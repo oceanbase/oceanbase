@@ -257,8 +257,7 @@ private:
   int preprocess_json_access_expr(const ObRawExpr *json_expr,
                                   const ObItemType op_type,
                                   const ObRawExpr *&new_expr,
-                                  bool &can_extract,
-                                  const ObRawExpr *const_expr = nullptr);
+                                  bool &can_extract);
   int get_final_search_index_value_param_idx(const ObRawExpr &const_expr,
                                              const ObObjType *cmp_type,
                                              int64_t &value_param_idx);

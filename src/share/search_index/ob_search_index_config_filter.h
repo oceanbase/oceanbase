@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef OCEANBASE_SHARE_ob_search_index_config_filter_H_
-#define OCEANBASE_SHARE_ob_search_index_config_filter_H_
+#ifndef OCEANBASE_SHARE_OB_SEARCH_INDEX_CONFIG_FILTER_H_
+#define OCEANBASE_SHARE_OB_SEARCH_INDEX_CONFIG_FILTER_H_
 
 #include <stdint.h>
 #include "lib/string/ob_string.h"
@@ -44,7 +44,7 @@ public:
 
   // Segment-aware prefix match. Returns true if any include path is a prefix of target_path.
   int match(const common::ObIArray<ObSearchIndexPathEncoder::JsonPathItem> &path_items,
-            const bool is_range_cmp, bool &matched, bool &is_terminal) const;
+            const bool index_sub_path, bool &matched, bool &is_terminal) const;
 
 
 private:
@@ -79,8 +79,8 @@ private:
 class ObSearchIndexConfigFilter
 {
 public:
-  static const int64_t TYPE_MASK_STRING = (1LL << 0);
-  static const int64_t TYPE_MASK_NUMBER = (1LL << 1);
+  static const uint8_t TYPE_MASK_STRING = (1 << 0);
+  static const uint8_t TYPE_MASK_NUMBER = (1 << 1);
 
   explicit ObSearchIndexConfigFilter(const uint64_t tenant_id);
 
@@ -90,11 +90,10 @@ public:
 
   // Combine path + type checks for JSON scalar nodes.
   int is_indexed(const common::ObIArray<ObSearchIndexPathEncoder::JsonPathItem> &path_items,
-            const common::ObJsonNodeType json_type, bool &passed,
-            const bool is_range_cmp = false) const;
-
-  int is_path_indexed(const common::ObIArray<ObSearchIndexPathEncoder::JsonPathItem> &path_items,
-                      bool &passed, const bool is_range_cmp = false) const;
+                 const common::ObJsonNodeType json_type, bool &passed) const;
+  int is_indexed(const common::ObIArray<ObSearchIndexPathEncoder::JsonPathItem> &path_items,
+                 const ObItemType pick_type, bool &passed, const bool index_sub_path) const;
+  static bool is_type_indexed(const uint8_t type_mask, const common::ObJsonNodeType json_type);
 
   // Build search index configuration string from parse node
   static int print_comment(const ParseNode *param_node, common::ObSqlString &out);
@@ -102,16 +101,19 @@ public:
   static int print_schema(const common::ObString &comment, char *buf, int64_t buf_len, int64_t &pos);
   static bool is_valid_config_path(common::ObJsonPath *json_path);
   bool has_types() const { return type_mask_ != 0; }
+  uint8_t get_type_mask() const { return type_mask_; }
 
   TO_STRING_KV(K_(has_include_paths), K_(has_exclude_paths), K_(type_mask));
 private:
-  bool is_type_indexed(const common::ObJsonNodeType json_type) const;
   bool has_paths() const { return has_include_paths_ || has_exclude_paths_; }
+  static common::ObJsonNodeType get_json_type(const ObItemType pick_type);
+  int is_path_indexed(const common::ObIArray<ObSearchIndexPathEncoder::JsonPathItem> &path_items,
+                      bool &passed, const bool index_sub_path = false) const;
 
 private:
   bool has_include_paths_;
   bool has_exclude_paths_;
-  int64_t type_mask_;
+  uint8_t type_mask_;
   ObSearchIndexJsonPathMatcher include_matcher_;
   ObSearchIndexJsonPathMatcher exclude_matcher_;
 };
@@ -119,4 +121,4 @@ private:
 }
 }
 
-#endif // OCEANBASE_SHARE_ob_search_index_config_filter_H_
+#endif // OCEANBASE_SHARE_OB_SEARCH_INDEX_CONFIG_FILTER_H_

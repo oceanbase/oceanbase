@@ -44,15 +44,14 @@ public:
                                      ObQueryRangeCtx &ctx,
                                      const ObRawExpr &path_expr,
                                      ObString &path,
-                                     const bool is_range_cmp,
-                                     bool &can_extract_range,
-                                     const ObRawExpr *const_expr = nullptr);
+                                     const bool index_sub_path,
+                                     bool &can_extract_range);
 
   static int is_json_scalar_match_index(ObExecContext &exec_ctx, const ObObj &json_value,
-                                        bool &is_match);
+                                        const uint8_t cons_encode_type, bool &is_match);
 
   static int is_json_scalar_or_array_match_index(ObExecContext &exec_ctx, const ObObj &json_value,
-                                                 bool &is_match);
+                                                 const uint8_t cons_encode_type, bool &is_match);
 
   static int add_json_scalar_constraint(ObQueryRangeCtx &ctx, const ObRawExpr *expr);
 

@@ -67,7 +67,7 @@ int ObSearchIndexJsonPathMatcher::init(const ObString &spec, int64_t &pos)
 }
 
 int ObSearchIndexJsonPathMatcher::match(
-    const ObIArray<ObSearchIndexPathEncoder::JsonPathItem> &path_items, const bool is_range_cmp,
+    const ObIArray<ObSearchIndexPathEncoder::JsonPathItem> &path_items, const bool index_sub_path,
     bool &matched, bool &is_terminal) const
 {
   int ret = OB_SUCCESS;
@@ -89,10 +89,13 @@ int ObSearchIndexJsonPathMatcher::match(
         matched = cur->terminal_;
         is_terminal = cur->terminal_;
         break;
-      } else if (OB_FAIL(cur->children_.get_refactored(item.path, child)) || OB_ISNULL(child)) {
-        ret = OB_SUCCESS;
-        break;
-      } else if ((is_range_cmp || child->terminal_) && idx == path_items.count() - 1) {
+      } else if (OB_FAIL(cur->children_.get_refactored(item.path, child))) {
+        if (ret == OB_HASH_NOT_EXIST) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to get child", K(ret), K(item.path));
+        }
+      } else if ((index_sub_path || child->terminal_) && idx == path_items.count() - 1) {
         matched = true;
         is_terminal = true;
         break;
@@ -262,7 +265,7 @@ void ObSearchIndexConfigFilter::reset()
 //   - Path with wildcard (e.g. "$.a.b.c.*"): $.a.b.c.* uses no index; $.a, $.a.b, $.a.b.c cannot use range index.
 int ObSearchIndexConfigFilter::is_path_indexed(
     const ObIArray<ObSearchIndexPathEncoder::JsonPathItem> &path_items,
-    bool &passed, const bool is_range_cmp) const
+    bool &passed, const bool index_sub_path) const
 {
   int ret = OB_SUCCESS;
   passed = true;
@@ -270,11 +273,11 @@ int ObSearchIndexConfigFilter::is_path_indexed(
   if (has_include_paths_) {
     if (OB_FAIL(include_matcher_.match(path_items, false, passed, is_terminal))) {
       LOG_WARN("failed to match include paths", K(ret), K(path_items));
-    } else if (is_terminal && is_range_cmp) {
+    } else if (is_terminal && index_sub_path) {
       passed = false;
     }
   } else if (has_exclude_paths_) {
-    if (OB_FAIL(exclude_matcher_.match(path_items, is_range_cmp, passed, is_terminal))) {
+    if (OB_FAIL(exclude_matcher_.match(path_items, index_sub_path, passed, is_terminal))) {
       LOG_WARN("failed to match exclude paths", K(ret), K(path_items));
     } else {
       passed = !passed;
@@ -283,33 +286,73 @@ int ObSearchIndexConfigFilter::is_path_indexed(
   return ret;
 }
 
+// During data generation, two checks apply:
+//   1. Type must match the config.
+//   2. Path must match the path in config; subpath relationship is not checked.
 int ObSearchIndexConfigFilter::is_indexed(
     const ObIArray<ObSearchIndexPathEncoder::JsonPathItem> &path_items,
-    const ObJsonNodeType json_type, bool &passed, const bool is_range_cmp) const
+    const ObJsonNodeType json_type, bool &passed) const
 {
   int ret = OB_SUCCESS;
   passed = true;
-  if (has_types() && !is_type_indexed(json_type)) {
+  if (has_types() && !is_type_indexed(type_mask_, json_type)) {
     passed = false;
-  } else if (has_paths() && OB_FAIL(is_path_indexed(path_items, passed, is_range_cmp))) {
+  } else if (has_paths() && OB_FAIL(is_path_indexed(path_items, passed))) {
     LOG_WARN("failed to check path", K(ret));
   }
-  LOG_DEBUG("check_path_and_type", K(is_range_cmp), K(passed), K(has_types()), K(has_paths()), K(json_type));
+  LOG_DEBUG("check_path_and_type", K(passed), K(has_types()), K(has_paths()), K(json_type));
   return ret;
 }
 
-bool ObSearchIndexConfigFilter::is_type_indexed(const ObJsonNodeType json_type) const
+// During query, type and subpath are checked as follows:
+// For range queries, index_sub_path is true; both checks apply:
+//   1. Pick type must match the config type.
+//   2. Path must match the path in config; subpath relationship is checked too.
+// For equality queries, index_sub_path is false:
+//   1. Pick type is not checked.
+//   2. Path must match the path in config; subpath relationship is not checked.
+int ObSearchIndexConfigFilter::is_indexed(
+    const ObIArray<ObSearchIndexPathEncoder::JsonPathItem> &path_items,
+    const ObItemType pick_type, bool &passed, const bool index_sub_path) const
+{
+  int ret = OB_SUCCESS;
+  passed = true;
+  const ObJsonNodeType json_type = get_json_type(pick_type);
+  if (index_sub_path && has_types() && !is_type_indexed(type_mask_, json_type)) {
+    passed = false;
+  } else if (has_paths() && OB_FAIL(is_path_indexed(path_items, passed, index_sub_path))) {
+    LOG_WARN("failed to check path", K(ret));
+  }
+  LOG_DEBUG("check_path_and_type", K(passed), K(has_types()), K(has_paths()), K(json_type));
+  return ret;
+}
+
+bool ObSearchIndexConfigFilter::is_type_indexed(const uint8_t type_mask,
+                                                const ObJsonNodeType json_type)
 {
   bool bret = true;
-  if (type_mask_ == 0) {
+  if (type_mask == 0) {
   } else if (json_type == ObJsonNodeType::J_STRING) {
-    bret = ((type_mask_ & TYPE_MASK_STRING) != 0);
+    bret = ((type_mask & TYPE_MASK_STRING) != 0);
   } else if (ObIJsonBase::is_json_number_type(json_type)) {
-    bret = ((type_mask_ & TYPE_MASK_NUMBER) != 0);
+    bret = ((type_mask & TYPE_MASK_NUMBER) != 0);
   } else {
     bret = false;
   }
   return bret;
+}
+
+ObJsonNodeType ObSearchIndexConfigFilter::get_json_type(const ObItemType pick_type)
+{
+  ObJsonNodeType json_type = ObJsonNodeType::J_NULL;
+  if (pick_type == T_JSON_STRING) {
+    json_type = ObJsonNodeType::J_STRING;
+  } else if (pick_type == T_JSON_NUMBER) {
+    json_type = ObJsonNodeType::J_DECIMAL;
+  } else {
+    json_type = ObJsonNodeType::J_NULL;
+  }
+  return json_type;
 }
 
 int append_search_index_list_items(const ParseNode *node, ObSqlString &out, const bool is_path)

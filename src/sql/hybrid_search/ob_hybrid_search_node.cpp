@@ -10,6 +10,7 @@
 #include "lib/json_type/ob_json_tree.h"
 #include "share/ob_json_access_utils.h"
 #include "lib/udt/ob_array_type.h"
+#include "share/search_index/ob_search_index_config_filter.h"
 #include "share/vector_index/ob_vector_index_util.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
@@ -610,25 +611,50 @@ int ObHybridSearchGenerator::check_filter_has_index(ObRawExpr *filter, bool &has
   return ret;
 }
 
-int ObHybridSearchGenerator::check_filter_has_search_index(ObRawExpr *filter, bool &has_search_index)
+int ObHybridSearchGenerator::get_search_index_cons_encode_type(ObRawExpr *filter,
+                                                               bool &has_search_index,
+                                                               uint8_t &cons_encode_type)
 {
   int ret = OB_SUCCESS;
   has_search_index = false;
+  cons_encode_type = 0;
   ObSEArray<uint64_t, 4> column_ids;
-  has_search_index = false;
-  if (OB_FAIL(ObRawExprUtils::extract_column_ids(filter, column_ids))) {
-    LOG_WARN("failed to extract column ids", K(filter), K(ret));
+  if (OB_ISNULL(filter) || OB_ISNULL(schema_guard_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), KP(filter), KP(schema_guard_));
+  } else if (OB_FAIL(ObRawExprUtils::extract_column_ids(filter, column_ids))) {
+    LOG_WARN("failed to extract column ids", K(ret), KPC(filter));
   } else if (column_ids.count() != 1) {
     // empty or multiple columns, can not use search index
   } else {
+    const uint64_t column_id = column_ids.at(0);
     for (int64_t i = 0; OB_SUCC(ret) && i < valid_index_ids_.count() && !has_search_index; ++i) {
       const uint64_t index_id = valid_index_ids_.at(i);
       const ObIArray<uint64_t> &index_column_ids = valid_index_cols_.at(i);
-      // search index can ignore prefix
       const bool can_ignore_prefix = index_can_ignore_prefix_.at(i);
       if (can_ignore_prefix && ObOptimizerUtil::check_index_match_prefix(
           column_ids, index_column_ids, true /* ignore prefix */)) {
+        const ObTableSchema *index_schema = nullptr;
+        const ObColumnSchemaV2 *index_column_schema = nullptr;
         has_search_index = true;
+        if (OB_FAIL(schema_guard_->get_table_schema(index_id, index_schema))) {
+          LOG_WARN("failed to get table schema", K(ret), K(index_id));
+        } else if (OB_ISNULL(index_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("index schema is null", K(ret), K(index_id));
+        } else if (OB_ISNULL(index_column_schema = index_schema->get_column_schema(column_id))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("index column schema is null", K(ret), K(index_id), K(column_id));
+        } else if (ob_is_json(index_column_schema->get_data_type())
+                   && !index_column_schema->get_comment_str().empty()) {
+          share::ObSearchIndexConfigFilter json_filter(index_schema->get_tenant_id());
+          if (OB_FAIL(json_filter.init_from_comment(index_column_schema->get_comment_str()))) {
+            LOG_WARN("failed to parse json column filter", K(ret), K(index_id), K(column_id),
+                     K(index_column_schema->get_comment_str()));
+          } else {
+            cons_encode_type = json_filter.get_type_mask();
+          }
+        }
       }
     }
   }
@@ -1756,12 +1782,13 @@ int ObHybridSearchGenerator::split_domain_contains_node(const ObDSLScalarQuery *
   } else if (filter_expr->get_expr_type() == T_FUN_SYS_JSON_CONTAINS ||
              filter_expr->get_expr_type() == T_FUNC_SYS_ARRAY_CONTAINS_ALL) {
     bool has_search_index = false;
-    if (OB_FAIL(check_filter_has_search_index(filter_expr, has_search_index))) {
-      LOG_WARN("failed to check filter has search index", K(ret));
+    uint8_t cons_encode_type = 0;
+    if (OB_FAIL(get_search_index_cons_encode_type(filter_expr, has_search_index, cons_encode_type))) {
+      LOG_WARN("failed to get search index constraint encode type", K(ret), KPC(filter_expr));
     } else if (!has_search_index) {
       // no search index, no need to split
     } else if (filter_expr->get_expr_type() == T_FUN_SYS_JSON_CONTAINS) {
-      if (OB_FAIL(split_json_contains(scalar_query, filter_expr, split_node))) {
+      if (OB_FAIL(split_json_contains(scalar_query, filter_expr, cons_encode_type, split_node))) {
         LOG_WARN("failed to split json contains node", K(ret));
       }
     } else if (filter_expr->get_expr_type() == T_FUNC_SYS_ARRAY_CONTAINS_ALL) {
@@ -1777,6 +1804,7 @@ int ObHybridSearchGenerator::split_domain_contains_node(const ObDSLScalarQuery *
 
 int ObHybridSearchGenerator::split_json_contains(const ObDSLScalarQuery *scalar_query,
                                                  ObRawExpr *filter_expr,
+                                                 uint8_t cons_encode_type,
                                                  ObIndexMergeNode *&split_node)
 {
   int ret = OB_SUCCESS;
@@ -1827,7 +1855,7 @@ int ObHybridSearchGenerator::split_json_contains(const ObDSLScalarQuery *scalar_
         // scalar, no need to split, need to add scalar constraint during query range extraction
       } else if (j_base->json_type() != common::ObJsonNodeType::J_ARRAY) {
         // not an array, no need to split
-      } else if (OB_FAIL(ObSearchIndexConstraint::is_json_scalar_or_array_match(j_base, 0,
+      } else if (OB_FAIL(ObSearchIndexConstraint::is_json_scalar_or_array_match(j_base, cons_encode_type,
                                                                                 can_extract))) {
         LOG_WARN("failed to check json array match", K(ret));
       } else if (!can_extract) {
@@ -1895,7 +1923,7 @@ int ObHybridSearchGenerator::split_json_contains(const ObDSLScalarQuery *scalar_
           // add json array count constraint
           PreCalcExprExpectResult expect_result = PRE_CALC_SEARCH_INDEX_CONSTRAINT;
           int64_t extra = ObSearchIndexConstraint::make_extra(
-              ObSearchIndexConstraint::JSON_ARRAY_COUNT, 0, element_count);
+              ObSearchIndexConstraint::JSON_ARRAY_COUNT, cons_encode_type, element_count);
           ObConstraintExtra cons_extra;
           cons_extra.extra_ = extra;
           if (OB_FAIL(bool_node->all_expr_constraints_.push_back(

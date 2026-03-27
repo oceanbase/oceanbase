@@ -317,15 +317,16 @@ int ObSearchIndexQueryRangeUtils::json_prefix_path_encode(ObIAllocator &allocato
                                                           ObQueryRangeCtx &ctx,
                                                           const ObRawExpr &path_expr,
                                                           ObString &path_prefix,
-                                                          const bool is_range_cmp,
-                                                          bool &can_extract_range,
-                                                          const ObRawExpr *const_expr)
+                                                          const bool index_sub_path,
+                                                          bool &can_extract_range)
 {
   int ret = OB_SUCCESS;
   can_extract_range = false;
   const share::ObSearchIndexConfigFilter *json_filter = nullptr;
+  ObItemType pick_type = T_NULL;
   if (ctx.is_search_index() && OB_NOT_NULL(ctx.search_index_range_ctx_)) {
     json_filter = ctx.search_index_range_ctx_->get_json_filter();
+    pick_type = ctx.search_index_range_ctx_->get_pick_type();
   }
   if (!path_expr.is_static_const_expr()) {
     can_extract_range = false;
@@ -391,9 +392,7 @@ int ObSearchIndexQueryRangeUtils::json_prefix_path_encode(ObIAllocator &allocato
         // Check path filter if json_filter is configured
         bool filter_passed = true;
         if (OB_SUCC(ret) && only_member_nodes && OB_NOT_NULL(json_filter)) {
-          if (json_filter->has_types()) {
-            filter_passed = false;
-          } else if (OB_FAIL(json_filter->is_path_indexed(path_items, filter_passed, is_range_cmp))) {
+          if (OB_FAIL(json_filter->is_indexed(path_items, pick_type, filter_passed, index_sub_path))) {
             LOG_WARN("failed to check path filter", K(ret));
           }
         }
@@ -415,6 +414,7 @@ int ObSearchIndexQueryRangeUtils::json_prefix_path_encode(ObIAllocator &allocato
 
 int ObSearchIndexQueryRangeUtils::is_json_scalar_match_index(ObExecContext &exec_ctx,
                                                              const ObObj &json_value,
+                                                             const uint8_t cons_encode_type,
                                                              bool &is_match)
 {
   int ret = OB_SUCCESS;
@@ -427,7 +427,7 @@ int ObSearchIndexQueryRangeUtils::is_json_scalar_match_index(ObExecContext &exec
                                                               &allocator,
                                                               j_base))) {
     LOG_WARN("failed to refine range json value const", K(ret));
-  } else if (OB_FAIL(ObSearchIndexConstraint::is_json_scalar_match(j_base, 0, is_match))) {
+  } else if (OB_FAIL(ObSearchIndexConstraint::is_json_scalar_match(j_base, cons_encode_type, is_match))) {
     LOG_WARN("failed to check json scalar match", K(ret));
   }
   return ret;
@@ -435,6 +435,7 @@ int ObSearchIndexQueryRangeUtils::is_json_scalar_match_index(ObExecContext &exec
 
 int ObSearchIndexQueryRangeUtils::is_json_scalar_or_array_match_index(ObExecContext &exec_ctx,
                                                                       const ObObj &json_value,
+                                                                      const uint8_t cons_encode_type,
                                                                       bool &is_match)
 {
   int ret = OB_SUCCESS;
@@ -447,7 +448,7 @@ int ObSearchIndexQueryRangeUtils::is_json_scalar_or_array_match_index(ObExecCont
                                                               &allocator,
                                                               j_base))) {
     LOG_WARN("failed to refine range json value const", K(ret));
-  } else if (OB_FAIL(ObSearchIndexConstraint::is_json_scalar_or_array_match(j_base, 0, is_match))) {
+  } else if (OB_FAIL(ObSearchIndexConstraint::is_json_scalar_or_array_match(j_base, cons_encode_type, is_match))) {
     LOG_WARN("failed to check json array match", K(ret));
   }
   return ret;
@@ -458,7 +459,10 @@ int ObSearchIndexQueryRangeUtils::add_json_scalar_constraint(ObQueryRangeCtx &ct
 {
   int ret = OB_SUCCESS;
   PreCalcExprExpectResult expect_result = PRE_CALC_SEARCH_INDEX_CONSTRAINT;
-  int64_t extra = ObSearchIndexConstraint::make_extra(ObSearchIndexConstraint::JSON_TYPE_SCALAR, 0, 0);
+  const uint8_t cons_encode_type =
+    ctx.search_index_range_ctx_ ? ctx.search_index_range_ctx_->get_cons_encode_type() : 0;
+  int64_t extra = ObSearchIndexConstraint::make_extra(ObSearchIndexConstraint::JSON_TYPE_SCALAR,
+                                                      cons_encode_type, 0);
   ObConstraintExtra cons_extra;
   cons_extra.extra_ = extra;
   ObExprConstraint cons(const_cast<ObRawExpr*>(expr), expect_result, cons_extra);
@@ -475,7 +479,10 @@ int ObSearchIndexQueryRangeUtils::add_json_scalar_or_array_constraint(ObQueryRan
 {
   int ret = OB_SUCCESS;
   PreCalcExprExpectResult expect_result = PRE_CALC_SEARCH_INDEX_CONSTRAINT;
-  int64_t extra = ObSearchIndexConstraint::make_extra(ObSearchIndexConstraint::JSON_TYPE_SCALAR_OR_ARRAY, 0, 0);
+  const uint8_t cons_encode_type =
+    ctx.search_index_range_ctx_ ? ctx.search_index_range_ctx_->get_cons_encode_type() : 0;
+  int64_t extra = ObSearchIndexConstraint::make_extra(
+    ObSearchIndexConstraint::JSON_TYPE_SCALAR_OR_ARRAY, cons_encode_type, 0);
   ObConstraintExtra cons_extra;
   cons_extra.extra_ = extra;
   ObExprConstraint cons(const_cast<ObRawExpr*>(expr), expect_result, cons_extra);

@@ -228,7 +228,9 @@ private:
   int generate_knn_node(const ObDSLKnnQuery *knn_query, ObVecSearchNode *&knn_node);
   int try_merge_nodes(const ObDSLQuery *query, ObIArray<ObIndexMergeNode*> &nodes, bool &merge_happened);
   int check_filter_has_index(ObRawExpr *filter, bool &has_index, uint64_t &target_index_id);
-  int check_filter_has_search_index(ObRawExpr *filter, bool &has_search_index);
+  int get_search_index_cons_encode_type(ObRawExpr *filter,
+                                        bool &has_search_index,
+                                        uint8_t &cons_encode_type);
   int init_fusion_node(const ObDSLQueryInfo *query_info, ObFusionNode *fusion_node);
   int get_vector_index_tid_from_expr(ObColumnRefRawExpr *field, uint64_t& vec_index_tid);
   bool is_search_subquery(ObIndexMergeNode *node) const;
@@ -245,6 +247,7 @@ private:
                                  ObIndexMergeNode *&split_node);
   int split_json_contains(const ObDSLScalarQuery *scalar_query,
                           ObRawExpr *filter_expr,
+                          uint8_t cons_encode_type,
                           ObIndexMergeNode *&split_node);
   int split_array_contains_all(const ObDSLScalarQuery *scalar_query,
                                ObRawExpr *filter_expr,

@@ -19,6 +19,7 @@
 #include "sql/ob_sql_utils.h"
 #include "sql/rewrite/ob_range_generator.h"
 #include "share/search_index/ob_search_index_encoder.h"
+#include "share/search_index/ob_search_index_config_filter.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/rewrite/ob_search_index_query_range_utils.h"
 #include "sql/engine/expr/ob_expr_json_func_helper.h"
@@ -4387,11 +4388,11 @@ int ObExprRangeConverter::get_json_access_expr_range(const ObRawExpr *l_expr,
   int ret = OB_SUCCESS;
   bool can_extract = true;
   if (is_json_access_expr(*l_expr)) {
-    if (OB_FAIL(preprocess_json_access_expr(l_expr, cmp_type, l_expr, can_extract, r_expr))) {
+    if (OB_FAIL(preprocess_json_access_expr(l_expr, cmp_type, l_expr, can_extract))) {
       LOG_WARN("failed to preprocess json access expr", K(ret));
     }
   } else if (is_json_access_expr(*r_expr)) {
-    if (OB_FAIL(preprocess_json_access_expr(r_expr, cmp_type, r_expr, can_extract, l_expr))) {
+    if (OB_FAIL(preprocess_json_access_expr(r_expr, cmp_type, r_expr, can_extract))) {
       LOG_WARN("failed to preprocess json access expr", K(ret));
     }
   }
@@ -4434,11 +4435,10 @@ bool ObExprRangeConverter::is_json_access_expr(const ObRawExpr &expr)
 int ObExprRangeConverter::preprocess_json_access_expr(const ObRawExpr *json_expr,
                                                       const ObItemType op_type,
                                                       const ObRawExpr *&new_expr,
-                                                      bool &can_extract,
-                                                      const ObRawExpr *const_expr)
+                                                      bool &can_extract)
 {
   int ret = OB_SUCCESS;
-  bool is_range_cmp = IS_RANGE_CMP_OP(op_type);
+  bool index_sub_path = IS_RANGE_CMP_OP(op_type);
   new_expr = json_expr;
   const ObRawExpr *origin_expr = json_expr;
   json_expr = ObRawExprUtils::skip_implicit_cast(json_expr);
@@ -4455,6 +4455,7 @@ int ObExprRangeConverter::preprocess_json_access_expr(const ObRawExpr *json_expr
     can_extract = false;
     bool is_valid = false;
     ObString encoded_path;
+    ctx_.search_index_range_ctx_->pick_type_ = json_expr->get_pick();
     if (OB_UNLIKELY(json_expr->get_param_count() < 2) ||
               OB_ISNULL(doc_expr = json_expr->get_param_expr(0)) ||
               OB_ISNULL(path_expr = json_expr->get_param_expr(1))) {
@@ -4487,7 +4488,7 @@ int ObExprRangeConverter::preprocess_json_access_expr(const ObRawExpr *json_expr
     } else if (!is_valid) {
       // do nothing
     } else if (OB_FAIL(ObSearchIndexQueryRangeUtils::json_prefix_path_encode(allocator_, ctx_,
-        *path_expr, encoded_path, is_range_cmp, is_valid, const_expr))) {
+        *path_expr, encoded_path, index_sub_path, is_valid))) {
       LOG_WARN("failed to check json path can extract range", K(ret));
     } else if (!is_valid) {
       // path is not a single member path, no need to extract range.
@@ -4495,7 +4496,6 @@ int ObExprRangeConverter::preprocess_json_access_expr(const ObRawExpr *json_expr
     } else {
       new_expr = column_expr;
       ctx_.search_index_range_ctx_->path_prefix_ = encoded_path;
-      ctx_.search_index_range_ctx_->pick_type_ = json_expr->get_pick();
       can_extract = true;
     }
   } else if (json_expr->get_expr_type() == T_FUN_SYS_JSON_VALUE &&
@@ -4507,6 +4507,7 @@ int ObExprRangeConverter::preprocess_json_access_expr(const ObRawExpr *json_expr
     can_extract = false;
     bool is_valid = false;
     ObString encoded_path;
+    ctx_.search_index_range_ctx_->pick_type_ = json_expr->get_pick();
     if (OB_UNLIKELY(json_expr->get_param_count() < 2) ||
         OB_ISNULL(doc_expr = json_expr->get_param_expr(0)) ||
         OB_ISNULL(path_expr = json_expr->get_param_expr(1))) {
@@ -4536,7 +4537,7 @@ int ObExprRangeConverter::preprocess_json_access_expr(const ObRawExpr *json_expr
     } else if (!is_valid) {
       // do nothing
     } else if (OB_FAIL(ObSearchIndexQueryRangeUtils::json_prefix_path_encode(allocator_, ctx_,
-        *path_expr, encoded_path, false, is_valid, const_expr))) {
+        *path_expr, encoded_path, false, is_valid))) {
       LOG_WARN("failed to check json path can extract range", K(ret));
     } else if (!is_valid) {
       // path is not a single member path, no need to extract range.
@@ -4544,7 +4545,6 @@ int ObExprRangeConverter::preprocess_json_access_expr(const ObRawExpr *json_expr
     } else {
       new_expr = column_expr;
       ctx_.search_index_range_ctx_->path_prefix_ = encoded_path;
-      ctx_.search_index_range_ctx_->pick_type_ = json_expr->get_pick();
       can_extract = true;
     }
   }
@@ -4615,6 +4615,7 @@ int ObExprRangeConverter::gen_search_index_cmp_node(const ObColumnRefRawExpr &co
     const ObObjType const_type = const_expr->get_result_type().get_type();
     const bool constraint_json_scalar = ob_is_json(const_type);
     const bool constraint_str_length = ob_is_string_type(const_type);
+    const uint8_t cons_encode_type = ctx_.search_index_range_ctx_->get_cons_encode_type();
     if (OB_FAIL(get_calculable_expr_val(const_expr, json_value, is_valid))) {
       LOG_WARN("failed to get calculable expr val", K(ret), KPC(const_expr));
     } else if (!is_valid) {
@@ -4624,6 +4625,7 @@ int ObExprRangeConverter::gen_search_index_cmp_node(const ObColumnRefRawExpr &co
     } else if (constraint_json_scalar &&
         OB_FAIL(ObSearchIndexQueryRangeUtils::is_json_scalar_match_index(*ctx_.exec_ctx_,
                                                                          json_value,
+                                                                         cons_encode_type,
                                                                          is_valid))) {
       LOG_WARN("fail to check is scalar json", K(ret));
     } else if (!is_valid) {
@@ -4885,7 +4887,7 @@ int ObExprRangeConverter::get_domain_param_expr(const ObRawExpr &domain_expr,
         } else if (!can_extract) {
           // do nothing
         } else if (OB_FAIL(ObSearchIndexQueryRangeUtils::json_prefix_path_encode(allocator_, ctx_,
-            *path_expr, encoded_path, false, can_extract, const_expr))) {
+            *path_expr, encoded_path, false, can_extract))) {
           LOG_WARN("failed to check json path can extract range", K(ret));
         } else if (!can_extract) {
           // path is not a single member path, no need to extract range.
@@ -4908,7 +4910,7 @@ int ObExprRangeConverter::get_domain_param_expr(const ObRawExpr &domain_expr,
       can_extract = false;
     } else if (is_json_access_expr(*jdoc_expr)) {
       const ObItemType op_type = domain_expr.get_expr_type();
-      if (OB_FAIL(preprocess_json_access_expr(jdoc_expr, op_type, jdoc_expr, can_extract, const_expr))) {
+      if (OB_FAIL(preprocess_json_access_expr(jdoc_expr, op_type, jdoc_expr, can_extract))) {
         LOG_WARN("failed to preprocess json access expr", K(ret));
       }
     }
@@ -4984,6 +4986,8 @@ int ObExprRangeConverter::convert_domain_expr_on_search_index(const ObRawExpr *d
     // do nothing.
   } else if (expr->is_domain_json_expr()) {
     ObObj json_value;
+    uint8_t cons_encode_type =
+      ctx_.search_index_range_ctx_ ? ctx_.search_index_range_ctx_->get_cons_encode_type() : 0;
     if (OB_FAIL(get_calculable_expr_val(const_expr, json_value, need_extract))) {
       LOG_WARN("failed to get calculable expr val", K(ret), KPC(const_expr));
     } else if (!need_extract) {
@@ -4996,6 +5000,7 @@ int ObExprRangeConverter::convert_domain_expr_on_search_index(const ObRawExpr *d
       if (json_value.is_json()) {
         if (OB_FAIL(ObSearchIndexQueryRangeUtils::is_json_scalar_match_index(*ctx_.exec_ctx_,
                                                                              json_value,
+                                                                             cons_encode_type,
                                                                              need_extract))) {
           LOG_WARN("fail to check is scalar json", K(ret));
         } else if (!need_extract) {
@@ -5007,7 +5012,17 @@ int ObExprRangeConverter::convert_domain_expr_on_search_index(const ObRawExpr *d
         // not json value, no need to add json scalar constraint
         // '[1]' member of jdoc, the `[1]` is scalar json_string, not json array.
         // but need to add string length constraint if const_expr is string type.
-        constraint_str_length = ob_is_string_tc(const_expr->get_result_type().get_type());
+        const ObObjType const_type = const_expr->get_result_type().get_type();
+        if (cons_encode_type != 0) {
+          if (ob_is_string_tc(const_type)) {
+            need_extract = ObSearchIndexConfigFilter::is_type_indexed(cons_encode_type,
+                                                                      ObJsonNodeType::J_STRING);
+          } else if (ob_is_numeric_type(const_type)) {
+            need_extract = ObSearchIndexConfigFilter::is_type_indexed(cons_encode_type,
+                                                                      ObJsonNodeType::J_DECIMAL);
+          }
+        }
+        constraint_str_length = need_extract && ob_is_string_tc(const_type);
         if (constraint_str_length && OB_FAIL(check_str_length_for_search_index_range(const_expr, need_extract))) {
           LOG_WARN("failed to check string length for search index range", K(ret));
         }
@@ -5033,6 +5048,7 @@ int ObExprRangeConverter::convert_domain_expr_on_search_index(const ObRawExpr *d
         need_extract = false;
       } else if (OB_FAIL(ObSearchIndexQueryRangeUtils::is_json_scalar_match_index(*ctx_.exec_ctx_,
                                                                                   json_value,
+                                                                                  cons_encode_type,
                                                                                   need_extract))) {
         LOG_WARN("fail to check is all member scalar json", K(ret));
       } else if (!need_extract) {
@@ -5065,6 +5081,7 @@ int ObExprRangeConverter::convert_domain_expr_on_search_index(const ObRawExpr *d
       } else if (OB_FAIL(ObSearchIndexQueryRangeUtils::is_json_scalar_or_array_match_index(
           *ctx_.exec_ctx_,
           json_value,
+          cons_encode_type,
           need_extract))) {
         LOG_WARN("fail to check is all member scalar json", K(ret));
       } else if (!need_extract) {

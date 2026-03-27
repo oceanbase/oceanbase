@@ -39,6 +39,7 @@ extern "C" {
 #include "share/search_index/ob_search_index_encoder.h"
 #include "lib/udt/ob_array_type.h"
 #include "lib/udt/ob_collection_type.h"
+#include "share/search_index/ob_search_index_config_filter.h"
 
 using namespace oceanbase;
 using namespace oceanbase::sql;
@@ -5575,7 +5576,7 @@ int ObSearchIndexConstraint::check_json_is_match(ObObjParam &obj_param,
   is_match = false;
   const ConstraintType constraint_type = static_cast<ConstraintType>(get_constraint_type(extra));
   const int32_t element_count = get_element_count(extra);
-  const int8_t cons_encode_type = static_cast<int8_t>(get_json_encode_type(extra));
+  const uint8_t cons_encode_type = static_cast<uint8_t>(get_json_encode_type(extra));
   if (OB_FAIL(ObJsonExprHelper::refine_range_json_value_const(obj_param,
                                                               &exec_ctx,
                                                               false,
@@ -5648,12 +5649,7 @@ int ObSearchIndexConstraint::is_json_scalar_match(const ObIJsonBase *j_base,
     const ObJsonNodeType json_type = j_base->json_type();
     if (cons_encode_type != 0) {
       // check json_type should be encoded as cons_encode_type
-      uint8_t encode_type = 0;
-      if (OB_FAIL(share::ObSearchIndexPathEncoder::encode_type(json_type, encode_type))) {
-        LOG_WARN("failed to encode type", K(ret));
-      } else if (encode_type != cons_encode_type) {
-        is_match = false;
-      }
+      is_match = ObSearchIndexConfigFilter::is_type_indexed(cons_encode_type, json_type);
     }
     if (OB_SUCC(ret) && is_match) {
       // check json_scalar value should be within SEARCH_INDEX_VALUE_LENGTH

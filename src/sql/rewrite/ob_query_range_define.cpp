@@ -2059,6 +2059,8 @@ int ObSearchIndexRangeCtx::init(const ObTableSchema *base_table_schema,
                 LOG_WARN("failed to parse json column filter", K(ret), K(column_comment));
                 json_filter_->~ObSearchIndexConfigFilter();
                 json_filter_ = nullptr;
+              } else {
+                cons_encode_type_ = json_filter_->get_type_mask();
               }
             }
           }
