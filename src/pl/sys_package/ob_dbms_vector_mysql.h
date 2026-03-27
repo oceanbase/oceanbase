@@ -35,6 +35,7 @@ public:
   DECLARE_FUNC(index_vector_memory_advisor);
   DECLARE_FUNC(index_vector_memory_estimate);
   DECLARE_FUNC(set_attribute);
+  DECLARE_FUNC(trigger_async_task);
 
 #undef DECLARE_FUNC
 

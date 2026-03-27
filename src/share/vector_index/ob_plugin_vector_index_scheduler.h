@@ -23,6 +23,7 @@
 #include "logservice/ob_log_base_type.h"
 #include "logservice/ob_log_handler.h"
 #include "share/vector_index/ob_ivf_async_task_executor.h"
+#include "share/vector_index/ob_vector_index_memsync_trigger_task.h"
 
 namespace oceanbase 
 {
@@ -161,6 +162,7 @@ struct ObPluginVectorIndexTaskCtx
   ObPluginVectorIndexTaskCtx(ObTabletID &index_tablet_id, uint64_t index_table_id)
     : index_tablet_id_(index_tablet_id),
       index_table_id_(index_table_id),
+      task_id_(OB_INVALID_ID),
       task_start_time_(0),
       last_modify_time_(0),
       failure_times_(0),
@@ -168,10 +170,11 @@ struct ObPluginVectorIndexTaskCtx
       in_queue_(false),
       task_status_(ObVectorIndexTaskStatus::OB_TTL_TASK_PREPARE)
   {}
-  TO_STRING_KV(K_(index_table_id), K_(index_tablet_id), K_(task_start_time), K_(last_modify_time), 
+  TO_STRING_KV(K_(index_table_id), K_(index_tablet_id), K_(task_id), K_(task_start_time), K_(last_modify_time),
                K_(failure_times), K_(err_code), K_(in_queue), K_(task_status));
-  ObTabletID index_tablet_id_;  
+  ObTabletID index_tablet_id_;
   uint64_t index_table_id_;
+  int64_t task_id_;  // task_id from __all_vector_index_task table for manual memsync trigger
   int64_t task_start_time_;
   int64_t last_modify_time_;
   int64_t failure_times_;
@@ -248,6 +251,11 @@ public:
   int check_and_execute_ivf_cache_maintenance_task(ObPluginVectorIndexMgr *&mgr);
 
   int log_tablets_need_memdata_sync(ObPluginVectorIndexMgr *mgr);
+  // For manual memsync trigger: submit memdata sync log for tablets from task records.
+  // Takes (tablet_id, table_id) from the records, then submit_log_().
+  int submit_memdata_sync_log_for_tablets(
+      const ObIArray<common::ObTabletID> &tablet_ids,
+      const ObIArray<uint64_t> &table_ids);
   int execute_all_memdata_sync_task(ObPluginVectorIndexMgr *mgr);
   int execute_one_memdata_sync_task(ObPluginVectorIndexMgr *mgr, ObPluginVectorIndexTaskCtx *ctx);
   int check_ls_task_state(ObPluginVectorIndexMgr *mgr);
@@ -342,6 +350,7 @@ private:
   ObVectorIndexTableIDArray table_id_array_;
   ObVecAsyncTaskExector async_task_exec_;
   ObIvfAsyncTaskExector ivf_task_exec_;
+  ObVecIdxMemSyncTriggerExecutor memsync_trigger_exec_;
 };
 
 class ObVectorIndexTask : public share::ObITask

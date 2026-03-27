@@ -52,4 +52,10 @@ CREATE OR REPLACE PACKAGE dbms_vector AUTHID CURRENT_USER
     IN     item                    VARCHAR(65535),
     IN     value                   VARCHAR(65535));
 
+  PROCEDURE trigger_async_task (
+    IN     task_type         VARCHAR(65535),
+    IN     table_name        VARCHAR(65535),
+    IN     index_name        VARCHAR(65535),
+    IN     tablet_id         BIGINT UNSIGNED DEFAULT 0);
+
 END dbms_vector;

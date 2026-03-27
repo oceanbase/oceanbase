@@ -14,6 +14,8 @@
 
 #include "ob_dbms_vector_mysql.h"
 #include "src/pl/ob_pl.h"
+#include "share/vector_index/ob_plugin_vector_index_util.h"
+#include "share/vector_index/ob_vector_index_async_task_util.h"
 #include "storage/vector_index/cmd/ob_vector_refresh_index_executor.h"
 
 namespace oceanbase
@@ -594,6 +596,148 @@ int ObDBMSVectorMySql::print_mem_size(uint64_t mem_size, ObStringBuffer &res_buf
     int res_len = snprintf(mem_size_str, 128, "%.1f %s", float_mem_size, units[unit_index]);
     if (OB_FAIL(res_buf.append(mem_size_str,res_len, 0))) {
       LOG_WARN("failed to append to buffer", K(ret));
+    }
+  }
+  return ret;
+}
+
+/*
+PROCEDURE trigger_async_task(
+  IN       TASK_TYPE           VARCHAR(65535),               ---- task type
+  IN       TABLE_NAME          VARCHAR(65535),               ---- table name
+  IN       INDEX_NAME          VARCHAR(65535),               ---- index name
+  IN       TABLET_ID           BIGINT                        ---- tablet_id
+);
+*/
+int ObDBMSVectorMySql::trigger_async_task(ObPLExecCtx &ctx, ParamStore &params, ObObj &result)
+{
+  UNUSED(result);
+  int ret = OB_SUCCESS;
+  CK(OB_LIKELY(4 == params.count()));
+  if ((!params.at(0).is_null() && !params.at(0).is_varchar())
+      || (!params.at(1).is_null() && !params.at(1).is_varchar())
+      || (!params.at(2).is_null() && !params.at(2).is_varchar())
+      || !(params.at(3).is_uint64() || params.at(3).is_int())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument for trigger async task", KR(ret), K(params));
+  }
+  if (OB_SUCC(ret)) {
+    ObString task_type_str = params.at(0).is_varchar() ? params.at(0).get_varchar() : ObString();
+    ObString table_name = params.at(1).is_varchar() ? params.at(1).get_varchar() : ObString();
+    ObString idx_name = params.at(2).is_varchar() ? params.at(2).get_varchar() : ObString();
+    uint64_t tablet_id = params.at(3).is_uint64() ? params.at(3).get_uint64() : params.at(3).get_int();
+
+    if (task_type_str.case_compare("FOLLOWER_IN_MEMORY_INDEX_REFRESH") != 0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("task type not supported", KR(ret), K(task_type_str));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "task type except FOLLOWER_IN_MEMORY_INDEX_REFRESH is");
+    } else if (table_name.empty() || idx_name.empty()) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("table_name or idx_name is empty", KR(ret), K(table_name), K(idx_name));
+    } else {
+      sql::ObExecContext *exec_ctx = ctx.exec_ctx_;
+      sql::ObSQLSessionInfo *session = nullptr;
+      share::schema::ObSchemaGetterGuard *schema_guard = nullptr;
+      sql::ObSchemaChecker schema_checker;
+      ObNameCaseMode case_mode = OB_NAME_CASE_INVALID;
+      ObCollationType cs_type = CS_TYPE_INVALID;
+      ObString base_db_name;
+      ObString base_name;
+      ObString index_db_name;
+      ObString index_name;
+      ObString new_base_db_name;
+      ObString new_base_name;
+      bool has_synonym = false;
+      const share::schema::ObTableSchema *base_table_schema = nullptr;
+      const share::schema::ObTableSchema *domain_table_schema = nullptr;
+      ObArray<ObTabletID> tablet_ids;
+      ObString domain_index_table_name;
+      uint64_t tenant_id = OB_INVALID_TENANT_ID;
+      uint64_t compat_version = 0;
+
+      if (OB_ISNULL(exec_ctx) || OB_ISNULL(session = exec_ctx->get_my_session())
+          || OB_ISNULL(exec_ctx->get_sql_ctx()) || OB_ISNULL(schema_guard = exec_ctx->get_sql_ctx()->schema_guard_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("exec_ctx or session or schema_guard is null", KR(ret));
+      } else if (OB_FAIL(schema_checker.init(*schema_guard, session->get_server_sid()))) {
+        LOG_WARN("fail to init schema checker", KR(ret));
+      } else {
+        tenant_id = session->get_effective_tenant_id();
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
+        LOG_WARN("fail to get data version", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(session->get_name_case_mode(case_mode)) || OB_FAIL(session->get_collation_connection(cs_type))) {
+        LOG_WARN("fail to get session options", KR(ret));
+      } else if (OB_FAIL(storage::ObVectorRefreshIndexExecutor::resolve_table_name(
+                  cs_type, case_mode, lib::is_oracle_mode(), table_name, base_db_name, base_name))) {
+        LOG_WARN("fail to resolve table name", KR(ret), K(table_name));
+      } else if (OB_FAIL(storage::ObVectorRefreshIndexExecutor::resolve_table_name(
+                  cs_type, case_mode, lib::is_oracle_mode(), idx_name, index_db_name, index_name))) {
+        LOG_WARN("fail to resolve index name", KR(ret), K(idx_name));
+      } else if (base_db_name.empty()) {
+        base_db_name = session->get_database_name();
+      }
+      if (OB_FAIL(ret)) {
+      } else if (index_db_name.empty()) {
+        index_db_name = session->get_database_name();
+      }
+      if (OB_FAIL(ret)) {
+      } else if (base_db_name.empty() || index_db_name.empty()) {
+        ret = OB_ERR_NO_DB_SELECTED;
+        LOG_WARN("no database selected", KR(ret));
+      } else if (base_db_name != index_db_name) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("different db name not supported", KR(ret), K(base_db_name), K(index_db_name));
+      } else if (OB_FAIL(schema_checker.get_table_schema_with_synonym(
+                  tenant_id, base_db_name, base_name, false, has_synonym,
+                  new_base_db_name, new_base_name, base_table_schema))) {
+        LOG_WARN("fail to get base table schema", KR(ret), K(base_db_name), K(base_name));
+      } else if (OB_ISNULL(base_table_schema)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("base table not exist", KR(ret), K(base_db_name), K(base_name));
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "base table name");
+      } else if (OB_FAIL(share::schema::ObTableSchema::build_index_table_name(
+                  *ctx.allocator_, base_table_schema->get_table_id(), index_name, domain_index_table_name))) {
+        LOG_WARN("fail to build domain index table name", KR(ret), K(index_name));
+      } else if (OB_FAIL(schema_checker.get_table_schema(
+                  tenant_id, index_db_name, domain_index_table_name, true, domain_table_schema))) {
+        LOG_WARN("fail to get domain table schema", KR(ret), K(domain_index_table_name));
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "index name");
+      } else if (OB_ISNULL(domain_table_schema)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("domain index table not exist", KR(ret), K(domain_index_table_name));
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "index name");
+      } else if (domain_table_schema->is_in_recyclebin()) {
+        LOG_DEBUG("domain table in recyclebin, skip");
+      } else if (!domain_table_schema->is_vec_hnsw_index()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("mem_sync only supported for hnsw index", KR(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "mem_sync index which is not hnsw index is");
+      } else if (0 != tablet_id && OB_FAIL(domain_table_schema->get_tablet_ids(tablet_ids))) {
+        LOG_WARN("fail to get domain table tablet ids", KR(ret),
+                 K(domain_table_schema->get_table_id()), K(tablet_id));
+      } else if (0 != tablet_id) {
+        bool is_valid_tablet_id = false;
+        for (int64_t i = 0; !is_valid_tablet_id && i < tablet_ids.count(); ++i) {
+          is_valid_tablet_id = (tablet_ids.at(i).id() == tablet_id);
+        }
+        if (!is_valid_tablet_id) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("tablet_id is not main tablet of index table", KR(ret),
+                   K(domain_table_schema->get_table_id()), K(tablet_id), K(tablet_ids));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "tablet_id");
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(share::ObVecIndexAsyncTaskUtil::create_memsync_trigger_task_record(
+                         tenant_id, domain_table_schema->get_table_id(), tablet_id))) {
+        LOG_WARN("fail to create mem_sync task record", KR(ret), K(tenant_id),
+                 K(domain_table_schema->get_table_id()), K(tablet_id));
+      } else {
+        LOG_INFO("mem_sync task record created, timer will execute memdata sync",
+                 K(domain_table_schema->get_table_id()), K(table_name), K(idx_name), K(tablet_id));
+      }
     }
   }
   return ret;
