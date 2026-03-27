@@ -117,6 +117,8 @@ private:
 
   static int generate_all_column_exprs(ObTableCtx &ctx);
 
+  static int build_generated_column_assign_item_expr(ObTableCtx &ctx);
+
   static int resolve_exprs(ObTableCtx &ctx);
 
   static int add_extra_column_exprs(ObTableCtx &ctx);
@@ -124,17 +126,19 @@ private:
   static int generate_calc_tablet_id_exprs(ObTableCtx &ctx);
   static int generate_calc_tablet_id_expr(ObTableCtx &ctx,
                                           const ObTableSchema &index_schema,
+                                          bool get_part_expr_from_assign,
                                           ObRawExpr *&expr);
   static int replace_assign_column_ref_expr(ObTableCtx &ctx, ObRawExpr *&expr);
   static int build_partition_expr(ObTableCtx &ctx,
                                   const ObTableSchema &table_schema,
-                                  const ObIArray<sql::ObRawExpr*> &part_column_exprs,
+                                  const ObIArray<std::pair<uint64_t, sql::ObRawExpr*>> &part_column_exprs,
                                   bool is_sub_part,
                                   sql::ObRawExpr *&partition_key_expr);
   static int get_part_key_column_expr(ObTableCtx &ctx,
                                       const ObPartitionKeyInfo &partition_keys,
-                                      ObIArray<sql::ObRawExpr*> &part_keys_expr);
-  static int replace_column_ref_in_part_expr(const ObIArray<sql::ObRawExpr*> &part_column_exprs,
+                                      bool get_part_expr_from_assign,
+                                      ObIArray<std::pair<uint64_t, sql::ObRawExpr*>> &part_keys_expr);
+  static int replace_column_ref_in_part_expr(const ObIArray<std::pair<uint64_t, sql::ObRawExpr*>> &part_column_exprs,
                                              sql::ObRawExpr *&partition_key_expr);
 private:
   static int write_datum(ObTableCtx &ctx,
@@ -274,6 +278,7 @@ private:
                                         sql::DASDelCtDefArray &del_ctdefs);
 
   static int get_rowkey_exprs(ObTableCtx &ctx, common::ObIArray<sql::ObRawExpr*> &rowkey_exprs);
+  static int get_heap_table_part_exprs(ObTableCtx &ctx, common::ObIArray<sql::ObRawExpr*> &part_key_exprs);
 
   static int generate_table_rowkey_info(ObTableCtx &ctx,
                                         ObTableInsCtDef &ins_ctdef);
