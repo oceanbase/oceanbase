@@ -1035,6 +1035,39 @@ int ObDBMSVectorMySql::check_sql_valid(const ObString &sql_query)
             break;
           }
         }
+        // Check for GROUP BY keyword (case-insensitive), allow any whitespace between GROUP and BY
+        else if (ptr + 5 <= end &&
+                 (ptr[0] == 'G' || ptr[0] == 'g') &&
+                 (ptr[1] == 'R' || ptr[1] == 'r') &&
+                 (ptr[2] == 'O' || ptr[2] == 'o') &&
+                 (ptr[3] == 'U' || ptr[3] == 'u') &&
+                 (ptr[4] == 'P' || ptr[4] == 'p')) {
+          bool is_word_start = (ptr == sql_query.ptr()) ||
+                               (!isalnum(static_cast<unsigned char>(*(ptr - 1))) && *(ptr - 1) != '_');
+          bool is_word_end_after_group = (ptr + 5 >= end) ||
+                                         (!isalnum(static_cast<unsigned char>(*(ptr + 5))) &&
+                                          *(ptr + 5) != '_');
+          if (is_word_start && is_word_end_after_group) {
+            const char *by_ptr = ptr + 5;
+            while (by_ptr < end &&
+                   (*by_ptr == ' ' || *by_ptr == '\t' || *by_ptr == '\n' || *by_ptr == '\r')) {
+              by_ptr++;
+            }
+            if (by_ptr + 2 <= end &&
+                (by_ptr[0] == 'B' || by_ptr[0] == 'b') &&
+                (by_ptr[1] == 'Y' || by_ptr[1] == 'y')) {
+              bool is_by_word_end = (by_ptr + 2 >= end) ||
+                                    (!isalnum(static_cast<unsigned char>(*(by_ptr + 2))) &&
+                                     *(by_ptr + 2) != '_');
+              if (is_by_word_end) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "GROUP BY not supported in recall rate calculation SQL");
+                LOG_WARN("GROUP BY found in sql_query, not supported", K(ret), K(sql_query));
+                break;
+              }
+            }
+          }
+        }
       }
 
       // Check for SELECT keyword (case-insensitive)
