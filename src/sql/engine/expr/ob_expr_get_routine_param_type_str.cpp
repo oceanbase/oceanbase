@@ -150,6 +150,12 @@ int ObExprGetRoutineParamTypeStr::eval_routine_param_type_str(const ObExpr &expr
       }
     }
   }
+  if (OB_FAIL(ret)) {
+    //ignore error and set result to default 'EXT'
+    ob_reset_tsi_warning_buffer();
+    ret = OB_SUCCESS;
+    res_datum.set_string("EXT", 3);
+  }
 #endif
   return ret;
 }
