@@ -21,6 +21,7 @@
 #include "share/vector_index/ob_ivf_async_task.h"
 #include "share/vector_index/ob_vector_index_aux_table_handler.h"
 #include "observer/ob_server.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 
 namespace oceanbase
 {
@@ -2295,7 +2296,18 @@ int ObVecIndexAsyncTask::check_finished_exchange_before(share::SCN &current_scn,
   } else {
     ObString key_str = row->storage_datums_[0].get_string();
     int64_t key_scn = 0;
-    if (OB_FAIL(ObPluginVectorIndexUtils::get_table_key_scn(key_str, key_scn))) {
+    if (key_str.suffix_match("_meta_data")) {
+      // For meta_data rows, key format is "!{tablet_id}_meta_data". SCN is in the value, not in the key.
+      // get_table_key_scn() would wrongly parse "meta" as SCN and fail with -4016.
+      ObString meta_data = row->storage_datums_[1].get_string();
+      if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(&allocator_, ObLongTextType, true, meta_data, nullptr))) {
+        LOG_WARN("read meta data fail for meta_data row", K(ret), K(key_str));
+      } else if (OB_FAIL(ObVectorIndexMeta::get_meta_scn(meta_data, key_scn))) {
+        LOG_WARN("get meta scn fail for meta_data row", K(ret), K(key_str));
+      } else if (key_scn == ctx_->task_status_.target_scn_.get_val_for_sql()) {
+        is_finished = true;
+      }
+    } else if (OB_FAIL(ObPluginVectorIndexUtils::get_table_key_scn(key_str, key_scn))) {
       LOG_WARN("fail to get table key scn", K(ret), K(key_str));
     } else if (key_scn == ctx_->task_status_.target_scn_.get_val_for_sql()) {
       is_finished = true;
