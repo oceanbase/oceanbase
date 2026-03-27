@@ -282,7 +282,6 @@ int ObCatalogMetaGetter::get_catalog(const uint64_t tenant_id,
     } else {
       switch (catalog_type) {
         case ObCatalogProperties::CatalogType::ODPS_TYPE: {
-#ifdef OB_BUILD_CPP_ODPS
           catalog = OB_NEWx(ObOdpsCatalog, &allocator_, allocator_);
           if (OB_ISNULL(catalog)) {
             ret = OB_ERR_UNEXPECTED;
@@ -292,10 +291,6 @@ int ObCatalogMetaGetter::get_catalog(const uint64_t tenant_id,
                                            schema->get_catalog_properties()))) {
             LOG_WARN("failed to init odps catalog", K(ret));
           }
-#else
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("ODPS CPP connector is not enabled", K(ret));
-#endif
           break;
         }
         case ObCatalogProperties::CatalogType::FILESYSTEM_TYPE: {

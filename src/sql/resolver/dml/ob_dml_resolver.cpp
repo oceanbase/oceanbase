@@ -5723,7 +5723,7 @@ int ObDMLResolver::build_column_schemas(ObTableSchema& table_schema,
             LOG_WARN("failed to set partition info for odps", K(ret));
           }
         }
-#elif
+#else
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "external odps table");
         LOG_WARN("not support to read odps in opensource", K(ret));

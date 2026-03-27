@@ -1829,8 +1829,9 @@ int ObExternalTableUtils::collect_external_file_list(
         OZ(basic_file_infos.push_back(basic_file_info));
       }
 #else
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_NOT_SUPPORTED;
       LOG_WARN("not support odps driver", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "external odps table cpp in opensource");
 #endif
     } else {
 #if defined (OB_BUILD_JNI_ODPS)
