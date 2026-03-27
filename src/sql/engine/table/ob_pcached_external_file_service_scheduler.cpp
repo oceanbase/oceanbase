@@ -10,6 +10,9 @@
 #include "share/storage_cache_policy/ob_storage_cache_common.h"
 #include "share/ob_thread_mgr.h"
 #include "ob_pcached_external_file_service.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/shared_storage/ob_ss_object_access_util.h"
+#endif
 
 using namespace oceanbase::share;
 using namespace oceanbase::common;
@@ -100,9 +103,26 @@ int ext_async_write_to_local(
     write_info.mtl_tenant_id_ = MTL_ID();
     write_info.set_is_write_cache(false); // preread macro is read cache
 
-    if (OB_FAIL(write_handle.async_write(write_info))) {
-      LOG_WARN("fail to async write", KR(ret),
-          K(write_info), KP(write_buf), K(write_size), K(write_handle));
+#ifdef OB_BUILD_SHARED_STORAGE
+    // SS mode: write to macro cache through shared-storage local cache writer.
+    // SN mode: keep original behavior (write_handle.async_write).
+    if (GCTX.is_shared_storage_mode()) {
+      // Need to reset macro_id_ first, because async_write_file_to_macro_cache() will set it again
+      // via object_handle.set_macro_block_id(), and ObStorageObjectHandle forbids setting twice.
+      const MacroBlockId macro_id = write_handle.get_macro_id(); // value copy is intentional
+      write_handle.reset_macro_id();
+      if (OB_FAIL(ObSSObjectAccessUtil::async_write_file_to_macro_cache(
+          false/*use_effective_tablet_id*/, macro_id, write_info, write_handle))) {
+        LOG_WARN("fail to async write file to macro cache", KR(ret),
+            K(macro_id), K(write_info), KP(write_buf), K(write_size), K(write_handle));
+      }
+    } else
+#endif
+    {
+      if (OB_FAIL(write_handle.async_write(write_info))) {
+        LOG_WARN("fail to async write", KR(ret),
+            K(write_info), KP(write_buf), K(write_size), K(write_handle));
+      }
     }
   }
   return ret;

@@ -14,6 +14,7 @@
 #include "sql/engine/table/ob_pcached_external_file_service.h"
 #include "sensitive_test/object_storage/test_object_storage.h"
 #include "storage/shared_storage/ob_ss_io_common_op.h"
+#include "storage/shared_storage/ob_disk_space_manager.h"
 #include "mittest/shared_storage/test_ss_macro_cache_mgr_util.h"
 #undef private
 #undef protected
@@ -552,6 +553,46 @@ TEST_F(TestSSPCachedExternalFileService, test_external_file_access)
     ASSERT_EQ(read_size, read_info.size_);
     ASSERT_EQ(0, MEMCMP(read_buf, write_buf + read_info.offset_, read_size));
     ASSERT_EQ(0, accesser->running_prefetch_tasks_map_.size());
+
+    OK(ObBackupIoAdapter::del_file(external_file_name, &info_base_));
+  }
+}
+
+TEST_F(TestSSPCachedExternalFileService, test_external_table_write_alloc_file_size)
+{
+  int ret = OB_SUCCESS;
+  if (enable_test_) {
+    ObTenantDiskSpaceManager *disk_space_mgr = MTL(ObTenantDiskSpaceManager *);
+    ASSERT_NE(nullptr, disk_space_mgr);
+    ObSSMacroCacheStat macro_block_stat;
+    OK(disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::MACRO_BLOCK, macro_block_stat));
+    const int64_t used_before = macro_block_stat.used_;
+
+    // generate external table file
+    const int64_t content_size = 4 * MB + 7;
+    ObArenaAllocator allocator;
+    char *write_buf = nullptr;
+    char external_file_name[OB_MAX_URI_LENGTH] = { 0 };
+    OK(generate_external_file(allocator, content_size,
+        external_file_name, sizeof(external_file_name), write_buf));
+
+    // buffered read triggers prefetch write to local cache (EXTERNAL_TABLE_FILE)
+    char read_buf[100] = { 0 };
+    ObExternalAccessFileInfo external_file_info;
+    ObExternalReadInfo external_read_info;
+    OK(init_external_info(
+        allocator, external_file_name, read_buf, sizeof(read_buf), 0/*offset*/,
+        external_file_info, external_read_info));
+    OK(read_and_check(external_file_info, external_read_info, write_buf, external_read_info.size_));
+    external_read_info.offset_ = 2 * MB;
+    OK(read_and_check(external_file_info, external_read_info, write_buf, external_read_info.size_));
+    external_read_info.offset_ = 4 * MB;
+    external_read_info.size_ = (content_size % (2 * MB));
+    OK(read_and_check(external_file_info, external_read_info, write_buf, external_read_info.size_));
+    OK(wait_prefetch_task_finish());
+
+    OK(disk_space_mgr->get_macro_cache_stat(ObSSMacroCacheType::MACRO_BLOCK, macro_block_stat));
+    ASSERT_GE(macro_block_stat.used_, used_before + content_size);
 
     OK(ObBackupIoAdapter::del_file(external_file_name, &info_base_));
   }
