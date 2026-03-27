@@ -649,8 +649,10 @@ int ObPluginVectorIndexLoadScheduler::execute_adapter_maintenance(ObIArray<uint6
         } else if (OB_ISNULL(table_schema)) {
           ret = OB_TABLE_NOT_EXIST;
           LOG_WARN("table schema is null", KR(ret), K(table_id), K_(tenant_id));
-        } else if (table_schema->is_in_recyclebin()) {
+        } else if (table_schema->is_in_recyclebin() || table_schema->is_unavailable_index()) {
           // do nothing
+          LOG_INFO("table is in recyclebin or unavailable, skip", K(table_id), K(table_schema->get_index_type()),
+                   K(table_schema->is_unavailable_index()), K(table_schema->is_in_recyclebin()));
         } else if (OB_FAIL(check_is_vector_index_table(*table_schema, is_vector_index, is_shared_index))) {
           LOG_WARN("fail to check is vector index", KR(ret));
         } else if (is_vector_index) {
