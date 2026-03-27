@@ -688,13 +688,15 @@ int ObMultipleGetMerge::inner_get_next_row_for_sstables_exist(ObDatumRow &row)
         }
         // prepare to prefetch next rowkey
         if (OB_FAIL(ret)) {
-        } else if (FALSE_IT(++get_row_range_idx_)) {
-        } else if (prefetch_row_range_idx_ < rowkey_cnt) {
+        } else if (prefetch_row_range_idx_ < rowkey_cnt && prefetch_row_range_idx_ - get_row_range_idx_ < common::OB_MULTI_GET_OPEN_ROWKEY_NUM) {
           if (OB_FAIL(prepare_prefetch_next_rowkey(multi_version_start, read_snapshot_version))) {
             STORAGE_LOG(WARN, "fail to prepare to prefetch next rowkey", K(ret), K(prefetch_row_range_idx_), K(rowkey_cnt));
           } else {
             ++prefetch_row_range_idx_;
           }
+        }
+        if (OB_SUCC(ret)) {
+          ++get_row_range_idx_;
         }
       }
     }
