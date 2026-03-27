@@ -4842,6 +4842,7 @@ int ObTransformUtils::check_need_add_cast(ObRawExprFactory &expr_factory,
   }
   return ret;
 }
+
 int ObTransformUtils::add_cast_for_replace_if_need(ObRawExprFactory &expr_factory,
                                                    const ObRawExpr *from_expr,
                                                    ObRawExpr *&to_expr,
@@ -8085,89 +8086,6 @@ int ObTransformUtils::create_aggr_expr(ObTransformerCtx *ctx,
     LOG_WARN("failed to formalize windown function", K(ret));
   } else if (OB_FAIL(agg_expr->pull_relation_id())) {
     LOG_WARN("failed to pull relation id and levels", K(ret));
-  }
-  return ret;
-}
-int ObTransformUtils::create_select_item_for_set(ObSQLSessionInfo *session_info,
-                                                  ObRawExprFactory *expr_factory,
-                                                  ObItemType set_op_type,
-                                                  const SelectItem &child_select_item,
-                                                  int64_t idx,
-                                                  const ObExprResType &res_type,
-                                                  SelectItem& set_select_item)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(session_info) || OB_ISNULL(expr_factory) || idx < 0) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(ret));
-  } else {
-    set_select_item.alias_name_ = child_select_item.alias_name_;
-    set_select_item.expr_name_ = child_select_item.expr_name_;
-    set_select_item.is_real_alias_ = child_select_item.is_real_alias_ ||
-                ObRawExprUtils::is_column_ref_skip_implicit_cast(child_select_item.expr_);
-    set_select_item.esc_str_flag_ = child_select_item.esc_str_flag_;
-    set_select_item.paramed_alias_name_ = child_select_item.paramed_alias_name_;
-    set_select_item.need_check_dup_name_ = child_select_item.need_check_dup_name_;
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(set_select_item.questions_pos_.assign(child_select_item.questions_pos_))) {
-    LOG_WARN("failed to assign questions pos", K(ret));
-  } else if (OB_FAIL(set_select_item.params_idx_.assign(child_select_item.params_idx_))) {
-    LOG_WARN("failed to assign params idx", K(ret));
-  } else if (OB_FAIL(set_select_item.neg_param_idx_.assign(child_select_item.neg_param_idx_))) {
-    LOG_WARN("failed to assign neg param idx", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::make_set_op_expr(*expr_factory,
-                                                      idx,
-                                                      set_op_type,
-                                                      res_type,
-                                                      session_info,
-                                                      set_select_item.expr_))) {
-    LOG_WARN("create set op expr failed", K(ret));
-  }
-  return ret;
-}
-int ObTransformUtils::generate_select_list_for_set(ObSQLSessionInfo *session_info,
-                                                   ObRawExprFactory *expr_factory,
-                                                   ObSelectStmt *select_stmt,
-                                                   const ObIArray<ObExprResType> &target_res_types)
-{
-  int ret = OB_SUCCESS;
-  ObSelectStmt *child_stmt = NULL;
-  ObSelectStmt *tmp_child_stmt = NULL;
-  if (OB_ISNULL(session_info) || OB_ISNULL(expr_factory) || OB_ISNULL(select_stmt)
-      || OB_UNLIKELY(select_stmt->get_set_query().empty())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected error", K(ret));
-  } else if (OB_ISNULL(child_stmt = select_stmt->get_set_query(0))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected set stmt", K(ret), K(child_stmt));
-  } else {
-    select_stmt->get_select_items().reset();
-    ObItemType set_op_type = static_cast<ObItemType>(T_OP_SET + select_stmt->get_set_op());
-    const int64_t num = child_stmt->get_select_item_size();
-    SelectItem new_select_item;
-    if (num != target_res_types.count()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected select item size", K(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < num; ++i) {
-      SelectItem &select_item = child_stmt->get_select_item(i);
-      if (OB_FAIL(create_select_item_for_set(session_info,
-                                             expr_factory,
-                                             set_op_type,
-                                             select_item,
-                                             i,
-                                             target_res_types.at(i),
-                                             new_select_item))) {
-        LOG_WARN("failed to create set select item", K(ret));
-      } else if (OB_FAIL(select_stmt->add_select_item(new_select_item))) {
-        LOG_WARN("push back set select item failed", K(ret));
-      } else if (OB_ISNULL(new_select_item.expr_) ||
-                 OB_UNLIKELY(!new_select_item.expr_->is_set_op_expr())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("expr is null or is not set op expr", "set op", PC(new_select_item.expr_));
-      }
-    }
   }
   return ret;
 }
