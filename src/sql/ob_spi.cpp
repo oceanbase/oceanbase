@@ -7953,6 +7953,7 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
                                                   true,
                                                   can_retry));
           OZ (query_sender->send_eof_packet(true));
+          OZ (query_sender->get_packet_sender().flush_buffer(false));
         }
 
         OX(implicit_cursor->set_rowcount(into_count > 0 ? 1 : 0));
