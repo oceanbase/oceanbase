@@ -11,7 +11,9 @@
 #include "storage/blocksstable/ob_data_file_prepare.h"
 #include "mtlenv/mock_tenant_module_env.h"
 #include "src/storage/backup/ob_backup_iterator.h"
-#include "close_modules/shared_storage/storage/incremental/sslog/ob_sslog_define.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/incremental/sslog/ob_sslog_define.h"
+#endif
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -208,6 +210,7 @@ TEST(TestBackupUtils, test_task_mgr)
   test_task_mgr(1024, 10240, 1);
 }
 
+#ifdef OB_BUILD_SHARED_STORAGE
 TEST(TestBackupUtils, test_should_backup_sslog_meta_type)
 {
   using namespace oceanbase::sslog;
@@ -230,6 +233,7 @@ TEST(TestBackupUtils, test_should_backup_sslog_meta_type)
   EXPECT_FALSE(should_backup_sslog_meta_type(ObSSLogMetaType::SSLOG_TABLET_SSTABLE_FOR_DDL));
   EXPECT_FALSE(should_backup_sslog_meta_type(ObSSLogMetaType::SSLOG_MAX_META));
 }
+#endif
 
 void make_macro_block_id_array(const int64_t tablet_id, const int64_t logic_version,
     const common::ObIArray<int64_t> &data_seq_list, common::ObIArray<ObBackupMacroBlockIDPair> &id_list)
