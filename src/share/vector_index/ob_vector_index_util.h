@@ -304,7 +304,9 @@ static const uint64_t MAX_IVF_POST_DIST_CALC_CNT = 500000;
       is_multi_value_index_(false),
       is_spatial_index_(false),
       can_extract_range_(false),
-      with_extra_info_(false) {}
+      with_extra_info_(false),
+      strategy_(ObVecIdxQueryStrategy::RECALL_FIRST),
+      pre_filtering_timeout_(-1) {}
   inline void set_vec_idx_type(ObVecIndexType vec_idx_type) { vec_idx_type_ = vec_idx_type;}
   ObVecIndexType get_vec_idx_type() const { return vec_idx_type_; }
   inline double get_selectivity() const { return selectivity_; }
@@ -312,6 +314,10 @@ static const uint64_t MAX_IVF_POST_DIST_CALC_CNT = 500000;
   inline void set_row_count(int64_t row_count) { row_count_ = row_count;}
   inline void set_can_use_vec_pri_opt(bool can_use_vec_pri_opt) {can_use_vec_pri_opt_ = can_use_vec_pri_opt;}
   bool can_use_vec_pri_opt() const { return can_use_vec_pri_opt_; }
+  inline void set_query_strategy(ObVecIdxQueryStrategy strategy) { strategy_ = strategy; }
+  inline ObVecIdxQueryStrategy get_query_strategy() const { return strategy_; }
+  inline void set_pre_filtering_timeout(int64_t pre_filtering_timeout) { pre_filtering_timeout_ = pre_filtering_timeout; }
+  inline int64_t get_pre_filtering_timeout() const { return pre_filtering_timeout_; }
   inline bool is_hnsw_vec_scan() const
   {
     return vector_index_param_.type_ == ObVectorIndexAlgorithmType::VIAT_HNSW ||
@@ -341,7 +347,8 @@ static const uint64_t MAX_IVF_POST_DIST_CALC_CNT = 500000;
   }
   TO_STRING_KV(K_(vec_idx_type), K_(adaptive_try_path), K_(selectivity), K_(row_count),
   K_(can_use_vec_pri_opt), K_(is_multi_value_index), K_(is_spatial_index),
-  K_(can_extract_range), K_(with_extra_info), K_(vector_index_param));
+  K_(can_extract_range), K_(with_extra_info), K_(vector_index_param),
+  K_(strategy), K_(pre_filtering_timeout));
   ObVecIndexType vec_idx_type_;                // pre & post & adaptive
   ObVecIdxAdaTryPath adaptive_try_path_;
   double selectivity_;
@@ -352,6 +359,8 @@ static const uint64_t MAX_IVF_POST_DIST_CALC_CNT = 500000;
   bool is_spatial_index_;
   bool can_extract_range_;
   bool with_extra_info_;
+  ObVecIdxQueryStrategy strategy_;
+  int64_t pre_filtering_timeout_;
 };
 
 struct VecIndexAccessInfo

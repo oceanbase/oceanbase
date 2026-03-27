@@ -251,13 +251,15 @@ struct ObVecIndexInfo
     is_spatial_index_(false),
     can_extract_range_(false),
     vec_index_name_(),
-    all_filters_can_be_picked_out_(false)
+    all_filters_can_be_picked_out_(false),
+    strategy_(ObVecIdxQueryStrategy::RECALL_FIRST),
+    pre_filtering_timeout_(-1)
   { }
   ~ObVecIndexInfo() {}
 
   TO_STRING_KV(K_(sort_key), KPC_(topk_limit_expr), KPC_(topk_offset_expr), KPC_(target_vec_column),
               KPC_(vec_id_column), K_(aux_table_column), K_(aux_table_id), K_(main_table_tid),
-              K_(vec_type), K_(vector_index_param), K_(query_param), K_(vec_index_name));
+              K_(vec_type), K_(vector_index_param), K_(query_param), K_(vec_index_name), K_(strategy), K_(pre_filtering_timeout));
   bool need_sort() const { return sort_key_.expr_ != nullptr; }
   inline void set_vec_algorithm_type(ObVectorIndexAlgorithmType type) { vector_index_param_.type_ = type; }
   inline void set_can_use_vec_pri_opt(bool can_use_vec_pri_opt) {can_use_vec_pri_opt_ = can_use_vec_pri_opt;}
@@ -329,6 +331,8 @@ struct ObVecIndexInfo
   bool can_extract_range_;
   ObString vec_index_name_;
   bool all_filters_can_be_picked_out_;
+  ObVecIdxQueryStrategy strategy_;
+  int64_t pre_filtering_timeout_;
 };
 
 class ObLogTableScan : public ObLogicalOperator
