@@ -469,6 +469,13 @@ int ObSSTableRowScanner<PrefetchType>::fetch_row(ObSSTableReadHandle &read_handl
                 K(prefetcher_.cur_micro_data_fetch_idx_), K(read_handle));
       prefetcher_.cur_micro_data_fetch_idx_ = read_handle.micro_begin_idx_;
       need_open_micro = true;
+    } else if (iter_param_->is_skip_scan() &&
+               prefetcher_.current_micro_info().skip_state_.is_skipped() &&
+               prefetcher_.cur_micro_data_fetch_idx_ < read_handle.micro_end_idx_) {
+      LOG_DEBUG("[INDEX SKIP SCAN] current micro is skipped, skip to next micro", K(cur_range_idx_),
+                K(prefetcher_.cur_micro_data_fetch_idx_), K(read_handle));
+      ++prefetcher_.cur_micro_data_fetch_idx_;
+      need_open_micro = true;
     }
     if (need_open_micro) {
       if (OB_FAIL(open_cur_data_block(read_handle))) {
@@ -598,6 +605,13 @@ int ObSSTableRowScanner<PrefetchType>::fetch_rows(ObSSTableReadHandle &read_hand
       LOG_DEBUG("[INDEX BLOCK] begin to fetch row", K(cur_range_idx_),
                 K(prefetcher_.cur_micro_data_fetch_idx_), K(read_handle));
       prefetcher_.cur_micro_data_fetch_idx_ = read_handle.micro_begin_idx_;
+      need_open_micro = true;
+    } else if (iter_param_->is_skip_scan() &&
+               prefetcher_.current_micro_info().skip_state_.is_skipped() &&
+               prefetcher_.cur_micro_data_fetch_idx_ < read_handle.micro_end_idx_) {
+      LOG_DEBUG("[INDEX SKIP SCAN] current micro is skipped, skip to next micro", K(cur_range_idx_),
+          K(prefetcher_.cur_micro_data_fetch_idx_), K(read_handle));
+      ++prefetcher_.cur_micro_data_fetch_idx_;
       need_open_micro = true;
     }
     if (need_open_micro) {
