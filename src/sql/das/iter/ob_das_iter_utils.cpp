@@ -5147,6 +5147,7 @@ int ObDASIterUtils::create_vec_hnsw_lookup_tree(ObTableScanParam &scan_param,
               && OB_FAIL(create_das_scan_iter(alloc, rowkey_vid_ctdef, rowkey_vid_rtdef, rowkey_vid_table_iter))) {
         LOG_WARN("failed to create rowkey vid table iter", K(ret));
       } else if (OB_NOT_NULL(rowkey_vid_table_iter)
+                 && vec_aux_ctdef->adaptive_try_path_ != ObVecIdxAdaTryPath::VEC_INDEX_IN_FILTER // VEC_INDEX_IN_FILTER cannot change path from pre-filter to post-iterative
                  && vec_aux_ctdef->can_use_vec_pri_opt()
                  && vec_aux_ctdef->strategy_ == ObVecIdxQueryStrategy::LATENCY_FIRST) {
         rowkey_vid_table_iter->set_pre_filtering_timeout(vec_aux_ctdef->pre_filtering_timeout_);

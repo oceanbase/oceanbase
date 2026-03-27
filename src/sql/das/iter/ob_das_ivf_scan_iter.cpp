@@ -1587,14 +1587,6 @@ void ObDASIvfBaseScanIter::reuse_cid_ctx()
   iterative_filter_ctx_.reuse();
 }
 
-int64_t ObDASIvfBaseScanIter::get_cid_vec_batch_count()
-{
-  int batch_count = ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE;
-  if (strategy_ == ObVecIdxQueryStrategy::LATENCY_FIRST && max_scan_vectors_ > 0 && adaptive_ctx_.iter_times_ > 1) {
-    batch_count = OB_MIN(max_scan_vectors_ - adaptive_ctx_.cid_vec_scan_rows_ + 1, ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE);
-  }
-  return batch_count;
-}
 /*************************** implement ObDASIvfScanIter ****************************/
 int ObDASIvfScanIter::inner_init(ObDASIterParam &param)
 {
@@ -1840,8 +1832,7 @@ int ObDASIvfScanIter::get_rowkeys_to_heap(const ObString &cid_str, int64_t cid_v
   if (OB_FAIL(scan_cid_range(cid_str, cid_vec_pri_key_cnt, cid_vec_ctdef, cid_vec_rtdef, cid_vec_scan_iter))) {
     LOG_WARN("fail to scan cid range", K(ret), K(cid_str), K(cid_vec_pri_key_cnt));
   } else if (is_vectorized) {
-    int64_t cid_vec_batch_count = get_cid_vec_batch_count();
-    IVF_GET_NEXT_ROWS_BEGIN_WITH_BATCH(cid_vec_iter_, cid_vec_batch_count)
+    IVF_GET_NEXT_ROWS_BEGIN(cid_vec_iter_)
     if (OB_SUCC(ret)) {
       ObEvalCtx::BatchInfoScopeGuard guard(*vec_aux_rtdef_->eval_ctx_);
       guard.set_batch_size(scan_row_cnt);
@@ -1849,6 +1840,12 @@ int ObDASIvfScanIter::get_rowkeys_to_heap(const ObString &cid_str, int64_t cid_v
       ObExpr *cid_expr = cid_vec_ctdef->result_output_[CID_VECTOR_IDX];
       ObDatum *cid_datum = cid_expr->locate_batch_datums(*vec_aux_rtdef_->eval_ctx_);
       adaptive_ctx_.cid_vec_scan_rows_ += scan_row_cnt;
+      if (strategy_ == ObVecIdxQueryStrategy::LATENCY_FIRST && max_scan_vectors_ > 0 && adaptive_ctx_.iter_times_ > 1) {
+        if (adaptive_ctx_.cid_vec_scan_rows_ > max_scan_vectors_) {
+          LOG_INFO("latency mode reach max iter limit", K(ret), K(max_scan_vectors_), K(adaptive_ctx_));
+          index_end = true;
+        }
+      }
       for (int64_t i = 0; OB_SUCC(ret) && i < scan_row_cnt; ++i) {
         guard.set_batch_idx(i);
         ObRowkey main_rowkey;
@@ -2954,14 +2951,19 @@ int ObDASIvfPQScanIter::calc_nearest_limit_rowkeys_in_cids(
       } else if (OB_FAIL(scan_cid_range(cid_str, cid_vec_pri_key_cnt, cid_vec_ctdef, cid_vec_rtdef, cid_vec_scan_iter))) {
         LOG_WARN("fail to scan cid range", K(ret), K(cur_cid), K(cid_vec_pri_key_cnt));
       } else if (is_vectorized) {
-        int64_t cid_vec_batch_count = get_cid_vec_batch_count();
-        IVF_GET_NEXT_ROWS_BEGIN_WITH_BATCH(cid_vec_iter_, cid_vec_batch_count)
+        IVF_GET_NEXT_ROWS_BEGIN(cid_vec_iter_)
         if (OB_SUCC(ret)) {
           ObEvalCtx::BatchInfoScopeGuard guard(*vec_aux_rtdef_->eval_ctx_);
           guard.set_batch_size(scan_row_cnt);
           ObExpr *cid_expr = cid_vec_ctdef->result_output_[PQ_IDS_IDX];
           ObDatum *cid_datum = cid_expr->locate_batch_datums(*vec_aux_rtdef_->eval_ctx_);
           adaptive_ctx_.cid_vec_scan_rows_ += scan_row_cnt;
+          if (strategy_ == ObVecIdxQueryStrategy::LATENCY_FIRST && max_scan_vectors_ > 0 && adaptive_ctx_.iter_times_ > 1) {
+            if (adaptive_ctx_.cid_vec_scan_rows_ > max_scan_vectors_) {
+              LOG_INFO("latency mode reach max iter limit", K(ret), K(max_scan_vectors_), K(adaptive_ctx_));
+              index_end = true;
+            }
+          }
 
           if (pre_compute_table) {
             if (OB_FAIL(calc_distance_with_precompute(guard, scan_row_cnt, rowkey_cnt, filter_main_rowkey,
