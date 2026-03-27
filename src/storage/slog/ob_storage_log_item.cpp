@@ -119,6 +119,7 @@ void ObStorageLogItem::destroy()
   log_cnt_ = 0;
   if (nullptr != local_offset_arr_ && local_offset_arr_ != offset_arr_) {
     ob_free(local_offset_arr_);
+    local_offset_arr_ = nullptr;
   }
 }
 
