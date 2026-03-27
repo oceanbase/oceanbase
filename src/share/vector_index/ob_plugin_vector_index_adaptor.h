@@ -595,22 +595,11 @@ struct ObVectorIndexSharedTableInfo
   {}
   bool is_valid()
   {
-    return is_vid_rowkey_info_consistent() && data_table_id_ != OB_INVALID_ID;
-  }
-
-  bool is_vid_rowkey_info_consistent()
-  {
-    bool all_valid = (rowkey_vid_table_id_ != OB_INVALID_ID && vid_rowkey_table_id_ != OB_INVALID_ID
-                     && rowkey_vid_tablet_id_.is_valid() && vid_rowkey_tablet_id_.is_valid());
-    bool all_invalid = (rowkey_vid_table_id_ == OB_INVALID_ID && vid_rowkey_table_id_ == OB_INVALID_ID
-                       && !rowkey_vid_tablet_id_.is_valid() && !vid_rowkey_tablet_id_.is_valid());
-    return all_valid || all_invalid;
-  }
-
-  bool has_vid_rowkey_info()
-  {
-    return rowkey_vid_table_id_ != OB_INVALID_ID && vid_rowkey_table_id_ != OB_INVALID_ID
-           && rowkey_vid_tablet_id_.is_valid() && vid_rowkey_tablet_id_.is_valid();
+    return rowkey_vid_table_id_ != OB_INVALID_ID
+           && vid_rowkey_table_id_ != OB_INVALID_ID
+           && data_table_id_ != OB_INVALID_ID
+           && rowkey_vid_tablet_id_.is_valid()
+           && vid_rowkey_tablet_id_.is_valid();
   }
 
   TO_STRING_KV(K_(rowkey_vid_table_id),
@@ -662,12 +651,7 @@ public:
   bool is_vbitmap_tablet_valid() { return vbitmap_tablet_id_.is_valid(); }
   bool is_data_tablet_valid() { return data_tablet_id_.is_valid(); }
   bool is_embedded_tablet_valid() { return embedded_tablet_id_.is_valid(); }
-  bool has_vid_rowkey_info() {
-    return rowkey_vid_table_id_ != OB_INVALID_ID
-           && rowkey_vid_tablet_id_.is_valid()
-           && vid_rowkey_table_id_ != OB_INVALID_ID
-           && vid_rowkey_tablet_id_.is_valid();
-  }
+  bool is_vid_rowkey_info_valid() { return rowkey_vid_table_id_ != OB_INVALID_ID && rowkey_vid_tablet_id_.is_valid(); }
   bool is_need_async_optimal() { return need_be_optimized_ && ! has_frozen(); }
   bool has_frozen() const { return frozen_data_.is_valid() && frozen_data_->has_frozen(); }
   bool is_frozen_finish() const { return frozen_data_.is_valid() && frozen_data_->is_frozen_finish(); }
@@ -959,7 +943,11 @@ public:
   }
   OB_INLINE bool get_is_need_vid()
   {
-    return has_vid_rowkey_info();
+    return is_need_vid_;
+  }
+  OB_INLINE void set_is_need_vid(bool is_need_vid)
+  {
+    is_need_vid_ = is_need_vid;
   }
 
   inline bool is_sparse_vector_index_type()
@@ -1053,7 +1041,7 @@ public:
               K_(inc_table_id), K_(vbitmap_table_id), K_(snapshot_table_id), K_(embedded_table_id),
               K_(ref_cnt), K_(idle_cnt), KP_(allocator),
               K_(index_identity), K_(follower_sync_statistics),
-              K_(mem_check_cnt), K_(is_mem_limited), K_(snapshot_key_prefix), K_(replace_scn), K_(dump_info));
+              K_(mem_check_cnt), K_(is_mem_limited), K_(is_need_vid), K_(snapshot_key_prefix), K_(replace_scn), K_(dump_info));
 
 private:
   int do_fill_vector_index_all_segments(common::ObIArray<ObVectorSegmentInfo> &segment_infos);
@@ -1149,6 +1137,8 @@ private:
   bool reload_finish_;
   int64_t last_embedding_time_;
 
+  // for vid opt
+  bool is_need_vid_;
   ObCollectionMapType *sparse_vector_type_;
   bool index_statistics_updated_;
 
