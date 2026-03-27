@@ -324,3 +324,4 @@
   RPC_S(PR5 validate_backup_ls_task, OB_VALIDATE_BACKUP_LS_TASK, (ObBackupValidateLSArg));
   RPC_S(PR5 report_backup_validate_over, OB_VALIDATE_BACKUP_LS_TASK_RES, (ObBackupTaskRes));
   RPC_S(PR5 admin_clear_transfer_meta_info_op, OB_HA_CLEAR_TRANSFER_META_INFO, (obrpc::ObAdminClearTransferMetaInfoOpArg));
+  RPC_AP(PR5 get_tenant_memory_info, OB_GET_TENANT_MEMORY_INFO, (obrpc::ObGetTenantMemoryInfoArg), obrpc::ObGetTenantMemoryInfoResult);

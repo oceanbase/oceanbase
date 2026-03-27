@@ -310,6 +310,9 @@ public:
   int ob_admin_clear_transfer_meta_info(
       const obrpc::ObAdminClearTransferMetaInfoOpArg &arg);
 
+// injected from ob_srv_mem_info.h
+#include "observer/ob_srv_mem_info.h"
+
 private:
   int inner_fill_tablet_info_(
       const int64_t tenant_id,

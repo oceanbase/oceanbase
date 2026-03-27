@@ -108,6 +108,7 @@ RPC_F(obrpc::OB_CHECK_SYS_TABLE_SCHEMA, obrpc::ObCheckSysTableSchemaArg, obrpc::
 RPC_F(obrpc::OB_PREWARM_SS_LOCAL_CACHE, obrpc::ObPrewarmSSLocalCacheArg, obrpc::ObPrewarmSSLocalCacheResult, ObPrewarmSSLocalCacheProxy);
 #endif
 RPC_RS(obrpc::OB_NON_ATOMIC_DROP_TABLE_IN_DATABASE, obrpc::ObDropTableArg, obrpc::ObDropTableRes, ObNonAtomicDropTableInDBProxy);
+RPC_F(obrpc::OB_GET_TENANT_MEMORY_INFO, obrpc::ObGetTenantMemoryInfoArg, obrpc::ObGetTenantMemoryInfoResult, ObGetTenantMemoryInfoProxy);
 
 
 }//end namespace rootserver
