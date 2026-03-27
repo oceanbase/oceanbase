@@ -3428,7 +3428,7 @@ DEF_BOOL(_ss_cold_tablet_delay_upload, OB_TENANT_PARAMETER, "false",
 DEF_BOOL(_ss_tablet_upload_follow_cache_policy, OB_TENANT_PARAMETER, "True",
          "Enable or disable tablet upload follow cache policy",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(_enable_ss_fast_migration, OB_TENANT_PARAMETER, "True",
+DEF_BOOL(_enable_ss_fast_migration, OB_TENANT_PARAMETER, "False",
          "use fast migration in shared-storage if enable",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_STR(ob_vector_search_strategy, OB_TENANT_PARAMETER, "LATENCY_FIRST",
