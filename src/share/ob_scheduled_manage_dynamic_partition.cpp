@@ -261,7 +261,6 @@ int ObScheduledManageDynamicPartition::parse_next_date(
 {
   int ret = OB_SUCCESS;
   next_date_ts = 0;
-  int32_t offset_sec = 0;
   if (OB_ISNULL(session)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("null session", KR(ret), K(session), K(next_date_str));
@@ -278,7 +277,6 @@ int ObScheduledManageDynamicPartition::parse_next_date(
     if (OB_ISNULL(tz_info)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tz info is null", KR(ret));
-    } else if (FALSE_IT(offset_sec = tz_info->get_offset())) {
     } else if (lib::is_oracle_mode()) {
       if (OB_FAIL(ObObjCaster::to_type(ObTimestampTZType, cast_ctx, src_obj, time_obj))) {
         LOG_WARN("failed to ObTimestampTZType type", KR(ret), K(src_obj));
@@ -286,8 +284,18 @@ int ObScheduledManageDynamicPartition::parse_next_date(
         next_date_ts = time_obj.get_otimestamp_value().time_us_;
       }
     } else { // mysql mode
+      int32_t offset_sec = 0;
+      int32_t tz_id = OB_INVALID_INDEX;
+      int32_t tran_type_id = OB_INVALID_INDEX;
       if (OB_FAIL(ObObjCaster::to_type(ObDateTimeType, cast_ctx, src_obj, time_obj))) {
         LOG_WARN("failed to ObDateTimeType type", KR(ret), K(src_obj));
+      } else if (OB_FAIL(tz_info->get_timezone_sub_offset(
+                         USEC_TO_SEC(time_obj.get_datetime()),
+                         ObString(),
+                         offset_sec,
+                         tz_id,
+                         tran_type_id))) {
+        LOG_WARN("failed to get timezone sub offset", KR(ret), K(time_obj));
       } else {
         next_date_ts = time_obj.get_datetime() - SEC_TO_USEC(offset_sec);
       }
