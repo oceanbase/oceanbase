@@ -1007,6 +1007,19 @@ int ObPluginVectorIndexAdaptor::fill_mem_context_detail_info(char *buf, int64_t 
 int ObPluginVectorIndexAdaptor::fill_vector_index_all_segments(common::ObIArray<ObVectorSegmentInfo> &segment_infos)
 {
   int ret = OB_SUCCESS;
+  // Make sure this function only fills HNSW segment info; non-HNSW types do not maintain
+  // segment metadata in the same way, so return directly.
+  if (!ObVectorIndexUtil::is_hnsw_index_type(type_)) {
+    LOG_INFO("not hnsw index type", K(type_));
+  } else if (OB_FAIL(do_fill_vector_index_all_segments(segment_infos))) {
+    LOG_WARN("failed to fill vector index all segments", K(ret));
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexAdaptor::do_fill_vector_index_all_segments(common::ObIArray<ObVectorSegmentInfo> &segment_infos)
+{
+  int ret = OB_SUCCESS;
   segment_infos.reset();
 
   // Fill common fields for all segments
@@ -1032,20 +1045,20 @@ int ObPluginVectorIndexAdaptor::fill_vector_index_all_segments(common::ObIArray<
     seg_info.segment_state_ = ObVectorIndexSegmentState::ACTIVE;
     seg_info.scn_ = incr_data_->scn_.get_val_for_inner_table_field(); // TODO: consider either use now or zero
 
-    if (incr_data_->segment_handle_.is_valid()) {
+    ObVectorIndexSegmentHandle incr_handle = incr_data_->segment_handle_;
+    if (incr_handle.is_valid()) {
       int64_t vec_cnt = 0;
-      int64_t min_vid = 0;
+      int64_t min_vid = INT64_MAX;
       int64_t max_vid = 0;
-      if (OB_FAIL(incr_data_->segment_handle_->get_index_number(vec_cnt))) {
+      if (OB_FAIL(incr_handle->get_index_number(vec_cnt))) {
         LOG_WARN("failed to get incr index number", K(ret));
-      } else if (OB_FAIL(incr_data_->segment_handle_->get_vid_bound(min_vid, max_vid))) {
-        LOG_WARN("failed to get incr vid bound", K(ret));
       } else {
+        incr_handle->get_read_bound_vid(max_vid, min_vid);
         seg_info.vector_cnt_ = vec_cnt;
         seg_info.min_vid_ = min_vid;
         seg_info.max_vid_ = max_vid;
-        seg_info.mem_used_ = incr_data_->segment_handle_->get_mem_used();
-        seg_info.ref_cnt_ = incr_data_->segment_handle_->get_ref();
+        seg_info.mem_used_ = incr_handle->get_mem_used();
+        seg_info.ref_cnt_ = incr_handle->get_ref();
       }
     } else {
       seg_info.vector_cnt_ = -1;
@@ -1061,7 +1074,7 @@ int ObPluginVectorIndexAdaptor::fill_vector_index_all_segments(common::ObIArray<
   }
 
   // Fill frozen segment (frozen_data_)
-  if (OB_SUCC(ret) && has_frozen() && frozen_data_->segment_handle_.is_valid()) {
+  if (OB_SUCC(ret) && has_frozen()) {
     TCRLockGuard lock_guard(frozen_data_->mem_data_rwlock_);
     ObVectorSegmentInfo seg_info;
     seg_info.reset();
@@ -1071,24 +1084,34 @@ int ObPluginVectorIndexAdaptor::fill_vector_index_all_segments(common::ObIArray<
     seg_info.inc_index_tablet_id_ = inc_index_tablet_id;
     seg_info.snapshot_index_tablet_id_ = snapshot_index_tablet_id;
     seg_info.block_count_ = 0; // Frozen segment not persisted yet
-    seg_info.segment_type_ = ObVectorIndexSegmentType::FREEZE_PERSIST;
-    seg_info.index_type_ = frozen_data_->segment_handle_->get_index_type();
+    seg_info.segment_type_ = ObVectorIndexSegmentType::IN_MEMORY;
     seg_info.segment_state_ = ObVectorIndexSegmentState::FROZEN; // TODO: consider fill info here or set in metadata
     seg_info.scn_ = frozen_data_->frozen_scn_.get_val_for_inner_table_field();
 
-    int64_t vec_cnt = 0;
-    int64_t min_vid = 0;
-    int64_t max_vid = 0;
-    if (OB_FAIL(frozen_data_->segment_handle_->get_index_number(vec_cnt))) {
-      LOG_WARN("failed to get frozen index number", K(ret));
-    } else if (OB_FAIL(frozen_data_->segment_handle_->get_vid_bound(min_vid, max_vid))) {
-      LOG_WARN("failed to get frozen vid bound", K(ret));
+    ObVectorIndexSegmentHandle frozen_handle = frozen_data_->segment_handle_;
+    if (frozen_handle.is_valid()) {
+      seg_info.index_type_ = frozen_handle->get_index_type();
+
+      int64_t vec_cnt = 0;
+      int64_t min_vid = INT64_MAX;
+      int64_t max_vid = 0;
+      if (OB_FAIL(frozen_handle->get_index_number(vec_cnt))) {
+        LOG_WARN("failed to get frozen index number", K(ret));
+      } else {
+        frozen_handle->get_read_bound_vid(max_vid, min_vid);
+        seg_info.vector_cnt_ = vec_cnt;
+        seg_info.min_vid_ = min_vid;
+        seg_info.max_vid_ = max_vid;
+        seg_info.mem_used_ = frozen_handle->get_mem_used();
+        seg_info.ref_cnt_ = frozen_handle->get_ref();
+      }
     } else {
-      seg_info.vector_cnt_ = vec_cnt;
-      seg_info.min_vid_ = min_vid;
-      seg_info.max_vid_ = max_vid;
-      seg_info.mem_used_ = frozen_data_->segment_handle_->get_mem_used();
-      seg_info.ref_cnt_ = frozen_data_->segment_handle_->get_ref();
+      seg_info.index_type_ = ObVectorIndexAlgorithmType::VIAT_MAX;
+      seg_info.vector_cnt_ = -1;
+      seg_info.mem_used_ = 0;
+      seg_info.ref_cnt_ = 0;
+      seg_info.min_vid_ = 0;
+      seg_info.max_vid_ = 0;
     }
 
     if (OB_SUCC(ret) && OB_FAIL(segment_infos.push_back(seg_info))) {
@@ -1118,20 +1141,20 @@ int ObPluginVectorIndexAdaptor::fill_vector_index_all_segments(common::ObIArray<
       seg_info.segment_state_ = ObVectorIndexSegmentState::PERSISTED;
 
       // Fill segment handle information
-      if (seg_meta.segment_handle_.is_valid()) {
+      ObVectorIndexSegmentHandle seg_handle = seg_meta.segment_handle_;
+      if (seg_handle.is_valid()) {
         int64_t vec_cnt = 0;
-        int64_t min_vid = 0;
+        int64_t min_vid = INT64_MAX;
         int64_t max_vid = 0;
-        if (OB_FAIL(seg_meta.segment_handle_->get_index_number(vec_cnt))) {
+        if (OB_FAIL(seg_handle->get_index_number(vec_cnt))) {
           LOG_WARN("failed to get segment index number", K(ret), K(i));
-        } else if (OB_FAIL(seg_meta.segment_handle_->get_vid_bound(min_vid, max_vid))) {
-          LOG_WARN("failed to get segment vid bound", K(ret), K(i));
         } else {
+          seg_handle->get_read_bound_vid(max_vid, min_vid);
           seg_info.vector_cnt_ = vec_cnt;
           seg_info.min_vid_ = min_vid;
           seg_info.max_vid_ = max_vid;
-          seg_info.mem_used_ = seg_meta.segment_handle_->get_mem_used();
-          seg_info.ref_cnt_ = seg_meta.segment_handle_->get_ref();
+          seg_info.mem_used_ = seg_handle->get_mem_used();
+          seg_info.ref_cnt_ = seg_handle->get_ref();
         }
       } else {
         seg_info.vector_cnt_ = -1;
@@ -1165,20 +1188,20 @@ int ObPluginVectorIndexAdaptor::fill_vector_index_all_segments(common::ObIArray<
       seg_info.segment_state_ = ObVectorIndexSegmentState::PERSISTED;
 
       // Fill segment handle information
-      if (seg_meta.segment_handle_.is_valid()) {
+      ObVectorIndexSegmentHandle seg_handle = seg_meta.segment_handle_;
+      if (seg_handle.is_valid()) {
         int64_t vec_cnt = 0;
-        int64_t min_vid = 0;
+        int64_t min_vid = INT64_MAX;
         int64_t max_vid = 0;
-        if (OB_FAIL(seg_meta.segment_handle_->get_index_number(vec_cnt))) {
+        if (OB_FAIL(seg_handle->get_index_number(vec_cnt))) {
           LOG_WARN("failed to get segment index number", K(ret), K(i));
-        } else if (OB_FAIL(seg_meta.segment_handle_->get_vid_bound(min_vid, max_vid))) {
-          LOG_WARN("failed to get segment vid bound", K(ret), K(i));
         } else {
+          seg_handle->get_read_bound_vid(max_vid, min_vid);
           seg_info.vector_cnt_ = vec_cnt;
           seg_info.min_vid_ = min_vid;
           seg_info.max_vid_ = max_vid;
-          seg_info.mem_used_ = seg_meta.segment_handle_->get_mem_used();
-          seg_info.ref_cnt_ = seg_meta.segment_handle_->get_ref();
+          seg_info.mem_used_ = seg_handle->get_mem_used();
+          seg_info.ref_cnt_ = seg_handle->get_ref();
         }
       } else {
         seg_info.vector_cnt_ = -1;
@@ -4284,7 +4307,7 @@ void ObPluginVectorIndexAdaptor::log_deseri_snap_without_lock(ObVectorIndexAlgor
 {
   int64_t snap_row_cnt = 0;
   int64_t snap_mem_used = get_snap_vsag_mem_used();
-  int64_t snap_min_vid = 0;
+  int64_t snap_min_vid = INT64_MAX;
   int64_t snap_max_vid = 0;
   if (snap_data_.is_valid() && snap_data_->is_inited()) {
     get_snap_index_row_cnt(snap_row_cnt);

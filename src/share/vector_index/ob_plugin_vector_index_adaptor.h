@@ -1056,6 +1056,7 @@ public:
               K_(mem_check_cnt), K_(is_mem_limited), K_(snapshot_key_prefix), K_(replace_scn), K_(dump_info));
 
 private:
+  int do_fill_vector_index_all_segments(common::ObIArray<ObVectorSegmentInfo> &segment_infos);
   int add_datum_row_into_array(blocksstable::ObDatumRow *datum_row,
                                ObArray<uint64_t> &i_vids,
                                ObArray<uint64_t> &d_vids);

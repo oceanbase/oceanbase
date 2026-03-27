@@ -1028,7 +1028,6 @@ int ObVecIdxMergeTask::delete_segment_rows(
   ObDMLBaseParam dml_param;
   storage::ObValueRowIterator row_iter;
   storage::ObStoreCtxGuard store_ctx_guard;
-  common::ObCollationType cs_type = CS_TYPE_INVALID;
   if (OB_FAIL(rescan(seg_meta, scan_param, timeout, table_scan_iter))) {
     LOG_WARN("rescan fail", K(ret));
   } else if (OB_FAIL(prepare_dml_del_row_iter(tx_desc, data_col_cs_type_, table_scan_iter, extra_column_idxs, row_iter, snapshot, true))) {
