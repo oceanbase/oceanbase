@@ -316,10 +316,14 @@ int ObParquetDictFilterPushdown::init_row_group_dict_encoding_check(
     for (int64_t i = 0; OB_SUCC(ret) && i < eager_columns.count(); ++i) {
       int32_t col_idx = eager_columns.at(i);
       bool all_pages_dict_encoded = false;
-      if (OB_FAIL(check_all_pages_dict_encoded(col_idx,
-                                               rg_reader,
-                                               column_indexs,
-                                               all_pages_dict_encoded))) {
+      if (col_idx < 0 || col_idx >= column_indexs.count()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid argument", K(ret), K(col_idx), K(column_indexs.count()));
+      } else if (column_indexs.at(col_idx) >= 0
+                 && OB_FAIL(check_all_pages_dict_encoded(col_idx,
+                                                         rg_reader,
+                                                         column_indexs,
+                                                         all_pages_dict_encoded))) {
         LOG_WARN("fail to check all pages dict encoded", K(ret), K(col_idx));
       } else if (OB_FAIL(dict_encoding_check_cache_.set_refactored(col_idx,
                                                                    all_pages_dict_encoded,
