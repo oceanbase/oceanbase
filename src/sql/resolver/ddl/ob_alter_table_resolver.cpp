@@ -6752,6 +6752,13 @@ int ObAlterTableResolver::check_modify_column_allowed(
   const ObObjType alter_col_type = alter_column_schema.get_data_type();
   const ObAccuracy &origin_col_accuracy = origin_col_schema.get_accuracy();
   const ObAccuracy &alter_col_accuracy = alter_column_schema.get_accuracy();
+  const bool is_number_p_to_int_without_decimalint =
+    ObNumberType == origin_col_type
+    && ObNumberType == alter_col_type
+    && origin_col_accuracy.get_precision() >= OB_MIN_NUMBER_PRECISION
+    && origin_col_accuracy.get_precision() <= OB_MAX_NUMBER_PRECISION
+    && 0 == origin_col_accuracy.get_scale()
+    && ObAccuracy::is_default_number_int(alter_col_accuracy);
   // The number type does not specify precision, which means that it is the largest range and requires special judgment
   if (lib::is_oracle_mode()
       && (origin_col_type == alter_col_type
@@ -6765,7 +6772,8 @@ int ObAlterTableResolver::check_modify_column_allowed(
           alter_col_accuracy.get_precision()
           || origin_col_accuracy.get_scale() >
           alter_col_accuracy.get_scale())
-      && !ObAccuracy::is_default_number(alter_column_schema.get_accuracy())) {
+      && !ObAccuracy::is_default_number(alter_column_schema.get_accuracy())
+      && !is_number_p_to_int_without_decimalint) {
     ret = OB_NOT_SUPPORTED;
     SQL_RESV_LOG(WARN, "Can not decrease precision or scale",
                 K(ret), K(alter_col_accuracy), K(origin_col_schema));
