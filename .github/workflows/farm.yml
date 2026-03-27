@@ -25,9 +25,9 @@ jobs:
   farm-setup:
     if: ${{ github.repository_owner == 'guoyan1996' && !github.event.pull_request.draft }}
     name: setup
-    runs-on: ob-test-arc-runner-k8s
+    runs-on: arc-runner-k8s-ci-org
     container:
-      image: harbor.oceanbase-dev.com/obrde-test/seekdb-actions-runner:test-20260316
+      image: harbor.oceanbase-dev.com/obrde-test/ob-actions-runner-worker:0.0.2
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -94,54 +94,44 @@ jobs:
           if [[ ! -x observer ]]; then echo "observer missing or not executable"; exit 1; fi
           echo "observer size: $(stat -c%s observer 2>/dev/null || stat -f%z observer 2>/dev/null) bytes"
 
-      - name: Compress and upload observer
+      - name: Compress and stage observer to FARM_TASK_DIR
         if: env.SKIP_FARM_COMPILE != 'true'
         shell: bash
         run: |
-          zstd -f -q -T0 -o observer.zst observer
-          echo "observer.zst size: $(stat -c%s observer.zst 2>/dev/null || stat -f%z observer.zst 2>/dev/null) bytes"
-
-      - name: Upload observer artifact (zst)
-        if: env.SKIP_FARM_COMPILE != 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: farm-observer
-          path: observer.zst
-          retention-days: 1
+          # farm_post_compile.sh already copies observer.zst to FARM_TASK_DIR;
+          # as a safety net, also compress+copy here if it is missing.
+          TASK_DIR="${{ env.FARM_TASK_DIR }}"
+          mkdir -p "$TASK_DIR"
+          if [[ ! -f "$TASK_DIR/observer.zst" ]]; then
+            zstd -f -q -T0 -o "$TASK_DIR/observer.zst" observer
+          fi
+          echo "observer.zst size: $(stat -c%s "$TASK_DIR/observer.zst" 2>/dev/null || stat -f%z "$TASK_DIR/observer.zst" 2>/dev/null) bytes"
 
   farm-mysqltest:
     if: ${{ github.repository_owner == 'guoyan1996' && !github.event.pull_request.draft }}
     name: mysqltest-slice-${{ matrix.slice }}
     needs: farm-setup
-    runs-on: ob-test-arc-runner-k8s
+    runs-on: arc-runner-k8s-ci-org
     strategy:
       fail-fast: false
       matrix:
         slice: [0, 1, 2, 3]
     container:
-      image: harbor.oceanbase-dev.com/obrde-test/seekdb-actions-runner:test-20260316
+      image: harbor.oceanbase-dev.com/obrde-test/ob-actions-runner-worker:0.0.2
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download observer from artifact
-        id: get-observer
-        uses: actions/download-artifact@v4
-        with:
-          name: farm-observer
-        continue-on-error: true
-
-      - name: Place observer (decompress or fallback wget)
+      - name: Place observer from FARM_TASK_DIR (decompress or fallback wget)
         shell: bash
         run: |
-          if [[ -f farm-observer ]]; then
-            zstd -d -f -q -o observer farm-observer && chmod +x observer
-          elif [[ -f farm-observer/observer.zst ]]; then
-            zstd -d -f -q -o observer farm-observer/observer.zst && chmod +x observer
-          elif [[ -f farm-observer/observer ]]; then
-            mv farm-observer/observer observer && chmod +x observer
+          BASE_TASK_DIR="${{ github.workspace }}/farm_build/${{ github.run_id }}"
+          if [[ -f "$BASE_TASK_DIR/observer.zst" ]]; then
+            zstd -d -f -q -o observer "$BASE_TASK_DIR/observer.zst" && chmod +x observer
+          elif [[ -f "$BASE_TASK_DIR/observer" ]]; then
+            cp -f "$BASE_TASK_DIR/observer" observer && chmod +x observer
           else
-            echo "Artifact not found, falling back to wget"
+            echo "Shared observer not found in $BASE_TASK_DIR, falling back to wget"
             URL="${{ vars.FARM_OBSERVER_URL }}"
             [[ -z "$URL" ]] && URL="http://6.12.233.4:5000/gy389672/observer"
             wget -O observer "$URL" || exit 1
@@ -170,31 +160,34 @@ jobs:
           .github/script/farm/collect_result.sh farm_result.json
         continue-on-error: true
 
-      - name: Upload slice result
+      - name: Stage slice result to FARM_TASK_DIR
         if: success() || failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: farm-result-slice-${{ matrix.slice }}
-          path: farm_result.json
-          retention-days: 1
+        shell: bash
+        run: |
+          SLICE_TASK_DIR="${{ github.workspace }}/farm_build/${{ github.run_id }}/slice_${{ matrix.slice }}"
+          mkdir -p "$SLICE_TASK_DIR"
+          [[ -f farm_result.json ]] && cp -f farm_result.json "$SLICE_TASK_DIR/farm_result.json" || true
         continue-on-error: true
 
-      # 失败时上传 collected_log 便于排查：obd_log、mysqltest_log、mysqltest_rec_log、core
-      - name: Upload collected_log (on failure)
+      # 失败时将 collected_log 拷贝到 FARM_TASK_DIR 便于排查：obd_log、mysqltest_log、mysqltest_rec_log、core
+      - name: Stage collected_log to FARM_TASK_DIR (on failure)
         if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: farm-collected-log-slice-${{ matrix.slice }}
-          path: farm_home_${{ matrix.slice }}/collected_log_${{ matrix.slice }}.tar.gz
-          retention-days: 7
+        shell: bash
+        run: |
+          SRC="farm_home_${{ matrix.slice }}/collected_log_${{ matrix.slice }}.tar.gz"
+          SLICE_TASK_DIR="${{ github.workspace }}/farm_build/${{ github.run_id }}/slice_${{ matrix.slice }}"
+          mkdir -p "$SLICE_TASK_DIR"
+          [[ -f "$SRC" ]] && cp -f "$SRC" "$SLICE_TASK_DIR/" || true
         continue-on-error: true
 
       - name: Job summary (logs hint)
         if: always()
         run: |
-          if [[ -f "farm_home_${{ matrix.slice }}/collected_log_${{ matrix.slice }}.tar.gz" ]]; then
-            echo "### Slice ${{ matrix.slice }} collected_log uploaded" >> "$GITHUB_STEP_SUMMARY"
-            echo "Download **farm-collected-log-slice-${{ matrix.slice }}** from Artifacts. Contents: \`obd_log/\`, \`mysqltest_log/\`, \`mysqltest_rec_log/\`, core dumps." >> "$GITHUB_STEP_SUMMARY"
+          SLICE_TASK_DIR="${{ github.workspace }}/farm_build/${{ github.run_id }}/slice_${{ matrix.slice }}"
+          LOG_FILE="$SLICE_TASK_DIR/collected_log_${{ matrix.slice }}.tar.gz"
+          if [[ -f "$LOG_FILE" ]]; then
+            echo "### Slice ${{ matrix.slice }} collected_log staged" >> "$GITHUB_STEP_SUMMARY"
+            echo "Log path: \`$LOG_FILE\`. Contents: \`obd_log/\`, \`mysqltest_log/\`, \`mysqltest_rec_log/\`, core dumps." >> "$GITHUB_STEP_SUMMARY"
           fi
 
   farm-collect:
@@ -202,24 +195,18 @@ jobs:
     if: ${{ github.repository_owner == 'guoyan1996' && !github.event.pull_request.draft && (always() && (needs.farm-mysqltest.result == 'success' || needs.farm-mysqltest.result == 'failure')) }}
     name: collect
     needs: farm-mysqltest
-    runs-on: ob-test-arc-runner-k8s
+    runs-on: arc-runner-k8s-ci-org
     container:
-      image: harbor.oceanbase-dev.com/obrde-test/seekdb-actions-runner:test-20260316
+      image: harbor.oceanbase-dev.com/obrde-test/ob-actions-runner-worker:0.0.2
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download all slice results
-        uses: actions/download-artifact@v4
-        with:
-          pattern: farm-result-slice-*
-          path: slice_results
-          merge-multiple: true
-
-      - name: Merge results and upload
+      - name: Merge results from FARM_TASK_DIR
         shell: bash
         run: |
           RUN_ID="${{ github.run_id }}"
+          BASE_TASK_DIR="${{ github.workspace }}/farm_build/$RUN_ID"
           FAILED=""
           SUCCESS="true"
           while IFS= read -r f; do
@@ -228,26 +215,21 @@ jobs:
             while IFS= read -r c; do
               [[ -n "$c" ]] && FAILED="${FAILED}${FAILED:+,}\"${c//\"/\\\"}\""
             done < <(grep -oP '"failed_cases":\[\K[^\]]*' "$f" 2>/dev/null | tr ',' '\n' | sed 's/^"\|"$//g')
-          done < <(find slice_results -name 'farm_result.json' 2>/dev/null)
+          done < <(find "$BASE_TASK_DIR" -name 'farm_result.json' 2>/dev/null)
           echo "{\"success\":$SUCCESS,\"run_id\":\"$RUN_ID\",\"failed_cases\":[${FAILED:-}]}" > farm_result.json
+          cp -f farm_result.json "$BASE_TASK_DIR/farm_result.json" || true
           echo "=== Farm result ==="
           cat farm_result.json
 
-      - name: Upload farm result as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: farm-result-native
-          path: farm_result.json
-          retention-days: 30
-
       - name: Job summary (where to find logs)
         run: |
+          BASE_TASK_DIR="${{ github.workspace }}/farm_build/${{ github.run_id }}"
           echo "## FARM CI 结果与日志" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| 内容 | Artifact 名称 | 说明 |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|------|---------------|------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| 汇总结果 | \`farm-result-native\` | 各 slice 合并后的 success/failed_cases |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| 单 slice 结果 | \`farm-result-slice-0\` ~ \`3\` | 各 slice 的 farm_result.json |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| 失败时详细日志 | \`farm-collected-log-slice-N\` | obd_log、mysqltest_log、mysqltest_rec_log、core，仅失败时上传 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 内容 | 路径 | 说明 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|------|------|------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 汇总结果 | \`$BASE_TASK_DIR/farm_result.json\` | 各 slice 合并后的 success/failed_cases |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 单 slice 结果 | \`$BASE_TASK_DIR/slice_N/farm_result.json\` | 各 slice 的 farm_result.json |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| 失败时详细日志 | \`$BASE_TASK_DIR/slice_N/collected_log_N.tar.gz\` | obd_log、mysqltest_log、mysqltest_rec_log、core，仅失败时写入 |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "在本次 Run 的 **Artifacts** 区域下载上述文件。" >> "$GITHUB_STEP_SUMMARY"
+          echo "所有文件均保存在 runner 节点的 \`$BASE_TASK_DIR\` 目录下。" >> "$GITHUB_STEP_SUMMARY"
