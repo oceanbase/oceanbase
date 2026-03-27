@@ -340,8 +340,8 @@ public:
 
 public:
   ObVectorIndexSegment(ObIAllocator *allocator):
-    is_inited_(false), is_base_(false), ref_cnt_(0), write_ref_cnt_(0),
-    allocator_(allocator), mem_ctx_(nullptr), index_(nullptr), vid_bound_(),
+    index_(nullptr), is_inited_(false), is_base_(false), ref_cnt_(0), write_ref_cnt_(0),
+    allocator_(allocator), mem_ctx_(nullptr), vid_bound_(),
     ibitmap_(nullptr), vbitmap_(nullptr)
   {
     ATOMIC_INC(&instacnce_cnt_);
@@ -437,6 +437,8 @@ public:
     KP_(allocator), KP_(mem_ctx), KP_(index), K_(vid_bound), KPC_(ibitmap), KPC_(vbitmap));
 
 private:
+  // must keep as first member, avoid null pointer check failure
+  void* index_;
   bool is_inited_;
   bool is_base_;
   int64_t ref_cnt_;
@@ -444,8 +446,6 @@ private:
   uint64_t tenant_id_;
   ObIAllocator *allocator_;
   ObVsagMemContext* mem_ctx_;
-  // VSAG库的向量索引是线程安全的, 所以不需要锁保护
-  void* index_;
   ObVidBound vid_bound_;
 public:
   ObVectorIndexRoaringBitMap *ibitmap_;

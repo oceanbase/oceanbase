@@ -292,18 +292,22 @@ int ObVectorIndexSerializer::deserialize(ObVectorIndexMeta& meta, ObIStreamBuf::
     lib::ObLightBacktraceGuard light_backtrace_guard(false);
     ObVectorIndexSegmentMeta &seg_meta = meta.bases_.at(0);
     ObVidBound vid_bound;
-    if (OB_FAIL(seg_meta.segment_handle_->fdeserialize(in))) {
+    ObVectorIndexSegmentHandle segment_handle = seg_meta.segment_handle_;
+    if (!segment_handle.is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get invalid segment handle", K(ret));
+    } else if (OB_FAIL(segment_handle->fdeserialize(in))) {
       LOG_WARN("fail to do vsag deserialize", K(ret));
       if (streambuf.get_error_code() != OB_SUCCESS && streambuf.get_error_code() != OB_ITER_END) {
         ret = streambuf.get_error_code();
         LOG_WARN("deserialize streambuf has fail", K(ret));
       }
-    } else if (OB_FALSE_IT(seg_meta.segment_handle_->set_is_base())) {
-    } else if (OB_FAIL(seg_meta.segment_handle_->immutable_optimize())) {
+    } else if (OB_FALSE_IT(segment_handle->set_is_base())) {
+    } else if (OB_FAIL(segment_handle->immutable_optimize())) {
       LOG_WARN("fail to index immutable_optimize", K(ret));
-    } else if (OB_FAIL(seg_meta.segment_handle_->get_vid_bound(vid_bound.min_vid_, vid_bound.max_vid_))) {
+    } else if (OB_FAIL(segment_handle->get_vid_bound(vid_bound.min_vid_, vid_bound.max_vid_))) {
       LOG_WARN("fail to get vid bound", K(ret));
-    } else if (OB_FALSE_IT(seg_meta.segment_handle_->set_read_vid_bound(vid_bound))) {
+    } else if (OB_FALSE_IT(segment_handle->set_read_vid_bound(vid_bound))) {
     } else if (OB_FAIL(seg_meta.deep_copy_seg_key(param.start_key_, param.end_key_))) {
       LOG_WARN("failed to deep copy seg key", K(ret), K(seg_meta));
     } else {

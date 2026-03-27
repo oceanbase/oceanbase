@@ -1031,7 +1031,7 @@ int ObVecIdxMergeTask::delete_segment_rows(
   common::ObCollationType cs_type = CS_TYPE_INVALID;
   if (OB_FAIL(rescan(seg_meta, scan_param, timeout, table_scan_iter))) {
     LOG_WARN("rescan fail", K(ret));
-  } else if (OB_FAIL(prepare_dml_del_row_iter(tx_desc, cs_type, table_scan_iter, extra_column_idxs, row_iter, snapshot))) {
+  } else if (OB_FAIL(prepare_dml_del_row_iter(tx_desc, data_col_cs_type_, table_scan_iter, extra_column_idxs, row_iter, snapshot, true))) {
     LOG_WARN("fail to prepare dml iter", K(ret));
   } else if (OB_FAIL(prepare_dml_param(dml_param, table_dml_param, store_ctx_guard, tx_desc, snapshot, schema_version, timeout))) {
     LOG_WARN("fail to prepare lob meta dml", K(ret));

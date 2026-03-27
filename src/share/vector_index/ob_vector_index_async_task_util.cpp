@@ -3227,7 +3227,8 @@ int ObVecIndexAsyncTask::prepare_dml_del_row_iter(
     ObTableScanIterator *table_scan_iter,
     ObIArray<uint64_t> &extra_column_idxs,
     storage::ObValueRowIterator &row_iter,
-    transaction::ObTxReadSnapshot &snapshot)
+    transaction::ObTxReadSnapshot &snapshot,
+    const bool is_force_delete)
 {
   int ret = OB_SUCCESS;
   ObLobManager *lob_mngr = MTL(ObLobManager*);
@@ -3267,7 +3268,7 @@ int ObVecIndexAsyncTask::prepare_dml_del_row_iter(
       } else if (datum_row->get_column_count() < 3) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get row column cnt invalid.", K(ret), K(datum_row->get_column_count()));
-      } else if (!datum_row->storage_datums_[tmp_visible_col_idx].get_bool()) { // remove visible = false old row
+      } else if (!datum_row->storage_datums_[tmp_visible_col_idx].get_bool() || is_force_delete) { // remove visible = false old row
         LOG_DEBUG("remove old row lob meta record", K(*datum_row));
         ObString data = datum_row->storage_datums_[tmp_data_col_idx].get_string();
         ObLobLocatorV2 lob(data, data.length() > 0);

@@ -588,7 +588,8 @@ protected:
       ObTableScanIterator *table_scan_iter,
       ObIArray<uint64_t> &extra_column_idxs,
       storage::ObValueRowIterator &row_iter,
-      transaction::ObTxReadSnapshot &snapshot);
+      transaction::ObTxReadSnapshot &snapshot,
+      const bool is_force_delete = false);
   int prepare_schema_and_snapshot(
       const ObTableSchema *&data_schema,
       const ObTableSchema *&snapshot_schema,

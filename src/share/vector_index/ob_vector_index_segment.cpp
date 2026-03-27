@@ -2017,8 +2017,11 @@ int ObVecIdxSnapshotData::load_segment(
   int ret = OB_SUCCESS;
   ObHNSWDeserializeCallback callback(adaptor);
   ObVectorIndexSerializer index_seri(*param.allocator_);
-  if (OB_FAIL(index_seri.deserialize(meta_, param, callback, tenant_id))) {
-    LOG_WARN("serialize index failed.", K(ret));
+  if (meta_.bases_.count() == 1 && meta_.bases_.at(0).segment_handle_.is_valid()) {
+    // already loaded by other thread, so skip this load
+    LOG_INFO("snap data base segment is valid, so skip", KPC(this));
+  } else if (OB_FAIL(index_seri.deserialize(meta_, param, callback, tenant_id))) {
+    LOG_WARN("deserialize index failed.", K(ret));
   } else if (OB_FAIL(get_snap_vid_bound(vid_bound_.min_vid_, vid_bound_.max_vid_))) {
     LOG_WARN("get snap vid bound fail", K(ret), K(meta_));
   }
