@@ -564,6 +564,7 @@ public:
   DELEGATE_WITH_RET(ls_meta_, get_migration_and_restore_status, int);
   int set_rebuild_info(const ObLSRebuildInfo &rebuild_info)
   {
+    WRLockGuard guard(meta_rwlock_);
     return ls_meta_.set_rebuild_info(rebuild_info);
   }
   DELEGATE_WITH_RET(ls_meta_, get_rebuild_info, int);

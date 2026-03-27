@@ -929,6 +929,10 @@ int ObLSMeta::set_rebuild_info(const ObLSRebuildInfo &rebuild_info)
     LOG_WARN("invalid rebuild info", K(ret), K(rebuild_info_), K(rebuild_info));
   } else if (rebuild_info_ == rebuild_info) {
     //do nothing
+  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_GC == migration_status_) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("migration status is gc, cannot set rebuild info", K(ret),
+        K(rebuild_info), K(migration_status_), KPC(this));
   } else if (ObLSRebuildStatus::CLEANUP == rebuild_info.status_
       && ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status_
       && ObMigrationStatus::OB_MIGRATION_STATUS_REBUILD_FAIL != migration_status_) {
