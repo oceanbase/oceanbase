@@ -173,6 +173,8 @@ public:
   // ObTabletMergeInfo::record_start_tx_scn_for_tx_data
   inline void set_filled_tx_scn(const share::SCN &scn) { filled_tx_scn_ = scn; }
 
+  int set_min_merged_trans_version_with_check(const int64_t min_merged_trans_version);
+
   TO_STRING_KV(K_(table_key),
       K_(sstable_logic_seq),
       K_(schema_version),

@@ -200,6 +200,7 @@ protected:
   int fill_mds_filter_info(ObMediumCompactionInfo &medium_info);
   int fill_mlog_purge_scn(ObMediumCompactionInfo &medium_info);
   int fill_window_decision_log_info(ObMediumCompactionInfo &medium_info);
+  bool need_read_mds(const ObMediumCompactionInfo &medium_info);
   static const int64_t DEFAULT_SCHEDULE_MEDIUM_INTERVAL = 60_s;
   static constexpr double SCHEDULE_RANGE_INC_ROW_COUNT_PERCENRAGE_THRESHOLD = 0.2;
   static const int64_t SCHEDULE_RANGE_ROW_COUNT_THRESHOLD = 1000 * 1000L; // 100w

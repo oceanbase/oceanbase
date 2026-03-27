@@ -1596,14 +1596,25 @@ int ObMediumCompactionScheduleFunc::get_max_sync_medium_scn(
   return ret;
 }
 
+// MDS read for TTL: compaction TTL is only permitted on delete_insert/append_only.
+// But aux lob is partial_update for TTL table because of CDC problem.
+// Don't use storage_schema_.was_compaction_ttl() to check because it maybe not sync with table schema.
+bool ObMediumCompactionScheduleFunc::need_read_mds(const ObMediumCompactionInfo &medium_info)
+{
+  return medium_info.storage_schema_.is_global_index_table()
+         || tablet_handle_.get_obj()->has_merged_with_mds_info()
+         || medium_info.storage_schema_.is_delete_insert_merge_engine()
+         || medium_info.storage_schema_.is_append_only_merge_engine()
+         || medium_info.storage_schema_.is_aux_lob_meta_table()
+         || medium_info.storage_schema_.is_aux_lob_piece_table();
+}
+
 int ObMediumCompactionScheduleFunc::fill_mds_filter_info(ObMediumCompactionInfo &medium_info)
 {
   int ret = OB_SUCCESS;
   ObMdsInfoDistinctMgr mds_info_mgr;
   ObVersionRange read_version_range(medium_info.last_medium_snapshot_, medium_info.medium_snapshot_);
-  const bool read_mds = medium_info.storage_schema_.is_global_index_table()
-    || tablet_handle_.get_obj()->has_merged_with_mds_info()
-    || medium_info.storage_schema_.was_compaction_ttl();
+  const bool read_mds = need_read_mds(medium_info);
   if (medium_info.storage_schema_.is_mlog_table()) {
     ret = fill_mlog_purge_scn(medium_info);
   } else if (read_mds && OB_FAIL(mds_info_mgr.init(allocator_, *tablet_handle_.get_obj(), nullptr/*split_extra_tablet_handles_ptr*/, read_version_range, false/*for_access*/))) {
@@ -1692,9 +1703,7 @@ int ObMediumCompactionScheduleFunc::check_tablet_inc_data(
   const int64_t last_major_snapshot = tablet.get_last_major_snapshot_version();
   ObMdsInfoDistinctMgr mds_info_mgr;
   ObVersionRange read_version_range(last_major_snapshot, merge_version);
-  const bool read_mds = medium_info.storage_schema_.is_global_index_table()
-    || tablet_handle_.get_obj()->has_merged_with_mds_info()
-    || medium_info.storage_schema_.was_compaction_ttl();
+  const bool read_mds = need_read_mds(medium_info);
   if (OB_FAIL(tablet.fetch_table_store(wrapper))) {
     LOG_WARN("failed to get table store wrapper", K(ret));
   } else if (OB_FAIL(check_progressive_merge(*wrapper.get_member(), medium_info.storage_schema_, is_progressive_merge))) {
