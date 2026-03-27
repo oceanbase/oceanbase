@@ -145,6 +145,7 @@ void *obdal_malloc(std::size_t size, std::size_t align)
   void *ptr = nullptr;
   ObMemAttr attr;
   attr.label_ = OB_DAL_SDK;
+  attr.ctx_id_ = ObCtxIds::GLIBC;
   const int64_t origin_tenant_id = ob_get_tenant_id();
   const int64_t tenant_id = ObDalAccessor::obdal_get_tenant_id();
   ob_get_tenant_id() = tenant_id;
