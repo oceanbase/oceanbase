@@ -14,7 +14,7 @@ namespace oceanbase
 namespace compaction
 {
 
-class ObWindowScheduleTabletFunc : virtual public ObScheduleTabletFunc
+class ObWindowScheduleTabletFunc : public ObScheduleTabletFunc
 {
 public:
   ObWindowScheduleTabletFunc() : ObScheduleTabletFunc(0, ObAdaptiveMergePolicy::WINDOW_COMPACTION, 0 /*loop_cnt*/, COMPACTION_WINDOW_MODE), window_decision_log_info_() {}

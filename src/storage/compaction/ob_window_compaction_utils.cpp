@@ -137,8 +137,9 @@ void ObTabletCompactionScore::update_with(const ObTabletCompactionScoreDecisionI
 
 /*------------------------ ObWindowCompactionMemoryContext ----------------------*/
 ObWindowCompactionMemoryContext::ObWindowCompactionMemoryContext()
-  : allocator_(ObMemAttr(MTL_ID(), "WinComAlloc"))
+  : allocator_()
 {
+  allocator_.set_attr(ObMemAttr(MTL_ID(), "WinComAlloc"));
   allocator_.set_nway(2); // only window loop and medium loop will use this allocator
 }
 
