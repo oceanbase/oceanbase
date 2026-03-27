@@ -160,9 +160,9 @@ int ObExprVecIVFPQCenterVector::generate_pq_center_vector(
           }
         }
 
-        if (OB_SUCC(ret) && centers_data != nullptr) {
+        if (OB_SUCC(ret)) {
           if (centers_count == 0) {
-        residual_vec = reinterpret_cast<float*>(arr->get_data());
+            residual_vec = reinterpret_cast<float*>(arr->get_data());
           } else {
             if (OB_FAIL(ObVectorIndexUtil::calc_residual_vector(
                 tmp_allocator,
