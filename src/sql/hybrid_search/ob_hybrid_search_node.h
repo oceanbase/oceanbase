@@ -233,7 +233,8 @@ private:
   int get_vector_index_tid_from_expr(ObColumnRefRawExpr *field, uint64_t& vec_index_tid);
   bool is_search_subquery(ObIndexMergeNode *node) const;
   bool is_knn_subquery(ObIndexMergeNode *node) const;
-  int collect_child_boost_and_update_flags(ObFusionNode *fusion_node,
+  int collect_child_boost_and_update_flags(const ObDSLQueryInfo *dsl_info,
+                                           ObFusionNode *fusion_node,
                                            ObIndexMergeNode *sub_node,
                                            ObConstRawExpr *one_boost_expr,
                                            int64_t child_idx);

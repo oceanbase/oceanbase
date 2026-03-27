@@ -178,7 +178,8 @@ struct ObDSLRankInfo {
 struct ObDSLQueryInfo
 {
   ObDSLQueryInfo()
-    : queries_(), from_(nullptr), size_(nullptr), min_score_(nullptr), raw_dsl_param_str_(), is_top_k_query_(true) {}
+    : queries_(), from_(nullptr), size_(nullptr), min_score_(nullptr), one_const_expr_(nullptr),
+      query_top_level_boost_(nullptr), raw_dsl_param_str_(), is_top_k_query_(true) {}
   static int check_column_in_dsl(ObIArray<TableItem*> &table_items, ObColumnRefRawExpr *col_expr, bool &in_dsl);
   int deep_copy(const ObDSLQueryInfo& src, ObIRawExprCopier &expr_copier, ObIAllocator* allocator);
   static int deep_copy_query(const ObDSLQuery *src, ObDSLQuery *&dst,
@@ -198,6 +199,7 @@ struct ObDSLQueryInfo
   ObRawExpr *size_;
   ObRawExpr *min_score_;
   ObRawExpr *one_const_expr_;
+  ObRawExpr *query_top_level_boost_;
   ObDSLRankInfo rank_info_;
   ObSEArray<ObColumnRefRawExpr*, 4, ModulePageAllocator, true> rowkey_cols_;
   ObSEArray<ObColumnRefRawExpr*, 4, ModulePageAllocator, true> dsl_cols;
@@ -205,7 +207,7 @@ struct ObDSLQueryInfo
   ObSEArray<ObRawExpr*, 4, ModulePageAllocator, true> dsl_exprs_;
   ObString raw_dsl_param_str_;
   bool is_top_k_query_;
-  TO_STRING_KV(K(queries_), K(from_), K(size_), K(min_score_),
+  TO_STRING_KV(K(queries_), K(from_), K(size_), K(min_score_), K(query_top_level_boost_),
                K(rank_info_), K(rowkey_cols_), K(dsl_cols), K(score_cols_),
                K(dsl_exprs_), K(raw_dsl_param_str_), K(is_top_k_query_));
 };

@@ -177,6 +177,8 @@ int ObDSLQueryInfo::deep_copy(const ObDSLQueryInfo& src, ObIRawExprCopier &expr_
     LOG_WARN("failed to copy size expr", K(ret));
   } else if (OB_FAIL(expr_copier.copy(src.min_score_, min_score_))) {
     LOG_WARN("failed to copy min score expr", K(ret));
+  } else if (OB_FAIL(expr_copier.copy(src.query_top_level_boost_, query_top_level_boost_))) {
+    LOG_WARN("failed to copy query top level boost expr", K(ret));
   } else if (OB_FAIL(expr_copier.copy(src.rowkey_cols_, rowkey_cols_))) {
     LOG_WARN("failed to copy rowkey cols", K(ret));
   } else if (OB_FAIL(expr_copier.copy(src.dsl_cols, dsl_cols))) {
@@ -444,6 +446,7 @@ int ObDSLQueryInfo::init_default_params(ObRawExprFactory &expr_factory, bool is_
   } else {
     one_const_expr_ = one_const_expr;
     is_top_k_query_ = is_top_k_query;
+    query_top_level_boost_ = one_const_expr_;
   }
   return ret;
 }
@@ -578,6 +581,9 @@ int ObDSLResolver::collect_exprs()
     LOG_WARN("fail to add rank_const expr", K(ret));
   } else if (OB_FAIL(add_dsl_expr(dsl_query_info_->one_const_expr_))) {
     LOG_WARN("fail to add one const expr", K(ret));
+  } else if (OB_NOT_NULL(dsl_query_info_->query_top_level_boost_) &&
+             OB_FAIL(add_dsl_expr(dsl_query_info_->query_top_level_boost_))) {
+    LOG_WARN("fail to add query top level boost expr", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < dsl_query_info_->queries_.count(); i++) {
       if (OB_FAIL(add_dsl_expr_recursive(dsl_query_info_->queries_.at(i)))) {
@@ -2638,10 +2644,16 @@ int ObDSLResolver::resolve_single_term(ObIJsonBase &req_node, ObDSLQuery *&query
     LOG_WARN("not supported syntax in query", K(ret), K(key));
   }
   if (OB_FAIL(ret)) {
-  } else if (outer_query_type == QUERY_ITEM_QUERY && OB_FAIL(setup_top_level_score(query))) {
-    LOG_WARN("fail to setup top level score", K(ret));
-  } else if (outer_query_type == QUERY_ITEM_QUERY && OB_FAIL(try_push_nested_boost_to_leaf_query(query, 1.0))) {
-    LOG_WARN("fail to push nested boost to leaf query", K(ret));
+  } else if (outer_query_type == QUERY_ITEM_QUERY) {
+    if (OB_FAIL(setup_top_level_score(query))) {
+      LOG_WARN("fail to setup top level score", K(ret));
+    } else {
+      dsl_query_info_->query_top_level_boost_ = query->boost_;
+      query->boost_ = static_cast<ObConstRawExpr *>(dsl_query_info_->one_const_expr_);
+      if (OB_FAIL(try_push_nested_boost_to_leaf_query(query, 1.0))) {
+        LOG_WARN("fail to push nested boost to leaf query", K(ret));
+      }
+    }
   }
   return ret;
 }

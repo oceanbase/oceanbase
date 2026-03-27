@@ -291,7 +291,7 @@ int ObHybridSearchGenerator::generate(const ObDSLQueryInfo *dsl_query,
         LOG_WARN("failed to generate hybrid search node", K(ret));
       } else if (OB_FAIL(fusion_node->children_.push_back(sub_node))) {
         LOG_WARN("failed to append hybrid search node", K(ret));
-      } else if (OB_FAIL(collect_child_boost_and_update_flags(fusion_node, sub_node, one_boost_expr, i))) {
+      } else if (OB_FAIL(collect_child_boost_and_update_flags(dsl_info, fusion_node, sub_node, one_boost_expr, i))) {
         LOG_WARN("failed to collect child boost and update flags", K(ret), K(i));
       }
     }
@@ -1701,22 +1701,23 @@ bool ObHybridSearchGenerator::is_knn_subquery(ObIndexMergeNode *node) const
 }
 
 int ObHybridSearchGenerator::collect_child_boost_and_update_flags(
+    const ObDSLQueryInfo *dsl_info,
     ObFusionNode *fusion_node,
     ObIndexMergeNode *sub_node,
     ObConstRawExpr *one_boost_expr,
     int64_t child_idx)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(fusion_node) || OB_ISNULL(sub_node)) {
+  if (OB_ISNULL(dsl_info) || OB_ISNULL(fusion_node) || OB_ISNULL(sub_node)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("fusion_node or sub_node is null", K(ret), KP(fusion_node), KP(sub_node));
+    LOG_WARN("dsl_info, fusion_node or sub_node is null", K(ret), KP(dsl_info), KP(fusion_node), KP(sub_node));
   } else {
     ObHybridSearchNodeBase *top_score_node = static_cast<ObHybridSearchNodeBase *>(sub_node);
+
     ObRawExpr *path_top_k_limit = nullptr;
-    if (OB_FAIL(fusion_node->weight_cols_.push_back(top_score_node->boost_))) {
+    ObRawExpr *weight_expr = is_search_subquery(sub_node) ? dsl_info->query_top_level_boost_ : top_score_node->boost_;
+    if (OB_FAIL(fusion_node->weight_cols_.push_back(weight_expr))) {
       LOG_WARN("failed to push back weight expr", K(ret), K(child_idx));
-    } else if (OB_FALSE_IT(top_score_node->boost_ = one_boost_expr)) {
-      LOG_WARN("failed to set boost expr", K(ret));
     } else if (is_search_subquery(sub_node)) {
       if (fusion_node->has_search_subquery_) {
         ret = OB_ERR_UNEXPECTED;
