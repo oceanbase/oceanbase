@@ -1205,6 +1205,7 @@ int ObDDLIndependentDag::init_tablet_merge_task(
                                       tx_info_.trans_id_,
                                       transaction::ObTxSEQ::cast_from_int(tx_info_.seq_no_)))) {
     LOG_WARN("failed to init  ddl merge task param", K(ret));
+  } else if (FALSE_IT(merge_param.tx_desc_ = tx_info_.tx_desc_)) {
   } else if (!for_major && FALSE_IT(merge_param.set_merge_all_slice())) {
   } else if (OB_FAIL(alloc_task(ddl_merge_task))) {
     LOG_WARN("failed to alloc ddl merge task", K(ret));
@@ -1229,6 +1230,7 @@ int ObDDLIndependentDag::init_tablet_merge_task(
                                       tx_info_.trans_id_,
                                       transaction::ObTxSEQ::cast_from_int(tx_info_.seq_no_)))) {
       LOG_WARN("failed to init  ddl merge task param", K(ret));
+    } else if (FALSE_IT(lob_merge_param.tx_desc_ = tx_info_.tx_desc_)) {
     } else if (!for_major && FALSE_IT(lob_merge_param.set_merge_all_slice())) {
     } else if (OB_FAIL(alloc_task(lob_merge_task))) {
       LOG_WARN("failed to create ddl merge taks ", K(ret));

@@ -1083,9 +1083,9 @@ int ObSSTabletPersister::inner_persist_aggregated_meta_(
   const bool is_ls_tx_data_tablet = tablet.is_ls_tx_data_tablet();
   ObSSTabletTableStoreMetaInfo table_store_meta_info;
 
-  if (OB_UNLIKELY(param_.is_major_shared_object())) {
+  if (OB_UNLIKELY(param_.is_major_shared_object() || param_.is_inc_major_shared_object())) {
     ret = OB_NOT_SUPPORTED;
-    STORAGE_LOG(WARN, "major shared object should not call this method", K(ret), K(param_));
+    STORAGE_LOG(WARN, "major or inc major shared object should not call this method", K(ret), K(param_));
   } else if (OB_UNLIKELY(write_buffer_.pending_write_cnt() > 0))  {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected non-empty write buffer", K(ret), K(write_buffer_));
@@ -1223,9 +1223,9 @@ int ObSSTabletPersister::fetch_table_store_and_write_info_(
   const ObTabletTableStore *old_table_store = nullptr;
   int64_t sstable_meta_size_aligned = 0; // aligned by 4K
 
-  if (OB_UNLIKELY(param_.is_major_shared_object())) {
+  if (OB_UNLIKELY(param_.is_major_shared_object() || param_.is_inc_major_shared_object())) {
     ret = OB_NOT_SUPPORTED;
-    STORAGE_LOG(WARN, "major shared object should not call this method", K(ret), K(param_));
+    STORAGE_LOG(WARN, "major or inc major shared object should not call this method", K(ret), K(param_));
   }
   // exclude empty shell tablet
   else if (OB_UNLIKELY(tablet.is_empty_shell())) {
@@ -1287,9 +1287,9 @@ int ObSSTabletPersister::fetch_storage_schema_and_write_info_(
   out_write_info.reset();
   ObStorageSchema *storage_schema = nullptr;
 
-  if (OB_UNLIKELY(param_.is_major_shared_object())) {
+  if (OB_UNLIKELY(param_.is_major_shared_object() || param_.is_inc_major_shared_object())) {
     ret = OB_NOT_SUPPORTED;
-    STORAGE_LOG(WARN, "major shared object should not call this method", K(ret), K(param_));
+    STORAGE_LOG(WARN, "major or inc major shared object should not call this method", K(ret), K(param_));
   }
   // exclude empty shell tablet
   else if (OB_UNLIKELY(tablet.is_empty_shell())) {
@@ -1319,9 +1319,9 @@ int ObSSTabletPersister::fetch_and_persist_tablet_macro_info_(
   ObLinkedMacroInfoWriteParam linked_macro_info_param;
   ObMultiTimeStats::TimeStats *time_stats = nullptr;
 
-  if (OB_UNLIKELY(param_.is_major_shared_object())) {
+  if (OB_UNLIKELY(param_.is_major_shared_object() || param_.is_inc_major_shared_object())) {
     ret = OB_NOT_SUPPORTED;
-    STORAGE_LOG(WARN, "major shared object should not call this method", K(ret), K(param_));
+    STORAGE_LOG(WARN, "major or inc major shared object should not call this method", K(ret), K(param_));
   } else if (OB_UNLIKELY(macro_info.is_inited())) {
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "macro info init twice", K(ret), K(macro_info));

@@ -500,7 +500,7 @@ bool ObDDLMacroBlockRedoInfo::is_valid() const
               // the type is default invalid, allow default value for compatibility
               && type_ >= ObDirectLoadType::DIRECT_LOAD_INVALID && type_ < ObDirectLoadType::DIRECT_LOAD_MAX;
   if (ret && is_incremental_direct_load(type_)) {
-    ret = logic_id_.is_valid() && trans_id_.is_valid();
+    ret = trans_id_.is_valid();
   }
 
   if (ret && ObDDLMacroBlockType::DDL_MB_SS_EMPTY_DATA_TYPE != block_type_){

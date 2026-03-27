@@ -5310,6 +5310,7 @@ int ObDDLTabletMergeDagParamV2::assign(const ObDDLTabletMergeDagParamV2 &merge_d
     tablet_ctx_       = merge_dag_param.tablet_ctx_;
     trans_id_         = merge_dag_param.trans_id_;
     seq_no_           = merge_dag_param.seq_no_;
+    tx_desc_          = merge_dag_param.tx_desc_;
     inc_major_trans_version_ = merge_dag_param.inc_major_trans_version_;
     is_inited_        = true;
   }

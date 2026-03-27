@@ -102,6 +102,13 @@ int ObLinkedMacroBlockWriter::write_block(
         opt.set_ss_share_meta_macro_object_opt(macro_info_param_.tablet_id_.id(), macro_info_param_.start_macro_seq_++, 0, macro_info_param_.reorganization_scn_);
         break;
       }
+      case WriteType::SHARED_INC_MAJOR_MACRO_INFO: {
+        opt.set_ss_inc_major_meta_macro_object_opt(macro_info_param_.tablet_id_.id(),
+                                                   macro_info_param_.start_macro_seq_++,
+                                                   0,
+                                                   macro_info_param_.reorganization_scn_);
+        break;
+      }
       case WriteType::SHARED_INC_MACRO_INFO : {
         opt.set_ss_tablet_sub_meta_opt(macro_info_param_.ls_id_.id(),
                                        macro_info_param_.tablet_id_.id(),

@@ -73,7 +73,10 @@ public:
       const int64_t snapshot_version,
       const int64_t start_macro_seq,
       blocksstable::ObIMacroBlockFlushCallback *ddl_redo_callback = nullptr,
-      blocksstable::ObIMacroBlockFlushCallback *ddl_finish_callback = nullptr);
+      blocksstable::ObIMacroBlockFlushCallback *ddl_finish_callback = nullptr,
+      const bool is_inc_major_shared_object = false,
+      const int64_t reorganization_scn = 0);
+
   #ifdef OB_BUILD_SHARED_STORAGE
   // inc_shared tablet meta persistence
   ObTabletPersisterParam(
@@ -107,15 +110,19 @@ public:
       return false;
     #endif
   }
+  bool is_inc_major_shared_object() const
+  {
+    return is_inc_major_shared_object_;
+  }
   bool for_ss_persist() const
   {
-    return is_major_shared_object() || is_inc_shared_object();
+    return is_major_shared_object() || is_inc_major_shared_object() || is_inc_shared_object();
   }
   int get_op_id(int64_t &op_id) const;
 
 
   TO_STRING_KV(K_(data_version), K_(ls_id), K_(ls_epoch), K_(tablet_id), K_(private_transfer_epoch),
-   K_(snapshot_version), K_(start_macro_seq), KP_(ddl_redo_callback), KP_(ddl_finish_callback)
+   K_(snapshot_version), K_(start_macro_seq), K_(is_inc_major_shared_object), KP_(ddl_redo_callback), KP_(ddl_finish_callback)
    #ifdef OB_BUILD_SHARED_STORAGE
    , KPC_(op_handle), KPC_(file), K_(update_reason), K_(sstable_op_id), K_(reorganization_scn), K_(meta_version),
    KP_(src_tablet_block_info)
@@ -129,6 +136,7 @@ public:
   int32_t private_transfer_epoch_;
   int64_t snapshot_version_;
   int64_t start_macro_seq_;
+  bool is_inc_major_shared_object_;
   blocksstable::ObIMacroBlockFlushCallback *ddl_redo_callback_;
   blocksstable::ObIMacroBlockFlushCallback *ddl_finish_callback_;
   #ifdef OB_BUILD_SHARED_STORAGE

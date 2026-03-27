@@ -859,9 +859,12 @@ int ObDDLIncRedoLogWriterCallback::write(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLIncRedoLogWriterCallback is not inited", K(ret));
-  } else if (OB_UNLIKELY((param_.need_submit_io_ && !macro_handle.is_valid()) || !logic_id.is_valid() || nullptr == buf || row_count <= 0)) {
+  } else if (OB_UNLIKELY((param_.need_submit_io_ && !macro_handle.is_valid())
+                          || nullptr == buf
+                          || (ObDDLMacroBlockType::DDL_MB_DATA_TYPE == param_.block_type_
+                              && (!logic_id.is_valid() || row_count <= 0)))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(macro_handle), K(logic_id), KP(buf), K(row_count));
+    LOG_WARN("invalid argument", K(ret), K(macro_handle), K(logic_id), KP(buf), K(row_count), K(param_.block_type_));
   } else {
     redo_info_.table_key_ = param_.table_key_;
     if (ObDDLMacroBlockType::DDL_MB_SS_EMPTY_DATA_TYPE == param_.block_type_) {

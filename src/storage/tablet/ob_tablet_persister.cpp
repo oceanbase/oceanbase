@@ -315,17 +315,13 @@ int ObTabletPersister::delete_blocks_(
   ObSSTableMetaPersistCtx sstable_persist_ctx(block_info_set, meta_write_ctxs, allocator);
   int64_t cur_macro_seq = param.start_macro_seq_;
 
-  if (!sstable.is_major_sstable()) {
+  if (OB_UNLIKELY(!param.is_valid()
+                  || OB_ISNULL(param.ddl_redo_callback_)
+                  || !sstable.is_major_type_sstable()
+                  || (sstable.is_major_sstable() && !param.is_major_shared_object())
+                  || (sstable.is_inc_major_type_sstable() && !param.is_inc_major_shared_object()))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("table is not major", K(ret), K(sstable));
-  } else if (OB_UNLIKELY(!param.is_valid()
-                         || OB_ISNULL(param.ddl_redo_callback_)
-                         || !param.is_major_shared_object())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid persister param", K(ret), K(param));
-  } else if (OB_UNLIKELY(!param.is_major_shared_object())) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("persist_major_sstable_linked_block_if_large only supports shared major", K(ret), K(param));
+    LOG_WARN("invalid args", K(ret), K(param), K(sstable));
   } else if (OB_FAIL(block_info_set.init())) {
     LOG_WARN("fail to init block_info_set", K(ret));
   } else if (OB_FAIL(sstable_persist_ctx.init(ctx_id, 100))) {

@@ -146,6 +146,7 @@ ObTabletPersisterParam::ObTabletPersisterParam(
     private_transfer_epoch_(private_transfer_epoch),
     snapshot_version_(0),
     start_macro_seq_(0),
+    is_inc_major_shared_object_(false),
     ddl_redo_callback_(nullptr),
     ddl_finish_callback_(nullptr)
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -173,7 +174,9 @@ ObTabletPersisterParam::ObTabletPersisterParam(
   const int64_t snapshot_version,
   const int64_t start_macro_seq,
   blocksstable::ObIMacroBlockFlushCallback *ddl_redo_callback,
-  blocksstable::ObIMacroBlockFlushCallback *ddl_finish_callback)
+  blocksstable::ObIMacroBlockFlushCallback *ddl_finish_callback,
+  const bool is_inc_major_shared_object,
+  const int64_t reorganization_scn)
   : data_version_(data_version),
     ls_id_(),
     ls_epoch_(0),
@@ -181,6 +184,7 @@ ObTabletPersisterParam::ObTabletPersisterParam(
     private_transfer_epoch_(private_transfer_epoch),
     snapshot_version_(snapshot_version),
     start_macro_seq_(start_macro_seq),
+    is_inc_major_shared_object_(is_inc_major_shared_object),
     ddl_redo_callback_(ddl_redo_callback),
     ddl_finish_callback_(ddl_finish_callback)
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -188,7 +192,7 @@ ObTabletPersisterParam::ObTabletPersisterParam(
     file_(nullptr),
     update_reason_(ObMetaUpdateReason::INVALID_META_UPDATE_REASON),
     sstable_op_id_(0),
-    reorganization_scn_(0),
+    reorganization_scn_(reorganization_scn),
     meta_version_(0),
     src_tablet_block_info_(nullptr)
 #endif
@@ -221,6 +225,7 @@ ObTabletPersisterParam::ObTabletPersisterParam(
     private_transfer_epoch_(OB_INVALID_TRANSFER_SEQ),
     snapshot_version_(0),
     start_macro_seq_(start_macro_seq),
+    is_inc_major_shared_object_(false),
     ddl_redo_callback_(ddl_redo_callback),
     ddl_finish_callback_(ddl_finish_callback),
     op_handle_(handle),
@@ -246,6 +251,8 @@ bool ObTabletPersisterParam::is_valid() const
   } else if (is_major_shared_object()) { // shared_major
     valid = 0 == ls_epoch_ && start_macro_seq_ >= 0;
   #ifdef OB_BUILD_SHARED_STORAGE
+  } else if (is_inc_major_shared_object()) { // shared_inc_major
+    valid = 0 == ls_epoch_ && start_macro_seq_ >= 0 && reorganization_scn_ >= 0;
   } else if (is_inc_shared_object()) { // inc_shared
     valid = OB_NOT_NULL(op_handle_) && OB_NOT_NULL(file_) && is_valid_update_reason(update_reason_);
   #endif
@@ -1169,7 +1176,10 @@ int ObTabletPersistCommon::build_async_write_start_opt(
     STORAGE_LOG(WARN, "invalid args", K(ret), K(param), K(cur_macro_seq));
   }
   #ifdef OB_BUILD_SHARED_STORAGE
-  else if (param.is_major_shared_object()) {
+  else if (param.is_inc_major_shared_object()) {
+    start_opt.set_ss_inc_major_meta_macro_object_opt(
+      param.tablet_id_.id(), cur_macro_seq, 0/*cg_id*/, param.reorganization_scn_);
+  } else if (param.is_major_shared_object()) {
     start_opt.set_ss_share_meta_macro_object_opt(
       param.tablet_id_.id(), cur_macro_seq, 0/*cg_id*/, param.reorganization_scn_);
   } else if (param.is_inc_shared_object()) {
@@ -1194,6 +1204,8 @@ int ObTabletPersistCommon::sync_cur_macro_seq_from_opt(
   if (OB_UNLIKELY(!param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid args", K(ret), K(param), K(curr_opt));
+  } else if (param.is_inc_major_shared_object()) {
+    cur_macro_seq = curr_opt.ss_share_opt_.data_seq_;
   } else if (param.is_major_shared_object()) {
     cur_macro_seq = curr_opt.ss_share_opt_.data_seq_;
   } else if (param.is_inc_shared_object()) {

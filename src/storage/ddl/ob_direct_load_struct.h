@@ -449,7 +449,7 @@ struct ObDDLTabletMergeDagParamV2
 public:
   ObDDLTabletMergeDagParamV2():
     for_major_(false), for_lob_(false), for_replay_(false), merge_all_slice_(false), direct_load_type_(ObDirectLoadType::DIRECT_LOAD_INVALID), start_scn_(share::SCN::min_scn()),
-    rec_scn_(share::SCN::min_scn()),  ddl_task_param_(), inc_major_trans_version_(0), tablet_ctx_(nullptr), is_inited_(false) {}
+    rec_scn_(share::SCN::min_scn()),  ddl_task_param_(), tx_desc_(nullptr), inc_major_trans_version_(0), tablet_ctx_(nullptr), is_inited_(false) {}
   int init(const bool for_major,
            const bool for_lob,
            const bool for_replay,
@@ -477,7 +477,7 @@ public:
   int get_merge_helper(ObIDDLMergeHelper *&merge_helper);
   VIRTUAL_TO_STRING_KV(K(for_major_), K(for_replay_), K(for_lob_), K(merge_all_slice_),
       K(direct_load_type_), K(start_scn_), K(rec_scn_), K(table_key_), K(ddl_task_param_),
-      K_(trans_id), K_(seq_no), KPC(tablet_ctx_), K_(inc_major_trans_version));
+      K_(trans_id), K_(seq_no), KP_(tx_desc), KPC(tablet_ctx_), K_(inc_major_trans_version));
 public:
   bool for_major_;
   bool for_lob_;
@@ -489,6 +489,7 @@ public:
   ObDDLTaskParam ddl_task_param_;
   transaction::ObTransID trans_id_; // for inc-major direct load only
   transaction::ObTxSEQ seq_no_; // for inc-major direct load only
+  transaction::ObTxDesc *tx_desc_; // for inc-major direct load only
   ObITable::TableKey table_key_;
   int64_t inc_major_trans_version_;
 private:

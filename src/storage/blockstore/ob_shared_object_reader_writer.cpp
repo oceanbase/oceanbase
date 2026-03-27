@@ -140,7 +140,8 @@ int ObSharedObjectsWriteCtx::assign(const ObSharedObjectsWriteCtx &other)
 int ObSharedObjectsWriteCtx::advance_data_seq()
 {
   int ret = OB_SUCCESS;
-  if (ObStorageObjectType::SHARED_MAJOR_META_MACRO == next_opt_.object_type_) {
+  if (ObStorageObjectType::SHARED_MAJOR_META_MACRO == next_opt_.object_type_
+      || ObStorageObjectType::SHARED_INC_MAJOR_META_MACRO == next_opt_.object_type_) {
     next_opt_.ss_share_opt_.data_seq_++;
   } else if (ObStorageObjectType::SHARED_TABLET_SUB_META == next_opt_.object_type_) {
     if (UINT32_MAX == next_opt_.ss_tablet_sub_meta_opt_.data_seq_) {

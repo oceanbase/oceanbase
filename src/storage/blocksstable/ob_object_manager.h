@@ -85,6 +85,14 @@ public:
   {
     set_ss_share_object_opt(ObStorageObjectType::SHARED_MAJOR_META_MACRO, false, 0, tablet_id, data_seq, column_group_id, reorganization_scn);
   }
+  void set_ss_inc_major_meta_macro_object_opt(
+      const int64_t tablet_id,
+      const int64_t data_seq,
+      const int64_t column_group_id,
+      const int64_t reorganization_scn)
+  {
+    set_ss_share_object_opt(ObStorageObjectType::SHARED_INC_MAJOR_META_MACRO, false, 0, tablet_id, data_seq, column_group_id, reorganization_scn);
+  }
   void set_ss_tmp_file_object_opt()
   {
     object_type_ = ObStorageObjectType::TMP_FILE;

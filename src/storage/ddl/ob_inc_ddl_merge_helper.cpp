@@ -1342,6 +1342,8 @@ int ObSSIncMajorDDLMergeHelper::assemble_sstable(ObDDLTabletMergeDagParamV2 &dag
   ObSSTable *inc_major_sstable = nullptr;
   ObTablesHandleArray co_sstable_array;
   ObDDLKvMgrHandle ddl_kv_mgr_handle;
+  ObDirectLoadAutoIncSeqData start_macro_seq;
+  int64_t out_macro_seq = 0;
 
   if (OB_UNLIKELY(!dag_merge_param.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -1353,8 +1355,13 @@ int ObSSIncMajorDDLMergeHelper::assemble_sstable(ObDDLTabletMergeDagParamV2 &dag
   } else if (OB_UNLIKELY(!tablet_handle.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet handle is invalid", KR(ret), K(tablet_handle));
-  } else if (OB_FAIL(ObSSDDLMergeHelper::build_sstable(dag_merge_param, co_sstable_array, inc_major_sstable))) {
+  } else if (OB_FAIL(ObDirectLoadAutoIncSeqService::get_start_seq(ls_id, tablet_id, compaction::MACRO_STEP_SIZE, start_macro_seq))) {
+    LOG_WARN("fail to get start seq", KR(ret));
+  } else if (OB_FAIL(ObSSDDLMergeHelper::build_sstable(dag_merge_param, co_sstable_array, start_macro_seq.get_seq_val(), out_macro_seq, inc_major_sstable))) {
     LOG_WARN("failed to build major sstable", K(ret), KPC(inc_major_sstable));
+  } else if (OB_ISNULL(inc_major_sstable)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null inc major sstable", KR(ret), K(dag_merge_param));
   } else if (OB_FAIL(update_tablet_table_store(dag_merge_param, co_sstable_array, inc_major_sstable))) {
     LOG_WARN("failed to update tablet table store", K(ret), KPC(inc_major_sstable));
   } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
