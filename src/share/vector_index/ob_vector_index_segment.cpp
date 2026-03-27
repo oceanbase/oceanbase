@@ -1571,9 +1571,10 @@ int ObVecIdxSnapshotData::get_snap_index_row_cnt(int64_t &count) const
   count = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < meta_.incrs_.count(); ++i) {
     const ObVectorIndexSegmentMeta &seg_meta = meta_.incrs_.at(i);
+    const ObVectorIndexSegmentHandle segment_handle = seg_meta.segment_handle_;
     int64_t seg_vec_cnt = 0;
-    if (! seg_meta.segment_handle_.is_valid()) { // skip
-    } else if (OB_FAIL(seg_meta.segment_handle_->get_index_number(seg_vec_cnt))) {
+    if (! segment_handle.is_valid()) { // skip
+    } else if (OB_FAIL(segment_handle->get_index_number(seg_vec_cnt))) {
       LOG_WARN("cal_distance_by_id fail", K(ret), K(i), K(seg_meta));
     } else {
       LOG_DEBUG("segment vector count", K(seg_vec_cnt), K(count));
@@ -1582,9 +1583,10 @@ int ObVecIdxSnapshotData::get_snap_index_row_cnt(int64_t &count) const
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < meta_.bases_.count(); ++i) {
     const ObVectorIndexSegmentMeta &seg_meta = meta_.bases_.at(i);
+    const ObVectorIndexSegmentHandle segment_handle = seg_meta.segment_handle_;
     int64_t seg_vec_cnt = 0;
-    if (! seg_meta.segment_handle_.is_valid()) { // skip
-    } else if (OB_FAIL(seg_meta.segment_handle_->get_index_number(seg_vec_cnt))) {
+    if (! segment_handle.is_valid()) { // skip
+    } else if (OB_FAIL(segment_handle->get_index_number(seg_vec_cnt))) {
       LOG_WARN("cal_distance_by_id fail", K(ret), K(i), K(seg_meta));
     } else {
       LOG_DEBUG("segment vector count", K(seg_vec_cnt), K(count));
@@ -1599,14 +1601,16 @@ int64_t ObVecIdxSnapshotData::get_snap_mem_used() const
   int64_t hold = 0;
   for (int64_t i = 0; i < meta_.incrs_.count(); ++i) {
     const ObVectorIndexSegmentMeta &seg_meta = meta_.incrs_.at(i);
-    if (seg_meta.segment_handle_.is_valid()) {
-      hold += seg_meta.segment_handle_->get_mem_used();
+    const ObVectorIndexSegmentHandle segment_handle = seg_meta.segment_handle_;
+    if (segment_handle.is_valid()) {
+      hold += segment_handle->get_mem_used();
     }
   }
   for (int64_t i = 0; i < meta_.bases_.count(); ++i) {
     const ObVectorIndexSegmentMeta &seg_meta = meta_.bases_.at(i);
-    if (seg_meta.segment_handle_.is_valid()) {
-      hold += seg_meta.segment_handle_->get_mem_used();
+    const ObVectorIndexSegmentHandle segment_handle = seg_meta.segment_handle_;
+    if (segment_handle.is_valid()) {
+      hold += segment_handle->get_mem_used();
     }
   }
   return hold;
@@ -1617,14 +1621,16 @@ int64_t ObVecIdxSnapshotData::get_snap_mem_hold() const
   int64_t hold = 0;
   for (int64_t i = 0; i < meta_.incrs_.count(); ++i) {
     const ObVectorIndexSegmentMeta &seg_meta = meta_.incrs_.at(i);
-    if (seg_meta.segment_handle_.is_valid()) {
-      hold += seg_meta.segment_handle_->get_mem_hold();
+    const ObVectorIndexSegmentHandle segment_handle = seg_meta.segment_handle_;
+    if (segment_handle.is_valid()) {
+      hold += segment_handle->get_mem_hold();
     }
   }
   for (int64_t i = 0; i < meta_.bases_.count(); ++i) {
     const ObVectorIndexSegmentMeta &seg_meta = meta_.bases_.at(i);
-    if (seg_meta.segment_handle_.is_valid()) {
-      hold += seg_meta.segment_handle_->get_mem_hold();
+    const ObVectorIndexSegmentHandle segment_handle = seg_meta.segment_handle_;
+    if (segment_handle.is_valid()) {
+      hold += segment_handle->get_mem_hold();
     }
   }
   return hold;
@@ -1637,14 +1643,16 @@ bool ObVecIdxSnapshotData::check_incr_mem_over_percentage(const int64_t incr_mem
   int64_t base_hold = 0;
   for (int64_t i = 0; i < meta_.incrs_.count(); ++i) {
     const ObVectorIndexSegmentMeta &seg_meta = meta_.incrs_.at(i);
-    if (seg_meta.segment_handle_.is_valid()) {
-      incr_hold += seg_meta.segment_handle_->get_mem_used();
+    const ObVectorIndexSegmentHandle segment_handle = seg_meta.segment_handle_;
+    if (segment_handle.is_valid()) {
+      incr_hold += segment_handle->get_mem_used();
     }
   }
   for (int64_t i = 0; i < meta_.bases_.count(); ++i) {
     const ObVectorIndexSegmentMeta &seg_meta = meta_.bases_.at(i);
-    if (seg_meta.segment_handle_.is_valid()) {
-      base_hold += seg_meta.segment_handle_->get_mem_used();
+    const ObVectorIndexSegmentHandle segment_handle = seg_meta.segment_handle_;
+    if (segment_handle.is_valid()) {
+      base_hold += segment_handle->get_mem_used();
     }
   }
   return base_hold > 0 && incr_memory_percentage > 0 && incr_hold * 100 > incr_memory_percentage * (incr_hold + base_hold);
@@ -1689,8 +1697,11 @@ bool ObVecIdxSnapshotData::check_incr_can_merge_base() const
 ObVectorIndexAlgorithmType ObVecIdxSnapshotData::get_snap_index_type() const
 {
   ObVectorIndexAlgorithmType index_type = VIAT_MAX;
-  if (meta_.bases_.count() > 0 && meta_.bases_.at(0).segment_handle_.is_valid()) {
-    index_type = meta_.bases_.at(0).segment_handle_->get_index_type();
+  if (meta_.bases_.count() > 0) {
+    const ObVectorIndexSegmentHandle segment_handle = meta_.bases_.at(0).segment_handle_;
+    if (segment_handle.is_valid()) {
+      index_type = segment_handle->get_index_type();
+    }
   }
   return index_type;
 }
@@ -1700,9 +1711,11 @@ int ObVecIdxSnapshotData::get_snap_vid_bound(int64_t &min_vid, int64_t &max_vid)
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < meta_.incrs_.count(); ++i) {
     ObVectorIndexSegmentMeta &seg_meta = meta_.incrs_.at(i);
+    const ObVectorIndexSegmentHandle segment_handle = seg_meta.segment_handle_;
     int64_t seg_min_vid = INT64_MAX;
     int64_t seg_max_vid = 0;
-    if (OB_FAIL(seg_meta.segment_handle_->get_vid_bound(seg_min_vid, seg_max_vid))) {
+    if (! segment_handle.is_valid()) { // skip
+    } else if (OB_FAIL(segment_handle->get_vid_bound(seg_min_vid, seg_max_vid))) {
       LOG_WARN("get_vid_bound fail", K(ret), K(i), K(seg_meta));
     } else {
       min_vid = OB_MIN(min_vid, seg_min_vid);
@@ -1711,9 +1724,11 @@ int ObVecIdxSnapshotData::get_snap_vid_bound(int64_t &min_vid, int64_t &max_vid)
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < meta_.bases_.count(); ++i) {
     ObVectorIndexSegmentMeta &seg_meta = meta_.bases_.at(i);
+    const ObVectorIndexSegmentHandle segment_handle = seg_meta.segment_handle_;
     int64_t seg_min_vid = INT64_MAX;
     int64_t seg_max_vid = 0;
-    if (OB_FAIL(seg_meta.segment_handle_->get_vid_bound(seg_min_vid, seg_max_vid))) {
+    if (! segment_handle.is_valid()) { // skip
+    } else if (OB_FAIL(segment_handle->get_vid_bound(seg_min_vid, seg_max_vid))) {
       LOG_WARN("get_vid_bound fail", K(ret), K(i), K(seg_meta));
     } else {
       min_vid = OB_MIN(min_vid, seg_min_vid);

@@ -808,13 +808,26 @@ int ObPluginVectorIndexAdaptor::fill_vector_index_info(ObVectorIndexInfo &info)
         LOG_WARN("failed to fill statistics", K(ret)); \
       } \
     }
-
+  int64_t incr_mem_used = 0;
+  int64_t incr_mem_hold = 0;
+  int64_t snap_mem_used = 0;
+  int64_t snap_mem_hold = 0;
+  if (incr_data_.is_valid() && incr_data_->is_inited()) {
+    TCRLockGuard lock_guard(incr_data_->mem_data_rwlock_);
+    incr_mem_used = get_incr_vsag_mem_used();
+    incr_mem_hold = get_incr_vsag_mem_hold();
+  }
+  if (snap_data_.is_valid() && snap_data_->is_inited()) {
+    TCRLockGuard lock_guard(snap_data_->mem_data_rwlock_);
+    snap_mem_used = get_snap_vsag_mem_used();
+    snap_mem_hold = get_snap_vsag_mem_hold();
+  }
   STAT_PRINT("{");
   STAT_PRINT("\"is_complete\":%d", is_complete());
-  STAT_PRINT(",\"incr_mem_used\":%lld", get_incr_vsag_mem_used());
-  STAT_PRINT(",\"incr_mem_hold\":%lld", get_incr_vsag_mem_hold());
-  STAT_PRINT(",\"snap_mem_used\":%lld", get_snap_vsag_mem_used());
-  STAT_PRINT(",\"snap_mem_hold\":%lld", get_snap_vsag_mem_hold());
+  STAT_PRINT(",\"incr_mem_used\":%lld", incr_mem_used);
+  STAT_PRINT(",\"incr_mem_hold\":%lld", incr_mem_hold);
+  STAT_PRINT(",\"snap_mem_used\":%lld", snap_mem_used);
+  STAT_PRINT(",\"snap_mem_hold\":%lld", snap_mem_hold);
 
   if (type_ != VIAT_MAX && OB_SUCC(ret)) {
     if (OB_FAIL(get_hnsw_param(param))) {
@@ -917,20 +930,21 @@ int ObPluginVectorIndexAdaptor::fill_vector_index_info(ObVectorIndexInfo &info)
   }
 
   if (OB_SUCC(ret) && has_frozen()) {
-    // TODO: may be need read lock
+    TCRLockGuard lock_guard(frozen_data_->mem_data_rwlock_);
     int64_t frozen_cnt = 0;
     int frozen_type = -1;
     int64_t frozen_mem_used = 0;
     int64_t frozen_mem_hold = 0;
     int64_t fbitmap_insert_cnt = 0;
     int64_t fbitmap_delete_cnt = 0;
-    if (frozen_data_->segment_handle_.is_valid()) {
-      if (OB_FAIL(frozen_data_->segment_handle_->get_index_number(frozen_cnt))) {
+    const ObVectorIndexSegmentHandle frozen_segment_handle = frozen_data_->segment_handle_;
+    if (frozen_segment_handle.is_valid()) {
+      if (OB_FAIL(frozen_segment_handle->get_index_number(frozen_cnt))) {
         LOG_WARN("failed to get snap index number.", K(ret));
       } else {
-        frozen_type = frozen_data_->segment_handle_->get_index_type();
-        frozen_mem_used = frozen_data_->segment_handle_->get_mem_used();
-        frozen_mem_hold = frozen_data_->segment_handle_->get_mem_hold();
+        frozen_type = frozen_segment_handle->get_index_type();
+        frozen_mem_used = frozen_segment_handle->get_mem_used();
+        frozen_mem_hold = frozen_segment_handle->get_mem_hold();
       }
     }
     if (OB_SUCC(ret) && frozen_data_->vbitmap_->is_inited()
@@ -990,14 +1004,24 @@ int ObPluginVectorIndexAdaptor::fill_vector_index_info(ObVectorIndexInfo &info)
 int ObPluginVectorIndexAdaptor::fill_mem_context_detail_info(char *buf, int64_t buf_len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
+  int64_t incr_mem_hold = 0;
+  int64_t snap_mem_hold = 0;
   if (incr_data_.is_valid() && incr_data_->is_inited()) {
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos,", \"vsag_incr_%lu\":%ld", get_inc_table_id(), get_incr_vsag_mem_hold()))) {
+    TCRLockGuard lock_guard(incr_data_->mem_data_rwlock_);
+    incr_mem_hold = get_incr_vsag_mem_hold();
+  }
+  if (snap_data_.is_valid() && snap_data_->is_inited()) {
+    TCRLockGuard lock_guard(snap_data_->mem_data_rwlock_);
+    snap_mem_hold = get_snap_vsag_mem_hold();
+  }
+  if (incr_data_.is_valid() && incr_data_->is_inited()) {
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos,", \"vsag_incr_%lu\":%ld", get_inc_table_id(), incr_mem_hold))) {
       OB_LOG(WARN, "failed to get vsag incr data mem info", K(ret));
     }
   }
   if (OB_FAIL(ret)) {
   } else if (snap_data_.is_valid() && snap_data_->is_inited()) {
-    if (OB_FAIL(databuff_printf(buf, buf_len, pos,", \"vsag_snap_%lu\":%ld", get_snapshot_table_id(), get_snap_vsag_mem_hold()))) {
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos,", \"vsag_snap_%lu\":%ld", get_snapshot_table_id(), snap_mem_hold))) {
       OB_LOG(WARN, "failed to get vsag snap data mem info", K(ret));
     }
   }
@@ -4776,9 +4800,10 @@ int ObPluginVectorIndexAdaptor::check_need_sync_to_follower_or_do_opt_task(ObPlu
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < snap_data_->meta_.incrs_.count(); ++i) {
         const ObVectorIndexSegmentMeta &seg_meta = snap_data_->meta_.incrs_.at(i);
+        const ObVectorIndexSegmentHandle segment_handle = seg_meta.segment_handle_;
         int64_t seg_vec_cnt = 0;
-        if (! seg_meta.segment_handle_.is_valid()) { // skip
-        } else if (OB_FAIL(seg_meta.segment_handle_->get_index_number(seg_vec_cnt))) {
+        if (! segment_handle.is_valid()) { // skip
+        } else if (OB_FAIL(segment_handle->get_index_number(seg_vec_cnt))) {
           LOG_WARN("cal_distance_by_id fail", K(ret), K(i), K(seg_meta));
         } else {
           current_snap_incr_vec_cnt += seg_vec_cnt;
@@ -4786,9 +4811,10 @@ int ObPluginVectorIndexAdaptor::check_need_sync_to_follower_or_do_opt_task(ObPlu
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < snap_data_->meta_.bases_.count(); ++i) {
         const ObVectorIndexSegmentMeta &seg_meta = snap_data_->meta_.bases_.at(i);
+        const ObVectorIndexSegmentHandle segment_handle = seg_meta.segment_handle_;
         int64_t seg_vec_cnt = 0;
-        if (! seg_meta.segment_handle_.is_valid()) { // skip
-        } else if (OB_FAIL(seg_meta.segment_handle_->get_index_number(seg_vec_cnt))) {
+        if (! segment_handle.is_valid()) { // skip
+        } else if (OB_FAIL(segment_handle->get_index_number(seg_vec_cnt))) {
           LOG_WARN("cal_distance_by_id fail", K(ret), K(i), K(seg_meta));
         } else {
           current_snap_base_vec_cnt += seg_vec_cnt;
@@ -4992,9 +5018,10 @@ int ObPluginVectorIndexAdaptor::print_adapter_info(char *buf, int64_t buf_len, i
         if (OB_FAIL(get_inc_index_row_cnt(incr_row_cnt))) {
           LOG_WARN("failed to get incr index row cnt", K(ret));
         }
-        if (incr_data_->segment_handle_.is_valid()) {
-          incr_data_->segment_handle_->get_read_bound_vid(incr_max_vid, incr_min_vid);
-          ObVectorIndexRoaringBitMap *vbitmap = incr_data_->segment_handle_->vbitmap_;
+        const ObVectorIndexSegmentHandle incr_segment_handle = incr_data_->segment_handle_;
+        if (incr_segment_handle.is_valid()) {
+          incr_segment_handle->get_read_bound_vid(incr_max_vid, incr_min_vid);
+          ObVectorIndexRoaringBitMap *vbitmap = incr_segment_handle->vbitmap_;
           if (OB_NOT_NULL(vbitmap)) {
             if (OB_NOT_NULL(vbitmap->insert_bitmap_)) {
               ROARING_TRY_CATCH(incr_bitmap_insert_cnt = roaring64_bitmap_get_cardinality(vbitmap->insert_bitmap_));
@@ -5103,13 +5130,14 @@ int ObPluginVectorIndexAdaptor::print_adapter_info(char *buf, int64_t buf_len, i
     int frozen_ret_code = 0;
     {
       TCRLockGuard lock_guard(frozen_data_->mem_data_rwlock_);
-      if (frozen_data_->segment_handle_.is_valid()) {
-        if (OB_FAIL(frozen_data_->segment_handle_->get_index_number(frozen_cnt))) {
+      const ObVectorIndexSegmentHandle frozen_segment_handle = frozen_data_->segment_handle_;
+      if (frozen_segment_handle.is_valid()) {
+        if (OB_FAIL(frozen_segment_handle->get_index_number(frozen_cnt))) {
           LOG_WARN("failed to get frozen index number.", K(ret));
         } else {
-          frozen_type = static_cast<int>(frozen_data_->segment_handle_->get_index_type());
-          frozen_mem_used = frozen_data_->segment_handle_->get_mem_used();
-          frozen_mem_hold = frozen_data_->segment_handle_->get_mem_hold();
+          frozen_type = static_cast<int>(frozen_segment_handle->get_index_type());
+          frozen_mem_used = frozen_segment_handle->get_mem_used();
+          frozen_mem_hold = frozen_segment_handle->get_mem_hold();
         }
       }
       if (OB_SUCC(ret) && frozen_data_->vbitmap_.is_valid()
@@ -6139,23 +6167,24 @@ int ObPluginVectorIndexAdaptor::get_full_incr_bitmap(roaring::api::roaring64_bit
   if (OB_SUCC(ret) && is_snap_inited()) {
     for (int64_t i = 0; OB_SUCC(ret) && i < snap_data_->meta_.incrs_.count(); ++i) {
       const ObVectorIndexSegmentMeta &seg_meta = snap_data_->meta_.incrs_.at(i);
-      if (! seg_meta.segment_handle_.is_valid()) {
+      const ObVectorIndexSegmentHandle segment_handle = seg_meta.segment_handle_;
+      if (! segment_handle.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("segment handle is invalid", K(ret), K(i), K(seg_meta), KPC(this));
       } else if (ObVectorIndexSegmentType::FREEZE_PERSIST == seg_meta.seg_type_) {
-        if (OB_ISNULL(seg_meta.segment_handle_->ibitmap_)) {
+        if (OB_ISNULL(segment_handle->ibitmap_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("segment ibitmap is null", K(ret), K(seg_meta));
-        } else if (OB_ISNULL(seg_meta.segment_handle_->ibitmap_->insert_bitmap_)) {
+        } else if (OB_ISNULL(segment_handle->ibitmap_->insert_bitmap_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("segment insert bitmap is null", K(ret), K(seg_meta));
         } else {
-          ROARING_TRY_CATCH(roaring64_bitmap_or_inplace(bitmap, seg_meta.segment_handle_->ibitmap_->insert_bitmap_));
+          ROARING_TRY_CATCH(roaring64_bitmap_or_inplace(bitmap, segment_handle->ibitmap_->insert_bitmap_));
         }
       } else if (ObVectorIndexSegmentType::INCR_MERGE == seg_meta.seg_type_) {
-        if (OB_NOT_NULL(seg_meta.segment_handle_->ibitmap_)
-            && OB_NOT_NULL(seg_meta.segment_handle_->ibitmap_->insert_bitmap_)) {
-          ROARING_TRY_CATCH(roaring64_bitmap_or_inplace(bitmap, seg_meta.segment_handle_->ibitmap_->insert_bitmap_));
+        if (OB_NOT_NULL(segment_handle->ibitmap_)
+            && OB_NOT_NULL(segment_handle->ibitmap_->insert_bitmap_)) {
+          ROARING_TRY_CATCH(roaring64_bitmap_or_inplace(bitmap, segment_handle->ibitmap_->insert_bitmap_));
         }
       }
     }
@@ -6190,8 +6219,11 @@ int ObPluginVectorIndexAdaptor::check_vbitmap_is_subset(roaring::api::roaring64_
     if (is_subset && is_snap_inited()) {
       for (int64_t i = 0; OB_SUCC(ret) && is_subset && i < snap_data_->meta_.incrs_.count(); ++i) {
         const ObVectorIndexSegmentMeta &seg_meta = snap_data_->meta_.incrs_.at(i);
-        if (OB_NOT_NULL(seg_meta.segment_handle_->vbitmap_) && OB_NOT_NULL(seg_meta.segment_handle_->vbitmap_->insert_bitmap_)) {
-          is_subset = roaring64_bitmap_is_subset(seg_meta.segment_handle_->vbitmap_->insert_bitmap_, delta_bitmap);
+        const ObVectorIndexSegmentHandle segment_handle = seg_meta.segment_handle_;
+        if (segment_handle.is_valid()
+            && OB_NOT_NULL(segment_handle->vbitmap_)
+            && OB_NOT_NULL(segment_handle->vbitmap_->insert_bitmap_)) {
+          is_subset = roaring64_bitmap_is_subset(segment_handle->vbitmap_->insert_bitmap_, delta_bitmap);
         }
       }
     }
