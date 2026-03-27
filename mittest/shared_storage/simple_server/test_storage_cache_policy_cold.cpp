@@ -429,7 +429,7 @@ TEST_F(ObStorageCachePolicyColdTest, test_cold_policy_cache_behavior)
   char read_buf[1024] = {0};
   int miss_cnt = 0;
 
-  // First round: read all blocks and erase from mem_macro_cache immediately
+  // First round: read all blocks
   for (int i = 0; i < data_block_ids.count(); i++) {
     if (data_block_ids.at(i).is_shared_data_or_meta()) {
       ObSSShareMacroReader share_macro_reader;
@@ -718,8 +718,6 @@ TEST_F(ObStorageCachePolicyColdTest, test_macro_block_cold_elimination)
     if (is_exist) {
       macro_count_after_policy_change++;
     }
-    // clear mem macro cache beacuse ObSSMemMacroCacheEvictTask will refresh mem cache to be local cache
-    IGNORE_RETURN(mem_macro_cache->meta_mgr_.erase_mem_macro_block_meta(cached_macro_ids.at(i)));
   }
   FLOG_INFO("[TEST] Step 5: Macro count after policy change", K(macro_count_after_policy_change));
   ASSERT_EQ(initial_macro_count, macro_count_after_policy_change);
