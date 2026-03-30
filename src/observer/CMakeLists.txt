@@ -1,7 +1,6 @@
 ob_set_subtarget(ob_server ALONE
   ob_server.cpp
   ob_service.cpp
-  ob_srv_mem_info.cpp
 )
 
 ob_set_subtarget(ob_server common
