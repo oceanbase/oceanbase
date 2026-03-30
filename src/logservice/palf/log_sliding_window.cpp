@@ -1133,7 +1133,7 @@ int LogSlidingWindow::handle_next_submit_log_(bool &is_committed_lsn_updated)
             PALF_LOG(WARN, "submit log failed", K(ret), K_(palf_id), K_(self), KPC(log_task), K(is_accum_checksum_acquired));
           }
           PALF_LOG(TRACE, "handle one submit log", K(ret), K_(palf_id), K_(self), K(tmp_log_id), K(is_committed_lsn_updated),
-              K(is_need_submit), K(is_submitted));
+              K(is_need_submit), K(is_submitted), KPC(log_task));
         }
         is_lease_expired = is_handle_thread_lease_expired(thread_lease_begin_ts);
       }

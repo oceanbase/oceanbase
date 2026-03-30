@@ -81,7 +81,7 @@ public:
   {
     return true;
   }
-  virtual bool can_revoke(const int64_t proposal_id) const
+  virtual bool can_revoke(const int64_t election_epoch) const
   {
     return true;
   }

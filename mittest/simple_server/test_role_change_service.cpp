@@ -121,7 +121,7 @@ TEST_F(RoleChangeService, basic_func)
     event_stack.event_type_ = RoleChangeEventType::ROLE_CHANGE_CB_EVENT_TYPE;
     event_stack.ls_id_ = ObLSID(1001);
     ObRoleChangeService::RetrySubmitRoleChangeEventCtx retry_ctx;
-    EXPECT_EQ(OB_TIMEOUT, role_change_service->handle_role_change_cb_event_for_log_handler_(palf::AccessMode::APPEND, ls.get_ls(), retry_ctx));
+    EXPECT_EQ(OB_TIMEOUT, role_change_service->handle_role_change_cb_event_for_log_handler_(palf::AccessMode::APPEND, palf::SyncMode::ASYNC, ls.get_ls(), retry_ctx));
     EXPECT_EQ(retry_ctx.reason_, ObRoleChangeService::RetrySubmitRoleChangeEventReason::WAIT_REPLAY_DONE_TIMEOUT);
     EXPECT_EQ(retry_ctx.need_retry(), true);
     EXPECT_EQ(OB_SUCCESS, role_change_service->on_role_change(1001));

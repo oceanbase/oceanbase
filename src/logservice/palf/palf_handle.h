@@ -237,10 +237,9 @@ public:
  	//
  	// @return :TODO
   virtual int get_role(common::ObRole &role, int64_t &proposal_id, bool &is_pending_state) const override final;
-  virtual int get_role_and_sync_mode(common::ObRole &role,
-                                     int64_t &proposal_id,
-                                     palf::SyncMode &sync_mode,
-                                     bool &is_pending_state) const override final;
+  virtual int get_proposal_id_and_sync_mode(int64_t &proposal_id,
+                                            palf::SyncMode &sync_mode,
+                                            bool &is_pending_state) const override final;
   virtual int get_palf_id(int64_t &palf_id) const override final;
   virtual int get_palf_epoch(int64_t &palf_epoch) const override final;
 
@@ -525,6 +524,7 @@ public:
   virtual int change_sync_mode(const int64_t proposal_id,
                                const int64_t mode_version,
                                const ipalf::SyncMode &sync_mode,
+                               const bool need_role_change,
                                int64_t &new_mode_version,
                                int64_t &out_proposal_id) override final;
   virtual int get_sync_mode(int64_t &mode_version, ipalf::SyncMode &sync_mode) const override final;

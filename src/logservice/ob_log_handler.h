@@ -302,6 +302,11 @@ public:
   // @param[in], role, LEADER or FOLLOWER
   // @param[in], proposal_id, global monotonically increasing id
   virtual void switch_role(const common::ObRole &role, const int64_t proposal_id) override;
+
+  // @brief switch log_handle sync_mode, to SYNC or ASYNC or PRE_ASYNC
+  // @param[in], sync_mode, SYNC or ASYNC or PRE_ASYNC
+  // @param[in], proposal_id, global monotonically increasing id
+  virtual void switch_sync_mode(const palf::SyncMode &sync_mode, const int64_t proposal_id) override;
   // @brief query role and proposal_id from ObLogHandler.
   // @param[out], role:
   //    LEADER, if 'role_' of ObLogHandler is LEADER and 'proposal_id' is same with PalfHandle.
@@ -350,6 +355,7 @@ public:
   // MPT functions
   void set_pre_async_blocked();
   void clear_pre_async_blocked();
+
   int process_change_sync_mode(const int64_t mode_version,
                                 const palf::SyncMode &sync_mode,
                                 const share::SCN &ref_scn,
@@ -883,7 +889,8 @@ public:
   int unregister_rebuild_cb() override final;
   int diagnose(LogHandlerDiagnoseInfo &diagnose_info) const;
   int diagnose_palf(palf::PalfDiagnoseInfo &diagnose_info) const;
-  TO_STRING_KV(K_(role), K_(proposal_id), KP(palf_handle_), KP(palf_env_), K(is_in_stop_state_), K(is_inited_), K(id_));
+  TO_STRING_KV(K_(role), K_(proposal_id), KP(palf_handle_), KP(palf_env_), K(is_in_stop_state_), K(is_inited_), K(id_), K_(sync_mode),
+      K_(is_pre_async_blocked));
   int offline() override final;
   int online(const palf::LSN &lsn, const share::SCN &scn, const bool is_logonly_replica = false) override final;
   bool is_offline() const override final;

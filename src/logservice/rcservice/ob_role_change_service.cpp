@@ -313,6 +313,7 @@ int ObRoleChangeService::handle_role_change_event_(const RoleChangeEvent &event,
   ObLSHandle ls_handle;
   ObLS *ls = NULL;
   AccessMode curr_access_mode;
+  SyncMode curr_sync_mode;
   int64_t unused_mode_version;
   OB_ASSERT(OB_SUCCESS == rc_set_.remove(event));
   if (false == event.is_valid()) {
@@ -324,6 +325,8 @@ int ObRoleChangeService::handle_role_change_event_(const RoleChangeEvent &event,
     CLOG_LOG(WARN, "get log stream from ObLSService failed", K(ret), K(event));
   } else if (OB_FAIL(ls->get_log_handler()->get_access_mode(unused_mode_version, curr_access_mode))) {
     CLOG_LOG(WARN, "ObLogHandler get_access_mode failed", K(ret));
+  } else if (!GCONF.enable_logservice && OB_FAIL(ls->get_log_handler()->get_sync_mode(unused_mode_version, curr_sync_mode))) {
+    CLOG_LOG(WARN, "ObLogHandler get_sync_mode failed", K(ret));
   } else {
     switch (event.event_type_) {
       case RoleChangeEventType::CHANGE_LEADER_EVENT_TYPE:
@@ -351,29 +354,30 @@ int ObRoleChangeService::handle_role_change_event_(const RoleChangeEvent &event,
       case RoleChangeEventType::ROLE_CHANGE_CB_EVENT_TYPE:
       {
         ObDIActionGuard di_action_guard2("role change cb event");
-        CLOG_LOG(INFO, "begin log handler role change", K(curr_access_mode), K(event), KPC(ls));
-        if (OB_FAIL(handle_role_change_cb_event_for_log_handler_(curr_access_mode, ls, retry_ctx))) {
+        CLOG_LOG(INFO, "begin log handler role change", K(curr_access_mode), K(curr_sync_mode), K(event), KPC(ls));
+        if (OB_FAIL(handle_role_change_cb_event_for_log_handler_(curr_access_mode, curr_sync_mode, ls, retry_ctx))) {
           CLOG_LOG(WARN, "handle_role_change_cb_event_for_log_handler_ failed", K(ret),
-              K(curr_access_mode), KPC(ls));
+              K(curr_access_mode), K(curr_sync_mode), KPC(ls));
         }
-        CLOG_LOG(INFO, "end log handler role change", K(ret), K(curr_access_mode), K(event), KPC(ls), K(retry_ctx));
-        CLOG_LOG(INFO, "begin restore handler role change", K(curr_access_mode), K(event), KPC(ls));
-        if (!retry_ctx.need_retry() && OB_FAIL(handle_role_change_cb_event_for_restore_handler_(curr_access_mode, ls))) {
+        CLOG_LOG(INFO, "end log handler role change", K(ret), K(curr_access_mode), K(curr_sync_mode), K(event), KPC(ls), K(retry_ctx));
+        CLOG_LOG(INFO, "begin restore handler role change", K(curr_access_mode), K(curr_sync_mode), K(event), KPC(ls));
+        if (!retry_ctx.need_retry() && OB_FAIL(handle_role_change_cb_event_for_restore_handler_(curr_access_mode, curr_sync_mode, ls))) {
           CLOG_LOG(WARN, "handle_role_change_cb_event_for_restore_handler_ failed", K(ret),
-              K(curr_access_mode), KPC(ls));
+              K(curr_access_mode), K(curr_sync_mode), KPC(ls));
         }
-        CLOG_LOG(INFO, "end restore handler role change", K(ret), K(curr_access_mode), K(event), KPC(ls));
+        CLOG_LOG(INFO, "end restore handler role change", K(ret), K(curr_access_mode), K(curr_sync_mode), K(event), KPC(ls));
         break;
       }
       case RoleChangeEventType::SYNC_MODE_EVENT_TYPE:
         ObDIActionGuard("sync mode role change event");
         CLOG_LOG(INFO, "begin log handler sync mode change", K(curr_access_mode), K(event), KPC(ls));
-        if (OB_FAIL(handle_sync_mode_event_for_log_handler_(curr_access_mode, ls, retry_ctx))) {
+        if (OB_FAIL(handle_sync_mode_event_for_log_handler_(ls))) {
           CLOG_LOG(WARN, "handle_sync_mode_event_for_log_handler_ failed", K(ret), K(curr_access_mode), K(event), KPC(ls));
         }
         CLOG_LOG(INFO, "end log handler sync mode change", K(ret), K(curr_access_mode), K(event), KPC(ls));
         CLOG_LOG(INFO, "begin restore handler sync mode change", K(curr_access_mode), K(event), KPC(ls));
-        if (!retry_ctx.need_retry() && OB_FAIL(handle_sync_mode_event_for_restore_handler_(curr_access_mode, ls))) {
+        if (OB_FAIL(handle_sync_mode_event_for_restore_handler_(ls))) {
+          // overwrite ret
           CLOG_LOG(WARN, "handle_sync_mode_event_for_restore_handler_ failed", K(ret), K(curr_access_mode), K(event), KPC(ls));
         }
         CLOG_LOG(INFO, "end sync mode change", K(ret), K(curr_access_mode), K(event), KPC(ls));
@@ -391,6 +395,7 @@ int ObRoleChangeService::handle_role_change_event_(const RoleChangeEvent &event,
 
 int ObRoleChangeService::handle_role_change_cb_event_for_restore_handler_(
     const AccessMode &curr_access_mode,
+    const SyncMode &curr_sync_mode,
     ObLS *ls)
 {
   int ret = OB_SUCCESS;
@@ -433,13 +438,13 @@ int ObRoleChangeService::handle_role_change_cb_event_for_restore_handler_(
       // follower -> follower
       case RoleChangeOptType::FOLLOWER_2_LEADER:
       {
-        ret = switch_follower_to_leader_restore_(new_proposal_id, ls);
+        ret = switch_follower_to_leader_restore_(new_proposal_id, curr_sync_mode, ls);
         break;
       }
       // leader -> leader
       case RoleChangeOptType::LEADER_2_LEADER:
       {
-        ret = switch_leader_to_leader_restore_(new_proposal_id, curr_proposal_id, ls);
+        ret = switch_leader_to_leader_restore_(new_proposal_id, curr_proposal_id, curr_sync_mode, ls);
         break;
       }
       // follower -> follower
@@ -459,6 +464,7 @@ int ObRoleChangeService::handle_role_change_cb_event_for_restore_handler_(
 
 int ObRoleChangeService::handle_role_change_cb_event_for_log_handler_(
     const AccessMode &curr_access_mode,
+    const SyncMode &curr_sync_mode,
     ObLS *ls,
     RetrySubmitRoleChangeEventCtx &retry_ctx)
 {
@@ -478,12 +484,10 @@ int ObRoleChangeService::handle_role_change_cb_event_for_log_handler_(
   bool is_pending_state = false;
   int64_t curr_proposal_id = -1;
   int64_t new_proposal_id = -1;
-  palf::SyncMode sync_mode = palf::SyncMode::ASYNC;
-  // 使用带 sync_mode 的 prepare_switch_role，确保 sync_mode 和 new_proposal_id 原子获取
   if (OB_FAIL(ls->get_log_handler()->prepare_switch_role(curr_role,
-        curr_proposal_id, new_role, new_proposal_id, is_pending_state, sync_mode))) {
+        curr_proposal_id, new_role, new_proposal_id, is_pending_state))) {
     CLOG_LOG(WARN, "ObLogHandler prepare_switch_role failed", K(ret), K(curr_role), K(curr_proposal_id),
-        K(new_role), K(new_proposal_id), K(sync_mode));
+        K(new_role), K(new_proposal_id));
   } else if (false == need_execute_role_change(curr_proposal_id, curr_role, new_proposal_id,
         new_role, is_pending_state, log_handler_is_offline)) {
     CLOG_LOG(INFO, "no need change role", K(ret), K(is_pending_state), K(curr_role), K(curr_proposal_id),
@@ -511,17 +515,17 @@ int ObRoleChangeService::handle_role_change_cb_event_for_log_handler_(
         break;
         // follower -> leader
       case RoleChangeOptType::FOLLOWER_2_LEADER:
-        if (OB_SUCC(ret) && OB_FAIL(switch_follower_to_leader_(new_proposal_id, sync_mode, ls, retry_ctx))) {
-          CLOG_LOG(WARN, "switch_follower_to_leader_ failed", K(curr_role), K(curr_proposal_id), K(new_role),
-                   K(curr_access_mode), K(new_proposal_id), K(sync_mode));
+        if (OB_SUCC(ret) && OB_FAIL(switch_follower_to_leader_(new_proposal_id, curr_sync_mode, ls, retry_ctx))) {
+          CLOG_LOG(WARN, "switch_follower_to_leader_ failed", K(curr_role), K(curr_proposal_id), K(new_role), K(curr_sync_mode),
+                   K(curr_access_mode), K(new_proposal_id));
         }
         break;
         // leader -> leader
       case RoleChangeOptType::LEADER_2_LEADER:
         if (OB_SUCC(ret) && OB_FAIL(switch_leader_to_leader_(new_proposal_id, curr_proposal_id,
-                                                             sync_mode, ls, retry_ctx))) {
+                                                             curr_sync_mode, ls, retry_ctx))) {
           CLOG_LOG(WARN, "switch_leader_to_leader_ failed", K(ret), K(curr_role),
-                   K(curr_proposal_id), K(new_role), K(curr_access_mode), K(new_proposal_id), K(sync_mode));
+                   K(curr_proposal_id), K(new_role), K(curr_access_mode), K(new_proposal_id), K(curr_sync_mode));
         }
         break;
         // follower -> follower
@@ -600,82 +604,102 @@ int ObRoleChangeService::handle_change_leader_event_for_log_handler_(
   return ret;
 }
 
-// 预留接口
-int ObRoleChangeService::handle_sync_mode_event_for_log_handler_(
-    const AccessMode &curr_access_mode,
-    ObLS *ls,
-    RetrySubmitRoleChangeEventCtx &retry_ctx)
+int ObRoleChangeService::handle_sync_mode_event_for_log_handler_(ObLS *ls)
 {
   int ret = OB_SUCCESS;
   const bool log_handler_is_offline = ls->get_log_handler()->is_offline();
-  ObRole curr_role = ObRole::INVALID_ROLE;
-  ObRole new_role  = ObRole::INVALID_ROLE;
   bool is_pending_state = false;
   int64_t curr_proposal_id = -1;
   int64_t new_proposal_id = -1;
-  palf::SyncMode sync_mode = palf::SyncMode::ASYNC;
-  // 使用带 sync_mode 的 prepare_switch_role，确保 sync_mode 和 new_proposal_id 原子获取
-  if (OB_FAIL(ls->get_log_handler()->prepare_switch_role(curr_role,
-        curr_proposal_id, new_role, new_proposal_id, is_pending_state, sync_mode))) {
-    CLOG_LOG(WARN, "ObLogHandler prepare_switch_role failed", K(ret), K(curr_role), K(curr_proposal_id),
-        K(new_role), K(new_proposal_id), K(sync_mode));
-  } else if (false == need_execute_sync_mode_change(curr_proposal_id, curr_role, new_proposal_id,
-        new_role, is_pending_state, log_handler_is_offline, sync_mode)) {
-    CLOG_LOG(INFO, "no need execute sync_mode change", K(curr_access_mode), K(curr_role), K(curr_proposal_id),
-        K(new_role), K(new_proposal_id), K(is_pending_state), K(log_handler_is_offline), K(sync_mode));
-  // append mode, log handler need execute leader to leader
-  } else if (is_append_mode(curr_access_mode) && curr_role == LEADER && OB_FAIL(switch_leader_to_leader_in_sync_mode_(new_proposal_id, curr_proposal_id, sync_mode, ls, retry_ctx))) {
-    CLOG_LOG(WARN, "switch_leader_to_leader_in_sync_mode_ failed", K(ret), K(new_proposal_id), K(curr_proposal_id), K(sync_mode));
-  } else if (is_append_mode(curr_access_mode) && curr_role == FOLLOWER && OB_FAIL(switch_follower_to_follower_(new_proposal_id, ls))) {
-    CLOG_LOG(WARN, "switch_follower_to_follower_in_sync_mode_ failed", K(ret), K(new_proposal_id), K(curr_proposal_id));
-  // raw write or flashback mode, log handler need execute follower to follower
-  } else if (is_raw_write_or_flashback_mode(curr_access_mode) && OB_FAIL(switch_follower_to_follower_(new_proposal_id, ls))) {
-    CLOG_LOG(WARN, "switch_follower_to_follower_in_sync_mode_ failed", K(ret), K(new_proposal_id), K(curr_proposal_id));
+  ObRole curr_role = ObRole::INVALID_ROLE;
+  SyncMode curr_sync_mode = SyncMode::ASYNC;
+  SyncMode new_sync_mode = SyncMode::ASYNC;
+  SyncModeChangeOptType sync_mode_change_opt_type = SyncModeChangeOptType::INVALID_SYNC_MODE_OPT_TYPE;
+  ObLogHandler *log_handler = ls->get_log_handler();
+  if (OB_ISNULL(log_handler)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "log_handler is null", K(ret), KPC(ls));
+  } else if (OB_FAIL(log_handler->prepare_switch_role(
+        curr_proposal_id, new_proposal_id, curr_role, is_pending_state, curr_sync_mode, new_sync_mode))) {
+    CLOG_LOG(WARN, "ObLogHandler prepare_switch_role failed", K(ret), KPC(ls), K(curr_proposal_id), K(new_proposal_id), K(new_sync_mode));
+  } else if (false == need_execute_sync_mode_change(curr_proposal_id, new_proposal_id,
+        is_pending_state, log_handler_is_offline, curr_sync_mode, new_sync_mode)) {
+    CLOG_LOG(INFO, "no need execute sync_mode change", K(curr_proposal_id), K(new_proposal_id), K(is_pending_state), K(log_handler_is_offline), K(curr_sync_mode), K(new_sync_mode), KPC(ls));
+  } else if (FALSE_IT(sync_mode_change_opt_type = get_sync_mode_change_opt_type_(curr_sync_mode, new_sync_mode))) {
   } else {
-    CLOG_LOG(INFO, "switch_leader_to_leader_in_sync_mode_ success", K(ret), K(new_proposal_id), K(curr_proposal_id), K(sync_mode));
+    if (palf::SyncMode::PRE_ASYNC == new_sync_mode) {
+      log_handler->set_pre_async_blocked();
+    } else {
+      log_handler->clear_pre_async_blocked();
+    }
+
+    switch (new_sync_mode) {
+      case palf::SyncMode::SYNC:
+        if (OB_FAIL(switch_to_sync_(new_proposal_id, curr_proposal_id, new_sync_mode, ls))) {
+          CLOG_LOG(WARN, "switch_to_sync_ failed", K(ret), K(new_proposal_id), K(curr_proposal_id), K(new_sync_mode), KPC(ls));
+        }
+        break;
+      case palf::SyncMode::PRE_ASYNC:
+        if (OB_FAIL(switch_to_pre_async_(ls))) {
+          CLOG_LOG(WARN, "switch_to_pre_async_ failed", K(ret), K(new_proposal_id), K(curr_proposal_id), K(new_sync_mode), KPC(ls));
+        }
+        break;
+      case palf::SyncMode::ASYNC:
+        if (OB_FAIL(switch_to_async_(ls))) {
+          CLOG_LOG(WARN, "switch_to_async_ failed", K(ret), K(new_proposal_id), K(curr_proposal_id), K(new_sync_mode), KPC(ls));
+        }
+        break;
+      default:
+        ret = OB_ERR_UNEXPECTED;
+    }
+
+    const share::ObLSID &ls_id = ls->get_ls_id();
+    if (OB_FAIL(ret)) {
+      CLOG_LOG(WARN, "handle_sync_mode_event_for_log_handler_ failed", K(ret), K(curr_role),
+          K(curr_proposal_id), K(new_proposal_id), K(curr_sync_mode), K(new_sync_mode), KPC(ls));
+    } else if (LEADER == curr_role && OB_FAIL(apply_service_->switch_sync_mode(ls_id, new_proposal_id, new_sync_mode))) {
+      CLOG_LOG(WARN, "apply_service_ switch_sync_mode failed", K(ret), K(ls_id), K(new_proposal_id), K(new_sync_mode), KPC(ls));
+    } else if (FALSE_IT(log_handler->switch_sync_mode(new_sync_mode, new_proposal_id))) {
+    } else if (LEADER == curr_role && OB_FAIL(switch_leader_to_leader_except_trans_(new_proposal_id, ls))) {
+      CLOG_LOG(WARN, "switch_leader_to_leader_except_trans failed", K(ret), K(new_proposal_id), K(ls_id));
+    } else {
+      CLOG_LOG(INFO, "handle_sync_mode_event_for_log_handler_ success", K(ret), K(ls_id), K(curr_role),
+        K(curr_proposal_id), K(new_proposal_id), K(curr_sync_mode), K(new_sync_mode), KPC(ls));
+    }
   }
   return ret;
 }
 
-int ObRoleChangeService::handle_sync_mode_event_for_restore_handler_(
-    const palf::AccessMode &curr_access_mode,
-    ObLS *ls)
+int ObRoleChangeService::handle_sync_mode_event_for_restore_handler_(ObLS *ls)
 {
   int ret = OB_SUCCESS;
-  ObRole curr_role = ObRole::INVALID_ROLE;
-  ObRole new_role  = ObRole::INVALID_ROLE;
+  const bool log_handler_is_offline = ls->get_log_handler()->is_offline();
   bool is_pending_state = false;
   int64_t curr_proposal_id = -1;
   int64_t new_proposal_id = -1;
+  ObRole curr_role = ObRole::INVALID_ROLE;
   SyncMode curr_sync_mode = SyncMode::ASYNC;
-  int64_t unused_mode_version = -1;
-  if (OB_FAIL(ls->get_log_handler()->get_sync_mode(unused_mode_version, curr_sync_mode))) {
-    CLOG_LOG(WARN, "get_sync_mode failed", K(ret), KPC(ls));
-  } else if (OB_FAIL(ls->get_log_restore_handler()->prepare_switch_role(curr_role,
-        curr_proposal_id, new_role, new_proposal_id, is_pending_state))) {
-    CLOG_LOG(WARN, "ObLogHandler prepare_switch_role failed", K(ret), K(curr_role), K(curr_proposal_id),
-        K(new_role), K(new_proposal_id));
-  } else if (false == need_execute_sync_mode_change(curr_proposal_id, curr_role, new_proposal_id,
-        new_role, is_pending_state, false, curr_sync_mode)) {
-    CLOG_LOG(INFO, "no need execute sync_mode change", K(curr_access_mode), K(curr_role), K(curr_proposal_id),
-        K(new_role), K(new_proposal_id), K(is_pending_state), K(curr_sync_mode));
-  // raw write or flashback mode, restore handler need execute leader to leader
-  } else if (is_raw_write_or_flashback_mode(curr_access_mode) && curr_role == LEADER && OB_FAIL(switch_leader_to_leader_restore_in_sync_mode_(new_proposal_id, curr_proposal_id, ls))) {
-    CLOG_LOG(WARN, "switch_leader_to_leader_restore_in_sync_mode_ failed", K(ret), K(new_proposal_id), K(curr_proposal_id));
-  } else if (is_raw_write_or_flashback_mode(curr_access_mode) && curr_role == FOLLOWER && OB_FAIL(switch_follower_to_follower_restore_())) {
-    CLOG_LOG(WARN, "switch_follower_to_follower_in_sync_mode_ failed", K(ret), K(new_proposal_id), K(curr_proposal_id));
-  // append mode, restore handler need execute follower to follower
-  } else if (is_append_mode(curr_access_mode) && OB_FAIL(switch_follower_to_follower_restore_())) {
-    CLOG_LOG(WARN, "switch_follower_to_follower_in_sync_mode_ failed", K(ret), K(new_proposal_id), K(curr_proposal_id));
+  SyncMode new_sync_mode = SyncMode::ASYNC;
+  SyncModeChangeOptType sync_mode_change_opt_type = SyncModeChangeOptType::INVALID_SYNC_MODE_OPT_TYPE;
+  if (OB_FAIL(ls->get_log_restore_handler()->prepare_switch_role(
+        curr_proposal_id, new_proposal_id, curr_role, is_pending_state, curr_sync_mode, new_sync_mode))) {
+    CLOG_LOG(WARN, "ObRestoreHandler prepare_switch_role failed", K(ret), K(curr_proposal_id), K(new_proposal_id), K(new_sync_mode));
+  } else if (false == need_execute_sync_mode_change(curr_proposal_id, new_proposal_id,
+        is_pending_state, log_handler_is_offline, curr_sync_mode, new_sync_mode)) {
+    CLOG_LOG(INFO, "no need execute sync_mode change", K(curr_proposal_id), K(new_proposal_id), K(is_pending_state), K(log_handler_is_offline), K(new_sync_mode), KPC(ls));
+  } else if (FALSE_IT(ls->get_log_restore_handler()->switch_sync_mode(new_sync_mode, new_proposal_id))) {
+  } else if (LEADER == curr_role && OB_FAIL(switch_leader_to_leader_except_trans_restore_(new_proposal_id, ls))) {
+    CLOG_LOG(WARN, "switch_leader_to_leader_except_trans_restore_ failed", K(ret), K(new_proposal_id), KPC(ls));
   } else {
-    CLOG_LOG(INFO, "switch_leader_to_leader_restore_in_sync_mode_ success", K(ret), K(new_proposal_id), K(curr_proposal_id));
+    CLOG_LOG(INFO, "handle_sync_mode_event_for_restore_handler_ success", K(curr_role),
+        K(curr_proposal_id), K(new_proposal_id), K(curr_sync_mode), K(new_sync_mode), KPC(ls));
   }
   return ret;
 }
 
 int ObRoleChangeService::switch_follower_to_leader_(
     const int64_t new_proposal_id,
-    const palf::SyncMode sync_mode,
+    const palf::SyncMode new_sync_mode,
     ObLS *ls,
     RetrySubmitRoleChangeEventCtx &retry_ctx)
 {
@@ -687,7 +711,7 @@ int ObRoleChangeService::switch_follower_to_leader_(
   ObLogHandler *log_handler = ls->get_log_handler();
   ObRoleChangeHandler *role_change_handler = ls->get_role_change_handler();
 
-  if (palf::SyncMode::PRE_ASYNC == sync_mode) {
+  if (palf::SyncMode::PRE_ASYNC == new_sync_mode) {
     log_handler->set_pre_async_blocked();
   } else {
     log_handler->clear_pre_async_blocked();
@@ -699,9 +723,9 @@ int ObRoleChangeService::switch_follower_to_leader_(
     CLOG_LOG(WARN, "get_end_lsn failed", K(ret), KPC(ls));
   } else if (!GCONF.enable_logservice && OB_NOT_NULL(transport_service_) &&
              (FALSE_IT(time_guard.click("transport_service->switch_to_leader"))
-              || OB_FAIL(transport_service_->switch_to_leader(ls_id, new_proposal_id, sync_mode, end_lsn)))) {
+              || OB_FAIL(transport_service_->switch_to_leader(ls_id, new_proposal_id, new_sync_mode, end_lsn)))) {
     CLOG_LOG(WARN, "transport_service_ switch_to_leader failed", K(ret), K(new_role),
-             K(new_proposal_id), K(sync_mode), K(end_lsn));
+             K(new_proposal_id), K(new_sync_mode), K(end_lsn));
 
   // NB: For MPT sync mode:
   //     1. Let transport_service switch to leader first, which enables it to receive standby ACKs
@@ -737,17 +761,17 @@ int ObRoleChangeService::switch_follower_to_leader_(
     }
 #endif
   } else if (FALSE_IT(time_guard.click("apply_service->switch_to_leader"))
-      || OB_FAIL(apply_service_->switch_to_leader(ls_id, new_proposal_id, sync_mode))) {
+      || OB_FAIL(apply_service_->switch_to_leader(ls_id, new_proposal_id, new_sync_mode))) {
     CLOG_LOG(WARN, "apply_service_ switch_to_leader failed", K(ret), K(new_role),
-             K(new_proposal_id), K(sync_mode));
+             K(new_proposal_id), K(new_sync_mode));
   } else if (FALSE_IT(time_guard.click("replay_service->switch_to_leader"))
       || OB_FAIL(replay_service_->switch_to_leader(ls_id))) {
     CLOG_LOG(WARN, "replay_service_ switch_to_leader failed", K(new_role), K(new_proposal_id));
   } else if (FALSE_IT(time_guard.click("wait_replay_service_submit_task_clear_"))
       || OB_FAIL(wait_replay_service_submit_task_clear_(ls_id))) {
     CLOG_LOG(ERROR, "wait_replay_service_submit_task_clear_ failed", K(new_role), K(new_proposal_id));
-  } else if (FALSE_IT(log_handler->switch_role(new_role, new_proposal_id))) {
-    CLOG_LOG(WARN, "ObLogHandler switch role failed", K(ret), K(new_role), K(new_proposal_id));
+  } else if (FALSE_IT(log_handler->switch_role_and_sync_mode(new_role, new_proposal_id, new_sync_mode))) {
+    CLOG_LOG(WARN, "ObLogHandler switch role failed", K(ret), K(new_role), K(new_proposal_id), K(new_sync_mode));
   } else if (FALSE_IT(ATOMIC_SET(&cur_task_info_.state_, TakeOverState::WAIT_RC_HANDLER_DONE))) {
   } else if (FALSE_IT(time_guard.click("role_change_handler->switch_to_leader"))
       || OB_FAIL(role_change_handler->switch_to_leader(cur_task_info_))) {
@@ -756,7 +780,7 @@ int ObRoleChangeService::switch_follower_to_leader_(
     ATOMIC_SET(&cur_task_info_.state_, TakeOverState::TAKE_OVER_FINISH);
     ATOMIC_SET(&cur_task_info_.log_type_, ObLogBaseType::INVALID_LOG_BASE_TYPE);
     CLOG_LOG(INFO, "switch_follower_to_leader_ success", K(ret), KPC(ls),
-             K(new_proposal_id), K(sync_mode));
+             K(new_proposal_id), K(new_sync_mode));
   }
   if (OB_FAIL(ret) && !retry_ctx.need_retry()) {
     log_handler->advance_election_epoch_and_downgrade_priority(0_s, "palf switch follower to leader failed");
@@ -879,12 +903,11 @@ int ObRoleChangeService::switch_leader_to_follower_gracefully_(
 int ObRoleChangeService::switch_leader_to_leader_(
     const int64_t new_proposal_id,
     const int64_t curr_proposal_id,
-    const palf::SyncMode sync_mode,
+    const palf::SyncMode curr_sync_mode,
     ObLS *ls,
     RetrySubmitRoleChangeEventCtx &retry_ctx)
 {
   int ret = OB_SUCCESS;
-  // sync_mode 已在上层 prepare_switch_role 时与 new_proposal_id 原子获取
   #ifdef ERRSIM
    SERVER_EVENT_SYNC_ADD("LOGSERVICE", "BEFORE_LEADER_TO_LEADER_RC");
   #endif
@@ -893,8 +916,8 @@ int ObRoleChangeService::switch_leader_to_leader_(
       || OB_FAIL(switch_leader_to_follower_forcedly_(curr_proposal_id, ls))) {
     CLOG_LOG(WARN, "switch_leader_to_leader_, switch leader to follower failed", K(ret), KPC(ls));
   } else if (FALSE_IT(time_guard.click("switch_follower_to_leader_"))
-      || OB_FAIL(switch_follower_to_leader_(new_proposal_id, sync_mode, ls, retry_ctx))) {
-    CLOG_LOG(WARN, "switch_follower_to_leader_ failed", K(ret), K(new_proposal_id), K(sync_mode));
+      || OB_FAIL(switch_follower_to_leader_(new_proposal_id, curr_sync_mode, ls, retry_ctx))) {
+    CLOG_LOG(WARN, "switch_follower_to_leader_ failed", K(ret), K(new_proposal_id));
   } else {
     CLOG_LOG(INFO, "switch_leader_to_leader_ success", K(ret), KPC(ls));
   }
@@ -914,6 +937,7 @@ int ObRoleChangeService::switch_follower_to_follower_(const int64_t new_proposal
 
 int ObRoleChangeService::switch_follower_to_leader_restore_(
     const int64_t new_proposal_id,
+    const palf::SyncMode new_sync_mode,
     ObLS *ls)
 {
   int ret = OB_SUCCESS;
@@ -923,7 +947,7 @@ int ObRoleChangeService::switch_follower_to_leader_restore_(
   ATOMIC_SET(&cur_task_info_.state_, TakeOverState::WAIT_RC_HANDLER_DONE);
   ATOMIC_SET(&cur_task_info_.id_, ls->get_ls_id().id());
   ObTimeGuard time_guard("switch_follower_to_leader_restore_", EACH_ROLE_CHANGE_COST_MAX_TIME);
-  if (FALSE_IT(log_restore_handler->switch_role(new_role, new_proposal_id))) {
+  if (FALSE_IT(log_restore_handler->switch_role_and_sync_mode(new_role, new_proposal_id, new_sync_mode))) {
   } else if (FALSE_IT(time_guard.click("restore_role_change_handler->switch_to_leader"))
       || OB_FAIL(restore_role_change_handler->switch_to_leader(cur_task_info_))) {
     CLOG_LOG(WARN, "restore_role_change_handler switch_to_leader failed", K(ret), K(new_role),
@@ -931,6 +955,7 @@ int ObRoleChangeService::switch_follower_to_leader_restore_(
   } else {
     ATOMIC_SET(&cur_task_info_.state_, TakeOverState::TAKE_OVER_FINISH);
     ATOMIC_SET(&cur_task_info_.log_type_, ObLogBaseType::INVALID_LOG_BASE_TYPE);
+    CLOG_LOG(INFO, "switch_follower_to_leader_restore_ success", K(ret), K(new_role), K(new_proposal_id), K(new_sync_mode), KPC(ls));
   }
   if (OB_FAIL(ret)) {
     log_restore_handler->advance_election_epoch_and_downgrade_priority(0_s, "palf switch follower to leader restore failed");
@@ -983,6 +1008,7 @@ int ObRoleChangeService::switch_follower_to_follower_restore_()
 int ObRoleChangeService::switch_leader_to_leader_restore_(
     const int64_t new_proposal_id,
     const int64_t curr_proposal_id,
+    const palf::SyncMode curr_sync_mode,
     ObLS *ls)
 {
   int ret = OB_SUCCESS;
@@ -992,57 +1018,11 @@ int ObRoleChangeService::switch_leader_to_leader_restore_(
     CLOG_LOG(WARN, "switch_leader_to_follower_forcedly_restore_ failed", K(ret),
         K(new_proposal_id), K(ls));
   } else if (FALSE_IT(time_guard.click("switch_follower_to_leader_restore_"))
-      || OB_FAIL(switch_follower_to_leader_restore_(new_proposal_id, ls))) {
+      || OB_FAIL(switch_follower_to_leader_restore_(new_proposal_id, curr_sync_mode, ls))) {
     CLOG_LOG(WARN, "switch_follower_to_leader_restore_ failed", K(ret),
-        K(new_proposal_id), K(ls));
+        K(new_proposal_id), K(curr_sync_mode), K(ls));
   } else {
-    CLOG_LOG(INFO, "switch_leader_to_leader_restore_ success", K(ls));
-  }
-  return ret;
-}
-
-int ObRoleChangeService::switch_leader_to_leader_in_sync_mode_(
-    const int64_t new_proposal_id,
-    const int64_t curr_proposal_id,
-    const palf::SyncMode sync_mode,
-    ObLS *ls,
-    RetrySubmitRoleChangeEventCtx &retry_ctx)
-{
-  int ret = OB_SUCCESS;
-  // sync_mode 已在上层 prepare_switch_role 时与 new_proposal_id 原子获取
-  #ifdef ERRSIM
-   SERVER_EVENT_SYNC_ADD("LOGSERVICE", "BEFORE_LEADER_TO_LEADER_RC");
-  #endif
-  ObTimeGuard time_guard("switch_leader_to_leader_in_sync_mode_change", EACH_ROLE_CHANGE_COST_MAX_TIME);
-  common::ObAddr invalid_addr;
-  if (FALSE_IT(time_guard.click("switch_leader_to_follower_gracefully_"))
-      || OB_FAIL(switch_leader_to_follower_gracefully_(new_proposal_id, curr_proposal_id, invalid_addr, ls))) {
-    CLOG_LOG(WARN, "switch_leader_to_leader_, switch leader to follower failed", K(ret), KPC(ls));
-  } else if (FALSE_IT(time_guard.click("switch_follower_to_leader_"))
-      || OB_FAIL(switch_follower_to_leader_(new_proposal_id, sync_mode, ls, retry_ctx))) {
-    CLOG_LOG(WARN, "switch_follower_to_leader_ failed", K(ret), K(new_proposal_id), K(sync_mode));
-  } else {
-    CLOG_LOG(INFO, "switch_leader_to_leader_in_sync_mode success", K(ret), KPC(ls));
-  }
-  return ret;
-}
-
-int ObRoleChangeService::switch_leader_to_leader_restore_in_sync_mode_(
-    const int64_t new_proposal_id,
-    const int64_t curr_proposal_id,
-    ObLS *ls)
-{
-  int ret = OB_SUCCESS;
-  ObTimeGuard time_guard("switch_leader_to_leader_restore_in_sync_mode_change", EACH_ROLE_CHANGE_COST_MAX_TIME);
-  common::ObAddr invalid_addr;
-  if (FALSE_IT(time_guard.click("switch_leader_to_follower_forcedly_"))
-      || OB_FAIL(switch_leader_to_follower_gracefully_restore_(invalid_addr, curr_proposal_id, ls))) {
-    CLOG_LOG(WARN, "switch_leader_to_leader_, switch leader to follower failed", K(ret), KPC(ls));
-  } else if (FALSE_IT(time_guard.click("switch_follower_to_leader_"))
-      || OB_FAIL(switch_follower_to_leader_restore_(new_proposal_id, ls))) {
-    CLOG_LOG(WARN, "switch_follower_to_leader_ failed", K(ret), K(new_proposal_id));
-  } else {
-    CLOG_LOG(INFO, "switch_leader_to_leader_restore_in_sync_mode success", K(ret), KPC(ls));
+    CLOG_LOG(INFO, "switch_leader_to_leader_restore_ success", K(new_proposal_id), K(curr_proposal_id), K(curr_sync_mode), K(ls));
   }
   return ret;
 }
@@ -1207,6 +1187,42 @@ ObRoleChangeService::RoleChangeOptType ObRoleChangeService::get_role_change_opt_
   return rc_opt_type;
 }
 
+ObRoleChangeService::SyncModeChangeOptType ObRoleChangeService::get_sync_mode_change_opt_type_(
+    const palf::SyncMode &old_sync_mode,
+    const palf::SyncMode &new_sync_mode) const
+{
+  SyncModeChangeOptType sync_mode_change_opt_type = SyncModeChangeOptType::INVALID_SYNC_MODE_OPT_TYPE;
+  if (SyncMode::ASYNC == old_sync_mode && SyncMode::SYNC == new_sync_mode) {
+    sync_mode_change_opt_type = SyncModeChangeOptType::ASYNC_2_SYNC;
+  } else if (SyncMode::SYNC == old_sync_mode && SyncMode::PRE_ASYNC == new_sync_mode) {
+    sync_mode_change_opt_type = SyncModeChangeOptType::SYNC_2_PRE_ASYNC;
+  } else if (SyncMode::PRE_ASYNC == old_sync_mode && SyncMode::ASYNC == new_sync_mode) {
+    sync_mode_change_opt_type = SyncModeChangeOptType::PRE_ASYNC_2_ASYNC;
+  } else if (SyncMode::ASYNC == old_sync_mode && SyncMode::PRE_ASYNC == new_sync_mode) {
+    sync_mode_change_opt_type = SyncModeChangeOptType::ASYNC_2_PRE_ASYNC;
+  } else if (SyncMode::INVALID_SYNC_MODE == old_sync_mode) {
+    switch (new_sync_mode) {
+      case palf::SyncMode::ASYNC:
+        sync_mode_change_opt_type = SyncModeChangeOptType::SYNC_2_PRE_ASYNC;
+        break;
+      case palf::SyncMode::SYNC:
+        sync_mode_change_opt_type = SyncModeChangeOptType::ASYNC_2_SYNC;
+        break;
+      case palf::SyncMode::PRE_ASYNC:
+        sync_mode_change_opt_type = SyncModeChangeOptType::SYNC_2_PRE_ASYNC;
+        break;
+      default:
+        int ret = OB_ERR_UNEXPECTED;
+        CLOG_LOG(ERROR, "unexpected sync mode change", K(ret), K(old_sync_mode), K(new_sync_mode));
+    }
+  } else {
+    int ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(ERROR, "unexpected sync mode change", K(ret), K(old_sync_mode), K(new_sync_mode));
+  }
+  CLOG_LOG(INFO, "get_sync_mode_change_opt_type_", K(old_sync_mode), K(new_sync_mode), K(sync_mode_change_opt_type));
+  return sync_mode_change_opt_type;
+}
+
 // NB:
 // 1. when log handler is offline, need execute role change;
 // 2. when palf is not in pending:
@@ -1228,19 +1244,15 @@ bool ObRoleChangeService::need_execute_role_change(const int64_t curr_proposal_i
 // only leader can execute sync_mode change
 bool ObRoleChangeService::need_execute_sync_mode_change(
       const int64_t curr_proposal_id,
-      const common::ObRole curr_role,
       const int64_t new_proposal_id,
-      const common::ObRole new_role,
       const bool is_pending_state,
       const bool is_offline,
-      const SyncMode curr_sync_mode) const
+      const SyncMode curr_sync_mode,
+      const SyncMode new_sync_mode) const
 {
   return !is_offline
          && !is_pending_state
-         && (curr_proposal_id != new_proposal_id || curr_role != new_role)
-         // && (curr_role == new_role)
-         // && common::ObRole::LEADER == curr_role
-         && SyncMode::INVALID_SYNC_MODE != curr_sync_mode;
+         && (curr_proposal_id != new_proposal_id || curr_sync_mode != new_sync_mode); // use || for ABA situation
 }
 
 int ObRoleChangeService::diagnose(RCDiagnoseInfo &diagnose_info)
@@ -1278,5 +1290,124 @@ bool ObRoleChangeService::need_retry_submit_role_change_event_(int ret) const
   return bool_ret;
 }
 
+int ObRoleChangeService::switch_to_sync_(const int64_t new_proposal_id,
+                                               const int64_t curr_proposal_id,
+                                               const palf::SyncMode &new_sync_mode,
+                                               ObLS *ls)
+{
+  int ret = OB_SUCCESS;
+  const share::ObLSID &ls_id = ls->get_ls_id();
+  ObLogHandler *log_handler = ls->get_log_handler();
+  palf::LSN end_lsn;
+  if (OB_ISNULL(transport_service_) || OB_ISNULL(log_handler)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "transport_service_ or log_handler is null", K(ret), K(ls_id), KPC(log_handler));
+  } else if (GCONF.enable_logservice) {
+    CLOG_LOG(INFO, "skip switch_to_sync_ in ss");
+  } else if (OB_FAIL(log_handler->get_end_lsn(end_lsn))) {
+    CLOG_LOG(WARN, "get_end_lsn failed", K(ret), KPC(ls));
+  } else if (OB_FAIL(transport_service_->switch_to_sync(ls_id, curr_proposal_id, new_proposal_id, new_sync_mode, end_lsn))) {
+    CLOG_LOG(WARN, "transport_service_ switch_to_sync failed", K(ret), K(curr_proposal_id), K(new_proposal_id), K(new_sync_mode), K(end_lsn));
+  } else {
+    CLOG_LOG(INFO, "switch_to_sync_ success", K(ret), K(new_sync_mode), K(new_proposal_id), K(end_lsn));
+  }
+  return ret;
+}
+
+int ObRoleChangeService::switch_to_pre_async_(ObLS *ls)
+{
+  int ret = OB_SUCCESS;
+  const share::ObLSID &ls_id = ls->get_ls_id();
+  if (OB_ISNULL(transport_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "transport_service_ is null", K(ret), K(ls_id));
+  } else if (GCONF.enable_logservice) {
+    CLOG_LOG(INFO, "skip switch_to_sync_ in ss");
+  } else if (OB_FAIL(transport_service_->switch_to_pre_async(ls_id))) {
+    CLOG_LOG(WARN, "transport_service_ switch_to_pre_async failed", K(ret), K(ls_id));
+  } else {
+    CLOG_LOG(INFO, "switch_to_sync_ success", K(ret), K(ls_id));
+  }
+
+  return ret;
+}
+
+int ObRoleChangeService::switch_to_async_(ObLS *ls)
+{
+  int ret = OB_SUCCESS;
+  const share::ObLSID &ls_id = ls->get_ls_id();
+  if (OB_ISNULL(transport_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "transport_service_ is null", K(ret), K(ls_id));
+  } else if (GCONF.enable_logservice) {
+    CLOG_LOG(INFO, "skip switch_to_async_ in ss");
+  } else if (OB_FAIL(transport_service_->switch_to_async(ls_id))) {
+    CLOG_LOG(WARN, "transport_service_ switch_to_async failed", K(ret), K(ls_id));
+  } else {
+    CLOG_LOG(INFO, "switch_to_async_ success", K(ret), K(ls_id));
+  }
+  return ret;
+}
+
+int ObRoleChangeService::switch_async_to_pre_async_(ObLS *ls)
+{
+  int ret = OB_SUCCESS;
+  const share::ObLSID &ls_id = ls->get_ls_id();
+  if (OB_ISNULL(transport_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "transport_service_ is null", K(ret), K(ls_id));
+  } else if (GCONF.enable_logservice) {
+    CLOG_LOG(INFO, "skip switch_async_to_pre_async_ in ss");
+  } else if (OB_FAIL(transport_service_->switch_async_to_pre_async(ls_id))) {
+    CLOG_LOG(WARN, "transport_service_ switch_async_to_pre_async failed", K(ret), K(ls_id));
+  } else {
+    CLOG_LOG(INFO, "switch_async_to_pre_async_ success", K(ret), K(ls_id));
+  }
+  return ret;
+}
+
+int ObRoleChangeService::switch_leader_to_leader_except_trans_(const int64_t new_proposal_id, ObLS *ls)
+{
+  int ret = OB_SUCCESS;
+  const share::ObLSID &ls_id = ls->get_ls_id();
+  ObRoleChangeHandler *role_change_handler = ls->get_role_change_handler();
+  if (OB_ISNULL(role_change_handler)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "role_change_handler is null", K(ret), K(ls_id));
+  } else {
+    ATOMIC_SET(&cur_task_info_.id_, ls_id.id());
+    ATOMIC_SET(&cur_task_info_.state_, logservice::TakeOverState::WAIT_RC_HANDLER_DONE);
+    if (OB_FAIL(role_change_handler->switch_leader_to_leader_except_trans(cur_task_info_))) {
+      CLOG_LOG(WARN, "switch_leader_to_leader_except_trans failed", K(ret), K(new_proposal_id), K(ls_id));
+    } else {
+      ATOMIC_SET(&cur_task_info_.state_, logservice::TakeOverState::TAKE_OVER_FINISH);
+      ATOMIC_SET(&cur_task_info_.log_type_, ObLogBaseType::INVALID_LOG_BASE_TYPE);
+      CLOG_LOG(INFO, "switch_leader_to_leader_except_trans success", K(ret), K(new_proposal_id), K(ls_id));
+    }
+  }
+  return ret;
+}
+
+int ObRoleChangeService::switch_leader_to_leader_except_trans_restore_(const int64_t new_proposal_id, ObLS *ls)
+{
+  int ret = OB_SUCCESS;
+  const share::ObLSID &ls_id = ls->get_ls_id();
+  ObRoleChangeHandler *restore_role_change_handler = ls->get_restore_role_change_handler();
+  if (OB_ISNULL(restore_role_change_handler)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "restore_role_change_handler is null", K(ret), K(ls_id));
+  } else {
+    ATOMIC_SET(&cur_task_info_.id_, ls_id.id());
+    ATOMIC_SET(&cur_task_info_.state_, logservice::TakeOverState::WAIT_RC_HANDLER_DONE);
+    if (OB_FAIL(restore_role_change_handler->switch_leader_to_leader_except_trans(cur_task_info_))) {
+      CLOG_LOG(WARN, "switch_leader_to_leader_except_trans_restore_ failed", K(ret), K(new_proposal_id), K(ls_id));
+    } else {
+      ATOMIC_SET(&cur_task_info_.state_, logservice::TakeOverState::TAKE_OVER_FINISH);
+      ATOMIC_SET(&cur_task_info_.log_type_, ObLogBaseType::INVALID_LOG_BASE_TYPE);
+      CLOG_LOG(INFO, "switch_leader_to_leader_except_trans_restore_ success", K(ret), K(new_proposal_id), K(ls_id));
+    }
+  }
+  return ret;
+}
 } // end namespace logservice
 } // end namespace oceanbase

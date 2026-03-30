@@ -95,6 +95,15 @@ private:
     LEADER_2_LEADER = 4,
     MAX_RC_OPT_TYPE = 5
   };
+  enum class SyncModeChangeOptType {
+    INVALID_SYNC_MODE_OPT_TYPE = 0,
+    INVALID_2_VALID = 1,
+    ASYNC_2_SYNC = 2,
+    SYNC_2_PRE_ASYNC = 3,
+    PRE_ASYNC_2_ASYNC = 4,
+    ASYNC_2_PRE_ASYNC = 5,
+    MAX_SYNC_MODE_OPT_TYPE = 6
+  };
   enum class RetrySubmitRoleChangeEventReason {
     INVALID_TYPE = 0,
     WAIT_REPLAY_DONE_TIMEOUT = 1,
@@ -130,25 +139,24 @@ private:
                                 RetrySubmitRoleChangeEventCtx &retry_ctx);
 
   int handle_role_change_cb_event_for_restore_handler_(const palf::AccessMode &curr_access_mode,
+                                                       const palf::SyncMode &curr_sync_mode,
                                                        ObLS *ls);
   int handle_change_leader_event_for_restore_handler_(const common::ObAddr &dst_addr,
                                                       ObLS *ls);
 
   int handle_role_change_cb_event_for_log_handler_(const palf::AccessMode &curr_access_mode,
+                                                   const palf::SyncMode &curr_sync_mode,
                                                    ObLS *ls,
                                                    RetrySubmitRoleChangeEventCtx &retry_ctx);
   int handle_change_leader_event_for_log_handler_(const common::ObAddr &dst_addr,
                                                   ObLS *ls);
-  int handle_sync_mode_event_for_log_handler_(const palf::AccessMode &curr_access_mode,
-                                              ObLS *ls,
-                                              RetrySubmitRoleChangeEventCtx &retry_ctx);
-  int handle_sync_mode_event_for_restore_handler_(const palf::AccessMode &curr_access_mode,
-                                                  ObLS *ls);
+  int handle_sync_mode_event_for_log_handler_(ObLS *ls);
+  int handle_sync_mode_event_for_restore_handler_(ObLS *ls);
   // retval
   //   - OB_SUCCESS
   //   - OB_TIMEOUT, means wait replay finish timeout.
   int switch_follower_to_leader_(const int64_t new_proposal_id,
-                                 const palf::SyncMode sync_mode,
+                                 const palf::SyncMode new_sync_mode,
                                  ObLS *ls,
                                  RetrySubmitRoleChangeEventCtx &retry_ctx);
   int switch_leader_to_follower_forcedly_(const int64_t new_proposal_id,
@@ -160,11 +168,12 @@ private:
   int switch_follower_to_follower_(const int64_t new_proposal_id, ObLS *ls);
   int switch_leader_to_leader_(const int64_t new_proposal_id,
                                const int64_t curr_proposal_id,
-                               const palf::SyncMode sync_mode,
+                               const palf::SyncMode curr_sync_mode,
                                ObLS *ls,
                                RetrySubmitRoleChangeEventCtx &retry_ctx);
 
   int switch_follower_to_leader_restore_(const int64_t new_proposal_id,
+                                         const palf::SyncMode new_sync_mode,
                                          ObLS *ls);
   int switch_leader_to_follower_forcedly_restore_(const int64_t new_proposal_id,
                                                   ObLS *ls);
@@ -174,15 +183,8 @@ private:
   int switch_follower_to_follower_restore_();
   int switch_leader_to_leader_restore_(const int64_t new_proposal_id,
                                        const int64_t curr_proposal_id,
+                                       const palf::SyncMode curr_sync_mode,
                                        ObLS *ls);
-  int switch_leader_to_leader_in_sync_mode_(const int64_t new_proposal_id,
-                                            const int64_t curr_proposal_id,
-                                            const palf::SyncMode sync_mode,
-                                            ObLS *ls,
-                                            RetrySubmitRoleChangeEventCtx &retry_ctx);
-  int switch_leader_to_leader_restore_in_sync_mode_(const int64_t new_proposal_id,
-                                                    const int64_t curr_proposal_id,
-                                                    ObLS *ls);
   // wait replay finish with timeout.
   int wait_replay_service_replay_done_(const share::ObLSID &ls_id,
                                        const palf::LSN &end_lsn,
@@ -204,18 +206,28 @@ private:
                                 const bool is_pending_state,
                                 const bool is_offline) const;
   bool need_execute_sync_mode_change(const int64_t curr_proposal_id,
-                                     const common::ObRole curr_role,
                                      const int64_t new_proposal_id,
-                                     const common::ObRole new_role,
                                      const bool is_pending_state,
                                      const bool is_offline,
-                                     const palf::SyncMode curr_sync_mode) const;
+                                     const palf::SyncMode curr_sync_mode,
+                                     const palf::SyncMode new_sync_mode) const;
   bool is_append_mode(const palf::AccessMode &access_mode) const;
   bool is_raw_write_or_flashback_mode(const palf::AccessMode &access_mode) const;
+  int switch_to_sync_(const int64_t new_proposal_id,
+                            const int64_t curr_proposal_id,
+                            const palf::SyncMode &new_sync_mode,
+                            ObLS *ls);
+  int switch_to_pre_async_(ObLS *ls);
+  int switch_to_async_(ObLS *ls);
+  int switch_async_to_pre_async_(ObLS *ls);
+  int switch_leader_to_leader_except_trans_(const int64_t new_proposal_id, ObLS *ls);
+  int switch_leader_to_leader_except_trans_restore_(const int64_t new_proposal_id, ObLS *ls);
 private:
   RoleChangeOptType get_role_change_opt_type_(const common::ObRole &old_role,
                                               const common::ObRole &new_role,
                                               const bool need_transform_by_access_mode) const;
+  SyncModeChangeOptType get_sync_mode_change_opt_type_(const palf::SyncMode &old_sync_mode,
+                                                       const palf::SyncMode &new_sync_mode) const;
   // retry submit role change event
   // NB: nowdays, we only support retry submit role change event when wait replay finished
   //     timeout.

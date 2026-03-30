@@ -555,17 +555,17 @@ int PalfHandleImpl::get_role(common::ObRole &role,
   return ret;
 }
 
-int PalfHandleImpl::get_role_and_sync_mode(common::ObRole &role,
-                                           int64_t &proposal_id,
-                                           SyncMode &sync_mode,
-                                           bool &is_pending_state) const
+int PalfHandleImpl::get_proposal_id_and_sync_mode(int64_t &proposal_id,
+                                                  SyncMode &sync_mode,
+                                                  bool &is_pending_state) const
 {
   int ret = OB_SUCCESS;
+  common::ObRole unsed_role;
   RLockGuard guard(lock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(ERROR, "PalfHandleImpl has not inited", K(ret));
-  } else if (OB_FAIL(get_role(role, proposal_id, is_pending_state))) {
+  } else if (OB_FAIL(get_role(unsed_role, proposal_id, is_pending_state))) {
     PALF_LOG(WARN, "get_role failed", K(ret), KPC(this));
   } else if (OB_FAIL(mode_mgr_.get_sync_mode(sync_mode))) {
     PALF_LOG(WARN, "get_sync_mode failed", K(ret), KPC(this));
@@ -2431,6 +2431,7 @@ int PalfHandleImpl::get_access_mode_ref_scn(int64_t &mode_version,
 int PalfHandleImpl::change_sync_mode(const int64_t proposal_id,
                                      const int64_t mode_version,
                                      const SyncMode &sync_mode,
+                                     const bool need_role_change,
                                      int64_t &new_mode_version,
                                      int64_t &new_proposal_id)
 {
@@ -2500,7 +2501,9 @@ int PalfHandleImpl::change_sync_mode(const int64_t proposal_id,
       if (OB_SUCC(ret)) {
         RLockGuard guard(lock_);
         int tmp_ret = OB_SUCCESS;
-        if (OB_SUCCESS != (tmp_ret = role_change_cb_wrpper_.on_role_change(palf_id_))) { //TODO by ziqi: change to on_sync_mode_change
+        if (need_role_change && OB_TMP_FAIL(role_change_cb_wrpper_.on_role_change(palf_id_))) {
+          PALF_LOG(WARN, "on_role_change failed", K(tmp_ret), K_(palf_id), K_(self));
+        } else if (!need_role_change && OB_TMP_FAIL(role_change_cb_wrpper_.on_sync_mode_change(palf_id_))) {
           PALF_LOG(WARN, "on_sync_mode_change failed", K(tmp_ret), K_(palf_id), K_(self));
         }
         PALF_EVENT("change_sync_mode success", palf_id_, K(ret), KPC(this),
@@ -4929,7 +4932,7 @@ int PalfHandleImpl::advance_election_epoch_and_downgrade_priority(const int64_t 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "PalfHandleImpl not inited", K(ret), K_(palf_id), K(reason));
-  } else if (false == state_mgr_.can_revoke(proposal_id)) {
+  } else if (false == state_mgr_.can_revoke(state_mgr_.get_leader_epoch())) {
     ret = OB_NOT_MASTER;
     PALF_LOG(WARN, "advance election epoch failed, not master", K(ret), K_(palf_id), K(proposal_id), K(reason));
   } else if (OB_FAIL(election_.change_leader_to(GCTX.self_addr()))) {

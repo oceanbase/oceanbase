@@ -615,9 +615,7 @@ int ObApplyStatus::is_apply_done(bool &is_done,
   return ret;
 }
 
-// 使用传入的同一轮次的proposal_id和sync mode保证一致性
-int ObApplyStatus::switch_to_leader(const int64_t new_proposal_id,
-                                    const palf::SyncMode &sync_mode)
+int ObApplyStatus::switch_to_leader(const int64_t new_proposal_id, const palf::SyncMode &sync_mode)
 {
   int ret = OB_SUCCESS;
   WLockGuardWithRetryInterval guard(lock_, WRLOCK_RETRY_INTERVAL_US, WRLOCK_RETRY_INTERVAL_US);
@@ -635,10 +633,9 @@ int ObApplyStatus::switch_to_leader(const int64_t new_proposal_id,
     CLOG_LOG(WARN, "apply status has already been leader", KPC(this));
   } else {
     ATOMIC_STORE(&proposal_id_, new_proposal_id);
-    role_ = LEADER;
-    // 如果palf_handle的sync_mode为SYNC，则设置is_sync_mode_为true
     ATOMIC_STORE(&is_sync_mode_, sync_mode == palf::SyncMode::SYNC ? true : false);
-    CLOG_LOG(INFO, "apply status switch_to_leader success", KPC(this));
+    role_ = LEADER;
+    CLOG_LOG(INFO, "apply status switch_to_leader success", KPC(this), K(new_proposal_id), K(sync_mode));
   }
   return ret;
 }
@@ -649,6 +646,30 @@ int ObApplyStatus::switch_to_follower()
   WLockGuardWithRetryInterval guard(lock_, WRLOCK_RETRY_INTERVAL_US, WRLOCK_RETRY_INTERVAL_US);
   if (OB_FAIL(switch_to_follower_())) {
     CLOG_LOG(WARN, "ObApplyStatus switch_to_follower_ failed", K(ret));
+  }
+  return ret;
+}
+
+int ObApplyStatus::switch_sync_mode(const int64_t new_proposal_id, const palf::SyncMode &sync_mode)
+{
+  int ret = OB_SUCCESS;
+  WLockGuardWithRetryInterval guard(lock_, WRLOCK_RETRY_INTERVAL_US, WRLOCK_RETRY_INTERVAL_US);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(ERROR, "apply status has not been inited");
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+    CLOG_LOG(INFO, "apply status has been stopped");
+  } else if (LEADER != role_) {
+    ret = OB_STATE_NOT_MATCH;
+    CLOG_LOG(WARN, "apply status is not leader", K(new_proposal_id), K(sync_mode), KPC(this));
+  } else if (new_proposal_id < ATOMIC_LOAD(&proposal_id_)) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid proposal id", K(ret), K(new_proposal_id), KPC(this));
+  } else {
+    ATOMIC_STORE(&proposal_id_, new_proposal_id);
+    ATOMIC_STORE(&is_sync_mode_, sync_mode == palf::SyncMode::SYNC ? true : false);
+    CLOG_LOG(INFO, "apply status switch_sync_mode success", KPC(this), K(new_proposal_id), K(sync_mode));
   }
   return ret;
 }
@@ -1622,6 +1643,29 @@ int ObLogApplyService::switch_to_follower(const share::ObLSID &id)
     CLOG_LOG(WARN, "apply status switch_to_follower failed", K(ret), K(id));
   } else {
     CLOG_LOG(INFO, "apply service switch_to_follower success", K(id));
+  }
+  return ret;
+}
+
+int ObLogApplyService::switch_sync_mode(const share::ObLSID &id,
+                                        const int64_t proposal_id,
+                                        const palf::SyncMode &sync_mode)
+{
+  int ret = OB_SUCCESS;
+  ObApplyStatus *apply_status = NULL;
+  ObApplyStatusGuard guard;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(ERROR, "apply service not init", K(ret));
+  } else if (OB_FAIL(get_apply_status(id, guard))) {
+    CLOG_LOG(WARN, "guard get apply status failed", K(ret), K(id));
+  } else if (NULL == (apply_status = guard.get_apply_status())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "apply status is not exist", K(ret), K(id));
+  } else if (OB_FAIL(apply_status->switch_sync_mode(proposal_id, sync_mode))) {
+    CLOG_LOG(WARN, "apply status switch_sync_mode failed", K(ret), K(id), K(proposal_id), K(sync_mode));
+  } else {
+    CLOG_LOG(INFO, "apply service switch_sync_mode success", K(id), K(proposal_id), K(sync_mode));
   }
   return ret;
 }

@@ -67,7 +67,7 @@ public:
   virtual bool can_raw_write(const int64_t proposal_id, const bool need_check_proposal_id) const;
   virtual bool can_slide_sw() const;
   virtual bool can_handle_committed_info(const int64_t &proposal_id) const;
-  virtual bool can_revoke(const int64_t proposal_id) const;
+  virtual bool can_revoke(const int64_t election_epoch) const;
   virtual int check_role_leader_and_state() const;
   virtual int64_t get_proposal_id() const;
   virtual common::ObRole get_role() const { return role_; }

@@ -51,14 +51,20 @@ public:
   // @param[out], new_role, role of palf.
   // @param[out], new_proposal_id, proposal_id of palf.
   // @param[out], sync_mode, sync_mode of palf, consistent with new_proposal_id.
-  int prepare_switch_role(common::ObRole &curr_role,
-                          int64_t &curr_proposal_id,
-                          common::ObRole &new_role,
+  int prepare_switch_role(int64_t &curr_proposal_id,
                           int64_t &new_proposal_id,
+                          common::ObRole &curr_role,
                           bool &is_pending_state,
-                          palf::SyncMode &sync_mode) const;
+                          palf::SyncMode &curr_sync_mode,
+                          palf::SyncMode &new_sync_mode) const;
+  // NB: only called by ObRoleChangeService
+  // switch role/proposal_id, and update sync_mode_ with the specified value when switching to leader.
+  virtual void switch_role_and_sync_mode(const common::ObRole &role,
+                                         const int64_t proposal_id,
+                                         const palf::SyncMode &sync_mode);
   // NB: only called by ObRoleChangeService
   virtual void switch_role(const common::ObRole &role, const int64_t proposal_id) = 0;
+  virtual void switch_sync_mode(const palf::SyncMode &sync_mode, const int64_t proposal_id) = 0;
   int advance_election_epoch_and_downgrade_priority(const int64_t downgrade_priority_time_us,
                                                      const char *reason);
   int change_leader_to(const common::ObAddr &dst_addr);
@@ -83,6 +89,7 @@ public:
   common::ObRole role_;
   int64_t proposal_id_;
   int64_t id_;
+  palf::SyncMode sync_mode_;  // effective when role_ is LEADER
   ipalf::IPalfHandle *palf_handle_;
   ipalf::IPalfEnv *palf_env_;
   bool enable_logservice_;

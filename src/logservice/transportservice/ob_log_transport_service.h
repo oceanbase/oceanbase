@@ -337,11 +337,18 @@ public:
   inline void inc_ref() { ATOMIC_INC(&ref_cnt_); }
   inline int64_t dec_ref() { return ATOMIC_SAF(&ref_cnt_, 1); }
   int switch_to_leader(const int64_t new_proposal_id,
-                       const palf::SyncMode &sync_mode,
+                       const palf::SyncMode new_sync_mode,
                        const palf::LSN &begin_lsn);
   int switch_to_follower();
   void mark_ls_gc_state();
   bool is_ls_gc_state() const { return true == ATOMIC_LOAD(&is_ls_gc_state_); }
+  int switch_to_sync(const int64_t curr_proposal_id,
+                           const int64_t new_proposal_id,
+                           const palf::SyncMode &new_sync_mode,
+                           const palf::LSN &begin_lsn);
+  int switch_to_pre_async();
+  int switch_to_async();
+  int switch_async_to_pre_async();
   int update_palf_committed_end_lsn(const palf::LSN &end_lsn, const share::SCN &end_scn);
   // share::SCN get_palf_committed_end_scn() const;
   int update_standby_committed_end_lsn(const palf::LSN &end_lsn, const share::SCN &end_scn);
@@ -666,11 +673,20 @@ public:
   // 角色切换接口
   int switch_to_leader(const share::ObLSID &id,
                        const int64_t new_proposal_id,
-                       const palf::SyncMode &sync_mode,
+                       const palf::SyncMode new_sync_mode,
                        const palf::LSN &begin_lsn);
   int switch_to_follower(const share::ObLSID &id);
   int mark_ls_gc_state(const share::ObLSID &id);
 
+
+  int switch_to_sync(const share::ObLSID &id,
+                           const int64_t curr_proposal_id,
+                           const int64_t new_proposal_id,
+                           const palf::SyncMode &new_sync_mode,
+                           const palf::LSN &begin_lsn);
+  int switch_to_pre_async(const share::ObLSID &id);
+  int switch_to_async(const share::ObLSID &id);
+  int switch_async_to_pre_async(const share::ObLSID &id);
   // 获取RPC代理
   obrpc::ObLogTransportRpcProxy *get_rpc_proxy();
 

@@ -174,11 +174,11 @@ public:
                     palf::LSN &end_lsn);
   //主备切换相关
   //int can_switch_to_follower(bool &can_revoke); //非最大保护模式不需要
-  int switch_to_leader(const int64_t new_proposal_id,
-                       const palf::SyncMode &sync_mode);
+  int switch_to_leader(const int64_t new_proposal_id, const palf::SyncMode &sync_mode);
   int switch_to_follower();
   void mark_ls_gc_state();
   bool is_ls_gc_state() const { return true == ATOMIC_LOAD(&is_ls_gc_state_); }
+  int switch_sync_mode(const int64_t new_proposal_id, const palf::SyncMode &sync_mode);
   //palf相关
   int update_palf_committed_end_lsn(const palf::LSN &end_lsn, const share::SCN &end_scn, const int64_t proposal_id);
   share::SCN get_palf_committed_end_scn() const;
@@ -353,6 +353,9 @@ public:
                        const int64_t proposal_id,
                        const palf::SyncMode &sync_mode);
   int switch_to_follower(const share::ObLSID &id);
+  int switch_sync_mode(const share::ObLSID &id,
+                       const int64_t proposal_id,
+                       const palf::SyncMode &sync_mode);
   int get_max_applied_scn(const share::ObLSID &id, share::SCN &scn);
   int get_palf_committed_end_scn(const share::ObLSID &id, share::SCN &scn);
   int push_task(ObApplyServiceTask *task);

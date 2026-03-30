@@ -332,6 +332,13 @@ void ObLogHandler::switch_role(const common::ObRole &role, const int64_t proposa
 #endif
 }
 
+void ObLogHandler::switch_sync_mode(const palf::SyncMode &sync_mode, const int64_t proposal_id)
+{
+  WLockGuard guard(lock_);
+  sync_mode_ = sync_mode;
+  proposal_id_ = proposal_id;
+}
+
 int ObLogHandler::get_role(common::ObRole &role, int64_t &proposal_id) const
 {
   return ObLogHandlerBase::get_role(role, proposal_id);
@@ -1824,7 +1831,7 @@ int ObLogHandler::emergency_append(const void *buffer,
     }
   }
 #endif
-  CLOG_LOG(TRACE, "debug_emergency_append", K(ret), KPC(this), K(opts), K(buffer), K(nbytes), K(ref_scn),
+  CLOG_LOG(INFO, "emergency_append", K(ret), KPC(this), K(opts), K(buffer), K(nbytes), K(ref_scn),
            K(allow_compress), K(cb), K(lsn), K(scn), K(log_compressed), K(final_nbytes));
 
   if (OB_SUCC(ret)) {
@@ -1857,7 +1864,7 @@ int ObLogHandler::emergency_append(const void *buffer,
           if (need_push_cb) {
             ret = apply_status_->push_append_cb(cb);
           }
-          CLOG_LOG(TRACE, "emergency append success", K(lsn), K(scn), K(log_compressed),
+          CLOG_LOG(INFO, "emergency append success", K(lsn), K(scn), K(log_compressed),
                    K(nbytes), K(final_nbytes), K(id_), K(log_type));
 #ifdef OB_BUILD_LOG_STORAGE_COMPRESS
           //add stat event
@@ -2673,43 +2680,45 @@ int ObLogHandler::change_sync_mode(const int64_t mode_version,
                                    int64_t &new_proposal_id)
 {
   int ret = OB_SUCCESS;
-  int64_t proposal_id = INVALID_PROPOSAL_ID;
+  const bool is_degrade_request = (palf::SyncMode::ASYNC == sync_mode || palf::SyncMode::PRE_ASYNC == sync_mode);
   new_proposal_id = INVALID_PROPOSAL_ID;
+  int64_t curr_mode_version = OB_INVALID_VERSION;
+  palf::SyncMode curr_sync_mode = palf::SyncMode::INVALID_SYNC_MODE;
+  common::ObRole curr_role = common::FOLLOWER;
+  bool is_pending_state = false;
+  bool need_role_change = false;
+  RLockGuard guard(lock_);
+  int64_t proposal_id = ATOMIC_LOAD(&proposal_id_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "ObLogHandler not init", K(ret), K_(id));
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
     CLOG_LOG(WARN, "ObLogHandler is in stop state", K(ret), K_(id));
+  } else if (OB_ISNULL(palf_handle_)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "palf_handle is null", K(ret), KPC(this));
   } else if (!is_valid_sync_mode(sync_mode)) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid sync_mode", K(ret), KPC(this), K(sync_mode));
-  } else if (sync_mode == palf::SyncMode::PRE_ASYNC || sync_mode == palf::SyncMode::ASYNC) {
-    // 强同步降级场景，直接使用palf id修改
+  } else if (is_degrade_request) {
+    // a tricky way to handle a case which log_handler leader doesn't exist.
     common::ObRole role = common::FOLLOWER;
     bool is_pending_state = false;
-
-    if (OB_ISNULL(palf_handle_)) {
-      ret = OB_ERR_UNEXPECTED;
-      CLOG_LOG(WARN, "palf_handle is null", K(ret), KPC(this));
-    } else if (OB_FAIL(palf_handle_->get_role(role, proposal_id, is_pending_state))) {
-      CLOG_LOG(WARN, "get_role failed", K(ret), KPC(this));
+    if (OB_FAIL(palf_handle_->get_role(role, proposal_id, is_pending_state))) {
+      CLOG_LOG(WARN, "failed to get role", K(ret), K_(id), K(proposal_id));
     } else if (LEADER != role || true == is_pending_state) {
       ret = OB_NOT_MASTER;
       CLOG_LOG(WARN, "not leader or pending state", K(ret), KPC(this), K(role), K(proposal_id), K(is_pending_state));
     }
-  } else if (sync_mode == palf::SyncMode::SYNC) {
-    // 强同步升级场景，使用log handler proposal_id修改
-    RLockGuard guard(lock_);
-    proposal_id = ATOMIC_LOAD(&proposal_id_);
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(palf_handle_->change_sync_mode(proposal_id, mode_version, sync_mode, new_mode_version, new_proposal_id))) {
-    CLOG_LOG(WARN, "palf change_sync_mode failed", K(ret), K_(id), K(proposal_id), K(mode_version), K(sync_mode));
+  } else if (OB_FAIL(palf_handle_->change_sync_mode(proposal_id, mode_version, sync_mode, need_role_change, new_mode_version, new_proposal_id))) {
+    CLOG_LOG(WARN, "palf change_sync_mode failed", K(ret), K_(id), K(proposal_id), K(mode_version), K(sync_mode), K(need_role_change), K(is_degrade_request));
   } else {
     FLOG_INFO("change_sync_mode success", K(ret), K_(id), K(proposal_id), K(mode_version), K(sync_mode),
-      K(new_proposal_id));
+      K(new_proposal_id), K(need_role_change), K(is_degrade_request));
   }
   return ret;
 }

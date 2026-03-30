@@ -246,6 +246,18 @@ void ObLogRestoreHandler::switch_role(const common::ObRole &role, const int64_t 
   }
 }
 
+void ObLogRestoreHandler::switch_sync_mode(const palf::SyncMode &sync_mode, const int64_t proposal_id)
+{
+  WLockGuard guard(lock_);
+  sync_mode_ = sync_mode;
+  proposal_id_ = proposal_id;
+  // clear fetch log tasks which's proposal_id is old, re-submit fetch log tasks
+  ObResSrcAlloctor::free(parent_);
+  parent_ = NULL;
+  context_.reset();
+  CLOG_LOG(INFO, "switch_sync_mode", K(sync_mode), K(proposal_id), KPC(this));
+}
+
 int ObLogRestoreHandler::get_role(common::ObRole &role, int64_t &proposal_id) const
 {
   return ObLogHandlerBase::get_role(role, proposal_id);
@@ -586,7 +598,7 @@ int ObLogRestoreHandler::handle_sync_mode_log_(const int64_t proposal_id,
     if (target_sync_mode != palf::SyncMode::INVALID_SYNC_MODE
         && curr_sync_mode != target_sync_mode) {
       int64_t new_mode_version = INVALID_PROPOSAL_ID;
-      if (OB_FAIL(palf_handle_->change_sync_mode(proposal_id, mode_version, target_sync_mode,
+      if (OB_FAIL(palf_handle_->change_sync_mode(proposal_id, mode_version, target_sync_mode, false,
                                                  new_mode_version, new_proposal_id))) {
         CLOG_LOG(WARN, "change_sync_mode failed", K(ret), K(id_), K(mode_version),
                  K(curr_sync_mode), K(target_sync_mode), K(scn), K(lsn));
@@ -599,10 +611,10 @@ int ObLogRestoreHandler::handle_sync_mode_log_(const int64_t proposal_id,
         // wait_proposal_id_consistent_() 内部会尝试获取读锁，所以必须在释放写锁后调用
         // TODO by qingxia: 暂时注释掉，等待 sync mode 变更不杀事务合入，后续再放开
         // TODO by qingxia: 在 sync mode 变更和选举并发的情况下，可能这里还是会卡住等30s
-        // int wait_ret = wait_proposal_id_consistent_(new_proposal_id);
-        // if (OB_FAIL(wait_ret)) {
-        //   CLOG_LOG(WARN, "wait proposal_id consistent failed", K(id_), K(wait_ret));
-        // }
+        int wait_ret = wait_proposal_id_consistent_(new_proposal_id);
+        if (OB_FAIL(wait_ret)) {
+          CLOG_LOG(WARN, "wait proposal_id consistent failed", K(id_), K(wait_ret));
+        }
 
         // 通知 ack service 更新 sync_mode 缓存
         ObLogStandbyAckService *ack_service = log_service->get_log_standby_ack_service();

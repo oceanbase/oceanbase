@@ -848,7 +848,7 @@ bool LogTransportStatus::is_enabled_without_lock() const
 }
 
 int LogTransportStatus::switch_to_leader(const int64_t new_proposal_id,
-                                         const palf::SyncMode &sync_mode,
+                                         const palf::SyncMode new_sync_mode,
                                          const palf::LSN &begin_lsn)
 {
   int ret = OB_SUCCESS;
@@ -858,18 +858,22 @@ int LogTransportStatus::switch_to_leader(const int64_t new_proposal_id,
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
     CLOG_LOG(INFO, "transport status has been stopped");
-  } else if (new_proposal_id < ATOMIC_LOAD(&proposal_id_)) {
-    ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid proposal id", K(ret), K(new_proposal_id), KPC(this));
-  } else if (OB_FAIL(submit_init_task(new_proposal_id, sync_mode, begin_lsn))) { // 异步完成强同步初始化流程
-    CLOG_LOG(WARN, "failed to submit init task", K(ret), K(ls_id_), K(new_proposal_id), K(sync_mode), K(begin_lsn));
+  } else if (OB_FAIL(submit_init_task(new_proposal_id, new_sync_mode, begin_lsn))) { // 异步完成强同步初始化流程
+    CLOG_LOG(WARN, "failed to submit init task", K(ret), K(ls_id_), K(new_proposal_id), K(new_sync_mode), K(begin_lsn));
   } else {
     WLockGuardWithRetryInterval wguard(lock_, WRLOCK_RETRY_INTERVAL_US, WRLOCK_RETRY_INTERVAL_US);
     role_ = LEADER;
-    ATOMIC_STORE(&proposal_id_, new_proposal_id);
+    is_enabled_ = SyncMode::SYNC == new_sync_mode ? true : false;
+    if (!is_enabled_) {
+      standby_committed_end_lsn_.reset();
+      standby_committed_end_scn_.reset();
+    }
+    if (new_proposal_id > ATOMIC_LOAD(&proposal_id_)) {
+      ATOMIC_STORE(&proposal_id_, new_proposal_id);
+    }
   }
 
-  CLOG_LOG(INFO, "transport status switch_to_leader end", K(ret), K(sync_mode), K(begin_lsn), KPC(this));
+  CLOG_LOG(INFO, "transport status switch_to_leader end", K(ret), K(new_proposal_id), K(begin_lsn), K(new_sync_mode),KPC(this));
   return ret;
 }
 
@@ -911,11 +915,95 @@ int LogTransportStatus::switch_to_follower()
     // 统一更新角色和状态
     WLockGuardWithRetryInterval guard(lock_, WRLOCK_RETRY_INTERVAL_US, WRLOCK_RETRY_INTERVAL_US);
     role_ = FOLLOWER;
-    is_enabled_ = is_sync_mode_enabled() ? true : false;
+    is_enabled_ = false;
     standby_committed_end_lsn_.reset();
     standby_committed_end_scn_.reset();
 
-    CLOG_LOG(INFO, "switch_to_follower success", K_(ls_id), K(need_wait_standby_sync));
+    CLOG_LOG(INFO, "switch_to_follower success", K_(ls_id), K(need_wait_standby_sync), KPC(this));
+  }
+  return ret;
+}
+
+int LogTransportStatus::switch_to_sync(const int64_t curr_proposal_id,
+                                             const int64_t new_proposal_id,
+                                             const palf::SyncMode &new_sync_mode,
+                                             const palf::LSN &begin_lsn)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(ERROR, "transport status has not been inited");
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+    CLOG_LOG(INFO, "transport status has been stopped");
+  } else if (new_proposal_id < ATOMIC_LOAD(&proposal_id_)) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid proposal id", K(ret), K(new_proposal_id), KPC(this));
+  } else if (OB_FAIL(submit_init_task(new_proposal_id, new_sync_mode, begin_lsn))) { // 异步完成强同步初始化流程
+    CLOG_LOG(WARN, "failed to submit init task", K(ret), K(ls_id_), K(new_proposal_id), K(new_sync_mode), K(begin_lsn));
+  } else {
+    WLockGuardWithRetryInterval wguard(lock_, WRLOCK_RETRY_INTERVAL_US, WRLOCK_RETRY_INTERVAL_US);
+    is_enabled_ = true;
+    ATOMIC_STORE(&proposal_id_, new_proposal_id);
+  }
+
+  CLOG_LOG(INFO, "transport status switch_to_sync,  end", K(ret), K(new_sync_mode), K(new_proposal_id), K(begin_lsn), KPC(this));
+  return ret;
+}
+
+int LogTransportStatus::switch_to_pre_async()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(ERROR, "transport status has not been inited");
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+    CLOG_LOG(INFO, "transport status has been stopped");
+  } else {
+    WLockGuardWithRetryInterval guard(lock_, WRLOCK_RETRY_INTERVAL_US, WRLOCK_RETRY_INTERVAL_US);
+    is_enabled_ = false;
+    standby_committed_end_lsn_.reset();
+    standby_committed_end_scn_.reset();
+    CLOG_LOG(INFO, "switch_to_pre_async success", K_(ls_id), KPC(this));
+  }
+  return ret;
+}
+
+int LogTransportStatus::switch_to_async()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(ERROR, "transport status has not been inited");
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+    CLOG_LOG(INFO, "transport status has been stopped");
+  } else {
+    WLockGuardWithRetryInterval guard(lock_, WRLOCK_RETRY_INTERVAL_US, WRLOCK_RETRY_INTERVAL_US);
+    is_enabled_ = false;
+    standby_committed_end_lsn_.reset();
+    standby_committed_end_scn_.reset();
+    CLOG_LOG(INFO, "switch_to_async success", K_(ls_id), KPC(this));
+  }
+  return ret;
+}
+
+int LogTransportStatus::switch_async_to_pre_async()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(ERROR, "transport status has not been inited");
+  } else if (is_in_stop_state_) {
+    ret = OB_NOT_RUNNING;
+    CLOG_LOG(INFO, "transport status has been stopped");
+  } else {
+    WLockGuardWithRetryInterval guard(lock_, WRLOCK_RETRY_INTERVAL_US, WRLOCK_RETRY_INTERVAL_US);
+    is_enabled_ = false;
+    standby_committed_end_lsn_.reset();
+    standby_committed_end_scn_.reset();
+    CLOG_LOG(INFO, "switch_async_to_pre_async success", K_(ls_id), KPC(this));
   }
   return ret;
 }
@@ -3117,7 +3205,7 @@ int ObLogTransportService::get_sync_standby_dest(ObSyncStandbyDestStruct &sync_s
 
 int ObLogTransportService::switch_to_leader(const share::ObLSID &id,
                                             const int64_t new_proposal_id,
-                                            const palf::SyncMode &sync_mode,
+                                            const palf::SyncMode new_sync_mode,
                                             const palf::LSN &begin_lsn)
 {
   int ret = OB_SUCCESS;
@@ -3136,12 +3224,12 @@ int ObLogTransportService::switch_to_leader(const share::ObLSID &id,
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "transport_status is NULL", KR(ret), K(id));
   } else {
-    if (OB_FAIL(transport_status->switch_to_leader(new_proposal_id, sync_mode, begin_lsn))) {
+    if (OB_FAIL(transport_status->switch_to_leader(new_proposal_id, new_sync_mode, begin_lsn))) {
       CLOG_LOG(WARN, "transport_status switch_to_leader failed", KR(ret), K(id), K(new_proposal_id),
-               K(sync_mode), K(begin_lsn));
+               K(new_sync_mode), K(begin_lsn));
     } else {
       CLOG_LOG(INFO, "transport_service switch_to_leader success", K(id), K(new_proposal_id),
-               K(sync_mode), K(begin_lsn));
+               K(new_sync_mode), K(begin_lsn));
     }
   }
 
@@ -3206,6 +3294,147 @@ int ObLogTransportService::mark_ls_gc_state(const share::ObLSID &id)
     transport_status->mark_ls_gc_state();
     CLOG_LOG(INFO, "transport service mark_ls_gc_state success", K(id));
   }
+  return ret;
+}
+
+int ObLogTransportService::switch_to_sync(const share::ObLSID &id,
+                                                const int64_t curr_proposal_id,
+                                                const int64_t new_proposal_id,
+                                                const palf::SyncMode &new_sync_mode,
+                                                const palf::LSN &begin_lsn)
+{
+  int ret = OB_SUCCESS;
+  ObTpStatusGuard guard;
+  LogTransportStatus *transport_status = NULL;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ObLogTransportService not init", KR(ret), K(id));
+  } else if (!id.is_valid() || new_proposal_id <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", KR(ret), K(id), K(new_proposal_id));
+  } else if (OB_FAIL(get_transport_status(id, guard))) {
+    CLOG_LOG(WARN, "get_transport_status failed", KR(ret), K(id));
+  } else if (NULL == (transport_status = guard.get_transport_status())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "transport_status is NULL", KR(ret), K(id));
+  } else {
+    if (OB_FAIL(transport_status->switch_to_sync(curr_proposal_id, new_proposal_id, new_sync_mode, begin_lsn))) {
+      CLOG_LOG(WARN, "transport_status switch_to_sync failed", KR(ret), K(id), K(new_proposal_id), K(curr_proposal_id),
+               K(new_sync_mode), K(begin_lsn));
+    } else {
+      CLOG_LOG(INFO, "transport_service switch_to_sync success", K(id), K(new_proposal_id), K(curr_proposal_id),
+               K(new_sync_mode), K(begin_lsn));
+    }
+  }
+  return ret;
+}
+
+int ObLogTransportService::switch_to_pre_async(const share::ObLSID &id)
+{
+  int ret = OB_SUCCESS;
+  ObTpStatusGuard guard;
+  LogTransportStatus *transport_status = NULL;
+
+  CLOG_LOG(INFO, "transport service switch_to_pre_async start", K(id)); //TODO by ziqi: delete
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ObLogTransportService not init", KR(ret), K(id));
+  } else if (!id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", KR(ret), K(id));
+  } else if (OB_FAIL(get_transport_status(id, guard))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      // transport_status 不存在，可能是日志流还未创建或已删除，记录日志但不报错
+      CLOG_LOG(TRACE, "transport_status not exist, skip switch_to_pre_async", K(id));
+      ret = OB_SUCCESS;
+    } else {
+      CLOG_LOG(WARN, "get_transport_status failed", KR(ret), K(id));
+    }
+  } else if (NULL == (transport_status = guard.get_transport_status())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "transport_status is NULL", KR(ret), K(id));
+  } else {
+    if (OB_FAIL(transport_status->switch_to_pre_async())) {
+      CLOG_LOG(WARN, "transport_status switch_to_pre_async failed", KR(ret), K(id));
+    } else {
+      CLOG_LOG(INFO, "transport_service switch_to_pre_async success", K(id));
+    }
+  }
+
+  return ret;
+}
+
+int ObLogTransportService::switch_to_async(const share::ObLSID &id)
+{
+  int ret = OB_SUCCESS;
+  ObTpStatusGuard guard;
+  LogTransportStatus *transport_status = NULL;
+
+  CLOG_LOG(INFO, "transport service switch_to_async start", K(id));
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ObLogTransportService not init", KR(ret), K(id));
+  } else if (!id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", KR(ret), K(id));
+  } else if (OB_FAIL(get_transport_status(id, guard))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      // transport_status 不存在，可能是日志流还未创建或已删除，记录日志但不报错
+      CLOG_LOG(TRACE, "transport_status not exist, skip switch_to_async", K(id));
+      ret = OB_SUCCESS;
+    } else {
+      CLOG_LOG(WARN, "get_transport_status failed", KR(ret), K(id));
+    }
+  } else if (NULL == (transport_status = guard.get_transport_status())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "transport_status is NULL", KR(ret), K(id));
+  } else {
+    if (OB_FAIL(transport_status->switch_to_async())) {
+      CLOG_LOG(WARN, "transport_status switch_to_async failed", KR(ret), K(id));
+    } else {
+      CLOG_LOG(INFO, "transport_service switch_to_async success", K(id));
+    }
+  }
+
+  return ret;
+}
+
+int ObLogTransportService::switch_async_to_pre_async(const share::ObLSID &id)
+{
+  int ret = OB_SUCCESS;
+  ObTpStatusGuard guard;
+  LogTransportStatus *transport_status = NULL;
+
+  CLOG_LOG(INFO, "transport service switch_async_to_pre_async start", K(id));
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ObLogTransportService not init", KR(ret), K(id));
+  } else if (!id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid argument", KR(ret), K(id));
+  } else if (OB_FAIL(get_transport_status(id, guard))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      // transport_status 不存在，可能是日志流还未创建或已删除，记录日志但不报错
+      CLOG_LOG(TRACE, "transport_status not exist, skip switch_async_to_pre_async", K(id));
+      ret = OB_SUCCESS;
+    } else {
+      CLOG_LOG(WARN, "get_transport_status failed", KR(ret), K(id));
+    }
+  } else if (NULL == (transport_status = guard.get_transport_status())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "transport_status is NULL", KR(ret), K(id));
+  } else {
+    if (OB_FAIL(transport_status->switch_async_to_pre_async())) {
+      CLOG_LOG(WARN, "transport_status switch_async_to_pre_async failed", KR(ret), K(id));
+    } else {
+      CLOG_LOG(INFO, "transport_service switch_async_to_pre_async success", K(id));
+    }
+  }
+
   return ret;
 }
 

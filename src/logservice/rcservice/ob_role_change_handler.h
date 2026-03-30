@@ -81,6 +81,7 @@ public:
   // 3. OTHERS, switch_to_follower_gracefully failed, but no need to revoke leader.
   int switch_to_follower_gracefully();
   int resume_to_leader();
+  int switch_leader_to_leader_except_trans(RCDiagnoseInfo &diagnose_info);
 
 private:
   int resume_leader_when_switch_failure_(int64_t cursor);

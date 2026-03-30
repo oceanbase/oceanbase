@@ -299,10 +299,9 @@ public:
                        int64_t &proposal_id,
                        bool &is_pending_state) const = 0;
   // 原子获取 role/proposal_id/sync_mode，保证一致性
-  virtual int get_role_and_sync_mode(common::ObRole &role,
-                                     int64_t &proposal_id,
-                                     SyncMode &sync_mode,
-                                     bool &is_pending_state) const = 0;
+  virtual int get_proposal_id_and_sync_mode(int64_t &proposal_id,
+                                            SyncMode &sync_mode,
+                                            bool &is_pending_state) const = 0;
   // 获取 palf_id
   virtual int get_palf_id(int64_t &palf_id) const = 0;
   // 切主接口，用于内部调试用，任何正式功能不应依赖此接口
@@ -580,6 +579,7 @@ public:
   virtual int change_sync_mode(const int64_t proposal_id,
                                const int64_t mode_version,
                                const SyncMode &sync_mode,
+                               const bool need_role_change,
                                int64_t &new_mode_version,
                                int64_t &out_proposal_id) = 0;
   virtual int get_sync_mode(int64_t &mode_version, SyncMode &sync_mode) const = 0;
@@ -742,10 +742,9 @@ public:
   int get_role(common::ObRole &role,
                int64_t &proposal_id,
                bool &is_pending_state) const override final;
-  int get_role_and_sync_mode(common::ObRole &role,
-                             int64_t &proposal_id,
-                             SyncMode &sync_mode,
-                             bool &is_pending_state) const override final;
+  int get_proposal_id_and_sync_mode(int64_t &proposal_id,
+                                    SyncMode &sync_mode,
+                                    bool &is_pending_state) const override final;
   int get_palf_id(int64_t &palf_id) const override final;
   int change_leader_to(const common::ObAddr &dest_addr) override final;
   int get_global_learner_list(common::GlobalLearnerList &learner_list) const override final;
@@ -851,6 +850,7 @@ public:
   int change_sync_mode(const int64_t proposal_id,
                        const int64_t mode_version,
                        const SyncMode &sync_mode,
+                       const bool need_role_change,
                        int64_t &new_mode_version,
                        int64_t &out_proposal_id) override final;
   int get_sync_mode(int64_t &mode_version, SyncMode &sync_mode) const override final;

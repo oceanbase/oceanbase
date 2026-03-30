@@ -211,6 +211,10 @@ public:
   // @param[in], role, LEADER or FOLLOWER
   // @param[in], proposal_id, global monotonically increasing id
   virtual void switch_role(const common::ObRole &role, const int64_t proposal_id) override;
+  // @brief switch log_restore_handle sync_mode, to SYNC or ASYNC or PRE_ASYNC
+  // @param[in], sync_mode, SYNC or ASYNC or PRE_ASYNC
+  // @param[in], proposal_id, global monotonically increasing id
+  virtual void switch_sync_mode(const palf::SyncMode &sync_mode, const int64_t proposal_id) override;
   // @brief query role and proposal_id from ObLogRestoreHandler
   // @param[out], role:
   //    LEADER, if 'role_' of ObLogRestoreHandler is LEADER and 'proposal_id' is same with PalfHandle.
@@ -345,7 +349,7 @@ public:
   void reset_raw_write_test_hook() { transport_task_queue_.reset_raw_write_test_hook(); }
   void set_ignore_restore_source_for_test(const bool ignore) { ignore_restore_source_for_test_ = ignore; }
 #endif
-  TO_STRING_KV(K_(is_inited), K_(is_in_stop_state), K_(id), K_(proposal_id), K_(role), KP_(parent), K_(context), K_(restore_context));
+  TO_STRING_KV(K_(is_inited), K_(is_in_stop_state), K_(id), K_(proposal_id), K_(role), KP_(parent), K_(context), K_(restore_context), K_(sync_mode));
 
 private:
   bool is_valid() const;

@@ -195,5 +195,50 @@ int ObRoleChangeHandler::resume_leader_when_switch_failure_(const int64_t cursor
   }
   return ret;
 }
+
+int ObRoleChangeHandler::switch_leader_to_leader_except_trans(RCDiagnoseInfo &diagnose_info)
+{
+  int ret = OB_SUCCESS;
+  // switch leader to follower
+  ObSpinLockGuard guard(lock_);
+  for (int i = 0; i < ObLogBaseType::MAX_LOG_BASE_TYPE; i++) {
+    ObIRoleChangeSubHandler *handler = sub_role_change_handler_arr_[i];
+    char sub_role_change_handler_str[OB_LOG_BASE_TYPE_STR_MAX_LEN] = {'\0'};
+    ObLogBaseType base_type = static_cast<ObLogBaseType>(i);
+    bool has_defined_to_string = false;
+    if (OB_SUCCESS == log_base_type_to_string(base_type, sub_role_change_handler_str,
+          OB_LOG_BASE_TYPE_STR_MAX_LEN)) {
+      has_defined_to_string = true;
+    }
+    if (NULL != handler && ObLogBaseType::TRANS_SERVICE_LOG_BASE_TYPE != base_type) {
+      handler->switch_to_follower_forcedly();
+      CLOG_LOG(INFO, "leader to follower forcedly, current role change handler is",
+          "cursor", i, "name", has_defined_to_string ? sub_role_change_handler_str : "hasn't define to string");
+    }
+  }
+  // switch follower to leader
+  for (int i = 0; i < ObLogBaseType::MAX_LOG_BASE_TYPE && OB_SUCC(ret); i++) {
+    ObIRoleChangeSubHandler *handler = sub_role_change_handler_arr_[i];
+    char sub_role_change_handler_str[OB_LOG_BASE_TYPE_STR_MAX_LEN] = {'\0'};
+    ObLogBaseType base_type = static_cast<ObLogBaseType>(i);
+    diagnose_info.log_type_ = base_type;
+    bool has_defined_to_string = false;
+    if (OB_SUCCESS == log_base_type_to_string(base_type, sub_role_change_handler_str,
+          OB_LOG_BASE_TYPE_STR_MAX_LEN)) {
+      has_defined_to_string = true;
+    }
+    if (NULL == handler || ObLogBaseType::TRANS_SERVICE_LOG_BASE_TYPE == base_type) {
+    } else if (OB_FAIL(handler->switch_to_leader())) {
+      CLOG_LOG(WARN, "switch_to_leader failed", K(ret), KP(handler), K(i),
+          "cursor", i, "name", has_defined_to_string ? sub_role_change_handler_str : "hasn't define to string");
+    } else {
+      CLOG_LOG(INFO, "follower to leader, current role change handler is",
+          "cursor", i, "name", has_defined_to_string ? sub_role_change_handler_str : "hasn't define to string");
+    }
+  }
+
+  return ret;
+}
+
 } // end namespace logservice
 } // end namespace oceanbase

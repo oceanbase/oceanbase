@@ -204,9 +204,9 @@ bool LogStateMgr::can_slide_sw() const
           || is_follower_init_() || is_follower_pending_());
 }
 
-bool LogStateMgr::can_revoke(const int64_t proposal_id) const
+bool LogStateMgr::can_revoke(const int64_t election_epoch) const
 {
-  return true == is_leader_active_() && get_proposal_id() == proposal_id;
+  return true == is_leader_active_() && check_epoch_is_same_with_election(election_epoch);
 }
 
 bool LogStateMgr::is_state_changed()

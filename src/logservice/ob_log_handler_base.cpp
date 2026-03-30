@@ -21,6 +21,7 @@ ObLogHandlerBase::ObLogHandlerBase() :
   role_(common::FOLLOWER),
   proposal_id_(palf::INVALID_PROPOSAL_ID),
   id_(-1),
+  sync_mode_(palf::SyncMode::INVALID_SYNC_MODE),
   palf_handle_(NULL),
   palf_env_(NULL),
   enable_logservice_(false),
@@ -51,12 +52,12 @@ int ObLogHandlerBase::prepare_switch_role(common::ObRole &curr_role,
   return ret;
 }
 
-int ObLogHandlerBase::prepare_switch_role(common::ObRole &curr_role,
-                                          int64_t &curr_proposal_id,
-                                          common::ObRole &new_role,
+int ObLogHandlerBase::prepare_switch_role(int64_t &curr_proposal_id,
                                           int64_t &new_proposal_id,
+                                          common::ObRole &curr_role,
                                           bool &is_pending_state,
-                                          palf::SyncMode &sync_mode) const
+                                          palf::SyncMode &curr_sync_mode,
+                                          palf::SyncMode &new_sync_mode) const
 {
   int ret = OB_SUCCESS;
   RLockGuard guard(lock_);
@@ -64,26 +65,28 @@ int ObLogHandlerBase::prepare_switch_role(common::ObRole &curr_role,
     ret = OB_NOT_INIT;
   } else if (is_in_stop_state_) {
     ret = OB_NOT_RUNNING;
-  } else if (enable_logservice_) {
-    // 共享存储模式不支持sync_mode，使用get_role并设置sync_mode为ASYNC
-    sync_mode = palf::SyncMode::ASYNC;
-    if (OB_FAIL(palf_handle_->get_role(new_role, new_proposal_id, is_pending_state))) {
-      PALF_LOG(WARN, "PalfHandle get_role failed", K(ret), K_(id), K(curr_role), K(curr_proposal_id));
-    } else {
-      curr_role = role_;
-      curr_proposal_id = proposal_id_;
-      PALF_LOG(TRACE, "prepare_switch_role with sync_mode success for shared storage", K(ret), K_(id), K(curr_role), K(curr_proposal_id),
-          K(new_role), K(new_proposal_id), K(sync_mode));
-    }
-  } else if (OB_FAIL(palf_handle_->get_role_and_sync_mode(new_role, new_proposal_id, sync_mode, is_pending_state))) {
-    PALF_LOG(WARN, "PalfHandle get_role_and_sync_mode failed", K(ret), K_(id), K(curr_role), K(curr_proposal_id));
+  } else if (OB_FAIL(palf_handle_->get_proposal_id_and_sync_mode(new_proposal_id, new_sync_mode, is_pending_state))) {
+    PALF_LOG(WARN, "PalfHandle get_proposal_id_and_sync_mode failed", K(ret), K_(id), K(curr_proposal_id));
   } else {
-    curr_role = role_;
     curr_proposal_id = proposal_id_;
-    PALF_LOG(TRACE, "prepare_switch_role with sync_mode success", K(ret), K_(id), K(curr_role), K(curr_proposal_id),
-        K(new_role), K(new_proposal_id), K(sync_mode));
+    curr_sync_mode = sync_mode_;
+    curr_role = role_;
+    PALF_LOG(INFO, "prepare_switch_role with sync_mode success", K(ret), K_(id), K(curr_proposal_id),
+        K(new_proposal_id), K(new_sync_mode));
   }
   return ret;
+}
+
+void ObLogHandlerBase::switch_role_and_sync_mode(const common::ObRole &role,
+                                                 const int64_t proposal_id,
+                                                 const palf::SyncMode &sync_mode)
+{
+  WLockGuard guard(lock_);
+  role_ = role;
+  proposal_id_ = proposal_id;
+  if (common::LEADER == role_) {
+    sync_mode_ = sync_mode;
+  }
 }
 
 int ObLogHandlerBase::advance_election_epoch_and_downgrade_priority(const int64_t downgrade_priority_time_us,

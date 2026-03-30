@@ -330,13 +330,12 @@ int PalfHandle::get_role(common::ObRole &role, int64_t &proposal_id, bool &is_pe
   return palf_handle_impl_->get_role(role, proposal_id, is_pending_state);
 }
 
-int PalfHandle::get_role_and_sync_mode(common::ObRole &role,
-                                       int64_t &proposal_id,
-                                       palf::SyncMode &sync_mode,
-                                       bool &is_pending_state) const
+int PalfHandle::get_proposal_id_and_sync_mode(int64_t &proposal_id,
+                                              palf::SyncMode &sync_mode,
+                                              bool &is_pending_state) const
 {
   CHECK_VALID;
-  return palf_handle_impl_->get_role_and_sync_mode(role, proposal_id, sync_mode, is_pending_state);
+  return palf_handle_impl_->get_proposal_id_and_sync_mode(proposal_id, sync_mode, is_pending_state);
 }
 
 int PalfHandle::get_palf_id(int64_t &palf_id) const
@@ -602,12 +601,13 @@ int PalfHandle::get_access_mode_ref_scn(int64_t &mode_version,
 int PalfHandle::change_sync_mode(const int64_t proposal_id,
                                  const int64_t mode_version,
                                  const ipalf::SyncMode &sync_mode,
+                                 const bool need_role_change,
                                  int64_t &new_mode_version,
                                  int64_t &out_proposal_id)
 {
   int ret = OB_SUCCESS;
   CHECK_VALID;
-  ret = palf_handle_impl_->change_sync_mode(proposal_id, mode_version, sync_mode, new_mode_version, out_proposal_id);
+  ret = palf_handle_impl_->change_sync_mode(proposal_id, mode_version, sync_mode, need_role_change, new_mode_version, out_proposal_id);
   return ret;
 }
 

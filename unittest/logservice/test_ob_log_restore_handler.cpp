@@ -242,12 +242,10 @@ public:
     return OB_SUCCESS;
   }
 
-  int get_role_and_sync_mode(common::ObRole &role,
-                             int64_t &proposal_id,
-                             ipalf::SyncMode &sync_mode,
-                             bool &is_pending_state) const override
+  int get_proposal_id_and_sync_mode(int64_t &proposal_id,
+                                    ipalf::SyncMode &sync_mode,
+                                    bool &is_pending_state) const override
   {
-    role = role_;
     proposal_id = proposal_id_;
     sync_mode = ipalf::SyncMode::ASYNC;
     is_pending_state = pending_state_;
@@ -318,6 +316,7 @@ public:
   int change_sync_mode(const int64_t proposal_id,
                        const int64_t mode_version,
                        const ipalf::SyncMode &sync_mode,
+                       const bool need_role_change,
                        int64_t &new_mode_version,
                        int64_t &out_proposal_id) override
   {
