@@ -764,6 +764,11 @@ if ((OB_FAIL(ret) || 0 == routines.count())   \
     OX (object_db_id = database_id);
     OX (object_name = package_name);
     if (OB_FAIL(ret)) {
+    } else if (lib::is_oracle_mode() &&
+      current_database.case_compare(db_name) != 0 &&
+      (0 == db_name.case_compare(OB_SYS_DATABASE_NAME) ||
+       0 ==  db_name.case_compare(OB_ORA_SYS_SCHEMA_NAME))) {
+      // specify "sys".xxx, resolve to sys package later
     } else if (OB_FAIL(schema_checker.get_package_id( // try user package now!
           tenant_id, object_db_id, object_name, compatible_mode, package_id))
         || OB_INVALID_ID == package_id) {
