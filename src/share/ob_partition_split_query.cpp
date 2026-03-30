@@ -471,7 +471,7 @@ int ObPartitionSplitQuery::fill_range_filter_param(
       LOG_DEBUG("print filter batch result flag", K(expr->batch_result_));
       if (OB_SUCC(ret)) {
         const int col_idx = (i - 1) % part_column_cnt;
-        ObDatum &expr_datum = expr->locate_datum_for_write(eval_ctx);
+        ObDatum &expr_datum = check_only ? expr->locate_expr_datum(eval_ctx) : expr->locate_datum_for_write(eval_ctx);
         if (i == 0) { // 1. bypass param expr.
           if (check_only) {
             if (OB_UNLIKELY(0 != expr_datum.get_int())) {
@@ -556,7 +556,7 @@ int ObPartitionSplitQuery::print_filter_params(sql::ObEvalCtx &eval_ctx, sql::Ex
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr is null", K(ret), K(expr));
     } else {
-      ObDatum &expr_datum = expr->locate_datum_for_write(eval_ctx);
+      ObDatum &expr_datum = expr->locate_expr_datum(eval_ctx);
       FLOG_INFO("print filter param", K(i), K(expr_datum));
     }
   }
