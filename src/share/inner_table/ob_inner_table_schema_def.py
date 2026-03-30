@@ -9100,6 +9100,8 @@ def_table_schema(
 # 592: __all_direct_load_stream
 # 593: __all_optstat_catalog_user_prefs
 # 594: __all_optstat_catalog_global_prefs
+# 595: __all_ss_gc_history
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
