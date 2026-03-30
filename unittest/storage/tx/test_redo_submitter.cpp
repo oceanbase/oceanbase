@@ -35,6 +35,7 @@ struct MockDelegate {
                                   ObTxLogCb *&log_cb,
                                   memtable::ObRedoLogSubmitHelper &helper,
                                   const int64_t replay_hint,
+                                  const bool has_hold_ctx_lock,
                                   share::SCN &submitted) = 0;
   virtual int fill_redo_log(memtable::ObTxFillRedoCtx &ctx) = 0;
 
@@ -43,10 +44,11 @@ struct MockImpl : MockDelegate {
   int a_;
   public:
   MOCK_CONST_METHOD0(is_parallel_logging, bool());
-  MOCK_METHOD5(submit_redo_log_out, int(ObTxLogBlock &,
+  MOCK_METHOD6(submit_redo_log_out, int(ObTxLogBlock &,
                                         ObTxLogCb *&,
                                         memtable::ObRedoLogSubmitHelper &,
                                         const int64_t,
+                                        const bool,
                                         share::SCN &));
   MOCK_METHOD1(fill_redo_log, int(memtable::ObTxFillRedoCtx &));
 };
@@ -94,6 +96,7 @@ int succ_submit_redo_log_out(ObTxLogBlock & b,
                              ObTxLogCb *& log_cb,
                              memtable::ObRedoLogSubmitHelper &h,
                              const int64_t replay_hint,
+                             const bool has_hold_ctx_lock,
                              share::SCN &submitted_scn)
 {
   submitted_scn.convert_for_tx(123123123);
@@ -113,9 +116,10 @@ int ObPartTransCtx::submit_redo_log_out(ObTxLogBlock &log_block,
                                         ObTxLogCb *&log_cb,
                                         memtable::ObRedoLogSubmitHelper &helper,
                                         const int64_t replay_hint,
+                                        const bool has_hold_ctx_lock,
                                         share::SCN &submitted_scn)
 {
-  return mock_ptr->submit_redo_log_out(log_block, log_cb, helper, replay_hint, submitted_scn);
+  return mock_ptr->submit_redo_log_out(log_block, log_cb, helper, replay_hint, has_hold_ctx_lock, submitted_scn);
 }
 }// transaction
 
@@ -155,7 +159,7 @@ TEST_F(ObTestRedoSubmitter, serial_submit_by_writer_thread_BLOCK_FROZEN)
         ctx.buf_pos_ = 200;
         return OB_BLOCK_FROZEN;
       }));
-    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_))
+    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_,_))
       .Times(1)
       .WillOnce(Invoke(succ_submit_redo_log_out));
     ObTxRedoSubmitter submitter(tx_ctx, mt_ctx);
@@ -178,7 +182,7 @@ TEST_F(ObTestRedoSubmitter, serial_submit_by_writer_thread_BUF_NOT_ENOUGH)
         ctx.buf_pos_ = 200;
         return OB_BUF_NOT_ENOUGH;
       }));
-    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_))
+    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_,_))
       .Times(1)
       .WillOnce(Invoke(succ_submit_redo_log_out));
     ObTxRedoSubmitter submitter(tx_ctx, mt_ctx);
@@ -201,7 +205,7 @@ TEST_F(ObTestRedoSubmitter, serial_submit_by_writer_thread_ALL_FILLED)
         ctx.buf_pos_ = 200;
         return OB_SUCCESS;
       }));
-    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_))
+    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_,_))
       .Times(1)
       .WillOnce(Invoke(succ_submit_redo_log_out));
     ObTxRedoSubmitter submitter(tx_ctx, mt_ctx);
@@ -224,7 +228,7 @@ TEST_F(ObTestRedoSubmitter, serial_submit_by_writer_thread_UNEXPECTED_ERROR)
         ctx.buf_pos_ = 200;
         return OB_ALLOCATE_MEMORY_FAILED;
       }));
-    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_))
+    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_,_))
       .Times(1)
       .WillOnce(Invoke(succ_submit_redo_log_out));
     ObTxRedoSubmitter submitter(tx_ctx, mt_ctx);
@@ -247,7 +251,7 @@ TEST_F(ObTestRedoSubmitter, serial_submit_by_writer_thread_serial_final)
         ctx.buf_pos_ = 200;
         return OB_SUCCESS;
       }));
-    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_))
+    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_,_))
       .Times(1)
       .WillOnce(Invoke(succ_submit_redo_log_out));
     ObTxRedoSubmitter submitter(tx_ctx, mt_ctx);
@@ -270,7 +274,7 @@ TEST_F(ObTestRedoSubmitter, parallel_submit_by_writer_thread_BLOCK_FROZEN)
         ctx.buf_pos_ = 200;
         return OB_BLOCK_FROZEN;
       }));
-    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_))
+    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_,_))
       .Times(1)
       .WillOnce(Invoke(succ_submit_redo_log_out));
     ObTxRedoSubmitter submitter(tx_ctx, mt_ctx);
@@ -294,7 +298,7 @@ TEST_F(ObTestRedoSubmitter, parallel_submit_by_writer_thread_BLOCKED_BY_OTHER_LI
         ctx.buf_pos_ = 200;
         return OB_ITER_END;
       }));
-    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_))
+    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_,_))
       .Times(1)
       .WillOnce(Invoke(succ_submit_redo_log_out));
     ObTxRedoSubmitter submitter(tx_ctx, mt_ctx);
@@ -318,7 +322,7 @@ TEST_F(ObTestRedoSubmitter, parallel_submit_by_writer_thread_ALL_FILLED)
         ctx.buf_pos_ = 200;
         return OB_SUCCESS;
       }));
-    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_))
+    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_,_))
       .Times(1)
       .WillOnce(Invoke(succ_submit_redo_log_out));
     ObTxRedoSubmitter submitter(tx_ctx, mt_ctx);
@@ -342,7 +346,7 @@ TEST_F(ObTestRedoSubmitter, parallel_submit_by_writer_thread_UNEXPECTED_ERROR)
         ctx.buf_pos_ = 200;
         return OB_ALLOCATE_MEMORY_FAILED;
       }));
-    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_))
+    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_,_))
       .Times(1)
       .WillOnce(Invoke(succ_submit_redo_log_out));
     ObTxRedoSubmitter submitter(tx_ctx, mt_ctx);
@@ -366,7 +370,7 @@ TEST_F(ObTestRedoSubmitter, submit_by_freeze_parallel_logging_BLOCK_FROZEN)
         ctx.buf_pos_ = 200;
         return OB_BLOCK_FROZEN;
       }));
-    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_))
+    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_,_))
       .Times(1)
       .WillOnce(Invoke(succ_submit_redo_log_out));
     EXPECT_CALL(mdo_, fill_redo_log(_))
@@ -398,7 +402,7 @@ TEST_F(ObTestRedoSubmitter, submit_by_freeze_parallel_logging_FROZEN_BLOCKED_BY_
         return OB_EAGAIN;
       }));
     // submit it out to log service layer
-    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_))
+    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_,_))
       .Times(1)
       .WillOnce(Invoke(succ_submit_redo_log_out));
     // retry from other lists, the list with small epoch flushed hit a block frozen
@@ -410,7 +414,7 @@ TEST_F(ObTestRedoSubmitter, submit_by_freeze_parallel_logging_FROZEN_BLOCKED_BY_
         return OB_BLOCK_FROZEN;
       }));
     // submit it out to log service layer
-    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_))
+    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_,_))
       .Times(1)
       .WillOnce(Invoke(succ_submit_redo_log_out));
     // retry from other list, can not submit others due to the list with min epoch is block frozen
@@ -442,7 +446,7 @@ TEST_F(ObTestRedoSubmitter, submit_by_freeze_parallel_logging_BUF_NOT_ENOUGH)
         ctx.buf_pos_ = 200;
         return OB_BUF_NOT_ENOUGH;
       }));
-    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_))
+    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_,_))
       .Times(1)
       .WillOnce(Invoke(succ_submit_redo_log_out));
     // the list with small epoch is all flushed
@@ -453,7 +457,7 @@ TEST_F(ObTestRedoSubmitter, submit_by_freeze_parallel_logging_BUF_NOT_ENOUGH)
         ctx.buf_pos_ = 200;
         return OB_EAGAIN;
       }));
-    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_))
+    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_,_))
       .Times(1)
       .WillOnce(Invoke(succ_submit_redo_log_out));
     // the second list with small epoch is all flushed
@@ -464,7 +468,7 @@ TEST_F(ObTestRedoSubmitter, submit_by_freeze_parallel_logging_BUF_NOT_ENOUGH)
         ctx.buf_pos_ = 200;
         return OB_EAGAIN;
       }));
-    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_))
+    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_,_))
       .Times(1)
       .WillOnce(Invoke(succ_submit_redo_log_out));
     // all list filled, nothing to fill
@@ -495,7 +499,7 @@ TEST_F(ObTestRedoSubmitter, submit_by_freeze_parallel_logging_ALL_FILLED)
         ctx.buf_pos_ = 200;
         return OB_SUCCESS;
       }));
-    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_))
+    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_,_))
       .Times(1)
       .WillOnce(Invoke(succ_submit_redo_log_out));
     ObTxRedoSubmitter submitter(tx_ctx, mt_ctx);
@@ -518,7 +522,7 @@ TEST_F(ObTestRedoSubmitter, submit_by_switch_leader_or_on_commit_serial_logging)
         ctx.buf_pos_ = 200;
         return OB_BLOCK_FROZEN;
       }));
-    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_))
+    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_,_))
       .Times(1)
       .WillOnce(Invoke(succ_submit_redo_log_out));
     ObTxRedoSubmitter submitter(tx_ctx, mt_ctx);
@@ -563,7 +567,7 @@ TEST_F(ObTestRedoSubmitter, submit_by_switch_leader_or_on_commit_parallel_loggin
         ctx.helper_->callbacks_.push_back(scope);
         return OB_SUCCESS;
       }));
-    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_))
+    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_,_))
       .Times(3)
       .WillRepeatedly(Invoke(succ_submit_redo_log_out));
     ObTxRedoSubmitter submitter(tx_ctx, mt_ctx);
@@ -606,7 +610,7 @@ TEST_F(ObTestRedoSubmitter, submit_by_switch_leader_or_on_commit_parallel_loggin
         ctx.buf_pos_ = 0;
         return OB_BLOCK_FROZEN;
       }));
-    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_))
+    EXPECT_CALL(mdo_, submit_redo_log_out(_,_,_,_,_,_))
       .Times(3)
       .WillRepeatedly(Invoke(succ_submit_redo_log_out));
     ObTxRedoSubmitter submitter(tx_ctx, mt_ctx);

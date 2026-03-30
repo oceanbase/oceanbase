@@ -82,15 +82,6 @@ ERRSIM_POINT_DEF(EN_COMPACTION_DATA_CHECKSUM_CO_BASE_SNAPSHOT_VERSION);
     }                                                                                                                        \
   } while (false)                                                                                                            \
 
-// Retry indefinitely when encountering a specific return code.
-// Assumption: the code block won't use `break/continue`, otherwise macro-as-control-structure semantics get tricky.
-// NOTE: requires an `int ret` variable in the surrounding scope.
-#define WITH_RET_CODE_RETRY(ret_code)                                                                       \
-  for (int retry_cnt = 0;                                                                                   \
-       (retry_cnt == 0) ? OB_SUCC(ret)                                                                      \
-                        : (((ret_code) == ret) ? (ret = OB_SUCCESS, true) : false);                         \
-       ++retry_cnt)
-
 ObTableStoreCache::ObTableStoreCache()
   : version_(0),
     length_(0),
@@ -4721,7 +4712,7 @@ int ObTablet::lock_row(
   } else if (OB_FAIL(guard.refresh_and_protect_memtable_for_write(relative_table))) {
     LOG_WARN("fail to protect table", K(ret), "tablet_id", tablet_meta_.tablet_id_);
   }
-  WITH_RET_CODE_RETRY(OB_MVCC_WRITE_CALLBACK_FREEZE_CLOCK_ORDER_DESCENDING) {
+  if (OB_SUCC(ret)) {
     ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), ObModIds::OB_STORE_ROW_LOCK_CHECKER));
     ObMemtable *write_memtable = nullptr;
     ObTableIterParam param;
@@ -4754,14 +4745,13 @@ int ObTablet::lock_row(
              || !rowkey.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument",
-               K(ret), K(relative_table), K(store_ctx), K(rowkey));
+                K(ret), K(relative_table), K(store_ctx), K(rowkey));
   } else if (OB_UNLIKELY(relative_table.get_tablet_id() != tablet_meta_.tablet_id_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet id doesn't match", K(ret), K(relative_table.get_tablet_id()), K(tablet_meta_.tablet_id_));
   } else if (OB_FAIL(guard.refresh_and_protect_memtable_for_write(relative_table))) {
     LOG_WARN("fail to protect table", K(ret));
-  }
-  WITH_RET_CODE_RETRY(OB_MVCC_WRITE_CALLBACK_FREEZE_CLOCK_ORDER_DESCENDING) {
+  } else {
     ObArenaAllocator allocator(common::ObMemAttr(MTL_ID(), ObModIds::OB_STORE_ROW_LOCK_CHECKER));
     ObMemtable *write_memtable = nullptr;
     ObTableIterParam param;
@@ -5435,7 +5425,7 @@ int ObTablet::update_row(
 {
   int ret = OB_SUCCESS;
 
-  WITH_RET_CODE_RETRY(OB_MVCC_WRITE_CALLBACK_FREEZE_CLOCK_ORDER_DESCENDING) {
+  {
     ObStorageTableGuard guard(this, store_ctx, true);
     ObMemtable *write_memtable = nullptr;
     const transaction::ObSerializeEncryptMeta *encrypt_meta = NULL;
@@ -5498,7 +5488,7 @@ int ObTablet::update_rows(
     ObRowsInfo &rows_info)
 {
   int ret = OB_SUCCESS;
-  WITH_RET_CODE_RETRY(OB_MVCC_WRITE_CALLBACK_FREEZE_CLOCK_ORDER_DESCENDING) {
+  {
     ObStorageTableGuard guard(this, store_ctx, true);
     ObMemtable *write_memtable = nullptr;
     const transaction::ObSerializeEncryptMeta *encrypt_meta = nullptr;
@@ -5556,7 +5546,7 @@ int ObTablet::insert_rows(
     ObRowsInfo &rows_info)
 {
   int ret = OB_SUCCESS;
-  WITH_RET_CODE_RETRY(OB_MVCC_WRITE_CALLBACK_FREEZE_CLOCK_ORDER_DESCENDING) {
+  {
     ObStorageTableGuard guard(this, store_ctx, true);
     ObMemtable *write_memtable = nullptr;
     const transaction::ObSerializeEncryptMeta *encrypt_meta = nullptr;
@@ -5618,7 +5608,7 @@ int ObTablet::insert_row(
     const common::ObIArray<transaction::ObEncryptMetaCache> *encrypt_meta_arr)
 {
   int ret = OB_SUCCESS;
-  WITH_RET_CODE_RETRY(OB_MVCC_WRITE_CALLBACK_FREEZE_CLOCK_ORDER_DESCENDING) {
+  {
     ObStorageTableGuard guard(this, store_ctx, true);
     ObMemtable *write_memtable = nullptr;
     const transaction::ObSerializeEncryptMeta *encrypt_meta = NULL;

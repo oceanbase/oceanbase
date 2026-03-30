@@ -45,6 +45,7 @@ int ObIMvccCtx::register_row_commit_cb(const storage::ObTableIterParam &param,
                                        ObMemtable *memtable)
 {
   int ret = OB_SUCCESS;
+  const bool is_replay = false;
   const bool is_non_unique_local_index = param.is_non_unique_local_index_;
 
   if (!res.has_insert()) {
@@ -80,6 +81,7 @@ int ObIMvccCtx::register_row_commit_cb(const storage::ObTableIterParam &param,
               node,
               data_size,
               old_row,
+              is_replay,
               seq_no,
               column_cnt,
               is_non_unique_local_index);
@@ -103,9 +105,7 @@ int ObIMvccCtx::register_row_commit_cb(const storage::ObTableIterParam &param,
           false);
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(append_callback(cb))) {
-          if (OB_MVCC_WRITE_CALLBACK_FREEZE_CLOCK_ORDER_DESCENDING != ret) {
-            TRANS_LOG(ERROR, "register callback failed", K(*this), K(ret));
-          }
+          TRANS_LOG(ERROR, "register callback failed", K(*this), K(ret));
           MTL(ObLockWaitMgr*)->erase_hash_holder_record(
             LockHashHelper::hash_rowkey(memtable->get_tablet_id(), *stored_key),
             cb->get_hash_holder_linker(),
@@ -114,9 +114,7 @@ int ObIMvccCtx::register_row_commit_cb(const storage::ObTableIterParam &param,
       } else {
         if (OB_FAIL(ret)) {
         } else if (OB_FAIL(append_callback(cb))) {
-          if (OB_MVCC_WRITE_CALLBACK_FREEZE_CLOCK_ORDER_DESCENDING != ret) {
             TRANS_LOG(ERROR, "register callback failed", K(*this), K(ret));
-          }
         }
       }
 
@@ -137,6 +135,7 @@ int ObIMvccCtx::register_row_commit_cb(const storage::ObTableIterParam &param,
                                        ObMemtable *memtable)
 {
   int ret = OB_SUCCESS;
+  const bool is_replay = false;
   const bool is_non_unique_local_index = param.is_non_unique_local_index_;
   ObMvccRowCallback *head = NULL;
   ObMvccRowCallback *tail = NULL;
@@ -177,6 +176,7 @@ int ObIMvccCtx::register_row_commit_cb(const storage::ObTableIterParam &param,
                 node,
                 data_size,
                 old_row,
+                is_replay,
                 seq_no,
                 column_cnt,
                 is_non_unique_local_index);
@@ -221,9 +221,7 @@ int ObIMvccCtx::register_row_commit_cb(const storage::ObTableIterParam &param,
         }
       }
       if (OB_FAIL(append_callback(head, tail, length))) {
-        if (OB_MVCC_WRITE_CALLBACK_FREEZE_CLOCK_ORDER_DESCENDING != ret) {
-          TRANS_LOG(ERROR, "register callback failed", K(*this), K(ret));
-        }
+        TRANS_LOG(ERROR, "register callback failed", K(*this), K(ret));
         for (int64_t i = 0; i < mvcc_results.count(); ++i) {
           ObMvccWriteResult &res = mvcc_results[i];
           if (res.has_insert()) {
@@ -241,9 +239,7 @@ int ObIMvccCtx::register_row_commit_cb(const storage::ObTableIterParam &param,
       }
     } else {
       if (OB_FAIL(append_callback(head, tail, length))) {
-        if (OB_MVCC_WRITE_CALLBACK_FREEZE_CLOCK_ORDER_DESCENDING != ret) {
-          TRANS_LOG(ERROR, "register callback failed", K(*this), K(ret));
-        }
+        TRANS_LOG(ERROR, "register callback failed", K(*this), K(ret));
       } else {
         TRANS_LOG(DEBUG, "register callback succeed", K(*this), K(ret),
                   KPC(head), KPC(tail), K(length), K(mvcc_results));
@@ -257,9 +253,7 @@ int ObIMvccCtx::register_row_commit_cb(const storage::ObTableIterParam &param,
       ObITransCallback *next = remove_cb->get_next();
       free_mvcc_row_callback(remove_cb);
       remove_cb = next;
-      if (OB_MVCC_WRITE_CALLBACK_FREEZE_CLOCK_ORDER_DESCENDING != ret) {
-        TRANS_LOG(WARN, "free failed mvcc row callback succeed", K(ret), KPC(remove_cb));
-      }
+      TRANS_LOG(WARN, "free failed mvcc row callback succeed", K(ret), KPC(remove_cb));
     }
     head = nullptr;
     tail = nullptr;
@@ -279,6 +273,7 @@ int ObIMvccCtx::register_row_replay_cb(
     const int64_t column_cnt)
 {
   int ret = OB_SUCCESS;
+  const bool is_replay = true;
   ObMvccRowCallback *cb = NULL;
   if (OB_ISNULL(key) || OB_ISNULL(value) || OB_ISNULL(node)
       || data_size <= 0 || OB_ISNULL(memtable)) {
@@ -293,6 +288,7 @@ int ObIMvccCtx::register_row_replay_cb(
             node,
             data_size,
             empty_old_row,
+            is_replay,
             seq_no,
             column_cnt,
             false/*is_non_unique_local_index_cb, not setted correctly now, fix later*/);
@@ -442,6 +438,22 @@ ObMvccRowCallback *ObIMvccCtx::alloc_row_callback(ObIMvccCtx &ctx, ObMvccRow &va
   }
   return cb;
 }
+
+ObMvccRowCallback *ObIMvccCtx::alloc_row_callback(ObMvccRowCallback &cb, ObMemtable *memtable)
+{
+  int ret = OB_SUCCESS;
+  void *cb_buffer = NULL;
+  ObMvccRowCallback *new_cb = NULL;
+  if (NULL == (cb_buffer = alloc_mvcc_row_callback())) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    TRANS_LOG(WARN, "alloc ObRowCB cb_buffer fail", K(ret));
+  } else if (NULL == (new_cb = new(cb_buffer) ObMvccRowCallback(cb, memtable))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    TRANS_LOG(WARN, "construct ObRowCB object fail", K(ret), "cb_buffer", cb_buffer);
+  }
+  return new_cb;
+}
+
 
 void ObIMvccCtx::check_row_callback_registration_between_stmt_()
 {

@@ -109,7 +109,6 @@ int ObLSTxLogAdapter::init(ObITxLogParam *param, ObTxTable *tx_table)
 }
 
 ERRSIM_POINT_DEF(ERRSIM_TX_NONBLOCK_SUBMIT_LOG);
-ERRSIM_POINT_DEF(EN_TX_NONBLOCK_SUBMIT_LOG_WITHOUT_RETRY);
 int ObLSTxLogAdapter::submit_log(const char *buf,
                                  const int64_t size,
                                  const SCN &base_scn,
@@ -186,7 +185,7 @@ int ObLSTxLogAdapter::submit_log(const char *buf,
         ob_usleep(sleep_us);
         cur_ts = ObTimeUtility::current_time();
       }
-    } while (OB_EAGAIN == ret && cur_ts < expire_us && EN_TX_NONBLOCK_SUBMIT_LOG_WITHOUT_RETRY == OB_SUCCESS);
+    } while (OB_EAGAIN == ret && cur_ts < expire_us);
 
   }
   TRANS_LOG(DEBUG, "ObLSTxLogAdapter::submit_ls_log", KR(ret), KP(cb));
