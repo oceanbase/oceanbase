@@ -161,7 +161,6 @@ int ObExprUsecToTime::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_exp
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
   rt_expr.eval_func_ = calc_usec_to_time_expr;
-  rt_expr.eval_vector_func_ = calc_usec_to_time_vector;
   return ret;
 }
 }

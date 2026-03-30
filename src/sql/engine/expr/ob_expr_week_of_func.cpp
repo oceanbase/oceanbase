@@ -61,13 +61,6 @@ int ObExprWeekOfYear::cg_expr(ObExprCGCtx &op_cg_ctx,
     LOG_WARN("children of weekofyear expr is null", K(ret), K(rt_expr.args_));
   } else {
     rt_expr.eval_func_ = ObExprWeekOfYear::calc_weekofyear;
-    // The vectorization of other types for the expression not completed yet.
-    if (ob_is_datetime_or_mysql_datetime_tc(rt_expr.args_[0]->datum_meta_.type_)
-        || ob_is_date_or_mysql_date(rt_expr.args_[0]->datum_meta_.type_)
-        || (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0 &&
-            ob_is_string_tc(rt_expr.args_[0]->datum_meta_.type_))) {
-      rt_expr.eval_vector_func_ = ObExprWeekOfYear::calc_weekofyear_vector;
-    }
   }
   return ret;
 }
@@ -593,14 +586,6 @@ int ObExprWeek::cg_expr(ObExprCGCtx &op_cg_ctx,
     LOG_WARN("second child of week expr is null", K(ret), K(rt_expr.args_));
   } else {
     rt_expr.eval_func_ = ObExprWeek::calc_week;
-    // The vectorization of other types for the expression not completed yet.
-    if ((ob_is_date_or_mysql_date(rt_expr.args_[0]->datum_meta_.type_)
-         || ob_is_datetime_or_mysql_datetime_tc(rt_expr.args_[0]->datum_meta_.type_))
-        //  || ob_is_string_tc(rt_expr.args_[0]->datum_meta_.type_))
-        && ((2 == rt_expr.arg_cnt_ && ObIntType == rt_expr.args_[1]->datum_meta_.type_)
-            || 1 == rt_expr.arg_cnt_)) {
-      rt_expr.eval_vector_func_ = ObExprWeek::calc_week_vector;
-    }
   }
   return ret;
 }

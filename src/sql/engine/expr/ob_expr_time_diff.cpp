@@ -116,11 +116,6 @@ int ObExprTimeDiff::cg_expr(ObExprCGCtx &op_cg_ctx,
     LOG_WARN("children of timediff expr is null", K(ret), K(rt_expr.args_));
   } else {
     rt_expr.eval_func_ = ObExprTimeDiff::calc_timediff;
-    // The vectorization of other types for the expression not completed yet.
-    if (ob_is_string_tc(rt_expr.args_[0]->datum_meta_.type_)
-        && ob_is_string_tc(rt_expr.args_[1]->datum_meta_.type_)) {
-      rt_expr.eval_vector_func_ = ObExprTimeDiff::calc_timediff_vector;
-    }
   }
   return ret;
 }

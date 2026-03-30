@@ -56,10 +56,6 @@ int ObExprTime::cg_expr(ObExprCGCtx &op_cg_ctx, const ObRawExpr &raw_expr, ObExp
     LOG_WARN("children of time expr is null", K(ret), K(rt_expr.args_));
   } else {
     rt_expr.eval_func_ = ObExprTime::calc_time;
-    // The vectorization of other types for the expression not completed yet.
-    if (ob_is_time_tc(rt_expr.args_[0]->datum_meta_.type_)) {
-      rt_expr.eval_vector_func_ = ObExprTime::calc_time_vector;
-    }
   }
   return ret;
 }
@@ -108,14 +104,6 @@ int ObExprTimeBase::cg_expr(ObExprCGCtx &op_cg_ctx,
     const ObObjTypeClass arg_tc = ob_obj_type_class(rt_expr.args_[0]->datum_meta_.type_);
     if(get_type() == T_FUN_SYS_DAY_NAME) {
       rt_expr.eval_func_ = ObExprDayName::calc_dayname;
-      // The vectorization of other types for the expression not completed yet.
-      if (ob_is_date_or_mysql_date(rt_expr.args_[0]->datum_meta_.type_)
-            || ob_is_datetime_or_mysql_datetime_tc(rt_expr.args_[0]->datum_meta_.type_)
-            || (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0 &&
-                (ob_is_string_tc(rt_expr.args_[0]->datum_meta_.type_) ||
-                 ob_is_int_uint_tc(rt_expr.args_[0]->datum_meta_.type_)))) {
-        rt_expr.eval_vector_func_ = ObExprDayName::calc_dayname_vector;
-      }
     } else {
       switch (dt_type_) {
         case DT_HOUR :
@@ -156,36 +144,12 @@ int ObExprTimeBase::cg_expr(ObExprCGCtx &op_cg_ctx,
           break;
         case DT_MDAY :
           rt_expr.eval_func_ = ObExprDayOfMonth::calc_dayofmonth;
-          // The vectorization of other types for the expression not completed yet.
-          if (ob_is_date_or_mysql_date(rt_expr.args_[0]->datum_meta_.type_)
-                || ob_is_datetime_or_mysql_datetime_tc(rt_expr.args_[0]->datum_meta_.type_)
-                || (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0 &&
-                    (ob_is_string_tc(rt_expr.args_[0]->datum_meta_.type_) ||
-                    ob_is_int_uint_tc(rt_expr.args_[0]->datum_meta_.type_)))) {
-            rt_expr.eval_vector_func_ = ObExprDayOfMonth::calc_dayofmonth_vector;
-          }
           break;
         case DT_WDAY :
           rt_expr.eval_func_ = ObExprDayOfWeek::calc_dayofweek;
-          // The vectorization of other types for the expression not completed yet.
-          if (ob_is_date_or_mysql_date(rt_expr.args_[0]->datum_meta_.type_)
-                || ob_is_datetime_or_mysql_datetime_tc(rt_expr.args_[0]->datum_meta_.type_)
-                || (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0 &&
-                    (ob_is_string_tc(rt_expr.args_[0]->datum_meta_.type_) ||
-                    ob_is_int_uint_tc(rt_expr.args_[0]->datum_meta_.type_)))) {
-            rt_expr.eval_vector_func_ = ObExprDayOfWeek::calc_dayofweek_vector;
-          }
           break;
         case DT_YDAY :
           rt_expr.eval_func_ = ObExprDayOfYear::calc_dayofyear;
-          // The vectorization of other types for the expression not completed yet.
-          if (ob_is_date_or_mysql_date(rt_expr.args_[0]->datum_meta_.type_)
-                || ob_is_datetime_or_mysql_datetime_tc(rt_expr.args_[0]->datum_meta_.type_)
-                || (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0 &&
-                    (ob_is_string_tc(rt_expr.args_[0]->datum_meta_.type_) ||
-                    ob_is_int_uint_tc(rt_expr.args_[0]->datum_meta_.type_)))) {
-            rt_expr.eval_vector_func_ = ObExprDayOfYear::calc_dayofyear_vector;
-          }
           break;
         case DT_YEAR :
           rt_expr.eval_func_ = ObExprYear::calc_year;
