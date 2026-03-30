@@ -2894,6 +2894,14 @@ int ObPLExecuteArg::obtain_routine(ObExecContext &ctx,
       } else {
         OX (routine_ = static_cast<ObPLFunction*>(inner_exec_info->cache_obj_.get_cache_obj()));
       }
+#ifdef OB_BUILD_ORACLE_PL
+      if (OB_SUCC(ret) && OB_NOT_NULL(ctx.get_my_session())) {
+        ObPLCodeCoverage *code_coverage = ctx.get_my_session()->get_pl_code_coverage();
+        if (OB_NOT_NULL(code_coverage)) {
+          OZ (code_coverage->add_vaild_rows_info_recursive(*routine_));
+        }
+      }
+#endif
       OX (is_first_execute_ = false);
     }
   }
