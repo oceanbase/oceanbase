@@ -17,6 +17,7 @@
 #include "sql/optimizer/ob_logical_operator.h"
 #include "sql/optimizer/ob_log_operator_factory.h"
 #include "sql/optimizer/ob_optimizer_context.h"
+#include "lib/utility/ob_tracepoint.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "lib/utility/ob_macro_utils.h"
 #include "sql/rewrite/ob_transform_utils.h"
@@ -777,6 +778,7 @@ int ObGroupByPushDownPlanRewriter::can_pushdown_groupby(ObLogGroupBy *groupby, b
     OPT_TRACE("groupby is three stage aggr, skip");
   } else {
     // 2. 收集聚合函数
+    bool is_valid_aggr = true;
     for (int64_t i = 0; OB_SUCC(ret) && i < groupby->get_aggr_funcs().count(); ++i) {
       ObRawExpr *raw_expr = groupby->get_aggr_funcs().at(i);
       ObAggFunRawExpr *aggr_expr = NULL;
@@ -789,11 +791,17 @@ int ObGroupByPushDownPlanRewriter::can_pushdown_groupby(ObLogGroupBy *groupby, b
       } else if (OB_FALSE_IT(aggr_expr = static_cast<ObAggFunRawExpr *>(raw_expr))) {
       } else if (OB_FAIL(aggr_items.push_back(aggr_expr))) {
         LOG_WARN("failed to push back aggr expr", K(ret));
+      } else if ((OB_E(EventTable::EN_PARTIAL_GROUP_BY_PUSHDOWN_CONTROLER) OB_SUCCESS) == OB_SUCCESS &&
+                 raw_expr->get_expr_type() != T_FUN_MIN && raw_expr->get_expr_type() != T_FUN_MAX) {
+        is_valid_aggr = false;
+        can_push = false;
+        OPT_TRACE("aggr type is not min/max, cannot push down partial groupby");
+        break;
       }
     }
     // 3. 检查是否满足 only_full_group_by
     bool is_only_full_group_by = false;
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(ret) || !is_valid_aggr) {
       // do nothing
     } else if (OB_FAIL(ObTransformUtils::check_stmt_is_only_full_group_by(
                         static_cast<const ObSelectStmt*>(stmt),
