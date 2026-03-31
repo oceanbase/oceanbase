@@ -27,22 +27,10 @@ int ObNewColumnCommonDecoder::decode(
     common::ObDatum &datum) const
 {
   int ret = OB_SUCCESS;
-  // it is sure that col_param can not be nullptr here
-  const ObObj &def_cell = col_param->get_orig_default_value();
-  if (OB_FAIL(datum.from_obj(def_cell))) {
-    LOG_WARN("Failed to transfer obj to datum", K(ret), K(def_cell));
-  } else if (def_cell.is_lob_storage() && !def_cell.is_null()) {
-    // lob def value must have no lob header when not null
-    // When do lob decode, should add lob header for default value
-    ObString data = datum.get_string();
-    ObString out;
-    if (OB_FAIL(ObLobManager::fill_lob_header(*allocator, data, out))) {
-      LOG_WARN("failed to fill lob header for column", K(ret), K(def_cell), K(data));
-    } else {
-      datum.set_string(out);
-    }
+  if (OB_FAIL(get_default_datum(*col_param, *allocator, datum))) {
+    LOG_WARN("Failed to get default datum", K(ret), KPC(col_param), KP(allocator));
   }
-  LOG_DEBUG("[NEW_COLUMN_DECODE] decode new column", K(def_cell), K(datum), K(lbt()));
+  LOG_DEBUG("[NEW_COLUMN_DECODE] decode new column", K(datum), K(lbt()));
   return ret;
 }
 
@@ -135,16 +123,22 @@ int ObNewColumnCommonDecoder::get_null_count(
 
 int ObNewColumnCommonDecoder::read_distinct(
     const ObColumnParam *col_param,
+    ObIAllocator &allocator,
     storage::ObGroupByCellBase &group_by_cell) const
 {
   int ret = OB_SUCCESS;
-  common::ObDatum *datums = group_by_cell.get_group_by_col_datums_to_fill();
-  if (OB_FAIL(datums[0].from_obj(col_param->get_orig_default_value(), ObDatum::get_obj_datum_map_type(col_param->get_orig_default_value().get_type())))) {
-    LOG_WARN("Failed to from storage datum", K(ret), K(col_param->get_orig_default_value()));
+  if (OB_ISNULL(col_param)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected null column param", K(ret));
   } else {
-    group_by_cell.set_distinct_cnt(1);
+    common::ObDatum *datums = group_by_cell.get_group_by_col_datums_to_fill();
+    if (OB_FAIL(get_default_datum(*col_param, allocator, datums[0]))) {
+      LOG_WARN("Failed to get default datum", K(ret), KPC(col_param));
+    } else {
+      group_by_cell.set_distinct_cnt(1);
+    }
+    LOG_DEBUG("[NEW_COLUMN_DECODE] read distinct", K(group_by_cell.get_group_by_col_offset()), KPC(datums), K(lbt()));
   }
-  LOG_DEBUG("[NEW_COLUMN_DECODE] read distinct", K(group_by_cell.get_group_by_col_offset()), KPC(datums), K(lbt()));
   return ret;
 }
 
@@ -157,6 +151,30 @@ int ObNewColumnCommonDecoder::read_reference(
   MEMSET(ref_buf, 0, sizeof(uint32_t) * row_cap);
   group_by_cell.set_ref_cnt(row_cap);
   LOG_DEBUG("[NEW_COLUMN_DECODE] read refrence", K(row_cap), K(group_by_cell.get_group_by_col_offset()), K(lbt()));
+  return ret;
+}
+
+int ObNewColumnCommonDecoder::get_default_datum(const ObColumnParam &col_param,
+                                                ObIAllocator &allocator,
+                                                ObDatum &datum)
+{
+  INIT_SUCC(ret);
+  const ObObj &def_obj = col_param.get_orig_default_value();
+  const ObObjMeta obj_meta = col_param.get_meta_type();
+  if (OB_FAIL(datum.from_obj(def_obj))) {
+    LOG_WARN("convert obj to datum failed", K(def_obj));
+  } else if (!def_obj.is_null() && obj_meta.is_lob_storage()) {
+    // lob def value must have no lob header when not null
+    // When do lob pushdown, should add lob header for default value
+    ObString data = datum.get_string();
+    ObString out;
+    if (OB_FAIL(ObLobManager::fill_lob_header(allocator, data, out))) {
+      LOG_WARN("failed to fill lob header for column", K(ret), K(def_obj),
+               K(data));
+    } else {
+      datum.set_string(out);
+    }
+  }
   return ret;
 }
 

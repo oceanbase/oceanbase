@@ -101,7 +101,7 @@ public:
       const ObColumnCSDecoderCtx &ctx,
       storage::ObGroupByCellBase &group_by_cell) const override
   {
-    return common_decoder_.read_distinct(ctx.get_col_param(), group_by_cell);
+    return common_decoder_.read_distinct(ctx.get_col_param(), *ctx.get_allocator(), group_by_cell);
   }
 
   virtual int read_reference(

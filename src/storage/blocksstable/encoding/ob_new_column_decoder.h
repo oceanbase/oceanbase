@@ -56,11 +56,17 @@ public:
 
   int read_distinct(
       const ObColumnParam *col_param,
+      ObIAllocator &allocator,
       storage::ObGroupByCellBase &group_by_cell) const;
 
   int read_reference(
       const int64_t row_cap,
       storage::ObGroupByCellBase &group_by_cell) const;
+
+  static int get_default_datum(
+        const ObColumnParam &col_param,
+        ObIAllocator &allocator,
+        ObDatum &datum);
 
   int get_distinct_count(int64_t &distinct_count) const { distinct_count = 1; return OB_SUCCESS; }
   bool is_new_column() const { return true; }
@@ -150,7 +156,7 @@ public:
       const char **cell_datas,
       storage::ObGroupByCellBase &group_by_cell)  const override
   {
-    return common_decoder_.read_distinct(ctx.col_param_, group_by_cell);
+    return common_decoder_.read_distinct(ctx.col_param_, *ctx.allocator_, group_by_cell);
   }
 
   virtual int read_reference(
