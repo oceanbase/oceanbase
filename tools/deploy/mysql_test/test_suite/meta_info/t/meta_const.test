@@ -1,7 +1,7 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-# owner: jingfeng.jf
+# owner: chenxiansen.cxs
 # owner group: SQL1
 # Test of functions
 
@@ -13,34 +13,34 @@ alter system flush plan cache global;
 connection default;
 
 --enable_metadata
-select 3;
-select 3.4;
-select 3.000000000000000000000000001;
+select /*+ use_plan_cache(none) */ 3;
+select /*+ use_plan_cache(none) */ 3.4;
+select /*+ use_plan_cache(none) */ 3.000000000000000000000000001;
 
-select -3;
-select -3.4;
-select -3.000000000000000000000000001;
+select /*+ use_plan_cache(none) */ -3;
+select /*+ use_plan_cache(none) */ -3.4;
+select /*+ use_plan_cache(none) */ -3.000000000000000000000000001;
 
-select 1, 11, 111, 1111, 11111, 111111, 1111111, 11111111, 111111111, 1111111111,11111111111, 111111111111;
-select TIMESTAMP '2012-12-31 11:30:45', TIMESTAMP '2012-12-31 11:30:45.1', TIMESTAMP '2012-12-31 11:30:45.11', TIMESTAMP '2012-12-31 11:30:45.111', TIMESTAMP '2012-12-31 11:30:45.1111', TIMESTAMP '2012-12-31 11:30:45.11111', TIMESTAMP '2012-12-31 11:30:45.111111';
-select TIME '11:30:45', TIME '11:30:45.111111', TIME '11:30:45.11111', TIME '11:30:45.1111', TIME '11:30:45.111', TIME '11:30:45.11', TIME '11:30:45.1';
-select date '1998-09-09';
-select TIMESTAMP '2012-2-1 11:30:45';
-select TIME '11:5:45';
-select date '1998-9-9';
-SELECT X'4D7953514C';
+select /*+ use_plan_cache(none) */ 1, 11, 111, 1111, 11111, 111111, 1111111, 11111111, 111111111, 1111111111,11111111111, 111111111111;
+select /*+ use_plan_cache(none) */ TIMESTAMP '2012-12-31 11:30:45', TIMESTAMP '2012-12-31 11:30:45.1', TIMESTAMP '2012-12-31 11:30:45.11', TIMESTAMP '2012-12-31 11:30:45.111', TIMESTAMP '2012-12-31 11:30:45.1111', TIMESTAMP '2012-12-31 11:30:45.11111', TIMESTAMP '2012-12-31 11:30:45.111111';
+select /*+ use_plan_cache(none) */ TIME '11:30:45', TIME '11:30:45.111111', TIME '11:30:45.11111', TIME '11:30:45.1111', TIME '11:30:45.111', TIME '11:30:45.11', TIME '11:30:45.1';
+select /*+ use_plan_cache(none) */ date '1998-09-09';
+select /*+ use_plan_cache(none) */ TIMESTAMP '2012-2-1 11:30:45';
+select /*+ use_plan_cache(none) */ TIME '11:5:45';
+select /*+ use_plan_cache(none) */ date '1998-9-9';
+SELECT /*+ use_plan_cache(none) */ X'4D7953514C';
 #SELECT 0x0a+0;
-SELECT 0x5061756c;
-SELECT 0x636174;
-SELECT TRUE, true, FALSE, false;
+SELECT /*+ use_plan_cache(none) */ 0x5061756c;
+SELECT /*+ use_plan_cache(none) */ 0x636174;
+SELECT /*+ use_plan_cache(none) */ TRUE, true, FALSE, false;
 
-select 'abcde';
-select '我爱你';
-select '我e爱a你t';
-select '';
-select ' ';
-select '0x10';
-select '0810';
+select /*+ use_plan_cache(none) */ 'abcde';
+select /*+ use_plan_cache(none) */ '我爱你';
+select /*+ use_plan_cache(none) */ '我e爱a你t';
+select /*+ use_plan_cache(none) */ '';
+select /*+ use_plan_cache(none) */ ' ';
+select /*+ use_plan_cache(none) */ '0x10';
+select /*+ use_plan_cache(none) */ '0810';
 
 --disable_warnings
 drop table if exists t1;

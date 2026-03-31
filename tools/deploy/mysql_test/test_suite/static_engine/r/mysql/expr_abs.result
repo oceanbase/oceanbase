@@ -130,8 +130,8 @@ Query Plan
 ==========================================
 Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(1 AND 0, BIGINT(-1, 0)))]), filter(nil)
-      values({abs(cast(1 AND 0, BIGINT(-1, 0)))})
+  0 - output([abs(1 AND 0)]), filter(nil)
+      values({abs(1 AND 0)})
 select abs(10/0);
 +-----------+
 | abs(10/0) |
@@ -254,7 +254,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t1, BIGINT(-1, 0)))]), filter(nil), rowset=16
+  0 - output([abs(t.t1)]), filter(nil), rowset=16
       access([t.t1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -274,7 +274,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t2, BIGINT(-1, 0)))]), filter(nil), rowset=16
+  0 - output([abs(t.t2)]), filter(nil), rowset=16
       access([t.t2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -294,7 +294,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t3, BIGINT(-1, 0)))]), filter(nil), rowset=16
+  0 - output([abs(t.t3)]), filter(nil), rowset=16
       access([t.t3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -314,7 +314,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t4, BIGINT(-1, 0)))]), filter(nil), rowset=16
+  0 - output([abs(t.t4)]), filter(nil), rowset=16
       access([t.t4]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -354,7 +354,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t6, BIGINT UNSIGNED(-1, 0)))]), filter(nil), rowset=16
+  0 - output([abs(t.t6)]), filter(nil), rowset=16
       access([t.t6]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -374,7 +374,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t7, BIGINT UNSIGNED(-1, 0)))]), filter(nil), rowset=16
+  0 - output([abs(t.t7)]), filter(nil), rowset=16
       access([t.t7]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -394,7 +394,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t8, BIGINT UNSIGNED(-1, 0)))]), filter(nil), rowset=16
+  0 - output([abs(t.t8)]), filter(nil), rowset=16
       access([t.t8]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true
@@ -414,7 +414,7 @@ Query Plan
 ===============================================
 Outputs & filters:
 -------------------------------------
-  0 - output([abs(cast(t.t9, BIGINT UNSIGNED(-1, 0)))]), filter(nil), rowset=16
+  0 - output([abs(t.t9)]), filter(nil), rowset=16
       access([t.t9]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t.__pk_increment]), range(MIN ; MAX)always true

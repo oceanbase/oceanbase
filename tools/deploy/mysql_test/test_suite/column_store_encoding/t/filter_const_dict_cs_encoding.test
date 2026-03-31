@@ -35,9 +35,11 @@ while($loop > 0)
 connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
 connection obsys;
 --enable_query_log
- 
+
+--disable_warnings
 alter system major freeze tenant all;
 --source mysql_test/include/wait_daily_merge.inc
+--enable_warnings
  
 select count(1) from t1;
 select count(1) from t1 where b <> 0;

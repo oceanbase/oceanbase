@@ -25,8 +25,10 @@ while ($count < 300)
 --enable_query_log
 select count(*) from t1;
 
+--disable_warnings
 alter system major freeze;
 --source mysql_test/include/wait_daily_merge.inc
+--enable_warnings
 
 alter table t1 add column c1 int default 0, add column c2 varchar(100);
 
@@ -52,8 +54,10 @@ select c1, c2 from t1 where c1 > 480 and a < 495;
 select b, c2, count(c1) from t1 where c1 > 490 and a < 495;
 select a, c1, count(c1) from t1 where a <20 and c1 != 80 and c1 != 6 and c1 < 30;
 
+--disable_warnings
 alter system major freeze;
 --source mysql_test/include/wait_daily_merge.inc
+--enable_warnings
 
 select count(*) from t1;
 

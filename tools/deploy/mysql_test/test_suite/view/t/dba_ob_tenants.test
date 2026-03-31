@@ -78,6 +78,8 @@ EXPLAIN BASIC select tenant_name,status from DBA_OB_TENANTS where tenant_name = 
 # 6.2 访问了__all_virtual_tenant_info的列，期望查询到__all_tenant_info表
 EXPLAIN BASIC select tenant_role,switchover_status from DBA_OB_TENANTS where tenant_name = 'tenant1';
 
+EXPLAIN BASIC select zone_unit_num_list from DBA_OB_TENANTS where tenant_name = 'tenant1';
+
 drop tenant if exists tenant1 force;
 drop resource pool if exists pool_tenant1;
 drop resource unit if exists test_unit;

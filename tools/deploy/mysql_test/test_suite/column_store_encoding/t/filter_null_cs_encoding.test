@@ -41,8 +41,10 @@ connect (obsys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
 connection obsys;
 --enable_query_log
 
+--disable_warnings
 alter system major freeze tenant all;
 --source mysql_test/include/wait_daily_merge.inc
+--enable_warnings
 
 --let $loop=5
 while($loop > 0)

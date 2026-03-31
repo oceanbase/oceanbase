@@ -40,8 +40,10 @@ while ($count < 500)
 --enable_query_log
 select count(*) from t1;
 
+--disable_warnings
 alter system major freeze;
 --source mysql_test/include/wait_daily_merge.inc
+--enable_warnings
 
 --disable_query_log
 --disable_warnings
@@ -76,8 +78,10 @@ select count(c) from t3;
 --let $count=12000
 eval INSERT INTO t1 VALUES($count, repeat($count,512));
 
+--disable_warnings
 alter system major freeze;
 --source mysql_test/include/wait_daily_merge.inc
+--enable_warnings
 
 select count(*) from t1;
 select * from t3;

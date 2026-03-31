@@ -198,7 +198,7 @@ Outputs & filters:
  10 - output([s.acctnbr], [s.balcatcd], [s.baltypcd], [a.acctnbr], [a.curracctstatcd]), filter(nil), rowset=16
       (#keys=1, [s.acctnbr]), is_single, dop=1
  11 - output([s.acctnbr], [s.balcatcd], [s.baltypcd], [a.acctnbr], [a.curracctstatcd]), filter(nil), rowset=16
-      distinct([s.acctnbr], [s.balcatcd], [s.baltypcd]), partial
+      distinct([s.acctnbr], [s.balcatcd], [s.baltypcd], [a.acctnbr], [a.curracctstatcd]), partial
  12 - output([s.acctnbr], [s.balcatcd], [s.baltypcd], [a.acctnbr], [a.curracctstatcd]), filter(nil), rowset=16
       equal_conds([s.acctnbr = a.acctnbr]), other_conds(nil)
       merge_directions([ASC])

@@ -373,15 +373,15 @@ id	v
 1	100
 insert into t(id) values(2),(10002);
 commit;
-ERROR HY000: Deadlock
+ERROR HY000: Deadlock found when trying to get lock
 select * from t where id = 10001;
-ERROR HY000: Deadlock
+ERROR HY000: Deadlock found when trying to get lock
 insert into t(id) values(10003);
-ERROR HY000: Deadlock
+ERROR HY000: Deadlock found when trying to get lock
 select * from t where id = 1;
-ERROR HY000: Deadlock
+ERROR HY000: Deadlock found when trying to get lock
 insert into t(id) values(3);
-ERROR HY000: Deadlock
+ERROR HY000: Deadlock found when trying to get lock
 commit;
 ERROR 40000: Transaction rollbacked
 "------------ 12 deadlock kill tx on orig, sync extra -------------
@@ -405,15 +405,15 @@ id	v
 12	100
 insert into t(id) values(212),(10122);
 commit;
-ERROR HY000: Deadlock
+ERROR HY000: Deadlock found when trying to get lock
 select * from t where id = 10012;
-ERROR HY000: Deadlock
+ERROR HY000: Deadlock found when trying to get lock
 insert into t(id) values(10123);
-ERROR HY000: Deadlock
+ERROR HY000: Deadlock found when trying to get lock
 select * from t where id = 12;
-ERROR HY000: Deadlock
+ERROR HY000: Deadlock found when trying to get lock
 insert into t(id) values(123);
-ERROR HY000: Deadlock
+ERROR HY000: Deadlock found when trying to get lock
 commit;
 ERROR 40000: Transaction rollbacked
 "------------- X - special query types ----------------------"

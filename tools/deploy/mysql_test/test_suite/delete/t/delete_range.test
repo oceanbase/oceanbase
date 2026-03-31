@@ -1,7 +1,7 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-# owner: xiaoyi.xy
+# owner: zg410411
 # owner group: SQL3
 # description: 本case是为了测试delete 一个range内的数据
 # tags: delete,dml

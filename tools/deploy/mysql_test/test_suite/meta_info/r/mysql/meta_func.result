@@ -94,7 +94,7 @@ CEMPNUM
 create table t3(a int, b decimal, c varchar(10));
 select ifnull(0, 0.0);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					ifnull(0, 0.0)	246	23	3	Y	32896	1	63
+def					ifnull(0, 0.0)	246	23	3	N	32897	1	63
 ifnull(0, 0.0)
 0.0
 insert into t3 values(0, 2.4, "123");
@@ -106,6 +106,41 @@ def					ifnull(a, b)	246	12	1	Y	32896	0	63
 def					ifnull(a, c)	253	44	1	Y	0	0	45
 ifnull(a, b)	ifnull(a, c)
 0	0
+select ifnull(null, 1);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def					ifnull(null, 1)	8	20	1	N	32897	0	63
+ifnull(null, 1)
+1
+select ifnull(1, null);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def					ifnull(1, null)	8	20	1	N	32897	0	63
+ifnull(1, null)
+1
+select ifnull(1, 1);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def					ifnull(1, 1)	8	20	1	N	32897	0	63
+ifnull(1, 1)
+1
+select ifnull(null, null);
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def					ifnull(null, null)	6	0	0	Y	32896	0	63
+ifnull(null, null)
+NULL
+select ifnull(a, null) from t3;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def					ifnull(a, null)	8	20	1	Y	32896	0	63
+ifnull(a, null)
+0
+select ifnull(null, a) from t3;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def					ifnull(null, a)	8	11	1	Y	32896	0	63
+ifnull(null, a)
+0
+select ifnull(a, a) from t3;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def					ifnull(a, a)	3	11	1	Y	32896	0	63
+ifnull(a, a)
+0
 drop table t1,t2, t3;
 create table t3k(c1 timestamp(6), c2 datetime(5), c3 timestamp(3), c4 datetime(5), c5 datetime(2));
 select UNIX_TIMESTAMP(c1), UNIX_TIMESTAMP(c2), UNIX_TIMESTAMP(c3), UNIX_TIMESTAMP(c4), UNIX_TIMESTAMP(c5) from t3k;

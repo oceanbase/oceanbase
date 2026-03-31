@@ -1,4 +1,4 @@
-# owner: dachuan.sdc
+# owner: wenkai.cwk
 # owner group: SQL2
 # tag: expr
 --disable_abort_on_error
@@ -44,3 +44,7 @@ connection conn_admin;
 select timediff("12:34:56.123", "13:33:22.34567");
 select timediff("13:34:23.01","13:34:23.002");
 select timediff("13:34:23.01","13:34:23.02");
+
+connection default;
+--echo bugfix: dima 2026032000114767332
+select timediff("", '12:00:00') from t1;

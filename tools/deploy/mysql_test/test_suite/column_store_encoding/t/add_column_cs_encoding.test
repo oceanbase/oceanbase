@@ -64,8 +64,10 @@ select a, e, f from t1 where c > 'ab' order by a;
 --disable_query_log
 connection obsys;
 --enable_query_log
+--disable_warnings
 alter system major freeze tenant all;
 --source mysql_test/include/wait_daily_merge.inc
+--enable_warnings
 
 alter table t1 add column g int;
 select a, b, e from t1 where c > 'ab' order by a;

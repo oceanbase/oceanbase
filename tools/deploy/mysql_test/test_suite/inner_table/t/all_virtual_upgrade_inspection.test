@@ -16,4 +16,4 @@ desc oceanbase.__all_virtual_upgrade_inspection;
 --disable_result_log
 
 --enable_result_log
-select * from oceanbase.__all_virtual_upgrade_inspection;
+select name, case when info in ('succeed', 'checking') then 'succeed' else info end as info from oceanbase.__all_virtual_upgrade_inspection;

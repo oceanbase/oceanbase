@@ -7,7 +7,7 @@ set @@session.explicit_defaults_for_timestamp=off;
 #description: test pl bugs [Aone]
 
 --result_format 4
-
+--source mysql_test/include/enable_proxy_tmp_table.inc
 --disable_query_log
 --disable_result_log
 --source mysql_test/include/index_quick_major.inc
@@ -486,27 +486,27 @@ drop table t4;
 drop procedure pro_hr;
 drop view v2;
 
-#### 
-#delimiter /;
-#--disable_warnings
-#drop temporary table if exists temp_t/
-#drop procedure if exists bug36021834/
-#--enable_warnings
-#
-#--error 0,1064
-#create procedure bug36021834()
-#begin
-#  create temporary table temp_t ( c1 VARCHAR(50));
-#  insert into temp_t values('create temp table in pl');
-#end/
-#
-#call bug36021834()/
-#select * from temp_t/
-#
-#delimiter ;/
-#
-#drop temporary table temp_t;
-#drop procedure bug36021834;
+### 
+delimiter /;
+--disable_warnings
+drop temporary table if exists temp_t/
+drop procedure if exists bug36021834/
+--enable_warnings
+
+--error 0,1064
+create procedure bug36021834()
+begin
+  create temporary table temp_t ( c1 VARCHAR(50));
+  insert into temp_t values('create temp table in pl');
+end/
+
+call bug36021834()/
+select * from temp_t/
+
+delimiter ;/
+
+drop temporary table temp_t;
+drop procedure bug36021834;
 
 ### 
 --disable_warnings
@@ -847,3 +847,4 @@ select f2//
 drop function f2//
 
 delimiter ;//
+--source mysql_test/include/disable_proxy_tmp_table.inc

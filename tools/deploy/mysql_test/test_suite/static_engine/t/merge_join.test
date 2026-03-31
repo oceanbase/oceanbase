@@ -10,7 +10,7 @@ connection conn_admin;
 connection default;
 
 --disable_warnings
-drop table if exists pk_t, t1, t2, t3, t4;
+drop table if exists pk_t, t1, t2, t3, t4, t5, t6;
 --enable_warnings
 
 create table pk_t(pk int primary key, c2 int);
@@ -18,11 +18,14 @@ create table t1(c1 int, c2 int);
 create table t2(c1 int, c2 int);
 create table t3(c1 int, c2 int);
 create table t4(c1 int, c2 int);
+create table t5(a int, b int, primary key (a));
+create table t6(a int, b int, primary key (a));
 insert/*trace*/ into pk_t values(2,2),(3,3), (6,6), (7, 7);
 insert/*trace*/ into t1 values(NULL, 8), (NULL, 8), (2,2),(2,2), (3,3), (3,3), (4,4), (4,4),(7,7),(7, 7);
 insert/*trace*/ into t2 values(NULL, 3),(1, 1), (1,1), (2,2), (3,3), (6,6),(6,6),(9,9), (10,10);
 insert/*trace*/ into t3 values(1,3), (2,2);
 insert/*trace*/ into t4 values(1,2), (1,2), (2,3);
+insert/*trace*/ into t5 values(1,1),(2,2),(3,3),(4,4),(5,5),(6,6),(7,7),(8,8),(9,9);
 
 connection conn_admin;
 connection default;
@@ -96,11 +99,17 @@ select /*+use_merge(pk_t t1) leading(pk_t t1)*/ * from pk_t, t1 where pk_t.pk = 
 --echo
 select/*+use_merge(t3 t4) leading(t3 t4)*/ * from t3 left join t4 on t3.c1 = t4.c1 and t3.c2 < t4.c2;
 
+--echo
+select /*+ OPT_PARAM('enable_rich_vector_format', 'FALSE') ordered use_merge(t6)*/* from t5 left join t6 on t5.a = t6.a;
+select /*+ OPT_PARAM('enable_rich_vector_format', 'TRUE') ordered use_merge(t6)*/* from t5 left join t6 on t5.a = t6.a;
+
 drop table pk_t;
 drop table t1;
 drop table t2;
 drop table t3;
 drop table t4;
+drop table t5;
+drop table t6;
 
 connection conn_admin;
 --sleep 2

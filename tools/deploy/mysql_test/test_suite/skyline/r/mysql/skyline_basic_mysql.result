@@ -2004,7 +2004,7 @@ Outputs & filters:
   0 - output([t6.a]), filter(nil), rowset=16
       limit(9), offset(nil)
   1 - output([t6.a]), filter(nil), rowset=16
-      group([t6.c]), agg_func(nil)
+      group([t6.c]), agg_func(nil), limit(9)
   2 - output([t6.a], [t6.c]), filter(nil), rowset=16
       access([t6.a], [t6.c]), partitions(p0)
       is_index_back=false, is_global_index=false, 
@@ -4699,7 +4699,6 @@ Optimization Info:
       table_dop:1
       dop_method:Table DOP
       avaiable_index_name:[t11i1, t11]
-      pruned_index_name:[t11]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
       estimation method:[DEFAULT, STORAGE]

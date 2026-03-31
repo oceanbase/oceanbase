@@ -11,27 +11,27 @@ c1	c2	c3
 4	4	4
 5	5	5
 6	6	6
-explain update /*+ parallel(3) enable_parallel_dml */ t1 set c2 = 3;
+explain basic update /*+ parallel(3) enable_parallel_dml */ t1 set c2 = 3;
 Query Plan
-=============================================================================================
-|ID|OPERATOR                                              |NAME       |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------------------------------------
-|0 |PX COORDINATOR                                        |           |6       |167         |
-|1 |└─EXCHANGE OUT DISTR                                  |:EX10003   |6       |164         |
-|2 |  └─INDEX INSERT                                      |t1(t1_idx1)|6       |162         |
-|3 |    └─EXCHANGE IN DISTR                               |           |6       |118         |
-|4 |      └─EXCHANGE OUT DISTR (PKEY HASH)                |:EX10002   |6       |117         |
-|5 |        └─MATERIAL                                    |           |6       |115         |
-|6 |          └─INDEX DELETE                              |t1(t1_idx1)|6       |115         |
-|7 |            └─EXCHANGE IN DISTR                       |           |6       |78          |
-|8 |              └─EXCHANGE OUT DISTR (PKEY HASH)        |:EX10001   |6       |77          |
-|9 |                └─MATERIAL                            |           |6       |75          |
-|10|                  └─UPDATE                            |           |6       |75          |
-|11|                    └─EXCHANGE IN DISTR               |           |6       |6           |
-|12|                      └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000   |6       |5           |
-|13|                        └─PX BLOCK ITERATOR           |           |6       |3           |
-|14|                          └─TABLE FULL SCAN           |t1         |6       |3           |
-=============================================================================================
+=======================================================================
+|ID|OPERATOR                                              |NAME       |
+-----------------------------------------------------------------------
+|0 |PX COORDINATOR                                        |           |
+|1 |└─EXCHANGE OUT DISTR                                  |:EX10003   |
+|2 |  └─INDEX INSERT                                      |t1(t1_idx1)|
+|3 |    └─EXCHANGE IN DISTR                               |           |
+|4 |      └─EXCHANGE OUT DISTR (PKEY HASH)                |:EX10002   |
+|5 |        └─MATERIAL                                    |           |
+|6 |          └─INDEX DELETE                              |t1(t1_idx1)|
+|7 |            └─EXCHANGE IN DISTR                       |           |
+|8 |              └─EXCHANGE OUT DISTR (PKEY HASH)        |:EX10001   |
+|9 |                └─MATERIAL                            |           |
+|10|                  └─UPDATE                            |           |
+|11|                    └─EXCHANGE IN DISTR               |           |
+|12|                      └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000   |
+|13|                        └─PX BLOCK ITERATOR           |           |
+|14|                          └─TABLE FULL SCAN           |t1         |
+=======================================================================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil), rowset=16
@@ -85,27 +85,27 @@ c2	c1
 2	1
 4	2
 6	3
-explain update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
+explain basic update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
 Query Plan
-===================================================================================================
-|ID|OPERATOR                                              |NAME             |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------------------------------------------
-|0 |PX COORDINATOR                                        |                 |3       |103         |
-|1 |└─EXCHANGE OUT DISTR                                  |:EX10003         |3       |102         |
-|2 |  └─INDEX INSERT                                      |pindex(pindex_i2)|3       |101         |
-|3 |    └─EXCHANGE IN DISTR                               |                 |3       |75          |
-|4 |      └─EXCHANGE OUT DISTR (HASH)                     |:EX10002         |3       |75          |
-|5 |        └─MATERIAL                                    |                 |3       |74          |
-|6 |          └─INDEX DELETE                              |pindex(pindex_i2)|3       |74          |
-|7 |            └─EXCHANGE IN DISTR                       |                 |3       |52          |
-|8 |              └─EXCHANGE OUT DISTR (HASH)             |:EX10001         |3       |52          |
-|9 |                └─MATERIAL                            |                 |3       |51          |
-|10|                  └─UPDATE                            |                 |3       |51          |
-|11|                    └─EXCHANGE IN DISTR               |                 |3       |4           |
-|12|                      └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000         |3       |4           |
-|13|                        └─PX BLOCK ITERATOR           |                 |3       |3           |
-|14|                          └─TABLE FULL SCAN           |pindex           |3       |3           |
-===================================================================================================
+=============================================================================
+|ID|OPERATOR                                              |NAME             |
+-----------------------------------------------------------------------------
+|0 |PX COORDINATOR                                        |                 |
+|1 |└─EXCHANGE OUT DISTR                                  |:EX10003         |
+|2 |  └─INDEX INSERT                                      |pindex(pindex_i2)|
+|3 |    └─EXCHANGE IN DISTR                               |                 |
+|4 |      └─EXCHANGE OUT DISTR (HASH)                     |:EX10002         |
+|5 |        └─MATERIAL                                    |                 |
+|6 |          └─INDEX DELETE                              |pindex(pindex_i2)|
+|7 |            └─EXCHANGE IN DISTR                       |                 |
+|8 |              └─EXCHANGE OUT DISTR (HASH)             |:EX10001         |
+|9 |                └─MATERIAL                            |                 |
+|10|                  └─UPDATE                            |                 |
+|11|                    └─EXCHANGE IN DISTR               |                 |
+|12|                      └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000         |
+|13|                        └─PX BLOCK ITERATOR           |                 |
+|14|                          └─TABLE FULL SCAN           |pindex           |
+=============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil), rowset=16
@@ -162,27 +162,27 @@ c2	c1
 NULL	1
 NULL	2
 NULL	3
-explain update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
+explain basic update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
 Query Plan
-===================================================================================================
-|ID|OPERATOR                                              |NAME             |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------------------------------------------
-|0 |PX COORDINATOR                                        |                 |3       |103         |
-|1 |└─EXCHANGE OUT DISTR                                  |:EX10003         |3       |102         |
-|2 |  └─INDEX INSERT                                      |pindex(pindex_i2)|3       |101         |
-|3 |    └─EXCHANGE IN DISTR                               |                 |3       |75          |
-|4 |      └─EXCHANGE OUT DISTR (HASH)                     |:EX10002         |3       |75          |
-|5 |        └─MATERIAL                                    |                 |3       |74          |
-|6 |          └─INDEX DELETE                              |pindex(pindex_i2)|3       |74          |
-|7 |            └─EXCHANGE IN DISTR                       |                 |3       |52          |
-|8 |              └─EXCHANGE OUT DISTR (HASH)             |:EX10001         |3       |52          |
-|9 |                └─MATERIAL                            |                 |3       |51          |
-|10|                  └─UPDATE                            |                 |3       |51          |
-|11|                    └─EXCHANGE IN DISTR               |                 |3       |4           |
-|12|                      └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000         |3       |4           |
-|13|                        └─PX BLOCK ITERATOR           |                 |3       |3           |
-|14|                          └─TABLE FULL SCAN           |pindex           |3       |3           |
-===================================================================================================
+=============================================================================
+|ID|OPERATOR                                              |NAME             |
+-----------------------------------------------------------------------------
+|0 |PX COORDINATOR                                        |                 |
+|1 |└─EXCHANGE OUT DISTR                                  |:EX10003         |
+|2 |  └─INDEX INSERT                                      |pindex(pindex_i2)|
+|3 |    └─EXCHANGE IN DISTR                               |                 |
+|4 |      └─EXCHANGE OUT DISTR (HASH)                     |:EX10002         |
+|5 |        └─MATERIAL                                    |                 |
+|6 |          └─INDEX DELETE                              |pindex(pindex_i2)|
+|7 |            └─EXCHANGE IN DISTR                       |                 |
+|8 |              └─EXCHANGE OUT DISTR (HASH)             |:EX10001         |
+|9 |                └─MATERIAL                            |                 |
+|10|                  └─UPDATE                            |                 |
+|11|                    └─EXCHANGE IN DISTR               |                 |
+|12|                      └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000         |
+|13|                        └─PX BLOCK ITERATOR           |                 |
+|14|                          └─TABLE FULL SCAN           |pindex           |
+=============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil), rowset=16
@@ -237,27 +237,27 @@ c2	c1
 2	1
 4	2
 6	3
-explain update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
+explain basic update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
 Query Plan
-===================================================================================================
-|ID|OPERATOR                                              |NAME             |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------------------------------------------
-|0 |PX COORDINATOR                                        |                 |3       |103         |
-|1 |└─EXCHANGE OUT DISTR                                  |:EX10003         |3       |102         |
-|2 |  └─INDEX INSERT                                      |pindex(pindex_i2)|3       |101         |
-|3 |    └─EXCHANGE IN DISTR                               |                 |3       |75          |
-|4 |      └─EXCHANGE OUT DISTR (PKEY HASH)                |:EX10002         |3       |75          |
-|5 |        └─MATERIAL                                    |                 |3       |74          |
-|6 |          └─INDEX DELETE                              |pindex(pindex_i2)|3       |74          |
-|7 |            └─EXCHANGE IN DISTR                       |                 |3       |52          |
-|8 |              └─EXCHANGE OUT DISTR (PKEY HASH)        |:EX10001         |3       |52          |
-|9 |                └─MATERIAL                            |                 |3       |51          |
-|10|                  └─UPDATE                            |                 |3       |51          |
-|11|                    └─EXCHANGE IN DISTR               |                 |3       |4           |
-|12|                      └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000         |3       |4           |
-|13|                        └─PX BLOCK ITERATOR           |                 |3       |3           |
-|14|                          └─TABLE FULL SCAN           |pindex           |3       |3           |
-===================================================================================================
+=============================================================================
+|ID|OPERATOR                                              |NAME             |
+-----------------------------------------------------------------------------
+|0 |PX COORDINATOR                                        |                 |
+|1 |└─EXCHANGE OUT DISTR                                  |:EX10003         |
+|2 |  └─INDEX INSERT                                      |pindex(pindex_i2)|
+|3 |    └─EXCHANGE IN DISTR                               |                 |
+|4 |      └─EXCHANGE OUT DISTR (PKEY HASH)                |:EX10002         |
+|5 |        └─MATERIAL                                    |                 |
+|6 |          └─INDEX DELETE                              |pindex(pindex_i2)|
+|7 |            └─EXCHANGE IN DISTR                       |                 |
+|8 |              └─EXCHANGE OUT DISTR (PKEY HASH)        |:EX10001         |
+|9 |                └─MATERIAL                            |                 |
+|10|                  └─UPDATE                            |                 |
+|11|                    └─EXCHANGE IN DISTR               |                 |
+|12|                      └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000         |
+|13|                        └─PX BLOCK ITERATOR           |                 |
+|14|                          └─TABLE FULL SCAN           |pindex           |
+=============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil), rowset=16
@@ -301,27 +301,27 @@ c2	c1
 2	1
 4	2
 6	3
-explain update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
+explain basic update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
 Query Plan
-=====================================================================================================
-|ID|OPERATOR                                                |NAME             |EST.ROWS|EST.TIME(us)|
------------------------------------------------------------------------------------------------------
-|0 |PX COORDINATOR                                          |                 |3       |103         |
-|1 |└─EXCHANGE OUT DISTR                                    |:EX10003         |3       |102         |
-|2 |  └─INDEX INSERT                                        |pindex(pindex_i2)|3       |101         |
-|3 |    └─EXCHANGE IN DISTR                                 |                 |3       |75          |
-|4 |      └─EXCHANGE OUT DISTR (HASH)                       |:EX10002         |3       |75          |
-|5 |        └─MATERIAL                                      |                 |3       |74          |
-|6 |          └─INDEX DELETE                                |pindex(pindex_i2)|3       |74          |
-|7 |            └─EXCHANGE IN DISTR                         |                 |3       |52          |
-|8 |              └─EXCHANGE OUT DISTR (HASH)               |:EX10001         |3       |52          |
-|9 |                └─MATERIAL                              |                 |3       |51          |
-|10|                  └─UPDATE                              |                 |3       |51          |
-|11|                    └─EXCHANGE IN DISTR                 |                 |3       |4           |
-|12|                      └─EXCHANGE OUT DISTR (PKEY RANDOM)|:EX10000         |3       |4           |
-|13|                        └─PX BLOCK ITERATOR             |                 |3       |3           |
-|14|                          └─TABLE FULL SCAN             |pindex           |3       |3           |
-=====================================================================================================
+===============================================================================
+|ID|OPERATOR                                                |NAME             |
+-------------------------------------------------------------------------------
+|0 |PX COORDINATOR                                          |                 |
+|1 |└─EXCHANGE OUT DISTR                                    |:EX10003         |
+|2 |  └─INDEX INSERT                                        |pindex(pindex_i2)|
+|3 |    └─EXCHANGE IN DISTR                                 |                 |
+|4 |      └─EXCHANGE OUT DISTR (HASH)                       |:EX10002         |
+|5 |        └─MATERIAL                                      |                 |
+|6 |          └─INDEX DELETE                                |pindex(pindex_i2)|
+|7 |            └─EXCHANGE IN DISTR                         |                 |
+|8 |              └─EXCHANGE OUT DISTR (HASH)               |:EX10001         |
+|9 |                └─MATERIAL                              |                 |
+|10|                  └─UPDATE                              |                 |
+|11|                    └─EXCHANGE IN DISTR                 |                 |
+|12|                      └─EXCHANGE OUT DISTR (PKEY RANDOM)|:EX10000         |
+|13|                        └─PX BLOCK ITERATOR             |                 |
+|14|                          └─TABLE FULL SCAN             |pindex           |
+===============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil), rowset=16
@@ -378,27 +378,27 @@ c2	c1
 NULL	1
 NULL	2
 NULL	3
-explain update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
+explain basic update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
 Query Plan
-=====================================================================================================
-|ID|OPERATOR                                                |NAME             |EST.ROWS|EST.TIME(us)|
------------------------------------------------------------------------------------------------------
-|0 |PX COORDINATOR                                          |                 |3       |104         |
-|1 |└─EXCHANGE OUT DISTR                                    |:EX10003         |3       |102         |
-|2 |  └─INDEX INSERT                                        |pindex(pindex_i2)|3       |101         |
-|3 |    └─EXCHANGE IN DISTR                                 |                 |3       |76          |
-|4 |      └─EXCHANGE OUT DISTR (HASH)                       |:EX10002         |3       |75          |
-|5 |        └─MATERIAL                                      |                 |3       |74          |
-|6 |          └─INDEX DELETE                                |pindex(pindex_i2)|3       |74          |
-|7 |            └─EXCHANGE IN DISTR                         |                 |3       |52          |
-|8 |              └─EXCHANGE OUT DISTR (HASH)               |:EX10001         |3       |52          |
-|9 |                └─MATERIAL                              |                 |3       |51          |
-|10|                  └─UPDATE                              |                 |3       |51          |
-|11|                    └─EXCHANGE IN DISTR                 |                 |3       |4           |
-|12|                      └─EXCHANGE OUT DISTR (PKEY RANDOM)|:EX10000         |3       |4           |
-|13|                        └─PX BLOCK ITERATOR             |                 |3       |3           |
-|14|                          └─TABLE FULL SCAN             |pindex           |3       |3           |
-=====================================================================================================
+===============================================================================
+|ID|OPERATOR                                                |NAME             |
+-------------------------------------------------------------------------------
+|0 |PX COORDINATOR                                          |                 |
+|1 |└─EXCHANGE OUT DISTR                                    |:EX10003         |
+|2 |  └─INDEX INSERT                                        |pindex(pindex_i2)|
+|3 |    └─EXCHANGE IN DISTR                                 |                 |
+|4 |      └─EXCHANGE OUT DISTR (HASH)                       |:EX10002         |
+|5 |        └─MATERIAL                                      |                 |
+|6 |          └─INDEX DELETE                                |pindex(pindex_i2)|
+|7 |            └─EXCHANGE IN DISTR                         |                 |
+|8 |              └─EXCHANGE OUT DISTR (HASH)               |:EX10001         |
+|9 |                └─MATERIAL                              |                 |
+|10|                  └─UPDATE                              |                 |
+|11|                    └─EXCHANGE IN DISTR                 |                 |
+|12|                      └─EXCHANGE OUT DISTR (PKEY RANDOM)|:EX10000         |
+|13|                        └─PX BLOCK ITERATOR             |                 |
+|14|                          └─TABLE FULL SCAN             |pindex           |
+===============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil), rowset=16
@@ -453,27 +453,27 @@ c2	c1
 2	1
 4	2
 6	3
-explain update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
+explain basic update /*+ parallel(3) enable_parallel_dml */ pindex set c2 = c3, c3 = 5;
 Query Plan
-=====================================================================================================
-|ID|OPERATOR                                                |NAME             |EST.ROWS|EST.TIME(us)|
------------------------------------------------------------------------------------------------------
-|0 |PX COORDINATOR                                          |                 |3       |104         |
-|1 |└─EXCHANGE OUT DISTR                                    |:EX10003         |3       |102         |
-|2 |  └─INDEX INSERT                                        |pindex(pindex_i2)|3       |101         |
-|3 |    └─EXCHANGE IN DISTR                                 |                 |3       |76          |
-|4 |      └─EXCHANGE OUT DISTR (PKEY HASH)                  |:EX10002         |3       |75          |
-|5 |        └─MATERIAL                                      |                 |3       |74          |
-|6 |          └─INDEX DELETE                                |pindex(pindex_i2)|3       |74          |
-|7 |            └─EXCHANGE IN DISTR                         |                 |3       |53          |
-|8 |              └─EXCHANGE OUT DISTR (PKEY HASH)          |:EX10001         |3       |52          |
-|9 |                └─MATERIAL                              |                 |3       |51          |
-|10|                  └─UPDATE                              |                 |3       |51          |
-|11|                    └─EXCHANGE IN DISTR                 |                 |3       |4           |
-|12|                      └─EXCHANGE OUT DISTR (PKEY RANDOM)|:EX10000         |3       |4           |
-|13|                        └─PX BLOCK ITERATOR             |                 |3       |3           |
-|14|                          └─TABLE FULL SCAN             |pindex           |3       |3           |
-=====================================================================================================
+===============================================================================
+|ID|OPERATOR                                                |NAME             |
+-------------------------------------------------------------------------------
+|0 |PX COORDINATOR                                          |                 |
+|1 |└─EXCHANGE OUT DISTR                                    |:EX10003         |
+|2 |  └─INDEX INSERT                                        |pindex(pindex_i2)|
+|3 |    └─EXCHANGE IN DISTR                                 |                 |
+|4 |      └─EXCHANGE OUT DISTR (PKEY HASH)                  |:EX10002         |
+|5 |        └─MATERIAL                                      |                 |
+|6 |          └─INDEX DELETE                                |pindex(pindex_i2)|
+|7 |            └─EXCHANGE IN DISTR                         |                 |
+|8 |              └─EXCHANGE OUT DISTR (PKEY HASH)          |:EX10001         |
+|9 |                └─MATERIAL                              |                 |
+|10|                  └─UPDATE                              |                 |
+|11|                    └─EXCHANGE IN DISTR                 |                 |
+|12|                      └─EXCHANGE OUT DISTR (PKEY RANDOM)|:EX10000         |
+|13|                        └─PX BLOCK ITERATOR             |                 |
+|14|                          └─TABLE FULL SCAN             |pindex           |
+===============================================================================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil), rowset=16
@@ -507,27 +507,27 @@ drop table pindex;
 create table pindex(a int primary key, b int) partition by hash(a) partitions 2;
 create unique index idx_b on pindex(b) global;
 insert into pindex values(1, NULL);
-explain update /*+parallel(2), enable_parallel_dml*/ pindex set b=2;
+explain basic update /*+parallel(2), enable_parallel_dml*/ pindex set b=2;
 Query Plan
-===============================================================================================
-|ID|OPERATOR                                              |NAME         |EST.ROWS|EST.TIME(us)|
------------------------------------------------------------------------------------------------
-|0 |PX COORDINATOR                                        |             |1       |60          |
-|1 |└─EXCHANGE OUT DISTR                                  |:EX10003     |1       |59          |
-|2 |  └─INDEX INSERT                                      |pindex(idx_b)|1       |59          |
-|3 |    └─EXCHANGE IN DISTR                               |             |1       |46          |
-|4 |      └─EXCHANGE OUT DISTR (HASH)                     |:EX10002     |1       |46          |
-|5 |        └─MATERIAL                                    |             |1       |46          |
-|6 |          └─INDEX DELETE                              |pindex(idx_b)|1       |46          |
-|7 |            └─EXCHANGE IN DISTR                       |             |1       |34          |
-|8 |              └─EXCHANGE OUT DISTR (HASH)             |:EX10001     |1       |34          |
-|9 |                └─MATERIAL                            |             |1       |34          |
-|10|                  └─UPDATE                            |             |1       |34          |
-|11|                    └─EXCHANGE IN DISTR               |             |1       |2           |
-|12|                      └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000     |1       |2           |
-|13|                        └─PX BLOCK ITERATOR           |             |1       |2           |
-|14|                          └─TABLE FULL SCAN           |pindex(idx_b)|1       |2           |
-===============================================================================================
+=========================================================================
+|ID|OPERATOR                                              |NAME         |
+-------------------------------------------------------------------------
+|0 |PX COORDINATOR                                        |             |
+|1 |└─EXCHANGE OUT DISTR                                  |:EX10003     |
+|2 |  └─INDEX INSERT                                      |pindex(idx_b)|
+|3 |    └─EXCHANGE IN DISTR                               |             |
+|4 |      └─EXCHANGE OUT DISTR (HASH)                     |:EX10002     |
+|5 |        └─MATERIAL                                    |             |
+|6 |          └─INDEX DELETE                              |pindex(idx_b)|
+|7 |            └─EXCHANGE IN DISTR                       |             |
+|8 |              └─EXCHANGE OUT DISTR (HASH)             |:EX10001     |
+|9 |                └─MATERIAL                            |             |
+|10|                  └─UPDATE                            |             |
+|11|                    └─EXCHANGE IN DISTR               |             |
+|12|                      └─EXCHANGE OUT DISTR (PKEY HASH)|:EX10000     |
+|13|                        └─PX BLOCK ITERATOR           |             |
+|14|                          └─TABLE FULL SCAN           |pindex(idx_b)|
+=========================================================================
 Outputs & filters:
 -------------------------------------
   0 - output(nil), filter(nil), rowset=16

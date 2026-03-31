@@ -1,4 +1,4 @@
-# owner: jingfeng.jf
+# owner: chenxiansen.cxs
 # owner group: SQL1
 # Test of functions
 
@@ -57,6 +57,13 @@ create table t3(a int, b decimal, c varchar(10));
 select ifnull(0, 0.0);
 insert into t3 values(0, 2.4, "123");
 select ifnull(a, b), ifnull(a, c) from t3;
+select ifnull(null, 1);
+select ifnull(1, null);
+select ifnull(1, 1);
+select ifnull(null, null);
+select ifnull(a, null) from t3;
+select ifnull(null, a) from t3;
+select ifnull(a, a) from t3;
 drop table t1,t2, t3;
 
 create table t3k(c1 timestamp(6), c2 datetime(5), c3 timestamp(3), c4 datetime(5), c5 datetime(2));

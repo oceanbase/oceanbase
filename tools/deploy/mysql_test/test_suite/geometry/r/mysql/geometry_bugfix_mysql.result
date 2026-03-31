@@ -265,14 +265,14 @@ x	y	st_astext(poi)
 1.111111	1.211111	LINESTRING(1.211111 1.111111,1.311111 1.211111)
 select executions, hit_count, substring(query_sql, 1, 100) as sql_text from oceanbase.GV$OB_PLAN_CACHE_PLAN_STAT where query_sql like '%x,y,poi%' order by plan_size desc limit 10;
 executions	hit_count	sql_text
-0	0	select executions, hit_count, substring(query_sql, 1, 100) as sql_text from oceanbase.GV$OB_PLAN_CAC
 1	0	insert into gis_point_plancache (x,y,poi) values (88.9200873939389,-70.01650134265074,st_srid(point(
-1	0	insert into gis_point_plancache (x,y,poi) values (-51.28971091880538,-16.112290993511024,st_srid(poi
 1	0	insert into gis_point_plancache (x,y,poi) values (66.70676602312597,68.49638658511424,st_srid(point(
 1	0	insert into gis_point_plancache (x,y,poi) values (-135.24378902766549,-45.111689570279204,st_srid(po
+1	0	insert into gis_point_plancache (x,y,poi) values (-51.28971091880538,-16.112290993511024,st_srid(poi
 1	0	insert into gis_point_plancache (x,y,poi) values (1.1, 1.2, st_srid(linestring(point(1.1, 1.2), poin
 1	0	insert into gis_point_plancache (x,y,poi) values (1.111, 1.211, st_srid(linestring(point(1.111, 1.21
 1	0	insert into gis_point_plancache (x,y,poi) values (1.111111, 1.211111, st_srid(linestring(point(1.111
+0	0	select executions, hit_count, substring(query_sql, 1, 100) as sql_text from oceanbase.GV$OB_PLAN_CAC
 drop table gis_point_plancache;
 select json_array(1.1, 1.1, 1.1);
 json_array(1.1, 1.1, 1.1)
@@ -389,7 +389,7 @@ Query Plan
 ======================================================
 |ID|OPERATOR        |NAME      |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------
-|0 |TABLE RANGE SCAN|tt1(idx05)|1       |158         |
+|0 |TABLE RANGE SCAN|tt1(idx05)|2       |294         |
 ======================================================
 Outputs & filters:
 -------------------------------------
@@ -693,7 +693,7 @@ Query Plan
 ===============================================================================
 |ID|OPERATOR        |NAME                               |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------------
-|0 |TABLE RANGE SCAN|highway_621(idx_the_geom_highway_6)|1       |448         |
+|0 |TABLE RANGE SCAN|highway_621(idx_the_geom_highway_6)|2       |639         |
 ===============================================================================
 Outputs & filters:
 -------------------------------------

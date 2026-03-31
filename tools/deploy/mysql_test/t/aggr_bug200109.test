@@ -1,7 +1,7 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-# owner: yuchen.wyc
+# owner: zhuhuashi.zhs
 # owner group: sql4
 # description: group by count测试
 # bug http://bugfree.corp.taobao.com/bug/200109

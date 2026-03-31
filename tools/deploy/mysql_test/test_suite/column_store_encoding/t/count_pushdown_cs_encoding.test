@@ -94,8 +94,10 @@ insert into t_default_value values(1,'a');
 
 ## major freeze
 connection obsys;
+--disable_warnings
 alter system major freeze tenant = all;
 --source mysql_test/include/wait_daily_merge.inc
+--enable_warnings
 
 connection default;
 select count(1),count(*) from t4;

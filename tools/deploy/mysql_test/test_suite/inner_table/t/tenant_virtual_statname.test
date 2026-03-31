@@ -1,7 +1,7 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-#owner: xiaoyi.xy
+# owner: zongmei.zzm
 #owner group : storage
 #description : __tenant_virtual_statname
 

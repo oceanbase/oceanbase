@@ -201,7 +201,7 @@ Query Plan
 ============================================================================
 |ID|OPERATOR        |NAME                            |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------
-|0 |TABLE RANGE SCAN|receivable_items(idx_unit_point)|1       |158         |
+|0 |TABLE RANGE SCAN|receivable_items(idx_unit_point)|2       |267         |
 ============================================================================
 Outputs & filters:
 -------------------------------------
@@ -228,7 +228,7 @@ Query Plan
 ==============================================================================
 |ID|OPERATOR        |NAME                              |EST.ROWS|EST.TIME(us)|
 ------------------------------------------------------------------------------
-|0 |TABLE RANGE SCAN|receivable_items(idx_unit_polygon)|1       |158         |
+|0 |TABLE RANGE SCAN|receivable_items(idx_unit_polygon)|2       |267         |
 ==============================================================================
 Outputs & filters:
 -------------------------------------
@@ -255,7 +255,7 @@ Query Plan
 =================================================================================
 |ID|OPERATOR        |NAME                                 |EST.ROWS|EST.TIME(us)|
 ---------------------------------------------------------------------------------
-|0 |TABLE RANGE SCAN|receivable_items(idx_unit_multipoint)|1       |158         |
+|0 |TABLE RANGE SCAN|receivable_items(idx_unit_multipoint)|2       |267         |
 =================================================================================
 Outputs & filters:
 -------------------------------------
@@ -282,7 +282,7 @@ Query Plan
 ================================================================================
 |ID|OPERATOR        |NAME                                |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------------------------
-|0 |TABLE RANGE SCAN|receivable_items(idx_unit_multiline)|1       |158         |
+|0 |TABLE RANGE SCAN|receivable_items(idx_unit_multiline)|2       |267         |
 ================================================================================
 Outputs & filters:
 -------------------------------------
@@ -309,7 +309,7 @@ Query Plan
 ================================================================================
 |ID|OPERATOR        |NAME                                |EST.ROWS|EST.TIME(us)|
 --------------------------------------------------------------------------------
-|0 |TABLE RANGE SCAN|receivable_items(idx_unit_multipoly)|1       |158         |
+|0 |TABLE RANGE SCAN|receivable_items(idx_unit_multipoly)|2       |267         |
 ================================================================================
 Outputs & filters:
 -------------------------------------
@@ -336,7 +336,7 @@ Query Plan
 ============================================================================
 |ID|OPERATOR        |NAME                            |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------
-|0 |TABLE RANGE SCAN|receivable_items(idx_unit_range)|1       |158         |
+|0 |TABLE RANGE SCAN|receivable_items(idx_unit_range)|2       |267         |
 ============================================================================
 Outputs & filters:
 -------------------------------------
@@ -366,7 +366,7 @@ Query Plan
 ============================================================================
 |ID|OPERATOR        |NAME                            |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------
-|0 |TABLE RANGE SCAN|receivable_items(idx_unit_range)|1       |532         |
+|0 |TABLE RANGE SCAN|receivable_items(idx_unit_range)|2       |641         |
 ============================================================================
 Outputs & filters:
 -------------------------------------
@@ -460,7 +460,7 @@ Query Plan
 ============================================================================
 |ID|OPERATOR        |NAME                            |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------
-|0 |TABLE RANGE SCAN|receivable_items(idx_unit_range)|1       |448         |
+|0 |TABLE RANGE SCAN|receivable_items(idx_unit_range)|2       |639         |
 ============================================================================
 Outputs & filters:
 -------------------------------------
@@ -581,7 +581,7 @@ Query Plan
 ============================================================================
 |ID|OPERATOR        |NAME                            |EST.ROWS|EST.TIME(us)|
 ----------------------------------------------------------------------------
-|0 |TABLE RANGE SCAN|receivable_items(idx_unit_range)|1       |448         |
+|0 |TABLE RANGE SCAN|receivable_items(idx_unit_range)|2       |639         |
 ============================================================================
 Outputs & filters:
 -------------------------------------
@@ -678,10 +678,10 @@ Query Plan
 =====================================================================================
 |ID|OPERATOR                 |NAME                            |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------------------
-|0 |PX COORDINATOR           |                                |1       |1289        |
-|1 |└─EXCHANGE OUT DISTR     |:EX10000                        |1       |1289        |
-|2 |  └─PX PARTITION ITERATOR|                                |1       |1288        |
-|3 |    └─TABLE RANGE SCAN   |receivable_items(idx_unit_range)|1       |1288        |
+|0 |PX COORDINATOR           |                                |2       |1489        |
+|1 |└─EXCHANGE OUT DISTR     |:EX10000                        |2       |1486        |
+|2 |  └─PX PARTITION ITERATOR|                                |2       |1479        |
+|3 |    └─TABLE RANGE SCAN   |receivable_items(idx_unit_range)|2       |1479        |
 =====================================================================================
 Outputs & filters:
 -------------------------------------
@@ -774,10 +774,10 @@ Query Plan
 =====================================================================================
 |ID|OPERATOR                 |NAME                            |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------------------
-|0 |PX COORDINATOR           |                                |1       |1289        |
-|1 |└─EXCHANGE OUT DISTR     |:EX10000                        |1       |1289        |
-|2 |  └─PX PARTITION ITERATOR|                                |1       |1288        |
-|3 |    └─TABLE RANGE SCAN   |receivable_items(idx_unit_range)|1       |1288        |
+|0 |PX COORDINATOR           |                                |2       |1489        |
+|1 |└─EXCHANGE OUT DISTR     |:EX10000                        |2       |1486        |
+|2 |  └─PX PARTITION ITERATOR|                                |2       |1479        |
+|3 |    └─TABLE RANGE SCAN   |receivable_items(idx_unit_range)|2       |1479        |
 =====================================================================================
 Outputs & filters:
 -------------------------------------

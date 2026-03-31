@@ -62,7 +62,7 @@ T bigint NOT NULL,
 V varbinary(1024) DEFAULT NULL,
 PRIMARY KEY (K, Q, T)
 ) kv_attributes ='{"Hbase": {"TimeToLive": 0}, "Hbase": {"MaxVersions": 1}}' partition by key(K) partitions 3;
-ERROR 0A000: kv attributes with wrong format not supported
+ERROR HY000: Time to live of hbase table must be greater than 0
 CREATE TABLE test_kv_attr(
 K varbinary(1024) NOT NULL,
 Q varbinary(256)  NOT NULL,
@@ -256,7 +256,7 @@ test_ttl	CREATE TABLE `test_ttl` (
   `b` varchar(1024) DEFAULT NULL,
   `c` timestamp NULL DEFAULT NULL,
   PRIMARY KEY (`a`)
-) ORGANIZATION INDEX DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE ENABLE_MACRO_BLOCK_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0 TTL = (c + INTERVAL 1 hour)
+) ORGANIZATION INDEX DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE ENABLE_MACRO_BLOCK_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0 TTL = c + INTERVAL 1 hour BY DELETING
 drop table test_ttl;
 create table test_ttl(a int primary key, b varchar(1024), c datetime) TTL(c + INTERVAL 1 hour);
 show create table test_ttl;
@@ -266,7 +266,7 @@ test_ttl	CREATE TABLE `test_ttl` (
   `b` varchar(1024) DEFAULT NULL,
   `c` datetime DEFAULT NULL,
   PRIMARY KEY (`a`)
-) ORGANIZATION INDEX DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE ENABLE_MACRO_BLOCK_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0 TTL = (c + INTERVAL 1 hour)
+) ORGANIZATION INDEX DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE ENABLE_MACRO_BLOCK_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0 TTL = c + INTERVAL 1 hour BY DELETING
 drop table test_ttl;
 create table test_ttl(a int primary key, b varchar(1024), c varchar(1024)) TTL(c + INTERVAL 1 hour);
 ERROR HY000: Column type of 'c' is not supported for TTL definition
@@ -287,7 +287,7 @@ test_ttl	CREATE TABLE `test_ttl` (
   `c` timestamp NULL DEFAULT NULL,
   `d` datetime DEFAULT NULL,
   PRIMARY KEY (`a`)
-) ORGANIZATION INDEX DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE ENABLE_MACRO_BLOCK_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0 TTL = (c + INTERVAL 0 hour)
+) ORGANIZATION INDEX DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE ENABLE_MACRO_BLOCK_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0 TTL = c + INTERVAL 0 hour BY DELETING
 alter table test_ttl TTL(c + INTERVAL 60 DAY);
 show create table test_ttl;
 Table	Create Table
@@ -297,7 +297,7 @@ test_ttl	CREATE TABLE `test_ttl` (
   `c` timestamp NULL DEFAULT NULL,
   `d` datetime DEFAULT NULL,
   PRIMARY KEY (`a`)
-) ORGANIZATION INDEX DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE ENABLE_MACRO_BLOCK_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0 TTL = (c + INTERVAL 60 DAY)
+) ORGANIZATION INDEX DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE ENABLE_MACRO_BLOCK_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0 TTL = c + INTERVAL 60 DAY BY DELETING
 drop table test_ttl;
 create table test_ttl(a int primary key, b varchar(1024), c timestamp) TTL(c + INTERVAL 1 second);
 drop table test_ttl;
@@ -361,6 +361,328 @@ test_ttl	CREATE TABLE `test_ttl` (
   `c` timestamp NULL DEFAULT NULL,
   `d` datetime DEFAULT NULL,
   PRIMARY KEY (`a`)
-) ORGANIZATION INDEX DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE ENABLE_MACRO_BLOCK_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0 TTL = (`d` + INTERVAL 1 second)
+) ORGANIZATION INDEX DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE ENABLE_MACRO_BLOCK_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0 TTL = `d` + INTERVAL 1 second BY DELETING
 drop table test_kv_attr;
 drop table test_ttl;
+drop table if exists test_ttl_with_index;
+CREATE TABLE test_ttl_with_index (
+a INT PRIMARY KEY, 
+b TIMESTAMP DEFAULT current_timestamp ON UPDATE current_timestamp,
+index idx(b) local)
+TTL (b + INTERVAL 12 HOUR) KV_ATTRIBUTES ='{"TTLScanIndex": "idx"}';
+drop table if exists test_ttl_with_index_1;
+CREATE TABLE `test_ttl_with_index_1` (
+`pagerowkey` varchar(1024) NOT NULL,
+`request` longtext DEFAULT NULL,
+`rawpage` longblob NOT NULL,
+`pagecode` varchar(1024) NOT NULL,
+`timestamp` bigint(20) NOT NULL,
+`_expire_ts` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+UNIQUE KEY `u_idx_pagerowkey` (`pagerowkey`) storing (_expire_ts)
+) ORGANIZATION = HEAP DEFAULT CHARSET = utf8mb4 
+TTL (_expire_ts + INTERVAL 1 DAY) KV_ATTRIBUTES ='{"TTLScanIndex": "u_idx_pagerowkey"}';
+CREATE TABLE test_ttl_with_index_2 (
+a INT PRIMARY KEY, 
+b TIMESTAMP DEFAULT current_timestamp ON UPDATE current_timestamp,
+index idx(b) local)
+TTL (b + INTERVAL 12 HOUR) KV_ATTRIBUTES ='{"TTLScanIndex": "idx_not_exist"}';
+ERROR 42000: Incorrect index name 'idx_not_exist'
+CREATE TABLE test_ttl_with_index_3 (
+a INT PRIMARY KEY, 
+b TIMESTAMP DEFAULT current_timestamp ON UPDATE current_timestamp,
+c varchar(128),
+index idx1(c) local)
+TTL (b + INTERVAL 12 HOUR) KV_ATTRIBUTES ='{"TTLScanIndex": "idx1"}';
+ERROR 0A000: this ttl scan index does not contain ttl column is not supported
+CREATE TABLE `test_ttl_with_index_4` (
+`pagerowkey` varchar(1024) NOT NULL,
+`request` longtext DEFAULT NULL,
+`rawpage` longblob NOT NULL,
+`pagecode` varchar(1024) NOT NULL,
+`timestamp` bigint(20) NOT NULL,
+`_expire_ts` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+UNIQUE KEY `u_idx_pagerowkey` (`pagerowkey`) storing (pagecode)
+) ORGANIZATION = HEAP DEFAULT CHARSET = utf8mb4 
+TTL (_expire_ts + INTERVAL 547 DAY) KV_ATTRIBUTES ='{"TTLScanIndex": "u_idx_pagerowkey"}';
+ERROR 0A000: this ttl scan index does not contain ttl column is not supported
+drop table if exists test_ttl_with_index_5;
+CREATE TABLE test_ttl_with_index_5 (
+a INT PRIMARY KEY, 
+b TIMESTAMP DEFAULT current_timestamp ON UPDATE current_timestamp,
+c varchar(128),
+index idx(b) local,
+index idx2(c) local)
+TTL (b + INTERVAL 12 HOUR) KV_ATTRIBUTES ='{"TTLScanIndex": "idx"}';
+alter table test_ttl_with_index_5 kv_attributes = '{"TTLScanIndex": "idx_not_exist"}';
+ERROR 42000: Incorrect index name 'idx_not_exist'
+alter table test_ttl_with_index_5 kv_attributes = '{"TTLScanIndex": "idx2"}';
+ERROR 0A000: this ttl scan index does not contain ttl column is not supported
+alter table test_ttl_with_index_5 add key idx3(b, c);
+alter table test_ttl_with_index_5 kv_attributes = '{"TTLScanIndex": "idx3"}';
+alter table test_ttl_with_index_5 add key idx4(b) storing(c);
+alter table test_ttl_with_index_5 kv_attributes = '{"TTLScanIndex": "idx4"}';
+alter table test_ttl_with_index_5 drop key idx4;
+ERROR 0A000: drop index when kv_atrributes has specified it not supported
+drop index idx4 on test_ttl_with_index_5;
+ERROR 0A000: drop index when kv_atrributes has specified it not supported
+drop table if exists test_ttl_with_index_6;
+CREATE TABLE test_ttl_with_index_6 (
+a INT PRIMARY KEY, 
+b TIMESTAMP DEFAULT current_timestamp ON UPDATE current_timestamp,
+c varchar(128),
+index idx(b) local,
+index idx2(c) local)
+TTL (b + INTERVAL 12 HOUR) ;
+alter table test_ttl_with_index_6 kv_attributes = '{"TTLScanIndex": "idx3"}';
+ERROR 42000: Incorrect index name 'idx3'
+alter table test_ttl_with_index_6 kv_attributes = '{"TTLScanIndex": "idx2"}';
+ERROR 0A000: this ttl scan index does not contain ttl column is not supported
+alter table test_ttl_with_index_6 kv_attributes = '{"TTLScanIndex": "idx"}';
+drop table if exists test_idx$cf1;
+CREATE TABLE test_idx$cf1 (
+K VARBINARY(1024), 
+Q VARBINARY(256), 
+T BIGINT, 
+V VARBINARY(1048576) NOT NULL, 
+PRIMARY KEY(K, Q, T),
+index idx(K, Q, T) local)
+KV_ATTRIBUTES ='{"Hbase": {"TimeToLive": 3600, "MaxVersions": 3}, "TTLScanIndex": "idx"}'
+PARTITION BY KEY(K) PARTITIONS 3;
+CREATE TABLE test_idx$cf2 (
+K VARBINARY(1024), 
+Q VARBINARY(256), 
+T BIGINT, 
+V VARBINARY(1048576) NOT NULL, 
+TTL bigint(20) DEFAULT NULL,
+PRIMARY KEY(K, Q, T),
+index idx(K, Q, T) local)
+KV_ATTRIBUTES ='{"Hbase": {"TimeToLive": 3600, "MaxVersions": 3}, "TTLScanIndex": "idx"}'
+PARTITION BY KEY(K) PARTITIONS 3;
+ERROR 0A000: this ttl scan index does not contain ttl column is not supported
+drop table if exists test_idx$cf3;
+CREATE TABLE test_idx$cf3 (
+K VARBINARY(1024), 
+Q VARBINARY(256), 
+T BIGINT, 
+V VARBINARY(1048576) NOT NULL, 
+PRIMARY KEY(K, Q, T),
+index idx(K, Q) storing (T) local)
+KV_ATTRIBUTES ='{"Hbase": {"TimeToLive": 3600, "MaxVersions": 3}, "TTLScanIndex": "idx"}'
+PARTITION BY KEY(K) PARTITIONS 3;
+ERROR 0A000: hbase scan index columns order not followed by K,Q,T is not supported
+CREATE TABLE test_ts_index$cf1 (
+K VARBINARY(1024), 
+T BIGINT, 
+S BIGINT,
+V json NOT NULL, 
+PRIMARY KEY(K, T, S),
+index idx(K, T, S) local)
+KV_ATTRIBUTES ='{"HBase":{}, "TTLScanIndex": "idx"}';
+ERROR 0A000: timeseries hbase table do ttl task with scan index not supported
+CREATE TABLE test_ts_index$cf2 (
+K varbinary(1024) NOT NULL,
+T bigint(20) NOT NULL,
+S bigint(20) NOT NULL,
+V json NOT NULL,
+G bigint(20) GENERATED ALWAYS AS (ABS(T)),
+TTL bigint(20) DEFAULT NULL,
+PRIMARY KEY (K, T, S)
+) KV_ATTRIBUTES = '{"HBase": {}}';
+ERROR 0A000: series table cell ttl not supported
+CREATE TABLE `test_ts_index$cf3` (
+K varbinary(1024) NOT NULL,
+T bigint(20) NOT NULL,
+S bigint(20) NOT NULL,
+V json NOT NULL,
+TTL bigint(20) DEFAULT NULL,
+G bigint(20) GENERATED ALWAYS AS (ABS(T)),
+PRIMARY KEY (K, T, S)
+) KV_ATTRIBUTES = '{"HBase": {}}';
+ERROR 0A000: series table cell ttl not supported
+CREATE TABLE `test_ts_index$cf4` (
+K varbinary(1024) NOT NULL,
+T bigint(20) NOT NULL,
+S bigint(20) NOT NULL,
+V json NOT NULL,
+G bigint(20) GENERATED ALWAYS AS (ABS(T)),
+PRIMARY KEY (K, T, S)
+) KV_ATTRIBUTES = '{"HBase": {"maxVersions": 10}}';
+ERROR 0A000: timeseries hbase table with max versions not supported
+CREATE TABLE `test_ts_index$cf5` (
+K varbinary(1024) NOT NULL,
+T bigint(20) NOT NULL,
+S bigint(20) NOT NULL,
+V json NOT NULL,
+G bigint(20) GENERATED ALWAYS AS (ABS(T)),
+PRIMARY KEY (K, T, S)
+) KV_ATTRIBUTES = '{"HBase": {"timeToLive": 3600}}';
+ERROR 0A000: timeseries hbase table with ttl not supported
+drop table if exists test_ts_index$cf6;
+CREATE TABLE `test_ts_index$cf6` (
+K varbinary(1024) NOT NULL,
+T bigint(20) NOT NULL,
+S bigint(20) NOT NULL,
+V json NOT NULL,
+G bigint(20) GENERATED ALWAYS AS (ABS(T)),
+PRIMARY KEY (K, T, S)
+) KV_ATTRIBUTES = '{"HBase": {}}';
+alter table test_ts_index$cf6 kv_attributes = '{"HBase": {"maxVersions" : 10}}';
+ERROR 0A000: timeseries hbase table with max versions not supported
+alter table test_ts_index$cf6 kv_attributes = '{"HBase": {"timeToLive" : 3600}}';
+ERROR 0A000: timeseries hbase table with ttl not supported
+alter table test_ts_index$cf6 add column TTL bigint(20) DEFAULT NULL;
+ERROR 0A000: alter timeseries hbase table add column not supported
+drop table if exists test_idx$cf4;
+CREATE TABLE test_idx$cf4 (
+K VARBINARY(1024), 
+Q VARBINARY(256), 
+T BIGINT, 
+V VARBINARY(1048576) NOT NULL, 
+PRIMARY KEY(K, Q, T))
+KV_ATTRIBUTES ='{"Hbase": {"TimeToLive": 3600, "MaxVersions": 3}}'
+PARTITION BY KEY(K) PARTITIONS 3;
+alter table test_idx$cf4 kv_attributes = '{"Hbase": {"TimeToLive": 3600, "MaxVersions": 3}, "TTLScanIndex": "idx2"}';
+ERROR 42000: Incorrect index name 'idx2'
+alter table test_idx$cf4 add key idx1(K, Q, T);
+alter table test_idx$cf4 kv_attributes = '{"Hbase": {"TimeToLive": 3600, "MaxVersions": 3}, "TTLScanIndex": "idx2"}';
+ERROR 42000: Incorrect index name 'idx2'
+alter table test_idx$cf4 kv_attributes = '{"Hbase": {"TimeToLive": 3600, "MaxVersions": 3},"TTLScanIndex": "idx1"}';
+CREATE TABLE test_ttl_with_index_6 (
+a INT PRIMARY KEY, 
+b TIMESTAMP DEFAULT current_timestamp ON UPDATE current_timestamp,
+c varchar(128),
+index idx(b) global partition by key(b) partitions 3)
+TTL (b + INTERVAL 12 HOUR) KV_ATTRIBUTES ='{"TTLScanIndex": "idx"}';
+ERROR 0A000: this index type used for ttl scan is not supported
+drop table if exists test_ttl_with_index_6;
+CREATE TABLE test_ttl_with_index_6 (
+a INT PRIMARY KEY, 
+b TIMESTAMP DEFAULT current_timestamp ON UPDATE current_timestamp,
+c varchar(128),
+index idx_g(b) global partition by key(b) partitions 3)
+TTL (b + INTERVAL 12 HOUR);
+alter table test_ttl_with_index_6 kv_attributes = '{"TTLScanIndex": "idx_g"}';
+ERROR 0A000: this index type used for ttl scan is not supported
+CREATE TABLE test_idx$cf5 (
+K VARBINARY(1024), 
+Q VARBINARY(256), 
+T BIGINT, 
+V VARBINARY(1048576) NOT NULL, 
+PRIMARY KEY(K, Q, T),
+index idx(K,T,Q) local)
+KV_ATTRIBUTES ='{"Hbase": {"TimeToLive": 3600, "MaxVersions": 3}, "TTLScanIndex": "idx"}'
+PARTITION BY KEY(K) PARTITIONS 3;
+ERROR 0A000: hbase scan index columns order not followed by K,Q,T is not supported
+drop table if exists test_idx$cf5;
+CREATE TABLE test_idx$cf5 (
+K VARBINARY(1024), 
+Q VARBINARY(256), 
+T BIGINT, 
+V VARBINARY(1048576) NOT NULL, 
+PRIMARY KEY(K, Q, T),
+index idx(K,T,Q) local)
+KV_ATTRIBUTES ='{"Hbase": {"TimeToLive": 3600, "MaxVersions": 3}}';
+alter table test_idx$cf5 kv_attributes = '{"Hbase": {"TimeToLive": 3600, "MaxVersions": 3},"TTLScanIndex": "idx"}';
+ERROR 0A000: hbase scan index columns order not followed by K,Q,T is not supported
+alter system set _enable_parallel_table_creation = false;
+drop table if exists test_idx$cf7;
+CREATE TABLE test_idx$cf7 (
+K VARBINARY(1024), 
+Q VARBINARY(256), 
+T BIGINT, 
+V VARBINARY(1048576) NOT NULL, 
+PRIMARY KEY(K, Q, T),
+index idx(K, Q, T) local)
+KV_ATTRIBUTES ='{"Hbase": {"TimeToLive": 3600, "MaxVersions": 3}, "TTLScanIndex": "idx"}'
+PARTITION BY KEY(K) PARTITIONS 3;
+set _show_ddl_in_compat_mode = 1;
+show create table test_idx$cf7;
+Table	Create Table
+test_idx$cf7	CREATE TABLE `test_idx$cf7` (
+  `K` varbinary(1024) NOT NULL,
+  `Q` varbinary(256) NOT NULL,
+  `T` bigint(20) NOT NULL,
+  `V` varbinary(1048576) NOT NULL,
+  PRIMARY KEY (`K`, `Q`, `T`),
+  KEY `idx` (`K`, `Q`, `T`)
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC
+ partition by key(`k`)
+(partition `p0`,
+partition `p1`,
+partition `p2`)
+set _show_ddl_in_compat_mode = 0;
+show create table test_idx$cf7;
+Table	Create Table
+test_idx$cf7	CREATE TABLE `test_idx$cf7` (
+  `K` varbinary(1024) NOT NULL,
+  `Q` varbinary(256) NOT NULL,
+  `T` bigint(20) NOT NULL,
+  `V` varbinary(1048576) NOT NULL,
+  PRIMARY KEY (`K`, `Q`, `T`),
+  KEY `idx` (`K`, `Q`, `T`) BLOCK_SIZE 16384 LOCAL
+) ORGANIZATION INDEX DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE ENABLE_MACRO_BLOCK_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0 KV_ATTRIBUTES = '{"Hbase": {"TimeToLive": 3600, "MaxVersions": 3}, "TTLScanIndex": "idx"}'
+ partition by key(`k`)
+(partition `p0`,
+partition `p1`,
+partition `p2`)
+drop table test_idx$cf7;
+alter system set _enable_parallel_table_creation = true;
+drop table if exists test_idx$cf7;
+CREATE TABLE test_idx$cf7 (
+K VARBINARY(1024), 
+Q VARBINARY(256), 
+T BIGINT, 
+V VARBINARY(1048576) NOT NULL, 
+PRIMARY KEY(K, Q, T),
+index idx(K, Q, T) local)
+KV_ATTRIBUTES ='{"Hbase": {"TimeToLive": 3600, "MaxVersions": 3}, "TTLScanIndex": "idx"}'
+PARTITION BY KEY(K) PARTITIONS 3;
+set _show_ddl_in_compat_mode = 1;
+show create table test_idx$cf7;
+Table	Create Table
+test_idx$cf7	CREATE TABLE `test_idx$cf7` (
+  `K` varbinary(1024) NOT NULL,
+  `Q` varbinary(256) NOT NULL,
+  `T` bigint(20) NOT NULL,
+  `V` varbinary(1048576) NOT NULL,
+  PRIMARY KEY (`K`, `Q`, `T`),
+  KEY `idx` (`K`, `Q`, `T`)
+) DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC
+ partition by key(`k`)
+(partition `p0`,
+partition `p1`,
+partition `p2`)
+set _show_ddl_in_compat_mode = 0;
+show create table test_idx$cf7;
+Table	Create Table
+test_idx$cf7	CREATE TABLE `test_idx$cf7` (
+  `K` varbinary(1024) NOT NULL,
+  `Q` varbinary(256) NOT NULL,
+  `T` bigint(20) NOT NULL,
+  `V` varbinary(1048576) NOT NULL,
+  PRIMARY KEY (`K`, `Q`, `T`),
+  KEY `idx` (`K`, `Q`, `T`) BLOCK_SIZE 16384 LOCAL
+) ORGANIZATION INDEX DEFAULT CHARSET = utf8mb4 ROW_FORMAT = DYNAMIC COMPRESSION = 'zstd_1.3.8' REPLICA_NUM = 2 BLOCK_SIZE = 16384 USE_BLOOM_FILTER = FALSE ENABLE_MACRO_BLOCK_BLOOM_FILTER = FALSE TABLET_SIZE = 134217728 PCTFREE = 0 KV_ATTRIBUTES = '{"Hbase": {"TimeToLive": 3600, "MaxVersions": 3}, "TTLScanIndex": "idx"}'
+ partition by key(`k`)
+(partition `p0`,
+partition `p1`,
+partition `p2`)
+drop table test_idx$cf7;
+drop table if exists test_ttl_with_index;
+drop table if exists test_ttl_with_index_1;
+drop table if exists test_ttl_with_index_2;
+drop table if exists test_ttl_with_index_3;
+drop table if exists test_ttl_with_index_4;
+drop table if exists test_ttl_with_index_5;
+drop table if exists test_ttl_with_index_6;
+drop table if exists test_idx$cf1;
+drop table if exists test_idx$cf2;
+drop table if exists test_idx$cf3;
+drop table if exists test_ts_index$cf1;
+drop table if exists test_ts_index$cf2;
+drop table if exists test_ts_index$cf3;
+drop table if exists test_ts_index$cf4;
+drop table if exists test_ts_index$cf5;
+drop table if exists test_ts_index$cf6;
+drop table if exists test_idx$cf4;
+drop table if exists test_idx$cf5;

@@ -28,11 +28,14 @@ RECOVERY_UNTIL_SCN	bigint(20) unsigned	NO
 LOG_MODE	varchar(100)	NO			
 ARBITRATION_SERVICE_STATUS	varchar(64)	NO			
 UNIT_NUM	bigint(20)	NO			
+ZONE_UNIT_NUM_LIST	varchar(65536)	NO			
 COMPATIBLE	varchar(65536)	NO			
 MAX_LS_ID	bigint(20)	NO			
 RESTORE_DATA_MODE	varchar(128)	NO			
 FLASHBACK_LOG_SCN	bigint(20) unsigned	NO			
 COMMENT	varchar(4096)	NO		NULL	
+PROTECTION_MODE	varchar(128)	NO			
+PROTECTION_LEVEL	varchar(128)	NO			
 select TENANT_NAME, TENANT_TYPE, COMPATIBILITY_MODE, STATUS, IN_RECYCLEBIN, LOCKED, TENANT_ROLE, SWITCHOVER_STATUS, LOG_MODE, UNIT_NUM, RESTORE_DATA_MODE, COMMENT from DBA_OB_TENANTS where TENANT_NAME = 'tenant1';
 TENANT_NAME	TENANT_TYPE	COMPATIBILITY_MODE	STATUS	IN_RECYCLEBIN	LOCKED	TENANT_ROLE	SWITCHOVER_STATUS	LOG_MODE	UNIT_NUM	RESTORE_DATA_MODE	COMMENT
 tenant1	USER	MYSQL	NORMAL	NO	NO	PRIMARY	NORMAL	NOARCHIVELOG	1	NORMAL	this is tenant1
@@ -86,11 +89,14 @@ RECOVERY_UNTIL_SCN	bigint(20) unsigned	NO
 LOG_MODE	varchar(100)	NO			
 ARBITRATION_SERVICE_STATUS	varchar(64)	NO			
 UNIT_NUM	bigint(20)	NO			
+ZONE_UNIT_NUM_LIST	varchar(65536)	NO			
 COMPATIBLE	varchar(65536)	NO			
 MAX_LS_ID	bigint(20)	NO			
 RESTORE_DATA_MODE	varchar(128)	NO			
 FLASHBACK_LOG_SCN	bigint(20) unsigned	NO			
 COMMENT	varchar(4096)	NO		NULL	
+PROTECTION_MODE	varchar(128)	NO			
+PROTECTION_LEVEL	varchar(128)	NO			
 SELECT TENANT_NAME, count(*) = 1  FROM oceanbase.DBA_OB_TENANTS group by TENANT_ID;
 TENANT_NAME	count(*) = 1
 tenant1	1
@@ -120,16 +126,19 @@ ALTER SYSTEM SWITCHOVER TO PRIMARY TENANT tenant1;
 use oceanbase;
 EXPLAIN BASIC select tenant_name,status from DBA_OB_TENANTS where tenant_name = 'tenant1';
 Query Plan
-========================================================================
-|ID|OPERATOR               |NAME                                       |
-------------------------------------------------------------------------
-|0 |NESTED-LOOP OUTER JOIN |                                           |
-|1 |├─TABLE FULL SCAN      |A                                          |
-|2 |└─MATERIAL             |                                           |
-|3 |  └─SUBPLAN SCAN       |C                                          |
-|4 |    └─HASH DISTINCT    |                                           |
-|5 |      └─TABLE FULL SCAN|__ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT|
-========================================================================
+=====================================
+|ID|OPERATOR                   |NAME|
+-------------------------------------
+|0 |NESTED-LOOP OUTER JOIN     |    |
+|1 |├─TABLE FULL SCAN          |A   |
+|2 |└─MATERIAL                 |    |
+|3 |  └─SUBPLAN SCAN           |C   |
+|4 |    └─HASH DISTINCT        |    |
+|5 |      └─HASH GROUP BY      |    |
+|6 |        └─HASH JOIN        |    |
+|7 |          ├─TABLE FULL SCAN|F   |
+|8 |          └─TABLE FULL SCAN|G   |
+=====================================
 Outputs & filters:
 -------------------------------------
   0 - output([A.tenant_name], [A.status]), filter(nil)
@@ -141,27 +150,37 @@ Outputs & filters:
   2 - output([C.TENANT_ID], [C.META_TENANT_ID]), filter(nil)
   3 - output([C.TENANT_ID], [C.META_TENANT_ID]), filter(nil)
       access([C.TENANT_ID], [C.META_TENANT_ID])
-  4 - output([__ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.tenant_id], [CASE WHEN __ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.tenant_id < 1 THEN NULL WHEN 
-      __ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.tenant_id != 1 THEN __ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.tenant_id - 1 ELSE NULL END]), filter(nil)
-      distinct([__ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.tenant_id])
-  5 - output([__ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.tenant_id]), filter(nil)
-      access([__ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.tenant_id]), partitions(p1)
-      is_index_back=false, is_global_index=false, 
-      range_key([__ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.resource_pool_id]), range(MIN ; MAX)always true
+  4 - output([F.tenant_id], [CASE WHEN F.tenant_id < 1 THEN NULL WHEN F.tenant_id != 1 THEN F.tenant_id - 1 ELSE NULL END]), filter(nil)
+      distinct([F.tenant_id])
+  5 - output([F.tenant_id]), filter(nil)
+      group([F.tenant_id], [G.zone]), agg_func(nil)
+  6 - output([F.tenant_id], [G.zone]), filter(nil)
+      equal_conds([F.resource_pool_id = G.resource_pool_id]), other_conds(nil)
+  7 - output([F.resource_pool_id], [F.tenant_id]), filter([F.tenant_id > 0])
+      access([F.resource_pool_id], [F.tenant_id]), partitions(p1)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([F.resource_pool_id]), range(MIN ; MAX)always true
+  8 - output([G.resource_pool_id], [G.zone]), filter([G.status != 'DELETING'])
+      access([G.resource_pool_id], [G.status], [G.zone]), partitions(p1)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([G.unit_id]), range(MIN ; MAX)always true
 EXPLAIN BASIC select tenant_role,switchover_status from DBA_OB_TENANTS where tenant_name = 'tenant1';
 Query Plan
-==========================================================================
-|ID|OPERATOR                 |NAME                                       |
---------------------------------------------------------------------------
-|0 |MERGE OUTER JOIN         |                                           |
-|1 |├─NESTED-LOOP OUTER JOIN |                                           |
-|2 |│ ├─TABLE FULL SCAN      |A                                          |
-|3 |│ └─MATERIAL             |                                           |
-|4 |│   └─SUBPLAN SCAN       |C                                          |
-|5 |│     └─HASH DISTINCT    |                                           |
-|6 |│       └─TABLE FULL SCAN|__ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT|
-|7 |└─TABLE FULL SCAN        |B                                          |
-==========================================================================
+=======================================
+|ID|OPERATOR                     |NAME|
+---------------------------------------
+|0 |MERGE OUTER JOIN             |    |
+|1 |├─NESTED-LOOP OUTER JOIN     |    |
+|2 |│ ├─TABLE FULL SCAN          |A   |
+|3 |│ └─MATERIAL                 |    |
+|4 |│   └─SUBPLAN SCAN           |C   |
+|5 |│     └─HASH DISTINCT        |    |
+|6 |│       └─HASH GROUP BY      |    |
+|7 |│         └─HASH JOIN        |    |
+|8 |│           ├─TABLE FULL SCAN|F   |
+|9 |│           └─TABLE FULL SCAN|G   |
+|10|└─TABLE FULL SCAN            |B   |
+=======================================
 Outputs & filters:
 -------------------------------------
   0 - output([CASE WHEN A.tenant_id = 1 THEN 'PRIMARY' WHEN (T_OP_BIT_AND, A.tenant_id, cast(X'01', BIGINT(-1, 0))) = 1 THEN 'PRIMARY' ELSE B.tenant_role 
@@ -177,17 +196,73 @@ Outputs & filters:
   3 - output([C.TENANT_ID], [C.META_TENANT_ID]), filter(nil)
   4 - output([C.TENANT_ID], [C.META_TENANT_ID]), filter(nil)
       access([C.TENANT_ID], [C.META_TENANT_ID])
-  5 - output([__ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.tenant_id], [CASE WHEN __ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.tenant_id < 1 THEN NULL WHEN 
-      __ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.tenant_id != 1 THEN __ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.tenant_id - 1 ELSE NULL END]), filter(nil)
-      distinct([__ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.tenant_id])
-  6 - output([__ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.tenant_id]), filter(nil)
-      access([__ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.tenant_id]), partitions(p1)
-      is_index_back=false, is_global_index=false, 
-      range_key([__ALL_VIRTUAL_RESOURCE_POOL_MYSQL_SYS_AGENT.resource_pool_id]), range(MIN ; MAX)always true
-  7 - output([B.tenant_id], [B.tenant_role], [B.switchover_status]), filter(nil)
+  5 - output([F.tenant_id], [CASE WHEN F.tenant_id < 1 THEN NULL WHEN F.tenant_id != 1 THEN F.tenant_id - 1 ELSE NULL END]), filter(nil)
+      distinct([F.tenant_id])
+  6 - output([F.tenant_id]), filter(nil)
+      group([F.tenant_id], [G.zone]), agg_func(nil)
+  7 - output([F.tenant_id], [G.zone]), filter(nil)
+      equal_conds([F.resource_pool_id = G.resource_pool_id]), other_conds(nil)
+  8 - output([F.resource_pool_id], [F.tenant_id]), filter([F.tenant_id > 0])
+      access([F.resource_pool_id], [F.tenant_id]), partitions(p1)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([F.resource_pool_id]), range(MIN ; MAX)always true
+  9 - output([G.resource_pool_id], [G.zone]), filter([G.status != 'DELETING'])
+      access([G.resource_pool_id], [G.status], [G.zone]), partitions(p1)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([G.unit_id]), range(MIN ; MAX)always true
+ 10 - output([B.tenant_id], [B.tenant_role], [B.switchover_status]), filter(nil)
       access([B.tenant_id], [B.tenant_role], [B.switchover_status]), partitions(p1)
       is_index_back=false, is_global_index=false, 
       range_key([B.tenant_id]), range(MIN ; MAX)always true
+EXPLAIN BASIC select zone_unit_num_list from DBA_OB_TENANTS where tenant_name = 'tenant1';
+Query Plan
+====================================================
+|ID|OPERATOR                       |NAME           |
+----------------------------------------------------
+|0 |NESTED-LOOP OUTER JOIN         |               |
+|1 |├─TABLE FULL SCAN              |A              |
+|2 |└─MATERIAL                     |               |
+|3 |  └─SUBPLAN SCAN               |C              |
+|4 |    └─MERGE GROUP BY           |               |
+|5 |      └─PARTITION SORT         |               |
+|6 |        └─SUBPLAN SCAN         |ANONYMOUS_VIEW2|
+|7 |          └─HASH GROUP BY      |               |
+|8 |            └─HASH JOIN        |               |
+|9 |              ├─TABLE FULL SCAN|F              |
+|10|              └─TABLE FULL SCAN|G              |
+====================================================
+Outputs & filters:
+-------------------------------------
+  0 - output([C.ZONE_UNIT_NUM_LIST]), filter(nil)
+      conds([A.tenant_id = C.TENANT_ID OR A.tenant_id = C.META_TENANT_ID]), nl_params_(nil), use_batch=false
+  1 - output([A.tenant_id]), filter([A.tenant_name = 'tenant1'])
+      access([A.tenant_id], [A.tenant_name]), partitions(p1)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([A.tenant_id]), range(MIN ; MAX)always true
+  2 - output([C.ZONE_UNIT_NUM_LIST], [C.TENANT_ID], [C.META_TENANT_ID]), filter(nil)
+  3 - output([C.TENANT_ID], [C.META_TENANT_ID], [C.ZONE_UNIT_NUM_LIST]), filter(nil)
+      access([C.TENANT_ID], [C.META_TENANT_ID], [C.ZONE_UNIT_NUM_LIST])
+  4 - output([ANONYMOUS_VIEW2.TENANT_ID], [CASE WHEN ANONYMOUS_VIEW2.TENANT_ID < 1 THEN NULL WHEN ANONYMOUS_VIEW2.TENANT_ID != 1 THEN ANONYMOUS_VIEW2.TENANT_ID 
+      - 1 ELSE NULL END], [T_FUN_GROUP_CONCAT(ANONYMOUS_VIEW2.ZONE, ':', cast(ANONYMOUS_VIEW2.UNIT_COUNT, VARCHAR(65536))) order_items(ANONYMOUS_VIEW2.ZONE) separator_param_expr(',
+      ')]), filter(nil)
+      group([ANONYMOUS_VIEW2.TENANT_ID]), agg_func([T_FUN_GROUP_CONCAT(ANONYMOUS_VIEW2.ZONE, ':', cast(ANONYMOUS_VIEW2.UNIT_COUNT, VARCHAR(65536))) order_items(ANONYMOUS_VIEW2.ZONE) 
+      separator_param_expr(',')])
+  5 - output([ANONYMOUS_VIEW2.TENANT_ID], [ANONYMOUS_VIEW2.UNIT_COUNT], [ANONYMOUS_VIEW2.ZONE]), filter(nil)
+      sort_keys([HASH(ANONYMOUS_VIEW2.TENANT_ID), ASC], [ANONYMOUS_VIEW2.TENANT_ID, ASC])
+  6 - output([ANONYMOUS_VIEW2.TENANT_ID], [ANONYMOUS_VIEW2.UNIT_COUNT], [ANONYMOUS_VIEW2.ZONE]), filter(nil)
+      access([ANONYMOUS_VIEW2.TENANT_ID], [ANONYMOUS_VIEW2.UNIT_COUNT], [ANONYMOUS_VIEW2.ZONE])
+  7 - output([F.tenant_id], [G.zone], [T_FUN_COUNT(*)]), filter(nil)
+      group([F.tenant_id], [G.zone]), agg_func([T_FUN_COUNT(*)])
+  8 - output([F.tenant_id], [G.zone]), filter(nil)
+      equal_conds([F.resource_pool_id = G.resource_pool_id]), other_conds(nil)
+  9 - output([F.resource_pool_id], [F.tenant_id]), filter([F.tenant_id > 0])
+      access([F.resource_pool_id], [F.tenant_id]), partitions(p1)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([F.resource_pool_id]), range(MIN ; MAX)always true
+ 10 - output([G.resource_pool_id], [G.zone]), filter([G.status != 'DELETING'])
+      access([G.resource_pool_id], [G.status], [G.zone]), partitions(p1)
+      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      range_key([G.unit_id]), range(MIN ; MAX)always true
 drop tenant if exists tenant1 force;
 drop resource pool if exists pool_tenant1;
 drop resource unit if exists test_unit;

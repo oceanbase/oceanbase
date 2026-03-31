@@ -1170,7 +1170,7 @@ Outputs & filters:
   0 - output([skyline_int.v3], [skyline_int.v5]), filter(nil), rowset=16
       limit(100), offset(nil)
   1 - output([skyline_int.v3], [skyline_int.v5]), filter(nil), rowset=16
-      group([skyline_int.v4], [skyline_int.v2]), agg_func(nil)
+      group([skyline_int.v4], [skyline_int.v2]), agg_func(nil), limit(100)
   2 - output([skyline_int.v5], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), filter(nil), rowset=16
       access([skyline_int.v5], [skyline_int.v3], [skyline_int.v4], [skyline_int.v2]), partitions(p0)
       is_index_back=false, is_global_index=false, 

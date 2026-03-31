@@ -1337,7 +1337,7 @@ Outputs & filters:
   1 - output([t2.colC], [t2.colA], [t2.colD], [t2.colE], [t2.colF]), filter(nil), rowset=16
       equal_conds([t1.colA = t2.colA]), other_conds(nil)
       merge_directions([ASC])
-  2 - output([t1.colA]), filter([(T_OP_BIT_AND, cast(t1.colB, BIGINT(-1, 0)), 4096) > 0]), rowset=16
+  2 - output([t1.colA]), filter([(T_OP_BIT_AND, t1.colB, 4096) > 0]), rowset=16
       access([t1.colA], [t1.colB]), partitions(p0)
       is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t1.colA]), range(MIN ; MAX)always true

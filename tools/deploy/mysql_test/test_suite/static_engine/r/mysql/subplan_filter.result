@@ -173,7 +173,7 @@ select c2 >= any(select c2 from t2) from t1;
 |                            1 |
 +------------------------------+
 select c2 <=> any(select c2 from t2) from t1;
-ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near '(select c2 from t2) from t1' at line 1
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your OceanBase version for the right syntax to use near 'select c2 from t2) from t1' at line 1
 select exists (select * from t2), not exists (select * from t2) from t1;
 +---------------------------+-------------------------------+
 | exists (select * from t2) | not exists (select * from t2) |
@@ -1499,20 +1499,20 @@ Query Plan
 ===============================================================================
 |ID|OPERATOR                                   |NAME    |EST.ROWS|EST.TIME(us)|
 -------------------------------------------------------------------------------
-|0 |PX COORDINATOR MERGE SORT                  |        |3       |591         |
-|1 |└─EXCHANGE OUT DISTR                       |:EX10000|3       |591         |
-|2 |  └─SORT                                   |        |3       |591         |
-|3 |    └─SUBPLAN FILTER                       |        |3       |590         |
+|0 |PX COORDINATOR MERGE SORT                  |        |3       |589         |
+|1 |└─EXCHANGE OUT DISTR                       |:EX10000|3       |589         |
+|2 |  └─SORT                                   |        |3       |588         |
+|3 |    └─SUBPLAN FILTER                       |        |3       |588         |
 |4 |      ├─PX BLOCK ITERATOR                  |        |5       |6           |
 |5 |      │ └─TABLE FULL SCAN                  |t1      |5       |6           |
-|6 |      └─MERGE GROUP BY                     |        |1       |234         |
-|7 |        └─NESTED-LOOP JOIN CARTESIAN       |        |25      |234         |
-|8 |          ├─NESTED-LOOP JOIN CARTESIAN     |        |5       |162         |
+|6 |      └─LIMIT                              |        |1       |234         |
+|7 |        └─NESTED-LOOP JOIN CARTESIAN       |        |1       |233         |
+|8 |          ├─NESTED-LOOP JOIN CARTESIAN     |        |1       |162         |
 |9 |          │ ├─DISTRIBUTED TABLE FULL SCAN  |t2      |1       |90          |
-|10|          │ └─MATERIAL                     |        |5       |72          |
-|11|          │   └─DISTRIBUTED TABLE FULL SCAN|t3      |5       |72          |
-|12|          └─MATERIAL                       |        |5       |72          |
-|13|            └─DISTRIBUTED TABLE FULL SCAN  |t4      |5       |72          |
+|10|          │ └─MATERIAL                     |        |1       |72          |
+|11|          │   └─DISTRIBUTED TABLE FULL SCAN|t3      |1       |72          |
+|12|          └─MATERIAL                       |        |1       |72          |
+|13|            └─DISTRIBUTED TABLE FULL SCAN  |t4      |1       |72          |
 ===============================================================================
 Outputs & filters:
 -------------------------------------
@@ -1530,24 +1530,24 @@ Outputs & filters:
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
   6 - output([1]), filter(nil), rowset=16
-      group(nil), agg_func(nil)
+      limit(1), offset(nil)
   7 - output(nil), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
   8 - output(nil), filter(nil), rowset=16
       conds(nil), nl_params_(nil), use_batch=false
   9 - output(nil), filter([:0 = t2.c2]), rowset=16
       access([t2.c2]), partitions(p[0-4])
-      is_index_back=false, is_global_index=false, filter_before_indexback[false], 
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, filter_before_indexback[false], 
       range_key([t2.__pk_increment]), range(MIN ; MAX)always true
  10 - output(nil), filter(nil), rowset=16
  11 - output(nil), filter(nil), rowset=16
       access(nil), partitions(p[0-3])
-      is_index_back=false, is_global_index=false, 
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([t3.__pk_increment]), range(MIN ; MAX)always true
  12 - output(nil), filter(nil), rowset=16
  13 - output(nil), filter(nil), rowset=16
       access(nil), partitions(p[0-3])
-      is_index_back=false, is_global_index=false, 
+      limit(1), offset(nil), is_index_back=false, is_global_index=false, 
       range_key([t4.__pk_increment]), range(MIN ; MAX)always true
 select /*+no_rewrite parallel(2)*/ c1 from t1 where exists(select 1 from t2, t3, t4 where t1.c2 = t2.c2 group by t1.c1) order by 1;
 +------+

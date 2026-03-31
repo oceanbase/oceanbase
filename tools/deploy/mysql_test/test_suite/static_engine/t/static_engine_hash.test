@@ -1,4 +1,4 @@
-#owner: dachuan.sdc
+# owner: wenkai.cwk
 #owner group: sql2
 --disable_abort_on_error
 --result_format 4

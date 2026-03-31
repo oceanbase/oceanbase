@@ -1,7 +1,7 @@
 --disable_query_log
 set @@session.explicit_defaults_for_timestamp=off;
 --enable_query_log
-# owner: xiaoyi.xy
+# owner: zg410411
 # owner group: SQL3
 # description: 测试where比较条件的delete stmt, 单行删除
 # tags: delete,dml

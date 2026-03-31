@@ -183,3 +183,10 @@ timediff("13:34:23.01","13:34:23.002")
 select timediff("13:34:23.01","13:34:23.02");
 timediff("13:34:23.01","13:34:23.02")
 -00:00:00.010000
+bugfix: dima 2026032000114767332
+select timediff("", '12:00:00') from t1;
+timediff("", '12:00:00')
+NULL
+NULL
+NULL
+NULL

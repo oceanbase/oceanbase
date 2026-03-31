@@ -1,8 +1,32 @@
 #owner: shenyunlong.syl
 #owner group: shenzhen
 
-connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
-connection default;
+connect (sys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection sys;
+
+--disable_query_log
+
+let $zone = query_get_value(select zone from oceanbase.dba_ob_zones, zone, 1);
+let $unit_num = query_get_value(select count(*) as c from oceanbase.__all_server group by zone, c, 1);
+
+--disable_warnings
+DROP TENANT IF EXISTS tenant_test_ttl FORCE;
+DROP RESOURCE POOL IF EXISTS pool_ttl_test;
+DROP RESOURCE UNIT IF EXISTS unit_ttl_test;
+--enable_warnings
+
+eval CREATE RESOURCE UNIT unit_ttl_test MAX_CPU=1, MEMORY_SIZE='2G';
+eval CREATE RESOURCE POOL pool_ttl_test UNIT='unit_ttl_test', UNIT_NUM=$unit_num;
+eval CREATE TENANT tenant_test_ttl PRIMARY_ZONE = $zone, REPLICA_NUM = 1, RESOURCE_POOL_LIST = ('pool_ttl_test') set ob_tcp_invited_nodes='%', ob_kv_mode='TABLEAPI';
+
+sleep 3;
+
+let $__tenant_name__ = 'tenant_test_ttl';
+--source mysql_test/include/get_tenant_server.inc
+connect (conn_test_ttl_root, $TE_SERVER_IP, root@tenant_test_ttl,,test, $TE_SERVER_PORT);
+connection conn_test_ttl_root;
+--enable_query_log
+
 alter system minor freeze;
 alter system set enable_kv_ttl = true;
 alter system set ttl_thread_score = 4;
@@ -70,3 +94,10 @@ select count(*) from ttl_table_ts_column_order;
 select TABLE_NAME, TRIGGER_TYPE, STATUS, TTL_DEL_CNT, MAX_VERSION_DEL_CNT, SCAN_CNT, RET_CODE from oceanbase.DBA_OB_KV_TTL_TASK_HISTORY where table_name = 'ttl_table_ts_column_order' order by tablet_id;
 
 drop table ttl_table_ts_column_order;
+
+connection sys;
+--disable_query_log
+DROP TENANT IF EXISTS tenant_test_ttl FORCE;
+DROP RESOURCE POOL IF EXISTS pool_ttl_test;
+DROP RESOURCE UNIT IF EXISTS unit_ttl_test;
+--enable_query_log

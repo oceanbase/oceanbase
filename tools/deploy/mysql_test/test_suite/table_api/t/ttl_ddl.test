@@ -1,9 +1,32 @@
 #owner: shenyunlong.syl
 #owner group: shenzhen
 
-connect (conn_admin, $OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connect (sys,$OBMYSQL_MS0,admin,$OBMYSQL_PWD,test,$OBMYSQL_PORT);
+connection sys;
 
-connection default;
+--disable_query_log
+
+let $zone = query_get_value(select zone from oceanbase.dba_ob_zones, zone, 1);
+let $unit_num = query_get_value(select count(*) as c from oceanbase.__all_server group by zone, c, 1);
+
+--disable_warnings
+DROP TENANT IF EXISTS tenant_test_ttl FORCE;
+DROP RESOURCE POOL IF EXISTS pool_ttl_test;
+DROP RESOURCE UNIT IF EXISTS unit_ttl_test;
+--enable_warnings
+
+eval CREATE RESOURCE UNIT unit_ttl_test MAX_CPU=1, MEMORY_SIZE='2G';
+eval CREATE RESOURCE POOL pool_ttl_test UNIT='unit_ttl_test', UNIT_NUM=$unit_num;
+eval CREATE TENANT tenant_test_ttl PRIMARY_ZONE = $zone, REPLICA_NUM = 1, RESOURCE_POOL_LIST = ('pool_ttl_test') set ob_tcp_invited_nodes='%', ob_kv_mode='TABLEAPI';
+
+sleep 3;
+
+let $__tenant_name__ = 'tenant_test_ttl';
+--source mysql_test/include/get_tenant_server.inc
+connect (conn_test_ttl_root, $TE_SERVER_IP, root@tenant_test_ttl,,test, $TE_SERVER_PORT);
+connection conn_test_ttl_root;
+--enable_query_log
+
 
 ### test kv_attributes syntax
 --disable_warnings
@@ -72,7 +95,7 @@ CREATE TABLE test_kv_attr(
     PRIMARY KEY (K, Q, T)
 ) kv_attributes ='{"TimeSeries": {}}' partition by key(K) partitions 3;
 
---error 1235
+--error 10507
 CREATE TABLE test_kv_attr(
     K varbinary(1024) NOT NULL,
     Q varbinary(256)  NOT NULL,
@@ -362,6 +385,346 @@ alter table test_ttl add column d datetime;
 alter table test_ttl TTL( `d` + INTERVAL 1 second  );
 show create table test_ttl;
 
-
 drop table test_kv_attr;
 drop table test_ttl;
+
+--disable_warnings
+drop table if exists test_ttl_with_index;
+--enable_warnings
+CREATE TABLE test_ttl_with_index (
+  a INT PRIMARY KEY, 
+  b TIMESTAMP DEFAULT current_timestamp ON UPDATE current_timestamp,
+  index idx(b) local)
+TTL (b + INTERVAL 12 HOUR) KV_ATTRIBUTES ='{"TTLScanIndex": "idx"}';
+
+--disable_warnings
+drop table if exists test_ttl_with_index_1;
+--enable_warnings
+CREATE TABLE `test_ttl_with_index_1` (
+  `pagerowkey` varchar(1024) NOT NULL,
+  `request` longtext DEFAULT NULL,
+  `rawpage` longblob NOT NULL,
+  `pagecode` varchar(1024) NOT NULL,
+  `timestamp` bigint(20) NOT NULL,
+  `_expire_ts` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY `u_idx_pagerowkey` (`pagerowkey`) storing (_expire_ts)
+) ORGANIZATION = HEAP DEFAULT CHARSET = utf8mb4 
+ TTL (_expire_ts + INTERVAL 1 DAY) KV_ATTRIBUTES ='{"TTLScanIndex": "u_idx_pagerowkey"}';
+
+--error 1280
+CREATE TABLE test_ttl_with_index_2 (
+  a INT PRIMARY KEY, 
+  b TIMESTAMP DEFAULT current_timestamp ON UPDATE current_timestamp,
+  index idx(b) local)
+TTL (b + INTERVAL 12 HOUR) KV_ATTRIBUTES ='{"TTLScanIndex": "idx_not_exist"}';
+
+--error 1235
+CREATE TABLE test_ttl_with_index_3 (
+  a INT PRIMARY KEY, 
+  b TIMESTAMP DEFAULT current_timestamp ON UPDATE current_timestamp,
+  c varchar(128),
+  index idx1(c) local)
+TTL (b + INTERVAL 12 HOUR) KV_ATTRIBUTES ='{"TTLScanIndex": "idx1"}';
+
+--error 1235
+CREATE TABLE `test_ttl_with_index_4` (
+  `pagerowkey` varchar(1024) NOT NULL,
+  `request` longtext DEFAULT NULL,
+  `rawpage` longblob NOT NULL,
+  `pagecode` varchar(1024) NOT NULL,
+  `timestamp` bigint(20) NOT NULL,
+  `_expire_ts` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY `u_idx_pagerowkey` (`pagerowkey`) storing (pagecode)
+) ORGANIZATION = HEAP DEFAULT CHARSET = utf8mb4 
+ TTL (_expire_ts + INTERVAL 547 DAY) KV_ATTRIBUTES ='{"TTLScanIndex": "u_idx_pagerowkey"}';
+
+--disable_warnings
+drop table if exists test_ttl_with_index_5;
+--enable_warnings
+CREATE TABLE test_ttl_with_index_5 (
+  a INT PRIMARY KEY, 
+  b TIMESTAMP DEFAULT current_timestamp ON UPDATE current_timestamp,
+  c varchar(128),
+  index idx(b) local,
+  index idx2(c) local)
+TTL (b + INTERVAL 12 HOUR) KV_ATTRIBUTES ='{"TTLScanIndex": "idx"}';
+
+--error 1280
+alter table test_ttl_with_index_5 kv_attributes = '{"TTLScanIndex": "idx_not_exist"}';
+
+--error 1235
+alter table test_ttl_with_index_5 kv_attributes = '{"TTLScanIndex": "idx2"}';
+
+alter table test_ttl_with_index_5 add key idx3(b, c);
+
+alter table test_ttl_with_index_5 kv_attributes = '{"TTLScanIndex": "idx3"}';
+
+alter table test_ttl_with_index_5 add key idx4(b) storing(c);
+
+alter table test_ttl_with_index_5 kv_attributes = '{"TTLScanIndex": "idx4"}';
+
+--error 1235
+alter table test_ttl_with_index_5 drop key idx4;
+--error 1235
+drop index idx4 on test_ttl_with_index_5;
+
+--disable_warnings
+drop table if exists test_ttl_with_index_6;
+--enable_warnings
+CREATE TABLE test_ttl_with_index_6 (
+  a INT PRIMARY KEY, 
+  b TIMESTAMP DEFAULT current_timestamp ON UPDATE current_timestamp,
+  c varchar(128),
+  index idx(b) local,
+  index idx2(c) local)
+TTL (b + INTERVAL 12 HOUR) ;
+
+--error 1280
+alter table test_ttl_with_index_6 kv_attributes = '{"TTLScanIndex": "idx3"}';
+--error 1235
+alter table test_ttl_with_index_6 kv_attributes = '{"TTLScanIndex": "idx2"}';
+
+alter table test_ttl_with_index_6 kv_attributes = '{"TTLScanIndex": "idx"}';
+
+--disable_warnings
+drop table if exists test_idx$cf1;
+--enable_warnings
+CREATE TABLE test_idx$cf1 (
+  K VARBINARY(1024), 
+  Q VARBINARY(256), 
+  T BIGINT, 
+  V VARBINARY(1048576) NOT NULL, 
+  PRIMARY KEY(K, Q, T),
+  index idx(K, Q, T) local)
+KV_ATTRIBUTES ='{"Hbase": {"TimeToLive": 3600, "MaxVersions": 3}, "TTLScanIndex": "idx"}'
+PARTITION BY KEY(K) PARTITIONS 3;
+
+--error 1235
+CREATE TABLE test_idx$cf2 (
+  K VARBINARY(1024), 
+  Q VARBINARY(256), 
+  T BIGINT, 
+  V VARBINARY(1048576) NOT NULL, 
+  TTL bigint(20) DEFAULT NULL,
+  PRIMARY KEY(K, Q, T),
+  index idx(K, Q, T) local)
+KV_ATTRIBUTES ='{"Hbase": {"TimeToLive": 3600, "MaxVersions": 3}, "TTLScanIndex": "idx"}'
+PARTITION BY KEY(K) PARTITIONS 3;
+
+--disable_warnings
+drop table if exists test_idx$cf3;
+--enable_warnings
+--error 1235
+CREATE TABLE test_idx$cf3 (
+  K VARBINARY(1024), 
+  Q VARBINARY(256), 
+  T BIGINT, 
+  V VARBINARY(1048576) NOT NULL, 
+  PRIMARY KEY(K, Q, T),
+  index idx(K, Q) storing (T) local)
+KV_ATTRIBUTES ='{"Hbase": {"TimeToLive": 3600, "MaxVersions": 3}, "TTLScanIndex": "idx"}'
+PARTITION BY KEY(K) PARTITIONS 3;
+
+# 测试时序模型
+--error 1235
+CREATE TABLE test_ts_index$cf1 (
+  K VARBINARY(1024), 
+  T BIGINT, 
+  S BIGINT,
+  V json NOT NULL, 
+  PRIMARY KEY(K, T, S),
+  index idx(K, T, S) local)
+KV_ATTRIBUTES ='{"HBase":{}, "TTLScanIndex": "idx"}';
+
+--error 1235
+CREATE TABLE test_ts_index$cf2 (
+  K varbinary(1024) NOT NULL,
+  T bigint(20) NOT NULL,
+  S bigint(20) NOT NULL,
+  V json NOT NULL,
+  G bigint(20) GENERATED ALWAYS AS (ABS(T)),
+  TTL bigint(20) DEFAULT NULL,
+  PRIMARY KEY (K, T, S)
+) KV_ATTRIBUTES = '{"HBase": {}}';
+
+--error 1235
+CREATE TABLE `test_ts_index$cf3` (
+  K varbinary(1024) NOT NULL,
+  T bigint(20) NOT NULL,
+  S bigint(20) NOT NULL,
+  V json NOT NULL,
+  TTL bigint(20) DEFAULT NULL,
+  G bigint(20) GENERATED ALWAYS AS (ABS(T)),
+  PRIMARY KEY (K, T, S)
+) KV_ATTRIBUTES = '{"HBase": {}}';
+
+--error 1235
+CREATE TABLE `test_ts_index$cf4` (
+  K varbinary(1024) NOT NULL,
+  T bigint(20) NOT NULL,
+  S bigint(20) NOT NULL,
+  V json NOT NULL,
+  G bigint(20) GENERATED ALWAYS AS (ABS(T)),
+  PRIMARY KEY (K, T, S)
+) KV_ATTRIBUTES = '{"HBase": {"maxVersions": 10}}';
+
+--error 1235
+CREATE TABLE `test_ts_index$cf5` (
+  K varbinary(1024) NOT NULL,
+  T bigint(20) NOT NULL,
+  S bigint(20) NOT NULL,
+  V json NOT NULL,
+  G bigint(20) GENERATED ALWAYS AS (ABS(T)),
+  PRIMARY KEY (K, T, S)
+) KV_ATTRIBUTES = '{"HBase": {"timeToLive": 3600}}';
+
+--disable_warnings
+drop table if exists test_ts_index$cf6;
+--enable_warnings
+CREATE TABLE `test_ts_index$cf6` (
+  K varbinary(1024) NOT NULL,
+  T bigint(20) NOT NULL,
+  S bigint(20) NOT NULL,
+  V json NOT NULL,
+  G bigint(20) GENERATED ALWAYS AS (ABS(T)),
+  PRIMARY KEY (K, T, S)
+) KV_ATTRIBUTES = '{"HBase": {}}';
+
+--error 1235
+alter table test_ts_index$cf6 kv_attributes = '{"HBase": {"maxVersions" : 10}}';
+
+--error 1235
+alter table test_ts_index$cf6 kv_attributes = '{"HBase": {"timeToLive" : 3600}}';
+
+--error 1235
+alter table test_ts_index$cf6 add column TTL bigint(20) DEFAULT NULL;
+
+--disable_warnings
+drop table if exists test_idx$cf4;
+--enable_warnings
+CREATE TABLE test_idx$cf4 (
+  K VARBINARY(1024), 
+  Q VARBINARY(256), 
+  T BIGINT, 
+  V VARBINARY(1048576) NOT NULL, 
+  PRIMARY KEY(K, Q, T))
+KV_ATTRIBUTES ='{"Hbase": {"TimeToLive": 3600, "MaxVersions": 3}}'
+PARTITION BY KEY(K) PARTITIONS 3;
+
+--error 1280
+alter table test_idx$cf4 kv_attributes = '{"Hbase": {"TimeToLive": 3600, "MaxVersions": 3}, "TTLScanIndex": "idx2"}';
+
+alter table test_idx$cf4 add key idx1(K, Q, T);
+
+--error 1280
+alter table test_idx$cf4 kv_attributes = '{"Hbase": {"TimeToLive": 3600, "MaxVersions": 3}, "TTLScanIndex": "idx2"}';
+
+alter table test_idx$cf4 kv_attributes = '{"Hbase": {"TimeToLive": 3600, "MaxVersions": 3},"TTLScanIndex": "idx1"}';
+
+--error 1235
+CREATE TABLE test_ttl_with_index_6 (
+  a INT PRIMARY KEY, 
+  b TIMESTAMP DEFAULT current_timestamp ON UPDATE current_timestamp,
+  c varchar(128),
+  index idx(b) global partition by key(b) partitions 3)
+TTL (b + INTERVAL 12 HOUR) KV_ATTRIBUTES ='{"TTLScanIndex": "idx"}';
+
+--disable_warnings
+drop table if exists test_ttl_with_index_6;
+--enable_warnings
+CREATE TABLE test_ttl_with_index_6 (
+  a INT PRIMARY KEY, 
+  b TIMESTAMP DEFAULT current_timestamp ON UPDATE current_timestamp,
+  c varchar(128),
+  index idx_g(b) global partition by key(b) partitions 3)
+TTL (b + INTERVAL 12 HOUR);
+
+--error 1235
+alter table test_ttl_with_index_6 kv_attributes = '{"TTLScanIndex": "idx_g"}';
+
+--error 1235
+CREATE TABLE test_idx$cf5 (
+  K VARBINARY(1024), 
+  Q VARBINARY(256), 
+  T BIGINT, 
+  V VARBINARY(1048576) NOT NULL, 
+  PRIMARY KEY(K, Q, T),
+  index idx(K,T,Q) local)
+KV_ATTRIBUTES ='{"Hbase": {"TimeToLive": 3600, "MaxVersions": 3}, "TTLScanIndex": "idx"}'
+PARTITION BY KEY(K) PARTITIONS 3;
+
+--disable_warnings
+drop table if exists test_idx$cf5;
+--enable_warnings
+CREATE TABLE test_idx$cf5 (
+  K VARBINARY(1024), 
+  Q VARBINARY(256), 
+  T BIGINT, 
+  V VARBINARY(1048576) NOT NULL, 
+  PRIMARY KEY(K, Q, T),
+  index idx(K,T,Q) local)
+KV_ATTRIBUTES ='{"Hbase": {"TimeToLive": 3600, "MaxVersions": 3}}';
+
+--error 1235
+alter table test_idx$cf5 kv_attributes = '{"Hbase": {"TimeToLive": 3600, "MaxVersions": 3},"TTLScanIndex": "idx"}';
+
+# 关闭并行建表
+alter system set _enable_parallel_table_creation = false;
+--disable_warnings
+drop table if exists test_idx$cf7;
+--enable_warnings
+CREATE TABLE test_idx$cf7 (
+  K VARBINARY(1024), 
+  Q VARBINARY(256), 
+  T BIGINT, 
+  V VARBINARY(1048576) NOT NULL, 
+  PRIMARY KEY(K, Q, T),
+  index idx(K, Q, T) local)
+KV_ATTRIBUTES ='{"Hbase": {"TimeToLive": 3600, "MaxVersions": 3}, "TTLScanIndex": "idx"}'
+PARTITION BY KEY(K) PARTITIONS 3;
+set _show_ddl_in_compat_mode = 1;
+show create table test_idx$cf7;
+set _show_ddl_in_compat_mode = 0;
+show create table test_idx$cf7;
+drop table test_idx$cf7;
+
+# 开启并行建表, 默认即开启
+alter system set _enable_parallel_table_creation = true;
+--disable_warnings
+drop table if exists test_idx$cf7;
+--enable_warnings
+CREATE TABLE test_idx$cf7 (
+  K VARBINARY(1024), 
+  Q VARBINARY(256), 
+  T BIGINT, 
+  V VARBINARY(1048576) NOT NULL, 
+  PRIMARY KEY(K, Q, T),
+  index idx(K, Q, T) local)
+KV_ATTRIBUTES ='{"Hbase": {"TimeToLive": 3600, "MaxVersions": 3}, "TTLScanIndex": "idx"}'
+PARTITION BY KEY(K) PARTITIONS 3;
+set _show_ddl_in_compat_mode = 1;
+show create table test_idx$cf7;
+set _show_ddl_in_compat_mode = 0;
+show create table test_idx$cf7;
+drop table test_idx$cf7;
+
+--disable_warnings
+drop table if exists test_ttl_with_index;
+drop table if exists test_ttl_with_index_1;
+drop table if exists test_ttl_with_index_2;
+drop table if exists test_ttl_with_index_3;
+drop table if exists test_ttl_with_index_4;
+drop table if exists test_ttl_with_index_5;
+drop table if exists test_ttl_with_index_6;
+drop table if exists test_idx$cf1;
+drop table if exists test_idx$cf2;
+drop table if exists test_idx$cf3;
+drop table if exists test_ts_index$cf1;
+drop table if exists test_ts_index$cf2;
+drop table if exists test_ts_index$cf3;
+drop table if exists test_ts_index$cf4;
+drop table if exists test_ts_index$cf5;
+drop table if exists test_ts_index$cf6;
+drop table if exists test_idx$cf4;
+drop table if exists test_idx$cf5;
+--enable_warnings
