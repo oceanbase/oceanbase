@@ -221,15 +221,3 @@ jobs:
           echo "=== Farm result ==="
           cat farm_result.json
 
-      - name: Job summary (where to find logs)
-        run: |
-          BASE_TASK_DIR="${{ github.workspace }}/farm_build/${{ github.run_id }}"
-          echo "## FARM CI 结果与日志" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| 内容 | 路径 | 说明 |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|------|------|------|" >> "$GITHUB_STEP_SUMMARY"
-          echo "| 汇总结果 | \`$BASE_TASK_DIR/farm_result.json\` | 各 slice 合并后的 success/failed_cases |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| 单 slice 结果 | \`$BASE_TASK_DIR/slice_N/farm_result.json\` | 各 slice 的 farm_result.json |" >> "$GITHUB_STEP_SUMMARY"
-          echo "| 失败时详细日志 | \`$BASE_TASK_DIR/slice_N/collected_log_N.tar.gz\` | obd_log、mysqltest_log、mysqltest_rec_log、core，仅失败时写入 |" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "所有文件均保存在 runner 节点的 \`$BASE_TASK_DIR\` 目录下。" >> "$GITHUB_STEP_SUMMARY"
