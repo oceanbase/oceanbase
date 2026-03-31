@@ -93,7 +93,8 @@ public:
     tablet_id_(tablet_id),
     query_(query),
     qualifier_with_family_(qualifier_with_family),
-    use_wildcard_column_tracker_(false)
+    use_wildcard_column_tracker_(false),
+    use_for_delete_(false)
   {}
   ObHbaseQuery(ObTableQuery &query, bool qualifier_with_family)
   : table_id_(OB_INVALID_ID),
@@ -101,7 +102,8 @@ public:
     query_(query),
     table_name_(),
     qualifier_with_family_(qualifier_with_family),
-    use_wildcard_column_tracker_(false)
+    use_wildcard_column_tracker_(false),
+    use_for_delete_(false)
   {}
   virtual ~ObHbaseQuery() = default;
 
@@ -111,6 +113,9 @@ public:
   OB_INLINE const ObTableQuery &get_query() const { return query_; }
   OB_INLINE bool get_qualifier_with_family() const { return qualifier_with_family_; }
 
+  OB_INLINE bool use_for_delete() const { return use_for_delete_; }
+  OB_INLINE void set_use_for_delete(bool is_enable) { use_for_delete_ = is_enable; }
+
   OB_INLINE void set_table_id(const uint64_t table_id) { table_id_ = table_id; }
   OB_INLINE void set_tablet_id(const common::ObTabletID &tablet_id) { tablet_id_ = tablet_id; }
 
@@ -119,7 +124,7 @@ public:
 
   OB_INLINE void set_use_wildcard_column_tracker(bool is_enable) { use_wildcard_column_tracker_ = is_enable; }
   OB_INLINE bool use_wildcard_column_tracker() const { return use_wildcard_column_tracker_; }
-  TO_STRING_KV(K_(table_id), K_(tablet_id), K_(query), K_(table_name), K_(qualifier_with_family));
+  TO_STRING_KV(K_(table_id), K_(tablet_id), K_(query), K_(table_name), K_(qualifier_with_family), K_(use_for_delete));
 private:
   uint64_t table_id_;
   common::ObTabletID tablet_id_;
@@ -128,6 +133,8 @@ private:
   bool qualifier_with_family_; // e.g., cf1.c1
   // note: when it is enable, force to use wildcard_column_tracker_ which will get all qualify
   bool use_wildcard_column_tracker_;
+
+  bool use_for_delete_;
 };
 
 class ObTableMergeFilterCompare

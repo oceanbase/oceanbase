@@ -1784,7 +1784,8 @@ ObHTableFilter::ObHTableFilter()
      max_versions_(1),
      limit_per_row_per_cf_(-1),
      offset_per_row_per_cf_(0),
-     filter_string_()
+     filter_string_(),
+     keep_max_versions_(false)
 {}
 
 void ObHTableFilter::reset()
@@ -1797,7 +1798,7 @@ void ObHTableFilter::reset()
   limit_per_row_per_cf_ = -1;
   offset_per_row_per_cf_ = 0;
   filter_string_.reset();
-
+  keep_max_versions_ = false;
 }
 
 int ObHTableFilter::add_column(const ObString &qualifier)
@@ -1888,6 +1889,7 @@ uint64_t ObHTableFilter::get_checksum() const
   checksum = ob_crc64(checksum, &limit_per_row_per_cf_, sizeof(limit_per_row_per_cf_));
   checksum = ob_crc64(checksum, &offset_per_row_per_cf_, sizeof(offset_per_row_per_cf_));
   checksum = ob_crc64(checksum, filter_string_.ptr(), filter_string_.length());
+  checksum = ob_crc64(checksum, &keep_max_versions_, sizeof(keep_max_versions_));
   return checksum;
 }
 
@@ -1915,6 +1917,7 @@ int ObHTableFilter::deep_copy(ObIAllocator &allocator, ObHTableFilter &dst) cons
     dst.max_versions_ = max_versions_;
     dst.limit_per_row_per_cf_ = limit_per_row_per_cf_;
     dst.offset_per_row_per_cf_ = offset_per_row_per_cf_;
+    dst.keep_max_versions_ = keep_max_versions_;
   }
 
   return ret;
@@ -1930,7 +1933,8 @@ OB_SERIALIZE_MEMBER_IF(ObHTableFilter,
                        max_versions_,
                        limit_per_row_per_cf_,
                        offset_per_row_per_cf_,
-                       filter_string_);
+                       filter_string_,
+                       keep_max_versions_);
 
 ////////////////////////////////////////////////////////////////
 int ObTableQueryIterableResultBase::append_family(ObNewRow &row, ObString family_name)

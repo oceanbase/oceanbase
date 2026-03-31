@@ -971,6 +971,7 @@ int ObHBaseModel::process_query_and_mutate_group(ObTableExecCtx &ctx,
   if (OB_FAIL(ret)) {
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < queries.count(); ++i) {
+      queries.at(i)->set_use_for_delete(true);
       if (!is_multi_cf_req_) {
         if (OB_FAIL(cf_service.del(*queries.at(i), ctx))) {
           LOG_WARN("failed to process query", K(ret), K(*queries.at(i)), K(i));
@@ -1033,6 +1034,7 @@ int ObHBaseModel::process_query_and_mutate_group(ObTableExecCtx &ctx,
                   LOG_WARN("table not exist", K(ret), K(real_table_name));
                 } else {
                   ObHbaseQuery new_query(queries.at(i)->get_query(), false);
+                  new_query.set_use_for_delete(true);
                   // set real table id and invalid tablet id to avoid 4377
                   new_query.set_table_id(real_simple_schema->get_table_id());
                   if (OB_FAIL(cf_service.del(new_query, cell, ctx))) {
@@ -1363,8 +1365,11 @@ int ObHBaseModel::process_batch_mutation_group(ObTableExecCtx &ctx,
           ObHbaseQuery query(table_query, false);
           if (OB_FAIL(construct_del_query(table_cells, ctx, cf_service, query))) {
             LOG_WARN("failed to construct del query", K(ret));
-          } else if (OB_FAIL(cf_service.del(query, ctx))) {
-            LOG_WARN("failed to del", K(ret));
+          } else {
+            query.set_use_for_delete(true);
+            if (OB_FAIL(cf_service.del(query, ctx))) {
+              LOG_WARN("failed to del", K(ret));
+            }
           }
         }
         break;
