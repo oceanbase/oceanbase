@@ -21,8 +21,12 @@ if [[ -n "${FORWARDING_HOST:-}" ]]; then
   echo "$FORWARDING_HOST mirrors.oceanbase.com" >> /etc/hosts 2>/dev/null || true
 fi
 
-mkdir -p "$TASK_DIR"
+deps_file="$WORKSPACE/deps/init/oceanbase.el7.x86_64.deps"
+if [[ -f "$deps_file" ]]; then
+  sed -i 's/mirrors.aliyun.com/mirrors.cloud.aliyuncs.com/g' "$deps_file"
+fi
 
+mkdir -p "$TASK_DIR"
 compile_ret=0
 if [[ -f "$SCRIPTS_DIR/farm_compile.sh" ]]; then
   set +e
