@@ -95,15 +95,6 @@ private:
     LEADER_2_LEADER = 4,
     MAX_RC_OPT_TYPE = 5
   };
-  enum class SyncModeChangeOptType {
-    INVALID_SYNC_MODE_OPT_TYPE = 0,
-    INVALID_2_VALID = 1,
-    ASYNC_2_SYNC = 2,
-    SYNC_2_PRE_ASYNC = 3,
-    PRE_ASYNC_2_ASYNC = 4,
-    ASYNC_2_PRE_ASYNC = 5,
-    MAX_SYNC_MODE_OPT_TYPE = 6
-  };
   enum class RetrySubmitRoleChangeEventReason {
     INVALID_TYPE = 0,
     WAIT_REPLAY_DONE_TIMEOUT = 1,
@@ -226,8 +217,6 @@ private:
   RoleChangeOptType get_role_change_opt_type_(const common::ObRole &old_role,
                                               const common::ObRole &new_role,
                                               const bool need_transform_by_access_mode) const;
-  SyncModeChangeOptType get_sync_mode_change_opt_type_(const palf::SyncMode &old_sync_mode,
-                                                       const palf::SyncMode &new_sync_mode) const;
   // retry submit role change event
   // NB: nowdays, we only support retry submit role change event when wait replay finished
   //     timeout.

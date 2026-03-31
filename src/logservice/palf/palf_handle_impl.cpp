@@ -2431,7 +2431,6 @@ int PalfHandleImpl::get_access_mode_ref_scn(int64_t &mode_version,
 int PalfHandleImpl::change_sync_mode(const int64_t proposal_id,
                                      const int64_t mode_version,
                                      const SyncMode &sync_mode,
-                                     const bool need_role_change,
                                      int64_t &new_mode_version,
                                      int64_t &new_proposal_id)
 {
@@ -2501,9 +2500,7 @@ int PalfHandleImpl::change_sync_mode(const int64_t proposal_id,
       if (OB_SUCC(ret)) {
         RLockGuard guard(lock_);
         int tmp_ret = OB_SUCCESS;
-        if (need_role_change && OB_TMP_FAIL(role_change_cb_wrpper_.on_role_change(palf_id_))) {
-          PALF_LOG(WARN, "on_role_change failed", K(tmp_ret), K_(palf_id), K_(self));
-        } else if (!need_role_change && OB_TMP_FAIL(role_change_cb_wrpper_.on_sync_mode_change(palf_id_))) {
+        if (OB_TMP_FAIL(role_change_cb_wrpper_.on_sync_mode_change(palf_id_))) {
           PALF_LOG(WARN, "on_sync_mode_change failed", K(tmp_ret), K_(palf_id), K_(self));
         }
         PALF_EVENT("change_sync_mode success", palf_id_, K(ret), KPC(this),

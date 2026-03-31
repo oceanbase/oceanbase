@@ -108,7 +108,8 @@ ObTransportServiceSubmitTask::ObTransportServiceSubmitTask():
     base_scn_(),
     next_to_submit_lsn_(),
     next_to_submit_scn_(),
-    iterator_()
+    iterator_(),
+    is_inited_(false)
 {
   type_ = ObTransportServiceTaskType::TRANSPORT_SUBMIT_TASK;
 }
@@ -126,6 +127,7 @@ void ObTransportServiceSubmitTask::reset()
   next_to_submit_lsn_.reset();
   next_to_submit_scn_.reset();
   lease_.reset();
+  is_inited_ = false;
 }
 
 void ObTransportServiceSubmitTask::destroy()
@@ -159,6 +161,7 @@ int ObTransportServiceSubmitTask::init(const share::ObLSID &ls_id,
     base_lsn_ = base_lsn;
     base_scn_ = base_scn;
     type_ = ObTransportServiceTaskType::TRANSPORT_SUBMIT_TASK;
+    is_inited_ = true;
     if (OB_SUCCESS != (tmp_ret = iterator_.next())) {
       // 在没有写入的情况下有可能已经到达边界
       CLOG_LOG(WARN, "iterator next failed", K(iterator_), K(tmp_ret));
@@ -1016,7 +1019,7 @@ void LogTransportStatus::mark_ls_gc_state()
 
 bool LogTransportStatus::need_submit_log() const
 {
-  return (role_ == common::ObRole::LEADER) && is_enabled_without_lock() && standby_addr_valid_;
+  return (role_ == common::ObRole::LEADER) && is_enabled_without_lock() && standby_addr_valid_ && tp_submit_task_.is_inited();
 }
 
 bool LogTransportStatus::is_sync_mode_enabled() const

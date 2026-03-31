@@ -2686,7 +2686,6 @@ int ObLogHandler::change_sync_mode(const int64_t mode_version,
   palf::SyncMode curr_sync_mode = palf::SyncMode::INVALID_SYNC_MODE;
   common::ObRole curr_role = common::FOLLOWER;
   bool is_pending_state = false;
-  bool need_role_change = false;
   RLockGuard guard(lock_);
   int64_t proposal_id = ATOMIC_LOAD(&proposal_id_);
   if (IS_NOT_INIT) {
@@ -2714,11 +2713,11 @@ int ObLogHandler::change_sync_mode(const int64_t mode_version,
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(palf_handle_->change_sync_mode(proposal_id, mode_version, sync_mode, need_role_change, new_mode_version, new_proposal_id))) {
-    CLOG_LOG(WARN, "palf change_sync_mode failed", K(ret), K_(id), K(proposal_id), K(mode_version), K(sync_mode), K(need_role_change), K(is_degrade_request));
+  } else if (OB_FAIL(palf_handle_->change_sync_mode(proposal_id, mode_version, sync_mode, new_mode_version, new_proposal_id))) {
+    CLOG_LOG(WARN, "palf change_sync_mode failed", K(ret), K_(id), K(proposal_id), K(mode_version), K(sync_mode), K(is_degrade_request));
   } else {
     FLOG_INFO("change_sync_mode success", K(ret), K_(id), K(proposal_id), K(mode_version), K(sync_mode),
-      K(new_proposal_id), K(need_role_change), K(is_degrade_request));
+      K(new_proposal_id), K(is_degrade_request));
   }
   return ret;
 }

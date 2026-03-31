@@ -601,13 +601,12 @@ int PalfHandle::get_access_mode_ref_scn(int64_t &mode_version,
 int PalfHandle::change_sync_mode(const int64_t proposal_id,
                                  const int64_t mode_version,
                                  const ipalf::SyncMode &sync_mode,
-                                 const bool need_role_change,
                                  int64_t &new_mode_version,
                                  int64_t &out_proposal_id)
 {
   int ret = OB_SUCCESS;
   CHECK_VALID;
-  ret = palf_handle_impl_->change_sync_mode(proposal_id, mode_version, sync_mode, need_role_change, new_mode_version, out_proposal_id);
+  ret = palf_handle_impl_->change_sync_mode(proposal_id, mode_version, sync_mode, new_mode_version, out_proposal_id);
   return ret;
 }
 

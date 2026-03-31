@@ -598,7 +598,7 @@ int ObLogRestoreHandler::handle_sync_mode_log_(const int64_t proposal_id,
     if (target_sync_mode != palf::SyncMode::INVALID_SYNC_MODE
         && curr_sync_mode != target_sync_mode) {
       int64_t new_mode_version = INVALID_PROPOSAL_ID;
-      if (OB_FAIL(palf_handle_->change_sync_mode(proposal_id, mode_version, target_sync_mode, false,
+      if (OB_FAIL(palf_handle_->change_sync_mode(proposal_id, mode_version, target_sync_mode,
                                                  new_mode_version, new_proposal_id))) {
         CLOG_LOG(WARN, "change_sync_mode failed", K(ret), K(id_), K(mode_version),
                  K(curr_sync_mode), K(target_sync_mode), K(scn), K(lsn));

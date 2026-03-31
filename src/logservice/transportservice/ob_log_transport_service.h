@@ -140,6 +140,7 @@ public:
            LogTransportStatus *transport_status);
   void reset() override;
   void destroy() override;
+  bool is_inited() const { return is_inited_; }
 
   bool has_remained_submit_log(const share::SCN &transported_point,
                                bool &iterate_end_by_transported_point);
@@ -157,7 +158,8 @@ public:
                        K(base_scn_),
                        K(next_to_submit_lsn_),
                        K(next_to_submit_scn_),
-                       K(iterator_));
+                       K(iterator_),
+                       K_(is_inited));
 private:
   int update_next_to_submit_lsn_(const palf::LSN &lsn);
   int update_next_to_submit_scn_(const share::SCN &scn);
@@ -169,6 +171,7 @@ private:
   palf::LSN next_to_submit_lsn_;
   share::SCN next_to_submit_scn_;
   ipalf::IPalfIterator<ipalf::IGroupEntry> iterator_;
+  bool is_inited_;
 };
 
 // 传输日志任务

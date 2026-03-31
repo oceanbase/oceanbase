@@ -524,7 +524,6 @@ public:
   virtual int change_sync_mode(const int64_t proposal_id,
                                const int64_t mode_version,
                                const ipalf::SyncMode &sync_mode,
-                               const bool need_role_change,
                                int64_t &new_mode_version,
                                int64_t &out_proposal_id) override final;
   virtual int get_sync_mode(int64_t &mode_version, ipalf::SyncMode &sync_mode) const override final;

@@ -614,7 +614,6 @@ int ObRoleChangeService::handle_sync_mode_event_for_log_handler_(ObLS *ls)
   ObRole curr_role = ObRole::INVALID_ROLE;
   SyncMode curr_sync_mode = SyncMode::ASYNC;
   SyncMode new_sync_mode = SyncMode::ASYNC;
-  SyncModeChangeOptType sync_mode_change_opt_type = SyncModeChangeOptType::INVALID_SYNC_MODE_OPT_TYPE;
   ObLogHandler *log_handler = ls->get_log_handler();
   if (OB_ISNULL(log_handler)) {
     ret = OB_ERR_UNEXPECTED;
@@ -625,7 +624,6 @@ int ObRoleChangeService::handle_sync_mode_event_for_log_handler_(ObLS *ls)
   } else if (false == need_execute_sync_mode_change(curr_proposal_id, new_proposal_id,
         is_pending_state, log_handler_is_offline, curr_sync_mode, new_sync_mode)) {
     CLOG_LOG(INFO, "no need execute sync_mode change", K(curr_proposal_id), K(new_proposal_id), K(is_pending_state), K(log_handler_is_offline), K(curr_sync_mode), K(new_sync_mode), KPC(ls));
-  } else if (FALSE_IT(sync_mode_change_opt_type = get_sync_mode_change_opt_type_(curr_sync_mode, new_sync_mode))) {
   } else {
     if (palf::SyncMode::PRE_ASYNC == new_sync_mode) {
       log_handler->set_pre_async_blocked();
@@ -680,7 +678,6 @@ int ObRoleChangeService::handle_sync_mode_event_for_restore_handler_(ObLS *ls)
   ObRole curr_role = ObRole::INVALID_ROLE;
   SyncMode curr_sync_mode = SyncMode::ASYNC;
   SyncMode new_sync_mode = SyncMode::ASYNC;
-  SyncModeChangeOptType sync_mode_change_opt_type = SyncModeChangeOptType::INVALID_SYNC_MODE_OPT_TYPE;
   if (OB_FAIL(ls->get_log_restore_handler()->prepare_switch_role(
         curr_proposal_id, new_proposal_id, curr_role, is_pending_state, curr_sync_mode, new_sync_mode))) {
     CLOG_LOG(WARN, "ObRestoreHandler prepare_switch_role failed", K(ret), K(curr_proposal_id), K(new_proposal_id), K(new_sync_mode));
@@ -1185,42 +1182,6 @@ ObRoleChangeService::RoleChangeOptType ObRoleChangeService::get_role_change_opt_
   }
   CLOG_LOG(INFO, "get_role_change_opt_type_", K(old_role), K(new_role), K(need_transform_by_access_mode), K(rc_opt_type));
   return rc_opt_type;
-}
-
-ObRoleChangeService::SyncModeChangeOptType ObRoleChangeService::get_sync_mode_change_opt_type_(
-    const palf::SyncMode &old_sync_mode,
-    const palf::SyncMode &new_sync_mode) const
-{
-  SyncModeChangeOptType sync_mode_change_opt_type = SyncModeChangeOptType::INVALID_SYNC_MODE_OPT_TYPE;
-  if (SyncMode::ASYNC == old_sync_mode && SyncMode::SYNC == new_sync_mode) {
-    sync_mode_change_opt_type = SyncModeChangeOptType::ASYNC_2_SYNC;
-  } else if (SyncMode::SYNC == old_sync_mode && SyncMode::PRE_ASYNC == new_sync_mode) {
-    sync_mode_change_opt_type = SyncModeChangeOptType::SYNC_2_PRE_ASYNC;
-  } else if (SyncMode::PRE_ASYNC == old_sync_mode && SyncMode::ASYNC == new_sync_mode) {
-    sync_mode_change_opt_type = SyncModeChangeOptType::PRE_ASYNC_2_ASYNC;
-  } else if (SyncMode::ASYNC == old_sync_mode && SyncMode::PRE_ASYNC == new_sync_mode) {
-    sync_mode_change_opt_type = SyncModeChangeOptType::ASYNC_2_PRE_ASYNC;
-  } else if (SyncMode::INVALID_SYNC_MODE == old_sync_mode) {
-    switch (new_sync_mode) {
-      case palf::SyncMode::ASYNC:
-        sync_mode_change_opt_type = SyncModeChangeOptType::SYNC_2_PRE_ASYNC;
-        break;
-      case palf::SyncMode::SYNC:
-        sync_mode_change_opt_type = SyncModeChangeOptType::ASYNC_2_SYNC;
-        break;
-      case palf::SyncMode::PRE_ASYNC:
-        sync_mode_change_opt_type = SyncModeChangeOptType::SYNC_2_PRE_ASYNC;
-        break;
-      default:
-        int ret = OB_ERR_UNEXPECTED;
-        CLOG_LOG(ERROR, "unexpected sync mode change", K(ret), K(old_sync_mode), K(new_sync_mode));
-    }
-  } else {
-    int ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(ERROR, "unexpected sync mode change", K(ret), K(old_sync_mode), K(new_sync_mode));
-  }
-  CLOG_LOG(INFO, "get_sync_mode_change_opt_type_", K(old_sync_mode), K(new_sync_mode), K(sync_mode_change_opt_type));
-  return sync_mode_change_opt_type;
 }
 
 // NB:

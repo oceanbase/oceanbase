@@ -1166,37 +1166,11 @@ int ObApplyStatus::update_last_check_scn_()
   } else if (OB_FAIL(ap_sv_->wait_append_sync(ls_id_))) {
     CLOG_LOG(WARN, "wait_append_sync failed", K(ret), K(ls_id_), KPC(this));
   } else {
-    // 强同步模式下，使用 min(palf_max_scn, standby_committed_end_scn_) 作为 last_check_scn_
-    SCN target_check_scn = palf_max_scn;
-    if (ATOMIC_LOAD(&is_sync_mode_) && !ATOMIC_LOAD(&is_ls_gc_state_)) {
-      const SCN cur_standby_committed_end_scn = standby_committed_end_scn_.atomic_load();
-      if (!palf_max_scn.is_valid()) {
-        ret = OB_EAGAIN;
-        CLOG_LOG(ERROR, "palf_max_scn is invalid in sync mode, skip update_last_check_scn",
-                 K(ls_id_), K_(is_sync_mode), K(palf_max_scn));
-      } else if (!cur_standby_committed_end_scn.is_valid()) {
-        ret = OB_EAGAIN;
-        CLOG_LOG(TRACE, "standby_committed_end_scn is invalid in sync mode, skip update_last_check_scn",
-                 K(ls_id_), K_(is_sync_mode), K(palf_max_scn));
-      } else {
-        target_check_scn = (palf_max_scn < cur_standby_committed_end_scn)
-                          ? palf_max_scn : cur_standby_committed_end_scn;
-      }
+    // TODO: maybe we need a more accurate way to specify the last_check_scm_ in sync_mode
+    for (int64_t i = 0; i < APPLY_TASK_QUEUE_SIZE; ++i) {
+      cb_queues_[i].set_snapshot_check_submit_cb_cnt();
     }
-    if (OB_SUCC(ret)) {
-      if (max_applied_cb_scn_.is_valid() && target_check_scn < max_applied_cb_scn_) {
-        ret = OB_EAGAIN;
-        // 备库可能没有同步到最新，需要等待下一轮检查，不能直接更新为
-        CLOG_LOG(TRACE, "target_check_scn regresses behind max_applied_cb_scn_, skip update",
-                 K(ls_id_), K(target_check_scn), K(max_applied_cb_scn_), K(palf_max_scn),
-                 K_(standby_committed_end_scn), K_(is_sync_mode));
-      } else {
-        for (int64_t i = 0; i < APPLY_TASK_QUEUE_SIZE; ++i) {
-          cb_queues_[i].set_snapshot_check_submit_cb_cnt();
-        }
-        last_check_scn_ = target_check_scn;
-      }
-    }
+    last_check_scn_ = palf_max_scn;
   }
   return ret;
 }
