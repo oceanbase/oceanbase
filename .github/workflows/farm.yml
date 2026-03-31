@@ -119,14 +119,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Place observer (from NFS or fallback wget)
+      - name: Place observer (from NFS)
         shell: bash
         run: |
           OBSERVER_ZST="${{ env.FARM_NFS_ROOT }}/${{ github.run_id }}/attempt-${{ github.run_attempt }}/setup/observer.zst"
           if [[ -f "$OBSERVER_ZST" ]]; then
             zstd -d -f -q -o observer "$OBSERVER_ZST" && chmod +x observer
           else
-            echo "observer not found on NFS, falling back to wget"
+            echo "observer not found on NFS"
           fi
           ls -la observer
       - name: Run mysqltest slice
