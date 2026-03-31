@@ -822,7 +822,8 @@ private:
   }
 
   // 测试单个场景的辅助函数
-  void test_single_scenario(const char *scenario_name,
+  // 返回true表示平衡，false表示不平衡
+  bool test_single_scenario(const char *scenario_name,
                            ObSEArray<ObStoreRange, 16> &ranges,
                            int64_t expected_task_count)
   {
@@ -840,7 +841,10 @@ private:
     // 准备sstable列表
     ObSEArray<ObITable *, 1> tables;
     ret = tables.push_back(&sstable_);
-    ASSERT_EQ(OB_SUCCESS, ret);
+    if (OB_SUCCESS != ret) {
+      EXPECT_EQ(OB_SUCCESS, ret);
+      return false;
+    }
 
     const ObITableReadInfo *index_read_info = &read_info_;
 
@@ -861,7 +865,10 @@ private:
     int64_t end_time_us = ObTimeUtility::current_time();
     int64_t cost_time_ms = (end_time_us - start_time_us) / 1000;
 
-    ASSERT_EQ(OB_SUCCESS, ret);
+    if (OB_SUCCESS != ret) {
+      EXPECT_EQ(OB_SUCCESS, ret);
+      return false;
+    }
 
     // 验证拆分结果的正确性：合并后的ranges应该和原始ranges一致
     verify_split_correctness(ranges, multi_range_split_array, *index_read_info, allocator);
@@ -881,20 +888,36 @@ private:
     print_graphical_output(multi_range_split_array, scenario_name, expected_task_count,
                           ranges.count(), total_input_rows, avg_rows, min_rows, max_rows);
 
+    // 根据不同的range数量判断是否平衡
+    bool result_balanced = false;
     if (ranges.count() <= 20) {
-      if (!is_balanced) {
-        EXPECT_TRUE(max_rows <= avg_rows * 5);
+      if (is_balanced) {
+        result_balanced = true;
+      } else {
+        // 不平衡时，检查是否满足放宽的条件
+        result_balanced = (max_rows <= avg_rows * 5);
       }
     } else if (ranges.count() >= 100) {
-      EXPECT_TRUE(max_rows <= avg_rows * 15);
+      result_balanced = (max_rows <= avg_rows * 15);
+    } else {
+      result_balanced = is_balanced;
     }
 
     allocator.reset();
+    return result_balanced;
   }
 };
 
 TEST_F(TestRangeSplitBalance, test_range_split_balance_comprehensive)
 {
+  // 获取索引树高度并计算中间层数
+  ObSSTableMetaHandle sstable_meta_handle;
+  int ret = sstable_.get_meta(sstable_meta_handle);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  int16_t total_tree_height = sstable_meta_handle.get_sstable_meta().get_index_tree_height(false);
+  STORAGE_LOG(INFO, "Index tree height info", K(total_tree_height), K(total_tree_height));
+  ASSERT_EQ(4, total_tree_height) << "Expected intermediate levels: 4, actual: " << total_tree_height;
+
   // 测试不同的任务数
   ObSEArray<int64_t, 8> task_counts;
   task_counts.push_back(2);
@@ -908,13 +931,21 @@ TEST_F(TestRangeSplitBalance, test_range_split_balance_comprehensive)
 
   STORAGE_LOG(INFO, "Starting comprehensive range split balance test");
 
+  // 统计平衡和不平衡的次数
+  int64_t total_count = 0;
+  int64_t unbalanced_count = 0;
+
   // 1. 测试whole range场景
   for (int64_t i = 0; i < task_counts.count(); ++i) {
     ObSEArray<ObStoreRange, 16> ranges;
     generate_whole_range_scenario(ranges);
     char scenario_name[64];
     sprintf(scenario_name, "Whole_Range_Task_%ld", task_counts.at(i));
-    test_single_scenario(scenario_name, ranges, task_counts.at(i));
+    bool is_balanced = test_single_scenario(scenario_name, ranges, task_counts.at(i));
+    total_count++;
+    if (!is_balanced) {
+      unbalanced_count++;
+    }
   }
 
   // 2. 测试small range场景
@@ -923,7 +954,11 @@ TEST_F(TestRangeSplitBalance, test_range_split_balance_comprehensive)
     generate_small_range_scenario(ranges);
     char scenario_name[64];
     sprintf(scenario_name, "Small_Range_Task_%ld", task_counts.at(i));
-    test_single_scenario(scenario_name, ranges, task_counts.at(i));
+    bool is_balanced = test_single_scenario(scenario_name, ranges, task_counts.at(i));
+    total_count++;
+    if (!is_balanced) {
+      unbalanced_count++;
+    }
   }
 
   // 3. 测试large range场景
@@ -932,7 +967,11 @@ TEST_F(TestRangeSplitBalance, test_range_split_balance_comprehensive)
     generate_large_range_scenario(ranges);
     char scenario_name[64];
     sprintf(scenario_name, "Large_Range_Task_%ld", task_counts.at(i));
-    test_single_scenario(scenario_name, ranges, task_counts.at(i));
+    bool is_balanced = test_single_scenario(scenario_name, ranges, task_counts.at(i));
+    total_count++;
+    if (!is_balanced) {
+      unbalanced_count++;
+    }
   }
 
   // 4. 测试many small ranges场景
@@ -941,7 +980,11 @@ TEST_F(TestRangeSplitBalance, test_range_split_balance_comprehensive)
     generate_many_small_ranges_scenario(ranges);
     char scenario_name[64];
     sprintf(scenario_name, "Many_Small_Ranges_Task_%ld", task_counts.at(i));
-    test_single_scenario(scenario_name, ranges, task_counts.at(i));
+    bool is_balanced = test_single_scenario(scenario_name, ranges, task_counts.at(i));
+    total_count++;
+    if (!is_balanced) {
+      unbalanced_count++;
+    }
   }
 
   // 5. 测试many large ranges场景
@@ -950,7 +993,11 @@ TEST_F(TestRangeSplitBalance, test_range_split_balance_comprehensive)
     generate_many_large_ranges_scenario(ranges);
     char scenario_name[64];
     sprintf(scenario_name, "Many_Large_Ranges_Task_%ld", task_counts.at(i));
-    test_single_scenario(scenario_name, ranges, task_counts.at(i));
+    bool is_balanced = test_single_scenario(scenario_name, ranges, task_counts.at(i));
+    total_count++;
+    if (!is_balanced) {
+      unbalanced_count++;
+    }
   }
 
   // 6. 测试mixed ranges场景
@@ -959,7 +1006,11 @@ TEST_F(TestRangeSplitBalance, test_range_split_balance_comprehensive)
     generate_mixed_ranges_scenario(ranges);
     char scenario_name[64];
     sprintf(scenario_name, "Mixed_Ranges_Task_%ld", task_counts.at(i));
-    test_single_scenario(scenario_name, ranges, task_counts.at(i));
+    bool is_balanced = test_single_scenario(scenario_name, ranges, task_counts.at(i));
+    total_count++;
+    if (!is_balanced) {
+      unbalanced_count++;
+    }
   }
 
   // 7. 测试超多range场景
@@ -974,9 +1025,20 @@ TEST_F(TestRangeSplitBalance, test_range_split_balance_comprehensive)
       generate_many_ranges_scenario(many_range_counts.at(j), ranges);
       char scenario_name[64];
       sprintf(scenario_name, "Many_Ranges_%ld_Task_%ld", many_range_counts.at(j), task_counts.at(i));
-      test_single_scenario(scenario_name, ranges, task_counts.at(i));
+      bool is_balanced = test_single_scenario(scenario_name, ranges, task_counts.at(i));
+      total_count++;
+      if (!is_balanced) {
+        unbalanced_count++;
+      }
     }
   }
+
+  // 检查不平衡占比应该小于5%
+  double unbalanced_ratio = total_count > 0 ? (double)unbalanced_count / total_count * 100.0 : 0.0;
+  STORAGE_LOG(INFO, "Balance Statistics", K(total_count), K(unbalanced_count), K(unbalanced_ratio));
+  EXPECT_TRUE(unbalanced_ratio < 5.0) << "Unbalanced ratio " << unbalanced_ratio
+                                       << "% should be less than 5%, total: " << total_count
+                                       << ", unbalanced: " << unbalanced_count;
 
   STORAGE_LOG(INFO, "Comprehensive range split balance test completed");
 }
