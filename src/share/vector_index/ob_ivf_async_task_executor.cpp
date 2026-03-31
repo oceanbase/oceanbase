@@ -158,13 +158,14 @@ int ObIvfAsyncTaskExector::LoadTaskCallback::operator()(ObIvfAuxTableInfoEntry &
   int ret = OB_SUCCESS;
   const ObIvfAuxTableInfo &table_info = entry.second;
   ObIAllocator *allocator = task_opt_.get_allocator();
+  bool should_load_task = true;
 
   if (!table_info.is_ivf_centroid_table_valid() && !table_info.is_ivf_pq_centroid_table_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("neither ivf centroid table nor ivf pq centroid table is ready for construction", K(ret), K(table_info));
+    should_load_task = false;
+    LOG_INFO("neither ivf centroid table nor ivf pq centroid table is ready for construction", K(table_info));
   }
 
-  for (int i = 0; OB_SUCC(ret) && i < table_info.count(); ++i) {
+  for (int i = 0; OB_SUCC(ret) && i < table_info.count() && should_load_task; ++i) {
     ObVecIndexAsyncTaskCtx *task_ctx = nullptr;
     int64_t new_task_id = OB_INVALID_ID;
     int64_t index_table_id = table_info.centroid_table_id_;
