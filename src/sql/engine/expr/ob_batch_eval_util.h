@@ -19,6 +19,7 @@
 #include "share/vector/ob_uniform_base.h"
 #include "share/vector/ob_discrete_base.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
+#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {
@@ -119,6 +120,13 @@ struct ObDoArithBatchEval
     ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
     const int64_t step_size = sizeof(uint16_t) * CHAR_BIT;
     common::ObDatumDesc desc;
+    // if ArithOp is for DatumFunctor which need alloc mem, here need set batch_info_idx
+    ObEvalCtx::BatchInfoScopeGuard *batch_info_guard = nullptr;
+    char guard_buffer[sizeof(ObEvalCtx::BatchInfoScopeGuard)];
+    if (ArithOp::is_need_alloc_mem()) {
+      batch_info_guard = new (guard_buffer) ObEvalCtx::BatchInfoScopeGuard(ctx);
+    }
+
     for (int64_t i = 0; i < size && OB_SUCC(ret);) {
       const int64_t bit_vec_off = i / step_size;
       const uint16_t skip_v = skip.reinterpret_data<uint16_t>()[bit_vec_off];
@@ -126,15 +134,24 @@ struct ObDoArithBatchEval
       if (i + step_size < size && (0 == (skip_v | eval_v))) {
         if (ArithOp::is_raw_op_supported() && in_frame_notnull) {
           for (int64_t j = 0; j < step_size; i++, j++) {
+            if (ArithOp::is_need_alloc_mem()) {
+              batch_info_guard->set_batch_idx(i);
+            }
             ArithOp::raw_op(iter.raw(i), l_it.raw(i), r_it.raw(i), args...);
           }
           i -= step_size;
           for (int64_t j = 0; OB_SUCC(ret) && j < step_size; i++, j++) {
+            if (ArithOp::is_need_alloc_mem()) {
+              batch_info_guard->set_batch_idx(i);
+            }
             iter.datum(i).pack_ = sizeof(typename ArithOp::RES_RAW_TYPE);
             ret = ArithOp::raw_check(iter.raw(i), l_it.raw(i), r_it.raw(i));
           }
         } else {
           for (int64_t j = 0; OB_SUCC(ret) && j < step_size; i++, j++) {
+            if (ArithOp::is_need_alloc_mem()) {
+              batch_info_guard->set_batch_idx(i);
+            }
             ret = ArithOp::datum_op(iter.datum(i), l_it.datum(i), r_it.datum(i), args...);
             desc.pack_ |= iter.datum(i).pack_;
           }
@@ -148,12 +165,20 @@ struct ObDoArithBatchEval
         const int64_t new_size = std::min(size, i + step_size);
         for (; i < new_size && OB_SUCC(ret); i++) {
           if (!(skip.at(i) || eval_flags.at(i))) {
+            if (ArithOp::is_need_alloc_mem()) {
+              batch_info_guard->set_batch_idx(i);
+            }
             ret = ArithOp::datum_op(iter.datum(i), l_it.datum(i), r_it.datum(i), args...);
             eval_flags.bit_or_assign(i, OB_SUCCESS == ret);
             desc.pack_ |= iter.datum(i).pack_;
           }
         }
       }
+    }
+
+    // ~BatchInfoScopeGuard and free memory
+    if (batch_info_guard) {
+      batch_info_guard->~BatchInfoScopeGuard();
     }
     if (OB_SUCC(ret) && desc.is_null()) {
       expr.get_eval_info(ctx).set_notnull(false);
@@ -725,6 +750,7 @@ struct ObArithOpRawType
 struct ObArithOpBase : public ObArithOpRawType<char, char, char>
 {
   constexpr static bool is_raw_op_supported() { return false; }
+  constexpr static bool is_need_alloc_mem() { return false; }
 
   template <typename... Args>
   static void raw_op(RES_RAW_TYPE &, const L_RAW_TYPE &, const R_RAW_TYPE, Args &...args) {}
@@ -741,6 +767,7 @@ struct ObArithTypedBase : public ObArithOpRawType<Res, Left, Right>
   {
     return false;
   }
+  constexpr static bool is_need_alloc_mem() { return false; }
 
   template <typename... Args>
   static void raw_op(Res &, const Left &, const Right, Args &...args)
@@ -766,6 +793,13 @@ struct ObWrapArithOpNullCheck: public ObArithOpBase
     }
     return ret;
   }
+};
+
+// Wrap arith operate with null check and DatumFunctor need alloc mem
+template <typename DatumFunctor>
+struct ObWrapArithOpNullCheckWithAllocMem: public ObWrapArithOpNullCheck<DatumFunctor>
+{
+  constexpr static bool is_need_alloc_mem() { return true; }
 };
 
 // Wrap arith operate with null check for vector.
@@ -797,6 +831,13 @@ template <typename DatumFunctor, typename... Args>
 int def_batch_arith_op_by_datum_func(BATCH_EVAL_FUNC_ARG_DECL, Args &...args)
 {
   return def_batch_arith_op<ObWrapArithOpNullCheck<DatumFunctor>, Args...>(
+      BATCH_EVAL_FUNC_ARG_LIST, args...);
+}
+
+template <typename DatumFunctor, typename... Args>
+int def_batch_arith_op_by_datum_func_with_mem_alloc(BATCH_EVAL_FUNC_ARG_DECL, Args &...args)
+{
+  return def_batch_arith_op<ObWrapArithOpNullCheckWithAllocMem<DatumFunctor>, Args...>(
       BATCH_EVAL_FUNC_ARG_LIST, args...);
 }
 
@@ -851,6 +892,7 @@ template <typename Base>
 struct ObArithOpWrap : public Base
 {
   constexpr static bool is_raw_op_supported() { return true; }
+  constexpr static bool is_need_alloc_mem() { return false; }
   template <typename... Args>
   int operator()(ObDatum &res, const ObDatum &l, const ObDatum &r, Args &...args) const
   {
@@ -884,6 +926,7 @@ template <typename Base>
 struct ObVectorArithOpWrap : public Base
 {
   constexpr static bool is_raw_op_supported() { return true; }
+  constexpr static bool is_need_alloc_mem() { return false; }
   template <typename ResVector, typename LeftVector, typename RightVector, typename... Args>
   int operator()(ResVector &res_vec, const LeftVector &left_vec, const RightVector &right_vec,
                  const int64_t idx, Args &... args) const

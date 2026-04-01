@@ -63,6 +63,10 @@ ObExprObjAccess::~ObExprObjAccess()
 {
 }
 
+ObExprObjAccess::ObjAccessExprAllocatorCtx::~ObjAccessExprAllocatorCtx()
+{
+}
+
 void ObExprObjAccess::ExtraInfo::reset()
 {
   get_attr_func_ = 0;
@@ -443,7 +447,8 @@ int ObExprObjAccess::ExtraInfo::calc(ObObj &result,
                                      const ParamStore &param_store,
                                      const common::ObObj *params,
                                      int64_t param_num,
-                                     ObEvalCtx *ctx) const
+                                     ObEvalCtx *ctx,
+                                     ObjAccessExprAllocatorCtx *access_obj_ctx) const
 {
   int ret = OB_SUCCESS;
   typedef int32_t (*GetAttr)(int64_t, int64_t [], int64_t *, int64_t *);
@@ -489,10 +494,23 @@ int ObExprObjAccess::ExtraInfo::calc(ObObj &result,
       if (OB_FAIL(ret)) {
       } else if (for_write_) {
         pl::ObPlCompiteWrite *composite_write = nullptr;
-        if (OB_ISNULL(composite_write =
-            static_cast<pl::ObPlCompiteWrite *>(ctx->get_expr_res_alloc().alloc(sizeof(pl::ObPlCompiteWrite))))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fail to alloca memory", K(ret));
+        if (access_obj_ctx == NULL) {
+          // alloc is ctx->get_top_expr_allocator() in ObSPIService::calc_obj_access_expr
+          if (OB_ISNULL(composite_write =
+              static_cast<pl::ObPlCompiteWrite *>(alloc.alloc(sizeof(pl::ObPlCompiteWrite))))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to alloca memory", K(ret));
+          }
+        } else {
+          // here expr is from ObExprObjAccess::eval_obj_access, use obj_access_ctx.allocator_
+          if (OB_ISNULL(composite_write =
+              reinterpret_cast<pl::ObPlCompiteWrite *>(access_obj_ctx->get_allocator().alloc(
+                        sizeof(pl::ObPlCompiteWrite))))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to alloca memory", K(ret));
+          }
+        }
+        if (OB_FAIL(ret)) {
         } else {
           composite_write->allocator_ = allocator_addr;
           composite_write->value_addr_ = attr_addr;
@@ -667,6 +685,8 @@ int ObExprObjAccess::eval_obj_access(const ObExpr &expr,
 
   ObObj result;
   ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+  ObjAccessExprAllocatorCtx *access_obj_ctx = NULL;
+  OZ(build_obj_access_ctx(expr, ctx.exec_ctx_, access_obj_ctx));
 
   if (OB_FAIL(ret)) {
     // do nothing
@@ -733,7 +753,8 @@ int ObExprObjAccess::eval_obj_access(const ObExpr &expr,
                     *effective_param_store_ptr,
                     params,
                     expr.arg_cnt_,
-                    &ctx));
+                    &ctx,
+                    access_obj_ctx));
     }
   }
 
@@ -744,7 +765,25 @@ int ObExprObjAccess::eval_obj_access(const ObExpr &expr,
   return ret;
 }
 
-
+int ObExprObjAccess::build_obj_access_ctx(const ObExpr &expr,
+                      ObExecContext &exec_ctx,
+                      ObjAccessExprAllocatorCtx *&obj_access_ctx)
+{
+  int ret = OB_SUCCESS;
+  uint64_t obj_access_ctx_id = static_cast<uint64_t>(expr.expr_ctx_id_);
+  if (OB_ISNULL(obj_access_ctx =
+      static_cast<ObjAccessExprAllocatorCtx *>(exec_ctx.get_expr_op_ctx(obj_access_ctx_id)))) {
+    if (OB_FAIL(exec_ctx.create_expr_op_ctx(obj_access_ctx_id, obj_access_ctx))) {
+      LOG_WARN("failed to create operator ctx", K(ret), K(obj_access_ctx_id));
+    } else if (OB_ISNULL(obj_access_ctx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected obj_access ctx", K(ret), KP(obj_access_ctx));
+    }
+  } else {
+    obj_access_ctx->reuse();
+  }
+  return ret;
+}
 
 }  // namespace sql
 }  // namespace oceanbase

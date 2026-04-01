@@ -528,7 +528,7 @@ int set_datum_json(sql::ObExpr *expr, sql::ObEvalCtx &eval_ctx, const ObString &
   int ret = OB_SUCCESS;
   ObEvalCtx::TempAllocGuard alloc_guard(eval_ctx);
   ObJsonNode *json_tree = nullptr;
-  ObJsonBinSerializer serializer(&eval_ctx.get_expr_res_alloc());
+  ObJsonBinSerializer serializer(&alloc_guard.get_allocator());
   ObString json_bin_string;
   if (OB_FAIL(ObJsonParser::get_tree(&alloc_guard.get_allocator(), in_str, json_tree))) {
     LOG_WARN("failed to parse json string", K(in_str));

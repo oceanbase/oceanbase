@@ -78,8 +78,7 @@ int ObExprCurrentUser::eval_current_user(const ObExpr &expr, ObEvalCtx &ctx,
       size_t buf_len = user_name.length() + hostname.length() + 2;
       size_t pos=0;
 
-      char *buf = static_cast<char *>(
-                    ctx.get_expr_res_alloc().alloc(buf_len));
+      char *buf = static_cast<char *>(expr.get_str_res_mem(ctx, buf_len));
       if (OB_ISNULL(buf)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc memory for result buf", K(ret), K(user_info));
