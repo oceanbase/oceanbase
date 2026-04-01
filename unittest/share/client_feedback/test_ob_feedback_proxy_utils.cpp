@@ -76,7 +76,7 @@ TEST(ObFeedbackProxyUtils, test_serialize_from_session)
   ASSERT_EQ(pos, 14);
 
   // result in hex
-  std::string hex_string = "0000010000003101000100000000";
+  std::string hex_string = "0000010000003101000100000031";
   verified = verifyHexString(buf, pos, hex_string);
   ASSERT_TRUE(verified);
 }

@@ -63,7 +63,10 @@ public:
     if (pos + KEY_PLACEHOLDER_LENGTH + VALUE_LENGTH_PLACEHOLDER_LENGTH > len) {
       ret = OB_SIZE_OVERFLOW;
       SERVER_LOG(WARN, "buffer size overflow", K(ret), K(pos), K(len), KPC(this));
-    } else if (OB_FAIL(serialization::encode(buf + KEY_PLACEHOLDER_LENGTH + VALUE_LENGTH_PLACEHOLDER_LENGTH, len, val_len, value_))) {
+    } else if (OB_FAIL(serialization::encode(buf + org_pos + KEY_PLACEHOLDER_LENGTH + VALUE_LENGTH_PLACEHOLDER_LENGTH,
+                                             len,
+                                             val_len,
+                                             value_))) {
       // 1. skip type and len, serialize value firstly
       SERVER_LOG(WARN, "serialize value in ObFeedbackProxyInfo failed", K(ret), K(pos), K(len), KPC(this));
     } else if (OB_FAIL(ObProtoTransUtil::store_type_and_len(buf, len, pos, type, val_len))) {

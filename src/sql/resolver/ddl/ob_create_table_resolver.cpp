@@ -281,7 +281,7 @@ int ObCreateTableResolver::set_temp_table_info(ObTableSchema &table_schema, Pars
 {
   int ret = OB_SUCCESS;
   uint64_t data_version = 0;
-  bool need_strong_routing = !table_schema.is_oracle_tmp_table_v2_index_table() && !table_schema.is_oracle_tmp_table_v2();
+  bool need_strong_routing = !(is_oracle_mode() && !is_old_oracle_temp_table_);
   if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is null", KR(ret));
