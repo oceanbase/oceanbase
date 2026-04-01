@@ -1565,30 +1565,69 @@ int ObSSTableMacroInfo::expand_block_ids(common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   if (entry_id_ != ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK) {
-    ObMacroIdIterator data_block_iter;
-    ObMacroIdIterator other_block_iter;
-    if (OB_FAIL(get_data_block_iter(data_block_iter))) {
-      LOG_WARN("fail to get data block iterator", K(ret));
-    } else if (OB_FAIL(get_other_block_iter(other_block_iter))) {
-      LOG_WARN("fail to get other block iterator", K(ret));
+    ObMacroIdIterator all_block_iter;
+    int64_t data_block_count = -1;
+    int64_t other_block_count = -1;
+    if (OB_FAIL(get_all_block_iter(all_block_iter))) {
+      LOG_WARN("fail to get all block iterator", K(ret));
+    } else if (OB_FAIL(all_block_iter.get_block_count(ObMacroIdIterator::Type::DATA_BLOCK, data_block_count))) {
+      LOG_WARN("fail to get data block count", K(ret));
+    } else if (OB_FAIL(all_block_iter.get_block_count(ObMacroIdIterator::Type::OTHER_BLOCK, other_block_count))) {
+      LOG_WARN("fail to get other block count", K(ret));
+    } else if (OB_UNLIKELY(data_block_count < 0 || other_block_count < 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected block count", K(ret), K(data_block_count), K(other_block_count), K_(entry_id));
     } else {
-      MacroBlockId *data_block_ids = static_cast<MacroBlockId *>(allocator.alloc(sizeof(MacroBlockId) * data_block_count_));
-      MacroBlockId *other_block_ids = static_cast<MacroBlockId *>(allocator.alloc(sizeof(MacroBlockId) * other_block_count_));
-      if (OB_ISNULL(data_block_ids) || OB_ISNULL(other_block_ids)) {
+      MacroBlockId *data_block_ids = nullptr;
+      MacroBlockId *other_block_ids = nullptr;
+      int64_t data_idx = 0;
+      int64_t other_idx = 0;
+      if (data_block_count > 0 && OB_ISNULL(data_block_ids = static_cast<MacroBlockId *>(
+          allocator.alloc(sizeof(MacroBlockId) * data_block_count)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to allocate memory for data block ids", K(ret));
+        LOG_WARN("fail to allocate memory for data block ids", K(ret), K(data_block_count));
+      } else if (other_block_count > 0 && OB_ISNULL(other_block_ids = static_cast<MacroBlockId *>(
+          allocator.alloc(sizeof(MacroBlockId) * other_block_count)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to allocate memory for other block ids", K(ret), K(other_block_count));
       } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < data_block_count_; ++i) {
-          new (data_block_ids + i) MacroBlockId();
-          if (OB_FAIL(data_block_iter.get_next_macro_id(*(data_block_ids + i)))) {
-            LOG_WARN("fail to get next macro id", K(ret));
+        while (OB_SUCC(ret)) {
+          MacroBlockId macro_id;
+          ObMacroIdIterator::Type block_type = ObMacroIdIterator::Type::MAX;
+          if (OB_FAIL(all_block_iter.get_next_macro_id(macro_id, block_type))) {
+            if (OB_ITER_END == ret) {
+              ret = OB_SUCCESS;
+              break;
+            } else {
+              LOG_WARN("fail to get next macro id", K(ret));
+            }
+          } else if (ObMacroIdIterator::Type::DATA_BLOCK == block_type) {
+            if (OB_UNLIKELY(data_idx >= data_block_count || OB_ISNULL(data_block_ids))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected data block id", K(ret), K(data_idx), K(data_block_count), KP(data_block_ids));
+            } else {
+              new (data_block_ids + data_idx) MacroBlockId(macro_id);
+              ++data_idx;
+            }
+          } else if (ObMacroIdIterator::Type::OTHER_BLOCK == block_type) {
+            if (OB_UNLIKELY(other_idx >= other_block_count || OB_ISNULL(other_block_ids))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected other block id", K(ret), K(other_idx), K(other_block_count), KP(other_block_ids));
+            } else {
+              new (other_block_ids + other_idx) MacroBlockId(macro_id);
+              ++other_idx;
+            }
+          } else if (ObMacroIdIterator::Type::LINKED_BLOCK == block_type) {
+            // skip linked blocks for in-memory macro info
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected block type", K(ret), K(block_type));
           }
         }
-        for (int64_t i = 0; OB_SUCC(ret) && i < other_block_count_; ++i) {
-          new (other_block_ids + i) MacroBlockId();
-          if (OB_FAIL(other_block_iter.get_next_macro_id(*(other_block_ids + i)))) {
-            LOG_WARN("fail to get next macro id", K(ret));
-          }
+        if (OB_SUCC(ret) && OB_UNLIKELY(data_idx != data_block_count || other_idx != other_block_count)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("block count mismatch after expand", K(ret), K(data_idx), K(data_block_count),
+              K(other_idx), K(other_block_count), K_(entry_id));
         }
       }
       if (OB_FAIL(ret)) {
@@ -1601,6 +1640,8 @@ int ObSSTableMacroInfo::expand_block_ids(common::ObIAllocator &allocator)
       } else {
         data_block_ids_ = data_block_ids;
         other_block_ids_ = other_block_ids;
+        data_block_count_ = data_block_count;
+        other_block_count_ = other_block_count;
         linked_block_ids_ = nullptr;
         linked_block_count_ = 0;
         entry_id_ = ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK;
