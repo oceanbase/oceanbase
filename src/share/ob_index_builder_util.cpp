@@ -179,7 +179,12 @@ int ObIndexBuilderUtil::set_shadow_column_info(
   shadow_column_schema.set_nullable(true);
   //the shadow pk is an independent column
   //so it should not inherit the column flags of the original pk
+  //STRING_LOB_COLUMN_FLAG is a data-type attribute that must be preserved
+  const bool is_string_lob = shadow_column_schema.is_string_lob();
   shadow_column_schema.set_column_flags(0);
+  if (is_string_lob) {
+    shadow_column_schema.set_is_string_lob();
+  }
   ObObj default_obj;
   default_obj.set_null();
   shadow_column_schema.set_cur_default_value(
