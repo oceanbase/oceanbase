@@ -1864,6 +1864,10 @@ int ObMicroBlockDecoder::filter_black_filter_batch(
                   pd_filter_info.start_ + pd_filter_info.count_ > row_count_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K_(row_count), K(pd_filter_info.start_), K(pd_filter_info.count_));
+  } else if (ObStoreFormat::is_row_store_type_with_pax_encoding(
+                 static_cast<ObRowStoreType>(header_->row_store_type_))) {
+    // Disable decoder-specific black pushdown for PAX row store and let the
+    // caller fall back to the generic batch evaluation path.
   } else {
     const common::ObIArray<int32_t> &col_offsets = filter.get_col_offsets(pd_filter_info.is_pd_to_cg_);
     const sql::ColumnParamFixedArray &col_params = filter.get_col_params();
