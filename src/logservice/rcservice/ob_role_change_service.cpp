@@ -508,7 +508,7 @@ int ObRoleChangeService::handle_role_change_cb_event_for_log_handler_(
     switch (opt_type) {
       // leader -> follower
       case RoleChangeOptType::LEADER_2_FOLLOWER:
-        if (OB_SUCC(ret) && OB_FAIL(switch_leader_to_follower_forcedly_(new_proposal_id, ls))) {
+        if (OB_SUCC(ret) && OB_FAIL(switch_leader_to_follower_forcedly_(new_proposal_id, ls, retry_ctx))) {
           CLOG_LOG(WARN, "switch_leader_to_follower_forcedly_ failed", K(ret), K(curr_role),
                    K(curr_proposal_id), K(new_role), K(curr_access_mode), K(new_proposal_id));
         }
@@ -788,7 +788,8 @@ int ObRoleChangeService::switch_follower_to_leader_(
 
 int ObRoleChangeService::switch_leader_to_follower_forcedly_(
     const int64_t new_proposal_id,
-    ObLS *ls)
+    ObLS *ls,
+    RetrySubmitRoleChangeEventCtx &retry_ctx)
 {
   int ret = OB_SUCCESS;
   const ObRole new_role = FOLLOWER;
@@ -803,7 +804,14 @@ int ObRoleChangeService::switch_leader_to_follower_forcedly_(
 	// when we can execute 'switch_to_follower_forcedly', means that there is no possibility to submit log via log handler successfully.
 	// however, the flying callback may have not been pushed into apply service, and then, 'switch_to_follower' will be executed, for trans,
 	// if the callback be executed after 'switch_to_follower', will cause abort.
-  if (!GCONF.enable_logservice && OB_NOT_NULL(transport_service_) &&
+  if (!GCONF.enable_logservice && (FALSE_IT(time_guard.click("wait_standby_sync_in_sync_mode"))
+      || OB_FAIL(wait_standby_sync_in_sync_mode_(ls_id, WAIT_STANDBY_SYNC_TIMEOUT_US)))) {
+    if (need_retry_submit_role_change_event_(ret)) {
+      retry_ctx.set_retry_reason(RetrySubmitRoleChangeEventReason::WAIT_STANDBY_SYNC_TIMEOUT);
+    } else {
+      CLOG_LOG(WARN, "wait_standby_sync_in_sync_mode failed", K(ret));
+    }
+  } else if (!GCONF.enable_logservice && OB_NOT_NULL(transport_service_) &&
     (FALSE_IT(time_guard.click("transport_service->switch_to_follower"))
       || OB_FAIL(transport_service_->switch_to_follower(ls_id)))) {
     CLOG_LOG(WARN, "transport_service_ switch_to_follower failed", K(ret), K(new_role), K(new_proposal_id));
@@ -825,7 +833,7 @@ int ObRoleChangeService::switch_leader_to_follower_forcedly_(
     (void)replay_service_->switch_to_follower(ls_id, end_lsn);
     CLOG_LOG(INFO, "switch_leader_to_follower_forcedly_ success", K(ret), KPC(ls));
   }
-  if (OB_FAIL(ret)) {
+  if (OB_FAIL(ret) && !retry_ctx.need_retry()) {
     log_handler->advance_election_epoch_and_downgrade_priority(0_s, "palf switch leader to follower forcedly failed");
     CLOG_LOG(WARN, "switch_leader_to_follower_forcedly_ failed", K(ret), K(new_proposal_id), K(new_role));
   }
@@ -910,7 +918,7 @@ int ObRoleChangeService::switch_leader_to_leader_(
   #endif
   ObTimeGuard time_guard("switch_leader_to_leader", EACH_ROLE_CHANGE_COST_MAX_TIME);
   if (FALSE_IT(time_guard.click("switch_leader_to_follower_forcedly_"))
-      || OB_FAIL(switch_leader_to_follower_forcedly_(curr_proposal_id, ls))) {
+      || OB_FAIL(switch_leader_to_follower_forcedly_(curr_proposal_id, ls, retry_ctx))) {
     CLOG_LOG(WARN, "switch_leader_to_leader_, switch leader to follower failed", K(ret), KPC(ls));
   } else if (FALSE_IT(time_guard.click("switch_follower_to_leader_"))
       || OB_FAIL(switch_follower_to_leader_(new_proposal_id, curr_sync_mode, ls, retry_ctx))) {
@@ -1306,23 +1314,6 @@ int ObRoleChangeService::switch_to_async_(ObLS *ls)
     CLOG_LOG(WARN, "transport_service_ switch_to_async failed", K(ret), K(ls_id));
   } else {
     CLOG_LOG(INFO, "switch_to_async_ success", K(ret), K(ls_id));
-  }
-  return ret;
-}
-
-int ObRoleChangeService::switch_async_to_pre_async_(ObLS *ls)
-{
-  int ret = OB_SUCCESS;
-  const share::ObLSID &ls_id = ls->get_ls_id();
-  if (OB_ISNULL(transport_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(WARN, "transport_service_ is null", K(ret), K(ls_id));
-  } else if (GCONF.enable_logservice) {
-    CLOG_LOG(INFO, "skip switch_async_to_pre_async_ in ss");
-  } else if (OB_FAIL(transport_service_->switch_async_to_pre_async(ls_id))) {
-    CLOG_LOG(WARN, "transport_service_ switch_async_to_pre_async failed", K(ret), K(ls_id));
-  } else {
-    CLOG_LOG(INFO, "switch_async_to_pre_async_ success", K(ret), K(ls_id));
   }
   return ret;
 }

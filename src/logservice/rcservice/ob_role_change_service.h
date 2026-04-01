@@ -151,7 +151,8 @@ private:
                                  ObLS *ls,
                                  RetrySubmitRoleChangeEventCtx &retry_ctx);
   int switch_leader_to_follower_forcedly_(const int64_t new_proposal_id,
-                                          ObLS *ls);
+                                          ObLS *ls,
+                                          RetrySubmitRoleChangeEventCtx &retry_ctx);
   int switch_leader_to_follower_gracefully_(const int64_t new_proposal_id,
                                             const int64_t curr_proposal_id,
                                             const common::ObAddr &dst_addr,
@@ -210,7 +211,6 @@ private:
                             ObLS *ls);
   int switch_to_pre_async_(ObLS *ls);
   int switch_to_async_(ObLS *ls);
-  int switch_async_to_pre_async_(ObLS *ls);
   int switch_leader_to_leader_except_trans_(const int64_t new_proposal_id, ObLS *ls);
   int switch_leader_to_leader_except_trans_restore_(const int64_t new_proposal_id, ObLS *ls);
 private:

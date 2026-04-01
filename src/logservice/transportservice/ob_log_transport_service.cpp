@@ -887,34 +887,6 @@ int LogTransportStatus::switch_to_follower()
     ret = OB_NOT_INIT;
     CLOG_LOG(ERROR, "transport status has not been inited", K(ret));
   } else {
-    // 判断是否需要等待备库同步：只有在SYNC模式且已启用时才需要等待
-    bool need_wait_standby_sync = is_sync_mode_enabled()
-                                  && !ATOMIC_LOAD(&is_ls_gc_state_)
-                                  && is_enabled_without_lock();
-
-    // SYNC模式下，等待备库同步完成（避免降级后数据丢失）
-    // TODO by ziqi: 增加超时机制，避免无限等待，补充case测试
-    if (need_wait_standby_sync) {
-      const int64_t MAX_WAIT_TIME_US = 10 * 1000; // 10ms
-      palf::LSN palf_end_lsn = get_palf_committed_end_lsn();
-      while (is_sync_mode_enabled()) {
-        {
-          RLockGuard guard(lock_);
-          palf::LSN standby_end_lsn = get_standby_committed_end_lsn();
-
-          if (standby_end_lsn.is_valid() && standby_end_lsn >= palf_end_lsn) {
-            CLOG_LOG(INFO, "standby sync done, ready to switch to follower",
-                     K_(ls_id), K(standby_end_lsn), K(palf_end_lsn));
-            break;
-          }
-          if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
-            CLOG_LOG(INFO, "wait standby sync", K_(ls_id), K(standby_end_lsn), K(palf_end_lsn));
-          }
-        }
-        ob_usleep(MAX_WAIT_TIME_US);
-      }
-    }
-
     // 统一更新角色和状态
     WLockGuardWithRetryInterval guard(lock_, WRLOCK_RETRY_INTERVAL_US, WRLOCK_RETRY_INTERVAL_US);
     role_ = FOLLOWER;
@@ -922,7 +894,7 @@ int LogTransportStatus::switch_to_follower()
     standby_committed_end_lsn_.reset();
     standby_committed_end_scn_.reset();
 
-    CLOG_LOG(INFO, "switch_to_follower success", K_(ls_id), K(need_wait_standby_sync), KPC(this));
+    CLOG_LOG(INFO, "switch_to_follower success", K_(ls_id), KPC(this));
   }
   return ret;
 }
