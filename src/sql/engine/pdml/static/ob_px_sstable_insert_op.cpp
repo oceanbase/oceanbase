@@ -394,6 +394,11 @@ int ObPxMultiPartSSTableInsertOp::eval_current_row(ObIArray<ObDatum *> &datums, 
       LOG_WARN("expr is NULL", K(ret), K(i));
     } else if (OB_FAIL(e->eval(eval_ctx, datum))) {
       LOG_WARN("evaluate expression failed", K(ret), K(i), KPC(e));
+    } else if (i == tablet_autoinc_column_idx_) {
+      // Reset the datum ptr for the same column that the heap slice writer will
+      // overwrite later, otherwise it may alias another expr datum buffer in
+      // the single-row path.
+      datum = &e->locate_datum_for_write(eval_ctx);
     } else if (e->type_ == T_PSEUDO_HIDDEN_CLUSTERING_KEY) {
       ObDatum &datum = e->locate_datum_for_write(eval_ctx);
       if (OB_FAIL(share::ObHeapTableUtil::handle_hidden_clustering_key_column(eval_ctx.get_expr_res_alloc(), tablet_id, datum))) {
