@@ -94,6 +94,7 @@ enum class ObVectorIndexSegmentType : uint16_t
   BASE,
   LEGACY_BASE,
   EMPTY,
+  VSAG_MERGE,
   MAX
 };
 

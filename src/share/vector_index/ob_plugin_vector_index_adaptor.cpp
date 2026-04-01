@@ -1297,7 +1297,7 @@ int ObPluginVectorIndexAdaptor::create_snap_segment(const ObVectorIndexAlgorithm
     LOG_WARN("get hnsw param failed.", K(ret));
   } else {
     ObVectorIndexAlgorithmType build_type = enforce_type == VIAT_MAX ? param->type_ : enforce_type;
-    int64_t max_degree = param->type_ == VIAT_HNSW_SQ ? ObVectorIndexUtil::get_hnswsq_type_metric(param->m_) : param->m_;
+    const int64_t max_degree = param->type_ == VIAT_HNSW_SQ && build_type == VIAT_HNSW ? ObVectorIndexUtil::get_hnswsq_type_metric(param->m_) : param->m_;
     if (OB_FAIL(ObVectorIndexSegment::create(
         segment_handle,
         tenant_id_,
@@ -2466,17 +2466,13 @@ int ObPluginVectorIndexAdaptor::check_snap_index()
         LOG_WARN("failed to create and build sparse index from arrays.", K(ret));
       }
     } else {
-      // TODO @zhichen
-      //    hnsw_sq/hnsw_bq is not hgraph here, but active segment is hgraph
-      //    and if change this, need consider old server upgrade
-      ObVectorIndexAlgorithmType build_type = param->extra_info_actual_size_ > 0 ?  VIAT_HGRAPH : VIAT_HNSW;
-      int64_t max_degree = param->type_ == VIAT_HNSW_SQ ? ObVectorIndexUtil::get_hnswsq_type_metric(param->m_) : param->m_;
+      ObVectorIndexAlgorithmType build_type = VIAT_HGRAPH;
       if (OB_FAIL(segment_builder->create_and_add(
           tenant_id_,
           *get_allocator(),
           *param,
           build_type,
-          max_degree,
+          param->m_,
           this))) {
         LOG_WARN("create segment fail", K(ret));
       }
@@ -3432,7 +3428,7 @@ int ObPluginVectorIndexAdaptor::serialize_snapshot(ObHNSWSerializeCallback::CbPa
   } else if (OB_ISNULL(index_param = static_cast<ObVectorIndexParam*>(algo_data_))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("failed to get index param.", K(ret));
-  } else if (snap_data_->builder_->seg_type_ == ObVectorIndexSegmentType::INCR_MERGE
+  } else if ((snap_data_->builder_->seg_type_ == ObVectorIndexSegmentType::INCR_MERGE || snap_data_->builder_->seg_type_ == ObVectorIndexSegmentType::VSAG_MERGE)
       && snap_data_->builder_->add_cnt_ == 0) {
     // store vbitmap for empty merge result
     if (! snap_data_->builder_->segment_handle_.is_valid()
@@ -6171,7 +6167,7 @@ int ObPluginVectorIndexAdaptor::get_full_incr_bitmap(roaring::api::roaring64_bit
       if (! segment_handle.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("segment handle is invalid", K(ret), K(i), K(seg_meta), KPC(this));
-      } else if (ObVectorIndexSegmentType::FREEZE_PERSIST == seg_meta.seg_type_) {
+      } else if (ObVectorIndexSegmentType::FREEZE_PERSIST == seg_meta.seg_type_ || ObVectorIndexSegmentType::VSAG_MERGE == seg_meta.seg_type_) {
         if (OB_ISNULL(segment_handle->ibitmap_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("segment ibitmap is null", K(ret), K(seg_meta));
