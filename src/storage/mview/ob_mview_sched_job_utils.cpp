@@ -19,6 +19,9 @@
 #include "share/backup/ob_backup_data_table_operator.h"
 #include "share/schema/ob_mview_info.h"
 #include "share/schema/ob_mlog_info.h"
+#include "share/inner_table/ob_inner_table_schema_constants.h"
+#include "lib/mysqlclient/ob_mysql_proxy.h"
+#include "lib/mysqlclient/ob_mysql_result.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "share/ob_mview_args.h"
 
@@ -109,6 +112,66 @@ int ObMViewSchedJobUtils::generate_job_action(
   return ret;
 }
 
+int ObMViewSchedJobUtils::get_owner_name_from_table_id_(
+    ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    ObIAllocator &allocator,
+    ObString &owner_name,
+    uint64_t &owner_user_id)
+{
+  int ret = OB_SUCCESS;
+  owner_name.reset();
+  owner_user_id = OB_INVALID_ID;
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    common::sqlclient::ObMySQLResult *result = nullptr;
+    ObSqlString sql;
+    ObString user_name;
+    ObString host_name;
+    if (OB_FAIL(sql.assign_fmt(
+            "SELECT t.define_user_id, u.user_name, u.host"
+            " FROM %s.%s t JOIN %s.%s u ON t.define_user_id = u.user_id"
+            " WHERE t.table_id = %lu LIMIT 1",
+            OB_SYS_DATABASE_NAME, OB_ALL_TABLE_TNAME,
+            OB_SYS_DATABASE_NAME, OB_ALL_USER_TNAME, table_id))) {
+      LOG_WARN("fail to assign sql for get owner info", KR(ret), K(tenant_id), K(table_id));
+    } else if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
+      LOG_WARN("execute sql failed", KR(ret), K(sql));
+    } else if (OB_ISNULL(result = res.get_result())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("result is null", KR(ret));
+    } else if (OB_FAIL(result->next())) {
+      if (OB_ITER_END == ret) {
+        ret = OB_ENTRY_NOT_EXIST;
+        LOG_WARN("no owner found for table", KR(ret), K(tenant_id), K(table_id));
+      } else {
+        LOG_WARN("fail to get next row", KR(ret));
+      }
+    } else {
+      EXTRACT_INT_FIELD_MYSQL(*result, "define_user_id", owner_user_id, uint64_t);
+      EXTRACT_VARCHAR_FIELD_MYSQL(*result, "user_name", user_name);
+      EXTRACT_VARCHAR_FIELD_MYSQL(*result, "host", host_name);
+      if (OB_SUCC(ret) && !user_name.empty()) {
+        if (lib::is_oracle_mode()) {
+          if (OB_FAIL(ob_write_string(allocator, user_name, owner_name))) {
+            LOG_WARN("failed to write owner name", KR(ret));
+          }
+        } else {
+          ObSqlString tmp;
+          if (OB_FAIL(tmp.assign_fmt("%.*s@%.*s",
+                  static_cast<int>(user_name.length()), user_name.ptr(),
+                  static_cast<int>(host_name.length()), host_name.ptr()))) {
+            LOG_WARN("failed to format owner name", KR(ret));
+          } else if (OB_FAIL(ob_write_string(allocator, tmp.string(), owner_name))) {
+            LOG_WARN("failed to write owner name", KR(ret));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObMViewSchedJobUtils::add_scheduler_job(
     ObISQLClient &sql_client,
     const uint64_t tenant_id,
@@ -117,7 +180,9 @@ int ObMViewSchedJobUtils::add_scheduler_job(
     const ObString &job_action,
     const ObObj &start_date,
     const ObString &repeat_interval,
-    const ObString &exec_env)
+    const ObString &exec_env,
+    const ObString *job_owner,
+    const uint64_t job_owner_id)
 {
   int ret = OB_SUCCESS;
   if (OB_INVALID_TENANT_ID == tenant_id) {
@@ -133,7 +198,12 @@ int ObMViewSchedJobUtils::add_scheduler_job(
       job_info.job_action_ = job_action;
       job_info.lowner_ = ObString("oceanbase");
       job_info.cowner_ = ObString("oceanbase");
-      job_info.powner_ = lib::is_oracle_mode() ? ObString("SYS") : ObString("root@%");
+      if (NULL == job_owner || job_owner->empty()) {
+        job_info.powner_ = lib::is_oracle_mode() ? ObString("SYS") : ObString("root@%");
+      } else {
+        job_info.powner_ = *job_owner;
+        job_info.user_id_ = job_owner_id;
+      }
       job_info.job_style_ = ObString("regular");
       job_info.job_type_ = ObString("PLSQL_BLOCK");
       job_info.job_class_ = ObString("DEFAULT_JOB_CLASS");
@@ -194,13 +264,22 @@ int ObMViewSchedJobUtils::create_mview_scheduler_job(
     data_sync = consistent_str;
   }
   // job_name is generated as "job_prefix+job_id"
+  ObString job_owner;
+  uint64_t job_owner_id = OB_INVALID_ID;
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObMViewSchedJobUtils::generate_job_id(tenant_id, job_id))) {
     LOG_WARN("failed to generate mview job id", KR(ret));
   } else if (OB_FAIL(ObMViewSchedJobUtils::generate_job_name(allocator, job_id, job_prefix,
                                                              refresh_job))) {
     LOG_WARN("failed to generate mview job name", KR(ret), K(tenant_id), K(job_id), K(job_prefix));
-  } else {
+  } else if (OB_FAIL(ObMViewSchedJobUtils::get_owner_name_from_table_id_(
+             sql_client, tenant_id, mview_id, allocator, job_owner, job_owner_id))) {
+    LOG_WARN("failed to get owner from mview table, use default owner", KR(ret), K(mview_id));
+    job_owner.reset();
+    job_owner_id = OB_INVALID_ID;
+    ret = OB_SUCCESS;
+  }
+  if (OB_SUCC(ret)) {
     ObSqlString job_action;
     if (OB_FAIL(job_action.assign_fmt("DBMS_MVIEW.refresh('%.*s.%.*s',"
                                       "nested=>%.*s",
@@ -217,7 +296,7 @@ int ObMViewSchedJobUtils::create_mview_scheduler_job(
       LOG_WARN("fail to append job action", KR(ret), K(db_name), K(table_name));
     } else if (OB_FAIL(ObMViewSchedJobUtils::add_scheduler_job(
                    sql_client, tenant_id, job_id, refresh_job, job_action.string(), start_date,
-                   repeat_interval, exec_env))) {
+                   repeat_interval, exec_env, &job_owner, job_owner_id))) {
       LOG_WARN("failed to add mview scheduler job", KR(ret), K(refresh_job), K(job_action),
                "start with", start_date, "next", repeat_interval);
     } else {
