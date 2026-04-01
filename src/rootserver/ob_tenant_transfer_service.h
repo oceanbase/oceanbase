@@ -190,6 +190,13 @@ private:
       const share::ObTransferPartInfo &part_info,
       const bool is_out_trans,
       const transaction::tablelock::ObTableLockOwnerID &lock_owner_id);
+  int refresh_schema_and_double_check_(
+      const share::ObTransferPartInfo &part_info,
+      const ObTabletID &tablet_id,
+      int64_t &part_idx,
+      int64_t &subpart_idx,
+      common::ObIAllocator &allocator,
+      share::schema::ObSimpleTableSchemaV2 *&table_schema);
   int add_out_trans_lock_(
       ObMySQLTransaction &trans,
       const transaction::tablelock::ObTableLockOwnerID &lock_owner_id,
@@ -214,8 +221,9 @@ private:
       const share::ObTransferTask &task,
       share::ObTransferPartList &finished_part_list,
       share::ObTransferPartList &all_part_list);
-  int batch_get_latest_table_schemas_(
+  int batch_get_table_schemas_by_version_(
       common::ObIAllocator &allocator,
+      const int64_t schema_version,
       const common::ObIArray<ObObjectID> &table_ids,
       common::ObIArray<share::schema::ObSimpleTableSchemaV2 *> &table_schemas);
   int get_latest_table_schema_(
