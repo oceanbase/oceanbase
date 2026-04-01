@@ -91,6 +91,35 @@ enum OB_TMP_FILE_TYPE
   COMPRESS_INDEX = 3,
 };
 
+enum class BlockFlushLevel : int8_t {
+  INVALID = -1,
+  L1 = 0, // for exclusive block, flushing page num is in (64, 256)
+  L2,     // for exclusive block, free page num is in (0, 64]
+  L3,     // for shared block, free page num is in (64, 256)
+  L4,     // for shared block, free page num is in (0, 64]
+  L5,     // all flushing pages are incomplete
+  MAX
+};
+
+constexpr int64_t to_flush_level_idx(const BlockFlushLevel level)
+{
+  return static_cast<int64_t>(level);
+}
+
+#define REACH_TIME_INTERVAL_WITH_TS(last_ts_ptr, interval) \
+  ({ \
+    bool bret = false; \
+    int64_t cur_time = common::ObClockGenerator::getClock(); \
+    int64_t last_time = ATOMIC_LOAD(last_ts_ptr); \
+    if (OB_UNLIKELY((interval + last_time) < cur_time)) \
+    { \
+      if (last_time == ATOMIC_CAS(last_ts_ptr, last_time, cur_time)) { \
+        bret = true; \
+      } \
+    } \
+    bret; \
+  })
+
 }  // end namespace tmp_file
 }  // end namespace oceanbase
 #endif // OCEANBASE_STORAGE_TMP_FILE_OB_TMP_FILE_GLOBAL_H_

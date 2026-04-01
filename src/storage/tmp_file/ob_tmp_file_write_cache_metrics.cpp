@@ -29,8 +29,15 @@ void ObTmpFileFlushMetrics::reset()
   ATOMIC_SET(&max_page_cnt_, -1);
   ATOMIC_SET(&min_page_cnt_, INT64_MAX);
   ATOMIC_SET(&skip_incomplete_page_cnt_, 0);
+  ATOMIC_SET(&skip_special_page_hold_cnt_, 0);
   ATOMIC_SET(&incomplete_page_flush_cnt_, 0);
   ATOMIC_SET(&meta_page_cnt_, 0);
+  ATOMIC_SET(&iterate_build_cnt_, 0);
+  ATOMIC_SET(&iterate_build_us_sum_, 0);
+  ATOMIC_SET(&task_profile_cnt_, 0);
+  ATOMIC_SET(&task_schedule_delay_us_sum_, 0);
+  ATOMIC_SET(&task_io_wait_us_sum_, 0);
+  ATOMIC_SET(&task_queue_wait_us_sum_, 0);
 }
 
 void ObTmpFileFlushMetrics::print_statistics()
@@ -43,15 +50,27 @@ void ObTmpFileFlushMetrics::print_statistics()
   int64_t min_flush_page_cnt = ATOMIC_LOAD(&min_page_cnt_) == INT64_MAX ? -1 : min_page_cnt_;
   int64_t meta_page_cnt = ATOMIC_LOAD(&meta_page_cnt_);
   int64_t skip_incomplete_page_cnt = ATOMIC_LOAD(&skip_incomplete_page_cnt_);
+  int64_t skip_special_page_hold_cnt = ATOMIC_LOAD(&skip_special_page_hold_cnt_);
   int64_t incomplete_page_flush_cnt = ATOMIC_LOAD(&incomplete_page_flush_cnt_);
   int64_t real_time_flushing_page_cnt = ATOMIC_LOAD(&real_time_flushing_page_cnt_);
+  int64_t iterate_build_cnt = ATOMIC_LOAD(&iterate_build_cnt_);
+  int64_t avg_iterate_build_us = ATOMIC_LOAD(&iterate_build_us_sum_) / max(iterate_build_cnt, 1);
+  int64_t task_profile_cnt = ATOMIC_LOAD(&task_profile_cnt_);
+  int64_t avg_task_schedule_delay_us = ATOMIC_LOAD(&task_schedule_delay_us_sum_) / max(task_profile_cnt, 1);
+  int64_t avg_task_io_wait_us = ATOMIC_LOAD(&task_io_wait_us_sum_) / max(task_profile_cnt, 1);
+  int64_t avg_task_queue_wait_us = ATOMIC_LOAD(&task_queue_wait_us_sum_) / max(task_profile_cnt, 1);
   LOG_INFO("tmp file flush statistics",
       K(flush_data_MB), K(total_page_cnt),
       K(flush_range_cnt), K(avg_flush_page_cnt),
       K(max_flush_page_cnt), K(min_flush_page_cnt),
       K(meta_page_cnt),
-      K(skip_incomplete_page_cnt), K(incomplete_page_flush_cnt),
-      K(real_time_flushing_page_cnt));
+      K(skip_incomplete_page_cnt), K(skip_special_page_hold_cnt),
+      K(incomplete_page_flush_cnt),
+      K(real_time_flushing_page_cnt),
+      K(iterate_build_cnt), K(avg_iterate_build_us),
+      K(task_profile_cnt),
+      K(avg_task_schedule_delay_us), K(avg_task_io_wait_us),
+      K(avg_task_queue_wait_us));
   reset();
 }
 
@@ -59,15 +78,20 @@ void ObTmpFileFlushMetrics::record_flush_task(const int64_t page_num)
 {
   ATOMIC_INC(&flush_range_cnt_);
   ATOMIC_AAF(&total_page_cnt_, page_num);
-  int max_page_cnt = ATOMIC_LOAD(&max_page_cnt_);
-  int min_page_cnt = ATOMIC_LOAD(&min_page_cnt_);
+  int64_t max_page_cnt = ATOMIC_LOAD(&max_page_cnt_);
+  int64_t min_page_cnt = ATOMIC_LOAD(&min_page_cnt_);
   ATOMIC_SET(&max_page_cnt_, max(max_page_cnt, page_num));
   ATOMIC_SET(&min_page_cnt_, min(min_page_cnt, page_num));
 }
 
 void ObTmpFileFlushMetrics::record_skip_incomplete_page(const int64_t page_num)
 {
-  ATOMIC_AAF(&flush_range_cnt_, page_num);
+  ATOMIC_AAF(&skip_incomplete_page_cnt_, page_num);
+}
+
+void ObTmpFileFlushMetrics::record_skip_special_page_hold(const int64_t page_num)
+{
+  ATOMIC_AAF(&skip_special_page_hold_cnt_, page_num);
 }
 
 void ObTmpFileFlushMetrics::record_incomplete_page(const int64_t page_num)
@@ -78,6 +102,22 @@ void ObTmpFileFlushMetrics::record_incomplete_page(const int64_t page_num)
 void ObTmpFileFlushMetrics::record_meta_page(const int64_t page_num)
 {
   ATOMIC_AAF(&meta_page_cnt_, page_num);
+}
+
+void ObTmpFileFlushMetrics::record_iterate_build_us(const int64_t us)
+{
+  ATOMIC_INC(&iterate_build_cnt_);
+  ATOMIC_AAF(&iterate_build_us_sum_, us);
+}
+
+void ObTmpFileFlushMetrics::record_task_profile(const int64_t schedule_delay_us,
+                                                const int64_t io_wait_us,
+                                                const int64_t queue_wait_us)
+{
+  ATOMIC_INC(&task_profile_cnt_);
+  ATOMIC_AAF(&task_schedule_delay_us_sum_, schedule_delay_us);
+  ATOMIC_AAF(&task_io_wait_us_sum_, io_wait_us);
+  ATOMIC_AAF(&task_queue_wait_us_sum_, queue_wait_us);
 }
 
 void ObTmpFileSwapMetrics::reset()
@@ -140,6 +180,11 @@ void ObTmpFileWriteCacheMetrics::record_meta_page(const int64_t page_num)
 void ObTmpFileWriteCacheMetrics::record_skip_incomplete_page(const int64_t page_num)
 {
   flush_metrics_.record_skip_incomplete_page(page_num);
+}
+
+void ObTmpFileWriteCacheMetrics::record_skip_special_page_hold(const int64_t page_num)
+{
+  flush_metrics_.record_skip_special_page_hold(page_num);
 }
 
 void ObTmpFileWriteCacheMetrics::record_incomplete_page(const int64_t page_num)

@@ -268,14 +268,16 @@ int ObTmpFileBlockManager::adjust_block_alloc_priority(const int64_t old_free_pa
   return ret;
 }
 
-int ObTmpFileBlockManager::insert_block_into_flush_priority_mgr(const int64_t flushing_page_num, ObTmpFileBlock &block)
+int ObTmpFileBlockManager::insert_block_into_flush_priority_mgr(
+    const BlockFlushLevel level,
+    ObTmpFileBlock &block)
 {
   int ret = OB_SUCCESS;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTmpFileBlockManager has not been inited", KR(ret), K(tenant_id_));
-  } else if (OB_FAIL(flush_priority_mgr_.insert_block_into_flush_priority_list(flushing_page_num, block))) {
+  } else if (OB_FAIL(flush_priority_mgr_.insert_block_into_flush_priority_list(level, block))) {
     LOG_ERROR("fail to insert tmp file block", KR(ret), K(block));
   }
 
@@ -283,14 +285,16 @@ int ObTmpFileBlockManager::insert_block_into_flush_priority_mgr(const int64_t fl
   return ret;
 }
 
-int ObTmpFileBlockManager::remove_block_from_flush_priority_mgr(const int64_t flushing_page_num, ObTmpFileBlock &block)
+int ObTmpFileBlockManager::remove_block_from_flush_priority_mgr(
+    const BlockFlushLevel level,
+    ObTmpFileBlock &block)
 {
   int ret = OB_SUCCESS;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTmpFileBlockManager has not been inited", KR(ret), K(tenant_id_));
-  } else if (OB_FAIL(flush_priority_mgr_.remove_block_from_flush_priority_list(flushing_page_num, block))) {
+  } else if (OB_FAIL(flush_priority_mgr_.remove_block_from_flush_priority_list(level, block))) {
     LOG_WARN("fail to remove tmp file block", KR(ret), K(block));
   }
 
@@ -299,16 +303,17 @@ int ObTmpFileBlockManager::remove_block_from_flush_priority_mgr(const int64_t fl
   return ret;
 }
 
-int ObTmpFileBlockManager::adjust_block_flush_priority(const int64_t old_flushing_page_num,
-                                                       const int64_t flushing_page_num,
-                                                       ObTmpFileBlock &block)
+int ObTmpFileBlockManager::adjust_block_flush_priority(
+    const BlockFlushLevel old_level,
+    const BlockFlushLevel new_level,
+    ObTmpFileBlock &block)
 {
   int ret = OB_SUCCESS;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTmpFileBlockManager has not been inited", KR(ret), K(tenant_id_));
-  } else if (OB_FAIL(flush_priority_mgr_.adjust_block_flush_priority(old_flushing_page_num, flushing_page_num, block))) {
+  } else if (OB_FAIL(flush_priority_mgr_.adjust_block_flush_priority(old_level, new_level, block))) {
     LOG_WARN("fail to adjust flush priority of tmp file block", KR(ret), K(block));
   }
 

@@ -18,6 +18,7 @@
 #include "lib/queue/ob_link_queue.h"
 #include "lib/allocator/ob_fifo_allocator.h"
 #include "lib/thread/thread_mgr_interface.h"
+#include "lib/container/ob_array.h"
 #include "deps/oblib/src/lib/list/ob_list.h"
 #include "storage/tmp_file/ob_tmp_file_flush_task.h"
 #include "storage/tmp_file/ob_tmp_file_block_manager.h"
@@ -26,6 +27,7 @@
 #include "storage/tmp_file/ob_tmp_file_write_cache_page_array.h"
 #include "storage/tmp_file/ob_tmp_file_write_cache_shrink_ctx.h"
 #include "storage/tmp_file/ob_tmp_file_write_cache_free_page_list.h"
+#include "storage/tmp_file/ob_tmp_file_write_cache_queue.h"
 
 namespace oceanbase
 {
@@ -38,34 +40,80 @@ class ObTmpFileWriteCacheKey;
 class ObTmpFilePageHandle;
 class ObTmpFileBlockFlushIterator;
 
+class ObTmpFileWriteCache;
+
+// We split flush processing into two timer tasks:
+// 1) ObTmpFileFlushBatchTimerTask dispatches a batch of flush tasks (includes memcpy and submit path),
+// 2) ObTmpFileFlushWaitTimerTask drains io_waiting_queue_ and finalizes completed tasks.
+// This separation keeps the TFSwap worker from doing all heavy work in a single loop, reduces
+// single-thread CPU bottleneck, and helps sustain higher IO submission rate / disk bandwidth usage.
+class ObTmpFileFlushWaitTimerTask : public common::ObTimerTask
+{
+public:
+  ObTmpFileFlushWaitTimerTask() : write_cache_(nullptr), scheduled_(0) {}
+  virtual ~ObTmpFileFlushWaitTimerTask() {}
+  int init(ObTmpFileWriteCache *write_cache);
+  OB_INLINE bool try_mark_scheduled() { return ATOMIC_BCAS(&scheduled_, 0, 1); }
+  OB_INLINE void clear_scheduled() { ATOMIC_SET(&scheduled_, 0); }
+  virtual void runTimerTask() override;
+private:
+  ObTmpFileWriteCache *write_cache_;
+  int64_t scheduled_;
+};
+
+class ObTmpFileFlushBatchTimerTask : public common::ObTimerTask
+{
+public:
+  ObTmpFileFlushBatchTimerTask() : write_cache_(nullptr), task_idx_(-1), print_ts_(0), scheduled_(0) {}
+  virtual ~ObTmpFileFlushBatchTimerTask() {}
+  int init(ObTmpFileWriteCache *write_cache, const int64_t task_idx);
+  OB_INLINE int64_t get_task_idx() const { return task_idx_; }
+  OB_INLINE bool try_mark_scheduled() { return ATOMIC_BCAS(&scheduled_, 0, 1); }
+  OB_INLINE void clear_scheduled() { ATOMIC_SET(&scheduled_, 0); }
+  OB_INLINE bool reach_print_interval(const int64_t interval_us)
+  {
+    return REACH_TIME_INTERVAL_WITH_TS(&print_ts_, interval_us);
+  }
+  virtual void runTimerTask() override;
+private:
+  ObTmpFileWriteCache *write_cache_;
+  int64_t task_idx_;
+  int64_t print_ts_;
+  int64_t scheduled_;
+};
+
 class ObTmpFileWriteCache : public lib::TGRunnable
 {
   friend class ObTmpFilePage;
   friend class ObTmpFileFlushTask;
   friend class ObTmpFileBlock;
+  friend class ObTmpFileFlushWaitTimerTask;
+  friend class ObTmpFileFlushBatchTimerTask;
 public:
   // 2MB - 24KB (keep WBP_BLOCK_SIZE smaller than OB_MALLOC_BIG_BLOCK_SIZE)
   static const int64_t WBP_BLOCK_SIZE = 2 * 1024 * 1024 - 24 * 1024;
   static const int64_t BLOCK_PAGE_NUMS =
       WBP_BLOCK_SIZE / ObTmpFileGlobal::PAGE_SIZE;  // 253 pages
   static const int64_t SWAP_FAST_INTERVAL = 5;      // 5ms
-  static const int64_t SWAP_INTERVAL = 1000;        // 1s
+  static const int64_t SWAP_INTERVAL = 100;         // 100ms
   static const int64_t SWAP_PAGE_NUM_PER_BATCH = 16;
   static const int64_t REFRESH_CONFIG_INTERVAL = 10 * 1000 * 1000;  // 10s
   static const int64_t DEFAULT_MEMORY_LIMIT = 64 * WBP_BLOCK_SIZE;  // 126.5MB
-  static const int64_t MAX_FLUSH_TIMER_NUM = 4;
+  static const int64_t MAX_FLUSH_TIMER_NUM = 2;
+  static const int64_t FLUSH_WAIT_TIMER_INTERVAL_US = 1000;
   static const int64_t BUCKET_CNT = ObTmpFileWriteCacheFreePageList::MAX_FREE_LIST_NUM * 8;
-  static const int64_t MAX_FLUSHING_DATA_SIZE = 400 * ObTmpFileGlobal::SN_BLOCK_SIZE;
+  static const int64_t MAX_FLUSHING_DATA_SIZE = 800LL * 1024LL * 1024LL; // 800MB
   static const int64_t ACCESS_TENANT_CONFIG_TIMEOUT_US = 10 * 1000; // 10ms
-  static const int64_t MAX_FLUSH_TASK_NUM_PER_BATCH = 1024;
-  static const int64_t MAX_ITER_BLOCK_NUM_PER_BATCH = 1024;
+  static const int64_t MAX_FLUSH_TASK_NUM_PER_BATCH = 2048;
+  static const int64_t MAX_ITER_BLOCK_NUM_PER_BATCH = 10000;
 
-  static const int64_t FLUSH_WATERMARK_L1 = 90;
-  static const int64_t FLUSH_WATERMARK_L2 = 80;
-  static const int64_t FLUSH_WATERMARK_L3 = 60;
-  static const int64_t FLUSH_PERCENT_L1 = 60;
-  static const int64_t FLUSH_PERCENT_L2 = 40;
+  static const int64_t FLUSH_WATERMARK_L1 = 80;
+  static const int64_t FLUSH_WATERMARK_L2 = 60;
+  static const int64_t FLUSH_WATERMARK_L3 = 40;
+  static const int64_t FLUSH_PERCENT_L1 = 40;
+  static const int64_t FLUSH_PERCENT_L2 = 30;
   static const int64_t FLUSH_PERCENT_L3 = 20;
+  static const int64_t INCOMPLETE_PAGE_HOLD_LIMIT = 20;  // 20%
 public:
   ObTmpFileWriteCache();
   ~ObTmpFileWriteCache();
@@ -94,6 +142,10 @@ public:
   int free_page(const ObTmpFileWriteCacheKey &page_key);
 
 public:
+  OB_INLINE void inc_incomplete_data_page_cnt() { ATOMIC_INC(&incomplete_data_page_cnt_); }
+  OB_INLINE void dec_incomplete_data_page_cnt() { ATOMIC_DEC(&incomplete_data_page_cnt_); }
+
+public:
   int unlock(const int64_t bucket_id);
   // for concurrent write
   int shared_lock(const int64_t bucket_id);
@@ -102,19 +154,17 @@ public:
   int64_t get_memory_limit();
 private:
   int swap_();
-  int add_swap_job_(ObTmpFileSwapJob *swap_job);
-  int pop_swap_job_(ObTmpFileSwapJob *&swap_job);
   int evict_(ObTmpFileFlushTask &task);
   int swap_page_(const int64_t timeout_ms);
 
   int flush_();
   int build_task_(const int64_t expect_flush_cnt,
                   ObTmpFileBlockFlushIterator &iterator,
-                  ObIArray<ObTmpFileFlushTask *> &tasks,
+                  int64_t &task_cnt,
                   ObIArray<ObTmpFileBlockHandle> &failed_blocks);
   int build_task_in_block_(
                   ObTmpFileBlockHandle &block_handle,
-                  ObIArray<ObTmpFileFlushTask *> &tasks,
+                  int64_t &task_cnt,
                   ObIArray<ObTmpFileBlockHandle> &failed_blocks,
                   int64_t &actual_flush_cnt);
   int collect_pages_(ObTmpFileBlockFlushingPageIterator &page_iterator,
@@ -123,12 +173,15 @@ private:
   int exec_wait_();
   int alloc_flush_task_(ObTmpFileFlushTask *&task);
   int free_flush_task_(ObTmpFileFlushTask *task);
-  int add_flush_task_(ObTmpFileFlushTask *task);
-  int pop_flush_task_(ObTmpFileFlushTask *&task);
   int remove_pending_task_();
+  int remove_pending_dispatch_task_();
   OB_INLINE int get_flush_ret_code_() const { return flush_ret_; }
   OB_INLINE void set_flush_ret_code_(const int ret_code) { flush_ret_ = ret_code; }
   int try_to_set_macro_block_idx_(ObTmpFileBlock &block);
+  int schedule_flush_task_(ObTmpFileFlushTask *task);
+  int try_schedule_flush_dispatch_task_(const int64_t task_idx);
+  int try_schedule_flush_wait_task_(const int64_t delay_us = 0);
+  int dispatch_flush_tasks_batch_(ObTmpFileFlushBatchTimerTask &batch_task);
 
   int add_free_page_(ObTmpFilePage *page);
   int expand_();
@@ -175,17 +228,20 @@ private:
   int tg_id_;
   int flush_ret_;
   uint32_t used_page_cnt_;
+  int32_t incomplete_data_page_cnt_;
+  int32_t meta_page_cnt_;
   int64_t memory_limit_;
   int64_t tenant_config_access_ts_;
   int64_t default_memory_limit_; // used in unit tests to forcibly set the memory limit
   int64_t disk_usage_limit_;
 
-  int cur_timer_idx_;
   int flush_tg_id_[MAX_FLUSH_TIMER_NUM];
-  int64_t swap_queue_size_;
-  int64_t io_waiting_queue_size_;
-  ObSpLinkQueue swap_queue_;
-  ObSpLinkQueue io_waiting_queue_;
+  int flush_wait_tg_id_;
+  ObTmpFileFlushWaitTimerTask flush_wait_task_;
+  ObTmpFileFlushBatchTimerTask flush_batch_tasks_[MAX_FLUSH_TIMER_NUM];
+  ObTmpFileWriteCacheQueue pending_flush_queue_;
+  ObTmpFileWriteCacheQueue swap_queue_;
+  ObTmpFileWriteCacheQueue io_waiting_queue_;
   ObTmpFileWriteCacheFreePageList free_page_list_;
   WriteCacheShrinkContext shrink_ctx_;
   ObThreadCond idle_cond_;
@@ -197,9 +253,9 @@ private:
   ObTmpFilePageArray pages_;
   ObLinearHashMap<ObTmpFileWriteCacheKey, ObTmpFilePageHandle> page_map_;
   ObFIFOAllocator page_allocator_;
-  ObFIFOAllocator block_allocator_;
   ObFIFOAllocator flush_allocator_;
-  ObFIFOAllocator swap_allocator_;
+  ObArray<ObTmpFileBlockHandle, ModulePageAllocator, false,
+          ObArrayExpressionCallBack<ObTmpFileBlockHandle>> flush_failed_blocks_;
 };
 
 }  // end namespace tmp_file

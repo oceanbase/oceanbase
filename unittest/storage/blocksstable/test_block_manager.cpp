@@ -144,7 +144,6 @@ TEST_F(TestBlockManager, test_mark_and_sweep)
 
   ObTimerService *timer_service = nullptr;
   ASSERT_EQ(OB_SUCCESS, ObTimerService::mtl_new(timer_service));
-  ASSERT_EQ(OB_SUCCESS, timer_service->start());
   tenant_ctx.set(timer_service);
 
   ASSERT_EQ(OB_SUCCESS, tmp_file::ObTmpPageCache::get_instance().init("sn_tmp_page_cache", 1));
@@ -154,6 +153,7 @@ TEST_F(TestBlockManager, test_mark_and_sweep)
   tenant_ctx.set(tf_mgr);
   EXPECT_EQ(OB_SUCCESS, tmp_file::ObTenantTmpFileManager::mtl_init(tf_mgr));
   tf_mgr->get_sn_file_manager().write_cache_.default_memory_limit_ = 40*1024*1024;
+  ASSERT_EQ(OB_SUCCESS, timer_service->start());
   EXPECT_EQ(OB_SUCCESS, tf_mgr->start());
   ObTenantEnv::set_tenant(&tenant_ctx);
   SERVER_STORAGE_META_SERVICE.is_started_ = true;
@@ -208,6 +208,12 @@ TEST_F(TestBlockManager, test_mark_and_sweep)
   OB_SERVER_BLOCK_MGR.mark_and_sweep();
 
   macro_handle.reset();
+  tf_mgr->stop();
+  timer_service->stop();
+  tf_mgr->wait();
+  timer_service->wait();
+  tf_mgr->destroy();
+  timer_service->destroy();
 
   tmp_file::ObTmpPageCache::get_instance().destroy();
   ObKVGlobalCache::get_instance().destroy();

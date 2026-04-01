@@ -22,13 +22,13 @@ namespace tmp_file
 int ObTmpFileBlockFlushPriorityManager::init()
 {
   int ret = OB_SUCCESS;
-  STATIC_ASSERT(ARRAYSIZEOF(flush_lists_) == (int64_t)BlockFlushLevel::MAX,
+  STATIC_ASSERT(ARRAYSIZEOF(flush_lists_) == to_flush_level_idx(BlockFlushLevel::MAX),
               "flush_lists_ size mismatch enum BlockFlushLevel count");
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObTmpFileBlockFlushPriorityManager inited twice", KR(ret));
   } else {
-    for (int32_t i = 0; i < BlockFlushLevel::MAX; i++) {
+    for (int64_t i = 0; i < to_flush_level_idx(BlockFlushLevel::MAX); i++) {
       flush_lists_[i].init(ObTmpFileBlockHandleList::FLUSH_NODE);
     }
     is_inited_ = true;
@@ -41,7 +41,7 @@ void ObTmpFileBlockFlushPriorityManager::destroy()
 {
   int ret = OB_SUCCESS;
   is_inited_ = false;
-  for (int64_t i = 0; i < BlockFlushLevel::MAX; i++) {
+  for (int64_t i = 0; i < to_flush_level_idx(BlockFlushLevel::MAX); i++) {
     int64_t cur_size = flush_lists_[i].size();
     if (cur_size != 0) {
       LOG_ERROR("there are blocks in flush_lists_ when destroying", K(i), K(cur_size));
@@ -52,57 +52,89 @@ void ObTmpFileBlockFlushPriorityManager::destroy()
   LOG_INFO("ObTmpFileBlockFlushPriorityManager destroy succ");
 }
 
-int ObTmpFileBlockFlushPriorityManager::insert_block_into_flush_priority_list(const int64_t flushing_page_num,
+int ObTmpFileBlockFlushPriorityManager::get_block_list_level(const int64_t flushing_page_num,
+                                                             const bool is_exclusive_block,
+                                                             const bool is_all_incomplete,
+                                                             BlockFlushLevel &level) const
+{
+  int ret = OB_SUCCESS;
+  level = BlockFlushLevel::INVALID;
+
+  BlockFlushLevel block_level = BlockFlushLevel::INVALID;
+  if (flushing_page_num <= 0 || flushing_page_num > ObTmpFileGlobal::BLOCK_PAGE_NUMS) {
+    block_level = BlockFlushLevel::INVALID;
+  } else if (is_all_incomplete) {
+    block_level = BlockFlushLevel::L5;
+  } else if (is_exclusive_block) {
+    if (flushing_page_num > 64 && flushing_page_num <= 256) {
+      block_level = BlockFlushLevel::L1;
+    } else{
+      block_level = BlockFlushLevel::L2;
+    }
+  } else {
+    if (flushing_page_num > 64 && flushing_page_num <= 256) {
+      block_level = BlockFlushLevel::L3;
+    } else{
+      block_level = BlockFlushLevel::L4;
+    }
+  }
+  if (OB_UNLIKELY(block_level < BlockFlushLevel::L1 || block_level >= BlockFlushLevel::MAX)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid level", KR(ret),
+        K(block_level), K(flushing_page_num), K(is_exclusive_block), K(is_all_incomplete));
+  } else {
+    level = block_level;
+  }
+  return ret;
+}
+
+int ObTmpFileBlockFlushPriorityManager::insert_block_into_flush_priority_list(const BlockFlushLevel level,
                                                                               ObTmpFileBlock &block)
 {
   int ret = OB_SUCCESS;
-  BlockFlushLevel level = get_block_list_level_(flushing_page_num, block.is_exclusive_block());
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTmpFileBlockFlushPriorityManager is not inited", KR(ret));
   } else if (OB_UNLIKELY(level < BlockFlushLevel::L1 || level >= BlockFlushLevel::MAX)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(level), K(flushing_page_num), K(block));
+    LOG_WARN("invalid argument", KR(ret), K(level), K(block));
   } else if (OB_UNLIKELY(!block.is_valid_without_lock())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("block is not valid", KR(ret), K(block));
-  } else if (OB_FAIL(flush_lists_[level].append(&block))) {
+  } else if (OB_FAIL(flush_lists_[to_flush_level_idx(level)].append(&block))) {
     LOG_WARN("fail to append block into flush_lists", KR(ret), K(block));
   }
-  LOG_DEBUG("insert block into flush priority list", KR(ret), K(flushing_page_num), K(level), K(block));
+  LOG_DEBUG("insert block into flush priority list", KR(ret), K(level), K(block));
   return ret;
 }
 
-int ObTmpFileBlockFlushPriorityManager::remove_block_from_flush_priority_list(const int64_t flushing_page_num,
+int ObTmpFileBlockFlushPriorityManager::remove_block_from_flush_priority_list(const BlockFlushLevel level,
                                                                               ObTmpFileBlock &block)
 {
   int ret = OB_SUCCESS;
-  BlockFlushLevel level = get_block_list_level_(flushing_page_num, block.is_exclusive_block());
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObTmpFileBlockFlushPriorityManager is not inited", KR(ret), K(block));
   } else if (OB_UNLIKELY(level < BlockFlushLevel::L1 || level >= BlockFlushLevel::MAX)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(flushing_page_num), K(block));
+    LOG_WARN("invalid argument", KR(ret), K(level), K(block));
   } else if (OB_UNLIKELY(!block.is_valid_without_lock())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("block is not valid", KR(ret), K(block));
-  } else if (OB_FAIL(flush_lists_[level].remove(&block))) {
+  } else if (OB_FAIL(flush_lists_[to_flush_level_idx(level)].remove(&block))) {
     LOG_WARN("fail to remove block from flush_lists", KR(ret), K(block));
   }
-  LOG_DEBUG("remove block from flush priority list", KR(ret), K(flushing_page_num), K(level), K(block));
+  LOG_DEBUG("remove block from flush priority list", KR(ret), K(level), K(block));
   return ret;
 }
 
-int ObTmpFileBlockFlushPriorityManager::adjust_block_flush_priority(const int64_t old_flushing_page_num,
-                                                                    const int64_t flushing_page_num,
+int ObTmpFileBlockFlushPriorityManager::adjust_block_flush_priority(BlockFlushLevel old_level,
+                                                                    BlockFlushLevel new_level,
                                                                     ObTmpFileBlock &block)
 {
   int ret = OB_SUCCESS;
-  BlockFlushLevel old_level = get_block_list_level_(old_flushing_page_num, block.is_exclusive_block());
-  BlockFlushLevel new_level = get_block_list_level_(flushing_page_num, block.is_exclusive_block());
   bool is_exist = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -111,19 +143,19 @@ int ObTmpFileBlockFlushPriorityManager::adjust_block_flush_priority(const int64_
                          new_level < BlockFlushLevel::L1 || new_level >= BlockFlushLevel::MAX)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(old_level), K(new_level),
-             K(old_flushing_page_num), K(flushing_page_num), K(block));
+             K(old_level), K(new_level), K(block));
   } else if (OB_UNLIKELY(!block.is_valid_without_lock())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("block is not valid", KR(ret), K(block));
   } else if (old_level == new_level) {
     // do nothing
-  } else if (OB_FAIL(flush_lists_[old_level].remove(&block, is_exist))) {
+  } else if (OB_FAIL(flush_lists_[to_flush_level_idx(old_level)].remove(&block, is_exist))) {
     LOG_WARN("fail to remove block from flush_lists", KR(ret), K(old_level), K(block));
   } else if (is_exist &&
-             OB_FAIL(flush_lists_[new_level].append(&block))) {
+             OB_FAIL(flush_lists_[to_flush_level_idx(new_level)].append(&block))) {
     LOG_WARN("fail to append block into flush_lists", KR(ret), K(new_level), K(block));
   }
-  LOG_DEBUG("adjust block from flush priority list", KR(ret), K(old_flushing_page_num), K(flushing_page_num),
+  LOG_DEBUG("adjust block from flush priority list", KR(ret), K(old_level), K(new_level),
            K(old_level), K(new_level), K(block));
   return ret;
 }
@@ -142,11 +174,11 @@ int ObTmpFileBlockFlushPriorityManager::popN_from_block_list_(const BlockFlushLe
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(flush_level));
   } else {
-    PopBlockOperator pop_op(expected_count, flush_lists_[flush_level], block_handles);
-    flush_lists_[flush_level].for_each(pop_op);
+    PopBlockOperator pop_op(expected_count, flush_lists_[to_flush_level_idx(flush_level)], block_handles);
+    flush_lists_[to_flush_level_idx(flush_level)].for_each(pop_op);
     actual_count += block_handles.count();
     LOG_DEBUG("popN_from_block_list_ finished", KR(ret), K(flush_level),
-        K(expected_count), K(actual_count), K(flush_lists_[flush_level].size()), K(block_handles.count()));
+        K(expected_count), K(actual_count), K(flush_lists_[to_flush_level_idx(flush_level)].size()), K(block_handles.count()));
   }
   return ret;
 }
@@ -175,29 +207,7 @@ bool PopBlockOperator::operator()(ObTmpFileBlkNode *node)
   return OB_SUCCESS == ret;
 }
 
-ObTmpFileBlockFlushPriorityManager::BlockFlushLevel ObTmpFileBlockFlushPriorityManager::get_block_list_level_(
-  const int64_t flushing_page_num, const bool is_exclusive_block) const
-{
-  BlockFlushLevel level = BlockFlushLevel::INVALID;
-  if (flushing_page_num <= 0 || flushing_page_num > ObTmpFileGlobal::BLOCK_PAGE_NUMS) {
-    level = BlockFlushLevel::INVALID;
-  } else if (is_exclusive_block) {
-    if (flushing_page_num > 64 && flushing_page_num <= 256) {
-      level = BlockFlushLevel::L1;
-    } else{
-      level = BlockFlushLevel::L2;
-    }
-  } else {
-    if (flushing_page_num > 64 && flushing_page_num <= 256) {
-      level = BlockFlushLevel::L3;
-    } else{
-      level = BlockFlushLevel::L4;
-    }
-  }
-  return level;
-}
-
-ObTmpFileBlockFlushPriorityManager::BlockFlushLevel ObTmpFileBlockFlushPriorityManager::get_next_level_(const BlockFlushLevel level) const
+BlockFlushLevel ObTmpFileBlockFlushPriorityManager::get_next_level_(const BlockFlushLevel level) const
 {
   BlockFlushLevel ret = BlockFlushLevel::INVALID;
   if (level != BlockFlushLevel::INVALID && level != BlockFlushLevel::MAX) {
@@ -208,6 +218,8 @@ ObTmpFileBlockFlushPriorityManager::BlockFlushLevel ObTmpFileBlockFlushPriorityM
     } else if (level == BlockFlushLevel::L3) {
       ret = BlockFlushLevel::L4;
     } else if (level == BlockFlushLevel::L4) {
+      ret = BlockFlushLevel::L5;
+    } else if (level == BlockFlushLevel::L5) {
       ret = BlockFlushLevel::MAX;
     } else {
       ret = BlockFlushLevel::INVALID;
@@ -219,7 +231,7 @@ ObTmpFileBlockFlushPriorityManager::BlockFlushLevel ObTmpFileBlockFlushPriorityM
 int64_t ObTmpFileBlockFlushPriorityManager::get_block_count()
 {
   int64_t size = 0;
-  for (int64_t i = 0; i < BlockFlushLevel::MAX; i++) {
+  for (int64_t i = 0; i < to_flush_level_idx(BlockFlushLevel::MAX); i++) {
     size += flush_lists_[i].size();
   }
   return size;
@@ -232,7 +244,7 @@ void ObTmpFileBlockFlushPriorityManager::print_blocks()
   BlockFlushLevel flush_level = BlockFlushLevel::L1;
   PrintOperator print_op("flush_prio_mgr");
   while (OB_SUCC(ret) && BlockFlushLevel::MAX != flush_level) {
-    flush_lists_[flush_level].for_each(print_op);
+    flush_lists_[to_flush_level_idx(flush_level)].for_each(print_op);
     flush_level = get_next_level_(flush_level);
   }
 }
