@@ -134,6 +134,13 @@ enum ObVectorIndexSyncIntervalType
   VSIT_MAX
 };
 
+enum ObVectorIndexContentType
+{
+  VICT_TEXT = 0,
+  VICT_IMAGE = 1,
+  VICT_MAX
+};
+
 static const int64_t OB_MAX_ENDPOINT_LENGTH = 512;
 
 struct ObIvfConstant {
@@ -173,7 +180,7 @@ struct ObVectorIndexParam //FARM COMPAT WHITELIST
     refine_type_(0), bq_bits_query_(DEFAULT_BQ_BITS_QUERY),
     refine_k_(DEFAULT_REFINE_K), bq_use_fht_(false), sync_interval_type_(VSIT_MAX), sync_interval_value_(0), nbits_(0),
     prune_(false), refine_(false), ob_sparse_drop_ratio_build_(0), window_size_(DEFAULT_WINDOW_SIZE),
-    ob_sparse_drop_ratio_search_(0), similarity_threshold_(0)
+    ob_sparse_drop_ratio_search_(0), similarity_threshold_(0), content_type_(VICT_TEXT)
   {
     MEMSET(endpoint_, 0, sizeof(endpoint_));
   }
@@ -203,6 +210,7 @@ struct ObVectorIndexParam //FARM COMPAT WHITELIST
     MEMSET(endpoint_, 0, sizeof(endpoint_));
     nbits_ = 0;
     similarity_threshold_ = 0;
+    content_type_ = VICT_TEXT;
   };
   int assign(const ObVectorIndexParam &other) {
     int ret = OB_SUCCESS;
@@ -230,6 +238,7 @@ struct ObVectorIndexParam //FARM COMPAT WHITELIST
     window_size_ = other.window_size_;
     ob_sparse_drop_ratio_search_ = other.ob_sparse_drop_ratio_search_;
     similarity_threshold_ = other.similarity_threshold_;
+    content_type_ = other.content_type_;
     MEMCPY(endpoint_, other.endpoint_, sizeof(endpoint_));
     return ret;
   };
@@ -261,6 +270,7 @@ struct ObVectorIndexParam //FARM COMPAT WHITELIST
   int window_size_;
   float ob_sparse_drop_ratio_search_;
   float similarity_threshold_;
+  ObVectorIndexContentType content_type_;
   OB_UNIS_VERSION(1);
 private:
   int print_hnsw_params(char *buf, int64_t buf_len, int64_t &pos) const;

@@ -129,6 +129,7 @@ OB_DEF_SERIALIZE_SIZE(ObVectorIndexParam)
               window_size_,
               ob_sparse_drop_ratio_search_);
   OB_UNIS_ADD_LEN_ARRAY(endpoint_, OB_MAX_ENDPOINT_LENGTH);
+  LST_DO_CODE(OB_UNIS_ADD_LEN, similarity_threshold_, content_type_);
   return len;
 }
 
@@ -157,6 +158,7 @@ OB_DEF_SERIALIZE(ObVectorIndexParam)
               window_size_,
               ob_sparse_drop_ratio_search_);
   OB_UNIS_ENCODE_ARRAY(endpoint_, OB_MAX_ENDPOINT_LENGTH);
+  LST_DO_CODE(OB_UNIS_ENCODE, similarity_threshold_, content_type_);
   return ret;
 }
 
@@ -192,6 +194,7 @@ OB_DEF_DESERIALIZE(ObVectorIndexParam)
               window_size_,
               ob_sparse_drop_ratio_search_);
   OB_UNIS_DECODE_ARRAY(endpoint_, OB_MAX_ENDPOINT_LENGTH);
+  LST_DO_CODE(OB_UNIS_DECODE, similarity_threshold_, content_type_);
   return ret;
 }
 
