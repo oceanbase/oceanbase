@@ -425,6 +425,7 @@ int ObTabletMeta::init(
     split_info_ = old_tablet_meta.split_info_;
     has_merged_with_mds_info_ = old_tablet_meta.has_merged_with_mds_info_;
     min_ss_tablet_version_ = old_tablet_meta.min_ss_tablet_version_;
+    min_ss_flush_op_id_ = old_tablet_meta.min_ss_flush_op_id_;
     if (OB_FAIL(last_persisted_committed_tablet_status_.assign(old_tablet_meta.last_persisted_committed_tablet_status_))) {
       LOG_WARN("fail to init last_persisted_committed_tablet_status from old tablet meta", K(ret),
           "last_persisted_committed_tablet_status", old_tablet_meta.last_persisted_committed_tablet_status_);
@@ -677,6 +678,7 @@ int ObTabletMeta::init(
         has_merged_with_mds_info_ = true;
       }
       min_ss_tablet_version_ = old_tablet_meta.min_ss_tablet_version_;
+      min_ss_flush_op_id_ = old_tablet_meta.min_ss_flush_op_id_;
       if (OB_FAIL(last_persisted_committed_tablet_status_.assign(old_tablet_meta.last_persisted_committed_tablet_status_))) {
         LOG_WARN("fail to init last_persisted_committed_tablet_status from old tablet meta", K(ret),
             "last_persisted_committed_tablet_status", old_tablet_meta.last_persisted_committed_tablet_status_);
