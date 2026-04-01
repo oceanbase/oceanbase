@@ -403,6 +403,7 @@ private:
   int finish_upgrade_for_sync_standby_status_();
   int post_upgrade_for_schema_history_recycle_();
   int post_upgrade_for_inspection_jobs_();
+  int post_upgrade_for_grant_standby_replication_role_privs_in_oracle_();
 };
 
 /* =========== special upgrade processor end   ============= */

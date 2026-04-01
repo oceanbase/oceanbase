@@ -2040,6 +2040,8 @@ int ObUpgradeFor4421Processor::post_upgrade()
     LOG_WARN("fail to post upgrade for schema history recycle job", KR(ret));
   } else if (OB_FAIL(post_upgrade_for_inspection_jobs_())) {
     LOG_WARN("fail to post upgrade for inspection jobs", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_grant_standby_replication_role_privs_in_oracle_())) {
+    LOG_WARN("fail to post upgrade for grant standby replication role privs", KR(ret));
   }
   return ret;
 }
@@ -2281,6 +2283,40 @@ int ObUpgradeFor4421Processor::finish_upgrade()
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(finish_upgrade_for_sync_standby_status_())) {
     LOG_WARN("fail to finish upgrade for sync_standby_status", KR(ret));
+  }
+  return ret;
+}
+
+int ObUpgradeFor4421Processor::post_upgrade_for_grant_standby_replication_role_privs_in_oracle_()
+{
+  int ret = OB_SUCCESS;
+  lib::Worker::CompatMode compat_mode = lib::Worker::CompatMode::INVALID;
+  bool is_standby = false;
+  if (OB_ISNULL(sql_proxy_) || OB_ISNULL(oracle_sql_proxy_) || OB_ISNULL(schema_service_) || !is_valid_tenant_id(tenant_id_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", KR(ret), KP_(sql_proxy), KP_(schema_service), K_(tenant_id));
+  } else if (!is_user_tenant(tenant_id_)) {
+    LOG_INFO("meta and sys tenant no need to grant standby replication role privs", K_(tenant_id));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::is_standby_tenant(sql_proxy_, tenant_id_, is_standby))) {
+    LOG_WARN("check is standby tenant failed", KR(ret), K_(tenant_id));
+  } else if (is_standby) {
+    LOG_INFO("standby tenant no need to grant standby replication role privs", K_(tenant_id));
+  } else if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(tenant_id_, compat_mode))) {
+    LOG_WARN("failed to get tenant compat mode", KR(ret), K_(tenant_id));
+  } else if (lib::Worker::CompatMode::ORACLE == compat_mode) {
+    int64_t affected_rows = 0;
+    ObSqlString tab_priv_sql;
+    if (OB_FAIL(tab_priv_sql.assign_fmt("GRANT SELECT on %s.%s to %s",
+        OB_ORA_SYS_SCHEMA_NAME, OB_DBA_OB_LOG_RESTORE_SOURCE_ORA_TNAME, OB_ORA_STANDBY_REPLICATION_ROLE_NAME))) {
+      LOG_WARN("fail to assign sql", KR(ret));
+    } else if (OB_FAIL(oracle_sql_proxy_->write(tenant_id_, tab_priv_sql.ptr(), affected_rows))) {
+      LOG_WARN("fail to write sql", KR(ret), K(tab_priv_sql));
+    }
+    if (OB_FAIL(ret)) {
+      LOG_WARN("[UPGRADE] upgrade grant standby replication role privs for sync standby failed", KR(ret), K_(tenant_id));
+    } else {
+      LOG_INFO("[UPGRADE] upgrade grant standby replication role privs for sync standby success", K_(tenant_id));
+    }
   }
   return ret;
 }
