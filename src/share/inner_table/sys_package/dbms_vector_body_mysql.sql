@@ -120,4 +120,22 @@ CREATE OR REPLACE PACKAGE BODY dbms_vector
     CALL do_set_attribute(idx_name, table_name, item, value);
   END;
 
+  PROCEDURE do_trigger_async_task (
+    IN     task_type         VARCHAR(65535),
+    IN     table_name        VARCHAR(65535),
+    IN     index_name        VARCHAR(65535),
+    IN     tablet_id         BIGINT UNSIGNED DEFAULT 0
+  );
+  PRAGMA INTERFACE(C, DBMS_VECTOR_MYSQL_TRIGGER_ASYNC_TASK);
+
+  PROCEDURE trigger_async_task(
+    IN     task_type         VARCHAR(65535),
+    IN     table_name        VARCHAR(65535),
+    IN     index_name        VARCHAR(65535),
+    IN     tablet_id         BIGINT UNSIGNED DEFAULT 0)
+  BEGIN
+    COMMIT;
+    CALL do_trigger_async_task(task_type, table_name, index_name, tablet_id);
+  END;
+
 END dbms_vector;

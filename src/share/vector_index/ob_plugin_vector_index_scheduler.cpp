@@ -30,6 +30,10 @@ int ObPluginVectorIndexLoadScheduler::init_task_executors(uint64_t tenant_id, Ob
     LOG_WARN("fail to init async task exec", K(ret), K(ls));
   } else if (OB_FAIL(ivf_task_exec_.init(tenant_id, &ls))) {
     LOG_WARN("fail to init async task exec", K(ret), K(ls));
+  } else if (OB_FAIL(memsync_trigger_exec_.init(tenant_id, &ls))) {
+    LOG_WARN("fail to init memsync trigger exec", K(ret), K(ls));
+  } else {
+    memsync_trigger_exec_.set_scheduler(this);
   }
   return ret;
 }
@@ -659,6 +663,8 @@ int ObPluginVectorIndexLoadScheduler::check_and_load_task_executors(bool &has_iv
     LOG_WARN("fail to clear old task ctx", K(ret));
   } else if (OB_FAIL(async_task_exec_.load_task(task_trace_base_num))) {
     LOG_WARN("fail to load tenant sync task", K(ret));
+  } else if (OB_FAIL(memsync_trigger_exec_.load_task(task_trace_base_num))) {
+    LOG_WARN("fail to load memsync trigger task", K(ret));
   } else if (OB_FAIL(ivf_task_exec_.check_schema_version_changed(schema_changed))) {
     //only when schema changed, load ivf task
     LOG_WARN("fail to check schema version changed", K(ret));
@@ -1165,6 +1171,117 @@ int ObPluginVectorIndexLoadScheduler::log_tablets_need_memdata_sync(ObPluginVect
   }
   need_refresh_ = false;
 
+  return ret;
+}
+
+int ObPluginVectorIndexLoadScheduler::submit_memdata_sync_log_for_tablets(
+    const ObIArray<common::ObTabletID> &tablet_ids,
+    const ObIArray<uint64_t> &table_ids)
+{
+  int ret = OB_SUCCESS;
+  bool need_submit_log = false;
+  ObPluginVectorIndexMgr *mgr = nullptr;
+  ObSchemaGetterGuard schema_guard;
+  ObVectorIndexTabletIDArray submit_tablet_ids;
+  ObVectorIndexTableIDArray submit_table_ids;
+  if (tablet_ids.count() != table_ids.count() || tablet_ids.count() <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tablet_ids or table_ids", KR(ret), K(tablet_ids.count()), K(table_ids.count()));
+  } else if (OB_FAIL(vector_index_service_->acquire_vector_index_mgr(ls_->get_ls_id(), mgr))) {
+    LOG_WARN("fail to acquire vector index ls mgr", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
+  } else if (OB_ISNULL(mgr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid vector index ls mgr", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
+  } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    LOG_WARN("fail to get schema guard", KR(ret), K_(tenant_id));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
+      const ObTabletID &tablet_id = tablet_ids.at(i);
+      const uint64_t table_id = table_ids.at(i);
+      if (tablet_id.is_valid()) {
+        if (OB_FAIL(submit_tablet_ids.push_back(tablet_id))) {
+          LOG_WARN("fail to push back tablet_id", KR(ret), K(i), K(tablet_id), K(table_id));
+        } else if (OB_FAIL(submit_table_ids.push_back(table_id))) {
+          LOG_WARN("fail to push back table_id", KR(ret), K(i), K(tablet_id), K(table_id));
+        }
+      } else {
+        const ObTableSchema *table_schema = nullptr;
+        ObArray<ObTabletID> expanded_tablet_ids;
+        if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, table_id, table_schema))) {
+          LOG_WARN("failed to get table schema", KR(ret), K(table_id), K_(tenant_id));
+        } else if (OB_ISNULL(table_schema)) {
+          ret = OB_TABLE_NOT_EXIST;
+          LOG_WARN("table schema is null", KR(ret), K(table_id), K_(tenant_id));
+        } else if (OB_FAIL(table_schema->get_tablet_ids(expanded_tablet_ids))) {
+          LOG_WARN("fail to get tablet ids", KR(ret), K(table_id));
+        } else {
+          for (int64_t j = 0; OB_SUCC(ret) && j < expanded_tablet_ids.count(); ++j) {
+            const ObTabletID &expanded_tablet_id = expanded_tablet_ids.at(j);
+            if (OB_FAIL(submit_tablet_ids.push_back(expanded_tablet_id))) {
+              LOG_WARN("fail to push back expanded tablet_id", KR(ret), K(j), K(expanded_tablet_id), K(table_id));
+            } else if (OB_FAIL(submit_table_ids.push_back(table_id))) {
+              LOG_WARN("fail to push back expanded table_id", KR(ret), K(j), K(expanded_tablet_id), K(table_id));
+            }
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret) && submit_tablet_ids.count() <= 0) {
+      ret = OB_ITEM_NOT_SETTED;
+      LOG_WARN("no tablet need submit memdata sync log", KR(ret), K(tablet_ids), K(table_ids));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    const int64_t wait_interval_us = 1000L;
+    const int64_t wait_timeout_us = 10L * 1000L * 1000L;
+    int64_t current_idx = 0;
+    int64_t wait_start_time_us = 0;
+    while (OB_SUCC(ret) && current_idx < submit_tablet_ids.count()) {
+      int64_t submit_cnt = 0;
+      {
+        common::ObSpinLockGuard ctx_guard(logging_lock_);
+        if (is_logging_) {
+          if (0 == wait_start_time_us) {
+            wait_start_time_us = ObTimeUtility::current_time();
+          } else if (ObTimeUtility::current_time() - wait_start_time_us >= wait_timeout_us) {
+            ret = OB_TIMEOUT;
+            LOG_WARN("wait memdata sync log callback timeout", KR(ret), K(current_idx),
+                     K(submit_tablet_ids.count()), K(wait_timeout_us), K(tenant_id_), K(ls_->get_ls_id()));
+          }
+        } else {
+          wait_start_time_us = 0;
+          submit_cnt = MIN(static_cast<int64_t>(ObVectorIndexSyncLogCb::VECTOR_INDEX_MAX_SYNC_COUNT),
+                           submit_tablet_ids.count() - current_idx);
+          tablet_id_array_.reuse();
+          table_id_array_.reuse();
+          for (int64_t i = 0; OB_SUCC(ret) && i < submit_cnt; ++i) {
+            if (OB_FAIL(tablet_id_array_.push_back(submit_tablet_ids.at(current_idx + i)))) {
+              LOG_WARN("fail to push back submit tablet_id", KR(ret), K(i), K(current_idx));
+            } else if (OB_FAIL(table_id_array_.push_back(submit_table_ids.at(current_idx + i)))) {
+              LOG_WARN("fail to push back submit table_id", KR(ret), K(i), K(current_idx));
+            }
+          }
+          if (OB_SUCC(ret)) {
+            need_submit_log = true;
+          }
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (need_submit_log) {
+        if (OB_FAIL(submit_log_())) {
+          LOG_WARN("fail to submit memdata sync log for manual trigger", KR(ret),
+                   K(tenant_id_), K(ls_->get_ls_id()), K(current_idx), K(submit_cnt));
+        } else {
+          current_idx += submit_cnt;
+          need_submit_log = false;
+        }
+      } else {
+        ob_usleep(wait_interval_us);
+      }
+    }
+  }
   return ret;
 }
 

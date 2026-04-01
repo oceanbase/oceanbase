@@ -73,6 +73,7 @@ enum ObVecIndexAsyncTaskType { //FARM COMPAT WHITELIST
   OB_VECTOR_ASYNC_INDEX_OPTINAL = 1,
   OB_VECTOR_ASYNC_INDEX_IVF_LOAD = 2,
   OB_VECTOR_ASYNC_INDEX_IVF_CLEAN = 3,
+  OB_VECTOR_ASYNC_MEMSYNC_TRIGGER = 4,
   OB_VECTOR_ASYNC_TASK_TYPE_INVALID
 };
 
@@ -473,6 +474,10 @@ public:
   static int fetch_new_trace_id(const uint64_t basic_num, ObIAllocator *allocator, TraceId &new_trace_id);
   static int in_active_time(const uint64_t tenant_id, bool& is_active_time);
   static int check_task_is_cancel(ObVecIndexAsyncTaskCtx *task, bool &is_cancel);
+  // Create one memsync trigger task record in __all_vector_index_task (PREPARE status).
+  // Timer/scheduler will read and execute memdata sync for this record.
+  static int create_memsync_trigger_task_record(
+    uint64_t tenant_id, uint64_t table_id, uint64_t tablet_id);
 
 private:
   static int construct_read_task_sql(

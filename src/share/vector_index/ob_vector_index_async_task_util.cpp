@@ -141,6 +141,65 @@ int ObVecIndexAsyncTaskUtil::check_task_is_cancel(ObVecIndexAsyncTaskCtx *task_c
 /////////////////////////////
 // ObVecIndexAsyncTaskUtil //
 ////////////////////////////
+int ObVecIndexAsyncTaskUtil::create_memsync_trigger_task_record(
+    uint64_t tenant_id, uint64_t table_id, uint64_t tablet_id)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator("VecMemSyncRec", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  ObVecIndexTaskCtxArray task_ctx_array;
+  int64_t new_task_id = OB_INVALID_ID;
+  ObVecIndexAsyncTaskCtx *task_ctx = nullptr;
+  common::ObCurTraceId::TraceId new_trace_id;
+  char *task_ctx_buf = static_cast<char *>(allocator.alloc(sizeof(ObVecIndexAsyncTaskCtx)));
+
+  if (OB_ISNULL(task_ctx_buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("async task ctx is null", K(ret));
+  } else if (FALSE_IT(task_ctx = new (task_ctx_buf) ObVecIndexAsyncTaskCtx())) {
+  } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::fetch_new_task_id(tenant_id, new_task_id))) {
+    LOG_WARN("fail to fetch new task id", K(ret), K(tenant_id));
+  } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::fetch_new_trace_id(1, &allocator, new_trace_id))) {
+    LOG_WARN("fail to fetch new trace id", K(ret), K(tablet_id));
+  } else {
+    task_ctx->tenant_id_ = tenant_id;
+    task_ctx->task_status_.tablet_id_ = ObTabletID(tablet_id);
+    task_ctx->task_status_.tenant_id_ = tenant_id;
+    task_ctx->task_status_.table_id_ = table_id;
+    task_ctx->task_status_.task_id_ = new_task_id;
+    task_ctx->task_status_.task_type_ = ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_MEMSYNC_TRIGGER;
+    task_ctx->task_status_.trigger_type_ = ObVecIndexAsyncTaskTriggerType::OB_VEC_TRIGGER_MANUAL;
+    task_ctx->task_status_.status_ = ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_PREPARE;
+    task_ctx->task_status_.trace_id_ = new_trace_id;
+    task_ctx->task_status_.target_scn_.convert_from_ts(ObTimeUtility::current_time());
+    if (OB_FAIL(task_ctx_array.push_back(task_ctx))) {
+      LOG_WARN("fail to push back task status", K(ret), K(task_ctx));
+    } else {
+      ObMySQLTransaction trans;
+      if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id))) {
+        LOG_WARN("fail start transaction", K(ret), K(tenant_id));
+      } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::batch_insert_vec_task(
+                     tenant_id, OB_ALL_VECTOR_INDEX_TASK_TNAME, trans, task_ctx_array))) {
+        LOG_WARN("fail to insert memsync trigger task record", K(ret), K(tenant_id), K(table_id), K(tablet_id));
+      }
+      if (trans.is_started()) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+          LOG_WARN("fail to commit trans", KR(ret), K(tmp_ret));
+          ret = OB_SUCC(ret) ? tmp_ret : ret;
+        }
+      }
+    }
+  }
+  if (OB_FAIL(ret)) { // release memory when fail
+    if (OB_NOT_NULL(task_ctx)) {
+      task_ctx->~ObVecIndexAsyncTaskCtx();
+      allocator.free(task_ctx);
+      task_ctx = nullptr;
+    }
+  }
+  return ret;
+}
+
 int ObVecIndexAsyncTaskUtil::in_active_time(
     const uint64_t tenant_id, bool& is_active_time)
 {
