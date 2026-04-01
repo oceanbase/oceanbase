@@ -787,6 +787,12 @@ private:
   int init_schema_info_from_cache();
   int adjust_rowkey();
   int adjust_properties();
+  // TableAPI temporal FSP: truncate matches ob_datum_cast; round uses obj_accuracy_check (ObDateTimeTC / ObMySQLDateTimeTC).
+  static const int64_t TEMPORAL_POWER_OF_10[MAX_SCALE_FOR_TEMPORAL + 1];
+  static int adjust_obj_temporal_to_column_scale(const common::ObAccuracy &accuracy,
+                                                 const common::ObCollationType cs_type,
+                                                 const bool need_truncate,
+                                                 ObObj &obj);
   // 获取索引表的tablet_id
   int get_related_tablet_id(const share::schema::ObTableSchema &index_schema,
                             common::ObTabletID &related_tablet_id);

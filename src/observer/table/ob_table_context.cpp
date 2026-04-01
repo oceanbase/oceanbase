@@ -17,6 +17,9 @@
 #include "src/share/table/ob_table_util.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "observer/table/utils/ob_table_convert_utils.h"
+#include "common/sql_mode/ob_sql_mode_utils.h"
+#include "lib/timezone/ob_time_convert.h"
+#include "share/object/ob_obj_cast.h"
 
 using namespace oceanbase::common;
 
@@ -24,6 +27,57 @@ namespace oceanbase
 {
 namespace table
 {
+// First MAX_SCALE_FOR_TEMPORAL+1 entries match ob_datum_cast.cpp power_of_10 (truncate branch).
+const int64_t ObTableCtx::TEMPORAL_POWER_OF_10[MAX_SCALE_FOR_TEMPORAL + 1] = {
+  1L,
+  10L,
+  100L,
+  1000L,
+  10000L,
+  100000L,
+  1000000L,
+};
+
+int ObTableCtx::adjust_obj_temporal_to_column_scale(const ObAccuracy &accuracy,
+                                                    const ObCollationType cs_type,
+                                                    const bool need_truncate,
+                                                    ObObj &obj)
+{
+  int ret = OB_SUCCESS;
+  if (need_truncate) {
+    const ObScale scale = accuracy.get_scale();
+    if (ob_is_datetime_tc(obj.get_type())) {
+      int64_t value = obj.get_datetime();
+      if (0 <= scale && scale < MAX_SCALE_FOR_TEMPORAL) {
+        const int32_t scale_step = MAX_SCALE_FOR_TEMPORAL - scale;
+        const int64_t p = TEMPORAL_POWER_OF_10[scale_step];
+        value /= p;
+        value *= p;
+      }
+      obj.set_datetime(obj.get_type(), value);
+    } else if (ob_is_mysql_datetime(obj.get_type())) {
+      ObMySQLDateTime value = obj.get_mysql_datetime();
+      if (0 <= scale && scale < MAX_SCALE_FOR_TEMPORAL) {
+        const int32_t scale_step = MAX_SCALE_FOR_TEMPORAL - scale;
+        const int64_t p = TEMPORAL_POWER_OF_10[scale_step];
+        value.microseconds_ /= p;
+        value.microseconds_ *= p;
+      }
+      obj.set_mysql_datetime(value);
+    }
+  } else {
+    ObCastCtx cast_ctx;
+    ObObj buf_obj;
+    const ObObj *res_obj = nullptr;
+    if (ob_is_datetime_tc(obj.get_type()) || ob_is_mysql_datetime(obj.get_type())) {
+      ret = obj_accuracy_check(cast_ctx, accuracy, cs_type, obj, buf_obj, res_obj);
+    }
+    if (OB_SUCC(ret) && OB_NOT_NULL(res_obj) && res_obj != &obj) {
+      obj = *res_obj;
+    }
+  }
+  return ret;
+}
 
 int ObTableCtx::get_tablet_by_rowkey(const ObRowkey &rowkey,
                                      ObTabletID &tablet_id)
@@ -528,7 +582,7 @@ int ObTableCtx::adjust_column_type(const ObTableColumnInfo &column_info, ObObj &
   } else if (column_type.get_type() != obj.get_type()
              && !(ob_is_string_type(column_type.get_type()) && ob_is_string_type(obj.get_type()))
              && !(ob_is_mysql_date_tc(column_type.get_type()) && ob_is_date_tc(obj.get_type()))
-             && !(ob_is_mysql_datetime(column_type.get_type()) && ob_is_datetime(obj.get_type()))) {
+             && !(ob_is_mysql_datetime(column_type.get_type()) && ob_is_datetime_tc(obj.get_type()))) {
     // 2. data type mismatch
     ret = OB_KV_COLUMN_TYPE_NOT_MATCH;
     const char *schema_type_str = ob_obj_type_str(column_type.get_type());
@@ -564,7 +618,18 @@ int ObTableCtx::adjust_column_type(const ObTableColumnInfo &column_info, ObObj &
     }
     // 4. check accuracy
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(ob_obj_accuracy_check_only(column_type.get_accuracy(), cs_type, obj))) {
+      // Match SQL FSP before accuracy check so KV does not error where SQL rounds/truncates.
+      // TIME_TRUNCATE_FRACTIONAL on => truncate; off => ObTimeConverter::round_*.
+      if (ob_is_datetime_tc(obj.get_type()) || ob_is_mysql_datetime(obj.get_type())) {
+        const bool truncate_temporal_fsp = is_time_truncate_fractional(get_session_info().get_sql_mode());
+        if (OB_FAIL(adjust_obj_temporal_to_column_scale(
+                column_type.get_accuracy(), cs_type, truncate_temporal_fsp, obj))) {
+          LOG_WARN("adjust temporal fractional scale failed", K(ret), K(obj), K(column_type));
+        }
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ob_obj_accuracy_check_only(column_type.get_accuracy(), cs_type, obj))) {
         if (ret == OB_DATA_OUT_OF_RANGE) {
           int64_t row_num = 0;
           LOG_USER_ERROR(OB_DATA_OUT_OF_RANGE, column_info.column_name_.length(), column_info.column_name_.ptr(), row_num);
