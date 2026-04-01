@@ -11493,13 +11493,26 @@ static struct VarsInit{
     ObSysVars[838].alias_ = "OB_SV_SQL_TRANSPILER" ;
     }();
 
+    [&] (){
+      ObSysVars[839].default_value_ = "0" ;
+      ObSysVars[839].info_ = "Parse number in JSON with full precision (but slower)" ;
+      ObSysVars[839].name_ = "json_float_full_precision" ;
+      ObSysVars[839].data_type_ = ObIntType ;
+      ObSysVars[839].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[839].id_ = SYS_VAR_JSON_FLOAT_FULL_PRECISION ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_JSON_FLOAT_FULL_PRECISION)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_JSON_FLOAT_FULL_PRECISION] = 839 ;
+      ObSysVars[839].base_value_ = "0" ;
+    ObSysVars[839].alias_ = "OB_SV_JSON_FLOAT_FULL_PRECISION" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 839;
+static int64_t var_amount = 840;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

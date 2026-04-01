@@ -527,6 +527,7 @@ public:
   bool get_local_ob_enable_parameter_anonymous_block() const;
   bool get_local_ob_enable_ps_parameter_anonymous_block() const;
   bool get_local_cursor_sharing_mode() const;
+  bool get_local_json_float_full_precision() const;
   ObLengthSemantics get_local_nls_length_semantics() const;
   ObLengthSemantics get_actual_nls_length_semantics() const;
   int64_t get_local_ob_org_cluster_id() const;
@@ -1892,7 +1893,8 @@ public:
         ob_enable_parameter_anonymous_block_(false),
         current_default_catalog_(0),
         security_version_(0),
-        ob_enable_ps_parameter_anonymous_block_(false)
+        ob_enable_ps_parameter_anonymous_block_(false),
+        json_float_full_precision_(false)
     {
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         MEMSET(nls_formats_buf_[i], 0, MAX_NLS_FORMAT_STR_LEN);
@@ -1963,6 +1965,7 @@ public:
       security_version_ = 0;
       ob_enable_ps_parameter_anonymous_block_ = false;
       current_default_catalog_ = 0;
+      json_float_full_precision_ = false;
     }
 
     inline bool operator==(const SysVarsCacheData &other) const {
@@ -2017,7 +2020,8 @@ public:
             ob_enable_parameter_anonymous_block_ == other.ob_enable_parameter_anonymous_block_ &&
             security_version_ == other.security_version_ &&
             ob_enable_ps_parameter_anonymous_block_ == other.ob_enable_ps_parameter_anonymous_block_ &&
-            current_default_catalog_ == other.current_default_catalog_;
+            current_default_catalog_ == other.current_default_catalog_ &&
+            json_float_full_precision_ == other.json_float_full_precision_;
       bool equal2 = true;
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         if (nls_formats_[i] != other.nls_formats_[i]) {
@@ -2206,6 +2210,7 @@ public:
     uint64_t current_default_catalog_;
     uint64_t security_version_;
     bool ob_enable_ps_parameter_anonymous_block_;
+    bool json_float_full_precision_;
   private:
     char nls_formats_buf_[ObNLSFormatEnum::NLS_MAX][MAX_NLS_FORMAT_STR_LEN];
   };
@@ -2330,6 +2335,7 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(uint64_t, security_version);
     DEF_SYS_VAR_CACHE_FUNCS(bool, ob_enable_ps_parameter_anonymous_block);
     DEF_SYS_VAR_CACHE_FUNCS(uint64_t, current_default_catalog);
+    DEF_SYS_VAR_CACHE_FUNCS(bool, json_float_full_precision);
     void set_autocommit_info(bool inc_value)
     {
       inc_data_.autocommit_ = inc_value;
@@ -2407,9 +2413,10 @@ private:
       bool inc_security_version_:1;
       bool inc_ob_enable_ps_parameter_anonymous_block_:1;
       bool inc_current_default_catalog_:1;
+      bool inc_json_float_full_precision_:1;
       // when add new inc bit, please update reserved_bits_, 
       // so that the total bits is 64
-      int reserved_bits_:5;
+      int reserved_bits_:4;
     };
     union { // FARM COMPAT WHITELIST
       uint64_t inc_flags_;
@@ -2784,6 +2791,11 @@ inline bool ObBasicSessionInfo::get_local_ob_enable_parameter_anonymous_block() 
 inline bool ObBasicSessionInfo::get_local_ob_enable_ps_parameter_anonymous_block() const
 {
   return sys_vars_cache_.get_ob_enable_ps_parameter_anonymous_block();
+}
+
+inline bool ObBasicSessionInfo::get_local_json_float_full_precision() const
+{
+  return sys_vars_cache_.get_json_float_full_precision();
 }
 
 inline ObLengthSemantics ObBasicSessionInfo::get_local_nls_length_semantics() const

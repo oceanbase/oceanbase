@@ -23,7 +23,18 @@ namespace common {
                       | rapidjson::kParseCommentsFlag \
                       | rapidjson::kParseTrailingCommasFlag
 
+#define RELAXJSON_FLAG_FULL_PRECISION RELAXJSON_FLAG \
+                      | rapidjson::kParseFullPrecisionFlag
+
 #define STRICTJSON_FLAG rapidjson::kParseObjectKeyNoQuotesFlag
+
+#define STRICTJSON_FLAG_FULL_PRECISION STRICTJSON_FLAG \
+                      | rapidjson::kParseFullPrecisionFlag
+
+#define INSITUJSON_FLAG rapidjson::kParseInsituFlag
+
+#define INSITUJSON_FLAG_FULL_PRECISION INSITUJSON_FLAG \
+                      | rapidjson::kParseFullPrecisionFlag
 
 int ObJsonParser::get_tree(ObIAllocator *allocator, const ObString &text, ObJsonNode *&j_tree,
                            uint32_t parse_flag, uint32_t max_depth_config)
@@ -91,12 +102,23 @@ int ObJsonParser::parse_json_text(ObIAllocator *allocator,
     ObRapidJsonReader reader(&parse_allocator);
     rapidjson::ParseResult r;
     try {
-      if (HAS_FLAG(parse_flag, JSN_RELAXED_FLAG)) {
-        r = reader.Parse<RELAXJSON_FLAG>(ss, handler);
-      } else if (HAS_FLAG(parse_flag, JSN_STRICT_FLAG)) {
-        r = reader.Parse<STRICTJSON_FLAG>(ss, handler);
+      if (HAS_FLAG(parse_flag, JSN_FLOAT_FULL_PRECISION_FLAG)) {
+        if (HAS_FLAG(parse_flag, JSN_RELAXED_FLAG)) {
+          r = reader.Parse<RELAXJSON_FLAG_FULL_PRECISION>(ss, handler);
+        } else if (HAS_FLAG(parse_flag, JSN_STRICT_FLAG)) {
+          r = reader.Parse<STRICTJSON_FLAG_FULL_PRECISION>(ss, handler);
+        } else {
+          r = reader.Parse<INSITUJSON_FLAG_FULL_PRECISION>(ss, handler);
+        }
       } else {
-        r = reader.Parse<rapidjson::kParseInsituFlag>(ss, handler);
+        if (HAS_FLAG(parse_flag, JSN_RELAXED_FLAG)) {
+          r = reader.Parse<RELAXJSON_FLAG>(ss, handler);
+        } else if (HAS_FLAG(parse_flag, JSN_STRICT_FLAG)) {
+          r = reader.Parse<STRICTJSON_FLAG>(ss, handler);
+        } else {
+          r = reader.Parse<INSITUJSON_FLAG>(ss, handler);
+        }
+
       }
     } catch (const std::bad_alloc &e) {
       ret = OB_ALLOCATE_MEMORY_FAILED;

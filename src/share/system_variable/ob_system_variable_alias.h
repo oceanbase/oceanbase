@@ -855,6 +855,7 @@ namespace share
   static const char* const OB_SV__PUSH_JOIN_PREDICATE = "_push_join_predicate";
   static const char* const OB_SV_SPARSE_DROP_RATIO_SEARCH = "ob_sparse_drop_ratio_search";
   static const char* const OB_SV_SQL_TRANSPILER = "sql_transpiler";
+  static const char* const OB_SV_JSON_FLOAT_FULL_PRECISION = "json_float_full_precision";
 
 }
 }

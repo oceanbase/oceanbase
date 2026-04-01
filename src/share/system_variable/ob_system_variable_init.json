@@ -11829,5 +11829,18 @@
     "info_cn": "控制是否开启 SQL Transpiler 功能。当开启时，满足条件的 PL/SQL 函数会被自动改写成 SQL 表达式，无需用户介入。",
     "background_cn": "",
     "ref_url": ""
+  },
+  "json_float_full_precision": {
+    "id": 10760,
+    "name": "json_float_full_precision",
+    "default_value": "0",
+    "base_value": "0",
+    "data_type": "bool",
+    "info": "Parse number in JSON with full precision (but slower)",
+    "flags": "SESSION | GLOBAL | NEED_SERIALIZE",
+    "publish_version": "4.3.5.6",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
   }
 }

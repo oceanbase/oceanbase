@@ -3023,6 +3023,13 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
       uint64_t uint_val = 0;
       OZ (val.get_uint64(uint_val), val);
       OX (sys_vars_cache_.set_current_default_catalog(uint_val));
+      break;
+    }
+    case SYS_VAR_JSON_FLOAT_FULL_PRECISION: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache_.set_json_float_full_precision(int_val != 0));
+      break;
     }
     default: {
       //do nothing
@@ -3553,6 +3560,13 @@ int ObBasicSessionInfo::fill_sys_vars_cache_base_value(
       uint64_t uint_val = 0;
       OZ (val.get_uint64(uint_val), val);
       OX (sys_vars_cache.set_current_default_catalog(uint_val));
+      break;
+    }
+    case SYS_VAR_JSON_FLOAT_FULL_PRECISION: {
+      int64_t int_val = 0;
+      OZ (val.get_int(int_val), val);
+      OX (sys_vars_cache.set_base_json_float_full_precision(int_val != 0));
+      break;
     }
     default: {
       //do nothing
