@@ -21,9 +21,13 @@ if [[ -n "${FORWARDING_HOST:-}" ]]; then
   echo "$FORWARDING_HOST mirrors.oceanbase.com" >> /etc/hosts 2>/dev/null || true
 fi
 
-deps_file="$WORKSPACE/deps/init/oceanbase.el7.x86_64.deps"
-if [[ -f "$deps_file" ]]; then
-  sed -i 's/mirrors.aliyun.com/mirrors.cloud.aliyuncs.com/g' "$deps_file"
+deps_dir="$WORKSPACE/deps/init"
+if [[ -d "$deps_dir" ]]; then
+  shopt -s nullglob
+  for f in "$deps_dir"/oceanbase.*.deps; do
+    sed -i 's/mirrors.aliyun.com/mirrors.cloud.aliyuncs.com/g' "$f"
+  done
+  shopt -u nullglob
 fi
 
 mkdir -p "$TASK_DIR"
