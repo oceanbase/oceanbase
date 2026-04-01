@@ -14,6 +14,7 @@
 
 #include "ob_log_systable_queryer.h"
 #include "share/inner_table/ob_inner_table_schema_constants.h" // OB_***_TNAME
+#include "lib/worker.h" // WorkerTimeoutGuard
 
 using namespace oceanbase::share;
 namespace oceanbase
@@ -22,6 +23,7 @@ namespace logservice
 {
 
 constexpr int64_t OB_LOG_SYSTABLE_QUERYER_SQL_QUERY_TIMEOUT_US = 10_s;
+ERRSIM_POINT_DEF(ERRSIM_FETCH_LOG_SYS_QUERY_TIMEOUT);
 
 ObLogSysTableQueryer::ObLogSysTableQueryer() :
     is_inited_(false),
@@ -46,6 +48,7 @@ int ObLogSysTableQueryer::init(const int64_t cluster_id,
     const int64_t sql_query_timeout_us)
 {
   int ret = OB_SUCCESS;
+  int64_t actual_sql_query_timeout_us = sql_query_timeout_us;
 
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
@@ -53,13 +56,30 @@ int ObLogSysTableQueryer::init(const int64_t cluster_id,
   } else if (OB_UNLIKELY(sql_query_timeout_us <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid sql query timeout", KR(ret), K(sql_query_timeout_us));
+  } else if (10_ms > sql_query_timeout_us || 3600_s < sql_query_timeout_us) { // 10ms to 1h
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid sql query timeout", KR(ret), K(sql_query_timeout_us));
   } else {
+#ifdef ERRSIM
+    int64_t source_tenant_id = MTL_ID();
+    const int inject_ret = OB_E(ERRSIM_FETCH_LOG_SYS_QUERY_TIMEOUT, source_tenant_id) OB_SUCCESS;
+    if (OB_UNLIKELY(OB_SUCCESS != inject_ret)) {
+      const int64_t errsim_sql_query_timeout_us = -ERRSIM_FETCH_LOG_SYS_QUERY_TIMEOUT.item_.error_code_;
+      if (OB_UNLIKELY(errsim_sql_query_timeout_us < 10_ms || errsim_sql_query_timeout_us > 3600_s)) {
+        LOG_WARN("invalid errsim sql query timeout", K(source_tenant_id), K(errsim_sql_query_timeout_us));
+      } else {
+        actual_sql_query_timeout_us = errsim_sql_query_timeout_us;
+        LOG_INFO("ERRSIM: override log route sql query timeout",
+            K(source_tenant_id), K(sql_query_timeout_us), K(actual_sql_query_timeout_us));
+      }
+    }
+#endif
     is_across_cluster_ = is_across_cluster;
     cluster_id_ = cluster_id;
     sql_proxy_ = &sql_proxy;
     is_inited_ = true;
     err_handler_ = err_handler;
-    sql_query_timeout_us_ = sql_query_timeout_us;
+    sql_query_timeout_us_ = actual_sql_query_timeout_us;
   }
 
   return ret;
@@ -326,6 +346,8 @@ int ObLogSysTableQueryer::do_query_(const uint64_t tenant_id,
     ObISQLClient::ReadResult &result)
 {
   int ret = OB_SUCCESS;
+  // ObTimerTaskThreadPool will set timeout to INT64_MAX, so we need to set a timeout for the query.
+  lib::WorkerTimeoutGuard worker_timeout_guard(ObTimeUtility::current_time() + sql_query_timeout_us_);
   ObTaskId trace_id(*ObCurTraceId::get_trace_id());
 
   if (IS_NOT_INIT) {

@@ -137,6 +137,9 @@ int ObMySQLStatement::wait_for_mysql(int &status)
   while (res <= 0 && OB_SUCC(ret)) {
     if (OB_FAIL(THIS_WORKER.check_status())) {
       LOG_WARN("check status failed", K(ret));
+    } else if (THIS_WORKER.is_timeout()) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("wait for mysql timeout", K(ret));
     } else {
       res = poll(&pfd, 1, timeout);
     }
