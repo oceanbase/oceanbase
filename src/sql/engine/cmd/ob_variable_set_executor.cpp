@@ -1468,8 +1468,9 @@ int ObVariableSetExecutor::sync_update_px_target_workers_per_cpu(ObExecContext &
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session = NULL;
   common::ObMySQLProxy *sql_proxy = NULL;
-
-  if (OB_ISNULL(session = ctx.get_my_session())) {
+  if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_6_0_0) {
+    // do nothing.
+  } else if (OB_ISNULL(session = ctx.get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
   } else if (OB_ISNULL(sql_proxy = ctx.get_sql_proxy())) {
