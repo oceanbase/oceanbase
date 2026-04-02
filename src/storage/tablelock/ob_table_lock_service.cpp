@@ -1306,10 +1306,12 @@ int ObTableLockService::process_table_lock_task_(ObTableLockCtx &ctx,
   } else if (!is_allowed) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("lock table not allowed now", K(ret), K(ctx));
-  } else if (OB_FAIL(process_tablet_lock_task_(ctx,
-                                               lock_mode,
-                                               lock_owner,
-                                               table_schema))) {
+  }
+  DEBUG_SYNC(TABLE_LOCK_AFTER_LOCK_TABLE_BEFORE_LOCK_TABLET);
+  if (FAILEDx(process_tablet_lock_task_(ctx,
+                                        lock_mode,
+                                        lock_owner,
+                                        table_schema))) {
     LOG_WARN("failed to lock table tablet", K(ret), K(ctx));
   }
   return ret;
