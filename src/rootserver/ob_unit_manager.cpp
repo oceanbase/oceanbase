@@ -8795,17 +8795,12 @@ int ObUnitManager::check_shrink_memory(
           ObSqlString message_to_user;
           const char *view_name = OB_GV_OB_VECTOR_MEMORY_TNAME;
           char ip_buf[common::OB_IP_STR_BUFF] = "";
-          uint64_t cluster_version = GET_MIN_CLUSTER_VERSION();
-          // vector memory check is supported in [4.3.5.5, 4.4.0.0), [4.4.1.0, 4.4.2.0), [4.4.2.1, 4.5.0.0), [4.6.0.0, )
-          bool vector_mem_supported = (cluster_version >= MOCK_CLUSTER_VERSION_4_3_5_5 && cluster_version < CLUSTER_VERSION_4_4_0_0)
-                                      || (cluster_version >= CLUSTER_VERSION_4_4_1_0 && cluster_version < MOCK_CLUSTER_VERSION_4_4_2_0)
-                                      || (cluster_version >= MOCK_CLUSTER_VERSION_4_4_2_1 && cluster_version < CLUSTER_VERSION_4_5_0_0)
-                                      || cluster_version >= CLUSTER_VERSION_4_6_0_0;
-          if (!vector_mem_supported) {
+          if (OB_UNLIKELY(!mem_info_operator.is_rpc_supported_version())) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected: vector_mem_used > max_vector_mem but version not in supported ranges",
                      K(vector_mem_used), K(max_vector_mem), KCV(GET_MIN_CLUSTER_VERSION()), KR(ret));
-          } else if (OB_FAIL(!tenant_mem_info->get_server().ip_to_string(ip_buf, sizeof(ip_buf)))) {
+          } else if (OB_UNLIKELY(!tenant_mem_info->get_server().ip_to_string(ip_buf, sizeof(ip_buf)))) {
+            ret = OB_ERR_UNEXPECTED;
             LOG_WARN("fail to convert server ip to string", KR(ret));
           } else if (OB_FAIL(message_to_user.assign_fmt(
               "The memory of vector index needs to be less than %.0f%% of the new memory "
@@ -8828,7 +8823,8 @@ int ObUnitManager::check_shrink_memory(
           ObSqlString message_to_user;
           const char *view_name = mem_info_operator.is_oracle_mode() ? OB_GV_OB_MEMSTORE_ORA_TNAME : OB_GV_OB_MEMSTORE_TNAME;
           char ip_buf[common::OB_IP_STR_BUFF] = "";
-          if (OB_FAIL(!tenant_mem_info->get_server().ip_to_string(ip_buf, sizeof(ip_buf)))) {
+          if (OB_UNLIKELY(!tenant_mem_info->get_server().ip_to_string(ip_buf, sizeof(ip_buf)))) {
+            ret = OB_ERR_UNEXPECTED;
             LOG_WARN("fail to convert server ip to string", KR(ret));
           } else if (OB_FAIL(message_to_user.assign_fmt(
               "The memory of memstore needs to be less than %.0f%% of the new memory "
