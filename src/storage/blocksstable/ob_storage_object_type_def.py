@@ -5047,3 +5047,21 @@ int get_object_id(const ObStorageObjectOpt &opt, MacroBlockId &object_id) const
 
 # Import optimized SHARED_MINI_DATA_MACRO_V2, SHARED_MINI_META_MACRO_V2, SHARED_MINOR_DATA_MACRO_V2, SHARED_MINOR_META_MACRO_V2 configurations
 exec(open("shared_mini_minor_data_macro_config.py").read())
+
+def_storage_object_type_cfg(
+    obj_type = 'SHARED_TABLET_MACRO_DIFF',  #ObSharedTabletMacroDiffType
+    id = 88,
+    owner = 'cxf262476',
+    access_mode = 'shared',
+    data_type = 'tablet_meta',
+    read_odirect = True,
+    write_strategy = ["WRITE_THROUGH"],
+    is_path_include_inner_tablet = True,
+    is_shared_tablet_macro_diff = True,
+    is_valid = '''
+bool is_valid(const MacroBlockId &file_id) const
+{
+  return true;
+}
+''',
+)

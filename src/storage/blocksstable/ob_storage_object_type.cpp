@@ -107,6 +107,7 @@ static const char *ob_storage_object_type_strs[] = {
   "SHARED_MINI_V2_META_MACRO",
   "SHARED_MINOR_V2_DATA_MACRO",
   "SHARED_MINOR_V2_META_MACRO",
+  "SHARED_TABLET_MACRO_DIFF",
   "MAX"
 };
 
@@ -6399,6 +6400,15 @@ int ObSharedMinorV2MetaMacroType::get_object_id(const ObStorageObjectOpt &opt, M
   return ret;
 }
 
+/**
+ * ---------------------------------------ObSharedTabletMacroDiffType----------------------------------------
+ */
+
+bool ObSharedTabletMacroDiffType::is_valid(const MacroBlockId &file_id) const
+{
+  return true;
+}
+
 
 const ObStorageObjectTypeBase &ObStorageObjectTypeInstance::get_instance(ObStorageObjectType type)
 {
@@ -6557,6 +6567,10 @@ const ObStorageObjectTypeBase &ObStorageObjectTypeInstance::get_instance(ObStora
     }
     case ObStorageObjectType::SHARED_MINOR_V2_META_MACRO: {
       static const ObSharedMinorV2MetaMacroType instance;
+      return instance;
+    }
+    case ObStorageObjectType::SHARED_TABLET_MACRO_DIFF: {
+      static const ObSharedTabletMacroDiffType instance;
       return instance;
     }
     default: {
