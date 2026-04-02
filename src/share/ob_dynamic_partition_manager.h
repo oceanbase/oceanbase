@@ -100,6 +100,7 @@ private:
   int get_table_time_zone_wrap_(ObTimeZoneInfoWrap &tz_info_wrap);
   int fetch_timestamp_from_part_key_(const schema::ObPartition &part, int64_t &timestamp);
   int get_session_time_zone_str_(char *buf, const int64_t len, int64_t &pos);
+  int datetime_to_timestamp_skip_gap_(const int64_t datetime, const ObTimeZoneInfo *tz_info, int64_t &timestamp);
   int add_timestamp_(const int64_t num, const ObDateUnitType time_unit, int64_t &timestamp);
   int floor_timestamp_(const ObDateUnitType time_unit, int64_t &timestamp);
 public:
