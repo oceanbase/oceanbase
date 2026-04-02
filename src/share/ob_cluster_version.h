@@ -89,11 +89,6 @@ private:
 #define TENANT_NEED_UPGRADE(tenant_id, need) (oceanbase::common::ObClusterVersion::get_instance().tenant_need_upgrade((tenant_id), (need)))
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-// whether min cluster version supports tenant memory info via RPC for shrink checks (vs SQL fallback)
-#define SUPPORT_TENANT_MEMORY_RPC_FOR_SHRINK(cluster_version) ((cluster_version >= MOCK_CLUSTER_VERSION_4_3_5_5 && cluster_version < CLUSTER_VERSION_4_4_0_0) \
-                                                               || (cluster_version >= CLUSTER_VERSION_4_4_1_0 && cluster_version < CLUSTER_VERSION_4_4_2_0) \
-                                                               || (cluster_version >= CLUSTER_VERSION_4_4_2_1))
-
 } // end of namespace common
 } // end of namespace oceanbase
 

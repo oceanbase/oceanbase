@@ -49,7 +49,7 @@ int ObTenantMemoryInfoOperator::get(const common::ObIArray<common::ObAddr> &serv
   mem_infos.reset();
   if (servers.count() == 0) {
     // do nothing
-  } else if (OB_UNLIKELY(!SUPPORT_TENANT_MEMORY_RPC_FOR_SHRINK(GET_MIN_CLUSTER_VERSION()))) {
+  } else if (OB_UNLIKELY(!is_rpc_supported_version())) {
     if (OB_FAIL(get_by_sql(servers, mem_infos))) {
       LOG_WARN("fail to get from sql", KR(ret), K(servers));
     }
@@ -94,9 +94,9 @@ int ObTenantMemoryInfoOperator::get(const common::ObIArray<common::ObAddr> &serv
         } else {
           TenantServerMemoryInfo mem_info;
           if (OB_FAIL(mem_info.set_by_rpc(rpc_result->get_tenant_id(),
-                                            rpc_result->get_svr_addr(),
-                                            rpc_result->get_memstore_info(),
-                                            rpc_result->get_vector_mem_info()))) {
+                                          rpc_result->get_svr_addr(),
+                                          rpc_result->get_memstore_info(),
+                                          rpc_result->get_vector_mem_info()))) {
             LOG_WARN("fail to init mem_info from rpc", KR(ret), KPC(rpc_result));
           } else if (OB_FAIL(mem_infos.push_back(mem_info))) {
             LOG_WARN("fail to push back mem_info", KR(ret), K(mem_info));
@@ -179,9 +179,9 @@ int ObTenantMemoryInfoOperator::get_by_sql(const common::ObIArray<common::ObAddr
 }
 
 int ObTenantMemoryInfoOperator::TenantServerMemoryInfo::set_by_rpc(uint64_t tenant_id,
-                                                                     const common::ObAddr &server,
-                                                                     const TenantMemstoreInfo &memstore_info,
-                                                                     const TenantVectorMemInfo &vector_mem_info)
+                                                                   const common::ObAddr &server,
+                                                                   const TenantMemstoreInfo &memstore_info,
+                                                                   const TenantVectorMemInfo &vector_mem_info)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || !server.is_valid())) {
@@ -197,8 +197,8 @@ int ObTenantMemoryInfoOperator::TenantServerMemoryInfo::set_by_rpc(uint64_t tena
 }
 
 int ObTenantMemoryInfoOperator::TenantServerMemoryInfo::set_by_sql(uint64_t tenant_id,
-                                                                     const common::ObAddr &server,
-                                                                     const TenantMemstoreInfo &memstore_info)
+                                                                   const common::ObAddr &server,
+                                                                   const TenantMemstoreInfo &memstore_info)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id || !server.is_valid())) {

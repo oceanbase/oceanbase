@@ -15,6 +15,7 @@
 
 #include "lib/container/ob_iarray.h"
 #include "lib/net/ob_addr.h"
+#include "share/ob_cluster_version.h"
 
 namespace oceanbase
 {
@@ -88,6 +89,13 @@ public:
   int init();
   int get(const common::ObIArray<common::ObAddr> &servers, common::ObIArray<TenantServerMemoryInfo> &mem_infos);
   bool is_oracle_mode() const { return is_oracle_mode_; }
+  inline bool is_rpc_supported_version() const
+  {
+    const int64_t cluster_version = GET_MIN_CLUSTER_VERSION();
+    return ((cluster_version >= MOCK_CLUSTER_VERSION_4_3_5_6 && cluster_version < CLUSTER_VERSION_4_4_0_0) ||
+            (cluster_version >= MOCK_CLUSTER_VERSION_4_4_1_1 && cluster_version < CLUSTER_VERSION_4_4_2_0) ||
+            (cluster_version >= CLUSTER_VERSION_4_4_2_1 && cluster_version < CLUSTER_VERSION_4_5_0_0));
+  }
 
 private:
   int get_by_sql(const common::ObIArray<common::ObAddr> &servers, common::ObIArray<TenantServerMemoryInfo> &mem_infos);

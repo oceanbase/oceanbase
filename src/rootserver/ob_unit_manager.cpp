@@ -8701,11 +8701,12 @@ int ObUnitManager::check_shrink_memory(
           ObSqlString message_to_user;
           const char *view_name = OB_GV_OB_VECTOR_MEMORY_TNAME;
           char ip_buf[common::OB_IP_STR_BUFF] = "";
-          if (!SUPPORT_TENANT_MEMORY_RPC_FOR_SHRINK(GET_MIN_CLUSTER_VERSION())) {
+          if (OB_UNLIKELY(!mem_info_operator.is_rpc_supported_version())) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected: vector_mem_used > max_vector_mem but version not in supported ranges",
                      K(vector_mem_used), K(max_vector_mem), KCV(GET_MIN_CLUSTER_VERSION()), KR(ret));
-          } else if (OB_FAIL(!tenant_mem_info->get_server().ip_to_string(ip_buf, sizeof(ip_buf)))) {
+          } else if (OB_UNLIKELY(!tenant_mem_info->get_server().ip_to_string(ip_buf, sizeof(ip_buf)))) {
+            ret = OB_ERR_UNEXPECTED;
             LOG_WARN("fail to convert server ip to string", KR(ret));
           } else if (OB_FAIL(message_to_user.assign_fmt(
               "The memory of vector index needs to be less than %.0f%% of the new memory "
@@ -8728,7 +8729,8 @@ int ObUnitManager::check_shrink_memory(
           ObSqlString message_to_user;
           const char *view_name = mem_info_operator.is_oracle_mode() ? OB_GV_OB_MEMSTORE_ORA_TNAME : OB_GV_OB_MEMSTORE_TNAME;
           char ip_buf[common::OB_IP_STR_BUFF] = "";
-          if (OB_FAIL(!tenant_mem_info->get_server().ip_to_string(ip_buf, sizeof(ip_buf)))) {
+          if (OB_UNLIKELY(!tenant_mem_info->get_server().ip_to_string(ip_buf, sizeof(ip_buf)))) {
+            ret = OB_ERR_UNEXPECTED;
             LOG_WARN("fail to convert server ip to string", KR(ret));
           } else if (OB_FAIL(message_to_user.assign_fmt(
               "The memory of memstore needs to be less than %.0f%% of the new memory "
