@@ -248,7 +248,8 @@ public:
               p2p_dh_map_info_(),
               sqc_order_gi_tasks_(false),
               locations_order_(),
-              lake_table_file_desc_(allocator_)
+              lake_table_file_desc_(allocator_),
+              collect_finish_res_succ_(false)
   {}
   ~ObPxSqcMeta() = default;
   int assign(const ObPxSqcMeta &other);
@@ -374,6 +375,8 @@ public:
   int64_t get_sqc_count() const { return sqc_count_;}
   void set_sqc_order_gi_tasks(bool v) { sqc_order_gi_tasks_ = v; }
   bool sqc_order_gi_tasks() const { return sqc_order_gi_tasks_; }
+  void set_collect_finish_res_succ(bool v) { collect_finish_res_succ_ = v; }
+  bool collect_finish_res_succ() const { return collect_finish_res_succ_; }
   inline void set_partition_random_affinitize(bool partition_random_affinitize)
   {
     partition_random_affinitize_ = partition_random_affinitize;
@@ -473,6 +476,7 @@ private:
   ObSEArray<std::pair<int64_t, bool>, 18> locations_order_;
   // for lake table file
   ObLakeTableFileDesc lake_table_file_desc_;
+  bool collect_finish_res_succ_;
 };
 
 class ObDfo

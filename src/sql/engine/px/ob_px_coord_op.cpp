@@ -830,14 +830,7 @@ int ObPxCoordOp::check_all_sqc(ObIArray<ObDfo *> &active_dfos,
         }
         all_dfo_terminate = false;
         break;
-      } else if (sqc.is_server_not_alive() || sqc.is_interrupt_by_dm()) {
-        if (sqc.is_interrupt_by_dm()) {
-          ObRpcResultCode err_msg;
-          ObPxErrorUtil::update_qc_error_code(coord_info_.first_error_code_,
-              OB_RPC_CONNECT_ERROR, err_msg, sqc.get_exec_addr());
-        }
-        sqc.set_server_not_alive(false);
-        sqc.set_interrupt_by_dm(false);
+      } else if (!sqc.collect_finish_res_succ()) {
         const DASTabletLocIArray &access_locations = sqc.get_access_table_locations();
         for (int64_t i = 0; i < access_locations.count() && OB_SUCC(ret); i++) {
           if (OB_FAIL(ctx_.get_trans_result().add_touched_ls(access_locations.at(i)->ls_id_))) {
@@ -852,6 +845,12 @@ int ObPxCoordOp::check_all_sqc(ObIArray<ObDfo *> &active_dfos,
         }
         LOG_WARN("server not alive", K(sqc), K(access_locations),
                   K(sqc.get_access_table_location_keys()), K(extra_access_locations));
+      }
+      if (sqc.is_interrupt_by_dm()) {
+        ObRpcResultCode err_msg;
+        ObPxErrorUtil::update_qc_error_code(coord_info_.first_error_code_,
+            OB_RPC_CONNECT_ERROR, err_msg, sqc.get_exec_addr());
+        sqc.set_interrupt_by_dm(false);
       }
     }
   }
