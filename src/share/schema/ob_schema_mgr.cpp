@@ -519,7 +519,8 @@ ObSchemaMgr::ObSchemaMgr()
       allocator_idx_(OB_INVALID_INDEX),
       mlog_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_MLOG_INFO_VEC, ObCtxIds::SCHEMA_SERVICE)),
       external_resource_mgr_(allocator_),
-      ai_model_mgr_(allocator_)
+      ai_model_mgr_(allocator_),
+      java_policy_mgr_(allocator_)
 {
 }
 
@@ -582,7 +583,8 @@ ObSchemaMgr::ObSchemaMgr(ObIAllocator &allocator)
       allocator_idx_(OB_INVALID_INDEX),
       mlog_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_MLOG_INFO_VEC, ObCtxIds::SCHEMA_SERVICE)),
       external_resource_mgr_(allocator_),
-      ai_model_mgr_(allocator_)
+      ai_model_mgr_(allocator_),
+      java_policy_mgr_(allocator_)
 {
 }
 
