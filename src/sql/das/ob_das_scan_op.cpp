@@ -44,7 +44,7 @@ using namespace transaction;
 namespace sql
 {
 OB_SERIALIZE_MEMBER(ObDASTCBMemProfileKey, fake_unique_id_, timestamp_);
-OB_SERIALIZE_MEMBER(ObDASScanCtDef,
+OB_SERIALIZE_MEMBER(ObDASScanCtDef, // FARM COMPAT WHITELIST
                     ref_table_id_,
                     access_column_ids_,
                     schema_version_,
@@ -59,7 +59,8 @@ OB_SERIALIZE_MEMBER(ObDASScanCtDef,
                     external_file_access_info_,
                     external_files_,
                     external_file_format_str_,
-                    trans_info_expr_);
+                    trans_info_expr_,
+                    cache_aware_row_num_);
 
 OB_DEF_SERIALIZE(ObDASScanRtDef)
 {
@@ -289,6 +290,7 @@ int ObDASScanOp::init_scan_param()
   }
   scan_param_.ls_id_ = ls_id_;
   scan_param_.tablet_id_ = tablet_id_;
+  scan_param_.cache_aware_row_num_ = scan_ctdef_->cache_aware_row_num_;
   if (scan_rtdef_->sample_info_ != nullptr) {
     scan_param_.sample_info_ = *scan_rtdef_->sample_info_;
   }
@@ -1343,6 +1345,7 @@ OB_INLINE int ObLocalIndexLookupOp::init_scan_param()
     scan_param_.op_filters_ = &lookup_ctdef_->pd_expr_spec_.pushdown_filters_;
   }
   scan_param_.pd_storage_filters_ = lookup_rtdef_->p_pd_expr_op_->pd_storage_filters_;
+  scan_param_.cache_aware_row_num_ = lookup_ctdef_->cache_aware_row_num_;
   if (OB_FAIL(scan_param_.column_ids_.assign(lookup_ctdef_->access_column_ids_))) {
     LOG_WARN("init column ids failed", K(ret));
   }

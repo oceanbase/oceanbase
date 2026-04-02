@@ -65,6 +65,7 @@ ObTableAccessContext::ObTableAccessContext()
     scan_mem_(nullptr),
     table_scan_stat_(NULL),
     table_store_stat_(),
+    cache_aware_row_num_(0),
     out_cnt_(0),
     trans_version_range_(),
     range_array_pos_(nullptr),
@@ -193,6 +194,7 @@ int ObTableAccessContext::init(ObTableScanParam &scan_param,
     range_array_pos_ = &scan_param.range_array_pos_;
     use_fuse_row_cache_ = false;
     row_scan_cnt_ = scan_param.row_scan_cnt_;
+    cache_aware_row_num_ = scan_param.cache_aware_row_num_ > 0 ? scan_param.cache_aware_row_num_ : common::MAX_MULTI_GET_CACHE_AWARE_ROW_NUM;
     if(OB_FAIL(build_lob_locator_helper(scan_param, ctx, trans_version_range))) {
       STORAGE_LOG(WARN, "Failed to build lob locator helper", K(ret));
       // new static engine do not need fill scale

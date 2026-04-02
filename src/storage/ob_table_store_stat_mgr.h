@@ -68,14 +68,14 @@ public:
   bool is_valid() const;
   int add(const ObTableStoreStat& other);
   ObTableStoreStat &operator=(const ObTableStoreStat& other);
-  OB_INLINE bool enable_get_row_cache() const
+  OB_INLINE bool enable_get_row_cache(const int64_t cache_aware_row_num) const
   {
-    return row_cache_miss_cnt_ < common::MAX_MULTI_GET_CACHE_AWARE_ROW_NUM
+    return row_cache_miss_cnt_ < cache_aware_row_num
            || row_cache_hit_cnt_ > row_cache_miss_cnt_ / 2;
   }
-  OB_INLINE bool enable_put_row_cache() const
+  OB_INLINE bool enable_put_row_cache(const int64_t cache_aware_row_num) const
   {
-    return row_cache_put_cnt_ < common::MAX_MULTI_GET_CACHE_AWARE_ROW_NUM;
+    return row_cache_put_cnt_ < cache_aware_row_num;
   }
   OB_INLINE bool enable_put_fuse_row_cache(const int64_t threshold) const
   {

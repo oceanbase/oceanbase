@@ -79,14 +79,14 @@ struct ObTableScanStoreStat
     physical_read_cnt_ = 0;
   }
 public:
-  OB_INLINE bool enable_get_row_cache() const
+  OB_INLINE bool enable_get_row_cache(const int64_t cache_aware_row_num) const
   {
-    return row_cache_miss_cnt_ < common::MAX_MULTI_GET_CACHE_AWARE_ROW_NUM
+    return row_cache_miss_cnt_ < cache_aware_row_num
            || row_cache_hit_cnt_ > row_cache_miss_cnt_ / 2;
   }
-  OB_INLINE bool enable_put_row_cache() const
+  OB_INLINE bool enable_put_row_cache(const int64_t cache_aware_row_num) const
   {
-    return row_cache_put_cnt_ < common::MAX_MULTI_GET_CACHE_AWARE_ROW_NUM;
+    return row_cache_put_cnt_ < cache_aware_row_num;
   }
   OB_INLINE bool enable_put_fuse_row_cache(const int64_t threshold) const
   {
@@ -139,10 +139,10 @@ struct ObTableAccessContext
       && NULL != stmt_allocator_
       && NULL != allocator_; }
   inline bool enable_get_row_cache() const {
-    return query_flag_.is_use_row_cache() && !use_fuse_row_cache_ && table_store_stat_.enable_get_row_cache() && !need_scn_ && !tablet_id_.is_ls_inner_tablet();
+    return query_flag_.is_use_row_cache() && !use_fuse_row_cache_ && table_store_stat_.enable_get_row_cache(cache_aware_row_num_) && !need_scn_ && !tablet_id_.is_ls_inner_tablet();
   }
   inline bool enable_put_row_cache() const {
-    return query_flag_.is_use_row_cache() && !use_fuse_row_cache_ && table_store_stat_.enable_put_row_cache() && !need_scn_ && !tablet_id_.is_ls_inner_tablet();
+    return query_flag_.is_use_row_cache() && !use_fuse_row_cache_ && table_store_stat_.enable_put_row_cache(cache_aware_row_num_) && !need_scn_ && !tablet_id_.is_ls_inner_tablet();
   }
   inline bool enable_bf_cache() const {
     return query_flag_.is_use_bloomfilter_cache() && table_store_stat_.enable_bf_cache() && !need_scn_ && !tablet_id_.is_ls_inner_tablet();
@@ -273,6 +273,7 @@ public:
   lib::MemoryContext scan_mem_; // scan/rescan level memory entity, only for query
   common::ObTableScanStatistic *table_scan_stat_;
   ObTableScanStoreStat table_store_stat_;
+  int64_t cache_aware_row_num_;
   int64_t out_cnt_;
   common::ObVersionRange trans_version_range_;
   const common::ObSEArray<int64_t, 4, common::ModulePageAllocator> *range_array_pos_;

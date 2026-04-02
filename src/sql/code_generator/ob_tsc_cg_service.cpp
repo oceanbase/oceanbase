@@ -28,6 +28,13 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
 {
   int ret = OB_SUCCESS;
   ObDASScanCtDef &scan_ctdef = tsc_ctdef.scan_ctdef_;
+  int64_t cache_aware_row_num = 0;
+  if (OB_NOT_NULL(cg_.opt_ctx_) && OB_NOT_NULL(cg_.opt_ctx_->get_query_ctx())) {
+    if (OB_FAIL(cg_.opt_ctx_->get_query_ctx()->get_global_hint().opt_params_.get_integer_opt_param(
+            ObOptParamHint::CACHE_AWARE_ROW_NUM, cache_aware_row_num))) {
+      LOG_WARN("failed to get cache aware row num hint", K(ret));
+    }
+  }
   ObQueryFlag query_flag;
   if (op.is_need_feedback() &&
       (op.get_plan()->get_optimizer_context().get_phy_plan_type() == OB_PHY_PLAN_LOCAL ||
@@ -99,6 +106,9 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
     } else {
       tsc_ctdef.flashback_item_.need_scn_ |= has_rowscn;
     }
+  }
+  if (OB_SUCC(ret) && cache_aware_row_num > 0) {
+    scan_ctdef.cache_aware_row_num_ = cache_aware_row_num;
   }
 
   if (OB_SUCC(ret)) {
@@ -182,6 +192,9 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
         } else if (OB_FAIL(cg_.generate_rt_exprs(op.get_rowkey_exprs(), tsc_ctdef.global_index_rowkey_exprs_))) {
           LOG_WARN("fail to generate rowkey exprs", K(ret));
         }
+      }
+      if (OB_SUCC(ret) && cache_aware_row_num > 0) {
+        tsc_ctdef.lookup_ctdef_->cache_aware_row_num_ = cache_aware_row_num;
       }
     }
   }

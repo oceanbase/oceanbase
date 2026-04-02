@@ -129,6 +129,7 @@ struct ObOptParamHint
     DEF(DAS_BATCH_RESCAN_FLAG,)          \
     DEF(PRESERVE_ORDER_FOR_GROUPBY,)             \
     DEF(DISABLE_SHARED_EXPR_EXTRACTION,)         \
+    DEF(CACHE_AWARE_ROW_NUM,)             \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 
