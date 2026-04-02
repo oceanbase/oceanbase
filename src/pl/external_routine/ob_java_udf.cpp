@@ -603,6 +603,11 @@ int ObJavaUDFExecutor::get_java_type_to_ob_map(const ObExprResType &res_type,
     break;
   }
 
+  case ObRawType: {
+    ALLOC_TYPE_MAPPER_EXT(ObFromJavaByteBufferTypeMapper);
+    break;
+  }
+
   default: {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("type in Java UDF is not supported yet", K(ret), K(res_type));

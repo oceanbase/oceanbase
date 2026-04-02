@@ -962,7 +962,9 @@ int ObFromJavaByteBufferTypeMapper::operator()(const ObPl__JavaUdf__Values &valu
 
         tmp_obj.set_varbinary(str);
 
-        if (OB_FAIL(convert(tmp_obj, res_obj))) {
+        if (ObRawType == res_type_.get_type()) {
+          res_obj.set_raw(str);
+        } else if (OB_FAIL(convert(tmp_obj, res_obj))) {
           LOG_WARN("failed to convert obj", K(ret), K(tmp_obj), K(res_obj));
         }
       }
