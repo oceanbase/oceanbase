@@ -67,7 +67,8 @@ uint64_t TenantTransID::hash() const
 {
   uint64_t hash_val = 0;
   hash_val = common::murmurhash(&tenant_id_, sizeof(tenant_id_), hash_val);
-  hash_val = common::murmurhash(&trans_id_, sizeof(trans_id_), hash_val);
+  uint64_t trans_id_hash = trans_id_.hash();
+  hash_val = common::murmurhash(&trans_id_hash, sizeof(trans_id_hash), hash_val);
   return hash_val;
 }
 

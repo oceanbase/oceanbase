@@ -470,17 +470,21 @@ int split_int64(const common::ObString &str, const char delimiter, common::ObIAr
 /// - IPv6: "[ipv6_address]:port" or "[ipv6_address]:port1:port2"
 ///
 /// @param [in]   addr_str        address string to parse
-/// @param [out]  ip_str          extracted IP address (without brackets for IPv6)
-/// @param [out]  port1_str       first port string (rpc_port for rootserver_list)
-/// @param [out]  port2_str       second port string (sql_port for rootserver_list, NULL for single port)
+/// @param [out]  addr_buf        caller-provided buffer for parsing (will be modified)
+/// @param [in]   buf_len         length of addr_buf
+/// @param [out]  ip_str          extracted IP address, points into addr_buf (without brackets for IPv6)
+/// @param [out]  port1           first port value (int32, rpc_port for rootserver_list)
+/// @param [out]  port2           second port value (int32, sql_port for rootserver_list, -1 for single port)
 ///
 /// @retval OB_SUCCESS            parse success
 /// @retval OB_INVALID_ARGUMENT   invalid format
 int parse_addr_with_port(
     const char *addr_str,
+    char *addr_buf,
+    const int64_t buf_len,
     const char *&ip_str,
-    const char *&port1_str,
-    const char *&port2_str);
+    int32_t &port1,
+    int32_t &port2);
 
 const char *calc_md5_cstr(const char *buf, const int64_t length);
 void calc_crc_checksum(uint64_t &crc_value, const char *buf, const int64_t length);
