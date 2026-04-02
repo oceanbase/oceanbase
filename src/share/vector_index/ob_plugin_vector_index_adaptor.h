@@ -273,6 +273,7 @@ public:
       batch_allocator_("BATCHALLOC", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       search_allocator_(tenant_id),
       ls_leader_(true),
+      is_sparse_vector_(false),
       is_refresh_adaptor_(false),
       complete_delta_lock_(nullptr),
       scn_() {};
@@ -311,8 +312,10 @@ public:
   bool get_ls_leader() { return ls_leader_; }
   void set_is_refresh_adaptor(const bool is_refresh_adaptor) { is_refresh_adaptor_ = is_refresh_adaptor; }
   bool get_is_refresh_adaptor() { return is_refresh_adaptor_; }
-
   void set_scn(const SCN scn) { scn_ = scn; }
+  SCN get_scn() const { return scn_; }
+
+  inline void set_sparse_vector(const bool is_sparse) { is_sparse_vector_ = is_sparse; }
 
   void do_next_batch()
   {
@@ -338,6 +341,7 @@ private:
   ObArenaAllocator batch_allocator_; // Used to complete_delta_buffer_data in batches, reuse after each batch of data is completed
   ObVsagSearchAlloc search_allocator_;
   bool ls_leader_;
+  bool is_sparse_vector_;
   bool is_refresh_adaptor_;
   // hold complete lock
   TCRWLock *complete_delta_lock_;
