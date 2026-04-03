@@ -25,6 +25,8 @@
 #include "share/rc/ob_tenant_base.h"  // MTL_GET_TENANT_ROLE_CACHE
 #include "share/ob_tenant_role.h"     // ObTenantRole
 #include "share/ob_share_util.h"      // ObShareUtil
+#include "logservice/restoreservice/ob_log_restore_handler.h"
+#include "logservice/restoreservice/ob_remote_log_source.h"
 
 namespace oceanbase
 {
@@ -717,6 +719,104 @@ int ObLogStandbyAckService::process_barrier(const StandbyAckTask &task, bool &st
   return ret;
 }
 
+int ObLogStandbyAckService::check_leader_and_raw_write_mode(ipalf::IPalfHandle *palf_handle,
+                                                             int64_t &proposal_id,
+                                                             bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = false;
+  proposal_id = palf::INVALID_PROPOSAL_ID;
+  common::ObRole role = common::ObRole::INVALID_ROLE;
+  palf::AccessMode access_mode = palf::AccessMode::INVALID_ACCESS_MODE;
+  bool is_pending_state = false;
+
+  if (OB_ISNULL(palf_handle)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "palf_handle is null", K(ret));
+  } else if (!palf_handle->is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "palf_handle is not valid", K(ret));
+  } else if (OB_FAIL(palf_handle->get_role(role, proposal_id, is_pending_state))) {
+    CLOG_LOG(WARN, "get_role failed", K(ret));
+  } else if (common::ObRole::LEADER != role || true == is_pending_state) {
+    // 只有 LEADER 才有效
+    CLOG_LOG(INFO, "not leader, check failed", KPC(palf_handle), K(role), K(proposal_id));
+  } else if (OB_FAIL(palf_handle->get_access_mode(access_mode))) {
+    CLOG_LOG(WARN, "get_access_mode failed", K(ret));
+  } else if (palf::AccessMode::RAW_WRITE != access_mode) {
+    // 只有 RAW_WRITE 模式才有效，APPEND 模式下位点与主库不可比
+    CLOG_LOG(INFO, "access mode is not RAW_WRITE, check failed", K(access_mode), K(proposal_id));
+  } else {
+    is_valid = true;
+    CLOG_LOG(TRACE, "check_leader_and_raw_write_mode success", K(proposal_id), K(access_mode));
+  }
+
+  return ret;
+}
+
+int ObLogStandbyAckService::check_restore_source_valid(const share::ObLSID &ls_id, bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  is_valid = false;
+  storage::ObLSHandle ls_handle;
+  storage::ObLS *ls = nullptr;
+  ObLogRestoreHandler *restore_handler = nullptr;
+  storage::ObLSService *ls_service = nullptr;
+
+  if (OB_ISNULL(ls_service = MTL(storage::ObLSService*))) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "ls_service is null", K(ret), K(ls_id));
+  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::LOG_MOD))) {
+    CLOG_LOG(WARN, "get ls failed", K(ret), K(ls_id));
+  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "ls is null", K(ret), K(ls_id));
+  } else if (OB_ISNULL(restore_handler = ls->get_log_restore_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "restore_handler is null", K(ret), K(ls_id));
+  } else {
+    ObRemoteSourceGuard source_guard;
+    restore_handler->deep_copy_source(source_guard);
+    ObRemoteLogParent *source = source_guard.get_source();
+    if (OB_ISNULL(source)) {
+      // source 为空，说明没有配置主库日志源
+      CLOG_LOG(INFO, "restore source is null, skip sending ack", K(ls_id));
+    } else if (!source->is_valid()) {
+      // source 无效
+      CLOG_LOG(INFO, "restore source is invalid, skip sending ack", K(ls_id), KPC(source));
+    } else {
+      is_valid = true;
+      CLOG_LOG(TRACE, "restore source is valid", K(ls_id));
+    }
+  }
+
+  return ret;
+}
+
+int ObLogStandbyAckService::check_and_compare_leader_status(ipalf::IPalfHandle *palf_handle,
+                                                            const int64_t first_proposal_id,
+                                                            bool &is_valid,
+                                                            int64_t &second_proposal_id)
+{
+  int ret = OB_SUCCESS;
+  is_valid = false;
+  second_proposal_id = palf::INVALID_PROPOSAL_ID;
+
+  // 检查是否是 LEADER 且是 RAW_WRITE 模式
+  if (OB_FAIL(check_leader_and_raw_write_mode(palf_handle, second_proposal_id, is_valid))) {
+    CLOG_LOG(WARN, "check_leader_and_raw_write_mode failed", K(ret));
+  } else if (!is_valid) {
+    // 不是 LEADER 或不是 RAW_WRITE 模式
+  } else if (first_proposal_id != second_proposal_id) {
+    // proposal_id 变化，说明期间发生了切主
+    is_valid = false;
+    CLOG_LOG(INFO, "proposal_id changed, skip sending ack",
+             K(first_proposal_id), K(second_proposal_id));
+  }
+
+  return ret;
+}
+
 int ObLogStandbyAckService::check_sync_mode_(const share::ObLSID &ls_id, bool &is_sync_mode)
 {
   int ret = OB_SUCCESS;
@@ -977,46 +1077,93 @@ int ObLogStandbyAckService::send_ack_to_primary_(const share::ObLSID &ls_id,
   common::ObAddr primary_addr;
   int64_t primary_cluster_id = OB_INVALID_CLUSTER_ID;
   uint64_t primary_tenant_id = OB_INVALID_TENANT_ID;
-  if (OB_FAIL(get_primary_info_(ls_id, primary_addr, primary_cluster_id, primary_tenant_id))) {
-    CLOG_LOG(WARN, "get_primary_info_ failed", K(ret), K(ls_id));
-  } else if (!primary_addr.is_valid() || primary_cluster_id == OB_INVALID_CLUSTER_ID ||
-            primary_tenant_id == OB_INVALID_TENANT_ID) {
-    // 没有配置主库信息，跳过发送
-    CLOG_LOG(TRACE, "primary info not available, skip sending ack", K(ls_id));
-  } else if (OB_ISNULL(rpc_proxy_)) {
+  ipalf::IPalfHandle *palf_handle = NULL;
+  int64_t first_proposal_id = palf::INVALID_PROPOSAL_ID;
+  int64_t second_proposal_id = palf::INVALID_PROPOSAL_ID;
+  bool is_valid = false;
+
+  // 第一次检查：确认是 leader 且 access mode 是 RAW_WRITE
+  if (OB_ISNULL(palf_env_)) {
     ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(WARN, "rpc_proxy_ is null", K(ret));
+    CLOG_LOG(WARN, "palf_env_ is null", K(ret), K(ls_id));
+  } else if (OB_FAIL(palf_env_->open(ls_id.id(), palf_handle))) {
+    CLOG_LOG(WARN, "open palf handle failed", K(ret), K(ls_id));
+  } else if (OB_FAIL(check_leader_and_raw_write_mode(palf_handle, first_proposal_id, is_valid))) {
+    CLOG_LOG(WARN, "first check leader and access mode failed", K(ret), K(ls_id));
+  } else if (!is_valid) {
+    // 不是 leader 或不是 RAW_WRITE 模式，跳过发送
+    CLOG_LOG(INFO, "first check failed, skip sending ack to primary",
+             K(ls_id), K(first_proposal_id), K(committed_end_lsn), K(committed_end_scn));
+  } else if (OB_FAIL(check_restore_source_valid(ls_id, is_valid))) {
+    CLOG_LOG(WARN, "check restore source valid failed", K(ret), K(ls_id));
+  } else if (!is_valid) {
+    // log_restore_source 为空或无效，跳过发送
+    CLOG_LOG(INFO, "restore source not valid, skip sending ack to primary", K(ls_id));
   } else {
-    // 构造 RPC 响应，发送给主库
-    ObLogSyncStandbyInfo resp;
-    resp.standby_cluster_id_ = GCONF.cluster_id;
-    resp.standby_tenant_id_ = MTL_ID();
-    resp.ls_id_ = ls_id;
-    resp.ret_code_ = OB_SUCCESS;
-    resp.refresh_info_ret_code_ = OB_SUCCESS;
-    resp.standby_committed_end_lsn_ = committed_end_lsn;
-    resp.standby_committed_end_scn_ = committed_end_scn;
-
-    const int64_t timeout_us = 3 * 1000 * 1000; // 3秒超时
-
-    // 使用 post_log_transport_resp 发送响应给主库
-    // 这是一个异步 RPC，但备库发送 ACK 不需要等待响应，所以使用空回调
-    static StandbyAckCallback cb;
-    if (OB_FAIL(rpc_proxy_->to(primary_addr)
-                      .dst_cluster_id(primary_cluster_id)
-                      .by(primary_tenant_id)
-                      .timeout(timeout_us)
-                      .post_log_transport_resp(resp, &cb))) {
-      CLOG_LOG(WARN, "post_log_transport_resp failed", K(ret), K(primary_addr), K(resp));
+    // 获取日志流的 end_lsn/end_scn
+    palf::LSN current_end_lsn;
+    share::SCN current_end_scn;
+    if (OB_FAIL(palf_handle->get_end_lsn(current_end_lsn))) {
+      CLOG_LOG(WARN, "get_end_lsn failed", K(ret), K(ls_id));
+    } else if (OB_FAIL(palf_handle->get_end_scn(current_end_scn))) {
+      CLOG_LOG(WARN, "get_end_scn failed", K(ret), K(ls_id));
     } else {
-      if (REACH_TIME_INTERVAL_THREAD_LOCAL(1_s)) {
-        CLOG_LOG(INFO, "send_ack_to_primary_ success", K(ls_id), K(committed_end_lsn),
-                K(committed_end_scn), K(primary_addr));
+      // 第二次检查：确认仍然是 leader 且 access mode 是 RAW_WRITE，且 proposal_id 不变
+      // TODO: add check on primary
+      if (OB_FAIL(get_primary_info_(ls_id, primary_addr, primary_cluster_id, primary_tenant_id))) {
+        CLOG_LOG(WARN, "get_primary_info_ failed", K(ret), K(ls_id));
+      } else if (!primary_addr.is_valid() || primary_cluster_id == OB_INVALID_CLUSTER_ID ||
+                primary_tenant_id == OB_INVALID_TENANT_ID) {
+        // 没有配置主库信息，跳过发送
+        CLOG_LOG(TRACE, "primary info not available, skip sending ack", K(ls_id));
+      } else if (OB_FAIL(check_and_compare_leader_status(palf_handle, first_proposal_id, is_valid, second_proposal_id))) {
+        CLOG_LOG(WARN, "second check leader and access mode failed", K(ret), K(ls_id));
+      } else if (!is_valid) {
+        CLOG_LOG(INFO, "second check failed, skip sending ack to primary",
+                 K(ls_id), K(first_proposal_id), K(second_proposal_id));
+
+      } else if (OB_ISNULL(rpc_proxy_)) {
+        ret = OB_ERR_UNEXPECTED;
+        CLOG_LOG(WARN, "rpc_proxy_ is null", K(ret));
       } else {
-        CLOG_LOG(TRACE, "send_ack_to_primary_ success", K(ls_id), K(committed_end_lsn),
-                K(committed_end_scn), K(primary_addr));
+        // 构造 RPC 响应，发送给主库
+        ObLogSyncStandbyInfo resp;
+        resp.standby_cluster_id_ = GCONF.cluster_id;
+        resp.standby_tenant_id_ = MTL_ID();
+        resp.ls_id_ = ls_id;
+        resp.ret_code_ = OB_SUCCESS;
+        resp.refresh_info_ret_code_ = OB_SUCCESS;
+        resp.standby_committed_end_lsn_ = current_end_lsn;
+        resp.standby_committed_end_scn_ = current_end_scn;
+
+        const int64_t timeout_us = 3 * 1000 * 1000; // 3秒超时
+
+        // 使用 post_log_transport_resp 发送响应给主库
+        // 这是一个异步 RPC，但备库发送 ACK 不需要等待响应，所以使用空回调
+        static StandbyAckCallback cb;
+        if (OB_FAIL(rpc_proxy_->to(primary_addr)
+                          .dst_cluster_id(primary_cluster_id)
+                          .by(primary_tenant_id)
+                          .timeout(timeout_us)
+                          .post_log_transport_resp(resp, &cb))) {
+          CLOG_LOG(WARN, "post_log_transport_resp failed", K(ret), K(primary_addr), K(resp));
+        } else {
+          if (REACH_TIME_INTERVAL_THREAD_LOCAL(1_s)) {
+            CLOG_LOG(INFO, "send_ack_to_primary_ success", K(ls_id), K(current_end_lsn),
+                    K(current_end_scn), K(primary_addr), K(first_proposal_id));
+          } else {
+            CLOG_LOG(TRACE, "send_ack_to_primary_ success", K(ls_id), K(current_end_lsn),
+                    K(current_end_scn), K(primary_addr), K(first_proposal_id));
+          }
+        }
       }
     }
+  }
+
+  // 关闭 palf handle
+  if (OB_NOT_NULL(palf_handle)) {
+    palf_env_->close(palf_handle);
+    palf_handle = NULL;
   }
 
   return ret;

@@ -14,6 +14,7 @@
 
 #include "ob_log_standby_rpc_processor.h"
 #include "lib/oblog/ob_log.h"
+#include "common/ob_role.h"
 #include "share/ob_define.h"
 #include "share/ob_thread_mgr.h"
 #include "logservice/ob_log_service.h"
@@ -108,73 +109,61 @@ int ObLogStandbyTransportP::process()
     // 无论是否 ret != OB_SUCCESS，都更新 resp 中的 end_lsn/end_scn
     palf::LSN palf_committed_end_lsn;
     share::SCN palf_committed_end_scn;
+    palf::PalfHandleGuard palf_handle_guard;
+    int64_t first_proposal_id = palf::INVALID_PROPOSAL_ID;
+    int64_t second_proposal_id = palf::INVALID_PROPOSAL_ID;
+    bool is_valid = false;
+    bool skip_return_stale_ack = false;
     ret = OB_SUCCESS;
 
-    bool skip_return_stale_ack = false;
+    // 第一次检查：确认是 leader 且 access mode 是 RAW_WRITE
     if (OB_ISNULL(log_service)) {
       ret = OB_ERR_UNEXPECTED;
       CLOG_LOG(ERROR, "ObLogService is null", K(ret));
+    } else if (OB_FAIL(log_service->open_palf(req.ls_id_, palf_handle_guard))) {
+      CLOG_LOG(WARN, "open_palf failed, use req value", K(ret), K(req.ls_id_));
+    } else if (OB_FAIL(ObLogStandbyAckService::check_leader_and_raw_write_mode(
+        palf_handle_guard.get_palf_handle(), first_proposal_id, is_valid))) {
+      CLOG_LOG(WARN, "first check leader and access mode failed", K(ret), K(req.ls_id_));
+    } else if (!is_valid) {
+      // 不是 leader 或不是 RAW_WRITE 模式，跳过返回
+      skip_return_stale_ack = true;
+      CLOG_LOG(INFO, "first check failed, skip returning ack to primary",
+               K(req.ls_id_), K(first_proposal_id));
+    } else if (OB_FAIL(ObLogStandbyAckService::check_restore_source_valid(req.ls_id_, is_valid))) {
+      CLOG_LOG(WARN, "check restore source valid failed", K(ret), K(req.ls_id_));
+    } else if (!is_valid) {
+      // log_restore_source 为空或无效，跳过返回
+      skip_return_stale_ack = true;
+      CLOG_LOG(INFO, "restore source not valid, skip returning ack to primary", K(req.ls_id_));
     } else {
-      palf::PalfHandleGuard palf_handle_guard;
-      if (OB_FAIL(log_service->open_palf(req.ls_id_, palf_handle_guard))) {
-        CLOG_LOG(WARN, "open_palf failed, use req value", K(ret), K(req.ls_id_));
-      } else if (!palf_handle_guard.is_valid()) {
-        ret = OB_ERR_UNEXPECTED;
-        CLOG_LOG(WARN, "palf handle guard is not valid", K(ret), K(req.ls_id_));
-      } else if (OB_FAIL(palf_handle_guard.get_end_lsn(palf_committed_end_lsn))) {
-        CLOG_LOG(WARN, "get palf committed_end_lsn failed", K(ret), K(req.ls_id_));
+      // 获取日志流的 end_lsn/end_scn
+      if (OB_FAIL(palf_handle_guard.get_end_lsn(palf_committed_end_lsn))) {
+        CLOG_LOG(WARN, "get_end_lsn failed", K(ret), K(req.ls_id_));
       } else if (OB_FAIL(palf_handle_guard.get_end_scn(palf_committed_end_scn))) {
-        CLOG_LOG(WARN, "get palf committed_end_scn failed", K(ret), K(req.ls_id_));
+        CLOG_LOG(WARN, "get_end_scn failed", K(ret), K(req.ls_id_));
       } else {
-        CLOG_LOG(INFO, "get palf committed_end_lsn and committed_end_scn success", K(req.ls_id_),
-                K(palf_committed_end_lsn), K(palf_committed_end_scn));
-      }
-
-      // 备库在 append 模式下写入的 LSN 与主库不可比，不应回传给主库
-      // 否则主库用该 LSN 迭代本地日志会触发 checksum error (-4070)
-      if (OB_SUCC(ret) && palf_handle_guard.is_valid()) {
-        palf::AccessMode access_mode = palf::AccessMode::INVALID_ACCESS_MODE;
-        if (OB_FAIL(palf_handle_guard.get_access_mode(access_mode))) {
-          CLOG_LOG(WARN, "get_access_mode failed", K(ret), K(req.ls_id_));
-        } else if (palf::AccessMode::APPEND == access_mode) {
-          skip_return_stale_ack = true;
-          CLOG_LOG(INFO, "access mode is APPEND, skip returning standby committed lsn to primary",
-                   K(req.ls_id_), K(palf_committed_end_lsn), K(palf_committed_end_scn));
-        }
-      }
-
-      // ERRSIM: 延迟返回，便于测试在延迟窗口内触发 failover，复现 append 模式返回场景
-      // 注意：延迟放在 access_mode 检查之后，这样如果延迟期间 failover 导致模式变化，
-      // 下一次 RPC 请求时会重新获取位点，此时已经是 APPEND 模式的新位点
-      if (OB_SUCC(ret) && palf_handle_guard.is_valid()) {
+        // ERRSIM: 延迟返回，便于测试在延迟窗口内触发 failover
         ERRSIM_POINT_DEF(ERRSIM_DELAY_STANDBY_TRANSPORT_RESP);
         if (ERRSIM_DELAY_STANDBY_TRANSPORT_RESP > 0) {
           const int64_t delay_s = abs(ERRSIM_DELAY_STANDBY_TRANSPORT_RESP);
           CLOG_LOG(INFO, "ERRSIM_DELAY_STANDBY_TRANSPORT_RESP enabled, sleep", K(delay_s), K(req.ls_id_));
           ob_usleep(static_cast<uint32_t>(delay_s * 1000 * 1000));
+        }
 
-          // 延迟后重新获取 access_mode 和位点，模拟 failover 后返回新位点的场景
-          // 这是复现问题的关键：failover 后备库进入 APPEND 模式并产生了新位点
-          palf::AccessMode new_access_mode = palf::AccessMode::INVALID_ACCESS_MODE;
-          if (OB_FAIL(palf_handle_guard.get_access_mode(new_access_mode))) {
-            CLOG_LOG(WARN, "get_access_mode failed after delay", K(ret), K(req.ls_id_));
-          } else if (palf::AccessMode::APPEND == new_access_mode) {
-            // 重新获取位点，此时是 APPEND 模式下的新位点
-            if (OB_FAIL(palf_handle_guard.get_end_lsn(palf_committed_end_lsn))) {
-              CLOG_LOG(WARN, "get palf committed_end_lsn failed after delay", K(ret), K(req.ls_id_));
-            } else if (OB_FAIL(palf_handle_guard.get_end_scn(palf_committed_end_scn))) {
-              CLOG_LOG(WARN, "get palf committed_end_scn failed after delay", K(ret), K(req.ls_id_));
-            } else {
-              skip_return_stale_ack = true;
-              CLOG_LOG(INFO, "access mode changed to APPEND after delay, skip returning standby committed lsn to primary",
-                       K(req.ls_id_), K(palf_committed_end_lsn), K(palf_committed_end_scn));
-            }
-          }
+        // 第二次检查：确认仍然是 leader 且 access mode 是 RAW_WRITE，且 proposal_id 不变
+        if (OB_FAIL(ObLogStandbyAckService::check_and_compare_leader_status(
+            palf_handle_guard.get_palf_handle(), first_proposal_id, is_valid, second_proposal_id))) {
+          CLOG_LOG(WARN, "second check leader and access mode failed", K(ret), K(req.ls_id_));
+        } else if (!is_valid) {
+          skip_return_stale_ack = true;
+          CLOG_LOG(INFO, "second check failed, skip returning ack to primary",
+                   K(req.ls_id_), K(first_proposal_id), K(second_proposal_id));
         }
       }
     }
 
-    // 设置 committed 位点（APPEND 模式下不设置，保持 invalid）
+    // 设置 committed 位点
     resp.refresh_info_ret_code_ = ret;
     if (!skip_return_stale_ack) {
       resp.standby_committed_end_lsn_ = palf_committed_end_lsn;

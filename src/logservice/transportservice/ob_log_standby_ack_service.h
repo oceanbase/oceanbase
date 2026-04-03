@@ -205,6 +205,23 @@ public:
   int batch_process_tasks(const common::ObIArray<StandbyAckTask> &tasks, bool &stopped);
   int process_barrier(const StandbyAckTask &task, bool &stopped);
 
+  // 检查是否是 leader 且 access mode 是 RAW_WRITE
+  // 用于发送 ACK 前后的一致性检查
+  static int check_leader_and_raw_write_mode(ipalf::IPalfHandle *palf_handle,
+                                              int64_t &proposal_id,
+                                              bool &is_valid);
+
+  // 检查备库的 log_restore_source 是否有效
+  // 如果 source 为空或无效，则不需要回复 ACK
+  static int check_restore_source_valid(const share::ObLSID &ls_id, bool &is_valid);
+
+  // 二次检查是否是 leader 且 access mode 是 RAW_WRITE，并与第一次的 proposal_id 比较
+  // 用于发送 ACK 前的二次确认，确保期间状态未发生变化
+  static int check_and_compare_leader_status(ipalf::IPalfHandle *palf_handle,
+                                             const int64_t first_proposal_id,
+                                             bool &is_valid,
+                                             int64_t &second_proposal_id);
+
 private:
 
   // 获取主库信息（地址、集群ID、租户ID）
