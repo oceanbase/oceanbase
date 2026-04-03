@@ -336,6 +336,7 @@ OB_DEFINE_PROCESSOR_S(Srv, OB_FETCH_ARB_MEMBER, ObFetchArbMemberP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_ESTIMATE_SKIP_RATE, ObEstimateSkipRateP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_CHECK_NESTED_MVIEW_MDS, ObCheckNestedMViewMdsP);
 OB_DEFINE_PROCESSOR_OBADMIN(Srv, OB_ADMIN_FORCE_DROP_LONELY_LOB_AUX_TABLE, ObAdminForceDropLonelyLobAuxTableP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_GET_TENANT_MEMORY_INFO, ObRpcGetTenantMemoryInfoP);
 } // end of namespace observer
 } // end of namespace oceanbase
 
