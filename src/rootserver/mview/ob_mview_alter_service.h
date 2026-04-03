@@ -20,6 +20,12 @@
 
 namespace oceanbase
 {
+namespace sql
+{
+class ObSchemaChecker;
+class ObSelectStmt;
+class ObSQLSessionInfo;
+}
 namespace rootserver
 {
 class ObMviewAlterService
@@ -55,10 +61,18 @@ private:
                                          share::schema::ObSchemaGetterGuard &schema_guard,
                                          ObDDLOperator &ddl_operator,
                                          common::ObMySQLTransaction &trans);
-  static int rebuild_mv_schema_with_new_table(share::schema::ObSchemaGetterGuard &schema_guard,
-                                              const share::schema::ObTableSchema &orig_mv_schema,
-                                              const share::schema::ObTableSchema &new_table_schema,
-                                              share::schema::ObTableSchema &mv_schema);
+  static int rebuild_container_schema_with_new_table(share::schema::ObSchemaGetterGuard &schema_guard,
+                                                     const share::schema::ObTableSchema &orig_mv_schema,
+                                                     const share::schema::ObTableSchema &orig_container_schema,
+                                                     const share::schema::ObTableSchema &new_table_schema,
+                                                     share::schema::ObTableSchema &container_schema);
+  static int rebuild_mv_container_schema(sql::ObSchemaChecker &schema_checker,
+                                         const share::schema::ObTableSchema &orig_mv_schema,
+                                         const share::schema::ObTableSchema &orig_container_schema,
+                                         share::schema::ObTableSchema &new_container_schema);
+  static int update_mv_container_schema_with_stmt(const sql::ObSelectStmt *stmt,
+                                                  sql::ObSQLSessionInfo &session_info,
+                                                  share::schema::ObTableSchema &mv_container_schema);
 };
 
 } // namespace rootserver
