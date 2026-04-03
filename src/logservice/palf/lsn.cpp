@@ -100,6 +100,77 @@ offset_t operator-(const LSN &lhs, const LSN &rhs)
   return lhs.val_ - rhs.val_;
 }
 
+LSN LSN::atomic_load() const
+{
+  LSN result;
+  const offset_t val = ATOMIC_LOAD(&val_);
+  result = LSN(val);
+  return result;
+}
+
+void LSN::atomic_store(const LSN &lsn)
+{
+  ATOMIC_STORE(&val_, ATOMIC_LOAD(&lsn.val_));
+}
+
+bool LSN::atomic_bcas(const LSN &old_v, const LSN &new_v)
+{
+  return ATOMIC_BCAS(&val_, old_v.val_, new_v.val_);
+}
+
+LSN LSN::atomic_vcas(const LSN &old_v, const LSN &new_v)
+{
+  const offset_t val = ATOMIC_VCAS(&val_, old_v.val_, new_v.val_);
+  LSN result = LSN(val);
+  return result;
+}
+
+LSN LSN::inc_update(const LSN &ref_lsn)
+{
+  bool is_updated = false;
+  return inc_update(ref_lsn, is_updated);
+}
+
+LSN LSN::inc_update(const LSN &ref_lsn, bool &is_updated)
+{
+  LSN old_lsn;
+  is_updated = false;
+  LSN new_lsn = this->atomic_load();
+  if (false == ref_lsn.is_valid()) {
+    // ref_lsn is invalid, return current lsn
+  } else {
+    while (false == new_lsn.is_valid() || new_lsn < ref_lsn) {
+      old_lsn = new_lsn;
+      if ((new_lsn = this->atomic_vcas(old_lsn, ref_lsn)) == old_lsn) {
+        new_lsn = ref_lsn;
+        is_updated = true;
+      }
+    }
+  }
+  return new_lsn;
+}
+
+LSN LSN::dec_update(const LSN &ref_lsn)
+{
+  bool is_updated = false;
+  return dec_update(ref_lsn, is_updated);
+}
+
+// INVALID_LSN_VAL is UINT64_MAX, so we can simply use > to compare
+LSN LSN::dec_update(const LSN &ref_lsn, bool &is_updated)
+{
+  LSN old_lsn;
+  LSN new_lsn = this->atomic_load();
+  is_updated = false;
+  while ((old_lsn = new_lsn) > ref_lsn) {
+    if ((new_lsn = this->atomic_vcas(old_lsn, ref_lsn)) == old_lsn) {
+      new_lsn = ref_lsn;
+      is_updated = true;
+    }
+  }
+  return new_lsn;
+}
+
 DEFINE_SERIALIZE(LSN)
 {
   int ret = OB_SUCCESS;

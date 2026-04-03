@@ -394,47 +394,6 @@ int ObSyncModeManager::write_sync_mode_log(const ObSyncModeLogType log_type,
   return ret;
 }
 
-// TODO by ziqi: 确认是否delete，通知 apply_service 清除备库位点
-int ObSyncModeManager::notify_apply_service_with_standby_lsn()
-{
-  int ret = OB_SUCCESS;
-  ObTpStatusGuard tp_guard;
-  LogTransportStatus *transport_status = nullptr;
-  ObLSID ls_id;
-  if (!is_inited_ || OB_ISNULL(log_handler_)) {
-    ret = OB_NOT_INIT;
-    CLOG_LOG(WARN, "ObSyncModeManager not inited", K(ret));
-  } else if (OB_FALSE_IT(ls_id = log_handler_->id_)) {
-  } else if (OB_ISNULL(log_handler_->transport_service_)) {
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(WARN, "transport_service is null", K(ret), K(ls_id));
-  } else if (OB_ISNULL(log_handler_->apply_status_)) {
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(WARN, "apply_status_ is NULL", K(ret), K(ls_id));
-  } else if (OB_FAIL(log_handler_->transport_service_->get_transport_status(ls_id, tp_guard))) {
-    CLOG_LOG(WARN, "get_transport_status failed", K(ret), K(ls_id));
-  } else if (NULL == (transport_status = tp_guard.get_transport_status())) {
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(WARN, "transport_status is NULL", K(ret), K(ls_id));
-  } else {
-    const palf::LSN standby_committed_end_lsn = transport_status->get_standby_committed_end_lsn();
-    const share::SCN standby_committed_end_scn = transport_status->get_standby_committed_end_scn();
-
-    if (standby_committed_end_lsn.is_valid() && standby_committed_end_scn.is_valid()) {
-      if (OB_FAIL(log_handler_->transport_service_->notify_apply_service(ls_id, standby_committed_end_lsn, standby_committed_end_scn))) {
-        CLOG_LOG(WARN, "notify_apply_service failed", K(ret), K(ls_id), K(standby_committed_end_lsn));
-      } else {
-        CLOG_LOG(INFO, "notify_apply_service_with_standby_lsn success", K(ls_id), K(standby_committed_end_lsn));
-      }
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      CLOG_LOG(WARN, "cannot get valid standby or palf committed end lsn", K(ret), K(ls_id), K(standby_committed_end_lsn),
-               K(standby_committed_end_scn));
-    }
-  }
-  return ret;
-}
-
 int ObSyncModeManager::handle_sync_mode_upgrade(const int64_t mode_version,
                                                 const bool need_write_log,
                                                 const share::ObLSID &ls_id,

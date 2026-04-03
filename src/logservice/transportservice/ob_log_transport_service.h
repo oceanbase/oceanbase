@@ -332,13 +332,15 @@ public:
   ~LogTransportStatus();
 
 public:
+  static int revert_transport_status(LogTransportStatus *transport_status);
+
+public:
   int init(const share::ObLSID &id,
            ipalf::IPalfEnv *palf_env,
            ObLogTransportService *transport_sv);
   void destroy();
   int stop();
   inline void inc_ref() { ATOMIC_INC(&ref_cnt_); }
-  inline int64_t dec_ref() { return ATOMIC_SAF(&ref_cnt_, 1); }
   int switch_to_leader(const int64_t new_proposal_id,
                        const palf::SyncMode new_sync_mode,
                        const palf::LSN &begin_lsn);
@@ -403,6 +405,7 @@ public:
 
   // 状态检查方法
   bool is_enabled() const;
+  bool is_in_stop_state() const;
   bool is_enabled_without_lock() const;
   bool need_submit_log() const;
   bool is_sync_mode_enabled() const;  // 检查当前 sync_mode 是否为 SYNC
@@ -458,6 +461,9 @@ private:
   int read_and_send_single_log_();
   int read_and_send_logs_();
 
+  // 释放引用计数
+  inline int64_t dec_ref_() { return ATOMIC_SAF(&ref_cnt_, 1); }
+
 private:
   typedef common::RWLock RWLock;
   typedef RWLock::RLockGuard RLockGuard;
@@ -512,29 +518,33 @@ private:
   int64_t last_standby_lsn_update_time_us_;  // 上次备库 LSN 变化的时间
 };
 
+// for transport_status_map in transport service
+class ObTpStatusGuard
+{
+public:
+  ObTpStatusGuard();
+  ObTpStatusGuard(LogTransportStatus *transport_status);
+  void move_from(ObTpStatusGuard &other);
+  void move_from(ObTpStatusGuard &&other);
+  ObTpStatusGuard clone() const;
+  ~ObTpStatusGuard();
+  LogTransportStatus *get_transport_status() const;
+private:
+  friend class ObLogTransportService;
+  LogTransportStatus *transport_status_;
+  ObTpStatusGuard(ObTpStatusGuard &&other) = delete;
+  ObTpStatusGuard &operator=(ObTpStatusGuard &&other) = delete;
+  DISALLOW_COPY_AND_ASSIGN(ObTpStatusGuard);
+};
+
 // RPC异步回调类，用于处理日志传输RPC的响应
 // 注意：通过引用计数保证 transport_status_ 在回调期间的有效性
 template<obrpc::ObRpcPacketCode pcode>
 class ObLogTransportRespCallback : public obrpc::ObLogTransportRpcProxy::AsyncCB<pcode>
 {
 public:
-  explicit ObLogTransportRespCallback(LogTransportStatus *transport_status)
-    : transport_status_(transport_status)
-  {
-    // 增加引用计数，防止回调期间 transport_status 被释放
-    if (OB_NOT_NULL(transport_status_)) {
-      transport_status_->inc_ref();
-    }
-  }
-
-  ~ObLogTransportRespCallback()
-  {
-    // 释放引用计数
-    if (OB_NOT_NULL(transport_status_)) {
-      transport_status_->dec_ref();
-      transport_status_ = NULL;
-    }
-  }
+  explicit ObLogTransportRespCallback(ObTpStatusGuard &&guard) { guard_.move_from(guard); }
+  ~ObLogTransportRespCallback() { }
 
   void set_args(const typename obrpc::ObLogTransportRpcProxy::AsyncCB<pcode>::Request &args) {
     UNUSED(args);
@@ -545,7 +555,7 @@ public:
     ObLogTransportRespCallback<pcode> *newcb = NULL;
     if (NULL != buf) {
       // clone 时会自动增加引用计数（在构造函数中）
-      newcb = new (buf) ObLogTransportRespCallback<pcode>(transport_status_);
+      newcb = new (buf) ObLogTransportRespCallback<pcode>(guard_.clone());
     }
     return newcb;
   }
@@ -559,7 +569,7 @@ public:
 
     if (OB_SUCCESS != rcode.rcode_) {
       CLOG_LOG_RET(WARN, rcode.rcode_, "log transport rpc error", K(rcode), K(dst), K(pcode));
-    } else if (OB_ISNULL(transport_status_)) {
+    } else if (OB_ISNULL(guard_.get_transport_status())) {
       ret = OB_ERR_UNEXPECTED;
       CLOG_LOG_RET(WARN, ret, "transport_status is NULL", K(dst), K(pcode));
     } else {
@@ -579,13 +589,13 @@ public:
         CLOG_LOG_RET(WARN, transport_resp.refresh_info_ret_code_, "refresh info returned error",
                      K(dst), K(transport_resp.refresh_info_ret_code_), K(transport_resp.ls_id_));
       } else if (!transport_resp.standby_committed_end_lsn_.is_valid() || !transport_resp.standby_committed_end_scn_.is_valid()) {
-        ret = OB_ERR_UNDEFINED;
-        CLOG_LOG_RET(ERROR, ret, "standby committed_end_lsn or standby committed_end_scn is invalid",
+        ret = OB_ERR_UNEXPECTED;
+        CLOG_LOG_RET(WARN, ret, "standby committed_end_lsn or standby committed_end_scn is invalid",
                      K(dst), K(transport_resp.ls_id_));
       // RPC接收端会best-effort更新备库的committed位点
       } else {
         // 更新备库的committed_end_lsn
-        if (OB_FAIL(transport_status_->update_standby_committed_end_lsn(
+        if (OB_FAIL(guard_.get_transport_status()->update_standby_committed_end_lsn(
                      transport_resp.standby_committed_end_lsn_,
                      transport_resp.standby_committed_end_scn_))) {
           CLOG_LOG_RET(WARN, ret, "update_standby_committed_end_lsn failed",
@@ -607,22 +617,7 @@ public:
   }
 
 private:
-  LogTransportStatus *transport_status_;
-};
-
-// for transport_status_map in transport service
-class ObTpStatusGuard
-{
-public:
-  ObTpStatusGuard();
-  ~ObTpStatusGuard();
-  LogTransportStatus *get_transport_status();
-private:
-  void set_transport_status_(LogTransportStatus *transport_status);
-private:
-  friend class ObLogTransportService;
-  LogTransportStatus *transport_status_;
-  DISALLOW_COPY_AND_ASSIGN(ObTpStatusGuard);
+  ObTpStatusGuard guard_;
 };
 
 class ObLogTransportService : public lib::TGTaskHandler
@@ -770,14 +765,14 @@ private:
   int handle_status_task_(ObTransportServiceStatusTask *status_task, bool &is_timeslice_run_out);
   int handle_init_task_(ObTransportServiceInitTask *init_task);
   int remove_all_ls_();
-  int revert_transport_status_(LogTransportStatus *transport_status);
 
-public:
+private:
   class RemoveTransportStatusFunctor
   {
   public:
     RemoveTransportStatusFunctor() : ret_code_(OB_SUCCESS) {}
     ~RemoveTransportStatusFunctor() {}
+    void reset();
     bool operator()(const share::ObLSID &id, LogTransportStatus *transport_status);
     int get_ret_code() const { return ret_code_; }
     TO_STRING_KV(K(ret_code_));
@@ -785,6 +780,19 @@ public:
     int ret_code_;
   };
 
+  class GetTransportStatusFunctor
+  {
+  public:
+    GetTransportStatusFunctor() : ret_code_(OB_SUCCESS) {}
+    ~GetTransportStatusFunctor() {}
+    bool operator()(const share::ObLSID &id, LogTransportStatus *transport_status);
+    int get_ret_code() const { return ret_code_; }
+    ObTpStatusGuard &get_guard() { return guard_; }
+    TO_STRING_KV(K(ret_code_));
+  private:
+    int ret_code_;
+    ObTpStatusGuard guard_;
+  };
 private:
   static const int64_t TRANSPORT_THREAD_COUNT = 1;
   static const int64_t TRANSPORT_INTERVAL_US = 100 * 1000; // 100ms

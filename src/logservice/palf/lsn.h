@@ -40,6 +40,16 @@ struct LSN
   bool operator>=(const LSN &lsn) const;
   bool operator<=(const LSN &lsn) const;
   LSN& operator=(const LSN &lsn);
+
+  LSN atomic_load() const;
+  void atomic_store(const LSN &lsn);
+  bool atomic_bcas(const LSN &old_v, const LSN &new_v);
+  LSN atomic_vcas(const LSN &old_v, const LSN &new_v);
+  LSN inc_update(const LSN &ref_lsn);
+  LSN inc_update(const LSN &ref_lsn, bool &is_updated);
+  LSN dec_update(const LSN &ref_lsn);
+  LSN dec_update(const LSN &ref_lsn, bool &is_updated);
+
   NEED_SERIALIZE_AND_DESERIALIZE;
   TO_STRING_AND_YSON(OB_ID(lsn), val_);
   offset_t val_;

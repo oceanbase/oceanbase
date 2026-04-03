@@ -837,8 +837,8 @@ int ObApplyStatus::update_standby_committed_end_lsn(const palf::LSN &end_lsn, co
                           || (standby_scn.is_valid() && end_scn < standby_scn)) {
       CLOG_LOG(WARN, "invalid arguments", K(ret), K(end_lsn), K(end_scn), K(standby_lsn), K(standby_scn));
     } else {
-      ATOMIC_STORE(&standby_committed_end_lsn_.val_, end_lsn.val_);
-      standby_committed_end_scn_.atomic_store(end_scn);
+      (void) standby_committed_end_lsn_.inc_update(end_lsn);
+      (void) standby_committed_end_scn_.inc_update(end_scn);
       if (OB_FAIL(update_min_committed_end_lsn_())) {
         CLOG_LOG(ERROR, "update_min_committed_end_lsn_ failed", K(ls_id_), K(ret), K(end_lsn), K(end_scn));
       }
@@ -899,24 +899,7 @@ int ObApplyStatus::update_min_committed_end_lsn_()
     }
 
     if (tmp_lsn.is_valid()) {
-      int64_t old_val = 0;
-      int64_t new_val = tmp_lsn.val_;
-      bool cas_success = false;
-      while (!cas_success) {
-        old_val = ATOMIC_LOAD(&min_committed_end_lsn_.val_);
-        // 如果新值不大于当前值，不需要更新
-        if (LSN(old_val).is_valid() && new_val <= old_val) {
-          break;
-        }
-        // 尝试 CAS 更新
-        cas_success = ATOMIC_BCAS(&min_committed_end_lsn_.val_, old_val, new_val);
-        if (cas_success) {
-          need_submit_task = true;
-          CLOG_LOG(TRACE, "update_min_committed_end_lsn_ CAS success",
-                   KPC(this), K(tmp_lsn), K(LSN(old_val)));
-        }
-        // CAS 失败说明有其他线程修改了，重新检查
-      }
+      (void) min_committed_end_lsn_.inc_update(tmp_lsn, need_submit_task);
     }
   }
 

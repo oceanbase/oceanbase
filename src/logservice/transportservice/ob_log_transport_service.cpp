@@ -508,6 +508,9 @@ int ObTransportServiceInitTask::do_init()
   } else if (OB_ISNULL(transport_status->tp_sv_)) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "transport_service is NULL", K(ret), K(ls_id_));
+  } else if (transport_status->is_in_stop_state()) {
+    ret = OB_NOT_RUNNING;
+    CLOG_LOG(INFO, "transport status has been stopped", K(ret), K(ls_id_));
   } else if (proposal_id_ <= 0 || proposal_id_ < transport_status->get_proposal_id()) { //检查当前的init task是否过期，考虑并发场景
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", K(ret), K(ls_id_), K(proposal_id_), K(transport_status->get_proposal_id()),
@@ -757,7 +760,7 @@ void LogTransportStatus::destroy()
     close_palf_handle();
   }
   is_inited_ = false;
-  is_in_stop_state_ = true;
+  ATOMIC_STORE(&is_in_stop_state_, true);
   ATOMIC_STORE(&is_ls_gc_state_, false);
   is_enabled_ = false;
   proposal_id_ = -1;
@@ -770,6 +773,37 @@ void LogTransportStatus::destroy()
   palf_env_ = nullptr;
   tp_sv_ = nullptr;
   ls_id_.reset();
+}
+
+int LogTransportStatus::stop()
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "transport status has not been inited");
+  } else {
+    ATOMIC_STORE(&is_in_stop_state_, true);
+    CLOG_LOG(INFO, "transport status stop success", KPC(this));
+  }
+  return ret;
+}
+
+int LogTransportStatus::revert_transport_status(LogTransportStatus *transport_status)
+{
+  int ret = OB_SUCCESS;
+  if (NULL != transport_status) {
+    int64_t ref_cnt = transport_status->dec_ref_();
+    if (0 == ref_cnt) {
+      CLOG_LOG(INFO, "free transport status", KPC(transport_status));
+      transport_status->~LogTransportStatus();
+      mtl_free(transport_status);
+    } else if (0 > ref_cnt) {
+      ret = OB_ERR_UNEXPECTED;
+      CLOG_LOG(ERROR, "possible transport status double release!!!", K(ref_cnt), KP(transport_status));
+    }
+  }
+  return ret;
+
 }
 
 int LogTransportStatus::init(const share::ObLSID &id,
@@ -845,6 +879,11 @@ bool LogTransportStatus::is_enabled() const
   return is_enabled_;
 }
 
+bool LogTransportStatus::is_in_stop_state() const
+{
+  return ATOMIC_LOAD(&is_in_stop_state_);
+}
+
 bool LogTransportStatus::is_enabled_without_lock() const
 {
   return is_enabled_;
@@ -858,7 +897,7 @@ int LogTransportStatus::switch_to_leader(const int64_t new_proposal_id,
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(ERROR, "transport status has not been inited");
-  } else if (is_in_stop_state_) {
+  } else if (is_in_stop_state()) {
     ret = OB_NOT_RUNNING;
     CLOG_LOG(INFO, "transport status has been stopped");
   } else if (OB_FAIL(submit_init_task(new_proposal_id, new_sync_mode, begin_lsn))) { // 异步完成强同步初始化流程
@@ -908,7 +947,7 @@ int LogTransportStatus::switch_to_sync(const int64_t curr_proposal_id,
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(ERROR, "transport status has not been inited");
-  } else if (is_in_stop_state_) {
+  } else if (is_in_stop_state()) {
     ret = OB_NOT_RUNNING;
     CLOG_LOG(INFO, "transport status has been stopped");
   } else if (new_proposal_id < ATOMIC_LOAD(&proposal_id_)) {
@@ -932,7 +971,7 @@ int LogTransportStatus::switch_to_pre_async()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(ERROR, "transport status has not been inited");
-  } else if (is_in_stop_state_) {
+  } else if (is_in_stop_state()) {
     ret = OB_NOT_RUNNING;
     CLOG_LOG(INFO, "transport status has been stopped");
   } else {
@@ -951,7 +990,7 @@ int LogTransportStatus::switch_to_async()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(ERROR, "transport status has not been inited");
-  } else if (is_in_stop_state_) {
+  } else if (is_in_stop_state()) {
     ret = OB_NOT_RUNNING;
     CLOG_LOG(INFO, "transport status has been stopped");
   } else {
@@ -970,7 +1009,7 @@ int LogTransportStatus::switch_async_to_pre_async()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(ERROR, "transport status has not been inited");
-  } else if (is_in_stop_state_) {
+  } else if (is_in_stop_state()) {
     ret = OB_NOT_RUNNING;
     CLOG_LOG(INFO, "transport status has been stopped");
   } else {
@@ -991,7 +1030,8 @@ void LogTransportStatus::mark_ls_gc_state()
 
 bool LogTransportStatus::need_submit_log() const
 {
-  return (role_ == common::ObRole::LEADER) && is_enabled_without_lock() && standby_addr_valid_ && tp_submit_task_.is_inited();
+  return (role_ == common::ObRole::LEADER) && is_enabled_without_lock() && standby_addr_valid_
+      && !is_in_stop_state() && tp_submit_task_.is_inited();
 }
 
 bool LogTransportStatus::is_sync_mode_enabled() const
@@ -1089,7 +1129,13 @@ void LogTransportStatus::close_palf_handle()
 int LogTransportStatus::enable_status(const int64_t proposal_id)
 {
   int ret = OB_SUCCESS;
-  if (proposal_id < proposal_id_) {
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "transport status has not been inited", K(ret), KPC(this));
+  } else if (is_in_stop_state()) {
+    ret = OB_NOT_RUNNING;
+    CLOG_LOG(INFO, "transport status has been stopped", K(ret), KPC(this));
+  } else if (proposal_id < proposal_id_) {
     ret = OB_STATE_NOT_MATCH;
     CLOG_LOG(WARN, "proposal_id is smaller than local, skip enable_status",
              K(ret), K(ls_id_), K(proposal_id), K_(proposal_id));
@@ -1237,36 +1283,39 @@ int LogTransportStatus::update_standby_committed_end_lsn(const palf::LSN &end_ls
     // 获取读锁后再检查 is_enabled_
     RLockGuard guard(lock_);
 
-    palf::LSN current_lsn = get_standby_committed_end_lsn();
-    share::SCN current_scn = get_standby_committed_end_scn();
+    const palf::LSN current_lsn = get_standby_committed_end_lsn();
+    const share::SCN current_scn = get_standby_committed_end_scn();
+    palf::LSN notify_apply_service_lsn = end_lsn;
+    share::SCN notify_apply_service_scn = end_scn;
 
     // no need to check whether sync_mode is enabled
     // MA mode need this
 
     // 检查位点是否回退（备库重启或切主可能导致位点回退）
-    if (current_lsn.is_valid() && end_lsn.val_ < current_lsn.val_) {
+    if (current_lsn.is_valid() && end_lsn < current_lsn
+        && current_scn.is_valid() && end_scn < current_scn) {
+      notify_apply_service_lsn = current_lsn;
+      notify_apply_service_scn = current_scn;
       ret = OB_STATE_NOT_MATCH;
-      CLOG_LOG(WARN, "standby committed_end_lsn rollback, skip update",
+      CLOG_LOG(WARN, "standby committed_end_lsn and committed_end_scn rollback, skip update",
                K(end_lsn), K(current_lsn), K(end_scn), K(current_scn), K(ls_id_));
-    } else if (current_lsn.is_valid() &&
-               end_lsn.val_ == current_lsn.val_ &&
-               end_scn == current_scn) {
+    } else if (end_lsn == current_lsn && end_scn == current_scn) {
       ret = OB_NO_NEED_UPDATE;
     } else {
       // 原子更新两个位点（虽然不是完全原子，但在读锁保护下是安全的）
-      ATOMIC_STORE(&standby_committed_end_lsn_.val_, end_lsn.val_);
-      standby_committed_end_scn_.atomic_store(end_scn);
-      CLOG_LOG(TRACE, "update standby committed_end_lsn success",
+      notify_apply_service_lsn = standby_committed_end_lsn_.inc_update(end_lsn);
+      notify_apply_service_scn = standby_committed_end_scn_.inc_update(end_scn);
+      CLOG_LOG(TRACE, "update standby committed_end_lsn and committed_end_scn success",
                K(end_lsn), K(current_lsn), K(end_scn), K(current_scn), K(ls_id_));
+    }
 
-      // 通知 apply service 更新备库位点
-      if (OB_NOT_NULL(tp_sv_)) {
-        int notify_ret = tp_sv_->notify_apply_service(ls_id_, end_lsn, end_scn);
-        if (OB_SUCCESS != notify_ret) {
-          // 通知失败不影响位点更新，仅记录日志
-          CLOG_LOG(WARN, "notify_apply_service failed",
-                   K(notify_ret), K(ls_id_), K(end_lsn), K(end_scn));
-        }
+    // 通知 apply service 更新备库位点
+    if (OB_NOT_NULL(tp_sv_) && notify_apply_service_lsn.is_valid() && notify_apply_service_scn.is_valid()) {
+      int notify_ret = tp_sv_->notify_apply_service(ls_id_, notify_apply_service_lsn, notify_apply_service_scn);
+      if (OB_SUCCESS != notify_ret) {
+        // 通知失败不影响位点更新，仅记录日志
+        CLOG_LOG(WARN, "notify_apply_service failed",
+                  K(notify_ret), K(ls_id_), K(notify_apply_service_lsn), K(notify_apply_service_scn));
       }
     }
   }
@@ -1299,10 +1348,11 @@ int LogTransportStatus::submit_task_to_transport_service_(ObTransportServiceTask
   } else if (task.acquire_lease()) {
     inc_ref();
     if (OB_ISNULL(tp_sv_)) {
+      dec_ref_();
       ret = OB_ERR_UNEXPECTED;
       CLOG_LOG(ERROR, "transport_sv_ is NULL", K(ret));
     } else if (OB_FAIL(tp_sv_->push_task(&task))) {
-      dec_ref();
+      dec_ref_();
       CLOG_LOG(WARN, "push task to transport service failed", K(ret));
     }
   }
@@ -1505,7 +1555,7 @@ int LogTransportStatus::send_log_via_rpc_(const ObLogTransportReq &req, const in
     CLOG_LOG(ERROR, "rpc_proxy is NULL", K(ret));
   } else {
     // 调用异步RPC发送日志
-    ObLogTransportRespCallback<obrpc::OB_LOG_TRANSPORT_REQ> cb(this);
+    ObLogTransportRespCallback<obrpc::OB_LOG_TRANSPORT_REQ> cb(ObTpStatusGuard(this));
 
     if (OB_FAIL(rpc_proxy->to(standby_addr_)
                        .dst_cluster_id(req.standby_cluster_id_)
@@ -1629,7 +1679,7 @@ int LogTransportStatus::reset_retry_iterator(const palf::LSN &start_lsn)
     if (IS_NOT_INIT) {
       ret = OB_NOT_INIT;
       CLOG_LOG(WARN, "transport status not init", K(ret));
-    } else if (is_in_stop_state_) {
+    } else if (is_in_stop_state()) {
       // NB: 如果 transport_status 正在被销毁或已停止，不应该创建新的 iterator
       // 避免在 destroy() 过程中创建 iterator 导致泄漏
       ret = OB_NOT_INIT;
@@ -1861,7 +1911,7 @@ int LogTransportStatus::periodic_retry_transport_log()
   if (OB_UNLIKELY(EN_PERIODIC_RETRY_TRANSPORT_LOG)) {
     ret = EN_PERIODIC_RETRY_TRANSPORT_LOG;
     CLOG_LOG(WARN, "error injection: periodic retry transport log", K(ret), K(ls_id_));
-  } else if (IS_NOT_INIT || is_in_stop_state_) {
+  } else if (IS_NOT_INIT || is_in_stop_state()) {
     // NB: 如果 transport_status 正在被销毁或已停止，不应该创建新的 iterator
     // 避免在 destroy() 过程中创建 iterator 导致泄漏
     ret = OB_NOT_INIT;
@@ -2114,11 +2164,11 @@ void ObLogTransportService::destroy()
 int ObLogTransportService::query_sync_standby_dest(const share::ObLSID &ls_id)
 {
   int ret = OB_SUCCESS;
-  LogTransportStatus *transport_status = NULL;
+  ObTpStatusGuard guard;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(ERROR, "ObLogTransportService not init", KR(ret));
-  } else if (OB_FAIL(transport_status_map_.get(ls_id, transport_status))) {
+  } else if (OB_FAIL(get_transport_status(ls_id, guard))) {
     CLOG_LOG(WARN, "failed to get transport status", KR(ret), K(ls_id));
   } else {
     // 同步获取sync_standby_dest，确保启用时就有有效值
@@ -2334,8 +2384,7 @@ int ObLogTransportService::UpdateStandbyAddrTask::collect_ls_list_(
         CLOG_LOG(WARN, "transport_status is NULL", KR(ret), K(ls_id));
         return true;
       }
-      ObTpStatusGuard guard;
-      guard.set_transport_status_(transport_status);
+      ObTpStatusGuard guard(transport_status);
       LogTransportStatus *tp_status = guard.get_transport_status();
       ipalf::IPalfHandle *palf_handle = nullptr;
       if (OB_ISNULL(palf_handle = tp_status->get_palf_handle())) {
@@ -2590,7 +2639,7 @@ int ObLogTransportService::add_ls(const share::ObLSID &id)
       transport_status->inc_ref();
       if (OB_FAIL(transport_status_map_.insert(id, transport_status))) {
         CLOG_LOG(WARN, "failed to add transport status", KR(ret), K(id));
-        revert_transport_status_(transport_status);
+        LogTransportStatus::revert_transport_status(transport_status);
         transport_status = NULL;
       } else {
         CLOG_LOG(INFO, "add transport status success", KR(ret), K(id));
@@ -2620,50 +2669,69 @@ ObTpStatusGuard::ObTpStatusGuard()
     : transport_status_(NULL)
 {}
 
+ObTpStatusGuard::ObTpStatusGuard(LogTransportStatus *transport_status)
+    : transport_status_(transport_status)
+{
+  if (OB_NOT_NULL(transport_status_)) {
+    transport_status_->inc_ref();
+  }
+}
+
+void ObTpStatusGuard::move_from(ObTpStatusGuard &other)
+{
+  if (this != &other) {
+    if (NULL != transport_status_) {
+      LogTransportStatus::revert_transport_status(transport_status_);
+    }
+    transport_status_ = other.transport_status_;
+    other.transport_status_ = NULL;
+  }
+}
+
+void ObTpStatusGuard::move_from(ObTpStatusGuard &&other)
+{
+  move_from(other);
+}
+
+ObTpStatusGuard ObTpStatusGuard::clone() const
+{
+  return ObTpStatusGuard(transport_status_);
+}
+
 ObTpStatusGuard::~ObTpStatusGuard()
 {
   if (NULL != transport_status_) {
-    if (0 == transport_status_->dec_ref()) {
-      CLOG_LOG(INFO, "free transport status", KPC(transport_status_));
-      transport_status_->~LogTransportStatus();
-      mtl_free(transport_status_);
-    }
+    LogTransportStatus::revert_transport_status(transport_status_);
     transport_status_ = NULL;
   }
 }
 
-LogTransportStatus *ObTpStatusGuard::get_transport_status()
+LogTransportStatus *ObTpStatusGuard::get_transport_status() const
 {
   return transport_status_;
-}
-
-void ObTpStatusGuard::set_transport_status_(LogTransportStatus *transport_status)
-{
-  transport_status_ = transport_status;
-  transport_status_->inc_ref();
 }
 
 int ObLogTransportService::get_transport_status(const share::ObLSID &id, ObTpStatusGuard &guard)
 {
   int ret = OB_SUCCESS;
-  LogTransportStatus *status = NULL;
+  GetTransportStatusFunctor functor;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "ObLogTransportService not init", KR(ret), K(id));
   } else if (!id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", KR(ret), K(id));
-  } else if (OB_FAIL(transport_status_map_.get(id, status))) {
+  } else if (OB_FAIL(transport_status_map_.operate(id, functor))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
       CLOG_LOG(TRACE, "transport status not exist", K(id));
     } else {
       CLOG_LOG(WARN, "failed to get transport status", KR(ret), K(id));
     }
-  } else if (OB_ISNULL(status)) {
+  } else if (OB_ISNULL(functor.get_guard().get_transport_status())) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "transport status is NULL", KR(ret), K(id));
   } else {
-    guard.set_transport_status_(status);
+    guard.move_from(functor.get_guard());
     CLOG_LOG(TRACE, "get transport status success", K(id));
   }
   return ret;
@@ -2705,6 +2773,7 @@ int ObLogTransportService::remove_all_ls_()
       for (int64_t i = 0; i < ls_id_array.count(); ++i) {
         const share::ObLSID &ls_id = ls_id_array.at(i);
         int tmp_ret = OB_SUCCESS;
+        functor.reset();
         if (OB_SUCCESS != (tmp_ret = transport_status_map_.erase_if(ls_id, functor))) {
           CLOG_LOG(WARN, "failed to remove transport status", KR(tmp_ret), K(ls_id));
           ret = (OB_SUCCESS == ret) ? tmp_ret : ret;
@@ -2716,6 +2785,11 @@ int ObLogTransportService::remove_all_ls_()
   return ret;
 }
 
+void ObLogTransportService::RemoveTransportStatusFunctor::reset()
+{
+  ret_code_ = OB_SUCCESS;
+}
+
 bool ObLogTransportService::RemoveTransportStatusFunctor::operator()(const share::ObLSID &id,
                                                                      LogTransportStatus *transport_status)
 {
@@ -2723,14 +2797,27 @@ bool ObLogTransportService::RemoveTransportStatusFunctor::operator()(const share
   if (OB_ISNULL(transport_status)) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "transport status is NULL", K(id), KR(ret));
+  } else if (OB_FAIL(transport_status->stop())) {
+    CLOG_LOG(WARN, "failed to stop transport status", K(id), KR(ret));
   } else if (OB_FAIL(transport_status->disable_status(palf::INVALID_PROPOSAL_ID))) {
     // use INT64_MAX to ensure disable_status always succeeds when removing transport status
     CLOG_LOG(WARN, "failed to disable status", K(id), KR(ret));
+  } else {
+    LogTransportStatus::revert_transport_status(transport_status);
   }
-  if (OB_SUCCESS == ret && 0 == transport_status->dec_ref()) {
-    CLOG_LOG(INFO, "free transport status", KPC(transport_status));
-    transport_status->~LogTransportStatus();
-    mtl_free(transport_status);
+  ret_code_ = ret;
+  return OB_SUCCESS == ret;
+
+}
+
+bool ObLogTransportService::GetTransportStatusFunctor::operator()(const share::ObLSID &id, LogTransportStatus *transport_status)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(transport_status)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "transport status is NULL", K(id), KR(ret));
+  } else {
+    guard_.move_from(ObTpStatusGuard(transport_status));
   }
   ret_code_ = ret;
   return OB_SUCCESS == ret;
@@ -3085,13 +3172,17 @@ void ObLogTransportService::handle(void *task)
   } else if (!is_running_) {
     CLOG_LOG(WARN, "transport service has been stopped, just ignore the task",
              K(is_running_), KPC(transport_status));
-    revert_transport_status_(transport_status);
+    // keep lease holded to prevent new task from being submitted
+    LogTransportStatus::revert_transport_status(transport_status);
     task_to_handle = NULL;
+    transport_status = NULL;
   } else {
     bool is_timeslice_run_out = false;
     ObTransportServiceTaskType task_type = task_to_handle->get_type();
 
-    if (ObTransportServiceTaskType::TRANSPORT_INIT_TASK == task_type) {
+    if (transport_status->is_in_stop_state()) {
+      CLOG_LOG(INFO, "transport status is in stop state, just ignore the task", KPC(transport_status));
+    } else if (ObTransportServiceTaskType::TRANSPORT_INIT_TASK == task_type) {
       ObTransportServiceInitTask *init_task = static_cast<ObTransportServiceInitTask *>(task_to_handle);
       ret = handle_init_task_(init_task);
     } else if (!transport_status->is_enabled()) {
@@ -3110,10 +3201,13 @@ void ObLogTransportService::handle(void *task)
     //TODO by ziqi: delete log for debug
     CLOG_LOG(TRACE, "handle task end", K(ret), K(task_type), KPC(transport_status));
 
-    if (OB_ENTRY_NOT_EXIST == ret) {
+    if (OB_ENTRY_NOT_EXIST == ret || transport_status->is_in_stop_state()) {
       // 日志流已被删除，任务应该完成并释放引用计数
+      // transport_status 已经被停止，不需要再推入队列
       if (OB_NOT_NULL(task_to_handle) && task_to_handle->revoke_lease()) {
-        revert_transport_status_(transport_status);
+        LogTransportStatus::revert_transport_status(transport_status);
+        task_to_handle = NULL;
+        transport_status = NULL;
       } else {
         need_push_back = true;
       }
@@ -3122,7 +3216,9 @@ void ObLogTransportService::handle(void *task)
       need_push_back = true;
     } else if (OB_NOT_NULL(task_to_handle) && task_to_handle->revoke_lease()) {
       // success to set state to idle, no need to push back
-      revert_transport_status_(transport_status);
+      LogTransportStatus::revert_transport_status(transport_status);
+      task_to_handle = NULL;
+      transport_status = NULL;
     } else {
       need_push_back = true;
     }
@@ -3138,7 +3234,9 @@ void ObLogTransportService::handle(void *task)
         CLOG_LOG(WARN, "failed to push task back", K(tmp_ret), KPC(task_to_handle));
         // 只有在transport_status非空时才调用revert，避免重复释放
         if (OB_NOT_NULL(transport_status)) {
-          revert_transport_status_(transport_status);
+          LogTransportStatus::revert_transport_status(transport_status);
+          task_to_handle = NULL;
+          transport_status = NULL;
         }
       }
     }
@@ -3198,6 +3296,9 @@ int ObLogTransportService::switch_to_leader(const share::ObLSID &id,
   } else if (NULL == (transport_status = guard.get_transport_status())) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "transport_status is NULL", KR(ret), K(id));
+  } else if (transport_status->is_in_stop_state()) {
+    ret = OB_NOT_RUNNING;
+    CLOG_LOG(INFO, "transport status has been stopped", K(ret), K(id));
   } else {
     if (OB_FAIL(transport_status->switch_to_leader(new_proposal_id, new_sync_mode, begin_lsn))) {
       CLOG_LOG(WARN, "transport_status switch_to_leader failed", KR(ret), K(id), K(new_proposal_id),
@@ -3452,19 +3553,6 @@ int ObLogTransportService::notify_apply_service(const share::ObLSID &id, const p
     }
   }
 
-  return ret;
-}
-
-int ObLogTransportService::revert_transport_status_(LogTransportStatus *transport_status)
-{
-  int ret = OB_SUCCESS;
-  if (NULL != transport_status) {
-    if (0 == transport_status->dec_ref()) {
-      CLOG_LOG(INFO, "free transport status", KPC(transport_status));
-      transport_status->~LogTransportStatus();
-      mtl_free(transport_status);
-    }
-  }
   return ret;
 }
 

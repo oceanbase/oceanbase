@@ -306,9 +306,6 @@ private:
   // Wait for apply service to finish
   // int wait_apply_service_done();
 
-  // Notify apply service with standby LSN
-  int notify_apply_service_with_standby_lsn();
-
   // Wait for apply status to become leader
   int wait_log_handler_leader_(const int64_t proposal_id, const int64_t abs_timeout_us = 0);
 
