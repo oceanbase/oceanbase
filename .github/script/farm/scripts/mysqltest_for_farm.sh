@@ -225,7 +225,7 @@ function obd_prepare_global {
 
     ob_name=obcluster$SLOT_ID
     app_name=$ob_name.$USER.$HOST
-    ocp_config_server='http://ocp-cfg.alibaba.net:8080/services?User_ID=alibaba&UID=test'
+    ocp_config_server=''
     proxy_cfg_url=${ocp_config_server}\&Action=GetObProxyConfig\&ObRegionGroup=$app_name
     cfg_url=${ocp_config_server}
 
