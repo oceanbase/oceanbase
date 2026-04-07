@@ -44,7 +44,7 @@ TEST_F(TestUpgradePath, 42x) // 42x
   versions.insert(MOCK_DATA_VERSION_4_2_5_7);
   ASSERT_EQ(ObUpgradeChecker::get_upgrade_path(MOCK_DATA_VERSION_4_2_5_7, path), OB_SUCCESS);
   check_upgrade_path(path, {
-    {MOCK_DATA_VERSION_4_3_5_5, false},
+    {MOCK_DATA_VERSION_4_3_5_6, false},
     {DATA_VERSION_4_4_0_0, false},
     {MOCK_DATA_VERSION_4_4_0_1, false},
     {DATA_VERSION_4_4_1_0, false},
@@ -59,9 +59,9 @@ TEST_F(TestUpgradePath, 43x) // 43x
   int ret = OB_SUCCESS;
   ObUpgradePath path;
   std::set<uint64_t> versions;
-  // 435 5
-  versions.insert(MOCK_DATA_VERSION_4_3_5_5);
-  ASSERT_EQ(ObUpgradeChecker::get_upgrade_path(MOCK_DATA_VERSION_4_3_5_5, path), OB_SUCCESS);
+  // 435 6
+  versions.insert(MOCK_DATA_VERSION_4_3_5_6);
+  ASSERT_EQ(ObUpgradeChecker::get_upgrade_path(MOCK_DATA_VERSION_4_3_5_6, path), OB_SUCCESS);
   check_upgrade_path(path, {
     {DATA_VERSION_4_4_0_0, false},
     {MOCK_DATA_VERSION_4_4_0_1, false},

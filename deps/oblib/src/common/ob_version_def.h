@@ -210,6 +210,7 @@ cal_version(const uint64_t major, const uint64_t minor, const uint64_t major_pat
 #define MOCK_DATA_VERSION_4_3_5_3 (oceanbase::common::cal_version(4, 3, 5, 3))
 #define MOCK_DATA_VERSION_4_3_5_4 (oceanbase::common::cal_version(4, 3, 5, 4))
 #define MOCK_DATA_VERSION_4_3_5_5 (oceanbase::common::cal_version(4, 3, 5, 5))
+#define MOCK_DATA_VERSION_4_3_5_6 (oceanbase::common::cal_version(4, 3, 5, 6))
 #define DATA_VERSION_4_4_0_0 (oceanbase::common::cal_version(4, 4, 0, 0))
 #define MOCK_DATA_VERSION_4_4_0_1 (oceanbase::common::cal_version(4, 4, 0, 1))
 #define DATA_VERSION_4_4_1_0 (oceanbase::common::cal_version(4, 4, 1, 0))
