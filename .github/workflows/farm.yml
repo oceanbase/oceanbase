@@ -2,7 +2,7 @@ name: Farm
 
 on:
   pull_request:
-    branches: [ master,develop ]
+    branches: [master, develop]
     types: [opened, reopened, synchronize, ready_for_review]
     paths-ignore:
       - 'docs/**'
@@ -13,18 +13,221 @@ on:
       - 'CONTRIBUTING.md'
   schedule:
     - cron: '30 9 * * *'
+  workflow_dispatch:
+
+env:
+  MYSQLTEST_SLICES: "4"
+  FARM_TASK_DIR: ${{ github.workspace }}/farm_build/${{ github.run_id }}
+  cache-name: cache-deps
+  SKIP_FARM_COMPILE: "false"
+  FARM_NFS_ROOT: /data/storage/jenkins_on_k8s/results/farm
 
 jobs:
-  farm:
-    if: ${{ github.repository_owner == 'oceanbase' && !github.event.pull_request.draft }}
-    name: Farm
-    runs-on: ubuntu-latest
+  farm-setup:
+    name: setup
+    if: ${{ github.repository_owner == 'oceanbase' && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}
+    runs-on: arc-runner-k8s-ci-org
+    container:
+      image: harbor.oceanbase-dev.com/obrde-test/ob-actions-runner-worker:0.0.2
     steps:
-      - name: Checkout workspace
-        uses: actions/checkout@v3
-      - name: action by obfarm
-        uses: ./.github/obfarm/
-        id: farm
+      - name: Checkout
+        uses: actions/checkout@v4
+
+
+      - name: Cache deps
+        uses: actions/cache@v4
         with:
-          pipeline_id: ${{ github.run_id }}
-          project: ${{ github.repository }}
+          key: ${{ runner.os }}-build-${{ env.cache-name }}-el9.x86_64-${{ hashFiles('deps/init/oceanbase.el9.x86_64.deps') }}
+          path: deps/3rd
+
+      - name: Prepare (jobargs, run_jobs)
+        shell: bash
+        run: |
+          chmod +x .github/script/farm/prepare.sh
+          export GITHUB_RUN_ID="${{ github.run_id }}"
+          export GITHUB_WORKSPACE="${{ github.workspace }}"
+          export MYSQLTEST_SLICES="${{ env.MYSQLTEST_SLICES }}"
+          export FARM_TASK_DIR="${{ env.FARM_TASK_DIR }}"
+          .github/script/farm/prepare.sh
+      - name: Setup ccache
+        if: env.SKIP_FARM_COMPILE != 'true'
+        uses: hendrikmuhs/ccache-action@v1.2.11
+        with:
+          max-size: 800M
+          save: ${{ github.event_name == 'push' }}
+          key: farm
+
+      - name: Compile
+        if: env.SKIP_FARM_COMPILE != 'true'
+        id: compile
+        shell: bash
+        run: |
+          chmod +x .github/script/farm/compile.sh
+          export GITHUB_RUN_ID="${{ github.run_id }}"
+          WS="${{ github.workspace }}"
+          if [[ ! -f "$WS/build.sh" ]] && [[ -f "$(pwd)/build.sh" ]]; then
+            export GITHUB_WORKSPACE="$(pwd)"
+          else
+            export GITHUB_WORKSPACE="$WS"
+          fi
+          export FARM_TASK_DIR="${{ env.FARM_TASK_DIR }}"
+          export RELEASE_MODE="${{ vars.RELEASE_MODE || '' }}"
+          export FORWARDING_HOST="${{ vars.FORWARDING_HOST || '' }}"
+          export PATH="$GITHUB_WORKSPACE/deps/3rd/usr/local/oceanbase/devtools/bin:$PATH"
+          .github/script/farm/compile.sh
+      - name: Prepare observer
+        if: env.SKIP_FARM_COMPILE != 'true'
+        shell: bash
+        run: |
+          if [[ ! -x observer ]]; then
+            for base in build_debug build_release build; do
+              for cand in "$base/observer" "$base/src/observer/observer"; do
+                if [[ -f "$cand" ]] && [[ -x "$cand" ]]; then
+                  cp -f "$cand" observer && chmod +x observer
+                  echo "observer copied from $cand"
+                  break 2
+                fi
+              done
+            done
+          fi
+          if [[ ! -x observer ]]; then echo "observer missing or not executable"; exit 1; fi
+          echo "observer size: $(stat -c%s observer 2>/dev/null || stat -f%z observer 2>/dev/null) bytes"
+      - name: Compress observer
+        if: env.SKIP_FARM_COMPILE != 'true'
+        shell: bash
+        run: |
+          zstd -f -q -T0 -o observer.zst observer
+          echo "observer.zst size: $(stat -c%s observer.zst 2>/dev/null || stat -f%z observer.zst 2>/dev/null) bytes"
+      - name: Persist observer to NFS
+        if: env.SKIP_FARM_COMPILE != 'true'
+        shell: bash
+        run: |
+          DEST_DIR="${{ env.FARM_NFS_ROOT }}/${{ github.run_id }}/attempt-${{ github.run_attempt }}/setup"
+          mkdir -p "$DEST_DIR"
+          cp -f observer.zst "$DEST_DIR/"
+          echo "observer.zst saved to $DEST_DIR/observer.zst"
+  farm-mysqltest:
+    name: mysqltest-slice-${{ matrix.slice }}
+    needs: farm-setup
+    runs-on: arc-runner-k8s-ci-org
+    container:
+      image: harbor.oceanbase-dev.com/obrde-test/ob-actions-runner-worker:0.0.2
+    strategy:
+      fail-fast: false
+      matrix:
+        slice: [0, 1, 2, 3]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Place observer (from NFS)
+        shell: bash
+        run: |
+          OBSERVER_ZST="${{ env.FARM_NFS_ROOT }}/${{ github.run_id }}/attempt-${{ github.run_attempt }}/setup/observer.zst"
+          if [[ -f "$OBSERVER_ZST" ]]; then
+            zstd -d -f -q -o observer "$OBSERVER_ZST" && chmod +x observer
+          else
+            echo "observer not found on NFS"
+          fi
+          ls -la observer
+      - name: Run mysqltest slice
+        shell: bash
+        run: |
+          chmod +x .github/script/farm/mysqltest_slice.sh
+          export GITHUB_RUN_ID="${{ github.run_id }}" GITHUB_WORKSPACE="${{ github.workspace }}"
+          export FARM_TASK_DIR="${{ github.workspace }}/farm_build/${{ github.run_id }}/slice_${{ matrix.slice }}"
+          export SLICE_IDX=${{ matrix.slice }} SLICES="${{ env.MYSQLTEST_SLICES }}"
+          export BRANCH="${{ github.ref_name }}" FORWARDING_HOST="${{ vars.FORWARDING_HOST || '' }}"
+          mkdir -p "$FARM_TASK_DIR"
+          .github/script/farm/mysqltest_slice.sh
+      - name: Collect slice result
+        if: success() || failure()
+        shell: bash
+        run: |
+          chmod +x .github/script/farm/collect_result.sh
+          export GITHUB_RUN_ID="${{ github.run_id }}" GITHUB_WORKSPACE="${{ github.workspace }}"
+          export FARM_TASK_DIR="${{ github.workspace }}/farm_build/${{ github.run_id }}/slice_${{ matrix.slice }}"
+          .github/script/farm/collect_result.sh farm_result.json
+        continue-on-error: true
+
+      - name: Persist slice result to NFS
+        if: success() || failure()
+        shell: bash
+        run: |
+          DEST_DIR="${{ env.FARM_NFS_ROOT }}/${{ github.run_id }}/attempt-${{ github.run_attempt }}/slices/slice_${{ matrix.slice }}"
+          mkdir -p "$DEST_DIR"
+          if [[ -f farm_result.json ]]; then
+            cp -f farm_result.json "$DEST_DIR/"
+          else
+            echo "skip copying slice result: farm_result.json not found"
+          fi
+          if [[ -d "${{ github.workspace }}/farm_build/${{ github.run_id }}/slice_${{ matrix.slice }}" ]]; then
+            cp -a "${{ github.workspace }}/farm_build/${{ github.run_id }}/slice_${{ matrix.slice }}" "$DEST_DIR/farm_task_dir"
+          fi
+        continue-on-error: true
+
+      # 失败时保存 collected_log 到 NFS 便于排查：obd_log、mysqltest_log、mysqltest_rec_log、core
+      - name: Persist collected_log to NFS (on failure)
+        if: failure()
+        shell: bash
+        run: |
+          SRC="farm_home_${{ matrix.slice }}/collected_log_${{ matrix.slice }}.tar.gz"
+          DEST_DIR="${{ env.FARM_NFS_ROOT }}/${{ github.run_id }}/attempt-${{ github.run_attempt }}/logs/slice_${{ matrix.slice }}"
+          mkdir -p "$DEST_DIR"
+          if [[ -f "$SRC" ]]; then
+            cp -f "$SRC" "$DEST_DIR/"
+            echo "collected log saved to $DEST_DIR/"
+          else
+            echo "skip copying collected log: $SRC not found"
+          fi
+        continue-on-error: true
+
+      - name: Job summary (logs hint)
+        if: always()
+        run: |
+          if [[ -f "farm_home_${{ matrix.slice }}/collected_log_${{ matrix.slice }}.tar.gz" ]]; then
+            echo "### Slice ${{ matrix.slice }} collected_log saved" >> "$GITHUB_STEP_SUMMARY"
+            echo "Saved to \`${{ env.FARM_NFS_ROOT }}/${{ github.run_id }}/attempt-${{ github.run_attempt }}/logs/slice_${{ matrix.slice }}/collected_log_${{ matrix.slice }}.tar.gz\`. Contents: \`obd_log/\`, \`mysqltest_log/\`, \`mysqltest_rec_log/\`, core dumps." >> "$GITHUB_STEP_SUMMARY"
+          fi
+  farm-collect:
+    # 仅在 4 个 mysqltest slice 都跑完（成功或失败）时执行；若 mysqltest 被 skip 则不跑
+    name: collect
+    needs: farm-mysqltest
+    if: ${{ always() && needs.farm-mysqltest.result != 'skipped' }}
+    runs-on: arc-runner-k8s-ci-org
+    container:
+      image: harbor.oceanbase-dev.com/obrde-test/ob-actions-runner-worker:0.0.2
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Collect slice results from NFS
+        shell: bash
+        run: |
+          SRC_ROOT="${{ env.FARM_NFS_ROOT }}/${{ github.run_id }}/attempt-${{ github.run_attempt }}/slices"
+          mkdir -p slice_results
+          if [[ -d "$SRC_ROOT" ]]; then
+            cp -a "$SRC_ROOT/." slice_results/
+          else
+            echo "slice result directory not found on NFS: $SRC_ROOT"
+          fi
+      - name: Merge results and persist
+        shell: bash
+        run: |
+          RUN_ID="${{ github.run_id }}"
+          FAILED=""
+          SUCCESS="true"
+          while IFS= read -r f; do
+            [[ -f "$f" ]] || continue
+            grep -q '"success":false' "$f" 2>/dev/null && SUCCESS="false"
+            while IFS= read -r c; do
+              [[ -n "$c" ]] && FAILED="${FAILED}${FAILED:+,}\"${c//\"/\\\"}\""
+            done < <(grep -oP '"failed_cases":\[\K[^\]]*' "$f" 2>/dev/null | tr ',' '\n' | sed 's/^"\|"$//g')
+          done < <(find slice_results -name 'farm_result.json' 2>/dev/null)
+          echo "{\"success\":$SUCCESS,\"run_id\":\"$RUN_ID\",\"failed_cases\":[${FAILED:-}]}" > farm_result.json
+          echo "=== Farm result ==="
+          cat farm_result.json
+          DEST_DIR="${{ env.FARM_NFS_ROOT }}/${{ github.run_id }}/attempt-${{ github.run_attempt }}/collect"
+          mkdir -p "$DEST_DIR"
+          cp -f farm_result.json "$DEST_DIR/"
+          echo "farm_result.json saved to $DEST_DIR/farm_result.json"
