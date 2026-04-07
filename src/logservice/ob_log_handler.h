@@ -1002,9 +1002,6 @@ private:
   common::ObQSync ls_qs_;
   ObMiniStat::ObStatItem append_cost_stat_;
   bool is_offline_;
-  // 强同步模式阻塞写入
-  mutable common::ObSpinLock pre_async_block_lock_;
-  mutable common::SimpleCond pre_async_block_cond_;
   bool is_pre_async_blocked_;
 #ifdef OB_BUILD_LOG_STORAGE_COMPRESS
   ObLogCompressorWrapper compressor_wrapper_;

@@ -78,8 +78,6 @@ ObLogHandler::ObLogHandler() : self_(),
                                rpc_proxy_(NULL),
                                append_cost_stat_("[PALF STAT APPEND COST TIME]", 1 * 1000 * 1000),
                                is_offline_(false),
-                               pre_async_block_lock_(common::ObLatchIds::TRANSPORT_SERVICE_TASK_LOCK),
-                               pre_async_block_cond_(common::ObWaitEventIds::UNITEST_COND_WAIT),
                                is_pre_async_blocked_(false),
 #ifdef OB_BUILD_LOG_STORAGE_COMPRESS
                                compressor_wrapper_(),
@@ -136,6 +134,9 @@ int ObLogHandler::init(const int64_t id,
   } else if (GCONF.enable_logservice && OB_FAIL(libpalf_proposer_config_mgr_.init(MTL_ID(), id, palf_handle_))) {
     CLOG_LOG(WARN, "failed to init libpalf_proposer_config_mgr_", K(id));
 #endif
+  // Initialize sync mode manager
+  } else if (OB_FAIL(sync_mode_manager_.init(this))) {
+      CLOG_LOG(WARN, "sync_mode_manager init failed", K(ret), K(id));
   } else {
     get_max_decided_scn_debug_time_ = OB_INVALID_TIMESTAMP;
     apply_service_ = apply_service;
@@ -155,12 +156,6 @@ int ObLogHandler::init(const int64_t id,
     enable_logservice_ = GCONF.enable_logservice;
     is_offline_ = true; // offline at default.
     is_inited_ = true;
-    // Initialize sync mode manager
-    if (OB_FAIL(sync_mode_manager_.init(this))) {
-      CLOG_LOG(WARN, "sync_mode_manager init failed", K(ret), K(id));
-    } else {
-      FLOG_INFO("ObLogHandler init success", K(id));
-    }
   }
   if (OB_FAIL(ret) && OB_INIT_TWICE != ret) {
     destroy();
@@ -257,6 +252,7 @@ void ObLogHandler::destroy()
   apply_service_ = NULL;
   replay_service_ = NULL;
   transport_service_ = NULL;
+  sync_mode_manager_.reset();
 #ifdef OB_BUILD_SHARED_LOG_SERVICE
   libpalf_proposer_config_mgr_.destroy();
 #endif
@@ -2623,6 +2619,7 @@ void ObLogHandler::clear_pre_async_blocked()
 int ObLogHandler::wait_pre_async_unblocked_()
 {
   int ret = OB_SUCCESS;
+  RLockGuard guard(lock_);
   // 使用原子操作读取标记，保证可见性
   if (ATOMIC_LOAD(&is_pre_async_blocked_)) {
     // 如果处于PRE_ASYNC阻塞状态

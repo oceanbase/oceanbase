@@ -519,13 +519,12 @@ int ObSyncModeManager::handle_sync_mode_downgrade_finish(const int64_t mode_vers
     int64_t palf_proposal_id = palf::INVALID_PROPOSAL_ID;
     int64_t new_proposal_id = palf::INVALID_PROPOSAL_ID;
     common::ObRole palf_role = common::FOLLOWER;
-    bool is_pending_state = false;
-    if (OB_FAIL(log_handler_->palf_handle_->get_role(palf_role, palf_proposal_id, is_pending_state))) {
+
+    if (OB_FAIL(log_handler_->get_role(palf_role, palf_proposal_id))) {
       CLOG_LOG(WARN, "get_role failed", K(ret), K(ls_id));
-    } else if (LEADER != palf_role || true == is_pending_state) {
+    } else if (LEADER != palf_role) {
       ret = OB_NOT_MASTER;
-      CLOG_LOG(WARN, "not leader or pending state", K(ret), K(ls_id), K(palf_role), K(palf_proposal_id),
-               K(is_pending_state));
+      CLOG_LOG(WARN, "not leader or pending state", K(ret), K(ls_id), K(palf_role), K(palf_proposal_id));
     } else if (OB_FAIL(write_sync_mode_log(ObSyncModeLogType::ASYNC, ref_scn, protection_info, lsn, end_scn,
                                            palf_proposal_id, abs_timeout_us))) {
       CLOG_LOG(WARN, "write ASYNC mode log failed", K(ret), K(ls_id));

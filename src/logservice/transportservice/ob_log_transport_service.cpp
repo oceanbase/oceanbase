@@ -1135,7 +1135,7 @@ int LogTransportStatus::enable_status(const int64_t proposal_id)
   } else if (is_in_stop_state()) {
     ret = OB_NOT_RUNNING;
     CLOG_LOG(INFO, "transport status has been stopped", K(ret), KPC(this));
-  } else if (proposal_id < proposal_id_) {
+  } else if (proposal_id < ATOMIC_LOAD(&proposal_id_)) {
     ret = OB_STATE_NOT_MATCH;
     CLOG_LOG(WARN, "proposal_id is smaller than local, skip enable_status",
              K(ret), K(ls_id_), K(proposal_id), K_(proposal_id));
