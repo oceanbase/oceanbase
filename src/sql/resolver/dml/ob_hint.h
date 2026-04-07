@@ -97,6 +97,7 @@ struct ObOptParamHint
     DEF(RANGE_INDEX_DIVE_LIMIT,) \
     DEF(PARTITION_INDEX_DIVE_LIMIT,) \
     DEF(DAS_BATCH_RESCAN_FLAG,)           \
+    DEF(CACHE_AWARE_ROW_NUM,)             \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 

@@ -43,7 +43,8 @@ public:
       external_file_location_(alloc),
       external_files_(alloc),
       external_file_format_str_(alloc),
-      trans_info_expr_(nullptr)
+      trans_info_expr_(nullptr),
+      cache_aware_row_num_(0)
   { }
   //in das scan op, column described with column expr
   virtual bool has_expr() const override { return true; }
@@ -75,7 +76,8 @@ public:
                        K_(external_files),
                        K_(external_file_format_str),
                        K_(external_file_location),
-                       KPC_(trans_info_expr));
+                       KPC_(trans_info_expr),
+                       K_(cache_aware_row_num));
   common::ObTableID ref_table_id_;
   UIntFixedArray access_column_ids_;
   int64_t schema_version_;
@@ -94,6 +96,7 @@ public:
   ExternalFileNameArray external_files_; //for external table scan TODO jim.wjh remove
   ObExternalFileFormat::StringData external_file_format_str_;
   ObExpr *trans_info_expr_; // transaction information pseudo-column
+  int64_t cache_aware_row_num_;
 };
 
 struct ObDASScanRtDef : ObDASBaseRtDef
