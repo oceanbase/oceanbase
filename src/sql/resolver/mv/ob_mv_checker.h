@@ -97,7 +97,8 @@ class ObMVChecker
       marker_idx_(OB_INVALID_INDEX),
       table_referenced_columns_info_(table_referenced_columns_info),
       refresh_dep_columns_(fast_refresh_dependent_columns),
-      stmt_idx_(OB_INVALID_INDEX)
+      stmt_idx_(OB_INVALID_INDEX),
+      enable_simplify_aggr_dep_(false)
     {
     }
   ~ObMVChecker() {}
@@ -121,7 +122,10 @@ class ObMVChecker
   static bool is_group_recalculate_aggr(const ObItemType aggr_type);
   static int extract_group_recalculate_aggrs(const ObIArray<ObAggFunRawExpr*> &all_aggrs,
                                              ObIArray<ObAggFunRawExpr*> &group_recalculate_aggrs);
-  static int get_dependent_aggr_of_fun_sum(const ObSelectStmt &stmt, const ObRawExpr *sum_param, const ObAggFunRawExpr *&dep_aggr);
+  static int get_dependent_aggr_of_fun_sum(const ObSelectStmt &stmt,
+                                           const ObRawExpr *sum_param,
+                                           const bool enable_simplify_aggr_dep,
+                                           const ObAggFunRawExpr *&dep_aggr);
   const ObSelectStmt &get_stmt() const {  return stmt_; }
   const MlogSchemaPairIArray &get_mlog_tables() const {  return mlog_tables_; }
   const ObTableSchema &get_mv_container_table_schema() const {  return mv_container_table_schema_;  }
@@ -164,9 +168,10 @@ private:
                               bool &is_valid);
   int check_mav_refresh_type(const ObSelectStmt &stmt, ObMVRefreshableType &refresh_type);
   int check_mav_refresh_type_basic(const ObSelectStmt &stmt, bool &is_valid);
-  int check_is_standard_group_by(const ObSelectStmt &stmt, bool &is_standard);
+  int check_is_valid_mysql_mode_group_by(const ObSelectStmt &stmt, bool &is_valid);
   int is_standard_select_in_group_by(const hash::ObHashSet<uint64_t> &expr_set,
                                      const ObRawExpr *expr,
+                                     const bool is_no_aggr_col_allowed,
                                      bool &is_standard);
   int check_and_expand_mav_aggrs(const ObSelectStmt &stmt,
                                  ObIArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>> &expand_aggrs,
@@ -227,6 +232,7 @@ private:
   // automatically generated invisible columns for refresh
   common::ObIArray<std::pair<ObRawExpr*, int64_t>> &refresh_dep_columns_;
   int64_t stmt_idx_; // union all child mv stmt idx in select list
+  bool enable_simplify_aggr_dep_;
   DISALLOW_COPY_AND_ASSIGN(ObMVChecker);
 };
 

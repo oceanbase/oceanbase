@@ -309,8 +309,9 @@ int ObSimpleMAVPrinter::gen_select_items_for_mav(const TableItem &table,
     if (OB_ISNULL(orig_expr = orig_select_items.at(i).expr_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected select item", K(ret), K(i), K(orig_select_items));
-    } else if (!ObOptimizerUtil::find_item(orig_group_by_exprs, orig_expr)
-                && T_FUN_COUNT != orig_expr->get_expr_type()) {
+    } else if (!(ObOptimizerUtil::find_item(orig_group_by_exprs, orig_expr)
+                 || (!orig_expr->has_flag(CNT_AGG) && orig_expr->has_flag(CNT_COLUMN))
+                 || T_FUN_COUNT == orig_expr->get_expr_type())) {
       select_item.expr_ = NULL;
     } else if (copier.is_existed(orig_expr)) {
       // do nothing
@@ -440,6 +441,7 @@ int ObSimpleMAVPrinter::get_dependent_aggr_of_fun_sum(const ObRawExpr *expr,
     LOG_WARN("get unexpected expr", K(ret), KPC(expr));
   } else if (OB_FAIL(ObMVChecker::get_dependent_aggr_of_fun_sum(mv_def_stmt_,
                                         static_cast<const ObAggFunRawExpr*>(expr)->get_param_expr(0),
+                                        true,
                                         dep_aggr))) {
     LOG_WARN("failed to get dependent aggr of fun sum", K(ret));
   }
@@ -557,8 +559,7 @@ int ObSimpleMAVPrinter::gen_update_assignments(const TableItem &target_table,
       } else if (OB_ISNULL(expr = select_items.at(i).expr_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected select item", K(ret), K(i), K(select_items));
-      } else if (expr->is_const_raw_expr()
-                 || ObOptimizerUtil::find_item(group_by_exprs, expr)) {
+      } else if (!expr->has_flag(CNT_AGG)) {
         // do nothing, no need to add
       } else if (OB_FAIL(copier.copy_on_replace(expr, assign.expr_))) {
         LOG_WARN("failed to generate group by exprs", K(ret));
@@ -734,23 +735,36 @@ int ObSimpleMAVPrinter::gen_simple_mav_delta_mv_select_list(ObRawExprCopier &cop
   } else if (OB_FAIL(create_simple_column_expr(table->get_table_name(), DML_FACTOR_COL_NAME, table->table_id_, dml_factor))) {
     LOG_WARN("failed to create simple column expr", K(ret));
   }
-  // add select list for group by
+  // add select list for group by and no aggr select items
   for (int64_t i = 0; OB_SUCC(ret) && i < mv_def_stmt_.get_select_item_size(); ++i) {
     const SelectItem &ori_select_item = mv_def_stmt_.get_select_item(i);
     SelectItem sel_item;
+    sel_item.alias_name_ = ori_select_item.alias_name_;
+    sel_item.is_real_alias_ = true;
     int64_t group_by_idx = -1;
-    if (!ObOptimizerUtil::find_item(orig_group_by_exprs, ori_select_item.expr_, &group_by_idx)) {
-      // do nothing
-    } else if (OB_UNLIKELY(group_by_idx < 0 || group_by_idx >= group_by_exprs.count())) {
+    if (OB_ISNULL(ori_select_item.expr_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected group by idx", K(ret), K(group_by_idx), K(ori_select_item));
-    } else {
-      sel_item.expr_ = group_by_exprs.at(group_by_idx);
-      sel_item.alias_name_ = ori_select_item.alias_name_;
-      sel_item.is_real_alias_ = true;
-      if (OB_FAIL(select_items.push_back(sel_item))) {
-        LOG_WARN("failed to pushback", K(ret));
+      LOG_WARN("unexpected null select expr", K(ret), K(i));
+    } else if (ObOptimizerUtil::find_item(orig_group_by_exprs, ori_select_item.expr_, &group_by_idx)) {
+      if (OB_UNLIKELY(group_by_idx < 0 || group_by_idx >= group_by_exprs.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected group by idx", K(ret), K(group_by_idx), K(ori_select_item));
+      } else {
+        sel_item.expr_ = group_by_exprs.at(group_by_idx);
       }
+    } else if (!ori_select_item.expr_->has_flag(CNT_AGG) && ori_select_item.expr_->has_flag(CNT_COLUMN)) {
+      ObRawExpr *tmp_expr = NULL;
+      if (OB_FAIL(copier.copy_on_replace(ori_select_item.expr_, tmp_expr))) {
+        LOG_WARN("failed to generate no aggr exprs", K(ret));
+      } else if (OB_FAIL(add_any_value_above_expr(tmp_expr, sel_item.expr_))) {
+        LOG_WARN("failed to add any value above expr", K(ret));
+      }
+    }
+
+    if (OB_FAIL(ret) || NULL == sel_item.expr_) {
+      /* do nothing */
+    } else if (OB_FAIL(select_items.push_back(sel_item))) {
+      LOG_WARN("failed to pushback", K(ret));
     }
   }
   // add select list for basic aggr
@@ -918,6 +932,26 @@ int ObSimpleMAVPrinter::add_nvl_above_exprs(ObRawExpr *expr, ObRawExpr *default_
     nvl_expr->set_expr_type(T_FUN_SYS_NVL);
     nvl_expr->set_func_name(ObString::make_string(N_NVL));
     res_expr = nvl_expr;
+  }
+  return ret;
+}
+
+int ObSimpleMAVPrinter::add_any_value_above_expr(ObRawExpr *expr, ObRawExpr *&res_expr)
+{
+  int ret = OB_SUCCESS;
+  res_expr = NULL;
+  ObSysFunRawExpr *any_value_expr = NULL;
+  if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_ANY_VALUE, any_value_expr))) {
+    LOG_WARN("fail to create nvl expr", K(ret));
+  } else if (OB_ISNULL(expr) || OB_ISNULL(any_value_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(expr), K(any_value_expr));
+  } else if (OB_FAIL(any_value_expr->set_param_expr(expr))) {
+    LOG_WARN("fail to set param expr", K(ret));
+  } else {
+    any_value_expr->set_expr_type(T_FUN_SYS_ANY_VALUE);
+    any_value_expr->set_func_name(ObString::make_string(N_ANY_VAL));
+    res_expr = any_value_expr;
   }
   return ret;
 }
