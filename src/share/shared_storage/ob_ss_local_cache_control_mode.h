@@ -24,13 +24,15 @@ public:
   ObSSLocalCacheControlMode(const uint8_t *values);
   void assign(const ObSSLocalCacheControlMode &other);
   virtual int set_value(const ObConfigModeItem &mode_item) override;
-  bool check_mode_valid(uint16_t mode) const { return mode > 2 ? false : true; }
+  bool check_mode_valid(const uint16_t mode) const { return mode > 2 ? false : true; }
   bool is_micro_cache_enable() const { return ((micro_cache_mode_ == MODE_OFF) ? false : true); }
   bool is_macro_read_cache_enable() const { return ((macro_read_cache_mode_ == MODE_OFF) ? false : true); }
   bool is_macro_write_cache_enable() const { return ((macro_write_cache_mode_ == MODE_OFF) ? false : true); }
-  void set_micro_cache_mode(uint16_t mode);
-  void set_macro_read_cache_mode(uint16_t mode);
-  void set_macro_write_cache_mode(uint16_t mode);
+  bool is_mem_macro_cache_enable() const { return ((mem_macro_cache_mode_ == MODE_OFF) ? false : true); }
+  void set_micro_cache_mode(const uint16_t mode);
+  void set_macro_read_cache_mode(const uint16_t mode);
+  void set_macro_write_cache_mode(const uint16_t mode);
+  void set_mem_macro_cache_mode(const uint16_t mode);
   uint16_t get_value() const { return value_; }
 
 public:
@@ -44,7 +46,8 @@ private:
       uint16_t micro_cache_mode_ : 2;
       uint16_t macro_read_cache_mode_ : 2;
       uint16_t macro_write_cache_mode_ : 2;
-      uint16_t reserved_ : 10;
+      uint16_t mem_macro_cache_mode_ : 2;
+      uint16_t reserved_ : 8;
     };
   };
 private:

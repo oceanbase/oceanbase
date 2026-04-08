@@ -50,19 +50,24 @@ int ObSSLocalCacheControlMode::set_value(const ObConfigModeItem &mode_item)
   return ret;
 }
 
-void ObSSLocalCacheControlMode::set_micro_cache_mode(uint16_t mode)
+void ObSSLocalCacheControlMode::set_micro_cache_mode(const uint16_t mode)
 {
   micro_cache_mode_ = mode;
 }
 
-void ObSSLocalCacheControlMode::set_macro_read_cache_mode(uint16_t mode)
+void ObSSLocalCacheControlMode::set_macro_read_cache_mode(const uint16_t mode)
 {
   macro_read_cache_mode_ = mode;
 }
 
-void ObSSLocalCacheControlMode::set_macro_write_cache_mode(uint16_t mode)
+void ObSSLocalCacheControlMode::set_macro_write_cache_mode(const uint16_t mode)
 {
   macro_write_cache_mode_ = mode;
+}
+
+void ObSSLocalCacheControlMode::set_mem_macro_cache_mode(const uint16_t mode)
+{
+  mem_macro_cache_mode_ = mode;
 }
 
 } // namespace common
