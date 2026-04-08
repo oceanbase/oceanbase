@@ -41,6 +41,79 @@ private:
   static const int32_t BLOCK_SIZE = 2 * 1024 * 1024;
 };
 
+struct MockObSSPhyBlockCommonHeaderWithExtraField
+{
+public:
+  MockObSSPhyBlockCommonHeaderWithExtraField()
+  {
+    reset();
+  }
+
+  void reset()
+  {
+    header_size_ = get_serialize_size();
+    version_ = ObSSPhyBlockCommonHeader::SS_PHY_BLK_COMMON_HEADER_VERSION;
+    magic_ = ObSSPhyBlockCommonHeader::SS_PHY_BLK_COMMON_HEADER_MAGIC;
+    payload_size_ = 0;
+    payload_checksum_ = 0;
+    blk_type_ = static_cast<int32_t>(ObSSPhyBlockType::SS_INVALID_TYPE);
+    reserved_ = 0;
+    compat_extra_field_ = 0;
+  }
+
+  bool is_valid() const
+  {
+    return (header_size_ > 0
+        && version_ == ObSSPhyBlockCommonHeader::SS_PHY_BLK_COMMON_HEADER_VERSION
+        && magic_ == ObSSPhyBlockCommonHeader::SS_PHY_BLK_COMMON_HEADER_MAGIC
+        && blk_type_ != static_cast<int32_t>(ObSSPhyBlockType::SS_INVALID_TYPE));
+  }
+
+  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+  {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len < 0)) {
+      ret = OB_INVALID_ARGUMENT;
+    } else if (OB_UNLIKELY(pos + get_serialize_size() > buf_len)) {
+      ret = OB_BUF_NOT_ENOUGH;
+    } else if (OB_UNLIKELY(!is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+    } else {
+      MockObSSPhyBlockCommonHeaderWithExtraField *header =
+          reinterpret_cast<MockObSSPhyBlockCommonHeaderWithExtraField *>(buf + pos);
+      header->header_size_ = header_size_;
+      header->version_ = version_;
+      header->magic_ = magic_;
+      header->payload_size_ = payload_size_;
+      header->payload_checksum_ = payload_checksum_;
+      header->attr_ = attr_;
+      header->compat_extra_field_ = compat_extra_field_;
+      pos += header->header_size_;
+    }
+    return ret;
+  }
+
+  int64_t get_serialize_size() const
+  {
+    return sizeof(MockObSSPhyBlockCommonHeaderWithExtraField);
+  }
+
+public:
+  int32_t header_size_;
+  int32_t version_;
+  int32_t magic_;
+  int32_t payload_size_;
+  uint32_t payload_checksum_;
+  union {
+    int32_t attr_;
+    struct {
+      int32_t blk_type_ : 8;
+      int32_t reserved_ : 24;
+    };
+  };
+  int32_t compat_extra_field_;
+};
+
 TestSSPhysicalBlockInfo::TestSSPhysicalBlockInfo()
 {}
 
@@ -217,6 +290,36 @@ TEST_F(TestSSPhysicalBlockInfo, phy_blk_common_header)
   ASSERT_EQ(true, tmp_common_header.is_micro_data_blk());
   ASSERT_EQ(common_header.payload_size_, tmp_common_header.payload_size_);
   ASSERT_EQ(common_header.payload_checksum_, tmp_common_header.payload_checksum_);
+}
+
+TEST_F(TestSSPhysicalBlockInfo, phy_blk_common_header_compatibility)
+{
+  const int64_t buf_size = 512;
+  char buf[buf_size];
+  MEMSET(buf, '\0', buf_size);
+
+  MockObSSPhyBlockCommonHeaderWithExtraField new_header;
+  new_header.payload_size_ = 4096;
+  new_header.payload_checksum_ = 10086;
+  new_header.blk_type_ = static_cast<int32_t>(ObSSPhyBlockType::SS_MICRO_DATA_BLK);
+  new_header.compat_extra_field_ = 20260312;
+  ASSERT_EQ(true, new_header.is_valid());
+
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, new_header.serialize(buf, buf_size, pos));
+  ASSERT_EQ(new_header.get_serialize_size(), pos);
+
+  ObSSPhyBlockCommonHeader old_header;
+  int64_t old_pos = 0;
+  ASSERT_EQ(OB_SUCCESS, old_header.deserialize(buf, pos, old_pos));
+  ASSERT_EQ(true, old_header.is_valid());
+  ASSERT_EQ(new_header.header_size_, old_header.header_size_);
+  ASSERT_EQ(new_header.version_, old_header.version_);
+  ASSERT_EQ(new_header.magic_, old_header.magic_);
+  ASSERT_EQ(new_header.payload_size_, old_header.payload_size_);
+  ASSERT_EQ(new_header.payload_checksum_, old_header.payload_checksum_);
+  ASSERT_EQ(new_header.attr_, old_header.attr_);
+  ASSERT_EQ(pos, old_pos);
 }
 
 TEST_F(TestSSPhysicalBlockInfo, micro_data_blk_header)

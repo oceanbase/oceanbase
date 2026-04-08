@@ -71,6 +71,77 @@ public:
 
 OB_SERIALIZE_MEMBER(MockSSCkptItemChildHeader, payload_size_, crc_);
 
+struct MockSSCkptPhyBlockSegmentHeaderWithExtraField
+{
+public:
+  MockSSCkptPhyBlockSegmentHeaderWithExtraField()
+  {
+    reset();
+  }
+
+  void reset()
+  {
+    header_size_ = get_serialize_size();
+    version_ = ObSSCkptPhyBlockSegmentHeader::SS_CKPT_BLK_SEG_HEADER_VERSION;
+    payload_size_ = 0;
+    payload_zsize_ = 0;
+    payload_checksum_ = 0;
+    tailer_offset_ = -1;
+    tailer_length_ = 0;
+    compressor_type_ = static_cast<uint32_t>(ObCompressorType::INVALID_COMPRESSOR);
+    reserved_ = 0;
+    compat_extra_field_ = 0;
+  }
+
+  int serialize(char *buf, const int64_t buf_len, int64_t &pos) const
+  {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len < 0)) {
+      ret = OB_INVALID_ARGUMENT;
+    } else if (OB_UNLIKELY(pos + get_serialize_size() > buf_len)) {
+      ret = OB_BUF_NOT_ENOUGH;
+    } else if (OB_UNLIKELY(payload_size_ <= 0)) {
+      ret = OB_INVALID_ARGUMENT;
+    } else {
+      MockSSCkptPhyBlockSegmentHeaderWithExtraField *header =
+          reinterpret_cast<MockSSCkptPhyBlockSegmentHeaderWithExtraField *>(buf + pos);
+      header->header_size_ = get_serialize_size();
+      header->version_ = version_;
+      header->payload_size_ = payload_size_;
+      header->payload_zsize_ = payload_zsize_;
+      header->payload_checksum_ = payload_checksum_;
+      header->tailer_offset_ = tailer_offset_;
+      header->tailer_length_ = tailer_length_;
+      header->attr_ = attr_;
+      header->compat_extra_field_ = compat_extra_field_;
+      pos += header->header_size_;
+    }
+    return ret;
+  }
+
+  int64_t get_serialize_size() const
+  {
+    return sizeof(MockSSCkptPhyBlockSegmentHeaderWithExtraField);
+  }
+
+public:
+  int32_t header_size_;
+  int32_t version_;
+  int32_t payload_size_;
+  int32_t payload_zsize_;
+  uint32_t payload_checksum_;
+  int32_t tailer_offset_;
+  int32_t tailer_length_;
+  union {
+    uint32_t attr_;
+    struct {
+      uint32_t compressor_type_ : 8;
+      uint32_t reserved_ : 24;
+    };
+  };
+  int32_t compat_extra_field_;
+};
+
 TestSSMicroCacheCommonMeta::TestSSMicroCacheCommonMeta()
 {}
 
@@ -577,6 +648,39 @@ TEST_F(TestSSMicroCacheCommonMeta, item_compatibility)
   ASSERT_EQ(OB_SUCCESS, mock_item_child_header.deserialize(buf, buf_size, pos));
   ASSERT_NE(pos, mock_item_child_header.get_serialize_size());
   ASSERT_EQ(mock_item_header.payload_size_, mock_item_child_header.payload_size_);
+}
+
+TEST_F(TestSSMicroCacheCommonMeta, ckpt_phy_blk_segment_header_compatibility)
+{
+  const int64_t buf_size = 512;
+  char buf[buf_size];
+  MEMSET(buf, '\0', buf_size);
+
+  MockSSCkptPhyBlockSegmentHeaderWithExtraField new_header;
+  new_header.payload_size_ = 4096;
+  new_header.payload_zsize_ = 2048;
+  new_header.payload_checksum_ = 100001;
+  new_header.tailer_offset_ = 128;
+  new_header.tailer_length_ = 32;
+  new_header.compressor_type_ = static_cast<uint32_t>(ObCompressorType::ZSTD_1_3_8_COMPRESSOR);
+  new_header.compat_extra_field_ = 20260312;
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, new_header.serialize(buf, buf_size, pos));
+  ASSERT_EQ(new_header.get_serialize_size(), pos);
+
+  ObSSCkptPhyBlockSegmentHeader old_header;
+  int64_t old_pos = 0;
+  ASSERT_EQ(OB_SUCCESS, old_header.deserialize(buf, pos, old_pos));
+  ASSERT_EQ(true, old_header.is_valid());
+  ASSERT_EQ(new_header.header_size_, old_header.header_size_);
+  ASSERT_EQ(new_header.version_, old_header.version_);
+  ASSERT_EQ(new_header.payload_size_, old_header.payload_size_);
+  ASSERT_EQ(new_header.payload_zsize_, old_header.payload_zsize_);
+  ASSERT_EQ(new_header.payload_checksum_, old_header.payload_checksum_);
+  ASSERT_EQ(new_header.tailer_offset_, old_header.tailer_offset_);
+  ASSERT_EQ(new_header.tailer_length_, old_header.tailer_length_);
+  ASSERT_EQ(new_header.attr_, old_header.attr_);
+  ASSERT_EQ(pos, old_pos);
 }
 
 TEST_F(TestSSMicroCacheCommonMeta, local_cache_control_mode)
