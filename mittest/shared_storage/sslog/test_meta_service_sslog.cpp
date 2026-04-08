@@ -347,7 +347,7 @@ int ObTestSSLogMetaService::build_update_table_store_param_(ObArenaAllocator &al
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sstable should not be nullptr");
   } else {
-    SCN clog_checkpoint_scn = sstable->get_end_scn();
+    SCN clog_checkpoint_scn = sstable->is_mds_sstable() ? tablet_handle.get_obj()->get_mds_checkpoint_scn() : sstable->get_end_scn();
     param.snapshot_version_ = tablet_handle.get_obj()->get_snapshot_version();
     param.multi_version_start_ = tablet_handle.get_obj()->get_multi_version_start();
 
