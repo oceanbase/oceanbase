@@ -18,6 +18,9 @@
 #include "storage/compaction/ob_medium_compaction_func.h"
 #include "storage/ddl/ob_tablet_ddl_kv.h"
 #include "observer/ob_server_event_history_table_operator.h"
+#ifdef OB_BUILD_SHARED_STORAGE
+#include "storage/incremental/ob_ss_tablet_merge_helper.h"
+#endif
 
 namespace oceanbase
 {
@@ -1052,8 +1055,24 @@ if (OB_SUCC(ret)) {
     } // end of for
 
     if (OB_FAIL(ret)) {
-    } else if (large_sstable_cnt > 1
-        || mini_sstable_row_cnt > (large_sstable_row_cnt * size_amplification_factor / 100)) {
+    } else if (large_sstable_cnt > 1) {
+#ifdef OB_BUILD_SHARED_STORAGE
+      if (GCTX.is_shared_storage_mode()) {
+        int tmp_ret = ObSSTabletMergeHelper::refine_tiered_minor_merge_result(
+            minor_compact_trigger, write_amplification_threshold,
+            size_amplification_factor, result);
+        if (OB_NO_NEED_MERGE == tmp_ret) {
+          ret = tmp_ret;
+          result.reset();
+        } else if (OB_NOT_SUPPORTED == tmp_ret) {
+          // tiered merge not applicable or disabled, fall back to no refine
+        } else if (OB_SUCCESS != tmp_ret) {
+          ret = tmp_ret;
+          LOG_WARN("failed to refine tiered minor merge", K(ret));
+        }
+      }
+#endif
+    } else if (mini_sstable_row_cnt > (large_sstable_row_cnt * size_amplification_factor / 100)) {
       // no refine, use current result to compaction
     } else if (mini_tables.get_count() <= minor_compact_trigger) {
       ret = OB_NO_NEED_MERGE;
@@ -2228,11 +2247,9 @@ int ObPartitionMergePolicy::get_ss_minor_merge_tables(
   if (OB_FAIL(ret)) {
   } else if (minor_merge_candidates.empty()) {
     ret = OB_NO_NEED_MERGE;
-#ifdef ERRSIM
   } else if (ERRSIM_DISABLE_MINOR_MERGE && !is_sys_tenant(MTL_ID())) {
     ret = OB_NO_NEED_MERGE;
     LOG_INFO("Errsim: disable ss minor merge", K(ret), "tenant_id", MTL_ID(), "tablet_id", tablet.get_tablet_meta().tablet_id_);
-#endif
   } else if (OB_FAIL(refine_and_get_minor_merge_result(param, tablet, minor_compact_trigger, minor_merge_candidates, result))) {
     if (OB_NO_NEED_MERGE != ret) {
       LOG_WARN("refine and get minor merge result fail", K(ret));

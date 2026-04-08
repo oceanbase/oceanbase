@@ -1205,6 +1205,10 @@ DEF_INT(_trx_max_log_cb_limit, OB_TENANT_PARAMETER, "16", "[0,)",
 DEF_INT(_minor_compaction_amplification_factor, OB_TENANT_PARAMETER, "0", "[0,100]",
         "thre L1 compaction write amplification factor, 0 means default 25, Range: [0,100] in integer",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_ss_enable_tiered_minor_merge, OB_TENANT_PARAMETER, "False",
+         "specifies whether enable two-level tiered minor merge to reduce write amplification. "
+         "Value: True:turned on;  False: turned off",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(major_compact_trigger, OB_TENANT_PARAMETER, "0", "[0,65535]",
         "specifies how many minor freeze should be triggered between two major freeze, Range: [0,65535] in integer",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
