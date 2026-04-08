@@ -1473,6 +1473,8 @@ struct MergeKeyInfoHelper
         force_inner_nl_(false),
         is_semi_anti_join_(false),
         is_index_merge_(false),
+        is_set_vec_strategy_(false),
+        has_primary_hint_(false),
         child_stmt_(NULL),
         pushdown_filters_(),
         filters_(),
@@ -1481,13 +1483,17 @@ struct MergeKeyInfoHelper
         table_opt_info_(NULL),
         est_method_(EST_INVALID),
         vec_index_type_(ObVecIndexType::VEC_INDEX_INVALID),
-        vec_idx_try_path_(ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN)
+        vec_idx_try_path_(ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN),
+        vec_query_strategy_(ObVecIdxQueryStrategy::RECALL_FIRST),
+        vec_pre_filtering_timeout_(-1)
       {}
 
       bool is_inner_path_;
       bool force_inner_nl_;
       bool is_semi_anti_join_;
       bool is_index_merge_;
+      bool is_set_vec_strategy_;
+      bool has_primary_hint_;
       ObSelectStmt *child_stmt_;
       // when generate inner access path, save all pushdown filters
       // when generate subquery path, save all pushdown filters after rename
@@ -1509,6 +1515,8 @@ struct MergeKeyInfoHelper
       ObSEArray<MatchExprInfo, 4> match_expr_infos_;
       ObVecIndexType vec_index_type_;
       ObVecIdxAdaTryPath vec_idx_try_path_;
+      ObVecIdxQueryStrategy vec_query_strategy_;
+      int64_t vec_pre_filtering_timeout_;
     };
 
     ObJoinOrder(common::ObIAllocator *allocator,
@@ -3208,6 +3216,9 @@ struct MergeKeyInfoHelper
                                   uint64_t used_column_id,
                                   const ObTableSchema &index_schema,
                                   bool &found);
+    bool has_whole_range(const ObQueryRangeArray &ranges);
+    int resolve_vec_query_strategy(const ObDMLStmt &stmt,
+                                   PathHelper &helper);
     friend class ::test::TestJoinOrder_ob_join_order_param_check_Test;
     friend class ::test::TestJoinOrder_ob_join_order_src_Test;
   private:

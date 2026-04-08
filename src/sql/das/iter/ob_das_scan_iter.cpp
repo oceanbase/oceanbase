@@ -238,9 +238,9 @@ int ObDASScanIter::try_check_vec_pre_filter_status(const int64_t row_count /* de
 int ObDASScanIter::check_vec_pre_filter_status()
 {
   int ret = OB_SUCCESS;
-  if (is_vec_pre_filtering_timeout_set() && vec_start_scan_ts_us_ <= 0) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("vector pre-filtering timeout is set but scan start timestamp is not set", K(ret), K(vec_pre_filtering_timeout_us_), K(vec_start_scan_ts_us_));
+  if (is_vec_pre_filtering_timeout_set() && OB_UNLIKELY(vec_start_scan_ts_us_ <= 0)) {
+    // do nothing, no timeout
+    LOG_WARN("vector start scan timestamp is unexpected unset", K(vec_pre_filtering_timeout_us_), K(vec_start_scan_ts_us_));
   } else {
     int64_t cur_ts = common::ObClockGenerator::getClock();
     int64_t timeout_ts = vec_start_scan_ts_us_ + vec_pre_filtering_timeout_us_;
