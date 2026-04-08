@@ -489,7 +489,8 @@ public:
       const int &ob_errcode,
       const ObObjectStorageInfo *storage_info,
       const ObString &uri,
-      const int64_t &handled_size);
+      const int64_t &handled_size,
+      const bool is_util_io);
   ~ObObjectStorageGuard();
   static bool is_connectivity_check_file(const ObString &uri);
 
@@ -520,12 +521,13 @@ private:
   // exits, leaving the reference dangling.
   const ObString uri_;
   const int64_t &handled_size_;
+  const bool is_util_io_;
 };
 
-#define OBJECT_STORAGE_GUARD(storage_info, uri, handled_size) \
+#define OBJECT_STORAGE_GUARD(storage_info, uri, handled_size, is_util_io) \
     common::ObObjectStorageGuard object_storage_guard_(       \
         __FILE__, __LINE__, __FUNCTION__,                     \
-        ret, storage_info, uri, handled_size)
+        ret, storage_info, uri, handled_size, is_util_io)
 
 }//common
 }//oceanbase

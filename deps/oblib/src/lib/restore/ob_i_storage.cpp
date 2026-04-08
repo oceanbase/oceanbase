@@ -884,14 +884,16 @@ ObObjectStorageGuard::ObObjectStorageGuard(
     const int &ob_errcode,
     const ObObjectStorageInfo *storage_info,
     const ObString &uri,
-    const int64_t &handled_size)
+    const int64_t &handled_size,
+    const bool is_util_io)
     : lib::ObMallocHookAttrGuard(get_mem_attr_from_storage_info(storage_info)),
       file_name_(file), line_(line), func_name_(func),
       ob_errcode_(ob_errcode),
       storage_info_(storage_info),
       start_time_us_(ObTimeUtility::current_time()),
       uri_(uri),
-      handled_size_(handled_size)
+      handled_size_(handled_size),
+      is_util_io_(is_util_io)
 {
   if (OB_ISNULL(file_name_)) {
     file_name_ = "";
@@ -931,24 +933,33 @@ bool ObObjectStorageGuard::is_connectivity_check_file(const ObString &uri)
 void ObObjectStorageGuard::print_access_storage_log_() const
 {
   const int64_t cost_time_us = ObTimeUtility::current_time() - start_time_us_;
-  // MB/s
-  const double speed = ((double)handled_size_ / 1024 / 1024)
-                     / ((double)cost_time_us / 1000 / 1000);
   const bool is_slow = is_slow_io_(cost_time_us);
   const bool need_log_for_connectivity_check_file = (is_slow || is_connectivity_check_file(uri_));
+
   if (is_slow || need_log_for_connectivity_check_file) {
-    _STORAGE_LOG_RET(WARN, ob_errcode_,
-        "access object storage cost too much time: %s (%s:%ld), "
-        "uri=%.*s, size=%ld byte, start_time=%ld, cost_ts=%ld us, speed=%.2f MB/s, is_slow=%d",
-        func_name_, file_name_, line_,
-        uri_.length(), uri_.ptr(), handled_size_, start_time_us_, cost_time_us, speed, is_slow);
+    if (is_util_io_) {
+      _STORAGE_LOG_RET(WARN, ob_errcode_,
+          "access object storage cost too much time: %s (%s:%ld), "
+          "uri=%.*s, size=%ld, start_time=%ld, cost_ts=%ld us, is_slow=%d",
+          func_name_, file_name_, line_,
+          uri_.length(), uri_.ptr(), handled_size_, start_time_us_, cost_time_us, is_slow);
+    } else {
+      // MB/s
+      const double speed = ((double)handled_size_ / 1024 / 1024)
+                        / ((double)cost_time_us / 1000 / 1000);
+      _STORAGE_LOG_RET(WARN, ob_errcode_,
+            "access object storage cost too much time: %s (%s:%ld), "
+            "uri=%.*s, size=%ld byte, start_time=%ld, cost_ts=%ld us, speed=%.2f MB/s, is_slow=%d",
+            func_name_, file_name_, line_,
+            uri_.length(), uri_.ptr(), handled_size_, start_time_us_, cost_time_us, speed, is_slow);
+    }
   }
 }
 
 bool ObObjectStorageGuard::is_slow_io_(const int64_t cost_time_us) const
 {
   bool is_slow = false;
-  if (handled_size_ == 0 && cost_time_us >= UTIL_IO_WARN_THRESHOLD_TIME_US) {
+  if (is_util_io_ && cost_time_us >= UTIL_IO_WARN_THRESHOLD_TIME_US) {
     is_slow = true;
   } else if (handled_size_ <= SMALL_IO_SIZE && cost_time_us >= SMALL_IO_WARN_THRESHOLD_TIME_US) {
     is_slow = true;

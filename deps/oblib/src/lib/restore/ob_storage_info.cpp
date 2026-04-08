@@ -1397,7 +1397,7 @@ int ObDeviceCredentialMgr::connect_to_sts(
     ResponseAndAllocator &res_and_allocator)
 {
   int ret = OB_SUCCESS;
-  OBJECT_STORAGE_GUARD(nullptr/*storage_info*/, "ObDeviceCredentialMgr::connect_to_sts", IO_HANDLED_SIZE_ZERO);
+  OBJECT_STORAGE_GUARD(nullptr/*storage_info*/, "ObDeviceCredentialMgr::connect_to_sts", IO_HANDLED_SIZE_ZERO, true/*is_util_io*/);
   CURL *curl = nullptr;
   char json_data[OB_MAX_ASSUME_ROLE_JSON_DATA_LENGTH] = {0};
 
