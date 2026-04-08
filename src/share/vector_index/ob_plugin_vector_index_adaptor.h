@@ -602,22 +602,11 @@ struct ObVectorIndexSharedTableInfo
   {}
   bool is_valid()
   {
-    return is_vid_rowkey_info_consistent() && data_table_id_ != OB_INVALID_ID;
-  }
-
-  bool is_vid_rowkey_info_consistent()
-  {
-    bool all_valid = (rowkey_vid_table_id_ != OB_INVALID_ID && vid_rowkey_table_id_ != OB_INVALID_ID
-                     && rowkey_vid_tablet_id_.is_valid() && vid_rowkey_tablet_id_.is_valid());
-    bool all_invalid = (rowkey_vid_table_id_ == OB_INVALID_ID && vid_rowkey_table_id_ == OB_INVALID_ID
-                       && !rowkey_vid_tablet_id_.is_valid() && !vid_rowkey_tablet_id_.is_valid());
-    return all_valid || all_invalid;
-  }
-
-  bool has_vid_rowkey_info()
-  {
-    return rowkey_vid_table_id_ != OB_INVALID_ID && vid_rowkey_table_id_ != OB_INVALID_ID
-           && rowkey_vid_tablet_id_.is_valid() && vid_rowkey_tablet_id_.is_valid();
+    return rowkey_vid_table_id_ != OB_INVALID_ID
+           && vid_rowkey_table_id_ != OB_INVALID_ID
+           && data_table_id_ != OB_INVALID_ID
+           && rowkey_vid_tablet_id_.is_valid()
+           && vid_rowkey_tablet_id_.is_valid();
   }
 
   TO_STRING_KV(K_(rowkey_vid_table_id),
@@ -665,12 +654,7 @@ public:
   bool is_inc_tablet_valid() { return inc_tablet_id_.is_valid(); }
   bool is_vbitmap_tablet_valid() { return vbitmap_tablet_id_.is_valid(); }
   bool is_data_tablet_valid() { return data_tablet_id_.is_valid(); }
-  bool has_vid_rowkey_info() {
-    return rowkey_vid_table_id_ != OB_INVALID_ID
-           && rowkey_vid_tablet_id_.is_valid()
-           && vid_rowkey_table_id_ != OB_INVALID_ID
-           && vid_rowkey_tablet_id_.is_valid();
-  }
+  bool is_vid_rowkey_info_valid() { return rowkey_vid_table_id_ != OB_INVALID_ID && rowkey_vid_tablet_id_.is_valid(); }
   bool is_need_async_optimal() { return need_be_optimized_; }
 
   ObTabletID& get_inc_tablet_id() { return inc_tablet_id_; }
@@ -900,7 +884,11 @@ public:
   }
   OB_INLINE bool get_is_need_vid()
   {
-    return has_vid_rowkey_info();
+    return is_need_vid_;
+  }
+  OB_INLINE void set_is_need_vid(bool is_need_vid)
+  {
+    is_need_vid_ = is_need_vid;
   }
 
   void reset_complete();
@@ -921,7 +909,7 @@ public:
               K_(inc_table_id),  K_(vbitmap_table_id), K_(snapshot_table_id),
               K_(ref_cnt), K_(idle_cnt), KP_(allocator),
               K_(index_identity), K_(follower_sync_statistics),
-              K_(mem_check_cnt), K_(is_mem_limited), K_(snapshot_key_prefix), K_(replace_scn), K_(dump_info));
+              K_(mem_check_cnt), K_(is_mem_limited), K_(is_need_vid), K_(dump_info), K_(snapshot_key_prefix), K_(replace_scn));
 private:
   void *get_incr_index();
   void *get_snap_index();
@@ -1013,6 +1001,9 @@ private:
   RWLock query_lock_;// lock for async task and query
   bool reload_finish_;
   bool index_statistics_updated_;
+
+  // for vid opt
+  bool is_need_vid_;
 
   /*
    * record scn for replace_old_adapter to deal with task conflict between memdata sync and async task.
