@@ -671,6 +671,9 @@ public:
     HandleOneLineParam(common::ObIArray<FieldValue> &fields, int field_cnt) 
       : fields_(fields), field_cnt_(field_cnt) {}
     common::ObIArray<FieldValue> &fields_;
+    // field_cnt_ records the actual parsed field count for this line, while fields_
+    // only materializes up to file_column_nums_ fields, so field_cnt_ can exceed
+    // fields_.count() when the input line contains more fields than the buffer holds.
     int field_cnt_;
   };
   struct HandleBatchLinesParam {

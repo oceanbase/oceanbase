@@ -4561,6 +4561,20 @@ int ObDMLResolver::build_column_schemas_for_csv(const ObExternalFileFormat &form
       int ret = OB_SUCCESS;
       if (col_cnt_ == 0) {
         int null_col_cnt = 0;
+        if (OB_UNLIKELY(param.field_cnt_ > OB_MAX_USER_DEFINED_COLUMNS_COUNT)) {
+          // TODO: use a new error code
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("csv field count exceeds max user defined columns, check csv format settings",
+                   K(ret),
+                   K(param.field_cnt_));
+        } else if (OB_UNLIKELY(param.field_cnt_ < 0)
+                   || OB_UNLIKELY(param.field_cnt_ > param.fields_.count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid csv field count",
+                   K(ret),
+                   K(param.field_cnt_),
+                   K(param.fields_.count()));
+        }
 
         for (int i = 0; OB_SUCC(ret) && i < param.field_cnt_; i++) {
           col_cnt_++;
