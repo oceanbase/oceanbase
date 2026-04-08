@@ -14,6 +14,7 @@
 #define USING_LOG_PREFIX COMMON
 
 #include "ob_lob_access_utils.h"
+#include "storage/lob/ob_lob_persistent_reader.h"
 #include "storage/tx/ob_trans_service.h"
 
 namespace oceanbase
@@ -365,6 +366,8 @@ int ObTextStringIter::get_full_data(ObString &data_str)
     if (OB_FAIL(get_delta_lob_full_data(loc, tmp_alloc_, data_str))) {
       COMMON_LOG(WARN, "get_delta_lob_full_data fail", K(ret), K(loc));
     }
+  } else if (OB_NOT_NULL(ctx_) && OB_NOT_NULL(ctx_->lob_access_ctx_) &&
+                 FALSE_IT(ctx_->lob_access_ctx_->reader_cache_.check_and_release_if_timeout())) {
   } else if (!is_outrow_) { // inrow lob
     if (OB_FAIL(loc.get_inrow_data(data_str))) {
       COMMON_LOG(WARN, "Lob: get lob inrow data failed", K(ret));
@@ -394,6 +397,8 @@ int ObTextStringIter::get_inrow_or_outrow_prefix_data(ObString &data_str, uint32
   } else if (datum_str_.length() == 0) {
     data_str.assign(NULL, 0);
     COMMON_LOG(DEBUG, "Lob: iter with null input", K(ret), K(*this));
+  } else if (OB_NOT_NULL(ctx_) && OB_NOT_NULL(ctx_->lob_access_ctx_) &&
+             FALSE_IT(ctx_->lob_access_ctx_->reader_cache_.check_and_release_if_timeout())) {
   } else if (!is_lob_ || !has_lob_header_) { // string types
     if (prefix_char_len == DEAFULT_LOB_PREFIX_CHAR_LEN) {
       data_str.assign_ptr(datum_str_.ptr(), datum_str_.length());
