@@ -142,7 +142,10 @@ TEST_F(TestSSPersistMicroMetaTask, test_persist_micro_meta)
     TestSSCommonUtil::MicroBlockInfo cur_info = p_micro_block_arr.at(i);
     ObSSMicroBlockCacheKey micro_key = TestSSCommonUtil::gen_phy_micro_key(cur_info.macro_id_, cur_info.offset_, cur_info.size_);
     ObSSMicroBlockMetaInfo cold_micro_info;
-    ASSERT_EQ(OB_SUCCESS, micro_meta_mgr.get_micro_meta_info(micro_key, cold_micro_info));
+    if (OB_FAIL(micro_meta_mgr.get_micro_meta_info(micro_key, cold_micro_info))) {
+      LOG_WARN("fail to get micro_meta info", KR(ret), K(i), K(p_micro_block_arr.count()), K(micro_key));
+    }
+    ASSERT_EQ(OB_SUCCESS, ret);
     if (cold_micro_info.is_data_persisted()) {
       ++persisted_micro_cnt;
       if (evict_micro_keys.count() < EVICT_MICRO_CNT) {
@@ -296,8 +299,9 @@ TEST_F(TestSSPersistMicroMetaTask, test_persist_micro_meta)
   }
   ASSERT_EQ(OB_SUCCESS, TestSSCommonUtil::add_micro_blocks(macro_block_cnt, block_size, p_micro_block_arr_2,
             up_micro_block_arr_2, 101, true, min_micro_size, max_micro_size));
-  ASSERT_EQ(macro_block_cnt * 2, phy_blk_mgr.blk_cnt_info_.data_blk_.used_cnt_);
-  ASSERT_EQ(macro_block_cnt * 2, cache_stat.phy_blk_stat().data_blk_used_cnt_);
+  // in case the evicted phy_block not be reused
+  ASSERT_LE(macro_block_cnt * 2, phy_blk_mgr.blk_cnt_info_.data_blk_.used_cnt_);
+  ASSERT_LE(macro_block_cnt * 2, cache_stat.phy_blk_stat().data_blk_used_cnt_);
   int64_t total_micro_size_2 = 0;
   for (int64_t i = 0; i < p_micro_block_arr_2.count(); ++i) {
     total_micro_size_2 += p_micro_block_arr_2.at(i).size_;
