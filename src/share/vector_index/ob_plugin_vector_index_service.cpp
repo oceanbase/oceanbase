@@ -1287,6 +1287,7 @@ int ObPluginVectorIndexMgr::replace_with_complete_adapter(ObVectorIndexAdapterCa
   // create new adapter
   ObPluginVectorIndexAdaptor *new_adapter = nullptr;
   bool set_success = false;
+  bool is_vid_rowkey_info_consistent = false;
   void *adpt_buff = allocator.alloc(sizeof(ObPluginVectorIndexAdaptor));
   if (OB_ISNULL(adpt_buff)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -1303,22 +1304,29 @@ int ObPluginVectorIndexMgr::replace_with_complete_adapter(ObVectorIndexAdapterCa
       // still call init to avoid not all 3 part of partial adapter called before merge
     } else if (OB_FAIL(new_adapter->init(memory_context_, all_vsag_use_mem_))) {
       LOG_WARN("failed to init adpt.", K(ret));
-    } else if (!new_adapter->is_vid_rowkey_info_valid()) {
+    } else {
       ObVectorIndexSharedTableInfo info;
       if (OB_FAIL(info_map.get_refactored(new_adapter->get_data_tablet_id(), info))) {
         LOG_WARN("failed to get vector index shared table info",
           K(new_adapter->get_data_tablet_id()), KR(ret));
-      } else {
-        if (info.rowkey_vid_table_id_ != OB_INVALID_ID) {
-          new_adapter->set_is_need_vid(true);
+      } else if (info.is_vid_rowkey_info_consistent()) {
+        is_vid_rowkey_info_consistent = true;
+        if (info.has_vid_rowkey_info()) {
           new_adapter->set_vid_rowkey_info(info);
+          new_adapter->set_data_table_id(info);
         } else {
-          new_adapter->set_is_need_vid(false);
           new_adapter->set_data_table_id(info);
         }
+      } else {
+        is_vid_rowkey_info_consistent = false;
+        LOG_INFO("vid rowkey info is not valid, do nothing", K(info));
       }
     }
+
     if (OB_FAIL(ret)) {
+    } else if (!is_vid_rowkey_info_consistent) {
+      LOG_INFO("vid rowkey info absent or invalid, skip setting complete adapter",
+               K(new_adapter->get_data_tablet_id()));
     } else {
       WLockGuard lock_guard(adapter_map_rwlock_);
       int overwrite = 0;
@@ -1358,7 +1366,7 @@ int ObPluginVectorIndexMgr::replace_with_complete_adapter(ObVectorIndexAdapterCa
       }
     }
   }
-  if (OB_FAIL(ret) && OB_NOT_NULL(new_adapter) && set_success == false) {
+  if (OB_NOT_NULL(new_adapter) && set_success == false) {
     new_adapter->~ObPluginVectorIndexAdaptor();
     allocator.free(adpt_buff);
     new_adapter = nullptr;
