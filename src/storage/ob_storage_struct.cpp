@@ -499,7 +499,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam()
       allow_adjust_next_start_scn_(false),
       update_tablet_ss_change_version_(),
       tablet_ss_change_fully_applied_(false),
-      upper_trans_param_()
+      upper_trans_param_(),
+      input_tables_handle_(NULL)
 {
 }
 
@@ -521,7 +522,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
     allow_adjust_next_start_scn_(false),
     update_tablet_ss_change_version_(),
     tablet_ss_change_fully_applied_(false),
-    upper_trans_param_(upper_trans_param)
+    upper_trans_param_(upper_trans_param),
+    input_tables_handle_(NULL)
 {
 }
 
@@ -544,7 +546,8 @@ ObUpdateTableStoreParam::ObUpdateTableStoreParam(
       allow_adjust_next_start_scn_(false),
       update_tablet_ss_change_version_(),
       tablet_ss_change_fully_applied_(false),
-      upper_trans_param_()
+      upper_trans_param_(),
+      input_tables_handle_(NULL)
 {
 }
 

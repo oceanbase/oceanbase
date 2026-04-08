@@ -482,7 +482,7 @@ struct ObUpdateTableStoreParam
                K_(allow_adjust_next_start_scn),
                K_(update_tablet_ss_change_version),
                K_(tablet_ss_change_fully_applied),
-               K_(upper_trans_param));
+               K_(upper_trans_param), KP_(input_tables_handle));
   ObCompactionTableStoreParam compaction_info_;
   ObDDLTableStoreParam ddl_info_;
   ObHATableStoreParam ha_info_;
@@ -497,6 +497,8 @@ struct ObUpdateTableStoreParam
   share::SCN update_tablet_ss_change_version_; // for shared storage tablet change sync
   bool tablet_ss_change_fully_applied_;        // wheter the specified version is fully applied
   UpdateUpperTransParam upper_trans_param_;    // set upper_trans_param_ only when update upper_trans_version
+  // for shared storage minor merge: verify all input sstables still exist in table-store
+  const ObTablesHandleArray *input_tables_handle_;
 };
 
 struct ObSplitTableStoreParam final
