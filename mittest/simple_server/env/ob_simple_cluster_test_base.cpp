@@ -190,12 +190,13 @@ int ObSimpleClusterTestBase::create_tenant_with_retry(const char *tenant_name,
                                                       const char *memory_size,
                                                       const char *log_disk_size,
                                                       const bool oracle_mode,
-                                                      int64_t tenant_cpu)
+                                                      int64_t tenant_cpu,
+                                                      const char *data_disk_size)
 {
   int ret = OB_SUCCESS;
   int retry_cnt = 0;
   do {
-    if (OB_FAIL(create_tenant(tenant_name, memory_size, log_disk_size, oracle_mode, tenant_cpu))) {
+    if (OB_FAIL(create_tenant(tenant_name, memory_size, log_disk_size, oracle_mode, tenant_cpu, data_disk_size))) {
       TRANS_LOG(WARN, "create_tenant fail, need retry", K(ret));
       ob_usleep(15 * 1000 * 1000); // 15s
     } else {

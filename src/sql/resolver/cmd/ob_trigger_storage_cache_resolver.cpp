@@ -49,10 +49,9 @@ int ObTriggerStorageCacheResolver::resolve(const ParseNode &parse_tree)
   } else if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info should not be null", K(ret));
-  } else if (OB_UNLIKELY(2 != parse_tree.num_child_) || OB_ISNULL(parse_tree.children_[0])) {
+  } else if (OB_ISNULL(parse_tree.children_[0])) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("children num not match or the children is null", K(ret), "num_child",
-        parse_tree.num_child_, K(parse_tree.children_[0]));
+    LOG_WARN("children is null", K(ret), "num_child", parse_tree.num_child_);
   } else {
     stmt_ = stmt;
     obrpc::ObTriggerStorageCacheArg::ObStorageCacheOp op = static_cast<obrpc::ObTriggerStorageCacheArg::ObStorageCacheOp>(parse_tree.children_[0]->value_);
@@ -60,8 +59,51 @@ int ObTriggerStorageCacheResolver::resolve(const ParseNode &parse_tree)
     if (obrpc::ObTriggerStorageCacheArg::TRIGGER == op) {
       // TRIGGER operation: ALTER SYSTEM TRIGGER STORAGE_CACHE_POLICY_EXECUTOR [TENANT = tenant_name]
       // parse_tree has 2 children: [action_type, tenant_name]
-      if (OB_FAIL(resolve_tenant_name_(stmt, parse_tree.children_[1]))) {
+      if (OB_UNLIKELY(2 != parse_tree.num_child_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("children num not match for TRIGGER op", K(ret), "num_child", parse_tree.num_child_);
+      } else if (OB_FAIL(resolve_tenant_name_(stmt, parse_tree.children_[1]))) {
         LOG_WARN("fail to resolve tenant name", K(ret));
+      }
+    } else if (obrpc::ObTriggerStorageCacheArg::SET_STATUS == op) {
+      // SET_STATUS operation: ALTER SYSTEM SET STATUS STORAGE_CACHE_POLICY_EXECUTOR
+      //                       POLICY_STATUS = 'xxx' TABLET_ID = xxx [TENANT = tenant_name]
+      // parse_tree has 4 children: [action_type, policy_status, tablet_id, tenant_name]
+      if (OB_UNLIKELY(4 != parse_tree.num_child_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("children num not match for SET_STATUS op", K(ret), "num_child", parse_tree.num_child_);
+      } else if (OB_ISNULL(parse_tree.children_[1]) || OB_ISNULL(parse_tree.children_[2]) || OB_ISNULL(parse_tree.children_[3])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("policy_status or tablet_id or tenant_name is null", K(ret));
+      } else if (OB_ISNULL(parse_tree.children_[2]->children_[0])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("tablet_id value node is null", K(ret));
+      } else {
+        ObString policy_status_str(parse_tree.children_[1]->str_len_, parse_tree.children_[1]->str_value_);
+        // parse_tree.children_[2] is T_TABLET_ID node, its children_[0] is INTNUM node containing the actual value
+        const int64_t tablet_id = parse_tree.children_[2]->children_[0]->value_;
+        int8_t policy_status = -1;
+        if (tablet_id <= 0) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid tablet_id", K(ret), K(tablet_id));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "tablet_id must be positive");
+        } else if (0 == policy_status_str.case_compare("hot")) {
+          policy_status = 0; // HOT
+        } else if (0 == policy_status_str.case_compare("auto")) {
+          policy_status = 1; // AUTO
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid policy_status", K(ret), K(policy_status_str));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "policy_status must be 'hot' or 'auto'");
+        }
+        if (OB_SUCC(ret)) {
+          stmt->set_tablet_id(tablet_id);
+          stmt->set_policy_status(policy_status);
+          if (OB_FAIL(resolve_tenant_name_(stmt, parse_tree.children_[3]))) {
+            LOG_WARN("fail to resolve tenant name", K(ret));
+          }
+        }
+        LOG_TRACE("[SCP]set storage cache policy status", K(ret), K(op), K(tablet_id), K(policy_status), K(policy_status_str));
       }
     } else {
       ret = OB_ERR_UNEXPECTED;

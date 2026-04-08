@@ -337,21 +337,10 @@ protected:
   virtual int compare_multi_version_col(const ObPartitionMergeIter &other,
                                         const int64_t multi_version_col,
                                         int &cmp_ret);
-  bool need_recycle_mv_row()
-  {
-    bool need_recycle = false;
-    const int64_t base_version = access_context_.trans_version_range_.base_version_;
-    const int64_t multi_version_start = access_context_.trans_version_range_.multi_version_start_;
-    if (nullptr != curr_row_ && !curr_row_->is_uncommitted_row() && !curr_row_->is_last_multi_version_row()) {
-      const int64_t commit_version = -curr_row_->storage_datums_[schema_rowkey_column_cnt_].get_int();
-      if (is_delete_insert_merge_ && (!is_ha_compeleted_ || base_version <= 0)) {
-        need_recycle = false;
-      } else if (commit_version <= multi_version_start) {
-        need_recycle = true;
-      }
-    }
-    return need_recycle;
-  }
+  bool need_recycle_mv_row() const;
+#ifdef OB_BUILD_SHARED_STORAGE
+  bool need_recycle_mv_row_for_ss() const;
+#endif
   int skip_ghost_row();
   int compact_old_row();
 private:

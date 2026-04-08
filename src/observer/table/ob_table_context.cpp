@@ -1951,15 +1951,26 @@ int ObTableCtx::classify_scan_exprs()
 
     // for index exprs, its order is schema define
     if (OB_SUCC(ret) && is_index_scan_ && !is_text_retrieval_scan()) {
-      for (int64_t i = 0; OB_SUCC(ret) && i < index_col_ids_.count(); i++) {
-        const ObTableColumnItem *item = nullptr;
-        if (OB_FAIL(get_column_item_by_column_id(index_col_ids_.at(i), item))) {
-          LOG_WARN("fail to get column item", K(ret), K(index_col_ids_), K(i));
-        } else if (OB_ISNULL(item)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("column item is null", K(ret));
-        } else if (OB_FAIL(index_exprs_.push_back(item->raw_expr_))) {
-          LOG_WARN("fail to push back index expr", K(ret), K(i));
+      if (OB_ISNULL(index_schema_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("index schema is NULL", K(ret));
+      } else {
+        for (int64_t i = 0;OB_SUCC(ret) && i < index_schema_->get_column_count(); i++) {
+          const ObColumnSchemaV2 *col_schema = index_schema_->get_column_schema_by_idx(i);
+          const ObTableColumnItem *item = nullptr;
+          if (OB_ISNULL(col_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("column schema is NULL", K(ret));
+          } else if (col_schema->is_shadow_column()) {
+            // do nothing
+          } else if (OB_FAIL(get_column_item_by_column_id(col_schema->get_column_id(), item))) {
+            LOG_WARN("fail to get column item", K(ret), K(col_schema->get_column_id()), K(i));
+          } else if (OB_ISNULL(item)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("column item is null", K(ret));
+          } else if (OB_FAIL(index_exprs_.push_back(item->raw_expr_))) {
+            LOG_WARN("fail to push back index expr", K(ret), K(i));
+          }
         }
       }
     }
@@ -2195,6 +2206,12 @@ int ObTableCtx::init_index_info(const ObString &index_name, const uint64_t arg_t
               ret = OB_SCHEMA_ERROR;
               LOG_WARN("partitioned table should pass right tablet id from client", K(ret));
             }
+          }
+
+          if (OB_SUCC(ret) && is_weak_read_) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("global index scan with weak read is not supported", K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "global index scan with weak read");
           }
         }
       }

@@ -307,6 +307,10 @@ protected:
   virtual int prepare_schema();
   virtual void free_schema();
   virtual int cal_merge_param() { return static_param_.cal_minor_merge_param(false/*has_compaction_filter*/); }
+  virtual ObStorageObjectWriteStrategy get_io_write_strategy() const
+  {
+     return ObStorageObjectWriteStrategy::WRITE_BACK;
+  }
   int init_parallel_merge_ctx();
   int init_static_desc();
   int init_read_info();

@@ -37,7 +37,7 @@ int ObTableFtsExprCgService::fill_doc_id_expr_param(ObTableCtx &ctx, ObRawExpr *
   } else if (OB_UNLIKELY(T_FUN_SYS_DOC_ID != doc_id_expr->get_expr_type())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("not doc id expr", K(ret), "expr type", doc_id_expr->get_expr_type());
-  } else if (OB_FAIL(ObTableExprCgService::generate_calc_tablet_id_expr(ctx, *table_schema, calc_tablet_id_expr))) {
+  } else if (OB_FAIL(ObTableExprCgService::generate_calc_tablet_id_expr(ctx, *table_schema, false, calc_tablet_id_expr))) {
     LOG_WARN("fail to generate calc tablet id expr", K(ret));
   } else if (OB_ISNULL(calc_tablet_id_expr)) {
     ret = OB_ERR_UNEXPECTED;

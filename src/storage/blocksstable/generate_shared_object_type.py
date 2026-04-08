@@ -100,6 +100,66 @@ def validate_config_functions():
 
     return all_valid
 
+def validate_write_strategies():
+    """Validate all write_strategy configurations"""
+    global all_storage_object_types
+    print("Validating write strategies...")
+    all_valid = True
+
+    for cfg in all_storage_object_types:
+        obj_type = cfg.get('obj_type')
+        if cfg.get('write_strategy'):
+            try:
+                strategy_mask = convert_write_strategy_to_mask(cfg['write_strategy'])
+                print(f"  ✅ {obj_type}: write_strategy = {cfg['write_strategy']} => 0x{strategy_mask:02x}")
+            except ValueError as e:
+                print(f"  ❌ {obj_type}: {e}")
+                all_valid = False
+
+    if all_valid:
+        print("✅ All write strategies are valid!")
+    else:
+        print("❌ Write strategy validation failed!")
+        sys.exit(1)
+
+    return all_valid
+
+def convert_write_strategy_to_mask(write_strategy):
+    """
+    Convert write strategy list to uint8_t bitmask
+
+    Strategy to bit mapping:
+    - WRITE_THROUGH: bit 0 (0x01)
+    - WRITE_BACK: bit 1 (0x02)
+    - WRITE_THROUGH_AND_TRY_WRITE_LCACHE: bit 2 (0x04)
+
+    Examples:
+    - ["WRITE_THROUGH"] => 0x01
+    - ["WRITE_THROUGH", "WRITE_THROUGH_AND_TRY_WRITE_LCACHE"] => 0x05
+    - ["WRITE_THROUGH", "WRITE_BACK", "WRITE_THROUGH_AND_TRY_WRITE_LCACHE"] => 0x07
+
+    Raises:
+        ValueError: if strategy is not one of WRITE_THROUGH, WRITE_BACK, WRITE_THROUGH_AND_TRY_WRITE_LCACHE
+    """
+    VALID_STRATEGIES = {"WRITE_THROUGH", "WRITE_BACK", "WRITE_THROUGH_AND_TRY_WRITE_LCACHE"}
+
+    mask = 0
+    if not write_strategy:
+        return mask
+
+    # Note: bit mask here is corresponding to ObStorageObjectWriteStrategy enum class
+    for strategy in write_strategy:
+        if strategy == "WRITE_THROUGH":
+            mask |= 0x01  # bit 0
+        elif strategy == "WRITE_BACK":
+            mask |= 0x02  # bit 1
+        elif strategy == "WRITE_THROUGH_AND_TRY_WRITE_LCACHE":
+            mask |= 0x04  # bit 2
+        else:
+            raise ValueError(f"Invalid write strategy: '{strategy}'. Must be one of: {VALID_STRATEGIES}")
+
+    return mask
+
 def extract_function_body(code_str):
     """Extract function body from complete function definition"""
     if not code_str or code_str == 'OB_NOT_SUPPORTED':
@@ -183,6 +243,8 @@ public:
   int get_open_flag_for_read() const;
   int aio_read(const ObStorageObjectReadInfo &read_info, ObStorageObjectHandle &object_handle) const;
   int aio_write(const ObStorageObjectWriteInfo &write_info, ObStorageObjectHandle &object_handle) const;
+  bool has_write_back_strategy() const;
+  bool has_write_through_and_try_write_lcache_strategy() const;
   // the ObjectType is macro data type, true or false
   virtual bool is_macro_data() const { return false; }
   // the ObjectType is tenant data type, true or false
@@ -211,8 +273,8 @@ public:
   virtual bool is_path_include_inner_tablet() const { return false; }
   //the ObjectType only store in remote object storage, true or false
   virtual bool is_direct_read() const { return false; }
-  //whether this type of object write through object storage, true or false
-  virtual bool is_direct_write() const { return false; }
+  // write strategy of this type object, including WRITE_THROUGH, WRITE_BACK and WRITE_THROUGH_AND_TRY_WRITE_LCACHE
+  virtual uint8_t write_strategy() const { return 0; }
   //whether this type of object exists overwrite with 'different content', true or false
   virtual bool is_overwrite() const { return false; }
   // whether this type of object can read out of bounds
@@ -414,9 +476,9 @@ void ObStorageObjectTypeBase::get_ss_macro_block_type(
   ss_macro_block_type = ObSSMacroBlockType::MAX_TYPE;
   if (ObStorageObjectType::EXTERNAL_TABLE_FILE == type_) {
     ss_macro_block_type = ObSSMacroBlockType::EXTERNAL_TABLE;
-  } else if (macro_id.is_shared_data_or_meta()) {
+  } else if (macro_id.is_shared_data_block_or_meta_block()) {
     ss_macro_block_type = ObSSMacroBlockType::SHARED_MACRO;
-  } else if (macro_id.is_private_data_or_meta()) {
+  } else if (macro_id.is_private_macro()) {
     ss_macro_block_type = ObSSMacroBlockType::PRIVATE_MACRO;
   }
 }
@@ -640,6 +702,16 @@ int ObStorageObjectTypeBase::aio_write(
 }
 #endif
 
+bool ObStorageObjectTypeBase::has_write_back_strategy() const
+{
+  return (write_strategy() & (1 << (uint8_t)ObStorageObjectWriteStrategy::WRITE_BACK));
+}
+
+bool ObStorageObjectTypeBase::has_write_through_and_try_write_lcache_strategy() const
+{
+  return (write_strategy() & (1 << (uint8_t)ObStorageObjectWriteStrategy::WRITE_THROUGH_AND_TRY_WRITE_LCACHE));
+}
+
 void ObStorageObjectTypeBase::set_ss_object_first_id_(
   const uint64_t incarnation_id, const uint64_t column_group_id, MacroBlockId &object_id) const
 {
@@ -757,8 +829,10 @@ public:
 
         if cfg.get('read_odirect'):
             h_f.write('  virtual bool is_direct_read() const { return true; }\n')
-        if cfg.get('write_odirect'):
-            h_f.write('  virtual bool is_direct_write() const { return true; }\n')
+        if cfg.get('write_strategy'):
+            # convert strategy list to bitmask
+            strategy_mask = convert_write_strategy_to_mask(cfg['write_strategy'])
+            h_f.write(f'  virtual uint8_t write_strategy() const {{ return {strategy_mask}; }}\n')
         if cfg.get('is_pin_local'):
             h_f.write('  virtual bool is_pin_local() const { return true; }\n')
 
@@ -981,6 +1055,9 @@ def main():
 
     # Validate function signatures before generating code
     validate_config_functions()
+
+    # Validate write strategy before generating code
+    validate_write_strategies()
 
     # generate code using all_storage_object_types
     print("Generating ob_storage_object_type.h...")

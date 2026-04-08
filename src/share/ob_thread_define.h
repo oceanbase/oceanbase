@@ -183,6 +183,8 @@ TG_DEF(VectorTaskPool, VectorTaskPool, QUEUE_THREAD, 1, 1024)
 
 #ifdef OB_BUILD_SHARED_STORAGE
 TG_DEF(ReplicaPrewarmHdlr, RepPrewarmHdlr, QUEUE_THREAD, 1, storage::ObReplicaPrewarmHandler::MAX_TASK_NUM)
+TG_DEF(LoCacheMTimer, LoCacheMTimer, TIMER)
+TG_DEF(LoCacheHTimer, LoCacheHTimer, TIMER)
 TG_DEF(MicCacheLTimer, MicCacheLTimer, TIMER)
 TG_DEF(MicCacheMTimer, MicCacheMTimer, TIMER)
 TG_DEF(MicCacheHTimer, MicCacheHTimer, TIMER)

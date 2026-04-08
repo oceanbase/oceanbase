@@ -2946,6 +2946,7 @@ typedef enum ObItemType
   T_FUN_ES_MATCH = 4914, // fulltext index for ES SQL
   T_HYBRID_SEARCH_EXPRESSION = 4915,
   T_HMS_CATALOG_NAME = 4917, // FARM COMPAT WHITELIST for hive metastore side default catalog
+  T_SET_STORAGE_CACHE_POLICY_STATUS = 4977,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

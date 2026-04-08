@@ -66,7 +66,8 @@ public:
     const bool micro_index_clustered,
     const share::SCN &reorganization_scn,
     const bool need_submit_io = true,
-    const uint64_t encoding_granularity = 0);
+    const uint64_t encoding_granularity = 0,
+    const common::ObStorageObjectWriteStrategy write_strategy = common::ObStorageObjectWriteStrategy::INVALID_WRITE_STRATEGY);
   bool is_valid() const;
   void reset();
   int assign(const ObStaticDataStoreDesc &desc);
@@ -96,7 +97,8 @@ public:
       K_(encoding_granularity),
       K_(reorganization_scn),
       K_(semistruct_properties),
-      K_(micro_block_format_version));
+      K_(micro_block_format_version),
+      K_(write_strategy));
 private:
   OB_INLINE int init_encryption_info(const share::schema::ObMergeSchema &merge_schema);
   OB_INLINE void init_block_size(const share::schema::ObMergeSchema &merge_schema);
@@ -136,6 +138,7 @@ public:
   int64_t micro_block_format_version_;
   share::SCN reorganization_scn_;
   share::ObSemistructProperties semistruct_properties_;
+  common::ObStorageObjectWriteStrategy write_strategy_;
 };
 
 // ObColDataStoreDesc is same for every parallel task
@@ -313,6 +316,7 @@ public:
   STATIC_DESC_FUNC(bool, need_submit_io);
   STATIC_DESC_FUNC(share::SCN, reorganization_scn);
   STATIC_DESC_FUNC(bool, is_delete_insert_table);
+  STATIC_DESC_FUNC(common::ObStorageObjectWriteStrategy, write_strategy);
   COL_DESC_FUNC(bool, is_row_store);
   COL_DESC_FUNC(uint16_t, table_cg_idx);
   COL_DESC_FUNC(int64_t, row_column_count);
@@ -407,7 +411,8 @@ struct ObWholeDataStoreDesc
     const storage::ObStorageColumnGroupSchema *cg_schema = nullptr,
     const uint16_t table_cg_idx = 0,
     const compaction::ObExecMode exec_mode = compaction::ObExecMode::EXEC_MODE_LOCAL,
-    const bool need_submit_io = true);
+    const bool need_submit_io = true,
+    const common::ObStorageObjectWriteStrategy write_strategy = common::ObStorageObjectWriteStrategy::INVALID_WRITE_STRATEGY);
   int gen_index_store_desc(const ObDataStoreDesc &data_desc);
   int assign(const ObDataStoreDesc &desc);
   int assign(const ObWholeDataStoreDesc &desc);

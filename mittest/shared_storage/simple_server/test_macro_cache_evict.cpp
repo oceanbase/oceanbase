@@ -138,7 +138,7 @@ public:
   {
     ObSimpleClusterTestBase::SetUp();
     if (!tenant_created_) {
-      OK(create_tenant("tt1", "5G", "10G", false/*oracle_mode*/, 8, "2G"));
+      OK(create_tenant_with_retry("tt1", "5G", "10G", false/*oracle_mode*/, 8, "2G"));
       OK(get_tenant_id(run_ctx_.tenant_id_));
       ASSERT_NE(0, run_ctx_.tenant_id_);
       tenant_created_ = true;
@@ -160,6 +160,7 @@ public:
     write_info_.size_ = WRITE_IO_SIZE;
     write_info_.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
     write_info_.mtl_tenant_id_ = run_ctx_.tenant_id_;
+    write_info_.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_THROUGH;
 
   }
 
@@ -400,6 +401,7 @@ public:
         macro_id.set_macro_transfer_seq(MACRO_BLOCK_TRANSFER_SEQ); // transfer_seq
         macro_id.set_tenant_seq(i); // tenant_seq
         write_info_.set_effective_tablet_id(MACRO_BLOCK_TABLET_ID); // effective_tablet_id
+        write_info_.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_BACK;
         break;
       case ObSSMacroCacheType::META_FILE:
         macro_id.set_id_mode((uint64_t)ObMacroBlockIdMode::ID_MODE_SHARE);
@@ -428,6 +430,7 @@ public:
         macro_id.set_macro_transfer_seq(HOT_TABLET_TRANSFER_SEQ); // transfer_seq
         macro_id.set_tenant_seq(i); // tenant_seq
         write_info_.set_effective_tablet_id(HOT_TABLET_TABLET_ID); // effective_tablet_id
+        write_info_.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_BACK;
         break;
       default:
         ASSERT_TRUE(false);

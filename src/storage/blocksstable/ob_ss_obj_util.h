@@ -36,7 +36,6 @@ public:
   static bool is_major(const ObStorageObjectType type);
   static bool is_mds(const ObStorageObjectType type);
   static bool is_direct_read(const ObStorageObjectType type);
-  static bool is_direct_write(const ObStorageObjectType type);
   static bool is_need_alloc_file_size(const ObStorageObjectType type);
   static bool is_pin_local(const ObStorageObjectType type);
   static bool is_overwrite(const ObStorageObjectType type);
@@ -58,7 +57,6 @@ public:
   static bool is_macro(const MacroBlockId &macro_id);
   static bool is_major(const MacroBlockId &macro_id);
   static bool need_fsync(const MacroBlockId &macro_id);
-  static bool is_direct_write(const MacroBlockId &macro_id);
   static bool server_tenant_can_have(const MacroBlockId &macro_id);
   static bool use_reserved_disk_space(const MacroBlockId &macro_id);
   static bool can_append_write(const MacroBlockId &macro_id);

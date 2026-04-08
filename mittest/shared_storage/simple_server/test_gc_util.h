@@ -121,6 +121,7 @@ static void write_block(
   write_info.size_ = WRITE_IO_SIZE;
   write_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
   write_info.mtl_tenant_id_ = MTL_ID();
+  write_info.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_THROUGH;
 
   ObStorageObjectHandle write_object_handle;
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(block_id));

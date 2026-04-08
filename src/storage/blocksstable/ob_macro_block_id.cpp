@@ -383,12 +383,16 @@ bool MacroBlockId::is_private_macro() const
   PRIVATE_DATA_MACRO
   PRIVATE_META_MACRO
   PRIVATE_TABLET_META
+  SHARED_MINI_DATA_MACRO
+  SHARED_MINI_META_MACRO
 */
 bool MacroBlockId::is_macro_write_cache_ctrl_obj_type() const
 {
-  return is_id_mode_share() && (SSObjUtil::is_macro(storage_object_type()) || SSObjUtil::is_tablet_meta(storage_object_type())) &&
-         SSObjUtil::is_private(storage_object_type()) &&!SSObjUtil::is_direct_write(storage_object_type()) &&
-         !SSObjUtil::use_reserved_disk_space(storage_object_type()) && !SSObjUtil::is_tmp_file(storage_object_type());
+  return is_id_mode_share() &&
+         (SSObjUtil::is_macro(storage_object_type()) || SSObjUtil::is_tablet_meta(storage_object_type())) &&
+         STI(storage_object_type()).has_write_back_strategy() &&
+         !SSObjUtil::use_reserved_disk_space(storage_object_type()) &&
+         !SSObjUtil::is_tmp_file(storage_object_type());
 }
 
 DEFINE_SERIALIZE(MacroBlockId)

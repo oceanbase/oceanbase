@@ -161,6 +161,7 @@ void TestSSMCPrewarmStruct::generate_shared_major_data_macro(const int64_t table
     write_info.size_ = WRITE_IO_SIZE;
     write_info.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
     write_info.mtl_tenant_id_ = MTL_ID();
+    write_info.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_THROUGH;
 
     // write
     MacroBlockId macro_id;

@@ -988,7 +988,8 @@ int ObBasicTabletMergeCtx::init_static_desc()
                                 get_tablet()->get_tablet_meta().micro_index_clustered_,
                                 get_tablet()->get_reorganization_scn(),
                                 true,
-                                static_param_.encoding_granularity_))) {
+                                static_param_.encoding_granularity_,
+                                get_io_write_strategy()))) {
     LOG_WARN("failed to init static desc", KR(ret), KPC(this));
   } else {
     LOG_TRACE("[SharedStorage] success to set exec mode", KR(ret), "exec_mode", exec_mode_to_str(static_desc_.exec_mode_));

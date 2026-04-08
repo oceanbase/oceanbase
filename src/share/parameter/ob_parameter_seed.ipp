@@ -964,6 +964,10 @@ DEF_INT(row_compaction_update_limit, OB_CLUSTER_PARAMETER, "6", "[1, 6400]",
         "maximum update count before trigger row compaction. "
         "Range: [1, 6400]",
         ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_sslog_table_row_level_gc, OB_TENANT_PARAMETER, "True",
+         "enable row-level gc recycle version for sslog table in shared storage mode. "
+         "When disabled, multi_version_start is used as fallback. The default value is True.",
+         ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(ignore_replay_checksum_error, OB_CLUSTER_PARAMETER, "True",
          "specifies whether error raised from the memtable replay checksum validation can be ignored. "
          "Value: True:ignored; False: not ignored",
@@ -3077,6 +3081,9 @@ DEF_INT(_sslog_table_meta_cache_usage_threshold, OB_TENANT_PARAMETER, "300", "[0
         "larger than (meta tenant disk limit * threshold), write throttling is triggered to slow down incoming write requests."
         "Range: [0, )",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_ss_inc_upload_try_write_local_cache, OB_TENANT_PARAMETER, "True",
+         "Enable or disable try write local cache when uploading incremental sstable to shared storage.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_STR(ob_vector_search_strategy, OB_TENANT_PARAMETER, "RECALL_FIRST",
         "The strategy of vector index searching. If it is set to RECALL_FIRST, which is default value, the search strategy is deep-search mode."

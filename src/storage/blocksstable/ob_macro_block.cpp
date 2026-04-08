@@ -392,6 +392,7 @@ int ObMacroBlock::flush(ObStorageObjectHandle &macro_handle,
       object_info.io_timeout_ms_ = std::max(GCONF._data_storage_io_timeout / 1000, DEFAULT_IO_WAIT_TIME_MS);
       object_info.device_handle_ = device_handle;
       object_info.has_backup_device_handle_ = OB_NOT_NULL(device_handle);
+      object_info.write_strategy_ = spec_->get_write_strategy();
 
       if (OB_FAIL(macro_handle.async_write(object_info))) {
         STORAGE_LOG(WARN, "Fail to async write block", K(ret), K(macro_handle), K(object_info));

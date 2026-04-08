@@ -320,6 +320,21 @@ public:
   int64_t part_id_;      // multipart upload's part id
 };
 
+// Please obey the following rules, when adding new write strategy:
+// 1. add new strategy at the end of the enum class
+// 2. update the convert_write_strategy_to_mask function in generate_shared_object_type.py
+enum class ObStorageObjectWriteStrategy : uint8_t
+{
+  // write object storage
+  WRITE_THROUGH = 0,
+  // write local cache (fallback to write object storage, when local disk space is not enough)
+  WRITE_BACK = 1,
+  // write object storage (in foreground) and try write local cache (in background). as long as
+  // successfully write object storage, this write operation is considered successful.
+  WRITE_THROUGH_AND_TRY_WRITE_LCACHE = 2,
+  INVALID_WRITE_STRATEGY = 3
+};
+
 #ifdef OB_BUILD_SHARED_STORAGE
 struct ObSSIOInfo : public ObSNIOInfo
 {
@@ -336,9 +351,11 @@ public:
   int64_t tmp_file_valid_length_;
   uint64_t effective_tablet_id_; // indicate effective tablet id about partition split
   bool is_write_cache_; // indicate write or read macro cache
+  ObStorageObjectWriteStrategy write_strategy_; // indicate write strategy of this io
 
   INHERIT_TO_STRING_KV("SNIOInfo", ObSNIOInfo, K_(phy_block_handle), K_(fd_cache_handle),
-                       K_(tmp_file_valid_length), K_(effective_tablet_id), K_(is_write_cache));
+                       K_(tmp_file_valid_length), K_(effective_tablet_id), K_(is_write_cache),
+                       K_(write_strategy));
 };
 #endif
 

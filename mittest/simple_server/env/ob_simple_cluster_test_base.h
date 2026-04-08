@@ -45,7 +45,8 @@ public:
                                const char *memory_size = "4G",
                                const char *log_disk_size = "4G",
                                const bool oracle_mode = false,
-                               int64_t tenant_cpu = 2);
+                               int64_t tenant_cpu = 2,
+                               const char *data_disk_size = nullptr);
   int create_tenant(const char *tenant_name = "tt1",
                     const char *memory_size = "4G",
                     const char *log_disk_size = "4G",

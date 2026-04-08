@@ -88,6 +88,7 @@ void TestSSObjectAccessUtil::SetUp()
   write_info_.size_ = WRITE_IO_SIZE;
   write_info_.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
   write_info_.mtl_tenant_id_ = MTL_ID();
+  write_info_.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_THROUGH;
 
   // construct read info
   read_buf_[0] = '\0';
@@ -141,6 +142,7 @@ TEST_F(TestSSObjectAccessUtil, test_macro_block)
   ObStorageObjectHandle write_object_handle;
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
 
+  write_info_.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_BACK;
   ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_write_file(write_info_, write_object_handle));
   ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
   write_object_handle.reset();

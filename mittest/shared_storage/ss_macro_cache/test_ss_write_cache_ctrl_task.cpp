@@ -133,6 +133,7 @@ TEST_F(TestSSWriteCacheCtrlTask, write_cache_threshold)
 
     write_info_.set_is_write_cache(true); // write cache
     write_info_.set_effective_tablet_id(tablet_id);
+    write_info_.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_BACK;
     ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::write_file(write_info_, write_object_handle));
     write_object_handle.reset();
   }

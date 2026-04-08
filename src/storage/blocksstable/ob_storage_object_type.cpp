@@ -223,9 +223,9 @@ void ObStorageObjectTypeBase::get_ss_macro_block_type(
   ss_macro_block_type = ObSSMacroBlockType::MAX_TYPE;
   if (ObStorageObjectType::EXTERNAL_TABLE_FILE == type_) {
     ss_macro_block_type = ObSSMacroBlockType::EXTERNAL_TABLE;
-  } else if (macro_id.is_shared_data_or_meta()) {
+  } else if (macro_id.is_shared_data_block_or_meta_block()) {
     ss_macro_block_type = ObSSMacroBlockType::SHARED_MACRO;
-  } else if (macro_id.is_private_data_or_meta()) {
+  } else if (macro_id.is_private_macro()) {
     ss_macro_block_type = ObSSMacroBlockType::PRIVATE_MACRO;
   }
 }
@@ -448,6 +448,16 @@ int ObStorageObjectTypeBase::aio_write(
   return ret;
 }
 #endif
+
+bool ObStorageObjectTypeBase::has_write_back_strategy() const
+{
+  return (write_strategy() & (1 << (uint8_t)ObStorageObjectWriteStrategy::WRITE_BACK));
+}
+
+bool ObStorageObjectTypeBase::has_write_through_and_try_write_lcache_strategy() const
+{
+  return (write_strategy() & (1 << (uint8_t)ObStorageObjectWriteStrategy::WRITE_THROUGH_AND_TRY_WRITE_LCACHE));
+}
 
 void ObStorageObjectTypeBase::set_ss_object_first_id_(
   const uint64_t incarnation_id, const uint64_t column_group_id, MacroBlockId &object_id) const
@@ -962,6 +972,29 @@ int ObSharedMiniDataMacroType::local_path_to_macro_id(const char *path, MacroBlo
   return ret;
 }
 
+int ObSharedMiniDataMacroType::get_parent_dir(char *path, const int64_t length, int64_t &pos,
+  const MacroBlockId &file_id, const uint64_t tenant_id,
+  const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const
+{
+  int ret = OB_SUCCESS;
+  // inner_tablet: tenant_id_epoch_id/shared_mini_macro_cache/ls/ls_id
+  // user_tablet: tenant_id_epoch_id/shared_mini_macro_cache/scatter_id
+  if (file_id.meta_is_inner_tablet()) {
+    if (OB_FAIL(databuff_printf(path, length, pos, "%s/%lu_%ld/%s/%s/%ld",
+              OB_DIR_MGR.get_local_cache_root_dir(), tenant_id, tenant_epoch_id,
+              SHARED_MINI_MACRO_CACHE_DIR_STR, LS_DIR_STR, file_id.meta_ls_id()))) {
+      LOG_WARN("fail to databuff printf", KR(ret));
+    }
+  } else {
+    if (OB_FAIL(databuff_printf(path, length, pos, "%s/%lu_%ld/%s/%02lX",
+              OB_DIR_MGR.get_local_cache_root_dir(), tenant_id, tenant_epoch_id,
+              SHARED_MINI_MACRO_CACHE_DIR_STR, (file_id.hash() % ObDirManager::SHARED_MACRO_SCATTER_DIR_NUM)))) {
+      LOG_WARN("fail to databuff printf", KR(ret));
+    }
+  }
+  return ret;
+}
+
 int ObSharedMiniDataMacroType::create_parent_dir(const MacroBlockId &file_id, const uint64_t tenant_id,
   const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const
 {
@@ -1211,6 +1244,29 @@ int ObSharedMiniMetaMacroType::local_path_to_macro_id(const char *path, MacroBlo
       macro_id.set_second_id(tablet_id);
       macro_id.set_third_id((op_id << 32) + macro_seq_id);
       macro_id.set_reorganization_scn(reorganization_scn);
+    }
+  }
+  return ret;
+}
+
+int ObSharedMiniMetaMacroType::get_parent_dir(char *path, const int64_t length, int64_t &pos,
+  const MacroBlockId &file_id, const uint64_t tenant_id,
+  const uint64_t tenant_epoch_id, const int64_t ls_epoch_id) const
+{
+  int ret = OB_SUCCESS;
+  // inner_tablet: tenant_id_epoch_id/shared_mini_macro_cache/ls/ls_id
+  // user_tablet: tenant_id_epoch_id/shared_mini_macro_cache/scatter_id
+  if (file_id.meta_is_inner_tablet()) {
+    if (OB_FAIL(databuff_printf(path, length, pos, "%s/%lu_%ld/%s/%s/%ld",
+              OB_DIR_MGR.get_local_cache_root_dir(), tenant_id, tenant_epoch_id,
+              SHARED_MINI_MACRO_CACHE_DIR_STR, LS_DIR_STR, file_id.meta_ls_id()))) {
+      LOG_WARN("fail to databuff printf", KR(ret));
+    }
+  } else {
+    if (OB_FAIL(databuff_printf(path, length, pos, "%s/%lu_%ld/%s/%02lX",
+              OB_DIR_MGR.get_local_cache_root_dir(), tenant_id, tenant_epoch_id,
+              SHARED_MINI_MACRO_CACHE_DIR_STR, (file_id.hash() % ObDirManager::SHARED_MACRO_SCATTER_DIR_NUM)))) {
+      LOG_WARN("fail to databuff printf", KR(ret));
     }
   }
   return ret;

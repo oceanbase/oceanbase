@@ -4473,13 +4473,6 @@ int ObTriggerStorageCacheP::process()
         } else {
           FLOG_INFO("[SCP] succeed to set storage cache policy status", K_(arg), K(tablet_id), K(policy_status));
         }
-        // record event to __all_server_event_history for ob_admin command
-        SERVER_EVENT_ADD("storage_cache_policy", "set_status",
-            "tenant_id", tenant_id,
-            "ret", ret,
-            "trace_id", *ObCurTraceId::get_trace_id(),
-            "tablet_id", arg_.get_tablet_id(),
-            "policy_status", arg_.get_policy_status() == 0 ? "HOT" : "AUTO");
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unknown storage cache op", K(ret), K_(arg));

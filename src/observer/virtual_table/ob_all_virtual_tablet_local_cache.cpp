@@ -113,7 +113,7 @@ int ObAllVirtualTabletLocalCache::process_curr_tenant(common::ObNewRow *&row)
     PolicyStatus policy_status = PolicyStatus::MAX_STATUS;
     ObSSMicroCacheTabletInfo tablet_micro_cache_info;
     ObSSMacroCacheTabletStat tablet_macro_cache_stat;
-    ObSSLocalCacheTabletStatEntry stat_entry;
+    ObStorageCacheHitStat stat_entry;
     if (OB_FAIL(ret)) {
     } else if (OB_UNLIKELY(cur_idx_ < 0)) {
       ret = OB_ERR_UNEXPECTED;
@@ -188,19 +188,19 @@ int ObAllVirtualTabletLocalCache::process_curr_tenant(common::ObNewRow *&row)
       // TODO (baonian.wcx): Increase the value of the micro cache
       // after the micro cache supports statistics items
       case CACHE_HIT_COUNT: {
-        cells[i].set_int(stat_entry.hit_cnt_);
+        cells[i].set_int(stat_entry.get_hit_cnt());
         break;
       }
       case CACHE_MISS_COUNT: {
-        cells[i].set_int(stat_entry.access_cnt_ - stat_entry.hit_cnt_);
+        cells[i].set_int(stat_entry.get_miss_cnt());
         break;
       }
       case CACHE_HIT_SIZE: {
-        cells[i].set_int(stat_entry.hit_size_);
+        cells[i].set_int(stat_entry.get_hit_bytes());
         break;
       }
       case CACHE_MISS_SIZE: {
-        cells[i].set_int(stat_entry.access_size_ - stat_entry.hit_size_);
+        cells[i].set_int(stat_entry.get_miss_bytes());
         break;
       }
       case INFO: {

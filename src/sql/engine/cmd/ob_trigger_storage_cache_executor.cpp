@@ -35,6 +35,14 @@ int ObTriggerStorageCacheExecutor::execute(ObExecContext &ctx, ObTriggerStorageC
   if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_2) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("trigger storage cache is not supported if version is less than 4.3.5.2", K(ret));
+  } else if (ObTriggerStorageCacheArg::SET_STATUS == arg.get_op() &&
+             GET_MIN_CLUSTER_VERSION() < DATA_VERSION_4_4_1_0) {
+    // Note: 4.4.1 is special - all releases are hotfixes with the same version number,
+    // so this check cannot actually block older 4.4.1 builds. However, it won't cause
+    // any adverse effects since the feature simply won't work on unsupported builds.
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("set status storage cache policy is not supported if version is less than 4.4.1.0", K(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "set status storage cache policy in version less than 4.4.1.0");
   } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
     LOG_WARN("get task executor failed", K(ret));
@@ -79,7 +87,8 @@ int ObTriggerStorageCacheExecutor::execute(ObExecContext &ctx, ObTriggerStorageC
       } else {
         int tmp_ret = OB_SUCCESS;
         FOREACH_X(server_addr, server_list, OB_SUCC(tmp_ret)) {
-          if (ObTriggerStorageCacheArg::TRIGGER == arg.get_op()) {
+          if (ObTriggerStorageCacheArg::TRIGGER == arg.get_op() ||
+              ObTriggerStorageCacheArg::SET_STATUS == arg.get_op()) {
             if (OB_TMP_FAIL(srv_rpc_proxy->to(*server_addr).timeout(rpc_timeout_us).trigger_storage_cache(arg))) {
               // If the server is timeout, just skip it
               if (ret == OB_SUCCESS) {
@@ -98,6 +107,13 @@ int ObTriggerStorageCacheExecutor::execute(ObExecContext &ctx, ObTriggerStorageC
           "tenant_id", arg.get_tenant_id(),
           "ret", ret,
           "trace_id", *ObCurTraceId::get_trace_id());
+    } else if (ObTriggerStorageCacheArg::SET_STATUS == arg.get_op()) {
+      SERVER_EVENT_ADD("storage_cache_policy", "set_status",
+          "tenant_id", arg.get_tenant_id(),
+          "ret", ret,
+          "trace_id", *ObCurTraceId::get_trace_id(),
+          "tablet_id", arg.get_tablet_id(),
+          "policy_status", arg.get_policy_status() == 0 ? "HOT" : "AUTO");
     }
   }
 #endif

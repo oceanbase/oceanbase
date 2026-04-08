@@ -77,6 +77,7 @@ void TestSSMacroCacheMgr::SetUp()
   write_info_.size_ = WRITE_IO_SIZE;
   write_info_.io_timeout_ms_ = DEFAULT_IO_WAIT_TIME_MS;
   write_info_.mtl_tenant_id_ = MTL_ID();
+  write_info_.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_BACK;
 }
 
 void TestSSMacroCacheMgr::TearDown()
@@ -253,6 +254,7 @@ TEST_F(TestSSMacroCacheMgr, update_effective_tablet_id_by_get)
   // 1. write to macro cache
   ObStorageObjectHandle write_object_handle;
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
+  write_info_.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_BACK;
   ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_write_file(write_info_, write_object_handle));
   ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
   write_object_handle.reset();
@@ -313,6 +315,7 @@ TEST_F(TestSSMacroCacheMgr, shift_lru_list)
   // 1. write to macro cache
   ObStorageObjectHandle write_object_handle;
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
+  write_info_.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_BACK;
   ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_write_file(write_info_, write_object_handle));
   ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
   write_object_handle.reset();
@@ -404,11 +407,13 @@ TEST_F(TestSSMacroCacheMgr, update_lru_list)
   // 1. write to macro cache
   ObStorageObjectHandle write_object_handle;
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
+  write_info_.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_BACK;
   ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_write_file(write_info_, write_object_handle));
   ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
   write_object_handle.reset();
 
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id_2));
+  write_info_.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_BACK;
   ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_write_file(write_info_, write_object_handle));
   ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
   write_object_handle.reset();
@@ -477,6 +482,7 @@ TEST_F(TestSSMacroCacheMgr, force_evict_by_macro_id_write_cache)
   // 1. write to macro cache
   ObStorageObjectHandle write_object_handle;
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
+  write_info_.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_BACK;
   ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_write_file(write_info_, write_object_handle));
   ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
   write_object_handle.reset();
@@ -519,6 +525,7 @@ TEST_F(TestSSMacroCacheMgr, clear_macro_cache)
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(macro_id));
   write_info_.set_is_write_cache(false); // simulate read_cache
   write_info_.set_effective_tablet_id(tablet_id);
+  write_info_.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_BACK;
   ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_write_file(write_info_, write_object_handle));
   ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
   write_object_handle.reset();
@@ -538,6 +545,7 @@ TEST_F(TestSSMacroCacheMgr, clear_macro_cache)
   ASSERT_EQ(OB_SUCCESS, write_object_handle.set_macro_block_id(hot_macro_id));
   write_info_.set_is_write_cache(false); // simulate read_cache
   write_info_.set_effective_tablet_id(hot_tablet_id);
+  write_info_.write_strategy_ = ObStorageObjectWriteStrategy::WRITE_BACK;
   ASSERT_EQ(OB_SUCCESS, ObSSObjectAccessUtil::async_write_file(write_info_, write_object_handle));
   ASSERT_EQ(OB_SUCCESS, write_object_handle.wait());
   write_object_handle.reset();

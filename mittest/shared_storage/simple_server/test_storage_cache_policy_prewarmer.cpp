@@ -97,6 +97,17 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_clean_task_history)
   ObStorageCachePolicyService *policy_service = MTL(ObStorageCachePolicyService *);
   ASSERT_NE(nullptr, policy_service);
 
+  // Stop refresh_policy_task to prevent it from adding system table info to maps during test
+  // Since hot inner tables are introduced, refresh_policy_task will add system table info to maps
+  // which causes the map size to be larger than expected (5, 7, 1 for test_clean table only)
+  TG_CANCEL_TASK(policy_service->refresh_policy_scheduler_.tg_id_, policy_service->refresh_policy_scheduler_.refresh_policy_task_);
+  TG_WAIT_TASK(policy_service->refresh_policy_scheduler_.tg_id_, policy_service->refresh_policy_scheduler_.refresh_policy_task_);
+
+  // Clear all maps first to remove any existing system table info added before stopping refresh_policy_task
+  ASSERT_EQ(OB_SUCCESS, policy_service->get_tablet_status_map().clear());
+  ASSERT_EQ(OB_SUCCESS, policy_service->get_part_policy_map().clear());
+  ASSERT_EQ(OB_SUCCESS, policy_service->get_table_policy_map().clear());
+
   int ret = OB_SUCCESS;
   // Simulate clean tablet_task_map
   SCPTabletTaskMap &tablet_tasks = policy_service->get_tablet_tasks();
@@ -259,6 +270,11 @@ TEST_F(ObStorageCachePolicyPrewarmerTest, test_clean_task_history)
   ASSERT_EQ(7, part_policy_map.size());
   ASSERT_EQ(1, table_policy_map.size());
   ASSERT_EQ(OB_SUCCESS, tablet_tasks.clear());
+
+  // Restore refresh_policy_task after test verification
+  TG_SCHEDULE(policy_service->refresh_policy_scheduler_.tg_id_,
+              policy_service->refresh_policy_scheduler_.refresh_policy_task_,
+              30 * 1000 * 1000, true);
   FLOG_INFO("[TEST] test_clean_task_history end");
 }
 
