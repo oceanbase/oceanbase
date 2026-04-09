@@ -180,7 +180,7 @@ int ObParallelMergeInfo::generate_from_range_array(
     if (sum_range_cnt < MIN_VALID_CONCURRENT_CNT || sum_range_cnt > UINT8_MAX) {
       // do nothing
     } else if (1 == sum_range_cnt) {
-      if (data_version < MOCK_DATA_VERSION_4_4_2_0) {
+      if (data_version < DATA_VERSION_4_6_0_0) {
         // do nothing for compatibility, otherwise it will generate datum rowkey with MIN and MAX, which will core in old version
       } else {
         list_size_ = 1; // whole range, don't need to split actually, but set list_size_ as 1 for compatibility
