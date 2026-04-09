@@ -249,6 +249,14 @@ int RangeSubsetComp::do_compare(const uint64_t *left, const int64_t left_cnt,
   return ret;
 }
 
+ObQueryRangeDim::ObQueryRangeDim(ObSkylineDim::Dimension dim_type)
+  : ObSkylineDim(dim_type),
+    column_cnt_(0),
+    contain_always_false_(false)
+{
+  MEMSET(column_ids_, 0, sizeof(uint64_t) * OB_MAX_ROWKEY_COLUMN_NUMBER);
+}
+
 int ObQueryRangeDim::compare(const ObSkylineDim &other, CompareStat &status) const
 {
   int ret = OB_SUCCESS;
@@ -518,7 +526,7 @@ int ObIndexSkylineDim::add_query_range_dim(const ObIArray<uint64_t> &prefix_rang
 {
   int ret = OB_SUCCESS;
   ObQueryRangeDim *dim = NULL;
-  if (OB_FAIL(ObSkylineDimFactory::get_instance().create_skyline_dim(allocator, dim))) {
+  if (OB_FAIL(ObSkylineDimFactory::get_instance().create_skyline_dim(allocator, dim, ObSkylineDim::QUERY_RANGE))) {
     LOG_WARN("failed to create key prefix dimension", K(ret));
   } else if (OB_ISNULL(dim)) {
     ret = OB_ERR_UNEXPECTED;
@@ -533,6 +541,30 @@ int ObIndexSkylineDim::add_query_range_dim(const ObIArray<uint64_t> &prefix_rang
       } else {
         LOG_TRACE("add query range dim success", K(ret), K(*dim));
       }
+    }
+  }
+  return ret;
+}
+
+int ObIndexSkylineDim::add_min_query_range_dim(const ObIArray<uint64_t> &min_prefix_range_ids,
+                                               ObIAllocator &allocator,
+                                               bool contain_always_false)
+{
+  int ret = OB_SUCCESS;
+  ObQueryRangeDim *dim = NULL;
+  if (OB_FAIL(ObSkylineDimFactory::get_instance().create_skyline_dim(allocator, dim, ObSkylineDim::MIN_QUERY_RANGE))) {
+    LOG_WARN("failed to create min query range dimension", K(ret));
+  } else if (OB_ISNULL(dim)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to create dimension", K(ret));
+  } else {
+    dim->set_contain_always_false(contain_always_false);
+    if (OB_FAIL(dim->add_rowkey_ids(min_prefix_range_ids))) {
+      LOG_WARN("failed to add rowkey ids", K(ret));
+    } else if (OB_FAIL(add_skyline_dim(*dim))) {
+      LOG_WARN("failed to add_skyline_dim", K(ret));
+    } else {
+      LOG_TRACE("add min query range dim success", K(ret), K(*dim));
     }
   }
   return ret;
@@ -715,6 +747,22 @@ int ObSkylineDimRecorder::extract_column_ids(const common::ObIArray<ObRawExpr*> 
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObSkylineDimFactory::create_skyline_dim(common::ObIAllocator &allocator,
+                                            ObQueryRangeDim *&skyline_dim,
+                                            ObSkylineDim::Dimension dim_type)
+{
+  int ret = common::OB_SUCCESS;
+  void *ptr = allocator.alloc(sizeof(ObQueryRangeDim));
+  skyline_dim = NULL;
+  if (OB_ISNULL(ptr)) {
+    ret = common::OB_ALLOCATE_MEMORY_FAILED;
+    SQL_OPT_LOG(WARN, "allocate memory for skyline dim failed", K(ret));
+  } else {
+    skyline_dim = new (ptr) ObQueryRangeDim(dim_type);
   }
   return ret;
 }

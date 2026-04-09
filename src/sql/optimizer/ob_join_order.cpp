@@ -1240,17 +1240,20 @@ int ObJoinOrder::get_preliminary_prefix_info(ObQueryRangeProvider &query_range_p
   int ret = OB_SUCCESS;
   int64_t equal_prefix_count = 0;
   int64_t range_prefix_count = 0;
+  int64_t min_range_prefix_count = 0;
   bool contain_always_false = false;
   if (OB_FAIL(query_range_provider.get_prefix_info(equal_prefix_count,
                                                    range_prefix_count,
-                                                   contain_always_false))) {
+                                                   contain_always_false,
+                                                   min_range_prefix_count))) {
     LOG_WARN("failed to get prefix info");
   } else {
     range_info.set_equal_prefix_count(equal_prefix_count);
     range_info.set_range_prefix_count(range_prefix_count);
+    range_info.set_min_range_prefix_count(min_range_prefix_count);
     range_info.set_contain_always_false(contain_always_false);
     LOG_TRACE("success to get preliminary prefix info", K(equal_prefix_count),
-                      K(range_prefix_count), K(contain_always_false));
+              K(range_prefix_count), K(min_range_prefix_count), K(contain_always_false));
   }
   return ret;
 }
@@ -2678,6 +2681,7 @@ int ObJoinOrder::check_and_extract_query_range(const uint64_t table_id,
                                                const ObIndexInfoCache &index_info_cache,
                                                bool &contain_always_false,
                                                ObIArray<uint64_t> &prefix_range_ids,
+                                               ObIArray<uint64_t> &min_prefix_range_ids,
                                                ObIArray<ObRawExpr *> &restrict_infos)
 {
   int ret = OB_SUCCESS;
@@ -2699,6 +2703,7 @@ int ObJoinOrder::check_and_extract_query_range(const uint64_t table_id,
     LOG_WARN("check quals match index error", K(restrict_infos), K(index_keys));
   } else if (expr_match) {
     prefix_range_ids.reset();
+    min_prefix_range_ids.reset();
     const QueryRangeInfo *query_range_info = NULL;
     if (OB_FAIL(index_info_cache.get_query_range(table_id, index_table_id,
                                                  query_range_info))) {
@@ -2709,17 +2714,25 @@ int ObJoinOrder::check_and_extract_query_range(const uint64_t table_id,
     } else {
       contain_always_false = query_range_info->get_contain_always_false();
       uint64_t range_prefix_count = query_range_info->get_range_prefix_count();
+      uint64_t min_range_prefix_count = query_range_info->get_min_range_prefix_count();
       const ObIArray<ColumnItem> &range_columns = query_range_info->get_range_columns();
       if (index_info_entry.is_index_geo()) {
         range_prefix_count = 1;
+        min_range_prefix_count = 1;
       }
       ObSEArray<uint64_t, 4> range_col_ids;
-      if (OB_UNLIKELY(range_prefix_count > range_columns.count())) {
+      if (OB_UNLIKELY(range_prefix_count > range_columns.count()) ||
+          OB_UNLIKELY(min_range_prefix_count > range_columns.count())) {
         ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("range prefix count is invalid", K(range_prefix_count), K(ret));
+        LOG_WARN("range prefix count is invalid", K(range_prefix_count), K(min_range_prefix_count), K(ret));
       } else {
         for (int i = 0; OB_SUCC(ret) && i < range_prefix_count; ++i) {
           if (OB_FAIL(prefix_range_ids.push_back(range_columns.at(i).column_id_))) {
+            LOG_WARN("failed to push back column_id", K(ret), K(i));
+          }
+        }
+        for (int i = 0; OB_SUCC(ret) && i < min_range_prefix_count; ++i) {
+          if (OB_FAIL(min_prefix_range_ids.push_back(range_columns.at(i).column_id_))) {
             LOG_WARN("failed to push back column_id", K(ret), K(i));
           }
         }
@@ -2752,6 +2765,8 @@ int ObJoinOrder::check_and_extract_query_range(const uint64_t table_id,
           } else if (!ObOptimizerUtil::is_subset(expr_col_ids, range_col_ids)) {
             // do nothing
           } else if (OB_FAIL(append_array_no_dup(prefix_range_ids, expr_col_ids))) {
+            LOG_WARN("failed to append array no dup", K(ret));
+          } else if (OB_FAIL(append_array_no_dup(min_prefix_range_ids, expr_col_ids))) {
             LOG_WARN("failed to append array no dup", K(ret));
           }
         }
@@ -2809,7 +2824,8 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
     const OrderingInfo *ordering_info = &index_info_entry->get_ordering_info();
     ObSEArray<uint64_t, 8> interest_column_ids;
     ObSEArray<bool, 8> const_column_info;
-    ObSEArray<uint64_t, 8> prefix_range_ids;  //for query range compare
+    ObSEArray<uint64_t, 8> prefix_range_ids;      //for query range compare
+    ObSEArray<uint64_t, 8> min_prefix_range_ids;  //for min query range compare (OR-branch pessimistic)
     bool contain_always_false = false;
     int64_t range_cnt = index_info_entry->get_range_info().get_range_count();
     if (OB_FAIL(extract_interesting_column_ids(ordering_info->get_index_keys(),
@@ -2824,6 +2840,7 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
                                                      index_info_cache,
                                                      contain_always_false,
                                                      prefix_range_ids,
+                                                     min_prefix_range_ids,
                                                      restrict_infos))) {
       LOG_WARN("check_and_extract query range failed", K(ret));
     } else {
@@ -2860,6 +2877,11 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
                                                          *allocator_,
                                                          contain_always_false))) {
           LOG_WARN("add query range dimension failed", K(ret));
+        } else if (!use_unique_index &&
+                   OB_FAIL(index_dim.add_min_query_range_dim(min_prefix_range_ids,
+                                                              *allocator_,
+                                                              contain_always_false))) {
+          LOG_WARN("add min query range dimension failed", K(ret));
         } else if (use_unique_index &&
                    OB_FAIL(index_dim.add_unique_range_dim(range_cnt,
                                                           *allocator_))) {

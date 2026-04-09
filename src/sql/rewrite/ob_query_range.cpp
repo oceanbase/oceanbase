@@ -10571,7 +10571,8 @@ int ObQueryRange::set_columnId_map(uint64_t columnId, const ObGeoColumnInfo &col
 
 int ObQueryRange::get_prefix_info(int64_t &equal_prefix_count,
                                   int64_t &range_prefix_count,
-                                  bool &contain_always_false) const
+                                  bool &contain_always_false,
+                                  int64_t &min_range_prefix_count) const
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(get_table_grapth().key_part_head_)) {
@@ -10582,6 +10583,7 @@ int ObQueryRange::get_prefix_info(int64_t &equal_prefix_count,
                           equal_prefix_count,
                           range_prefix_count,
                           contain_always_false);
+    min_range_prefix_count = range_prefix_count;
   }
   return ret;
 }

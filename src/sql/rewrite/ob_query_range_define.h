@@ -426,7 +426,8 @@ public:
   virtual const common::ObIArray<ObRawExpr*> &get_unprecise_range_exprs() const { return unprecise_range_exprs_; }
   virtual int get_prefix_info(int64_t &equal_prefix_count,
                               int64_t &range_prefix_count,
-                              bool &contain_always_false) const;
+                              bool &contain_always_false,
+                              int64_t &min_range_prefix_count) const;
   virtual int get_total_range_sizes(common::ObIArray<uint64_t> &total_range_sizes) const;
 
   const ObIArray<uint64_t>& get_range_sizes() const { return total_range_sizes_; }
@@ -436,7 +437,8 @@ public:
                       bool* equals,
                       bool* extract_ranges,
                       int64_t &equal_prefix_count,
-                      int64_t &range_prefix_count) const;
+                      int64_t &range_prefix_count,
+                      int64_t &min_range_prefix_count) const;
   int get_new_equal_idx(const ObRangeNode *range_node,
                         bool* equals,
                         ObIArray<int64_t> &new_idx) const;

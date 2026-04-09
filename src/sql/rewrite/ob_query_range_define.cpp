@@ -928,24 +928,27 @@ int ObPreRangeGraph::fill_column_metas(const ObIArray<ColumnItem> &range_columns
 
 int ObPreRangeGraph::get_prefix_info(int64_t &equal_prefix_count,
                                      int64_t &range_prefix_count,
-                                     bool &contain_always_false) const
+                                     bool &contain_always_false,
+                                     int64_t &min_range_prefix_count) const
 {
   int ret = OB_SUCCESS;
   equal_prefix_count = OB_MAX_ROWKEY_COLUMN_NUMBER;
   range_prefix_count = 0;
+  min_range_prefix_count = column_count_;
   if (OB_ISNULL(node_head_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null range node");
   } else if (node_head_->always_true_ || node_head_->always_false_) {
     equal_prefix_count = 0;
     range_prefix_count = 0;
+    min_range_prefix_count = 0;
     contain_always_false = node_head_->always_false_;
   } else {
     bool equals[column_count_];
     bool extract_ranges[column_count_];
     MEMSET(equals, 0, sizeof(bool) * column_count_);
     MEMSET(extract_ranges, 0, sizeof(bool) * column_count_);
-    if (OB_FAIL(get_prefix_info(node_head_, equals, extract_ranges, equal_prefix_count, range_prefix_count))) {
+    if (OB_FAIL(get_prefix_info(node_head_, equals, extract_ranges, equal_prefix_count, range_prefix_count, min_range_prefix_count))) {
       LOG_WARN("failed to get prefix info");
     }
   }
@@ -956,7 +959,8 @@ int ObPreRangeGraph::get_prefix_info(const ObRangeNode *range_node,
                                      bool* equals,
                                      bool* extract_ranges,
                                      int64_t &equal_prefix_count,
-                                     int64_t &range_prefix_count) const
+                                     int64_t &range_prefix_count,
+                                     int64_t &min_range_prefix_count) const
 {
   int ret = OB_SUCCESS;
   ObSEArray<int64_t, 8> new_equal_idx;
@@ -970,7 +974,7 @@ int ObPreRangeGraph::get_prefix_info(const ObRangeNode *range_node,
       LOG_WARN("failed to get new idx");
     } else if (cur_node->and_next_ != nullptr) {
       if (OB_FAIL(SMART_CALL(get_prefix_info(cur_node->and_next_, equals, extract_ranges,
-                                             equal_prefix_count, range_prefix_count)))) {
+                                             equal_prefix_count, range_prefix_count, min_range_prefix_count)))) {
         LOG_WARN("failed to check is strict equal graph");
       }
     } else {
@@ -986,6 +990,7 @@ int ObPreRangeGraph::get_prefix_info(const ObRangeNode *range_node,
       }
       equal_prefix_count = std::min(equal_prefix_count, cur_pos);
       range_prefix_count = std::max(range_prefix_count, tmp_range_prefix_count);
+      min_range_prefix_count = std::min(min_range_prefix_count, tmp_range_prefix_count);
     }
     // reset flag in current range node
     for (int64_t j = 0; j < new_equal_idx.count(); ++j) {

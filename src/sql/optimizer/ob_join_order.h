@@ -2186,6 +2186,7 @@ struct MergeKeyInfoHelper
                                       const ObIndexInfoCache &index_info_cache,
                                       bool &contain_always_false,
                                       common::ObIArray<uint64_t> &prefix_range_ids,
+                                      common::ObIArray<uint64_t> &min_prefix_range_ids,
                                       ObIArray<ObRawExpr *> &restrict_infos);
 
     /**

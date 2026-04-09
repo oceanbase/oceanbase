@@ -35,6 +35,7 @@ public:
       equal_prefix_count_(0),
       equal_prefix_null_count_(0),
       range_prefix_count_(0),
+      min_range_prefix_count_(-1),
       index_column_count_(0),
       range_columns_(),
       expr_constraints_(),
@@ -57,6 +58,10 @@ public:
   uint64_t get_equal_prefix_count() const { return equal_prefix_count_; };
   uint64_t get_equal_prefix_null_count() const { return equal_prefix_null_count_; };
   uint64_t get_range_prefix_count() const { return range_prefix_count_; };
+  // Returns min_range_prefix_count if set (exec-param path), otherwise falls back to range_prefix_count.
+  // min_range_prefix_count reflects the pessimistic prefix count across all OR branches of the range graph.
+  uint64_t get_min_range_prefix_count() const
+  { return min_range_prefix_count_ >= 0 ? min_range_prefix_count_ : range_prefix_count_; }
   uint64_t get_index_column_count() const { return index_column_count_; };
   bool get_contain_always_false() const { return contain_always_false_; }
   
@@ -95,6 +100,8 @@ public:
   { equal_prefix_null_count_ = equal_prefix_null_count; }
   void set_range_prefix_count(const int64_t range_prefix_count)
   { range_prefix_count_ = range_prefix_count; }
+  void set_min_range_prefix_count(const int64_t min_range_prefix_count)
+  { min_range_prefix_count_ = min_range_prefix_count; }
   void set_index_column_count(const int64_t index_column_count)
   { index_column_count_ = index_column_count; };
   void set_contain_always_false(const bool contain_always_false)
@@ -108,7 +115,7 @@ public:
   int64_t get_unique_range_rowcnt() const { return unique_range_rowcnt_; }
 
   TO_STRING_KV(K_(is_valid), K_(contain_always_false), K_(range_columns), K_(equal_prefix_count),
-               K_(equal_prefix_null_count), K_(range_prefix_count),
+               K_(equal_prefix_null_count), K_(range_prefix_count), K_(min_range_prefix_count),
                K_(index_column_count), K_(expr_constraints), K_(index_prefix),
                K_(range_count), K_(unique_range_rowcnt));
 private:
@@ -121,6 +128,7 @@ private:
   int64_t equal_prefix_count_;
   int64_t equal_prefix_null_count_;
   int64_t range_prefix_count_;
+  int64_t min_range_prefix_count_; // pessimistic prefix count across OR branches, -1 means unset (use range_prefix_count_)
   int64_t index_column_count_; // index column count without adding primary key
   common::ObSEArray<ColumnItem, 8, common::ModulePageAllocator, true> range_columns_;
   common::ObSEArray<ObExprConstraint, 8, common::ModulePageAllocator, true> expr_constraints_;

@@ -33,12 +33,13 @@ class ObRawExpr;
 class ObSkylineDim
 {
 public:
-  enum Dimension {
+  enum Dimension { //FARM COMPAT WHITELIST
     INDEX_BACK = 0,
     INTERESTING_ORDER,
     QUERY_RANGE,
     SHARDING_INFO,
     UNIQUE_RANGE,
+    MIN_QUERY_RANGE,
     MAX_DIM //max dimension
   };
   enum CompareStat {
@@ -117,10 +118,8 @@ class ObQueryRangeDim: public ObSkylineDim
 {
 public:
   friend class ObOptimizerTraceImpl;
-  ObQueryRangeDim() : ObSkylineDim(QUERY_RANGE),
-    column_cnt_(0),
-    contain_always_false_(false)
-  { MEMSET(column_ids_, 0, sizeof(uint64_t) * common::OB_MAX_ROWKEY_COLUMN_NUMBER);}
+  explicit ObQueryRangeDim(ObSkylineDim::Dimension dim_type);
+  ObQueryRangeDim() : ObQueryRangeDim(ObSkylineDim::QUERY_RANGE) {}
   virtual ~ObQueryRangeDim() {}
   virtual int compare(const ObSkylineDim &other, CompareStat &status) const;
   int add_rowkey_ids(const common::ObIArray<uint64_t> &column_ids);
@@ -233,6 +232,9 @@ public:
   int add_query_range_dim(const common::ObIArray<uint64_t> &prefix_range_ids,
                           common::ObIAllocator &allocator,
                           bool contain_always_false);
+  int add_min_query_range_dim(const common::ObIArray<uint64_t> &min_prefix_range_ids,
+                              common::ObIAllocator &allocator,
+                              bool contain_always_false);
   int add_unique_range_dim(int64_t range_cnt, ObIAllocator &allocator);
   int add_sharding_info_dim(ObShardingInfo *sharding_info, bool is_single_get, bool is_global_index, bool is_index_back, bool can_extract_range, ObIAllocator &allocator);
   bool can_prunning() const { return can_prunning_; }
@@ -274,6 +276,8 @@ public:
   template<typename SkylineDimType>
   int create_skyline_dim(common::ObIAllocator &allocator,
                          SkylineDimType *&skyline_dim);
+  int create_skyline_dim(common::ObIAllocator &allocator, ObQueryRangeDim *&skyline_dim,
+                         ObSkylineDim::Dimension dim_type);
 private:
   ObSkylineDimFactory() {}
   DISALLOW_COPY_AND_ASSIGN(ObSkylineDimFactory);
