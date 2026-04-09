@@ -24,6 +24,7 @@ namespace sql
 #define JAR_VERSION_101 (oceanbase::common::cal_version(1, 0, 1, 0))
 #define JAR_VERSION_102 (oceanbase::common::cal_version(1, 0, 2, 0))
 #define JAR_VERSION_103 (oceanbase::common::cal_version(1, 0, 3, 0))
+#define JAR_VERSION_104 (oceanbase::common::cal_version(1, 0, 4, 0))
 
 } // namespace sql
 } // namespace oceanbase
