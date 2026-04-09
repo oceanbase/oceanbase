@@ -464,6 +464,7 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
       CK (OB_NOT_NULL(schema_checker_->get_schema_mgr()));
       CK (OB_NOT_NULL(params_.sql_proxy_));
       CK (OB_NOT_NULL(session_info_));
+      ObSEArray<std::pair<int64_t, int64_t>, 32> qm_pairs; // ps_param_idx -> proc_arg_idx
       for (int64_t i = 0; OB_SUCC(ret) && i < proc_info->get_param_count(); ++i) {
         const ObRoutineParam *param_info = proc_info->get_routine_params().at(i);
         const ObRawExpr *param_expr = params.at(i);
@@ -479,13 +480,16 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
                                                     NULL,
                                                     &params_.package_guard_->dblink_guard_));
         if (OB_SUCC(ret)) {
+          ObSEArray<int64_t, 4> ps_idxs;
           const ObRawExpr* param = params.at(i);
           CK (OB_NOT_NULL(param));
-          if (param->get_expr_type() == T_QUESTIONMARK) {
-            OZ (call_proc_info->add_question_mark_idx(i));
-            if (session_info_->enable_pl_null_literal_parameterization()) {
-              OZ (pl::ObPLResolver::modify_null_param_using_deduced_type(param, pl_type, nullptr));
-            }
+          OZ (ObRawExprUtils::extract_param_idxs(param, ps_idxs));
+          for (int64_t j = 0; OB_SUCC(ret) && j < ps_idxs.count(); ++j) {
+            OZ (qm_pairs.push_back({ps_idxs.at(j), i}));
+          }
+          if (OB_SUCC(ret) && param->get_expr_type() == T_QUESTIONMARK
+              && session_info_->enable_pl_null_literal_parameterization()) {
+            OZ (pl::ObPLResolver::modify_null_param_using_deduced_type(param, pl_type, nullptr));
           }
           if (param_info->is_out_sp_param() || param_info->is_inout_sp_param()) {
             if (lib::is_mysql_mode()
@@ -569,6 +573,11 @@ int ObCallProcedureResolver::resolve(const ParseNode &parse_tree)
             }
           }
         }
+      }
+      lib::ob_sort(qm_pairs.begin(), qm_pairs.end(),
+             [](auto &l, auto &r) { return l.first < r.first; });
+      for (int64_t i = 0; OB_SUCC(ret) && i < qm_pairs.count(); ++i) {
+        OZ (call_proc_info->add_question_mark_idx(qm_pairs.at(i).second)); // proc_arg_idx
       }
     }
     if (OB_SUCC(ret) && OB_NOT_NULL(proc_info) && (OB_INVALID_ID != proc_info->get_dblink_id())) {
