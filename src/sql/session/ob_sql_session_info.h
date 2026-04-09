@@ -1872,26 +1872,7 @@ public:
     if (GCONF._enable_unit_gc_wait && is_obproxy_mode()
         && proxy_version_ >= unit_gc_min_sup_proxy_version_) {
       need_kill = false;
-      bool is_already_set = false;
-      if (OB_FAIL(try_lock_query())) {
-        if (OB_UNLIKELY(OB_EAGAIN != ret)) {
-          SQL_SESSION_LOG(WARN, "fail to try lock query", K(ret));
-        } else {
-          ret = OB_SUCCESS;
-        }
-      } else {
-        // successful lock means that there is no request in the current session
-        if (OB_FAIL(get_session_temp_table_used(is_already_set))) {
-          SQL_SESSION_LOG(WARN, "failed to get session temp table used", K(ret));
-        } else if (!is_already_set && !is_in_transaction()) {
-          need_kill = true;
-        }
-        (void)unlock_query();
-      }
     }
-    // SQL_ENG_LOG(INFO, "can kill session immediately", K(need_kill), K(is_obproxy_mode()),
-    //             K(proxy_version_), K(unit_gc_min_sup_proxy_version_), K(GCONF._enable_unit_gc_wait),
-    //             K(ret));
     return ret;
   }
   int64_t &get_curr_request_id() { return curr_request_id_; }
