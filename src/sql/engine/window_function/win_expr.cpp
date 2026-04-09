@@ -2687,13 +2687,6 @@ int WinExprWrapper<Derived>::copy_aggr_row(WinExprEvalCtx &ctx, const char *src_
   return ret;
 }
 
-namespace {
-  bool should_skip_all_rows(const WinExprEvalCtx &ctx, const ObBitVector &skip, const int64_t row_start, const int64_t row_end)
-  {
-    return skip.accumulate_bit_cnt(row_start - ctx.expr_to_row_store_offset_, row_end - ctx.expr_to_row_store_offset_) == row_end - row_start;
-  }
-}
-
 // WinExprHelper
 template <typename Derived>
 int WinExprWrapper<Derived>::process_partition(WinExprEvalCtx &ctx, const int64_t part_start,
@@ -2707,7 +2700,8 @@ int WinExprWrapper<Derived>::process_partition(WinExprEvalCtx &ctx, const int64_
       LOG_WARN("invalid partition", K(part_start), K(part_end), K(row_start), K(row_end));
     } else if (OB_UNLIKELY(part_start >= part_end || row_start >= row_end)) {
       LOG_DEBUG("empty partition", K(part_start), K(part_end), K(row_start), K(row_end));
-    } else if (OB_UNLIKELY(!all_active && should_skip_all_rows(ctx, skip, row_start, row_end))) {
+    } else if (OB_UNLIKELY(!all_active && skip.accumulate_bit_cnt(row_end - row_start) == row_end - row_start)) {
+      // all_active = false meaning not tiny partition opt
     } else {
       Frame prev_frame, cur_frame;
       bool whole_frame = true, valid_frame = true;
