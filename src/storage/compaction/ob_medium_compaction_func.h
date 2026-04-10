@@ -3,6 +3,7 @@
 #ifndef OB_STORAGE_COMPACTION_MEDIUM_COMPACTION_FUNC_H_
 #define OB_STORAGE_COMPACTION_MEDIUM_COMPACTION_FUNC_H_
 
+#include "share/schema/ob_multi_version_schema_service.h"
 #include "storage/ls/ob_ls.h"
 #include "storage/compaction/ob_partition_merge_policy.h"
 #include "share/tablet/ob_tablet_filter.h"
@@ -72,6 +73,14 @@ public:
     ObIAllocator &allocator,
     storage::ObStorageSchema &storage_schema,
     uint64_t &table_id);
+  static int get_table_schema(
+    ObMultiVersionSchemaService &schema_service,
+    const ObTabletID tablet_id,
+    const int64_t schema_version,
+    const int64_t data_version,
+    uint64_t &table_id,
+    const ObTableSchema*& table_schema,
+    bool retry_get_schema_guard = true);
   static int batch_check_medium_finish(
     const hash::ObHashMap<ObLSID, share::ObLSInfo> &ls_info_map,
     ObIArray<ObTabletCheckInfo> &finish_tablet_ls_infos,

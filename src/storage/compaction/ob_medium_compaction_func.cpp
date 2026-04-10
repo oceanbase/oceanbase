@@ -1131,39 +1131,14 @@ int ObMediumCompactionScheduleFunc::get_table_schema_to_merge(
     uint64_t &table_id)
 {
   int ret = OB_SUCCESS;
-  const uint64_t tenant_id = MTL_ID();
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   table_id = OB_INVALID_ID;
   schema::ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = nullptr;
-  int64_t save_schema_version = schema_version;
 
-  if (OB_FAIL(get_table_id(schema_service, tablet_id, schema_version, table_id))) {
-    if (OB_TABLE_IS_DELETED != ret) {
-      LOG_WARN("failed to get table id", K(ret), K(tablet_id));
-    }
-  } else if (OB_FAIL(schema_service.retry_get_schema_guard(tenant_id,
-                                                            schema_version,
-                                                            table_id,
-                                                            schema_guard,
-                                                            save_schema_version))) {
-    if (OB_TABLE_IS_DELETED == ret) {
-      LOG_WARN("table is deleted", K(ret), K(table_id));
-    } else if (OB_ERR_SCHEMA_HISTORY_EMPTY == ret) {
-      LOG_WARN("schema history may recycle", K(ret));
-    } else {
-      LOG_WARN("Fail to get schema", K(ret), K(tenant_id), K(schema_version), K(table_id));
-    }
-  } else if (OB_UNLIKELY(save_schema_version < schema_version)) {
-    ret = OB_SCHEMA_ERROR;
-    LOG_WARN("can not use older schema version", K(ret), K(schema_version), K(save_schema_version), K(table_id));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
-    LOG_WARN("Fail to get table schema", K(ret), K(table_id));
-  } else if (NULL == table_schema) {
-    ret = OB_TABLE_IS_DELETED;
-    LOG_WARN("table is deleted", K(ret), K(table_id));
+  if (OB_FAIL(get_table_schema(schema_service, tablet_id, schema_version, data_version, table_id, table_schema))) {
+    LOG_WARN("Failed to get table schema", K(ret), K(tablet_id), K(table_id), K(schema_version), K(data_version));
   }
-
 #ifdef ERRSIM
   if (OB_SUCC(ret)) {
     static bool have_set_errno = false;
@@ -1186,10 +1161,55 @@ int ObMediumCompactionScheduleFunc::get_table_schema_to_merge(
   if (FAILEDx(storage_schema.init(allocator, *table_schema, tablet.get_tablet_meta().compat_mode_, false/*skip_column_info*/, data_version, false/*generate_cs_replica_cg_array*/))) {
     LOG_WARN("failed to init storage schema", K(ret), K(schema_version), K(tablet), KPC(table_schema));
   } else {
-    LOG_INFO("get schema to merge", K(tablet_id), K(table_id), K(schema_version), K(save_schema_version),
+    LOG_INFO("get schema to merge", K(tablet_id), K(table_id), K(schema_version),
               K(storage_schema),
               "is_hidden_table", table_schema->is_user_hidden_table(),
               "is_invalid_index", table_schema->is_index_table() && !table_schema->can_read_index());
+  }
+  return ret;
+}
+
+int ObMediumCompactionScheduleFunc::get_table_schema(
+    ObMultiVersionSchemaService &schema_service,
+    const ObTabletID tablet_id,
+    const int64_t schema_version,
+    const int64_t data_version,
+    uint64_t &table_id,
+    const ObTableSchema*& table_schema,
+    bool retry_get_schema_guard)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  table_id = OB_INVALID_ID;
+  schema::ObSchemaGetterGuard schema_guard;
+  table_schema = nullptr;
+  int64_t save_schema_version = schema_version;
+
+  if (OB_FAIL(get_table_id(schema_service, tablet_id, schema_version, table_id))) {
+    if (OB_TABLE_IS_DELETED != ret) {
+      LOG_WARN("failed to get table id", K(ret), K(tablet_id));
+    }
+  } else if (OB_FAIL(retry_get_schema_guard
+                         ? schema_service.retry_get_schema_guard(
+                               tenant_id, schema_version, table_id,
+                               schema_guard, save_schema_version)
+                         : schema_service.get_tenant_schema_guard(
+                               tenant_id, schema_guard, schema_version))) {
+    if (OB_TABLE_IS_DELETED == ret) {
+      LOG_WARN("table is deleted", K(ret), K(table_id));
+    } else if (OB_ERR_SCHEMA_HISTORY_EMPTY == ret) {
+      LOG_WARN("schema history may recycle", K(ret));
+    } else {
+      LOG_WARN("Fail to get schema", K(ret), K(tenant_id), K(schema_version), K(table_id));
+    }
+  } else if (OB_UNLIKELY(save_schema_version < schema_version)) {
+    ret = OB_SCHEMA_ERROR;
+    LOG_WARN("can not use older schema version", K(ret), K(schema_version), K(save_schema_version), K(table_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+    LOG_WARN("Fail to get table schema", K(ret), K(table_id));
+  } else if (NULL == table_schema) {
+    ret = OB_TABLE_IS_DELETED;
+    LOG_WARN("table is deleted", K(ret), K(table_id));
   }
   return ret;
 }

@@ -1578,11 +1578,23 @@ int ObBasicTabletMergeCtx::try_update_storage_schema(ObStorageSchema &new_schema
 {
   INIT_SUCC(ret);
   const uint64_t tenant_id = MTL_ID();
-  const uint64_t tablet_id = get_tablet_id().id();
+  const ObTabletID tablet_id = get_tablet_id();
   const ObTableSchema *table_schema = nullptr;
   ObSchemaGetterGuard schema_guard;
-  if (OB_FAIL(get_table_schema(new_schema.get_schema_version(), table_schema,
-                               schema_guard))) {
+  ObMultiVersionSchemaService* schema_service = nullptr;
+  uint64_t table_id = OB_INVALID_ID;
+  const int64_t schema_version = new_schema.get_schema_version();
+  if (OB_ISNULL(schema_service = MTL(ObTenantSchemaService *)->get_schema_service())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get schema service from MTL", K(ret));
+  } else if (OB_FAIL(ObMediumCompactionScheduleFunc::get_table_schema(
+            *schema_service,
+            tablet_id,
+            schema_version,
+            static_param_.data_version_,
+            table_id,
+            table_schema,
+            /* retry_get_schema_guard */ false))) {
     // cannot get table schema
     // discard error code and continue mini / minor compaction
     LOG_WARN("failed to get table schema, storage schema will not be updated.",
@@ -1593,52 +1605,11 @@ int ObBasicTabletMergeCtx::try_update_storage_schema(ObStorageSchema &new_schema
   } else if (OB_ISNULL(table_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null schema!", KP(table_schema));
+  } else if (table_schema->get_schema_version() != new_schema.get_schema_version()) {
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "Inconsistent schema version, storage schema will not be updated.", K(tablet_id), K(schema_version), K(table_schema->get_schema_version()));
   } else if (OB_FAIL(new_schema.update_column_info(*table_schema, static_param_.data_version_))) {
     LOG_WARN("failed to update column info", "schema_version", new_schema.get_schema_version(), KPC(table_schema), K(new_schema));
   }
-  return ret;
-}
-
-int ObBasicTabletMergeCtx::get_table_schema(const uint64_t schema_version, const ObTableSchema *&table_schema, ObSchemaGetterGuard &schema_guard)
-{
-  INIT_SUCC(ret);
-  const uint64_t tenant_id = MTL_ID();
-
-  table_schema = nullptr;
-  schema_guard.reset();
-
-  // 1. get table id
-  ObSEArray<ObTabletID, 1> tablet_ids;
-  ObSEArray<uint64_t, 1> table_ids;
-  uint64_t table_id = OB_INVALID_ID;
-  ObMultiVersionSchemaService *schema_service = MTL(ObTenantSchemaService *)->get_schema_service();
-  if (OB_ISNULL(schema_service)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("schema service is null", K(ret));
-  } else if (OB_FAIL(tablet_ids.push_back(get_tablet_id()))) {
-    LOG_WARN("failed to push back tablet id", K(ret));
-  } else if (OB_FAIL(schema_service->get_tablet_to_table_history(tenant_id, tablet_ids, schema_version, table_ids))) {
-    LOG_WARN("failed to get table id according to tablet id", K(ret), K(schema_version));
-  } else if (OB_UNLIKELY(table_ids.empty())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected empty table id", K(ret), K(table_ids));
-  } else if (table_ids.at(0) == OB_INVALID_ID) {
-    ret = OB_TABLE_IS_DELETED;
-    LOG_TRACE("table is deleted", K(ret), K(get_tablet_id()), K(schema_version));
-  } else {
-    table_id = table_ids.at(0);
-  }
-
-  // 2. get table schema
-  if (FAILEDx(schema_service->get_tenant_schema_guard(tenant_id, schema_guard))) {
-    LOG_WARN("failed to get tenant schema guard", K(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
-    LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(table_id));
-  } else if (OB_ISNULL(table_schema)) {
-    ret = OB_TABLE_IS_DELETED;
-    LOG_TRACE("table is deleted", KP(table_schema));
-  }
-
   return ret;
 }
 
