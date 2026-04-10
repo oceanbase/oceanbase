@@ -81,7 +81,8 @@ void ObAdminLogExecutor::print_usage()
             "4. 支持解析归档文件\n"
             "5. 如何通过LSN快速定位日志:\n"
             "   1. 获取文件ID: BLOCK_ID=LSN/(64MB-4KB)\n"
-            "   2. 根据LSN去输出文件中执行grep操作"
+            "   2. 根据LSN去输出文件中执行grep操作\n"
+            "6. 完整输出大列 hex: 设置环境变量 OB_ADMIN_DUMP_FULL_HEX=1 或 OB_ADMIN_DUMP_FULL_HEX=<字节数>，可输出更多/完整列数据(默认每列最多 128 字节)"
            );
 #endif
   } else {
