@@ -694,7 +694,7 @@ int ObResolverUtils::get_candidate_routines(ObSchemaChecker &schema_checker,
     }
   }
 
-#define TRY_SYNONYM(synonym_name)             \
+#define TRY_SYNONYM(synonym_name, need_check_public_synonym)             \
 if ((OB_FAIL(ret) || 0 == routines.count())   \
       && OB_ALLOCATE_MEMORY_FAILED != ret) {  \
   ret = OB_SUCCESS;                           \
@@ -703,7 +703,7 @@ if ((OB_FAIL(ret) || 0 == routines.count())   \
   OZ (resolve_synonym_object_recursively(     \
     schema_checker, (outer_synonym_checker != NULL) ? *outer_synonym_checker : synonym_checker,          \
     tenant_id, database_id, synonym_name,     \
-    object_db_id, object_name, exist, db_name.empty()));       \
+    object_db_id, object_name, exist, need_check_public_synonym));       \
   if (OB_SUCC(ret) && exist) {                \
     need_try_synonym = true;                  \
   }                                           \
@@ -742,7 +742,7 @@ if ((OB_FAIL(ret) || 0 == routines.count())   \
     OX (object_name = routine_name);
     if (OB_SUCC(ret)) {
       GET_STANDALONE_ROUTINE();
-      TRY_SYNONYM(routine_name);
+      TRY_SYNONYM(routine_name, true);
     }
     if (OB_SUCC(ret) && need_try_synonym) {
       GET_STANDALONE_ROUTINE();
@@ -774,7 +774,7 @@ if ((OB_FAIL(ret) || 0 == routines.count())   \
           tenant_id, object_db_id, OB_INVALID_ID, object_name, package_id))
         || OB_INVALID_ID == package_id) {
         bool need_try_synonym = false;
-        TRY_SYNONYM(package_name);
+        TRY_SYNONYM(package_name, db_name.empty());
         if (OB_SUCC(ret) && need_try_synonym) {
           if (OB_FAIL(schema_checker.get_package_id( // try synonym user package now!
               tenant_id, object_db_id, object_name, compatible_mode, package_id))
