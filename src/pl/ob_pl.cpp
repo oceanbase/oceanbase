@@ -4357,6 +4357,7 @@ int ObPLExecState::init(const ParamStore *params, bool is_anonymous)
     // TODO bin.lb: how about the memory?
     // 
     OZ(func_.get_frame_info().pre_alloc_exec_memory(*ctx_.exec_ctx_, expr_alloc));
+    OX (ctx_.exec_ctx_->set_pl_expr_alloc(expr_alloc));
   }
 
   // saved self ctx on stack, will used by spi_calc_subprogram_expr
