@@ -6177,11 +6177,12 @@ int ObVectorIndexUtil::get_vector_index_column_name(
         if (OB_ISNULL(ori_col_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected ori column", K(ret), K(col_schema->get_column_id()), K(data_table_schema));
-        }
-        // else if (!ori_col_schema->is_vec_hnsw_vector_column() && !ori_col_schema->is_vec_ivf_center_vector_column() && !ori_col_schema->is_vec_spiv_vec_column()) {
-        //   // only need vec_vector column, here skip other column
-        // }
-        else if (OB_FAIL(ori_col_schema->get_cascaded_column_ids(cascaded_column_ids))) {
+        } else if (!ori_col_schema->is_vec_index_column()
+                   && !ori_col_schema->is_vec_spiv_vec_column()) {
+          // is_vec_index_column does not include is_vec_spiv_vec_column; need both for SPIV key column name
+          // skip other columns (e.g. generated columns like subname)
+          continue;
+        } else if (OB_FAIL(ori_col_schema->get_cascaded_column_ids(cascaded_column_ids))) {
           LOG_WARN("failed to get cascaded column ids", K(ret));
         } else {
           for (int64_t j = 0; OB_SUCC(ret) && !has_get_column_name && j < cascaded_column_ids.count(); ++j) {
