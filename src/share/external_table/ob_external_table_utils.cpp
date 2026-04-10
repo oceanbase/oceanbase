@@ -2212,7 +2212,7 @@ int ObExternalTableUtils::concat_external_file_location(const ObString &location
       OZ (full_path.append(sub_path));
     } else if (*(full_path.ptr() + full_path.length() - 1) == '/'
           && sub_path[0] == '/') {
-      OZ (full_path.append(sub_path.ptr() + 1));
+      OZ (full_path.append(sub_path.ptr() + 1, sub_path.length() - 1));
     } else {
       OZ (full_path.append(sub_path));
     }
@@ -2257,7 +2257,7 @@ int ObExternalTableUtils::resolve_location_for_load_and_select_into(ObSchemaGett
         ObSqlString full_path_str;
         if (OB_FAIL(concat_external_file_location(location_url, sub_path, full_path_str))) {
           LOG_WARN("failed to concat file location", K(ret), K(location_url), K(sub_path));
-        } else if (OB_FAIL(ob_write_string(allocator, full_path_str.string(), full_path))) {
+        } else if (OB_FAIL(ob_write_string(allocator, full_path_str.string(), full_path, true))) {
           LOG_WARN("failed to write string", K(ret));
         } else if (OB_NOT_NULL(access_info)) {
           if (OB_FAIL(ob_write_string(allocator, schema_ptr->get_location_access_info(), *access_info))) {
