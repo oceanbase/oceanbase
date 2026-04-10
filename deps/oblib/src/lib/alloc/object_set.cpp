@@ -796,6 +796,7 @@ AObject *ObjectSetV2::alloc_object(const uint64_t size, const ObMemAttr &attr)
 l_local:
       obj = local_free;
       local_free = obj->next_;
+      abort_unless(NULL == local_free || ((int64_t)obj>>21) == ((int64_t)local_free>>21));
     } else if (OB_LIKELY(sc.avail_blist_ != NULL)) {
       int64_t freelist_cnt = 0;
       ABlock *block = sc.pop_avail();
