@@ -24,14 +24,17 @@ int ObDDLResolver::resolve_external_file_format(const ParseNode *format_node,
   int ret = OB_SUCCESS;
   bool has_file_format = false;
   ObDataInFileStruct data_in_file_struct;
-  bool default_csv_escape_char_is_none = true;
+  bool enable_standard_csv_format = true;
   OZ(params.session_info_->check_feature_enable(
-                      ObCompatFeatureType::DEFAULT_CSV_ESCAPE_CHAR_IS_NONE,
-                      default_csv_escape_char_is_none));
-  // feature version >= 4.5.1.0, default escaped char is none in external table and url table
-  if (OB_SUCC(ret) && default_csv_escape_char_is_none) {
+                      ObCompatFeatureType::STANDARD_CSV_FORMAT_IN_EXTERNAL_TABLE,
+                      enable_standard_csv_format));
+  // feature version >= 4.5.1.0, use standard CSV format in external table and url table
+  if (OB_SUCC(ret) && enable_standard_csv_format) {
     data_in_file_struct.field_escaped_char_ = INT64_MAX;
     data_in_file_struct.field_escaped_str_ = "";
+    data_in_file_struct.field_term_str_ = ",";
+    data_in_file_struct.field_enclosed_char_ = '"';
+    data_in_file_struct.field_enclosed_str_ = "\"";
   }
   if (OB_SUCC(ret) && OB_FAIL(format.csv_format_.init_format(data_in_file_struct,
                                             OB_MAX_COLUMN_NUMBER,

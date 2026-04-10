@@ -120,7 +120,9 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
     }
 
     int64_t default_escaped_char = ObDataInFileStruct::DEFAULT_FIELD_ESCAPED_CHAR;
-    bool is_default_escaped_char_none = true;
+    int64_t default_enclosed_char = ObDataInFileStruct::DEFAULT_FIELD_ENCLOSED_CHAR;
+    ObString default_field_term_str = ObDataInFileStruct::DEFAULT_FIELD_TERM_STR;
+    bool is_standard_csv_format = true;
     uint64_t compat_version = 0;
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(share::ObExternalTableUtils::get_tenant_compat_version(schema_guard_,
@@ -129,11 +131,13 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
       LOG_WARN("failed to get tenant compat version", K(ret), K(tenant_id));
     } else if (OB_FAIL(ObCompatControl::check_feature_enable(
                                 compat_version,
-                                ObCompatFeatureType::DEFAULT_CSV_ESCAPE_CHAR_IS_NONE,
-                                is_default_escaped_char_none))) {
-      LOG_WARN("failed to check default csv escape char feature", K(ret), K(compat_version));
-    } else if (is_default_escaped_char_none) {
+                                ObCompatFeatureType::STANDARD_CSV_FORMAT_IN_EXTERNAL_TABLE,
+                                is_standard_csv_format))) {
+      LOG_WARN("failed to check standard csv format feature", K(ret), K(compat_version));
+    } else if (is_standard_csv_format) {
       default_escaped_char = INT64_MAX;
+      default_enclosed_char = '"';
+      default_field_term_str = ",";
     }
 
     if (OB_SUCC(ret) && ObExternalFileFormat::CSV_FORMAT == format.format_type_) {
@@ -144,13 +148,13 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
       if (OB_FAIL(0 != csv.line_term_str_.case_compare(ObDataInFileStruct::DEFAULT_LINE_TERM_STR) &&
                         databuff_printf(buf, buf_len, pos, "\n  LINE_DELIMITER = %.*s,", origin_format.origin_line_term_str_.length(), origin_format.origin_line_term_str_.ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print LINE_DELIMITER", K(ret));
-      } else if (OB_FAIL(0 != csv.field_term_str_.case_compare(ObDataInFileStruct::DEFAULT_FIELD_TERM_STR) &&
+      } else if (OB_FAIL(0 != csv.field_term_str_.case_compare(default_field_term_str) &&
                         databuff_printf(buf, buf_len, pos, "\n  FIELD_DELIMITER = %.*s,", origin_format.origin_field_term_str_.length(), origin_format.origin_field_term_str_.ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print FIELD_DELIMITER", K(ret));
       } else if (OB_FAIL(default_escaped_char != csv.field_escaped_char_ &&
                         databuff_printf(buf, buf_len, pos, "\n  ESCAPE = %.*s,", origin_format.origin_field_escaped_str_.length(), origin_format.origin_field_escaped_str_.ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print ESCAPE", K(ret));
-      } else if (OB_FAIL(ObDataInFileStruct::DEFAULT_FIELD_ENCLOSED_CHAR != csv.field_enclosed_char_ &&
+      } else if (OB_FAIL(default_enclosed_char != csv.field_enclosed_char_ &&
                         databuff_printf(buf, buf_len, pos, "\n  FIELD_OPTIONALLY_ENCLOSED_BY = %.*s,", origin_format.origin_field_enclosed_str_.length(), origin_format.origin_field_enclosed_str_.ptr()))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print FIELD_OPTIONALLY_ENCLOSED_BY", K(ret));
       } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n  ENCODING = '%s',", ObCharset::charset_name(csv.cs_type_)))) {

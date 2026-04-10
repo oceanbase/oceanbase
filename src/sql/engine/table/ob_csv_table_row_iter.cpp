@@ -386,9 +386,14 @@ int ObCSVTableRowIterator::load_next_buf()
           state_.data_end_ = next_load_pos + tmp_read_size;
           state_.already_read_size_ += tmp_read_size;
         }
-        state_.has_escape_ = (nullptr != memchr(state_.buf_,
-                                                parser_.get_format().field_escaped_char_,
-                                                state_.data_end_ - state_.pos_));
+        state_.has_escape_ = (parser_.get_format().field_escaped_char_ != INT64_MAX
+                                && nullptr != memchr(state_.buf_,
+                                                     parser_.get_format().field_escaped_char_,
+                                                     state_.data_end_ - state_.pos_))
+                              || (parser_.get_format().field_enclosed_char_ != INT64_MAX
+                                    && nullptr != memchr(state_.buf_,
+                                                         parser_.get_format().field_enclosed_char_,  // 标准csv中可以用enclosed符转义enclosed符
+                                                         state_.data_end_ - state_.pos_));
       }
     }
 
