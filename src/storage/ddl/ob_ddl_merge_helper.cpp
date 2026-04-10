@@ -285,7 +285,7 @@ int ObSNDDLMergeHelperV2::process_prepare_task(ObIDag *dag,
     ObArenaAllocator arena(ObMemAttr(MTL_ID(), "DDL_Mrg_Pre"));
     ObTabletDDLCompleteMdsUserData user_data;
     if (OB_FAIL(tablet_handle.get_obj()->get_ddl_complete(share::SCN::max_scn(), arena, user_data))) {
-      if (OB_EMPTY_RESULT == ret) {
+      if (OB_EMPTY_RESULT == ret || OB_ERR_SHARED_LOCK_CONFLICT == ret) {
         /* for ddl execute node, should wait take effect */
         if (ObDagType::DAG_TYPE_DDL == dag->get_type()) {
           ret = OB_EAGAIN;
