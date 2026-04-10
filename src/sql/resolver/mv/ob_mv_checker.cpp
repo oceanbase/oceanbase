@@ -729,6 +729,7 @@ int ObMVChecker::check_min_max_aggr_fast_refresh_valid(const ObSelectStmt &stmt,
   const TableItem *table_item = NULL;
   const ObTableSchema *index_schema = NULL;
   ObSEArray<uint64_t, 8> group_by_col_ids;
+  const bool IGNORE_INDEX_CHECK = true;
   if (OB_ISNULL(query_ctx = stmt.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(query_ctx));
@@ -736,6 +737,9 @@ int ObMVChecker::check_min_max_aggr_fast_refresh_valid(const ObSelectStmt &stmt,
     fast_refreshable_error_.assign_fmt("min/max aggregation function only support for single table query");
   } else if (stmt.is_scala_group_by()) {
     fast_refreshable_error_.assign_fmt("min/max aggregation function not support for scala group by");
+  } else if (IGNORE_INDEX_CHECK) {
+    // just ignore index check for min/max aggr
+    is_valid = true;
   } else if (OB_ISNULL(table_item = stmt.get_table_item(0))
              || OB_UNLIKELY(!table_item->is_basic_table())) {
     ret = OB_ERR_UNEXPECTED;
