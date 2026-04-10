@@ -359,9 +359,6 @@ class ObDASLocationRouter
 public:
   ObDASLocationRouter(common::ObIAllocator &allocator);
   ~ObDASLocationRouter();
-  int nonblock_get(const ObDASTableLocMeta &loc_meta,
-                   const common::ObTabletID &tablet_id,
-                   share::ObLSLocation &location);
 
   int nonblock_get_candi_tablet_locations(const ObDASTableLocMeta &loc_meta,
                                           const common::ObIArray<ObTabletID> &tablet_ids,
@@ -419,10 +416,19 @@ private:
   int get_vt_ls_location(uint64_t table_id,
                          const common::ObTabletID &tablet_id,
                          share::ObLSLocation &location);
+  int nonblock_get(const ObDASTableLocMeta &loc_meta,
+                   const common::ObTabletID &tablet_id,
+                   share::ObLSLocation &location);
   int nonblock_get_readable_replica(const uint64_t tenant_id,
                                     const common::ObTabletID &tablet_id,
                                     ObDASTabletLoc &tablet_loc,
                                     const ObDASTableLocMeta &loc_meta);
+  int nonblock_get_candi_tablet_location(const ObDASTableLocMeta &loc_meta,
+                                         const common::ObTabletID &tablet_id,
+                                         const common::ObObjectID &partition_id,
+                                         const common::ObObjectID &first_level_part_id,
+                                         share::ObLSLocation &location,
+                                         ObCandiTabletLoc &candi_tablet_loc);
 private:
   int last_errno_;
   int cur_errno_;
