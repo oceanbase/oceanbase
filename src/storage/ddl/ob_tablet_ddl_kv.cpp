@@ -30,7 +30,7 @@ using namespace oceanbase::compaction;
 ObBlockMetaTree::ObBlockMetaTree()
   : is_inited_(false), macro_blocks_(), arena_("DDL_Btree", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()), tree_allocator_(arena_), block_tree_(tree_allocator_), datum_utils_(nullptr)
 {
-  macro_blocks_.set_attr(ObMemAttr(MTL_ID(), "DDL_Btree"));
+  macro_blocks_.set_attr(ObMemAttr(MTL_ID(), "DDL_Btree", ObCtxIds::DDL_KV_CTX_ID));
 }
 
 ObBlockMetaTree::~ObBlockMetaTree()
@@ -46,7 +46,7 @@ int ObBlockMetaTree::init(const ObTablet &tablet,
                           const ObSSTable *first_ddl_sstable)
 {
   int ret = OB_SUCCESS;
-  const ObMemAttr mem_attr(MTL_ID(), "BlockMetaTree");
+  const ObMemAttr mem_attr(MTL_ID(), "BlockMetaTree", ObCtxIds::DDL_KV_CTX_ID);
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret));
@@ -72,7 +72,7 @@ int ObBlockMetaTree::init(const ObTablet &tablet,
       int_col_desc.col_order_ = ObOrderType::ASC;
       int_col_desc.col_type_.set_int();
       ObSEArray<schema::ObColDesc, 1> col_descs;
-      col_descs.set_attr(ObMemAttr(MTL_ID(), "DDL_Btree_descs"));
+      col_descs.set_attr(ObMemAttr(MTL_ID(), "DDL_Btree_descs", ObCtxIds::DDL_KV_CTX_ID));
       const bool is_column_store = true;
       if (OB_FAIL(col_descs.push_back(int_col_desc))) {
         LOG_WARN("push back col desc failed", K(ret));
@@ -851,7 +851,7 @@ int ObDDLKV::init(const ObLSID &ls_id,
                   const ObITable::TableType table_type)
 {
   int ret = OB_SUCCESS;
-  const lib::ObMemAttr attr(MTL_ID(), "DDLKVMemAlloc");
+  const lib::ObMemAttr attr(MTL_ID(), "DDLKVMemAlloc", ObCtxIds::DDL_KV_CTX_ID);
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("init twice", K(ret), KP(this));
@@ -1538,7 +1538,7 @@ int ObDDLKV::init(const ObITable::TableKey &table_key,
                   const bool use_hash_index)
 {
   int ret = OB_SUCCESS;
-  const lib::ObMemAttr attr(MTL_ID(), "DDLKVMemAlloc");
+  const lib::ObMemAttr attr(MTL_ID(), "DDLKVMemAlloc", ObCtxIds::DDL_KV_CTX_ID);
   UNUSED(use_hash_index);
 
   if (is_inited_) {
