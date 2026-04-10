@@ -465,9 +465,9 @@ void ObStorageObjectTypeBase::get_ss_macro_block_type(
   ss_macro_block_type = ObSSMacroBlockType::MAX_TYPE;
   if (ObStorageObjectType::EXTERNAL_TABLE_FILE == type_) {
     ss_macro_block_type = ObSSMacroBlockType::EXTERNAL_TABLE;
-  } else if (macro_id.is_shared_data_or_meta()) {
+  } else if (macro_id.is_shared_data_block_or_meta_block()) {
     ss_macro_block_type = ObSSMacroBlockType::SHARED_MACRO;
-  } else if (macro_id.is_private_data_or_meta()) {
+  } else if (macro_id.is_private_macro()) {
     ss_macro_block_type = ObSSMacroBlockType::PRIVATE_MACRO;
   }
 }
