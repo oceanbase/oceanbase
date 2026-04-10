@@ -4740,9 +4740,25 @@ int ObDDLService::check_convert_to_character(obrpc::ObAlterTableArg &alter_table
     LOG_USER_ERROR(OB_ERR_COLLATION_MISMATCH, collation.length(), collation.ptr(),
                       charset.length(), charset.ptr());
   }
-  // This is to do a performance optimization. If the collation_type of the original table is
-  // equivalent to the new collation_type, do nothing
-  if (OB_SUCC(ret) && orig_table_schema.get_collation_type() != collation_type) {
+
+  /* check collect equal  */
+  bool all_collact_equal = true;
+  if (OB_SUCC(ret)) {
+    ObTableSchema::const_column_iterator iter = orig_table_schema.column_begin();
+    ObTableSchema::const_column_iterator end = orig_table_schema.column_end();
+    for (; OB_SUCC(ret) && iter != end; ++iter) {
+      ObColumnSchemaV2 *col = (*iter);
+      if (OB_ISNULL(col)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("col is NULL", K(ret));
+      } else if (col->get_collation_type() != collation_type) {
+        all_collact_equal = false;
+        break;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && !all_collact_equal) {
     if (is_long_running_ddl(ddl_type)) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "There are several mutually exclusive DDL in single statement");
