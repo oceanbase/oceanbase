@@ -177,6 +177,39 @@ int ObLogSubPlanFilter::get_plan_item_info(PlanText &plan_text,
             enable_das_group_rescan_ ? "true" : "false"))) {
     LOG_WARN("BUF_PRINTF fails", K(ret));
   } else { /* Do nothing */ }
+  if (OB_FAIL(ret) || (plan_text.type_ != EXPLAIN_EXTENDED && plan_text.type_ != EXPLAIN_EXTENDED_NOADDR)) {
+  } else if (OB_FAIL(BUF_PRINTF(", "))) {
+    LOG_WARN("BUF_PRINTF fails", K(ret));
+  } else if (!is_px_batch_rescan_enabled()) {
+    if (OB_FAIL(BUF_PRINTF("px_batch_subplan_idx(nil)"))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    }
+  } else {
+    if (OB_FAIL(BUF_PRINTF("px_batch_subplan_idx("))) {
+      LOG_WARN("BUF_PRINTF fails", K(ret));
+    } else {
+      bool first = true;
+      for (int i = 0; i < enable_px_batch_rescans_.count(); i++) {
+        if (enable_px_batch_rescans_.at(i)) {
+          if (first) {
+            if (OB_FAIL(BUF_PRINTF("[%ld]", i))) {
+              LOG_WARN("BUF_PRINTF fails", K(ret));
+            }
+            first = false;
+          } else {
+            if (OB_FAIL(BUF_PRINTF(", [%ld]", i))) {
+              LOG_WARN("BUF_PRINTF fails", K(ret));
+            }
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(BUF_PRINTF(")"))) {
+          LOG_WARN("BUF_PRINTF fails", K(ret));
+        }
+      }
+    }
+  }
   END_BUF_PRINT(plan_item.special_predicates_,
                 plan_item.special_predicates_len_);
   return ret;

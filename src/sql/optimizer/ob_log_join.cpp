@@ -208,6 +208,12 @@ int ObLogJoin::get_plan_item_info(PlanText &plan_text,
       } else if (OB_FAIL(BUF_PRINTF("use_batch=%s", can_use_batch_nlj_? "true" : "false"))) {
         LOG_WARN("BUF_PRINTF fails", K(ret));
       } else { /* Do nothing */ }
+      if (OB_FAIL(ret) || (plan_text.type_ != EXPLAIN_EXTENDED && plan_text.type_ != EXPLAIN_EXTENDED_NOADDR)) {
+      } else if (OB_FAIL(BUF_PRINTF(", "))) {
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      } else if (OB_FAIL(BUF_PRINTF("px_batch=%s", enable_px_batch_rescan_ ? "true" : "false"))){
+        LOG_WARN("BUF_PRINTF fails", K(ret));
+      } else { /* Do nothing */ }
     } else if (HASH_JOIN == get_join_algo()) {
       const ObIArray<ObRawExpr *> &equal_conds = get_equal_join_conditions();
       const ObIArray<ObRawExpr *> &other_conds = get_other_join_conditions();
