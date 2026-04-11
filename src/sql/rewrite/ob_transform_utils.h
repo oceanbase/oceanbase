@@ -1760,8 +1760,7 @@ public:
 
   static int get_join_keys(ObIArray<ObRawExpr*> &conditions,
                            ObSqlBitSet<> &table_ids,
-                           ObIArray<ObRawExpr*> &join_keys,
-                           bool &is_simply_join);
+                           ObIArray<ObRawExpr*> &join_keys);
 
   static int check_joined_table_combinable(ObDMLStmt *stmt,
                                            JoinedTable *joined_table,
