@@ -1195,6 +1195,13 @@ private:
   int inc_config_version(int64_t timeout_us) override final;
   int precheck_before_set_initial_member_list_(const int64_t proposal_id, bool &can_set_initial_member_list);
 
+  int change_sync_mode_inner_(const int64_t proposal_id,
+                              const int64_t election_epoch,
+                              const int64_t mode_version,
+                              const SyncMode &sync_mode,
+                              int64_t &new_mode_version,
+                              int64_t &out_proposal_id);
+
   // ========================= flashback ==============================
   int can_do_flashback_(const int64_t mode_version,
                         const share::SCN &flashback_scn,

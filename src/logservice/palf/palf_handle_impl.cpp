@@ -2435,9 +2435,12 @@ int PalfHandleImpl::change_sync_mode(const int64_t proposal_id,
                                      int64_t &new_proposal_id)
 {
   int ret = OB_SUCCESS;
-  SyncMode prev_sync_mode;
   new_proposal_id = INVALID_PROPOSAL_ID;
   bool is_initial_config_version = false;
+  ObRole curr_role = common::FOLLOWER;
+  int64_t curr_election_epoch = OB_INVALID_TIMESTAMP;
+  int64_t curr_mode_version = INVALID_PROPOSAL_ID;
+  int64_t curr_proposal_id = INVALID_PROPOSAL_ID;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
   } else if (INVALID_PROPOSAL_ID == proposal_id ||
@@ -2452,75 +2455,137 @@ int PalfHandleImpl::change_sync_mode(const int64_t proposal_id,
   } else if (is_initial_config_version) {
     ret = OB_STATE_NOT_MATCH;
     PALF_LOG(WARN, "not set initial_member_list yet, cannot change sync_mode", K(ret), K_(palf_id), K(proposal_id), K(mode_version), K(sync_mode));
+  } else if (OB_FAIL(state_mgr_.get_election_role(curr_role, curr_election_epoch))) {
+    PALF_LOG(WARN, "get election role failed", K(ret), K_(palf_id), K_(self), K(proposal_id), K(sync_mode));
+  } else if (false == is_strong_leader(curr_role)) {
+    ret = OB_NOT_MASTER;
+    PALF_LOG(WARN, "not leader, cannot change sync mode", K(ret), K_(palf_id), K_(self), K(proposal_id), K(sync_mode));
   } else if (OB_FAIL(mode_change_lock_.trylock())) {
     // require lock to protect status from concurrent change_sync_mode
     ret = OB_EAGAIN;
     PALF_LOG(WARN, "another change_sync_mode is running, try again", K(ret), K_(palf_id),
         K_(self), K(proposal_id), K(sync_mode));
-  } else if (OB_FAIL(config_change_lock_.trylock())) {
-    // forbid to change sync mode when reconfiguration is doing
-    mode_change_lock_.unlock();
-    ret = OB_EAGAIN;
-    PALF_LOG(WARN, "reconfiguration is running, try again", K(ret), K_(palf_id),
-        K_(self), K(proposal_id), K(sync_mode));
-  } else if (OB_FAIL(mode_mgr_.get_sync_mode(prev_sync_mode))) {
-    PALF_LOG(WARN, "get old sync_mode failed", K(ret), K_(palf_id),
-        K_(self), K(proposal_id), K(sync_mode));
   } else {
-    PALF_EVENT("start change_sync_mode", palf_id_, K(ret), KPC(this),
-        K(proposal_id), K(sync_mode), K_(sw));
-    ret = OB_EAGAIN;
-    bool first_run = true;
-    int64_t out_proposal_id = INVALID_PROPOSAL_ID;
+    PALF_EVENT("start change_sync_mode", palf_id_, K(ret), KPC(this), K(proposal_id), K(sync_mode), K_(sw));
     common::ObTimeGuard time_guard("change_sync_mode", 10 * 1000);
-    while (OB_EAGAIN == ret) {
-      bool is_state_changed = false;
-      {
-        RLockGuard guard(lock_);
-        is_state_changed = mode_mgr_.is_state_changed();
-      }
-      if (is_state_changed) {
-        WLockGuard guard(lock_);
-        if (first_run && proposal_id != state_mgr_.get_proposal_id()) {
-          ret = OB_STATE_NOT_MATCH;
-          PALF_LOG(WARN, "can not change_sync_mode", K(ret), K_(palf_id),
-              K_(self), K(proposal_id), "palf proposal_id", state_mgr_.get_proposal_id());
-        } else if (OB_SUCC(mode_mgr_.change_sync_mode(mode_version, sync_mode, out_proposal_id))) {
-          // ref_scn parameter is ignored, current ref_scn will be preserved
-          PALF_LOG(INFO, "change_sync_mode success", K(ret), K_(palf_id), K_(self), K(proposal_id),
-              K(mode_version), K(sync_mode), K(out_proposal_id));
-        } else if (OB_EAGAIN != ret) {
-          PALF_LOG(WARN, "change_sync_mode failed", K(ret), K_(palf_id), K_(self), K(proposal_id),
-              K(mode_version), K(sync_mode));
+    int tmp_ret = OB_SUCCESS;
+    curr_proposal_id = proposal_id;
+    curr_mode_version = mode_version;
+    do {
+      if (false == state_mgr_.check_epoch_is_same_with_election(curr_election_epoch)) {
+        ret = OB_NOT_MASTER;
+        PALF_LOG(WARN, "election epoch changed, cannot change sync mode", K(ret), K_(palf_id), K_(self), K(curr_proposal_id), K(sync_mode));
+      } else if (OB_TMP_FAIL(config_change_lock_.trylock())) {
+        if (OB_EAGAIN == tmp_ret) {
+          ret = OB_NEED_RETRY;
+          PALF_LOG(TRACE, "reconfiguration is running", KR(tmp_ret), K_(palf_id), K_(self), K(curr_proposal_id), K(sync_mode));
+        } else {
+          ret = tmp_ret;
+          PALF_LOG(ERROR, "trylock config_change_lock_ failed", KR(tmp_ret), K_(palf_id), K_(self), K(curr_proposal_id), K(sync_mode));
         }
-        first_run = false;
+      } else {
         time_guard.click("do_once_change");
+        ret = change_sync_mode_inner_(curr_proposal_id, curr_election_epoch, curr_mode_version, sync_mode, new_mode_version, new_proposal_id);
+        config_change_lock_.unlock();
+        PALF_LOG(INFO, "change_sync_mode_inner_ finish", K(ret), K_(palf_id), K_(self), K(curr_proposal_id), K(sync_mode), K(curr_mode_version));
       }
-      // do role_change after change_sync_mode success
-      if (OB_SUCC(ret)) {
-        RLockGuard guard(lock_);
-        int tmp_ret = OB_SUCCESS;
-        if (OB_TMP_FAIL(role_change_cb_wrpper_.on_sync_mode_change(palf_id_))) {
-          PALF_LOG(WARN, "on_sync_mode_change failed", K(tmp_ret), K_(palf_id), K_(self));
+      if (OB_NEED_RETRY == ret) {
+        time_guard.click("wait_for_higher_prio_config_change");
+        ob_usleep(50_ms);
+        if (OB_TMP_FAIL(mode_mgr_.get_mode_version(curr_mode_version))) {
+          ret = tmp_ret;
+          PALF_LOG(WARN, "get mode_version failed", K(ret), K_(palf_id), K_(self), K(curr_proposal_id), K(sync_mode));
+        } else {
+          curr_proposal_id = state_mgr_.get_proposal_id();
+          PALF_LOG(INFO, "retry change_sync_mode_inner_", K(ret), K_(palf_id), K_(self), K(curr_proposal_id), K(sync_mode), K(curr_mode_version));
         }
-        PALF_EVENT("change_sync_mode success", palf_id_, K(ret), KPC(this),
-            K(proposal_id), K(sync_mode), K(time_guard), K_(sw));
-        mode_mgr_.get_sync_mode_version(new_mode_version);
-        new_proposal_id = out_proposal_id;
-        PALF_REPORT_INFO_KV(K(proposal_id));
-        plugins_.record_sync_mode_change_event(palf_id_, mode_version, new_mode_version, prev_sync_mode, sync_mode, EXTRA_INFOS);
       }
-      if (OB_EAGAIN == ret) {
-        ob_usleep(1000);
-      }
-    }
-    PALF_EVENT("change_sync_mode finish", palf_id_, K(ret), KPC(this),
-        K(proposal_id), K(sync_mode), K(time_guard), K_(sw));
-    config_change_lock_.unlock();
+    } while (OB_NEED_RETRY == ret);
+    time_guard.click("change_sync_mode finish");
+    PALF_LOG(INFO, "change_sync_mode finish", K(ret), K_(palf_id), K_(self), K(curr_proposal_id), K(sync_mode), K(curr_mode_version),
+        K_(mode_mgr), K(time_guard));
     mode_change_lock_.unlock();
   }
   return ret;
 }
+
+int PalfHandleImpl::change_sync_mode_inner_(const int64_t proposal_id,
+                                            const int64_t election_epoch,
+                                            const int64_t mode_version,
+                                            const SyncMode &sync_mode,
+                                            int64_t &new_mode_version,
+                                            int64_t &new_proposal_id)
+{
+  // caller holds mode_change_lock_ and config_change_lock_
+  int ret = OB_SUCCESS;
+  SyncMode prev_sync_mode;
+  bool first_run = true;
+  int64_t out_proposal_id = INVALID_PROPOSAL_ID;
+  common::ObTimeGuard time_guard("change_sync_mode_inner", 10 * 1000);
+  if (OB_FAIL(mode_mgr_.get_sync_mode(prev_sync_mode))) {
+    PALF_LOG(WARN, "get old sync_mode failed", K(ret), K_(palf_id),
+        K_(self), K(proposal_id), K(sync_mode));
+  } else {
+    ret = OB_EAGAIN;
+  }
+  while (OB_EAGAIN == ret) {
+    bool is_state_changed = false;
+    if (true == ATOMIC_LOAD(&has_higher_prio_config_change_)) {
+      WLockGuard guard(lock_);
+      if (false == state_mgr_.check_epoch_is_same_with_election(election_epoch)) {
+        ret = OB_NOT_MASTER;
+        PALF_LOG(WARN, "election epoch changed, cannot change sync mode", K(ret), K_(palf_id), K_(self), K(proposal_id), K(sync_mode),
+            K(first_run), K_(mode_mgr), K(election_epoch));
+      } else {
+        ret = OB_NEED_RETRY;
+        PALF_LOG(WARN, "higher priority config change is waiting", K(ret), K_(palf_id), K_(self), K(proposal_id), K(sync_mode),
+            K(first_run), K_(mode_mgr));
+        mode_mgr_.reset_status();
+      }
+    } else {
+      RLockGuard guard(lock_);
+      is_state_changed = mode_mgr_.is_state_changed();
+    }
+    if (is_state_changed) {
+      WLockGuard guard(lock_);
+      if (first_run && proposal_id != state_mgr_.get_proposal_id()) {
+        ret = OB_STATE_NOT_MATCH;
+        PALF_LOG(WARN, "can not change_sync_mode", K(ret), K_(palf_id),
+            K_(self), K(proposal_id), "palf proposal_id", state_mgr_.get_proposal_id(), K(election_epoch));
+      } else if (OB_SUCC(mode_mgr_.change_sync_mode(mode_version, sync_mode, out_proposal_id))) {
+        // ref_scn parameter is ignored, current ref_scn will be preserved
+        PALF_LOG(INFO, "change_sync_mode success", K(ret), K_(palf_id), K_(self), K(proposal_id),
+            K(mode_version), K(sync_mode), K(out_proposal_id));
+      } else if (OB_EAGAIN != ret) {
+        PALF_LOG(WARN, "change_sync_mode failed", K(ret), K_(palf_id), K_(self), K(proposal_id),
+            K(mode_version), K(sync_mode));
+      }
+      first_run = false;
+      time_guard.click("do_once_change");
+    }
+    // do role_change after change_sync_mode success
+    if (OB_SUCC(ret)) {
+      RLockGuard guard(lock_);
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(role_change_cb_wrpper_.on_sync_mode_change(palf_id_))) {
+        PALF_LOG(WARN, "on_sync_mode_change failed", K(tmp_ret), K_(palf_id), K_(self));
+      }
+      PALF_EVENT("change_sync_mode success", palf_id_, K(ret), KPC(this),
+          K(proposal_id), K(sync_mode), K(time_guard), K_(sw));
+      mode_mgr_.get_sync_mode_version(new_mode_version);
+      new_proposal_id = out_proposal_id;
+      PALF_REPORT_INFO_KV(K(proposal_id));
+      plugins_.record_sync_mode_change_event(palf_id_, mode_version, new_mode_version, prev_sync_mode, sync_mode, EXTRA_INFOS);
+    }
+    if (OB_EAGAIN == ret) {
+      ob_usleep(1000);
+    }
+  }
+  PALF_EVENT("change_sync_mode_inner finish", palf_id_, K(ret), KPC(this),
+      K(proposal_id), K(sync_mode), K(time_guard), K_(sw));
+  return ret;
+};
+
 int PalfHandleImpl::get_sync_mode(int64_t &mode_version, SyncMode &sync_mode) const
 {
   int ret = OB_SUCCESS;
