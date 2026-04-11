@@ -91,19 +91,20 @@ int ObCompactionResourceManager::get_window_compaction_thread_cnt(
   ObResourceManagerProxy::TransGuard trans_guard(trans, tenant_id_, ret);
   if (OB_UNLIKELY(!trans_guard.ready())) {
     // warning is logged in trans_guard
-  } else if (OB_ISNULL(GCTX.cgroup_ctrl_) || !GCTX.cgroup_ctrl_->is_valid()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("adaptive window compaction thread is only supported when cgroup is valid", KR(ret));
-  } else if (OB_FAIL(check_window_resources_ready_(trans))) {
-    LOG_WARN("failed to check window resources ready", K(ret));
   } else if (OB_FAIL(ObScheduleDailyMaintenanceWindow::get_daily_maintenance_window_job_info(trans, tenant_id_, allocator_, job_info))) {
     LOG_WARN("failed to get daily maintenance window job info", K(ret));
   } else if (OB_FAIL(job_cfg.parse_from_string(job_info.job_config_))) {
     LOG_WARN("failed to parse job config", K(ret), "job_config", job_info.job_config_);
   } else if (job_cfg.thread_cnt_ != 0) {
+    // When cgroup is invalid, job_config.thread_cnt is the only way to set thread count.
     thread_cnt = job_cfg.thread_cnt_;
     from_job_config = true;
     LOG_INFO("[WIN-COMPACTION] get window compaction thread cnt from job config", K(ret), K(thread_cnt));
+  } else if (OB_ISNULL(GCTX.cgroup_ctrl_) || !GCTX.cgroup_ctrl_->is_valid()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("adaptive window compaction thread is only supported when cgroup is valid or thread_cnt is set in job config", KR(ret));
+  } else if (OB_FAIL(check_window_resources_ready_(trans))) {
+    LOG_WARN("failed to check window resources ready", K(ret));
   } else if (OB_FAIL(calculate_window_compaction_thread_cnt_(trans, thread_cnt))) {
     LOG_WARN("failed to calculate window compaction thread cnt", K(ret));
   }

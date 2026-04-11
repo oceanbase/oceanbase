@@ -458,20 +458,16 @@ void ObWindowLoop::update_adaptive_compaction_thread_cnt()
 {
   int ret = OB_SUCCESS;
   bool from_job_config = false;
-  if (OB_ISNULL(GCTX.cgroup_ctrl_) || !GCTX.cgroup_ctrl_->is_valid()) {
-    // cgroup is invalid , set adaptive_task_limit_ as limits_
-    adaptive_compaction_thread_cnt_ = 0;
-    adaptive_status_ = THREAD_NOT_INITED;
-    LOG_INFO("cgroup is invalid, don't need to adapt window thread cnt");
-  } else if (THREAD_NOT_INITED == adaptive_status_ || REACH_THREAD_TIME_INTERVAL(5_min)) {
-    // adaptive task limit for window compaction is affected by tenant max cpu, plan directive, and job_config, so it needs to be updated periodically.
+  int64_t tmp_thread_cnt = 0;
+  if (THREAD_NOT_INITED == adaptive_status_ || REACH_THREAD_TIME_INTERVAL(5_min)) {
     ObCompactionResourceManager resource_mgr;
-    if (OB_FAIL(resource_mgr.get_window_compaction_thread_cnt(adaptive_compaction_thread_cnt_, from_job_config))) {
-      LOG_WARN("failed to get window compaction thread cnt", K(ret));
-    } else if (from_job_config) {
-      adaptive_status_ = THREAD_ASSIGNED;
+    if (OB_FAIL(resource_mgr.get_window_compaction_thread_cnt(tmp_thread_cnt, from_job_config))) {
+      adaptive_compaction_thread_cnt_ = 0;
+      adaptive_status_ = THREAD_NOT_INITED;
+      LOG_WARN("failed to get window compaction thread cnt, use compaction_low_thread_score", K(ret));
     } else {
-      adaptive_status_ = THREAD_ADAPTIVE;
+      adaptive_compaction_thread_cnt_ = tmp_thread_cnt;
+      adaptive_status_ = from_job_config ? THREAD_ASSIGNED : THREAD_ADAPTIVE;
     }
   }
   time_guard_.click(ObWindowCompactionTimeGuard::UPDATE_ADAPTIVE_THREAD_CNT);
@@ -484,9 +480,9 @@ int ObWindowLoop::get_adaptive_compaction_thread_cnt(
   int ret = OB_SUCCESS;
   if (THREAD_NOT_INITED == adaptive_status_) {
     adaptive_thread_cnt = compaction_low_thread_score;
-  } else if (THREAD_ADAPTIVE) {
+  } else if (THREAD_ADAPTIVE == adaptive_status_) {
     adaptive_thread_cnt = std::max(adaptive_compaction_thread_cnt_, compaction_low_thread_score);
-  } else if (THREAD_ASSIGNED) {
+  } else if (THREAD_ASSIGNED == adaptive_status_) {
     adaptive_thread_cnt = adaptive_compaction_thread_cnt_;
   } else {
     ret = OB_STATE_NOT_MATCH;
