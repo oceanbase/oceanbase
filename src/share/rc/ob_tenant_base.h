@@ -464,7 +464,7 @@ using ObHMSClientUnifyPoolMgr = share::ObCatalogClientPoolMgr<oceanbase::share::
       storage::checkpoint::ObCheckPointService *,    \
       storage::checkpoint::ObTabletGCService *,      \
       archive::ObArchiveService*,                    \
-      compaction::ObTenantTabletScheduler*,          \
+      storage::ObEmptyReadBucket*,                   \
       compaction::ObTenantMediumChecker*,            \
       storage::ObTenantCompactionMemPool*,           \
       TenantCompactionObjMgr                         \
@@ -491,7 +491,7 @@ using ObHMSClientUnifyPoolMgr = share::ObCatalogClientPoolMgr<oceanbase::share::
       ObTestModule*,                                 \
       oceanbase::common::sqlclient::ObTenantOciEnvs*, \
       rootserver::ObHeartbeatService*,              \
-      storage::ObEmptyReadBucket*,                  \
+      compaction::ObTenantTabletScheduler*,         \
       rootserver::ObDBMSSchedService*,              \
       TenantErrsimModule                            \
       TenantErrsimEvent                             \
