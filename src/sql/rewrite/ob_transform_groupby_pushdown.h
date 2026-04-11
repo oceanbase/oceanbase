@@ -281,7 +281,8 @@ private:
                                    const ObIArray<TableItem*> &table_items,
                                    ObIArray<uint64_t> &flatten_joined_tables,
                                    PushDownParam &params,
-                                   TableItem *&new_table_item);
+                                   TableItem *&new_table_item,
+                                   ObIArray<ObRawExpr *> *pushed_pseudo_column_like_exprs = NULL);
 
   int transform_aggregation_expr(ObDMLStmt &stmt,
                                  ObAggFunRawExpr &aggr_expr,
