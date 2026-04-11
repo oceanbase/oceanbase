@@ -586,11 +586,30 @@ private:
                          hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode> &expr_set,
                          bool is_nullside);
 
+  // Break shared exprs on the null-producing side in two passes. We must collect the
+  // whole dangerous chain first and then copy top-down, because copying a child first
+  // can still leave it shared after the parent is copied later.
   int do_remove_shared_expr(hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode> &expr_set,
                             ObIArray<ObRawExpr *> &padnull_exprs,
                             bool is_nullside,
                             ObRawExpr *&expr,
                             bool &has_nullside_column);
+
+  // Mark exprs that must be copied. A parent must also be copied once any child needs
+  // copying, otherwise later child replacement would still be wired through the old
+  // shared parent.
+  int collect_remove_shared_expr(hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode> &expr_set,
+                                 ObIArray<ObRawExpr *> &padnull_exprs,
+                                 bool is_nullside,
+                                 ObRawExpr *expr,
+                                 ObIArray<ObRawExpr *> &copy_exprs,
+                                 bool &has_nullside_column,
+                                 bool &need_copy_tree);
+
+  // Copy from parent to child so that child rewrites are attached to the new parent
+  // tree instead of mutating pointers that are still shared elsewhere.
+  int copy_remove_shared_expr(ObIArray<ObRawExpr *> &copy_exprs,
+                              ObRawExpr *&expr);
 
   int check_nullside_expr(ObRawExpr *expr, bool &bret);
 

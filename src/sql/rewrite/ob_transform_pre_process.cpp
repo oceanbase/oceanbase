@@ -10561,9 +10561,42 @@ int ObTransformPreProcess::do_remove_shared_expr(hash::ObHashSet<uint64_t, hash:
                                                  bool &has_padnull_column)
 {
   int ret = OB_SUCCESS;
+  bool need_copy_tree = false;
+  ObSEArray<ObRawExpr *, 4> copy_exprs;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  // Copying while traversing child-first is not enough here: a copied child can still
+  // be wired through an old shared parent after that parent is copied later. Collect the
+  // whole dangerous chain first, then rebuild it from parent to child.
+  } else if (OB_FAIL(collect_remove_shared_expr(expr_set,
+                                                padnull_exprs,
+                                                is_nullside,
+                                                expr,
+                                                copy_exprs,
+                                                has_padnull_column,
+                                                need_copy_tree))) {
+    LOG_WARN("failed to collect remove shared expr", K(ret));
+  } else if (need_copy_tree && OB_FAIL(copy_remove_shared_expr(copy_exprs, expr))) {
+    LOG_WARN("failed to copy remove shared expr", K(ret));
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::collect_remove_shared_expr(hash::ObHashSet<uint64_t, hash::NoPthreadDefendMode> &expr_set,
+                                                      ObIArray<ObRawExpr *> &padnull_exprs,
+                                                      bool is_nullside,
+                                                      ObRawExpr *expr,
+                                                      ObIArray<ObRawExpr *> &copy_exprs,
+                                                      bool &has_padnull_column,
+                                                      bool &need_copy_tree)
+{
+  int ret = OB_SUCCESS;
   bool need_copy = false;
   uint64_t key = reinterpret_cast<uint64_t>(expr);
+  int exist_ret = OB_HASH_NOT_EXIST;
   has_padnull_column = false;
+  need_copy_tree = false;
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
@@ -10572,34 +10605,39 @@ int ObTransformPreProcess::do_remove_shared_expr(hash::ObHashSet<uint64_t, hash:
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
     bool has = false;
-    if (OB_FAIL(SMART_CALL(do_remove_shared_expr(expr_set,
-                                                 padnull_exprs,
-                                                 is_nullside,
-                                                 expr->get_param_expr(i),
-                                                 has)))) {
-      LOG_WARN("failed to remove shared expr", K(ret));
-    } else if (has) {
-      has_padnull_column = true;
+    bool child_need_copy = false;
+    if (OB_FAIL(SMART_CALL(collect_remove_shared_expr(expr_set,
+                                                      padnull_exprs,
+                                                      is_nullside,
+                                                      expr->get_param_expr(i),
+                                                      copy_exprs,
+                                                      has,
+                                                      child_need_copy)))) {
+      LOG_WARN("failed to collect remove shared expr", K(ret));
+    } else {
+      has_padnull_column |= has;
+      need_copy_tree |= child_need_copy;
     }
   }
-  if (OB_SUCC(ret) &&
-      OB_HASH_EXIST == expr_set.exist_refactored(key) &&
-      !expr->is_column_ref_expr() &&
-      !expr->is_query_ref_expr() &&
-      !expr->is_const_raw_expr() &&
-      !expr->is_exec_param_expr() &&
-      !expr->is_pseudo_column_expr()) {
+  if (OB_SUCC(ret) && OB_UNLIKELY(OB_HASH_EXIST != (exist_ret = expr_set.exist_refactored(key))
+                                  && OB_HASH_NOT_EXIST != exist_ret)) {
+    ret = exist_ret;
+    LOG_WARN("failed to check expr hash set", K(ret), K(key), KP(expr));
+  }
+  if (OB_SUCC(ret)
+      && OB_HASH_EXIST == exist_ret
+      && !expr->is_column_ref_expr()
+      && !expr->is_query_ref_expr()
+      && !expr->is_const_raw_expr()
+      && !expr->is_exec_param_expr()
+      && !expr->is_pseudo_column_expr()) {
     bool bret = false;
-    ObRawExpr *new_expr = NULL;
-    if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("params have null", K(ret));
-    } else if (padnull_exprs.empty() || !has_padnull_column) {
-      // do nothing
-    } else if (OB_FAIL(ObTransformUtils::is_null_propagate_expr(expr, padnull_exprs, bret))) {
-      LOG_WARN("failed to check is null propogate expr", K(ret));
-    } else if (!bret) {
-      need_copy = true;
+    if (!padnull_exprs.empty() && has_padnull_column) {
+      if (OB_FAIL(ObTransformUtils::is_null_propagate_expr(expr, padnull_exprs, bret))) {
+        LOG_WARN("failed to check is null propogate expr", K(ret));
+      } else if (!bret) {
+        need_copy = true;
+      }
     }
     if (OB_SUCC(ret) && !need_copy && is_nullside) {
       if (OB_FAIL(check_nullside_expr(expr, bret))) {
@@ -10608,14 +10646,42 @@ int ObTransformPreProcess::do_remove_shared_expr(hash::ObHashSet<uint64_t, hash:
         need_copy = true;
       }
     }
-    if (OB_SUCC(ret) && need_copy) {
-      if (OB_FAIL(ObRawExprCopier::copy_expr_node(*ctx_->expr_factory_,
-                                                  expr,
-                                                  new_expr))) {
-        LOG_WARN("failed to copy expr node", K(ret));
-      } else {
-        expr = new_expr;
-      }
+  }
+  if (OB_SUCC(ret)) {
+    // Once a child needs copying, every ancestor on that path must also be copied so
+    // that later child replacement happens on a private parent tree instead of on a
+    // shared one.
+    need_copy_tree = need_copy_tree || need_copy;
+    if (need_copy_tree && OB_FAIL(add_var_to_array_no_dup(copy_exprs, expr))) {
+      LOG_WARN("failed to add copy expr into array", K(ret), KP(expr));
+    }
+  }
+  return ret;
+}
+
+int ObTransformPreProcess::copy_remove_shared_expr(ObIArray<ObRawExpr *> &copy_exprs,
+                                                   ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("expr is null", K(ret));
+  } else if (ObOptimizerUtil::find_item(copy_exprs, expr)) {
+    // Copy parent first so that copied children will be attached to the new tree and
+    // cannot remain shared through pointers reachable from the old parent.
+    ObRawExpr *new_expr = NULL;
+    if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->expr_factory_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("params have null", K(ret));
+    } else if (OB_FAIL(ObRawExprCopier::copy_expr_node(*ctx_->expr_factory_, expr, new_expr))) {
+      LOG_WARN("failed to copy expr node", K(ret));
+    } else {
+      expr = new_expr;
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+    if (OB_FAIL(SMART_CALL(copy_remove_shared_expr(copy_exprs, expr->get_param_expr(i))))) {
+      LOG_WARN("failed to copy remove shared expr", K(ret));
     }
   }
   return ret;
