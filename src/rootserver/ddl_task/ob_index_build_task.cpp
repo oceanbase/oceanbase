@@ -1049,10 +1049,18 @@ int ObIndexBuildTask::wait_and_send_single_partition_replica_task(bool &state_fi
       LOG_WARN("fail to get next batch tablets", K(ret), K(parallelism), K(execution_id), K(tablets));
       state_finished = true;
     }
-  } else if (OB_FAIL(ObIndexBuildTask::push_tablet_execution_id(task_id_, task_type_, is_retryable_ddl_, data_format_version_, tablets, tenant_id_))) {
-    LOG_WARN("fail to push tablet execution id", K(ret));
-  } else if (OB_FAIL(send_build_single_replica_request(true, parallelism, execution_id, ls_id, leader_addr, tablets))) {
-    LOG_WARN("fail to send build single partition replica request", K(ret), K(parallelism), K(execution_id), K(tablets));
+  } else {
+    if (OB_FAIL(ObIndexBuildTask::push_tablet_execution_id(task_id_, task_type_, is_retryable_ddl_, data_format_version_, tablets, tenant_id_))) {
+      LOG_WARN("fail to push tablet execution id", K(ret));
+    } else if (OB_FAIL(send_build_single_replica_request(true, parallelism, execution_id, ls_id, leader_addr, tablets))) {
+      LOG_WARN("fail to send build single partition replica request", K(ret), K(parallelism), K(execution_id), K(tablets));
+    }
+    if (OB_FAIL(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(tablet_scheduler_.confirm_batch_tablets_status(execution_id, false /* finish_status */, ls_id, tablets))) {
+        LOG_WARN("fail to rollback batch tablets status", K(tmp_ret), K(execution_id), K(ls_id), K(tablets));
+      }
+    }
   }
   return ret;
 }
