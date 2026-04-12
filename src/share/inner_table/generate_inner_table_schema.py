@@ -2824,6 +2824,11 @@ if __name__ == "__main__":
 
   f.close()
 
-  generate_load_inner_table_schema()
+  import sys
+  # used in farm, **must not** use this arg in development
+  if '--skip-load-schema' not in sys.argv:
+    generate_load_inner_table_schema()
+  else:
+    print("Skip generate_load_inner_table_schema due to --skip-load-schema")
 
   print "\nSuccess\n"
