@@ -1049,7 +1049,11 @@ int ObTscCgService::generate_tsc_filter(const ObLogTableScan &op, ObTableScanSpe
       // Defensive check: nonpushdown filter columns should be in output exprs.
       const ExprFixedArray &output_exprs = spec.tsc_ctdef_.get_das_output_exprs();
       for (int64_t i = 0; OB_SUCC(ret) && i < filter_column_exprs.count(); ++i) {
-        if (!has_exist_in_array(output_exprs, filter_column_exprs.at(i))) {
+        if (filter_column_raw_exprs.at(i)->is_column_ref_expr() &&
+            static_cast<const ObColumnRefRawExpr *>(filter_column_raw_exprs.at(i))->is_pseudo_column_ref()) {
+          // filter with pseudo_column_ref expr cannot be pushdown, and pseudo_column_ref expr
+          // is filled in table scan operator, not belong to DAS output exprs.
+        } else if (!has_exist_in_array(output_exprs, filter_column_exprs.at(i))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("nonpushdown filter column is not in output exprs", K(ret), K(i), K(filter_column_exprs), K(output_exprs));
         }
