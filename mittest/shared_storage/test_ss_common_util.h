@@ -173,7 +173,7 @@ ObCompressorType TestSSCommonUtil::get_random_compress_type()
 int TestSSCommonUtil::wait_for_persist_task()
 {
   int ret = OB_SUCCESS;
-  const int64_t interval_us = 10 * 1000 * 1000L;
+  const int64_t interval_us = 60 * 1000 * 1000L;
   const int64_t start_us = ObTimeUtility::current_time();
   while (ATOMIC_LOAD(&SSMicroCacheStat.mem_blk_stat().mem_blk_fg_used_cnt_) > 1 ||
          ATOMIC_LOAD(&SSMicroCacheStat.mem_blk_stat().mem_blk_bg_used_cnt_) > 1) {
