@@ -7016,6 +7016,10 @@ int ObLogPlan::candi_allocate_order_by(bool &need_limit,
     // keep minimal cost plan or interesting plan
     if (OB_SUCC(ret)) {
       int64_t check_scope = OrderingCheckScope::CHECK_SET;
+      if (!limit_plans.empty()) {
+        ObOptimizerContext &opt_ctx = get_optimizer_context();
+        opt_ctx.add_plan_note(LIMIT_RELIABLE_STRATEGY_WIN_NOTE);
+      }
       if (limit_plans.empty() && OB_FAIL(limit_plans.assign(order_by_plans))) {
         LOG_WARN("failed to assign candidate plans", K(ret));
       } else if (OB_FAIL(update_plans_interesting_order_info(limit_plans, check_scope))) {
@@ -7827,6 +7831,10 @@ int ObLogPlan::candi_allocate_limit(ObRawExpr *limit_expr,
     }
     if (OB_SUCC(ret)) {
       int64_t check_scope = OrderingCheckScope::NOT_CHECK;
+      if (!reliable_plans.empty()) {
+        ObOptimizerContext &opt_ctx = get_optimizer_context();
+        opt_ctx.add_plan_note(LIMIT_RELIABLE_STRATEGY_WIN_NOTE);
+      }
       if (reliable_plans.empty() && OB_FAIL(reliable_plans.assign(non_reliable_plans))) {
         LOG_WARN("failed to assign plans", K(ret));
       } else if (OB_FAIL(update_plans_interesting_order_info(reliable_plans, check_scope))) {
@@ -10713,7 +10721,7 @@ int ObLogPlan::add_candidate_plan(ObIArray<CandidatePlan> &current_plans,
     } else if (DominateRelation::OBJ_LEFT_DOMINATE == plan_rel ||
                DominateRelation::OBJ_EQUAL == plan_rel) {
       should_add = false;
-      OPT_TRACE("current plan has be dominated");
+      OPT_TRACE("current plan dominated");
     } else if (DominateRelation::OBJ_RIGHT_DOMINATE == plan_rel) {
       if (OB_FAIL(current_plans.remove(i))) {
         LOG_WARN("failed to remove dominated plans", K(i), K(ret));

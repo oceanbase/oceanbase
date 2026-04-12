@@ -45,6 +45,7 @@ namespace sql
 #define NON_STANDARD_COMPARISON_SETTING "Non-standard comparison level is set to %s because of %s"
 #define INSERTUP_OPT_FOR_COLUMN_STROE_ENABLED  "Optimization of insert on duplicate key update for column store is enabled"
 #define INSERTUP_OPT_FOR_COLUMN_STROE_DISABLED  "Optimization of insert on duplicate key update for column store is disabled, because %s"
+#define LIMIT_RELIABLE_STRATEGY_WIN_NOTE "Streaming strategy is selected because of limit candidate pruning."
 
 }
 }

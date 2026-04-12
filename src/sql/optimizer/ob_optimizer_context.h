@@ -713,8 +713,19 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
       add_plan_note(s);
     }
   }
+  inline bool has_plan_note(const common::ObString &str) const
+  {
+    bool existed = false;
+    for (int64_t i = 0; !existed && i < plan_notes_.count(); ++i) {
+      existed = (0 == plan_notes_.at(i).compare(str));
+    }
+    return existed;
+  }
   void add_plan_note(const common::ObString &str)
   {
+    if (has_plan_note(str)){
+      return;
+    }
     common::ObString s;
     int ret = common::ob_write_string(allocator_, str, s);
     if (OB_SUCC(ret)) {
