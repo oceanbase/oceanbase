@@ -32,13 +32,14 @@
 
 #include <arrow/c/bridge.h>
 #include <arrow/array.h>
-
+#include "lib/wide_integer/ob_wide_integer_str_funcs.h"
 
 namespace oceanbase
 {
 using namespace common;
 namespace sql
 {
+
 #define ARROW_FAIL(statement) (OB_UNLIKELY(!(statement).ok()))
 
 OB_SERIALIZE_MEMBER(ObSelectIntoOpInput, task_id_, sqc_id_);
@@ -4008,8 +4009,11 @@ int ObSelectIntoOp::calc_parquet_decimal_length(int precision)
   return std::ceil((1 + precision / std::log10(2)) / 8);
 }
 
-
-int ObSelectIntoOp::orc_type_mapping_of_ob_type(ObDatumMeta& meta, int max_length, std::unique_ptr<orc::Type>& orc_type)
+int ObSelectIntoOp::orc_type_mapping_of_ob_type(ObDatumMeta &meta,
+                                                int max_length,
+                                                std::unique_ptr<orc::Type> &orc_type,
+                                                const ObExpr *expr,
+                                                ObEvalCtx *eval_ctx)
 {
   int ret = OB_SUCCESS;
   ObObjType obj_type = meta.get_type();
@@ -4029,7 +4033,7 @@ int ObSelectIntoOp::orc_type_mapping_of_ob_type(ObDatumMeta& meta, int max_lengt
   } else if (ObDoubleType == obj_type) {
     orc_type = orc::createPrimitiveType(orc::TypeKind::DOUBLE);
   } else if (ob_is_number_or_decimal_int_tc(obj_type)) {
-    if (OB_FAIL(check_oracle_number(obj_type, meta.precision_, meta.scale_))) {
+    if (OB_FAIL(check_oracle_number(obj_type, meta.precision_, meta.scale_, expr, eval_ctx))) {
       LOG_WARN("not support number type", K(ret));
     } else {
       int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(meta.precision_);
@@ -4087,7 +4091,9 @@ int ObSelectIntoOp::create_orc_schema(std::unique_ptr<orc::Type> &schema)
     std::unique_ptr<orc::Type> column_type;
     if (OB_FAIL(orc_type_mapping_of_ob_type(select_exprs.at(i)->datum_meta_,
                                             select_exprs.at(i)->max_length_,
-                                            column_type))) {
+                                            column_type,
+                                            select_exprs.at(i),
+                                            &eval_ctx_))) {
       LOG_WARN("unsupported type ob the column", K(ret));
     } else {
       try {
@@ -4148,7 +4154,9 @@ int ObSelectIntoOp::setup_parquet_schema()
       primitive_length = -1;
       if (OB_FAIL(check_oracle_number(obj_type,
                                       select_exprs.at(i)->datum_meta_.precision_,
-                                      select_exprs.at(i)->datum_meta_.scale_))) {
+                                      select_exprs.at(i)->datum_meta_.scale_,
+                                      select_exprs.at(i),
+                                      &eval_ctx_))) {
         LOG_WARN("not support number type", K(ret));
       } else if (OB_FAIL(get_parquet_logical_type(logical_type,
                                                   obj_type,
@@ -4594,13 +4602,80 @@ bool ObSelectIntoOp::file_need_split(int64_t file_size)
                 || (MY_SPEC.is_single_ && file_size > MAX_OSS_FILE_SIZE)));
 }
 
-int ObSelectIntoOp::check_oracle_number(ObObjType obj_type, int16_t &precision, int8_t scale)
+int ObSelectIntoOp::deduce_oracle_number_export_ps_from_nmb(const common::number::ObNumber &nmb,
+                                                            int16_t &precision,
+                                                            int8_t &scale)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator("SelectIntoPS", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  char buf[number::ObNumber::MAX_PRINTABLE_SIZE];
+  int64_t pos = 0;
+  const int16_t fmt_scale = static_cast<int16_t>(nmb.get_scale());
+  if (OB_FAIL(nmb.format(buf, sizeof(buf), pos, fmt_scale))) {
+    LOG_WARN("failed to format oracle number for export ps deduce", K(ret));
+  } else if (OB_UNLIKELY(pos <= 0 || pos >= static_cast<int64_t>(sizeof(buf)))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected formatted number length", K(ret), K(pos));
+  } else {
+    const int64_t str_len = pos;
+    int16_t prec_out = PRECISION_UNKNOWN_YET;
+    int16_t scale_out = SCALE_UNKNOWN_YET;
+    int32_t val_len = 0;
+    ObDecimalInt *decint = nullptr;
+    const int wide_ret
+        = wide::from_string(buf, str_len, allocator, scale_out, prec_out, val_len, decint);
+    const bool wide_ps_valid
+        = (OB_SUCCESS == wide_ret && prec_out <= OB_MAX_DECIMAL_POSSIBLE_PRECISION
+           && scale_out <= OB_MAX_DECIMAL_POSSIBLE_PRECISION && scale_out >= 0
+           && prec_out >= scale_out);
+    if (wide_ps_valid) {
+      precision = prec_out;
+      scale = static_cast<int8_t>(scale_out);
+    } else {
+      number::ObNumber parsed;
+      int16_t fp = 0;
+      int16_t fs = 0;
+      const int parse_ret = parsed.from(buf, str_len, allocator, &fp, &fs);
+      const bool parse_ps_valid
+          = (OB_SUCCESS == parse_ret && fp <= OB_MAX_DECIMAL_POSSIBLE_PRECISION
+             && fs <= OB_MAX_DECIMAL_POSSIBLE_PRECISION && fs >= 0 && fp >= fs);
+      if (parse_ps_valid) {
+        precision = fp;
+        scale = static_cast<int8_t>(fs);
+      } else {
+        ret = (OB_SUCCESS != wide_ret)    ? wide_ret
+              : (OB_SUCCESS != parse_ret) ? parse_ret
+                                          : OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to deduce export precision/scale for oracle number",
+                 K(ret), K(wide_ret), K(parse_ret), K(prec_out), K(scale_out), K(fp), K(fs));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSelectIntoOp::check_oracle_number(ObObjType obj_type,
+                                        int16_t &precision,
+                                        int8_t &scale,
+                                        const ObExpr *expr,
+                                        ObEvalCtx *eval_ctx)
 {
   int ret = OB_SUCCESS;
   if (is_oracle_mode() && ob_is_number_tc(obj_type)) {
-    if (scale == 0 && precision == -1) {
-      precision = 38; // oracle int
-    } else if (precision < 1 || scale < -84) {
+    if (PRECISION_UNKNOWN_YET == precision
+        && (static_cast<int8_t>(ORA_NUMBER_SCALE_UNKNOWN_YET) == scale || 0 == scale)) {
+      precision = DEFAULT_NUMBER_PRECISION_FOR_INTEGER;
+      scale = static_cast<int8_t>(DEFAULT_SCALE_FOR_INTEGER);
+      if (OB_NOT_NULL(expr) && OB_NOT_NULL(eval_ctx) && expr->is_static_const_) {
+        const ObDatum &d = expr->locate_expr_datum(*eval_ctx);
+        if (!d.is_null()) {
+          const number::ObNumber nmb(d.get_number());
+          if (OB_FAIL(deduce_oracle_number_export_ps_from_nmb(nmb, precision, scale))) {
+            LOG_WARN("deduce oracle number export precision/scale failed", K(ret));
+          }
+        }
+      }
+    } else if (precision < 1 || scale < static_cast<int8_t>(OB_MIN_NUMBER_SCALE)) {
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "number without specified precision and scale");
       LOG_WARN("not support number without specified precision and scale", K(ret));

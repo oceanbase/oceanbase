@@ -30,6 +30,7 @@
 #include "sql/engine/basic/ob_external_file_writer.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/engine/table/ob_odps_table_utils.h"
+#include "lib/number/ob_number_v2.h"
 
 namespace oceanbase
 {
@@ -381,7 +382,11 @@ private:
                                 parquet::Int96 &res);
   int init_orc_env();
   int setup_orc_schema();
-  int orc_type_mapping_of_ob_type(ObDatumMeta& meta, int max_length, std::unique_ptr<orc::Type>& orc_type);
+  int orc_type_mapping_of_ob_type(ObDatumMeta &meta,
+                                  int max_length,
+                                  std::unique_ptr<orc::Type> &orc_type,
+                                  const ObExpr *expr = nullptr,
+                                  ObEvalCtx *eval_ctx = nullptr);
   int create_orc_schema(std::unique_ptr<orc::Type> &schema);
   int into_outfile_batch_orc(const ObBatchRows &brs, ObExternalFileWriter *data_writer);
   int build_orc_cell(const ObDatumMeta &datum_meta,
@@ -402,9 +407,16 @@ private:
                                 const bool is_strict_mode,
                                 const ObDateSqlMode date_sql_mode);
   bool file_need_split(int64_t file_size);
-  int check_oracle_number(ObObjType obj_type, int16_t &precision, int8_t scale);
+  int check_oracle_number(ObObjType obj_type,
+                          int16_t &precision,
+                          int8_t &scale,
+                          const ObExpr *expr = nullptr,
+                          ObEvalCtx *eval_ctx = nullptr);
+  int deduce_oracle_number_export_ps_from_nmb(const common::number::ObNumber &nmb,
+                                              int16_t &precision,
+                                              int8_t &scale);
 
-  #ifdef OB_BUILD_CPP_ODPS
+#ifdef OB_BUILD_CPP_ODPS
   int recursive_fill_list_record(shared_ptr<apsara::odps::sdk::ODPSArray> odps_array,
                                  ObODPSArrayHelper *array_helper,
                                  ObIAllocator &alloc,

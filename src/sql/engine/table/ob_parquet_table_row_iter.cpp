@@ -2286,7 +2286,11 @@ int ObParquetTableRowIterator::DataLoader::load_timestamp_hive()
           ObOTimestampData data;
           data.time_us_ = utc_timestamp + adjust_us;
           data.time_ctx_.set_tail_nsec((int32_t)(nsec_time_value % NSECS_PER_USEC));
-          dec_vec->set_otimestamp_tiny(i + row_offset_, ObOTimestampTinyData().from_timestamp_data(data));
+          if (ObTimestampTZType == file_col_expr_->datum_meta_.type_) {
+            dec_vec->set_otimestamp_tz(i + row_offset_, data);
+          } else {
+            dec_vec->set_otimestamp_tiny(i + row_offset_, ObOTimestampTinyData().from_timestamp_data(data));
+          }
         }
       }
     }
