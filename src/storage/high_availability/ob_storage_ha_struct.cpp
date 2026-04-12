@@ -656,8 +656,12 @@ bool ObMigrationStatusHelper::check_migration_status_is_fail(const ObMigrationSt
 
 bool ObMigrationStatusHelper::need_online(const ObMigrationStatus &cur_status)
 {
+  // If online ls executes before ls migration handler changes its migration status from
+  // OB_MIGRATION_STATUS_REPLACE_HOLD to OB_MIGRATION_STATUS_NONE. The ls will miss online.
+  // So, ls with migration status of OB_MIGRATION_STATUS_REPLACE_HOLD needs online.
   return (OB_MIGRATION_STATUS_NONE == cur_status
-         || OB_MIGRATION_STATUS_GC == cur_status);
+         || OB_MIGRATION_STATUS_GC == cur_status
+         || OB_MIGRATION_STATUS_REPLACE_HOLD == cur_status);
 }
 
 bool ObMigrationStatusHelper::check_allow_gc_abandoned_ls(const ObMigrationStatus &cur_status)
