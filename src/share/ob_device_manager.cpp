@@ -6,6 +6,7 @@
 #include <sys/vfs.h>
 #include <unistd.h>
 #include "lib/restore/ob_object_device.h"
+#include "lib/utility/ob_macro_utils.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_table_device.h"
 #endif
@@ -416,6 +417,35 @@ int parse_storage_info(common::ObString uri, ObIODevice*& device_handle, common:
   return ret;
 }
 
+void ObDeviceManager::free_device_slot_(ObDeviceInsInfo &dev_info)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  if (OB_NOT_NULL(dev_info.device_)) {
+    if (OB_TMP_FAIL(ObIOManager::get_instance().remove_device_channel(dev_info.device_))) {
+      ret = COVER_SUCC(tmp_ret);
+      OB_LOG(WARN, "fail to remove device channel", KR(tmp_ret), KP(dev_info.device_));
+    }
+    ObString old_key(dev_info.device_key_);
+    if (OB_TMP_FAIL(device_map_.erase_refactored(old_key))) {
+      ret = COVER_SUCC(tmp_ret);
+      OB_LOG(WARN, "fail to erase device from device_map", KR(tmp_ret), KP(old_key.ptr()));
+    }
+    if (OB_TMP_FAIL(handle_map_.erase_refactored((int64_t)(dev_info.device_)))) {
+      ret = COVER_SUCC(tmp_ret);
+      OB_LOG(WARN, "fail to erase device from handle_map", KR(tmp_ret), KP(dev_info.device_));
+    }
+    dev_info.device_->destroy();
+    allocator_.free(dev_info.device_);
+    dev_info.device_ = nullptr;
+    device_count_--;
+  }
+  if (OB_NOT_NULL(dev_info.device_key_)) {
+    allocator_.free(dev_info.device_key_);
+    dev_info.device_key_ = nullptr;
+  }
+}
+
 int ObDeviceManager::alloc_device_(
     const ObString &uri,
     const ObString &device_key,
@@ -447,34 +477,11 @@ int ObDeviceManager::alloc_device_(
     } else {
       //try to release one
       if (-1 == avai_idx && -1 != last_no_ref_idx) {
-        //erase from map
-        ObIODevice* del_device = device_ins_[last_no_ref_idx].device_;
-        ObString old_key(device_ins_[last_no_ref_idx].device_key_);
-        if (OB_FAIL(ObIOManager::get_instance().remove_device_channel(del_device))) {
-          OB_LOG(WARN, "fail to remove device channel", KR(ret), KP(del_device));
-        } else if (OB_FAIL(device_map_.erase_refactored(old_key))) {
-          OB_LOG(WARN, "fail to erase device from device map", KP(old_key.ptr()), KR(ret),
-              K(uri), KP(device_key.ptr()));
-        } else if (OB_FAIL(handle_map_.erase_refactored((int64_t)(device_ins_[last_no_ref_idx].device_)))) {
-          OB_LOG(WARN, "fail to erase device from handle map", K(device_ins_[last_no_ref_idx].device_),
-                 KR(ret), K(uri), KP(device_key.ptr()));
-        } else {
-          /*free the resource*/
-          del_device->destroy();
-          allocator_.free(del_device);
-          device_ins_[last_no_ref_idx].device_ = NULL;
-          char *del_device_key = device_ins_[last_no_ref_idx].device_key_;
-          if (OB_NOT_NULL(del_device_key)) {
-            allocator_.free(del_device_key);
-            device_ins_[last_no_ref_idx].device_key_ = NULL;
-            del_device_key = NULL;
-          }
-          abort_unless(device_count_ == MAX_DEVICE_INSTANCE);
-          device_count_--;
-          avai_idx = last_no_ref_idx;
-          OB_LOG(INFO, "release one device for realloc another!", KP(old_key.ptr()),
-              K(uri), KP(device_key.ptr()));
-        }
+        abort_unless(device_count_ == MAX_DEVICE_INSTANCE);
+        free_device_slot_(device_ins_[last_no_ref_idx]);
+        avai_idx = last_no_ref_idx;
+        OB_LOG(INFO, "release one device for realloc another!",
+            K(uri), KP(device_key.ptr()));
       }
 
       if (OB_SUCCESS == ret) {
@@ -599,6 +606,11 @@ int ObDeviceManager::alloc_device_and_init_(
           } else {
             object_device->set_storage_id_mod(storage_id_mod);
           }
+        }
+
+        if (OB_FAIL(ret)) {
+          free_device_slot_(*dev_info);
+          dev_info = nullptr;
         }
       }
     } else {

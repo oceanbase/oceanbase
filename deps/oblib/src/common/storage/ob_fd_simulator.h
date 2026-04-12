@@ -42,6 +42,7 @@ public:
   };
 
   int init();
+  void destroy();
   int get_fd(void* ctx, const int device_type, const ObStorageAccessType op_type, ObIOFd &fd);
   int fd_to_ctx(const ObIOFd& fd, void*& ctx);  //called when query ctx 
   int release_fd(const ObIOFd& fd);           //called when close

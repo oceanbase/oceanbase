@@ -102,6 +102,7 @@ private:
   int alloc_device_(const ObString &uri,
                     const ObString &device_key,
                     ObDeviceInsInfo *&device_info);
+  void free_device_slot_(ObDeviceInsInfo &dev_info);
   int get_device_key_(ObIAllocator &allcator,
                       const ObString &uri,
                       const ObObjectStorageInfo &storage_info,

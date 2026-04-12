@@ -73,6 +73,21 @@ int ObFdSimulator::init_manager_array(FdSlot* second_array)
   return ret;
 }
 
+void ObFdSimulator::destroy()
+{
+  common::ObSpinLockGuard guard(lock_);
+  if (is_init_) {
+    first_array_ = nullptr;
+    second_array_num_ = 0;
+    used_fd_cnt_ = 0;
+    total_fd_cnt_ = 0;
+    alloc_fd_cnt_ = 0;
+    release_fd_cnt_ = 0;
+    allocator_.reset();
+    is_init_ = false;
+  }
+}
+
 /*init the fd management unit*/
 int ObFdSimulator::init()
 {

@@ -260,6 +260,7 @@ void ObObjectDevice::destroy()
     async_buffered_multiwriter_ctx_pool_.reset();
     async_io_event_queue_.destroy();
     allocator_.reset();
+    fd_mng_.destroy();
     //close the util
     util_.close();
     //baseinfo will be free with allocator
@@ -320,6 +321,13 @@ int ObObjectDevice::start(const ObIODOpts &opts)
       if (OB_FAIL(databuff_printf(storage_info_str_, OB_MAX_URI_LENGTH, "%s", opts.opts_[0].value_.value_str))) {
         OB_LOG(WARN, "fail to copy str to storage info", K(ret));
       }
+    }
+
+    if (OB_FAIL(ret) && !is_started_) {
+      async_io_event_queue_.destroy();
+      allocator_.reset();
+      fd_mng_.destroy();
+      util_.close();
     }
   }
   return ret;
