@@ -8,12 +8,33 @@ if(RET AND NOT RET EQUAL 0)
   message(FATAL_ERROR "Generate pl parser failed and check error in ${PROJECT_SOURCE_DIR}/src/pl/parser/_gen_parser.error")
 endif()
 
-ob_set_subtarget(ob_pl ALONE
+set(ob_pl_alone_sources
   parser/ob_pl_parser.cpp
   parser/pl_non_reserved_keywords_mysql_mode.c
   parser/pl_parser_base.c
   parser/pl_parser_mysql_mode_lex.c
   parser/pl_parser_mysql_mode_tab.c
+)
+
+if(OB_BUILD_ORACLE_PL)
+  list(APPEND ob_pl_alone_sources
+    parser/pl_parser_oracle_latin1_mode_lex.c
+    parser/pl_parser_oracle_latin1_mode_tab.c
+    parser/pl_non_reserved_keywords_oracle_latin1_mode.c
+    parser/pl_parser_oracle_utf8_mode_lex.c
+    parser/pl_parser_oracle_utf8_mode_tab.c
+    parser/pl_non_reserved_keywords_oracle_utf8_mode.c
+    parser/pl_parser_oracle_gbk_mode_lex.c
+    parser/pl_parser_oracle_gbk_mode_tab.c
+    parser/pl_non_reserved_keywords_oracle_gbk_mode.c
+    parser/pl_parser_oracle_hkscs_mode_lex.c
+    parser/pl_parser_oracle_hkscs_mode_tab.c
+    parser/pl_non_reserved_keywords_oracle_hkscs_mode.c
+  )
+endif()
+
+ob_set_subtarget(ob_pl ALONE
+  ${ob_pl_alone_sources}
 )
 
 ob_set_subtarget(ob_pl common

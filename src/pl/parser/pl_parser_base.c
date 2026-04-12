@@ -4,6 +4,7 @@
  */
 
 #include "pl/parser/pl_parser_base.h"
+#include "sql/parser/ob_parser_charset_utils.h"
 
 #define yyconst const
 typedef void* yyscan_t;
@@ -11,11 +12,29 @@ typedef void* yyscan_t;
 typedef struct yy_buffer_state *YY_BUFFER_STATE;
 
 #ifdef OB_BUILD_ORACLE_PL
-extern YY_BUFFER_STATE obpl_oracle_yy_scan_bytes (yyconst char *bytes,int len ,yyscan_t yyscanner );
-extern void obpl_oracle_yy_switch_to_buffer (YY_BUFFER_STATE new_buffer ,yyscan_t yyscanner );
-extern void obpl_oracle_yy_delete_buffer (YY_BUFFER_STATE b ,yyscan_t yyscanner );
-extern int obpl_oracle_yylex_init_extra (YY_EXTRA_TYPE user_defined,yyscan_t* scanner);
-extern int obpl_oracle_yyparse(ObParseCtx *parse_ctx);
+extern YY_BUFFER_STATE obpl_oracle_latin1_yy_scan_bytes (yyconst char *bytes,int len ,yyscan_t yyscanner );
+extern void obpl_oracle_latin1_yy_switch_to_buffer (YY_BUFFER_STATE new_buffer ,yyscan_t yyscanner );
+extern void obpl_oracle_latin1_yy_delete_buffer (YY_BUFFER_STATE b ,yyscan_t yyscanner );
+extern int obpl_oracle_latin1_yylex_init_extra (YY_EXTRA_TYPE user_defined,yyscan_t* scanner);
+extern int obpl_oracle_latin1_yyparse(ObParseCtx *parse_ctx);
+
+extern YY_BUFFER_STATE obpl_oracle_utf8_yy_scan_bytes (yyconst char *bytes,int len ,yyscan_t yyscanner );
+extern void obpl_oracle_utf8_yy_switch_to_buffer (YY_BUFFER_STATE new_buffer ,yyscan_t yyscanner );
+extern void obpl_oracle_utf8_yy_delete_buffer (YY_BUFFER_STATE b ,yyscan_t yyscanner );
+extern int obpl_oracle_utf8_yylex_init_extra (YY_EXTRA_TYPE user_defined,yyscan_t* scanner);
+extern int obpl_oracle_utf8_yyparse(ObParseCtx *parse_ctx);
+
+extern YY_BUFFER_STATE obpl_oracle_gbk_yy_scan_bytes (yyconst char *bytes,int len ,yyscan_t yyscanner );
+extern void obpl_oracle_gbk_yy_switch_to_buffer (YY_BUFFER_STATE new_buffer ,yyscan_t yyscanner );
+extern void obpl_oracle_gbk_yy_delete_buffer (YY_BUFFER_STATE b ,yyscan_t yyscanner );
+extern int obpl_oracle_gbk_yylex_init_extra (YY_EXTRA_TYPE user_defined,yyscan_t* scanner);
+extern int obpl_oracle_gbk_yyparse(ObParseCtx *parse_ctx);
+
+extern YY_BUFFER_STATE obpl_oracle_hkscs_yy_scan_bytes (yyconst char *bytes,int len ,yyscan_t yyscanner );
+extern void obpl_oracle_hkscs_yy_switch_to_buffer (YY_BUFFER_STATE new_buffer ,yyscan_t yyscanner );
+extern void obpl_oracle_hkscs_yy_delete_buffer (YY_BUFFER_STATE b ,yyscan_t yyscanner );
+extern int obpl_oracle_hkscs_yylex_init_extra (YY_EXTRA_TYPE user_defined,yyscan_t* scanner);
+extern int obpl_oracle_hkscs_yyparse(ObParseCtx *parse_ctx);
 #define IS_ORACLE_COMPATIBLE (1/*ORACLE_MODE*/ == parse_ctx->comp_mode_)
 #endif
 
@@ -34,9 +53,35 @@ int obpl_parser_init(ObParseCtx *parse_ctx)
 #ifndef OB_BUILD_ORACLE_PL
     ret = obpl_mysql_yylex_init_extra(parse_ctx, &(parse_ctx->scanner_ctx_.yyscan_info_));
 #else
-    ret = IS_ORACLE_COMPATIBLE ?
-        obpl_oracle_yylex_init_extra(parse_ctx, &(parse_ctx->scanner_ctx_.yyscan_info_))
-        : obpl_mysql_yylex_init_extra(parse_ctx, &(parse_ctx->scanner_ctx_.yyscan_info_));
+    if (IS_ORACLE_COMPATIBLE) {
+      ObCharsetParserType type = CHARSET_PARSER_TYPE_NONE;
+      if (ret = obcharset_get_parser_type_by_coll(parse_ctx->connection_collation_, &type),
+                 0 != ret) {
+        (void)snprintf(parse_ctx->global_errmsg_, MAX_ERROR_MSG, "get charset failed: %u",
+                                                    parse_ctx->connection_collation_);
+      } else {
+        switch(type) {
+          case CHARSET_PARSER_TYPE_SINGLE_BYTE:
+            ret = obpl_oracle_latin1_yylex_init_extra(parse_ctx, &(parse_ctx->scanner_ctx_.yyscan_info_));
+            break;
+          case CHARSET_PARSER_TYPE_UTF8MB4:
+            ret = obpl_oracle_utf8_yylex_init_extra(parse_ctx, &(parse_ctx->scanner_ctx_.yyscan_info_));
+            break;
+          case CHARSET_PARSER_TYPE_GB:
+            ret = obpl_oracle_gbk_yylex_init_extra(parse_ctx, &(parse_ctx->scanner_ctx_.yyscan_info_));
+            break;
+          case CHARSET_PARSER_TYPE_HKSCS:
+            ret = obpl_oracle_hkscs_yylex_init_extra(parse_ctx, &(parse_ctx->scanner_ctx_.yyscan_info_));
+            break;
+          default:
+            ret = -1;
+            (void)snprintf(parse_ctx->global_errmsg_, MAX_ERROR_MSG, "get not support connection collation: %u",
+                                                                              parse_ctx->connection_collation_);
+        }
+      }
+    } else {
+      ret = obpl_mysql_yylex_init_extra(parse_ctx, &(parse_ctx->scanner_ctx_.yyscan_info_));
+    }
 #endif
   }
   return ret;
@@ -56,19 +101,64 @@ int obpl_parser_parse(ObParseCtx *parse_ctx)
     } else {
       ret = OB_PARSER_SUCCESS;
 #ifdef IS_ORACLE_COMPATIBLE
-      YY_BUFFER_STATE bp = (IS_ORACLE_COMPATIBLE ?
-          obpl_oracle_yy_scan_bytes(parse_ctx->stmt_str_, parse_ctx->stmt_len_, parse_ctx->scanner_ctx_.yyscan_info_)
-          : obpl_mysql_yy_scan_bytes(parse_ctx->stmt_str_, parse_ctx->stmt_len_, parse_ctx->scanner_ctx_.yyscan_info_));
-      IS_ORACLE_COMPATIBLE ?
-          obpl_oracle_yy_switch_to_buffer(bp, parse_ctx->scanner_ctx_.yyscan_info_)
-          : obpl_mysql_yy_switch_to_buffer(bp, parse_ctx->scanner_ctx_.yyscan_info_);
-
-      if (0 != (IS_ORACLE_COMPATIBLE ? obpl_oracle_yyparse(parse_ctx) : obpl_mysql_yyparse(parse_ctx))) {
-        ret = OB_PARSER_ERR_PARSE_SQL;
+      if (IS_ORACLE_COMPATIBLE) {
+        ObCharsetParserType type = CHARSET_PARSER_TYPE_NONE;
+        if (ret = obcharset_get_parser_type_by_coll(parse_ctx->connection_collation_, &type),
+                   0 != ret) {
+          (void)snprintf(parse_ctx->global_errmsg_, MAX_ERROR_MSG, "get charset failed: %u",
+                                                      parse_ctx->connection_collation_);
+        } else {
+          switch(type) {
+            case CHARSET_PARSER_TYPE_SINGLE_BYTE: {
+              YY_BUFFER_STATE bp = obpl_oracle_latin1_yy_scan_bytes(parse_ctx->stmt_str_, parse_ctx->stmt_len_, parse_ctx->scanner_ctx_.yyscan_info_);
+              obpl_oracle_latin1_yy_switch_to_buffer(bp, parse_ctx->scanner_ctx_.yyscan_info_);
+              if (0 != obpl_oracle_latin1_yyparse(parse_ctx)) {
+                ret = OB_PARSER_ERR_PARSE_SQL;
+              }
+              obpl_oracle_latin1_yy_delete_buffer(bp, parse_ctx->scanner_ctx_.yyscan_info_);
+              break;
+            }
+            case CHARSET_PARSER_TYPE_UTF8MB4: {
+              YY_BUFFER_STATE bp = obpl_oracle_utf8_yy_scan_bytes(parse_ctx->stmt_str_, parse_ctx->stmt_len_, parse_ctx->scanner_ctx_.yyscan_info_);
+              obpl_oracle_utf8_yy_switch_to_buffer(bp, parse_ctx->scanner_ctx_.yyscan_info_);
+              if (0 != obpl_oracle_utf8_yyparse(parse_ctx)) {
+                ret = OB_PARSER_ERR_PARSE_SQL;
+              }
+              obpl_oracle_utf8_yy_delete_buffer(bp, parse_ctx->scanner_ctx_.yyscan_info_);
+              break;
+            }
+            case CHARSET_PARSER_TYPE_GB: {
+              YY_BUFFER_STATE bp = obpl_oracle_gbk_yy_scan_bytes(parse_ctx->stmt_str_, parse_ctx->stmt_len_, parse_ctx->scanner_ctx_.yyscan_info_);
+              obpl_oracle_gbk_yy_switch_to_buffer(bp, parse_ctx->scanner_ctx_.yyscan_info_);
+              if (0 != obpl_oracle_gbk_yyparse(parse_ctx)) {
+                ret = OB_PARSER_ERR_PARSE_SQL;
+              }
+              obpl_oracle_gbk_yy_delete_buffer(bp, parse_ctx->scanner_ctx_.yyscan_info_);
+              break;
+            }
+            case CHARSET_PARSER_TYPE_HKSCS: {
+              YY_BUFFER_STATE bp = obpl_oracle_hkscs_yy_scan_bytes(parse_ctx->stmt_str_, parse_ctx->stmt_len_, parse_ctx->scanner_ctx_.yyscan_info_);
+              obpl_oracle_hkscs_yy_switch_to_buffer(bp, parse_ctx->scanner_ctx_.yyscan_info_);
+              if (0 != obpl_oracle_hkscs_yyparse(parse_ctx)) {
+                ret = OB_PARSER_ERR_PARSE_SQL;
+              }
+              obpl_oracle_hkscs_yy_delete_buffer(bp, parse_ctx->scanner_ctx_.yyscan_info_);
+              break;
+            }
+            default:
+              ret = -1;
+              (void)snprintf(parse_ctx->global_errmsg_, MAX_ERROR_MSG, "get not support connection collation: %u",
+                                                                                parse_ctx->connection_collation_);
+          }
+        }
+      } else {
+        YY_BUFFER_STATE bp = obpl_mysql_yy_scan_bytes(parse_ctx->stmt_str_, parse_ctx->stmt_len_, parse_ctx->scanner_ctx_.yyscan_info_);
+        obpl_mysql_yy_switch_to_buffer(bp, parse_ctx->scanner_ctx_.yyscan_info_);
+        if (0 != obpl_mysql_yyparse(parse_ctx)) {
+          ret = OB_PARSER_ERR_PARSE_SQL;
+        }
+        obpl_mysql_yy_delete_buffer(bp, parse_ctx->scanner_ctx_.yyscan_info_);
       }
-      IS_ORACLE_COMPATIBLE ?
-          obpl_oracle_yy_delete_buffer(bp, parse_ctx->scanner_ctx_.yyscan_info_)
-          : obpl_mysql_yy_delete_buffer(bp, parse_ctx->scanner_ctx_.yyscan_info_);
 #else
       YY_BUFFER_STATE bp =
           obpl_mysql_yy_scan_bytes(parse_ctx->stmt_str_, parse_ctx->stmt_len_, parse_ctx->scanner_ctx_.yyscan_info_);
