@@ -731,6 +731,7 @@ int ObTableApiScanRowIterator::open(ObTableApiScanExecutor *executor)
 int ObTableApiScanRowIterator::get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
+  row = nullptr;
   ObNewRow *tmp_row = nullptr;
   char *row_buf = nullptr;
   ObObj *cells = nullptr;
@@ -844,6 +845,7 @@ int ObTableApiScanRowIterator::adjust_output_obj_type(ObObj &obj)
 int ObTableApiScanRowIterator::get_next_row(ObNewRow *&row, common::ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
+  row = nullptr;
   ObNewRow *inner_row = nullptr;
   if (OB_FAIL(get_next_row(inner_row))) {
     if (OB_ITER_END != ret) {
