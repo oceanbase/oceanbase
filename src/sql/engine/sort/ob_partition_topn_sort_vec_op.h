@@ -22,7 +22,6 @@ namespace oceanbase {
 namespace sql {
 class ObPartTopnRowBuffer {
   public:
-    const static int64_t MAX_BUFFER_SIZE = 1 * 1024 * 1024; // 1MB
     const static int64_t MIN_BUFFER_SIZE = 2 * 1024; // 2KB
     ObPartTopnRowBuffer(ObSqlWorkAreaProfile &profile,
                         common::ObIAllocator &allocator,
@@ -73,18 +72,18 @@ class ObPartTopnRowBuffer {
         common::ObList<RowBuffer, ObIAllocator>::const_iterator iter = row_buffers_.last();
         const RowBuffer &row_buf = *iter;
         // expected size = (1.0 * used_size / buffer_size) * 2 * buffer_size
-        ret = (row_buf.buffer_offset_ * 2);
+        ret = min(row_buf.buffer_offset_ * 2, max_mem_bound());
       }
       return ret;
     }
     int64_t max_mem_bound() const {
-      return 0.8 * profile_.get_global_bound_size();
+      return min((int64_t)(0.8 * profile_.get_global_bound_size()), get_level3_cache_size());
     }
     int get_mem(int64_t size, char *&buffer) {
       int ret = OB_SUCCESS;
       if (OB_UNLIKELY(row_buffers_.empty())) {
         RowBuffer row_buf;
-        int64_t buffer_size = min(next_pow2(size * est_rows_ / 10), MAX_BUFFER_SIZE);
+        int64_t buffer_size = min(next_pow2(size * est_rows_ / 10), get_level3_cache_size());
         buffer_size = max(buffer_size, MIN_BUFFER_SIZE);
         buffer_size = min(buffer_size, max_mem_bound());
         row_buf.buffer_size_ = buffer_size;
