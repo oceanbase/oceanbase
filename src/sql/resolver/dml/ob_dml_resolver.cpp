@@ -21561,8 +21561,9 @@ int ObDMLResolver::resolve_match_against_expr_with_match_phrase_mode(ObRawExpr *
   if (OB_ISNULL(expr) || OB_ISNULL(cur_match_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(expr), K(cur_match_expr));
+  } else {
+    cur_match_expr->set_mode_flag(ObMatchAgainstMode::NATURAL_LANGUAGE_MODE);
   }
-  cur_match_expr->set_mode_flag(ObMatchAgainstMode::NATURAL_LANGUAGE_MODE);
 
   ObRawExpr *result_op = nullptr;
   ObRawExpr *and_op = nullptr;
@@ -21572,22 +21573,28 @@ int ObDMLResolver::resolve_match_against_expr_with_match_phrase_mode(ObRawExpr *
   ObSEArray<ObRawExpr*, 1> and_param_exprs;
   ObSEArray<ObRawExpr*, 1> or_like_param_exprs;
   bool result_is_bool = true;
-  ObRawExpr *search_key_expr = cur_match_expr->get_search_key();
+  ObRawExpr *search_key_expr = nullptr;
   ObRawExpr *match_parent_expr = nullptr;
 
   ObOpRawExpr *concat_text_expr = nullptr;
   ObConstRawExpr *const_str_expr = nullptr;
   ObConstRawExpr *like_es_expr = NULL;
   ObSEArray<ObRawExpr*, 1> substr_param_exprs;
-  const char *ptr_value = "%";
-  ObString const_str_value(1, ptr_value);
-  const char *es_ptr_value = "\\";
-  ObString like_escape(1, es_ptr_value);
   if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(search_key_expr = cur_match_expr->get_search_key())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null search key in match phrase mode", K(ret));
+  } else {
+    const ObCollationType search_key_cs = search_key_expr->get_result_type().get_collation_type();
+    const ObString const_str_value = ObCharsetUtils::get_const_str(search_key_cs, '%');
+    const ObString like_escape = ObCharsetUtils::get_const_str(search_key_cs, '\\');
+    if (OB_UNLIKELY(const_str_value.empty() || like_escape.empty())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get_const_str failed for phrase LIKE aux literal", K(ret), K(search_key_cs));
   } else if (OB_FAIL(ObRawExprUtils::build_const_string_expr(*params_.expr_factory_,
                                                       ObVarcharType,
                                                       const_str_value,
-                                                      search_key_expr->get_result_type().get_collation_type(),
+                                                      search_key_cs,
                                                       const_str_expr))) {
     LOG_WARN("fail to build type expr", K(ret));
   } else if (OB_FAIL(substr_param_exprs.push_back(const_str_expr))) {
@@ -21604,7 +21611,7 @@ int ObDMLResolver::resolve_match_against_expr_with_match_phrase_mode(ObRawExpr *
   } else if (OB_FAIL(ObRawExprUtils::build_const_string_expr(*params_.expr_factory_,
                                                               ObVarcharType,
                                                               like_escape,
-                                                              search_key_expr->get_result_type().get_collation_type(),
+                                                              search_key_cs,
                                                               like_es_expr))) {
     LOG_WARN("fail to create string raw expr", K(ret), K(like_escape));
   } else {
@@ -21627,6 +21634,7 @@ int ObDMLResolver::resolve_match_against_expr_with_match_phrase_mode(ObRawExpr *
         LOG_WARN("fail to push back expr", K(ret));
       }
     }
+  }
   }
   if (OB_FAIL(ret)) {
   } else if (or_like_param_exprs.count() == 0) {
