@@ -398,12 +398,13 @@ private:
     // Use the stream identifier to delete the request structure
     int remove(RpcRequest *target);
 
-    TO_STRING_KV(K_(count), K_(head), K_(tail));
+    TO_STRING_KV(K_(count), KP_(head), KP_(tail));
   };
 
 public:
   TO_STRING_KV(
       K_(tenant_id),
+      K_(svr),
       "host", reinterpret_cast<void *>(&host_),
       "state", print_state(state_),
       "rpc_result_cnt", res_queue_.count(),
