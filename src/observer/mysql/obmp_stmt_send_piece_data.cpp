@@ -123,6 +123,7 @@ int ObMPStmtSendPieceData::process()
     LOG_WARN("session is NULL or invalid", K_(stmt_id), K_(param_id), K(sess), K(ret));
   } else if (OB_FAIL(update_transmission_checksum_flag(*sess))) {
     LOG_WARN("update transmisson checksum flag failed", K(ret));
+    revert_session(sess);
   } else {
     ObSQLSessionInfo &session = *sess;
     THIS_WORKER.set_session(sess);
