@@ -846,6 +846,10 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
   bool enable_spf_batch_rescan = session.is_spf_mlj_group_rescan_enabled();
   bool enable_px_ordered_coord = GCONF._enable_px_ordered_coord;
   int64_t das_batch_rescan_flag = tenant_config.is_valid() ? tenant_config->_enable_das_batch_rescan_flag : 0;
+  // when use tracepoint, enable all batch rescan only for tenant default
+  if ((OB_E(EventTable::EN_DAS_GROUP_RESCAN_TEST_MODE) OB_SUCCESS) != OB_SUCCESS) {
+    das_batch_rescan_flag = INT64_MAX;
+  }
   // disabled when config is not valid
   int64_t rtf_creator_max_row_count = tenant_config.is_valid() ? tenant_config->_rtf_creator_max_row_count : INT64_MAX;
   int64_t rtf_user_min_partition_count = tenant_config.is_valid() ? tenant_config->_rtf_user_min_partition_count : -1;

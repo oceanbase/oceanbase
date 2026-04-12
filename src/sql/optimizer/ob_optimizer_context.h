@@ -529,10 +529,6 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     // when enable das batch rescan flag and opt_version >= 4.2.5, use new interface to check can batch rescan,
     // otherwise, use old interface to check can batch rescan for compatibility.
     enable_425_exec_batch_rescan_ = (batch_rescan_flag != 0) && enable_425_opt_version;
-    // when use tracepoint, enable all batch rescan.
-    if ((OB_E(EventTable::EN_DAS_GROUP_RESCAN_TEST_MODE) OB_SUCCESS) != OB_SUCCESS) {
-      batch_rescan_flags_ = INT64_MAX;
-    }
   }
 
   inline bool enable_nlj_batch_rescan() const { return enable_nlj_batch_rescan_; }
