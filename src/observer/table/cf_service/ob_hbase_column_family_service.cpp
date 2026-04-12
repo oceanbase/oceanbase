@@ -539,6 +539,7 @@ int ObHbaseColumnFamilyService::del(const ObHbaseTableCells &table_cells, ObTabl
           LOG_WARN("fail to construct query from del entity", K(ret), KPC(cell));
         } else {
           query.set_table_id(table_id);
+          query.set_use_for_delete(true);
           ObIArray<ObTabletID> &tablet_ids = table_query.get_tablet_ids();
           tablet_ids.reset();
           if (OB_FAIL(tablet_ids.push_back(cell->get_tablet_id()))) {
@@ -605,7 +606,10 @@ int ObHbaseMultiCFService::delete_all_family(const ObITableEntity &del_cell, con
 
   if (OB_FAIL(construct_query(del_cell, exec_ctx, query))) {
     LOG_WARN("fail to cons query from del entity", K(ret), K(del_cell));
-  } else if (OB_FAIL(ObTableQueryUtils::get_table_schemas(schema_guard, table_group_name, true,
+  } else {
+    query.set_use_for_delete(true);
+  }
+  if (OB_SUCC(ret) && OB_FAIL(ObTableQueryUtils::get_table_schemas(schema_guard, table_group_name, true,
                   credential.tenant_id_, credential.database_id_, table_schemas))) {
     LOG_WARN("fail to get all column family table schemas", K(ret), K(table_group_name),
       K(credential.tenant_id_), K(credential.database_id_));
@@ -687,6 +691,7 @@ int ObHbaseMultiCFService::delete_family(const ObITableEntity &del_cell, const O
   } else {
     query.set_table_id(real_table_id);
     query.set_tablet_id(real_tablet_id);
+    query.set_use_for_delete(true);
     if (OB_FAIL(ObHbaseColumnFamilyService::del(query, exec_ctx))) {
       LOG_WARN("fail to delete by query", K(ret), K(query));
     } else {}

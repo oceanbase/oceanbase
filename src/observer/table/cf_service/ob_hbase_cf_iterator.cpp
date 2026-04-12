@@ -426,7 +426,7 @@ int ObHbaseRowIterator::init(ScannerContext &scanner_context, const ObHBaseParam
     if (desc.get_time_to_live() > 0) {
       time_to_live_ = desc.get_time_to_live();
     }
-    if (desc.get_max_version() > 0) {
+    if (desc.get_max_version() > 0 && !hbase_query_.use_for_delete()) {
       max_version_ = desc.get_max_version();
     }
     if ((select_columns.empty() ||
@@ -615,7 +615,7 @@ int ObHbaseRowIterator::get_next_row_internal(ResultType *&result)
       if (time_to_live_ > 0) {
         column_tracker_->set_ttl(time_to_live_);
       }
-      if (max_version_ > 0) {
+      if (max_version_ > 0 && !hbase_query_.use_for_delete()) {
         int32_t real_max_version = std::min(column_tracker_->get_max_version(), max_version_);
         column_tracker_->set_max_version(real_max_version);
       }
