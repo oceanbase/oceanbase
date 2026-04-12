@@ -83,6 +83,7 @@ protected:
   void prepare_data_desc(ObWholeDataStoreDesc &data_desc, ObSSTableIndexBuilder *sstable_builder);
   void prepare_index_desc(const ObWholeDataStoreDesc &data_desc, ObWholeDataStoreDesc &index_desc);
   void mock_compaction(const int64_t test_row_num,
+                       const uint64_t data_version,
                        ObIArray<ObMacroBlocksWriteCtx *> &data_write_ctxs,
                        ObIArray<ObMacroBlocksWriteCtx *> &index_write_ctxs,
                        ObMacroMetasArray *&meta_info_list,
@@ -620,6 +621,7 @@ void TestIndexTree::prepare_cg_data_desc(ObWholeDataStoreDesc &data_desc,
 }
 
 void TestIndexTree::mock_compaction(const int64_t test_row_num,
+                                    const uint64_t data_version,
                                     ObIArray<ObMacroBlocksWriteCtx *> &data_write_ctxs,
                                     ObIArray<ObMacroBlocksWriteCtx *> &index_write_ctxs,
                                     ObMacroMetasArray *&meta_info_list,
@@ -636,6 +638,8 @@ void TestIndexTree::mock_compaction(const int64_t test_row_num,
   ASSERT_NE(nullptr, buf);
   sstable_builder = new (buf) ObSSTableIndexBuilder(false /* not need writer buffer*/);
   prepare_index_builder(data_desc, *sstable_builder);
+  sstable_builder->index_store_desc_.get_desc().static_desc_->major_working_cluster_version_ = data_version;
+  sstable_builder->container_store_desc_.static_desc_->major_working_cluster_version_ = data_version;
   ObDatumRow multi_row;
   ASSERT_EQ(OB_SUCCESS, multi_row.init(allocator_, MAX_TEST_COLUMN_CNT));
   ObDmlFlag dml = DF_INSERT;
@@ -1239,7 +1243,7 @@ TEST_F(TestIndexTree, test_merge_info_build_row)
   ObSSTableMergeRes res;
   IndexTreeRootCtxList *roots = nullptr;
   ObSSTableIndexBuilder *sst_builder = nullptr;
-  mock_compaction(test_row_num, data_write_ctxs, index_write_ctxs, merge_info_list, res, roots, sst_builder);
+  mock_compaction(test_row_num, DATA_CURRENT_VERSION, data_write_ctxs, index_write_ctxs, merge_info_list, res, roots, sst_builder);
 
   const int64_t rowkey_cnt = TEST_ROWKEY_COLUMN_CNT;
   blocksstable::ObDatumRow datum_row;
@@ -1295,7 +1299,7 @@ TEST_F(TestIndexTree, test_meta_builder)
   ObSSTableMergeRes res;
   IndexTreeRootCtxList *roots = nullptr;
   ObSSTableIndexBuilder *sst_builder = nullptr;
-  mock_compaction(test_row_num, data_write_ctxs, index_write_ctxs, merge_info_list, res, roots, sst_builder);
+  mock_compaction(test_row_num, DATA_CURRENT_VERSION, data_write_ctxs, index_write_ctxs, merge_info_list, res, roots, sst_builder);
 
   ASSERT_TRUE(res.data_root_desc_.is_valid());
   ASSERT_TRUE(res.data_root_desc_.is_mem_type());
@@ -1336,7 +1340,7 @@ TEST_F(TestIndexTree, test_meta_builder_data_root)
   ObSSTableMergeRes res;
   IndexTreeRootCtxList *roots = nullptr;
   ObSSTableIndexBuilder *sst_builder = nullptr;
-  mock_compaction(test_row_num, data_write_ctxs, index_write_ctxs, merge_info_list, res, roots, sst_builder);
+  mock_compaction(test_row_num, DATA_CURRENT_VERSION, data_write_ctxs, index_write_ctxs, merge_info_list, res, roots, sst_builder);
 
   ASSERT_TRUE(res.data_root_desc_.is_valid());
   ASSERT_TRUE(res.data_root_desc_.is_mem_type());
@@ -1476,7 +1480,7 @@ TEST_F(TestIndexTree, test_index_block_dumper_get_row_in_mem)
   ObSSTableMergeRes res;
   IndexTreeRootCtxList *roots = nullptr;
   ObSSTableIndexBuilder *sst_builder = nullptr;
-  mock_compaction(test_row_num, data_write_ctxs, index_write_ctxs, merge_info_list, res, roots, sst_builder);
+  mock_compaction(test_row_num, DATA_CURRENT_VERSION, data_write_ctxs, index_write_ctxs, merge_info_list, res, roots, sst_builder);
   ObDatumRow leaf_row;
   ASSERT_EQ(OB_SUCCESS, leaf_row.init(allocator_, TEST_ROWKEY_COLUMN_CNT + 3));
 
@@ -1556,7 +1560,7 @@ TEST_F(TestIndexTree, test_index_block_dumper_get_row_in_disk)
   ObSSTableMergeRes res;
   IndexTreeRootCtxList *roots = nullptr;
   ObSSTableIndexBuilder *sst_builder = nullptr;
-  mock_compaction(test_row_num, data_write_ctxs, index_write_ctxs, merge_info_list, res, roots, sst_builder);
+  mock_compaction(test_row_num, DATA_CURRENT_VERSION, data_write_ctxs, index_write_ctxs, merge_info_list, res, roots, sst_builder);
   ObDatumRow leaf_row;
   ASSERT_EQ(OB_SUCCESS, leaf_row.init(allocator_, TEST_ROWKEY_COLUMN_CNT + 3));
   ObWholeDataStoreDesc data_desc;
@@ -1618,7 +1622,7 @@ TEST_F(TestIndexTree, test_index_block_dumper_get_micro_in_disk)
   ObSSTableMergeRes res;
   IndexTreeRootCtxList *roots = nullptr;
   ObSSTableIndexBuilder *sst_builder = nullptr;
-  mock_compaction(test_row_num, data_write_ctxs, index_write_ctxs, merge_info_list, res, roots, sst_builder);
+  mock_compaction(test_row_num, DATA_CURRENT_VERSION, data_write_ctxs, index_write_ctxs, merge_info_list, res, roots, sst_builder);
   ObDatumRow leaf_row;
   ASSERT_EQ(OB_SUCCESS, leaf_row.init(allocator_, TEST_ROWKEY_COLUMN_CNT + 3));
   ObWholeDataStoreDesc data_desc;
@@ -1673,6 +1677,8 @@ TEST_F(TestIndexTree, test_single_row_desc)
   ObWholeDataStoreDesc index_desc;
   prepare_index_desc(data_desc, index_desc);
   prepare_index_builder(index_desc, sstable_builder);
+  sstable_builder.index_store_desc_.get_desc().static_desc_->major_working_cluster_version_ = DATA_VERSION_4_1_0_0;
+  sstable_builder.container_store_desc_.static_desc_->major_working_cluster_version_ = DATA_VERSION_4_1_0_0;
 
   ObMacroBlockWriter data_writer;
   ObMacroSeqParam seq_param;
@@ -1813,7 +1819,7 @@ TEST_F(TestIndexTree, test_data_block_checksum)
   ObSSTableMergeRes res;
   IndexTreeRootCtxList *roots = nullptr;
   ObSSTableIndexBuilder *sst_builder = nullptr;
-  mock_compaction(test_row_num, data_write_ctxs, index_write_ctxs, merge_info_list, res, roots, sst_builder);
+  mock_compaction(test_row_num, DATA_CURRENT_VERSION, data_write_ctxs, index_write_ctxs, merge_info_list, res, roots, sst_builder);
   ASSERT_EQ(test_row_num, merge_info_list->count());
 
   int64_t max_reported_column_id = TEST_COLUMN_CNT + 2;
@@ -1845,7 +1851,7 @@ TEST_F(TestIndexTree, test_reuse_macro_block)
   ObSSTableMergeRes res;
   IndexTreeRootCtxList *roots = nullptr;
   ObSSTableIndexBuilder *sst_builder = nullptr;
-  mock_compaction(test_row_num, data_write_ctxs, index_write_ctxs, macro_metas, res, roots, sst_builder);
+  mock_compaction(test_row_num, DATA_CURRENT_VERSION, data_write_ctxs, index_write_ctxs, macro_metas, res, roots, sst_builder);
   ASSERT_EQ(test_row_num, macro_metas->count());
 
   ObWholeDataStoreDesc data_desc;
@@ -2225,7 +2231,7 @@ TEST_F(TestIndexTree, test_cg_row_offset)
     ObSSTableIndexBuilder *sst_builder = nullptr;
     const int64_t micro_block_size = size_arr.at(i);
     index_schema_.set_block_size(micro_block_size);
-    mock_compaction(test_row_num, data_write_ctxs, index_write_ctxs, merge_info_list, res, roots, sst_builder);
+    mock_compaction(test_row_num, DATA_CURRENT_VERSION, data_write_ctxs, index_write_ctxs, merge_info_list, res, roots, sst_builder);
     ObMicroBlockData root_block;
     ASSERT_EQ(OB_SUCCESS, root_block.init_with_prepare_micro_header(res.root_desc_.buf_, res.root_desc_.addr_.size_));
 
@@ -2278,7 +2284,7 @@ TEST_F(TestIndexTree, test_absolute_offset)
   OK(rebuilder.init(sstable_builder, macro_seq_param, nullptr, ddl_table_key));
 
   ObSSTableIndexBuilder *sst_builder = nullptr;
-  mock_compaction(test_row_num, data_write_ctxs, index_write_ctxs, merge_info_list, res, roots, sst_builder);
+  mock_compaction(test_row_num, DATA_CURRENT_VERSION, data_write_ctxs, index_write_ctxs, merge_info_list, res, roots, sst_builder);
   ASSERT_EQ(test_row_num, merge_info_list->count());
   vector<int64_t> absolute_offsets;
   LOG_INFO("test absolute offset", K(test_row_num));
@@ -2334,7 +2340,7 @@ TEST_F(TestIndexTree, test_close_with_old_schema)
   ObSSTableMergeRes res;
   IndexTreeRootCtxList *roots = nullptr;
   ObSSTableIndexBuilder *sst_builder = nullptr;
-  mock_compaction(test_row_num, data_write_ctxs, index_write_ctxs, merge_info_list, res, roots, sst_builder);
+  mock_compaction(test_row_num, DATA_VERSION_4_0_0_0, data_write_ctxs, index_write_ctxs, merge_info_list, res, roots, sst_builder);
   ASSERT_EQ(test_row_num, merge_info_list->count());
 
   // mock old schema with fewer columns

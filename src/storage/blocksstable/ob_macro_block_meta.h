@@ -40,6 +40,12 @@ public:
   int deserialize(const char *buf, const int64_t data_len, int64_t& pos);
   int64_t get_serialize_size(const int64_t data_version) const;
   int64_t get_max_serialize_size(const int64_t data_version) const;
+  OB_INLINE bool is_valid_version() const
+  {
+    return version_ == DATA_BLOCK_META_VAL_VERSION_V2
+        || version_ == DATA_BLOCK_META_VAL_VERSION_V1;
+  }
+
   TO_STRING_KV(K_(version), K_(length), K_(data_checksum), K_(rowkey_count),
         K_(column_count), K_(micro_block_count), K_(occupy_size), K_(data_size),
         K_(data_zsize), K_(original_size), K_(progressive_merge_round), K_(block_offset), K_(block_size), K_(row_count),
@@ -50,9 +56,19 @@ public:
         K_(logic_id), K_(macro_id), K_(column_checksums), K_(has_string_out_row), K_(all_lob_in_row),
         K_(agg_row_len), KP_(agg_row_buf), K_(ddl_end_row_offset), K_(macro_block_bf_size), KP_(macro_block_bf_buf));
 
+  static int32_t mapping_data_version_to_val_version(const uint64_t data_version);
 private:
-  static const int32_t DATA_BLOCK_META_VAL_VERSION = 1; // abandon after 431
+  bool is_valid_macro_id(const MacroBlockId &macro_id, const int64_t data_version) const;
+  void check_and_revise_macro_id_version(const int64_t data_version, MacroBlockId &macro_id) const;
+private:
+  // initial version
+  static const int32_t DATA_BLOCK_META_VAL_VERSION_V1 = 1;
+  // Version history (V2):
+  //   - 4.3.1.0: ddl_end_row_offset
+  //   - 4.3.3.0: macro_id_fourth_id (MacroBlockId); remove vptr in ObLogicMacroBlockId
+  //   - 4.3.5.1: macro_block_bf_size, macro_block_bf_buf
   static const int32_t DATA_BLOCK_META_VAL_VERSION_V2 = 2;
+  static const int32_t DEFAULT_DATA_BLOCK_META_VAL_VERSION = DATA_BLOCK_META_VAL_VERSION_V2;
 
   DISALLOW_COPY_AND_ASSIGN(ObDataBlockMetaVal);
 
@@ -93,12 +109,16 @@ public:
   uint64_t schema_version_;
   int64_t snapshot_version_;
   ObLogicMacroBlockId logic_id_;
+  /* -------------------------------- 4_3_3_0 -------------------------------- */
+  // The macro block id of old verison has only three ids, but a fourth id is added since OB4.3.3.
+  // Whether macro_id_fourth_id_ is persisted is determined by version_ in MacroBlockId (i.e. MACRO_BLOCK_ID_VERSION_V1 vs V2).
   MacroBlockId macro_id_;
   common::ObSEArray<int64_t, 4> column_checksums_;
   bool has_string_out_row_;
   bool all_lob_in_row_;
   int64_t agg_row_len_; // size of agg_row_buf_
   const char *agg_row_buf_; // data buffer for pre aggregated row
+  /* -------------------------------- 4_3_1_0 -------------------------------- */
   // used for ddl sstable migration & backup rebuild sstable
   // eg: if only one macro block with 100 rows, ddl_end_row_offset_ is 99.
   int64_t ddl_end_row_offset_;

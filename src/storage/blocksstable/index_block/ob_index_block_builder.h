@@ -325,6 +325,7 @@ public:
       ObIndexBlockRowDesc &row_desc);
   int row_desc_to_meta(
       const ObIndexBlockRowDesc &macro_row_desc,
+      const uint64_t data_version,
       ObDataMacroBlockMeta &macro_meta,
       ObIAllocator &allocator);
   int append_micro_block(

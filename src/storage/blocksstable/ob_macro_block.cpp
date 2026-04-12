@@ -516,7 +516,7 @@ int ObMacroBlock::write_macro_header()
   return ret;
 }
 
-int ObMacroBlock::get_macro_block_meta(ObDataMacroBlockMeta &macro_meta)
+int ObMacroBlock::get_macro_block_meta(ObDataMacroBlockMeta &macro_meta, const uint64_t data_version)
 {
   int ret = OB_SUCCESS;
   macro_meta.val_.logic_id_.logic_version_ = spec_->get_logical_version();
@@ -527,6 +527,7 @@ int ObMacroBlock::get_macro_block_meta(ObDataMacroBlockMeta &macro_meta)
   if (!spec_->is_major_or_meta_merge_type() || spec_->get_major_working_cluster_version() >= DATA_VERSION_4_5_1_0) {
     macro_meta.val_.logic_id_.merge_type_ = (uint8_t)spec_->get_merge_type();
   }
+  macro_meta.val_.version_ = ObDataBlockMetaVal::mapping_data_version_to_val_version(data_version);
   macro_meta.val_.macro_id_ = ObIndexBlockRowHeader::DEFAULT_IDX_ROW_MACRO_ID;
   macro_meta.val_.rowkey_count_ = macro_header_.fixed_header_.rowkey_column_count_;
   macro_meta.val_.compressor_type_ = spec_->get_compressor_type();

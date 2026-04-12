@@ -123,8 +123,12 @@ public:
     : data_seq_(), logic_version_(0), tablet_id_(0 /* ObTabletID::INVALID_TABLET_ID */), info_(0)
   {
 #if defined(__x86_64__)
-  // The size of ObLogicMacroBlockId affects the size of the index row at the end of the macro block.
-  // Must pay attention to the backward and forward compatibility when adding new fields.
+  // This struct is serialized; layout/size changes affect compatibility in two places:
+  // 1. Index micro blocks in the data macro block: logic macro id is written into index rows at the
+  //    end of the data macro block, affecting index row format and length.
+  // 2. Macro block meta at the end of the data macro block (ObDataBlockMetaVal): logic_id_ is
+  //    persisted there; its serialized length depends on this struct, so changes can cause
+  //    historical meta deserialize or length check to fail (e.g. length_ != pos - start_pos).
   static_assert(sizeof(ObLogicMacroBlockId) == 32, "The size of ObLogicMacroBlockId affects the size of the index row at the end of the macro block.");
 #endif
   }
@@ -132,8 +136,12 @@ public:
     : data_seq_(data_seq), logic_version_(logic_version), tablet_id_(tablet_id), info_(0)
   {
 #if defined(__x86_64__)
-  // The size of ObLogicMacroBlockId affects the size of the index row at the end of the macro block.
-  // Must pay attention to the backward and forward compatibility when adding new fields.
+  // This struct is serialized; layout/size changes affect compatibility in two places:
+  // 1. Index micro blocks in the data macro block: logic macro id is written into index rows at the
+  //    end of the data macro block, affecting index row format and length.
+  // 2. Macro block meta at the end of the data macro block (ObDataBlockMetaVal): logic_id_ is
+  //    persisted there; its serialized length depends on this struct, so changes can cause
+  //    historical meta deserialize or length check to fail (e.g. length_ != pos - start_pos).
   static_assert(sizeof(ObLogicMacroBlockId) == 32, "The size of ObLogicMacroBlockId affects the size of the index row at the end of the macro block.");
 #endif
   }
@@ -145,6 +153,8 @@ public:
   bool operator <(const ObLogicMacroBlockId &other) const;
   bool operator >(const ObLogicMacroBlockId &other) const;
   void reset();
+  int serialize(char *buf, const int64_t buf_len, int64_t &pos, const uint64_t data_version) const;
+  int64_t get_serialize_size(const uint64_t data_version) const;
   OB_INLINE bool is_valid() const
   {
     return data_seq_.is_valid() && logic_version_ > 0 && tablet_id_ > 0;

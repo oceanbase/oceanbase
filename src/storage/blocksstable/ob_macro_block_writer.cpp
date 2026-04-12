@@ -1869,7 +1869,9 @@ int ObMacroBlockWriter::index_builder_append_row(const ObMicroBlockDesc &micro_b
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "builder is null", K(ret));
   } else if (OB_FAIL(builder_->append_row(micro_block_desc, macro_block))) {
-    STORAGE_LOG(WARN, "fail to append row", K(ret), K(micro_block_desc));
+    if (OB_BUF_NOT_ENOUGH != ret) {
+      STORAGE_LOG(WARN, "fail to append row", K(ret), K(micro_block_desc));
+    }
   } else if (micro_index_clustered() && is_curr_block_pre_allocated_) {
     // no need to aggregate micro block, just append row, because it has already been aggregated.
     if (OB_FAIL(builder_->clustered_index_append_row(micro_block_desc))) {
@@ -2526,7 +2528,7 @@ int ObMacroBlockWriter::exec_callback(const ObStorageObjectHandle &macro_handle,
   } else {
     ObDataMacroBlockMeta macro_block_meta;
     if (!macro_block->is_dirty()) {
-    } else if (OB_FAIL(macro_block->get_macro_block_meta(macro_block_meta))) {
+    } else if (OB_FAIL(macro_block->get_macro_block_meta(macro_block_meta, data_store_desc_->get_major_working_cluster_version()))) {
       STORAGE_LOG(WARN, "fail to get macro block meta", K(ret));
     } else if (OB_FAIL(callback_->wait())) {
       STORAGE_LOG(WARN, "fail to wait callback flush", K(ret));

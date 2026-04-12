@@ -64,7 +64,7 @@ public:
       const ObMicroBlockDesc &micro_block_desc,
       const bool is_leaf_index_block,
       int64_t &data_offset);
-  int get_macro_block_meta(ObDataMacroBlockMeta &macro_meta);
+  int get_macro_block_meta(ObDataMacroBlockMeta &macro_meta, const uint64_t data_version);
   int add_pre_warm_state(const bool micro_block_need_pre_warm);
   int get_pre_warm_state(const int micro_block_idx, bool &need_pre_warm) const;
   OB_INLINE bool need_pre_warm() const { return need_pre_warm_; }
