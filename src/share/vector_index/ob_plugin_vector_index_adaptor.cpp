@@ -4295,6 +4295,7 @@ int ObPluginVectorIndexAdaptor::deserialize_snap_data(ObVectorQueryConditions *q
     ObHNSWDeserializeCallback::CbParam param;
     param.iter_ = query_cond->row_iter_;
     param.allocator_ = &tmp_allocator;
+    DEBUG_SYNC(BEFORE_DESERIALIZE_SNAP_DATA);
     TCWLockGuard lock_guard(snap_data_->mem_data_rwlock_);
     ObString target_prefix;
     if (!get_snapshot_key_prefix().empty() && key_prefix.prefix_match(get_snapshot_key_prefix()) && snap_data_->has_complete_) {
