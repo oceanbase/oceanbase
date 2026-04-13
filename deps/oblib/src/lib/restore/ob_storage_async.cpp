@@ -163,7 +163,7 @@ int ObStorageAsyncReader::open(
 {
   int ret = OB_SUCCESS;
   ObDalObjectMeta meta;
-  OBJECT_STORAGE_GUARD(storage_info, uri, IO_HANDLED_SIZE_ZERO);
+  OBJECT_STORAGE_GUARD(storage_info, uri, IO_HANDLED_SIZE_ZERO, true/*util_io*/);
 
   if (OB_UNLIKELY(is_opened_)) {
     ret = OB_OPEN_TWICE;
@@ -324,7 +324,7 @@ void ObStorageAsyncWriter::reset()
 int ObStorageAsyncWriter::open(const ObString &uri, ObObjectStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
-  OBJECT_STORAGE_GUARD(storage_info, uri, IO_HANDLED_SIZE_ZERO);
+  OBJECT_STORAGE_GUARD(storage_info, uri, IO_HANDLED_SIZE_ZERO, true/*util_io*/);
 
   if (OB_UNLIKELY(is_opened_)) {
     ret = OB_OPEN_TWICE;
@@ -452,7 +452,7 @@ int ObStorageAsyncMultiPartWriter::open(
     ObObjectStorageInfo *storage_info)
 {
   int ret = OB_SUCCESS;
-  OBJECT_STORAGE_GUARD(storage_info, uri, IO_HANDLED_SIZE_ZERO);
+  OBJECT_STORAGE_GUARD(storage_info, uri, IO_HANDLED_SIZE_ZERO, true/*util_io*/);
 
   if (OB_UNLIKELY(is_opened_)) {
     ret = OB_OPEN_TWICE;
