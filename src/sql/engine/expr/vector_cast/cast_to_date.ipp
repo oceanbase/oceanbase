@@ -315,6 +315,9 @@ struct ToDateCastImpl
               }
               if (CAST_FAIL(ObTimeConverter::str_to_ob_time_with_date(in_val, ob_time_, NULL, date_sql_mode_, false, digits_))) {
                 SQL_LOG(WARN, "failed to convert string to date", K(ret));
+              } else if (OB_SUCCESS != warning) {
+                // str_to_ob_time_with_date failed but CAST_FAIL converted error to warning,
+                // ob_time_ is invalid, skip reading from ob_time_, out_val stays 0
               } else if (CM_IS_ERROR_ON_SCALE_OVER(expr.extra_) && out_val == ObTimeConverter::ZERO_DATE) {
                 // check zero date for scale over mode
                 ret = OB_INVALID_DATE_VALUE;

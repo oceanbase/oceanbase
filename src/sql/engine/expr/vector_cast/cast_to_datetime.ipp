@@ -589,6 +589,9 @@ struct ToDatetimeCastImpl
                 }
                 if (CAST_FAIL(ObTimeConverter::str_to_ob_time_with_date(in_val, ob_time_, NULL, date_sql_mode_, cvrt_ctx_.need_truncate_, digits_))) {
                   SQL_LOG(WARN, "failed to convert string to datetime", K(ret));
+                } else if (OB_SUCCESS != warning) {
+                  // str_to_ob_time_with_date failed but CAST_FAIL converted error to warning,
+                  // ob_time_ is invalid, skip ob_time_to_datetime, out_val stays 0
                 } else if (CM_IS_ERROR_ON_SCALE_OVER(expr.extra_)
                           &&  (out_val == ObTimeConverter::ZERO_DATE
                               || out_val == ObTimeConverter::ZERO_DATETIME)) {
