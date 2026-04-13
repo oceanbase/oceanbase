@@ -343,6 +343,7 @@ private:
       } else {
         obj = new(ptr) ClientInstance(allocator_);
         if (OB_FAIL(obj->init(properties_))) {
+          obj->~ClientInstance();
           allocator_->free(ptr);
           SHARE_LOG(WARN, "failed to init object", K(ret));
         } else {
