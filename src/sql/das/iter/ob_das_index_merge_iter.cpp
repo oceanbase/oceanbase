@@ -700,9 +700,6 @@ int ObDASIndexMergeIter::compare(IndexMergeRowStore &cur_store, IndexMergeRowSto
       if (OB_ISNULL(cur_datums) || OB_ISNULL(cmp_datums)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected nullptr", K(ret), K(cur_datums), K(cmp_datums));
-      } else if (OB_UNLIKELY(cur_datums->is_null() || cmp_datums->is_null())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null datum", K(ret), KPC(cur_datums), KPC(cmp_datums));
       } else {
         ObObj cur_obj;
         ObObj cmp_obj;
