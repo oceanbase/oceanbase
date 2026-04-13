@@ -3087,7 +3087,7 @@ int ObAlterTableExecutor::populate_based_schema_obj_info_(obrpc::ObAlterTableArg
       LOG_WARN("table not exits", KR(ret), K(table_id));
     } else {
       bool find = false;
-      for (int i = 0; i < OB_SUCC(ret) && alter_table_arg.based_schema_object_infos_.count(); ++i) {
+      for (int i = 0; OB_SUCC(ret) && i < alter_table_arg.based_schema_object_infos_.count(); ++i) {
         ObBasedSchemaObjectInfo &based_schema_object_info =
                                 alter_table_arg.based_schema_object_infos_.at(i);
         if (based_schema_object_info.schema_id_ == alter_table_arg.table_id_) {
