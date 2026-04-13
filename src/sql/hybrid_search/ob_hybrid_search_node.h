@@ -243,6 +243,8 @@ private:
   int deal_child_node(ObIndexMergeNode *node, bool &prune_happened, double &sel);
   int recurse_count_index_nodes(const ObIndexMergeNode *node, int64_t &index_scan_count,
                                 bool &ingore_normal_access_path) const;
+  int collect_unprecise_index_filters(const ObIndexMergeNode *node,
+                                      ObIArray<ObRawExpr*> &unprecise_filters) const;
   int split_domain_contains_node(const ObDSLScalarQuery *scalar_query,
                                  ObIndexMergeNode *&split_node);
   int split_json_contains(const ObDSLScalarQuery *scalar_query,

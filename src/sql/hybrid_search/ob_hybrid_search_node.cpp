@@ -63,6 +63,9 @@ int ObHybridSearchGenerator::deal_table_scan_filters(ObIndexMergeNode *hybrid_se
       if (OB_FAIL(recurse_count_index_nodes(fusion_node->children_.at(0), index_scan_count,
                                             ingore_normal_access_path))) {
         LOG_WARN("failed to recurse count index nodes", K(ret));
+      } else if (OB_FAIL(collect_unprecise_index_filters(fusion_node->children_.at(0),
+                                                         table_filters))) {
+        LOG_WARN("failed to collect unprecise index filters", K(ret));
       }
     } else if (fusion_node->children_.at(0)->node_type_ != INDEX_MERGE_HYBRID_BOOLEAN_QUERY) {
       // do nothing
@@ -140,6 +143,8 @@ int ObHybridSearchGenerator::deal_table_scan_filters(ObIndexMergeNode *hybrid_se
         if (OB_FAIL(recurse_count_index_nodes(bool_node, index_scan_count,
                                               ingore_normal_access_path))) {
           LOG_WARN("failed to recurse count index nodes", K(ret));
+        } else if (OB_FAIL(collect_unprecise_index_filters(bool_node, table_filters))) {
+          LOG_WARN("failed to collect unprecise index filters", K(ret));
         }
       }
     }
@@ -246,19 +251,50 @@ int ObHybridSearchGenerator::recurse_count_index_nodes(const ObIndexMergeNode *n
     CK (bool_node->must_not_nodes_.empty());
     for (int i = 0; i < bool_node->filter_nodes_.count() && OB_SUCC(ret); i++) {
       ObIndexMergeNode *child_node = static_cast<ObIndexMergeNode *>(bool_node->filter_nodes_.at(i));
-      if (OB_FAIL(recurse_count_index_nodes(child_node, index_scan_count, ingore_normal_access_path))) {
+      if (OB_FAIL(SMART_CALL(recurse_count_index_nodes(child_node, index_scan_count, ingore_normal_access_path)))) {
         LOG_WARN("failed to recurse count index nodes", K(ret), K(i), KPC(child_node));
       }
     }
     for (int i = 0; i < bool_node->should_nodes_.count() && OB_SUCC(ret); i++) {
       ObIndexMergeNode *child_node = static_cast<ObIndexMergeNode *>(bool_node->should_nodes_.at(i));
-      if (OB_FAIL(recurse_count_index_nodes(child_node, index_scan_count, ingore_normal_access_path))) {
+      if (OB_FAIL(SMART_CALL(recurse_count_index_nodes(child_node, index_scan_count, ingore_normal_access_path)))) {
         LOG_WARN("failed to recurse count index nodes", K(ret), K(i), KPC(child_node));
       }
     }
   } else {
     // other node type, set ingore_normal_access_path to true
     ingore_normal_access_path = true;
+  }
+  return ret;
+}
+
+int ObHybridSearchGenerator::collect_unprecise_index_filters(const ObIndexMergeNode *node,
+                                                              ObIArray<ObRawExpr*> &unprecise_filters) const
+{
+  int ret = OB_SUCCESS;
+  if (node->is_hybrid_scalar_node() && OB_NOT_NULL(node->ap_)) {
+    const ObScalarQueryNode *scalar_node = static_cast<const ObScalarQueryNode*>(node);
+    const ObIArray<ObRawExpr*> &pushdown_filters = scalar_node->pri_table_query_params_.pushdown_filters_;
+    const ObIArray<ObRawExpr*> &range_exprs = scalar_node->ap_->get_query_range_provider()->get_range_exprs();
+    for (int64_t i = 0; i < pushdown_filters.count() && OB_SUCC(ret); i++) {
+      ObRawExpr *filter = pushdown_filters.at(i);
+      if (ObOptimizerUtil::find_item(range_exprs, filter)) {
+        // filter is in range exprs, which is precise filter
+      } else if (node->ap_->is_search_index_path() &&
+          (filter->is_json_domain_expr() || filter->is_domain_array_expr())) {
+        // domain expr on search index path is always precise filter
+      } else if (OB_FAIL(add_var_to_array_no_dup(unprecise_filters, filter))) {
+        LOG_WARN("failed to append expr", K(ret));
+      }
+    }
+  } else if (node->node_type_ == INDEX_MERGE_HYBRID_BOOLEAN_QUERY) {
+    const ObBooleanQueryNode *bool_node = static_cast<const ObBooleanQueryNode*>(node);
+    for (int i = 0; i < bool_node->filter_nodes_.count() && OB_SUCC(ret); i++) {
+      ObIndexMergeNode *child_node = static_cast<ObIndexMergeNode *>(bool_node->filter_nodes_.at(i));
+      if (OB_FAIL(SMART_CALL(collect_unprecise_index_filters(child_node, unprecise_filters)))) {
+        LOG_WARN("failed to collect unprecise index filters", K(ret), K(i), KPC(child_node));
+      }
+    }
   }
   return ret;
 }
