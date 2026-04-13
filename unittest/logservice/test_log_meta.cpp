@@ -132,12 +132,12 @@ TEST(TestLogMeta, test_log_meta_generate)
   log_info.lsn_ = lsn;
   base_info.curr_lsn_ = prev_lsn;
   base_info.prev_log_info_ = log_info;
-  EXPECT_EQ(OB_INVALID_ARGUMENT, meta1.generate_by_palf_base_info(base_info, AccessMode::APPEND, palf::NORMAL_REPLICA));
+  EXPECT_EQ(OB_INVALID_ARGUMENT, meta1.generate_by_palf_base_info(base_info, AccessMode::APPEND, SyncMode::ASYNC, palf::NORMAL_REPLICA));
   // valid lsn
   log_info.lsn_ = prev_lsn;
   base_info.curr_lsn_ = lsn;
   base_info.prev_log_info_ = log_info;
-  EXPECT_EQ(OB_SUCCESS, meta1.generate_by_palf_base_info(base_info, AccessMode::APPEND, palf::NORMAL_REPLICA));
+  EXPECT_EQ(OB_SUCCESS, meta1.generate_by_palf_base_info(base_info, AccessMode::APPEND, SyncMode::ASYNC, palf::NORMAL_REPLICA));
   EXPECT_EQ(meta1.log_prepare_meta_.log_proposal_id_, base_info.prev_log_info_.log_proposal_id_);
   EXPECT_EQ(meta1.log_config_meta_.proposal_id_, base_info.prev_log_info_.log_proposal_id_);
   EXPECT_EQ(meta1.log_config_meta_.curr_.config_.config_version_.proposal_id_, base_info.prev_log_info_.log_proposal_id_);

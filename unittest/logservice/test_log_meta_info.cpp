@@ -319,7 +319,8 @@ TEST(TestLogMetaInfos, test_log_mode_meta)
   // Test invalid argument
   EXPECT_FALSE(log_mode_meta1.is_valid());
   EXPECT_EQ(OB_INVALID_ARGUMENT, log_mode_meta1.generate(1, 1, AccessMode::INVALID_ACCESS_MODE, SyncMode::ASYNC, share::SCN::min_scn()));
-  EXPECT_EQ(OB_INVALID_ARGUMENT, log_mode_meta1.generate(1, 1, AccessMode::APPEND, SyncMode::INVALID_SYNC_MODE, share::SCN::min_scn()));
+  // INVALID_SYNC_MODE is now allowed for arb replica scenario
+  EXPECT_EQ(OB_SUCCESS, log_mode_meta1.generate(1, 1, AccessMode::APPEND, SyncMode::INVALID_SYNC_MODE, share::SCN::min_scn()));
   EXPECT_EQ(OB_INVALID_ARGUMENT, log_mode_meta1.generate(1, 1, AccessMode::APPEND, SyncMode::ASYNC, invalid_scn));
   EXPECT_EQ(OB_INVALID_ARGUMENT, log_mode_meta1.generate(1, INVALID_PROPOSAL_ID, AccessMode::APPEND, SyncMode::ASYNC, share::SCN::min_scn()));
   EXPECT_EQ(OB_INVALID_ARGUMENT, log_mode_meta1.generate(INVALID_PROPOSAL_ID, 1, AccessMode::APPEND, SyncMode::ASYNC, share::SCN::min_scn()));
@@ -339,6 +340,97 @@ TEST(TestLogMetaInfos, test_log_mode_meta)
                       log_mode_meta1.sync_mode_ == log_mode_meta2.sync_mode_ &&
                       log_mode_meta1.ref_scn_ == log_mode_meta2.ref_scn_);
   EXPECT_TRUE(equal);
+}
+
+// Test arb replica upgrade compatibility:
+// When arb replica upgrades before observers, generate() should produce V1 format
+// for INVALID_SYNC_MODE (sentinel value) to avoid old observer deserialization failure.
+TEST(TestLogMetaInfos, test_log_mode_meta_arb_upgrade_compat)
+{
+  static const int64_t BUFSIZE = 1 << 21;
+  char buf[BUFSIZE];
+
+  // Save original version settings
+  const uint64_t saved_cluster_version = oceanbase::ObClusterVersion::get_instance().get_cluster_version();
+
+  // ============================================================
+  // Scenario 1: Arb replica with INVALID_SYNC_MODE (upgrade window)
+  // Simulate arb fallback path: update_data_version(0) makes
+  // GET_MIN_DATA_VERSION fail, triggering the arb fallback branch.
+  // binary_version >= 4.4.2.1, sync_mode = INVALID → expect V1
+  // ============================================================
+  {
+    oceanbase::ObClusterVersion::get_instance().update_cluster_version(CLUSTER_VERSION_4_4_2_1);
+    oceanbase::ObClusterVersion::get_instance().update_data_version(0);
+    LogModeMeta meta;
+    EXPECT_EQ(OB_SUCCESS, meta.generate(1, 1, AccessMode::APPEND, SyncMode::INVALID_SYNC_MODE, share::SCN::min_scn()));
+    // INVALID_SYNC_MODE → version must be V1
+    EXPECT_EQ(LogModeMeta::LOG_MODE_META_VERSION, meta.version_);
+    EXPECT_EQ(SyncMode::INVALID_SYNC_MODE, meta.sync_mode_);
+
+    // V1 is_valid() does not check sync_mode, should pass
+    EXPECT_TRUE(meta.is_valid());
+
+    // V1 serialize: sync_mode_ is NOT written to buffer
+    int64_t pos = 0;
+    EXPECT_EQ(OB_SUCCESS, meta.serialize(buf, BUFSIZE, pos));
+    int64_t v1_size = pos;
+
+    // V1 deserialize: sync_mode_ defaults to ASYNC
+    pos = 0;
+    LogModeMeta meta_deser;
+    EXPECT_EQ(OB_SUCCESS, meta_deser.deserialize(buf, BUFSIZE, pos));
+    EXPECT_EQ(LogModeMeta::LOG_MODE_META_VERSION, meta_deser.version_);
+    EXPECT_EQ(SyncMode::ASYNC, meta_deser.sync_mode_);
+    EXPECT_EQ(meta.proposal_id_, meta_deser.proposal_id_);
+    EXPECT_EQ(meta.access_mode_, meta_deser.access_mode_);
+    EXPECT_EQ(meta.ref_scn_, meta_deser.ref_scn_);
+    EXPECT_TRUE(meta_deser.is_valid());
+
+    // V1 size should be smaller than V2 (no sync_mode field)
+    LogModeMeta meta_v2;
+    oceanbase::ObClusterVersion::get_instance().update_data_version(CLUSTER_VERSION_4_4_2_1);
+    EXPECT_EQ(OB_SUCCESS, meta_v2.generate(1, 1, AccessMode::APPEND, SyncMode::ASYNC, share::SCN::min_scn()));
+    EXPECT_EQ(LogModeMeta::LOG_MODE_META_VERSION_V2, meta_v2.version_);
+    EXPECT_EQ(v1_size + (int64_t)sizeof(int64_t), meta_v2.get_serialize_size());
+  }
+
+  // ============================================================
+  // Scenario 2: V2 data deserialized as V1 by old observer simulation
+  // Verify that V1 serialized data can be correctly consumed:
+  // old observer only knows V1 layout, no sync_mode_ field.
+  // ============================================================
+  {
+    oceanbase::ObClusterVersion::get_instance().update_cluster_version(CLUSTER_VERSION_4_4_2_1);
+    oceanbase::ObClusterVersion::get_instance().update_data_version(0);
+
+    // Arb generates V1 (INVALID_SYNC_MODE sentinel)
+    LogModeMeta arb_meta;
+    EXPECT_EQ(OB_SUCCESS, arb_meta.generate(1, 1, AccessMode::APPEND, SyncMode::INVALID_SYNC_MODE, share::SCN::min_scn()));
+    EXPECT_EQ(LogModeMeta::LOG_MODE_META_VERSION, arb_meta.version_);
+
+    // Serialize V1
+    int64_t pos = 0;
+    EXPECT_EQ(OB_SUCCESS, arb_meta.serialize(buf, BUFSIZE, pos));
+    int64_t serialized_len = pos;
+
+    // Old observer deserializes: reads version, proposal_id, mode_version, access_mode, ref_scn
+    // No sync_mode_ in buffer → offset stays correct → ref_scn reads correctly
+    pos = 0;
+    LogModeMeta old_observer_meta;
+    EXPECT_EQ(OB_SUCCESS, old_observer_meta.deserialize(buf, serialized_len, pos));
+    // All bytes consumed, no leftover
+    EXPECT_EQ(serialized_len, pos);
+    EXPECT_EQ(arb_meta.proposal_id_, old_observer_meta.proposal_id_);
+    EXPECT_EQ(arb_meta.mode_version_, old_observer_meta.mode_version_);
+    EXPECT_EQ(arb_meta.access_mode_, old_observer_meta.access_mode_);
+    EXPECT_EQ(arb_meta.ref_scn_, old_observer_meta.ref_scn_);
+    EXPECT_TRUE(old_observer_meta.is_valid());
+  }
+
+  // Restore original version settings
+  oceanbase::ObClusterVersion::get_instance().update_cluster_version(saved_cluster_version);
+  oceanbase::ObClusterVersion::get_instance().update_data_version(saved_cluster_version);
 }
 
 TEST(TestLogMetaInfos, test_log_snapshot_meta)

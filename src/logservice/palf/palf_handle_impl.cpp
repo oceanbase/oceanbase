@@ -112,6 +112,7 @@ int PalfHandleImpl::init(const int64_t palf_id,
   int pret = 0;
   LogMeta log_meta;
   LogSnapshotMeta snapshot_meta;
+  const SyncMode sync_mode = SyncMode::ASYNC; // Normal replica uses ASYNC by default
   if (IS_INIT) {
     ret = OB_INIT_TWICE;
     PALF_LOG(ERROR, "LogServer has inited", K(ret), K(palf_id));
@@ -134,8 +135,8 @@ int PalfHandleImpl::init(const int64_t palf_id,
     PALF_LOG(ERROR, "Invalid argument!!!", K(ret), K(palf_id), K(palf_base_info), K(replica_type),
         K(access_mode), K(log_dir), K(alloc_mgr), K(log_block_pool), K(log_rpc),
         K(log_io_worker), K(log_shared_queue_th), K(palf_env_impl), K(self), K(election_timer), K(palf_epoch));
-  } else if (OB_FAIL(log_meta.generate_by_palf_base_info(palf_base_info, access_mode, replica_type))) {
-    PALF_LOG(WARN, "generate_by_palf_base_info failed", K(ret), K(palf_id), K(palf_base_info), K(access_mode), K(replica_type));
+  } else if (OB_FAIL(log_meta.generate_by_palf_base_info(palf_base_info, access_mode, sync_mode, replica_type))) {
+    PALF_LOG(WARN, "generate_by_palf_base_info failed", K(ret), K(palf_id), K(palf_base_info), K(access_mode), K(sync_mode), K(replica_type));
   } else if ((pret = snprintf(log_dir_, MAX_PATH_SIZE, "%s", log_dir)) && false) {
     ret = OB_ERR_UNEXPECTED;
     PALF_LOG(ERROR, "error unexpected", K(ret), K(palf_id));
@@ -152,7 +153,7 @@ int PalfHandleImpl::init(const int64_t palf_id,
     flush_cb_cost_stat_.set_extra_info(EXTRA_INFOS);
     last_accum_write_statistic_time_ = ObTimeUtility::current_time();
     last_accum_fetch_statistic_time_ = ObTimeUtility::current_time();
-    PALF_EVENT("PalfHandleImpl init success", palf_id_, K(ret), K(self), K(access_mode), K(palf_base_info),
+    PALF_EVENT("PalfHandleImpl init success", palf_id_, K(ret), K(self), K(access_mode), K(sync_mode), K(palf_base_info),
         K(replica_type), K(log_dir), K(log_meta), K(palf_epoch));
   }
   return ret;
