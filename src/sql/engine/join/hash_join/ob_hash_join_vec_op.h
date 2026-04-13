@@ -605,6 +605,8 @@ private:
   JoinHashTable *cur_join_table_;
 
   // ********* for fill partitions *********
+  // Sql mem callback is on each ObHJPartition row_store (create_partition / fill_partition_from_join_filter /
+  // get_max_memory_size); part_mgr_ only holds partition pairs.
   ObHJPartition **left_part_array_;
   ObHJPartition **right_part_array_;
   ObHJPartition *left_part_;

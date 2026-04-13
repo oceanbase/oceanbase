@@ -1006,7 +1006,7 @@ int ObHashJoinVecOp::get_max_memory_size(int64_t input_size)
           K(right_part_));
       } else {
         // switch callback for count memory size
-        //left_part_->set_callback(&sql_mem_processor_);
+        left_part_->set_callback(&sql_mem_processor_);
       }
     }
     LOG_TRACE("trace auto memory manager", K(hash_area_size), K(part_count_),
@@ -1374,6 +1374,7 @@ int ObHashJoinVecOp::create_partition(bool is_left, int64_t part_id, ObHJPartiti
                                 MY_SPEC.max_batch_size_, MY_SPEC.compress_type_, build_extra_size))) {
     LOG_WARN("fail to init batch", K(ret), K(part_level_), K(part_id), K(is_left));
   } else {
+    part->set_callback(&sql_mem_processor_);
     part->get_row_store().set_dir_id(sql_mem_processor_.get_dir_id());
     part->get_row_store().set_io_event_observer(&io_event_observer_);
     LOG_DEBUG("debug init batch", K(part_level_), K(part_id),

@@ -135,6 +135,12 @@ public:
   int64_t get_pre_part_count() { return pre_part_count_; }
 
   inline void set_memory_limit(int64_t limit) { partition_store_->set_memory_limit(limit); }
+  inline void set_callback(ObSqlMemoryCallback *callback)
+  {
+    if (OB_NOT_NULL(partition_store_)) {
+      partition_store_->get_row_store().set_callback(callback);
+    }
+  }
   inline bool is_dumped() { return 0 < partition_store_->is_dumped(); }
   inline int64_t get_dump_size() { return partition_store_->get_dump_size(); }
   ObTempRowStore &get_row_store() { return partition_store_->get_row_store(); }
