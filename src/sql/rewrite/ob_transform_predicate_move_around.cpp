@@ -2304,6 +2304,10 @@ int ObTransformPredicateMoveAround::pushdown_through_groupby(
     } else if (has_ref_assign_user_var) {
       // do nothing
       OPT_TRACE(pred, "has user var, can not pushdown");
+    } else if (pred->has_flag(CNT_SUB_QUERY) &&
+               !pred->is_deterministic()) {
+      // do nothing
+      OPT_TRACE(pred, "is not deterministic, can not pushdown");
     } else if (OB_FAIL(output_predicates.push_back(pred))) {
       LOG_WARN("failed to push back predicate", K(ret));
     } else {
