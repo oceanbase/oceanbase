@@ -87,9 +87,183 @@ public:
   virtual ~TestInterColumnSubstringDecoder() {}
 };
 
+class MockPaxBlackFilterExecutor : public sql::ObBlackFilterExecutor
+{
+public:
+  MockPaxBlackFilterExecutor(
+      common::ObIAllocator &allocator,
+      sql::ObPushdownBlackFilterNode &filter_node,
+      sql::ObPushdownOperator &op,
+      ObStorageDatum *datums,
+      const ObObjMeta &obj_meta)
+    : sql::ObBlackFilterExecutor(allocator, filter_node, op),
+      datums_(datums),
+      get_datums_call_count_(0),
+      filter_batch_call_count_(0)
+  {
+    expr_.obj_meta_ = obj_meta;
+    expr_.datum_meta_.type_ = obj_meta.get_type();
+  }
+
+  int get_datums_from_column(common::ObIArray<blocksstable::ObSqlDatumInfo> &datum_infos) override
+  {
+    int ret = OB_SUCCESS;
+    ++get_datums_call_count_;
+    datum_infos.reuse();
+    if (OB_FAIL(datum_infos.push_back(blocksstable::ObSqlDatumInfo(datums_, &expr_)))) {
+      LOG_WARN("failed to push datum info", K(ret));
+    }
+    return ret;
+  }
+
+  int filter(ObEvalCtx &, const sql::ObBitVector &, bool &filtered) override
+  {
+    filtered = false;
+    return OB_SUCCESS;
+  }
+
+  int filter_batch(
+      sql::ObPushdownFilterExecutor *parent,
+      const int64_t start,
+      const int64_t end,
+      common::ObBitmap &result_bitmap) override
+  {
+    UNUSEDx(parent, start, end, result_bitmap);
+    ++filter_batch_call_count_;
+    return OB_SUCCESS;
+  }
+
+  ObStorageDatum *datums_;
+  sql::ObExpr expr_;
+  int64_t get_datums_call_count_;
+  int64_t filter_batch_call_count_;
+};
+
 TEST_F(TestIntBaseDiffDecoder, filter_pushdown_comaprison_neg_test)
 {
   filter_pushdown_comaprison_neg_test();
+}
+
+TEST_F(TestDictDecoder, black_filter_pushdown_disabled_for_encoding_row_store)
+{
+  ObDatumRow row;
+  ASSERT_EQ(OB_SUCCESS, row.init(allocator_, full_column_cnt_));
+  for (int64_t i = 0; i < ROW_CNT; ++i) {
+    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(10000 + (i % 4), row));
+    ASSERT_EQ(OB_SUCCESS, encoder_.append_row(row));
+  }
+
+  char *buf = nullptr;
+  int64_t size = 0;
+  ASSERT_EQ(OB_SUCCESS, build_block(buf, size));
+
+  ObMicroBlockDecoder decoder;
+  ObMicroBlockData data;
+  ASSERT_EQ(OB_SUCCESS, data.init_with_prepare_micro_header(encoder_.data_buffer_.data(), encoder_.data_buffer_.length()));
+  ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_));
+  ASSERT_EQ(common::ENCODING_ROW_STORE, static_cast<common::ObRowStoreType>(decoder.micro_header_->row_store_type_));
+
+  int64_t dict_col_idx = -1;
+  for (int64_t i = read_info_.get_rowkey_count(); i < full_column_cnt_; ++i) {
+    if (decoder.decoders_[i].ctx_->col_header_->type_ == ObColumnHeader::DICT) {
+      dict_col_idx = i;
+      break;
+    }
+  }
+  ASSERT_NE(-1, dict_col_idx);
+
+  sql::PushdownFilterInfo pd_filter_info;
+  pd_filter_info.start_ = 0;
+  pd_filter_info.count_ = decoder.row_count_;
+  pd_filter_info.batch_size_ = 2;
+  pd_filter_info.allocator_ = &allocator_;
+  pd_filter_info.cell_data_ptrs_ = static_cast<const char **>(allocator_.alloc(sizeof(const char *) * pd_filter_info.batch_size_));
+  ASSERT_NE(nullptr, pd_filter_info.cell_data_ptrs_);
+
+  ObBitmap result_bitmap(allocator_);
+  ASSERT_EQ(OB_SUCCESS, result_bitmap.init(pd_filter_info.count_));
+
+  ObStorageDatum datum_buf[2];
+  sql::ObPushdownBlackFilterNode filter_node(allocator_);
+  sql::ObExecContext exec_ctx(allocator_);
+  sql::ObEvalCtx eval_ctx(exec_ctx);
+  sql::ObPushdownExprSpec expr_spec(allocator_);
+  sql::ObPushdownOperator op(eval_ctx, expr_spec);
+  MockPaxBlackFilterExecutor filter(allocator_, filter_node, op, datum_buf, col_descs_.at(dict_col_idx).col_type_);
+  ASSERT_EQ(OB_SUCCESS, filter.col_offsets_.init(1));
+  ASSERT_EQ(OB_SUCCESS, filter.col_params_.init(1));
+  ASSERT_EQ(OB_SUCCESS, filter.col_offsets_.push_back(dict_col_idx));
+  ASSERT_EQ(OB_SUCCESS, filter.col_params_.push_back(nullptr));
+  filter.n_cols_ = 1;
+
+  bool filter_applied = true;
+  ASSERT_EQ(OB_SUCCESS, decoder.filter_black_filter_batch(nullptr, filter, pd_filter_info, result_bitmap, filter_applied));
+  ASSERT_FALSE(filter_applied);
+  ASSERT_EQ(0, filter.get_datums_call_count_);
+  ASSERT_EQ(0, filter.filter_batch_call_count_);
+}
+
+TEST_F(TestDictDecoder, black_filter_pushdown_disabled_for_selective_encoding_row_store)
+{
+  encoder_.reuse();
+  ctx_.row_store_type_ = common::SELECTIVE_ENCODING_ROW_STORE;
+  ASSERT_EQ(OB_SUCCESS, encoder_.init(ctx_));
+
+  ObDatumRow row;
+  ASSERT_EQ(OB_SUCCESS, row.init(allocator_, full_column_cnt_));
+  for (int64_t i = 0; i < ROW_CNT; ++i) {
+    ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(10000 + (i % 4), row));
+    ASSERT_EQ(OB_SUCCESS, encoder_.append_row(row));
+  }
+
+  char *buf = nullptr;
+  int64_t size = 0;
+  ASSERT_EQ(OB_SUCCESS, build_block(buf, size));
+
+  ObMicroBlockDecoder decoder;
+  ObMicroBlockData data;
+  ASSERT_EQ(OB_SUCCESS, data.init_with_prepare_micro_header(encoder_.data_buffer_.data(), encoder_.data_buffer_.length()));
+  ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_));
+  ASSERT_EQ(common::SELECTIVE_ENCODING_ROW_STORE, static_cast<common::ObRowStoreType>(decoder.micro_header_->row_store_type_));
+
+  int64_t dict_col_idx = -1;
+  for (int64_t i = read_info_.get_rowkey_count(); i < full_column_cnt_; ++i) {
+    if (decoder.decoders_[i].ctx_->col_header_->type_ == ObColumnHeader::DICT) {
+      dict_col_idx = i;
+      break;
+    }
+  }
+  ASSERT_NE(-1, dict_col_idx);
+
+  sql::PushdownFilterInfo pd_filter_info;
+  pd_filter_info.start_ = 0;
+  pd_filter_info.count_ = decoder.row_count_;
+  pd_filter_info.batch_size_ = 2;
+  pd_filter_info.allocator_ = &allocator_;
+  pd_filter_info.cell_data_ptrs_ = static_cast<const char **>(allocator_.alloc(sizeof(const char *) * pd_filter_info.batch_size_));
+  ASSERT_NE(nullptr, pd_filter_info.cell_data_ptrs_);
+
+  ObBitmap result_bitmap(allocator_);
+  ASSERT_EQ(OB_SUCCESS, result_bitmap.init(pd_filter_info.count_));
+
+  ObStorageDatum datum_buf[2];
+  sql::ObPushdownBlackFilterNode filter_node(allocator_);
+  sql::ObExecContext exec_ctx(allocator_);
+  sql::ObEvalCtx eval_ctx(exec_ctx);
+  sql::ObPushdownExprSpec expr_spec(allocator_);
+  sql::ObPushdownOperator op(eval_ctx, expr_spec);
+  MockPaxBlackFilterExecutor filter(allocator_, filter_node, op, datum_buf, col_descs_.at(dict_col_idx).col_type_);
+  ASSERT_EQ(OB_SUCCESS, filter.col_offsets_.init(1));
+  ASSERT_EQ(OB_SUCCESS, filter.col_params_.init(1));
+  ASSERT_EQ(OB_SUCCESS, filter.col_offsets_.push_back(dict_col_idx));
+  ASSERT_EQ(OB_SUCCESS, filter.col_params_.push_back(nullptr));
+  filter.n_cols_ = 1;
+
+  bool filter_applied = true;
+  ASSERT_EQ(OB_SUCCESS, decoder.filter_black_filter_batch(nullptr, filter, pd_filter_info, result_bitmap, filter_applied));
+  ASSERT_FALSE(filter_applied);
+  ASSERT_EQ(0, filter.get_datums_call_count_);
+  ASSERT_EQ(0, filter.filter_batch_call_count_);
 }
 
 PUSHDOWN_GENERAL_TEST(TestRetroPDDecoder);
