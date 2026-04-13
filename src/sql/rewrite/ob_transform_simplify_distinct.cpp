@@ -104,6 +104,9 @@ int ObTransformSimplifyDistinct::distinct_can_be_eliminated(ObSelectStmt *stmt, 
       bool contain_only = true;
       if (OB_FAIL(ObTransformUtils::check_const_select(ctx_, stmt, contain_only))) {
         LOG_WARN("failed to check const select", K(ret));
+      } else if (contain_only && limit_count > 0 &&
+                 OB_FAIL(ObTransformUtils::add_compare_int_constraint(ctx_, stmt->get_limit_expr(), T_OP_GT, 0))) {
+        LOG_WARN("failed to add compare int constraint", K(ret));
       } else if (contain_only) {
         can_be = true;
       } else { /* Do nothing */ }
