@@ -189,6 +189,10 @@ int calc_timestampadd_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datu
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is NULL", K(ret));
+  } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
+    LOG_WARN("get sql mode failed", K(ret));
+  } else if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
+    LOG_WARN("get tz info failed", K(ret));
   } else if (OB_FAIL(expr.args_[0]->eval(ctx, unit_datum)) ||
       OB_FAIL(expr.args_[1]->eval(ctx, interval_datum)) ||
       OB_FAIL(expr.args_[2]->eval(ctx, timestamp_datum))) {
@@ -197,10 +201,6 @@ int calc_timestampadd_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datu
   } else if (unit_datum->is_null() || interval_datum->is_null() ||
              timestamp_datum->is_null()) {
     res_datum.set_null();
-  } else if (OB_FAIL(helper.get_sql_mode(sql_mode))) {
-    LOG_WARN("get sql mode failed", K(ret));
-  } else if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
-    LOG_WARN("get tz info failed", K(ret));
   } else {
     int64_t ts = 0;
     int64_t interval_int = interval_datum->get_int();
