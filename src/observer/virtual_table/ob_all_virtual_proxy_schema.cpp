@@ -832,6 +832,7 @@ int ObAllVirtualProxySchema::get_view_decoded_schema_(
         } else {
           // set # of question marks
           resolver_ctx.query_ctx_->set_questionmark_count(static_cast<int64_t> (parse_result.question_mark_ctx_.count_));
+          resolver_ctx.expr_factory_->set_query_ctx(resolver_ctx.query_ctx_);
         }
         if (OB_SUCC(ret)
             && OB_NOT_NULL(parse_result.result_tree_)
