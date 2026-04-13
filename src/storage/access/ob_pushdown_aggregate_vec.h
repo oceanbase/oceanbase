@@ -113,6 +113,7 @@ public:
   OB_INLINE int64_t get_agg_row_id() const { return agg_row_id_; }
   OB_INLINE bool is_aggr_with_expr() const { return aggr_with_expr_; }
   OB_INLINE void reset_agg_row_id() { agg_row_id_ = OB_INVALID_CS_ROW_ID; }
+  OB_INLINE bool is_param_null_prop() const { return !aggr_with_expr_; }
   OB_INLINE sql::ObExpr *get_agg_expr() const
   {
     const sql::ObAggrInfo &agg_info = basic_info_.agg_ctx_.aggr_infos_.at(agg_idx_);
