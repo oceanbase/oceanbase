@@ -372,11 +372,6 @@ private:
   void deep_copy_source_(ObRemoteSourceGuard &guard);
   int check_if_ls_gc_(bool &done);
   int check_offline_log_(bool &done);
-  // Helper functions for raw_write
-  int validate_raw_write_params_(const int64_t proposal_id,
-                                 const palf::LSN &lsn,
-                                 const char *buf,
-                                 const int64_t buf_size) const;
   int parse_log_type_(const char *buf,
                                   const int64_t buf_size,
                                   ObLogBaseType &log_type,
@@ -393,6 +388,11 @@ private:
   // ASYNC 日志必须等到租户的 sync_scn > pre_async_scn_ 后才可以接受
   int check_async_log_acceptable_(const share::SCN &async_log_scn) const;
   int wait_proposal_id_consistent_(const int64_t new_proposal_id) const;
+  int change_sync_mode(const int64_t proposal_id,
+                       const int64_t mode_version,
+                       const palf::SyncMode &target_sync_mode,
+                       int64_t &new_mode_version,
+                       int64_t &new_proposal_id);
   int do_raw_write_(const int64_t proposal_id,
                     const palf::LSN &lsn,
                     const char *buf,
@@ -401,14 +401,11 @@ private:
   int do_raw_write_with_retry_(const int64_t proposal_id,
                                const palf::LSN &lsn,
                                const char *buf,
-                               const int64_t buf_size,
-                               const bool need_sync_mode_lock);
+                               const int64_t buf_size);
   // 清理 transport task 队列
   void clear_transport_task_queue_();
 
 private:
-  typedef common::RWLock::RLockGuard SyncModeRLockGuard;
-  typedef common::RWLock::WLockGuard SyncModeWLockGuard;
   ObRemoteLogParent *parent_;
   ObRemoteFetchContext context_;
   ObRestoreLogContext restore_context_;
@@ -417,10 +414,6 @@ private:
   int64_t last_delay_count_;
   ObRemoteFetchStat cur_stat_info_;
   ObRemoteFetchStat last_stat_info_;
-  // 用于保护 sync_mode 变更期间不允许其他日志提交
-  // 当检测到 sync_mode_log 时，先获取该写锁，然后再写入日志、等待多数派、修改 sync_mode
-  // 其他 raw_write 调用需要先获取该锁的读锁，确保在 sync_mode 变更期间不会有新日志提交
-  mutable common::RWLock sync_mode_change_lock_;
 #ifdef OB_LOG_RESTORE_QUEUE_TEST_INFRA
   bool ignore_restore_source_for_test_;
 #endif

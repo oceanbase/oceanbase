@@ -108,7 +108,6 @@ ObLogRestoreHandler::ObLogRestoreHandler() :
   last_delay_count_(0),
   cur_stat_info_(),
   last_stat_info_(),
-  sync_mode_change_lock_(common::ObLatchIds::TRANSPORT_SERVICE_TASK_LOCK),
   pre_async_scn_()
 {
 #ifdef OB_LOG_RESTORE_QUEUE_TEST_INFRA
@@ -404,38 +403,6 @@ int ObLogRestoreHandler::clean_source()
 
 ERRSIM_POINT_DEF(ERRSIM_SUBMIT_LOG_ERROR);
 
-int ObLogRestoreHandler::validate_raw_write_params_(const int64_t proposal_id,
-                                                     const palf::LSN &lsn,
-                                                     const char *buf,
-                                                     const int64_t buf_size) const
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-  } else if (is_in_stop_state_) {
-    ret = OB_IN_STOP_STATE;
-  } else if (LEADER != role_) {
-    ret = OB_NOT_MASTER;
-  } else if (OB_UNLIKELY(!lsn.is_valid()
-        || NULL == buf
-        || 0 >= buf_size
-        || 0 >= proposal_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid argument", K(ret), K(proposal_id), K(lsn), K(buf), K(buf_size));
-  } else if (proposal_id != proposal_id_) {
-    ret = OB_NOT_MASTER;
-    CLOG_LOG(INFO, "stale task, just skip", K(proposal_id), K(proposal_id_), K(lsn), K(id_));
-  } else if ((NULL == parent_ || restore_to_end_unlock_())
-#ifdef OB_LOG_RESTORE_QUEUE_TEST_INFRA
-             && !ignore_restore_source_for_test_
-#endif
-            ) {
-    ret = OB_RESTORE_LOG_TO_END;
-    CLOG_LOG(INFO, "submit log to end, just skip", K(ret), K(lsn), KPC(this));
-  }
-  return ret;
-}
-
 int ObLogRestoreHandler::parse_log_type_(const char *buf,
                                          const int64_t buf_size,
                                          ObLogBaseType &log_type,
@@ -598,8 +565,8 @@ int ObLogRestoreHandler::handle_sync_mode_log_(const int64_t proposal_id,
     if (target_sync_mode != palf::SyncMode::INVALID_SYNC_MODE
         && curr_sync_mode != target_sync_mode) {
       int64_t new_mode_version = INVALID_PROPOSAL_ID;
-      if (OB_FAIL(palf_handle_->change_sync_mode(proposal_id, mode_version, target_sync_mode,
-                                                 new_mode_version, new_proposal_id))) {
+      if (OB_FAIL(change_sync_mode(proposal_id, mode_version, target_sync_mode,
+                                   new_mode_version, new_proposal_id))) {
         CLOG_LOG(WARN, "change_sync_mode failed", K(ret), K(id_), K(mode_version),
                  K(curr_sync_mode), K(target_sync_mode), K(scn), K(lsn));
       } else {
@@ -727,6 +694,39 @@ int ObLogRestoreHandler::wait_proposal_id_consistent_(const int64_t new_proposal
   return ret;
 }
 
+int ObLogRestoreHandler::change_sync_mode(const int64_t proposal_id,
+                                          const int64_t mode_version,
+                                          const palf::SyncMode &target_sync_mode,
+                                          int64_t &new_mode_version,
+                                          int64_t &new_proposal_id)
+{
+  int ret = OB_SUCCESS;
+  RLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ObLogRestoreHandler not init", K(ret), K(id_));
+  } else if (is_in_stop_state_) {
+    ret = OB_IN_STOP_STATE;
+    CLOG_LOG(WARN, "ObLogRestoreHandler is in stop state", K(ret), K(id_));
+  } else if (!is_strong_leader(role_)) {
+    ret = OB_NOT_MASTER;
+    CLOG_LOG(WARN, "not leader, skip change_sync_mode", K(ret), K(id_), K(role_));
+  } else if (proposal_id != proposal_id_) {
+    ret = OB_NOT_MASTER;
+    CLOG_LOG(INFO, "stale proposal_id, skip change_sync_mode", K(proposal_id), K(proposal_id_), K(id_));
+  } else if (OB_ISNULL(palf_handle_) || !palf_handle_->is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "palf_handle_ is invalid", K(ret), K(id_), KP(palf_handle_));
+  } else if (OB_FAIL(palf_handle_->change_sync_mode(proposal_id, mode_version, target_sync_mode,
+                                                     new_mode_version, new_proposal_id))) {
+    CLOG_LOG(WARN, "palf change_sync_mode failed", K(ret), K(id_), K(mode_version), K(target_sync_mode));
+  } else {
+    CLOG_LOG(INFO, "change_sync_mode success", K(id_), K(mode_version), K(target_sync_mode),
+             K(new_mode_version), K(new_proposal_id));
+  }
+  return ret;
+}
+
 int ObLogRestoreHandler::do_raw_write_(const int64_t proposal_id,
                                        const palf::LSN &lsn,
                                        const char *buf,
@@ -763,32 +763,38 @@ int ObLogRestoreHandler::do_raw_write_(const int64_t proposal_id,
 int ObLogRestoreHandler::do_raw_write_with_retry_(const int64_t proposal_id,
                                                   const palf::LSN &lsn,
                                                   const char *buf,
-                                                  const int64_t buf_size,
-                                                  const bool need_sync_mode_lock)
+                                                  const int64_t buf_size)
 {
   int ret = OB_SUCCESS;
   int64_t wait_times = 0;
 
   while (wait_times < MAX_RAW_WRITE_RETRY_TIMES) {
     ret = OB_SUCCESS;
-    if (need_sync_mode_lock) {
-      // 普通日志获取 sync_mode_change_lock_ 的读锁
-      // 这样在 change_sync_mode 执行期间（持有写锁）会被阻塞
-      SyncModeRLockGuard sync_mode_rguard(sync_mode_change_lock_);
-      RLockGuard guard(lock_);
-      if (OB_FAIL(validate_raw_write_params_(proposal_id, lsn, buf, buf_size))) {
-        CLOG_LOG(WARN, "validate_raw_write_params_ failed", KR(ret), K(id_), K(proposal_id), K(lsn), K(buf_size));
-      } else if (OB_FAIL(do_raw_write_(proposal_id, lsn, buf, buf_size))) {
-        CLOG_LOG(WARN, "do_raw_write_ failed", KR(ret), K(id_), K(proposal_id), K(lsn), K(buf_size));
-      }
-    } else {
-      // sync_mode_log 不需要获取 sync_mode_change_lock_，因为它已经持有写锁
-      RLockGuard guard(lock_);
-      if (OB_FAIL(validate_raw_write_params_(proposal_id, lsn, buf, buf_size))) {
-        CLOG_LOG(WARN, "validate_raw_write_params_ failed", KR(ret), K(id_), K(proposal_id), K(lsn), K(buf_size));
-      } else if (OB_FAIL(do_raw_write_(proposal_id, lsn, buf, buf_size))) {
-        CLOG_LOG(WARN, "do_raw_write_ failed", KR(ret), K(id_), K(proposal_id), K(lsn), K(buf_size));
-      }
+    RLockGuard guard(lock_);
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+    } else if (is_in_stop_state_) {
+      ret = OB_IN_STOP_STATE;
+    } else if (LEADER != role_) {
+      ret = OB_NOT_MASTER;
+    } else if (OB_UNLIKELY(!lsn.is_valid()
+          || NULL == buf
+          || 0 >= buf_size
+          || 0 >= proposal_id)) {
+      ret = OB_INVALID_ARGUMENT;
+      CLOG_LOG(WARN, "invalid argument", K(ret), K(proposal_id), K(lsn), K(buf), K(buf_size));
+    } else if (proposal_id != proposal_id_) {
+      ret = OB_NOT_MASTER;
+      CLOG_LOG(INFO, "stale task, just skip", K(proposal_id), K(proposal_id_), K(lsn), K(id_));
+    } else if ((NULL == parent_ || restore_to_end_unlock_())
+#ifdef OB_LOG_RESTORE_QUEUE_TEST_INFRA
+               && !ignore_restore_source_for_test_
+#endif
+              ) {
+      ret = OB_RESTORE_LOG_TO_END;
+      CLOG_LOG(INFO, "submit log to end, just skip", K(ret), K(lsn), KPC(this));
+    } else if (OB_FAIL(do_raw_write_(proposal_id, lsn, buf, buf_size))) {
+      CLOG_LOG(WARN, "do_raw_write_ failed", KR(ret), K(id_), K(proposal_id), K(lsn), K(buf_size));
     }
 
     if (OB_EAGAIN == ret) {
@@ -842,33 +848,16 @@ int ObLogRestoreHandler::raw_write(const int64_t proposal_id,
 
     // 如果是 sync_mode_log，先修改 sync_mode，再写日志
     if (is_sync_mode_log) {
-      // 获取写锁，阻止新的日志提交，防止在 change_sync_mode 期间有新日志导致滑动窗口问题
-      SyncModeWLockGuard sync_mode_wguard(sync_mode_change_lock_);
-      CLOG_LOG(INFO, "acquired sync_mode_change_lock_ write lock before change_sync_mode",
-              K(id_), K(lsn), K(sync_mode_log_type));
-
-      // 先修改 sync_mode
       int64_t new_proposal_id = proposal_id;
       if (OB_FAIL(handle_sync_mode_log_(proposal_id, lsn, scn, sync_mode_log_type, is_standby_dest, new_proposal_id))) {
         CLOG_LOG(WARN, "handle_sync_mode_log_ failed", KR(ret), K(id_), K(lsn), K(scn), K(sync_mode_log_type));
-      } else {
-        CLOG_LOG(INFO, "handle_sync_mode_log_ success, now write log", K(id_), K(lsn), K(scn), K(sync_mode_log_type),
-                 K(proposal_id), K(new_proposal_id));
-
-        // 再写日志，不需要获取 sync_mode_change_lock_ 读锁（因为已经持有写锁）
-        if (OB_FAIL(do_raw_write_with_retry_(new_proposal_id, lsn, buf, buf_size, false))) {
-          CLOG_LOG(WARN, "do_raw_write_with_retry_ failed", KR(ret), K(id_), K(lsn), K(buf_size));
-        } else {
-          CLOG_LOG(INFO, "sync_mode_log write success", K(id_), K(lsn), K(scn), K(sync_mode_log_type));
-        }
-      }
-      // sync_mode_wguard 析构时自动释放写锁
-    } else {
-      // 普通日志需要获取 sync_mode_change_lock_ 的读锁
-      // 这样在 change_sync_mode 执行期间（持有写锁）会被阻塞
-      if (OB_FAIL(do_raw_write_with_retry_(proposal_id, lsn, buf, buf_size, true))) {
+      } else if (OB_FAIL(do_raw_write_with_retry_(new_proposal_id, lsn, buf, buf_size))) {
         CLOG_LOG(WARN, "do_raw_write_with_retry_ failed", KR(ret), K(id_), K(lsn), K(buf_size));
+      } else {
+        CLOG_LOG(INFO, "sync_mode_log write success", K(id_), K(lsn), K(scn), K(sync_mode_log_type));
       }
+    } else if (OB_FAIL(do_raw_write_with_retry_(proposal_id, lsn, buf, buf_size))) {
+        CLOG_LOG(WARN, "do_raw_write_with_retry_ failed", KR(ret), K(id_), K(lsn), K(buf_size));
     }
   }
 
