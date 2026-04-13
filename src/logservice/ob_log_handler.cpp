@@ -79,6 +79,7 @@ ObLogHandler::ObLogHandler() : self_(),
                                append_cost_stat_("[PALF STAT APPEND COST TIME]", 1 * 1000 * 1000),
                                is_offline_(false),
                                is_pre_async_blocked_(false),
+                               has_sync_mode_degrading_mark_(false),
 #ifdef OB_BUILD_LOG_STORAGE_COMPRESS
                                compressor_wrapper_(),
 #endif
@@ -244,6 +245,7 @@ void ObLogHandler::destroy()
   is_in_stop_state_ = true;
   // 清理PRE_ASYNC阻塞状态，唤醒所有等待的线程
   clear_pre_async_blocked();
+  clear_sync_mode_degrading_mark();
   common::TCWLockGuard deps_guard(deps_lock_);
   if (NULL != apply_service_ && NULL != apply_status_) {
     apply_service_->revert_apply_status(apply_status_);
@@ -2616,6 +2618,21 @@ void ObLogHandler::clear_pre_async_blocked()
   ATOMIC_STORE(&is_pre_async_blocked_, false);
 }
 
+void ObLogHandler::mark_sync_mode_degrading()
+{
+  ATOMIC_STORE(&has_sync_mode_degrading_mark_, true);
+}
+
+void ObLogHandler::clear_sync_mode_degrading_mark()
+{
+  ATOMIC_STORE(&has_sync_mode_degrading_mark_, false);
+}
+
+bool ObLogHandler::has_degrading_sync_mode() const
+{
+  return ATOMIC_LOAD(&has_sync_mode_degrading_mark_);
+}
+
 int ObLogHandler::wait_pre_async_unblocked_()
 {
   int ret = OB_SUCCESS;
@@ -2679,10 +2696,6 @@ int ObLogHandler::change_sync_mode(const int64_t mode_version,
   int ret = OB_SUCCESS;
   const bool is_degrade_request = (palf::SyncMode::ASYNC == sync_mode || palf::SyncMode::PRE_ASYNC == sync_mode);
   new_proposal_id = INVALID_PROPOSAL_ID;
-  int64_t curr_mode_version = OB_INVALID_VERSION;
-  palf::SyncMode curr_sync_mode = palf::SyncMode::INVALID_SYNC_MODE;
-  common::ObRole curr_role = common::FOLLOWER;
-  bool is_pending_state = false;
   RLockGuard guard(lock_);
   int64_t proposal_id = ATOMIC_LOAD(&proposal_id_);
   if (IS_NOT_INIT) {
@@ -2710,11 +2723,15 @@ int ObLogHandler::change_sync_mode(const int64_t mode_version,
   }
 
   if (OB_FAIL(ret)) {
+  } else if (is_degrade_request && FALSE_IT(mark_sync_mode_degrading())) {
   } else if (OB_FAIL(palf_handle_->change_sync_mode(proposal_id, mode_version, sync_mode, new_mode_version, new_proposal_id))) {
     CLOG_LOG(WARN, "palf change_sync_mode failed", K(ret), K_(id), K(proposal_id), K(mode_version), K(sync_mode), K(is_degrade_request));
   } else {
     FLOG_INFO("change_sync_mode success", K(ret), K_(id), K(proposal_id), K(mode_version), K(sync_mode),
       K(new_proposal_id), K(is_degrade_request));
+  }
+  if (is_degrade_request) {
+    clear_sync_mode_degrading_mark();
   }
   return ret;
 }

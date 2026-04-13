@@ -355,6 +355,9 @@ public:
   // MPT functions
   void set_pre_async_blocked();
   void clear_pre_async_blocked();
+  void mark_sync_mode_degrading();
+  void clear_sync_mode_degrading_mark();
+  bool has_degrading_sync_mode() const;
 
   int process_change_sync_mode(const int64_t mode_version,
                                 const palf::SyncMode &sync_mode,
@@ -1003,6 +1006,7 @@ private:
   ObMiniStat::ObStatItem append_cost_stat_;
   bool is_offline_;
   bool is_pre_async_blocked_;
+  bool has_sync_mode_degrading_mark_;
 #ifdef OB_BUILD_LOG_STORAGE_COMPRESS
   ObLogCompressorWrapper compressor_wrapper_;
 #endif

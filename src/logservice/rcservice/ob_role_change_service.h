@@ -100,7 +100,8 @@ private:
     WAIT_REPLAY_DONE_TIMEOUT = 1,
     WAIT_REPLACE_DONE_TIMEOUT = 2,
     WAIT_STANDBY_SYNC_TIMEOUT = 3,
-    MAX_TYPE = 4
+    SYNC_MODE_DEGRADING = 4,  // FARM COMPAT WHITELIST
+    MAX_TYPE = 5
   };
   class RetrySubmitRoleChangeEventCtx {
   public:
@@ -113,7 +114,8 @@ private:
     {
       return RetrySubmitRoleChangeEventReason::WAIT_REPLAY_DONE_TIMEOUT == reason_
              || RetrySubmitRoleChangeEventReason::WAIT_REPLACE_DONE_TIMEOUT == reason_
-             || RetrySubmitRoleChangeEventReason::WAIT_STANDBY_SYNC_TIMEOUT == reason_;
+             || RetrySubmitRoleChangeEventReason::WAIT_STANDBY_SYNC_TIMEOUT == reason_
+             || RetrySubmitRoleChangeEventReason::SYNC_MODE_DEGRADING == reason_;
     }
     void set_retry_reason(const RetrySubmitRoleChangeEventReason &reason)
     {
@@ -205,6 +207,12 @@ private:
                                      const palf::SyncMode new_sync_mode) const;
   bool is_append_mode(const palf::AccessMode &access_mode) const;
   bool is_raw_write_or_flashback_mode(const palf::AccessMode &access_mode) const;
+  void check_if_need_retry_(const RoleChangeEvent &event,
+                            ObLS *ls,
+                            const int64_t pre_mode_version,
+                            RetrySubmitRoleChangeEventCtx &retry_ctx);
+  bool is_role_change_event_(const RoleChangeEvent &event) const;
+  bool has_sync_mode_degrading_mark_(ObLS *ls) const;
   int switch_to_sync_(const int64_t new_proposal_id,
                             const int64_t curr_proposal_id,
                             const palf::SyncMode &new_sync_mode,
@@ -212,7 +220,6 @@ private:
   int switch_to_pre_async_(ObLS *ls);
   int switch_to_async_(ObLS *ls);
   int switch_leader_to_leader_except_trans_(const int64_t new_proposal_id, ObLS *ls);
-  int switch_leader_to_leader_except_trans_restore_(const int64_t new_proposal_id, ObLS *ls);
 private:
   RoleChangeOptType get_role_change_opt_type_(const common::ObRole &old_role,
                                               const common::ObRole &new_role,

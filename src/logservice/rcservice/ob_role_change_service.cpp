@@ -214,11 +214,14 @@ void ObRoleChangeService::handle(void *task)
   } else {
     CLOG_LOG(INFO, "end handle_role_change_event_", "sequence:", start_ts, KPC(event));
   }
+  const RoleChangeEvent saved_event = (NULL != event) ? *event : RoleChangeEvent();
   if (NULL != event) {
     OB_DELETE(RoleChangeEvent, "RCService", event);
   }
-  if (retry_ctx.need_retry() && OB_FAIL(on_role_change(ls_id))) {
-    CLOG_LOG(WARN, "retry submit role change event failed", K(ls_id), K(retry_ctx));
+  if (retry_ctx.need_retry()) {
+    if (OB_FAIL(submit_role_change_event_(saved_event))) {
+      CLOG_LOG(WARN, "retry submit role change event failed", K(ls_id), K(saved_event), K(retry_ctx));
+    }
   }
 }
 
@@ -314,7 +317,7 @@ int ObRoleChangeService::handle_role_change_event_(const RoleChangeEvent &event,
   ObLS *ls = NULL;
   AccessMode curr_access_mode;
   SyncMode curr_sync_mode;
-  int64_t unused_mode_version;
+  int64_t pre_mode_version;
   OB_ASSERT(OB_SUCCESS == rc_set_.remove(event));
   if (false == event.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -323,9 +326,13 @@ int ObRoleChangeService::handle_role_change_event_(const RoleChangeEvent &event,
              || NULL == (ls = ls_handle.get_ls())) {
     ret = OB_ENTRY_NOT_EXIST;
     CLOG_LOG(WARN, "get log stream from ObLSService failed", K(ret), K(event));
-  } else if (OB_FAIL(ls->get_log_handler()->get_access_mode(unused_mode_version, curr_access_mode))) {
+  } else if (is_role_change_event_(event) && has_sync_mode_degrading_mark_(ls)) {
+    retry_ctx.set_retry_reason(RetrySubmitRoleChangeEventReason::SYNC_MODE_DEGRADING);
+    CLOG_LOG(INFO, "palf is in sync_mode degrading, not handle role change event, retry later",
+        K(event), KPC(ls), K(retry_ctx));
+  } else if (OB_FAIL(ls->get_log_handler()->get_access_mode(pre_mode_version, curr_access_mode))) {
     CLOG_LOG(WARN, "ObLogHandler get_access_mode failed", K(ret));
-  } else if (!GCONF.enable_logservice && OB_FAIL(ls->get_log_handler()->get_sync_mode(unused_mode_version, curr_sync_mode))) {
+  } else if (!GCONF.enable_logservice && OB_FAIL(ls->get_log_handler()->get_sync_mode(pre_mode_version, curr_sync_mode))) {
     CLOG_LOG(WARN, "ObLogHandler get_sync_mode failed", K(ret));
   } else {
     switch (event.event_type_) {
@@ -387,10 +394,35 @@ int ObRoleChangeService::handle_role_change_event_(const RoleChangeEvent &event,
         CLOG_LOG(WARN, "unexpected role change event type", K(ret));
     }
   }
+  if (OB_NOT_NULL(ls) && is_role_change_event_(event) && !retry_ctx.need_retry()) {
+    check_if_need_retry_(event, ls, pre_mode_version, retry_ctx);
+  }
   if (OB_SUCC(ret) && OB_NOT_NULL(ls) && !retry_ctx.need_retry()) {
     (void)ls->report_replica_info();
   }
   return ret;
+}
+
+void ObRoleChangeService::check_if_need_retry_(
+    const RoleChangeEvent &event,
+    ObLS *ls,
+    const int64_t pre_mode_version,
+    RetrySubmitRoleChangeEventCtx &retry_ctx)
+{
+  int64_t post_mode_version = 0;
+  SyncMode unused_sync_mode;
+  int ret = OB_SUCCESS;
+  if (has_sync_mode_degrading_mark_(ls)) {
+    retry_ctx.set_retry_reason(RetrySubmitRoleChangeEventReason::SYNC_MODE_DEGRADING);
+    CLOG_LOG(INFO, "palf is in sync_mode degrading after role change, retry later",
+        K(event), KPC(ls), K(retry_ctx));
+  } else if (OB_FAIL(ls->get_log_handler()->get_sync_mode(post_mode_version, unused_sync_mode))) {
+    CLOG_LOG(WARN, "get_sync_mode for post-check failed", K(ret), K(event));
+  } else if (post_mode_version != pre_mode_version) {
+    retry_ctx.set_retry_reason(RetrySubmitRoleChangeEventReason::SYNC_MODE_DEGRADING);
+    CLOG_LOG(INFO, "mode_version changed during role change, palf is doing sync_mode change, need retry",
+        K(event), K(pre_mode_version), K(post_mode_version), K(unused_sync_mode), K(retry_ctx));
+  }
 }
 
 int ObRoleChangeService::handle_role_change_cb_event_for_restore_handler_(
@@ -685,8 +717,8 @@ int ObRoleChangeService::handle_sync_mode_event_for_restore_handler_(ObLS *ls)
         is_pending_state, log_handler_is_offline, curr_sync_mode, new_sync_mode)) {
     CLOG_LOG(INFO, "no need execute sync_mode change", K(curr_proposal_id), K(new_proposal_id), K(is_pending_state), K(log_handler_is_offline), K(new_sync_mode), KPC(ls));
   } else if (FALSE_IT(ls->get_log_restore_handler()->switch_sync_mode(new_sync_mode, new_proposal_id))) {
-  } else if (LEADER == curr_role && OB_FAIL(switch_leader_to_leader_except_trans_restore_(new_proposal_id, ls))) {
-    CLOG_LOG(WARN, "switch_leader_to_leader_except_trans_restore_ failed", K(ret), K(new_proposal_id), KPC(ls));
+  } else if (LEADER == curr_role && OB_FAIL(switch_leader_to_leader_restore_(new_proposal_id, curr_proposal_id, curr_sync_mode, ls))) {
+    CLOG_LOG(WARN, "switch_leader_to_leader_restore_ failed", K(ret), K(new_proposal_id), K(curr_proposal_id), K(curr_sync_mode), KPC(ls));
   } else {
     CLOG_LOG(INFO, "handle_sync_mode_event_for_restore_handler_ success", K(curr_role),
         K(curr_proposal_id), K(new_proposal_id), K(curr_sync_mode), K(new_sync_mode), KPC(ls));
@@ -1250,6 +1282,18 @@ bool ObRoleChangeService::is_raw_write_or_flashback_mode(const AccessMode &mode)
       AccessMode::PREPARE_FLASHBACK == mode);
 }
 
+bool ObRoleChangeService::is_role_change_event_(const RoleChangeEvent &event) const
+{
+  return RoleChangeEventType::SYNC_MODE_EVENT_TYPE != event.event_type_;
+}
+
+bool ObRoleChangeService::has_sync_mode_degrading_mark_(ObLS *ls) const
+{
+  return OB_NOT_NULL(ls)
+         && OB_NOT_NULL(ls->get_log_handler())
+         && ls->get_log_handler()->has_degrading_sync_mode();
+}
+
 bool ObRoleChangeService::need_retry_submit_role_change_event_(int ret) const
 {
   bool bool_ret = false;
@@ -1335,28 +1379,6 @@ int ObRoleChangeService::switch_leader_to_leader_except_trans_(const int64_t new
       ATOMIC_SET(&cur_task_info_.state_, logservice::TakeOverState::TAKE_OVER_FINISH);
       ATOMIC_SET(&cur_task_info_.log_type_, ObLogBaseType::INVALID_LOG_BASE_TYPE);
       CLOG_LOG(INFO, "switch_leader_to_leader_except_trans success", K(ret), K(new_proposal_id), K(ls_id));
-    }
-  }
-  return ret;
-}
-
-int ObRoleChangeService::switch_leader_to_leader_except_trans_restore_(const int64_t new_proposal_id, ObLS *ls)
-{
-  int ret = OB_SUCCESS;
-  const share::ObLSID &ls_id = ls->get_ls_id();
-  ObRoleChangeHandler *restore_role_change_handler = ls->get_restore_role_change_handler();
-  if (OB_ISNULL(restore_role_change_handler)) {
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(WARN, "restore_role_change_handler is null", K(ret), K(ls_id));
-  } else {
-    ATOMIC_SET(&cur_task_info_.id_, ls_id.id());
-    ATOMIC_SET(&cur_task_info_.state_, logservice::TakeOverState::WAIT_RC_HANDLER_DONE);
-    if (OB_FAIL(restore_role_change_handler->switch_leader_to_leader_except_trans(cur_task_info_))) {
-      CLOG_LOG(WARN, "switch_leader_to_leader_except_trans_restore_ failed", K(ret), K(new_proposal_id), K(ls_id));
-    } else {
-      ATOMIC_SET(&cur_task_info_.state_, logservice::TakeOverState::TAKE_OVER_FINISH);
-      ATOMIC_SET(&cur_task_info_.log_type_, ObLogBaseType::INVALID_LOG_BASE_TYPE);
-      CLOG_LOG(INFO, "switch_leader_to_leader_except_trans_restore_ success", K(ret), K(new_proposal_id), K(ls_id));
     }
   }
   return ret;

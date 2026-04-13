@@ -125,7 +125,7 @@ int ObRestoreLogFunction::process_(const share::ObLSID &id,
       if (OB_FAIL(restore_handler->raw_write(proposal_id, lsn, scn, buf, buf_size))) {
         if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
           ret = OB_SUCCESS;
-        } else if (OB_NOT_MASTER  == ret || OB_EAGAIN == ret || OB_RESTORE_LOG_TO_END == ret) {
+        } else if (OB_NOT_MASTER  == ret || OB_EAGAIN == ret || OB_RESTORE_LOG_TO_END == ret || OB_STATE_NOT_MATCH == ret) {
           ret = OB_NEED_RETRY;
         } else {
           LOG_WARN("raw write failed", K(ret), K(id), K(lsn), K(buf), K(buf_size));
