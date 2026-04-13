@@ -981,6 +981,25 @@ int ObPartitionMergePolicy::get_co_major_minor_merge_tables(
   return ret;
 }
 
+int ObPartitionMergePolicy::set_filled_tx_scn_for_minor_merge(const ObTablet &tablet, ObGetMergeTablesResult &result)
+{
+  int ret = OB_SUCCESS;
+  if (!result.is_gc_tx_data() && !tablet.is_ls_inner_tablet() && result.fill_tx_info_.is_normal()) {
+    SCN max_filled_tx_scn = SCN::min_scn();
+    for (int i = 0; i < result.handle_.get_count(); ++i) {
+      ObSSTable *sstable = static_cast<ObSSTable *>(result.handle_.get_table(i));
+      if (sstable->get_filled_tx_scn() > max_filled_tx_scn) {
+        max_filled_tx_scn = sstable->get_filled_tx_scn();
+      }
+    }
+    if (max_filled_tx_scn != result.scn_range_.end_scn_) {
+      LOG_TRACE("use max_filled_tx_scn as new filled_tx_scn for minor merge", K(max_filled_tx_scn), K(result));
+    }
+    result.fill_tx_info_.set_special_fill_tx_type(ObFillTxType::FILL_TX_TYPE_DATA_MINOR, max_filled_tx_scn);
+  }
+  return ret;
+}
+
 int ObPartitionMergePolicy::schedule_co_major_minor_errsim(
     const ObTablesHandleArray &input_tables,
     ObIArray<ObTableHandleV2> &output_tables)

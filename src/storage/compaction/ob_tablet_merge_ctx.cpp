@@ -457,6 +457,11 @@ int ObTabletExeMergeCtx::get_tables_by_key(ObGetMergeTablesResult &get_merge_tab
         }
       } else if (OB_FAIL(get_merge_table_result.handle_.add_sstable(sstable_wrapper.get_sstable(), table_store_wrapper.get_meta_handle()))) {
         LOG_WARN("failed to add sstable into result", KR(ret), K(sstable_wrapper));
+      } else if (get_merge_table_result.fill_tx_info_.is_data_minor()) {
+        if (OB_UNLIKELY(sstable_wrapper.get_sstable()->get_filled_tx_scn() > get_merge_table_result.fill_tx_info_.fill_tx_scn_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected filled tx scn", K(ret), K(get_merge_table_result), KPC(sstable_wrapper.get_sstable()));
+        }
       }
     } // end of for
     if (OB_SUCC(ret) && get_merge_table_result.handle_.get_count() != table_key_array.count()) {

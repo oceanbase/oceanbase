@@ -134,6 +134,9 @@ public:
       const bool need_check_tablet);
   static bool is_sstable_count_not_safe(const int64_t minor_table_cnt);
 
+  static int set_filled_tx_scn_for_minor_merge(
+    const storage::ObTablet &tablet,
+    storage::ObGetMergeTablesResult &result);
 private:
   static int find_mini_merge_tables(
       const storage::ObGetMergeTablesParam &param,
@@ -217,7 +220,6 @@ private:
   static int schedule_co_major_minor_errsim(
       const storage::ObTablesHandleArray &input_tables,
       common::ObIArray<storage::ObTableHandleV2> &output_tables);
-
 public:
   static const int64_t OB_HIST_MINOR_FACTOR = 3;
   static const int64_t OB_UNSAFE_TABLE_CNT = 32;

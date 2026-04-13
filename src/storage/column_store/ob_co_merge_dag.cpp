@@ -211,7 +211,9 @@ int ObCOMergePrepareTask::create_schedule_dag(ObCOTabletMergeCtx &ctx)
 
   if (OB_FAIL(ret)) {
   } else if (minor_result.handle_.get_count() > 0) {
-    if (OB_FAIL(schedule_minor_exec_dag(ctx, minor_result))) {
+    if (OB_FAIL(ObPartitionMergePolicy::set_filled_tx_scn_for_minor_merge(*ctx.get_tablet(), minor_result))) {
+      LOG_WARN("failed to set filled tx scn for minor merge", K(ret), K(minor_result));
+    } else if (OB_FAIL(schedule_minor_exec_dag(ctx, minor_result))) {
       LOG_WARN("failed to schedule minor exec dag", K(ret));
     }
   } else {
