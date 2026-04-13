@@ -206,6 +206,52 @@ int ObIncDDLMergeTaskUtils::freeze_inc_major_ddl_kv(
   return ret;
 }
 
+int ObIncDDLMergeTaskUtils::freeze_ddl_kv(const ObTabletHandle &tablet_handle)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!tablet_handle.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(tablet_handle));
+  } else {
+    ObDDLKvMgrHandle ddl_kv_mgr_handle;
+    if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
+      if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
+        LOG_WARN("failed to get ddl kv mgr", KR(ret), K(tablet_handle));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    } else if (!ddl_kv_mgr_handle.get_obj()->can_freeze()) {
+      ret = OB_EAGAIN;
+      if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+        LOG_WARN("ddl kv cannot freeze now", KR(ret), K(ddl_kv_mgr_handle));
+      }
+    } else {
+      if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->freeze_ddl_kv(SCN::min_scn() /*start_scn*/,
+                                                             0/*snapshot_version*/,
+                                                             0/*data_format_version*/))) {
+        LOG_WARN("fail to freeze ddl kv", KR(ret), K(tablet_handle));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObIncDDLMergeTaskUtils::freeze_ddl_kv(ObLS *ls, const ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(ls == nullptr || !tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), KP(ls), K(tablet_id));
+  } else {
+    ObTabletHandle tablet_handle;
+    if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls, tablet_id, tablet_handle, ObMDSGetTabletMode::READ_ALL_COMMITED))) {
+      LOG_WARN("failed to get tablet handle", KR(ret), KPC(ls), K(tablet_id));
+    } else if (OB_FAIL(freeze_ddl_kv(tablet_handle))) {
+      LOG_WARN("failed to freeze ddl kv", KR(ret), K(tablet_handle));
+    }
+  }
+  return ret;
+}
 
 int ObIncDDLMergeTaskUtils::update_tablet_table_store(
     ObLS *ls,

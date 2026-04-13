@@ -674,6 +674,8 @@ int ObDDLMergeScheduler::schedule_tablet_ddl_major_merge(
     } else if (ddl_complete.has_complete_ || has_freezed_ddl_kv) {
       if (OB_FAIL(ObDirectLoadMgrUtil::generate_merge_param(ddl_complete, *(tablet_handle.get_obj()), param))) {
         LOG_WARN("failed to generate merge param", K(ret), K(ddl_complete));
+      } else if (param.is_commit_ && OB_FAIL(ObDDLMergeTaskUtils::final_freeze_ddl_kv(ls_id, tablet_handle.get_obj()->get_tablet_id()))) {
+        LOG_WARN("try to freeze ddl kv failed", K(ret));
       } else if (FALSE_IT(param.rec_scn_ = ddl_kv_mgr_handle.get_obj()->get_max_freeze_scn())) {
       } else if (OB_FAIL(compaction::ObScheduleDagFunc::schedule_ddl_table_merge_dag(param))) {
         LOG_WARN("try schedule ddl merge dag failed when ddl kv is full ", K(ret), K(param));

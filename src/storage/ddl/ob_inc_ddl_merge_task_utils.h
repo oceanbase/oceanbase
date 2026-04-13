@@ -33,6 +33,8 @@ public:
       const uint64_t data_format_version,
       const bool is_replay,
       const share::SCN &start_scn /*only worked when is_replay is true*/);
+  static int freeze_ddl_kv(const ObTabletHandle &tablet_handle);
+  static int freeze_ddl_kv(ObLS *ls, const ObTabletID &tablet_id);
   static int update_tablet_table_store(
         ObLS *ls,
         ObTabletHandle &tablet_handle);

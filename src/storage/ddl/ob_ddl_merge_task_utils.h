@@ -49,6 +49,9 @@ public:
                            const int64_t snapshot_version,
                            const uint64_t tenant_data_version);
 
+  // final freeze ddl kv for major merge, avoid full ddl kv left in tablet
+  static int final_freeze_ddl_kv(const ObLSID &ls_id, const ObTabletID &tablet_id);
+
   /*
    * the return value it's  < slice_idx, cg_sstable_array<sstable_handle>> pairs, required cg sstable sorted as cg_idx
   */

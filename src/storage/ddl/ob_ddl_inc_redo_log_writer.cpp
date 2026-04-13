@@ -489,6 +489,9 @@ int ObDDLIncRedoLogWriter::local_write_inc_start_log(
   } else if (is_incremental_minor_direct_load(direct_load_type_)
       && OB_FAIL(freeze_inc_minor_ddl_kv(ls, tablet_id_, lob_meta_tablet_id))) {
     LOG_WARN("failed to freeze inc minor ddl kv", KR(ret));
+  } else if (is_incremental_major_direct_load(direct_load_type_)
+      && OB_FAIL(freeze_for_inc_major(ls, tablet_id_, lob_meta_tablet_id))) {
+    LOG_WARN("failed to freeze for inc major", KR(ret));
   } else if (OB_ISNULL(cb = OB_NEW(ObDDLIncStartClogCb, ObMemAttr(MTL_ID(), "DDL_IRLW")))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(ret));
@@ -570,6 +573,21 @@ int ObDDLIncRedoLogWriter::freeze_inc_minor_tablet(
                                        false, /*need_rewrite_meta*/
                                        ObFreezeSourceFlag::DIRECT_INC_START))) {
     LOG_WARN("sync tablet freeze failed", K(ret), K(tablet_id));
+  }
+  return ret;
+}
+
+int ObDDLIncRedoLogWriter::freeze_for_inc_major(
+  ObLS *ls,
+  const ObTabletID &tablet_id,
+  const ObTabletID &lob_meta_tablet_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObIncDDLMergeTaskUtils::freeze_ddl_kv(ls, tablet_id))) {
+    LOG_WARN("fail to freeze ddl kv", KR(ret), KPC(ls), K(tablet_id));
+  } else if (lob_meta_tablet_id.is_valid()
+      && OB_FAIL(ObIncDDLMergeTaskUtils::freeze_ddl_kv(ls, lob_meta_tablet_id))) {
+    LOG_WARN("fail to freeze ddl kv", KR(ret), KPC(ls), K(lob_meta_tablet_id));
   }
   return ret;
 }

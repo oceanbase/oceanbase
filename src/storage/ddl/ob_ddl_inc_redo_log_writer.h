@@ -138,6 +138,10 @@ private:
   int freeze_inc_minor_tablet(
       ObLS *ls,
       const common::ObTabletID &tablet_id);
+  int freeze_for_inc_major(
+    ObLS *ls,
+    const common::ObTabletID &tablet_id,
+    const common::ObTabletID &lob_meta_tablet_id);
 private:
   bool is_inited_;
   bool remote_write_;

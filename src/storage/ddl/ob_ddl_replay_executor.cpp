@@ -1782,6 +1782,8 @@ int ObDDLIncMajorStartReplayExecutor::do_replay_(ObTabletHandle &tablet_handle)
     LOG_WARN("failed to update inc_major_replay_scn for F replica", K(ret), K_(tablet_id), K_(scn));
   } else if (!is_lob_ && OB_FAIL(update_storage_schema_to_tablet(tablet_handle, inc_major_replay_scn))) {
     LOG_WARN("failed to update storage schema to tablet", KR(ret), K_(tablet_id), K(inc_major_replay_scn));
+  } else if (OB_FAIL(ObIncDDLMergeTaskUtils::freeze_ddl_kv(tablet_handle))) {
+    LOG_WARN("fail to freeze ddl kv", KR(ret), K(tablet_id_));
   }
   FLOG_INFO("replay inc major start log", K(ret), K(ls_->get_ls_id()), K(inc_major_replay_scn),
       K_(scn), K_(tablet_id), K_(has_cs_replica), K_(is_lob), K(need_replay), KPC_(storage_schema));

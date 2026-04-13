@@ -265,6 +265,51 @@ int ObDDLMergeTaskUtils::freeze_ddl_kv(const ObLSID &ls_id,
   return ret;
 }
 
+int ObDDLMergeTaskUtils::final_freeze_ddl_kv(const ObLSID &ls_id, const ObTabletID &tablet_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!ls_id.is_valid() || !tablet_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_id), K(tablet_id));
+  } else {
+    ObLSService *ls_service = MTL(ObLSService *);
+    ObLSHandle ls_handle;
+    ObTabletHandle tablet_handle;
+    ObDDLKvMgrHandle ddl_kv_mgr_handle;
+    ObDDLKVQueryParam query_param;
+    ObArray<ObDDLKVHandle> ddl_kvs_handle;
+    query_param.ddl_kv_type_ = ObDDLKVType::DDL_KV_FULL;
+    if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
+      LOG_WARN("get ls failed", K(ret), K(ls_id));
+    } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, tablet_id, tablet_handle, ObMDSGetTabletMode::READ_ALL_COMMITED))) {
+      LOG_WARN("failed to get tablet handle", KR(ret), K(ls_id), K(tablet_id));
+    } else if (OB_FAIL(tablet_handle.get_obj()->get_ddl_kv_mgr(ddl_kv_mgr_handle))) {
+      if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
+        LOG_WARN("get ddl kv mgr failed", K(ret), K(ls_id), K(tablet_id));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    } else if (!ddl_kv_mgr_handle.get_obj()->can_freeze()) {
+      // 1. all is full ddl kv, wait next schedule merge
+      // 2. all is inc major ddl kv, do nothing
+      // 3. mix of full and inc major ddl kv, full ddl kv must freezed, do nothing
+      if (REACH_TIME_INTERVAL(10 * 1000 * 1000)) {
+        LOG_WARN("ddl kv cannot freeze now", K(tablet_id));
+      }
+    } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->get_ddl_kvs(false/*frozen_only*/, ddl_kvs_handle, query_param))) {
+      LOG_WARN("failed to get ddl kvs", K(ret), K(query_param));
+    } else if (ddl_kvs_handle.empty()) {
+      // do nothing
+    } else {
+      ObDDLKV *last_kv = ddl_kvs_handle.at(ddl_kvs_handle.count() - 1).get_obj();
+      if (last_kv->is_freezed()) {
+      } else if (OB_FAIL(ddl_kv_mgr_handle.get_obj()->freeze_ddl_kv(SCN::min_scn() /*start_scn*/, 0/*snapshot_version*/, 0/*data_format_version*/))) {
+        LOG_WARN("failed to freeze ddl kv", K(ret));
+      }
+    }
+  }
+  return ret;
+}
 
 int ObDDLMergeTaskUtils::get_ddl_tables_from_ddl_kvs(
     const ObArray<ObDDLKVHandle> &frozen_ddl_kvs,
