@@ -65,7 +65,9 @@ public:
                                const common::ObString &job_action,
                                const common::ObObj &start_date,
                                const common::ObString &repeat_interval,
-                               const common::ObString &exec_env);
+                               const common::ObString &exec_env,
+                               const common::ObString *job_owner = NULL,
+                               const uint64_t job_owner_id = common::OB_INVALID_ID);
   static int create_mview_scheduler_job(common::ObISQLClient &sql_client,
                                         const uint64_t tenant_id,
                                         const uint64_t mview_id,
@@ -135,6 +137,12 @@ public:
 private:
   static int acquire_major_refresh_mv_merge_scn_(common::ObISQLClient &trans,
                                                  const uint64_t tenant_id);
+  static int get_owner_name_from_table_id_(common::ObISQLClient &sql_client,
+                                           const uint64_t tenant_id,
+                                           const uint64_t table_id,
+                                           common::ObIAllocator &allocator,
+                                           common::ObString &owner_name,
+                                           uint64_t &owner_user_id);
 };
 } // namespace storage
 } // namespace oceanbase
