@@ -3069,6 +3069,9 @@ typedef enum ObItemType
 
   T_EXTERNAL_LANGUAGE = 4978,  // for Oracle external language parse node
 
+  T_FULLTEXT_DICT = 4979,
+  T_REFRESH_FULLTEXT_DICT = 4980,
+
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
