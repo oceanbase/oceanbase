@@ -556,7 +556,7 @@ int ObMPPacketSender::send_error_packet(int err,
         session->get_pl_exact_err_msg().reset();
       }
     } else if (conn_->need_send_extra_ok_packet()) {
-      if (conn_->is_in_authed_phase()) {
+      if (conn_->is_in_authed_phase() && conn_->is_logined()) {
         LOG_TRACE("need extra ok packet", K(ret), K(epacket.get_sql_state()), K(epacket.get_message()));
         if (!has_pl() && NULL == session) {
           if (OB_FAIL(get_session(session))) {
@@ -583,7 +583,7 @@ int ObMPPacketSender::send_error_packet(int err,
           }
           LOG_INFO("dump txn free route audit_record", "value", session->get_txn_free_route_flag(), K(session->get_server_sid()), K(session->get_proxy_sessid()));
         }
-      } else {  // just a basic ok packet contain nothing
+      } else {  // not yet logged in or in connected phase: use basic ok packet
         OMPKOK okp;
         okp.set_capability(conn_->cap_flags_);
         if (OB_FAIL(response_compose_packet(epacket, okp, session, false))) {
@@ -1046,6 +1046,8 @@ bool ObMPPacketSender::need_flush_buffer() const
 int ObMPPacketSender::flush_buffer(const bool is_last)
 {
   int ret = OB_SUCCESS;
+  const bool is_auth_switch_phase = OB_NOT_NULL(conn_) && conn_->is_in_auth_switch_phase();
+  const bool need_set_last_packet = is_last || is_auth_switch_phase;
   if (OB_UNLIKELY(!conn_valid_)) {
     ret = OB_CONNECT_ERROR;
     LOG_WARN("connection in error, maybe has disconnected", K(ret));
@@ -1060,7 +1062,7 @@ int ObMPPacketSender::flush_buffer(const bool is_last)
   } else {
     if (proto20_context_.is_proto20_used() && (FILL_PAYLOAD_STEP == proto20_context_.next_step_)) {
       ObProtoEncodeParam param;
-      if (OB_FAIL(build_encode_param_(param, NULL, is_last))) {
+      if (OB_FAIL(build_encode_param_(param, NULL, need_set_last_packet))) {
         LOG_ERROR("fail to build encode param", K(ret));
       } else if (OB_FAIL(ObProto20Utils::fill_proto20_header_and_tailer(param))) {
         LOG_ERROR("fail to fill ob20 protocol header and tailer", K(ret));
