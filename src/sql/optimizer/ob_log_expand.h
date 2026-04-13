@@ -78,7 +78,8 @@ private:
   static int create_aggr_with_dup_params(ObRawExprFactory &factory, ObAggFunRawExpr *aggr_item,
                                          ObSQLSessionInfo *sess, const bool use_exist_dup,
                                          ObIArray<DupRawExprPair> &dup_expr_pairs,
-                                         ObAggFunRawExpr *&new_agg);
+                                         ObAggFunRawExpr *&new_agg,
+                                         const bool dup_const = false);
   static int create_aggr_with_exist_dup(ObRawExprFactory &factory, ObAggFunRawExpr *aggr_item,ObAggFunRawExpr *exist_dupped_aggr,
                                         ObSQLSessionInfo *sess, ObIArray<DupRawExprPair> &dup_expr_pairs, ObAggFunRawExpr *&new_agg);
   static int find_expr_within_aggr_item(ObAggFunRawExpr *aggr_item, const ObRawExpr *expected,

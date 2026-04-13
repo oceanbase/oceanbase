@@ -343,7 +343,7 @@ int ObLogExpand::dup_and_replace_params_for_distinct_agg(ObRawExprFactory &facto
         }
       } else if (OB_FAIL(create_aggr_with_dup_params(factory, aggr_items.at(i), sess,
                                               false,
-                                              dup_expr_pairs, new_agg))) {
+                                              dup_expr_pairs, new_agg, true))) {
         LOG_WARN("create aggr failed", K(ret));
       }
       if (OB_FAIL(ret)) {
@@ -538,7 +538,8 @@ int ObLogExpand::create_aggr_with_dup_params(ObRawExprFactory &factory, ObAggFun
                                              ObSQLSessionInfo *sess,
                                              const bool use_exist_dup,
                                              ObIArray<DupRawExprPair> &dup_expr_pairs,
-                                             ObAggFunRawExpr *&new_agg)
+                                             ObAggFunRawExpr *&new_agg,
+                                             const bool dup_const /*false*/)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(factory.create_raw_expr(aggr_item->get_expr_type(), new_agg))) {
@@ -559,7 +560,7 @@ int ObLogExpand::create_aggr_with_dup_params(ObRawExprFactory &factory, ObAggFun
         // do nothing
         continue;
       }
-      if (real_param_exprs.at(i)->is_const_expr()) {
+      if (real_param_exprs.at(i)->is_const_expr() && !dup_const) {
         continue;
       }
       if (OB_FAIL(build_dup_expr(factory, sess, use_exist_dup, real_param_exprs.at(i), dup_expr_pairs, dup_expr))) {
