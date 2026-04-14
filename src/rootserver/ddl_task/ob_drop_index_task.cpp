@@ -168,6 +168,9 @@ int ObDropIndexTask::update_index_status(const ObIndexStatus new_status)
 int ObDropIndexTask::prepare(const ObDDLTaskStatus new_status)
 {
   int ret = OB_SUCCESS;
+
+  DEBUG_SYNC(BEFORE_DROP_INDEX);
+
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDropIndexTask has not been inited", K(ret));
