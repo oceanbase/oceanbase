@@ -68,6 +68,7 @@ int ObParquetTableRowIterator::init(const storage::ObTableScanParam *scan_param)
 {
   int ret = OB_SUCCESS;
   ObEvalCtx &eval_ctx = scan_param->op_->get_eval_ctx();
+  filter_eval_inited_ = false;
   mem_attr_ = ObMemAttr(MTL_ID(), "ParquetRowIter");
   allocator_.set_attr(mem_attr_);
   str_res_mem_.set_attr(mem_attr_);
@@ -2903,6 +2904,8 @@ int ObParquetTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
     } else if (OB_FAIL(calc_column_convert(read_count, false, eval_ctx))) {
       // 在字典解码后调用，确保 column_exprs_ 拿到正确数据
       LOG_WARN("failed to calc column convert", K(ret));
+    } else if (OB_FAIL(ensure_filter_eval_inited_once(scan_param_->pd_storage_filters_))) {
+      LOG_WARN("failed to init filter evaluated datums once", K(ret));
     } else if (OB_FAIL(calc_filters(read_count, scan_param_->pd_storage_filters_, nullptr))) {
       LOG_WARN("failed to calc lazy filters", K(ret));
     } else if (OB_FAIL(reorder_output(*scan_param_->pd_storage_filters_->get_result(),
@@ -2940,6 +2943,7 @@ void ObParquetTableRowIterator::reset() {
     malloc_allocator_.free(rg_bitmap_);
     rg_bitmap_ = nullptr;
   }
+  filter_eval_inited_ = false;
 }
 
 int ObParquetTableRowIterator::read_min_max_datum(const std::string &min_val, const std::string &max_val,
@@ -3680,6 +3684,68 @@ int ObParquetTableRowIterator::calc_eager_column_convert(const int64_t read_coun
   return ret;
 }
 
+int ObParquetTableRowIterator::init_filter_evaluated_datums(ObPushdownFilterExecutor *curr_filter)
+{
+  int ret = OB_SUCCESS;
+  bool filter_valid = true;
+  if (OB_ISNULL(curr_filter)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null filter", K(ret));
+  } else if (curr_filter->is_filter_node()) {
+    if (curr_filter->is_filter_black_node()) {
+      if (OB_FAIL(curr_filter->init_evaluated_datums(filter_valid))) {
+        LOG_WARN("failed to init eval datum", K(ret));
+      } else if (!filter_valid) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("filter is invalid", K(ret), K(curr_filter->is_logic_op_node()));
+      }
+    } else if (curr_filter->is_filter_white_node()) {
+      ObWhiteFilterExecutor *white_filter = static_cast<ObWhiteFilterExecutor *>(curr_filter);
+      ObWhiteFilterOperatorType op_type = white_filter->get_op_type();
+      if (WHITE_OP_IN == op_type) {
+        if (OB_FAIL(white_filter->init_in_eval_datums(filter_valid))) {
+          LOG_WARN("failed to init eval datum", K(ret));
+        }
+      } else if (OB_FAIL(white_filter->init_compare_eval_datums(filter_valid))) {
+        LOG_WARN("failed to init eval datum", K(ret));
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (!filter_valid) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("filter is invalid", K(ret), K(curr_filter->is_logic_op_node()));
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("filter is invalid", K(ret), K(curr_filter->is_logic_op_node()));
+    }
+  } else if (curr_filter->is_logic_op_node()) {
+    sql::ObPushdownFilterExecutor **children = curr_filter->get_childs();
+    for (uint32_t i = 0; OB_SUCC(ret) && i < curr_filter->get_child_count(); ++i) {
+      if (OB_ISNULL(children[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected null child filter", K(ret), K(i));
+      } else if (OB_FAIL(init_filter_evaluated_datums(children[i]))) {
+        LOG_WARN("failed to init child eval datum", K(ret), K(i), KP(children[i]));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObParquetTableRowIterator::ensure_filter_eval_inited_once(ObPushdownFilterExecutor *root_filter)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(root_filter)) {
+  } else if (filter_eval_inited_) {
+  } else if (OB_FAIL(init_filter_evaluated_datums(root_filter))) {
+    LOG_WARN("failed to init filter evaluated datums", K(ret));
+  } else {
+    filter_eval_inited_ = true;
+  }
+  return ret;
+}
+
 int ObParquetTableRowIterator::apply_dict_code_filters(const int64_t count,
                                                        ObPushdownFilterExecutor *curr_filter)
 {
@@ -3727,8 +3793,6 @@ int ObParquetTableRowIterator::calc_filters(const int64_t count,
 
   if (OB_SUCC(ret) && OB_NOT_NULL(curr_filter)) {
     common::ObBitmap *result = nullptr;
-    bool filter_valid = true;
-
     if (curr_filter->is_filter_node()) {
       // 检查filter是否已被字典优化处理
       if (OB_NOT_NULL(dict_filter_pushdown_)
@@ -3740,32 +3804,10 @@ int ObParquetTableRowIterator::calc_filters(const int64_t count,
           LOG_WARN("Failed to init filter bitmap", K(ret));
         } else if (nullptr != parent_filter && OB_FAIL(parent_filter->prepare_skip_filter(false))) {
           LOG_WARN("Failed to check parent skip filter", K(ret));
-        } else if (curr_filter->is_filter_black_node()) {
-          ObBlackFilterExecutor *black_filter = static_cast<ObBlackFilterExecutor *>(curr_filter);
-          if (OB_FAIL(curr_filter->init_evaluated_datums(filter_valid))) {
-            LOG_WARN("failed to init eval datum", K(ret));
-          } else if (!filter_valid) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("filter is invalid", K(ret), K(curr_filter->is_logic_op_node()));
-          } else if (OB_FAIL(black_filter->filter_batch(parent_filter, 0, count, *result))) {
-            LOG_WARN("failed to filter batch", K(ret));
-          }
-        } else if (curr_filter->is_filter_white_node()) {
-          ObWhiteFilterExecutor *white_filter = static_cast<ObWhiteFilterExecutor *>(curr_filter);
-          ObWhiteFilterOperatorType op_type = white_filter->get_op_type();
-          if (WHITE_OP_IN == op_type) {
-            if (OB_FAIL(white_filter->init_in_eval_datums(filter_valid))) {
-              LOG_WARN("failed to init eval datum", K(ret));
-            }
-          } else if (OB_FAIL(white_filter->init_compare_eval_datums(filter_valid))) {
-            LOG_WARN("failed to init eval datum", K(ret));
-          }
-
-          if (OB_FAIL(ret)) {
-          } else if (!filter_valid) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("filter is invalid", K(ret), K(curr_filter->is_logic_op_node()));
-          } else if (OB_FAIL(white_filter->filter_batch(parent_filter, 0, count, *result))) {
+        } else {
+          ObPhysicalFilterExecutor *phy_filter
+              = static_cast<ObPhysicalFilterExecutor *>(curr_filter);
+          if (OB_FAIL(phy_filter->filter_batch(parent_filter, 0, count, *result))) {
             LOG_WARN("failed to filter batch", K(ret));
           }
         }
@@ -4039,6 +4081,8 @@ int ObParquetTableRowIterator::ParquetSectorIterator::prepare_next(const int64_t
           } else if (OB_FAIL(iter_->calc_eager_column_convert(read_count))) {
             // 在字典解码后调用，确保 column_exprs_ 拿到正确数据
             LOG_WARN("failed to calc eager column convert", K(ret));
+          } else if (OB_FAIL(iter_->ensure_filter_eval_inited_once(real_filter))) {
+            LOG_WARN("failed to init eager filter evaluated datums once", K(ret));
           } else if (OB_FAIL(iter_->calc_filters(read_count, real_filter, nullptr))) {
             LOG_WARN("failed to calc eager filters", K(ret));
           } else if (nullptr != real_filter
@@ -4508,70 +4552,224 @@ int ObParquetTableRowIterator::prepare_page_ranges(const int64_t num_rows)
   return ret;
 }
 
+// 把 [src_begin, src_begin+len) 压到 [dst, dst+len)
+static inline void copy_null_run(ObBitVector *nulls,
+                                 const int64_t dst,
+                                 const int64_t src_begin,
+                                 const int64_t len)
+{
+  if (nulls->is_all_false(src_begin, src_begin + len)) {
+    nulls->unset_all(dst, dst + len);
+  } else if (nulls->is_all_true(src_begin, src_begin + len)) {
+    nulls->set_all(dst, dst + len);
+  } else {
+    for (int64_t offset = 0; offset < len; ++offset) {
+      const bool is_null = nulls->at(src_begin + offset);
+      nulls->unset(dst + offset);
+      nulls->bit_or_assign(dst + offset, is_null);
+    }
+  }
+}
+
+static void build_low_filter_runs(const oceanbase::common::ObBitmap &bitmap,
+                                  const int64_t read_count,
+                                  const int64_t small_filtered_threshold,
+                                  int64_t *run_begins,
+                                  int64_t *run_lens,
+                                  int64_t *run_dsts,
+                                  int64_t &run_count)
+{
+  run_count = 0;
+  int64_t dst = 0;
+  for (int64_t idx = 0; idx < read_count && run_count <= small_filtered_threshold;) {
+    while (idx < read_count && !bitmap[idx]) {
+      ++idx;
+    }
+    if (idx >= read_count) {
+      break;
+    }
+    const int64_t run_begin = idx;
+    while (idx < read_count && bitmap[idx]) {
+      ++idx;
+    }
+    const int64_t run_len = idx - run_begin;
+    if (run_begin != dst) {
+      run_begins[run_count] = run_begin;
+      run_lens[run_count] = run_len;
+      run_dsts[run_count] = dst;
+      ++run_count;
+    }
+    dst += run_len;
+  }
+}
+
 int ObParquetTableRowIterator::reorder_output(const oceanbase::common::ObBitmap &bitmap,
                                               ObEvalCtx &ctx,
                                               int64_t &read_count)
 {
   int ret = OB_SUCCESS;
-  int64_t real_count = bitmap.popcnt();
+  const int64_t real_count = bitmap.popcnt();
   if (real_count < read_count) {
-    for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs_.count(); ++i) {
-      ObIVector *vec = column_exprs_.at(i)->get_vector(ctx);
-      int64_t project_count = 0;
-      switch (vec->get_format()) {
-        case VEC_FIXED : {
-          ObFixedLengthBase *fix_vec = static_cast<ObFixedLengthBase *> (vec);
-          for (int64_t j = 0; j < read_count; ++j) {
-            if (bitmap[j]) {
-              if (fix_vec->get_nulls()->at(j)) {
-                fix_vec->get_nulls()->set(project_count);
-              } else {
-                fix_vec->get_nulls()->unset(project_count);
-                MEMCPY(fix_vec->get_data() + fix_vec->get_length() * project_count,
-                       fix_vec->get_data() + fix_vec->get_length() * j,
-                       fix_vec->get_length());
-              }
-              ++project_count;
-            }
-          }
-          break;
-        }
-        case VEC_DISCRETE : {
-          ObDiscreteBase *dis_vec = static_cast<ObDiscreteBase *> (vec);
-          for (int64_t j = 0; j < read_count; ++j) {
-            if (bitmap[j]) {
-              if (dis_vec->get_nulls()->at(j)) {
-                dis_vec->get_nulls()->set(project_count);
-              } else {
-                dis_vec->get_nulls()->unset(project_count);
-                dis_vec->get_lens()[project_count] = dis_vec->get_lens()[j];
-                dis_vec->get_ptrs()[project_count] = dis_vec->get_ptrs()[j];
-              }
-              ++project_count;
-            }
-          }
-          break;
-        }
-        case VEC_UNIFORM : {
-          ObUniformBase *uni_vec = static_cast<ObUniformBase *> (vec);
-          for (int64_t j = 0; j < read_count; ++j) {
-            if (bitmap[j]) {
-              uni_vec->get_datums()[project_count] = uni_vec->get_datums()[j];
-              ++project_count;
-            }
-          }
-          break;
-        }
-        case VEC_UNIFORM_CONST : {
-          break;
-        }
-        default : {
+    const int64_t filtered_count = read_count - real_count;
+    const int64_t small_filtered_threshold = 8;
+    const int64_t small_survivor_threshold = 16;
+    int64_t run_begins[small_filtered_threshold + 1];
+    int64_t run_lens[small_filtered_threshold + 1];
+    int64_t run_dsts[small_filtered_threshold + 1];
+    int64_t run_count = 0;
+    int32_t row_ids[small_survivor_threshold];
+    int64_t row_count = 0;
+
+    const bool use_low_filter_fast_path
+        = filtered_count <= small_filtered_threshold && (filtered_count << 5) <= read_count;
+    const bool use_high_filter_fast_path
+        = real_count <= small_survivor_threshold && (real_count << 4) <= read_count;
+
+    if (use_low_filter_fast_path) {
+      build_low_filter_runs(bitmap,
+                            read_count,
+                            small_filtered_threshold,
+                            run_begins,
+                            run_lens,
+                            run_dsts,
+                            run_count);
+    } else if (use_high_filter_fast_path) {
+      int64_t from = 0;
+      if (OB_FAIL(
+              bitmap.get_row_ids(row_ids, row_count, from, read_count, small_survivor_threshold))) {
+          LOG_WARN("failed to get row ids", K(ret), K(read_count), K(real_count));
+      } else if (OB_UNLIKELY(row_count != real_count)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected format", K(ret), K(vec->get_format()));
-        }
+          LOG_WARN("unexpected row count", K(ret), K(row_count), K(real_count), K(read_count));
       }
     }
-    read_count = real_count;
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs_.count(); ++i) {
+      ObIVector *vec = column_exprs_.at(i)->get_vector(ctx);
+      switch (vec->get_format()) {
+          case VEC_FIXED: {
+            ObFixedLengthBase *fix_vec = static_cast<ObFixedLengthBase *>(vec);
+            ObBitVector *nulls = fix_vec->get_nulls();
+            if (use_low_filter_fast_path) {
+              for (int64_t run_idx = 0; run_idx < run_count; ++run_idx) {
+                MEMMOVE(fix_vec->get_data() + fix_vec->get_length() * run_dsts[run_idx],
+                        fix_vec->get_data() + fix_vec->get_length() * run_begins[run_idx],
+                        fix_vec->get_length() * run_lens[run_idx]);
+                copy_null_run(nulls, run_dsts[run_idx], run_begins[run_idx], run_lens[run_idx]);
+              }
+            } else if (use_high_filter_fast_path) {
+              for (int64_t project_count = 0; project_count < real_count; ++project_count) {
+                const int64_t src_idx = row_ids[project_count];
+                if (nulls->at(src_idx)) {
+                  nulls->set(project_count);
+                } else {
+                  nulls->unset(project_count);
+                  if (project_count != src_idx) {
+                  MEMCPY(fix_vec->get_data() + fix_vec->get_length() * project_count,
+                         fix_vec->get_data() + fix_vec->get_length() * src_idx,
+                         fix_vec->get_length());
+                  }
+                }
+              }
+            } else {
+              int64_t project_count = 0;
+              for (int64_t j = 0; j < read_count; ++j) {
+                if (bitmap[j]) {
+                  if (nulls->at(j)) {
+                  nulls->set(project_count);
+                  } else {
+                  nulls->unset(project_count);
+                  if (project_count != j) {
+                    MEMCPY(fix_vec->get_data() + fix_vec->get_length() * project_count,
+                           fix_vec->get_data() + fix_vec->get_length() * j,
+                           fix_vec->get_length());
+                  }
+                  }
+                  ++project_count;
+                }
+              }
+            }
+            break;
+          }
+          case VEC_DISCRETE: {
+            ObDiscreteBase *dis_vec = static_cast<ObDiscreteBase *>(vec);
+            ObBitVector *nulls = dis_vec->get_nulls();
+            if (use_low_filter_fast_path) {
+              for (int64_t run_idx = 0; run_idx < run_count; ++run_idx) {
+                MEMMOVE(dis_vec->get_lens() + run_dsts[run_idx],
+                        dis_vec->get_lens() + run_begins[run_idx],
+                        sizeof(dis_vec->get_lens()[0]) * run_lens[run_idx]);
+                MEMMOVE(dis_vec->get_ptrs() + run_dsts[run_idx],
+                        dis_vec->get_ptrs() + run_begins[run_idx],
+                        sizeof(dis_vec->get_ptrs()[0]) * run_lens[run_idx]);
+                copy_null_run(nulls, run_dsts[run_idx], run_begins[run_idx], run_lens[run_idx]);
+              }
+            } else if (use_high_filter_fast_path) {
+              for (int64_t project_count = 0; project_count < real_count; ++project_count) {
+                const int64_t src_idx = row_ids[project_count];
+                if (nulls->at(src_idx)) {
+                  nulls->set(project_count);
+                } else {
+                  nulls->unset(project_count);
+                  if (project_count != src_idx) {
+                  dis_vec->get_lens()[project_count] = dis_vec->get_lens()[src_idx];
+                  dis_vec->get_ptrs()[project_count] = dis_vec->get_ptrs()[src_idx];
+                  }
+                }
+              }
+            } else {
+              int64_t project_count = 0;
+              for (int64_t j = 0; j < read_count; ++j) {
+                if (bitmap[j]) {
+                  if (nulls->at(j)) {
+                  nulls->set(project_count);
+                  } else {
+                  nulls->unset(project_count);
+                  if (project_count != j) {
+                    dis_vec->get_lens()[project_count] = dis_vec->get_lens()[j];
+                    dis_vec->get_ptrs()[project_count] = dis_vec->get_ptrs()[j];
+                  }
+                  }
+                  ++project_count;
+                }
+              }
+            }
+            break;
+          }
+          case VEC_UNIFORM: {
+            ObUniformBase *uni_vec = static_cast<ObUniformBase *>(vec);
+            if (use_low_filter_fast_path) {
+              for (int64_t run_idx = 0; run_idx < run_count; ++run_idx) {
+                MEMMOVE(uni_vec->get_datums() + run_dsts[run_idx],
+                        uni_vec->get_datums() + run_begins[run_idx],
+                        sizeof(uni_vec->get_datums()[0]) * run_lens[run_idx]);
+              }
+            } else if (use_high_filter_fast_path) {
+              for (int64_t j = 0; j < real_count; ++j) {
+                uni_vec->get_datums()[j] = uni_vec->get_datums()[row_ids[j]];
+              }
+            } else {
+              int64_t project_count = 0;
+              for (int64_t j = 0; j < read_count; ++j) {
+                if (bitmap[j]) {
+                  uni_vec->get_datums()[project_count++] = uni_vec->get_datums()[j];
+                }
+              }
+            }
+            break;
+          }
+          case VEC_UNIFORM_CONST: {
+            break;
+          }
+          default: {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected format", K(ret), K(vec->get_format()));
+          }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      read_count = real_count;
+    }
   }
   return ret;
 }

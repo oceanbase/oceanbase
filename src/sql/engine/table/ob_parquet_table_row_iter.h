@@ -167,6 +167,7 @@ public:
     reader_metrics_(),
     column_index_type_(sql::ColumnIndexType::NAME),
     is_col_name_case_sensitive_(false),
+    filter_eval_inited_(false),
     dict_filter_pushdown_(nullptr) {}
   virtual ~ObParquetTableRowIterator();
 
@@ -561,6 +562,8 @@ private:
                          std::shared_ptr<parquet::RowGroupReader> eager_rg_reader);
   void dynamic_switch_calc_mode();
   int calc_column_convert(const int64_t read_count, const bool is_eager, ObEvalCtx &eval_ctx);
+  int init_filter_evaluated_datums(ObPushdownFilterExecutor *curr_filter);
+  int ensure_filter_eval_inited_once(ObPushdownFilterExecutor *root_filter);
   int calc_file_meta_column(const int64_t read_count, ObEvalCtx &eval_ctx);
   static bool is_contain_field_id(std::shared_ptr<parquet::FileMetaData> file_meta);
   // 根据字典编码检查结果，动态更新 load_funcs_
@@ -615,6 +618,7 @@ private:
   ObLakeTableParquetReaderMetrics reader_metrics_;
   sql::ColumnIndexType column_index_type_;
   bool is_col_name_case_sensitive_;
+  bool filter_eval_inited_;
   ObParquetDictFilterPushdown *dict_filter_pushdown_;  // 字典优化模块
 };
 
