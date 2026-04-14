@@ -63,7 +63,6 @@ struct ObTableScanStoreStat
     MEMSET(this, 0, sizeof(ObTableScanStoreStat));
     in_bf_cache_threshold_ = common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM;
     in_row_cache_threshold_ = common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM;
-    in_fuse_row_cache_threshold_ = common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM;
   }
   // for rescan query, keep row cache and bf releated stats unchanged
   OB_INLINE void reuse()
@@ -76,7 +75,6 @@ struct ObTableScanStoreStat
     rowkey_prefix_ = 0;
     in_bf_cache_threshold_ = common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM;
     in_row_cache_threshold_ = common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM;
-    in_fuse_row_cache_threshold_ = common::DEFAULT_MAX_MULTI_GET_CACHE_AWARE_ROW_NUM;
     out_row_cnt_ = 0;
     major_sstable_read_row_cnt_ = 0;
     minor_sstable_read_row_cnt_ = 0;
@@ -88,16 +86,15 @@ struct ObTableScanStoreStat
 public:
   OB_INLINE bool enable_get_row_cache() const
   {
-    return row_cache_miss_cnt_ < in_row_cache_threshold_
-           || row_cache_hit_cnt_ > row_cache_miss_cnt_ / 2;
+    return row_cache_miss_cnt_ < in_row_cache_threshold_ || row_cache_hit_cnt_ > row_cache_miss_cnt_ / 2;
   }
   OB_INLINE bool enable_put_row_cache() const
   {
     return row_cache_put_cnt_ < in_row_cache_threshold_;
   }
-  OB_INLINE bool enable_put_fuse_row_cache() const
+  OB_INLINE bool enable_put_fuse_row_cache(const int64_t threshold) const
   {
-    return fuse_row_cache_put_cnt_ < in_fuse_row_cache_threshold_;
+    return fuse_row_cache_put_cnt_ < threshold;
   }
   OB_INLINE bool enable_bf_cache() const
   {
@@ -110,7 +107,7 @@ public:
                K_(fuse_row_cache_hit_cnt), K_(fuse_row_cache_miss_cnt), K_(fuse_row_cache_put_cnt),
                K_(micro_access_cnt), K_(pushdown_micro_access_cnt), K_(empty_read_cnt),
                K_(rowkey_prefix),
-               K_(in_bf_cache_threshold), K_(in_fuse_row_cache_threshold), K_(in_row_cache_threshold),
+               K_(in_bf_cache_threshold), K_(in_row_cache_threshold),
                K_(major_sstable_read_row_cnt), K_(minor_sstable_read_row_cnt), K_(memstore_read_row_cnt),
                K_(blockscan_row_cnt), K_(storage_filtered_row_cnt), K_(skip_index_skip_block_cnt));
   int64_t row_cache_hit_cnt_;
@@ -128,7 +125,6 @@ public:
   int64_t empty_read_cnt_;
   int64_t rowkey_prefix_;
   int64_t in_bf_cache_threshold_;
-  int64_t in_fuse_row_cache_threshold_;
   int64_t in_row_cache_threshold_;
   int64_t out_row_cnt_;
   int64_t major_sstable_read_row_cnt_;
@@ -164,10 +160,10 @@ struct ObTableAccessContext
     return trans_version_range_.snapshot_version_ < snapshot_version;
   }
   inline bool enable_put_fuse_row_cache(const bool is_mview_table_scan = false) const {
-    return query_flag_.is_use_fuse_row_cache() && table_store_stat_.enable_put_fuse_row_cache() && (!need_scn_ || is_mview_table_scan) && !tablet_id_.is_ls_inner_tablet() && !has_mds_filter();
+    return query_flag_.is_use_fuse_row_cache() && table_store_stat_.enable_put_fuse_row_cache(cache_aware_row_num_) && (!need_scn_ || is_mview_table_scan) && !tablet_id_.is_ls_inner_tablet() && !has_mds_filter();
   }
   inline int64_t get_fuse_row_cache_put_count_threshold() const {
-    return table_store_stat_.in_fuse_row_cache_threshold_;
+    return cache_aware_row_num_;
   }
   inline bool is_limit_end() const {
     return (nullptr != limit_param_ && limit_param_->limit_ >= 0 && (out_cnt_ - limit_param_->offset_ >= limit_param_->limit_));
@@ -345,10 +341,8 @@ public:
   lib::MemoryContext scan_mem_; // scan/rescan level memory entity, only for query
   common::ObTableScanStatistic *table_scan_stat_;
   ObTableScanStoreStat table_store_stat_;
+  int64_t cache_aware_row_num_;
   int64_t out_cnt_;
-  int64_t in_bf_cache_threshold_;
-  int64_t in_fuse_row_cache_threshold_;
-  int64_t in_row_cache_threshold_;
   common::ObVersionRange trans_version_range_;
   const common::ObSEArray<int64_t, 4, common::ModulePageAllocator> *range_array_pos_;
   share::SCN merge_scn_;

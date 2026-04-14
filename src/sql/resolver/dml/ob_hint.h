@@ -255,6 +255,8 @@ struct ObOptParamHint
     DEF(_OB_JAVA_ODPS_DATA_TRANSFER_MODE,)         \
     DEF(_USE_ODPS_JNI_CONNECTOR,)                  \
     DEF(ODPS_JDK_STORAGE_BATCH_SIZE,)             \
+    DEF(CACHE_AWARE_ROW_NUM,)                       \
+
 
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);

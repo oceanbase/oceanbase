@@ -151,6 +151,7 @@ int ObDASLocalLookupIter::init_scan_param(ObTableScanParam &param, const ObDASSc
       param.op_filters_ = &ctdef->pd_expr_spec_.pushdown_filters_;
     }
     param.pd_storage_filters_ = rtdef->p_pd_expr_op_->pd_storage_filters_;
+    param.cache_aware_row_num_ = ctdef->cache_aware_row_num_;
     if (FAILEDx(param.column_ids_.assign(ctdef->access_column_ids_))) {
       LOG_WARN("failed to assign column ids", K(ret));
     }

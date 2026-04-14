@@ -1153,10 +1153,13 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
       is_valid = val.is_int() && (0 <= val.get_int());
       break;
     }
-    default: {
-      LOG_TRACE("invalid opt param val", K(param_type), K(val));
+    case CACHE_AWARE_ROW_NUM: {
+      is_valid = val.is_int() && val.get_int() >= 1;
       break;
     }
+    default:
+      LOG_TRACE("invalid opt param val", K(param_type), K(val));
+      break;
   }
   return is_valid;
 }

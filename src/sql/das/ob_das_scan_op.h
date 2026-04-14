@@ -121,7 +121,8 @@ public:
       pre_range_graph_(alloc),
       aggregate_param_props_(alloc),
       push_down_topn_(),
-      semantic_index_info_()
+      semantic_index_info_(),
+      cache_aware_row_num_(0)
   { }
   //in das scan op, column described with column expr
   virtual bool has_expr() const override { return true; }
@@ -196,7 +197,8 @@ public:
                        K_(pre_query_range),
                        K_(is_index_merge),
                        K_(pre_range_graph),
-                       K_(push_down_topn));
+                       K_(push_down_topn),
+                       K_(cache_aware_row_num));
   common::ObTableID ref_table_id_;
   UIntFixedArray access_column_ids_;
   int64_t schema_version_;
@@ -249,6 +251,7 @@ public:
   // top-n pushdown
   ObDASPushDownTopN push_down_topn_;
   share::ObDasSemanticIndexInfo semantic_index_info_;
+  int64_t cache_aware_row_num_;
 };
 
 enum class ObDASScanTaskType
