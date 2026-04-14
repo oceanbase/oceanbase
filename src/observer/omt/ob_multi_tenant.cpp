@@ -1896,6 +1896,8 @@ int ObMultiTenant::remove_tenant(const uint64_t tenant_id, bool &remove_tenant_s
           SpinWLockGuard guard(lock_);
           removed_tenant->start();
         }
+      } else {
+        removed_tenant->set_kill_session_success(true);
       }
     }
   }

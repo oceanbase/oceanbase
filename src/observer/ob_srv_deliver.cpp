@@ -857,9 +857,9 @@ int ObSrvDeliver::deliver_mysql_request(ObRequest &req)
       }
       if (OB_FAIL(ret)) {
             // do nothing
-      } else if (tenant->has_stopped()) {
+      } else if (tenant->has_stopped() && tenant->is_kill_session_success()) {
         ret = OB_TENANT_NOT_IN_SERVER;
-        LOG_WARN("tenant is stopped", K(ret), K(tenant->id()));
+        LOG_WARN("tenant is stopped and kill session success", K(ret), K(tenant->id()));
         if (OB_NOT_NULL(conn->get_diagnostic_info())) {
           conn->get_diagnostic_info()->end_wait_event(ObWaitEventIds::NETWORK_QUEUE_WAIT, false);
           req.reset_diagnostic_info();
