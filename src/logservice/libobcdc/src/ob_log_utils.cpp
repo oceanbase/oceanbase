@@ -1069,107 +1069,147 @@ int split(char *str, const char *delimiter,
   return ret;
 }
 
+namespace
+{
+
+int parse_port_value_(const char *port_str, int32_t &port)
+{
+  int ret = OB_SUCCESS;
+  int64_t parsed_port = 0;
+
+  if (OB_FAIL(c_str_to_int(port_str, parsed_port))) {
+  } else if (OB_UNLIKELY(parsed_port <= 0 || parsed_port > 65535)) {
+    ret = OB_INVALID_DATA;
+  } else {
+    port = static_cast<int32_t>(parsed_port);
+  }
+
+  return ret;
+}
+
+int parse_ipv6_addr_with_port_(char *addr_buf, const char *addr_str, const char *&ip_str,
+    const char *&port1_str, const char *&port2_str)
+{
+  int ret = OB_SUCCESS;
+  char *save_ptr = nullptr;
+  char *close_bracket = nullptr;
+
+  ip_str = addr_buf + 1;
+  if (OB_ISNULL(close_bracket = strrchr(addr_buf, ']'))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid IPv6 format, missing ']'", K(addr_str));
+  } else {
+    *close_bracket = '\0';
+    ++close_bracket;
+
+    if (':' != *close_bracket) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_ERROR("invalid IPv6 format, missing ':' after ']'", K(addr_str));
+    } else if (OB_ISNULL(port1_str = strtok_r(close_bracket + 1, ":", &save_ptr))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_ERROR("parse port1 failed", K(addr_str));
+    } else {
+      port2_str = strtok_r(nullptr, ":", &save_ptr);
+    }
+  }
+
+  return ret;
+}
+
+int parse_ipv4_or_hostname_addr_with_port_(char *addr_buf, const char *addr_str, const int64_t addr_str_len,
+    const char *&ip_str, const char *&port1_str, const char *&port2_str)
+{
+  int ret = OB_SUCCESS;
+  int64_t colon_count = 0;
+
+  for (int64_t i = 0; i < addr_str_len; ++i) {
+    if (':' == addr_buf[i]) {
+      ++colon_count;
+    }
+  }
+
+  if (colon_count >= 2) {
+    char *last_colon = strrchr(addr_buf, ':');
+    if (OB_ISNULL(last_colon)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_ERROR("invalid format, missing ':'", K(addr_str));
+    } else {
+      *last_colon = '\0';
+      port2_str = last_colon + 1;
+
+      char *second_last_colon = strrchr(addr_buf, ':');
+      if (OB_ISNULL(second_last_colon)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_ERROR("invalid format, expected ip:port1:port2", K(addr_str));
+      } else {
+        *second_last_colon = '\0';
+        port1_str = second_last_colon + 1;
+        ip_str = addr_buf;
+      }
+    }
+  } else if (1 == colon_count) {
+    char *save_ptr = nullptr;
+    if (OB_ISNULL(ip_str = strtok_r(addr_buf, ":", &save_ptr))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_ERROR("parse ip/hostname failed", K(addr_str));
+    } else if (OB_ISNULL(port1_str = strtok_r(nullptr, ":", &save_ptr))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_ERROR("parse port failed", K(addr_str));
+    }
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid format, missing ':'", K(addr_str));
+  }
+
+  return ret;
+}
+
+} // namespace
+
 int parse_addr_with_port(
     const char *addr_str,
+    char *addr_buf,
+    const int64_t buf_len,
     const char *&ip_str,
-    const char *&port1_str,
-    const char *&port2_str)
+    int32_t &port1,
+    int32_t &port2)
 {
   int ret = OB_SUCCESS;
   ip_str = nullptr;
-  port1_str = nullptr;
-  port2_str = nullptr;
+  port1 = -1;
+  port2 = -1;
 
-  if (OB_ISNULL(addr_str) || OB_UNLIKELY(0 == strlen(addr_str))) {
+  if (OB_ISNULL(addr_str) || OB_UNLIKELY(0 == strlen(addr_str))
+      || OB_ISNULL(addr_buf) || OB_UNLIKELY(buf_len <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_ERROR("invalid argument", KP(addr_str));
+    LOG_ERROR("invalid argument", KP(addr_str), KP(addr_buf), K(buf_len));
   } else {
-    // Make a copy for parsing (strtok_r will modify the string)
+    // Copy into caller-provided buffer for parsing (strtok_r will modify the string)
     const int64_t addr_str_len = strlen(addr_str);
-    char addr_buf[256];  // Should be enough for any valid address
-    if (OB_UNLIKELY(addr_str_len >= sizeof(addr_buf))) {
+    if (OB_UNLIKELY(addr_str_len >= buf_len)) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_ERROR("address string too long", K(addr_str_len), K(sizeof(addr_buf)));
+      LOG_ERROR("address string too long", K(addr_str_len), K(buf_len));
     } else {
       MEMCPY(addr_buf, addr_str, addr_str_len);
       addr_buf[addr_str_len] = '\0';
 
-      char *save_ptr = nullptr;
+      const char *port1_str = nullptr;
+      const char *port2_str = nullptr;
 
-      // Check if it's IPv6 format (starts with '[')
       if ('[' == addr_buf[0]) {
-        // IPv6 format: [ipv6]:port1 or [ipv6]:port1:port2
-        ip_str = addr_buf + 1;  // Skip '['
-        char *close_bracket = strrchr(addr_buf, ']');
-        if (OB_ISNULL(close_bracket)) {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_ERROR("invalid IPv6 format, missing ']'", K(addr_str));
-        } else {
-          *close_bracket = '\0';  // Replace ']' with '\0'
-          close_bracket++;
-          if (':' != *close_bracket) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_ERROR("invalid IPv6 format, missing ':' after ']'", K(addr_str));
-          } else {
-            close_bracket++;  // Skip ':'
-            // Now close_bracket points to port1 start position
-            if (OB_ISNULL(port1_str = strtok_r(close_bracket, ":", &save_ptr))) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_ERROR("parse port1 failed", K(addr_str));
-            } else {
-              // Try to get port2 (may not exist for single port format)
-              port2_str = strtok_r(nullptr, ":", &save_ptr);
-              // port2_str can be NULL for single port format
-            }
-          }
-        }
+        ret = parse_ipv6_addr_with_port_(addr_buf, addr_str, ip_str, port1_str, port2_str);
       } else {
-        // IPv4 format or hostname: port1 or port1:port2
-        // Count colons to determine format
-        int colon_count = 0;
-        for (int64_t i = 0; i < addr_str_len; i++) {
-          if (':' == addr_buf[i]) {
-            colon_count++;
-          }
-        }
+        ret = parse_ipv4_or_hostname_addr_with_port_(addr_buf, addr_str, addr_str_len,
+            ip_str, port1_str, port2_str);
+      }
 
-        if (colon_count >= 2) {
-          // Two or more colons - format: ip:port1:port2 (rootserver_list format)
-          // Parse from right to left: find last colon for port2, second last for port1
-          char *last_colon = strrchr(addr_buf, ':');
-          if (OB_NOT_NULL(last_colon)) {
-            *last_colon = '\0';
-            port2_str = last_colon + 1;
-
-            // Find second last colon for port1
-            char *second_last_colon = strrchr(addr_buf, ':');
-            if (OB_NOT_NULL(second_last_colon)) {
-              *second_last_colon = '\0';
-              port1_str = second_last_colon + 1;
-              ip_str = addr_buf;
-            } else {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_ERROR("invalid format, expected ip:port1:port2", K(addr_str));
-            }
-          } else {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_ERROR("invalid format, missing ':'", K(addr_str));
+      if (OB_SUCC(ret) && OB_NOT_NULL(port1_str)) {
+        if (OB_FAIL(parse_port_value_(port1_str, port1))) {
+          LOG_ERROR("parse port1 failed", KR(ret), K(addr_str), K(port1_str));
+        } else if (OB_NOT_NULL(port2_str)) {
+          if (OB_FAIL(parse_port_value_(port2_str, port2))) {
+            LOG_ERROR("parse port2 failed", KR(ret), K(addr_str), K(port2_str));
           }
-        } else if (colon_count == 1) {
-          // Single colon - format: ip:port or hostname:port
-          if (OB_ISNULL(ip_str = strtok_r(addr_buf, ":", &save_ptr))) {
-            ret = OB_INVALID_ARGUMENT;
-            LOG_ERROR("parse ip/hostname failed", K(addr_str));
-          } else {
-            port1_str = strtok_r(nullptr, ":", &save_ptr);
-            if (OB_ISNULL(port1_str)) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_ERROR("parse port failed", K(addr_str));
-            }
-          }
-        } else {
-          ret = OB_INVALID_ARGUMENT;
-          LOG_ERROR("invalid format, missing ':'", K(addr_str));
         }
       }
     }
@@ -1621,14 +1661,14 @@ int c_str_to_int(const char *str, int64_t &num)
   errno = 0;
   char *end_str = NULL;
   if (OB_ISNULL(str) || OB_UNLIKELY(0 == strlen(str))) {
-    LOG_ERROR("c_str_to_int str should not null");
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("c_str_to_int str should not null");
   } else {
     num = strtoll(str, &end_str, 10);
     if (errno != 0 || (NULL != end_str && *end_str != '\0')) {
+      ret = OB_INVALID_DATA;
       LOG_ERROR("strtoll convert string to int value fail", K(str), K(num),
         "error", strerror(errno), K(end_str));
-      ret = OB_INVALID_DATA;
     }
   }
   return ret;
@@ -1640,14 +1680,14 @@ int c_str_to_uint64(const char *str, uint64_t &num)
   errno = 0;
   char *end_str = NULL;
   if (OB_ISNULL(str) || OB_UNLIKELY(0 == strlen(str))) {
-    LOG_ERROR("c_str_to_int str should not null");
     ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("c_str_to_int str should not null");
   } else {
     num = strtoull(str, &end_str, 10);
     if (errno != 0 || (NULL != end_str && *end_str != '\0')) {
+      ret = OB_INVALID_DATA;
       LOG_ERROR("strtoll convert string to int value fail", K(str), K(num),
         "error", strerror(errno), K(end_str));
-      ret = OB_INVALID_DATA;
     }
   }
   return ret;

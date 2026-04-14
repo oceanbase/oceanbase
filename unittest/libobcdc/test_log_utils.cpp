@@ -359,16 +359,16 @@ TEST(utils, parse_addr_with_port_ipv4_single_port)
   int ret = OB_SUCCESS;
   const char *addr_str = "a.b.c.d:2881";
   const char *ip_str = nullptr;
-  const char *port1_str = nullptr;
-  const char *port2_str = nullptr;
+  int32_t port1 = 0;
+  int32_t port2 = 0;
+  char addr_buf[256];
 
-  ret = parse_addr_with_port(addr_str, ip_str, port1_str, port2_str);
+  ret = parse_addr_with_port(addr_str, addr_buf, sizeof(addr_buf), ip_str, port1, port2);
   EXPECT_EQ(OB_SUCCESS, ret);
   EXPECT_NE(nullptr, ip_str);
-  EXPECT_NE(nullptr, port1_str);
-  EXPECT_EQ(nullptr, port2_str);
   EXPECT_STREQ("a.b.c.d", ip_str);
-  EXPECT_STREQ("2881", port1_str);
+  EXPECT_EQ(2881, port1);
+  EXPECT_EQ(-1, port2);
 }
 
 TEST(utils, parse_addr_with_port_ipv4_double_port)
@@ -376,17 +376,16 @@ TEST(utils, parse_addr_with_port_ipv4_double_port)
   int ret = OB_SUCCESS;
   const char *addr_str = "a.b.c.d:2881:2882";
   const char *ip_str = nullptr;
-  const char *port1_str = nullptr;
-  const char *port2_str = nullptr;
+  int32_t port1 = 0;
+  int32_t port2 = 0;
+  char addr_buf[256];
 
-  ret = parse_addr_with_port(addr_str, ip_str, port1_str, port2_str);
+  ret = parse_addr_with_port(addr_str, addr_buf, sizeof(addr_buf), ip_str, port1, port2);
   EXPECT_EQ(OB_SUCCESS, ret);
   EXPECT_NE(nullptr, ip_str);
-  EXPECT_NE(nullptr, port1_str);
-  EXPECT_NE(nullptr, port2_str);
   EXPECT_STREQ("a.b.c.d", ip_str);
-  EXPECT_STREQ("2881", port1_str);
-  EXPECT_STREQ("2882", port2_str);
+  EXPECT_EQ(2881, port1);
+  EXPECT_EQ(2882, port2);
 }
 
 TEST(utils, parse_addr_with_port_ipv6_single_port)
@@ -394,16 +393,16 @@ TEST(utils, parse_addr_with_port_ipv6_single_port)
   int ret = OB_SUCCESS;
   const char *addr_str = "[a:b:c:d:e:f:g:h]:2881";
   const char *ip_str = nullptr;
-  const char *port1_str = nullptr;
-  const char *port2_str = nullptr;
+  int32_t port1 = 0;
+  int32_t port2 = 0;
+  char addr_buf[256];
 
-  ret = parse_addr_with_port(addr_str, ip_str, port1_str, port2_str);
+  ret = parse_addr_with_port(addr_str, addr_buf, sizeof(addr_buf), ip_str, port1, port2);
   EXPECT_EQ(OB_SUCCESS, ret);
   EXPECT_NE(nullptr, ip_str);
-  EXPECT_NE(nullptr, port1_str);
-  EXPECT_EQ(nullptr, port2_str);
   EXPECT_STREQ("a:b:c:d:e:f:g:h", ip_str);
-  EXPECT_STREQ("2881", port1_str);
+  EXPECT_EQ(2881, port1);
+  EXPECT_EQ(-1, port2);
 }
 
 TEST(utils, parse_addr_with_port_ipv6_double_port)
@@ -411,17 +410,16 @@ TEST(utils, parse_addr_with_port_ipv6_double_port)
   int ret = OB_SUCCESS;
   const char *addr_str = "[a:b:c:d:e:f:g:h]:2881:2882";
   const char *ip_str = nullptr;
-  const char *port1_str = nullptr;
-  const char *port2_str = nullptr;
+  int32_t port1 = 0;
+  int32_t port2 = 0;
+  char addr_buf[256];
 
-  ret = parse_addr_with_port(addr_str, ip_str, port1_str, port2_str);
+  ret = parse_addr_with_port(addr_str, addr_buf, sizeof(addr_buf), ip_str, port1, port2);
   EXPECT_EQ(OB_SUCCESS, ret);
   EXPECT_NE(nullptr, ip_str);
-  EXPECT_NE(nullptr, port1_str);
-  EXPECT_NE(nullptr, port2_str);
   EXPECT_STREQ("a:b:c:d:e:f:g:h", ip_str);
-  EXPECT_STREQ("2881", port1_str);
-  EXPECT_STREQ("2882", port2_str);
+  EXPECT_EQ(2881, port1);
+  EXPECT_EQ(2882, port2);
 }
 
 TEST(utils, parse_addr_with_port_ipv6_compressed)
@@ -429,16 +427,16 @@ TEST(utils, parse_addr_with_port_ipv6_compressed)
   int ret = OB_SUCCESS;
   const char *addr_str = "[::a]:2881";
   const char *ip_str = nullptr;
-  const char *port1_str = nullptr;
-  const char *port2_str = nullptr;
+  int32_t port1 = 0;
+  int32_t port2 = 0;
+  char addr_buf[256];
 
-  ret = parse_addr_with_port(addr_str, ip_str, port1_str, port2_str);
+  ret = parse_addr_with_port(addr_str, addr_buf, sizeof(addr_buf), ip_str, port1, port2);
   EXPECT_EQ(OB_SUCCESS, ret);
   EXPECT_NE(nullptr, ip_str);
-  EXPECT_NE(nullptr, port1_str);
-  EXPECT_EQ(nullptr, port2_str);
   EXPECT_STREQ("::a", ip_str);
-  EXPECT_STREQ("2881", port1_str);
+  EXPECT_EQ(2881, port1);
+  EXPECT_EQ(-1, port2);
 }
 
 TEST(utils, parse_addr_with_port_ipv6_full_format)
@@ -446,104 +444,166 @@ TEST(utils, parse_addr_with_port_ipv6_full_format)
   int ret = OB_SUCCESS;
   const char *addr_str = "[a:b:c:d:e:f:g:h]:2881:2882";
   const char *ip_str = nullptr;
-  const char *port1_str = nullptr;
-  const char *port2_str = nullptr;
+  int32_t port1 = 0;
+  int32_t port2 = 0;
+  char addr_buf[256];
 
-  ret = parse_addr_with_port(addr_str, ip_str, port1_str, port2_str);
+  ret = parse_addr_with_port(addr_str, addr_buf, sizeof(addr_buf), ip_str, port1, port2);
   EXPECT_EQ(OB_SUCCESS, ret);
   EXPECT_NE(nullptr, ip_str);
-  EXPECT_NE(nullptr, port1_str);
-  EXPECT_NE(nullptr, port2_str);
   EXPECT_STREQ("a:b:c:d:e:f:g:h", ip_str);
-  EXPECT_STREQ("2881", port1_str);
-  EXPECT_STREQ("2882", port2_str);
+  EXPECT_EQ(2881, port1);
+  EXPECT_EQ(2882, port2);
+}
+
+TEST(utils, parse_addr_with_port_hostname_single_port)
+{
+  int ret = OB_SUCCESS;
+  const char *ip_str = nullptr;
+  int32_t port1 = 0;
+  int32_t port2 = 0;
+  char addr_buf[256];
+
+  ret = parse_addr_with_port("hostname.example.com:2881", addr_buf, sizeof(addr_buf), ip_str, port1, port2);
+  EXPECT_EQ(OB_SUCCESS, ret);
+  EXPECT_NE(nullptr, ip_str);
+  EXPECT_STREQ("hostname.example.com", ip_str);
+  EXPECT_EQ(2881, port1);
+  EXPECT_EQ(-1, port2);
+}
+
+TEST(utils, parse_addr_with_port_hostname_double_port)
+{
+  int ret = OB_SUCCESS;
+  const char *ip_str = nullptr;
+  int32_t port1 = 0;
+  int32_t port2 = 0;
+  char addr_buf[256];
+
+  ret = parse_addr_with_port("hostname.example.com:2881:2882", addr_buf, sizeof(addr_buf), ip_str, port1, port2);
+  EXPECT_EQ(OB_SUCCESS, ret);
+  EXPECT_NE(nullptr, ip_str);
+  EXPECT_STREQ("hostname.example.com", ip_str);
+  EXPECT_EQ(2881, port1);
+  EXPECT_EQ(2882, port2);
 }
 
 TEST(utils, parse_addr_with_port_boundary)
 {
   int ret = OB_SUCCESS;
   const char *ip_str = nullptr;
-  const char *port1_str = nullptr;
-  const char *port2_str = nullptr;
+  int32_t port1 = 0;
+  int32_t port2 = 0;
+  char addr_buf[256];
 
   // Test NULL pointer
-  ret = parse_addr_with_port(NULL, ip_str, port1_str, port2_str);
+  ret = parse_addr_with_port(NULL, addr_buf, sizeof(addr_buf), ip_str, port1, port2);
   EXPECT_EQ(OB_INVALID_ARGUMENT, ret);
 
   // Test empty string
-  ret = parse_addr_with_port("", ip_str, port1_str, port2_str);
+  ret = parse_addr_with_port("", addr_buf, sizeof(addr_buf), ip_str, port1, port2);
   EXPECT_EQ(OB_INVALID_ARGUMENT, ret);
 
   // Test missing port
-  ret = parse_addr_with_port("a.b.c.d", ip_str, port1_str, port2_str);
+  ret = parse_addr_with_port("a.b.c.d", addr_buf, sizeof(addr_buf), ip_str, port1, port2);
   EXPECT_EQ(OB_INVALID_ARGUMENT, ret);
 
   // Test missing colon
-  ret = parse_addr_with_port("a.b.c.d", ip_str, port1_str, port2_str);
+  ret = parse_addr_with_port("a.b.c.d", addr_buf, sizeof(addr_buf), ip_str, port1, port2);
   EXPECT_EQ(OB_INVALID_ARGUMENT, ret);
 
   // Test IPv6 missing closing bracket
-  ret = parse_addr_with_port("[a:b:c:d:e:f:g:h:2881", ip_str, port1_str, port2_str);
+  ret = parse_addr_with_port("[a:b:c:d:e:f:g:h:2881", addr_buf, sizeof(addr_buf), ip_str, port1, port2);
   EXPECT_EQ(OB_INVALID_ARGUMENT, ret);
 
   // Test IPv6 missing colon after bracket
-  ret = parse_addr_with_port("[a:b:c:d:e:f:g:h]2881", ip_str, port1_str, port2_str);
+  ret = parse_addr_with_port("[a:b:c:d:e:f:g:h]2881", addr_buf, sizeof(addr_buf), ip_str, port1, port2);
   EXPECT_EQ(OB_INVALID_ARGUMENT, ret);
 
   // Test IPv4 with only one colon but expecting two ports
-  ret = parse_addr_with_port("a.b.c.d:2881", ip_str, port1_str, port2_str);
+  ret = parse_addr_with_port("a.b.c.d:2881", addr_buf, sizeof(addr_buf), ip_str, port1, port2);
   EXPECT_EQ(OB_SUCCESS, ret);
   EXPECT_NE(nullptr, ip_str);
-  EXPECT_NE(nullptr, port1_str);
-  EXPECT_EQ(nullptr, port2_str);  // Single port format, port2 should be NULL
+  EXPECT_EQ(2881, port1);
+  EXPECT_EQ(-1, port2);  // Single port format, port2 should be -1
+
+  // Test NULL buffer
+  ret = parse_addr_with_port("a.b.c.d:2881", nullptr, sizeof(addr_buf), ip_str, port1, port2);
+  EXPECT_EQ(OB_INVALID_ARGUMENT, ret);
+
+  // Test buffer too small
+  char small_buf[5];
+  ret = parse_addr_with_port("a.b.c.d:2881", small_buf, sizeof(small_buf), ip_str, port1, port2);
+  EXPECT_EQ(OB_INVALID_ARGUMENT, ret);
+
+  // Test port value 0 (invalid)
+  ret = parse_addr_with_port("a.b.c.d:0", addr_buf, sizeof(addr_buf), ip_str, port1, port2);
+  EXPECT_EQ(OB_INVALID_DATA, ret);
+
+  // Test negative port (invalid)
+  ret = parse_addr_with_port("a.b.c.d:-1", addr_buf, sizeof(addr_buf), ip_str, port1, port2);
+  EXPECT_EQ(OB_INVALID_DATA, ret);
+
+  // Test port > 65535 (invalid)
+  ret = parse_addr_with_port("a.b.c.d:65536", addr_buf, sizeof(addr_buf), ip_str, port1, port2);
+  EXPECT_EQ(OB_INVALID_DATA, ret);
+
+  // Test port overflow for int32 output
+  ret = parse_addr_with_port("a.b.c.d:2147483648", addr_buf, sizeof(addr_buf), ip_str, port1, port2);
+  EXPECT_EQ(OB_INVALID_DATA, ret);
+
+  ret = parse_addr_with_port("[::1]:2147483648:2882", addr_buf, sizeof(addr_buf), ip_str, port1, port2);
+  EXPECT_EQ(OB_INVALID_DATA, ret);
 }
 
 TEST(utils, parse_addr_with_port_ipv4_various_ports)
 {
   int ret = OB_SUCCESS;
   const char *ip_str = nullptr;
-  const char *port1_str = nullptr;
-  const char *port2_str = nullptr;
+  int32_t port1 = 0;
+  int32_t port2 = 0;
+  char addr_buf[256];
 
   // Test with different port numbers
   const char *addr1 = "a.b.c.d:8080:9090";
-  ret = parse_addr_with_port(addr1, ip_str, port1_str, port2_str);
+  ret = parse_addr_with_port(addr1, addr_buf, sizeof(addr_buf), ip_str, port1, port2);
   EXPECT_EQ(OB_SUCCESS, ret);
   EXPECT_STREQ("a.b.c.d", ip_str);
-  EXPECT_STREQ("8080", port1_str);
-  EXPECT_STREQ("9090", port2_str);
+  EXPECT_EQ(8080, port1);
+  EXPECT_EQ(9090, port2);
 
   // Test with single digit ports
   const char *addr2 = "a.b.c.d:1:2";
-  ret = parse_addr_with_port(addr2, ip_str, port1_str, port2_str);
+  ret = parse_addr_with_port(addr2, addr_buf, sizeof(addr_buf), ip_str, port1, port2);
   EXPECT_EQ(OB_SUCCESS, ret);
   EXPECT_STREQ("a.b.c.d", ip_str);
-  EXPECT_STREQ("1", port1_str);
-  EXPECT_STREQ("2", port2_str);
+  EXPECT_EQ(1, port1);
+  EXPECT_EQ(2, port2);
 }
 
 TEST(utils, parse_addr_with_port_ipv6_various_ports)
 {
   int ret = OB_SUCCESS;
   const char *ip_str = nullptr;
-  const char *port1_str = nullptr;
-  const char *port2_str = nullptr;
+  int32_t port1 = 0;
+  int32_t port2 = 0;
+  char addr_buf[256];
 
   // Test with different port numbers
   const char *addr1 = "[a:b:c:d:e:f:g:h]:8080:9090";
-  ret = parse_addr_with_port(addr1, ip_str, port1_str, port2_str);
+  ret = parse_addr_with_port(addr1, addr_buf, sizeof(addr_buf), ip_str, port1, port2);
   EXPECT_EQ(OB_SUCCESS, ret);
   EXPECT_STREQ("a:b:c:d:e:f:g:h", ip_str);
-  EXPECT_STREQ("8080", port1_str);
-  EXPECT_STREQ("9090", port2_str);
+  EXPECT_EQ(8080, port1);
+  EXPECT_EQ(9090, port2);
 
   // Test with IPv6-mapped IPv4 address format
   const char *addr2 = "[::ffff:a.b.c.d]:2881:2882";
-  ret = parse_addr_with_port(addr2, ip_str, port1_str, port2_str);
+  ret = parse_addr_with_port(addr2, addr_buf, sizeof(addr_buf), ip_str, port1, port2);
   EXPECT_EQ(OB_SUCCESS, ret);
   EXPECT_STREQ("::ffff:a.b.c.d", ip_str);
-  EXPECT_STREQ("2881", port1_str);
-  EXPECT_STREQ("2882", port2_str);
+  EXPECT_EQ(2881, port1);
+  EXPECT_EQ(2882, port2);
 }
 
 /*
@@ -554,58 +614,51 @@ TEST(utils, parse_addr_with_port_comprehensive)
 {
   int ret = OB_SUCCESS;
   const char *ip_str = nullptr;
-  const char *port1_str = nullptr;
-  const char *port2_str = nullptr;
+  int32_t port1 = 0;
+  int32_t port2 = 0;
+  char addr_buf[256];
 
   // Test IPv4 addresses
   struct {
     const char *addr_str;
     const char *expected_ip;
-    const char *expected_port1;
-    const char *expected_port2;
+    int32_t expected_port1;
+    int32_t expected_port2;
   } ipv4_test_cases[] = {
-    {"a.b.c.d:2881", "a.b.c.d", "2881", nullptr},
-    {"a.b.c.d:2881:2882", "a.b.c.d", "2881", "2882"},
-    {"a.b.c.d:8080:9090", "a.b.c.d", "8080", "9090"},
+    {"a.b.c.d:2881", "a.b.c.d", 2881, -1},
+    {"a.b.c.d:2881:2882", "a.b.c.d", 2881, 2882},
+    {"a.b.c.d:8080:9090", "a.b.c.d", 8080, 9090},
   };
 
   for (size_t i = 0; i < sizeof(ipv4_test_cases) / sizeof(ipv4_test_cases[0]); i++) {
-    ret = parse_addr_with_port(ipv4_test_cases[i].addr_str, ip_str, port1_str, port2_str);
+    ret = parse_addr_with_port(ipv4_test_cases[i].addr_str, addr_buf, sizeof(addr_buf), ip_str, port1, port2);
     EXPECT_EQ(OB_SUCCESS, ret) << "Failed to parse: " << ipv4_test_cases[i].addr_str;
     EXPECT_STREQ(ipv4_test_cases[i].expected_ip, ip_str);
-    EXPECT_STREQ(ipv4_test_cases[i].expected_port1, port1_str);
-    if (ipv4_test_cases[i].expected_port2 != nullptr) {
-      EXPECT_STREQ(ipv4_test_cases[i].expected_port2, port2_str);
-    } else {
-      EXPECT_EQ(nullptr, port2_str);
-    }
+    EXPECT_EQ(ipv4_test_cases[i].expected_port1, port1);
+    EXPECT_EQ(ipv4_test_cases[i].expected_port2, port2);
   }
 
   // Test IPv6 addresses
   struct {
     const char *addr_str;
     const char *expected_ip;
-    const char *expected_port1;
-    const char *expected_port2;
+    int32_t expected_port1;
+    int32_t expected_port2;
   } ipv6_test_cases[] = {
-    {"[a:b:c:d:e:f:g:h]:2881", "a:b:c:d:e:f:g:h", "2881", nullptr},
-    {"[a:b:c:d:e:f:g:h]:2881:2882", "a:b:c:d:e:f:g:h", "2881", "2882"},
-    {"[::a]:8080", "::a", "8080", nullptr},
-    {"[::a]:8080:9090", "::a", "8080", "9090"},
-    {"[a:b:c:d:e:f:g:h]:2881", "a:b:c:d:e:f:g:h", "2881", nullptr},
-    {"[::ffff:a.b.c.d]:2881:2882", "::ffff:a.b.c.d", "2881", "2882"},
+    {"[a:b:c:d:e:f:g:h]:2881", "a:b:c:d:e:f:g:h", 2881, -1},
+    {"[a:b:c:d:e:f:g:h]:2881:2882", "a:b:c:d:e:f:g:h", 2881, 2882},
+    {"[::a]:8080", "::a", 8080, -1},
+    {"[::a]:8080:9090", "::a", 8080, 9090},
+    {"[a:b:c:d:e:f:g:h]:2881", "a:b:c:d:e:f:g:h", 2881, -1},
+    {"[::ffff:a.b.c.d]:2881:2882", "::ffff:a.b.c.d", 2881, 2882},
   };
 
   for (size_t i = 0; i < sizeof(ipv6_test_cases) / sizeof(ipv6_test_cases[0]); i++) {
-    ret = parse_addr_with_port(ipv6_test_cases[i].addr_str, ip_str, port1_str, port2_str);
+    ret = parse_addr_with_port(ipv6_test_cases[i].addr_str, addr_buf, sizeof(addr_buf), ip_str, port1, port2);
     EXPECT_EQ(OB_SUCCESS, ret) << "Failed to parse: " << ipv6_test_cases[i].addr_str;
     EXPECT_STREQ(ipv6_test_cases[i].expected_ip, ip_str);
-    EXPECT_STREQ(ipv6_test_cases[i].expected_port1, port1_str);
-    if (ipv6_test_cases[i].expected_port2 != nullptr) {
-      EXPECT_STREQ(ipv6_test_cases[i].expected_port2, port2_str);
-    } else {
-      EXPECT_EQ(nullptr, port2_str);
-    }
+    EXPECT_EQ(ipv6_test_cases[i].expected_port1, port1);
+    EXPECT_EQ(ipv6_test_cases[i].expected_port2, port2);
   }
 }
 }

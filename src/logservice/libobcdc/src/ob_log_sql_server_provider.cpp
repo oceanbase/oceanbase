@@ -202,41 +202,32 @@ int ObLogSQLServerProvider::parse_rs_list_(const char *rs_list, ServerList &serv
         // Supports IPv4: ipv4_address:rpc_port:sql_port
         // Supports IPv6: [ipv6_address]:rpc_port:sql_port
         const char *ip_str = nullptr;
-        const char *rpc_port_str = nullptr;
-        const char *sql_port_str = nullptr;
+        int32_t rpc_port = -1;
+        int32_t sql_port = -1;
+        char addr_buf[256];
 
-        if (OB_FAIL(parse_addr_with_port(rs_ptr, ip_str, rpc_port_str, sql_port_str))) {
+        if (OB_FAIL(parse_addr_with_port(rs_ptr, addr_buf, sizeof(addr_buf), ip_str, rpc_port, sql_port))) {
           LOG_WARN("failed to parse rs_info_str", KR(ret), K(rs_ptr));
-        } else if (OB_ISNULL(ip_str) || OB_ISNULL(rpc_port_str) || OB_ISNULL(sql_port_str)) {
+        } else if (OB_ISNULL(ip_str) || rpc_port <= 0 || sql_port <= 0) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid rs param, expected ip:rpc_port:sql_port", KR(ret), K(rs_ptr),
-              KP(ip_str), KP(rpc_port_str), KP(sql_port_str));
+              KP(ip_str), K(rpc_port), K(sql_port));
         } else {
-          int64_t rpc_port_64 = -1;
-          int64_t sql_port = -1;
+          ObAddr addr;
+          ObRootAddr rs_addr;
+          addr.reset();
+          rs_addr.reset();
 
-          if (OB_FAIL(c_str_to_int(rpc_port_str, rpc_port_64))) {
-            LOG_ERROR("fail to convert rpc_port_str to rpc_port_int64", KR(ret), K(rpc_port_str), K(rpc_port_64));
-          } else if (OB_FAIL(c_str_to_int(sql_port_str, sql_port))) {
-            LOG_ERROR("fail to convert sql_port_str to sql_port_int64", KR(ret), K(sql_port_str), K(sql_port));
-          } else {
-            ObAddr addr;
-            ObRootAddr rs_addr;
-            addr.reset();
-            rs_addr.reset();
-            int32_t rpc_port_32 = static_cast<int32_t>(rpc_port_64);
-
-            if (addr.set_ip_addr(ip_str, rpc_port_32)) {
-              if (OB_FAIL(rs_addr.init(addr, FOLLOWER, sql_port))) {
-                LOG_WARN("failed to init addr", KR(ret), K(addr), K(sql_port));
-              } else if (!rs_addr.is_valid()) {
-                LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid rs addr, will ignore this server", K(rs_list), K(ip_str), K(rpc_port_32), K(sql_port));
-              } else if (OB_FAIL(server_list.push_back(rs_addr))) {
-                LOG_ERROR("failed to pushback rs server to server list", KR(ret));
-              }
-            } else {
-              LOG_WARN("invalid ip address for rs list config, will ignore this server", K(rs_list), K(ip_str), K(rpc_port_32), K(sql_port));
+          if (addr.set_ip_addr(ip_str, rpc_port)) {
+            if (OB_FAIL(rs_addr.init(addr, FOLLOWER, sql_port))) {
+              LOG_WARN("failed to init addr", KR(ret), K(addr), K(sql_port));
+            } else if (!rs_addr.is_valid()) {
+              LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid rs addr, will ignore this server", K(rs_list), K(ip_str), K(rpc_port), K(sql_port));
+            } else if (OB_FAIL(server_list.push_back(rs_addr))) {
+              LOG_ERROR("failed to pushback rs server to server list", KR(ret));
             }
+          } else {
+            LOG_WARN("invalid ip address for rs list config, will ignore this server", K(rs_list), K(ip_str), K(rpc_port), K(sql_port));
           }
         }
       }
