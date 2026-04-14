@@ -2534,6 +2534,7 @@ int ObRemoteScan::init(const uint64_t tenant_id,
       ddl_info.set_is_ddl(true);
       ddl_info.set_source_table_hidden(false);
       ddl_info.set_dest_table_hidden(false);
+      ddl_info.set_retryable_ddl(true);
       if (OB_FAIL(session_param.ddl_info_.init(ddl_info, hidden_table_schema->get_session_id()))) {
         LOG_WARN("fail to init ddl info", KR(ret), K(ddl_info), K(hidden_table_schema->get_session_id()));
       } else if (OB_FAIL(ObBackupUtils::get_tenant_sys_time_zone_wrap(dest_tenant_id_, time_zone, tz_info_wrap_))) {
