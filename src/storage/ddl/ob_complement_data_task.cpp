@@ -502,6 +502,7 @@ int ObComplementDataContext::init(
   ObTabletMemberWrapper<ObTabletTableStore> table_store_wrapper;
   bool is_column_store = false;
   bool is_cs_replica_exist = false;
+  bool skip_complement_by_major = false;
   if (OB_UNLIKELY(is_inited_)) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ObComplementDataContext has already been inited", K(ret));
@@ -520,15 +521,33 @@ int ObComplementDataContext::init(
     LOG_WARN("tablet handle is null", K(ret), K(param));
   } else if (OB_FAIL(ObTabletDDLUtil::check_and_get_major_sstable(param.dest_ls_id_, param.dest_tablet_id_, first_major_sstable, table_store_wrapper))) {
     LOG_WARN("check if major sstable exist failed", K(ret), K(param));
-  } else if (nullptr != first_major_sstable) {
-    LOG_INFO("major exists, skip create tablet direct load mgr", K(ret), K(param));
-  } else if (OB_FAIL(hidden_table_schema.get_is_column_store(is_column_store))) {
-    LOG_WARN("failed to check is column store", K(ret));
-  } else if (OB_FAIL(ObDirectLoadMgrUtil::check_cs_replica_exist(param.dest_ls_id_, param.dest_tablet_id_, is_cs_replica_exist))) {
-    LOG_WARN("failed to check tablet_id exist", K(ret));
-  } else if (FALSE_IT(is_column_store = is_cs_replica_exist ? true : is_column_store)) {
   } else {
-    total_slice_cnt_ = param.ranges_.count();
+    /* Skip complement write only when both data tablet and lob meta tablet (if any) already have major.
+     * Otherwise retry may see main major from a prior attempt while lob still has DDL_DUMP only — lob_write_stat_
+     * stays 0 and merge_cg_slice idempotency fails (-4016). */
+    skip_complement_by_major = (nullptr != first_major_sstable);
+    if (OB_SUCC(ret) && skip_complement_by_major && param.dest_lob_meta_tablet_id_.is_valid()) {
+      const ObSSTable *lob_first_major_sstable = nullptr;
+      ObTabletMemberWrapper<ObTabletTableStore> lob_table_store_wrapper;
+      if (OB_FAIL(ObTabletDDLUtil::check_and_get_major_sstable(
+              param.dest_ls_id_, param.dest_lob_meta_tablet_id_, lob_first_major_sstable, lob_table_store_wrapper))) {
+        LOG_WARN("check if lob meta major sstable exist failed", K(ret), K(param));
+      } else if (nullptr == lob_first_major_sstable) {
+        skip_complement_by_major = false;
+        FLOG_INFO("main major exists but lob meta has no major, still run complement write for lob", K(ret), K(param));
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (skip_complement_by_major) {
+      LOG_INFO("major exists, skip create tablet direct load mgr", K(ret), K(param));
+    } else if (OB_FAIL(hidden_table_schema.get_is_column_store(is_column_store))) {
+      LOG_WARN("failed to check is column store", K(ret));
+    } else if (OB_FAIL(ObDirectLoadMgrUtil::check_cs_replica_exist(param.dest_ls_id_, param.dest_tablet_id_, is_cs_replica_exist))) {
+      LOG_WARN("failed to check tablet_id exist", K(ret));
+    } else if (FALSE_IT(is_column_store = is_cs_replica_exist ? true : is_column_store)) {
+    } else {
+      total_slice_cnt_ = param.ranges_.count();
+    }
   }
 
   /* tablet context only used for following merge task, only part of param are necessary*/
@@ -549,7 +568,7 @@ int ObComplementDataContext::init(
   }
 
   if (OB_SUCC(ret)) {
-    is_major_sstable_exist_ = nullptr != first_major_sstable ? true : false;
+    is_major_sstable_exist_ = skip_complement_by_major;
     concurrent_cnt_ = param.concurrent_cnt_;
     is_inited_ = true;
   }
