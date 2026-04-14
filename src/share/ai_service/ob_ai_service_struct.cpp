@@ -7,6 +7,7 @@
 #include "lib/json/ob_json.h"
 #include "share/ob_encryption_util.h"
 #include "share/rc/ob_tenant_base.h"
+#include "share/schema/ob_ai_model_mgr.h"
 
 #define USING_LOG_PREFIX SHARE
 
@@ -44,12 +45,126 @@ const char *VALID_PROVIDERS[] = {
         } \
       } else
 
+#define EXTRACT_JSON_ELEM_INT(json_key, int_val) \
+if (elem.first.case_compare(json_key) == 0) { \
+  if (elem.second->json_type() != ObJsonNodeType::J_INT && elem.second->json_type() != ObJsonNodeType::J_UINT) { \
+    ret = OB_AI_FUNC_PARAM_VALUE_INVALID; \
+    LOG_WARN("invalid json type", K(ret), K(elem.first), K(elem.second->json_type())); \
+    FORWARD_USER_ERROR(ret, "invalid parameters type for parameters." #json_key ", " #json_key " must be an integer"); \
+  } else { \
+    int_val = elem.second->get_int(); \
+  } \
+} else
+
+#define EXTRACT_JSON_ELEM_DOUBLE(json_key, double_val) \
+if (elem.first.case_compare(json_key) == 0) { \
+  if (elem.second->json_type() != ObJsonNodeType::J_DOUBLE && \
+      elem.second->json_type() != ObJsonNodeType::J_INT && \
+      elem.second->json_type() != ObJsonNodeType::J_UINT) { \
+    ret = OB_AI_FUNC_PARAM_VALUE_INVALID; \
+    LOG_WARN("invalid json type", K(ret), K(elem.first), K(elem.second->json_type())); \
+    FORWARD_USER_ERROR(ret, "invalid parameters type for parameters." #json_key ", " #json_key " must be a number"); \
+  } else { \
+    if (elem.second->json_type() == ObJsonNodeType::J_DOUBLE) { \
+      double_val = elem.second->get_double(); \
+    } else { \
+      double_val = static_cast<double>(elem.second->get_int()); \
+    } \
+  } \
+} else
+
 #define EXTRACT_JSON_ELEM_END() \
   { \
     ret = OB_AI_FUNC_PARAM_INVALID; \
     LOG_USER_ERROR(OB_AI_FUNC_PARAM_INVALID, elem.first.length(), elem.first.ptr()); \
     LOG_WARN("unknown json key param", K(ret), K(elem.first)); \
   }
+
+#define EXTRACT_JSON_ELEM_NO_CHECK_END() \
+  { \
+  }
+
+static int check_endpoint_parameters_valid(const ObString &parameters)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator("AIEpParamChk");
+  ObIJsonBase *params_base = nullptr;
+  int64_t batch_size = 0;
+  int64_t max_image_size = 0;
+  int64_t max_tokens = 0;
+  int64_t min_concurrency = 0;
+  int64_t max_concurrency = 0;
+  double temperature = 0.0;
+  double top_p = 0.0;
+  if (parameters.empty()) {
+    // do nothing
+  } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator,
+                                                      parameters,
+                                                      ObJsonInType::JSON_TREE,
+                                                      ObJsonInType::JSON_TREE,
+                                                      params_base))) {
+    LOG_WARN("failed to parse endpoint parameters", K(ret), K(parameters));
+  } else if (OB_ISNULL(params_base) || params_base->json_type() != ObJsonNodeType::J_OBJECT) {
+    ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+    LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, strlen("parameters"), "parameters");
+    LOG_WARN("endpoint parameters should be json object", K(ret), K(parameters));
+  } else {
+    JsonObjectIterator iter = params_base->object_iterator();
+    while (!iter.end() && OB_SUCC(ret)) {
+      ObJsonObjPair elem;
+      if (OB_FAIL(iter.get_elem(elem))) {
+        LOG_WARN("failed to get elem", K(ret));
+      } else {
+        EXTRACT_JSON_ELEM_INT("batch_size", batch_size)
+        EXTRACT_JSON_ELEM_INT("max_image_size", max_image_size)
+        EXTRACT_JSON_ELEM_INT("max_tokens", max_tokens)
+        EXTRACT_JSON_ELEM_INT("min_concurrency", min_concurrency)
+        EXTRACT_JSON_ELEM_INT("max_concurrency", max_concurrency)
+        EXTRACT_JSON_ELEM_DOUBLE("temperature", temperature)
+        EXTRACT_JSON_ELEM_DOUBLE("top_p", top_p)
+        EXTRACT_JSON_ELEM_NO_CHECK_END()
+      }
+      iter.next();
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (batch_size < 0) {
+      ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+      LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, strlen("batch_size"), "batch_size");
+      LOG_WARN("batch size is invalid", K(ret), K(batch_size));
+    } else if (max_image_size < 0) {
+      ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+      LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, strlen("max_image_size"), "max_image_size");
+      LOG_WARN("max image size is invalid", K(ret), K(max_image_size));
+    } else if (max_tokens < 0) {
+      ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+      LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, strlen("max_tokens"), "max_tokens");
+      LOG_WARN("max_tokens is invalid", K(ret), K(max_tokens));
+    } else if (temperature < 0.0) {
+      ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+      LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, strlen("temperature"), "temperature");
+      LOG_WARN("temperature is invalid, should be in range [0.0, 2.0]", K(ret), K(temperature));
+    } else if (top_p < 0.0) {
+      ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+      LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, strlen("top_p"), "top_p");
+      LOG_WARN("top_p is invalid, should be in range [0.0, 1.0]", K(ret), K(top_p));
+    } else if (min_concurrency < 0) {
+      ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+      LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, strlen("min_concurrency"), "min_concurrency");
+      LOG_WARN("min_concurrency is invalid, must be a positive integer", K(ret), K(min_concurrency));
+    } else if (max_concurrency < 0) {
+      ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+      LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, strlen("max_concurrency"), "max_concurrency");
+      LOG_WARN("max_concurrency is invalid, must be a positive integer", K(ret), K(max_concurrency));
+    } else if (min_concurrency > 0 && max_concurrency > 0 && min_concurrency > max_concurrency) {
+      ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
+      LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, strlen("min_concurrency"), "min_concurrency");
+      LOG_WARN("min_concurrency must not exceed max_concurrency",
+               K(ret), K(min_concurrency), K(max_concurrency));
+    }
+  }
+  return ret;
+}
 
 int ObAiModelEndpointInfo::parse_from_json_base(common::ObArenaAllocator &allocator, const ObString &name, const ObIJsonBase &params_jbase)
 {
@@ -98,10 +213,8 @@ int ObAiModelEndpointInfo::check_valid() const
     ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
     LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, strlen("provider"), "provider");
     LOG_WARN("provider is invalid", K(ret), K(*this));
-  } else if (!parameters_.empty()) {
-    ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
-    LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, strlen("parameters"), "parameters");
-    LOG_WARN("parameters is not empty", K(ret), K(*this));
+  } else if (OB_FAIL(check_endpoint_parameters_valid(parameters_))) {
+    LOG_WARN("parameters is invalid", K(ret), K(*this), K(parameters_));
   } else if (!request_transform_fn_.empty()) {
     ret = OB_AI_FUNC_PARAM_VALUE_INVALID;
     LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, strlen("request_transform_fn"), "request_transform_fn");
@@ -349,6 +462,89 @@ int ObAiServiceModelInfo::check_valid() const
     LOG_USER_ERROR(OB_AI_FUNC_PARAM_VALUE_INVALID, strlen("type"), "type");
     LOG_WARN("model type is invalid", K(ret), K(*this), K(type_));
   }
+  return ret;
+}
+
+int ObAIModelConfigInfo::init(ObIAllocator &allocator,
+                              const schema::ObAiModelSchema &ai_model_schema,
+                              const ObAiModelEndpointInfo &endpoint_info)
+{
+  int ret = OB_SUCCESS;
+  reset();
+  const ObString request_model_name = endpoint_info.get_request_model_name().empty()
+                                      ? ai_model_schema.get_model_name()
+                                      : endpoint_info.get_request_model_name();
+  if (OB_FAIL(ob_write_string(allocator, ai_model_schema.get_name(), model_key_, true))) {
+    LOG_WARN("failed to deep copy model key", K(ret), K(ai_model_schema));
+  } else if (OB_FAIL(ob_write_string(allocator, ai_model_schema.get_model_name(), model_name_, true))) {
+    LOG_WARN("failed to deep copy model name", K(ret), K(ai_model_schema));
+  } else if (OB_FAIL(ob_write_string(allocator, endpoint_info.get_provider(), provider_, true))) {
+    LOG_WARN("failed to deep copy provider", K(ret), K(endpoint_info));
+  } else if (OB_FAIL(ob_write_string(allocator, endpoint_info.get_url(), url_, true))) {
+    LOG_WARN("failed to deep copy endpoint url", K(ret), K(endpoint_info));
+  } else if (OB_FAIL(ob_write_string(allocator, request_model_name, request_model_name_, true))) {
+    LOG_WARN("failed to deep copy request model name", K(ret), K(request_model_name));
+  } else if (OB_FAIL(endpoint_info.get_unencrypted_access_key(allocator, api_key_))) {
+    LOG_WARN("failed to get unencrypted access key", K(ret), K(endpoint_info));
+  } else if (OB_FALSE_IT(model_type_ = ai_model_schema.get_type())) {
+  } else {
+    const ObString &parameters = endpoint_info.get_parameters();
+    if (!parameters.empty()) {
+      ObIJsonBase *params_base = nullptr;
+      if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator,
+                                                    parameters,
+                                                    ObJsonInType::JSON_TREE,
+                                                    ObJsonInType::JSON_TREE,
+                                                    params_base))) {
+        LOG_WARN("failed to parse endpoint parameters", K(ret), K(parameters));
+      } else if (OB_ISNULL(params_base) || params_base->json_type() != ObJsonNodeType::J_OBJECT) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("endpoint parameters should be json object", K(ret), K(parameters));
+      } else {
+        // get endpoint parameters
+        JsonObjectIterator iter = params_base->object_iterator();
+        while (!iter.end() && OB_SUCC(ret)) {
+          ObJsonObjPair elem;
+          if (OB_FAIL(iter.get_elem(elem))) {
+            LOG_WARN("failed to get elem", K(ret));
+          } else {
+            EXTRACT_JSON_ELEM_INT("batch_size", batch_size_)
+            EXTRACT_JSON_ELEM_INT("max_image_size", max_image_size_)
+            EXTRACT_JSON_ELEM_INT("min_concurrency", min_concurrency_)
+            EXTRACT_JSON_ELEM_INT("max_concurrency", max_concurrency_)
+            EXTRACT_JSON_ELEM_NO_CHECK_END()
+          }
+          iter.next();
+        }
+        // get message parameters
+        ObJsonObject *message_parameters = static_cast<ObJsonObject *>(params_base);
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(message_parameters->remove("batch_size"))) {
+            LOG_WARN("failed to remove batch size", K(ret));
+          } else if (OB_FAIL(message_parameters->remove("max_image_size"))) {
+            LOG_WARN("failed to remove max image size", K(ret));
+          } else if (OB_FAIL(message_parameters->remove("min_concurrency"))) {
+            LOG_WARN("failed to remove min concurrency", K(ret));
+          } else if (OB_FAIL(message_parameters->remove("max_concurrency"))) {
+            LOG_WARN("failed to remove max concurrency", K(ret));
+          } else {
+            message_parameters_ = message_parameters;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAIModelConfigInfo::merge_default_config(ObIAllocator &allocator, const share::ObAIModelConfigItem &default_config)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(allocator);
+  batch_size_ = batch_size_ == 0 ? default_config.batch_size_ : batch_size_;
+  max_image_size_ = max_image_size_ == 0 ? default_config.max_image_size_ : max_image_size_;
+  min_concurrency_ = min_concurrency_ == 0 ? default_config.min_concurrency_ : min_concurrency_;
+  max_concurrency_ = max_concurrency_ == 0 ? default_config.max_concurrency_ : max_concurrency_;
   return ret;
 }
 

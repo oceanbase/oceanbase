@@ -16,6 +16,10 @@ namespace oceanbase
 {
 namespace share
 {
+namespace schema
+{
+class ObAiModelSchema;
+}
 
 struct EndpointType final
 {
@@ -146,6 +150,93 @@ private:
   ObString parameters_;
   ObString request_transform_fn_;
   ObString response_transform_fn_;
+};
+
+struct ObAIModelConfigItem
+{
+public:
+  static const int64_t DEFAULT_MIN_CONCURRENCY = 10;
+  static const int64_t DEFAULT_MAX_CONCURRENCY = 100;
+
+  ObAIModelConfigItem()
+      : batch_size_(0),
+        max_image_size_(0),
+        min_concurrency_(DEFAULT_MIN_CONCURRENCY),
+        max_concurrency_(DEFAULT_MAX_CONCURRENCY) {}
+  ~ObAIModelConfigItem() = default;
+public:
+  int64_t batch_size_;
+  int64_t max_image_size_;
+  int64_t min_concurrency_;
+  int64_t max_concurrency_;
+  TO_STRING_KV(K_(batch_size), K_(max_image_size), K_(min_concurrency), K_(max_concurrency));
+};
+
+
+struct ObAIModelConfigInfo
+{
+public:
+  ObAIModelConfigInfo() { reset(); }
+  ~ObAIModelConfigInfo() = default;
+
+  void reset()
+  {
+    model_key_.reset();
+    model_name_.reset();
+    model_type_ = EndpointType::MAX_TYPE;
+    provider_.reset();
+    url_.reset();
+    api_key_.reset();
+    request_model_name_.reset();
+    message_parameters_ = nullptr;
+    batch_size_ = 0;
+    max_image_size_ = 0;
+    min_concurrency_ = ObAIModelConfigItem::DEFAULT_MIN_CONCURRENCY;
+    max_concurrency_ = ObAIModelConfigItem::DEFAULT_MAX_CONCURRENCY;
+  }
+
+  int init(ObIAllocator &allocator, const schema::ObAiModelSchema &ai_model_schema, const ObAiModelEndpointInfo &endpoint_info);
+  int merge_default_config(ObIAllocator &allocator, const ObAIModelConfigItem &default_config);
+  const ObString &get_model_key() const { return model_key_; }
+  const ObString &get_model_name() const { return model_name_; }
+  EndpointType::TYPE get_model_type() const { return model_type_; }
+  const ObString &get_provider() const { return provider_; }
+  const ObString &get_url() const { return url_; }
+  const ObString &get_api_key() const { return api_key_; }
+  const ObString &get_request_model_name() const { return request_model_name_; }
+  common::ObJsonObject* get_message_parameters() const { return message_parameters_; }
+  int64_t get_batch_size() const { return batch_size_; }
+  int64_t get_max_image_size() const { return max_image_size_; }
+  int64_t get_min_concurrency() const { return min_concurrency_; }
+  int64_t get_max_concurrency() const { return max_concurrency_; }
+
+  TO_STRING_KV(K_(model_key),
+               K_(model_name),
+               K_(model_type),
+               K_(provider),
+               K_(url),
+               K_(request_model_name),
+               K_(message_parameters),
+               K_(batch_size),
+               K_(max_image_size),
+               K_(min_concurrency),
+               K_(max_concurrency));
+
+private:
+  ObString model_key_;
+  // ai service model info
+  ObString model_name_;
+  EndpointType::TYPE model_type_;
+  // endpoint info
+  ObString provider_;
+  ObString url_;
+  ObString api_key_;
+  ObString request_model_name_;
+  common::ObJsonObject* message_parameters_;
+  int64_t batch_size_;
+  int64_t max_image_size_;
+  int64_t min_concurrency_;
+  int64_t max_concurrency_;
 };
 
 } // namespace share

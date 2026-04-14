@@ -197,7 +197,8 @@ TEST_F(ObOpenAIUtilsTest, test_embedding_get_body)
     ObOpenAIUtils::ObOpenAIEmbed embedding;
     ObJsonObject *body = nullptr;
     ObJsonObject *config = nullptr;
-    ASSERT_EQ(OB_SUCCESS, embedding.get_body(allocator, model, input_array, config, body));
+    ObString input_type("text");
+    ASSERT_EQ(OB_SUCCESS, embedding.get_body(allocator, model, input_array, config, input_type, body));
 
     ObJsonNode *model_node = body->get_value("model");
     ObStringBuffer model_buf(&allocator);
@@ -273,6 +274,88 @@ TEST_F(ObOpenAIUtilsTest, test_embedding_parse_output_empty)
     ObJsonObject *http_response = static_cast<ObJsonObject *>(j_base);
     ObIJsonBase *result = nullptr;
     ASSERT_EQ(OB_INVALID_DATA, embedding.parse_output(allocator, http_response, result));
+}
+
+TEST_F(ObOpenAIUtilsTest, test_model_config_manager_singleton_and_init)
+{
+    ObAIModelConfigInfoManager &manager = ObAIModelConfigInfoManager::get_instance();
+    // singleton instance should be stable
+    ASSERT_EQ(&manager, &ObAIModelConfigInfoManager::get_instance());
+
+    // reset and re-init should both succeed
+    manager.reset();
+    ASSERT_EQ(OB_SUCCESS, manager.init());
+    ASSERT_GT(manager.size(), 0);
+    // repeated init should be no-op and still success
+    ASSERT_EQ(OB_SUCCESS, manager.init());
+}
+
+TEST_F(ObOpenAIUtilsTest, test_model_config_manager_get_model_config_positive)
+{
+    ObAIModelConfigInfoManager &manager = ObAIModelConfigInfoManager::get_instance();
+    manager.reset();
+
+    // positive: known model config should be found (lazy init path)
+    oceanbase::share::ObAIModelConfigItem item;
+    ASSERT_EQ(OB_SUCCESS, manager.get_model_config(ObAIFuncProviderUtils::DASHSCOPE,
+                                                   ObString("qwen3-vl-embedding"),
+                                                   item));
+    ASSERT_EQ(5, item.batch_size_);
+    ASSERT_EQ(5 * 1024 * 1024, item.max_image_size_);
+
+    ASSERT_EQ(OB_SUCCESS, manager.get_model_config(ObAIFuncProviderUtils::DASHSCOPE,
+                                                   ObString("qwen2.5-vl-embedding"),
+                                                   item));
+    ASSERT_EQ(1, item.batch_size_);
+    ASSERT_EQ(5 * 1024 * 1024, item.max_image_size_);
+
+    ASSERT_EQ(OB_SUCCESS, manager.get_model_config(ObAIFuncProviderUtils::DASHSCOPE,
+                                                   ObString("multimodal-embedding-v1"),
+                                                   item));
+    ASSERT_EQ(1, item.batch_size_);
+    ASSERT_EQ(3 * 1024 * 1024, item.max_image_size_);
+}
+
+TEST_F(ObOpenAIUtilsTest, test_model_config_manager_get_model_config_negative)
+{
+    ObAIModelConfigInfoManager &manager = ObAIModelConfigInfoManager::get_instance();
+    manager.reset();
+    oceanbase::share::ObAIModelConfigItem item;
+
+    // unknown model: get_model_config returns OB_SUCCESS with default item (design: fallback to default)
+    ASSERT_EQ(OB_SUCCESS, manager.get_model_config(ObAIFuncProviderUtils::DASHSCOPE,
+                                                  ObString("model-not-exists"),
+                                                  item));
+    ASSERT_EQ(0, item.batch_size_);
+    ASSERT_EQ(0, item.max_image_size_);
+    // unknown provider: same behavior
+    ASSERT_EQ(OB_SUCCESS, manager.get_model_config(ObString("UNKNOWN-PROVIDER"),
+                                                   ObString("qwen3-vl-embedding"),
+                                                   item));
+    ASSERT_EQ(0, item.batch_size_);
+    ASSERT_EQ(0, item.max_image_size_);
+    // invalid input should fail fast
+    ASSERT_EQ(OB_INVALID_ARGUMENT, manager.get_model_config(ObString(),
+                                                           ObString("qwen3-vl-embedding"),
+                                                           item));
+    ASSERT_EQ(OB_INVALID_ARGUMENT, manager.get_model_config(ObAIFuncProviderUtils::DASHSCOPE,
+                                                           ObString(),
+                                                           item));
+}
+
+TEST_F(ObOpenAIUtilsTest, test_model_config_manager_get_config_negative)
+{
+    ObAIModelConfigInfoManager &manager = ObAIModelConfigInfoManager::get_instance();
+    manager.reset();
+    oceanbase::share::ObAIModelConfigItem item;
+
+    // get_config has the same argument checks
+    ASSERT_EQ(OB_INVALID_ARGUMENT, manager.get_config(ObString(),
+                                                      ObString("qwen3-vl-embedding"),
+                                                      item));
+    ASSERT_EQ(OB_INVALID_ARGUMENT, manager.get_config(ObAIFuncProviderUtils::DASHSCOPE,
+                                                      ObString(),
+                                                      item));
 }
 
 
