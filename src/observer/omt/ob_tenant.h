@@ -508,6 +508,8 @@ public:
   OB_INLINE int64_t get_worker_time() const { return ATOMIC_LOAD(&worker_us_); }
   OB_INLINE int64_t get_cpu_time() const { return ATOMIC_LOAD(&cpu_time_us_); }
   OB_INLINE int64_t get_group_cpu_time(uint64_t group_id) const { return ATOMIC_LOAD(&group_cpu_time_us_[group_id]); }
+  OB_INLINE bool is_kill_session_success() const { return ATOMIC_LOAD(&kill_session_success_); }
+  OB_INLINE void set_kill_session_success(bool val) { ATOMIC_STORE(&kill_session_success_, val); }
   int64_t get_rusage_time();
   // sql throttle
   void update_sql_throttle_metrics(const ObSqlThrottleMetrics &metrics)
@@ -647,6 +649,8 @@ public:
   int64_t last_check_ts_;
   double last_lq_cpu_;
   int64_t cpu_time_us_ CACHE_ALIGNED;
+private:
+  bool kill_session_success_;
 }; // end of class ObTenant
 
 OB_INLINE int64_t ObResourceGroup::min_worker_cnt() const

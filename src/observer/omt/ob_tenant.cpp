@@ -770,7 +770,8 @@ ObTenant::ObTenant(const int64_t id,
       worker_us_(0),
       last_check_ts_(0),
       last_lq_cpu_(0.0),
-      cpu_time_us_(0)
+      cpu_time_us_(0),
+      kill_session_success_(false)
 {
   token_usage_check_ts_ = ObTimeUtility::current_time();
   lock_.set_diagnose(true);
@@ -1495,7 +1496,8 @@ int ObTenant::recv_request(ObRequest &req)
 {
   int ret = OB_SUCCESS;
   int req_level = 0;
-  if (has_stopped()) {
+  bool need_reject = (is_kill_session_success() || ObRequest::OB_MYSQL != req.get_type());
+  if (has_stopped() && need_reject) {
     ret = OB_TENANT_NOT_IN_SERVER;
     LOG_WARN("receive request but tenant has already stopped", K(ret), K(id_));
   } else if (0 != req.get_group_id()) {
