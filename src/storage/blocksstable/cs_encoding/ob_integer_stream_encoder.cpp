@@ -168,8 +168,6 @@ int ObIntegerStreamEncoder::encode_stream_meta(ObMicroBufferWriter &buf_writer)
     LOG_WARN("fail to serialize stream meta", K(ret), K(pos), KP(buf), K(buf_len));
   } else if (OB_FAIL(buf_writer.advance(pos))) {
     LOG_WARN("fail to advance", KR(ret), K(buf_writer), K(pos));
-  } else {
-    LOG_INFO("encode stream meta", K(buf_writer.length()), K(ctx_->meta_));
   }
 
   return ret;
