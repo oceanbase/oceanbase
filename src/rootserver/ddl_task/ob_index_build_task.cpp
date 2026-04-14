@@ -136,6 +136,14 @@ int ObIndexSSTableBuildTask::process()
         if (OB_FAIL(ret)) {
           LOG_WARN("errsim ddl execute building the subtask of vector index snapshot table failed", KR(ret));
         }
+      } else if (index_schema->is_vec_ivfpq_pq_centroid_index() ||
+                 index_schema->is_vec_ivfpq_centroid_index() ||
+                 index_schema->is_vec_ivfflat_centroid_index() ||
+                 index_schema->is_vec_ivfsq8_centroid_index()) {
+        ret = OB_E(EventTable::EN_VEC_INDEX_IVF_CENTER_TABLE_BUILD_ERR) OB_SUCCESS;
+        if (OB_FAIL(ret)) {
+          LOG_WARN("errsim ddl execute building the subtask of vector index ivf center table failed", KR(ret));
+        }
       }
     #endif
     if (OB_FAIL(ret)) {
