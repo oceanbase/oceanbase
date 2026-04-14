@@ -640,6 +640,7 @@ ob_set_subtarget(ob_server virtual_table
   virtual_table/ob_all_virtual_sql_plan.cpp
   virtual_table/ob_all_virtual_opt_stat_gather_monitor.cpp
   virtual_table/ob_all_virtual_thread.cpp
+  virtual_table/ob_all_virtual_tenant_worker_group.cpp
   virtual_table/ob_all_virtual_cgroup_config.cpp
   virtual_table/ob_all_virtual_shared_storage_quota.cpp
   virtual_table/ob_virtual_flt_config.cpp

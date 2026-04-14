@@ -940,6 +940,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12590	__all_virtual_ss_local_cache_diagnose_info	2	201001	1
 12591	__all_virtual_ddl_dag_monitor	2	201001	1
 12592	__all_virtual_vector_segment_info	2	201001	1
+12603	__all_virtual_tenant_worker_group	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
 20002	GV$OB_PLAN_CACHE_PLAN_STAT	1	201001	1
 20003	SCHEMATA	1	201002	1
@@ -1544,6 +1545,7 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21715	V$OB_SINDI_INDEX_INFO	1	201001	1
 21716	GV$OB_HNSW_INDEX_SEGMENT_INFO	1	201001	1
 21717	V$OB_HNSW_INDEX_SEGMENT_INFO	1	201001	1
+21723	GV$OB_TENANT_WORKER_GROUPS	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

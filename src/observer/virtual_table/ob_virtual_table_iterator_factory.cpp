@@ -194,6 +194,7 @@
 #include "observer/virtual_table/ob_all_virtual_ls_log_restore_status.h"
 #include "observer/virtual_table/ob_all_virtual_tablet_buffer_info.h"
 #include "observer/virtual_table/ob_all_virtual_cgroup_config.h"
+#include "observer/virtual_table/ob_all_virtual_tenant_worker_group.h"
 #include "observer/virtual_table/ob_virtual_flt_config.h"
 #include "observer/virtual_table/ob_all_virtual_tenant_snapshot_ls_replica.h"
 #include "observer/virtual_table/ob_all_virtual_tenant_snapshot_ls_replica_history.h"
@@ -2867,6 +2868,13 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             ObAllVirtualCgroupConfig *all_virtual_cgroup_config = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualCgroupConfig, all_virtual_cgroup_config))) {
               vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_cgroup_config);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_TENANT_WORKER_GROUP_TID: {
+            ObAllVirtualTenantWorkerGroup *all_virtual_tenant_worker_group = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualTenantWorkerGroup, all_virtual_tenant_worker_group))) {
+              vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_tenant_worker_group);
             }
             break;
           }

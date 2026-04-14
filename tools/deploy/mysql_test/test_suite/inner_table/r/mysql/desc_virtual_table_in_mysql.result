@@ -6864,3 +6864,23 @@ IF(count(*) >= 0, 1, 0)
 "oceanbase.__all_virtual_vector_segment_info runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_tenant_worker_group;
+Field	Type	Null	Key	Default	Extra
+svr_ip	varchar(46)	NO		NULL	
+svr_port	bigint(20)	NO		NULL	
+tenant_id	bigint(20)	NO		NULL	
+group_id	bigint(20)	NO		NULL	
+workers_size	bigint(20)	NO		NULL	
+req_queue_size	bigint(20)	NO		NULL	
+recv_req_cnt	bigint(20)	NO		NULL	
+deleted	tinyint(4)	NO		NULL	
+token_change_ts	bigint(20)	NO		NULL	
+throttled_time_us	bigint(20)	NO		NULL	
+idle_cnt	bigint(20)	NO		NULL	
+last_not_empty_ts	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tenant_worker_group;
+IF(count(*) >= 0, 1, 0)
+1
+"oceanbase.__all_virtual_tenant_worker_group runs in single server"
+IF(count(*) >= 0, 1, 0)
+1

@@ -1396,6 +1396,7 @@
 # 12590: __all_virtual_ss_local_cache_diagnose_info
 # 12591: __all_virtual_ddl_dag_monitor
 # 12592: __all_virtual_vector_segment_info
+# 12603: __all_virtual_tenant_worker_group
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -2179,6 +2180,8 @@
 # 15545: __all_virtual_macro_block_ha_task_history  # BASE_TABLE_NAME1
 # 15546: ALL_VIRTUAL_ROUTINE_LOAD_JOB_REAL_AGENT
 # 15546: __all_routine_load_job  # BASE_TABLE_NAME
+# 15552: ALL_VIRTUAL_TENANT_WORKER_GROUP
+# 15552: __all_virtual_tenant_worker_group  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA
@@ -2783,6 +2786,7 @@
 # 21715: V$OB_SINDI_INDEX_INFO
 # 21716: GV$OB_HNSW_INDEX_SEGMENT_INFO
 # 21717: V$OB_HNSW_INDEX_SEGMENT_INFO
+# 21723: GV$OB_TENANT_WORKER_GROUPS
 # 25001: DBA_SYNONYMS
 # 25002: DBA_OBJECTS
 # 25003: ALL_OBJECTS
@@ -3329,6 +3333,7 @@
 # 28292: DBA_OB_TTL_TASKS
 # 28293: DBA_OB_TTL_TASK_HISTORY
 # 28295: DBA_OB_ROUTINE_LOAD_JOBS
+# 28296: GV$OB_TENANT_WORKER_GROUPS
 # 14999: __idx_11003_all_virtual_plan_cache_stat_i1
 # 14999: all_virtual_plan_cache_stat_i1  # INDEX_NAME
 # 14999: __all_virtual_plan_cache_stat  # DATA_BASE_TABLE_NAME
