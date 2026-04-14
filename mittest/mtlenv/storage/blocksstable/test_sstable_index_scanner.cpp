@@ -288,6 +288,53 @@ TEST_F(TestSSTableIndexScanner, test_range_with_advance)
   ASSERT_EQ(OB_ITER_END, index_scanner.get_next(index_row));
 }
 
+// Regression test: when last_prefetch_key_ carries extra multi-version columns but
+// advance_to receives the business prefix key, the scanner should treat prefix-equal
+// keys as "not found in prefetched queue, continue on non-prefetch path" instead of
+// throwing "block contains advanced key already prefetched but not found".
+//
+// Before the fix, compare_datum_cnt=true makes the 6-col prefetched key compare greater
+// than the 2-col advance key, which enters the prefetched branch and ends with
+// OB_ERR_UNEXPECTED after the queue is exhausted. After the fix, this call should succeed.
+TEST_F(TestSSTableIndexScanner, test_advance_to_prefix_key_should_not_throw_unexpected)
+{
+  ObArenaAllocator tmp_arena;
+  ObDatumRange range;
+  generate_range(min_row_seed_, max_row_seed_, range);
+  ObSSTableIndexScanParam scan_param;
+  ObFixedArray<ObSkipIndexColMeta, ObIAllocator> proj;
+  prepare_scan_param(false, scan_param, proj);
+
+  ObSSTableIndexScanner index_scanner;
+  ASSERT_EQ(OB_SUCCESS, index_scanner.init(range, scan_param, sstable_, tmp_arena));
+  const ObSSTableIndexRow *index_row = nullptr;
+  ASSERT_EQ(OB_SUCCESS, index_scanner.get_next(index_row));
+  ASSERT_TRUE(nullptr != index_row);
+
+  ObSSTableIndexBlockLevelScanner *leaf =
+      index_scanner.level_scanners_.at(index_scanner.level_scanners_.count() - 1);
+  ASSERT_TRUE(nullptr != leaf);
+  ASSERT_FALSE(leaf->is_root_block_);
+
+  ASSERT_EQ(OB_SUCCESS, row_generate_.get_next_row(max_row_seed_, rowkey_buf_));
+  ObStorageDatum mv_datums[6];
+  for (int i = 0; i < 2; ++i) {
+    mv_datums[i] = rowkey_buf_.storage_datums_[i];
+  }
+  mv_datums[2].set_int(-100);
+  mv_datums[3].set_int(0);
+  mv_datums[4].set_int(-200);
+  mv_datums[5].set_int(0);
+  ObDatumRowkey mv_rowkey;
+  mv_rowkey.assign(mv_datums, 6);
+  leaf->last_prefetch_key_.set_compact_rowkey(&mv_rowkey);
+
+  ObDatumRowkey advance_key;
+  advance_key.assign(rowkey_buf_.storage_datums_, 2);
+
+  int ret = leaf->advance_to(advance_key, true);
+  ASSERT_EQ(OB_SUCCESS, ret);
+}
 
 } // namespace blocksstable
 } // namespace oceanbase
