@@ -295,6 +295,17 @@ int ObJoinOrder::compute_table_location(const uint64_t table_id,
                                         const bool is_global_index,
                                         ObTablePartitionInfo *&table_partition_info)
 {
+  ObArray<ObRawExpr *> empty_filters;
+  return compute_table_location_with_filters(table_id, ref_table_id, is_global_index,
+                                             empty_filters, table_partition_info);
+}
+
+int ObJoinOrder::compute_table_location_with_filters(const uint64_t table_id,
+                                                     const uint64_t ref_table_id,
+                                                     const bool is_global_index,
+                                                     const ObIArray<ObRawExpr*> &extra_filters,
+                                                     ObTablePartitionInfo *&table_partition_info)
+{
   int ret = OB_SUCCESS;
   ObOptimizerContext *opt_ctx = NULL;
   ObSqlSchemaGuard *sql_schema_guard = NULL;
@@ -354,6 +365,8 @@ int ObJoinOrder::compute_table_location(const uint64_t table_id,
                                                                           correlated_filters,
                                                                           uncorrelated_filters))) {
       LOG_WARN("Failed to extract correlated filters", K(ret));
+    } else if (OB_FAIL(append_array_no_dup(uncorrelated_filters, extra_filters))) {
+      LOG_WARN("failed to append extra partition filters", K(ret));
     } else if (OB_FAIL(table_partition_info->init_table_location(*sql_schema_guard,
                                                                   *stmt,
                                                                   exec_ctx,
@@ -370,8 +383,8 @@ int ObJoinOrder::compute_table_location(const uint64_t table_id,
                                                                               dtc_params))) {
       LOG_WARN("failed to calculate table location", K(ret));
     } else {
-      LOG_TRACE("succeed to calculate base table sharding info", K(table_id), K(ref_table_id),
-          K(is_global_index));
+      LOG_TRACE("succeed to calculate table location with extra filters",
+          K(table_id), K(ref_table_id), K(is_global_index), K(extra_filters.count()));
     }
   }
   if (OB_SUCC(ret)) {
@@ -5473,9 +5486,7 @@ int ObJoinOrder::create_one_index_merge_path(const uint64_t table_id,
     index_merge_path->domain_idx_info_.set_domain_idx_type(DomainIndexType::FTS_INDEX);
     if (NULL == table_partition_info_) {
       // generate table location for main table
-      if (OB_FAIL(compute_table_location(table_id,
-                                         ref_table_id,
-                                         false,
+      if (OB_FAIL(compute_table_location(table_id, ref_table_id, false,
                                          index_merge_path->table_partition_info_))) {
         LOG_WARN("failed to compute table location", K(ret), K(table_id), K(ref_table_id));
       }
@@ -24915,7 +24926,63 @@ int ObJoinOrder::create_hybrid_search_access_paths(const uint64_t table_id,
     } else if (table_filters.count() > 0 &&
                OB_FAIL(access_paths.at(0)->filter_.assign(table_filters))) {
       LOG_WARN("failed to assign table filters", K(ret));
-    } else {
+    }
+
+    // For hybrid search paths, try to extract partition filters from the
+    // hybrid search tree and recompute table location with those filters.
+    // NOTE: table_partition_info_ may already be set by compute_base_table_property()
+    // using only restrict_info_set_ (normal WHERE conditions), which does NOT
+    // include filters embedded in the DSL query tree. We must always attempt
+    // partition pruning with the hybrid-search-specific filters here.
+    if (OB_SUCC(ret) && access_paths.count() == 1 && OB_NOT_NULL(access_paths.at(0))) {
+      IndexMergePath *index_merge_path = static_cast<IndexMergePath*>(access_paths.at(0));
+      ObSEArray<ObRawExpr*, 4> part_filters;
+      ObSEArray<uint64_t, 4> part_col_ids;
+      if (OB_ISNULL(table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null table schema", K(ret));
+      } else if (table_schema->get_partition_key_column_num() > 0 &&
+                 OB_FAIL(table_schema->get_partition_key_info().get_column_ids(part_col_ids))) {
+        LOG_WARN("failed to get partition key column ids", K(ret));
+      } else if (table_schema->get_subpartition_key_column_num() > 0 &&
+                 OB_FAIL(table_schema->get_subpartition_key_info().get_column_ids(part_col_ids))) {
+        LOG_WARN("failed to get subpartition key column ids", K(ret));
+      } else if (part_col_ids.empty()) {
+        // Non-partitioned table, nothing to do, keep existing table_partition_info_
+      } else if (OB_FAIL(generator.extract_partition_filters_from_tree(
+                     index_merge_tree, part_col_ids, part_filters))) {
+        LOG_WARN("failed to extract partition filters from hybrid search tree", K(ret));
+      } else if (part_filters.empty()) {
+        // No partition filters found in hybrid search tree, keep existing table_partition_info_
+      } else if (OB_FAIL(compute_table_location_with_filters(
+                     table_id, ref_table_id, false, part_filters,
+                     index_merge_path->table_partition_info_))) {
+        LOG_WARN("failed to compute table location with partition filters", K(ret),
+                 K(table_id), K(ref_table_id), K(part_filters));
+      } else {
+        // Recompute sharding info with the new partition info
+        ObShardingInfo *sharding_info = NULL;
+        ObTableLocationType location_type = OB_TBL_LOCATION_UNINITIALIZED;
+        if (OB_ISNULL(index_merge_path->table_partition_info_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null table_partition_info", K(ret));
+        } else if (OB_FAIL(index_merge_path->table_partition_info_->get_location_type(
+                       OPT_CTX.get_local_server_addr(), location_type))) {
+          LOG_WARN("failed to get location type", K(ret));
+        } else if (OB_FAIL(compute_sharding_info_with_part_info(location_type,
+                                                                index_merge_path->table_partition_info_,
+                                                                sharding_info))) {
+          LOG_WARN("compute sharding info with partition info failed", K(ret),
+                   K(location_type), K(index_merge_path->table_partition_info_));
+        } else {
+          index_merge_path->strong_sharding_ = sharding_info;
+        }
+        LOG_TRACE("hybrid search partition pruning with extracted filters",
+                  K(table_id), K(ref_table_id), K(part_filters));
+      }
+    }
+
+    if (OB_SUCC(ret) && access_paths.count() == 1 && OB_NOT_NULL(access_paths.at(0))) {
       set_dsl_query_path(access_paths.at(0), table_item->dsl_query_ != NULL);
     }
   }

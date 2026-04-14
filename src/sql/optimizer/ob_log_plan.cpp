@@ -7971,8 +7971,8 @@ int ObLogPlan::create_hybrid_fusion_plan(ObLogicalOperator *&top)
           && part_info->get_part_level() != share::schema::PARTITION_LEVEL_ZERO);
       bool is_distributed = tsc->is_distributed();
       bool use_das = tsc->use_das();
-      bool need_fusion = (is_distributed || is_part_table);
-      bool need_px = (!use_das) && (is_distributed || is_part_table);
+      bool need_fusion = is_distributed || (use_das && is_part_table);
+      bool need_px = (!use_das) && is_distributed;
       if (need_fusion) {
         if (OB_FAIL(get_fusion_node_from_tsc(tsc, fusion_node))) {
           LOG_WARN("failed to get fusion node from table scan", K(ret));

@@ -746,6 +746,198 @@ int ObHybridSearchGenerator::move_bool_nodes_to_children(ObIndexMergeNode* node)
   return ret;
 }
 
+int ObHybridSearchGenerator::extract_partition_related_filters(
+    const ObIArray<ObRawExpr*> &filters,
+    const ObIArray<uint64_t> &part_col_ids,
+    ObIArray<ObRawExpr*> &partition_filters)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
+    ObRawExpr *filter = filters.at(i);
+    if (OB_ISNULL(filter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null filter", K(ret), K(i));
+    } else {
+      ObSEArray<uint64_t, 4> col_ids;
+      if (OB_FAIL(ObRawExprUtils::extract_column_ids(filter, col_ids))) {
+        LOG_WARN("failed to extract column ids from filter", K(ret));
+      } else {
+        bool references_part_col = ObOptimizerUtil::overlap(col_ids, part_col_ids);
+        if (references_part_col) {
+          if (OB_FAIL(add_var_to_array_no_dup(partition_filters, filter))) {
+            LOG_WARN("failed to add partition filter", K(ret));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObHybridSearchGenerator::build_or_partition_filter(
+    const ObIArray<ObRawExpr*> &left_filters,
+    const ObIArray<ObRawExpr*> &right_filters,
+    ObIArray<ObRawExpr*> &result)
+{
+  int ret = OB_SUCCESS;
+  result.reuse();
+  if (left_filters.empty() || right_filters.empty()) {
+    // If either branch has no partition filter, we cannot prune any partition
+    // because that branch could match rows in any partition.
+  } else {
+    ObRawExprFactory &expr_factory = plan_->get_optimizer_context().get_expr_factory();
+    ObRawExpr *left_and_expr = nullptr;
+    ObRawExpr *right_and_expr = nullptr;
+    ObRawExpr *or_expr = nullptr;
+    if (OB_FAIL(ObRawExprUtils::build_and_expr(expr_factory, left_filters, left_and_expr))) {
+      LOG_WARN("failed to build and expr for left filters", K(ret));
+    } else if (OB_FAIL(ObRawExprUtils::build_and_expr(expr_factory, right_filters, right_and_expr))) {
+      LOG_WARN("failed to build and expr for right filters", K(ret));
+    } else {
+      ObSEArray<ObRawExpr*, 2> or_params;
+      if (OB_FAIL(or_params.push_back(left_and_expr))) {
+        LOG_WARN("failed to push back left and expr", K(ret));
+      } else if (OB_FAIL(or_params.push_back(right_and_expr))) {
+        LOG_WARN("failed to push back right and expr", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::build_or_exprs(expr_factory, or_params, or_expr))) {
+        LOG_WARN("failed to build or expr", K(ret));
+      } else if (OB_NOT_NULL(or_expr)) {
+        if (OB_FAIL(or_expr->formalize(plan_->get_optimizer_context().get_session_info()))) {
+          LOG_WARN("failed to formalize or expr", K(ret));
+        } else if (OB_FAIL(result.push_back(or_expr))) {
+          LOG_WARN("failed to push back or expr", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObHybridSearchGenerator::extract_partition_filters_from_tree(
+    ObIndexMergeNode *node,
+    const ObIArray<uint64_t> &part_col_ids,
+    ObIArray<ObRawExpr*> &partition_filters)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null node", K(ret));
+  } else if (part_col_ids.empty()) {
+  } else {
+    switch (node->node_type_) {
+      case INDEX_MERGE_HYBRID_SCALAR_QUERY: {
+        if (OB_FAIL(extract_partition_related_filters(
+                node->filter_, part_col_ids, partition_filters))) {
+          LOG_WARN("failed to extract partition filters from scalar node", K(ret));
+        }
+        break;
+      }
+      case INDEX_MERGE_HYBRID_BOOLEAN_QUERY: {
+        ObBooleanQueryNode *bool_node = static_cast<ObBooleanQueryNode*>(node);
+        for (int64_t i = 0; OB_SUCC(ret) && i < bool_node->must_nodes_.count(); ++i) {
+          if (OB_FAIL(SMART_CALL(extract_partition_filters_from_tree(
+                  bool_node->must_nodes_.at(i), part_col_ids, partition_filters)))) {
+            LOG_WARN("failed to extract from must node", K(ret), K(i));
+          }
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < bool_node->filter_nodes_.count(); ++i) {
+          if (OB_FAIL(SMART_CALL(extract_partition_filters_from_tree(
+                  bool_node->filter_nodes_.at(i), part_col_ids, partition_filters)))) {
+            LOG_WARN("failed to extract from filter node", K(ret), K(i));
+          }
+        }
+        // For should (OR) nodes, the correct partition pruning semantics is:
+        //   partitions(branch1) UNION partitions(branch2) UNION ...
+        // We achieve this by building an OR expression from each branch's
+        // partition filters: (branch1_filters) OR (branch2_filters) OR ...
+        // The optimizer's partition pruning module will then compute the
+        // union of partitions from the OR expression.
+        // If any branch has no partition filter, we cannot prune at all
+        // because that branch could match rows in any partition.
+        if (OB_SUCC(ret) && bool_node->should_nodes_.count() > 0) {
+          ObSEArray<ObRawExpr*, 4> accumulated_filters;
+          if (OB_FAIL(SMART_CALL(extract_partition_filters_from_tree(
+                  bool_node->should_nodes_.at(0), part_col_ids, accumulated_filters)))) {
+            LOG_WARN("failed to extract from first should node", K(ret));
+          }
+          for (int64_t i = 1; OB_SUCC(ret) && i < bool_node->should_nodes_.count()
+                              && accumulated_filters.count() > 0; ++i) {
+            ObSEArray<ObRawExpr*, 4> child_filters;
+            ObSEArray<ObRawExpr*, 4> or_result;
+            if (OB_FAIL(SMART_CALL(extract_partition_filters_from_tree(
+                    bool_node->should_nodes_.at(i), part_col_ids, child_filters)))) {
+              LOG_WARN("failed to extract from should node", K(ret), K(i));
+            } else if (OB_FAIL(build_or_partition_filter(
+                    accumulated_filters, child_filters, or_result))) {
+              LOG_WARN("failed to build or partition filter", K(ret));
+            } else if (OB_FAIL(accumulated_filters.assign(or_result))) {
+              LOG_WARN("failed to assign or result filters", K(ret));
+            }
+          }
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(append_array_no_dup(partition_filters, accumulated_filters))) {
+              LOG_WARN("failed to append should partition filters", K(ret));
+            }
+          }
+        }
+        break;
+      }
+      case INDEX_MERGE_HYBRID_FUSION_SEARCH: {
+        // For fusion nodes, the semantics is the same as should (OR):
+        // each child path may match different partitions, so we need the
+        // union of all children's partitions.
+        ObFusionNode *fusion = static_cast<ObFusionNode*>(node);
+        if (fusion->children_.count() > 0) {
+          ObSEArray<ObRawExpr*, 4> accumulated_filters;
+          if (OB_FAIL(SMART_CALL(extract_partition_filters_from_tree(
+                  fusion->children_.at(0), part_col_ids, accumulated_filters)))) {
+            LOG_WARN("failed to extract from first fusion child", K(ret));
+          }
+          for (int64_t i = 1; OB_SUCC(ret) && i < fusion->children_.count()
+                              && accumulated_filters.count() > 0; ++i) {
+            ObSEArray<ObRawExpr*, 4> child_filters;
+            ObSEArray<ObRawExpr*, 4> or_result;
+            if (OB_FAIL(SMART_CALL(extract_partition_filters_from_tree(
+                    fusion->children_.at(i), part_col_ids, child_filters)))) {
+              LOG_WARN("failed to extract from fusion child", K(ret), K(i));
+            } else if (OB_FAIL(build_or_partition_filter(
+                    accumulated_filters, child_filters, or_result))) {
+              LOG_WARN("failed to build or partition filter for fusion", K(ret));
+            } else if (OB_FAIL(accumulated_filters.assign(or_result))) {
+              LOG_WARN("failed to assign or result filters", K(ret));
+            }
+          }
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(append_array_no_dup(partition_filters, accumulated_filters))) {
+              LOG_WARN("failed to append fusion partition filters", K(ret));
+            }
+          }
+        }
+        break;
+      }
+      case INDEX_MERGE_HYBRID_KNN: {
+        ObVecSearchNode *vec_node = static_cast<ObVecSearchNode*>(node);
+        for (int64_t i = 0; OB_SUCC(ret) && i < vec_node->filter_nodes_.count(); ++i) {
+          if (OB_FAIL(SMART_CALL(extract_partition_filters_from_tree(
+                  vec_node->filter_nodes_.at(i), part_col_ids, partition_filters)))) {
+            LOG_WARN("failed to extract from knn filter node", K(ret), K(i));
+          }
+        }
+        break;
+      }
+      case INDEX_MERGE_HYBRID_FTS_QUERY: {
+        break;
+      }
+      default: {
+        LOG_TRACE("skip extracting partition filters from unknown node type",
+                  K(node->node_type_));
+        break;
+      }
+    }
+  }
+  return ret;
+}
+
 /**
  * @brief ObHybridSearchGenerator::try_merge_nodes
  *
