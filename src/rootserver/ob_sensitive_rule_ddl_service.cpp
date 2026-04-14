@@ -329,7 +329,9 @@ int ObSensitiveRuleDDLService::rebuild_hidden_table_sensitive_columns(
   const uint64_t tenant_id = orig_table_schema.get_tenant_id();
   ObSEArray<const ObSensitiveRuleSchema *, 4> sensitive_rules;
   ObColumnNameMap col_name_map;
-  if (OB_ISNULL(ddl_service_)) {
+  if (OB_UNLIKELY(orig_table_schema.get_tenant_id() != hidden_table_schema.get_tenant_id())) {
+    // only possible in cross-tenant table recovery, DO NOT rebuild sensitive rule in such scenario for now
+  } else if (OB_ISNULL(ddl_service_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ddl service is null", K(ret));
   } else if (OB_FAIL(ddl_service_->check_inner_stat())) {
