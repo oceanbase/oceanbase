@@ -98,6 +98,8 @@ protected:
       const ObStorageSchema &clipped_storage_schema,
       const ObStorageColumnGroupSchema *cg_schema,
       ObIArray<ObSplitIndexBuilderCtx> &index_builder_ctx_arr);
+private:
+  int get_merge_type(const ObSSTable &sstable, compaction::ObMergeType &merge_type);
 protected:
   bool is_inited_;
   ObTabletSplitParam *param_;

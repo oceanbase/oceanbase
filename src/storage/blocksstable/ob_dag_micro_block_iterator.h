@@ -21,6 +21,9 @@ public:
   virtual ~ObDagMicroBlockIterator();
   void reset();
   int open_cg_block(ObCGBlock *cg_block);
+  int open(const char *macro_block_buf,
+          const int64_t macro_block_buf_size,
+          const bool need_deserialize);
   int update_cg_block_offset_and_micro_idx();
 
   TO_STRING_KV(KP_(macro_block_buf), K_(macro_block_buf_size), K_(simplified_macro_header),
@@ -28,9 +31,7 @@ public:
        K_(is_inited), K_(cg_block));
 
 private:
-  int open(const char *macro_block_buf,
-           const int64_t macro_block_buf_size,
-           const bool need_deserialize);
+
   int get_index_block(ObMicroBlockData &micro_block, const bool force_deserialize);
   int fast_locate_micro_block(const int64_t cg_block_offset, const int64_t micro_block_idx);
 private:

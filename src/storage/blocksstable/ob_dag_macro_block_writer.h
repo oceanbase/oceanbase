@@ -113,6 +113,7 @@ private:
   inline void set_dag_stage(const ObDagMacroWriterStage stage) { dag_stage_ = stage; }
   inline ObDagMacroWriterStage get_dag_stage() const { return dag_stage_; }
   int append_macro_block(const ObCGBlock &cg_block);
+  void print_all_micro_blocks_rowkey(const ObCGBlock &cg_block, ObIAllocator &rowkey_allocator);
   int reuse_micro_blocks(ObDagMicroBlockIterator &micro_block_iter, ObIAllocator &allocator);
   bool is_reuse_macro_block(const ObCGBlock &cg_block, const int64_t macro_block_fill_ratio) const;
   bool is_almost_full_macro_block(const int64_t macro_block_fill_threshold) const;

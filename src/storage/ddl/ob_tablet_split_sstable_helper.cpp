@@ -110,6 +110,25 @@ ObSSTableSplitHelper::~ObSSTableSplitHelper()
   is_inited_ = false;
 }
 
+int ObSSTableSplitHelper::get_merge_type(const ObSSTable &sstable, compaction::ObMergeType &merge_type)
+{
+  int ret = OB_SUCCESS;
+  merge_type = ObMergeType::INVALID_MERGE_TYPE;
+  if (sstable.is_major_sstable()) {
+    merge_type = sstable.is_meta_major_sstable()
+               ? ObMergeType::META_MAJOR_MERGE
+               : ObMergeType::MAJOR_MERGE;
+  } else if (sstable.is_minor_sstable()) {
+    merge_type = ObMergeType::MINOR_MERGE;
+  } else {
+    // mds mini / minor sstable use mds mini merge type in ObTabletSplitUtil::build_mds_sstable
+    // inc major type sstable and ddl sstable are not supported for sstable split
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("sstable type is not supported for sstable split", K(ret), K(sstable));
+  }
+  return ret;
+}
+
 int ObSSTableSplitHelper::prepare_index_builder_ctxs(
     ObIAllocator &allocator,
     const ObTabletSplitParam &param,
@@ -121,6 +140,7 @@ int ObSSTableSplitHelper::prepare_index_builder_ctxs(
 {
   int ret = OB_SUCCESS;
   index_builder_ctx_arr.reset();
+  ObMergeType merge_type;
   if (OB_UNLIKELY(!param.is_valid()
       || !split_ctx.is_valid()
       || !sstable.is_valid()
@@ -128,6 +148,8 @@ int ObSSTableSplitHelper::prepare_index_builder_ctxs(
       || (sstable.is_column_store_sstable() && (cg_schema == nullptr || !cg_schema->is_valid())))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(param), K(sstable), K(clipped_storage_schema), KPC(cg_schema));
+  } else if (OB_FAIL(get_merge_type(sstable, merge_type))) {
+    LOG_WARN("fail to get merge type from sstable", K(ret));
   } else {
     ObTabletHandle tablet_handle;
     compaction::ObExecMode exec_mode = GCTX.is_shared_storage_mode() ?
@@ -138,7 +160,6 @@ int ObSSTableSplitHelper::prepare_index_builder_ctxs(
       tablet_handle.reset();
       ObSplitIndexBuilderCtx index_builder_ctx;
       const ObTabletID dst_tablet_id = param.dest_tablets_id_.at(j);
-      const ObMergeType merge_type = sstable.is_major_sstable() ? MAJOR_MERGE : MINOR_MERGE;
       const int64_t snapshot_version = sstable.is_major_sstable() ?
         sstable.get_snapshot_version() : sstable.get_end_scn().get_val_for_tx();
       int32_t transfer_epoch = -1;
@@ -330,11 +351,6 @@ int ObSSTableSplitWriteHelper::prepare_macro_block_writer(
       ObMacroBlockWriter *macro_block_writer = nullptr;
       ObISSTableObjectCleaner *object_cleaner = nullptr;
       const ObTabletID &dst_tablet_id = param_->dest_tablets_id_.at(i);
-      const ObMergeType merge_type = sstable_->is_major_sstable() ? MAJOR_MERGE : MINOR_MERGE;
-      const int64_t snapshot_version = sstable_->is_major_sstable() ?
-          sstable_->get_snapshot_version() : sstable_->get_end_scn().get_val_for_tx();
-      compaction::ObExecMode exec_mode = GCTX.is_shared_storage_mode() ?
-          compaction::ObExecMode::EXEC_MODE_OUTPUT : compaction::ObExecMode::EXEC_MODE_LOCAL;
       const ObSplitIndexBuilderCtx &index_builder_ctx = index_builder_ctx_arr.at(i);
       const ObMacroSeqParam &macro_seq_param = macro_seq_param_arr.at(i);
       if (OB_UNLIKELY(!index_builder_ctx.is_valid())) {

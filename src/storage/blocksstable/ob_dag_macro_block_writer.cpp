@@ -236,17 +236,47 @@ int ObDagMacroBlockWriter::append_cg_block(ObCGBlock &cg_block, const int64_t ma
     // have to iterate and reuse the micro block
     ObDagMicroBlockIterator micro_block_iter;
     compaction::ObLocalArena iter_allocator_temp("DagMaBlkWriter");
+    // Open the CG macro block and position the iterator at the micro block indicated by
+    // cg_block's offset and micro-block index (see open_cg_block / fast_locate_micro_block).
+    // Iteration therefore starts from that logical position, not necessarily the first micro block.
     if (OB_FAIL(micro_block_iter.open_cg_block(&cg_block))) {
       STORAGE_LOG(WARN, "fail to open cg block", K(ret), K(cg_block), K(micro_block_iter));
     } else if (OB_FAIL(reuse_micro_blocks(micro_block_iter, iter_allocator_temp))) {
       if (ret == OB_BUF_NOT_ENOUGH) {
         STORAGE_LOG(INFO, "The macro block is full and cannot accommodate more micro blocks.", K(ret));
       } else {
-        STORAGE_LOG(WARN, "fail to reuse micro block", K(ret));
+        STORAGE_LOG(WARN, "fail to reuse micro block", K(ret), K(micro_block_iter));
+        print_all_micro_blocks_rowkey(cg_block, iter_allocator_temp);
       }
     }
   }
   return ret;
+}
+
+void ObDagMacroBlockWriter::print_all_micro_blocks_rowkey(const ObCGBlock &cg_block, ObIAllocator &rowkey_allocator)
+{
+  int ret = OB_SUCCESS;
+  ObMicroBlockDesc micro_block_desc;
+  ObMicroIndexData micro_index_data;
+  ObDagMicroBlockIterator micro_block_iter;
+  if (OB_FAIL(micro_block_iter.open(cg_block.get_macro_block_buffer(), cg_block.get_macro_buffer_size(), false))) {
+    STORAGE_LOG(WARN, "fail to open cg block", K(ret), K(cg_block), K(micro_block_iter));
+  } else {
+    FLOG_INFO("start to print all micro blocks rowkey in current cg block", K(ret));
+  }
+  while (OB_SUCC(ret)) {
+    rowkey_allocator.reuse();
+    if (OB_FAIL(micro_block_iter.get_next_micro_block_desc(micro_block_desc, micro_index_data, rowkey_allocator))) {
+      if (ret == OB_ITER_END) {
+        ret = OB_SUCCESS;
+        break;
+      } else {
+        STORAGE_LOG(WARN, "fail to get next micro block", K(ret), K(micro_block_iter));
+      }
+    } else {
+      FLOG_INFO("get next micro block desc success", K(micro_block_desc), K(micro_index_data), K(micro_block_iter));
+    }
+  }
 }
 
 int ObDagMacroBlockWriter::reuse_micro_blocks(ObDagMicroBlockIterator &micro_block_iter, ObIAllocator &rowkey_allocator)

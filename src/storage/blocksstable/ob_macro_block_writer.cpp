@@ -1139,6 +1139,7 @@ int ObMacroBlockWriter::append_macro_block(
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_ENABLE_CHECK_MICRO_BLOCK_ROW);
 int ObMacroBlockWriter::append_micro_block(const ObMicroBlock &micro_block, const ObMacroBlockDesc *curr_macro_desc)
 {
   int ret = OB_SUCCESS;
@@ -1180,6 +1181,12 @@ int ObMacroBlockWriter::append_micro_block(const ObMicroBlock &micro_block, cons
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(write_micro_block(micro_block_desc, false))) {
         STORAGE_LOG(WARN, "Failed to write micro block, ", K(ret), K(micro_block_desc), KPC(data_store_desc_), K(micro_index_data));
+        if (OB_UNLIKELY(ERRSIM_ENABLE_CHECK_MICRO_BLOCK_ROW)) {
+          // check the input micro block before build_micro_block_desc
+          ObSSTableMacroBlockChecker::check_micro_block_rows(micro_block);
+          // check the output micro block after build_micro_block_desc
+          ObSSTableMacroBlockChecker::check_micro_desc_rows(micro_block_desc, *data_store_desc_, micro_block.micro_index_info_->row_header_);
+        }
       } else {
         merge_block_info_.multiplexed_micro_count_in_new_macro_++;
         merge_block_info_.original_size_ += micro_block_desc.original_size_;
@@ -1811,6 +1818,10 @@ int ObMacroBlockWriter::build_micro_block_desc_with_rewrite(
   } else if (OB_FAIL(micro_block.micro_index_info_->row_header_->fill_micro_des_meta(
       deep_copy_des_meta, micro_des_meta))) {
     LOG_WARN("fail to fill micro block deserialize meta", K(ret), KPC(micro_block.micro_index_info_));
+  } else if (OB_UNLIKELY(header.has_column_checksum_ != data_store_desc_->is_major_merge_type()
+                      || header.column_count_ != data_store_desc_->get_row_column_count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected header", K(ret), K(header), K(data_store_desc_));
   } else {
     bool is_compressed = false;
 
@@ -1822,6 +1833,7 @@ int ObMacroBlockWriter::build_micro_block_desc_with_rewrite(
     } else if (OB_ISNULL(reader)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("reader is null", K(ret), KP(reader));
+    } else if (FALSE_IT(reader->reset())) {
     } else if (OB_FAIL(reader->init(decompressed_data, nullptr))) {
       LOG_WARN("reader init failed", K(micro_block), K(ret));
     } else if (OB_FAIL(save_last_key(micro_block.range_.get_end_key()))) {
@@ -1885,7 +1897,13 @@ int ObMacroBlockWriter::write_micro_block(ObMicroBlockDesc &micro_block_desc, co
 {
   int ret = OB_SUCCESS;
   int64_t data_offset = 0;
-  if (OB_FAIL(wait_io_and_alloc_block())) {
+  if (OB_UNLIKELY(ERRSIM_ENABLE_CHECK_MICRO_BLOCK_ROW)) {
+    // check micro block rows after encoding、 compression and encryption
+    if (OB_FAIL(ObSSTableMacroBlockChecker::check_micro_desc_rows(micro_block_desc, *data_store_desc_, nullptr))) {
+      STORAGE_LOG(WARN, "fail to check micro block row", K(ret), K(micro_block_desc));
+    }
+  }
+  if (FAILEDx(wait_io_and_alloc_block())) {
     STORAGE_LOG(WARN, "Fail to pre-alloc block", K(ret));
   } else if (OB_NOT_NULL(builder_)) {
     // we use index_builder_append_row > builder_->append_row() to judge whether the micro_block can be added

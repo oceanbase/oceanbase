@@ -74,6 +74,164 @@ int ObSSTableMacroBlockChecker::check(
   return ret;
 }
 
+int ObSSTableMacroBlockChecker::check_micro_desc_rows(
+    const ObMicroBlockDesc &micro_block_desc,
+    const ObDataStoreDesc &data_store_desc,
+    const ObIndexBlockRowHeader *index_row_header)
+{
+  int ret = OB_SUCCESS;
+  ObIMicroBlockReader *reader = NULL;
+  ObMicroBlockData decompressed_data;
+  compaction::ObLocalArena micro_block_allocator("CheckMicRow");
+  ObDatumRow check_datum_row;
+  ObMacroBlockReader macro_reader;
+  ObMicroBlockReaderHelper reader_helper;
+
+  ObMicroBlockDesMeta micro_des_meta(
+    data_store_desc.get_compressor_type(), data_store_desc.get_row_store_type(),
+    data_store_desc.get_encrypt_id(), data_store_desc.get_master_key_id(), data_store_desc.get_encrypt_key());
+  bool is_compressed = false;
+  int64_t pos = 0;
+  int64_t micro_buf_size = 0;
+  char *micro_block_buf = nullptr;
+  int64_t row_count = 0;
+  if (OB_UNLIKELY(!micro_block_desc.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "micro block desc is not valid", K(ret), K(micro_block_desc));
+  } else if (OB_FAIL(reader_helper.init(micro_block_allocator))) {
+    STORAGE_LOG(WARN, "fail to init reader helper", K(ret));
+  } else if (OB_FAIL(check_datum_row.init(micro_block_allocator, micro_block_desc.header_->column_count_))) {
+    STORAGE_LOG(WARN, "fail to init datum row", K(ret), K(micro_block_desc.header_->column_count_));
+  } else if (FALSE_IT(micro_buf_size = micro_block_desc.header_->header_size_ + micro_block_desc.buf_size_)) {
+  } else if (OB_ISNULL(micro_block_buf = static_cast<char *>(micro_block_allocator.alloc(micro_buf_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc mem", K(ret), K(micro_buf_size), K(micro_block_desc));
+  } else if (OB_FAIL(micro_block_desc.header_->serialize(micro_block_buf, micro_buf_size, pos))) {
+    STORAGE_LOG(WARN, "failed to serialize header", K(ret), K(micro_block_desc));
+  } else {
+    MEMCPY(micro_block_buf + micro_block_desc.header_->header_size_, micro_block_desc.buf_, micro_block_desc.buf_size_);
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(macro_reader.decrypt_and_decompress_data(micro_des_meta, micro_block_buf,
+      micro_buf_size, decompressed_data, is_compressed))) {
+    STORAGE_LOG(WARN, "fail to decrypt and decompress data", K(ret));
+  } else if (OB_FAIL(reader_helper.get_reader(*decompressed_data.get_micro_header(), reader))) {
+    STORAGE_LOG(WARN, "fail to get reader", K(ret));
+  } else if (OB_ISNULL(reader)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "reader is null", K(ret), KP(reader));
+  } else if (FALSE_IT(reader->reset())) {
+  } else if (OB_FAIL(reader->init(decompressed_data, nullptr))) {
+    STORAGE_LOG(WARN, "reader init failed", K(ret));
+  } else if (OB_FAIL(reader->get_row_count(row_count))) {
+    STORAGE_LOG(WARN, "fail to get row count from micro block reader", K(ret));
+  } else {
+    for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < row_count; ++row_idx) {
+      check_datum_row.reuse();
+      if (OB_FAIL(reader->get_row(row_idx, check_datum_row))) {
+        STORAGE_LOG(WARN, "get_row failed", K(ret), K(row_idx), K(row_count), K(data_store_desc));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+    STORAGE_LOG(WARN, "Fail to check micro block", K(ret), KPC(micro_block_desc.header_), K(micro_des_meta));
+    if (OB_NOT_NULL(index_row_header)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(check_micro_rows_by_index(micro_block_buf, micro_buf_size, index_row_header, check_datum_row))) {
+        STORAGE_LOG(WARN, "Fail to check micro block", K(tmp_ret), KPC(index_row_header));
+      }
+    }
+  } else {
+    STORAGE_LOG(INFO, "Check micro block success", KPC(micro_block_desc.header_), K(micro_des_meta));
+  }
+  return ret;
+}
+
+int ObSSTableMacroBlockChecker::check_micro_block_rows(const ObMicroBlock &micro_block)
+{
+  int ret = OB_SUCCESS;
+  const int64_t micro_buf_size = micro_block.data_.get_buf_size();
+  char *micro_block_buf = nullptr;
+  compaction::ObLocalArena micro_block_allocator("CheckMicRow");
+  ObDatumRow check_datum_row;
+  if (OB_UNLIKELY(!micro_block.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "micro block is not valid", K(micro_block));
+  } else if (OB_ISNULL(micro_block_buf = static_cast<char *>(micro_block_allocator.alloc(micro_buf_size)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to alloc mem", K(ret), K(micro_buf_size));
+  } else {
+    MEMCPY(micro_block_buf, micro_block.data_.get_buf(), micro_buf_size);
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(check_datum_row.init(micro_block_allocator, micro_block.header_.column_count_))) {
+    STORAGE_LOG(WARN, "fail to init datum row", K(ret), K(micro_block.header_.column_count_));
+  } else if (OB_FAIL(check_micro_rows_by_index(micro_block_buf, micro_buf_size,
+      micro_block.micro_index_info_->row_header_, check_datum_row))) {
+    STORAGE_LOG(WARN, "Fail to check micro block", K(ret), K(micro_block.header_));
+  }
+  return ret;
+}
+
+int ObSSTableMacroBlockChecker::check_micro_rows_by_index(
+    const char *micro_block_buf,
+    const int64_t micro_buf_size,
+    const ObIndexBlockRowHeader *index_row_header,
+    ObDatumRow &check_datum_row)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator("MiBlkChecker");
+  ObIMicroBlockReader *reader = NULL;
+  ObMicroBlockData decompressed_data;
+  const bool deep_copy_des_meta = false;
+  ObMicroBlockDesMeta micro_des_meta;
+  int64_t row_count = 0;
+  ObMacroBlockReader macro_reader;
+  ObMicroBlockReaderHelper reader_helper;
+  if (OB_ISNULL(index_row_header)
+      || OB_ISNULL(micro_block_buf)
+      || OB_UNLIKELY(micro_buf_size <= 0)
+      || OB_UNLIKELY(!check_datum_row.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", K(ret), KP(index_row_header),
+      KP(micro_block_buf), K(micro_buf_size), K(check_datum_row));
+  } else if (OB_FAIL(index_row_header->fill_micro_des_meta(
+      deep_copy_des_meta, micro_des_meta))) {
+    STORAGE_LOG(WARN, "fail to fill micro block deserialize meta", K(ret), KPC(index_row_header));
+  } else if (OB_FAIL(reader_helper.init(allocator))) {
+    STORAGE_LOG(WARN, "fail to init reader helper", K(ret));
+  } else {
+    bool is_compressed = false;
+    if (OB_FAIL(macro_reader.decrypt_and_decompress_data(micro_des_meta, micro_block_buf,
+        micro_buf_size, decompressed_data, is_compressed))) {
+      STORAGE_LOG(WARN, "fail to decrypt and decompress data", K(ret));
+    } else if (OB_FAIL(reader_helper.get_reader(*decompressed_data.get_micro_header(), reader))) {
+      STORAGE_LOG(WARN, "fail to get reader", K(ret));
+    } else if (OB_ISNULL(reader)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "reader is null", K(ret), KP(reader));
+    } else if (FALSE_IT(reader->reset())) {
+    } else if (OB_FAIL(reader->init(decompressed_data, nullptr))) {
+      STORAGE_LOG(WARN, "reader init failed", K(ret));
+    } else if (OB_FAIL(reader->get_row_count(row_count))) {
+      STORAGE_LOG(WARN, "fail to get row count from micro block reader", K(ret));
+    } else {
+      for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < row_count; ++row_idx) {
+        check_datum_row.reuse();
+        if (OB_FAIL(reader->get_row(row_idx, check_datum_row))) {
+          STORAGE_LOG(WARN, "get_row failed", K(ret), K(row_idx), K(row_count));
+        }
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+    STORAGE_LOG(WARN, "Fail to check micro block", K(ret), K(micro_des_meta));
+  } else {
+    STORAGE_LOG(INFO, "Check micro block success", K(micro_des_meta), KPC(index_row_header));
+  }
+  return ret;
+}
+
 int ObSSTableMacroBlockChecker::check_data_macro_block_rows_and_index(
     const char *macro_block_buf,
     const int64_t macro_block_buf_size,
