@@ -307,7 +307,7 @@ int qsched_stop(int qid)
 int qsched_wait(int qid)
 {
   int err = 0;
-  QWGuard("wait");
+  QRGuard("wait");
   QDescRoot* root = (typeof(root))imap_fetch(qid);
   if (NULL == root) {
     err = -ENOENT;

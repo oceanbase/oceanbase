@@ -173,12 +173,6 @@ int64_t ObAddr::inner_to_string(char *buffer, const int64_t size) const
   int64_t pos = 0;
   if (nullptr != buffer && size > 0) {
     //databuff_printf(buffer, size, pos, "version=%d ", version_);
-#ifdef ENABLE_DEBUG_LOG
-    if (size < MAX_IP_PORT_LENGTH && (version_ == IPV4 || version_ == IPV6)) {
-      LOG_ERROR_RET(OB_BUF_NOT_ENOUGH, "buffer size is not enough for an ip string",
-                    K(size));
-    }
-#endif
     if (version_ == IPV4) {
       if (port_ > 0) {
         databuff_printf(buffer, size, pos, "\"%d.%d.%d.%d:%d\"",
