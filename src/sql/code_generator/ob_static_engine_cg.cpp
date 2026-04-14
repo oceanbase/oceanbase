@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 
 #include "ob_static_engine_cg.h"
+#include "sql/resolver/dml/ob_dml_stmt.h"
 #include "sql/optimizer/ob_log_group_by.h"
 #include "sql/optimizer/ob_log_sort.h"
 #include "sql/optimizer/ob_log_limit.h"
@@ -7679,6 +7680,7 @@ int ObStaticEngineCG::set_partition_range_info(ObLogTableScan &op, ObTableScanSp
   ObSqlSchemaGuard *schema_guard = NULL;
   const ObTableSchema *table_schema = NULL;
   const ObTableSchema *index_schema = NULL;
+  const TableItem *table_item = NULL;
   ObRawExpr *part_expr = op.get_part_expr();
   ObRawExpr *subpart_expr = op.get_subpart_expr();
   ObSEArray<ObRawExpr *, 2> part_column_exprs;
@@ -7714,6 +7716,12 @@ int ObStaticEngineCG::set_partition_range_info(ObLogTableScan &op, ObTableScanSp
     /*do nothing*/
   } else if (OB_FAIL(index_schema->get_rowkey_info().get_column_ids(rowkey_column_ids))) {
     LOG_WARN("failed to get index rowkey column ids", K(ret));
+  } else if (OB_NOT_NULL(table_item = stmt->get_table_item_by_id(table_id))
+      && table_item->is_index_table_
+      && stmt->is_select_stmt()
+      && share::schema::is_local_fts_index(index_schema->get_index_type())) {
+    LOG_INFO("index direct select: fallback to scanning all partitions",
+             K(table_id), K(ref_table_id), K(index_id));
   } else if (OB_ISNULL(part_expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null part expr", K(ret));

@@ -8786,7 +8786,48 @@ int ObDMLResolver::resolve_table_partition_expr(const TableItem &table_item, con
     ret = OB_NOT_INIT;
     LOG_WARN("dml_stmt is null");
   } else if (table_schema.get_part_level() != PARTITION_LEVEL_ZERO) {
-    if (OB_FAIL(resolve_partition_expr(table_item, table_schema, part_type, part_str, part_expr))) {
+    bool fallback_scan_all_parts = false;
+    if (table_item.is_index_table_
+        && dml_stmt->is_select_stmt()
+        && share::schema::is_local_fts_index(table_schema.get_index_type())) {
+      const ObTableSchema *data_table_schema = NULL;
+      bool index_table_has_part_key = true;
+      bool index_table_has_subpart_key = true;
+      const uint64_t data_table_id = table_schema.get_data_table_id();
+      if (OB_UNLIKELY(OB_INVALID_ID == data_table_id)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid data table id for index table", K(ret), K(data_table_id));
+      } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
+                                                          data_table_id,
+                                                          data_table_schema))) {
+        LOG_WARN("get data table schema failed", K(ret), K(data_table_id));
+      } else if (OB_ISNULL(data_table_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("data table schema is null", K(ret), K(data_table_id));
+      } else if (OB_FAIL(check_index_table_has_partition_keys(&table_schema,
+                                                              data_table_schema->get_partition_key_info(),
+                                                              index_table_has_part_key))) {
+        LOG_WARN("fail to check if index table has partition keys", K(ret));
+      } else if (PARTITION_LEVEL_TWO == data_table_schema->get_part_level()
+                 && OB_FAIL(check_index_table_has_partition_keys(&table_schema,
+                                                                data_table_schema->get_subpartition_key_info(),
+                                                                index_table_has_subpart_key))) {
+        LOG_WARN("fail to check if index table has subpartition keys", K(ret));
+      } else if (!index_table_has_part_key
+          || (PARTITION_LEVEL_TWO == data_table_schema->get_part_level()
+              && !index_table_has_subpart_key)) {
+        LOG_INFO("index direct select: fallback to scanning all partitions",
+                 K(part_str), K(part_type), K(table_schema.get_index_type()),
+                 K(index_table_has_part_key), K(index_table_has_subpart_key));
+        part_expr = NULL;
+        subpart_expr = NULL;
+        fallback_scan_all_parts = true;
+      }
+    }
+
+    if (OB_FAIL(ret) || fallback_scan_all_parts) {
+      // do nothing
+    } else if (OB_FAIL(resolve_partition_expr(table_item, table_schema, part_type, part_str, part_expr))) {
       LOG_WARN("Failed to resolve partition expr", K(ret), K(part_str), K(part_type));
     } else if (PARTITION_LEVEL_TWO == table_schema.get_part_level()) {
       const ObString &subpart_str = table_schema.get_sub_part_option().get_part_func_expr_str();
@@ -8835,7 +8876,7 @@ int ObDMLResolver::resolve_table_partition_expr(const TableItem &table_item, con
       } else if (OB_FAIL(dml_stmt->set_part_expr(table_item.table_id_, table_item.ref_id_, tmp_part_expr, tmp_subpart_expr))) {
         LOG_WARN("set part expr to dml stmt failed", K(ret));
       } else {
-        LOG_TRACE("resolve partition expr", K(table_item), K(*part_expr), K(part_str));
+        LOG_TRACE("resolve partition expr", K(table_item), KPC(part_expr), K(part_str));
       }
     }
   }

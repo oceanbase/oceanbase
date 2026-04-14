@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX SQL_OPT
 #include "ob_sharding_info.h"
 #include "sql/optimizer/ob_log_plan.h"
+#include "sql/resolver/dml/ob_dml_stmt.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
@@ -72,7 +73,15 @@ int ObShardingInfo::init_partition_info(ObOptimizerContext &ctx,
       ObRawExpr *subpart_expr = NULL;
       part_func_type_ = table_schema->get_part_option().get_part_func_type();
       partition_array_ = table_schema->get_part_array();
-      if (OB_ISNULL(part_expr = stmt.get_part_expr(table_id, ref_table_id))) {
+      const TableItem *table_item = stmt.get_table_item_by_id(table_id);
+      if (OB_NOT_NULL(table_item)
+          && table_item->is_index_table_
+          && stmt.is_select_stmt()
+          && share::schema::is_local_fts_index(table_schema->get_index_type())) {
+        LOG_INFO("index direct select: fallback to scanning all partitions",
+                 K(table_id), K(ref_table_id));
+        part_level_ = PARTITION_LEVEL_ZERO;
+      } else if (OB_ISNULL(part_expr = stmt.get_part_expr(table_id, ref_table_id))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("There is no part expr in stmt", K(table_id), K(ret));
       } else if (OB_FAIL(part_func_exprs_.push_back(part_expr))) {
@@ -124,6 +133,7 @@ int ObShardingInfo::get_all_partition_key(ObOptimizerContext &ctx,
   all_partition_keys.reuse();
   ObSqlSchemaGuard *schema_guard = NULL;
   const ObTableSchema *table_schema = NULL;
+  const TableItem *table_item = NULL;
   ObRawExpr *part_expr = NULL;
   if (OB_ISNULL(schema_guard = ctx.get_sql_schema_guard())) {
     ret = OB_SCHEMA_ERROR;
@@ -137,6 +147,12 @@ int ObShardingInfo::get_all_partition_key(ObOptimizerContext &ctx,
   } else if (PARTITION_LEVEL_ONE != table_schema->get_part_level()
              && PARTITION_LEVEL_TWO != table_schema->get_part_level()) {
     /* do nohitng */
+  } else if (OB_NOT_NULL(table_item = stmt.get_table_item_by_id(table_id))
+      && table_item->is_index_table_
+      && stmt.is_select_stmt()
+      && share::schema::is_local_fts_index(table_schema->get_index_type())) {
+    LOG_INFO("index direct select: fallback to scanning all partitions",
+             K(table_id), K(ref_table_id));
   } else if (OB_ISNULL(part_expr = stmt.get_part_expr(table_id, ref_table_id))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("There is no part expr in stmt", K(table_id), K(ret));
