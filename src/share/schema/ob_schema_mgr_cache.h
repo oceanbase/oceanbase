@@ -131,8 +131,10 @@ public:
           ObSchemaMgr *&eli_schema_mgr,
           ObSchemaMgrHandle *handle = NULL);
   int find_dst_item_for_put(const uint64_t tenant_id,
+                            const int64_t max_schema_slot_num,
                             ObSchemaMgrItem *&dst_item,
                             int64_t &target_pos);
+  int64_t get_max_cached_num() const { return max_cached_num_; }
   int try_gc_tenant_schema_mgr(ObSchemaMgr *&eli_schema_mgr);
   int try_eliminate_schema_mgr(ObSchemaMgr *&eli_schema_mgr);
   void dump() const;

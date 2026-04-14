@@ -5474,8 +5474,17 @@ int ObMultiVersionSchemaService::check_schema_slot_available(const uint64_t tena
   } else if (OB_ISNULL(schema_mgr_cache = &schema_store->schema_mgr_cache_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_mgr_cache is null", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_mgr_cache->find_dst_item_for_put(tenant_id, dst_item, target_pos))){
-    LOG_WARN("fail to find dst item for put", KR(ret), K(dst_item));
+  } else {
+    int64_t max_schema_slot_num = schema_mgr_cache->get_max_cached_num();
+    if (!ObSchemaService::g_liboblog_mode_) {
+      omt::ObTenantConfigGuard tenant_config(OTC_MGR.get_tenant_config_with_lock(tenant_id));
+      if (tenant_config.is_valid()) {
+        max_schema_slot_num = tenant_config->_max_schema_slot_num;
+      }
+    }
+    if (OB_FAIL(schema_mgr_cache->find_dst_item_for_put(tenant_id, max_schema_slot_num, dst_item, target_pos))){
+      LOG_WARN("fail to find dst item for put", KR(ret), K(dst_item));
+    }
   }
   return ret;
 }
