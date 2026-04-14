@@ -268,6 +268,7 @@ int ObDASScalarScanRtDef::generate_op(ObDASSearchCost lead_cost, ObDASSearchCtx 
     if (ctdef->is_primary_table_scan_) {
       ObDASScalarPrimaryROROpParam op_param(ctdef, this);
       ObDASScalarPrimaryROROp *primary_ror_op = nullptr;
+      op_param.set_is_scoring(ctdef->is_scoring());
       if (OB_FAIL(search_ctx.create_op(op_param, primary_ror_op))) {
         LOG_WARN("failed to create primary ror op", K(ret));
       } else if (OB_ISNULL(primary_ror_op)) {
@@ -279,6 +280,7 @@ int ObDASScalarScanRtDef::generate_op(ObDASSearchCost lead_cost, ObDASSearchCtx 
     } else {
       ObDASScalarIndexROROpParam op_param(ctdef, this);
       ObDASScalarIndexROROp *index_ror_op = nullptr;
+      op_param.set_is_scoring(ctdef->is_scoring());
       if (OB_FAIL(search_ctx.create_op(op_param, index_ror_op))) {
         LOG_WARN("failed to create index ror op", K(ret));
       } else if (OB_ISNULL(index_ror_op)) {
@@ -292,6 +294,7 @@ int ObDASScalarScanRtDef::generate_op(ObDASSearchCost lead_cost, ObDASSearchCtx 
     // non-ROR scan
     ObDASScalarScanOpParam op_param(ctdef, this);
     ObDASScalarScanOp *non_ror_scan_op = nullptr;
+    op_param.set_is_scoring(ctdef->is_scoring());
     if (OB_FAIL(search_ctx.create_op(op_param, non_ror_scan_op))) {
       LOG_WARN("failed to create scan op", K(ret));
     } else if (OB_ISNULL(non_ror_scan_op)) {
@@ -303,6 +306,7 @@ int ObDASScalarScanRtDef::generate_op(ObDASSearchCost lead_cost, ObDASSearchCtx 
       if (search_ctx.get_rowid_type() == DAS_ROWID_TYPE_UINT64) {
         ObDASBitmapOpParam bitmap_op_param(non_ror_scan_op);
         ObDASBitmapOp *bitmap_op = nullptr;
+        bitmap_op_param.set_is_scoring(ctdef->is_scoring());
         if (OB_FAIL(search_ctx.create_op(bitmap_op_param, bitmap_op))) {
           LOG_WARN("failed to create bitmap op", K(ret));
         } else if (OB_ISNULL(bitmap_op)) {
@@ -314,6 +318,7 @@ int ObDASScalarScanRtDef::generate_op(ObDASSearchCost lead_cost, ObDASSearchCtx 
       } else {
         ObDASSortOpParam sort_op_param(non_ror_scan_op);
         ObDASSortOp *sort_op = nullptr;
+        sort_op_param.set_is_scoring(ctdef->is_scoring());
         if (OB_FAIL(search_ctx.create_op(sort_op_param, sort_op))) {
           LOG_WARN("failed to create sort op", K(ret));
         } else if (OB_ISNULL(sort_op)) {

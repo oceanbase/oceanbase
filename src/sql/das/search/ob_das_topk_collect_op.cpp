@@ -49,6 +49,7 @@ int ObDASTopKCollectRtDef::generate_op(ObDASSearchCost lead_cost, ObDASSearchCtx
   } else if (0 == limit_datum->get_int()) {
     ObDASDummyOp *dummy_op = nullptr;
     ObDASDummyOpParam dummy_op_param;
+    dummy_op_param.set_is_scoring(ctdef->is_scoring());
     if (OB_FAIL(search_ctx.create_op(dummy_op_param, dummy_op))) {
       LOG_WARN("failed to create dummy op", KR(ret));
     } else {
@@ -57,6 +58,7 @@ int ObDASTopKCollectRtDef::generate_op(ObDASSearchCost lead_cost, ObDASSearchCtx
   } else {
     ObDASTopKCollectOpParam op_param;
     ObDASTopKCollectOp *topk_collect_op = nullptr;
+    op_param.set_is_scoring(ctdef->is_scoring());
     op_param.limit_ = limit_datum->get_int();
     op_param.child_ = child_op;
     if (OB_FAIL(search_ctx.create_op(op_param, topk_collect_op))) {
