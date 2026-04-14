@@ -455,7 +455,15 @@ int ObSessionTabletDeleteHelper::do_work()
         table_lock_arg.owner_id_.convert_from_client_sessid(conn->get_session().get_sessid_for_table(), conn->get_session().get_client_create_time());
         if (OB_FAIL(transaction::tablelock::ObInnerConnectionLockUtil::lock_table(tenant_id_, table_lock_arg, conn))) {
           LOG_WARN("lock table failed", KR(ret), K(table_lock_arg));
-        } else if (OB_FAIL(ObOnlineDDLLock::lock_table_in_trans(tenant_id_, table_id, transaction::tablelock::ROW_EXCLUSIVE, timeout_us_, *trans_))) {
+        // NOTE: Set to EXCLUSIVE (X) lock for table here,
+        // to resolve the concurrent issue where tablet-level online DDL locks
+        // may not be acquired for index tables during transfer operations.
+        //
+        // See issue 2026041000115303753
+        //
+        // TODO: @jinzhu
+        // This is a temporary solution, we need to find a better solution to resolve this issue.
+        } else if (OB_FAIL(ObOnlineDDLLock::lock_table_in_trans(tenant_id_, table_id, transaction::tablelock::EXCLUSIVE, timeout_us_, *trans_))) {
           LOG_WARN("lock online ddl table failed", KR(ret), K(table_lock_arg));
         } else if (OB_FAIL(ObOnlineDDLLock::lock_tablets_in_trans(tenant_id_, tablet_ids, transaction::tablelock::EXCLUSIVE, timeout_us_ /*try lock*/, *trans_))) {
           LOG_WARN("lock online ddl tablets failed", KR(ret), K(tablet_ids));
