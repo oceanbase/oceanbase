@@ -345,6 +345,10 @@ int ObLinkedMacroBlockItemReader::read_item_block()
     buf_pos_ += sizeof(ObMacroBlockCommonHeader);
     if (OB_FAIL(linked_header_.deserialize(buf_, buf_len_, buf_pos_))) {
       LOG_WARN("fail to deserialize ObLinkedMacroBlockHeader", K(ret));
+    } else if (OB_UNLIKELY(linked_header_.is_linked_macro_item_incomplete() &&
+                          !linked_header_.is_linked_macro_item_fragment_head())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("linked macro item is incomplete and not fragment head", K(ret));
     } else {
       first_item_offset_in_block_ = buf_pos_;
       buf_len_ = sizeof(ObMacroBlockCommonHeader) + common_header_->get_payload_size();
