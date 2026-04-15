@@ -149,6 +149,7 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
                      OB_FAIL(check_mds_filter(current,
                                               trans_version,
                                               multi_version_info.mvcc_row_flag_.is_ghost_row(),
+                                              multi_version_info.dml_row_flag_.is_lock(),
                                               is_filtered))) {
             LOG_WARN("failed to check mds filter", K(ret), K(current), K(trans_version), K(is_major_sstable));
           } else if (!is_filtered && FALSE_IT(check_base_version(trans_version, is_filtered))) {
@@ -157,7 +158,11 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
           } else if (lock_state->is_lock_decided()) {
             lock_state->lock_dml_flag_ = multi_version_info.dml_row_flag_.get_dml_flag();
           }
-        } else if (OB_FAIL(check_mds_filter(current, 0/*trans_version*/, multi_version_info.mvcc_row_flag_.is_ghost_row(), is_filtered))) {
+        } else if (OB_FAIL(check_mds_filter(current,
+                                            0 /*trans_version*/,
+                                            multi_version_info.mvcc_row_flag_.is_ghost_row(),
+                                            multi_version_info.dml_row_flag_.is_lock(),
+                                            is_filtered))) {
           LOG_WARN("failed to check mds filter", K(ret), K(current), K(trans_version), K(is_major_sstable));
         } else if (!is_filtered && FALSE_IT(check_base_version(trans_version, is_filtered))) {
         } else if (is_filtered) {
@@ -166,7 +171,7 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
         } else {
           lock_state->lock_dml_flag_ = multi_version_info.dml_row_flag_.get_dml_flag();
         }
-      } else if (OB_FAIL(check_mds_filter(current, 0/*trans_version*/, false, is_filtered))) {
+      } else if (OB_FAIL(check_mds_filter(current, 0 /*trans_version*/, false, false, is_filtered))) {
         LOG_WARN("failed to check mds filter", K(ret), K(current), K(trans_version), K(is_major_sstable));
       } else if (is_filtered) {
       } else {
@@ -195,15 +200,21 @@ int ObMicroBlockRowLockChecker::get_next_row(const ObDatumRow *&row)
 }
 
 // TODO if current row is filtered by truncate, it's no need to scan remain data of the same rowkey
-int ObMicroBlockRowLockChecker::check_mds_filter(const int64_t current, const int64_t trans_version, const bool is_ghost_row, bool &fitered)
+int ObMicroBlockRowLockChecker::check_mds_filter(const int64_t current,
+                                                 const int64_t trans_version,
+                                                 const bool is_ghost_row,
+                                                 const bool is_lock_row,
+                                                 bool &filtered)
 {
   int ret = OB_SUCCESS;
-  fitered = false;
+  filtered = false;
 
   if (context_->mds_filter_mgr_ == nullptr) {
     // empty filter, skip
   } else if (is_ghost_row) {
     // skip
+  } else if (is_lock_row) {
+    filtered = true;
   } else {
     const int64_t rowkey_cnt = read_info_->get_schema_rowkey_count();
     if (OB_FAIL(reader_->get_row(current, row_))) {
@@ -215,14 +226,14 @@ int ObMicroBlockRowLockChecker::check_mds_filter(const int64_t current, const in
 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(context_->mds_filter_mgr_->filter(row_,
-                                                         fitered,
+                                                         filtered,
                                                          true /* check_filter */,
                                                          sstable_ == nullptr || !sstable_->is_major_sstable() /* check base version */))) {
       LOG_WARN("failed to filter mds", K(ret));
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_UNLIKELY(fitered)) {
+    } else if (OB_UNLIKELY(filtered)) {
       LOG_DEBUG("[MDS INFO] filtered by mds", KR(ret), K(current), K_(row), K(trans_version), KPC(context_->mds_filter_mgr_), K(rowkey_cnt));
     } else {
       LOG_DEBUG("[MDS INFO] not filtered row", KR(ret), K(current), K(row_), K(trans_version), KPC(context_->mds_filter_mgr_), K(rowkey_cnt));
