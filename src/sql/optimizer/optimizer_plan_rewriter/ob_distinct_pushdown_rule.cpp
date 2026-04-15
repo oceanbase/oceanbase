@@ -88,6 +88,8 @@ int ObDistinctPushdownContext::map_and_check(const common::ObIArray<ObRawExpr *>
 {
   int ret = OB_SUCCESS;
   is_valid = true;
+  OPT_TRACE("map_and_check before: distinct_exprs:", distinct_exprs_,
+            "from_exprs:", from_exprs, "to_exprs:", to_exprs);
   ObRawExprCopier copier(expr_factory);
   ObSEArray<ObRawExpr*, 4> replaced_exprs;
   if (OB_ISNULL(session_info)) {
@@ -112,6 +114,7 @@ int ObDistinctPushdownContext::map_and_check(const common::ObIArray<ObRawExpr *>
   }
 
   if (OB_FAIL(ret) || !is_valid) {
+    OPT_TRACE("map_and_check: mapping invalid or failed, is_valid:", is_valid);
   } else {
     distinct_exprs_.reuse();
     if (OB_FAIL(distinct_exprs_.assign(replaced_exprs))) {
@@ -123,6 +126,9 @@ int ObDistinctPushdownContext::map_and_check(const common::ObIArray<ObRawExpr *>
       } else if (OB_FAIL(distinct_exprs_.at(i)->pull_relation_id())) {
         LOG_WARN("failed to formalize expr", K(ret));
       }
+    }
+    if (OB_SUCC(ret)) {
+      OPT_TRACE("map_and_check after: distinct_exprs:", distinct_exprs_);
     }
   }
   return ret;
@@ -179,7 +185,7 @@ int ObDistinctPushdownContext::merge_with(const common::ObIArray<ObRawExpr*> &lo
                                         bool &pushdown_lower_and_check)
 {
   int ret = OB_SUCCESS;
-
+  OPT_TRACE("merge_with: upper context:", distinct_exprs_, "lower distinct:", lower_distinct_exprs);
   pushdown_upper_and_update = false;
   pushdown_lower_and_ignore = false;
   pushdown_lower_and_check = false;
@@ -188,6 +194,7 @@ int ObDistinctPushdownContext::merge_with(const common::ObIArray<ObRawExpr*> &lo
   if (ObOptimizerUtil::subset_exprs(lower_distinct_exprs, distinct_exprs_) &&
       lower_distinct_exprs.count() < distinct_exprs_.count()) {
     pushdown_lower_and_ignore = true;
+    OPT_TRACE("merge_with: lower is better (strict subset), use lower distinct");
     distinct_exprs_.reset();
     // we should ignore current context and leave a distinct there
     if (OB_FAIL(distinct_exprs_.assign(lower_distinct_exprs))) {
@@ -198,11 +205,13 @@ int ObDistinctPushdownContext::merge_with(const common::ObIArray<ObRawExpr*> &lo
     // we should update current node
     // and treat context as already pushed down
     pushdown_upper_and_update = true;
+    OPT_TRACE("merge_with: upper is better (upper subset of lower), update current node");
   } else {
     // can not compare
     // do not update current
     // and put a distinct above
     pushdown_lower_and_check = true;
+    OPT_TRACE("merge_with: incomparable, place distinct above, use lower context");
     distinct_exprs_.reset();
     if (OB_FAIL(distinct_exprs_.assign(lower_distinct_exprs))) {
       LOG_WARN("failed to assign context", K(ret));
@@ -223,12 +232,17 @@ int ObDistinctPushDownPlanRewriter::visit_distinct(ObLogDistinct *distinct,
     LOG_WARN("unexpected null", K(ret), KP(distinct), KP(child), KP(result));
   } else if (HASH_AGGREGATE != distinct->get_algo()) {
     // do not handle distinct other than hash
+    OPT_TRACE("skip distinct: not hash aggregate", distinct->get_name(), distinct->get_op_id());
     can_transform = false;
   } else if (!distinct->is_distributed()) {
     // do nothing for non-distributed distinct for now, to avoid affecting TP scenarios
+    OPT_TRACE("skip distinct: not distributed", distinct->get_name(), distinct->get_op_id());
     can_transform = false;
   } else if (NULL == ctx || ctx->is_empty() || distinct->get_filter_exprs().count() > 0) {
     // If the upper context is empty (or blocked by filters), push down the current distinct.
+    OPT_TRACE("visit distinct: no upper context or has filters, start fresh pushdown",
+              distinct->get_name(), distinct->get_op_id(),
+              "distinct_exprs:", distinct->get_distinct_exprs());
     ObDistinctPushdownContext pushdown_context;
     ObDistinctPushdownResult child_result;
     ObDistinctPushdownResult *child_result_ptr = &child_result;
@@ -240,6 +254,10 @@ int ObDistinctPushDownPlanRewriter::visit_distinct(ObLogDistinct *distinct,
       OPT_TRACE("distinct is pushed down", K(distinct->get_op_id()));
     }
   } else {
+    OPT_TRACE("visit distinct: has upper context, merge with current distinct",
+              distinct->get_name(), distinct->get_op_id(),
+              "upper_ctx:", ctx->distinct_exprs_,
+              "current_distinct:", distinct->get_distinct_exprs());
     ObDistinctPushdownContext pushdown_context;
     bool pushdown_upper_and_update = false;
     bool pushdown_lower_and_ignore = false;
@@ -284,7 +302,7 @@ int ObDistinctPushDownPlanRewriter::visit_distinct(ObLogDistinct *distinct,
         // (inherit enable_reshuffle from parent ctx)
       }
     }
-    if OB_FAIL(ret) {
+    if (OB_FAIL(ret)) {
       // do nothing
     } else if (OB_FAIL(rewrite_child(child, &pushdown_context, child_result_ptr))) {
       LOG_WARN("failed to rewrite child", K(ret), K(distinct->get_name()));
@@ -293,6 +311,7 @@ int ObDistinctPushDownPlanRewriter::visit_distinct(ObLogDistinct *distinct,
     // add distinct at the current distinct node based on the upper context.
     } else if (pushdown_lower_and_ignore) {
       // ignore pushdown context, do nothing
+      OPT_TRACE("visit distinct: lower is better, ignore upper context", distinct->get_name());
     } else if (pushdown_lower_and_check && OB_FAIL(try_place_distinct(distinct, ctx, result))) {
       LOG_WARN("failed to check and add partial distinct");
     }
@@ -331,18 +350,22 @@ int ObDistinctPushDownPlanRewriter::visit_groupby(ObLogGroupBy *groupby,
     LOG_WARN("unexpected groupby", K(ret), KP(groupby), KP(result), KP(child));
   } else if (!groupby->is_distributed()) {
     // do nothing for non-distributed group by for now, to avoid affecting TP scenarios
+    OPT_TRACE("skip groupby: not distributed", groupby->get_name(), groupby->get_op_id());
     can_transform = false;
   } else if (HASH_AGGREGATE != groupby->get_algo() || !(groupby->get_step() == AggregatePathType::SINGLE)) {
     // do not handle distinct other than hash
+    OPT_TRACE("skip groupby: not hash aggregate or not single step", groupby->get_name(), groupby->get_op_id());
     can_transform = false;
   } else if (groupby->is_three_stage_aggr()) {
     // do not handle three stage group by
+    OPT_TRACE("skip groupby: three stage aggregate", groupby->get_name(), groupby->get_op_id());
     can_transform = false;
   } else if (OB_FAIL(groupby->is_duplicate_insensitive_aggregation(is_duplicate_insensitive))) {
     LOG_WARN("failed to check duplicate insensitive aggregation", K(ret));
   } else if (!is_duplicate_insensitive) {
     // do nothing
     // this will be handled by partial groupby pushdown
+    OPT_TRACE("skip groupby: not duplicate insensitive aggregation", groupby->get_name(), groupby->get_op_id());
     can_transform = false;
   } else {
     OPT_TRACE("try place distinct from group by", groupby->get_name(), groupby->get_op_id(), groupby->get_aggr_funcs());
@@ -358,6 +381,7 @@ int ObDistinctPushDownPlanRewriter::visit_groupby(ObLogGroupBy *groupby,
     if (OB_FAIL(generate_context_from_groupby(groupby, pushdown_context, can_pushdown))) {
       LOG_WARN("failed extract distinct context from group by", K(ret));
     } else if (!can_pushdown) {
+      OPT_TRACE("skip groupby: cannot generate pushdown context", groupby->get_name(), groupby->get_op_id());
       can_transform = false;
     } else if (OB_FAIL(rewrite_child(child, &pushdown_context, child_result_ptr))) {
       LOG_WARN("failed to rewrite child", K(ret), K(groupby->get_name()));
@@ -391,8 +415,10 @@ int ObDistinctPushDownPlanRewriter::visit_join(ObLogJoin *join,
     LOG_WARN("unexpected join", K(ret), KP(join), K(join->get_num_of_child()), KP(join->get_child(0)), KP(join->get_child(1)));
   } else if (!join->is_distributed()) {
     // do nothing for non-distributed join for now, to avoid affecting TP scenarios
+    OPT_TRACE("skip join: not distributed", join->get_name(), join->get_op_id());
     can_transform = false;
   } else {
+    OPT_TRACE("visit join", join->get_name(), join->get_op_id());
     ObJoinType join_type = join->get_join_type();
     bool try_push_to_left = (ctx != NULL) &&
                             (INNER_JOIN == join_type ||
@@ -420,11 +446,16 @@ int ObDistinctPushDownPlanRewriter::visit_join(ObLogJoin *join,
     if (MERGE_JOIN == join->get_join_algo()) {
       // do nothing
       // default rewrite logic
+      OPT_TRACE("skip join: merge join not supported", join->get_name(), join->get_op_id());
       can_transform = false;
     } else if ((!(try_push_to_left || left_implicit_distinct) &&
                 !(try_push_to_right || right_implicit_distinct))) {
+      OPT_TRACE("skip join: no side eligible for pushdown", join->get_name(), join->get_op_id(),
+                "try_push_to_left:", try_push_to_left, "try_push_to_right:", try_push_to_right,
+                "left_implicit_distinct:", left_implicit_distinct, "right_implicit_distinct:", right_implicit_distinct);
       can_transform = false;
     } else if (join->get_filter_exprs().count() > 0) {
+      OPT_TRACE("skip join: has filter exprs", join->get_name(), join->get_op_id());
       can_transform = false;
     } else {
       ObSEArray<ObRawExpr*, 4> reduce_exprs;
@@ -447,8 +478,13 @@ int ObDistinctPushDownPlanRewriter::visit_join(ObLogJoin *join,
                                                               extract_join_key_failed))) {
         LOG_WARN("failed to get equal keys from join condition", K(ret));
       } else if (extract_join_key_failed) {
+        OPT_TRACE("skip join: failed to extract strict equal keys", join->get_name(), join->get_op_id());
         can_transform = false;
       } else {
+        OPT_TRACE("join push analysis: left_join_keys:", left_join_keys, "right_join_keys:", right_join_keys,
+                  "try_push_to_left:", try_push_to_left, "try_push_to_right:", try_push_to_right,
+                  "left_implicit_distinct:", left_implicit_distinct, "right_implicit_distinct:", right_implicit_distinct,
+                  "disable_reshuffle:", disable_reshuffle);
         ObDistinctPushdownResult left_result;
         ObDistinctPushdownResult right_result;
         ObDistinctPushdownResult *left_result_ptr = &left_result;
@@ -507,6 +543,7 @@ int ObDistinctPushDownPlanRewriter::visit_join(ObLogJoin *join,
           } else if (OB_FAIL(append(left_context.distinct_exprs_, left_join_keys))) {
             LOG_WARN("failed to append distinct exprs", K(ret));
           } else {
+            OPT_TRACE("join left child: can push, left_context:", left_context.distinct_exprs_);
             do_pushed = true;
           }
         }
@@ -552,6 +589,7 @@ int ObDistinctPushDownPlanRewriter::visit_join(ObLogJoin *join,
                                                       is_partially_pushdown))) {
             LOG_WARN("failed to filter distinct exprs", K(ret));
           } else if (!can_push_to_right) {
+            OPT_TRACE("join right child: cannot push context to right side", join->get_name(), join->get_op_id());
           //   right_context = dummy_context;
           // } else if (!is_enforced_pushdown && (right_context->get_distinct_exprs().empty()
           //                                       && !current_context_empty)) {
@@ -560,6 +598,7 @@ int ObDistinctPushDownPlanRewriter::visit_join(ObLogJoin *join,
           } else if (OB_FAIL(append(right_context.distinct_exprs_, right_join_keys))) {
             LOG_WARN("failed to append distinct exprs", K(ret));
           } else {
+            OPT_TRACE("join right child: can push, right_context:", right_context.distinct_exprs_);
             do_pushed = true;
           }
         }
@@ -585,6 +624,10 @@ int ObDistinctPushDownPlanRewriter::visit_join(ObLogJoin *join,
           }
         }
 
+        OPT_TRACE("join push summary: can_push_to_left:", can_push_to_left,
+                  "can_push_to_right:", can_push_to_right,
+                  "left_materialized:", left_result.is_materialized(),
+                  "right_materialized:", right_result.is_materialized());
         if (OB_FAIL(ret)) {
           // do nothing
         } else if (do_pushed
@@ -624,18 +667,23 @@ int ObDistinctPushDownPlanRewriter::visit_exchange(ObLogExchange *exchange,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected exchange", K(ret), KP(exchange), K(exchange->get_num_of_child()), KP(exchange->get_child(0)));
   } else if (NULL == ctx || ctx->is_empty() || exchange->get_filter_exprs().count() > 0) {
+    OPT_TRACE("visit exchange: skip or block, no ctx or has filters", exchange->get_name(), exchange->get_op_id());
     can_transform = false;
   } else if (OB_FAIL(can_push_through_exchange(exchange, ctx, can_transform))) {
     LOG_WARN("failed to check if can push through exchange", K(ret));
   } else if (!can_transform) {
-    // do nothing
+    OPT_TRACE("visit exchange: cannot push through", exchange->get_name(), exchange->get_op_id());
   } else if (exchange->is_consumer()) {
+    OPT_TRACE("visit exchange: consumer, push context through to child then try place",
+              exchange->get_name(), exchange->get_op_id(), "ctx:", ctx->distinct_exprs_);
     if (OB_FAIL(SMART_CALL(rewrite_child(exchange->get_child(0), ctx, result)))) {
       LOG_WARN("failed to rewrite child", K(ret));
     } else if (!result->is_materialized() && OB_FAIL(try_place_distinct(exchange, ctx, result))) {
       LOG_WARN("failed to try place distinct", K(ret));
     }
   } else {
+    OPT_TRACE("visit exchange: producer, push context with adjusted flags",
+              exchange->get_name(), exchange->get_op_id(), "ctx:", ctx->distinct_exprs_);
     ObDistinctPushdownContext pushdown_ctx;
     if (OB_FAIL(pushdown_ctx.assign(*ctx))) {
       LOG_WARN("failed to assign pushdown context", K(ret));
@@ -650,6 +698,8 @@ int ObDistinctPushDownPlanRewriter::visit_exchange(ObLogExchange *exchange,
     if (OB_FAIL(default_rewrite_children(exchange, result))) {
       LOG_WARN("failed to trigger rewrite children", K(ret));
     } else if (NULL != ctx && !ctx->is_empty() && exchange->is_consumer()) {
+      OPT_TRACE("visit exchange: can_transform=false but consumer with ctx, try place distinct",
+                exchange->get_name(), exchange->get_op_id());
       if (OB_FAIL(try_place_distinct(exchange, ctx, result))) {
         LOG_WARN("failed to try place distinct", K(ret));
       }
@@ -671,9 +721,11 @@ int ObDistinctPushDownPlanRewriter::visit_material(ObLogMaterial *material,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected material", K(ret), KP(material), K(material->get_num_of_child()), KP(material->get_child(0)));
   } else if (NULL == ctx || ctx->is_empty() || material->get_filter_exprs().count() > 0) {
+    OPT_TRACE("visit material: no ctx or has filters, skip", material->get_name(), material->get_op_id());
     can_transform = false;
   } else if (!material->is_distributed()) {
     // do nothing for non-distributed material for now, to avoid affecting TP scenarios
+    OPT_TRACE("visit material: not distributed, skip", material->get_name(), material->get_op_id());
     can_transform = false;
   } else if (OB_FAIL(SMART_CALL(rewrite_child(material->get_child(0), ctx, result)))) {
     LOG_WARN("failed to rewrite child", K(ret));
@@ -706,19 +758,23 @@ int ObDistinctPushDownPlanRewriter::visit_table_scan(ObLogTableScan *table_scan,
     can_transform = false;
   } else if (!table_scan->is_distributed()) {
     // do nothing for non-distributed table scan for now, to avoid affecting TP scenarios
+    OPT_TRACE("visit table scan: not distributed, skip", table_scan->get_name(), table_scan->get_op_id());
     can_transform = false;
   } else {
+    OPT_TRACE("visit table scan", table_scan->get_name(), table_scan->get_op_id(),
+              "ctx:", ctx->distinct_exprs_);
     push_into_scan = false;
     ObSEArray<ObAggFunRawExpr*, 1> dummy_aggr;
     bool can_pushdown = table_scan->get_pushdown_aggr_exprs().empty() &&
                         table_scan->get_pushdown_groupby_columns().empty();
     if (!can_pushdown) {
-      // do nothing
+      OPT_TRACE("visit table scan: already has pushdown aggr/groupby, skip", table_scan->get_name());
     } else if (OB_FAIL(plan->check_storage_distinct_pushdown(ctx->distinct_exprs_, push_into_scan))) {
       LOG_WARN("failed to check can storage distinct pushdown", K(ret));
     } else if (push_into_scan && OB_FAIL(plan->try_push_aggr_into_table_scan(table_scan, dummy_aggr, ctx->distinct_exprs_))) {
       LOG_WARN("failed to try push aggr into table scan", K(ret));
     } else if (!push_into_scan && table_scan->get_pushdown_groupby_columns().empty()) {
+      OPT_TRACE("visit table scan: cannot push into storage, try place distinct above", table_scan->get_name());
       // add partial
       // it could be the case that distinct already pushed down
       if (OB_FAIL(try_place_distinct(table_scan, ctx, result))) {
@@ -726,6 +782,7 @@ int ObDistinctPushDownPlanRewriter::visit_table_scan(ObLogTableScan *table_scan,
       }
     } else {
       // pushed into scan
+      OPT_TRACE("visit table scan: distinct pushed into storage", table_scan->get_name(), table_scan->get_op_id());
       result->set_is_materialized(true);
     }
   }
@@ -762,14 +819,19 @@ int ObDistinctPushDownPlanRewriter::visit_subplan_scan(ObLogSubPlanScan *subplan
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to cast select stmt", K(ret));
   } else if (NULL == ctx || ctx->is_empty() || subplan_scan->get_filter_exprs().count() > 0) {
+    OPT_TRACE("visit subplan scan: no ctx or has filters, skip", subplan_scan->get_name(), subplan_scan->get_op_id());
     can_transform = false;
   } else if (child_select_stmt->is_unpivot_select()) {
     // because of unpivot bugs, unpivot select is not supported for now
+    OPT_TRACE("visit subplan scan: unpivot select not supported", subplan_scan->get_name(), subplan_scan->get_op_id());
     can_transform = false;
   } else if (!subplan_scan->is_distributed()) {
     // do nothing for non-distributed subplan scan for now, to avoid affecting TP scenarios
+    OPT_TRACE("visit subplan scan: not distributed, skip", subplan_scan->get_name(), subplan_scan->get_op_id());
     can_transform = false;
   } else {
+    OPT_TRACE("visit subplan scan", subplan_scan->get_name(), subplan_scan->get_op_id(),
+              "ctx:", ctx->distinct_exprs_);
     ObSEArray<ObRawExpr*, 4> output_cols;
     ObSEArray<ObRawExpr*, 4> input_cols;
     ObDistinctPushdownContext pushdown_context;
@@ -790,7 +852,10 @@ int ObDistinctPushDownPlanRewriter::visit_subplan_scan(ObLogSubPlanScan *subplan
                                                       can_pushdown))) {
       LOG_WARN("failed to map pushdown context", K(ret));
     } else if (!can_pushdown) {
+      OPT_TRACE("visit subplan scan: context mapping failed, cannot push through", subplan_scan->get_name(), subplan_scan->get_op_id());
       can_transform = false;
+    } else {
+      OPT_TRACE("visit subplan scan: context mapped successfully, pushdown_context:", pushdown_context.distinct_exprs_);
     }
     if (OB_FAIL(ret) || !can_transform) {
       // rewrite child, pass result directly
@@ -821,17 +886,23 @@ int ObDistinctPushDownPlanRewriter::visit_set(ObLogSet *set,
   // need to map the pushdown context
   // do nothing if is merge
   if (set->is_recursive_union()) {
+    OPT_TRACE("visit set: recursive union not supported", set->get_name(), set->get_op_id());
     can_transform = false;
   } else if (!set->is_distributed()) {
     // do nothing for non-distributed set for now, to avoid affecting TP scenarios
+    OPT_TRACE("visit set: not distributed, skip", set->get_name(), set->get_op_id());
     can_transform = false;
   } else if (HASH_SET != set->get_algo() && set->is_set_distinct()) {
+    OPT_TRACE("visit set: set distinct but not hash set, skip", set->get_name(), set->get_op_id());
     can_transform = false;
   } else if ((NULL == ctx || ctx->is_empty() || set->get_filter_exprs().count() > 0) && !set->is_set_distinct()) {
+    OPT_TRACE("visit set: union all with no ctx or has filters, skip", set->get_name(), set->get_op_id());
     can_transform = false;
   } else if (ObSelectStmt::UNION == set->get_set_op() && !set->is_set_distinct()) {
     // handle union all
     // directly pushdown to all input
+    OPT_TRACE("visit set: union all, push ctx to all children", set->get_name(), set->get_op_id(),
+              "ctx:", ctx->distinct_exprs_);
     // todo do a pull up if not pushdown far away
     ObSEArray<ObRawExpr *, 8> select_exprs;
     ObSEArray<ObRawExpr*, 4> child_select_exprs;
@@ -896,6 +967,8 @@ int ObDistinctPushDownPlanRewriter::visit_set(ObLogSet *set,
       // }
     }
   } else if (set->is_set_distinct()) {
+    OPT_TRACE("visit set: set distinct (union distinct), merge with upper ctx",
+              set->get_name(), set->get_op_id());
     bool any_pushdown = false;
     // if current context is not null
     // do a merge before rewrite children
@@ -910,6 +983,7 @@ int ObDistinctPushDownPlanRewriter::visit_set(ObLogSet *set,
     } else if (NULL == ctx || ctx->is_empty() || set->get_filter_exprs().count() > 0
                || ObSelectStmt::UNION != set->get_set_op()) {
       // get_current_context
+      OPT_TRACE("visit set: no upper ctx or not union distinct, use set exprs as context", set->get_name());
       if (OB_FAIL(simplified_pushdown_context.distinct_exprs_.assign(select_exprs))) {
         LOG_WARN("failed to assign distinct context", K(ret));
       }
@@ -921,7 +995,13 @@ int ObDistinctPushDownPlanRewriter::visit_set(ObLogSet *set,
                                                               pushdown_lower_and_check))) {
       LOG_WARN("failed to assign expr array", K(ret));
     } else if (pushdown_lower_and_ignore || pushdown_lower_and_check) {
+      OPT_TRACE("visit set: set distinct merge result: disable place distinct",
+                "pushdown_upper_and_update:", pushdown_upper_and_update,
+                "pushdown_lower_and_ignore:", pushdown_lower_and_ignore,
+                "pushdown_lower_and_check:", pushdown_lower_and_check);
       simplified_pushdown_context.enable_place_distinct_ = false;
+    } else {
+      OPT_TRACE("visit set: set distinct merge result: pushdown_upper_and_update:", pushdown_upper_and_update);
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < set->get_num_of_child(); i++) {
       ObLogicalOperator *child_op = NULL;
@@ -1058,6 +1138,8 @@ int ObDistinctPushDownPlanRewriter::generate_context(ObLogDistinct *distinct, Ob
     ctx.enable_place_distinct_ = false;
     ctx.enable_reshuffle_ = false;
     ctx.benefit_from_reshuffle_ = false;
+    OPT_TRACE("generate_context from distinct", distinct->get_name(), distinct->get_op_id(),
+              "ctx:", ctx.distinct_exprs_);
   }
   return ret;
 }
@@ -1104,7 +1186,12 @@ int ObDistinctPushDownPlanRewriter::generate_context_from_groupby(ObLogGroupBy *
     ctx.enable_reshuffle_ = true;
     if (OB_FAIL(ctx.distinct_exprs_.assign(distinct_exprs))) {
       LOG_WARN("failed to assign distinct exprs", K(ret));
+    } else {
+      OPT_TRACE("generate_context_from_groupby", groupby->get_name(), groupby->get_op_id(),
+                "ctx:", ctx.distinct_exprs_);
     }
+  } else {
+    OPT_TRACE("generate_context_from_groupby: cannot generate context", groupby->get_name(), groupby->get_op_id());
   }
   return ret;
 }
@@ -1121,9 +1208,14 @@ int ObDistinctPushDownPlanRewriter::can_push_through_exchange(ObLogExchange *exc
   } else if (exchange->is_merge_sort() || exchange->get_sample_type() != NOT_INIT_SAMPLE_TYPE
               || exchange->is_task_order()) {
     // push down only when not merge && not px-sample && not task-order
+    OPT_TRACE("can_push_through_exchange: blocked by merge_sort/sample/task_order",
+              exchange->get_name(), exchange->get_op_id(),
+              "is_merge_sort:", exchange->is_merge_sort(),
+              "is_task_order:", exchange->is_task_order());
     can_push = false;
   } else {
     // TODO tuliwei.tlw: check if exchange exprs match distinct exprs
+    OPT_TRACE("can_push_through_exchange: can push", exchange->get_name(), exchange->get_op_id());
     can_push = true;
   }
   return ret;
@@ -1389,12 +1481,20 @@ int ObDistinctPushDownPlanRewriter::simplify_distinct_exprs(ObLogicalOperator *o
       is_const = false;
     }
   }
+  OPT_TRACE("simplify_distinct_exprs: input:", distinct_exprs, "op:", op->get_name());
   if (OB_FAIL(ret)) {
   } else if (reduce_exprs_remove_const.count() > 0) {
     // deduplicate
     if (OB_FAIL(append_array_no_dup(simplified_exprs, reduce_exprs_remove_const))) {
       LOG_WARN("faild to append array", K(op), K(ret));
+    } else {
+      OPT_TRACE("simplify_distinct_exprs: output:", simplified_exprs);
+      OPT_TRACE("simplify params: fd_item_set:", op->get_fd_item_set(),
+                "equal_sets:", op->get_output_equal_sets(),
+                "const_exprs:", op->get_output_const_exprs());
     }
+  } else {
+    OPT_TRACE("simplify_distinct_exprs: output is empty (all constant or eliminated)");
   }
 
   return ret;
@@ -1414,6 +1514,8 @@ int ObDistinctPushDownPlanRewriter::filter_distinct_exprs_by(ObDistinctPushdownC
   ObRelIds intersect_rel_ids;
   can_push = true;
   is_partially_pushdown = false;
+  OPT_TRACE("filter_distinct_exprs_by: input distinct_exprs:", context->distinct_exprs_,
+            "op:", op->get_name(), "join_exprs:", join_exprs);
   for (int64_t i = 0; OB_SUCC(ret) && i < context->distinct_exprs_.count(); ++i) {
     if (context->distinct_exprs_.at(i)->get_relation_ids().is_subset(op->get_table_set())) {
       reduced_exprs.push_back(context->distinct_exprs_.at(i));
@@ -1425,7 +1527,7 @@ int ObDistinctPushDownPlanRewriter::filter_distinct_exprs_by(ObDistinctPushdownC
       } else if (OB_FAIL(intersect_rel_ids.intersect_members(op->get_table_set()))) {
         LOG_WARN("failed to do intersect", K(ret));
       } else if (intersect_rel_ids.is_empty()) {
-      } else if OB_FAIL(exprs_from_both_sides.push_back(context->distinct_exprs_.at(i))) {
+      } else if (OB_FAIL(exprs_from_both_sides.push_back(context->distinct_exprs_.at(i)))) {
         LOG_WARN("failed to push back exprs", K(ret));
       }
     }
@@ -1454,8 +1556,13 @@ int ObDistinctPushDownPlanRewriter::filter_distinct_exprs_by(ObDistinctPushdownC
     context->distinct_exprs_.reset();
     if (OB_FAIL(context->distinct_exprs_.assign(reduced_exprs))) {
       LOG_WARN("failed to assign distinct exprs", K(ret));
+    } else {
+      OPT_TRACE("filter_distinct_exprs_by result: can_push:", can_push,
+                "reduced distinct_exprs:", context->distinct_exprs_);
     }
   } else {
+    OPT_TRACE("filter_distinct_exprs_by result: cannot push, cross-side exprs not determined",
+              "exprs_from_both_sides:", exprs_from_both_sides);
     context->distinct_exprs_.reset();
   }
   return ret;

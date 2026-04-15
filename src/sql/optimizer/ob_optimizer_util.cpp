@@ -4034,8 +4034,8 @@ int ObOptimizerUtil::try_add_fd_item(const ObDMLStmt *stmt,
       } else if (OB_ISNULL(col_expr = stmt->get_column_expr_by_id(table_id, column_ids.at(i)))) {
         //column is not used by current stmt, skip
         all_columns_used = false;
-      } else if (OB_FAIL(unique_exprs.push_back(col_expr))) {
-        LOG_WARN("failed to push back unique col", K(ret));
+      } else if (OB_FAIL(add_var_to_array_no_dup(unique_exprs, col_expr))) {
+        LOG_WARN("failed to append unique col no dup", K(ret));
       } else if (ObOptimizerUtil::find_item(not_null_columns, col_expr)) {
         // col_expr is not null
         contain_not_null = true;
