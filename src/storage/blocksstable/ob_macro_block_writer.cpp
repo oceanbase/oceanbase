@@ -1646,6 +1646,7 @@ int ObMacroBlockWriter::write_micro_block_and_prewarm(const bool dump_diag_info,
   bool reserve_succ_flag = false;
   const bool need_pre_warm_while_pre_alloc = need_pre_warm && is_curr_block_pre_allocated_;
   if (need_pre_warm_while_pre_alloc) {
+    IGNORE_RETURN micro_writer_->serialize_micro_header_into_block_buffer(micro_block_desc);
     IGNORE_RETURN pre_warmer_->reserve(micro_block_desc, reserve_succ_flag);
   }
   if (OB_FAIL(micro_helper_.compress_encrypt_micro_block(micro_block_desc,

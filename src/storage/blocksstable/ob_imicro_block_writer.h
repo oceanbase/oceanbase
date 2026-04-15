@@ -188,6 +188,9 @@ public:
   virtual int get_pre_agg_param(const int64_t col_idx, ObMicroDataPreAggParam &pre_agg_param) const;
   void set_block_size_upper_bound(const int64_t &size) { block_size_upper_bound_ = size; }
   int build_micro_block_desc(ObMicroBlockDesc &micro_block_desc);
+  /// Serialize header into the reserved prefix at get_block_buf() for consumers that
+  /// parse a contiguous raw micro block (e.g. index block cache prewarm before compress).
+  int serialize_micro_header_into_block_buffer(ObMicroBlockDesc &micro_block_desc);
   int build_micro_block_desc_in_unittest(ObMicroBlockDesc &micro_block_desc); // only for unittest
   int32_t get_row_count_delta() const { return row_count_delta_; }
   int64_t get_micro_block_merge_verify_level() const

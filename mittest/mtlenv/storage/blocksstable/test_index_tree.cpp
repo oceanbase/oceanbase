@@ -16,6 +16,7 @@
 #define private public
 #include "storage/blocksstable/ob_row_generate.h"
 #include "storage/blocksstable/cs_encoding/ob_micro_block_cs_encoder.h"
+#include "storage/blocksstable/index_block/ob_index_block_row_scanner.h"
 #include "mtlenv/mock_tenant_module_env.h"
 
 namespace oceanbase
@@ -1153,6 +1154,83 @@ TEST_F(TestIndexTree, test_accumulative_info)
   ASSERT_EQ(test_row_num, next_next_builder->index_block_aggregator_.get_row_count());
   ASSERT_EQ(test_row_num, next_next_builder->index_block_aggregator_.aggregate_info_.micro_block_count_);
   ASSERT_EQ(test_row_num, next_next_builder->index_block_aggregator_.aggregate_info_.macro_block_count_);
+}
+
+// Regression for issue 2026040800115245333: index micro block writer leaves header slot zero until macro write;
+// ObIndexBlockCachePreWarm path needs contiguous raw bytes. ObIMicroBlockWriter::serialize_micro_header_into_block_buffer
+// (called from ObMacroBlockWriter::write_micro_block_and_prewarm before reserve) must make get_block_buf() parseable.
+TEST_F(TestIndexTree, test_index_micro_header_serialize_before_pre_warm_transform)
+{
+  LOG_INFO("BEGIN TestIndexTree.test_index_micro_header_serialize_before_pre_warm_transform");
+  prepare_schema();
+  table_schema_.set_row_store_type(common::ObRowStoreType::CS_ENCODING_ROW_STORE);
+  index_schema_.set_row_store_type(common::ObRowStoreType::CS_ENCODING_ROW_STORE);
+
+  ObWholeDataStoreDesc data_desc;
+  prepare_data_desc(data_desc, nullptr);
+  ObWholeDataStoreDesc index_desc;
+  prepare_index_desc(data_desc, index_desc);
+
+  ObMacroBlockWriter index_macro_writer;
+  ObMacroSeqParam seq_param;
+  seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
+  seq_param.start_ = 0;
+  const ObPreWarmerParam pre_warm_param(MEM_PRE_WARM);
+  ObSSTablePrivateObjectCleaner cleaner;
+  ASSERT_EQ(OB_SUCCESS, index_macro_writer.open(index_desc.get_desc(), 0/*parallel_idx*/, seq_param/*start_seq*/, pre_warm_param, cleaner));
+
+  ObBaseIndexBlockBuilder builder;
+  ASSERT_EQ(OB_SUCCESS, builder.init(data_desc.get_desc(), index_desc.get_desc(), allocator_, &index_macro_writer, 0));
+  ObIMicroBlockWriter *micro_writer = builder.micro_writer_;
+
+  const int64_t round_row_num = 10;
+  ObStorageDatum obj[4];
+  obj[0].set_int32(0);
+  obj[1].set_string(ObString(1, "1"));
+  obj[2].set_int(-2);
+  obj[3].set_int(0);
+  ObDatumRowkey row_key;
+  row_key.assign(obj, 4);
+  ObIndexBlockRowDesc index_row(index_desc.get_desc());
+  index_row.row_count_ = 1;
+  index_row.micro_block_count_ = 1;
+  index_row.macro_block_count_ = 1;
+  index_row.row_key_ = row_key;
+  index_row.macro_id_ = MacroBlockId::mock_valid_macro_id();
+
+  for (int64_t i = 0; i < round_row_num; ++i) {
+    ASSERT_EQ(OB_SUCCESS, builder.append_row(index_row));
+  }
+  ASSERT_EQ(round_row_num, micro_writer->get_row_count());
+
+  ObMicroBlockDesc micro_block_desc;
+  ASSERT_EQ(OB_SUCCESS, micro_writer->build_micro_block_desc(micro_block_desc));
+  micro_block_desc.last_rowkey_ = row_key;
+
+  ObMicroBlockData micro_data_before;
+  const int ret_parse_before = micro_data_before.init_with_prepare_micro_header(
+      micro_block_desc.get_block_buf(), micro_block_desc.get_block_size());
+  ASSERT_EQ(OB_ERR_UNEXPECTED, ret_parse_before)
+      << "contiguous raw block header slot must be invalid before serialize";
+
+  ASSERT_EQ(OB_SUCCESS, micro_writer->serialize_micro_header_into_block_buffer(micro_block_desc));
+
+  ObMicroBlockData micro_data_after;
+  ASSERT_EQ(OB_SUCCESS, micro_data_after.init_with_prepare_micro_header(
+      micro_block_desc.get_block_buf(), micro_block_desc.get_block_size()));
+
+  ObArenaAllocator trans_alloc("IdxBlkTrn", OB_MALLOC_NORMAL_BLOCK_SIZE, 500);
+  ObIndexBlockDataTransformer transformer;
+  char *transform_alloced = nullptr;
+  ObMicroBlockData transformed;
+  ASSERT_EQ(OB_SUCCESS, transformer.transform(
+      micro_data_after, transformed, trans_alloc, transform_alloced, nullptr));
+  ASSERT_TRUE(transformed.is_valid());
+  if (nullptr != transform_alloced) {
+    trans_alloc.free(transform_alloced);
+  }
+
+  LOG_INFO("FINISH TestIndexTree.test_index_micro_header_serialize_before_pre_warm_transform");
 }
 
 TEST_F(TestIndexTree, test_multi_writers_with_close)

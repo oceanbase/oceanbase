@@ -199,19 +199,37 @@ int ObIMicroBlockWriter::build_micro_block_desc(ObMicroBlockDesc &micro_block_de
   return ret;
 }
 
-int ObIMicroBlockWriter::build_micro_block_desc_in_unittest(ObMicroBlockDesc &micro_block_desc)
+int ObIMicroBlockWriter::serialize_micro_header_into_block_buffer(ObMicroBlockDesc &micro_block_desc)
 {
   int ret = OB_SUCCESS;
   int64_t pos = 0;
+  if (OB_UNLIKELY(nullptr == micro_block_desc.header_ || !micro_block_desc.header_->is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid micro block desc for header serialize", K(ret), K(micro_block_desc));
+  } else if (OB_UNLIKELY(nullptr == micro_block_desc.buf_ || micro_block_desc.buf_size_ <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid micro block payload for header serialize", K(ret), K(micro_block_desc));
+  } else if (OB_FAIL(micro_block_desc.header_->serialize(
+      const_cast<char *>(micro_block_desc.get_block_buf()),
+      micro_block_desc.header_->header_size_,
+      pos))) {
+    STORAGE_LOG(WARN, "failed to serialize micro header into block buffer", K(ret), K(micro_block_desc));
+  } else if (OB_UNLIKELY(micro_block_desc.header_->header_size_ != pos)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "micro header serialize len is invalid", K(ret), K(micro_block_desc), K(pos));
+  }
+  return ret;
+}
+
+int ObIMicroBlockWriter::build_micro_block_desc_in_unittest(ObMicroBlockDesc &micro_block_desc)
+{
+  int ret = OB_SUCCESS;
   if (OB_FAIL(ObIMicroBlockWriter::build_micro_block_desc(micro_block_desc))) {
     STORAGE_LOG(WARN, "failed to build micro block desc", KR(ret), K_(micro_header), K(micro_block_desc));
-  } else if (OB_FAIL(micro_header_.serialize(const_cast<char *>(micro_block_desc.get_block_buf()), micro_header_.header_size_, pos))) {
-    STORAGE_LOG(WARN, "failed to serialize micro header", KR(ret), K_(micro_header));
-  } else if (OB_UNLIKELY(micro_header_.header_size_ != pos)) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "micro header serialize len is invalid", KR(ret), K_(micro_header), K(pos));
+  } else if (OB_FAIL(serialize_micro_header_into_block_buffer(micro_block_desc))) {
+    STORAGE_LOG(WARN, "failed to serialize micro header into block buffer", KR(ret), K_(micro_header), K(micro_block_desc));
   } else {
-    STORAGE_LOG(TRACE, "success to serialize micro header", KR(ret), K_(micro_header), K(micro_block_desc), K(pos));
+    STORAGE_LOG(TRACE, "success to build micro block desc in unittest", KR(ret), K_(micro_header), K(micro_block_desc));
   }
   return ret;
 }
