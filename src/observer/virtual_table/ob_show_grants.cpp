@@ -1062,6 +1062,9 @@ int ObShowGrants::print_privs_to_buff(
         if ((priv_set & OB_PRIV_ACCESS_AI_MODEL) && OB_SUCCESS == ret) {
           ret = BUF_PRINTF(" ACCESS AI MODEL,");
         }
+        if ((priv_set & OB_PRIV_CREATE_LOCATION) && OB_SUCCESS == ret) {
+          ret = BUF_PRINTF(" CREATE LOCATION,");
+        }
         if (OB_SUCCESS == ret && pos > 0) {
           pos--; //Delete last ','
         }
