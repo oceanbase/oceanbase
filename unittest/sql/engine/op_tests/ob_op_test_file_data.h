@@ -8,7 +8,7 @@
 
 #define USING_LOG_PREFIX SQL
 
-#include "unittest/sql/engine/op_test/ob_op_test_types.h"
+#include "unittest/sql/engine/op_tests/ob_op_test_types.h"
 #include "lib/utility/ob_macro_utils.h"
 #include <fstream>
 #include <sstream>

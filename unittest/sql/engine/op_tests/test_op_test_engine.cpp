@@ -4,7 +4,7 @@
  */
 
 #include <gtest/gtest.h>
-#include "unittest/sql/engine/op_test/ob_op_test_engine.h"
+#include "unittest/sql/engine/op_tests/ob_op_test_engine.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "lib/worker.h"  // for lib::is_oracle_mode, lib::is_mysql_mode

@@ -43,3 +43,31 @@ sql_unittest(test_scalar_agg_op
   ob_op_test_engine.cpp
   ob_op_test_data_source.cpp
 )
+
+# Phase 3: Window Function operator tests
+sql_unittest(test_window_function_op
+  test_window_function_op.cpp
+  ob_op_test_engine.cpp
+  ob_op_test_data_source.cpp
+)
+
+# Phase 4: MergeGroupBy operator tests
+sql_unittest(test_merge_groupby_op
+  test_merge_groupby_op.cpp
+  ob_op_test_engine.cpp
+  ob_op_test_data_source.cpp
+)
+
+# Phase 4: HashGroupBy operator tests
+sql_unittest(test_hash_groupby_op
+  test_hash_groupby_op.cpp
+  ob_op_test_engine.cpp
+  ob_op_test_data_source.cpp
+)
+
+# Phase 5: Expand operator tests
+sql_unittest(test_expand_op
+  test_expand_op.cpp
+  ob_op_test_engine.cpp
+  ob_op_test_data_source.cpp
+)

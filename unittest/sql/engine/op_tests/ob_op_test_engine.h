@@ -8,9 +8,10 @@
 #include "unittest/sql/test_sql_utils.h"
 #include "sql/code_generator/ob_static_engine_expr_cg.h"
 #include "sql/engine/ob_physical_plan.h"
-#include "unittest/sql/engine/op_test/ob_op_test_types.h"
-#include "unittest/sql/engine/op_test/ob_op_test_result.h"
-#include "unittest/sql/engine/op_test/ob_op_test_data_source.h"
+#include "sql/engine/ob_physical_plan_ctx.h"
+#include "unittest/sql/engine/op_tests/ob_op_test_types.h"
+#include "unittest/sql/engine/op_tests/ob_op_test_result.h"
+#include "unittest/sql/engine/op_tests/ob_op_test_data_source.h"
 #include "share/config/ob_server_config.h"  // for GCONF
 #include "observer/omt/ob_tenant_config_mgr.h"  // for ObTenantConfigGuard
 #include "lib/alloc/alloc_func.h"  // for get_tenant_memory_hold
@@ -123,6 +124,18 @@ public:
   void set_rescan_memory_tolerance(int64_t tolerance_bytes) { rescan_memory_tolerance_bytes_ = tolerance_bytes; }
   int64_t get_rescan_memory_tolerance() const { return rescan_memory_tolerance_bytes_; }
 
+  /**
+   * @brief Enable/disable rich format for vectorized execution.
+   * Must be called AFTER prepare() (expression CG) to ensure CG runs in FORCE_ON mode.
+   * @param enable True for FORCE_ON (2.0 vec), false for FORCE_OFF (1.0)
+   */
+  void enable_rich_format(bool enable)
+  {
+    session_info_.set_force_rich_format(
+        enable ? ObBasicSessionInfo::ForceRichFormatStatus::FORCE_ON
+               : ObBasicSessionInfo::ForceRichFormatStatus::FORCE_OFF);
+  }
+
   // ===== Lifecycle =====
   virtual void init() override;
   virtual void destroy() override;
@@ -199,6 +212,16 @@ public:
   // ===== Session Access =====
   ObSQLSessionInfo &get_session_info() { return session_info_; }
 
+  // ===== Expression Factory Access =====
+  ObRawExprFactory &get_expr_factory() { return expr_factory_; }
+
+  // ===== Pending Raw Exprs (for pseudo columns created outside SQL resolution) =====
+  void add_pending_raw_expr(ObRawExpr *expr) {
+    if (OB_NOT_NULL(expr)) {
+      pending_raw_exprs_.push_back(expr);
+    }
+  }
+
 private:
   /**
    * @brief Collect top-level raw expressions from statement into an array.
@@ -233,11 +256,16 @@ private:
   bool saved_gconf_dump_enabled_ = false;  // Saved GCONF state for restore
   DumpVerifyMode dump_verify_mode_ = DumpVerifyMode::FULL_ROWS;  // Dump verification mode
   ObPhysicalPlan phy_plan_;
+  ObPhysicalPlanCtx *phy_plan_ctx_;  // Physical plan context for operators that need it
   common::ObArenaAllocator allocator_;
 
   // Rescan memory check configuration
   bool rescan_memory_check_ = true;  // Enable rescan memory check by default
   int64_t rescan_memory_tolerance_bytes_ = 0;  // 0 means auto (max(first_scan * 10%, 64KB))
+
+  // Pending raw exprs: pseudo columns (e.g., grouping_id) created outside SQL resolution
+  // Added to CG raw_exprs in generate_exprs(), cleared after use
+  std::vector<ObRawExpr *> pending_raw_exprs_;
 
   DISALLOW_COPY_AND_ASSIGN(OpTestEngine);
 };

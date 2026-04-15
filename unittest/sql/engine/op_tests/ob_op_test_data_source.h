@@ -7,7 +7,7 @@
 #define OCEANBASE_UNITTEST_SQL_ENGINE_OP_TEST_OB_OP_TEST_DATA_SOURCE_H_
 
 #include "sql/engine/ob_operator.h"
-#include "unittest/sql/engine/op_test/ob_op_test_types.h"
+#include "unittest/sql/engine/op_tests/ob_op_test_types.h"
 #include <functional>
 #include <fstream>
 
@@ -126,6 +126,7 @@ public:
 
   int inner_open() override
   {
+    int ret = OB_SUCCESS;
     cur_idx_ = 0;
     output_cnt_ = 0;
 
@@ -141,11 +142,20 @@ public:
       }
     }
 
+    // Sort rows using real SQL expression eval if sort key specs are set
+    if (OB_SUCC(ret) && !sort_key_specs_.empty() && data_source_mode_ == MockDataSourceMode::ARRAY) {
+      if (OB_FAIL(sort_data_by_exprs())) {
+        // sort failed, return error
+      } else {
+        sort_key_specs_.clear();  // sort once only
+      }
+    }
+
     // Apply offset: skip first offset_ rows
-    if (has_offset_ && offset_ > 0 && data_source_mode_ == MockDataSourceMode::ARRAY) {
+    if (OB_SUCC(ret) && has_offset_ && offset_ > 0 && data_source_mode_ == MockDataSourceMode::ARRAY) {
       cur_idx_ = std::min(offset_, static_cast<int64_t>(rows_.size()));
     }
-    return OB_SUCCESS;
+    return ret;
   }
 
   int inner_get_next_row() override
@@ -224,6 +234,16 @@ public:
   void set_vector_format(VectorFormat fmt) { vector_format_ = fmt; }
 
   /**
+   * @brief Set sort key specs for pre-execution sorting via real SQL expression eval.
+   * Called by ob_op_test_base.h after generate_exprs() has resolved ObExpr* pointers.
+   * Sorting happens in inner_open() once eval_ctx_ is available.
+   */
+  void set_sort_key_specs(const std::vector<SortKeySpec> &specs)
+  {
+    sort_key_specs_ = specs;
+  }
+
+  /**
    * @brief Set LIMIT value. Only this many rows will be output.
    * @param limit Maximum rows to output (-1 means no limit)
    */
@@ -236,6 +256,12 @@ public:
   void set_offset(int64_t offset) { offset_ = offset; has_offset_ = true; }
 
 private:
+  /**
+   * @brief Sort rows_ using sort_key_specs_ by evaluating ObExpr* in row mode.
+   * Called from inner_open() after eval_ctx_ is available.
+   */
+  int sort_data_by_exprs();
+
   /**
    * @brief Fill a single value directly into frame buffers.
    */
@@ -273,6 +299,9 @@ private:
   std::ifstream *csv_file_;
   bool csv_has_header_ = false;
   int64_t csv_current_line_ = 0;
+
+  // ===== Sort key specs (for with_sorted_data + arbitrary SQL expressions) =====
+  std::vector<SortKeySpec> sort_key_specs_;
 };
 
 }  // namespace sql

@@ -11,7 +11,7 @@
 #include <vector>
 #include <sstream>
 #include <iostream>
-#include "unittest/sql/engine/op_test/ob_op_test_types.h"
+#include "unittest/sql/engine/op_tests/ob_op_test_types.h"
 
 namespace oceanbase
 {
@@ -133,6 +133,30 @@ public:
   }
 
   /**
+   * @brief Verify rows in exact order using per-column generators.
+   * Generates expected rows from generators and delegates to verify_ordered(vector<TestRow>).
+   *
+   * Example:
+   *   result.verify_ordered(1000, gen::sequential(1), gen::sequential(10, 10));
+   */
+  template <typename... Generators>
+  bool verify_ordered(int64_t row_num, Generators&&... generators)
+  {
+    std::vector<ColumnGenerator> col_gens = {ColumnGenerator(std::forward<Generators>(generators))...};
+    std::vector<TestRow> expected;
+    expected.reserve(row_num);
+    for (int64_t i = 0; i < row_num; ++i) {
+      std::vector<TestValue> values;
+      values.reserve(col_gens.size());
+      for (auto &g : col_gens) {
+        values.push_back(g(i));
+      }
+      expected.emplace_back(std::move(values));
+    }
+    return verify_ordered(expected);
+  }
+
+  /**
    * @brief Verify a specific column across all rows.
    * @param col_idx Column index
    * @param expected Expected values for this column
@@ -157,6 +181,59 @@ public:
       }
     }
     return true;
+  }
+
+  /**
+   * @brief Verify a specific column using a generator.
+   * @param col_idx Column index
+   * @param row_num Number of expected rows
+   * @param generator ColumnGenerator to produce expected values
+   */
+  bool verify_column(int64_t col_idx, int64_t row_num, ColumnGenerator generator)
+  {
+    std::vector<TestValue> expected;
+    expected.reserve(row_num);
+    for (int64_t i = 0; i < row_num; ++i) {
+      expected.push_back(generator(i));
+    }
+    return verify_column(col_idx, expected);
+  }
+
+  /**
+   * @brief Verify rows ignoring order (sort both actual and expected, then compare).
+   * Suitable for HashGroupBy and other operators with non-deterministic output order.
+   */
+  bool verify_unordered(const std::vector<TestRow> &expected)
+  {
+    std::vector<std::vector<std::string>> expected_strs;
+    expected_strs.reserve(expected.size());
+    for (const auto &row : expected) {
+      expected_strs.push_back(row_to_strings(row));
+    }
+    return verify_unordered_internal(expected_strs);
+  }
+
+  /**
+   * @brief Verify rows ignoring order using per-column generators.
+   * Generates expected rows, then delegates to verify_unordered(vector<TestRow>).
+   *
+   * Example: result.verify_unordered(1000, gen_a, gen_count, gen_sum);
+   */
+  template <typename... Generators>
+  bool verify_unordered(int64_t row_num, Generators&&... generators)
+  {
+    std::vector<ColumnGenerator> col_gens = {ColumnGenerator(std::forward<Generators>(generators))...};
+    std::vector<TestRow> expected;
+    expected.reserve(row_num);
+    for (int64_t i = 0; i < row_num; ++i) {
+      std::vector<TestValue> values;
+      values.reserve(col_gens.size());
+      for (auto &g : col_gens) {
+        values.push_back(g(i));
+      }
+      expected.emplace_back(std::move(values));
+    }
+    return verify_unordered(expected);
   }
 
   // ===== Debug output =====
@@ -382,6 +459,57 @@ private:
       }
     }
     return true;
+  }
+
+  // Internal unordered verification
+  bool verify_unordered_internal(const std::vector<std::vector<std::string>> &expected)
+  {
+    if (row_count() != static_cast<int64_t>(expected.size())) {
+      print_diff_unordered(expected, "row count mismatch");
+      return false;
+    }
+
+    auto sorted_actual = rows_;
+    auto sorted_expected = expected;
+    // Normalize both before sorting
+    for (auto &row : sorted_actual) { row = normalize_row(row); }
+    for (auto &row : sorted_expected) { row = normalize_row(row); }
+    std::sort(sorted_actual.begin(), sorted_actual.end());
+    std::sort(sorted_expected.begin(), sorted_expected.end());
+
+    for (int64_t i = 0; i < row_count(); ++i) {
+      if (sorted_actual[i] != sorted_expected[i]) {
+        print_diff_unordered(expected, "rows differ after sorting");
+        return false;
+      }
+    }
+    return true;
+  }
+
+  // Print diff for unordered verification
+  void print_diff_unordered(const std::vector<std::vector<std::string>> &expected,
+                             const std::string &reason) const
+  {
+    std::cerr << "\n=== Unordered Verification FAILED: " << reason << " ===" << std::endl;
+    std::cerr << "\nExpected (" << expected.size() << " rows, unordered):" << std::endl;
+    for (size_t i = 0; i < expected.size(); ++i) {
+      std::cerr << "  [" << i << "] ";
+      for (size_t j = 0; j < expected[i].size(); ++j) {
+        if (j > 0) std::cerr << ", ";
+        std::cerr << expected[i][j];
+      }
+      std::cerr << std::endl;
+    }
+    std::cerr << "\nActual (" << row_count() << " rows):" << std::endl;
+    for (int64_t i = 0; i < row_count(); ++i) {
+      std::cerr << "  [" << i << "] ";
+      for (size_t j = 0; j < rows_[i].size(); ++j) {
+        if (j > 0) std::cerr << ", ";
+        std::cerr << rows_[i][j];
+      }
+      std::cerr << std::endl;
+    }
+    std::cerr << "=============================================" << std::endl;
   }
 
   // Print diff information on failure

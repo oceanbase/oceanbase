@@ -37,7 +37,7 @@
 ## 二、文件结构
 
 ```
-unittest/sql/engine/op_test/
+unittest/sql/engine/op_tests/
 ├── ob_op_test_types.h        # 基础类型定义 (TestValue, TestRow)
 ├── ob_op_test_engine.h/cpp   # OpTestEngine (继承 TestSqlUtils)
 ├── ob_op_test_data_source.h/cpp # MockDataSourceSpec, MockDataSourceOp
@@ -303,7 +303,7 @@ public:
 ### 5.1 基本用法
 
 ```cpp
-#include "unittest/sql/engine/op_test/ob_op_test_kit.h"
+#include "unittest/sql/engine/op_tests/ob_op_test_kit.h"
 
 TEST_F(MaterialOpTest, BasicTest) {
   auto result = material_test()
@@ -460,14 +460,14 @@ ob-make test_scalar_agg_op
 ### 6.2 运行测试
 
 ```bash
-./unittest/sql/engine/op_test/test_material_op
-./unittest/sql/engine/op_test/test_limit_op
-./unittest/sql/engine/op_test/test_scalar_agg_op
+./unittest/sql/engine/op_tests/test_material_op
+./unittest/sql/engine/op_tests/test_limit_op
+./unittest/sql/engine/op_tests/test_scalar_agg_op
 ```
 
 ### 6.3 修改范围
 
-- **允许修改**：`unittest/sql/engine/op_test/` 目录下的文件
+- **允许修改**：`unittest/sql/engine/op_tests/` 目录下的文件
 - **禁止修改**：`src/` 目录下的业务逻辑代码（只允许添加日志打印）
 
 ### 6.4 ObOpInput 限制

@@ -5,7 +5,7 @@
 
 #define USING_LOG_PREFIX SQL
 
-#include "unittest/sql/engine/op_test/ob_op_test_data_source.h"
+#include "unittest/sql/engine/op_tests/ob_op_test_data_source.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr.h"
 #include "share/vector/ob_vector_base.h"
@@ -17,6 +17,8 @@
 #include "lib/allocator/ob_malloc.h"
 #include "lib/wide_integer/ob_wide_integer.h"
 #include "lib/wide_integer/ob_wide_integer_str_funcs.h"
+#include <numeric>    // std::iota
+#include <algorithm>  // std::stable_sort
 
 namespace oceanbase
 {
@@ -153,7 +155,14 @@ int MockDataSourceOp::inner_get_next_batch(const int64_t max_row_cnt)
       ObDatum *datums = expr->locate_batch_datums(eval_ctx_);
       int64_t row_count = (brs_.size_ > 0) ? brs_.size_ : cnt;
       for (int64_t row = 0; row < row_count; ++row) {
-        if (nulls.at(row)) {
+        // For VEC_UNIFORM, null is stored in datum->null_ (set by vec->set_null() in
+        // fill_value_directly). The separate null bitmap (get_nulls) is NOT updated for
+        // VEC_UNIFORM, so checking nulls.at(row) would miss nulls and set_none() would
+        // clear the null flag. Use datum->is_null() directly for VEC_UNIFORM.
+        bool is_null = (fmt == VEC_UNIFORM || fmt == VEC_UNIFORM_CONST)
+                       ? datums[row].is_null()
+                       : nulls.at(row);
+        if (is_null) {
           datums[row].set_null();
         } else {
           datums[row].set_none();
@@ -182,6 +191,19 @@ int MockDataSourceOp::inner_get_next_batch(const int64_t max_row_cnt)
     brs_.size_ = row_count;
     cur_idx_ += row_count;
     output_cnt_ += row_count;
+  }
+
+  // In 1.0 mode (no rich format), cast each output expr vector to VEC_UNIFORM
+  // so downstream 1.0 operators can access data via datum ptr/len/null correctly.
+  if (OB_SUCC(ret) && !spec_.use_rich_format_) {
+    for (int64_t col = 0; col < col_count && OB_SUCC(ret); ++col) {
+      ObExpr *expr = output_exprs.at(col);
+      if (OB_NOT_NULL(expr)) {
+        if (OB_FAIL(expr->cast_to_uniform(brs_.size_, eval_ctx_))) {
+          LOG_WARN("cast to uniform failed", K(ret), K(col));
+        }
+      }
+    }
   }
 
   return ret;
@@ -314,9 +336,17 @@ int MockDataSourceOp::fill_value_directly(ObExpr *expr, int64_t row_idx,
         LOG_WARN("failed to parse decimal int from string", K(str_val.c_str()), K(ret));
         break;
       }
-      // Copy to vector buffer
+      // Copy to vector buffer with sign extension.
+      // val_len may be smaller than int_bytes when the string's parsed precision
+      // is less than the expression's declared precision (e.g. "0.50" has
+      // precision=3 → val_len=4, but decimal(10,2) needs int_bytes=8).
+      // Use ObDecimalIntBuilder::extend() so negative values are sign-extended
+      // correctly (fills 0xFF for negative, 0x00 for positive).
       char *dst = data + row_idx * int_bytes;
-      MEMCPY(dst, decint, val_len);
+      ObDecimalIntBuilder builder;
+      builder.from(decint, val_len);
+      builder.extend(int_bytes);
+      MEMCPY(dst, builder.get_decimal_int(), int_bytes);
       break;
     }
 
@@ -486,7 +516,39 @@ int MockDataSourceOp::fill_value_directly(ObExpr *expr, int64_t row_idx,
       break;
     }
 
-    // TODO: set decimal int, int32/int64/int128/int256/int512
+    case ObDecimalIntType: {
+      std::string str_val;
+      if (value.is_string()) {
+        str_val = value.get_string();
+      } else if (value.is_int()) {
+        str_val = std::to_string(value.get_int());
+      } else if (value.is_double()) {
+        str_val = std::to_string(value.get_double());
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unsupported value type for decimal int (uniform)", K(ret));
+        break;
+      }
+      const int16_t precision = expr->datum_meta_.precision_;
+      const int32_t int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(precision);
+      ObDecimalInt *decint = nullptr;
+      int16_t calc_scale = 0, calc_precision = 0;
+      int32_t val_len = 0;
+      common::ObArenaAllocator arena;
+      if (OB_FAIL(wide::from_string(str_val.c_str(), str_val.length(), arena,
+                                     calc_scale, calc_precision, val_len, decint))) {
+        LOG_WARN("failed to parse decimal int from string (uniform)", K(str_val.c_str()), K(ret));
+        break;
+      }
+      // reset ptr_ to point to the expression's res_buf before writing:
+      // set_decimal_int does memcpy(ptr_, ...) so ptr_ must point to valid frame memory
+      expr->reset_ptr_in_datum(eval_ctx_, row_idx);
+      // zero the full int_bytes slot first (val_len may be < int_bytes for small values)
+      MEMSET(const_cast<char *>(datums[row_idx].ptr_), 0, int_bytes);
+      MEMCPY(const_cast<char *>(datums[row_idx].ptr_), decint, val_len);
+      datums[row_idx].pack_ = static_cast<uint32_t>(int_bytes);
+      break;
+    }
 
     case ObVarcharType:
     case ObCharType:
@@ -511,6 +573,178 @@ int MockDataSourceOp::fill_value_directly(ObExpr *expr, int64_t row_idx,
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("unsupported vector format", K(fmt), K(ret));
   }
+
+  return ret;
+}
+
+// ===== sort_data_by_exprs helpers =====
+
+namespace {
+
+/**
+ * Fill an ObDatum from a TestValue for row-mode sort key evaluation.
+ * String pointer points into the TestValue's std::string, which must remain alive.
+ */
+static void fill_datum_from_test_value(ObDatum &datum, const TestValue &val)
+{
+  if (val.is_null()) {
+    datum.set_null();
+  } else if (val.is_int()) {
+    datum.set_int(val.get_int());
+  } else if (val.is_double()) {
+    datum.set_double(val.get_double());
+  } else if (val.is_string()) {
+    const std::string &s = val.get_string();
+    datum.set_string(ObString(static_cast<int32_t>(s.length()), s.c_str()));
+  } else {
+    datum.set_null();
+  }
+}
+
+/**
+ * Convert an evaluated ObDatum to TestValue for sort comparison.
+ */
+static TestValue datum_to_test_value(const ObDatum &datum, const ObObjType type)
+{
+  if (datum.is_null()) return TestValue::null();
+  if (ob_is_int_tc(type)) {
+    return TestValue(datum.get_int());
+  } else if (ob_is_uint_tc(type)) {
+    return TestValue(static_cast<int64_t>(datum.get_uint64()));
+  } else if (type == ObFloatType) {
+    return TestValue(static_cast<double>(datum.get_float()));
+  } else if (type == ObDoubleType) {
+    return TestValue(datum.get_double());
+  } else if (ob_is_string_type(type)) {
+    ObString str = datum.get_string();
+    return TestValue(std::string(str.ptr(), str.length()));
+  }
+  return TestValue::null();
+}
+
+/**
+ * Recursively clear evaluated flag for sort key expr and all sub-exprs.
+ * Called before evaluating each row so stale cached values are not reused.
+ */
+static void clear_sort_key_eval_flag(ObExpr *expr, ObEvalCtx &eval_ctx)
+{
+  if (OB_ISNULL(expr)) return;
+  expr->get_eval_info(eval_ctx).clear_evaluated_flag();
+  for (uint32_t i = 0; i < expr->arg_cnt_; ++i) {
+    clear_sort_key_eval_flag(expr->args_[i], eval_ctx);
+  }
+}
+
+/**
+ * Recursively reset vector header format to VEC_INVALID for expr and all sub-exprs.
+ * This prevents cast_to_uniform() from overwriting datums with stale vector data
+ * left over from a previous execution (e.g., 2.0 run in dual-format check mode).
+ */
+static void reset_vector_header_recursive(ObExpr *expr, ObEvalCtx &eval_ctx)
+{
+  if (OB_ISNULL(expr)) return;
+  if (UINT32_MAX != expr->vector_header_off_) {
+    expr->get_vector_header(eval_ctx).format_ = VEC_INVALID;
+  }
+  for (uint32_t i = 0; i < expr->arg_cnt_; ++i) {
+    reset_vector_header_recursive(expr->args_[i], eval_ctx);
+  }
+}
+
+}  // anonymous namespace
+
+int MockDataSourceOp::sort_data_by_exprs()
+{
+  int ret = OB_SUCCESS;
+  if (sort_key_specs_.empty() || rows_.empty()) return ret;
+
+  const ExprFixedArray &col_exprs = get_spec().output_;
+  const int64_t n = static_cast<int64_t>(rows_.size());
+  const int64_t col_count = col_exprs.count();
+
+  // Reset vector header formats to VEC_INVALID for all column exprs and sort key sub-exprs.
+  // This prevents cast_to_uniform() in ObExpr::eval() from overwriting freshly filled datums
+  // with stale vector data from a previous execution (e.g., 2.0 run in dual-format check).
+  for (int64_t j = 0; j < col_count; ++j) {
+    ObExpr *col_expr = col_exprs.at(j);
+    if (UINT32_MAX != col_expr->vector_header_off_) {
+      col_expr->get_vector_header(eval_ctx_).format_ = VEC_INVALID;
+    }
+  }
+  for (const SortKeySpec &spec : sort_key_specs_) {
+    reset_vector_header_recursive(spec.key_expr, eval_ctx_);
+  }
+
+  // Collect sort key values for each row
+  std::vector<std::vector<TestValue>> key_values(n);
+
+  for (int64_t row_i = 0; row_i < n && OB_SUCC(ret); ++row_i) {
+    const TestRow &row = rows_[row_i];
+
+    // 1. Clear all eval flags (columns + sort key sub-exprs) for this row
+    for (int64_t j = 0; j < col_count; ++j) {
+      col_exprs.at(j)->get_eval_info(eval_ctx_).clear_evaluated_flag();
+    }
+    for (const SortKeySpec &spec : sort_key_specs_) {
+      clear_sort_key_eval_flag(spec.key_expr, eval_ctx_);
+    }
+
+    // 2. Fill column datums from TestRow and mark evaluated
+    for (int64_t j = 0; j < col_count && OB_SUCC(ret); ++j) {
+      if (j >= static_cast<int64_t>(row.size())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("row has fewer columns than expected", K(j), K(row.size()), K(ret));
+        break;
+      }
+      ObExpr *col_expr = col_exprs.at(j);
+      ObDatum &datum = col_expr->locate_datum_for_write(eval_ctx_);
+      fill_datum_from_test_value(datum, row[j]);
+      col_expr->set_evaluated_flag(eval_ctx_);
+    }
+    if (OB_FAIL(ret)) break;
+
+    // 3. Evaluate each sort key expr and record result
+    key_values[row_i].reserve(sort_key_specs_.size());
+    for (const SortKeySpec &spec : sort_key_specs_) {
+      ObDatum *result = nullptr;
+      if (OB_FAIL(spec.key_expr->eval(eval_ctx_, result))) {
+        LOG_WARN("sort key eval failed", K(ret));
+        break;
+      }
+      if (OB_ISNULL(result)) {
+        key_values[row_i].push_back(TestValue::null());
+      } else {
+        key_values[row_i].push_back(
+            datum_to_test_value(*result, spec.key_expr->datum_meta_.type_));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret)) return ret;
+
+  // 4. Stable-sort rows by collected key values
+  std::vector<int64_t> idx(n);
+  std::iota(idx.begin(), idx.end(), 0);
+  std::stable_sort(idx.begin(), idx.end(),
+    [&](int64_t a, int64_t b) -> bool {
+      for (size_t k = 0; k < sort_key_specs_.size(); ++k) {
+        const TestValue &va = key_values[a][k];
+        const TestValue &vb = key_values[b][k];
+        if (va.is_null() && vb.is_null()) continue;
+        const bool asc = sort_key_specs_[k].ascending;
+        const bool nf  = sort_key_specs_[k].nulls_first;
+        if (va.is_null()) return nf ? asc : !asc;
+        if (vb.is_null()) return nf ? !asc : asc;
+        if (va < vb) return asc;
+        if (vb < va) return !asc;
+      }
+      return false;  // equal
+    });
+
+  std::vector<TestRow> sorted;
+  sorted.reserve(n);
+  for (int64_t i : idx) sorted.push_back(std::move(rows_[i]));
+  rows_ = std::move(sorted);
 
   return ret;
 }

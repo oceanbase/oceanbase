@@ -8,7 +8,7 @@
 
 #define USING_LOG_PREFIX SQL
 
-#include "unittest/sql/engine/op_test/ob_op_test_engine.h"
+#include "unittest/sql/engine/op_tests/ob_op_test_engine.h"
 #include "share/config/ob_server_config.h"  // for GCONF
 #include "observer/omt/ob_tenant_config_mgr.h"  // for ObTenantConfigGuard
 #include "sql/resolver/dml/ob_dml_stmt.h"
@@ -25,6 +25,8 @@
 #include "lib/number/ob_number_v2.h"
 #include "lib/worker.h"  // for CompatMode, set_compat_mode
 #include "storage/tmp_file/ob_tmp_file_manager.h"  // for ObTenantTmpFileManager
+#include "sql/rewrite/ob_expand_aggregate_utils.h"  // for ObExpandAggregateUtils
+#include "unittest/sql/engine/op_tests/ob_op_test_base.h"
 
 namespace oceanbase
 {
@@ -32,7 +34,8 @@ namespace sql
 {
 
 OpTestEngine::OpTestEngine()
-  : inited_(false)
+  : inited_(false),
+    phy_plan_ctx_(nullptr)
 {
 }
 
@@ -528,6 +531,32 @@ int OpTestEngine::collect_raw_exprs(ObDMLStmt &stmt,
         if (OB_FAIL(exprs.push_back(aggr_items.at(i)))) {
           LOG_WARN("failed to push aggr item", K(ret));
         }
+        // Also collect aggr params - needed when aggr is expanded (e.g., AVG -> SUM/COUNT)
+        // The expanded aggr params may be new expressions not in select items
+        const ObIArray<ObRawExpr *> &params = aggr_items.at(i)->get_real_param_exprs();
+        for (int64_t j = 0; OB_SUCC(ret) && j < params.count(); ++j) {
+          if (OB_NOT_NULL(params.at(j))) {
+            if (OB_FAIL(exprs.push_back(params.at(j)))) {
+              LOG_WARN("failed to push aggr param", K(ret), K(i), K(j));
+            }
+          }
+        }
+        // Also collect ORDER BY expressions inside aggregate (for GROUP_CONCAT, etc.)
+        const ObIArray<OrderItem> &aggr_order_items = aggr_items.at(i)->get_order_items();
+        for (int64_t j = 0; OB_SUCC(ret) && j < aggr_order_items.count(); ++j) {
+          if (OB_NOT_NULL(aggr_order_items.at(j).expr_)) {
+            if (OB_FAIL(exprs.push_back(aggr_order_items.at(j).expr_))) {
+              LOG_WARN("failed to push aggr order item", K(ret), K(i), K(j));
+            }
+          }
+        }
+        // Also collect separator expression for GROUP_CONCAT
+        ObRawExpr *separator_expr = aggr_items.at(i)->get_separator_param_expr();
+        if (OB_SUCC(ret) && OB_NOT_NULL(separator_expr)) {
+          if (OB_FAIL(exprs.push_back(separator_expr))) {
+            LOG_WARN("failed to push aggr separator expr", K(ret), K(i));
+          }
+        }
       }
     }
   }
@@ -607,6 +636,16 @@ int OpTestEngine::generate_exprs(ObDMLStmt &stmt)
   // We need to reset it to 0 so that init_expr_op() can be called again for the new expressions.
   exec_ctx_.reset_expr_op();
 
+  // Step 0: Expand aggregate expressions (AVG -> SUM/COUNT, STDDEV, VAR_POP, etc.)
+  // This is required for complex aggregate functions that are transformed into simpler ones.
+  // Without this step, the aggregate processor will reject T_FUN_AVG and other complex types.
+  bool trans_happened = false;
+  ObExpandAggregateUtils expand_utils(expr_factory_, &session_info_);
+  if (OB_FAIL(expand_utils.expand_aggr_expr(&stmt, trans_happened))) {
+    LOG_WARN("failed to expand aggregate expressions", K(ret));
+    return ret;
+  }
+
   // Step 1: Collect top-level raw expressions into ObRawExprUniqueSet
   // Do NOT pre-flatten! Let generate() handle the flattening.
   // Pre-flattening sets IS_MARKED flag which never gets cleared,
@@ -627,6 +666,15 @@ int OpTestEngine::generate_exprs(ObDMLStmt &stmt)
       return ret;
     }
   }
+
+  // Add pending raw exprs (e.g., grouping_id pseudo column from Expand operator)
+  for (size_t i = 0; i < pending_raw_exprs_.size() && OB_SUCC(ret); ++i) {
+    if (OB_FAIL(raw_exprs.append(pending_raw_exprs_.at(i)))) {
+      LOG_WARN("append pending raw expr failed", K(ret));
+      return ret;
+    }
+  }
+  pending_raw_exprs_.clear();
 
   // CRITICAL: Clear IS_MARKED flag from expressions before calling generate()
   // The append() calls above set IS_MARKED on each expression for deduplication.
@@ -675,6 +723,20 @@ int OpTestEngine::generate_exprs(ObDMLStmt &stmt)
     LOG_WARN("init expr op failed", K(ret));
     return ret;
   }
+
+  // Create and set ObPhysicalPlanCtx for operators that need it (e.g., GROUP_CONCAT with ORDER BY)
+  // This must be set before operator execution
+  if (OB_ISNULL(phy_plan_ctx_)) {
+    void *ctx_mem = allocator_.alloc(sizeof(ObPhysicalPlanCtx));
+    if (OB_ISNULL(ctx_mem)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc phy_plan_ctx failed", K(ret));
+      return ret;
+    }
+    phy_plan_ctx_ = new (ctx_mem) ObPhysicalPlanCtx(allocator_);
+  }
+  exec_ctx_.set_physical_plan_ctx(phy_plan_ctx_);
+  exec_ctx_.reference_my_plan(&phy_plan_);
 
   return ret;
 }
@@ -740,6 +802,7 @@ OpTestResult OpTestEngine::collect_batch_results(ObOperator *op, const ExprFixed
 {
   OpTestResult result;
   int ret = OB_SUCCESS;
+  FatalErrorChecker error_checker(ret);
 
   if (OB_ISNULL(op)) {
     LOG_WARN("op is null");
@@ -850,6 +913,21 @@ OpTestResult OpTestEngine::collect_batch_results(ObOperator *op, const ExprFixed
         }
       }
 
+      // In 1.0 mode (no rich format), operators fill datum store but do not
+      // initialize vector headers. We must call init_vector(VEC_UNIFORM) so
+      // that get_vector() returns a valid VEC_UNIFORM vector rather than VEC_INVALID.
+      if (!op->get_spec().use_rich_format_) {
+        for (int64_t col = 0; col < result_exprs->count() && OB_SUCC(ret); ++col) {
+          ObExpr *expr = result_exprs->at(col);
+          if (OB_NOT_NULL(expr)) {
+            VectorFormat fmt = expr->is_batch_result() ? VEC_UNIFORM : VEC_UNIFORM_CONST;
+            if (OB_FAIL(expr->init_vector(eval_ctx, fmt, batch_rows->size_))) {
+              LOG_WARN("init vector failed", K(ret), K(col));
+            }
+          }
+        }
+      }
+
       for (int64_t row = 0; row < batch_rows->size_ && OB_SUCC(ret); ++row) {
         if (batch_rows->skip_->exist(row)) {
           continue;
@@ -869,7 +947,7 @@ OpTestResult OpTestEngine::collect_batch_results(ObOperator *op, const ExprFixed
           // We need to use the vector's format for correct data access.
           ObIVector *vec = expr->get_vector(eval_ctx);
           VectorFormat fmt = vec ? vec->get_format() : VEC_INVALID;
-          // TODO: fmt should not be VEC_INVALID
+          EXPECT_NE(fmt, VEC_INVALID);
 
           // Check NULL using vector's is_null() method which correctly checks the null bitmap
           if (vec && vec->is_null(row)) {

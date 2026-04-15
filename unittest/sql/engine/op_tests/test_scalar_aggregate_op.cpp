@@ -4,8 +4,8 @@
  */
 
 #include <gtest/gtest.h>
-#include "unittest/sql/engine/op_test/ob_op_test_kit.h"
-#include "unittest/sql/engine/op_test/ob_op_test_scalar_aggregate.h"
+#include "unittest/sql/engine/op_tests/ob_op_test_kit.h"
+#include "unittest/sql/engine/op_tests/ob_op_test_scalar_aggregate.h"
 #include "sql/engine/ob_batch_rows.h"
 
 namespace oceanbase
@@ -48,7 +48,7 @@ TEST_F(ScalarAggregateOpTest, CountStar)
       .table("t", "a int")
       .select("COUNT(*)")
       .with_data({{1}, {2}, {3}, {4}, {5}})
-      .run(engine_);
+      .enable_dual_format_check().run(engine_);
 
   EXPECT_EQ(1, result.row_count());
   EXPECT_TRUE(result.verify_ordered({{"5"}}));
@@ -61,7 +61,7 @@ TEST_F(ScalarAggregateOpTest, SumInt)
       .table("t", "a int")
       .select("SUM(a)")
       .with_data({{1}, {2}, {3}, {4}, {5}})
-      .run(engine_);
+      .enable_dual_format_check().run(engine_);
 
   EXPECT_EQ(1, result.row_count());
   EXPECT_TRUE(result.verify_ordered({{"15"}}));
@@ -74,7 +74,7 @@ TEST_F(ScalarAggregateOpTest, AvgInt)
       .table("t", "a int")
       .select("AVG(a)")
       .with_data({{10}, {20}, {30}})
-      .run(engine_);
+      .enable_dual_format_check().run(engine_);
 
   EXPECT_EQ(1, result.row_count());
   // AVG(10, 20, 30) = 20
@@ -88,7 +88,7 @@ TEST_F(ScalarAggregateOpTest, MinInt)
       .table("t", "a int")
       .select("MIN(a)")
       .with_data({{5}, {3}, {8}, {1}, {9}})
-      .run(engine_);
+      .enable_dual_format_check().run(engine_);
 
   EXPECT_EQ(1, result.row_count());
   EXPECT_TRUE(result.verify_ordered({{"1"}}));
@@ -104,7 +104,7 @@ TEST_F(ScalarAggregateOpTest, MaxString)
                   TestRow{std::string("banana")},
                   TestRow{std::string("cherry")},
                   TestRow{std::string("date")}})
-      .run(engine_);
+      .enable_dual_format_check().run(engine_);
 
   EXPECT_EQ(1, result.row_count());
   // Max string by dictionary order: "date"
@@ -118,7 +118,7 @@ TEST_F(ScalarAggregateOpTest, MultipleAggregates)
       .table("t", "a int, b int")
       .select("COUNT(*), SUM(a), AVG(b), MIN(a), MAX(b)")
       .with_data({{1, 10}, {2, 20}, {3, 30}})
-      .run(engine_);
+      .enable_dual_format_check().run(engine_);
 
   EXPECT_EQ(1, result.row_count());
   // COUNT=3, SUM(a)=6, AVG(b)=20, MIN(a)=1, MAX(b)=30
@@ -136,7 +136,7 @@ TEST_F(ScalarAggregateOpTest, CountDistinctInt)
       .select("COUNT(DISTINCT a)")
       .with_data(generate_data_with_duplicates(3, 3))
       .enable_hash_base_distinct(true)
-      .run(engine_);
+      .enable_dual_format_check().run(engine_);
 
   EXPECT_EQ(1, result.row_count());
   EXPECT_TRUE(result.verify_ordered({{"3"}}));
@@ -154,7 +154,7 @@ TEST_F(ScalarAggregateOpTest, SumDistinctInt)
       .select("SUM(DISTINCT a)")
       .with_data(std::move(data))
       .enable_hash_base_distinct(true)
-      .run(engine_);
+      .enable_dual_format_check().run(engine_);
 
   EXPECT_EQ(1, result.row_count());
   EXPECT_TRUE(result.verify_ordered({{"60"}}));
@@ -172,7 +172,7 @@ TEST_F(ScalarAggregateOpTest, SumDistinctDecimal)
       .select("SUM(DISTINCT price)")
       .with_data(std::move(data))
       .enable_hash_base_distinct(true)
-      .run(engine_);
+      .enable_dual_format_check().run(engine_);
 
   EXPECT_EQ(1, result.row_count());
 }
@@ -193,7 +193,7 @@ TEST_F(ScalarAggregateOpTest, CountDistinctString)
       .select("COUNT(DISTINCT name)")
       .with_data(std::move(data))
       .enable_hash_base_distinct(true)
-      .run(engine_);
+      .enable_dual_format_check().run(engine_);
 
   EXPECT_EQ(1, result.row_count());
   EXPECT_TRUE(result.verify_ordered({{"3"}}));
@@ -208,7 +208,7 @@ TEST_F(ScalarAggregateOpTest, EmptyTableCount)
       .table("t", "a int")
       .select("COUNT(*)")
       .with_data({})
-      .run(engine_);
+      .enable_dual_format_check().run(engine_);
 
   EXPECT_EQ(1, result.row_count());
   EXPECT_TRUE(result.verify_ordered({{"0"}}));
@@ -221,7 +221,7 @@ TEST_F(ScalarAggregateOpTest, EmptyTableSum)
       .table("t", "a int")
       .select("SUM(a)")
       .with_data({})
-      .run(engine_);
+      .enable_dual_format_check().run(engine_);
 
   EXPECT_EQ(1, result.row_count());
   // SUM on empty set returns NULL (represented as "NULL" string)
@@ -235,7 +235,7 @@ TEST_F(ScalarAggregateOpTest, EmptyTableMultipleAggregates)
       .table("t", "a int")
       .select("COUNT(*), SUM(a), AVG(a), MIN(a), MAX(a)")
       .with_data({})
-      .run(engine_);
+      .enable_dual_format_check().run(engine_);
 
   EXPECT_EQ(1, result.row_count());
   // COUNT(*) = 0, others are NULL
@@ -258,7 +258,7 @@ TEST_F(ScalarAggregateOpTest, LargeDataSetCount)
       .table("t", "a int")
       .select("COUNT(*)")
       .with_data(generate_data(row_count))
-      .run(engine_);
+      .enable_dual_format_check().run(engine_);
 
   EXPECT_EQ(1, result.row_count());
   EXPECT_TRUE(result.verify_ordered({{"1000"}}));
@@ -274,7 +274,7 @@ TEST_F(ScalarAggregateOpTest, LargeDataSetSum)
       .table("t", "a int")
       .select("SUM(a)")
       .with_data(generate_data(row_count))
-      .run(engine_);
+      .enable_dual_format_check().run(engine_);
 
   EXPECT_EQ(1, result.row_count());
   EXPECT_TRUE(result.verify_ordered({{"500500"}}));
@@ -289,7 +289,7 @@ TEST_F(ScalarAggregateOpTest, LargeDataSetMinMax)
       .table("t", "a int")
       .select("MIN(a), MAX(a)")
       .with_data(generate_data(row_count))
-      .run(engine_);
+      .enable_dual_format_check().run(engine_);
 
   EXPECT_EQ(1, result.row_count());
   EXPECT_TRUE(result.verify_ordered({{"1", "1000"}}));
@@ -311,7 +311,7 @@ TEST_F(ScalarAggregateOpTest, LargeDataSetDistinct)
       .select("COUNT(DISTINCT a)")
       .with_data(std::move(data))
       .enable_hash_base_distinct(true)
-      .run(engine_);
+      .enable_dual_format_check().run(engine_);
 
   EXPECT_EQ(1, result.row_count());
   EXPECT_TRUE(result.verify_ordered({{"100"}}));
@@ -326,7 +326,7 @@ TEST_F(ScalarAggregateOpTest, MultiBatchProcessing)
       .select("COUNT(*), SUM(a)")
       .with_batch_size(10)
       .with_data(generate_data(100))
-      .run(engine_);
+      .enable_dual_format_check().run(engine_);
 
   EXPECT_EQ(1, result.row_count());
   // COUNT=100, SUM=5050
