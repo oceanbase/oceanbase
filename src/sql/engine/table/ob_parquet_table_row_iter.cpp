@@ -1575,6 +1575,7 @@ int ObParquetTableRowIterator::DataLoader::load_fixed_string_col()
     } else {
       bool is_byte_length = is_oracle_byte_length(
             lib::is_oracle_mode(), file_col_expr_->datum_meta_.length_semantics_);
+      const int64_t max_length = file_col_expr_->max_length_;
       int j = 0;
       stat_.cross_page_cnt_ += cross_page_;
       stat_.in_page_cnt_ += (!cross_page_);
@@ -1584,32 +1585,40 @@ int ObParquetTableRowIterator::DataLoader::load_fixed_string_col()
         } else {
           void *res_ptr = NULL;
           parquet::FixedLenByteArray &cur_v = values.at(j++);
-          if (OB_UNLIKELY(fixed_length > file_col_expr_->max_length_
-                          && (is_byte_length || ObCharset::strlen_char(CS_TYPE_UTF8MB4_BIN,
-                                                                       pointer_cast<const char *>(cur_v.ptr),
-                                                                       fixed_length) > file_col_expr_->max_length_))) {
-            ret = OB_ERR_DATA_TOO_LONG;
-            LOG_WARN("data too long", K(file_col_expr_->max_length_), K(fixed_length), K(is_byte_length), K(ret));
+          int64_t adjusted_len = fixed_length;
+          if (OB_UNLIKELY(fixed_length > max_length
+                          && OB_FAIL(ObExternalTableUtils::adjust_string_length_for_external_table(
+                              pointer_cast<const char *>(cur_v.ptr),
+                              fixed_length,
+                              max_length,
+                              is_byte_length,
+                              is_hive_lake_table_,
+                              adjusted_len)))) {
+            LOG_WARN("data too long", K(max_length), K(fixed_length), K(is_byte_length), K(ret));
           } else if (ob_is_large_text(file_col_expr_->datum_meta_.type_)) {
-            if (OB_FAIL(ObTextStringHelper::string_to_templob_result(*file_col_expr_, eval_ctx_,
-                                      ObString(fixed_length, pointer_cast<const char *>(cur_v.ptr)),
-                                                                     i + row_offset_))) {
-              LOG_WARN("fail to lob result", K(ret));
+            if (OB_FAIL(ObTextStringHelper::string_to_templob_result(
+                    *file_col_expr_,
+                    eval_ctx_,
+                    ObString(adjusted_len, pointer_cast<const char *>(cur_v.ptr)),
+                    i + row_offset_))) {
+                LOG_WARN("fail to lob result", K(ret));
             }
           } else {
             if (!cross_page_) {
-              res_ptr = (void*)(cur_v.ptr);
-            } else if (fixed_length > 0) {
-              //when row_count_ less than batch_size_, it may reach page end and reload next page
-              //string values need deep copy
-              if (OB_ISNULL(res_ptr = str_res_mem_.alloc(fixed_length))) {
-                ret = OB_ALLOCATE_MEMORY_FAILED;
-                LOG_WARN("fail to allocate memory", K(fixed_length));
-              } else {
-                MEMCPY(res_ptr, cur_v.ptr, fixed_length);
-              }
+                res_ptr = (void *)(cur_v.ptr);
+            } else if (adjusted_len > 0) {
+                // when row_count_ less than batch_size_, it may reach page end and reload next page
+                // string values need deep copy
+                if (OB_ISNULL(res_ptr = str_res_mem_.alloc(adjusted_len))) {
+                  ret = OB_ALLOCATE_MEMORY_FAILED;
+                  LOG_WARN("fail to allocate memory", K(adjusted_len));
+                } else {
+                  MEMCPY(res_ptr, cur_v.ptr, adjusted_len);
+                }
             }
-            text_vec->set_string(i + row_offset_, pointer_cast<const char *>(res_ptr), fixed_length);
+            text_vec->set_string(i + row_offset_,
+                                 pointer_cast<const char *>(res_ptr),
+                                 adjusted_len);
           }
         }
       }
@@ -1660,16 +1669,20 @@ int ObParquetTableRowIterator::DataLoader::load_string_col()
       if (OB_LIKELY(is_fast_path)) {
         for (int i = 0; OB_SUCC(ret) && i < row_count_; i++) {
           parquet::ByteArray &cur_v = values_data[i];
+          int64_t adjusted_len = cur_v.len;
           if (OB_UNLIKELY(cur_v.len > max_length
-                          && (is_byte_length
-                              || ObCharset::strlen_char(CS_TYPE_UTF8MB4_BIN,
-                                                        pointer_cast<const char *>(cur_v.ptr),
-                                                        cur_v.len)
-                                     > max_length))) {
-            ret = OB_ERR_DATA_TOO_LONG;
+                          && OB_FAIL(ObExternalTableUtils::adjust_string_length_for_external_table(
+                              pointer_cast<const char *>(cur_v.ptr),
+                              cur_v.len,
+                              max_length,
+                              is_byte_length,
+                              is_hive_lake_table_,
+                              adjusted_len)))) {
             LOG_WARN("data too long", K(max_length), K(cur_v.len), K(ret));
           } else {
-            text_vec->set_string(i + row_offset, pointer_cast<const char *>(cur_v.ptr), cur_v.len);
+            text_vec->set_string(i + row_offset,
+                                 pointer_cast<const char *>(cur_v.ptr),
+                                 adjusted_len);
           }
         }
       } else {
@@ -1679,42 +1692,44 @@ int ObParquetTableRowIterator::DataLoader::load_string_col()
           } else {
             parquet::ByteArray &cur_v = values_data[j++];
             if (OB_UNLIKELY(is_oracle_mode && 0 == cur_v.len)) {
-              text_vec->set_null(i + row_offset);
+                text_vec->set_null(i + row_offset);
             } else {
-              void *res_ptr = NULL;
+                void *res_ptr = NULL;
+                int64_t adjusted_len = cur_v.len;
 
-              // Check length only when necessary (Optimization: reduce unlikely checks)
-              if (OB_UNLIKELY(cur_v.len > max_length
-                              && (is_byte_length
-                                  || ObCharset::strlen_char(CS_TYPE_UTF8MB4_BIN,
-                                                            pointer_cast<const char *>(cur_v.ptr),
-                                                            cur_v.len)
-                                         > max_length))) {
-                ret = OB_ERR_DATA_TOO_LONG;
-                LOG_WARN("data too long", K(max_length), K(cur_v.len), K(is_byte_length), K(ret));
-              } else if (OB_UNLIKELY(is_large_text)) {
-                if (OB_FAIL(ObTextStringHelper::string_to_templob_result(
-                        *file_col_expr_,
-                        eval_ctx_,
-                        ObString(cur_v.len, pointer_cast<const char *>(cur_v.ptr)),
-                        i + row_offset))) {
+                if (OB_UNLIKELY(
+                        cur_v.len > max_length
+                        && OB_FAIL(ObExternalTableUtils::adjust_string_length_for_external_table(
+                            pointer_cast<const char *>(cur_v.ptr),
+                            cur_v.len,
+                            max_length,
+                            is_byte_length,
+                            is_hive_lake_table_,
+                            adjusted_len)))) {
+                  LOG_WARN("data too long", K(max_length), K(cur_v.len), K(is_byte_length), K(ret));
+                } else if (OB_UNLIKELY(is_large_text)) {
+                  if (OB_FAIL(ObTextStringHelper::string_to_templob_result(
+                          *file_col_expr_,
+                          eval_ctx_,
+                          ObString(adjusted_len, pointer_cast<const char *>(cur_v.ptr)),
+                          i + row_offset))) {
                     LOG_WARN("fail to lob result", K(ret));
-                }
-              } else {
-                if (OB_LIKELY(!cross_page_)) {
+                  }
+                } else {
+                  if (OB_LIKELY(!cross_page_)) {
                     res_ptr = (void *)(cur_v.ptr);
-                } else if (cur_v.len > 0) {
-                    if (OB_ISNULL(res_ptr = str_res_mem_.alloc(cur_v.len))) {
+                  } else if (adjusted_len > 0) {
+                    if (OB_ISNULL(res_ptr = str_res_mem_.alloc(adjusted_len))) {
                       ret = OB_ALLOCATE_MEMORY_FAILED;
-                      LOG_WARN("fail to allocate memory", K(cur_v.len));
+                      LOG_WARN("fail to allocate memory", K(adjusted_len));
                     } else {
-                      MEMCPY(res_ptr, cur_v.ptr, cur_v.len);
+                      MEMCPY(res_ptr, cur_v.ptr, adjusted_len);
                     }
+                  }
+                  text_vec->set_string(i + row_offset,
+                                       pointer_cast<const char *>(res_ptr),
+                                       adjusted_len);
                 }
-                text_vec->set_string(i + row_offset,
-                                     pointer_cast<const char *>(res_ptr),
-                                     cur_v.len);
-              }
             }
           }
         }
@@ -3626,7 +3641,7 @@ int ObParquetTableRowIterator::project_eager_columns(int64_t &count, int64_t cap
                             temp_row_count, state_.cur_row_group_row_count_,
                             default_value, state_.eager_read_row_counts_[i],
                             cross_page, stat_, cur_col_id_, first_batch,
-                            dict_filter_pushdown_, false);
+                            dict_filter_pushdown_, false, is_hive_lake_table());
           OZ (loader.load_data_for_col(load_funcs_.at(cur_col_id_)));
           load_row_count += temp_row_count;
           first_batch = false;
@@ -3927,7 +3942,7 @@ int ObParquetTableRowIterator::project_lazy_columns(int64_t &read_count, int64_t
                             temp_row_count, state_.cur_row_group_row_count_,
                             default_value, state_.read_row_counts_[cur_col_id_],
                             cross_page, stat_, cur_col_id_, first_batch, dict_filter_pushdown_,
-                            is_eager_calc());
+                            is_eager_calc(), is_hive_lake_table());
           OZ (loader.load_data_for_col(load_funcs_.at(cur_col_id_)));
           load_row_count += temp_row_count;
           tmp_logical_read += temp_row_count;

@@ -33,6 +33,41 @@ const char *ObExternalTableUtils::dummy_file_name()
   return "#######DUMMY_FILE#######";
 }
 
+int ObExternalTableUtils::adjust_string_length_for_external_table(const char *data,
+                                                                  const int64_t src_length,
+                                                                  const int64_t max_length,
+                                                                  const bool is_byte_length,
+                                                                  const bool enable_hive_compat,
+                                                                  int64_t &out_length)
+{
+  int ret = OB_SUCCESS;
+  out_length = src_length;
+  if (OB_ISNULL(data)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid string data", K(ret), KP(data), K(src_length), K(max_length));
+  } else {
+    const bool over_limit
+        = src_length > max_length
+          && (is_byte_length
+              || ObCharset::strlen_char(CS_TYPE_UTF8MB4_BIN, data, src_length) > max_length);
+    if (over_limit) {
+      if (!enable_hive_compat) {
+        ret = OB_ERR_DATA_TOO_LONG;
+        LOG_WARN("data too long", K(ret), K(src_length), K(max_length));
+      } else if (is_byte_length) {
+        out_length = max_length;
+      } else {
+        out_length = ObCharset::charpos(CS_TYPE_UTF8MB4_BIN, data, src_length, max_length);
+        if (OB_UNLIKELY(out_length < 0 || out_length > src_length)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid truncated length", K(ret), K(out_length), K(src_length), K(max_length));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObExternalTableUtils::get_tenant_compat_version(schema::ObSchemaGetterGuard &schema_guard,
                                                     const uint64_t tenant_id,
                                                     uint64_t &compat_version)

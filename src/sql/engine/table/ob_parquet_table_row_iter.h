@@ -324,7 +324,8 @@ private:
                int32_t col_idx,
                bool first_batch,
                ObParquetDictFilterPushdown * dict_filter_pushdown,
-               bool need_decode):
+               bool need_decode,
+               const bool is_hive_lake_table):
       eval_ctx_(eval_ctx),
       file_col_expr_(file_col_expr),
       arr_type_(arr_type),
@@ -346,7 +347,8 @@ private:
       col_idx_(col_idx),
       first_batch_(first_batch),
       dict_filter_pushdown_(dict_filter_pushdown),
-      need_decode_(need_decode)
+      need_decode_(need_decode),
+      is_hive_lake_table_(is_hive_lake_table)
     {}
     typedef int (DataLoader::*LOAD_FUNC)();
     static LOAD_FUNC
@@ -461,6 +463,7 @@ private:
     bool first_batch_;
     ObParquetDictFilterPushdown *dict_filter_pushdown_;
     bool need_decode_;
+    bool is_hive_lake_table_;
   };
   class ParquetSectorIterator {
     public:

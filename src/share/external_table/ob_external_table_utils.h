@@ -191,6 +191,12 @@ public:
 
  public:
   static const char *dummy_file_name();
+  static int adjust_string_length_for_external_table(const char *data,
+                                                     const int64_t src_length,
+                                                     const int64_t max_length,
+                                                     const bool is_byte_length,
+                                                     const bool enable_hive_compat,
+                                                     int64_t &out_length);
   static int get_tenant_compat_version(schema::ObSchemaGetterGuard &schema_guard,
                                        const uint64_t tenant_id,
                                        uint64_t &compat_version);

@@ -330,9 +330,15 @@ private:
   struct DataLoader {
     DataLoader() { reset(); }
     ~DataLoader() { reset(); }
-    int init(ObExpr *file_col_expr, const orc::ColumnVectorBatch *batch, const orc::Type *col_type,
-             ObEvalCtx &eval_ctx);
-    int init(ObExpr *file_col_expr, const ObColumnDefaultValue *col_def, ObEvalCtx &eval_ctx);
+    int init(ObExpr *file_col_expr,
+             const orc::ColumnVectorBatch *batch,
+             const orc::Type *col_type,
+             ObEvalCtx &eval_ctx,
+             const bool is_hive_lake_table);
+    int init(ObExpr *file_col_expr,
+             const ObColumnDefaultValue *col_def,
+             ObEvalCtx &eval_ctx,
+             const bool is_hive_lake_table);
     void reset()
     {
       file_col_expr_ = nullptr;
@@ -341,6 +347,7 @@ private:
       col_type_ = nullptr;
       load_func_ = nullptr;
       col_def_ = nullptr;
+      is_hive_lake_table_ = false;
     }
 
     bool has_load_func() const { return load_func_ != nullptr; }
@@ -398,6 +405,7 @@ private:
     const orc::Type *col_type_;
     const ObColumnDefaultValue *col_def_;
     LOAD_FUNC load_func_;
+    bool is_hive_lake_table_;
   };
 
   // wrapper struct of orc row reader and batch
