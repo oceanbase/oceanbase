@@ -530,6 +530,11 @@ int ObLogExchange::compute_sharding_info()
   } else {
     if (NULL != get_sharding()) {
       /* for hash-hash, repartition, broadcast, will be set separately*/
+      // When unmatch_row_dist_method_ is RANDOM, data is not truly partitioned
+      // Some rows may go to random workers, so we should use distributed sharding
+      if (unmatch_row_dist_method_ == ObPQDistributeMethod::RANDOM) {
+        strong_sharding_ = get_plan()->get_optimizer_context().get_distributed_sharding();
+      }
     } else if (is_pq_local()) {
       // for pull to local
       strong_sharding_ = get_plan()->get_optimizer_context().get_local_sharding();

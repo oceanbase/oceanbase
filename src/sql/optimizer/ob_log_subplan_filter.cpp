@@ -456,16 +456,15 @@ int ObLogSubPlanFilter::compute_sharding_info()
     }
   } else if (DistAlgo::DIST_PARTITION_NONE == dist_algo_) {
     ObShardingInfo *sharding = NULL;
-    if (OB_ISNULL(get_child(1)) ||
-        OB_ISNULL(sharding = get_child(1)->get_sharding())) {
+    if (OB_ISNULL(get_child(0)) ||
+        OB_ISNULL(sharding = get_child(0)->get_sharding())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(sharding), K(ret));
-    } else if (OB_FAIL(get_repart_sharding_info(get_child(1),
-                                                strong_sharding_,
-                                                weak_sharding_))) {
-      LOG_WARN("failed to rebuild sharding info", K(ret));
+    } else if (OB_FAIL(weak_sharding_.assign(get_child(0)->get_weak_sharding()))) {
+      LOG_WARN("failed to assign weak sharding", K(ret));
     } else {
-      inherit_sharding_index_ = 1;
+      strong_sharding_ = get_child(0)->get_strong_sharding();
+      inherit_sharding_index_ = 0;
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
