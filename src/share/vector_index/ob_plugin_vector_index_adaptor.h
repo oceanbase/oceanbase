@@ -882,7 +882,9 @@ public:
   }
   bool is_in_opt_task() const { return is_in_opt_task_; }
 
-  int check_if_need_optimize(ObVectorQueryAdaptorResultContext *ctx = nullptr);
+  int check_if_need_optimize();
+
+  int check_need_freeze_by_optimize_ratio(const int64_t freeze_threshold, bool &need_freeze);
 
   void vector_index_task_finish()
   {
@@ -915,6 +917,7 @@ public:
   int get_inc_index_row_cnt(int64_t &count);
   int get_snap_index_row_cnt(int64_t &count);
   int get_vbitmap_row_cnt_safe(int64_t &count);
+  int get_vbitmap_delete_cnt_safe(int64_t &count);
   int get_inc_index_row_cnt_safe(int64_t &count);
   int get_snap_index_row_cnt_safe(int64_t &count);
   int get_snap_vbitmap_cnt_safe(int64_t &insert_count, int64_t &delete_count);

@@ -2267,44 +2267,46 @@ ObVectorIndexAlgorithmType ObPluginVectorIndexAdaptor::get_incr_index_type()
   return index_type;
 }
 
-int ObPluginVectorIndexAdaptor::check_if_need_optimize(ObVectorQueryAdaptorResultContext *ctx)
+int ObPluginVectorIndexAdaptor::check_if_need_optimize()
 {
   int ret = OB_SUCCESS;
-  int64_t snap_count = follower_sync_statistics_.snap_count_;
-  int64_t snap_incr_seg_cnt = follower_sync_statistics_.snap_incr_seg_cnt_;
-  int64_t snap_incr_vec_cnt = follower_sync_statistics_.snap_incr_vec_cnt_;
-  int64_t snap_base_seg_cnt = follower_sync_statistics_.snap_base_seg_cnt_;
-  int64_t snap_base_vec_cnt = follower_sync_statistics_.snap_base_vec_cnt_;
-  int64_t incr_count = follower_sync_statistics_.incr_count_;
-  int64_t bitmap_count = follower_sync_statistics_.vbitmap_count_;
-  bitmap_count = MAX(incr_count, bitmap_count);
+  int64_t incr_count = 0;
+  int64_t snap_count = 0;
+  int64_t vbitmap_delete_count = 0;
   bool snap_data_loaded = false;
+  bool use_new_check = false;
+  uint64_t tenant_data_version = 0;
   if (snap_data_.is_valid()) {
     snap_data_loaded = snap_data_->has_complete_;
   }
-  if (snap_count == 0 && (!snap_data_loaded || !index_statistics_updated_)) {
-    // skip optimize
-    LOG_DEBUG("skip optimize", K(ret), K(snap_data_loaded), K_(index_statistics_updated), K(snap_count), K(incr_count), K(bitmap_count));
-  } else if (!need_be_optimized_) {
-    int64_t delete_count = 0;
-    int64_t insert_count = 0;
-    if (OB_NOT_NULL(ctx) && OB_NOT_NULL(ctx->bitmaps_)) {
-      if (OB_NOT_NULL(ctx->bitmaps_->delete_bitmap_)) {
-        delete_count = roaring64_bitmap_get_cardinality(ctx->bitmaps_->delete_bitmap_);
-      }
-      if (OB_NOT_NULL(ctx->bitmaps_->insert_bitmap_)) {
-        insert_count = roaring64_bitmap_get_cardinality(ctx->bitmaps_->insert_bitmap_);
+  if (!need_be_optimized_) {
+    // check is use segment mode
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
+      LOG_WARN("failed to get tenant data version", K(ret), K(tenant_id_));
+    } else if (tenant_config.is_valid() && (tenant_data_version >= DATA_VERSION_4_5_1_0) &&
+      OB_FALSE_IT(use_new_check = ObPluginVectorIndexHelper::enable_persist_vector_index_incremental(tenant_id_))) {
+      // do nothing
+    } else if (use_new_check) {
+      // new check logic, use merge task instead of optimize task
+    } else if (incr_data_.is_valid() && incr_data_->is_inited() && OB_FAIL(get_inc_index_row_cnt_safe(incr_count))) {
+      LOG_WARN("failed to get incr index row cnt", K(ret));
+    } else if (snap_data_.is_valid() && snap_data_->is_inited() && OB_FAIL(get_snap_index_row_cnt_safe(snap_count))) {
+      LOG_WARN("failed to get snap index row cnt", K(ret));
+    } else if (vbitmap_data_.is_valid() && vbitmap_data_->is_inited()
+               && OB_FAIL(get_vbitmap_delete_cnt_safe(vbitmap_delete_count))) {
+      LOG_WARN("failed to get vbitmap delete cnt", K(ret));
+    } else if (snap_count == 0 && (!snap_data_loaded)) {
+      // skip optimize
+      LOG_DEBUG("skip optimize", K(ret), K(snap_data_loaded));
+    } else {
+      need_be_optimized_ = (incr_count + vbitmap_delete_count > (incr_count + snap_count) * VEC_INDEX_OPTIMIZE_RATIO);
+      LOG_DEBUG("check_if_need_optimize", K(snap_count), K(incr_count), K(vbitmap_delete_count), K(need_be_optimized_));
+      if (need_be_optimized_) {
+        // log info only when need optimize to avoid log flood
+        LOG_INFO("need optimize", K(ret), K(incr_count), K(snap_count), K(vbitmap_delete_count), K(need_be_optimized_));
       }
     }
-
-    if (follower_sync_statistics_.use_new_check_) {
-      // new check logic, use merge task instead of optimze task
-    } else if (snap_count + incr_count + insert_count == 0) {
-    } else if (static_cast<double_t>(delete_count + insert_count + bitmap_count + snap_incr_vec_cnt) / static_cast<double_t>(snap_count + incr_count + insert_count) > VEC_INDEX_OPTIMIZE_RATIO) {
-      need_be_optimized_ = true;
-      LOG_INFO("need optimize", K(ret), K(snap_count), K(incr_count), K(insert_count), K(delete_count), K(bitmap_count), K_(need_be_optimized), K(snap_data_loaded), K_(index_statistics_updated));
-    }
-    LOG_DEBUG("check_if_need_optimize", K(snap_count), K(incr_count), K(bitmap_count), K(insert_count), K(delete_count));
   }
   return ret;
 }
@@ -4279,12 +4281,6 @@ int ObPluginVectorIndexAdaptor::query_result(ObLSID &ls_id,
     }
   }
 
-  int tmp_ret = OB_SUCCESS;
-  if (PVQ_REFRESH == ctx->status_) {
-  } else if ((tmp_ret = check_if_need_optimize(ctx)) != OB_SUCCESS) {
-    LOG_WARN("failed to check if vector index need optimize", K(tmp_ret));
-  }
-
   return ret;
 }
 
@@ -4879,13 +4875,6 @@ int ObPluginVectorIndexAdaptor::check_need_sync_to_follower_or_do_opt_task(ObPlu
       }
       index_statistics_updated_ = true;
     }
-
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(check_if_need_optimize())) {
-      LOG_WARN("failed to check if vector index need optimize", K(tmp_ret));
-    } else {
-      LOG_INFO("syninfo", K_(follower_sync_statistics), K_(need_be_optimized));
-    }
   }
   return ret;
 }
@@ -5209,6 +5198,19 @@ int ObPluginVectorIndexAdaptor::get_vbitmap_row_cnt_safe(int64_t &count)
     }
     if (OB_NOT_NULL(vbitmap_data_->bitmap_->insert_bitmap_)) {
       count += roaring64_bitmap_get_cardinality(vbitmap_data_->bitmap_->insert_bitmap_);
+    }
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexAdaptor::get_vbitmap_delete_cnt_safe(int64_t &count)
+{
+  int ret = OB_SUCCESS;
+  count = 0;
+  TCRLockGuard lock_guard(vbitmap_data_->bitmap_rwlock_);
+  if (OB_NOT_NULL(vbitmap_data_->bitmap_)) {
+    if (OB_NOT_NULL(vbitmap_data_->bitmap_->delete_bitmap_)) {
+      count = roaring64_bitmap_get_cardinality(vbitmap_data_->bitmap_->delete_bitmap_);
     }
   }
   return ret;
@@ -5850,8 +5852,45 @@ int ObPluginVectorIndexAdaptor::check_need_freeze(const int64_t freeze_threshold
   } else if (vec_cnt > 0 && active_segment_mem >= freeze_threshold * amplification_factor) {
     need_freeze = true;
     LOG_INFO("trigger freeze", K(vec_cnt), K(active_segment_mem), K(freeze_threshold), K(amplification_factor));
-  } else {
+  } else if (OB_FAIL(check_need_freeze_by_optimize_ratio(freeze_threshold, need_freeze))) {
+    LOG_WARN("failed to check need freeze by optimize ratio", K(ret));
+  } else if (!need_freeze) {
     LOG_INFO("active segment no need to freeze", KP(this), K_(incr_data), K(vec_cnt), K(active_segment_mem), K(freeze_threshold), K(amplification_factor));
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexAdaptor::check_need_freeze_by_optimize_ratio(const int64_t freeze_threshold, bool &need_freeze)
+{
+  int ret = OB_SUCCESS;
+  int64_t snap_count = 0;
+  int64_t incr_count = 0;
+  int64_t vbitmap_delete_count = 0;
+  bool snap_data_loaded = false;
+  need_freeze = false;
+  int64_t dim = 0;
+
+  if (snap_data_.is_valid()) {
+    snap_data_loaded = snap_data_->has_complete_;
+  }
+  // only check snap data and delete bitmap count, at least one vector in incr data
+  if (snap_data_.is_valid() && snap_data_->is_inited() && OB_FAIL(get_snap_index_row_cnt_safe(snap_count))) {
+    LOG_WARN("failed to get snap index row cnt", K(ret));
+  } else if (incr_data_.is_valid() && incr_data_->is_inited()
+              && OB_FAIL(get_inc_index_row_cnt_safe(incr_count))) {
+    LOG_WARN("failed to get incr index row cnt", K(ret));
+  } else if (vbitmap_data_.is_valid() && vbitmap_data_->is_inited()
+             && OB_FAIL(get_vbitmap_delete_cnt_safe(vbitmap_delete_count))) {
+    LOG_WARN("failed to get vbitmap delete cnt", K(ret));
+  } else if (snap_count == 0 && !snap_data_loaded) {
+    // skip, snap data not ready
+    LOG_DEBUG("skip freeze by optimize ratio, snap data not ready", K(ret), K(snap_data_loaded));
+  } else if (OB_FAIL(get_dim(dim))) {
+    LOG_WARN("failed to get dim", K(ret));
+    //TODO: segment frozen check now, if don't need, don't need to check incr_count
+  } else if (incr_count >= 1 && dim > 0 && vbitmap_delete_count > freeze_threshold/(dim * 4) ) {
+    need_freeze = true;
+    LOG_INFO("trigger freeze by optimize ratio", K(snap_count), K(vbitmap_delete_count));
   }
   return ret;
 }

@@ -94,7 +94,8 @@ int ObVecAsyncTaskExector::load_task(uint64_t &task_trace_base_num)
       if (OB_ISNULL(adapter)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected nullptr", K(ret));
-      } else if (adapter->is_need_async_optimal()) {
+      } else if (OB_FALSE_IT(adapter->check_if_need_optimize())) {
+      } else if (OB_SUCC(ret) && adapter->is_need_async_optimal()) {
         int64_t new_task_id = OB_INVALID_ID;
         int64_t index_table_id = OB_INVALID_ID;
         bool inc_new_task = false;
