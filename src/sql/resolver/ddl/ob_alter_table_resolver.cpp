@@ -1927,7 +1927,11 @@ int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
             && sort_column_node->children_[4]->type_ == T_SEARCH_INDEX_COLUMN_PARAMS) {
           const ParseNode *search_with_node = sort_column_node->children_[4];
           const ObColumnSchemaV2 *col_schema = table_schema_->get_column_schema(sort_item.column_name_);
-          if (OB_FAIL(ObDDLResolver::resolve_search_index_column_comment(
+          if (OB_ISNULL(col_schema)) {
+            ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
+            LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, sort_item.column_name_.length(), sort_item.column_name_.ptr());
+            LOG_WARN("column does not exist", K(ret), K(sort_item.column_name_));
+          } else if (OB_FAIL(ObDDLResolver::resolve_search_index_column_comment(
                   search_with_node, col_schema, sort_item.column_name_, allocator_, sort_item.column_comment_))) {
             LOG_WARN("failed to resolve search index column config", K(ret), K(sort_item.column_name_));
           }

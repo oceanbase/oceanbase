@@ -421,7 +421,11 @@ int ObCreateIndexResolver::resolve_index_column_node(
           && index_keyname_ == INDEX_KEYNAME::SEARCH_KEY
           && OB_NOT_NULL(search_with_node)) {
         const ObColumnSchemaV2 *col_schema = tbl_schema->get_column_schema(sort_item.column_name_);
-        if (OB_FAIL(ObDDLResolver::resolve_search_index_column_comment(
+        if (OB_ISNULL(col_schema)) {
+          ret = OB_ERR_KEY_COLUMN_DOES_NOT_EXITS;
+          LOG_USER_ERROR(OB_ERR_KEY_COLUMN_DOES_NOT_EXITS, sort_item.column_name_.length(), sort_item.column_name_.ptr());
+          LOG_WARN("column does not exist", K(ret), K(sort_item.column_name_));
+        } else if (OB_FAIL(ObDDLResolver::resolve_search_index_column_comment(
                 search_with_node, col_schema, sort_item.column_name_, allocator_, sort_item.column_comment_))) {
           LOG_WARN("failed to resolve search index column config", K(ret), K(sort_item.column_name_));
         }
