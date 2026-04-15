@@ -30999,7 +30999,30 @@ int ObDDLService::drop_database(const ObDropDatabaseArg &arg,
       } else if (!arg.to_recyclebin_ && OB_FAIL(lock_tables_in_recyclebin(*db_schema, actual_trans))) {
         LOG_WARN("failed to lock tables in recyclebin", K(ret));
       }
+      {
+        // Check if any oracle tmp table v2 in the database has an active session (i.e. session tablets
+        // not yet GC'd). If so, block the drop.
+        ObSEArray<const share::schema::ObSimpleTableSchemaV2 *, 16> table_schemas;
+        for (int64_t i = 0; OB_SUCC(ret) && i < table_ids.count(); i++) {
+          const share::schema::ObSimpleTableSchemaV2 *simple_table_schema = nullptr;
+          if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id, table_ids.at(i), simple_table_schema))) {
+            LOG_WARN("failed to get simple table schema", KR(ret), K(tenant_id), K(table_ids.at(i)));
+          } else if (OB_ISNULL(simple_table_schema)) {
+            // table already gone, skip
+          } else if (OB_FAIL(table_schemas.push_back(simple_table_schema))) {
+            LOG_WARN("failed to push back table schema", K(ret), K(i));
+          }
+        }
 
+        if (OB_FAIL(ret)) {
+        } else if (table_schemas.empty()) {
+          // do nothing
+        } else if (OB_FAIL(storage::ObSessionTabletGCHelper::is_any_table_has_active_session(table_schemas))) {
+          if (OB_ERR_TEMP_TABLE_BUSY != ret) {
+            LOG_WARN("failed to check if any table has active session", K(ret));
+          }
+        }
+      }
       if (OB_SUCC(ret) && arg.to_recyclebin_ && !is_inner_db(db_schema->get_database_id())) {
         if (OB_FAIL(ddl_operator.drop_database_to_recyclebin(*db_schema,
                                                              actual_trans,

@@ -718,30 +718,179 @@ int ObSessionTabletGCHelper::is_table_has_active_session(
 {
   int ret = OB_SUCCESS;
   has_active_session = false;
-  ObRefreshSchemaStatus schema_status;
-  ObSchemaService *schema_service = NULL;
   ObSEArray<common::ObTableID, 4> table_ids;
-  ObArray<ObAuxTableMetaInfo> related_infos;
-  const uint64_t primary_table_id = table_id;
-  common::ObSEArray<storage::ObSessionTabletInfo, 4> session_tablet_infos;
-  schema_status.tenant_id_ = MTL_ID();
+  ObSchemaService *schema_svr = nullptr;
   if (OB_ISNULL(GCTX.sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy is null", KR(ret));
     } else if (OB_ISNULL(GCTX.schema_service_)
-      || OB_ISNULL(schema_service = GCTX.schema_service_->get_schema_service())) {
+               || OB_ISNULL(schema_svr = GCTX.schema_service_->get_schema_service())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("GCTX.schema_service_ is null", KR(ret));
-  } else if (OB_FAIL(schema_service->fetch_aux_tables(
-      schema_status,
-      tenant_id,
-      table_id,
-      schema_version,
-      *GCTX.sql_proxy_,
-      related_infos))) {
+  } else if (OB_FAIL(fetch_all_relative_table_ids(tenant_id,
+                                                  table_id,
+                                                  schema_version,
+                                                  *GCTX.sql_proxy_,
+                                                  *schema_svr,
+                                                  /*out*/table_ids))) {
+    LOG_WARN("failed to fetch all relative table ids", K(ret), K(tenant_id), K(table_id),
+      K(schema_version));
+  } else if (OB_FAIL(check_if_any_table_has_active_session(tenant_id,
+                                                           *GCTX.sql_proxy_,
+                                                           table_ids,
+                                                           /*out*/has_active_session))) {
+    LOG_WARN("failed to check if any table has active session", K(ret));
+  }
+  return ret;
+}
+
+int ObSessionTabletGCHelper::is_table_has_active_session(
+  const share::schema::ObSimpleTableSchemaV2 *table_schema,
+  const obrpc::ObAlterTableArg *alter_table_arg)
+{
+  int ret = OB_SUCCESS;
+  bool has_active_session = false;
+  uint64_t table_id = 0;
+  if (OB_ISNULL(table_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("table schema is null", KR(ret));
+  } else if (!need_check_table(table_schema, alter_table_arg)) {
+    // do nothing
+  } else if (FALSE_IT(table_id = table_schema->is_oracle_tmp_table_v2_index_table() ? table_schema->get_data_table_id() : table_schema->get_table_id())) {
+  } else if (OB_FAIL(is_table_has_active_session(table_schema->get_tenant_id()/* might be 0 */, table_id, table_schema->get_schema_version(), has_active_session))) {
+    LOG_WARN("failed to check if table has active session", KR(ret), K(table_id), KPC(table_schema));
+  } else if (has_active_session) {
+    ret = OB_ERR_TEMP_TABLE_BUSY;
+    LOG_WARN("table has active session", KR(ret), K(table_id), KPC(table_schema));
+    LOG_USER_ERROR(OB_ERR_TEMP_TABLE_BUSY);
+  } else {
+    LOG_INFO("table has no active temporary tablet", KR(ret), K(table_id), KPC(table_schema));
+  }
+  return ret;
+}
+
+int ObSessionTabletGCHelper::is_any_table_has_active_session(
+  const common::ObIArray<const share::schema::ObSimpleTableSchemaV2 *> &table_schemas)
+{
+  int ret = OB_SUCCESS;
+  const int64_t total_cnt = table_schemas.count();
+  uint64_t tenant_id = OB_INVALID_TENANT_ID ;
+  ObSchemaService *schema_svr = nullptr;
+  bool has_active_session = false;
+  common::ObSEArray<common::ObTableID, 16> table_ids;
+
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", K(ret));
+  } else if (OB_ISNULL(GCTX.schema_service_)
+             || OB_ISNULL(schema_svr = GCTX.schema_service_->get_schema_service())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.schema_service_ is null", K(ret));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < total_cnt; ++i) {
+    const share::schema::ObSimpleTableSchemaV2 *schema = table_schemas.at(i);
+    if (OB_ISNULL(schema)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("table schema is null", K(ret));
+    } else if (!need_check_table(schema, /*alter_table_arg*/nullptr)) {
+      // do nothing
+    } else {
+      const uint64_t table_id = schema->is_oracle_tmp_table_v2_index_table() ? schema->get_data_table_id() : schema->get_table_id();
+      if (OB_INVALID_TENANT_ID == tenant_id) {
+        tenant_id = schema->get_tenant_id();
+      } else if (schema->get_tenant_id() != tenant_id) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schemas' tenant id are different", K(ret), K(tenant_id), KPC(schema));
+      }
+      if (FAILEDx(fetch_all_relative_table_ids(tenant_id,
+                                               table_id,
+                                               schema->get_schema_version(),
+                                               *GCTX.sql_proxy_,
+                                               *schema_svr,
+                                               /*out*/table_ids))) {
+        LOG_WARN("failed to fetch all relative table ids", K(ret), K(tenant_id), K(table_id),
+          "schema_version", schema->get_schema_version());
+      }
+    }
+
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (table_ids.empty()) {
+    // do nothing
+  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected invalid tenant id", K(ret), K(tenant_id));
+  } else if (OB_FAIL(check_if_any_table_has_active_session(tenant_id,
+                                                           *GCTX.sql_proxy_,
+                                                           table_ids,
+                                                           /*out*/has_active_session))) {
+    LOG_WARN("failed to check if any table has active session", K(ret));
+  } else if (has_active_session) {
+    ret = OB_ERR_TEMP_TABLE_BUSY;
+    LOG_WARN("table has active session", K(ret), K(table_ids));
+    LOG_USER_ERROR(OB_ERR_TEMP_TABLE_BUSY);
+  } else {
+    LOG_INFO("table has no active temporary tablet", K(ret), K(table_ids));
+  }
+  return ret;
+}
+
+bool ObSessionTabletGCHelper::need_check_table(
+  const share::schema::ObSimpleTableSchemaV2 *schema,
+  const obrpc::ObAlterTableArg *alter_table_arg)
+{
+  int ret = OB_SUCCESS;
+  bool b_ret = true;
+  if (OB_ISNULL(schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid null schema", K(ret));
+  } else if (schema->is_hidden_schema()
+      || schema->get_session_id() != 0
+      || (!schema->is_oracle_tmp_table_v2()
+      && !schema->is_oracle_tmp_table_v2_index_table())) {
+    b_ret = false;
+    LOG_INFO("table is not oracle tmp table v2 or oracle tmp table v2 index table", K(ret), KPC(schema));
+  } else {
+    uint64_t table_id = schema->is_oracle_tmp_table_v2_index_table() ? schema->get_data_table_id() : schema->get_table_id();
+    if (nullptr != alter_table_arg) {
+      int64_t num_members = alter_table_arg->alter_table_schema_.alter_option_bitset_.num_members();
+      if (num_members == 1) {
+        // only rename and comment need not to check if table has active session
+        b_ret = !alter_table_arg->alter_table_schema_.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::TABLE_NAME)
+                && !alter_table_arg->alter_table_schema_.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::COMMENT);
+      }
+    }
+    if (!b_ret) {
+      LOG_INFO("no need to check if table has active session", K(ret), K(table_id));
+    }
+  }
+  return b_ret;
+}
+
+int ObSessionTabletGCHelper::fetch_all_relative_table_ids(
+  const uint64_t tenant_id,
+  const uint64_t primary_table_id,
+  const int64_t schema_version,
+  common::ObMySQLProxy &sql_proxy,
+  ObSchemaService &schema_svr,
+  /*out*/common::ObIArray<common::ObTableID> &table_ids)
+{
+  int ret = OB_SUCCESS;
+  ObRefreshSchemaStatus schema_status;
+  ObArray<ObAuxTableMetaInfo> related_infos;
+  schema_status.tenant_id_ = MTL_ID();
+  if (OB_FAIL(schema_svr.fetch_aux_tables(
+        schema_status,
+        tenant_id,
+        primary_table_id,
+        schema_version,
+        sql_proxy,
+        related_infos))) {
     LOG_WARN("fail to fetch_aux_tables", KR(ret), K(tenant_id),
         K(primary_table_id), K(schema_status), K(schema_version));
-  } else if (OB_FAIL(table_ids.push_back(ObTableID(table_id)))) {
+  } else if (OB_FAIL(table_ids.push_back(ObTableID(primary_table_id)))) {
     LOG_WARN("failed to push back table id", KR(ret));
   } else {
     ARRAY_FOREACH(related_infos, idx) {
@@ -750,11 +899,23 @@ int ObSessionTabletGCHelper::is_table_has_active_session(
       }
     }
   }
+  return ret;
+}
 
-  if (FAILEDx(share::ObTabletToGlobalTmpTableOperator::batch_get_by_table_ids(*GCTX.sql_proxy_, tenant_id, table_ids, session_tablet_infos))) {
+int ObSessionTabletGCHelper::check_if_any_table_has_active_session(
+  const uint64_t tenant_id,
+  common::ObMySQLProxy &sql_proxy,
+  const common::ObIArray<ObTableID> &table_ids,
+  /*out*/bool &has_active_session)
+{
+  int ret = OB_SUCCESS;
+  has_active_session = false;
+  common::ObSEArray<storage::ObSessionTabletInfo, 4> session_tablet_infos;
+
+  if (OB_FAIL(share::ObTabletToGlobalTmpTableOperator::batch_get_by_table_ids(sql_proxy, tenant_id, table_ids, session_tablet_infos))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
-      ret = OB_SUCCESS;
       LOG_INFO("gtt has no active session", KR(ret), K(table_ids));
+      ret = OB_SUCCESS;
     } else {
       LOG_WARN("failed to get session tablet infos", KR(ret));
     }
@@ -777,45 +938,6 @@ int ObSessionTabletGCHelper::is_table_has_active_session(
     } else {
       ret = OB_SUCCESS;
       LOG_INFO("gtt has no active session", KR(ret), K(table_ids));
-    }
-  }
-  return ret;
-}
-
-int ObSessionTabletGCHelper::is_table_has_active_session(
-  const share::schema::ObSimpleTableSchemaV2 *table_schema,
-  const obrpc::ObAlterTableArg *alter_table_arg)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(table_schema)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("table schema is null", KR(ret));
-  } else if (table_schema->is_hidden_schema() || table_schema->get_session_id() != 0 || (!table_schema->is_oracle_tmp_table_v2() && !table_schema->is_oracle_tmp_table_v2_index_table())) {
-    ret = OB_SUCCESS;
-    LOG_INFO("table is not oracle tmp table v2 or oracle tmp table v2 index table", KR(ret), KPC(table_schema));
-  } else {
-    uint64_t table_id = table_schema->is_oracle_tmp_table_v2_index_table() ? table_schema->get_data_table_id() : table_schema->get_table_id();
-    bool need_check = true;
-    bool has_active_session = false;
-    if (nullptr != alter_table_arg) {
-      int64_t num_members = alter_table_arg->alter_table_schema_.alter_option_bitset_.num_members();
-      if (num_members == 1) {
-        // only rename and comment need not to check if table has active session
-        need_check = !alter_table_arg->alter_table_schema_.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::TABLE_NAME) &&
-                     !alter_table_arg->alter_table_schema_.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::COMMENT);
-      }
-    }
-    if (false == need_check) {
-      ret = OB_SUCCESS;
-      LOG_INFO("not need to check if table has active session", KR(ret), K(table_id), KPC(table_schema));
-    } else if (OB_FAIL(is_table_has_active_session(table_schema->get_tenant_id()/* might be 0 */, table_id, table_schema->get_schema_version(), has_active_session))) {
-      LOG_WARN("failed to check if table has active session", KR(ret), K(table_id), KPC(table_schema));
-    } else if (has_active_session) {
-      ret = OB_ERR_TEMP_TABLE_BUSY;
-      LOG_WARN("table has active session", KR(ret), K(table_id), KPC(table_schema));
-      LOG_USER_ERROR(OB_ERR_TEMP_TABLE_BUSY);
-    } else {
-      LOG_INFO("table has no active temporary tablet", KR(ret), K(table_id), KPC(table_schema));
     }
   }
   return ret;
