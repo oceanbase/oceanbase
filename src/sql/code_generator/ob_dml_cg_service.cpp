@@ -2995,9 +2995,12 @@ int ObDmlCgService::fill_search_index_extra_info_on_table_param(
           common::ObArenaAllocator tmp_allocator(ObMemAttr(MTL_ID(), "SearchIdxCg"));
           common::ObSEArray<ObString, 8> column_comments;
           for (int64_t i = 0; OB_SUCC(ret) && i < included_cids.count(); ++i) {
+            int64_t col_idx = -1;
             int64_t col_id = included_cids.at(i);
-            if (OB_FAIL(included_cid_idxes.push_back(data_schema->get_column_idx(col_id)))) {
-              LOG_WARN("failed to push back included cid idx", K(ret), K(col_id));
+            if (OB_FAIL(data_schema->get_store_column_idx(col_id, col_idx))) {
+              LOG_WARN("failed to get store column idx", K(ret), K(col_id));
+            } else if (OB_FAIL(included_cid_idxes.push_back(col_idx))) {
+              LOG_WARN("failed to push back included cid idx", K(ret), K(col_id), K(col_idx));
             } else {
               const ObColumnSchemaV2 *col_schema =
                 data_schema->get_column_schema(included_cids.at(i));

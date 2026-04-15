@@ -2007,11 +2007,10 @@ int ObSearchIndexRangeCtx::init(const ObTableSchema *base_table_schema,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null param", K(ret), K(column_item));
   } else {
+    int64_t column_idx = -1;
     const uint64_t column_id = column_item.column_id_;
-    const int64_t column_idx = base_table_schema->get_column_idx(column_id);
-    if (column_idx < 0) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to get column idx", K(ret), K(column_id));
+    if (OB_FAIL(base_table_schema->get_store_column_idx(column_id, column_idx))) {
+      LOG_WARN("failed to get store column idx", K(ret), K(column_id));
     } else {
       column_idx_ = column_idx;
       column_meta_.column_id_ = column_id;

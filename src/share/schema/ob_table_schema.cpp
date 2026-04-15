@@ -6911,6 +6911,28 @@ int ObTableSchema::get_store_column_count(int64_t &column_count, const bool full
   return ret;
 }
 
+int ObTableSchema::get_store_column_idx(const uint64_t column_id, int64_t &column_idx) const
+{
+  int ret = OB_SUCCESS;
+  column_idx = -1;
+  ObArray<ObColDesc> column_descs;
+  if (OB_FAIL(get_store_column_ids(column_descs))) {
+    LOG_WARN("failed to get store column ids", K(ret));
+  } else {
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < column_descs.count(); idx++) {
+      if (column_id == column_descs.at(idx).col_id_) {
+        column_idx = idx;
+        break;
+      }
+    }
+    if (OB_SUCC(ret) && -1 == column_idx) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to get store column idx", K(ret), K(column_id), K(column_descs));
+    }
+  }
+  return ret;
+}
+
 int ObTableSchema::get_column_ids(common::ObIArray<ObColDesc> &column_ids, bool no_virtual) const
 {
   int ret = OB_SUCCESS;
