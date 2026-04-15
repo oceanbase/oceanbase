@@ -136,6 +136,8 @@ public:
   ~ObSPIExprBuffer() {
     already_used_cnt_ = already_used_cnt_ - local_used_cnt_;
   }
+  ObSPIExprBuffer(const ObSPIExprBuffer&) = delete;
+  ObSPIExprBuffer& operator=(const ObSPIExprBuffer&) = delete;
 public:
   int32_t &already_used_cnt_;
   int32_t local_buffer_cnt_;
