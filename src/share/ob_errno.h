@@ -1424,7 +1424,6 @@ constexpr int OB_USER_OUTOF_DATA_DISK_SPACE = -6330;
 constexpr int OB_ARB_DEGRADE = -6331;
 constexpr int OB_OBJ_LOCK_WRONG_WORKER = -6332;
 constexpr int OB_ERR_TEMP_TABLE_BUSY = -6333;
-constexpr int OB_MVCC_WRITE_CALLBACK_FREEZE_CLOCK_ORDER_DESCENDING = -6334;
 constexpr int OB_ELECTION_WARN_LOGBUF_FULL = -7000;
 constexpr int OB_ELECTION_WARN_LOGBUF_EMPTY = -7001;
 constexpr int OB_ELECTION_WARN_NOT_RUNNING = -7002;
@@ -1962,6 +1961,7 @@ constexpr int OB_ERR_FORALL_BULK_INDEX_IN_INTO_CLAUSE = -9836;
 constexpr int OB_ERR_FORALL_INVLIAD_IN_BIND_VARIABLE = -9837;
 constexpr int OB_ERR_BULK_SQL_ATTRS_NOT_SINGLE_INDEX = -9838;
 constexpr int OB_ERR_JAVA_SESSION_STATE_CHANGED = -9839;
+constexpr int OB_ERR_OBJECT_HAS_TYPE_OR_TABLE_DEPENDENT = -9840;
 constexpr int OB_ERR_KV_GLOBAL_INDEX_ROUTE = -10500;
 constexpr int OB_TTL_NOT_ENABLE = -10501;
 constexpr int OB_TTL_COLUMN_NOT_EXIST = -10502;
@@ -3754,7 +3754,6 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ARB_DEGRADE__USER_ERROR_MSG "logstream has been degraded due to error"
 #define OB_OBJ_LOCK_WRONG_WORKER__USER_ERROR_MSG "object lock worker thread wrong"
 #define OB_ERR_TEMP_TABLE_BUSY__USER_ERROR_MSG "attempt to access a transactional temp table already in use"
-#define OB_MVCC_WRITE_CALLBACK_FREEZE_CLOCK_ORDER_DESCENDING__USER_ERROR_MSG "mvcc write callback freeze clock order descending"
 #define OB_ELECTION_WARN_LOGBUF_FULL__USER_ERROR_MSG "The log buffer is full"
 #define OB_ELECTION_WARN_LOGBUF_EMPTY__USER_ERROR_MSG "The log buffer is empty"
 #define OB_ELECTION_WARN_NOT_RUNNING__USER_ERROR_MSG "The object is not running"
@@ -4460,6 +4459,7 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_FORALL_INVLIAD_IN_BIND_VARIABLE__USER_ERROR_MSG "FORALL bulk IN-bind variables cannot be used here"
 #define OB_ERR_BULK_SQL_ATTRS_NOT_SINGLE_INDEX__USER_ERROR_MSG "bulk SQL attributes must use a single index"
 #define OB_ERR_JAVA_SESSION_STATE_CHANGED__USER_ERROR_MSG "class %.*s has changed, Java session state cleared"
+#define OB_ERR_OBJECT_HAS_TYPE_OR_TABLE_DEPENDENT__USER_ERROR_MSG "cannot change object with type or table dependents"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__USER_ERROR_MSG "incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__USER_ERROR_MSG "TTL feature is not enabled"
 #define OB_TTL_COLUMN_NOT_EXIST__USER_ERROR_MSG "TTL column '%.*s' not exists"
@@ -7949,8 +7949,6 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_OBJ_LOCK_WRONG_WORKER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -6332, object lock worker thread wrong"
 #define OB_ERR_TEMP_TABLE_BUSY__ORA_USER_ERROR_MSG "ORA-14450: attempt to access a transactional temp table already in use"
 #define OB_ERR_TEMP_TABLE_BUSY__OBE_USER_ERROR_MSG "OBE-14450: attempt to access a transactional temp table already in use"
-#define OB_MVCC_WRITE_CALLBACK_FREEZE_CLOCK_ORDER_DESCENDING__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6334, mvcc write callback freeze clock order descending"
-#define OB_MVCC_WRITE_CALLBACK_FREEZE_CLOCK_ORDER_DESCENDING__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -6334, mvcc write callback freeze clock order descending"
 #define OB_ELECTION_WARN_LOGBUF_FULL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7000, The log buffer is full"
 #define OB_ELECTION_WARN_LOGBUF_FULL__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -7000, The log buffer is full"
 #define OB_ELECTION_WARN_LOGBUF_EMPTY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -7001, The log buffer is empty"
@@ -9361,6 +9359,8 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_BULK_SQL_ATTRS_NOT_SINGLE_INDEX__OBE_USER_ERROR_MSG "PLS-00431: bulk SQL attributes must use a single index"
 #define OB_ERR_JAVA_SESSION_STATE_CHANGED__ORA_USER_ERROR_MSG "ORA-29549: class %.*s has changed, Java session state cleared"
 #define OB_ERR_JAVA_SESSION_STATE_CHANGED__OBE_USER_ERROR_MSG "OBE-29549: class %.*s has changed, Java session state cleared"
+#define OB_ERR_OBJECT_HAS_TYPE_OR_TABLE_DEPENDENT__ORA_USER_ERROR_MSG "ORA-22933: cannot change object with type or table dependents"
+#define OB_ERR_OBJECT_HAS_TYPE_OR_TABLE_DEPENDENT__OBE_USER_ERROR_MSG "OBE-22933: cannot change object with type or table dependents"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -10500, incorrect route for obkv global index, client router should refresh."
 #define OB_TTL_NOT_ENABLE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -10501, TTL feature is not enabled"
