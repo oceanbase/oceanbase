@@ -188,8 +188,9 @@ int ObVecITaskExecutor::check_task_ddl_conflict(
   if (OB_ISNULL(task_ctx) || OB_ISNULL(index_ls_mgr)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), KP(task_ctx), KP(index_ls_mgr));
-  } else if (task_ctx->task_status_.trigger_type_ != ObVecIndexAsyncTaskTriggerType::OB_VEC_TRIGGER_AUTO) {
-    // manually triggered tasks are not subject to DDL scheduling policy
+  } else if (task_ctx->task_status_.trigger_type_ != ObVecIndexAsyncTaskTriggerType::OB_VEC_TRIGGER_AUTO ||
+     task_ctx->task_status_.task_type_ != ObVecIndexAsyncTaskType::OB_VECTOR_ASYNC_INDEX_OPTINAL) {
+    // only AUTO-triggered OPTINAL tasks are subject to DDL scheduling conflict checks
   } else {
     const uint64_t inc_table_id = task_ctx->task_status_.table_id_;
     LOG_DEBUG("check_task_ddl_conflict", K(inc_table_id), K(conflict_index_task_set.size()));
