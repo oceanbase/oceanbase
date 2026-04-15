@@ -1296,7 +1296,8 @@ int ObDMLStmtPrinter::print_mysql_json_return_type(int64_t value, ObDataType dat
       }
       break;
     }
-    case T_DATETIME: {
+    case T_DATETIME:
+    case ObMySQLDateTimeType: {
       int16_t scale = parse_node.int16_values_[1];
       if (scale >= 0) {
         DATA_PRINTF("datetime(%d) ", scale);
@@ -1305,7 +1306,8 @@ int ObDMLStmtPrinter::print_mysql_json_return_type(int64_t value, ObDataType dat
       }
       break;
     }
-    case T_DATE: {
+    case T_DATE:
+    case ObMySQLDateType: {
       DATA_PRINTF("date ");
       break;
     }

@@ -836,8 +836,15 @@ int cast_to_string(common::ObIAllocator *allocator,
                    uint8_t &is_type_mismatch)
 {
   INIT_SUCC(ret);
-  UNUSED(ctx);
   ObString val;
+  bool need_pad_char = false;
+  // Check if PAD_CHAR_TO_FULL_LENGTH mode is enabled for CHAR type in MySQL mode
+  if (lib::is_mysql_mode() && ObCharType == cast_param.dst_type_) {
+    ObBasicSessionInfo *session = ctx.exec_ctx_.get_my_session();
+    if (OB_NOT_NULL(session)) {
+      need_pad_char = is_pad_char_to_full_length(session->get_sql_mode());
+    }
+  }
   if (OB_ISNULL(j_base)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("json base is null", K(ret));
@@ -959,8 +966,14 @@ int cast_to_string(common::ObIAllocator *allocator,
           LOG_USER_ERROR(OB_OPERATE_OVERFLOW, "STRING", "json expr");
         }
       }
-      if (OB_SUCC(ret) && ObCharType == cast_param.dst_type_ && CS_TYPE_BINARY == cast_param.dst_coll_type_) {   // binary need padding
-        int64_t text_length = val.length();
+      // Padding for CHAR type: binary CHAR always needs padding, non-binary CHAR needs padding
+      // when PAD_CHAR_TO_FULL_LENGTH is set
+      if (OB_SUCC(ret) && ObCharType == cast_param.dst_type_
+          && (CS_TYPE_BINARY == cast_param.dst_coll_type_ || need_pad_char)) {
+        // For binary charset, use byte length; for non-binary charset, use character length
+        int64_t text_length = (CS_TYPE_BINARY == cast_param.dst_coll_type_)
+                              ? val.length()
+                              : str_len_char;
         if (max_accuracy_len > text_length) {
           int64_t padding_cnt = max_accuracy_len - text_length;
           ObString padding_res;
