@@ -47112,7 +47112,9 @@ FROM
 """.replace("\n", " ")
 )
 # 21724: V$OB_KEYWORDS
-
+# 21725: DBA_OB_EXTERNAL_TAB_STATISTICS
+# 21726: DBA_OB_EXTERNAL_TAB_COL_STATISTICS
+# 21727: DBA_OB_EXTERNAL_PART_COL_STATISTICS
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
