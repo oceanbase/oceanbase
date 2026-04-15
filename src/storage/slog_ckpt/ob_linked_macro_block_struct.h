@@ -29,7 +29,8 @@ enum ObLinkedMacroBlockWriteType : int8_t
   SHARED_MAJOR_MACRO_INFO = 2,
   SHARED_INC_MACRO_INFO   = 3,
   SHARED_INC_MAJOR_MACRO_INFO = 4,
-  LMI_MAX_TYPE            = 5,
+  SHARED_TABLET_MACRO_DIFF    = 5,
+  LMI_MAX_TYPE            = 6,
 };
 
 struct ObLinkedMacroBlockHeader final
