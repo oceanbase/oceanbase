@@ -1473,17 +1473,17 @@ int ObHybridSearchNodeBase::collect_vec_infos(ObIArray<ObVecIndexInfo *> &vec_in
 int ObVecSearchNode::init_vec_info(ObSqlSchemaGuard *schema_guard)
 {
   int ret = OB_SUCCESS;
-  if (ap_ != NULL) {
+  if (ap_ != NULL && OB_NOT_NULL(ap_->vec_idx_info_)) {
     vec_info_.main_table_tid_ = table_schema_->get_table_id();
     vec_info_.vec_type_ = ObVecIndexType::VEC_INDEX_INVALID;
-    vec_info_.selectivity_ = ap_->vec_idx_info_.vec_extra_info_.get_selectivity();
-    vec_info_.row_count_ = ap_->vec_idx_info_.vec_extra_info_.get_row_count();
-    vec_info_.set_can_use_vec_pri_opt(ap_->vec_idx_info_.vec_extra_info_.can_use_vec_pri_opt());
-    vec_info_.vector_index_param_ = ap_->vec_idx_info_.vec_extra_info_.get_vector_index_param();
-    vec_info_.adaptive_try_path_ = ap_->vec_idx_info_.vec_extra_info_.adaptive_try_path_;
-    vec_info_.can_extract_range_ = ap_->vec_idx_info_.vec_extra_info_.can_extract_range_;
-    vec_info_.is_spatial_index_ =  ap_->vec_idx_info_.vec_extra_info_.is_spatial_index_;
-    vec_info_.is_multi_value_index_ = ap_->vec_idx_info_.vec_extra_info_.is_multi_value_index_;
+    vec_info_.selectivity_ = ap_->vec_idx_info_->vec_extra_info_.get_selectivity();
+    vec_info_.row_count_ = ap_->vec_idx_info_->vec_extra_info_.get_row_count();
+    vec_info_.set_can_use_vec_pri_opt(ap_->vec_idx_info_->vec_extra_info_.can_use_vec_pri_opt());
+    vec_info_.vector_index_param_ = ap_->vec_idx_info_->vec_extra_info_.get_vector_index_param();
+    vec_info_.adaptive_try_path_ = ap_->vec_idx_info_->vec_extra_info_.adaptive_try_path_;
+    vec_info_.can_extract_range_ = ap_->vec_idx_info_->vec_extra_info_.can_extract_range_;
+    vec_info_.is_spatial_index_ =  ap_->vec_idx_info_->vec_extra_info_.is_spatial_index_;
+    vec_info_.is_multi_value_index_ = ap_->vec_idx_info_->vec_extra_info_.is_multi_value_index_;
     bool is_hybrid = false;
     if (search_option_ != nullptr) {
       vec_info_.query_param_ = search_option_->param_;

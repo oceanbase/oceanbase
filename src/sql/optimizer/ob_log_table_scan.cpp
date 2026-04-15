@@ -46,27 +46,27 @@ const char *ObLogTableScan::get_name() const
     } else if (sample_method == SampleInfo::DDL_BLOCK_SAMPLE) {
       name = "TABLE DDL BLOCK SAMPLE SCAN";
     }
-  } else if (vector_index_info_.vec_type_ == ObVecIndexType::VEC_INDEX_PRE) {
+  } else if (OB_NOT_NULL(vector_index_info_) && vector_index_info_->vec_type_ == ObVecIndexType::VEC_INDEX_PRE) {
     if (use_index_merge()) {
       name = use_das() ? "DISTRIBUTED VECTOR INDEX PRE-FILTER INDEX MERGE SCAN" : "VECTOR INDEX PRE-FILTER INDEX MERGE SCAN";
     } else {
       name = use_das() ? "DISTRIBUTED VECTOR INDEX PRE-FILTER SCAN" : "VECTOR INDEX PRE-FILTER SCAN";
     }
-  } else if (vector_index_info_.vec_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER) {
+  } else if (OB_NOT_NULL(vector_index_info_) && vector_index_info_->vec_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER) {
     name = use_das() ? "DISTRIBUTED VECTOR INDEX POST-ITERATIVE-FILTER SCAN" : "VECTOR INDEX POST-ITERATIVE-FILTER SCAN";
-  } else if (vector_index_info_.vec_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN) {
+  } else if (OB_NOT_NULL(vector_index_info_) && vector_index_info_->vec_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN) {
     if (use_index_merge()) {
       name = use_das() ? "DISTRIBUTED VECTOR INDEX ADAPTIVE INDEX MERGE SCAN" : "VECTOR INDEX ADAPTIVE INDEX MERGE SCAN";
-    } else if (vector_index_info_.adaptive_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER) {
+    } else if (vector_index_info_->adaptive_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER) {
       name = use_das() ? "DISTRIBUTED VECTOR INDEX ADAPTIVE SCAN (POST-ITERATIVE-FILTER)" :
                          "VECTOR INDEX ADAPTIVE SCAN (POST-ITERATIVE-FILTER)";
-    } else if (vector_index_info_.adaptive_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_IN_FILTER) {
+    } else if (vector_index_info_->adaptive_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_IN_FILTER) {
       name = use_das() ? "DISTRIBUTED VECTOR INDEX ADAPTIVE SCAN (IN-FILTER)" :
                          "VECTOR INDEX ADAPTIVE SCAN (IN-FILTER)";
-    } else if (vector_index_info_.adaptive_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER) {
+    } else if (vector_index_info_->adaptive_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER) {
       name = use_das() ? "DISTRIBUTED VECTOR INDEX ADAPTIVE SCAN (PRE-FILTER)" :
                          "VECTOR INDEX ADAPTIVE SCAN (PRE-FILTER)";
-    } else if (vector_index_info_.adaptive_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_POST_FILTER) {
+    } else if (vector_index_info_->adaptive_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_POST_FILTER) {
       name = use_das() ? "DISTRIBUTED VECTOR INDEX ADAPTIVE SCAN (POST-FILTER)" :
                          "VECTOR INDEX ADAPTIVE SCAN (POST-FILTER)";
     } else {
@@ -142,6 +142,25 @@ bool ObLogTableScan::use_query_range() const
     }
   }
   return res;
+}
+
+int ObLogTableScan::alloc_vector_index_info_if_need()
+{
+  int ret = OB_SUCCESS;
+  ObLogPlan *plan = get_plan();
+  if (OB_ISNULL(plan)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null plan", K(ret));
+  } else if (OB_ISNULL(vector_index_info_)) {
+    void *buf = plan->get_allocator().alloc(sizeof(ObVecIndexInfo));
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate vector index info", K(ret));
+    } else {
+      vector_index_info_ = new(buf) ObVecIndexInfo(plan->get_allocator());
+    }
+  }
+  return ret;
 }
 
 int ObLogTableScan::get_merge_engine_type(ObMergeEngineType &merge_engine_type, bool &enable_delete_insert_scan) const
@@ -1735,7 +1754,7 @@ int ObLogTableScan::index_back_check()
   if (OB_SUCC(ret)) {
     index_back_ = !column_found;
     // now, vec index hnsw scan must index back
-    if (vector_index_info_.need_index_back() && OB_FALSE_IT(index_back_ = true)) {
+    if (OB_NOT_NULL(vector_index_info_) && vector_index_info_->need_index_back() && OB_FALSE_IT(index_back_ = true)) {
     } else if (OB_FAIL(filter_before_index_back_set())) {
       LOG_WARN("Failed to filter_before_index_back_set", K(ret));
     } else {/*Do nothing*/}
@@ -1970,6 +1989,7 @@ int ObLogTableScan::pick_out_query_range_exprs()
   ObSqlSchemaGuard *schema_guard = NULL;
   const share::schema::ObTableSchema *index_schema = NULL;
   const ObQueryRangeProvider *pre_range = get_pre_graph();
+  ObVecIndexInfo *vec_index_info = get_vector_index_info();
   /*
   * virtual table may have hash index,
   * for hash index, if it is a get, we should still extract the range condition
@@ -1990,8 +2010,7 @@ int ObLogTableScan::pick_out_query_range_exprs()
     LOG_WARN("failed to check is table get", K(ret));
   } else if ((index_schema->is_ordered() || is_get) && NULL != pre_range) {
     const ObIArray<ObRawExpr *> &range_exprs = pre_range->get_range_exprs();
-    ObVecIndexInfo &vec_index_info = get_vector_index_info();
-    if (vec_index_info.is_vec_adaptive_scan()) {
+    if (OB_NOT_NULL(vec_index_info) && vec_index_info->is_vec_adaptive_scan()) {
       // just check whether all filters can be picked out
       bool all_picked_out = true;
       for (int64_t i = 0; i < filter_exprs_.count() && all_picked_out; ++i) {
@@ -2003,7 +2022,7 @@ int ObLogTableScan::pick_out_query_range_exprs()
           all_picked_out = false;
         }
       }
-      vec_index_info.set_all_filters_can_be_picked_out(all_picked_out);
+      vec_index_info->set_all_filters_can_be_picked_out(all_picked_out);
     } else {
       ObArray<ObRawExpr *> filter_exprs;
       if (OB_FAIL(filter_exprs.assign(filter_exprs_))) {
@@ -2489,11 +2508,11 @@ int ObLogTableScan::get_plan_object_info(PlanText &plan_text,
                                          ObSqlPlanItem &plan_item)
 {
   int ret = OB_SUCCESS;
+  const ObVecIndexInfo *vc_info = get_vector_index_info();
   if (OB_SUCC(ret)) {
     //print object alias
     const ObString &name = get_table_name();
     const ObString &index_name = get_index_name();
-    ObVecIndexInfo &vc_info = get_vector_index_info();
     BEGIN_BUF_PRINT;
     if (OB_FAIL(BUF_PRINTF("%.*s", name.length(), name.ptr()))) {
       LOG_WARN("BUF_PRINTF fails", K(ret));
@@ -2526,24 +2545,24 @@ int ObLogTableScan::get_plan_object_info(PlanText &plan_text,
           } else if (is_descending_direction(get_scan_direction()) &&
               OB_FAIL(BUF_PRINTF("%s", COMMA_REVERSE))) {
             LOG_WARN("BUF_PRINTF fails", K(ret));
-          } else if (!vc_info.get_vec_index_name().empty() && (OB_FAIL(BUF_PRINTF(","))
-                    || OB_FAIL(BUF_PRINTF("%.*s", vc_info.get_vec_index_name().length(), vc_info.get_vec_index_name().ptr())))) {
+          } else if (OB_NOT_NULL(vc_info) && !vc_info->get_vec_index_name().empty() && (OB_FAIL(BUF_PRINTF(","))
+                    || OB_FAIL(BUF_PRINTF("%.*s", vc_info->get_vec_index_name().length(), vc_info->get_vec_index_name().ptr())))) {
             LOG_WARN("BUF_PRINTF fails", K(ret));
           } else if (OB_FAIL(BUF_PRINTF("%s", RIGHT_BRACKET))) {
             LOG_WARN("BUF_PRINTF fails", K(ret));
           }
         }
       }
-    } else if (is_index_scan() || !vc_info.get_vec_index_name().empty()) {
-      const bool is_vec_post_scan = !vc_info.get_vec_index_name().empty()
-          && (vc_info.vec_type_ == VEC_INDEX_POST_WITHOUT_FILTER || vc_info.adaptive_try_path_ == VEC_INDEX_ITERATIVE_FILTER || vc_info.adaptive_try_path_ == VEC_INDEX_POST_FILTER);
+    } else if (is_index_scan() || (OB_NOT_NULL(vc_info) && !vc_info->get_vec_index_name().empty())) {
+      const bool is_vec_post_scan = OB_NOT_NULL(vc_info) && !vc_info->get_vec_index_name().empty()
+          && (vc_info->vec_type_ == VEC_INDEX_POST_WITHOUT_FILTER || vc_info->adaptive_try_path_ == VEC_INDEX_ITERATIVE_FILTER || vc_info->adaptive_try_path_ == VEC_INDEX_POST_FILTER);
       const bool need_print_index = is_index_scan() && !is_vec_post_scan;
       if (OB_FAIL(BUF_PRINTF("%s", LEFT_BRACKET))) {
         LOG_WARN("BUF_PRINTF fails", K(ret));
       } else if (need_print_index && OB_FAIL(BUF_PRINTF("%.*s", index_name.length(), index_name.ptr()))) {
         LOG_WARN("BUF_PRINTF fails", K(ret));
-      } else if (!vc_info.get_vec_index_name().empty() && ((need_print_index && OB_FAIL(BUF_PRINTF(",")))
-                || OB_FAIL(BUF_PRINTF("%.*s", vc_info.get_vec_index_name().length(), vc_info.get_vec_index_name().ptr())))) {
+      } else if (OB_NOT_NULL(vc_info) && !vc_info->get_vec_index_name().empty() && ((need_print_index && OB_FAIL(BUF_PRINTF(",")))
+                || OB_FAIL(BUF_PRINTF("%.*s", vc_info->get_vec_index_name().length(), vc_info->get_vec_index_name().ptr())))) {
         LOG_WARN("BUF_PRINTF fails", K(ret));
       } else if (is_descending_direction(get_scan_direction()) &&
                  OB_FAIL(BUF_PRINTF("%s", COMMA_REVERSE))) {
@@ -3050,7 +3069,7 @@ int ObLogTableScan::print_outline_data(PlanText &plan_text)
   ObItemType index_type = T_INDEX_HINT;
   const ObDMLStmt *stmt = NULL;
   bool use_desc_hint = get_scan_direction() == default_desc_direction();
-  ObVecIndexInfo &vc_info = get_vector_index_info();
+  const ObVecIndexInfo *vc_info = get_vector_index_info();
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt()) ||
       OB_ISNULL(stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
@@ -3132,15 +3151,15 @@ int ObLogTableScan::print_outline_data(PlanText &plan_text)
         LOG_WARN("failed to print index hint", K(ret));
       }
     }
-    if (OB_SUCC(ret) && !get_vector_index_info().get_vec_index_name().empty()) {
+    if (OB_SUCC(ret) && OB_NOT_NULL(vc_info) && !vc_info->get_vec_index_name().empty()) {
       ObIndexHint index_hint(T_VECTOR_INDEX_HINT);
       index_hint.set_qb_name(qb_name);
       index_hint.get_table().set_table(*table_item);
-      index_hint.get_index_name().assign_ptr(get_vector_index_info().get_vec_index_name().ptr(), get_vector_index_info().get_vec_index_name().length());
-      if (get_vector_index_info().vec_type_ == VEC_INDEX_ADAPTIVE_SCAN) {
-        if (get_vector_index_info().adaptive_try_path_ == VEC_INDEX_PRE_FILTER || get_vector_index_info().adaptive_try_path_ ==VEC_INDEX_IN_FILTER) {
+      index_hint.get_index_name().assign_ptr(vc_info->get_vec_index_name().ptr(), vc_info->get_vec_index_name().length());
+      if (vc_info->vec_type_ == VEC_INDEX_ADAPTIVE_SCAN) {
+        if (vc_info->adaptive_try_path_ == VEC_INDEX_PRE_FILTER || vc_info->adaptive_try_path_ ==VEC_INDEX_IN_FILTER) {
           index_hint.get_filter_type() = VecFilterType::PRE_FILTER;
-        } else if (get_vector_index_info().adaptive_try_path_ == VEC_INDEX_POST_FILTER || get_vector_index_info().adaptive_try_path_ == VEC_INDEX_ITERATIVE_FILTER) {
+        } else if (vc_info->adaptive_try_path_ == VEC_INDEX_POST_FILTER || vc_info->adaptive_try_path_ == VEC_INDEX_ITERATIVE_FILTER) {
           index_hint.get_filter_type() = VecFilterType::POST_FILTER;
         } else {
           index_hint.get_filter_type() = VecFilterType::ADAPTIVE;
@@ -3187,6 +3206,7 @@ int ObLogTableScan::print_outline_data(PlanText &plan_text)
 int ObLogTableScan::print_used_hint(PlanText &plan_text)
 {
   int ret = OB_SUCCESS;
+  const ObVecIndexInfo *vc_info = get_vector_index_info();
   if (OB_ISNULL(get_plan())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL", K(ret), K(get_plan()));
@@ -3263,9 +3283,8 @@ int ObLogTableScan::print_used_hint(PlanText &plan_text)
     } else {
       // print vector index hint.
       const ObIndexHint *index_hint = NULL;
-      ObVecIndexInfo &vc_info = get_vector_index_info();
-      if (vc_info.aux_table_id_.empty()) {
-      } else if (ObOptimizerUtil::find_item(table_hint->vec_index_list_, vc_info.aux_table_id_.at(0), &idx)) {
+      if (OB_ISNULL(vc_info) || vc_info->aux_table_id_.empty()) {
+      } else if (ObOptimizerUtil::find_item(table_hint->vec_index_list_, vc_info->aux_table_id_.at(0), &idx)) {
         if (OB_UNLIKELY(idx < 0 || idx >= table_hint->index_list_.count())
             || OB_ISNULL(index_hint = static_cast<const ObIndexHint *>(table_hint->vec_index_hints_.at(idx)))) {
           // found invalid vector index hint, not print.
@@ -3274,9 +3293,9 @@ int ObLogTableScan::print_used_hint(PlanText &plan_text)
           if (index_hint->get_filter_type() == VecFilterType::ADAPTIVE) {
             need_print_hint = true;
           } else if (index_hint->get_filter_type() == VecFilterType::PRE_FILTER) {
-            need_print_hint = vc_info.vec_index_pre_filter() || (vc_info.is_vec_adaptive_scan() && vc_info.adaptive_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER);
+            need_print_hint = vc_info->vec_index_pre_filter() || (vc_info->is_vec_adaptive_scan() && vc_info->adaptive_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER);
           } else if (index_hint->get_filter_type() == VecFilterType::POST_FILTER) {
-            need_print_hint = vc_info.vec_index_post_filter() || vc_info.is_vec_adaptive_iter_scan();
+            need_print_hint = vc_info->vec_index_post_filter() || vc_info->is_vec_adaptive_iter_scan();
           }
           if (need_print_hint && OB_FAIL(index_hint->print_hint(plan_text))) {
             LOG_WARN("failed to print index hint", K(ret), KPC(index_hint));
@@ -3818,15 +3837,18 @@ int ObLogTableScan::extract_domain_id_index_back_expr(ObIArray<ObRawExpr *> &exp
   const ObColumnSchemaV2 *doc_id_col_schema = nullptr;
   const ObColumnSchemaV2 *vid_col_schema = nullptr;
   ObSEArray<ColumnItem, 4> col_items;
-  ObVecIndexInfo &vc_info = get_vector_index_info();
   bool check_vid_col = need_vec_id_index_back();
   bool check_doc_id_col = need_doc_id_index_back();
+  const ObVecIndexInfo *vc_info = get_vector_index_info();
   if (!check_vid_col && !check_doc_id_col) {
     //skip
   } else if (OB_ISNULL(get_stmt()) || OB_ISNULL(get_plan())  ||
       OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), KP(get_stmt()), KP(get_plan()),  KP(schema_guard));
+  } else if (check_vid_col && OB_ISNULL(vc_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null vector index info", K(ret), K(check_vid_col), K(check_doc_id_col));
   } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id_, table_schema))) {
     LOG_WARN("failed to get table schema", K(ret));
   } else {
@@ -3897,19 +3919,20 @@ int ObLogTableScan::extract_text_retrieval_access_expr(ObTextRetrievalInfo &tr_i
 int ObLogTableScan::extract_vec_idx_access_expr(ObIArray<ObRawExpr *> &exprs)
 {
   int ret = OB_SUCCESS;
-  ObVecIndexInfo &vec_info = get_vector_index_info();
   ObSqlSchemaGuard *schema_guard = nullptr;
   const ObTableSchema *table_schema = nullptr;
   ObSEArray<ColumnItem, 4> col_items;
   if (OB_ISNULL(get_stmt()) || OB_ISNULL(get_plan())  ||
-      OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
+      OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard()) ||
+      OB_ISNULL(get_vector_index_info())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), KP(get_stmt()), KP(get_plan()),  KP(schema_guard));
+    LOG_WARN("get unexpected null", K(ret), KP(get_stmt()), KP(get_plan()),  KP(schema_guard), KP(get_vector_index_info()));
   } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id_, table_schema))) {
     LOG_WARN("failed to get table schema", K(ret));
   } else if (OB_FAIL(get_stmt()->get_column_items(table_id_, col_items))) {
     LOG_WARN("failed to get column items", K(ret));
   } else {
+    ObVecIndexInfo &vec_info = *get_vector_index_info();
     for (int64_t i = 0; OB_SUCC(ret) && i < col_items.count(); ++i) {
       const ColumnItem &col_item = col_items.at(i);
       bool is_rowkey = false;
@@ -3991,34 +4014,37 @@ int ObLogTableScan::extract_vec_idx_access_expr(ObIArray<ObRawExpr *> &exprs)
 int ObLogTableScan::get_vec_idx_calc_exprs(ObIArray<ObRawExpr *> &all_exprs) // check all expr
 {
   int ret = OB_SUCCESS;
-  ObVecIndexInfo &vec_info = get_vector_index_info();
-  if (OB_ISNULL(vec_info.sort_key_.expr_)) {
+  ObVecIndexInfo *vec_info = get_vector_index_info();
+  if (OB_ISNULL(vec_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected vector_index_info_ nullptr", K(ret));
+  } else if (OB_ISNULL(vec_info->sort_key_.expr_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null vector sort expr", K(ret));
-  } else if (OB_FAIL(all_exprs.push_back(vec_info.sort_key_.expr_))) {
+  } else if (OB_FAIL(all_exprs.push_back(vec_info->sort_key_.expr_))) {
     LOG_WARN("failed to append vector sort expr", K(ret));
-  } else if (OB_NOT_NULL(vec_info.topk_limit_expr_) &&
-             OB_FAIL(all_exprs.push_back(vec_info.topk_limit_expr_))) {
+  } else if (OB_NOT_NULL(vec_info->topk_limit_expr_) &&
+             OB_FAIL(all_exprs.push_back(vec_info->topk_limit_expr_))) {
     LOG_WARN("failed to append limit expr", K(ret));
-  } else if (OB_NOT_NULL(vec_info.topk_offset_expr_) &&
-             OB_FAIL(all_exprs.push_back(vec_info.topk_offset_expr_))) {
+  } else if (OB_NOT_NULL(vec_info->topk_offset_expr_) &&
+             OB_FAIL(all_exprs.push_back(vec_info->topk_offset_expr_))) {
     LOG_WARN("failed to append offset expr", K(ret));
   } else if (is_vec_idx_scan_pre_filter()) {
-    if (vec_info.is_hnsw_vec_scan()) {
-      if (OB_FAIL(all_exprs.push_back(vec_info.vec_id_column_))) {
+    if (vec_info->is_hnsw_vec_scan()) {
+      if (OB_FAIL(all_exprs.push_back(vec_info->vec_id_column_))) {
         LOG_WARN("failed to append vid column to access exprs", K(ret));
-      } else if (OB_FAIL(all_exprs.push_back(vec_info.target_vec_column_))) {
+      } else if (OB_FAIL(all_exprs.push_back(vec_info->target_vec_column_))) {
         LOG_WARN("failed to append snapshot_data column to access exprs", K(ret));
       } else {
         int aux_table_column_cnt =
-          vec_info.is_hybrid_index ? HNSW_MAX_COL_CNT : HNSW_MAX_COL_CNT - HNSW_HYBRID_COL_CNT;
+          vec_info->is_hybrid_index ? HNSW_MAX_COL_CNT : HNSW_MAX_COL_CNT - HNSW_HYBRID_COL_CNT;
         int64_t hnsw_max_column_cnt = aux_table_column_cnt;
-        if (!vec_info.has_get_visible_column()) {
+        if (!vec_info->has_get_visible_column()) {
           hnsw_max_column_cnt = hnsw_max_column_cnt - 1;
         }
         for (int i = 0; i < hnsw_max_column_cnt && OB_SUCC(ret); ++i) {
-          if (i < vec_info.aux_table_column_.count()) {
-            if (OB_FAIL(all_exprs.push_back(vec_info.aux_table_column_.at(i)))) {
+          if (i < vec_info->aux_table_column_.count()) {
+            if (OB_FAIL(all_exprs.push_back(vec_info->aux_table_column_.at(i)))) {
               LOG_WARN("failed to append aux column to access exprs", K(ret));
             }
           } else {
@@ -4028,7 +4054,7 @@ int ObLogTableScan::get_vec_idx_calc_exprs(ObIArray<ObRawExpr *> &all_exprs) // 
         }// end for
       }
       // for adaptive sca/iter scan, need an extra functioanal lookup, record all_tr_info
-      if (OB_SUCC(ret) && (vec_info.is_vec_adaptive_scan() || vec_info.vec_index_post_filter())) {
+      if (OB_SUCC(ret) && (vec_info->is_vec_adaptive_scan() || vec_info->vec_index_post_filter())) {
         if (is_text_retrieval_scan() && OB_FAIL(get_vec_iter_tr_infos().push_back(get_text_retrieval_info()))) {
           LOG_WARN("fail to get text_retrieval tr infos", K(ret));
         }
@@ -4049,13 +4075,13 @@ int ObLogTableScan::get_vec_idx_calc_exprs(ObIArray<ObRawExpr *> &all_exprs) // 
           }
         }
       }
-    } else if (vec_info.is_spiv_scan()) {
-      if (OB_FAIL(all_exprs.push_back(vec_info.target_vec_column_))) {
+    } else if (vec_info->is_spiv_scan()) {
+      if (OB_FAIL(all_exprs.push_back(vec_info->target_vec_column_))) {
         LOG_WARN("failed to append target vec column to access exprs", K(ret));
       } else {
         for (int i = 0; i < ObVectorSPIVColumnIdx::SPIV_MAX_COL_CNT && OB_SUCC(ret); ++i) {
-          if (i < vec_info.aux_table_column_.count()) {
-            if (OB_FAIL(all_exprs.push_back(vec_info.aux_table_column_.at(i)))) {
+          if (i < vec_info->aux_table_column_.count()) {
+            if (OB_FAIL(all_exprs.push_back(vec_info->aux_table_column_.at(i)))) {
               LOG_WARN("failed to append aux column to access exprs", K(ret));
             }
           } else {
@@ -4065,12 +4091,12 @@ int ObLogTableScan::get_vec_idx_calc_exprs(ObIArray<ObRawExpr *> &all_exprs) // 
         }// end for
       }
     } else {
-      if (vec_info.is_ivf_vec_scan()) {
-        if (OB_FAIL(all_exprs.push_back(vec_info.target_vec_column_))) {
+      if (vec_info->is_ivf_vec_scan()) {
+        if (OB_FAIL(all_exprs.push_back(vec_info->target_vec_column_))) {
           LOG_WARN("failed to append target vec column to access exprs", K(ret));
         }
-        for (int i = 0; i < vec_info.aux_table_column_.count() && OB_SUCC(ret); ++i) {
-          if (OB_FAIL(all_exprs.push_back(vec_info.aux_table_column_.at(i)))) {
+        for (int i = 0; i < vec_info->aux_table_column_.count() && OB_SUCC(ret); ++i) {
+          if (OB_FAIL(all_exprs.push_back(vec_info->aux_table_column_.at(i)))) {
             LOG_WARN("failed to append aux column to access exprs", K(ret));
           }
         } // end for
@@ -4342,20 +4368,23 @@ int ObLogTableScan::prepare_vector_access_exprs()
 {
   int ret = OB_SUCCESS;
   bool is_all_inited = false;
-  ObVecIndexInfo &vc_info = get_vector_index_info();
-  if (OB_FAIL(vc_info.check_vec_aux_column_is_all_inited(is_all_inited))) {
+  ObVecIndexInfo *vc_info = get_vector_index_info();
+  if (OB_ISNULL(vc_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected vector_index_info_ nullptr", K(ret));
+  } else if (OB_FAIL(vc_info->check_vec_aux_column_is_all_inited(is_all_inited))) {
     LOG_WARN("failed to check hnsw aux column is all inited", K(ret));
   } else if (is_all_inited) {
     // do nothing, exprs already generated
-  } else if (get_vector_index_info().is_hnsw_vec_scan()) {
-    if (OB_FAIL(prepare_hnsw_vector_access_exprs(vc_info))) {
+  } else if (get_vector_index_info()->is_hnsw_vec_scan()) {
+    if (OB_FAIL(prepare_hnsw_vector_access_exprs(*vc_info))) {
       LOG_WARN("fail to prepare hnsw vector access exprs", K(ret));
     }
-  } else if (get_vector_index_info().is_ivf_vec_scan()) {
+  } else if (get_vector_index_info()->is_ivf_vec_scan()) {
     if (OB_FAIL(prepare_ivf_vector_access_exprs())) {
       LOG_WARN("fail to prepare hnsw vector access exprs", K(ret));
     }
-  } else if (vc_info.is_spiv_scan()) {
+  } else if (vc_info->is_spiv_scan()) {
     if (OB_FAIL(prepare_spiv_vector_access_exprs())) {
       LOG_WARN("fail to prepare spiv vector access exprs", K(ret));
     }
@@ -4367,7 +4396,7 @@ int ObLogTableScan::prepare_spiv_vector_access_exprs() {
   int ret = OB_SUCCESS;
   const ObTableSchema *table_schema = nullptr;
   const ObTableSchema *dim_docid_value_table = nullptr;
-  ObVecIndexInfo &vc_info = get_vector_index_info();
+  ObVecIndexInfo *vc_info = nullptr;
   ObSqlSchemaGuard *schema_guard  = nullptr;
   TableItem *table_item = nullptr;
   ObRawExprFactory *expr_factory = nullptr;
@@ -4380,12 +4409,13 @@ int ObLogTableScan::prepare_spiv_vector_access_exprs() {
   if (OB_ISNULL(get_stmt()) || OB_ISNULL(get_plan()) ||
       OB_ISNULL(expr_factory = &get_plan()->get_optimizer_context().get_expr_factory()) ||
       OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info()) ||
-      OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
+      OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard()) ||
+      OB_ISNULL(vc_info = get_vector_index_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null pointer", K(ret));
   } else if (OB_FAIL(schema_guard->get_table_schema(get_real_ref_table_id(), table_schema))) {
     LOG_WARN("failed to get table schema", K(ret));
-  } else if (OB_FAIL(schema_guard->get_table_schema(vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_FIRST_AUX_TBL_IDX), dim_docid_value_table))) {
+  } else if (OB_FAIL(schema_guard->get_table_schema(vc_info->get_aux_table_id(ObVectorAuxTableIdx::VEC_FIRST_AUX_TBL_IDX), dim_docid_value_table))) {
     LOG_WARN("failed to get table schema", K(ret));
   } else if (OB_ISNULL(table_item = get_stmt()->get_table_item_by_id(get_table_id()))) {
     ret = OB_ERR_UNEXPECTED;
@@ -4411,15 +4441,15 @@ int ObLogTableScan::prepare_spiv_vector_access_exprs() {
       /* column must add in order, same as ObVectorSPIVColumnIdx*/
     } else if (!need_skip_rowkey_doc() && OB_FAIL(prepare_rowkey_vid_dep_exprs(true/*is_rowkey_docid*/))) {
       LOG_WARN("failed to prepare rowkey vid dep exprs", K(ret));
-    } else if (OB_FAIL(vc_info.aux_table_column_.push_back(aux_docid_column))) {
+    } else if (OB_FAIL(vc_info->aux_table_column_.push_back(aux_docid_column))) {
       LOG_WARN("fail to push back aux docid column", K(ret));
-    } else if (OB_FAIL(vc_info.aux_table_column_.push_back(aux_value_column))) {
+    } else if (OB_FAIL(vc_info->aux_table_column_.push_back(aux_value_column))) {
       LOG_WARN("fail to push back aux value column", K(ret));
-    } else if (OB_FAIL(vc_info.aux_table_column_.push_back(aux_dim_column))) {
+    } else if (OB_FAIL(vc_info->aux_table_column_.push_back(aux_dim_column))) {
       LOG_WARN("fail to push back aux value column", K(ret));
     } else {
-      vc_info.target_vec_column_ = target_vec_column;
-      vc_info.vec_id_column_ = aux_docid_column;
+      vc_info->target_vec_column_ = target_vec_column;
+      vc_info->vec_id_column_ = aux_docid_column;
     }
   }
   return ret;
@@ -4508,7 +4538,7 @@ int ObLogTableScan::prepare_ivf_pq_access_exprs(const ObTableSchema *table_schem
   const ObTableSchema *ivf_pq_id_tbl = nullptr;
   const ObTableSchema *ivf_pq_code_tbl = nullptr;
   const ObTableSchema *ivf_pq_rowkey_cid_tbl = nullptr;
-  ObVecIndexInfo &vc_info = get_vector_index_info();
+  ObVecIndexInfo *vc_info = get_vector_index_info();
   ObColumnRefRawExpr *ivf_pq_id_pid_column = nullptr;
   ObColumnRefRawExpr *ivf_pq_id_center_column = nullptr;
   ObColumnRefRawExpr *ivf_pq_code_cid_column = nullptr;
@@ -4517,27 +4547,27 @@ int ObLogTableScan::prepare_ivf_pq_access_exprs(const ObTableSchema *table_schem
   ObColumnRefRawExpr *ivf_rowkey_cid_pids_column = nullptr;
   ObArray<uint64_t> rowkey_cids;
   if (OB_ISNULL(table_schema) || OB_ISNULL(schema_guard) || OB_ISNULL(table_item)
-     || OB_ISNULL(expr_factory) || OB_ISNULL(session_info)) {
+     || OB_ISNULL(expr_factory) || OB_ISNULL(session_info) || OB_ISNULL(vc_info)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null pointer", K(ret), KP(table_schema), KP(schema_guard), KP(table_item), KP(expr_factory), KP(session_info));
-  } else if (vc_info.aux_table_column_.count() != (ObVectorIVFFlatColumnIdx::IVF_CENTROID_CENTER_COL + 1)) {
+    LOG_WARN("unexpected null pointer", K(ret), KP(table_schema), KP(schema_guard), KP(table_item), KP(expr_factory), KP(session_info), KP(vc_info));
+  } else if (vc_info->aux_table_column_.count() != (ObVectorIVFFlatColumnIdx::IVF_CENTROID_CENTER_COL + 1)) {
      ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected aux column cnt", K(ret), K(vc_info.aux_table_id_.count()));
-  } else if (OB_FAIL(schema_guard->get_table_schema(vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_FOURTH_AUX_TBL_IDX), ivf_pq_id_tbl))) {
+    LOG_WARN("unexpected aux column cnt", K(ret), K(vc_info->aux_table_id_.count()));
+  } else if (OB_FAIL(schema_guard->get_table_schema(vc_info->get_aux_table_id(ObVectorAuxTableIdx::VEC_FOURTH_AUX_TBL_IDX), ivf_pq_id_tbl))) {
     LOG_WARN("failed to get table schema", K(ret));
   } else if (OB_ISNULL(ivf_pq_id_tbl)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null pointer", K(ret), K(vc_info.aux_table_id_.count()), K(vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_FOURTH_AUX_TBL_IDX)));
-  } else if (OB_FAIL(schema_guard->get_table_schema(vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_SECOND_AUX_TBL_IDX), ivf_pq_code_tbl))) {
+    LOG_WARN("unexpected null pointer", K(ret), K(vc_info->aux_table_id_.count()), K(vc_info->get_aux_table_id(ObVectorAuxTableIdx::VEC_FOURTH_AUX_TBL_IDX)));
+  } else if (OB_FAIL(schema_guard->get_table_schema(vc_info->get_aux_table_id(ObVectorAuxTableIdx::VEC_SECOND_AUX_TBL_IDX), ivf_pq_code_tbl))) {
     LOG_WARN("failed to get table schema", K(ret));
   } else if (OB_ISNULL(ivf_pq_code_tbl)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null pointer", K(ret), K(vc_info.aux_table_id_.count()), K(vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_SECOND_AUX_TBL_IDX)));
-  } else if (OB_FAIL(schema_guard->get_table_schema(vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_THIRD_AUX_TBL_IDX), ivf_pq_rowkey_cid_tbl))) {
+    LOG_WARN("unexpected null pointer", K(ret), K(vc_info->aux_table_id_.count()), K(vc_info->get_aux_table_id(ObVectorAuxTableIdx::VEC_SECOND_AUX_TBL_IDX)));
+  } else if (OB_FAIL(schema_guard->get_table_schema(vc_info->get_aux_table_id(ObVectorAuxTableIdx::VEC_THIRD_AUX_TBL_IDX), ivf_pq_rowkey_cid_tbl))) {
     LOG_WARN("failed to get table schema", K(ret));
   } else if (OB_ISNULL(ivf_pq_rowkey_cid_tbl)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null pointer", K(ret), K(vc_info.aux_table_id_.count()), K(vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_THIRD_AUX_TBL_IDX)));
+    LOG_WARN("unexpected null pointer", K(ret), K(vc_info->aux_table_id_.count()), K(vc_info->get_aux_table_id(ObVectorAuxTableIdx::VEC_THIRD_AUX_TBL_IDX)));
   } else if (OB_FAIL(table_schema->get_rowkey_column_ids(rowkey_cids))) {
     LOG_WARN("fail to get rowkey column ids in rowkey vid", K(ret), KPC(ivf_pq_code_tbl));
   } else if (OB_FAIL(prepare_ivf_aux_tbl_cid_and_center_col_access_exprs(ivf_pq_id_tbl, table_schema, expr_factory, table_item,
@@ -4559,17 +4589,17 @@ int ObLogTableScan::prepare_ivf_pq_access_exprs(const ObTableSchema *table_schem
         KP(ivf_pq_id_tbl), KP(ivf_pq_id_pid_column), KP(ivf_pq_id_center_column), KP(ivf_pq_code_cid_column),
         KP(ivf_pq_code_pids_column), KP(ivf_rowkey_cid_cid_column), KP(ivf_rowkey_cid_pids_column));
   /* column must add in order, same as ObVectorIVFPQColumnIdx*/
-  } else if (OB_FAIL(vc_info.aux_table_column_.push_back(ivf_pq_id_pid_column))) {
+  } else if (OB_FAIL(vc_info->aux_table_column_.push_back(ivf_pq_id_pid_column))) {
     LOG_WARN("fail to push back aux column", K(ret));
-  } else if (OB_FAIL(vc_info.aux_table_column_.push_back(ivf_pq_id_center_column))) {
+  } else if (OB_FAIL(vc_info->aux_table_column_.push_back(ivf_pq_id_center_column))) {
     LOG_WARN("fail to push back aux column", K(ret));
-  } else if (OB_FAIL(vc_info.aux_table_column_.push_back(ivf_rowkey_cid_cid_column))) {
+  } else if (OB_FAIL(vc_info->aux_table_column_.push_back(ivf_rowkey_cid_cid_column))) {
     LOG_WARN("fail to push back aux column", K(ret));
-  } else if (OB_FAIL(vc_info.aux_table_column_.push_back(ivf_rowkey_cid_pids_column))) {
+  } else if (OB_FAIL(vc_info->aux_table_column_.push_back(ivf_rowkey_cid_pids_column))) {
     LOG_WARN("fail to push back aux column", K(ret));
-  } else if (OB_FAIL(vc_info.aux_table_column_.push_back(ivf_pq_code_cid_column))) {
+  } else if (OB_FAIL(vc_info->aux_table_column_.push_back(ivf_pq_code_cid_column))) {
     LOG_WARN("fail to push back aux column", K(ret));
-  } else if (OB_FAIL(vc_info.aux_table_column_.push_back(ivf_pq_code_pids_column))) {
+  } else if (OB_FAIL(vc_info->aux_table_column_.push_back(ivf_pq_code_pids_column))) {
     LOG_WARN("fail to push back aux column", K(ret));
   }
   return ret;
@@ -4583,10 +4613,12 @@ int ObLogTableScan::prepare_ivf_vector_access_exprs()
   TableItem *table_item = nullptr;
   ObRawExprFactory *expr_factory = nullptr;
   ObSQLSessionInfo *session_info = nullptr;
+  ObVecIndexInfo *vc_info = nullptr;
   if (OB_ISNULL(get_stmt()) || OB_ISNULL(get_plan()) ||
       OB_ISNULL(expr_factory = &get_plan()->get_optimizer_context().get_expr_factory()) ||
       OB_ISNULL(session_info = get_plan()->get_optimizer_context().get_session_info()) ||
-      OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
+      OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard()) ||
+      OB_ISNULL(vc_info = get_vector_index_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null pointer", K(ret));
   } else if (OB_FAIL(schema_guard->get_table_schema(get_real_ref_table_id(), table_schema))) {
@@ -4596,11 +4628,11 @@ int ObLogTableScan::prepare_ivf_vector_access_exprs()
     LOG_WARN("unexpected null pointer", K(ret));
   } else if (OB_FAIL(prepare_ivf_common_tbl_access_exprs(table_schema, schema_guard, table_item, expr_factory, session_info))) {
     LOG_WARN("prepare_ivf_rowkey_access_exprs", K(ret));
-  } else if (get_vector_index_info().is_ivf_flat_scan() || get_vector_index_info().is_ivf_sq_scan()) {
+  } else if (vc_info->is_ivf_flat_scan() || vc_info->is_ivf_sq_scan()) {
     if (OB_FAIL(prepare_ivf_flat_and_sq_access_exprs(table_schema, schema_guard, table_item, expr_factory, session_info))) {
       LOG_WARN("fail to prepare ivf flat and sq vector access exprs", K(ret));
     }
-  } else if (get_vector_index_info().is_ivf_pq_scan()) {
+  } else if (vc_info->is_ivf_pq_scan()) {
     if (OB_FAIL(prepare_ivf_pq_access_exprs(table_schema, schema_guard, table_item, expr_factory, session_info))) {
       LOG_WARN("fail to prepare ivf pq vector access exprs", K(ret));
     }
@@ -4619,20 +4651,20 @@ int ObLogTableScan::prepare_ivf_common_tbl_access_exprs(const ObTableSchema *tab
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *ivf_center_id_tbl = nullptr;
-  ObVecIndexInfo &vc_info = get_vector_index_info();
+  ObVecIndexInfo *vc_info = get_vector_index_info();
   ObColumnRefRawExpr *cid_column = nullptr;
   ObColumnRefRawExpr *center_column = nullptr;
   ObColumnRefRawExpr *target_vec_column = nullptr;
   ObSEArray<uint64_t , 1> col_ids;
   if (OB_ISNULL(table_schema) || OB_ISNULL(schema_guard) || OB_ISNULL(table_item)
-     || OB_ISNULL(expr_factory) || OB_ISNULL(session_info)) {
+     || OB_ISNULL(expr_factory) || OB_ISNULL(session_info) || OB_ISNULL(vc_info)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null pointer", K(ret), KP(table_schema), KP(schema_guard), KP(table_item), KP(expr_factory), KP(session_info));
-  } else if (OB_FAIL(schema_guard->get_table_schema(vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_FIRST_AUX_TBL_IDX), ivf_center_id_tbl))) {
+    LOG_WARN("unexpected null pointer", K(ret), KP(table_schema), KP(schema_guard), KP(table_item), KP(expr_factory), KP(session_info), KP(vc_info));
+  } else if (OB_FAIL(schema_guard->get_table_schema(vc_info->get_aux_table_id(ObVectorAuxTableIdx::VEC_FIRST_AUX_TBL_IDX), ivf_center_id_tbl))) {
     LOG_WARN("failed to get table schema", K(ret));
   } else if (OB_ISNULL(ivf_center_id_tbl)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null pointer", K(ret), K(vc_info.aux_table_id_.count()), K(vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_FIRST_AUX_TBL_IDX)));
+    LOG_WARN("unexpected null pointer", K(ret), K(vc_info->aux_table_id_.count()), K(vc_info->get_aux_table_id(ObVectorAuxTableIdx::VEC_FIRST_AUX_TBL_IDX)));
   } else if (OB_FAIL(prepare_ivf_aux_tbl_cid_and_center_col_access_exprs(ivf_center_id_tbl, table_schema, expr_factory, table_item,
                                                                         cid_column, center_column, true, true))) {
     LOG_WARN("fail to prepare ivf cid vec tbl access exprs", K(ret));
@@ -4662,12 +4694,12 @@ int ObLogTableScan::prepare_ivf_common_tbl_access_exprs(const ObTableSchema *tab
     LOG_WARN("unexpected null vetor index generated column", K(ret),
         KP(cid_column), KP(center_column));
   /* column must add in order, same as ObVectorIVFFlatColumnIdx*/
-  } else if (OB_FAIL(vc_info.aux_table_column_.push_back(cid_column))) {
+  } else if (OB_FAIL(vc_info->aux_table_column_.push_back(cid_column))) {
     LOG_WARN("fail to push back delta vid column", K(ret));
-  } else if (OB_FAIL(vc_info.aux_table_column_.push_back(center_column))) {
+  } else if (OB_FAIL(vc_info->aux_table_column_.push_back(center_column))) {
     LOG_WARN("fail to push back delta type column", K(ret));
   } else {
-    vc_info.target_vec_column_ = target_vec_column;
+    vc_info->target_vec_column_ = target_vec_column;
   }
   return ret;
 }
@@ -4852,7 +4884,7 @@ int ObLogTableScan::prepare_ivf_flat_and_sq_access_exprs(const ObTableSchema *ta
   const ObTableSchema *ivf_cid_vec_tbl = nullptr;
   const ObTableSchema *ivf_rowkey_cid_tbl = nullptr;
   const ObTableSchema *ivf_sq_meta_tbl = nullptr;
-  ObVecIndexInfo &vc_info = get_vector_index_info();
+  ObVecIndexInfo *vc_info = get_vector_index_info();
   ObColumnRefRawExpr *cid_vec_cid_column = nullptr;
   ObColumnRefRawExpr *cid_vec_vec_column = nullptr;
   ObColumnRefRawExpr *rowkey_cid_cid_column = nullptr;
@@ -4860,22 +4892,22 @@ int ObLogTableScan::prepare_ivf_flat_and_sq_access_exprs(const ObTableSchema *ta
   ObColumnRefRawExpr *sq_meta_vec_column = nullptr;
   ObArray<uint64_t> rowkey_cids;
   if (OB_ISNULL(table_schema) || OB_ISNULL(schema_guard) || OB_ISNULL(table_item)
-     || OB_ISNULL(expr_factory) || OB_ISNULL(session_info)) {
+     || OB_ISNULL(expr_factory) || OB_ISNULL(session_info) || OB_ISNULL(vc_info)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null pointer", K(ret), KP(table_schema), KP(schema_guard), KP(table_item), KP(expr_factory), KP(session_info));
-  } else if (vc_info.aux_table_column_.count() != (ObVectorIVFFlatColumnIdx::IVF_CENTROID_CENTER_COL + 1)) {
+    LOG_WARN("unexpected null pointer", K(ret), KP(table_schema), KP(schema_guard), KP(table_item), KP(expr_factory), KP(session_info), KP(vc_info));
+  } else if (vc_info->aux_table_column_.count() != (ObVectorIVFFlatColumnIdx::IVF_CENTROID_CENTER_COL + 1)) {
      ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected aux column cnt", K(ret), K(vc_info.aux_table_id_.count()));
-  } else if (OB_FAIL(schema_guard->get_table_schema(vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_SECOND_AUX_TBL_IDX), ivf_cid_vec_tbl))) {
+    LOG_WARN("unexpected aux column cnt", K(ret), K(vc_info->aux_table_id_.count()));
+  } else if (OB_FAIL(schema_guard->get_table_schema(vc_info->get_aux_table_id(ObVectorAuxTableIdx::VEC_SECOND_AUX_TBL_IDX), ivf_cid_vec_tbl))) {
     LOG_WARN("failed to get table schema", K(ret));
   } else if (OB_ISNULL(ivf_cid_vec_tbl)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null pointer", K(ret), K(vc_info.aux_table_id_.count()), K(vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_SECOND_AUX_TBL_IDX)));
-  } else if (OB_FAIL(schema_guard->get_table_schema(vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_THIRD_AUX_TBL_IDX), ivf_rowkey_cid_tbl))) {
+    LOG_WARN("unexpected null pointer", K(ret), K(vc_info->aux_table_id_.count()), K(vc_info->get_aux_table_id(ObVectorAuxTableIdx::VEC_SECOND_AUX_TBL_IDX)));
+  } else if (OB_FAIL(schema_guard->get_table_schema(vc_info->get_aux_table_id(ObVectorAuxTableIdx::VEC_THIRD_AUX_TBL_IDX), ivf_rowkey_cid_tbl))) {
     LOG_WARN("failed to get table schema", K(ret));
   } else if (OB_ISNULL(ivf_rowkey_cid_tbl)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null pointer", K(ret), K(vc_info.aux_table_id_.count()), K(vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_THIRD_AUX_TBL_IDX)));
+    LOG_WARN("unexpected null pointer", K(ret), K(vc_info->aux_table_id_.count()), K(vc_info->get_aux_table_id(ObVectorAuxTableIdx::VEC_THIRD_AUX_TBL_IDX)));
   } else if (OB_FAIL(table_schema->get_rowkey_column_ids(rowkey_cids))) {
     LOG_WARN("fail to get rowkey column ids in rowkey vid", K(ret), KPC(ivf_cid_vec_tbl));
   } else if (OB_FAIL(prepare_ivf_aux_tbl_cid_and_center_col_access_exprs(ivf_cid_vec_tbl, table_schema, expr_factory, table_item,
@@ -4884,12 +4916,12 @@ int ObLogTableScan::prepare_ivf_flat_and_sq_access_exprs(const ObTableSchema *ta
   } else if (OB_FAIL(prepare_ivf_rowkey_cid_tbl_access_exprs(ivf_rowkey_cid_tbl, table_schema, expr_factory, table_item,
                                                             rowkey_cid_cid_column))) {
     LOG_WARN("fail to prepare_ivf_rowkey_cid_tbl_access_exprs", K(ret));
-  } else if (vc_info.is_ivf_sq_scan()) {
-    if (OB_FAIL(schema_guard->get_table_schema(vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_FOURTH_AUX_TBL_IDX), ivf_sq_meta_tbl))) {
+  } else if (vc_info->is_ivf_sq_scan()) {
+    if (OB_FAIL(schema_guard->get_table_schema(vc_info->get_aux_table_id(ObVectorAuxTableIdx::VEC_FOURTH_AUX_TBL_IDX), ivf_sq_meta_tbl))) {
       LOG_WARN("failed to get table schema", K(ret));
     } else if (OB_ISNULL(ivf_sq_meta_tbl)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null pointer", K(ret), K(vc_info.aux_table_id_.count()), K(vc_info.get_aux_table_id(ObVectorAuxTableIdx::VEC_FOURTH_AUX_TBL_IDX)));
+      LOG_WARN("unexpected null pointer", K(ret), K(vc_info->aux_table_id_.count()), K(vc_info->get_aux_table_id(ObVectorAuxTableIdx::VEC_FOURTH_AUX_TBL_IDX)));
     } else if (OB_FAIL(prepare_ivf_sq_meta_tbl_access_exprs(ivf_sq_meta_tbl, table_schema, expr_factory, table_item,
                                                            sq_meta_id_column, sq_meta_vec_column))) {
       LOG_WARN("fail to prepare ivf sq meta tbl access exprs", K(ret));
@@ -4900,24 +4932,24 @@ int ObLogTableScan::prepare_ivf_flat_and_sq_access_exprs(const ObTableSchema *ta
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(cid_vec_cid_column) || OB_ISNULL(cid_vec_vec_column)
             || OB_ISNULL(rowkey_cid_cid_column)
-            || (vc_info.is_ivf_sq_scan() && (OB_ISNULL(sq_meta_id_column) || OB_ISNULL(sq_meta_vec_column)))) {
+            || (vc_info->is_ivf_sq_scan() && (OB_ISNULL(sq_meta_id_column) || OB_ISNULL(sq_meta_vec_column)))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null vetor index generated column", K(ret),
         KP(cid_vec_cid_column), KP(cid_vec_vec_column), KP(rowkey_cid_cid_column),
         K(ivf_cid_vec_tbl->get_rowkey_column_num()), K(rowkey_cids.count()),
         K( ivf_rowkey_cid_tbl->get_rowkey_column_num()),
-        K(vc_info.is_ivf_sq_scan()), KP(sq_meta_id_column), KP(sq_meta_vec_column));
+        K(vc_info->is_ivf_sq_scan()), KP(sq_meta_id_column), KP(sq_meta_vec_column));
   /* column must add in order, same as ObVectorIVFFlatColumnIdx and ObVectorIVFSQColumnIdx*/
-  } else if (OB_FAIL(vc_info.aux_table_column_.push_back(cid_vec_cid_column))) {
+  } else if (OB_FAIL(vc_info->aux_table_column_.push_back(cid_vec_cid_column))) {
     LOG_WARN("fail to push back aux column", K(ret));
-  } else if (OB_FAIL(vc_info.aux_table_column_.push_back(cid_vec_vec_column))) {
+  } else if (OB_FAIL(vc_info->aux_table_column_.push_back(cid_vec_vec_column))) {
     LOG_WARN("fail to push back aux column", K(ret));
-  } else if (OB_FAIL(vc_info.aux_table_column_.push_back(rowkey_cid_cid_column))) {
+  } else if (OB_FAIL(vc_info->aux_table_column_.push_back(rowkey_cid_cid_column))) {
     LOG_WARN("fail to push back aux column", K(ret));
-  } else if (vc_info.is_ivf_sq_scan()) {
-    if (OB_FAIL(vc_info.aux_table_column_.push_back(sq_meta_id_column))) {
+  } else if (vc_info->is_ivf_sq_scan()) {
+    if (OB_FAIL(vc_info->aux_table_column_.push_back(sq_meta_id_column))) {
       LOG_WARN("fail to push back aux column", K(ret));
-    } else if (OB_FAIL(vc_info.aux_table_column_.push_back(sq_meta_vec_column))) {
+    } else if (OB_FAIL(vc_info->aux_table_column_.push_back(sq_meta_vec_column))) {
       LOG_WARN("fail to push back aux column", K(ret));
     }
   }
@@ -4933,10 +4965,15 @@ int ObLogTableScan::prepare_rowkey_vid_dep_exprs(bool is_rowkey_docid)
   const ObTableSchema *rowkey_vid_schema = nullptr;
   const ObTableSchema *rowkey_doc_schema = nullptr;
   ObArray<uint64_t> rowkey_cids;
-  uint64_t rowkey_vid_tid = is_rowkey_docid ? get_rowkey_doc_table_id() : get_vector_index_info().get_aux_table_id(ObVectorAuxTableIdx::VEC_FOURTH_AUX_TBL_IDX);
+  uint64_t rowkey_vid_tid = 0;
+  ObVecIndexInfo *vc_info = get_vector_index_info();
   if (OB_ISNULL(get_plan()) || OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected error, schema guard or get_plan() is nullptr", K(ret), KP(get_plan()), KP(schema_guard));
+  } else if (!is_rowkey_docid && OB_ISNULL(vc_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null vector index info", K(ret), K(is_rowkey_docid));
+  } else if (FALSE_IT(rowkey_vid_tid = is_rowkey_docid ? get_rowkey_doc_table_id() : vc_info->get_aux_table_id(ObVectorAuxTableIdx::VEC_FOURTH_AUX_TBL_IDX))) {
   } else if (OB_FAIL(schema_guard->get_table_schema(get_real_ref_table_id(), table_schema))) {
     LOG_WARN("failed to get table schema", K(ret));
   } else if (OB_ISNULL(table_schema)) {

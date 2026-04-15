@@ -635,6 +635,7 @@ class Path
         range_prefix_count_(0),
         table_opt_info_(),
         domain_idx_info_(allocator),
+        vec_idx_info_(nullptr),
         for_update_(false),
         use_skip_scan_(OptSkipScanState::SS_UNSET),
         use_column_store_(false),
@@ -735,6 +736,7 @@ class Path
     }
 
     int compute_access_path_batch_rescan();
+    int alloc_vector_index_info_if_need(common::ObIAllocator &allocator);
     bool is_rescan_path() const { return est_cost_info_.is_rescan_; }
     int compute_is_das_dynamic_part_pruning(const EqualSets &equal_sets,
                                             const ObIArray<ObRawExpr*> &src_keys,
@@ -805,7 +807,7 @@ class Path
     int64_t range_prefix_count_; // prefix count
     BaseTableOptInfo *table_opt_info_;
     DomainIndexAccessInfo domain_idx_info_;
-    VecIndexAccessInfo vec_idx_info_;
+    VecIndexAccessInfo *vec_idx_info_;
     bool for_update_;
     OptSkipScanState use_skip_scan_;
     bool use_column_store_;
@@ -1576,6 +1578,8 @@ struct MergeKeyInfoHelper
         is_semi_anti_join_(false),
         is_index_merge_(false),
         need_domain_id_scan_(false),
+        is_set_vec_strategy_(false),
+        has_primary_hint_(false),
         child_stmt_(NULL),
         pushdown_filters_(),
         filters_(),
@@ -1585,7 +1589,9 @@ struct MergeKeyInfoHelper
         est_method_(EST_INVALID),
         vec_index_id_(OB_INVALID_ID),
         vec_index_type_(ObVecIndexType::VEC_INDEX_INVALID),
-        vec_idx_try_path_(ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN)
+        vec_idx_try_path_(ObVecIdxAdaTryPath::VEC_PATH_UNCHOSEN),
+        vec_query_strategy_(ObVecIdxQueryStrategy::RECALL_FIRST),
+        vec_pre_filtering_timeout_(-1)
       {}
 
       bool is_inner_path_;
@@ -1593,6 +1599,8 @@ struct MergeKeyInfoHelper
       bool is_semi_anti_join_;
       bool is_index_merge_;
       bool need_domain_id_scan_;
+      bool is_set_vec_strategy_;
+      bool has_primary_hint_;
       ObSelectStmt *child_stmt_;
       // when generate inner access path, save all pushdown filters
       // when generate subquery path, save all pushdown filters after rename
@@ -1615,6 +1623,8 @@ struct MergeKeyInfoHelper
       uint64_t vec_index_id_;
       ObVecIndexType vec_index_type_;
       ObVecIdxAdaTryPath vec_idx_try_path_;
+      ObVecIdxQueryStrategy vec_query_strategy_;
+      int64_t vec_pre_filtering_timeout_;
     };
 
     ObJoinOrder(ObJoinOrderEnum &join_order_enum,
@@ -2146,6 +2156,7 @@ struct MergeKeyInfoHelper
                                     const uint64_t ref_table_id,
                                     const PathHelper &helper,
                                     const bool need_table_filter,
+                                    const bool need_vec_idx_info,
                                     const ObIArray<ObRawExpr*> &unprecise_filters,
                                     ObIArray<ObPCParamEqualInfo> &equal_param_constraints,
                                     ObIArray<ObPCConstParamInfo> &const_param_constraints,
@@ -3458,6 +3469,9 @@ struct MergeKeyInfoHelper
                                             const ObIArray<ColumnItem> &range_columns,
                                             const ColumnItem *&column_item);
     bool is_expanded_realtime_major_refresh_mview() const;
+    bool has_whole_range(const ObQueryRangeArray &ranges);
+    int resolve_vec_query_strategy(const ObDMLStmt &stmt,
+                                   PathHelper &helper);
     friend class ::test::TestJoinOrder_ob_join_order_param_check_Test;
     friend class ::test::TestJoinOrder_ob_join_order_src_Test;
 

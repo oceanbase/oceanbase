@@ -264,13 +264,15 @@ struct ObVecIndexInfo
     vec_index_name_(),
     has_get_visible_column_(false),
     all_filters_can_be_picked_out_(false),
-    knn_filter_mode_(ObKnnFilterMode::INVALID_KNN_FILTER_MODE)
+    knn_filter_mode_(ObKnnFilterMode::INVALID_KNN_FILTER_MODE),
+    strategy_(ObVecIdxQueryStrategy::RECALL_FIRST),
+    pre_filtering_timeout_(-1)
   { }
   ~ObVecIndexInfo() {}
 
   TO_STRING_KV(K_(sort_key), KPC_(topk_limit_expr), KPC_(topk_offset_expr), KPC_(target_vec_column),
               KPC_(vec_id_column), K_(aux_table_column), K_(aux_table_id), K_(main_table_tid),
-              K_(vec_type), K_(vector_index_param), K_(query_param), K_(vec_index_name), K_(has_get_visible_column));
+              K_(vec_type), K_(vector_index_param), K_(query_param), K_(vec_index_name), K_(has_get_visible_column), K_(strategy), K_(pre_filtering_timeout));
   bool need_sort() const { return sort_key_.expr_ != nullptr; }
   inline void set_has_get_visible_column(bool value) { has_get_visible_column_ = value; }
   inline void set_vec_algorithm_type(ObVectorIndexAlgorithmType type) { vector_index_param_.type_ = type; }
@@ -357,6 +359,8 @@ struct ObVecIndexInfo
   bool all_filters_can_be_picked_out_;
   // hybrid search search options
   ObKnnFilterMode knn_filter_mode_;
+  ObVecIdxQueryStrategy strategy_;
+  int64_t pre_filtering_timeout_;
 };
 
 struct ObPushDownTopNInfo
@@ -464,7 +468,7 @@ public:
         match_tr_infos_(plan.get_allocator()),
         vec_iter_tr_infos_(plan.get_allocator()),
         merge_tr_infos_(plan.get_allocator()),
-        vector_index_info_(plan.get_allocator()),
+        vector_index_info_(nullptr),
         das_keep_ordering_(false),
         filter_monotonicity_(plan.get_allocator()),
         auto_split_filter_type_(OB_INVALID_ID),
@@ -1174,20 +1178,20 @@ public:
   }
   void set_identify_seq_expr(ObRawExpr *expr) { identify_seq_expr_ = expr; }
   inline bool can_batch_rescan() const { return NULL != access_path_ && access_path_->can_batch_rescan_; }
-  inline bool is_ivf_vec_scan() const {return vector_index_info_.is_ivf_vec_scan();}
-  inline bool is_ivf_pq_scan() const {return vector_index_info_.is_ivf_pq_scan();}
-  inline bool is_hnsw_vec_scan() const {return vector_index_info_.is_hnsw_vec_scan();}
+  inline bool is_ivf_vec_scan() const {return OB_NOT_NULL(vector_index_info_) && vector_index_info_->is_ivf_vec_scan();}
+  inline bool is_ivf_pq_scan() const {return OB_NOT_NULL(vector_index_info_) && vector_index_info_->is_ivf_pq_scan();}
+  inline bool is_hnsw_vec_scan() const {return OB_NOT_NULL(vector_index_info_) && vector_index_info_->is_hnsw_vec_scan();}
   inline bool is_primary_vec_idx_scan() const { return is_vec_idx_scan_pre_filter() && ref_table_id_ == index_table_id_; }
-  inline bool is_vec_index_table_id(const uint64_t tid) const { return vector_index_info_.is_vec_aux_table_id(tid); }
-  inline bool is_vec_idx_scan_pre_filter() const { return vector_index_info_.vec_index_pre_filter() || vector_index_info_.is_vec_adaptive_scan(); }
-  inline bool is_vec_idx_scan_post_filter() const { return is_index_scan() && vector_index_info_.vec_index_post_filter(); }
+  inline bool is_vec_index_table_id(const uint64_t tid) const { return OB_NOT_NULL(vector_index_info_) && vector_index_info_->is_vec_aux_table_id(tid); }
+  inline bool is_vec_idx_scan_pre_filter() const { return OB_NOT_NULL(vector_index_info_) && (vector_index_info_->vec_index_pre_filter() || vector_index_info_->is_vec_adaptive_scan()); }
+  inline bool is_vec_idx_scan_post_filter() const { return is_index_scan() && OB_NOT_NULL(vector_index_info_) && vector_index_info_->vec_index_post_filter(); }
   inline bool is_vec_idx_scan() const { return is_vec_idx_scan_pre_filter() || is_vec_idx_scan_post_filter(); }
-  inline bool is_vec_adaptive_scan() const { return vector_index_info_.is_vec_adaptive_scan(); }
-  inline bool is_ivf_adaptive_scan() const { return vector_index_info_.is_ivf_adaptive_scan(); }
-  inline bool is_ipivf_adaptive_scan() const { return vector_index_info_.is_ipivf_adaptive_scan(); }
-  inline bool is_spiv_vec_scan() const {return vector_index_info_.is_spiv_scan();}
-  inline ObVecIndexInfo &get_vector_index_info() { return vector_index_info_; }
-  inline const ObVecIndexInfo &get_vector_index_info() const { return vector_index_info_; }
+  inline bool is_vec_adaptive_scan() const { return OB_NOT_NULL(vector_index_info_) && vector_index_info_->is_vec_adaptive_scan(); }
+  inline bool is_ivf_adaptive_scan() const { return OB_NOT_NULL(vector_index_info_) && vector_index_info_->is_ivf_adaptive_scan(); }
+  inline bool is_ipivf_adaptive_scan() const { return OB_NOT_NULL(vector_index_info_) && vector_index_info_->is_ipivf_adaptive_scan(); }
+  inline bool is_spiv_vec_scan() const {return OB_NOT_NULL(vector_index_info_) && vector_index_info_->is_spiv_scan();}
+  inline ObVecIndexInfo *get_vector_index_info() { return vector_index_info_; }
+  inline const ObVecIndexInfo *get_vector_index_info() const { return vector_index_info_; }
   inline bool has_limit() const {
     return (push_down_top_n_info_.limit_count_expr_ != NULL ||
             push_down_top_n_info_.limit_offset_expr_ != NULL);
@@ -1201,6 +1205,7 @@ public:
 
   int check_das_need_keep_ordering();
   int check_das_need_scan_with_domain_id();
+  int alloc_vector_index_info_if_need();
   // Prune domain_id plan when access columns do not contain any domain_id column (called after ALLOC_EXPR).
   int prune_domain_id_plan_if_access_not_need();
 
@@ -1478,7 +1483,7 @@ protected: // memeber variables
   ObSqlArray<ObTextRetrievalInfo> match_tr_infos_;
   ObSqlArray<ObTextRetrievalInfo> vec_iter_tr_infos_;
   ObSqlArray<ObTextRetrievalInfo> merge_tr_infos_;
-  ObVecIndexInfo vector_index_info_;
+  ObVecIndexInfo *vector_index_info_;
 
   ObPxRFStaticInfo px_rf_info_;
   bool das_keep_ordering_;

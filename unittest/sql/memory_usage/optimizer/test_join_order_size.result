@@ -2,7 +2,7 @@
 | --- | --- |
 | ObJoinOrder | 1200 |
 | Path | 600 |
-| AccessPath | 3016 |
+| AccessPath | 2168 |
 | JoinPath | 936 |
 | SubQueryPath | 616 |
 | FunctionTablePath | 616 |

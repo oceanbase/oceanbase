@@ -39,7 +39,7 @@
 | ObTextRetrievalInfo | 184 |
 | ObRawFilterMonotonicity | 72 |
 | ObRawAggrParamMonotonicity | 24 |
-| ObVecIndexInfo | 936 |
+| ObVecIndexInfo | 952 |
 | ObThreeStageAggrInfo | 120 |
 | ObRollupAdaptiveInfo | 104 |
 | ObHashRollupInfo | 168 |
