@@ -225,6 +225,8 @@ void ObTmpFileWriteCache::destroy()
     LOG_INFO("write cache destroy begin");
     print_();
     cleanup_list_();
+    // reset page_map_ before releasing pages to avoid accessing invalid pages
+    page_map_.reset();
     if (pages_.size() > 0) {
       release_blocks_reverse_(pages_.size() - BLOCK_PAGE_NUMS, 0);
     }
@@ -252,7 +254,6 @@ void ObTmpFileWriteCache::destroy()
 
     flush_failed_blocks_.reset();
     pages_.destroy();
-    page_map_.reset();
     flush_allocator_.reset();
     page_allocator_.reset();
     is_inited_ = false;
