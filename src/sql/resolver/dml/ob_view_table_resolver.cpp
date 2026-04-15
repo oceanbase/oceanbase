@@ -22,6 +22,7 @@ int ObViewTableResolver::do_resolve_set_query(const ParseNode &parse_tree,
 
   child_resolver.set_current_level(current_level_);
   child_resolver.set_current_view_level(current_view_level_);
+  child_resolver.set_view_ref_id(current_view_item_.ref_id_);
   child_resolver.set_parent_namespace_resolver(parent_namespace_resolver_);
   child_resolver.set_current_view_item(current_view_item_);
   child_resolver.set_parent_view_resolver(parent_view_resolver_);

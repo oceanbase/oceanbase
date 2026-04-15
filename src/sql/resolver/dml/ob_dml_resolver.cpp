@@ -19143,6 +19143,7 @@ int ObDMLResolver::init_cte_resolver(ObSelectResolver &select_resolver,
   int ret = OB_SUCCESS;
   select_resolver.set_current_level(current_level_);
   select_resolver.set_current_view_level(current_view_level_);
+  select_resolver.set_view_ref_id(view_ref_id_);
   select_resolver.set_parent_namespace_resolver(parent_namespace_resolver_);
   select_resolver.cte_ctx_.opt_col_alias_parse_node_ = opt_col_node;
   /**
