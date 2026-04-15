@@ -11311,17 +11311,38 @@ int ObDMLResolver::resolve_external_table_generated_column(
 
       if (OB_SUCC(ret)) {
         ObRawExpr *pattern_expr = OB_NOT_NULL(cast_expr) ? cast_expr : get_path_expr;
+        ObString data_access_path;
+        ObString refined_expr_name;
         if (column_index_type == ColumnIndexType::NAME && OB_ISNULL(pattern_expr)) {
           ret = OB_ERR_UNSUPPORTED_ACTION_ON_GENERATED_COLUMN;
           LOG_WARN("invalid generated column define for external table", K(ret));
-        } else if (OB_FAIL(ObResolverUtils::build_file_column_expr_for_parquet(
-                             *params_.expr_factory_, *params_.session_info_,
-                             table_item.table_id_, table_item.table_name_,
-                             col.col_name_, get_path_expr, cast_expr, column_schema,
-                             column_index_type, file_column_idx, real_ref_expr))) {
-          LOG_WARN("fail to build file column expr", K(ret));
-        } else if ((column_index_type == ColumnIndexType::NAME || OB_NOT_NULL(cast_expr)) &&
-              OB_FAIL(ObRawExprUtils::replace_ref_column(ref_expr, pattern_expr, real_ref_expr))) {
+        } else if (OB_FAIL(ObResolverUtils::build_refined_external_column_expr_name(
+                              params_.expr_factory_->get_allocator(),
+                              params_.session_info_,
+                              get_path_expr,
+                              column_index_type,
+                              file_column_idx,
+                              refined_expr_name,
+                              data_access_path))) {
+          LOG_WARN("fail to build refined external column expr name", K(ret));
+        } else if (nullptr == (real_ref_expr = ObResolverUtils::find_file_column_expr(
+                              pseudo_external_file_col_exprs_,
+                              table_item.table_id_,
+                              file_column_idx,
+                              refined_expr_name))) {
+          if (OB_FAIL(ObResolverUtils::build_file_column_expr_for_parquet(
+                              *params_.expr_factory_, *params_.session_info_,
+                              table_item.table_id_, table_item.table_name_,
+                              col.col_name_, cast_expr, column_schema,
+                              column_index_type, file_column_idx, data_access_path,
+                              refined_expr_name, real_ref_expr))) {
+            LOG_WARN("fail to build file column expr", K(ret));
+          }
+        }
+
+        if (OB_SUCC(ret)
+            && (column_index_type == ColumnIndexType::NAME || OB_NOT_NULL(cast_expr))
+            && OB_FAIL(ObRawExprUtils::replace_ref_column(ref_expr, pattern_expr, real_ref_expr))) {
           LOG_WARN("replace column reference expr failed", K(ret));
         }
       }

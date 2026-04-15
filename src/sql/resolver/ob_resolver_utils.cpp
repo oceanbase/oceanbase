@@ -5256,30 +5256,57 @@ ObResolverUtils::deduce_external_file_format_from_pseudo_column_name(const commo
   return type;
 }
 
-
-int refine_external_column_expr_name(ObRawExprFactory &expr_factory,
-                                     ObPseudoColumnRawExpr &file_column_expr,
-                                     ColumnIndexType column_index_type)
+int ObResolverUtils::build_refined_external_column_expr_name(
+    ObIAllocator &allocator,
+    const ObSQLSessionInfo *session_info,
+    ObRawExpr *get_path_expr,
+    ColumnIndexType column_index_type,
+    uint64_t column_idx,
+    ObString &refined_column_name,
+    ObString &data_access_path)
 {
   int ret = OB_SUCCESS;
+  data_access_path.reset();
   ObSqlString temp_str;
-  ObString refined_column_name;
-  OZ (temp_str.append("externalrow$col"));
+  if (ColumnIndexType::NAME == column_index_type) {
+    ObRawExpr *path_expr = nullptr;
+    if (OB_ISNULL(session_info)
+        || OB_ISNULL(get_path_expr)
+        || get_path_expr->get_param_count() <= 1
+        || OB_ISNULL(path_expr = get_path_expr->get_param_expr(1))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid get path expr", K(ret), KP(get_path_expr), KP(path_expr));
+    } else if (OB_FAIL(path_expr->formalize(session_info))) {
+      LOG_WARN("fail to formalize expr", K(ret));
+    } else if (!path_expr->is_static_const_expr()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not support non-const expr", K(ret), KPC(path_expr));
+    } else {
+      ObConstRawExpr *const_path_expr = static_cast<ObConstRawExpr *>(path_expr);
+      if (!const_path_expr->get_value().is_string_type()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support non-string path expr", K(ret), KPC(const_path_expr));
+      } else {
+        data_access_path = const_path_expr->get_value().get_string();
+      }
+    }
+  }
 
+  OZ (temp_str.append("externalrow$col"));
   if (OB_SUCC(ret)) {
     switch (column_index_type) {
       case ColumnIndexType::NAME: {
         ret = temp_str.append_fmt("_by_name('%.*s')",
-                                  file_column_expr.get_data_access_path().length(),
-                                  file_column_expr.get_data_access_path().ptr());
+                                  data_access_path.length(),
+                                  data_access_path.ptr());
         break;
       }
       case ColumnIndexType::ID: {
-        ret = temp_str.append_fmt("_by_id(%lu)", file_column_expr.get_column_idx());
+        ret = temp_str.append_fmt("_by_id(%lu)", column_idx);
         break;
       }
       case ColumnIndexType::POSITION: {
-        ret = temp_str.append_fmt("_by_position(%lu)", file_column_expr.get_column_idx());
+        ret = temp_str.append_fmt("_by_position(%lu)", column_idx);
         break;
       }
       default: {
@@ -5290,10 +5317,7 @@ int refine_external_column_expr_name(ObRawExprFactory &expr_factory,
     }
   }
 
-  OZ (ob_write_string(expr_factory.get_allocator(), temp_str.string(), refined_column_name));
-  if (OB_SUCC(ret)) {
-    file_column_expr.set_expr_name(refined_column_name);
-  }
+  OZ (ob_write_string(allocator, temp_str.string(), refined_column_name));
   return ret;
 }
 
@@ -5303,16 +5327,16 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
     const uint64_t table_id,
     const ObString &table_name,
     const ObString &column_name,
-    ObRawExpr *get_path_expr,
     ObRawExpr *cast_expr,
     const ObColumnSchemaV2 *generated_column,
     sql::ColumnIndexType column_index_type,
     uint64_t column_idx,
+    const ObString &data_access_path,
+    const ObString &refined_column_name,
     ObRawExpr *&expr)
 {
   int ret = OB_SUCCESS;
   ObPseudoColumnRawExpr *file_column_expr = nullptr;
-  ObRawExpr *path_expr = nullptr;
 
   if (OB_FAIL(expr_factory.create_raw_expr(T_PSEUDO_EXTERNAL_FILE_COL, file_column_expr))) {
     LOG_WARN("create nextval failed", K(ret));
@@ -5325,10 +5349,6 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
     file_column_expr->set_table_id(table_id);
     file_column_expr->set_explicited_reference();
 
-    if (column_index_type == ColumnIndexType::NAME &&
-        (OB_ISNULL(get_path_expr) || OB_ISNULL(path_expr = get_path_expr->get_param_expr(1)))) {
-      ret = OB_ERR_UNEXPECTED;
-    }
     if (OB_SUCC(ret)) {
       //get type
       ObExprTypeCtx type_ctx; // 用于将session等全局变量传入calc_result_type
@@ -5399,19 +5419,11 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
       file_column_expr->set_mapped_column_id(generated_column->get_column_id());
       switch (column_index_type) {
         case ColumnIndexType::NAME: {
-          //get path
-          if (OB_FAIL(path_expr->formalize(&session_info))) {
-            LOG_WARN("fail to formalize expr", K(ret));
-          } else if (!path_expr->is_static_const_expr()) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("not support non-const expr", K(ret), KPC(path_expr));
+          if (data_access_path.empty()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid data access path for parquet column", K(ret));
           } else {
-            ObConstRawExpr *const_path_expr = static_cast<ObConstRawExpr *>(path_expr);
-            if (!const_path_expr->get_value().is_string_type()) {
-              ret = OB_NOT_SUPPORTED;
-            } else {
-              file_column_expr->set_data_access_path(const_path_expr->get_value().get_string());
-            }
+            file_column_expr->set_data_access_path(data_access_path);
           }
           break;
         }
@@ -5432,9 +5444,7 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
         }
       }
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(refine_external_column_expr_name(expr_factory, *file_column_expr, column_index_type))) {
-          LOG_WARN("fail to refine external column expr name");
-        }
+        file_column_expr->set_expr_name(refined_column_name);
       }
     }
   }
