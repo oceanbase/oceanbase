@@ -10262,7 +10262,16 @@ int ObTablet::check_new_sstable_can_be_acccepted_(const ObTablet &old_tablet, co
   } else if (ObTabletRestoreStatus::FULL != restore_status) {
     // skip
   } else if (OB_ISNULL(param.sstable_)) {
-    // do nothing
+    // check slice sstables in ddl_info for column store inc major ddl merge
+    for (int64_t i = 0; OB_SUCC(ret) && !has_backup_macro && i < param.ddl_info_.slice_sstables_.count(); ++i) {
+      if (OB_FAIL(ObTableStoreUtil::check_has_backup_macro_block(param.ddl_info_.slice_sstables_.at(i), has_backup_macro))) {
+        LOG_WARN("fail to check slice sstable has backup macro block", K(ret), K(i));
+      }
+    }
+    if (OB_SUCC(ret) && has_backup_macro) {
+      ret = OB_NO_NEED_MERGE;
+      LOG_WARN("new slice sstable has backup macro while restore status is FULL", K(ret), K(old_tablet), K(param));
+    }
   } else if (OB_FAIL(sstable_array.init(allocator, param.sstable_))) {
     LOG_WARN("fail to init sstable array", K(ret), K(param));
   } else if (OB_FAIL(check_sstable_array_without_backup_table_(sstable_array, has_backup_macro))) {
