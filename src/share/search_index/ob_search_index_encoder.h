@@ -191,6 +191,9 @@ public:
   static bool string_safety_to_compare(const ObString &str);
   static bool string_column_may_truncate(const ObObjMeta &column_meta,
                                          const ObLength column_length);
+  // Check whether the column type is supported by the search index row generator.
+  // Keep in sync with ObSearchIndexRowGenerator::Generator::generate_rows().
+  static bool is_supported_column_type(const ObObjType type);
 };
 
 } // namespace share

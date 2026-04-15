@@ -951,5 +951,58 @@ bool ObSearchIndexValueEncoder::string_column_may_truncate(const ObObjMeta &colu
   return truncated;
 }
 
+bool ObSearchIndexValueEncoder::is_supported_column_type(const ObObjType type)
+{
+  bool bret = false;
+  switch (type) {
+    // signed integers
+    case ObTinyIntType:
+    case ObSmallIntType:
+    case ObMediumIntType:
+    case ObInt32Type:
+    case ObIntType:
+    // unsigned integers
+    case ObUTinyIntType:
+    case ObUSmallIntType:
+    case ObUMediumIntType:
+    case ObUInt32Type:
+    case ObUInt64Type:
+    // floating point
+    case ObFloatType:
+    case ObUFloatType:
+    case ObDoubleType:
+    case ObUDoubleType:
+    // string types
+    case ObVarcharType:
+    case ObCharType:
+    case ObTinyTextType:
+    case ObTextType:
+    case ObMediumTextType:
+    case ObLongTextType:
+    // date/time types
+    case ObDateType:
+    case ObMySQLDateType:
+    case ObDateTimeType:
+    case ObTimestampType:
+    case ObMySQLDateTimeType:
+    case ObTimeType:
+    case ObYearType:
+    // number types
+    case ObNumberType:
+    case ObUNumberType:
+    case ObDecimalIntType:
+    // json
+    case ObJsonType:
+    // collection/array
+    case ObCollectionSQLType:
+      bret = true;
+      break;
+    default:
+      bret = false;
+      break;
+  }
+  return bret;
+}
+
 } // namespace share
 } // namespace oceanbase

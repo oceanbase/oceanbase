@@ -30,6 +30,7 @@
 #include "sql/resolver/ddl/ob_create_view_resolver.h"
 #include "share/search_index/ob_search_index_builder_util.h"
 #include "share/search_index/ob_search_index_config_filter.h"
+#include "share/search_index/ob_search_index_encoder.h"
 
 namespace oceanbase
 {
@@ -14651,6 +14652,13 @@ int ObDDLResolver::resolve_search_index_constraint(
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "search index on generated column is");
       LOG_WARN("search index on generated column is not supported", K(ret), K(column_schema));
+    } else if (is_search_index
+               && OB_UNLIKELY(!share::ObSearchIndexValueEncoder::is_supported_column_type(
+                                  column_schema.get_data_type()))) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "search index on this column type is");
+      LOG_WARN("search index on this column type is not supported",
+               K(ret), "column_type", column_schema.get_data_type(), K(column_schema));
     }
   }
   return ret;
