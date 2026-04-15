@@ -546,6 +546,17 @@ int ObLogGroupBy::replace_op_replaced_exprs(ObRawExprReplacer &replacer)
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    for (int i = 0; OB_SUCC(ret) && i < distinct_pairs_.count(); i++) {
+      ObRawExpr *&org_agg = distinct_pairs_.at(i).element<0>();
+      ObRawExpr *&new_agg = distinct_pairs_.at(i).element<1>();
+      if (OB_FAIL(replace_expr_action(replacer, org_agg))) {
+        LOG_WARN("replace org agg failed", K(ret));
+      } else if (OB_FAIL(replace_expr_action(replacer, new_agg))) {
+        LOG_WARN("replace new agg failed", K(ret));
+      }
+    }
+  }
   return ret;
 }
 int ObLogGroupBy::inner_replace_op_exprs(ObRawExprReplacer &replacer)
