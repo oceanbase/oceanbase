@@ -2197,8 +2197,6 @@ bool ObMacroBlockWriter::check_can_flush_small_sstable(const bool is_flush_for_l
         && align_macro_size < blocksstable::SMALL_SSTABLE_THRESHOLD
         && ObSSTableIndexBuilder::satisfies_small_sstable_pre_requisites(sstable_index_builder->get_optimization_mode(),
                                                                          data_store_desc_->get_concurrent_cnt(),
-                                                                         data_store_desc_->is_cg(),
-                                                                         row_count,
                                                                          device_handle_);
 }
 

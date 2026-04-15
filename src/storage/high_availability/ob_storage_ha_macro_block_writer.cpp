@@ -25,7 +25,8 @@ ObStorageHAMacroBlockWriter::ObStorageHAMacroBlockWriter()
    reader_(NULL),
    index_block_rebuilder_(nullptr),
    macro_checker_(),
-   extra_info_(nullptr)
+   extra_info_(nullptr),
+   small_sstable_write_opt_()
 {
 }
 
@@ -35,6 +36,7 @@ int ObStorageHAMacroBlockWriter::init(
     const common::ObTabletID &tablet_id,
     const ObDagId &dag_id,
     const ObMigrationSSTableParam *sstable_param,
+    const ObStorageHASmallSSTableWriteOpt &small_sstable_write_opt,
     ObICopyMacroBlockReader *reader,
     ObIndexBlockRebuilder *index_block_rebuilder,
     ObCopyTabletRecordExtraInfo *extra_info)
@@ -50,11 +52,12 @@ int ObStorageHAMacroBlockWriter::init(
             || OB_ISNULL(sstable_param)
             || OB_ISNULL(reader)
             || OB_ISNULL(index_block_rebuilder)
-            || OB_ISNULL(extra_info))
+            || OB_ISNULL(extra_info)
+            || !small_sstable_write_opt.is_valid())
   {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(tenant_id), K(tablet_id), KP(sstable_param),
-        KP(reader), KP(index_block_rebuilder), KP(extra_info));
+        KP(reader), KP(index_block_rebuilder), KP(extra_info), K(small_sstable_write_opt));
   } else if (OB_FAIL(check_sstable_param_for_init_(sstable_param))) {
     LOG_WARN("failed to check sstable param", K(ret));
   } else {
@@ -66,6 +69,7 @@ int ObStorageHAMacroBlockWriter::init(
     reader_ = reader;
     index_block_rebuilder_ = index_block_rebuilder;
     extra_info_ = extra_info;
+    small_sstable_write_opt_ = small_sstable_write_opt;
     is_inited_ = true;
   }
   return ret;
@@ -263,6 +267,20 @@ int ObStorageHAMacroBlockWriter::process(
   return ret;
 }
 
+bool ObStorageHAMacroBlockWriter::check_can_flush_small_sstable(const blocksstable::ObBufferReader &data) const
+{
+  const int64_t align_macro_size = data.upper_align_length();
+  const ObSSTableIndexBuilder *sstable_index_builder = OB_ISNULL(index_block_rebuilder_)
+                                                      ? nullptr
+                                                      : index_block_rebuilder_->get_sstable_index_builder();
+  return 1 == small_sstable_write_opt_.range_macro_block_cnt_
+         && align_macro_size < blocksstable::SMALL_SSTABLE_THRESHOLD
+         && OB_NOT_NULL(sstable_index_builder)
+         && ObSSTableIndexBuilder::satisfies_small_sstable_pre_requisites(sstable_index_builder->get_optimization_mode(),
+                                                                          small_sstable_write_opt_.copy_task_concurrent_cnt_,
+                                                                          nullptr);
+}
+
 int ObStorageHAMacroBlockWriter::write_macro_block_(
     const ObStorageObjectOpt &opt,
     blocksstable::ObStorageObjectWriteInfo &write_info,
@@ -271,21 +289,74 @@ int ObStorageHAMacroBlockWriter::write_macro_block_(
     blocksstable::ObBufferReader &data)
 {
   int ret = OB_SUCCESS;
+  MacroBlockId macro_id;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", K(ret));
-  } else {
-    write_info.buffer_ = data.data();
-    write_info.size_ = data.upper_align_length();
-    write_handle.reset();
-
-    if (OB_FAIL(ObObjectManager::async_write_object(opt, write_info, write_handle))) {
-      LOG_WARN("fail to async write block", K(ret), K(write_info), K(write_handle));
-    } else if (OB_FAIL(copied_ctx.add_macro_block_id(write_handle.get_macro_id()))) {
-      LOG_WARN("fail to add macro id", K(ret), "macro id", write_handle.get_macro_id());
-    } else if (OB_FAIL(append_macro_row_(data.data(), data.capacity(), write_handle.get_macro_id()))) {
-      LOG_WARN("failed to append macro row", K(ret), K(write_handle));
+  } else if (check_can_flush_small_sstable(data)) {
+    if (OB_FAIL(flush_small_sstable_macro_block_(data, macro_id, copied_ctx))) {
+      LOG_WARN("fail to flush small sstable macro block", K(ret), K(opt), K(write_info), K(write_handle), K(data));
+    } else {
+      FLOG_INFO("successfully write small sstable in physical copy task", K(ret));
     }
+  } else if (OB_FAIL(flush_normal_macro_block_(opt, write_info, write_handle, data, macro_id, copied_ctx))) {
+    LOG_WARN("fail to flush normal macro block", K(ret), K(opt), K(write_info), K(write_handle), K(data));
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(append_macro_row_(data.data(), data.capacity(), macro_id))) {
+      LOG_WARN("failed to append macro row", K(ret), K(macro_id));
+    }
+  }
+  return ret;
+}
+
+int ObStorageHAMacroBlockWriter::flush_small_sstable_macro_block_(
+    blocksstable::ObBufferReader &data,
+    MacroBlockId &macro_id,
+    blocksstable::ObMacroBlocksWriteCtx &copied_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (copied_ctx.get_macro_block_count() > 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected non-empty macro ctx before small-sstable flush", K(ret),
+             K(copied_ctx.get_macro_block_count()), K(small_sstable_write_opt_.range_macro_block_cnt_));
+  } else {
+    ObSharedMacroBlockMgr *shared_block_mgr = MTL(ObSharedMacroBlockMgr*);
+    const int64_t data_buf_size = data.upper_align_length();
+    ObBlockInfo block_info;
+    if (OB_FAIL(shared_block_mgr->write_block(data.data(), data_buf_size, block_info, copied_ctx))) {
+      LOG_WARN("fail to write small sstable through shared_block_mgr", K(ret));
+    } else if (OB_UNLIKELY(!block_info.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("successfully write small sstable data macro block, but block info is invalid", K(ret), K(block_info));
+    } else if (OB_FAIL(index_block_rebuilder_->set_block_info(block_info))) {
+      LOG_WARN("fail to set small sstable block info", K(ret), K(block_info));
+    } else {
+      macro_id = block_info.macro_id_;
+    }
+  }
+  return ret;
+}
+
+int ObStorageHAMacroBlockWriter::flush_normal_macro_block_(
+    const ObStorageObjectOpt &opt,
+    blocksstable::ObStorageObjectWriteInfo &write_info,
+    blocksstable::ObStorageObjectHandle &write_handle,
+    blocksstable::ObBufferReader &data,
+    MacroBlockId &macro_id,
+    blocksstable::ObMacroBlocksWriteCtx &copied_ctx)
+{
+  int ret = OB_SUCCESS;
+  write_info.buffer_ = data.data();
+  write_info.size_ = data.upper_align_length();
+  write_handle.reset();
+
+  if (OB_FAIL(ObObjectManager::async_write_object(opt, write_info, write_handle))) {
+    LOG_WARN("fail to async write block", K(ret), K(write_info), K(write_handle));
+  } else if (OB_FAIL(copied_ctx.add_macro_block_id(write_handle.get_macro_id()))) {
+    LOG_WARN("fail to add macro id", K(ret), "macro id", write_handle.get_macro_id());
+  } else {
+    macro_id = write_handle.get_macro_id();
   }
   return ret;
 }

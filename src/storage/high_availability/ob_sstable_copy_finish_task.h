@@ -194,6 +194,9 @@ public:
   int build_sstable_reuse_info();
   const ObMacroBlockReuseMgr &get_macro_block_reuse_mgr() const { return macro_block_reuse_mgr_; }
   virtual int process() override;
+  OB_INLINE int64_t get_copy_task_concurrent_cnt() const {
+    return sstable_macro_range_info_.copy_macro_range_array_.count();
+  }
   VIRTUAL_TO_STRING_KV(K("ObSSTableCopyFinishTask"), KP(this), K(copy_ctx_));
 
 private:

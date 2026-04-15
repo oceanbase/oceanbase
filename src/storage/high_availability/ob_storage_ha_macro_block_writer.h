@@ -12,6 +12,7 @@
 #include "storage/blocksstable/ob_macro_block_checker.h"
 #include "ob_storage_ha_reader.h"
 #include "ob_physical_copy_task.h"
+#include "ob_storage_ha_small_sstable_write_opt.h"
 #include "storage/blocksstable/index_block/ob_index_block_builder.h"
 
 namespace oceanbase
@@ -46,6 +47,7 @@ public:
       const common::ObTabletID &tablet_id,
       const ObDagId &dag_id,
       const ObMigrationSSTableParam *sstable_param,
+      const ObStorageHASmallSSTableWriteOpt &small_sstable_write_opt,
       ObICopyMacroBlockReader *reader,
       ObIndexBlockRebuilder *index_block_rebuilder,
       ObCopyTabletRecordExtraInfo *extra_info
@@ -67,12 +69,25 @@ protected:
 private:
   int check_macro_block_(
       const blocksstable::ObBufferReader &data);
+  bool check_can_flush_small_sstable(const blocksstable::ObBufferReader &data) const;
   int write_macro_block_(
       const ObStorageObjectOpt &opt,
       blocksstable::ObStorageObjectWriteInfo &write_info,
       blocksstable::ObStorageObjectHandle &write_handle,
       blocksstable::ObMacroBlocksWriteCtx &copied_ctx,
       blocksstable::ObBufferReader &data);
+  int flush_small_sstable_macro_block_(
+      blocksstable::ObBufferReader &data,
+      MacroBlockId &macro_id,
+      blocksstable::ObMacroBlocksWriteCtx &copied_ctx);
+
+  int flush_normal_macro_block_(
+      const ObStorageObjectOpt &opt,
+      blocksstable::ObStorageObjectWriteInfo &write_info,
+      blocksstable::ObStorageObjectHandle &write_handle,
+      blocksstable::ObBufferReader &data,
+      MacroBlockId &macro_id,
+      blocksstable::ObMacroBlocksWriteCtx &copied_ctx);
 
 protected:
   bool is_inited_;
@@ -85,6 +100,7 @@ protected:
   ObIndexBlockRebuilder *index_block_rebuilder_;
   blocksstable::ObSSTableMacroBlockChecker macro_checker_;
   ObCopyTabletRecordExtraInfo *extra_info_;
+  ObStorageHASmallSSTableWriteOpt small_sstable_write_opt_;  // small-sstable flush path in physical copy
 };
 
 class ObStorageHALocalMacroBlockWriter final : public ObStorageHAMacroBlockWriter

@@ -445,9 +445,13 @@ int ObPhysicalCopyTask::get_macro_block_writer_(
   ObStorageHAMacroBlockWriter *tmp_writer = nullptr;
   const ObMigrationSSTableParam *sstable_param = nullptr;
   const bool is_shared_storage = GCTX.is_shared_storage_mode();
-  if (OB_ISNULL(reader) || OB_ISNULL(index_block_rebuilder)) {
+  if (OB_ISNULL(reader)
+      || OB_ISNULL(index_block_rebuilder)
+      || OB_ISNULL(finish_task_)
+      || OB_ISNULL(copy_macro_range_id_info_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("macro block writer get invalid argument", K(ret), KP(reader), KP(index_block_rebuilder));
+    LOG_WARN("macro block writer get invalid argument", K(ret), KP(reader), KP(index_block_rebuilder),
+      KP(finish_task_), KP(copy_macro_range_id_info_));
   } else if (FALSE_IT(sstable_param = finish_task_->get_sstable_param())) {
   } else if (OB_ISNULL(sstable_param)) {
     ret = OB_ERR_UNEXPECTED;
@@ -464,12 +468,15 @@ int ObPhysicalCopyTask::get_macro_block_writer_(
       }
 #endif
     }
-
+    const ObStorageHASmallSSTableWriteOpt small_sstable_write_opt(
+        finish_task_->get_copy_task_concurrent_cnt(),
+        copy_macro_range_id_info_->range_info_.macro_block_count_);
     if (OB_ISNULL(tmp_writer)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory", K(ret));
     } else if (OB_FAIL(tmp_writer->init(copy_ctx_->tenant_id_, copy_ctx_->ls_id_, copy_ctx_->tablet_id_,
-        this->get_dag()->get_dag_id(), sstable_param, reader, index_block_rebuilder, copy_ctx_->extra_info_))) {
+        this->get_dag()->get_dag_id(), sstable_param, small_sstable_write_opt,
+        reader, index_block_rebuilder, copy_ctx_->extra_info_))) {
       STORAGE_LOG(WARN, "failed to init macro block writer", K(ret), KPC(copy_ctx_));
     } else {
       writer = tmp_writer;

@@ -36,7 +36,6 @@ static const uint32_t META_BLOCK_VERSION = 1;
 static const int64_t DEFAULT_MICRO_BLOCK_WRITER_COUNT = 64;
 static const int64_t DEFAULT_MACRO_BLOCK_CNT = 64;
 static const int64_t SMALL_SSTABLE_THRESHOLD = 1 << 20; // 1M
-static const int64_t SMALL_SSTABLE_ROW_COUNT_THRESHOLD_FOR_CG = 50000;
 
 typedef common::ObSEArray<ObIndexTreeRootCtx *, DEFAULT_MICRO_BLOCK_WRITER_COUNT>
     IndexTreeRootCtxList;
@@ -90,6 +89,7 @@ public:
       const int64_t block_offset,
       const int64_t block_size,
       const ObLogicMicroBlockId &logic_micro_id);
+  int set_small_sstable_block_info(const ObBlockInfo &block_info);
 
   TO_STRING_KV(KP(allocator_), K_(is_inited), K_(task_type), K_(last_key),
                K_(task_idx), K_(meta_block_offset), K_(meta_block_size),
@@ -529,6 +529,8 @@ public:
       common::ObIAllocator &allocator,
       ObDataMacroBlockMeta *&macro_meta);
   int get_tablet_private_transfer_epoch(int32_t &tablet_private_transfer_epoch) const;
+  int set_block_info(const ObBlockInfo &block_info);
+  OB_INLINE const ObSSTableIndexBuilder *get_sstable_index_builder() const { return sstable_builder_; }
 
 private:
   int inner_init(
@@ -676,6 +678,7 @@ public:
   bool micro_index_clustered() const;
   int32_t get_private_transfer_epoch() const;
   OB_INLINE ObSpaceOptimizationMode get_optimization_mode() const { return optimization_mode_; }
+  OB_INLINE int64_t get_concurrent_cnt() const { return roots_.count(); }
   const compaction::ObMergeBlockInfo &get_merge_block_info() const { return macro_writer_.get_merge_block_info(); }
   TO_STRING_KV(K(roots_.count()));
 
@@ -695,10 +698,8 @@ public:
                                                      const ObDataStoreDesc &container_store_desc,
                                                      const IndexTreeRootCtxList &roots,
                                                      ObDataMacroBlockMeta &macro_meta);
-  static bool satisfies_small_sstable_pre_requisites(ObSSTableIndexBuilder::ObSpaceOptimizationMode mode,
-                                                     int64_t concurrent_cnt,
-                                                     bool is_cg,
-                                                     int64_t row_count,
+  static bool satisfies_small_sstable_pre_requisites(const ObSpaceOptimizationMode mode,
+                                                     const int64_t concurrent_cnt,
                                                      const ObIODevice *device_handle);
 
 private:
