@@ -7463,7 +7463,9 @@ int JoinPath::get_re_estimate_param(EstimateCostInfo &param,
     }
 
     if (OB_SUCC(ret)) {
-      if (is_complex_join && ObEnableOptRowGoal::AUTO == plan->get_optimizer_context().get_enable_opt_row_goal()){
+      if (is_complex_join
+          && ObEnableOptRowGoal::AUTO == plan->get_optimizer_context().get_enable_opt_row_goal()
+          && plan->get_selectivity_ctx().check_opt_compat_version(COMPAT_VERSION_4_2_5_BP8)){
         right_param.need_row_count_ = -1;
         left_param.need_row_count_ = -1;
       } else if (param.need_row_count_ >= card || param.need_row_count_ < 0) {

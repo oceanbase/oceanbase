@@ -239,7 +239,9 @@ int ObLogSubPlanFilter::do_re_est_cost(EstimateCostInfo &param, double &card, do
                                                              &complex_filter_flag))) {
     LOG_WARN("failed to calc selectivity", K(ret));
   } else if (sel <= OB_DOUBLE_EPSINON || param.need_row_count_ >= child->get_card() * sel
-    || (complex_filter_flag && ObEnableOptRowGoal::AUTO == get_plan()->get_optimizer_context().get_enable_opt_row_goal())) {
+    || (complex_filter_flag
+        && ObEnableOptRowGoal::AUTO == get_plan()->get_optimizer_context().get_enable_opt_row_goal()
+        && get_plan()->get_selectivity_ctx().check_opt_compat_version(COMPAT_VERSION_4_2_5_BP8))) {
     param.need_row_count_ = -1;
   } else {
     param.need_row_count_ /= sel;
