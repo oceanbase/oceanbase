@@ -2127,6 +2127,10 @@ int ObLocalFileListArrayOpWithFilter::func(const dirent *entry)
         OB_LOG(WARN, "fail to push filename to array", K(ret), K(tmp_file));
       } else if (OB_FAIL(file_size_.push_back(get_size()))) {
         OB_LOG(WARN, "fail to push size to array", K(ret), K(tmp_file));
+      } else if (OB_FAIL(modify_times_.push_back(get_extra_info().last_modified_time_ms_))) {
+        OB_LOG(WARN, "fail to push extra info to array", K(ret));
+      } else if (OB_FAIL(content_digests_.push_back(ObString()))) {
+        OB_LOG(WARN, "fail to push content digest", K(ret));
       }
     }
   }
@@ -2824,12 +2828,26 @@ int ObExternalFileInfoCollector::get_file_list(const common::ObString &path,
       }
     }
     ObArray<int64_t> useless_size;
+    ObArray<int64_t> useless_modify_times;
+    ObArray<ObString> useless_content_digests;
     for (int64_t i = 0; OB_SUCC(ret) && OB_SUCC(THIS_WORKER.check_status()) && i < file_dirs.count(); i++) {
       ObString file_dir = file_dirs.at(i);
-      ObLocalFileListArrayOpWithFilter dir_op(file_dirs, useless_size, file_dir, path_cstring, NULL,
+      ObLocalFileListArrayOpWithFilter dir_op(file_dirs,
+                                              useless_size,
+                                              useless_modify_times,
+                                              useless_content_digests,
+                                              file_dir,
+                                              path_cstring,
+                                              NULL,
                                               allocator_);
-      ObLocalFileListArrayOpWithFilter file_op(file_urls, file_sizes, file_dir, path_cstring,
-                                               pattern.empty() ? NULL : &filter, allocator_);
+      ObLocalFileListArrayOpWithFilter file_op(file_urls,
+                                               file_sizes,
+                                               modify_times,
+                                               content_digests,
+                                               file_dir,
+                                               path_cstring,
+                                               pattern.empty() ? NULL : &filter,
+                                               allocator_);
       dir_op.set_dir_flag();
       if (OB_FAIL(ObExternalIoAdapter::list_files(file_dir, storage_info_, file_op))) {
         LOG_WARN("fail to list files", KR(ret), K(file_dir), KPC(storage_info_));
@@ -2840,9 +2858,6 @@ int ObExternalFileInfoCollector::get_file_list(const common::ObString &path,
         LOG_WARN("too many files and dirs to visit", K(ret));
       }
     }
-    OZ(convert_to_full_file_urls(path, file_urls, temp_file_urls));
-    OZ(collect_files_content_digest(temp_file_urls, content_digests));
-    OZ(collect_files_modify_time(temp_file_urls, modify_times));
   } else {
     ObExternalFileListArrayOpWithFilter file_op(file_urls, file_sizes, modify_times,
                                                 content_digests, pattern.empty() ? NULL : &filter,
@@ -2850,6 +2865,7 @@ int ObExternalFileInfoCollector::get_file_list(const common::ObString &path,
     if (OB_FAIL(ObExternalIoAdapter::list_files(path_cstring, storage_info_, file_op))) {
       LOG_WARN("fail to list files", KR(ret), K(path_cstring), KPC(storage_info_));
     } else if (!file_op.is_valid_content_digests() || !file_op.is_valid_modify_times()) {
+      LOG_WARN("didn't fetch modify time and content_digests by list, run fallback code", K(path));
       OZ(convert_to_full_file_urls(path, file_urls, temp_file_urls));
       if (!file_op.is_valid_content_digests()) {
         OZ(collect_files_content_digest(temp_file_urls, content_digests));
@@ -2858,6 +2874,15 @@ int ObExternalFileInfoCollector::get_file_list(const common::ObString &path,
         OZ(collect_files_modify_time(temp_file_urls, modify_times));
       }
     }
+  }
+
+  if (file_sizes.count() != modify_times.count() || file_sizes.count() != content_digests.count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("modify_time and content_digests must be fetched by list",
+             K(ret),
+             K(file_sizes.count()),
+             K(modify_times.count()),
+             K(content_digests.count()));
   }
   return ret;
 }
