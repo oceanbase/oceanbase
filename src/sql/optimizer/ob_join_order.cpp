@@ -1207,7 +1207,7 @@ int ObJoinOrder::check_has_exec_stage_param(const ObQueryRangeProvider &query_ra
                                             bool &has_exec_stage_param)
 {
   int ret = OB_SUCCESS;
-  has_exec_stage_param = false;
+  has_exec_stage_param = query_range.is_new_query_range() ? query_range.has_exec_param() : false;
   const ObIArray<ObRawExpr*> &range_exprs = query_range.get_range_exprs();
   const ObIArray<ObRawExpr*> &ss_range_exprs = query_range.get_ss_range_exprs();
   for (int64_t i = 0; OB_SUCC(ret) && !has_exec_stage_param && i < range_exprs.count(); ++i) {
