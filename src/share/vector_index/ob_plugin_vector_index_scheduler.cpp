@@ -1138,6 +1138,8 @@ int ObPluginVectorIndexLoadScheduler::log_tablets_need_memdata_sync(ObPluginVect
           LOG_WARN("get null adapter", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
         } else if (iter->first != adapter->get_inc_tablet_id()) {
           // do nothing
+        } else if (OB_INVALID_ID == adapter->get_inc_table_id()) {
+          // do nothing
         } else if (tablet_id_array_.count() >= ObVectorIndexSyncLogCb::VECTOR_INDEX_MAX_SYNC_COUNT) {
           // do nothing, wait for next schedule
         } else if (!need_refresh_ && OB_FAIL(adapter->check_need_sync_to_follower_or_do_opt_task(mgr, is_leader_, need_sync))) {
@@ -2046,25 +2048,25 @@ int ObVectorIndexMemSyncInfo::add_task_to_waiting_map(ObVectorIndexSyncLog &ls_l
   for (int64_t i = 0; OB_SUCC(ret) && i < ls_log.get_tablet_id_array().count(); i++) {
     ObTabletID tablet_id = ls_log.get_tablet_id_array().at(i);
     uint64_t table_id = ls_log.get_table_id_array().at(i);
-    char *task_ctx_buf = 
-      static_cast<char *>(get_waiting_allocator().alloc(sizeof(ObPluginVectorIndexTaskCtx)));
     ObPluginVectorIndexTaskCtx* task_ctx = nullptr;
     ObPluginVectorIndexTaskCtx* tmp_task_ctx = nullptr;
-    if (OB_ISNULL(task_ctx_buf)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("memdata sync fail to alloc task ctx", KR(ret));
-    } else if (FALSE_IT(task_ctx = new(task_ctx_buf)ObPluginVectorIndexTaskCtx(tablet_id, table_id))) {
-    } else if (OB_FAIL(waiting_task_map.get_refactored(tablet_id, tmp_task_ctx))) {
+    if (OB_FAIL(waiting_task_map.get_refactored(tablet_id, tmp_task_ctx))) {
       if (ret == OB_HASH_NOT_EXIST) {
         ret = OB_SUCCESS;
-        if (OB_FAIL(waiting_task_map.set_refactored(tablet_id, task_ctx))) {
+        char *task_ctx_buf =
+          static_cast<char *>(get_waiting_allocator().alloc(sizeof(ObPluginVectorIndexTaskCtx)));
+        if (OB_ISNULL(task_ctx_buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("memdata sync fail to alloc task ctx", KR(ret));
+        } else if (FALSE_IT(task_ctx = new(task_ctx_buf)ObPluginVectorIndexTaskCtx(tablet_id, table_id))) {
+        } else if (OB_FAIL(waiting_task_map.set_refactored(tablet_id, task_ctx))) {
           LOG_WARN("memdata sync failed to set vector index task ctx", K(ret), K(tablet_id), KPC(task_ctx));
         } else {
           LOG_INFO("memdata sync success get replay vector index task ctx", K(ret), K(tablet_id), KPC(task_ctx));
         }
       }
     } else { // task already set, not scheduled
-      LOG_INFO("memdata sync duplicate vector index task ctx", K(ret), K(tablet_id), KPC(task_ctx));
+      LOG_INFO("memdata sync duplicate vector index task ctx", K(ret), K(tablet_id), KPC(tmp_task_ctx));
     }
     if (OB_FAIL(ret) && OB_NOT_NULL(task_ctx)) {
       task_ctx->~ObPluginVectorIndexTaskCtx();
@@ -2084,18 +2086,28 @@ int ObVectorIndexMemSyncInfo::add_task_to_waiting_map(VectorIndexAdaptorMap &ada
     // only use complete adapter, tablet id of no.3 aux index table
     ObPluginVectorIndexAdaptor *adapter = iter->second;
     ObTabletID tablet_id = iter->first;
-    if (tablet_id == adapter->get_inc_tablet_id()) {
-      char *task_ctx_buf = 
-        static_cast<char *>(get_waiting_allocator().alloc(sizeof(ObPluginVectorIndexTaskCtx)));
+    if (OB_INVALID_ID == adapter->get_inc_table_id()) {
+      // do nothing
+    } else if (tablet_id == adapter->get_inc_tablet_id()) {
       ObPluginVectorIndexTaskCtx* task_ctx = nullptr;
-      if (OB_ISNULL(task_ctx_buf)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("memdata sync fail to alloc task ctx", KR(ret));
-      } else if (FALSE_IT(task_ctx = new(task_ctx_buf)ObPluginVectorIndexTaskCtx(tablet_id, adapter->get_inc_table_id()))) {
-      } else if (OB_FAIL(current_map.set_refactored(tablet_id, task_ctx))) {
-        LOG_WARN("memdata sync failed to set vector index task ctx", K(ret), K(tablet_id), KPC(task_ctx));
+      ObPluginVectorIndexTaskCtx* tmp_task_ctx = nullptr;
+      if (OB_FAIL(current_map.get_refactored(tablet_id, tmp_task_ctx))) {
+        if (ret == OB_HASH_NOT_EXIST) {
+          ret = OB_SUCCESS;
+          char *task_ctx_buf =
+            static_cast<char *>(get_waiting_allocator().alloc(sizeof(ObPluginVectorIndexTaskCtx)));
+          if (OB_ISNULL(task_ctx_buf)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("memdata sync fail to alloc task ctx", KR(ret));
+          } else if (FALSE_IT(task_ctx = new(task_ctx_buf)ObPluginVectorIndexTaskCtx(tablet_id, adapter->get_inc_table_id()))) {
+          } else if (OB_FAIL(current_map.set_refactored(tablet_id, task_ctx))) {
+            LOG_WARN("memdata sync failed to set vector index task ctx", K(ret), K(tablet_id), KPC(task_ctx));
+          } else {
+            LOG_INFO("memdata sync success set force index task ctx", K(ret), K(tablet_id), KPC(task_ctx));
+          }
+        }
       } else {
-        LOG_INFO("memdata sync success set force index task ctx", K(ret), K(tablet_id), KPC(task_ctx));
+        LOG_INFO("memdata sync duplicate vector index task ctx", K(ret), K(tablet_id), KPC(tmp_task_ctx));
       }
       if (OB_FAIL(ret) && OB_NOT_NULL(task_ctx)) {
         task_ctx->~ObPluginVectorIndexTaskCtx();
@@ -2112,17 +2124,25 @@ int ObVectorIndexMemSyncInfo::add_task_to_waiting_map(ObTabletID &tablet_id, int
   int ret = OB_SUCCESS;
   common::ObSpinLockGuard ctx_guard(switch_lock_); // prevent context switch in maintance thread
   VectorIndexMemSyncMap &current_map = get_waiting_map();
-  char *task_ctx_buf = 
-    static_cast<char *>(get_waiting_allocator().alloc(sizeof(ObPluginVectorIndexTaskCtx)));
   ObPluginVectorIndexTaskCtx* task_ctx = nullptr;
-  if (OB_ISNULL(task_ctx_buf)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("memdata sync fail to alloc task ctx", KR(ret));
-  } else if (FALSE_IT(task_ctx = new(task_ctx_buf)ObPluginVectorIndexTaskCtx(tablet_id, table_id))) {
-  } else if (OB_FAIL(current_map.set_refactored(tablet_id, task_ctx))) {
-    LOG_WARN("memdata sync failed to set vector index task ctx", K(ret), K(tablet_id), KPC(task_ctx));
+  ObPluginVectorIndexTaskCtx* tmp_task_ctx = nullptr;
+  if (OB_FAIL(current_map.get_refactored(tablet_id, tmp_task_ctx))) {
+    if (ret == OB_HASH_NOT_EXIST) {
+      ret = OB_SUCCESS;
+      char *task_ctx_buf =
+        static_cast<char *>(get_waiting_allocator().alloc(sizeof(ObPluginVectorIndexTaskCtx)));
+      if (OB_ISNULL(task_ctx_buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("memdata sync fail to alloc task ctx", KR(ret));
+      } else if (FALSE_IT(task_ctx = new(task_ctx_buf)ObPluginVectorIndexTaskCtx(tablet_id, table_id))) {
+      } else if (OB_FAIL(current_map.set_refactored(tablet_id, task_ctx))) {
+        LOG_WARN("memdata sync failed to set vector index task ctx", K(ret), K(tablet_id), KPC(task_ctx));
+      } else {
+        LOG_INFO("memdata sync success set force index task ctx", K(ret), K(tablet_id), KPC(task_ctx));
+      }
+    }
   } else {
-    LOG_INFO("memdata sync success set force index task ctx", K(ret), K(tablet_id), KPC(task_ctx));
+    LOG_INFO("memdata sync duplicate vector index task ctx", K(ret), K(tablet_id), KPC(tmp_task_ctx));
   }
   if (OB_FAIL(ret) && OB_NOT_NULL(task_ctx)) {
     task_ctx->~ObPluginVectorIndexTaskCtx();
