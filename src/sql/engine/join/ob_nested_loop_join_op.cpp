@@ -34,7 +34,8 @@ ObNestedLoopJoinOp::ObNestedLoopJoinOp(ObExecContext &exec_ctx,
     max_group_size_(OB_MAX_BULK_JOIN_ROWS),
     group_join_buffer_(),
     match_left_batch_end_(false), match_right_batch_end_(false), l_idx_(0),
-    no_match_row_found_(true), need_output_row_(false), left_expr_extend_size_(0)
+    no_match_row_found_(true), need_output_row_(false), left_expr_extend_size_(0),
+    params_(), param_idxs_(), param_expr_idxs_()
 {
   state_operation_func_[JS_JOIN_END] = &ObNestedLoopJoinOp::join_end_operate;
   state_function_func_[JS_JOIN_END][FT_ITER_GOING] = NULL;
@@ -138,6 +139,11 @@ int ObNestedLoopJoinOp::inner_open()
       LOG_WARN("init batch info failed", KR(ret));
     }
   }
+  if (OB_SUCC(ret) && MY_SPEC.enable_px_batch_rescan_) {
+    if (OB_FAIL(init_params(MY_SPEC.rescan_params_.count()))) {
+      LOG_WARN("fail to init params", K(ret));
+    }
+  }
   return ret;
 }
 //NLJ has its own switch_iterator
@@ -158,6 +164,27 @@ int ObNestedLoopJoinOp::switch_iterator()
   OX(OB_ASSERT(false == brs_.end_));
 #endif
 
+  return ret;
+}
+
+inline int ObNestedLoopJoinOp::init_params(int64_t param_cnt) {
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(param_cnt <= 0)) {
+    // pass
+  } else if (OB_FAIL(params_.reserve(param_cnt))) {
+    LOG_WARN("fail to reserve params", K(ret));
+  } else if (OB_FAIL(param_idxs_.reserve(param_cnt))) {
+    LOG_WARN("fail to reserve param idxs", K(ret));
+  } else if (OB_FAIL(param_expr_idxs_.reserve(param_cnt))) {
+    LOG_WARN("fail to reserve param expr idxs", K(ret));
+  } else {
+    params_.set_block_size(std::min(static_cast<int64_t>(param_cnt * sizeof(common::ObObjParam)),
+                                    OB_MALLOC_NORMAL_BLOCK_SIZE));
+    param_idxs_.set_block_size(std::min(static_cast<int64_t>(param_cnt * sizeof(int64_t)),
+                                        OB_MALLOC_NORMAL_BLOCK_SIZE));
+    param_expr_idxs_.set_block_size(std::min(static_cast<int64_t>(param_cnt * sizeof(int64_t)),
+                                              OB_MALLOC_NORMAL_BLOCK_SIZE));
+  }
   return ret;
 }
 
@@ -340,6 +367,66 @@ int ObNestedLoopJoinOp::fill_cur_row_rescan_param()
   return ret;
 }
 
+int ObNestedLoopJoinOp::prepare_rescan_params(bool is_group)
+{
+  int ret = OB_SUCCESS;
+  int64_t param_cnt = get_spec().rescan_params_.count();
+  ObPhysicalPlanCtx *plan_ctx = GET_PHY_PLAN_CTX(ctx_);
+  CK(OB_NOT_NULL(plan_ctx));
+  ObObjParam *param = NULL;
+  ObBatchRescanCtl *batch_rescan_ctl = (get_spec().enable_px_batch_rescan_ && is_group)
+      ? &batch_rescan_ctl_
+      : NULL;
+  if (OB_SUCC(ret) && NULL != batch_rescan_ctl && param_cnt > 0) {
+    params_.reuse();
+    param_idxs_.reuse();
+    param_expr_idxs_.reuse();
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < param_cnt; ++i) {
+    const ObDynamicParamSetter &rescan_param = get_spec().rescan_params_.at(i);
+    if (OB_FAIL(rescan_param.set_dynamic_param(eval_ctx_, param))) {
+      LOG_WARN("fail to set dynamic param", K(ret));
+    } else if (NULL != batch_rescan_ctl) {
+      if (OB_ISNULL(param)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected param", K(ret));
+      } else {
+        LOG_DEBUG("dynamic param", K(i), K(param));
+        ObObjParam copy_res;
+        int64_t expr_idx = 0;
+        OZ(batch_rescan_ctl->params_.deep_copy_param(*param, copy_res));
+        OZ(params_.push_back(copy_res));
+        OZ(param_idxs_.push_back(rescan_param.param_idx_));
+        CK(OB_NOT_NULL(plan_ctx->get_phy_plan()));
+        OZ(plan_ctx->get_phy_plan()->get_expr_frame_info().get_expr_idx_in_frame(
+            rescan_param.dst_, expr_idx));
+        OZ(param_expr_idxs_.push_back(expr_idx));
+        param = NULL;
+      }
+    }
+  }
+  if (OB_SUCC(ret) && NULL != batch_rescan_ctl) {
+    batch_rescan_ctl->param_version_ += 1;
+    OZ(batch_rescan_ctl->params_.append_batch_rescan_param(param_idxs_, params_, param_expr_idxs_));
+  }
+
+  // 左边每一行出来后，去通知右侧 GI 实施 part id 过滤，避免 PKEY NLJ 场景下扫不必要分区
+  if (OB_SUCC(ret) && !get_spec().enable_px_batch_rescan_ && get_spec().enable_gi_partition_pruning_) {
+    ObDatum *datum = nullptr;
+    if (OB_FAIL(get_spec().gi_partition_id_expr_->eval(eval_ctx_, datum))) {
+      LOG_WARN("fail eval value", K(ret));
+    } else {
+      // NOTE: 如果右侧对应多张表，这里的逻辑也没有问题
+      // 如 A REPART TO NLJ (B JOIN C) 的场景
+      // 此时 GI 在 B 和 C 的上面
+      int64_t part_id = datum->get_int();
+      ctx_.get_gi_pruning_info().set_part_id(part_id);
+    }
+  }
+
+  return ret;
+}
+
 int ObNestedLoopJoinOp::join_row_with_semi_join()
 {
   int ret = OB_SUCCESS;
@@ -501,6 +588,7 @@ int ObNestedLoopJoinOp::group_read_left_operate()
         if (OB_SUCC(ret)) {
           // 没有下一个了, 尝试填充 cache.
           batch_rescan_ctl_.reuse();
+          OZ(batch_rescan_ctl_.params_.params_.reserve(MY_SPEC.group_size_));
           left_store_iter_.reset();
           left_store_.reset();
           mem_context_->get_arena_allocator().reset();
@@ -747,6 +835,7 @@ int ObNestedLoopJoinOp::group_get_left_batch(const ObBatchRows *&group_left_brs)
         if (OB_SUCC(ret)) {
           // 没有下一个了, 尝试填充 cache.
           batch_rescan_ctl_.reuse();
+          OZ(batch_rescan_ctl_.params_.params_.reserve(op_max_batch_size_));
           left_store_iter_.reset();
           left_store_.reset();
           mem_context_->get_arena_allocator().reset();

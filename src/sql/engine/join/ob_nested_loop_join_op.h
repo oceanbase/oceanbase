@@ -111,9 +111,13 @@ public:
     if (MY_SPEC.group_rescan_) {
       group_join_buffer_.destroy();
     }
+    params_.destroy();
+    param_idxs_.destroy();
+    param_expr_idxs_.destroy();
     ObBasicNestedLoopJoinOp::destroy();
   }
   ObBatchRescanCtl &get_batch_rescan_ctl() { return batch_rescan_ctl_; }
+  int prepare_rescan_params(bool is_group = false);
   int fill_cur_row_rescan_param();
   int calc_other_conds(bool &is_match);
 
@@ -168,6 +172,7 @@ private:
   bool continue_fetching() { return !(is_left_end_ || is_full());}
   virtual int do_drain_exch() override;
   virtual int inner_drain_exch() { return OB_SUCCESS; }
+  inline int init_params(int64_t param_cnt);
 public:
   ObJoinState state_;
   // for bnl join
@@ -208,6 +213,11 @@ public:
   bool need_output_row_;
   int32_t left_expr_extend_size_;
   // for refactor vectorized end
+
+  // for px batch rescan, reuse in every batch rescan
+  sql::ObTMArray<common::ObObjParam> params_;
+  common::ObSArray<int64_t> param_idxs_;
+  common::ObSArray<int64_t> param_expr_idxs_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObNestedLoopJoinOp);
 };

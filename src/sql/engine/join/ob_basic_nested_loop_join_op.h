@@ -53,7 +53,6 @@ public:
   virtual OperatorOpenOrder get_operator_open_order() const override final
   { return OPEN_SELF_FIRST; }
 
-  int prepare_rescan_params(bool is_group = false);
   virtual void destroy() override { ObJoinOp::destroy(); }
   void set_param_null();
 
