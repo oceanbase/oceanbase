@@ -2855,7 +2855,12 @@ int ObRangeGenerator::generate_tmp_search_index_domain_param(const ObRangeNode &
         for (int64_t i = 0; OB_SUCC(ret) && i < size; ++i) {
           ObObj elem_obj;
           elem_obj.set_meta_type(elem_meta);
-          if (OB_FAIL(arr_obj->elem_at(i, elem_obj))) {
+          if (arr_obj->is_null(i)) {
+            objs_ptr[i].set_null();
+            if (OB_FAIL(tmp_in_param->in_param_.push_back(&objs_ptr[i]))) {
+              LOG_WARN("failed to push back array element", K(ret));
+            }
+          } else if (OB_FAIL(arr_obj->elem_at(i, elem_obj))) {
             LOG_WARN("failed to get array element", K(ret), K(i));
           } else {
             objs_ptr[i] = elem_obj;
@@ -2977,7 +2982,9 @@ int ObRangeGenerator::fill_search_index_range_column(const int64_t col_idx,
       range_obj = path_obj;
     }
   } else if (share::SEARCH_INDEX_VALUE == col_idx) {
-    if (is_json_value) {
+    if (value.is_null()) {
+      range_obj.set_null();
+    } else if (is_json_value) {
       ObString encoded_value;
       ObIJsonBase* j_base = reinterpret_cast<ObIJsonBase*>(value.get_ext());
       if (OB_ISNULL(j_base)) {

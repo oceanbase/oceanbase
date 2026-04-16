@@ -101,6 +101,7 @@ public:
   static int print_schema(const common::ObString &comment, char *buf, int64_t buf_len, int64_t &pos);
   static bool is_valid_config_path(common::ObJsonPath *json_path);
   bool has_types() const { return type_mask_ != 0; }
+  bool has_exclude_paths() const { return has_exclude_paths_; }
   uint8_t get_type_mask() const { return type_mask_; }
 
   TO_STRING_KV(K_(has_include_paths), K_(has_exclude_paths), K_(type_mask));

@@ -441,8 +441,18 @@ int ObExprRangeConverter::gen_column_cmp_node(const ObRawExpr &l_expr,
       cmp_type = T_OP_GE;
     }
     if (is_search_index) {
-      if (OB_FAIL(gen_search_index_cmp_node(*column_expr, const_expr, cmp_type,
-                                            null_safe, is_valid, range_node))) {
+      const bool is_range_cmp = IS_RANGE_CMP_OP(cmp_type);
+      const share::ObSearchIndexConfigFilter *json_filter =
+            OB_NOT_NULL(ctx_.search_index_range_ctx_) ?
+              ctx_.search_index_range_ctx_->get_json_filter() :
+              nullptr;
+      const bool has_excluded_json_type =
+        OB_NOT_NULL(json_filter) && json_filter->has_exclude_paths();
+      if (ob_is_json(column_expr->get_result_type().get_type()) && is_range_cmp
+          && has_excluded_json_type) {
+        // do nothing
+      } else if (OB_FAIL(gen_search_index_cmp_node(*column_expr, const_expr, cmp_type, null_safe,
+                                                   is_valid, range_node))) {
         LOG_WARN("failed to gen search index cmp node", K(ret));
       }
     } else {

@@ -155,46 +155,36 @@ int ObSearchIndexJsonPathMatcher::insert_path(const ObString &path)
     } else {
       Node *cur = root_;
       JsonPathIterator it = json_path.begin();
-      if (it == json_path.end()) {
-        ObString wildcard(ObString::make_string("*"));
-        Node *child = nullptr;
-        if (OB_FAIL(get_or_create_child(*cur, wildcard, child))) {
-          LOG_WARN("failed to get or create child for wildcard", K(ret));
-        } else {
-          cur = child;
+      for (; OB_SUCC(ret) && it != json_path.end(); ++it) {
+        ObJsonPathNode *node = *it;
+        if (OB_ISNULL(node)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("null path node", K(ret));
+          break;
         }
-      } else {
-        for (; OB_SUCC(ret) && it != json_path.end(); ++it) {
-          ObJsonPathNode *node = *it;
-          if (OB_ISNULL(node)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("null path node", K(ret));
-            break;
-          }
-          ObJsonPathNodeType node_type = node->get_node_type();
-          if (node_type == JPN_ROOT) {
-          } else if (node_type == JPN_MEMBER) {
-            ObJsonPathBasicNode *basic_node = static_cast<ObJsonPathBasicNode *>(node);
-            ObString key_name(basic_node->get_object().len_, basic_node->get_object().object_name_);
-            Node *child = nullptr;
-            if (OB_FAIL(get_or_create_child(*cur, key_name, child))) {
-              LOG_WARN("failed to get or create child", K(ret));
-            } else {
-              cur = child;
-            }
-          } else if (node_type == JPN_MEMBER_WILDCARD) {
-            ObString wildcard(ObString::make_string("*"));
-            Node *child = nullptr;
-            if (OB_FAIL(get_or_create_child(*cur, wildcard, child))) {
-              LOG_WARN("failed to get or create child for wildcard", K(ret));
-            } else {
-              cur = child;
-            }
+        ObJsonPathNodeType node_type = node->get_node_type();
+        if (node_type == JPN_ROOT) {
+        } else if (node_type == JPN_MEMBER) {
+          ObJsonPathBasicNode *basic_node = static_cast<ObJsonPathBasicNode *>(node);
+          ObString key_name(basic_node->get_object().len_, basic_node->get_object().object_name_);
+          Node *child = nullptr;
+          if (OB_FAIL(get_or_create_child(*cur, key_name, child))) {
+            LOG_WARN("failed to get or create child", K(ret));
           } else {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("not supported node type", K(ret), K(node_type));
-            break;
+            cur = child;
           }
+        } else if (node_type == JPN_MEMBER_WILDCARD) {
+          ObString wildcard(ObString::make_string("*"));
+          Node *child = nullptr;
+          if (OB_FAIL(get_or_create_child(*cur, wildcard, child))) {
+            LOG_WARN("failed to get or create child for wildcard", K(ret));
+          } else {
+            cur = child;
+          }
+        } else {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("not supported node type", K(ret), K(node_type));
+          break;
         }
       }
       if (OB_SUCC(ret)) {
@@ -276,7 +266,7 @@ int ObSearchIndexConfigFilter::is_path_indexed(
     } else if (is_terminal && index_sub_path) {
       passed = false;
     }
-  } else if (has_exclude_paths_) {
+  } else if (has_exclude_paths_ && path_items.count() > 0) { // exclude paths should not match empty path like "$"
     if (OB_FAIL(exclude_matcher_.match(path_items, index_sub_path, passed, is_terminal))) {
       LOG_WARN("failed to match exclude paths", K(ret), K(path_items));
     } else {
@@ -381,10 +371,12 @@ int append_search_index_list_items(const ParseNode *node, ObSqlString &out, cons
       } else {
         ObJsonPath *json_path = new (buf) ObJsonPath(path_str, &tmp_alloc);
         if (OB_FAIL(json_path->parse_path())) {
+          LOG_WARN("invalid jsonpath expression", K(ret), K(path_str));
           LOG_USER_ERROR(OB_INVALID_ARGUMENT, "search index config");
         } else if (!ObSearchIndexConfigFilter::is_valid_config_path(json_path)) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("not supported jsonpath expression", K(ret), K(path_str));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "the jsonpath in search index config is");
         }
       }
     }
@@ -644,12 +636,24 @@ int ObSearchIndexConfigFilter::print_schema(const ObString &comment,
 // Returns true if the path is valid for search index config: each node must be a member (key),
 // and the last node may be a member wildcard (*).
 // Example: "$.a.b.c" is valid; "$.a.b.*" is valid (wildcard only at the last segment).
+// "$" (no segments) and "$.*" (root-level member wildcard only) are invalid.
 bool ObSearchIndexConfigFilter::is_valid_config_path(common::ObJsonPath *json_path)
 {
   bool ret_bool = true;
-  int i = 0;
-  int total_nodes = json_path->path_node_cnt();
+  const int total_nodes = json_path->path_node_cnt();
+  if (total_nodes == 0) {
+    ret_bool = false;
+  } else if (total_nodes == 1) {
+    JsonPathIterator it = json_path->begin();
+    if (it != json_path->end()) {
+      ObJsonPathNode *only = *it;
+      if (OB_NOT_NULL(only) && only->get_node_type() == JPN_MEMBER_WILDCARD) {
+        ret_bool = false;
+      }
+    }
+  }
 
+  int i = 0;
   JsonPathIterator it = json_path->begin();
   for (; i < total_nodes && ret_bool == true && it != json_path->end(); ++i, ++it) {
     ObJsonPathNode *node = *it;
@@ -659,7 +663,7 @@ bool ObSearchIndexConfigFilter::is_valid_config_path(common::ObJsonPath *json_pa
     }
   }
 
-  if (ret_bool == false && i == total_nodes - 1 && it != json_path->end()) {
+  if (ret_bool == false && i != 0 && i == total_nodes - 1 && it != json_path->end()) {
     ObJsonPathNode *node = *it;
     if (OB_NOT_NULL(node) && node->get_node_type() == JPN_MEMBER_WILDCARD) {
       ret_bool = true;
