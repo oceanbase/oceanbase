@@ -576,9 +576,9 @@ int ObDynamicSampling::estimate_rowcount(int64_t max_ds_timeout,
       ret = COVER_SUCC(tmp_ret);
       LOG_WARN("failed to restore session", K(tmp_ret));
     }
-    if (OB_NOT_NULL(saved_data.session_value_)) {
-      saved_data.session_value_->reset();
-    }
+  }
+  if (OB_NOT_NULL(saved_data.session_value_)) {
+    saved_data.session_value_->reset();
   }
   LOG_TRACE("go to dynamic sample one time", K(sample_block_ratio_), K(ret),
             K(raw_sql_str), K(max_ds_timeout), K(start_time), K(ObTimeUtility::current_time() - start_time));
