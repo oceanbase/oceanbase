@@ -777,7 +777,8 @@ public:
   static int64_t combine_server_id(int64_t ts, uint64_t server_id) {
     return (ts & ((1LL << 43) - 1LL)) | ((server_id & 0xFFFF) << 48);
   }
-  static int get_external_table_type(const uint64_t tenant_id,
+  static int get_external_table_type(share::schema::ObSchemaGetterGuard &schema_guard,
+                                     const uint64_t tenant_id,
                                      const uint64_t table_id,
                                      ObExternalFileFormat::FormatType &type);
   static int get_external_table_type(const ObTableSchema *table_schema,
@@ -796,7 +797,8 @@ public:
                                             const ObOptParamHint &opt_params,
                                             ObIAllocator &allocator,
                                             ObString &result_format_str);
-  static int is_odps_external_table(const uint64_t tenant_id,
+  static int is_odps_external_table(share::schema::ObSchemaGetterGuard &schema_guard,
+                                    const uint64_t tenant_id,
                                     const uint64_t table_id,
                                     bool &is_odps_external_table);
   static int is_odps_external_table(const ObTableSchema *table_schema,

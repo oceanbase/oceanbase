@@ -1333,14 +1333,13 @@ int ObSQLUtils::extract_odps_part_spec(const ObString &all_part_spec, ObIArray<O
   return ret;
 }
 
-int ObSQLUtils::get_external_table_type(const uint64_t tenant_id,
+int ObSQLUtils::get_external_table_type(share::schema::ObSchemaGetterGuard &schema_guard,
+                                        const uint64_t tenant_id,
                                         const uint64_t table_id,
                                         ObExternalFileFormat::FormatType &type)
 {
   int ret = OB_SUCCESS;
   const ObTableSchema *table_schema = NULL;
-  share::schema::ObSchemaGetterGuard schema_guard;
-  OZ (GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard));
   OZ (schema_guard.get_table_schema(tenant_id, table_id, table_schema));
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(get_external_table_type(table_schema, type))) {
@@ -1378,15 +1377,15 @@ int ObSQLUtils::get_external_table_type(const ObString &table_format_or_properti
   return ret;
 }
 
-
-int ObSQLUtils::is_odps_external_table(const uint64_t tenant_id,
+int ObSQLUtils::is_odps_external_table(share::schema::ObSchemaGetterGuard &schema_guard,
+                                       const uint64_t tenant_id,
                                        const uint64_t table_id,
                                        bool &is_odps_external_table)
 {
   int ret = OB_SUCCESS;
   is_odps_external_table = false;
   ObExternalFileFormat::FormatType external_table_type;
-  if (OB_FAIL(ObSQLUtils::get_external_table_type(tenant_id, table_id, external_table_type))) {
+  if (OB_FAIL(ObSQLUtils::get_external_table_type(schema_guard, tenant_id, table_id, external_table_type))) {
     LOG_WARN("failed to get external table type", K(ret));
   } else {
     is_odps_external_table = (ObExternalFileFormat::FormatType:: ODPS_FORMAT == external_table_type);

@@ -336,10 +336,15 @@ public:
       const uint64_t part_id);
 
   int update_inner_table_file_list(
-    sql::ObExecContext &exec_ctx, const uint64_t tenant_id, const uint64_t table_id,
-    common::ObArray<share::ObExternalTableBasicFileInfo> &basic_file_infos,
-    common::ObIArray<uint64_t> &updated_part_ids, bool &has_partition_changed,
-    const uint64_t part_id = -1, bool collect_statistic = true);
+      sql::ObExecContext &exec_ctx,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const uint64_t tenant_id,
+      const uint64_t table_id,
+      common::ObArray<share::ObExternalTableBasicFileInfo> &basic_file_infos,
+      common::ObIArray<uint64_t> &updated_part_ids,
+      bool &has_partition_changed,
+      const uint64_t part_id = -1,
+      bool collect_statistic = true);
 
   int get_all_records_from_inner_table(ObIAllocator &allocator,
                                     int64_t tenant_id,
@@ -453,7 +458,8 @@ private:
                             int64_t file_id, const bool is_local_file_on_disk,
                             ObIArray<ObExternalFileInfo> &external_files);
 
-  int collect_odps_table_statistics(const bool collect_statistic,
+  int collect_odps_table_statistics(share::schema::ObSchemaGetterGuard &schema_guard,
+                                    const bool collect_statistic,
                                     const uint64_t tenant_id,
                                     const uint64_t table_id,
                                     ObIArray<uint64_t> &updated_part_ids,
@@ -461,6 +467,7 @@ private:
   int delete_auto_refresh_job(ObExecContext &exec_ctx, ObMySQLTransaction &trans);
   int create_auto_refresh_job(ObExecContext &ctx, const int64_t interval, ObMySQLTransaction &trans);
   int update_inner_table_files_list_by_part(
+      share::schema::ObSchemaGetterGuard &schema_guard,
       ObMySQLTransaction &trans,
       const uint64_t tenant_id,
       const uint64_t table_id,
@@ -470,6 +477,7 @@ private:
 
   int update_inner_table_files_list_by_table(
     sql::ObExecContext &exec_ctx,
+    share::schema::ObSchemaGetterGuard &schema_guard,
     ObMySQLTransaction &trans,
     const uint64_t tenant_id,
     const uint64_t table_id,
