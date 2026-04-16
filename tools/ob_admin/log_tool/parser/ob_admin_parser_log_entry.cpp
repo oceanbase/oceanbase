@@ -871,12 +871,18 @@ int ObAdminParserLogEntry::prepare_log_buf_(ObLogBaseHeader &header)
   int ret = OB_SUCCESS;
 #ifdef OB_BUILD_LOG_STORAGE_COMPRESS
   if (header.is_compressed()) {
-    LogCompressedPayloadHeader com_header;
     int64_t decompressed_len = 0;
     const int64_t header_len = pos_;
     int64_t local_pos = 0;
-    if (OB_FAIL(logservice::decompress(buf_ + pos_, buf_len_ - pos_, str_arg_.decompress_buf_ + header_len,
-                                       str_arg_.decompress_buf_len_- header_len, decompressed_len))) {
+    if (OB_ISNULL(str_arg_.decompress_buf_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("decompress buffer is null", K(header), K(entry_), K(str_arg_));
+    } else if (OB_UNLIKELY(header_len < 0 || header_len >= str_arg_.decompress_buf_len_)) {
+      ret = OB_BUF_NOT_ENOUGH;
+      LOG_ERROR("decompress buffer is not enough for header", K(ret), K(header), K(header_len),
+                K(str_arg_.decompress_buf_len_), K(entry_));
+    } else if (OB_FAIL(logservice::decompress(buf_ + pos_, buf_len_ - pos_, str_arg_.decompress_buf_ + header_len,
+                                              str_arg_.decompress_buf_len_ - header_len, decompressed_len))) {
       LOG_ERROR("failed to decompress", K(header), K(entry_));
     } else if (OB_FAIL(header.serialize(str_arg_.decompress_buf_, header_len, local_pos))){
       LOG_ERROR("failed to serialize", K(header));

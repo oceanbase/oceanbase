@@ -226,10 +226,8 @@ void ObAdminMutatorStringArg::reset()
   buf_len_ = 0;
   decompress_buf_ = NULL;
   decompress_buf_len_ = 0;
+  pos_ = 0;
   flag_ = LogFormatFlag::NO_FORMAT;
-  //pos_ = 0;
-  //:w
-  //:wtx_id_ = 0;
   writer_ptr_ = nullptr;
   filter_.reset();
   log_stat_ = NULL;
