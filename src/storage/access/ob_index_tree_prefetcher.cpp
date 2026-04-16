@@ -315,7 +315,7 @@ int ObIndexTreePrefetcher::last_handle_hit(const ObMicroIndexInfo &block_info,
       EVENT_INC(ObStatEventIds::DATA_BLOCK_CACHE_HIT);
       hit = true;
     }
-  } else if (micro_handle.match(macro_id, offset, size)) {
+  } else if (micro_handle.in_block_state() && micro_handle.match(macro_id, offset, size)) {
     EVENT_INC(ObStatEventIds::INDEX_BLOCK_CACHE_HIT);
     hit = true;
   }
