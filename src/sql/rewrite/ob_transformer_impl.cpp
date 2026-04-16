@@ -148,9 +148,16 @@ int ObTransformerImpl::set_transformation_parameters(ObQueryCtx *query_ctx)
     if (tenant_config.is_valid()) {
       ctx_->complex_cbqt_table_num_ = tenant_config->_complex_cbqt_table_num;
       ctx_->force_subquery_unnest_ = tenant_config->_force_subquery_unnest;
+      ctx_->force_equal_semi_to_inner_ = tenant_config->_force_equal_semi_to_inner;
       ctx_->nested_loop_join_enabled_ = tenant_config->_nested_loop_join_enabled;
       if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_bool_opt_param(ObOptParamHint::NESTED_LOOP_JOIN_ENABLED,
                                                                               ctx_->nested_loop_join_enabled_))) {
+        LOG_WARN("fail to get bool opt param", K(ret));
+      } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_bool_opt_param(ObOptParamHint::FORCE_SUBQUERY_UNNEST,
+                                                                                    ctx_->force_subquery_unnest_))) {
+        LOG_WARN("fail to get bool opt param", K(ret));
+      } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_bool_opt_param(ObOptParamHint::FORCE_EQUAL_SEMI_TO_INNER,
+                                                                                    ctx_->force_equal_semi_to_inner_))) {
         LOG_WARN("fail to get bool opt param", K(ret));
       }
     }

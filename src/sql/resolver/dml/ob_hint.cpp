@@ -1045,6 +1045,16 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
                                       || 0 == val.get_varchar().case_compare("false"));
       break;
     }
+    case FORCE_EQUAL_SEMI_TO_INNER: {
+      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
+                                      || 0 == val.get_varchar().case_compare("false"));
+      break;
+    }
+    case FORCE_SUBQUERY_UNNEST: {
+      is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
+                                      || 0 == val.get_varchar().case_compare("false"));
+      break;
+    }
     case PUSHDOWN_STORAGE_LEVEL:
     case RANGE_INDEX_DIVE_LIMIT:
     case PARTITION_INDEX_DIVE_LIMIT:

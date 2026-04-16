@@ -2190,6 +2190,9 @@ DEF_BOOL(_enable_in_range_optimization, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_force_subquery_unnest, OB_TENANT_PARAMETER, "FALSE",
         "aggressively unnest all subqueries that can be unnested, with correctness guaranteed.",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_force_equal_semi_to_inner, OB_TENANT_PARAMETER, "FALSE",
+        "force semi join with equal condition to transform to inner join without cost check",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_force_explict_500_malloc, OB_CLUSTER_PARAMETER, "False",
          "Force 500 memory for explicit allocation",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

@@ -1183,17 +1183,17 @@ int ObWhereSubQueryPullup::transform_single_set_query(ObDMLStmt *stmt,
         LOG_WARN("fail to check subquery match index", K(ret));
       } else if (queries.at(j).use_outer_join_ && subq_match_idx && subquery->get_table_items().count() > 1 &&
                  !subquery->get_stmt_hint().has_enable_hint(T_UNNEST) && !ctx_->force_subquery_unnest_) {
-        // do nothing
+        OPT_TRACE("skip unnest single set subquery because subquery match index and has multiple tables");
       } else if (subquery->get_select_item_size() >= 2) {
-        // do nothing
+        OPT_TRACE("skip unnest single set subquery because subquery has multiple select items");
       } else if (OB_FAIL(check_nested_subquery_cond(*query_expr, is_nested_subq_cond))) {
         LOG_WARN("failed to check contain nested subquery condition", KPC(query_expr));
       } else if (is_nested_subq_cond &&
                  !subquery->get_stmt_hint().has_enable_hint(T_UNNEST) &&
                  !ctx_->force_subquery_unnest_) {
-        // do nothing
+        OPT_TRACE("skip unnest single set subquery because subquery has nested subquery condition");
       } else if (has_exist_in_array(transformed_subqueries, query_expr)) {
-        //do nothing
+        OPT_TRACE("skip unnest single set subquery because subquery has already been transformed");
       } else if (OB_FAIL(transformed_subqueries.push_back(query_expr))) {
         LOG_WARN("fail to push back", K(ret));
       } else if (OB_FAIL(unnest_single_set_subquery(stmt, queries.at(j), false))) {
@@ -1233,18 +1233,20 @@ int ObWhereSubQueryPullup::transform_single_set_query(ObDMLStmt *stmt,
         LOG_WARN("fail to check subquery match index", K(ret));
       } else if (queries.at(j).use_outer_join_ && subq_match_idx && subquery->get_table_items().count() > 1 &&
                  !subquery->get_stmt_hint().has_enable_hint(T_UNNEST) && !ctx_->force_subquery_unnest_) {
-        // do nothing
-      } else if (is_select_expr && !subquery->get_stmt_hint().has_enable_hint(T_UNNEST)) {
-        //do nothing
-      } else if (has_exist_in_array(transformed_subqueries, query_expr) ||
-                 (subquery->get_select_item_size() > 1 && !is_vector_assign)) {
-        //do nothing
+        OPT_TRACE("skip unnest single set subquery because subquery match index and has multiple tables");
+      } else if (is_select_expr && !subquery->get_stmt_hint().has_enable_hint(T_UNNEST) &&
+                 !ctx_->force_subquery_unnest_) {
+        OPT_TRACE("skip unnest single set subquery because subquery has multiple select items");
+      } else if (has_exist_in_array(transformed_subqueries, query_expr)) {
+        OPT_TRACE("skip unnest single set subquery because subquery has already been transformed");
+      } else if (subquery->get_select_item_size() > 1 && !is_vector_assign) {
+        OPT_TRACE("skip unnest single set subquery because subquery has multiple select items and is not vector assign");
       } else if (OB_FAIL(check_nested_subquery_cond(*query_expr, is_nested_subq_cond))) {
         LOG_WARN("failed to check contain nested subquery condition", KPC(query_expr));
       } else if (is_nested_subq_cond &&
                  !subquery->get_stmt_hint().has_enable_hint(T_UNNEST) &&
                  !ctx_->force_subquery_unnest_) {
-        // do nothing
+        OPT_TRACE("skip unnest single set subquery because subquery has nested subquery condition");
       } else if (OB_FAIL(transformed_subqueries.push_back(query_expr))) {
         LOG_WARN("fail to push back", K(ret));
       } else if (OB_FAIL(unnest_single_set_subquery(stmt,
