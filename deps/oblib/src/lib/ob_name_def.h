@@ -553,6 +553,7 @@
 #define N_FORMAT "format"
 #define N_TO_CLOB "to_clob"
 #define N_TO_BLOB "to_blob"
+#define N_IMAGE_TYPE "image_type"
 #define N_EMPTY_CLOB "empty_clob"
 #define N_EMPTY_BLOB "empty_blob"
 #define N_TO_TIMESTAMP "to_timestamp"

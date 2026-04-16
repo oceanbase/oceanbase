@@ -75,6 +75,21 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObAIFuncIComplete);
 };
 
+class ObAIFuncIVLComplete : public ObAIFuncBase
+{
+public:
+  ObAIFuncIVLComplete() {}
+  virtual ~ObAIFuncIVLComplete() {}
+  virtual int get_body(common::ObIAllocator &allocator,
+                       common::ObString &model,
+                       common::ObString &prompt,
+                       common::ObJsonObject *prompt_object,
+                       common::ObJsonObject *config,
+                       common::ObJsonObject *&body) = 0;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObAIFuncIVLComplete);
+};
+
 class ObAIFuncIEmbed : public ObAIFuncBase
 {
 public:
@@ -84,6 +99,13 @@ public:
                        common::ObString &model,
                        common::ObArray<ObString> &contents,
                        common::ObJsonObject *config,
+                       common::ObString input_type,  // "text" or "image"
+                       common::ObJsonObject *&body) = 0;
+  virtual int get_body(common::ObIAllocator &allocator,
+                       common::ObString &model,
+                       common::ObArray<ObString> &contents,
+                       common::ObJsonObject *config,
+                       common::ObArray<ObString> &input_type_array,  // input type per content, e.g. text/image
                        common::ObJsonObject *&body) = 0;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAIFuncIEmbed);
