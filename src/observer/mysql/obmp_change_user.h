@@ -58,6 +58,7 @@ private:
   int handle_user_var(const common::ObString &var, const common::ObString &val,
                       const common::ObObjType type, common::ObCastCtx &cast_ctx,
                       sql::ObBasicSessionInfo &session) const;
+  int reset_session_for_change_user(sql::ObSQLSessionInfo *session);
 
 private:
   obmysql::ObMySQLRawPacket pkt_;
