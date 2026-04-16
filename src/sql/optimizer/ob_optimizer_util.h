@@ -1431,6 +1431,8 @@ public:
 
   static int check_contain_ora_rowscn_expr(const ObRawExpr *expr, bool &contains);
 
+  static int check_contain_pl_composite_expr(const ObRawExpr *expr, bool &contains);
+
   static int allocate_group_id_expr(ObLogPlan *log_plan, ObRawExpr *&group_id_expr);
 
   static int allocate_identify_seq_expr(ObOptimizerContext &opt_ctx, ObRawExpr *&identify_seq_expr);

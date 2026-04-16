@@ -766,6 +766,7 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
     //2. data table scan filter when TSC use the data table scan directly
     //lookup_pushdown_filters means that the data table filter when
     //TSC use index scan and lookup the data table
+    bool contains_pl_composite_expr = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < filters.count(); ++i) {
       if (use_batch() && filters.at(i)->has_flag(CNT_DYNAMIC_PARAM)) {
         //In Batch table scan the dynamic param filter do not push down to storage
@@ -778,6 +779,12 @@ int ObLogTableScan::extract_pushdown_filters(ObIArray<ObRawExpr*> &nonpushdown_f
         //User Define Function/obj access expr filter do not push down to storage
         if (OB_FAIL(nonpushdown_filters.push_back(filters.at(i)))) {
           LOG_WARN("push UDF/obj access filter store non-pushdown filter failed", K(ret), K(i));
+        }
+      } else if (OB_FAIL(ObOptimizerUtil::check_contain_pl_composite_expr(filters.at(i), contains_pl_composite_expr))) {
+        LOG_WARN("failed to check contain pl composite expr", K(ret));
+      } else if (contains_pl_composite_expr) {
+        if (OB_FAIL(nonpushdown_filters.push_back(filters.at(i)))) {
+          LOG_WARN("push pl composite expr filter store non-pushdown filter failed", K(ret), K(i));
         }
       } else if (filters.at(i)->has_flag(CNT_DYNAMIC_USER_VARIABLE)
               || filters.at(i)->has_flag(CNT_ASSIGN_EXPR)) {
