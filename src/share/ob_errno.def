@@ -2971,10 +2971,11 @@ DEFINE_ERROR_EXT(OB_HTTP_SERVER_ERROR, -11125, OB_HTTP_SERVER_ERROR, "HY000", "H
 DEFINE_ERROR_EXT(OB_INVALID_DATE_TRUNC_FORMAT, -11126, -1, "HY000", "unit not recognized", "unit \'%.*s\' not recognized");
 DEFINE_ERROR(OB_ERR_INVALID_PRIVILEGE_ON_SENSITIVE_RULES, -11127, -1, "HY000", "Privilege not allowed for sensitive rules");
 DEFINE_ERROR(OB_AP_QUERY_NEED_RETRY, -11128, -1, "HY000", "AP query will retry with column replica");
-
 DEFINE_ERROR_EXT(OB_KAFKA_ERROR, -11129, -1, "HY000", "kafka server throw error", "kafka server throw error: ErrorMsg=%s");
 DEFINE_ERROR(OB_KAFKA_NEED_RETRY, -11130, -1, "HY000", "retry with kafka error");
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_USERENV_PARAMETER, -11131, -1, "HY000", "invalid USERENV parameter", 2003, "invalid USERENV parameter");
+DEFINE_ERROR_EXT(OB_SRF_NOT_ALLOWED, -11132, -1, "HY000", "set-returning functions usage are not allowed", "set-returning functions '%.*s' usage are not allowed")
+
 // 余留位置
 ////////////////////////////////////////////////////////////////
 // SQL扩展区段1：[-11000, -12000)

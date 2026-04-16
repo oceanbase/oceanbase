@@ -3074,6 +3074,7 @@ typedef enum ObItemType
 
   T_FULLTEXT_DICT = 4981,
   T_REFRESH_FULLTEXT_DICT = 4982,
+  T_SET_RETURNING_FUNCTION = 4983,
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
