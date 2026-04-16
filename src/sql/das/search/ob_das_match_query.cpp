@@ -96,6 +96,7 @@ int ObDASMatchRtDef::generate_op(ObDASSearchCost lead_cost, ObDASSearchCtx &sear
     // empty query tokens
     ObDASDummyOp *dummy_op = nullptr;
     ObDASDummyOpParam dummy_op_param;
+    dummy_op_param.set_is_scoring(ctdef->is_scoring());
     if (OB_FAIL(search_ctx.create_op(dummy_op_param, dummy_op))) {
       LOG_WARN("failed to create dummy op", KR(ret));
     } else {
@@ -125,6 +126,7 @@ int ObDASMatchRtDef::generate_op(ObDASSearchCost lead_cost, ObDASSearchCtx &sear
       const ObString &query_token = query_tokens.at(i);
       ObDASTokenOp *token_op = nullptr;
       ObDASTokenOpParam token_op_param;
+      token_op_param.set_is_scoring(ctdef->is_scoring());
       token_op_param.ir_ctdef_ = ctdef->get_ir_ctdef();
       token_op_param.ir_rtdef_ = get_ir_rtdef();
       token_op_param.block_max_param_ = &block_max_param_;
@@ -142,6 +144,7 @@ int ObDASMatchRtDef::generate_op(ObDASSearchCost lead_cost, ObDASSearchCtx &sear
     } else if (ObMatchOperator::MATCH_OPERATOR_AND == match_operator_datum->get_int()) {
       ObDASConjunctionOp *conjunction_op = nullptr;
       ObDASConjunctionOpParam conjunction_op_param(token_ops);
+      conjunction_op_param.set_is_scoring(ctdef->is_scoring());
       if (OB_FAIL(search_ctx.create_op(conjunction_op_param, conjunction_op))) {
         LOG_WARN("failed to create conjunction op", KR(ret));
       } else {
@@ -154,6 +157,7 @@ int ObDASMatchRtDef::generate_op(ObDASSearchCost lead_cost, ObDASSearchCtx &sear
         if (minimum_should_match > 1) {
           ObDASBMWOp *bmw_op = nullptr;
           ObDASBMWOpParam bmw_op_param(token_ops, minimum_should_match, allocator_);
+          bmw_op_param.set_is_scoring(ctdef->is_scoring());
           if (OB_FAIL(search_ctx.create_op(bmw_op_param, bmw_op))) {
             LOG_WARN("failed to create bmw op", KR(ret));
           } else {
@@ -163,6 +167,7 @@ int ObDASMatchRtDef::generate_op(ObDASSearchCost lead_cost, ObDASSearchCtx &sear
           ObDASBMMOp *bmm_op = nullptr;
           ObDASBMMOpParam bmm_op_param(
               token_ops, query_optional_, pushdown_filter_op_, allocator_);
+          bmm_op_param.set_is_scoring(ctdef->is_scoring());
           if (OB_FAIL(search_ctx.create_op(bmm_op_param, bmm_op))) {
             LOG_WARN("failed to create bmm op", KR(ret));
           } else {
@@ -176,6 +181,7 @@ int ObDASMatchRtDef::generate_op(ObDASSearchCost lead_cost, ObDASSearchCtx &sear
             minimum_should_match,
             false,
             lead_cost);
+        disjunction_op_param.set_is_scoring(ctdef->is_scoring());
         if (OB_FAIL(search_ctx.create_op(disjunction_op_param, disjunction_op))) {
           LOG_WARN("failed to create disjunction op", KR(ret));
         } else {

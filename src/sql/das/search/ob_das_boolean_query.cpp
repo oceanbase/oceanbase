@@ -412,6 +412,7 @@ int ObDASBooleanQueryRtDef::opt(const ObBooleanSubClause<ObIDASSearchRtDef> &sho
     if (min_should_match > 1) {
       ObDASBMWOp *bmw_op = nullptr;
       ObDASBMWOpParam bmw_op_param(optional_ops, min_should_match, allocator_);
+      bmw_op_param.set_is_scoring(static_cast<const ObIDASSearchCtDef *>(ctdef_)->is_scoring());
       if (OB_FAIL(search_ctx.create_op(bmw_op_param, bmw_op))) {
         LOG_WARN("failed to create bmw op", KR(ret));
       } else {
@@ -420,6 +421,7 @@ int ObDASBooleanQueryRtDef::opt(const ObBooleanSubClause<ObIDASSearchRtDef> &sho
     } else {
       ObDASBMMOp *bmm_op = nullptr;
       ObDASBMMOpParam bmm_op_param(optional_ops, false, nullptr, allocator_);
+      bmm_op_param.set_is_scoring(static_cast<const ObIDASSearchCtDef *>(ctdef_)->is_scoring());
       if (OB_FAIL(search_ctx.create_op(bmm_op_param, bmm_op))) {
         LOG_WARN("failed to create bmm op", KR(ret));
       } else {
@@ -429,6 +431,7 @@ int ObDASBooleanQueryRtDef::opt(const ObBooleanSubClause<ObIDASSearchRtDef> &sho
   } else if (need_score) {
     ObDASDisjunctionOp *disjunction_op = nullptr;
     ObDASDisjunctionOpParam disjunction_op_param(optional_ops, min_should_match, false, lead_cost);
+    disjunction_op_param.set_is_scoring(static_cast<const ObIDASSearchCtDef *>(ctdef_)->is_scoring());
     if (OB_FAIL(search_ctx.create_op(disjunction_op_param, disjunction_op))) {
       LOG_WARN("failed to create disjunction op", KR(ret));
     } else {
@@ -437,6 +440,7 @@ int ObDASBooleanQueryRtDef::opt(const ObBooleanSubClause<ObIDASSearchRtDef> &sho
   } else {
     ObDASDisjunctionFilterOp *disjunction_filter_op = nullptr;
     ObDASDisjunctionFilterOpParam disjunction_filter_op_param(optional_ops, min_should_match, lead_cost);
+    disjunction_filter_op_param.set_is_scoring(static_cast<const ObIDASSearchCtDef *>(ctdef_)->is_scoring());
     if (OB_FAIL(search_ctx.create_op(disjunction_filter_op_param, disjunction_filter_op))) {
       LOG_WARN("failed to create disjunction filter op", KR(ret));
     } else {
@@ -476,6 +480,7 @@ int ObDASBooleanQueryRtDef::generate_conjunction_op(const ObArray<ObIDASSearchOp
   int ret = OB_SUCCESS;
   ObDASConjunctionOp *conjunction_op = nullptr;
   ObDASConjunctionOpParam conjunction_op_param(required);
+  conjunction_op_param.set_is_scoring(static_cast<const ObIDASSearchCtDef *>(ctdef_)->is_scoring());
   if (OB_FAIL(search_ctx.create_op(conjunction_op_param, conjunction_op))) {
     LOG_WARN("failed to create conjunction op", K(ret));
   } else {
@@ -493,6 +498,7 @@ int ObDASBooleanQueryRtDef::generate_disjunction_op(const ObArray<ObIDASSearchOp
   int ret = OB_SUCCESS;
   ObDASDisjunctionOp *disjunction_op = nullptr;
   ObDASDisjunctionOpParam disjunction_op_param(optional_ops, min_should_match, false, lead_cost);
+  disjunction_op_param.set_is_scoring(static_cast<const ObIDASSearchCtDef *>(ctdef_)->is_scoring());
   if (OB_FAIL(search_ctx.create_op(disjunction_op_param, disjunction_op))) {
     LOG_WARN("failed to create disjunction op", K(ret));
   } else {
@@ -509,6 +515,7 @@ int ObDASBooleanQueryRtDef::generate_req_excl_op(ObIDASSearchOp *required,
   int ret = OB_SUCCESS;
   ObDASReqExclOp *req_excl_op = nullptr;
   ObDASReqExclOpParam req_excl_op_param(required, excluded);
+  req_excl_op_param.set_is_scoring(static_cast<const ObIDASSearchCtDef *>(ctdef_)->is_scoring());
   if (OB_FAIL(search_ctx.create_op(req_excl_op_param, req_excl_op))) {
     LOG_WARN("failed to create req excl op", K(ret));
   } else {
@@ -525,6 +532,7 @@ int ObDASBooleanQueryRtDef::generate_req_opt_op(ObIDASSearchOp *required,
   int ret = OB_SUCCESS;
   ObDASReqOptOp *req_opt_op = nullptr;
   ObDASReqOptOpParam req_opt_op_param(required, optional, true);
+  req_opt_op_param.set_is_scoring(static_cast<const ObIDASSearchCtDef *>(ctdef_)->is_scoring());
   if (OB_FAIL(search_ctx.create_op(req_opt_op_param, req_opt_op))) {
     LOG_WARN("failed to create req opt op", K(ret));
   } else {
