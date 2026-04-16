@@ -1588,6 +1588,47 @@ int ObJoinOrder::check_can_use_vec_primary_opt(const uint64_t ref_table_id,
   return ret;
 }
 
+bool ObJoinOrder::has_whole_range(const ObQueryRangeArray &ranges)
+{
+  bool bret = false;
+  for (int64_t i = 0; !bret && i < ranges.count(); ++i) {
+    const ObNewRange *range = ranges.at(i);
+    bret = OB_NOT_NULL(range) && range->is_whole_range();
+  }
+  return bret;
+}
+
+int ObJoinOrder::resolve_vec_query_strategy(const ObDMLStmt &stmt,
+                                            PathHelper &helper)
+{
+  int ret = OB_SUCCESS;
+  ObVecIdxQueryStrategy strategy = ObVecIdxQueryStrategy::RECALL_FIRST;
+  int64_t pre_filtering_timeout = -1;
+  const ObVectorIndexQueryParam &query_param = stmt.get_vector_index_query_param();
+  if (query_param.is_set_strategy_ && query_param.strategy_ == ObVecIdxQueryStrategy::RECALL_FIRST) {
+    strategy = query_param.strategy_;
+  } else {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (OB_UNLIKELY(!tenant_config.is_valid())) {
+      LOG_WARN("tenant config is invalid", K(ret));
+    } else {
+      if (query_param.is_set_strategy_) {
+        strategy = query_param.strategy_;
+      } else {
+        ObString tenant_strategy(tenant_config->ob_vector_search_strategy.get_value());
+        strategy = tenant_strategy.compare(ObVectorTenantSearchStrategy::LATENCY_FIRST_STR) == 0
+            ? ObVecIdxQueryStrategy::LATENCY_FIRST
+            : ObVecIdxQueryStrategy::RECALL_FIRST;
+      }
+      pre_filtering_timeout = tenant_config->_vector_pre_filtering_timeout;
+    }
+  }
+  helper.is_set_vec_strategy_ = true;
+  helper.vec_query_strategy_ = strategy;
+  helper.vec_pre_filtering_timeout_ = pre_filtering_timeout;
+  return ret;
+}
+
 int ObJoinOrder::process_vec_index_info(const ObDMLStmt *stmt,
                                         const uint64_t table_id,
                                         const uint64_t ref_table_id,
@@ -1691,6 +1732,8 @@ int ObJoinOrder::process_vec_index_info(const ObDMLStmt *stmt,
                                                         selectivity,
                                                         get_plan()->get_predicate_selectivities()))) {
       LOG_WARN("failed to calculate selectivity", K(ret));
+    } else if (!helper.is_set_vec_strategy_ && OB_FAIL(resolve_vec_query_strategy(*stmt, helper))) {
+      LOG_WARN("failed to resolve vector query strategy", K(ret));
     } else if (OB_FAIL(ObVectorIndexUtil::set_vector_index_param(vec_index_schema, 
                                                                   access_path.domain_idx_info_.vec_extra_info_, 
                                                                   selectivity, 
@@ -1700,6 +1743,8 @@ int ObJoinOrder::process_vec_index_info(const ObDMLStmt *stmt,
     } else {
       access_path.domain_idx_info_.set_domain_idx_type(DomainIndexType::VEC_INDEX);
       access_path.domain_idx_info_.vec_extra_info_.set_row_count(table_meta_info_.table_row_count_);
+      access_path.domain_idx_info_.vec_extra_info_.set_query_strategy(helper.vec_query_strategy_);
+      access_path.domain_idx_info_.vec_extra_info_.set_pre_filtering_timeout(helper.vec_pre_filtering_timeout_);
     }
 
     if (OB_FAIL(ret)) {
@@ -1708,6 +1753,12 @@ int ObJoinOrder::process_vec_index_info(const ObDMLStmt *stmt,
       || access_path.domain_idx_info_.vec_extra_info_.adaptive_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER)
       && OB_FAIL(ObVectorIndexUtil::set_adaptive_try_path(access_path.domain_idx_info_.vec_extra_info_, index_id == ref_table_id))) {
       LOG_WARN("set vector index adaptive try path", K(ret));
+    } else if (!(index_id == ref_table_id && helper.has_primary_hint_) // if this index is primary index and used primary index hint, skip
+               && access_path.domain_idx_info_.vec_extra_info_.vec_idx_type_ == ObVecIndexType::VEC_INDEX_ADAPTIVE_SCAN
+               && access_path.domain_idx_info_.vec_extra_info_.adaptive_try_path_ == ObVecIdxAdaTryPath::VEC_INDEX_PRE_FILTER
+               && access_path.domain_idx_info_.vec_extra_info_.get_query_strategy() == ObVecIdxQueryStrategy::LATENCY_FIRST
+               && has_whole_range(range_info.get_ranges())) {
+      access_path.domain_idx_info_.vec_extra_info_.adaptive_try_path_ = ObVecIdxAdaTryPath::VEC_INDEX_ITERATIVE_FILTER;
     }
   }
   return ret;
@@ -2594,6 +2645,9 @@ int ObJoinOrder::cal_dimension_info(const uint64_t table_id, //alias table id
   } else {
     // For tables with full-text search requirements, the index back dimension need not be considered due to functional lookup.
     ignore_index_back_dim |= has_match_expr;
+    // For vector query with index, the index back dimension need not be considered due to the necessity of the need to index back
+    bool has_vec_approx = stmt->has_vec_approx();
+    ignore_index_back_dim |= has_vec_approx;
     bool is_index_back = ignore_index_back_dim ? false : index_info_entry->is_index_back();
     const OrderingInfo *ordering_info = &index_info_entry->get_ordering_info();
     ObSEArray<uint64_t, 8> interest_column_ids;
@@ -20925,6 +20979,9 @@ int ObJoinOrder::get_valid_hint_index_list(const ObDMLStmt &stmt,
   for (int64_t i = 0; OB_SUCC(ret) && i < hint_index_ids.count(); ++i) {
     const ObTableSchema *index_hint_table_schema = nullptr;
     const uint64_t tid = hint_index_ids.at(i);
+    if (tid == ref_table_id && !helper.has_primary_hint_) {
+      helper.has_primary_hint_ = true;
+    }
     if (OB_FAIL(schema_guard->get_table_schema(tid, index_hint_table_schema, is_link_table))) {
       LOG_WARN("failed to get table schema", K(ret), K(tid));
     } else if (OB_ISNULL(index_hint_table_schema)) {
