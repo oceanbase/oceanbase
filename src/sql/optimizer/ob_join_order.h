@@ -2889,6 +2889,12 @@ struct MergeKeyInfoHelper
                                const bool is_global_index,
                                ObTablePartitionInfo *&table_partition_info);
 
+    int compute_table_location_with_filters(const uint64_t table_id,
+                                            const uint64_t ref_table_id,
+                                            const bool is_global_index,
+                                            const common::ObIArray<ObRawExpr*> &extra_filters,
+                                            ObTablePartitionInfo *&table_partition_info);
+
     int get_query_range_info(const uint64_t table_id,
                              const uint64_t base_table_id,
                              const uint64_t index_id,
