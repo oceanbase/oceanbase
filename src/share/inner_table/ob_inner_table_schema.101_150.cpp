@@ -8130,6 +8130,25 @@ int ObInnerTableSchema::all_column_history_schema(ObTableSchema &table_schema)
       true, //is_nullable
       false); //is_autoincrement
   }
+
+  if (OB_SUCC(ret)) {
+    ObObj has_used_as_ttl_default;
+    has_used_as_ttl_default.set_tinyint(0);
+    ADD_COLUMN_SCHEMA_T("has_used_as_ttl", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObTinyIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      1, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false, //is_autoincrement
+      has_used_as_ttl_default,
+      has_used_as_ttl_default); //default_value
+  }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);
   table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);

@@ -119,6 +119,7 @@ int ObColumnSchemaV2::assign(const ObColumnSchemaV2 &src_schema)
     is_zero_fill_ = src_schema.is_zero_fill_;
     is_autoincrement_ = src_schema.is_autoincrement_;
     is_hidden_ = src_schema.is_hidden_;
+    has_used_as_ttl_ = src_schema.has_used_as_ttl_;
     charset_type_ = src_schema.charset_type_;
     is_binary_collation_ = src_schema.is_binary_collation_;
     on_update_current_timestamp_ = src_schema.on_update_current_timestamp_;
@@ -245,6 +246,7 @@ void ObColumnSchemaV2::reset()
   is_zero_fill_ = false;
   is_autoincrement_ = false;
   is_hidden_ = false;
+  has_used_as_ttl_ = false;
   charset_type_ = ObCharset::get_default_charset();
   is_binary_collation_ = false;
   on_update_current_timestamp_ = false;
@@ -316,7 +318,8 @@ OB_DEF_SERIALIZE(ObColumnSchemaV2)
                 sub_type_,
                 skip_index_attr_,
                 lob_chunk_size_,
-                local_session_vars_);
+                local_session_vars_,
+                has_used_as_ttl_);
   }
 
   return ret;
@@ -385,7 +388,8 @@ OB_DEF_DESERIALIZE(ObColumnSchemaV2)
                 sub_type_,
                 skip_index_attr_,
                 lob_chunk_size_,
-                local_session_vars_);
+                local_session_vars_,
+                has_used_as_ttl_);
   }
   return ret;
 }
@@ -432,7 +436,8 @@ OB_DEF_SERIALIZE_SIZE(ObColumnSchemaV2)
               sub_type_,
               skip_index_attr_,
               lob_chunk_size_,
-              local_session_vars_);
+              local_session_vars_,
+              has_used_as_ttl_);
   return len;
 }
 
@@ -529,7 +534,8 @@ int64_t ObColumnSchemaV2::to_string(char *buf, const int64_t buf_len) const
     K_(skip_index_attr),
     K_(lob_chunk_size),
     KPC_(column_ref_idxs),
-    K(local_session_vars_));
+    K(local_session_vars_),
+    K_(has_used_as_ttl));
   J_OBJ_END();
   return pos;
 }

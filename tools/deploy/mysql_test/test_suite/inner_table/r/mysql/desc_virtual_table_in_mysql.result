@@ -971,6 +971,7 @@ sub_data_type	bigint(20)	NO		0
 skip_index_attr	bigint(20)	NO		0	
 lob_chunk_size	bigint(20)	NO		262144	
 local_session_vars	longtext	YES		NULL	
+has_used_as_ttl	tinyint(4)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_core_column_table;
 IF(count(*) >= 0, 1, 0)
 1

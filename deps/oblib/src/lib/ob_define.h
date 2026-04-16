@@ -659,6 +659,10 @@ const uint64_t OB_MLOG_ROWID_COLUMN_ID = OB_ALL_MAX_COLUMN_ID
 const uint64_t OB_MIN_MLOG_SPECIAL_COLUMN_ID = OB_MLOG_SEQ_NO_COLUMN_ID;
 const uint64_t OB_MAX_MLOG_SPECIAL_COLUMN_ID = OB_MLOG_ROWID_COLUMN_ID;
 
+// TTL column id for Lob Meta Table
+const uint64_t OB_LOB_META_TTL_COLUMN_ID = OB_ALL_MAX_COLUMN_ID
+                                           - OB_END_RESERVED_COLUMN_ID_NUM + 6; /* 65525 */
+
 const char *const OB_MLOG_SEQ_NO_COLUMN_NAME = "SEQUENCE$$";
 const char *const OB_MLOG_DML_TYPE_COLUMN_NAME = "DMLTYPE$$";
 const char *const OB_MLOG_OLD_NEW_COLUMN_NAME = "OLD_NEW$$";
@@ -696,6 +700,9 @@ const int32_t OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME_LENGTH = 5;
 
 const char *const OB_HIDDEN_LOGICAL_ROWID_INDEX_NAME = "ROWID_INDEX";
 const int32_t OB_HIDDEN_LOGICAL_ROWID_INDEX_NAME_LENGTH = 11;
+
+// hidden ttl column name in Lob Meta Table
+const char *const OB_LOB_META_TTL_COLUMN_NAME = "__ttl_column";
 
 // internal index prefix
 const char *const OB_INDEX_PREFIX = "__idx_";

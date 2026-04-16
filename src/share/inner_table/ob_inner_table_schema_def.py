@@ -383,6 +383,7 @@ all_column_def = dict(
       ('skip_index_attr', 'int', 'false', '0'),
       ('lob_chunk_size', 'int', 'false', 'OB_DEFAULT_LOB_CHUNK_SIZE'),
       ('local_session_vars', 'longtext', 'true'),
+      ('has_used_as_ttl', 'bool', 'false', '0'),
     ],
 )
 

@@ -106,6 +106,7 @@ int assign(const ObColumnSchemaV2 &src_schema);
   inline void set_data_scale(const int16_t data_scale) { accuracy_.set_scale(data_scale); }
   inline void set_zero_fill(const bool is_zero_fill) { is_zero_fill_ = is_zero_fill; }
   inline void set_nullable(const bool is_nullable) { is_nullable_ = is_nullable; }
+  inline void set_has_used_as_ttl(const bool has_used_as_ttl) { has_used_as_ttl_ = has_used_as_ttl; }
   // add default not null constraint
   inline void add_not_null_cst();
   inline void add_not_null_cst(const bool rely_flag, const bool enable_flag,
@@ -198,6 +199,7 @@ int assign(const ObColumnSchemaV2 &src_schema);
   inline bool is_mysql_date_or_date() const { return meta_type_.is_mysql_date_or_date(); }
   inline bool is_mysql_datetime_or_datetime() const { return meta_type_.is_mysql_datetime_or_datetime(); }
   inline bool is_timestamp() const { return meta_type_.is_timestamp(); }
+  inline bool has_used_as_ttl() const { return has_used_as_ttl_; }
 
   inline bool is_xmltype() const {
     return ((meta_type_.is_ext() || meta_type_.is_user_defined_sql_type()) && sub_type_ == T_OBJ_XML)
@@ -420,6 +422,7 @@ private:
   bool is_zero_fill_;
   bool is_autoincrement_;
   bool is_hidden_;
+  bool has_used_as_ttl_; // add bool at this to avoid memory padding, TODO(menglan): clear it in offline ddl path
   int64_t column_flags_;
   ColumnReferenceSet *column_ref_idxs_;
   common::ObCharsetType charset_type_;//default:utf8mb4

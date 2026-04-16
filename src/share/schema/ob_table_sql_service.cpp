@@ -4666,6 +4666,8 @@ int ObTableSqlService::gen_column_dml_without_check(
                          || (((DATA_VERSION_4_2_2_0 <= tenant_data_version && tenant_data_version < DATA_VERSION_4_3_0_0) || tenant_data_version >= DATA_VERSION_4_3_1_0)
                             && OB_FAIL(dml.add_column("lob_chunk_size", column.get_lob_chunk_size())))
                          || (tenant_data_version >= DATA_VERSION_4_2_2_0 &&OB_FAIL(dml.add_column("local_session_vars", ObHexEscapeSqlStr(local_session_var))))
+                         || (tenant_data_version >= DATA_VERSION_4_6_1_0
+                             && OB_FAIL(dml.add_column("has_used_as_ttl", column.has_used_as_ttl())))
                          || OB_FAIL(dml.add_gmt_create())
                          || OB_FAIL(dml.add_gmt_modified()))) {
       LOG_WARN("dml add column failed", K(ret));
