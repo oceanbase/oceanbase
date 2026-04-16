@@ -225,6 +225,15 @@ int IndexDMLInfo::init_column_convert_expr(const ObAssignments &assignments)
         break;
       }
     }
+    // PDML split insert (delete + insert): columns not in SET keep column refs. For HNSW vector vid,
+    // that would re-read the old vid while PK already changed — delta buffer insert then duplicates (vid,'I').
+    // Use the generated VEC_VID expression (dependant_expr), consistent with non-PDML update new_row.
+    if (OB_SUCC(ret) && OB_NOT_NULL(insert_expr) && insert_expr->is_column_ref_expr()) {
+      ObColumnRefRawExpr *col_ref = static_cast<ObColumnRefRawExpr *>(insert_expr);
+      if (col_ref->is_vec_hnsw_vid_column() && OB_NOT_NULL(col_ref->get_dependant_expr())) {
+        insert_expr = col_ref->get_dependant_expr();
+      }
+    }
     if (OB_ISNULL(insert_expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("null unexpected", K(ret));
