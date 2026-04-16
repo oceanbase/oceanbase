@@ -1383,6 +1383,67 @@ int ObDDLResolver::resolve_file_prefix(ObString &url,
   return ret;
 }
 
+int ObDDLResolver::build_dynamic_partition_policy_string_(
+    const ParseNode *option_node, ObString &dynamic_partition_policy)
+{
+  int ret = OB_SUCCESS;
+  static const int64_t MAX_DYNAMIC_PARTITION_POLICY_BUF_LEN = 512;
+  // Build policy string from parse tree nodes
+  char buf[MAX_DYNAMIC_PARTITION_POLICY_BUF_LEN];
+  int64_t pos = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < option_node->num_child_; i++) {
+    ParseNode *child = option_node->children_[i];
+    if (OB_ISNULL(child) || OB_ISNULL(child->children_)
+        || child->num_child_ < 1 || OB_ISNULL(child->children_[0])) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_RESV_LOG(WARN, "invalid dynamic partition option node", KR(ret));
+    } else {
+      ParseNode *val_node = child->children_[0];
+      const char *key = nullptr;
+      switch (child->type_) {
+        case T_DYNAMIC_PARTITION_ENABLE:          key = "ENABLE"; break;
+        case T_DYNAMIC_PARTITION_TIME_UNIT:       key = "TIME_UNIT"; break;
+        case T_DYNAMIC_PARTITION_PRECREATE_TIME:  key = "PRECREATE_TIME"; break;
+        case T_DYNAMIC_PARTITION_EXPIRE_TIME:     key = "EXPIRE_TIME"; break;
+        case T_DYNAMIC_PARTITION_TIME_ZONE:       key = "TIME_ZONE"; break;
+        case T_DYNAMIC_PARTITION_BIGINT_PRECISION: key = "BIGINT_PRECISION"; break;
+        default:
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "unknown dynamic partition option type", KR(ret), K(child->type_));
+          break;
+      }
+      if (OB_SUCC(ret)) {
+        if (i > 0 && OB_FAIL(databuff_printf(buf, MAX_DYNAMIC_PARTITION_POLICY_BUF_LEN, pos, ","))) {
+          SQL_RESV_LOG(WARN, "fail to databuff_printf", KR(ret));
+        } else if (child->type_ == T_DYNAMIC_PARTITION_ENABLE) {
+          if (OB_FAIL(databuff_printf(buf, MAX_DYNAMIC_PARTITION_POLICY_BUF_LEN, pos, "%s=%s",
+              key, val_node->value_ ? "TRUE" : "FALSE"))) {
+            SQL_RESV_LOG(WARN, "fail to databuff_printf", KR(ret));
+          }
+        } else if (OB_ISNULL(val_node->str_value_)) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "option value str is null", KR(ret));
+        } else if (OB_FAIL(databuff_printf(buf, MAX_DYNAMIC_PARTITION_POLICY_BUF_LEN, pos, "%s=%.*s",
+            key, static_cast<int>(val_node->str_len_), val_node->str_value_))) {
+          SQL_RESV_LOG(WARN, "fail to databuff_printf", KR(ret));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObString tmp_str(pos, buf);
+    if (OB_FAIL(ob_write_string(*allocator_, tmp_str, dynamic_partition_policy))) {
+      SQL_RESV_LOG(WARN, "write string failed", KR(ret));
+    } else if (OB_FAIL(ObDynamicPartitionManager::format_dynamic_partition_policy_str(*allocator_, dynamic_partition_policy, dynamic_partition_policy))) {
+      SQL_RESV_LOG(WARN, "fail to format dynamic partition policy str", KR(ret));
+    } else if (stmt::T_CREATE_TABLE == stmt_->get_stmt_type()
+               && OB_FAIL(ObDynamicPartitionManager::fill_default_value(*allocator_, dynamic_partition_policy, dynamic_partition_policy))) {
+      SQL_RESV_LOG(WARN, "fail to fill default value", KR(ret), K(dynamic_partition_policy));
+    }
+  }
+  return ret;
+}
+
 int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool is_index_option)
 {
   int ret = OB_SUCCESS;
@@ -3213,25 +3274,14 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
           ret = OB_NOT_SUPPORTED;
           SQL_RESV_LOG(WARN, "index option should not specify dynamic partition policy", KR(ret));
         } else if (OB_ISNULL(option_node->children_)
-                   || 0 == option_node->num_child_
-                   || OB_ISNULL(option_node->str_value_)) {
+                   || 0 == option_node->num_child_) {
           ret = OB_INVALID_ARGUMENT;
           SQL_RESV_LOG(WARN, "invalid dynamic partition policy arg", KR(ret), "num_child", option_node->num_child_);
-        } else {
-          ObString tmp_str;
-          tmp_str.assign_ptr(const_cast<char *>(option_node->str_value_),
-                             static_cast<int32_t>(option_node->str_len_));
-          if (OB_FAIL(ob_write_string(*allocator_, tmp_str, dynamic_partition_policy_))) {
-            SQL_RESV_LOG(WARN, "write string failed", KR(ret));
-          } else if (OB_FAIL(ObDynamicPartitionManager::format_dynamic_partition_policy_str(*allocator_, dynamic_partition_policy_, dynamic_partition_policy_))) {
-            SQL_RESV_LOG(WARN, "fail to format dynamic partition policy str", KR(ret));
-          } else if (stmt::T_CREATE_TABLE == stmt_->get_stmt_type()
-                     && OB_FAIL(ObDynamicPartitionManager::fill_default_value(*allocator_, dynamic_partition_policy_, dynamic_partition_policy_))) {
-            SQL_RESV_LOG(WARN, "fail to fill default value", KR(ret), K_(dynamic_partition_policy));
-          } else if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()
-                     && OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::DYNAMIC_PARTITION_POLICY))) {
-            SQL_RESV_LOG(WARN, "failed to add member to bitset", KR(ret));
-          }
+        } else if (OB_FAIL(build_dynamic_partition_policy_string_(option_node, dynamic_partition_policy_))) {
+          SQL_RESV_LOG(WARN, "fail to build dynamic partition policy string", KR(ret));
+        } else if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()
+                   && OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::DYNAMIC_PARTITION_POLICY))) {
+          SQL_RESV_LOG(WARN, "failed to add member to bitset", KR(ret));
         }
         break;
       }

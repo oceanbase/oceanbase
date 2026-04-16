@@ -669,6 +669,9 @@ protected:
   int resolve_table_option(
       const ParseNode *node,
       const bool is_index_option);
+  int build_dynamic_partition_policy_string_(
+      const ParseNode *option_node,
+      common::ObString &dynamic_partition_policy);
   int resolve_column_definition_ref(
       share::schema::ObColumnSchemaV2 &column,
       ParseNode *node,

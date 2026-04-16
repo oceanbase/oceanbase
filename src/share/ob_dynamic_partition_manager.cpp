@@ -1442,6 +1442,7 @@ int ObDynamicPartitionManager::update_dynamic_partition_policy_with_str_(
       } else if (OB_UNLIKELY(kv.count() != 2)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("dynamic partition policy is invalid", KR(ret), K(kv.count()));
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "dynamic partition policy format, expected key=value");
       } else {
         ObString k = kv.at(0);
         ObString v = kv.at(1);
@@ -1453,6 +1454,7 @@ int ObDynamicPartitionManager::update_dynamic_partition_policy_with_str_(
           } else {
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("invalid dynamic partition policy params", KR(ret), K(k), K(v));
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "dynamic partition enable, expected TRUE or FALSE");
           }
         } else if (0 == k.case_compare("TIME_UNIT")) {
           if (is_alter) {
@@ -1460,14 +1462,17 @@ int ObDynamicPartitionManager::update_dynamic_partition_policy_with_str_(
             LOG_WARN("not support to alter dynamic partition time unit", KR(ret));
           } else if (OB_FAIL(str_to_time_unit(v, policy.time_unit_))) {
             LOG_WARN("fail to convert str to time unit", KR(ret), K(v));
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "dynamic partition time_unit, expected HOUR/DAY/WEEK/MONTH/YEAR");
           }
         } else if (0 == k.case_compare("PRECREATE_TIME")) {
           if (OB_FAIL(str_to_time(v, policy.precreate_time_num_, policy.precreate_time_unit_))) {
             LOG_WARN("fail to convert str to time interval", KR(ret), K(v));
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "dynamic partition precreate_time, expected format like '2MONTH'");
           }
         } else if (0 == k.case_compare("EXPIRE_TIME")) {
           if (OB_FAIL(str_to_time(v, policy.expire_time_num_, policy.expire_time_unit_))) {
             LOG_WARN("fail to convert str to time interval", KR(ret), K(v));
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "dynamic partition expire_time, expected format like '13MONTH'");
           }
         } else if (0 == k.case_compare("TIME_ZONE")) {
           int32_t offset = 0;
@@ -1496,11 +1501,13 @@ int ObDynamicPartitionManager::update_dynamic_partition_policy_with_str_(
             } else {
               ret = OB_INVALID_ARGUMENT;
               LOG_WARN("invalid dynamic partition policy params", KR(ret), K(k), K(v));
+              LOG_USER_ERROR(OB_INVALID_ARGUMENT, "dynamic partition bigint_precision, expected S/MS/US/NONE");
             }
           }
         } else {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("unknown dynamic partition policy params", KR(ret), K(k));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "dynamic partition policy, unknown parameter");
         }
       }
     }
