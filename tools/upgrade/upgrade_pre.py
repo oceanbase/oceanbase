@@ -2692,30 +2692,36 @@
 #    if min_cluster_version < get_version("4.3.3.0"):
 #      logging.info("Cluster version < 4.3.3.0, skip vector index check")
 #    else:
-#      sql = """
-#        SELECT t.tenant_id, t.table_id, t.table_name, t.database_id
-#        FROM oceanbase.__all_virtual_table t
-#        INNER JOIN (
-#            SELECT tenant_id, table_id
-#            FROM oceanbase.__all_virtual_column_group
-#            WHERE column_group_type NOT IN (0, 1)
-#            GROUP BY tenant_id, table_id
-#        ) cg ON t.tenant_id = cg.tenant_id AND t.table_id = cg.table_id
-#        INNER JOIN (
-#            SELECT DISTINCT tenant_id, data_table_id
-#            FROM oceanbase.__all_virtual_table
-#            WHERE index_type >= 25 AND index_type <= 44 AND index_type != 41
-#        ) vi ON t.tenant_id = vi.tenant_id AND t.table_id = vi.data_table_id
-#        WHERE t.table_type = 3
-#          AND t.data_table_id = 0
-#          AND t.column_store = 1
-#      """
-#      (desc, results) = query_cur.exec_query(sql, print_when_succ=False)
-#      if len(results) > 0:
-#        fail_list.append("exist vector index on column table in the cluster, upgrade to current version is not supported")
-#        logging.info("check vector index exist failed, found vector index on column table")
-#      else:
-#        logging.info("check vector index exist success")
+#      sql = "select tenant_id from oceanbase.__all_tenant"
+#      (desc, results) = query_cur.exec_query(sql)
+#      for row in results:
+#        tenant_id = row[0]
+#        sql = """
+#          SELECT t.tenant_id, t.table_id, t.table_name, t.database_id
+#          FROM oceanbase.__all_virtual_table t
+#          INNER JOIN (
+#              SELECT tenant_id, table_id
+#              FROM oceanbase.__all_virtual_column_group
+#              WHERE column_group_type NOT IN (0, 1)
+#              GROUP BY tenant_id, table_id
+#          ) cg ON t.tenant_id = cg.tenant_id AND t.table_id = cg.table_id
+#          INNER JOIN (
+#              SELECT DISTINCT tenant_id, data_table_id
+#              FROM oceanbase.__all_virtual_table
+#              WHERE index_type >= 25 AND index_type <= 44 AND index_type != 41
+#          ) vi ON t.tenant_id = vi.tenant_id AND t.table_id = vi.data_table_id
+#          WHERE t.table_type = 3
+#            AND t.data_table_id = 0
+#            AND t.column_store = 1
+#            AND t.tenant_id = {0}
+#        """.format(tenant_id)
+#        (desc, results) = query_cur.exec_query(sql, print_when_succ=False)
+#        if len(results) > 0:
+#          fail_list.append("exist vector index on column table in the cluster, upgrade to current version is not supported")
+#          logging.info("check vector index exist failed, found vector index on column table in tenant {0}".format(tenant_id))
+#          break
+#        else:
+#          logging.info("check vector index exist success in tenant {0}".format(tenant_id))
 ## 开始升级前的检查
 #def do_check(my_host, my_port, my_user, my_passwd, timeout, upgrade_params, cpu_arch):
 #  try:
