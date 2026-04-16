@@ -4276,8 +4276,8 @@ int ObSlaveMapUtil::build_ppwj_slave_mn_map(ObDfo &parent, ObDfo &child, uint64_
 }
 
 // 本函数用于 pdml 场景，支持：
-//  1. 当分区数小于线程数，将一个 partition 映射到对应 SQC 的一组线程上
-//  2. 当分区数大于线程数，将一组 partitions 映射到对应 SQC 的一个线程上
+//  1. 将 pkey 映射到一个或多个线程上
+//  2. 将 多个 pkey 映射到一个线程上
 // 并且保证：pkey 最小化分布（在充分运用算力的前提下，让尽可能少的线程并发处理同一个分区）
 // pkey-hash, pkey-range 等都可以用这个 map
 int ObSlaveMapUtil::build_pkey_affinitized_ch_mn_map(ObDfo &parent,
@@ -4297,8 +4297,8 @@ int ObSlaveMapUtil::build_pkey_affinitized_ch_mn_map(ObDfo &parent,
       //    PDML
       //      EX (pkey hash)
       //  .....
-      // 为 child dfo 建立其发送数据的 channel map，在 pkey affinitized 模型下，
-      // 一个 parttions 会被分发到对应 SQC 上的一组线程中
+      // 为child dfo建立其发送数据的channel map，在pkey random模型下，parent dfo的每一个SQC中的worker都可以
+      // 处理其对应SQC中所包含的所有partition，所以直接采用`build_ch_map_by_sqcs`
       ObPxPartChMapArray &map = child.get_part_ch_map();
       ObIArray<ObPxSqcMeta> &sqcs = parent.get_sqcs();
       ObPxChTotalInfos *dfo_ch_total_infos = &child.get_dfo_ch_total_infos();
@@ -4332,22 +4332,20 @@ int ObSlaveMapUtil::build_pkey_affinitized_ch_mn_map(ObDfo &parent,
   return ret;
 }
 
-// 本函数用于 pdml 场景，支持：
-// 将每个 partition 映射到对应 SQC 的所有线程上
-int ObSlaveMapUtil::build_pkey_scatter_ch_mn_map(ObDfo &parent, ObDfo &child, uint64_t tenant_id)
+
+int ObSlaveMapUtil::build_pkey_random_ch_mn_map(ObDfo &parent, ObDfo &child, uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   if (1 != parent.get_child_count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected dfo", K(ret), K(parent));
-  } else if (ObPQDistributeMethod::PARTITION_RANDOM == child.get_dist_method()
-             || ObPQDistributeMethod::PARTITION_RANGE == child.get_dist_method()) {
-    LOG_TRACE("build pkey scatter channel map",
+  } else if (ObPQDistributeMethod::PARTITION_RANDOM == child.get_dist_method()) {
+    LOG_TRACE("build pkey random channel map",
       K(parent.get_dfo_id()), K(parent.get_sqcs_count()),
       K(child.get_dfo_id()), K(child.get_sqcs_count()));
       //  .....
       //    PDML
-      //      EX (pkey scatter)
+      //      EX (pkey random)
       //  .....
       // 为child dfo建立其发送数据的channel map，在pkey random模型下，parent dfo的每一个SQC中的worker都可以
       // 处理其对应SQC中所包含的所有partition，所以直接采用`build_ch_map_by_sqcs`
@@ -4537,16 +4535,16 @@ int ObSlaveMapUtil::build_pkey_mn_ch_map(ObExecContext &ctx, ObDfo &child, ObDfo
     }
     break;
   }
-  case ObPQDistributeMethod::Type::PARTITION_HASH: {
+  case ObPQDistributeMethod::Type::PARTITION_HASH:
+  case ObPQDistributeMethod::Type::PARTITION_RANGE: {
     if (OB_FAIL(build_pkey_affinitized_ch_mn_map(parent, child, tenant_id))) {
       LOG_WARN("failed to build pkey random channel map", K(ret));
     }
     break;
   }
-  case ObPQDistributeMethod::Type::PARTITION_RANGE:
   case ObPQDistributeMethod::Type::PARTITION_RANDOM: {
     // PDML: shuffle to any worker in parent dfo
-    if (OB_FAIL(build_pkey_scatter_ch_mn_map(parent, child, tenant_id))) {
+    if (OB_FAIL(build_pkey_random_ch_mn_map(parent, child, tenant_id))) {
       LOG_WARN("failed to build pkey random channel map", K(ret));
     }
     break;
