@@ -1361,24 +1361,16 @@ protected: // memeber variables
   const common::ObIArray<int64_t> *part_ids_;
   ObSqlArray<ObRawExpr *> range_conds_;
 
-  // for index merge, we need to prepare range conds and filters for each index scan, and we need
-  // to store full query filters for final check.
-  // for example, consider following query:
-  // create table t1(c1 int primary key, c2 int, c3 int, c4 int);
-  // create index c2 on t1(c2) local;
-  // create index c3 on t1(c3) local;
-  // create index c4 on t1(c4) local;
-  //     select /*+union_merge(t1 c2 c3 c4)*/ * from t1 where c1=1 or c2=1 or c4<1;
-  // when we choose index merge plan, range conds and filters need to be prepared, thus:
-  //  ---------------------------------------------------------
-  //  |  index table  |     range conds     |      filters    |
-  //  ---------------------------------------------------------
-  //  |      c2       |         NULL       |      c1 = 1      |
-  //  |      c3       |         NULL        |       NULL      |
-  //  |      c4       |        c4 < 1       |       NULL      |
-  //  ---------------------------------------------------------
-  // NOTE: only filters before index back can be pushed down to index scan.
-  // and full filters 'c1=1 or c2=1 or c4<1' will be used after lookup for final check.
+  // Current status of the index merge plan:
+  // 1. Index scans involved in index merge must be able to extract a query range,
+  //    which is recorded in @AccessPath::get_query_range_provider(). The range is NOT required to be precise.
+  // 2. Index scans involved in index merge cannot evaluate pushdown filters.
+  //    (Limited applicable scenarios, and some filters cannot be evaluated on index tables.)
+  // 3. All unevaluated filters caused by imprecise ranges or missing indexes, recorded in @get_filter_exprs(),
+  //    are evaluated uniformly in final table lookup.
+  // 4. The complete original filters, recorded in @full_filters_, are used in the vector index adaptive scan with index merge.
+  //
+  // @index_range_conds_ is just for explain plan now and @index_filters_ is always empty and unused.
   typedef ObSqlArray<ObRawExpr *> ExprArray;
   ObSqlArray<ExprArray, true> index_range_conds_;
   ObSqlArray<ExprArray, true> index_filters_;

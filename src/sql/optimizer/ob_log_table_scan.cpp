@@ -1909,12 +1909,8 @@ int ObLogTableScan::set_index_table_scan_filters(ObIndexMergeNode *node, bool is
             found_expr = true;
           } else { /* do nothing */ }
         }
-        // for virtual table, even if we extract query range, we need to maintain the condition into the filter
-        if (OB_SUCC(ret) && (!found_expr || (is_virtual_table(ref_table_id_)))) {
-          if (OB_FAIL(index_filters_.at(node->scan_node_idx_).push_back(scan_pushdown_filters.at(i)))) {
-            LOG_WARN("add filter expr failed", KPC(node), K(ret));
-          } else { /* do nothing */ }
-        }
+
+        // @index_range_conds_ is just for explain plan now and @index_filters_ is always empty and unused.
         if (OB_SUCC(ret) && found_expr) {
           if (OB_FAIL(index_range_conds_.at(node->scan_node_idx_).push_back(scan_pushdown_filters.at(i)))) {
             LOG_WARN("failed to push back expr", K(ret));
