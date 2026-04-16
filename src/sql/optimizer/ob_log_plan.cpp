@@ -15436,7 +15436,8 @@ int ObLogPlan::check_normal_aggr_can_storage_pushdown(const uint64_t table_id,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
     } else if (!first_param->is_column_ref_expr() ||
-               table_id != static_cast<ObColumnRefRawExpr*>(first_param)->get_table_id()) {
+               table_id != static_cast<ObColumnRefRawExpr*>(first_param)->get_table_id() ||
+               static_cast<ObColumnRefRawExpr*>(first_param)->is_pseudo_column_ref()) {
       can_push = false;
     }
   }
