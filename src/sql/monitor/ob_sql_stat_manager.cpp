@@ -146,7 +146,14 @@ void ObSqlStatManager::wait() {
       ob_usleep(1000 * 1000);
       LOG_WARN("wait sql stat linkhash map to be empty", K(alloc_handle_.get_alloc_count()));
     }
-    LOG_INFO("success to wait sql stat manager", K(MTL_ID()), K(alloc_handle_.get_alloc_count()));
+    LOG_INFO("sql stat manager values freed, before purge",
+             K(MTL_ID()), K(alloc_handle_.get_alloc_count()), K(alloc_handle_.get_alloc_node_count()), K(allocator_.allocated()));
+    sql_stat_infos_.purge();
+    LOG_INFO("sql stat manager after hashmap purge",
+             K(MTL_ID()), K(alloc_handle_.get_alloc_count()), K(alloc_handle_.get_alloc_node_count()), K(allocator_.allocated()));
+    allocator_.purge();
+    LOG_INFO("success to wait sql stat manager",
+             K(MTL_ID()), K(alloc_handle_.get_alloc_count()), K(alloc_handle_.get_alloc_node_count()), K(allocator_.allocated()));
   }
 }
 
@@ -161,6 +168,8 @@ void ObSqlStatManager::destroy() {
     ret = OB_ERROR;
     LOG_WARN("sql stat manager is not stopped", K(ret));
   } else {
+    LOG_INFO("sql stat manager before destroy",
+             K(MTL_ID()), K(alloc_handle_.get_alloc_count()), K(alloc_handle_.get_alloc_node_count()), K(allocator_.allocated()));
     is_inited_ = false;
   }
 }

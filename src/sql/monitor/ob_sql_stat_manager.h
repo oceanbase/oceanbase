@@ -29,7 +29,7 @@ class ObSqlStatRecordNodeAlloc
 {
 public:
   ObSqlStatRecordNodeAlloc(ObIAllocator *allocator, int64_t alloc_limit)
-      : alloc_count_(0), alloc_limit_(alloc_limit), allocator_(allocator)
+      : alloc_count_(0), alloc_node_count_(0), alloc_limit_(alloc_limit), allocator_(allocator)
   {}
   ~ObSqlStatRecordNodeAlloc()
   {}
@@ -74,6 +74,7 @@ public:
       COMMON_LOG(WARN, "sql stat record node is null", K(node));
     } else {
       allocator_->free(node);
+      ATOMIC_DEC(&alloc_node_count_);
     }
   }
 
@@ -88,14 +89,17 @@ public:
     } else {
       node = new (buf) common::LinkHashNode<N>();
       node->hash_val_ = value;
+      ATOMIC_INC(&alloc_node_count_);
     }
     return node;
   }
 
   int64_t get_alloc_count() const { return alloc_count_; }
+  int64_t get_alloc_node_count() const { return alloc_node_count_; }
 
 private:
   int64_t alloc_count_;
+  int64_t alloc_node_count_;
   int64_t alloc_limit_;
   ObIAllocator *allocator_;
 };
