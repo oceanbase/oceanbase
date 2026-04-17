@@ -788,14 +788,20 @@ ERROR 22003: value is out of range
 select c1, ---c1 from tt;
 ERROR 22003: value is out of range
 
-EXPLAIN SELECT (- (CAST(NULL AS SIGNED))) < (- (CAST(0.7646335288457784 AS TIME)));
-Query Plan
-      values({cast((T_OP_NEG, cast(NULL, BIGINT(0, 0))), DOUBLE(-1, -1)) < (T_OP_NEG, cast(cast(0.7646335288457784, TIME(0, 0)), DOUBLE(-1, -1)))})
-  0 - output([cast((T_OP_NEG, cast(NULL, BIGINT(0, 0))), DOUBLE(-1, -1)) < (T_OP_NEG, cast(cast(0.7646335288457784, TIME(0, 0)), DOUBLE(-1, -1)))]), filter(nil)
--------------------------------------
-------------------------------------------
-==========================================
-==========================================
-Outputs & filters:
-|0 |EXPRESSION|    |1       |1           |
-|ID|OPERATOR  |NAME|EST.ROWS|EST.TIME(us)|
+drop view if exists v1;
+SELECT (- (CAST(NULL AS SIGNED))) < (- (CAST(0.7646335288457784 AS TIME)));
++---------------------------------------------------------------------+
+| (- (CAST(NULL AS SIGNED))) < (- (CAST(0.7646335288457784 AS TIME))) |
++---------------------------------------------------------------------+
+|                                                                NULL |
++---------------------------------------------------------------------+
+create view v1 as SELECT (- (CAST(NULL AS SIGNED))), (- (CAST(0.7646335288457784 AS TIME))), (- (CAST(NULL AS SIGNED))) < (- (CAST(0.7646335288457784 AS TIME)));
+desc v1;
++----------------------------------------+-------------+------+-----+---------+-------+
+| Field                                  | Type        | Null | Key | Default | Extra |
++----------------------------------------+-------------+------+-----+---------+-------+
+| (- (CAST(0.7646335288457784 AS TIME))) | double(0,0) | NO   |     |         |       |
+| (- (CAST(NULL AS SIGNED)))             | bigint(0)   | NO   |     |         |       |
+| Name_exp_1                             | int(1)      | NO   |     |         |       |
++----------------------------------------+-------------+------+-----+---------+-------+
+drop view v1;

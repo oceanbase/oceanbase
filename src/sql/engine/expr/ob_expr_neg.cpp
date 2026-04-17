@@ -237,7 +237,8 @@ int ObExprNeg::calc_result_type1(ObExprResType &type, ObExprResType &type1, ObEx
         type.set_precision(ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE][type.get_type()].
             get_precision());
       } else {
-        if (type.get_type() == ObDoubleType && !ob_is_numeric_tc(type1.get_type_class())) {
+        if (type.get_type() == ObDoubleType && !ob_is_numeric_tc(type1.get_type_class()) && !ob_is_temporal_type(type1.get_type())) {
+          // type is double, input is not numeric (and not temporal type)
           // In this case, the parameter's precision has no effect on the result precision,
           // and should be consistent with the deduction logic in ObRawExprDeduceType::try_add_cast_expr_above_for_deduce_type
           type.set_scale(SCALE_UNKNOWN_YET);
