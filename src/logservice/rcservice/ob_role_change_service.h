@@ -90,7 +90,8 @@ private:
     WAIT_REPLAY_DONE_TIMEOUT = 1,
     WAIT_REPLACE_DONE_TIMEOUT = 2,
     WAIT_STANDBY_SYNC_TIMEOUT = 3,
-    MAX_TYPE = 4
+    SYNC_MODE_DEGRADING = 4,
+    MAX_TYPE = 5
   };
   class RetrySubmitRoleChangeEventCtx {
   public:
@@ -102,7 +103,9 @@ private:
     bool need_retry() const
     {
       return RetrySubmitRoleChangeEventReason::WAIT_REPLAY_DONE_TIMEOUT == reason_
-             || RetrySubmitRoleChangeEventReason::WAIT_REPLACE_DONE_TIMEOUT == reason_;
+             || RetrySubmitRoleChangeEventReason::WAIT_REPLACE_DONE_TIMEOUT == reason_
+             || RetrySubmitRoleChangeEventReason::WAIT_STANDBY_SYNC_TIMEOUT == reason_
+             || RetrySubmitRoleChangeEventReason::SYNC_MODE_DEGRADING == reason_;
     }
     void set_retry_reason(const RetrySubmitRoleChangeEventReason &reason)
     {
