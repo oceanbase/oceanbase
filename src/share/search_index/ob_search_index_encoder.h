@@ -188,6 +188,14 @@ public:
                           const common::ObIJsonBase *j_base,
                           common::ObString &value);
 
+  // For UTF-16/UTF-16LE charsets whose strnxfrm_varlen is unimplemented, convert the
+  // string to UTF-8 and remap the collation to the corresponding UTF-8 equivalent.
+  // Safe because utf16_general_ci / utf8mb4_general_ci share the same UCA weight
+  // algorithm, and utf16_bin / utf8mb4_bin both sort by Unicode code point order.
+  static int normalize_string_for_encoding(common::ObIAllocator &allocator,
+                                           common::ObString &str_value,
+                                           common::ObCollationType &cs_type);
+
   static bool string_safety_to_compare(const ObString &str);
   static bool string_column_may_truncate(const ObObjMeta &column_meta,
                                          const ObLength column_length);

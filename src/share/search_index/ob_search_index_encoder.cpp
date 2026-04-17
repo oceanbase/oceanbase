@@ -472,10 +472,13 @@ int ObSearchIndexValueEncoder::encode_value(ObIAllocator &allocator,
     }
     case ObVarcharType: {
       ObEncParam enc_param;
-      if (OB_FAIL(init_string_enc_param(obj_type, obj_meta.get_collation_type(), 0, true, true,
-                                        enc_param))) {
+      ObCollationType cs_type = obj_meta.get_collation_type();
+      ObString str_value = datum.get_string();
+      if (OB_FAIL(normalize_string_for_encoding(allocator, str_value, cs_type))) {
+        LOG_WARN("fail to normalize string for encoding", K(ret));
+      } else if (OB_FAIL(init_string_enc_param(obj_type, cs_type, 0, true, true, enc_param))) {
         LOG_WARN("fail to init string enc param", K(ret));
-      } else if (OB_FAIL(encode_string(allocator, datum.get_string(), value, enc_param))) {
+      } else if (OB_FAIL(encode_string(allocator, str_value, value, enc_param))) {
         LOG_WARN("fail to encode string", K(ret));
       }
       break;
@@ -485,15 +488,16 @@ int ObSearchIndexValueEncoder::encode_value(ObIAllocator &allocator,
     case ObMediumTextType:
     case ObLongTextType: {
       ObEncParam enc_param;
+      ObCollationType cs_type = obj_meta.get_collation_type();
       ObString str_value = datum.get_string();
       bool has_lob_header = obj_meta.has_lob_header();
-      sql::ObDatumMeta datum_meta(obj_meta.get_type(), obj_meta.get_collation_type(),
-                                  obj_meta.get_scale());
+      sql::ObDatumMeta datum_meta(obj_meta.get_type(), cs_type, obj_meta.get_scale());
       if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(allocator, datum, datum_meta,
                                                                  has_lob_header, str_value))) {
         LOG_WARN("fail to get real data", K(ret), K(str_value));
-      } else if (OB_FAIL(init_string_enc_param(ObVarcharType, obj_meta.get_collation_type(), 0,
-                                               true, true, enc_param))) {
+      } else if (OB_FAIL(normalize_string_for_encoding(allocator, str_value, cs_type))) {
+        LOG_WARN("fail to normalize string for encoding", K(ret));
+      } else if (OB_FAIL(init_string_enc_param(ObVarcharType, cs_type, 0, true, true, enc_param))) {
         LOG_WARN("fail to init string enc param", K(ret));
       } else if (OB_FAIL(encode_string(allocator, str_value, value, enc_param))) {
         LOG_WARN("fail to encode string", K(ret));
@@ -884,6 +888,11 @@ int ObSearchIndexValueEncoder::encode_string(ObIAllocator &allocator,
   } else if (OB_FAIL(ObOrderPerservingEncoder::encode_from_string_varlen(string_value, mem,
       max_buf_len, to_len, enc_param))) {
     LOG_WARN("failed to encode from string varlen", K(ret));
+  } else if (OB_UNLIKELY(to_len < 0)) {
+    // Defensive check: sortkey_var_len may return (size_t)-1 for unsupported collations
+    // (e.g. when strnxfrm_varlen is NULL), which wraps to a negative int64_t.
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("encode_from_string_varlen returned negative length", K(ret), K(to_len), K(string_value));
   } else {
     // truncate encoded value length to SEARCH_INDEX_VALUE_LENGTH
     to_len = MIN(to_len, SEARCH_INDEX_VALUE_LENGTH);
@@ -925,6 +934,26 @@ int ObSearchIndexValueEncoder::encode_value(common::ObIAllocator &allocator,
     LOG_WARN("fail to init json string enc param", K(ret));
   } else if (OB_FAIL(encode_json_scalar(allocator, j_base, result, enc_param))) {
     LOG_WARN("fail to encode json scalar", K(ret));
+  }
+  return ret;
+}
+
+int ObSearchIndexValueEncoder::normalize_string_for_encoding(ObIAllocator &allocator,
+                                                             ObString &str_value,
+                                                             ObCollationType &cs_type)
+{
+  int ret = OB_SUCCESS;
+  ObCharsetType charset = ObCharset::charset_type_by_coll(cs_type);
+  if (CHARSET_UTF16 == charset || CHARSET_UTF16LE == charset) {
+    ObString converted;
+    if (OB_FAIL(ObCharset::charset_convert(allocator, str_value, cs_type,
+                                           CS_TYPE_UTF8MB4_BIN, converted))) {
+      LOG_WARN("fail to convert charset to utf8mb4", K(ret), K(cs_type));
+    } else {
+      str_value = converted;
+      cs_type = ObCharset::is_bin_sort(cs_type) ? CS_TYPE_UTF8MB4_BIN
+                                                : CS_TYPE_UTF8MB4_GENERAL_CI;
+    }
   }
   return ret;
 }

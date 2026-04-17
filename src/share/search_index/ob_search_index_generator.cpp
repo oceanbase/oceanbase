@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "share/search_index/ob_search_index_generator.h"
+#include "lib/charset/ob_charset.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/json_type/ob_json_base.h"
 #include "lib/json_type/ob_json_tree.h"
@@ -53,8 +54,16 @@ int ObSearchIndexRowGenerator::Generator::init(const uint64_t column_idx, const 
     }
   } else if (ob_is_string_type(col_type)) {
     ObObjType obj_type = ob_is_text_tc(col_type) ? ObVarcharType : obj_meta_.get_type();
+    ObCollationType cs_type = obj_meta_.get_collation_type();
+    ObCharsetType charset = ObCharset::charset_type_by_coll(cs_type);
+    if (CHARSET_UTF16 == charset || CHARSET_UTF16LE == charset) {
+      orig_cs_type_ = cs_type;
+      need_normalize_encoding_ = true;
+      cs_type = ObCharset::is_bin_sort(cs_type) ? CS_TYPE_UTF8MB4_BIN
+                                                : CS_TYPE_UTF8MB4_GENERAL_CI;
+    }
     if (OB_FAIL(ObSearchIndexValueEncoder::init_string_enc_param(obj_type,
-                                                                 obj_meta_.get_collation_type(),
+                                                                 cs_type,
                                                                  0, /** sql_mode */
                                                                  true, /** is_null_first */
                                                                  true, /** is_asc */
@@ -184,8 +193,16 @@ int ObSearchIndexRowGenerator::Generator::generate_rows(
       }
       case ObVarcharType:
       case ObCharType: {
-        ret = ObSearchIndexValueEncoder::encode_string(allocator_, datum.get_string(), value,
-                                                       enc_param_);
+        ObString str_value = datum.get_string();
+        ObCollationType tmp_cs = orig_cs_type_;
+        if (need_normalize_encoding_
+            && OB_FAIL(ObSearchIndexValueEncoder::normalize_string_for_encoding(
+                   allocator_, str_value, tmp_cs))) {
+          LOG_WARN("fail to normalize string for encoding", K(ret));
+        } else if (OB_FAIL(ObSearchIndexValueEncoder::encode_string(
+                       allocator_, str_value, value, enc_param_))) {
+          LOG_WARN("fail to encode string", K(ret));
+        }
         break;
       }
       case ObTinyTextType:
@@ -193,13 +210,18 @@ int ObSearchIndexRowGenerator::Generator::generate_rows(
       case ObMediumTextType:
       case ObLongTextType: {
         ObString str_value = datum.get_string();
+        ObCollationType tmp_cs = orig_cs_type_;
         if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(
                 &allocator_, obj_meta_.get_type(), obj_meta_.get_collation_type(),
                 true, str_value))) {
           LOG_WARN("fail to read real string data", K(ret));
-        } else {
-          ret = ObSearchIndexValueEncoder::encode_string(allocator_, str_value, value,
-                                                         enc_param_);
+        } else if (need_normalize_encoding_
+                   && OB_FAIL(ObSearchIndexValueEncoder::normalize_string_for_encoding(
+                          allocator_, str_value, tmp_cs))) {
+          LOG_WARN("fail to normalize string for encoding", K(ret));
+        } else if (OB_FAIL(ObSearchIndexValueEncoder::encode_string(
+                       allocator_, str_value, value, enc_param_))) {
+          LOG_WARN("fail to encode string", K(ret));
         }
         break;
       }

@@ -129,6 +129,8 @@ private:
         column_idx_(OB_INVALID_ID),
         enc_param_(),
         obj_meta_(),
+        need_normalize_encoding_(false),
+        orig_cs_type_(CS_TYPE_INVALID),
         arr_type_(nullptr),
         elem_generator_(nullptr),
         config_filter_(nullptr),
@@ -162,6 +164,11 @@ private:
     uint64_t column_idx_;
     ObEncParam enc_param_;
     ObObjMeta obj_meta_;
+    // When the column's collation is not supported by encode_from_string_varlen
+    // (e.g. UTF-16, UTF-16LE, latin1, or utf8mb4_unicode_ci), we normalize the
+    // string to a supported charset/collation before encoding.
+    bool need_normalize_encoding_;
+    ObCollationType orig_cs_type_;
 
     // for array type
     common::ObCollectionArrayType *arr_type_;
