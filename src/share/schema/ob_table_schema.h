@@ -1952,6 +1952,7 @@ public:
   // it is equal to the size of column_ids array returned by get_store_column_ids
 
   virtual int get_store_column_count(int64_t &column_count, const bool full_col = false) const override;
+  int get_store_column_idx(const uint64_t column_id, int64_t &column_idx) const;
 
   // whether table should check merge progress
   int is_need_check_merge_progress(bool &need_check) const;
