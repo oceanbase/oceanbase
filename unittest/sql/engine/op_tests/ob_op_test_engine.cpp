@@ -3,12 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 // Allow access to private members of ObTenantBase for test setup
+#include "lib/ob_errno.h"
 #define private public
 #define protected public
 
 #define USING_LOG_PREFIX SQL
 
 #include "unittest/sql/engine/op_tests/ob_op_test_engine.h"
+#include <algorithm>  // for std::transform
+#include <cctype>     // for ::tolower
 #include "share/config/ob_server_config.h"  // for GCONF
 #include "observer/omt/ob_tenant_config_mgr.h"  // for ObTenantConfigGuard
 #include "sql/resolver/dml/ob_dml_stmt.h"
@@ -22,7 +25,9 @@
 #include "share/schema/ob_table_schema.h"
 #include "share/schema/ob_schema_struct.h"
 #include "common/object/ob_object.h"
+#include "share/vector/ob_vector_define.h"  // for VecValueTypeClass, get_vec_value_tc
 #include "lib/number/ob_number_v2.h"
+#include "lib/json_type/ob_json_base.h"  // for ObJsonBaseFactory, ObIJsonBase, ObJsonBuffer
 #include "lib/worker.h"  // for CompatMode, set_compat_mode
 #include "storage/tmp_file/ob_tmp_file_manager.h"  // for ObTenantTmpFileManager
 #include "sql/rewrite/ob_expand_aggregate_utils.h"  // for ObExpandAggregateUtils
@@ -32,6 +37,60 @@ namespace oceanbase
 {
 namespace sql
 {
+
+// ===== TestDefaultParameterConf Implementation =====
+
+TestDefaultParameterConf &TestDefaultParameterConf::instance()
+{
+  static thread_local TestDefaultParameterConf inst;
+  return inst;
+}
+
+int TestDefaultParameterConf::set(const std::string &name, const std::string &value)
+{
+  int ret = OB_SUCCESS;  // Required by LOG_WARN macro
+  FatalErrorChecker ret_checker(ret);
+  // Step 1: Get sys tenant config for validation
+  omt::ObTenantConfigGuard tc(TENANT_CONF(OB_SYS_TENANT_ID));
+  if (!tc.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Tenant config not available. Call set() after engine.init()");
+    return ret;
+  }
+
+  // Step 2: Validate name exists
+  ObConfigStringKey key(name.c_str());
+  ObConfigItem *item = nullptr;
+  ret = tc->container_.get_refactored(key, item);
+  if (OB_SUCCESS != ret || OB_ISNULL(item)) {
+    if (OB_SUCC(ret)) { ret = OB_ERR_UNEXPECTED; }
+    LOG_WARN("Unknown tenant config item", "name", name.c_str(), K(ret));
+    return ret;
+  }
+
+  // Step 3: Validate value by trial set then restore
+  // Save current value (value_ptr() is protected virtual, accessible via #define private public)
+  char saved_buf[OB_MAX_CONFIG_VALUE_LEN];
+  const char *cur_val = item->value_ptr();
+  STRNCPY(saved_buf, cur_val, sizeof(saved_buf));
+  saved_buf[sizeof(saved_buf) - 1] = '\0';
+
+  bool valid = item->set_value(value.c_str());
+  // Restore original value regardless of validation result
+  item->set_value(saved_buf);
+
+  if (!valid) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Invalid value for tenant config", "name", name.c_str(), "value", value.c_str());
+    return ret;
+  }
+
+  // Step 4: Validation passed, store override
+  overrides_[name] = value;
+  return ret;
+}
+
+// ===== OpTestEngine Implementation =====
 
 OpTestEngine::OpTestEngine()
   : inited_(false),
@@ -61,18 +120,6 @@ void OpTestEngine::init()
     LOG_INFO("Enabled SQL operator dump", K(enable_sql_operator_dump_));
   }
 
-  // Configure hash_area_size if dump is enabled
-  if (enable_sql_operator_dump_ && hash_area_size_ > 0) {
-    uint64_t tenant_id = ObTenantEnv::get_tenant_local()->id_;
-    if (tenant_id != OB_INVALID_TENANT_ID) {
-      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-      if (tenant_config.is_valid()) {
-        tenant_config->_hash_area_size = hash_area_size_;
-        LOG_INFO("Set hash_area_size for tenant", K(tenant_id), K(hash_area_size_));
-      }
-    }
-  }
-
   // Set compatibility mode in thread-local variable
   // This is required for lib::is_oracle_mode() / lib::is_mysql_mode() to work correctly
   if (sql_mode_ == SqlMode::ORACLE) {
@@ -87,6 +134,10 @@ void OpTestEngine::init()
   // This is required for implicit cast creation during expression type deduction
   session_info_.set_cur_exec_ctx(&exec_ctx_);
 
+  // Set my_session on exec_ctx so that ctx_.get_my_session() works for hash join
+  // and other operators that need session access during open()
+  exec_ctx_.set_my_session(&session_info_);
+
   // Force enable rich format for vector execution
   session_info_.set_force_rich_format(
       oceanbase::sql::ObBasicSessionInfo::ForceRichFormatStatus::FORCE_ON);
@@ -99,6 +150,7 @@ void OpTestEngine::init()
   // MTL_ID() returns get_tenant_local()->id(), which defaults to OB_INVALID_TENANT_ID.
   // We need to set the tenant ID on get_tenant_local() to match session's tenant ID.
   int ret = OB_SUCCESS;
+  FatalErrorChecker error_checker(ret);
 
   // Step 1: Set tenant ID on get_tenant_local() so MTL_ID() returns correct value
   // The get_tenant_local() returns a static thread-local ObTenantBase object with id_ = OB_INVALID_TENANT_ID
@@ -111,6 +163,30 @@ void OpTestEngine::init()
     LOG_INFO("Set tenant local id", "tenant_id", local_ctx->id_,
              "local_ctx_ptr", (void*)local_ctx,
              "tenant_ctx_ptr", (void*)tenant_ctx);
+  }
+
+  // Step 1.5: Add tenant config for the session's effective tenant ID.
+  // ObHashJoinVecOp::inner_open() calls TENANT_CONF(session->get_effective_tenant_id()).
+  // The test framework sets effective_tenant_id_ = 1 in init_schema(), but the
+  // constructor only adds config for sys_tenant_id_ (OB_SYS_TENANT_ID).
+  // We must ensure a config exists for tenant_id=1.
+  {
+    uint64_t effective_tenant_id = session_info_.get_effective_tenant_id();
+    if (effective_tenant_id != OB_INVALID_TENANT_ID) {
+      // Check if config already exists
+      omt::ObTenantConfigGuard tc(TENANT_CONF(effective_tenant_id));
+      if (!tc.is_valid()) {
+        int add_ret = OB_SUCCESS;
+        if (OB_FAIL(omt::ObTenantConfigMgr::get_instance().add_tenant_config(effective_tenant_id))) {
+          LOG_WARN("failed to add tenant config for effective tenant", K(add_ret), K(effective_tenant_id));
+        } else {
+          LOG_INFO("Added tenant config for effective tenant", K(effective_tenant_id));
+        }
+      }
+      // Apply TLS tenant config overrides (e.g., _hash_area_size, _enable_hash_join_processor)
+      // _enable_hash_join_processor default is "7" from parameter_seed.ipp, no need to hardcode
+      apply_tenant_config_overrides();
+    }
   }
 
   // Step 2: Create and set ObTenantTmpFileManager if not exists
@@ -149,6 +225,29 @@ void OpTestEngine::init()
   inited_ = true;
 }
 
+void OpTestEngine::apply_tenant_config_overrides()
+{
+  const auto &overrides = TestDefaultParameterConf::instance().overrides_;
+  if (overrides.empty()) return;
+
+  uint64_t effective_tenant_id = session_info_.get_effective_tenant_id();
+  if (effective_tenant_id == OB_INVALID_TENANT_ID) return;
+
+  omt::ObTenantConfigGuard tc(TENANT_CONF(effective_tenant_id));
+  if (!tc.is_valid()) return;
+
+  for (const auto &kv : overrides) {
+    ObConfigStringKey key(kv.first.c_str());
+    ObConfigItem *item = nullptr;
+    if (OB_SUCCESS == tc->container_.get_refactored(key, item)
+        && OB_NOT_NULL(item)) {
+      item->set_value(kv.second.c_str());
+      LOG_INFO("Applied tenant config override",
+               "name", kv.first.c_str(), "value", kv.second.c_str());
+    }
+  }
+}
+
 void OpTestEngine::destroy()
 {
   if (!inited_) {
@@ -179,6 +278,7 @@ void OpTestEngine::destroy()
 int OpTestEngine::register_table(const char *table_name, const char *col_defs)
 {
   int ret = OB_SUCCESS;
+  FatalErrorChecker error_checker(ret);
 
   if (OB_ISNULL(table_name) || OB_ISNULL(col_defs)) {
     ret = OB_INVALID_ARGUMENT;
@@ -292,43 +392,118 @@ int OpTestEngine::register_table(const char *table_name, const char *col_defs)
     column_schema.set_charset_type(CHARSET_UTF8MB4);
     column_schema.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
 
-    // Parse type
-    if (col_type.find("int") != std::string::npos || col_type.find("INT") != std::string::npos) {
-      column_schema.set_data_type(ObIntType);
-      column_schema.set_nullable(true);
-    } else if (col_type.find("varchar") != std::string::npos || col_type.find("VARCHAR") != std::string::npos) {
-      column_schema.set_data_type(ObVarcharType);
-      column_schema.set_nullable(true);
-      // Extract length if specified
-      size_t paren_pos = col_type.find('(');
-      if (paren_pos != std::string::npos) {
-        size_t end_paren = col_type.find(')', paren_pos);
-        if (end_paren != std::string::npos) {
-          int len = std::stoi(col_type.substr(paren_pos + 1, end_paren - paren_pos - 1));
-          column_schema.set_data_length(len);
+    // Parse type: lowercase for matching, keep original for parameter extraction
+    std::string col_type_lower = col_type;
+    std::transform(col_type_lower.begin(), col_type_lower.end(), col_type_lower.begin(), ::tolower);
+
+    // Check for unsigned suffix
+    bool is_unsigned = false;
+    {
+      const std::string unsigned_kw = "unsigned";
+      size_t us_pos = col_type_lower.rfind(unsigned_kw);
+      if (us_pos != std::string::npos) {
+        // Ensure "unsigned" is a trailing token (not part of another word)
+        size_t after_us = us_pos + unsigned_kw.size();
+        if (after_us == col_type_lower.size()) {
+          is_unsigned = true;
+          col_type_lower = col_type_lower.substr(0, us_pos);
+          // Trim trailing whitespace
+          while (!col_type_lower.empty() && isspace(col_type_lower.back())) col_type_lower.pop_back();
+          // Also trim from original col_type for parameter extraction
+          col_type = col_type.substr(0, us_pos);
+          while (!col_type.empty() && isspace(col_type.back())) col_type.pop_back();
         }
       }
-    } else if (col_type.find("number") != std::string::npos || col_type.find("NUMBER") != std::string::npos) {
-      // Parse number(P, S) if present
+    }
+
+    // Helper: extract parenthesized args from original col_type
+    // Returns the content inside the first pair of parentheses, or empty string
+    auto extract_paren_args = [&col_type]() -> std::string {
       size_t paren_pos = col_type.find('(');
-      if (paren_pos != std::string::npos) {
-        size_t end_paren = col_type.find(')', paren_pos);
-        if (end_paren != std::string::npos) {
-          std::string args = col_type.substr(paren_pos + 1, end_paren - paren_pos - 1);
-          size_t comma_pos = args.find(',');
-          if (comma_pos != std::string::npos) {
-            int precision = std::stoi(args.substr(0, comma_pos));
-            int scale = std::stoi(args.substr(comma_pos + 1));
-            column_schema.set_data_type(ObDecimalIntType);
-            column_schema.set_data_precision(precision);
-            column_schema.set_data_scale(scale);
-          } else {
-            // number(P) without scale
-            int precision = std::stoi(args);
-            column_schema.set_data_type(ObDecimalIntType);
-            column_schema.set_data_precision(precision);
-            column_schema.set_data_scale(0);
-          }
+      if (paren_pos == std::string::npos) return "";
+      size_t end_paren = col_type.find(')', paren_pos);
+      if (end_paren == std::string::npos) return "";
+      return col_type.substr(paren_pos + 1, end_paren - paren_pos - 1);
+    };
+
+    // Helper: extract first integer from parenthesized args
+    auto extract_paren_int = [&col_type]() -> int {
+      size_t paren_pos = col_type.find('(');
+      if (paren_pos == std::string::npos) return -1;
+      size_t end_paren = col_type.find(')', paren_pos);
+      if (end_paren == std::string::npos) return -1;
+      try {
+        return std::stoi(col_type.substr(paren_pos + 1, end_paren - paren_pos - 1));
+      } catch (...) { return -1; }
+    };
+
+    // Match types from most specific to least specific
+    // Integer types (ordered by length/specificity to avoid substring mis-matches)
+    if (col_type_lower.find("mediumint") != std::string::npos) {
+      column_schema.set_data_type(is_unsigned ? ObUMediumIntType : ObMediumIntType);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("smallint") != std::string::npos) {
+      column_schema.set_data_type(is_unsigned ? ObUSmallIntType : ObSmallIntType);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("tinyint") != std::string::npos) {
+      column_schema.set_data_type(is_unsigned ? ObUTinyIntType : ObTinyIntType);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("int32") != std::string::npos) {
+      column_schema.set_data_type(is_unsigned ? ObUInt32Type : ObInt32Type);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("bigint") != std::string::npos) {
+      column_schema.set_data_type(is_unsigned ? ObUInt64Type : ObIntType);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("int") != std::string::npos) {
+      column_schema.set_data_type(is_unsigned ? ObUInt64Type : ObIntType);
+      column_schema.set_nullable(true);
+    // Float/Double types
+    } else if (col_type_lower.find("ufloat") != std::string::npos) {
+      column_schema.set_data_type(ObUFloatType);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("udouble") != std::string::npos) {
+      column_schema.set_data_type(ObUDoubleType);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("float") != std::string::npos) {
+      column_schema.set_data_type(is_unsigned ? ObUFloatType : ObFloatType);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("double") != std::string::npos) {
+      column_schema.set_data_type(is_unsigned ? ObUDoubleType : ObDoubleType);
+      // Parse double(M, S) if present
+      std::string args = extract_paren_args();
+      if (!args.empty()) {
+        size_t comma_pos = args.find(',');
+        if (comma_pos != std::string::npos) {
+          column_schema.set_data_length(std::stoi(args.substr(0, comma_pos)));
+          column_schema.set_data_scale(std::stoi(args.substr(comma_pos + 1)));
+        } else {
+          column_schema.set_data_length(std::stoi(args));
+        }
+      }
+      column_schema.set_nullable(true);
+    // Number types
+    } else if (col_type_lower.find("number_float") != std::string::npos) {
+      column_schema.set_data_type(ObNumberFloatType);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("unumber") != std::string::npos) {
+      column_schema.set_data_type(ObUNumberType);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("number") != std::string::npos) {
+      // Parse number(P, S) if present
+      std::string args = extract_paren_args();
+      if (!args.empty()) {
+        size_t comma_pos = args.find(',');
+        if (comma_pos != std::string::npos) {
+          int precision = std::stoi(args.substr(0, comma_pos));
+          int scale = std::stoi(args.substr(comma_pos + 1));
+          column_schema.set_data_type(ObDecimalIntType);
+          column_schema.set_data_precision(precision);
+          column_schema.set_data_scale(scale);
+        } else {
+          int precision = std::stoi(args);
+          column_schema.set_data_type(ObDecimalIntType);
+          column_schema.set_data_precision(precision);
+          column_schema.set_data_scale(0);
         }
       } else {
         // number without precision/scale
@@ -339,64 +514,189 @@ int OpTestEngine::register_table(const char *table_name, const char *col_defs)
           column_schema.set_data_precision(10);
           column_schema.set_data_scale(0);
         } else {
-          column_schema.set_data_type(ObNumberType);
+          column_schema.set_data_type(is_unsigned ? ObUNumberType : ObNumberType);
         }
       }
       column_schema.set_nullable(true);
-    } else if (col_type.find("decimal") != std::string::npos || col_type.find("DECIMAL") != std::string::npos) {
+    } else if (col_type_lower.find("decimal") != std::string::npos) {
       // Parse decimal(P, S) if present
-      size_t paren_pos = col_type.find('(');
-      if (paren_pos != std::string::npos) {
-        size_t end_paren = col_type.find(')', paren_pos);
-        if (end_paren != std::string::npos) {
-          std::string args = col_type.substr(paren_pos + 1, end_paren - paren_pos - 1);
-          size_t comma_pos = args.find(',');
-          if (comma_pos != std::string::npos) {
-            int precision = std::stoi(args.substr(0, comma_pos));
-            int scale = std::stoi(args.substr(comma_pos + 1));
-            column_schema.set_data_type(ObDecimalIntType);
-            column_schema.set_data_precision(precision);
-            column_schema.set_data_scale(scale);
-          } else {
-            // decimal(P) without scale
-            int precision = std::stoi(args);
-            column_schema.set_data_type(ObDecimalIntType);
-            column_schema.set_data_precision(precision);
-            column_schema.set_data_scale(0);
-          }
+      std::string args = extract_paren_args();
+      if (!args.empty()) {
+        size_t comma_pos = args.find(',');
+        if (comma_pos != std::string::npos) {
+          int precision = std::stoi(args.substr(0, comma_pos));
+          int scale = std::stoi(args.substr(comma_pos + 1));
+          column_schema.set_data_type(ObDecimalIntType);
+          column_schema.set_data_precision(precision);
+          column_schema.set_data_scale(scale);
+        } else {
+          int precision = std::stoi(args);
+          column_schema.set_data_type(ObDecimalIntType);
+          column_schema.set_data_precision(precision);
+          column_schema.set_data_scale(0);
         }
       } else {
         // decimal without precision/scale
         column_schema.set_data_type(ObDecimalIntType);
       }
       column_schema.set_nullable(true);
-    } else if (col_type.find("double") != std::string::npos || col_type.find("DOUBLE") != std::string::npos) {
-      column_schema.set_data_type(ObDoubleType);
-      // Parse double(M, S) if present
-      size_t paren_pos = col_type.find('(');
-      if (paren_pos != std::string::npos) {
-        size_t end_paren = col_type.find(')', paren_pos);
-        if (end_paren != std::string::npos) {
-          std::string args = col_type.substr(paren_pos + 1, end_paren - paren_pos - 1);
-          size_t comma_pos = args.find(',');
-          if (comma_pos != std::string::npos) {
-            int m = std::stoi(args.substr(0, comma_pos));
-            int s = std::stoi(args.substr(comma_pos + 1));
-            column_schema.set_data_length(m);
-            column_schema.set_data_scale(s);
-          } else {
-            // double(M) without scale
-            column_schema.set_data_length(std::stoi(args));
-          }
-        }
-      }
+    // Timestamp types (ordered by specificity)
+    } else if (col_type_lower.find("timestamp_tz") != std::string::npos) {
+      column_schema.set_data_type(ObTimestampTZType);
+      column_schema.set_data_scale(9);  // nanosecond precision for Oracle timestamp
       column_schema.set_nullable(true);
-    } else if (col_type.find("float") != std::string::npos || col_type.find("FLOAT") != std::string::npos) {
-      column_schema.set_data_type(ObFloatType);
+    } else if (col_type_lower.find("timestamp_ltz") != std::string::npos) {
+      column_schema.set_data_type(ObTimestampLTZType);
+      column_schema.set_data_scale(9);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("timestamp_nano") != std::string::npos) {
+      column_schema.set_data_type(ObTimestampNanoType);
+      column_schema.set_data_scale(9);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("timestamp") != std::string::npos) {
+      column_schema.set_data_type(ObTimestampType);
+      column_schema.set_data_scale(6);  // microsecond precision
+      column_schema.set_nullable(true);
+    // Datetime/Date/Time/Year types
+    } else if (col_type_lower.find("mysql_datetime") != std::string::npos) {
+      column_schema.set_data_type(ObMySQLDateTimeType);
+      column_schema.set_data_scale(6);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("mysql_date") != std::string::npos) {
+      column_schema.set_data_type(ObMySQLDateType);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("datetime") != std::string::npos) {
+      column_schema.set_data_type(ObDateTimeType);
+      column_schema.set_data_scale(6);  // microsecond precision
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("date") != std::string::npos) {
+      column_schema.set_data_type(ObDateType);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("time") != std::string::npos) {
+      column_schema.set_data_type(ObTimeType);
+      column_schema.set_data_scale(6);  // microsecond precision
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("year") != std::string::npos) {
+      column_schema.set_data_type(ObYearType);
+      column_schema.set_nullable(true);
+    // Blob types (must come before text types, and more specific before less specific)
+    } else if (col_type_lower.find("longblob") != std::string::npos) {
+      column_schema.set_data_type(ObLongTextType);
+      column_schema.set_collation_type(CS_TYPE_BINARY);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("mediumblob") != std::string::npos) {
+      column_schema.set_data_type(ObMediumTextType);
+      column_schema.set_collation_type(CS_TYPE_BINARY);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("tinyblob") != std::string::npos) {
+      column_schema.set_data_type(ObTinyTextType);
+      column_schema.set_collation_type(CS_TYPE_BINARY);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("blob") != std::string::npos) {
+      column_schema.set_data_type(ObTextType);
+      int len = extract_paren_int();
+      column_schema.set_data_length(len > 0 ? len : 65535);
+      column_schema.set_collation_type(CS_TYPE_BINARY);
+      column_schema.set_nullable(true);
+    // Text types (ordered by specificity)
+    } else if (col_type_lower.find("longtext") != std::string::npos) {
+      column_schema.set_data_type(ObLongTextType);
+      column_schema.set_data_length(65535);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("mediumtext") != std::string::npos) {
+      column_schema.set_data_type(ObMediumTextType);
+      column_schema.set_data_length(65535);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("tinytext") != std::string::npos) {
+      column_schema.set_data_type(ObTinyTextType);
+      int len = extract_paren_int();
+      column_schema.set_data_length(len > 0 ? len : 65535);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("text") != std::string::npos) {
+      column_schema.set_data_type(ObTextType);
+      int len = extract_paren_int();
+      column_schema.set_data_length(len > 0 ? len : 65535);
+      column_schema.set_nullable(true);
+    // Character string types (ordered by specificity)
+    } else if (col_type_lower.find("nvarchar2") != std::string::npos) {
+      column_schema.set_data_type(ObNVarchar2Type);
+      int len = extract_paren_int();
+      if (len > 0) column_schema.set_data_length(len);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("nchar") != std::string::npos) {
+      column_schema.set_data_type(ObNCharType);
+      int len = extract_paren_int();
+      if (len > 0) column_schema.set_data_length(len);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("varchar") != std::string::npos) {
+      column_schema.set_data_type(ObVarcharType);
+      int len = extract_paren_int();
+      if (len > 0) column_schema.set_data_length(len);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("char") != std::string::npos) {
+      column_schema.set_data_type(ObCharType);
+      int len = extract_paren_int();
+      if (len > 0) column_schema.set_data_length(len);
+      column_schema.set_nullable(true);
+    // Special types
+    } else if (col_type_lower.find("hex_string") != std::string::npos) {
+      column_schema.set_data_type(ObHexStringType);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("raw") != std::string::npos) {
+      column_schema.set_data_type(ObRawType);
+      int len = extract_paren_int();
+      if (len > 0) column_schema.set_data_length(len);
+      column_schema.set_nullable(true);
+    // Interval types
+    } else if (col_type_lower.find("interval_ym") != std::string::npos) {
+      column_schema.set_data_type(ObIntervalYMType);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("interval_ds") != std::string::npos) {
+      column_schema.set_data_type(ObIntervalDSType);
+      column_schema.set_nullable(true);
+    // JSON/Geometry/RoaringBitmap types (before bit/set to avoid substring matches)
+    } else if (col_type_lower.find("roaringbitmap") != std::string::npos) {
+      column_schema.set_data_type(ObRoaringBitmapType);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("json") != std::string::npos) {
+      column_schema.set_data_type(ObJsonType);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("geometry") != std::string::npos) {
+      column_schema.set_data_type(ObGeometryType);
+      column_schema.set_nullable(true);
+    // Bit type: parse bit(N), default N=1 (after roaringbitmap to avoid substring match)
+    } else if (col_type_lower.find("bit") != std::string::npos) {
+      column_schema.set_data_type(ObBitType);
+      int len = extract_paren_int();
+      column_schema.set_data_length(len > 0 ? len : 1);
+      column_schema.set_nullable(true);
+    // Enum/Set types
+    } else if (col_type_lower.find("enum") != std::string::npos) {
+      column_schema.set_data_type(ObEnumType);
+      column_schema.set_data_length(1);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("set") != std::string::npos) {
+      column_schema.set_data_type(ObSetType);
+      column_schema.set_data_length(1);
+      column_schema.set_nullable(true);
+    // Lob/URowID/UDT/Collection types
+    } else if (col_type_lower.find("lob") != std::string::npos) {
+      column_schema.set_data_type(ObLobType);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("urowid") != std::string::npos) {
+      column_schema.set_data_type(ObURowIDType);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("udt") != std::string::npos) {
+      column_schema.set_data_type(ObUserDefinedSQLType);
+      column_schema.set_nullable(true);
+    } else if (col_type_lower.find("collection") != std::string::npos) {
+      column_schema.set_data_type(ObCollectionSQLType);
       column_schema.set_nullable(true);
     } else {
       // Default to varchar
       column_schema.set_data_type(ObVarcharType);
+      int len = extract_paren_int();
+      if (len > 0) column_schema.set_data_length(len);
       column_schema.set_nullable(true);
     }
 
@@ -447,6 +747,7 @@ int OpTestEngine::register_table(const char *table_name, const char *col_defs)
 int OpTestEngine::resolve_sql(const std::string &sql, ObDMLStmt *&stmt, int expect_error)
 {
   int ret = OB_SUCCESS;
+  FatalErrorChecker error_checker(ret);
   stmt = nullptr;
 
   // Check stmt_factory_ and query_ctx
@@ -492,6 +793,7 @@ int OpTestEngine::collect_raw_exprs(ObDMLStmt &stmt,
                                     ObIArray<ObRawExpr *> &exprs)
 {
   int ret = OB_SUCCESS;
+  FatalErrorChecker error_checker(ret);
 
   // Try to cast to ObSelectStmt for select items
   ObSelectStmt *select_stmt = nullptr;
@@ -617,6 +919,7 @@ int OpTestEngine::collect_raw_exprs(ObDMLStmt &stmt,
 int OpTestEngine::generate_exprs(ObDMLStmt &stmt)
 {
   int ret = OB_SUCCESS;
+  FatalErrorChecker error_checker(ret);
 
   // CRITICAL: Clear expression frame info from previous runs
   // The rt_exprs_ array is reused across runs, and prepare_allocate() only expands it.
@@ -737,6 +1040,12 @@ int OpTestEngine::generate_exprs(ObDMLStmt &stmt)
   }
   exec_ctx_.set_physical_plan_ctx(phy_plan_ctx_);
   exec_ctx_.reference_my_plan(&phy_plan_);
+  // Set phy_plan on phy_plan_ctx so operators (e.g., ObHashJoinVecOp::init_join_table_ctx)
+  // can access it via get_phy_plan()
+  phy_plan_ctx_->set_phy_plan(&phy_plan_);
+  // Set min_cluster_version so operators can query cluster capabilities
+  // (e.g., ObHashJoinVecOp::init_join_table_ctx checks >= CLUSTER_VERSION_4_3_5_0)
+  phy_plan_.set_min_cluster_version(CLUSTER_CURRENT_VERSION);
 
   return ret;
 }
@@ -797,6 +1106,31 @@ MockDataSourceOp *OpTestEngine::create_mock_data_source(const ExprFixedArray &ou
   }
   return create_mock_data_source_op(*spec);
 }
+
+namespace {
+
+int json_bin_to_text(common::ObIAllocator &allocator, const char *bin_data, int32_t bin_len,
+                     char *out_buf, int64_t out_buf_size, int32_t &out_len)
+{
+  int ret = OB_SUCCESS;
+  common::ObString json_bin(bin_len, bin_data);
+  common::ObIJsonBase *j_base = nullptr;
+  if (OB_FAIL(common::ObJsonBaseFactory::get_json_base(
+        &allocator, json_bin, common::ObJsonInType::JSON_BIN,
+        common::ObJsonInType::JSON_TREE, j_base))) {
+    return ret;
+  }
+  common::ObJsonBuffer j_buf(&allocator);
+  if (OB_FAIL(j_base->print(j_buf, true))) {
+    return ret;
+  }
+  out_len = static_cast<int32_t>(std::min(j_buf.length(), static_cast<uint64_t>(out_buf_size - 1)));
+  MEMCPY(out_buf, j_buf.ptr(), out_len);
+  out_buf[out_len] = '\0';
+  return ret;
+}
+
+}  // anonymous namespace
 
 OpTestResult OpTestEngine::collect_batch_results(ObOperator *op, const ExprFixedArray *output_exprs)
 {
@@ -970,38 +1304,95 @@ OpTestResult OpTestEngine::collect_batch_results(ObOperator *op, const ExprFixed
             // For fixed-length types, data is in res_buf
             char *data = expr->get_res_buf(eval_ctx);
             const ObObjType obj_type = expr->datum_meta_.get_type();
-            switch (obj_type) {
-            case ObIntType:
-            case ObInt32Type: {
+            const VecValueTypeClass vec_tc = get_vec_value_tc(obj_type,
+                expr->datum_meta_.scale_, expr->datum_meta_.precision_);
+
+            switch (vec_tc) {
+            case VEC_TC_INTEGER: {
               int64_t val = reinterpret_cast<const int64_t *>(data)[row];
               snprintf(tmp_buf, sizeof(tmp_buf), "%ld", val);
               payload = tmp_buf;
               length = strlen(tmp_buf);
               break;
             }
-            case ObUInt64Type:
-            case ObUInt32Type: {
+            case VEC_TC_UINTEGER:
+            case VEC_TC_BIT:
+            case VEC_TC_ENUM_SET: {
               uint64_t val = reinterpret_cast<const uint64_t *>(data)[row];
               snprintf(tmp_buf, sizeof(tmp_buf), "%lu", val);
               payload = tmp_buf;
               length = strlen(tmp_buf);
               break;
             }
-            case ObDoubleType: {
-              double val = reinterpret_cast<const double *>(data)[row];
-              snprintf(tmp_buf, sizeof(tmp_buf), "%g", val);
-              payload = tmp_buf;
-              length = strlen(tmp_buf);
-              break;
-            }
-            case ObFloatType: {
+            case VEC_TC_FLOAT: {
               float val = reinterpret_cast<const float *>(data)[row];
               snprintf(tmp_buf, sizeof(tmp_buf), "%g", val);
               payload = tmp_buf;
               length = strlen(tmp_buf);
               break;
             }
-            case ObDecimalIntType: {
+            case VEC_TC_DOUBLE:
+            case VEC_TC_FIXED_DOUBLE: {
+              double val = reinterpret_cast<const double *>(data)[row];
+              snprintf(tmp_buf, sizeof(tmp_buf), "%g", val);
+              payload = tmp_buf;
+              length = strlen(tmp_buf);
+              break;
+            }
+            case VEC_TC_DATETIME:
+            case VEC_TC_TIME:
+            case VEC_TC_INTERVAL_YM:
+            case VEC_TC_MYSQL_DATETIME: {
+              int64_t val = reinterpret_cast<const int64_t *>(data)[row];
+              snprintf(tmp_buf, sizeof(tmp_buf), "%ld", val);
+              payload = tmp_buf;
+              length = strlen(tmp_buf);
+              break;
+            }
+            case VEC_TC_DATE:
+            case VEC_TC_MYSQL_DATE: {
+              int32_t val = reinterpret_cast<const int32_t *>(data)[row];
+              snprintf(tmp_buf, sizeof(tmp_buf), "%d", val);
+              payload = tmp_buf;
+              length = strlen(tmp_buf);
+              break;
+            }
+            case VEC_TC_YEAR: {
+              uint8_t val = reinterpret_cast<const uint8_t *>(data)[row];
+              snprintf(tmp_buf, sizeof(tmp_buf), "%u", val);
+              payload = tmp_buf;
+              length = strlen(tmp_buf);
+              break;
+            }
+            case VEC_TC_TIMESTAMP_TZ: {
+              const ObOTimestampData *ts = reinterpret_cast<const ObOTimestampData *>(
+                  data + row * sizeof(ObOTimestampData));
+              snprintf(tmp_buf, sizeof(tmp_buf), "%ld", ts->time_us_);
+              payload = tmp_buf;
+              length = strlen(tmp_buf);
+              break;
+            }
+            case VEC_TC_TIMESTAMP_TINY: {
+              const ObOTimestampTinyData *ts = reinterpret_cast<const ObOTimestampTinyData *>(
+                  data + row * sizeof(ObOTimestampTinyData));
+              snprintf(tmp_buf, sizeof(tmp_buf), "%ld", ts->time_us_);
+              payload = tmp_buf;
+              length = strlen(tmp_buf);
+              break;
+            }
+            case VEC_TC_INTERVAL_DS: {
+              const ObIntervalDSValue *ds = reinterpret_cast<const ObIntervalDSValue *>(
+                  data + row * sizeof(ObIntervalDSValue));
+              snprintf(tmp_buf, sizeof(tmp_buf), "%ld", ds->nsecond_);
+              payload = tmp_buf;
+              length = strlen(tmp_buf);
+              break;
+            }
+            case VEC_TC_DEC_INT32:
+            case VEC_TC_DEC_INT64:
+            case VEC_TC_DEC_INT128:
+            case VEC_TC_DEC_INT256:
+            case VEC_TC_DEC_INT512: {
               // For decimal int, get precision to calculate int_bytes
               const int16_t precision = expr->datum_meta_.precision_;
               const int32_t int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(precision);
@@ -1016,6 +1407,13 @@ OpTestResult OpTestEngine::collect_batch_results(ObOperator *op, const ExprFixed
                 payload = "?";
                 length = 1;
               }
+              break;
+            }
+            case VEC_TC_UNKNOWN: {
+              int64_t val = reinterpret_cast<const int64_t *>(data)[row];
+              snprintf(tmp_buf, sizeof(tmp_buf), "%ld", val);
+              payload = tmp_buf;
+              length = strlen(tmp_buf);
               break;
             }
             default:
@@ -1033,8 +1431,11 @@ OpTestResult OpTestEngine::collect_batch_results(ObOperator *op, const ExprFixed
             char *cont_data = expr->get_continuous_vector_data(eval_ctx);
             uint32_t *offsets = expr->get_continuous_vector_offsets(eval_ctx);
             const ObObjType obj_type = expr->datum_meta_.get_type();
+            const VecValueTypeClass vec_tc = get_vec_value_tc(obj_type,
+                expr->datum_meta_.scale_, expr->datum_meta_.precision_);
 
-            if (obj_type == ObNumberType) {
+            switch (vec_tc) {
+            case VEC_TC_NUMBER: {
               const number::ObCompactNumber *cnum =
                 reinterpret_cast<const number::ObCompactNumber *>(cont_data + offsets[row]);
               number::ObNumber num(*cnum);
@@ -1048,17 +1449,34 @@ OpTestResult OpTestEngine::collect_batch_results(ObOperator *op, const ExprFixed
                 payload = "?";
                 length = 1;
               }
-            } else {
+              break;
+            }
+            default:
               payload = cont_data + offsets[row];
               length = offsets[row + 1] - offsets[row];
+              break;
             }
           } else if (fmt == VEC_DISCRETE) {
             // For discrete format, ptrs and lens are in separate arrays
             char **ptrs = expr->get_discrete_vector_ptrs(eval_ctx);
             int32_t *lens = expr->get_discrete_vector_lens(eval_ctx);
             const ObObjType obj_type = expr->datum_meta_.get_type();
-            // For number type, need to decode ObCompactNumber to string
-            if (obj_type == ObNumberType) {
+            const VecValueTypeClass vec_tc = get_vec_value_tc(obj_type,
+                expr->datum_meta_.scale_, expr->datum_meta_.precision_);
+
+            // Helper lambda to strip ObLobCommon header if present
+            auto strip_lob_header = [&](const char *&payload_ref, int32_t &length_ref) {
+              if (expr->obj_meta_.has_lob_header() && length_ref > 0) {
+                const ObLobCommon *lob = reinterpret_cast<const ObLobCommon *>(payload_ref);
+                if (lob->in_row_) {
+                  payload_ref = lob->get_inrow_data_ptr();
+                  length_ref = static_cast<int32_t>(lob->get_byte_size(length_ref));
+                }
+              }
+            };
+
+            switch (vec_tc) {
+            case VEC_TC_NUMBER: {
               const number::ObCompactNumber *cnum =
                 reinterpret_cast<const number::ObCompactNumber *>(ptrs[row]);
               number::ObNumber num(*cnum);
@@ -1072,127 +1490,110 @@ OpTestResult OpTestEngine::collect_batch_results(ObOperator *op, const ExprFixed
                 payload = "?";
                 length = 1;
               }
-            } else {
+              break;
+            }
+            case VEC_TC_STRING:
+            case VEC_TC_RAW:
+            case VEC_TC_ROWID:
+            case VEC_TC_ENUM_SET_INNER: {
               payload = ptrs[row];
               length = lens[row];
+              break;
+            }
+            case VEC_TC_LOB:
+            case VEC_TC_UDT:
+            case VEC_TC_COLLECTION: {
+              payload = ptrs[row];
+              length = lens[row];
+              strip_lob_header(payload, length);
+              break;
+            }
+            case VEC_TC_JSON: {
+              payload = ptrs[row];
+              length = lens[row];
+              strip_lob_header(payload, length);
+              if (OB_SUCC(json_bin_to_text(allocator_, payload, length,
+                                           tmp_buf, sizeof(tmp_buf), length))) {
+                payload = tmp_buf;
+              }
+              break;
+            }
+            case VEC_TC_GEO:
+            case VEC_TC_ROARINGBITMAP: {
+              payload = ptrs[row];
+              length = lens[row];
+              strip_lob_header(payload, length);
+              break;
+            }
+            default: {
+              payload = ptrs[row];
+              length = lens[row];
+              break;
+            }
             }
           } else if (fmt == VEC_UNIFORM) {
             // For uniform format, use ObDatum
             ObDatum *datums = expr->locate_batch_datums(eval_ctx);
             const ObObjType obj_type = expr->datum_meta_.get_type();
-            // For numeric types, need to convert binary to string
-            switch (obj_type) {
-            case ObIntType:
-            case ObInt32Type: {
+            const VecValueTypeClass vec_tc = get_vec_value_tc(obj_type,
+                expr->datum_meta_.scale_, expr->datum_meta_.precision_);
+
+            switch (vec_tc) {
+            case VEC_TC_INTEGER: {
               int64_t val = datums[row].get_int();
               snprintf(tmp_buf, sizeof(tmp_buf), "%ld", val);
               payload = tmp_buf;
               length = strlen(tmp_buf);
               break;
             }
-            case ObUInt64Type:
-            case ObUInt32Type: {
+            case VEC_TC_UINTEGER:
+            case VEC_TC_BIT:
+            case VEC_TC_ENUM_SET: {
               uint64_t val = datums[row].get_uint();
               snprintf(tmp_buf, sizeof(tmp_buf), "%lu", val);
               payload = tmp_buf;
               length = strlen(tmp_buf);
               break;
             }
-            case ObDoubleType: {
-              double val = datums[row].get_double();
-              snprintf(tmp_buf, sizeof(tmp_buf), "%g", val);
-              payload = tmp_buf;
-              length = strlen(tmp_buf);
-              break;
-            }
-            case ObFloatType: {
+            case VEC_TC_FLOAT: {
               float val = datums[row].get_float();
               snprintf(tmp_buf, sizeof(tmp_buf), "%g", val);
               payload = tmp_buf;
               length = strlen(tmp_buf);
               break;
             }
-            case ObNumberType: {
-              // For number type, datum.ptr_ points to ObCompactNumber
-              const number::ObCompactNumber *cnum =
-                reinterpret_cast<const number::ObCompactNumber *>(datums[row].ptr_);
-              // Use ObNumber constructor that takes ObCompactNumber
-              number::ObNumber num(*cnum);
-              // Use format() method to get actual number string, not debug format
-              // format() writes to buffer and returns success/failure
-              int64_t pos = 0;
-              int fmt_ret = num.format(tmp_buf, sizeof(tmp_buf), pos, -1);  // -1 = auto scale
-              if (OB_SUCCESS == fmt_ret && pos > 0) {
-                tmp_buf[pos] = '\0';
-                payload = tmp_buf;
-                length = pos;
-              } else {
-                payload = "?";
-                length = 1;
-              }
+            case VEC_TC_DOUBLE:
+            case VEC_TC_FIXED_DOUBLE: {
+              double val = datums[row].get_double();
+              snprintf(tmp_buf, sizeof(tmp_buf), "%g", val);
+              payload = tmp_buf;
+              length = strlen(tmp_buf);
               break;
             }
-            case ObDecimalIntType: {
-              // For decimal int, datum.ptr_ points to the decimal int data
-              const int16_t precision = expr->datum_meta_.precision_;
-              const int32_t int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(precision);
-              const ObDecimalInt *decint = reinterpret_cast<const ObDecimalInt *>(datums[row].ptr_);
-              int64_t pos = 0;
-              char dec_buf[128];
-              if (OB_SUCCESS == wide::to_string(decint, int_bytes, expr->datum_meta_.scale_,
-                                                 dec_buf, sizeof(dec_buf), pos)) {
-                payload = dec_buf;
-                length = pos;
-              } else {
-                payload = "?";
-                length = 1;
-              }
-              break;
-            }
-            default:
-              // For string types, use the raw pointer
-              payload = datums[row].ptr_;
-              length = datums[row].len_;
-              break;
-            }
-          } else {
-            // VEC_INVALID or flat format - use ObDatum
-            // When enable_rich_format() is false, expressions use flat format (ObDatum)
-            // The format will be VEC_INVALID in this case
-            ObDatum *datums = expr->locate_batch_datums(eval_ctx);
-            const ObObjType obj_type = expr->datum_meta_.get_type();
-            switch (obj_type) {
-            case ObIntType:
-            case ObInt32Type: {
+            case VEC_TC_DATETIME:
+            case VEC_TC_TIME:
+            case VEC_TC_INTERVAL_YM:
+            case VEC_TC_MYSQL_DATETIME:
+            case VEC_TC_TIMESTAMP_TZ:
+            case VEC_TC_TIMESTAMP_TINY:
+            case VEC_TC_INTERVAL_DS:
+            case VEC_TC_YEAR:
+            case VEC_TC_UNKNOWN: {
               int64_t val = datums[row].get_int();
               snprintf(tmp_buf, sizeof(tmp_buf), "%ld", val);
               payload = tmp_buf;
               length = strlen(tmp_buf);
               break;
             }
-            case ObUInt64Type:
-            case ObUInt32Type: {
-              uint64_t val = datums[row].get_uint();
-              snprintf(tmp_buf, sizeof(tmp_buf), "%lu", val);
+            case VEC_TC_DATE:
+            case VEC_TC_MYSQL_DATE: {
+              int32_t val = datums[row].get_int();
+              snprintf(tmp_buf, sizeof(tmp_buf), "%d", val);
               payload = tmp_buf;
               length = strlen(tmp_buf);
               break;
             }
-            case ObDoubleType: {
-              double val = datums[row].get_double();
-              snprintf(tmp_buf, sizeof(tmp_buf), "%g", val);
-              payload = tmp_buf;
-              length = strlen(tmp_buf);
-              break;
-            }
-            case ObFloatType: {
-              float val = datums[row].get_float();
-              snprintf(tmp_buf, sizeof(tmp_buf), "%g", val);
-              payload = tmp_buf;
-              length = strlen(tmp_buf);
-              break;
-            }
-            case ObNumberType: {
+            case VEC_TC_NUMBER: {
               // For number type, datum.ptr_ points to ObCompactNumber
               const number::ObCompactNumber *cnum =
                 reinterpret_cast<const number::ObCompactNumber *>(datums[row].ptr_);
@@ -1209,7 +1610,11 @@ OpTestResult OpTestEngine::collect_batch_results(ObOperator *op, const ExprFixed
               }
               break;
             }
-            case ObDecimalIntType: {
+            case VEC_TC_DEC_INT32:
+            case VEC_TC_DEC_INT64:
+            case VEC_TC_DEC_INT128:
+            case VEC_TC_DEC_INT256:
+            case VEC_TC_DEC_INT512: {
               // For decimal int, datum.ptr_ points to the decimal int data
               const int16_t precision = expr->datum_meta_.precision_;
               const int32_t int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(precision);
@@ -1226,13 +1631,55 @@ OpTestResult OpTestEngine::collect_batch_results(ObOperator *op, const ExprFixed
               }
               break;
             }
-            case ObVarcharType:
-            case ObTextType:
-            case ObLongTextType:
-            case ObCharType: {
-              // For string types, use the raw pointer
+            case VEC_TC_STRING:
+            case VEC_TC_RAW:
+            case VEC_TC_ROWID:
+            case VEC_TC_ENUM_SET_INNER: {
               payload = datums[row].ptr_;
               length = datums[row].len_;
+              break;
+            }
+            case VEC_TC_LOB:
+            case VEC_TC_UDT:
+            case VEC_TC_COLLECTION: {
+              payload = datums[row].ptr_;
+              length = datums[row].len_;
+              if (expr->obj_meta_.has_lob_header() && length > 0) {
+                const ObLobCommon *lob = reinterpret_cast<const ObLobCommon *>(payload);
+                if (lob->in_row_) {
+                  payload = lob->get_inrow_data_ptr();
+                  length = static_cast<int32_t>(lob->get_byte_size(length));
+                }
+              }
+              break;
+            }
+            case VEC_TC_JSON: {
+              payload = datums[row].ptr_;
+              length = datums[row].len_;
+              if (expr->obj_meta_.has_lob_header() && length > 0) {
+                const ObLobCommon *lob = reinterpret_cast<const ObLobCommon *>(payload);
+                if (lob->in_row_) {
+                  payload = lob->get_inrow_data_ptr();
+                  length = static_cast<int32_t>(lob->get_byte_size(length));
+                }
+              }
+              if (OB_SUCC(json_bin_to_text(allocator_, payload, length,
+                                           tmp_buf, sizeof(tmp_buf), length))) {
+                payload = tmp_buf;
+              }
+              break;
+            }
+            case VEC_TC_GEO:
+            case VEC_TC_ROARINGBITMAP: {
+              payload = datums[row].ptr_;
+              length = datums[row].len_;
+              if (expr->obj_meta_.has_lob_header() && length > 0) {
+                const ObLobCommon *lob = reinterpret_cast<const ObLobCommon *>(payload);
+                if (lob->in_row_) {
+                  payload = lob->get_inrow_data_ptr();
+                  length = static_cast<int32_t>(lob->get_byte_size(length));
+                }
+              }
               break;
             }
             default:
@@ -1241,6 +1688,171 @@ OpTestResult OpTestEngine::collect_batch_results(ObOperator *op, const ExprFixed
               length = datums[row].len_;
               if (nullptr == payload || 0 == length) {
                 // Fallback: try as int
+                int64_t val = datums[row].get_int();
+                snprintf(tmp_buf, sizeof(tmp_buf), "%ld", val);
+                payload = tmp_buf;
+                length = strlen(tmp_buf);
+              }
+              break;
+            }
+          } else {
+            // VEC_INVALID or flat format - use ObDatum
+            // When enable_rich_format() is false, expressions use flat format (ObDatum)
+            // The format will be VEC_INVALID in this case
+            ObDatum *datums = expr->locate_batch_datums(eval_ctx);
+            const ObObjType obj_type = expr->datum_meta_.get_type();
+            const VecValueTypeClass vec_tc = get_vec_value_tc(obj_type,
+                expr->datum_meta_.scale_, expr->datum_meta_.precision_);
+
+            switch (vec_tc) {
+            case VEC_TC_INTEGER: {
+              int64_t val = datums[row].get_int();
+              snprintf(tmp_buf, sizeof(tmp_buf), "%ld", val);
+              payload = tmp_buf;
+              length = strlen(tmp_buf);
+              break;
+            }
+            case VEC_TC_UINTEGER:
+            case VEC_TC_BIT:
+            case VEC_TC_ENUM_SET: {
+              uint64_t val = datums[row].get_uint();
+              snprintf(tmp_buf, sizeof(tmp_buf), "%lu", val);
+              payload = tmp_buf;
+              length = strlen(tmp_buf);
+              break;
+            }
+            case VEC_TC_FLOAT: {
+              float val = datums[row].get_float();
+              snprintf(tmp_buf, sizeof(tmp_buf), "%g", val);
+              payload = tmp_buf;
+              length = strlen(tmp_buf);
+              break;
+            }
+            case VEC_TC_DOUBLE:
+            case VEC_TC_FIXED_DOUBLE: {
+              double val = datums[row].get_double();
+              snprintf(tmp_buf, sizeof(tmp_buf), "%g", val);
+              payload = tmp_buf;
+              length = strlen(tmp_buf);
+              break;
+            }
+            case VEC_TC_DATETIME:
+            case VEC_TC_TIME:
+            case VEC_TC_INTERVAL_YM:
+            case VEC_TC_MYSQL_DATETIME:
+            case VEC_TC_TIMESTAMP_TZ:
+            case VEC_TC_TIMESTAMP_TINY:
+            case VEC_TC_INTERVAL_DS:
+            case VEC_TC_YEAR:
+            case VEC_TC_UNKNOWN: {
+              int64_t val = datums[row].get_int();
+              snprintf(tmp_buf, sizeof(tmp_buf), "%ld", val);
+              payload = tmp_buf;
+              length = strlen(tmp_buf);
+              break;
+            }
+            case VEC_TC_DATE:
+            case VEC_TC_MYSQL_DATE: {
+              int32_t val = datums[row].get_int();
+              snprintf(tmp_buf, sizeof(tmp_buf), "%d", val);
+              payload = tmp_buf;
+              length = strlen(tmp_buf);
+              break;
+            }
+            case VEC_TC_NUMBER: {
+              // For number type, datum.ptr_ points to ObCompactNumber
+              const number::ObCompactNumber *cnum =
+                reinterpret_cast<const number::ObCompactNumber *>(datums[row].ptr_);
+              number::ObNumber num(*cnum);
+              int64_t pos = 0;
+              int fmt_ret = num.format(tmp_buf, sizeof(tmp_buf), pos, -1);
+              if (OB_SUCCESS == fmt_ret && pos > 0) {
+                tmp_buf[pos] = '\0';
+                payload = tmp_buf;
+                length = pos;
+              } else {
+                payload = "?";
+                length = 1;
+              }
+              break;
+            }
+            case VEC_TC_DEC_INT32:
+            case VEC_TC_DEC_INT64:
+            case VEC_TC_DEC_INT128:
+            case VEC_TC_DEC_INT256:
+            case VEC_TC_DEC_INT512: {
+              // For decimal int, datum.ptr_ points to the decimal int data
+              const int16_t precision = expr->datum_meta_.precision_;
+              const int32_t int_bytes = wide::ObDecimalIntConstValue::get_int_bytes_by_precision(precision);
+              const ObDecimalInt *decint = reinterpret_cast<const ObDecimalInt *>(datums[row].ptr_);
+              int64_t pos = 0;
+              char dec_buf[128];
+              if (OB_SUCCESS == wide::to_string(decint, int_bytes, expr->datum_meta_.scale_,
+                                                 dec_buf, sizeof(dec_buf), pos)) {
+                payload = dec_buf;
+                length = pos;
+              } else {
+                payload = "?";
+                length = 1;
+              }
+              break;
+            }
+            case VEC_TC_STRING:
+            case VEC_TC_RAW:
+            case VEC_TC_ROWID:
+            case VEC_TC_ENUM_SET_INNER: {
+              payload = datums[row].ptr_;
+              length = datums[row].len_;
+              break;
+            }
+            case VEC_TC_LOB:
+            case VEC_TC_UDT:
+            case VEC_TC_COLLECTION: {
+              payload = datums[row].ptr_;
+              length = datums[row].len_;
+              if (expr->obj_meta_.has_lob_header() && length > 0) {
+                const ObLobCommon *lob = reinterpret_cast<const ObLobCommon *>(payload);
+                if (lob->in_row_) {
+                  payload = lob->get_inrow_data_ptr();
+                  length = static_cast<int32_t>(lob->get_byte_size(length));
+                }
+              }
+              break;
+            }
+            case VEC_TC_JSON: {
+              payload = datums[row].ptr_;
+              length = datums[row].len_;
+              if (expr->obj_meta_.has_lob_header() && length > 0) {
+                const ObLobCommon *lob = reinterpret_cast<const ObLobCommon *>(payload);
+                if (lob->in_row_) {
+                  payload = lob->get_inrow_data_ptr();
+                  length = static_cast<int32_t>(lob->get_byte_size(length));
+                }
+              }
+              if (OB_SUCC(json_bin_to_text(allocator_, payload, length,
+                                           tmp_buf, sizeof(tmp_buf), length))) {
+                payload = tmp_buf;
+              }
+              break;
+            }
+            case VEC_TC_GEO:
+            case VEC_TC_ROARINGBITMAP: {
+              payload = datums[row].ptr_;
+              length = datums[row].len_;
+              if (expr->obj_meta_.has_lob_header() && length > 0) {
+                const ObLobCommon *lob = reinterpret_cast<const ObLobCommon *>(payload);
+                if (lob->in_row_) {
+                  payload = lob->get_inrow_data_ptr();
+                  length = static_cast<int32_t>(lob->get_byte_size(length));
+                }
+              }
+              break;
+            }
+            default:
+              // For unknown types, try to use raw data
+              payload = datums[row].ptr_;
+              length = datums[row].len_;
+              if (nullptr == payload || 0 == length) {
                 int64_t val = datums[row].get_int();
                 snprintf(tmp_buf, sizeof(tmp_buf), "%ld", val);
                 payload = tmp_buf;
@@ -1302,6 +1914,7 @@ OpTestResult OpTestEngine::execute(ObOperator *op, const ExprFixedArray *output_
 {
   OpTestResult result;
   int ret = OB_SUCCESS;
+  FatalErrorChecker error_checker(ret);
 
   if (OB_ISNULL(op)) {
     LOG_WARN("op is null");

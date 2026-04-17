@@ -291,6 +291,152 @@ inline ColumnGenerator cycle(std::vector<TestValue> values)
   };
 }
 
+namespace detail {
+
+// 将 'YYYY-MM-DD' 或 'YYYY-MM-DD HH:MM:SS' 解析为微秒值（自 epoch 1970-01-01 00:00:00 UTC）
+// 简化实现：假设有效输入，不考虑时区/闰秒
+inline int64_t parse_datetime_us(const std::string &s)
+{
+  int year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0;
+  if (sscanf(s.c_str(), "%d-%d-%d %d:%d:%d", &year, &month, &day, &hour, &minute, &second) >= 3) {
+    // Valid: at least YYYY-MM-DD parsed
+  } else if (sscanf(s.c_str(), "%d-%d-%d", &year, &month, &day) == 3) {
+    // Valid: YYYY-MM-DD only
+  } else {
+    return 0;  // Invalid input
+  }
+  // Days from 1970-01-01 to year-01-01
+  int64_t y = year - 1;
+  int64_t days_to_year = y * 365 + y / 4 - y / 100 + y / 400 - 719527;
+  // Days in months before this month (non-leap year)
+  static const int month_days[] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+  int64_t days_to_month = 0;
+  for (int m = 1; m < month; ++m) {
+    days_to_month += month_days[m];
+    if (m == 2 && (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0))) {
+      days_to_month += 1;  // leap year February
+    }
+  }
+  int64_t total_days = days_to_year + days_to_month + day;
+  int64_t total_us = total_days * 86400000000LL + hour * 3600000000LL + minute * 60000000LL + second * 1000000LL;
+  return total_us;
+}
+
+// 将 'YYYY-MM-DD' 解析为天数（自 epoch）
+inline int32_t parse_date_day(const std::string &s)
+{
+  int64_t us = parse_datetime_us(s);
+  return static_cast<int32_t>(us / 86400000000LL);
+}
+
+// 将 'HH:MM:SS' 解析为微秒
+inline int64_t parse_time_us(const std::string &s)
+{
+  int hour = 0, minute = 0, second = 0;
+  if (sscanf(s.c_str(), "%d:%d:%d", &hour, &minute, &second) >= 2) {
+    return hour * 3600000000LL + minute * 60000000LL + second * 1000000LL;
+  }
+  return 0;
+}
+
+}  // namespace detail
+
+// 随机 datetime 值（微秒编码，int64_t 载体）
+// 重载1：直接微秒范围
+inline ColumnGenerator random_datetime(
+    int64_t start_us, int64_t end_us, uint64_t seed)
+{
+  auto rng = std::make_shared<std::mt19937_64>(seed);
+  auto dist = std::make_shared<std::uniform_int_distribution<int64_t>>(start_us, end_us);
+  return [rng, dist, seed](int64_t row_idx) -> TestValue {
+    if (row_idx == 0) { rng->seed(seed); }
+    return (*dist)(*rng);
+  };
+}
+
+// 重载2：字符串日期范围（推荐用法）
+// 示例：random_datetime("2020-01-01", "2024-12-31")
+//       random_datetime("2020-01-01 00:00:00", "2024-12-31 23:59:59")
+inline ColumnGenerator random_datetime(
+    const std::string &start_date, const std::string &end_date, uint64_t seed = 42)
+{
+  int64_t start_us = detail::parse_datetime_us(start_date);
+  int64_t end_us = detail::parse_datetime_us(end_date);
+  return random_datetime(start_us, end_us, seed);
+}
+
+// 重载3：默认范围 2000-01-01 ~ 2030-01-01
+inline ColumnGenerator random_datetime(uint64_t seed = 42)
+{
+  return random_datetime(946684800000000LL, 1893456000000000LL, seed);
+}
+
+// 随机 date 值（天数编码，int64_t 载体）
+// 重载1：直接天数范围
+inline ColumnGenerator random_date(
+    int32_t start_day, int32_t end_day, uint64_t seed)
+{
+  auto rng = std::make_shared<std::mt19937_64>(seed);
+  auto dist = std::make_shared<std::uniform_int_distribution<int64_t>>(start_day, end_day);
+  return [rng, dist, seed](int64_t row_idx) -> TestValue {
+    if (row_idx == 0) { rng->seed(seed); }
+    return (*dist)(*rng);
+  };
+}
+
+// 重载2：字符串日期范围
+// 示例：random_date("2020-01-01", "2024-12-31")
+inline ColumnGenerator random_date(
+    const std::string &start_date, const std::string &end_date, uint64_t seed = 42)
+{
+  int32_t start_day = detail::parse_date_day(start_date);
+  int32_t end_day = detail::parse_date_day(end_date);
+  return random_date(start_day, end_day, seed);
+}
+
+// 重载3：默认范围 2000-01-01 ~ 2030-01-01
+inline ColumnGenerator random_date(uint64_t seed = 42)
+{
+  return random_date(10957, 21915, seed);
+}
+
+// 随机 year 值（1901-2155，int64_t 载体）
+inline ColumnGenerator random_year(uint64_t seed = 42)
+{
+  return gen::random_int(1901, 2155, seed);
+}
+
+// 随机 bit 值（0 到 2^max_bits - 1，int64_t 载体）
+inline ColumnGenerator random_bit(int max_bits = 64, uint64_t seed = 42)
+{
+  int64_t max_val = (max_bits >= 64) ? INT64_MAX : ((1LL << max_bits) - 1);
+  return gen::random_int(0, max_val, seed);
+}
+
+// 随机 time 值（微秒编码，int64_t 载体）
+// 重载1：直接微秒范围
+inline ColumnGenerator random_time(
+    int64_t start_us, int64_t end_us, uint64_t seed)
+{
+  return gen::random_int(start_us, end_us, seed);
+}
+
+// 重载2：字符串时间范围
+// 示例：random_time("08:00:00", "18:00:00")
+inline ColumnGenerator random_time(
+    const std::string &start_time, const std::string &end_time, uint64_t seed = 42)
+{
+  int64_t start_us = detail::parse_time_us(start_time);
+  int64_t end_us = detail::parse_time_us(end_time);
+  return gen::random_int(start_us, end_us, seed);
+}
+
+// 重载3：默认范围 00:00:00 ~ 23:59:59
+inline ColumnGenerator random_time(uint64_t seed = 42)
+{
+  return gen::random_int(0, 86399000000LL, seed);
+}
+
 inline ColumnGenerator nullable(ColumnGenerator inner, int64_t null_every_n = 10)
 {
   return [inner, null_every_n](int64_t row_idx) -> TestValue {

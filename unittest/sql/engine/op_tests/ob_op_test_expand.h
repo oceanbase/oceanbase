@@ -90,6 +90,7 @@ public:
   int post_resolve_hook(OpTestEngine &engine, ObDMLStmt &stmt)
   {
     int ret = OB_SUCCESS;
+    FatalErrorChecker error_checker(ret);
     ObOpPseudoColumnRawExpr *grouping_id = nullptr;
     if (OB_FAIL(ObRawExprUtils::build_grouping_id(
             engine.get_expr_factory(), engine.get_session_info(), grouping_id))) {

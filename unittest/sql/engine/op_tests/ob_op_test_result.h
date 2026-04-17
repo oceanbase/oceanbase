@@ -115,6 +115,25 @@ public:
     return rows_.at(idx);
   }
 
+  const std::vector<std::vector<std::string>> &get_rows() const
+  {
+    return rows_;
+  }
+
+  const std::string get_row_string(int64_t idx) const
+  {
+    std::string result = "{";
+    const std::vector<std::string> &row = get_row(idx);
+    for (int i = 0; i < row.size(); ++i) {
+      if (i > 0) {
+        result += ", ";
+      }
+      result += row[i];
+    }
+    result += "}";
+    return result;
+  }
+
   // ===== Verification methods =====
 
   /**

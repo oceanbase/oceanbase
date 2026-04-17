@@ -132,6 +132,7 @@ public:
                          ObExpr *limit_expr, ObExpr *offset_expr, bool use_rich_format)
   {
     int ret = OB_SUCCESS;
+    FatalErrorChecker error_checker(ret);
     if (use_rich_format) {
       // 2.0: ObHashGroupByVecSpec
       void *mem = alloc.alloc(sizeof(ObHashGroupByVecSpec));
@@ -270,6 +271,7 @@ private:
   int fill_group_exprs_and_cmp_funcs(common::ObIAllocator &/*alloc*/, SpecType *spec)
   {
     int ret = OB_SUCCESS;
+    FatalErrorChecker error_checker(ret);
     if (OB_ISNULL(spec) || OB_ISNULL(resolved_stmt_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("spec or resolved_stmt_ is null", K(ret), KP(spec), KP(resolved_stmt_));

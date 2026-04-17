@@ -83,6 +83,7 @@ private:
                               bool use_rich_format, ObPhyOperatorType op_type)
   {
     int ret = OB_SUCCESS;
+    FatalErrorChecker error_checker(ret);
     void *mem = alloc.alloc(sizeof(SpecType));
     if (OB_ISNULL(mem)) {
       LOG_WARN("alloc spec failed");

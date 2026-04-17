@@ -298,6 +298,7 @@ private:
                              const ExprFixedArray &output_exprs, bool use_rich_format)
   {
     int ret = OB_SUCCESS;
+    FatalErrorChecker error_checker(ret);
 
     void *mem = alloc.alloc(sizeof(ObWindowFunctionVecSpec));
     if (OB_ISNULL(mem)) {
@@ -390,6 +391,7 @@ private:
                                const ExprFixedArray &output_exprs, bool use_rich_format)
   {
     int ret = OB_SUCCESS;
+    FatalErrorChecker error_checker(ret);
 
     void *mem = alloc.alloc(sizeof(ObWindowFunctionSpec));
     if (OB_ISNULL(mem)) {
@@ -480,6 +482,7 @@ private:
   void fill_vec_sort_cmp_funcs(ObWindowFunctionVecSpec *wf_spec)
   {
     int ret = OB_SUCCESS;
+    FatalErrorChecker error_checker(ret);
     for (int64_t i = 0; OB_SUCC(ret) && i < wf_spec->wf_infos_.count(); ++i) {
       WinFuncInfo &wf_info = wf_spec->wf_infos_.at(i);
       for (int64_t j = 0; OB_SUCC(ret) && j < wf_info.sort_exprs_.count(); ++j) {
@@ -529,6 +532,7 @@ private:
   void fill_rd_fields(ObWindowFunctionVecSpec *wf_spec)
   {
     int ret = OB_SUCCESS;
+    FatalErrorChecker error_checker(ret);
     ObSEArray<ObExpr *, 16> rd_expr;
 
     if (wf_spec->wf_infos_.count() > 0) {

@@ -102,6 +102,7 @@ public:
                          ObExpr *limit_expr, ObExpr *offset_expr, bool use_rich_format)
   {
     int ret = OB_SUCCESS;
+    FatalErrorChecker error_checker(ret);
     if (use_rich_format) {
       // 2.0: ObScalarAggregateVecSpec
       void *mem = alloc.alloc(sizeof(ObScalarAggregateVecSpec));

@@ -81,14 +81,6 @@ public:
   void set_enable_sql_operator_dump(bool enable) { enable_sql_operator_dump_ = enable; }
   bool get_enable_sql_operator_dump() const { return enable_sql_operator_dump_; }
 
-  /**
-   * @brief Set hash area size for work area memory limit (in bytes).
-   * This controls the memory threshold before Material operator spills to disk.
-   * @param size Hash area size in bytes (default: 1MB)
-   */
-  void set_hash_area_size(int64_t size) { hash_area_size_ = size; }
-  int64_t get_hash_area_size() const { return hash_area_size_; }
-
   // ===== Dump Verification Mode =====
   /**
    * @brief Enum for dump verification mode.
@@ -139,6 +131,13 @@ public:
   // ===== Lifecycle =====
   virtual void init() override;
   virtual void destroy() override;
+
+  // ===== Tenant Config Override =====
+  /**
+   * @brief Apply tenant config overrides from TestDefaultParameterConf TLS.
+   * Called by OpSpecBuilder::prepare() after engine init and before register_table.
+   */
+  void apply_tenant_config_overrides();
 
   // ===== Schema Registration =====
   /**
@@ -252,7 +251,6 @@ private:
   int64_t batch_size_ = DEFAULT_BATCH_SIZE;
   bool use_row_by_row_eval_ = false;  // For custom eval_func testing
   bool enable_sql_operator_dump_ = false;  // SQL operator dump flag
-  int64_t hash_area_size_ = 1024 * 1024;  // Default 1MB for hash area
   bool saved_gconf_dump_enabled_ = false;  // Saved GCONF state for restore
   DumpVerifyMode dump_verify_mode_ = DumpVerifyMode::FULL_ROWS;  // Dump verification mode
   ObPhysicalPlan phy_plan_;

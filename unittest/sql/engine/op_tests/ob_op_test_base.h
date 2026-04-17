@@ -31,14 +31,129 @@
 #include <vector>
 #include <map>
 #include <set>
+#include <functional>
+#include <initializer_list>
+#include <utility>
 
 namespace oceanbase
 {
 namespace sql
 {
-
-namespace
+struct TLVars
 {
+  TLVars(): disabled_ret_check_(false) {}
+  static bool ret_check_disabled()
+  {
+    return get_instance().disabled_ret_check_;
+  }
+
+private:
+  friend struct DisableRetCheckGuard;
+  static void set_ret_check_disabled(bool disabled)
+  {
+    get_instance().disabled_ret_check_ = disabled;
+  }
+  static TLVars &get_instance()
+  {
+    static thread_local TLVars instance;
+    return instance;
+  }
+
+private:
+  bool disabled_ret_check_;
+};
+
+struct DisableRetCheckGuard
+{
+  DisableRetCheckGuard()
+  {
+    stored_v_ = TLVars::ret_check_disabled();
+    TLVars::set_ret_check_disabled(true);
+  }
+  ~DisableRetCheckGuard()
+  {
+    TLVars::set_ret_check_disabled(stored_v_);
+  }
+
+private:
+  bool stored_v_;
+};
+
+// Temporarily disables op-tests return-code checking for a compound statement.
+// Usage: DISABLE_OPTESTS_RET_CHECK { ... }  — equivalent to a block-local DisableRetCheckGuard.
+// Uses C++17 if-init (this tree builds with -std=gnu++17); RAII object scope is exactly the `{ ... }`.
+#define DISABLE_OPTESTS_RET_CHECK \
+  if (::oceanbase::sql::DisableRetCheckGuard ob_op_tests_disable_ret_check_guard_; true)
+
+// Thread-local singleton: stores tenant config overrides for testing.
+// Each config item's default value is defined in parameter_seed.ipp via DEF_* macros,
+// and add_tenant_config() initializes them when creating ObTenantConfig.
+// This struct only stores non-default values that tests need to override.
+struct TestDefaultParameterConf
+{
+  std::map<std::string, std::string> overrides_;
+
+  static TestDefaultParameterConf &instance();
+
+  // Set a config override. Validates:
+  //   1) name exists in ObTenantConfig's container_ (valid config name)
+  //   2) value is legal for the config type (trial set_value then restore)
+  // On validation failure, triggers EXPECT_TRUE(false) and does NOT store.
+  // Must be called after engine.init() (requires tenant config created).
+  int set(const std::string &name, const std::string &value);
+
+  void remove(const std::string &name)
+  { overrides_.erase(name); }
+
+  void clear() { overrides_.clear(); }
+  bool empty() const { return overrides_.empty(); }
+};
+
+// RAII guard: saves TLS state on construction, restores on destruction.
+struct TestParameterGuard
+{
+  TestParameterGuard()
+  { saved_ = TestDefaultParameterConf::instance().overrides_; }
+
+  // Applies config overrides after saving current overrides (same as default + chained set()).
+  explicit TestParameterGuard(std::initializer_list<std::pair<const char *, const char *>> confs)
+      : TestParameterGuard()
+  {
+    for (const auto &p : confs) {
+      (void)set(p.first, p.second);
+    }
+  }
+
+  TestParameterGuard &set(const std::string &name, const std::string &value)
+  {
+    TestDefaultParameterConf::instance().set(name, value);
+    return *this;
+  }
+
+  ~TestParameterGuard()
+  { TestDefaultParameterConf::instance().overrides_ = saved_; }
+
+private:
+  std::map<std::string, std::string> saved_;
+};
+
+// One key/value entry for WITH_TENANT_CONFS (comma-separated list of OB_TENANT_CONF(...) or {"k","v"}).
+#define OB_TENANT_CONF(K, V) ::std::pair<const char *, const char *>((K), (V))
+
+// Temporarily applies tenant config overrides for a compound statement (RAII like TestParameterGuard).
+// Usage (C++ pair literals; colon between strings is not valid C++ syntax):
+//   WITH_TENANT_CONFS(
+//     {"_hash_area_size", "2M"},
+//     {"_rowsets_max_rows", "512"}
+//   ) { ... }
+// or:
+//   WITH_TENANT_CONFS(
+//     OB_TENANT_CONF("_hash_area_size", "2M"),
+//     OB_TENANT_CONF("_rowsets_max_rows", "512")
+//   ) { ... }
+#define WITH_TENANT_CONFS(...) \
+  if (::oceanbase::sql::TestParameterGuard ob_op_tests_tenant_conf_guard__{{ __VA_ARGS__ }}; true)
+
 // RAII checker for fatal error detection.
 // Sets thread-local trace_id at construction (random-based).
 // Checks ret at scope exit and reports trace_id if not OB_SUCCESS.
@@ -59,7 +174,7 @@ public:
     trace_id_set_ = true;
   }
   ~FatalErrorChecker() {
-    if (OB_SUCCESS != ret_) {
+    if (OB_SUCCESS != ret_ && !TLVars::ret_check_disabled()) {
       const char* trace_id_str = trace_id_set_ ? trace_id_buf_ : common::ObCurTraceId::get_trace_id_str();
       fprintf(stderr, "\n[FatalErrorChecker] ERROR: ret=%d, trace_id=%s\n", ret_, trace_id_str);
       EXPECT_EQ(OB_SUCCESS, ret_);
@@ -73,6 +188,8 @@ private:
   bool trace_id_set_;
   char trace_id_buf_[common::OB_MAX_TRACE_ID_BUFFER_SIZE];
 };
+
+namespace {
 
 // Helper: check if expr is in child_output (by pointer)
 inline bool expr_in_child_output(ObExpr *expr, const ExprFixedArray &child_output)
@@ -135,6 +252,7 @@ int fill_sort_info_for_expr(ObExpr *expr,
                              common::ObIAllocator &alloc)
 {
   int ret = OB_SUCCESS;
+  FatalErrorChecker error_checker(ret);
   if (OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("expr is null", K(ret));
@@ -247,6 +365,7 @@ int fill_aggr_infos_for_groupby(common::ObIAllocator &alloc,
                                   bool use_rich_format)
 {
   int ret = OB_SUCCESS;
+  FatalErrorChecker error_checker(ret);
   if (OB_ISNULL(groupby_spec) || OB_ISNULL(resolved_stmt) || OB_ISNULL(phy_plan)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid argument", K(ret), KP(groupby_spec), KP(resolved_stmt), KP(phy_plan));
@@ -501,6 +620,7 @@ public:
   ObOperator *default_create_op(ObExecContext &ctx, ObOpSpec &spec, ObOperator *child_op)
   {
     int ret = OB_SUCCESS;
+    FatalErrorChecker error_checker(ret);
     Derived *derived = static_cast<Derived *>(this);
 
     // Step 1: Get OpInput (calls create_input which may be overridden)
@@ -839,11 +959,25 @@ public:
   /**
    * @brief Enable dual format check mode.
    * When enabled, run() executes both 2.0 (vec) and 1.0 versions and compares results.
+   * Rows are compared positionally — use this for operators with deterministic output order.
    * @param enable True to enable (default: true)
    */
   Derived& enable_dual_format_check(bool enable = true)
   {
     dual_format_check_ = enable;
+    return static_cast<Derived&>(*this);
+  }
+
+  /**
+   * @brief Enable dual format check mode with unordered (set-based) comparison.
+   * Like enable_dual_format_check(), but sorts both result sets before comparing.
+   * Use for operators whose output order is non-deterministic (Hash GroupBy with dump,
+   * Hash Join, etc.) where 1.0 and 2.0 may return the same rows in different order.
+   */
+  Derived& enable_dual_format_unordered_check()
+  {
+    dual_format_check_ = true;
+    dual_format_unordered_ = true;
     return static_cast<Derived&>(*this);
   }
 
@@ -924,6 +1058,7 @@ public:
   int prepare(OpTestEngine &engine)
   {
     int ret = OB_SUCCESS;
+    FatalErrorChecker error_checker(ret);
 
     // Step 0: Set SQL mode (must be set before init)
     engine.set_sql_mode(sql_mode_);
@@ -937,10 +1072,12 @@ public:
 
     // Step 0.3: Configure SQL operator dump for large data scenarios
     engine.set_enable_sql_operator_dump(enable_sql_operator_dump_);
-    engine.set_hash_area_size(hash_area_size_);
     engine.set_dump_verify_mode(dump_verify_mode_);
     engine.set_rescan_memory_check(rescan_memory_check_);
     engine.set_rescan_memory_tolerance(rescan_memory_tolerance_bytes_);
+
+    // Step 0.4: Apply TLS tenant config overrides (including _hash_area_size pushed by run())
+    engine.apply_tenant_config_overrides();
 
     // Step 1: Register mock table schema
     ret = engine.register_table(table_name_.c_str(), col_defs_.c_str());
@@ -1179,6 +1316,7 @@ public:
   {
     OpTestResult result;
     int ret = OB_SUCCESS;
+    FatalErrorChecker error_checker(ret);
 
     // Reconstruct ExprFixedArrays from prepared vectors
     ExprFixedArray column_exprs(engine.get_phy_plan().get_allocator());
@@ -1372,7 +1510,16 @@ public:
 
     // Step 8: Execute
     // Pass output_exprs for SELECT expression evaluation
-    result = engine.execute(op, &output_exprs, rescan_times_);
+    if (datahub_setup_fn_ && OB_NOT_NULL(root_spec)) {
+      if (OB_SUCC(ret)) {
+        ret = datahub_setup_fn_(engine.get_exec_ctx(), root_spec->id_);
+      }
+      if (OB_SUCC(ret)) {
+        result = engine.execute(op, &output_exprs, rescan_times_);
+      }
+    } else {
+      result = engine.execute(op, &output_exprs, rescan_times_);
+    }
 
     return result;
   }
@@ -1391,6 +1538,21 @@ public:
 
     // RAII checker: will LOG_ERROR and EXPECT if ret != OB_SUCCESS at scope exit
     FatalErrorChecker error_checker(ret);
+
+    // RAII: push builder's tenant config overrides into TLS, auto-restore on scope exit
+    TestParameterGuard param_guard;
+    if (enable_sql_operator_dump_ && hash_area_size_ > 0) {
+      // _hash_area_size is DEF_CAP type: requires unit suffix (e.g., "4M", "1G")
+      // Convert bytes to megabytes string with "M" suffix
+      int64_t mb = hash_area_size_ / (1024 * 1024);
+      if (mb > 0) {
+        param_guard.set("_hash_area_size", std::to_string(mb) + "M");
+      } else {
+        // Less than 1MB, use KB
+        int64_t kb = hash_area_size_ / 1024;
+        param_guard.set("_hash_area_size", std::to_string(kb) + "K");
+      }
+    }
 
     // Prepare: SQL registration, resolve, CG, collect exprs (always in FORCE_ON mode)
     ret = prepare(engine);
@@ -1421,9 +1583,21 @@ public:
           << "dual_format_check: row count mismatch: 2.0=" << res_2_0.row_count()
           << " vs 1.0=" << res_1_0.row_count();
       if (res_2_0.row_count() == res_1_0.row_count()) {
-        for (int64_t i = 0; i < res_2_0.row_count(); ++i) {
-          EXPECT_EQ(res_2_0.get_row(i), res_1_0.get_row(i))
-              << "dual_format_check: row " << i << " mismatch between 2.0 and 1.0";
+        if (dual_format_unordered_) {
+          // Unordered operators (e.g. Hash GroupBy with dump): sort both sets before comparing
+          auto rows_2_0 = res_2_0.get_rows();
+          auto rows_1_0 = res_1_0.get_rows();
+          std::sort(rows_2_0.begin(), rows_2_0.end());
+          std::sort(rows_1_0.begin(), rows_1_0.end());
+          for (int64_t i = 0; i < res_2_0.row_count(); ++i) {
+            EXPECT_EQ(rows_2_0[i], rows_1_0[i])
+                << "dual_format_check: row " << i << " mismatch between 2.0 and 1.0 (unordered)";
+          }
+        } else {
+          for (int64_t i = 0; i < res_2_0.row_count(); ++i) {
+            EXPECT_EQ(res_2_0.get_row(i), res_1_0.get_row(i))
+                << "dual_format_check: row " << i << " mismatch between 2.0 and 1.0";
+          }
         }
       }
       return res_2_0;
@@ -1493,17 +1667,40 @@ protected:
 
   /**
    * @brief Parse col_defs_ and create random ColumnGenerators for each column.
-   * Type mapping:
-   *   int/int32/int64    -> gen::sequential(1)
-   *   double/float       -> gen::random_double(0.0, 100000.0)
-   *   varchar/char/text  -> gen::random_string(min(length, 16))
-   *   number/decimal     -> gen::random_decimal(precision, scale)
+   * Uses priority-ordered substring matching on lowercased type strings,
+   * so more specific types (e.g. mediumint) match before broader ones (e.g. int).
    */
   std::vector<ColumnGenerator> create_auto_generators() const
   {
     std::vector<ColumnGenerator> generators;
     std::string col_defs_str(col_defs_);
     size_t pos = 0;
+
+    // Helper: extract parenthesized args from lower (e.g. "decimal(10,2)" -> "10,2")
+    auto extract_paren_args = [](const std::string &lower) -> std::string {
+      size_t pp = lower.find('(');
+      if (pp == std::string::npos) return "";
+      size_t ep = lower.find(')', pp);
+      if (ep == std::string::npos) return "";
+      return lower.substr(pp + 1, ep - pp - 1);
+    };
+
+    // Helper: parse precision,scale from paren args
+    auto parse_precision_scale = [](const std::string &args, int default_p, int default_s)
+        -> std::pair<int, int> {
+      if (args.empty()) return {default_p, default_s};
+      size_t cp = args.find(',');
+      if (cp != std::string::npos) {
+        return {std::stoi(args.substr(0, cp)), std::stoi(args.substr(cp + 1))};
+      }
+      return {std::stoi(args), 0};
+    };
+
+    // Helper: parse single int from paren args
+    auto parse_single_int = [](const std::string &args, int default_val) -> int {
+      if (args.empty()) return default_val;
+      return std::stoi(args);
+    };
 
     while (pos < col_defs_str.size()) {
       // Skip whitespace
@@ -1533,47 +1730,138 @@ protected:
       std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
 
       uint64_t col_seed = 42 + static_cast<uint64_t>(generators.size());
+      std::string paren_args = extract_paren_args(lower);
 
-      if (lower.find("int") != std::string::npos) {
+      // Priority-ordered type matching: most specific first
+      // Integer types
+      if (lower.find("mediumint") != std::string::npos) {
         generators.push_back(gen::sequential(1));
-      } else if (lower.find("double") != std::string::npos
-                 || lower.find("float") != std::string::npos) {
+      } else if (lower.find("smallint") != std::string::npos) {
+        generators.push_back(gen::sequential(1));
+      } else if (lower.find("tinyint") != std::string::npos) {
+        generators.push_back(gen::sequential(1));
+      } else if (lower.find("bigint") != std::string::npos) {
+        generators.push_back(gen::sequential(1));
+      } else if (lower.find("int32") != std::string::npos) {
+        generators.push_back(gen::sequential(1));
+      } else if (lower.find("int") != std::string::npos) {
+        generators.push_back(gen::sequential(1));
+      }
+      // Floating point types
+      else if (lower.find("ufloat") != std::string::npos) {
         generators.push_back(gen::random_double(0.0, 100000.0, col_seed));
-      } else if (lower.find("varchar") != std::string::npos
-                 || lower.find("char") != std::string::npos
-                 || lower.find("text") != std::string::npos) {
-        int64_t str_len = 10;
-        size_t pp = lower.find('(');
-        if (pp != std::string::npos) {
-          size_t ep = lower.find(')', pp);
-          if (ep != std::string::npos) {
-            str_len = std::min(static_cast<int64_t>(
-                std::stoi(lower.substr(pp + 1, ep - pp - 1))),
-                static_cast<int64_t>(16));
-          }
+      } else if (lower.find("udouble") != std::string::npos) {
+        generators.push_back(gen::random_double(0.0, 100000.0, col_seed));
+      } else if (lower.find("float") != std::string::npos) {
+        generators.push_back(gen::random_double(0.0, 100000.0, col_seed));
+      } else if (lower.find("double") != std::string::npos) {
+        generators.push_back(gen::random_double(0.0, 100000.0, col_seed));
+      }
+      // Decimal/number types
+      else if (lower.find("number_float") != std::string::npos) {
+        auto [p, s] = parse_precision_scale(paren_args, 10, 2);
+        generators.push_back(gen::random_decimal(p, s, col_seed));
+      } else if (lower.find("unumber") != std::string::npos) {
+        generators.push_back(gen::random_decimal(10, 0, col_seed));
+      } else if (lower.find("number") != std::string::npos) {
+        auto [p, s] = parse_precision_scale(paren_args, 10, 2);
+        generators.push_back(gen::random_decimal(p, s, col_seed));
+      } else if (lower.find("decimal") != std::string::npos) {
+        auto [p, s] = parse_precision_scale(paren_args, 10, 2);
+        generators.push_back(gen::random_decimal(p, s, col_seed));
+      }
+      // Timestamp/datetime types
+      else if (lower.find("timestamp_tz") != std::string::npos
+               || lower.find("timestamp_ltz") != std::string::npos
+               || lower.find("timestamp_nano") != std::string::npos
+               || lower.find("timestamp") != std::string::npos) {
+        generators.push_back(gen::random_datetime(col_seed));
+      } else if (lower.find("mysql_datetime") != std::string::npos) {
+        generators.push_back(gen::random_datetime(col_seed));
+      } else if (lower.find("datetime") != std::string::npos) {
+        generators.push_back(gen::random_datetime(col_seed));
+      }
+      // Date/time/year types
+      else if (lower.find("mysql_date") != std::string::npos) {
+        generators.push_back(gen::random_date(col_seed));
+      } else if (lower.find("date") != std::string::npos) {
+        generators.push_back(gen::random_date(col_seed));
+      } else if (lower.find("time") != std::string::npos) {
+        generators.push_back(gen::random_time(col_seed));
+      } else if (lower.find("year") != std::string::npos) {
+        generators.push_back(gen::random_year(col_seed));
+      }
+      // Binary large object types
+      else if (lower.find("longblob") != std::string::npos
+               || lower.find("mediumblob") != std::string::npos
+               || lower.find("tinyblob") != std::string::npos
+               || lower.find("blob") != std::string::npos) {
+        generators.push_back(gen::random_string(8, col_seed));
+      }
+      // Text types
+      else if (lower.find("longtext") != std::string::npos
+               || lower.find("mediumtext") != std::string::npos
+               || lower.find("tinytext") != std::string::npos
+               || lower.find("text") != std::string::npos) {
+        generators.push_back(gen::random_string(10, col_seed));
+      }
+      // National char types (must be before varchar/char)
+      else if (lower.find("nvarchar2") != std::string::npos
+               || lower.find("nchar") != std::string::npos) {
+        generators.push_back(gen::random_string(16, col_seed));
+      }
+      // String types
+      else if (lower.find("varchar") != std::string::npos
+               || lower.find("char") != std::string::npos) {
+        int64_t str_len = 16;
+        if (!paren_args.empty()) {
+          str_len = std::min(static_cast<int64_t>(parse_single_int(paren_args, 16)),
+                             static_cast<int64_t>(16));
         }
         generators.push_back(gen::random_string(str_len, col_seed));
-      } else if (lower.find("decimal") != std::string::npos
-                 || lower.find("number") != std::string::npos) {
-        int precision = 10, scale = 2;
-        size_t pp = lower.find('(');
-        if (pp != std::string::npos) {
-          size_t ep = lower.find(')', pp);
-          if (ep != std::string::npos) {
-            std::string args = lower.substr(pp + 1, ep - pp - 1);
-            size_t cp = args.find(',');
-            if (cp != std::string::npos) {
-              precision = std::stoi(args.substr(0, cp));
-              scale = std::stoi(args.substr(cp + 1));
-            } else {
-              precision = std::stoi(args);
-              scale = 0;
-            }
-          }
+      }
+      // Hex/raw types
+      else if (lower.find("hex_string") != std::string::npos
+               || lower.find("raw") != std::string::npos) {
+        generators.push_back(gen::random_string(8, col_seed));
+      }
+      // Interval types
+      else if (lower.find("interval_ym") != std::string::npos) {
+        generators.push_back(gen::random_int(1, 120, col_seed));
+      } else if (lower.find("interval_ds") != std::string::npos) {
+        generators.push_back(gen::random_int(1, 86400000000000LL, col_seed));
+      }
+      // Bit type
+      else if (lower.find("bit") != std::string::npos) {
+        int max_bits = 64;
+        if (!paren_args.empty()) {
+          max_bits = parse_single_int(paren_args, 64);
         }
-        generators.push_back(gen::random_decimal(precision, scale, col_seed));
-      } else {
-        // Default fallback: random string
+        generators.push_back(gen::random_bit(max_bits, col_seed));
+      }
+      // Enum/set types
+      else if (lower.find("enum") != std::string::npos) {
+        generators.push_back(gen::random_int(1, 5, col_seed));
+      } else if (lower.find("set") != std::string::npos) {
+        generators.push_back(gen::random_int(1, 5, col_seed));
+      }
+      // JSON/geometry/roaringbitmap
+      else if (lower.find("json") != std::string::npos) {
+        generators.push_back(gen::constant(std::string("{}")));
+      } else if (lower.find("geometry") != std::string::npos) {
+        generators.push_back(gen::constant(std::string("")));
+      } else if (lower.find("roaringbitmap") != std::string::npos) {
+        generators.push_back(gen::constant(std::string("")));
+      }
+      // Lob/urowid/udt/collection
+      else if (lower.find("lob") != std::string::npos
+               || lower.find("urowid") != std::string::npos
+               || lower.find("udt") != std::string::npos
+               || lower.find("collection") != std::string::npos) {
+        generators.push_back(gen::random_string(10, col_seed));
+      }
+      // Default fallback: random string
+      else {
         generators.push_back(gen::random_string(10, col_seed));
       }
 
@@ -1662,8 +1950,9 @@ protected:
   ObExpr::EvalVectorFunc custom_eval_vector_func_ = nullptr;
 
   // Rich format / dual format check configuration
-  bool rich_format_ = true;          // Default: use 2.0 vec operator
-  bool dual_format_check_ = false;   // Default: single-run mode
+  bool rich_format_ = true;              // Default: use 2.0 vec operator
+  bool dual_format_check_ = false;       // Default: single-run mode
+  bool dual_format_unordered_ = false;   // When true, sort rows before comparing 1.0 vs 2.0
 
   // Intermediate state for dual-run mode (set by prepare(), used by build_and_execute())
   std::vector<ObExpr *> prepared_col_exprs_vec_;
@@ -1674,56 +1963,18 @@ protected:
   int64_t prepared_condition_size_ = 0;
 
   // ===== Datahub Mock Support =====
-  // Note: Datahub support temporarily disabled due to macro conflicts
-  // Uncomment when ob_op_test_datahub.h is included
 
-  // /**
-  //  * @brief Register a mock whole message for datahub testing.
-  //  *
-  //  * Use this for operators that use datahub (Window Function with single_part_parallel,
-  //  * Barrier synchronization, etc.) to provide pre-filled whole messages.
-  //  *
-  //  * @tparam PieceMsg The piece message type (e.g., ObWinbufPieceMsg)
-  //  * @tparam WholeMsg The whole message type (e.g., ObWinbufWholeMsg)
-  //  * @param msg_type The DTL message type (e.g., dtl::DH_WINBUF_WHOLE_MSG)
-  //  * @param setup_fn Lambda to fill the whole message content
-  //  * @return Reference to derived class for chaining
-  //  *
-  //  * Example:
-  //  *   .with_datahub_whole_msg<ObWinbufPieceMsg, ObWinbufWholeMsg>(
-  //  *       dtl::DH_WINBUF_WHOLE_MSG,
-  //  *       [](ObWinbufWholeMsg &msg) {
-  //  *         msg.is_empty_ = false;
-  //  *         // fill msg with aggregate results...
-  //  *       })
-  //  */
-  // template <class PieceMsg, class WholeMsg>
-  // Derived& with_datahub_whole_msg(dtl::ObDtlMsgType msg_type,
-  //                                 std::function<void(WholeMsg&)> setup_fn)
-  // {
-  //   datahub_setup_fn_ = [msg_type, setup_fn](MockDatahubContext& ctx, uint64_t op_id) {
-  //     ctx.register_whole_msg<PieceMsg, WholeMsg>(op_id, msg_type, setup_fn);
-  //   };
-  //   return static_cast<Derived&>(*this);
-  // }
+  /**
+   * @brief Set datahub setup function (type-erased for header isolation).
+   * The caller is responsible for initializing and destroying MockDatahubContext.
+   */
+  Derived& set_datahub_fn(std::function<int(ObExecContext&, uint64_t)> fn)
+  {
+    datahub_setup_fn_ = std::move(fn);
+    return static_cast<Derived&>(*this);
+  }
 
-  // /**
-  //  * @brief Register a barrier whole message (convenience method).
-  //  *
-  //  * Use this for operators that need barrier synchronization.
-  //  *
-  //  * @return Reference to derived class for chaining
-  //  */
-  // Derived& with_datahub_barrier()
-  // {
-  //   datahub_setup_fn_ = [](MockDatahubContext& ctx, uint64_t op_id) {
-  //     ctx.register_barrier(op_id);
-  //   };
-  //   return static_cast<Derived&>(*this);
-  // }
-
-  // Datahub mock setup function (disabled)
-  // std::function<void(MockDatahubContext&, uint64_t)> datahub_setup_fn_;
+  std::function<int(ObExecContext&, uint64_t)> datahub_setup_fn_;
 };
 
 }  // namespace sql

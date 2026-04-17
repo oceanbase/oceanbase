@@ -71,3 +71,41 @@ sql_unittest(test_expand_op
   ob_op_test_engine.cpp
   ob_op_test_data_source.cpp
 )
+
+# Phase 6: Merge Join operator tests
+sql_unittest(test_merge_join_op
+  test_merge_join_op.cpp
+  ob_op_test_engine.cpp
+  ob_op_test_data_source.cpp
+)
+
+# Phase 7: Type coverage tests
+sql_unittest(test_type_coverage
+  test_type_coverage.cpp
+  ob_op_test_engine.cpp
+  ob_op_test_data_source.cpp
+)
+
+# Phase 8: Hash Join operator tests
+sql_unittest(test_hash_join_op
+  test_hash_join_op.cpp
+  ob_op_test_engine.cpp
+  ob_op_test_data_source.cpp
+)
+
+# Phase 8: Nested Loop Join operator tests
+sql_unittest(test_nested_loop_join_op
+  test_nested_loop_join_op.cpp
+  ob_op_test_engine.cpp
+  ob_op_test_data_source.cpp
+)
+
+# Phase 8: Window Function datahub tests
+# NOTE: Disabled due to `#define private public` macro conflict in ob_op_test_datahub.h
+# which pollutes the namespace when included alongside other OceanBase headers.
+# To re-enable: isolate datahub includes in a separate compilation unit.
+# sql_unittest(test_window_function_datahub
+#   test_window_function_datahub.cpp
+#   ob_op_test_engine.cpp
+#   ob_op_test_data_source.cpp
+# )

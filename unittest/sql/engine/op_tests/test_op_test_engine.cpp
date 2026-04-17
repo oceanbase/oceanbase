@@ -4,7 +4,9 @@
  */
 
 #include <gtest/gtest.h>
+#include "lib/ob_errno.h"
 #include "unittest/sql/engine/op_tests/ob_op_test_engine.h"
+#include "unittest/sql/engine/op_tests/ob_op_test_base.h"
 #include "sql/resolver/dml/ob_select_stmt.h"
 #include "sql/resolver/expr/ob_raw_expr.h"
 #include "lib/worker.h"  // for lib::is_oracle_mode, lib::is_mysql_mode
@@ -87,11 +89,13 @@ TEST_F(OpTestEngineTest, RegisterTableIdempotent)
 // Test register_table with null arguments (should fail)
 TEST_F(OpTestEngineTest, RegisterTableNullArgs)
 {
-  int ret = engine_.register_table(nullptr, "a int");
-  EXPECT_EQ(OB_INVALID_ARGUMENT, ret);
+  DISABLE_OPTESTS_RET_CHECK {
+    int ret = engine_.register_table(nullptr, "a int");
+    EXPECT_EQ(OB_INVALID_ARGUMENT, ret);
 
-  ret = engine_.register_table("t5", nullptr);
-  EXPECT_EQ(OB_INVALID_ARGUMENT, ret);
+    ret = engine_.register_table("t5", nullptr);
+    EXPECT_EQ(OB_INVALID_ARGUMENT, ret);
+  }
 }
 
 // Test register_table with empty column defs
@@ -447,6 +451,175 @@ TEST_F(OpTestEngineTest, DoubleWithPrecisionOnly)
   ObDMLStmt *stmt = nullptr;
   ret = engine_.resolve_sql("SELECT a FROM t_dbl_p", stmt);
   EXPECT_EQ(OB_SUCCESS, ret);
+}
+
+// ===== TestDefaultParameterConf Tests =====
+
+// Test basic set/remove/clear/empty operations
+TEST_F(OpTestEngineTest, ParameterConfBasicSetGet)
+{
+  auto &conf = TestDefaultParameterConf::instance();
+  // Clean slate
+  conf.clear();
+  EXPECT_TRUE(conf.empty());
+
+  // set valid config item (_hash_area_size is DEF_CAP, requires unit suffix)
+  conf.set("_hash_area_size", "1M");
+  EXPECT_FALSE(conf.empty());
+  EXPECT_EQ(1, conf.overrides_.size());
+  EXPECT_EQ("1M", conf.overrides_["_hash_area_size"]);
+
+  // remove
+  conf.remove("_hash_area_size");
+  EXPECT_TRUE(conf.empty());
+
+  // clear
+  conf.set("_hash_area_size", "1M");
+  conf.clear();
+  EXPECT_TRUE(conf.empty());
+}
+
+// Test set with invalid config name (should not store)
+TEST_F(OpTestEngineTest, ParameterConfInvalidName)
+{
+  DISABLE_OPTESTS_RET_CHECK
+  {
+    auto &conf = TestDefaultParameterConf::instance();
+    conf.clear();
+
+    // Disable ret check since set() internally triggers EXPECT on invalid names
+    {
+      int ret = conf.set("_nonexistent_config_item_xyz", "123");
+      EXPECT_FALSE(OB_SUCC(ret));
+    }
+    EXPECT_TRUE(conf.empty()) << "Invalid name should not be stored in overrides";
+  }
+}
+
+// Test set with invalid value (should not store)
+TEST_F(OpTestEngineTest, ParameterConfInvalidValue)
+{
+  DISABLE_OPTESTS_RET_CHECK {
+    auto &conf = TestDefaultParameterConf::instance();
+    conf.clear();
+
+    // _enable_hash_join_processor is DEF_INT; set_value() validates type (not range).
+    // "not_a_number" is not a valid integer and must be rejected.
+    int ret = conf.set("_enable_hash_join_processor", "not_a_number");
+    EXPECT_FALSE(OB_SUCC(ret));
+    EXPECT_TRUE(conf.empty()) << "Invalid value should not be stored in overrides";
+  }
+}
+
+// ===== TestParameterGuard Tests =====
+
+// Test RAII save/restore
+TEST_F(OpTestEngineTest, ParameterGuardSaveRestore)
+{
+  auto &conf = TestDefaultParameterConf::instance();
+  conf.clear();
+  conf.set("_hash_area_size", "1M");
+  EXPECT_EQ("1M", conf.overrides_["_hash_area_size"]);
+
+  {
+    TestParameterGuard guard;
+    // Guard saved the previous state
+    conf.set("_hash_area_size", "2M");
+    conf.set("_enable_hash_join_processor", "7");
+    EXPECT_EQ("2M", conf.overrides_["_hash_area_size"]);
+  }
+  // After guard destruction, previous state should be restored
+  EXPECT_EQ("1M", conf.overrides_["_hash_area_size"]);
+  EXPECT_EQ(0, conf.overrides_.count("_enable_hash_join_processor"));
+}
+
+// Test chained set calls
+TEST_F(OpTestEngineTest, ParameterGuardChainedSet)
+{
+  auto &conf = TestDefaultParameterConf::instance();
+  conf.clear();
+
+  {
+    TestParameterGuard guard;
+    guard.set("_hash_area_size", "1M");
+    EXPECT_EQ("1M", conf.overrides_["_hash_area_size"]);
+  }
+  EXPECT_TRUE(conf.empty());
+}
+
+// Test nested guards
+TEST_F(OpTestEngineTest, ParameterGuardNestedGuard)
+{
+  auto &conf = TestDefaultParameterConf::instance();
+  conf.clear();
+
+  {
+    TestParameterGuard guard1;
+    guard1.set("_hash_area_size", "1M");
+
+    {
+      TestParameterGuard guard2;
+      guard2.set("_hash_area_size", "2M");
+      EXPECT_EQ("2M", conf.overrides_["_hash_area_size"]);
+
+      {
+        TestParameterGuard guard3;
+        guard3.set("_hash_area_size", "4M");
+        EXPECT_EQ("4M", conf.overrides_["_hash_area_size"]);
+      }
+      // guard3 restored to guard2's state
+      EXPECT_EQ("2M", conf.overrides_["_hash_area_size"]);
+    }
+    // guard2 restored to guard1's state
+    EXPECT_EQ("1M", conf.overrides_["_hash_area_size"]);
+  }
+  // guard1 restored to initial state (empty)
+  EXPECT_TRUE(conf.empty());
+}
+
+// ===== TenantConfigOverride Integration Tests =====
+
+// Test that _hash_area_size override actually takes effect
+TEST_F(OpTestEngineTest, TenantConfigOverrideApplied)
+{
+  auto &conf = TestDefaultParameterConf::instance();
+  conf.clear();
+
+  // Set override via TestParameterConf (DEF_CAP type, use "M" suffix)
+  conf.set("_hash_area_size", "2M");
+
+  // Re-init engine so apply_tenant_config_overrides() is called
+  engine_.destroy();
+  engine_.init();
+
+  // Verify the override was applied
+  uint64_t effective_tenant_id = engine_.get_session_info().get_effective_tenant_id();
+  omt::ObTenantConfigGuard tc(TENANT_CONF(effective_tenant_id));
+  ASSERT_TRUE(tc.is_valid());
+  // _hash_area_size stores value in bytes, "2M" = 2 * 1024 * 1024
+  EXPECT_EQ(2 * 1024 * 1024, tc->_hash_area_size.get());
+
+  conf.clear();
+}
+
+// Test multiple overrides applied simultaneously
+TEST_F(OpTestEngineTest, TenantConfigOverrideMultipleParams)
+{
+  auto &conf = TestDefaultParameterConf::instance();
+  conf.clear();
+
+  conf.set("_hash_area_size", "4M");
+
+  // Re-init engine
+  engine_.destroy();
+  engine_.init();
+
+  uint64_t effective_tenant_id = engine_.get_session_info().get_effective_tenant_id();
+  omt::ObTenantConfigGuard tc(TENANT_CONF(effective_tenant_id));
+  ASSERT_TRUE(tc.is_valid());
+  EXPECT_EQ(4 * 1024 * 1024, tc->_hash_area_size.get());
+
+  conf.clear();
 }
 
 }  // namespace sql

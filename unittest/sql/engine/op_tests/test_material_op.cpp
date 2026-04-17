@@ -1179,6 +1179,7 @@ TEST_F(MaterialOpTest, T4b_ExprWithCustomEval)
 static int my_add_100_eval_func(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &datum)
 {
   int ret = OB_SUCCESS;
+  FatalErrorChecker error_checker(ret);
   ObDatum *child_datum = nullptr;
   if (OB_FAIL(expr.args_[0]->eval(ctx, child_datum))) {
     // Error case
@@ -1230,6 +1231,7 @@ static int my_mul_10_eval_vector_func(const ObExpr &expr, ObEvalCtx &ctx,
                                        const ObBitVector &skip, const EvalBound &bound)
 {
   int ret = OB_SUCCESS;
+  FatalErrorChecker error_checker(ret);
   // Evaluate child expression first
   if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
     return ret;

@@ -60,6 +60,7 @@ public:
                          ObExpr *limit_expr, ObExpr *offset_expr, bool use_rich_format)
   {
     int ret = OB_SUCCESS;
+    FatalErrorChecker error_checker(ret);
     if (use_rich_format) {
       // 2.0: ObMaterialVecSpec (includes width_ field)
       void *mem = alloc.alloc(sizeof(ObMaterialVecSpec));
@@ -159,6 +160,8 @@ public:
 private:
   bool bypass_;  // Bypass mode for material operator
 };
+
+#undef private
 
 /**
  * @brief ExprTestSpec - Convenience wrapper for expression unit tests.

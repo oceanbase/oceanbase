@@ -231,7 +231,7 @@ TEST_F(HashGroupByOpTest, Dump)
       .with_sql_operator_dump(true)
       .with_hash_area_size(64 * 1024)
       .with_data(std::move(data))
-      .enable_dual_format_check().run(engine_);
+      .enable_dual_format_unordered_check().run(engine_);
 
   EXPECT_TRUE(result.verify_unordered(expected));
 }

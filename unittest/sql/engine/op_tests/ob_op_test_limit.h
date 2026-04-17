@@ -101,6 +101,7 @@ private:
                               ObExpr *limit_expr, ObExpr *offset_expr, bool use_rich_format)
   {
     int ret = OB_SUCCESS;
+    FatalErrorChecker error_checker(ret);
     void *mem = alloc.alloc(sizeof(SpecType));
     if (OB_ISNULL(mem)) {
       LOG_WARN("alloc spec failed", K(ret));
