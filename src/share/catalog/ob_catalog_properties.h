@@ -21,7 +21,8 @@ enum class ObLakeTableFormat
   INVALID = 0,
   ICEBERG,
   HIVE,
-  ODPS
+  ODPS,
+  PAIMON
 };
 
 enum class ObURISelectionMode
