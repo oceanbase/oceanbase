@@ -673,6 +673,7 @@ public:
     is_inited_(false),
     has_build_(false),
     need_vid_check_(false),
+    build_finished_(false),
     segment_handle_(),
     vid_array_(nullptr),
     vec_array_(nullptr),
@@ -692,6 +693,8 @@ public:
   ~ObVectorIndexSegmentBuilder();
   bool is_inited() const { return ATOMIC_LOAD(&is_inited_); }
   void set_inited() { ATOMIC_STORE(&is_inited_, true); }
+  bool is_build_finished() const { return ATOMIC_LOAD(&build_finished_); }
+  void set_build_finished(const bool v) { ATOMIC_STORE(&build_finished_, v); }
   void free(ObIAllocator &allocator);
   void free_vec_buf_data(ObIAllocator &allocator);
   int init_vec_buffer(const uint64_t tenant_id, ObIAllocator &allocator, const bool is_sparse_vector);
@@ -738,7 +741,7 @@ public:
   int add_index(float* vecs, int64_t* ids, int dim, char *extra_info, int size, int64_t extra_info_actual_size = 0);
   int add_index(uint32_t *lens, uint32_t *dims, float *vals, int64_t *ids, int size, char *extra_infos, int64_t extra_info_actual_size = 0);
 
-  TO_STRING_KV(KP(this), K_(is_inited), K_(seg_type), K_(has_build), K_(need_vid_check),
+  TO_STRING_KV(KP(this), K_(is_inited), K_(seg_type), K_(has_build), K_(need_vid_check), K_(build_finished),
       K_(segment_handle), KP_(vid_array), KP_(vec_array), KP_(extra_info_buf),
       KP_(lens_array), KP_(dims_array), KP_(vals_array),
       K_(vid_bound), KPC_(ibitmap), KPC_(vbitmap), K_(total_cnt), K_(add_cnt), K_(skip_cnt));
@@ -748,6 +751,7 @@ public:
   bool is_inited_;  // true only after segment_handle_ or vec buffer is fully initialized
   bool has_build_;
   bool need_vid_check_;
+  bool build_finished_;
   TCRWLock mem_data_rwlock_{ObLatchIds::VECTOR_MEM_DATA};
   ObVectorIndexSegmentHandle segment_handle_;
   ObVecIdxVidArray *vid_array_;
@@ -794,9 +798,7 @@ public:
   static int64_t instacnce_cnt_;
   ObVecIdxSnapshotData()
     : ObVectorIndexDataBase(),
-      is_ready_for_read_(false),
       builder_(nullptr),
-      deserializer_(nullptr),
       meta_(),
       vid_bound_()
   {
@@ -838,13 +840,11 @@ private:
       storage::ObTableScanIterator *snap_data_iter, const uint64_t tenant_id, ObVectorIndexSegmentMeta &seg_meta);
 
 public:
-  TO_STRING_KV(KP(this), K_(type), K_(is_init), K_(has_complete), K_(is_ready_for_read), K_(scn),
-    K_(ref_cnt), KPC_(builder), KPC_(deserializer), K_(meta), K_(vid_bound), K_(last_res_seg_info));
+  TO_STRING_KV(KP(this), K_(type), K_(is_init), K_(has_complete), K_(scn),
+    K_(ref_cnt), KPC_(builder), K_(meta), K_(vid_bound), K_(last_res_seg_info));
 
   TCRWLock mem_data_rwlock_{ObLatchIds::VECTOR_MEM_DATA};
-  bool is_ready_for_read_;
   ObVectorIndexSegmentBuilder *builder_;
-  ObVectorIndexSegmentDeserializer *deserializer_;
   ObVectorIndexMeta meta_;
   ObVidBound vid_bound_;
   ObVecIndexBuildSegInfo last_res_seg_info_;

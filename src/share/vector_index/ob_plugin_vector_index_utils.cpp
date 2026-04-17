@@ -1009,8 +1009,8 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
     }
   }
   // free adapter memory when failed
-  if ((OB_FAIL(ret) || index_count == 0) && OB_NOT_NULL(new_adapter) && create_new_adp) {
-    LOG_INFO("release new adapter memory in failure", K(ret), K(index_count), KP(new_adapter), K(create_new_adp));
+  if ((OB_FAIL(ret) || (index_count == 0 && !is_meta_data)) && OB_NOT_NULL(new_adapter) && create_new_adp) {
+    LOG_INFO("release new adapter memory in failure", K(ret), K(index_count), KP(new_adapter), K(create_new_adp), K(is_meta_data));
     new_adapter->~ObPluginVectorIndexAdaptor();
     vector_index_service->get_adaptor_allocator().free(adpt_buff);
     adpt_buff = nullptr;
@@ -1025,7 +1025,7 @@ int ObPluginVectorIndexUtils::try_sync_snapshot_memdata(ObLSID &ls_id,
     snapshot_idx_iter = nullptr;
   }
   if (OB_SUCC(ret)) {
-    LOG_INFO("refresh memdata snap done",
+    LOG_INFO("refresh memdata snap done", KP(new_adapter), KP(adapter),
       K(ls_id), K(target_scn), K(index_count), K(is_meta_data), K(meta_scn));
   }
   return ret;
@@ -1073,6 +1073,7 @@ int ObPluginVectorIndexUtils::try_reuse_segments_from_old_adapter(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("snap data is invalid", K(ret), K(new_snap), K(old_snap));
     } else {
+      TCRLockGuard snap_mem_lock_guard(old_snap->mem_data_rwlock_);
       ObVectorIndexMeta &new_meta = new_snap->meta_;
       const ObVectorIndexMeta &old_meta = old_snap->meta_;
       for (int64_t i = 0; OB_SUCC(ret) && i < new_meta.incrs_.count(); ++i) {
@@ -1156,6 +1157,17 @@ int ObPluginVectorIndexUtils::refresh_adp_from_table(
       if (OB_SUCC(ret) && ada_ctx.get_status() == PVQ_COM_DATA) {
         if (OB_FAIL(read_vector_info(adapter, allocator, ls_id, target_scn, ada_ctx))) {
           LOG_WARN("failed to read vector_info", KR(ret));
+        }
+      }
+
+      if (OB_SUCC(ret) && ! ls_leader) {
+        // check again if ls is follower
+        bool is_leader_now = false;
+        if (OB_FAIL(ObPluginVectorIndexUtils::get_ls_leader_flag(ls_id, is_leader_now))) {
+          LOG_WARN("fail to get ls leader flag", K(ret), K(ls_id));
+        } else if (is_leader_now) {
+          adapter->reset_complete();
+          LOG_INFO("ls change from follower to leader, reset complete", K(ls_id), KPC(adapter));
         }
       }
     }

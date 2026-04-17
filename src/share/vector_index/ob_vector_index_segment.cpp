@@ -1027,6 +1027,7 @@ void ObVectorIndexSegmentBuilder::free(ObIAllocator &allocator)
   skip_cnt_ = 0;
   has_build_ = false;
   need_vid_check_ = false;
+  build_finished_ = false;
   is_inited_ = false;
 }
 
@@ -1760,6 +1761,7 @@ int ObVecIdxSnapshotData::build_meta(
       seg_meta.end_key_buf_, OB_VECTOR_INDEX_SNAPSHOT_KEY_LENGTH, seg_meta.end_key_))) {
     LOG_WARN("get end key fail", K(ret), K(index_type), K(tablet_id), K(snapshot_version));
   } else {
+    TCWLockGuard snap_mem_lock_guard(mem_data_rwlock_);
     seg_meta.seg_type_ = builder_->seg_type_;
     seg_meta.index_type_ = index_type;
     builder_->segment_handle_->set_is_base();
@@ -1811,11 +1813,8 @@ int ObVecIdxSnapshotData::build_finished(ObIAllocator &allocator)
       last_res_seg_info_.min_vid_ = min_vid;
       last_res_seg_info_.max_vid_ = max_vid;
     }
-    builder_->segment_handle_.reset();
     builder_->free(allocator);
-    builder_->~ObVectorIndexSegmentBuilder();
-    allocator.free(builder_);
-    builder_ = nullptr;
+    builder_->set_build_finished(true);
   }
   return ret;
 }
