@@ -3934,11 +3934,12 @@ int ObPluginVectorIndexAdaptor::check_need_sync_to_follower_or_do_opt_task(ObPlu
   return ret;
 }
 
-int ObPluginVectorIndexAdaptor::check_can_sync_to_follower(ObPluginVectorIndexMgr *mgr, int64_t current_snapshot_count, bool &need_sync)
+int ObPluginVectorIndexAdaptor::check_snapshot_table_can_read_index(bool &can_read_index)
 {
   int ret = OB_SUCCESS;
   ObSchemaGetterGuard schema_guard;
   const ObSimpleTableSchemaV2 *snapshot_table_schema = NULL;
+  can_read_index = false;
   if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id_, schema_guard))) {
     LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id_));
   } else if (OB_FAIL(schema_guard.get_simple_table_schema(tenant_id_, get_snapshot_table_id(), snapshot_table_schema))) {
@@ -3947,11 +3948,23 @@ int ObPluginVectorIndexAdaptor::check_can_sync_to_follower(ObPluginVectorIndexMg
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("snapshot table not exist", K(ret), K(snapshot_table_schema));
   } else {
-    if (need_sync && !snapshot_table_schema->can_read_index()) {
+    can_read_index = snapshot_table_schema->can_read_index();
+  }
+  return ret;
+}
+
+int ObPluginVectorIndexAdaptor::check_can_sync_to_follower(ObPluginVectorIndexMgr *mgr, int64_t current_snapshot_count, bool &need_sync)
+{
+  int ret = OB_SUCCESS;
+  bool can_read_index = false;
+  if (OB_FAIL(check_snapshot_table_can_read_index(can_read_index))) {
+    LOG_WARN("fail to check snapshot table can read index", KR(ret), K(tenant_id_), K(get_snapshot_table_id()));
+  } else {
+    if (need_sync && !can_read_index) {
       need_sync = false;
       LOG_INFO("snapshot table not ready, not need sync to follower", KPC(this));
     }
-    if (current_snapshot_count == 0 && snapshot_table_schema->can_read_index()) {
+    if (current_snapshot_count == 0 && can_read_index) {
       if (OB_FAIL(mgr->get_mem_sync_info().add_task_to_waiting_map(get_inc_tablet_id(), get_inc_table_id()))) {
         if (OB_HASH_EXIST == ret) {
           ret = OB_SUCCESS;
