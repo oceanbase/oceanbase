@@ -1492,9 +1492,8 @@ TEST_F(TestDataBlockMetaValCompact, round_trip_old_data_version)
   ret = serialize_deserialize_round_trip(val, data_version, decoded, allocator);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(decoded.is_valid());
-  ASSERT_EQ(decoded.macro_id_.version_, MacroBlockId::MACRO_BLOCK_ID_VERSION_V1);
+  ASSERT_EQ(decoded.macro_id_.version_, MacroBlockId::MACRO_BLOCK_ID_VERSION_V2);
   ASSERT_EQ(decoded.macro_id_.fourth_id_, 0);
-  ASSERT_EQ(val.macro_id_, decoded.macro_id_);
 }
 
 TEST_F(TestDataBlockMetaValCompact, round_trip_new_data_version)
@@ -1548,9 +1547,8 @@ TEST_F(TestDataBlockMetaValCompact, serialize_version_correction)
   ret = decoded.deserialize(buf, ser_len, pos);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_TRUE(decoded.is_valid());
-  ASSERT_EQ(decoded.macro_id_.version_, MacroBlockId::MACRO_BLOCK_ID_VERSION_V1);
+  ASSERT_EQ(decoded.macro_id_.version_, MacroBlockId::MACRO_BLOCK_ID_VERSION_V2);
   ASSERT_EQ(decoded.macro_id_.fourth_id_, 0);
-  ASSERT_NE(val.macro_id_, decoded.macro_id_);
 }
 
 // LatestDataBlockMetaVal @ 4.2.5 serialize -> buf -> MockDataBlockMetaVal_4_3_0_0 deserialize
@@ -1658,7 +1656,9 @@ TEST_F(TestDataBlockMetaValCompact, version_compat_mock_4_2_5_to_latest)
   ASSERT_EQ(OB_SUCCESS, ret) << "ObDataBlockMetaVal should deserialize MockDataBlockMetaVal_4_2_5 buf";
   ASSERT_TRUE(decoded_from_mock.is_valid());
   ASSERT_EQ(decoded_from_mock.version_, mock_val.version_);
-  ASSERT_EQ(decoded_from_mock.macro_id_.first_id(), mock_val.macro_id_.first_id());
+  ASSERT_NE(decoded_from_mock.macro_id_.first_id(), mock_val.macro_id_.first_id());
+  ASSERT_EQ(mock_val.macro_id_.version_, MacroBlockId::MACRO_BLOCK_ID_VERSION_V1);
+  ASSERT_EQ(decoded_from_mock.macro_id_.version_, MacroBlockId::MACRO_BLOCK_ID_VERSION_V2);
   ASSERT_EQ(decoded_from_mock.macro_id_.second_id(), mock_val.macro_id_.second_id());
   ASSERT_EQ(decoded_from_mock.macro_id_.third_id(), mock_val.macro_id_.third_id());
   ASSERT_EQ(decoded_from_mock.row_count_, mock_val.row_count_);
@@ -1777,8 +1777,9 @@ TEST_F(TestDataBlockMetaValCompact, version_compat_mock_4_3_0_to_latest)
   ASSERT_EQ(decoded_buf_len, 92);
   ASSERT_EQ(OB_SUCCESS, ret) << "ObDataBlockMetaVal should deserialize MockDataBlockMetaVal_4_3_0_0 buf";
   ASSERT_TRUE(decoded_from_mock.is_valid());
-  ASSERT_EQ(decoded_from_mock.version_, mock_val.version_);
-  ASSERT_EQ(decoded_from_mock.macro_id_.first_id(), mock_val.macro_id_.first_id());
+  ASSERT_NE(decoded_from_mock.macro_id_.first_id(), mock_val.macro_id_.first_id());
+  ASSERT_EQ(decoded_from_mock.macro_id_.version(), MacroBlockId::MACRO_BLOCK_ID_VERSION_V2);
+  ASSERT_EQ(mock_val.macro_id_.version_, MacroBlockId::MACRO_BLOCK_ID_VERSION_V1);
   ASSERT_EQ(decoded_from_mock.macro_id_.second_id(), mock_val.macro_id_.second_id());
   ASSERT_EQ(decoded_from_mock.macro_id_.third_id(), mock_val.macro_id_.third_id());
   ASSERT_EQ(decoded_from_mock.row_count_, mock_val.row_count_);

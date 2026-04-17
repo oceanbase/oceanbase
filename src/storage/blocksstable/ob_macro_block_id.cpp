@@ -523,6 +523,9 @@ DEFINE_DESERIALIZE(MacroBlockId)
   } else if (OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &third_id_))) {
     LOG_WARN("decode third_id_ failed.", K(ret), K(new_pos), K(data_len), K(*this));
   } else if (version_ == MACRO_BLOCK_ID_VERSION_V1) {
+    // In-memory MacroBlockId always uses V2; V1 exists only on persisted bytes for backward compatibility
+    // (three int64s on wire, no fourth_id).
+    version_ = MACRO_BLOCK_ID_VERSION_V2;
     fourth_id_ = 0;
   } else if (version_ == MACRO_BLOCK_ID_VERSION_V2) {
     if (OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &fourth_id_))) {

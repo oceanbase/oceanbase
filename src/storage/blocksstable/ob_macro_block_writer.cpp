@@ -1821,6 +1821,9 @@ int ObMacroBlockWriter::build_micro_block_desc_with_rewrite(
     LOG_WARN("fail to fill micro block deserialize meta", K(ret), KPC(micro_block.micro_index_info_));
   } else if (OB_UNLIKELY(header.has_column_checksum_ != data_store_desc_->is_major_merge_type()
                       || header.column_count_ != data_store_desc_->get_row_column_count())) {
+    // ObMicroBlockHeader serialized size must not change on this rewrite path: fields such as
+    // row_offset and other encoding-relative data in the payload are not relocated when
+    // header_size_ / get_serialize_size() would differ.
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected header", K(ret), K(header), K(data_store_desc_));
   } else {

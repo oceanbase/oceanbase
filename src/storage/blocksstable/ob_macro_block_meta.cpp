@@ -243,6 +243,10 @@ int ObDataBlockMetaVal::build_value(ObStorageDatum &datum,
   return ret;
 }
 
+// Failures of this check are expected mainly during compatibility upgrades: when data_version is still
+// below DATA_VERSION_4_3_3_0, old_version_valid requires MACRO_BLOCK_ID_VERSION_V1 and fourth_id_ == 0,
+// but the MacroBlockId version is V2
+// so we need to revise the macro_id version to V1 when data_version < 4.3.3.0
 bool ObDataBlockMetaVal::is_valid_macro_id(const MacroBlockId &macro_id, const int64_t data_version) const
 {
   // macro_id.fourth_id() is 0 in such situation:
@@ -456,7 +460,6 @@ int ObDataBlockMetaVal::deserialize(const char *buf, const int64_t data_len, int
 int64_t ObDataBlockMetaVal::get_max_serialize_size(const int64_t data_version) const
 {
   int64_t len = sizeof(*this);
-  uint64_t compact_fixed_version = DATA_VERSION_4_6_0_0;
   len -= (
           sizeof(column_checksums_)
 

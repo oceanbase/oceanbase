@@ -61,7 +61,11 @@ private:
   bool is_valid_macro_id(const MacroBlockId &macro_id, const int64_t data_version) const;
   void check_and_revise_macro_id_version(const int64_t data_version, MacroBlockId &macro_id) const;
 private:
-  // initial version
+  // Version history (V1):
+  //   - 4.3.0.0: logic_id_.info_;
+  //              ObMacroDataSeq vptr (removed in ObLogicMacroBlockId at 4.3.3.0, see V2);
+  //              agg_row_len_
+  //              agg_row_buf_
   static const int32_t DATA_BLOCK_META_VAL_VERSION_V1 = 1;
   // Version history (V2):
   //   - 4.3.1.0: ddl_end_row_offset
