@@ -13,11 +13,12 @@
 #include "common/storage/ob_io_device.h"
 #include "share/backup/ob_backup_struct.h"
 #include "sql/engine/table/ob_external_table_access_service.h"
+#include "sql/engine/table/ob_external_file_access.h"
+#include "sql/engine/table/ob_csv_prefetch_mgr.h"
 #include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase {
 namespace sql {
-
 
 class ObCSVIteratorState : public ObExternalIteratorState
 {
@@ -97,7 +98,10 @@ public:
   static const int max_ipv6_port_length = 100;
   ObCSVTableRowIterator() : bit_vector_cache_(NULL),
                             is_bad_file_enabled_(false),
-                            max_buffer_size_(1024 * 1024 * 1024) {}
+                            max_buffer_size_(1024 * 1024 * 1024),
+                            enable_prefetch_(false),
+                            prefetch_mgr_(),
+                            storage_type_(OB_STORAGE_MAX_TYPE) {}
   virtual ~ObCSVTableRowIterator();
   virtual int init(const storage::ObTableScanParam *scan_param) override;
   int get_next_row() override;
@@ -146,6 +150,9 @@ private:
   bool is_bad_file_enabled_;
   bool use_handle_batch_lines_ = false;
   int64_t max_buffer_size_;
+  bool enable_prefetch_;
+  ObCSVPrefetchMgr prefetch_mgr_;
+  common::ObStorageType storage_type_;
 };
 
 

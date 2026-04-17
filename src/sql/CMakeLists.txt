@@ -1175,6 +1175,7 @@ ob_set_subtarget(ob_sql engine_table
   engine/table/ob_pcached_external_file_service_scheduler.cpp
   engine/table/ob_external_table_pushdown_filter.cpp
   engine/table/ob_csv_table_row_iter.cpp
+  engine/table/ob_csv_prefetch_mgr.cpp
   engine/table/ob_dummy_table_row_iter.cpp
   engine/table/ob_orc_table_row_iter.cpp
   engine/table/ob_parquet_table_row_iter.cpp

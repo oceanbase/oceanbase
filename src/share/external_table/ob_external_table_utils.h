@@ -15,6 +15,8 @@
 #include "src/sql/engine/table/ob_external_file_access.h"
 #include "sql/optimizer/file_prune/ob_lake_table_file_map.h"
 #include "sql/engine/connector/ob_odps_jni_connector.h"
+#include "sql/engine/table/ob_csv_prefetch_mgr.h"
+#include "sql/engine/px/ob_granule_parallel_task_gen.h"
 
 namespace oceanbase
 {
@@ -904,42 +906,79 @@ public:
     int ret = OB_SUCCESS;
     ObArenaAllocator allocator_for_read;
     char *buf = nullptr;
-    int64_t buf_len = 2 * 1024 * 1024;
-    if (OB_ISNULL(buf = (char *)allocator_for_read.alloc(buf_len))) {
+    bool use_prefetch = false;
+    ObSqlString full_path;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      ObStorageType storage_type = OB_STORAGE_MAX_TYPE;
+      OZ (get_storage_type_from_path_for_external_table(external_location, storage_type));
+      use_prefetch = tenant_config->_enable_external_table_prefetch
+                     && !std::is_same<HandleFunc, GamblingFunctor>::value  // 只对全量扫描界定预取
+                     && storage_type != OB_STORAGE_FILE;
+    }
+    int64_t buf_len = use_prefetch ? OB_MALLOC_BIG_BLOCK_SIZE : 2 * 1024 * 1024;
+    if (OB_SUCC(ret) && OB_ISNULL(buf = (char *)allocator_for_read.alloc(buf_len))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory for buffer", K(ret), K(buf_len));
-    }
-    MEMSET(buf, 0, buf_len);
-    ObExternalStreamFileReader file_reader;
-    OZ (file_reader.init(external_location, external_access_info,
-                         external_file_format.csv_format_.compression_algorithm_,
-                         allocator_for_read));
-    ObSqlString full_path;
-    if (!is_abs_url(url)) {
-      OZ (full_path.append_fmt("%.*s%s%.*s", external_location.length(), external_location.ptr(),
-                                (external_location.empty() || external_location[external_location.length() - 1] == '/') ? "" : "/",
-                                url.length(), url.ptr()));
     } else {
-      OZ (full_path.assign(url));
-    }
-    OZ (file_reader.open(full_path.string()));
-    file_reader.advance(start_pos);
-    int64_t already_read_size = 0;
-    int64_t target_read_size = end_pos - start_pos;
-    while (OB_SUCC(ret)
-           && !handle_func.is_finished_
-           && already_read_size < target_read_size
-           && !file_reader.eof()) {
-      int64_t read_size = 0;
-      OZ (file_reader.read(buf, buf_len, read_size));
-      if (read_size > 0) {
-        int check_size = min(read_size, target_read_size - already_read_size);
-        OZ (handle_func(external_file_format, buf, check_size));
+      MEMSET(buf, 0, buf_len);
+      if (!is_abs_url(url)) {
+        OZ (full_path.append_fmt("%.*s%s%.*s", external_location.length(), external_location.ptr(),
+                                  (external_location.empty() || external_location[external_location.length() - 1] == '/') ? "" : "/",
+                                  url.length(), url.ptr()));
+      } else {
+        OZ (full_path.assign(url));
       }
-      already_read_size += read_size;
     }
+
+    if (OB_FAIL(ret)) {
+    } else if (!use_prefetch) {
+      ObExternalStreamFileReader file_reader;
+      OZ (file_reader.init(external_location, external_access_info,
+                          external_file_format.csv_format_.compression_algorithm_,
+                          allocator_for_read));
+      OZ (file_reader.open(full_path.string()));
+      file_reader.advance(start_pos);
+      int64_t already_read_size = 0;
+      int64_t target_read_size = end_pos - start_pos;
+      while (OB_SUCC(ret)
+            && !handle_func.is_finished_
+            && already_read_size < target_read_size
+            && !file_reader.eof()) {
+        int64_t read_size = 0;
+        OZ (file_reader.read(buf, buf_len, read_size));
+        if (read_size > 0) {
+          int check_size = min(read_size, target_read_size - already_read_size);
+          OZ (handle_func(external_file_format, buf, check_size));
+        }
+        already_read_size += read_size;
+      }
+      file_reader.close();
+    } else {
+      ObCSVPrefetchMgr prefetch_mgr;
+      OZ (prefetch_mgr.init(allocator_for_read, external_file_format.csv_format_.compression_algorithm_));
+      ObExternalFileUrlInfo *file_url_info = nullptr;
+      OZ (create_external_file_url_info(external_location, external_access_info, full_path.string(), allocator_for_read, file_url_info));
+      ObExternalFileCacheOptions cache_options;  // no cache for csv prefetch
+      OZ (prefetch_mgr.open(*file_url_info, cache_options, start_pos, end_pos));
+      int64_t already_read_size = 0;
+      int64_t target_read_size = end_pos - start_pos;
+      while (OB_SUCC(ret)
+            && !handle_func.is_finished_
+            && already_read_size < target_read_size
+            && !prefetch_mgr.eof()) {
+        int64_t read_size = 0;
+        OZ (prefetch_mgr.get_buffer(buf, buf_len, read_size));
+        if (read_size > 0) {
+          int check_size = min(read_size, target_read_size - already_read_size);
+          OZ (handle_func(external_file_format, buf, check_size));
+        }
+        already_read_size += read_size;
+      }
+      prefetch_mgr.close();
+    }
+
     allocator_for_read.free(buf);
-    file_reader.close();
     return ret;
   }
 
