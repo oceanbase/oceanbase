@@ -847,6 +847,7 @@ int ObPxMSReceiveVecOp::new_local_order_input(MergeSortInput *&out_msi)
     local_input->row_store_.set_callback(&sql_mem_processor_);
     local_input->row_store_.set_io_event_observer(&io_event_observer_);
     ObMemAttr mem_attr(ctx_.get_my_session()->get_effective_tenant_id(), "PxMSRecvLocal", ObCtxIds::WORK_AREA);
+    bool push_succ = false;
     if (OB_FAIL(local_input->row_store_.init(MY_SPEC.all_exprs_, get_spec().max_batch_size_,
                                          mem_attr, 0 /* mem_limit */, true /* enable_dump*/,
                                          0 /*row_extra_size*/,
@@ -856,11 +857,14 @@ int ObPxMSReceiveVecOp::new_local_order_input(MergeSortInput *&out_msi)
       LOG_WARN("failed to allocate dir id for temp row store", K(ret));
     } else if (OB_FAIL(merge_inputs_.push_back(local_input))) {
       LOG_WARN("fail push back MergeSortInput", K(ret));
+    } else {
+      push_succ = true;
+      out_msi = local_input;
+    }
+    if (OB_FAIL(ret) && !push_succ && NULL != local_input) {
       local_input->clean_row_store(ctx_);
       local_input->destroy();
       mem_context_->get_malloc_allocator().free(local_input);
-    } else {
-      out_msi = local_input;
     }
   }
   return ret;

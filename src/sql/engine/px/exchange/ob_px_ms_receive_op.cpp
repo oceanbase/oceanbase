@@ -709,6 +709,7 @@ int ObPxMSReceiveOp::new_local_order_input(MergeSortInput *&out_msi)
     local_input->datum_store_.set_allocator(mem_context_->get_malloc_allocator());
     local_input->datum_store_.set_callback(&sql_mem_processor_);
     local_input->datum_store_.set_io_event_observer(&io_event_observer_);
+    bool push_succ = false;
     if (OB_FAIL(local_input->datum_store_.init(0,
                               ctx_.get_my_session()->get_effective_tenant_id(),
                               ObCtxIds::WORK_AREA,
@@ -719,11 +720,14 @@ int ObPxMSReceiveOp::new_local_order_input(MergeSortInput *&out_msi)
       LOG_WARN("failed to allocate dir id for chunk datum store", K(ret));
     } else if (OB_FAIL(merge_inputs_.push_back(local_input))) {
       LOG_WARN("fail push back MergeSortInput", K(ret));
+    } else {
+      push_succ = true;
+      out_msi = local_input;
+    }
+    if (OB_FAIL(ret) && !push_succ && NULL != local_input) {
       local_input->clean_row_store(ctx_);
       local_input->destroy();
       mem_context_->get_malloc_allocator().free(local_input);
-    } else {
-      out_msi = local_input;
     }
   }
   return ret;
