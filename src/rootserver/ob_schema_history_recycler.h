@@ -230,6 +230,7 @@ public:
   static const int64_t BATCH_COMPRESS_SCHEMA_CNT = 100;
   static const int64_t BATCH_COMPRESS_RECORD_CNT = 1000;
   static const int64_t COMPRESS_RECORD_THREHOLD = 10;
+  static const int64_t BATCH_DELETE_ROW_LIMIT = 10000;
   static const int64_t BUCKET_NUM = 10000;
 public:
   ObIRecycleSchemaExecutor() = delete;

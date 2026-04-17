@@ -1575,7 +1575,8 @@ int ObRecycleSchemaExecutor::gen_batch_recycle_schema_history_sql(
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(sql.append_fmt(") and schema_version <= %ld", schema_version_))) {
+    } else if (OB_FAIL(sql.append_fmt(") and schema_version <= %ld limit %ld",
+                                      schema_version_, BATCH_DELETE_ROW_LIMIT))) {
       LOG_WARN("fail to append fmt", K(ret), K_(tenant_id), K_(schema_version));
     }
   }
@@ -1589,16 +1590,34 @@ int EXECUTOR::batch_recycle_schema_history( \
   int ret = OB_SUCCESS; \
   ObSqlString sql; \
   int64_t affected_rows = 0; \
+  int64_t total_affected_rows = 0; \
+  int64_t delete_round = 0; \
   if (OB_FAIL(gen_batch_recycle_schema_history_sql(dropped_schema_keys, sql))) { \
     LOG_WARN("fail to gen sql", K(ret)); \
-  } else if (OB_FAIL(sql_proxy_->write(tenant_id_, sql.ptr(), affected_rows))) { \
-    LOG_WARN("fail to execute sql", K(ret), K_(tenant_id), K_(schema_version)); \
-  } else if (is_zero_row(affected_rows)) { \
-    ret = OB_ERR_UNEXPECTED; \
-    LOG_WARN("affected_rows is zero", K(ret), K_(tenant_id), K_(schema_version)); \
   } else { \
-    LOG_INFO("[SCHEMA_RECYCLE] batch_recycle_schema_history", \
-             K(ret), K_(tenant_id), K(affected_rows), K(sql)); \
+    do { \
+      affected_rows = 0; \
+      delete_round++; \
+      if (OB_FAIL(check_stop())) { \
+        LOG_WARN("schema history recycler is stopped", K(ret)); \
+      } else if (OB_FAIL(sql_proxy_->write(tenant_id_, sql.ptr(), affected_rows))) { \
+        LOG_WARN("fail to execute sql", K(ret), K_(tenant_id), K_(schema_version)); \
+      } else { \
+        total_affected_rows += affected_rows; \
+        LOG_INFO("[SCHEMA_RECYCLE] batch_recycle_schema_history", \
+                 K(ret), K_(tenant_id), K(affected_rows), K(total_affected_rows), \
+                 K(delete_round)); \
+      } \
+    } while (OB_SUCC(ret) && affected_rows > 0); \
+  } \
+  if (OB_SUCC(ret)) { \
+    if (is_zero_row(total_affected_rows)) { \
+      ret = OB_ERR_UNEXPECTED; \
+      LOG_WARN("affected_rows is zero", K(ret), K_(tenant_id), K_(schema_version)); \
+    } else { \
+      LOG_INFO("[SCHEMA_RECYCLE] batch_recycle_schema_history done", \
+               K(ret), K_(tenant_id), K(total_affected_rows), K(sql)); \
+    } \
   } \
   return ret; \
 }
@@ -1634,7 +1653,7 @@ int ObRecycleSchemaExecutor::gen_batch_compress_schema_history_sql(
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(sql.append_fmt(")"))) {
+    } else if (OB_FAIL(sql.append_fmt(") limit %ld", BATCH_DELETE_ROW_LIMIT))) {
       LOG_WARN("fail to append fmt", K(ret), K_(tenant_id), K_(schema_version));
     }
   }
@@ -1717,16 +1736,34 @@ int EXECUTOR::batch_compress_schema_history( \
   int ret = OB_SUCCESS; \
   ObSqlString sql; \
   int64_t affected_rows = 0; \
+  int64_t total_affected_rows = 0; \
+  int64_t delete_round = 0; \
   if (OB_FAIL(gen_batch_compress_schema_history_sql(compress_schema_infos, sql))) { \
     LOG_WARN("fail to gen sql", K(ret)); \
-  } else if (OB_FAIL(sql_proxy_->write(tenant_id_, sql.ptr(), affected_rows))) { \
-    LOG_WARN("fail to execute sql", K(ret), K_(tenant_id), K_(schema_version)); \
-  } else if (is_zero_row(affected_rows)) { \
-    ret = OB_ERR_UNEXPECTED; \
-    LOG_WARN("affected_rows is zero", K(ret), K_(tenant_id), K_(schema_version)); \
   } else { \
-    LOG_INFO("[SCHEMA_RECYCLE] batch_compress_schema_history", \
-             K(ret), K_(tenant_id), K(affected_rows), K(sql)); \
+    do { \
+      affected_rows = 0; \
+      delete_round++; \
+      if (OB_FAIL(check_stop())) { \
+        LOG_WARN("schema history recycler is stopped", K(ret)); \
+      } else if (OB_FAIL(sql_proxy_->write(tenant_id_, sql.ptr(), affected_rows))) { \
+        LOG_WARN("fail to execute sql", K(ret), K_(tenant_id), K_(schema_version)); \
+      } else { \
+        total_affected_rows += affected_rows; \
+        LOG_INFO("[SCHEMA_RECYCLE] batch_compress_schema_history", \
+                 K(ret), K_(tenant_id), K(affected_rows), K(total_affected_rows), \
+                 K(delete_round)); \
+      } \
+    } while (OB_SUCC(ret) && affected_rows > 0); \
+  } \
+  if (OB_SUCC(ret)) { \
+    if (is_zero_row(total_affected_rows)) { \
+      ret = OB_ERR_UNEXPECTED; \
+      LOG_WARN("affected_rows is zero", K(ret), K_(tenant_id), K_(schema_version)); \
+    } else { \
+      LOG_INFO("[SCHEMA_RECYCLE] batch_compress_schema_history done", \
+               K(ret), K_(tenant_id), K(total_affected_rows), K(sql)); \
+    } \
   } \
   return ret; \
 }
@@ -1843,7 +1880,8 @@ int ObSecondRecycleSchemaExecutor::gen_batch_recycle_schema_history_sql(
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(sql.append_fmt(") and schema_version <= %ld", schema_version_))) {
+    } else if (OB_FAIL(sql.append_fmt(") and schema_version <= %ld limit %ld",
+                                      schema_version_, BATCH_DELETE_ROW_LIMIT))) {
       LOG_WARN("fail to append fmt", K(ret), K_(tenant_id), K_(schema_version));
     }
   }
@@ -1964,7 +2002,8 @@ int ObThirdRecycleSchemaExecutor::gen_batch_recycle_schema_history_sql(
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(sql.append_fmt(") and schema_version <= %ld", schema_version_))) {
+    } else if (OB_FAIL(sql.append_fmt(") and schema_version <= %ld limit %ld",
+                                      schema_version_, BATCH_DELETE_ROW_LIMIT))) {
       LOG_WARN("fail to append fmt", K(ret), K_(tenant_id), K_(schema_version));
     }
   }
@@ -2166,7 +2205,7 @@ int ObSystemVariableRecycleSchemaExecutor::gen_batch_compress_schema_history_sql
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(sql.append_fmt(")"))) {
+    } else if (OB_FAIL(sql.append_fmt(") limit %ld", BATCH_DELETE_ROW_LIMIT))) {
       LOG_WARN("fail to append fmt", K(ret), K_(tenant_id), K_(schema_version));
     }
   }
@@ -2382,7 +2421,7 @@ int ObObjectPrivRecycleSchemaExecutor::gen_batch_recycle_schema_history_sql(
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(sql.append_fmt(")"))) {
+    } else if (OB_FAIL(sql.append_fmt(") limit %ld", BATCH_DELETE_ROW_LIMIT))) {
       LOG_WARN("fail to append fmt", KR(ret), K_(tenant_id), K_(schema_version));
     }
   }
@@ -2425,7 +2464,7 @@ int ObObjectPrivRecycleSchemaExecutor::gen_batch_compress_schema_history_sql(
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(sql.append_fmt(")"))) {
+    } else if (OB_FAIL(sql.append_fmt(") limit %ld", BATCH_DELETE_ROW_LIMIT))) {
       LOG_WARN("fail to append fmt", KR(ret), K_(tenant_id), K_(schema_version));
     }
   }

@@ -241,7 +241,7 @@ int ObObjectPrivMysqlRecycleSchemaExecutor::gen_batch_recycle_schema_history_sql
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(sql.append_fmt(")"))) {
+    } else if (OB_FAIL(sql.append_fmt(") limit %ld", BATCH_DELETE_ROW_LIMIT))) {
       LOG_WARN("fail to append fmt", KR(ret), K_(tenant_id), K_(schema_version));
     }
   }
@@ -284,7 +284,7 @@ int ObObjectPrivMysqlRecycleSchemaExecutor::gen_batch_compress_schema_history_sq
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(sql.append_fmt(")"))) {
+    } else if (OB_FAIL(sql.append_fmt(") limit %ld", BATCH_DELETE_ROW_LIMIT))) {
       LOG_WARN("fail to append fmt", KR(ret), K_(tenant_id), K_(schema_version));
     }
   }
