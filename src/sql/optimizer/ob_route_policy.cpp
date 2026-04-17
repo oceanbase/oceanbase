@@ -94,7 +94,7 @@ int ObRoutePolicy::filter_replica(const ObAddr &local_server,
       // if is local replica and can read, filter all replicas and only select this replica.
       if (is_local && !cur_replica.is_filter_) {
         for (int64_t j = 0; j < candi_replicas.count(); ++j) {
-          candi_replicas.at(i).is_filter_ = true;
+          candi_replicas.at(j).is_filter_ = true;
         }
         cur_replica.is_filter_ = false;
         need_break = true;
