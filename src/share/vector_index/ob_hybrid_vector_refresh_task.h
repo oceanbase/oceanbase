@@ -93,6 +93,7 @@ public:
   ObSEArray<uint64_t, 4> embedded_table_update_ids_;
   omt::ObAiServiceGuard ai_service_;
   const ObAiModelEndpointInfo *endpoint_;
+  ObString request_model_name_;
   ObPluginVectorIndexAdapterGuard adp_guard_;
   bool task_started_;
   uint32_t part_key_num_; // is part key but rowkey
