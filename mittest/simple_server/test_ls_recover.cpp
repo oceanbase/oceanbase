@@ -15,6 +15,7 @@
 #include "env/ob_simple_server_restart_helper.h"
 #include "storage/init_basic_struct.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/meta_store/ob_tenant_storage_meta_service.h"
 
 #undef private
 #undef protected

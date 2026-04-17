@@ -152,7 +152,7 @@ if(OB_BUILD_CLOSE_MODULES)
   # SPM功能
   ob_define(OB_BUILD_SPM ON)
   # share storage
-  ob_define(OB_BUILD_SHARED_STORAGE ON)
+  ob_define(OB_BUILD_SHARED_STORAGE OFF)
 
   # oracle
   ob_define(OB_BUILD_ORACLE_PARSER ON)
@@ -169,7 +169,7 @@ if(OB_BUILD_CLOSE_MODULES)
   ob_define(OB_BUILD_LOG_STORAGE_COMPRESS ON)
 
   # 独立日志服务
-  ob_define(OB_BUILD_SHARED_LOG_SERVICE ON)
+  ob_define(OB_BUILD_SHARED_LOG_SERVICE OFF)
 
   # 默认使用BABASSL
   ob_define(OB_USE_BABASSL ON)

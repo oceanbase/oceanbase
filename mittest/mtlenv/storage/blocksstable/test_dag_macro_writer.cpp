@@ -23,6 +23,9 @@
 #include "storage/blocksstable/ob_data_file_prepare.h"
 #include "unittest/storage/blocksstable/cs_encoding/ob_row_vector_converter.h"
 #include "plugin/sys/ob_plugin_mgr.h"
+#ifdef OB_BUILD_TDE_SECURITY
+#include "share/ob_master_key_getter.h"
+#endif
 
 namespace oceanbase
 {

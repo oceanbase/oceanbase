@@ -11,9 +11,6 @@
 #include "storage/blocksstable/ob_data_file_prepare.h"
 #include "mtlenv/mock_tenant_module_env.h"
 #include "src/storage/backup/ob_backup_iterator.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/incremental/sslog/ob_sslog_define.h"
-#endif
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -209,31 +206,6 @@ TEST(TestBackupUtils, test_task_mgr)
 {
   test_task_mgr(1024, 10240, 1);
 }
-
-#ifdef OB_BUILD_SHARED_STORAGE
-TEST(TestBackupUtils, test_should_backup_sslog_meta_type)
-{
-  using namespace oceanbase::sslog;
-  // meta types that should be backed up
-  EXPECT_TRUE(should_backup_sslog_meta_type(ObSSLogMetaType::SSLOG_LS_META));
-  EXPECT_TRUE(should_backup_sslog_meta_type(ObSSLogMetaType::SSLOG_TABLET_META));
-  EXPECT_TRUE(should_backup_sslog_meta_type(ObSSLogMetaType::SSLOG_MINI_SSTABLE));
-  EXPECT_TRUE(should_backup_sslog_meta_type(ObSSLogMetaType::SSLOG_MINOR_SSTABLE));
-  EXPECT_TRUE(should_backup_sslog_meta_type(ObSSLogMetaType::SSLOG_MDS_MINI_SSTABLE));
-  EXPECT_TRUE(should_backup_sslog_meta_type(ObSSLogMetaType::SSLOG_MDS_MINOR_SSTABLE));
-  EXPECT_TRUE(should_backup_sslog_meta_type(ObSSLogMetaType::SSLOG_FLUSH_MINI_SSTABLE));
-  EXPECT_TRUE(should_backup_sslog_meta_type(ObSSLogMetaType::SSLOG_SPLIT_MINOR_SSTABLE));
-  EXPECT_TRUE(should_backup_sslog_meta_type(ObSSLogMetaType::SSLOG_SPLIT_MDS_MINOR_SSTABLE));
-  EXPECT_TRUE(should_backup_sslog_meta_type(ObSSLogMetaType::SSLOG_MAJOR_SSTABLE));
-  // meta types that should NOT be backed up
-  EXPECT_FALSE(should_backup_sslog_meta_type(ObSSLogMetaType::SSLOG_INVALID_META));
-  EXPECT_FALSE(should_backup_sslog_meta_type(ObSSLogMetaType::SSLOG_TABLET_TABLESTORE));
-  EXPECT_FALSE(should_backup_sslog_meta_type(ObSSLogMetaType::SSLOG_TABLET_STORAGE_SCHEMA));
-  EXPECT_FALSE(should_backup_sslog_meta_type(ObSSLogMetaType::SSLOG_TABLET_SSTABLE));
-  EXPECT_FALSE(should_backup_sslog_meta_type(ObSSLogMetaType::SSLOG_TABLET_SSTABLE_FOR_DDL));
-  EXPECT_FALSE(should_backup_sslog_meta_type(ObSSLogMetaType::SSLOG_MAX_META));
-}
-#endif
 
 void make_macro_block_id_array(const int64_t tablet_id, const int64_t logic_version,
     const common::ObIArray<int64_t> &data_seq_list, common::ObIArray<ObBackupMacroBlockIDPair> &id_list)

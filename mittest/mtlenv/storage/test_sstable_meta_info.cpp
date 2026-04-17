@@ -53,7 +53,7 @@ struct MacroIdComp final
   }
 };
 
-using macro_id_set_t = set<MacroBlockId, MacroIdComp>;
+using macro_id_set_t = std::set<MacroBlockId, MacroIdComp>;
 
 void gen_macro_id(MacroBlockId &block_id)
 {
@@ -164,8 +164,8 @@ void make_sstable_macro_info(
   const int64_t other_block_cnt,
   ObArenaAllocator &allocator,
   ObSSTableMacroInfo &macro_info,
-  vector<MacroBlockId> *data_block_ids = nullptr,
-  vector<MacroBlockId> *other_block_ids = nullptr)
+  std::vector<MacroBlockId> *data_block_ids = nullptr,
+  std::vector<MacroBlockId> *other_block_ids = nullptr)
 {
   macro_info.reset();
   ObMetaDiskAddr block_addr;
@@ -209,7 +209,7 @@ void make_sstable_macro_info(
 void persist_macro_info_to_linked_blocks(
     ObArenaAllocator &allocator,
     ObSSTableMacroInfo &macro_info,
-    vector<MacroBlockId> *linked_block_ids = nullptr)
+    std::vector<MacroBlockId> *linked_block_ids = nullptr)
 {
   ASSERT_TRUE(macro_info.is_valid());
   ASSERT_EQ(nullptr, macro_info.linked_block_ids_);
@@ -255,9 +255,9 @@ void serialize_macro_info(
   const bool inlined,
   ObArenaAllocator &allocator,
   ObSSTableMacroInfo &macro_info,
-  vector<char> &buf,
+  std::vector<char> &buf,
   int64_t &buf_size,
-  vector<MacroBlockId> *linked_block_ids = nullptr)
+  std::vector<MacroBlockId> *linked_block_ids = nullptr)
 {
   ASSERT_TRUE(macro_info.is_valid());
   if (!inlined) {
@@ -346,7 +346,7 @@ using block_id_and_type = pair<MacroBlockId, block_type_t>;
 bool is_macro_block_exists(
   const MacroBlockId &block_id,
   const block_type_t block_type,
-  const vector<block_id_and_type> &block_ids)
+  const std::vector<block_id_and_type> &block_ids)
 {
   auto find = std::find_if(block_ids.cbegin(), block_ids.cend(),
     [&](const block_id_and_type &it)
@@ -361,7 +361,7 @@ bool is_macro_block_exists(
 
 void check_macro_block_iter(
   ObMacroIdIterator &iter,
-  const vector<block_id_and_type> &expected_result)
+  const std::vector<block_id_and_type> &expected_result)
 {
   MacroBlockId block_id;
   block_type_t block_type = block_type_t::MAX;
@@ -376,12 +376,12 @@ void check_macro_block_iter(
 
 void check_macro_block_iters(
   const ObSSTableMacroInfo &macro_info,
-  const vector<MacroBlockId> &data_blk_ids,
-  const vector<MacroBlockId> &other_blk_ids,
-  const vector<MacroBlockId> &linked_blk_ids)
+  const std::vector<MacroBlockId> &data_blk_ids,
+  const std::vector<MacroBlockId> &other_blk_ids,
+  const std::vector<MacroBlockId> &linked_blk_ids)
 {
   ObMacroIdIterator iter;
-  vector<block_id_and_type> expected_result;
+  std::vector<block_id_and_type> expected_result;
   int64_t tmp_cnt = 0;
   int64_t data_blk_cnt = 0, other_blk_cnt = 0, linked_blk_cnt = 0, total_blk_count = 0;
   int64_t expected_data_blk_cnt = 0, expected_other_blk_cnt = 0, expected_linked_blk_cnt = 0;
@@ -514,13 +514,13 @@ TEST_F(TestSSTableMetaInfo, test_macro_iter)
   {
     const int64_t data_block_cnt = 0;
     const int64_t other_block_cnt = 0;
-    vector<MacroBlockId> data_block_ids, other_block_ids, linked_block_ids;
+    std::vector<MacroBlockId> data_block_ids, other_block_ids, linked_block_ids;
     ObSSTableMacroInfo macro_info;
     make_sstable_macro_info(
       data_block_cnt, other_block_cnt, allocator, macro_info,
       &data_block_ids, &other_block_ids);
 
-    vector<char> macro_info_buf;
+    std::vector<char> macro_info_buf;
     int64_t buf_size = 0;
     serialize_macro_info(true, allocator, macro_info, macro_info_buf, buf_size, &linked_block_ids);
     check_macro_info_deserialize(macro_info, allocator, macro_info_buf.data(), buf_size);
@@ -531,13 +531,13 @@ TEST_F(TestSSTableMetaInfo, test_macro_iter)
   {
     const int64_t data_block_cnt = 5;
     const int64_t other_block_cnt = 7;
-    vector<MacroBlockId> data_block_ids, other_block_ids, linked_block_ids;
+    std::vector<MacroBlockId> data_block_ids, other_block_ids, linked_block_ids;
     ObSSTableMacroInfo macro_info;
     make_sstable_macro_info(
       data_block_cnt, other_block_cnt, allocator, macro_info,
       &data_block_ids, &other_block_ids);
 
-    vector<char> macro_info_buf;
+    std::vector<char> macro_info_buf;
     int64_t buf_size = 0;
     serialize_macro_info(/*inlined*/true, allocator, macro_info, macro_info_buf, buf_size, &linked_block_ids);
     check_macro_info_deserialize(macro_info, allocator, macro_info_buf.data(), buf_size);
@@ -548,13 +548,13 @@ TEST_F(TestSSTableMetaInfo, test_macro_iter)
   {
     const int64_t data_block_cnt = 1234;
     const int64_t other_block_cnt = 5678;
-    vector<MacroBlockId> data_block_ids, other_block_ids, linked_block_ids;
+    std::vector<MacroBlockId> data_block_ids, other_block_ids, linked_block_ids;
     ObSSTableMacroInfo macro_info;
     make_sstable_macro_info(
       data_block_cnt, other_block_cnt, allocator, macro_info,
       &data_block_ids, &other_block_ids);
 
-    vector<char> macro_info_buf;
+    std::vector<char> macro_info_buf;
     int64_t buf_size = 0;
     serialize_macro_info(/*inlined*/false, allocator, macro_info, macro_info_buf, buf_size, &linked_block_ids);
     check_macro_info_deserialize(macro_info, allocator, macro_info_buf.data(), buf_size);
@@ -572,18 +572,18 @@ TEST_F(TestSSTableMetaInfo, test_macro_info_deep_copy)
     const int64_t other_block_cnt = 0;
     make_sstable_macro_info(
       data_block_cnt, other_block_cnt, allocator, macro_info);
-    vector<char> macro_info_buf;
+    std::vector<char> macro_info_buf;
     int64_t buf_size = 0;
     serialize_macro_info(/*inlined*/true, allocator, macro_info, macro_info_buf, buf_size);
 
     ObSSTableMacroInfo macro_info_copy;
     const int64_t copy_buf_size = macro_info.get_variable_size();
     printf("copy_buf_size:%ld\n", copy_buf_size);
-    vector<char> copy_buf(copy_buf_size, '\0');
+    std::vector<char> copy_buf(copy_buf_size, '\0');
     int64_t pos = 0;
     ASSERT_SUCC(macro_info.deep_copy(copy_buf.data(), copy_buf_size, pos, macro_info_copy));
 
-    vector<char> macro_info_buf2;
+    std::vector<char> macro_info_buf2;
     int64_t buf_size2 = 0;
     serialize_macro_info(/*inlined*/true, allocator, macro_info_copy, macro_info_buf2, buf_size2);
     ASSERT_EQ(buf_size, buf_size2);
@@ -597,18 +597,18 @@ TEST_F(TestSSTableMetaInfo, test_macro_info_deep_copy)
     const int64_t other_block_cnt = 15;
     make_sstable_macro_info(
       data_block_cnt, other_block_cnt, allocator, macro_info);
-    vector<char> macro_info_buf;
+    std::vector<char> macro_info_buf;
     int64_t buf_size = 0;
     serialize_macro_info(/*inlined*/true, allocator, macro_info, macro_info_buf, buf_size);
 
     ObSSTableMacroInfo macro_info_copy;
     const int64_t copy_buf_size = macro_info.get_variable_size();
     printf("copy_buf_size:%ld\n", copy_buf_size);
-    vector<char> copy_buf(copy_buf_size, '\0');
+    std::vector<char> copy_buf(copy_buf_size, '\0');
     int64_t pos = 0;
     ASSERT_SUCC(macro_info.deep_copy(copy_buf.data(), copy_buf_size, pos, macro_info_copy));
 
-    vector<char> macro_info_buf2;
+    std::vector<char> macro_info_buf2;
     int64_t buf_size2 = 0;
     serialize_macro_info(/*inlined*/true, allocator, macro_info_copy, macro_info_buf2, buf_size2);
     ASSERT_EQ(buf_size, buf_size2);
@@ -622,17 +622,17 @@ TEST_F(TestSSTableMetaInfo, test_macro_info_deep_copy)
     const int64_t other_block_cnt = 5678;
     make_sstable_macro_info(
       data_block_cnt, other_block_cnt, allocator, macro_info);
-    vector<char> macro_info_buf;
+    std::vector<char> macro_info_buf;
     int64_t buf_size = 0;
     serialize_macro_info(/*inlined*/false, allocator, macro_info, macro_info_buf, buf_size);
 
     ObSSTableMacroInfo macro_info_copy;
     const int64_t copy_buf_size = macro_info.get_variable_size();
     printf("copy_buf_size:%ld\n", copy_buf_size);
-    vector<char> copy_buf(copy_buf_size, '\0');
+    std::vector<char> copy_buf(copy_buf_size, '\0');
     int64_t pos = 0;
     ASSERT_SUCC(macro_info.deep_copy(copy_buf.data(), copy_buf_size, pos, macro_info_copy));
-    vector<char> macro_info_buf2;
+    std::vector<char> macro_info_buf2;
     int64_t buf_size2 = 0;
     serialize_macro_info(/*inlined*/true, allocator, macro_info_copy, macro_info_buf2, buf_size2);
     ASSERT_EQ(buf_size, buf_size2);
@@ -654,7 +654,7 @@ TEST_F(TestSSTableMetaInfo, test_sstable_get_meta)
     persist_macro_info_to_linked_blocks(allocator, sstable.meta_->macro_info_);
 
     const int64_t full_serialize_size = sstable.get_full_serialize_size(DATA_CURRENT_VERSION);
-    vector<char> full_buf(full_serialize_size, '\0');
+    std::vector<char> full_buf(full_serialize_size, '\0');
     int64_t pos = 0;
     ASSERT_SUCC(sstable.serialize_full_table(DATA_CURRENT_VERSION, full_buf.data(), full_buf.size(), pos));
 
@@ -684,7 +684,7 @@ TEST_F(TestSSTableMetaInfo, test_sstable_get_meta)
     persist_macro_info_to_linked_blocks(allocator, sstable.meta_->macro_info_);
 
     const int64_t full_serialize_size = sstable.get_full_serialize_size(DATA_CURRENT_VERSION);
-    vector<char> full_buf(full_serialize_size, '\0');
+    std::vector<char> full_buf(full_serialize_size, '\0');
     int64_t pos = 0;
     ASSERT_SUCC(sstable.serialize_full_table(DATA_CURRENT_VERSION, full_buf.data(), full_buf.size(), pos));
 
@@ -693,7 +693,7 @@ TEST_F(TestSSTableMetaInfo, test_sstable_get_meta)
     sstable.set_addr(addr);
 
     const int64_t serialize_size = sstable.get_serialize_size(DATA_CURRENT_VERSION);
-    vector<char> buf(serialize_size, '\0');
+    std::vector<char> buf(serialize_size, '\0');
     pos = 0;
     ASSERT_SUCC(sstable.serialize(DATA_CURRENT_VERSION, buf.data(), buf.size(), pos));
 
@@ -727,7 +727,7 @@ TEST_F(TestSSTableMetaInfo, test_sstable_get_meta)
       ASSERT_SUCC(sstable_ptr->persist_linked_block_if_need(allocator, param, macro_start_seq, linked_block_write_ctx));
 
       const int64_t full_serialize_size = sstable.get_full_serialize_size(DATA_CURRENT_VERSION);
-      vector<char> full_buf(full_serialize_size, '\0');
+      std::vector<char> full_buf(full_serialize_size, '\0');
       int64_t pos = 0;
       ASSERT_SUCC(sstable_ptr->serialize_full_table(DATA_CURRENT_VERSION, full_buf.data(), full_buf.size(), pos));
       ObSSTableMetaHandle meta_handle2;

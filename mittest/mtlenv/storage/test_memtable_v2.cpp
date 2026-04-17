@@ -13,6 +13,9 @@
 #include "mtlenv/mock_tenant_module_env.h"
 #include "storage/tx/ob_mock_tx_ctx.h"
 #include "storage/init_basic_struct.h"
+#ifdef OB_BUILD_TDE_SECURITY
+#include "share/ob_master_key_getter.h"
+#endif
 
 namespace oceanbase
 {
