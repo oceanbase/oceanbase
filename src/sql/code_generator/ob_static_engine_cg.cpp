@@ -8003,8 +8003,8 @@ int ObStaticEngineCG::generate_spec(
         if (OB_UNLIKELY(ob_obj_type_class(from_type) != ob_obj_type_class(to_type) ||
                         (ob_is_string_or_lob_type(from_type) && from_coll != to_coll))) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected output type of subplan scan", K(ret), K(from->get_result_type()),
-                  K(col_expr->get_result_type()));
+          LOG_WARN("unexpected output type of subplan scan", K(ret), K(from), K(from->get_result_type()),
+                   K(col_expr), K(col_expr->get_result_type()));
         } else if (ob_is_decimal_int_tc(from_type) &&
             ObRawExprUtils::decimal_int_need_cast(from->get_accuracy(), col_expr->get_accuracy())) {
           ret = OB_ERR_UNEXPECTED;
