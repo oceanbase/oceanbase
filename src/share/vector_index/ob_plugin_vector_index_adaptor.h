@@ -816,6 +816,7 @@ public:
                               ObIAllocator *allocator);
 
   int check_need_sync_to_follower_or_do_opt_task(ObPluginVectorIndexMgr *mgr, bool is_leader, bool &need_sync);
+  int check_snapshot_table_can_read_index(bool &can_read_index);
   int check_can_sync_to_follower(ObPluginVectorIndexMgr *mgr, int64_t current_snapshot_count, bool &need_sync);
 
   int check_need_freeze(const int64_t freeze_threshold, bool &need_freeze);
