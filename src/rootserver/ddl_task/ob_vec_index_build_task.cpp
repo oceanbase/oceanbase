@@ -707,6 +707,8 @@ int ObVecIndexBuildTask::prepare_aux_index_tables()
                                         ObIndexType::INDEX_TYPE_HYBRID_INDEX_LOG_LOCAL :
                                         ObIndexType::INDEX_TYPE_VEC_DELTA_BUFFER_LOCAL;
   const ObIndexType hybrid_embedded_vec_type = ObIndexType::INDEX_TYPE_HYBRID_INDEX_EMBEDDED_LOCAL;
+
+  DEBUG_SYNC(BUILD_VECTOR_INDEX_PREPARE_AUX_INDEX_TABLES);
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));

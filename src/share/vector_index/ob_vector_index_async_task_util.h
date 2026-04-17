@@ -8,6 +8,7 @@
 
 #include "lib/string/ob_string.h"
 #include "lib/container/ob_array.h"
+#include "lib/net/ob_addr.h"
 #include "common/ob_tablet_id.h"
 #include "share/scn.h"
 #include "share/ob_ls_id.h"
@@ -274,6 +275,9 @@ public:
         task_status_(),
         sys_task_id_(),
         in_thread_pool_(false),
+        run_inner_sql_(false),
+        inner_sql_snapshot_version_(0),
+        inner_sql_exec_addr_(),
         lock_(common::ObLatchIds::OB_VEC_INDEX_ASYNC_TASK_CTX_LOCK),
         allocator_(ObMemAttr(MTL_ID(), "VecIdxTaskCtx")), // set after init
         extra_data_(),
@@ -281,7 +285,20 @@ public:
   {}
   virtual ~ObVecIndexAsyncTaskCtx();
 
-  TO_STRING_KV(K_(tenant_id), K_(retry_time), KP_(ls), K_(task_status), K_(sys_task_id), K_(in_thread_pool), KP_(extra_data), K_(is_new_task));
+  int cancel_task();
+  int kill_inner_sql_if_needed();
+  int set_inner_sql_running(const int64_t snapshot_version, const common::ObAddr &exec_addr);
+  void clear_inner_sql_info()
+  {
+    common::ObSpinLockGuard guard(lock_);
+    run_inner_sql_ = false;
+    inner_sql_snapshot_version_ = 0;
+    inner_sql_exec_addr_.reset();
+  }
+
+  TO_STRING_KV(K_(tenant_id), K_(retry_time), KP_(ls), K_(task_status), K_(sys_task_id),
+               K_(in_thread_pool), K_(run_inner_sql), K_(inner_sql_snapshot_version),
+               K_(inner_sql_exec_addr), KP_(extra_data), K_(is_new_task));
 
   uint64_t tenant_id_;
   uint64_t retry_time_;
@@ -289,6 +306,9 @@ public:
   ObVecIndexTaskStatus task_status_;
   TraceId sys_task_id_;
   bool in_thread_pool_;
+  bool run_inner_sql_;
+  int64_t inner_sql_snapshot_version_;
+  common::ObAddr inner_sql_exec_addr_;
   common::ObSpinLock lock_; // lock for update task_status_
   ObArenaAllocator allocator_; // for extra_data_
   void *extra_data_;

@@ -22,6 +22,7 @@
 #include "share/vector_index/ob_vector_index_aux_table_handler.h"
 #include "observer/ob_server.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
+#include "rootserver/ddl_task/ob_ddl_task.h"
 
 namespace oceanbase
 {
@@ -375,12 +376,98 @@ int ObVecIndexAsyncTaskUtil::init_tablet_rebuild_new_adapter(ObPluginVectorIndex
   return ret;
 }
 
+int ObVecIndexAsyncTaskCtx::cancel_task()
+{
+  int ret = OB_SUCCESS;
+  bool need_kill_inner_sql = false;
+  DEBUG_SYNC(CANCEL_VECTOR_INDEX_ASYNC_TASK);
+  {
+    common::ObSpinLockGuard guard(lock_);
+    if (task_status_.status_ != ObVecIndexAsyncTaskStatus::OB_VECTOR_ASYNC_TASK_FINISH) {
+      task_status_.ret_code_ = OB_CANCELED;
+      need_kill_inner_sql = run_inner_sql_;
+    }
+  }
+  if (need_kill_inner_sql) {
+    LOG_INFO("kill inner sql for canceled vector task", KPC(this));
+    int tmp_ret = kill_inner_sql_if_needed();
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("fail to kill inner sql for canceled vector task", K(tmp_ret), KPC(this));
+    }
+  }
+  LOG_INFO("vector async task canceled", K(ret), KPC(this));
+  return ret;
+}
+
+int ObVecIndexAsyncTaskCtx::kill_inner_sql_if_needed()
+{
+  int ret = OB_SUCCESS;
+  TraceId trace_id;
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  int64_t task_id = OB_INVALID_ID;
+  int64_t snapshot_version = 0;
+  common::ObAddr exec_addr;
+  {
+    common::ObSpinLockGuard guard(lock_);
+    if (!run_inner_sql_) {
+    } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("sql proxy is null", K(ret), KPC(this));
+    } else {
+      trace_id = sys_task_id_.is_valid() ? sys_task_id_ : task_status_.trace_id_;
+      tenant_id = tenant_id_;
+      task_id = task_status_.task_id_;
+      snapshot_version = inner_sql_snapshot_version_;
+      exec_addr = inner_sql_exec_addr_;
+    }
+  }
+  if (OB_FAIL(ret) || snapshot_version <= 0 || task_id <= 0
+      || OB_INVALID_TENANT_ID == tenant_id || trace_id.is_invalid()) {
+    if (OB_SUCC(ret) && snapshot_version <= 0) {
+      LOG_INFO("skip kill inner sql, no valid snapshot version", K(snapshot_version),
+               K(task_id), K(tenant_id), K(trace_id));
+    }
+  } else {
+    common::ObArray<common::ObAddr> exec_addrs;
+    if (exec_addr.is_valid() && OB_FAIL(exec_addrs.push_back(exec_addr))) {
+      LOG_WARN("fail to push exec addr", K(ret), K(exec_addr), KPC(this));
+    } else if (OB_FAIL(rootserver::ObDDLTaskRecordOperator::kill_task_inner_sql(
+                   *GCTX.sql_proxy_,
+                   trace_id,
+                   tenant_id,
+                   task_id,
+                   snapshot_version,
+                   exec_addrs))) {
+      LOG_WARN("fail to kill task inner sql", K(ret), K(trace_id), K(tenant_id),
+               K(task_id), K(snapshot_version), K(exec_addr));
+    }
+  }
+  return ret;
+}
+
+int ObVecIndexAsyncTaskCtx::set_inner_sql_running(const int64_t snapshot_version, const common::ObAddr &exec_addr)
+{
+  int ret = OB_SUCCESS;
+  common::ObSpinLockGuard guard(lock_);
+  if (snapshot_version <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid snapshot version", K(ret), K(snapshot_version), K(exec_addr));
+  } else {
+    run_inner_sql_ = true;
+    inner_sql_snapshot_version_ = snapshot_version;
+    inner_sql_exec_addr_ = exec_addr;
+  }
+  return ret;
+}
+
 int ObVecIndexAsyncTaskUtil::check_task_is_cancel(ObVecIndexAsyncTaskCtx *task_ctx, bool &is_cancel)
 {
   int ret = OB_SUCCESS;
   is_cancel = false;
   if (OB_NOT_NULL(task_ctx)) {
-    if (task_ctx->sys_task_id_.is_valid()) {
+    if (task_ctx->task_status_.ret_code_ == OB_CANCELED) {
+      is_cancel = true;
+    } else if (task_ctx->sys_task_id_.is_valid()) {
       if (OB_FAIL(SYS_TASK_STATUS_MGR.is_task_cancel(task_ctx->sys_task_id_, is_cancel))) {
         LOG_WARN("failed to check task is cancel", K(ret), K(task_ctx->sys_task_id_));
       }
@@ -2558,6 +2645,7 @@ int ObVecIndexAsyncTask::execute_inner_sql(
   bool need_padding = false;
   common::ObAddr ls_leader_addr;
   int ret_code = -1;
+  bool inner_sql_running_marked = false;
 
   if (data_table_id == OB_INVALID_ID || dest_table_id == OB_INVALID_ID || parallelism < 1 || !current_scn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -2606,10 +2694,15 @@ int ObVecIndexAsyncTask::execute_inner_sql(
     const int64_t DDL_INNER_SQL_EXECUTE_TIMEOUT = ObDDLUtil::calc_inner_sql_execute_timeout();
     ObASHSetInnerSqlWaitGuard ash_inner_sql_guard(ObInnerSqlWaitTypeId::RS_CREATE_INDEX_BUILD_REPLICA);
     LOG_INFO("execute sql" , K(sql_string), K(current_scn), K(data_table_id), K(tenant_id_));
+    DEBUG_SYNC(BEFORE_VEC_ASYNC_INNER_SQL_WRITE);
     if (OB_FAIL(timeout_ctx.set_trx_timeout_us(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
       LOG_WARN("set trx timeout failed", K(ret));
     } else if (OB_FAIL(timeout_ctx.set_timeout(DDL_INNER_SQL_EXECUTE_TIMEOUT))) {
       LOG_WARN("set timeout failed", K(ret));
+    } else if (OB_NOT_NULL(ctx_)
+               && OB_FAIL(ctx_->set_inner_sql_running(current_scn.get_val_for_sql(), ls_leader_addr))) {
+      LOG_WARN("fail to mark inner sql running", K(ret), K(task_id), K(current_scn), K(ls_leader_addr));
+    } else if (OB_FALSE_IT(inner_sql_running_marked = OB_NOT_NULL(ctx_))) {
     } else if (OB_FAIL(user_sql_proxy->write(tenant_id_, sql_string.ptr(), affected_rows, ObCompatibilityMode::MYSQL_MODE, &session_param, &ls_leader_addr))) {
       LOG_WARN("fail to execute build replica sql", K(ret), K(tenant_id_));
     } else if (OB_FAIL(ObVecIndexAsyncTaskUtil::get_inner_sql_ret_code(task_id, ret_code))) {
@@ -2617,6 +2710,25 @@ int ObVecIndexAsyncTask::execute_inner_sql(
     } else {
       ret = ret_code;
       LOG_INFO("execute inner sql ret code", K(ret), K(task_id), KPC(ctx_));
+    }
+  }
+  if (inner_sql_running_marked) {
+    LOG_INFO("clear inner sql info", K(ret), K(task_id), KPC(ctx_));
+    ctx_->clear_inner_sql_info();
+  }
+  if (OB_FAIL(ret) && OB_NOT_NULL(ctx_)) {
+    bool is_cancel = false;
+    int tmp_ret = ObVecIndexAsyncTaskUtil::check_task_is_cancel(ctx_, is_cancel);
+    if (OB_SUCCESS != tmp_ret) {
+      LOG_WARN("fail to recheck task cancel state after inner sql returns", K(tmp_ret), KPC(ctx_));
+    } else if (is_cancel) {
+      if (OB_ERR_SESSION_INTERRUPTED == ret
+          || OB_CANCELED == ret) {
+        ret = OB_CANCELED;
+      } else {
+        LOG_WARN("skip overriding non-cancel-like inner sql error",
+                 K(ret), K(task_id), KPC(ctx_));
+      }
     }
   }
   return ret;
