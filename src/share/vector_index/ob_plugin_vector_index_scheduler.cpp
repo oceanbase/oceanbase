@@ -1126,6 +1126,7 @@ int ObPluginVectorIndexLoadScheduler::log_tablets_need_memdata_sync(ObPluginVect
       FOREACH_X(iter, mgr->get_complete_adapter_map(), OB_SUCC(ret)) {
         ObPluginVectorIndexAdaptor *adapter = iter->second;
         bool need_sync = false;
+        bool can_read_index = false;
         if (OB_ISNULL(adapter)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get null adapter", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
@@ -1137,6 +1138,13 @@ int ObPluginVectorIndexLoadScheduler::log_tablets_need_memdata_sync(ObPluginVect
           // do nothing, wait for next schedule
         } else if (!need_refresh_ && OB_FAIL(adapter->check_need_sync_to_follower_or_do_opt_task(mgr, is_leader_, need_sync))) {
           LOG_WARN("fail to check need memdata sync", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
+        } else if (need_refresh_ && OB_FAIL(adapter->check_snapshot_table_can_read_index(can_read_index))) {
+          LOG_WARN("fail to check snapshot table can read index", KR(ret),
+              K(tenant_id_), K(ls_->get_ls_id()), KPC(adapter));
+          ret = OB_SUCCESS;
+        } else if (need_refresh_ && !can_read_index) {
+          LOG_INFO("snapshot table not ready, skip refresh memdata sync", K(tenant_id_),
+              K(ls_->get_ls_id()), KPC(adapter));
         } else if ((need_refresh_ || need_sync) && is_leader_) {
           if (OB_FAIL(tablet_id_array_.push_back(iter->first))) {
             LOG_WARN("fail to push tablet id need memdata sync", KR(ret), K(tenant_id_), K(ls_->get_ls_id()));
