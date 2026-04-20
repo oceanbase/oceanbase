@@ -630,10 +630,15 @@ int ObSPIService::calc_obj_access_expr(ObPLExecCtx *ctx,
 {
   int ret = OB_SUCCESS;
   ObIAllocator *expr_alloc = nullptr;
+  ObPLContext *pl_ctx = nullptr;
+  ObPLContext *top_context = nullptr;
   CK (OB_NOT_NULL(ctx));
   CK (OB_NOT_NULL(ctx->exec_ctx_));
   CK (OB_NOT_NULL(ctx->params_));
-  OX (expr_alloc = ctx->get_top_expr_allocator());
+  OX (pl_ctx = ctx->exec_ctx_->get_pl_stack_ctx());
+  OX (top_context = ctx->exec_ctx_->get_my_session()->get_pl_context());
+  CK (OB_NOT_NULL(pl_ctx->get_pl_exec_info()));
+  OX (expr_alloc = pl_ctx->get_pl_exec_info()->is_cached_ ? &top_context->get_exec_cache_allocator() : &pl_ctx->get_exec_cache_allocator());
   CK (OB_NOT_NULL(expr_alloc));
   if (OB_SUCC(ret)) {
     const ObExprObjAccess *obj_access = NULL;
