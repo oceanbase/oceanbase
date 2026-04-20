@@ -486,6 +486,10 @@ int ObStorageHdfsJniUtil::list_files(const common::ObString &uri, common::ObBase
                      K(file_info.mName));
             } else {
               op.set_size(file_info.mSize);
+              // Set file extra info last modified time and its unit is seconds.
+              ObFileExtraInfo file_ext_info;
+              file_ext_info.last_modified_time_ms_ = file_info.mLastMod * 1000LL;
+              op.set_extra_info(file_ext_info);
             }
 
             if (OB_SUCC(ret)) {

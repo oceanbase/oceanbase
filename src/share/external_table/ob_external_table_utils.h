@@ -176,17 +176,24 @@ class ObLocalFileListArrayOpWithFilter : public ObBaseDirEntryOperator
 public:
   ObLocalFileListArrayOpWithFilter(ObIArray <common::ObString> &name_array,
                                    ObIArray <int64_t>& file_size,
+                                   ObIArray<int64_t> &modify_times,
+                                   ObIArray<ObString> &content_digests,
                                    const ObString &path,
                                    const ObString &origin_path,
                                    ObExternalPathFilter *filter,
                                    ObIAllocator &array_allocator)
-    : name_array_(name_array), file_size_(file_size), path_(path), origin_path_(origin_path),
-      filter_(filter), allocator_(array_allocator) {}
+      : name_array_(name_array), file_size_(file_size), modify_times_(modify_times),
+        content_digests_(content_digests), path_(path), origin_path_(origin_path), filter_(filter),
+        allocator_(array_allocator)
+  {
+  }
   virtual bool need_get_file_meta() const override { return true; }
   int func(const dirent *entry);
 private:
   ObIArray <ObString> &name_array_;
   ObIArray <int64_t> &file_size_;
+  ObIArray <int64_t> &modify_times_;
+  ObIArray <ObString> &content_digests_;
   const ObString &path_;
   const ObString &origin_path_;
   ObExternalPathFilter *filter_;
