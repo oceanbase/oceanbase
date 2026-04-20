@@ -1391,6 +1391,7 @@ struct PlTransformTreeCtx
   bool is_ps_mode_;
   int64_t total_param_nums_;
   ObPlanCacheCtx *ps_pc_ctx_;
+  bool local_not_param_;  // 局部不参数化标志，仅影响当前子树
   PlTransformTreeCtx() :
     allocator_(NULL),
     params_(NULL),
@@ -1406,7 +1407,8 @@ struct PlTransformTreeCtx
     raw_param_num_(0),
     is_ps_mode_(false),
     total_param_nums_(0),
-    ps_pc_ctx_(nullptr)
+    ps_pc_ctx_(nullptr),
+    local_not_param_(false)
   {}
 };
 

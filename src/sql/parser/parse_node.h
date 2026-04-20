@@ -141,6 +141,7 @@ typedef struct _ParseNode
       uint32_t is_input_quoted_ : 1; // indicate name_ob input whether with double quote
       uint32_t is_forbid_parameter_ : 1; //1 indicate forbid parameter
       uint32_t is_default_literal_expression_ : 1; // 1 indicate in default literal expression, "DEFAULT NOW()"
+      uint32_t is_forbid_anony_parameter_some_scene_ : 1; // 1 indicate anonymous block parameterization is prohibited in certain scenarios
       uint32_t reserved_;
     };
   };

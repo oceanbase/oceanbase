@@ -103,7 +103,8 @@ public:
         pl_resolve_cache_(resolve_cache),
         pl_sql_transpiled_exprs_(),
         forbid_pl_sql_transpiler_(false),
-        is_prepare_with_params_(false)
+        is_prepare_with_params_(false),
+        is_ps_prepare_stage_(false)
   {}
   virtual ~ObPLResolveCtx() {
     if (need_destruct_resolve_cache_ && OB_NOT_NULL(pl_resolve_cache_)) {
@@ -140,6 +141,7 @@ public:
   ObSEArray<ObUDFRawExpr *, 4, common::ModulePageAllocator, true> pl_sql_transpiled_exprs_;
   bool forbid_pl_sql_transpiler_;
   bool is_prepare_with_params_;
+  bool is_ps_prepare_stage_;
 };
 
 class ObPLMockSelfArg
