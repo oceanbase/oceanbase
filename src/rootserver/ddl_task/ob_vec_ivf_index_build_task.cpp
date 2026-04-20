@@ -1308,23 +1308,18 @@ int ObVecIVFIndexBuildTask::wait_aux_table_complement()
     }
   }
   if (state_finished || OB_FAIL(ret)) {
-    ObDDLTaskStatus next_status;
+    ObDDLTaskStatus next_status = task_status_;
+    ObDDLTaskStatus old_status = task_status_;
     if (child_task_failed || OB_FAIL(ret)) {
-      if (!ObIDDLTask::in_ddl_retry_white_list(ret)) {
-        const ObDDLTaskStatus old_status = static_cast<ObDDLTaskStatus>(task_status_);
-        const ObDDLTaskStatus new_status = ObDDLTaskStatus::FAIL;
-        (void)switch_status(new_status, false, ret);
-        ret = OB_SUCCESS; // allow clean up
-      }
-    } else if (OB_SUCC(ret)) {
-      if (OB_FAIL(get_next_status(next_status))) {
-        LOG_WARN("failed to get next status", K(ret));
-      } else {
-        (void)switch_status(next_status, true, ret);
-        LOG_INFO("wait aux table complement finished", K(ret), K(parent_task_id_),
-            K(task_id_), K(*this));
-      }
+      next_status = ObIDDLTask::in_ddl_retry_white_list(ret) ? next_status : ObDDLTaskStatus::FAIL;
+    } else if (OB_FAIL(get_next_status(next_status))) {
+      next_status = ObDDLTaskStatus::FAIL;
+      LOG_WARN("failed to get next status", K(ret), K(next_status));
     }
+    (void)switch_status(next_status, next_status != ObDDLTaskStatus::FAIL, ret);
+    FLOG_INFO("wait aux table complement finished", K(ret), K(parent_task_id_),
+        K(task_id_), K(old_status), K(next_status), K(*this));
+    ret = OB_SUCCESS;
   }
   return ret;
 }
