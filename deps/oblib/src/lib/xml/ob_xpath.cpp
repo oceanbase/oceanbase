@@ -2977,7 +2977,10 @@ int ObPathFilterOpNode::eval_node(ObPathCtx &ctx, ObSeekResult& res)
     if (ret != OB_ITER_END) {
       LOG_WARN("fail to eval right");
     } else {
-      ret = init_right_without_filter(ctx, res);
+      if (OB_NOT_NULL(right_)) {
+        right_->is_seeked_ = false;
+      }
+      ret = init_right_with_filter(ctx, res);
     }
   }
 
