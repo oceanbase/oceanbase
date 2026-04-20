@@ -3917,6 +3917,7 @@ int ObTablet::inc_ref_with_macro_iter(ObMacroInfoIterator &macro_iter, bool &inc
         block_info.reset();
         if (OB_TMP_FAIL(macro_iter.get_next(block_info))) {
           LOG_ERROR("fail to get next block info, macro block may leak", K(tmp_ret));
+          break;
         } else if (OB_TMP_FAIL(OB_STORAGE_OBJECT_MGR.dec_ref(block_info.macro_id()))) {
           LOG_ERROR("fail to increase macro block's ref cnt, macro block may leak", K(tmp_ret), K(block_info));
         } else if (ObTabletMacroType::SHARED_DATA_BLOCK == block_info.block_type()

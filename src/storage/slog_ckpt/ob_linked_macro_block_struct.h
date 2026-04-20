@@ -70,6 +70,14 @@ struct ObLinkedMacroBlockHeader final
     fragment_offset_ = 0;
     previous_macro_block_id_.reset();
   }
+  OB_INLINE bool is_linked_macro_item_incomplete() const
+  {
+    return 0 == item_count_;
+  }
+  OB_INLINE bool is_linked_macro_item_fragment_head() const
+  {
+    return 0 == item_count_ && 0 == fragment_offset_;
+  }
 
   TO_STRING_KV(
     K_(version), K_(magic), K_(item_count), K_(fragment_offset), K_(previous_macro_block_id));
