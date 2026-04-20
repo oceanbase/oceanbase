@@ -68,20 +68,10 @@ private:
   int pruning_set_query(common::ObIArray<ObParentDMLStmt> &parent_stmts,
                         ObSelectStmt *&stmt,
                         bool &trans_happened);
-  int check_exprs_constant_false(common::ObIArray<ObRawExpr*> &exprs,
-                                 bool &constant_false,
-                                 int64_t stmt_idx,
-                                 SimplifySetHelper &helper);
   int remove_set_query_in_stmt(ObSelectStmt *&stmt,
                                ObIArray<int64_t> &remove_list,
                                common::ObIArray<int64_t> &constraints_idxs,
                                bool &trans_happened);
-  int check_limit_zero_in_stmt(ObRawExpr *limit_expr,
-                               ObRawExpr *offset_expr,
-                               ObRawExpr *percent_expr,
-                               bool &need_remove,
-                               int64_t stmt_idx,
-                               SimplifySetHelper &helper);
   int check_set_stmt_removable(ObSelectStmt *stmt,
                                bool &need_remove,
                                int64_t stmt_idx,

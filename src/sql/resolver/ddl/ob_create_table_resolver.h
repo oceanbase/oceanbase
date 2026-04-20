@@ -139,6 +139,7 @@ private:
 
   int add_inner_index_for_heap_gtt();
   int check_max_row_data_length(const ObTableSchema &table_schema);
+  int check_stmt_is_empty_set(ObSelectStmt *select_stmt, bool &is_empty_set);
 
 private:
   // data members
