@@ -894,17 +894,26 @@ public:
     const common::ObString &table_name,
     const common::ObString &column_name,
     ObRawExpr *&expr);
+  static int build_refined_external_column_expr_name(
+    ObIAllocator &allocator,
+    const ObSQLSessionInfo *session_info,
+    ObRawExpr *get_path_expr,
+    sql::ColumnIndexType column_index_type,
+    uint64_t column_idx,
+    common::ObString &refined_column_name,
+    common::ObString &data_access_path);
   static int build_file_column_expr_for_parquet(
     ObRawExprFactory &expr_factory,
     const ObSQLSessionInfo &session_info,
     const uint64_t table_id,
     const common::ObString &table_name,
     const common::ObString &column_name,
-    ObRawExpr *get_path_expr,
     ObRawExpr *cast_expr,
     const ObColumnSchemaV2 *generated_column,
     sql::ColumnIndexType column_index_type,
     uint64_t column_idx,
+    const common::ObString &data_access_path,
+    const common::ObString &refined_column_name,
     ObRawExpr *&expr);
   //only used for DDL resolver, resolve a PSEUDO column expr for validation and printer not for execution
   static int resolve_external_table_column_def(ObRawExprFactory &expr_factory,
