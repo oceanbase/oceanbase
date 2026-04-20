@@ -185,6 +185,8 @@ public:
   int set_start_global_trans_version(const int64_t start_global_trans_version);
   // check need pause when consume or resource collector backlog
   bool need_pause_redo_dispatch() const;
+  
+  void get_memory_usage_status(bool &touch_memory_warn_limit, bool &memory_overused) const;
 
   // online sql not available only when using data_dict and fetch_log directly from backup.
   OB_INLINE bool is_online_sql_not_available() const

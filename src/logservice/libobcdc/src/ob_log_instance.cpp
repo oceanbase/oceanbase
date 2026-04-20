@@ -3163,11 +3163,11 @@ int ObLogInstance::init_ob_cluster_version_()
   if (OB_SUCC(ret) && min_observer_version != OB_INVALID_ID) {
     if (min_observer_version <= CLUSTER_VERSION_4_3_5_4) {
       enable_filter_mow_lob_ = 1;
-      LOG_INFO("auto enabled enable_filte_mow_lob_col for cluster version <= 4.3.5.4", 
+      LOG_INFO("auto enabled enable_filte_mow_lob_col for cluster version <= 4.3.5.4",
                K(min_observer_version));
     } else if (TCONF.enable_filte_mow_lob_col == 1) {
       enable_filter_mow_lob_ = 1;
-      LOG_INFO("Configure enable_filter_mow_lob_col = 1", 
+      LOG_INFO("Configure enable_filter_mow_lob_col = 1",
                K(min_observer_version));
     }
   }
@@ -3458,6 +3458,15 @@ bool ObLogInstance::need_pause_redo_dispatch() const
     }
   }
   return current_need_pause;
+}
+
+void ObLogInstance::get_memory_usage_status(bool &touch_memory_warn_limit, bool &memory_overused) const
+{
+  int64_t memory_hold = get_memory_hold_();
+  int64_t memory_limit = CDC_CFG_MGR.get_memory_limit();
+  int64_t memory_warn_usage = memory_limit * TCONF.memory_usage_warn_threshold / 100.0;
+  touch_memory_warn_limit = (memory_hold > memory_warn_usage);
+  memory_overused = (memory_hold > memory_limit);
 }
 
 }

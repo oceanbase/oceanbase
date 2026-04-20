@@ -19,6 +19,7 @@
 #include "ob_log_instance.h"            // TCTX
 #include "ob_log_trans_msg_sorter.h"    // IObLogTransMsgSorter
 #include "ob_cdc_auto_config_mgr.h"     // CDC_CFG_MGR
+#include "ob_cdc_lob_data_merger.h"     // IObCDCLobDataMerger
 
 namespace oceanbase
 {
@@ -120,6 +121,14 @@ void TransDispatchCtx::set_normal_priority_budget_(const int64_t &average_budget
   const bool need_pause = TCTX.need_pause_redo_dispatch();
   IObLogTransMsgSorter *msg_sorter = TCTX.trans_msg_sorter_;
   const bool is_new_trans_can_dispatch = (! is_dispatching_ && average_budget > 0 && !need_pause);
+  bool touch_memory_warn_limit = false;
+  bool memory_overused = false;
+  TCTX.get_memory_usage_status(touch_memory_warn_limit, memory_overused);
+  IObCDCLobDataMerger *lob_data_merger = TCTX.lob_data_merger_;
+  int64_t lob_data_merger_task_count = 0;
+  if (OB_NOT_NULL(lob_data_merger)) {
+    lob_data_merger->get_task_count(lob_data_merger_task_count);
+  }
 
   for(int64_t i = 0; i < normal_priority_part_budget_arr_.count(); i++) {
     PartTransDispatchBudget &budget = normal_priority_part_budget_arr_[i];
@@ -144,14 +153,17 @@ void TransDispatchCtx::set_normal_priority_budget_(const int64_t &average_budget
         && OB_NOT_NULL(part_trans_task)
         && OB_NOT_NULL(msg_sorter)
         && (part_trans_task->get_trans_id() == msg_sorter->get_cur_sort_trans_id()) // wait last trans handled in sorter
-        && (part_trans_task->is_dispatched_redo_be_sorted() || ! need_pause)) {
-      const int64_t extra_redo_dispatch_size = CDC_CFG_MGR.get_extra_redo_dispatch_memory_size();
+        && (part_trans_task->is_dispatched_redo_be_sorted() || lob_data_merger_task_count > 0)) {
+
+      const int64_t extra_redo_dispatch_size = touch_memory_warn_limit ? 1 : CDC_CFG_MGR.get_extra_redo_dispatch_memory_size();
 
       if (REACH_TIME_INTERVAL(PRINT_STAT_INTERVAL)) {
-        LOG_INFO("[NOTICE][REDO_DISPATCH][DATA_SKEW] budget usedup but dispatched_redo all sorted, use extra_redo budget",
+        LOG_TRACE("[NOTICE][REDO_DISPATCH][DATA_SKEW] budget usedup but dispatched_redo all sorted, or waiting lob data to merge, use extra_redo budget",
             K(budget),
             K(average_budget),
             K(need_pause),
+            K(touch_memory_warn_limit),
+            K(lob_data_merger_task_count),
             "extra_redo_dispatch_size", SIZE_TO_STR(extra_redo_dispatch_size),
             "part_trans_task", part_trans_task->get_part_trans_info(),
             "redo_sorted_progress", part_trans_task->get_sorted_redo_list().sorted_progress_);

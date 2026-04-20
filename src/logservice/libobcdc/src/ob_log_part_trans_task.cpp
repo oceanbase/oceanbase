@@ -252,7 +252,7 @@ int MutatorRow::parse_columns_(
                 }
               } else if (OB_FAIL(parse_outrow_lob_column_(is_parse_new_col, dml_flag, column_id, lob_common))) {
                 LOG_ERROR("parse_outrow_lob_column_ failed", K(ret), K(obj), K(column_id));
-              }    
+              }
             } // is_lob_storage
             if (OB_SUCC(ret) && OB_FAIL(add_column_(
                 column_id,
@@ -336,7 +336,7 @@ int MutatorRow::parse_outrow_lob_column_(
             new(lob_data_get_ctx) ObLobDataGetCtx();
             if(OB_FAIL(lob_data_get_ctx->reset((void *)(&new_lob_ctx_cols_), column_id, dml_flag, &lob_data, false/*is_new_col*/))) {
               LOG_ERROR("lob data get ctx reset failed", KR(ret));
-            } else {                
+            } else {
               new_lob_ctx_cols_.add(lob_data_get_ctx);
             }
           }
