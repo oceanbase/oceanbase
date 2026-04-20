@@ -218,8 +218,7 @@ int ObFdItemFactory::get_parent_exprs_ptr(const ObIArray<ObRawExpr *> &parent_ex
       if (OB_ISNULL(parent_sets_.at(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get null fd parent set", K(ret));
-      } else if (parent_exprs.count() == parent_sets_.at(i)->count() &&
-                 ObOptimizerUtil::subset_exprs(*parent_sets_.at(i), parent_exprs)) {
+      } else if (ObOptimizerUtil::same_exprs(*parent_sets_.at(i), parent_exprs)) {
         parent_exprs_ptr = parent_sets_.at(i);
         find = true;
       }
