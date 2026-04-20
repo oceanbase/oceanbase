@@ -183,6 +183,21 @@ int ObIndexTreeRootCtx::add_clustered_index_block_micro_infos(
   return ret;
 }
 
+int ObIndexTreeRootCtx::set_small_sstable_block_info(const ObBlockInfo &block_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!block_info.is_valid() || !block_info.is_small_sstable())) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid block info", K(ret), K(block_info));
+  } else if (OB_UNLIKELY(small_sstable_block_info_.is_valid() || small_sstable_block_info_.is_small_sstable())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected small sstable block info", K(ret), K_(small_sstable_block_info));
+  } else {
+    small_sstable_block_info_ = block_info;
+  }
+  return ret;
+}
+
 bool ObIndexTreeRootBlockDesc::is_valid() const
 {
   return is_empty() ||
@@ -1679,12 +1694,7 @@ int ObSSTableIndexBuilder::close_with_macro_seq_inner(
     const bool is_single_block = check_single_block();
     if (is_single_block) {
       ObSpaceOptimizationMode tmp_mode = optimization_mode_;
-      // tmp code, we should support reuse data for small sstable
-      if (!satisfies_small_sstable_pre_requisites(tmp_mode,
-                                                  roots_.count(),
-                                                  index_store_desc_.get_desc().is_cg(),
-                                                  res.row_count_,
-                                                  device_handle_)) {
+      if (!satisfies_small_sstable_pre_requisites(optimization_mode_, roots_.count(), device_handle_)) {
         tmp_mode = DISABLE;
       }
       switch (tmp_mode) {
@@ -2032,10 +2042,8 @@ int ObSSTableIndexBuilder::get_single_macro_meta_for_small_sstable(
 }
 
 bool ObSSTableIndexBuilder::satisfies_small_sstable_pre_requisites(
-     ObSpaceOptimizationMode mode,
-     int64_t concurrent_cnt,
-     bool is_cg,
-     int64_t row_count,
+     const ObSpaceOptimizationMode mode,
+     const int64_t concurrent_cnt,
      const ObIODevice *device_handle)
 {
   ObSpaceOptimizationMode tmp_mode = mode;
@@ -2047,7 +2055,6 @@ bool ObSSTableIndexBuilder::satisfies_small_sstable_pre_requisites(
 #endif
   return ObSpaceOptimizationMode::ENABLE == tmp_mode
         && 1 == concurrent_cnt
-        && (!is_cg || row_count <= blocksstable::SMALL_SSTABLE_ROW_COUNT_THRESHOLD_FOR_CG)
         && (nullptr == device_handle);
 }
 
@@ -3332,15 +3339,11 @@ int ObDataIndexBlockBuilder::append_meta_row_to_dumper(const MacroBlockId &block
 int ObDataIndexBlockBuilder::set_block_info(const ObBlockInfo &block_info)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(!block_info.is_valid() || !block_info.is_small_sstable())) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "invalid block info", K(ret), K(block_info));
-  } else if (OB_UNLIKELY(index_tree_root_ctx_->small_sstable_block_info_.is_valid()
-                  || index_tree_root_ctx_->small_sstable_block_info_.is_small_sstable())) {
+  if (OB_ISNULL(index_tree_root_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexpected small sstable block info", K(ret), K_(index_tree_root_ctx_->small_sstable_block_info));
-  } else {
-    index_tree_root_ctx_->small_sstable_block_info_ = block_info;
+    STORAGE_LOG(WARN, "unexpected null index_tree_root_ctx_", K(ret));
+  } else if (OB_FAIL(index_tree_root_ctx_->set_small_sstable_block_info(block_info))) {
+    STORAGE_LOG(WARN, "fail to set small sstable block info", K(ret), K(block_info));
   }
   return ret;
 }
@@ -4202,6 +4205,18 @@ int ObIndexBlockRebuilder::get_tablet_transfer_seq (int64_t &tablet_transfer_seq
     LOG_WARN("sstable_builder_ shoulde not be nullptr", K(ret), KP(sstable_builder_));
   } else {
     tablet_transfer_seq = sstable_builder_->get_tablet_transfer_seq();
+  }
+  return ret;
+}
+
+int ObIndexBlockRebuilder::set_block_info(const ObBlockInfo &block_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(index_tree_root_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "index tree root ctx should not be nullptr", K(ret), KP(index_tree_root_ctx_));
+  } else if (OB_FAIL(index_tree_root_ctx_->set_small_sstable_block_info(block_info))) {
+    STORAGE_LOG(WARN, "fail to set small sstable block info", K(ret), K(block_info));
   }
   return ret;
 }

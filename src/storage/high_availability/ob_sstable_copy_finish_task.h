@@ -238,6 +238,9 @@ public:
   virtual int process() override;
   int add_macro_block_id_info(const ObCopySSTableMacroIdInfo &macro_id_info);
   ObCopySSTableMacroIdInfo &get_macro_block_id_info() { return macro_id_info_; }
+  OB_INLINE int64_t get_copy_task_concurrent_cnt() const {
+    return sstable_macro_range_info_.copy_macro_range_array_.count();
+  }
   VIRTUAL_TO_STRING_KV(K("ObSSTableCopyFinishTask"), KP(this), K(copy_ctx_));
 
 private:

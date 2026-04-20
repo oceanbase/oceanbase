@@ -1831,7 +1831,9 @@ int ObMacroBlockWriter::index_builder_append_row(const ObMicroBlockDesc &micro_b
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "builder is null", K(ret));
   } else if (OB_FAIL(builder_->append_row(micro_block_desc, macro_block))) {
-    STORAGE_LOG(WARN, "fail to append row", K(ret), K(micro_block_desc));
+    if (OB_BUF_NOT_ENOUGH != ret) {
+      STORAGE_LOG(WARN, "fail to append row", K(ret), K(micro_block_desc));
+    }
   } else if (micro_index_clustered() && is_curr_block_pre_allocated_) {
     // no need to aggregate micro block, just append row, because it has already been aggregated.
     if (OB_FAIL(builder_->clustered_index_append_row(micro_block_desc))) {
@@ -2128,8 +2130,6 @@ bool ObMacroBlockWriter::check_can_flush_small_sstable(const bool is_flush_for_l
         && align_macro_size < blocksstable::SMALL_SSTABLE_THRESHOLD
         && ObSSTableIndexBuilder::satisfies_small_sstable_pre_requisites(sstable_index_builder->get_optimization_mode(),
                                                                          data_store_desc_->get_concurrent_cnt(),
-                                                                         data_store_desc_->is_cg(),
-                                                                         row_count,
                                                                          device_handle_);
 }
 

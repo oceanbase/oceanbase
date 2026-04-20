@@ -272,10 +272,18 @@ int ObCopiedSSTableCreator::create_sstable()
   int ret = OB_SUCCESS;
   ObSSTableMergeRes res;
   ObTableHandleV2 table_handle;
+  int64_t concurrent_cnt = 0;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObCopiedSSTableCreator not init", K(ret));
+  } else if (OB_ISNULL(finish_task_) || OB_ISNULL(sstable_index_builder_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid argument", K(ret), KP(finish_task_), KP(sstable_index_builder_));
+  } else if (FALSE_IT(concurrent_cnt = finish_task_->get_copy_task_concurrent_cnt())) {
+  } else if (OB_UNLIKELY(concurrent_cnt != sstable_index_builder_->get_concurrent_cnt())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("concurrent cnt is invalid", K(ret), K(concurrent_cnt), K(sstable_index_builder_->get_concurrent_cnt()));
   } else {
     SMART_VAR(ObTabletCreateSSTableParam, param) {
       if (OB_FAIL(sstable_index_builder_->close(res))) {
