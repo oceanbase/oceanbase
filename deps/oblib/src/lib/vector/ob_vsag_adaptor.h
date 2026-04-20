@@ -75,7 +75,7 @@ int construct_vsag_create_param(
     uint8_t create_type, const char *dtype, const char *metric, int dim,
     int max_degree, int ef_construction, int ef_search, void *allocator,
     int extra_info_size, int16_t refine_type, int16_t bq_bits_query,
-    bool bq_use_fht, bool store_raw_vector, char *result_param_str);
+    bool bq_use_fht, bool store_raw_vector, bool use_reorder, char *result_param_str);
 int construct_vsag_search_param(uint8_t create_type,
                                              int64_t ef_search,
                                              bool use_extra_info_filter,
@@ -93,6 +93,7 @@ int create_index(VectorIndexPtr &index_handler, IndexType index_type, const char
 int build_index(VectorIndexPtr& index_handler, float* vector_list, int64_t* ids, int dim, int size, char *extra_infos = nullptr);
 int build_index(VectorIndexPtr &index_handler, uint32_t *lens, uint32_t *dims, float *vals, int64_t *ids, int size,
     char *extra_info = nullptr);
+int tune_index(VectorIndexPtr& index_handler, int new_index_type);
 int add_index(VectorIndexPtr& index_handler, float* vector, int64_t* ids, int dim, int size, char *extra_info = nullptr);
 int add_index(VectorIndexPtr &index_handler, uint32_t *lens, uint32_t *dims, float *vals, int64_t *ids, int size,
     char *extra_info = nullptr);

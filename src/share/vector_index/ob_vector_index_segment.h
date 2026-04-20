@@ -394,6 +394,7 @@ public:
   int fserialize(std::ostream& out_stream) { return obvectorutil::fserialize(index_, out_stream); }
   int fdeserialize(std::istream& in_stream) { return obvectorutil::fdeserialize(index_, in_stream); }
   int immutable_optimize() { return obvectorutil::immutable_optimize(index_); }
+  int tune_index(int new_index_type) { return obvectorutil::tune_index(index_, new_index_type); }
 
   // TODO mark const
   ObVectorIndexAlgorithmType get_index_type() const { return static_cast<ObVectorIndexAlgorithmType>(obvectorutil::get_index_type(const_cast<void*>(index_))); }
@@ -858,6 +859,7 @@ struct ObVecIdxFrozenData : public ObVectorIndexDataBase
     NO_FROZEN = 0,
     FROZEN,
     WAIT_WRITE_FINISHED,
+    TUNE_INDEX,  // after write ref 0, tune index (e.g. HNSW_SQ/BQ) before WAIT_WRITE_FINISHED
     REFRESH_VBITMAP,
     PERSIST,
     REFRESH_SNAP,

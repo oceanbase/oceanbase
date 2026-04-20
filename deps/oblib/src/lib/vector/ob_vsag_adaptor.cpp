@@ -216,6 +216,7 @@ public:
   inline int get_max_degree() const { return max_degree_; }
   inline int get_ef_construction() const { return ef_construction_; }
   inline int get_index_type() const { return (int)index_type_; }
+  void set_index_type(IndexType t) { index_type_ = t; }
   const char *get_dtype() const { return dtype_; }
   const char *get_metric() const { return metric_; }
   inline int get_ef_search() const { return ef_search_; }
@@ -632,7 +633,7 @@ int construct_vsag_create_param(
     uint8_t create_type, const char *dtype, const char *metric, int dim,
     int max_degree, int ef_construction, int ef_search, void *allocator,
     int extra_info_size, int16_t refine_type, int16_t bq_bits_query,
-    bool bq_use_fht, bool store_raw_vector, char *result_param_str)
+    bool bq_use_fht, bool store_raw_vector, bool use_reorder, char *result_param_str)
 {
   int ret = OB_SUCCESS;
   bool is_hgraph_type = get_is_hgraph_type(create_type);
@@ -695,7 +696,7 @@ int construct_vsag_create_param(
                                      ",\"max_degree\":%d",
                                      max_degree))) {
     LOG_WARN("failed to fill result_param_str", K(ret), K(max_degree));
-  } else if (create_type == HGRAPH_TYPE && store_raw_vector &&
+  } else if (create_type == HGRAPH_TYPE &&
              OB_FAIL(databuff_printf(result_param_str, buf_len, pos,
                                  ",\"store_raw_vector\":true"))) {
     LOG_WARN("failed to fill store_raw_vector", K(ret));
@@ -710,12 +711,12 @@ int construct_vsag_create_param(
                                      ",\"build_thread_count\":%d",
                                      0))) {
     LOG_WARN("failed to fill result_param_str", K(ret));
-  } else if (create_type == HNSW_BQ_TYPE &&
+  } else if (use_reorder && create_type == HNSW_BQ_TYPE &&
              OB_FAIL(databuff_printf(
                  result_param_str, buf_len, pos,
                  ",\"use_reorder\":true"))) {
     LOG_WARN("failed to fill result_param_str", K(ret));
-  } else if (create_type == HNSW_BQ_TYPE &&
+  } else if (use_reorder && create_type == HNSW_BQ_TYPE &&
              OB_FAIL(databuff_printf(
                  result_param_str, buf_len, pos,
                  ",\"ignore_reorder\":true"))) {
@@ -934,7 +935,7 @@ int create_index(VectorIndexPtr &index_handler,
     if (OB_FAIL(construct_vsag_create_param(
         uint8_t(index_type), dtype, metric, dim, max_degree,
         ef_construction, ef_search, allocator, extra_info_size,
-        refine_type, bq_bits_query, bq_use_fht, store_raw_vector, result_param_str))) {
+        refine_type, bq_bits_query, bq_use_fht, store_raw_vector, true, result_param_str))) {
       LOG_WARN("construct_vsag_create_param fail", K(ret), K(index_type));
     } else {
       const std::string input_json_str(result_param_str);
@@ -1078,6 +1079,43 @@ int build_index(VectorIndexPtr &index_handler, uint32_t *lens, uint32_t *dims, f
     }
     if (OB_FAIL(handler->build_index(dataset))) {
       LOG_WARN("[OBVSAG] build index error happend", K(ret));
+    }
+  }
+  return ret;
+}
+
+int tune_index(VectorIndexPtr &index_handler, int new_index_type)
+{
+  int ret = OB_SUCCESS;
+  if (index_handler == nullptr) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("[OBVSAG] tune null pointer", K(index_handler));
+  } else {
+    HnswIndexHandler *hnsw = static_cast<HnswIndexHandler *>(index_handler);
+    int max_degree = static_cast<int>(hnsw->get_max_degree());
+    char result_param_str[1024];
+    if (OB_FAIL(construct_vsag_create_param(
+            new_index_type, hnsw->get_dtype(), hnsw->get_metric(), hnsw->get_dim(),
+            max_degree, hnsw->get_ef_construction(), hnsw->get_ef_search(),
+            hnsw->get_allocator(), static_cast<int>(hnsw->get_extra_info_size()),
+            hnsw->get_refine_type(), hnsw->get_bq_bits_query(), hnsw->get_bq_use_fht(),
+            (new_index_type == HGRAPH_TYPE), false, result_param_str))) {
+      LOG_WARN("[OBVSAG] construct_vsag_create_param for tune failed", K(ret), K(new_index_type), KP(index_handler));
+    } else {
+      std::string params_str(result_param_str);
+      tl::expected<bool, Error> result = hnsw->get_index()->Tune(params_str, true /* disable_future_tuning */);
+      if (result.has_value()) {
+        if (!result.value()) {
+          ret = OB_ERR_VSAG_RETURN_ERROR;
+          LOG_WARN("[OBVSAG] tune returned false", K(ret), KP(index_handler), K(new_index_type));
+        } else {
+          hnsw->set_index_type(static_cast<IndexType>(new_index_type));
+          LOG_INFO("[OBVSAG] tune returned true, index_type updated", K(ret), KP(index_handler), K(new_index_type));
+        }
+      } else {
+        ret = vsag_errcode2ob(result.error().type);
+        LOG_WARN("[OBVSAG] tune error", K(ret), K(result.error().type), KP(index_handler), K(new_index_type));
+      }
     }
   }
   return ret;

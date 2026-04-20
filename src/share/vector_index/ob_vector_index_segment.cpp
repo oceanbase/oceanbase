@@ -1458,7 +1458,9 @@ int ObVectorIndexSegmentBuilder::check_vid_range(const int64_t vid, bool &has_sk
 {
   int ret = OB_SUCCESS;
   has_skip_vid = false;
+  ++total_cnt_;
   if (! need_vid_check_) { // skip check
+    ++add_cnt_;
   } else if (! vid_bound_.is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("vid bound is invalid", K(vid_bound_));
@@ -1467,7 +1469,6 @@ int ObVectorIndexSegmentBuilder::check_vid_range(const int64_t vid, bool &has_sk
     // const bool in_ii_bitmap = roaring::api::roaring64_bitmap_contains(ibitmap_->insert_bitmap_, vid);
     // const bool in_vi_bitmap = roaring::api::roaring64_bitmap_contains(vbitmap_->insert_bitmap_, vid);
     // const bool in_vd_bitmap = roaring::api::roaring64_bitmap_contains(vbitmap_->delete_bitmap_, vid);
-    ++total_cnt_;
     if (! in_vid_bound) {
       has_skip_vid = true;
       ++skip_cnt_;
@@ -1902,6 +1903,8 @@ int ObVecIdxSnapshotData::load_segment(ObIAllocator &allocator, ObPluginVectorIn
   param.seg_meta_ = &seg_meta;
   if (OB_FAIL(ObVectorIndexSegment::deserialize(seg_meta.segment_handle_, tenant_id, adaptor, param))) {
     LOG_WARN("serialize index failed.", K(ret));
+  } else {
+    LOG_INFO("load segment success", K(ret), K(seg_meta));
   }
   if (OB_FAIL(ret)) {
     seg_meta.segment_handle_.reset();
