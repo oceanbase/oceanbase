@@ -9273,7 +9273,8 @@ int ObRawExprUtils::build_common_aggr_expr(ObRawExprFactory &expr_factory,
                                            ObSQLSessionInfo *session_info,
                                            const ObItemType expect_op_type,
                                            ObRawExpr *param_expr,
-                                           ObAggFunRawExpr *&aggr_expr)
+                                           ObAggFunRawExpr *&aggr_expr,
+                                           bool keep_sum_precision)
 {
   int ret = OB_SUCCESS;
   aggr_expr = NULL;
@@ -9289,6 +9290,7 @@ int ObRawExprUtils::build_common_aggr_expr(ObRawExprFactory &expr_factory,
     LOG_WARN("failed to add flag", K(ret));
   } else if (OB_FAIL(aggr_expr->add_real_param_expr(param_expr))) {
     LOG_WARN("failed to add param expr to agg expr", K(ret));
+  } else if (FALSE_IT(aggr_expr->set_is_keep_sum_precision(keep_sum_precision))) {
   } else if (OB_FAIL(aggr_expr->formalize(session_info))) {
     LOG_WARN("failed to extract info", K(ret));
   } else {/*do nothing */}

@@ -9316,7 +9316,8 @@ int ObOptimizerUtil::generate_pullup_aggr_expr(ObRawExprFactory &expr_factory,
                                                        session_info,
                                                        pullup_aggr_type,
                                                        pushdown_expr,
-                                                       pullup_aggr))) {
+                                                       pullup_aggr,
+                                                       T_FUN_SUM == pullup_aggr_type))) {
       LOG_WARN("failed to build common aggr expr", K(ret));
     }
   } else if (T_FUN_GROUPING == aggr_type &&

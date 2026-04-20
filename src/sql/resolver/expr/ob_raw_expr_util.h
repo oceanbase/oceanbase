@@ -1191,7 +1191,8 @@ public:
                                     ObSQLSessionInfo *session_info,
                                     const ObItemType expect_op_type,
                                     ObRawExpr *param_expr,
-                                    ObAggFunRawExpr *&aggr_expr);
+                                    ObAggFunRawExpr *&aggr_expr,
+                                    bool keep_sum_precision = false);
 
   //专用于limit_expr/offset_expr中，用于构造case when limit_expr < 0 then 0 else limit_expr end
   static int build_case_when_expr_for_limit(ObRawExprFactory &expr_factory,

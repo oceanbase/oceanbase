@@ -764,7 +764,7 @@ int ObGroupByPushDownPlanRewriter::can_pushdown_groupby(ObLogGroupBy *groupby, b
   } else if (!stmt->is_select_stmt()) {
     can_push = false;
     OPT_TRACE("stmt is not select stmt, can not push");
-  } else if (groupby->has_rollup()) {
+  } else if (groupby->has_rollup() || groupby->get_grouping_set_info() != NULL) {
     can_push = false;
     OPT_TRACE("groupby has rollup, can not push");
   } else if (groupby->get_algo() == MERGE_AGGREGATE && groupby->get_group_by_exprs().count() != 0) {
@@ -773,7 +773,7 @@ int ObGroupByPushDownPlanRewriter::can_pushdown_groupby(ObLogGroupBy *groupby, b
   } else if (!groupby->is_distributed()) {
     can_push = false;
     OPT_TRACE("groupby is not distributed, can not push");
-  } else if (groupby->is_three_stage_aggr()) {
+  } else if (groupby->is_three_stage_aggr() || groupby->is_three_stage_expand_aggr()) {
     can_push = false;
     OPT_TRACE("groupby is three stage aggr, skip");
   } else {
