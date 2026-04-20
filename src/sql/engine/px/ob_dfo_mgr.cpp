@@ -508,7 +508,9 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
     }
   } else if (phy_op->is_dml_operator() && NULL != parent_dfo) {
     // 当前op是一个dml算子，需要设置dfo的属性
-    parent_dfo->set_dml_op(true);
+    if (ObPXServerAddrUtil::check_build_dfo_with_dml(*phy_op)) {
+      parent_dfo->set_dml_op(true);
+    }
   } else if (phy_op->get_type() == PHY_TEMP_TABLE_ACCESS && NULL != parent_dfo) {
     parent_dfo->set_temp_table_scan(true);
     const ObTempTableAccessOpSpec *access = static_cast<const ObTempTableAccessOpSpec*>(phy_op);
