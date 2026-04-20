@@ -13,6 +13,7 @@
 #include "storage/ddl/ob_inc_ddl_merge_task_utils.h"
 #include "storage/ddl/ob_ddl_merge_task_utils.h"
 #include "storage/ddl/ob_ddl_merge_schedule.h"
+#include "share/schema/ob_multi_version_schema_service.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/compaction_v2/ob_ss_compact_helper.h"
 #include "storage/ddl/ob_ss_ddl_util.h"
@@ -1094,9 +1095,16 @@ int ObSplitStartReplayExecutor::check_can_skip_replay(
   ObLSRestoreStatus restore_status;
   ObLSRestoreHandler *restore_handler = nullptr;
   share::SCN consistent_scn = SCN::min_scn();
+  bool is_tenant_dropped = false;
   if (OB_UNLIKELY(!handle.is_valid() || !scn.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(scn), KPC(handle.get_obj()));
+  } else if (OB_FAIL(GSCHEMASERVICE.check_if_tenant_has_been_dropped(MTL_ID(), is_tenant_dropped))) {
+    LOG_WARN("check if tenant has been dropped failed", K(ret), "tenant_id", MTL_ID());
+  } else if (is_tenant_dropped) {
+    can_skip = true;
+    FLOG_INFO("skip split replay due to tenant dropped", "tenant_id", MTL_ID(),
+      "src_tablet_id", handle.get_obj()->get_tablet_id());
   } else if (OB_ISNULL(restore_handler = ls.get_ls_restore_handler())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("restore handler should not be null", K(ret));
