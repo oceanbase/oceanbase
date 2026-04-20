@@ -737,7 +737,9 @@ int ObTransformSimplifySubquery::transform_any_all(ObDMLStmt *stmt, bool &trans_
     if (OB_FAIL(relation_expr_pointers.at(i).get(target))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("find to get expr from group", K(ret), K(target));
-    } else if (OB_FAIL(try_transform_any_all(stmt, target, is_happened))) {
+    // Pass target as root_expr so descendants can be checked in condition context
+    // via check_expr_used_as_condition(stmt, root_expr, expr, ...).
+    } else if (OB_FAIL(try_transform_any_all(stmt, target, target, is_happened))) {
       LOG_WARN("fail to transform expr", K(ret));
     } else if (!is_happened) {
       // do nothing
@@ -750,7 +752,10 @@ int ObTransformSimplifySubquery::transform_any_all(ObDMLStmt *stmt, bool &trans_
   return ret;
 }
 
-int ObTransformSimplifySubquery::try_transform_any_all(ObDMLStmt *stmt, ObRawExpr *&expr, bool &trans_happened)
+int ObTransformSimplifySubquery::try_transform_any_all(ObDMLStmt *stmt,
+                                                       ObRawExpr *root_expr,
+                                                       ObRawExpr *&expr,
+                                                       bool &trans_happened)
 {
   int ret = OB_SUCCESS;
   bool is_happened = false;
@@ -765,7 +770,7 @@ int ObTransformSimplifySubquery::try_transform_any_all(ObDMLStmt *stmt, ObRawExp
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("too deep recursive", K(ret), K(is_stack_overflow));
   } else if (IS_SUBQUERY_COMPARISON_OP(expr->get_expr_type())) {
-    if (OB_FAIL(do_transform_any_all(stmt, expr, is_happened))) {
+    if (OB_FAIL(do_transform_any_all(stmt, root_expr, expr, is_happened))) {
       LOG_WARN("failed to do_trans_any_all", K(ret));
     } else {
       trans_happened |= is_happened;
@@ -773,7 +778,10 @@ int ObTransformSimplifySubquery::try_transform_any_all(ObDMLStmt *stmt, ObRawExp
   } else if (expr->has_flag(CNT_SUB_QUERY)) {
     //check children
     for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
-      if (OB_FAIL(SMART_CALL(try_transform_any_all(stmt, expr->get_param_expr(i), is_happened)))) {
+      if (OB_FAIL(SMART_CALL(try_transform_any_all(stmt,
+                                                   root_expr,
+                                                   expr->get_param_expr(i),
+                                                   is_happened)))) {
         LOG_WARN("failed to try_transform_any_all for param", K(ret));
       } else {
         trans_happened |= is_happened;
@@ -783,7 +791,10 @@ int ObTransformSimplifySubquery::try_transform_any_all(ObDMLStmt *stmt, ObRawExp
   return ret;
 }
 
-int ObTransformSimplifySubquery::do_transform_any_all(ObDMLStmt *stmt, ObRawExpr *&expr, bool &trans_happened)
+int ObTransformSimplifySubquery::do_transform_any_all(ObDMLStmt *stmt,
+                                                      ObRawExpr *root_expr,
+                                                      ObRawExpr *&expr,
+                                                      bool &trans_happened)
 {
   int ret = OB_SUCCESS;
   bool is_happened = false;
@@ -800,7 +811,7 @@ int ObTransformSimplifySubquery::do_transform_any_all(ObDMLStmt *stmt, ObRawExpr
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(transform_any_all_as_min_max(stmt, expr, is_happened))) {
+    } else if (OB_FAIL(transform_any_all_as_min_max(stmt, root_expr, expr, is_happened))) {
       LOG_WARN("failed to trans_any_all_as_min_max", K(ret));
     } else {
       trans_happened |= is_happened;
@@ -823,16 +834,19 @@ int ObTransformSimplifySubquery::do_transform_any_all(ObDMLStmt *stmt, ObRawExpr
   return ret;
 }
 
-int ObTransformSimplifySubquery::check_any_all_as_min_max(ObRawExpr *expr, bool &is_valid)
+int ObTransformSimplifySubquery::check_any_all_as_min_max(ObDMLStmt *stmt,
+                                                          ObRawExpr *root_expr,
+                                                          ObRawExpr *expr,
+                                                          bool &is_valid)
 {
   int ret = OB_SUCCESS;
   ObSelectStmt *child_stmt = NULL;
   is_valid = false;
 
   //check op_expr
-  if (OB_ISNULL(expr) || OB_ISNULL(ctx_)) {
+  if (OB_ISNULL(stmt) || OB_ISNULL(root_expr) || OB_ISNULL(expr) || OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("params have null", K(ret), K(expr));
+    LOG_WARN("params have null", K(ret), K(stmt), K(root_expr), K(expr));
   } else if (IS_SUBQUERY_COMPARISON_OP(expr->get_expr_type())
              && T_OP_SQ_EQ != expr->get_expr_type()
              && T_OP_SQ_NSEQ != expr->get_expr_type()
@@ -884,7 +898,20 @@ int ObTransformSimplifySubquery::check_any_all_as_min_max(ObRawExpr *expr, bool 
       } else if (!is_match) {
         /*不能利用基表索引，不改写*/
       } else if (expr->has_flag(IS_WITH_ANY)) {
-        is_valid = true;
+        // ANY(empty set) is FALSE, but MIN/MAX over empty set yields NULL.
+        // So for projection/value expressions, rewriting ANY to MIN/MAX can change
+        // observable results (e.g. 0 -> NULL). check_expr_used_as_condition()
+        // restricts this rewrite to boolean-condition context only, where this
+        // mismatch is acceptable for current rewrite strategy.
+        bool used_as_condition = false;
+        if (OB_FAIL(ObTransformUtils::check_expr_used_as_condition(stmt,
+                                                                   root_expr,
+                                                                   expr,
+                                                                   used_as_condition))) {
+          LOG_WARN("failed to check expr used as condition", K(ret));
+        } else if (used_as_condition) {
+          is_valid = true;
+        }
       } else if (expr->has_flag(IS_WITH_ALL)) {
         if (OB_FAIL(ObTransformUtils::is_column_nullable(child_stmt,
                                                          ctx_->schema_checker_,
@@ -903,6 +930,7 @@ int ObTransformSimplifySubquery::check_any_all_as_min_max(ObRawExpr *expr, bool 
 }
 
 int ObTransformSimplifySubquery::transform_any_all_as_min_max(ObDMLStmt *stmt,
+                                                              ObRawExpr *root_expr,
                                                               ObRawExpr *expr,
                                                               bool &trans_happened)
 {
@@ -912,7 +940,7 @@ int ObTransformSimplifySubquery::transform_any_all_as_min_max(ObDMLStmt *stmt,
   if (OB_ISNULL(stmt) || OB_ISNULL(expr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("params have null", K(ret), K(stmt), K(expr));
-  } else if (OB_FAIL(check_any_all_as_min_max(expr, is_valid))) {
+  } else if (OB_FAIL(check_any_all_as_min_max(stmt, root_expr, expr, is_valid))) {
     LOG_WARN("failed to check_any_all_as_min_max", K(ret));
   } else if (!is_valid) {
     /* do nothing */

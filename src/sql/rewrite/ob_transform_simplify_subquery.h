@@ -69,18 +69,30 @@ private:
    * @brief try_trans_any_all
    * 尝试对表达式 expr 本身或者它的参数表达式进行改写
    */
-  int try_transform_any_all(ObDMLStmt *stmt, ObRawExpr *&expr, bool &trans_happened);
+  int try_transform_any_all(ObDMLStmt *stmt,
+                            ObRawExpr *root_expr,
+                            ObRawExpr *&expr,
+                            bool &trans_happened);
 
   /**
    * @brief do_trans_any_all
    * 判断一个表达式是否可以进行改写，如果可以那么进行改写
    */
-  int do_transform_any_all(ObDMLStmt *stmt, ObRawExpr *&expr, bool &trans_happened);
+  int do_transform_any_all(ObDMLStmt *stmt,
+                           ObRawExpr *root_expr,
+                           ObRawExpr *&expr,
+                           bool &trans_happened);
 
-  int check_any_all_as_min_max(ObRawExpr *expr, bool &is_valid);
+  int check_any_all_as_min_max(ObDMLStmt *stmt,
+                               ObRawExpr *root_expr,
+                               ObRawExpr *expr,
+                               bool &is_valid);
 
 
-  int transform_any_all_as_min_max(ObDMLStmt *stmt, ObRawExpr *expr, bool &trans_happened);
+  int transform_any_all_as_min_max(ObDMLStmt *stmt,
+                                   ObRawExpr *root_expr,
+                                   ObRawExpr *expr,
+                                   bool &trans_happened);
 
   int do_transform_any_all_as_min_max(ObSelectStmt *sel_stmt, const ObItemType aggr_type,
                                       bool is_with_all, bool &trans_happened);
