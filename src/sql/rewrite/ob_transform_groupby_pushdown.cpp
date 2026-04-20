@@ -2180,7 +2180,9 @@ int ObTransformGroupByPushdown::distribute_filter(ObSelectStmt *stmt,
     LOG_WARN("params have null", K(ret), K(stmt), K(cond));
   } else if (!cond->has_flag(CNT_COLUMN)) {
     // do nothing
-  } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(cond, column_exprs))) {
+  } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(cond,
+                                                          column_exprs,
+                                                          true))) {
     LOG_WARN("failed to extract column exprs", K(ret));
   } else if (OB_UNLIKELY(column_exprs.count() <= 0)) {
     ret = OB_ERR_UNEXPECTED;
@@ -2262,7 +2264,9 @@ int ObTransformGroupByPushdown::distribute_joined_on_conds(ObDMLStmt *stmt,
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObRawExprUtils::extract_column_exprs(join_conds, column_exprs))) {
+    if (OB_FAIL(ObRawExprUtils::extract_column_exprs(join_conds,
+                                                     column_exprs,
+                                                     true))) {
       LOG_WARN("failed to extract column exprs", K(ret));
     } else if (OB_FAIL(joined_table->join_conditions_.assign(join_conds))) {
       LOG_WARN("failed to assign join conditions", K(ret));
@@ -2394,6 +2398,7 @@ int ObTransformGroupByPushdown::push_down_groupby_into_cross_join(
   ObSEArray<TableItem *, 4> new_view_table_items;
   ObSEArray<ObRawExpr*, 4> old_exprs;
   ObSEArray<ObRawExpr*, 4> new_exprs;
+  ObSEArray<ObRawExpr*, 4> pushed_pseudo_column_like_exprs;
   ObSEArray<ObRawExpr*, 4> count_star_exprs;
   ObSEArray<ObRawExpr*, 4> old_agg_exprs;
   ObSEArray<ObRawExpr*, 4> new_agg_exprs;
@@ -2416,7 +2421,12 @@ int ObTransformGroupByPushdown::push_down_groupby_into_cross_join(
     if (cross_join_params.at(i).table_bit_index_.is_empty()) {
       continue;
     } else if (OB_FAIL(push_down_group_by_into_view(
-                         stmt, table_items, flatten_joined_tables, cross_join_params.at(i), new_table_item))) {
+                         stmt,
+                         table_items,
+                         flatten_joined_tables,
+                         cross_join_params.at(i),
+                         new_table_item,
+                         &pushed_pseudo_column_like_exprs))) {
       LOG_WARN("failed to push down group by into view", K(ret));
     } else if (OB_ISNULL(new_table_item) || OB_ISNULL(sub_stmt = new_table_item->ref_query_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -2468,6 +2478,10 @@ int ObTransformGroupByPushdown::push_down_groupby_into_cross_join(
       LOG_WARN("failed to add replace pair", K(ret));
     } else if (OB_FAIL(stmt->copy_and_replace_stmt_expr(copier))) {
       LOG_WARN("failed to copy and replace stmt expr", K(ret));
+    } else if (!pushed_pseudo_column_like_exprs.empty() &&
+               OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_pseudo_column_like_exprs(),
+                                                   pushed_pseudo_column_like_exprs))) {
+      LOG_WARN("failed to remove pseudo column like exprs", K(ret));
     } else if (OB_FAIL(append(stmt->get_table_items(), cross_join_tables))) {
       LOG_WARN("failed to append cross-join tables", K(ret));
     }
@@ -2671,6 +2685,7 @@ int ObTransformGroupByPushdown::do_double_eager_rewrite(ObSelectStmt *stmt,
   ObSEArray<bool, 4> table_types;
   ObSEArray<ObRawExpr*, 4> old_exprs;
   ObSEArray<ObRawExpr*, 4> new_exprs;
+  ObSEArray<ObRawExpr*, 4> pushed_pseudo_column_like_exprs;
   ObSEArray<TableItem*, 4> table_items;
   ObSEArray<TableItem *, 4> new_table_items;
   if (OB_ISNULL(stmt)) {
@@ -2687,7 +2702,12 @@ int ObTransformGroupByPushdown::do_double_eager_rewrite(ObSelectStmt *stmt,
     if (params.at(i).table_bit_index_.is_empty()) {
       continue;
     } else if (OB_FAIL(push_down_group_by_into_view(
-                         stmt, table_items, flatten_joined_tables, params.at(i), new_table_item))) {
+                         stmt,
+                         table_items,
+                         flatten_joined_tables,
+                         params.at(i),
+                         new_table_item,
+                         &pushed_pseudo_column_like_exprs))) {
       LOG_WARN("failed to push down group by into view", K(ret));
     } else if (OB_ISNULL(new_table_item) || OB_ISNULL(sub_stmt = new_table_item->ref_query_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -2759,6 +2779,10 @@ int ObTransformGroupByPushdown::do_double_eager_rewrite(ObSelectStmt *stmt,
       LOG_WARN("failed to add replace pair", K(ret));
     } else if (OB_FAIL(stmt->copy_and_replace_stmt_expr(copier))) {
       LOG_WARN("failed to copy and replace stmt expr", K(ret));
+    } else if (!pushed_pseudo_column_like_exprs.empty() &&
+               OB_FAIL(ObOptimizerUtil::remove_item(stmt->get_pseudo_column_like_exprs(),
+                                                   pushed_pseudo_column_like_exprs))) {
+      LOG_WARN("failed to remove pseudo column like exprs", K(ret));
     } else if (OB_FAIL(append(stmt->get_table_items(), eager_aggr_tables))) {
       LOG_WARN("failed to append aggregation tables", K(ret));
     }
@@ -2787,12 +2811,14 @@ int ObTransformGroupByPushdown::push_down_group_by_into_view(ObSelectStmt *stmt,
                                                               const ObIArray<TableItem*> &table_items,
                                                               ObIArray<uint64_t> &flatten_joined_tables,
                                                               PushDownParam &params,
-                                                              TableItem *&new_table_item)
+                                                              TableItem *&new_table_item,
+                                                              ObIArray<ObRawExpr *> *pushed_pseudo_column_like_exprs)
 {
   int ret = OB_SUCCESS;
   ObSelectStmt *sub_stmt = NULL;
   ObSEArray<int64_t, 4> table_index_array;
   ObSEArray<uint64_t, 4> joined_table_ids;
+  ObSEArray<ObRawExpr *, 4> local_pushed_pseudo_column_like_exprs;
   bool is_added = false;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_ISNULL(ctx_->stmt_factory_) ||
       OB_ISNULL(ctx_->allocator_)) {
@@ -2917,6 +2943,28 @@ int ObTransformGroupByPushdown::push_down_group_by_into_view(ObSelectStmt *stmt,
   if (OB_SUCC(ret)) {
     if (OB_FAIL(stmt->get_column_items().assign(new_column_list))) {
       LOG_WARN("failed to assign new column list", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::extract_pseudo_column_like_expr(params.filter_exprs_,
+                                                                          local_pushed_pseudo_column_like_exprs))) {
+      LOG_WARN("failed to extract pseudo column like exprs", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::extract_pseudo_column_like_expr(params.join_columns_,
+                                                                          local_pushed_pseudo_column_like_exprs))) {
+      LOG_WARN("failed to extract pseudo column like exprs", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::extract_pseudo_column_like_expr(params.group_exprs_,
+                                                                          local_pushed_pseudo_column_like_exprs))) {
+      LOG_WARN("failed to extract pseudo column like exprs", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::extract_pseudo_column_like_expr(params.aggr_exprs_,
+                                                                          local_pushed_pseudo_column_like_exprs))) {
+      LOG_WARN("failed to extract pseudo column like exprs", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::extract_pseudo_column_like_expr(params.having_exprs_,
+                                                                          local_pushed_pseudo_column_like_exprs))) {
+      LOG_WARN("failed to extract pseudo column like exprs", K(ret));
+    } else if (OB_FAIL(append_array_no_dup(sub_stmt->get_pseudo_column_like_exprs(),
+                                           local_pushed_pseudo_column_like_exprs))) {
+      LOG_WARN("failed to append pseudo column like exprs", K(ret));
+    } else if (OB_NOT_NULL(pushed_pseudo_column_like_exprs) &&
+               OB_FAIL(append_array_no_dup(*pushed_pseudo_column_like_exprs,
+                                           local_pushed_pseudo_column_like_exprs))) {
+      LOG_WARN("failed to append pushed pseudo column like exprs", K(ret));
     } else if (OB_FAIL(append_array_no_dup(sub_stmt->get_group_exprs(), params.join_columns_))) {
       LOG_WARN("failed to append array without duplicate", K(ret));
     } else if (OB_FAIL(append_array_no_dup(sub_stmt->get_group_exprs(), params.group_exprs_))) {
@@ -3202,7 +3250,7 @@ int ObTransformGroupByPushdown::add_exprs(const ObIArray<ObRawExpr *> &exprs,
     if (OB_ISNULL(expr = exprs.at(i))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr is null", K(ret), K(expr));
-    } else if (!expr->has_flag(CNT_COLUMN) ||
+    } else if ((!expr->has_flag(CNT_COLUMN) && !ObRawExprUtils::is_pseudo_column_like_expr(*expr)) ||
                !table_set.is_superset2(expr->get_relation_ids())) {
       // do nothing
     } else if (OB_FAIL(add_var_to_array_no_dup(dest, expr))) {

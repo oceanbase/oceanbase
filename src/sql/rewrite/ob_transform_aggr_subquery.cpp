@@ -1870,6 +1870,9 @@ int ObTransformAggrSubquery::do_join_first_transform(ObSelectStmt &select_stmt,
       LOG_WARN("failed to append check constraint items", K(ret));
     } else if (OB_FAIL(append(select_stmt.get_aggr_items(), subquery->get_aggr_items()))) {
       LOG_WARN("failed to append aggr items", K(ret));
+    } else if (OB_FAIL(append_array_no_dup(select_stmt.get_pseudo_column_like_exprs(),
+                                           subquery->get_pseudo_column_like_exprs()))) {
+      LOG_WARN("failed to append pseudo column like exprs", K(ret));
     } else if (OB_FAIL(select_stmt.rebuild_tables_hash())) {
       LOG_WARN("failed to rebuild table hash", K(ret));
     } else if (OB_FAIL(select_stmt.update_column_item_rel_id())) {
