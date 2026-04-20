@@ -1634,7 +1634,7 @@ int ObTTLUtil::check_is_htable_ttl_(const ObTableSchema &table_schema, bool allo
   is_ttl_table = false;
   const ObColumnSchemaV2 *ttl_column = nullptr;
   table::ObHbaseModeType mode_type = table::ObHbaseModeType::OB_INVALID_MODE_TYPE;
-  if (OB_FAIL(table::ObHTableUtils::get_mode_type(table_schema, mode_type))) {
+  if (OB_FAIL(table::ObHTableUtils::match_mode_type_by_column_name(table_schema, mode_type))) {
     LOG_WARN("fail to get mode type", KR(ret));
   } else if (mode_type == table::ObHbaseModeType::OB_INVALID_MODE_TYPE ||
             (!allow_timeseries_table && mode_type == table::ObHbaseModeType::OB_HBASE_SERIES_TYPE)) {
@@ -1960,7 +1960,7 @@ int ObTTLUtil::check_kv_attributes(ObKVAttr &attr,
 {
   int ret = OB_SUCCESS;
   table::ObHbaseModeType mode_type = table::ObHbaseModeType::OB_INVALID_MODE_TYPE;
-  if (OB_FAIL(ObHTableUtils::get_mode_type(table_schema, mode_type))) {
+  if (OB_FAIL(ObHTableUtils::match_mode_type_by_column_name(table_schema, mode_type))) {
     LOG_WARN("fail to get hbase mode type", K(ret));
   } else if (OB_FAIL(check_kv_attributes_common_(attr, part_level, by_admin, mode_type))) {
     LOG_WARN("fail to check kv attributes common", K(ret));
@@ -1982,7 +1982,7 @@ int ObTTLUtil::check_kv_attributes(const share::schema::ObTableSchema &table_sch
   table::ObHbaseModeType mode_type = table::ObHbaseModeType::OB_INVALID_MODE_TYPE;
   if (OB_FAIL(parse_kv_attributes(table_schema.get_tenant_id(), table_schema.get_kv_attributes(), kv_attr))) {
     LOG_WARN("failed to parse kv attributes", K(ret));
-  } else if (OB_FAIL(ObHTableUtils::get_mode_type(table_schema, mode_type))) {
+  } else if (OB_FAIL(ObHTableUtils::match_mode_type_by_column_name(table_schema, mode_type))) {
     LOG_WARN("fail to get hbase mode type", K(ret));
   } else if (OB_FAIL(check_kv_attributes_common_(kv_attr, table_schema.get_part_level(), is_htable, mode_type))) {
     LOG_WARN("fail to check kv attributes common", K(ret));
@@ -2021,7 +2021,7 @@ int ObTTLUtil::check_kv_attributes(ObKVAttr &kv_attr,
   int ret = OB_SUCCESS;
 
   table::ObHbaseModeType mode_type = table::ObHbaseModeType::OB_INVALID_MODE_TYPE;
-  if (OB_FAIL(ObHTableUtils::get_mode_type(table_schema, mode_type))) {
+  if (OB_FAIL(ObHTableUtils::match_mode_type_by_column_name(table_schema, mode_type))) {
     LOG_WARN("fail to get hbase mode type", K(ret));
   } else if (OB_FAIL(check_kv_attributes_common_(kv_attr, table_schema.get_part_level(), false /*by_admin*/, mode_type))) {
     LOG_WARN("fail to check kv attributes common", K(ret));

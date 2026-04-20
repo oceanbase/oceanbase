@@ -808,7 +808,7 @@ int ObTabletTTLScheduler::get_ttl_para_from_schema(const schema::ObTableSchema *
     }
   }
   if (OB_SUCC(ret) && !param.is_redis_table_ && !is_table_model) {
-    if (OB_FAIL(ObHTableUtils::get_mode_type(*table_schema, mode_type))) {
+    if (OB_FAIL(ObHTableUtils::match_mode_type_by_column_name(*table_schema, mode_type))) {
       LOG_WARN("fail to check htable schema", KR(ret), K(table_schema->get_table_name()));
     } else if (mode_type == ObHbaseModeType::OB_HBASE_NORMAL_TYPE) {
       const ObColumnSchemaV2 *ttl_schema = NULL;

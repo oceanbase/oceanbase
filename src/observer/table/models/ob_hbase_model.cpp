@@ -32,22 +32,29 @@ int ObHBaseModel::check_mode_defense(ObTableExecCtx &ctx)
 {
   int ret = OB_SUCCESS;
   is_multi_cf_req_ = ObHTableUtils::is_tablegroup_req(ctx.get_table_name(), ObTableEntityType::ET_HKV);
-  bool is_series_mode = ctx.get_schema_cache_guard().get_hbase_mode_type() == ObHbaseModeType::OB_HBASE_SERIES_TYPE;
-  uint64_t data_version = 0;
-  if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
-    LOG_WARN("get data version failed", K(ret));
-  } else if (is_series_mode && data_version < DATA_VERSION_4_3_5_2) {
+  ObHbaseModeType mode_type = ctx.get_schema_cache_guard().get_hbase_mode_type();
+  if (mode_type == ObHbaseModeType::OB_INVALID_MODE_TYPE) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not support series model with data version less than 4_3_5_2", K(ret), K(data_version));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "series model with data version less than 4_3_5_2");
-  } else if (is_multi_cf_req_ && is_series_mode) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("hbase series mode is not supported multi cf", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "timeseries hbase table with multi column family");
+    LOG_WARN("accessing non-hbase schema table via hbase client is not supported",
+              K(ret), K(ctx.get_table_name()));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "accessing non-hbase schema table via hbase client");
+  } else if (mode_type == ObHbaseModeType::OB_HBASE_SERIES_TYPE) {
+    uint64_t data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+      LOG_WARN("get data version failed", K(ret));
+    } else if (data_version < DATA_VERSION_4_3_5_2) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not support series model with data version less than 4_3_5_2", K(ret), K(data_version));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "series model with data version less than 4_3_5_2");
+    } else if (is_multi_cf_req_) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("hbase series mode is not supported multi cf", K(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "timeseries hbase table with multi column family");
+    }
   }
-
   return ret;
 }
+
 int ObHBaseModel::check_ls_op_defense(ObTableExecCtx &ctx, const ObTableLSOpRequest &req)
 {
   int ret = OB_SUCCESS;

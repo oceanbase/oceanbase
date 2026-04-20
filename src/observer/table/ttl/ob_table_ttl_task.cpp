@@ -423,7 +423,7 @@ int ObTableTTLDeleteTask::decide_and_check_scan_index(const share::schema::ObTab
     LOG_WARN("redis model do ttl task with scan index is not supported", K(ret), K(attr));
   } else if (attr.type_ == ObKVAttr::HBASE) {
     ObHbaseModeType mode_type = ObHbaseModeType::OB_INVALID_MODE_TYPE;
-    if (OB_FAIL(ObHTableUtils::get_mode_type(table_schema, mode_type))) {
+    if (OB_FAIL(ObHTableUtils::match_mode_type_by_column_name(table_schema, mode_type))) {
       LOG_WARN("failed to get hbase mode type", K(ret), K(table_schema.get_table_id()));
     } else if (mode_type == ObHbaseModeType::OB_INVALID_MODE_TYPE) {
       ret = OB_ERR_UNEXPECTED;

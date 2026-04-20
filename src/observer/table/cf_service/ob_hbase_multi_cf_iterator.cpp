@@ -15,6 +15,7 @@
 #include "ob_hbase_multi_cf_iterator.h"
 #include "share/table/ob_table_util.h"
 #include "observer/table/part_calc/ob_table_part_clip.h"
+#include "observer/table/utils/ob_htable_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::share::schema;
@@ -85,6 +86,9 @@ int ObHbaseMultiCFIterator::init_cf_queries(ObTableExecCtx &exec_ctx, const ObHb
   } else if (FALSE_IT(tablegroup_id = first_table_schema->get_tablegroup_id())) {
   } else if (OB_FAIL(schema_guard.get_table_schemas_in_tablegroup(tenant_id, tablegroup_id, table_schemas))) {
     LOG_WARN("fail to get table schemas in tablegroup", K(ret), K(tenant_id), K(tablegroup_id));
+  } else if (OB_FAIL(ObHTableUtils::filter_table_schemas_by_database(table_schemas,
+      credential.database_id_))) {
+    LOG_WARN("fail to filter table schemas by database", K(ret), K(credential.database_id_));
   } else if (table_schemas.empty()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table schema is empty", K(ret));

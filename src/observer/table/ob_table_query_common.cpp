@@ -15,6 +15,7 @@
 #include "ob_htable_filter_operator.h"
 #include "observer/table/redis/ob_redis_iterator.h"
 #include "src/share/table/ob_table_util.h"
+#include "utils/ob_htable_utils.h"
 
 namespace oceanbase
 {
@@ -339,6 +340,8 @@ int ObTableQueryUtils::get_table_schemas(ObSchemaGetterGuard& schema_guard,
       LOG_USER_ERROR(OB_KV_HBASE_TABLE_NOT_FOUND, arg_table_name.length(), arg_table_name.ptr());
     } else if (OB_FAIL(schema_guard.get_table_schemas_in_tablegroup(arg_tenant_id, tablegroup_id, table_schemas))) {
       LOG_WARN("Failed to get table schemas from table group", K(ret), K(arg_tenant_id), K(tablegroup_id));
+    } else if (OB_FAIL(ObHTableUtils::filter_table_schemas_by_database(table_schemas, arg_database_id))) {
+      LOG_WARN("fail to filter table schemas by database", K(ret), K(arg_database_id));
     } else {
       // Proceed to initialize multi_cf_infos_ with the tables in the table group
       // The table_schemas array now contains the schemas of all tables in the table group

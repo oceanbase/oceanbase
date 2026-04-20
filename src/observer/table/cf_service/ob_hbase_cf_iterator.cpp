@@ -1408,7 +1408,7 @@ int ObHbaseCFIterator::init()
     ObSchemaGetterGuard &schema_guard = exec_ctx_.get_schema_guard();
     if (OB_FAIL(schema_guard.get_table_schema(MTL_ID(), table_id, table_schema))) {
       LOG_WARN("fail to get table schema", K(ret), K(table_id));
-    } else if (OB_FAIL(ObHTableUtils::get_mode_type(*table_schema, hbase_mode_type))) {
+    } else if (OB_FAIL(ObHTableUtils::match_mode_type_by_column_name(*table_schema, hbase_mode_type))) {
       LOG_WARN("fail to get habse model type", K(ret));
     } else {
       is_timeseries_table_ = hbase_mode_type == ObHbaseModeType::OB_HBASE_SERIES_TYPE;

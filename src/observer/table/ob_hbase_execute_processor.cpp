@@ -167,6 +167,11 @@
   ObTabletID route_tablet_id(ObTabletID::INVALID_TABLET_ID);
   if (OB_FAIL(init_schema_and_calc_part(ls_id))) {
     LOG_WARN("fail to init schema and calc part", K(ret));
+  } else if (schema_cache_guard_.get_hbase_mode_type() == ObHbaseModeType::OB_INVALID_MODE_TYPE) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("accessing non-hbase schema table via hbase client is not supported",
+              K(ret), K(schema_cache_guard_.get_table_name_str()));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "accessing non-hbase schema table via hbase client");
   } else if (FALSE_IT(route_tablet_id = arg_.cf_rows_.at(0).get_cf_row(0).get_cell(0).get_tablet_id())) {
   } else if (!route_tablet_id.is_valid()) {
     ret = OB_ERR_UNEXPECTED;

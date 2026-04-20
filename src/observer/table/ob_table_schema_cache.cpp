@@ -72,18 +72,58 @@ int ObKvSchemaCacheObj::cons_table_info(const ObTableSchema *table_schema)
     set_is_secondary_part(table_schema->get_part_level() == PARTITION_LEVEL_TWO);
     set_is_heap_table(!table_schema->is_table_with_pk());
     lob_inrow_threshold_ = table_schema->get_lob_inrow_threshold();
-    if (OB_FAIL(ObHTableUtils::get_mode_type(*table_schema, hbase_mode_type_))) {
-      LOG_WARN("fail to get mode type", K(ret));
-    } else if (hbase_mode_type_ == ObHbaseModeType::OB_HBASE_NORMAL_TYPE) {
-      uint64_t data_version = 0;
-      if (OB_NOT_NULL(table_schema->get_column_schema(ObHTableConstants::TTL_CNAME_STR))) {
-        flags_.has_hbase_ttl_column_ = true;
-        if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
-          LOG_WARN("get data version failed", K(ret));
-        } else if (data_version < DATA_VERSION_4_3_5_1) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("not support ttl column with data version less than 4_3_5_1", K(ret), K(data_version));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "ttl column with data version less than 4_3_5_1");
+    // step 1: match hbase mode type by column names (may not be accurate for non-HBASE tables)
+    if (OB_FAIL(ObHTableUtils::match_mode_type_by_column_name(*table_schema, hbase_mode_type_))) {
+      LOG_WARN("fail to match mode type by column name", K(ret));
+    } else if (kv_attributes_.type_ == ObKVAttr::HBASE) {
+      // step 2a: kv_attributes explicitly declares HBASE,
+      // verify mode type is one of the two hbase modes, then do strict column type validation
+      if (hbase_mode_type_ == ObHbaseModeType::OB_HBASE_NORMAL_TYPE) {
+        uint64_t data_version = 0;
+        if (OB_FAIL(ObHTableUtils::check_hbase_normal_column_types(*table_schema))) {
+          LOG_WARN("fail to check hbase normal column types", K(ret));
+        } else if (OB_NOT_NULL(table_schema->get_column_schema(ObHTableConstants::TTL_CNAME_STR))) {
+          flags_.has_hbase_ttl_column_ = true;
+          if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+            LOG_WARN("get data version failed", K(ret));
+          } else if (data_version < DATA_VERSION_4_3_5_1) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not support ttl column with data version less than 4_3_5_1", K(ret), K(data_version));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "ttl column with data version less than 4_3_5_1");
+          }
+        }
+      } else if (hbase_mode_type_ == ObHbaseModeType::OB_HBASE_SERIES_TYPE) {
+        if (OB_FAIL(ObHTableUtils::check_hbase_series_column_types(*table_schema))) {
+          LOG_WARN("fail to check hbase series column types", K(ret));
+        }
+      } else {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("kv_attributes declares HBASE but table schema does not match any hbase mode",
+                 K(ret), K(hbase_mode_type_));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "HBASE kv_attributes with non-hbase table schema");
+      }
+    } else if (hbase_mode_type_ != ObHbaseModeType::OB_INVALID_MODE_TYPE) {
+      // step 2b: kv_attributes is not HBASE, but column names matched a hbase mode,
+      // further verify column types to confirm; if types do not match, reset to INVALID
+      if (hbase_mode_type_ == ObHbaseModeType::OB_HBASE_NORMAL_TYPE) {
+        if (ObHTableUtils::match_hbase_normal_column_types(*table_schema)) {
+          uint64_t data_version = 0;
+          if (OB_NOT_NULL(table_schema->get_column_schema(ObHTableConstants::TTL_CNAME_STR))) {
+            flags_.has_hbase_ttl_column_ = true;
+            if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+              LOG_WARN("get data version failed", K(ret));
+            } else if (data_version < DATA_VERSION_4_3_5_1) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("not support ttl column with data version less than 4_3_5_1", K(ret), K(data_version));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "ttl column with data version less than 4_3_5_1");
+            }
+          }
+        } else {
+          hbase_mode_type_ = ObHbaseModeType::OB_INVALID_MODE_TYPE;
+        }
+      } else if (hbase_mode_type_ == ObHbaseModeType::OB_HBASE_SERIES_TYPE) {
+        if (!ObHTableUtils::match_hbase_series_column_types(*table_schema)) {
+          hbase_mode_type_ = ObHbaseModeType::OB_INVALID_MODE_TYPE;
         }
       }
     }

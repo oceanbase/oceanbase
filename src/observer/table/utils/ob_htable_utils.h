@@ -486,7 +486,19 @@ public:
   static int merge_key_range(ObKeyRangeTree& tree);
   static int cons_query_by_entity(const ObITableEntity &entity, ObIAllocator &allocator, ObTableQuery &query);
   static int gen_filter_by_entity(const ObITableEntity &entity, ObHTableFilter &filter);
-  static int get_mode_type(const share::schema::ObTableSchema &table_schema, ObHbaseModeType &mode_type);
+  // match hbase mode type by column names only, may not be accurate
+  // for tables not explicitly declared as HBASE in kv_attributes
+  static int match_mode_type_by_column_name(const share::schema::ObTableSchema &table_schema, ObHbaseModeType &mode_type);
+  static int check_hbase_normal_column_types(const share::schema::ObTableSchema &table_schema);
+  static int check_hbase_series_column_types(const share::schema::ObTableSchema &table_schema);
+  static bool match_hbase_normal_column_types(const share::schema::ObTableSchema &table_schema);
+  static bool match_hbase_series_column_types(const share::schema::ObTableSchema &table_schema);
+  static int filter_table_schemas_by_database(
+      common::ObIArray<const share::schema::ObSimpleTableSchemaV2 *> &table_schemas,
+      uint64_t database_id);
+  static int filter_table_schemas_by_database(
+      common::ObIArray<const share::schema::ObTableSchema *> &table_schemas,
+      uint64_t database_id);
   static int construct_entity_from_row(const ObNewRow &row,
                                        ObKvSchemaCacheGuard &schema_cache_guard,
                                        ObTableEntity &entity);
@@ -544,8 +556,8 @@ public:
                               ObKvSchemaCacheGuard &schema_cache_guard);
 private:
   static int build_range_by_entity(const ObITableEntity &entity, ObIAllocator &allocator, ObTableQuery &query);
-  static int match_hbase_normal_mode(const share::schema::ObTableSchema &table_schema, bool &matched);
-  static int match_hbase_series_mode(const share::schema::ObTableSchema &table_schema, bool &matched);
+  static bool match_hbase_normal_mode(const share::schema::ObTableSchema &table_schema);
+  static bool match_hbase_series_mode(const share::schema::ObTableSchema &table_schema);
 
 private:
   ObHTableUtils() = delete;

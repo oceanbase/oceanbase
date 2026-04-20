@@ -674,35 +674,28 @@ int ObHTableUtils::lock_redis_key(uint64_t table_id, const ObString &lock_key, O
   return ret;
 }
 
-int ObHTableUtils::get_mode_type(const ObTableSchema &table_schema, ObHbaseModeType &mode_type)
+int ObHTableUtils::match_mode_type_by_column_name(const ObTableSchema &table_schema, ObHbaseModeType &mode_type)
 {
   int ret = OB_SUCCESS;
-  bool matched = false;
   mode_type = ObHbaseModeType::OB_INVALID_MODE_TYPE;
   const ObColumnSchemaV2 *second_schema = NULL;
   if (OB_ISNULL(second_schema = table_schema.get_column_schema_by_idx(1))) {
     // do nothing
   } else if (ObHTableConstants::CQ_CNAME_STR.case_compare(second_schema->get_column_name()) == 0) {
-    if (OB_FAIL(match_hbase_normal_mode(table_schema, matched))) {
-      LOG_WARN("fail to match hbase normal mode", K(ret), K(table_schema));
-    } else if (matched) {
+    if (match_hbase_normal_mode(table_schema)) {
       mode_type = ObHbaseModeType::OB_HBASE_NORMAL_TYPE;
     }
   } else if (ObHTableConstants::VERSION_CNAME_STR.case_compare(second_schema->get_column_name()) == 0) {
-    if (OB_FAIL(match_hbase_series_mode(table_schema, matched))) {
-      LOG_WARN("fail to match hbase series mode", K(ret), K(table_schema));
-    } else if (matched) {
+    if (match_hbase_series_mode(table_schema)) {
       mode_type = ObHbaseModeType::OB_HBASE_SERIES_TYPE;
     }
   }
   return ret;
 }
 
-int ObHTableUtils::match_hbase_normal_mode(const ObTableSchema &table_schema, bool &matched)
+bool ObHTableUtils::match_hbase_normal_mode(const ObTableSchema &table_schema)
 {
-  int ret = OB_SUCCESS;
-  UNUSED(ret);
-  matched = false;
+  bool matched = false;
   const ObColumnSchemaV2 *key_column = NULL;
   const ObColumnSchemaV2 *version_column = NULL;
   const ObColumnSchemaV2 *value_column = NULL;
@@ -721,17 +714,15 @@ int ObHTableUtils::match_hbase_normal_mode(const ObTableSchema &table_schema, bo
   } else {
     matched = true;
   }
-  return ret;
+  return matched;
 }
 
-int ObHTableUtils::match_hbase_series_mode(const ObTableSchema &table_schema, bool &matched)
+bool ObHTableUtils::match_hbase_series_mode(const ObTableSchema &table_schema)
 {
-  int ret = OB_SUCCESS;
-  matched = false;
+  bool matched = false;
   const ObColumnSchemaV2 *key_column = NULL;
   const ObColumnSchemaV2 *series_column = NULL;
   const ObColumnSchemaV2 *value_column = NULL;
-  const ObColumnSchemaV2 *add_schema = NULL;
   if (OB_ISNULL(key_column = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_K))) {
     // do nothing
   } else if (ObHTableConstants::ROWKEY_CNAME_STR.case_compare(key_column->get_column_name()) != 0) {
@@ -744,17 +735,218 @@ int ObHTableUtils::match_hbase_series_mode(const ObTableSchema &table_schema, bo
     // do nothing
   } else if (ObHTableConstants::VALUE_CNAME_STR.case_compare(value_column->get_column_name()) != 0) {
     // do nothing
-  } else if (value_column->get_data_type() != ObJsonType) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_USER_ERROR(OB_ERR_UNEXPECTED, "series table value column type must be json");
-    LOG_WARN("series table value column type must be json", K(ret), K(value_column->get_data_type()));
-  } else if (OB_NOT_NULL(add_schema = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_TTL)) &&
-                ObHTableConstants::TTL_CNAME_STR.case_compare(add_schema->get_column_name()) == 0) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "series table not support cell ttl");
-    LOG_WARN("series table not support cell ttl", K(ret));
   } else {
     matched = true;
+  }
+  return matched;
+}
+
+int ObHTableUtils::check_hbase_normal_column_types(const ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  const ObColumnSchemaV2 *k_column = NULL;
+  const ObColumnSchemaV2 *q_column = NULL;
+  const ObColumnSchemaV2 *t_column = NULL;
+  const ObColumnSchemaV2 *v_column = NULL;
+  const ObColumnSchemaV2 *ttl_column = NULL;
+  if (OB_ISNULL(k_column = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_K))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get K column schema", K(ret));
+  } else if (!ob_is_string_type(k_column->get_data_type())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "hbase normal table with non-string K column type");
+    LOG_WARN("hbase normal table K column type must be varchar or varbinary",
+             K(ret), K(k_column->get_data_type()));
+  } else if (OB_ISNULL(q_column = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_Q))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get Q column schema", K(ret));
+  } else if (!ob_is_string_type(q_column->get_data_type())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "hbase normal table with non-string Q column type");
+    LOG_WARN("hbase normal table Q column type must be varchar or varbinary",
+             K(ret), K(q_column->get_data_type()));
+  } else if (OB_ISNULL(t_column = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_T))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get T column schema", K(ret));
+  } else if (ObIntType != t_column->get_data_type()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "hbase normal table with non-bigint T column type");
+    LOG_WARN("hbase normal table T column type must be bigint",
+             K(ret), K(t_column->get_data_type()));
+  } else if (OB_ISNULL(v_column = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_V))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get V column schema", K(ret));
+  } else if (!ob_is_string_type(v_column->get_data_type())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "hbase normal table with non-string V column type");
+    LOG_WARN("hbase normal table V column type must be varchar or varbinary",
+             K(ret), K(v_column->get_data_type()));
+  } else {
+    // TTL column is optional; only validate type if it exists and the name matches TTL_CNAME_STR
+    ttl_column = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_TTL);
+    if (OB_NOT_NULL(ttl_column)
+        && 0 == ObHTableConstants::TTL_CNAME_STR.case_compare(ttl_column->get_column_name())
+        && ObIntType != ttl_column->get_data_type()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "hbase normal table with non-bigint TTL column type");
+      LOG_WARN("hbase normal table TTL column type must be bigint",
+               K(ret), K(ttl_column->get_data_type()));
+    }
+  }
+  return ret;
+}
+
+int ObHTableUtils::check_hbase_series_column_types(const ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  const ObColumnSchemaV2 *k_column = NULL;
+  const ObColumnSchemaV2 *t_column = NULL;
+  const ObColumnSchemaV2 *s_column = NULL;
+  const ObColumnSchemaV2 *v_column = NULL;
+  const ObColumnSchemaV2 *ttl_column = NULL;
+  if (OB_ISNULL(k_column = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_K))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get K column schema", K(ret));
+  } else if (!ob_is_string_type(k_column->get_data_type())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "hbase series table with non-string K column type");
+    LOG_WARN("hbase series table K column type must be varchar or varbinary",
+             K(ret), K(k_column->get_data_type()));
+  } else if (OB_ISNULL(t_column = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_T))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get T column schema", K(ret));
+  } else if (ObIntType != t_column->get_data_type()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "hbase series table with non-bigint T column type");
+    LOG_WARN("hbase series table T column type must be bigint",
+             K(ret), K(t_column->get_data_type()));
+  } else if (OB_ISNULL(s_column = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_S))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get S column schema", K(ret));
+  } else if (ObIntType != s_column->get_data_type()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "hbase series table with non-bigint S column type");
+    LOG_WARN("hbase series table S column type must be bigint",
+             K(ret), K(s_column->get_data_type()));
+  } else if (OB_ISNULL(v_column = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_V))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("fail to get V column schema", K(ret));
+  } else if (ObJsonType != v_column->get_data_type()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "hbase series table with non-json V column type");
+    LOG_WARN("hbase series table V column type must be json",
+             K(ret), K(v_column->get_data_type()));
+  } else {
+    // TTL column is not supported in series table; report error if it exists and name matches
+    ttl_column = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_TTL);
+    if (OB_NOT_NULL(ttl_column)
+        && 0 == ObHTableConstants::TTL_CNAME_STR.case_compare(ttl_column->get_column_name())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "hbase series table with cell ttl column");
+      LOG_WARN("hbase series table not support cell ttl", K(ret));
+    }
+  }
+  return ret;
+}
+
+bool ObHTableUtils::match_hbase_normal_column_types(const ObTableSchema &table_schema)
+{
+  bool matched = false;
+  const ObColumnSchemaV2 *k_column = NULL;
+  const ObColumnSchemaV2 *q_column = NULL;
+  const ObColumnSchemaV2 *t_column = NULL;
+  const ObColumnSchemaV2 *v_column = NULL;
+  if (OB_ISNULL(k_column = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_K))) {
+    // do nothing
+  } else if (!ob_is_string_type(k_column->get_data_type())) {
+    // do nothing
+  } else if (OB_ISNULL(q_column = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_Q))) {
+    // do nothing
+  } else if (!ob_is_string_type(q_column->get_data_type())) {
+    // do nothing
+  } else if (OB_ISNULL(t_column = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_T))) {
+    // do nothing
+  } else if (ObIntType != t_column->get_data_type()) {
+    // do nothing
+  } else if (OB_ISNULL(v_column = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_V))) {
+    // do nothing
+  } else if (!ob_is_string_type(v_column->get_data_type())) {
+    // do nothing
+  } else {
+    matched = true;
+  }
+  return matched;
+}
+
+bool ObHTableUtils::match_hbase_series_column_types(const ObTableSchema &table_schema)
+{
+  bool matched = false;
+  const ObColumnSchemaV2 *k_column = NULL;
+  const ObColumnSchemaV2 *t_column = NULL;
+  const ObColumnSchemaV2 *s_column = NULL;
+  const ObColumnSchemaV2 *v_column = NULL;
+  if (OB_ISNULL(k_column = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_K))) {
+    // do nothing
+  } else if (!ob_is_string_type(k_column->get_data_type())) {
+    // do nothing
+  } else if (OB_ISNULL(t_column = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_T))) {
+    // do nothing
+  } else if (ObIntType != t_column->get_data_type()) {
+    // do nothing
+  } else if (OB_ISNULL(s_column = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_S))) {
+    // do nothing
+  } else if (ObIntType != s_column->get_data_type()) {
+    // do nothing
+  } else if (OB_ISNULL(v_column = table_schema.get_column_schema_by_idx(ObHTableConstants::COL_IDX_V))) {
+    // do nothing
+  } else if (ObJsonType != v_column->get_data_type()) {
+    // do nothing
+  } else {
+    matched = true;
+  }
+  return matched;
+}
+
+int ObHTableUtils::filter_table_schemas_by_database(
+    ObIArray<const schema::ObSimpleTableSchemaV2 *> &table_schemas,
+    uint64_t database_id)
+{
+  int ret = OB_SUCCESS;
+  int64_t i = 0;
+  while (OB_SUCC(ret) && i < table_schemas.count()) {
+    const schema::ObSimpleTableSchemaV2 *schema = table_schemas.at(i);
+    if (OB_ISNULL(schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema is null", K(ret));
+    } else if (schema->get_database_id() != database_id) {
+      if (OB_FAIL(table_schemas.remove(i))) {
+        LOG_WARN("fail to remove table schema", K(ret), K(i));
+      }
+    } else {
+      ++i;
+    }
+  }
+  return ret;
+}
+
+int ObHTableUtils::filter_table_schemas_by_database(
+    ObIArray<const schema::ObTableSchema *> &table_schemas,
+    uint64_t database_id)
+{
+  int ret = OB_SUCCESS;
+  int64_t i = 0;
+  while (OB_SUCC(ret) && i < table_schemas.count()) {
+    const schema::ObTableSchema *schema = table_schemas.at(i);
+    if (OB_ISNULL(schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table schema is null", K(ret));
+    } else if (schema->get_database_id() != database_id) {
+      if (OB_FAIL(table_schemas.remove(i))) {
+        LOG_WARN("fail to remove table schema", K(ret), K(i));
+      }
+    } else {
+      ++i;
+    }
   }
   return ret;
 }
@@ -1227,6 +1419,12 @@ int ObHTableUtils::init_tablegroup_schema(share::schema::ObSchemaGetterGuard &sc
   } else if (OB_FAIL(schema_guard.get_table_schemas_in_tablegroup(credential.tenant_id_, tablegroup_id, table_schemas))) {
     LOG_WARN("fail to get table schema from table group", K(ret), K(credential.tenant_id_),
               K(credential.database_id_), K(arg_tablegroup_name), K(tablegroup_id));
+  } else if (OB_FAIL(filter_table_schemas_by_database(table_schemas, credential.database_id_))) {
+    LOG_WARN("fail to filter table schemas by database", K(ret), K(credential.database_id_));
+  } else if (table_schemas.empty()) {
+    ret = OB_KV_HBASE_TABLE_NOT_FOUND;
+    LOG_WARN("tablegroup has no table in current database", K(ret), K(credential.database_id_),
+             K(arg_tablegroup_name));
   } else {
     if (table_schemas.count() != 1) {
       // TODO: @dazhi
@@ -1283,6 +1481,12 @@ int ObHTableUtils::init_tablegroup_schema(share::schema::ObSchemaGetterGuard &sc
   } else if (OB_FAIL(schema_guard.get_table_schemas_in_tablegroup(credential.tenant_id_, tablegroup_id, table_schemas))) {
     LOG_WARN("fail to get table schema from table group", K(ret), K(credential.tenant_id_),
               K(credential.database_id_), K(arg_tablegroup_name), K(tablegroup_id));
+  } else if (OB_FAIL(filter_table_schemas_by_database(table_schemas, credential.database_id_))) {
+    LOG_WARN("fail to filter table schemas by database", K(ret), K(credential.database_id_));
+  } else if (table_schemas.empty()) {
+    ret = OB_KV_HBASE_TABLE_NOT_FOUND;
+    LOG_WARN("tablegroup has no table in current database", K(ret), K(credential.database_id_),
+             K(arg_tablegroup_name));
   } else {
     if (table_schemas.count() != 1) {
       if (arg_table_id != OB_INVALID_ID) {

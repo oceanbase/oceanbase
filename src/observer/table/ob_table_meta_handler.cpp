@@ -1389,6 +1389,9 @@ int ObHTableGetDescHandler::get_cf_desc(ObTableExecCtx &ctx)
     LOG_WARN("Tablegroup does not exist", K(ret), K(credential.tenant_id_), K(htable_name_));
   } else if (OB_FAIL(schema_guard.get_table_schemas_in_tablegroup(credential.tenant_id_, tablegroup_id, table_schemas))) {
     LOG_WARN("Failed to get table schemas from table group", K(ret), K_(credential.tenant_id), K(tablegroup_id));
+  } else if (OB_FAIL(ObHTableUtils::filter_table_schemas_by_database(table_schemas,
+      credential.database_id_))) {
+    LOG_WARN("fail to filter table schemas by database", K(ret), K(credential.database_id_));
   } else {
     CfDesc *cf_desc = nullptr;
     for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count(); ++i) {
@@ -1473,8 +1476,15 @@ int ObHTableDisableTableHandler::handle(ObTableExecCtx &ctx, ObTableMetaResponse
                                                                   table_group_id,
                                                                   table_schemas))) {
     LOG_WARN("failed to get table schemas", K(ret), K(tenant_id), K(table_group_id));
-  } else if (!table_schemas.empty()) {
-    // 2. check if sub-tables is disabled. if disabled，then return OB_KV_TABLE_NOT_DISABLED
+  } else if (OB_FAIL(ObHTableUtils::filter_table_schemas_by_database(table_schemas,
+      ctx.get_credential().database_id_))) {
+    LOG_WARN("fail to filter table schemas by database", K(ret),
+             K(ctx.get_credential().database_id_));
+  } else if (table_schemas.empty()) {
+    ret = OB_KV_HBASE_TABLE_NOT_FOUND;
+    LOG_WARN("table group not found in current database after filter", K(ret), K_(table_group_name));
+  } else {
+    // 2. check if sub-tables is disabled. if disabled, then return OB_KV_TABLE_NOT_DISABLED
     const ObTableSchema *schema = table_schemas.at(0);
     bool is_enabled = true;
     ObKVAttr kv_attr;
@@ -1526,8 +1536,15 @@ int ObHTableEnableTableHandler::handle(ObTableExecCtx &ctx, ObTableMetaResponse 
                                                                   table_group_id,
                                                                   table_schemas))) {
     LOG_WARN("failed to get table schemas", K(ret), K(tenant_id), K(table_group_id));
+  } else if (OB_FAIL(ObHTableUtils::filter_table_schemas_by_database(
+      table_schemas, ctx.get_credential().database_id_))) {
+    LOG_WARN("fail to filter table schemas by database", K(ret),
+             K(ctx.get_credential().database_id_));
+  } else if (table_schemas.empty()) {
+    ret = OB_KV_HBASE_TABLE_NOT_FOUND;
+    LOG_WARN("table group not found in current database after filter", K(ret), K_(table_group_name));
   } else {
-    // 2. check if sub-tables is enabled. if enabled，then return OB_KV_TABLE_NOT_ENABLED
+    // 2. check if sub-tables is enabled. if enabled, then return OB_KV_TABLE_NOT_ENABLED
     const ObTableSchema *schema = table_schemas.at(0);
     ObKVAttr kv_attr;
     if (OB_ISNULL(schema)) {
