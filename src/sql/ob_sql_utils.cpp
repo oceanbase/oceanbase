@@ -843,6 +843,9 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
           LOG_WARN("failed to push back element", K(ret));
         }
       } // end for
+      if (OB_SUCC(ret) && params.count() > 0) {
+        phy_plan_ctx->set_original_param_cnt(params.count());
+      }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(phy_plan_ctx->init_datum_param_store())) {
         LOG_WARN("init datum param store failed", K(ret));

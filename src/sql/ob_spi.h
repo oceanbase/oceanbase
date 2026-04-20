@@ -509,14 +509,19 @@ public:
   static int spi_calc_raw_expr(ObSQLSessionInfo *session_info,
                                ObIAllocator *allocator,
                                const ObRawExpr *rawexpr,
-                               ObObj *result);
+                               ObObj *result,
+                               const ParamStore *param_store = nullptr);
   static int spi_calc_expr(pl::ObPLExecCtx *ctx,
                            const ObSqlExpression *expr,
                            const int64_t result_idx,
                            ObObjParam *result);
+  static int spi_set_symbol(pl::ObPLExecCtx *ctx,
+                                            const int64_t result_idx,
+                                            ObObjParam *result);
   static int spi_calc_expr_at_idx(pl::ObPLExecCtx *ctx,
                                   const int64_t expr_idx,
                                   const int64_t result_idx,
+                                  const bool calc_once,
                                   ObObjParam *result);
 
   static int spi_calc_subprogram_expr(pl::ObPLExecCtx *ctx,
@@ -1135,10 +1140,8 @@ private:
   static int recreate_implicit_savapoint_if_need(pl::ObPLExecCtx *ctx, int &result);
   static int recreate_implicit_savapoint_if_need(sql::ObExecContext &ctx, int &result);
 
+  static int calc_common_expr(pl::ObPLExecCtx *ctx, const ObSqlExpression *expr, ObObjParam *result);
   static int calc_obj_access_expr(pl::ObPLExecCtx *ctx, const ObSqlExpression &expr, ObObjParam &result);
-
-  static bool can_obj_access_expr_fast_calc(const ObSqlExpression &expr,
-                                            const ObExprObjAccess *&obj_access);
 
   static int set_variable(pl::ObPLExecCtx *ctx,
                           const share::ObSetVar::SetScopeType scope,
@@ -1527,6 +1530,7 @@ private:
   static int setup_cursor_snapshot_verify_(pl::ObPLCursorInfo *cursor, ObSPIResultSet *spi_result);
   static int save_unstreaming_cursor_sql(pl::ObPLCursorInfo &cursor, const ObString &sql_text);
   static int check_system_trigger_legal(pl::ObPLExecCtx *ctx, const ObString &sql, stmt::StmtType stmt_type);
+
 };
 
 struct ObPLSubPLSqlTimeGuard

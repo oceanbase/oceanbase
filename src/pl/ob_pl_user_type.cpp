@@ -233,9 +233,9 @@ int ObUserDefinedType::deep_copy_obj(
   ObIAllocator &allocator, const ObObj &src, ObObj &dst, bool need_new_allocator, bool ignore_del_element)
 {
   int ret = OB_SUCCESS;
-  CK (src.is_pl_extend());
+  // CK (src.is_pl_extend());
 
-  if (OB_SUCC(ret)) {
+  if (src.is_pl_extend()) {
     switch (src.get_meta().get_extend_type()) {
     case PL_CURSOR_TYPE: {
       OZ (ObRefCursorType::deep_copy_cursor(allocator, src, dst));
@@ -259,6 +259,8 @@ int ObUserDefinedType::deep_copy_obj(
     }
       break;
     }
+  } else {
+    OZ (common::deep_copy_obj(allocator, src, dst));
   }
   return ret;
 }

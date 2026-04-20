@@ -762,7 +762,9 @@ struct ObPLExecCtx : public ObPLINS
       local_expr_alloc_("PLBlockExpr", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       tmp_alloc_for_copy_param_("PLTmpAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       saved_sql_code_info_(),
-      param_store_for_sql_(nullptr), mem_context_(nullptr)
+      param_store_for_sql_(nullptr),
+      mem_context_(nullptr),
+      calc_once_results_()
   {
     if (NULL != exec_ctx && NULL != exec_ctx_->get_my_session()) {
       pl_ctx_ = exec_ctx_->get_my_session()->get_pl_context();
@@ -823,6 +825,9 @@ struct ObPLExecCtx : public ObPLINS
   int get_spi_result_set(ObSPIResultSet *&spi_result_set);
   int get_mem_context_for_sql(lib::MemoryContext &mem_context);
 
+  int get_calc_once_result(int64_t idx, ObObjParam *& result);
+  int set_calc_once_result(int64_t idx, ObObjParam *result);
+
   common::ObIAllocator *allocator_; // Symbol Allocator
   sql::ObExecContext *exec_ctx_;
   ParamStore *params_; // param stroe, 对应PL Function的符号表
@@ -840,6 +845,7 @@ struct ObPLExecCtx : public ObPLINS
   ObPLSqlCodeInfo saved_sql_code_info_;
   ParamStore *param_store_for_sql_;
   lib::MemoryContext mem_context_;
+  common::hash::ObHashMap<int64_t, ObObjParam*, common::hash::NoPthreadDefendMode> calc_once_results_;
 };
 
 // backup and restore ObExecContext attributes

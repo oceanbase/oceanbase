@@ -3844,7 +3844,7 @@ int ObPLExecCtx::calc_expr(uint64_t package_id, int64_t expr_idx, ObObjParam &re
 {
   int ret = OB_SUCCESS;
   if (OB_INVALID_ID == package_id) {
-    OZ (ObSPIService::spi_calc_expr_at_idx(this, expr_idx, OB_INVALID_INDEX, &result));
+    OZ (ObSPIService::spi_calc_expr_at_idx(this, expr_idx, OB_INVALID_INDEX, false, &result));
   } else {
     OZ (ObSPIService::spi_calc_package_expr(this, package_id, expr_idx, &result));
   }
@@ -3853,6 +3853,9 @@ int ObPLExecCtx::calc_expr(uint64_t package_id, int64_t expr_idx, ObObjParam &re
 
 ObPLExecCtx::~ObPLExecCtx()
 {
+  if (calc_once_results_.created()) {
+    calc_once_results_.destroy();
+  }
   if (OB_NOT_NULL(mem_context_)) {
     DESTROY_CONTEXT(mem_context_);
     mem_context_ = nullptr;
@@ -3878,6 +3881,47 @@ int ObPLExecCtx::get_param_store_for_sql(ObIAllocator &allocator, ParamStore *&p
   }
   if (OB_SUCC(ret)) {
     param_store = param_store_for_sql_;
+  }
+  return ret;
+}
+
+int ObPLExecCtx::get_calc_once_result(int64_t idx, ObObjParam *& result)
+{
+  int ret = OB_SUCCESS;
+  result = nullptr;
+  static const int64_t CALC_ONCE_RESULTS_MAP_SIZE = 16;
+  if (!calc_once_results_.created()
+    && OB_FAIL(calc_once_results_.create(CALC_ONCE_RESULTS_MAP_SIZE, ObModIds::OB_PL_TEMP))) {
+    LOG_WARN("failed to create once calc results map", K(ret), K(idx));
+  } else if (OB_FAIL(calc_once_results_.get_refactored(idx, result))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      result = nullptr;
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to get once calc result", K(ret), K(idx));
+    }
+  } else if (OB_ISNULL(result)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get once calc result", K(ret), K(idx));
+  }
+  return ret;
+}
+
+int ObPLExecCtx::set_calc_once_result(int64_t idx, ObObjParam *result)
+{
+  int ret = OB_SUCCESS;
+  ObObjParam *local_result = nullptr;
+  if (OB_ISNULL(result)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("result is null", K(ret));
+  } else if (OB_ISNULL(local_result = reinterpret_cast<ObObjParam *>(local_expr_alloc_.alloc(sizeof(ObObjParam))))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc memory for once calc result", K(ret));
+  } else if (FALSE_IT(new (local_result) ObObjParam())) {
+  } else if (OB_FAIL(deep_copy_objparam(local_expr_alloc_, *result, *local_result))) {
+    LOG_WARN("failed to deep copy local result", K(ret));
+  } else if (OB_FAIL(calc_once_results_.set_refactored(idx, local_result))) {
+    LOG_WARN("failed to set once calc result", K(ret), K(idx));
   }
   return ret;
 }

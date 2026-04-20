@@ -1198,7 +1198,8 @@ private:
   int check_params_legal_in_body_routine(ObPLFunctionAST &routine_ast,
                                          const ObPLRoutineInfo *parent_routine_info,
                                          const ObPLRoutineInfo *body_routine_info);
-  int check_expr_can_pre_calc(ObRawExpr *expr, bool &pre_calc);
+  int check_expr_can_pre_calc(ObRawExpr *expr, bool &pre_calc, bool check_argument_pre_calc = false);
+  bool check_can_pre_calc_argument(ObRawExpr *expr);
   int transform_subquery_expr(const ParseNode *node,
                               ObRawExpr *&expr,
                               const ObPLDataType *expected_type,
@@ -1207,7 +1208,8 @@ private:
   int transform_var_val_to_dynamic_SQL(int64_t sql_expr_index, int64_t into_expr_index, ObPLFunctionAST &func);
   int transform_to_new_assign_stmt(ObIArray<int64_t> &transform_array, ObPLAssignStmt *&old_stmt);
 
-  int replace_to_const_expr_if_need(ObRawExpr *&expr);
+  int analyze_calc_once_exprs(ObPLFunctionAST &func);
+  int replace_to_const_expr_if_need(ObRawExpr *&expr, bool check_argument_pre_calc = false);
   int build_seq_value_expr(ObRawExpr *&expr,
                            const sql::ObQualifiedName &q_name,
                            uint64_t seq_id);

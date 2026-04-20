@@ -806,7 +806,9 @@ int ObPLResolver::resolve_root(const ObStmtNodeTree *parse_tree, ObPLFunctionAST
   } else if (OB_FAIL(resolve_goto_stmts(func))) {
     LOG_WARN("failed to resolve goto stmts", K(ret));
   } else if (OB_FAIL(check_subprogram(func))) {
-    LOG_WARN("faield to check subprogram", K(ret));
+    LOG_WARN("failed to check subprogram", K(ret));
+  } else if (OB_FAIL(analyze_calc_once_exprs(func))) {
+    LOG_WARN("failed to pre calc const expr", K(ret));
   }
   return ret;
 }
@@ -10672,7 +10674,7 @@ int ObPLResolver::build_raw_expr(const ParseNode *node,
   if (OB_SUCC(ret) && op_exprs.count() > 0) {
     if (OB_FAIL(ObRawExprUtils::resolve_op_exprs_for_oracle_implicit_cast(expr_factory_,
                                         &resolve_ctx_.session_info_, op_exprs))) {
-      LOG_WARN("implicit cast faild", K(ret));
+      LOG_WARN("implicit cast failed", K(ret));
     }
   }
 
@@ -11700,35 +11702,80 @@ int ObPLResolver::transform_to_new_assign_stmt(ObIArray<int64_t> &transform_arra
   return ret;
 }
 
-int ObPLResolver::check_expr_can_pre_calc(ObRawExpr *expr, bool &pre_calc)
+bool ObPLResolver::check_can_pre_calc_argument(ObRawExpr *expr)
+{
+  bool result = false;
+  if (OB_ISNULL(expr)) {
+    // do nothing
+  } else if (T_QUESTIONMARK == expr->get_expr_type()) {
+    ObConstRawExpr *const_expr = static_cast<ObConstRawExpr *>(expr);
+    if (OB_NOT_NULL(const_expr)
+        && OB_NOT_NULL(current_block_)
+        && OB_NOT_NULL(current_block_->get_symbol_table())
+        && OB_NOT_NULL(resolve_ctx_.param_list_)
+        && const_expr->get_value().get_unknown() < resolve_ctx_.param_list_->count()) {
+      int64_t idx = const_expr->get_value().get_unknown();
+      const ObPLVar *var = current_block_->get_symbol_table()->get_symbol(idx);
+      if (OB_NOT_NULL(var) && var->is_readonly()) {
+        result = true;
+      }
+    }
+  }
+  return result;
+}
+
+int ObPLResolver::check_expr_can_pre_calc(ObRawExpr *expr, bool &pre_calc, bool check_argument_pre_calc)
 {
   int ret = OB_SUCCESS;
   CK (OB_NOT_NULL(expr));
   // 在SQL下可以提前计算的表达式,在PL下则不一定能提前计算, 如ROW_COUNT, ROW%COUNT
   // 暂时没有统一的规则计算可以在PL端提前计算的表达式,因此暂时仅放开部分表达式
-  if (!(
-    (IS_CONST_TYPE(expr->get_expr_type()) && T_QUESTIONMARK != expr->get_expr_type())
-    || T_FUN_SYS_STR_TO_DATE == expr->get_expr_type()
-    || T_FUN_SYS_TO_DATE == expr->get_expr_type()
-    || T_FUN_COLUMN_CONV == expr->get_expr_type())) {
+  if (OB_SUCC(ret)
+    && !((IS_CONST_TYPE(expr->get_expr_type()) && T_QUESTIONMARK != expr->get_expr_type())
+         || (check_argument_pre_calc && T_QUESTIONMARK == expr->get_expr_type() && check_can_pre_calc_argument(expr))
+         || T_FUN_SYS_STR_TO_DATE == expr->get_expr_type()
+         || T_FUN_SYS_TO_DATE == expr->get_expr_type()
+         || T_FUN_COLUMN_CONV == expr->get_expr_type())) {
     pre_calc = false;
   }
   for (int64_t i = 0; OB_SUCC(ret) && pre_calc && i < expr->get_param_count(); ++i) {
-    OZ (SMART_CALL(check_expr_can_pre_calc(expr->get_param_expr(i), pre_calc)));
+    OZ (SMART_CALL(check_expr_can_pre_calc(expr->get_param_expr(i), pre_calc, check_argument_pre_calc)));
   }
-  LOG_DEBUG("check_expr_can_pre_calc", K(pre_calc), K(ret), KPC(expr));
   return ret;
 }
 
-int ObPLResolver::replace_to_const_expr_if_need(ObRawExpr *&expr)
+int ObPLResolver::analyze_calc_once_exprs(ObPLFunctionAST &func)
+{
+  int ret = OB_SUCCESS;
+  int64_t cnt = func.get_exprs().count();
+  for (int64_t i = 0; i < cnt; ++i) {
+    ObRawExpr *expr = func.get_exprs().at(i);
+    bool calc_once = false;
+    CK (OB_NOT_NULL(expr));
+    if (OB_SUCC(ret)
+        && expr->is_const_expr()
+        && !(IS_CONST_TYPE(expr->get_expr_type()) && T_QUESTIONMARK != expr->get_expr_type())) {
+      calc_once = true;
+      OZ (check_expr_can_pre_calc(expr, calc_once, true));
+    }
+    if (OB_SUCC(ret) && calc_once) {
+      OZ (func.add_calc_once_expr(i));
+    }
+  }
+  return ret;
+}
+
+int ObPLResolver::replace_to_const_expr_if_need(ObRawExpr *&expr, bool check_argument_pre_calc)
 {
   int ret = OB_SUCCESS;
   bool pre_calc = false;
   CK (OB_NOT_NULL(expr));
-  LOG_DEBUG("start replaceto const expr if need", K(ret), KPC(expr));
-  if (OB_SUCC(ret) && expr->is_const_expr()) {
+  LOG_TRACE("start replace to const rawexpr if need", K(ret), KPC(expr));
+  if (OB_SUCC(ret)
+    && expr->is_const_expr()
+    && !(IS_CONST_TYPE(expr->get_expr_type()) && T_QUESTIONMARK != expr->get_expr_type())) {
     pre_calc = true;
-    OZ (check_expr_can_pre_calc(expr, pre_calc));
+    OZ (check_expr_can_pre_calc(expr, pre_calc, check_argument_pre_calc));
   }
   if (OB_SUCC(ret) && pre_calc && !expr->is_const_raw_expr()) {
     ObObj result;
@@ -11736,14 +11783,15 @@ int ObPLResolver::replace_to_const_expr_if_need(ObRawExpr *&expr)
     OZ (ObSPIService::spi_calc_raw_expr(&(resolve_ctx_.session_info_),
                                         &(resolve_ctx_.allocator_),
                                         expr,
-                                        &result));
+                                        &result,
+                                        resolve_ctx_.param_list_), KPC(expr));
     OZ (expr_factory_.create_raw_expr(static_cast<ObItemType>(result.get_meta().get_type()),
                                       const_expr));
     CK (OB_NOT_NULL(const_expr));
     OX (const_expr->set_value(result));
     OX (expr = const_expr);
   }
-  LOG_DEBUG("end replaceto const expr if need", K(ret), KPC(expr));
+  LOG_TRACE("end replace to const expr if need", K(ret), KPC(expr));
   return ret;
 }
 
