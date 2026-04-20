@@ -1605,7 +1605,6 @@ int ObStorageObDalMultiPartWriter::abort()
   } else {
     is_opened_ = false;
   }
-  reset();
   return ret;
 }
 
