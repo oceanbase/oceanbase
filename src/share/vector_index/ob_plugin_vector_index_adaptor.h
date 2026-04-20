@@ -1055,12 +1055,14 @@ private:
   bool check_if_complete_index(SCN read_scn);
   int check_if_complete_delta(ObVectorQueryAdaptorResultContext *ctx, roaring::api::roaring64_bitmap_t *gene_bitmap, int64_t count, bool &res);
   int write_into_delta_mem(ObVectorQueryAdaptorResultContext *ctx,
-                           int count,
+                           int64_t count,
                            float *vectors,
                            uint64_t *vids,
                            ObVecExtraInfoObj *extra_objs,
                            int64_t extra_column_count,
                            ObVidBound vid_bound,
+                           uint64_t *null_vids,
+                           int64_t null_count,
                            bool& has_written,
                            uint32_t *sparse_byte_lens = nullptr);
   int write_into_index_mem(ObVecIdxVBitmapDataHandle &vbitmap, int64_t dim, SCN read_scn, ObArray<uint64_t> &i_vids, ObArray<uint64_t> &d_vids);
