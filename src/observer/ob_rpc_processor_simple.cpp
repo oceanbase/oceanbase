@@ -5142,12 +5142,25 @@ int ObGetInspectionStatusP::process()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("inspection service is null", KR(ret), K(tenant_id));
       } else {
+        // If inspection hasn't been done on this server (e.g., after leader switch),
+        // run it now before returning status to avoid stale "checking" state.
+        if (!inspection_service->is_all_checked()) {
+          int tmp_ret = OB_SUCCESS;
+          LOG_INFO("[ROOT_INSPECTION] auto trigger run_inspection on get_inspection_status", K(tenant_id));
+          if (OB_TMP_FAIL(inspection_service->run_inspection())) {
+            LOG_WARN("auto run_inspection on get_inspection_status failed", KR(tmp_ret), K(tenant_id));
+          }
+        }
         result_.tenant_id_ = tenant_id;
         result_.sys_stat_passed_ = inspection_service->is_sys_stat_passed();
         result_.sys_param_passed_ = inspection_service->is_sys_param_passed();
         result_.sys_table_schema_passed_ = inspection_service->is_sys_table_schema_passed();
         result_.data_version_passed_ = inspection_service->is_data_version_passed();
         result_.all_checked_ = inspection_service->is_all_checked();
+        LOG_INFO("[ROOT_INSPECTION] get_inspection_status finish", K(tenant_id),
+                 K(result_.all_checked_), K(result_.sys_stat_passed_),
+                 K(result_.sys_param_passed_), K(result_.sys_table_schema_passed_),
+                 K(result_.data_version_passed_));
       }
     } else {
       LOG_WARN("switch tenant failed", KR(ret), K(tenant_id));
