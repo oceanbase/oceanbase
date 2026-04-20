@@ -11,4 +11,10 @@ CREATE OR REPLACE PACKAGE dbms_mview AUTHID CURRENT_USER
     IN     nested                 BOOLEAN        DEFAULT FALSE,
     IN     nested_refresh_mode    VARCHAR(65535) DEFAULT NULL);
 
+  PROCEDURE set_refresh_params(
+    IN     mv_name                VARCHAR(65535),
+    IN     parameter_name         VARCHAR(65535),
+    IN     parameter_value        VARCHAR(65535)
+  );
+
 END dbms_mview;

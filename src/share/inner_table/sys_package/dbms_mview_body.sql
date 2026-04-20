@@ -129,5 +129,11 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
                nested_refresh_mode);
   END;
 
+  PROCEDURE set_refresh_params(
+    mv_name           IN  VARCHAR2,
+    parameter_name    IN  VARCHAR2,
+    parameter_value   IN  VARCHAR2);
+  PRAGMA INTERFACE(C, DBMS_MVIEW_SET_REFRESH_PARAMS);
+
 END dbms_mview;
 //
