@@ -29,7 +29,8 @@ public:
       match_operator_(nullptr),
       minimum_should_match_(nullptr),
       ir_ctdef_idx_(-1),
-      pushdown_must_filter_op_ctdef_idx_(-1)
+      pushdown_must_filter_op_ctdef_idx_(-1),
+      is_msm_unresolved_expr_(false)
   {
     set_is_scoring(true);
   }
@@ -49,7 +50,8 @@ public:
       KPC_(match_operator),
       KPC_(minimum_should_match),
       K_(ir_ctdef_idx),
-      K_(pushdown_must_filter_op_ctdef_idx));
+      K_(pushdown_must_filter_op_ctdef_idx),
+      K_(is_msm_unresolved_expr));
 
   ObExpr *query_text_;
   ObExpr *boost_;
@@ -57,6 +59,7 @@ public:
   ObExpr *minimum_should_match_;
   int64_t ir_ctdef_idx_;
   int64_t pushdown_must_filter_op_ctdef_idx_;
+  bool is_msm_unresolved_expr_;
 };
 
 struct ObDASMatchRtDef : ObIDASSearchRtDef

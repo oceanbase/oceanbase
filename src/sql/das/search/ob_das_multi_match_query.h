@@ -29,7 +29,8 @@ public:
       minimum_should_match_(nullptr),
       type_(nullptr),
       field_boosts_(alloc),
-      ir_ctdef_indices_(alloc)
+      ir_ctdef_indices_(alloc),
+      is_msm_unresolved_expr_(false)
   {
     set_is_scoring(true);
   }
@@ -41,7 +42,8 @@ public:
       KPC_(minimum_should_match),
       KPC_(type),
       K_(ir_ctdef_indices),
-      K_(field_boosts));
+      K_(field_boosts),
+      K_(is_msm_unresolved_expr));
 
   ObDASIRScanCtDef *get_ir_ctdef(const int64_t idx) const
   {
@@ -58,6 +60,7 @@ public:
   ObExpr *type_;
   ExprFixedArray field_boosts_;
   ObFixedArray<int64_t, ObIAllocator> ir_ctdef_indices_;
+  bool is_msm_unresolved_expr_;
 };
 
 struct ObDASMultiMatchRtDef : ObIDASSearchRtDef

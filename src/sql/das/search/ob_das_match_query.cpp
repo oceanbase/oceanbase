@@ -27,7 +27,8 @@ OB_SERIALIZE_MEMBER((ObDASMatchCtDef, ObIDASSearchCtDef),
                     match_operator_,
                     minimum_should_match_,
                     ir_ctdef_idx_,
-                    pushdown_must_filter_op_ctdef_idx_);
+                    pushdown_must_filter_op_ctdef_idx_,
+                    is_msm_unresolved_expr_);
 
 OB_SERIALIZE_MEMBER((ObDASMatchRtDef, ObIDASSearchRtDef));
 

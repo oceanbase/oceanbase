@@ -25,7 +25,8 @@ OB_SERIALIZE_MEMBER((ObDASMultiMatchCtDef, ObIDASSearchCtDef),
                     minimum_should_match_,
                     type_,
                     field_boosts_,
-                    ir_ctdef_indices_);
+                    ir_ctdef_indices_,
+                    is_msm_unresolved_expr_);
 
 OB_SERIALIZE_MEMBER((ObDASMultiMatchRtDef, ObIDASSearchRtDef));
 
