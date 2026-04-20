@@ -408,6 +408,8 @@ private:
   int post_upgrade_for_grant_standby_replication_role_privs_in_oracle_();
 };
 
+DEF_SIMPLE_UPGRARD_PROCESSER(4, 4, 2, 2)
+
 /* =========== special upgrade processor end   ============= */
 
 /* =========== upgrade processor end ============= */

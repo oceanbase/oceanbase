@@ -248,3 +248,7 @@
       - 4.4.2.1
 
 - version: 4.4.2.1
+  can_be_upgraded_to:
+      - 4.4.2.2
+
+- version: 4.4.2.2
