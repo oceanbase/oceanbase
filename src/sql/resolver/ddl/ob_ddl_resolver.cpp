@@ -4303,10 +4303,9 @@ int ObDDLResolver::resolve_normal_column_attribute(ObColumnSchemaV2 &column,
           } else {
             int64_t comment_length = comment.length();
             char *comment_ptr = const_cast<char *>(comment.ptr());
-            if(OB_FAIL(ObResolverUtils::check_comment_length(session_info_,
-                                                            comment_ptr,
-                                                            &comment_length,
-                                                            MAX_COLUMN_COMMENT_CHAR_LENGTH))){
+            if(OB_FAIL(check_column_comment_length(session_info_,
+                                       comment_ptr,
+                                       &comment_length))){
               LOG_WARN("fail to check_comment_length", K(ret));
             } else {
               column.set_comment(ObString(comment_length, comment_ptr));
@@ -4628,10 +4627,9 @@ int ObDDLResolver::resolve_generated_column_attribute(ObColumnSchemaV2 &column,
         } else {
           int64_t comment_length = comment.length();
           char *comment_ptr = const_cast<char *>(comment.ptr());
-          if(OB_FAIL(ObResolverUtils::check_comment_length(session_info_,
-                                                          comment_ptr,
-                                                          &comment_length,
-                                                          MAX_COLUMN_COMMENT_CHAR_LENGTH))){
+          if(OB_FAIL(check_column_comment_length(session_info_,
+                                       comment_ptr,
+                                       &comment_length))){
             LOG_WARN("fail to check_comment_length", K(ret));
           } else {
             column.set_comment(ObString(comment_length, comment_ptr));
@@ -5256,10 +5254,9 @@ int ObDDLResolver::resolve_identity_column_attribute(ObColumnSchemaV2 &column,
       } else {
         int64_t comment_length = attr_node->children_[0]->str_len_;
         char *comment_ptr = const_cast<char *>(attr_node->children_[0]->str_value_);
-        if(OB_FAIL(ObResolverUtils::check_comment_length(session_info_,
-                                                        comment_ptr,
-                                                        &comment_length,
-                                                        MAX_COLUMN_COMMENT_CHAR_LENGTH))){
+        if(OB_FAIL(check_column_comment_length(session_info_,
+                                       comment_ptr,
+                                       &comment_length))){
           LOG_WARN("fail to check_comment_length", K(ret));
         } else {
           column.set_comment(ObString(comment_length, comment_ptr));
@@ -5683,6 +5680,22 @@ int ObDDLResolver::check_prefix_key(const int32_t prefix_len,
       LOG_USER_ERROR(OB_WRONG_SUB_KEY);
       SQL_RESV_LOG(WARN, "The used length is longer than the key part", K(prefix_len), K(ret));
     }
+  }
+  return ret;
+}
+
+int ObDDLResolver::check_column_comment_length(ObSQLSessionInfo *session_info, char *str, int64_t *str_len)
+{
+  int ret = OB_SUCCESS;
+  int64_t max_len = 0;
+  if (OB_ISNULL(session_info) || OB_ISNULL(str) || (OB_ISNULL(str_len))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(session_info), KP(str), KP(str_len));
+  } else if (FALSE_IT(max_len = session_info->is_oracle_compatible()
+                                ? MAX_ORACLE_COMMENT_LENGTH
+                                : MAX_COLUMN_COMMENT_CHAR_LENGTH)) {
+  } else if (OB_FAIL(ObResolverUtils::check_comment_length(session_info, str, str_len, max_len))) {
+    LOG_WARN("fail to check comment length", KR(ret));
   }
   return ret;
 }
