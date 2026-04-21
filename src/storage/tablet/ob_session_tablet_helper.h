@@ -157,12 +157,32 @@ public:
     const ObString &db_name,
     const ObString &table_name,
     const obrpc::ObAlterTableArg *alter_table_arg = nullptr);
+  /// @brief: batch interface for drop database
+  static int is_any_table_has_active_session(
+      const common::ObIArray<const share::schema::ObSimpleTableSchemaV2 *> &table_schemas);
   static const int64_t MAX_GC_COUNT = 600;
   static const int64_t NUM_OF_TABLET_GROUP = 4;
   static const int64_t TABLET_GROUP_SIZE = 16;
   static const int64_t BATCH_DELETE_SESSION_TABLET_COUNT = TABLET_GROUP_SIZE * NUM_OF_TABLET_GROUP;
   TO_STRING_KV(K_(tenant_id));
 private:
+  static bool need_check_table(
+    const share::schema::ObSimpleTableSchemaV2 *schema,
+    const obrpc::ObAlterTableArg *alter_table_arg);
+  /// @brief fetch all relative tables' id by @param primary_table_id
+  /// @param[out] table_ids: append-only array(won't be reset in this method)
+  static int fetch_all_relative_table_ids(
+    const uint64_t tenant_id,
+    const uint64_t primary_table_id,
+    const int64_t schema_version,
+    common::ObMySQLProxy &sql_proxy,
+    ObSchemaService &schema_svr,
+    /*out*/common::ObIArray<common::ObTableID> &table_ids);
+  static int check_if_any_table_has_active_session(
+    const uint64_t tenant_id,
+    common::ObMySQLProxy &sql_proxy,
+    const common::ObIArray<ObTableID> &table_ids,
+    /*out*/bool &has_active_session);
   static int is_table_has_active_session(
     const uint64_t tenant_id,
     const uint64_t table_id,
