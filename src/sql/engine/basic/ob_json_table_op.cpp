@@ -1398,8 +1398,32 @@ int XmlTableFunc::init_ctx(ObRegCol &scan_node, JtScanCtx*& ctx)
     } else {
       ObPathVarObject *t_ns = static_cast<ObPathVarObject*>(ctx->context);
       t_iter = new (path_buf) ObPathExprIter(ctx->op_exec_alloc_, ctx->mem_ctx_->allocator_);
-      if (OB_FAIL(t_iter->init(ctx->xpath_ctx_, scan_node.col_info_.path_, ctx->default_ns, doc, t_ns))) {
-        LOG_WARN("fail to init xpath iterator", K(scan_node.col_info_.path_), K(ctx->default_ns), K(ret));
+      // convert xpath string from tenant charset to utf8 if needed,
+      // because ObPathParser uses rapidjson::UTF8<char>::Decode which requires utf8 encoding
+      ObString xpath_str = scan_node.col_info_.path_;
+      const ObSQLSessionInfo *session = ctx->exec_ctx_->get_my_session();
+      if (OB_ISNULL(session)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("session is NULL", K(ret));
+      } else {
+        ObCollationType src_cs_type = session->get_nls_collation();
+        if (ObCharset::charset_type_by_coll(src_cs_type) != CHARSET_UTF8MB4) {
+          ObString utf8_xpath;
+          if (OB_FAIL(ObCharset::charset_convert(*ctx->op_exec_alloc_,
+                                                  xpath_str,
+                                                  src_cs_type,
+                                                  CS_TYPE_UTF8MB4_BIN,
+                                                  utf8_xpath))) {
+            LOG_WARN("fail to convert xpath charset to utf8",
+                K(ret), K(xpath_str), K(src_cs_type));
+          } else {
+            xpath_str = utf8_xpath;
+          }
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(t_iter->init(ctx->xpath_ctx_, xpath_str, ctx->default_ns, doc, t_ns))) {
+        LOG_WARN("fail to init xpath iterator", K(xpath_str), K(ctx->default_ns), K(ret));
       } else if (OB_FAIL(t_iter->open())) {
         ret = OB_ERR_PARSE_XQUERY_EXPR;
         LOG_USER_ERROR(OB_ERR_PARSE_XQUERY_EXPR, t_iter->get_path_str().length(), t_iter->get_path_str().ptr());
