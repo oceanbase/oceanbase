@@ -670,7 +670,9 @@ int ObCDCLobDataMerger::try_to_push_task_into_formatter_(
   IObLogFormatter *formatter = TCTX.formatter_;
 
   if (is_ddl) {
-    // is_ddl, do nothing
+    // DDL path waits for LOB callback in caller thread and does not enter formatter,
+    // so reclaim the in-flight LobDataOutRowCtxList stat here when callback is done.
+    ATOMIC_DEC(&lob_data_list_task_count_);
   } else {
     if (OB_ISNULL(formatter)) {
       ret = OB_ERR_UNEXPECTED;

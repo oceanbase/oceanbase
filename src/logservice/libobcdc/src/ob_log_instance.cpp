@@ -3512,5 +3512,14 @@ bool ObLogInstance::need_pause_redo_dispatch() const
   return current_need_pause;
 }
 
+void ObLogInstance::get_memory_usage_status(bool &touch_memory_warn_limit, bool &memory_overused) const
+{
+  int64_t memory_hold = get_memory_hold_();
+  int64_t memory_limit = CDC_CFG_MGR.get_memory_limit();
+  int64_t memory_warn_usage = memory_limit * TCONF.memory_usage_warn_threshold / 100.0;
+  touch_memory_warn_limit = (memory_hold > memory_warn_usage);
+  memory_overused = (memory_hold > memory_limit);
+}
+
 }
 }
