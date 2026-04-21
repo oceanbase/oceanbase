@@ -112,7 +112,11 @@ enum ObPLOpaqueType
   PL_ANY_TYPE = 0,
   PL_ANY_DATA = 1,
   PL_XML_TYPE = 2,
-  PL_JSON_TYPE = 3
+  PL_JSON_TYPE = 3,
+  PL_XMLPARSER_TYPE = 4,
+  PL_XMLDOM_DOC_TYPE = 5,
+  PL_XMLDOM_NODE_TYPE = 6,
+  PL_XMLDOM_NODELIST_TYPE = 7
 };
 
 enum ObPLIntegerType
