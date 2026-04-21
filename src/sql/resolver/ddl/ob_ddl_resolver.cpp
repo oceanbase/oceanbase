@@ -11940,6 +11940,9 @@ int ObDDLResolver::resolve_partition_range(ObPartitionedStmt *stmt,
       ObIntervalPartitionResolver interval_partition_resolver(params_);
       if (OB_FAIL(interval_partition_resolver.resolve_interval_clause(stmt, node, table_schema, range_values_exprs))) {
         LOG_WARN("failed to resolve interval clause", KR(ret));
+      } else if (!is_subpartition && stmt->get_interval_expr() != NULL) {
+        part_func_type = PARTITION_FUNC_TYPE_INTERVAL;
+        partition_option->set_part_func_type(part_func_type);
       }
     }
 
@@ -12062,7 +12065,6 @@ int ObDDLResolver::resolve_auto_partition(ObPartitionedStmt *stmt, ParseNode *no
   bool SET_AUTO_PARTITION_NUM = false;
   int64_t auto_part_size = 0;
   bool enable_auto_split = false;
-
   if (OB_ISNULL(node) || OB_ISNULL(node->children_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", KR(ret), K(node));
