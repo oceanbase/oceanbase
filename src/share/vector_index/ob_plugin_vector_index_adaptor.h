@@ -936,6 +936,8 @@ private:
                            ObVecExtraInfoObj *extra_objs,
                            int64_t extra_column_count,
                            ObVidBound vid_bound,
+                           uint64_t *null_vids,
+                           int null_count,
                            bool& has_written);
   int write_into_index_mem(int64_t dim, SCN read_scn, ObArray<uint64_t> &i_vids, ObArray<uint64_t> &d_vids);
   int generate_snapshot_valid_bitmap(ObVectorQueryAdaptorResultContext *ctx,
