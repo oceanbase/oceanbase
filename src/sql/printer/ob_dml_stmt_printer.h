@@ -143,8 +143,6 @@ public:
   int print_subquery(const ObSelectStmt *subselect_stmt,
                      uint64_t subquery_print_params);
   int print_temp_table_as_cte();
-
-  int print_quote_for_const(ObRawExpr* expr, bool &print_quote);
   int print_expr_except_const_number(ObRawExpr* expr, ObStmtScope scope);
   int print_cte_define_title(TableItem* cte_table);
   int print_cte_define_title(const ObSelectStmt *sub_select_stmt);
