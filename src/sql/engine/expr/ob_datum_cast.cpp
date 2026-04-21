@@ -11781,10 +11781,7 @@ int cast_sql_xml_pl_xml(const sql::ObExpr &expr,
   void *ptr = NULL;
   ObObj* data = NULL; // obobj for blob;
   ObIAllocator &allocator = ctx.exec_ctx_.get_allocator();
-  if (OB_ISNULL(data = static_cast<ObObj*>(allocator.alloc(sizeof(ObObj))))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate memory for pl object", K(ret));
-  } else if (OB_ISNULL(ptr = allocator.alloc(sizeof(pl::ObPLXmlType)))) {
+  if (OB_ISNULL(ptr = allocator.alloc(sizeof(pl::ObPLXmlType)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("Failed to allocate memory for pl xml data type", K(ret), K(sizeof(pl::ObPLXmlType)));
   } else if (FALSE_IT(xmltype = new (ptr)pl::ObPLXmlType())) {
@@ -11795,16 +11792,22 @@ int cast_sql_xml_pl_xml(const sql::ObExpr &expr,
     ObString xml_data;
     if (!child_res->is_null() && !child_res->get_string().empty()) {
       /*
-      We believe that the memory in child_res is reliable,
-      and the content in it can be passed to the next layer without copying.
-      Therefore, there is no deep copy of row-level memory here.
-      If you find that the memory of xml_data is unstable later,
-      you can add a deep copy here to copy the data to the memory of expr: get_str_res_mem().
+      Deep copy XML bytes into exec_ctx allocator to avoid keeping references
+      to child_res row-level buffers. The PL XML object may outlive the source
+      datum memory when rows are materialized and reused by upstream operators.
       */
       xml_data = child_res->get_string();
-      data->set_string(ObLongTextType, xml_data.ptr(), xml_data.length());
-      data->set_has_lob_header(); // must has lob header
-      data->set_collation_type(CS_TYPE_UTF8MB4_BIN);
+      int64_t data_size = xml_data.length();
+      char *data_buff = static_cast<char *>(allocator.alloc(data_size));
+      if (OB_ISNULL(data_buff)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate memory for xml data", K(ret), K(data_size));
+      } else {
+        MEMCPY(data_buff, xml_data.ptr(), data_size);
+        data->set_string(ObLongTextType, data_buff, static_cast<int32_t>(data_size));
+        data->set_has_lob_header(); // must has lob header
+        data->set_collation_type(CS_TYPE_UTF8MB4_BIN);
+      }
     } else {
       data->set_null();
     }
