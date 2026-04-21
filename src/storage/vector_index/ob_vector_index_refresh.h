@@ -32,7 +32,7 @@ public:
   bool is_valid() const {
     return OB_INVALID_TENANT_ID != tenant_id_ &&
            OB_INVALID_ID != domain_tb_id_ && OB_INVALID_ID != base_tb_id_ &&
-           OB_INVALID_ID != index_id_tb_id_ && OB_NOT_NULL(trans_) &&
+           OB_INVALID_ID != index_id_tb_id_ &&
            share::schema::ObVectorRefreshMethod::MAX != refresh_method_;
   }
   void reuse() {
@@ -85,7 +85,6 @@ private:
                                  bool is_collect_col_id,
                                  ObIArray<uint64_t>& col_ids,
                                  ObSqlString &col_names);
-  int lock_domain_table_for_refresh();
   int do_refresh();
   int do_rebuild();
 

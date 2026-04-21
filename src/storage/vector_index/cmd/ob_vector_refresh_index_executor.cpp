@@ -1583,25 +1583,14 @@ int ObVectorRefreshIndexExecutor::do_rebuild() {
   refresh_ctx.idx_parallel_creation_ = idx_parallel_creation_;
   refresh_ctx.delta_rate_threshold_ = delta_rate_threshold_;
 
-  ObVectorRefreshIdxTransaction trans;
   ObVectorIndexRefresher refresher;
   CK(OB_NOT_NULL(ctx_));
   int64_t start_time_us = common::ObTimeUtility::fast_current_time();
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(trans.start(ctx_->get_my_session(), ctx_->get_sql_proxy()))) {
-    LOG_WARN("fail to start trans", KR(ret));
-  } else if (FALSE_IT(refresh_ctx.trans_ = &trans)) {
   } else if (OB_FAIL(refresher.init(*ctx_, refresh_ctx))) {
     LOG_WARN("fail to init refresher", KR(ret), K(refresh_ctx));
   } else if (OB_FAIL(refresher.refresh())) {
     LOG_WARN("fail to do refresh", KR(ret), K(refresh_ctx));
-  }
-  if (trans.is_started()) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
-      LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
-      ret = COVER_SUCC(tmp_ret);
-    }
   }
   if (ret == OB_EAGAIN) {
     ret = OB_OP_NOT_ALLOW;
@@ -1631,22 +1620,11 @@ int ObVectorRefreshIndexExecutor::do_rebuild_with_retry()
 
   CK(OB_NOT_NULL(ctx_));
   while (OB_SUCC(ret) && OB_SUCC(ctx_->check_status())) {
-    ObVectorRefreshIdxTransaction trans;
     ObVectorIndexRefresher refresher;
-    if (OB_FAIL(trans.start(ctx_->get_my_session(), ctx_->get_sql_proxy()))) {
-      LOG_WARN("fail to start trans", KR(ret));
-    } else if (FALSE_IT(refresh_ctx.trans_ = &trans)) {
-    } else if (OB_FAIL(refresher.init(*ctx_, refresh_ctx))) {
+    if (OB_FAIL(refresher.init(*ctx_, refresh_ctx))) {
       LOG_WARN("fail to init refresher", KR(ret), K(refresh_ctx));
     } else if (OB_FAIL(refresher.refresh())) {
       LOG_WARN("fail to do refresh", KR(ret), K(refresh_ctx));
-    }
-    if (trans.is_started()) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
-        ret = COVER_SUCC(tmp_ret);
-      }
     }
     if (OB_FAIL(ret)) {
       if (retry_cnt < MAX_REFRESH_RETRY_THRESHOLD &&

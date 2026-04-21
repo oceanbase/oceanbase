@@ -37,8 +37,7 @@ int ObVectorIndexRefresher::init(sql::ObExecContext &ctx,
     ret = OB_INIT_TWICE;
     LOG_WARN("ObVectorIndexRefresher init twice", KR(ret), KP(this));
   } else if (OB_UNLIKELY(nullptr == ctx.get_my_session() ||
-                         nullptr == ctx.get_sql_proxy() ||
-                         nullptr == refresh_ctx.trans_)) {
+                         nullptr == ctx.get_sql_proxy())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(ctx), K(refresh_ctx));
   } else {
@@ -256,38 +255,6 @@ int ObVectorIndexRefresher::get_vector_index_col_names(
   return ret;
 }
 
-int ObVectorIndexRefresher::lock_domain_table_for_refresh() {
-  int ret = OB_SUCCESS;
-  CK(OB_NOT_NULL(refresh_ctx_));
-  CK(OB_NOT_NULL(refresh_ctx_->trans_));
-  if (OB_SUCC(ret)) {
-    const uint64_t tenant_id = refresh_ctx_->tenant_id_;
-    const uint64_t domain_tb_id = refresh_ctx_->domain_tb_id_;
-    int64_t retries = 0;
-    while (OB_SUCC(ret) && OB_SUCC(ctx_->check_status())) {
-      if (OB_FAIL(ObVectorIndexRefresher::lock_domain_tb(
-              *(refresh_ctx_->trans_), tenant_id, domain_tb_id, true))) {
-        if (OB_UNLIKELY(OB_TRY_LOCK_ROW_CONFLICT != ret)) {
-          LOG_WARN("fail to lock delta_buf_table for refresh", KR(ret),
-                  K(tenant_id), K(domain_tb_id));
-        } else {
-          ret = OB_SUCCESS;
-          ++retries;
-          if (retries % 10 == 0) {
-            LOG_WARN("retry too many times", K(retries), K(tenant_id),
-                    K(domain_tb_id));
-          }
-          ob_usleep(100LL * 1000);
-        }
-      } else {
-        break;
-      }
-    }
-    FLOG_INFO("[VEC_INDEX][REFRESH] lock domain table for refresh", K(ret), K(retries), K(tenant_id), K(domain_tb_id));
-  }
-  return ret;
-}
-
 int ObVectorIndexRefresher::do_refresh() {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = OB_INVALID_ID; 
@@ -497,6 +464,7 @@ int ObVectorIndexRefresher::do_rebuild() {
   int ret = OB_SUCCESS;
   uint64_t tenant_id = OB_INVALID_ID;
   ObSQLSessionInfo *session_info = nullptr;
+  ObMySQLProxy *sql_proxy = nullptr;
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *base_table_schema = nullptr;
   const ObTableSchema *domain_table_schema = nullptr;
@@ -510,12 +478,10 @@ int ObVectorIndexRefresher::do_rebuild() {
   // refresh_ctx_->delta_rate_threshold_ = 0; // yjl, for test
   dbms_scheduler::ObDBMSSchedJobInfo job_info;
   int64_t start_time_us = common::ObTimeUtility::fast_current_time();
+  ObVectorRefreshIdxTransaction trans;
   if (OB_ISNULL(refresh_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("refresh_ctx is null", K(ret));
-  } else if (OB_ISNULL(refresh_ctx_->trans_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("trans is null", K(ret));
   } else if (OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctx is null", K(ret));
@@ -523,6 +489,12 @@ int ObVectorIndexRefresher::do_rebuild() {
   } else if (OB_ISNULL(session_info = ctx_->get_my_session())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null session info", KR(ret), KPC(ctx_));
+  } else if (OB_ISNULL(sql_proxy = ctx_->get_sql_proxy())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null sql proxy", KR(ret), KPC(ctx_));
+  } else if (OB_FAIL(trans.start(session_info, sql_proxy))) {
+    LOG_WARN("fail to start trans for rebuild", KR(ret));
+  } else if (FALSE_IT(refresh_ctx_->trans_ = &trans)) {
   } else if (OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("schema service is null", KR(ret));
@@ -632,7 +604,18 @@ int ObVectorIndexRefresher::do_rebuild() {
     triggered = false;
     FLOG_INFO("[VEC_INDEX][REBUILD] no need to start rebuild", K(base_table_row_cnt), K(index_id_table_row_cnt), K(domain_table_row_cnt), K(refresh_ctx_->delta_rate_threshold_));
   }
-  
+
+  // Prevents the transaction from being held open during wait_ddl_finish().
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("failed to end trans before rebuild DDL", KR(ret), KR(tmp_ret));
+      ret = COVER_SUCC(tmp_ret);
+    }
+  }
+  // free trans immediately after to avoid used after commit
+  refresh_ctx_->trans_ = nullptr;
+
   DEBUG_SYNC(BEFORE_DBMS_VECTOR_REBUILD);
 
   if (OB_FAIL(ret)) {
