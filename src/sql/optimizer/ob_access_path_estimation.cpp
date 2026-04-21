@@ -1640,7 +1640,7 @@ int ObAccessPathEstimation::get_valid_partition_info(ObOptimizerContext &ctx,
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < part_stats.count(); i ++) {
         const ObOptTableStat &stat = part_stats.at(i);
-        if (stat.get_last_analyzed() <= 0 || stat.get_row_count() > 0) {
+        if (stat.get_last_analyzed() <= 0 || stat.is_stat_expired() || stat.get_row_count() > 0) {
           if (OB_FAIL(valid_partitions.push_back(all_partitions.at(i)))) {
             LOG_WARN("failed to push back tablet loc", K(ret), K(all_partitions.at(i)));
           }
