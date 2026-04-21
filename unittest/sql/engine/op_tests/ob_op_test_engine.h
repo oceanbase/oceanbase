@@ -5,6 +5,7 @@
 #ifndef OCEANBASE_UNITTEST_SQL_ENGINE_OP_TEST_OB_OP_TEST_ENGINE_H_
 #define OCEANBASE_UNITTEST_SQL_ENGINE_OP_TEST_OB_OP_TEST_ENGINE_H_
 
+#include <atomic>
 #include "unittest/sql/test_sql_utils.h"
 #include "sql/code_generator/ob_static_engine_expr_cg.h"
 #include "sql/engine/ob_physical_plan.h"
@@ -139,6 +140,14 @@ public:
    */
   void apply_tenant_config_overrides();
 
+  // ===== Session Variable Override =====
+  /**
+   * @brief Apply session variable overrides from TestSessionVarConf TLS.
+   * Called by OpSpecBuilder::prepare() after engine init and before register_table.
+   * Uses session_info_.update_sys_variable() to set each variable.
+   */
+  void apply_session_variable_overrides();
+
   // ===== Schema Registration =====
   /**
    * @brief Register a mock table for testing.
@@ -221,6 +230,21 @@ public:
     }
   }
 
+  // ===== Performance Recording =====
+  /**
+   * @brief Enable/disable performance recording.
+   * When enabled, execute() measures timing and fills PerfStats in OpTestResult.
+   * @param enable True to enable
+   */
+  void set_perf_record(bool enable) { perf_record_enabled_ = enable; }
+  bool get_perf_record() const { return perf_record_enabled_; }
+
+  /**
+   * @brief Get the mock timing accumulator pointer.
+   * Used by MockDataSourceOp to accumulate its inner_get_next_batch timing.
+   */
+  std::atomic<int64_t> *get_mock_perf_acc() { return &mock_acc_ns_; }
+
 private:
   /**
    * @brief Collect top-level raw expressions from statement into an array.
@@ -264,6 +288,10 @@ private:
   // Pending raw exprs: pseudo columns (e.g., grouping_id) created outside SQL resolution
   // Added to CG raw_exprs in generate_exprs(), cleared after use
   std::vector<ObRawExpr *> pending_raw_exprs_;
+
+  // Performance recording
+  bool perf_record_enabled_ = false;
+  std::atomic<int64_t> mock_acc_ns_{0};  // Accumulator for MockDataSource timing (ns)
 
   DISALLOW_COPY_AND_ASSIGN(OpTestEngine);
 };

@@ -27,11 +27,14 @@
 #include "objit/common/ob_item_type.h"
 #include "lib/profile/ob_trace_id.h"
 #include "lib/random/ob_random.h"
+#include "lib/utility/ob_tracepoint.h"  // for EventTable, EventItem
 #include <string>
 #include <vector>
 #include <map>
 #include <set>
 #include <functional>
+#include <type_traits>
+#include <memory>
 #include <initializer_list>
 #include <utility>
 
@@ -153,6 +156,156 @@ private:
 //   ) { ... }
 #define WITH_TENANT_CONFS(...) \
   if (::oceanbase::sql::TestParameterGuard ob_op_tests_tenant_conf_guard__{{ __VA_ARGS__ }}; true)
+
+// ===== Session Variable RAII Support =====
+
+// Thread-local singleton: stores session variable overrides for testing.
+// Applied via OpTestEngine::apply_session_variable_overrides() using session_info_.update_sys_variable().
+struct TestSessionVarConf
+{
+  std::map<std::string, std::string> overrides_;
+
+  static TestSessionVarConf &instance()
+  {
+    static thread_local TestSessionVarConf inst;
+    return inst;
+  }
+
+  void set(const std::string &name, const std::string &value)
+  { overrides_[name] = value; }
+
+  void remove(const std::string &name)
+  { overrides_.erase(name); }
+
+  void clear() { overrides_.clear(); }
+  bool empty() const { return overrides_.empty(); }
+};
+
+// RAII guard: saves TLS session variable state on construction, restores on destruction.
+struct TestSessionVarGuard
+{
+  TestSessionVarGuard()
+  { saved_ = TestSessionVarConf::instance().overrides_; }
+
+  explicit TestSessionVarGuard(std::initializer_list<std::pair<const char *, const char *>> vars)
+      : TestSessionVarGuard()
+  {
+    for (const auto &p : vars) {
+      set(p.first, p.second);
+    }
+  }
+
+  TestSessionVarGuard &set(const std::string &name, const std::string &value)
+  {
+    TestSessionVarConf::instance().set(name, value);
+    return *this;
+  }
+
+  ~TestSessionVarGuard()
+  { TestSessionVarConf::instance().overrides_ = saved_; }
+
+private:
+  std::map<std::string, std::string> saved_;
+};
+
+// One key/value entry for WITH_SESSION_VARS.
+#define OB_SESSION_VAR(K, V) ::std::pair<const char *, const char *>((K), (V))
+
+// Temporarily applies session variable overrides for a compound statement (RAII).
+// Usage (C++17 if-init, same pattern as WITH_TENANT_CONFS):
+//   WITH_SESSION_VARS(
+//     {"ob_query_timeout", "10000000"},
+//     {"group_concat_max_len", "1024"}
+//   ) {
+//     builder.run();
+//   }
+// or:
+//   WITH_SESSION_VARS(
+//     OB_SESSION_VAR("ob_query_timeout", "10000000"),
+//     OB_SESSION_VAR("group_concat_max_len", "1024")
+//   ) {
+//     builder.run();
+//   }
+#define WITH_SESSION_VARS(...) \
+  if (::oceanbase::sql::TestSessionVarGuard ob_op_tests_session_var_guard__{{ __VA_ARGS__ }}; true)
+
+// ===== Tracepoint RAII Support =====
+
+// Describes a tracepoint to be set for testing.
+// Maps directly to EventItem fields (ob_tracepoint.h).
+struct TestTracepoint {
+  const char *name = nullptr;  // Tracepoint name (e.g. "EN_ENABLE_SQL_OP_DUMP")
+  int64_t error_code = 0;    // Error code to return when triggered
+  int64_t occur = 0;         // Max number of times to trigger (>0 = countdown, 0 = use trigger_freq)
+  int64_t trigger_freq = 0;  // Trigger frequency (1 = always, N = 1/N probability)
+  int64_t cond = 0;          // Condition value (0 = unconditional)
+};
+
+// RAII guard: sets tracepoints on construction, resets them on destruction.
+// Uses EventTable::set_event(name, item) to set, and resets with zero EventItem on scope exit.
+class TestTracepointGuard {
+public:
+  explicit TestTracepointGuard(std::initializer_list<TestTracepoint> tps)
+  {
+    for (const auto &tp : tps) {
+      apply_tp(tp);
+    }
+  }
+
+  explicit TestTracepointGuard(const std::vector<TestTracepoint> &tps)
+  {
+    for (const auto &tp : tps) {
+      apply_tp(tp);
+    }
+  }
+
+  ~TestTracepointGuard()
+  {
+    common::EventItem zero;  // Default constructed = all zeros = disabled
+    for (const auto &n : names_) {
+      ::oceanbase::common::EventTable::instance().set_event(n, zero);
+    }
+  }
+
+  // Non-copyable, non-movable
+  TestTracepointGuard(const TestTracepointGuard &) = delete;
+  TestTracepointGuard &operator=(const TestTracepointGuard &) = delete;
+
+private:
+  void apply_tp(const TestTracepoint &tp)
+  {
+    common::EventItem item;
+    item.error_code_  = tp.error_code;
+    item.occur_       = tp.occur;
+    item.trigger_freq_= tp.trigger_freq;
+    item.cond_        = tp.cond;
+    int ret = ::oceanbase::common::EventTable::instance().set_event(tp.name, item);
+    if (OB_SUCCESS != ret) {
+      LOG_WARN("TestTracepointGuard: set_event failed", K(ret), "name", tp.name);
+    } else {
+      names_.push_back(tp.name);
+    }
+  }
+
+  std::vector<const char *> names_;  // Store raw pointers (string literals from macro)
+};
+
+// Helper macro for creating a TestTracepoint entry.
+// Usage: OB_TP("EN_ENABLE_SQL_OP_DUMP", 0, 1, 1)
+//        OB_TP("EN_SOME_TP", -4013, 3, 1)  -- trigger 3 times with error -4013
+#define OB_TP(N, E, O, F) ::oceanbase::sql::TestTracepoint{ (N), (E), (O), (F), 0 }
+
+// Temporarily applies tracepoint overrides for a compound statement (RAII).
+// Usage (C++17 if-init, same pattern as WITH_TENANT_CONFS):
+//   WITH_TRACEPOINTS(
+//     OB_TP("EN_ENABLE_SQL_OP_DUMP", 0, 1, 1),
+//     OB_TP("EN_SQL_MEMORY_MANAGER_CTX_EXTEND", -4013, 1, 1)
+//   ) {
+//     builder.run();
+//   }
+// Tracepoints are automatically reset when the scope exits.
+#define WITH_TRACEPOINTS(...) \
+  if (::oceanbase::sql::TestTracepointGuard ob_op_tests_tp_guard__{ __VA_ARGS__ }; true)
 
 // RAII checker for fatal error detection.
 // Sets thread-local trace_id at construction (random-based).
@@ -880,6 +1033,94 @@ public:
     return static_cast<Derived&>(*this);
   }
 
+  /**
+   * @brief Set per-column vector formats, overriding the single vector_format_.
+   * Column count must match the number of columns in the table definition.
+   * Validation rules (checked at build time):
+   *   - Fixed-length columns: only VEC_FIXED or VEC_UNIFORM allowed
+   *   - Variable-length columns: only VEC_DISCRETE, VEC_CONTINUOUS, or VEC_UNIFORM allowed
+   * In non-rich-format mode, col_formats_ is ignored (entire batch uses VEC_UNIFORM).
+   * @param fmts One VectorFormat per column
+   */
+  template <typename... Fmts>
+  Derived& with_col_formats(Fmts... fmts)
+  {
+    col_formats_ = {static_cast<VectorFormat>(fmts)...};
+    return static_cast<Derived&>(*this);
+  }
+
+  /**
+   * @brief Set batch size via a function that returns size for each batch index.
+   * The function receives batch index (0-based) and returns desired batch size.
+   * Return <= 0 to use the default max_row_cnt for that batch.
+   * Note: This only affects MockDataSource output batch size; OpTestEngine::collect_batch_results
+   * still calls op->get_next_batch(INT64_MAX, ...) — the parent operator receives whatever
+   * MockDataSource produces per batch.
+   * @param fn Function taking (batch_idx) -> batch_size
+   */
+  template <typename F,
+            typename = std::enable_if_t<std::is_invocable_r_v<int64_t, F, int64_t>>>
+  Derived& with_batch_size(F &&fn)
+  {
+    batch_size_fn_ = std::forward<F>(fn);
+    return static_cast<Derived&>(*this);
+  }
+
+  /**
+   * @brief Set session variable overrides for the test run.
+   * Variables are applied via session_info_.update_sys_variable() in prepare().
+   * @param vars Initializer list of (name, value) pairs
+   *
+   * Example:
+   *   .with_session_vars({{"ob_query_timeout", "10000000"}, {"group_concat_max_len", "1024"}})
+   */
+  Derived& with_session_vars(std::initializer_list<std::pair<const char *, const char *>> vars)
+  {
+    for (const auto &p : vars) {
+      session_vars_.emplace(p.first, p.second);
+    }
+    return static_cast<Derived&>(*this);
+  }
+
+  /**
+   * @brief Set tracepoints to be activated during run() via RAII guard.
+   * Tracepoints are automatically reset when the run() scope exits.
+   * @param tps Initializer list of TestTracepoint entries
+   */
+  Derived& with_tracepoints(std::initializer_list<TestTracepoint> tps)
+  {
+    tracepoints_.assign(tps.begin(), tps.end());
+    return static_cast<Derived&>(*this);
+  }
+
+  /**
+   * @brief Inject skip bits into each batch produced by MockDataSource.
+   * The function receives (batch_idx, batch_size, skip_bitmap) and should set bits
+   * for rows to be skipped. brs_.size_ remains unchanged; skipped rows are invisible
+   * to downstream operators. Therefore, the actual number of rows participating in
+   * computation is <= batch_size, and test expectations should account for filtered rows.
+   * @param fn Function taking (batch_idx, batch_size, ObBitVector*) -> void
+   */
+  template <typename F>
+  Derived& with_input_skips(F &&fn)
+  {
+    input_skip_fn_ = std::forward<F>(fn);
+    return static_cast<Derived&>(*this);
+  }
+
+  /**
+   * @brief Enable performance recording for operator execution.
+   * When enabled, execute() measures wall-clock time and MockDataSource accumulates
+   * its own timing. The difference (operator_rt_ns) represents pure operator execution time.
+   * Results are available via result.get_perf_stats() after run().
+   * @param enable True to enable (default: true)
+   */
+  Derived& with_perf_record(bool enable = true)
+  {
+    perf_record_ = enable;
+    return static_cast<Derived&>(*this);
+  }
+
   // ===== SQL Operator Dump Configuration =====
 
   /**
@@ -1076,8 +1317,14 @@ public:
     engine.set_rescan_memory_check(rescan_memory_check_);
     engine.set_rescan_memory_tolerance(rescan_memory_tolerance_bytes_);
 
+    // Step 0.3.1: Configure performance recording
+    engine.set_perf_record(perf_record_);
+
     // Step 0.4: Apply TLS tenant config overrides (including _hash_area_size pushed by run())
     engine.apply_tenant_config_overrides();
+
+    // Step 0.5: Apply TLS session variable overrides (including those pushed by run()/with_session_vars())
+    engine.apply_session_variable_overrides();
 
     // Step 1: Register mock table schema
     ret = engine.register_table(table_name_.c_str(), col_defs_.c_str());
@@ -1433,6 +1680,49 @@ public:
       mock_op->set_vector_format(vector_format_);
     }
 
+    // Step 5.6: Pass extended configuration to MockDataSourceOp
+    if (!col_formats_.empty()) {
+      // Validate per-column formats against column types
+      const int64_t col_cnt = column_exprs.count();
+      if (static_cast<int64_t>(col_formats_.size()) != col_cnt) {
+        LOG_WARN("col_formats size mismatch", "expected", col_cnt,
+                 "actual", col_formats_.size());
+        EXPECT_EQ(col_cnt, static_cast<int64_t>(col_formats_.size()))
+            << "with_col_formats: column count mismatch. Expected " << col_cnt
+            << " formats, got " << col_formats_.size();
+        return result;
+      }
+      for (int64_t i = 0; i < col_cnt; ++i) {
+        ObExpr *expr = column_exprs.at(i);
+        VectorFormat fmt = col_formats_[i];
+        if (OB_NOT_NULL(expr) && expr->is_fixed_length_data_) {
+          if (fmt != VEC_FIXED && fmt != VEC_UNIFORM) {
+            LOG_WARN("invalid format for fixed-length column", K(i), K(fmt));
+            EXPECT_TRUE(fmt == VEC_FIXED || fmt == VEC_UNIFORM)
+                << "Column " << i << " is fixed-length but got format " << fmt;
+            return result;
+          }
+        } else if (OB_NOT_NULL(expr)) {
+          if (fmt != VEC_DISCRETE && fmt != VEC_CONTINUOUS && fmt != VEC_UNIFORM) {
+            LOG_WARN("invalid format for variable-length column", K(i), K(fmt));
+            EXPECT_TRUE(fmt == VEC_DISCRETE || fmt == VEC_CONTINUOUS || fmt == VEC_UNIFORM)
+                << "Column " << i << " is variable-length but got format " << fmt;
+            return result;
+          }
+        }
+      }
+      mock_op->set_col_formats(col_formats_);
+    }
+    if (batch_size_fn_) {
+      mock_op->set_batch_size_fn(batch_size_fn_);
+    }
+    if (input_skip_fn_) {
+      mock_op->set_input_skip_fn(input_skip_fn_);
+    }
+    if (perf_record_) {
+      mock_op->set_perf_accumulator(engine.get_mock_perf_acc());
+    }
+
     // Step 6.5: Set context for create_spec() before calling
     child_output_exprs_ = &column_exprs;
 
@@ -1552,6 +1842,18 @@ public:
         int64_t kb = hash_area_size_ / 1024;
         param_guard.set("_hash_area_size", std::to_string(kb) + "K");
       }
+    }
+
+    // RAII: push builder's session variable overrides into TLS, auto-restore on scope exit
+    TestSessionVarGuard session_var_guard;
+    for (const auto &kv : session_vars_) {
+      session_var_guard.set(kv.first, kv.second);
+    }
+
+    // RAII: activate tracepoints for this run, auto-reset on scope exit
+    std::unique_ptr<TestTracepointGuard> tp_guard;
+    if (!tracepoints_.empty()) {
+      tp_guard.reset(new TestTracepointGuard(tracepoints_));
     }
 
     // Prepare: SQL registration, resolve, CG, collect exprs (always in FORCE_ON mode)
@@ -1953,6 +2255,24 @@ protected:
   bool rich_format_ = true;              // Default: use 2.0 vec operator
   bool dual_format_check_ = false;       // Default: single-run mode
   bool dual_format_unordered_ = false;   // When true, sort rows before comparing 1.0 vs 2.0
+
+  // Per-column vector format override
+  std::vector<VectorFormat> col_formats_;  // Empty = use vector_format_ fallback
+
+  // Variable batch size function
+  std::function<int64_t(int64_t)> batch_size_fn_;  // nullptr = use max_row_cnt
+
+  // Tracepoint overrides (applied via RAII in run())
+  std::vector<TestTracepoint> tracepoints_;
+
+  // Input skip injection function
+  std::function<void(int64_t, int64_t, ObBitVector *)> input_skip_fn_;  // nullptr = no skip
+
+  // Session variable overrides (applied in run() via TestSessionVarGuard)
+  std::map<std::string, std::string> session_vars_;
+
+  // Performance recording
+  bool perf_record_ = false;
 
   // Intermediate state for dual-run mode (set by prepare(), used by build_and_execute())
   std::vector<ObExpr *> prepared_col_exprs_vec_;

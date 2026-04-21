@@ -12,6 +12,7 @@
 #include "unittest/sql/engine/op_tests/ob_op_test_engine.h"
 #include <algorithm>  // for std::transform
 #include <cctype>     // for ::tolower
+#include "lib/time/ob_time_utility.h"
 #include "share/config/ob_server_config.h"  // for GCONF
 #include "observer/omt/ob_tenant_config_mgr.h"  // for ObTenantConfigGuard
 #include "sql/resolver/dml/ob_dml_stmt.h"
@@ -243,6 +244,27 @@ void OpTestEngine::apply_tenant_config_overrides()
         && OB_NOT_NULL(item)) {
       item->set_value(kv.second.c_str());
       LOG_INFO("Applied tenant config override",
+               "name", kv.first.c_str(), "value", kv.second.c_str());
+    }
+  }
+}
+
+void OpTestEngine::apply_session_variable_overrides()
+{
+  int ret = OB_SUCCESS;
+  FatalErrorChecker error_checker(ret);
+  const auto &overrides = TestSessionVarConf::instance().overrides_;
+  if (overrides.empty()) return;
+
+  for (const auto &kv : overrides) {
+    ObString var_name(static_cast<int32_t>(kv.first.length()), kv.first.c_str());
+    ObString var_value(static_cast<int32_t>(kv.second.length()), kv.second.c_str());
+    ret = session_info_.update_sys_variable(var_name, var_value);
+    if (OB_SUCCESS != ret) {
+      LOG_WARN("Failed to apply session variable override",
+               "name", kv.first.c_str(), "value", kv.second.c_str(), K(ret));
+    } else {
+      LOG_INFO("Applied session variable override",
                "name", kv.first.c_str(), "value", kv.second.c_str());
     }
   }
@@ -1155,6 +1177,7 @@ OpTestResult OpTestEngine::collect_batch_results(ObOperator *op, const ExprFixed
   // For CHECKSUM mode, we accumulate checksum incrementally without storing all rows
   uint64_t running_checksum = 0;
   int64_t total_row_count = 0;
+  int64_t batch_count = 0;
 
   while (OB_SUCC(ret)) {
     ret = op->get_next_batch(INT64_MAX, batch_rows);
@@ -1163,6 +1186,11 @@ OpTestResult OpTestEngine::collect_batch_results(ObOperator *op, const ExprFixed
         LOG_WARN("get next batch failed", K(ret));
       }
       break;
+    }
+    ++batch_count;
+    // Don't count empty end-marker batches (size_=0 with end_=true)
+    if (OB_ISNULL(batch_rows) || batch_rows->size_ <= 0) {
+      --batch_count;
     }
 
     if (OB_ISNULL(batch_rows)) {
@@ -1895,6 +1923,7 @@ OpTestResult OpTestEngine::collect_batch_results(ObOperator *op, const ExprFixed
   } else if (dump_verify_mode_ == DumpVerifyMode::NONE) {
   }
 
+  result.set_batch_count(batch_count);
   return result;
 }
 
@@ -1919,6 +1948,15 @@ OpTestResult OpTestEngine::execute(ObOperator *op, const ExprFixedArray *output_
   if (OB_ISNULL(op)) {
     LOG_WARN("op is null");
     return result;
+  }
+
+  // Reset perf accumulator for this execution
+  if (perf_record_enabled_) {
+    mock_acc_ns_.store(0);
+  }
+  int64_t op_start_ns = 0;
+  if (perf_record_enabled_) {
+    op_start_ns = common::ObTimeUtility::current_time_ns();
   }
 
   // Open operator
@@ -2004,6 +2042,22 @@ OpTestResult OpTestEngine::execute(ObOperator *op, const ExprFixedArray *output_
   int close_ret = op->close();
   if (OB_SUCCESS != close_ret) {
     LOG_WARN("close operator failed", K(close_ret));
+  }
+
+  // Fill performance stats if enabled
+  if (perf_record_enabled_ && op_start_ns > 0) {
+    int64_t op_total_ns = common::ObTimeUtility::current_time_ns() - op_start_ns;
+    OpTestResult::PerfStats perf;
+    perf.op_total_ns = op_total_ns;
+    perf.mock_total_ns = mock_acc_ns_.load();
+    perf.batch_count = first_result.get_batch_count();
+    perf.row_count = first_result.row_count();
+    first_result.set_perf_stats(perf);
+    LOG_INFO("PerfRecord stats",
+             "op_total_us", op_total_ns / 1000,
+             "mock_total_us", perf.mock_total_ns / 1000,
+             "operator_rt_us", perf.operator_rt_ns() / 1000,
+             "row_count", perf.row_count);
   }
 
   return first_result;

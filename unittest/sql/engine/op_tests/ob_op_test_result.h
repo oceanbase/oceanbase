@@ -100,6 +100,10 @@ public:
    */
   int64_t row_count() const { return static_cast<int64_t>(rows_.size()); }
 
+  // ===== Batch count =====
+  void set_batch_count(int64_t count) { batch_count_ = count; }
+  int64_t get_batch_count() const { return batch_count_; }
+
   /**
    * @brief Check if the result is empty.
    */
@@ -392,8 +396,25 @@ public:
    */
   int64_t get_rescan_count() const { return rescan_memory_info_.rescan_count_; }
 
+  // ===== Performance Recording Support =====
+
+  struct PerfStats {
+    int64_t op_total_ns = 0;     // 父算子 open+get_next_batch+close 总耗时 (ns)
+    int64_t mock_total_ns = 0;   // 所有 MockDataSource::inner_get_next_batch 累加耗时 (ns)
+    int64_t batch_count = 0;     // get_next_batch 调用次数
+    int64_t row_count = 0;       // 总行数
+    int64_t operator_rt_ns() const { return op_total_ns - mock_total_ns; }
+    double operator_rt_us() const { return static_cast<double>(operator_rt_ns()) / 1000.0; }
+    double operator_rt_ms() const { return static_cast<double>(operator_rt_ns()) / 1000000.0; }
+  };
+
+  void set_perf_stats(const PerfStats &s) { perf_stats_ = s; }
+  const PerfStats &get_perf_stats() const { return perf_stats_; }
+  bool has_perf_stats() const { return perf_stats_.op_total_ns > 0; }
+
 private:
   std::vector<std::vector<std::string>> rows_;
+  int64_t batch_count_ = 0;  // Number of get_next_batch calls
 
   // For CHECKSUM mode - store checksum instead of all rows
   uint64_t checksum_ = 0;
@@ -401,6 +422,9 @@ private:
 
   // For rescan memory tracking
   RescanMemoryInfo rescan_memory_info_;
+
+  // For performance recording
+  PerfStats perf_stats_;
 
   // Convert TestRow to vector of strings
   std::vector<std::string> row_to_strings(const TestRow &row) const

@@ -7,9 +7,12 @@
 #define OCEANBASE_UNITTEST_SQL_ENGINE_OP_TEST_OB_OP_TEST_DATA_SOURCE_H_
 
 #include "sql/engine/ob_operator.h"
+#include "sql/engine/ob_bit_vector.h"
 #include "unittest/sql/engine/op_tests/ob_op_test_types.h"
+#include <atomic>
 #include <functional>
 #include <fstream>
+#include <vector>
 
 namespace oceanbase
 {
@@ -129,6 +132,8 @@ public:
     int ret = OB_SUCCESS;
     cur_idx_ = 0;
     output_cnt_ = 0;
+    batch_call_cnt_ = 0;
+    skip_call_cnt_ = 0;
 
     // Mode-specific initialization
     if (data_source_mode_ == MockDataSourceMode::STREAM_CSV && !csv_file_path_.empty()) {
@@ -181,6 +186,8 @@ public:
   {
     cur_idx_ = 0;
     output_cnt_ = 0;
+    batch_call_cnt_ = 0;
+    skip_call_cnt_ = 0;
 
     // Mode-specific rescan handling
     if (data_source_mode_ == MockDataSourceMode::STREAM_CSV) {
@@ -232,6 +239,39 @@ public:
    * @param fmt Vector format (VEC_DISCRETE or VEC_CONTINUOUS)
    */
   void set_vector_format(VectorFormat fmt) { vector_format_ = fmt; }
+
+  /**
+   * @brief Set per-column vector formats.
+   * Overrides the single vector_format_ for each column individually.
+   * Validation (column count match, type compatibility) is done in OpSpecBuilder.
+   * @param fmts Per-column format vector
+   */
+  void set_col_formats(const std::vector<VectorFormat> &fmts) { col_formats_ = fmts; }
+
+  /**
+   * @brief Set batch size function for variable batch sizes.
+   * The function receives batch index (0-based) and returns the desired batch size.
+   * Return <= 0 to use the default max_row_cnt.
+   * @param fn Function taking (batch_idx) -> batch_size
+   */
+  void set_batch_size_fn(std::function<int64_t(int64_t)> fn) { batch_size_fn_ = std::move(fn); }
+
+  /**
+   * @brief Set input skip function for injecting skip bits into each batch.
+   * Called after data is filled but before brs_ finalization.
+   * The function receives (batch_idx, batch_size, skip_bitmap) and should set bits
+   * for rows to be skipped. brs_.size_ remains unchanged; skipped rows are invisible
+   * to downstream operators.
+   * @param fn Function taking (batch_idx, batch_size, ObBitVector*) -> void
+   */
+  void set_input_skip_fn(std::function<void(int64_t, int64_t, ObBitVector *)> fn) { input_skip_fn_ = std::move(fn); }
+
+  /**
+   * @brief Set performance accumulator for timing MockDataSource::inner_get_next_batch.
+   * When non-null, each inner_get_next_batch call accumulates its duration (ns) into this atomic.
+   * @param acc Pointer to atomic accumulator (owned by OpTestEngine)
+   */
+  void set_perf_accumulator(std::atomic<int64_t> *acc) { mock_total_ns_acc_ = acc; }
 
   /**
    * @brief Set sort key specs for pre-execution sorting via real SQL expression eval.
@@ -302,6 +342,20 @@ private:
 
   // ===== Sort key specs (for with_sorted_data + arbitrary SQL expressions) =====
   std::vector<SortKeySpec> sort_key_specs_;
+
+  // ===== Per-column format override =====
+  std::vector<VectorFormat> col_formats_;  // Empty = use vector_format_ fallback
+
+  // ===== Variable batch size =====
+  std::function<int64_t(int64_t)> batch_size_fn_;  // nullptr = use max_row_cnt
+  int64_t batch_call_cnt_ = 0;
+
+  // ===== Input skip injection =====
+  std::function<void(int64_t, int64_t, ObBitVector *)> input_skip_fn_;  // nullptr = no skip
+  int64_t skip_call_cnt_ = 0;
+
+  // ===== Performance timing accumulator =====
+  std::atomic<int64_t> *mock_total_ns_acc_ = nullptr;  // Owned by OpTestEngine
 };
 
 }  // namespace sql

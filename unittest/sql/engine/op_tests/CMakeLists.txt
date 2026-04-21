@@ -109,3 +109,10 @@ sql_unittest(test_nested_loop_join_op
 #   ob_op_test_engine.cpp
 #   ob_op_test_data_source.cpp
 # )
+
+# Phase 9: Framework extensions tests
+sql_unittest(test_framework_extensions
+  test_framework_extensions.cpp
+  ob_op_test_engine.cpp
+  ob_op_test_data_source.cpp
+)

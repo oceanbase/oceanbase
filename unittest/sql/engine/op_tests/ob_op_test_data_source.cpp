@@ -24,6 +24,7 @@
 #include "lib/geo/ob_wkt_parser.h"
 #include "lib/geo/ob_geo.h"
 #include "lib/roaringbitmap/ob_roaringbitmap.h"
+#include "lib/time/ob_time_utility.h"
 #include <numeric>    // std::iota
 #include <algorithm>  // std::stable_sort
 #include <vector>
@@ -36,6 +37,19 @@ namespace sql
 
 int MockDataSourceOp::inner_get_next_batch(const int64_t max_row_cnt)
 {
+  // Performance timing: accumulate MockDataSource time if perf accumulator is set
+  struct ScopedNs {
+    int64_t start_ns;
+    std::atomic<int64_t> *acc;
+    ScopedNs(std::atomic<int64_t> *a) : start_ns(0), acc(a) {
+      if (acc) { start_ns = common::ObTimeUtility::current_time_ns(); }
+    }
+    ~ScopedNs() {
+      if (acc && start_ns > 0) {
+        acc->fetch_add(common::ObTimeUtility::current_time_ns() - start_ns);
+      }
+    }
+  } scoped_perf_ns_(mock_total_ns_acc_);
   int ret = OB_SUCCESS;
   clear_evaluated_flag();
 
@@ -66,7 +80,16 @@ int MockDataSourceOp::inner_get_next_batch(const int64_t max_row_cnt)
     remain = std::min(remain, limit_remain);
   }
 
-  const int64_t cnt = std::min(max_row_cnt, remain);
+  // Apply custom batch size function if set
+  int64_t cap = max_row_cnt;
+  if (batch_size_fn_) {
+    int64_t custom = batch_size_fn_(batch_call_cnt_);
+    if (custom > 0) {
+      cap = std::min(cap, custom);
+    }
+  }
+  const int64_t cnt = std::min(cap, remain);
+  ++batch_call_cnt_;
 
   if (cnt == 0) {
     brs_.size_ = 0;
@@ -136,10 +159,12 @@ int MockDataSourceOp::inner_get_next_batch(const int64_t max_row_cnt)
       break;
     }
 
-    // Determine vector format based on use_rich_format_ setting and data type
+    // Determine vector format: per-column override > type-based default
     VectorFormat fmt;
     if (!spec_.use_rich_format_) {
       fmt = VEC_UNIFORM;
+    } else if (col < static_cast<int64_t>(col_formats_.size())) {
+      fmt = col_formats_[col];  // Per-column override (validated in builder)
     } else if (expr->is_fixed_length_data_) {
       fmt = VEC_FIXED;
     } else if (vector_format_ == VEC_CONTINUOUS) {
@@ -208,6 +233,15 @@ int MockDataSourceOp::inner_get_next_batch(const int64_t max_row_cnt)
     brs_.size_ = row_count;
     cur_idx_ += row_count;
     output_cnt_ += row_count;
+
+    // Apply input skip function if set: inject skip bits into brs_.skip_
+    if (input_skip_fn_ && brs_.size_ > 0) {
+      ObBitVector *skip = brs_.skip_;
+      if (OB_NOT_NULL(skip)) {
+        input_skip_fn_(skip_call_cnt_, brs_.size_, skip);
+      }
+      ++skip_call_cnt_;
+    }
   }
 
   // In 1.0 mode (no rich format), cast each output expr vector to VEC_UNIFORM
