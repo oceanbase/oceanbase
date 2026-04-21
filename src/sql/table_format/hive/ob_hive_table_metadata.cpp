@@ -1456,7 +1456,7 @@ int ObHiveTableMetadata::calc_num_from_str(const ObString &part_val,
       } else if (part_val.ptr()[k] == '-') {
         is_negative = true;
       } else {
-        ret = OB_ERR_UNEXPECTED;
+        ret = OB_ERR_INCORRECT_STRING_VALUE;
         LOG_WARN("unexpected part_val", K(ret), K(is_tinyint), K(part_val));
       }
     }
