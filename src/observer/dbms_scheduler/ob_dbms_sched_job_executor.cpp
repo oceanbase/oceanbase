@@ -140,6 +140,14 @@ int ObDBMSSchedJobExecutor::init_session(
       trx_timeout_obj.set_int(TRX_TIMEOUT_US);
       OZ (session.update_sys_variable(SYS_VAR_OB_QUERY_TIMEOUT, query_timeout_obj));
       OZ (session.update_sys_variable(SYS_VAR_OB_TRX_TIMEOUT, trx_timeout_obj));
+    } else if (job_info.is_purge_recyclebin_job()) {
+      const int64_t TIMEOUT_US = job_info.get_max_run_duration() * 1000000L;
+      ObObj query_timeout_obj;
+      ObObj trx_timeout_obj;
+      query_timeout_obj.set_int(TIMEOUT_US);
+      trx_timeout_obj.set_int(TIMEOUT_US);
+      OZ (session.update_sys_variable(SYS_VAR_OB_QUERY_TIMEOUT, query_timeout_obj));
+      OZ (session.update_sys_variable(SYS_VAR_OB_TRX_TIMEOUT, trx_timeout_obj));
     }
   }
 

@@ -233,6 +233,10 @@ int ObCmdExecutor::execute(ObExecContext &ctx, ObICmd &cmd)
                  && static_cast<ObAlterTableStmt*>(&cmd)->is_add_interval_partition()) {
         //alter interval partition need to use query_timeout_hint,
         //do not need adjust _ob_ddl_timeout
+      } else if (cmd.get_cmd_type() == stmt::T_PURGE_RECYCLEBIN
+                 && my_session->is_inner()) {
+        // For scheduled purge recyclebin job, worker timeout is already set based on
+        // max_run_duration in run_dbms_sched_job. Do not override it with _ob_ddl_timeout.
       } else if (OB_FAIL(my_session->update_sys_variable(
                          share::SYS_VAR_OB_QUERY_TIMEOUT, val))) {
         LOG_WARN("set sys variable failed", K(ret), K(val.get_int()));

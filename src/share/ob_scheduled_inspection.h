@@ -14,6 +14,7 @@
 #define OCEANBASE_SHARE_OB_SCHEDULED_INSPECTION_H_
 
 #include "sql/engine/ob_exec_context.h"
+#include "sql/session/ob_sql_session_info.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h" // ObDBMSSchedJobInfo
 
 namespace oceanbase
@@ -42,9 +43,11 @@ public:
     ObMySQLTransaction &trans);
 
   // Set attribute for scheduled inspection jobs (SCHEDULED_RUN_INSPECTION, SCHEDULED_PURGE_RECYCLEBIN).
-  // Only repeat_interval is allowed
+  // SCHEDULED_RUN_INSPECTION: only repeat_interval is supported.
+  // SCHEDULED_PURGE_RECYCLEBIN: repeat_interval, start_date, max_run_duration are supported.
   static int set_attribute(
     common::ObISQLClient &sql_client,
+    sql::ObSQLSessionInfo *session,
     const common::ObString &attr_name,
     const common::ObString &attr_val,
     const dbms_scheduler::ObDBMSSchedJobInfo &job_info,

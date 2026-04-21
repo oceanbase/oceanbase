@@ -926,6 +926,12 @@ int ObPurgeRecycleBinExecutor::execute(ObExecContext &ctx, ObPurgeRecycleBinStmt
       }
     }
     while (OB_SUCC(ret) && !is_tenant_finish) {
+      // For scheduled purge recyclebin job, check worker timeout between batches
+      // so that the job can be interrupted when max_run_duration is exceeded.
+      if (session->is_inner() && THIS_WORKER.is_timeout()) {
+        ret = OB_TIMEOUT;
+        break;
+      }
       //一个租户只purge 10个回收站的对象，防止卡住RS的ddl线程
       //每次返回purge的行数，只有purge数目少于affected_rows
       int64_t cal_timeout = 0;
@@ -956,7 +962,7 @@ int ObPurgeRecycleBinExecutor::execute(ObExecContext &ctx, ObPurgeRecycleBinStmt
       LOG_INFO("purge recycle objects", KR(ret), K(cost_time), K(cal_timeout),
                K(total_purge_count), K(arg), K(affected_rows), K(is_tenant_finish));
     }
-    LOG_INFO("purge recyclebin success", KR(ret), K(arg), K(total_purge_count));
+    LOG_INFO("purge recyclebin finished", KR(ret), K(arg), K(total_purge_count));
   }
   return ret;
 }

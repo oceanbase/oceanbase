@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SHARE
 
 #include "share/ob_scheduled_inspection.h"
+#include "share/ob_scheduled_manage_dynamic_partition.h"
 
 #include "share/stat/ob_dbms_stats_maintenance_window.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
@@ -183,24 +184,52 @@ int ObScheduledInspection::create_jobs_for_upgrade(
 
 int ObScheduledInspection::set_attribute(
   common::ObISQLClient &sql_client,
+  sql::ObSQLSessionInfo *session,
   const common::ObString &attr_name,
   const common::ObString &attr_val,
   const dbms_scheduler::ObDBMSSchedJobInfo &job_info,
   bool &is_valid)
 {
   int ret = OB_SUCCESS;
-  is_valid = false;
-  if (0 != attr_name.case_compare("repeat_interval")) {
+  is_valid = true;
+  if (job_info.is_inspection_job() && 0 != attr_name.case_compare("repeat_interval")) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "only repeat_interval is supported for scheduled inspection jobs");
-    LOG_WARN("only repeat_interval is supported", KR(ret), K(attr_name));
-  } else {
-    is_valid = true;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT,
+      "SET_ATTRIBUTE for SCHEDULED_RUN_INSPECTION job. Only repeat_interval is supported");
+    LOG_WARN("attribute not supported for SCHEDULED_RUN_INSPECTION", KR(ret), K(attr_name));
+  } else if (0 == attr_name.case_compare("repeat_interval")) {
     ObObj attr_val_obj;
     attr_val_obj.set_string(ObVarcharType, attr_val);
     if (OB_FAIL(ObDBMSSchedJobUtils::update_dbms_sched_job_info(sql_client, job_info, attr_name, attr_val_obj, false))) {
       LOG_WARN("failed to update job info", KR(ret), K(attr_name), K(attr_val));
     }
+  } else if (0 == attr_name.case_compare("start_date")) {
+    int64_t start_date_ts = OB_INVALID_TIMESTAMP;
+    if (OB_FAIL(ObScheduledManageDynamicPartition::parse_next_date(session, attr_val, start_date_ts))) {
+      LOG_WARN("failed to parse start_date", KR(ret), K(attr_val));
+    } else if (ObTimeUtility::current_time() > start_date_ts) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "start_date: cannot be in the past");
+      LOG_WARN("start_date cannot be in the past", KR(ret), K(attr_val), K(start_date_ts));
+    } else {
+      ObObj attr_val_obj;
+      attr_val_obj.set_time(start_date_ts);
+      if (OB_FAIL(ObDBMSSchedJobUtils::update_dbms_sched_job_info(sql_client, job_info, attr_name, attr_val_obj, false))) {
+        LOG_WARN("failed to update job info", KR(ret), K(attr_name), K(attr_val));
+      }
+    }
+  } else if (0 == attr_name.case_compare("max_run_duration")) {
+    ObObj attr_val_obj;
+    attr_val_obj.set_string(ObVarcharType, attr_val);
+    if (OB_FAIL(ObDBMSSchedJobUtils::update_dbms_sched_job_info(sql_client, job_info, attr_name, attr_val_obj, false))) {
+      LOG_WARN("failed to update job info", KR(ret), K(attr_name), K(attr_val));
+    }
+  } else {
+    is_valid = false;
+    ret = OB_INVALID_ARGUMENT;
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT,
+      "SET_ATTRIBUTE for SCHEDULED_PURGE_RECYCLEBIN job. Supported attributes: repeat_interval, start_date, max_run_duration");
+    LOG_WARN("unsupported attribute", KR(ret), K(attr_name));
   }
   return ret;
 }

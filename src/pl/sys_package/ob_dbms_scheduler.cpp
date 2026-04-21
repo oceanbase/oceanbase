@@ -528,6 +528,7 @@ int ObDBMSScheduler::set_job_attribute(
       }
     } else if (job_info.is_inspection_job() || job_info.is_purge_recyclebin_job()) {
       if (OB_FAIL(ObScheduledInspection::set_attribute(*ctx.get_sql_proxy(),
+                                                       ctx.get_my_session(),
                                                        attr_name,
                                                        attr_val,
                                                        job_info,
