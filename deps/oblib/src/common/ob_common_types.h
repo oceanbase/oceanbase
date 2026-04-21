@@ -221,7 +221,7 @@ struct ObQueryFlag
   inline bool is_query_stat() const { return query_stat_; }
   inline bool is_mysql_mode() const { return sql_mode_ == MysqlMode; }
   inline bool is_read_latest() const { return read_latest_; }
-  inline bool is_lookup_for_4377() const { return is_lookup_for_4377_; }
+  inline bool is_lookup_for_4377() const { return is_lookup_for_4377_ && !for_foreign_key_check_; }
   inline bool is_prewarm() const { return prewarm_; }
   inline bool is_index_invalid() const { return index_invalid_; }
   inline bool is_use_row_cache() const { return !is_whole_macro_scan() && use_row_cache_ == UseCache; }
