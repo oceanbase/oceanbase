@@ -126,12 +126,15 @@ ParseNode *param_node = NULL; \
 do { \
   parse_ctx->global_errno_ = check_cursor_node(&param_node, parse_ctx->mem_pool_, node, can_has_paramlist); \
   if (parse_ctx->global_errno_ != OB_PARSER_SUCCESS) { \
-    (obpl_oracle_parse_fatal_error(parse_ctx->global_errno_, YYLEX_PARAM, "check cursor source tree '%s' failed\n", #node)); \
+    (YY_CUSTOM_FATAL_ERROR(parse_ctx->global_errno_, "check cursor source tree '%s' failed\n", #node)); \
   } \
 } while (0)
 
 #ifdef OB_BUILD_ORACLE_PL
-extern const NonReservedKeyword *oracle_pl_non_reserved_keyword_lookup(const char *word);
+extern const NonReservedKeyword *oracle_pl_latin1_non_reserved_keyword_lookup(const char *word);
+extern const NonReservedKeyword *oracle_pl_utf8_non_reserved_keyword_lookup(const char *word);
+extern const NonReservedKeyword *oracle_pl_gbk_non_reserved_keyword_lookup(const char *word);
+extern const NonReservedKeyword *oracle_pl_hkscs_non_reserved_keyword_lookup(const char *word);
 #endif
 
 extern const NonReservedKeyword *mysql_pl_non_reserved_keyword_lookup(const char *word);
