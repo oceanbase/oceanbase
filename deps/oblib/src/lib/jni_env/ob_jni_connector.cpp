@@ -135,13 +135,13 @@ int ObJniConnector::is_valid_loaded_jars_() {
     OX(cur_version = cal_version(major_version, minor_version, major_patch_version, minor_patch_version));
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_LIKELY(cur_version == CLUSTER_VERSION_4_4_2_1)) {
+  } else if (OB_LIKELY(cur_version >= CLUSTER_VERSION_4_4_2_1)) {
     if (OB_LIKELY(JAR_VERSION_104 == real_jar_version)) {
       is_valid = true;
     } else {
       LOG_WARN("current major jar version is not 1.0.4", K(ret), K(real_jar_version), K(JAR_VERSION_104));
     }
-  } else if (OB_LIKELY(cur_version >= CLUSTER_VERSION_4_4_1_0)) {
+  } else if (OB_LIKELY(cur_version == CLUSTER_VERSION_4_4_1_0)) {
     if (OB_LIKELY(JAR_VERSION_102 == real_jar_version)) {
       is_valid = true;
     } else {
