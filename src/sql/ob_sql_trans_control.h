@@ -51,6 +51,8 @@ class ObIEndTransCallback;
 class ObEndTransAsyncCallback;
 class ObNullEndTransCallback;
 class ObIDASTaskOp;
+class ObOpSpec;
+class ObTableModifySpec;
 
 class TransState
 {
@@ -247,6 +249,7 @@ public:
                                    transaction::ObTransService* txs,
                                    const int64_t nested_level,
                                    const bool is_for_sslog);
+  static const ObTableModifySpec *find_main_table_dml_spec_(const ObOpSpec *op);
   static int acquire_table_lock_if_needed_(ObSQLSessionInfo *session,
                                            const ObPhysicalPlan *plan,
                                            ObExecContext &exec_ctx);

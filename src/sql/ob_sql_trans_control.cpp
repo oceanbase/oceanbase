@@ -1267,6 +1267,27 @@ int ObSqlTransControl::stmt_setup_savepoint_(ObSQLSessionInfo *session,
   return ret;
 }
 
+// Recursively find the first DML operator that is not a PDML index maintenance operator.
+// In PDML plans with indexes, there are separate DML operators for the main table and
+// index tables. Index maintenance operators have is_pdml_index_maintain_ set to true.
+// By skipping them, we ensure we get the table_id of the main table.
+const ObTableModifySpec *ObSqlTransControl::find_main_table_dml_spec_(const ObOpSpec *op)
+{
+  const ObTableModifySpec *result = nullptr;
+  if (OB_NOT_NULL(op)) {
+    if (op->is_dml_operator()) {
+      const ObTableModifySpec *modify_spec = static_cast<const ObTableModifySpec *>(op);
+      if (!modify_spec->is_pdml_index_maintain_) {
+        result = modify_spec;
+      }
+    }
+    for (uint32_t i = 0; OB_ISNULL(result) && i < op->get_child_cnt(); ++i) {
+      result = find_main_table_dml_spec_(op->get_child(i));
+    }
+  }
+  return result;
+}
+
 int ObSqlTransControl::acquire_table_lock_if_needed_(ObSQLSessionInfo *session,
                                                      const ObPhysicalPlan *plan,
                                                      ObExecContext &exec_ctx)
@@ -1277,37 +1298,63 @@ int ObSqlTransControl::acquire_table_lock_if_needed_(ObSQLSessionInfo *session,
   if (OB_NOT_NULL(plan)) {
     const int64_t table_lock_mode = plan->get_phy_plan_hint().table_lock_mode_;
     if (table_lock_mode != 0) {
-      // First, try to get from root operator's das_ctdef (most reliable for Insert/Update operations)
-      // This directly accesses das_base_ctdef_.index_tid_ which contains the actual table_id
-      // Reference: get_single_table_loc_id in ob_table_modify_op.h
-      const ObOpSpec *root_op = plan->get_root_op_spec();
-      if (OB_NOT_NULL(root_op) && root_op->is_dml_operator()) {
-        const ObTableModifySpec *modify_spec = static_cast<const ObTableModifySpec *>(root_op);
-        ObTableID table_loc_id = OB_INVALID_ID;
-        ObTableID ref_table_id = OB_INVALID_ID;
-        if (OB_SUCC(modify_spec->get_single_table_loc_id(table_loc_id, ref_table_id))) {
-          table_id = ref_table_id;
-          LOG_DEBUG("get table_id from modify_spec", K(table_id));
+      // Find the main table DML operator by traversing the operator tree.
+      // Skip PDML index maintenance operators (is_pdml_index_maintain_ = true)
+      // to ensure we always lock the main table, not an index table.
+      if (OB_SUCC(ret)) {
+        const ObOpSpec *root_op = plan->get_root_op_spec();
+        const ObTableModifySpec *modify_spec = find_main_table_dml_spec_(root_op);
+        if (OB_NOT_NULL(modify_spec)) {
+          ObTableID table_loc_id = OB_INVALID_ID;
+          ObTableID ref_table_id = OB_INVALID_ID;
+          // Use a temporary variable instead of OB_SUCC to avoid polluting ret,
+          // because get_single_table_loc_id may legitimately fail for multi-ctdef
+          // operators (e.g., self-join FOR UPDATE with multiple lock_ctdefs).
+          if (OB_FAIL(modify_spec->get_single_table_loc_id(table_loc_id, ref_table_id))) {
+            LOG_WARN("get table_id from main table dml spec", K(table_id));
+          } else {
+            table_id = ref_table_id;
+          }
         }
       }
 
-      // If no valid table_id from root operator, try to get from plan's table locations
+      // Fallback: try to get from plan's DAS table locations
       if (OB_SUCC(ret) && OB_INVALID_ID == table_id) {
         const ObIArray<ObTableLocation> &das_locations = plan->get_das_table_locations();
         if (das_locations.count() > 0) {
-          // Get the first table ID as target table ID
-          // For most DML operations, there is usually only one main table
           table_id = das_locations.at(0).get_ref_table_id();
           LOG_DEBUG("get table_id from das_locations", K(table_id));
         }
       }
 
-      // If no DAS locations, try to get from normal table locations
+      // Fallback: try to get from normal table locations
       if (OB_SUCC(ret) && OB_INVALID_ID == table_id) {
         const ObIArray<ObTableLocation> &normal_locations = plan->get_table_locations();
         if (normal_locations.count() > 0) {
           table_id = normal_locations.at(0).get_ref_table_id();
           LOG_DEBUG("get table_id from normal_locations", K(table_id));
+        }
+      }
+
+      // Defense: table lock hint only supports user tables.
+      if (OB_SUCC(ret) && OB_INVALID_ID != table_id) {
+        ObSchemaGetterGuard schema_guard;
+        const uint64_t tenant_id = session->get_effective_tenant_id();
+        const ObTableSchema *table_schema = nullptr;
+        if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+          LOG_WARN("failed to get schema guard", K(ret), K(tenant_id));
+        } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+          LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(table_id));
+        } else if (OB_ISNULL(table_schema)) {
+          ret = OB_TABLE_NOT_EXIST;
+          LOG_WARN("table schema is null", K(ret), K(table_id));
+        } else if (!table_schema->is_user_table()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("table lock hint is not supported for non-user table",
+                   K(ret),
+                   K(table_id),
+                   "table_type",
+                   table_schema->get_table_type());
         }
       }
 
