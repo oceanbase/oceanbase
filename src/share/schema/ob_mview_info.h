@@ -100,7 +100,8 @@ public:
                                     const uint64_t tenant_id,
                                     const uint64_t refresh_scn,
                                     const uint64_t target_data_sync_scn,
-                                    ObMViewInfo &mview_info);
+                                    ObMViewInfo &mview_info,
+                                    bool allow_empty_dep = false);
   static int bacth_fetch_mview_infos(ObISQLClient &sql_client,
                                      const uint64_t tenant_id,
                                      const uint64_t refresh_scn,

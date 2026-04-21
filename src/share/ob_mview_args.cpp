@@ -15,7 +15,6 @@ namespace obrpc
 bool ObMViewCompleteRefreshArg::is_valid() const
 {
   bool bret = OB_INVALID_TENANT_ID != exec_tenant_id_ &&
-              !based_schema_object_infos_.empty() &&
               OB_INVALID_TENANT_ID != tenant_id_ &&
               OB_INVALID_ID != table_id_;
   for (int64_t i = 0; bret && i < based_schema_object_infos_.count(); ++i) {
