@@ -156,8 +156,9 @@ int ObCreateTenantResolver::resolve(const ParseNode &parse_tree)
     ObCharsetType charset_type = mystmt->get_create_tenant_arg().tenant_schema_.get_charset_type();
     if (is_oracle_mode) {
       if (CS_TYPE_BINARY == collation_type || CHARSET_BINARY == charset_type) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("cant't set collation for oracle mode", K(ret));
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "set collate for oracle mode tenant");
+        LOG_WARN("set collate for oracle mode tenant is not supported", K(ret), K(collation_type), K(charset_type));
       } else if (CHARSET_INVALID == charset_type && CS_TYPE_INVALID == collation_type) {
         charset_type = ObCharset::get_default_charset();
         collation_type = ObCharset::get_default_collation_oracle(charset_type);
