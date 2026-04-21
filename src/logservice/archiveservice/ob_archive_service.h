@@ -120,13 +120,13 @@ private:
   };
 private:
   void run1();
-  void do_thread_task_();
+  bool do_thread_task_();
   bool need_check_switch_archive_() const;
   bool need_check_switch_stop_status_() const;
   bool need_print_archive_status_() const;
 
   // ============= 开启/关闭归档 ========== //
-  void do_check_switch_archive_();
+  bool do_check_switch_archive_();
   // 1. 获取租户级归档配置项信息
   int load_archive_round_attr_(ObTenantArchiveRoundAttr &attr);
 
@@ -164,6 +164,7 @@ private:
 
 private:
   const int64_t THREAD_RUN_INTERVAL = 5 * 1000 * 1000L;
+  const int64_t FAST_THREAD_RUN_INTERVAL = 1 * 1000 * 1000L; // 1s, used during transient states (BEGINNING/STOPPING)
 private:
   bool inited_;
   uint64_t tenant_id_;
