@@ -470,6 +470,9 @@ protected:
   template <typename T>
   int calc_vec_dis(T *a, T *b, int dim, float &dis, ObExprVectorDistance::ObVecDisType dis_type);
   int get_rowkey_brute_post(bool is_vectorized, IvfRowkeyHeap& nearest_rowkey_heap);
+  int do_brute_force_prefilter_rowkeys(bool is_vectorized,
+                                       float *search_vec,
+                                       ObExprVectorDistance::ObVecDisType raw_dis_type);
   uint64_t hash_val_for_rk(const common::ObRowkey& rk);
   int build_rowkey_hash_set(
     ObIvfPreFilter &prefilter,

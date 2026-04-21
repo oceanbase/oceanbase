@@ -1272,31 +1272,43 @@ int ObDASIvfBaseScanIter::get_rowkey_pre_filter(ObIAllocator& allocator, bool is
     inv_idx_scan_iter_->clear_evaluated_flag();
     if (!is_vectorized) {
       ObRowkey *rowkey = nullptr;
+      int save_ret = OB_SUCCESS;
       if (OB_FAIL(inv_idx_scan_iter_->get_next_row())) {
-        if (OB_ITER_END != ret) {
+        if (OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY == ret) {
+          save_ret = ret;
+          ret = OB_SUCCESS;
+        } else if (OB_ITER_END != ret) {
           LOG_WARN("failed to get next rowkey", K(ret));
         }
-      } else if (OB_FALSE_IT(rowkey_count++)) {
-      } else if (OB_FAIL(get_rowkey(allocator, rowkey))) {
-        // pre_fileter_rowkeys_ need keep rowkey mem, so use vec_op_alloc_
-        LOG_WARN("failed to get rowkey", K(ret));
-      } else if (OB_FAIL(pre_fileter_rowkeys_.push_back(*rowkey))) {
-        LOG_WARN("failed to push rowkey", K(ret));
+      }
+      if (OB_SUCC(ret)) {
+        rowkey_count++;
+        if (OB_FAIL(get_rowkey(allocator, rowkey))) {
+          // pre_fileter_rowkeys_ need keep rowkey mem, so use vec_op_alloc_
+          LOG_WARN("failed to get rowkey", K(ret));
+        } else if (OB_FAIL(pre_fileter_rowkeys_.push_back(*rowkey))) {
+          LOG_WARN("failed to push rowkey", K(ret));
+        }
+      }
+      if (OB_SUCC(ret) && OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY == save_ret) {
+        ret = save_ret;
       }
     } else {
       int64_t batch_row_count = ObVectorParamData::VI_PARAM_DATA_BATCH_SIZE;
 
       int64_t scan_row_cnt = 0;
+      int save_ret = OB_SUCCESS;
       if (OB_FAIL(inv_idx_scan_iter_->get_next_rows(scan_row_cnt, batch_row_count))) {
         if (OB_ITER_END != ret) {
-          LOG_WARN("failed to get next rowkey", K(ret));
+          LOG_WARN("failed to get next rowkey", K(ret), K(scan_row_cnt));
         }
       }
 
       rowkey_count += scan_row_cnt;
-      if (OB_FAIL(ret) && OB_ITER_END != ret) {
+      if (OB_FAIL(ret) && OB_ITER_END != ret && OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY != ret) {
         LOG_WARN("fail to get next row from inv_idx_scan_iter_", K(ret));
       } else if (scan_row_cnt > 0) {
+        save_ret = ret;
         ret = OB_SUCCESS;
       }
 
@@ -1313,6 +1325,9 @@ int ObDASIvfBaseScanIter::get_rowkey_pre_filter(ObIAllocator& allocator, bool is
             LOG_WARN("store push rowkey", K(ret));
           }
         }
+      }
+      if (OB_SUCC(ret) && OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY == save_ret) {
+        ret = save_ret;
       }
     }
   }
@@ -2153,16 +2168,22 @@ int ObDASIvfScanIter::do_ivf_scan_pre(ObIAllocator &allocator, bool is_vectorize
   const bool need_check_brute = est_output_row_cnt <= IVF_MAX_BRUTE_FORCE_SIZE * 10 || ! is_range_prefilter;
   ObIvfPreFilter prefilter(MTL_ID());
   if (need_check_brute && OB_FAIL(get_rowkey_pre_filter(mem_context_->get_arena_allocator(), is_vectorized, IVF_MAX_BRUTE_FORCE_SIZE))) {
-    LOG_WARN("failed to get rowkey pre filter", K(ret), K(is_vectorized));
+    if (ret == OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY &&
+        strategy_ == ObVecIdxQueryStrategy::LATENCY_FIRST &&
+        pre_fileter_rowkeys_.count() > 0 &&
+        pre_fileter_rowkeys_.count() < IVF_MAX_BRUTE_FORCE_SIZE) {
+      LOG_TRACE("prefilter timeout after collecting partial brute candidates, continue brute search, do not change path to iterative filter",
+                K(ret), K(pre_fileter_rowkeys_.count()), K(strategy_), K(adaptive_ctx_));
+      ret = OB_SUCCESS;
+      if (OB_FAIL(do_brute_force_prefilter_rowkeys(is_vectorized, reinterpret_cast<float *>(real_search_vec_.ptr()), raw_dis_type))) {
+        LOG_WARN("failed to do brute force prefilter rowkeys", K(ret));
+      }
+    } else {
+      LOG_WARN("failed to get rowkey pre filter", K(ret), K(is_vectorized));
+    }
   } else if (need_check_brute && pre_fileter_rowkeys_.count() < IVF_MAX_BRUTE_FORCE_SIZE) {
-    // do brute search
-    adaptive_ctx_.is_brute_force_= true;
-    IvfRowkeyHeap nearest_rowkey_heap(vec_op_alloc_, reinterpret_cast<float *>(real_search_vec_.ptr()), raw_dis_type, dim_,
-                                      get_nprobe(limit_param_, 1), similarity_threshold_);
-    if (OB_FAIL(get_rowkey_brute_post(is_vectorized, nearest_rowkey_heap))) {
-      LOG_WARN("failed to get limit rowkey brute", K(ret));
-    } else if (OB_FAIL(nearest_rowkey_heap.get_nearest_probe_center_ids(saved_rowkeys_))) {
-      LOG_WARN("failed to get top n", K(ret));
+    if (OB_FAIL(do_brute_force_prefilter_rowkeys(is_vectorized, reinterpret_cast<float *>(real_search_vec_.ptr()), raw_dis_type))) {
+      LOG_WARN("failed to do brute force prefilter rowkeys", K(ret));
     }
   } else {
     if (OB_FAIL(get_nearest_probe_center_ids(is_vectorized))) {
@@ -3185,6 +3206,27 @@ int ObDASIvfBaseScanIter::get_rowkey_brute_post(bool is_vectorized, IvfRowkeyHea
   return ret;
 }
 
+int ObDASIvfBaseScanIter::do_brute_force_prefilter_rowkeys(
+    bool is_vectorized,
+    float *search_vec,
+    ObExprVectorDistance::ObVecDisType raw_dis_type)
+{
+  int ret = OB_SUCCESS;
+  adaptive_ctx_.is_brute_force_ = true;
+  IvfRowkeyHeap nearest_rowkey_heap(vec_op_alloc_,
+                                    search_vec /*unused*/,
+                                    raw_dis_type,
+                                    dim_,
+                                    get_nprobe(limit_param_, 1),
+                                    similarity_threshold_);
+  if (OB_FAIL(get_rowkey_brute_post(is_vectorized, nearest_rowkey_heap))) {
+    LOG_WARN("failed to get limit rowkey brute", K(ret));
+  } else if (OB_FAIL(nearest_rowkey_heap.get_nearest_probe_center_ids(saved_rowkeys_))) {
+    LOG_WARN("failed to get top n", K(ret));
+  }
+  return ret;
+}
+
 int ObDASIvfBaseScanIter::get_main_rowkey_brute(
   ObIAllocator &allocator,
   const ObDASScanCtDef *brute_ctdef,
@@ -3671,15 +3713,22 @@ int ObDASIvfPQScanIter::process_ivf_scan_pre(ObIAllocator &allocator, bool is_ve
     const int64_t est_output_row_cnt = adaptive_ctx_.selectivity_ * adaptive_ctx_.row_count_;
     const bool need_check_brute = est_output_row_cnt <= IVF_MAX_BRUTE_FORCE_SIZE * 10 || ! is_range_prefilter;
     if (need_check_brute && OB_FAIL(get_rowkey_pre_filter(mem_context_->get_arena_allocator(), is_vectorized, IVF_MAX_BRUTE_FORCE_SIZE))) {
-      LOG_WARN("failed to get rowkey pre filter", K(ret), K(is_vectorized));
+      if (ret == OB_VECTOR_INDEX_ADAPTIVE_NEED_RETRY &&
+          strategy_ == ObVecIdxQueryStrategy::LATENCY_FIRST &&
+          pre_fileter_rowkeys_.count() > 0 &&
+          pre_fileter_rowkeys_.count() < IVF_MAX_BRUTE_FORCE_SIZE) {
+        LOG_TRACE("prefilter timeout after collecting partial brute candidates, continue brute search, do not change path to iterative filter",
+                  K(ret), K(pre_fileter_rowkeys_.count()), K(strategy_), K(adaptive_ctx_));
+        ret = OB_SUCCESS;
+        if (OB_FAIL(do_brute_force_prefilter_rowkeys(is_vectorized, search_vec, raw_dis_type))) {
+          LOG_WARN("failed to do brute force prefilter rowkeys", K(ret));
+        }
+      } else {
+        LOG_WARN("failed to get rowkey pre filter", K(ret), K(is_vectorized));
+      }
     } else if (need_check_brute && pre_fileter_rowkeys_.count() < IVF_MAX_BRUTE_FORCE_SIZE) {
-      // do brute search
-      adaptive_ctx_.is_brute_force_= true;
-      IvfRowkeyHeap nearest_rowkey_heap(vec_op_alloc_, search_vec/*unused*/, raw_dis_type, dim_, get_nprobe(limit_param_, 1), similarity_threshold_);
-      if (OB_FAIL(get_rowkey_brute_post(is_vectorized, nearest_rowkey_heap))) {
-        LOG_WARN("failed to get limit rowkey brute", K(ret));
-      } else if (OB_FAIL(nearest_rowkey_heap.get_nearest_probe_center_ids(saved_rowkeys_))) {
-        LOG_WARN("failed to get top n", K(ret));
+      if (OB_FAIL(do_brute_force_prefilter_rowkeys(is_vectorized, search_vec, raw_dis_type))) {
+        LOG_WARN("failed to do brute force prefilter rowkeys", K(ret));
       }
     } else { // search with prefilter
       if (is_range_prefilter) { // rowkey range prefilter
