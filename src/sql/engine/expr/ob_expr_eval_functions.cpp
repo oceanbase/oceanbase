@@ -1499,6 +1499,7 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   ObExprGetRoutineParamTypeStr::eval_routine_param_type_str,          /* 908 */
   NULL, // ObExprNchr::calc_nchr_expr,                                /* 909 */
   NULL, // ObExprToMonday::calc_to_monday,                            /* 910 */
+  NULL, // ObExprSplitByString::calc_split_by_string,                 /* 911 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {

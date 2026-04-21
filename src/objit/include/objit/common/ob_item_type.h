@@ -998,6 +998,7 @@ typedef enum ObItemType
   T_FUN_SYS_GET_ROUTINE_PARAM_TYPE_STR = 1952,
   T_FUN_SYS_TO_MONDAY = 1953,
   T_FUN_SYS_NCHR = 1954,
+  T_FUN_SYS_SPLIT_BY_STRING = 1955,
 
   ///< @note add new sys function type before this line
   T_FUN_SYS_END = 2000,
