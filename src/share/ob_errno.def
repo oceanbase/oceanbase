@@ -2981,6 +2981,23 @@ DEFINE_ERROR_EXT(OB_SRF_NOT_ALLOWED, -11132, -1, "HY000", "set-returning functio
 // SQL扩展区段1：[-11000, -12000)
 ////////////////////////////////////////////////////////////////
 
+////////////////////////////////////////////////////////////////
+// CDC错误码值域:[-12000, -12500)
+////////////////////////////////////////////////////////////////
+DEFINE_ERROR_EXT_DEP(OB_CDC_STREAM_ALREADY_EXISTS, -12000, -1, "42S01", "CDC stream already exists", "CDC stream '%.*s' already exists");
+DEFINE_ERROR_EXT_DEP(OB_CDC_STREAM_NOT_FOUND, -12001, -1, "HY000", "CDC stream not found", "CDC stream '%.*s' not found");
+DEFINE_ERROR_EXT_DEP(OB_CDC_STREAM_STATE_NOT_MATCH, -12002, -1, "HY000", "CDC stream state not match", "CDC stream '%.*s' state not match");
+DEFINE_ERROR_EXT_DEP(OB_CDC_STREAM_INVALID_ARGUMENT, -12003, -1, "HY000", "Invalid CDC stream argument", "Invalid CDC stream argument: %.*s");
+DEFINE_ERROR_EXT_DEP(OB_CDC_CLIENT_CHANNEL_OCCUPIED, -12004, -1, "HY000", "CDC client channel occupied", "CDC channel conflict on stream %ld channel %d (owned by client %ld)");
+DEFINE_ERROR_EXT_DEP(OB_CDC_CLIENT_PARAM_MISMATCH, -12005, -1, "HY000", "CDC client register parameter mismatch", "CDC client '%.*s' already registered with different stream/channels");
+DEFINE_ERROR_EXT_DEP(OB_CDC_CLIENT_CHANNEL_OUT_OF_RANGE, -12006, -1, "HY000", "CDC client channel out of range", "CDC channel %d out of range [0, %d) for stream %ld");
+DEFINE_ERROR_EXT_DEP(OB_CDC_CLIENT_NOT_ACTIVE, -12007, -1, "HY000", "CDC client not active", "CDC client %ld is not in Active state");
+DEFINE_ERROR_EXT_DEP(OB_CDC_CHANNEL_INVALID, -12008, -1, "HY000", "CDC channel invalid", "CDC channel %d not in client %ld channel_list");
+DEFINE_ERROR_EXT_DEP(OB_CDC_INVALID_ARGUMENT, -12009, -1, "HY000", "Invalid CDC ACK argument", "Invalid CDC ACK argument: %.*s");
+DEFINE_ERROR_EXT_DEP(OB_CDC_METADB_UNAVAILABLE, -12010, -1, "HY000", "CDC MetaDB unavailable", "CDC MetaDB write failed for stream %ld");
+// CDC错误码值域:[-12000, -12500)
+// 余留位置
+
 //////////////////////////////////// 新增(占位)须知 ////////////////////////////////////
 // 1. 新增错误码需要先在master分支提交，保证master是所有版本的超集，避免出现错误码冲突
 // 2. 不支持以注释方式“占位”错误码，如果要新增错误码，直接提交完整的错误码定义即可
