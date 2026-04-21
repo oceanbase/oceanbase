@@ -240,6 +240,11 @@ public:
       const share::schema::ObColumnSchemaV2 &column,
       const bool is_oracle_mode,
       const bool is_prepare_stage=false);
+  // Column comment length: Oracle mode 4000, MySQL mode 1024. Aligns with COMMENT ON COLUMN path.
+  static int check_column_comment_length(
+      ObSQLSessionInfo *session_info,
+      char *str,
+      int64_t *str_len);
   static int check_raw_column_length(
       const share::schema::ObColumnSchemaV2 &column);
   static int check_urowid_column_length(
