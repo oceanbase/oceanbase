@@ -1625,8 +1625,6 @@ int ObTscCgService::generate_pushdown_aggr_ctdef(const ObLogTableScan &op,
                                             K(op.get_table_id()));
         } else if (OB_FAIL(op.get_aggr_param_monotonicity(param_expr, col_expr, param_prop.mono_))) {
           LOG_WARN("fail to get aggr param monotonicity", K(ret), KPC(param_expr), KPC(col_expr));
-        } else if (OB_FAIL(ObTransformUtils::is_null_propagate_expr(param_expr, col_expr, param_prop.is_null_prop_))) {
-          LOG_WARN("fail to get aggr param null porpagate", K(ret), KPC(param_expr), KPC(col_expr));
         } else {
           OZ(scan_ctdef.aggregate_column_ids_.push_back(col_expr->get_column_id()));
           OZ(scan_ctdef.aggregate_param_props_.push_back(param_prop));
@@ -3781,8 +3779,6 @@ int ObTscCgService::generate_text_ir_pushdown_expr_ctdef(
           LOG_ERROR("expected basic column", K(ret), K(param_col_expr->get_table_id()), K(op.get_table_id()), KPC(param_col_expr));
         } else if (OB_FAIL(op.get_aggr_param_monotonicity(param_expr, param_col_expr, param_prop.mono_))) {
           LOG_WARN("fail to get aggr param monotonicity", K(ret), KPC(param_expr), KPC(param_col_expr));
-        } else if (OB_FAIL(ObTransformUtils::is_null_propagate_expr(param_expr, param_col_expr, param_prop.is_null_prop_))) {
-          LOG_WARN("fail to get aggr param null porpagate", K(ret), KPC(param_expr), KPC(param_col_expr));
         } else if (OB_FAIL(scan_ctdef.aggregate_column_ids_.push_back(param_col_expr->get_column_id()))) {
           LOG_WARN("failed to append aggregate column ids", K(ret));
         } else if (OB_FAIL(scan_ctdef.aggregate_param_props_.push_back(param_prop))) {

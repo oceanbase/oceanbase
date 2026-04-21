@@ -170,7 +170,6 @@ protected:
   OB_INLINE bool is_monotonic_asc() const { return share::Monotonicity::ASC == param_prop_.mono_; }
   OB_INLINE bool is_monotonic_desc() const { return share::Monotonicity::DESC == param_prop_.mono_; }
   OB_INLINE bool is_monotonic() const { return is_monotonic_asc() || is_monotonic_desc(); }
-  OB_INLINE bool is_param_null_prop() const { return param_prop_.is_null_prop_; }
 protected:
   ObBitmap *bitmap_;
   blocksstable::ObAggRowReader *agg_row_reader_;

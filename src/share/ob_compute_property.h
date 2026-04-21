@@ -35,7 +35,7 @@ struct ObAggrParamProperty final
 {
   OB_UNIS_VERSION_V(1);
 public:
-  ObAggrParamProperty() : mono_(Monotonicity::NONE_MONO), is_null_prop_(true) {}
+  ObAggrParamProperty() : mono_(Monotonicity::NONE_MONO), is_null_prop_(false) {}
   ObAggrParamProperty(const Monotonicity mono, const bool is_null_prop)
     : mono_(mono),
       is_null_prop_(is_null_prop)
