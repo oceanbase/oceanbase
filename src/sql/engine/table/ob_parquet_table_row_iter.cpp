@@ -23,8 +23,13 @@
 #include "sql/resolver/dml/ob_dml_resolver.h"
 #include "storage/blocksstable/encoding/ob_encoding_util.h"
 #include "storage/direct_load/ob_direct_load_vector_utils.h"
+#include "common/ob_target_specific.h"
 
 #include <parquet/api/reader.h>
+
+#if OB_USE_MULTITARGET_CODE
+#include <immintrin.h>
+#endif
 
 namespace oceanbase
 {
@@ -1047,7 +1052,33 @@ ObParquetTableRowIterator::DataLoader::LOAD_FUNC ObParquetTableRowIterator::Data
 
 
 #define IS_PARQUET_COL_NOT_NULL (0 == max_def_level)
-#define IS_PARQUET_COL_VALUE_IS_NULL(V) (V < max_def_level)
+#define IS_PARQUET_COL_VALUE_IS_NULL(V) (0 != max_def_level && (V) < max_def_level)
+
+OB_DECLARE_DEFAULT_CODE(
+inline static void int32_to_int64_vec_convert(int64_t *dst, const int32_t *src, int64_t count)
+{
+  for (int64_t i = 0; i < count; i++) {
+    dst[i] = src[i];
+  }
+}
+)
+
+#if OB_USE_MULTITARGET_CODE
+OB_DECLARE_AVX512_SPECIFIC_CODE(
+inline static void int32_to_int64_vec_convert(int64_t *dst, const int32_t *src, int64_t count)
+{
+  int64_t i = 0;
+  for (; i + 8 <= count; i += 8) {
+    __m256i v32 = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(src + i));
+    __m512i v64 = _mm512_cvtepi32_epi64(v32);
+    _mm512_storeu_si512(reinterpret_cast<__m512i *>(dst + i), v64);
+  }
+  for (; i < count; i++) {
+    dst[i] = src[i];
+  }
+}
+)
+#endif
 
 int ObParquetTableRowIterator::DataLoader::load_int32_to_int32_vec()
 {
@@ -1737,6 +1768,18 @@ int ObParquetTableRowIterator::DataLoader::load_int32_to_int64_vec()
     if (OB_UNLIKELY(values_cnt > row_count_)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("repeated data not support");
+    } else if (IS_PARQUET_COL_NOT_NULL && values_cnt == row_count_) {
+      int64_t *dst = pointer_cast<int64_t *>(int64_vec->get_data()) + row_offset_;
+      const int32_t *src = values.get_data();
+#if OB_USE_MULTITARGET_CODE
+      if (common::is_arch_supported(common::ObTargetArch::AVX512)) {
+        specific::avx512::int32_to_int64_vec_convert(dst, src, row_count_);
+      } else {
+        specific::normal::int32_to_int64_vec_convert(dst, src, row_count_);
+      }
+#else
+      specific::normal::int32_to_int64_vec_convert(dst, src, row_count_);
+#endif
     } else {
       int j = 0;
       for (int i = 0; i < row_count_; i++) {
@@ -3253,8 +3296,6 @@ int ObParquetTableRowIterator::project_eager_columns(int64_t &count, int64_t cap
                             default_value, state_.eager_read_row_counts_[i],
                             cross_page, stat_,
                             cur_col_id_, first_batch, dict_filter_pushdown_, false);
-          MEMSET(def_levels_buf_.get_data(), 0, sizeof(def_levels_buf_.at(0)) * eval_ctx.max_batch_size_);
-          MEMSET(rep_levels_buf_.get_data(), 0, sizeof(rep_levels_buf_.at(0)) * eval_ctx.max_batch_size_);
           OZ (loader.load_data_for_col(load_funcs_.at(cur_col_id_)));
           load_row_count += temp_row_count;
           first_batch = false;
@@ -3516,8 +3557,6 @@ int ObParquetTableRowIterator::project_lazy_columns(int64_t &read_count, int64_t
                             default_value, state_.read_row_counts_[cur_col_id_],
                             cross_page, stat_,
                             cur_col_id_, first_batch, dict_filter_pushdown_, is_eager_calc());
-          MEMSET(def_levels_buf_.get_data(), 0, sizeof(def_levels_buf_.at(0)) * eval_ctx.max_batch_size_);
-          MEMSET(rep_levels_buf_.get_data(), 0, sizeof(rep_levels_buf_.at(0)) * eval_ctx.max_batch_size_);
           OZ (loader.load_data_for_col(load_funcs_.at(cur_col_id_)));
           load_row_count += temp_row_count;
           tmp_logical_read += temp_row_count;
