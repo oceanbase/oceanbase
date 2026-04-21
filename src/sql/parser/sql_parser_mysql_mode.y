@@ -8343,7 +8343,6 @@ TABLE_MODE opt_equal_mark STRING_VALUE
 {
   (void)($2);
   merge_nodes($$, result, T_DYNAMIC_PARTITION_POLICY, $4);
-  dup_expr_string($$, result, @4.first_column, @4.last_column);
 }
 ;
 
