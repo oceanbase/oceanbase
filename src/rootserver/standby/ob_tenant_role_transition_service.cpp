@@ -608,6 +608,7 @@ int ObTenantRoleTransitionService::do_prepare_flashback_for_switch_to_primary_(
 int ObTenantRoleTransitionService::clear_log_restore_source_()
 {
   int ret = OB_SUCCESS;
+  bool enable_protection_mode = false;
   ObLogRestoreSourceMgr restore_source_mgr;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("error unexpected", KR(ret), K_(tenant_id), KP(sql_proxy_), KP(rpc_proxy_));
@@ -615,6 +616,12 @@ int ObTenantRoleTransitionService::clear_log_restore_source_()
     LOG_WARN("failed to init restore_source_mgr", KR(ret), K(tenant_id_));
   } else if (OB_FAIL(restore_source_mgr.delete_source())) {
     LOG_WARN("failed to delete restore source", KR(ret), K(tenant_id_));
+  } else if (OB_FAIL(standby::ObProtectionModeUtils::check_tenant_data_version_for_protection_mode(
+                 tenant_id_, enable_protection_mode))) {
+    LOG_WARN("failed to check tenant data version for protection mode", KR(ret), K_(tenant_id));
+  } else if (!enable_protection_mode) {
+    LOG_INFO("tenant data version does not support protection mode, skip clear_fetched_log_cache",
+             K_(tenant_id));
   } else if (OB_FAIL(OB_STANDBY_SERVICE.clear_fetched_log_cache(tenant_id_))) {
     LOG_WARN("failed to clear fetched log cache", KR(ret), K(tenant_id_));
   }
