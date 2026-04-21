@@ -13251,20 +13251,18 @@ int ObTransformUtils::check_lazy_left_join_valid(ObDMLStmt *stmt,
 
 int ObTransformUtils::get_join_keys(ObIArray<ObRawExpr*> &conditions,
                                     ObSqlBitSet<> &table_ids,
-                                    ObIArray<ObRawExpr*> &join_keys,
-                                    bool &is_simply_join)
+                                    ObIArray<ObRawExpr*> &join_keys)
 {
   int ret = OB_SUCCESS;
-  is_simply_join = true;
-  for (int64_t i = 0; OB_SUCC(ret) && is_simply_join && i < conditions.count(); ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < conditions.count(); ++i) {
     ObRawExpr *expr = conditions.at(i);
     ObRawExpr *l_expr = NULL;
     ObRawExpr *r_expr = NULL;
     if (OB_ISNULL(expr)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null expr", K(ret));
-    } else if (!expr->has_flag(IS_JOIN_COND)) {
-      is_simply_join = false;
+    } else if (expr->get_expr_type() != T_OP_EQ) {
+      /*do nothing*/
     } else if (2 != expr->get_param_count()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect expr param count", K(ret));
@@ -13277,13 +13275,11 @@ int ObTransformUtils::get_join_keys(ObIArray<ObRawExpr*> &conditions,
       if (OB_FAIL(join_keys.push_back(r_expr))) {
         LOG_WARN("failed to push back expr", K(ret));
       }
-    } else if (l_expr->get_relation_ids().overlap(table_ids) && 
-               !r_expr->get_relation_ids().is_subset(table_ids)) {
+    } else if (l_expr->get_relation_ids().is_subset(table_ids) && 
+               !r_expr->get_relation_ids().overlap(table_ids)) {
       if (OB_FAIL(join_keys.push_back(l_expr))) {
         LOG_WARN("failed to push back expr", K(ret));
       }
-    } else {
-      is_simply_join = false;
     }
   }
   return ret;
