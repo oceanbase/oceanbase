@@ -556,6 +556,27 @@ int ob_collection_str(const ObObjType &type, const common::ObIArray<ObString> &t
   return ret;
 }
 
+int ob_append_quoted_str(char *buff, int64_t buff_length, int64_t &pos, const ObString &str)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(databuff_printf(buff, buff_length, pos, "'"))) {
+    // do nothing
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < str.length(); ++i) {
+      const char ch = str.ptr()[i];
+      if ('\'' == ch) {
+        ret = databuff_printf(buff, buff_length, pos, "''");
+      } else {
+        ret = databuff_printf(buff, buff_length, pos, "%c", ch);
+      }
+    }
+    if (OB_SUCC(ret)) {
+      ret = databuff_printf(buff, buff_length, pos, "'");
+    }
+  }
+  return ret;
+}
+
 int ob_enum_or_set_str(const ObObjMeta &obj_meta, const common::ObIArray<ObString> &type_info, char *buff, int64_t buff_length, int64_t &pos)
 {
   int ret = OB_SUCCESS;
@@ -580,7 +601,7 @@ int ob_enum_or_set_str(const ObObjMeta &obj_meta, const common::ObIArray<ObStrin
                                            cur_str))) {
       LOG_WARN("convert string to system collation failed",
                K(ret), K(obj_meta), K(cur_str));
-    } else if (OB_FAIL(databuff_printf(buff, buff_length, pos, "'%.*s'", cur_str.length(), cur_str.ptr()))) {
+    } else if (OB_FAIL(ob_append_quoted_str(buff, buff_length, pos, cur_str))) {
       LOG_WARN("fail to print buffer", K(ret), K(buff_length), K(pos), K(i));
     } else if (i == type_info.count() - 1) {
       if (OB_FAIL(databuff_printf(buff, buff_length, pos, ")"))) {
