@@ -2220,13 +2220,22 @@ int ObRawExprResolverImpl::resolve_dblink_udf_expr(const ParseNode *node,
       const ParseNode *param_node = node->children_[i];
       CK (OB_NOT_NULL(param_node));
       if (OB_SUCC(ret) && T_SP_CPARAM == param_node->type_) {
-        if (T_IDENT != param_node->children_[0]->type_) {
+        const ParseNode *name_node = NULL;
+        if (T_OBJ_ACCESS_REF == param_node->children_[0]->type_
+            && 2 == param_node->children_[0]->num_child_
+            && OB_NOT_NULL(param_node->children_[0]->children_[0])
+            && OB_ISNULL(param_node->children_[0]->children_[1])
+            && T_IDENT == param_node->children_[0]->children_[0]->type_) {
+          name_node = param_node->children_[0]->children_[0];
+        } else if (T_IDENT == param_node->children_[0]->type_) {
+          name_node = param_node->children_[0];
+        }
+        if (OB_SUCC(ret) && OB_ISNULL(name_node)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid param name node", K(ret), K(param_node->children_[0]->type_));
-        } else {
+        } else if (OB_SUCC(ret)) {
           has_assign_expr = true;
-          ObString param_name(static_cast<int32_t>(param_node->children_[0]->str_len_),
-                              param_node->children_[0]->str_value_);
+          ObString param_name(static_cast<int32_t>(name_node->str_len_), name_node->str_value_);
           OV (!param_name.empty(), OB_INVALID_ARGUMENT);
           OZ (udf_info.param_names_.push_back(param_name));
           OZ (SMART_CALL(recursive_resolve(param_node->children_[1], param_expr)));
