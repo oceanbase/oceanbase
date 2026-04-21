@@ -188,6 +188,7 @@ private:
       bool &has_modify_partition_rule);
 
   int modify_partition_func_type_if_need(ObTableSchema &new_table_schema);
+  static int check_global_index_bound(const ObTableSchema &schema);
 
 private:
   typedef common::ObArray<std::pair<ObRowkey, ObPartition*> > PartLowBound;

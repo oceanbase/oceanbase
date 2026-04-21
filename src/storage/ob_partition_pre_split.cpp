@@ -354,6 +354,8 @@ int ObPartitionPreSplit::get_global_index_pre_split_schema_if_need(
             LOG_WARN("[PRE_SPLIT] fail to check table info", K(ret), K(index_schema));
           } else if (OB_FAIL(do_pre_split_global_index(database_name, *data_table_schema, index_schema, auto_part_size, index_schema))) {
             LOG_WARN("[PRE_SPLIT] fail to get new index table split range", K(ret), K(tenant_id), K(database_name));
+          } else if (OB_FAIL(check_global_index_bound(index_schema))) {
+            LOG_WARN("[PRE_SPLIT] fail to check high bound outrow lob", K(ret), K(index_schema));
           } else {
             LOG_DEBUG("[PRE_SPLIT] success pre split index schema", K(index_schema));
           }
@@ -372,6 +374,29 @@ int ObPartitionPreSplit::get_global_index_pre_split_schema_if_need(
   return ret;
 }
 
+int ObPartitionPreSplit::check_global_index_bound(const ObTableSchema &schema)
+{
+  int ret = OB_SUCCESS;
+  ObPartition **part_array = schema.get_part_array();
+  const int64_t partition_num = schema.get_partition_num();
+  for (int64_t i = 0; OB_SUCC(ret) && i < partition_num; ++i) {
+    if (OB_ISNULL(part_array[i])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("[PRE_SPLIT] invalid partition", K(ret));
+    } else {
+      const ObRowkey &high_bound = part_array[i]->get_high_bound_val();
+      const ObObj *obj_ptr = high_bound.get_obj_ptr();
+      const int64_t obj_cnt = high_bound.get_obj_cnt();
+      for (int64_t j = 0; OB_SUCC(ret) && j < obj_cnt; ++j) {
+       if (obj_ptr[j].is_outrow_lob()) { // index keys do not support outrow lob currently
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("[PRE_SPLIT] outrow lob in high bound val is not supported", K(ret), K(obj_ptr[j]));
+        }
+      }
+    }
+  }
+  return ret;
+}
 /*
   1. 在预分裂创建全局索引的场景，外层ddl_type可以不传，其他场景需要传
   2. 在预分裂主表或者已存在的全局索引表时，外层传入的data_table_schema可以是主表和全局索引表的的new_table_schema
@@ -387,6 +412,7 @@ int ObPartitionPreSplit::do_table_pre_split_if_need(
   int ret = OB_SUCCESS;
   const int64_t tenant_id = new_table_schema.get_tenant_id();
   uint64_t current_data_version = 0;
+  bool pre_splited_global_index = false;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, current_data_version))) {
     LOG_WARN("failed to get data version", K(ret));
   } else if (current_data_version < DATA_VERSION_4_3_4_0) {
@@ -416,6 +442,8 @@ int ObPartitionPreSplit::do_table_pre_split_if_need(
     } else if (OB_FAIL(do_pre_split_global_index(db_name, data_table_schema, ori_index_table_schema, new_table_schema.get_part_option().get_auto_part_size(), new_table_schema))) {
       LOG_WARN("fail to do pre split global index", K(ret),
         K(db_name), K(data_table_schema), K(ori_index_table_schema), K(new_table_schema));
+    } else {
+      pre_splited_global_index = true;
     }
   } else {
     // 1. alter main table
@@ -433,6 +461,13 @@ int ObPartitionPreSplit::do_table_pre_split_if_need(
     } else if (OB_FAIL(do_pre_split_main_table(db_name, ori_table_schema, new_table_schema))) {
       LOG_WARN("fail to do pre split global index", K(ret),
         K(db_name), K(ori_table_schema), K(new_table_schema));
+    } else if (is_global_index) {
+      pre_splited_global_index = true;
+    }
+  }
+  if (OB_SUCC(ret) && pre_splited_global_index) {
+    if (OB_FAIL(check_global_index_bound(new_table_schema))) {
+      LOG_WARN("[PRE_SPLIT] fail to check high bound outrow lob", K(ret), K(new_table_schema));
     }
   }
   return ret;
@@ -594,7 +629,7 @@ int ObPartitionPreSplit::check_table_can_do_pre_split(
       LOG_WARN("[PRE_SPLIT] partition key not prefix of rowkey is not support", K(ret));
     }
   }
-  LOG_WARN("[PRE_SPLIT] table is partition", K(table_schema.is_partitioned_table()));
+  LOG_WARN("[PRE_SPLIT] table is partition", K(ret), K(table_schema.is_partitioned_table()));
   return ret;
 }
 
