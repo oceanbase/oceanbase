@@ -741,6 +741,9 @@ const char *ASH_VIEW_SQL_442 =
 "  ASH.PLSQL_OBJECT_ID AS PLSQL_OBJECT_ID,"
 "  ASH.PLSQL_SUBPROGRAM_ID AS PLSQL_SUBPROGRAM_ID,"
 "  ASH.PLSQL_SUBPROGRAM_NAME AS PLSQL_SUBPROGRAM_NAME,"
+"  ASH.IN_SQL_EXECUTION AS IN_SQL_EXECUTION, "
+"  ASH.IN_PLSQL_COMPILATION AS IN_PLSQL_COMPILATION, "
+"  ASH.IN_PLSQL_EXECUTION AS IN_PLSQL_EXECUTION, "
 "  ASH.BLOCKING_SESSION_ID AS BLOCKING_SESSION_ID,"
 "  ASH.TABLET_ID AS TABLET_ID,"
 "  ASH.TM_DELTA_TIME AS TM_DELTA_TIME, "
@@ -7724,7 +7727,8 @@ int ObDbmsWorkloadRepository::print_ash_top_io_event(const AshReportParams &ash_
       ))) {
         LOG_WARN("Failed to append top io sql");
       } else if (OB_FAIL(sql_string.append_fmt(
-        "SELECT * "
+        //优化器目前存在query pushdown 和 predicate movearound不收敛的问题，在需要从WR和ash查询数据时触发，需要禁用query transformation
+        "SELECT /*+ no_query_transformation */ * "
         "FROM( "
             "SELECT "
               "CASE WHEN sad.event_rank > 1 THEN NULL ELSE %s END AS NODE, "
