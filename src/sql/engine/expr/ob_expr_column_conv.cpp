@@ -747,34 +747,41 @@ int ObExprColumnConv::column_convert_batch(const ObExpr &expr,
     ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
     batch_info_guard.set_batch_size(batch_size);
     if (!is_lob_storage(out_type) || is_string2text) {
-      if (is_string2text
-          && OB_SUCCESS != (ret = inner_loop_for_convert_batch<PARAM_TC::TEXT_TC>(expr, ctx, skip, batch_size,
-                                                                             is_strict, max_accuracy_len, cast_mode,
-                                                                             eval_flags, vals, results,
-                                                                             batch_info_guard))) {
-      } else if (is_string_type
-          && OB_SUCCESS != (ret = inner_loop_for_convert_batch<PARAM_TC::STRING_TC>(expr, ctx, skip, batch_size,
-                                                                             is_strict, max_accuracy_len, cast_mode,
-                                                                             eval_flags, vals, results,
-                                                                             batch_info_guard))) {
-        LOG_WARN("failed to convert batch", K(ret));
-      } else if (is_int_tc
-                 && OB_SUCCESS != (ret = inner_loop_for_convert_batch<PARAM_TC::INT_TC>(expr, ctx, skip, batch_size,
-                                                                                 is_strict, max_accuracy_len, cast_mode,
-                                                                                 eval_flags, vals, results,
-                                                                                 batch_info_guard))) {
-        LOG_WARN("failed to convert batch", K(ret));
-      } else if (is_decimal_int_tc
-                 && OB_SUCCESS != (ret = inner_loop_for_convert_batch<PARAM_TC::DECIMAL_INT_TC>(expr, ctx, skip, batch_size,
-                                                                                         is_strict, max_accuracy_len, cast_mode,
-                                                                                         eval_flags, vals, results,
-                                                                                         batch_info_guard))) {
-        LOG_WARN("failed to convert batch", K(ret));
-      } else if (OB_SUCCESS != (ret = inner_loop_for_convert_batch<PARAM_TC::OTHER_TC>(expr, ctx, skip, batch_size,
-                                                                   is_strict, max_accuracy_len, cast_mode,
-                                                                   eval_flags, vals, results,
-                                                                   batch_info_guard))) {
-        LOG_WARN("failed to convert batch", K(ret));
+      if (is_string2text) {
+        if (OB_FAIL(inner_loop_for_convert_batch<PARAM_TC::TEXT_TC>(expr, ctx, skip, batch_size,
+                                                                     is_strict, max_accuracy_len, cast_mode,
+                                                                     eval_flags, vals, results,
+                                                                     batch_info_guard))) {
+          LOG_WARN("failed to convert batch for TEXT_TC", K(ret));
+        }
+      } else if (is_string_type) {
+        if (OB_FAIL(inner_loop_for_convert_batch<PARAM_TC::STRING_TC>(expr, ctx, skip, batch_size,
+                                                                       is_strict, max_accuracy_len, cast_mode,
+                                                                       eval_flags, vals, results,
+                                                                       batch_info_guard))) {
+          LOG_WARN("failed to convert batch for STRING_TC", K(ret));
+        }
+      } else if (is_int_tc) {
+        if (OB_FAIL(inner_loop_for_convert_batch<PARAM_TC::INT_TC>(expr, ctx, skip, batch_size,
+                                                                     is_strict, max_accuracy_len, cast_mode,
+                                                                     eval_flags, vals, results,
+                                                                     batch_info_guard))) {
+          LOG_WARN("failed to convert batch for INT_TC", K(ret));
+        }
+      } else if (is_decimal_int_tc) {
+        if (OB_FAIL(inner_loop_for_convert_batch<PARAM_TC::DECIMAL_INT_TC>(expr, ctx, skip, batch_size,
+                                                                            is_strict, max_accuracy_len, cast_mode,
+                                                                            eval_flags, vals, results,
+                                                                            batch_info_guard))) {
+          LOG_WARN("failed to convert batch for DECIMAL_INT_TC", K(ret));
+        }
+      } else {
+        if (OB_FAIL(inner_loop_for_convert_batch<PARAM_TC::OTHER_TC>(expr, ctx, skip, batch_size,
+                                                                      is_strict, max_accuracy_len, cast_mode,
+                                                                      eval_flags, vals, results,
+                                                                      batch_info_guard))) {
+          LOG_WARN("failed to convert batch for OTHER_TC", K(ret));
+        }
       }
     } else if (expr.args_[4]->obj_meta_.is_user_defined_sql_type()) {
       ret = OB_ERR_INVALID_XML_DATATYPE;
