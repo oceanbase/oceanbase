@@ -39,7 +39,7 @@ namespace blocksstable
 class MockDataBlockMetaVal final
 {
 public:
-  static const int32_t DATA_BLOCK_META_VAL_VERSION = 1;
+  static const int32_t DATA_BLOCK_META_VAL_VERSION_V1 = 1;
   static const int32_t DATA_BLOCK_META_VAL_VERSION_V2 = 2;
 
 public:
@@ -137,7 +137,7 @@ public:
       int64_t start_pos = pos;
       if (OB_FAIL(serialization::decode_i32(buf, data_len, pos, &version_))) {
         LOG_WARN("fail to decode version", K(ret), K(data_len), K(pos));
-      } else if (OB_UNLIKELY(version_ != DATA_BLOCK_META_VAL_VERSION && version_ != DATA_BLOCK_META_VAL_VERSION_V2)) {
+      } else if (OB_UNLIKELY(version_ != DATA_BLOCK_META_VAL_VERSION_V1 && version_ != DATA_BLOCK_META_VAL_VERSION_V2)) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("object version mismatch", K(ret), K(version_));
       } else if (OB_FAIL(serialization::decode_i32(buf, data_len, pos, &length_))) {
@@ -198,6 +198,18 @@ public:
       }
     }
     return ret;
+  }
+  int64_t get_max_serialize_size() const
+  {
+    int64_t len = sizeof(*this);
+    len -= (sizeof(column_checksums_) + sizeof(agg_row_buf_));
+    len += sizeof(int64_t); // serialize column count
+    len += sizeof(int64_t) * column_count_; // serialize each checksum
+    len += agg_row_len_;
+    if (version_ >= DATA_BLOCK_META_VAL_VERSION_V2) {
+      len += sizeof(int64_t); // ddl_end_row_offset_
+    }
+    return len;
   }
   int64_t get_serialize_size() const
   {
@@ -319,10 +331,14 @@ public:
   int64_t ddl_end_row_offset_;
 };
 
-void set_macro_id_to_valid(MacroBlockId & macro_id)
+void set_macro_id_to_valid(MacroBlockId & macro_id, const int64_t data_version)
 {
   macro_id.id_mode_ = (uint64_t)ObMacroBlockIdMode::ID_MODE_LOCAL;
-  macro_id.version_ = MacroBlockId::MACRO_BLOCK_ID_VERSION_V2;
+  if (data_version >= DATA_VERSION_4_3_3_0) {
+    macro_id.version_ = MacroBlockId::MACRO_BLOCK_ID_VERSION_V2;
+  } else {
+    macro_id.version_ = MacroBlockId::MACRO_BLOCK_ID_VERSION_V1;
+  }
   macro_id.second_id_ = 1;
 }
 
@@ -424,10 +440,11 @@ TEST_F(TestMacroBlockBloomFilter, test_data_macro_meta_val_compat)
   char * buf = new char[buf_len];
 
   MockDataBlockMetaVal mock_macro_meta_val;
+  uint64_t data_version = DATA_VERSION_4_3_1_0;
   ASSERT_EQ(mock_macro_meta_val.version_, int64_t(MockDataBlockMetaVal::DATA_BLOCK_META_VAL_VERSION_V2));
   ASSERT_EQ(-1, mock_macro_meta_val.ddl_end_row_offset_);
   mock_macro_meta_val.ddl_end_row_offset_ = 10;
-  set_macro_id_to_valid(mock_macro_meta_val.macro_id_);
+  set_macro_id_to_valid(mock_macro_meta_val.macro_id_, data_version);
   int64_t mock_pos = 0;
   ASSERT_EQ(OB_SUCCESS, mock_macro_meta_val.serialize(buf, buf_len, mock_pos));
   ASSERT_EQ(mock_pos, mock_macro_meta_val.get_serialize_size());
@@ -436,14 +453,18 @@ TEST_F(TestMacroBlockBloomFilter, test_data_macro_meta_val_compat)
   int64_t pos = 0;
   ASSERT_EQ(OB_SUCCESS, macro_meta_val.deserialize(buf, mock_pos, pos));
   ASSERT_EQ(pos, mock_pos);
+  int64_t new_buf_len_tmp = macro_meta_val.get_serialize_size(data_version);
+  int64_t mock_new_buf_len_tmp = mock_macro_meta_val.get_serialize_size();
+  ASSERT_EQ(new_buf_len_tmp, mock_new_buf_len_tmp);
   ASSERT_EQ(0, macro_meta_val.macro_block_bf_size_);
   ASSERT_EQ(10, macro_meta_val.ddl_end_row_offset_);
 
   // test new meta can deserialize old meta with version 1
-  mock_macro_meta_val.version_ = MockDataBlockMetaVal::DATA_BLOCK_META_VAL_VERSION;
+  mock_macro_meta_val.version_ = MockDataBlockMetaVal::DATA_BLOCK_META_VAL_VERSION_V1;
   mock_macro_meta_val.ddl_end_row_offset_ = -1;
   mock_macro_meta_val.row_count_ = 20251223;
-  set_macro_id_to_valid(mock_macro_meta_val.macro_id_);
+  data_version = DATA_VERSION_4_3_0_0;
+  set_macro_id_to_valid(mock_macro_meta_val.macro_id_, data_version);
 
   int64_t old_pos = 0;
   ASSERT_EQ(OB_SUCCESS, mock_macro_meta_val.serialize(buf, buf_len, old_pos));
@@ -453,11 +474,19 @@ TEST_F(TestMacroBlockBloomFilter, test_data_macro_meta_val_compat)
   int64_t new_pos = 0;
   ASSERT_EQ(OB_SUCCESS, macro_meta_val.deserialize(buf, old_pos, new_pos));
   ASSERT_EQ(new_pos, old_pos);
-  ASSERT_EQ(int64_t(MockDataBlockMetaVal::DATA_BLOCK_META_VAL_VERSION_V2), macro_meta_val.version_);
+  int64_t max_buf_len = macro_meta_val.get_max_serialize_size(data_version);
+  int64_t mock_max_buf_len = mock_macro_meta_val.get_max_serialize_size()
+                             - sizeof(int64_t); // macro_id.fourth_id_ from 4.3.3
+  ASSERT_EQ(max_buf_len, mock_max_buf_len);
+  int64_t new_buf_len = macro_meta_val.get_serialize_size(data_version);
+  int64_t mock_new_buf_len = mock_macro_meta_val.get_serialize_size();
+  ASSERT_EQ(new_buf_len, mock_new_buf_len);
+  ASSERT_EQ(int64_t(MockDataBlockMetaVal::DATA_BLOCK_META_VAL_VERSION_V1), macro_meta_val.version_);
   ASSERT_EQ(20251223, macro_meta_val.row_count_);
   ASSERT_EQ(-1, macro_meta_val.ddl_end_row_offset_);
 
   // test old meta can deserialize new meta with version 2 and ddl_end_row_offset_ is -1
+  data_version = DATA_VERSION_4_3_5_0;
   macro_meta_val.version_ = ObDataBlockMetaVal::DATA_BLOCK_META_VAL_VERSION_V2;
   macro_meta_val.row_count_ = 1;
   macro_meta_val.column_count_ = 2;
@@ -482,7 +511,7 @@ TEST_F(TestMacroBlockBloomFilter, test_data_macro_meta_val_compat)
   macro_meta_val.schema_version_ = 16;
   macro_meta_val.snapshot_version_ = 17;
   macro_meta_val.logic_id_ = ObLogicMacroBlockId(18, 19, 20);
-  set_macro_id_to_valid(macro_meta_val.macro_id_);
+  set_macro_id_to_valid(macro_meta_val.macro_id_, data_version);
   macro_meta_val.column_checksums_.push_back(22);
   macro_meta_val.has_string_out_row_ = true;
   macro_meta_val.all_lob_in_row_ = true;
@@ -498,6 +527,9 @@ TEST_F(TestMacroBlockBloomFilter, test_data_macro_meta_val_compat)
   old_pos = 0;
   ASSERT_EQ(OB_SUCCESS, mock_macro_meta_val.deserialize(buf, new_pos, old_pos));
   ASSERT_EQ(new_pos, old_pos);
+  int64_t new_max_buf_len = macro_meta_val.get_max_serialize_size(DATA_VERSION_4_3_5_0);
+  int64_t mock_new_max_buf_len = mock_macro_meta_val.get_max_serialize_size();
+  ASSERT_EQ(new_max_buf_len, mock_new_max_buf_len);
   ASSERT_EQ(int64_t(ObDataBlockMetaVal::DATA_BLOCK_META_VAL_VERSION_V2), mock_macro_meta_val.version_);
   ASSERT_EQ(11, mock_macro_meta_val.row_count_);
   ASSERT_EQ(-1, mock_macro_meta_val.ddl_end_row_offset_);
@@ -696,7 +728,7 @@ TEST_F(TestMacroBlockBloomFilter, test_insert)
 int main(int argc, char **argv)
 {
   system("rm -f test_macro_block_bloom_filter.log*");
-  OB_LOGGER.set_file_name("test_macro_block_bloom_filter.log", true);
+  OB_LOGGER.set_file_name("test_macro_block_bloom_filter.log");
   OB_LOGGER.set_log_level("INFO");
   STORAGE_LOG(INFO, "begin unittest: test_macro_block_bloom_filter");
   testing::InitGoogleTest(&argc, argv);

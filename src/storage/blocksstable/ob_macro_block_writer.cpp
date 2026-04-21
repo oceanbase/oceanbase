@@ -1777,6 +1777,13 @@ int ObMacroBlockWriter::build_micro_block_desc_with_rewrite(
   } else if (OB_FAIL(micro_block.micro_index_info_->row_header_->fill_micro_des_meta(
       deep_copy_des_meta, micro_des_meta))) {
     LOG_WARN("fail to fill micro block deserialize meta", K(ret), KPC(micro_block.micro_index_info_));
+  } else if (OB_UNLIKELY(header.has_column_checksum_ != data_store_desc_->is_major_merge_type()
+                      || header.column_count_ != data_store_desc_->get_row_column_count())) {
+    // ObMicroBlockHeader serialized size must not change on this rewrite path: fields such as
+    // row_offset and other encoding-relative data in the payload are not relocated when
+    // header_size_ / get_serialize_size() would differ.
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected header", K(ret), K(header), K(data_store_desc_));
   } else {
     bool is_compressed = false;
     reader->reset();
@@ -2462,7 +2469,7 @@ int ObMacroBlockWriter::exec_callback(const ObStorageObjectHandle &macro_handle,
   } else {
     ObDataMacroBlockMeta macro_block_meta;
     if (!macro_block->is_dirty()) {
-    } else if (OB_FAIL(macro_block->get_macro_block_meta(macro_block_meta))) {
+    } else if (OB_FAIL(macro_block->get_macro_block_meta(macro_block_meta, data_store_desc_->get_major_working_cluster_version()))) {
       STORAGE_LOG(WARN, "fail to get macro block meta", K(ret));
     } else if (OB_FAIL(callback_->wait())) {
       STORAGE_LOG(WARN, "fail to wait callback flush", K(ret));

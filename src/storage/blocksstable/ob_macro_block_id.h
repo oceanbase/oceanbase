@@ -86,7 +86,8 @@ public:
   void set_second_id(const int64_t second_id) { second_id_ = second_id; }
   void set_third_id(const int64_t third_id) { third_id_ = third_id; }
   void set_fourth_id(const int64_t fourth_id) { fourth_id_ = fourth_id; }
-
+  uint64_t version() const { return version_; }
+  void set_version_v1() { version_ = MACRO_BLOCK_ID_VERSION_V1; }
   void set_version_v2() { version_ = MACRO_BLOCK_ID_VERSION_V2; }
   uint64_t id_mode() const { return id_mode_; }
   bool is_id_mode_local() const; // sn deploy mode, but local macro id.
@@ -171,8 +172,9 @@ private:
   void first_id_to_string_(char *buf, const int64_t buf_len, int64_t &pos) const;
 
 public:
-  static const int64_t MACRO_BLOCK_ID_VERSION_V1 = 0;
-  static const int64_t MACRO_BLOCK_ID_VERSION_V2 = 1; // addding fourth_id_ for V1
+
+  static const uint64_t MACRO_BLOCK_ID_VERSION_V1 = 0;    // initial version
+  static const uint64_t MACRO_BLOCK_ID_VERSION_V2 = 1;    // From 4.3.3, add fourth_id_ for V1
 
   static const int64_t EMPTY_ENTRY_BLOCK_INDEX = -1;
   static const int64_t AUTONOMIC_BLOCK_INDEX = -1;

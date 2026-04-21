@@ -801,7 +801,7 @@ int ObSSTableIndexBuilder::ObMacroMetaIter::init(
     ret = OB_INIT_TWICE;
     STORAGE_LOG(WARN, "Init twice", K(ret));
   } else if (OB_FAIL(index_block_loader_.init(allocator, data_version))) {
-    STORAGE_LOG(WARN, "fail to init index block loader", K(ret), K(data_version));
+    STORAGE_LOG(WARN, "fail to init index block loader", K(ret), KDV(data_version));
   } else if (OB_FAIL(meta_row_.init(allocator, meta_row_column_count))) {
     STORAGE_LOG(WARN, "fail to init meta row", K(ret), K(meta_row_column_count));
   } else {
@@ -885,7 +885,7 @@ int ObSSTableIndexBuilder::init_meta_iter(common::ObIAllocator &allocator, ObMac
                                container_store_desc_.get_row_column_count(),
                                index_store_desc_.get_desc().is_cg(),
                                data_version))) {
-    STORAGE_LOG(WARN, "fail to init iter", K(ret), K(data_version));
+    STORAGE_LOG(WARN, "fail to init iter", K(ret), KDV(data_version));
   }
   return ret;
 }
@@ -1269,7 +1269,7 @@ int ObSSTableIndexBuilder::build_cg_meta_tree()
             STORAGE_LOG(WARN, "fail to parse row", K(ret), K(meta_row));
           } else if (FALSE_IT(macro_meta.end_key_.datums_[0].set_int(macro_meta.val_.row_count_ + row_idx))) {
           } else if (OB_FAIL(macro_meta.build_row(cg_meta_row, row_allocator_, data_version))) {
-            STORAGE_LOG(WARN, "fail to build row", K(ret), K(macro_meta), K(data_version));
+            STORAGE_LOG(WARN, "fail to build row", K(ret), K(macro_meta), KDV(data_version));
           } else if (OB_FAIL(meta_tree_builder_.append_leaf_row(cg_meta_row))) {
             STORAGE_LOG(WARN, "fail to append leaf row", K(ret), K(cg_meta_row));
           } else {
@@ -1676,7 +1676,7 @@ int ObSSTableIndexBuilder::close_with_macro_seq_inner(
       STORAGE_LOG(WARN, "fail to assign res", K(ret), K_(res));
     }
   } else if (OB_FAIL(index_block_loader_.init(load_allocator, data_version))) {
-    STORAGE_LOG(WARN, "fail to init index block loader", K(ret), K(data_version));
+    STORAGE_LOG(WARN, "fail to init index block loader", K(ret), KDV(data_version));
   } else if (FALSE_IT(device_handle_ = device_handle)) {
   } else if (OB_FAIL(res.prepare_column_checksum_array(index_store_desc_.get_desc().get_full_stored_col_cnt()))) {
     STORAGE_LOG(WARN, "fail to prepare column checksum array", K(ret));
@@ -2073,7 +2073,7 @@ int ObSSTableIndexBuilder::change_single_macro_meta_for_small_sstable(const ObDa
   } else if (OB_FAIL(meta_row.init(self_allocator_, container_store_desc_.get_row_column_count()))) {
     STORAGE_LOG(WARN, "fail to init meta row", K(ret), K(container_store_desc_.get_row_column_count()));
   } else if (OB_FAIL(macro_meta.build_row(meta_row, row_allocator_, data_version))) {
-    STORAGE_LOG(WARN, "fail to build row", K(ret), K(macro_meta), K(data_version));
+    STORAGE_LOG(WARN, "fail to build row", K(ret), K(macro_meta), KDV(data_version));
   } else if (OB_FAIL(macro_meta_dumper.append_row(meta_row))) {
     STORAGE_LOG(WARN, "failed to append row to index block dumper", K(ret), K(macro_meta));
   } else if (FALSE_IT(roots_[0]->meta_block_info_.reset())) {
@@ -2604,13 +2604,15 @@ int ObBaseIndexBlockBuilder::meta_to_row_desc(
 }
 
 int ObBaseIndexBlockBuilder::row_desc_to_meta(
-    const ObIndexBlockRowDesc &macro_row_desc, ObDataMacroBlockMeta &macro_meta,
+    const ObIndexBlockRowDesc &macro_row_desc,
+    const uint64_t data_version,
+    ObDataMacroBlockMeta &macro_meta,
     ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   macro_meta.end_key_ = macro_row_desc.row_key_;
-  macro_meta.val_.macro_id_ =
-      macro_row_desc.macro_id_; // DEFAULT_IDX_ROW_MACRO_ID
+  macro_meta.val_.version_ = ObDataBlockMetaVal::mapping_data_version_to_val_version(data_version);
+  macro_meta.val_.macro_id_ = macro_row_desc.macro_id_;
   macro_meta.val_.block_offset_ = macro_row_desc.block_offset_;
   macro_meta.val_.block_size_ = macro_row_desc.block_size_;
   macro_meta.val_.row_count_ = macro_row_desc.row_count_;
@@ -3023,12 +3025,9 @@ int ObDataIndexBlockBuilder::cal_macro_meta_block_size(const ObDatumRowkey &rowk
     macro_meta.val_.column_count_ = column_cnt;
     macro_meta.val_.compressor_type_ = data_store_desc_->get_compressor_type();
     macro_meta.val_.row_store_type_ = data_store_desc_->get_row_store_type();
-    macro_meta.val_.logic_id_.logic_version_ =
-        data_store_desc_->get_logical_version();
-    macro_meta.val_.logic_id_.column_group_idx_ =
-        data_store_desc_->get_table_cg_idx();
-    macro_meta.val_.logic_id_.tablet_id_ =
-        data_store_desc_->get_tablet_id().id();
+    macro_meta.val_.logic_id_.logic_version_ = data_store_desc_->get_logical_version();
+    macro_meta.val_.logic_id_.column_group_idx_ = data_store_desc_->get_table_cg_idx();
+    macro_meta.val_.logic_id_.tablet_id_ = data_store_desc_->get_tablet_id().id();
     macro_meta.val_.macro_id_ = ObIndexBlockRowHeader::DEFAULT_IDX_ROW_MACRO_ID;
     meta_row_.reuse();
     meta_row_allocator_.reuse();
@@ -3241,7 +3240,7 @@ int ObDataIndexBlockBuilder::append_macro_block(
     meta_row_.reuse();
     meta_row_allocator_.reuse();
     if (OB_FAIL(macro_meta.build_row(meta_row_, meta_row_allocator_, data_version))) {
-      STORAGE_LOG(WARN, "fail to build row", K(ret), K(macro_meta), K(data_version));
+      STORAGE_LOG(WARN, "fail to build row", K(ret), K(macro_meta), KDV(data_version));
     } else if (OB_FAIL(macro_meta_dumper_.append_row(meta_row_))) {
       STORAGE_LOG(WARN, "failed to append row to index block dumper", K(ret), K(meta_row_));
     } else if (micro_index_clustered()) {
@@ -3279,7 +3278,7 @@ int ObDataIndexBlockBuilder::write_meta_block(
   if (OB_UNLIKELY(!macro_row_desc.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid macro row desc", K(ret), K(macro_row_desc));
-  } else if (OB_FAIL(macro_block.get_macro_block_meta(macro_meta_))) {
+  } else if (OB_FAIL(macro_block.get_macro_block_meta(macro_meta_, data_version))) {
     STORAGE_LOG(WARN, "fail to get macro block meta", K(ret), K_(macro_meta));
   } else if (OB_UNLIKELY(macro_meta_.val_.micro_block_count_ !=
                          macro_row_desc.micro_block_count_)) {
@@ -3290,12 +3289,14 @@ int ObDataIndexBlockBuilder::write_meta_block(
     STORAGE_LOG(WARN, "fail to deep copy last rowkey", K(ret), K_(last_rowkey), K_(macro_meta));
   } else if (FALSE_IT(update_macro_meta_with_offset(macro_block.get_row_count(),
                                                     ddl_start_row_offset))) {
-  } else if (OB_FAIL(row_desc_to_meta(macro_row_desc, macro_meta_,
+  } else if (OB_FAIL(row_desc_to_meta(macro_row_desc,
+                                      data_version,
+                                      macro_meta_,
                                       meta_row_allocator_))) {
     STORAGE_LOG(WARN, "fail to convert macro row descriptor to meta", K(ret),
-                K(macro_row_desc));
+                K(macro_row_desc), KDV(data_version));
   } else if (OB_FAIL(macro_meta_.build_row(meta_row_, meta_row_allocator_, data_version))) {
-    STORAGE_LOG(WARN, "fail to build row", K(ret), K_(macro_meta), K(data_version));
+    STORAGE_LOG(WARN, "fail to build row", K(ret), K_(macro_meta), KDV(data_version));
   } else if (OB_FAIL(meta_block_writer_->append_row(meta_row_))) {
     STORAGE_LOG(WARN, "fail to append macro row", K(ret), K(meta_row_));
   } else if (OB_FAIL(meta_block_writer_->build_micro_block_desc(meta_block_desc))) {
@@ -3329,7 +3330,7 @@ int ObDataIndexBlockBuilder::append_meta_row_to_dumper(const MacroBlockId &block
     STORAGE_LOG(WARN, "invalid block id", K(ret), K(block_id));
   } else if (FALSE_IT(macro_meta_.val_.macro_id_ = block_id)) { // real macro id
   } else if (OB_FAIL(macro_meta_.build_row(meta_row_, meta_row_allocator_, data_version))) {
-    STORAGE_LOG(WARN, "fail to build row", K(ret), K_(macro_meta), K(data_version));
+    STORAGE_LOG(WARN, "fail to build row", K(ret), K_(macro_meta), KDV(data_version));
   } else if (OB_FAIL(macro_meta_dumper_.append_row(meta_row_))) {
     STORAGE_LOG(WARN, "failed to append row to index block dumper", K(ret), K_(macro_meta));
   }
@@ -4273,14 +4274,12 @@ int ObIndexBlockRebuilder::inner_get_macro_meta(
   } else if (OB_FAIL(tmp_macro_meta.parse_row(datum_row))) {
     STORAGE_LOG(WARN, "fail to parse meta row", K(ret), K(datum_row),
                 K(macro_header), K(macro_id));
+  } else if (FALSE_IT(tmp_macro_meta.val_.macro_id_ = macro_id)) {
+  } else if (OB_FAIL(tmp_macro_meta.deep_copy(tmp_meta_ptr, allocator))) {
+    STORAGE_LOG(WARN, "fail to deep copy", K(ret), K(datum_row),
+                K(macro_header), K(tmp_macro_meta));
   } else {
-    tmp_macro_meta.val_.macro_id_ = macro_id;
-    if (OB_FAIL(tmp_macro_meta.deep_copy(tmp_meta_ptr, allocator))) {
-      STORAGE_LOG(WARN, "fail to deep copy", K(ret), K(datum_row),
-                  K(macro_header), K(tmp_macro_meta));
-    } else {
-      macro_meta = tmp_meta_ptr;
-    }
+    macro_meta = tmp_meta_ptr;
   }
   return ret;
 }
@@ -4410,7 +4409,7 @@ int ObIndexBlockRebuilder::add_macro_block_meta(const ObDataMacroBlockMeta &macr
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "index tree root ctx not inited", K(ret), K_(is_inited));
   } else if (OB_FAIL(macro_meta.build_row(meta_row_, row_allocator_, data_version))) {
-    STORAGE_LOG(WARN, "fail to build row", K(ret), K(macro_meta), K(data_version));
+    STORAGE_LOG(WARN, "fail to build row", K(ret), K(macro_meta), KDV(data_version));
   } else if (OB_FAIL(meta_tree_dumper_->append_row(meta_row_))) {
     STORAGE_LOG(WARN, "failed to append row to index block dumper", K(ret), K(macro_meta));
   } else if (need_index_tree_dumper()) {
