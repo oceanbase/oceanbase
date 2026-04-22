@@ -731,6 +731,11 @@ int ObPLDependencyCheck::resolve_and_check_synonym(ObSchemaChecker &schema_check
           exist = true;
         }
       }
+      for (int64_t i = 0; !exist && i < stored_sys_schema_objs_.count(); i++) {
+        if (stored_sys_schema_objs_.at(i)->schema_id_ == object_id) {
+          exist = true;
+        }
+      }
       if (!exist) {
         ret = OB_OLD_SCHEMA_VERSION;
         LOG_WARN("exist object which name as current synonym", K(ret), K(object_id), K(synonym_info));
@@ -941,8 +946,8 @@ int ObPLDependencyCheck::match_dep_schema(const ObPLCacheBasicCtx &pc_ctx,
                  && !stored_schema_array.at(i)->match_compare(schema_array.at(i))) {
         // check whether common table name is same as system table in oracle mode
         is_same = false;
-        set_expired_schema_version(*stored_schema_objs_.at(i));
-        LOG_WARN("mismatched schema objs", K(*stored_schema_objs_.at(i)), K(stored_schema_objs_.at(i)), K(i));
+        set_expired_schema_version(*stored_schema_array.at(i));
+        LOG_WARN("mismatched schema objs", K(*stored_schema_array.at(i)), K(stored_schema_array.at(i)), K(i));
       } else {
         // do nothing
       }
