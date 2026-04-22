@@ -173,9 +173,9 @@ private:
 
   static int64_t get_scan_range_count(const ObIArray<ObNewRange> &ranges);
 
-  static int check_path_can_use_storage_estimation(const AccessPath *path,
-                                                   bool &can_use,
-                                                   ObOptimizerContext &ctx);
+  static int check_paths_can_use_storage_estimation(common::ObIArray<AccessPath*> &paths,
+                                                    bool &can_use,
+                                                    ObOptimizerContext &ctx);
 
   static int choose_leader_replica(const ObCandiTabletLoc &part_loc_info,
                                    const bool can_use_remote,

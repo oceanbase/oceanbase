@@ -1689,8 +1689,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
-      dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       DISTRIBUTED
   Note:
@@ -1790,8 +1790,8 @@ Optimization Info:
       dop_method:Table DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
-      dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       DISTRIBUTED
   Parameters:
@@ -1895,7 +1895,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      estimation method:[DEFAULT]
   Plan Type:
       DISTRIBUTED
   Note:
@@ -2005,8 +2005,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
-      dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   t2:
       table_rows:22
       physical_range_rows:8
@@ -2016,8 +2016,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
-      dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       DISTRIBUTED
   Note:
@@ -2127,8 +2127,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
-      dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   t2:
       table_rows:22
       physical_range_rows:8
@@ -2138,8 +2138,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
-      dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       DISTRIBUTED
   Note:
@@ -2249,8 +2249,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
-      dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   t2:
       table_rows:22
       physical_range_rows:8
@@ -2260,8 +2260,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
-      dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       DISTRIBUTED
   Note:
@@ -2371,8 +2371,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
-      dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   t2:
       table_rows:22
       physical_range_rows:8
@@ -2382,8 +2382,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
-      dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       DISTRIBUTED
   Note:
@@ -2502,8 +2502,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
-      dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   t2:
       table_rows:22
       physical_range_rows:8
@@ -2513,8 +2513,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
-      dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -2525,7 +2525,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      estimation method:[DEFAULT]
   Plan Type:
       DISTRIBUTED
   Note:
@@ -2686,7 +2686,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      estimation method:[DEFAULT]
   t2:
       table_rows:22
       physical_range_rows:8
@@ -2696,8 +2696,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
-      dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -2708,7 +2708,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      estimation method:[DEFAULT]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -2719,7 +2719,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      estimation method:[DEFAULT]
   t2:
       table_rows:22
       physical_range_rows:8
@@ -2729,8 +2729,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
-      dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -2741,7 +2741,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      estimation method:[DEFAULT]
   t2:
       table_rows:22
       physical_range_rows:8
@@ -2751,8 +2751,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
-      dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       DISTRIBUTED
   Parameters:
@@ -2914,8 +2914,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
-      dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   t2:
       table_rows:22
       physical_range_rows:8
@@ -2925,8 +2925,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
-      dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -2937,7 +2937,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      estimation method:[DEFAULT]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -2948,7 +2948,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      estimation method:[DEFAULT]
   t2:
       table_rows:22
       physical_range_rows:8
@@ -2958,8 +2958,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
-      dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -2970,7 +2970,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      estimation method:[DEFAULT]
   t2:
       table_rows:22
       physical_range_rows:8
@@ -2980,8 +2980,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
-      dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       DISTRIBUTED
   Parameters:
@@ -3144,8 +3144,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
-      dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   t2:
       table_rows:22
       physical_range_rows:8
@@ -3155,8 +3155,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
-      dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -3167,7 +3167,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      estimation method:[DEFAULT]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -3178,7 +3178,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      estimation method:[DEFAULT]
   t2:
       table_rows:22
       physical_range_rows:8
@@ -3188,8 +3188,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
-      dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   t2:
       table_rows:22
       physical_range_rows:1
@@ -3200,7 +3200,7 @@ Optimization Info:
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
       dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      estimation method:[DEFAULT]
   t2:
       table_rows:22
       physical_range_rows:8
@@ -3210,8 +3210,8 @@ Optimization Info:
       dop_method:DAS DOP
       avaiable_index_name:[t2]
       stats info:[version=1970-01-01 08:00:00.000000, is_locked=0, is_expired=0]
-      dynamic sampling level:0
-      estimation method:[DEFAULT, STORAGE]
+      dynamic sampling level:1
+      estimation method:[DYNAMIC SAMPLING BASIC]
   Plan Type:
       DISTRIBUTED
   Parameters:

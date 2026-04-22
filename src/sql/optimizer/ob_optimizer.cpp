@@ -889,7 +889,10 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     LOG_WARN("failed to get pushdown storage level opt param", K(ret));
   } else if (OB_FAIL(stmt.check_has_cursor_expression(has_cursor_expr))) {
     LOG_WARN("fail to check cursor expression info", K(ret));
-  } else if (OB_FAIL(session.is_storage_estimation_enabled(storage_estimation_enabled))) {
+  } else if (OB_FAIL(opt_params.get_sys_var(ObOptParamHint::_ENABLE_STORAGE_CARDINALITY_ESTIMATION,
+                                            &session,
+                                            share::SYS_VAR__ENABLE_STORAGE_CARDINALITY_ESTIMATION,
+                                            storage_estimation_enabled))) {
     LOG_WARN("fail to get storage_estimation_enabled", K(ret));
   } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ENABLE_DAS_KEEP_ORDER, das_keep_order_enabled))) {
     LOG_WARN("failed to check das keep order enabled", K(ret));

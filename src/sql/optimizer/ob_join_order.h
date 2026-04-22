@@ -639,7 +639,6 @@ class Path
         for_update_(false),
         use_skip_scan_(OptSkipScanState::SS_UNSET),
         use_column_store_(false),
-        is_valid_inner_path_(false),
         index_prefix_(-1),
         can_batch_rescan_(false),
         can_das_dynamic_part_pruning_(-1),
@@ -763,6 +762,13 @@ class Path
         range_provider->get_unprecise_range_exprs().empty();
     }
 
+    bool new_range_with_exec_param() const {
+      return (get_query_range_provider() != NULL &&
+              get_query_range_provider()->is_new_query_range() &&
+              (get_query_range_provider()->has_exec_param() ||
+               get_query_range_provider()->has_fake_const_udf()));
+    }
+
     TO_STRING_KV(K_(table_id),
                  K_(ref_table_id),
                  K_(index_id),
@@ -811,8 +817,6 @@ class Path
     bool for_update_;
     OptSkipScanState use_skip_scan_;
     bool use_column_store_;
-    // mark this access path is inner path and contribute query range
-    bool is_valid_inner_path_;
     int64_t index_prefix_;
     bool can_batch_rescan_;
     int64_t can_das_dynamic_part_pruning_;

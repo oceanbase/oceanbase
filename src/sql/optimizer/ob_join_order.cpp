@@ -9634,6 +9634,7 @@ int AccessPath::assign(const AccessPath &other, common::ObIAllocator *allocator)
   use_column_store_ = other.use_column_store_;
   pre_query_range_ = NULL;
   pre_range_graph_ = NULL;
+  index_prefix_ = other.index_prefix_;
   can_batch_rescan_ = other.can_batch_rescan_;
   can_das_dynamic_part_pruning_ = other.can_das_dynamic_part_pruning_;
   is_ordered_by_pk_ = other.is_ordered_by_pk_;
@@ -21831,6 +21832,9 @@ int ObJoinOrder::find_best_inner_nl_path(const ObIArray<Path*> &inner_paths,
     if (OB_SUCC(ret) && need_replace) {
       best_nl_path = nl_path;
     }
+  }
+  if (OB_NOT_NULL(best_nl_path)) {
+    OPT_TRACE("choose best inner nl path", static_cast<void*>(best_nl_path), "with cost", best_nl_path->get_cost());
   }
   return ret;
 }
