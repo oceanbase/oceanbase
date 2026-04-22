@@ -22,7 +22,6 @@ using namespace sql;
 using namespace sql::dtl;
 namespace sql
 {
-
 OB_SERIALIZE_MEMBER((ObPxMSReceiveVecOpInput, ObPxReceiveOpInput));
 
 OB_SERIALIZE_MEMBER((ObPxMSReceiveVecSpec, ObPxReceiveSpec),
@@ -169,6 +168,9 @@ int ObPxMSReceiveVecOp::release_merge_inputs()
 {
   int ret = OB_SUCCESS;
   int release_merge_sort_ret = OB_SUCCESS;
+  if (merge_inputs_.count() > MAX_INPUT_NUMBER) {
+    LOG_TRACE("too much local order inputs", K(merge_inputs_.count()));
+  }
   while (0 < merge_inputs_.count()) {
     MergeSortInput *msi = NULL;
     if (OB_SUCCESS != (release_merge_sort_ret = merge_inputs_.pop_back(msi))) {
@@ -948,9 +950,6 @@ int ObPxMSReceiveVecOp::get_all_rows_from_channels(ObPhysicalPlanCtx *phy_plan_c
                            && OB_FAIL(full_dump_array.push_back(cur_temp_store))) {
                   LOG_WARN("push back failed", K(ret));
                 // create a new local input
-                } else if (OB_UNLIKELY(merge_inputs_.count() > MAX_INPUT_NUMBER)) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("too much local order inputs", K(ret));
                 } else if (OB_FAIL(new_local_order_input(new_msi))) {
                   LOG_WARN("failed to create new local order input", K(ret));
                 } else {
@@ -1259,14 +1258,14 @@ int ObPxMSReceiveVecOp::MergeSortInput::need_dump(ObSqlMemMgrProcessor &sql_mem_
 {
   int ret = OB_SUCCESS;
   need_dump = false;
-  if (sql_mem_processor.get_data_size() > sql_mem_processor.get_mem_bound()
+  if (alloc.used() > sql_mem_processor.get_mem_bound()
           && GCONF.is_sql_operator_dump_enabled()
           && OB_FAIL(sql_mem_processor.extend_max_memory_size(
             &alloc,
             [&](int64_t max_memory_size) {
-              return sql_mem_processor.get_data_size() > max_memory_size;
+              return alloc.used() > max_memory_size;
             },
-            need_dump, sql_mem_processor.get_data_size()))) {
+            need_dump, alloc.used()))) {
     LOG_WARN("failed to extend max memory size", K(ret));
   }
   return ret;
