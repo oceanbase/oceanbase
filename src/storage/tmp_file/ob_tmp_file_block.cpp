@@ -7,6 +7,7 @@
 
 #include "storage/tmp_file/ob_tmp_file_block.h"
 #include "storage/tmp_file/ob_tmp_file_block_manager.h"
+#include "storage/tmp_file/ob_tmp_file_block_handle_list.h"
 #include "storage/tmp_file/ob_tmp_file_write_cache.h"
 #include "storage/tmp_file/ob_tmp_file_manager.h"
 #include "storage/blocksstable/ob_block_manager.h"
@@ -743,7 +744,12 @@ int ObTmpFileBlock::init_flushing_page_iterator(ObTmpFileBlockFlushingPageIterat
 // each time the block could only be flushed once.
 // otherwise, when iterate flush priority lists, the order might be wrong due to the position of block in the list
 // might be modified by other operations.
-int ObTmpFileBlock::set_flushing_status(bool &lock_succ)
+//
+// Removing the node from `list` MUST happen while the block write lock is still held.
+// Otherwise the lock would be released first, and a concurrent thread trying to
+// append the node to another level list would fail because the node is still on the old list.
+
+int ObTmpFileBlock::try_pick_for_flushing(ObTmpFileBlockHandleList &list, bool &lock_succ)
 {
   int ret = OB_SUCCESS;
   lock_succ = lock_.try_wrlock();
@@ -754,14 +760,16 @@ int ObTmpFileBlock::set_flushing_status(bool &lock_succ)
     } else if (OB_UNLIKELY(is_in_flushing_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("tmp file block is already in flushing", KR(ret), KPC(this));
+    } else if (OB_FAIL(list.remove_without_lock_(ObTmpFileBlockHandle(this)))) {
+      LOG_ERROR("fail to remove handle from flush priority list", KR(ret), KPC(this));
     } else {
       is_in_flushing_ = true;
     }
     int tmp_ret = OB_SUCCESS;
     if (OB_TMP_FAIL(lock_.unlock())) {
       LOG_ERROR("fail to unlock", KR(tmp_ret), KPC(this));
+      ob_abort();
     }
-    ret = ret == OB_SUCCESS ? tmp_ret : ret;
   }
 
   LOG_DEBUG("set flushing status over", KR(ret), K(lock_succ), KPC(this));
@@ -781,8 +789,6 @@ int ObTmpFileBlock::flush_pages_succ(const int64_t begin_page_id, const int64_t 
   } else if (OB_FAIL(flushed_page_bitmap_.set_bitmap_batch(
                      begin_page_id, page_num, true))) {
     LOG_WARN("fail to set bitmap", KR(ret), K(begin_page_id), K(page_num), KPC(this));
-  } else if (reinsert_into_flush_prio_mgr_()) {
-    LOG_DEBUG("reinsert into flush prio mgr", K(begin_page_id), K(page_num), KPC(this));
   }
 
   LOG_DEBUG("flush pages succ", KR(ret), K(begin_page_id), K(page_num), KPC(this));
