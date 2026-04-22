@@ -483,20 +483,14 @@ int ObSchemaMgrCache::get_slot_info(common::ObIAllocator &allocator, common::ObI
 }
 
 int ObSchemaMgrCache::find_dst_item_for_put(const uint64_t tenant_id,
+                                             const int64_t max_schema_slot_num,
                                              ObSchemaMgrItem *&dst_item,
                                              int64_t &target_pos)
 {
   int ret = OB_SUCCESS;
   bool is_stop = false;
-  int64_t max_schema_slot_num = max_cached_num_;
   dst_item = NULL;
   target_pos = -1;
-  if (!ObSchemaService::g_liboblog_mode_) {
-    omt::ObTenantConfigGuard tenant_config(OTC_MGR.get_tenant_config_with_lock(tenant_id));
-    if (tenant_config.is_valid()) {
-      max_schema_slot_num = tenant_config->_max_schema_slot_num;
-    }
-  }
   // 1. In order to avoid the repeated adjustment of the configuration item _max_schema_slot_num that may cause problems
   //  that may be caused by the invisible version in the history, max_cached_num_ can only be increased during
   //  the operation of the observer. The memory release frequency of the schema mgr is controlled by _max_schema_slot_num.
@@ -579,11 +573,21 @@ int ObSchemaMgrCache::put(ObSchemaMgr *schema_mgr,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant_id", KR(ret), "tenant_id", schema_mgr->get_tenant_id());
   } else {
-    TCWLockGuard guard(lock_);
     const uint64_t tenant_id = schema_mgr->get_tenant_id();
+    // get_tenant_config_with_lock() acquires ObTenantConfigMgr::rwlock_ read lock,
+    // must be called before TCWLockGuard(lock_) to avoid AB-BA deadlock with del_tenant_config()
+    // which acquires rwlock_ write lock first then lock_ read lock via check_if_tenant_has_been_dropped().
+    int64_t max_schema_slot_num = max_cached_num_;
+    if (!ObSchemaService::g_liboblog_mode_) {
+      omt::ObTenantConfigGuard tenant_config(OTC_MGR.get_tenant_config_with_lock(tenant_id));
+      if (tenant_config.is_valid()) {
+        max_schema_slot_num = tenant_config->_max_schema_slot_num;
+      }
+    }
+    TCWLockGuard guard(lock_);
     ObSchemaMgrItem *dst_item = NULL;
     int64_t target_pos = -1;
-    if (OB_FAIL(find_dst_item_for_put(tenant_id, dst_item, target_pos))){
+    if (OB_FAIL(find_dst_item_for_put(tenant_id, max_schema_slot_num, dst_item, target_pos))){
       LOG_WARN("fail to find dst item for put", KR(ret), K(dst_item));
     } else if (OB_ISNULL(dst_item)) {
       ret = OB_ERR_UNEXPECTED;
