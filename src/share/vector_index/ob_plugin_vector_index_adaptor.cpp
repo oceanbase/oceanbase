@@ -2835,20 +2835,25 @@ int ObPluginVectorIndexAdaptor::complete_delta_buffer_table_data(ObVectorQueryAd
         LOG_INFO("[VEC_INDEX][COMPLETE_DELTA] SYCN_DELTA_batch_end", KP(this), K(inc_tablet_id_), K(incr_data_), K(ctx->vec_data_));
         // finish delta memdata complete, set has complete to true
         if (is_mem_data_init_atomic(VIRT_INC)) {
-          incr_data_->has_complete_ = true;
-          LOG_INFO("[VEC_INDEX][COMPLETE_DELTA] set incr data complete to true", KPC(this), K(lbt()));
-        }
-        if (ctx->get_complete_delta_lock() == nullptr || ctx->get_complete_delta_lock() != &incr_data_->complete_lock_) {
-          ret = OB_ERR_UNEXPECTED;
-          FLOG_WARN("[VEC_INDEX][COMPLETE_DELTA] ctx complete delta lock is nullptr or complete index lock is not incr data complete lock",
-            K(ret), K(ctx), K(ctx->get_complete_delta_lock()), K(&incr_data_->complete_lock_), KPC(this), K(lbt()));
+          if (ctx->get_is_refresh_adaptor()) {
+            LOG_INFO("[VEC_INDEX][COMPLETE_DELTA] no need to set incr data complete for refresh adaptor or has tx before switch leader",
+              K(ctx->get_is_refresh_adaptor()), KPC(this), K(lbt()));
+          } else {
+            incr_data_->has_complete_ = true;
+            LOG_INFO("[VEC_INDEX][COMPLETE_DELTA] set incr data complete to true", K(ctx->get_is_refresh_adaptor()), KPC(this), K(lbt()));
+          }
+          if (ctx->get_complete_delta_lock() == nullptr || ctx->get_complete_delta_lock() != &incr_data_->complete_lock_) {
+            ret = OB_ERR_UNEXPECTED;
+            FLOG_WARN("[VEC_INDEX][COMPLETE_DELTA] ctx complete delta lock is nullptr or complete index lock is not incr data complete lock",
+              K(ret), K(ctx), K(ctx->get_complete_delta_lock()), K(&incr_data_->complete_lock_), KPC(this), K(lbt()));
+            ret = OB_SUCCESS;
+          }
+          if (OB_FAIL(incr_data_->complete_lock_.unlock())) {
+            LOG_WARN("[VEC_INDEX][COMPLETE_DELTA] unlock complete delta lock failed", K(ret), K(&incr_data_->complete_lock_), KPC(this), K(lbt()));
+          }
+          ctx->set_complete_delta_lock(nullptr);
           ret = OB_SUCCESS;
         }
-        if (OB_FAIL(incr_data_->complete_lock_.unlock())) {
-          LOG_WARN("[VEC_INDEX][COMPLETE_DELTA] unlock complete delta lock failed", K(ret), K(&incr_data_->complete_lock_), KPC(this), K(lbt()));
-        }
-        ctx->set_complete_delta_lock(nullptr);
-        ret = OB_SUCCESS;
       }
     }
   }
