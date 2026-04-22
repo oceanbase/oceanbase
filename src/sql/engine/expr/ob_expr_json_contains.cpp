@@ -155,7 +155,7 @@ int ObExprJsonContains::json_contains_object(ObIJsonBase* json_target, ObIJsonBa
   int ret = OB_SUCCESS;
   if (json_candidate->json_type() != ObJsonNodeType::J_OBJECT) {
     *result = false;
-  } else if (json_target->element_count() == 0 && json_candidate->element_count() == 0) {
+  } else if (json_candidate->element_count() == 0) {
     *result = true;
   } else {
     JsonObjectIterator iter_t = json_target->object_iterator();
