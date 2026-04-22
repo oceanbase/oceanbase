@@ -32,6 +32,7 @@
 #include "share/external_table/ob_external_table_file_mgr.h"
 #include "share/balance/ob_scheduled_trigger_partition_balance.h" // ObScheduledTriggerPartitionBalance
 #include "share/balance/ob_object_balance_weight_operator.h" // ObObjectBalanceWeightOperator
+#include "share/ob_balance_define.h" // need_balance_table
 #include "storage/mview/ob_mview_sched_job_utils.h"
 #include "pl/ob_pl_persistent.h"
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
@@ -2516,6 +2517,76 @@ int ObDDLOperator::add_table_subpartitions(const ObTableSchema &orig_table_schem
   return ret;
 }
 
+int ObDDLOperator::copy_balance_weights_for_truncate(
+    ObISQLClient &client,
+    const uint64_t tenant_id,
+    const ObTableSchema &orig_table_schema,
+    const ObTableSchema &new_table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  const uint64_t src_table_id = orig_table_schema.get_table_id();
+  const uint64_t dst_table_id = new_table_schema.get_table_id();
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+      || OB_INVALID_ID == src_table_id
+      || OB_INVALID_ID == dst_table_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(src_table_id), K(dst_table_id));
+  } else if (!share::need_balance_table(orig_table_schema)) {
+    // only user tables, global index tables and tmp tables support balance weight
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("fail to get tenant data version", KR(ret), K(tenant_id));
+  } else if (data_version < DATA_VERSION_4_4_2_2) {
+    LOG_INFO("skip copy balance weight, data version not ready",
+             K(tenant_id), K(src_table_id), K(dst_table_id), KDV(data_version));
+  } else {
+    const bool table_id_changed = src_table_id != dst_table_id;
+    // copy table-level weight when table_id changes
+    if (table_id_changed
+        && OB_FAIL(ObObjectBalanceWeightOperator::copy_table_level_weight(
+            client, tenant_id, src_table_id, dst_table_id))) {
+      LOG_WARN("copy table level weight failed", KR(ret),
+               K(tenant_id), K(src_table_id), K(dst_table_id));
+    }
+    // copy partition-level weights for partitioned tables
+    if (OB_SUCC(ret) && orig_table_schema.is_partitioned_table()) {
+      const int64_t part_num = orig_table_schema.get_partition_num();
+      ObPartition **orig_parts = orig_table_schema.get_part_array();
+      ObPartition **new_parts = new_table_schema.get_part_array();
+      ObArray<ObObjectID> old_part_ids;
+      ObArray<ObObjectID> new_part_ids;
+      bool part_ids_changed = false;
+      if (OB_ISNULL(orig_parts) || OB_ISNULL(new_parts)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("part array is null", KR(ret), KP(orig_parts), KP(new_parts));
+      } else if (OB_UNLIKELY(part_num != new_table_schema.get_partition_num())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("partition num mismatch", KR(ret), K(part_num),
+                 "new_part_num", new_table_schema.get_partition_num());
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < part_num; i++) {
+        if (OB_ISNULL(orig_parts[i]) || OB_ISNULL(new_parts[i])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("partition is null", KR(ret), K(i), KP(orig_parts[i]), KP(new_parts[i]));
+        } else if (OB_FAIL(old_part_ids.push_back(orig_parts[i]->get_object_id()))) {
+          LOG_WARN("push_back failed", KR(ret), K(i));
+        } else if (OB_FAIL(new_part_ids.push_back(new_parts[i]->get_object_id()))) {
+          LOG_WARN("push_back failed", KR(ret), K(i));
+        } else if (orig_parts[i]->get_object_id() != new_parts[i]->get_object_id()) {
+          part_ids_changed = true;
+        }
+      }
+      if (OB_SUCC(ret) && (table_id_changed || part_ids_changed)
+          && OB_FAIL(ObObjectBalanceWeightOperator::copy_part_level_weights(
+          client, tenant_id, src_table_id, dst_table_id, old_part_ids, new_part_ids))) {
+        LOG_WARN("copy_part_level_weights failed", KR(ret), K(tenant_id),
+                 K(src_table_id), K(dst_table_id));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLOperator::truncate_table(const ObString *ddl_stmt_str,
                                   const share::schema::ObTableSchema &orig_table_schema,
                                   const share::schema::ObTableSchema &new_table_schema,
@@ -2524,7 +2595,8 @@ int ObDDLOperator::truncate_table(const ObString *ddl_stmt_str,
   int ret = OB_SUCCESS;
   bool is_truncate_table = true;
   bool is_truncate_partition = false;
-  uint64_t table_id = new_table_schema.get_table_id();
+  const uint64_t tenant_id = orig_table_schema.get_tenant_id();
+  const uint64_t table_id = new_table_schema.get_table_id();
   uint64_t schema_version = new_table_schema.get_schema_version();
   ObSchemaOperationType operation_type = OB_DDL_TRUNCATE_TABLE;
   ObSchemaService *schema_service = schema_service_.get_schema_service();
@@ -2564,6 +2636,13 @@ int ObDDLOperator::truncate_table(const ObString *ddl_stmt_str,
                                                     false,
                                                     ddl_stmt_str))) {
     LOG_WARN("failed to update table schema attribute", KR(ret), K(table_id), K(schema_version));
+  }
+  // Try copy and keep balance weights; failure is non-fatal.
+  int tmp_ret = OB_SUCCESS;
+  if (OB_SUCC(ret) && OB_TMP_FAIL(copy_balance_weights_for_truncate(
+      trans, tenant_id, orig_table_schema, new_table_schema))) {
+    LOG_WARN("failed to copy balance weight on truncate table, weight will be cleared",
+              KR(tmp_ret), K(tenant_id), K(table_id));
   }
   return ret;
 }
@@ -2716,6 +2795,7 @@ int ObDDLOperator::truncate_table_partitions(const share::schema::ObTableSchema 
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = orig_table_schema.get_tenant_id();
+  const uint64_t table_id = orig_table_schema.get_table_id();
   int64_t new_schema_version = OB_INVALID_VERSION;
   ObSchemaService *schema_service = schema_service_.get_schema_service();
   if (OB_ISNULL(schema_service)) {
@@ -2723,13 +2803,22 @@ int ObDDLOperator::truncate_table_partitions(const share::schema::ObTableSchema 
     LOG_WARN("schema_service is NULL", KR(ret));
   } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
     LOG_WARN("fail to gen new schema_version", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(schema_service->get_table_sql_service().truncate_part_info(
-                     trans,
-                     orig_table_schema,
-                     inc_table_schema,
-                     del_table_schema,
-                     new_schema_version))) {
-    LOG_WARN("delete inc part info failed", KR(ret));
+  } else {
+    if (OB_FAIL(schema_service->get_table_sql_service().truncate_part_info(
+                   trans,
+                   orig_table_schema,
+                   inc_table_schema,
+                   del_table_schema,
+                   new_schema_version))) {
+      LOG_WARN("delete inc part info failed", KR(ret));
+    }
+    // Try copy and keep balance weights; failure is non-fatal.
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCC(ret) && OB_TMP_FAIL(copy_balance_weights_for_truncate(
+        trans, tenant_id, del_table_schema, inc_table_schema))) {
+      LOG_WARN("failed to copy balance weight on truncate partition, weight will be cleared",
+                KR(tmp_ret), K(tenant_id), K(table_id));
+    }
   }
 
   return ret;

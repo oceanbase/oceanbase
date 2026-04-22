@@ -103,6 +103,31 @@ public:
       const uint64_t tenant_id,
       ObIArray<ObObjectBalanceWeight> &obj_balance_weights);
 
+  // Copy partition-level weight records from old_part_ids to new_part_ids.
+  // src_table_id is used in WHERE to read old records;
+  // dst_table_id is used in INSERT to write new records.
+  // When src_table_id == dst_table_id (e.g., truncate partition), only
+  // partition object_ids change. When they differ (e.g., non-parallel truncate table),
+  // both table_id and partition object_ids change.
+  // Old records are NOT deleted; they will be cleaned up by the background
+  // try_clear_tenant_expired_obj_weight task.
+  static int copy_part_level_weights(
+      ObISQLClient &client,
+      const uint64_t tenant_id,
+      const uint64_t src_table_id,
+      const uint64_t dst_table_id,
+      const ObIArray<ObObjectID> &old_part_ids,
+      const ObIArray<ObObjectID> &new_part_ids);
+
+  // Copy the table-level weight record (partition_id = -1, subpartition_id = -1)
+  // from src_table_id to dst_table_id. Used when truncate table changes table_id.
+  // No-op if no table-level weight exists for src_table_id.
+  static int copy_table_level_weight(
+      ObISQLClient &client,
+      const uint64_t tenant_id,
+      const uint64_t src_table_id,
+      const uint64_t dst_table_id);
+
 private:
   static int fill_dml_with_key_(
       const ObObjectBalanceWeightKey &obj_key,
@@ -114,6 +139,15 @@ private:
   static int inner_batch_remove_by_sql_(
       ObISQLClient &client,
       const ObIArray<ObObjectBalanceWeightKey> &obj_keys,
+      const int64_t start_idx,
+      const int64_t end_idx);
+  static int inner_copy_part_weights_batch_(
+      ObISQLClient &client,
+      const uint64_t tenant_id,
+      const uint64_t src_table_id,
+      const uint64_t dst_table_id,
+      const ObIArray<ObObjectID> &old_part_ids,
+      const ObIArray<ObObjectID> &new_part_ids,
       const int64_t start_idx,
       const int64_t end_idx);
 };

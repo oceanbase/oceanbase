@@ -384,5 +384,135 @@ int ObObjectBalanceWeightOperator::construct_obj_balance_weight_(
   return ret;
 }
 
+int ObObjectBalanceWeightOperator::copy_part_level_weights(
+    ObISQLClient &client,
+    const uint64_t tenant_id,
+    const uint64_t src_table_id,
+    const uint64_t dst_table_id,
+    const ObIArray<ObObjectID> &old_part_ids,
+    const ObIArray<ObObjectID> &new_part_ids)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+      || OB_INVALID_ID == src_table_id
+      || OB_INVALID_ID == dst_table_id
+      || old_part_ids.count() != new_part_ids.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(src_table_id), K(dst_table_id),
+             "old_count", old_part_ids.count(), "new_count", new_part_ids.count());
+  } else if (!old_part_ids.empty()) {
+    const int64_t BATCH_SIZE = GCONF.tablet_meta_table_scan_batch_count;
+    int64_t total = old_part_ids.count();
+    for (int64_t start = 0; OB_SUCC(ret) && start < total; start += BATCH_SIZE) {
+      int64_t end = min(start + BATCH_SIZE, total);
+      if (OB_FAIL(inner_copy_part_weights_batch_(
+          client, tenant_id, src_table_id, dst_table_id,
+          old_part_ids, new_part_ids, start, end))) {
+        LOG_WARN("fail to copy part weights batch", KR(ret),
+                 K(tenant_id), K(src_table_id), K(dst_table_id), K(start), K(end));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObObjectBalanceWeightOperator::inner_copy_part_weights_batch_(
+    ObISQLClient &client,
+    const uint64_t tenant_id,
+    const uint64_t src_table_id,
+    const uint64_t dst_table_id,
+    const ObIArray<ObObjectID> &old_part_ids,
+    const ObIArray<ObObjectID> &new_part_ids,
+    const int64_t start_idx,
+    const int64_t end_idx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(start_idx < 0
+      || start_idx >= end_idx
+      || end_idx > old_part_ids.count()
+      || end_idx > new_part_ids.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid batch range", KR(ret), K(start_idx), K(end_idx),
+             "old_count", old_part_ids.count(), "new_count", new_part_ids.count());
+  } else {
+    int64_t affected_rows = 0;
+    ObSqlString sql;
+    if (OB_FAIL(sql.assign_fmt(
+        "INSERT INTO %s (table_id, partition_id, subpartition_id, weight)"
+        " SELECT %lu, CASE partition_id",
+        OB_ALL_OBJECT_BALANCE_WEIGHT_TNAME, dst_table_id))) {
+      LOG_WARN("sql assign_fmt failed", KR(ret));
+    }
+    for (int64_t i = start_idx; OB_SUCC(ret) && i < end_idx; i++) {
+      if (OB_FAIL(sql.append_fmt(" WHEN %lu THEN %lu", old_part_ids.at(i), new_part_ids.at(i)))) {
+        LOG_WARN("sql append_fmt failed", KR(ret), K(i));
+      }
+    }
+    if (FAILEDx(sql.append_fmt(
+        " END, subpartition_id, weight FROM %s"
+        " WHERE table_id = %lu AND partition_id IN (",
+        OB_ALL_OBJECT_BALANCE_WEIGHT_TNAME, src_table_id))) {
+      LOG_WARN("sql append_fmt failed", KR(ret));
+    }
+    for (int64_t i = start_idx; OB_SUCC(ret) && i < end_idx; i++) {
+      if (OB_FAIL(sql.append_fmt("%s%lu", (i == start_idx ? "" : ","), old_part_ids.at(i)))) {
+        LOG_WARN("sql append_fmt failed", KR(ret), K(i));
+      }
+    }
+    if (FAILEDx(sql.append_fmt(") AND subpartition_id = %ld"
+        " ON DUPLICATE KEY UPDATE weight = VALUES(weight)",
+        static_cast<int64_t>(OB_INVALID_ID)))) {
+      LOG_WARN("sql append failed", KR(ret));
+    } else if (OB_FAIL(client.write(tenant_id, sql.ptr(), affected_rows))) {
+      LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(src_table_id),
+               K(dst_table_id), K(sql));
+    } else if (affected_rows > 0) {
+      LOG_INFO("copy partition balance weight batch done", KR(ret),
+                K(tenant_id), K(src_table_id), K(dst_table_id),
+                K(start_idx), K(end_idx), K(affected_rows));
+    }
+  }
+  return ret;
+}
+
+int ObObjectBalanceWeightOperator::copy_table_level_weight(
+    ObISQLClient &client,
+    const uint64_t tenant_id,
+    const uint64_t src_table_id,
+    const uint64_t dst_table_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id)
+      || OB_INVALID_ID == src_table_id
+      || OB_INVALID_ID == dst_table_id
+      || src_table_id == dst_table_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid args", KR(ret), K(tenant_id), K(src_table_id), K(dst_table_id));
+  } else {
+    int64_t affected_rows = 0;
+    ObSqlString sql;
+    if (OB_FAIL(sql.assign_fmt(
+        "INSERT INTO %s (table_id, partition_id, subpartition_id, weight)"
+        " SELECT %lu, partition_id, subpartition_id, weight FROM %s"
+        " WHERE table_id = %lu AND partition_id = %ld AND subpartition_id = %ld"
+        " ON DUPLICATE KEY UPDATE weight = VALUES(weight)",
+        OB_ALL_OBJECT_BALANCE_WEIGHT_TNAME,
+        dst_table_id,
+        OB_ALL_OBJECT_BALANCE_WEIGHT_TNAME,
+        src_table_id,
+        static_cast<int64_t>(OB_INVALID_ID),
+        static_cast<int64_t>(OB_INVALID_ID)))) {
+      LOG_WARN("sql assign_fmt failed", KR(ret));
+    } else if (OB_FAIL(client.write(tenant_id, sql.ptr(), affected_rows))) {
+      LOG_WARN("execute sql failed", KR(ret), K(tenant_id), K(src_table_id),
+               K(dst_table_id), K(sql));
+    } else if (affected_rows > 0) {
+      LOG_INFO("copy table level balance weight done",
+               K(tenant_id), K(src_table_id), K(dst_table_id), K(affected_rows));
+    }
+  }
+  return ret;
+}
+
 } // end namespace share
 } // end namespace oceanbase
