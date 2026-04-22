@@ -267,6 +267,7 @@ ObExecContext::~ObExecContext()
     lake_table_file_map_->destroy();
     lake_table_file_map_ = NULL;
   }
+  deterministic_udf_cache_allocator_.reset();
   need_try_serialize_package_var_ = false;
   if (odps_partition_str_to_file_size_.created()) {
     odps_partition_str_to_file_size_.destroy();
@@ -298,8 +299,6 @@ void ObExecContext::reset_op_ctx()
 {
   reset_expr_op();
   op_kit_store_.destroy();
-
-  deterministic_udf_cache_allocator_.reset();
 }
 
 void ObExecContext::reset_op_env()
@@ -318,6 +317,7 @@ void ObExecContext::reset_op_env()
   if (OB_NOT_NULL(udf_ctx_mgr_)) {
     udf_ctx_mgr_->reset();
   }
+  deterministic_udf_cache_allocator_.reset();
 }
 int ObExecContext::init_phy_op(const uint64_t phy_op_size)
 {
