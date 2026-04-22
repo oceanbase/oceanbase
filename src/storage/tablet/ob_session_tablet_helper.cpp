@@ -26,6 +26,7 @@ namespace oceanbase
 {
 namespace storage
 {
+ERRSIM_POINT_DEF(EN_SESSION_TABLET_GC_FAILED);
 
 int serialize_inc_schema(
     const uint64_t tenant_id,
@@ -402,70 +403,20 @@ int ObSessionTabletDeleteHelper::do_work()
   } else {
     common::ObSEArray<const share::schema::ObTableSchema *, 1> table_schemas_for_delete;
     common::ObSEArray<common::ObTabletID, 1> tablet_ids_for_delete;
+    common::ObSEArray<ObSessionTabletInfo *, 1> schema_missing_tablet_infos;
     share::schema::ObSchemaGetterGuard schema_guard;
+    const bool is_atomic_batch = true;
     if (OB_FAIL(schema_service->get_tenant_schema_guard(tenant_id_, schema_guard))) {
       LOG_WARN("failed to get schema guard", KR(ret), K(tenant_id_));
-    }
-    ARRAY_FOREACH(tablet_infos_, idx) {
-      const share::schema::ObTableSchema *table_schema = nullptr;
-      observer::ObInnerSQLConnection *conn = NULL;
-      common::ObSEArray<common::ObTabletID, 1> tablet_ids;
-      ObSessionTabletInfo &tablet_info = *tablet_infos_.at(idx);
-      if (!tablet_info.is_creator_) {
-        ret = OB_SUCCESS;
-        LOG_INFO("not creator session, skip delete from oracle temporary table", KR(ret), K(tablet_info));
-      } else if (OB_FAIL(ret) || OB_ISNULL(trans_) || !trans_->is_started()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("invalid transaction", KR(ret), K(tenant_id_), K(OB_ISNULL(trans_)));
-      } else if (OB_FAIL(tablet_ids.push_back(tablet_info.tablet_id_))) {
-        LOG_WARN("failed to push back tablet id", KR(ret));
-      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, tablet_info.table_id_, table_schema))) {
-        LOG_WARN("failed to get table schema", KR(ret), K(tablet_info.table_id_));
-      } else if (OB_ISNULL(table_schema)) {
-        ret = OB_TABLE_NOT_EXIST;
-        LOG_WARN("table schema is null", KR(ret), K(tablet_info.table_id_));
-      } else if (OB_UNLIKELY(PARTITION_LEVEL_ZERO != table_schema->get_part_level()
-                          || !(table_schema->is_oracle_tmp_table_v2() || table_schema->is_oracle_tmp_table_v2_index_table()))) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("partition level is zero or table is not oracle tmp table v2", KR(ret), KPC(table_schema));
-      } else if (OB_FAIL(table_schemas_for_delete.push_back(table_schema))) {
-        LOG_WARN("failed to push back table schema for delete", KR(ret));
-      } else if (OB_FAIL(tablet_ids_for_delete.push_back(tablet_info.tablet_id_))) {
-        LOG_WARN("failed to push back tablet id for delete", KR(ret));
-      } else if (OB_ISNULL(conn = static_cast<observer::ObInnerSQLConnection *>(trans_->get_connection()))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("connection is null", KR(ret), K(tenant_id_));
-      } else {
-        //
-        // 1. Acquire a ROW EXCLUSIVE table lock on table (Table ID).
-        // 2. Acquire a ROW EXCLUSIVE Online DDL lock on table (Table ID).
-        // 3. Acquire an EXCLUSIVE Online DDL lock on tablet (Tablet ID).
-        // 4. Acquire an EXCLUSIVE table lock on tablet (Tablet ID).
-        uint64_t table_id = table_schema->is_oracle_tmp_table_v2_index_table() ? table_schema->get_data_table_id() : table_schema->get_table_id();
-        transaction::tablelock::ObLockTableRequest table_lock_arg;
-        table_lock_arg.lock_mode_ = transaction::tablelock::ROW_EXCLUSIVE;
-        table_lock_arg.timeout_us_ = timeout_us_; // try lock, if not success, will be deleted by GC tasks later
-        table_lock_arg.table_id_ = table_id;
-        table_lock_arg.op_type_ = transaction::tablelock::IN_TRANS_COMMON_LOCK;
-        table_lock_arg.owner_id_.convert_from_client_sessid(conn->get_session().get_sessid_for_table(), conn->get_session().get_client_create_time());
-        if (OB_FAIL(transaction::tablelock::ObInnerConnectionLockUtil::lock_table(tenant_id_, table_lock_arg, conn))) {
-          LOG_WARN("lock table failed", KR(ret), K(table_lock_arg));
-        // NOTE: Set to EXCLUSIVE (X) lock for table here,
-        // to resolve the concurrent issue where tablet-level online DDL locks
-        // may not be acquired for index tables during transfer operations.
-        //
-        // See issue 2026041000115303753
-        //
-        // TODO: @jinzhu
-        // This is a temporary solution, we need to find a better solution to resolve this issue.
-        } else if (OB_FAIL(ObOnlineDDLLock::lock_table_in_trans(tenant_id_, table_id, transaction::tablelock::EXCLUSIVE, timeout_us_, *trans_))) {
-          LOG_WARN("lock online ddl table failed", KR(ret), K(table_lock_arg));
-        } else if (OB_FAIL(ObOnlineDDLLock::lock_tablets_in_trans(tenant_id_, tablet_ids, transaction::tablelock::EXCLUSIVE, timeout_us_ /*try lock*/, *trans_))) {
-          LOG_WARN("lock online ddl tablets failed", KR(ret), K(tablet_ids));
-        } else if (OB_FAIL(ObInnerConnectionLockUtil::lock_tablet(tenant_id_, table_id, tablet_ids, transaction::tablelock::EXCLUSIVE, timeout_us_ /*try lock*/, conn))) {
-          LOG_WARN("lock tablets failed", KR(ret), K(tablet_ids));
-        }
-      }
+    } else if (OB_FAIL(check_and_lock_tables(is_atomic_batch,
+                                             schema_guard,
+                                             tablet_ids_for_delete,
+                                             table_schemas_for_delete,
+                                             schema_missing_tablet_infos))) {
+      LOG_WARN("fail to check and lock tables", K(ret), K(is_atomic_batch));
+    } else if (OB_UNLIKELY(!schema_missing_tablet_infos.empty())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("schema missing tablet infos should be empty", K(ret), K(schema_missing_tablet_infos));
     }
 
     if (OB_SUCC(ret) && !tablet_ids_for_delete.empty()) {
@@ -488,6 +439,261 @@ int ObSessionTabletDeleteHelper::do_work()
           }
         }
       }
+    }
+  }
+  return ret;
+}
+
+int ObSessionTabletDeleteHelper::do_work_for_gc(ObSessionTabletGCTaskSummary &summary)
+{
+  int ret = OB_SUCCESS;
+  share::schema::ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  summary.failed_cnt_ += tablet_infos_.count();
+
+  if (OB_ISNULL(schema_service) || OB_ISNULL(schema_service->get_schema_service())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is null", KR(ret), KP(schema_service));
+  } else if (OB_FAIL(schema_service->gen_new_schema_version(tenant_id_, new_schema_version))) {
+    LOG_WARN("fail to gen new schema_version", KR(ret), K(tenant_id_));
+  } else {
+    common::ObSEArray<const share::schema::ObTableSchema *, 4> table_schemas_for_delete;
+    common::ObSEArray<common::ObTabletID, 4> tablet_ids_for_delete;
+    common::ObSEArray<ObSessionTabletInfo *, 4> schema_missing_tablet_infos;
+    const bool is_atomic_batch = false;
+    share::schema::ObSchemaGetterGuard schema_guard;
+    if (OB_FAIL(schema_service->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+      LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id_));
+    } else if (OB_FAIL(check_and_lock_tables(is_atomic_batch,
+                                             schema_guard,
+                                             tablet_ids_for_delete,
+                                             table_schemas_for_delete,
+                                             schema_missing_tablet_infos))) {
+      LOG_WARN("fail to check and lock tables", K(ret), K(is_atomic_batch));
+    } else if (tablet_ids_for_delete.empty()) {
+      LOG_INFO("tablet ids for delete is empty, nothing to do", K(ret), K(tablet_ids_for_delete));
+    } else if (OB_FAIL(delete_tablets(tablet_ids_for_delete, new_schema_version))) {
+      LOG_WARN("fail to delete tablets", K(ret));
+    } else {
+      summary.failed_cnt_ -= tablet_ids_for_delete.count();
+      LOG_INFO("succeed to remove tablet", K(ret), K(tablet_ids_for_delete), K(lbt()));
+    }
+
+    if (trans_->is_started()) {
+      ARRAY_FOREACH(table_schemas_for_delete, idx) {
+        const share::schema::ObTableSchema *table_schema = table_schemas_for_delete.at(idx);
+        if (OB_NOT_NULL(table_schema)) { // serialize inc schemas for cdc
+          if (false == table_schema->is_valid()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("invalid table schema", KR(ret), KPC(table_schema));
+          } else if (OB_FAIL(serialize_inc_schema(tenant_id_, *trans_, *table_schema))) {
+            LOG_WARN("fail to serialize inc schemas", KR(ret), K(tenant_id_), KPC(table_schema));
+          }
+        }
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (schema_missing_tablet_infos.empty()) {
+      // do nothing
+    } else if (FALSE_IT(summary.schema_missing_tablets_cnt_ += schema_missing_tablet_infos.count())) {
+    } else if (OB_FAIL(delete_schema_missing_tablets(schema_missing_tablet_infos, new_schema_version))) {
+      LOG_WARN("fail to delete schema missing tablets", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSessionTabletDeleteHelper::lock_table_for_delete(
+  const ObTableSchema &table_schema,
+  const common::ObIArray<ObTabletID> &tablet_ids)
+{
+  int ret = OB_SUCCESS;
+  observer::ObInnerSQLConnection *conn = NULL;
+  if (OB_ISNULL(conn = static_cast<observer::ObInnerSQLConnection *>(trans_->get_connection()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("connection is null", KR(ret), K(tenant_id_));
+  } else if (OB_UNLIKELY(tablet_ids.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid empty tablet ids", K(ret), K(tablet_ids));
+  } else {
+    //
+    // 1. Acquire a ROW EXCLUSIVE table lock on table (Table ID).
+    // 2. Acquire a ROW EXCLUSIVE Online DDL lock on table (Table ID).
+    // 3. Acquire an EXCLUSIVE Online DDL lock on tablet (Tablet ID).
+    // 4. Acquire an EXCLUSIVE table lock on tablet (Tablet ID).
+    const uint64_t table_id = table_schema.is_oracle_tmp_table_v2_index_table() ? table_schema.get_data_table_id() : table_schema.get_table_id();
+    transaction::tablelock::ObLockTableRequest table_lock_arg;
+    table_lock_arg.lock_mode_ = transaction::tablelock::ROW_EXCLUSIVE;
+    table_lock_arg.timeout_us_ = timeout_us_; // try lock, if not success, will be deleted by GC tasks later
+    table_lock_arg.table_id_ = table_id;
+    table_lock_arg.op_type_ = transaction::tablelock::IN_TRANS_COMMON_LOCK;
+    table_lock_arg.owner_id_.convert_from_client_sessid(conn->get_session().get_sessid_for_table(), conn->get_session().get_client_create_time());
+    if (OB_FAIL(transaction::tablelock::ObInnerConnectionLockUtil::lock_table(tenant_id_, table_lock_arg, conn))) {
+      LOG_WARN("lock table failed", KR(ret), K(table_lock_arg));
+      // NOTE: Set to EXCLUSIVE (X) lock for table here,
+      // to resolve the concurrent issue where tablet-level online DDL locks
+      // may not be acquired for index tables during transfer operations.
+      //
+      // See issue 2026041000115303753
+      //
+      // TODO: @jinzhu
+      // This is a temporary solution, we need to find a better solution to resolve this issue.
+    } else if (OB_FAIL(ObOnlineDDLLock::lock_table_in_trans(tenant_id_, table_id, transaction::tablelock::EXCLUSIVE, timeout_us_, *trans_))) {
+      LOG_WARN("lock online ddl table failed", KR(ret), K(table_lock_arg));
+    } else if (OB_FAIL(ObOnlineDDLLock::lock_tablets_in_trans(tenant_id_, tablet_ids, transaction::tablelock::EXCLUSIVE, timeout_us_ /*try lock*/, *trans_))) {
+      LOG_WARN("lock online ddl tablets failed", KR(ret), K(tablet_ids));
+    } else if (OB_FAIL(ObInnerConnectionLockUtil::lock_tablet(tenant_id_, table_id, tablet_ids, transaction::tablelock::EXCLUSIVE, timeout_us_ /*try lock*/, conn))) {
+      LOG_WARN("lock tablets failed", KR(ret), K(tablet_ids));
+    }
+  }
+  return ret;
+}
+
+int ObSessionTabletDeleteHelper::check_and_lock_tables(
+    const bool is_atomic_batch,
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    /*out*/common::ObIArray<ObTabletID> &tablet_ids_for_delete,
+    /*out*/common::ObIArray<const ObTableSchema *> &table_schemas_for_delete,
+    /*out*/common::ObIArray<ObSessionTabletInfo *> &schema_missing_tablet_infos)
+{
+  int ret = OB_SUCCESS;
+  tablet_ids_for_delete.reset();
+  table_schemas_for_delete.reset();
+  schema_missing_tablet_infos.reset();
+  const int64_t bucket_cnt = 17;
+  hash::ObHashSet<uint64_t> failed_data_tb_id_set;
+  common::ObSEArray<common::ObTabletID, 1> tablet_ids;
+
+  if (OB_FAIL(failed_data_tb_id_set.create(bucket_cnt))) {
+    LOG_WARN("fail to create failed data table id set", K(ret), K(bucket_cnt));
+  }
+
+  ARRAY_FOREACH(tablet_infos_, idx) {
+    tablet_ids.reset();
+    const share::schema::ObTableSchema *table_schema = nullptr;
+    ObSessionTabletInfo &tablet_info = *tablet_infos_.at(idx);
+    if (!tablet_info.is_creator_) {
+      ret = OB_SUCCESS;
+      LOG_INFO("not creator session, skip delete from oracle temporary table", KR(ret), K(tablet_info));
+    } else {
+      if (OB_FAIL(ret) || OB_ISNULL(trans_) || !trans_->is_started()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid transaction", KR(ret), K(tenant_id_), K(OB_ISNULL(trans_)));
+      } else if (OB_FAIL(tablet_ids.push_back(tablet_info.tablet_id_))) {
+        LOG_WARN("failed to push back tablet id", KR(ret));
+      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, tablet_info.table_id_, table_schema))) {
+        LOG_WARN("failed to get table schema", KR(ret), K(tablet_info.table_id_));
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("table schema is null", KR(ret), K(tablet_info.table_id_));
+      } else if (OB_UNLIKELY(PARTITION_LEVEL_ZERO != table_schema->get_part_level()
+                          || !(table_schema->is_oracle_tmp_table_v2() || table_schema->is_oracle_tmp_table_v2_index_table()))) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("partition level is zero or table is not oracle tmp table v2", KR(ret), KPC(table_schema));
+      } else if (OB_FAIL(lock_table_for_delete(*table_schema, tablet_ids))) {
+        LOG_WARN("fail to lock table for delete", K(ret), KPC(table_schema), K(tablet_ids));
+      }
+
+#ifdef ERRSIM
+      if (OB_SUCC(ret)) {
+        const int64_t err_tablet_id = GCONF.errsim_test_tablet_id.get_value();
+        if (err_tablet_id > 0 && tablet_info.tablet_id_.id() == err_tablet_id) {
+          if (OB_FAIL(EN_SESSION_TABLET_GC_FAILED ? : OB_SUCCESS)) {
+            LOG_WARN("fake gc session tablet error", K(ret), K(tablet_info));
+          }
+        }
+      }
+#endif
+
+      if (OB_FAIL(ret)) {
+        if (is_atomic_batch) {
+          // do nothing
+        } else if (OB_ISNULL(table_schema)) {
+          if (OB_TABLE_NOT_EXIST == ret) {
+            /// only when @c get_table_schema returns OB_SUCCESS and table_schema is nullptr
+            ret = OB_SUCCESS;
+            if (OB_FAIL(schema_missing_tablet_infos.push_back(&tablet_info))) {
+              LOG_WARN("fail to push back schema missing tablet info", K(ret), K(schema_missing_tablet_infos.count()));
+            }
+          }
+        } else {
+          // !is_atomic_batch && nullptr != table_schema(lock table failed): reset errcode and record primary table id
+          ret = OB_SUCCESS;
+          const uint64_t table_id = table_schema->is_oracle_tmp_table_v2_index_table() ? table_schema->get_data_table_id() : table_schema->get_table_id();
+          if (OB_FAIL(failed_data_tb_id_set.set_refactored(table_id, /*overwrite*/1))) {
+            LOG_WARN("fail to set refactored", K(ret), K(table_id));
+          }
+        }
+      } else if (OB_FAIL(tablet_ids_for_delete.push_back(tablet_info.tablet_id_))) {
+        LOG_WARN("fail to push back tablet id", K(ret), K(tablet_ids_for_delete.count()));
+      } else if (OB_FAIL(table_schemas_for_delete.push_back(table_schema))) {
+        LOG_WARN("fail to push back table schema", K(ret), K(table_schemas_for_delete.count()));
+      }
+    }
+  }
+
+  if (OB_FAIL(ret) || is_atomic_batch) {
+    // do nothing
+  } else if (failed_data_tb_id_set.empty()) {
+    // do nothing
+  } else if (OB_FAIL(remove_failed_tables(failed_data_tb_id_set, tablet_ids_for_delete, table_schemas_for_delete))) {
+    LOG_WARN("failed to remove failed tables", K(ret));
+  }
+  return ret;
+}
+
+int ObSessionTabletDeleteHelper::remove_failed_tables(
+    const hash::ObHashSet<uint64_t> &failed_data_tb_id_set,
+    /*out*/common::ObIArray<ObTabletID> &tablet_ids_for_delete,
+    /*out*/common::ObIArray<const ObTableSchema *> &table_schemas_for_delete)
+{
+  int ret = OB_SUCCESS;
+  const int64_t total_cnt = tablet_ids_for_delete.count();
+
+  if (OB_UNLIKELY(table_schemas_for_delete.count() != total_cnt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("tablet_ids_for_delete and table_schemas_for_delete should be the same size", K(ret),
+      K(total_cnt), K(table_schemas_for_delete.count()));
+  } else if (0 == total_cnt) {
+    // do nothing
+  } else {
+    int64_t cur = 0;
+    for (int64_t i = 0; OB_SUCC(ret) && i < total_cnt; ++i) {
+      ObTabletID tablet_id = tablet_ids_for_delete.at(i);
+      const ObTableSchema *table_schema = table_schemas_for_delete.at(i);
+      if (OB_UNLIKELY(!tablet_id.is_valid() || nullptr == table_schema)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid tablet id or null table schema", K(ret), K(tablet_id),
+          KPC(table_schema));
+      } else {
+        const uint64_t table_id = table_schema->is_oracle_tmp_table_v2_index_table() ? table_schema->get_data_table_id() : table_schema->get_table_id();
+        if (OB_FAIL(failed_data_tb_id_set.exist_refactored(table_id))) {
+          if (OB_HASH_EXIST == ret) {
+            // skip all tablets of this table
+            ret = OB_SUCCESS;
+          } else if (OB_HASH_NOT_EXIST == ret) {
+            ret = OB_SUCCESS;
+            tablet_ids_for_delete.at(cur) = tablet_id;
+            table_schemas_for_delete.at(cur) = table_schema;
+            ++cur;
+          } else {
+            LOG_WARN("fail to do exist refactored", K(ret));
+          }
+        }
+      }
+    }
+    const int64_t pop_cnt = total_cnt - cur;
+    for (int64_t i = 0; OB_SUCC(ret) && i < pop_cnt; ++i) {
+      tablet_ids_for_delete.pop_back();
+      table_schemas_for_delete.pop_back();
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(cur != tablet_ids_for_delete.count()
+                           || cur != table_schemas_for_delete.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected result array's count", K(ret), "final_cnt", cur,
+        K(tablet_ids_for_delete.count()), K(table_schemas_for_delete.count()));
     }
   }
   return ret;
@@ -524,6 +730,43 @@ int ObSessionTabletDeleteHelper::delete_tablets(const ObIArray<common::ObTabletI
       LOG_WARN("failed to drop tablet to table history", KR(ret), K(tablet_ids), K(tablet_infos_));
     }
   }
+  return ret;
+}
+
+int ObSessionTabletDeleteHelper::delete_schema_missing_tablets(const ObIArray<ObSessionTabletInfo *> &tablet_infos, const int64_t schema_version)
+{
+  int ret = OB_SUCCESS;
+#ifndef OB_BUILD_PACKAGE
+  const int64_t total_cnt = tablet_infos.count();
+  LOG_ERROR("Prepare to delete schema missing tablets", K(ret), K(tablet_infos), K(schema_version));
+  if (OB_UNLIKELY(0 == total_cnt)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid empty tablet infos", K(ret), K(tablet_infos));
+  }
+  ObFixedArray<ObTabletID, ObArenaAllocator> tablet_ids(allocator_, total_cnt);
+  for (int64_t i = 0; OB_SUCC(ret) && i < total_cnt; ++i) {
+    const ObSessionTabletInfo *tablet_info = tablet_infos.at(i);
+    if (OB_ISNULL(tablet_info)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid null tablet info", K(ret), KPC(tablet_info));
+    } else if (OB_FAIL(tablet_ids.push_back(tablet_info->tablet_id_))) {
+      LOG_WARN("fail to push back tablet id", K(ret), K(tablet_ids.count()));
+    }
+  }
+  // Hold OnlineDDL tablet lock(EXCLUSIVE)
+  if (FAILEDx(ObOnlineDDLLock::lock_tablets_in_trans(tenant_id_, tablet_ids, transaction::tablelock::EXCLUSIVE, timeout_us_ /*try lock*/, *trans_))) {
+    LOG_WARN("lock online ddl tablets failed", KR(ret), K(tablet_ids));
+  } else if (OB_FAIL(delete_tablets(tablet_ids, schema_version))) {
+    LOG_WARN("fail to delete tablets", K(ret));
+  } else {
+    FLOG_INFO("Finish to delete schema missing tablets", K(ret), K(tablet_infos), K(schema_version));
+  }
+#else
+  // TODO(fanyin): delete schema missing tablets might be dangerous in
+  // production environment...
+  ret = OB_ERR_UNEXPECTED;
+  LOG_ERROR("The schema for tablets are missing, manual deletion required", K(ret), K(tablet_infos), K(schema_version));
+#endif
   return ret;
 }
 
@@ -613,8 +856,8 @@ int ObSessionTabletGCHelper::get_local_leader_ls_ids(common::ObIArray<share::ObL
 int ObSessionTabletGCHelper::do_work()
 {
   int ret = OB_SUCCESS;
-  uint64_t failed_count = 0;
-  uint64_t gc_count = 0;
+  int64_t failed_count = 0;
+  ObSessionTabletGCTaskSummary gc_summary;
   const int64_t start_time = ObTimeUtility::current_time();
   common::ObSEArray<storage::ObSessionTabletInfo, TABLET_GROUP_SIZE * NUM_OF_TABLET_GROUP> session_tablet_infos;
   common::ObSEArray<storage::ObSessionTabletInfo *, TABLET_GROUP_SIZE * NUM_OF_TABLET_GROUP> session_tablet_infos_for_delete;
@@ -672,7 +915,7 @@ int ObSessionTabletGCHelper::do_work()
           ObSEArray<storage::ObSessionTabletInfo *, BATCH_DELETE_SESSION_TABLET_COUNT> session_tablet_infos_for_delete_batch;
           // Remove the session tablet which is not alive
           // A failure will not affect subsequent delete operations
-          for (int64_t group_idx = 0; gc_count < MAX_GC_COUNT && group_idx < session_tablet_infos_for_delete_grouped.count(); ++group_idx) {
+          for (int64_t group_idx = 0; gc_summary.total_cnt_ < MAX_GC_COUNT && group_idx < session_tablet_infos_for_delete_grouped.count(); ++group_idx) {
             ret = OB_SUCCESS;
             // One group share the same session_id and sequence, must be deleted together
             ObSEArray<storage::ObSessionTabletInfo *, TABLET_GROUP_SIZE> &group = session_tablet_infos_for_delete_grouped.at(group_idx);
@@ -689,13 +932,12 @@ int ObSessionTabletGCHelper::do_work()
                 if (OB_SUCC(ret)) {
                   storage::ObSessionTabletDeleteHelper tablet_delete_helper(tenant_id_, session_tablet_infos_for_delete_batch, trans);
                   tablet_delete_helper.set_timeout_us(0/* no timeout */);
-                  if (OB_FAIL(tablet_delete_helper.do_work())) {
-                    failed_count += session_tablet_infos_for_delete_batch.count();
+                  if (OB_FAIL(tablet_delete_helper.do_work_for_gc(gc_summary))) {
                     LOG_WARN("failed to delete session tablets in batch", KR(ret), K(session_tablet_infos_for_delete_batch));
                   } else {
                     LOG_INFO("GC succeed to remove session tablets in batch", K(tenant_id_), K(session_tablet_infos_for_delete_batch));
                   }
-                  gc_count += session_tablet_infos_for_delete_batch.count();
+                  gc_summary.total_cnt_ += session_tablet_infos_for_delete_batch.count();
                 }
               }
               if (trans.is_started()) {
@@ -714,7 +956,7 @@ int ObSessionTabletGCHelper::do_work()
     }
   }
   const int64_t cost_time = ObTimeUtility::current_time() - start_time;
-  LOG_INFO("GC task finished", KR(ret), K(gc_count), K(failed_count), K(cost_time), K(ls_ids.count()));
+  LOG_INFO("GC task finished", KR(ret), K(gc_summary), K(cost_time), K(ls_ids.count()));
   return ret;
 }
 

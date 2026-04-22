@@ -96,6 +96,24 @@ private:
   ObSessionTabletInfoMap &session_tablet_map_;
 };
 
+struct ObSessionTabletGCTaskSummary final
+{
+public:
+  ObSessionTabletGCTaskSummary()
+    : total_cnt_(0),
+      schema_missing_tablets_cnt_(0),
+      failed_cnt_(0)
+  {
+  }
+  ~ObSessionTabletGCTaskSummary() = default;
+  TO_STRING_KV(K_(total_cnt), K_(schema_missing_tablets_cnt), K_(failed_cnt));
+
+public:
+  int64_t total_cnt_;
+  int64_t schema_missing_tablets_cnt_;
+  int64_t failed_cnt_;
+};
+
 class ObSessionTabletDeleteHelper final
 {
 public:
@@ -111,10 +129,67 @@ public:
   {}
   ~ObSessionTabletDeleteHelper() = default;
   int do_work();
+  /// @brief Delete session tablets with GC-oriented batch(For GC only).
+  ///   per-table failures are filtered
+  ///   (see remove_failed_tables inside check_and_lock_tables) so tablets that
+  ///   passed checks can still be deleted in the same invocation.
+  ///   It will try to DELETE tablets whose table schema is no
+  ///   longer present (e.g. table already dropped while the tablet still exists),
+  ///
+  /// @return OB_SUCCESS on success, or an error code if a non-recoverable step fails.
+  int do_work_for_gc(ObSessionTabletGCTaskSummary &summary);
   void set_timeout_us(int64_t timeout_us) { timeout_us_ = timeout_us; }
   TO_STRING_KV(K_(tenant_id), K_(tablet_infos));
 private:
+  /// @brief Remove entries whose data table id exists in @p failed_data_tb_id_set
+  ///        from @p tablet_ids_for_delete and @p table_schemas_for_delete in place.
+  /// @pre tablet_ids_for_delete.count() == table_schemas_for_delete.count()
+  ///
+  /// @param[in]     failed_data_tb_id_set       Set of data table ids whose
+  ///                                            tablets should be excluded.
+  /// @param[in,out] tablet_ids_for_delete       Tablet id array to be filtered.
+  /// @param[in,out] table_schemas_for_delete    Corresponding table schema array
+  ///                                            to be filtered.
+  /// @return OB_SUCCESS on success, OB_INVALID_ARGUMENT if the two arrays have
+  ///         different sizes or contain invalid entries.
+  static int remove_failed_tables(
+      const hash::ObHashSet<uint64_t> &failed_data_tb_id_set,
+      /*out*/common::ObIArray<ObTabletID> &tablet_ids_for_delete,
+      /*out*/common::ObIArray<const ObTableSchema *> &table_schemas_for_delete);
+private:
+  int lock_table_for_delete(
+      const ObTableSchema &table_schema,
+      const common::ObIArray<ObTabletID> &tablet_ids);
+
+  /// @brief Validate schemas and acquire locks for session tablets before deletion.
+  /// Iterates over @c tablet_infos_ and, for each entry owned by the creator
+  /// session, fetches its table schema, verifies it is a non-partitioned Oracle
+  /// temporary table (v2), and acquires a table lock via @c lock_table_for_delete.
+  /// Successfully checked tablets and their schemas are appended to the output
+  /// arrays.
+  ///
+  /// NOTE: When @p is_atomic_batch is FALSE, failures on individual tables are
+  /// tolerated: the failed data table ids are collected and later removed from
+  /// the output arrays via @c remove_failed_tables so that the remaining tablets
+  /// can still be deleted. When @p is_atomic_batch is TRUE, any single failure
+  /// causes the entire operation to fail.
+  ///
+  /// @param[in]  is_atomic_batch             If true, any single table failure
+  ///                                            aborts the whole batch.
+  /// @param[out] tablet_ids_for_delete       Receives the tablet ids that
+  ///                                            passed validation and locking.
+  /// @param[out] table_schemas_for_delete    Receives the corresponding table
+  ///                                           schemas.
+  /// @param[out] schema_missing_tablet_infos Tablets whose table schema is missing.
+  /// @return OB_SUCCESS on success, or an appropriate error code on failure.
+  int check_and_lock_tables(
+      const bool is_atomic_batch,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      /*out*/common::ObIArray<ObTabletID> &tablet_ids_for_delete,
+      /*out*/common::ObIArray<const ObTableSchema *> &table_schemas_for_delete,
+      /*out*/common::ObIArray<ObSessionTabletInfo *> &schema_missing_tablet_infos);
   int delete_tablets(const ObIArray<common::ObTabletID> &tablet_ids, const int64_t schema_version);
+  int delete_schema_missing_tablets(const ObIArray<ObSessionTabletInfo *> &tablet_infos, const int64_t schema_version);
   int mds_remove_tablet(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
