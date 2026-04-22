@@ -518,6 +518,7 @@ int ObPluginVectorIndexAdaptor::init_mem(ObVectorIndexMemData *&table_info)
     if (OB_NOT_NULL(table_buff)) {
       get_allocator()->free(table_buff);
       table_buff = nullptr;
+      table_info = nullptr;
     }
   }
   return ret;
@@ -585,8 +586,8 @@ int ObPluginVectorIndexAdaptor::set_param(ObString init_str, int64_t dim)
 {
   INIT_SUCC(ret);
   ObVectorIndexParam *hnsw_param = nullptr;
-  if (OB_NOT_NULL(algo_data_)) {
-    // do nothing
+  if (OB_NOT_NULL(ATOMIC_LOAD(&algo_data_))) {
+    // already set, do nothing
   } else if (OB_ISNULL(get_allocator())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("adaptor allocator invalid.", K(ret));
@@ -597,10 +598,15 @@ int ObPluginVectorIndexAdaptor::set_param(ObString init_str, int64_t dim)
   } else if (OB_FAIL(ObVectorIndexUtil::parser_params_from_string(init_str, ObVectorIndexType::VIT_HNSW_INDEX, *hnsw_param))) {
     LOG_WARN("failed to parse params.", K(ret));
   } else {
-    type_ = hnsw_param->type_;
-    algo_data_ = hnsw_param;
     hnsw_param->dim_ = dim;
-    LOG_INFO("init vector index adapter with param", KPC(hnsw_param)); // change log to debug level later
+    type_ = hnsw_param->type_;
+    // Publish algo_data_ last via CAS. If another thread already set it, free our allocation.
+    if (!ATOMIC_BCAS(&algo_data_, nullptr, static_cast<void *>(hnsw_param))) {
+      get_allocator()->free(hnsw_param);
+      hnsw_param = nullptr;
+    } else {
+      LOG_INFO("init vector index adapter with param", KPC(hnsw_param)); // change log to debug level later
+    }
   }
 
   if (OB_FAIL(ret)) {
@@ -1613,6 +1619,10 @@ int ObPluginVectorIndexAdaptor::set_snapshot_key_prefix(uint64_t tablet_id, uint
       }
       snapshot_key_prefix_.assign(key_prefix_str, pos);
       LOG_INFO("change vector index snapshot_key_prefix success", K(snapshot_key_prefix_), KP(this), K(*this));
+    }
+    if (OB_FAIL(ret) && OB_NOT_NULL(key_prefix_str)) {
+      get_allocator()->free(key_prefix_str);
+      key_prefix_str = nullptr;
     }
   }
   return ret;
@@ -3481,10 +3491,10 @@ int ObPluginVectorIndexAdaptor::deserialize_snap_data(ObVectorQueryConditions *q
   ObVectorIndexAlgorithmType index_type = VIAT_MAX;
   ObString key_prefix;
   ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(query_cond->row_iter_);
-  ObCostGuard cost_guard(this, "deserialize_snap_data", 0, 0,
-                         ObCostGuard::KNN_SEARCH_SLOW_THRESHOLD_US); // for timeout log
   ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_);
   ObArenaAllocator allocator;
+  ObCostGuard cost_guard(this, "deserialize_snap_data", 0, 0,
+                         ObCostGuard::KNN_SEARCH_SLOW_THRESHOLD_US); // for timeout log
   if (OB_ISNULL(table_scan_iter) || OB_ISNULL(query_cond)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get null pointer.", K(ret), K(table_scan_iter), K(query_cond));

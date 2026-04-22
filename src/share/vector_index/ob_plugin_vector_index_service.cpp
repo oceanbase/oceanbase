@@ -961,13 +961,22 @@ void ObPluginVectorIndexService::destroy()
 {
   if (IS_INIT) {
     FLOG_INFO("destroy vector index service", K_(tenant_id));
-    is_inited_ = false;
-    has_start_ = false;
-    tenant_id_ = OB_INVALID_TENANT_ID;
-    is_ls_or_tablet_changed_ = false;
-    schema_service_ = NULL;
-    ls_service_ = NULL;
-    sql_proxy_ = NULL;
+
+    // Stop creating/acquiring new vector objects before reclaiming allocators.
+    stop();
+    wait();
+
+    // Destroy thread pools/handlers before releasing mgrs and allocators so no
+    // background task can keep adapter refs alive during allocator reset.
+    if (OB_NOT_NULL(tenant_vec_async_task_sched_)) {
+      tenant_vec_async_task_sched_->destroy();
+      ob_free(tenant_vec_async_task_sched_);
+      tenant_vec_async_task_sched_ = nullptr;
+    }
+    // destroy kmeans build task handler
+    kmeans_build_task_handler_.destroy();
+
+    vec_async_task_handle_.destroy();
 
     FOREACH(iter, index_ls_mgr_map_) {
       const ObLSID &ls_id = iter->first;
@@ -982,14 +991,13 @@ void ObPluginVectorIndexService::destroy()
     allocator_.reset();
     alloc_.reset();
 
-    // destroy vec async task
-    if (OB_NOT_NULL(tenant_vec_async_task_sched_)) {
-      tenant_vec_async_task_sched_->destroy();  // destroy tg_id_
-      ob_free(tenant_vec_async_task_sched_);
-      tenant_vec_async_task_sched_ = nullptr;
-    }
-    // destroy kmeans build task handler
-    kmeans_build_task_handler_.destroy();
+    is_inited_ = false;
+    has_start_ = false;
+    tenant_id_ = OB_INVALID_TENANT_ID;
+    is_ls_or_tablet_changed_ = false;
+    schema_service_ = NULL;
+    ls_service_ = NULL;
+    sql_proxy_ = NULL;
   }
 }
 
@@ -1157,6 +1165,7 @@ void ObPluginVectorIndexService::wait()
     if (OB_NOT_NULL(tenant_vec_async_task_sched_)) {
       tenant_vec_async_task_sched_->wait();
     }
+    get_vec_async_task_handle().wait();
     kmeans_build_task_handler_.wait();
   }
 }
