@@ -1591,29 +1591,31 @@ int ObTransformSimplifySubquery::simplify_select_items(ObDMLStmt *stmt,
         LOG_WARN("Simplify select list in EXISTS fails", K(ret));
       }
     }
-    ObRawExprResType res_type;
-    res_type.set_type(ObIntType);
-    for(int64_t i = 0; OB_SUCC(ret) && i < subquery->get_select_item_size(); i++) {
-      SelectItem &select_item = subquery->get_select_item(i);
-      if(OB_ISNULL(select_item.expr_)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null select expr", K(ret), K(select_item));
-      } else {
-        select_item.expr_->set_result_type(res_type);
+    if (OB_SUCC(ret) && trans_happened) {
+      ObRawExprResType res_type;
+      res_type.set_type(ObIntType);
+      for(int64_t i = 0; OB_SUCC(ret) && i < subquery->get_select_item_size(); i++) {
+        SelectItem &select_item = subquery->get_select_item(i);
+        if(OB_ISNULL(select_item.expr_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null select expr", K(ret), K(select_item));
+        } else {
+          select_item.expr_->set_result_type(res_type);
+        }
       }
-    }
-    bool has_limit = false;
-    if (OB_FAIL(ret)){
-      // do nothing
-    } else if (OB_FAIL(check_limit(op_type, subquery, has_limit))) {
-      LOG_WARN("failed to check subquery has unremovable limit", K(ret));
-    } else if(!has_limit
-              && is_add_limit_for_exists_subquery_enabled(stmt->get_query_ctx()->optimizer_features_enable_version_)
-              && NULL != subquery->get_limit_expr() &&
-              OB_FAIL(ObTransformUtils::add_compare_int_constraint(ctx_, subquery->get_limit_expr(), T_OP_GE, 1))) {
-      LOG_WARN("failed to add const param constraints", K(ret));
-    } else if (!has_limit) {
-      subquery->assign_set_all();
+      bool has_limit = false;
+      if (OB_FAIL(ret)){
+        // do nothing
+      } else if (OB_FAIL(check_limit(op_type, subquery, has_limit))) {
+        LOG_WARN("failed to check subquery has unremovable limit", K(ret));
+      } else if(!has_limit
+                && is_add_limit_for_exists_subquery_enabled(stmt->get_query_ctx()->optimizer_features_enable_version_)
+                && NULL != subquery->get_limit_expr() &&
+                OB_FAIL(ObTransformUtils::add_compare_int_constraint(ctx_, subquery->get_limit_expr(), T_OP_GE, 1))) {
+        LOG_WARN("failed to add const param constraints", K(ret));
+      } else if (!has_limit) {
+        subquery->assign_set_all();
+      }
     }
   } else {
     // Add single select item with const int 1
