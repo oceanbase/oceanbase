@@ -623,7 +623,6 @@ private:
   ParquetSectorIterator sector_iter_;
   std::shared_ptr<parquet::PageIndexReader> page_index_reader_;
   std::shared_ptr<parquet::RowGroupPageIndexReader> rg_page_index_reader_;
-  bool has_duplicated_column_; // 标记该文件会不会对同一个物理列扫描两次
   // place each column skiped page's [page_start_row, page_rows]
   common::ObFixedArray<ObArray<std::pair<int64_t, int64_t>> *, ObIAllocator> page_skip_ranges_;
   // place each column selected page's [page_offset, page_size]

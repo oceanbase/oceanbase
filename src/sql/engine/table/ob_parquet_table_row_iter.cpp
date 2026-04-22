@@ -567,23 +567,6 @@ int ObParquetTableRowIterator::next_file()
     }
   }
 
-  if (OB_SUCC(ret)) {
-    has_duplicated_column_ = false;
-    hash::ObHashSet<int> seen_column_index;
-    if (OB_FAIL(seen_column_index.create(8))) {
-      LOG_WARN("failed to create hash set", K(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && !has_duplicated_column_ && i < column_indexs_.count(); i++) {
-      if (column_indexs_.at(i) >= 0) {
-        if (OB_HASH_EXIST == (ret = seen_column_index.set_refactored(column_indexs_.at(i), 0))) {
-          has_duplicated_column_ = true;
-          ret = OB_SUCCESS; // reset ret, duplicate is not an error
-        } else if (OB_FAIL(ret)) {
-          LOG_WARN("failed to insert into hash set", K(ret));
-        }
-      }
-    }
-  }
   return ret;
 }
 
@@ -4737,7 +4720,7 @@ bool ObParquetTableRowIterator::is_enable_rg_parquet_page_mgr() const
 
   // 判断启用条件
   return options_.enable_parquet_page_cache_ && (page_index_reader_ != NULL)
-         && (rg_page_index_reader_ != NULL) && !has_duplicated_column_;
+         && (rg_page_index_reader_ != NULL);
 }
 
 int ObParquetTableRowIterator::calc_column_convert(const int64_t read_count,

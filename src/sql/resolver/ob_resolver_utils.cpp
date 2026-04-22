@@ -5509,6 +5509,8 @@ int ObResolverUtils::build_file_column_expr_for_parquet(
       file_column_expr->set_mapped_column_id(generated_column->get_column_id());
       switch (column_index_type) {
         case ColumnIndexType::NAME: {
+          // set a placeholder id
+          file_column_expr->set_column_idx(UINT64_MAX);
           if (data_access_path.empty()) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("invalid data access path for parquet column", K(ret));
