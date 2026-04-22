@@ -2053,7 +2053,7 @@ int ObPluginVectorIndexAdaptor::check_index_id_table_readnext_status(ObVectorQue
   blocksstable::ObDatumRow *datum_row = nullptr;
   int64_t read_num = 0;
   SCN read_scn = SCN::min_scn();
-  ObArray<uint64_t> i_vids;
+  int64_t i_vid_count = 0;
   ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(row_iter);
   bool is_skip_4th_index = is_pruned_read_index_id();
 
@@ -2105,12 +2105,12 @@ int ObPluginVectorIndexAdaptor::check_index_id_table_readnext_status(ObVectorQue
       ctx->status_ = PVQ_COM_DATA;
     }
   } else if (check_if_complete_index(read_scn) &&
-             OB_FAIL(complete_index_mem_data(ctx, read_scn, row_iter, datum_row, i_vids))) {
+             OB_FAIL(complete_index_mem_data(ctx, read_scn, row_iter, datum_row, i_vid_count))) {
     LOG_WARN("failed to check comple index mem data.", K(ret), K(read_scn), K(vbitmap_data_->scn_));
   } else if (OB_ISNULL(ctx->bitmaps_) || OB_ISNULL(ctx->bitmaps_->insert_bitmap_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to get ctx bit map.", K(ret));
-  } else if (check_if_complete_delta(ctx, ctx->bitmaps_->insert_bitmap_, i_vids.count())) {
+  } else if (check_if_complete_delta(ctx, ctx->bitmaps_->insert_bitmap_, i_vid_count)) {
     if (OB_FAIL(try_init_mem_data(VIRT_INC))) {
       LOG_WARN("failed to init mem data incr.", K(ret));
     } else {
@@ -2135,7 +2135,7 @@ int ObPluginVectorIndexAdaptor::check_index_id_table_readnext_status(ObVectorQue
           FLOG_INFO("[VEC_INDEX][COMPLETE_DELTA] success to hold complete delta lock guard", K(ctx), K(&incr_data_->complete_lock_), KPC(this), K(lbt()));
         }
         // check again if complete delta
-        if (check_if_complete_delta(ctx, ctx->bitmaps_->insert_bitmap_, i_vids.count())) {
+        if (check_if_complete_delta(ctx, ctx->bitmaps_->insert_bitmap_, i_vid_count)) {
           ctx->set_complete_delta_lock(&incr_data_->complete_lock_);
           if (OB_FAIL(prepare_delta_mem_data(ctx->bitmaps_->insert_bitmap_, ctx))) {
             LOG_WARN("failed to complete.", K(ret));
@@ -2184,8 +2184,8 @@ int ObPluginVectorIndexAdaptor::check_snapshot_table_wait_status(ObVectorQueryAd
 }
 
 int ObPluginVectorIndexAdaptor::write_into_index_mem(int64_t dim, SCN read_scn,
-                                                     ObArray<uint64_t> &i_vids,
-                                                     ObArray<uint64_t> &d_vids)
+                                                     ObIArray<uint64_t> &i_vids,
+                                                     ObIArray<uint64_t> &d_vids)
 {
   INIT_SUCC(ret);
   TCWLockGuard lock_guard(vbitmap_data_->mem_data_rwlock_);
@@ -2195,10 +2195,10 @@ int ObPluginVectorIndexAdaptor::write_into_index_mem(int64_t dim, SCN read_scn,
     roaring::api::roaring64_bitmap_t *ibitmap = vbitmap_data_->bitmap_->insert_bitmap_;
     roaring::api::roaring64_bitmap_t *dbitmap = vbitmap_data_->bitmap_->delete_bitmap_;
     for (int64_t i = 0; OB_SUCC(ret) && i < i_vids.count(); i++) {
-      ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(ibitmap, i_vids[i]));
+      ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(ibitmap, i_vids.at(i)));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < d_vids.count(); i++) {
-      ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(dbitmap, d_vids[i]));
+      ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(dbitmap, d_vids.at(i)));
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < d_vids.count(); i++) {
       ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_remove(ibitmap, d_vids.at(i)));
@@ -2276,8 +2276,8 @@ bool ObPluginVectorIndexAdaptor::check_if_complete_data(ObVectorQueryAdaptorResu
 }
 
 int ObPluginVectorIndexAdaptor::add_datum_row_into_array(blocksstable::ObDatumRow *datum_row,
-                                                         ObArray<uint64_t> &i_vids,
-                                                         ObArray<uint64_t> &d_vids)
+                                                         ObIArray<uint64_t> &i_vids,
+                                                         ObIArray<uint64_t> &d_vids)
 {
   INIT_SUCC(ret);
   int64_t vid = 0;
@@ -2311,76 +2311,80 @@ int ObPluginVectorIndexAdaptor::complete_index_mem_data(ObVectorQueryAdaptorResu
                                                         SCN read_scn,
                                                         common::ObNewRowIterator *row_iter,
                                                         blocksstable::ObDatumRow *last_row,
-                                                        ObArray<uint64_t> &i_vids)
+                                                        int64_t &i_vid_count)
 {
   INIT_SUCC(ret);
   int64_t dim = 0;
-  ObArray<uint64_t> d_vids;
   if (OB_ISNULL(row_iter)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get ctx or row_iter null.", K(ret), KP(row_iter));
-  } else if (OB_FAIL(try_init_mem_data(VIRT_BITMAP))) {
-    LOG_WARN("failed to init valid bitmap", K(ret), K(VIRT_BITMAP));
-  } else if (OB_FAIL(add_datum_row_into_array(last_row, i_vids, d_vids))) {
-    LOG_WARN("failed to add vid into array.", K(ret), KP(last_row));
+    LOG_WARN("get ctx or row_iter null.", K(ret), KP(ctx), KP(row_iter));
   } else {
-    oceanbase::share::SCN stop_scn = vbitmap_data_->scn_;
-    oceanbase::share::SCN curr_scn;
-    int64_t read_num = 0;
-    ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(row_iter);
-    while (OB_SUCC(ret)) {
-      blocksstable::ObDatumRow *datum_row = nullptr;
-      int64_t vid = 0;
-      ObString op;
-      if (OB_FAIL(table_scan_iter->get_next_row(datum_row))) {
-        if (OB_ITER_END != ret) {
-          LOG_WARN("get next row failed.", K(ret));
-        }
-      } else if (OB_FALSE_IT(read_num = datum_row->storage_datums_[0].get_int())) {
-        LOG_WARN("failed to get read scn.", K(ret));
-      } else if (OB_FAIL(curr_scn.convert_for_gts(read_num))) {
-        LOG_WARN("failed to convert from ts.", K(ret), K(read_num));
-      } else if (stop_scn >= curr_scn) {
-        ret = OB_ITER_END;
-      } else if (OB_FAIL(add_datum_row_into_array(datum_row, i_vids, d_vids))) {
-        LOG_WARN("failed to add vid into array.", K(ret), KP(datum_row));
-      }
-    }
-
-    if (ret == OB_ITER_END) {
-      ret = OB_SUCCESS;
-    }
-
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(get_dim(dim))) {
-      LOG_WARN("failed to get dim.", K(ret));
+    ObArenaAllocator tmp_alloc("VecIdxTmpAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+    common::ModulePageAllocator vid_alloc(tmp_alloc, "VecIdxVbmapVid");
+    ObArray<uint64_t, common::ModulePageAllocator, false> i_vids(OB_MALLOC_NORMAL_BLOCK_SIZE, vid_alloc);
+    ObArray<uint64_t, common::ModulePageAllocator, false> d_vids(OB_MALLOC_NORMAL_BLOCK_SIZE, vid_alloc);
+    if (OB_FAIL(try_init_mem_data(VIRT_BITMAP))) {
+      LOG_WARN("failed to init valid bitmap", K(ret), K(VIRT_BITMAP));
+    } else if (OB_FAIL(add_datum_row_into_array(last_row, i_vids, d_vids))) {
+      LOG_WARN("failed to add vid into array.", K(ret), KP(last_row));
     } else {
-      if (!ctx->get_is_refresh_adaptor()) {
-        if (vbitmap_data_->complete_lock_.try_wrlock()) {
+      oceanbase::share::SCN stop_scn = vbitmap_data_->scn_;
+      oceanbase::share::SCN curr_scn;
+      int64_t read_num = 0;
+      ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(row_iter);
+      while (OB_SUCC(ret)) {
+        blocksstable::ObDatumRow *datum_row = nullptr;
+        if (OB_FAIL(table_scan_iter->get_next_row(datum_row))) {
+          if (OB_ITER_END != ret) {
+            LOG_WARN("get next row failed.", K(ret));
+          }
+        } else if (OB_FALSE_IT(read_num = datum_row->storage_datums_[0].get_int())) {
+          LOG_WARN("failed to get read scn.", K(ret));
+        } else if (OB_FAIL(curr_scn.convert_for_gts(read_num))) {
+          LOG_WARN("failed to convert from ts.", K(ret), K(read_num));
+        } else if (stop_scn >= curr_scn) {
+          ret = OB_ITER_END;
+        } else if (OB_FAIL(add_datum_row_into_array(datum_row, i_vids, d_vids))) {
+          LOG_WARN("failed to add vid into array.", K(ret), KP(datum_row));
+        }
+      }
+
+      if (ret == OB_ITER_END) {
+        ret = OB_SUCCESS;
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_FALSE_IT(i_vid_count = i_vids.count())) {
+      } else if (OB_FAIL(get_dim(dim))) {
+        LOG_WARN("failed to get dim.", K(ret));
+      } else {
+        if (!ctx->get_is_refresh_adaptor()) {
+          if (vbitmap_data_->complete_lock_.try_wrlock()) {
+            if (OB_FAIL(write_into_index_mem(dim, read_scn, i_vids, d_vids))) {
+              LOG_WARN("failed to write into index mem.", K(ret), K(read_scn));
+            }
+            int tmp_ret = vbitmap_data_->complete_lock_.unlock();
+            if (tmp_ret != OB_SUCCESS) {
+              LOG_WARN("unlock complete index lock failed", K(ret), K(tmp_ret), K(&vbitmap_data_->complete_lock_));
+            }
+          } else if (ctx->is_bitmaps_valid()) {
+            lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIBitmapADPS"));
+            FLOG_INFO("[VEC_INDEX][COMPLETE_INDEX] set ctx bitmaps directly", K(i_vids.count()), K(d_vids.count()), KPC(this), K(lbt()));
+            for (int64_t i = 0; OB_SUCC(ret) && i < i_vids.count(); i++) {
+              ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(ctx->bitmaps_->insert_bitmap_, i_vids[i]));
+            }
+            for (int64_t i = 0; OB_SUCC(ret) && i < d_vids.count(); i++) {
+              ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(ctx->bitmaps_->delete_bitmap_, d_vids[i]));
+            }
+            for (int64_t i = 0; OB_SUCC(ret) && i < d_vids.count(); i++) {
+              ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_remove(ctx->bitmaps_->insert_bitmap_, d_vids.at(i)));
+            }
+          }
+        } else {
+          TCWLockGuard guard(vbitmap_data_->complete_lock_);
           if (OB_FAIL(write_into_index_mem(dim, read_scn, i_vids, d_vids))) {
             LOG_WARN("failed to write into index mem.", K(ret), K(read_scn));
           }
-          int tmp_ret = vbitmap_data_->complete_lock_.unlock();
-          if (tmp_ret != OB_SUCCESS) {
-            LOG_WARN("unlock complete index lock failed", K(ret), K(tmp_ret), K(&vbitmap_data_->complete_lock_));
-          }
-        } else if (ctx->is_bitmaps_valid()) {
-          lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIBitmapADPS"));
-          FLOG_INFO("[VEC_INDEX][COMPLETE_INDEX] set ctx bitmaps directly", K(i_vids.count()), K(d_vids.count()), KPC(this), K(lbt()));
-          for (int64_t i = 0; OB_SUCC(ret) && i < i_vids.count(); i++) {
-            ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(ctx->bitmaps_->insert_bitmap_, i_vids[i]));
-          }
-          for (int64_t i = 0; OB_SUCC(ret) && i < d_vids.count(); i++) {
-            ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(ctx->bitmaps_->delete_bitmap_, d_vids[i]));
-          }
-          for (int64_t i = 0; OB_SUCC(ret) && i < d_vids.count(); i++) {
-            ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_remove(ctx->bitmaps_->insert_bitmap_, d_vids.at(i)));
-          }
-        }
-      } else {
-        TCWLockGuard guard(vbitmap_data_->complete_lock_);
-        if (OB_FAIL(write_into_index_mem(dim, read_scn, i_vids, d_vids))) {
-          LOG_WARN("failed to write into index mem.", K(ret), K(read_scn));
         }
       }
     }

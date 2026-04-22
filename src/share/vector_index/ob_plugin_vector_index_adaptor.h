@@ -791,7 +791,7 @@ public:
                               SCN read_scn,
                               common::ObNewRowIterator *row_iter,
                               blocksstable::ObDatumRow *last_row,
-                              ObArray<uint64_t> &i_vids);
+                              int64_t &i_vid_count);
   int prepare_delta_mem_data(roaring::api::roaring64_bitmap_t *gene_bitmap,
                              ObVectorQueryAdaptorResultContext *ctx);
   int serialize(ObIAllocator *allocator, ObOStreamBuf::CbParam &cb_param, ObOStreamBuf::Callback &cb);
@@ -923,8 +923,8 @@ private:
   void *get_incr_index();
   void *get_snap_index();
   int add_datum_row_into_array(blocksstable::ObDatumRow *datum_row,
-                               ObArray<uint64_t> &i_vids,
-                               ObArray<uint64_t> &d_vids);
+                               ObIArray<uint64_t> &i_vids,
+                               ObIArray<uint64_t> &d_vids);
   bool check_if_complete_index(SCN read_scn);
   bool check_if_complete_delta(ObVectorQueryAdaptorResultContext *ctx,
                                roaring::api::roaring64_bitmap_t *gene_bitmap,
@@ -939,7 +939,7 @@ private:
                            uint64_t *null_vids,
                            int null_count,
                            bool& has_written);
-  int write_into_index_mem(int64_t dim, SCN read_scn, ObArray<uint64_t> &i_vids, ObArray<uint64_t> &d_vids);
+  int write_into_index_mem(int64_t dim, SCN read_scn, ObIArray<uint64_t> &i_vids, ObIArray<uint64_t> &d_vids);
   int generate_snapshot_valid_bitmap(ObVectorQueryAdaptorResultContext *ctx,
                                      common::ObNewRowIterator *row_iter,
                                      SCN query_scn);
