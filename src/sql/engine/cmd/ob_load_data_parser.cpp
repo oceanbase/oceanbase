@@ -1351,7 +1351,7 @@ int ObExternalFileFormat::mock_gen_column_def(
         } else {
           ObString type_info = column.get_extended_type_info().at(0);
           if (!type_info.prefix_match("ARRAY")) {
-            ret = OB_ERR_UNEXPECTED;
+            ret = OB_NOT_SUPPORTED;
             LOG_WARN("invalid type info prefix", K(ret), K(type_info));
           } else {
             const char *type_ptr = type_info.ptr();
@@ -1376,10 +1376,11 @@ int ObExternalFileFormat::mock_gen_column_def(
         OZ (expect_column_name.append(column.get_column_name_str()));
 
         LOG_TRACE("get expect column name", K(ret), K(expect_column_name.string()));
-        if (OB_FAIL(temp_str.append_fmt("get_path(%s, '%.*s')",
-                                        N_EXTERNAL_FILE_ROW,
-                                        expect_column_name.string().length(),
-                                        expect_column_name.string().ptr()))) {
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(temp_str.append_fmt("get_path(%s, '%.*s')",
+                                               N_EXTERNAL_FILE_ROW,
+                                               expect_column_name.string().length(),
+                                               expect_column_name.string().ptr()))) {
           LOG_WARN("fail to append sql str", K(ret));
         }
       } else if (parquet_format_.column_index_type_ == sql::ColumnIndexType::POSITION) {
