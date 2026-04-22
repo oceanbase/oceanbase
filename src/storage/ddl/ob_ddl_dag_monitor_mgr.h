@@ -51,7 +51,9 @@ public:
 
   // Cleanup API:
   // - CLEAN_ALL_NODE: remove all nodes
-  // - CLEAN_EXPIRED_NODE: remove finished & expired nodes
+  // - CLEAN_EXPIRED_NODE: remove finished & expired nodes, plus finished nodes whose
+  //                       info list has already been drained (to avoid empty nodes
+  //                       piling up in the allocator while waiting for TTL)
   // - CLEAN_FINISHED_INFO: if node expired, remove node; otherwise clean finished infos in node
   int clean_nodes(const CleanMode mode);
 

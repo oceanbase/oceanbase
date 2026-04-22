@@ -271,6 +271,12 @@ int ObDDLDagMonitorNode::get_all_infos(ObIAllocator &allocator, ObIArray<ObDDLDa
   return ret;
 }
 
+bool ObDDLDagMonitorNode::is_info_list_empty() const
+{
+  SpinRLockGuard guard(lock_);
+  return info_list_.is_empty();
+}
+
 int ObDDLDagMonitorNode::clean_infos(const bool only_finished)
 {
   int ret = OB_SUCCESS;

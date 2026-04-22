@@ -132,6 +132,11 @@ public:
 
   bool is_finished() const { return finish_timestamp_ > 0; }
   bool is_expired(const int64_t current_time, const int64_t ttl_us) const;
+  // Returns true if the node currently holds no task-side monitor info.
+  // Used by the manager's cleanup path to reclaim finished nodes whose
+  // info list has already been drained, avoiding empty nodes piling up in
+  // the allocator while waiting for TTL.
+  bool is_info_list_empty() const;
 
   const Key &get_key() const { return key_; }
   const void *get_dag_ptr() const { return reinterpret_cast<const void *>(key_.dag_ptr_); }

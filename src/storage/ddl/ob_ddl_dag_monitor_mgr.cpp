@@ -263,8 +263,13 @@ int ObDDLDagMonitorMgr::clean_nodes_unlock(const CleanMode mode)
       continue;
     }
     const bool node_expired = node->is_expired(now, ttl_us_);
+    // Reclaim finished nodes whose info list has already been drained. Without this,
+    // empty-but-not-yet-expired nodes would keep occupying allocator blocks under
+    // heavy DDL workload (virtual table shows nothing but IndDagMonAlloc piles up),
+    // eventually causing new DDL tasks to fail with -4013.
+    const bool empty_finished_node = node->is_finished() && node->is_info_list_empty();
     const bool need_remove = (CLEAN_ALL_NODE == mode)
-                             || (CLEAN_EXPIRED_NODE == mode && node_expired)
+                             || (CLEAN_EXPIRED_NODE == mode && (node_expired || empty_finished_node))
                              || (CLEAN_FINISHED_INFO == mode && node_expired);
     if (need_remove) {
       if (OB_FAIL(inner_remove_node(node))) {
