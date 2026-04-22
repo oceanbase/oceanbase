@@ -1564,9 +1564,7 @@ int ObPlanCache::cache_evict_by_glitch_node()
              "cache_obj_num", get_cache_obj_size(),
              "cache_node_num", cache_key_node_map_.size());
       LCKeyValueArray to_evict_list;
-      std::pop_heap(co_list.begin(), co_list.end(), [](const LCKeyValue &left, const LCKeyValue &right) {
-        return left.node_->get_node_stat()->weight() > right.node_->get_node_stat()->weight();
-      });
+      lib::ob_sort(co_list.begin(), co_list.end(), stat_compare);
       for (int64_t i = 0; OB_SUCC(ret) && mem_to_free > 0 && i < N; i++) {
         mem_to_free -= co_list.at(i).node_->get_mem_size();
         ++cache_evict_num;
