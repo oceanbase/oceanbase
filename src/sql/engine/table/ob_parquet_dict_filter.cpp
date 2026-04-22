@@ -266,7 +266,7 @@ int ObParquetDictFilterPushdown::save_dict_column_data(int32_t col_idx,
       if (has_null) {
         int j = 0;
         for (int64_t i = 0; i < row_count && OB_SUCC(ret); ++i) {
-          if (def_levels[i] < max_def_level) {
+          if (0 != max_def_level && def_levels[i] < max_def_level) {
             dict_data->indices_[row_offset + i] = dict_len;
           } else {
             dict_data->indices_[row_offset + i] = indices[j++];
