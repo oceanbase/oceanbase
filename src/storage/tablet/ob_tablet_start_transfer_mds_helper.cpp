@@ -28,8 +28,8 @@ using namespace common;
 using namespace transaction;
 
 ERRSIM_POINT_DEF(EN_CREATE_TRANSFER_IN_TABLET_FAILED);
-
 ERRSIM_POINT_DEF(EN_TRANSFER_DIAGNOSE_START_REPLAY_FAILED);
+ERRSIM_POINT_DEF(EN_BLOCK_TRANSFER_IN_REPLAY);
 /******************ObTabletStartTransferOutReplayExecutor*********************/
 class ObTabletStartTransferOutReplayExecutor final : public logservice::ObTabletReplayExecutor
 {
@@ -1653,8 +1653,10 @@ int ObTabletStartTransferInHelper::on_replay(
     LOG_WARN("tx start transfer in info is unexpected", K(ret), K(tx_start_transfer_in_info));
   } else if (CLICK_FAIL(get_migration_and_restore_status_(tx_start_transfer_in_info, migration_status, ls_restore_status))) {
     LOG_WARN("failed to get migration and restore status", K(ret), K(tx_start_transfer_in_info));
-  } else if (CLICK_FAIL(check_can_replay_redo_log_(tx_start_transfer_in_info, scn, migration_status, ls_restore_status))) {
+  } else if (CLICK_FAIL(check_can_replay_redo_log_for_restore_(tx_start_transfer_in_info, scn, migration_status, ls_restore_status))) {
     LOG_WARN("failed to check can replay redo log", K(ret), K(tx_start_transfer_in_info));
+  } else if (CLICK_FAIL(check_can_replay_redo_log_for_migration_(scn, tx_start_transfer_in_info, migration_status))) {
+    LOG_WARN("failed to check can create transfer in tablet", K(ret), K(scn), K(tx_start_transfer_in_info), K(migration_status));
   } else if (CLICK_FAIL(check_can_skip_replay_(scn, tx_start_transfer_in_info, skip_replay))) {
     LOG_WARN("failed to check can skip replay", K(ret), K(tx_start_transfer_in_info));
   } else if (skip_replay) {
@@ -1725,12 +1727,7 @@ int ObTabletStartTransferInHelper::on_replay_success_(
 {
   MDS_TG(1_s);
   int ret = OB_SUCCESS;
-  ObLSHandle ls_handle;
-  ObLSService *ls_service = nullptr;
-  ObLS *ls = nullptr;
   const bool for_replay = true;
-  bool can_skip_replay = false;
-  bool can_skip_check_src = false;
   const int64_t start_ts = ObTimeUtil::current_time();
   LOG_INFO("[TRANSFER] start tx start transfer in on_replay_success_",
       K(tx_start_transfer_in_info));
@@ -1752,6 +1749,29 @@ int ObTabletStartTransferInHelper::on_replay_success_(
   if (!scn.is_valid() || !tx_start_transfer_in_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("on replay success get invalid argument", K(ret), K(scn), K(tx_start_transfer_in_info));
+#ifdef ERRSIM
+  } else if (OB_FAIL(EN_BLOCK_TRANSFER_IN_REPLAY)) {
+    ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
+    ObLSHandle ls_handle;
+    ObLS *ls = nullptr;
+    if (OB_FAIL(MTL(ObLSService*)->get_ls(tx_start_transfer_in_info.dest_ls_id_, ls_handle, ObLSGetMod::MDS_TABLE_MOD))) {
+      LOG_WARN("failed to get ls", K(ret), K(tx_start_transfer_in_info));
+    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls should not be NULL", K(ret), K(tx_start_transfer_in_info));
+    } else if (OB_FAIL(ls->get_migration_status(migration_status))) {
+      LOG_WARN("failed to get migration status", K(ret), K(tx_start_transfer_in_info));
+    } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE != migration_status) {
+      // skip block for migration ls
+      ret = OB_SUCCESS;
+      LOG_INFO("[ERRSIM] skip block for migration ls", K(migration_status), KPC(ls));
+    } else {
+      LOG_INFO("[ERRSIM] block transfer in replay", K(ret), K(migration_status), KPC(ls));
+    }
+#endif
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (CLICK_FAIL(check_transfer_dest_tablets_(tx_start_transfer_in_info, for_replay))) {
     LOG_WARN("failed to check transfer dest tablets", K(ret), K(tx_start_transfer_in_info));
   } else if (CLICK_FAIL(create_transfer_in_tablets_(scn, for_replay, tx_start_transfer_in_info, ctx))) {
@@ -2306,7 +2326,40 @@ int ObTabletStartTransferInHelper::get_migration_and_restore_status_(
   return ret;
 }
 
-int ObTabletStartTransferInHelper::check_can_replay_redo_log_(
+int ObTabletStartTransferInHelper::check_can_replay_redo_log_for_migration_(
+    const share::SCN &scn,
+    const ObTXStartTransferInInfo &tx_start_transfer_in_info,
+    const ObMigrationStatus &migration_status)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  share::SCN gts_scn;
+
+  if (!scn.is_valid() || !tx_start_transfer_in_info.is_valid() || !ObMigrationStatusHelper::is_valid(migration_status)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("check can create transfer in tablet get invalid argument", K(ret), K(scn), K(tx_start_transfer_in_info), K(migration_status));
+  } else if (ObMigrationStatus::OB_MIGRATION_STATUS_NONE == migration_status) {
+    // not in migration, allow creation
+  } else if (OB_FAIL(ObTransferUtils::get_gts(tenant_id, gts_scn))) {
+    LOG_WARN("failed to get gts", K(ret), K(tenant_id), K(scn));
+  } else if (gts_scn < scn) {
+    ret = OB_EAGAIN;
+    LOG_WARN("in migration and gts is smaller than transfer start scn, cannot create transfer in tablet",
+        K(ret), K(gts_scn), K(scn), K(migration_status), K(tx_start_transfer_in_info));
+#ifdef ERRSIM
+    SERVER_EVENT_SYNC_ADD("transfer", "cannot_create_transfer_in_tablet",
+                   "tenant_id", MTL_ID(),
+                   "src_ls", tx_start_transfer_in_info.src_ls_id_.id(),
+                   "dest_ls", tx_start_transfer_in_info.dest_ls_id_.id(),
+                   "transfer_scn", scn,
+                   "gts_scn", gts_scn,
+                   "migration_status", static_cast<int64_t>(migration_status));
+#endif
+  }
+  return ret;
+}
+
+int ObTabletStartTransferInHelper::check_can_replay_redo_log_for_restore_(
     const ObTXStartTransferInInfo &tx_start_transfer_in_info,
     const share::SCN &scn,
     const ObMigrationStatus &migration_status,

@@ -265,11 +265,15 @@ private:
       const ObTXStartTransferInInfo &tx_start_transfer_in_info,
       ObMigrationStatus &migration_status,
       share::ObLSRestoreStatus &ls_restore_status);
-  static int check_can_replay_redo_log_(
+  static int check_can_replay_redo_log_for_restore_(
       const ObTXStartTransferInInfo &tx_start_transfer_in_info,
       const share::SCN &scn,
       const ObMigrationStatus &migration_status,
       const share::ObLSRestoreStatus &ls_restore_status);
+  static int check_can_replay_redo_log_for_migration_(
+      const share::SCN &scn,
+      const ObTXStartTransferInInfo &tx_start_transfer_in_info,
+      const ObMigrationStatus &migration_status);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletStartTransferInHelper);
 };

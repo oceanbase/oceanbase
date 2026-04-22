@@ -2050,7 +2050,7 @@ bool ObSSTableIndexBuilder::satisfies_small_sstable_pre_requisites(
 #ifdef ERRSIM
   if (OB_SUCCESS != EN_COMPACTION_DISABLE_SHARED_MACRO) {
     tmp_mode = DISABLE;
-    FLOG_INFO("ERRSIM EN_COMPACTION_DISABLE_SHARED_MACRO", KR(ret));
+    FLOG_INFO("ERRSIM EN_COMPACTION_DISABLE_SHARED_MACRO");
   }
 #endif
   return ObSpaceOptimizationMode::ENABLE == tmp_mode
