@@ -41,7 +41,7 @@ public:
 
   const int64_t RESERVED_FETCH_US = 10 * 1000 * 1000; // 10s, used for fetch observer log archive status
   const int64_t MIN_IDLE_INTERVAL_US = 2 * 1000 * 1000; // 2s
-  const int64_t FAST_IDLE_INTERVAL_US = 10 * 1000 * 1000; // 10s, used during BEGINNING or STOPPING
+  const int64_t FAST_IDLE_INTERVAL_US = 1 * 1000 * 1000; // 1s, used during PREPARE/BEGINNING or STOPPING (intentionally == MIN_IDLE_INTERVAL_US)
   const int64_t MAX_IDLE_INTERVAL_US = 60 * 1000 * 1000; // 60s
   DEFINE_MTL_FUNC(ObArchiveSchedulerService);
   int init();
@@ -81,7 +81,7 @@ private:
   int close_tenant_archive_mode_(const common::ObIArray<uint64_t> &tenant_ids_array);
   int close_tenant_archive_mode_(const uint64_t tenant_id);
   // notify arhicve start/end to tenant's rs
-  void notify_start_archive_(const uint64_t tenant_id);
+  int notify_start_archive_(const uint64_t tenant_id);
 
   bool is_inited_;
   uint64_t tenant_id_;

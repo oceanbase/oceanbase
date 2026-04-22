@@ -214,9 +214,17 @@ void ObArchiveService::run1()
   } else {
     while (! has_set_stop()) {
       int64_t begin_tstamp = ObTimeUtility::current_time();
-      do_thread_task_();
+      bool has_switch = do_thread_task_();
       int64_t end_tstamp = ObTimeUtility::current_time();
-      int64_t wait_interval = THREAD_RUN_INTERVAL - (end_tstamp - begin_tstamp);
+      // Use shorter interval during transient states so persist_and_load()
+      // picks up newly-produced archive data sooner.
+      ArchiveKey key;
+      ObArchiveRoundState state;
+      archive_round_mgr_.get_archive_round_info(key, state);
+      const bool in_transient_state = state.is_beginning() || state.is_stopping();
+      int64_t interval = (has_switch || in_transient_state)
+                         ? FAST_THREAD_RUN_INTERVAL : THREAD_RUN_INTERVAL;
+      int64_t wait_interval = interval - (end_tstamp - begin_tstamp);
       if (wait_interval > 0) {
         common::ObBKGDSessInActiveGuard inactive_guard;
         cond_.timedwait(wait_interval);
@@ -226,19 +234,21 @@ void ObArchiveService::run1()
   ARCHIVE_LOG(INFO, "ObArchiveService thread end", K_(tenant_id));
 }
 
-void ObArchiveService::do_thread_task_()
+bool ObArchiveService::do_thread_task_()
 {
+  bool has_switch = false;
   if (! is_user_tenant(tenant_id_)) {
   } else {
-    do_check_switch_archive_();
+    has_switch = do_check_switch_archive_();
     check_and_set_archive_stop_();
     print_archive_status_();
     persist_mgr_.persist_and_load();
     scheduler_.schedule();
   }
+  return has_switch;
 }
 
-void ObArchiveService::do_check_switch_archive_()
+bool ObArchiveService::do_check_switch_archive_()
 {
   int ret = OB_SUCCESS;
   ObTenantArchiveRoundAttr attr;
@@ -286,6 +296,7 @@ void ObArchiveService::do_check_switch_archive_()
       ARCHIVE_LOG(INFO, "check_log_archive_state_, no switch round op", K(attr));
     }
   }
+  return op != ArchiveRoundOp::NONE;
 }
 
 int ObArchiveService::load_archive_round_attr_(ObTenantArchiveRoundAttr &attr)
@@ -411,6 +422,9 @@ int ObArchiveService::start_archive_(const ObTenantArchiveRoundAttr &attr)
           share::ObTenantLogArchiveStatus::COMPATIBLE::COMPATIBLE_VERSION_2, dest, dest_id))) {
     ARCHIVE_LOG(ERROR, "archive round mgr set archive info failed", K(ret), K(attr));
   } else {
+    // Just notify the LSMgr thread to pick up LS tasks; do not call
+    // bootstrap_ls_tasks() directly to avoid concurrent insert_or_update_ls_
+    // races with the LSMgr thread's own add_ls_task_() loop.
     notify_start_();
     ARCHIVE_LOG(INFO, "start archive succ", K_(tenant_id));
   }
