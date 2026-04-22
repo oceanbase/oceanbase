@@ -56,6 +56,7 @@
 #include "share/external_table/ob_external_table_utils.h"
 #include "share/ob_debug_sync.h"
 #include "share/schema/ob_schema_utils.h"
+#include "share/stat/ob_dbms_stats_utils.h"
 namespace oceanbase
 {
 using namespace common;
@@ -2265,6 +2266,8 @@ int ObDropTableExecutor::execute(ObExecContext &ctx, ObDropTableStmt &stmt)
     } else if (FALSE_IT(tmp_arg.foreign_key_checks_ = is_oracle_mode() || (is_mysql_mode() && foreign_key_checks))) {
     } else if (FALSE_IT(tmp_arg.compat_mode_ = ORACLE_MODE == my_session->get_compatibility_mode() ?
         lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL)) {
+    } else if (OB_FAIL(ObDbmsStatsUtils::cancel_async_gather_stats(ctx))) {
+      LOG_WARN("failed to cancel async gather stats before drop table", KR(ret), K(tenant_id));
     } else {
       bool is_parallel_drop = false;
       if (!(data_version >= DATA_VERSION_4_2_5_1 && data_version < DATA_VERSION_4_3_0_0)) {
@@ -2416,7 +2419,9 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
       int64_t affected_rows = 0;
       bool is_parallel_ddl = true;
       const uint64_t tenant_id = truncate_table_arg.tenant_id_;
-      if (OB_FAIL(ObParallelDDLControlMode::is_parallel_ddl_enable(
+      if (OB_FAIL(ObDbmsStatsUtils::cancel_async_gather_stats(ctx))) {
+        LOG_WARN("failed to cancel async gather stats before truncate table", KR(ret), K(tenant_id));
+      } else if (OB_FAIL(ObParallelDDLControlMode::is_parallel_ddl_enable(
                          ObParallelDDLControlMode::TRUNCATE_TABLE,
                          tenant_id, is_parallel_ddl))) {
         LOG_WARN("fail to check whether is parallel truncate table", KR(ret), K(tenant_id));
