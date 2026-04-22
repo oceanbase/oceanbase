@@ -642,13 +642,107 @@ private:
   // for child with ObPQDistributeMethod::Type::PARTITION_RANDOM
   static int build_pkey_random_ch_mn_map(ObDfo &parent, ObDfo &child, uint64_t tenant_id);
 
-  // for child with ObPQDistributeMethod::Type::PARTITION_HASH or PARTITION_RANGE
+  // for child with ObPQDistributeMethod::Type::PARTITION_HASH
   static int build_pkey_affinitized_ch_mn_map(ObDfo &parent, ObDfo &child, uint64_t tenant_id);
+  // for child with ObPQDistributeMethod::Type::PARTITION_RANGE
+  static int build_pkey_average_task_ch_mn_map(ObExecContext &ctx, ObDfo &parent, ObDfo &child, uint64_t tenant_id);
   static int build_affinitized_partition_map_by_sqcs(common::ObIArray<ObPxSqcMeta> &sqcs,
                                                      ObDfo &child,
                                                      ObIArray<int64_t> &prefix_task_counts,
                                                      int64_t total_task_count,
                                                      ObPxPartChMapArray &map);
+  typedef common::hash::ObHashMap<uint64_t, int64_t> PartRowCountMap;
+  static int build_average_task_partition_map_by_sqcs(
+      common::ObIArray<ObPxSqcMeta> &sqcs,
+      ObDfo &child,
+      ObIArray<int64_t> &prefix_task_counts,
+      int64_t total_task_count,
+      ObPxPartChMapArray &map,
+      const PartRowCountMap *part_row_count_map);
+
+  // ---------- for online ddl get partition rows statistics  ----------
+  struct AffinitizedPartitionRowMeta {
+    ObDASTabletLoc *loc_ = nullptr;
+    int64_t row_count_ = 0;
+    TO_STRING_KV(KP(loc_), K(row_count_));
+  };
+  struct AffinitizedRowMetaDescCmp {
+    bool operator()(const AffinitizedPartitionRowMeta &a, const AffinitizedPartitionRowMeta &b) const
+    {
+      if (a.row_count_ != b.row_count_) {
+        return a.row_count_ > b.row_count_;
+      }
+      const int64_t ida = OB_NOT_NULL(a.loc_) ? a.loc_->tablet_id_.id() : 0;
+      const int64_t idb = OB_NOT_NULL(b.loc_) ? b.loc_->tablet_id_.id() : 0;
+      return ida < idb;
+    }
+  };
+  typedef ObSEArray<AffinitizedPartitionRowMeta, 64> AffinitizedPartRowMetaArray;
+  static int64_t affinitized_zigzag_channel_idx(const int64_t part_idx, const int64_t T)
+  {
+    int64_t ch = 0;
+    if (T <= 1) {
+      ch = 0;
+    } else {
+      const int64_t period = 2 * T;
+      const int64_t pos = part_idx % period;
+      ch = (pos < T) ? pos : (2 * T - 1 - pos);
+    }
+    return ch;
+  }
+  static int dispatch_weighted_threads_for_affinitized_lt(
+      const int64_t thread_cnt,
+      const int64_t prefix_task_count,
+      AffinitizedPartRowMetaArray &metas_by_row_desc,
+      ObPxPartChMapArray &map,
+      const int64_t task_idx_base);
+  static int dispatch_light_partitions_abundant(
+      const int64_t t_available,
+      const int64_t prefix_task_count,
+      const int64_t task_offset,
+      AffinitizedPartRowMetaArray &metas,
+      ObPxPartChMapArray &map);
+  static int dispatch_affinitized_heavy_then_zigzag(
+      const int64_t thread_cnt,
+      const int64_t prefix_task_count,
+      AffinitizedPartRowMetaArray &row_metas,
+      ObPxPartChMapArray &map);
+  // 单个 SQC 内的几何均分 / round-robin 分配
+  static int dispatch_affinitized_partition_map_for_one_sqc(
+      const DASTabletLocArray &locations,
+      const int64_t sqc_task_count,
+      const int64_t prefix_task_count,
+      ObPxPartChMapArray &map);
+  // DDL 建局部索引统计信息收集辅助函数
+  static int get_ddl_local_index_part_arrays(
+      ObExecContext &ctx,
+      const uint64_t tenant_id,
+      bool &local_index_and_one_level,
+      uint64_t &data_table_id,
+      int64_t &part_num,
+      share::schema::ObPartition **&data_parts,
+      share::schema::ObPartition **&index_parts,
+      share::schema::ObSchemaGetterGuard &schema_guard);
+  static int build_part_id_arrays(
+      const int64_t part_num,
+      share::schema::ObPartition **data_parts,
+      share::schema::ObPartition **index_parts,
+      ObIArray<int64_t> &data_part_ids,
+      ObIArray<int64_t> &idx_part_ids);
+  static int collect_part_stats_to_idx_map(
+      const uint64_t tenant_id,
+      const uint64_t data_table_id,
+      const int64_t part_num,
+      const ObIArray<int64_t> &data_part_ids,
+      const ObIArray<int64_t> &idx_part_ids,
+      bool &part_row_count_valid,
+      PartRowCountMap &out_part_row_count_map);
+  static int try_collect_ddl_local_index_part_row_counts(
+      ObExecContext &ctx,
+      const ObDfo &child,
+      const uint64_t tenant_id,
+      bool &part_row_count_valid,
+      PartRowCountMap &out_part_row_count_map);
 
 private:
   static int build_partition_map_by_sqcs(common::ObIArray<ObPxSqcMeta> &sqcs,
