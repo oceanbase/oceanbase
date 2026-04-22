@@ -856,7 +856,8 @@ int ObMViewInfo::update_mview_data_attr(ObISQLClient &sql_client,
                                         const uint64_t tenant_id,
                                         const uint64_t refresh_scn,
                                         const uint64_t target_data_sync_scn,
-                                        ObMViewInfo &mview_info)
+                                        ObMViewInfo &mview_info,
+                                        bool allow_empty_dep)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -878,25 +879,29 @@ int ObMViewInfo::update_mview_data_attr(ObISQLClient &sql_client,
                      tenant_id, mview_info.get_mview_id(), mv_dep_infos, true))) {
     LOG_WARN("fail to get mv dep infos", K(ret), K(mview_info));
   } else if (mv_dep_infos.count() <= 0) {
-    ret = OB_ERR_MVIEW_MISSING_DEPENDENCE;
-    const ObTableSchema *mview_table_schema = nullptr;
-    const ObDatabaseSchema *db_schema = nullptr;
-    uint64_t mview_table_id = mview_info.get_mview_id();
-    if (OB_TMP_FAIL(schema_guard.get_table_schema(tenant_id, mview_table_id, mview_table_schema))) {
-      LOG_WARN("fail to get table schema", KR(tmp_ret), K(tenant_id), K(mview_table_id));
-    } else if (OB_ISNULL(mview_table_schema)) {
-      tmp_ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("table schema is null", KR(tmp_ret), K(tenant_id), K(mview_table_id));
-    } else if (OB_TMP_FAIL(schema_guard.get_database_schema(
-                           tenant_id, mview_table_schema->get_database_id(), db_schema))) {
-      LOG_WARN("fail to get db schema", KR(tmp_ret), K(tenant_id),
-               K(mview_table_schema->get_database_id()));
-    } else if (OB_ISNULL(db_schema)) {
-      tmp_ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("database not exist", KR(tmp_ret));
+    if (!allow_empty_dep){
+      ret = OB_ERR_MVIEW_MISSING_DEPENDENCE;
+      const ObTableSchema *mview_table_schema = nullptr;
+      const ObDatabaseSchema *db_schema = nullptr;
+      uint64_t mview_table_id = mview_info.get_mview_id();
+      if (OB_TMP_FAIL(schema_guard.get_table_schema(tenant_id, mview_table_id, mview_table_schema))) {
+        LOG_WARN("fail to get table schema", KR(tmp_ret), K(tenant_id), K(mview_table_id));
+      } else if (OB_ISNULL(mview_table_schema)) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table schema is null", KR(tmp_ret), K(tenant_id), K(mview_table_id));
+      } else if (OB_TMP_FAIL(schema_guard.get_database_schema(
+                            tenant_id, mview_table_schema->get_database_id(), db_schema))) {
+        LOG_WARN("fail to get db schema", KR(tmp_ret), K(tenant_id),
+                K(mview_table_schema->get_database_id()));
+      } else if (OB_ISNULL(db_schema)) {
+        tmp_ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("database not exist", KR(tmp_ret));
+      } else {
+        LOG_ERROR("This materialized view has invalid dependency info, please perform a complete refresh to recover", K(ret), K(mview_info));
+        LOG_USER_ERROR(OB_ERR_MVIEW_MISSING_DEPENDENCE, db_schema->get_database_name_str().ptr(), mview_table_schema->get_table_name_str().ptr());
+      }
     } else {
-      LOG_ERROR("This materialized view has invalid dependency info, please perform a complete refresh to recover", K(ret), K(mview_info));
-      LOG_USER_ERROR(OB_ERR_MVIEW_MISSING_DEPENDENCE, db_schema->get_database_name_str().ptr(), mview_table_schema->get_table_name_str().ptr());
+      dep_base_table = true;
     }
   } else {
     ARRAY_FOREACH(mv_dep_infos, idx) {

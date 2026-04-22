@@ -766,7 +766,7 @@ int ObMViewRefresher::fast_refresh()
       if (OB_FAIL(mview_info.set_last_refresh_trace_id(ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf))))) {
         LOG_WARN("fail to set last refresh trace id", KR(ret));
       } else if (OB_FAIL(ObMViewInfo::update_mview_data_attr(trans, tenant_id,
-                        last_refresh_scn, target_data_sync_scn_val, mview_info))) {
+                        last_refresh_scn, target_data_sync_scn_val, mview_info, refresh_ctx_->based_schema_object_infos_.empty()))) {
         LOG_WARN("fail to update mview data scn", KR(ret), K(mview_info), K(last_refresh_scn));
       } else if (OB_FAIL(ObMViewInfo::update_mview_last_refresh_info(trans, mview_info))) {
         LOG_WARN("fail to update mview last refresh info", KR(ret), K(mview_info));

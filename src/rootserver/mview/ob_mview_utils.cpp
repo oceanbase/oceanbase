@@ -244,7 +244,7 @@ int ObMViewUtils::generate_mview_complete_refresh_sql(
   bool is_oracle_mode = false;
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == mview_table_id ||
                   OB_INVALID_ID == container_table_id || snapshot_version <= 0 ||
-                  execution_id < 0 || task_id <= 0 || based_schema_object_infos.empty())) {
+                  execution_id < 0 || task_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", KR(ret), K(tenant_id), K(mview_table_id), K(container_table_id),
              K(snapshot_version), K(execution_id), K(task_id), K(based_schema_object_infos));
@@ -279,10 +279,10 @@ int ObMViewUtils::generate_mview_complete_refresh_sql(
                      container_table_name, is_oracle_mode))) {
     LOG_WARN("fail to generate new name with escape character", KR(ret),
       K(container_table_schema->get_table_name_str()), K(is_oracle_mode));
-  } else if (use_schema_version_hint_for_src_table &&
-             OB_FAIL(ObMViewUtils::check_schema_version_and_generate_ddl_schema_hint(
-                     tenant_id, mview_table_id, schema_guard, based_schema_object_infos,
-                     is_oracle_mode, src_table_schema_version_hint))) {
+  } else if (use_schema_version_hint_for_src_table && !based_schema_object_infos.empty() &&
+              OB_FAIL(ObMViewUtils::check_schema_version_and_generate_ddl_schema_hint(
+                      tenant_id, mview_table_id, schema_guard, based_schema_object_infos,
+                      is_oracle_mode, src_table_schema_version_hint))) {
     LOG_WARN("failed to generated mview ddl schema hint", KR(ret));
   } else {
     // generate mview complete refresh sql

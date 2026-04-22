@@ -2075,7 +2075,8 @@ int ObDDLService::start_mview_complete_refresh_task(
     arg.ddl_stmt_str_ = ddl_stmt_str;
   }
   if (OB_SUCC(ret)) {
-    if (OB_UNLIKELY(max_dependency_version > mview_schema.get_max_dependency_version())) {
+    if (OB_UNLIKELY(!arg.based_schema_object_infos_.empty() &&
+                     max_dependency_version > mview_schema.get_max_dependency_version())) {
       ret = OB_OLD_SCHEMA_VERSION;
       LOG_WARN("base table schema version is old",
           KR(ret), K(max_dependency_version), KPC(dep_infos),
@@ -23807,7 +23808,7 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
               } else if (OB_FAIL(mview_info.set_last_refresh_trace_id(ObCurTraceId::get_trace_id_str()))) {
                 LOG_WARN("fail to set last refresh trace id", KR(ret));
               } else if (OB_FAIL(ObMViewInfo::update_mview_data_attr(trans, tenant_id,
-                                 refresh_scn_val, target_data_sync_scn_val, mview_info))) {
+                                 refresh_scn_val, target_data_sync_scn_val, mview_info, alter_table_arg.based_schema_object_infos_.empty()))) {
                 LOG_WARN("fail to update mview data scn", KR(ret), K(mview_info),
                          K(refresh_scn_val));
               } else if (OB_FAIL(ObMViewInfo::update_mview_last_refresh_info(trans, mview_info))) {
