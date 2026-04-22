@@ -1072,13 +1072,31 @@ void ObPluginVectorIndexService::destroy()
 {
   if (IS_INIT) {
     FLOG_INFO("destroy vector index service", K_(tenant_id));
-    is_inited_ = false;
-    has_start_ = false;
-    tenant_id_ = OB_INVALID_TENANT_ID;
-    is_ls_or_tablet_changed_ = false;
-    schema_service_ = NULL;
-    ls_service_ = NULL;
-    sql_proxy_ = NULL;
+
+    // Stop creating/acquiring new vector objects before reclaiming allocators.
+    stop();
+    wait();
+
+    // destroy vec async task
+    if (OB_NOT_NULL(tenant_vec_async_task_sched_)) {
+      tenant_vec_async_task_sched_->destroy();  // destroy tg_id_
+      ob_free(tenant_vec_async_task_sched_);
+      tenant_vec_async_task_sched_ = nullptr;
+    }
+
+    // TODO: destory shared tg_id
+    if (kmeans_tg_id_ != OB_INVALID_TG_ID) {
+      TG_DESTROY(kmeans_tg_id_);
+      kmeans_tg_id_ = OB_INVALID_TG_ID;
+    }
+    if (embedding_tg_id_ != OB_INVALID_TG_ID) {
+      TG_DESTROY(embedding_tg_id_);
+      embedding_tg_id_ = OB_INVALID_TG_ID;
+    }
+    // destroy kmeans build task handler
+    kmeans_build_task_handler_.destroy();
+    // destroy async task handler
+    vec_async_task_handle_.destroy();
 
     FOREACH(iter, vec_idx_tmp_map_) {
       ObVectorIndexTmpInfo *tmp_info = iter->second;
@@ -1106,26 +1124,13 @@ void ObPluginVectorIndexService::destroy()
     tmp_info_allocator_.reset();
     adaptor_allocator_.reset();
 
-    // destroy vec async task
-    if (OB_NOT_NULL(tenant_vec_async_task_sched_)) {
-      tenant_vec_async_task_sched_->destroy();  // destroy tg_id_
-      ob_free(tenant_vec_async_task_sched_);
-      tenant_vec_async_task_sched_ = nullptr;
-    }
-
-    // TODO: destory shared tg_id
-    if (kmeans_tg_id_ != OB_INVALID_TG_ID) {
-      TG_DESTROY(kmeans_tg_id_);
-      kmeans_tg_id_ = OB_INVALID_TG_ID;
-    }
-    if (embedding_tg_id_ != OB_INVALID_TG_ID) {
-      TG_DESTROY(embedding_tg_id_);
-      embedding_tg_id_ = OB_INVALID_TG_ID;
-    }
-    // destroy kmeans build task handler
-    kmeans_build_task_handler_.destroy();
-    // destroy async task handler
-    vec_async_task_handle_.destroy();
+    is_inited_ = false;
+    has_start_ = false;
+    tenant_id_ = OB_INVALID_TENANT_ID;
+    is_ls_or_tablet_changed_ = false;
+    schema_service_ = NULL;
+    ls_service_ = NULL;
+    sql_proxy_ = NULL;
   }
 }
 
@@ -1310,6 +1315,7 @@ void ObPluginVectorIndexService::wait()
     if (OB_NOT_NULL(tenant_vec_async_task_sched_)) {
       tenant_vec_async_task_sched_->wait();
     }
+    get_vec_async_task_handle().wait();
     kmeans_build_task_handler_.wait();
     embedding_task_handler_.wait();
   }
@@ -1711,6 +1717,8 @@ int ObPluginVectorIndexMgr::replace_with_full_partial_adapter(ObVectorIndexAcqui
           LOG_WARN("fail to release partial index adapter", K(ctx.vbitmap_tablet_id_), KR(ret));
         } else if (OB_FAIL(erase_partial_adapter_(ctx.snapshot_tablet_id_))) {
           LOG_WARN("fail to release partial index adapter", K(ctx.snapshot_tablet_id_), KR(ret));
+        } else if (OB_FAIL(ctx.embedded_tablet_id_.is_valid() && erase_partial_adapter_(ctx.embedded_tablet_id_))) {
+          LOG_WARN("fail to release partial index adapter", K(ctx.embedded_tablet_id_), KR(ret));
         } else if (OB_FAIL(set_partial_adapter_(ctx.inc_tablet_id_, new_adapter, overwrite))) {
           LOG_WARN("failed to set new full partial adapter", K(ctx.inc_tablet_id_), KR(ret));
         } else if (OB_FAIL(set_partial_adapter_(ctx.vbitmap_tablet_id_, new_adapter, overwrite))) {
