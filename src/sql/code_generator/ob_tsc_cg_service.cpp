@@ -4546,6 +4546,18 @@ int ObTscCgService::generate_vec_id_lookup_ctdef(const ObLogTableScan &op,
       }
     }
 
+    if (OB_SUCC(ret) && vec_scan_ctdef->op_type_ == DAS_OP_SORT) {
+      ObDASSortCtDef *sort_def = static_cast<ObDASSortCtDef*>(static_cast<ObDASAttachCtDef*>(vec_scan_ctdef));
+      if (OB_UNLIKELY(sort_def->sort_exprs_.count() != 1)
+          || OB_ISNULL(sort_def->sort_exprs_.at(0))
+          || OB_UNLIKELY(!sort_def->sort_exprs_.at(0)->is_vector_sort_expr())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected sort exprs for vector index scan", K(ret), K(sort_def->sort_exprs_.count()));
+      } else if (OB_FAIL(result_outputs.push_back(sort_def->sort_exprs_.at(0)))) {
+        LOG_WARN("failed to add distance expr to result output", K(ret));
+      }
+    }
+
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(aux_lookup_ctdef->result_output_.assign(result_outputs))) {
       LOG_WARN("assign result output failed", K(ret));
