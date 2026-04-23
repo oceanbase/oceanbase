@@ -650,7 +650,7 @@ int ObDelUpdResolver::resolve_additional_assignments(ObIArray<ObTableAssignment>
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("session_info_ is null", K(ret));
     } else if (OB_FAIL(schema_checker_->get_table_schema(session_info_->get_effective_tenant_id(),
-        table_item->get_base_table_item().ref_id_, table_schema, table_item->is_link_table()))) {
+        table_item->get_base_table_item().ref_id_, table_schema, table_item->get_base_table_item().is_link_table()))) {
       LOG_WARN("fail to get table schema", K(ret), KPC(table_item));
     } else if (OB_ISNULL(table_schema)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1038,6 +1038,8 @@ int ObDelUpdResolver::set_base_table_for_updatable_view(TableItem &table_item,
           } else if (new_table_item->is_json_table()) {
             ret = is_mysql_mode() ? OB_ERR_NON_INSERTABLE_TABLE : OB_ERR_VIRTUAL_COL_NOT_ALLOWED;
             LOG_WARN("json table can not be insert", K(ret));
+          } else if (new_table_item->is_link_table()) {
+            // dblink table, view_base_item_ already set above, no extra check needed
           } else {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("column is not updatable", K(ret), K(col_ref));
