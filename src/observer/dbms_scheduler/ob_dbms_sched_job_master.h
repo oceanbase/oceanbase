@@ -141,6 +141,8 @@ public:
   int purge_run_detail();
   bool mysql_event_scheduler_is_off(ObDBMSSchedJobInfo &job_info);
   bool mysql_event_check_databse_exist(ObDBMSSchedJobInfo &job_info);
+  /// Stale running row in __all_tenant_scheduler_job (e.g. executor/restart) while no real execution.
+  int is_stale_scheduler_job_zombie(ObDBMSSchedJobInfo &job_info, int64_t now, bool &zombie);
 
 private:
   const static int MAX_READY_JOBS_CAPACITY = 1024 * 1024;

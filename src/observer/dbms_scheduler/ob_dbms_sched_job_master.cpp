@@ -14,6 +14,8 @@
 
 #include "ob_dbms_sched_job_master.h"
 #include "share/ob_primary_zone_util.h"//ObPrimaryZoneUtil
+#include "lib/net/ob_addr.h"
+#include "share/ob_all_server_tracer.h"
 
 #include "rootserver/ob_root_service.h"
 #include "storage/mview/ob_mview_sched_job_utils.h"
@@ -242,14 +244,27 @@ int ObDBMSSchedJobMaster::scheduler_job(ObDBMSSchedJobKey *job_key)
       job_key = NULL;
       LOG_INFO("free invalid job", K(job_info));
     } else if (job_info.is_running()) {
-      if (now > job_info.get_this_date() + TO_TS(job_info.get_max_run_duration())) {
-        if (OB_FAIL(table_operator_.update_for_timeout(job_info))) {
-          LOG_WARN("update for end failed for timeout job", K(ret));
+      bool zombie = false;
+      if (job_info.is_mview_job() &&
+          OB_FAIL(is_stale_scheduler_job_zombie(job_info, now, zombie))) {
+        LOG_WARN("fail to check zombie", K(ret));
+      } else if (zombie) {
+        if (OB_FAIL(table_operator_.update_for_lost(job_info))) {
+          LOG_WARN("recover zombie dbms sched job failed", K(job_info), KPC(job_key));
         } else {
-          LOG_WARN("job is timeout, force update for end", K(job_info), K(now));
+          next_check_date = now;
+          LOG_WARN("recovered zombie dbms sched job, will reschedule on alive server", K(job_info));
         }
       } else {
-        LOG_INFO("job is running now, retry later", K(job_info));
+        if (now > job_info.get_this_date() + TO_TS(job_info.get_max_run_duration())) {
+          if (OB_FAIL(table_operator_.update_for_timeout(job_info))) {
+            LOG_WARN("update for end failed for timeout job", K(ret));
+          } else {
+            LOG_WARN("job is timeout, force update for end", K(job_info), K(now));
+          }
+        } else {
+          LOG_INFO("job is running now, retry later", K(job_info));
+        }
       }
     } else if (job_info.is_killed()) {
       free_job_key(job_key);
@@ -674,6 +689,36 @@ bool ObDBMSSchedJobMaster::mysql_event_scheduler_is_off(ObDBMSSchedJobInfo &job_
     mysql_event_scheduler_is_off = false;
   }
   return mysql_event_scheduler_is_off;
+}
+
+int ObDBMSSchedJobMaster::is_stale_scheduler_job_zombie(
+    ObDBMSSchedJobInfo &job_info, int64_t now, bool &zombie)
+{
+  int ret = OB_SUCCESS;
+  zombie = false;
+  if (!job_info.is_running()) {
+  } else if (job_info.is_on_executing()
+             && now > job_info.get_this_exec_date() + CHECK_JOB_LOST_THRESHOLD
+             && !job_info.get_this_exec_addr().empty()) {
+    ObAddr exec_addr;
+    if (OB_FAIL(exec_addr.parse_from_cstring(job_info.get_this_exec_addr().ptr()))) {
+      LOG_WARN("parse this_exec_addr failed for sched zombie detect", K(job_info.get_this_exec_addr()));
+      ret = OB_SUCCESS;
+    } else {
+      bool is_active = false;
+      bool is_service = false;
+      if (OB_FAIL(SVR_TRACER.check_server_active(exec_addr, is_active))) {
+        LOG_WARN("check_server_active failed for sched zombie detect", K(ret), K(exec_addr));
+        ret = OB_SUCCESS;
+      } else if (OB_FAIL(SVR_TRACER.check_in_service(exec_addr, is_service))) {
+        LOG_WARN("check_in_service failed for sched zombie detect", K(ret), K(exec_addr));
+        ret = OB_SUCCESS;
+      } else if (!is_active || !is_service) {
+        zombie = true;
+      }
+    }
+  }
+  return ret;
 }
 
 bool ObDBMSSchedJobMaster::mysql_event_check_databse_exist(ObDBMSSchedJobInfo &job_info)
