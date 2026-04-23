@@ -141,6 +141,7 @@ struct ObTransformerCtx
     materialize_blacklist_(),
     disable_gtt_session_isolation_(false),
     force_subquery_unnest_(false),
+    force_equal_semi_to_inner_(false),
     nested_loop_join_enabled_(true)
   { }
   virtual ~ObTransformerCtx() {}
@@ -222,6 +223,8 @@ struct ObTransformerCtx
   bool disable_gtt_session_isolation_; //debug GTT, do not add session filters in transformer preprocessing for all GTTs
   /* used to control subquery unnest behavior */
   bool force_subquery_unnest_;
+  /* used to control force equal semi to inner behavior */
+  bool force_equal_semi_to_inner_;
   /* used for NLJ opportunity check */
   bool nested_loop_join_enabled_;
 };

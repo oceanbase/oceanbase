@@ -241,11 +241,12 @@ struct ObOptParamHint
     DEF(ENABLE_FAST_REFRESH_SIMPLIFY_AGGR_DEP,)         \
     DEF(DISABLE_SHARED_EXPR_EXTRACTION,)            \
     DEF(ENABLE_MERGE_INTO,)                         \
-    DEF(_OB_JAVA_ODPS_DATA_TRANSFER_MODE,)         \
-    DEF(_USE_ODPS_JNI_CONNECTOR,)                  \
-    DEF(ODPS_JDK_STORAGE_BATCH_SIZE,)             \
+    DEF(_OB_JAVA_ODPS_DATA_TRANSFER_MODE,)          \
+    DEF(_USE_ODPS_JNI_CONNECTOR,)                   \
+    DEF(ODPS_JDK_STORAGE_BATCH_SIZE,)               \
     DEF(CACHE_AWARE_ROW_NUM,)                       \
-
+    DEF(FORCE_EQUAL_SEMI_TO_INNER,)                 \
+    DEF(FORCE_SUBQUERY_UNNEST,)                     \
 
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);

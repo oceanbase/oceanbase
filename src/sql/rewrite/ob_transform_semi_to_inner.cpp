@@ -582,6 +582,9 @@ int ObTransformSemiToInner::check_basic_validity(ObDMLStmt *root_stmt,
       OPT_TRACE("stmt is insensitive to result of subquery has duplicated values");
       LOG_TRACE("stmt is insensitive to result of subquery has duplicated values");
     }
+    if (OB_SUCC(ret) && ctx_->force_equal_semi_to_inner_) {
+      need_check_cost = false;
+    }
   } else if (invalid_conds_count > 0) {
     // do nothing
   } else if (cmp_join_conds_count < 2 && OB_FAIL(check_can_add_deduplication(left_exprs, right_exprs, can_add_deduplication))) {
@@ -593,7 +596,8 @@ int ObTransformSemiToInner::check_basic_validity(ObDMLStmt *root_stmt,
                                                       semi_info.semi_conditions_,
                                                       condition_match_index))) {
     LOG_WARN("failed to check join condition match index", K(ret));
-  } else if (!ctx.is_multi_join_cond_ && !condition_match_index) {
+  } else if (!ctx.is_multi_join_cond_ && !condition_match_index &&
+             !ctx_->force_equal_semi_to_inner_) {
     // do nothing
     OPT_TRACE("semi condition not match index and is not multi join , will not transform");
   } else if (cmp_join_conds_count == 0 && other_conds_count == 0 && can_add_deduplication) {
@@ -612,6 +616,12 @@ int ObTransformSemiToInner::check_basic_validity(ObDMLStmt *root_stmt,
     } else if (query_from_dual) {
       need_check_cost = false;
     }
+    if (OB_SUCC(ret) && ctx_->force_equal_semi_to_inner_) {
+      need_check_cost = false;
+    }
+  } else if (!ctx.is_multi_join_cond_ && !condition_match_index) {
+    // do nothing
+    OPT_TRACE("semi condition not match index and is not multi join , will not transform");
   } else if (cmp_join_conds_count == 1 && other_conds_count == 0 && can_add_deduplication) {
     // TO_AGGR_INNER : for cases when there is one and only one compare-join-condition
     is_valid = true;
