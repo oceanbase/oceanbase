@@ -5178,6 +5178,7 @@ int ObTransformPreProcess::transform_for_nested_aggregate(ObDMLStmt *&stmt, bool
   } else {
     ObSelectStmt *sub_stmt = NULL;
     ObSelectStmt *select_stmt = static_cast<ObSelectStmt *>(stmt);
+    bool hier_trans_happened = false;
     /**
      * 本函数将含有嵌套聚合的stmt改写成两层stmt
      * select sum(b), max(sum(b)) from t1 group by b;
@@ -5196,14 +5197,22 @@ int ObTransformPreProcess::transform_for_nested_aggregate(ObDMLStmt *&stmt, bool
     } else if (OB_FAIL(generate_child_level_aggr_stmt(select_stmt,
                                                       sub_stmt))) {
       LOG_WARN("failed to generate first level aggr stmt.", K(ret));
+    } else if (select_stmt->is_hierarchical_query()
+               && OB_FAIL(transform_for_hierarchical_query(sub_stmt, hier_trans_happened))) {
+      LOG_WARN("failed to transform hierarchical query in child stmt", K(ret));
     } else if (OB_FAIL(generate_parent_level_aggr_stmt(select_stmt,
                                                        sub_stmt))) {
       LOG_WARN("failed to generate nested aggr stmt.", K(ret));
-    } else if (OB_FAIL(select_stmt->formalize_stmt(ctx_->session_info_))) {
-      LOG_WARN("failed to formalize stmt.", K(ret));
     } else {
-      trans_happened = true;
-      stmt = select_stmt;
+      if (select_stmt->is_hierarchical_query()) {
+        select_stmt->reset_hierarchical_params();
+      }
+      if (OB_FAIL(select_stmt->formalize_stmt(ctx_->session_info_))) {
+        LOG_WARN("failed to formalize stmt.", K(ret));
+      } else {
+        trans_happened = true;
+        stmt = select_stmt;
+      }
     }
   }
   return ret;
