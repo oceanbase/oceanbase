@@ -573,6 +573,7 @@ int ObPartitionMergePolicy::check_need_gc_tx_data(
   }
 
 #ifdef ERRSIM
+ERRSIM_POINT_DEF(EN_MINOR_MERGE_GC_TX_DATA)
   const ObTabletID &tablet_id = tablet.get_tablet_meta().tablet_id_;
   if (OB_FAIL(ret)) {
   } else if (tablet_id.is_inner_tablet() || tablet_id.is_sys_tablet() || tablet_id.is_ls_inner_tablet()) {
