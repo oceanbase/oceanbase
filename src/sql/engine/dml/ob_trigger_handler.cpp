@@ -294,7 +294,8 @@ int TriggerHandle::init_param_new_row(
           trig_ctdef.new_row_exprs_.at(i)->obj_meta_))) {
         LOG_WARN("failed to datum to obj", K(ret));
       } else if (lib::is_oracle_mode()
-                 &&(is_udt = ob_is_geometry(trig_ctdef.new_row_exprs_.at(i)->obj_meta_.get_type()))) {
+                 &&(is_udt = ob_is_geometry(trig_ctdef.new_row_exprs_.at(i)->obj_meta_.get_type())
+                             || ob_is_extend(trig_ctdef.new_row_exprs_.at(i)->obj_meta_.get_type()))) {
         if (OB_FAIL(OB_ISNULL(eval_ctx.exec_ctx_.get_sql_ctx()))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("sql ctx is null", K(ret));
