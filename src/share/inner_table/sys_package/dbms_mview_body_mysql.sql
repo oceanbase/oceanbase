@@ -36,4 +36,10 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview
     CALL do_refresh(mv_name, method, refresh_parallel, nested, nested_refresh_mode);
   END;
 
+  PROCEDURE set_refresh_params(
+    IN     mv_name                VARCHAR(65535),
+    IN     parameter_name         VARCHAR(65535),
+    IN     parameter_value        VARCHAR(65535));
+  PRAGMA INTERFACE(C, DBMS_MVIEW_MYSQL_SET_REFRESH_PARAMS);
+
 END dbms_mview;
