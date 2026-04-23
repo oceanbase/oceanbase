@@ -466,6 +466,7 @@ struct ColumnContent
     is_nullable_(false),
     is_implicit_(false),
     is_predicate_column_(false),
+    is_key_column_(false),
     srs_id_(UINT64_MAX),
     column_name_()
   {}
@@ -475,6 +476,7 @@ struct ColumnContent
                N_NULLABLE, is_nullable_,
                "implicit", is_implicit_,
                K_(is_predicate_column),
+               K_(is_key_column),
                K_(srs_id),
                N_COLUMN_NAME, column_name_);
 
@@ -483,6 +485,10 @@ struct ColumnContent
   bool is_nullable_;
   bool is_implicit_;
   bool is_predicate_column_;
+  // the column is a rowkey / partition key / unique index key,
+  // consumed by check_update_key_column_changed to decide if the UPDATE
+  // actually changed a key value (used to gate update_split_trace_id).
+  bool is_key_column_;
   union { // only for gis
     struct {
       uint32_t geo_type_ : 5;
@@ -697,6 +703,7 @@ public:
   ObUpdCtDef(common::ObIAllocator &alloc)
     : ObDMLBaseCtDef(alloc, dupd_ctdef_, DAS_OP_TABLE_UPDATE),
       dupd_ctdef_(alloc),
+      enable_update_split_trace_id_(false),
       need_check_filter_null_(false),
       need_check_table_cycle_(false),
       distinct_algo_(T_DISTINCT_NONE),
@@ -713,6 +720,7 @@ public:
   { }
   INHERIT_TO_STRING_KV("ObDMLBaseCtDef", ObDMLBaseCtDef,
                        K_(dupd_ctdef),
+                       K_(enable_update_split_trace_id),
                        K_(need_check_filter_null),
                        K_(need_check_table_cycle),
                        K_(distinct_algo),
@@ -727,6 +735,7 @@ public:
                        K_(related_del_ctdefs),
                        K_(related_ins_ctdefs));
   ObDASUpdCtDef dupd_ctdef_;
+  bool enable_update_split_trace_id_;
   bool need_check_filter_null_;
   // need_check_table_cycle_ is true if the fk cascade update may cause a cycle reference.
   bool need_check_table_cycle_;

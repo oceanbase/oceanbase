@@ -200,7 +200,8 @@ OB_SERIALIZE_MEMBER(ColumnContent,
                     is_nullable_,
                     is_implicit_,
                     is_predicate_column_,
-                    srs_id_);
+                    srs_id_,
+                    is_key_column_);
 
 int SeRowkeyItem::init(
     const ObExprPtrIArray &row, ObEvalCtx &ctx, ObIAllocator &alloc, const int64_t rowkey_cnt)
@@ -513,6 +514,7 @@ OB_DEF_SERIALIZE(ObUpdCtDef)
   OZ(ObDASUtils::serialize_das_ctdefs(buf, buf_len, pos, related_upd_ctdefs_));
   OZ(ObDASUtils::serialize_das_ctdefs(buf, buf_len, pos, related_del_ctdefs_));
   OZ(ObDASUtils::serialize_das_ctdefs(buf, buf_len, pos, related_ins_ctdefs_));
+  OB_UNIS_ENCODE(enable_update_split_trace_id_);
   return ret;
 }
 
@@ -572,6 +574,7 @@ OB_DEF_DESERIALIZE(ObUpdCtDef)
   OZ(ObDASUtils::deserialize_das_ctdefs(buf, data_len, pos,
                                         alloc_, DAS_OP_TABLE_INSERT,
                                         related_ins_ctdefs_));
+  OB_UNIS_DECODE(enable_update_split_trace_id_);
   return ret;
 }
 
@@ -605,6 +608,7 @@ OB_DEF_SERIALIZE_SIZE(ObUpdCtDef)
   len += ObDASUtils::das_ctdefs_serialize_size(related_upd_ctdefs_);
   len += ObDASUtils::das_ctdefs_serialize_size(related_del_ctdefs_);
   len += ObDASUtils::das_ctdefs_serialize_size(related_ins_ctdefs_);
+  OB_UNIS_ADD_LEN(enable_update_split_trace_id_);
   return len;
 }
 
