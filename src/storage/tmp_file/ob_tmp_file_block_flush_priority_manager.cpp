@@ -194,14 +194,14 @@ bool PopBlockOperator::operator()(ObTmpFileBlkNode *node)
   } else {
     bool is_flushing = false;
     ObTmpFileBlockHandle handle(&node->block_);
-    if (OB_FAIL(handle->set_flushing_status(is_flushing))) {
-      LOG_WARN("fail to set flushing status", KR(ret), K(handle));
-    } else if (is_flushing) {
-      if (OB_FAIL(list_.remove_without_lock_(handle))) {
-        LOG_ERROR("fail to remove handle", KR(ret), K(handle));
-      } else if (OB_FAIL(block_handles_.push_back(handle))) {
-        LOG_ERROR("fail to push back block handle", KR(ret), K(handle));
-      }
+    // Claim the block and detach the node from list_ atomically under the
+    // block write lock to eliminate the window where is_in_flushing_=true
+    // but the node is still on list_.
+    if (OB_FAIL(handle->try_pick_for_flushing(list_, is_flushing))) {
+      LOG_WARN("fail to pick block for flushing", KR(ret), K(handle));
+    } else if (is_flushing &&
+               OB_FAIL(block_handles_.push_back(handle))) {
+      LOG_ERROR("fail to push back block handle", KR(ret), K(handle));
     }
   }
   return OB_SUCCESS == ret;

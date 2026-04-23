@@ -36,8 +36,8 @@ struct PrintOperator {
 
 class ObTmpFileBlockHandleList
 {
-  friend class PopBlockOperator;
   friend struct GetAllocatableBlockOp;
+  friend class ObTmpFileBlock;
 public:
   enum ListType {
     INVALID = -1,

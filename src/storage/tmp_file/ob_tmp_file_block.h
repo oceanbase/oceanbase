@@ -27,6 +27,7 @@ class ObTmpFileBlockPageBitmap;
 class ObTmpFileBlockManager;
 class ObTmpFileBlock;
 class ObTmpFileBlockFlushingPageIterator;
+class ObTmpFileBlockHandleList;
 
 class ObTmpFileBlockPageBitmap
 {
@@ -101,7 +102,9 @@ public:
   int insert_pages_into_flushing_list(ObIArray<ObTmpFilePageHandle> &page_arr);
   int init_flushing_page_iterator(ObTmpFileBlockFlushingPageIterator &iter,
                                   int64_t &flushing_page_num);
-  int set_flushing_status(bool &lock_succ);
+  // Atomically claim this block for a flush cycle and detach its flush_blk_node_
+  // from the given flush priority list under the block write lock.
+  int try_pick_for_flushing(ObTmpFileBlockHandleList &list, bool &lock_succ);
   int flush_pages_succ(const int64_t begin_page_id, const int64_t page_num);
   int is_page_flushed(const ObTmpFilePageId &page_id, bool &is_flushed) const;
   OB_INLINE bool is_all_incomplete_flushing() const
