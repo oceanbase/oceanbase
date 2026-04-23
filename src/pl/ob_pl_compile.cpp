@@ -201,7 +201,6 @@ int ObPLCompiler::init_anonymous_ast(
       }
       pl_type.reset();
       int64_t int_value = 0;
-      // 参数化整型常量按照会按照numbger来生成param
       if (!is_prepare_protocol
           && (ObNumberType == params->at(i).get_type() || ObUNumberType == params->at(i).get_type())
           && params->at(i).get_number().is_valid_int64(int_value)

@@ -566,26 +566,6 @@ void ObSPIResultSet::end_nested_stmt_if_need(ObPLExecCtx *pl_ctx, int &result)
   return;
 }
 
-
-bool ObSPIService::can_obj_access_expr_fast_calc(const ObSqlExpression &expr,
-                                                 const ObExprObjAccess *&obj_access)
-{
-  bool ret = false;
-  if (is_obj_access_expression(expr)
-      && 1 == expr.get_expr_items().count()
-      && OB_NOT_NULL(get_first_expr_item(expr).get_expr_operator())
-      && T_OBJ_ACCESS_REF == get_first_expr_item(expr).get_expr_operator()->get_type()) {
-    const ObExprOperator* op = get_first_expr_item(expr).get_expr_operator();
-    obj_access = static_cast<const ObExprObjAccess*>(op);
-    if (OB_NOT_NULL(obj_access)) {
-      ret = true;
-    }
-  } else {
-    obj_access = NULL;
-  }
-  return ret;
-}
-
 int ObSPIService::calc_obj_access_expr(ObPLExecCtx *ctx,
                                        const ObSqlExpression &expr,
                                        ObObjParam &result)
@@ -839,13 +819,16 @@ int ObSPIService::cast_enum_set_to_string(ObExecContext &ctx,
 int ObSPIService::spi_calc_raw_expr(ObSQLSessionInfo *session,
                                     ObIAllocator *allocator,
                                     const ObRawExpr *expr,
-                                    ObObj *result)
+                                    ObObj *result,
+                                    const ParamStore *param_store)
 {
   int ret = OB_SUCCESS;
-  ParamStore param_store((ObWrapperAllocator(*allocator)));
+  const ParamStore local_param_store((ObWrapperAllocator(*allocator)));
+  const ParamStore *v_param_store = OB_NOT_NULL(param_store) ? param_store : &local_param_store;
   CK (OB_NOT_NULL(session));
   CK (OB_NOT_NULL(result));
-  OZ (ObSQLUtils::se_calc_const_expr(session, expr, param_store, *allocator, session->get_cur_exec_ctx(), *result));
+  OZ (ObSQLUtils::se_calc_const_expr(
+    session, expr, *v_param_store, *allocator, session->get_cur_exec_ctx(), *result));
   OX (result->set_collation_level(expr->get_result_type().get_collation_level()));
   if (OB_SUCC(ret) && expr->is_enum_set_with_subschema()) {
     ObObjMeta org_obj_meta;
@@ -977,16 +960,88 @@ int ObSPIService::spi_convert_objparam(ObPLExecCtx *ctx,
 int ObSPIService::spi_calc_expr_at_idx(pl::ObPLExecCtx *ctx,
                                        const int64_t expr_idx,
                                        const int64_t result_idx,
+                                       const bool calc_once,
                                        ObObjParam *result)
 {
   int ret = OB_SUCCESS;
   const ObSqlExpression *expr = nullptr;
   CK (OB_NOT_NULL(ctx));
   CK (OB_NOT_NULL(ctx->func_));
+  CK (OB_NOT_NULL(result));
   CK (expr_idx != OB_INVALID_ID);
   CK (OB_LIKELY(0 <= expr_idx && expr_idx < ctx->func_->get_expressions().count()));
   OX (expr = ctx->func_->get_expressions().at(expr_idx));
-  OZ (spi_calc_expr(ctx, expr, result_idx, result));
+  if (OB_FAIL(ret)) {
+  } else if (calc_once) {
+    ObObjParam *local_result = nullptr;
+    OZ (ctx->get_calc_once_result(expr_idx, local_result));
+    if (OB_FAIL(ret)) {
+    } else if (OB_NOT_NULL(local_result)) {
+      OX (*(ObObj*)result = *(ObObj*)local_result);
+      OZ (spi_set_symbol(ctx, result_idx, result));
+    } else {
+      OZ (spi_calc_expr(ctx, expr, result_idx, result));
+      OZ (spi_set_symbol(ctx, result_idx, result));
+      OZ (ctx->set_calc_once_result(expr_idx, result));
+    }
+  } else {
+    OZ (spi_calc_expr(ctx, expr, result_idx, result));
+    OZ (spi_set_symbol(ctx, result_idx, result));
+  }
+  if (OB_FAIL(ret) && lib::is_mysql_mode()) {
+    ctx->exec_ctx_->get_my_session()->set_show_warnings_buf(ret);
+  }
+  SET_SPI_STATUS;
+  return ret;
+}
+
+int ObSPIService::spi_set_symbol(pl::ObPLExecCtx *ctx,
+                                                 const int64_t result_idx,
+                                                 ObObjParam *result)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(ctx));
+  CK (OB_NOT_NULL(ctx->params_));
+  CK (OB_NOT_NULL(result));
+  if (OB_SUCC(ret) && result_idx != OB_INVALID_INDEX) {
+    ObObj tmp;
+    ObObjParam &local_variable = ctx->params_->at(result_idx);
+    bool is_ref_cursor = local_variable.is_ref_cursor_type();
+    if (!result->is_ext()) { // baisic variable path
+      bool has_lob_header = result->ObObj::has_lob_header();
+      ObAccuracy invalid_accuracy;
+      if (local_variable.get_meta().get_scale() != SCALE_UNKNOWN_YET) {
+        result->ObObj::set_scale(local_variable.get_meta().get_scale());
+        result->set_accuracy(local_variable.get_accuracy());
+      } else if (result->get_accuracy() == invalid_accuracy) {
+        result->set_accuracy(local_variable.get_accuracy());
+      }
+      if (result->is_null()) {
+        result->set_param_meta(local_variable.get_param_meta());
+      }
+      if (has_lob_header) {
+        result->ObObj::set_has_lob_header();
+      }
+      if (is_ref_cursor && result->is_null()) {
+        OZ (spi_add_ref_cursor_refcount(ctx, &local_variable, -1)); // close local variable cursor
+        OX (result->set_extend(static_cast<int64_t>(0), PL_REF_CURSOR_TYPE));
+        OX (result->set_param_meta());
+      }
+      OX (result->set_is_ref_cursor_type(is_ref_cursor));
+      OZ (common::deep_copy_obj(*ctx->allocator_, *result, tmp));
+      OZ (ObUserDefinedType::destruct_objparam(
+        *ctx->allocator_, local_variable, ctx->exec_ctx_->get_my_session()));
+      OX (local_variable = tmp);
+    } else if (!is_ref_cursor) { // composite path, not cursor
+      CK (result->get_meta().get_extend_type() != PL_REF_CURSOR_TYPE);
+      OX (result->set_udt_id(local_variable.get_udt_id()));
+      OZ (ObUserDefinedType::deep_copy_obj(*ctx->allocator_, *result, tmp));
+      OZ (ObUserDefinedType::destruct_objparam(
+        *ctx->allocator_, local_variable, ctx->exec_ctx_->get_my_session()));
+      OX (local_variable = tmp);
+    }
+    OX (local_variable.set_param_meta());
+  }
   return ret;
 }
 
@@ -996,108 +1051,44 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
                                 ObObjParam *result)
 {
   int ret = OB_SUCCESS;
+
   ObIAllocator *expr_allocator = nullptr;
-  ObPLExecState *curr_state = nullptr;
-  CK (OB_NOT_NULL(ctx), OB_NOT_NULL(expr), OB_NOT_NULL(result));
-  CK (OB_NOT_NULL(ctx->exec_ctx_), OB_NOT_NULL(ctx->params_), OB_NOT_NULL(ctx->allocator_), OB_NOT_NULL(ctx->exec_ctx_->get_my_session()));
-  CK (OB_NOT_NULL(ctx->pl_ctx_));
-  CK (OB_NOT_NULL(curr_state = ctx->pl_ctx_->get_current_state()));
-  OX (expr_allocator = ctx->get_top_expr_allocator());
-  CK (OB_NOT_NULL(expr_allocator));
+  CK (OB_NOT_NULL(ctx));
+  CK (OB_NOT_NULL(expr_allocator = ctx->get_top_expr_allocator()));
+
+  // calculate expression
   if (OB_SUCC(ret)) {
-    ObItemType expr_type = expr->get_expr_items().at(0).get_item_type();
+    const ObPostExprItem &item = expr->get_expr_items().at(0);
+    ObItemType expr_type = item.get_item_type();
     if (IS_CONST_TYPE(expr_type)) {
-      bool need_check = false;
-      const ObObj &value = expr->get_expr_items().at(0).get_obj();
+      const ObObj &value = item.get_obj();
       if (T_QUESTIONMARK == expr_type) {
+        bool need_check = false;
         OZ (ObSQLUtils::get_param_value<ObObjParam>(value, *ctx->params_, *result, need_check));
       } else {
-        OZ (deep_copy_obj(*expr_allocator, value, *result));
+        *(ObObj*)result = value;
       }
     } else if (T_OBJ_ACCESS_REF == expr_type) {
       OZ (calc_obj_access_expr(ctx, *expr, *result));
     } else {
-      LOG_DEBUG("spi_calc_expr without row", K(*expr));
-      ObExprResType result_type;
-      bool has_implicit_savepoint = false;
-      bool explicit_trans = ctx->exec_ctx_->get_my_session()->has_explicit_start_trans();
-      ObPLContext *pl_ctx = ctx->exec_ctx_->get_pl_stack_ctx();
-      ObPLContext *top_context = ctx->exec_ctx_->get_my_session()->get_pl_context();
-      CK (OB_NOT_NULL(pl_ctx));
-      CK (OB_NOT_NULL(top_context));
-      CK (OB_NOT_NULL(pl_ctx->get_pl_exec_info()));
-      if (OB_SUCC(ret) && lib::is_mysql_mode() && !pl_ctx->is_function_or_trigger()) {
-        if (ctx->exec_ctx_->get_my_session()->is_in_transaction()) {
-          DISABLE_SQL_MEMLEAK_GUARD;
-          OZ (ObSqlTransControl::create_savepoint(*ctx->exec_ctx_, PL_INNER_EXPR_SAVEPOINT));
-          OX (has_implicit_savepoint = true);
-        }
-      }
-      if (OB_SUCC(ret)) {
-        OZ (ObSQLUtils::calc_sql_expression_without_row(*ctx->exec_ctx_, *expr, *result,
-               pl_ctx->get_pl_exec_info()->is_cached_ ? &top_context->get_exec_cache_allocator() : &pl_ctx->get_exec_cache_allocator(), true),
-          KPC(expr), K(result_idx));
-        OX(result->set_param_meta());
-
-        if ((OB_DATA_OUT_OF_RANGE == ret || OB_ERR_DATA_TOO_LONG == ret
-            || OB_ERR_VALUE_LARGER_THAN_ALLOWED == ret) && lib::is_oracle_mode()) {
-          LOG_WARN("change error code to value error", K(ret));
-          ret = OB_ERR_NUMERIC_OR_VALUE_ERROR;
-        }
-        OZ (get_result_type(*ctx, *expr, result_type));
-        OX (result->set_param_meta(result_type));
-        /* 如果本层是udf, 本次计算的表达式中含有udf;
-          如果内层udf失败，由udf内部来回滚, 如果内层udf成功, 发生了强转失败等问题, 此处不回滚,
-          由本层udf的destory接口来保证回滚, 兼容mysql */
-        if (lib::is_mysql_mode() && !pl_ctx->is_function_or_trigger()) {
-          if (OB_SUCCESS != ret && ctx->exec_ctx_->get_my_session()->is_in_transaction()) {
-            int tmp_ret = OB_SUCCESS;
-            if (has_implicit_savepoint) {
-              DISABLE_SQL_MEMLEAK_GUARD;
-              if (OB_SUCCESS !=
-                  (tmp_ret = ObSqlTransControl::rollback_savepoint(*ctx->exec_ctx_, PL_INNER_EXPR_SAVEPOINT))) {
-                LOG_WARN("failed to rollback current pl to implicit savepoint", K(ret), K(tmp_ret));
-              }
-  #ifdef OB_BUILD_ORACLE_PL
-            } else if (ctx->exec_ctx_->get_my_session()->associated_xa()) {
-              if (OB_TRANS_XA_BRANCH_FAIL != ret) {
-                tmp_ret = ObDbmsXA::xa_rollback_savepoint(*ctx->exec_ctx_);
-                if (OB_SUCCESS != tmp_ret) {
-                  LOG_WARN("xa trans roll back to save point failed",
-                          K(tmp_ret), KPC(ctx->exec_ctx_->get_my_session()->get_tx_desc()));
-                }
-              }
-  #endif
-            } else if (ctx->exec_ctx_->get_my_session()->get_in_transaction()) {
-              tmp_ret = ObPLContext::implicit_end_trans(*ctx->exec_ctx_->get_my_session(), *ctx->exec_ctx_, true);
-            }
-            ret = OB_SUCCESS == ret ? tmp_ret : ret;
-          } else if (ctx->exec_ctx_->get_my_session()->get_local_autocommit() && !explicit_trans) {
-            if (!ctx->exec_ctx_->get_my_session()->associated_xa()) {
-              int tmp_ret = OB_SUCCESS;
-              if (OB_SUCCESS == ret) {
-                if (OB_SUCCESS != (tmp_ret = ObPLContext::implicit_end_trans(*ctx->exec_ctx_->get_my_session(), *ctx->exec_ctx_, false, true))) {
-                  // 不覆盖原来的错误码
-                  LOG_WARN("failed to explicit end trans", K(ret), K(tmp_ret));
-                }
-              }
-              ret = OB_SUCCESS == ret ? tmp_ret : ret;
-            }
-          }
-        }
-      }
+      OZ (calc_common_expr(ctx, expr, result));
     }
   }
 
-  if (OB_SUCC(ret)
-      && result->is_binary()
-      && result->get_val_len() < result->get_accuracy().get_length()) {
-      OZ (spi_pad_binary(ctx->exec_ctx_->get_my_session(), 
-        result->get_accuracy(), expr_allocator, result));
-  }
+  OX (result->set_is_pl_mock_default_param(expr->get_is_pl_mock_default_expr()));
+  OX (result->set_param_meta());
 
-  if (OB_SUCC(ret)
-      && result->is_character_type()) {
+  if (OB_FAIL(ret)) {
+  } else if (result->is_null()) {
+    result->v_.int64_ = 0;
+  } else if (result->is_ext()) {
+    ObExprResType result_type;
+    OZ (get_result_type(*ctx, *expr, result_type));
+    OX (result->set_udt_id(result_type.get_udt_id()));
+  } else if (result->is_binary()
+             && result->get_val_len() < result->get_accuracy().get_length()) {
+    OZ (spi_pad_binary(ctx->exec_ctx_->get_my_session(), result->get_accuracy(), expr_allocator, result));
+  } else if (result->is_character_type()) {
     ObObjType type = result->get_type();
     if (lib::is_mysql_mode() && T_QUESTIONMARK == get_expression_type(*expr) &&
         (ObCharType == type || ObNCharType == type)) {
@@ -1115,81 +1106,77 @@ int ObSPIService::spi_calc_expr(ObPLExecCtx *ctx,
         ctx->exec_ctx_->get_my_session(), expr, expr_allocator, result));
     }
   }
+  return ret;
+}
 
-  if (OB_SUCC(ret)) {
-    if (result->is_null()) {
-      result->v_.int64_ = 0;
-    }
-    if (OB_INVALID_INDEX != result_idx) {
-      // local baisc var 需要用执行栈allocator深拷一次
-      ObObjParam &param = ctx->params_->at(result_idx);
-      bool is_ref_cursor = param.is_ref_cursor_type();
-      ObAccuracy invalid_accuracy;
-      if (!result->is_ext()) {
-        ObObjParam tmp;
-        OZ (deep_copy_obj(*ctx->allocator_, *result, tmp));
-        OX (*result = tmp);
-        if (OB_SUCC(ret)) {
-          bool has_lob_header = result->ObObj::has_lob_header();
-          if (param.get_meta().get_scale() != SCALE_UNKNOWN_YET) {
-            result->ObObj::set_scale(param.get_meta().get_scale());
-            result->set_accuracy(ctx->params_->at(result_idx).get_accuracy());
-          } else if (result->get_accuracy() == invalid_accuracy) {
-            result->set_accuracy(ctx->params_->at(result_idx).get_accuracy());
-          }
-          if (result->is_null()) {
-            result->set_param_meta(param.get_param_meta());
-          }
-          if (has_lob_header) {
-            result->ObObj::set_has_lob_header();
-          }
-          if (is_ref_cursor && result->is_null()) {
-            OZ (spi_add_ref_cursor_refcount(ctx, &param, -1));
-            OX (result->set_extend(static_cast<int64_t>(0), PL_REF_CURSOR_TYPE));
-            OX (result->set_param_meta());
-          }
-          if (OB_SUCC(ret)) {
-            void *ptr = param.get_deep_copy_obj_ptr();
-            if (nullptr != ptr) {
-              ctx->allocator_->free(ptr);
-            }
-            param = *result;
-            param.set_is_ref_cursor_type(is_ref_cursor);
-            param.set_param_meta();
-          }
-        }
-      } else if (!is_ref_cursor) {
-        int64_t orig_udt_id = ctx->params_->at(result_idx).get_udt_id();
-        ObObj tmp;
-        if (result->get_meta().get_extend_type() != PL_REF_CURSOR_TYPE) {
-          OZ (ObUserDefinedType::deep_copy_obj(*ctx->allocator_, *result, tmp));
-        } else {
-          tmp = *result;
-        }
-        if (0 != ctx->params_->at(result_idx).get_ext()) {
-          OZ (ObUserDefinedType::destruct_objparam(*ctx->allocator_,
-                                                  ctx->params_->at(result_idx),
-                                                  ctx->exec_ctx_->get_my_session()));
-        }
-        OX (ctx->params_->at(result_idx) = tmp);
-        OX (ctx->params_->at(result_idx).set_udt_id(orig_udt_id));
-        OX (ctx->params_->at(result_idx).set_param_meta());
-      }
-    } else {
-      result->set_param_meta();
+int ObSPIService::calc_common_expr(ObPLExecCtx *ctx, const ObSqlExpression *expr, ObObjParam *result)
+{
+  int ret = OB_SUCCESS;
+
+  bool has_implicit_savepoint = false;
+  ObPLContext *pl_ctx = ctx->exec_ctx_->get_pl_stack_ctx();
+  ObPLContext *top_context = ctx->exec_ctx_->get_my_session()->get_pl_context();
+
+  CK (OB_NOT_NULL(pl_ctx));
+  CK (OB_NOT_NULL(top_context));
+  CK (OB_NOT_NULL(pl_ctx->get_pl_exec_info()));
+
+  if (OB_SUCC(ret) && lib::is_mysql_mode() && !pl_ctx->is_function_or_trigger()) {
+    if (ctx->exec_ctx_->get_my_session()->is_in_transaction()) {
+      DISABLE_SQL_MEMLEAK_GUARD;
+      OZ (ObSqlTransControl::create_savepoint(*ctx->exec_ctx_, PL_INNER_EXPR_SAVEPOINT));
+      OX (has_implicit_savepoint = true);
     }
   }
-  if (OB_SUCC(ret) && result->is_ext()) {
+  if (OB_SUCC(ret)) {
     ObExprResType result_type;
+    ObIAllocator *cache_alloc = pl_ctx->get_pl_exec_info()->is_cached_
+                                  ? &top_context->get_exec_cache_allocator() : &pl_ctx->get_exec_cache_allocator();
+    OZ (ObSQLUtils::calc_sql_expression_without_row(*ctx->exec_ctx_, *expr, *result, cache_alloc, true), KPC(expr));
     OZ (get_result_type(*ctx, *expr, result_type));
-    OX (result->set_udt_id(result_type.get_udt_id()));
+    OX (result->set_param_meta(result_type));
+
+    if ((OB_DATA_OUT_OF_RANGE == ret || OB_ERR_DATA_TOO_LONG == ret
+        || OB_ERR_VALUE_LARGER_THAN_ALLOWED == ret) && lib::is_oracle_mode()) {
+      LOG_WARN("change error code to value error", K(ret));
+      ret = OB_ERR_NUMERIC_OR_VALUE_ERROR;
+    }
+
+    if (lib::is_mysql_mode() && !pl_ctx->is_function_or_trigger()) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != ret && ctx->exec_ctx_->get_my_session()->is_in_transaction()) {
+        if (has_implicit_savepoint) {
+          DISABLE_SQL_MEMLEAK_GUARD;
+          if (OB_SUCCESS !=
+              (tmp_ret = ObSqlTransControl::rollback_savepoint(*ctx->exec_ctx_, PL_INNER_EXPR_SAVEPOINT))) {
+            LOG_WARN("failed to rollback current pl to implicit savepoint", K(ret), K(tmp_ret));
+          }
+#ifdef OB_BUILD_ORACLE_PL
+        } else if (ctx->exec_ctx_->get_my_session()->associated_xa() && OB_TRANS_XA_BRANCH_FAIL != ret) {
+          if (OB_SUCCESS !=
+              (tmp_ret = ObDbmsXA::xa_rollback_savepoint(*ctx->exec_ctx_))) {
+            LOG_WARN("xa trans rollback to save point failed", K(ret), K(tmp_ret));
+          }
+#endif
+        } else if (ctx->exec_ctx_->get_my_session()->get_in_transaction()) {
+          if (OB_SUCCESS !=
+              (tmp_ret = ObPLContext::implicit_end_trans(*ctx->exec_ctx_->get_my_session(), *ctx->exec_ctx_, true))) {
+            LOG_WARN("failed to implicit end trans", K(tmp_ret));
+          }
+        }
+      } else if (OB_SUCCESS == ret
+                 && ctx->exec_ctx_->get_my_session()->get_local_autocommit()
+                 && !ctx->exec_ctx_->get_my_session()->has_explicit_start_trans()
+                 && !ctx->exec_ctx_->get_my_session()->associated_xa()) {
+        int tmp_ret = OB_SUCCESS;
+        if (OB_SUCCESS !=
+            (tmp_ret = ObPLContext::implicit_end_trans(*ctx->exec_ctx_->get_my_session(), *ctx->exec_ctx_, false, true))) {
+          LOG_WARN("failed to explicit end trans", K(ret), K(tmp_ret));
+        }
+        ret = OB_SUCCESS == ret ? tmp_ret : ret;
+      }
+    }
   }
-  if (OB_SUCC(ret)) {
-    result->set_is_pl_mock_default_param(expr->get_is_pl_mock_default_expr());
-  } else if (lib::is_mysql_mode()) {
-    ctx->exec_ctx_->get_my_session()->set_show_warnings_buf(ret);
-  }
-  SET_SPI_STATUS;
   return ret;
 }
 
@@ -3462,7 +3449,7 @@ int ObSPIService::spi_execute_immediate(ObPLExecCtx *ctx,
                                      is_type_record,
                                      for_update,
                                      true, /*is_dynamic_sql*/
-                                     &out_using_params)));
+                                     &out_using_params)), K(param_store));
   }
   return ret;
 }

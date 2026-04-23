@@ -1618,6 +1618,7 @@ public:
        exprs_(allocator),
        continue_handler_desc_bodys_(allocator),
        simple_calc_bitset_(),
+       calc_once_bitset_(),
        sql_stmts_(allocator),
        expr_factory_(allocator),
        symbol_table_(allocator),
@@ -1674,6 +1675,8 @@ public:
   inline int add_simple_calcs(const ObBitSet<> &simple_calc) { return simple_calc_bitset_.add_members(simple_calc); }
   inline const ObBitSet<> & get_simple_calcs() const { return simple_calc_bitset_; }
   inline bool is_simple_calc(int64_t i) const { return simple_calc_bitset_.has_member(i); }
+  inline int add_calc_once_expr(int64_t i) { return calc_once_bitset_.add_member(i); }
+  inline bool is_calc_once_expr(int64_t i) const { return calc_once_bitset_.has_member(i); }
   inline sql::ObRawExprFactory &get_expr_factory() { return expr_factory_; }
   inline const ObPLSymbolTable &get_symbol_table() const { return symbol_table_; }
   inline ObPLSymbolTable &get_symbol_table() { return symbol_table_; }
@@ -1779,6 +1782,7 @@ protected:
   ObPLSEArray<sql::ObRawExpr*> exprs_; //使用的表达式，在AST里是ObRawExpr，在ObPLFunction里是ObISqlExpression
   ObPLSEArray<ObPLStmtBlock*> continue_handler_desc_bodys_;
   ObBitSet<> simple_calc_bitset_; //可以使用LLVM进行计算的表达式下标
+  ObBitSet<> calc_once_bitset_;
   ObPLSEArray<ObPLSqlStmt*> sql_stmts_;
   sql::ObRawExprFactory expr_factory_;
   ObPLSymbolTable symbol_table_;

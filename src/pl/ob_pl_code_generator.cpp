@@ -576,7 +576,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLAssignStmt &s)
                 int64_t idx = const_expr->get_value().get_unknown();
                 const ObPLDataType &into_type = var->get_type();
                 if (OB_SUCC(ret)
-                    && (ObObjAccessIdx::IS_INVALID != alloc_scop
+                    && ((ObObjAccessIdx::IS_INVALID != alloc_scop && OB_INVALID_INDEX == result_idx)
                         || into_type.is_collection_type()
                         || into_type.is_record_type()
                         || into_type.is_ref_cursor_type())) {
@@ -613,7 +613,9 @@ int ObPLCodeGenerateVisitor::visit(const ObPLAssignStmt &s)
                   }
                 }
                 // 处理Nocopy参数
-                if (OB_SUCC(ret) && generator_.get_param_size() > 0) {
+                if (OB_SUCC(ret)
+                    && generator_.get_ast().get_proc_type() != ObProcType::STANDALONE_ANONYMOUS
+                    && generator_.get_param_size() > 0) {
                   ObSEArray<ObLLVMValue, 2> args;
                   ObLLVMValue ret_err;
                   ObLLVMValue idx_value, need_free;
@@ -4310,6 +4312,8 @@ int ObPLCodeGenerator::init_spi_service()
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(arg_types.push_back(int64_type))) {
       LOG_WARN("push_back error", K(ret));
+    } else if (OB_FAIL(arg_types.push_back(bool_type))) {
+      LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(arg_types.push_back(obj_param_pointer_type))) {
       LOG_WARN("push_back error", K(ret));
     } else if (OB_FAIL(ObLLVMFunctionType::get(int32_type, arg_types, ft))) {
@@ -7147,6 +7151,7 @@ int ObPLCodeGenerator::generate_spi_calc(int64_t expr_idx,
       ObSEArray<ObLLVMValue, 4> args;
       ObLLVMValue result;
       ObLLVMValue int_value;
+      ObLLVMValue is_calc_once_value;
       ObLLVMValue package_id;
       int64_t udt_id = ast_.get_expr(expr_idx)->get_result_type().get_udt_id();
 
@@ -7165,6 +7170,10 @@ int ObPLCodeGenerator::generate_spi_calc(int64_t expr_idx,
       } else if (OB_FAIL(helper_.get_int64(result_idx, int_value))) {
         LOG_WARN("failed to get int64", K(ret));
       } else if (OB_FAIL(args.push_back(int_value))) { //结果在ObArray里的位置
+        LOG_WARN("push_back error", K(ret));
+      } else if (OB_FAIL(helper_.get_int8(get_ast().is_calc_once_expr(expr_idx), is_calc_once_value))) {
+        LOG_WARN("failed to get int8", K(ret));
+      } else if (OB_FAIL(args.push_back(is_calc_once_value))) {
         LOG_WARN("push_back error", K(ret));
       } else if (OB_FAIL(args.push_back(p_result_obj))) {
         LOG_WARN("push_back error", K(ret));

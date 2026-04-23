@@ -726,7 +726,8 @@ struct ObPLExecCtx : public ObPLINS
       nocopy_params_(nocopy_params), guard_(guard),
       local_expr_alloc_("PLBlockExpr", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       tmp_alloc_for_copy_param_("PLTmpAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-      saved_sql_code_info_()
+      saved_sql_code_info_(),
+      calc_once_results_()
   {
     if (NULL != exec_ctx && NULL != exec_ctx_->get_my_session()) {
       pl_ctx_ = exec_ctx_->get_my_session()->get_pl_context();
@@ -736,6 +737,8 @@ struct ObPLExecCtx : public ObPLINS
       result_allocator_ = &local_expr_alloc_;
     }
   }
+
+  ~ObPLExecCtx();
 
   static uint32_t allocator_offset_bits() { return offsetof(ObPLExecCtx, allocator_) * 8; }
   static uint32_t exec_ctx_offset_bits() { return offsetof(ObPLExecCtx, exec_ctx_) * 8; }
@@ -781,6 +784,10 @@ struct ObPLExecCtx : public ObPLINS
     }
   }
 
+
+  int get_calc_once_result(int64_t idx, ObObjParam *& result);
+  int set_calc_once_result(int64_t idx, ObObjParam *result);
+
   common::ObIAllocator *allocator_; // Symbol Allocator
   sql::ObExecContext *exec_ctx_;
   ParamStore *params_; // param stroe, 对应PL Function的符号表
@@ -796,6 +803,7 @@ struct ObPLExecCtx : public ObPLINS
   ObArenaAllocator local_expr_alloc_;
   ObArenaAllocator tmp_alloc_for_copy_param_;
   ObPLSqlCodeInfo saved_sql_code_info_;
+  common::hash::ObHashMap<int64_t, ObObjParam*, common::hash::NoPthreadDefendMode> calc_once_results_;
 };
 
 // backup and restore ObExecContext attributes
