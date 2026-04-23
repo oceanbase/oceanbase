@@ -6601,7 +6601,7 @@ int ObSchemaRetrieveUtils::retrieve_external_resource_schema(const uint64_t tena
 {
   int ret = OB_SUCCESS;
 
-  ObArenaAllocator allocator(ObMemAttr(tenant_id, "SchExtRes"));
+  ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES);
   ObSimpleExternalResourceSchema schema(&allocator);
 
   uint64_t pre_res_id = OB_INVALID_ID;
@@ -6701,7 +6701,7 @@ int ObSchemaRetrieveUtils::retrieve_java_policy_schema(const uint64_t tenant_id,
 {
   int ret = common::OB_SUCCESS;
   uint64_t prev_id = common::OB_INVALID_ID;
-  ObArenaAllocator allocator(ObMemAttr(tenant_id, "SchJavaPol"));
+  ObArenaAllocator allocator(ObModIds::OB_TEMP_VARIABLES);
   ObSimpleJavaPolicySchema schema(&allocator);
   int64_t count = 0;
   while (OB_SUCCESS == ret && common::OB_SUCCESS == (ret = result.next())) {
