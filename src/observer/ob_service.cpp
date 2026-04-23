@@ -1857,7 +1857,6 @@ int ObService::prepare_server_for_adding_server(
       LOG_WARN("fail to get build_version", KR(ret));
     }
 
-#ifdef OB_BUILD_SHARED_STORAGE
     if (OB_FAIL(ret)) {
 #ifdef OB_BUILD_TDE_SECURITY
     } else if (arg.get_root_key_type() == RootKeyType::INVALID || arg.get_root_key().empty()) {
@@ -1871,6 +1870,7 @@ int ObService::prepare_server_for_adding_server(
       LOG_WARN("failed to set root key", KR(ret), K(arg));
 #endif
     }
+#ifdef OB_BUILD_SHARED_STORAGE
     if (OB_FAIL(ret)) {
     } else {
       const ObSArray<share::ObZoneStorageTableInfo>& storage_infos = arg.get_zone_storage_infos();
