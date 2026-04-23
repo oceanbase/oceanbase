@@ -297,6 +297,7 @@ ObExecContext::~ObExecContext()
     lob_access_ctx_ = nullptr;
   }
   auto_dop_map_.destroy();
+  deterministic_udf_cache_allocator_.reset();
 }
 
 void ObExecContext::clean_resolve_ctx()
@@ -322,8 +323,6 @@ void ObExecContext::reset_op_ctx()
 {
   reset_expr_op();
   op_kit_store_.destroy();
-
-  deterministic_udf_cache_allocator_.reset();
 }
 
 void ObExecContext::reset_op_env()
@@ -342,6 +341,7 @@ void ObExecContext::reset_op_env()
   if (OB_NOT_NULL(udf_ctx_mgr_)) {
     udf_ctx_mgr_->reset();
   }
+  deterministic_udf_cache_allocator_.reset();
 }
 int ObExecContext::init_phy_op(const uint64_t phy_op_size)
 {
