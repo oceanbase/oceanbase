@@ -807,7 +807,7 @@ public:
                               SCN read_scn,
                               common::ObNewRowIterator *row_iter,
                               blocksstable::ObDatumRow *last_row,
-                              ObArray<uint64_t> &i_vids);
+                              int64_t &i_vid_count);
   int prepare_delta_mem_data(roaring::api::roaring64_bitmap_t *gene_bitmap,
                              ObVectorQueryAdaptorResultContext *ctx);
   int serialize(ObIAllocator *allocator, ObOStreamBuf::CbParam &cb_param, ObOStreamBuf::Callback &cb);
@@ -1001,7 +1001,7 @@ public:
       const SCN& frozen_scn, common::ObNewRowIterator *row_iter);
   int write_into_bitmap_without_lock(
       ObVecIdxVBitmapDataHandle &vbitmap, int64_t dim, SCN read_scn,
-      ObArray<uint64_t> &i_vids, ObArray<uint64_t> &d_vids);
+      common::ObIArray<uint64_t> &i_vids, common::ObIArray<uint64_t> &d_vids);
 
   // for index serialize and deserialize
   int serialize_snapshot(ObHNSWSerializeCallback::CbParam &param);
@@ -1050,8 +1050,8 @@ public:
 private:
   int do_fill_vector_index_all_segments(common::ObIArray<ObVectorSegmentInfo> &segment_infos);
   int add_datum_row_into_array(blocksstable::ObDatumRow *datum_row,
-                               ObArray<uint64_t> &i_vids,
-                               ObArray<uint64_t> &d_vids);
+                               common::ObIArray<uint64_t> &i_vids,
+                               common::ObIArray<uint64_t> &d_vids);
   bool check_if_complete_index(SCN read_scn);
   int check_if_complete_delta(ObVectorQueryAdaptorResultContext *ctx, roaring::api::roaring64_bitmap_t *gene_bitmap, int64_t count, bool &res);
   int write_into_delta_mem(ObVectorQueryAdaptorResultContext *ctx,
@@ -1065,7 +1065,7 @@ private:
                            int64_t null_count,
                            bool& has_written,
                            uint32_t *sparse_byte_lens = nullptr);
-  int write_into_index_mem(ObVecIdxVBitmapDataHandle &vbitmap, int64_t dim, SCN read_scn, ObArray<uint64_t> &i_vids, ObArray<uint64_t> &d_vids);
+  int write_into_index_mem(ObVecIdxVBitmapDataHandle &vbitmap, int64_t dim, SCN read_scn, common::ObIArray<uint64_t> &i_vids, common::ObIArray<uint64_t> &d_vids);
   int generate_snapshot_valid_bitmap(ObVectorQueryAdaptorResultContext *ctx,
                                      common::ObNewRowIterator *row_iter,
                                      SCN query_scn);
