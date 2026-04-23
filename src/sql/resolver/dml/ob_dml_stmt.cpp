@@ -5931,7 +5931,7 @@ int TableItem::deep_copy_dsl_query_info(const ObDSLQueryInfo& dsl_query_info, Ob
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory dsl query info struct failed.", K(ret));
   } else {
-    tmp_dsl_query_info = new (tmp_dsl_query_info) ObDSLQueryInfo();
+    tmp_dsl_query_info = new (tmp_dsl_query_info) ObDSLQueryInfo(*allocator);
     if (OB_FAIL(tmp_dsl_query_info->deep_copy(dsl_query_info, expr_copier, allocator))) {
       LOG_WARN("deep copy dsl query info failed.", K(ret));
     } else {

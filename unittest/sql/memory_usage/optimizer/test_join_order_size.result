@@ -6,7 +6,7 @@
 | JoinPath | 936 |
 | SubQueryPath | 616 |
 | FunctionTablePath | 616 |
-| JsonTablePath | 840 |
+| JsonTablePath | 728 |
 | TempTablePath | 624 |
 | CteTablePath | 616 |
 | ValuesTablePath | 616 |

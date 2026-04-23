@@ -167,7 +167,7 @@ public:
     VecIndexScanParams() : access_exprs_(), table_id_(OB_INVALID_ID), scan_type_(ObTSCIRScanType::OB_IR_INV_IDX_SCAN) {}
     virtual ~VecIndexScanParams() {}
 
-    common::ObSEArray<ObRawExpr*, 2, common::ModulePageAllocator, true> access_exprs_;
+    common::ObSEArray<ObRawExpr*, 2> access_exprs_;
     ObTableID table_id_;
     ObTSCIRScanType scan_type_;
   };

@@ -56,6 +56,8 @@
 #include "sql/optimizer/ob_log_link_dml.h"
 #include "sql/optimizer/ob_log_values_table_access.h"
 #include "sql/optimizer/ob_log_expand.h"
+#include "sql/optimizer/ob_log_hybrid_fusion.h"
+#include "sql/optimizer/ob_log_rescan.h"
 #include "sql/optimizer/ob_skyline_prunning.h"
 #undef protected
 #undef private
@@ -419,6 +421,8 @@ TEST_F(TestSQLCompile, log_plan_size)
   PRINT_SIZE(of_result, ObLogOptimizerStatsGathering)
   PRINT_SIZE(of_result, ObLogValuesTableAccess)
   PRINT_SIZE(of_result, ObLogExpand)
+  PRINT_SIZE(of_result, ObLogHybridFusion)
+  PRINT_SIZE(of_result, ObLogRescan)
   of_result.close();
   verify_results(result_file, tmp_file);
 }

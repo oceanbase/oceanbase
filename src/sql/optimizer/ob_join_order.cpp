@@ -25529,7 +25529,7 @@ int ObJoinOrder::init_dsl_query(const TableItem *table_item, const PathHelper &h
       ObDSLQueryInfo *dsl_query_info = NULL;
       ObDSLBoolQuery *bool_query = NULL;
       ObConstRawExpr *one_const_expr = NULL;
-      if (OB_ISNULL(dsl_query_info = OB_NEWx(ObDSLQueryInfo, allocator_))) {
+      if (OB_ISNULL(dsl_query_info = OB_NEWx(ObDSLQueryInfo, allocator_, *allocator_))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate memory for ObDSLQueryInfo", K(ret));
       } else if (OB_FAIL(dsl_query_info->init_default_params(OPT_CTX.get_expr_factory(), false))) {

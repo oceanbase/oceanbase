@@ -75,7 +75,8 @@ bool ObLogHybridFusion::has_search_subquery() const
 
 ObLogHybridFusion::ObLogHybridFusion(ObLogPlan &plan)
   : ObLogicalOperator(plan),
-    fusion_node_(nullptr) {}
+    fusion_node_(nullptr),
+    access_exprs_(plan.get_allocator()) {}
 
 int ObLogHybridFusion::generate_access_exprs()
 {

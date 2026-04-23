@@ -41,7 +41,7 @@ public:
 
 private:
   ObFusionNode *fusion_node_;
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> access_exprs_;
+  ObSqlArray<ObRawExpr*> access_exprs_;
   DISALLOW_COPY_AND_ASSIGN(ObLogHybridFusion);
 };
 

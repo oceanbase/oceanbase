@@ -77,10 +77,10 @@ public:
                     ObEsQueryItem outer_query_type, ObDSLQuery *parent_query);
   virtual ~ObDSLBoolQuery() {}
 
-  ObSEArray<ObDSLQuery*, 4, ModulePageAllocator, true> must_;
-  ObSEArray<ObDSLQuery*, 4, ModulePageAllocator, true> should_;
-  ObSEArray<ObDSLQuery*, 4, ModulePageAllocator, true> filter_;
-  ObSEArray<ObDSLQuery*, 4, ModulePageAllocator, true> must_not_;
+  ObSqlArray<ObDSLQuery*> must_;
+  ObSqlArray<ObDSLQuery*> should_;
+  ObSqlArray<ObDSLQuery*> filter_;
+  ObSqlArray<ObDSLQuery*> must_not_;
   // for must/should/filter/must_not, -1: not exists, 0: exists but empty, >0: exists and has content
   int64_t must_cnt_;
   int64_t should_cnt_;
@@ -94,9 +94,9 @@ public:
                        K(msm_), K(origin_expr_));
 
 private:
-  ObDSLBoolQuery(ObEsQueryItem outer_query_type, ObDSLQuery *parent_query)
+  ObDSLBoolQuery(ObIAllocator &alloc, ObEsQueryItem outer_query_type, ObDSLQuery *parent_query)
     : ObDSLQuery(QUERY_ITEM_BOOL, outer_query_type, parent_query),
-      must_(), should_(), filter_(), must_not_(),
+      must_(alloc), should_(alloc), filter_(alloc), must_not_(alloc),
       must_cnt_(-1), should_cnt_(-1), filter_cnt_(-1), must_not_cnt_(-1),
       msm_(1), origin_expr_(nullptr) {}
 };
@@ -121,7 +121,7 @@ public:
   ObColumnRefRawExpr *field_;
   ObConstRawExpr *k_;
   ObConstRawExpr *query_vector_;
-  ObSEArray<ObDSLQuery*, 4, ModulePageAllocator, true> filter_;
+  ObSqlArray<ObDSLQuery*> filter_;
   ObRawExpr *distance_;
   SearchOption *search_option_;
   INHERIT_TO_STRING_KV("ObDSLQuery", ObDSLQuery,
@@ -129,13 +129,13 @@ public:
                        K(filter_), K(distance_), K(search_option_));
 
 private:
-  ObDSLKnnQuery(ObEsQueryItem outer_query_type)
+  ObDSLKnnQuery(ObIAllocator &alloc, ObEsQueryItem outer_query_type)
     : ObDSLQuery(QUERY_ITEM_KNN, outer_query_type),
       dist_algo_(ObVectorIndexDistAlgorithm::VIDA_L2),
       field_(nullptr),
       k_(nullptr),
       query_vector_(nullptr),
-      filter_(),
+      filter_(alloc),
       distance_(nullptr),
       search_option_(nullptr) {}
 };
@@ -177,9 +177,10 @@ struct ObDSLRankInfo {
 
 struct ObDSLQueryInfo
 {
-  ObDSLQueryInfo()
-    : queries_(), from_(nullptr), size_(nullptr), min_score_(nullptr), one_const_expr_(nullptr),
-      query_top_level_boost_(nullptr), raw_dsl_param_str_(), is_top_k_query_(true) {}
+  ObDSLQueryInfo(ObIAllocator &alloc)
+    : queries_(alloc), from_(nullptr), size_(nullptr), min_score_(nullptr), one_const_expr_(nullptr),
+      query_top_level_boost_(nullptr), rowkey_cols_(alloc), dsl_cols(alloc), score_cols_(alloc),
+      dsl_exprs_(alloc), raw_dsl_param_str_(), is_top_k_query_(true) {}
   static int check_column_in_dsl(ObIArray<TableItem*> &table_items, ObColumnRefRawExpr *col_expr, bool &in_dsl);
   int deep_copy(const ObDSLQueryInfo& src, ObIRawExprCopier &expr_copier, ObIAllocator* allocator);
   static int deep_copy_query(const ObDSLQuery *src, ObDSLQuery *&dst,
@@ -194,17 +195,17 @@ struct ObDSLQueryInfo
                                     ObIRawExprCopier &expr_copier, ObIAllocator* allocator, ObDSLQuery *parent);
   int init_default_params(ObRawExprFactory &expr_factory, bool is_top_k_query = true);
 
-  ObSEArray<ObDSLQuery*, 4, ModulePageAllocator, true> queries_;
+  ObSqlArray<ObDSLQuery*> queries_;
   ObRawExpr *from_;
   ObRawExpr *size_;
   ObRawExpr *min_score_;
   ObRawExpr *one_const_expr_;
   ObRawExpr *query_top_level_boost_;
   ObDSLRankInfo rank_info_;
-  ObSEArray<ObColumnRefRawExpr*, 4, ModulePageAllocator, true> rowkey_cols_;
-  ObSEArray<ObColumnRefRawExpr*, 4, ModulePageAllocator, true> dsl_cols;
-  ObSEArray<ObOpPseudoColumnRawExpr*, 4, ModulePageAllocator, true> score_cols_;
-  ObSEArray<ObRawExpr*, 4, ModulePageAllocator, true> dsl_exprs_;
+  ObSqlArray<ObColumnRefRawExpr*> rowkey_cols_;
+  ObSqlArray<ObColumnRefRawExpr*> dsl_cols;
+  ObSqlArray<ObOpPseudoColumnRawExpr*> score_cols_;
+  ObSqlArray<ObRawExpr*> dsl_exprs_;
   ObString raw_dsl_param_str_;
   bool is_top_k_query_;
   TO_STRING_KV(K(queries_), K(from_), K(size_), K(min_score_), K(query_top_level_boost_),

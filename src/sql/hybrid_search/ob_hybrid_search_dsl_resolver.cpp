@@ -117,7 +117,7 @@ int ObDSLBoolQuery::create(ObIAllocator &alloc, ObDSLBoolQuery *&bool_query,
                            ObEsQueryItem outer_query_type, ObDSLQuery *parent_query)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(bool_query = OB_NEWx(ObDSLBoolQuery, &alloc, outer_query_type, parent_query))) {
+  if (OB_ISNULL(bool_query = OB_NEWx(ObDSLBoolQuery, &alloc, alloc, outer_query_type, parent_query))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory for ObDSLBoolQuery", K(ret));
   }
@@ -127,7 +127,7 @@ int ObDSLBoolQuery::create(ObIAllocator &alloc, ObDSLBoolQuery *&bool_query,
 int ObDSLKnnQuery::create(ObIAllocator &alloc, ObDSLKnnQuery *&knn_query, ObEsQueryItem outer_query_type)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(knn_query = OB_NEWx(ObDSLKnnQuery, &alloc, outer_query_type))) {
+  if (OB_ISNULL(knn_query = OB_NEWx(ObDSLKnnQuery, &alloc, alloc, outer_query_type))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory for ObDSLKnnQuery", K(ret));
   }
@@ -273,10 +273,10 @@ int ObDSLQueryInfo::deep_copy_query_bool(const ObDSLBoolQuery *src, ObDSLBoolQue
                                          ObIRawExprCopier &expr_copier, ObIAllocator* allocator, ObDSLQuery *parent)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObDSLQuery*, 4, ModulePageAllocator, true> must;
-  ObSEArray<ObDSLQuery*, 4, ModulePageAllocator, true> should;
-  ObSEArray<ObDSLQuery*, 4, ModulePageAllocator, true> filter;
-  ObSEArray<ObDSLQuery*, 4, ModulePageAllocator, true> must_not;
+  ObSEArray<ObDSLQuery*, 4> must;
+  ObSEArray<ObDSLQuery*, 4> should;
+  ObSEArray<ObDSLQuery*, 4> filter;
+  ObSEArray<ObDSLQuery*, 4> must_not;
   if (OB_ISNULL(src) || OB_ISNULL(allocator)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null param", K(ret), KP(src), KP(allocator));
@@ -338,7 +338,7 @@ int ObDSLQueryInfo::deep_copy_query_knn(const ObDSLKnnQuery *src, ObDSLKnnQuery 
                                         ObIRawExprCopier &expr_copier, ObIAllocator* allocator)
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObDSLQuery*, 4, ModulePageAllocator, true> filter;
+  ObSEArray<ObDSLQuery*, 4> filter;
   ObRawExpr *field_expr = nullptr;
   ObRawExpr *k_expr = nullptr;
   ObRawExpr *query_vector_expr = nullptr;
@@ -1127,7 +1127,7 @@ int ObDSLResolver::init_bool_info(ObIJsonBase &req_node, int32_t &msm, ObConstRa
 int ObDSLResolver::init_col_idx_map()
 {
   int ret = OB_SUCCESS;
-  ObSEArray<ObAuxTableMetaInfo, 4, ModulePageAllocator, true> simple_index_infos;
+  ObSEArray<ObAuxTableMetaInfo, 4> simple_index_infos;
   if (col_idx_map_.created()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("col idx map already initialized, should not call init again", K(ret));
@@ -1152,7 +1152,7 @@ int ObDSLResolver::init_col_idx_map()
         for (int64_t j = 0; OB_SUCC(ret) && j < rowkey_info.get_size(); j++) {
           const ObRowkeyColumn *rowkey_column = nullptr;
           const ObColumnSchemaV2 *col_schema = nullptr;
-          ObSEArray<uint64_t, 4, ModulePageAllocator, true> cascaded_column_ids;
+          ObSEArray<uint64_t, 4> cascaded_column_ids;
           const ObColumnSchemaV2 *table_column = nullptr;
           if (OB_ISNULL(rowkey_column = rowkey_info.get_column(j))) {
             ret = OB_ERR_UNEXPECTED;
@@ -1170,7 +1170,7 @@ int ObDSLResolver::init_col_idx_map()
           } else if (OB_FAIL(table_column->get_cascaded_column_ids(cascaded_column_ids))) {
             LOG_WARN("failed to get cascaded_column_ids", K(ret));
           } else {
-            ObSEArray<uint64_t, 4, ModulePageAllocator, true> user_column_ids;
+            ObSEArray<uint64_t, 4> user_column_ids;
             bool is_multi_column_index = false;
             for (int64_t k = 0; OB_SUCC(ret) && k < cascaded_column_ids.count(); k++) {
               const ObColumnSchemaV2 *cascaded_column = table_schema_->get_column_schema(cascaded_column_ids.at(k));
@@ -1307,7 +1307,7 @@ int ObDSLResolver::init_resolver()
   } else if (OB_NOT_NULL(dsl_query_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dsl_query_info_ already initialized", K(ret));
-  } else if (OB_ISNULL(dsl_query_info_ = OB_NEWx(ObDSLQueryInfo, allocator_))) {
+  } else if (OB_ISNULL(dsl_query_info_ = OB_NEWx(ObDSLQueryInfo, allocator_, *allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to create dsl query info", K(ret));
   } else if (OB_FAIL(dsl_query_info_->init_default_params(*params_.expr_factory_))) {
@@ -1716,7 +1716,7 @@ int ObDSLResolver::resolve_knn(ObIJsonBase &req_node, ObDSLQuery *&query)
   ObRawExpr *k_expr = nullptr;
   ObRawExpr *query_vector_expr = nullptr;
   ObRawExpr *distance_expr = nullptr;
-  ObSEArray<ObDSLQuery*, 4, ModulePageAllocator, true> filter_queries;
+  ObSEArray<ObDSLQuery*, 4> filter_queries;
   ObConstRawExpr *boost_expr = nullptr;
   ObDSLKnnQuery::SearchOption *search_option = nullptr;
   ObDSLKnnQuery *knn_query = nullptr;
@@ -1852,10 +1852,10 @@ int ObDSLResolver::resolve_bool(ObIJsonBase &req_node, ObDSLQuery *&query, ObDSL
 {
   int ret = OB_SUCCESS;
   uint64_t count = 0;
-  ObSEArray<ObDSLQuery*, 4, ModulePageAllocator, true> must;
-  ObSEArray<ObDSLQuery*, 4, ModulePageAllocator, true> should;
-  ObSEArray<ObDSLQuery*, 4, ModulePageAllocator, true> filter;
-  ObSEArray<ObDSLQuery*, 4, ModulePageAllocator, true> must_not;
+  ObSEArray<ObDSLQuery*, 4> must;
+  ObSEArray<ObDSLQuery*, 4> should;
+  ObSEArray<ObDSLQuery*, 4> filter;
+  ObSEArray<ObDSLQuery*, 4> must_not;
   int64_t must_cnt = -1;
   int64_t should_cnt = -1;
   int64_t filter_cnt = -1;
@@ -2877,8 +2877,8 @@ int ObDSLResolver::resolve_multi_fields_query_param(
 {
   int ret = OB_SUCCESS;
 
-  ObSEArray<ObColumnRefRawExpr*, 4, ModulePageAllocator, true> fields;
-  ObSEArray<ObConstRawExpr*, 4, ModulePageAllocator, true> field_boosts;
+  ObSEArray<ObColumnRefRawExpr*, 4> fields;
+  ObSEArray<ObConstRawExpr*, 4> field_boosts;
   ObMatchFieldsType type = ObDSLFullTextMultiFieldQueryParam::DEFAULT_FIELD_TYPE;
   ObMatchOperator opr = ObDSLFullTextQuery::DEFAULT_OPERATOR;
   int32_t minimum_should_match = ObDSLFullTextQuery::DEFAULT_MINIMUM_SHOULD_MATCH;
@@ -3212,7 +3212,7 @@ int ObDSLResolver::resolve_range(ObIJsonBase &req_node, ObDSLQuery *&query, ObDS
   ObSysFunRawExpr *json_extract_expr = nullptr;
   ObRawExpr *field_expr = nullptr;
   ObRawExpr *scalar_expr = nullptr;
-  ObSEArray<ObRawExpr*, 4, ModulePageAllocator, true> condition_exprs;
+  ObSEArray<ObRawExpr*, 4> condition_exprs;
   ObDSLScalarQuery *range_query = nullptr;
   if (ObDSLQuery::check_need_cal_score_in_bool(outer_query_type, parent_query)) {
     ret = OB_NOT_SUPPORTED;
@@ -3514,7 +3514,7 @@ int ObDSLResolver::resolve_terms(ObIJsonBase &req_node, ObDSLQuery *&query, ObDS
   ObRawExpr *path_expr = nullptr;
   ObSysFunRawExpr *json_extract_expr = nullptr;
   ObRawExpr *field_expr = nullptr;
-  ObSEArray<ObRawExpr*, 4, ModulePageAllocator, true> value_exprs;
+  ObSEArray<ObRawExpr*, 4> value_exprs;
   ObRawExpr *in_expr = nullptr;
   ObDSLScalarQuery *terms_query = nullptr;
   if (ObDSLQuery::check_need_cal_score_in_bool(outer_query_type, parent_query)) {

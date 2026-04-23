@@ -1335,6 +1335,7 @@ class Path
       : Path(NULL, allocator),
         table_id_(OB_INVALID_ID),
         value_exprs_(allocator),
+        ori_value_exprs_(allocator),
         column_param_default_exprs_(allocator) {}
     virtual ~JsonTablePath() {}
     int assign(const JsonTablePath &other, common::ObIAllocator *allocator);
@@ -1351,7 +1352,7 @@ class Path
   public:
     uint64_t table_id_;
     ObSqlArray<ObRawExpr*> value_exprs_;
-    common::ObSEArray<ObRawExpr*, 1, common::ModulePageAllocator, true> ori_value_exprs_;
+    ObSqlArray<ObRawExpr*> ori_value_exprs_;
     ObSqlArray<ObColumnDefault> column_param_default_exprs_;
   private:
       DISALLOW_COPY_AND_ASSIGN(JsonTablePath);

@@ -2010,7 +2010,7 @@ struct NoSpecialExprPredicate {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to alloc pushdown context", K(ret));
       } else {
-        new_context = new (ptr) JoinFilterPushdownContext();
+        new_context = new (ptr) JoinFilterPushdownContext(*allocator);
       }
       return ret;
     }

@@ -23,7 +23,7 @@ public:
   ObLogStatCollector(ObLogPlan &plan)
       : ObLogicalOperator(plan),
         sort_keys_(plan.get_allocator()),
-        inverted_sort_keys_(),
+        inverted_sort_keys_(plan.get_allocator()),
         is_none_partition_(),
         type_(ObStatCollectorType::NOT_INIT_TYPE)
         {}
@@ -42,7 +42,7 @@ public:
   virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
 private:
   ObSqlArray<OrderItem> sort_keys_;
-  common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true> inverted_sort_keys_;
+  ObSqlArray<OrderItem> inverted_sort_keys_;
   bool is_none_partition_;
   ObStatCollectorType type_;
 };

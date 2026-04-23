@@ -490,7 +490,9 @@ public:
         aggr_param_mono_(plan.get_allocator()),
         is_gtt_temp_table_v2_(false),
         is_scan_resumable_(false),
-	      is_hybrid_search_(false)
+	      is_hybrid_search_(false),
+        hybrid_search_exprs_(plan.get_allocator()),
+        hybrid_search_scores_(plan.get_allocator())
   {
   }
 
@@ -1511,8 +1513,8 @@ protected: // memeber variables
   bool is_gtt_temp_table_v2_;
   bool is_scan_resumable_;
   bool is_hybrid_search_;
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> hybrid_search_exprs_;
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> hybrid_search_scores_;
+  ObSqlArray<ObRawExpr*> hybrid_search_exprs_;
+  ObSqlArray<ObRawExpr*> hybrid_search_scores_;
 
   // disallow copy and assign
   DISALLOW_COPY_AND_ASSIGN(ObLogTableScan);
