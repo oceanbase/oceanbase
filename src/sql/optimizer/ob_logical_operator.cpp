@@ -418,6 +418,7 @@ ObLogicalOperator::ObLogicalOperator(ObLogPlan &plan)
     is_nl_style_pipelined_plan_(false),
     is_at_most_one_row_(false),
     is_local_order_(false),
+    is_local_order_by_das_(false),
     is_range_order_(false),
     op_ordering_(plan.get_allocator()),
     empty_expr_sets_(plan.get_empty_expr_sets()),
@@ -702,6 +703,7 @@ int ObLogicalOperator::compute_op_ordering()
     LOG_WARN("failed to set op ordering", K(ret));
   } else {
     is_local_order_ = child->get_is_local_order();
+    is_local_order_by_das_ = child->get_is_local_order_by_das();
     is_range_order_ = child->get_is_range_order();
   }
   return ret;
@@ -1080,6 +1082,7 @@ int ObLogicalOperator::compute_property(Path *path)
     set_width(path->parent_->get_output_row_size());
     set_interesting_order_info(path->get_interesting_order_info());
     set_is_local_order(path->is_local_order_);
+    set_is_local_order_by_das(path->is_local_order_by_das_);
     set_is_range_order(path->is_range_order_);
     set_parallel(path->parallel_);
     set_op_parallel_rule(path->op_parallel_rule_);

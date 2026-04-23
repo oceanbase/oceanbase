@@ -1178,6 +1178,8 @@ public:
    */
   inline void set_is_local_order(bool is_local_order) { is_local_order_ = is_local_order; }
   inline bool get_is_local_order() const { return is_local_order_; }
+  inline void set_is_local_order_by_das(bool is_local_order_by_das) { is_local_order_by_das_ = is_local_order_by_das; }
+  inline bool get_is_local_order_by_das() const { return is_local_order_by_das_; }
   inline void set_is_range_order(bool is_range_order) { is_range_order_ = is_range_order; }
   inline bool get_is_range_order() const { return is_range_order_; }
 
@@ -2004,6 +2006,7 @@ protected:
   // when has no op_ordering_
   // is_local_order has no meanings
   bool is_local_order_;
+  bool is_local_order_by_das_;  // local order originates from DAS scan, GI cannot leverage it
   bool is_range_order_;
   ObSqlArray<OrderItem> op_ordering_;
   const EqualSets &empty_expr_sets_;

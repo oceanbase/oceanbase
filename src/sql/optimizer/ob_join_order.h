@@ -375,6 +375,7 @@ class Path
     Path(ObJoinOrder* parent, common::ObIAllocator &allocator)
       : parent_(parent),
         is_local_order_(false),
+        is_local_order_by_das_(false),
         is_range_order_(false),
         ordering_(allocator),
         interesting_order_info_(OrderingFlag::NOT_MATCH),
@@ -552,6 +553,7 @@ class Path
      */
     ObJoinOrder* parent_;
     bool is_local_order_;
+    bool is_local_order_by_das_;  // local order originates from DAS scan, cannot be used for GI pullup
     bool is_range_order_;
     ObSqlArray<OrderItem> ordering_;//Path的输出序，不一定来自于Stmt上的expr
     int64_t interesting_order_info_;  // 记录path的序在stmt中的哪些地方用到 e.g. join, group by, order by
