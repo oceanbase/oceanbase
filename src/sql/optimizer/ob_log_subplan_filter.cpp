@@ -223,6 +223,7 @@ int ObLogSubPlanFilter::do_re_est_cost(EstimateCostInfo &param, double &card, do
   ObLogicalOperator *child = NULL;
   double sel = 1.0;
   ObSEArray<ObBasicCostInfo, 4> cost_infos;
+  bool complex_filter_flag = false;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(child = get_child(ObLogicalOperator::first_child))
       || OB_UNLIKELY(param.need_parallel_ < 1 || param.need_batch_rescan_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -234,9 +235,15 @@ int ObLogSubPlanFilter::do_re_est_cost(EstimateCostInfo &param, double &card, do
                                                              get_plan()->get_selectivity_ctx(),
                                                              get_filter_exprs(),
                                                              sel,
-                                                             get_plan()->get_predicate_selectivities()))) {
+                                                             get_plan()->get_predicate_selectivities(),
+                                                             &complex_filter_flag))) {
     LOG_WARN("failed to calc selectivity", K(ret));
-  } else if (sel <= OB_DOUBLE_EPSINON || param.need_row_count_ >= child->get_card() * sel) {
+  } else if (sel <= OB_DOUBLE_EPSINON || param.need_row_count_ >= child->get_card() * sel 
+    ||  (ObEnableOptRowGoal::AUTO == get_plan()->get_optimizer_context().get_enable_opt_row_goal()
+         && complex_filter_flag
+         && get_plan()->get_selectivity_ctx().check_opt_compat_version(COMPAT_VERSION_4_2_5_BP8, COMPAT_VERSION_4_3_0, 
+                                                                       COMPAT_VERSION_4_3_5_BP6))
+        ) {
     param.need_row_count_ = -1;
   } else {
     param.need_row_count_ /= sel;
