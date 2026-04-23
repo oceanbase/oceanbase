@@ -1818,39 +1818,43 @@ int ObPluginVectorIndexAdaptor::write_into_delta_mem(ObVectorQueryAdaptorResultC
                                                      ObVecExtraInfoObj *extra_objs,
                                                      int64_t extra_column_count,
                                                      ObVidBound vid_bound,
+                                                     uint64_t *null_vids,
+                                                     int null_count,
                                                      bool& has_written)
 {
   INIT_SUCC(ret);
   has_written = false;
-  if (count == 0) {
+  if (count == 0 && null_count == 0) {
     // do nothing
   } else if (!is_mem_data_init_atomic(VIRT_INC)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("write into delta mem but incr memdata uninit.", K(ret));
   } else {
     TCWLockGuard lock_guard(incr_data_->mem_data_rwlock_);
-    if (check_if_complete_delta(ctx, ctx->bitmaps_->insert_bitmap_, count)) {
+    if (check_if_complete_delta(ctx, ctx->bitmaps_->insert_bitmap_, count + null_count)) {
       char *extra_info_buf = nullptr;
       ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_);
-      if (OB_SUCC(ret) && OB_NOT_NULL(extra_objs) && extra_column_count > 0) {
-        int64_t extra_info_actual_size = 0;
-        if (OB_FAIL(get_extra_info_actual_size(extra_info_actual_size))) {
-          LOG_WARN("failed to get extra info actual size.", K(ret));
-        } else if (extra_info_actual_size > 0 && 
-                   OB_FAIL(ObVecExtraInfo::extra_infos_to_buf(tmp_allocator, extra_objs, extra_column_count,
-                                                              extra_info_actual_size, count, extra_info_buf))) {
-          LOG_WARN("failed to encode extra info.", K(ret), K(extra_info_actual_size));
+      if (count > 0) {
+        if (OB_SUCC(ret) && OB_NOT_NULL(extra_objs) && extra_column_count > 0) {
+          int64_t extra_info_actual_size = 0;
+          if (OB_FAIL(get_extra_info_actual_size(extra_info_actual_size))) {
+            LOG_WARN("failed to get extra info actual size.", K(ret));
+          } else if (extra_info_actual_size > 0 && 
+                     OB_FAIL(ObVecExtraInfo::extra_infos_to_buf(tmp_allocator, extra_objs, extra_column_count,
+                                                                extra_info_actual_size, count, extra_info_buf))) {
+            LOG_WARN("failed to encode extra info.", K(ret), K(extra_info_actual_size));
+          }
         }
-      }
-      lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
-      lib::ObLightBacktraceGuard light_backtrace_guard(false);
-      if (OB_SUCC(ret) && OB_FAIL(obvectorutil::add_index(incr_data_->index_, 
-                                                 vectors, 
-                                                 reinterpret_cast<int64_t *>(vids), 
-                                                 ctx->get_dim(), 
-                                                 extra_info_buf,
-                                                 count))) {
-        LOG_WARN("failed to add index.", K(ret), K(ctx->get_dim()), K(count));
+        lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIndexVsagADP"));
+        lib::ObLightBacktraceGuard light_backtrace_guard(false);
+        if (OB_SUCC(ret) && OB_FAIL(obvectorutil::add_index(incr_data_->index_, 
+                                                   vectors, 
+                                                   reinterpret_cast<int64_t *>(vids), 
+                                                   ctx->get_dim(), 
+                                                   extra_info_buf,
+                                                   count))) {
+          LOG_WARN("failed to add index.", K(ret), K(ctx->get_dim()), K(count));
+        }
       }
       if (OB_SUCC(ret)) {
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIBitmapADPJ"));
@@ -1858,6 +1862,9 @@ int ObPluginVectorIndexAdaptor::write_into_delta_mem(ObVectorQueryAdaptorResultC
         incr_data_->set_vid_bound_inc(vid_bound);
         for (int64_t i = 0; OB_SUCC(ret) && i < count; i++) {
           ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(incr_data_->bitmap_->insert_bitmap_, vids[i]));
+        }
+        for (int64_t i = 0; OB_SUCC(ret) && i < null_count; i++) {
+          ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(incr_data_->bitmap_->insert_bitmap_, null_vids[i]));
         }
       }
       has_written = true;
@@ -1873,10 +1880,12 @@ int ObPluginVectorIndexAdaptor::complete_delta_buffer_table_data(ObVectorQueryAd
   INIT_SUCC(ret);
   float *vectors = nullptr;
   uint64_t *vids = nullptr;
+  uint64_t *null_vids = nullptr;
   ObVecExtraInfoObj *extra_info_objs = nullptr;
   ObVidBound vid_bound;
 
   int count = 0;
+  int null_count = 0;
   ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_);
   if (OB_ISNULL(ctx)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1889,6 +1898,9 @@ int ObPluginVectorIndexAdaptor::complete_delta_buffer_table_data(ObVectorQueryAd
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc new mem.", K(ret));
   } else if (OB_ISNULL(vids = static_cast<uint64_t *>(tmp_allocator.alloc(sizeof(uint64_t) * ctx->get_vec_cnt())))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc new mem.", K(ret));
+  } else if (OB_ISNULL(null_vids = static_cast<uint64_t *>(tmp_allocator.alloc(sizeof(uint64_t) * ctx->get_vec_cnt())))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc new mem.", K(ret));
   } else if (OB_NOT_NULL(ctx->vec_data_.extra_info_objs_)) {
@@ -1906,7 +1918,8 @@ int ObPluginVectorIndexAdaptor::complete_delta_buffer_table_data(ObVectorQueryAd
     for (int i = 0; OB_SUCC(ret) && i < ctx_vec_cnt; i++) {
       float *vector = nullptr;
       if (ctx->vec_data_.vectors_[i].is_null() || ctx->vec_data_.vectors_[i].get_string().empty()) {
-        // do nothing
+        null_vids[null_count] = ctx->get_vids()[i + ctx->get_curr_idx()].get_int();
+        null_count++;
       } else if (ctx->vec_data_.vectors_[i].get_string().length() != dim * sizeof(float)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get invalid string.", K(ret), K(i), K(ctx->vec_data_.vectors_[i].get_string().length()), K(dim));
@@ -1928,14 +1941,15 @@ int ObPluginVectorIndexAdaptor::complete_delta_buffer_table_data(ObVectorQueryAd
         count++;
       }
     }
-    LOG_INFO("[VEC_INDEX][COMPLETE_DELTA] SYCN_DELTA_complete_data", KP(this), K(inc_tablet_id_), KP(incr_data_), K(ctx->vec_data_));
+    LOG_INFO("[VEC_INDEX][COMPLETE_DELTA] SYCN_DELTA_complete_data", K(count), K(null_count), KP(this), K(inc_tablet_id_), KP(incr_data_), K(ctx->vec_data_));
     // print_vids(vids, ctx_vec_cnt);
     // print_vectors(vectors, ctx_vec_cnt, dim);
   }
   // wether really get the lock, write to the index
   bool has_written = false;
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(write_into_delta_mem(ctx, count, vectors, vids, extra_info_objs, ctx->get_extra_column_count(), vid_bound, has_written))) {
+  } else if (OB_FAIL(write_into_delta_mem(ctx, count, vectors, vids, extra_info_objs,
+    ctx->get_extra_column_count(), vid_bound, null_vids, null_count, has_written))) {
     LOG_WARN("failed to write into delta mem.", K(ret), KP(ctx));
   } else {
     ctx->batch_allocator_.reuse();
