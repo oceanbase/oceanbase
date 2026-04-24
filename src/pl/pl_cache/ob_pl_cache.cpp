@@ -710,6 +710,11 @@ int ObPLObjectValue::resolve_and_check_synonym(ObSchemaChecker &schema_checker,
           exist = true;
         }
       }
+      for (int64_t i = 0; !exist && i < stored_sys_schema_objs_.count(); i++) {
+        if (stored_sys_schema_objs_.at(i)->schema_id_ == object_id) {
+          exist = true;
+        }
+      }
       if (!exist) {
         ret = OB_OLD_SCHEMA_VERSION;
         LOG_WARN("exist object which name as current synonym", K(ret), K(object_id), K(synonym_info));
