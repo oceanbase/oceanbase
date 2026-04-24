@@ -81,15 +81,17 @@ do {                                      \
 
 struct ObLCKeyValue
 {
-  ObLCKeyValue() : node_(NULL) {}
-  ObLCKeyValue(ObILibCacheKey *key, ObILibCacheNode *node)
+  ObLCKeyValue() : node_(NULL), weight_(0.0) {}
+  ObLCKeyValue(ObILibCacheKey *key, ObILibCacheNode *node, double weight)
     : key_(key),
-      node_(node) {}
+      node_(node),
+      weight_(weight) {}
 
-  TO_STRING_KV(KP(key_), KP(node_));
+  TO_STRING_KV(KP(key_), KP(node_), K(weight_));
 
   ObILibCacheKey *key_;
   ObILibCacheNode *node_;
+  double weight_;
 };
 
 typedef ObLCKeyValue LCKeyValue;

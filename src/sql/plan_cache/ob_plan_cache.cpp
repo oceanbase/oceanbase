@@ -276,13 +276,8 @@ bool stat_compare(const LCKeyValue &left, const LCKeyValue &right)
   if (OB_ISNULL(left.node_) || OB_ISNULL(right.node_)) {
     cmp_ret = false;
     SQL_PC_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid argument", KP(left.node_), KP(right.node_), K(cmp_ret));
-  } else if (OB_ISNULL(left.node_->get_node_stat())
-             || OB_ISNULL(right.node_->get_node_stat())) {
-    cmp_ret = false;
-    SQL_PC_LOG_RET(ERROR, OB_INVALID_ARGUMENT, "invalid argument", K(left.node_->get_node_stat()),
-                      K(right.node_->get_node_stat()), K(cmp_ret));
   } else {
-    cmp_ret = left.node_->get_node_stat()->weight() < right.node_->get_node_stat()->weight();
+    cmp_ret = left.weight_ < right.weight_;
   }
   return cmp_ret;
 }
@@ -306,7 +301,7 @@ struct ObNodeStatFilterOp : public ObKVEntryTraverseOp
       SQL_PC_LOG(WARN, "invalid argument",
       K(key_value_list_), K(entry.first), K(entry.second), K(ret));
     } else {
-      ObLCKeyValue lc_kv(entry.first, entry.second);
+      ObLCKeyValue lc_kv(entry.first, entry.second, entry.second->get_node_stat()->weight());
       if (key_value_list_->count() < evict_num_) {
         if (OB_FAIL(key_value_list_->push_back(lc_kv))) {
            SQL_PC_LOG(WARN, "fail to push into evict_array", K(ret));

@@ -83,7 +83,7 @@ struct ObKVEntryTraverseOp
     } else if (OB_FAIL(check_entry_match(entry, is_match))) {
       PL_CACHE_LOG(WARN, "failed to check entry match", K(ret));
     } else if (is_match) {
-      if (OB_FAIL(key_value_list_->push_back(ObLCKeyValue(entry.first, entry.second)))) {
+      if (OB_FAIL(key_value_list_->push_back(ObLCKeyValue(entry.first, entry.second, entry.second->get_node_stat()->weight())))) {
         PL_CACHE_LOG(WARN, "fail to push back key", K(ret));
       } else {
         entry.second->inc_ref_count(ref_handle_);
