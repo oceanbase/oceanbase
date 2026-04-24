@@ -2119,6 +2119,8 @@ int ObTxDesc::add_modified_tables(const ObIArray<uint64_t> &dml_table_ids)
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(lock_);
+  const int64_t old_modified_cnt = modified_tables_.count();
+  bool changed = false;
   if (modified_tables_.count() >= 8) {
     // go dedup
     ARRAY_FOREACH(dml_table_ids, i) {
@@ -2144,6 +2146,7 @@ int ObTxDesc::add_modified_tables(const ObIArray<uint64_t> &dml_table_ids)
           ++last;
           if (last != i) {
             modified_tables_.at(last) = modified_tables_.at(i);
+            changed = true;
           }
         }
       }
@@ -2152,7 +2155,11 @@ int ObTxDesc::add_modified_tables(const ObIArray<uint64_t> &dml_table_ids)
       }
     }
   }
-  LOG_TRACE("record trans dml table_ids", K(modified_tables_), K(tx_id_));
+  if (old_modified_cnt != modified_tables_.count() || changed) {
+    state_change_flags_.PARTS_CHANGED_ = true;
+  }
+  LOG_TRACE("record trans dml table_ids", K(modified_tables_), K(tx_id_), K(dml_table_ids),
+      K(old_modified_cnt), K(changed));
   return ret;
 }
 
