@@ -15991,7 +15991,8 @@ int ObPLResolver::resolve_construct(ObObjAccessIdent &access_ident,
     OX (access_ident.udf_info_.udf_database_ = database_name);
     if (OB_SUCC(ret) &&
         !access_ident.udf_info_.udf_database_.empty() &&
-        !access_ident.udf_info_.udf_database_.case_compare_equal(OB_SYS_DATABASE_NAME)) {
+        !access_ident.udf_info_.udf_database_.case_compare_equal(OB_SYS_DATABASE_NAME) &&
+        access_idxs.count() > 0) {
       OZ (q_name.access_idents_.push_back(access_ident.udf_info_.udf_database_));
     }
   } else if (access_idxs.count() > 0) {
