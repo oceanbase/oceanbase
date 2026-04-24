@@ -13,6 +13,7 @@
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/ob_pl_udt_object_manager.h"
 #endif
+#include "share/schema/ob_package_info.h"
 #include "sql/resolver/dml/ob_inlist_resolver.h"
 #include "sql/engine/expr/ob_expr_max_pt.h"
 namespace oceanbase
@@ -2554,36 +2555,102 @@ int ObRawExprResolverImpl::process_obj_access_node(const ParseNode &node, ObRawE
       LOG_WARN("process xmlagg node failed", K(ret));
     }
   } else {
-    ObQualifiedName column_ref;
-    int64_t child_start = ctx_.columns_->count();
-    if (OB_FAIL(resolve_obj_access_idents(node, column_ref))) {
-      LOG_WARN("resolve obj access idents failed", K(ret));
-    } else {
-      column_ref.format_qualified_name(ctx_.case_mode_);
-      column_ref.parents_expr_info_ = ctx_.parents_expr_info_;
-      ObColumnRefRawExpr *b_expr = NULL;
-      if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_REF_COLUMN, b_expr))) {
-        LOG_WARN("fail to create raw expr", K(ret));
-      } else if (OB_ISNULL(b_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("column ref expr is null", K(ret));
+    // Oracle mode parser wraps value(a) as T_OBJ_ACCESS_REF(T_FUN_SYS["value"], ...)
+    //   Case 1: value(a)       → children_[1] is NULL → full rewrite via process_oracle_value_func_node
+    //   Case 2: value(a).col1  → children_[1] is non-NULL → patch children_[0] to T_IDENT "a",
+    //                            then fall through to normal obj-access path (a.col1)
+    bool value_handled = false;
+    const bool is_value_func = lib::is_oracle_mode()
+        && node.num_child_ == 2
+        && OB_NOT_NULL(node.children_[0])
+        && node.children_[0]->type_ == T_FUN_SYS
+        && node.children_[0]->num_child_ >= 1
+        && OB_NOT_NULL(node.children_[0]->children_[0])
+        && 0 == ObString(node.children_[0]->children_[0]->str_len_,
+                         node.children_[0]->children_[0]->str_value_)
+                   .case_compare("value");
+
+    if (is_value_func && OB_ISNULL(node.children_[1])) {
+      // Case 1: standalone value(a)
+      if (OB_FAIL(process_oracle_value_func_node(node.children_[0], expr, value_handled))) {
+        LOG_WARN("failed to process oracle value func node in obj_access path", K(ret));
+      }
+    } else if (is_value_func && OB_NOT_NULL(node.children_[1])) {
+      // Case 2: value(a).col1 — extract alias name from T_FUN_SYS arg,
+      // verify it is a FUNCTION_TABLE alias, then patch children_[0] to T_IDENT "a"
+      const ParseNode *fun_node = node.children_[0];
+      ObString arg_name;
+      if (fun_node->num_child_ >= 2
+          && OB_NOT_NULL(fun_node->children_[1])
+          && fun_node->children_[1]->num_child_ == 1
+          && OB_NOT_NULL(fun_node->children_[1]->children_[0])) {
+        const ParseNode *arg_node = fun_node->children_[1]->children_[0];
+        if (arg_node->type_ == T_OBJ_ACCESS_REF
+            && arg_node->num_child_ == 2
+            && OB_NOT_NULL(arg_node->children_[0])
+            && arg_node->children_[0]->type_ == T_IDENT
+            && OB_ISNULL(arg_node->children_[1])) {
+          arg_name.assign_ptr(arg_node->children_[0]->str_value_,
+                              static_cast<int32_t>(arg_node->children_[0]->str_len_));
+        }
+      }
+      if (!arg_name.empty()
+          && OB_NOT_NULL(ctx_.stmt_)
+          && ctx_.stmt_->is_dml_stmt()) {
+        ObDMLStmt *dml_stmt = static_cast<ObDMLStmt *>(ctx_.stmt_);
+        const ObIArray<TableItem *> &tis = dml_stmt->get_table_items();
+        bool found = false;
+        for (int64_t i = 0; !found && i < tis.count(); ++i) {
+          if (OB_NOT_NULL(tis.at(i))
+              && tis.at(i)->is_function_table()
+              && 0 == tis.at(i)->alias_name_.compare(arg_name)) {
+            found = true;
+          }
+        }
+        if (found) {
+          // patch: value(a).col1 → a.col1
+          const ParseNode *alias_ident =
+              fun_node->children_[1]->children_[0]->children_[0];
+          const_cast<ParseNode &>(node).children_[0] =
+              const_cast<ParseNode *>(alias_ident);
+          // value_handled stays false → fall through to normal path
+        }
+      }
+    }
+
+    if (OB_SUCC(ret) && !value_handled) {
+      // Normal obj-access resolution (identifiers, PL vars, UDFs, etc.)
+      ObQualifiedName column_ref;
+      int64_t child_start = ctx_.columns_->count();
+      if (OB_FAIL(resolve_obj_access_idents(node, column_ref))) {
+        LOG_WARN("resolve obj access idents failed", K(ret));
       } else {
-        column_ref.ref_expr_ = b_expr;
-        if (column_ref.is_pl_var()) {
-          //PL变量的所有生成的孩子ObQualifiedName都不是root
-          for (int64_t i = child_start; OB_SUCC(ret) && i < ctx_.columns_->count(); ++i) {
-            ctx_.columns_->at(i).is_access_root_ = false;
-          }
-        }
-        for (int64_t i = child_start; OB_SUCC(ret) && i < ctx_.columns_->count(); ++i) {
-          if (!ctx_.columns_->at(i).parent_qname_exists()) {
-            ctx_.columns_->at(i).parent_qname_idx_ = ctx_.columns_->count();
-          }
-        }
-        if (OB_FAIL(ctx_.columns_->push_back(column_ref))) {
-          LOG_WARN("Add column failed", K(ret));
+        column_ref.format_qualified_name(ctx_.case_mode_);
+        column_ref.parents_expr_info_ = ctx_.parents_expr_info_;
+        ObColumnRefRawExpr *b_expr = NULL;
+        if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_REF_COLUMN, b_expr))) {
+          LOG_WARN("fail to create raw expr", K(ret));
+        } else if (OB_ISNULL(b_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("column ref expr is null", K(ret));
         } else {
-          expr = b_expr;
+          column_ref.ref_expr_ = b_expr;
+          if (column_ref.is_pl_var()) {
+            //PL变量的所有生成的孩子ObQualifiedName都不是root
+            for (int64_t i = child_start; OB_SUCC(ret) && i < ctx_.columns_->count(); ++i) {
+              ctx_.columns_->at(i).is_access_root_ = false;
+            }
+          }
+          for (int64_t i = child_start; OB_SUCC(ret) && i < ctx_.columns_->count(); ++i) {
+            if (!ctx_.columns_->at(i).parent_qname_exists()) {
+              ctx_.columns_->at(i).parent_qname_idx_ = ctx_.columns_->count();
+            }
+          }
+          if (OB_FAIL(ctx_.columns_->push_back(column_ref))) {
+            LOG_WARN("Add column failed", K(ret));
+          } else {
+            expr = b_expr;
+          }
         }
       }
     }
@@ -8180,6 +8247,322 @@ int ObRawExprResolverImpl::cast_accuracy_check(const ParseNode *node, const char
   return ret;
 }
 
+/**
+ * @brief Handles Oracle value(table_alias) pseudo-function with TABLE() collection expressions.
+ *        Rewrite depends on the element type of the collection:
+ *          scalar  (TABLE OF NUMBER, XMLSEQUENCE, etc.) → value(a) → a.COLUMN_VALUE
+ *          object  (TABLE OF ty1 where ty1 IS OBJECT)   → value(a) → ty1(a.col1, a.col2, ...)
+ *
+ * @param node The ParseNode representing the VALUE() function node, expected to contain the table alias arguments.
+ * @param expr The resulting rewritten expression, if successfully handled.
+ * @param is_handled true if the argument strictly matches a valid FUNCTION_TABLE table item alias from an active DML statement and is successfully rewritten; false otherwise (caller will fallback to regular T_FUN_SYS or PL variable resolution).
+ * @return OB_SUCCESS on success, or an error code on failure.
+ */
+int ObRawExprResolverImpl::process_oracle_value_func_node(const ParseNode *node,
+                                                          ObRawExpr *&expr,
+                                                          bool &is_handled)
+{
+  int ret = OB_SUCCESS;
+  is_handled = false;
+
+  bool can_rewrite = lib::is_oracle_mode() && OB_NOT_NULL(ctx_.columns_);
+
+  // Stage 1: validate exactly one arg in T_EXPR_LIST
+  if (can_rewrite
+      && (node->num_child_ < 2
+          || OB_ISNULL(node->children_[1])
+          || node->children_[1]->num_child_ != 1
+          || OB_ISNULL(node->children_[1]->children_[0]))) {
+    can_rewrite = false;
+  }
+
+  const ParseNode *arg_node = can_rewrite ? node->children_[1]->children_[0] : NULL;
+
+  // Stage 2: extract identifier from T_OBJ_ACCESS_REF(T_IDENT "a", NULL)
+  ObString arg_name;
+  if (can_rewrite) {
+    if (arg_node->type_ == T_OBJ_ACCESS_REF
+        && arg_node->num_child_ == 2
+        && OB_NOT_NULL(arg_node->children_[0])
+        && arg_node->children_[0]->type_ == T_IDENT
+        && OB_ISNULL(arg_node->children_[1])) {
+      arg_name.assign_ptr(arg_node->children_[0]->str_value_,
+                          static_cast<int32_t>(arg_node->children_[0]->str_len_));
+    }
+    if (arg_name.empty()) {
+      can_rewrite = false;
+    }
+  }
+
+  // Stage 3: find matching FUNCTION_TABLE alias
+  ObDMLStmt *dml_stmt = NULL;
+  if (can_rewrite) {
+    if (OB_ISNULL(ctx_.stmt_) || !ctx_.stmt_->is_dml_stmt()) {
+      can_rewrite = false;
+    } else {
+      dml_stmt = static_cast<ObDMLStmt *>(ctx_.stmt_);
+    }
+  }
+
+  const TableItem *matched_item = NULL;
+  if (can_rewrite) {
+    const ObIArray<TableItem *> &table_items = dml_stmt->get_table_items();
+    for (int64_t i = 0; i < table_items.count(); ++i) {
+      const TableItem *ti = table_items.at(i);
+      if (OB_ISNULL(ti)) {
+        continue;
+      }
+      if (ti->is_function_table() && !ti->alias_name_.empty()
+          && 0 == ti->alias_name_.case_compare(arg_name)) {
+        matched_item = ti;
+        break;
+      }
+    }
+    if (OB_ISNULL(matched_item)) {
+      can_rewrite = false;
+    }
+  }
+
+  // Stage 4: determine scalar vs object element type
+  // scalar → a.COLUMN_VALUE;  object → ty1(a.col1, a.col2, ...)
+  bool is_object_elem = false;
+  if (can_rewrite
+      && OB_NOT_NULL(matched_item->function_table_expr_)
+      && matched_item->function_table_expr_->get_result_type().is_ext()) {
+    // UDF-based TABLE(): check if COLUMN_VALUE exists → scalar; otherwise → object
+    bool has_column_value = false;
+    const ObIArray<ColumnItem> &column_items = dml_stmt->get_column_items();
+    for (int64_t i = 0; OB_SUCC(ret) && !has_column_value && i < column_items.count(); ++i) {
+      if (column_items.at(i).table_id_ == matched_item->table_id_
+          && 0 == column_items.at(i).column_name_.case_compare("COLUMN_VALUE")) {
+        has_column_value = true;
+      }
+    }
+    if (OB_SUCC(ret) && !has_column_value) {
+      is_object_elem = true;
+    }
+  }
+
+  // Stage 5A: scalar path — synthesize <alias>.COLUMN_VALUE
+  if (OB_SUCC(ret) && can_rewrite && !is_object_elem) {
+    ObQualifiedName column_ref;
+    column_ref.tbl_name_ = matched_item->alias_name_;
+    column_ref.col_name_ = ObString::make_string("COLUMN_VALUE");
+    column_ref.parents_expr_info_ = ctx_.parents_expr_info_;
+    ObColumnRefRawExpr *col_expr = NULL;
+    if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_REF_COLUMN, col_expr))) {
+      LOG_WARN("failed to create column ref raw expr for value() scalar rewrite", K(ret));
+    } else if (OB_ISNULL(col_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("col_expr is null after create", K(ret));
+    } else {
+      column_ref.ref_expr_ = col_expr;
+      if (OB_FAIL(ctx_.columns_->push_back(column_ref))) {
+        LOG_WARN("failed to push back column ref for value() scalar rewrite", K(ret));
+      } else {
+        expr = col_expr;
+        is_handled = true;
+      }
+    }
+  }
+
+  // Stage 5B: object path — build ty1(a.col1, a.col2, ...) via ObObjectConstructRawExpr
+  // Steps: look up collection element RecordType → create per-member placeholder
+  //        column refs → assemble constructor expression
+  if (OB_SUCC(ret) && can_rewrite && is_object_elem) {
+    const ObRawExpr *func_expr = matched_item->function_table_expr_;
+    uint64_t coll_udt_id = func_expr->get_udt_id();
+    const ObSQLSessionInfo *session = ctx_.session_info_;
+    ObSchemaChecker *schema_checker = ctx_.schema_checker_;
+    ObExecContext *exec_ctx = OB_NOT_NULL(session) ? const_cast<ObSQLSessionInfo *>(session)->get_cur_exec_ctx() : NULL;
+    pl::ObPLPackageGuard *package_guard_ptr = NULL;
+    if (OB_ISNULL(session) || OB_ISNULL(exec_ctx) || OB_ISNULL(schema_checker)) {
+      can_rewrite = false;
+    } else if (OB_FAIL(exec_ctx->get_package_guard(package_guard_ptr))) {
+      LOG_WARN("failed to get package guard for value() rewrite", K(ret));
+    } else if (OB_ISNULL(package_guard_ptr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("package guard is null", K(ret));
+    }
+
+    // resolve collection UDT
+    const pl::ObUserDefinedType *coll_udt = NULL;
+    if (OB_SUCC(ret) && can_rewrite) {
+      OZ (ObResolverUtils::get_user_type(
+            &ctx_.expr_factory_.get_allocator(),
+            const_cast<ObSQLSessionInfo *>(session),
+            exec_ctx->get_sql_proxy(),
+            schema_checker->get_schema_guard(),
+            *package_guard_ptr,
+            coll_udt_id, coll_udt));
+      if (OB_SUCC(ret) && OB_ISNULL(coll_udt)) {
+        can_rewrite = false;
+      }
+    }
+
+    // verify it is a collection type
+    const pl::ObCollectionType *coll_type = NULL;
+    if (OB_SUCC(ret) && can_rewrite) {
+      if (!coll_udt->is_collection_type()) {
+        can_rewrite = false;
+      } else {
+        coll_type = static_cast<const pl::ObCollectionType *>(coll_udt);
+      }
+    }
+
+    // resolve element record type
+    const pl::ObUserDefinedType *elem_udt = NULL;
+    const pl::ObRecordType *record_type = NULL;
+    if (OB_SUCC(ret) && can_rewrite) {
+      OZ (ObResolverUtils::get_user_type(
+            &ctx_.expr_factory_.get_allocator(),
+            const_cast<ObSQLSessionInfo *>(session),
+            exec_ctx->get_sql_proxy(),
+            schema_checker->get_schema_guard(),
+            *package_guard_ptr,
+            coll_type->get_element_type().get_user_type_id(), elem_udt));
+      if (OB_SUCC(ret) && (OB_ISNULL(elem_udt) || !elem_udt->is_record_type())) {
+        can_rewrite = false;
+      } else if (OB_SUCC(ret)) {
+        record_type = static_cast<const pl::ObRecordType *>(elem_udt);
+      }
+    }
+
+    // build ObObjectConstructRawExpr
+    ObObjectConstructRawExpr *object_expr = NULL;
+    if (OB_SUCC(ret) && can_rewrite) {
+      if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_FUN_PL_OBJECT_CONSTRUCT, object_expr))) {
+        LOG_WARN("failed to create ObObjectConstructRawExpr for value() rewrite", K(ret));
+      } else if (OB_ISNULL(object_expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("object_expr is null after create", K(ret));
+      } else if (OB_FAIL(object_expr->init_param_exprs(record_type->get_member_count()))) {
+        LOG_WARN("failed to init param exprs", K(ret));
+      }
+    }
+
+    // configure result type, access_names, database_id and schema_version.
+    //
+    // elem_udt_id encodes the type origin in its high bits:
+    //   schema-level UDT  : extract_package_id → OB_INVALID_ID
+    //   package-level type: extract_package_id → real package object id
+    //   anonymous block   : extract_package_id → OB_PL_MOCK_ANONYMOUS_ID
+    if (OB_SUCC(ret) && can_rewrite) {
+      int64_t rowsize = 0;
+      const uint64_t elem_udt_id = record_type->get_user_type_id();
+      const uint64_t pkg_id = extract_package_id(elem_udt_id);
+      const bool is_schema_udt = !pl::is_invalid_or_mocked_package_id(elem_udt_id);
+      if (OB_FAIL(record_type->get_size(pl::PL_TYPE_ROW_SIZE, rowsize))) {
+        LOG_WARN("failed to get record type rowsize", K(ret));
+      } else {
+        ObRawExprResType res_type;
+        res_type.set_type(ObExtendType);
+        res_type.set_extend_type(pl::PL_RECORD_TYPE);
+        res_type.set_udt_id(elem_udt_id);
+        object_expr->set_result_type(res_type);
+        object_expr->set_udt_id(elem_udt_id);
+        object_expr->set_func_name(record_type->get_name());
+        object_expr->set_rowsize(rowsize);
+      }
+      if (OB_FAIL(ret)) {
+      } else if (is_schema_udt) {
+        // schema-level UDT (CREATE TYPE ty1 AS OBJECT ...):
+        //   access_names needs only the bare type name; database identity is
+        //   carried by database_id_ separately.
+        const ObUDTTypeInfo *udt_info = NULL;
+        uint64_t tenant_id = pl::get_tenant_id_by_object_id(elem_udt_id);
+        if (OB_FAIL(object_expr->add_access_name(record_type->get_name()))) {
+          LOG_WARN("failed to add access name to object expr", K(ret));
+        } else if (OB_FAIL(schema_checker->get_udt_info(tenant_id, elem_udt_id, udt_info))) {
+          LOG_WARN("failed to get udt info for value() rewrite", K(ret), K(elem_udt_id));
+        } else if (OB_ISNULL(udt_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("udt_info is null for schema-level element type", K(ret), K(elem_udt_id));
+        } else {
+          object_expr->set_database_id(udt_info->get_database_id());
+          object_expr->set_coll_schema_version(udt_info->get_schema_version());
+        }
+      } else if (OB_INVALID_ID != pkg_id &&
+                 !pl::is_mocked_anonymous_array_id(elem_udt_id)) {
+        // package-level type (pkg1.ty1):
+        //   push package name first, then type name
+        const share::schema::ObPackageInfo *pkg_info = NULL;
+        uint64_t pkg_tenant_id = pl::get_tenant_id_by_object_id(pkg_id);
+        if (OB_FAIL(schema_checker->get_schema_guard()->get_package_info(
+                      pkg_tenant_id, pkg_id, pkg_info))) {
+          LOG_WARN("failed to get package info for value() access_names", K(ret), K(pkg_id));
+        } else if (OB_ISNULL(pkg_info)) {
+          // package info not found — fall back to bare type name
+          if (OB_FAIL(object_expr->add_access_name(record_type->get_name()))) {
+            LOG_WARN("failed to add access name (fallback) to object expr", K(ret));
+          }
+        } else if (OB_FAIL(object_expr->add_access_name(pkg_info->get_package_name()))) {
+          LOG_WARN("failed to add package name to object expr access_names", K(ret));
+        } else if (OB_FAIL(object_expr->add_access_name(record_type->get_name()))) {
+          LOG_WARN("failed to add type name to object expr access_names", K(ret));
+        }
+      } else {
+        // anonymous block local type: bare type name only
+        if (OB_FAIL(object_expr->add_access_name(record_type->get_name()))) {
+          LOG_WARN("failed to add access name (anonymous) to object expr", K(ret));
+        }
+      }
+    }
+
+    // for each record member: create placeholder column ref {tbl=alias, col=memberN}
+    for (int64_t i = 0; OB_SUCC(ret) && can_rewrite
+         && i < record_type->get_member_count(); ++i) {
+      const pl::ObPLDataType *pl_type = record_type->get_record_member_type(i);
+      const ObString *member_name = record_type->get_record_member_name(i);
+      if (OB_ISNULL(pl_type) || OB_ISNULL(member_name)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("null member info in record type", K(ret), K(i));
+      } else {
+        ObColumnRefRawExpr *col_expr = NULL;
+        if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(T_REF_COLUMN, col_expr))) {
+          LOG_WARN("failed to create column ref raw expr for value() member", K(ret), K(i));
+        } else if (OB_ISNULL(col_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("col_expr is null after create", K(ret));
+        } else if (OB_FAIL(object_expr->add_param_expr(col_expr))) {
+          LOG_WARN("failed to add param expr to object constructor", K(ret), K(i));
+        } else {
+          ObRawExprResType param_type;
+          if (pl_type->is_obj_type()) {
+            if (OB_NOT_NULL(pl_type->get_data_type())) {
+              param_type.set_meta(pl_type->get_data_type()->get_meta_type());
+              param_type.set_accuracy(pl_type->get_data_type()->get_accuracy());
+            }
+          } else {
+            param_type.set_ext();
+            param_type.set_extend_type(pl_type->get_type());
+            param_type.set_udt_id(pl_type->get_user_type_id());
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(object_expr->add_elem_type(param_type))) {
+            LOG_WARN("failed to add elem type to object constructor", K(ret), K(i));
+          } else {
+            ObQualifiedName col_ref;
+            col_ref.tbl_name_ = matched_item->alias_name_;
+            col_ref.col_name_ = *member_name;
+            col_ref.parents_expr_info_ = ctx_.parents_expr_info_;
+            col_ref.ref_expr_ = col_expr;
+            if (OB_FAIL(ctx_.columns_->push_back(col_ref))) {
+              LOG_WARN("failed to push back column ref for value() member", K(ret), K(i));
+            }
+          }
+        }
+      }
+    }
+
+    if (OB_SUCC(ret) && can_rewrite) {
+      expr = object_expr;
+      is_handled = true;
+    }
+  }
+  return ret;
+}
+
 int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node,
                                                 ObRawExpr *&expr,
                                                 const bool is_root_expr)
@@ -8200,7 +8583,7 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node,
     LOG_WARN("func_expr is null");
   } else {
     ObString name(node->children_[0]->str_len_, node->children_[0]->str_value_);
-    if (OB_FAIL(check_internal_function(name))) {
+    if (OB_SUCC(ret) && OB_FAIL(check_internal_function(name))) {
       LOG_WARN("unexpected internal function", K(ret));
     }
     if (OB_SUCC(ret)) {
