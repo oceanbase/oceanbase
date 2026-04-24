@@ -208,6 +208,15 @@ public:
                      const share::schema::ObTableSchema &orig_table_schema,
                      const share::schema::ObTableSchema &new_table_schema,
                      common::ObMySQLTransaction &trans);
+  // Copy balance weights from orig_table_schema to new_table_schema during truncate.
+  // Handles both table-level and partition-level weights.
+  // Supports both table_id change and same table_id scenarios.
+  // Failure is expected to be non-fatal (caller uses OB_TMP_FAIL).
+  static int copy_balance_weights_for_truncate(
+      ObISQLClient &client,
+      const uint64_t tenant_id,
+      const share::schema::ObTableSchema &orig_table_schema,
+      const share::schema::ObTableSchema &new_table_schema);
   int update_boundary_schema_version(const uint64_t &tenant_id,
                                      const uint64_t &boundary_schema_version,
                                      common::ObMySQLTransaction &trans);

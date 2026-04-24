@@ -13926,6 +13926,12 @@ int ObDDLService::update_global_index(ObAlterTableArg &arg,
             } else if (OB_FAIL(index_arg_list.push_back(create_index_arg))) {
               LOG_WARN("push back to index_arg_list failed", KR(ret), K(create_index_arg));
             }
+            // Try copy and keep balance weights of global index; failure is non-fatal.
+            int tmp_ret = OB_SUCCESS;
+            if (OB_SUCC(ret) && OB_TMP_FAIL(ObDDLOperator::copy_balance_weights_for_truncate(
+                trans, tenant_id, *index_table_schema, new_index_table_schema))) {
+              LOG_WARN("fail to copy balance weights for global index", KR(tmp_ret), KR(ret), K(arg));
+            }
           }
         }
       } // for
@@ -26690,6 +26696,7 @@ int ObDDLService::truncate_table(const ObTruncateTableArg &arg,
           LOG_WARN("truncate temp table not supported on RS", K(ret));
         } else if (OB_SUCC(ret)) {
           ObSArray<ObTableSchema> table_schemas;
+          ObSArray<const ObTableSchema*> orig_table_schemas;
           ObSArray<ObRecycleObject> index_recycle_objs;
           uint64_t new_table_id = OB_INVALID_ID;
           ObTableSchema new_table_schema;
@@ -26711,6 +26718,8 @@ int ObDDLService::truncate_table(const ObTruncateTableArg &arg,
             }
             if (OB_FAIL(table_schemas.push_back(new_table_schema))) {
               LOG_WARN("failed to add table schema!", K(ret));
+            } else if (OB_FAIL(orig_table_schemas.push_back(orig_table_schema))) {
+              LOG_WARN("failed to push back orig table schema!", K(ret));
             }
           }
           //reconstruct index schema
@@ -26791,6 +26800,8 @@ int ObDDLService::truncate_table(const ObTruncateTableArg &arg,
                       && OB_FAIL(reconstruct_search_data_index(tenant_id, *index_table_schema, new_idx_tid,
                                  trans, schema_guard, allocator, index_recycle_objs, table_schemas))) {
                       LOG_WARN("failed to reconstruct search data index schema", KR(ret));
+                    } else if (OB_FAIL(orig_table_schemas.push_back(index_table_schema))) {
+                      LOG_WARN("failed to push back orig index schema!", K(ret));
                     }
                   }
                 }
@@ -26804,16 +26815,28 @@ int ObDDLService::truncate_table(const ObTruncateTableArg &arg,
             const uint64_t new_table_id = OB_INVALID_ID;
             ObTableSchema lob_meta_schema;
             ObTableSchema lob_piece_schema;
-            if (OB_FAIL(lob_meta_builder.generate_aux_lob_meta_schema(
+            const ObTableSchema *orig_lob_meta_schema = NULL;
+            const ObTableSchema *orig_lob_piece_schema = NULL;
+            if (OB_FAIL(schema_guard.get_table_schema(
+                tenant_id, orig_table_schema->get_aux_lob_meta_tid(), orig_lob_meta_schema))) {
+              LOG_WARN("get orig lob meta schema failed", KR(ret));
+            } else if (OB_FAIL(schema_guard.get_table_schema(
+                tenant_id, orig_table_schema->get_aux_lob_piece_tid(), orig_lob_piece_schema))) {
+              LOG_WARN("get orig lob piece schema failed", KR(ret));
+            } else if (OB_FAIL(lob_meta_builder.generate_aux_lob_meta_schema(
                 schema_service, new_table_schema, new_table_id, lob_meta_schema, false))) {
               LOG_WARN("generate_schema for lob meta table failed", K(new_table_schema), K(ret));
             } else if (OB_FAIL(table_schemas.push_back(lob_meta_schema))) {
               LOG_WARN("push_back lob meta table failed", K(ret));
+            } else if (OB_FAIL(orig_table_schemas.push_back(orig_lob_meta_schema))) {
+              LOG_WARN("push_back orig lob meta schema failed", K(ret));
             } else if (OB_FAIL(lob_data_builder.generate_aux_lob_piece_schema(
                        schema_service, new_table_schema, new_table_id, lob_piece_schema, false))) {
               LOG_WARN("generate_schema for lob data table failed", K(new_table_schema), K(ret));
             } else if (OB_FAIL(table_schemas.push_back(lob_piece_schema))) {
               LOG_WARN("push_back lob data table failed", K(ret));
+            } else if (OB_FAIL(orig_table_schemas.push_back(orig_lob_piece_schema))) {
+              LOG_WARN("push_back orig lob piece schema failed", K(ret));
             } else {
               table_schemas.at(0).set_aux_lob_meta_tid(lob_meta_schema.get_table_id());
               table_schemas.at(0).set_aux_lob_piece_tid(lob_piece_schema.get_table_id());
@@ -26864,9 +26887,31 @@ int ObDDLService::truncate_table(const ObTruncateTableArg &arg,
                     new_aux_vp_schema.set_data_table_id(new_table_id);
                     if (OB_FAIL(table_schemas.push_back(new_aux_vp_schema))) {
                       LOG_WARN("failed to add table schema!", K(ret));
+                    } else if (OB_FAIL(orig_table_schemas.push_back(aux_vp_table_schema))) {
+                      LOG_WARN("failed to push back orig vp schema!", K(ret));
                     }
                   }
                 }
+              }
+            }
+          }
+          if (OB_SUCC(ret)) {
+            // Try copy and keep balance weights; failure is non-fatal.
+            // Make sure orig_table_schemas and table_schemas are paired by construction.
+            int tmp_ret = OB_SUCCESS;
+            if (orig_table_schemas.count() != table_schemas.count()) {
+              tmp_ret = OB_ERR_UNEXPECTED;
+              LOG_ERROR("orig_table_schemas and table_schemas count mismatch", KR(tmp_ret),
+                        K(orig_table_schemas.count()), K(table_schemas.count()));
+            }
+            for (int64_t i = 0; OB_SUCCESS == tmp_ret && i < orig_table_schemas.count(); ++i) {
+              if (OB_ISNULL(orig_table_schemas.at(i))) {
+                // skip
+              } else if (OB_TMP_FAIL(ObDDLOperator::copy_balance_weights_for_truncate(
+                  trans, tenant_id, *orig_table_schemas.at(i), table_schemas.at(i)))) {
+                LOG_WARN("failed to copy balance weight on truncate table, ignored",
+                        K(tmp_ret), K(i), K(orig_table_schemas.at(i)->get_table_id()),
+                        K(table_schemas.at(i).get_table_id()));
               }
             }
           }
