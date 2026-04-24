@@ -200,6 +200,7 @@ private:
   Projector search_idx_included_cid_idxes_;
   ArrayTypeArray search_idx_arr_types_;
   ColumnConfigArray search_idx_column_comments_;
+  uint64_t user_ttl_column_id_;
 };
 
 class ObTableDMLParam

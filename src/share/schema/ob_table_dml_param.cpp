@@ -62,7 +62,8 @@ ObTableSchemaParam::ObTableSchemaParam(ObIAllocator &allocator)
     search_idx_included_cids_(allocator),
     search_idx_included_cid_idxes_(allocator),
     search_idx_arr_types_(allocator),
-    search_idx_column_comments_(allocator)
+    search_idx_column_comments_(allocator),
+    user_ttl_column_id_(OB_INVALID_ID)
 {
 }
 
@@ -113,6 +114,7 @@ void ObTableSchemaParam::reset()
   search_idx_included_cid_idxes_.reset();
   search_idx_arr_types_.reset();
   search_idx_column_comments_.reset();
+  user_ttl_column_id_ = OB_INVALID_ID;
 }
 
 int ObTableSchemaParam::convert(const ObTableSchema *schema)
@@ -724,6 +726,7 @@ OB_DEF_SERIALIZE(ObTableSchemaParam)
   OB_UNIS_ENCODE(fts_index_type_);
   OB_UNIS_ENCODE(is_rowscn_ttl_table_);
   OB_UNIS_ENCODE(search_idx_column_comments_);
+  OB_UNIS_ENCODE(user_ttl_column_id_);
   return ret;
 }
 
@@ -926,6 +929,7 @@ OB_DEF_DESERIALIZE(ObTableSchemaParam)
   OB_UNIS_DECODE(fts_index_type_);
   OB_UNIS_DECODE(is_rowscn_ttl_table_);
   OB_UNIS_DECODE(search_idx_column_comments_);
+  OB_UNIS_DECODE(user_ttl_column_id_);
   return ret;
 }
 
@@ -1000,6 +1004,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchemaParam)
   OB_UNIS_ADD_LEN(fts_index_type_);
   OB_UNIS_ADD_LEN(is_rowscn_ttl_table_);
   OB_UNIS_ADD_LEN(search_idx_column_comments_);
+  OB_UNIS_ADD_LEN(user_ttl_column_id_);
   return len;
 }
 
