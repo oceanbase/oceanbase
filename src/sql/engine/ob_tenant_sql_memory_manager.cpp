@@ -7,6 +7,7 @@
 
 #include "ob_tenant_sql_memory_manager.h"
 #include "sql/engine/px/ob_px_util.h"
+#include "lib/utility/ob_tracepoint.h"
 
 namespace oceanbase {
 
@@ -903,7 +904,9 @@ int ObTenantSqlMemoryManager::get_max_work_area_size(
               : total_alloc_size;
     double alloc_ratio = total_alloc_size * 1.0 / tmp_max_wa_memory_size;
     if (alloc_ratio < 0) {
-      LOG_ERROR("alloc ratio is less than 0", K(alloc_ratio), K(total_alloc_size), K(tmp_max_wa_memory_size));
+      if (OB_UNLIKELY(OB_SUCCESS != (OB_E(EventTable::EN_SQL_MEM_TOTAL_ALLOC_SIZE_CHECK) OB_SUCCESS))) {
+        LOG_ERROR("alloc ratio is less than 0", K(alloc_ratio), K(total_alloc_size), K(tmp_max_wa_memory_size));
+      }
       alloc_ratio = 0;
       sql_mem_callback_.reset_total_alloc_size_if_negative();
     }
