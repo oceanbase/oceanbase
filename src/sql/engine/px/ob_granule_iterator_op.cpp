@@ -935,7 +935,18 @@ int ObGranuleIteratorOp::do_drain_exch()
 int ObGranuleIteratorOp::inner_get_next_row()
 {
   const int64_t row_cnt = 1;
-  return try_get_rows(row_cnt);
+  int ret = try_get_rows(row_cnt);
+
+  // Set DDL slice_id pseudo column for non-batch path
+  if (OB_SUCC(ret) && is_fts_sample_done_ && nullptr != MY_SPEC.ddl_slice_id_expr_) {
+    if (current_slice_idx_ >= 0 && total_slice_count_ > 0) {
+      storage::ObTabletSliceParam slice_param(static_cast<int16_t>(total_slice_count_), static_cast<int16_t>(current_slice_idx_));
+      MY_SPEC.ddl_slice_id_expr_->locate_datum_for_write(eval_ctx_).set_int(slice_param.slice_id_);
+      MY_SPEC.ddl_slice_id_expr_->set_evaluated_projected(eval_ctx_);
+    }
+  }
+
+  return ret;
 }
 
 int ObGranuleIteratorOp::inner_get_next_batch(const int64_t max_row_cnt)
