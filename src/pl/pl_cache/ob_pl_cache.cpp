@@ -782,7 +782,7 @@ int ObPLDependencyCheck::get_synonym_schema_version(ObPLCacheBasicCtx &pc_ctx,
           if (OB_FAIL(ret)) {
           } else if (exist) {
             ret = OB_OLD_SCHEMA_VERSION;
-            LOG_WARN("exist object which name as current synonym", K(ret), KPC(synonym_info));
+            LOG_WARN("exist object which name as current synonym", K(ret), K(pcv_schema), KPC(synonym_info));
           } else {
             OZ (resolve_and_check_synonym(schema_checker, tenant_id, pcv_schema.invoker_db_id_, *session_info, *synonym_info));
             OX (new_version = synonym_info->get_schema_version());
@@ -794,7 +794,7 @@ int ObPLDependencyCheck::get_synonym_schema_version(ObPLCacheBasicCtx &pc_ctx,
       }
     } else if (OB_ISNULL(synonym_info)) {
       ret = OB_OLD_SCHEMA_VERSION;
-      LOG_WARN("can not get newer synonym_info", K(ret));
+      LOG_WARN("can not get newer synonym_info", K(ret), K(pcv_schema));
     }
   }
   return ret;

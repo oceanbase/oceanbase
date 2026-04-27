@@ -56,11 +56,12 @@ int ObPLDependencyUtil::get_synonym_object(uint64_t tenant_id,
   int ret = OB_SUCCESS;
   ObSchemaChecker schema_checker;
   ObSynonymChecker synonym_checker;
+  uint64_t saved_owner_id = owner_id;
   OZ (schema_checker.init(schema_guard, session_info.get_sessid_for_table()));
   OZ (ObResolverUtils::resolve_synonym_object_recursively(
     schema_checker, synonym_checker,
     tenant_id, owner_id, object_name, owner_id, object_name, exist));
-  OZ (collect_synonym_deps(tenant_id, owner_id, synonym_checker, schema_guard, deps));
+  OZ (collect_synonym_deps(tenant_id, saved_owner_id, synonym_checker, schema_guard, deps));
   return ret;
 }
 
@@ -98,6 +99,8 @@ int ObPLDependencyUtil::collect_synonym_deps(uint64_t tenant_id,
         }
         if (!exists && OB_FAIL(deps->push_back(obj_version))) {
           LOG_WARN("failed to push back obj version to array", K(ret), KPC(deps), K(obj_version));
+        } else {
+          LOG_INFO("[SYNONYM_SCHEMA]add synonym dep", K(obj_version), K(lbt()));
         }
       }
     }
