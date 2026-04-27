@@ -270,6 +270,43 @@ int ObLobSplitContext::init(const ObLobSplitParam& param)
   return ret;
 }
 
+int ObLobSplitContext::report_to_migrate_task()
+{
+  int ret = OB_SUCCESS;
+  ObLSMigrationHandler *ls_migration_handler = nullptr;
+  if (OB_ISNULL(ls_handle_.get_ls())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls should not be null", K(ret));
+  } else if (OB_ISNULL(ls_migration_handler = ls_handle_.get_ls()->get_ls_migration_handler())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ls migration handler should not be NULL", K(ret), KPC(ls_handle_.get_ls()));
+  } else if (OB_FAIL(ls_migration_handler->set_result_for_split(OB_EAGAIN))) {
+    LOG_WARN("failed to set result for split", K(ret));
+  } else {
+    LOG_INFO("successfully to set result for split error", KR(ret));
+  }
+  return ret;
+}
+
+int ObLobSplitContext::get_dst_lob_main_tablet_handle(
+  const ObLobSplitParam& param,
+  const ObTabletID& main_tablet_id,
+  ObTabletHandle& main_tablet_handle)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObTabletSplitUtil::get_tablet(allocator_, ls_handle_, main_tablet_id,
+      GCTX.is_shared_storage_mode(), main_tablet_handle, ObMDSGetTabletMode::READ_ALL_COMMITED))) {
+    LOG_WARN("get tablet handle failed", K(ret), K(param));
+  } else if (OB_UNLIKELY(!main_tablet_handle.is_valid())) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("tablet handle is null", K(ret), K(param));
+  }
+  if (OB_FAIL(ret)) {
+    (void) report_to_migrate_task();
+  }
+  return ret;
+}
+
 int ObLobSplitContext::get_dst_lob_tablet_ids(
     const ObLobSplitParam& param)
 {
@@ -284,12 +321,8 @@ int ObLobSplitContext::get_dst_lob_tablet_ids(
   } else if (OB_FAIL(lob_meta_tablet_handle_.get_obj()->get_all_tables(lob_meta_table_store_iterator_))) {
     LOG_WARN("failed to get all sstables", K(ret), K(param));
   } else if (FALSE_IT(main_tablet_id_ = lob_meta_tablet_handle_.get_obj()->get_tablet_meta().data_tablet_id_)) {
-  } else if (OB_FAIL(ObTabletSplitUtil::get_tablet(allocator_, ls_handle_, main_tablet_id_,
-      GCTX.is_shared_storage_mode(), main_tablet_handle_, ObMDSGetTabletMode::READ_ALL_COMMITED))) {
+  } else if (OB_FAIL(get_dst_lob_main_tablet_handle(param, main_tablet_id_, main_tablet_handle_))) {
     LOG_WARN("get tablet handle failed", K(ret), K(param));
-  } else if (OB_ISNULL(main_tablet_handle_.get_obj())) {
-    ret = OB_ERR_SYS;
-    LOG_WARN("tablet handle is null", K(ret), K(param));
   } else if (OB_FAIL(main_tablet_handle_.get_obj()->get_all_tables(main_table_store_iterator_))) {
     LOG_WARN("failed to get all sstables", K(ret), K(param));
   } else if (OB_FAIL(main_tablet_handle_.get_obj()->ObITabletMdsInterface::get_ddl_data(share::SCN::max_scn(), ddl_data))) {
@@ -441,7 +474,7 @@ int ObTabletLobSplitDag::init_by_param(const share::ObIDagInitParam *param)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected err", K(ret), K(param_));
   } else if (OB_FAIL(context_.init(param_))) {
-    LOG_WARN("init failed", K(ret));
+    LOG_WARN("init failed", K(ret), K_(param));
   } else {
     consumer_group_id_ = tmp_param->consumer_group_id_;
     is_inited_ = true;

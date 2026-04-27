@@ -175,6 +175,11 @@ public:
 
 private:
   int get_dst_lob_tablet_ids(const ObLobSplitParam& param);
+  int get_dst_lob_main_tablet_handle(
+    const ObLobSplitParam& param,
+    const ObTabletID& main_tablet_id,
+    ObTabletHandle& main_tablet_handle);
+  int report_to_migrate_task();
 private:
   common::ObArenaAllocator range_allocator_; // for datum range.
 public:
