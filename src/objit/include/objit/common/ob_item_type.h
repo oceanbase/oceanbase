@@ -3077,6 +3077,12 @@ typedef enum ObItemType
   T_REFRESH_FULLTEXT_DICT = 4982,
   T_SET_RETURNING_FUNCTION = 4983,
 
+  // outline binding rule
+  T_BINDING_RULE_CLAUSE = 4984,
+  T_BINDING_RULE_SCOPE = 4985,
+  T_BINDING_RULE_MAP = 4986,
+  T_BINDING_RULE_MAP_ITEM = 4987,
+
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

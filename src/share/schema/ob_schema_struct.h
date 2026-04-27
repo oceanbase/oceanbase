@@ -6676,6 +6676,7 @@ protected:
   common::ObString format_sql_text_;
   common::ObString format_sql_id_;
   bool format_outline_;
+  common::ObString pattern_rules_;
 };
 
 class ObDbLinkBaseInfo : public ObSchema

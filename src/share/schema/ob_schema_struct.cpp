@@ -11371,6 +11371,8 @@ ObOutlineInfo &ObOutlineInfo::operator=(const ObOutlineInfo &src_info)
       LOG_WARN("Fail to deep copy owner", K(ret));
     } else if (OB_FAIL(deep_copy_str(src_info.version_, version_))) {
       LOG_WARN("Fail to deep copy version", K(ret));
+    } else if (OB_FAIL(deep_copy_str(src_info.pattern_rules_, pattern_rules_))) {
+      LOG_WARN("Fail to deep copy pattern_rules", K(ret));
     } else if (OB_ISNULL(allocator_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("allocator is NULL", K(ret));
@@ -11411,6 +11413,7 @@ void ObOutlineInfo::reset()
   format_outline_ = false;
   outline_params_wrapper_.destroy();
   format_outline_ = false;
+  reset_string(pattern_rules_);
   ObSchema::reset();
 }
 
@@ -11492,6 +11495,7 @@ int64_t ObOutlineInfo::get_convert_size() const
   convert_size += owner_.length() + 1;
   convert_size += version_.length() + 1;
   convert_size += outline_params_wrapper_.get_convert_size();
+  convert_size += pattern_rules_.length() + 1;
   return convert_size;
 }
 
@@ -11600,7 +11604,8 @@ OB_DEF_SERIALIZE(ObOutlineInfo)
   LST_DO_CODE(OB_UNIS_ENCODE, tenant_id_, database_id_, outline_id_, schema_version_,
               name_, signature_, outline_content_, sql_text_, outline_target_, owner_,
               used_, version_, compatible_, enabled_, format_, outline_params_wrapper_,
-              sql_id_, owner_id_, format_sql_text_, format_sql_id_, format_outline_);
+              sql_id_, owner_id_, format_sql_text_, format_sql_id_, format_outline_,
+              pattern_rules_);
   return ret;
 }
 
@@ -11618,6 +11623,7 @@ OB_DEF_DESERIALIZE(ObOutlineInfo)
   ObString version;
   ObString format_sql_id;
   ObString format_sql_text;
+  ObString pattern_rules;
 
   LST_DO_CODE(OB_UNIS_DECODE, tenant_id_, database_id_, outline_id_, schema_version_,
               name, signature, outline_content, sql_text, outline_target, owner, used_,
@@ -11659,6 +11665,13 @@ OB_DEF_DESERIALIZE(ObOutlineInfo)
             LOG_WARN("Fail to deep copy sql_text", K(ret));
           } else if (OB_FAIL(deep_copy_str(format_sql_id, format_sql_id_))) {
             LOG_WARN("Fail to deep copy sql_id", K(ret));
+          } else if (pos < data_len) {
+            LST_DO_CODE(OB_UNIS_DECODE, pattern_rules);
+            if (OB_FAIL(ret)) {
+              // backward compatibility - do nothing
+            } else if (OB_FAIL(deep_copy_str(pattern_rules, pattern_rules_))) {
+              LOG_WARN("Fail to deep copy pattern_rules", K(ret));
+            }
           }
         } else {
           owner_id_ = OB_INVALID_ID;
@@ -11676,7 +11689,7 @@ OB_DEF_SERIALIZE_SIZE(ObOutlineInfo)
   LST_DO_CODE(OB_UNIS_ADD_LEN, tenant_id_, database_id_, outline_id_, schema_version_,
               name_, signature_, sql_id_, outline_content_, sql_text_, outline_target_, owner_,
               used_, version_, compatible_, enabled_, format_, outline_params_wrapper_, owner_id_,
-              format_sql_text_, format_sql_id_, format_outline_);
+              format_sql_text_, format_sql_id_, format_outline_, pattern_rules_);
   return len;
 }
 
