@@ -226,16 +226,31 @@ int ObPartGetter::get_part_id_and_subpart_id(
   return ret;
 }
 
+int ObPartIterator::cache_is_oracle_mode()
+{
+  int ret = OB_SUCCESS;
+  if (!is_oracle_mode_cached_) {
+    if (OB_ISNULL(partition_schema_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("partition_schema_ is null", KR(ret));
+    } else if (OB_FAIL(partition_schema_->check_if_oracle_compat_mode(cached_is_oracle_mode_))) {
+      LOG_WARN("fail to cache is_oracle_mode", KR(ret), KPC_(partition_schema));
+    } else {
+      is_oracle_mode_cached_ = true;
+    }
+  }
+  return ret;
+}
+
 int ObPartIterator::next(const ObPartition *&part)
 {
   int ret = OB_SUCCESS;
-  bool is_oracle_mode = false;
   part = NULL;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("iter not init", KR(ret));
-  } else if (OB_FAIL(partition_schema_->check_if_oracle_compat_mode(is_oracle_mode))) {
-    LOG_WARN("fail to check if oracle mode", KR(ret), KPC_(partition_schema));
+  } else if (OB_FAIL(cache_is_oracle_mode())) {
+    LOG_WARN("fail to cache is_oracle_mode", KR(ret), KPC_(partition_schema));
   } else {
     // The partition_array of the system table is empty and needs to be processed by part_num
     int64_t part_num = check_normal_partition(check_partition_mode_) ?
@@ -247,12 +262,12 @@ int ObPartIterator::next(const ObPartition *&part)
     if (idx_++ >= total_part_num - 1) {
       ret = OB_ITER_END;
     } else if (0 <= idx_ && part_num > idx_) {
-       // deal with normal partition
+      // deal with normal partition
       int64_t idx = idx_;
       ObPartition **part_array = partition_schema_->get_part_array();
       const ObPartitionLevel part_level = partition_schema_->get_part_level();
       if (PARTITION_LEVEL_ZERO == part_level) {
-        ObString part_name(!is_oracle_mode ?
+        ObString part_name(!cached_is_oracle_mode_ ?
                            ObPartitionSchema::MYSQL_NON_PARTITIONED_TABLE_PART_NAME:
                            ObPartitionSchema::ORACLE_NON_PARTITIONED_TABLE_PART_NAME);
         if (OB_FAIL(part_.set_part_name(part_name))) {

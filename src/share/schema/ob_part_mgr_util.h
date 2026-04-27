@@ -63,7 +63,9 @@ public:
     : is_inited_(false),
       partition_schema_(NULL),
       idx_(common::OB_INVALID_INDEX), part_(),
-      check_partition_mode_(CHECK_PARTITION_MODE_NORMAL)
+      check_partition_mode_(CHECK_PARTITION_MODE_NORMAL),
+      is_oracle_mode_cached_(false),
+      cached_is_oracle_mode_(false)
    {}
 
   ObPartIterator(const ObPartitionSchema &partition_schema,
@@ -79,9 +81,11 @@ public:
     idx_ = common::OB_INVALID_INDEX;
     part_.reset();
     check_partition_mode_ = mode;
+    is_oracle_mode_cached_ = false;
     is_inited_ = true;
   }
   int next(const ObPartition *&part);
+  int cache_is_oracle_mode();
 private:
   bool is_inited_;
   const ObPartitionSchema *partition_schema_;
@@ -90,6 +94,9 @@ private:
   //  here is the mock out for external use
   share::schema::ObPartition part_;
   ObCheckPartitionMode check_partition_mode_;
+  // Lazy cache: only check oracle mode on first next(), reuse for subsequent iterations
+  bool is_oracle_mode_cached_;  // whether the oracle mode has been cached
+  bool cached_is_oracle_mode_;  // cached value
 };
 
 class ObSubPartIterator

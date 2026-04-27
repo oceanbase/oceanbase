@@ -30,7 +30,6 @@ enum ObBcastOptimization {
   BC_TO_SERVER,
 };
 
-typedef common::hash::ObHashMap<uint64_t, int64_t, common::hash::NoPthreadDefendMode> ObTabletIdxMap;
 
 // 监听各类事件，如 root dfo 调度事件，etc
 class ObIPxCoordEventListener
@@ -564,8 +563,9 @@ public:
     int64_t tablet_idx_;
     uint64_t hash_value_;
     int64_t worker_id_;
+    int64_t gi_task_set_idx_;
     ObPxTabletInfo tablet_info_;
-    TO_STRING_KV(K_(tablet_id), K_(tablet_idx), K_(hash_value), K_(worker_id), K_(tablet_info));
+    TO_STRING_KV(K_(tablet_id), K_(tablet_idx), K_(hash_value), K_(worker_id), K_(tablet_info), K_(gi_task_set_idx));
   };
 public:
   ObPxAffinityByRandom(bool order_partitions, bool partition_random_affinitize)
@@ -578,7 +578,8 @@ public:
       int64_t tablet_idx,
       int64_t worker_cnt,
       uint64_t tenant_id,
-      ObPxTabletInfo &tablet_row_info);
+      ObPxTabletInfo &tablet_row_info,
+      int64_t gi_task_set_idx = -1);
   int do_random(bool use_partition_info, uint64_t tenant_id);
   const ObIArray<TabletHashValue> &get_result() { return tablet_hash_values_; }
   static int get_tablet_info(int64_t tablet_id, ObIArray<ObPxTabletInfo> &tablets_info, ObPxTabletInfo &partition_info);

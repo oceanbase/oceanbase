@@ -7,6 +7,8 @@
 
 #include "ob_granule_pump.h"
 #include "sql/engine/px/ob_px_sqc_handler.h"
+#include "share/schema/ob_schema_getter_guard.h"
+#include "observer/ob_server_struct.h"
 
 namespace oceanbase
 {
@@ -705,7 +707,8 @@ int ObGranulePump::add_new_gi_task(ObGranulePumpArgs &args, bool check_task_exis
     } else if (OB_FAIL(splitter.split_granule(args,
                                               scan_ops,
                                               gi_task_array_map_,
-                                              random_type))) {
+                                              random_type,
+                                              this))) {
       LOG_WARN("failed to prepare affinity gi task", K(ret));
     }
   } else if (ObGranuleUtil::affinitize(args.gi_attri_flag_)) {
@@ -718,7 +721,8 @@ int ObGranulePump::add_new_gi_task(ObGranulePumpArgs &args, bool check_task_exis
     } else if (OB_FAIL(splitter.split_granule(args,
                                               scan_ops,
                                               gi_task_array_map_,
-                                              random_type))) {
+                                              random_type,
+                                              this))) {
       LOG_WARN("failed to prepare affinity gi task", K(ret));
     }
   } else if (ObGranuleUtil::pwj_gi(args.gi_attri_flag_)) {
@@ -948,6 +952,23 @@ int ObGranulePump::check_can_randomize(ObGranulePumpArgs &args, bool &can_random
 void ObGranulePump::destroy()
 {
   gi_task_array_map_.reset();
+  if (table_id_to_tablet_idx_map_.created() && OB_NOT_NULL(table_id_to_tablet_idx_map_allocator_)) {
+    for (ObTableIdToTabletIdxMap::iterator it = table_id_to_tablet_idx_map_.begin();
+         it != table_id_to_tablet_idx_map_.end(); ++it) {
+      if (nullptr != it->second) {
+        (void)it->second->destroy();
+        table_id_to_tablet_idx_map_allocator_->free(it->second);
+        it->second = nullptr;
+      }
+    }
+  }
+  if (table_id_to_tablet_idx_map_.created()) {
+    (void)table_id_to_tablet_idx_map_.destroy();
+  }
+  table_id_to_tablet_idx_map_allocator_ = nullptr;
+  if (tablet_id_to_tablets_info_idx_map_.created()) {
+    (void)tablet_id_to_tablets_info_idx_map_.destroy();
+  }
   // no pump_version added rescan no sample scan
   for (int64_t i = 0; i < external_task_runners_.count(); ++i) {
     OB_DELETEx(GITaskGenRunner, &external_task_runners_.at(i)->get_exec_ctx().get_allocator(), external_task_runners_.at(i));
@@ -967,6 +988,114 @@ void ObGranulePump::destroy()
   }
   use_odps_jni_connector_ = false;
   pump_args_.reset();
+}
+
+int ObGranulePump::get_or_build_tablet_idx_map(uint64_t table_id,
+                                               ObExecContext &ctx,
+                                               const ObTabletIdxMap *&idx_map)
+{
+  int ret = OB_SUCCESS;
+  idx_map = nullptr;
+  if (OB_UNLIKELY(!table_id_to_tablet_idx_map_.created())) {
+    if (OB_FAIL(table_id_to_tablet_idx_map_.create(TABLE_TABLET_IDX_MAP_HASH_BUCKET_NUM, "TblTabletIdxMap"))) {
+      LOG_WARN("fail to create table tablet idx map", K(ret));
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else {
+    ObTabletIdxMap *new_idx_map_ptr = nullptr;
+    if (OB_FAIL(table_id_to_tablet_idx_map_.get_refactored(table_id, new_idx_map_ptr))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        ObSQLSessionInfo *session = GET_MY_SESSION(ctx);
+        ObSchemaGetterGuard *schema_guard = nullptr;
+        const ObTableSchema *table_schema = nullptr;
+        if (OB_ISNULL(table_id_to_tablet_idx_map_allocator_)) {
+          table_id_to_tablet_idx_map_allocator_ = &ctx.get_allocator();
+        }
+        share::schema::ObSchemaGetterGuard local_schema_guard;
+        if (OB_ISNULL(session)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("session is null", K(ret), K(table_id));
+        } else if (OB_ISNULL(ctx.get_sql_ctx())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("sql ctx is null", K(ret));
+        } else if (OB_NOT_NULL(schema_guard = ctx.get_sql_ctx()->schema_guard_)) {
+          // do nothing
+        } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(session->get_effective_tenant_id(),
+                                                                         local_schema_guard))) {
+          LOG_WARN("fail to get schema guard", K(ret));
+        } else {
+          schema_guard = &local_schema_guard;
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(schema_guard->get_table_schema(session->get_effective_tenant_id(),
+                                                          table_id,
+                                                          table_schema))) {
+          LOG_WARN("failed to get table schema", K(ret), K(table_id));
+        } else if (OB_ISNULL(table_schema)) {
+          ret = OB_SCHEMA_ERROR;
+          LOG_WARN("table schema is null", K(ret), K(table_id));
+        } else if (OB_ISNULL(table_id_to_tablet_idx_map_allocator_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("table tablet idx map allocator is null", K(ret), K(table_id));
+        } else {
+          void *buf = table_id_to_tablet_idx_map_allocator_->alloc(sizeof(ObTabletIdxMap));
+          if (OB_ISNULL(buf)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to alloc ObTabletIdxMap", K(ret), K(table_id));
+          } else {
+            new_idx_map_ptr = new (buf) ObTabletIdxMap();
+            if (OB_FAIL(ObPXServerAddrUtil::build_tablet_idx_map(table_schema, *new_idx_map_ptr))) {
+              LOG_WARN("fail to build tablet idx map", K(ret), K(table_id));
+              (void)new_idx_map_ptr->destroy();
+              new_idx_map_ptr->~ObTabletIdxMap();
+              table_id_to_tablet_idx_map_allocator_->free(new_idx_map_ptr);
+            } else if (OB_FAIL(table_id_to_tablet_idx_map_.set_refactored(table_id, new_idx_map_ptr))) {
+              LOG_WARN("fail to set refactored table tablet idx map", K(ret), K(table_id));
+              (void)new_idx_map_ptr->destroy();
+              new_idx_map_ptr->~ObTabletIdxMap();
+              table_id_to_tablet_idx_map_allocator_->free(new_idx_map_ptr);
+            } else {
+              idx_map = new_idx_map_ptr;
+            }
+          }
+        }
+      } else {
+        LOG_WARN("unexpected error", K(ret), K(table_id));
+      }
+    } else {
+      idx_map = new_idx_map_ptr;
+    }
+  }
+  return ret;
+}
+
+int ObGranulePump::get_or_build_tablet_id_px_tablets_info_idx_map(ObIArray<ObPxTabletInfo> &tablets_info,
+                                                                  ObTabletIdToTabletsInfoIdxMap *&tablet_id_to_tablets_info_idx_map)
+{
+  int ret = OB_SUCCESS;
+  if (tablets_info.empty()) {
+    // do nothing
+  } else if (tablet_id_to_tablets_info_idx_map_.created()) {
+    // do nothing
+  } else if (OB_FAIL(tablet_id_to_tablets_info_idx_map_.create(tablets_info.count(), "TabletsMap"))) {
+    LOG_WARN("failed to create tablet id px tablets info idx map", K(ret));
+  } else {
+    ARRAY_FOREACH(tablets_info, idx) {
+      if (OB_FAIL(tablet_id_to_tablets_info_idx_map_.set_refactored(tablets_info.at(idx).tablet_id_, idx))) {
+        if (OB_HASH_EXIST == ret) {
+          ret = OB_SUCCESS; // skip duplicate tablet_id
+        } else {
+          LOG_WARN("fail to set refactored tablet id px tablets info idx map", K(ret), K(tablets_info.at(idx).tablet_id_));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    tablet_id_to_tablets_info_idx_map = &tablet_id_to_tablets_info_idx_map_;
+  }
+  return ret;
 }
 
 void ObGranulePump::reset_task_array()
@@ -1450,13 +1579,13 @@ int ObAccessAllGranuleSplitter::split_granule(ObGranulePumpArgs &args,
     } else if (OB_FAIL(taskset_array.prepare_allocate(args.parallelism_))) {
       LOG_WARN("failed to prepare allocate", K(ret));
     } else if (OB_FAIL(split_gi_task(args,
-                                              tsc,
-                                              scan_key_id,
-                                              op_id,
-                                              tablet_arrays.at(idx),
-                                              partition_granule,
-                                              total_task_set,
-                                              random_type))) {
+                                     tsc,
+                                     scan_key_id,
+                                     op_id,
+                                     tablet_arrays.at(idx),
+                                     partition_granule,
+                                     total_task_set,
+                                     random_type))) {
       LOG_WARN("failed to init granule iter pump", K(ret));
     } else if (OB_FAIL(split_tasks_access_all(total_task_set, args.parallelism_, taskset_array))) {
       LOG_WARN("failed to split ");
@@ -1473,14 +1602,14 @@ int ObAccessAllGranuleSplitter::split_granule(ObGranulePumpArgs &args,
 int ObAffinitizeGranuleSplitter::split_tasks_affinity(ObExecContext &ctx,
                                                       ObGITaskSet &taskset,
                                                       int64_t parallelism,
-                                                      ObGITaskArray &taskset_array)
+                                                      ObGITaskArray &taskset_array,
+                                                      ObGranulePump *pump)
 {
   int ret = OB_SUCCESS;
-  ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = NULL;
   ObSQLSessionInfo *my_session = NULL;
   ObPxTabletInfo partition_row_info;
-  ObTabletIdxMap idx_map;
+  const ObTabletIdxMap *idx_map = nullptr;
   bool qc_order_gi_tasks = false;
   bool partition_random_affinitize = true;
   if (OB_ISNULL(my_session = GET_MY_SESSION(ctx)) || OB_ISNULL(ctx.get_sqc_handler())) {
@@ -1488,85 +1617,121 @@ int ObAffinitizeGranuleSplitter::split_tasks_affinity(ObExecContext &ctx,
     LOG_WARN("fail to get my session", K(ret), K(my_session), K(ctx.get_sqc_handler()));
   } else {
     qc_order_gi_tasks = ctx.get_sqc_handler()->get_sqc_init_arg().qc_order_gi_tasks_;
-    partition_random_affinitize =
-        ctx.get_sqc_handler()->get_sqc_init_arg().sqc_.partition_random_affinitize();
+    partition_random_affinitize = ctx.get_sqc_handler()->get_sqc_init_arg().sqc_.partition_random_affinitize();
   }
-  int64_t cur_idx = -1;
-  ObPxAffinityByRandom affinitize_rule(qc_order_gi_tasks, partition_random_affinitize);
-  ARRAY_FOREACH_X(taskset.gi_task_set_, idx, cnt, OB_SUCC(ret)) {
-    if (cur_idx != taskset.gi_task_set_.at(idx).idx_) {
-      cur_idx = taskset.gi_task_set_.at(idx).idx_; // get all different partition key in Affinitize
-      const ObDASTabletLoc &tablet_loc = *taskset.gi_task_set_.at(idx).tablet_loc_;
-      int64_t tablet_idx = -1;
-      if (NULL == table_schema || table_schema->get_table_id() != tablet_loc.loc_meta_->ref_table_id_) {
-        uint64_t table_id = tablet_loc.loc_meta_->ref_table_id_;
-        if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(
-                    my_session->get_effective_tenant_id(),
-                    schema_guard))) {
-          LOG_WARN("Failed to get schema guard", K(ret));
-        } else if (OB_FAIL(schema_guard.get_table_schema(
-                   my_session->get_effective_tenant_id(),
-                   table_id, table_schema))) {
-          LOG_WARN("Failed to get table schema", K(ret), K(table_id));
-        } else if (OB_ISNULL(table_schema)) {
-          ret = OB_SCHEMA_ERROR;
-          LOG_WARN("Table schema is null", K(ret), K(table_id));
-        } else if (OB_FAIL(ObPXServerAddrUtil::build_tablet_idx_map(table_schema, idx_map))) {
-          LOG_WARN("fail to build tablet idx map", K(ret));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        // see issue
-        // for virtual table, we can directly mock a tablet id
-        // function build_tablet_idx_map will mock a idx map whose key
-        // varies from 1 to table_schema->get_all_part_num(), and the value = key + 1
-        // so we can directly set tablet_idx = tablet_loc.tablet_id_.id() + 1, the result is same
-        if (is_virtual_table(table_schema->get_table_id())) {
-          tablet_idx = tablet_loc.tablet_id_.id() + 1;
-        } else if (OB_FAIL(idx_map.get_refactored(tablet_loc.tablet_id_.id(), tablet_idx))) {
-          ret = OB_HASH_NOT_EXIST == ret ? OB_SCHEMA_ERROR : ret;
-          LOG_WARN("fail to get tablet idx", K(ret), K(tablet_loc), KPC(table_schema));
-        }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObPxAffinityByRandom::get_tablet_info(tablet_loc.tablet_id_.id(),
-                                                               px_tablets_info_,
-                                                               partition_row_info))) {
-        LOG_WARN("Failed to get tablet info", K(ret));
-      } else if (OB_FAIL(affinitize_rule.add_partition(tablet_loc.tablet_id_.id(),
-                                                      tablet_idx,
-                                                      parallelism,
-                                                      my_session->get_effective_tenant_id(),
-                                                      partition_row_info))) {
-        LOG_WARN("Failed to get affinitize taskid" , K(ret));
-      }
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(pump)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("pump is null", K(ret), KP(pump));
     }
   }
+
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(affinitize_rule.do_random(!px_tablets_info_.empty(),
-                                               my_session->get_effective_tenant_id()))) {
-    LOG_WARN("failed to do random", K(ret));
   } else {
-    const ObIArray<ObPxAffinityByRandom::TabletHashValue> &partition_worker_pairs = affinitize_rule.get_result();
-    ARRAY_FOREACH(partition_worker_pairs, rt_idx) {
-      int64_t task_id = partition_worker_pairs.at(rt_idx).worker_id_;
-      int64_t tablet_id = partition_worker_pairs.at(rt_idx).tablet_id_;
-      if (task_id >= parallelism) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("Task id is invalid", K(ret), K(task_id), K(parallelism));
-      }
-      ARRAY_FOREACH(taskset.gi_task_set_, idx) {
-        const ObDASTabletLoc &tablet_key = *taskset.gi_task_set_.at(idx).tablet_loc_;
-        if (tablet_id == tablet_key.tablet_id_.id()) {
-          ObGITaskSet &real_task_set = taskset_array.at(task_id);
-          if (OB_FAIL(real_task_set.gi_task_set_.push_back(taskset.gi_task_set_.at(idx)))) {
-            LOG_WARN("Failed to push back task info", K(ret));
+    int64_t cur_idx = -1;
+    uint64_t table_id = OB_INVALID_ID;
+    ObPxAffinityByRandom affinitize_rule(qc_order_gi_tasks, partition_random_affinitize);
+    ObTabletIdToTabletsInfoIdxMap *tablet_id_to_tablets_info_idx_map = nullptr;
+    const ObArray<ObGITaskSet::ObGITaskInfo> &gi_tasks = taskset.gi_task_set_;
+    if (OB_FAIL(pump->get_or_build_tablet_id_px_tablets_info_idx_map(px_tablets_info_, tablet_id_to_tablets_info_idx_map))) {
+      LOG_WARN("failed to build tablet id px tablets info idx map", K(ret));
+    }
+    ARRAY_FOREACH_X(gi_tasks, idx, cnt, OB_SUCC(ret)) {
+      if (cur_idx != gi_tasks.at(idx).idx_) {
+        cur_idx = gi_tasks.at(idx).idx_; // get all different partition key in Affinitize
+        const ObDASTabletLoc &tablet_loc = *gi_tasks.at(idx).tablet_loc_;
+        int64_t tablet_idx = -1;
+        uint64_t cur_table_id = tablet_loc.loc_meta_->ref_table_id_;
+        if (OB_INVALID_ID == table_id || cur_table_id != table_id) {
+          if (OB_FAIL(pump->get_or_build_tablet_idx_map(cur_table_id, ctx, idx_map))) {
+            LOG_WARN("fail to get or build tablet idx map", K(ret), K(cur_table_id));
+          } else if (OB_ISNULL(idx_map)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("idx_map is null", K(ret));
+          } else {
+            table_id = cur_table_id;
+          }
+        }
+        if (OB_SUCC(ret)) {
+          // see issue
+          // for virtual table, we can directly mock a tablet id
+          // function build_tablet_idx_map will mock a idx map whose key
+          // varies from 1 to table_schema->get_all_part_num(), and the value = key + 1
+          // so we can directly set tablet_idx = tablet_loc.tablet_id_.id() + 1, the result is same
+          if (is_virtual_table(table_id)) {
+            tablet_idx = tablet_loc.tablet_id_.id() + 1;
+          } else if (OB_FAIL(idx_map->get_refactored(tablet_loc.tablet_id_.id(), tablet_idx))) {
+            ret = OB_HASH_NOT_EXIST == ret ? OB_SCHEMA_ERROR : ret;
+            LOG_WARN("fail to get tablet idx", K(ret), K(tablet_loc));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(get_tablet_info(tablet_loc.tablet_id_.id(),
+                                      px_tablets_info_,
+                                      partition_row_info,
+                                      tablet_id_to_tablets_info_idx_map))) {
+            LOG_WARN("Failed to get tablet info", K(ret));
+          } else if (OB_FAIL(affinitize_rule.add_partition(tablet_loc.tablet_id_.id(),
+                                                           tablet_idx,
+                                                           parallelism,
+                                                           my_session->get_effective_tenant_id(),
+                                                           partition_row_info,
+                                                           idx))) {
+            LOG_WARN("Failed to get affinitize taskid" , K(ret));
           }
         }
       }
-      LOG_TRACE("affinitize granule split a task_array",
-          K(tablet_id), K(task_id), K(parallelism), K(taskset_array), K(ret));
     }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(affinitize_rule.do_random(!px_tablets_info_.empty(),
+                                                 my_session->get_effective_tenant_id()))) {
+      LOG_WARN("failed to do random", K(ret));
+    } else {
+      const ObIArray<ObPxAffinityByRandom::TabletHashValue> &partition_worker_pairs = affinitize_rule.get_result();
+      ARRAY_FOREACH_X(partition_worker_pairs, rt_idx, rt_cnt, OB_SUCC(ret)) {
+        int64_t task_id = partition_worker_pairs.at(rt_idx).worker_id_;
+        int64_t tablet_id = partition_worker_pairs.at(rt_idx).tablet_id_;
+        int64_t gi_task_set_idx = partition_worker_pairs.at(rt_idx).gi_task_set_idx_;
+        if (task_id >= parallelism) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("Task id is invalid", K(ret), K(task_id), K(parallelism));
+        } else if (gi_task_set_idx < 0 || gi_task_set_idx >= gi_tasks.count()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("GI task set idx is invalid", K(ret), K(gi_task_set_idx), K(gi_tasks.count()));
+        } else {
+          ObGITaskSet &real_task_set = taskset_array.at(task_id);
+          int64_t partition_idx = gi_tasks.at(gi_task_set_idx).idx_;
+          for (int64_t i = gi_task_set_idx; OB_SUCC(ret) && i < gi_tasks.count(); i++) {
+            if (gi_tasks.at(i).idx_ != partition_idx) {
+              break;
+            } else if (OB_FAIL(real_task_set.gi_task_set_.push_back(gi_tasks.at(i)))) {
+              LOG_WARN("Failed to push back task info", K(ret));
+            }
+          }
+          LOG_TRACE("affinitize granule split a task_array", K(tablet_id), K(task_id),
+                    K(parallelism), K(gi_task_set_idx), K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObAffinitizeGranuleSplitter::get_tablet_info(uint64_t tablet_id,
+                                                 ObIArray<ObPxTabletInfo> &tablets_info,
+                                                 ObPxTabletInfo &tablet_info,
+                                                 ObTabletIdToTabletsInfoIdxMap *&tablet_id_to_tablets_info_idx_map)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(tablet_id_to_tablets_info_idx_map) && tablet_id_to_tablets_info_idx_map->created()) {
+    int64_t tablets_info_idx = -1;
+    if (OB_FAIL(tablet_id_to_tablets_info_idx_map->get_refactored(tablet_id, tablets_info_idx))) {
+      LOG_WARN("failed to get tablet info", K(ret));
+    } else {
+      tablet_info.assign(tablets_info.at(tablets_info_idx));
+    }
+  } else if (OB_FAIL(ObPxAffinityByRandom::get_tablet_info(tablet_id, tablets_info, tablet_info))) {
+    LOG_WARN("failed to get tablet info", K(ret));
   }
   return ret;
 }
@@ -1575,6 +1740,7 @@ int ObNormalAffinitizeGranuleSplitter::split_granule(ObGranulePumpArgs &args,
                                                      ObIArray<const ObTableScanSpec *> &scan_ops,
                                                      GITaskArrayMap &gi_task_array_result,
                                                      ObGITaskSet::ObGIRandomType random_type,
+                                                     ObGranulePump *granule_pump,
                                                      bool partition_granule /* = true */)
 {
   int ret = OB_SUCCESS;
@@ -1608,8 +1774,7 @@ int ObNormalAffinitizeGranuleSplitter::split_granule(ObGranulePumpArgs &args,
                                      total_task_set,
                                      random_type))) {
       LOG_WARN("failed to init granule iter pump", K(ret));
-    } else if (OB_FAIL(split_tasks_affinity(*args.ctx_, total_task_set, args.parallelism_,
-        taskset_array))) {
+    } else if (OB_FAIL(split_tasks_affinity(*args.ctx_, total_task_set, args.parallelism_, taskset_array, granule_pump))) {
       LOG_WARN("failed to split task affinity", K(ret));
     } else {
       gi_task_array_result.at(idx + task_idx).tsc_op_id_ = op_id;
@@ -1734,7 +1899,7 @@ int ObPartitionWiseGranuleSplitter::split_granule(ObGranulePumpArgs &args,
       }
     }
     if (OB_FAIL(ret)) {
-      // pass
+      // do nothing
     } else if (OB_FAIL(split_tsc_gi_task(args,
                                     scan_ops,
                                     tsc_tablet_arrays,
@@ -1851,6 +2016,7 @@ int ObPWAffinitizeGranuleSplitter::split_granule(ObGranulePumpArgs &args,
                                                  ObIArray<const ObTableScanSpec *> &scan_ops,
                                                  GITaskArrayMap &gi_task_array_result,
                                                  ObGITaskSet::ObGIRandomType random_type,
+                                                 ObGranulePump *granule_pump,
                                                  bool partition_granule /* = true */)
 {
   int ret = OB_SUCCESS;
@@ -1891,8 +2057,7 @@ int ObPWAffinitizeGranuleSplitter::split_granule(ObGranulePumpArgs &args,
                                      total_task_set,
                                      random_type))) {
       LOG_WARN("failed to init granule iter pump", K(ret));
-    } else if (OB_FAIL(split_tasks_affinity(*args.ctx_, total_task_set, args.parallelism_,
-        taskset_array))) {
+    } else if (OB_FAIL(split_tasks_affinity(*args.ctx_, total_task_set, args.parallelism_, taskset_array, granule_pump))) {
       LOG_WARN("failed to split task affinity", K(ret));
     } else if (OB_FAIL(adjust_task_order(asc_gi_task_order, taskset_array,
                                          op_id, args.locations_order_))) {

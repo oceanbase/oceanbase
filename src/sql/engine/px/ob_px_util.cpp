@@ -3140,7 +3140,8 @@ int ObPxAffinityByRandom::add_partition(int64_t tablet_id,
                                         int64_t tablet_idx,
                                         int64_t worker_cnt,
                                         uint64_t tenant_id,
-                                        ObPxTabletInfo &tablet_row_info)
+                                        ObPxTabletInfo &tablet_row_info,
+                                        int64_t gi_task_set_idx /* = -1 */)
 {
   int ret = OB_SUCCESS;
   LOG_TRACE("add partition", K(tablet_id), K(tablet_idx), K(worker_cnt), K(this), K(order_partitions_));
@@ -3158,6 +3159,7 @@ int ObPxAffinityByRandom::add_partition(int64_t tablet_id,
     tablet_hash_value.tablet_idx_ = tablet_idx;
     tablet_hash_value.tablet_id_ = tablet_id;
     tablet_hash_value.tablet_info_ = tablet_row_info;
+    tablet_hash_value.gi_task_set_idx_ = gi_task_set_idx;
     worker_cnt_ = worker_cnt;
     if (OB_FAIL(tablet_hash_values_.push_back(tablet_hash_value))) {
       LOG_WARN("Failed to push back item", K(ret));

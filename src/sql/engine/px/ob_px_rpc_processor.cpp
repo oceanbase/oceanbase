@@ -446,7 +446,7 @@ int ObInitFastSqcP::process()
   } else if (OB_FAIL(sqc_handler->link_qc_sqc_channel())) {
     LOG_WARN("fail to link qc sqc channel", K(ret));
   } else if (sqc_handler->get_phy_plan().is_enable_px_fast_reclaim() &&
-      OB_FAIL(ObDetectManagerUtils::sqc_register_into_dm(sqc_handler, sqc_handler->get_sqc_init_arg().sqc_))) {
+             OB_FAIL(ObDetectManagerUtils::sqc_register_into_dm(sqc_handler, sqc_handler->get_sqc_init_arg().sqc_))) {
     LOG_WARN("[DM] sqc failed to register_into_dm");
   } else {
     ObPxRpcInitSqcArgs &arg = sqc_handler->get_sqc_init_arg();

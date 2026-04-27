@@ -30,7 +30,10 @@ namespace share {
 }
 namespace sql
 {
-
+// <tablet_id, tablet_idx>
+typedef common::hash::ObHashMap<uint64_t, int64_t, common::hash::NoPthreadDefendMode> ObTabletIdxMap;
+// <tablet_id, tablets_info_idx>
+typedef common::hash::ObHashMap<uint64_t, int64_t, common::hash::NoPthreadDefendMode> ObTabletIdToTabletsInfoIdxMap;
 class ObTableModifySpec;
 class ObPxSqcMeta;
 
@@ -362,7 +365,13 @@ protected :
   int split_tasks_affinity(ObExecContext &ctx,
                            ObGITaskSet &taskset,
                            int64_t parallelism,
-                           ObGITaskArray &taskset_array);
+                           ObGITaskArray &taskset_array,
+                           ObGranulePump *pump);
+
+  int get_tablet_info(uint64_t tablet_id,
+                      ObIArray<ObPxTabletInfo> &tablets_info,
+                      ObPxTabletInfo &tablet_info,
+                      ObTabletIdToTabletsInfoIdxMap *&tablet_id_to_tablets_info_idx_map);
 };
 
 class ObNormalAffinitizeGranuleSplitter : public ObAffinitizeGranuleSplitter
@@ -374,6 +383,7 @@ public :
                     ObIArray<const ObTableScanSpec *> &scan_ops,
                     GITaskArrayMap &gi_task_array_result,
                     ObGITaskSet::ObGIRandomType random_type,
+                    ObGranulePump *granule_pump,
                     bool partition_granule = true);
 };
 
@@ -386,6 +396,7 @@ public:
                     ObIArray<const ObTableScanSpec *> &scan_ops,
                     GITaskArrayMap &gi_task_array_result,
                     ObGITaskSet::ObGIRandomType random_type,
+                    ObGranulePump *granule_pump,
                     bool partition_granule = true);
   int adjust_task_order(bool asc, ObGITaskArray &taskset_array, int64_t tsc_op_id,
                         const ObIArray<std::pair<int64_t, bool>> &locations_order);
@@ -415,6 +426,9 @@ public:
   fetch_task_ret_(OB_SUCCESS),
   finished_cnt_(0),
   use_odps_jni_connector_(false),
+  table_id_to_tablet_idx_map_(),
+  table_id_to_tablet_idx_map_allocator_(nullptr),
+  tablet_id_to_tablets_info_idx_map_(),
   external_task_runners_() {
     external_task_runners_.set_attr(common::ObMemAttr(MTL_ID(), MEM_ATTR_EXT_TASK_GEN));
   }
@@ -479,6 +493,13 @@ public:
   static int find_task_array_item(GITaskArrayMap &gi_task_map,
                               common::ObIArray<const ObTableScanSpec *> &scan_ops,
                               const bool check_task_exist, int64_t &idx);
+  // For PX batch rescan: get or build idx_map by table_id, reused in regenerate_gi_task.
+  // When table_id_to_tablet_idx_map_ does not contain table_id, fetches table_schema and builds ObTabletIdxMap.
+  int get_or_build_tablet_idx_map(uint64_t table_id,
+                                  ObExecContext &ctx,
+                                  const ObTabletIdxMap *&idx_map);
+  int get_or_build_tablet_id_px_tablets_info_idx_map(ObIArray<ObPxTabletInfo> &tablets_info,
+                                                     ObTabletIdToTabletsInfoIdxMap *&tablet_id_to_tablets_info_idx_map);
 private:
 
   int fetch_granule_by_worker_id(const ObGITaskSet *&task_set,
@@ -539,6 +560,18 @@ private:
   int fetch_task_ret_;
   uint64_t finished_cnt_;
   bool use_odps_jni_connector_;
+
+  // PX batch rescan:
+  // table_id_to_tablet_idx_map_ : cache <table_id, idx_map> for affinitize task split, avoid rebuild each time.
+  // idx_map : tablet_id to tablet_idx map, reused in one batch.
+  // table_id_to_tablet_idx_map_allocator_ : allocator for table_id_to_tablet_idx_map_.
+  typedef common::hash::ObHashMap<uint64_t, ObTabletIdxMap *, common::hash::NoPthreadDefendMode> ObTableIdToTabletIdxMap;
+  static const int64_t TABLE_TABLET_IDX_MAP_HASH_BUCKET_NUM = 8;
+  ObTableIdToTabletIdxMap table_id_to_tablet_idx_map_;
+  common::ObIAllocator *table_id_to_tablet_idx_map_allocator_;
+  // tablet_id_to_tablets_info_idx_map_: tablet_id -> tablets_info_idx mapping for faster
+  // resolution of tablets_info_idx from tablet_id when accessing tablets_info.
+  ObTabletIdToTabletsInfoIdxMap tablet_id_to_tablets_info_idx_map_;
 
 public:
 // external table start;
