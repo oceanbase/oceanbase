@@ -3446,3 +3446,7 @@ DEF_TIME(_vector_pre_filtering_timeout, OB_TENANT_PARAMETER, "50ms", "[10ms,)",
 ERRSIM_DEF_BOOL(inject_latency_before_on_success, OB_TENANT_PARAMETER, "False",
           "errsim to inject latency before on success",
           ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_nested_sql_local_optimize, OB_TENANT_PARAMETER, "False",
+         "enable or disable nested sql use local plan first",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
