@@ -340,8 +340,14 @@ int ObCSVTableRowIterator::open_next_file()
                                                                        url_.string(),
                                                                        arena_alloc_,
                                                                        file_url_info));
-        file_size = file_url_info->get_file_size();
-        state_.cur_file_size_ = file_size;
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(file_url_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("file url info is null", K(ret));
+        } else {
+          file_size = file_url_info->get_file_size();
+          state_.cur_file_size_ = file_size;
+        }
         LOG_TRACE("[CSV PREFETCH] open_next_file", K(ret), K(url_), K(file_size),
                  "bounded_start", state_.bounded_start_pos_,
                  "bounded_end", state_.bounded_end_pos_);
