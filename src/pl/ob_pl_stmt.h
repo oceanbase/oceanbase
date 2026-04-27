@@ -2083,17 +2083,34 @@ public:
       is_contain_goto_stmt_(false),
       is_autonomous_block_(false) {}
   virtual ~ObPLStmtBlock() {
-    reset();
+    int ret = common::OB_SUCCESS;
+    if (OB_FAIL(reset())) {
+      PL_LOG(WARN, "failed to reset ObPLStmtBlock", K(ret));
+    }
   }
 
-  void reset()
+  int reset()
   {
+    int ret = common::OB_SUCCESS;
     for (int64_t i = 0; i < stmts_.count(); ++i) {
-      if (NULL != stmts_.at(i)) {
-        stmts_.at(i)->~ObPLStmt();
+      ObPLStmt *stmt = stmts_.at(i);
+      if (NULL != stmt) {
+        if (OB_FAIL(SMART_CALL(destruct_child_stmt(stmt)))) {
+          PL_LOG(WARN, "failed to destruct child stmt", K(ret), K(i));
+        }
       }
     }
     stmts_.reset();
+    return ret;
+  }
+
+  static int destruct_child_stmt(ObPLStmt *stmt)
+  {
+    int ret = common::OB_SUCCESS;
+    if (OB_NOT_NULL(stmt)) {
+      stmt->~ObPLStmt();
+    }
+    return ret;
   }
 
   int accept(ObPLStmtVisitor &visitor) const;

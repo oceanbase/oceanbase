@@ -18313,7 +18313,10 @@ int ObPLResolver::resolve_stmt_list(const ObStmtNodeTree *node,
     if (OB_SUCC(ret)) {
       set_current(*parent);
     } else if (block != NULL) {
-      block->reset();
+      int tmp_ret = block->reset();
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("failed to reset block", K(tmp_ret));
+      }
     }
   }
   return ret;
