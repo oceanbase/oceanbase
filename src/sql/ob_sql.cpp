@@ -5214,13 +5214,37 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
         ParamStore &param_store = pctx->get_param_store_for_update();
         if (OB_NOT_NULL(ps_params)) {
           //本地是ps协议，远端依然走ps接口
-          int64_t initial_param_count = (PC_PL_MODE == pc_ctx.mode_ && pc_ctx.sql_ctx_.enable_pl_sql_parameterize_) ?
-                                      pc_ctx.sql_ctx_.origin_pl_param_count_ : ps_params->count();
-          //对于ps协议为什么不使用用户传递下来的ps_params?因为对于Oracle模式下''等价于NULL
-          //这里需要做一次转换，而param store里的param是转换后的，因此不需要再去转换
-          for (int64_t i = param_store.count(); i > initial_param_count; --i) {
-            //丢掉计算产生的多余参数，只保留最初的参数，避免第二次生成计划的时候重复计算引起参数位置错误
-            param_store.pop_back();
+          if (PC_PL_MODE == pc_ctx.mode_ && pc_ctx.sql_ctx_.enable_pl_sql_parameterize_) {
+            //param_store after pl sql parameterization mix constant and PL variables(in SQL position order)
+            //remote use raw_sql_(original SQL without parameterization), which only contains PL variable placeholders(:0, :1, ...)
+            //therefore, we need to filter out the constant parameters, only keep the PL variable parameters corresponding to T_QUESTIONMARK
+            int64_t raw_cnt = pc_ctx.fp_result_.raw_params_.count();
+            int64_t dst = 0;
+            for (int64_t src = 0; OB_SUCC(ret) && src < raw_cnt && src < param_store.count(); ++src) {
+              const ObPCParam *pc_param = pc_ctx.fp_result_.raw_params_.at(src);
+              if (OB_ISNULL(pc_param) || OB_ISNULL(pc_param->node_)) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected null pc_param in pl parameterize", K(ret), K(src), K(raw_cnt));
+              } else if (T_QUESTIONMARK == pc_param->node_->type_) {
+                if (dst != src) {
+                  param_store.at(dst) = param_store.at(src);
+                }
+                ++dst;
+              }
+            }
+            if (OB_SUCC(ret)) {
+              while (param_store.count() > dst) {
+                param_store.pop_back();
+              }
+            }
+          } else {
+            //对于ps协议为什么不使用用户传递下来的ps_params?因为对于Oracle模式下''等价于NULL
+            //这里需要做一次转换，而param store里的param是转换后的，因此不需要再去转换
+            int64_t initial_param_count = ps_params->count();
+            for (int64_t i = param_store.count(); i > initial_param_count; --i) {
+              //丢掉计算产生的多余参数，只保留最初的参数，避免第二次生成计划的时候重复计算引起参数位置错误
+              param_store.pop_back();
+            }
           }
           pctx->get_remote_sql_info().use_ps_ = true;
           pctx->get_remote_sql_info().is_original_ps_mode_ = true;
