@@ -696,8 +696,10 @@ int ObMediumCompactionInfo::init_data_version(const uint64_t compat_version)
       medium_compat_version_ = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V4;
     } else if (compat_version < ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION) {
       medium_compat_version_ = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V5;
-    } else {
+    } else if (compat_version < DATA_VERSION_4_6_1_0) {
       medium_compat_version_ = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V6;
+    } else {
+      medium_compat_version_ = ObMediumCompactionInfo::MEDIUM_COMPAT_VERSION_V7;
     }
   }
   return ret;

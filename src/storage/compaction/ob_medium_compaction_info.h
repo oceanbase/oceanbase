@@ -347,7 +347,8 @@ public:
   static const int64_t MEDIUM_COMPAT_VERSION_V5 = 5; // after this version, use encoding row limit
   // < V6: co_major_merge_type_, >= V6: co_major_merge_strategy_ to record merge strategy / support window decision info in medium info
   static const int64_t MEDIUM_COMPAT_VERSION_V6 = 6;
-  static const int64_t MEDIUM_COMPAT_VERSION_LATEST = MEDIUM_COMPAT_VERSION_V6;
+  static const int64_t MEDIUM_COMPAT_VERSION_V7 = 7; // after this version, add compaction_batch_size_
+  static const int64_t MEDIUM_COMPAT_VERSION_LATEST = MEDIUM_COMPAT_VERSION_V7;
 private:
   static const int32_t SCS_ONE_BIT = 1;
   static const int32_t SCS_RESERVED_BITS = 23;
