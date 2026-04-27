@@ -453,7 +453,7 @@ int ObExprObjAccess::ExtraInfo::calc(ObObj &result,
   int ret = OB_SUCCESS;
   typedef int32_t (*GetAttr)(int64_t, int64_t [], int64_t *, int64_t *);
   GetAttr get_attr = reinterpret_cast<GetAttr>(get_attr_func_);
-  ParamArray param_array;
+  ParamArray param_array(&alloc);
   CK (OB_NOT_NULL(ctx));
   OZ (init_param_array(param_store, params, param_num, param_array));
 
