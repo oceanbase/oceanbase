@@ -2174,13 +2174,22 @@ int ObRawExprResolverImpl::resolve_dblink_udf_expr(const ParseNode *node,
       const ParseNode *param_node = node->children_[i];
       CK (OB_NOT_NULL(param_node));
       if (OB_SUCC(ret) && T_SP_CPARAM == param_node->type_) {
-        if (T_IDENT != param_node->children_[0]->type_) {
+        const ParseNode *name_node = NULL;
+        if (T_OBJ_ACCESS_REF == param_node->children_[0]->type_
+            && 2 == param_node->children_[0]->num_child_
+            && OB_NOT_NULL(param_node->children_[0]->children_[0])
+            && OB_ISNULL(param_node->children_[0]->children_[1])
+            && T_IDENT == param_node->children_[0]->children_[0]->type_) {
+          name_node = param_node->children_[0]->children_[0];
+        } else if (T_IDENT == param_node->children_[0]->type_) {
+          name_node = param_node->children_[0];
+        }
+        if (OB_SUCC(ret) && OB_ISNULL(name_node)) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid param name node", K(ret), K(param_node->children_[0]->type_));
-        } else {
+        } else if (OB_SUCC(ret)) {
           has_assign_expr = true;
-          ObString param_name(static_cast<int32_t>(param_node->children_[0]->str_len_),
-                              param_node->children_[0]->str_value_);
+          ObString param_name(static_cast<int32_t>(name_node->str_len_), name_node->str_value_);
           OV (!param_name.empty(), OB_INVALID_ARGUMENT);
           OZ (udf_info.param_names_.push_back(param_name));
           OZ (SMART_CALL(recursive_resolve(param_node->children_[1], param_expr)));
@@ -8309,11 +8318,14 @@ int ObRawExprResolverImpl::resolve_udf_node(const ParseNode *node, ObUDFInfo &ud
     } else {
       ObRawExpr *param_expr = NULL;
       int32_t num_child = node->children_[1]->num_child_;
-      bool has_assign_expr = false;
+      // Track two different meanings of "=>" inside the same parameter list:
+      // - named formal parameter notation for UDF calls (name => expr)
+      // - associative array constructor key/value pairs (key_expr => value_expr)
+      bool seen_named_param_assign = false;
       if (OB_FAIL(func_expr->init_param_exprs(num_child * 2))) {
         LOG_WARN("failed to init param exprs", K(ret));
       }
-      bool has_assign_const = false;
+      bool seen_assoc_array_kv_assign = false;
       for (int32_t i = 0; OB_SUCC(ret) && i < num_child; ++i) {
         const ParseNode *param_node = node->children_[1]->children_[i];
         if (OB_ISNULL(param_node)) {
@@ -8325,60 +8337,77 @@ int ObRawExprResolverImpl::resolve_udf_node(const ParseNode *node, ObUDFInfo &ud
             || OB_ISNULL(param_node->children_[1])) {
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("param node is invalid", K(ret));
-          } else if (T_IDENT != param_node->children_[0]->type_) {
-            // is associative array params with =>
-            if (OB_SUCC(ret)) {
-              if (!has_assign_const && i != 0) {
-                // in case of associative array constructor (1, 3 => 4) & (a => 2, 3 => 4)
+          } else {
+            const ParseNode *left_node = param_node->children_[0];
+            bool is_simple_ident = false;
+            ObString param_name_str;
+
+            if (T_IDENT == left_node->type_) {
+              is_simple_ident = true;
+              param_name_str.assign_ptr(left_node->str_value_, static_cast<int32_t>(left_node->str_len_));
+            } else if (T_OBJ_ACCESS_REF == left_node->type_ &&
+                       2 == left_node->num_child_ &&
+                       OB_NOT_NULL(left_node->children_[0]) &&
+                       OB_ISNULL(left_node->children_[1]) &&
+                       T_IDENT == left_node->children_[0]->type_) {
+              is_simple_ident = true;
+              param_name_str.assign_ptr(left_node->children_[0]->str_value_,
+                                       static_cast<int32_t>(left_node->children_[0]->str_len_));
+            }
+
+            if (is_simple_ident) {
+              if (OB_SUCC(ret) && seen_assoc_array_kv_assign && i != 0) {
+                // in case of associative array constructor (1 => 2, a => 4)
                 ret = OB_ERR_POSITIONAL_FOLLOW_NAME;
                 LOG_WARN("can not get parameter after assign", K(ret));
-              } else {
-                has_assign_const = true;
-                udf_info.is_associative_array_with_param_assign_op_ = true;
               }
-            }
+              if (OB_FAIL(ret)) {
+              } else {
+                seen_named_param_assign = true;
+                if (param_name_str.empty()) {
+                  ret = OB_INVALID_ARGUMENT;
+                  LOG_WARN("param node string is empty", K(ret));
+                } else if (OB_FAIL(udf_info.param_names_.push_back(param_name_str))) {
+                  LOG_WARN("failed to push back", K(ret), K(param_name_str));
+                } else if (OB_FAIL(SMART_CALL(recursive_resolve(param_node->children_[1], param_expr)))) {
+                  LOG_WARN("failed to recursive resolve", K(ret));
+                } else if (OB_FAIL(udf_info.param_exprs_.push_back(param_expr))) {
+                  LOG_WARN("failed to push back", K(ret));
+                }
+              }
+            } else {
+              if (OB_SUCC(ret)) {
+                if (!seen_assoc_array_kv_assign && i != 0) {
+                  // in case of associative array constructor (1, 3 => 4) & (a => 2, 3 => 4)
+                  ret = OB_ERR_POSITIONAL_FOLLOW_NAME;
+                  LOG_WARN("can not get parameter after assign", K(ret));
+                } else {
+                  seen_assoc_array_kv_assign = true;
+                  udf_info.is_associative_array_with_param_assign_op_ = true;
+                }
+              }
 
-            if (OB_FAIL(ret)) {
-            } else if (OB_FAIL(SMART_CALL(recursive_resolve(param_node->children_[0], param_expr)))) {
-              LOG_WARN("failed to recursive resolve", K(ret));
-            } else if (OB_FAIL(func_expr->add_param_expr(param_expr))) {
-              LOG_WARN("failed to push back", K(ret));
-            } else {
-              udf_info.udf_param_num_++;
-            }
+              if (OB_FAIL(ret)) {
+              } else if (OB_FAIL(SMART_CALL(recursive_resolve(param_node->children_[0], param_expr)))) {
+                LOG_WARN("failed to recursive resolve", K(ret));
+              } else if (OB_FAIL(func_expr->add_param_expr(param_expr))) {
+                LOG_WARN("failed to push back", K(ret));
+              } else {
+                udf_info.udf_param_num_++;
+              }
 
-            if (OB_FAIL(ret)) {
-            } else if (OB_FAIL(SMART_CALL(recursive_resolve(param_node->children_[1], param_expr)))) {
-              LOG_WARN("failed to recursive resolve", K(ret));
-            } else if (OB_FAIL(func_expr->add_param_expr(param_expr))) {
-              LOG_WARN("failed to push back", K(ret));
-            } else {
-              udf_info.udf_param_num_++;
-            }
-          } else {
-            if (OB_SUCC(ret) && has_assign_const && i != 0) {
-              // in case of associative array constructor (1 => 2, a => 4)
-              ret = OB_ERR_POSITIONAL_FOLLOW_NAME;
-              LOG_WARN("can not get parameter after assign", K(ret));
-            }
-            if (OB_FAIL(ret)) {
-            } else {
-              has_assign_expr = true;
-              ObString param_name(static_cast<int32_t>(param_node->children_[0]->str_len_),
-                                  param_node->children_[0]->str_value_);
-              if (param_name.empty()) {
-                ret = OB_INVALID_ARGUMENT;
-                LOG_WARN("param node string is empty", K(ret));
-              } else if (OB_FAIL(udf_info.param_names_.push_back(param_name))) {
-                LOG_WARN("failed to push back", K(ret), K(param_name));
+              if (OB_FAIL(ret)) {
               } else if (OB_FAIL(SMART_CALL(recursive_resolve(param_node->children_[1], param_expr)))) {
                 LOG_WARN("failed to recursive resolve", K(ret));
-              } else if (OB_FAIL(udf_info.param_exprs_.push_back(param_expr))) {
+              } else if (OB_FAIL(func_expr->add_param_expr(param_expr))) {
                 LOG_WARN("failed to push back", K(ret));
+              } else {
+                udf_info.udf_param_num_++;
               }
             }
           }
-        } else if (has_assign_expr || has_assign_const) { // in case of (1=>2, 3) for associative array constructor
+        } else if (seen_named_param_assign || seen_assoc_array_kv_assign) {
+          // in case of (1=>2, 3) for associative array constructor and (a => 1, 2) for UDF
           ret = OB_ERR_POSITIONAL_FOLLOW_NAME;
           LOG_WARN("can not get parameter after assign", K(ret));
         } else if (OB_FAIL(SMART_CALL(recursive_resolve(param_node, param_expr)))) {
