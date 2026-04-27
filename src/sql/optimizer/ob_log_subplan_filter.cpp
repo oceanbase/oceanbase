@@ -8,8 +8,106 @@
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "sql/optimizer/ob_log_granule_iterator.h"
 #include "sql/rewrite/ob_transform_utils.h"
+#include "sql/resolver/dml/ob_hint.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
+
+
+int ObLogSubPlanFilter::expr_contains_my_subquery(const ObRawExpr *expr, bool &result) const
+{
+  int ret = OB_SUCCESS;
+  result = false;
+  bool has_mine = false;
+  bool all_mine = true;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (expr->has_flag(CNT_SUB_QUERY)) {
+    if (OB_FAIL(check_subquery_ownership(expr, has_mine, all_mine))) {
+      LOG_WARN("failed to check subquery ownership", K(ret));
+    } else {
+      result = has_mine && all_mine;
+    }
+  }
+  return ret;
+}
+
+int ObLogSubPlanFilter::check_subquery_ownership(const ObRawExpr *expr,
+                                                 bool &has_mine,
+                                                 bool &all_mine) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (!expr->has_flag(CNT_SUB_QUERY) || !all_mine) {
+    // no subquery below or already found a foreign one
+  } else if (expr->is_query_ref_expr()) {
+    if (ObOptimizerUtil::find_item(subquery_exprs_, expr)) {
+      has_mine = true;
+    } else {
+      all_mine = false;
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && all_mine && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(check_subquery_ownership(expr->get_param_expr(i), has_mine, all_mine)))) {
+        LOG_WARN("failed to check subquery ownership", K(ret), K(i));
+      }
+    }
+  }
+  return ret;
+}
+
+// Claim root-level branch expressions (CASE/IF/NVL/...) that wrap this SPF's
+// subqueries, so they are produced here instead of at a parent operator.
+int ObLogSubPlanFilter::allocate_expr_post(ObAllocExprContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObLogicalOperator::allocate_expr_post(ctx))) {
+    LOG_WARN("failed to allocate expr post", K(ret));
+  } else if (OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_optimizer_context().get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (!get_plan()->get_optimizer_context().get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_2_BP2,
+                                                                                            COMPAT_VERSION_4_5_0,
+                                                                                            COMPAT_VERSION_4_6_1)) {
+    // skip for older optimizer version
+  } else {
+    ObIArray<ExprProducer> &producers = ctx.expr_producers_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < producers.count(); ++i) {
+      ExprProducer &producer = producers.at(i);
+      ObRawExpr *expr = producer.expr_;
+      bool can_be_produced = false;
+      bool contains_my_subquery = false;
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (producer.producer_id_ <= id_
+                 || OB_INVALID_ID != producer.producer_branch_
+                 || !expr->has_flag(CNT_SUB_QUERY)
+                 || !ObOptimizerUtil::is_branch_expr(expr)) {
+        // skip
+      } else if (OB_FAIL(expr_contains_my_subquery(expr, contains_my_subquery))) {
+        LOG_WARN("failed to check expr contains my subquery", K(ret));
+      } else if (!contains_my_subquery) {
+      } else if (OB_FAIL(expr_can_be_produced(expr, ctx, can_be_produced))) {
+        LOG_WARN("failed to check expr can be produced", K(ret));
+      } else if (!can_be_produced) {
+        LOG_TRACE("branch expr cannot be produced at SPF, skip", KPC(expr), K(id_));
+      } else {
+        producer.producer_id_ = id_;
+        producer.producer_branch_ = branch_id_;
+        if (producer.consumer_id_ > id_ && !is_plan_root()) {
+          if (OB_FAIL(add_var_to_array_no_dup(output_exprs_, expr))) {
+            LOG_WARN("failed to add expr to output", K(ret));
+          }
+        }
+        LOG_TRACE("claimed branch expr at subplan filter", KPC(expr), K(id_), K(producer.consumer_id_));
+      }
+    }
+  }
+  return ret;
+}
 
 int ObLogSubPlanFilter::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
 {

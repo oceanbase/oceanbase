@@ -681,6 +681,9 @@ struct ObAllocExprContext
   common::ObSEArray<ExprProducer, 16> expr_producers_;
   // Exprs that cannot be used to extract shared child exprs
   common::ObSEArray<ObRawExpr *, 4> inseparable_exprs_;
+  // Branch sub-exprs (CASE/IF/NVL/...) with CNT_SUB_QUERY flag found during flatten.
+  // SPF uses this list to register them as separate producers when they wrap its subqueries.
+  common::ObSEArray<ObRawExpr *, 4> branch_subquery_exprs_;
 };
 
 struct ObPxPipeBlockingCtx
