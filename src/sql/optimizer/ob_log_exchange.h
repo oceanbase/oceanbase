@@ -52,6 +52,7 @@ public:
       null_row_dist_method_(ObNullDistributeMethod::NONE),
       slave_mapping_type_(SlaveMappingType::SM_NONE),
       use_scatter_channel_for_pkey_hash_(false),
+      slave_mapping_id_(0),
       gi_info_(),
       px_batch_op_(NULL),
       px_batch_op_id_(OB_INVALID_ID),
@@ -148,6 +149,7 @@ public:
   virtual int compute_plan_type() override;
   SlaveMappingType get_slave_mapping_type() { return slave_mapping_type_; }
   bool is_slave_mapping() const { return SlaveMappingType::SM_NONE != slave_mapping_type_; }
+  int64_t get_slave_mapping_id() const { return slave_mapping_id_; }
   ObLogicalOperator *get_px_batch_op() { return px_batch_op_; }
   void set_px_batch_op(ObLogicalOperator *op) { px_batch_op_ = op; }
   int64_t get_px_batch_op_id() { return px_batch_op_id_; }
@@ -283,6 +285,8 @@ private:
   ObNullDistributeMethod::Type null_row_dist_method_;
   SlaveMappingType slave_mapping_type_;
   bool use_scatter_channel_for_pkey_hash_;
+  // unique id for slave mapping pair in the plan, start from 1
+  int64_t slave_mapping_id_;
 
   //granule info
   ObAllocGIInfo gi_info_;

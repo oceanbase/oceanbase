@@ -517,8 +517,10 @@ public:
     parent_dfo_id_(common::OB_INVALID_ID),
     px_sequence_id_(common::OB_INVALID_ID),
     temp_table_id_(0),
-    in_slave_mapping_type_(SlaveMappingType::SM_NONE),
+    in_slave_mapping_types_(),
+    in_slave_mapping_ids_(),
     out_slave_mapping_type_(SlaveMappingType::SM_NONE),
+    out_slave_mapping_id_(0),
     part_ch_map_(),
     dist_method_(ObPQDistributeMethod::NONE),
     use_scatter_channel_for_pkey_hash_(false),
@@ -586,17 +588,22 @@ public:
   inline void set_into_odps(bool has_into_odps) { has_into_odps_ = has_into_odps; }
   inline bool has_into_odps() const { return has_into_odps_; }
   inline bool is_fast_dfo() const { return is_prealloc_receive_channel() || is_prealloc_transmit_channel(); }
-  inline void set_in_slave_mapping_type(SlaveMappingType v) { in_slave_mapping_type_ = v; }
   inline void set_out_slave_mapping_type(SlaveMappingType v) { out_slave_mapping_type_ = v; }
-  inline SlaveMappingType get_in_slave_mapping_type() { return in_slave_mapping_type_; }
-  inline SlaveMappingType get_out_slave_mapping_type() { return out_slave_mapping_type_; }
-  inline bool is_in_slave_mapping() { return SlaveMappingType::SM_NONE != in_slave_mapping_type_; }
+  inline void set_out_slave_mapping_id(int64_t v) { out_slave_mapping_id_ = v; }
+  inline SlaveMappingType get_out_slave_mapping_type() const { return out_slave_mapping_type_; }
+  inline int64_t get_out_slave_mapping_id() const { return out_slave_mapping_id_; }
   inline bool is_out_slave_mapping() { return SlaveMappingType::SM_NONE != out_slave_mapping_type_; }
   inline void set_use_scatter_channel_for_pkey_hash(bool use_scatter_channel_for_pkey_hash)
   {
     use_scatter_channel_for_pkey_hash_ = use_scatter_channel_for_pkey_hash;
   }
   inline bool use_scatter_channel_for_pkey_hash() const { return use_scatter_channel_for_pkey_hash_; }
+
+  int append_in_slave_mapping_child(const SlaveMappingType v,
+                                    const int64_t slave_mapping_id);
+  bool is_in_slave_mapping() const { return in_slave_mapping_types_.count() > 0; }
+  bool has_reference_child() const ;
+  int64_t get_first_ref_child_sm_id() const;
 
   ObPxPartChMapArray &get_part_ch_map() { return part_ch_map_; }
 
@@ -743,7 +750,7 @@ public:
                KP_(depend_sibling),
                KP_(parent),
                "child", get_child_count(),
-               K_(in_slave_mapping_type),
+               K_(in_slave_mapping_types),
                K_(out_slave_mapping_type),
                K_(dist_method),
                K_(pkey_table_loc_id),
@@ -811,8 +818,13 @@ private:
   int64_t parent_dfo_id_;
   uint64_t px_sequence_id_;
   uint64_t temp_table_id_;
-  SlaveMappingType in_slave_mapping_type_;
+
+  // a parent dfo may has more than one slave mapping childs
+  ObTMArray<SlaveMappingType> in_slave_mapping_types_;
+  ObTMArray<int64_t> in_slave_mapping_ids_;
+  // a child dfo only has one slave mapping output to parent
   SlaveMappingType out_slave_mapping_type_;
+  int64_t out_slave_mapping_id_;
   ObPxPartChMapArray part_ch_map_;
   ObPQDistributeMethod::Type dist_method_;
   bool use_scatter_channel_for_pkey_hash_;

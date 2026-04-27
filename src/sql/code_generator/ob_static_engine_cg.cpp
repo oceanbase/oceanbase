@@ -4709,6 +4709,7 @@ int ObStaticEngineCG::generate_basic_transmit_spec(
     spec.set_px_id(op.get_px_id());
     spec.set_dfo_id(op.get_dfo_id());
     spec.set_slave_mapping_type(op.get_slave_mapping_type());
+    spec.set_slave_mapping_id(op.get_slave_mapping_id());
     spec.need_null_aware_shuffle_ = op.need_null_aware_shuffle();
     spec.is_rollup_hybrid_ = op.is_rollup_hybrid();
     spec.is_wf_hybrid_ = op.is_wf_hybrid();

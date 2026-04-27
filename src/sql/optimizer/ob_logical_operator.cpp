@@ -178,6 +178,7 @@ int ObExchangeInfo::assign(const ObExchangeInfo &other)
     unmatch_row_dist_method_ = other.unmatch_row_dist_method_;
     null_row_dist_method_ = other.null_row_dist_method_;
     slave_mapping_type_ = other.slave_mapping_type_;
+    slave_mapping_id_ = other.slave_mapping_id_;
     strong_sharding_ = other.strong_sharding_;
     need_null_aware_shuffle_ = other.need_null_aware_shuffle_;
     is_rollup_hybrid_ = other.is_rollup_hybrid_;

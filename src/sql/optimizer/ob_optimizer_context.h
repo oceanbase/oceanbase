@@ -318,7 +318,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     enable_hash_groupby_limit_pushdown_(true),
     join_order_enum_threshold_(10),
     max_permutation_(2000),
-    idp_reduction_threshold_(5000)
+    idp_reduction_threshold_(5000),
+    slave_mapping_id_gen_(0)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -851,6 +852,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_idp_reduction_threshold(uint64_t threshold) { idp_reduction_threshold_ = threshold; }
   inline bool get_is_weak_read() const { return is_weak_read_; }
   inline void set_is_weak_read(bool is_weak_read) { is_weak_read_ = is_weak_read; }
+  inline int64_t generate_slave_mapping_id() { return ++slave_mapping_id_gen_; }
 private:
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
@@ -994,6 +996,7 @@ private:
   uint64_t join_order_enum_threshold_;
   uint64_t max_permutation_;
   uint64_t idp_reduction_threshold_;
+  int64_t slave_mapping_id_gen_; // generate slave mapping id, start from 1
 };
 }
 }

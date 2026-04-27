@@ -925,7 +925,9 @@ int ObSelectLogPlan::inner_create_merge_rollup_plan(const ObIArray<ObRawExpr*> &
              DistAlgo::DIST_HASH_HASH_LOCAL == algo) {
     ObExchangeInfo exch_info;
     exch_info.slave_mapping_type_ = get_slave_mapping_type(algo);
-
+    if (IS_SLAVE_MAPPING(exch_info.slave_mapping_type_)) {
+      exch_info.slave_mapping_id_ = generate_slave_mapping_id();
+    }
     // allocate push down group by
     bool should_pullup_gi = false;
     if (groupby_helper.can_basic_pushdown_) {
@@ -1405,6 +1407,9 @@ int ObSelectLogPlan::create_hash_group_plan(const ObIArray<ObRawExpr*> &reduce_e
              DistAlgo::DIST_HASH_HASH_LOCAL == algo) {
     ObExchangeInfo exch_info;
     exch_info.slave_mapping_type_ = get_slave_mapping_type(algo);
+    if (IS_SLAVE_MAPPING(exch_info.slave_mapping_type_)) {
+      exch_info.slave_mapping_id_ = generate_slave_mapping_id();
+    }
     bool need_push_down = groupby_helper.can_basic_pushdown_ && top->is_distributed();
     // allocate two stage group by
     if (need_push_down) {
@@ -1778,6 +1783,9 @@ int ObSelectLogPlan::inner_create_merge_group_plan(const ObIArray<ObRawExpr*> &r
              DistAlgo::DIST_HASH_HASH_LOCAL == algo) {
     ObExchangeInfo exch_info;
     exch_info.slave_mapping_type_ = get_slave_mapping_type(algo);
+    if (IS_SLAVE_MAPPING(exch_info.slave_mapping_type_)) {
+      exch_info.slave_mapping_id_ = generate_slave_mapping_id();
+    }
     // allocate push down group by
     bool should_pullup_gi = false;
     bool need_push_down = groupby_helper.can_basic_pushdown_ && top->is_distributed();
@@ -2541,6 +2549,9 @@ int ObSelectLogPlan::create_hash_distinct_plan(ObLogicalOperator *&top,
   } else if (DistAlgo::DIST_HASH_HASH == algo ||
              DistAlgo::DIST_HASH_HASH_LOCAL == algo) {
     exch_info.slave_mapping_type_ = get_slave_mapping_type(algo);
+    if (IS_SLAVE_MAPPING(exch_info.slave_mapping_type_)) {
+      exch_info.slave_mapping_id_ = generate_slave_mapping_id();
+    }
     bool pushed_down = distinct_helper.can_basic_pushdown_ && top->is_distributed();
     //allocate push down distinct if necessary
     if (distinct_helper.can_basic_pushdown_ &&
@@ -2606,6 +2617,9 @@ int ObSelectLogPlan::create_merge_distinct_plan(ObLogicalOperator *&top,
              DistAlgo::DIST_HASH_HASH_LOCAL == algo) {
     ObExchangeInfo exch_info;
     exch_info.slave_mapping_type_ = get_slave_mapping_type(algo);
+    if (IS_SLAVE_MAPPING(exch_info.slave_mapping_type_)) {
+      exch_info.slave_mapping_id_ = generate_slave_mapping_id();
+    }
     // allocate push down distinct if necessary
     bool pushed_down = distinct_helper.can_basic_pushdown_ && top->is_distributed();
     if (pushed_down) {
@@ -5585,6 +5599,11 @@ int ObSelectLogPlan::compute_set_exchange_info(const EqualSets &equal_sets,
       right_exch_info.dist_method_ = ObPQDistributeMethod::HASH;
       left_exch_info.slave_mapping_type_ = get_slave_mapping_type(set_method);
       right_exch_info.slave_mapping_type_ = get_slave_mapping_type(set_method);
+      if (IS_SLAVE_MAPPING(left_exch_info.slave_mapping_type_)) {
+        int64_t slave_mapping_id = generate_slave_mapping_id();
+        left_exch_info.slave_mapping_id_ = slave_mapping_id;
+        right_exch_info.slave_mapping_id_ = slave_mapping_id;
+      }
     }
   } else if (DistAlgo::DIST_HASH_NONE == set_method) {
     parallel_source = &right_child;
@@ -5701,6 +5720,11 @@ int ObSelectLogPlan::compute_set_exchange_info(const EqualSets &equal_sets,
         right_exch_info.dist_method_ = ObPQDistributeMethod::HASH;
         left_exch_info.slave_mapping_type_ = get_slave_mapping_type(set_method);
         right_exch_info.slave_mapping_type_ = get_slave_mapping_type(set_method);
+        if (IS_SLAVE_MAPPING(left_exch_info.slave_mapping_type_)) {
+          int64_t slave_mapping_id = generate_slave_mapping_id();
+          left_exch_info.slave_mapping_id_ = slave_mapping_id;
+          right_exch_info.slave_mapping_id_ = slave_mapping_id;
+        }
       }
     }
   } else if (DistAlgo::DIST_NONE_PARTITION == set_method ||
@@ -5754,6 +5778,11 @@ int ObSelectLogPlan::compute_set_exchange_info(const EqualSets &equal_sets,
         right_exch_info.dist_method_ = ObPQDistributeMethod::PARTITION_HASH;
         left_exch_info.slave_mapping_type_ = get_slave_mapping_type(set_method);
         right_exch_info.slave_mapping_type_ = get_slave_mapping_type(set_method);
+        if (IS_SLAVE_MAPPING(left_exch_info.slave_mapping_type_)) {
+          int64_t slave_mapping_id = generate_slave_mapping_id();
+          left_exch_info.slave_mapping_id_ = slave_mapping_id;
+          right_exch_info.slave_mapping_id_ = slave_mapping_id;
+        }
       }
     }
   } else {
@@ -7940,6 +7969,10 @@ int ObSelectLogPlan::create_hash_local_dist_win_func(ObLogicalOperator *top,
   int ret = OB_SUCCESS;
   ObExchangeInfo exch_info;
   exch_info.slave_mapping_type_ = SlaveMappingType::SM_PWJ_HASH_HASH;
+  if (IS_SLAVE_MAPPING(exch_info.slave_mapping_type_)) {
+    int64_t slave_mapping_id = generate_slave_mapping_id();
+    exch_info.slave_mapping_id_ = slave_mapping_id;
+  }
   const int64_t part_cnt = win_func_helper.part_cnt_;
   ObRawExpr *topn_const = NULL;
   if (OB_ISNULL(top)) {

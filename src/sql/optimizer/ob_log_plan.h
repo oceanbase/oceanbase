@@ -2053,6 +2053,7 @@ public:
   static bool check_multivalue_index_in_node(const ObIndexMergeNode *node);
   // Helper function to find hybrid search table scan in plan tree
   static int find_hybrid_search_table_scan(ObLogicalOperator *op, ObLogTableScan *&out_tsc);
+  inline int64_t generate_slave_mapping_id() { return optimizer_context_.generate_slave_mapping_id(); }
 private:
   static const int64_t IDP_PATHNUM_THRESHOLD = 5000;
 protected: // member variable

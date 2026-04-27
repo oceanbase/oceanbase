@@ -90,7 +90,9 @@ public:
   inline bool has_lgi() const { return has_lgi_; }
 
   void set_slave_mapping_type(SlaveMappingType slave_mapping_type) { slave_mapping_type_ = slave_mapping_type; }
+  void set_slave_mapping_id(int64_t slave_mapping_id) { slave_mapping_id_ = slave_mapping_id; }
   SlaveMappingType get_slave_mapping_type() const { return slave_mapping_type_; }
+  int64_t get_slave_mapping_id() const { return slave_mapping_id_; }
   bool is_slave_mapping() const { return SlaveMappingType::SM_NONE != slave_mapping_type_; }
 
   // 切分成多少个task
@@ -116,6 +118,7 @@ public:
   ObPQDistributeMethod::Type unmatch_row_dist_method_;
   ObNullDistributeMethod::Type null_row_dist_method_;
   SlaveMappingType slave_mapping_type_;
+  int64_t slave_mapping_id_;
   //当前的job中包含light granule iterator operator
   bool has_lgi_;
 

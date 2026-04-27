@@ -2283,6 +2283,11 @@ int ObLogPlan::compute_join_exchange_info(JoinPath &join_path,
     } else {
       left_exch_info.slave_mapping_type_ = sm_type;
       right_exch_info.slave_mapping_type_ = sm_type;
+      if (IS_SLAVE_MAPPING(sm_type)) {
+        int64_t slave_mapping_id = generate_slave_mapping_id();
+        left_exch_info.slave_mapping_id_ = slave_mapping_id;
+        right_exch_info.slave_mapping_id_ = slave_mapping_id;
+      }
     }
   } else if (DistAlgo::DIST_PARTITION_NONE == join_path.join_dist_algo_) {
     ObPQDistributeMethod::Type unmatch_method = ObPQDistributeMethod::DROP;
@@ -2326,6 +2331,11 @@ int ObLogPlan::compute_join_exchange_info(JoinPath &join_path,
       right_exch_info.dist_method_ = ObPQDistributeMethod::HASH;
       left_exch_info.slave_mapping_type_ = sm_type;
       right_exch_info.slave_mapping_type_ = sm_type;
+      if (IS_SLAVE_MAPPING(sm_type)) {
+        int64_t slave_mapping_id = generate_slave_mapping_id();
+        left_exch_info.slave_mapping_id_ = slave_mapping_id;
+        right_exch_info.slave_mapping_id_ = slave_mapping_id;
+      }
     }
   } else if (DistAlgo::DIST_NONE_PARTITION == join_path.join_dist_algo_) {
     ObPQDistributeMethod::Type unmatch_method = ObPQDistributeMethod::DROP;
@@ -2369,6 +2379,11 @@ int ObLogPlan::compute_join_exchange_info(JoinPath &join_path,
       right_exch_info.dist_method_ = ObPQDistributeMethod::PARTITION_HASH;
       left_exch_info.slave_mapping_type_ = sm_type;
       right_exch_info.slave_mapping_type_ = sm_type;
+      if (IS_SLAVE_MAPPING(sm_type)) {
+        int64_t slave_mapping_id = generate_slave_mapping_id();
+        left_exch_info.slave_mapping_id_ = slave_mapping_id;
+        right_exch_info.slave_mapping_id_ = slave_mapping_id;
+      }
     }
   } else if (DistAlgo::DIST_BC2HOST_NONE == join_path.join_dist_algo_) {
      left_exch_info.dist_method_ = ObPQDistributeMethod::BC2HOST;
@@ -2384,6 +2399,10 @@ int ObLogPlan::compute_join_exchange_info(JoinPath &join_path,
     } else {
       left_exch_info.dist_method_ = ObPQDistributeMethod::SM_BROADCAST;
       left_exch_info.slave_mapping_type_ = sm_type;
+      if (IS_SLAVE_MAPPING(sm_type)) {
+        int64_t slave_mapping_id = generate_slave_mapping_id();
+        left_exch_info.slave_mapping_id_ = slave_mapping_id;
+      }
     }
   } else if (DistAlgo::DIST_NONE_BROADCAST == join_path.join_dist_algo_) {
     right_exch_info.dist_method_ = ObPQDistributeMethod::BROADCAST;
@@ -2397,6 +2416,10 @@ int ObLogPlan::compute_join_exchange_info(JoinPath &join_path,
     } else {
       right_exch_info.dist_method_ = ObPQDistributeMethod::SM_BROADCAST;
       right_exch_info.slave_mapping_type_ = sm_type;
+      if (IS_SLAVE_MAPPING(sm_type)) {
+        int64_t slave_mapping_id = generate_slave_mapping_id();
+        right_exch_info.slave_mapping_id_ = slave_mapping_id;
+      }
     }
   } else if (DistAlgo::DIST_HASH_NONE == join_path.join_dist_algo_) {
     ObPQDistributeMethod::Type unmatch_method = ObPQDistributeMethod::DROP;
