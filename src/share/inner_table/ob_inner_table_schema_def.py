@@ -18303,6 +18303,7 @@ def_table_schema(
 )
 # 12604: __all_virtual_keyword
 # 12605: __all_virtual_ss_gc_history
+# 12606: __all_virtual_table_archive_history
 
 
 # 余留位置（此行之前占位）
