@@ -177,7 +177,16 @@ int ObLogSubPlanFilter::get_plan_item_info(PlanText &plan_text,
             enable_das_group_rescan_ ? "true" : "false"))) {
     LOG_WARN("BUF_PRINTF fails", K(ret));
   } else { /* Do nothing */ }
+  // check if any right child has exchange allocated
+  bool has_right_exchange = false;
+  for (int64_t i = first_child; OB_SUCC(ret) && !has_right_exchange && i < get_num_of_child(); i++) {
+    if (OB_NOT_NULL(get_child(i)) && get_child(i)->is_exchange_allocated()) {
+      has_right_exchange = true;
+    }
+  }
   if (OB_FAIL(ret) || (plan_text.type_ != EXPLAIN_EXTENDED && plan_text.type_ != EXPLAIN_EXTENDED_NOADDR)) {
+  } else if (!has_right_exchange) {
+    /* only print px_batch when some right child has exchange operator */
   } else if (OB_FAIL(BUF_PRINTF(", "))) {
     LOG_WARN("BUF_PRINTF fails", K(ret));
   } else if (!is_px_batch_rescan_enabled()) {

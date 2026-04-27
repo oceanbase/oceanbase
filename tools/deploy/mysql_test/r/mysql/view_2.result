@@ -434,7 +434,7 @@ Query Plan
 Outputs & filters:
 -------------------------------------
   0 - output([t11.a], [t21.a]), filter(nil), rowset=16
-      conds(nil), nl_params_([t11.a(:0)]), use_batch=true, px_batch=false
+      conds(nil), nl_params_([t11.a(:0)]), use_batch=true
   1 - output([t11.a]), filter(nil), rowset=16
       access([t11.a]), partitions(p0)
       is_index_back=false, is_global_index=false, 

@@ -209,6 +209,8 @@ int ObLogJoin::get_plan_item_info(PlanText &plan_text,
         LOG_WARN("BUF_PRINTF fails", K(ret));
       } else { /* Do nothing */ }
       if (OB_FAIL(ret) || (plan_text.type_ != EXPLAIN_EXTENDED && plan_text.type_ != EXPLAIN_EXTENDED_NOADDR)) {
+      } else if (NULL == get_child(second_child) || !get_child(second_child)->is_exchange_allocated()) {
+        /* only print px_batch when right child has exchange operator */
       } else if (OB_FAIL(BUF_PRINTF(", "))) {
         LOG_WARN("BUF_PRINTF fails", K(ret));
       } else if (OB_FAIL(BUF_PRINTF("px_batch=%s", enable_px_batch_rescan_ ? "true" : "false"))){
