@@ -4743,8 +4743,10 @@ int ObDDLService::check_convert_to_character(obrpc::ObAlterTableArg &alter_table
   }
 
   /* check collect equal  */
-  bool all_collact_equal = true;
-  if (OB_SUCC(ret)) {
+  // Also check table-level collation: if the table's collation differs from the target,
+  // the conversion must proceed even if all columns already have the target collation.
+  bool all_collact_equal = (orig_table_schema.get_collation_type() == collation_type);
+  if (OB_SUCC(ret) && all_collact_equal) {
     ObTableSchema::const_column_iterator iter = orig_table_schema.column_begin();
     ObTableSchema::const_column_iterator end = orig_table_schema.column_end();
     for (; OB_SUCC(ret) && iter != end; ++iter) {
