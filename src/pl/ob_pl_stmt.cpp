@@ -2986,7 +2986,7 @@ int ObPLBlockNS::resolve_symbol(const ObString &var_name,
     if (OB_INVALID_INDEX == var_idx && OB_NOT_NULL(external_ns_)) {
       OZ (SMART_CALL(
         external_ns_->resolve_external_symbol(var_name, type, data_type, parent_id, var_idx)));
-      if (OB_SUCC(ret) && data_type.is_composite_type()) { // 来自外部的user_type需要在本namespace中展开
+      if (OB_SUCC(ret) && data_type.is_composite_type()) { // External user_type must be expanded in this namespace.
         const ObUserDefinedType *user_type = NULL;
         ObSEArray<ObDataType, 8> types;
         OZ (get_pl_data_type_by_id(data_type.get_user_type_id(), user_type));
@@ -3052,7 +3052,8 @@ int ObPLBlockNS::resolve_symbol(const ObString &var_name,
     for (int64_t i = 0;
          OB_SUCC(ret)
          && OB_INVALID_INDEX == var_idx
-         && OB_INVALID_INDEX == parent_id
+         && (OB_INVALID_INDEX == parent_id
+            || (parent_id == database_id_ && 0 == var_name.case_compare(get_package_name())))
          && i < get_labels().count(); ++i) {
       const ObString *label = label_table_->get_label(get_labels().at(i));
       if (OB_ISNULL(label)) {
@@ -3089,7 +3090,8 @@ int ObPLBlockNS::resolve_symbol(const ObString &var_name,
     // search to parent namespace, util to top parent, then try self and external symbol.
     if (OB_SUCC(ret)
         && OB_INVALID_INDEX == var_idx
-        && OB_INVALID_INDEX == parent_id) {
+        && (OB_INVALID_INDEX == parent_id
+            || (parent_id == database_id_ && 0 == var_name.case_compare(get_package_name())))) {
       if (OB_NOT_NULL(pre_ns_)) {
         ObPLDependencyGuard guard(external_ns_, pre_ns_->get_external_ns());
         if (OB_FAIL(SMART_CALL(pre_ns_->resolve_symbol(var_name, type, data_type, parent_id, var_idx)))) {
