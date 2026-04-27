@@ -25,7 +25,9 @@ ObHashDistinctVecSpec::ObHashDistinctVecSpec(ObIAllocator &alloc, const ObPhyOpe
   group_distinct_exprs_(alloc),
   grouping_id_(nullptr),
   group_sort_collations_(alloc),
-  has_non_distinct_aggr_params_(false)
+  has_non_distinct_aggr_params_(false),
+  llc_ndv_est_enabled_(false),
+  skew_detection_enabled_(false)
 {}
 
 OB_SERIALIZE_MEMBER((ObHashDistinctVecSpec, ObOpSpec),
@@ -37,7 +39,9 @@ OB_SERIALIZE_MEMBER((ObHashDistinctVecSpec, ObOpSpec),
                     group_distinct_exprs_,
                     grouping_id_,
                     group_sort_collations_,
-                    has_non_distinct_aggr_params_);
+                    has_non_distinct_aggr_params_,
+                    llc_ndv_est_enabled_,
+                    skew_detection_enabled_);
 
 ObHashDistinctVecOp::ObHashDistinctVecOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
     : ObOperator(exec_ctx, spec, input),

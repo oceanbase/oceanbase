@@ -44,6 +44,8 @@ public:
   ObExpr *grouping_id_;
   common::ObFixedArray<ObSortCollations, common::ObIAllocator> group_sort_collations_;
   bool has_non_distinct_aggr_params_;
+  bool llc_ndv_est_enabled_;
+  bool skew_detection_enabled_;
 };
 
 class ObHashDistinctVecOp : public ObOperator
