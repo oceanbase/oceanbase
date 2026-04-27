@@ -11493,6 +11493,10 @@ int ObTransformPreProcess::check_stmt_need_preserve_order(ObDMLStmt *stmt,
   } else if (OB_FALSE_IT(sel_stmt=static_cast<ObSelectStmt*>(stmt))) {
   } else if (!sel_stmt->has_limit() || NULL != sel_stmt->get_limit_percent_expr()) {
     OPT_TRACE("query do not have normal limit offset");
+  } else if (sel_stmt->has_rollup() ||
+             sel_stmt->has_grouping_sets() ||
+             sel_stmt->has_cube()) {
+    OPT_TRACE("query with grouping sets/rollup/cube will not preserve order for pagination");
   } else if (OB_FALSE_IT(is_valid = true)) {
   } else if (sel_stmt->has_order_by() ||
              sel_stmt->has_group_by() ||
