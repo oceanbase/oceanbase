@@ -437,7 +437,7 @@ int ObExprJsonObject::set_result(ObObjType dst_type, ObString str_res, common::O
     if (strict_type == OB_JSON_ON_STRICT_USE &&
         OB_FAIL(ObJsonParser::check_json_syntax(str_res, allocator,
                                                 ObJsonParser::JSN_STRICT_FLAG,
-                                                ObJsonExprHelper::get_json_max_depth_config()))) {
+                                                ObJsonExprHelper::get_json_max_depth_config(ctx)))) {
       ret = OB_ERR_JSON_SYNTAX_ERROR;
       LOG_WARN("fail to parse json text strict", K(ret));
     } else if (OB_FAIL(ObJsonExprHelper::pack_json_str_res(expr, ctx, res, str_res))) {

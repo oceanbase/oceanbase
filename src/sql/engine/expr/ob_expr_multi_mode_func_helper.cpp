@@ -14,6 +14,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "lib/ob_errno.h"
 #include "ob_expr_multi_mode_func_helper.h"
+#include "sql/engine/ob_exec_context.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -85,6 +86,37 @@ MultimodeAlloctor::MultimodeAlloctor(ObArenaAllocator &arena, uint64_t type, int
     check_level_ = tenant_config->_multimodel_memory_trace_level;
     if (check_level_ > 2) {
       check_level_ = 0;
+    }
+  }
+}
+
+MultimodeAlloctor::MultimodeAlloctor(ObArenaAllocator &arena, uint64_t type, int64_t tenant_id, int &ret,
+                                     ObEvalCtx &ctx, const char *func_name)
+    : arena_(arena),
+      baseline_size_(0),
+      type_(type),
+      mem_threshold_flag_(0),
+      func_name_(func_name),
+      children_used_(used()),
+      expect_threshold_(0),
+      ret_(ret),
+      ext_used_(0)
+{
+  uint64_t alloc_tenant = arena.get_arena().get_tenant_id();
+  ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  if (alloc_tenant != tenant_id) {
+    INIT_SUCC(ret);
+    LOG_WARN("[Multi-mode ALARM] different tenants", K(ret), K(alloc_tenant), K(tenant_id));
+  }
+  if (OB_NOT_NULL(session)) {
+    check_level_ = session->get_cached_multimodel_memory_trace_level() > 2 ? 0 : session->get_cached_multimodel_memory_trace_level();
+  } else {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(alloc_tenant));
+    if (tenant_config.is_valid()) {
+      check_level_ = tenant_config->_multimodel_memory_trace_level;
+      if (check_level_ > 2) {
+        check_level_ = 0;
+      }
     }
   }
 }

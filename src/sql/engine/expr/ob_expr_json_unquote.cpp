@@ -66,7 +66,6 @@ int ObExprJsonUnquote::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta met
   ObIJsonBase *j_base = NULL;
   ObObjType type = meta.type_;
   ObCollationType cs_type = meta.cs_type_;
-
   if (type == ObIntType || type == ObDoubleType) {
     // special for mathematical function, consistent with mysql
     if (data.is_null()) {
@@ -98,7 +97,7 @@ int ObExprJsonUnquote::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta met
       }
     } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, j_in_type,
                                                         j_in_type, j_base, 0,
-                                                        ObJsonExprHelper::get_json_max_depth_config()))) {
+                                                        ObJsonExprHelper::get_json_max_depth_config(ctx)))) {
       LOG_WARN("failed: get json base", K(ret), K(type));
       if (OB_ERR_INVALID_JSON_TEXT) {
         ret = OB_ERR_INVALID_JSON_TEXT_IN_PARAM;

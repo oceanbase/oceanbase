@@ -85,7 +85,7 @@ int ObExprJsonLength::calc(ObEvalCtx &ctx, const ObDatum &data1, ObDatumMeta met
     } else if (OB_FALSE_IT(allocator->add_baseline_size(j_doc.length()))) {
     } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_doc, j_in_type,
                                                         j_in_type, j_base, 0,
-                                                        ObJsonExprHelper::get_json_max_depth_config()))) {
+                                                        ObJsonExprHelper::get_json_max_depth_config(ctx)))) {
       LOG_WARN("fail to get json base", K(ret), K(type1), K(j_doc), K(j_in_type));
     }
   }

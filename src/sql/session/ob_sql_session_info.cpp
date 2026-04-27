@@ -3606,6 +3606,14 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       ATOMIC_STORE(&force_unstreaming_cursor_, tenant_config->_force_unstreaming_cursor);
       ATOMIC_STORE(&enable_pl_null_literal_parameterization_, tenant_config->_enable_pl_null_literal_parameterization);
       extend_sql_plan_monitor_metrics_ = tenant_config->_extend_sql_plan_monitor_metrics;
+      // 14. JSON and multi-mode related config cache
+      int32_t json_max_depth = tenant_config->json_document_max_depth;
+      if (json_max_depth < JSON_DOCUMENT_MAX_DEPTH || json_max_depth > 1024) {
+        json_max_depth = JSON_DOCUMENT_MAX_DEPTH;
+      }
+      ATOMIC_STORE(&json_document_max_depth_, json_max_depth);
+      ATOMIC_STORE(&multimodel_memory_trace_level_,
+                   tenant_config->_multimodel_memory_trace_level > 2 ? 0 : tenant_config->_multimodel_memory_trace_level);
     }
     conf_enable_sql_audit_ = GCONF.enable_sql_audit;
     ATOMIC_STORE(&last_check_ec_ts_, cur_ts);

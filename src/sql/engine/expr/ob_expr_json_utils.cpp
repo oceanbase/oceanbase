@@ -1927,7 +1927,6 @@ int ObJsonUtil::get_json_doc(ObExpr *expr,
   ObDatum *json_datum = NULL;
   ObObjType val_type = expr->datum_meta_.type_;
   ObCollationType cs_type = expr->datum_meta_.cs_type_;
-
   bool is_oracle = lib::is_oracle_mode();
 
   if (OB_FAIL(allocator.eval_arg(expr, ctx, json_datum))) {
@@ -1960,7 +1959,7 @@ int ObJsonUtil::get_json_doc(ObExpr *expr,
         is_null = true;
       } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, j_str, j_in_type,
                                                   expect_type, j_base, parse_flag,
-                                                  ObJsonExprHelper::get_json_max_depth_config()))) {
+                                                  ObJsonExprHelper::get_json_max_depth_config(ctx)))) {
         LOG_WARN("fail to get json base", K(ret), K(j_in_type));
         if (ret == OB_ERR_JSON_OUT_OF_DEPTH) {
           is_cover_by_error = false;

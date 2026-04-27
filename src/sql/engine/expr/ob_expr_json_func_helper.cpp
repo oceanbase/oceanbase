@@ -284,7 +284,7 @@ int ObJsonExprHelper::get_json_doc(const ObExpr &expr, ObEvalCtx &ctx,
       if (is_oracle && j_str.length() == 0) {
         is_null = true;
       } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, j_str, j_in_type,
-                                                  expect_type, j_base, parse_flag))) {
+                                                  expect_type, j_base, parse_flag, ObJsonExprHelper::get_json_max_depth_config(ctx)))) {
         LOG_WARN("fail to get json base", K(ret), K(j_in_type));
         if (is_oracle) {
           ret = OB_ERR_JSON_SYNTAX_ERROR;
@@ -442,7 +442,7 @@ int ObJsonExprHelper::get_json_for_partial_update(
     }
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(
-          &allocator, j_str, ObJsonInType::JSON_BIN, ObJsonInType::JSON_TREE, j_base, 0, ObJsonExprHelper::get_json_max_depth_config()))) {
+          &allocator, j_str, ObJsonInType::JSON_BIN, ObJsonInType::JSON_TREE, j_base, 0, ObJsonExprHelper::get_json_max_depth_config(ctx)))) {
       LOG_WARN("get json base fail", K(ret), K(j_str));
     }
     cursor->~ObLobCursor();
@@ -2693,6 +2693,16 @@ int ObJsonExprHelper::get_json_max_depth_config()
     }
   }
   return json_max_depth;
+}
+
+int ObJsonExprHelper::get_json_max_depth_config(ObSQLSessionInfo *session)
+{
+  return session->get_cached_json_document_max_depth();
+}
+
+int ObJsonExprHelper::get_json_max_depth_config(ObEvalCtx &ctx)
+{
+  return get_json_max_depth_config(ctx.exec_ctx_.get_my_session());
 }
 
 bool ObJsonExprHelper::is_json_special_same_as_expr(ObItemType type, int64_t index)
