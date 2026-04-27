@@ -746,8 +746,8 @@ int ObSSTable::scan_macro_block(
   if (OB_FAIL(ret)) {
     if (nullptr != iter) {
       iter->~ObIMacroBlockIterator();
-    }
-    if (nullptr != buf) {
+      allocator.free(iter);
+    } else if (nullptr != buf) {
       allocator.free(buf);
     }
   } else {
@@ -782,8 +782,8 @@ int ObSSTable::scan_micro_block(
   if (OB_FAIL(ret)) {
     if (nullptr != micro_iter) {
       micro_iter->~ObMicroBlockIndexIterator();
-    }
-    if (nullptr != buf) {
+      allocator.free(micro_iter);
+    } else if (nullptr != buf) {
       allocator.free(buf);
     }
     micro_iter = nullptr;
@@ -824,8 +824,8 @@ int ObSSTable::scan_secondary_meta(
     if (OB_FAIL(ret)) {
       if (OB_NOT_NULL(iter)) {
         iter->~ObSSTableSecMetaIterator();
-      }
-      if (OB_NOT_NULL(buf)) {
+        allocator.free(iter);
+      } else if (OB_NOT_NULL(buf)) {
         allocator.free(buf);
       }
     }

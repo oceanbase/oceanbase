@@ -204,8 +204,8 @@ int ObMdsScanParamHelper::build_table_param(
 
     if (OB_FAIL(ret)) {
       table_param->~ObTableParam();
-      allocator.free(buf);
-      buf = nullptr;
+      allocator.free(table_param);
+      table_param = nullptr;
     }
   }
 

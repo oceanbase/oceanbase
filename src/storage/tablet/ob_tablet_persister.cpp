@@ -1280,9 +1280,9 @@ int ObTabletPersister::load_table_store(
     if (OB_NOT_NULL(tmp_store)) {
       // avoid memory leak, like: ObMajorChecksumInfo::column_checksums_
       tmp_store->~ObTabletTableStore();
-    }
-    if (OB_NOT_NULL(ptr)) {
       // ObArenaAllocator has no effect, but is a safety measure
+      allocator.free(tmp_store);
+    } else if (OB_NOT_NULL(ptr)) {
       allocator.free(ptr);
     }
   }

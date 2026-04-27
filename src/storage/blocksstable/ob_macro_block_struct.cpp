@@ -86,7 +86,7 @@ int ObMacroBlocksWriteCtx::deep_copy(ObMacroBlocksWriteCtx *&dst, ObIAllocator &
 
   if (OB_FAIL(ret) && OB_UNLIKELY(dst != nullptr)) {
     dst->~ObMacroBlocksWriteCtx();
-    allocator.free(buf);
+    allocator.free(dst);
     dst = nullptr;
   }
   return ret;
