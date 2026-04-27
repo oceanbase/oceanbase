@@ -1424,6 +1424,7 @@ int ObRecoveryLSService::process_ls_transfer_task_in_trans_(
 
 //balance ls group and balance primary zone
 ERRSIM_POINT_DEF(ERRSIM_STANDBY_BALANCE);
+ERRSIM_POINT_DEF(ERRSIM_BLOCK_TRANSFER_BEGIN_REMOVE);
 int ObRecoveryLSService::do_standby_balance_()
 {
   int ret = OB_SUCCESS;
@@ -1569,11 +1570,8 @@ int ObRecoveryLSService::try_do_ls_balance_task_(
             K(ls_balance_task), K(tenant_info));
       }
     } else if (ls_balance_task.get_task_op().is_transfer_end()) {
-      if (OB_FAIL(ObLSServiceHelper::check_transfer_task_replay(
-              tenant_id_, ls_balance_task.get_src_ls(),
-              ls_balance_task.get_dest_ls(), ls_balance_task.get_operation_scn(),
-              can_remove))) {
-        LOG_WARN("failed to check transfer task replay", KR(ret), K(tenant_id_),
+      if (OB_FAIL(check_transfer_end_can_remove_(ls_balance_task, can_remove))) {
+        LOG_WARN("failed to check transfer end can remove", KR(ret),
             K(ls_balance_task), K(tenant_info));
       }
     } else if (ls_balance_task.get_task_op().is_transfer_begin()) {
@@ -1655,7 +1653,11 @@ KR(ret), K(tenant_id_), K(tenant_info), K(ls_balance_task));
       ret = OB_SUCCESS;
     }
     if (OB_SUCC(ret) && can_remove) {
-      if (OB_FAIL(ObLSServiceHelper::check_transfer_task_replay(
+      if (OB_UNLIKELY(ERRSIM_BLOCK_TRANSFER_BEGIN_REMOVE)) {
+        can_remove = false;
+        LOG_WARN("ERRSIM_BLOCK_TRANSFER_BEGIN_REMOVE: block transfer begin remove",
+            K(ls_balance_task), K(tenant_info));
+      } else if (OB_FAIL(ObLSServiceHelper::check_transfer_task_replay(
               tenant_id_, ls_balance_task.get_src_ls(),
               ls_balance_task.get_dest_ls(), transfer_scn, can_remove))) {
         LOG_WARN("failed to check transfer task replay", KR(ret), K(tenant_id_),
@@ -1667,6 +1669,52 @@ KR(ret), K(tenant_id_), K(tenant_info), K(ls_balance_task));
         // 10s
         LOG_WARN("can not remove ls balance task helper", K(ls_balance_task), K(tenant_info));
       }
+    }
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::check_transfer_end_can_remove_(
+    const share::ObBalanceTaskHelper &ls_balance_task,
+    bool &can_remove)
+{
+  int ret = OB_SUCCESS;
+  can_remove = false;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K(inited_));
+  } else if (OB_UNLIKELY(!ls_balance_task.is_valid()
+        || !ls_balance_task.get_task_op().is_transfer_end())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(ls_balance_task));
+  } else if (OB_ISNULL(proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql can't null", KR(ret), KP(proxy_));
+  } else {
+    // check corresponding transfer_begin has been removed before removing transfer_end
+    ObBalanceTaskHelper transfer_begin_task;
+    if (OB_FAIL(ObBalanceTaskHelperTableOperator::try_find_transfer_begin(tenant_id_,
+            ls_balance_task.get_operation_scn(), ls_balance_task.get_src_ls(),
+            ls_balance_task.get_dest_ls(), *proxy_, transfer_begin_task))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        // transfer_begin has been removed, safe to proceed
+        ret = OB_SUCCESS;
+        can_remove = true;
+      } else {
+        LOG_WARN("failed to find transfer begin task", KR(ret), K(tenant_id_), K(ls_balance_task));
+      }
+    } else {
+      // transfer_begin still exists, cannot remove transfer_end before it
+      can_remove = false;
+      LOG_WARN("transfer_begin still exists, cannot remove transfer_end",
+          K(ls_balance_task), K(transfer_begin_task));
+    }
+    if (OB_FAIL(ret) || !can_remove) {
+    } else if (OB_FAIL(ObLSServiceHelper::check_transfer_task_replay(
+            tenant_id_, ls_balance_task.get_src_ls(),
+            ls_balance_task.get_dest_ls(), ls_balance_task.get_operation_scn(),
+            can_remove))) {
+      LOG_WARN("failed to check transfer task replay", KR(ret), K(tenant_id_), K(ls_balance_task));
     }
   }
   return ret;

@@ -165,6 +165,8 @@ private:
  int check_transfer_begin_can_remove_(const share::ObBalanceTaskHelper &ls_balance_task,
      const share::ObAllTenantInfo &tenant_info,
      bool &can_remove);
+ int check_transfer_end_can_remove_(const share::ObBalanceTaskHelper &ls_balance_task,
+     bool &can_remove);
  int do_ls_balance_alter_task_(const share::ObBalanceTaskHelper &ls_balance_task,
                                common::ObMySQLTransaction &trans);
  int get_ls_(storage::ObLSHandle &ls_handle, storage::ObLS *&ls);
