@@ -751,7 +751,12 @@ int ObDefaultValueUtils::build_default_expr_not_strict_static(
     default_value.set_null();
   } else {
     default_value.set_type(column_schema->get_data_type());
-    if (OB_FAIL(default_value.build_not_strict_default_value(column_schema->get_accuracy().get_precision(), column_schema->get_collation_type()))) {
+    bool is_collection_vector_type = false;
+    if (ob_is_collection_sql_type(column_schema->get_data_type())
+        && column_schema->get_extended_type_info().count() == 1) {
+      is_collection_vector_type = column_schema->get_extended_type_info().at(0).prefix_match_ci("VECTOR");
+    }
+    if (OB_FAIL(default_value.build_not_strict_default_value(column_schema->get_accuracy().get_precision(), column_schema->get_collation_type(), is_collection_vector_type))) {
       LOG_WARN("failed to build not strict default value info", K(column_schema), K(ret));
     } else if (ob_is_enumset_tc(default_value.get_type()) || default_value.is_collection_sql_type()) {
       uint16_t subschema_id = 0;
@@ -811,7 +816,25 @@ int ObDefaultValueUtils::build_default_expr_not_strict(const ColumnItem *column,
     default_value.set_null();
   } else {
     default_value.set_type(column->get_column_type()->get_type());
-    if (OB_FAIL(default_value.build_not_strict_default_value(column->get_column_type()->get_accuracy().get_precision(), column->get_column_type()->get_collation_type()))) {
+    bool is_collection_vector_type = false;
+    if (ob_is_collection_sql_type(column->get_column_type()->get_type())
+        && OB_NOT_NULL(column->get_expr())
+        && OB_NOT_NULL(params_->session_info_)
+        && OB_NOT_NULL(params_->session_info_->get_cur_exec_ctx())) {
+      uint16_t subschema_id = column->get_expr()->get_subschema_id();
+      ObSubSchemaValue value;
+      if (OB_SUCCESS == params_->session_info_->get_cur_exec_ctx()
+                          ->get_sqludt_meta_by_subschema_id(subschema_id, value)
+          && OB_NOT_NULL(value.value_)) {
+        const ObSqlCollectionInfo *coll_info =
+            reinterpret_cast<const ObSqlCollectionInfo *>(value.value_);
+        if (OB_NOT_NULL(coll_info->collection_meta_)
+            && coll_info->collection_meta_->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
+          is_collection_vector_type = true;
+        }
+      }
+    }
+    if (OB_FAIL(default_value.build_not_strict_default_value(column->get_column_type()->get_accuracy().get_precision(), column->get_column_type()->get_collation_type(), is_collection_vector_type))) {
       LOG_WARN("failed to build not strict default value info", K(column), K(ret));
     } else if (ob_is_enumset_tc(default_value.get_type()) || default_value.is_collection_sql_type()) {
       const ObColumnRefRawExpr *column_expr = column->get_expr();

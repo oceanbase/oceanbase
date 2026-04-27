@@ -1476,7 +1476,8 @@ bool ObObj::is_zero() const
 
 int ObObj::build_not_strict_default_value(
     int16_t precision,
-    const ObCollationType string_cs_type)
+    const ObCollationType string_cs_type,
+    bool is_collection_vector_type)
 {
   int ret = OB_SUCCESS;
   const ObObjType &data_type = meta_.get_type();
@@ -1564,10 +1565,28 @@ int ObObj::build_not_strict_default_value(
     case ObTextType:
     case ObMediumTextType:
     case ObLongTextType:
-    case ObGeometryType:
-    case ObCollectionSQLType:{
+    case ObGeometryType:{
         ObString null_str;
         set_string(data_type, null_str);
+        meta_.set_inrow();
+      }
+      break;
+    case ObCollectionSQLType:{
+        // For array/map/sparsevector types, the raw_binary format starts with a
+        // 4-byte uint32_t length_ field. An empty string is illegal because
+        // init() requires raw_data.length() >= sizeof(length_). So we must
+        // provide at least 4 bytes of zeros ("\x00\x00\x00\x00") to represent
+        // an empty collection with length_ = 0.
+        // For vector type, the raw_binary does NOT contain a length_ prefix
+        // (data length is inferred from total bytes), so an empty string is
+        // valid and represents an empty vector.
+        if (is_collection_vector_type) {
+          ObString null_str;
+          set_string(data_type, null_str);
+        } else {
+          ObString empty_arr = ObString(4, "\x00\x00\x00\x00");
+          set_string(data_type, empty_arr);
+        }
         meta_.set_inrow();
       }
       break;

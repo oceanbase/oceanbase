@@ -8921,7 +8921,12 @@ int ObDDLService::resolve_orig_default_value(ObColumnSchemaV2 &alter_column_sche
   } else {
     ObObj default_value;
     default_value.set_type(alter_column_schema.get_data_type());
-    if (OB_FAIL(default_value.build_not_strict_default_value(alter_column_schema.get_accuracy().get_precision(), alter_column_schema.get_collation_type()))) {
+    bool is_collection_vector_type = false;
+    if (ob_is_collection_sql_type(alter_column_schema.get_data_type())
+        && alter_column_schema.get_extended_type_info().count() == 1) {
+      is_collection_vector_type = alter_column_schema.get_extended_type_info().at(0).trim_space_only().prefix_match_ci("VECTOR");
+    }
+    if (OB_FAIL(default_value.build_not_strict_default_value(alter_column_schema.get_accuracy().get_precision(), alter_column_schema.get_collation_type(), is_collection_vector_type))) {
       LOG_WARN("failed to build not strict default value", K(ret));
     } else if (OB_FAIL(alter_column_schema.set_orig_default_value(default_value))) {
       LOG_WARN("failed to set orig default value", K(ret));
@@ -8939,7 +8944,12 @@ int ObDDLService::resolve_orig_default_value(ObColumnSchemaV2 &alter_column_sche
       } else if (!alter_column_schema.is_nullable() && orig_default_value.is_null()) {
         ObObj default_value;
         default_value.set_type(alter_column_schema.get_data_type());
-        if (OB_FAIL(default_value.build_not_strict_default_value(alter_column_schema.get_accuracy().get_precision(), alter_column_schema.get_collation_type()))) {
+        bool is_collection_vector_type = false;
+        if (ob_is_collection_sql_type(alter_column_schema.get_data_type())
+            && alter_column_schema.get_extended_type_info().count() == 1) {
+          is_collection_vector_type = alter_column_schema.get_extended_type_info().at(0).trim_space_only().prefix_match_ci("VECTOR");
+        }
+        if (OB_FAIL(default_value.build_not_strict_default_value(alter_column_schema.get_accuracy().get_precision(), alter_column_schema.get_collation_type(), is_collection_vector_type))) {
           LOG_WARN("failed to build not strict default value", K(ret));
         } else if (OB_FAIL(alter_column_schema.set_orig_default_value(default_value))) {
           LOG_WARN("failed to set orig default value", K(ret));
