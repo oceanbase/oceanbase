@@ -9205,6 +9205,14 @@ int ObJoinOrder::compute_join_path_relationship(const JoinPath &first_path,
     } else {
       /* do nothing */
     }
+
+    if (OB_SUCC(ret)
+        && ((DominateRelation::OBJ_LEFT_DOMINATE == relation && first_path.parallel_ < second_path.parallel_)
+        || (DominateRelation::OBJ_RIGHT_DOMINATE == relation && first_path.parallel_ > second_path.parallel_))) {
+      relation = DominateRelation::OBJ_UNCOMPARABLE;
+      OPT_TRACE("plan relation rollback to uncomparable because of path DOP");
+    }
+
     LOG_TRACE("finish compute nlj rescan join path relationship", K(need_compare),
                     K(first_path.can_use_batch_nlj_), K(second_path.can_use_batch_nlj_),
                     K(first_right_local_rescan), K(second_right_local_rescan),
