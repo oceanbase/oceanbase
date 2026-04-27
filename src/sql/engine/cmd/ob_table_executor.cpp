@@ -1320,7 +1320,9 @@ int ObAlterTableExecutor::execute(ObExecContext &ctx, ObAlterTableStmt &stmt)
         // 此处的ctx.get_sql_ctx()->schema_guard_没初始化
         ObSchemaGetterGuard schema_guard;
         if (OB_FAIL(ret)) {
-        } else if (alter_table_arg.alter_part_type_ == ObAlterTableArg::ADD_PARTITION && alter_table_arg.alter_table_schema_.is_external_table()) {
+        } else if ((alter_table_arg.alter_part_type_ == ObAlterTableArg::ADD_PARTITION
+                    || alter_table_arg.alter_part_type_ == ObAlterTableArg::DROP_PARTITION)
+                   && alter_table_arg.alter_table_schema_.is_external_table()) {
           ObExprRegexpSessionVariables regexp_vars;
           ObSqlString full_path;
           CK (alter_table_arg.alter_table_schema_.get_part_array());
