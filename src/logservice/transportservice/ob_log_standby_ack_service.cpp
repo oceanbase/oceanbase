@@ -35,6 +35,8 @@ using namespace palf;
 using namespace share;
 using namespace lib;
 
+ERRSIM_POINT_DEF(ERRSIM_STANDBY_ACK_SERVICE_INIT_FAIL);
+
 namespace logservice
 {
 
@@ -329,9 +331,11 @@ int ObLogStandbyAckService::init(ipalf::IPalfEnv *palf_env, rpc::frame::ObReqTra
   } else if (OB_ISNULL(palf_env_ = palf_env)) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(WARN, "invalid argument", K(ret), KP(palf_env));
-  } else if (OB_FAIL(ack_task_queue_.init(this, ACK_QUEUE_THREAD_NUM, ACK_QUEUE_SIZE,
-                                          "StandbyAckSrv", MAP_TENANT_ID))) {
+  } else if (OB_FAIL(ack_task_queue_.init_only(this, ACK_QUEUE_THREAD_NUM, ACK_QUEUE_SIZE,
+                                               "StandbyAckSrv", MAP_TENANT_ID))) {
     CLOG_LOG(WARN, "fail to init ack task queue", K(ret));
+  } else if (OB_FAIL(ERRSIM_STANDBY_ACK_SERVICE_INIT_FAIL)) {
+    CLOG_LOG(WARN, "errsim: standby ack service init fail after queue init", K(ret));
   } else if (OB_FAIL(TG_CREATE_TENANT(lib::TGDefIDs::StandbyAckTimer, timer_tg_id_))) {
     CLOG_LOG(WARN, "fail to create timer thread group", K(ret));
   } else if (OB_FAIL(ack_status_map_.init("SYNC_ACK_STATUS", MAP_TENANT_ID))) {
@@ -358,7 +362,7 @@ int ObLogStandbyAckService::init(ipalf::IPalfEnv *palf_env, rpc::frame::ObReqTra
 
   if (OB_FAIL(ret) && OB_INIT_TWICE != ret) {
     destroy();
-    CLOG_LOG(WARN, "ObLogStandbyAckService init failed", K(ret));
+    CLOG_LOG(WARN, "ObLogStandbyAckService init failed, destroy done", K(ret));
   }
   return ret;
 }
@@ -369,7 +373,10 @@ int ObLogStandbyAckService::start()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(ERROR, "ObLogStandbyAckService not init", KR(ret));
-  } else if (OB_FAIL(TG_START(timer_tg_id_))) {
+  } else if (FALSE_IT(ack_task_queue_.set_run_wrapper(MTL_CTX()))) {
+  } else if (OB_FAIL(ack_task_queue_.start())) {
+     CLOG_LOG(ERROR, "start ack task queue failed", K(ret));
+   } else if (OB_FAIL(TG_START(timer_tg_id_))) {
      CLOG_LOG(ERROR, "start timer thread group failed", K(ret));
    } else if (OB_FAIL(TG_SCHEDULE(timer_tg_id_, periodic_ack_task_, PERIODIC_ACK_INTERVAL_US, true))) {
      CLOG_LOG(ERROR, "schedule periodic ack task failed", K(ret));
