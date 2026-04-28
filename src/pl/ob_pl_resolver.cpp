@@ -2571,6 +2571,7 @@ int ObPLResolver::fill_record_type(
                                            ctx.session_info_.get_server_sid()));              \
     CK (OB_NOT_NULL(select_stmt_node = parse_result.result_tree_->children_[0]));\
     CK (T_SELECT == select_stmt_node->type_);                                    \
+    OX (resolver_ctx.expr_factory_->set_query_ctx(resolver_ctx.query_ctx_));    \
     ObSelectResolver select_resolver(resolver_ctx);                              \
     OZ (SMART_CALL(select_resolver.resolve(*select_stmt_node)));                 \
     CK (OB_NOT_NULL(select_stmt = static_cast<ObSelectStmt*>(select_resolver.get_basic_stmt()))); \
