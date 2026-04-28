@@ -3831,6 +3831,7 @@ int ObDataTabletsMigrationTask::init()
   ObIDagNet *dag_net = nullptr;
   ObMigrationDagNet* migration_dag_net = nullptr;
   ObArray<ObTabletID> tablet_id_array;
+  ObSEArray<ObINodeWithChild*, 1> child_node_array;
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
@@ -3843,8 +3844,9 @@ int ObDataTabletsMigrationTask::init()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
   } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
+  } else if (OB_FAIL(this->get_dag()->copy_child_nodes(child_node_array))) {
+    LOG_WARN("failed to copy child nodes", K(ret));
   } else {
-    const common::ObIArray<ObINodeWithChild*> &child_node_array = this->get_dag()->get_child_nodes();
     if (child_node_array.count() != 1) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("data tablets migration dag get unexpected child node", K(ret), K(child_node_array));

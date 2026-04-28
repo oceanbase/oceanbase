@@ -1610,6 +1610,7 @@ int ObDataTabletsMetaRestoreTask::init()
   int ret = OB_SUCCESS;
   ObIDagNet *dag_net = nullptr;
   ObLSRestoreDagNet *ls_restore_dag_net = nullptr;
+  ObSEArray<ObINodeWithChild*, 1> child_node_array;
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
@@ -1622,8 +1623,9 @@ int ObDataTabletsMetaRestoreTask::init()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
   } else if (FALSE_IT(ls_restore_dag_net = static_cast<ObLSRestoreDagNet*>(dag_net))) {
+  } else if (OB_FAIL(this->get_dag()->copy_child_nodes(child_node_array))) {
+    LOG_WARN("failed to copy child nodes", K(ret));
   } else {
-    const common::ObIArray<ObINodeWithChild*> &child_node_array = this->get_dag()->get_child_nodes();
     if (child_node_array.count() != 1) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("data tablets meta restore dag get unexpected child node", K(ret), K(child_node_array));
