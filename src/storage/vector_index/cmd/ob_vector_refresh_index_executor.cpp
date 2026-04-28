@@ -1333,8 +1333,8 @@ int ObVectorRefreshIndexExecutor::get_target_dbms_job_name(
       LOG_WARN("failed to generate refresh job name", K(ret));
     }
   } else {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected attribute", K(ret), K(attribute), K(domain_table_id));
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not support operation", K(ret), K(attribute), K(domain_table_id));
   }
   return ret;
 }
