@@ -177,7 +177,9 @@ ObMViewTransaction::ObSessionSavedForInner::ObSessionSavedForInner()
     session_info_(nullptr),
     session_saved_value_(nullptr),
     database_id_(OB_INVALID_ID),
-    database_name_(nullptr)
+    database_name_(nullptr),
+    audit_record_(),
+    origin_audit_record_(nullptr)
 {
 }
 
@@ -218,6 +220,8 @@ int ObMViewTransaction::ObSessionSavedForInner::save(ObSQLSessionInfo *session_i
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to alloc memory", KR(ret));
     }
+    origin_audit_record_ = &session_info->get_raw_audit_record();
+    session_info->switch_audit_record_ptr(&audit_record_);
     // save session
     if (OB_SUCC(ret)) {
       if (OB_FAIL(session_info->save_session(*session_saved_value))) {
@@ -270,6 +274,9 @@ int ObMViewTransaction::ObSessionSavedForInner::save(ObSQLSessionInfo *session_i
         allocator_.free(database_name_buf);
         database_name_buf = nullptr;
       }
+      if (OB_NOT_NULL(origin_audit_record_)) {
+        session_info->switch_audit_record_ptr(origin_audit_record_);
+      }
     }
   }
   return ret;
@@ -302,6 +309,9 @@ int ObMViewTransaction::ObSessionSavedForInner::restore()
         allocator_.free(database_name_);
         database_name_ = nullptr;
       }
+    }
+    if (OB_NOT_NULL(origin_audit_record_)) {
+      session_info_->switch_audit_record_ptr(origin_audit_record_);
     }
     session_info_ = nullptr;
   }

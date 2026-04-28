@@ -727,7 +727,8 @@ struct ObPLExecCtx : public ObPLINS
       local_expr_alloc_("PLBlockExpr", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       tmp_alloc_for_copy_param_("PLTmpAlloc", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
       saved_sql_code_info_(),
-      calc_once_results_()
+      calc_once_results_(),
+      param_store_for_sql_(nullptr), mem_context_(nullptr)
   {
     if (NULL != exec_ctx && NULL != exec_ctx_->get_my_session()) {
       pl_ctx_ = exec_ctx_->get_my_session()->get_pl_context();
@@ -787,6 +788,9 @@ struct ObPLExecCtx : public ObPLINS
 
   int get_calc_once_result(int64_t idx, ObObjParam *& result);
   int set_calc_once_result(int64_t idx, ObObjParam *result);
+  int get_param_store_for_sql(ObIAllocator &allocator, ParamStore *&param_store);
+  int get_spi_result_set(ObSPIResultSet *&spi_result_set);
+  int get_mem_context_for_sql(lib::MemoryContext &mem_context);
 
   common::ObIAllocator *allocator_; // Symbol Allocator
   sql::ObExecContext *exec_ctx_;
@@ -804,6 +808,8 @@ struct ObPLExecCtx : public ObPLINS
   ObArenaAllocator tmp_alloc_for_copy_param_;
   ObPLSqlCodeInfo saved_sql_code_info_;
   common::hash::ObHashMap<int64_t, ObObjParam*, common::hash::NoPthreadDefendMode> calc_once_results_;
+  ParamStore *param_store_for_sql_;
+  lib::MemoryContext mem_context_;
 };
 
 // backup and restore ObExecContext attributes
@@ -871,7 +877,8 @@ public:
     cur_complex_obj_count_(INT64_MAX),
     is_agg_func_(is_agg_func),
     has_tx_cursor_(false),
-    tx_cursor_idx_set_()
+    tx_cursor_idx_set_(),
+    is_eh_registered_(false)
   { }
   virtual ~ObPLExecState();
 
@@ -965,6 +972,8 @@ public:
   ObPLContext *get_top_pl_context() { return top_context_; }
   ExecCtxBak &get_exec_ctx_bak() { return self_exec_ctx_bak_; }
   void try_clear_complex_obj();
+  void set_eh_registered(bool v) { is_eh_registered_ = v; }
+  bool is_eh_registered() { return is_eh_registered_; }
 
   TO_STRING_KV(K_(inner_call),
                K_(top_call),
@@ -1003,6 +1012,7 @@ private:
   bool is_agg_func_;
   bool has_tx_cursor_;
   hash::ObHashSet<int64_t>* tx_cursor_idx_set_; // for tx cursor idx
+  bool is_eh_registered_;
 
 };
 
@@ -1306,6 +1316,8 @@ public:
   bool get_disable_pl_exec_cache() const { return disable_pl_exec_cache_; }
   ObPLEnableCallParamDefendCheck &get_enable_call_param_defend_check() { return enable_call_param_defend_check_; }
 
+  void register_stack_frames();
+
 private:
   ObPLContext* get_stack_pl_ctx();
   void set_parent_stack_ctx(pl::ObPLContext *parent_stack_ctx)
@@ -1573,11 +1585,17 @@ public:
   static int check_session_alive(const ObBasicSessionInfo &session);
 
   bool forbid_anony_parameter(ObSQLSessionInfo &session, bool is_ps_mode, bool forbid);
-  bool parameter_ps_anonymous_block(ObExecContext &ctx,
+  int parameter_ps_anonymous_block(ObExecContext &ctx,
                                             ObIAllocator &allocator,
                                             ParseResult &parse_result,
                                             ObString &no_param_sql,
                                             ObPlanCacheCtx &pc_ctx);
+  static int parameter_ps_call_stmt(ObSQLSessionInfo &session,
+                              ParseResult &parse_result,
+                              ObPlanCacheCtx &pc_ctx,
+                              ObString &no_param_sql,
+                              ObIAllocator &allocator,
+                              ParamStore &param_store);
 
 private:
   common::ObMySQLProxy *sql_proxy_;
@@ -1745,13 +1763,33 @@ public:
   ObArray<int64_t> subprogram_path_;
 };
 
+class ObSPIResultSetCache
+{
+  static constexpr int64_t SPI_RESULT_SET_BUFFER_SIZE = 4;
+public:
+  ObSPIResultSetCache(ObIAllocator &alloc) :
+    alloc_(alloc),
+    spi_result_set_(nullptr),
+    used_cnt_(0) {}
+  ~ObSPIResultSetCache()
+  {
+
+  }
+  int get_spi_result_set(ObSPIResultSet *&spi_result_set);
+  void desc_cnt() { used_cnt_--; }
+private:
+  ObIAllocator &alloc_;
+  ObSPIResultSet *spi_result_set_;
+  int64_t used_cnt_;
+};
 
 class ObPLExecuteCache
 {
 public:
   ObPLExecuteCache(common::ObArenaAllocator &alloc)
     : alloc_(alloc),
-      pl_exec_info_map_()
+      pl_exec_info_map_(),
+      spi_result_set_cache_(alloc)
   {}
   ~ObPLExecuteCache();
 
@@ -1772,9 +1810,12 @@ public:
                               bool is_subroutine,
                               ObPLExecInfo *&pl_exec_info);
 
+  inline ObSPIResultSetCache &get_spi_result_set_cache() { return spi_result_set_cache_; }
+
 private:
   common::ObArenaAllocator &alloc_;
   common::hash::ObHashMap<ObPLExecCacheKey, ObPLExecInfo*, common::hash::NoPthreadDefendMode> pl_exec_info_map_;
+  ObSPIResultSetCache spi_result_set_cache_;
 };
 
 class ObPLASHGuard

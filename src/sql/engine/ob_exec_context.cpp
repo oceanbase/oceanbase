@@ -140,7 +140,8 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     py_sub_inter_ctx_(nullptr),
     lake_table_file_map_(nullptr),
     need_try_serialize_package_var_(false),
-    current_granule_type_(OB_GRANULE_UNINITIALIZED)
+    current_granule_type_(OB_GRANULE_UNINITIALIZED),
+    tx_result_()
 {
 }
 
@@ -264,6 +265,7 @@ ObExecContext::~ObExecContext()
     odps_partition_str_to_file_size_.destroy();
   }
   pl_complex_type_lazy_mgr_.reset();
+  tx_result_.reset();
 }
 
 void ObExecContext::clean_resolve_ctx()

@@ -1333,6 +1333,7 @@ int ObConstRawExpr::assign(const ObRawExpr &other)
       is_date_unit_ = const_expr.is_date_unit_;
       is_literal_bool_ = const_expr.is_literal_bool();
       is_dynamic_eval_questionmark_ = const_expr.is_dynamic_eval_questionmark_;
+      is_from_overloaded_routine_ = const_expr.is_from_overloaded_routine_;
       orig_questionmark_type_.assign(const_expr.get_orig_qm_type());
     }
   }
@@ -1400,6 +1401,7 @@ void ObConstRawExpr::reset()
   is_literal_bool_ = false;
   extra_.array_param_group_id_ = -1;
   is_dynamic_eval_questionmark_ = false;
+  is_from_overloaded_routine_ = false;
   orig_questionmark_type_.reset();
 
 }

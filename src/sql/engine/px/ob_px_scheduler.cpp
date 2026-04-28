@@ -292,7 +292,7 @@ int ObPxMsgProc::process_sqc_finish_msg_once(ObExecContext &ctx, const ObPxFinis
              "packet_trans_result", pkt.get_trans_result(),
              "tx_desc", *session->get_tx_desc());
   } else if (pkt.get_trans_result().get_touched_ls().count() > 0
-             && OB_FAIL(session->get_trans_result()
+             && OB_FAIL(ctx.get_trans_result()
                         .add_touched_ls(pkt.get_trans_result().get_touched_ls()))) {
     LOG_WARN("fail add touched ls for tx", K(ret),
              "touched_ls", pkt.get_trans_result().get_touched_ls());
@@ -301,7 +301,7 @@ int ObPxMsgProc::process_sqc_finish_msg_once(ObExecContext &ctx, const ObPxFinis
     LOG_TRACE("on_sqc_finish_msg trans_result",
               "packet_trans_result", pkt.get_trans_result(),
               "tx_desc", *session->get_tx_desc(),
-              "tx_result", session->get_trans_result());
+              "tx_result", ctx.get_trans_result());
   }
   if (OB_SUCC(ret) && pkt.sqc_iceberg_data_files_.count() > 0) {
     if (OB_ISNULL(ctx.get_physical_plan_ctx())) {
@@ -650,7 +650,7 @@ int ObPxTerminateMsgProc::on_sqc_finish_msg(ObExecContext &ctx, const ObPxFinish
              "packet_trans_result", pkt.get_trans_result(),
              "tx_desc", *session->get_tx_desc());
   } else if (pkt.get_trans_result().get_touched_ls().count() > 0
-             && OB_FAIL(session->get_trans_result()
+             && OB_FAIL(ctx.get_trans_result()
                         .add_touched_ls(pkt.get_trans_result().get_touched_ls()))) {
     LOG_WARN("fail add touched ls for tx", K(ret),
              "touched_ls", pkt.get_trans_result().get_touched_ls());

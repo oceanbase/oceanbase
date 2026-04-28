@@ -79,6 +79,7 @@ public:
     }
     return idx != OB_INVALID_INDEX ? out_mode_.at(idx) : ObRoutineParamInOut::SP_PARAM_INVALID;
   }
+  inline const ObIArray<int64_t> &get_question_mark_idx() const { return question_mark_idx_; }
   int add_out_param(int64_t i,
                     int64_t mode,
                     const ObString &name,

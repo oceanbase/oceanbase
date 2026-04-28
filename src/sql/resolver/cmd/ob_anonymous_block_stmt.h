@@ -42,7 +42,7 @@ public:
   {
   }
   virtual ~ObAnonymousBlockStmt() {}
-
+  inline ParseNode* get_body() { return body_; }
   inline const ParseNode *get_body() const { return body_; }
   inline void set_body(ParseNode *body) { body_ = body; }
 

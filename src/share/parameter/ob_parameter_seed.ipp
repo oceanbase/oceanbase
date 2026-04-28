@@ -3447,6 +3447,10 @@ ERRSIM_DEF_BOOL(inject_latency_before_on_success, OB_TENANT_PARAMETER, "False",
           "errsim to inject latency before on success",
           ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_BOOL(_enable_pl_null_literal_parameterization, OB_TENANT_PARAMETER, "False",
+        "Enable parameterization of NULL literals in anonymous blocks to improve cache hit rate.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_BOOL(_enable_nested_sql_local_optimize, OB_TENANT_PARAMETER, "False",
          "enable or disable nested sql use local plan first",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

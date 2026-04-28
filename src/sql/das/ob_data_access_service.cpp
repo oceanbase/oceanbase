@@ -505,7 +505,7 @@ int ObDataAccessService::do_async_remote_das_task(ObDASRef &das_ref,
     // RPC fail, add task's LSID to trans_result
     // indicate some transaction participant may touched
     for (int i = 0; i < task_ops.count(); i++) {
-      session->get_trans_result().add_touched_ls(task_ops.at(i)->get_ls_id());
+      das_ref.get_exec_ctx().get_trans_result().add_touched_ls(task_ops.at(i)->get_ls_id());
     }
   }
   if (OB_FAIL(ret)) {
@@ -639,7 +639,7 @@ int ObDataAccessService::do_sync_remote_das_task(
       // RPC fail, add task's LSID to trans_result
       // indicate some transaction participant may touched
       for (int i = 0; i < task_ops.count(); i++) {
-        session->get_trans_result().add_touched_ls(task_ops.at(i)->get_ls_id());
+        das_ref.get_exec_ctx().get_trans_result().add_touched_ls(task_ops.at(i)->get_ls_id());
       }
     }
     if (OB_FAIL(ret)) {
