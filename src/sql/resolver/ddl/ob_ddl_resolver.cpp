@@ -5987,9 +5987,11 @@ int ObDDLResolver::check_column_comment_length(ObSQLSessionInfo *session_info, c
 {
   int ret = OB_SUCCESS;
   int64_t max_len = 0;
-  if (OB_ISNULL(session_info) || OB_ISNULL(str) || (OB_ISNULL(str_len))) {
+  if (OB_ISNULL(session_info) || OB_ISNULL(str_len) || (OB_ISNULL(str) && *str_len != 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), KP(session_info), KP(str), KP(str_len));
+  } else if (OB_ISNULL(str)) {
+    // str is NULL with str_len 0, which means empty comment, nothing to check
   } else if (FALSE_IT(max_len = session_info->is_oracle_compatible()
                                 ? MAX_ORACLE_COMMENT_LENGTH
                                 : MAX_COLUMN_COMMENT_CHAR_LENGTH)) {
