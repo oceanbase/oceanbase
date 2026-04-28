@@ -2852,6 +2852,11 @@ int ObMemtable::mvcc_replay_(storage::ObStoreCtx &ctx,
                                                      arg.column_cnt_))) {
     TRANS_LOG(WARN, "register_row_replay_cb fail", K(ret));
   } else if (FALSE_IT(timeguard.click("register_row_replay_cb"))) {
+  } else {
+    // accumulate row_size_ on clog replay path (used by follower sync and
+    // leader recovery after restart) to keep mini merge parallel degree
+    // estimation consistent with the mvcc write path
+    mt_stat_.row_size_ += arg.data_->dup_size();
   }
   return ret;
 }
@@ -3560,7 +3565,12 @@ void ObMemtable::mvcc_write_statistic_(const ObMvccWriteResult &res)
     } else if (blocksstable::ObDmlFlag::DF_DELETE == dml_flag) {
       ++mt_stat_.delete_row_count_;
     }
-
+    // accumulate row_size_ on the mvcc write path. row_size_ is consumed by
+    // ObParallelMergeCtx::init_parallel_mini_merge to derive the parallel
+    // degree (total_bytes) when splitting a mini merge into parallel tasks.
+    // Without this accumulation, mini merge would always fall back to serial
+    // execution.
+    mt_stat_.row_size_ += res.tx_node_->get_data_size();
     EVENT_ADD(ObStatEventIds::MEMSTORE_WRITE_BYTES,
               res.mtk_.get_rowkey()->get_deep_copy_size() +
               res.tx_node_->get_data_size());
