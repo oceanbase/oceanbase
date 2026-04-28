@@ -246,19 +246,12 @@ int ObTxCycleTwoPhaseCommitter::prepare_redo()
   } else if (is_2pc_logging()) {
     TRANS_LOG(INFO, "committer is under logging", K(ret), K(*this));
   } else {
-    set_upstream_state(ObTxState::REDO_COMPLETE);
-    collected_.reset();
-    if (OB_TMP_FAIL(post_downstream_msg(ObTwoPhaseCommitMsgType::OB_MSG_TX_PREPARE_REDO_REQ))) {
+    // set_upstream_state(ObTxState::REDO_COMPLETE);
+    // collected_.reset();
+    if (OB_FAIL(drive_self_2pc_phase(ObTxState::REDO_COMPLETE))) {
+      TRANS_LOG(WARN, "drive 2pc phase", K(ret), K(*this));
+    } else if (OB_TMP_FAIL(post_downstream_msg(ObTwoPhaseCommitMsgType::OB_MSG_TX_PREPARE_REDO_REQ))) {
       TRANS_LOG(WARN, "post prepare request failed", K(tmp_ret), K(*this));
-    }
-
-    // TODO, only submit commit info
-    if (OB_TMP_FAIL(submit_log(ObTwoPhaseCommitLogType::OB_LOG_TX_COMMIT_INFO))) {
-      if (OB_BLOCK_FROZEN == tmp_ret) {
-        // memtable is freezing, can not submit log right now.
-      } else {
-        TRANS_LOG(WARN, "submit prepare log failed", K(tmp_ret), K(*this));
-      }
     }
   }
   TRANS_LOG(INFO, "prepare redo", K(ret), K(*this));
