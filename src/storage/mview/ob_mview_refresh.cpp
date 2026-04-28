@@ -140,24 +140,15 @@ int ObMViewRefresher::lock_mview_for_refresh()
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = refresh_param_.tenant_id_;
   const uint64_t mview_id = refresh_param_.mview_id_;
-  int64_t retries = 0;
-  CK(OB_NOT_NULL(refresh_ctx_->trans_));
-  while (OB_SUCC(ret) && OB_SUCC(ctx_->check_status())) {
-    if (OB_FAIL(ObMViewRefreshHelper::lock_mview(*refresh_ctx_->trans_, tenant_id, mview_id,
-                                                 true /*try_lock*/))) {
-      if (OB_UNLIKELY(OB_TRY_LOCK_ROW_CONFLICT != ret)) {
-        LOG_WARN("fail to lock mview for refresh", KR(ret), K(tenant_id), K(mview_id));
-      } else {
-        ret = OB_SUCCESS;
-        ++retries;
-        if (retries % 10 == 0) {
-          LOG_WARN("retry too many times", K(retries), K(tenant_id), K(mview_id));
-        }
-        ob_usleep(100LL * 1000);
-      }
-    } else {
-      break;
+  if(OB_ISNULL(refresh_ctx_->trans_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null transaction", KR(ret), KPC(refresh_ctx_));
+  } else if (OB_FAIL(ObMViewRefreshHelper::lock_mview(*refresh_ctx_->trans_, tenant_id, mview_id,
+                                                true /*try_lock*/))) {
+    if (OB_EAGAIN == ret || OB_TRY_LOCK_ROW_CONFLICT == ret) {
+      ret = OB_TASK_EXIST;
     }
+    LOG_WARN("fail to lock mview for refresh", K(ret), K(tenant_id), K(mview_id));
   }
   DEBUG_SYNC(AFTER_LOCK_MVIEW_IN_REFRESH);
   return ret;
