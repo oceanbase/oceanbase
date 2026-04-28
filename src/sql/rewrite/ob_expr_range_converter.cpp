@@ -448,8 +448,11 @@ int ObExprRangeConverter::gen_column_cmp_node(const ObRawExpr &l_expr,
               nullptr;
       const bool has_excluded_json_type =
         OB_NOT_NULL(json_filter) && json_filter->has_exclude_paths();
+      const bool is_root_path =
+        OB_NOT_NULL(ctx_.search_index_range_ctx_) &&
+        ctx_.search_index_range_ctx_->path_prefix_.empty();
       if (ob_is_json(column_expr->get_result_type().get_type()) && is_range_cmp
-          && has_excluded_json_type) {
+          && has_excluded_json_type && is_root_path) {
         // do nothing
       } else if (OB_FAIL(gen_search_index_cmp_node(*column_expr, const_expr, cmp_type, null_safe,
                                                    is_valid, range_node))) {
@@ -4400,6 +4403,9 @@ int ObExprRangeConverter::get_json_access_expr_range(const ObRawExpr *l_expr,
                                                       ObRangeNode *&range_node)
 {
   int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(ctx_.search_index_range_ctx_)) {
+    ctx_.search_index_range_ctx_->path_prefix_.reset();
+  }
   bool can_extract = true;
   if (is_json_access_expr(*l_expr)) {
     if (OB_FAIL(preprocess_json_access_expr(l_expr, cmp_type, l_expr, can_extract))) {
