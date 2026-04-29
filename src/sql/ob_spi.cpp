@@ -5429,6 +5429,9 @@ int ObSPIService::spi_extend_collection(pl::ObPLExecCtx *ctx,
         }
       }
     }
+    if (OB_SUCC(ret) && OB_NOT_NULL(table)) {
+      table->set_is_null(false);
+    }
   }
   SET_SPI_STATUS;
   return ret;

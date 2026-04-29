@@ -1112,7 +1112,7 @@ public:
   inline bool is_inited() const { return count_ != -1; }
   inline bool is_collection_null() const
   {
-    return PL_ASSOCIATIVE_ARRAY_TYPE == type_ ? false : !is_inited();
+    return PL_ASSOCIATIVE_ARRAY_TYPE == type_ ? false : (!is_inited() || is_null());
   }
 
   bool is_contain_null_val() const;
