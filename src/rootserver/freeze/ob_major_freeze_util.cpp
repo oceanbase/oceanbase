@@ -52,6 +52,22 @@ int ObMajorFreezeUtil::get_major_freeze_service(
   return ret;
 }
 
+int ObMajorFreezeUtil::check_epoch_immediately(common::ObISQLClient &sql_proxy,
+    const uint64_t tenant_id,
+    const int64_t expected_epoch)
+{
+  int ret = OB_SUCCESS;
+  bool is_match = true;
+  if (OB_FAIL(share::ObServiceEpochProxy::check_service_epoch(sql_proxy, tenant_id,
+              share::ObServiceEpochProxy::FREEZE_SERVICE_EPOCH, expected_epoch, is_match))) {
+    LOG_WARN("fail to check freeze service epoch", KR(ret), K(tenant_id), K(expected_epoch));
+  } else if (!is_match) {
+    ret = OB_FREEZE_SERVICE_EPOCH_MISMATCH;
+    LOG_WARN("freeze_service_epoch mismatch", K(tenant_id), K(expected_epoch));
+  }
+  return ret;
+}
+
 int ObMajorFreezeUtil::check_epoch_periodically(
     common::ObISQLClient &sql_proxy,
     const uint64_t tenant_id,

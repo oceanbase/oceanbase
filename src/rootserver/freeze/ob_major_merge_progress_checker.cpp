@@ -249,6 +249,8 @@ int ObMajorMergeProgressChecker::check_merge_progress(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K_(tenant_id), K(global_broadcast_scn),
               "array_error", all_progress.error());
+  } else if (OB_FAIL(ObMajorFreezeUtil::check_epoch_immediately(*sql_proxy_, tenant_id_, expected_epoch))) {
+    LOG_WARN("fail to check freeze service epoch", KR(ret), K_(tenant_id), K(expected_epoch));
   } else {
     HEAP_VAR(ObZoneArray, all_zones) {
       all_progress.reset();
