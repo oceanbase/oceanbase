@@ -4593,22 +4593,23 @@ int ObLogPlan::generate_three_stage_aggr_expr(ObRawExprFactory &expr_factory,
 
 bool ObLogPlan::enable_two_phase_fts_index_merge()
 {
+  // disable two phase fts index merge
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session_info = NULL;
   bool enable_two_phase_fts_index_merge = false;
-  if (OB_ISNULL(session_info = get_optimizer_context().get_session_info())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("session_info get unexpected null", K(ret), K(lbt()));
-  } else {
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session_info->get_effective_tenant_id()));
-    if (tenant_config.is_valid()) {
-      enable_two_phase_fts_index_merge = tenant_config->_enable_two_phase_fts_index_merge;
-      LOG_TRACE("trace enable two phase fts index merge",K(enable_two_phase_fts_index_merge));
-    } else {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to init tenant config", K(lbt()));
-    }
-  }
+  // if (OB_ISNULL(session_info = get_optimizer_context().get_session_info())) {
+  //   ret = OB_ERR_UNEXPECTED;
+  //   LOG_WARN("session_info get unexpected null", K(ret), K(lbt()));
+  // } else {
+  //   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session_info->get_effective_tenant_id()));
+  //   if (tenant_config.is_valid()) {
+  //     enable_two_phase_fts_index_merge = tenant_config->_enable_two_phase_fts_index_merge;
+  //     LOG_TRACE("trace enable two phase fts index merge",K(enable_two_phase_fts_index_merge));
+  //   } else {
+  //     ret = OB_ERR_UNEXPECTED;
+  //     LOG_WARN("failed to init tenant config", K(lbt()));
+  //   }
+  // }
   return enable_two_phase_fts_index_merge;
 }
 
