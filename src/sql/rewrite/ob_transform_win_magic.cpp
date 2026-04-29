@@ -789,6 +789,30 @@ int ObTransformWinMagic::check_stmt_and_view(ObDMLStmt *stmt,
     OPT_TRACE("group expr not match");
   }
 
+  // ROLLUP/CUBE/GROUPING SETS semantics depend on distinct grouping positions.
+  if (OB_SUCC(ret) && is_valid && stmt->is_select_stmt()) {
+    ObSelectStmt *sel_stmt = static_cast<ObSelectStmt *>(stmt);
+    if (sel_stmt->has_rollup() || sel_stmt->has_cube() || sel_stmt->has_grouping_sets()) {
+      ObSEArray<ObRawExpr *, 4> replace_from;
+      ObSEArray<ObRawExpr *, 4> replace_to;
+      if (OB_FAIL(build_column_replace_map(stmt,
+                                           rewrite_table,
+                                           rewrite_view,
+                                           map_info,
+                                           replace_from,
+                                           replace_to))) {
+        LOG_WARN("build grouping sets replace exprs failed", K(ret));
+      } else if (OB_FAIL(check_grouping_sets_no_collapse(sel_stmt,
+                                                         replace_from,
+                                                         replace_to,
+                                                         is_valid))) {
+        LOG_WARN("check grouping sets no collapse failed", K(ret));
+      } else if (!is_valid) {
+        OPT_TRACE("skip WIN_MAGIC: ROLLUP/CUBE/GROUPING SETS exprs would collapse after merge");
+      }
+    }
+  }
+
   if (OB_SUCC(ret) && is_valid) {
     if (OB_FAIL(trans_tables.push_back(rewrite_table))) {
       LOG_WARN("push back", K(ret));
@@ -797,6 +821,139 @@ int ObTransformWinMagic::check_stmt_and_view(ObDMLStmt *stmt,
          if (OB_FAIL(trans_tables.push_back(tables.at(i)))) {
             LOG_WARN("push back", K(ret));
           }
+      }
+    }
+  }
+  return ret;
+}
+
+// Builds (main_col -> view_output_col) pairs that mirror the column replacement
+// performed in `merge_table_items` after WIN_MAGIC happened.
+// Used by `check_grouping_sets_no_collapse` to detect whether two distinct ROLLUP/CUBE/GROUPING SETS
+// positions would collapse into the same column after the rewrite.
+int ObTransformWinMagic::build_column_replace_map(ObDMLStmt *stmt,
+                                                  TableItem *rewrite_table,
+                                                  ObSelectStmt *rewrite_view,
+                                                  ObStmtMapInfo &map_info,
+                                                  ObIArray<ObRawExpr *> &replace_from,
+                                                  ObIArray<ObRawExpr *> &replace_to)
+{
+  int ret = OB_SUCCESS;
+  TemporaryEqualSets dummy_set;
+  if (OB_ISNULL(stmt) || OB_ISNULL(rewrite_table) || OB_ISNULL(rewrite_view)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("pointer is null", K(ret), K(stmt), K(rewrite_table), K(rewrite_view));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < map_info.table_map_.count(); ++i) {
+    TableItem *main_table = NULL;
+    TableItem *view_table = NULL;
+    ObSEArray<ColumnItem, 4> main_column_items;
+    if (map_info.table_map_.at(i) == OB_INVALID_ID) {
+      // do nothing
+    } else if (OB_UNLIKELY(map_info.table_map_.at(i) < 0
+               || map_info.table_map_.at(i) >= stmt->get_table_size())
+               || OB_ISNULL(main_table = stmt->get_table_item(map_info.table_map_.at(i)))
+               || OB_ISNULL(view_table = rewrite_view->get_table_item(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table item is null", K(ret), K(i), K(map_info.table_map_.at(i)), K(main_table), K(view_table));
+    } else if (OB_FAIL(stmt->get_column_items(main_table->table_id_, main_column_items))) {
+      LOG_WARN("get column items failed", K(ret));
+    }
+    for (int64_t j = 0; OB_SUCC(ret) && j < main_column_items.count(); ++j) {
+      ColumnItem *main_col = NULL;
+      ColumnItem *view_col = NULL;
+      ObRawExpr *parent_expr = NULL;
+      const uint64_t column_id = main_column_items.at(j).column_id_;
+      if (OB_ISNULL(main_col = stmt->get_column_item_by_id(main_table->table_id_, column_id))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("main column item is null", K(ret), K(column_id));
+      } else if (OB_ISNULL(view_col = rewrite_view->get_column_item_by_id(view_table->table_id_, column_id))) {
+        // do nothing
+      } else if (OB_FAIL(ObOptimizerUtil::get_parent_stmt_expr(dummy_set,
+                                                               rewrite_table->table_id_,
+                                                               *stmt,
+                                                               *rewrite_view,
+                                                               view_col->get_expr(),
+                                                               parent_expr))) {
+        LOG_WARN("get parent stmt expr failed", K(ret));
+      } else if (parent_expr == NULL) {
+        // it's safe to skip such expr because
+        // a view column not exists in parent stmt will never collapse anyway
+      } else if (OB_FAIL(replace_from.push_back(main_col->get_expr()))) {
+        LOG_WARN("push back expr failed", K(ret));
+      } else if (OB_FAIL(replace_to.push_back(parent_expr))) {
+        LOG_WARN("push back expr failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+// Check ROLLUP/CUBE/GROUPING sets exprs and reject WIN_MAGIC if any of two exprs
+// would collapse into the same column after the rewrite - which would reduce grouping levels
+int ObTransformWinMagic::check_grouping_sets_no_collapse(ObSelectStmt *stmt,
+                                                         const ObIArray<ObRawExpr *> &replace_from,
+                                                         const ObIArray<ObRawExpr *> &replace_to,
+                                                         bool &is_valid)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObRawExpr *, 8> all_group_by_exprs;
+  ObSEArray<ObRawExpr *, 8> exprs_to_check;
+  is_valid = true;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("pointer is null", K(ret));
+  } else if (OB_UNLIKELY(replace_from.count() != replace_to.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("replace expr count mismatch", K(ret), K(replace_from.count()), K(replace_to.count()));
+  } else if (replace_from.empty()) {
+    // do nothing
+  } else if (OB_FAIL(stmt->get_all_group_by_exprs(all_group_by_exprs))) {
+    LOG_WARN("get all group by exprs failed", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < all_group_by_exprs.count(); ++i) {
+      if (OB_ISNULL(all_group_by_exprs.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is null", K(ret));
+      } else if (!all_group_by_exprs.at(i)->is_column_ref_expr()) {
+        // only check collapse between column exprs
+        // column replacement inside compound exprs would not affect the grouping results
+      } else if (OB_FAIL(exprs_to_check.push_back(all_group_by_exprs.at(i)))) {
+        LOG_WARN("push back item failed", K(ret));
+      }
+    }
+  }
+  // iterate over `exprs_to_check` to check if there is any pair of column exprs
+  // that would be collapsed into the same column after rewrite.
+  // if so, invalid the transformation
+  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < exprs_to_check.count(); ++i) {
+    int64_t idx1 = OB_INVALID_INDEX;
+    const ObRawExpr *orig_expr1 = exprs_to_check.at(i);
+    const ObRawExpr *new_expr1 = NULL;
+    if (OB_ISNULL(orig_expr1)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expr is null", K(ret));
+    } else if (OB_FAIL(ObTransformUtils::get_expr_idx(replace_from, orig_expr1, idx1))) {
+      LOG_WARN("get expr index failed", K(ret));
+    } else {
+      new_expr1 = (idx1 != OB_INVALID_INDEX) ? replace_to.at(idx1) : orig_expr1;
+    }
+    for (int64_t j = i + 1; OB_SUCC(ret) && is_valid && j < exprs_to_check.count(); ++j) {
+      int64_t idx2 = OB_INVALID_INDEX;
+      const ObRawExpr *orig_expr2 = exprs_to_check.at(j);
+      const ObRawExpr *new_expr2 = NULL;
+      if (OB_ISNULL(orig_expr2)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("expr is null", K(ret));
+      } else if (orig_expr1 == orig_expr2) {
+        // Already the same expr before replacement.
+      } else if (OB_FAIL(ObTransformUtils::get_expr_idx(replace_from, orig_expr2, idx2))) {
+        LOG_WARN("get expr index failed", K(ret));
+      } else {
+        new_expr2 = (idx2 != OB_INVALID_INDEX) ? replace_to.at(idx2) : orig_expr2;
+        if (new_expr1 == new_expr2) {
+          is_valid = false; // two exprs collapse into one after transformation
+        }
       }
     }
   }
