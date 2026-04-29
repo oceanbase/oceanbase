@@ -56,7 +56,7 @@ public:
     const int ret_code) override;
   virtual bool task_can_retry() const override
   {
-    return share::ObDDLTaskStatus::WAIT_ROWKEY_VID_TABLE_COMPLEMENT == task_status_
+    return share::ObDDLTaskStatus::WAIT_ROWKEY_VID_TABLE_COMPLEMENT == task_status_ || share::ObDDLTaskStatus::WAIT_VID_ROWKEY_TABLE_COMPLEMENT == task_status_
            ? is_retryable_ddl_
            : true;
   }

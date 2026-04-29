@@ -7293,8 +7293,10 @@ int ObDDLService::create_aux_index_task_(
                                      share::schema::is_vec_ivfsq8_centroid_index(create_index_arg.index_type_) ||
                                      share::schema::is_vec_ivfpq_centroid_index(create_index_arg.index_type_) ||
                                      share::schema::is_vec_ivfpq_pq_centroid_index(create_index_arg.index_type_);
+    const bool is_any_vec_aux = is_vec_rowkey_vid_aux || is_vec_centroid_aux
+        || share::schema::is_vec_index_snapshot_data_type(create_index_arg.index_type_);
     if (tenant_data_version >= DATA_VERSION_4_5_1_0) {
-      param.ddl_need_retry_at_executor_ = (is_vec_centroid_aux || is_vec_rowkey_vid_aux || is_rowkey_doc_aux) && !create_index_arg.is_offline_or_restore();
+      param.ddl_need_retry_at_executor_ = (is_any_vec_aux || is_rowkey_doc_aux) && !create_index_arg.is_offline_or_restore();
     } else if (tenant_data_version >= DATA_VERSION_4_4_0_0) {
       param.ddl_need_retry_at_executor_ = (is_vec_rowkey_vid_aux || is_rowkey_doc_aux) && !create_index_arg.is_offline_or_restore();
     } else if (tenant_data_version >= DATA_VERSION_4_3_5_2) {
