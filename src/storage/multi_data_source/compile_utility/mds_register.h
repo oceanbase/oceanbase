@@ -249,6 +249,10 @@ _GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION_(HELPER_CLASS, BUFFER_CTX_TYPE, ID, ENU
                                        ::oceanbase::storage::mds::MdsCtx, \
                                        46,\
                                        SYNC_STANDBY_STATUS)
+  GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION(::oceanbase::storage::ObTabletTruncateMdsHelper,\
+                                          ::oceanbase::storage::mds::ObTabletTruncateMdsCtx,\
+                                          47,\
+                                          TRUNCATE_TABLET)
   // # 余留位置（此行之前占位）
 #undef GENERATE_MDS_FRAME_CODE_FOR_TRANSACTION
 #endif
@@ -295,11 +299,23 @@ public: \
 namespace storage
 {
   DEFINE_EMPTY(ObTabletRandomMdsHelper)
+  DEFINE_EMPTY(ObTabletTruncateMdsHelper)
 }
 namespace share
 {
   DEFINE_EMPTY(ObSyncStandbyStatusMDSHelper)
 }
+namespace storage
+{
+namespace mds
+{
+class ObTabletTruncateMdsCtx : public MdsCtx
+{
+public:
+  using MdsCtx::MdsCtx;
+};
+} // namespace mds
+} // namespace storage
 
 #undef DEFINE_EMPTY
 
@@ -390,6 +406,9 @@ _GENERATE_MDS_UNIT_(KEY_TYPE, VALUE_TYPE, NEED_MULTI_VERSION)
                     false)
   // GENERATE_MDS_UNIT(::oceanbase::storage::mds::DummyKey,\
   //                   ::oceanbase::storage::ObTabletRandomMdsUserData,\
+  //                   false)
+  // GENERATE_MDS_UNIT(::oceanbase::storage::mds::DummyKey,\
+  //                   ::oceanbase::storage::ObTabletTruncateMdsUserData,\
   //                   false)
   // # 余留位置（此行之前占位）
 #endif
