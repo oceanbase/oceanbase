@@ -1131,7 +1131,7 @@ int ObSQLSessionInfo::drop_temp_tables(const bool is_disconn,
   obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
   if (OB_FAIL(get_autocommit(ac))) {
     LOG_WARN("get autocommit error", K(ret), K(ac));
-  } else if (!(is_inner() && !is_user_session())
+  } else if ((!(is_inner() && !is_user_session()) || get_job_info() != nullptr)
              && (get_has_temp_table_flag()
                  || has_accessed_session_level_temp_table()
                  || has_tx_level_temp_table()
