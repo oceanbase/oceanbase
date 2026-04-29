@@ -341,6 +341,7 @@ public:
   bool need_check_output_datum_;
   bool use_rich_format_;
   ObCompressorType compress_type_;
+  bool is_block_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObOpSpec);

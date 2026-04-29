@@ -114,6 +114,7 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     logical_plan_(),
     is_enable_px_fast_reclaim_(false),
     use_rich_format_(false),
+    enable_vec_batch_accum_(false),
     subschema_ctx_(allocator_),
     das_dop_(0),
     disable_auto_memory_mgr_(false),
@@ -267,6 +268,7 @@ void ObPhysicalPlan::reset()
   px_worker_share_plan_enabled_ = false;
   extend_sql_plan_monitor_metrics_ = false;
   optimizer_features_enable_version_ = 0;
+  enable_vec_batch_accum_ = false;
   route_to_column_replica_ = false;
 }
 void ObPhysicalPlan::destroy()
@@ -929,7 +931,8 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     phy_hint_.table_lock_mode_,
                     route_to_column_replica_,
                     enable_inc_major_,
-                    need_strong_routing_);
+                    need_strong_routing_,
+                    enable_vec_batch_accum_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)

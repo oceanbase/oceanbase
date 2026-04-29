@@ -200,7 +200,8 @@ ObOpSpec::ObOpSpec(ObIAllocator &alloc, const ObPhyOperatorType type)
     max_batch_size_(0),
     need_check_output_datum_(false),
     use_rich_format_(false),
-    compress_type_(NONE_COMPRESSOR)
+    compress_type_(NONE_COMPRESSOR),
+    is_block_(false)
 {
 }
 
@@ -222,7 +223,8 @@ OB_SERIALIZE_MEMBER(ObOpSpec,
                     max_batch_size_,
                     need_check_output_datum_,
                     use_rich_format_,
-                    compress_type_);
+                    compress_type_,
+                    is_block_);
 
 DEF_TO_STRING(ObOpSpec)
 {
