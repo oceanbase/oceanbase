@@ -2570,6 +2570,9 @@ int ObPluginVectorIndexAdaptor::check_delta_buffer_table_readnext_status(ObVecto
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get invalid op.", K(ret), K(op));
         }
+        if (OB_SUCC(ret)) {
+          INC_METRIC_VAL(common::ObMetricId::HS_VEC_HNSW_DELTA_BUF_TABLE_SCAN_ROWS, 1);
+        }
         can_skip = false;
       }
     }
@@ -2905,11 +2908,12 @@ int ObPluginVectorIndexAdaptor::check_index_id_table_readnext_status(ObVectorQue
     } else {
       LOG_WARN("failed to get new row.", K(ret));
     }
+  } else if (!datum_row->is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get invalid new row.", K(ret));
   } else {
-    if (!datum_row->is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get invalid new row.", K(ret));
-    } else if (OB_FALSE_IT(read_num = datum_row->storage_datums_[0].get_int())) {
+    INC_METRIC_VAL(common::ObMetricId::HS_VEC_HNSW_INDEX_ID_TABLE_SCAN_ROWS, 1);
+    if (OB_FALSE_IT(read_num = datum_row->storage_datums_[0].get_int())) {
       LOG_WARN("failed to get read scn.", K(ret));
     } else if (OB_FAIL(read_scn.convert_for_gts(read_num))) {
       LOG_WARN("failed to convert from ts.", K(ret), K(read_num));
@@ -3209,6 +3213,8 @@ int ObPluginVectorIndexAdaptor::complete_index_mem_data(ObVectorQueryAdaptorResu
           LOG_INFO("skip in frozen vbitmap", K(curr_scn), K(frozen_vbitmap_scn), KPC(datum_row));
         } else if (OB_FAIL(add_datum_row_into_array(datum_row, i_vids, d_vids))) {
           LOG_WARN("failed to add vid into array.", K(ret), KP(datum_row));
+        } else {
+          INC_METRIC_VAL(common::ObMetricId::HS_VEC_HNSW_INDEX_ID_TABLE_SCAN_ROWS, 1);
         }
       }
 
@@ -4275,38 +4281,41 @@ int ObPluginVectorIndexAdaptor::query_result(ObLSID &ls_id,
       } else if (OB_ISNULL(row) || row->get_column_count() < 2) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid row", K(ret), K(row));
-      } else if (row->storage_datums_[0].get_string().suffix_match("_meta_data")) {
-        ObString meta_data = row->storage_datums_[1].get_string();
-        int64_t meta_scn = 0;
-        if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(ctx->tmp_allocator_, ObLongTextType, true, meta_data, nullptr))) {
-          LOG_WARN("read meta data fail", K(ret));
-        } else if (OB_FAIL(ObVectorIndexMeta::get_meta_scn(meta_data, meta_scn))) {
-          LOG_WARN("get meta scn fail", K(ret));
-        } else if (meta_scn > snap_data_->meta_.header_.scn_ || ! snap_data_->has_complete_) {
-          if (meta_scn > snap_data_->meta_.header_.scn_) {
-            ctx->status_ = PVQ_REFRESH;
-            LOG_INFO("query result need refresh adapter",
-                K(ret), K(ls_id), K(ctx->get_ls_leader()), K(snapshot_tablet_id_), K(get_snapshot_key_prefix()), K(row->storage_datums_[0].get_string()),
-                KP(this), K(meta_scn), K(snap_data_->meta_.header_.scn_));
-          } else if (OB_FAIL(deserialize_snap_data(query_cond))) {
-            LOG_WARN("failed to deserialize snap data", K(ret), KP(this), K(meta_scn), K(snap_data_->meta_.header_.scn_));
+      } else {
+        INC_METRIC_VAL(common::ObMetricId::HS_VEC_HNSW_SNAPSHOT_TABLE_SCAN_ROWS, 1);
+        if (row->storage_datums_[0].get_string().suffix_match("_meta_data")) {
+          ObString meta_data = row->storage_datums_[1].get_string();
+          int64_t meta_scn = 0;
+          if (OB_FAIL(sql::ObTextStringHelper::read_real_string_data(ctx->tmp_allocator_, ObLongTextType, true, meta_data, nullptr))) {
+            LOG_WARN("read meta data fail", K(ret));
+          } else if (OB_FAIL(ObVectorIndexMeta::get_meta_scn(meta_data, meta_scn))) {
+            LOG_WARN("get meta scn fail", K(ret));
+          } else if (meta_scn > snap_data_->meta_.header_.scn_ || ! snap_data_->has_complete_) {
+            if (meta_scn > snap_data_->meta_.header_.scn_) {
+              ctx->status_ = PVQ_REFRESH;
+              LOG_INFO("query result need refresh adapter",
+                  K(ret), K(ls_id), K(ctx->get_ls_leader()), K(snapshot_tablet_id_), K(get_snapshot_key_prefix()), K(row->storage_datums_[0].get_string()),
+                  KP(this), K(meta_scn), K(snap_data_->meta_.header_.scn_));
+            } else if (OB_FAIL(deserialize_snap_data(query_cond))) {
+              LOG_WARN("failed to deserialize snap data", K(ret), KP(this), K(meta_scn), K(snap_data_->meta_.header_.scn_));
+            }
           }
-        }
-      } else if (OB_NOT_NULL(row) && row->get_column_count() == 3 && !row->storage_datums_[2].get_bool()) {
-        // if table 5 has visible row, we should get key, data and visible row total 3 column
-        ret = OB_SCHEMA_EAGAIN;
-        LOG_INFO("row is invisible, maybe is doing async task, skip load", K(ret), KPC(row));
-      } else if (get_snapshot_key_prefix().empty()
-          || !row->storage_datums_[0].get_string().prefix_match(get_snapshot_key_prefix())
-          || (is_snap_inited() && ! snap_data_->has_complete_))
-      {
-        if (get_create_type() == CreateTypeComplete) {
-          ctx->status_ = PVQ_REFRESH;
-          LOG_WARN("[VEC_INDEX][COMPLETE_SNAP] snap key is empty or prefix not match, need to refresh adaptor",
-            K(ret), K(ls_id), K(ctx->get_ls_leader()), K(snapshot_tablet_id_),
-            K(get_snapshot_key_prefix()), K(row->storage_datums_[0].get_string()), KPC(this));
-        } else if (OB_FAIL(deserialize_snap_data(query_cond, row))) {
-          LOG_WARN("failed to deserialize snap data", K(ret));
+        } else if (OB_NOT_NULL(row) && row->get_column_count() == 3 && !row->storage_datums_[2].get_bool()) {
+          // if table 5 has visible row, we should get key, data and visible row total 3 column
+          ret = OB_SCHEMA_EAGAIN;
+          LOG_INFO("row is invisible, maybe is doing async task, skip load", K(ret), KPC(row));
+        } else if (get_snapshot_key_prefix().empty()
+            || !row->storage_datums_[0].get_string().prefix_match(get_snapshot_key_prefix())
+            || (is_snap_inited() && ! snap_data_->has_complete_))
+        {
+          if (get_create_type() == CreateTypeComplete) {
+            ctx->status_ = PVQ_REFRESH;
+            LOG_WARN("[VEC_INDEX][COMPLETE_SNAP] snap key is empty or prefix not match, need to refresh adaptor",
+              K(ret), K(ls_id), K(ctx->get_ls_leader()), K(snapshot_tablet_id_),
+              K(get_snapshot_key_prefix()), K(row->storage_datums_[0].get_string()), KPC(this));
+          } else if (OB_FAIL(deserialize_snap_data(query_cond, row))) {
+            LOG_WARN("failed to deserialize snap data", K(ret));
+          }
         }
       }
     }
@@ -4333,6 +4342,7 @@ int ObPluginVectorIndexAdaptor::deserialize_snap_data(ObVectorQueryConditions *q
   ObTableScanIterator *table_scan_iter = static_cast<ObTableScanIterator *>(query_cond->row_iter_);
   ObArenaAllocator tmp_allocator("VectorAdaptor", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_);
   ObArenaAllocator allocator;
+  common::ScopedTimer timer(common::ObMetricId::HS_VEC_HNSW_DESERIALIZE_SNAP_TIME);
   ObCostGuard cost_guard(this, "deserialize_snap_data", 0, 0,
                          ObCostGuard::KNN_SEARCH_SLOW_THRESHOLD_US); // for timeout log
   if (OB_ISNULL(table_scan_iter) || OB_ISNULL(query_cond)) {

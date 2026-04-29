@@ -76,7 +76,8 @@ public:
       output_rows_cnt_(0),
       bitmap_(nullptr),
       bitmap_iter_(),
-      score_expr_(nullptr)
+      score_expr_(nullptr),
+      profile_(nullptr)
   {}
   virtual ~ObDASSearchDriverIter() {}
 
@@ -174,6 +175,7 @@ private:
   ObVecIndexBitmapIter bitmap_iter_;
 
   ObExpr *score_expr_;
+  common::ObOpProfile<common::ObMetric> *profile_;
 };
 
 }  // namespace sql

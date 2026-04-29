@@ -250,6 +250,8 @@ private:
 
   int init_adaptor_vid_iter_if_null();
 
+  ObVecPathType get_vec_index_path_type();
+
   OB_INLINE bool is_pre_filter() const { return vec_index_type_ == ObVecIndexType::VEC_INDEX_PRE; }
   OB_INLINE bool is_iter_filter() const { return vec_index_type_ == ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER; }
   OB_INLINE bool is_post_filter() const { return is_post_without_filter() || is_post_with_filter(); }

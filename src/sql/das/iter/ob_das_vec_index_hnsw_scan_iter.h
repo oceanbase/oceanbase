@@ -16,6 +16,7 @@
 #include "share/vector_index/ob_plugin_vector_index_adaptor.h"
 #include "sql/das/iter/ob_das_hnsw_scan_iter.h"
 #include "sql/das/iter/ob_das_vec_index_scan_iter.h"
+#include "share/diagnosis/ob_runtime_profile.h"
 
 namespace oceanbase
 {
@@ -118,9 +119,13 @@ public:
       distance_threshold_(FLT_MAX),
       adaptor_(nullptr),
       ada_ctx_(MTL_ID(), 0, &vec_op_alloc_, nullptr),
-      first_post_filter_search_(true) {}
+      first_post_filter_search_(true),
+      profile_(nullptr) {}
 
   virtual ~ObDASVecIndexHNSWScanIter() {}
+
+  virtual int do_table_scan() override;
+  virtual int rescan() override;
 
   virtual void set_adaptor(share::ObPluginVectorIndexAdaptor *adaptor) { adaptor_ = adaptor; }
   virtual void set_vector_query_condition(ObVectorQueryConditions *query_cond) { query_cond_ = query_cond; }
@@ -293,6 +298,8 @@ private:
   share::ObPluginVectorIndexAdaptor* adaptor_;
   ObVectorQueryAdaptorResultContext ada_ctx_;
   bool first_post_filter_search_;
+
+  common::ObOpProfile<common::ObMetric> *profile_;
 };
 
 }  // namespace sql
