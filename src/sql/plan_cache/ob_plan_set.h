@@ -211,6 +211,14 @@ public:
   void set_plan_cache_value(ObPlanCacheValue *pc_value) { plan_cache_value_ = pc_value; }
   ObPlanCacheValue *get_plan_cache_value() { return plan_cache_value_; }
   ObPlanCache *get_plan_cache() const;
+  inline static bool is_rich_format_matched(const ObPhysicalPlan *plan, const ObPlanCacheCtx &pc_ctx)
+  {
+    const ObSQLSessionInfo *session = pc_ctx.sql_ctx_.session_info_;
+    return OB_ISNULL(plan) || OB_ISNULL(session) || plan->get_use_rich_format() == session->use_rich_format();
+  }
+  virtual void record_rich_format_plan(bool use_rich_format) { UNUSED(use_rich_format); }
+  virtual bool has_rich_format_plan() const { return false; }
+  virtual bool has_non_rich_format_plan() const { return false; }
   virtual int add_cache_obj(ObPlanCacheObject &cache_object,
                             ObPlanCacheCtx &pc_ctx,
                             int64_t ol_param_idx,
@@ -336,6 +344,7 @@ public:
       remote_plan_(NULL),
       direct_local_plan_(NULL),
       dist_plans_(),
+      rich_format_plan_flag_(0),
       has_duplicate_table_(false),
       //has_array_binding_(false),
       is_contain_virtual_table_(false),
@@ -357,6 +366,18 @@ public:
   virtual int64_t get_mem_size() override;
   virtual void reset() override;
   virtual bool is_sql_planset() override;
+  virtual void record_rich_format_plan(bool use_rich_format) override
+  {
+    rich_format_plan_flag_ |= use_rich_format ? HAS_RICH_FORMAT_PLAN : HAS_NON_RICH_FORMAT_PLAN;
+  }
+  virtual bool has_rich_format_plan() const override
+  {
+    return 0 != (rich_format_plan_flag_ & HAS_RICH_FORMAT_PLAN);
+  }
+  virtual bool has_non_rich_format_plan() const override
+  {
+    return 0 != (rich_format_plan_flag_ & HAS_NON_RICH_FORMAT_PLAN);
+  }
   virtual int init_new_set(const ObPlanCacheCtx &pc_ctx,
                            const ObPlanCacheObject &cache_obj,
                            int64_t outline_param_idx,
@@ -457,6 +478,11 @@ private:
   bool is_local_plan_opt_allowed(int last_retry_err);
   virtual bool has_any_plan();
 private:
+  enum RichFormatPlanFlag
+  {
+    HAS_RICH_FORMAT_PLAN = 1,
+    HAS_NON_RICH_FORMAT_PLAN = 1 << 1
+  };
   //used for array binding, only local plan
   ObPhysicalPlan *array_binding_plan_;
   common::ObSEArray<ObPhysicalPlan *, 4> local_plans_;
@@ -468,6 +494,7 @@ private:
   // for directly get plan
   ObPhysicalPlan *direct_local_plan_;
   ObDistPlans dist_plans_;
+  int64_t rich_format_plan_flag_;
 
   //计划中是否含有复制表
   bool has_duplicate_table_;

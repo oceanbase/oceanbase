@@ -194,7 +194,9 @@ bool ObDistPlans::is_plan_available(const ObPhysicalPlan &plan, ObPlanCacheCtx &
 {
   bool can_use = true;
   MATCH_GUARD(plan.get_plan_id(), pc_ctx);
-  if (pc_ctx.try_get_plan_) {
+  if (!ObPlanSet::is_rich_format_matched(&plan, pc_ctx)) {
+    can_use = false;
+  } else if (pc_ctx.try_get_plan_) {
     if (pc_ctx.compare_plan_->get_plan_hash_value() != plan.get_plan_hash_value()) {
       can_use = false;
     }

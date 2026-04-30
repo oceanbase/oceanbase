@@ -3,12 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include "lib/oblog/ob_log.h"
+#include "share/schema/ob_server_schema_service.h"
+#include "sql/engine/ob_physical_plan.h"
 #define USING_LOG_PREFIX SQL_PC
 
 #include "ob_plan_set.h"
 #include "sql/plan_cache/ob_pcv_set.h"
 #include "sql/privilege_check/ob_ora_priv_check.h"
 #include "sql/privilege_check/ob_privilege_check.h"
+#include "sql/session/ob_sql_session_info.h"
 
 using namespace oceanbase;
 using namespace common;
@@ -1460,6 +1464,9 @@ int ObSqlPlanSet::add_plan(ObPhysicalPlan &plan,
   }
   SQL_PC_LOG(TRACE, "plan set add plan", K(ret), K(&plan), "plan type ", plan_type,
                     K(has_duplicate_table_), K(stmt_type_));
+  if (OB_SUCCESS == ret) {
+    record_rich_format_plan(plan.get_use_rich_format());
+  }
   // increase plan ref_count,
   // if plan doesn't add in plan cache,don't increase ref_count;
   bool real_add = OB_PHY_PLAN_LOCAL != plan_type || pc_ctx.need_add_obj_stat_;
@@ -2106,6 +2113,10 @@ int ObSqlPlanSet::try_get_remote_plan(ObPlanCacheCtx &pc_ctx,
     LOG_DEBUG("remote plan is null");
     RECORD_CACHE_MISS(REMOTE_PLAN_NOT_EXISTS, pc_ctx, "There is no remote plan", K(remote_plan_));
     get_next = true;
+  } else if (!ObPlanSet::is_rich_format_matched(remote_plan_, pc_ctx)) {
+    LOG_TRACE("remote plan rich format does not match", K(remote_plan_->get_use_rich_format()));
+    plan = NULL;
+    get_next = true;
   } else if (OB_FAIL(get_plan_type(remote_plan_->get_table_locations(),
                                   remote_plan_->has_uncertain_local_operator(),
                                   pc_ctx,
@@ -2182,6 +2193,9 @@ int ObSqlPlanSet::get_plan_special(ObPlanCacheCtx &pc_ctx,
 #ifdef OB_BUILD_SPM
   if (OB_FAIL(try_get_evolution_plan(pc_ctx, plan, get_next))) {
     SQL_PC_LOG(TRACE, "get evolution plan failed", K(ret));
+  } else if (OB_NOT_NULL(plan) && !ObPlanSet::is_rich_format_matched(plan, pc_ctx)) {
+    plan = NULL;
+    get_next = true;
   }
 #endif
   // try local plan
@@ -2244,6 +2258,7 @@ void ObSqlPlanSet::reset()
   direct_local_plan_ = NULL;
   local_plans_.reset();
   dist_plans_.reset();
+  rich_format_plan_flag_ = 0;
   //local_phy_locations_.reset();
   //partition_key_.reset();
   ObPlanSet::reset();
@@ -2579,21 +2594,25 @@ ObPhysicalPlan *ObSqlPlanSet::get_local_plan(ObPlanCacheCtx &pc_ctx)
   } else if (pc_ctx.try_get_plan_) {
     for (int64_t i = 0; i < local_plans_.count(); ++i) {
       if (pc_ctx.compare_plan_->get_plan_hash_value()
-          == local_plans_.at(i)->get_plan_hash_value()) {
+          == local_plans_.at(i)->get_plan_hash_value()
+          && ObPlanSet::is_rich_format_matched(local_plans_.at(i), pc_ctx)) {
         plan = local_plans_.at(i);
         break;
       }
     }
   } else {
     if (!pc_ctx.enable_adaptive_plan_cache_) {
-      plan = direct_local_plan_;
+      if (ObPlanSet::is_rich_format_matched(direct_local_plan_, pc_ctx)) {
+        plan = direct_local_plan_;
+      }
     } else {
       for (int64_t i = 0; i < local_plans_.count(); ++i) {
-        if (local_plans_.at(i)->is_active_status()) {
+        if (local_plans_.at(i)->is_active_status()
+            && ObPlanSet::is_rich_format_matched(local_plans_.at(i), pc_ctx)) {
           plan = local_plans_.at(i);
           pc_ctx.has_inactive_plan_ = false;
           break;
-        } else {
+        } else if (!local_plans_.at(i)->is_active_status()) {
           pc_ctx.has_inactive_plan_ = true;
         }
       }
