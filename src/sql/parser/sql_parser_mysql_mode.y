@@ -576,7 +576,7 @@ END_P SET_VAR DELIMITER
 %type <node> opt_empty_table_list opt_repair_mode opt_repair_option_list repair_option repair_option_list opt_checksum_option
 %type <node> cache_index_stmt load_index_into_cache_stmt tbl_index_list tbl_index tbl_partition_list opt_tbl_partition_list tbl_index_or_partition_list tbl_index_or_partition opt_ignore_leaves key_cache_name
 %type <node> module_name info_type opt_infile
-%type <node_opt_parens> select_clause_set select_clause_set_body
+%type <node_opt_parens> select_clause_set select_clause_set_body select_clause_set_left_body
 %type <node> dynamic_partition_option dynamic_partition_option_list sys_view_cast_opt
 %type <node> create_sensitive_rule_stmt drop_sensitive_rule_stmt alter_sensitive_rule_stmt alter_sensitive_rule_action sensitive_rule_name sensitive_field_list sensitive_field sensitivity_protection_spec sensitivity_encryption_spec
 %type <node> algorithm_opt lock_opt
@@ -11636,7 +11636,7 @@ select_clause_set set_type select_clause_set_body
     $$->is_parenthesized_ = false;
   }
 }
-| select_clause_set_body set_type select_clause_set_body
+| select_clause_set_left_body set_type select_clause_set_body
 {
   ParseNode *select_node = NULL;
   flatten_set_op(result, select_node, $1, $3, $2);
@@ -11650,6 +11650,16 @@ select_clause_set set_type select_clause_set_body
   }
 }
 ;
+
+select_clause_set_left_body:
+select_clause
+{
+  malloc_select_set_body($$, result, $1, false);
+}
+| select_with_parens %prec LOWER_PARENS
+{
+  malloc_select_set_body($$, result, $1, false);
+}
 
 select_clause_set_body:
 no_table_select
