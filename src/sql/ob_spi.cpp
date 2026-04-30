@@ -1044,7 +1044,7 @@ int ObSPIService::spi_set_symbol(pl::ObPLExecCtx *ctx,
   CK (OB_NOT_NULL(ctx->params_));
   CK (OB_NOT_NULL(result));
   if (OB_SUCC(ret) && result_idx != OB_INVALID_INDEX) {
-    ObObj tmp;
+    ObObjParam tmp;
     ObObjParam &local_variable = ctx->params_->at(result_idx);
     bool is_ref_cursor = local_variable.is_ref_cursor_type();
     if (!result->is_ext()) { // baisic variable path
@@ -1068,7 +1068,7 @@ int ObSPIService::spi_set_symbol(pl::ObPLExecCtx *ctx,
         OX (result->set_param_meta());
       }
       OX (result->set_is_ref_cursor_type(is_ref_cursor));
-      OZ (common::deep_copy_obj(*ctx->allocator_, *result, tmp));
+      OZ (common::deep_copy_objparam(*ctx->allocator_, *result, tmp));
       OZ (ObUserDefinedType::destruct_objparam(
         *ctx->allocator_, local_variable, ctx->exec_ctx_->get_my_session()));
       OX (local_variable = tmp);
