@@ -10075,12 +10075,16 @@ ObSPIRetryCtrlGuard::ObSPIRetryCtrlGuard(
     retry_ctrl_.set_tenant_local_schema_version(tenant_version);
     retry_ctrl_.set_sys_local_schema_version(sys_version);
     spi_result_.get_sql_ctx().schema_guard_ = &spi_result.get_scheme_guard();
+    saved_retry_cnt_ = session_info_.get_retry_info_for_update().get_retry_cnt();
     init_ = true;
   }
 }
 
 ObSPIRetryCtrlGuard::~ObSPIRetryCtrlGuard()
 {
+  if (init_) {
+    session_info_.get_retry_info_for_update().set_retry_cnt(saved_retry_cnt_);
+  }
 }
 
 void ObSPIRetryCtrlGuard::test()
@@ -10110,7 +10114,9 @@ ObSPIExecEnvGuard::ObSPIExecEnvGuard(
     query_start_time_bk_ = session_info.get_query_start_time();
     session_info.set_pl_spi_query_info(ObTimeUtility::current_time());
     session_info.set_use_pl_inner_info_string(false);
+    session_info.get_cur_sql_id(sql_id_, sizeof(sql_id_));
   }
+  
 }
 
 ObSPIExecEnvGuard::~ObSPIExecEnvGuard()
@@ -10118,6 +10124,8 @@ ObSPIExecEnvGuard::~ObSPIExecEnvGuard()
   session_info_.get_retry_info_for_update().clear();
   if (!is_ps_cursor_) {
     session_info_.reset_pl_spi_query_info(query_start_time_bk_);
+    session_info_.set_use_pl_inner_info_string(true);
+    session_info_.set_cur_sql_id(sql_id_);
   }
 }
 

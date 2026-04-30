@@ -955,6 +955,7 @@ public:
     is_inner_mock_ = false;
     is_system_trigger_ = false;
     saved_pl_internal_time_split_point_ = 0;
+    saved_use_pl_inner_info_string_ = false;
   }
 
   int is_inited() { return session_info_ != NULL; }
@@ -1145,6 +1146,7 @@ private:
   bool is_inner_mock_;
   bool is_system_trigger_;
   int64_t saved_pl_internal_time_split_point_;
+  bool saved_use_pl_inner_info_string_;
 };
 
 struct PlTransformTreeCtx
