@@ -367,8 +367,10 @@ int HnswIndexHandler::knn_search(const vsag::DatasetPtr &query, int64_t topk,
                                  bitmap == nullptr ? nullptr : vsag_filter,
                                  vsag_allocator, input_iter, is_last_search);
   tl::expected<std::shared_ptr<vsag::Dataset>, vsag::Error> result = index_->KnnSearch(query, topk, search_param);
+  // may be iter_ctx is alloc, but query failed.
+  // so we need to store it always, and release by upper layer
+  iter_ctx = search_param.iter_ctx;
   if (result.has_value()) {
-    iter_ctx = search_param.iter_ctx;
     result.value()->Owner(false);
     ids = result.value()->GetIds();
     dist = result.value()->GetDistances();
