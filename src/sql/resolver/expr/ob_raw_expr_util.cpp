@@ -2726,10 +2726,9 @@ int ObRawExprUtils::try_modify_udt_col_expr_for_gen_col_recursively(const ObSQLS
       CK (OB_NOT_NULL(child_expr));
       OZ (SMART_CALL(try_modify_udt_col_expr_for_gen_col_recursively(session, table_schema, resolved_cols, expr_factory, child_expr)));
       if (OB_SUCC(ret) && (tmp_expr != child_expr)) {
-        ObSysFunRawExpr *sys_func_expr = NULL;
-        // replace happened
-        CK (OB_NOT_NULL(sys_func_expr = dynamic_cast<ObSysFunRawExpr *>(expr)));
-        OZ (sys_func_expr->replace_param_expr(i, child_expr));
+        // replace happened, use get_param_expr reference to replace child directly,
+        // which works for all expr types (ObOpRawExpr, ObCaseOpRawExpr, etc.)
+        expr->get_param_expr(i) = child_expr;
       }
     }
   }
