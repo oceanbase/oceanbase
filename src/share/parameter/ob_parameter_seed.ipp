@@ -3454,3 +3454,11 @@ DEF_BOOL(_enable_pl_null_literal_parameterization, OB_TENANT_PARAMETER, "False",
 DEF_BOOL(_enable_nested_sql_local_optimize, OB_TENANT_PARAMETER, "False",
          "enable or disable nested sql use local plan first",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_STR_WITH_CHECKER(function_round_dialect, OB_TENANT_PARAMETER, "MYSQL",
+                     common::ObConfigFunctionRoundDialectChecker,
+                     "Controls the behavior of ROUND() on date/datetime types in MySQL mode. "
+                     "MYSQL: treat date as numeric (return double). "
+                     "ORACLE: use Oracle-style format string rounding.",
+                     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+                     "MYSQL, ORACLE");

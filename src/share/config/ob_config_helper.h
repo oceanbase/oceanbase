@@ -1303,6 +1303,17 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigEvictOldSSTablePolicyChecker);
 };
+
+class ObConfigFunctionRoundDialectChecker : public ObConfigChecker
+{
+public:
+  ObConfigFunctionRoundDialectChecker() {}
+  virtual ~ObConfigFunctionRoundDialectChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigFunctionRoundDialectChecker);
+};
+
 // Checker for comma-separated string list (e.g., "item1,item2,item3" or single "item")
 class ObConfigCommaSeparatedStringChecker : public ObConfigChecker
 {

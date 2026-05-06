@@ -1897,6 +1897,11 @@ bool ObConfigEvictOldSSTablePolicyChecker::check(const ObConfigItem &t) const
   return bret;
 }
 
+bool ObConfigFunctionRoundDialectChecker::check(const ObConfigItem &t) const
+{
+  return 0 == t.case_compare("MYSQL") || 0 == t.case_compare("ORACLE");
+}
+
 bool ObConfigAppendUpdateGlobalIndexesForDynamicPartitionChecker::check(const ObConfigItem& t) const
 {
   return 0 == t.case_compare("AUTO")

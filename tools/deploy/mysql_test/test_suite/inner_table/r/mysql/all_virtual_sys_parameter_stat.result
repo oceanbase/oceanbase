@@ -156,6 +156,7 @@ external_table_disk_cache_max_percentage
 external_table_io_hole_size
 external_table_io_range_size
 freeze_trigger_percentage
+function_round_dialect
 fuse_row_cache_priority
 global_background_cpu_quota
 global_index_auto_split_policy
