@@ -151,7 +151,7 @@ struct DecintRangeChecker
           int &cast_ret = CM_IS_ERROR_ON_FAIL(expr.extra_) ? ret : warning;
           const ResType val = *reinterpret_cast<const ResType *>(res_vec_->get_payload(idx));
           int cmp_min = val >= min_v_ ? 1 : -1;
-          int cmp_max = val >= max_v_ ? 1 : -1;
+          int cmp_max = val > max_v_ ? 1 : -1;
           if (cmp_min >= 0 && cmp_max <= 0) {
             // do nothing
           } else if (lib::is_oracle_mode()) {
