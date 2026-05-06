@@ -11,11 +11,11 @@
  * 全局对象缓存池，每个类型独立的缓存池。
  * 共核数 2 倍的缓存队列，线程根据线程 ID 映射到缓存队列上。
  *
- *   sop_borrow(type) 用于获取一个对象
+ *   sop_borrow(ptr) 用于获取一个对象
  *   sop_return(type, ptr) 归还一个对象
  *
- *   sop_borrow(type) 等价于 ObServerObjectPool<type>::get_instance().borrow_object()
- *   sop_return(type, ptr) 等价于 ObServerObjectPool<type>::get_instance().return_object(ptr)
+ *   sop_borrow(ptr) 等价于 ObServerObjectPool<type>::get_instance().borrow_object(ptr)
+ *   sop_return(ptr) 等价于 ObServerObjectPool<type>::get_instance().return_object(ptr)
  *
  * 通过虚拟表 __all_virtual_server_object_pool 可以查看所有对象缓存池的每个缓存队列的信息，
  * 虚拟表每列的含义参考 ObPoolArenaHead 里每个属性的注释
@@ -188,9 +188,14 @@ template <class T>
 class ObServerObjectPool
 {
 public:
-  T* borrow_object() {
-    T *ctx = NULL;
-    if (OB_LIKELY(is_inited_)) {
+  int borrow_object(T *&ctx)
+  {
+    int ret = OB_SUCCESS;
+    ctx = NULL;
+    if (OB_UNLIKELY(!is_inited_)) {
+      ret = OB_NOT_INIT;
+      COMMON_LOG_RET(WARN, ret, "server object pool not initialized", K(typeid(T).name()));
+    } else {
       Meta *cmeta = NULL;
       int64_t itid = get_itid();
       int64_t aid = itid % arena_num_;
@@ -210,7 +215,8 @@ public:
         SET_USE_500(attr);
         char *p = static_cast<char*>(ob_malloc(item_size_, attr));
         if (NULL == p) {
-          COMMON_LOG_RET(ERROR, common::OB_ALLOCATE_MEMORY_FAILED, "allocate memory failed", K(typeid(T).name()), K(item_size_));
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          COMMON_LOG_RET(ERROR, ret, "allocate memory failed", K(typeid(T).name()), K(item_size_));
         } else {
           Meta *cmeta = reinterpret_cast<Meta*>(p);
           cmeta->next = NULL;
@@ -220,11 +226,15 @@ public:
           new (ctx) T();
         }
       }
-      if (NULL != ctx) {
+      if (OB_FAIL(ret)) {
+      } else if (OB_ISNULL(ctx)) {
+        ret = OB_ERR_UNEXPECTED;
+        COMMON_LOG(ERROR, "unexpected null ctx", K(ret));
+      } else {
         ATOMIC_INC(&arena.all_using_cnt);
       }
     }
-    return ctx;
+    return ret;
   }
 
   void return_object(T* x) {
@@ -391,23 +401,6 @@ inline ObServerObjectPool<T>& get_server_object_pool() {
   static Wrapper w;
   return w.instance_;
 }
-
-#define sop_borrow(type)                                                                                        \
-  ({                                                                                                            \
-    type *iter = common::get_server_object_pool<type>().borrow_object();                                        \
-    if (OB_NOT_NULL(iter)) {                                                                                    \
-      storage::ObStorageLeakChecker::get_instance().handle_hold(iter); \
-    }                                                                                                           \
-    (iter);                                                                                                     \
-  })
-
-#define sop_return(type, ptr)                                                                                   \
-  do {                                                                                                          \
-    if (OB_NOT_NULL(ptr)) {                                                                                     \
-      storage::ObStorageLeakChecker::get_instance().handle_reset(ptr); \
-    }                                                                                                           \
-    common::get_server_object_pool<type>().return_object(ptr);                                                  \
-  } while (false)
 
 }
 }

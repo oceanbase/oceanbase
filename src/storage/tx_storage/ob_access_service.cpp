@@ -20,6 +20,27 @@ using namespace logservice::coordinator;
 namespace storage
 {
 
+template<typename T>
+inline int mtl_sop_borrow_checked(T *&iter)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(MTL(common::ObServerObjectPool<T>*)->borrow_object(iter))) {
+    COMMON_LOG(ERROR, "failed to borrow object", K(ret));
+  } else {
+    storage::ObStorageLeakChecker::get_instance().handle_hold(iter);
+  }
+  return ret;
+}
+
+template<typename T>
+inline void mtl_sop_return_checked(T *iter)
+{
+  if (OB_NOT_NULL(iter)) {
+    storage::ObStorageLeakChecker::get_instance().handle_reset(iter);
+  }
+  MTL(common::ObServerObjectPool<T>*)->return_object(iter);
+}
+
 void ObStoreCtxGuard::reset()
 {
   int ret = OB_SUCCESS;
@@ -1421,7 +1442,7 @@ int ObAccessService::revert_scan_iter(ObNewRowIterator *iter)
     if (OB_FAIL(table_scan_iter->check_ls_offline_after_read())) {
       LOG_WARN("discover ls offline after table scan", K(ret), KPC(table_scan_iter));
     }
-    mtl_sop_return_checked(ObTableScanIterator, table_scan_iter);
+    mtl_sop_return_checked(table_scan_iter);
   } else {
     iter->~ObNewRowIterator();
   }
@@ -1636,9 +1657,8 @@ int ObAccessService::do_table_scan_(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("The result_ is already pointed to an valid object",
         K(ret), K(ls_id), K(data_tablet_id), KPC(result), K(lbt()));
-  } else if (OB_ISNULL(iter = mtl_sop_borrow(ObTableScanIterator))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("alloc table scan iterator fail", K(ret));
+  } else if (OB_FAIL(mtl_sop_borrow_checked(iter))) {
+    LOG_WARN("failed to borrow table scan iterator", K(ret));
   } else if (FALSE_IT(result = iter)) {
     // upper layer responsible for releasing iter object
   } else if (OB_FAIL(check_read_allowed_(ls_id,

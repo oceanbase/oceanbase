@@ -1126,33 +1126,17 @@ inline ObTenantSimpleGuard _make_tenant_simple_guard()
     } while(0)
 
 
-#define mtl_sop_borrow(type)                                                                                    \
-  ({                                                                                                            \
-    type *iter = MTL(common::ObServerObjectPool<type>*)->borrow_object();                                       \
-    (iter);                                                                                                     \
-  })
+  template<typename T>
+  inline int mtl_sop_borrow(T *&ptr)
+  {
+    return MTL(common::ObServerObjectPool<T>*)->borrow_object(ptr);
+  }
 
-#define mtl_sop_return(type, ptr)                                                                               \
-  do {                                                                                                          \
-    MTL(common::ObServerObjectPool<type>*)->return_object(ptr);                                                 \
-  } while (false)
-
-#define mtl_sop_borrow_checked(type)                                                                                    \
-  ({                                                                                                            \
-    type *iter = MTL(common::ObServerObjectPool<type>*)->borrow_object();                                       \
-    if (OB_NOT_NULL(iter)) {                                                                                    \
-      storage::ObStorageLeakChecker::get_instance().handle_hold(iter); \
-    }                                                                                                           \
-    (iter);                                                                                                     \
-  })
-
-#define mtl_sop_return_checked(type, iter)                                                                               \
-  do {                                                                                                          \
-    if (OB_NOT_NULL(iter)) {                                                                                    \
-      storage::ObStorageLeakChecker::get_instance().handle_reset(iter); \
-    }                                                                                                           \
-    MTL(common::ObServerObjectPool<type>*)->return_object(iter);                                                 \
-  } while (false)
+  template<typename T>
+  inline void mtl_sop_return(T *ptr)
+  {
+    MTL(common::ObServerObjectPool<T>*)->return_object(ptr);
+  }
 
 } // end of namespace share
 

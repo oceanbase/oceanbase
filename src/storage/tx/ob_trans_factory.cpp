@@ -96,7 +96,7 @@ const char *ObLSTxCtxMgrFactory::mod_type_ = "OB_PARTITION_TRANS_CTX_MGR";
 ObTransCtx *ObTransCtxFactory::alloc(const int64_t ctx_type)
 {
   int tmp_ret = OB_SUCCESS;
-  ObTransCtx *ctx = NULL;
+  ObPartTransCtx *ctx = NULL;
 
   if (OB_LIKELY(!ObTransErrsim::is_memory_errsim())) {
     if (ObTransCtxType::PARTICIPANT == ctx_type) {
@@ -105,15 +105,15 @@ ObTransCtx *ObTransCtxFactory::alloc(const int64_t ctx_type)
       if (ATOMIC_LOAD(&active_part_ctx_count_) > MAX_PART_CTX_COUNT && GCTX.status_ == ObServiceStatus::SS_SERVING) {
         TRANS_LOG_RET(ERROR, tmp_ret, "participant context memory alloc failed", K_(active_part_ctx_count));
         tmp_ret = OB_TRANS_CTX_COUNT_REACH_LIMIT;
-      } else if (NULL != (ctx = mtl_sop_borrow(ObPartTransCtx))) {
+      } else if (OB_TMP_FAIL(mtl_sop_borrow(ctx))) {
+        // do nothing
+      } else {
         (void)ATOMIC_FAA(&active_part_ctx_count_, 1);
         TRANS_LOG(DEBUG,
                   "[Tx Ctx] alloc part_ctx success",
                   KP(ctx),
                   K(active_part_ctx_count_),
                   K(total_release_part_ctx_count_));
-      } else {
-        // do nothing
       }
     } else {
       tmp_ret = OB_ERR_UNEXPECTED;
@@ -139,7 +139,7 @@ void ObTransCtxFactory::release(ObTransCtx *ctx)
   } else {
     ObPartTransCtx *part_ctx = static_cast<ObPartTransCtx *>(ctx);
     part_ctx->destroy();
-    mtl_sop_return(ObPartTransCtx, part_ctx);
+    mtl_sop_return(part_ctx);
     (void)ATOMIC_FAA(&active_part_ctx_count_, -1);
     (void)ATOMIC_FAA(&total_release_part_ctx_count_, 1);
     TRANS_LOG(DEBUG,

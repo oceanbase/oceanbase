@@ -58,9 +58,9 @@ int ObWaitEventContainer::get_and_set(
           if (OB_ISNULL(pool_)) {
             ret = OB_ALLOCATE_MEMORY_FAILED;
           } else {
-            ObWaitEventStatArray *array = pool_->borrow_object();
-            if (OB_ISNULL(array)) {
-              ret = OB_ALLOCATE_MEMORY_FAILED;
+            ObWaitEventStatArray *array = nullptr;
+            if (OB_FAIL(pool_->borrow_object(array))) {
+              LOG_WARN("failed to borrow object", K(ret));
             } else {
               array_ = array;
               copy_list_stat_to_array();
