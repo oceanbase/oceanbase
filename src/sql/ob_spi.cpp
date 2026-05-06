@@ -957,6 +957,13 @@ int ObSPIService::spi_convert_objparam(ObPLExecCtx *ctx,
     result_type.reset();
     result_type.set_meta(expected_type->get_data_type()->get_meta_type());
     result_type.set_accuracy(expected_type->get_data_type()->get_accuracy());
+    if (CS_TYPE_ANY == result_type.get_collation_type()) {
+      if (src->get_meta().is_string_or_lob_locator_type()) {
+        result_type.set_collation_type(src->get_meta().get_collation_type());
+      } else {
+        result_type.set_collation_type(ctx->exec_ctx_->get_my_session()->get_nls_collation());
+      }
+    }
     if (result_type.is_null()) {
       ObObjParam value;
       CK (OB_LIKELY(STANDALONE_ANONYMOUS == ctx->func_->get_proc_type()));
