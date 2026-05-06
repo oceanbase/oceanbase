@@ -322,7 +322,9 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     join_order_enum_threshold_(10),
     max_permutation_(2000),
     idp_reduction_threshold_(5000),
-    slave_mapping_id_gen_(0)
+    slave_mapping_id_gen_(0),
+    udf_cost_factor_(1.0),
+    udf_selectivity_(0.005)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -793,6 +795,10 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_generate_random_plan(bool rand_plan) { generate_random_plan_ = rand_plan; }
   inline int64_t get_optimizer_index_cost_adj() const { return optimizer_index_cost_adj_; }
   inline void set_optimizer_index_cost_adj(int64_t v) { optimizer_index_cost_adj_ = v; }
+  inline double get_udf_cost_factor() const { return udf_cost_factor_; }
+  inline void set_udf_cost_factor(double v) { udf_cost_factor_ = v; }
+  inline double get_udf_selectivity() const { return udf_selectivity_; }
+  inline void set_udf_selectivity(double v) { udf_selectivity_ = v; }
   inline bool get_is_skip_scan_enabled() const { return is_skip_scan_enabled_; }
   inline void set_is_skip_scan_enabled(bool v) { is_skip_scan_enabled_ = v; }
   inline bool get_enable_better_inlist_costing() const { return enable_better_inlist_costing_; }
@@ -1009,6 +1015,8 @@ private:
   uint64_t max_permutation_;
   uint64_t idp_reduction_threshold_;
   int64_t slave_mapping_id_gen_; // generate slave mapping id, start from 1
+  double udf_cost_factor_;
+  double udf_selectivity_;
 };
 }
 }

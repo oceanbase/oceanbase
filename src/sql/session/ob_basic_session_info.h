@@ -1286,6 +1286,8 @@ public:
   int is_serial_set_order_forced(bool &force_set_order, bool is_oracle_mode) const;
   int is_old_charset_aggregation_enabled(bool &is_enable) const;
   int is_storage_estimation_enabled(bool &storage_estimation_enabled) const;
+  int get_udf_cost_factor(int64_t &cost_factor) const;
+  int get_udf_selectivity(double &sel) const;
   bool is_use_trace_log() const
   {
     return sys_vars_cache_.get_ob_enable_trace_log();

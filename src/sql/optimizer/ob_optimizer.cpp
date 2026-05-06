@@ -883,6 +883,8 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
   bool enable_index_merge = tenant_config.is_valid() ? tenant_config->_enable_index_merge : false;
   const ObOptParamHint &opt_params = ctx_.get_global_hint().opt_params_;
   bool aggr_pushdown_allowed = false;
+  int64_t udf_cost_factor = 100;
+  double udf_sel = 0.005;
 
   if (OB_ISNULL(query_ctx)) {
     ret = OB_ERR_UNEXPECTED;
@@ -960,8 +962,16 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     LOG_WARN("failed to get das batch rescan flag", K(ret));
   } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ENABLE_INDEX_MERGE, enable_index_merge))) {
     LOG_WARN("failed to get opt param enable index merge", K(ret));
-  } else if(OB_FAIL(session.if_aggr_pushdown_allowed(aggr_pushdown_allowed))) {
+  } else if (OB_FAIL(session.if_aggr_pushdown_allowed(aggr_pushdown_allowed))) {
     LOG_WARN("failed to get sys var enable aggr pushdown", K(ret));
+  } else if (OB_FAIL(session.get_udf_cost_factor(udf_cost_factor))) {
+    LOG_WARN("failed to get sys var udf cost coefficient", K(ret));
+  } else if (OB_FAIL(opt_params.get_integer_opt_param(ObOptParamHint::UDF_COST_FACTOR, udf_cost_factor))) {
+    LOG_WARN("failed to get opt param udf cost coefficient", K(ret));
+  } else if (OB_FAIL(session.get_udf_selectivity(udf_sel))) {
+    LOG_WARN("failed to get sys var udf selectivity", K(ret));
+  } else if (OB_FAIL(opt_params.get_double_opt_param(ObOptParamHint::UDF_SELECTIVITY, udf_sel))) {
+    LOG_WARN("failed to get opt param udf selectivity", K(ret));
   } else {
     ctx_.init_batch_rescan_flags(enable_use_batch_nlj, enable_spf_batch_rescan,
       query_ctx->optimizer_features_enable_version_, das_batch_rescan_flag);
@@ -1029,6 +1039,8 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     if (tenant_config.is_valid()) {
       ctx_.set_enable_nested_sql_local_optimize(tenant_config->_enable_nested_sql_local_optimize);
     }
+    ctx_.set_udf_cost_factor(static_cast<double>(udf_cost_factor) / 100.0);
+    ctx_.set_udf_selectivity(udf_sel);
   }
   return ret;
 }

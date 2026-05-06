@@ -17,8 +17,10 @@
 #define GET_COST_MODEL()                                                \
       ObOptEstCostModel normal_model(cost_params_normal,                \
                                      opt_ctx.get_system_stat());        \
+      normal_model.set_udf_cost_factor(opt_ctx.get_udf_cost_factor());  \
       ObOptEstVectorCostModel vector_model(cost_params_vector,          \
                                            opt_ctx.get_system_stat());  \
+      vector_model.set_udf_cost_factor(opt_ctx.get_udf_cost_factor());  \
       ObOptEstCostModel *model = &normal_model;                 \
       if (VECTOR_MODEL == opt_ctx.get_cost_model_type()) {      \
         model = &vector_model;                                  \

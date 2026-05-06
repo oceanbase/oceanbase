@@ -97,6 +97,8 @@ const ObSysVarClassType ESSENTIAL_SYS_VARS[] = {
   SYS_VAR__PUSH_JOIN_PREDICATE,        // _push_join_predicate
   SYS_VAR_SQL_TRANSPILER,        // sql_transpiler
   SYS_VAR_AP_QUERY_ROUTE_POLICY,        // ap_query_route_policy
+  SYS_VAR_OB_UDF_COST_FACTOR,        // ob_udf_cost_factor
+  SYS_VAR_OB_UDF_SELECTIVITY,        // ob_udf_selectivity
 };
 
 const int64_t ESSENTIAL_SYS_VARS_COUNT = sizeof(ESSENTIAL_SYS_VARS) / sizeof(ESSENTIAL_SYS_VARS[0]);
@@ -11687,13 +11689,43 @@ static struct VarsInit{
     ObSysVars[847].alias_ = "OB_SV_AP_QUERY_REPLICA_FALLBACK" ;
     }();
 
+    [&] (){
+      ObSysVars[848].default_value_ = "100" ;
+      ObSysVars[848].info_ = "Set cost factor for UDF filter predicate (default: 100)" ;
+      ObSysVars[848].name_ = "ob_udf_cost_factor" ;
+      ObSysVars[848].data_type_ = ObIntType ;
+      ObSysVars[848].min_val_ = "1" ;
+      ObSysVars[848].max_val_ = "10000000" ;
+      ObSysVars[848].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[848].id_ = SYS_VAR_OB_UDF_COST_FACTOR ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_UDF_COST_FACTOR)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_UDF_COST_FACTOR] = 848 ;
+      ObSysVars[848].base_value_ = "100" ;
+    ObSysVars[848].alias_ = "OB_SV_UDF_COST_FACTOR" ;
+    }();
+
+    [&] (){
+      ObSysVars[849].default_value_ = "0.005" ;
+      ObSysVars[849].info_ = "Set default selectivity for UDF equality predicate (default: 0.005)" ;
+      ObSysVars[849].name_ = "ob_udf_selectivity" ;
+      ObSysVars[849].data_type_ = ObNumberType ;
+      ObSysVars[849].min_val_ = "0.0" ;
+      ObSysVars[849].max_val_ = "1.0" ;
+      ObSysVars[849].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[849].id_ = SYS_VAR_OB_UDF_SELECTIVITY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_UDF_SELECTIVITY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_UDF_SELECTIVITY] = 849 ;
+      ObSysVars[849].base_value_ = "0.005" ;
+    ObSysVars[849].alias_ = "OB_SV_UDF_SELECTIVITY" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 848;
+static int64_t var_amount = 850;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

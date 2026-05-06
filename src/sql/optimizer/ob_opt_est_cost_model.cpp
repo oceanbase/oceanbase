@@ -2485,7 +2485,7 @@ int ObOptEstCostModel::cost_one_qual(const ObRawExpr *expr, double &cost)
        || expr->is_spatial_expr()) {
     cost += cost_params_.get_comparison_cost(sys_stat_, ObGeometryTC);
   } else if (expr->is_udf_expr()) {
-    cost += cost_params_.get_comparison_cost(sys_stat_, ObUserDefinedSQLTC);
+    cost += udf_cost_factor_ * cost_params_.get_comparison_cost(sys_stat_, ObUserDefinedSQLTC);
   } else if (expr->is_json_expr()) {
     cost += cost_params_.get_comparison_cost(sys_stat_, ObJsonTC);
   } else if (ob_is_lob_locator(expr->get_result_type().get_type()) ||
@@ -2604,7 +2604,7 @@ int ObOptEstCostModel::calc_pred_cost_per_row(const ObRawExpr *expr,
        || expr->is_xml_expr()) {
       cost += cost_params_.get_comparison_cost(sys_stat_, ObGeometryTC) / rows;
     } else if (expr->is_udf_expr()) {
-      cost += cost_params_.get_comparison_cost(sys_stat_, ObUserDefinedSQLTC) / rows;
+      cost += udf_cost_factor_ * cost_params_.get_comparison_cost(sys_stat_, ObUserDefinedSQLTC) / rows;
     } else if (ob_is_lob_locator(expr->get_result_type().get_type())) {
       cost += cost_params_.get_comparison_cost(sys_stat_, ObLobTC) / rows;
     } else if (T_OP_DIV == expr->get_expr_type()) {
