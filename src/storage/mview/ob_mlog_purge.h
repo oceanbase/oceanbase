@@ -67,12 +67,15 @@ public:
 private:
   int prepare_for_purge();
   int do_purge();
-  int get_and_check_mlog_database_schema(const share::schema::ObDatabaseSchema *&database_schema);
-
+  int start_trans(ObMViewTransaction &trans, uint64_t database_id, const ObString &database_name);
+  int register_mds(ObMViewTransaction &trans);
+  int update_mlog_info(int64_t start_time, int64_t end_time, int64_t total_affected_rows);
+  int get_database_info(ObIAllocator &allocator, uint64_t &database_id, ObString &database_name);
+private:
+  static const int64_t MLOG_PURGE_BATCH_ROW_LIMIT = 100000;
 private:
   sql::ObExecContext *ctx_;
   ObMLogPurgeParam purge_param_;
-  ObMViewTransaction trans_;
   share::schema::ObMLogInfo mlog_info_;
   bool is_oracle_mode_;
   bool need_purge_;
