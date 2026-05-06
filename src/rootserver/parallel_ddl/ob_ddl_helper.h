@@ -48,9 +48,11 @@ public:
   static int write_1503_ddl_operation(share::schema::ObMultiVersionSchemaService *schema_service,
                                       const uint64_t tenant_id,
                                       ObDDLSQLTransaction &trans);
-  static int wait_ddl_trans(share::schema::ObDDLTransController *controller,
+  static int wait_ddl_trans(share::schema::ObMultiVersionSchemaService *schema_service,
+                            share::schema::ObDDLTransController *controller,
                             const uint64_t tenant_id,
-                            const int64_t task_id);
+                            const int64_t task_id,
+                            ObDDLSQLTransaction &trans);
   static int end_ddl_trans(share::schema::ObMultiVersionSchemaService *schema_service,
                            share::schema::ObDDLTransController *ddl_trans_controller,
                            const uint64_t tenant_id,

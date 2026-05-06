@@ -143,7 +143,7 @@ public:
   const common::ObIArray<const RpcResult *> &get_results() const { return results_; }
   int receive_response();
 
-  int64_t get_response_count();
+  int64_t get_response_count() const;
   bool check_has_error_result() const;
   int check_return_cnt(const int64_t return_cnt) const;
 private:
@@ -163,7 +163,7 @@ private:
   common::ObArenaAllocator allocator_;
   common::ObDList<ObAsyncCB<PC, ObAsyncRpcProxy, RpcProxy> > cb_list_;
   int64_t response_count_;
-  common::ObThreadCond cond_;
+  mutable common::ObThreadCond cond_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAsyncRpcProxy);
 };
@@ -485,7 +485,7 @@ int ObAsyncRpcProxy<PC, RpcArg, RpcResult, Func, RpcProxy>::wait(
 }
 
 template<ObRpcPacketCode PC, typename RpcArg, typename RpcResult, typename Func, typename RpcProxy>
-int64_t ObAsyncRpcProxy<PC, RpcArg, RpcResult, Func, RpcProxy>::get_response_count()
+int64_t ObAsyncRpcProxy<PC, RpcArg, RpcResult, Func, RpcProxy>::get_response_count() const
 {
   common::ObThreadCondGuard guard(cond_);
   return response_count_;

@@ -41,7 +41,8 @@ inline bool is_parallel_ddl(const obrpc::ObRpcPacketCode pcode, const obrpc::ObD
          || obrpc::OB_PARALLEL_UPDATE_INDEX_STATUS == pcode
          || obrpc::OB_PARALLEL_DROP_TABLE == pcode
          || obrpc::OB_PARALLEL_CREATE_NORMAL_TENANT == pcode
-         || obrpc::OB_PARALLEL_HTABLE_DDL == pcode;
+         || obrpc::OB_PARALLEL_HTABLE_DDL == pcode
+         || obrpc::OB_NON_ATOMIC_DROP_TABLE_IN_DATABASE == pcode;
   if (OB_ISNULL(ddl_arg)) {
   } else if (!is_valid_tenant_id(ddl_arg->exec_tenant_id_)) {
     ret = OB_INVALID_ARGUMENT;
@@ -812,6 +813,8 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_AI_MODEL, ObRpcDropAiModelP, drop_ai_
 
 // sensitive rule
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_HANDLE_SENSITIVE_RULE_DDL, ObRpcHandleSensitiveRuleDDLP, handle_sensitive_rule_ddl(arg_));
+// for drop database and purge database
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_NON_ATOMIC_DROP_TABLE_IN_DATABASE, ObRpcNonAtomicDropTableInDatabaseP, non_atomic_drop_table_in_database(arg_, result_));
 
 // java policy ddl
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_JAVA_POLICY, ObRpcCreateJavaPolicyP, create_java_policy(arg_, result_));
