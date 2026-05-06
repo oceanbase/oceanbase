@@ -39,6 +39,8 @@ public:
                       ObExpr &rt_expr) const override;
   virtual bool need_rt_ctx() const override { return true; }
 private:
+  static int eval_json_contains_path_fast_path(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
+  static int eval_json_contains_path_general_path(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
   DISALLOW_COPY_AND_ASSIGN(ObExprJsonContainsPath);
 };
 

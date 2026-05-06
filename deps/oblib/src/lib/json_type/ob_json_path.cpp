@@ -1088,6 +1088,8 @@ void ObJsonPathCache::reset()
     }
   }
   path_arr_ptr_.clear();
+  multi_path_keys_.reset();
+  fast_path_state_ = FAST_PATH_UNCHECKED;
 }
 
 size_t ObJsonPathCache::size()
@@ -1131,7 +1133,40 @@ common::ObIAllocator* ObJsonPathCache::get_allocator()
 {
   return allocator_;
 }
- 
+
+int ObJsonPathCache::append_path_key(const ObIArray<ObString> &keys)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LIB_LOG(WARN, "allocator is null", K(ret));
+  } else {
+    ObMultiPathEntry entry;
+    entry.key_cnt = keys.count();
+    if (entry.key_cnt > 0) {
+      void *buf = allocator_->alloc(sizeof(ObString) * entry.key_cnt);
+      if (OB_ISNULL(buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LIB_LOG(WARN, "alloc keys array failed", K(ret), K(entry.key_cnt));
+      } else {
+        entry.keys = static_cast<ObString*>(buf);
+        for (int64_t i = 0; OB_SUCC(ret) && i < entry.key_cnt; ++i) {
+          ObString copy;
+          if (OB_FAIL(ob_write_string(*allocator_, keys.at(i), copy))) {
+            LIB_LOG(WARN, "ob_write_string fail", K(ret), K(i));
+          } else {
+            new (&entry.keys[i]) ObString(copy);
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(multi_path_keys_.push_back(entry))) {
+      LIB_LOG(WARN, "push_back entry failed", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObJsonPathUtil::append_array_index(uint64_t index, bool from_end, ObJsonBuffer& str)
 {
   INIT_SUCC(ret);

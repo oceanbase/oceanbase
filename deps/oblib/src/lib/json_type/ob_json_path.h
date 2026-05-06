@@ -16,6 +16,7 @@
 
 #include "lib/string/ob_string.h"
 #include "lib/container/ob_array.h"
+#include "lib/container/ob_se_array.h"
 #include "lib/container/ob_vector.h"
 #include "lib/json_type/ob_json_common.h"
 #include "src/sql/parser/parse_node.h"
@@ -395,12 +396,24 @@ public:
     OK_NULL,
     ERROR,
   };
+  enum FastPathState {
+    FAST_PATH_UNCHECKED = 0,
+    FAST_PATH_SUPPORTED = 1,
+    FAST_PATH_NOT_SUPPORTED = 2,
+  };
 
   struct ObJsonPathItem {
     ObJsonPath* path_;
     ObPathParseStat state_;
     int index_;
     ObJsonPathItem() : path_(NULL), state_(UNINITIALIZED), index_(-1) {}
+  };
+
+  struct ObMultiPathEntry {
+    ObString *keys;
+    int64_t key_cnt;
+    ObMultiPathEntry() : keys(nullptr), key_cnt(0) {}
+    TO_STRING_KV(KP(keys), K(key_cnt));
   };
 
   const static int64_t MAX_PATH_CACHE_COUNT = 10;
@@ -416,7 +429,8 @@ public:
         page_allocator_(*allocator, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR),
         path_item_arena_(DEFAULT_PAGE_SIZE, page_allocator_),
         path_vector_arena_(DEFAULT_PAGE_SIZE, page_allocator_),
-        path_arr_ptr_(&path_vector_arena_, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR) {}
+        path_arr_ptr_(&path_vector_arena_, common::ObModIds::OB_MODULE_PAGE_ALLOCATOR),
+        fast_path_state_(FAST_PATH_UNCHECKED) {}
   ~ObJsonPathCache() {};
 
   size_t get_cached_path_count(size_t idx);
@@ -428,6 +442,19 @@ public:
   int find_and_add_cache(ObIAllocator &allocator, ObJsonPath*& parse_path, ObString& path_str, int arg_idx, bool is_const = false);
   void set_allocator(common::ObIAllocator *allocator);
   common::ObIAllocator* get_allocator();
+  OB_INLINE bool is_fast_path_unsupported() const { return fast_path_state_ == FAST_PATH_NOT_SUPPORTED; }
+  OB_INLINE bool is_fast_path_unchecked() const { return fast_path_state_ == FAST_PATH_UNCHECKED; }
+  OB_INLINE void set_fast_path_supported() { fast_path_state_ = FAST_PATH_SUPPORTED; }
+  OB_INLINE void set_fast_path_not_supported()
+  {
+    fast_path_state_ = FAST_PATH_NOT_SUPPORTED;
+    multi_path_keys_.reset();
+  }
+  int append_path_key(const ObIArray<ObString> &keys);
+  OB_INLINE const ObSEArray<ObMultiPathEntry, 4>& get_multi_path_keys() const
+  {
+    return multi_path_keys_;
+  }
 private:
   int set_path(ObJsonPath* path, ObPathParseStat stat, int arg_idx, int index);
 
@@ -440,6 +467,9 @@ private:
   JsonPathItemArena path_item_arena_;
   JsonPathVectorArena path_vector_arena_;
   ObJsonPathPointers path_arr_ptr_;
+  /* next two fields are only used in fast path */
+  FastPathState fast_path_state_;
+  ObSEArray<ObMultiPathEntry, 4> multi_path_keys_;
 };
 
 using ObPathParseStat = ObJsonPathCache::ObPathParseStat;

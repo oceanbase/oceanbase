@@ -204,7 +204,30 @@ public:
                         ObDatum &res,
                         ObDatum *return_val,
                         ObIAllocator *allocator,
-                        ObJsonSeekResult &hits);
+                        ObIJsonBase *j_base);
+
+private:
+  static int normalize_single_result(ObJsonExprParam *json_param,
+                                     ObIJsonBase *j_base,
+                                     bool &is_null_result);
+  static int eval_json_value_fast_path(const ObExpr &expr,
+                                       ObEvalCtx &ctx,
+                                       MultimodeAlloctor &temp_allocator,
+                                       ObDatum &res,
+                                       ObJsonParamCacheCtx* param_ctx,
+                                       bool is_cover_by_error);
+
+  static int ensure_param_ctx_initialized(const ObExpr &expr,
+                                          ObEvalCtx &ctx,
+                                          ObJsonParamCacheCtx* param_ctx,
+                                          bool &is_cover_by_error);
+
+  static int eval_json_value_general_path(const ObExpr &expr,
+                                          ObEvalCtx &ctx,
+                                          MultimodeAlloctor &temp_allocator,
+                                          ObDatum &res,
+                                          ObJsonParamCacheCtx* param_ctx,
+                                          bool is_cover_by_error);
 
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprJsonValue);

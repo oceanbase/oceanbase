@@ -743,6 +743,7 @@ public:
   };
 
   inline bool is_const_expr() const { return is_static_const_ || is_dynamic_const_; }
+  inline bool is_static_const_expr() const { return is_static_const_; }
 
   inline bool is_vector_sort_expr() const {
     return type_ == T_FUN_SYS_L2_DISTANCE ||

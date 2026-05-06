@@ -1248,7 +1248,53 @@ int ObJsonExprHelper::find_and_add_cache(
   return ret;
 }
 
-bool ObJsonExprHelper::is_convertible_to_json(ObObjType &type)
+int ObJsonExprHelper::parse_and_cache_path_keys(ObJsonPathCache *path_cache,
+                                                  ObString &path_str,
+                                                  ObIAllocator &allocator,
+                                                  int arg_idx)
+{
+  int ret = OB_SUCCESS;
+  ObJsonPath *json_path = nullptr;
+  if (OB_FAIL(find_and_add_cache(allocator, path_cache, json_path, path_str, arg_idx, true, true))) {
+    LOG_WARN("path parse failed", K(ret), K(path_str));
+  } else if (OB_ISNULL(json_path) || json_path->path_node_cnt() < 1 || json_path->can_match_many()) {
+    ret = OB_NOT_SUPPORTED;
+  } else {
+    common::ObSEArray<common::ObString, 4> keys;
+    for (int64_t i = 0; OB_SUCC(ret) && i < json_path->path_node_cnt(); ++i) {
+      ObJsonPathBasicNode *node = json_path->path_node(i);
+      if (node->get_node_type() != ObJsonPathNodeType::JPN_MEMBER) {
+        ret = OB_NOT_SUPPORTED;
+      } else {
+        ObString key(node->get_object().len_, node->get_object().object_name_);
+        if (OB_FAIL(keys.push_back(key))) {
+          LOG_WARN("push_back key failed", K(ret), K(i));
+        }
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(path_cache->append_path_key(keys))) {
+      LOG_WARN("fail to cache path keys", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObJsonExprHelper::validate_and_cache_simple_path(ObJsonPathCache* path_cache,
+                                                      ObString& path_str,
+                                                      ObIAllocator &allocator,
+                                                      int arg_idx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(parse_and_cache_path_keys(path_cache, path_str, allocator, arg_idx))) {
+    path_cache->set_fast_path_not_supported();
+    ret = OB_SUCCESS;
+  } else {
+    path_cache->set_fast_path_supported();
+  }
+  return ret;
+}
+
+bool ObJsonExprHelper::is_convertible_to_json(const ObObjType type)
 {
   bool val = false;
   switch (type) {
@@ -3224,7 +3270,452 @@ int ObJsonDeltaLob::deserialize_lob_diffs(char* buf, const int64_t buf_len, stor
   return ret;
 }
 
-/********** ObJsonDeltaLob ****************/
+
+template <typename DecodeFunc, typename ValType>
+int ObJsonBinFastLocator::decode_impl(ObString &json_str, int64_t &offset, ValType *val,
+                                 DecodeFunc decode_func, int64_t max_len)
+{
+  int ret = OB_SUCCESS;
+  int64_t total_len = json_str.length();
+  int64_t avail_len = std::min(max_len, total_len - offset);
+  const char* ptr = json_str.ptr() + offset;
+  int64_t pos = 0;
+  if (avail_len < 0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported avail_len", K(ret), K(avail_len), K(max_len), K(offset), K(pos));
+  } else if (OB_FAIL(decode_func(ptr, avail_len, pos, val))) {
+    LOG_WARN("decode fail", K(ret), K(avail_len), K(max_len), K(offset), K(pos));
+  } else {
+    offset += pos;
+  }
+  return ret;
+}
+
+uint64_t ObJsonBinFastLocator::get_var_local(const char *ptr, uint8_t type)
+{
+  uint64_t value = 0;
+  if (OB_LIKELY(type < JBLS_MAX)) {
+    switch (type) {
+      case JBLS_UINT8: {
+        value = *reinterpret_cast<const uint8_t *>(ptr);
+        break;
+      }
+      case JBLS_UINT16: {
+        value = *reinterpret_cast<const uint16_t *>(ptr);
+        break;
+      }
+      case JBLS_UINT32: {
+        value = *reinterpret_cast<const uint32_t *>(ptr);
+        break;
+      }
+      case JBLS_UINT64: {
+        value = *reinterpret_cast<const uint64_t *>(ptr);
+        break;
+      }
+    }
+  } else {
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "invalid var type.", K(OB_NOT_SUPPORTED), K(type));
+  }
+  return value;
+}
+
+int ObJsonBinFastLocator::decode_vi64(ObString &json_str, int64_t &offset, int64_t *val)
+{
+  static const int64_t max_vi64_len = serialization::encoded_length_vi64(UINT64_MAX);
+  return ObJsonBinFastLocator::decode_impl(json_str, offset, val, serialization::decode_vi64, max_vi64_len);
+}
+
+// Parse ObJsonBinHeader and compute key/value entry offsets for fast lookup.
+//
+// Object binary layout (after doc header):
+//   [ObJsonBinHeader (2B)][element_count][obj_size][key_entries][value_entries]
+//
+// ObJsonBinHeader bit fields (byte 0: type_, byte 1: bit-packed):
+//   type_(8b) | entry_size_(2b) | count_size_(2b) | obj_size_size_(2b)
+//   | is_continuous_(1b) | reserved_(1b)
+//
+// key_entry   = [key_offset(entry_size_), key_len(entry_size_)]
+// value_entry = [value_offset(entry_size_), value_type(1B)]
+int ObJsonBinFastLocator::parse_json_bin_header(const char *ptr, int64_t len)
+{
+  int ret = OB_SUCCESS;
+  data_ptr_ = const_cast<char*>(ptr);
+  total_len_ = len;
+  if (OB_UNLIKELY(len < BIN_HEADER_SIZE)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("len too small for object header", K(ret), K(len));
+  } else {
+    const ObJsonBinHeader *header = reinterpret_cast<const ObJsonBinHeader *>(ptr);
+    type_ = header->type_;
+    if (type_ != static_cast<uint8_t>(ObJsonNodeType::J_OBJECT)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported type", K(ret), K(type_));
+    } else {
+      entry_type_ = header->entry_size_;
+      entry_size_ = static_cast<uint8_t>(ObJsonVar::get_var_size(entry_type_));
+      const uint8_t count_size = header->count_size_;
+      const uint8_t obj_size_size = header->obj_size_size_;
+      const uint8_t count_var_size =
+          static_cast<uint8_t>(ObJsonVar::get_var_size(count_size));
+      const uint8_t obj_size_var_size =
+          static_cast<uint8_t>(ObJsonVar::get_var_size(obj_size_size));
+      const uint8_t var_size = count_var_size + obj_size_var_size;
+
+      if (entry_type_ >= JBLS_MAX || count_size >= JBLS_MAX || obj_size_size >= JBLS_MAX
+          || BIN_HEADER_SIZE + var_size > len) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not supported var size", K(ret), K(count_var_size), K(obj_size_var_size));
+      } else {
+        element_count_ = get_var_local(ptr + BIN_HEADER_SIZE, count_size);
+        key_offset_start_ = BIN_HEADER_SIZE + var_size;
+        value_offset_start_ = key_offset_start_ + element_count_ * (entry_size_ << 1);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJsonBinFastLocator::init(const char *data, int64_t length)
+{
+  int ret = OB_SUCCESS;
+  data_ptr_ = const_cast<char*>(data);
+  total_len_ = length;
+  if (OB_UNLIKELY(length < DOC_HEADER_SIZE)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported length", K(ret), K(length), K(DOC_HEADER_SIZE));
+  } else {
+    const ObJsonBinDocHeader *doc_header = reinterpret_cast<const ObJsonBinDocHeader*>(data_ptr_);
+    use_lexicographical_order_ = doc_header->use_lexicographical_order_;
+    extend_seg_offset_ = doc_header->extend_seg_offset_;
+    data_ptr_ += DOC_HEADER_SIZE;
+    total_len_ -= DOC_HEADER_SIZE;
+
+    // J_DOC_HEADER_V0 marks the only doc-header version whose binary layout
+    // (ObJsonBinDocHeader fields: use_lexicographical_order_, extend_seg_offset_)
+    // this fast-path knows how to parse; non-V0 data has a different layout.
+    if (doc_header->type_ != J_DOC_HEADER_V0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported type", K(ret), K(doc_header->type_));
+    } else if (OB_FAIL(parse_json_bin_header(data_ptr_, total_len_))) {
+      LOG_WARN("parse_json_bin_header fail", K(ret));
+    } else {
+      root_data_ptr_ = data_ptr_;
+      root_total_len_ = total_len_;
+    }
+  }
+  return ret;
+}
+
+int ObJsonBinFastLocator::reset_to_root()
+{
+  return parse_json_bin_header(root_data_ptr_, root_total_len_);
+}
+
+int ObJsonBinFastLocator::get_key_in_object(size_t i, ObString &key)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t k_entry_offset = key_offset_start_ + i * entry_size_ * 2;
+  char *ptr = data_ptr_ + k_entry_offset;
+
+  if (OB_UNLIKELY(k_entry_offset + entry_size_ * 2 > total_len_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported offset", K(ret), K(k_entry_offset), K(total_len_), K(i));
+  } else {
+    uint64_t key_offset = get_var_local(ptr, entry_type_);
+    uint64_t key_len = get_var_local(ptr + entry_size_, entry_type_);
+    if (OB_UNLIKELY(key_offset + key_len > total_len_)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported offset", K(ret), K(k_entry_offset), K(total_len_), K(i));
+    } else {
+      key.assign_ptr(data_ptr_ + key_offset, key_len);
+    }
+  }
+  return ret;
+}
+
+int ObJsonBinFastLocator::lookup_index(const ObString &key, size_t *idx)
+{
+  int ret = OB_SUCCESS;
+
+  ObJsonKeyCompare comparator(use_lexicographical_order_);
+  ObString key_iter;
+  bool is_found = false;
+
+  int64_t high = element_count_ - 1;
+  // do binary search
+  int64_t low = 0;
+  while (OB_SUCC(ret) && low <= high) {
+    int64_t mid = low + (high - low) / 2;
+    if (OB_FAIL(get_key_in_object(mid, key_iter))) {
+      LOG_WARN("fail to get key.", K(ret), K(mid), K(low), K(high));
+    } else {
+      int compare_result = comparator.compare(key_iter, key);
+      if (compare_result == 0) {
+        *idx = mid;
+        is_found = true;
+        break;
+      } else if (compare_result > 0) {
+        high = mid - 1;
+      } else {
+        low = mid + 1;
+      }
+    }
+  }
+
+  ret = (ret == OB_SUCCESS && !is_found) ? OB_SEARCH_NOT_FOUND : ret;
+  return ret;
+}
+
+int ObJsonBinFastLocator::seek(const ObString &key, char *&res_ptr, int64_t &res_len,
+                               uint8_t &res_type)
+{
+  int ret = OB_SUCCESS;
+  size_t idx = 0;
+  ret = lookup_index(key, &idx);
+  if (ret == OB_SEARCH_NOT_FOUND) {
+  } else if (OB_FAIL(ret)) {
+    LOG_WARN("look up child node failed.", K(ret), K(key));
+  } else {
+    if (idx >= element_count_) {
+      ret = OB_OUT_OF_ELEMENT;
+      LOG_WARN("index out of range.", K(ret), K(idx), K(element_count_));
+    } else {
+      if (OB_FAIL(get_value_offset_len(idx, res_ptr, res_len, res_type))) {
+        LOG_WARN("init bin data fail", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObJsonBinFastLocator::seek(const ObIArray<ObString> &keys, char *&res_ptr, int64_t &res_len,
+                               uint8_t &res_type)
+{
+  int ret = OB_SUCCESS;
+  if (keys.count() == 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("empty keys", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < keys.count(); ++i) {
+      if (OB_FAIL(seek(keys.at(i), res_ptr, res_len, res_type))) {
+        if (ret != OB_SEARCH_NOT_FOUND) {
+          LOG_WARN("lookup fail", K(ret), K(i));
+        }
+        break;
+      } else if (i + 1 < keys.count()) {
+        if (ObJsonVerType::get_json_type(static_cast<ObJBVerType>(OB_JSON_TYPE_GET_INLINE(res_type)))
+            != ObJsonNodeType::J_OBJECT) {
+          ret = OB_SEARCH_NOT_FOUND;
+        } else if (OB_FAIL(parse_json_bin_header(res_ptr, res_len))) {
+          LOG_WARN("parse_json_bin_header fail", K(ret), K(res_ptr), K(res_len));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+template <typename Sink>
+int append_wrapped_json_bin(Sink &sink, const uint8_t type, char *res_ptr,
+                                 const int64_t res_len, const bool use_lexicographical_order)
+{
+  int ret = OB_SUCCESS;
+  const ObJBVerType vertype = static_cast<ObJBVerType>(type);
+  const ObJsonNodeType node_type = ObJsonVerType::get_json_type(vertype);
+  const int64_t doc_hdr_sz = sizeof(ObJsonBinDocHeader);
+  if (node_type == ObJsonNodeType::J_ARRAY || node_type == ObJsonNodeType::J_OBJECT) {
+    ObJsonBinDocHeader header;
+    header.extend_seg_offset_ = doc_hdr_sz + res_len;
+    header.use_lexicographical_order_ = use_lexicographical_order;
+    if (OB_FAIL(sink.append(reinterpret_cast<const char *>(&header), sizeof(header)))) {
+      LOG_WARN("append json bin doc header failed", K(ret));
+    } else if (OB_FAIL(sink.append(res_ptr, res_len))) {
+      LOG_WARN("append json bin payload failed", K(ret));
+    }
+  } else if (!ObJsonVerType::is_opaque_or_string(vertype)) {
+    if (OB_FAIL(sink.append(reinterpret_cast<const char *>(&vertype), sizeof(uint8_t)))) {
+      LOG_WARN("append json bin type byte failed", K(ret));
+    } else if (OB_FAIL(sink.append(res_ptr, res_len))) {
+      LOG_WARN("append json bin payload failed", K(ret));
+    }
+  } else if (OB_FAIL(sink.append(res_ptr, res_len))) {
+    LOG_WARN("append json bin payload failed", K(ret));
+  }
+  return ret;
+}
+
+int ObJsonBinFastLocator::pack_json_str_res(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res,
+                                            char *res_ptr, int64_t res_len, uint8_t &res_type)
+{
+  int ret = OB_SUCCESS;
+  const ObJBVerType vertype = static_cast<ObJBVerType>(res_type);
+  const ObJsonNodeType node_type = ObJsonVerType::get_json_type(vertype);
+  const bool is_container = (node_type == ObJsonNodeType::J_ARRAY
+                             || node_type == ObJsonNodeType::J_OBJECT);
+  const bool need_type_byte = !is_container && !ObJsonVerType::is_opaque_or_string(vertype);
+  const int64_t total_data_len = res_len + (is_container
+                                            ? static_cast<int64_t>(sizeof(ObJsonBinDocHeader))
+                                            : (need_type_byte ? 1LL : 0LL));
+  ObTextStringDatumResult text_result(expr.datum_meta_.type_, &expr, &ctx, &res);
+  if (OB_FAIL(text_result.init(total_data_len))) {
+    LOG_WARN("init lob result failed");
+  } else if (OB_FAIL(append_wrapped_json_bin(text_result, res_type, res_ptr, res_len,
+                                             use_lexicographical_order_))) {
+    LOG_WARN("append wrapped json bin failed", K(ret));
+  } else {
+    text_result.set_result();
+  }
+  return ret;
+}
+
+int ObJsonBinFastLocator::get_raw_binary(ObString &buf, uint8_t type, char *res_ptr,
+                                         int64_t res_len, ObIAllocator *allocator) const
+{
+  INIT_SUCC(ret);
+  ObJsonBuffer result(allocator);
+  if (OB_FAIL(result.reserve(DOC_HEADER_SIZE + res_len))) {
+    LOG_WARN("reserve fail", K(ret));
+  } else if (OB_FAIL(append_wrapped_json_bin(result, type, res_ptr, res_len,
+                                             use_lexicographical_order_))) {
+    LOG_WARN("append wrapped json bin failed", K(ret));
+  } else {
+    result.get_result_string(buf);
+  }
+  return ret;
+}
+
+int ObJsonBinFastLocator::get_value_offset_len(size_t idx, char *&res_ptr, int64_t &res_len,
+                                               uint8_t &res_type)
+{
+  int ret = OB_SUCCESS;
+  uint64_t res_offset = value_offset_start_ + idx * (entry_size_ + OB_JSON_BIN_VALUE_TYPE_LEN);
+  if (OB_UNLIKELY(res_offset + entry_size_ + OB_JSON_BIN_VALUE_TYPE_LEN > total_len_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported offset", K(ret), K(res_offset), K(total_len_), K(idx));
+  } else {
+    res_ptr = data_ptr_ + res_offset;
+    res_type = *reinterpret_cast<uint8_t *>(res_ptr + entry_size_);
+    bool is_inlined = OB_JSON_TYPE_INLINE_MASK & res_type;
+    res_type = OB_JSON_TYPE_GET_INLINE(res_type);
+    if (is_inlined) {
+      // entry_size_ is at most 8 bytes (derived from a 2-bit field), use member buffer
+      MEMSET(inline_buf_, 0, sizeof(inline_buf_));
+      int64_t pos = 0;
+      uint64_t value = get_var_local(res_ptr, entry_type_);
+      if (OB_FAIL(serialization::encode_vi64(inline_buf_, entry_size_, pos, value))) {
+        LOG_WARN("failed to serialize for int json obj", K(ret), K(entry_size_), K(pos), K(value));
+      } else {
+        res_ptr = inline_buf_;
+        res_len = pos;
+      }
+    } else {
+      res_offset = get_var_local(res_ptr, entry_type_);
+      res_ptr = data_ptr_ + res_offset;
+      ObJBVerType vertype = static_cast<ObJBVerType>(res_type);
+      ObJsonNodeType node_type = ObJsonVerType::get_json_type(vertype);
+      switch (node_type) {
+        case ObJsonNodeType::J_NULL: {
+          break;
+        }
+        case ObJsonNodeType::J_OBJECT:
+        case ObJsonNodeType::J_ARRAY: {
+          if (res_offset + BIN_HEADER_SIZE > total_len_) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("sub object header out of range", K(ret), K(res_offset), K(total_len_));
+          } else {
+            const ObJsonBinHeader *sub_header = reinterpret_cast<const ObJsonBinHeader *>(res_ptr);
+            const uint8_t count_size = sub_header->count_size_;
+            const uint8_t obj_size_size = sub_header->obj_size_size_;
+            const uint8_t count_var_size = ObJsonVar::get_var_size(count_size);
+            const uint8_t obj_size_var_size = ObJsonVar::get_var_size(obj_size_size);
+            if (count_size >= JBLS_MAX || obj_size_size >= JBLS_MAX
+                || res_offset + BIN_HEADER_SIZE + count_var_size + obj_size_var_size > total_len_) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("sub object var size invalid", K(ret));
+            } else {
+              const char *var_ptr = res_ptr + BIN_HEADER_SIZE + count_var_size;
+              int64_t obj_size = get_var_local(var_ptr, obj_size_size);
+              res_len = obj_size;
+            }
+          }
+          break;
+        }
+        case ObJsonNodeType::J_DECIMAL:
+        case ObJsonNodeType::J_ODECIMAL: {
+          number::ObNumber number;
+          int64_t offset = res_offset + 2 *sizeof(int16_t); // skip precision and scale
+          static const int64_t max_ob_number_len =
+            sizeof(uint32_t) + sizeof(uint32_t) * number::ObNumber::MAX_CALC_LEN;
+          int64_t avail_len = std::min(max_ob_number_len, total_len_ - offset);
+          const char* ptr = data_ptr_ + offset;
+          int64_t pos = 0;
+          if (avail_len < 0) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("not supported avail_len", K(ret), K(avail_len), K(offset), K(pos));
+          } else if (OB_FAIL(number.deserialize(ptr, avail_len, pos))) {
+            LOG_WARN("decode number fail", K(ret), K(avail_len), K(offset), K(pos), KP(ptr));
+          } else {
+            offset += pos;
+          }
+          res_len = offset - res_offset;
+          break;
+        }
+        case ObJsonNodeType::J_STRING: {
+          int64_t offset = res_offset + 1;
+          int64_t str_len = 0;
+          ObString json_str(total_len_, data_ptr_);
+          if (OB_FAIL(decode_vi64(json_str, offset, &str_len))) {
+            LOG_WARN("decode string length fail", K(ret), K(offset), K(str_len));
+          } else {
+            element_count_ = (static_cast<uint64_t>(str_len));
+            res_len = offset - res_offset + str_len;
+          }
+          break;
+        }
+        case ObJsonNodeType::J_OFLOAT:
+        case ObJsonNodeType::J_DATE:
+        case ObJsonNodeType::J_MYSQL_DATE:
+        case ObJsonNodeType::J_ORACLEDATE: {
+          res_len = sizeof(int32_t);
+          break;
+        }
+        case ObJsonNodeType::J_DOUBLE:
+        case ObJsonNodeType::J_ODOUBLE:
+        case ObJsonNodeType::J_TIME:
+        case ObJsonNodeType::J_DATETIME:
+        case ObJsonNodeType::J_ODATE:
+        case ObJsonNodeType::J_MYSQL_DATETIME:
+        case ObJsonNodeType::J_OTIMESTAMP:
+        case ObJsonNodeType::J_OTIMESTAMPTZ:
+        case ObJsonNodeType::J_TIMESTAMP:
+        case ObJsonNodeType::J_INT:
+        case ObJsonNodeType::J_OINT:
+        case ObJsonNodeType::J_UINT:
+        case ObJsonNodeType::J_OLONG: {
+          res_len = sizeof(int64_t);
+          break;
+        }
+        case ObJsonNodeType::J_BOOLEAN: {
+          res_len = sizeof(bool);
+          break;
+        }
+        default: {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("invalid node type.", K(ret), K(node_type));
+          break;
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    res_len = MIN(res_len, total_len_ - res_offset);
+    if (OB_UNLIKELY(res_len < 0)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported offset", K(ret), K(res_offset), K(res_len), K(total_len_), K(idx));
+    }
+  }
+  return ret;
+}
 
 }
 }
