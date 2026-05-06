@@ -2977,6 +2977,7 @@ DEFINE_ERROR_EXT(OB_KAFKA_ERROR, -11129, -1, "HY000", "kafka server throw error"
 DEFINE_ERROR(OB_KAFKA_NEED_RETRY, -11130, -1, "HY000", "retry with kafka error");
 DEFINE_ORACLE_ERROR(OB_ERR_INVALID_USERENV_PARAMETER, -11131, -1, "HY000", "invalid USERENV parameter", 2003, "invalid USERENV parameter");
 DEFINE_ERROR_EXT(OB_SRF_NOT_ALLOWED, -11132, -1, "HY000", "set-returning functions usage are not allowed", "set-returning functions '%.*s' usage are not allowed")
+DEFINE_ERROR_EXT(OB_AI_REMOTE_SERVICE_ERROR, -11133, -1, "HY000", "AI REMOTE SERVICE ERROR", "AI REMOTE SERVICE ERROR: %.*s");
 
 // 余留位置
 ////////////////////////////////////////////////////////////////
