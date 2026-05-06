@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX COMMON
 #include "ob_io_define.h"
 #include "storage/backup/ob_backup_factory.h"
+#include "share/backup/ob_backup_io_adapter.h"
 #include "src/storage/ob_file_system_router.h"
 #include "src/observer/ob_server.h"
 using namespace oceanbase::lib;
@@ -1272,6 +1273,16 @@ void ObIORequest::destroy()
 {
   int ret = OB_SUCCESS;
   retry_count_ = 0;
+  if (nullptr != io_result_ && io_result_->flag_.is_need_close_dev_and_fd()) {
+    ObIODevice *device_handle = fd_.device_handle_;
+    if (OB_NOT_NULL(device_handle) && device_handle->is_object_device()) {
+      ObBackupIoAdapter io_adapter;
+      if (OB_FAIL(io_adapter.close_device_and_fd(device_handle, fd_))) {
+        OB_LOG(WARN, "fail to close device and fd in sn mode", KR(ret), K(fd_));
+      }
+    }
+    io_result_->flag_.set_no_need_close_dev_and_fd();
+  }
   if (nullptr != control_block_ && nullptr != fd_.device_handle_) {
     fd_.device_handle_->free_iocb(control_block_);
     control_block_ = nullptr;
