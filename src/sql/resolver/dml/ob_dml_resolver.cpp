@@ -12434,10 +12434,8 @@ int ObDMLResolver::resolve_table_relation_factor_dblink(const ParseNode *table_n
     LOG_WARN("cat not find dblink", K(dblink_name), K(ret));
   } else if (FALSE_IT([&]{dblink_id = dblink_schema->get_dblink_id();}())) {
   } else if (lib::is_oracle_mode()) {
-    database_name = dblink_schema->get_user_name();
-    if (!tmp_dbname.empty() && 0 != database_name.case_compare(tmp_dbname)) {
-      database_name = tmp_dbname;
-    }
+    // set database as in the parse node
+    database_name = tmp_dbname;
     char letter;
     char *src_ptr = database_name.ptr();
     for(ObString::obstr_size_t i = 0; i < database_name.length(); ++i) {

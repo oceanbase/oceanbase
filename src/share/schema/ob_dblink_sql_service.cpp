@@ -381,10 +381,15 @@ int ObDbLinkSqlService::fetch_link_table_info(dblink_param_ctx &param_ctx,
   ObString nls_database_name;
   ObString nls_table_name;
   ObString nls_dblink_name;
-  static const char * sql_str_fmt_array[] = { // for Oracle mode dblink
+  static const char * sql_str_fmt_array[] = { // for Oracle mode dblink, schema-qualified
     "/*$BEFPARSEdblink_req_level=1*/ SELECT * FROM \"%.*s\".\"%.*s\"%c%.*s WHERE ROWNUM < 1",
     "/*$BEFPARSEdblink_req_level=2*/ SELECT * FROM \"%.*s\".\"%.*s\"%c%.*s WHERE ROWNUM < 1",
     "/*$BEFPARSEdblink_req_level=3*/ SELECT * FROM \"%.*s\".\"%.*s\"%c%.*s WHERE ROWNUM < 1",
+  };
+  static const char * sql_str_fmt_no_schema_array[] = { // for Oracle mode dblink, unqualified (synonym-resolvable)
+    "/*$BEFPARSEdblink_req_level=1*/ SELECT * FROM \"%.*s\"%c%.*s WHERE ROWNUM < 1",
+    "/*$BEFPARSEdblink_req_level=2*/ SELECT * FROM \"%.*s\"%c%.*s WHERE ROWNUM < 1",
+    "/*$BEFPARSEdblink_req_level=3*/ SELECT * FROM \"%.*s\"%c%.*s WHERE ROWNUM < 1",
   };
   static const char * sql_str_fmt_array_mysql_mode[] = { // for MySql mode dblink
     "/*$BEFPARSEdblink_req_level=1*/ SELECT * FROM `%.*s`.`%.*s`%c%.*s LIMIT 0",
@@ -396,9 +401,9 @@ int ObDbLinkSqlService::fetch_link_table_info(dblink_param_ctx &param_ctx,
     if (NULL == session_info) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("session_info is NULL", K(ret));
-    } else if (database_name.empty() || table_name.empty()) {
+    } else if (table_name.empty()) {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("table name or database name is empty", K(ret), K(database_name), K(table_name));
+      LOG_WARN("table name is empty", K(ret), K(database_name), K(table_name));
     } else if (OB_FAIL(convert_idenfitier_charset(param_ctx.link_type_, allocator, database_name,
                       session_info, nls_database_name))) {
       LOG_WARN("convert charset of database name failed", K(ret));
@@ -408,13 +413,21 @@ int ObDbLinkSqlService::fetch_link_table_info(dblink_param_ctx &param_ctx,
     } else if (OB_FAIL(convert_idenfitier_charset(param_ctx.link_type_, allocator, dblink_name,
                       session_info, nls_dblink_name))) {
       LOG_WARN("convert charset of dblink name failed", K(ret));
-    } else if (OB_FAIL(sql.append_fmt(lib::is_oracle_mode() ?
-                                      sql_str_fmt_array[sql_request_level - 1] :
-                                      sql_str_fmt_array_mysql_mode[sql_request_level - 1],
-                                      nls_database_name.length(), nls_database_name.ptr(),
-                                      nls_table_name.length(), nls_table_name.ptr(),
-                                      nls_dblink_name.empty() ? ' ' : '@',
-                                      nls_dblink_name.length(), nls_dblink_name.ptr()))) {
+    } else if (database_name.empty()
+                 && OB_FAIL(sql.append_fmt(sql_str_fmt_no_schema_array[sql_request_level - 1],
+                                           nls_table_name.length(),
+                                           nls_table_name.ptr(),
+                                           nls_dblink_name.empty() ? ' ' : '@',
+                                           nls_dblink_name.length(),
+                                           nls_dblink_name.ptr()))) {
+        LOG_WARN("append sql failed", K(ret), K(nls_table_name), K(nls_dblink_name));
+    } else if (!database_name.empty() && OB_FAIL(sql.append_fmt(lib::is_oracle_mode() ?
+                                                                sql_str_fmt_array[sql_request_level - 1] :
+                                                                sql_str_fmt_array_mysql_mode[sql_request_level - 1],
+                                                                nls_database_name.length(), nls_database_name.ptr(),
+                                                                nls_table_name.length(), nls_table_name.ptr(),
+                                                                nls_dblink_name.empty() ? ' ' : '@',
+                                                                nls_dblink_name.length(), nls_dblink_name.ptr()))) {
       LOG_WARN("append sql failed", K(ret), K(nls_database_name), K(nls_table_name), K(nls_dblink_name));
     } else if (sql::DblinkGetConnType::TEMP_CONN == conn_type) {
       if (OB_ISNULL(reverse_link)) {
@@ -536,6 +549,7 @@ int ObDbLinkSqlService::generate_link_table_schema(const dblink_param_ctx &param
 {
   int ret = OB_SUCCESS;
   const char * desc_sql_str_fmt = "/*$BEFPARSEdblink_req_level=1*/ desc \"%.*s\".\"%.*s\"";
+  const char * desc_sql_str_fmt_no_schema = "/*$BEFPARSEdblink_req_level=1*/ desc \"%.*s\"";
   ObSqlString desc_sql;
   int64_t desc_res_row_idx = -1;
   bool need_desc = param_ctx.sql_request_level_ == 1 &&
@@ -601,8 +615,17 @@ int ObDbLinkSqlService::generate_link_table_schema(const dblink_param_ctx &param
           } else if (OB_FAIL(convert_idenfitier_charset(param_ctx.link_type_, allocator, table_name,
                             session_info, nls_table_name))) {
             LOG_WARN("convert charset of table name failed", K(ret));
-          } else if (OB_FAIL(desc_sql.append_fmt(desc_sql_str_fmt, nls_database_name.length(),
-                        nls_database_name.ptr(), nls_table_name.length(), nls_table_name.ptr()))) {
+          } else if (database_name.empty()
+                       && OB_FAIL(desc_sql.append_fmt(desc_sql_str_fmt_no_schema,
+                                                       nls_table_name.length(),
+                                                       nls_table_name.ptr()))) {
+            LOG_WARN("append desc sql failed", K(ret));
+          } else if (!database_name.empty()
+                       && OB_FAIL(desc_sql.append_fmt(desc_sql_str_fmt,
+                                                       nls_database_name.length(),
+                                                       nls_database_name.ptr(),
+                                                       nls_table_name.length(),
+                                                       nls_table_name.ptr()))) {
             LOG_WARN("append desc sql failed", K(ret));
           } else if (OB_FAIL(dblink_proxy_->dblink_read(dblink_conn, desc_res, desc_sql.ptr()))) {
             LOG_WARN("read link failed", K(ret), K(param_ctx), K(desc_sql.ptr()));
