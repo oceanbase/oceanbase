@@ -631,6 +631,7 @@ int ObJoinOrder::compute_base_table_path_ordering(AccessPath *path)
         // when enable das keep order optimization, DAS layer can provide a guarantee of local order,
         // otherwise the order is totally not guaranteed.
         path->is_local_order_ = true;
+        path->is_local_order_by_das_ = true;
       } else {
         path->ordering_.reset();
       }
@@ -8053,6 +8054,7 @@ int oceanbase::sql::Path::assign(const Path &other, common::ObIAllocator *alloca
   UNUSED(allocator);
   parent_ = other.parent_;
   is_local_order_ = other.is_local_order_;
+  is_local_order_by_das_ = other.is_local_order_by_das_;
   is_range_order_ = other.is_range_order_;
   cost_  = other.cost_;
   op_cost_ = other.op_cost_;
@@ -9461,6 +9463,7 @@ int JoinPath::compute_join_path_ordering()
         } else {
           is_range_order_ = left_path_->is_range_order_;
           is_local_order_ = left_path_->is_local_order_;
+          is_local_order_by_das_ = left_path_->is_local_order_by_das_;
         }
       } else {
         int64_t interesting_order_info = OrderingFlag::NOT_MATCH;
@@ -9488,6 +9491,7 @@ int JoinPath::compute_join_path_ordering()
     } else if (!is_left_need_exchange() || left_path_->is_single() || left_path_->is_local_order_) {
       is_range_order_ = left_path_->is_range_order_;
       is_local_order_ = left_path_->is_local_order_;
+      is_local_order_by_das_ = left_path_->is_local_order_by_das_;
     } else {
       is_local_order_ = true;
       is_range_order_ = false;

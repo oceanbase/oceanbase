@@ -5887,7 +5887,10 @@ int ObLogPlan::get_distribute_group_by_method(ObLogicalOperator *top,
                                                                 is_partition_wise))) {
       LOG_WARN("failed to check if sharding compatible with distinct expr", K(ret));
     } else if (is_partition_wise) {
-      if (top->is_parallel_more_than_part_cnt() &&
+      if (top->get_is_local_order_by_das()) {
+        group_dist_methods &= ~DistAlgo::DIST_PARTITION_WISE;
+        OPT_TRACE("group operator will not use partition wise method due to DAS local order");
+      } else if (top->is_parallel_more_than_part_cnt() &&
           query_ctx->check_opt_compat_version(COMPAT_VERSION_4_3_5)) {
         OPT_TRACE("group operator will use partition wise method");
       } else {
@@ -6968,7 +6971,10 @@ int ObLogPlan::check_can_pullup_gi(ObLogicalOperator &top,
   bool has_win_func = false;
   if (is_partition_wise) {
     can_pullup = true;
-  } else if (need_sort || !top.get_is_local_order() || top.is_exchange_allocated()) {
+  } else if (need_sort ||
+    !top.get_is_local_order() ||
+    top.get_is_local_order_by_das() ||
+    top.is_exchange_allocated()) {
     /* do nothing */
   } else if (OB_FAIL(top.check_has_op_below(LOG_WINDOW_FUNCTION, has_win_func))) {
     LOG_WARN("failed to check has window function below", K(ret));
