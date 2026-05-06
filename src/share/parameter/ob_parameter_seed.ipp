@@ -1932,6 +1932,12 @@ DEF_BOOL(_ignore_system_memory_over_limit_error, OB_CLUSTER_PARAMETER, "False",
 ERRSIM_DEF_STR(backup_errsim_task_server_addr, OB_CLUSTER_PARAMETER, "",
         "the server addr that backup task send to when in errsim mode",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+ERRSIM_DEF_STR(backup_errsim_old_rs_server_addr, OB_CLUSTER_PARAMETER, "",
+        "the old rs leader addr used by backup change turn errsim",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+ERRSIM_DEF_STR(backup_errsim_new_rs_server_addr, OB_CLUSTER_PARAMETER, "",
+        "the new rs leader addr used by backup stale snapshot errsim",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 #ifdef OB_USE_ASAN
 DEF_BOOL(enable_asan_for_memory_context, OB_CLUSTER_PARAMETER, "False",
         "when use ob_asan, user can specifies whether to allow ObAsanAllocator(default is ObAllocator as allocator of MemoryContext",

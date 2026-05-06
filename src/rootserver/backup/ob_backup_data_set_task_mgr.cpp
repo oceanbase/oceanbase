@@ -40,6 +40,22 @@ using namespace share;
 using namespace rootserver;
 using namespace backup;
 
+#ifdef ERRSIM
+static int is_backup_errsim_server_(const ObString &server_str, bool &is_target_server)
+{
+  int ret = OB_SUCCESS;
+  common::ObAddr addr;
+  is_target_server = false;
+  if (server_str.empty()) {
+  } else if (OB_FAIL(addr.parse_from_string(server_str))) {
+    LOG_WARN("failed to parse backup errsim server addr", K(ret), K(server_str));
+  } else if (GCONF.self_addr_ == addr) {
+    is_target_server = true;
+  }
+  return ret;
+}
+#endif
+
 ObBackupSetTaskMgr::ObBackupSetTaskMgr()
  : is_inited_(false),
    meta_tenant_id_(0),
@@ -2107,7 +2123,24 @@ int ObBackupSetTaskMgr::backup_data_in_shared_nothing_()
   ObArray<ObBackupLSTaskAttr> ls_task;
   int64_t finish_cnt = 0;
   ObBackupLSTaskAttr *build_index_attr = nullptr;
-  if (OB_FAIL(ObBackupLSTaskOperator::get_ls_tasks(*sql_proxy_, job_attr_->job_id_, job_attr_->tenant_id_, false/*update*/, ls_task))) {
+  ObMySQLTransaction lock_trans;
+  ObBackupSetTaskAttr lock_set_task_attr;
+  if (OB_FAIL(lock_trans.start(sql_proxy_, meta_tenant_id_))) {
+    LOG_WARN("fail to start trans", K(ret));
+  } else if (OB_FAIL(ObBackupTaskOperator::get_backup_task(lock_trans,
+      job_attr_->job_id_, job_attr_->tenant_id_, /*for update*/true, lock_set_task_attr))) {
+    LOG_WARN("failed to lock backup set task row for update", K(ret), KPC(job_attr_));
+  } else if (lock_set_task_attr.status_.status_ != ObBackupStatus::Status::BACKUP_USER_DATA) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("backup set task status not allow", K(ret), K(lock_set_task_attr));
+  }
+  if (lock_trans.is_started()) {
+    int trans_ret = backup_service_->end_transaction(lock_trans, ret);
+    ret = COVER_SUCC(trans_ret);
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ObBackupLSTaskOperator::get_ls_tasks(*sql_proxy_, job_attr_->job_id_, job_attr_->tenant_id_, false/*update*/, ls_task))) {
     LOG_WARN("[DATA_BACKUP]failed to get log stream tasks", K(ret), "job_id", job_attr_->job_id_, "tenant_id", job_attr_->tenant_id_);
   } else if (ls_task.empty()) {
     ret = OB_ERR_UNEXPECTED;
@@ -2118,7 +2151,20 @@ int ObBackupSetTaskMgr::backup_data_in_shared_nothing_()
     bool need_change_turn = false;
     bool finish_build_index = false;
     ObSArray<storage::ObBackupDataTabletToLSInfo> tablets_to_ls;
-    if (OB_FAIL(build_index_(build_index_attr, finish_build_index))) {
+#ifdef ERRSIM
+    bool wait_new_rs_snapshot = false;
+    if (OB_FAIL(is_backup_errsim_server_(GCONF.backup_errsim_new_rs_server_addr.str(), wait_new_rs_snapshot))) {
+      LOG_WARN("failed to check new rs errsim server", K(ret), "server", GCONF.backup_errsim_new_rs_server_addr.str());
+    } else if (wait_new_rs_snapshot) {
+      ROOTSERVICE_EVENT_ADD("backup_errsim", "stale_ls_snapshot_ready",
+                            "server", GCONF.self_addr_,
+                            "tenant_id", set_task_attr_.tenant_id_,
+                            "task_id", set_task_attr_.task_id_);
+      DEBUG_SYNC(AFTER_GET_BACKUP_DATA_LS_SNAPSHOT_FOR_SPECIFIED_SERVER);
+    }
+#endif
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(build_index_(build_index_attr, finish_build_index))) {
       LOG_WARN("[DATA_BACKUP]failed to wait build index", K(ret), KPC(build_index_attr));
     } else if (!finish_build_index) {
     } else if (OB_FAIL(check_need_change_turn_(ls_task, need_change_turn, tablets_to_ls))) {
@@ -2301,6 +2347,7 @@ int ObBackupSetTaskMgr::change_turn_(
     ObIArray<storage::ObBackupDataTabletToLSInfo> &tablets_to_ls)
 {
   int ret = OB_SUCCESS;
+  ObBackupSetTaskAttr lock_set_task_attr;
   ROOTSERVICE_EVENT_INSTANCE.sync_add_event("rs_backup", "rs_before_change_turn",
                              "tenant_id", set_task_attr_.tenant_id_,
                              "task_id", set_task_attr_.task_id_);
@@ -2316,6 +2363,12 @@ int ObBackupSetTaskMgr::change_turn_(
     LOG_WARN("failed to set default timeout ctx", K(ret), K(timeout));
   } else if (OB_FAIL(trans_.start(sql_proxy_, meta_tenant_id_))) {
     LOG_WARN("fail to start trans", K(ret));
+  } else if (OB_FAIL(ObBackupTaskOperator::get_backup_task(trans_,
+      job_attr_->job_id_, job_attr_->tenant_id_, true/*for update*/, lock_set_task_attr))) {
+    LOG_WARN("failed to lock backup set task row for update", K(ret), KPC(job_attr_));
+  } else if (lock_set_task_attr.status_.status_ != ObBackupStatus::Status::BACKUP_USER_DATA) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("backup set task status not allow", K(ret), K(lock_set_task_attr));
   } else if (OB_FAIL(change_task_turn_(ls_tasks, tablets_to_ls))) {
     LOG_WARN("[DATA_BACKUP]failed to change task turn", K(ret), K(set_task_attr_));
   } else if (OB_FAIL(ObBackupLSTaskOperator::delete_build_index_task(trans_, build_index_attr))) {
@@ -2325,16 +2378,30 @@ int ObBackupSetTaskMgr::change_turn_(
     LOG_WARN("[DATA_BACKUP]failed to move skip tablet to history", K(ret));
   }
 
-  if (trans_.is_started()) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_TMP_FAIL(trans_.end(OB_SUCC(ret)))) {
-      ret = OB_SUCC(ret) ? tmp_ret : ret;
-      LOG_WARN("failed to end trans", K(ret), K(tmp_ret));
+#ifdef ERRSIM
+  bool wait_old_rs_commit = false;
+  if (OB_SUCC(ret) && OB_FAIL(is_backup_errsim_server_(GCONF.backup_errsim_old_rs_server_addr.str(), wait_old_rs_commit))) {
+    LOG_WARN("failed to check old rs errsim server", K(ret), "server", GCONF.backup_errsim_old_rs_server_addr.str());
+  } else if (OB_SUCC(ret) && wait_old_rs_commit) {
+    ROOTSERVICE_EVENT_ADD("backup_errsim", "before_change_turn_commit",
+                          "server", GCONF.self_addr_,
+                          "tenant_id", set_task_attr_.tenant_id_,
+                          "task_id", set_task_attr_.task_id_);
+    DEBUG_SYNC(BEFORE_BACKUP_CHANGE_TURN_COMMIT_FOR_SPECIFIED_SERVER);
+  }
+#endif
+  int trans_ret = backup_service_->end_transaction(trans_, ret);
+  ret = COVER_SUCC(trans_ret);
+  if (OB_SUCC(ret)) {
+#ifdef ERRSIM
+    if (wait_old_rs_commit) {
+      ROOTSERVICE_EVENT_ADD("backup_errsim", "after_change_turn_commit",
+                            "server", GCONF.self_addr_,
+                            "tenant_id", set_task_attr_.tenant_id_,
+                            "task_id", set_task_attr_.task_id_);
     }
-
-    if (OB_SUCC(ret)) {
-      backup_service_->wakeup();
-    }
+#endif
+    backup_service_->wakeup();
   }
   return ret;
 }
