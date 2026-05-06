@@ -3412,7 +3412,7 @@ DEF_CAP(_write_throttle_by_pending_log_size_limit, OB_TENANT_PARAMETER, "0", "[0
 DEF_TIME(_write_throttle_by_pending_log_sleep_interval, OB_TENANT_PARAMETER, "20ms", "[0ms, 1h]",
          "the sleep interval when write throttle by pending log size. Range: [0ms, 1h]",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_BOOL(_persist_vector_index_incremental, OB_TENANT_PARAMETER, "False",
+DEF_BOOL(_persist_vector_index_incremental, OB_TENANT_PARAMETER, "True",
         "Controls whether to enable incremental persistence for vector indexes",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
