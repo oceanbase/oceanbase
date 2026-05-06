@@ -185,6 +185,7 @@ TEST_F(TestIndexBlockRowStruct, test_parser_normal)
   row_desc.micro_block_count_ = 1;
   row_desc.aggregated_row_ = &agg_res;
   row_desc.is_serialized_agg_row_ = false;
+  row_desc.set_major_working_cluster_version(DATA_CURRENT_VERSION);
 
   // row_desc.data_store_desc_ = &desc_.get_desc();
   row_desc.row_key_ = row_key;

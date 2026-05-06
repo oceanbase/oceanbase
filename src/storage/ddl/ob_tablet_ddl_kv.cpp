@@ -200,7 +200,7 @@ int ObBlockMetaTree::insert_macro_block(const ObDDLMacroHandle &macro_handle,
     tree_value = new (buf) ObBlockMetaTreeValue(insert_meta, rowkey);
 
     tree_value->co_sstable_row_offset_ = co_sstable_row_offset;
-    tree_value->header_.version_ = ObIndexBlockRowHeader::INDEX_BLOCK_HEADER_V2;
+    tree_value->header_.version_ = ObIndexBlockRowHeader::mapping_data_version_to_header_version(data_desc_.get_desc().get_major_working_cluster_version());
     tree_value->header_.row_store_type_ = static_cast<uint8_t>(insert_meta->val_.row_store_type_);
     tree_value->header_.compressor_type_ = static_cast<uint8_t>(insert_meta->val_.compressor_type_);
     tree_value->header_.is_data_index_ = true;
@@ -208,7 +208,14 @@ int ObBlockMetaTree::insert_macro_block(const ObDDLMacroHandle &macro_handle,
     tree_value->header_.is_leaf_block_ = true;
     tree_value->header_.is_macro_node_ = true;
     tree_value->header_.is_major_node_ = true;
-    tree_value->header_.has_logic_micro_id_ = true;
+    // V1 header format does not include logic_micro_id in serialized layout; setting has_logic_micro_id_
+    // when version is V1 would make is_valid() fail (compact_valid check).
+    if (tree_value->header_.version_ != ObIndexBlockRowHeader::INDEX_BLOCK_HEADER_V1) {
+      tree_value->header_.has_logic_micro_id_ = true;
+    } else {
+      tree_value->header_.unset_has_logic_micro_id();
+      tree_value->header_.unset_has_shared_data_macro_id();
+    }
     tree_value->header_.is_deleted_ = insert_meta->val_.is_deleted_;
     tree_value->header_.contain_uncommitted_row_ = insert_meta->val_.contain_uncommitted_row_;
     tree_value->header_.block_offset_ = insert_meta->val_.block_offset_;

@@ -3542,6 +3542,7 @@ int ObDataIndexBlockBuilder::generate_macro_meta_row_desc(
   int ret = OB_SUCCESS;
   macro_row_desc.set_merge_type(index_store_desc_->get_merge_type());
   macro_row_desc.set_end_scn(index_store_desc_->get_end_scn());
+  macro_row_desc.set_major_working_cluster_version(index_store_desc_->get_major_working_cluster_version());
   macro_row_desc.set_row_store_type(index_store_desc_->get_row_store_type());
   macro_row_desc.set_compressor_type(index_store_desc_->get_compressor_type());
   macro_row_desc.set_master_key_id(index_store_desc_->get_master_key_id());

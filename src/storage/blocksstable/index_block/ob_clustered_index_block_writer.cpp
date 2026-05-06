@@ -563,6 +563,7 @@ int ObClusteredIndexBlockWriter::make_clustered_index_micro_block_with_rewrite(
       } else {
         ObIndexBlockRowDesc clustered_row_desc;
         clustered_row_desc.set_merge_type(data_store_desc_->get_merge_type());
+        clustered_row_desc.set_major_working_cluster_version(data_store_desc_->get_major_working_cluster_version());
         // The following code needs to consider compatibility.
         int64_t agg_row_size = 0;
         const ObIndexBlockRowHeader *idx_row_header = nullptr;
@@ -671,6 +672,7 @@ int ObClusteredIndexBlockWriter::make_clustered_index_micro_block_with_reuse(
     row_key_allocator.reuse();
     ObIndexBlockRowDesc clustered_row_desc;
     clustered_row_desc.set_merge_type(data_store_desc_->get_merge_type());
+    clustered_row_desc.set_major_working_cluster_version(data_store_desc_->get_major_working_cluster_version());
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(index_block_row_scanner.get_next(index_info,
                                                         false /* is_multi_check */,
