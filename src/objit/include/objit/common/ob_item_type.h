@@ -3083,6 +3083,7 @@ typedef enum ObItemType
   T_BINDING_RULE_MAP = 4986,
   T_BINDING_RULE_MAP_ITEM = 4987,
   T_PARSER_ANALYSIS = 4988,  // for fulltext index WITH PARSER analyzer analysis JSON
+  T_VERIFY_NOWAIT = 4989,
 
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;

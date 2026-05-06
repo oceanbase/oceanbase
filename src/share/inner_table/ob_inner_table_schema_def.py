@@ -5246,6 +5246,7 @@ def_table_schema(
         ('type', 'varchar:32'),
         ('value', 'longtext'),
         ('recovery_until_scn', 'uint'),
+        ('recovery_delay', 'int', 'false', '0'),
   ],
 )
 
@@ -14331,6 +14332,8 @@ def_table_schema(
     ('unsubmitted_lsn', 'uint'),
     ('unsubmitted_log_scn', 'uint'),
     ('pending_cnt', 'int'),
+    ('min_unreplayed_lsn', 'uint'),
+    ('min_unreplayed_scn', 'uint'),
   ],
 
   partition_columns = ['svr_ip', 'svr_port'],
@@ -18304,7 +18307,7 @@ def_table_schema(
 # 12604: __all_virtual_keyword
 # 12605: __all_virtual_ss_gc_history
 # 12606: __all_virtual_table_archive_history
-
+# 12607: __all_virtual_log_transport_stat
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -18901,6 +18904,7 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15546', all_def_ke
 # 15551: __all_java_policy
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15552', all_def_keywords['__all_virtual_tenant_worker_group']))
 # 15553: __all_virtual_keyword
+# 15554: ALL_VIRTUAL_LOG_TRANSPORT_STAT
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -47118,6 +47122,10 @@ FROM
 # 21725: DBA_OB_EXTERNAL_TAB_STATISTICS
 # 21726: DBA_OB_EXTERNAL_TAB_COL_STATISTICS
 # 21727: DBA_OB_EXTERNAL_PART_COL_STATISTICS
+# 21728: GV$OB_LS_LOG_REPLAY_STAT
+# 21729: V$OB_LS_LOG_REPLAY_STAT
+# 21730: GV$OB_LS_LOG_TRANSPORT_STAT
+# 21731: V$OB_LS_LOG_TRANSPORT_STAT
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
@@ -82229,6 +82237,10 @@ FROM
     SYS.ALL_VIRTUAL_TENANT_WORKER_GROUP
 """.replace("\n", " ")
 )
+# 28297: GV$OB_LS_LOG_REPLAY_STAT
+# 28298: V$OB_LS_LOG_REPLAY_STAT
+# 28299: GV$OB_LS_LOG_TRANSPORT_STAT
+# 28300: V$OB_LS_LOG_TRANSPORT_STAT
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################

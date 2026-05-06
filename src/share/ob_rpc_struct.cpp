@@ -7977,6 +7977,7 @@ int ObSwitchTenantArg::init(
     op_type_ = op_type;
     tenant_name_ = tenant_name;
     is_verify_ = is_verify;
+    is_verify_nowait_ = false;
   }
   return ret;
 }
@@ -7990,11 +7991,13 @@ int ObSwitchTenantArg::assign(const ObSwitchTenantArg &other)
   tenant_name_ = other.tenant_name_;
   stmt_str_ = other.stmt_str_;
   is_verify_ = other.is_verify_;
+  is_verify_nowait_ = other.is_verify_nowait_;
 
   return ret;
 }
 
-OB_SERIALIZE_MEMBER(ObSwitchTenantArg, exec_tenant_id_, op_type_, tenant_name_, stmt_str_, is_verify_);
+OB_SERIALIZE_MEMBER(ObSwitchTenantArg, exec_tenant_id_, op_type_, tenant_name_, stmt_str_,
+    is_verify_, is_verify_nowait_);
 
 int ObRecoverTenantArg::init(
     const uint64_t exec_tenant_id,

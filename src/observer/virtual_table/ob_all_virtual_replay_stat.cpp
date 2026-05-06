@@ -112,6 +112,12 @@ int ObAllVirtualReplayStat::insert_stat_(logservice::LSReplayStat &replay_stat)
       case OB_APP_MIN_COLUMN_ID + 9:
         cur_row_.cells_[i].set_int(replay_stat.pending_cnt_);
         break;
+      case OB_APP_MIN_COLUMN_ID + 10:
+        cur_row_.cells_[i].set_uint64(palf::PALF_INITIAL_LSN_VAL);
+        break;
+      case OB_APP_MIN_COLUMN_ID + 11:
+        cur_row_.cells_[i].set_uint64(SCN::min_scn().get_val_for_inner_table_field());
+        break;
       default:
         ret = OB_ERR_UNEXPECTED;
         SERVER_LOG(WARN, "unkown column");

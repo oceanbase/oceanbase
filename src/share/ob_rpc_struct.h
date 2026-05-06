@@ -9568,7 +9568,8 @@ public:
                         op_type_(INVALID),
                         tenant_name_(),
                         stmt_str_(),
-                        is_verify_(false) {}
+                        is_verify_(false),
+                        is_verify_nowait_(false){}
   ~ObSwitchTenantArg() {}
   int init(
     const uint64_t exec_tenant_id,
@@ -9582,7 +9583,8 @@ public:
   int assign(const ObSwitchTenantArg &other);
   void set_stmt_str(const ObString &stmt_str) { stmt_str_ = stmt_str; }
 
-  TO_STRING_KV(K_(exec_tenant_id), K_(op_type), K_(stmt_str), K_(tenant_name), K_(is_verify));
+  TO_STRING_KV(K_(exec_tenant_id), K_(op_type), K_(stmt_str), K_(tenant_name), K_(is_verify),
+      K_(is_verify_nowait));
 
   static const char *get_alter_type_str(const OpType op_type)
   {
@@ -9615,6 +9617,7 @@ public:\
   Property_declare_var(ObString, tenant_name)
   Property_declare_var(ObString, stmt_str)
   Property_declare_var(bool, is_verify)
+  Property_declare_var(bool, is_verify_nowait)
 #undef Property_declare_var
 };
 

@@ -6879,6 +6879,8 @@ enabled	tinyint(4)	NO		NULL
 unsubmitted_lsn	bigint(20) unsigned	NO		NULL	
 unsubmitted_log_scn	bigint(20) unsigned	NO		NULL	
 pending_cnt	bigint(20)	NO		NULL	
+min_unreplayed_lsn	bigint(20) unsigned	NO		NULL	
+min_unreplayed_scn	bigint(20) unsigned	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_replay_stat;
 IF(count(*) >= 0, 1, 0)
 1
@@ -7834,6 +7836,7 @@ gmt_modified	timestamp(6)	NO		NULL
 type	varchar(32)	NO		NULL	
 value	longtext	NO		NULL	
 recovery_until_scn	bigint(20) unsigned	NO		NULL	
+recovery_delay	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_log_restore_source;
 IF(count(*) >= 0, 1, 0)
 1
