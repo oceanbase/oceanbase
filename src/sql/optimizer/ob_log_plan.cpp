@@ -10894,6 +10894,12 @@ int ObLogPlan::compute_rescan_plan_relationship(const ObLogicalOperator &first_p
     } else {
       /* do nothing */
     }
+    if (OB_SUCC(ret)
+        && ((DominateRelation::OBJ_LEFT_DOMINATE == relation && first_spf->get_parallel() < second_spf->get_parallel())
+        || (DominateRelation::OBJ_RIGHT_DOMINATE == relation && first_spf->get_parallel() > second_spf->get_parallel()))) {
+      relation = DominateRelation::OBJ_UNCOMPARABLE;
+      OPT_TRACE("plan relation rollback to uncomparable because of path DOP");
+    }
     LOG_TRACE("finish compute spf rescan plan relationship", K(need_compare),
                     K(first_spf->enable_das_group_rescan()), K(second_spf->enable_das_group_rescan()),
                     K(first_right_local_rescan), K(second_right_local_rescan),
