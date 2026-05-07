@@ -1300,8 +1300,8 @@ public:
   bool is_backup_meta() const { return BACKUP_SYS_META == status_ || BACKUP_USER_META == status_; }
   bool is_backup_major() const { return BACKUP_DATA_MAJOR == status_; }
   bool is_backup_minor() const { return BACKUP_DATA_MINOR == status_; }
-  bool is_backup_log() const { return BACKUP_LOG == status_; }
   bool is_backup_sys() const { return BACKUP_DATA_SYS == status_; }
+  bool is_backup_log_phase() const { return PREPARE_BACKUP_LOG == status_ || BACKUP_LOG == status_; }
   bool is_backup_finish() const { return COMPLETED == status_ || FAILED == status_ || CANCELED == status_; }
   const char* get_str() const;
   int set_status(const char *str);

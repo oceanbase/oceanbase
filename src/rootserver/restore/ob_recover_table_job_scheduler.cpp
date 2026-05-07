@@ -273,9 +273,11 @@ int ObRecoverTableJobScheduler::sys_prepare_(share::ObRecoverTableJob &job)
   }
 
 #ifdef ERRSIM
-  ret = OB_E(EventTable::EN_INSERT_USER_RECOVER_JOB_FAILED) OB_SUCCESS;
-  if (OB_FAIL(ret)) {
-    ROOTSERVICE_EVENT_ADD("recover_table_errsim", "insert_user_job_failed");
+  if (OB_SUCC(ret)) {
+    ret = OB_E(EventTable::EN_INSERT_USER_RECOVER_JOB_FAILED) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      ROOTSERVICE_EVENT_ADD("recover_table_errsim", "insert_user_job_failed");
+    }
   }
 #endif
   int tmp_ret = OB_SUCCESS;
