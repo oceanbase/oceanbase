@@ -599,7 +599,8 @@ public:
         && index_info.has_agg_data()
         && (sstable_->is_major_sstable() || iter_param_->enable_inc_skip_index())
         && (index_info.can_blockscan() || iter_param_->is_delete_insert_ || iter_param_->is_append_only_merge_engine())
-        && index_info.is_filter_uncertain();
+        && index_info.is_filter_uncertain()
+        && !(nullptr != access_ctx_->block_row_store_ && access_ctx_->block_row_store_->get_pd_filter_info().contain_rowscn_ && index_info.contain_uncommitted_row());
   }
   virtual bool read_wait()
   {
