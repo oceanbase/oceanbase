@@ -241,6 +241,36 @@ int ObLSMigrationHandler::check_task_list_empty_(bool &is_empty)
   return ret;
 }
 
+int ObLSMigrationHandler::set_result_for_split(const int32_t result)
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ls migration handler do not init", K(ret));
+  } else {
+    common::SpinWLockGuard guard(lock_);
+    ObLSMigrationTask task;
+    if (OB_FAIL(get_ls_migration_task_with_nolock_(task))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        // no task, no need to set result
+        ret = OB_SUCCESS;
+        LOG_INFO("no migration task, no need to set result", K(ret), KPC(ls_));
+      } else {
+        LOG_WARN("failed to get ls migration task", K(ret), KPC(ls_));
+      }
+    } else if (ObMigrationOpType::ADD_LS_OP == task.arg_.type_
+        || ObMigrationOpType::MIGRATE_LS_OP == task.arg_.type_
+        || (ObMigrationOpType::REBUILD_LS_OP == task.arg_.type_ && ObLSMigrationHandlerStatus::WAIT_COMPLETE_LS == status_)) {
+      // WAIT_COMPLETE_LS : wait clog rebuild complete
+      if (OB_SUCCESS == result_ && OB_SUCCESS != result) {
+        FLOG_INFO("set first error result", K(result), K_(status));
+        result_ = result;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObLSMigrationHandler::set_result(const int32_t result)
 {
   int ret = OB_SUCCESS;
