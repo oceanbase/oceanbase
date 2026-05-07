@@ -265,6 +265,8 @@ WAIT_EVENT_DEF(LOCATION_RETRY_WAIT, 32003, "retry: wait location cache load", "e
 WAIT_EVENT_DEF(OTHER_RETRY_WAIT, 32004, "retry: other retry wait", "error", "", "", CLUSTER, true, true)
 WAIT_EVENT_DEF(TX_PENDING_LOG_OVERFLOW_RETRY_WAIT, 32005, "retry: wait for the pending log synchronization", "error code", "ls_id", "", CLUSTER, true, true)
 WAIT_EVENT_DEF(UNITEST_COND_WAIT, 32006, "unitest condition wait", "address", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(OB_DAS_FUSION_BITMAP_BARRIER_COND_WAIT, 32007, "ob das fusion bitmap barrier cond wait", "address", "", "", CONCURRENCY, true, true)
+WAIT_EVENT_DEF(OB_DAS_FUSION_COORDINATOR_COND_WAIT, 32008, "ob das fusion coordinator cond wait", "address", "", "", CONCURRENCY, true, true)
 
 // END. DO NOT MODIFY.
 WAIT_EVENT_DEF(WAIT_EVENT_DEF_END, 99999, "event end", "", "", "", OTHER, false, true)

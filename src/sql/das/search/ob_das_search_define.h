@@ -289,10 +289,12 @@ public:
       has_vector_subquery_(false),
       is_top_k_query_(true),
       fusion_method_(ObFusionMethod::WEIGHT_SUM),
-      has_hybrid_fusion_op_(false)
+      has_hybrid_fusion_op_(false),
+      enable_parallel_(false),
+      query_dop_(1)
   {}
   ~ObDASFusionCtDef() {}
-  INHERIT_TO_STRING_KV("ObDASFusionCtDef", ObDASAttachCtDef, K(search_index_), K(has_search_subquery_), K(has_vector_subquery_), K(rowid_exprs_), K(score_exprs_), K(rank_exprs_), K(weight_exprs_), KPC_(size_expr), KPC_(offset_expr), KPC_(rank_window_size_expr), KPC_(rank_constant_expr), KPC_(min_score_expr), K(fusion_method_));
+  INHERIT_TO_STRING_KV("ObDASFusionCtDef", ObDASAttachCtDef, K(search_index_), K(has_search_subquery_), K(has_vector_subquery_), K(rowid_exprs_), K(score_exprs_), K(rank_exprs_), K(weight_exprs_), KPC_(size_expr), KPC_(offset_expr), KPC_(rank_window_size_expr), KPC_(rank_constant_expr), KPC_(min_score_expr), K(fusion_method_), K(enable_parallel_), K(query_dop_));
 
   int init(
     int64_t search_index,
@@ -362,6 +364,8 @@ public:
   bool is_top_k_query_;
   ObFusionMethod fusion_method_;
   bool has_hybrid_fusion_op_;
+  bool enable_parallel_;
+  int64_t query_dop_;
 };
 
 struct ObDASFusionRtDef : ObDASAttachRtDef
