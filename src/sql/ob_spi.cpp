@@ -2099,6 +2099,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
             }
             ret = OB_SUCCESS == ret ? close_ret : ret;
           }
+          is_retry = true;
         } while (RETRY_TYPE_NONE != retry_ctrl.get_retry_type()); //SPI只做LOCAL重试
       }
 
@@ -4378,6 +4379,7 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
           }
           ret = (OB_SUCCESS == ret ? close_ret : ret);
         }
+        is_retry = true;
       } while (RETRY_TYPE_NONE != retry_ctrl.get_retry_type());
     }
     if (OB_SUCC(ret) && cursor.isopen() && !cursor.is_server_cursor()) {  //non_session cursor opened need to add into non session cursor map
