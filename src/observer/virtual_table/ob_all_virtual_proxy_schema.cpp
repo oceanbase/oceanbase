@@ -216,7 +216,10 @@ int ObAllVirtualProxySchema::inner_open()
   //FIXME: should not use cluster level schema guard
   } else if (OB_FAIL(schema_service_->get_cluster_schema_guard(schema_guard_))) {
     LOG_WARN("fail to get schema guard", KR(ret));
-  } else {
+  } else if (OB_NOT_NULL(session_)) {
+    schema_guard_.set_session_id(session_->get_sessid_for_table());
+  }
+  if (OB_SUCC(ret)) {
     const int64_t ROW_KEY_COUNT = 6;
     int64_t exec_tenant_id = OB_INVALID_ID;
     ObRowkey start_key;
@@ -751,7 +754,8 @@ bool ObAllVirtualProxySchema::is_virtual_or_temporary_table_(
     const share::schema::ObTableSchema &table_schema) const
 {
   return table_schema.is_vir_table()
-      || table_schema.is_tmp_table()
+      || table_schema.is_oracle_tmp_table()
+      || table_schema.is_oracle_tmp_table_v2()
       || table_schema.is_view_table()
       || table_schema.is_external_table();
 }
