@@ -197,7 +197,8 @@ bool ObDistPlans::is_plan_available(const ObPhysicalPlan &plan, ObPlanCacheCtx &
 {
   bool can_use = true;
   if (pc_ctx.try_get_plan_) {
-    if (pc_ctx.compare_plan_->get_plan_hash_value() != plan.get_plan_hash_value()) {
+    if (pc_ctx.compare_plan_->get_plan_hash_value() != plan.get_plan_hash_value()
+        || !ObPlanSet::is_rich_format_matched(&plan, pc_ctx)) {
       can_use = false;
     }
   } else if (pc_ctx.enable_adaptive_plan_cache_) {
