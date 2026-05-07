@@ -1096,7 +1096,9 @@ int ObRestoreScheduler::restore_init_ls(const share::ObPhysicalRestoreJob &job_i
   }
 
 #ifdef ERRSIM
+  if (OB_SUCC(ret)) {
     ret = OB_E(EventTable::EN_RESTORE_CREATE_LS_FAILED) OB_SUCCESS;
+  }
 #endif
 
   TenantRestoreStatus tenant_restore_status;
