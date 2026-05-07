@@ -200,6 +200,5 @@ ob_unittest_observer(test_merge_sort_op test_merge_sort_op.cpp)
 set(VECTOR_INDEX_TEST_SHARE
         vector_index/test_vector_index_utils.cpp
         )
-ob_unittest_observer(test_vector_index_freeze vector_index/test_vector_index_freeze.cpp ${VECTOR_INDEX_TEST_SHARE})
-ob_unittest_observer(test_vector_index_freeze_with_base vector_index/test_vector_index_freeze_with_base.cpp ${VECTOR_INDEX_TEST_SHARE})
+ob_farm_observer(test_vector_index_freeze vector_index/test_vector_index_freeze.cpp ${VECTOR_INDEX_TEST_SHARE})
 ####### vector index case #########
