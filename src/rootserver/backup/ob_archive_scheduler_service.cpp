@@ -390,7 +390,7 @@ void ObArchiveSchedulerService::set_checkpoint_interval_(const int64_t interval_
     } else if (max_idle_us > MAX_IDLE_INTERVAL_US) {
       idle_time_us = min(MAX_IDLE_INTERVAL_US, max(lag_target / 2, MIN_IDLE_INTERVAL_US));
     } else {
-      idle_time_us = max_idle_us;
+      idle_time_us = min(max_idle_us, max(MIN_IDLE_INTERVAL_US, lag_target / 2));
     }
   }
 
