@@ -5,6 +5,7 @@ create or replace package body utl_recomp AS
   num_threads number;
   num_batch number;
   current_batch number := 0;
+  job_name_prefix varchar2(100);
 
   sorted_table varchar2(50) := 'SYS.UTL_RECOMP_SORTED';
   compiled_table varchar2(50) := 'SYS.UTL_RECOMP_COMPILED';
@@ -192,7 +193,7 @@ create or replace package body utl_recomp AS
   procedure drop_jobs is
     job_names str_array;
   begin
-    select job_name bulk collect into job_names from SYS.DBA_SCHEDULER_JOBS where job_action like 'SYS.UTL_RECOMP.PARALLEL_SLAVE(%';
+    select job_name bulk collect into job_names from SYS.DBA_SCHEDULER_JOBS where job_name like job_name_prefix || '%';
     for i in 1 .. job_names.count() loop
       begin
         dbms_scheduler.drop_job(job_names(i), true);
@@ -294,7 +295,7 @@ create or replace package body utl_recomp AS
   procedure create_jobs as
   begin
     for i in 0 .. num_threads-1 loop
-      dbms_scheduler.create_job(JOB_NAME => 'UTL_RECOMP_SLAVE_' || current_batch,
+      dbms_scheduler.create_job(JOB_NAME => job_name_prefix || current_batch,
                                 JOB_TYPE => 'PLSQL_BLOCK',
                                 JOB_ACTION => 'SYS.UTL_RECOMP.PARALLEL_SLAVE(' || current_batch || ')',
                                 START_DATE => systimestamp,
@@ -312,11 +313,18 @@ create or replace package body utl_recomp AS
     remain_job_cnt int;
   begin
     loop
-      select count(*) into remain_job_cnt
-        from sys.ALL_VIRTUAL_TENANT_SCHEDULER_JOB_REAL_AGENT
-        where LAST_DATE is NULL and job > 0 and JOB_NAME LIKE 'UTL_RECOMP_SLAVE_%';
-      exit when remain_job_cnt = 0;
-      DBMS_LOCK.SLEEP(3);
+      SELECT count(*) INTO remain_job_cnt
+        FROM sys.ALL_VIRTUAL_TENANT_SCHEDULER_JOB_REAL_AGENT a
+        WHERE a.JOB_NAME LIKE job_name_prefix || '%'
+          AND a.job = 0
+          AND NOT EXISTS (
+            SELECT 1 FROM sys.ALL_VIRTUAL_TENANT_SCHEDULER_JOB_REAL_AGENT b
+            WHERE b.JOB_NAME = a.JOB_NAME
+              AND b.job > 0
+              AND b.STATE NOT IN ('SCHEDULED', 'STARTED')
+          );
+      EXIT WHEN remain_job_cnt = 0;
+      DBMS_LOCK.SLEEP(1);
     end loop;
   end;
 
@@ -324,6 +332,7 @@ create or replace package body utl_recomp AS
   procedure recomp_parallel(threads PLS_INTEGER := NULL, schema varchar2 := NULL, flags PLS_INTEGER := 0) as
   begin
     current_batch := 0;
+    job_name_prefix := 'UTL_RECOMP_SLAVE_' || USER || '_';
     prepare_table(skip_list_table, skip_list_table_ddl, flags);
     prepare_table(sorted_table, sorted_table_ddl, flags);
     prepare_table(compiled_table, compiled_table_ddl, flags);
@@ -340,7 +349,7 @@ create or replace package body utl_recomp AS
     for i in 1 .. ceil(num_batch/num_threads) loop
       create_jobs();
       wait_jobs();
-      drop_jobs();
+      --drop_jobs();
     end loop;
   end;
 
