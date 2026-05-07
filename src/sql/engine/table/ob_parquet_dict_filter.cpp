@@ -756,9 +756,9 @@ int ObParquetDictFilterPushdown::need_decode_dict_column(
     LOG_WARN("filter executor is null", K(ret));
   }
 
-  // 条件1：列在输出中，且不是eager模式
+  // 条件1：列在输出中需要解码
   if (OB_FAIL(ret)) {
-  } else if (is_dup_project.at(col_idx) && !is_eager_calc) {
+  } else if (is_dup_project.at(col_idx)) {
     need_decode = true;
   }
 

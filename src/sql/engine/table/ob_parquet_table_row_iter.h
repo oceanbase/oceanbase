@@ -160,8 +160,7 @@ public:
     read_row_counts_(),
     eager_read_row_counts_(),
     cur_row_group_row_count_(0),
-    logical_read_row_count_(0),
-    logical_eager_read_row_count_(0) {}
+    logical_read_row_count_(0) {}
   int init(const int64_t column_cnt, const int64_t eager_cnt, ObIAllocator &alloc) {
     int ret = OB_SUCCESS;
     read_row_counts_.set_allocator(&alloc);
@@ -187,7 +186,6 @@ public:
     }
     cur_row_group_row_count_ = 0;
     logical_read_row_count_ = 0;
-    logical_eager_read_row_count_ = 0;
   }
   DECLARE_VIRTUAL_TO_STRING;
   int64_t row_group_idx_;
@@ -198,13 +196,11 @@ public:
   common::ObFixedArray<int64_t, common::ObIAllocator> eager_read_row_counts_;
   int64_t cur_row_group_row_count_;
   int64_t logical_read_row_count_;
-  int64_t logical_eager_read_row_count_;
 };
 
 class ObParquetTableRowIterator :
     public ObExternalTableRowIterator, public ObExternalTablePushdownFilter {
 public:
-  static const int64_t SECTOR_SIZE = 8192;
   static const constexpr double EAGER_CALC_CUT_RATIO = 0.66;
   ObParquetTableRowIterator() :
     read_props_(&arrow_alloc_),
@@ -218,7 +214,7 @@ public:
     cur_eager_id_(-1),
     rg_bitmap_(nullptr),
     malloc_allocator_(),
-    sector_iter_(SECTOR_SIZE, this, allocator_),
+    cross_pages_(allocator_),
     page_index_reader_(nullptr),
     rg_page_index_reader_(nullptr),
     page_skip_ranges_(allocator_),
@@ -464,57 +460,11 @@ private:
     ObParquetDictFilterPushdown *dict_filter_pushdown_;
     bool need_decode_;
   };
-  class ParquetSectorIterator {
-    public:
-      ParquetSectorIterator(const int64_t sector_size, ObParquetTableRowIterator *iter, ObIAllocator &alloc)
-        :  iter_(iter), capacity_(sector_size),
-            size_(0), idx_(0), bitmap_(alloc),
-            alloc_(alloc), skip_ranges_(), read_ranges_(),
-            segment_count_(0), cross_pages_(alloc) {}
-      int prepare_next(const int64_t group_remain_count, const int64_t batch_size,
-                       ObPushdownFilterExecutor *root_filter, ObEvalCtx &eval_ctx);
-      void rewind(const int64_t capacity);
-      void reset();
-      int fill_ranges(const int64_t batch_size, const bool has_no_skip_bits);
-      int fill_ranges_one();
-      int fill_eager_ranges(const ObBitVector &rg_bitmap,
-                            const int64_t max_batch_size,
-                            const int64_t start_idx,
-                            const int64_t capacity,
-                            const bool has_no_skip_bits);
-      ObIArray<int64_t> &get_skip_ranges() { return skip_ranges_; }
-      ObIArray<int64_t> &get_read_ranges() { return read_ranges_; }
-      bool is_end() const { return 0 == size_ || idx_ >= size_; }
-      bool is_empty() const { return 0 == size_; }
-      void check_cross_pages(const int64_t capacity);
-      bool is_cross_page(const int64_t column_id) { return cross_pages_.at(column_id); }
-      // Check if a batch will cross page boundary
-      // Returns true if the batch crosses page, false otherwise
-      bool check_if_batch_cross_page(const int64_t column_id,
-        const int64_t current_row_pos,
-        const int64_t batch_size);
-
-    private:
-      bool has_no_skip_bits();
-
-    private:
-      ObParquetTableRowIterator *iter_;
-      int64_t capacity_;
-      int64_t size_;
-      int64_t idx_;
-      ObBitmap bitmap_;
-      ObIAllocator &alloc_;
-      ObArray<int64_t> skip_ranges_;
-      ObArray<int64_t> read_ranges_;
-      int64_t segment_count_;
-      common::ObFixedArray<bool, common::ObIAllocator> cross_pages_;
-      common::ObArrayWrap<std::shared_ptr<parquet::OffsetIndex>> offset_indexs_;
-  };
-  friend class ObParquetTableRowIterator::ParquetSectorIterator;
 private:
   int next_file();
   int next_row_group();
-  int next_sector(const int64_t capacity, ObEvalCtx &eval_ctx, int64_t &read_count);
+  int advance_next_batch(const int64_t capacity, ObEvalCtx &eval_ctx, int64_t &read_count);
+  int read_batch(const int64_t actual_capacity, ObEvalCtx &eval_ctx, int64_t &read_count);
   int calc_pseudo_exprs(const int64_t read_count);
   ObExternalTableAccessOptions& make_external_table_access_options(stmt::StmtType stmt_type);
   static int convert_timestamp_datum(const ObDatumMeta &datum_type, int64_t adjusted_min_value,
@@ -536,7 +486,10 @@ private:
                         std::unique_ptr<parquet::ParquetFileReader>& file_reader,
                         std::unique_ptr<parquet::ParquetFileReader>& eager_file_reader);
   void reset_column_readers();
-  int project_eager_columns(int64_t &count, int64_t capacity);
+  int project_eager_columns(int64_t &count,
+                            int64_t capacity,
+                            int64_t output_row_offset,
+                            int64_t &eager_row_pos);
   int calc_eager_column_convert(const int64_t read_count);
   int apply_dict_code_filters(const int64_t count,
                               ObPushdownFilterExecutor *curr_filter);
@@ -544,15 +497,13 @@ private:
                    ObPushdownFilterExecutor *curr_filter,
                    ObPushdownFilterExecutor *parent_filter);
   int project_lazy_columns(int64_t &read_count, int64_t capacity);
-  void load_lazy_read_row_count();
   int64_t SkipRowsInColumn(const int64_t column_id, const int64_t num_rows_to_skip,
                            const int64_t logical_idx, const bool is_lazy,
                            int64_t &curr_idx, parquet::ColumnReader* reader,
                            parquet::internal::RecordReader* record_reader,
                            bool is_collection_column);
-  void clear_eager_flags(ObEvalCtx &eval_ctx);
-  void move_next();
-  void increase_read_rows(const int64_t rows, const bool only_eager);
+  void move_next(const int64_t capacity);
+  void increase_read_rows(const int64_t rows, const bool only_eager, int64_t &eager_row_pos);
   int prepare_page_ranges(std::shared_ptr<parquet::RowGroupReader> rg_reader, const int64_t num_rows);
   int prepare_all_column_page_locations(
       int64_t rg_num_rows,
@@ -560,7 +511,21 @@ private:
   int64_t get_real_skip_count(const int64_t curr_idx,
                               const int64_t num_rows_to_skip,
                               const int64_t column_id);
-  int reorder_output(const oceanbase::common::ObBitmap &bitmap, ObEvalCtx &ctx, int64_t &read_count);
+  int reorder_output(const oceanbase::common::ObBitmap &bitmap,
+                     ObEvalCtx &ctx,
+                     int64_t &read_count,
+                     bool only_eager_output = false);
+  // Compact projected eager columns
+  int reorder_eager_output_columns(const oceanbase::common::ObBitmap &bitmap,
+                                   ObEvalCtx &ctx,
+                                   int64_t &read_count);
+  void check_cross_pages(const int64_t capacity);
+  bool is_cross_page(const int64_t column_id) { return cross_pages_.at(column_id); }
+  bool check_if_batch_cross_page(const int64_t column_id,
+                                  const int64_t current_row_pos,
+                                  const int64_t batch_size);
+  int fill_rg_skip_read_ranges(const int64_t capacity);
+  int fill_lazy_ranges(const ObPushdownFilterExecutor &filter);
   int prepare_rg_bitmap(std::shared_ptr<parquet::RowGroupReader> rg_reader);
   int prepare_page_index(const int64_t cur_row_group,
                          std::shared_ptr<parquet::RowGroupReader> rg_reader,
@@ -620,7 +585,14 @@ private:
   int64_t cur_eager_id_;
   ObBitVector *rg_bitmap_;
   common::ObFIFOAllocator malloc_allocator_;
-  ParquetSectorIterator sector_iter_;
+  // single-layer iteration state
+  common::ObFixedArray<bool, common::ObIAllocator> cross_pages_;
+  common::ObArrayWrap<std::shared_ptr<parquet::OffsetIndex>> offset_indexs_;
+  ObSEArray<int64_t, 16> eager_output_indices_;
+  ObSEArray<int64_t, 8> rg_skip_ranges_; // rg-level skip/read from fill_rg_skip_read_ranges
+  ObSEArray<int64_t, 8> rg_read_ranges_;
+  ObSEArray<int64_t, 8> lazy_skip_ranges_; // combined skip/read for project_lazy_columns
+  ObSEArray<int64_t, 8> lazy_read_ranges_;
   std::shared_ptr<parquet::PageIndexReader> page_index_reader_;
   std::shared_ptr<parquet::RowGroupPageIndexReader> rg_page_index_reader_;
   // place each column skiped page's [page_start_row, page_rows]
