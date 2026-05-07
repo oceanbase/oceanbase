@@ -542,8 +542,12 @@ public:
     }
     find_new_line = true;
     if (field_idx < format_.file_column_nums_) {
+      // 这里处理行尾的最后一个字段：
+      // 1. str > ori_field_begin 表示最后一个字段有内容，需要生成字段。
+      // 2. 最后一个字段为空时，若 ignore_last_empty_col_ 为 false，则保留该空字段；
+      //    但 skip_blank_lines_ 为 true 时，需要通过 field_idx > 0 排除真正的空行。
       if ((str > ori_field_begin) ||
-          (!SKIP_BLANK_LINES && !IGNORE_LAST_EMPTY_COLUMN)) {
+          (!IGNORE_LAST_EMPTY_COLUMN && (!SKIP_BLANK_LINES || field_idx > 0))) {
         ++field_idx;
         if (USE_HANDLE_BATCH_LINES) {
           gen_new_field(false, ori_field_begin, str, field_begin, str, field_idx, output_line_no);
@@ -938,10 +942,16 @@ int ObCSVGeneralParser::scan_proto(const char *&str,
             field_end = escape_buf_pos;
           }
         }
+        // 判断当前解析到的内容是否需要生成字段：
+        // 1. is_field_term 表示遇到字段分隔符，分隔符前的字段已经结束，需要生成字段；
+        // 2. ori_field_end > ori_field_begin 表示字段本身有内容，需要生成字段;
+        // 3. 如果当前行以分隔符结尾，最后一个字段为空，只有在 ignore_last_empty_col_ 为 false
+        //    时才保留；同时 skip_blank_lines_ 只跳过真正的空行，field_idx > 0 说明当前行
+        //    已经有字段，是非空数据行，尾部空字段也需要按参数语义保留下来。
         if (is_field_term || ori_field_end > ori_field_begin ||
             (field_idx < format_.file_column_nums_
-            && !format_.skip_blank_lines_
-            && !format_.ignore_last_empty_col_)
+            && !format_.ignore_last_empty_col_
+            && (!format_.skip_blank_lines_ || field_idx > 0))
         ) {
           if (field_idx++ < format_.file_column_nums_) {
             if (USE_HANDLE_BATCH_LINES) {
