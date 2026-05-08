@@ -1,5 +1,6 @@
 name: "🙋 Question"
-description: Ask a question about OceanBase\mlabels:
+description: Ask a question about OceanBase
+labels:
   - type: question
 body:
   - type: checkboxes
