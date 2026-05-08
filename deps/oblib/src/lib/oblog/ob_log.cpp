@@ -783,6 +783,7 @@ void ObLogger::rotate_log(const int64_t size, const bool redirect_flag,
 {
   if (OB_LIKELY(size > 0) && max_file_size_ > 0 && log_struct.file_size_ >= max_file_size_) {
     if (OB_LIKELY(0 == pthread_mutex_trylock(&file_size_mutex_))) {
+      log_struct.reset();
       rotate_log(log_struct.filename_, fd_type, redirect_flag, log_struct.fd_,
                  log_struct.wf_fd_, file_list_, wf_file_list_);
       (void)ATOMIC_SET(&log_struct.file_size_, 0);
@@ -1693,9 +1694,13 @@ void ObLogger::flush_logs_to_file(ObPLogItem **log_item, const int64_t count)
           (void)ATOMIC_AAF(&log_file_[i].write_size_, size);
           (void)ATOMIC_AAF(&log_file_[i].file_size_, size);
           (void)ATOMIC_AAF(&log_file_[i].write_count_, iovcnt[i]);
+          log_file_[i].try_fsync(size);
         }
         if (wf_iovcnt[i] > 0 && log_file_[i].wf_fd_ > 0) {
-          (void)::writev(log_file_[i].wf_fd_, wf_vec[i], wf_iovcnt[i]);
+          ssize_t wf_size = ::writev(log_file_[i].wf_fd_, wf_vec[i], wf_iovcnt[i]);
+          if (wf_size > 0) {
+            log_file_[i].try_wfsync(wf_size);
+          }
         }
       }
 
