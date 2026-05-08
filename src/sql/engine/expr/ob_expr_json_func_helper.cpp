@@ -3598,12 +3598,19 @@ int ObJsonBinFastLocator::get_value_offset_len(size_t idx, char *&res_ptr, int64
     bool is_inlined = OB_JSON_TYPE_INLINE_MASK & res_type;
     res_type = OB_JSON_TYPE_GET_INLINE(res_type);
     if (is_inlined) {
-      // entry_size_ is at most 8 bytes (derived from a 2-bit field), use member buffer
       MEMSET(inline_buf_, 0, sizeof(inline_buf_));
       int64_t pos = 0;
-      uint64_t value = get_var_local(res_ptr, entry_type_);
-      if (OB_FAIL(serialization::encode_vi64(inline_buf_, entry_size_, pos, value))) {
-        LOG_WARN("failed to serialize for int json obj", K(ret), K(entry_size_), K(pos), K(value));
+      uint64_t uval = get_var_local(res_ptr, entry_type_);
+      ObJBVerType vertype_inline = static_cast<ObJBVerType>(res_type);
+      ObJsonNodeType node_type_inline = ObJsonVerType::get_json_type(vertype_inline);
+      int64_t sval;
+      if (node_type_inline == ObJsonNodeType::J_INT || node_type_inline == ObJsonNodeType::J_OINT) {
+        sval = ObJsonVar::var_uint2int(uval, entry_size_);
+      } else {
+        sval = static_cast<int64_t>(uval);
+      }
+      if (OB_FAIL(serialization::encode_vi64(inline_buf_, sizeof(inline_buf_), pos, sval))) {
+        LOG_WARN("failed to serialize for int json obj", K(ret), K(sizeof(inline_buf_)), K(pos), K(sval));
       } else {
         res_ptr = inline_buf_;
         res_len = pos;
@@ -3615,6 +3622,7 @@ int ObJsonBinFastLocator::get_value_offset_len(size_t idx, char *&res_ptr, int64
       ObJsonNodeType node_type = ObJsonVerType::get_json_type(vertype);
       switch (node_type) {
         case ObJsonNodeType::J_NULL: {
+          res_len = 1;
           break;
         }
         case ObJsonNodeType::J_OBJECT:
@@ -3687,12 +3695,22 @@ int ObJsonBinFastLocator::get_value_offset_len(size_t idx, char *&res_ptr, int64
         case ObJsonNodeType::J_MYSQL_DATETIME:
         case ObJsonNodeType::J_OTIMESTAMP:
         case ObJsonNodeType::J_OTIMESTAMPTZ:
-        case ObJsonNodeType::J_TIMESTAMP:
+        case ObJsonNodeType::J_TIMESTAMP: {
+          res_len = sizeof(int64_t);
+          break;
+        }
         case ObJsonNodeType::J_INT:
         case ObJsonNodeType::J_OINT:
         case ObJsonNodeType::J_UINT:
         case ObJsonNodeType::J_OLONG: {
-          res_len = sizeof(int64_t);
+          int64_t int_offset = res_offset;
+          int64_t val = 0;
+          ObString json_str(total_len_, data_ptr_);
+          if (OB_FAIL(decode_vi64(json_str, int_offset, &val))) {
+            LOG_WARN("decode int length fail", K(ret), K(int_offset));
+          } else {
+            res_len = int_offset - res_offset;
+          }
           break;
         }
         case ObJsonNodeType::J_BOOLEAN: {

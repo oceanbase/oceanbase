@@ -596,7 +596,9 @@ private:
   int64_t total_len_;           // Cached json_str_.length() to avoid repeated function calls
   bool use_lexicographical_order_;
   uint64_t extend_seg_offset_;
-  char inline_buf_[sizeof(uint64_t)];  // Buffer for inlined values, avoids dangling pointer to stack
+  // vi64 encoding needs up to 10 bytes (64-bit value / 7 bits per byte, rounded up)
+  static constexpr int64_t INLINE_BUF_SIZE = 10;
+  char inline_buf_[INLINE_BUF_SIZE];  // Buffer for inlined values, avoids dangling pointer to stack
   char *root_data_ptr_;         // root object start saved by init(), used by reset_to_root()
   int64_t root_total_len_;
 };
