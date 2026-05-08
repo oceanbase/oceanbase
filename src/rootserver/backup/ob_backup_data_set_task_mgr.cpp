@@ -618,11 +618,15 @@ int ObBackupSetTaskMgr::do_wait_ss_ls_consistency_()
 
       if (compare_ls_id_lists_(all_ls_ids, sslog_ls_ids)) {
         // LS lists match - persist read_scn AND sslog_gts into __all_backup_task
+        ObBackupExtraInfo new_extra_info = set_task_attr_.extra_info_;
+        new_extra_info.sslog_gts_ = sslog_gts;
+        new_extra_info.read_scn_ = read_scn;
         if (OB_FAIL(ObBackupTaskOperator::update_extra_info(*sql_proxy_, set_task_attr_.task_id_,
-            tenant_id, sslog_gts, read_scn))) {
-          LOG_WARN("failed to update extra_info", K(ret), K(tenant_id), K(sslog_gts), K(read_scn));
+            tenant_id, new_extra_info))) {
+          LOG_WARN("failed to update extra_info", K(ret), K(tenant_id), K(new_extra_info));
         } else {
           success = true;
+          set_task_attr_.extra_info_ = new_extra_info;
           ROOTSERVICE_EVENT_ADD("backup_data", "wait_ss_ls_consistency_success",
                                 "tenant_id", tenant_id,
                                 "backup_set_id", job_attr_->backup_set_id_,

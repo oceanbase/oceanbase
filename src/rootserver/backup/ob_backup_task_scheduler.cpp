@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX RS
 
 #include "ob_backup_task_scheduler.h"
+#include "ob_backup_server_disk_space_filter.h"
 #include "share/ob_zone_table_operation.h"
 #include "share/backup/ob_backup_server_mgr.h"
 #include "share/backup/ob_backup_connectivity.h"
@@ -21,6 +22,7 @@ using namespace obrpc;
 using namespace share;
 namespace rootserver
 {
+
 ObBackupTaskSchedulerQueue::ObBackupTaskSchedulerQueue()
   : is_inited_(false),
     mutex_(common::ObLatchIds::BACKUP_LOCK),
@@ -33,7 +35,9 @@ ObBackupTaskSchedulerQueue::ObBackupTaskSchedulerQueue()
     task_map_(),
     rpc_proxy_(nullptr),
     task_scheduler_(nullptr),
-    sql_proxy_(nullptr)
+    sql_proxy_(nullptr),
+    cached_disk_stats_(),
+    cached_disk_stats_ts_(0)
 {
 }
 
@@ -80,6 +84,8 @@ void ObBackupTaskSchedulerQueue::reset()
   task_map_.clear();
   tenant_stat_map_.reuse();
   server_stat_map_.reuse();
+  cached_disk_stats_.reset();
+  cached_disk_stats_ts_ = 0;
 }
 
 int ObBackupTaskSchedulerQueue::init(
@@ -287,76 +293,154 @@ int ObBackupTaskSchedulerQueue::update_task_last_alive_time(const ObBackupSchedu
   return ret;
 }
 
+bool ObBackupTaskSchedulerQueue::is_wait_list_empty_()
+{
+  ObMutexGuard guard(mutex_);
+  return wait_list_.is_empty();
+}
+
+int ObBackupTaskSchedulerQueue::prepare_disk_filtered_servers_(
+    const ObIArray<ObBackupServer> &all_servers,
+    ObIArray<ObBackupServer> &disk_filtered_servers)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  disk_filtered_servers.reset();
+  ObArray<ObBackupServerDiskSpaceFilter::RawDiskStat> raw_stats;
+  const int64_t now = ObTimeUtility::current_time();
+  bool cache_hit = false;
+
+  // 1) try TTL cache
+  {
+    ObMutexGuard guard(mutex_);
+    if (now - cached_disk_stats_ts_ <= DISK_STATS_CACHE_TTL && !cached_disk_stats_.empty()) {
+      if (OB_TMP_FAIL(raw_stats.assign(cached_disk_stats_))) {
+        LOG_WARN("fail to copy cached disk stats", K(tmp_ret));
+      } else {
+        cache_hit = true;
+      }
+    }
+  }
+
+  // 2) on cache miss, query and refresh cache
+  if (!cache_hit) {
+    ObBackupServerDiskSpaceFilter disk_space_filter;
+    if (OB_TMP_FAIL(disk_space_filter.init(sql_proxy_))) {
+      LOG_WARN("[BACKUP] fail to init disk space filter", K(tmp_ret));
+    } else if (OB_TMP_FAIL(disk_space_filter.query_all_disk_stats(raw_stats))) {
+      LOG_WARN("[BACKUP] fail to query disk stats", K(tmp_ret));
+      raw_stats.reset();
+    } else {
+      ObMutexGuard guard(mutex_);
+      if (OB_TMP_FAIL(cached_disk_stats_.assign(raw_stats))) {
+        LOG_WARN("fail to update disk stats cache", K(tmp_ret));
+      } else {
+        cached_disk_stats_ts_ = now;
+      }
+    }
+  }
+
+  // 3) apply filter or fall back. Fallback path keeps scheduling unblocked even when
+  // the SQL fails and the cache is empty.
+  if (raw_stats.empty()) {
+    LOG_WARN("[BACKUP] disk stats unavailable, fallback to original server list",
+             K(all_servers.count()));
+    if (OB_FAIL(disk_filtered_servers.assign(all_servers))) {
+      LOG_WARN("fail to assign fallback servers", K(ret));
+    }
+  } else if (OB_TMP_FAIL(ObBackupServerDiskSpaceFilter::apply_disk_filter(
+                 all_servers, raw_stats, disk_filtered_servers))) {
+    LOG_WARN("[BACKUP] fail to apply disk filter, fallback to original server list",
+             K(tmp_ret), K(all_servers.count()));
+    if (OB_FAIL(disk_filtered_servers.assign(all_servers))) {
+      LOG_WARN("fail to assign fallback servers", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObBackupTaskSchedulerQueue::pop_task(ObBackupScheduleTask *&output_task, common::ObArenaAllocator &allocator)
 {
   int ret = OB_SUCCESS;
   ObBackupScheduleTask *task = nullptr;
   output_task = nullptr;
   ObArray<ObBackupServer> all_servers;
-  ObArray<ObBackupServer> connectivity_servers;
+  ObArray<ObBackupServer> disk_filtered_servers;
   ObAddr dst;
-
   bool can_schedule = false;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup scheduler queue not init", K(ret));
+  } else if (is_wait_list_empty_()) {
+    // Skip the disk-space-filter SQL when nothing is waiting. Avoids amplifying
+    // RS internal query pressure during idle.
   } else if (OB_FAIL(get_all_servers_(all_servers))) {
     LOG_WARN("fail to get zone servers", K(ret));
+  } else if (OB_FAIL(prepare_disk_filtered_servers_(all_servers, disk_filtered_servers))) {
+    LOG_WARN("fail to prepare disk filtered servers", K(ret));
   } else {
-
-    ObMutexGuard guard(mutex_);
-    DLIST_FOREACH(t, wait_list_)
-    {
-      if (OB_FAIL(choose_dst_(t, all_servers, dst, can_schedule))) {
-        LOG_WARN("fail to choose servers from all servers", K(ret), KPC(t));
+    if (disk_filtered_servers.empty()) {
+      if (REACH_TIME_INTERVAL(60 * 1000 * 1000)) {
+        LOG_ERROR("[BACKUP] all servers disk space insufficient, backup task cannot be scheduled. "
+                  "Please expand disk space or adjust _backup_server_disk_limit_percentage.",
+                  K(all_servers.count()),
+                  "limit_percentage", static_cast<int64_t>(GCONF._backup_server_disk_limit_percentage));
       }
-      if (OB_SUCC(ret) && can_schedule) {
-        task = t;
-        break;
-      }
-    }
-    if (OB_SUCC(ret) && nullptr != task) {
-      if (!dst.is_valid()) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("error dst", K(ret), KPC(task), K(dst));
-      } else if (OB_FAIL(task->set_schedule(dst))) {
-        LOG_WARN("fail to set schedule", K(ret), K(dst), KPC(task));
-      } else if (OB_FAIL(set_server_stat_(dst, task->get_type()))) {
-        LOG_WARN("set server stat faled", K(ret), K(dst));
-      } else {
-        wait_list_.remove(task);
-        if (OB_FAIL(task->update_dst_and_doing_status(*sql_proxy_))) {
-          LOG_WARN("fail to update task dst in internal table", K(ret), KPC(task), K(dst));
-        } else if (!schedule_list_.add_last(task)) { // This step must be successful
-          ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("fail to add task to schedule list", K(ret), KPC(task));
-        } 
-        if (OB_FAIL(ret)) {
-          int tmp_ret = OB_SUCCESS;
-          //if ret != OB_SUCCESS, clean_server_ref_ and add_last must execute
-          if (OB_SUCCESS != (tmp_ret = clean_server_ref_(dst, task->get_type()))) {
-            LOG_ERROR("fail to clean server ref", K(ret), KPC(task));
-          }
-          if (!wait_list_.add_last(task)) {
-            LOG_ERROR("fail to add task to wait list", KPC(task));
-          } 
+    } else {
+      ObMutexGuard guard(mutex_);
+      DLIST_FOREACH(t, wait_list_)
+      {
+        if (OB_FAIL(choose_dst_(t, disk_filtered_servers, dst, can_schedule))) {
+          LOG_WARN("fail to choose servers from all servers", K(ret), KPC(t));
+        }
+        if (OB_SUCC(ret) && can_schedule) {
+          task = t;
+          break;
         }
       }
-      if (OB_FAIL(ret)) {
-        task->clear_schedule();
-        task = nullptr;
+      if (OB_SUCC(ret) && nullptr != task) {
+        if (!dst.is_valid()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("error dst", K(ret), KPC(task), K(dst));
+        } else if (OB_FAIL(task->set_schedule(dst))) {
+          LOG_WARN("fail to set schedule", K(ret), K(dst), KPC(task));
+        } else if (OB_FAIL(set_server_stat_(dst, task->get_type()))) {
+          LOG_WARN("set server stat faled", K(ret), K(dst));
+        } else {
+          wait_list_.remove(task);
+          if (OB_FAIL(task->update_dst_and_doing_status(*sql_proxy_))) {
+            LOG_WARN("fail to update task dst in internal table", K(ret), KPC(task), K(dst));
+          } else if (!schedule_list_.add_last(task)) { // This step must be successful
+            ret = OB_ERR_UNEXPECTED;
+            LOG_ERROR("fail to add task to schedule list", K(ret), KPC(task));
+          }
+          if (OB_FAIL(ret)) {
+            int tmp_ret = OB_SUCCESS;
+            //if ret != OB_SUCCESS, clean_server_ref_ and add_last must execute
+            if (OB_SUCCESS != (tmp_ret = clean_server_ref_(dst, task->get_type()))) {
+              LOG_ERROR("fail to clean server ref", K(ret), KPC(task));
+            }
+            if (!wait_list_.add_last(task)) {
+              LOG_ERROR("fail to add task to wait list", KPC(task));
+            }
+          }
+        }
+        if (OB_FAIL(ret)) {
+          task->clear_schedule();
+          task = nullptr;
+        }
       }
-    }
 
-    if (OB_FAIL(ret) || OB_ISNULL(task)) {
-    } else {
-      if (OB_FAIL(task->clone(allocator, output_task))) {
-        LOG_WARN("fail to clone input task", K(ret));
-      } else if (OB_ISNULL(output_task)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("input task ptr is null", K(ret));
+      if (OB_FAIL(ret) || OB_ISNULL(task)) {
       } else {
-        task->set_executor_time(ObTimeUtility::current_time());
+        if (OB_FAIL(task->clone(allocator, output_task))) {
+          LOG_WARN("fail to clone input task", K(ret));
+        } else if (OB_ISNULL(output_task)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("input task ptr is null", K(ret));
+        } else {
+          task->set_executor_time(ObTimeUtility::current_time());
+        }
       }
     }
   }
@@ -582,8 +666,9 @@ int ObBackupTaskSchedulerQueue::choose_dst_(
     } else if (OB_FAIL(ObBackupDestIOPermissionMgr::get_src_info_from_extension(extension, src_info))) {
       LOG_WARN("failed to check locality info valid", K(ret), K(extension));
     } else if (!src_info.is_empty()) {
+      // Backup destination has zone/idc/region constraints: first filter servers by connectivity,
+      // then get_alternative_servers_ intersects with task's optional_servers (if any).
       ObArray<common::ObAddr> empty_block_server;
-      // Only backup data job has black server need set empty block server when backup zone/idc/region set
       if (!task->can_execute_on_any_server() && BackupJobType::BACKUP_DATA_JOB == task->get_type()) {
         ObBackupDataLSTask *tmp_task = static_cast<ObBackupDataLSTask *>(task);
         if (OB_FAIL(tmp_task->set_optional_servers_(empty_block_server))) {
@@ -599,19 +684,21 @@ int ObBackupTaskSchedulerQueue::choose_dst_(
         LOG_WARN("failed to get alternative servers", K(ret), K(task), K(tmp_optional_servers));
       }
     } else if (!task->can_execute_on_any_server()) {
-        const ObIArray<ObBackupServer> &optional_servers =task->get_optional_servers();
-        if (optional_servers.empty()) {
+        // Task has specific server preferences (backup zone/region set). Pass disk-filtered `servers`
+        // rather than task->get_optional_servers() directly: get_alternative_servers_ internally
+        // intersects with task->get_optional_servers(), so passing `servers` ensures disk-space
+        // filtered servers are excluded while still respecting the task's server preferences.
+        if (task->get_optional_servers().empty()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("optional servers is empty", K(ret), KPC(task));
-        } else if (OB_FAIL(get_alternative_servers_(*task, optional_servers, alternative_servers))) {
-          LOG_WARN("failed to get alternative servers", K(ret), K(task), K(optional_servers));
+        } else if (OB_FAIL(get_alternative_servers_(*task, servers, alternative_servers))) {
+          LOG_WARN("failed to get alternative servers", K(ret), K(task), K(servers));
         }
     } else {
       if (OB_FAIL(get_alternative_servers_(*task, servers, alternative_servers))) {
         LOG_WARN("failed to get alternative servers", K(ret), K(task), K(servers));
       }
     }
-
 
     if (OB_FAIL(ret)) {
     } else if (alternative_servers.empty()) { // servers are busy, wait for next turn
@@ -730,7 +817,7 @@ int ObBackupTaskSchedulerQueue::get_dst_(const ObIArray<ObAddr> &alternative_ser
 }
 
 int ObBackupTaskSchedulerQueue::check_server_can_become_dst_(
-	  const ObAddr &server, 
+	  const ObAddr &server,
     const BackupJobType &type,
     bool &can_dst)
 {

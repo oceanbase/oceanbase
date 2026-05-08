@@ -1847,7 +1847,7 @@ int ObBackupTaskOperator::update_start_scn(common::ObISQLClient &proxy, const in
 }
 
 int ObBackupTaskOperator::update_extra_info(common::ObISQLClient &proxy, const int64_t task_id,
-    const uint64_t tenant_id, const SCN &sslog_gts, const SCN &read_scn)
+    const uint64_t tenant_id, const ObBackupExtraInfo &extra_info)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -1855,14 +1855,11 @@ int ObBackupTaskOperator::update_extra_info(common::ObISQLClient &proxy, const i
   ObDMLSqlSplicer dml;
   char info_buf[OB_INNER_TABLE_DEFAULT_VALUE_LENTH] = "";
   int64_t pos = 0;
-  ObBackupExtraInfo info;
-  info.sslog_gts_ = sslog_gts;
-  info.read_scn_ = read_scn;
   if (task_id <= 0 || tenant_id == OB_INVALID_TENANT_ID) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(task_id), K(tenant_id));
-  } else if (OB_FAIL(info.encode_to_str(info_buf, sizeof(info_buf), pos))) {
-    LOG_WARN("failed to encode extra_info", K(ret), K(sslog_gts), K(read_scn));
+  } else if (OB_FAIL(extra_info.encode_to_str(info_buf, sizeof(info_buf), pos))) {
+    LOG_WARN("failed to encode extra_info", K(ret), K(extra_info));
   } else if (OB_FAIL(dml.add_pk_column(OB_STR_TENANT_ID, tenant_id))) {
     LOG_WARN("failed to add column", K(ret));
   } else if (OB_FAIL(dml.add_pk_column(OB_STR_TASK_ID, task_id))) {
@@ -1881,7 +1878,7 @@ int ObBackupTaskOperator::update_extra_info(common::ObISQLClient &proxy, const i
     LOG_WARN("[DATA_BACKUP]backup task not exist, update extra_info affected 0 rows",
         K(ret), K(task_id), K(tenant_id), K(sql));
   } else {
-    LOG_INFO("[DATA_BACKUP]success update extra_info", K(sql), K(sslog_gts), K(read_scn));
+    LOG_INFO("[DATA_BACKUP]success update extra_info", K(sql), K(extra_info));
   }
   return ret;
 }

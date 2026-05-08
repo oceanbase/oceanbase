@@ -1134,5 +1134,6 @@ int ObServerTableOperator::exec_write(
   LOG_INFO("update __all_server table", KR(ret), K(affected_rows), K(sql));
   return ret;
 }
-}//end namespace rootserver
+
+}//end namespace share
 }//end namespace oceanbase

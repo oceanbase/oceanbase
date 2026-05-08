@@ -1152,6 +1152,16 @@ DEF_INT(data_disk_usage_limit_percentage, OB_CLUSTER_PARAMETER, "90", "[50,100]"
         "the safe use percentage of data disk"
         "Range: [50,100] in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_backup_server_disk_limit_percentage, OB_CLUSTER_PARAMETER, "90", "[50,99]",
+        "the disk usage percentage threshold for backup server selection. "
+        "Servers with disk usage higher than this threshold will not be selected for backup tasks. "
+        "Range: [50,99] in integer.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_TIME(_backup_disk_full_max_wait_duration, OB_CLUSTER_PARAMETER, "24h", "[1s, 7d]",
+        "max duration to wait for disk-full recovery before a backup job is permanently failed. "
+        "Counted from the first time any task reports OB_SERVER_OUTOF_DISK_SPACE. "
+        "Range: [1s, 7d].",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(sys_bkgd_net_percentage, OB_CLUSTER_PARAMETER, "60", "[0,100]",
         "the net percentage of sys background net. Range: [0, 100] in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

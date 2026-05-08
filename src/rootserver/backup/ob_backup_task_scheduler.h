@@ -8,7 +8,9 @@
 
 #include "ob_backup_base_service.h"
 #include "ob_backup_schedule_task.h"
+#include "ob_backup_server_disk_space_filter.h"
 #include "ob_backup_service.h"
+#include "lib/literals/ob_literals.h"
 
 namespace oceanbase 
 {
@@ -111,6 +113,13 @@ private:
   int64_t get_task_cnt_() const { return task_map_.size(); }
   int64_t get_wait_task_cnt_() const { return wait_list_.get_size(); }
   int64_t get_in_schedule_task_cnt_() const { return schedule_list_.get_size(); }
+  bool is_wait_list_empty_();
+  // Compute disk-filtered server list for scheduling. Uses a TTL cache of raw disk
+  // stats (DISK_STATS_CACHE_TTL) to avoid hitting __all_virtual_server every call.
+  // On any failure, falls back to copying all_servers so scheduling never blocks.
+  int prepare_disk_filtered_servers_(
+      const common::ObIArray<share::ObBackupServer> &all_servers,
+      common::ObIArray<share::ObBackupServer> &disk_filtered_servers);
 
 private:
   bool is_inited_;
@@ -130,7 +139,12 @@ private:
   TaskMap task_map_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;
   ObBackupTaskScheduler *task_scheduler_;
-  common::ObMySQLProxy *sql_proxy_; 
+  common::ObMySQLProxy *sql_proxy_;
+  // Cache of cluster-wide disk stats. Refreshed from __all_virtual_server when stale,
+  // serving subsequent pop_task calls within the TTL window. Protected by mutex_.
+  common::ObArray<ObBackupServerDiskSpaceFilter::RawDiskStat> cached_disk_stats_;
+  int64_t cached_disk_stats_ts_;
+  static const int64_t DISK_STATS_CACHE_TTL = 5_min;
   DISALLOW_COPY_AND_ASSIGN(ObBackupTaskSchedulerQueue);
 };
 

@@ -8,8 +8,8 @@
 #include "ob_backup_data_ls_task_mgr.h"
 #include "ob_backup_task_scheduler.h"
 #include "storage/backup/ob_backup_operator.h"
-#include "storage/backup/ob_backup_operator.h"
 #include "share/backup/ob_backup_connectivity.h"
+#include "share/backup/ob_backup_data_table_operator.h"
 
 namespace oceanbase
 {
@@ -312,36 +312,53 @@ int ObBackupDataLSTaskMgr::handle_execute_over(
   ObSqlString extra_condition;
   share::ObBackupDataType backup_data_type;
   int64_t full_replica_num = 0;
+
   if (!ls_attr.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_attr));
-  } else if (ls_attr.task_type_.is_need_add_file_list() && OB_FAIL(add_file_list_(sql_proxy, ls_attr))) {
-    LOG_WARN("failed to add file list", K(ret), K(ls_attr));
-  } else if (OB_FAIL(new_ls_attr.assign(ls_attr))) {
-    LOG_WARN("failed to assign ls attr", K(ret), K(ls_attr));
-  } else if (OB_FAIL(extra_condition.assign_fmt(
-      "%s = %ld and %s = %ld and %s='%s'", OB_STR_TURN_ID, ls_attr.turn_id_, OB_STR_RETRY_ID, ls_attr.retry_id_,
-      OB_STR_STATUS, ls_attr.status_.get_str()))) {
-    LOG_WARN("failed to assign extra condition", K(ret));
-  } else if (OB_FALSE_IT(new_ls_attr.end_ts_ = ObTimeUtility::current_time())) {
-  } else if (OB_FAIL(ObBackupUtils::get_full_replica_num(ls_attr.tenant_id_, full_replica_num))) {
-    LOG_WARN("failed to get full replica num", K(ret));
-  } else if (new_ls_attr.black_servers_.count() + 1 >= full_replica_num && OB_FALSE_IT(new_ls_attr.black_servers_.reset())) {
-  } else if (OB_SUCCESS != result_info.result_ && OB_FAIL(new_ls_attr.black_servers_.push_back(result_info.addr_))) {
-    LOG_WARN("failed to push back black server", K(ret), K(result_info));
-  } else if (OB_FALSE_IT(new_ls_attr.result_ = result_info.result_)) {
-  } else if (OB_FALSE_IT(new_ls_attr.status_ = ObBackupTaskStatus::FINISH)) {
-  } else if (OB_FAIL(result_info.get_comment_str(new_ls_attr.comment_))) {
-    LOG_WARN("failed to get comment str", K(ret));
-  } else if (OB_FAIL(ObBackupLSTaskOperator::report_ls_task(sql_proxy, new_ls_attr, extra_condition))) {
-    LOG_WARN("failed to report ls task", K(ret), K(new_ls_attr), K(extra_condition));
-  } else if (!ls_attr.task_type_.is_backup_data()) {
-    // do nothing
-  } else if (OB_FAIL(ls_attr.task_type_.get_backup_data_type(backup_data_type))) {
-    LOG_WARN("failed to get backup data type", K(ret), K(ls_attr));
-  } else if (OB_FAIL(backup::ObLSBackupOperator::mark_ls_task_info_final(ls_attr.task_id_, ls_attr.tenant_id_,
-      ls_attr.ls_id_, ls_attr.turn_id_, ls_attr.retry_id_, backup_data_type, sql_proxy))) {
-    LOG_WARN("[DATA_BACKUP]failed to update ls task info final to True", K(ret), K(ls_attr));
+  } else {
+    if (OB_SERVER_OUTOF_DISK_SPACE == result_info.result_) {
+      LOG_WARN("[BACKUP] backup task failed due to disk full on server",
+               "server", result_info.addr_,
+               "ls_id", ls_attr.ls_id_,
+               "tenant_id", ls_attr.tenant_id_,
+               "task_type", ls_attr.task_type_.get_str());
+#ifdef ERRSIM
+      ROOTSERVICE_EVENT_ADD("backup_data", "disk_full_error",
+                            "tenant_id", ls_attr.tenant_id_,
+                            "ls_id", ls_attr.ls_id_.id(),
+                            "server", result_info.addr_,
+                            "task_type", ls_attr.task_type_.get_str());
+#endif
+    }
+    if (ls_attr.task_type_.is_need_add_file_list() && OB_FAIL(add_file_list_(sql_proxy, ls_attr))) {
+      LOG_WARN("failed to add file list", K(ret), K(ls_attr));
+    } else if (OB_FAIL(new_ls_attr.assign(ls_attr))) {
+      LOG_WARN("failed to assign ls attr", K(ret), K(ls_attr));
+    } else if (OB_FAIL(extra_condition.assign_fmt(
+        "%s = %ld and %s = %ld and %s='%s'", OB_STR_TURN_ID, ls_attr.turn_id_, OB_STR_RETRY_ID, ls_attr.retry_id_,
+        OB_STR_STATUS, ls_attr.status_.get_str()))) {
+      LOG_WARN("failed to assign extra condition", K(ret));
+    } else if (OB_FALSE_IT(new_ls_attr.end_ts_ = ObTimeUtility::current_time())) {
+    } else if (OB_FAIL(ObBackupUtils::get_full_replica_num(ls_attr.tenant_id_, full_replica_num))) {
+      LOG_WARN("failed to get full replica num", K(ret));
+    } else if (new_ls_attr.black_servers_.count() + 1 >= full_replica_num && OB_FALSE_IT(new_ls_attr.black_servers_.reset())) {
+    } else if (OB_SUCCESS != result_info.result_ && OB_FAIL(new_ls_attr.black_servers_.push_back(result_info.addr_))) {
+      LOG_WARN("failed to push back black server", K(ret), K(result_info));
+    } else if (OB_FALSE_IT(new_ls_attr.result_ = result_info.result_)) {
+    } else if (OB_FALSE_IT(new_ls_attr.status_ = ObBackupTaskStatus::FINISH)) {
+    } else if (OB_FAIL(result_info.get_comment_str(new_ls_attr.comment_))) {
+      LOG_WARN("failed to get comment str", K(ret));
+    } else if (OB_FAIL(ObBackupLSTaskOperator::report_ls_task(sql_proxy, new_ls_attr, extra_condition))) {
+      LOG_WARN("failed to report ls task", K(ret), K(new_ls_attr), K(extra_condition));
+    } else if (!ls_attr.task_type_.is_backup_data()) {
+      // do nothing
+    } else if (OB_FAIL(ls_attr.task_type_.get_backup_data_type(backup_data_type))) {
+      LOG_WARN("failed to get backup data type", K(ret), K(ls_attr));
+    } else if (OB_FAIL(backup::ObLSBackupOperator::mark_ls_task_info_final(ls_attr.task_id_, ls_attr.tenant_id_,
+        ls_attr.ls_id_, ls_attr.turn_id_, ls_attr.retry_id_, backup_data_type, sql_proxy))) {
+      LOG_WARN("[DATA_BACKUP]failed to update ls task info final to True", K(ret), K(ls_attr));
+    }
   }
   return ret;
 }
@@ -413,6 +430,27 @@ int ObBackupDataLSTaskMgr::finish_(int64_t &finish_cnt)
   } else {
     bool ls_can_retry = true;
     int64_t next_retry_id = ls_attr_->retry_id_ + 1;
+    const bool is_disk_full_error = ObBackupUtils::is_disk_full_error(ls_attr_->result_);
+
+    // On first disk-full, record the timestamp and persist it. Best-effort:
+    // copy -> write DB -> on success assign back, mirroring do_wait_ss_ls_consistency_.
+    if (is_disk_full_error && set_task_attr_->extra_info_.first_disk_full_ts_ == 0) {
+      ObBackupExtraInfo new_extra_info = set_task_attr_->extra_info_;
+      new_extra_info.first_disk_full_ts_ = ObTimeUtility::current_time();
+      int tmp_ret = ObBackupTaskOperator::update_extra_info(*sql_proxy_,
+          set_task_attr_->task_id_, set_task_attr_->tenant_id_, new_extra_info);
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("failed to persist first_disk_full_ts, will retry next round",
+                 K(tmp_ret), "task_id", set_task_attr_->task_id_);
+      } else {
+        set_task_attr_->extra_info_ = new_extra_info;
+      }
+    }
+    const bool disk_full_timeout = is_disk_full_error
+        && set_task_attr_->extra_info_.first_disk_full_ts_ > 0
+        && ObTimeUtility::current_time() - set_task_attr_->extra_info_.first_disk_full_ts_
+           > GCONF._backup_disk_full_max_wait_duration;
+
     switch(ls_attr_->task_type_.type_) {
       case ObBackupDataTaskType::BACKUP_META:
       case ObBackupDataTaskType::BACKUP_META_FINISH:
@@ -424,27 +462,30 @@ int ObBackupDataLSTaskMgr::finish_(int64_t &finish_cnt)
         }
 #endif
         // when backup meta failed, ls task max retry times is three.
-        if (!ObBackupUtils::is_need_retry_error(ls_attr_->result_) || ls_attr_->retry_id_ >= max_retry_times) {
+        if (!ObBackupUtils::is_need_retry_error(ls_attr_->result_)
+            || (!is_disk_full_error && ls_attr_->retry_id_ >= max_retry_times)
+            || disk_full_timeout) {
           job_attr_->can_retry_ = false;
-        } 
+        }
         break;
       }
       case ObBackupDataTaskType::BACKUP_USER_DATA:
       case ObBackupDataTaskType::BACKUP_BUILD_INDEX:
       case ObBackupDataTaskType::BACKUP_FUSE_TABLET_META: {
-        int64_t cur_ts = ObTimeUtility::current_time();
-        if (!ObBackupUtils::is_need_retry_error(ls_attr_->result_) 
-            || set_task_attr_->retry_cnt_ + next_retry_id > OB_BACKUP_MAX_RETRY_TIMES) {
+        if (!ObBackupUtils::is_need_retry_error(ls_attr_->result_)
+            || (!is_disk_full_error && set_task_attr_->retry_cnt_ + next_retry_id > OB_BACKUP_MAX_RETRY_TIMES)
+            || disk_full_timeout) {
           job_attr_->can_retry_ = false;
-        } 
+        }
         break;
       }
       case ObBackupDataTaskType::BACKUP_PLUS_ARCHIVE_LOG: {
-        // this task only retry when send task failed
+        // this task only retries when send task failed or disk full within the wait window
         if (OB_REBALANCE_TASK_CANT_EXEC != ls_attr_->result_
-            && common::OB_TIMEOUT != ls_attr_->result_) {
+            && common::OB_TIMEOUT != ls_attr_->result_
+            && (!is_disk_full_error || disk_full_timeout)) {
           job_attr_->can_retry_ = false;
-        } 
+        }
         break;
       }
       default: {

@@ -1179,6 +1179,7 @@ public:
   virtual ~ObBackupUtils() {}
   static int get_backup_info_default_timeout_ctx(common::ObTimeoutCtx &ctx);
   static bool is_need_retry_error(const int err);
+  static bool is_disk_full_error(const int err);
   //format input string split with ',' or ';'
   template<class T>
   static int parse_backup_format_input(
@@ -1620,17 +1621,22 @@ public:
 
 struct ObBackupExtraInfo final
 {
-  ObBackupExtraInfo() : sslog_gts_(), read_scn_() {}
+  ObBackupExtraInfo() : sslog_gts_(), read_scn_(), first_disk_full_ts_(0) {}
   ~ObBackupExtraInfo() = default;
-  void reset() { sslog_gts_.reset(); read_scn_.reset(); }
-  bool has_value() const { return sslog_gts_.is_valid_and_not_min() || read_scn_.is_valid_and_not_min(); }
+  void reset() { sslog_gts_.reset(); read_scn_.reset(); first_disk_full_ts_ = 0; }
+  bool has_value() const
+  {
+    return sslog_gts_.is_valid_and_not_min() || read_scn_.is_valid_and_not_min()
+           || first_disk_full_ts_ > 0;
+  }
   int assign(const ObBackupExtraInfo &other);
   int encode_to_str(char *buf, const int64_t buf_len, int64_t &pos) const;
   int decode_from_str(const char *str);
-  TO_STRING_KV(K_(sslog_gts), K_(read_scn));
+  TO_STRING_KV(K_(sslog_gts), K_(read_scn), K_(first_disk_full_ts));
 
   SCN sslog_gts_;
   SCN read_scn_;
+  int64_t first_disk_full_ts_;  // us; 0 means never encountered disk-full
 };
 
 struct ObBackupSetTaskAttr final

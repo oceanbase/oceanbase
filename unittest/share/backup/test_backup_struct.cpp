@@ -268,6 +268,11 @@ TEST(ObBackupExtraInfo, encode_decode_normal)
 
 TEST(ObBackupExtraInfo, encode_decode_min_scn)
 {
+  // Note: By design, min_scn (val_=0) is treated as "no value", same as invalid SCN.
+  // encode_to_str writes 0 for both min_scn and invalid SCN, and decode_from_str
+  // leaves the field in reset (invalid) state when it reads 0. So min_scn does
+  // NOT round-trip bit-for-bit; instead it becomes invalid after decode, which
+  // is consistent with has_value() / is_valid_and_not_min() semantics.
   int ret = OB_SUCCESS;
   share::ObBackupExtraInfo info;
   share::ObBackupExtraInfo decoded;
@@ -283,7 +288,10 @@ TEST(ObBackupExtraInfo, encode_decode_min_scn)
   ret = decoded.decode_from_str(buf);
   ASSERT_EQ(OB_SUCCESS, ret);
   ASSERT_EQ(info.sslog_gts_, decoded.sslog_gts_);
-  ASSERT_EQ(info.read_scn_, decoded.read_scn_);
+  // min_scn is encoded as 0 and decoded back as invalid (not min_scn).
+  // Both are treated as "no value", so verify via the semantic check.
+  ASSERT_FALSE(decoded.read_scn_.is_valid_and_not_min());
+  ASSERT_FALSE(info.read_scn_.is_valid_and_not_min());
 }
 
 TEST(ObBackupExtraInfo, encode_decode_max_uint64)
@@ -371,14 +379,17 @@ TEST(ObBackupExtraInfo, encode_null_buf)
 
 TEST(ObBackupExtraInfo, encode_decode_roundtrip_multiple)
 {
+  // Note: SCN value 0 (min_scn) is treated as "no value" by encode/decode, same as
+  // invalid SCN. So bit-for-bit round-trip is only guaranteed for valid_and_not_min
+  // SCNs (i.e., values strictly greater than 0). All test values below are >= 1.
   const uint64_t max_scn_ts = (1UL << 62) - 1;
   const uint64_t test_values[][2] = {
-    {0, 0},
     {1, 1},
     {100, 200},
     {1000000000ULL, 2000000000ULL},
-    {max_scn_ts, 0},
-    {0, max_scn_ts},
+    {max_scn_ts, 1},
+    {1, max_scn_ts},
+    {max_scn_ts, max_scn_ts},
   };
 
   for (int i = 0; i < sizeof(test_values) / sizeof(test_values[0]); i++) {

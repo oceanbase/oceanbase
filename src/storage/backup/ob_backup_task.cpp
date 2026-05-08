@@ -2349,6 +2349,7 @@ int ObLSBackupDataTask::init(const int64_t task_id, const share::ObBackupDataTyp
   return ret;
 }
 
+ERRSIM_POINT_DEF(EN_BACKUP_DISK_FULL);
 int ObLSBackupDataTask::process()
 {
   int ret = OB_SUCCESS;
@@ -2386,6 +2387,17 @@ int ObLSBackupDataTask::process()
       SERVER_EVENT_SYNC_ADD("backup_errsim", "before_backup_sys_tablets",
                             "ls_id", param_.ls_id_.id());
       DEBUG_SYNC(BEFORE_BACKUP_SYS_TABLETS);
+    }
+  }
+#endif
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    if (backup_data_type_.is_user_backup()) {
+      ret = EN_BACKUP_DISK_FULL ? : OB_SUCCESS;
+      if (OB_FAIL(ret)) {
+        SERVER_EVENT_ADD("backup_errsim", "backup_disk_full");
+      }
     }
   }
 #endif

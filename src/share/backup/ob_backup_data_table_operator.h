@@ -166,7 +166,7 @@ public:
   static int update_start_scn(common::ObISQLClient &proxy, const int64_t task_id, const uint64_t tenant_id,
       const SCN &scn);
   static int update_extra_info(common::ObISQLClient &proxy, const int64_t task_id,
-      const uint64_t tenant_id, const SCN &sslog_gts, const SCN &read_scn);
+      const uint64_t tenant_id, const ObBackupExtraInfo &extra_info);
 private:
   static int fill_dml_with_backup_task_(const ObBackupSetTaskAttr &backup_set_task, ObDMLSqlSplicer &dml);
 };
