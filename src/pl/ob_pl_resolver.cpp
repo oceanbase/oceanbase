@@ -3474,20 +3474,9 @@ int ObPLResolver::resolve_dblink_row_type(const ObString &db_name,
   }
   CK (!table_name.empty());
   if (OB_SUCC(ret)) {
-    if (db_name.empty()) {
-      ObString default_dblink_user;
-      OZ (resolve_ctx_.schema_guard_.get_dblink_user(resolve_ctx_.session_info_.get_effective_tenant_id(),
-                                                    dblink_name,
-                                                    default_dblink_user,
-                                                    resolve_ctx_.allocator_));
-      OZ (resolve_ctx_.package_guard_.dblink_guard_.get_dblink_table_by_name(
-            resolve_ctx_.session_info_, resolve_ctx_.schema_guard_,
-            dblink_name, default_dblink_user, table_name, table_schema));
-    } else {
-      OZ (resolve_ctx_.package_guard_.dblink_guard_.get_dblink_table_by_name(
-            resolve_ctx_.session_info_, resolve_ctx_.schema_guard_,
-            dblink_name, db_name, table_name, table_schema));
-    }
+    OZ (resolve_ctx_.package_guard_.dblink_guard_.get_dblink_table_by_name(
+          resolve_ctx_.session_info_, resolve_ctx_.schema_guard_,
+          dblink_name, db_name, table_name, table_schema));
     CK (OB_NOT_NULL(table_schema));
     if (OB_SUCC(ret)) {
       ObRecordType *record_type = NULL;
