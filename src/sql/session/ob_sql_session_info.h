@@ -1091,9 +1091,11 @@ public:
   storage::ObSessionTabletInfoMap &get_gtt_tablet_info_map() { return gtt_tablet_info_map_; }
   void gen_gtt_session_scope_unique_id();
   void gen_gtt_trans_scope_unique_id();
-  void set_trans_gtt_v2_sequence(const int64_t sequence) { trans_gtt_v2_sequence_ = sequence;  }
-  int64_t get_trans_gtt_v2_sequence() const { return trans_gtt_v2_sequence_; }
+  void set_trans_gtt_v2_sequence(const int64_t sequence);
+  int64_t get_session_gtt_v2_sequence();
+  int64_t get_trans_gtt_v2_sequence();
   void update_trans_gtt_v2_sequence();
+  uint64_t get_min_data_version_of_init_sess();
   common::ObIArray<uint64_t> &get_gtt_session_scope_ids() { return gtt_session_scope_ids_; }
   common::ObIArray<uint64_t> &get_gtt_trans_scope_ids() { return gtt_trans_scope_ids_; }
   int add_dblink_sequence_schema(ObSequenceSchema *schema);
@@ -1486,6 +1488,7 @@ public:
   ObErrorSyncSysVarEncoder &get_error_sync_sys_var_encoder() { return error_sync_sys_var_encoder_;}
   ObSequenceCurrvalEncoder &get_sequence_currval_encoder() { return sequence_currval_encoder_; }
   ObQueryInfoEncoder &get_query_info_encoder() { return query_info_encoder_; }
+  ObTransGttV2SequenceEncoder &get_trans_gtt_v2_sequence_encoder() { return trans_gtt_v2_sequence_encoder_; }
   ObContextsMap &get_contexts_map() { return contexts_map_; }
   ObSequenceCurrvalMap &get_sequence_currval_map() { return sequence_currval_map_; }
   ObDBlinkSequenceIdMap  &get_dblink_sequence_id_map() { return dblink_sequence_id_map_; }
@@ -1827,6 +1830,9 @@ public:
   bool is_need_send_feedback_proxy_info() const { return need_send_feedback_proxy_info_; }
   void set_is_lock_session(bool v) { is_lock_session_ = v; }
   bool is_lock_session() const { return is_lock_session_; }
+  void set_is_temporary_table_session(bool v) { is_temporary_table_session_ = v; }
+  bool is_temporary_table_session() const { return is_temporary_table_session_; }
+  void mark_session_temp_table_used(const bool is_used);
   int64_t get_plsql_exec_time();
   int64_t get_plsql_compile_time() { return plsql_compile_time_; }
   void update_pure_sql_exec_time(int64_t elapsed_time);
@@ -2058,6 +2064,7 @@ private:
   bool coninfo_set_by_sess_ = false;
   bool need_send_feedback_proxy_info_ = false;
   bool is_lock_session_ = false;
+  bool is_temporary_table_session_ = false;
 
   ObSessInfoEncoder* sess_encoders_[SESSION_SYNC_MAX_TYPE] = {
                             //&usr_var_encoder_,
@@ -2164,7 +2171,8 @@ private:
   int64_t last_update_ccl_cnt_time_;
   int64_t curr_request_id_;  // mark current request id in sql audit
   int64_t trans_gtt_v2_sequence_;
-  // The minimal data version at session creation.
+  // The minimal data version at session creation. Once the session uses an old-version temporary table,
+  // it cannot use a new-version temporary table during an upgrade.
   uint64_t min_data_version_of_init_sess_;
 
   private:

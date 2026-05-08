@@ -291,6 +291,8 @@ public:
   inline bool is_gtt_temp_table_v2() const { return is_gtt_temp_table_v2_; }
   common::ObIArray<uint64_t> &get_gtt_trans_scope_ids() { return gtt_trans_scope_ids_; }
   common::ObIArray<uint64_t> &get_gtt_session_scope_ids() { return gtt_session_scope_ids_; }
+  bool need_strong_routing() const { return need_strong_routing_; }
+  void set_need_strong_routing(bool need_strong_routing) { need_strong_routing_ = need_strong_routing; }
   common::ObIArray<uint64_t> &get_immediate_refresh_external_table_ids() { return immediate_refresh_external_table_ids_; }
   bool is_contain_oracle_trx_level_temporary_table() const { return gtt_trans_scope_ids_.count() > 0; }
   bool is_contain_oracle_session_level_temporary_table() const { return gtt_session_scope_ids_.count() > 0; }

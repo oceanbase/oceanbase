@@ -194,6 +194,7 @@ void ObPhysicalPlan::reset()
   contain_table_scan_ = false;
   has_nested_sql_ = false;
   session_id_ = 0;
+  route_to_column_replica_ = false;
   is_gtt_temp_table_v2_ = false;
   contain_oracle_trx_level_temporary_table_ = false;
   contain_oracle_session_level_temporary_table_ = false;

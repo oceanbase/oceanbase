@@ -286,11 +286,13 @@ int ObCreateTableResolver::add_udt_hidden_column(ObTableSchema &table_schema,
 int ObCreateTableResolver::set_temp_table_info(ObTableSchema &table_schema, ParseNode *commit_option_node)
 {
   int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  bool need_strong_routing = !(is_oracle_mode() && !is_old_oracle_temp_table_);
   if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is null", KR(ret));
   } else if (FALSE_IT(session_info_->set_has_temp_table_flag())) {
-  } else if (OB_FAIL(session_info_->set_session_temp_table_used(true))) {
+  } else if (OB_FAIL(session_info_->set_session_temp_table_used(*session_info_, true, need_strong_routing))) {
     LOG_WARN("fail to set session temp table used", KR(ret));
   } else if (OB_FAIL(set_table_name(table_name_))) {
       LOG_WARN("failed to set table name", K(ret), K(table_name_));
