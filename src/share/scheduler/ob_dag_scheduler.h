@@ -44,12 +44,16 @@ class ObIDag;
 class ObIDagNet;
 class ObTenantDagScheduler;
 class ObTenantDagWorker;
+class ObDagPrioScheduler;
 
 class ObINodeWithChild
 {
 public:
+  friend class ObDagPrioScheduler;
+public:
   ObINodeWithChild()
-      : indegree_(0)
+      : indegree_(0),
+        lock_(common::ObLatchIds::WORK_DAG_LOCK)
   {}
   virtual ~ObINodeWithChild() { reset(); }
 
@@ -61,7 +65,7 @@ public:
   int64_t get_indegree() const { return indegree_; }
   void inc_indegree() { ATOMIC_INC(&indegree_); }
   int64_t dec_indegree() { return ATOMIC_SAF(&indegree_,1); }
-  const common::ObIArray<ObINodeWithChild*> &get_child_nodes() const { return children_; }
+  int copy_child_nodes(common::ObIArray<ObINodeWithChild*> &child_nodes);
   int dec_indegree_for_children();
   int deep_copy_children(const common::ObIArray<ObINodeWithChild*> &other);
   void reset_children();
@@ -74,11 +78,13 @@ public:
 
 protected:
   virtual int add_child_node(ObINodeWithChild &child);
+  const common::ObIArray<ObINodeWithChild*> &get_child_nodes() const { return children_; }
 
 protected:
   static const int64_t DEFAULT_CHILDREN_NUM = 8;
   int64_t indegree_;
   common::ObSEArray<ObINodeWithChild*, DEFAULT_CHILDREN_NUM> children_;
+  lib::ObMutex lock_;
 };
 
 class ObITask : public common::ObDLinkBase<ObITask>, public ObINodeWithChild
@@ -419,7 +425,6 @@ private:
   ObDagId id_;
   ObDagStatus dag_status_;
   int64_t running_task_cnt_;
-  lib::ObMutex lock_;
   TaskList task_list_; // should protect by lock
   bool is_stop_;
   uint32_t max_retry_times_;  // should protect by lock

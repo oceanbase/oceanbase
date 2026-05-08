@@ -79,6 +79,18 @@ DEFINE_TASK_ADD_KV(5)
 
 /********************************************ObINodeWithChild impl******************************************/
 
+int ObINodeWithChild::copy_child_nodes(common::ObIArray<ObINodeWithChild*> &child_nodes)
+{
+  int ret = OB_SUCCESS;
+  ObMutexGuard guard(lock_);
+  if (OB_FAIL(guard.get_ret())) {
+    COMMON_LOG(WARN, "failed to get lock", K(ret));
+  } else if (OB_FAIL(child_nodes.assign(children_))) {
+    COMMON_LOG(WARN, "failed to assign child nodes", K(ret));
+  }
+  return ret;
+}
+
 int ObINodeWithChild::add_child_node(ObINodeWithChild &child)
 {
   int ret = OB_SUCCESS;
@@ -375,7 +387,6 @@ ObIDag::ObIDag(const ObDagType::ObDagTypeEnum type)
     priority_(OB_DAG_TYPES[type].init_dag_prio_),
     dag_status_(ObIDag::DAG_STATUS_INITING),
     running_task_cnt_(0),
-    lock_(common::ObLatchIds::WORK_DAG_LOCK),
     is_stop_(false),
     max_retry_times_(0),
     running_times_(0),
@@ -540,8 +551,13 @@ int ObIDag::check_cycle()
       while (OB_SUCC(ret) && !stack.empty()) {
         ObITask *pop_task = stack.at(stack.count() - 1);
         int64_t child_idx = pop_task->get_last_visit_child();
-        const ObIArray<ObINodeWithChild*> &children = pop_task->get_child_nodes();
+        ObSEArray<ObINodeWithChild*, DEFAULT_CHILDREN_NUM> children;
         bool has_push = false;
+        // NOTE: children of pop_task may be changed when pop_task is running, so we need copy it.
+        // the cyclic of the concurrently added child task will be checked when the child task is added into dag.
+        if (OB_FAIL(pop_task->copy_child_nodes(children))) {
+          COMMON_LOG(WARN, "failed to get child nodes", K(ret));
+        }
         while (OB_SUCC(ret) && !has_push && child_idx < children.count()) {
           ObITask *child_task = static_cast<ObITask*>(children.at(child_idx));
           if (OB_ISNULL(child_task)) {

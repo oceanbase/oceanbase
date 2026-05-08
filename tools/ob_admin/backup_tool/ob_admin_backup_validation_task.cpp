@@ -4098,6 +4098,7 @@ int ObAdminPrepareTabletValidationTask::schedule_next_dag_()
   ObAdminBackupTabletGroupValidationDag *currect_dag = nullptr;
   ObAdminBackupTabletGroupValidationDag *cloned_dag = nullptr;
   ObTenantDagScheduler *scheduler = nullptr;
+  ObSEArray<ObINodeWithChild *, 1> child_dags;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret));
@@ -4127,7 +4128,9 @@ int ObAdminPrepareTabletValidationTask::schedule_next_dag_()
     STORAGE_LOG(WARN, "failed to init cloned_dag", K(ret));
   } else if (OB_FAIL(cloned_dag->create_first_task())) {
     STORAGE_LOG(WARN, "failed to create first task", K(ret));
-  } else if (OB_FAIL(cloned_dag->deep_copy_children(currect_dag->get_child_nodes()))) {
+  } else if (OB_FAIL(currect_dag->copy_child_nodes(child_dags))) {
+    STORAGE_LOG(WARN, "failed to get child nodes", K(ret), K(cloned_dag));
+  } else if (OB_FAIL(cloned_dag->deep_copy_children(child_dags))) {
     STORAGE_LOG(WARN, "failed to deep copy child", K(ret), K(cloned_dag));
   } else if (OB_FAIL(dag_net->add_dag_into_dag_net(*cloned_dag))) {
     STORAGE_LOG(WARN, "failed to add cloned_dag into dag net", K(ret), K(cloned_dag));
