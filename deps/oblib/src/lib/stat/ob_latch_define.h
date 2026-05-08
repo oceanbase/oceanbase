@@ -995,7 +995,8 @@ LATCH_DEF(OB_SCHEMA_HISTORY_RECYCLE_SERVICE_LOCK, 963, "ob schema history recycl
 LATCH_DEF(FT_DICT_BUILD_SLOTS_LOCK, 964, "fulltext dict build slots lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(FT_DICT_ROW_SCN_CACHE_LOCK, 965, "fulltext dict row scn cache lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(SANDBOX_LOCK, 966, "ob_sandbox and sandbox manager lock", LATCH_FIFO, 2000, 0, true)
-LATCH_DEF(LATCH_END, 967, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(OB_PLUGIN_VECTOR_INDEX_TASK_CTX_MAP_LOCK, 967, "ob plugin vector index task ctx map lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(LATCH_END, 968, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 
