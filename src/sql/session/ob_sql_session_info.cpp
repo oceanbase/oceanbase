@@ -4327,7 +4327,9 @@ void ObSQLSessionInfo::update_trans_gtt_v2_sequence()
 int64_t ObSQLSessionInfo::get_session_gtt_v2_sequence()
 {
   int64_t result = ATOMIC_LOAD(&gtt_session_scope_unique_id_);
-  if (get_min_data_version_of_init_sess() >= MOCK_DATA_VERSION_4_4_2_1) {
+  const uint64_t data_version = get_min_data_version_of_init_sess();
+  if ((data_version >= MOCK_DATA_VERSION_4_4_2_1 && data_version < DATA_VERSION_4_5_0_0)
+      || data_version >= DATA_VERSION_4_6_1_0) {
     result = OB_GTT_V2_SESS_TABLET_SEQUENCE;
   }
   return result;
@@ -4345,7 +4347,9 @@ uint64_t ObSQLSessionInfo::get_min_data_version_of_init_sess()
 int64_t ObSQLSessionInfo::get_trans_gtt_v2_sequence()
 {
   int64_t result = ATOMIC_LOAD(&gtt_trans_scope_unique_id_);
-  if (get_min_data_version_of_init_sess() >= MOCK_DATA_VERSION_4_4_2_1) {
+  const uint64_t data_version = get_min_data_version_of_init_sess();
+  if ((data_version >= MOCK_DATA_VERSION_4_4_2_1 && data_version < DATA_VERSION_4_5_0_0)
+      || data_version >= DATA_VERSION_4_6_1_0) {
     result = ATOMIC_LOAD(&trans_gtt_v2_sequence_);
   }
   return result;

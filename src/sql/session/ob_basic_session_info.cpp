@@ -6450,7 +6450,9 @@ int ObBasicSessionInfo::set_session_temp_table_used(ObSQLSessionInfo &session, c
     LOG_WARN("fail to update_system_variable", K(ret));
   }
   if (OB_SUCC(ret) && false == need_strong_routing && INVALID_SESSID != client_sessid_) {
-    if (session.get_min_data_version_of_init_sess() >= MOCK_DATA_VERSION_4_4_2_1) {
+    const uint64_t data_version = session.get_min_data_version_of_init_sess();
+    if ((data_version >= MOCK_DATA_VERSION_4_4_2_1 && data_version < DATA_VERSION_4_5_0_0)
+        || data_version >= DATA_VERSION_4_6_1_0) {
       session.mark_session_temp_table_used(is_used);
     }
   }
