@@ -270,6 +270,7 @@ syspack_config = [
     SysPackConfig(SysPackGroup.ORACLE, "dbms_routine_load", "dbms_routine_load.sql", "dbms_routine_load_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     SysPackConfig(SysPackGroup.ORACLE, "dbms_lob_manager", "dbms_lob_manager.sql", "dbms_lob_manager_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     SysPackConfig(SysPackGroup.ORACLE, "dbms_daily_maintenance", "dbms_daily_maintenance.sql", "dbms_daily_maintenance_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
+    SysPackConfig(SysPackGroup.ORACLE, "dbms_java", "dbms_java.sql", "dbms_java_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     # MySQL
     SysPackConfig(SysPackGroup.MYSQL, "dbms_stats", "dbms_stats_mysql.sql", "dbms_stats_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_scheduler", "dbms_scheduler_mysql.sql", "dbms_scheduler_mysql_body.sql"),

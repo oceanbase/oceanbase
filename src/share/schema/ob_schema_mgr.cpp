@@ -512,7 +512,8 @@ ObSchemaMgr::ObSchemaMgr()
       allocator_idx_(OB_INVALID_INDEX),
       mlog_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_MLOG_INFO_VEC, ObCtxIds::SCHEMA_SERVICE)),
       external_resource_mgr_(allocator_),
-      ai_model_mgr_(allocator_)
+      ai_model_mgr_(allocator_),
+      java_policy_mgr_(allocator_)
 {
 }
 
@@ -575,7 +576,8 @@ ObSchemaMgr::ObSchemaMgr(ObIAllocator &allocator)
       allocator_idx_(OB_INVALID_INDEX),
       mlog_infos_(0, NULL, SET_USE_500(ObModIds::OB_SCHEMA_MLOG_INFO_VEC, ObCtxIds::SCHEMA_SERVICE)),
       external_resource_mgr_(allocator_),
-      ai_model_mgr_(allocator_)
+      ai_model_mgr_(allocator_),
+      java_policy_mgr_(allocator_)
 {
 }
 
@@ -666,6 +668,8 @@ int ObSchemaMgr::init(const uint64_t tenant_id)
     LOG_WARN("init ai_model_mgr_ failed", K(ret));
   } else if (OB_FAIL(ccl_rule_mgr_.init())) {
     LOG_WARN("init ccl_rule mgr failed", K(ret));
+  } else if (OB_FAIL(java_policy_mgr_.init())) {
+    LOG_WARN("init java_policy mgr failed", K(ret));
   } else {
     tenant_id_ = tenant_id;
   }
@@ -740,6 +744,7 @@ void ObSchemaMgr::reset()
     mlog_infos_.clear();
     external_resource_mgr_.reset();
     ai_model_mgr_.reset();
+    java_policy_mgr_.reset();
   }
 }
 
@@ -866,6 +871,8 @@ int ObSchemaMgr::assign(const ObSchemaMgr &other)
         LOG_WARN("assign ccl_rule mgr failed", K(ret));
       } else if (OB_FAIL(sensitive_rule_mgr_.assign(other.sensitive_rule_mgr_))) {
         LOG_WARN("assign sensitive_rule mgr failed", K(ret));
+      } else if (OB_FAIL(java_policy_mgr_.assign(other.java_policy_mgr_))) {
+        LOG_WARN("assign java_policy mgr failed", K(ret));
       }
     }
   }
@@ -975,6 +982,8 @@ int ObSchemaMgr::deep_copy(const ObSchemaMgr &other)
         LOG_WARN("deep copy ccl_rule mgr failed", K(ret));
       } else if (OB_FAIL(sensitive_rule_mgr_.deep_copy(other.sensitive_rule_mgr_))) {
         LOG_WARN("deep copy sensitive_rule mgr failed", K(ret));
+      } else if (OB_FAIL(java_policy_mgr_.deep_copy(other.java_policy_mgr_))) {
+        LOG_WARN("deep copy java_policy mgr failed", K(ret));
       }
     }
     if (OB_SUCC(ret)) {
@@ -4867,6 +4876,7 @@ int ObSchemaMgr::get_schema_count(int64_t &schema_count) const
     int64_t ai_model_schema_count = 0;
     int64_t ccl_rule_schema_count = 0;
     int64_t sensitive_rule_schema_count = 0;
+    int64_t java_policy_schema_count = 0;
     if (OB_FAIL(outline_mgr_.get_outline_schema_count(outline_schema_count))) {
       LOG_WARN("get_outline_schema_count failed", K(ret));
     } else if (OB_FAIL(routine_mgr_.get_routine_schema_count(routine_schema_count))) {
@@ -4929,6 +4939,8 @@ int ObSchemaMgr::get_schema_count(int64_t &schema_count) const
       LOG_WARN("get ccl_rule schema count failed", K(ret));
     } else if (OB_FAIL(sensitive_rule_mgr_.get_schema_count(sensitive_rule_schema_count))) {
       LOG_WARN("get sensitive_rule schema count failed", K(ret));
+    } else if (OB_FAIL(java_policy_mgr_.get_java_policy_schema_count(java_policy_schema_count))) {
+      LOG_WARN("get java_policy schema count failed", K(ret));
     } else {
       schema_count += (outline_schema_count + routine_schema_count + priv_schema_count
                        + synonym_schema_count + package_schema_count
@@ -4954,6 +4966,7 @@ int ObSchemaMgr::get_schema_count(int64_t &schema_count) const
                        + mock_fk_parent_table_schema_count
                        + external_resource_schema_count
                        + ai_model_schema_count
+                       + java_policy_schema_count
                       );
     }
   }
@@ -5758,6 +5771,8 @@ int ObSchemaMgr::get_schema_statistics(common::ObIArray<ObSchemaStatisticsInfo> 
     LOG_WARN("failed to push back schema statistics", K(ret), K(schema_info));
   } else if (OB_FAIL(ai_model_mgr_.get_schema_statistics(schema_info))) {
     LOG_WARN("failed to get ai_model statistics", K(ret));
+  } else if (OB_FAIL(java_policy_mgr_.get_schema_statistics(schema_info))) {
+    LOG_WARN("failed to get java_policy statistics", K(ret));
   } else if (OB_FAIL(schema_infos.push_back(schema_info))) {
     LOG_WARN("failed to push back schema statistics", K(ret), K(schema_info));
   }
@@ -6175,6 +6190,55 @@ int ObSchemaMgr::get_ai_model_schema(
   }
 
   return ret;
+}
+
+int ObSchemaMgr::add_java_policys(const common::ObIArray<ObSimpleJavaPolicySchema> &java_policy_schemas)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; i < java_policy_schemas.count() && OB_SUCC(ret); ++i) {
+    if (OB_FAIL(add_java_policy(java_policy_schemas.at(i)))) {
+      LOG_WARN("push schema failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObSchemaMgr::add_java_policy(const ObSimpleJavaPolicySchema &java_policy_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(java_policy_mgr_.add_java_policy(java_policy_schema))) {
+    LOG_WARN("fail to add java policy", K(ret));
+  }
+  return ret;
+}
+
+int ObSchemaMgr::del_java_policy(const ObTenantJavaPolicyId &id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(java_policy_mgr_.del_java_policy(id))) {
+    LOG_WARN("fail to del java policy", K(ret), K(id));
+  }
+  return ret;
+}
+
+int ObSchemaMgr::get_java_policy_schema(const uint64_t tenant_id,
+                                        const uint64_t key,
+                                        const ObSimpleJavaPolicySchema *&java_policy_schema) const
+{
+  return java_policy_mgr_.get_java_policy_schema(tenant_id, key, java_policy_schema);
+}
+
+int ObSchemaMgr::get_java_policy_schemas_in_tenant(const uint64_t tenant_id,
+                                                   common::ObIArray<const ObSimpleJavaPolicySchema *> &schema_array) const
+{
+  return java_policy_mgr_.get_java_policy_schemas_in_tenant(tenant_id, schema_array);
+}
+
+int ObSchemaMgr::get_java_policy_schemas_of_grantee(const uint64_t tenant_id,
+                                                    const uint64_t grantee_id,
+                                                    common::ObIArray<const ObSimpleJavaPolicySchema *> &schema_array) const
+{
+  return java_policy_mgr_.get_java_policy_schemas_of_grantee(tenant_id, grantee_id, schema_array);
 }
 
 } //end of namespace schema

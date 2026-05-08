@@ -9093,8 +9093,34 @@ def_table_schema(
   ],
 )
 # 585: __all_table_archive_history
-# 586: __all_java_policy
-# 587: __all_java_policy_history
+
+all_java_policy = dict(
+  owner = 'xumengqiang.xmq',
+  table_name = '__all_java_policy',
+  table_id = '586',
+  table_type = 'SYSTEM_TABLE',
+    gm_columns = ['gmt_create', 'gmt_modified'],
+    rowkey_columns = [
+      ('tenant_id', 'int', 'false'),
+      ('key', 'int', 'false'),
+  ],
+  is_cluster_private = False,
+  meta_record_in_sys = False,
+  in_tenant_space = True,
+  normal_columns = [
+    ('kind', 'int', 'false'),
+    ('grantee', 'int', 'false'),
+    ('type_schema', 'int', 'false'),
+    ('type_name', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true'),
+    ('name', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true'),
+    ('action', 'varchar:OB_INNER_TABLE_DEFAULT_VALUE_LENTH', 'true'),
+    ('status', 'int', 'false'),
+  ],
+)
+
+def_table_schema(**all_java_policy)
+def_table_schema(**gen_history_table_def(587, all_java_policy))
+
 # 588: __all_catalog_table_stat
 # 589: __all_catalog_column_stat
 # 590: __all_catalog_table_opt_stat_gather_history
@@ -18235,11 +18261,6 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
 )
-# 12592: __all_virtual_vector_segment_info
-# 12593: __all_virtual_sql_group_commit_stat
-# 12594: __all_virtual_java_policy
-# 12595: __all_virtual_java_policy_history
-# 12596: __all_virtual_catalog_table_opt_stat_gather_history
 
 def_table_schema(
   owner = 'huhaosheng.hhs',
@@ -18273,6 +18294,20 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
 )
+
+# 12593: __all_virtual_sql_group_commit_stat
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12594',
+  table_name = '__all_virtual_java_policy',
+  keywords = all_def_keywords['__all_java_policy']))
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12595',
+  table_name = '__all_virtual_java_policy_history',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__all_java_policy_history']))
+
+# 12596: __all_virtual_catalog_table_opt_stat_gather_history
 # 12597: __all_virtual_object_storage_stat
 # 12598: __all_virtual_object_storage_error_record
 # 12599: __all_virtual_audit_log_encryption_password
@@ -18900,8 +18935,10 @@ def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15545'
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15546', all_def_keywords['__all_routine_load_job']))
 # 15548: __all_virtual_ss_local_cache_diagnose_info
 # 15549: __all_virtual_sql_group_commit_stat
-# 15550: __all_external_resource
-# 15551: __all_java_policy
+
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15550', all_def_keywords['__all_external_resource']))
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15551', all_def_keywords['__all_java_policy']))
+
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15552', all_def_keywords['__all_virtual_tenant_worker_group']))
 # 15553: __all_virtual_keyword
 # 15554: ALL_VIRTUAL_LOG_TRANSPORT_STAT
@@ -47086,8 +47123,63 @@ def_table_schema(
     WHERE SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
 """.replace("\n", " ")
 )
-# 21718: DBA_JAVA_POLICY
-# 21719: USER_JAVA_POLICY
+
+def_table_schema(
+      owner = 'xumengqiang.xmq',
+      table_name      = 'DBA_JAVA_POLICY',
+      table_id        = '21718',
+      table_type      = 'SYSTEM_VIEW',
+      rowkey_columns  = [],
+      normal_columns  = [],
+      gm_columns      = [],
+      in_tenant_space = True,
+      view_definition =
+      """
+      select
+      case jp.kind when 0 then 'GRANT' when 1 then 'RESTRICT' end KIND,
+        u.user_name GRANTEE,
+        db.database_name TYPE_SCHEMA,
+        jp.type_name TYPE_NAME,
+        jp.name NAME,
+        jp.action ACTION,
+        case jp.status when 2 then 'ENABLED' when 3 then 'DISABLED' end ENABLED,
+        jp.`key` SEQ
+      from
+        oceanbase.__all_java_policy jp, oceanbase.__all_user u, oceanbase.__all_database db
+      where
+        jp.TENANT_ID = 0 and jp.grantee = u.user_id and jp.type_schema = db.database_id
+      order by u.user_name, db.database_name, jp.type_name, jp.name, jp.action
+             """.replace("\n", " ")
+)
+
+def_table_schema(
+      owner = 'xumengqiang.xmq',
+      table_name      = 'USER_JAVA_POLICY',
+      table_id        = '21719',
+      table_type      = 'SYSTEM_VIEW',
+      rowkey_columns  = [],
+      normal_columns  = [],
+      gm_columns      = [],
+      in_tenant_space = True,
+      view_definition =
+      """
+      select
+      case jp.kind when 0 then 'GRANT' when 1 then 'RESTRICT' end KIND,
+        u.user_name GRANTEE,
+        db.database_name TYPE_SCHEMA,
+        jp.type_name TYPE_NAME,
+        jp.name NAME,
+        jp.action ACTION,
+        case jp.status when 2 then 'ENABLED' when 3 then 'DISABLED' end ENABLED,
+        jp.`key` SEQ
+      from
+        oceanbase.__all_java_policy jp, oceanbase.__all_user u, oceanbase.__all_database db
+      where
+        jp.TENANT_ID = 0 and jp.grantee = u.user_id and jp.type_schema = db.database_id and concat(u.user_name, '@', u.host)=current_user()
+      order by u.user_name, db.database_name, jp.type_name, jp.name, jp.action
+             """.replace("\n", " ")
+)
+
 # 21720: DBA_SCHEDULER_RUNNING_JOBS
 # 21721: CDB_SCHEDULER_RUNNING_JOBS
 # 21722: CDB_SCHEDULER_JOBS
@@ -47756,6 +47848,28 @@ def_table_schema(
         NULL AS EDITION_NAME
       FROM SYS.ALL_VIRTUAL_SENSITIVE_RULE_REAL_AGENT
       WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+
+      UNION ALL
+
+      SELECT
+        TENANT_ID,
+        GMT_CREATE,
+        GMT_MODIFIED,
+        DATABASE_ID,
+        NAME AS OBJECT_NAME,
+        NULL AS SUBOBJECT_NAME,
+        RESOURCE_ID AS OBJECT_ID,
+        NULL AS DATA_OBJECT_ID,
+        CASE TYPE WHEN 4 THEN 'JAVA CLASS' ELSE NULL END AS OBJECT_TYPE,
+        'VALID' AS STATUS,
+        'N' AS TEMPORARY,
+        'N' AS "GENERATED",
+        'N' AS SECONDARY,
+        0 AS NAMESPACE,
+        NULL AS EDITION_NAME
+      FROM SYS.ALL_VIRTUAL_EXTERNAL_RESOURCE_REAL_AGENT
+      WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+        AND TYPE IN (4)
     ) A
     JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT B
     ON A.TENANT_ID = B.TENANT_ID
@@ -48300,6 +48414,29 @@ def_table_schema(
         NULL AS EDITION_NAME
       FROM SYS.ALL_VIRTUAL_SENSITIVE_RULE_REAL_AGENT
       WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+
+      UNION ALL
+
+      SELECT
+        TENANT_ID,
+        GMT_CREATE,
+        GMT_MODIFIED,
+        DATABASE_ID,
+        NAME AS OBJECT_NAME,
+        NULL AS SUBOBJECT_NAME,
+        RESOURCE_ID AS OBJECT_ID,
+        RESOURCE_ID AS PRIV_OBJECT_ID,
+        NULL AS DATA_OBJECT_ID,
+        CASE TYPE WHEN 4 THEN 'JAVA CLASS' ELSE NULL END AS OBJECT_TYPE,
+        'VALID' AS STATUS,
+        'N' AS TEMPORARY,
+        'N' AS "GENERATED",
+        'N' AS SECONDARY,
+        0 AS NAMESPACE,
+        NULL AS EDITION_NAME
+      FROM SYS.ALL_VIRTUAL_EXTERNAL_RESOURCE_REAL_AGENT
+      WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+        AND TYPE IN (4)
     ) A
     JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT B
     ON A.TENANT_ID = B.TENANT_ID
@@ -48846,6 +48983,28 @@ def_table_schema(
         NULL AS EDITION_NAME
       FROM SYS.ALL_VIRTUAL_SENSITIVE_RULE_REAL_AGENT
       WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+
+      UNION ALL
+
+      SELECT
+        TENANT_ID,
+        GMT_CREATE,
+        GMT_MODIFIED,
+        DATABASE_ID,
+        NAME AS OBJECT_NAME,
+        NULL AS SUBOBJECT_NAME,
+        RESOURCE_ID AS OBJECT_ID,
+        NULL AS DATA_OBJECT_ID,
+        CASE TYPE WHEN 4 THEN 'JAVA CLASS' ELSE NULL END AS OBJECT_TYPE,
+        'VALID' AS STATUS,
+        'N' AS TEMPORARY,
+        'N' AS "GENERATED",
+        'N' AS SECONDARY,
+        0 AS NAMESPACE,
+        NULL AS EDITION_NAME
+      FROM SYS.ALL_VIRTUAL_EXTERNAL_RESOURCE_REAL_AGENT
+      WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+        AND TYPE IN (4)
     ) A
     JOIN SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT B
     ON A.TENANT_ID = B.TENANT_ID
@@ -70000,8 +70159,66 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-# 25319: DBA_JAVA_POLICY
-# 25320: USER_JAVA_POLICY
+def_table_schema(
+      owner = 'xumengqiang.xmq',
+      table_name      = 'DBA_JAVA_POLICY',
+      name_postfix    = '_ORA',
+      database_id     = 'OB_ORA_SYS_DATABASE_ID',
+      table_id        = '25319',
+      table_type      = 'SYSTEM_VIEW',
+      rowkey_columns  = [],
+      normal_columns  = [],
+      gm_columns      = [],
+      in_tenant_space = True,
+      view_definition =
+      """
+      select
+      case jp.kind when 0 then 'GRANT' when 1 then 'RESTRICT' end KIND,
+        u.user_name GRANTEE,
+        db.database_name TYPE_SCHEMA,
+        jp.type_name TYPE_NAME,
+        jp.name NAME,
+        jp.action ACTION,
+        case jp.status when 2 then 'ENABLED' when 3 then 'DISABLED' end ENABLED,
+        jp.key SEQ
+      from
+        SYS.ALL_VIRTUAL_JAVA_POLICY_REAL_AGENT jp, SYS.ALL_VIRTUAL_USER_REAL_AGENT u, SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT db
+      where
+        jp.TENANT_ID = EFFECTIVE_TENANT_ID() and jp.grantee = u.user_id and jp.type_schema = db.database_id
+      order by u.user_name, db.database_name, jp.type_name, jp.name, jp.action
+             """.replace("\n", " ")
+)
+
+def_table_schema(
+      owner = 'xumengqiang.xmq',
+      table_name      = 'USER_JAVA_POLICY',
+      name_postfix    = '_ORA',
+      database_id     = 'OB_ORA_SYS_DATABASE_ID',
+      table_id        = '25320',
+      table_type      = 'SYSTEM_VIEW',
+      rowkey_columns  = [],
+      normal_columns  = [],
+      gm_columns      = [],
+      in_tenant_space = True,
+      view_definition =
+      """
+      select
+      case jp.kind when 0 then 'GRANT' when 1 then 'RESTRICT' end KIND,
+        u.user_name GRANTEE,
+        db.database_name TYPE_SCHEMA,
+        jp.type_name TYPE_NAME,
+        jp.name NAME,
+        jp.action ACTION,
+        case jp.status when 2 then 'ENABLED' when 3 then 'DISABLED' end ENABLED,
+        jp.key SEQ
+      from
+        SYS.ALL_VIRTUAL_JAVA_POLICY_REAL_AGENT jp, SYS.ALL_VIRTUAL_USER_REAL_AGENT u, SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT db
+      where
+        jp.TENANT_ID = EFFECTIVE_TENANT_ID() and jp.grantee = u.user_id and jp.type_schema = db.database_id and u.user_name = SYS_CONTEXT('USERENV','CURRENT_USER')
+      order by u.user_name, db.database_name, jp.type_name, jp.name, jp.action
+             """.replace("\n", " ")
+)
+
 # 25321: V$OB_KEYWORDS
 
 #

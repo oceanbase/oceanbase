@@ -12734,6 +12734,42 @@ IF(count(*) >= 0, 1, 0)
 IF(count(*) >= 0, 1, 0)
 1
 select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_vector_segment_info limit 1;
+desc oceanbase.__all_virtual_java_policy;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+key	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+kind	bigint(20)	NO		NULL	
+grantee	bigint(20)	NO		NULL	
+type_schema	bigint(20)	NO		NULL	
+type_name	varchar(4096)	YES		NULL	
+name	varchar(4096)	YES		NULL	
+action	varchar(4096)	YES		NULL	
+status	bigint(20)	NO		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_java_policy;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_java_policy limit 1;
+desc oceanbase.__all_virtual_java_policy_history;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+key	bigint(20)	NO	PRI	NULL	
+schema_version	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+is_deleted	bigint(20)	NO		NULL	
+kind	bigint(20)	YES		NULL	
+grantee	bigint(20)	YES		NULL	
+type_schema	bigint(20)	YES		NULL	
+type_name	varchar(4096)	YES		NULL	
+name	varchar(4096)	YES		NULL	
+action	varchar(4096)	YES		NULL	
+status	bigint(20)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_java_policy_history;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_java_policy_history limit 1;
 desc oceanbase.__all_virtual_tenant_worker_group;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO		NULL	

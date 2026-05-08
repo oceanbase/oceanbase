@@ -329,7 +329,15 @@
   //----Functions for managing external resource----
   RPC_S(PRD create_external_resource, obrpc::OB_CREATE_EXTERNAL_RESOURCE, (ObCreateExternalResourceArg), obrpc::ObCreateExternalResourceRes);
   RPC_S(PRD drop_external_resource, obrpc::OB_DROP_EXTERNAL_RESOURCE, (ObDropExternalResourceArg), obrpc::ObDropExternalResourceRes);
+  RPC_S(PRD ora_upload_jar_external_resource, obrpc::OB_ORA_UPLOAD_JAR, (ObOraUploadJarArg), obrpc::ObOraUploadJarRes);
+  RPC_S(PRD ora_drop_jar_external_resource, obrpc::OB_ORA_DROP_JAR, (ObOraDropJarArg), obrpc::ObOraDropJarRes);
   //----End of functions for managing external resource----
+
+  //----Functions for managing java_policy----
+  RPC_S(PRD create_java_policy, obrpc::OB_CREATE_JAVA_POLICY, (ObCreateJavaPolicyArg), obrpc::ObCreateJavaPolicyRes);
+  RPC_S(PRD drop_java_policy, obrpc::OB_DROP_JAVA_POLICY, (ObDropJavaPolicyArg), obrpc::ObDropJavaPolicyRes);
+  RPC_S(PRD modify_java_policy, obrpc::OB_MODIFY_JAVA_POLICY, (ObModifyJavaPolicyArg), obrpc::ObModifyJavaPolicyRes);
+  //----End of functions for managing java_policy----
 
   //----Functions for managing ai model----
   RPC_S(PRD create_ai_model, obrpc::OB_CREATE_AI_MODEL, (ObCreateAiModelArg));

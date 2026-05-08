@@ -8,6 +8,7 @@
 
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_external_resource_schema_struct.h"
+#include "share/ob_get_compat_mode.h"
 
 namespace oceanbase
 {
@@ -142,8 +143,10 @@ public:
 
   inline void set_case_mode()
   {
-    case_mode_ = lib::is_mysql_mode() ? common::OB_ORIGIN_AND_INSENSITIVE
-                                      : common::OB_ORIGIN_AND_SENSITIVE;
+    lib::Worker::CompatMode tenant_mode = lib::Worker::CompatMode::MYSQL;
+    ObCompatModeGetter::get_tenant_mode(tenant_id_, tenant_mode);
+    case_mode_ = lib::Worker::CompatMode::ORACLE != tenant_mode ? common::OB_ORIGIN_AND_INSENSITIVE
+                                                                : common::OB_ORIGIN_AND_SENSITIVE;
   }
 
   inline uint64_t get_tenant_id() const { return tenant_id_; }

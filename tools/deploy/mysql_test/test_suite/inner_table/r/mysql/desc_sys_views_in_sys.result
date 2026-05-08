@@ -17030,6 +17030,46 @@ end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.V$OB_HNSW_INDEX_SEGMENT_INFO limit 1);
 cnt
 1
+desc oceanbase.DBA_JAVA_POLICY;
+Field	Type	Null	Key	Default	Extra
+KIND	varchar(8)	NO		NULL	
+GRANTEE	varchar(128)	NO		NULL	
+TYPE_SCHEMA	varchar(128)	NO			
+TYPE_NAME	varchar(4096)	YES		NULL	
+NAME	varchar(4096)	YES		NULL	
+ACTION	varchar(4096)	YES		NULL	
+ENABLED	varchar(8)	NO		NULL	
+SEQ	bigint(20)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|DBA_JAVA_POLICY|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|DBA_JAVA_POLICY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_JAVA_POLICY|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_JAVA_POLICY limit 1);
+cnt
+1
+desc oceanbase.USER_JAVA_POLICY;
+Field	Type	Null	Key	Default	Extra
+KIND	varchar(8)	NO		NULL	
+GRANTEE	varchar(128)	NO		NULL	
+TYPE_SCHEMA	varchar(128)	NO			
+TYPE_NAME	varchar(4096)	YES		NULL	
+NAME	varchar(4096)	YES		NULL	
+ACTION	varchar(4096)	YES		NULL	
+ENABLED	varchar(8)	NO		NULL	
+SEQ	bigint(20)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|USER_JAVA_POLICY|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|USER_JAVA_POLICY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|USER_JAVA_POLICY|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.USER_JAVA_POLICY limit 1);
+cnt
+1
 desc oceanbase.GV$OB_TENANT_WORKER_GROUPS;
 Field	Type	Null	Key	Default	Extra
 SVR_IP	varchar(46)	NO		NULL	

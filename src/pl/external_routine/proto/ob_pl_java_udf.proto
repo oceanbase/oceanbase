@@ -10,6 +10,14 @@ option java_outer_classname = "ObJavaUDFArg";
 message BatchedArgs {
   fixed64 batch_size = 1;
   repeated Values args = 2;
+  repeated Permission permissions = 3;
+}
+
+message Permission {
+  bool is_grant = 1;  // true for grant, false for restrict
+  bytes type = 2;
+  bytes name = 3;
+  bytes action = 4;
 }
 
 message Values {

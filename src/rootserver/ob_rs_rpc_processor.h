@@ -795,6 +795,8 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_FORCE_DROP_LONELY_LOB_AUX_TABLE, ObForceDr
 // external resource ddl
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_EXTERNAL_RESOURCE, ObRpcCreateExternalResourceP, create_external_resource(arg_, result_));
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_EXTERNAL_RESOURCE, ObRpcDropExternalResourceP, drop_external_resource(arg_, result_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_ORA_UPLOAD_JAR, ObRpcOraUploadJarP, ora_upload_jar_external_resource(arg_, result_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_ORA_DROP_JAR, ObRpcOraDropJarP, ora_drop_jar_external_resource(arg_, result_));
 // htable ddl
 DEFINE_DDL_SYS_TNT_RPC_PROCESSOR(obrpc::OB_PARALLEL_HTABLE_DDL, ObRpcParallelHTableDDLP, parallel_htable_ddl(arg_, result_));
 
@@ -808,6 +810,11 @@ DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_HANDLE_SENSITIVE_RULE_DDL, ObRpcHandleSens
 DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_NON_ATOMIC_DROP_TABLE_IN_DATABASE, ObRpcNonAtomicDropTableInDatabaseP, non_atomic_drop_table_in_database(arg_, result_));
 
 DEFINE_RS_RPC_PROCESSOR(obrpc::OB_GET_REFRESHED_SCHEMA_VERSIONS, ObRpcGetRefreshedSchemaVersionsP, get_refreshed_schema_versions(result_));
+
+// java policy ddl
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_CREATE_JAVA_POLICY, ObRpcCreateJavaPolicyP, create_java_policy(arg_, result_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_DROP_JAVA_POLICY, ObRpcDropJavaPolicyP, drop_java_policy(arg_, result_));
+DEFINE_DDL_RS_RPC_PROCESSOR(obrpc::OB_MODIFY_JAVA_POLICY, ObRpcModifyJavaPolicyP, modify_java_policy(arg_, result_));
 
 #undef DEFINE_RS_RPC_PROCESSOR_
 #undef DEFINE_RS_RPC_PROCESSOR
