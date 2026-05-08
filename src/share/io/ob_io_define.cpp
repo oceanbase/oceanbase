@@ -2230,6 +2230,14 @@ int ObIOHandle::wait(const int64_t wait_timeout_ms)
     LOG_WARN("IO wait timeout", K(ret), K(*result_));
     ret = OB_TIMEOUT;
   }
+  if (OB_NOT_NULL(result_) && result_->is_finished_) {
+    const int64_t io_resp_time_us = get_io_interval(result_->time_log_.end_ts_, result_->time_log_.begin_ts_);
+    const int64_t slow_io_threshold_us = GCONF.trace_log_slow_query_watermark;
+    if (io_resp_time_us > slow_io_threshold_us) {
+      LOG_WARN("slow io, io response time exceeds trace_log_slow_query_watermark",
+          K(io_resp_time_us), K(slow_io_threshold_us), K(ret), K(*result_));
+    }
+  }
   estimate();
 
   return ret;
