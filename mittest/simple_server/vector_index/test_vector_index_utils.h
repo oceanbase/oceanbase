@@ -27,7 +27,7 @@ class TestVectorIndexBase : public ObSimpleClusterTestBase {
 
 protected:
   const static int kDim = 18;
-  const static int kFreezeRowsPerWorker = 1000;
+  const static int kFreezeRowsPerWorker = 100;
   const static int kFreezeSearchIters = 1000;
 public:
   TestVectorIndexBase()

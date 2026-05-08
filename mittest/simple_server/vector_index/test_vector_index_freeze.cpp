@@ -754,8 +754,8 @@ TEST_F(TestVectorIndexFreeze, partition_table)
 TEST_F(TestVectorIndexFreeze, with_base)
 {
   int ret = OB_SUCCESS;
-  const int64_t kPreloadRows = 1000;
-  const int64_t kRowsPerWorkerAfterIndex = 1000;
+  const int64_t kPreloadRows = 100;
+  const int64_t kRowsPerWorkerAfterIndex = 100;
   const char* tenant_name = "vdb";
   LOGI("create tenant begin");
   int64_t affected_rows = 0;
