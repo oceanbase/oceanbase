@@ -1953,6 +1953,9 @@ int ObRecordType::init_session_var(const ObPLResolveCtx &resolve_ctx,
     ObObj *member = NULL;
     MEMSET(data, 0, init_size);
     new (data) ObPLRecord(user_type_id_, record_members_.count());
+    if (is_object_type()) {
+      record->set_null();
+    }
     if (OB_FAIL(record->init_data(obj_allocator, true))) {
       obj_allocator.free(data);
     } else {
@@ -2006,6 +2009,11 @@ int ObRecordType::init_session_var(const ObPLResolveCtx &resolve_ctx,
             OZ (get_member(i)->get_size(PL_TYPE_INIT_SIZE, init_size));
             OZ (get_member(i)->newx(*record->get_allocator(), &resolve_ctx, member_ptr));
             OX (member->set_extend(member_ptr, get_member(i)->get_type(), init_size));
+            if (OB_SUCC(ret) && get_member(i)->is_record_type()) {
+              ObPLComposite *composite = reinterpret_cast<ObPLComposite *>(member_ptr);
+              CK (OB_NOT_NULL(composite));
+              OX (composite->set_null());
+            }
           }
         }
       }
@@ -2843,6 +2851,9 @@ int ObCollectionType::init_session_var(const ObPLResolveCtx &resolve_ctx,
                                             0,
                                             false));
       OX (default_construct ? coll->set_inited() : void(NULL));
+      if (OB_SUCC(ret) && !is_associative_array_type() && !default_construct) {
+        coll->set_null();
+      }
       if (OB_FAIL(ret)) {
         ObUserDefinedType::destruct_objparam(obj_allocator, obj, &(resolve_ctx.session_info_));
       }
