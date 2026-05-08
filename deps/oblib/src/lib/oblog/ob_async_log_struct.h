@@ -110,15 +110,22 @@ class ObPLogFileStruct
 public:
   ObPLogFileStruct();
   virtual ~ObPLogFileStruct() { close_all(); }
+  static void set_sync_size_threshold(uint64_t threshold);
   int open(const char *log_file, const bool open_wf_flag, const bool redirect_flag);
   int reopen(const bool redirect_flag);
   int reopen_wf();
   int close_all();
   bool is_opened() { return fd_ > STDERR_FILENO; }
   int64_t get_write_size() const { return write_size_; }
+  void fsync();
+  void wfsync();
+  void try_fsync(const int64_t size);
+  void try_wfsync(const int64_t size);
+  void reset();
 public:
   static const int32_t MAX_LOG_FILE_NAME_SIZE = 256;
   static const mode_t LOG_FILE_MODE = 0644;
+  static uint64_t sync_size_threshold;
 
   char filename_[MAX_LOG_FILE_NAME_SIZE];
   int32_t fd_;//descriptor of log-file
@@ -128,6 +135,10 @@ public:
   int64_t file_size_;
   struct stat stat_;
   struct stat wf_stat_;
+  int64_t offset_;
+  int64_t wf_offset_;
+  int64_t unsynced_size_;
+  int64_t wf_unsynced_size_;
 };
 
 } // common

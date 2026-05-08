@@ -297,6 +297,7 @@ syslog_disk_size
 syslog_file_uncompressed_count
 syslog_io_bandwidth_limit
 syslog_level
+syslog_sync_size_threshold
 system_memory
 sys_bkgd_migration_change_member_list_timeout
 sys_bkgd_migration_retry_num
