@@ -97,6 +97,14 @@ int ObCreateTableLikeHelper::check_schema_valid_(const ObTableSchema *&orig_tabl
     LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, helper.convert(arg_.origin_db_name_),
                                         helper.convert(arg_.origin_table_name_),
                    "BASE TABLE");
+  } else if ((orig_table_schema->is_partitioned_table()
+              || orig_table_schema->is_auto_partitioned_table()) && TMP_TABLE == arg_.table_type_) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN(
+        "create temporary table like on table with partition not supported",
+        KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                   "create temporary table like on table with partition is");
   } else if (orig_table_schema->has_mlog_table()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN(
