@@ -48,6 +48,7 @@ class ObIDag;
 class ObIDagNet;
 class ObTenantDagScheduler;
 class ObTenantDagWorker;
+class ObDagPrioScheduler;
 
 
 struct ObDiagnoseLocation final
@@ -102,6 +103,8 @@ struct ObDiagnoseLocation final
 class ObINodeWithChild
 {
 public:
+  friend class ObDagPrioScheduler;
+public:
   ObINodeWithChild()
       : indegree_(0),
         lock_(common::ObLatchIds::WORK_DAG_LOCK)
@@ -117,8 +120,7 @@ public:
   bool check_with_lock(); // defense check
   int64_t get_indegree() const;
   int add_parent_node(ObINodeWithChild &parent);
-  const common::ObIArray<ObINodeWithChild*> &get_child_nodes() const { return children_; }
-  const common::ObIArray<ObINodeWithChild*> &get_parent_nodes() const { return parent_; }
+  int copy_child_nodes(common::ObIArray<ObINodeWithChild*> &child_nodes);
   int remove_parent_for_children();
   int remove_child_for_parents();
   int deep_copy_children(const common::ObIArray<ObINodeWithChild*> &other);
@@ -132,6 +134,7 @@ public:
   TO_STRING_KV(KP(this), K_(indegree));
 
 protected:
+  const common::ObIArray<ObINodeWithChild*> &get_child_nodes() const { return children_; }
   virtual int add_child_without_lock(ObINodeWithChild &child);
 
 private:

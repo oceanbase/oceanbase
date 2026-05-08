@@ -128,6 +128,18 @@ int ObINodeWithChild::add_parent_node(ObINodeWithChild &parent)
   return ret;
 }
 
+int ObINodeWithChild::copy_child_nodes(common::ObIArray<ObINodeWithChild*> &child_nodes)
+{
+  int ret = OB_SUCCESS;
+  ObMutexGuard guard(lock_);
+  if (OB_FAIL(guard.get_ret())) {
+    COMMON_LOG(WARN, "failed to get lock", K(ret));
+  } else if (OB_FAIL(child_nodes.assign(children_))) {
+    COMMON_LOG(WARN, "failed to assign child nodes", K(ret));
+  }
+  return ret;
+}
+
 // if failed, child will not be in the children_ array
 int ObINodeWithChild::add_child_without_lock(ObINodeWithChild &child)
 {
@@ -664,8 +676,13 @@ int ObIDag::check_cycle()
       while (OB_SUCC(ret) && !stack.empty()) {
         ObITask *pop_task = stack.at(stack.count() - 1);
         int64_t child_idx = pop_task->get_last_visit_child();
-        const ObIArray<ObINodeWithChild*> &children = pop_task->get_child_nodes();
+        ObSEArray<ObINodeWithChild*, DEFAULT_CHILDREN_NUM> children;
         bool has_push = false;
+        // NOTE: children of pop_task may be changed when pop_task is running, so we need copy it.
+        // the cyclic of the concurrently added child task will be checked when the child task is added into dag.
+        if (OB_FAIL(pop_task->copy_child_nodes(children))) {
+          COMMON_LOG(WARN, "failed to get child nodes", K(ret));
+        }
         while (OB_SUCC(ret) && !has_push && child_idx < children.count()) {
           ObITask *child_task = static_cast<ObITask*>(children.at(child_idx));
           if (OB_ISNULL(child_task)) {
