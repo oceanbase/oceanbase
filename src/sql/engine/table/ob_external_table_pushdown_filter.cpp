@@ -849,7 +849,9 @@ int ObExternalTablePushdownFilter::generate_lazy_exprs(const ObIArray<std::pair<
       bool is_found = false;
       for (int64_t j = 0; OB_SUCC(ret) && j < mapping_col_ids.count(); ++j) {
         if (mapping_col_ids.at(j).second == i) {
-          OZ (lazy_columns_.push_back(j));
+          if (!has_exist_in_array(eager_columns_, static_cast<uint64_t>(j))) {
+            OZ (lazy_columns_.push_back(j));
+          }
           is_found = true;
           break;
         }

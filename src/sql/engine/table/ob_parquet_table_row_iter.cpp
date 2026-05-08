@@ -138,6 +138,33 @@ int ObParquetTableRowIterator::init(const storage::ObTableScanParam *scan_param)
     }
 
     if (OB_SUCC(ret)) {
+      eager_output_indices_.reuse();
+      for (int64_t eager_idx = 0; OB_SUCC(ret) && eager_idx < get_eager_count(); ++eager_idx) {
+        const int64_t file_col_id = eager_columns_.at(eager_idx);
+        if (file_col_id < 0 || file_col_id >= mapping_column_ids_.count()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected eager file col id",
+                   K(ret),
+                   K(file_col_id),
+                   K(mapping_column_ids_.count()));
+        } else {
+          const int64_t expr_idx = mapping_column_ids_.at(file_col_id).second;
+          if (expr_idx < 0 || expr_idx >= column_exprs_.count()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected expr index for eager column",
+                     K(ret),
+                     K(expr_idx),
+                     K(column_exprs_.count()));
+          } else if (expr_idx >= column_sel_mask_.count() || !column_sel_mask_.at(expr_idx)) {
+            // not an output column, skip
+          } else if (OB_FAIL(eager_output_indices_.push_back(expr_idx))) {
+            LOG_WARN("failed to push eager expr index", K(ret), K(expr_idx));
+          }
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
       if (scan_param_->ext_enable_late_materialization_
           && scan_param->pd_storage_filters_ != nullptr) {
         // build filter expr rels for late materialization
@@ -153,6 +180,8 @@ int ObParquetTableRowIterator::init(const storage::ObTableScanParam *scan_param)
       OZ (coll_column_indexs_.allocate_array(allocator_, file_column_exprs_.count()));
       OZ (coll_record_readers_.allocate_array(allocator_, file_column_exprs_.count()));
       OZ (load_funcs_.allocate_array(allocator_, file_column_exprs_.count()));
+      OZ (cross_pages_.prepare_allocate(file_column_exprs_.count()));
+      OZ (offset_indexs_.allocate_array(allocator_, file_column_exprs_.count()));
       if (get_eager_count() > 0) {
         OZ (eager_column_readers_.allocate_array(allocator_, get_eager_count()));
         OZ (eager_record_readers_.allocate_array(allocator_, get_eager_count()));
@@ -626,7 +655,6 @@ int ObParquetTableRowIterator::next_row_group()
             iceberg_scan_task->delete_files_.count() > 0 ? delete_bitmap_->get_cardinality() : 0;
           state_.is_delete_file_loaded_ = true;
           state_.logical_read_row_count_ = 0;
-          state_.logical_eager_read_row_count_ = 0;
           find_row_group = true;
         }
       } else {
@@ -647,7 +675,14 @@ int ObParquetTableRowIterator::next_row_group()
           continue;
         } else {
           ++reader_metrics_.selected_row_group_count_;
-          sector_iter_.reset();
+          // reset single-layer iteration state for new row group
+          for (int64_t i = 0; i < offset_indexs_.count(); ++i) {
+            offset_indexs_.at(i).reset();
+          }
+          if (cross_pages_.count() > 0) {
+            MEMSET(pointer_cast<char *>(&cross_pages_.at(0)), 0,
+                   sizeof(bool) * cross_pages_.count());
+          }
           find_row_group = true;
 
           if (OB_NOT_NULL(dict_filter_pushdown_)) {
@@ -2904,29 +2939,26 @@ int ObParquetTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
   int64_t read_count = 0;
   ObMallocHookAttrGuard guard(mem_attr_);
 
-  if (OB_FAIL(next_sector(capacity, eval_ctx, read_count))) {
+  ObPushdownFilterExecutor *filter = scan_param_->pd_storage_filters_;
+  if (OB_FAIL(advance_next_batch(capacity, eval_ctx, read_count))) {
     if (OB_ITER_END != ret) {
-      LOG_WARN("failed to get next sector", K(ret));
+      LOG_WARN("failed to read next batch", K(ret));
     }
   } else if (OB_FAIL(calc_file_meta_column(read_count, eval_ctx))) {
     LOG_WARN("failed to calc file meta column", K(ret));
   } else if (OB_FAIL(calc_exprs_for_rowid(read_count, state_))) {
     LOG_WARN("failed to calc rowid", K(ret));
-  } else if (is_lazy_calc() && scan_param_->ext_enable_late_materialization_
-             && nullptr != scan_param_->pd_storage_filters_) {
-    if (OB_FAIL(apply_dict_code_filters(read_count, scan_param_->pd_storage_filters_))) {
+  } else if (is_lazy_calc() && scan_param_->ext_enable_late_materialization_ && nullptr != filter) {
+    if (OB_FAIL(apply_dict_code_filters(read_count, filter))) {
       LOG_WARN("failed to apply dict code filters", K(ret));
     } else if (OB_FAIL(calc_column_convert(read_count, false, eval_ctx))) {
-      // 在字典解码后调用，确保 column_exprs_ 拿到正确数据
       LOG_WARN("failed to calc column convert", K(ret));
-    } else if (OB_FAIL(ensure_filter_eval_inited_once(scan_param_->pd_storage_filters_))) {
+    } else if (OB_FAIL(ensure_filter_eval_inited_once(filter))) {
       LOG_WARN("failed to init filter evaluated datums once", K(ret));
-    } else if (OB_FAIL(calc_filters(read_count, scan_param_->pd_storage_filters_, nullptr))) {
+    } else if (OB_FAIL(calc_filters(read_count, filter, nullptr))) {
       LOG_WARN("failed to calc lazy filters", K(ret));
-    } else if (OB_FAIL(reorder_output(*scan_param_->pd_storage_filters_->get_result(),
-                                      eval_ctx,
-                                      read_count))) {
-      LOG_WARN("failed to reorder", K(ret));
+    } else if (OB_FAIL(reorder_output(*filter->get_result(), eval_ctx, read_count, false))) {
+      LOG_WARN("failed to reorder output", K(ret));
     }
   } else if (OB_FAIL(calc_column_convert(read_count, false, eval_ctx))) {
     LOG_WARN("failed to calc column convert", K(ret));
@@ -3587,14 +3619,18 @@ void ObParquetTableRowIterator::reset_column_readers()
   }
 }
 
-int ObParquetTableRowIterator::project_eager_columns(int64_t &count, int64_t capacity)
+// eager_row_pos: 追踪 eager 列物理读取器在 row group 内的绝对位置
+// output_row_offset: 追踪当前批次内 expr vector 的写入偏移，即已经写入了多少行
+int ObParquetTableRowIterator::project_eager_columns(int64_t &count,
+                                                     int64_t capacity,
+                                                     int64_t output_row_offset,
+                                                     int64_t &eager_row_pos)
 {
   int ret = OB_SUCCESS;
   ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
   const ExprFixedArray &column_conv_exprs = *(scan_param_->ext_column_dependent_exprs_);
   int64_t read_count = 0;
   ObMallocHookAttrGuard guard(mem_attr_);
-  str_res_mem_.reuse();
   if (!has_eager_columns()) {
     read_count = capacity;
   } else {
@@ -3604,34 +3640,37 @@ int ObParquetTableRowIterator::project_eager_columns(int64_t &count, int64_t cap
         // use class member variables to apply data page filter
         cur_col_id_ = eager_columns_.at(i);
         cur_eager_id_ = i;
-        int64_t load_row_count = 0;
+        // start writing at output_row_offset within the vector
+        int64_t load_row_count = output_row_offset;
         ObColumnDefaultValue default_value = is_lake_table() ?
                                   colid_default_value_arr_.at(cur_col_id_) : ObColumnDefaultValue();
         ObExpr* column_expr = get_column_expr_by_id(cur_col_id_);
-        OZ (column_expr->init_vector_for_write(
-                eval_ctx,
-                column_expr->get_default_res_format(),
-                eval_ctx.max_batch_size_));
+        // only initialize vector when writing from offset 0 (first segment)
+        if (0 == output_row_offset) {
+          OZ (column_expr->init_vector_for_write(
+                  eval_ctx,
+                  column_expr->get_default_res_format(),
+                  eval_ctx.max_batch_size_));
+        }
         std::shared_ptr<parquet::ColumnReader> eager_col_reader = eager_column_readers_.at(i);
         ObCollectionArrayType *arr_type = NULL;
         if (ob_is_collection_sql_type(column_expr->datum_meta_.type_)) {
           OZ (ObArrayExprUtils::get_array_type_by_subschema_id(eval_ctx,
                                             column_expr->datum_meta_.get_subschema_id(), arr_type));
         }
-        bool first_batch = true;
-        while (OB_SUCC(ret) && load_row_count < capacity &&
+        bool first_batch = (0 == output_row_offset);
+        while (OB_SUCC(ret) && load_row_count < output_row_offset + capacity &&
               ((eager_col_reader == nullptr && load_row_count < state_.cur_row_group_row_count_) ||
               (eager_col_reader != nullptr && eager_col_reader->HasNext()))) {
           int64_t temp_row_count = 0;
-          int64_t requested_batch_size = capacity - load_row_count;
+          int64_t requested_batch_size = output_row_offset + capacity - load_row_count;
 
-          // Check if this batch will cross page boundary
           bool cross_page
-              = !sector_iter_.is_cross_page(cur_col_id_)
+              = !is_cross_page(cur_col_id_)
                     ? false
-                    : sector_iter_.check_if_batch_cross_page(cur_col_id_,
-                                                             state_.eager_read_row_counts_[i],
-                                                             requested_batch_size);
+                    : check_if_batch_cross_page(cur_col_id_,
+                                                state_.eager_read_row_counts_[i],
+                                                requested_batch_size);
           DataLoader loader(eval_ctx, column_expr, arr_type,
                             eager_column_readers_.at(i).get(),
                             eager_record_readers_.at(i).get(),
@@ -3647,12 +3686,13 @@ int ObParquetTableRowIterator::project_eager_columns(int64_t &count, int64_t cap
           first_batch = false;
         }
         if (OB_SUCC(ret)) {
+          int64_t new_rows = load_row_count - output_row_offset;
           if (0 == read_count) {
-            read_count = load_row_count;
+            read_count = new_rows;
           } else {
-            if (read_count != load_row_count) {
+            if (read_count != new_rows) {
               ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("row count inconsist", K(ret), K(read_count), K(load_row_count),
+              LOG_WARN("row count inconsist", K(ret), K(read_count), K(new_rows),
                                               K(state_), K(state_.eager_read_row_counts_),
                                               K(state_.read_row_counts_));
             }
@@ -3660,11 +3700,9 @@ int ObParquetTableRowIterator::project_eager_columns(int64_t &count, int64_t cap
         }
         file_column_exprs_.at(cur_col_id_)->set_evaluated_projected(eval_ctx);
         if (0 == i) {
-          stat_.projected_eager_cnt_ += load_row_count;
+          stat_.projected_eager_cnt_ += read_count;
         }
       }
-      //ObTaskController::get().allow_next_syslog();
-      //LOG_INFO("print load batch", K(state_.eager_read_row_counts_[0]));
     } catch (const ObErrorCodeException &ob_error) {
       if (OB_SUCC(ret)) {
         ret = ob_error.get_error_code();
@@ -3680,7 +3718,7 @@ int ObParquetTableRowIterator::project_eager_columns(int64_t &count, int64_t cap
   }
 
   if (OB_SUCC(ret)) {
-    state_.logical_eager_read_row_count_ += read_count;
+    eager_row_pos += read_count;
     count = read_count;
   }
   return ret;
@@ -3883,7 +3921,6 @@ int ObParquetTableRowIterator::project_lazy_columns(int64_t &read_count, int64_t
   ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
   read_count = 0;
   ObMallocHookAttrGuard guard(mem_attr_);
-  str_res_mem_.reuse();
   try {
     //load vec data from parquet file to file column expr
     for (int i = 0; OB_SUCC(ret) && i < get_lazy_file_count(); ++i) {
@@ -3895,8 +3932,8 @@ int ObParquetTableRowIterator::project_lazy_columns(int64_t &read_count, int64_t
       ObExpr* column_expr = get_column_expr_by_id(cur_col_id_);
       OZ (column_expr->init_vector_for_write(
               eval_ctx, column_expr->get_default_res_format(), eval_ctx.max_batch_size_));
-      ObIArray<int64_t> &skip_range = sector_iter_.get_skip_ranges();
-      ObIArray<int64_t> &read_range = sector_iter_.get_read_ranges();
+      ObIArray<int64_t> &skip_range = lazy_skip_ranges_;
+      ObIArray<int64_t> &read_range = lazy_read_ranges_;
       ObCollectionArrayType *arr_type = NULL;
       if (ob_is_collection_sql_type(column_expr->datum_meta_.type_)) {
         OZ (ObArrayExprUtils::get_array_type_by_subschema_id(
@@ -3905,7 +3942,7 @@ int ObParquetTableRowIterator::project_lazy_columns(int64_t &read_count, int64_t
 
       // Check if this batch will cross page boundary
       bool cross_page = true;
-      if (!sector_iter_.is_cross_page(cur_col_id_)) {
+      if (!is_cross_page(cur_col_id_)) {
         cross_page = false;
       } else {
         // 计算当前批次的总行数：包括跳过的行数和需要读取的行数
@@ -3914,9 +3951,9 @@ int ObParquetTableRowIterator::project_lazy_columns(int64_t &read_count, int64_t
           read_batch_size += skip_range.at(j);
           read_batch_size += read_range.at(j);
         }
-        cross_page = sector_iter_.check_if_batch_cross_page(cur_col_id_,
-                                                            state_.read_row_counts_[cur_col_id_],
-                                                            read_batch_size);
+        cross_page = check_if_batch_cross_page(cur_col_id_,
+                                               state_.read_row_counts_[cur_col_id_],
+                                               read_batch_size);
       }
       for (int64_t j = 0; OB_SUCC(ret) && j < skip_range.count(); ++j) {
         int64_t skip_count = SkipRowsInColumn(cur_col_id_, skip_range.at(j),
@@ -3981,53 +4018,53 @@ int ObParquetTableRowIterator::project_lazy_columns(int64_t &read_count, int64_t
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected index", K(ret));
   }
-  for (int64_t i = 0; i < sector_iter_.get_skip_ranges().count(); ++i) {
-    state_.logical_read_row_count_ += sector_iter_.get_skip_ranges().at(i);
+  for (int64_t i = 0; i < lazy_skip_ranges_.count(); ++i) {
+    state_.logical_read_row_count_ += lazy_skip_ranges_.at(i);
   }
   if (0 == get_lazy_file_count()) {
-    for (int64_t i = 0; i < sector_iter_.get_read_ranges().count(); ++i) {
-      read_count += sector_iter_.get_read_ranges().at(i);
+    for (int64_t i = 0; i < lazy_read_ranges_.count(); ++i) {
+      read_count += lazy_read_ranges_.at(i);
     }
   }
   state_.logical_read_row_count_ += read_count;
   return ret;
 }
 
-void ObParquetTableRowIterator::move_next()
+void ObParquetTableRowIterator::move_next(const int64_t capacity)
 {
   if (nullptr != rg_page_index_reader_) {
-    if (state_.logical_read_row_count_ != state_.logical_eager_read_row_count_
-        || (has_eager_columns()
-            && state_.eager_read_row_counts_.at(0) > state_.logical_read_row_count_)) {
-      LOG_ERROR_RET(OB_ERR_UNEXPECTED, "inconsist row count", K(state_), K(state_.eager_read_row_counts_));
+    if (has_eager_columns()
+        && state_.eager_read_row_counts_.at(0) > state_.logical_read_row_count_) {
+      LOG_ERROR_RET(OB_ERR_UNEXPECTED,
+                    "inconsist row count",
+                    K(state_),
+                    K(state_.eager_read_row_counts_));
     }
-    bool find_sector = false;
+    bool found_readable_batch = false;
     int64_t &curr_idx = state_.logical_read_row_count_;
-    while (!find_sector && curr_idx < state_.cur_row_group_row_count_) {
+    int64_t dummy_eager_pos = state_.logical_read_row_count_;
+    while (!found_readable_batch && curr_idx < state_.cur_row_group_row_count_) {
       int64_t remain_size = state_.cur_row_group_row_count_ - curr_idx;
-      int64_t capacity = min(SECTOR_SIZE, remain_size);
-      if (rg_bitmap_->accumulate_bit_cnt(curr_idx, curr_idx + capacity) == capacity) {
-        increase_read_rows(capacity, false);
+      int64_t step = min(capacity, remain_size);
+      if (rg_bitmap_->accumulate_bit_cnt(curr_idx, curr_idx + step) == step) {
+        increase_read_rows(step, false, dummy_eager_pos);
       } else {
-        find_sector = true;
+        found_readable_batch = true;
       }
-      /*ObTaskController::get().allow_next_syslog();
-      LOG_INFO("print move next", K(capacity), K(find_sector), K(state_.logical_read_row_count_),
-                                    K(state_.logical_eager_read_row_count_), K(curr_idx),
-                                    K(state_.cur_row_group_row_count_), K(state_.read_row_counts_),
-                                    K(state_.eager_read_row_counts_));*/
     }
   }
 }
 
-void ObParquetTableRowIterator::increase_read_rows(const int64_t rows, const bool only_eager)
+void ObParquetTableRowIterator::increase_read_rows(const int64_t rows,
+                                                   const bool only_eager,
+                                                   int64_t &eager_row_pos)
 {
   if (rows > 0) {
     int64_t eager_column_id = 0;
     for (int64_t i = 0; i < state_.read_row_counts_.count(); ++i) {
       cur_col_id_ = i;
       if (!only_eager) {
-        SkipRowsInColumn( i, rows, state_.logical_read_row_count_, true, state_.read_row_counts_[i],
+        SkipRowsInColumn(i, rows, state_.logical_read_row_count_, true, state_.read_row_counts_[i],
                   column_readers_.at(i).get(), record_readers_.at(i).get(),
                   coll_record_readers_.at(i),
                   ob_is_collection_sql_type(file_column_exprs_.at(i)->datum_meta_.type_));
@@ -4035,7 +4072,7 @@ void ObParquetTableRowIterator::increase_read_rows(const int64_t rows, const boo
       if (has_eager_columns() && eager_column_id < get_eager_count()
                               && eager_columns_.at(eager_column_id) == i) {
         cur_eager_id_ = eager_column_id;
-        SkipRowsInColumn(i, rows, state_.logical_eager_read_row_count_, false,
+        SkipRowsInColumn(i, rows, eager_row_pos, false,
                   state_.eager_read_row_counts_[eager_column_id],
                   eager_column_readers_.at(eager_column_id).get(),
                   eager_record_readers_.at(eager_column_id).get(),
@@ -4044,276 +4081,35 @@ void ObParquetTableRowIterator::increase_read_rows(const int64_t rows, const boo
         ++eager_column_id;
       }
     }
-    state_.logical_eager_read_row_count_ += rows;
+    eager_row_pos += rows;
     if (!only_eager) {
       state_.logical_read_row_count_ += rows;
     }
   }
 }
 
-
-int ObParquetTableRowIterator::ParquetSectorIterator::prepare_next(const int64_t group_remain_count,
-                                                                   const int64_t batch_size,
-                                                                   ObPushdownFilterExecutor *root_filter,
-                                                                   ObEvalCtx &eval_ctx)
-{
-  int ret = OB_SUCCESS;
-  int64_t capacity = std::min(capacity_, group_remain_count);
-  if (OB_NOT_NULL(iter_->dict_filter_pushdown_)) {
-    iter_->dict_filter_pushdown_->clear_filter_arrays();
-  }
-  if (is_end()) {
-    if (!bitmap_.is_inited()) {
-      OZ (bitmap_.init(capacity_));
-      OZ (cross_pages_.prepare_allocate(iter_->file_column_exprs_.count()));
-      OZ (offset_indexs_.allocate_array(alloc_, iter_->file_column_exprs_.count()));
-    }
-    if (OB_SUCC(ret)) {
-      rewind(capacity);
-      if (group_remain_count > 0) {
-        check_cross_pages(capacity);
-        OZ(fill_eager_ranges(*iter_->rg_bitmap_,
-          batch_size,
-          iter_->state_.logical_eager_read_row_count_,
-          capacity,
-          has_no_skip_bits()));
-        CK (skip_ranges_.count() == read_ranges_.count());
-        ObPushdownFilterExecutor *real_filter = iter_->has_eager_columns() ? root_filter : nullptr;
-        for (int64_t i = 0; OB_SUCC(ret) && i < skip_ranges_.count(); ++i) {
-          iter_->increase_read_rows(skip_ranges_.at(i), true);
-          if (nullptr == real_filter) {
-            MEMSET(static_cast<void *> (&bitmap_.get_data()[size_]),
-                                        1, sizeof(int8_t) * skip_ranges_.at(i));
-          }
-          size_ += skip_ranges_.at(i);
-          int64_t real_batch_size = read_ranges_.at(i);
-          int64_t read_count = 0;
-          if (0 == real_batch_size) {
-          } else if (OB_FAIL(iter_->project_eager_columns(read_count, real_batch_size))) {
-            LOG_WARN("failed to project eager column", K(ret));
-          } else if (OB_FAIL(iter_->apply_dict_code_filters(read_count, real_filter))) {
-            LOG_WARN("failed to apply dict code filters", K(ret));
-          } else if (OB_FAIL(iter_->calc_eager_column_convert(read_count))) {
-            // 在字典解码后调用，确保 column_exprs_ 拿到正确数据
-            LOG_WARN("failed to calc eager column convert", K(ret));
-          } else if (OB_FAIL(iter_->ensure_filter_eval_inited_once(real_filter))) {
-            LOG_WARN("failed to init eager filter evaluated datums once", K(ret));
-          } else if (OB_FAIL(iter_->calc_filters(read_count, real_filter, nullptr))) {
-            LOG_WARN("failed to calc eager filters", K(ret));
-          } else if (nullptr != real_filter
-                     && OB_FAIL(bitmap_.append(size_, *real_filter->get_result(), 0, read_count))) {
-            LOG_WARN("failed to copy bitmap", K(ret));
-          } else {
-            size_ += read_count;
-          }
-        }
-        if (OB_SUCC(ret) && size_ > 0) {
-          if (nullptr != real_filter && OB_FAIL(bitmap_.bit_not())) {
-            LOG_WARN("failed to convert bitmap", K(ret));
-          }
-          ++segment_count_;
-        }
-      }
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (0 == size_) {
-  } else if (OB_FAIL(
-      1 == batch_size ? fill_ranges_one() : fill_ranges(batch_size, has_no_skip_bits()))) {
-    LOG_WARN("failed to fill ranges", K(ret));
-  } else if (skip_ranges_.empty()) {
-    ret = OB_ERR_UNEXPECTED;
-  }
-
-  //LOG_INFO("print sector info", KP(root_filter), K(size_), K(idx_), K(capacity_), K(segment_count_), K(group_remain_count), K(batch_size));
-
-  return ret;
-}
-
-void ObParquetTableRowIterator::ParquetSectorIterator::rewind(const int64_t capacity)
-{
-  size_ = 0;
-  idx_ = 0;
-  memset(static_cast<void *> (bitmap_.get_data()), 0, sizeof(int8_t) * capacity_);
-  if (cross_pages_.count() > 0) {
-    memset(pointer_cast<char *> (&cross_pages_.at(0)),
-           0, sizeof(bool) * cross_pages_.count());
-  }
-}
-
-void ObParquetTableRowIterator::ParquetSectorIterator::reset()
-{
-  size_ = 0;
-  idx_ = 0;
-  segment_count_ = 0;
-  for (int64_t i = 0; i < offset_indexs_.count(); ++i) {
-    offset_indexs_.at(i).reset();
-  }
-}
-
-int ObParquetTableRowIterator::ParquetSectorIterator::fill_ranges_one()
-{
-  int ret = OB_SUCCESS;
-  skip_ranges_.reuse();
-  read_ranges_.reuse();
-  int64_t read_count = 0;
-  int64_t start_idx = idx_;
-  int64_t continus_len = 0;
-  if (idx_ < size_) {
-    while (idx_ < size_ && 1 == bitmap_.get_data()[idx_]) {
-      ++idx_;
-      ++continus_len;
-    }
-    OZ (skip_ranges_.push_back(continus_len));
-    if (idx_ < size_) {
-      OZ (read_ranges_.push_back(1));
-      ++idx_;
-    } else {
-      OZ (read_ranges_.push_back(0));
-    }
-  }
-  return ret;
-}
-
-int ObParquetTableRowIterator::ParquetSectorIterator::fill_ranges(
-    const int64_t batch_size,
-    const bool has_no_skip_bits)
-{
-  int ret = OB_SUCCESS;
-  skip_ranges_.reuse();
-  read_ranges_.reuse();
-  if (idx_ < size_) {
-    int64_t start_idx = idx_;
-    if (has_no_skip_bits) {
-      if (idx_ + batch_size > size_) {
-        idx_ = size_;
-      } else {
-        idx_ += batch_size;
-      }
-      // 没有被过滤数据时，可以直接生成 ranges
-      OZ (skip_ranges_.push_back(0));
-      OZ (read_ranges_.push_back(idx_ - start_idx));
-    } else {
-      int64_t read_count = 0;
-      for (; read_count < batch_size && idx_ < size_; ++idx_) {
-        if (0 == bitmap_.get_data()[idx_]) {
-          ++read_count;
-        }
-      }
-      int64_t end_idx = idx_;
-      int8_t val = bitmap_.get_data()[start_idx++];
-      int64_t continus_len = 1;
-      if (0 == val) {
-        OZ (skip_ranges_.push_back(0));
-      }
-      for (; OB_SUCC(ret) && start_idx < end_idx; ++start_idx) {
-        if (bitmap_.get_data()[start_idx] == val) {
-          ++continus_len;
-        } else if (0 == val) {
-          OZ (read_ranges_.push_back(continus_len));
-          continus_len = 1;
-        } else {
-          OZ (skip_ranges_.push_back(continus_len));
-          continus_len = 1;
-        }
-        val = bitmap_.get_data()[start_idx];
-      }
-      if (0 == val) {
-        OZ (read_ranges_.push_back(continus_len));
-      } else {
-        OZ (skip_ranges_.push_back(continus_len));
-      }
-    }
-  }
-  if (read_ranges_.count() == skip_ranges_.count() - 1) {
-    OZ (read_ranges_.push_back(0));
-  }
-  //LOG_INFO("print ranges", K(skip_ranges_), K(read_ranges_), K(idx_), K(size_), K(bitmap_), K(read_count));
-  return ret;
-}
-
-int ObParquetTableRowIterator::ParquetSectorIterator::fill_eager_ranges(const ObBitVector &rg_bitmap,
-                                                                        const int64_t max_batch_size,
-                                                                        const int64_t start_idx,
-                                                                        const int64_t capacity,
-                                                                        const bool has_no_skip_bits)
-{
-  int ret = OB_SUCCESS;
-  skip_ranges_.reuse();
-  read_ranges_.reuse();
-
-  if (has_no_skip_bits) {
-    // 没有被过滤数据时，可以直接生成 ranges
-    OZ (skip_ranges_.push_back(0));
-    int64_t remaining = capacity;
-    while (remaining > 0) {
-        int64_t chunk = std::min(remaining, max_batch_size);
-        if (read_ranges_.count() == skip_ranges_.count()) {
-          OZ (skip_ranges_.push_back(0));
-        }
-        OZ (read_ranges_.push_back(chunk));
-        remaining -= chunk;
-    }
-  } else {
-    int64_t i = start_idx;
-    int64_t n = start_idx + capacity;
-    if (rg_bitmap.at(i) == 0) {
-      OZ (skip_ranges_.push_back(0));
-    }
-    while (i < n) {
-      bool current_bit = rg_bitmap.at(i);
-      int64_t start = i;
-      while (i < n && rg_bitmap.at(i) == current_bit) {
-        ++i;
-      }
-      int64_t length = i - start;
-      if (current_bit) {
-        OZ (skip_ranges_.push_back(length));
-      } else {
-        int64_t remaining = length;
-        while (remaining > 0) {
-            int64_t chunk = std::min(remaining, max_batch_size);
-            if (read_ranges_.count() == skip_ranges_.count()) {
-              OZ (skip_ranges_.push_back(0));
-            }
-            OZ (read_ranges_.push_back(chunk));
-            remaining -= chunk;
-        }
-      }
-    }
-  }
-
-  if (read_ranges_.count() == skip_ranges_.count() - 1) {
-    OZ (read_ranges_.push_back(0));
-  }
-  return ret;
-}
-
-void ObParquetTableRowIterator::ParquetSectorIterator::check_cross_pages(const int64_t capacity)
+void ObParquetTableRowIterator::check_cross_pages(const int64_t capacity)
 {
   if (cross_pages_.count() > 0) {
-    if (nullptr == iter_->rg_page_index_reader_ && cross_pages_.count() > 0) {
-      memset(pointer_cast<char *> (&cross_pages_.at(0)),
-           1, sizeof(bool) * cross_pages_.count());
+    if (nullptr == rg_page_index_reader_ && cross_pages_.count() > 0) {
+      memset(pointer_cast<char *>(&cross_pages_.at(0)), 1, sizeof(bool) * cross_pages_.count());
     } else {
-      int64_t sector_start = iter_->state_.logical_read_row_count_;
-      int64_t sector_end = sector_start + capacity;
+      int64_t batch_start = state_.logical_read_row_count_;
+      int64_t batch_end = batch_start + capacity;
       for (int64_t i = 0; i < cross_pages_.count(); ++i) {
         bool cross_page = true;
-        if (iter_->column_indexs_.at(i) < 0) {
+        if (column_indexs_.at(i) < 0) {
           cross_page = false;
         } else {
-          // Pre-load OffsetIndex into cache if not already cached
           if (i >= offset_indexs_.count() || !offset_indexs_.at(i)) {
-            offset_indexs_.at(i) =
-                iter_->rg_page_index_reader_->GetOffsetIndex(iter_->column_indexs_.at(i));
+            offset_indexs_.at(i) = rg_page_index_reader_->GetOffsetIndex(column_indexs_.at(i));
           }
           std::shared_ptr<parquet::OffsetIndex> offset_index = offset_indexs_.at(i);
           for (int64_t j = 0; cross_page && j < offset_index->page_locations().size(); ++j) {
             int64_t offset = offset_index->page_locations().at(j).first_row_index;
-            if (sector_start >= offset) {
-              if (j == offset_index->page_locations().size() - 1
-                  || sector_end <= offset_index->page_locations().at(j + 1).first_row_index) {
+            if (batch_start >= offset) {
+              if (j == static_cast<int64_t>(offset_index->page_locations().size()) - 1
+                  || batch_end <= offset_index->page_locations().at(j + 1).first_row_index) {
                 cross_page = false;
               }
             }
@@ -4325,45 +4121,20 @@ void ObParquetTableRowIterator::ParquetSectorIterator::check_cross_pages(const i
   }
 }
 
-bool ObParquetTableRowIterator::ParquetSectorIterator::has_no_skip_bits()
-{
-  bool check = (iter_->delete_bitmap_ == nullptr || iter_->delete_bitmap_->get_cardinality() == 0)
-         && !iter_->has_eager_columns();
-
-  if (check) {
-    // 需要检查 rg_bitmap_ 中是否有被设置的位
-    bool has_skip_in_rg = false;
-    if (iter_->rg_bitmap_ != nullptr && iter_->state_.cur_row_group_row_count_ > 0) {
-      int64_t start = iter_->state_.logical_eager_read_row_count_;
-      int64_t end = std::min(start + capacity_, iter_->state_.cur_row_group_row_count_);
-      // 检查当前sector范围内是否有需要跳过的位
-      if (iter_->rg_bitmap_->accumulate_bit_cnt(start, end) > 0) {
-        has_skip_in_rg = true;
-      }
-    }
-    check = !has_skip_in_rg;
-  }
-  return check;
-}
-
-bool ObParquetTableRowIterator::ParquetSectorIterator::check_if_batch_cross_page(
-    const int64_t column_id,
-    const int64_t current_row_pos,
-    const int64_t batch_size)
+bool ObParquetTableRowIterator::check_if_batch_cross_page(const int64_t column_id,
+                                                          const int64_t current_row_pos,
+                                                          const int64_t batch_size)
 {
   bool will_cross_page = true;
-  if (nullptr == iter_->rg_page_index_reader_
-      || column_id < 0
-      || column_id >= iter_->column_indexs_.count()
-      || iter_->column_indexs_.at(column_id) < 0) {
+  if (nullptr == rg_page_index_reader_ || column_id < 0 || column_id >= column_indexs_.count()
+      || column_indexs_.at(column_id) < 0) {
     // do nothing
   } else {
     std::shared_ptr<parquet::OffsetIndex> offset_index;
     if (column_id < offset_indexs_.count() && nullptr != offset_indexs_.at(column_id)) {
       offset_index = offset_indexs_.at(column_id);
     } else {
-      // Fallback: get OffsetIndex directly if not in cache
-      offset_index = iter_->rg_page_index_reader_->GetOffsetIndex(iter_->column_indexs_.at(column_id));
+      offset_index = rg_page_index_reader_->GetOffsetIndex(column_indexs_.at(column_id));
       if (column_id < offset_indexs_.count()) {
         offset_indexs_.at(column_id) = offset_index;
       }
@@ -4371,12 +4142,11 @@ bool ObParquetTableRowIterator::ParquetSectorIterator::check_if_batch_cross_page
     if (nullptr == offset_index || offset_index->page_locations().empty()) {
       // do nothing
     } else {
-      const auto& page_locations = offset_index->page_locations();
+      const auto &page_locations = offset_index->page_locations();
       int64_t batch_end = current_row_pos + batch_size;
       size_t found_page_idx = SIZE_MAX;
       size_t left = 0;
       size_t right = page_locations.size();
-      // find the page containing current_row_pos
       while (left < right) {
         size_t mid = left + (right - left) / 2;
         int64_t page_start = page_locations.at(mid).first_row_index;
@@ -4384,8 +4154,8 @@ bool ObParquetTableRowIterator::ParquetSectorIterator::check_if_batch_cross_page
           right = mid;
         } else {
           int64_t next_page_start = (mid + 1 < page_locations.size())
-                                    ? page_locations.at(mid + 1).first_row_index
-                                    : INT64_MAX;
+                                        ? page_locations.at(mid + 1).first_row_index
+                                        : INT64_MAX;
           if (current_row_pos < next_page_start) {
             found_page_idx = mid;
             break;
@@ -4399,7 +4169,6 @@ bool ObParquetTableRowIterator::ParquetSectorIterator::check_if_batch_cross_page
           int64_t next_page_start = page_locations.at(found_page_idx + 1).first_row_index;
           will_cross_page = (batch_end > next_page_start);
         } else {
-          // Last page, no cross-page
           will_cross_page = false;
         }
       }
@@ -4408,7 +4177,102 @@ bool ObParquetTableRowIterator::ParquetSectorIterator::check_if_batch_cross_page
   return will_cross_page;
 }
 
+int ObParquetTableRowIterator::fill_rg_skip_read_ranges(const int64_t capacity)
+{
+  int ret = OB_SUCCESS;
+  rg_skip_ranges_.reuse();
+  rg_read_ranges_.reuse();
+  const int64_t start_idx = state_.logical_read_row_count_;
+  const bool no_skip_bits
+      = (nullptr == rg_bitmap_)
+        || (0 == rg_bitmap_->accumulate_bit_cnt(start_idx, start_idx + capacity));
+  if (no_skip_bits) {
+    OZ(rg_skip_ranges_.push_back(0));
+    OZ(rg_read_ranges_.push_back(capacity));
+  } else {
+    const int64_t n = start_idx + capacity;
+    if (rg_bitmap_->at(start_idx) == 0) {
+      OZ(rg_skip_ranges_.push_back(0));
+    }
+    int64_t i = start_idx;
+    while (OB_SUCC(ret) && i < n) {
+      bool current_bit = rg_bitmap_->at(i);
+      int64_t seg_start = i;
+      while (i < n && rg_bitmap_->at(i) == current_bit) {
+        ++i;
+      }
+      int64_t length = i - seg_start;
+      if (current_bit) {
+        OZ(rg_skip_ranges_.push_back(length));
+      } else {
+        if (rg_read_ranges_.count() == rg_skip_ranges_.count()) {
+          OZ(rg_skip_ranges_.push_back(0));
+        }
+        OZ(rg_read_ranges_.push_back(length));
+      }
+    }
+    if (rg_read_ranges_.count() == rg_skip_ranges_.count() - 1) {
+      OZ(rg_read_ranges_.push_back(0));
+    }
+  }
+  return ret;
+}
 
+int ObParquetTableRowIterator::fill_lazy_ranges(const ObPushdownFilterExecutor &filter)
+{
+  int ret = OB_SUCCESS;
+  const common::ObBitmap *filter_result = filter.get_result();
+  lazy_skip_ranges_.reuse();
+  lazy_read_ranges_.reuse();
+
+  int64_t filter_row = 0;
+  int64_t pending_skip = 0;
+  int64_t cur_read = 0;
+
+  const uint8_t *filter_data = filter_result->get_data();
+
+  for (int64_t seg = 0; OB_SUCC(ret) && seg < rg_skip_ranges_.count(); ++seg) {
+    pending_skip += rg_skip_ranges_.at(seg);
+    int64_t pos = filter_row;
+    const int64_t seg_end = filter_row + rg_read_ranges_.at(seg);
+    while (OB_SUCC(ret) && pos < seg_end) {
+      if (0 == filter_data[pos]) {
+        if (cur_read > 0) {
+          OZ(lazy_read_ranges_.push_back(cur_read));
+          cur_read = 0;
+        }
+        int64_t next_pass = -1;
+        OZ(filter_result->next_valid_idx(pos, seg_end - pos, false, next_pass));
+        if (-1 == next_pass) {
+          pending_skip += seg_end - pos;
+          pos = seg_end;
+        } else {
+          pending_skip += next_pass - pos;
+          pos = next_pass;
+        }
+      } else {
+        if (0 == cur_read) {
+          OZ(lazy_skip_ranges_.push_back(pending_skip));
+          pending_skip = 0;
+        }
+        while (pos < seg_end && filter_data[pos]) {
+          ++cur_read;
+          ++pos;
+        }
+      }
+    }
+    filter_row = seg_end;
+  }
+  if (OB_SUCC(ret)) {
+    if (cur_read > 0) {
+      OZ(lazy_read_ranges_.push_back(cur_read));
+    } else {
+      OZ(lazy_skip_ranges_.push_back(pending_skip));
+      OZ(lazy_read_ranges_.push_back(0));
+    }
+  }
+  return ret;
+}
 
 int64_t ObParquetTableRowIterator::SkipRowsInColumn(const int64_t column_id,
                                                     const int64_t num_rows_to_skip,
@@ -4620,7 +4484,8 @@ static void build_low_filter_runs(const oceanbase::common::ObBitmap &bitmap,
 
 int ObParquetTableRowIterator::reorder_output(const oceanbase::common::ObBitmap &bitmap,
                                               ObEvalCtx &ctx,
-                                              int64_t &read_count)
+                                              int64_t &read_count,
+                                              bool only_eager_output)
 {
   int ret = OB_SUCCESS;
   const int64_t real_count = bitmap.popcnt();
@@ -4659,132 +4524,161 @@ int ObParquetTableRowIterator::reorder_output(const oceanbase::common::ObBitmap 
       }
     }
 
-    for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs_.count(); ++i) {
-      ObIVector *vec = column_exprs_.at(i)->get_vector(ctx);
-      switch (vec->get_format()) {
-          case VEC_FIXED: {
-            ObFixedLengthBase *fix_vec = static_cast<ObFixedLengthBase *>(vec);
-            ObBitVector *nulls = fix_vec->get_nulls();
-            if (use_low_filter_fast_path) {
-              for (int64_t run_idx = 0; run_idx < run_count; ++run_idx) {
-                MEMMOVE(fix_vec->get_data() + fix_vec->get_length() * run_dsts[run_idx],
-                        fix_vec->get_data() + fix_vec->get_length() * run_begins[run_idx],
-                        fix_vec->get_length() * run_lens[run_idx]);
-                copy_null_run(nulls, run_dsts[run_idx], run_begins[run_idx], run_lens[run_idx]);
-              }
-            } else if (use_high_filter_fast_path) {
-              for (int64_t project_count = 0; project_count < real_count; ++project_count) {
-                const int64_t src_idx = row_ids[project_count];
-                if (nulls->at(src_idx)) {
-                  nulls->set(project_count);
-                } else {
-                  nulls->unset(project_count);
-                  if (project_count != src_idx) {
-                  MEMCPY(fix_vec->get_data() + fix_vec->get_length() * project_count,
-                         fix_vec->get_data() + fix_vec->get_length() * src_idx,
-                         fix_vec->get_length());
-                  }
+    const int64_t col_loop_cnt
+        = only_eager_output ? eager_output_indices_.count() : column_exprs_.count();
+    for (int64_t pos = 0; OB_SUCC(ret) && pos < col_loop_cnt; ++pos) {
+      const int64_t i = only_eager_output ? eager_output_indices_.at(pos) : pos;
+      if (only_eager_output && (i < 0 || i >= column_exprs_.count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected column expr index", K(ret), K(i), K(column_exprs_.count()));
+      }
+      if (OB_SUCC(ret)) {
+          ObIVector *vec = column_exprs_.at(i)->get_vector(ctx);
+          switch (vec->get_format()) {
+            case VEC_FIXED: {
+              ObFixedLengthBase *fix_vec = static_cast<ObFixedLengthBase *>(vec);
+              ObBitVector *nulls = fix_vec->get_nulls();
+              if (use_low_filter_fast_path) {
+                for (int64_t run_idx = 0; run_idx < run_count; ++run_idx) {
+                  MEMMOVE(fix_vec->get_data() + fix_vec->get_length() * run_dsts[run_idx],
+                          fix_vec->get_data() + fix_vec->get_length() * run_begins[run_idx],
+                          fix_vec->get_length() * run_lens[run_idx]);
+                  copy_null_run(nulls, run_dsts[run_idx], run_begins[run_idx], run_lens[run_idx]);
                 }
-              }
-            } else {
-              int64_t project_count = 0;
-              for (int64_t j = 0; j < read_count; ++j) {
-                if (bitmap[j]) {
-                  if (nulls->at(j)) {
-                  nulls->set(project_count);
+              } else if (use_high_filter_fast_path) {
+                for (int64_t project_count = 0; project_count < real_count; ++project_count) {
+                  const int64_t src_idx = row_ids[project_count];
+                  if (nulls->at(src_idx)) {
+                    nulls->set(project_count);
                   } else {
-                  nulls->unset(project_count);
-                  if (project_count != j) {
-                    MEMCPY(fix_vec->get_data() + fix_vec->get_length() * project_count,
-                           fix_vec->get_data() + fix_vec->get_length() * j,
-                           fix_vec->get_length());
+                    nulls->unset(project_count);
+                    if (project_count != src_idx) {
+                      MEMCPY(fix_vec->get_data() + fix_vec->get_length() * project_count,
+                             fix_vec->get_data() + fix_vec->get_length() * src_idx,
+                             fix_vec->get_length());
+                    }
                   }
+                }
+              } else {
+                int64_t project_count = 0;
+                for (int64_t j = 0; j < read_count; ++j) {
+                  if (bitmap[j]) {
+                    if (nulls->at(j)) {
+                      nulls->set(project_count);
+                    } else {
+                      nulls->unset(project_count);
+                      if (project_count != j) {
+                        MEMCPY(fix_vec->get_data() + fix_vec->get_length() * project_count,
+                               fix_vec->get_data() + fix_vec->get_length() * j,
+                               fix_vec->get_length());
+                      }
+                    }
+                    ++project_count;
                   }
-                  ++project_count;
                 }
               }
+              break;
             }
-            break;
-          }
-          case VEC_DISCRETE: {
-            ObDiscreteBase *dis_vec = static_cast<ObDiscreteBase *>(vec);
-            ObBitVector *nulls = dis_vec->get_nulls();
-            if (use_low_filter_fast_path) {
-              for (int64_t run_idx = 0; run_idx < run_count; ++run_idx) {
-                MEMMOVE(dis_vec->get_lens() + run_dsts[run_idx],
-                        dis_vec->get_lens() + run_begins[run_idx],
-                        sizeof(dis_vec->get_lens()[0]) * run_lens[run_idx]);
-                MEMMOVE(dis_vec->get_ptrs() + run_dsts[run_idx],
-                        dis_vec->get_ptrs() + run_begins[run_idx],
-                        sizeof(dis_vec->get_ptrs()[0]) * run_lens[run_idx]);
-                copy_null_run(nulls, run_dsts[run_idx], run_begins[run_idx], run_lens[run_idx]);
-              }
-            } else if (use_high_filter_fast_path) {
-              for (int64_t project_count = 0; project_count < real_count; ++project_count) {
-                const int64_t src_idx = row_ids[project_count];
-                if (nulls->at(src_idx)) {
-                  nulls->set(project_count);
-                } else {
-                  nulls->unset(project_count);
-                  if (project_count != src_idx) {
-                  dis_vec->get_lens()[project_count] = dis_vec->get_lens()[src_idx];
-                  dis_vec->get_ptrs()[project_count] = dis_vec->get_ptrs()[src_idx];
-                  }
+            case VEC_DISCRETE: {
+              ObDiscreteBase *dis_vec = static_cast<ObDiscreteBase *>(vec);
+              ObBitVector *nulls = dis_vec->get_nulls();
+              if (use_low_filter_fast_path) {
+                for (int64_t run_idx = 0; run_idx < run_count; ++run_idx) {
+                  MEMMOVE(dis_vec->get_lens() + run_dsts[run_idx],
+                          dis_vec->get_lens() + run_begins[run_idx],
+                          sizeof(dis_vec->get_lens()[0]) * run_lens[run_idx]);
+                  MEMMOVE(dis_vec->get_ptrs() + run_dsts[run_idx],
+                          dis_vec->get_ptrs() + run_begins[run_idx],
+                          sizeof(dis_vec->get_ptrs()[0]) * run_lens[run_idx]);
+                  copy_null_run(nulls, run_dsts[run_idx], run_begins[run_idx], run_lens[run_idx]);
                 }
-              }
-            } else {
-              int64_t project_count = 0;
-              for (int64_t j = 0; j < read_count; ++j) {
-                if (bitmap[j]) {
-                  if (nulls->at(j)) {
-                  nulls->set(project_count);
+              } else if (use_high_filter_fast_path) {
+                for (int64_t project_count = 0; project_count < real_count; ++project_count) {
+                  const int64_t src_idx = row_ids[project_count];
+                  if (nulls->at(src_idx)) {
+                    nulls->set(project_count);
                   } else {
-                  nulls->unset(project_count);
-                  if (project_count != j) {
-                    dis_vec->get_lens()[project_count] = dis_vec->get_lens()[j];
-                    dis_vec->get_ptrs()[project_count] = dis_vec->get_ptrs()[j];
+                    nulls->unset(project_count);
+                    if (project_count != src_idx) {
+                      dis_vec->get_lens()[project_count] = dis_vec->get_lens()[src_idx];
+                      dis_vec->get_ptrs()[project_count] = dis_vec->get_ptrs()[src_idx];
+                    }
                   }
+                }
+              } else {
+                int64_t project_count = 0;
+                for (int64_t j = 0; j < read_count; ++j) {
+                  if (bitmap[j]) {
+                    if (nulls->at(j)) {
+                      nulls->set(project_count);
+                    } else {
+                      nulls->unset(project_count);
+                      if (project_count != j) {
+                        dis_vec->get_lens()[project_count] = dis_vec->get_lens()[j];
+                        dis_vec->get_ptrs()[project_count] = dis_vec->get_ptrs()[j];
+                      }
+                    }
+                    ++project_count;
                   }
-                  ++project_count;
                 }
               }
+              break;
             }
-            break;
-          }
-          case VEC_UNIFORM: {
-            ObUniformBase *uni_vec = static_cast<ObUniformBase *>(vec);
-            if (use_low_filter_fast_path) {
-              for (int64_t run_idx = 0; run_idx < run_count; ++run_idx) {
-                MEMMOVE(uni_vec->get_datums() + run_dsts[run_idx],
-                        uni_vec->get_datums() + run_begins[run_idx],
-                        sizeof(uni_vec->get_datums()[0]) * run_lens[run_idx]);
-              }
-            } else if (use_high_filter_fast_path) {
-              for (int64_t j = 0; j < real_count; ++j) {
-                uni_vec->get_datums()[j] = uni_vec->get_datums()[row_ids[j]];
-              }
-            } else {
-              int64_t project_count = 0;
-              for (int64_t j = 0; j < read_count; ++j) {
-                if (bitmap[j]) {
-                  uni_vec->get_datums()[project_count++] = uni_vec->get_datums()[j];
+            case VEC_UNIFORM: {
+              ObUniformBase *uni_vec = static_cast<ObUniformBase *>(vec);
+              if (use_low_filter_fast_path) {
+                for (int64_t run_idx = 0; run_idx < run_count; ++run_idx) {
+                  MEMMOVE(uni_vec->get_datums() + run_dsts[run_idx],
+                          uni_vec->get_datums() + run_begins[run_idx],
+                          sizeof(uni_vec->get_datums()[0]) * run_lens[run_idx]);
+                }
+              } else if (use_high_filter_fast_path) {
+                for (int64_t j = 0; j < real_count; ++j) {
+                  uni_vec->get_datums()[j] = uni_vec->get_datums()[row_ids[j]];
+                }
+              } else {
+                int64_t project_count = 0;
+                for (int64_t j = 0; j < read_count; ++j) {
+                  if (bitmap[j]) {
+                    uni_vec->get_datums()[project_count++] = uni_vec->get_datums()[j];
+                  }
                 }
               }
+              break;
             }
-            break;
-          }
-          case VEC_UNIFORM_CONST: {
-            break;
-          }
-          default: {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected format", K(ret), K(vec->get_format()));
+            case VEC_UNIFORM_CONST: {
+              break;
+            }
+            default: {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected format", K(ret), K(vec->get_format()));
+            }
           }
       }
     }
     if (OB_SUCC(ret)) {
       read_count = real_count;
     }
+  }
+  return ret;
+}
+
+int ObParquetTableRowIterator::reorder_eager_output_columns(
+    const oceanbase::common::ObBitmap &bitmap,
+    ObEvalCtx &ctx,
+    int64_t &read_count)
+{
+  int ret = OB_SUCCESS;
+  if (eager_output_indices_.count() > 0) {
+    OZ(reorder_output(bitmap, ctx, read_count, true));
+  } else {
+    const int64_t real_count = bitmap.popcnt();
+    if (real_count < read_count) {
+      read_count = real_count;
+    }
+  }
+  for (int64_t idx = 0; OB_SUCC(ret) && idx < eager_output_indices_.count(); ++idx) {
+    column_exprs_.at(eager_output_indices_.at(idx))->set_evaluated_projected(ctx);
   }
   return ret;
 }
@@ -4862,7 +4756,6 @@ int ObParquetTableRowIterator::prepare_page_index(const int64_t cur_row_group,
         }
         state_.cur_row_group_row_count_ = file_meta_->RowGroup(cur_row_group)->num_rows();
         state_.logical_read_row_count_ = 0;
-        state_.logical_eager_read_row_count_ = 0;
         //LOG_INFO("got rg", K(state_.cur_row_group_idx_), K(state_.cur_row_group_row_count_));
         int64_t eager_column_cnt = 0;
         for (int i = 0; OB_SUCC(ret) && i < column_indexs_.count(); i++) {
@@ -5059,7 +4952,9 @@ int ObParquetTableRowIterator::calc_column_convert(const int64_t read_count,
   return ret;
 }
 
-int ObParquetTableRowIterator::next_sector(const int64_t capacity, ObEvalCtx &eval_ctx, int64_t &read_count)
+int ObParquetTableRowIterator::advance_next_batch(const int64_t capacity,
+                                                  ObEvalCtx &eval_ctx,
+                                                  int64_t &read_count)
 {
   int ret = OB_SUCCESS;
   read_count = 0;
@@ -5072,21 +4967,19 @@ int ObParquetTableRowIterator::next_sector(const int64_t capacity, ObEvalCtx &ev
           }
         }
       }
-      if (!file_column_exprs_.count()) {
-        read_count = std::min(capacity, state_.cur_row_group_row_count_ - state_.logical_read_row_count_);
+      if (OB_FAIL(ret)) {
+      } else if (!file_column_exprs_.count()) {
+        read_count
+            = std::min(capacity, state_.cur_row_group_row_count_ - state_.logical_read_row_count_);
         state_.logical_read_row_count_ += read_count;
-        state_.logical_eager_read_row_count_ += read_count;
       } else {
-        if (OB_FAIL(ret)) {
-        } else if (sector_iter_.is_end() && FALSE_IT(move_next())) {
-        } else if (OB_FAIL(sector_iter_.prepare_next(state_.cur_row_group_row_count_ - (has_eager_columns()
-                                  ? state_.logical_eager_read_row_count_ : state_.logical_read_row_count_),
-                                      capacity, scan_param_->pd_storage_filters_, eval_ctx))) {
-          LOG_WARN("failed to prepare next", K(ret));
-        } else if (sector_iter_.is_empty()) {
-        } else if (FALSE_IT(scan_param_->op_->clear_evaluated_flag())) {
-        } else if (OB_FAIL(project_lazy_columns(read_count, capacity))) {
-          LOG_WARN("failed to project lazy columns", K(ret));
+        int64_t group_remain = state_.cur_row_group_row_count_ - state_.logical_read_row_count_;
+        if (group_remain > 0) {
+          move_next(std::min(capacity, group_remain));
+          group_remain = state_.cur_row_group_row_count_ - state_.logical_read_row_count_;
+          if (group_remain > 0) {
+            OZ(read_batch(std::min(capacity, group_remain), eval_ctx, read_count));
+          }
         }
       }
     }
@@ -5095,15 +4988,88 @@ int ObParquetTableRowIterator::next_sector(const int64_t capacity, ObEvalCtx &ev
       ret = ob_error.get_error_code();
       LOG_WARN("fail to read file", K(ret));
     }
-  } catch(const std::exception& e) {
+  } catch (const std::exception &e) {
     if (OB_SUCC(ret)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error", K(ret), "Info", e.what());
     }
-  } catch(...) {
+  } catch (...) {
     if (OB_SUCC(ret)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected error", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObParquetTableRowIterator::read_batch(const int64_t actual_capacity,
+                                          ObEvalCtx &eval_ctx,
+                                          int64_t &read_count)
+{
+  int ret = OB_SUCCESS;
+  ObPushdownFilterExecutor *filter = scan_param_->pd_storage_filters_;
+  scan_param_->op_->clear_evaluated_flag();
+  str_res_mem_.reuse();
+  if (OB_NOT_NULL(dict_filter_pushdown_)) {
+    dict_filter_pushdown_->clear_filter_arrays();
+  }
+  check_cross_pages(actual_capacity);
+  OZ(fill_rg_skip_read_ranges(actual_capacity));
+  CK(rg_skip_ranges_.count() == rg_read_ranges_.count());
+  if (OB_FAIL(ret)) {
+  } else if (!has_eager_columns()) {
+    if (OB_FAIL(lazy_skip_ranges_.assign(rg_skip_ranges_))) {
+      LOG_WARN("failed to assign lazy skip ranges", K(ret));
+    } else if (OB_FAIL(lazy_read_ranges_.assign(rg_read_ranges_))) {
+      LOG_WARN("failed to assign lazy read ranges", K(ret));
+    } else if (OB_FAIL(project_lazy_columns(read_count, actual_capacity))) {
+      LOG_WARN("failed to project lazy columns", K(ret));
+    }
+  } else {
+    int64_t eager_row_pos = state_.logical_read_row_count_;
+    int64_t eager_read_total = 0;
+    int64_t output_row_offset = 0;
+    for (int64_t seg = 0; OB_SUCC(ret) && seg < rg_skip_ranges_.count(); ++seg) {
+      increase_read_rows(rg_skip_ranges_.at(seg), true, eager_row_pos);
+      const int64_t rg_read = rg_read_ranges_.at(seg);
+      if (rg_read > 0) {
+        int64_t seg_read = 0;
+        OZ(project_eager_columns(seg_read, rg_read, output_row_offset, eager_row_pos));
+        eager_read_total += seg_read;
+        output_row_offset += seg_read;
+      }
+    }
+    if (OB_FAIL(ret) || 0 == eager_read_total) {
+      if (OB_SUCC(ret)) {
+        for (int64_t seg = 0; seg < rg_skip_ranges_.count(); ++seg) {
+          state_.logical_read_row_count_ += rg_skip_ranges_.at(seg);
+        }
+      }
+    } else if (OB_FAIL(apply_dict_code_filters(eager_read_total, filter))) {
+      LOG_WARN("failed to apply dict code filters", K(ret));
+    } else if (OB_FAIL(calc_eager_column_convert(eager_read_total))) {
+      LOG_WARN("failed to calc eager column convert", K(ret));
+    } else if (OB_FAIL(ensure_filter_eval_inited_once(filter))) {
+      LOG_WARN("failed to init eager filter evaluated datums once", K(ret));
+    } else if (OB_FAIL(calc_filters(eager_read_total, filter, nullptr))) {
+      LOG_WARN("failed to calc eager filters", K(ret));
+    } else if (OB_FAIL(reorder_eager_output_columns(*filter->get_result(),
+                                                    eval_ctx,
+                                                    eager_read_total))) {
+      LOG_WARN("failed to reorder eager output columns", K(ret));
+    } else if (0 == get_lazy_file_count()) {
+      // no lazy columns, passing rows already compacted
+      state_.logical_read_row_count_ += actual_capacity;
+      read_count = eager_read_total;
+      if (0 == read_count) {
+        scan_param_->op_->clear_evaluated_flag();
+      }
+    } else if (OB_FAIL(fill_lazy_ranges(*filter))) {
+      LOG_WARN("failed to fill lazy ranges", K(ret));
+    } else if (OB_FAIL(project_lazy_columns(read_count, actual_capacity))) {
+      LOG_WARN("failed to project lazy columns", K(ret));
+    } else if (0 == read_count) {
+      scan_param_->op_->clear_evaluated_flag();
     }
   }
   return ret;
