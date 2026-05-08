@@ -1128,6 +1128,7 @@ outline_content	longtext	NO		NULL
 format_sql_text	longtext	YES		NULL	
 format_sql_id	varbinary(32)	NO			
 format_outline	bigint(20)	NO		0	
+pattern_rules	longtext	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__tenant_virtual_outline;
 IF(count(*) >= 0, 1, 0)
 1

@@ -1416,7 +1416,8 @@ struct ObObjPrintParams
       uint32_t character_hex_safe_represent_:1;
       uint32_t binary_string_print_base64_:1;
       uint32_t not_print_internal_catalog_:1;
-      uint32_t reserved_:19;
+      uint32_t print_dbtbname_as_wildcard_:1;
+      uint32_t reserved_:18;
     };
   };
 

@@ -1071,7 +1071,8 @@ all_outline_def = dict(
       ('owner_id', 'int', 'true'),
       ('format_sql_text', 'longtext', 'true'),
       ('format_sql_id', 'varbinary:OB_MAX_SQL_ID_LENGTH', 'false', ''),
-      ('format_outline', 'int', 'false', '0')
+      ('format_outline', 'int', 'false', '0'),
+      ('pattern_rules', 'longtext', 'true'),
     ],
 )
 
@@ -10778,7 +10779,8 @@ def_table_schema(
       ('outline_content', 'longtext', 'false'),
       ('format_sql_text', 'longtext', 'true'),
       ('format_sql_id', 'varbinary:OB_MAX_SQL_ID_LENGTH', 'false', ''),
-      ('format_outline', 'int', 'false', '0')
+      ('format_outline', 'int', 'false', '0'),
+      ('pattern_rules', 'longtext', 'true'),
     ],
 )
 
@@ -31117,7 +31119,8 @@ def_table_schema(
       CAST(SQL_ID AS CHAR(32)) AS SQL_ID,
       OUTLINE_CONTENT,
       CASE WHEN IS_DELETED = 1 THEN 'YES' ELSE 'NO' END AS IS_DELETED,
-      CASE WHEN ENABLED = 1 THEN 'YES' ELSE 'NO' END AS ENABLED
+      CASE WHEN ENABLED = 1 THEN 'YES' ELSE 'NO' END AS ENABLED,
+      PATTERN_RULES
     FROM oceanbase.__all_outline_history
 """.replace("\n", " "),
 
@@ -31466,7 +31469,8 @@ def_table_schema(
       A.OUTLINE_TARGET,
       A.OUTLINE_SQL,
       A.SQL_ID,
-      A.OUTLINE_CONTENT
+      A.OUTLINE_CONTENT,
+      B.PATTERN_RULES
     FROM oceanbase.__tenant_virtual_outline A, oceanbase.__all_outline B
     WHERE A.OUTLINE_ID = B.OUTLINE_ID AND B.FORMAT_OUTLINE = 0
 """.replace("\n", " "),
@@ -38932,7 +38936,8 @@ def_table_schema(
       A.OUTLINE_TARGET,
       A.OUTLINE_SQL,
       A.FORMAT_SQL_ID,
-      A.OUTLINE_CONTENT
+      A.OUTLINE_CONTENT,
+      B.PATTERN_RULES
     FROM oceanbase.__tenant_virtual_outline A, oceanbase.__all_outline B
     WHERE A.OUTLINE_ID = B.OUTLINE_ID AND B.FORMAT_OUTLINE != 0
 """.replace("\n", " "),
@@ -67891,7 +67896,8 @@ def_table_schema(
       A.OUTLINE_TARGET,
       A.OUTLINE_SQL,
       A.FORMAT_SQL_ID,
-      A.OUTLINE_CONTENT
+      A.OUTLINE_CONTENT,
+      B.PATTERN_RULES
     FROM SYS.TENANT_VIRTUAL_OUTLINE_AGENT A, SYS.ALL_VIRTUAL_OUTLINE_REAL_AGENT B
     WHERE A.OUTLINE_ID = B.OUTLINE_ID AND B.FORMAT_OUTLINE != 0;
 """.replace("\n", " "),
@@ -76088,7 +76094,8 @@ def_table_schema(
         CAST(SQL_ID AS VARCHAR2(32)) AS SQL_ID,
         OUTLINE_CONTENT,
         CASE WHEN IS_DELETED = 1 THEN 'YES' ELSE 'NO' END AS IS_DELETED,
-        CASE WHEN ENABLED = 1 THEN 'YES' ELSE 'NO' END AS ENABLED
+        CASE WHEN ENABLED = 1 THEN 'YES' ELSE 'NO' END AS ENABLED,
+        PATTERN_RULES
   FROM SYS.ALL_VIRTUAL_OUTLINE_HISTORY_REAL_AGENT
 """.replace("\n", " ")
 )
@@ -76117,7 +76124,8 @@ def_table_schema(
                           A.OUTLINE_TARGET,
                           A.OUTLINE_SQL,
                           A.SQL_ID,
-                          A.OUTLINE_CONTENT
+                          A.OUTLINE_CONTENT,
+                          B.PATTERN_RULES
                    FROM SYS.TENANT_VIRTUAL_OUTLINE_AGENT A, SYS.ALL_VIRTUAL_OUTLINE_REAL_AGENT B
                    WHERE A.OUTLINE_ID = B.OUTLINE_ID AND B.FORMAT_OUTLINE = 0
 """.replace("\n", " ")

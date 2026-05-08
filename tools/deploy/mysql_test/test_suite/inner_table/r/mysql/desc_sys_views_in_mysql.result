@@ -5000,6 +5000,7 @@ SQL_ID	varchar(32)	YES
 OUTLINE_CONTENT	longtext	YES		NULL	
 IS_DELETED	varchar(3)	NO			
 ENABLED	varchar(3)	NO			
+PATTERN_RULES	longtext	YES		NULL	
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_OUTLINE_CONCURRENT_HISTORY|%') then 2
@@ -5196,6 +5197,7 @@ OUTLINE_TARGET	longtext	NO		NULL
 OUTLINE_SQL	longtext	NO		NULL	
 SQL_ID	varchar(32)	NO			
 OUTLINE_CONTENT	longtext	NO		NULL	
+PATTERN_RULES	longtext	YES		NULL	
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_OUTLINES|%') then 2
@@ -8096,6 +8098,7 @@ OUTLINE_TARGET	longtext	NO		NULL
 OUTLINE_SQL	longtext	NO		NULL	
 FORMAT_SQL_ID	varbinary(32)	NO			
 OUTLINE_CONTENT	longtext	NO		NULL	
+PATTERN_RULES	longtext	YES		NULL	
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_FORMAT_OUTLINES|%') then 2
