@@ -39,9 +39,6 @@ public:
 private:
   template <typename Arg0Vec, typename Arg1Vec, typename ResVec>
   static int calc_find_in_set_vector_dispatch(VECTOR_EVAL_FUNC_ARG_DECL);
-
-  template <typename Arg0Vec, typename ResVec>
-  static int calc_find_in_set_vector_dispatch(VECTOR_EVAL_FUNC_ARG_DECL);
   DISALLOW_COPY_AND_ASSIGN(ObExprFindInSet);
 };
 
