@@ -39,7 +39,7 @@
 #include "ob_log_callback.h"                        // ObILogCallback
 #include "ob_cdc_lob_ctx.h"                         // ObLobDataOutRowCtxList
 #include "ob_cdc_lob_aux_table_schema_info.h"       // ObCDCLobAuxTableSchemaInfo
-#include "lib/allocator/ob_lf_fifo_allocator.h"     // ObConcurrentFIFOAllocator
+// Removed: #include "lib/allocator/ob_lf_fifo_allocator.h" - no longer needed, ObLogEntryTask uses independent ObArenaAllocator
 #include "ob_log_safe_arena.h"
 #include "ob_log_tic_update_info.h"                 // TICUpdateInfo
 
@@ -740,7 +740,7 @@ private:
 
 typedef LightyList<IStmtTask> StmtList;
 
-class ObLogEntryTask
+class ObLogEntryTask : public ObLogResourceRecycleTask
 {
 public:
   ObLogEntryTask(PartTransTask &host, const bool is_direct_load_inc_log = false);
@@ -1123,6 +1123,10 @@ public:
   void set_global_schema_version(const int64_t global_schema_version) { global_schema_version_ = global_schema_version; }
   int64_t get_global_schema_version() const { return global_schema_version_; }
 
+  /// Timestamp (us) when this task was pushed to committer queue; 0 means not set. Used for queue wait time stat.
+  void set_committer_push_timestamp_us(const int64_t us) { committer_push_timestamp_us_ = us; }
+  int64_t get_committer_push_timestamp_us() const { return committer_push_timestamp_us_; }
+
   void set_next_task(PartTransTask *next) { next_task_ = next; }
   PartTransTask *next_task() { return next_task_; }
 
@@ -1257,7 +1261,6 @@ public:
   int check_for_ddl_trans(
       bool &is_not_barrier,
       ObSchemaOperationType &op_type) const;
-  ObIAllocator &get_log_entry_task_base_allocator() { return log_entry_task_base_allocator_; };
   int push_tic_update_info(const TICUpdateInfo &tic_update_info);
   void get_tic_update_info(ObArray<TICUpdateInfo> &tic_update_infos) const
   {
@@ -1375,7 +1378,7 @@ private:
   // trace_id/trace_info/part_trans_info_str_/participant_
   // MutatorRow(DDL)/DdlStmtTask
   ObSmallArena            allocator_;
-  ObLfFIFOAllocator       log_entry_task_base_allocator_;
+  // Note: log_entry_task_base_allocator_ removed - ObLogEntryTask now uses independent ObArenaAllocator
   ServedState             serve_state_;
   // trans basic info
   uint64_t                cluster_id_;            // cluster ID
@@ -1432,6 +1435,7 @@ private:
   // Distributed transaction level, tls_ided transactions within a distributed transaction have the same number
   int64_t                 global_trans_seq_;
   int64_t                 global_schema_version_;
+  int64_t                 committer_push_timestamp_us_;  // set when pushed to committer, 0 = not set
 
   // PartTransTask linked list structure
   // list of participants in Sequencer

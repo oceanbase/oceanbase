@@ -1185,10 +1185,9 @@ int LSFetchCtx::get_dispatch_progress(int64_t &dispatch_progress, logfetcher::Pa
     LOG_ERROR("invalid part trans resolver", KR(ret), K(part_trans_resolver_));
   } else if (OB_FAIL(part_trans_resolver_->get_dispatch_progress(dispatch_progress,
       dispatch_info))) {
-    LOG_ERROR("get_dispatch_progress from part trans resolver fail", KR(ret), K(tls_id_));
+    LOG_ERROR("get_dispatch_progress from part trans resolver fail", KR(ret), K_(tls_id));
   } else if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == dispatch_progress)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("dispatch_progress is invalid", KR(ret), K(dispatch_progress), K(tls_id_), K(dispatch_info));
+    LOG_WARN("dispatch_progress is invalid", KR(ret), K(dispatch_progress), K_(tls_id), K(dispatch_info));
   }
 
   return ret;

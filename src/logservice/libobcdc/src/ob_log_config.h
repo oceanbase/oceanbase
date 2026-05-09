@@ -117,6 +117,8 @@ public:
   DEF_INT(ddl_parser_thread_num, OB_CLUSTER_PARAMETER, "1", "[1,]", "DDL parser thread number");
   DEF_INT(sequencer_thread_num, OB_CLUSTER_PARAMETER, "5", "[1,]", "sequencer thread number");
   DEF_INT(sequencer_queue_length, OB_CLUSTER_PARAMETER, "0", "[0,]", "sequencer queue length");
+  DEF_INT(redo_dispatcher_thread_num, OB_CLUSTER_PARAMETER, "1", "[1,]", "redo dispatcher thread number");
+  DEF_INT(redo_dispatcher_queue_length, OB_CLUSTER_PARAMETER, "0", "[0,]", "redo dispatcher queue length");
   DEF_INT(formatter_thread_num, OB_CLUSTER_PARAMETER, "10", "[1,]", "formatter thread number");
   DEF_INT(lob_data_merger_thread_num, OB_CLUSTER_PARAMETER, "5", "[1,]", "lob data merger thread number");
   DEF_INT(lob_data_merger_queue_length, OB_CLUSTER_PARAMETER, "1000000", "[0,]", "lob data merger queue length");
@@ -129,8 +131,16 @@ public:
   DEF_INT(br_queue_length, OB_CLUSTER_PARAMETER, "0", "[0,]", "user_binlog_record queue length");
   DEF_INT(cached_schema_version_count, OB_CLUSTER_PARAMETER, "32", "[1,]", "cached schema version count");
   DEF_INT(history_schema_version_count, OB_CLUSTER_PARAMETER, "16", "[1,]", "history schema version count");
-  DEF_INT(resource_collector_thread_num, OB_CLUSTER_PARAMETER, "11", "[1,]", "resource collector thread number");
+  // DEPRECATED: resource_collector_thread_num is no longer used. Thread counts are configured per sub-pool.
+  DEF_INT(resource_collector_thread_num, OB_CLUSTER_PARAMETER, "15", "[1,]", "resource collector thread number (DEPRECATED, kept for backward compat)");
   DEF_INT(resource_collector_thread_num_for_br, OB_CLUSTER_PARAMETER, "7", "[1,]", "binlog record resource collector thread number");
+  DEF_INT(resource_collector_thread_num_for_log_entry_task, OB_CLUSTER_PARAMETER, "2", "[0,]", "log entry task resource collector thread number");
+  DEF_INT(resource_collector_thread_num_for_part_trans, OB_CLUSTER_PARAMETER, "3", "[1,]", "part trans task resource collector thread number");
+  DEF_INT(resource_collector_thread_num_for_storage_delete, OB_CLUSTER_PARAMETER, "2", "[1,]", "storage delete task thread number for async rocksdb delete operations");
+  DEF_INT(resource_collector_thread_num_for_lob_clean, OB_CLUSTER_PARAMETER, "1", "[1,]", "lob data clean task thread number");
+  DEF_INT(storage_delete_batch_size, OB_CLUSTER_PARAMETER, "1000", "[1,]", "batch size for storage delete operations");
+  DEF_INT(storage_batch_delete_interval_ms, OB_CLUSTER_PARAMETER, "1000", "[100,]", "interval in milliseconds for flushing storage delete buffer, triggers flush when buffer not full but time reached");
+  T_DEF_BOOL(enable_batch_write, OB_CLUSTER_PARAMETER, 0, "0:disabled (single write), 1:enabled (batch write)");
   DEF_INT(instance_num, OB_CLUSTER_PARAMETER, "1", "[1,]", "store instance number");
   DEF_INT(instance_index, OB_CLUSTER_PARAMETER, "0", "[0,]", "store instance index, start from 0");
   DEF_INT(part_trans_task_prealloc_count, OB_CLUSTER_PARAMETER, "0", "[0,]",
@@ -173,6 +183,10 @@ public:
   // Default value: 2^31 - 10000, this is a special cluster ID agreed in OCP for deleting historical data scenarios
   // libobcdc filters REDO data from deleted historical data scenarios by default
   DEF_STR(cluster_id_black_list, OB_CLUSTER_PARAMETER, "|", "cluster id black list");
+
+  // transaction id filter list, format: tenant_id:trans_id1,trans_id2,...|tenant_id:...
+  // e.g. filter_trans_id_list=1001:1111,2222,3333|1002:1111,2222
+  DEF_STR(filter_trans_id_list, OB_CLUSTER_PARAMETER, "|", "transaction id filter list");
 
   // minimum value of default cluster id blacklist value
   // The minimum value is: 2^31 - 10000 = 2147473648
@@ -273,8 +287,12 @@ public:
   // the destination of archive log.
   DEF_STR(archive_dest, OB_CLUSTER_PARAMETER, "|", "the location of archive log");
   T_DEF_INT_INFT(rocksdb_write_buffer_size, OB_CLUSTER_PARAMETER, 64, 16, "write buffer size[M]");
-  DEF_TIME(rocksdb_flush_interval, OB_CLUSTER_PARAMETER, "10m", "[0s,1d]", "rocksdb flush interval for redo_storage, 0s means never");
-  DEF_TIME(rocksdb_compact_interval, OB_CLUSTER_PARAMETER, "6h", "[0s,7d]", "rocksdb compact interval for redo_storage, 0s means never");
+  DEF_TIME(rocksdb_flush_interval, OB_CLUSTER_PARAMETER, "1m", "[0s,1d]", "rocksdb flush interval for redo_storage, 0s means never");
+  DEF_TIME(rocksdb_compact_interval, OB_CLUSTER_PARAMETER, "1h", "[0s,7d]", "rocksdb compact interval for redo_storage, 0s means never");
+  T_DEF_BOOL(rocksdb_enable_compress, OB_CLUSTER_PARAMETER, 1, "0:disabled, 1:enabled");
+  T_DEF_BOOL(rocksdb_read_verify_checksums, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
+
+  DEF_CAP(rocksdb_block_cache_size, OB_CLUSTER_PARAMETER, "4G", "[0M,]", "rocksdb block cache size");
 
   T_DEF_INT_INFT(io_thread_num, OB_CLUSTER_PARAMETER, 4, 1, "io thread number");
   T_DEF_INT(idle_pool_thread_num, OB_CLUSTER_PARAMETER, 4, 1, 32, "idle pool thread num");
@@ -437,6 +455,7 @@ public:
   T_DEF_INT(pause_redo_dispatch_task_count_threshold, OB_CLUSTER_PARAMETER, 80, 0, 100, "task cound percent threshold for pause redo dispatch");
   T_DEF_INT(memory_usage_warn_threshold, OB_CLUSTER_PARAMETER, 85, 10, 100, "memory usage wan threshold, may pause fetch while reach the threshold");
   T_DEF_INT_INFT(queue_backlog_lowest_tolerance, OB_CLUSTER_PARAMETER, 100, 0, "lowest threshold of queue_backlog that will touch flow controll");
+  T_DEF_BOOL(enable_parser_flow_control, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
   // sorter thread num
   T_DEF_INT(msg_sorter_thread_num, OB_CLUSTER_PARAMETER, 1, 1, 32, "trans msg sorter thread num");
   // sorter thread
@@ -465,6 +484,11 @@ public:
 
   // enable test_mode_switch_fetch_mode to test whether cdc service can fetch log correctly when switching fetch mode
   T_DEF_BOOL(test_mode_switch_fetch_mode, OB_CLUSTER_PARAMETER, 0, "0:disabled 1:enabled");
+
+  // Number of parallel RPC streams for discrete miss log fetch.
+  // 1 = serial (original behavior). >1 splits the miss-log array into N ranges and fetches concurrently.
+  T_DEF_INT_INFT(miss_log_discrete_fetch_parallelism, OB_CLUSTER_PARAMETER, 8, 1,
+      "number of parallel RPC streams for discrete miss log fetch, 1 means no parallelism");
 
   // simulate fetch missing error when fetching missing log for the first time
   T_DEF_BOOL(test_fetch_missing_errsim, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
@@ -539,6 +563,11 @@ public:
 
   // Output heartbeat interval to external, default 1s
   T_DEF_INT_INFT(output_heartbeat_interval_msec, OB_CLUSTER_PARAMETER, 1000, 1, "output heartbeat interval in seconds");
+
+  // Post-commit thread count for async after_trans_handled_ processing, default 1
+  T_DEF_INT_INFT(committer_post_commit_thread_num, OB_CLUSTER_PARAMETER, 2, 1, "committer post-commit thread number");
+  // Post-commit queue size for async after_trans_handled_ processing, default 100000
+  T_DEF_INT_INFT(committer_post_commit_queue_size, OB_CLUSTER_PARAMETER, 100000, 0, "committer post-commit queue size");
 
   // Whether to have incremental backup mode
   // Off by default; if it is, then incremental backup mode
@@ -622,6 +651,7 @@ public:
   DEF_CAP(print_mod_memory_usage_threshold, OB_CLUSTER_PARAMETER, "0M", "[0M,]", "print mod memory usage threshold");
   DEF_STR(print_mod_memory_usage_label, OB_CLUSTER_PARAMETER, "|", "mod label for print memmory usage");
   T_DEF_INT_INFT(max_chunk_cache_size, OB_CLUSTER_PARAMETER, 0, 0, "chunkmgr max chunk size");
+  DEF_CAP(task_pool_allocator_total_limit, OB_CLUSTER_PARAMETER, "0M", "[0M,]", "task pool allocator total limit");
 
   // direct load inc
   // Whether to sync the incremental direct load data

@@ -15,6 +15,7 @@
 #include "ob_cdc_auto_config_mgr.h"
 #include "ob_log_config.h"                  // TCONF
 #include "ob_log_utils.h"
+#include "ob_log_part_trans_task.h"         // PartTransTask
 
 #define REFRESH_NUM_FIELD_DIRECT(FIELD_NAME, FIELD_VALUE) \
   do { \
@@ -102,6 +103,10 @@ void ObCDCAutoConfigMgr::init_queue_length_(const ObLogConfig &config)
   const int64_t msg_sorter_queue_length = br_queue_length;
   REFRESH_NUM_FIELD_WITH_CONFIG(msg_sorter_task_count_upper_limit, msg_sorter_queue_length, config.msg_sorter_task_count_upper_limit.get());
   REFRESH_NUM_FIELD_WITH_CONFIG(sequencer_queue_length, auto_sequencer_queue_length, config.sequencer_queue_length.get());
+
+  // auto_redo_dispatcher_queue_length uses same calculation as sequencer_queue_length
+  REFRESH_NUM_FIELD_WITH_CONFIG(redo_dispatcher_queue_length, auto_sequencer_queue_length, config.redo_dispatcher_queue_length.get());
+
   REFRESH_NUM_FIELD_WITH_CONFIG(storager_queue_length, DEFAULT_STORAGE_QUEUE_LENGTH, config.storager_queue_length.get());
   REFRESH_NUM_FIELD_WITH_CONFIG(reader_queue_length, DEFAULT_STORAGE_QUEUE_LENGTH, config.reader_queue_length.get());
 }
@@ -109,7 +114,9 @@ void ObCDCAutoConfigMgr::init_queue_length_(const ObLogConfig &config)
 void ObCDCAutoConfigMgr::init_initial_config_(const ObLogConfig &config)
 {
   const int64_t factor = factor_;
-  const int64_t part_trans_task_prealloc_count = (1 << (factor_ - 11)) * 20000;
+  const int64_t part_trans_task_prealloc_count_auto = (1 << (factor_ - 11)) * 20000;
+  const int64_t part_trans_task_max_prealloc_count = 4 * _G_ / sizeof(PartTransTask);
+  const int64_t part_trans_task_prealloc_count = std::min(part_trans_task_max_prealloc_count, part_trans_task_prealloc_count_auto);
   REFRESH_NUM_FIELD_WITH_CONFIG(part_trans_task_prealloc_count, part_trans_task_prealloc_count, config.part_trans_task_prealloc_count.get());
 }
 
@@ -128,6 +135,7 @@ void ObCDCAutoConfigMgr::refresh_dynamic_config_(const ObLogConfig &config)
   const int64_t direct_load_inc_thread_num = factor_ <= 12 ? 1 : (factor_ - 12);
   const int64_t direct_load_inc_queue_backlog_lowest_tolerance = 1 << (factor_ + 1);
   const int64_t max_chunk_cache_size =  factor_ <= 12 ? (1 << (factor_ - 11)) * 512 * _M_ : 4096 * _M_;
+  const int64_t task_pool_allocator_total_limit = memory_limit_;
 
   REFRESH_NUM_FIELD_WITH_CONFIG(redo_dispatcher_memory_limit, redo_dispatcher_limit, config.redo_dispatcher_memory_limit.get());
   REFRESH_NUM_FIELD_WITH_CONFIG(extra_redo_dispatch_memory_size, extra_redo_dispatch_memory_size, config.extra_redo_dispatch_memory_size.get());
@@ -144,6 +152,9 @@ void ObCDCAutoConfigMgr::refresh_dynamic_config_(const ObLogConfig &config)
   REFRESH_NUM_FIELD_WITH_CONFIG(direct_load_inc_thread_num, direct_load_inc_thread_num, config.direct_load_inc_thread_num.get());
   REFRESH_NUM_FIELD_WITH_CONFIG(direct_load_inc_queue_backlog_lowest_tolerance, direct_load_inc_queue_backlog_lowest_tolerance, config.direct_load_inc_queue_backlog_lowest_tolerance.get());
   _LOG_INFO("[AUTO_CONFIG][MAX_CHUNK_CACHE_SIZE: %s(%ld)}]", SIZE_TO_STR(max_chunk_cache_size_), max_chunk_cache_size_);
+  REFRESH_NUM_FIELD_WITH_CONFIG(task_pool_allocator_total_limit, task_pool_allocator_total_limit, config.task_pool_allocator_total_limit.get());
+  _LOG_INFO("[AUTO_CONFIG][TASK_POOL_ALLOCATOR_TOTAL_LIMIT: %s(%ld)]",
+      SIZE_TO_STR(task_pool_allocator_total_limit_), task_pool_allocator_total_limit_);
 }
 
 int64_t ObCDCAutoConfigMgr::get_log2_(int64_t value)

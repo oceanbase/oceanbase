@@ -18,17 +18,21 @@
 #include <string>
 #include <vector>
 #include "lib/oblog/ob_log_module.h"
+#include "lib/container/ob_array.h"
 
 namespace oceanbase
 {
 namespace libobcdc
 {
+class ObLogStoreKey;
+
 struct ObSlice
 {
 public:
   ObSlice() : buf_(NULL), buf_len_(0) {}
   ObSlice(const char *buf, const int64_t buf_len) : buf_(buf), buf_len_(buf_len) {}
   ~ObSlice() { reset(); }
+  TO_STRING_KV(K_(buf_len), KP_(buf));
 
   void reset()
   {
@@ -54,13 +58,14 @@ public:
   virtual int put(const std::string &key, const ObSlice &value) = 0;
   virtual int put(void *cf_handle, const std::string &key, const ObSlice &value) = 0;
 
-  virtual int batch_write(void *cf_handle, const std::vector<std::string> &keys, const std::vector<ObSlice> &values) = 0;
+  virtual int batch_write(void *cf_handle, const common::ObArray<ObLogStoreKey> &keys, const common::ObArray<ObSlice> &values) = 0;
 
   virtual int get(const std::string &key, std::string &value) = 0;
   virtual int get(void *cf_handle, const std::string &key, std::string &value) = 0;
 
   virtual int del(const std::string &key) = 0;
   virtual int del(void *cf_handle, const std::string &key) = 0;
+  virtual int batch_delete(void *cf_handle, const common::ObArray<ObLogStoreKey> &keys) = 0;
   virtual int del_range(void *cf_handle, const std::string &begin_key, const std::string &end_key) = 0;
   virtual int compact_range(void *cf_handle, const std::string &begin_key, const std::string &end_key, const bool op_entire_cf = false) = 0;
   virtual int flush(void *cf_handle) = 0;

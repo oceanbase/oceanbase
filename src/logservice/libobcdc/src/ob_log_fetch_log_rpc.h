@@ -38,6 +38,11 @@ class FetchStream;
 // Fetch log synchronous RPC wrapper class
 // Wrapping synchronous RPC with asynchronous interface
 // Use for fetch missing log
+//
+// Supports two usage modes:
+// 1. Synchronous (original): fetch_log() — sends RPC and blocks until response
+// 2. Pipelined: send_fetch_log() + wait_response() — send RPC without blocking,
+//    then wait separately. This enables overlapping RPC latency with log processing.
 class FetchLogSRpc
 {
   typedef obrpc::ObCdcProxy::AsyncCB<obrpc::OB_LS_FETCH_MISSING_LOG> RpcCBBase;
@@ -47,7 +52,7 @@ public:
   virtual ~FetchLogSRpc();
 
 public:
-  // Perform synchronous RPC requests
+  // Perform synchronous RPC requests (send + wait combined)
   // The ret return value only indicates whether the function was successful, not whether the RPC was successful
   // RPC-related error code is set to result code
   int fetch_log(IObLogRpc &rpc,
@@ -57,6 +62,24 @@ public:
       const common::ObAddr &svr,
       const int64_t timeout,
       const int64_t progress);
+
+  // Pipelined mode: send RPC without blocking
+  // After this call returns OB_SUCCESS, the RPC is in-flight.
+  // Caller MUST call wait_response() before accessing the result.
+  int send_fetch_log(IObLogRpc &rpc,
+      const uint64_t tenant_id,
+      const share::ObLSID &ls_id,
+      const ObIArray<obrpc::ObCdcLSFetchMissLogReq::MissLogParam> &miss_log_array,
+      const common::ObAddr &svr,
+      const int64_t timeout,
+      const int64_t progress);
+
+  // Pipelined mode: block until the in-flight RPC completes.
+  // After this returns, get_result_code() and get_resp() are valid.
+  void wait_response();
+
+  // Check whether a previously sent RPC has completed (non-blocking)
+  bool is_rpc_done() const { return ATOMIC_LOAD(&rpc_done_); }
 
   int set_resp(const obrpc::ObRpcResultCode &rcode,
       const obrpc::ObCdcLSFetchLogResp *resp);
@@ -113,6 +136,80 @@ private:
 
 private:
   DISALLOW_COPY_AND_ASSIGN(FetchLogSRpc);
+};
+
+////////////////////////////// FetchLog2SRpc //////////////////////////////
+// Synchronous RPC wrapper for OB_LS_FETCH_LOG2 (normal log fetch).
+// Used by miss log handler to do range-based fetching: sequentially scan
+// a CLOG file and let the client filter by miss LSN.
+// Modeled after FetchLogSRpc but uses ObCdcLSFetchLogReq instead of
+// ObCdcLSFetchMissLogReq.
+class FetchLog2SRpc
+{
+  typedef obrpc::ObCdcProxy::AsyncCB<obrpc::OB_LS_FETCH_LOG2> RpcCBBase;
+
+public:
+  FetchLog2SRpc();
+  virtual ~FetchLog2SRpc();
+
+public:
+  int fetch_log(IObLogRpc &rpc,
+      const uint64_t tenant_id,
+      const share::ObLSID &ls_id,
+      const palf::LSN &start_lsn,
+      const common::ObAddr &svr,
+      const int64_t timeout,
+      const int64_t progress);
+
+  void reset();
+
+  const obrpc::ObRpcResultCode &get_result_code() const { return rcode_; }
+  const obrpc::ObCdcLSFetchLogResp &get_resp() const { return resp_; }
+  const obrpc::ObCdcLSFetchLogReq &get_req() const { return req_; }
+
+private:
+  int set_resp_(const obrpc::ObRpcResultCode &rcode, const obrpc::ObCdcLSFetchLogResp *resp);
+  int build_request_(
+      const uint64_t tenant_id,
+      const share::ObLSID &ls_id,
+      const palf::LSN &start_lsn,
+      const int64_t progress);
+
+private:
+  class RpcCB : public RpcCBBase
+  {
+  public:
+    explicit RpcCB(FetchLog2SRpc &host);
+    virtual ~RpcCB();
+
+  public:
+    rpc::frame::ObReqTransport::AsyncCB *clone(const rpc::frame::SPAlloc &alloc) const;
+    int process();
+    void on_timeout();
+    void on_invalid();
+    typedef typename obrpc::ObCdcProxy::ObRpc<obrpc::OB_LS_FETCH_LOG2> ProxyRpc;
+    void set_args(const typename ProxyRpc::Request &args) { UNUSED(args); }
+
+  private:
+    int do_process_(const obrpc::ObRpcResultCode &rcode, const obrpc::ObCdcLSFetchLogResp *resp);
+
+  private:
+    FetchLog2SRpc &host_;
+
+  private:
+    DISALLOW_COPY_AND_ASSIGN(RpcCB);
+  };
+
+private:
+  obrpc::ObCdcLSFetchLogReq      req_;
+  obrpc::ObCdcLSFetchLogResp     resp_;
+  obrpc::ObRpcResultCode         rcode_;
+  RpcCB                          cb_;
+  common::ObCond                 cond_;
+  volatile bool rpc_done_ CACHE_ALIGNED;
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(FetchLog2SRpc);
 };
 
 struct FetchLogARpcResult;

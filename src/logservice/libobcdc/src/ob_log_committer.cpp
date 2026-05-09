@@ -29,7 +29,7 @@
 #include "ob_log_config.h"              // ObLogConfig
 #include "ob_log_tenant_mgr.h"          // IObLogTenantMgr
 #include "ob_log_trace_id.h"            // ObLogTraceIdGuard
-
+#include "ob_log_utils.h"               // get_timestamp
 #define _STAT(level, fmt, args...) _OBLOG_COMMITTER_LOG(level, "[STAT] [COMMITTER] " fmt, ##args)
 #define STAT(level, fmt, args...) OBLOG_COMMITTER_LOG(level, "[STAT] [COMMITTER] " fmt, ##args)
 #define _ISTAT(fmt, args...) _STAT(INFO, fmt, ##args)
@@ -76,6 +76,7 @@ ObLogCommitter::ObLogCommitter() :
     resource_collector_(NULL),
     commit_pid_(0),
     heartbeat_pid_(0),
+    post_commit_thread_pool_(*this),
     stop_flag_(true),
     trans_committer_queue_(),
     trans_committer_queue_cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::CDC_COMMON_COND_WAIT),
@@ -85,9 +86,12 @@ ObLogCommitter::ObLogCommitter() :
     last_output_checkpoint_(OB_INVALID_VERSION),
     global_heartbeat_seq_(0),
     global_heartbeat_info_queue_(),
+    post_commit_queue_(),
+    post_commit_queue_cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::CDC_COMMON_COND_WAIT),
     dml_part_trans_task_count_(0),
     ddl_part_trans_task_count_(0),
-    dml_trans_count_(0)
+    dml_trans_count_(0),
+    stat_info_()
 {
 }
 
@@ -129,6 +133,9 @@ int ObLogCommitter::init(const int64_t start_seq,
       CHECKPOINT_QUEUE_ALLOCATOR_HOLD_LIMIT,
       CHECKPOINT_QUEUE_ALLOCATOR_PAGE_SIZE))) {
     LOG_ERROR("init checkpoint_queue_allocator_ fail", KR(ret));
+  } else if (OB_FAIL(post_commit_queue_.init(TCONF.committer_post_commit_queue_size))) {
+    LOG_ERROR("init post_commit_queue_ fail", KR(ret),
+        "post_commit_queue_size", (int64_t)TCONF.committer_post_commit_queue_size);
   } else {
     checkpoint_queue_allocator_.set_label(ObModIds::OB_LOG_COMMITTER_CHECKPOINT_QUEUE);
     last_output_checkpoint_ = OB_INVALID_VERSION;
@@ -138,10 +145,14 @@ int ObLogCommitter::init(const int64_t start_seq,
     dml_part_trans_task_count_ = 0;
     ddl_part_trans_task_count_ = 0;
     dml_trans_count_ = 0;
+    stat_info_.reset();
+    stat_info_.last_stat_time_ = get_timestamp_coarse();
     stop_flag_ = true;
     inited_ = true;
 
-    LOG_INFO("init committer succ", K(start_seq));
+    LOG_INFO("init committer succ", K(start_seq),
+        "post_commit_thread_num", (int64_t)TCONF.committer_post_commit_thread_num,
+        "post_commit_queue_size", (int64_t)TCONF.committer_post_commit_queue_size);
   }
 
   return ret;
@@ -171,6 +182,8 @@ void ObLogCommitter::destroy()
   global_heartbeat_seq_ = 0;
   (void)global_heartbeat_info_queue_.destroy();
 
+  post_commit_queue_.destroy();
+
   dml_part_trans_task_count_ = 0;
   ddl_part_trans_task_count_ = 0;
   dml_trans_count_ = 0;
@@ -197,7 +210,18 @@ int ObLogCommitter::start()
       LOG_ERROR("create HEARTBEAT thread fail", K(pthread_ret), KERRNOMSG(pthread_ret));
       ret = OB_ERR_UNEXPECTED;
     } else {
-      LOG_INFO("start Committer commit and HEARTBEAT thread succ");
+      // Create post-commit thread pool (configurable count, using lib::Threads)
+      const int64_t post_commit_thread_num = TCONF.committer_post_commit_thread_num;
+      if (OB_FAIL(post_commit_thread_pool_.set_thread_count(post_commit_thread_num))) {
+        LOG_ERROR("set post_commit thread count fail", KR(ret), K(post_commit_thread_num));
+      } else if (OB_FAIL(post_commit_thread_pool_.init())) {
+        LOG_ERROR("init post_commit thread pool fail", KR(ret));
+      } else if (OB_FAIL(post_commit_thread_pool_.start())) {
+        LOG_ERROR("start post_commit thread pool fail", KR(ret));
+      } else {
+        LOG_INFO("start Committer commit, HEARTBEAT and POST_COMMIT threads succ",
+            "post_commit_thread_num", post_commit_thread_pool_.get_thread_count());
+      }
     }
 
     if (OB_FAIL(ret)) {
@@ -236,6 +260,17 @@ void ObLogCommitter::stop()
 
       heartbeat_pid_ = 0;
     }
+
+    // Stop post_commit thread pool: set stop flag and wake up all threads
+    post_commit_thread_pool_.stop();
+    // Signal condition to wake up threads waiting on the post_commit_queue_cond_
+    const int64_t post_commit_thread_num = post_commit_thread_pool_.get_thread_count();
+    for (int64_t i = 0; i < post_commit_thread_num; i++) {
+      post_commit_queue_cond_.signal();
+    }
+    post_commit_thread_pool_.wait();
+    post_commit_thread_pool_.destroy();
+    LOG_INFO("stop Committer POST_COMMIT thread pool succ", K(post_commit_thread_num));
   }
 }
 
@@ -265,6 +300,7 @@ int ObLogCommitter::push(PartTransTask *task,
   // DDL tasks
   // Note: The is_ddl_offline_task() task is an offline task and is not specially handled here
   else if (task->is_ddl_trans() || task->is_ls_op_trans()) {
+   task->set_committer_push_timestamp_us(get_timestamp_coarse());
    const int64_t seq = task->get_global_trans_seq();
 
    if (OB_FAIL(trans_committer_queue_.set(seq, task))) {
@@ -282,6 +318,7 @@ int ObLogCommitter::push(PartTransTask *task,
   else if (task->is_dml_trans()) {
     (void)ATOMIC_AAF(&dml_part_trans_task_count_, task_count);
     (void)ATOMIC_AAF(&dml_trans_count_, 1);
+    task->set_committer_push_timestamp_us(get_timestamp_coarse());
     // DML does not allow tenant to be invalid
     const int64_t seq = task->get_global_trans_seq();
 
@@ -373,6 +410,31 @@ int ObLogCommitter::update_checkpoint_info_(PartTransTask &task)
     checkpoint_task = NULL;
   } else {
     checkpoint_queue_cond_.signal();
+  }
+
+  return ret;
+}
+
+int ObLogCommitter::update_checkpoint_info_no_signal_(PartTransTask &task)
+{
+  int ret = OB_SUCCESS;
+  CheckpointTask *checkpoint_task = NULL;
+  int64_t checkpoint_seq = task.get_checkpoint_seq();
+
+  if (OB_UNLIKELY(checkpoint_seq < 0)) {
+    LOG_ERROR("task checkpoint sequence is invalid", K(checkpoint_seq), K(task));
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(alloc_checkpoint_task_(task, checkpoint_task))) {
+    LOG_ERROR("alloc_checkpoint_task_ fail", KR(ret), K(task));
+  } else if (OB_ISNULL(checkpoint_task)) {
+    LOG_ERROR("invalid checkpoint_task", K(checkpoint_task));
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+  } else if (OB_FAIL(checkpoint_queue_.set(checkpoint_seq, checkpoint_task))) {
+    LOG_ERROR("set checkpoint_queue_ fail", KR(ret), K(checkpoint_seq), K(checkpoint_task));
+    free_checkpoint_task_(checkpoint_task);
+    checkpoint_task = NULL;
+  } else {
+    // Phase 1: No signal here - caller will batch signal after processing all participants
   }
 
   return ret;
@@ -796,12 +858,25 @@ void ObLogCommitter::commit_routine()
       if (OB_ERR_OUT_OF_UPPER_BOUND == ret || (OB_SUCCESS == ret && NULL == part_trans_task)) {
         // data not ready
         ret = OB_SUCCESS;
+        (void)ATOMIC_AAF(&perf_stat_.queue_not_ready_count_, 1);
         trans_committer_queue_cond_.timedwait(DATA_OP_TIMEOUT);
       } else if (OB_FAIL(ret)) {
         LOG_ERROR("get task from commit queue fail", KR(ret), KPC(part_trans_task),
             "begin_sn", trans_committer_queue_.begin_sn(), "end_sn", trans_committer_queue_.end_sn());
       } else {
-        // get a valid & ready trans
+        // get a valid & ready trans - record queue wait time and queue depth
+        const int64_t push_ts = part_trans_task->get_committer_push_timestamp_us();
+        if (push_ts > 0) {
+          const int64_t queue_wait_us = get_timestamp_coarse() - push_ts;
+          (void)ATOMIC_AAF(&perf_stat_.queue_wait_sum_us_, queue_wait_us);
+          (void)ATOMIC_AAF(&perf_stat_.queue_wait_count_, 1);
+        }
+        const int64_t end_sn = trans_committer_queue_.end_sn();
+        const int64_t depth = end_sn - next_seq;
+        ATOMIC_STORE(&perf_stat_.last_queue_depth_, depth);
+        if (depth > ATOMIC_LOAD(&perf_stat_.max_queue_depth_)) {
+          ATOMIC_STORE(&perf_stat_.max_queue_depth_, depth);
+        }
         if (OB_FAIL(handle_when_trans_ready_(part_trans_task, commit_trans_count))) {
           if (OB_IN_STOP_STATE != ret) {
             LOG_ERROR("handle_when_trans_ready_ fail", KR(ret), KPC(part_trans_task),
@@ -890,8 +965,8 @@ int ObLogCommitter::handle_ddl_task_(PartTransTask *ddl_task)
     LOG_ERROR("invalid ddl task", KPC(ddl_task));
     ret = OB_INVALID_ARGUMENT;
   } else {
-    // Subtract the number of DDL transactions
-    ATOMIC_DEC(&ddl_part_trans_task_count_);
+    // NOTE: ddl_part_trans_task_count_ decrement is deferred to post_commit_routine()
+    // to keep the task visible to flow control while it's in the post-commit queue.
     TransCtx *trans_ctx = NULL;
     const uint64_t tenant_id = ddl_task->get_tenant_id();
     const ObTransID &trans_id = ddl_task->get_trans_id();
@@ -1037,15 +1112,23 @@ int ObLogCommitter::handle_task_(PartTransTask *participants)
     ret = OB_NOT_SUPPORTED;
   }
   if (OB_SUCC(ret)) {
+    // Count total processed transactions
+    stat_info_.inc_total_processed_trans();
     // MUST update tenant_trans_commit_version first and then update checkpoint_queue_(in after_trans_handled_)
+    // This must be done in the commit thread to maintain monotonicity
+    const int64_t update_tenant_start_us = get_timestamp_coarse();
     if (OB_FAIL(update_tenant_trans_commit_version_(*participants))) {
       LOG_ERROR("update_tenant_trans_commit_version_ failed", KR(ret), KPC(participants));
-    } else if (OB_FAIL(after_trans_handled_(participants))) {
-      if (OB_IN_STOP_STATE != ret) {
-        LOG_ERROR("after_trans_handled_ failed", KR(ret));
-      }
     } else {
-      // no more access to participants
+      const int64_t update_tenant_elapsed_us = get_timestamp_coarse() - update_tenant_start_us;
+      (void)ATOMIC_AAF(&perf_stat_.update_tenant_version_sum_us_, update_tenant_elapsed_us);
+      (void)ATOMIC_AAF(&perf_stat_.update_tenant_version_count_, 1);
+      // Phase 2: Offload after_trans_handled_ to the async post-commit thread
+      if (OB_FAIL(push_to_post_commit_queue_(participants))) {
+        if (OB_IN_STOP_STATE != ret) {
+          LOG_ERROR("push_to_post_commit_queue_ failed", KR(ret));
+        }
+      }
     }
   }
 
@@ -1101,6 +1184,7 @@ int ObLogCommitter::handle_dml_task_(PartTransTask *participants)
     // Place the Binlog Record chain in the user queue
     // Binlog Record may be recycled at any time
     if (OB_SUCC(ret)) {
+      const int64_t output_start_us = get_timestamp_coarse();
       if (OB_FAIL(commit_binlog_record_list_(*trans_ctx, cluster_id, valid_part_trans_task_count,
               tenant_id, trans_commit_version))) {
         if (OB_IN_STOP_STATE != ret) {
@@ -1109,13 +1193,14 @@ int ObLogCommitter::handle_dml_task_(PartTransTask *participants)
               K(tenant_id), K(trans_commit_version));
         }
       } else {
-        // succ
+        const int64_t output_elapsed_us = get_timestamp_coarse() - output_start_us;
+        (void)ATOMIC_AAF(&perf_stat_.output_sum_us_, output_elapsed_us);
+        (void)ATOMIC_AAF(&perf_stat_.output_count_, 1);
       }
     }
 
-    // Counting the number of partitioned tasks, reducing the number of participants
-    (void)ATOMIC_AAF(&dml_part_trans_task_count_, -part_trans_task_count);
-    (void)ATOMIC_AAF(&dml_trans_count_, -1);
+    // NOTE: dml_part_trans_task_count_ and dml_trans_count_ decrements are deferred to
+    // post_commit_routine() to keep the tasks visible to flow control while in the post-commit queue.
 
     // revert TransCtx
     if (NULL != trans_ctx) {
@@ -1213,6 +1298,155 @@ int ObLogCommitter::after_trans_handled_(PartTransTask *participants)
   return ret;
 }
 
+// Phase 1 + Phase 0: Batched signal version of after_trans_handled_
+// All checkpoint_queue_ sets are done without signaling; only ONE signal at the end.
+// Fine-grained timing with ns-precision for Phase 0 instrumentation.
+int ObLogCommitter::after_trans_handled_batch_signal_(PartTransTask *participants, int64_t &participant_count)
+{
+  int ret = OB_SUCCESS;
+  PartTransTask *part_trans_task = participants;
+  int64_t participant_cnt = 0;
+  participant_count = 0;
+
+  while (OB_SUCC(ret) && ! stop_flag_ && OB_NOT_NULL(part_trans_task)) {
+    PartTransTask *next = part_trans_task->next_task();
+    ++participant_cnt;
+
+    // Phase 0: measure checkpoint alloc+set
+    const int64_t ckpt_start_ns = ObTimeUtility::current_time_ns();
+    if (OB_FAIL(update_checkpoint_info_no_signal_(*part_trans_task))) {
+      LOG_ERROR("update_checkpoint_info_no_signal_ fail", KR(ret), KPC(part_trans_task));
+    }
+    const int64_t ckpt_end_ns = ObTimeUtility::current_time_ns();
+    (void)ATOMIC_AAF(&perf_stat_.ckpt_alloc_set_sum_ns_, ckpt_end_ns - ckpt_start_ns);
+
+    // Decrement the reference count; if it hits 0, revert the task to resource_collector
+    if (OB_SUCC(ret) && 0 == part_trans_task->dec_ref_cnt()) {
+      const int64_t revert_start_ns = ObTimeUtility::current_time_ns();
+      if (OB_FAIL(resource_collector_->revert(part_trans_task))) {
+        if (OB_IN_STOP_STATE != ret) {
+          LOG_ERROR("revert PartTransTask fail", KR(ret), K(part_trans_task));
+        }
+      } else {
+        part_trans_task = NULL;
+      }
+      const int64_t revert_end_ns = ObTimeUtility::current_time_ns();
+      (void)ATOMIC_AAF(&perf_stat_.revert_sum_ns_, revert_end_ns - revert_start_ns);
+      (void)ATOMIC_AAF(&perf_stat_.revert_call_count_, 1);
+    }
+
+    part_trans_task = next;
+  }
+
+  if (OB_SUCC(ret) && ! stop_flag_) {
+    // Phase 1: batch signal - one signal wakes up the heartbeat thread for all participants
+    const int64_t signal_start_ns = ObTimeUtility::current_time_ns();
+    checkpoint_queue_cond_.signal();
+    const int64_t signal_end_ns = ObTimeUtility::current_time_ns();
+    (void)ATOMIC_AAF(&perf_stat_.ckpt_signal_sum_ns_, signal_end_ns - signal_start_ns);
+  }
+
+  (void)ATOMIC_AAF(&perf_stat_.participant_count_, participant_cnt);
+  participant_count = participant_cnt;
+
+  if (stop_flag_) {
+    ret = OB_IN_STOP_STATE;
+  }
+
+  return ret;
+}
+
+// Phase 2: Push participants list to the post-commit queue for async processing
+int ObLogCommitter::push_to_post_commit_queue_(PartTransTask *participants)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(participants)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("participants is null", KR(ret));
+  } else {
+    // Spin-retry push to the fixed queue until success or stop
+    while (OB_SUCC(ret) && ! stop_flag_) {
+      ret = post_commit_queue_.push(participants);
+      if (OB_SUCCESS == ret) {
+        (void)ATOMIC_AAF(&perf_stat_.post_commit_queue_push_count_, 1);
+        post_commit_queue_cond_.signal();
+        break;
+      } else if (OB_SIZE_OVERFLOW == ret) {
+        // Queue is full, wait briefly and retry
+        ret = OB_SUCCESS;
+        ob_usleep(100);
+      } else {
+        LOG_ERROR("push to post_commit_queue_ fail", KR(ret));
+      }
+    }
+    if (stop_flag_) {
+      ret = OB_IN_STOP_STATE;
+    }
+  }
+
+  return ret;
+}
+
+// Phase 2: Post-commit thread routine - processes after_trans_handled_ asynchronously
+void ObLogCommitter::post_commit_routine()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(! inited_)) {
+    LOG_ERROR("committer has not been initialized for post_commit");
+    ret = OB_NOT_INIT;
+  } else {
+    while (! stop_flag_ && OB_SUCCESS == ret) {
+      ObLogTraceIdGuard trace_guard;
+      PartTransTask *participants = NULL;
+
+      ret = post_commit_queue_.pop(participants);
+      if (OB_SUCCESS == ret && OB_NOT_NULL(participants)) {
+        (void)ATOMIC_AAF(&perf_stat_.post_commit_queue_pop_count_, 1);
+        // Remember task type before processing (participants may be reverted during processing)
+        const bool is_ddl_or_ls_op = participants->is_ddl_trans() || participants->is_ls_op_trans();
+        int64_t participant_count = 0;
+        const int64_t after_handled_start_us = get_timestamp_coarse();
+        if (OB_FAIL(after_trans_handled_batch_signal_(participants, participant_count))) {
+          if (OB_IN_STOP_STATE != ret) {
+            LOG_ERROR("after_trans_handled_batch_signal_ fail", KR(ret));
+          }
+        } else {
+          const int64_t after_handled_elapsed_us = get_timestamp_coarse() - after_handled_start_us;
+          (void)ATOMIC_AAF(&perf_stat_.after_trans_handled_sum_us_, after_handled_elapsed_us);
+          (void)ATOMIC_AAF(&perf_stat_.after_trans_handled_count_, 1);
+          // Decrement task counts here (deferred from handle_dml/ddl_task_) so that
+          // tasks remain visible to flow control while in the post-commit queue
+          if (is_ddl_or_ls_op) {
+            (void)ATOMIC_AAF(&ddl_part_trans_task_count_, -1);
+          } else {
+            (void)ATOMIC_AAF(&dml_part_trans_task_count_, -participant_count);
+            (void)ATOMIC_AAF(&dml_trans_count_, -1);
+          }
+        }
+      } else if (OB_ENTRY_NOT_EXIST == ret) {
+        // Queue is empty, wait for signal
+        ret = OB_SUCCESS;
+        post_commit_queue_cond_.timedwait(DATA_OP_TIMEOUT);
+      } else if (OB_SUCCESS != ret) {
+        LOG_ERROR("pop from post_commit_queue_ fail", KR(ret));
+      }
+    } // while
+  }
+
+  if (stop_flag_) {
+    ret = OB_IN_STOP_STATE;
+  }
+
+  if (OB_SUCCESS != ret && OB_IN_STOP_STATE != ret && NULL != err_handler_) {
+    err_handler_->handle_error(ret, "Committer POST_COMMIT thread exits, err=%d", ret);
+    stop_flag_ = true;
+  }
+
+  LOG_INFO("Committer POST_COMMIT thread exits", KR(ret), K_(stop_flag));
+}
+
 int ObLogCommitter::do_trans_stat_(const logservice::TenantLSID &tls_id,
     const int64_t total_stmt_cnt)
 {
@@ -1260,6 +1494,8 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
     ret = OB_INVALID_ARGUMENT;
   } else if (OB_FAIL(trans_ctx.has_valid_br(stop_flag_))) {
     if (OB_EMPTY_RESULT == ret) {
+      // Count empty transactions
+      stat_info_.inc_empty_trans();
       if (0 < trans_ctx.get_total_br_count()) {
         // unexpected
         LOG_ERROR("unexpected skiping trans with valid br", KR(ret), K(trans_ctx));
@@ -1326,6 +1562,7 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
 
         if (OB_FAIL(next_ready_br_task_(trans_ctx, br_task))) {
           if (OB_EAGAIN == ret) {
+            (void)ATOMIC_AAF(&perf_stat_.next_ready_br_eagain_count_, 1);
             ob_usleep(10*1000);
             ret = OB_SUCCESS;
             if (OB_UNLIKELY(0 == (++retry_count) % 100)) {
@@ -1466,6 +1703,111 @@ void ObLogCommitter::configure(const ObLogConfig &cfg)
 
   ATOMIC_STORE(&g_output_heartbeat_interval, output_heartbeat_interval_msec * _MSEC_);
   LOG_INFO("[CONFIG]", K(output_heartbeat_interval_msec));
+
+  // Dynamic thread count adjustment for post-commit thread pool
+  if (inited_) {
+    const int64_t new_thread_num = cfg.committer_post_commit_thread_num.get();
+    const int64_t cur_thread_num = post_commit_thread_pool_.get_thread_count();
+    if (new_thread_num > 0 && new_thread_num != cur_thread_num) {
+      int ret = OB_SUCCESS;
+      if (OB_FAIL(post_commit_thread_pool_.set_thread_count(new_thread_num))) {
+        LOG_WARN("failed to set post_commit thread count dynamically", KR(ret),
+            "old_thread_num", cur_thread_num, "new_thread_num", new_thread_num);
+      } else {
+        LOG_INFO("[CONFIG][COMMITTER] post_commit_thread_num adjusted",
+            "old_thread_num", cur_thread_num, "new_thread_num", new_thread_num);
+      }
+    }
+  }
+}
+
+void ObLogCommitter::print_stat_info()
+{
+  stat_info_.calc_and_print_stat();
+  perf_stat_.calc_and_print_stat(trans_committer_queue_.begin_sn(), trans_committer_queue_.end_sn());
+}
+
+void CommitterStatInfo::calc_and_print_stat()
+{
+  int64_t current_timestamp = get_timestamp_coarse();
+  int64_t local_total_processed_trans_count = ATOMIC_LOAD(&total_processed_trans_count_);
+  int64_t local_empty_trans_count = ATOMIC_LOAD(&empty_trans_count_);
+  int64_t local_last_total_processed_trans_count = last_total_processed_trans_count_;
+  int64_t local_last_empty_trans_count = last_empty_trans_count_;
+  int64_t local_last_stat_time = last_stat_time_;
+  int64_t delta_time = current_timestamp - local_last_stat_time;
+  int64_t delta_total_count = local_total_processed_trans_count - local_last_total_processed_trans_count;
+  int64_t delta_empty_count = local_empty_trans_count - local_last_empty_trans_count;
+  double total_tps = 0.0;
+  double empty_tps = 0.0;
+
+  // Update the last statistics
+  last_total_processed_trans_count_ = local_total_processed_trans_count;
+  last_empty_trans_count_ = local_empty_trans_count;
+  last_stat_time_ = current_timestamp;
+
+  if (delta_time > 0) {
+    total_tps = (double)(delta_total_count) * 1000000.0 / (double)delta_time;
+    empty_tps = (double)(delta_empty_count) * 1000000.0 / (double)delta_time;
+  }
+
+  _ISTAT("[TPS_STAT] TOTAL_TPS=%.3lf EMPTY_TPS=%.3lf TOTAL_COUNT=%ld EMPTY_COUNT=%ld "
+      "DELTA_TOTAL=%ld DELTA_EMPTY=%ld",
+      total_tps, empty_tps, local_total_processed_trans_count, local_empty_trans_count,
+      delta_total_count, delta_empty_count);
+}
+
+void CommitterPerfStat::calc_and_print_stat(int64_t begin_sn, int64_t end_sn)
+{
+  const int64_t qw_sum = ATOMIC_LOAD(&queue_wait_sum_us_);
+  const int64_t qw_cnt = ATOMIC_LOAD(&queue_wait_count_);
+  const int64_t out_sum = ATOMIC_LOAD(&output_sum_us_);
+  const int64_t out_cnt = ATOMIC_LOAD(&output_count_);
+  const int64_t utv_sum = ATOMIC_LOAD(&update_tenant_version_sum_us_);
+  const int64_t utv_cnt = ATOMIC_LOAD(&update_tenant_version_count_);
+  const int64_t ath_sum = ATOMIC_LOAD(&after_trans_handled_sum_us_);
+  const int64_t ath_cnt = ATOMIC_LOAD(&after_trans_handled_count_);
+  const int64_t qnr = ATOMIC_LOAD(&queue_not_ready_count_);
+  const int64_t eagain = ATOMIC_LOAD(&next_ready_br_eagain_count_);
+  const int64_t cur_depth = end_sn - begin_sn;
+  // push_to_rc: from push into committer queue until handed to RC (revert); same count for all phases
+  const int64_t cnt = (qw_cnt > 0 ? qw_cnt : 0);
+  const int64_t push_to_rc_sum_us = qw_sum + out_sum + utv_sum + ath_sum;
+  const int64_t push_to_rc_avg_us = (cnt > 0 ? push_to_rc_sum_us / cnt : 0);
+
+  // Phase 0: Fine-grained after_trans_handled_ breakdown (ns)
+  const int64_t ckpt_as_ns = ATOMIC_LOAD(&ckpt_alloc_set_sum_ns_);
+  const int64_t ckpt_sig_ns = ATOMIC_LOAD(&ckpt_signal_sum_ns_);
+  const int64_t rev_ns = ATOMIC_LOAD(&revert_sum_ns_);
+  const int64_t rev_cnt = ATOMIC_LOAD(&revert_call_count_);
+  const int64_t part_cnt = ATOMIC_LOAD(&participant_count_);
+  // Phase 2: post-commit queue stats
+  const int64_t pcq_push = ATOMIC_LOAD(&post_commit_queue_push_count_);
+  const int64_t pcq_pop = ATOMIC_LOAD(&post_commit_queue_pop_count_);
+
+  _ISTAT("[COMMITTER_PERF] [PUSH_TO_RC_AVG_US] %ld (sum=%ld count=%ld) "
+      "[QUEUE_WAIT_US] sum=%ld count=%ld avg_us=%ld "
+      "[OUTPUT_US] sum=%ld count=%ld avg_us=%ld "
+      "[UPDATE_TENANT_VERSION_US] sum=%ld count=%ld avg_us=%ld "
+      "[AFTER_TRANS_HANDLED_US] sum=%ld count=%ld avg_us=%ld "
+      "[BACKLOG] queue_not_ready_count=%ld next_ready_br_eagain_count=%ld "
+      "cur_queue_depth=%ld last_depth=%ld max_depth=%ld "
+      "[AFTER_DETAIL_NS] ckpt_alloc_set=%ld signal=%ld revert=%ld(cnt=%ld) participants=%ld "
+      "avg_ckpt_ns=%ld avg_signal_ns=%ld avg_revert_ns=%ld "
+      "[POST_COMMIT_QUEUE] push=%ld pop=%ld pending=%ld",
+      push_to_rc_avg_us, push_to_rc_sum_us, cnt,
+      qw_sum, qw_cnt, qw_cnt > 0 ? qw_sum / qw_cnt : 0,
+      out_sum, out_cnt, out_cnt > 0 ? out_sum / out_cnt : 0,
+      utv_sum, utv_cnt, utv_cnt > 0 ? utv_sum / utv_cnt : 0,
+      ath_sum, ath_cnt, ath_cnt > 0 ? ath_sum / ath_cnt : 0,
+      qnr, eagain, cur_depth, ATOMIC_LOAD(&last_queue_depth_), ATOMIC_LOAD(&max_queue_depth_),
+      ckpt_as_ns, ckpt_sig_ns, rev_ns, rev_cnt, part_cnt,
+      part_cnt > 0 ? ckpt_as_ns / part_cnt : 0,
+      ath_cnt > 0 ? ckpt_sig_ns / ath_cnt : 0,
+      rev_cnt > 0 ? rev_ns / rev_cnt : 0,
+      pcq_push, pcq_pop, pcq_push - pcq_pop);
+  // Reset so next print reflects next interval only
+  reset();
 }
 
 } // namespace libobcdc

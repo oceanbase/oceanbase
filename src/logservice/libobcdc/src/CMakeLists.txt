@@ -53,6 +53,7 @@ ob_set_subtarget(obcdc_object_list common
   ob_log_cluster_id_filter.cpp
   ob_log_committer.cpp
   ob_log_config.cpp
+  ob_log_disk_io_monitor.cpp
   ob_log_sys_ls_task_handler.cpp
   ob_log_ddl_processor.cpp
   ob_log_ls_op_processor.cpp
@@ -134,6 +135,7 @@ ob_set_subtarget(obcdc_object_list common
   ob_log_trans_ctx.cpp
   ob_log_trans_ctx_mgr.cpp
   ob_log_trans_dispatch_ctx.cpp
+  ob_log_trans_id_filter.cpp
   ob_cdc_multi_data_source_info.cpp
   ob_log_trans_log.cpp
   ob_log_trans_msg_sorter.cpp
@@ -151,9 +153,9 @@ ob_add_new_object_target(obcdc_objects obcdc_object_list)
 target_link_libraries(obcdc_objects PUBLIC obcdc_base)
 target_compile_definitions(obcdc_objects PRIVATE ENABLE_DEBUG_LOG)
 if (OB_STRICT_COMPILE_FLAGS)
-  target_compile_options(obcdc_objects PRIVATE)
+  target_compile_options(obcdc_objects PRIVATE -Wno-c++20-extensions)
 else()
-  target_compile_options(obcdc_objects PRIVATE -Werror)
+  target_compile_options(obcdc_objects PRIVATE -Werror -Wno-c++20-extensions)
 endif()
 if (OB_SO_CACHE)
   add_library(obcdc SHARED IMPORTED GLOBAL)

@@ -18,6 +18,7 @@
 #include "libobcdc.h"
 
 #include "lib/allocator/ob_concurrent_fifo_allocator.h"   // ObConcurrentFIFOAllocator
+#include "lib/allocator/ob_lf_fifo_allocator.h"          // ObLfFIFOAllocator
 #include "lib/alloc/memory_dump.h"                        // memory_meta_dump
 
 #include "ob_log_binlog_record.h"                         // ObLogBR
@@ -36,6 +37,8 @@
 #include "ob_cdc_global_info.h"                           // ObCDCGlobalInfo
 #include "ob_log_fetcher_dispatcher.h"                    // ObLogFetcherDispatcher
 #include "ob_log_meta_data_service.h"                     // ObLogMetaDataService
+#include "ob_log_disk_io_monitor.h"                       // ObLogDiskIOMonitor
+#include "ob_log_resource_collector.h"                    // ObLogResourceCollector
 #include "share/ls/ob_ls_log_stat_info.h"                 // ObLogserviceModelInfo
 
 namespace oceanbase
@@ -374,6 +377,7 @@ public:
   BRQueue                   br_queue_;
   PartTransTaskPool         trans_task_pool_;
   IObLogEntryTaskPool       *log_entry_task_pool_;
+  common::ObLfFIFOAllocator log_entry_task_base_allocator_;  // Base allocator for ObLogEntryTask arena_allocator_
   IObStoreService           *store_service_;
   IObLogBRPool              *br_pool_;
   IObLogTransCtxMgr         *trans_ctx_mgr_;
@@ -411,6 +415,9 @@ public:
   // @retval OB_ENTRY_NOT_EXIST     tenant not exist
   // @retval other error code       fail
   int get_tenant_guard(const uint64_t tenant_id, ObLogTenantGuard &guard);
+
+  // Get base allocator for ObLogEntryTask
+  common::ObIAllocator &get_log_entry_task_base_allocator() { return log_entry_task_base_allocator_; }
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogInstance);

@@ -21,6 +21,7 @@
 #include "ob_log_tenant_mgr.h"          // IObLogTenantMgr
 #include "ob_log_config.h"              // TCONF
 #include "ob_log_trace_id.h"            // ObLogTraceIdGuard
+#include "ob_log_utils.h"               // set_cdc_thread_name
 
 #define _STAT(level, fmt, args...) _OBLOG_LOG(level, "[STAT] [SYS_LS_HANDLER] " fmt, ##args)
 #define STAT(level, fmt, args...) OBLOG_LOG(level, "[STAT] [SYS_LS_HANDLER] " fmt, ##args)
@@ -450,6 +451,7 @@ int ObLogSysLsTaskHandler::dispatch_task_(
 void ObLogSysLsTaskHandler::handle_task_routine()
 {
   int ret = OB_SUCCESS;
+  set_cdc_thread_name("CDC-SYS-LS-HANDLER");
   ObLogTraceIdGuard trace_guard;
 
   while (! stop_flag_ && OB_SUCCESS == ret) {

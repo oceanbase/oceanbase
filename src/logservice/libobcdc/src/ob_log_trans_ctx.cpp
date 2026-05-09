@@ -93,6 +93,7 @@ TransCtx::TransCtx() :
     participant_count_(0),
     ready_participant_objs_(NULL),
     ready_participant_count_(0),
+    has_ddl_participant_(false),
     total_br_count_(0),
     committed_br_count_(0),
     valid_part_trans_task_count_(0),
@@ -131,6 +132,7 @@ void TransCtx::reset()
   committed_br_count_ = 0;
   valid_part_trans_task_count_ = 0;
   revertable_ref_info_ = 0;
+  has_ddl_participant_ = false;
   is_trans_redo_dispatched_ = false;
   is_trans_sorted_ = false;
 
@@ -543,14 +545,20 @@ int TransCtx::build_ready_participants_list_()
   } else {
     // Linked list of participants
     for (int64_t index = 0; OB_SUCCESS == ret && index < participant_count_; index++) {
-      if (OB_ISNULL(participants_[index].obj_)) {
+      PartTransTask *participant = participants_[index].obj_;
+      if (OB_ISNULL(participant)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("participant object is NULL", KR(ret), K(participants_[index]), K(index),
             K(participant_count_), K(state_), K(trans_id_));
-      } else if (index < participant_count_ - 1) {
-        participants_[index].obj_->set_next_task(participants_[index + 1].obj_);
       } else {
-        participants_[index].obj_->set_next_task(NULL);
+        if (participant->is_ddl_trans()) {
+          ATOMIC_SET(&has_ddl_participant_, true);
+        }
+        if (index < participant_count_ - 1) {
+          participant->set_next_task(participants_[index + 1].obj_);
+        } else {
+          participant->set_next_task(NULL);
+        }
       }
     }
 
@@ -788,21 +796,6 @@ int TransCtx::get_tenant_id(uint64_t &tenant_id) const
     tenant_id = ready_participant_objs_->get_tenant_id();
   }
   return ret;
-}
-
-bool TransCtx::has_ddl_participant() const
-{
-  bool has_ddl_part = false;
-  ObSpinLockGuard guard(lock_);
-  PartTransTask* participant = ready_participant_objs_;
-
-  while (! has_ddl_part && OB_NOT_NULL(participant)) {
-    PartTransTask* next = participant->next_task();
-    has_ddl_part = participant->is_ddl_trans();
-    participant = next;
-  }
-
-  return has_ddl_part;
 }
 
 int TransCtx::init_participant_array_(const int64_t part_count)

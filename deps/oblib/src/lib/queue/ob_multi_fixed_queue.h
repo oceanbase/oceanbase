@@ -211,7 +211,7 @@ int ObMultiFixedQueue<MAX_QUEUE_NUM>::get_task_count(const int64_t queue_index, 
     LIB_LOG(ERROR, "invalid argument", K(queue_index), K(queue_num_));
     ret = OB_INVALID_ARGUMENT;
   } else {
-    task_count = queue_[queue_index].get_total();
+    task_count = queue_[queue_index].get_curr_total();
   }
 
   return ret;

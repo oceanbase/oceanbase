@@ -17,6 +17,7 @@
 #include "ob_cdc_part_trans_resolver.h"
 #include "ob_log_cluster_id_filter.h"     // ClusterIdFilter
 #include "ob_log_lsn_filter.h"            // LsnFilter
+#include "ob_log_trans_id_filter.h"       // TransIDFilter
 #include "logservice/logfetcher/ob_log_part_serve_info.h"       // PartServeInfo
 #include "ob_log_config.h"                // TCONF
 
@@ -145,6 +146,7 @@ ObCDCPartTransResolver::ObCDCPartTransResolver(
     IObLogFetcherDispatcher &dispatcher,
     IObLogClusterIDFilter &cluster_id_filter,
     IObLogLsnFilter &lsn_filter,
+    IObLogTransIDFilter &trans_id_filter,
     const int64_t source_cluster_id) :
     offlined_(false),
     tls_id_(),
@@ -152,6 +154,7 @@ ObCDCPartTransResolver::ObCDCPartTransResolver(
     cluster_id_filter_(cluster_id_filter),
     enable_direct_load_inc_(false),
     lsn_filter_(lsn_filter),
+    trans_id_filter_(trans_id_filter),
     source_cluster_id_(source_cluster_id)
 {}
 
@@ -199,6 +202,8 @@ int ObCDCPartTransResolver::read(
     LOG_ERROR("check_cluster_id_served failed", KR(ret), K_(tls_id), K(lsn), KPC(tx_log_block_header));
   } else if (OB_UNLIKELY(!is_cluster_id_served)) {
     LOG_DEBUG("[STAT] [FETCHER] [TRANS_NOT_SERVE]", K_(tls_id), K(is_cluster_id_served), K(lsn));
+  } else if (trans_id_filter_.should_filter(tls_id_.get_tenant_id(), tx_log_block_header->get_tx_id())) {
+    LOG_DEBUG("[STAT] [FETCHER] [TRANS_FILTERED]", K_(tls_id), K(tx_log_block_header->get_tx_id()), K(lsn));
   } else {
     // has redo-like tx_log in log_entry, including
     // ObTxRedoLog/ObTxMultiDataSourceLog/ObTxRollbackToLog

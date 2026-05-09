@@ -18,6 +18,7 @@
 
 #include "lib/net/ob_addr.h"
 #include "logservice/palf/log_entry.h"
+#include "logservice/palf/lsn.h"                              // lsn_2_block
 #include "logservice/logfetcher/ob_log_fetch_stat_info.h"     // TransStatInfo
 #include "ob_log_ls_fetch_ctx.h"                              // LSFetchCtx
 #include "ob_cdc_part_trans_resolver.h"                       // MissingLogInfo
@@ -64,12 +65,16 @@ public:
 
   IObCDCPartTransResolver::MissingLogInfo &missing_info_;
   bool need_change_server_;
+  bool disable_server_change_;
   logfetcher::TransStatInfo &tsi_;
 };
+
+class MissLogParallelFetcher;
 
 // NOTICE: SINGLETON TOOL TO HANDLE MISSLOG. NOT THREAD-SAFE. DO NOT ADD FIELD IN ObCDCMissLogHandler
 class ObCDCMissLogHandler
 {
+  friend class MissLogParallelFetcher;
 public:
   static ObCDCMissLogHandler &get_instance();
   ~ObCDCMissLogHandler() {}
@@ -96,6 +101,19 @@ private:
   int handle_miss_redo_log_(
       MissLogTask &misslog_task,
       FetchLogSRpc &fetch_log_srpc,
+      FetchLogSRpc &fetch_log_srpc_next,
+      volatile bool &stop_flag);
+  int handle_miss_redo_log_discrete_(
+      MissLogTask &misslog_task,
+      FetchLogSRpc &fetch_log_srpc,
+      FetchLogSRpc &fetch_log_srpc_next,
+      int64_t &fetched_missing_log_cnt,
+      const int64_t total_misslog_cnt,
+      volatile bool &stop_flag);
+  int handle_miss_redo_log_parallel_(
+      MissLogTask &misslog_task,
+      int64_t &fetched_missing_log_cnt,
+      const int64_t total_misslog_cnt,
       volatile bool &stop_flag);
   // split all miss_logs by batch
   int build_batch_misslog_lsn_arr_(
@@ -116,13 +134,19 @@ private:
       MissLogTask &misslog_task,
       const ObIArray<obrpc::ObCdcLSFetchMissLogReq::MissLogParam> &miss_log_array,
       FetchLogSRpc &fetch_srpc,
-      volatile bool &stop_flag);
+      volatile bool &stop_flag,
+      ObAddr *worker_svr = nullptr,
+      bool *worker_need_change = nullptr,
+      volatile int64_t *svr_change_lock = nullptr);
   int fetch_miss_log_(
       const ObIArray<obrpc::ObCdcLSFetchMissLogReq::MissLogParam> &miss_log_array,
       const int64_t timeout,
       MissLogTask &misslog_task,
       FetchLogSRpc &fetch_srpc,
-      volatile bool &stop_flag);
+      volatile bool &stop_flag,
+      ObAddr *worker_svr = nullptr,
+      bool *worker_need_change = nullptr,
+      volatile int64_t *svr_change_lock = nullptr);
   int fetch_miss_log_direct_(
       const ObIArray<obrpc::ObCdcLSFetchMissLogReq::MissLogParam> &miss_log_array,
       const int64_t timeout,

@@ -18,6 +18,7 @@
 #include "ob_log_part_trans_parser.h"   // IObLogPartTransParser
 #include "ob_log_part_trans_task.h"     // PartTransTask
 #include "ob_log_trace_id.h"
+#include "ob_log_utils.h"               // set_cdc_thread_name
 
 using namespace oceanbase::common;
 
@@ -137,6 +138,12 @@ int ObLogDdlParser::push(PartTransTask &task, const int64_t timeout)
 int ObLogDdlParser::get_part_trans_task_count(int64_t &task_num)
 {
   return DdlParserThread::get_total_task_num(task_num);
+}
+
+int ObLogDdlParser::thread_begin()
+{
+  set_cdc_thread_name("CDC-DDL-PARSER");
+  return OB_SUCCESS;
 }
 
 int ObLogDdlParser::handle(void *data,

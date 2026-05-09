@@ -41,6 +41,7 @@ class IObLogEntryTaskPool;
 class IObLogFetcherDispatcher;
 class IObLogClusterIDFilter;
 class IObLogLsnFilter;
+class IObLogTransIDFilter;
 
 class ObLogPartTransResolverFactory : public IObLogPartTransResolverFactory
 {
@@ -56,6 +57,7 @@ public:
       IObLogFetcherDispatcher &dispatcher,
       IObLogClusterIDFilter &cluster_id_filter,
       IObLogLsnFilter &lsn_filter,
+      IObLogTransIDFilter &trans_id_filter,
       const int64_t source_cluster_id);
   void destroy();
 
@@ -80,6 +82,7 @@ private:
   IObLogFetcherDispatcher   *dispatcher_;
   IObLogClusterIDFilter     *cluster_id_filter_;
   IObLogLsnFilter           *lsn_filter_;
+  IObLogTransIDFilter       *trans_id_filter_;
   int64_t                   source_cluster_id_;
 
   common::ObSmallAllocator  allocator_;

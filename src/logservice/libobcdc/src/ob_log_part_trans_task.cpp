@@ -2211,6 +2211,7 @@ void DdlStmtTask::reset()
 ////////////////////////////////////////////////////////////////////////////////////
 
 ObLogEntryTask::ObLogEntryTask(PartTransTask &host, const bool is_direct_load_inc_log) :
+    ObLogResourceRecycleTask(ObLogResourceRecycleTask::LOG_ENTRY_TASK),
     host_(&host),
     participant_(NULL),
     tls_id_(),
@@ -2221,10 +2222,10 @@ ObLogEntryTask::ObLogEntryTask(PartTransTask &host, const bool is_direct_load_in
     formatted_stmt_num_(0),
     row_ref_cnt_(0),
     arena_allocator_(
-        host.get_log_entry_task_base_allocator(),
-        "LogEntryTask",
-        host.get_tenant_id(),
-        is_direct_load_inc_log ? OB_MALLOC_BIG_BLOCK_SIZE : OB_MALLOC_NORMAL_BLOCK_SIZE)
+      TCTX.get_log_entry_task_base_allocator(),  // Use base allocator to reduce fragmentation
+      "LogEntryTask",
+      host.get_tenant_id(),
+      is_direct_load_inc_log ? OB_MALLOC_BIG_BLOCK_SIZE : OB_MALLOC_NORMAL_BLOCK_SIZE)  // 64KB page size for normal case
 {
 }
 
@@ -2582,7 +2583,6 @@ void ObLogEntryTask::set_row_ref_cnt(const int64_t row_ref_cnt)
 PartTransTask::PartTransTask() :
     ObLogResourceRecycleTask(ObLogResourceRecycleTask::PART_TRANS_TASK),
     allocator_(),
-    log_entry_task_base_allocator_(),
     serve_state_(SERVED),
     cluster_id_(0),
     type_(TASK_TYPE_UNKNOWN),
@@ -2613,6 +2613,7 @@ PartTransTask::PartTransTask() :
     checkpoint_seq_(0),
     global_trans_seq_(0),
     global_schema_version_(OB_INVALID_VERSION),
+    committer_push_timestamp_us_(0),
     next_task_(NULL),
     local_schema_version_(OB_INVALID_VERSION),
     stmt_list_(),
@@ -2748,6 +2749,7 @@ void PartTransTask::reset()
   checkpoint_seq_ = 0;
   global_trans_seq_ = 0;
   global_schema_version_ = OB_INVALID_VERSION;
+  committer_push_timestamp_us_ = 0;
   next_task_ = NULL;
 
   local_schema_version_ = OB_INVALID_VERSION;
@@ -2759,23 +2761,13 @@ void PartTransTask::reset()
   tic_update_infos_.reset();
   // reuse memory
   allocator_.reset();
-  log_entry_task_base_allocator_.destroy();
 }
 
 int PartTransTask::init_log_entry_task_allocator()
 {
-  int ret = OB_SUCCESS;
-  lib::ObMemAttr attr(tls_id_.get_tenant_id(), "LogEntryTaskBas");
-  const int64_t cache_block_count = 4; // nway for vslice_alloc
-
-  if (OB_FAIL(log_entry_task_base_allocator_.init(
-      OB_MALLOC_MIDDLE_BLOCK_SIZE,
-      attr,
-      cache_block_count))) {
-    LOG_ERROR("init log_entry_task_base_allocator_ failed", KR(ret), KPC(this));
-  }
-
-  return ret;
+  // ObLogEntryTask now uses independent ObArenaAllocator, no need to init base allocator
+  // This function is kept for compatibility but does nothing
+  return OB_SUCCESS;
 }
 
 int PartTransTask::push_redo_log(
@@ -3643,6 +3635,8 @@ int PartTransTask::commit(
       LOG_ERROR("to_string_part_trans_info_str failed", KR(ret), K(trans_commit_version), K(cluster_id), K(commit_log_lsn), KPC(this));
     } else if (OB_FAIL(untreeify_redo_list_())) {
       LOG_ERROR("untreeify redo_list failed", KR(ret), K(trans_commit_version), K(cluster_id), K(commit_log_lsn), KPC(this));
+    } else if (OB_FAIL(rollback_list_.optimize())) {
+      LOG_ERROR("optimize rollback_list failed", KR(ret), K(trans_commit_version), K(cluster_id), K(commit_log_lsn), KPC(this));
     } else {
       // 3. trans_version, cluster_id and commit_log_lsn
       commit_ts_ = commit_log_submit_ts;
@@ -4343,18 +4337,8 @@ int PartTransTask::init_participant_array_(
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("unexcepted invalid part_array", KR(ret), K(participants_), KPC(this));
       } else {}
-    } else {
-      for (int64_t index = 0; OB_SUCC(ret) && index < part_count; index++) {
-        const transaction::ObLSLogInfo &part_log_info = participants.at(index);
-
-        if (OB_UNLIKELY(! part_log_info.is_valid())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_ERROR("part_log_info recorded in TransCommitLog is invalid", KR(ret),
-              K_(tls_id), K_(trans_id), K_(trans_type), K(participants), K(part_log_info));
-        } else if (OB_FAIL(participants_.push_back(part_log_info))) {
-          LOG_ERROR("participants_ push_back failed", KR(ret), KPC(this));
-        } else {}
-      }
+    } else if (OB_FAIL(participants_.assign(participants))) {
+      LOG_ERROR("participants_ assign failed", KR(ret), KPC(this));
     }
   }
 
@@ -4400,7 +4384,7 @@ int PartTransTask::to_string_part_trans_info_()
   } else if (OB_FAIL(common::databuff_printf(buf, buf_size, pos, "%s"DELIMITER_STR"%ld", tls_str_, trans_id_.get_id()))) {
     LOG_ERROR("serialize tls_id_str failed", KR(ret), K(buf), K(buf_size), K(pos), K_(tls_str), K_(trans_id));
   } else {
-    part_trans_info_str_.assign_ptr(buf, static_cast<int32_t>(buf_size));
+    part_trans_info_str_.assign_ptr(buf, static_cast<int32_t>(pos));
   }
 
   if (OB_FAIL(ret)) {

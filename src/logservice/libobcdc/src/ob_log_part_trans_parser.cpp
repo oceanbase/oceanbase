@@ -629,13 +629,7 @@ int ObLogPartTransParser::check_row_need_rollback_(
   int ret = OB_SUCCESS;
   need_rollback = false;
   const RollbackList &rollback_list = part_trans_task.get_rollback_list();
-  const auto &row_seq_no = row.get_seq_no();
-  const RollbackNode *rollback_node = rollback_list.head_;
-
-  while (OB_SUCC(ret) && OB_NOT_NULL(rollback_node) && ! need_rollback) {
-    need_rollback = rollback_node->should_rollback_stmt(row_seq_no);
-    rollback_node = rollback_node->get_next();
-  }
+  need_rollback = rollback_list.should_rollback_stmt(row.get_seq_no());
 
   return ret;
 }

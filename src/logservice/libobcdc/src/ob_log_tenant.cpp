@@ -25,6 +25,8 @@
 #include "ob_log_start_schema_matcher.h"                            // ObLogStartSchemaMatcher
 #include "ob_log_schema_getter.h"                                   // ObLogSchemaGuard
 #include "ob_log_store_service.h"                                   // IObLogStoreService
+#include "ob_log_resource_collector.h"                              // IObLogResourceCollector
+#include "ob_log_instance.h"                                         // TCTX
 
 #define STAT(level, tag_str, args...) OBLOG_LOG(level, "[STAT] [TENANT] " tag_str, ##args)
 #define ISTAT(tag_str, args...) STAT(INFO, tag_str, ##args)
@@ -125,6 +127,15 @@ int ObLogTenant::init(
   } else if (OB_FAIL(tenant_checkpoint_.assign(tenant_checkpoint))) {
     LOG_ERROR("assign tenant_checkpiont failed", KR(ret),
         "target_checkpoint", tenant_checkpoint, "current_checkpoint", tenant_checkpoint_);
+  } else {
+    // Initialize batch delete buffer in resource collector
+    IObLogResourceCollector *resource_collector = TCTX.resource_collector_;
+    if (OB_ISNULL(resource_collector)) {
+      LOG_ERROR("resource_collector is NULL, cannot init batch delete buffer", K(tenant_id));
+      ret = OB_ERR_UNEXPECTED;
+    } else if (OB_FAIL(resource_collector->init_tenant_batch_delete_buffer(tenant_id))) {
+      LOG_ERROR("init_tenant_batch_delete_buffer fail", KR(ret), K(tenant_id));
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -255,6 +266,14 @@ void ObLogTenant::reset()
   committer_next_trans_schema_version_ = OB_INVALID_VERSION;
   tenant_checkpoint_.destroy();
   lob_storage_clean_task_.reset();
+
+  // Clean up batch delete buffers for this tenant before dropping column_family
+  // No need to flush keys since column_family will be dropped
+  IObLogResourceCollector *resource_collector = TCTX.resource_collector_;
+  if (OB_NOT_NULL(resource_collector)) {
+    resource_collector->clean_tenant_batch_delete_buffers(tenant_id);
+  }
+
   IObStoreService *store_service = TCTX.store_service_;
   if (OB_NOT_NULL(store_service)) {
     LOG_INFO("prepare drop tenant column family", K(tenant_id));

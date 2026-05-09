@@ -16,6 +16,7 @@
 #include "ob_log_instance.h"
 #include "ob_log_resource_collector.h"
 #include "ob_log_trace_id.h"
+#include "ob_log_utils.h"                          // set_cdc_thread_name
 
 #define _STAT(level, fmt, args...) _DATA_DICT_LOG(level, "[LOG_META_DATA] [REPLAYER] " fmt, ##args)
 #define STAT(level, fmt, args...) DATA_DICT_LOG(level, "[LOG_META_DATA] [REPLAYER] " fmt, ##args)
@@ -153,6 +154,7 @@ int ObLogMetaDataReplayer::wait_replay_end()
 void ObLogMetaDataReplayer::run1()
 {
   int ret = OB_SUCCESS;
+  set_cdc_thread_name("CDC-META-REPLAYER");
   ObDictTenantInfoGuard dict_tenant_info_guard;
   ObDictTenantInfo *tenant_info = nullptr;
   ObLogTraceIdGuard trace_guard;

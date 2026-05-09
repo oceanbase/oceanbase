@@ -71,6 +71,25 @@ int FetchLogSRpc::fetch_log(IObLogRpc &rpc,
 {
   int ret = OB_SUCCESS;
 
+  if (OB_FAIL(send_fetch_log(rpc, tenant_id, ls_id, miss_log_array, svr, timeout, progress))) {
+    LOG_ERROR("send_fetch_log fail", KR(ret), K(tenant_id), K(ls_id));
+  } else {
+    wait_response();
+  }
+
+  return ret;
+}
+
+int FetchLogSRpc::send_fetch_log(IObLogRpc &rpc,
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const ObIArray<ObCdcLSFetchMissLogReq::MissLogParam> &miss_log_array,
+    const common::ObAddr &svr,
+    const int64_t timeout,
+    const int64_t progress)
+{
+  int ret = OB_SUCCESS;
+
   reset();
 
   // build request
@@ -91,14 +110,18 @@ int FetchLogSRpc::fetch_log(IObLogRpc &rpc,
     // Reset the error code
     ret = OB_SUCCESS;
   } else {
-    // If the RPC is sent successfully, block waits for rpc done
-    while (! ATOMIC_LOAD(&rpc_done_)) {
-      // This relies on the fact that the RPC must eventually call back, so the TIMEOUT time is not set
-      cond_.wait();
-    }
+    // RPC sent successfully, caller should call wait_response() to get the result
   }
 
   return ret;
+}
+
+void FetchLogSRpc::wait_response()
+{
+  while (! ATOMIC_LOAD(&rpc_done_)) {
+    // This relies on the fact that the RPC must eventually call back, so the TIMEOUT time is not set
+    cond_.wait();
+  }
 }
 
 int FetchLogSRpc::build_request_(
@@ -244,6 +267,196 @@ int FetchLogSRpc::RpcCB::do_process_(const ObRpcResultCode &rcode, const ObCdcLS
     LOG_ERROR("set fetch log response fail", KR(ret), K(resp), K(rcode));
   } else {
     // success
+  }
+
+  return ret;
+}
+
+////////////////////////////// FetchLog2SRpc //////////////////////////////
+FetchLog2SRpc::FetchLog2SRpc() :
+    req_(),
+    resp_(),
+    rcode_(),
+    cb_(*this),
+    cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::CDC_COMMON_COND_WAIT),
+    rpc_done_(false)
+{
+}
+
+FetchLog2SRpc::~FetchLog2SRpc()
+{
+  reset();
+}
+
+void FetchLog2SRpc::reset()
+{
+  req_.reset();
+  resp_.reset();
+  rcode_.reset();
+  rpc_done_ = false;
+}
+
+int FetchLog2SRpc::fetch_log(IObLogRpc &rpc,
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const palf::LSN &start_lsn,
+    const common::ObAddr &svr,
+    const int64_t timeout,
+    const int64_t progress)
+{
+  int ret = OB_SUCCESS;
+
+  reset();
+
+  if (OB_FAIL(build_request_(tenant_id, ls_id, start_lsn, progress))) {
+    LOG_ERROR("build FetchLog2 request fail", KR(ret), K(tenant_id), K(ls_id), K(start_lsn));
+  } else if (OB_FAIL(rpc.async_stream_fetch_log(tenant_id, svr, req_, cb_, timeout))) {
+    LOG_ERROR("send async stream fetch log rpc fail", KR(ret), K(tenant_id), K(svr), K(req_), K(timeout));
+
+    rcode_.rcode_ = ret;
+    (void)snprintf(rcode_.msg_, sizeof(rcode_.msg_), "send async stream fetch log rpc fail");
+    rpc_done_ = true;
+    ret = OB_SUCCESS;
+  } else {
+    while (! ATOMIC_LOAD(&rpc_done_)) {
+      cond_.wait();
+    }
+  }
+
+  return ret;
+}
+
+int FetchLog2SRpc::build_request_(
+    const uint64_t tenant_id,
+    const share::ObLSID &ls_id,
+    const palf::LSN &start_lsn,
+    const int64_t progress)
+{
+  int ret = OB_SUCCESS;
+  UNUSED(tenant_id);
+
+  reset();
+
+  req_.set_ls_id(ls_id);
+  req_.set_start_lsn(start_lsn);
+  req_.set_client_pid(static_cast<uint64_t>(getpid()));
+  req_.set_progress(progress);
+
+  if (OB_FAIL(req_.set_upper_limit_ts(INT64_MAX))) {
+    LOG_ERROR("set upper_limit_ts failed", KR(ret));
+  }
+
+  return ret;
+}
+
+int FetchLog2SRpc::set_resp_(const ObRpcResultCode &rcode, const ObCdcLSFetchLogResp *resp)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(OB_SUCCESS == rcode.rcode_ && NULL == resp)) {
+    LOG_ERROR("invalid fetch log response", K(rcode), K(resp));
+    ret = OB_INVALID_ARGUMENT;
+  } else {
+    rcode_ = rcode;
+    if (OB_SUCCESS == rcode.rcode_) {
+      if (OB_FAIL(resp_.assign(*resp))) {
+        LOG_ERROR("assign new fetch log resp fail", KR(ret), KPC(resp), K(resp_));
+      }
+    }
+  }
+
+  // On assign failure, propagate error into rcode_ so caller sees it
+  if (OB_SUCCESS != ret) {
+    rcode_.rcode_ = ret;
+  }
+
+  ATOMIC_SET(&rpc_done_, true);
+  cond_.signal();
+  return ret;
+}
+
+FetchLog2SRpc::RpcCB::RpcCB(FetchLog2SRpc &host) : host_(host)
+{}
+
+FetchLog2SRpc::RpcCB::~RpcCB()
+{}
+
+rpc::frame::ObReqTransport::AsyncCB *FetchLog2SRpc::RpcCB::clone(const rpc::frame::SPAlloc &alloc) const
+{
+  void *buf = NULL;
+  RpcCB *cb = NULL;
+
+  if (OB_ISNULL(buf = alloc(sizeof(RpcCB)))) {
+    LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "clone rpc callback fail", K(buf), K(sizeof(RpcCB)));
+  } else if (OB_ISNULL(cb = new(buf) RpcCB(host_))) {
+    LOG_ERROR_RET(OB_ALLOCATE_MEMORY_FAILED, "construct RpcCB fail", K(buf));
+  }
+
+  return cb;
+}
+
+int FetchLog2SRpc::RpcCB::process()
+{
+  int ret = OB_SUCCESS;
+  ObCdcLSFetchLogResp &result = RpcCBBase::result_;
+  ObRpcResultCode &rcode = RpcCBBase::rcode_;
+
+  if (OB_FAIL(do_process_(rcode, &result))) {
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("process FetchLog2 callback fail", KR(ret), K(result), K(rcode));
+    }
+  }
+  result.reset();
+
+  return ret;
+}
+
+void FetchLog2SRpc::RpcCB::on_timeout()
+{
+  int ret = OB_SUCCESS;
+  ObRpcResultCode rcode;
+  const common::ObAddr &svr = RpcCBBase::dst_;
+
+  rcode.rcode_ = OB_TIMEOUT;
+  ObCStringHelper helper;
+  (void)snprintf(rcode.msg_, sizeof(rcode.msg_), "FetchLog2 rpc timeout, svr=%s",
+      helper.convert(svr));
+
+  if (OB_FAIL(do_process_(rcode, NULL))) {
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("process FetchLog2 callback on timeout fail", KR(ret), K(rcode), K(svr));
+    }
+  }
+}
+
+void FetchLog2SRpc::RpcCB::on_invalid()
+{
+  int ret = OB_SUCCESS;
+  ObRpcResultCode rcode;
+  const common::ObAddr &svr = RpcCBBase::dst_;
+
+  rcode.rcode_ = OB_RPC_PACKET_INVALID;
+  ObCStringHelper helper;
+  (void)snprintf(rcode.msg_, sizeof(rcode.msg_),
+      "FetchLog2 rpc response packet is invalid, svr=%s",
+      helper.convert(svr));
+
+  if (OB_FAIL(do_process_(rcode, NULL))) {
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("process FetchLog2 callback on invalid fail", KR(ret), K(rcode), K(svr));
+    }
+  }
+}
+
+int FetchLog2SRpc::RpcCB::do_process_(const ObRpcResultCode &rcode, const ObCdcLSFetchLogResp *resp)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(OB_SUCCESS == rcode.rcode_ && NULL == resp)) {
+    LOG_ERROR("invalid response packet", K(rcode), K(resp));
+    ret = OB_INVALID_ERROR;
+  } else if (OB_FAIL(host_.set_resp_(rcode, resp))) {
+    LOG_ERROR("set fetch log response fail", KR(ret), K(resp), K(rcode));
   }
 
   return ret;

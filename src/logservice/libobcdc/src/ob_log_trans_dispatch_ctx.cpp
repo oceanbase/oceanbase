@@ -18,6 +18,7 @@
 #include "ob_log_config.h"              // TCONF
 #include "ob_log_instance.h"            // TCTX
 #include "ob_log_trans_msg_sorter.h"    // IObLogTransMsgSorter
+#include "ob_cdc_lob_data_merger.h"     // IObCDCLobDataMerger
 #include "ob_cdc_auto_config_mgr.h"     // CDC_CFG_MGR
 #include "ob_cdc_lob_data_merger.h"     // IObCDCLobDataMerger
 

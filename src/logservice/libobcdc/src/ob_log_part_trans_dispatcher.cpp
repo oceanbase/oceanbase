@@ -103,7 +103,11 @@ int PartTransDispatcher::init(const logservice::TenantLSID &tls_id,
     // it is possible that the heartbeat will fall back because it takes the "pending task timestamp-1".
     // 2. so initialize progress to start timestamp-1
     init_dispatch_progress_ = start_tstamp - 1;
-    last_dispatch_progress_ = start_tstamp - 1;
+    // Initialize last_dispatch_progress_ to a known value (= init_dispatch_progress_) instead of
+    // OB_INVALID_TIMESTAMP.  This avoids a transient window during the first task dispatch where
+    // last_dispatch_progress_ briefly holds a lower intermediate value that could be observed by
+    // the heartbeat thread and cause a safe-point rollback.
+    last_dispatch_progress_ = init_dispatch_progress_;
   }
   return ret;
 }
@@ -158,6 +162,10 @@ int PartTransDispatcher::dispatch_part_trans_task_(PartTransTask &task, volatile
   // 1. prepare_log_lsn is only valid for DDL and DML types
   // 2. should not use reference of prepare_log_lsn in case of usage of prepare_lsn after part_trans_task recycled
   const palf::LSN prepare_lsn = task.get_prepare_log_lsn();
+  // NOTE: last_dispatch_progress_ is now initialized to init_dispatch_progress_ in init(),
+  // so the previous first-dispatch special case (setting it to min(init_dispatch_progress_, prepare_ts))
+  // is no longer needed.  update_status_after_consume_task_() handles all subsequent updates
+  // via std::max, ensuring monotonically non-decreasing progress.
 
   if (OB_INVALID_TIMESTAMP != prepare_ts) {
     // Check if progress is backed up
@@ -591,22 +599,36 @@ int PartTransDispatcher::get_dispatch_progress(int64_t &dispatch_progress,
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == last_dispatch_progress_)) {
-    LOG_ERROR("invalid last_dispatch_progress_", K(last_dispatch_progress_));
+  if (OB_UNLIKELY(OB_INVALID_TIMESTAMP == init_dispatch_progress_)) {
     ret = OB_NOT_INIT;
+    LOG_ERROR("invalid init_dispatch_progress_", KR(ret), K_(init_dispatch_progress));
   }
   // Get PartTransDispatcher member values without locking
   else {
     // The default is to take the progress of the last issue
-    dispatch_progress = ATOMIC_LOAD(&last_dispatch_progress_);
+    const int64_t saved_last_dispatch_progress = ATOMIC_LOAD(&last_dispatch_progress_);
+    dispatch_progress = saved_last_dispatch_progress;
     dispatch_info.last_dispatch_log_lsn_ = palf::LSN(ATOMIC_LOAD(&last_dispatch_log_lsn_.val_));
     dispatch_info.current_checkpoint_ = ATOMIC_LOAD(&checkpoint_);
 
     // Access is not atomic and may be biased
     dispatch_info.pending_task_count_ = get_total_task_count_();
 
-    // Update dispatch progress based on the task being dispatched
+    // Update dispatch progress based on the task being dispatched.
+    // NOTE: this may *lower* dispatch_progress via std::min(dispatch_progress, task_ts - 1)
+    // when a task is being dispatched (dispatching_task_info_) or sitting at the queue head.
     task_queue_.update_dispatch_progress_by_task_queue(dispatch_progress, dispatch_info);
+
+    // Clamp: dispatch_progress must never go below saved_last_dispatch_progress.
+    // Since last_dispatch_progress_ is initialized to init_dispatch_progress_ (= start_tstamp - 1)
+    // and only increases via std::max in update_status_after_consume_task_(), we have
+    // saved_last_dispatch_progress >= init_dispatch_progress_ always.  This single clamp
+    // therefore also covers the init_dispatch_progress_ floor.
+    //
+    // Why this is needed: the dispatching_task_info_ / queue-head mechanism above can
+    // temporarily reduce dispatch_progress to (task_timestamp - 1).  If last_dispatch_progress_
+    // has already advanced past that point, the safe-point should not regress.
+    dispatch_progress = std::max(dispatch_progress, saved_last_dispatch_progress);
   }
 
   return ret;

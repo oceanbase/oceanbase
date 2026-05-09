@@ -14,20 +14,20 @@ LOG_DIR=./log
 
 rm -fr $LOG_DIR/ core.* ${DATA_FILE}*
 
-export LD_LIBRARY_PATH=./lib/:$LD_LIBRARY_PATH
-./obcdc_tailf -v
+export LD_LIBRARY_PATH=./lib64/:$LD_LIBRARY_PATH
+./bin/obcdc_tailf -v
 ulimit -c unlimited
 ## work in background
-`pwd`/obcdc_tailf -f $CONFIG -t $TIMESTAMP -d
-#`pwd`/obcdc_tailf -f $CONFIG -T $TIMESTAMP -d
-#./obcdc_tailf_static -f $CONFIG -T $TIMESTAMP -d
-#`pwd`/obcdc_tailf -f $CONFIG -T $TIMESTAMP -D${DATA_FILE} -d
+`pwd`/bin/obcdc_tailf -f $CONFIG -t $TIMESTAMP -d
+#`pwd`/bin/obcdc_tailf -f $CONFIG -T $TIMESTAMP -d
+#./bin/obcdc_tailf_static -f $CONFIG -T $TIMESTAMP -d
+#`pwd`/bin/obcdc_tailf -f $CONFIG -T $TIMESTAMP -D${DATA_FILE} -d
 
 # Timed runs in the background
-# `pwd`/obcdc_tailf -R $RUN_TIME -f $CONFIG -t $TIMESTAMP -d
+# `pwd`/bin/obcdc_tailf -R $RUN_TIME -f $CONFIG -t $TIMESTAMP -d
 
 # output data
-# `pwd`/obcdc_tailf -V -f $CONFIG -T $TIMESTAMP -D${DATA_FILE} 2>&1 | grep -v tid
+# `pwd`/bin/obcdc_tailf -V -f $CONFIG -T $TIMESTAMP -D${DATA_FILE} 2>&1 | grep -v tid
 
 # Timed runs with output data
-# `pwd`/obcdc_tailf -x -o -R$RUN_TIME -f $CONFIG -t $TIMESTAMP -D${DATA_FILE} 2>&1 | grep -v tid
+# `pwd`/bin/obcdc_tailf -x -o -R$RUN_TIME -f $CONFIG -t $TIMESTAMP -D${DATA_FILE} 2>&1 | grep -v tid

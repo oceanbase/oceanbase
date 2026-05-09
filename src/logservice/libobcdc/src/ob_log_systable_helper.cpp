@@ -607,8 +607,34 @@ int IObLogSysTableHelper::BatchSQLQuery::get_records(
     const ObLogSvrBlacklist &server_blacklist,
     common::ObIArray<common::ObAddr >&records)
 {
+  int ret = OB_SUCCESS;
   int64_t record_count = 0;
-  return get_records_tpl_(records, "QueryAllServerInfo", record_count);
+
+  if (OB_UNLIKELY(! inited_)) {
+    LOG_ERROR("not init");
+    ret = OB_NOT_INIT;
+  } else if (OB_FAIL(next_result())) {
+    LOG_ERROR("next_result fail", KR(ret), "mysql_error_code", get_mysql_err_code(),
+        "mysql_err_msg", get_mysql_err_msg());
+  } else {
+    while (OB_SUCC(ret)) {
+      if (OB_FAIL(next_row())) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_ERROR("get next row fail", KR(ret), "mysql_error_code", get_mysql_err_code(),
+              "mysql_err_msg", get_mysql_err_msg());
+        }
+        break;
+      } else if (OB_FAIL(parse_record_from_row_(server_blacklist, records))) {
+        LOG_ERROR("parse records from row data fail", KR(ret));
+      } else {
+        record_count++;
+      }
+    }
+  }
+
+  return ret;
 }
 
 int IObLogSysTableHelper::BatchSQLQuery::parse_record_from_row_(common::ObIArray<TenantInfo> &records)

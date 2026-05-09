@@ -68,6 +68,7 @@ DEFINE_FIELD_WITH_GETTER(int64_t, br_queue_length);
 // thread queue length
 DEFINE_FIELD_WITH_GETTER(int64_t, auto_queue_length);
 DEFINE_FIELD_WITH_GETTER(int64_t, sequencer_queue_length);
+DEFINE_FIELD_WITH_GETTER(int64_t, redo_dispatcher_queue_length);
 DEFINE_FIELD_WITH_GETTER(int64_t, storager_queue_length);
 DEFINE_FIELD_WITH_GETTER(int64_t, reader_queue_length);
 DEFINE_FIELD_WITH_GETTER(int64_t, lob_data_merger_queue_length);
@@ -92,6 +93,9 @@ DEFINE_FIELD_WITH_GETTER(int64_t, storager_mem_percentage);
 
 // chunk_mgr cache
 DEFINE_FIELD_WITH_GETTER(int64_t, max_chunk_cache_size);
+
+// task pool allocator
+DEFINE_FIELD_WITH_GETTER(int64_t, task_pool_allocator_total_limit);
 
 // flow control for direct load inc
 DEFINE_FIELD_WITH_GETTER(int64_t, direct_load_inc_thread_num);

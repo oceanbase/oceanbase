@@ -19,17 +19,21 @@
 #include "ob_log_instance.h"
 #include "ob_log_trans_redo_dispatcher.h"
 #include "ob_cdc_auto_config_mgr.h"
+#include "ob_log_trace_id.h"            // ObLogTraceIdGuard
 
 namespace oceanbase
 {
 namespace libobcdc
 {
 ObLogTransRedoDispatcher::ObLogTransRedoDispatcher() :
-  trans_dispatch_ctx_(),
   redo_memory_limit_(0),
   cur_dispatched_redo_memory_(0),
+  task_count_(0),
   trans_stat_mgr_(NULL),
-  enable_sort_by_seq_no_(false)
+  err_handler_(NULL),
+  enable_sort_by_seq_no_(false),
+  task_queue_(),
+  inited_(false)
 {
   dispatch_func_ = NULL;
 }
@@ -41,15 +45,24 @@ ObLogTransRedoDispatcher::~ObLogTransRedoDispatcher()
 
 int ObLogTransRedoDispatcher::init(const int64_t redo_dispatcher_memory_limit,
                                    const bool enable_sort_by_seq_no,
-                                   IObLogTransStatMgr &trans_stat_mgr)
+                                   const int64_t thread_num,
+                                   const int64_t queue_size,
+                                   IObLogTransStatMgr &trans_stat_mgr,
+                                   IObLogErrHandler &err_handler)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(redo_dispatcher_memory_limit <= 0)) {
-    LOG_ERROR("invalid arguments", KR(ret), K(redo_dispatcher_memory_limit));
+  if (OB_UNLIKELY(redo_dispatcher_memory_limit <= 0)
+      || OB_UNLIKELY(thread_num <= 0)
+      || OB_UNLIKELY(queue_size <= 0)) {
+    LOG_ERROR("invalid arguments", KR(ret), K(redo_dispatcher_memory_limit), K(thread_num), K(queue_size));
     ret = OB_INVALID_ARGUMENT;
+  } else if (OB_UNLIKELY(inited_)) {
+    LOG_ERROR("ObLogTransRedoDispatcher has been initialized");
+    ret = OB_INIT_TWICE;
   } else {
     trans_stat_mgr_ = &trans_stat_mgr;
+    err_handler_ = &err_handler;
     ATOMIC_SET(&redo_memory_limit_, redo_dispatcher_memory_limit);
     ATOMIC_SET(&cur_dispatched_redo_memory_, 0);
     enable_sort_by_seq_no_ = enable_sort_by_seq_no;
@@ -59,18 +72,69 @@ int ObLogTransRedoDispatcher::init(const int64_t redo_dispatcher_memory_limit,
     } else {
       dispatch_func_ = &ObLogTransRedoDispatcher::dispatch_by_partition_order_;
     }
+
+    if (OB_FAIL(task_queue_.init(queue_size))) {
+      LOG_ERROR("init task_queue failed", KR(ret), K(queue_size));
+    } else if (OB_FAIL(lib::ThreadPool::set_thread_count(thread_num))) {
+      LOG_ERROR("set thread count failed", KR(ret), K(thread_num));
+    } else if (OB_FAIL(lib::ThreadPool::init())) {
+      LOG_ERROR("ThreadPool init failed", KR(ret));
+    } else {
+      inited_ = true;
+      LOG_INFO("init redo dispatcher succ", K(thread_num), K(queue_size), K(redo_dispatcher_memory_limit));
+    }
   }
 
   return ret;
 }
 
+int ObLogTransRedoDispatcher::start()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_UNLIKELY(!inited_)) {
+    LOG_ERROR("ObLogTransRedoDispatcher has not been initialized");
+    ret = OB_NOT_INIT;
+  } else if (OB_FAIL(lib::ThreadPool::start())) {
+    LOG_ERROR("start redo dispatcher thread pool failed", KR(ret), "thread_num", get_thread_count());
+  } else {
+    LOG_INFO("start redo dispatcher threads succ", "thread_num", get_thread_count());
+  }
+
+  return ret;
+}
+
+void ObLogTransRedoDispatcher::stop()
+{
+  if (inited_) {
+    mark_stop_flag();
+    lib::ThreadPool::wait();
+    LOG_INFO("stop redo dispatcher threads succ", "thread_num", get_thread_count());
+  }
+}
+
 void ObLogTransRedoDispatcher::destroy()
 {
-  trans_dispatch_ctx_.reset();
-  redo_memory_limit_ = 0;
-  cur_dispatched_redo_memory_ = 0;
-  trans_stat_mgr_ = NULL;
-  dispatch_func_ = NULL;
+  if (inited_) {
+    lib::ThreadPool::stop();
+    lib::ThreadPool::wait();
+    lib::ThreadPool::destroy();
+
+    // Drain remaining tasks
+    TransCtx *trans_ctx = NULL;
+    while (OB_SUCCESS == task_queue_.pop(trans_ctx)) {
+      // TransCtx is managed by TransCtxMgr, we don't free it here
+    }
+
+    task_queue_.destroy();
+    redo_memory_limit_ = 0;
+    cur_dispatched_redo_memory_ = 0;
+    task_count_ = 0;
+    trans_stat_mgr_ = NULL;
+    err_handler_ = NULL;
+    dispatch_func_ = NULL;
+    inited_ = false;
+  }
 }
 
 void ObLogTransRedoDispatcher::configure(const ObLogConfig &config)
@@ -78,24 +142,46 @@ void ObLogTransRedoDispatcher::configure(const ObLogConfig &config)
   const int64_t redo_mem_limit = CDC_CFG_MGR.get_redo_dispatcher_memory_limit();
   ATOMIC_SET(&redo_memory_limit_, redo_mem_limit);
   LOG_INFO("[CONFIG][REDO_DISPATCHER]", "redo_dispatcher_memory_limit", redo_mem_limit, "to_size", SIZE_TO_STR(redo_mem_limit));
+
+  // Dynamic thread count adjustment
+  const int64_t new_thread_num = config.redo_dispatcher_thread_num.get();
+  const int64_t cur_thread_num = get_thread_count();
+  if (new_thread_num > 0 && new_thread_num != cur_thread_num) {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(lib::ThreadPool::set_thread_count(new_thread_num))) {
+      LOG_WARN("failed to set thread count dynamically", KR(ret), K(cur_thread_num), K(new_thread_num));
+    } else {
+      LOG_INFO("[CONFIG][REDO_DISPATCHER] thread_num adjusted", "old_thread_num", cur_thread_num, "new_thread_num", new_thread_num);
+    }
+  }
 }
 
-int ObLogTransRedoDispatcher::dispatch_trans_redo(TransCtx &trans, volatile bool &stop_flag)
+int ObLogTransRedoDispatcher::dispatch_trans_redo(TransCtx &trans)
 {
   int ret = OB_SUCCESS;
-  bool enable_monitor = false;
-  ObLogTimeMonitor monitor("RedoDispatcher::dispatch_trans_redo", enable_monitor);
 
-  if (OB_FAIL(((*this).*dispatch_func_)(trans, stop_flag))) {
-    if (OB_IN_STOP_STATE != ret) {
-      LOG_ERROR("failed to dispatch redo of trans", KR(ret), K(trans), K(stop_flag));
-    }
+  if (OB_UNLIKELY(!inited_)) {
+    LOG_ERROR("ObLogTransRedoDispatcher has not been initialized");
+    ret = OB_NOT_INIT;
+  } else if (OB_UNLIKELY(has_set_stop())) {
+    ret = OB_IN_STOP_STATE;
   } else {
-    trans.set_trans_redo_dispatched();
-    trans_stat_mgr_->do_dispatch_trans_stat();
+    // Push TransCtx* to queue for async processing
+    if (OB_FAIL(task_queue_.push(&trans))) {
+      if (OB_SIZE_OVERFLOW == ret) {
+        if (REACH_TIME_INTERVAL(10 * 1000)) {
+          LOG_DEBUG("redo dispatcher queue is full, need retry", K(trans), "queue_size", task_queue_.get_curr_total());
+        }
+        ret = OB_NEED_RETRY;
+      } else {
+        LOG_ERROR("push trans_ctx to queue failed", KR(ret), K(trans));
+      }
+    } else {
+      // Successfully queued, increment task count atomically
+      ATOMIC_INC(&task_count_);
+      LOG_DEBUG("dispatch_trans_redo queued", K(trans));
+    }
   }
-
-  LOG_DEBUG("dispatch_trans_redo finish", KR(ret), K(trans));
 
   return ret;
 }
@@ -114,21 +200,21 @@ int ObLogTransRedoDispatcher::dec_dispatched_redo_memory(const int64_t &log_size
 }
 
 // dispatch redo_read_task by partition order if enable_output_trans_order_by_sql_operation = 0;
-int ObLogTransRedoDispatcher::dispatch_by_partition_order_(TransCtx &trans, volatile bool &stop_flag)
+int ObLogTransRedoDispatcher::dispatch_by_partition_order_(TransCtx &trans)
 {
   int ret = OB_SUCCESS;
   bool enable_monitor = false;
   ObLogTimeMonitor monitor("ObLogRedoDispatcher::dispatch_by_partition_order_", enable_monitor);
   PartTransTask *part_trans_task = trans.get_participant_objs();
 
-  while(OB_SUCC(ret) && !stop_flag && OB_NOT_NULL(part_trans_task)) {
+  while(OB_SUCC(ret) && !lib::ThreadPool::has_set_stop() && OB_NOT_NULL(part_trans_task)) {
     PartTransTask *next_part_trans_task = part_trans_task->next_task();
     bool is_part_dispatch_finish = false;
 
-    while(OB_SUCC(ret) && !stop_flag) {
+    while(OB_SUCC(ret) && !lib::ThreadPool::has_set_stop()) {
       bool has_memory_to_dispatch_redo = false;
 
-      if (OB_FAIL(try_get_and_dispatch_single_redo_(*part_trans_task, has_memory_to_dispatch_redo, is_part_dispatch_finish, stop_flag))) {
+      if (OB_FAIL(try_get_and_dispatch_single_redo_(*part_trans_task, has_memory_to_dispatch_redo, is_part_dispatch_finish))) {
         if (OB_IN_STOP_STATE != ret) {
           LOG_ERROR("try_get_and_dispatch_single_redo_ fail", KR(ret), K(has_memory_to_dispatch_redo),
               K(is_part_dispatch_finish), KP(part_trans_task), KPC(part_trans_task));
@@ -151,7 +237,7 @@ int ObLogTransRedoDispatcher::dispatch_by_partition_order_(TransCtx &trans, vola
     }
   }
 
-  if (stop_flag) {
+  if (lib::ThreadPool::has_set_stop()) {
     ret = OB_IN_STOP_STATE;
   }
 
@@ -159,79 +245,79 @@ int ObLogTransRedoDispatcher::dispatch_by_partition_order_(TransCtx &trans, vola
 }
 
 // dispatch redo_read_task by turn if enable_output_trans_order_by_sql_operation = 1;
-int ObLogTransRedoDispatcher::dispatch_by_turn_(TransCtx &trans, volatile bool &stop_flag)
+int ObLogTransRedoDispatcher::dispatch_by_turn_(TransCtx &trans)
 {
   int ret = OB_SUCCESS;
   int64_t retry_cnt = 0;
 
-  if (OB_FAIL(trans_dispatch_ctx_.init(trans))) {
-    LOG_ERROR("failed to set dispatch context for trans", KR(ret), K(trans), K_(trans_dispatch_ctx));
+  // Create TransDispatchCtx on stack
+  TransDispatchCtx dispatch_ctx;
+  if (OB_FAIL(dispatch_ctx.init(trans))) {
+    LOG_ERROR("failed to set dispatch context for trans", KR(ret), K(trans), K(dispatch_ctx));
   }
 
-  while (OB_SUCC(ret) && !stop_flag && !trans_dispatch_ctx_.is_trans_dispatched()) {
-    if (OB_FAIL(reblance_part_redo_memory_to_alloc_(trans))) {
-      LOG_ERROR("failed to reblance redo dispatcher memory budget", KR(ret), K(trans), K(stop_flag));
-    } else if (OB_FAIL(dispatch_trans_batch_redo_(trans, stop_flag))) {
+  while (OB_SUCC(ret) && !lib::ThreadPool::has_set_stop() && !dispatch_ctx.is_trans_dispatched()) {
+    if (OB_FAIL(reblance_part_redo_memory_to_alloc_(trans, dispatch_ctx))) {
+      LOG_ERROR("failed to reblance redo dispatcher memory budget", KR(ret), K(trans));
+    } else if (OB_FAIL(dispatch_trans_batch_redo_(trans, dispatch_ctx))) {
       if (OB_IN_STOP_STATE != ret) {
-        LOG_ERROR("failed to batch dispatch redo", KR(ret), K_(enable_sort_by_seq_no), K(trans), K(stop_flag));
+        LOG_ERROR("failed to batch dispatch redo", KR(ret), K_(enable_sort_by_seq_no), K(trans));
       }
-    } else if (!trans_dispatch_ctx_.is_trans_dispatched()) {
+    } else if (!dispatch_ctx.is_trans_dispatched()) {
       ob_usleep(200); // sleep 200 us
       if (OB_UNLIKELY(++retry_cnt % 50000 == 0)) {
         // print each 5 sec
         // TODO: simply log content
-        LOG_WARN("trans dispatch_by_turn for too many times", KR(ret), K(retry_cnt), K(trans), K_(trans_dispatch_ctx));
+        LOG_WARN("trans dispatch_by_turn for too many times", KR(ret), K(retry_cnt), K(trans), K(dispatch_ctx));
       }
     } else {
     }
   }
 
-  if (stop_flag) {
+  if (lib::ThreadPool::has_set_stop()) {
     ret = OB_IN_STOP_STATE;
   }
 
   return ret;
 }
 
-int ObLogTransRedoDispatcher::reblance_part_redo_memory_to_alloc_(TransCtx &trans)
+int ObLogTransRedoDispatcher::reblance_part_redo_memory_to_alloc_(TransCtx &trans, TransDispatchCtx &dispatch_ctx)
 {
   int ret = OB_SUCCESS;
 
-  if (enable_sort_by_seq_no_) {
-    // only used for sort_br_by_stmt_seq_no
-    const int64_t redo_memory_limit = ATOMIC_LOAD(&redo_memory_limit_);
-    const int64_t cur_used_mem = ATOMIC_LOAD(&cur_dispatched_redo_memory_);
-    const int64_t total_budget = redo_memory_limit - cur_used_mem;
+  // only used for sort_br_by_stmt_seq_no
+  const int64_t redo_memory_limit = ATOMIC_LOAD(&redo_memory_limit_);
+  const int64_t cur_used_mem = ATOMIC_LOAD(&cur_dispatched_redo_memory_);
+  const int64_t total_budget = redo_memory_limit - cur_used_mem;
 
-    if (OB_FAIL(trans_dispatch_ctx_.reblance_budget(redo_memory_limit, cur_used_mem, trans))) {
-      if (OB_ITER_END != ret) {
-        LOG_ERROR("failed to get redo dispatch budget", KR(ret), K(redo_memory_limit), K(cur_used_mem), K(total_budget), K_(trans_dispatch_ctx));
-      }
+  if (OB_FAIL(dispatch_ctx.reblance_budget(redo_memory_limit, cur_used_mem, trans))) {
+    if (OB_ITER_END != ret) {
+      LOG_ERROR("failed to get redo dispatch budget", KR(ret), K(redo_memory_limit), K(cur_used_mem), K(total_budget), K(dispatch_ctx));
     }
   }
 
   return ret;
 }
 
-int ObLogTransRedoDispatcher::dispatch_trans_batch_redo_(TransCtx &trans, volatile bool &stop_flag)
+int ObLogTransRedoDispatcher::dispatch_trans_batch_redo_(TransCtx &trans, TransDispatchCtx &dispatch_ctx)
 {
   int ret = OB_SUCCESS;
-  PartBudgetArray &normal_priority_part_task_arr = trans_dispatch_ctx_.get_normal_priority_part_budgets();
-  PartBudgetArray &high_priority_part_task_arr = trans_dispatch_ctx_.get_high_priority_part_budgets();
+  PartBudgetArray &normal_priority_part_task_arr = dispatch_ctx.get_normal_priority_part_budgets();
+  PartBudgetArray &high_priority_part_task_arr = dispatch_ctx.get_high_priority_part_budgets();
 
-  if (OB_FAIL(dispatch_part_redo_with_budget_(trans, normal_priority_part_task_arr, stop_flag))) {
+  if (OB_FAIL(dispatch_part_redo_with_budget_(trans, dispatch_ctx, normal_priority_part_task_arr))) {
     if (OB_IN_STOP_STATE != ret) {
       LOG_ERROR("failed to handle batch dispatch redo task", KR(ret), K_(enable_sort_by_seq_no), K(trans),
-          K(normal_priority_part_task_arr), K(stop_flag));
+          K(normal_priority_part_task_arr));
     }
-  } else if (OB_FAIL(dispatch_part_redo_with_budget_(trans, high_priority_part_task_arr, stop_flag))) {
+  } else if (OB_FAIL(dispatch_part_redo_with_budget_(trans, dispatch_ctx, high_priority_part_task_arr))) {
     if (OB_IN_STOP_STATE != ret) {
       LOG_ERROR("failed to handle batch dispatch redo task", KR(ret), K_(enable_sort_by_seq_no), K(trans),
-          K(high_priority_part_task_arr), K(stop_flag));
+          K(high_priority_part_task_arr));
     }
   } else { /* disaptch batch succ, wait for next batch */ }
 
-  if (stop_flag) {
+  if (lib::ThreadPool::has_set_stop()) {
     ret = OB_IN_STOP_STATE;
   }
 
@@ -240,8 +326,8 @@ int ObLogTransRedoDispatcher::dispatch_trans_batch_redo_(TransCtx &trans, volati
 
 int ObLogTransRedoDispatcher::dispatch_part_redo_with_budget_(
     TransCtx &trans,
-    PartBudgetArray &part_task_budget_array,
-    volatile bool &stop_flag)
+    TransDispatchCtx &dispatch_ctx,
+    PartBudgetArray &part_task_budget_array)
 {
   int ret = OB_SUCCESS;
   bool is_cur_batch_dispatch_finish = (0 == part_task_budget_array.count());
@@ -249,7 +335,7 @@ int ObLogTransRedoDispatcher::dispatch_part_redo_with_budget_(
   dispatched_part_idx_arr.reset();
   LOG_DEBUG("dispatch part redo with budget", K(part_task_budget_array), K(trans));
 
-  while(OB_SUCC(ret) && !stop_flag && !is_cur_batch_dispatch_finish) {
+  while(OB_SUCC(ret) && !lib::ThreadPool::has_set_stop() && !is_cur_batch_dispatch_finish) {
     int budget_usedup_part_cnt = 0;
 
     for (int64_t i = 0; OB_SUCC(ret) && i < part_task_budget_array.count(); i++) {
@@ -262,13 +348,13 @@ int ObLogTransRedoDispatcher::dispatch_part_redo_with_budget_(
         ret = OB_ERR_UNEXPECTED;
         LOG_ERROR("unexpected PartTaskBudget", KR(ret), K(part_trans_dispatch_budget));
       } else if (OB_FAIL(try_get_and_dispatch_single_redo_(*part_trans_task, has_memory_to_dispatch_redo, is_part_dispatch_finish,
-                            stop_flag, &part_trans_dispatch_budget))) {
+                            &part_trans_dispatch_budget))) {
         if (OB_IN_STOP_STATE != ret) {
           LOG_ERROR("try_get_and_dispatch_single_redo_ fail", KR(ret), K(has_memory_to_dispatch_redo),
               K(is_part_dispatch_finish), K(part_trans_dispatch_budget));
         }
       } else if (is_part_dispatch_finish) {
-        trans_dispatch_ctx_.inc_dispatched_part();
+        dispatch_ctx.inc_dispatched_part();
         if (OB_FAIL(dispatched_part_idx_arr.push_back(i))) {
           LOG_ERROR("failed to push_back dispatch finished part idx to dispatched_part_idx_arr", KR(ret), K(part_trans_dispatch_budget));
         }
@@ -281,7 +367,7 @@ int ObLogTransRedoDispatcher::dispatch_part_redo_with_budget_(
     for (int64_t i = dispatched_part_idx_arr.count() - 1; OB_SUCC(ret) && i >= 0 ; i--) {
       int64_t &dispatch_finish_idx = dispatched_part_idx_arr[i];
       if (OB_FAIL(part_task_budget_array.remove(dispatch_finish_idx))) {
-        LOG_ERROR("remove dispatch finished part_task from part_task_budget_array failed", KR(ret), K_(trans_dispatch_ctx), K(trans));
+        LOG_ERROR("remove dispatch finished part_task from part_task_budget_array failed", KR(ret), K(dispatch_ctx), K(trans));
       }
     }
 
@@ -294,7 +380,7 @@ int ObLogTransRedoDispatcher::dispatch_part_redo_with_budget_(
 
   }
 
-  if (stop_flag) {
+  if (lib::ThreadPool::has_set_stop()) {
     ret = OB_IN_STOP_STATE;
   }
 
@@ -305,7 +391,6 @@ int ObLogTransRedoDispatcher::try_get_and_dispatch_single_redo_(
     PartTransTask &part_trans_task,
     bool &has_memory_to_dispatch_redo,
     bool &is_part_dispatch_finish,
-    volatile bool &stop_flag,
     PartTransDispatchBudget *part_budget)
 {
   int ret = OB_SUCCESS;
@@ -320,7 +405,7 @@ int ObLogTransRedoDispatcher::try_get_and_dispatch_single_redo_(
     is_part_dispatch_finish = true;
   } else if (OB_FAIL(check_redo_can_dispatch_(has_memory_to_dispatch_redo, part_budget))) {
     LOG_ERROR("failed to check_redo_can_dispatch", KR(ret), K_(cur_dispatched_redo_memory), K_(redo_memory_limit),
-        K(part_trans_task), K(has_memory_to_dispatch_redo), K(stop_flag), KP(part_budget), KPC(part_budget));
+        K(part_trans_task), K(has_memory_to_dispatch_redo), KP(part_budget), KPC(part_budget));
   } else if (has_memory_to_dispatch_redo) {
     DmlRedoLogNode *redo_node = NULL;
 
@@ -336,9 +421,9 @@ int ObLogTransRedoDispatcher::try_get_and_dispatch_single_redo_(
 
       // redo is not null, whcih is checked by PartTransTask::next_redo_to_dispatch
       // NOTICE: NO MORE ACCESS TO redo_node after dispatch_redo_
-      if (OB_FAIL(dispatch_redo_(part_trans_task, *redo_node, stop_flag))) {
+      if (OB_FAIL(dispatch_redo_(part_trans_task, *redo_node))) {
         if (OB_IN_STOP_STATE != ret) {
-          LOG_ERROR("failed to dispatch redo", KR(ret), KPC(redo_node), K(stop_flag));
+          LOG_ERROR("failed to dispatch redo", KR(ret), KPC(redo_node));
         }
       } else {
         // dispatch one redo success
@@ -354,7 +439,7 @@ int ObLogTransRedoDispatcher::try_get_and_dispatch_single_redo_(
     }
   }
 
-  if (stop_flag) {
+  if (lib::ThreadPool::has_set_stop()) {
     ret = OB_IN_STOP_STATE;
   }
 
@@ -387,7 +472,7 @@ int ObLogTransRedoDispatcher::check_redo_can_dispatch_(bool &can_dispatch, PartT
 }
 
 // check memory and dispatch
-int ObLogTransRedoDispatcher::dispatch_redo_(PartTransTask &part_trans, DmlRedoLogNode &redo_node, volatile bool &stop_flag)
+int ObLogTransRedoDispatcher::dispatch_redo_(PartTransTask &part_trans, DmlRedoLogNode &redo_node)
 {
   int ret = OB_SUCCESS;
   const bool is_redo_in_storage = redo_node.is_stored();
@@ -396,14 +481,14 @@ int ObLogTransRedoDispatcher::dispatch_redo_(PartTransTask &part_trans, DmlRedoL
   if (OB_FAIL(alloc_task_for_redo_(part_trans, redo_node, log_entry_task))) {
     LOG_ERROR("fail to generate log_entry_task for redo_node", KR(ret), K(part_trans), K(redo_node));
   } else if (is_redo_in_storage) {
-    if (OB_FAIL(push_task_to_reader_(*log_entry_task, stop_flag))) {
+    if (OB_FAIL(push_task_to_reader_(*log_entry_task))) {
       if (OB_IN_STOP_STATE != ret) {
-        LOG_ERROR("fail to push log_entry_task to reader", KR(ret), K(is_redo_in_storage), K(log_entry_task), K(stop_flag));
+        LOG_ERROR("fail to push log_entry_task to reader", KR(ret), K(is_redo_in_storage), K(log_entry_task));
       }
     }
-  } else if (OB_FAIL(push_task_to_parser_(*log_entry_task, stop_flag))) {
+  } else if (OB_FAIL(push_task_to_parser_(*log_entry_task))) {
     if (OB_IN_STOP_STATE != ret) {
-      LOG_ERROR("fail to push log_entry_task to parser", KR(ret), K(is_redo_in_storage), K(log_entry_task), K(stop_flag));
+      LOG_ERROR("fail to push log_entry_task to parser", KR(ret), K(is_redo_in_storage), K(log_entry_task));
     }
   }
 
@@ -442,7 +527,7 @@ int ObLogTransRedoDispatcher::alloc_task_for_redo_(PartTransTask &part_task,
 }
 
 // push redo_read_task(ObLogEntryTask) to ObLogRedoReader if redo is in storage
-int ObLogTransRedoDispatcher::push_task_to_reader_(ObLogEntryTask &log_entry_task, volatile bool &stop_flag)
+int ObLogTransRedoDispatcher::push_task_to_reader_(ObLogEntryTask &log_entry_task)
 {
   int ret = OB_SUCCESS;
 
@@ -450,14 +535,14 @@ int ObLogTransRedoDispatcher::push_task_to_reader_(ObLogEntryTask &log_entry_tas
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("redo reader is null!", KR(ret));
   } else {
-    RETRY_FUNC(stop_flag, (*TCTX.reader_), push, log_entry_task, DISPATCH_OP_TIMEOUT);
+    RETRY_FUNC(lib::ThreadPool::has_set_stop(), (*TCTX.reader_), push, log_entry_task, DISPATCH_OP_TIMEOUT);
   }
 
   return ret;
 }
 
 // push ObLogEntryTask to dml_parser if redo is in memory
-int ObLogTransRedoDispatcher::push_task_to_parser_(ObLogEntryTask &log_entry_task, volatile bool &stop_flag)
+int ObLogTransRedoDispatcher::push_task_to_parser_(ObLogEntryTask &log_entry_task)
 {
   int ret = OB_SUCCESS;
 
@@ -465,10 +550,74 @@ int ObLogTransRedoDispatcher::push_task_to_parser_(ObLogEntryTask &log_entry_tas
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("dml parser is null!", KR(ret));
   } else {
-    RETRY_FUNC(stop_flag, (*TCTX.dml_parser_), push, log_entry_task, DISPATCH_OP_TIMEOUT);
+    RETRY_FUNC(lib::ThreadPool::has_set_stop(), (*TCTX.dml_parser_), push, log_entry_task, DISPATCH_OP_TIMEOUT);
   }
 
   return ret;
+}
+
+void ObLogTransRedoDispatcher::run(int64_t idx)
+{
+  int ret = OB_SUCCESS;
+  set_cdc_thread_name("CDC-REDO-DISPATCHER", idx);
+  TransCtx *trans_ctx = NULL;
+
+  while (!lib::ThreadPool::has_set_stop() && OB_SUCC(ret)) {
+    ObLogTraceIdGuard trace_guard;
+    if (OB_FAIL(task_queue_.pop(trans_ctx))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        // Queue is empty, wait a bit
+        ob_usleep(100);
+        ret = OB_SUCCESS;
+      } else {
+        LOG_ERROR("pop trans_ctx from queue failed", KR(ret));
+        break;
+      }
+    } else if (OB_ISNULL(trans_ctx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("trans_ctx is null", KR(ret));
+      ATOMIC_DEC(&task_count_);
+    } else if (OB_FAIL(process_dispatch_task_(*trans_ctx))) {
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("process_dispatch_task_ failed", KR(ret), KP(trans_ctx));
+      }
+      ATOMIC_DEC(&task_count_);
+    } else {
+      ATOMIC_DEC(&task_count_);
+    }
+  }
+
+  // Failure to exit
+  if (OB_SUCCESS != ret && OB_IN_STOP_STATE != ret && NULL != err_handler_) {
+    err_handler_->handle_error(ret, "Redo dispatcher thread exits, thread_index=%ld, err=%d", idx, ret);
+  }
+}
+
+int ObLogTransRedoDispatcher::process_dispatch_task_(TransCtx &trans_ctx)
+{
+  int ret = OB_SUCCESS;
+  bool enable_monitor = false;
+  ObLogTimeMonitor monitor("RedoDispatcher::process_dispatch_task", enable_monitor);
+
+  // Use dispatch_func_ to call the appropriate dispatch function
+  if (OB_FAIL(((*this).*dispatch_func_)(trans_ctx))) {
+    if (OB_IN_STOP_STATE != ret) {
+      LOG_ERROR("failed to dispatch redo of trans", KR(ret), K(trans_ctx));
+    }
+  } else {
+    trans_ctx.set_trans_redo_dispatched();
+    trans_stat_mgr_->do_dispatch_trans_stat();
+  }
+
+  LOG_DEBUG("process_dispatch_task_ finish", KR(ret), K(trans_ctx));
+
+  return ret;
+}
+
+void ObLogTransRedoDispatcher::get_task_stat(int64_t &task_count, int64_t &queue_size) const
+{
+  task_count = ATOMIC_LOAD(&task_count_);
+  queue_size = task_queue_.get_curr_total();
 }
 
 } // end namespace libobcdc

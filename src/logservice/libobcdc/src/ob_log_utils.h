@@ -35,6 +35,7 @@
 #include "storage/blocksstable/ob_datum_row.h"// ObRowDml
 #include "share/schema/ob_schema_service.h"   // ObSchemaService
 #include "share/inner_table/ob_inner_table_schema.h"   // OB_ALL_SEQUENCE_VALUE_TID
+#include "lib/time/ob_time_utility.h"                  // ObTimeUtility (current_time / current_time_coarse)
 #include "ob_cdc_define.h"
 
 namespace oceanbase
@@ -138,7 +139,15 @@ private:
   char buf_[BufLen];
 };
 
+/// Current time in microseconds (wall clock). Uses gettimeofday; full precision, slightly higher cost.
+/// Prefer for: timeouts, deadlines, human-readable time, or when microsecond resolution is needed.
 inline int64_t get_timestamp() { return ::oceanbase::common::ObTimeUtility::current_time(); }
+
+/// Coarse-grained current time in microseconds (wall clock). Uses CLOCK_REALTIME_COARSE when available;
+/// typically lower cost than get_timestamp() at the expense of resolution (e.g. millisecond-level).
+/// Prefer for: perf stats, queue-wait timing, phase timing, or any high-frequency elapsed-time only.
+/// Do not mix with get_timestamp() when computing deltas; use one source for both ends of the interval.
+inline int64_t get_timestamp_coarse() { return ::oceanbase::common::ObTimeUtility::current_time_coarse(); }
 
 class HumanDataSizeConverter
 {

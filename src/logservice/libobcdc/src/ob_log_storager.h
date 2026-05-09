@@ -16,14 +16,19 @@
 #define OCEANBASE_LIBOBCDC_STORAGER_H_
 
 #include "lib/thread/ob_multi_fixed_queue_thread.h" // ObMQThread
+#include "lib/container/ob_array.h"                 // ObArray
+#include "lib/hash/ob_hashmap.h"                    // ObHashMap
 #include "ob_log_trans_stat_mgr.h"                  // TransRpsStatInfo
 #include "ob_log_store_service_stat.h"              // StoreServiceStatInfo
 #include "ob_log_batch_buffer.h"                    // IObLogBatchBufTask, IObBatchBufferConsumer
+#include "ob_log_store_key.h"                       // ObLogStoreKey
+#include "ob_log_disk_io_monitor.h"                 // ObLogDiskIOMonitor
 
 namespace oceanbase
 {
 namespace libobcdc
 {
+class ObSlice;
 /////////////////////////////////////////////////////////////////////////////////////////
 class IObLogStorager : public IObBatchBufferConsumer
 {
@@ -46,12 +51,16 @@ public:
     return OB_NOT_IMPLEMENT;
   }
   virtual void get_task_count(int64_t &block_count, int64_t &log_task_count) const = 0;
+  virtual void print_stat_info() = 0;
 };
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
 class IObStoreService;
 class IObLogErrHandler;
+class ObLogStoreTask;
+
+typedef common::hash::ObHashMap<uint64_t, common::ObArray<ObLogStoreTask *>> TenantBatchMap;
 
 typedef common::ObMQThread<IObLogStorager::MAX_STORAGER_NUM> StoragerThread;
 
@@ -72,6 +81,14 @@ public:
   virtual int submit(IObLogBatchBufTask *task);
   void get_task_count(int64_t &block_count, int64_t &log_task_count) const;
   int handle(void *data, const int64_t thread_index, volatile bool &stop_flag);
+  void print_stat_info();
+
+  // Get disk IO monitor for external monitoring
+  ObLogDiskIOMonitor& get_disk_io_monitor() { return disk_io_monitor_; }
+  const ObLogDiskIOMonitor& get_disk_io_monitor() const { return disk_io_monitor_; }
+
+  // Get RocksDB statistics for monitoring
+  void get_rocksdb_stats(std::string& perf_stats, std::string& io_stats) const;
 
 public:
   int init(const int64_t thread_num,
@@ -82,23 +99,31 @@ public:
 
 private:
   static const int64_t DATA_OP_TIMEOUT = 1 * 1000 * 1000;
-  static const int64_t PRINT_TASK_COUNT_INTERVAL = 10 * _SEC_;
-  static const int64_t PRINT_RPS_STAT_INTERVAL   = 10 * _SEC_;
 
 private:
   int handle_task_(IObLogBatchBufTask &batch_task,
       const int64_t thread_index,
       volatile bool &stop_flag);
+  int handle_task_batch_write_(IObLogBatchBufTask &batch_task,
+      const int64_t thread_index,
+      volatile bool &stop_flag,
+      const char *batch_buf);
+  int handle_task_single_write_(IObLogBatchBufTask &batch_task,
+      const int64_t thread_index,
+      volatile bool &stop_flag,
+      const char *batch_buf);
   int write_store_service_(const char *key,
       const char *log_str,
       const size_t log_str_len,
       void *column_family_handle,
       const int64_t thread_index);
-
-  void print_task_count_();
-  void print_rps_();
+  int batch_write_store_service_(void *column_family_handle,
+      const common::ObArray<ObLogStoreKey> &keys,
+      const common::ObArray<ObSlice> &values,
+      const int64_t thread_index);
 
   int read_store_service_(const std::string &key);
+  void print_task_count_();
 
 private:
   bool                      inited_;
@@ -110,6 +135,7 @@ private:
   int64_t                   block_count_ CACHE_ALIGNED;
   int64_t                   log_task_count_ CACHE_ALIGNED;
   StoreServiceStatInfo      store_service_stat_;
+  ObLogDiskIOMonitor        disk_io_monitor_;
 
   IObStoreService           *store_service_;
   IObLogErrHandler          *err_handler_;

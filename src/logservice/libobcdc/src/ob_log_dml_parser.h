@@ -64,6 +64,7 @@ public:
 public:
   // Handler functions for ObSeqThread
   virtual int handle(void *task, const int64_t thread_index, volatile bool &stop_flag);
+  virtual int thread_begin() override;
 
 public:
   int start();

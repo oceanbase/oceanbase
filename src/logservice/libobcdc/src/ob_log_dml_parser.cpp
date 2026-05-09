@@ -22,6 +22,7 @@
 #include "ob_log_resource_collector.h"  // IObLogResourceCollector
 #include "ob_log_trace_id.h"
 #include "ob_cdc_auto_config_mgr.h"     // CDC_CFG_MGR
+#include "ob_log_utils.h"               // set_cdc_thread_name
 
 using namespace oceanbase::common;
 
@@ -167,6 +168,12 @@ int ObLogDmlParser::get_log_entry_task_count(int64_t &task_num)
   return ret;
 }
 
+int ObLogDmlParser::thread_begin()
+{
+  set_cdc_thread_name("CDC-DML-PARSER");
+  return OB_SUCCESS;
+}
+
 int ObLogDmlParser::handle(void *data,
     const int64_t thread_index,
     volatile bool &stop_flag)
@@ -189,7 +196,8 @@ int ObLogDmlParser::handle(void *data,
   } else if (OB_ISNULL(redo_log_node = task->get_redo_log_node())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("redo_log_node is NULL", K(redo_log_node), KPC(task));
-  } else if (redo_log_node->is_direct_load_inc_log() && OB_FAIL(wait_until_parser_pause_down_(thread_index, stop_flag))) {
+  } else if ((TCONF.enable_parser_flow_control == 1 || redo_log_node->is_direct_load_inc_log())
+      && OB_FAIL(wait_until_parser_pause_down_(thread_index, stop_flag))) {
     if (OB_IN_STOP_STATE != ret) {
       LOG_ERROR("wait until parser pause down failed", KR(ret), KP(task), KPC(task));
     }
@@ -265,7 +273,7 @@ int ObLogDmlParser::handle_empty_stmt_(ObLogEntryTask &log_entry_task,
     ret = OB_ERR_UNEXPECTED;
   } else if (OB_FAIL(log_entry_task.set_redo_log_formatted())) {
     LOG_ERROR("set_redo_log_formatted fail", KR(ret), K(log_entry_task), K(part_trans_task), K(stop_flag));
-  // TODO Optimize revert_log_entry_task is synchronous interface
+  // revert_log_entry_task is now asynchronous interface, will push task into queue for async processing
   } else if (OB_FAIL(resource_collector->revert_log_entry_task(&log_entry_task))) {
     if (OB_IN_STOP_STATE != ret) {
       LOG_ERROR("revert log_entry_task fail", KR(ret));
@@ -307,14 +315,10 @@ int ObLogDmlParser::wait_until_parser_pause_down_(const int64_t thread_index, vo
     LOG_ERROR("formatter is null", KR(ret));
   } else {
     while (OB_SUCC(ret) && !stop_flag) {
-      const double memory_usage_warn_percent = TCONF.memory_usage_warn_threshold / 100.0;
-      const int64_t memory_limit = CDC_CFG_MGR.get_memory_limit();
-      const int64_t memory_warn_usage = memory_limit * memory_usage_warn_percent;
-      const int64_t memory_hold = lib::get_memory_hold();
-      const bool touch_memory_warn_limit = (memory_hold > memory_warn_usage);
-
       const int64_t queue_backlog_lowest_tolerance = CDC_CFG_MGR.get_direct_load_inc_queue_backlog_lowest_tolerance();
-
+      bool touch_memory_warn_limit = false;
+      bool memory_overused = false;
+      TCTX.get_memory_usage_status(touch_memory_warn_limit, memory_overused);
       int64_t formatter_br_count = 0;
       int64_t formatter_log_entry_count = 0;
       int64_t formatter_stmt_in_lob_merger_count = 0;
@@ -325,15 +329,13 @@ int ObLogDmlParser::wait_until_parser_pause_down_(const int64_t thread_index, vo
       } else if (touch_memory_warn_limit && formatter_br_count > queue_backlog_lowest_tolerance ) {
         const static int64_t PRINT_WAIT_PARSER_PAUSE_DOWN_TIMEOUT = 10 * _SEC_;
         if (TC_REACH_TIME_INTERVAL(PRINT_WAIT_PARSER_PAUSE_DOWN_TIMEOUT)) {
-          _LOG_INFO("[STAT] [FLOW_CONTROL] NEED_SLOW_DOWN=%d MEM=%s/%s THREAD_INDEX=%ld "
+          _LOG_INFO("[STAT] [FLOW_CONTROL] PARSER_NEED_SLOW_DOWN=1 THREAD_INDEX=%ld "
               "FORMATTER=[BR:%ld, LOGENTRY:%ld, STMT_IN_LOG_MERGER: %ld] ",
-              1, SIZE_TO_STR(memory_hold), SIZE_TO_STR(memory_limit), thread_index,
-              formatter_br_count, formatter_log_entry_count, formatter_stmt_in_lob_merger_count);
+              thread_index, formatter_br_count, formatter_log_entry_count, formatter_stmt_in_lob_merger_count);
         } else {
-          _LOG_DEBUG("[STAT] [FLOW_CONTROL] NEED_SLOW_DOWN=%d MEM=%s/%s THREAD_INDEX=%ld "
+          _LOG_DEBUG("[STAT] [FLOW_CONTROL] PARSER_NEED_SLOW_DOWN=1 THREAD_INDEX=%ld "
               "FORMATTER=[BR:%ld, LOGENTRY:%ld, STMT_IN_LOG_MERGER: %ld] ",
-              1, SIZE_TO_STR(memory_hold), SIZE_TO_STR(memory_limit), thread_index,
-              formatter_br_count, formatter_log_entry_count, formatter_stmt_in_lob_merger_count);
+              thread_index, formatter_br_count, formatter_log_entry_count, formatter_stmt_in_lob_merger_count);
         }
         // sleep 1ms and retry
         const static int64_t WAIT_PARSER_PAUSE_DOWN_TIME = 1 * 1000;

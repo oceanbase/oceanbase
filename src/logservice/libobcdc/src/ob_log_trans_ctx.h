@@ -242,7 +242,7 @@ public:
   int lock();
   int unlock();
   int get_tenant_id(uint64_t &tenant_id) const;
-  bool has_ddl_participant() const;
+  OB_INLINE bool has_ddl_participant() const { return ATOMIC_LOAD(&has_ddl_participant_); }
 
   // for unittest start
   int set_trans_id(const transaction::ObTransID &trans_id);
@@ -380,6 +380,7 @@ private:
   int64_t                   participant_count_;        // Participant count
   PartTransTask             *ready_participant_objs_;  // List of added participant objects
   int64_t                   ready_participant_count_;  // Amount of added participant objects
+  bool                      has_ddl_participant_;     // Whether the transaction has a DDL participant
 
   int64_t                   total_br_count_ CACHE_ALIGNED;
   int64_t                   committed_br_count_ CACHE_ALIGNED;

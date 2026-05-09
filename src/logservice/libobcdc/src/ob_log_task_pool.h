@@ -99,7 +99,8 @@ public:
   int init(common::ObIAllocator *task_alloc,
       const int64_t prealloc_pool_size,
       const bool allow_dynamic_alloc,
-      const int64_t prealloc_page_count)
+      const int64_t prealloc_page_count,
+      const int64_t large_allocator_total_limit = LARGE_ALLOCATOR_TOTAL_LIMIT)
   {
     int ret = common::OB_SUCCESS;
     const int64_t start_ts = get_timestamp();
@@ -115,7 +116,7 @@ public:
       ret = common::OB_INVALID_ARGUMENT;
       OBLOG_LOG(WARN, "invalid argument", KR(ret), K(task_alloc), K(prealloc_pool_size),
           K(trans_task_page_size), K(prealloc_page_count));
-    } else if (OB_FAIL(task_large_allocator_.init(LARGE_ALLOCATOR_TOTAL_LIMIT,
+    } else if (OB_FAIL(task_large_allocator_.init(large_allocator_total_limit,
         LARGE_ALLOCATOR_HOLD_LIMIT,
         LARGE_ALLOCATOR_PAGE_SIZE))) {
       OBLOG_LOG(ERROR, "init large allocator fail", KR(ret));
@@ -249,6 +250,14 @@ public:
       }
 
       task = NULL;
+    }
+  }
+
+  void update_large_allocator_limit(const int64_t total_limit)
+  {
+    if (inited_ && total_limit > 0) {
+      task_large_allocator_.set_total_limit(total_limit);
+      OBLOG_LOG(INFO, "update task_large_allocator total_limit", K(total_limit));
     }
   }
 

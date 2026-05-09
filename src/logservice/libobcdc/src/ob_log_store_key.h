@@ -29,11 +29,12 @@ public:
   ~ObLogStoreKey();
   void reset();
   int init(const logservice::TenantLSID &tenant_ls_id, const palf::LSN &log_lsn);
+  int assign(const ObLogStoreKey &other);
   bool is_valid() const;
   uint64_t get_tenant_id() const { return tenant_ls_id_.get_tenant_id(); }
 
 public:
-  int get_key(std::string &key);
+  int get_key(std::string &key) const;
   int64_t to_string(char* buf, const int64_t buf_len) const;
 
 private:
@@ -43,9 +44,6 @@ private:
   // 1. non-LOB record corresponding to LogEntry log_lsn
   // 2. First LogEntry log_lsn for LOB records
   palf::LSN     log_lsn_;
-
-private:
-  DISALLOW_COPY_AND_ASSIGN(ObLogStoreKey);
 };
 
 }; // end namespace libobcdc

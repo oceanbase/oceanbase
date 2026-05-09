@@ -478,6 +478,7 @@ int ObLogSequencer::handle_sequenced_trans_(
 int ObLogSequencer::handle(void *data, const int64_t thread_index, volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
+  set_cdc_thread_name("CDC-SEQ-TX-HANDLER", thread_index);
   ObLogTraceIdGuard trace_guard;
   PartTransTask *part_trans_task = static_cast<PartTransTask *>(data);
   (void)ATOMIC_AAF(&queue_part_trans_task_count_, -1);
@@ -783,11 +784,7 @@ int ObLogSequencer::push_task_into_redo_dispatcher_(TransCtx &trans_ctx, volatil
 {
   int ret = OB_SUCCESS;
 
-  if (OB_FAIL(redo_dispatcher_->dispatch_trans_redo(trans_ctx, stop_flag))) {
-    if (OB_IN_STOP_STATE != ret) {
-      LOG_ERROR("failed to dispatch trans redo", KR(ret), K(trans_ctx), K(stop_flag));
-    }
-  }
+  RETRY_FUNC_ON_ERROR(OB_NEED_RETRY, stop_flag, (*redo_dispatcher_), dispatch_trans_redo, trans_ctx);
 
   return ret;
 }
@@ -869,26 +866,40 @@ int ObLogSequencer::handle_participants_ready_trans_(
 int ObLogSequencer::wait_until_ready_queue_not_busy_(volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
-  const int64_t seq_trans_queue_cap = seq_trans_queue_.capacity();
-  const int64_t seq_trans_threshold = seq_trans_queue_cap * TCONF.pause_redo_dispatch_task_count_threshold / 100;
   bool ready_queue_busy = true;
   const int64_t start_ts = get_timestamp();
   const int64_t base_sleep_us_if_busy = 100;
 
   while (ready_queue_busy && !stop_flag) {
-    // ready_queue_busy = true if: seq_trans_queue is not empty and memory hold touch warn threshold
+    // ready_queue_busy = true if: redo_dispatcher queue or seq_trans_queue is not empty and memory hold touch warn threshold
     const int64_t mem_hold = lib::get_memory_hold();
     const int64_t mem_limit = TCONF.memory_limit;
     const double mem_warn_threshold = mem_limit * TCONF.memory_usage_warn_threshold / 100.0;
     const int64_t seq_trans_cnt = seq_trans_queue_.get_curr_total();
 
+    // Get redo_dispatcher queue size (now dispatch is async)
+    int64_t redo_dispatcher_task_count = 0;
+    int64_t redo_dispatcher_queue_cap = 0;
+    int64_t redo_dispatcher_queue_size_unused = 0;
+    if (OB_NOT_NULL(redo_dispatcher_)) {
+      redo_dispatcher_->get_task_stat(redo_dispatcher_task_count, redo_dispatcher_queue_size_unused);
+      redo_dispatcher_queue_cap = redo_dispatcher_->get_queue_capacity();
+    }
+    const int64_t seq_trans_queue_cap = seq_trans_queue_.capacity();
+    const int64_t seq_trans_threshold = seq_trans_queue_cap * TCONF.pause_redo_dispatch_task_count_threshold / 100;
+    const int64_t redo_dispatcher_threshold = redo_dispatcher_queue_cap * TCONF.pause_redo_dispatch_task_count_threshold / 100;
+    const int64_t total_pending_cnt = seq_trans_cnt + redo_dispatcher_task_count;
+
     if (mem_hold < mem_warn_threshold) {
-      ready_queue_busy = (seq_trans_cnt >= seq_trans_queue_cap);
+      // Check both queues
+      ready_queue_busy = (seq_trans_cnt >= seq_trans_queue_cap)
+          || (redo_dispatcher_task_count >= redo_dispatcher_queue_cap);
     } else if (mem_hold < mem_limit) {
-      ready_queue_busy = seq_trans_cnt > seq_trans_threshold;
+      ready_queue_busy = (seq_trans_cnt > seq_trans_threshold)
+          || (redo_dispatcher_task_count > redo_dispatcher_threshold);
     } else {
-      // should not disaptch if exist trans not handled
-      ready_queue_busy = seq_trans_cnt > 0;
+      // should not dispatch if exist trans not handled
+      ready_queue_busy = (seq_trans_cnt > seq_trans_threshold) || (redo_dispatcher_task_count > redo_dispatcher_threshold);
     }
 
     if (ready_queue_busy) {
@@ -897,7 +908,10 @@ int ObLogSequencer::wait_until_ready_queue_not_busy_(volatile bool &stop_flag)
             K(mem_hold),
             "sequencer_queue_size", queue_part_trans_task_count_,
             "ready_queue_size", ready_trans_queue_.size(),
-            K(seq_trans_cnt));
+            "seq_trans_queue_size", seq_trans_cnt,
+            "redo_dispatcher_task_count", redo_dispatcher_task_count,
+            "redo_dispatcher_queue_cap", redo_dispatcher_queue_cap,
+            "total_pending", total_pending_cnt);
       }
       ob_usleep(100);
     }
@@ -1192,25 +1206,30 @@ int ObLogSequencer::wait_until_parser_done_(
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(TCTX.dml_parser_) || OB_ISNULL(TCTX.reader_)) {
+  if (OB_ISNULL(TCTX.dml_parser_)
+      || OB_ISNULL(TCTX.reader_)
+      || OB_ISNULL(TCTX.trans_redo_dispatcher_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("dml_parser or reader is null", KR(ret));
+    LOG_ERROR("dml_parser or reader or redo_dispatcher is null", KR(ret));
   } else {
     while (OB_SUCC(ret) && ! stop_flag) {
+      int64_t redo_dispatcher_task_count = 0;
+      int64_t redo_dispatcher_queue_size_unused = 0;
+      TCTX.trans_redo_dispatcher_->get_task_stat(redo_dispatcher_task_count, redo_dispatcher_queue_size_unused);
       int64_t reader_task_count = 0;
       int64_t dml_parser_task_count = 0;
       TCTX.reader_->get_task_count(reader_task_count);
 
       if (OB_FAIL(TCTX.dml_parser_->get_log_entry_task_count(dml_parser_task_count))) {
         LOG_ERROR("get_dml_parser_task_count failed", KR(ret), K(dml_parser_task_count));
-      } else if (0 < (reader_task_count + dml_parser_task_count)) {
+      } else if (0 < (reader_task_count + dml_parser_task_count + redo_dispatcher_task_count)) {
         const static int64_t PRINT_WAIT_PARSER_TIMEOUT = 10 * _SEC_;
         if (REACH_TIME_INTERVAL(PRINT_WAIT_PARSER_TIMEOUT)) {
           LOG_INFO("DDL barrier waiting reader and dml_parser empty",
-              K(caller), K(reader_task_count), K(dml_parser_task_count));
+              K(caller), K(reader_task_count), K(dml_parser_task_count), K(redo_dispatcher_task_count));
         } else {
           LOG_DEBUG("DDL barrier waiting reader and dml_parser empty",
-              K(reader_task_count), K(dml_parser_task_count));
+              K(reader_task_count), K(dml_parser_task_count), K(redo_dispatcher_task_count));
         }
         // sleep 100ms and retry
         const static int64_t WAIT_PARSER_EMPTY_TIME = 100 * 1000;

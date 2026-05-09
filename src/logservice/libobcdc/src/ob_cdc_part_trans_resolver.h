@@ -36,6 +36,7 @@ struct TransStatInfo;
 class IObLogFetcherDispatcher;
 class IObLogClusterIDFilter;
 class IObLogLsnFilter;
+class IObLogTransIDFilter;
 struct PartServeInfo;
 };
 
@@ -225,6 +226,7 @@ public:
       IObLogFetcherDispatcher &dispatcher,
       IObLogClusterIDFilter &cluster_id_filter,
       IObLogLsnFilter &lsn_filter,
+      IObLogTransIDFilter &trans_id_filter,
       const int64_t source_cluster_id);
   virtual ~ObCDCPartTransResolver();
 
@@ -454,6 +456,7 @@ private:
   IObLogClusterIDFilter     &cluster_id_filter_;
   bool                      enable_direct_load_inc_;
   IObLogLsnFilter           &lsn_filter_;
+  IObLogTransIDFilter       &trans_id_filter_;
   int64_t                   source_cluster_id_;         // Source OB cluster ID for TTL delete log conversion
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCDCPartTransResolver);
