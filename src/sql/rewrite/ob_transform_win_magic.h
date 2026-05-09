@@ -165,6 +165,19 @@ private:
 
   int check_mode_and_agg_type(ObSelectStmt *stmt, bool &is_valid);
 
+  // Reject WIN_MAGIC when two grouping positions would merge after column replacement.
+  int check_grouping_sets_no_collapse(ObSelectStmt *stmt,
+                                      const common::ObIArray<ObRawExpr *> &replace_from,
+                                      const common::ObIArray<ObRawExpr *> &replace_to,
+                                      bool &is_valid);
+  // helper function only for `check_grouping_sets_no_collapse`
+  int build_column_replace_map(ObDMLStmt *stmt,
+                               TableItem *rewrite_table,
+                               ObSelectStmt *rewrite_view,
+                               ObStmtMapInfo &map_info,
+                               common::ObIArray<ObRawExpr *> &replace_from,
+                               common::ObIArray<ObRawExpr *> &replace_to);
+
   int construct_trans_table(const ObDMLStmt *stmt,
                             const TableItem *table,
                             ObIArray<ObSEArray<TableItem *, 4>> &trans_basic_tables);

@@ -30,6 +30,8 @@ typedef common::ObSEArray<ObRawExprSet*, 8, common::ModulePageAllocator, true> O
 typedef ObRawExprSet EqualSet;
 typedef ObRawExprSets EqualSets;
 
+typedef EqualSets TemporaryEqualSets;
+
 class ObRawExprSetUtils
 {
 public:
