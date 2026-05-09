@@ -371,7 +371,7 @@ struct ABlock {
   OB_INLINE uint64_t hold(uint64_t *payload=nullptr) const;
   OB_INLINE char *data() const;
 
-  union {
+  union { //FARM COMPAT WHITELIST
     uint32_t MAGIC_CODE_;
     struct {
       struct {
