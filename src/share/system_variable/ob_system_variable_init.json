@@ -11886,5 +11886,35 @@
     "info_cn": "存储到磁盘的密码哈希所使用的 SHA256 迭代次数",
     "background_cn": "",
     "ref_url": ""
+  },
+  "ob_udf_cost_factor": {
+    "id": 10765,
+    "name": "ob_udf_cost_factor",
+    "default_value": "100",
+    "base_value": "100",
+    "data_type": "int",
+    "info": "Set cost factor for UDF filter predicate (default: 100)",
+    "flags": "GLOBAL | SESSION | INFLUENCE_PLAN",
+    "min_val": "1",
+    "max_val": "10000000",
+    "publish_version": "4.6.1.0",
+    "info_cn": "设置UDF谓词的代价系数(默认值: 100)",
+    "background_cn": "",
+    "ref_url": ""
+  },
+  "ob_udf_selectivity": {
+    "id": 10766,
+    "name": "ob_udf_selectivity",
+    "default_value": "0.005",
+    "base_value": "0.005",
+    "data_type": "numeric",
+    "info": "Set default selectivity for UDF equality predicate (default: 0.005)",
+    "flags": "GLOBAL | SESSION | INFLUENCE_PLAN",
+    "min_val": "0.0",
+    "max_val": "1.0",
+    "publish_version": "4.6.1.0",
+    "info_cn": "设置UDF谓词的选择率(默认值: 0.005)",
+    "background_cn": "",
+    "ref_url": ""
   }
 }

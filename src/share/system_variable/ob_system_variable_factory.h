@@ -6100,6 +6100,20 @@ public:
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(842); }
 };
+class ObSysVarObUdfCostFactor : public ObIntSysVar
+{
+public:
+  ObSysVarObUdfCostFactor() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_UDF_COST_FACTOR; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(843); }
+};
+class ObSysVarObUdfSelectivity : public ObNumericSysVar
+{
+public:
+  ObSysVarObUdfSelectivity() : ObNumericSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  inline virtual ObSysVarClassType get_type() const { return SYS_VAR_OB_UDF_SELECTIVITY; }
+  inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(844); }
+};
 
 
 class ObSysVarFactory
@@ -6123,7 +6137,7 @@ private:
 
 public:
   const static int64_t MYSQL_SYS_VARS_COUNT = 99;
-  const static int64_t OB_SYS_VARS_COUNT = 744;
+  const static int64_t OB_SYS_VARS_COUNT = 746;
   const static int64_t OB_SYS_DEFAULT_VALUE_CHANGED_SERIALIZED_VAR_COUNT = 10;
   const static int64_t ALL_SYS_VARS_COUNT = MYSQL_SYS_VARS_COUNT + OB_SYS_VARS_COUNT;
   const static int64_t INVALID_MAX_READ_STALE_TIME = -1;

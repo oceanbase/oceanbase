@@ -11554,13 +11554,43 @@ static struct VarsInit{
     ObSysVars[842].alias_ = "OB_SV_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS" ;
     }();
 
+    [&] (){
+      ObSysVars[843].default_value_ = "100" ;
+      ObSysVars[843].info_ = "Set cost factor for UDF filter predicate (default: 100)" ;
+      ObSysVars[843].name_ = "ob_udf_cost_factor" ;
+      ObSysVars[843].data_type_ = ObIntType ;
+      ObSysVars[843].min_val_ = "1" ;
+      ObSysVars[843].max_val_ = "10000000" ;
+      ObSysVars[843].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[843].id_ = SYS_VAR_OB_UDF_COST_FACTOR ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_UDF_COST_FACTOR)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_UDF_COST_FACTOR] = 843 ;
+      ObSysVars[843].base_value_ = "100" ;
+    ObSysVars[843].alias_ = "OB_SV_UDF_COST_FACTOR" ;
+    }();
+
+    [&] (){
+      ObSysVars[844].default_value_ = "0.005" ;
+      ObSysVars[844].info_ = "Set default selectivity for UDF equality predicate (default: 0.005)" ;
+      ObSysVars[844].name_ = "ob_udf_selectivity" ;
+      ObSysVars[844].data_type_ = ObNumberType ;
+      ObSysVars[844].min_val_ = "0.0" ;
+      ObSysVars[844].max_val_ = "1.0" ;
+      ObSysVars[844].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[844].id_ = SYS_VAR_OB_UDF_SELECTIVITY ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_UDF_SELECTIVITY)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_UDF_SELECTIVITY] = 844 ;
+      ObSysVars[844].base_value_ = "0.005" ;
+    ObSysVars[844].alias_ = "OB_SV_UDF_SELECTIVITY" ;
+    }();
+
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
       HasInvalidSysVar = true;
     }
   }
 }vars_init;
 
-static int64_t var_amount = 843;
+static int64_t var_amount = 845;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

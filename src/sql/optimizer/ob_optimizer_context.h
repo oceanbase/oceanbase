@@ -321,7 +321,9 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     enable_nested_sql_local_optimize_(false),
     nested_sql_try_basic_first_(true),
     need_retry_plan_(false),
-    min_cluster_version_(GET_MIN_CLUSTER_VERSION())
+    min_cluster_version_(GET_MIN_CLUSTER_VERSION()),
+    udf_cost_factor_(1.0),
+    udf_selectivity_(0.005)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -786,6 +788,10 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_generate_random_plan(bool rand_plan) { generate_random_plan_ = rand_plan; }
   inline int64_t get_optimizer_index_cost_adj() const { return optimizer_index_cost_adj_; }
   inline void set_optimizer_index_cost_adj(int64_t v) { optimizer_index_cost_adj_ = v; }
+  inline double get_udf_cost_factor() const { return udf_cost_factor_; }
+  inline void set_udf_cost_factor(double v) { udf_cost_factor_ = v; }
+  inline double get_udf_selectivity() const { return udf_selectivity_; }
+  inline void set_udf_selectivity(double v) { udf_selectivity_ = v; }
   inline bool get_is_skip_scan_enabled() const { return is_skip_scan_enabled_; }
   inline void set_is_skip_scan_enabled(bool v) { is_skip_scan_enabled_ = v; }
   inline bool get_enable_better_inlist_costing() const { return enable_better_inlist_costing_; }
@@ -980,6 +986,8 @@ private:
   bool nested_sql_try_basic_first_; // Flag for nested SQL local optimization: try basic plan first, fallback to DAS if not local
   bool need_retry_plan_; // Flag to indicate if plan needs to be regenerated (set by LogPlan, checked by Optimizer)
   uint64_t min_cluster_version_; // Record the unified cluster version during the optimizer phase
+  double udf_cost_factor_;
+  double udf_selectivity_;
 };
 }
 }

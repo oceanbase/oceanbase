@@ -859,6 +859,8 @@ namespace share
   static const char* const OB_SV_ENABLE_PL_ASYNC_COMMIT = "ob_enable_pl_async_commit";
   static const char* const OB_SV_JSON_FLOAT_FULL_PRECISION = "json_float_full_precision";
   static const char* const OB_SV_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS = "caching_sha2_password_digest_rounds";
+  static const char* const OB_SV_UDF_COST_FACTOR = "ob_udf_cost_factor";
+  static const char* const OB_SV_UDF_SELECTIVITY = "ob_udf_selectivity";
 
 }
 }

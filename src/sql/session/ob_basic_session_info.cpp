@@ -4308,6 +4308,36 @@ int ObBasicSessionInfo::is_storage_estimation_enabled(bool &storage_estimation_e
   return ret;
 }
 
+int ObBasicSessionInfo::get_udf_cost_factor(int64_t &cost_factor) const
+{
+  int ret = OB_SUCCESS;
+  ret = get_sys_variable(share::SYS_VAR_OB_UDF_COST_FACTOR, cost_factor);
+  return ret;
+}
+
+int ObBasicSessionInfo::get_udf_selectivity(double &sel) const
+{
+  int ret = OB_SUCCESS;
+  sel = 0.005;
+  ObObj sel_obj;
+  if (OB_FAIL(get_sys_variable(share::SYS_VAR_OB_UDF_SELECTIVITY, sel_obj))) {
+    LOG_WARN("failed to load sys param", "var_name", SYS_VAR_OB_UDF_SELECTIVITY, K(ret));
+  } else if (sel_obj.is_number()) {
+    number::ObNumber num = sel_obj.get_number();
+    char buf[64];
+    int64_t pos = 0;
+    if (OB_SUCC(num.format(buf, sizeof(buf), pos, sel_obj.get_scale()))) {
+      buf[pos] = '\0';
+      char *end = nullptr;
+      double tmp = strtod(buf, &end);
+      if (end != buf && tmp > 0.0) {
+        sel = tmp;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObBasicSessionInfo::is_select_index_enabled(bool &select_index_enabled) const
 {
   return get_bool_sys_var(SYS_VAR_OB_ENABLE_INDEX_DIRECT_SELECT, select_index_enabled);

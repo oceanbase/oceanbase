@@ -76,6 +76,7 @@ enum class ObSelEstType
   SIMPLE_JOIN,
   INEQUAL_JOIN,
   UNIFORM_RANGE,
+  UDF,
 };
 
 class ObSelEstimatorFactory;
@@ -231,6 +232,30 @@ private:
 /**
  * Estimate default selectivity
 */
+class ObUdfSelEstimator : public ObIndependentSelEstimator
+{
+public:
+  ObUdfSelEstimator() : ObIndependentSelEstimator(ObSelEstType::UDF) {}
+  virtual ~ObUdfSelEstimator() = default;
+
+  static int create_estimator(ObSelEstimatorFactory &factory,
+                              const OptSelectivityCtx &ctx,
+                              const ObRawExpr &expr,
+                              ObSelEstimator *&estimator)
+  {
+    return create_simple_estimator<ObUdfSelEstimator>(factory, ctx, expr, estimator);
+  }
+  virtual bool is_complex_filter_qual() override { return false; }
+  virtual bool is_complex_join_qual() override { return true; }
+  virtual int get_sel(const OptTableMetas &table_metas,
+                      const OptSelectivityCtx &ctx,
+                      double &selectivity,
+                      ObIArray<ObExprSelPair> &all_predicate_sel) override;
+  inline static bool check_expr_valid(const ObRawExpr &expr) { return expr.is_udf_expr(); }
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObUdfSelEstimator);
+};
+
 class ObDefaultSelEstimator : public ObIndependentSelEstimator
 {
 public:

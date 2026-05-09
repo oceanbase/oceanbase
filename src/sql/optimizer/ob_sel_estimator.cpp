@@ -287,6 +287,18 @@ void ObSelEstimator::extract_default_eigen_expr(const ObRawExpr *expr)
   return;
 }
 
+int ObUdfSelEstimator::get_sel(const OptTableMetas &table_metas,
+                               const OptSelectivityCtx &ctx,
+                               double &selectivity,
+                               ObIArray<ObExprSelPair> &all_predicate_sel)
+{
+  UNUSED(table_metas);
+  UNUSED(all_predicate_sel);
+  int ret = OB_SUCCESS;
+  selectivity = ctx.get_opt_ctx().get_udf_selectivity();
+  return ret;
+}
+
 int ObDefaultSelEstimator::get_sel(const OptTableMetas &table_metas,
                                   const OptSelectivityCtx &ctx,
                                   double &selectivity,
@@ -2872,6 +2884,7 @@ int ObSelEstimatorFactory::create_estimator(const OptSelectivityCtx &ctx,
     ObUniformRangeSelEstimator::create_estimator,
     ObCmpSelEstimator::create_estimator,
     ObBtwSelEstimator::create_estimator,
+    ObUdfSelEstimator::create_estimator,
     ObDefaultSelEstimator::create_estimator,
   };
   static const int64_t func_cnt = sizeof(create_estimator_funcs)/sizeof(CreateEstimatorFunc);

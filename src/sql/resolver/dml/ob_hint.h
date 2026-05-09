@@ -247,10 +247,13 @@ struct ObOptParamHint
     DEF(CACHE_AWARE_ROW_NUM,)                       \
     DEF(FORCE_EQUAL_SEMI_TO_INNER,)                 \
     DEF(FORCE_SUBQUERY_UNNEST,)                     \
+    DEF(UDF_COST_FACTOR,)                      \
+    DEF(UDF_SELECTIVITY,)                           \
 
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 
+  static bool varchar_to_double(const ObObj &val, double &dval);
   static bool is_param_val_valid(const OptParamType param_type, const ObObj &val);
   int merge_opt_param_hint(const ObOptParamHint &other);
   int add_opt_param_hint(const ObString &param_name, const ObObj &val)
@@ -265,6 +268,7 @@ struct ObOptParamHint
   int get_integer_opt_param(const OptParamType param_type, int64_t &val, bool &is_exists) const;
   int get_integer_opt_param(const OptParamType param_type, int64_t &val) const;
   int get_opt_param_runtime_filter_type(int64_t &rf_type) const;
+  int get_double_opt_param(const OptParamType param_type, double &val) const;
   int get_hash_rollup_param(ObObj &val, bool &has_opt_param) const;
   int get_enum_opt_param(const OptParamType param_type, int64_t &val) const;
   int has_opt_param(const OptParamType param_type, bool &has_hint) const;

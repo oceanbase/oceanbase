@@ -888,6 +888,19 @@ int ObOptParamHint::add_opt_param_hint(const OptParamType param_type, const ObOb
   return ret;
 }
 
+bool ObOptParamHint::varchar_to_double(const ObObj &val, double &dval)
+{
+  bool succ = false;
+  if (val.is_varchar()) {
+    ObString str = val.get_varchar();
+    char *endptr = NULL;
+    int err = 0;
+    dval = ObCharset::strntod(str.ptr(), str.length(), &endptr, &err);
+    succ = (err == 0 && endptr == str.ptr() + str.length());
+  }
+  return succ;
+}
+
 bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObObj &val)
 {
   bool is_valid = false;
@@ -1123,6 +1136,15 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
       is_valid = val.is_int() && val.get_int() >= 1;
       break;
     }
+    case UDF_COST_FACTOR: {
+      is_valid = val.is_int() && val.get_int() >= 1 && val.get_int() <= 10000000;
+      break;
+    }
+    case UDF_SELECTIVITY: {
+      double dval = 0.0;
+      is_valid = varchar_to_double(val, dval) && dval >= 0.0 && dval <= 1.0;
+      break;
+    }
     default:
       LOG_TRACE("invalid opt param val", K(param_type), K(val));
       break;
@@ -1213,6 +1235,24 @@ int ObOptParamHint::get_integer_opt_param(const OptParamType param_type, int64_t
 {
   bool is_exists = false;
   return get_integer_opt_param(param_type, val, is_exists);
+}
+
+int ObOptParamHint::get_double_opt_param(const OptParamType param_type, double &val) const
+{
+  int ret = OB_SUCCESS;
+  ObObj obj;
+  if (OB_FAIL(get_opt_param(param_type, obj))) {
+    LOG_WARN("failed to get opt param", K(ret));
+  } else if (obj.is_nop_value()) {
+    // not set, keep default
+  } else if (!obj.is_varchar()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("param obj is invalid", K(ret), K(obj));
+  } else if (!varchar_to_double(obj, val)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("param obj is invalid", K(ret), K(obj));
+  }
+  return ret;
 }
 
 int ObOptParamHint::get_opt_param_runtime_filter_type(int64_t &rf_type) const

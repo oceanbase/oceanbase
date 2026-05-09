@@ -686,10 +686,13 @@ public:
 	ObOptEstCostModel(const ObOptCostModelParameter &cost_params,
                     const OptSystemStat &stat)
 		:cost_params_(cost_params),
-    sys_stat_(stat)
+    sys_stat_(stat),
+    udf_cost_factor_(1.0)
 	{}
 
   virtual ~ObOptEstCostModel()=default;
+
+  void set_udf_cost_factor(double f) { udf_cost_factor_ = f; }
 
   int cost_nestloop(const ObCostNLJoinInfo &est_cost_info,
 										double &cost);
@@ -963,6 +966,7 @@ protected:
 protected:
   const ObOptCostModelParameter &cost_params_;
   const OptSystemStat &sys_stat_;
+  double udf_cost_factor_;
   DISALLOW_COPY_AND_ASSIGN(ObOptEstCostModel);
 };
 
