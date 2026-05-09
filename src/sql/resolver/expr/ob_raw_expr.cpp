@@ -4640,15 +4640,15 @@ bool ObSysFunRawExpr::inner_same_as(
     } else if (IS_QUERY_JSON_EXPR(expr.get_expr_type()) || IS_QUERY_JSON_EXPR(get_expr_type())) {
       bool_ret = inner_json_expr_same_as(expr, check_context);
     }
-  } else if (T_FUN_SYS_RAND == get_expr_type() ||
+  } else if ((T_FUN_SYS_RAND == get_expr_type() ||
              T_FUN_SYS_RANDOM == get_expr_type() ||
              T_FUN_SYS_UUID == get_expr_type() ||
              T_FUN_SYS_UUID_SHORT == get_expr_type() ||
              T_FUN_SYS_GUID == get_expr_type() ||
              T_OP_GET_USER_VAR == get_expr_type() ||
              T_OP_GET_SYS_VAR == get_expr_type() ||
-             (has_flag(IS_STATE_FUNC) && (NULL == check_context ||
-                          (NULL != check_context && check_context->need_check_deterministic_)))) {
+             has_flag(IS_STATE_FUNC)) && (NULL == check_context ||
+                          (NULL != check_context && check_context->need_check_deterministic_))) {
   } else if (T_FUN_SYS_LAST_REFRESH_SCN == get_expr_type()) {
     bool_ret = get_mview_id() == static_cast<const ObSysFunRawExpr&>(expr).get_mview_id();
   } else if (get_expr_class() == expr.get_expr_class()) {
