@@ -5495,7 +5495,9 @@ int ObTableSchema::check_prohibition_rules(const ObColumnSchemaV2 &src_schema,
   // It is forbidden to modify the type when the modified column is referenced by the generated column
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Alter column that the generated column depends on");
-  } else if (!is_oracle_mode && is_offline
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
+    LOG_WARN("fail to get min data version", KR(ret), K(tenant_id_));
+  } else if (data_version < DATA_VERSION_4_4_2_2 && !is_oracle_mode && is_offline
     && OB_FAIL(check_prefix_index_columns_depend(src_schema,
                                                  schema_guard,
                                                  has_prefix_idx_col_deps,
@@ -5503,9 +5505,7 @@ int ObTableSchema::check_prohibition_rules(const ObColumnSchemaV2 &src_schema,
                                                  prefix_column))) {
     LOG_WARN("check prefix index columns cascaded failed", K(ret));
   } else if (has_prefix_idx_col_deps) {
-    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
-      LOG_WARN("fail to get min data version", KR(ret), K(tenant_id_));
-    } else if (DATA_VERSION_4_3_5_2 <= data_version
+    if (DATA_VERSION_4_3_5_2 <= data_version
      && ((ObCharType == src_schema.get_data_type()
      && ObVarcharType == dst_schema.get_data_type()
      && src_schema.get_data_length() == dst_schema.get_data_length())

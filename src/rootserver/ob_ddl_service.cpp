@@ -11163,6 +11163,62 @@ int ObDDLService::add_column_to_column_group(
   return ret;
 }
 
+bool ObDDLService::can_keep_prefix_semantic(const share::schema::ObColumnSchemaV2 &new_col,
+                                            const share::schema::ObColumnSchemaV2 &prefix_gen_col)
+{
+  const common::ObObjTypeClass new_col_type_class = new_col.get_data_type_class();
+  return sql::ObDDLResolver::is_valid_prefix_key_type(new_col_type_class)
+      && new_col.get_data_length() >= prefix_gen_col.get_data_length();
+}
+
+int ObDDLService::drop_downgraded_dependent_prefix_columns_offline(
+    const ObTableSchema &origin_table_schema,
+    const ObColumnSchemaV2 &orig_column_schema,
+    const ObColumnSchemaV2 &new_column_schema,
+    ObSchemaGetterGuard &schema_guard,
+    const uint64_t data_version,
+    ObTableSchema &new_table_schema)
+{
+  int ret = OB_SUCCESS;
+  bool has_prefix_idx_col_deps = false;
+  bool can_change_prefix_column_length = false;
+  const ObColumnSchemaV2 *prefix_column = nullptr;
+  if (data_version < DATA_VERSION_4_4_2_2) {
+    if (OB_FAIL(origin_table_schema.check_prefix_index_columns_depend(
+                orig_column_schema, schema_guard, has_prefix_idx_col_deps,
+                can_change_prefix_column_length, prefix_column))) {
+      LOG_WARN("check prefix index columns depend failed", K(ret));
+    } else if (can_change_prefix_column_length && (!has_prefix_idx_col_deps || OB_ISNULL(prefix_column))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("prefix index columns depend", K(ret), K(has_prefix_idx_col_deps),
+          K(can_change_prefix_column_length), K(prefix_column));
+    } else if (can_change_prefix_column_length
+            && prefix_column->get_data_length() > new_column_schema.get_data_length()
+            && OB_FAIL(drop_column_update_new_table(prefix_column->get_column_name_str(), new_table_schema))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to drop downgraded dependent prefix generated column",
+          K(ret), KPC(prefix_column), K(new_column_schema));
+    }
+  } else {
+    for (ObTableSchema::const_column_iterator iter = origin_table_schema.column_begin();
+         OB_SUCC(ret) && iter != origin_table_schema.column_end(); ++iter) {
+      const ObColumnSchemaV2 *dep_prefix_col = *iter;
+      if (OB_ISNULL(dep_prefix_col)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("dependent prefix column is null", K(ret));
+      } else if (!dep_prefix_col->is_prefix_column()
+                 || !dep_prefix_col->has_cascaded_column_id(orig_column_schema.get_column_id())) {
+        // not a dependent prefix generated column
+      } else if (!can_keep_prefix_semantic(new_column_schema, *dep_prefix_col)
+          && OB_FAIL(drop_column_update_new_table(dep_prefix_col->get_column_name_str(), new_table_schema))) {
+        LOG_WARN("failed to drop downgraded dependent prefix generated column",
+            K(ret), KPC(dep_prefix_col), K(new_column_schema));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLService::gen_alter_column_new_table_schema_offline(
     const ObTableSchema &origin_table_schema,
     AlterTableSchema &alter_table_schema,
@@ -11269,9 +11325,6 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
         // column that has been add, alter, change or modify
         const ObColumnSchemaV2 *orig_column_schema = NULL;
         const ObSchemaOperationType op_type = alter_column_schema->alter_type_;
-        bool has_prefix_idx_col_deps = false;
-        bool can_change_prefix_column_length = false;
-        const ObColumnSchemaV2 *prefix_column = nullptr;
         switch (op_type) {
           case OB_DDL_DROP_COLUMN: {
             if (OB_FAIL(drop_column_offline(origin_table_schema, new_table_schema,
@@ -11360,18 +11413,12 @@ int ObDDLService::gen_alter_column_new_table_schema_offline(
                                                        new_column_schema,
                                                        is_contain_part_key))) {
                 LOG_WARN("prepare new column schema failed", K(ret));
-              } else if (OB_FAIL(origin_table_schema.check_prefix_index_columns_depend(
-                           *orig_column_schema, schema_guard, has_prefix_idx_col_deps,
-                           can_change_prefix_column_length, prefix_column))) {
-                LOG_WARN("check prefix index columns depend failed", K(ret));
-              } else if (can_change_prefix_column_length && (!has_prefix_idx_col_deps || OB_ISNULL(prefix_column))) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_WARN("prefix index columns depend", K(ret), K(has_prefix_idx_col_deps), K(can_change_prefix_column_length), K(prefix_column));
-              } else if (can_change_prefix_column_length
-                      && prefix_column->get_data_length() > new_column_schema.get_data_length()
-                      && OB_FAIL(drop_column_update_new_table(prefix_column->get_column_name_str(), new_table_schema))) {
-                ret = OB_ERR_UNEXPECTED;
-                LOG_USER_ERROR(OB_NOT_SUPPORTED, "Alter column that the prefix index column depends on");
+                // prefix index is not supported in oracle mode
+              } else if (!is_oracle_mode && OB_FAIL(drop_downgraded_dependent_prefix_columns_offline(
+                             origin_table_schema, *orig_column_schema, new_column_schema,
+                             schema_guard, alter_table_arg.data_version_, new_table_schema))) {
+                LOG_WARN("failed to drop downgraded dependent prefix generated column",
+                    K(ret), KPC(orig_column_schema), K(new_column_schema));
               } else if (OB_FAIL(new_table_schema.alter_column(
                            new_column_schema, ObTableSchema::CHECK_MODE_OFFLINE, false))) {
                 LOG_WARN("alter column failed", K(ret));
@@ -21427,14 +21474,21 @@ int ObDDLService::gen_hidden_index_schema_columns(const ObTableSchema &orig_tabl
           } else if (OB_ISNULL(alter_column = new_table_schema.get_column_schema(alter_column_name))) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("alter column not found in table schema", K(ret), K(alter_column_name), K(new_table_schema));
-          } else if (alter_column->get_data_length() < col->get_data_length()) {
-            if (MOCK_DATA_VERSION_4_3_5_4 > data_version || (DATA_VERSION_4_4_0_0 <= data_version && DATA_VERSION_4_4_1_0 > data_version) ) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected error, data version is not supported", K(ret), K(data_version));
-            } else {
-              // alter dep_column_length < prefix_len, we need delete prefix column ,change prefix index to common index
-              sort_item.column_name_ = alter_column_name;
+          } else if (data_version < DATA_VERSION_4_4_2_2) {
+            if (alter_column->get_data_length() < col->get_data_length()) {
+              if (MOCK_DATA_VERSION_4_3_5_4 > data_version || (DATA_VERSION_4_4_0_0 <= data_version && DATA_VERSION_4_4_1_0 > data_version) ) {
+                ret = OB_ERR_UNEXPECTED;
+                LOG_WARN("unexpected error, data version is not supported", K(ret), K(data_version));
+              } else {
+                // alter dep_column_length < prefix_len, we need delete prefix column ,change prefix index to common index
+                sort_item.column_name_ = alter_column_name;
+                sort_item.prefix_len_ = 0;
+              }
             }
+          } else if (!can_keep_prefix_semantic(*alter_column, *col)) {
+            // Downgrade prefix index column to common index column.
+            sort_item.column_name_ = alter_column_name;
+            sort_item.prefix_len_ = 0;
           }
         }
         if (OB_FAIL(ret)) {
@@ -38981,6 +39035,22 @@ int ObDDLService::pre_rename_mysql_columns_offline(
   } else if (OB_FAIL(new_table_schema.alter_mysql_table_columns(
                new_column_schemas, orig_column_names, ObTableSchema::CHECK_MODE_OFFLINE))) {
     LOG_WARN("alter mysql table columns failed", K(ret));
+  } else if (!is_oracle_mode) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < new_column_schemas.count(); ++i) {
+      const ObColumnSchemaV2 *orig_column_schema = nullptr;
+      if (OB_ISNULL(orig_column_schema = origin_table_schema.get_column_schema(orig_column_names.at(i)))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("original column not found in origin table schema",
+            K(ret), K(orig_column_names.at(i)), K(origin_table_schema));
+      } else if (OB_FAIL(drop_downgraded_dependent_prefix_columns_offline(
+                     origin_table_schema, *orig_column_schema, new_column_schemas.at(i),
+                     schema_guard, alter_table_arg.data_version_, new_table_schema))) {
+        LOG_WARN("failed to drop downgraded dependent prefix generated column in rename-first path",
+            K(ret), KPC(orig_column_schema), K(new_column_schemas.at(i)));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (!new_pk_column.empty() && OB_FAIL(add_primary_key(new_pk_column, new_table_schema))) {
     LOG_WARN("failed to add pk to table", K(ret), K(new_pk_column), K(new_table_schema));
   } else if (OB_FAIL(new_table_schema.check_primary_key_cover_partition_column())) {
