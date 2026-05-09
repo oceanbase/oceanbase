@@ -243,6 +243,7 @@ int ObSelectResolver::do_resolve_set_query_in_recursive_cte(const ParseNode &par
       ObSelectResolver child_resolver(params_);
       child_resolver.set_current_level(current_level_);
       child_resolver.set_current_view_level(current_view_level_);
+      child_resolver.set_view_ref_id(view_ref_id_);
       child_resolver.set_in_set_query(true);
       child_resolver.set_parent_namespace_resolver(parent_namespace_resolver_);
       child_resolver.set_calc_found_rows(i == 0 ? has_calc_found_rows_ : false);
@@ -600,6 +601,7 @@ int ObSelectResolver::do_resolve_set_query(const ParseNode &parse_tree,
 
   child_resolver.set_current_level(current_level_);
   child_resolver.set_current_view_level(current_view_level_);
+  child_resolver.set_view_ref_id(view_ref_id_);
   child_resolver.set_in_set_query(true);
   child_resolver.set_parent_namespace_resolver(parent_namespace_resolver_);
   child_resolver.set_calc_found_rows(is_left_child && has_calc_found_rows_);
@@ -6578,6 +6580,7 @@ int ObSelectResolver::resolve_subquery_info(const ObIArray<ObSubQueryInfo> &subq
     const ObSubQueryInfo &info = subquery_info.at(i);
     ObSelectResolver subquery_resolver(params_);
     subquery_resolver.set_current_level(current_level_ + 1);
+    subquery_resolver.set_view_ref_id(view_ref_id_);
     subquery_resolver.set_is_sub_stmt(true);
     subquery_resolver.set_parent_namespace_resolver(this);
     subquery_resolver.set_current_view_level(current_view_level_);
