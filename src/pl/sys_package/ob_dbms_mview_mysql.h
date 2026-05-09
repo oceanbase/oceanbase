@@ -42,6 +42,7 @@ public:
 
   DECLARE_FUNC(purge_log);
   DECLARE_FUNC(refresh);
+  DECLARE_FUNC(set_refresh_params);
 
 #undef DECLARE_FUNC
 

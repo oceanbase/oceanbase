@@ -712,7 +712,7 @@ int ObDBMSSchedJobUtils::update_dbms_sched_job_info(common::ObISQLClient &sql_cl
       LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_string()));
     }
   } else if (0 == job_attribute_name.case_compare("max_run_duration") || 0 == job_attribute_name.case_compare("duration")) {
-    const int MAX_RUN_DURATION_LEN = 16;
+    const int MAX_RUN_DURATION_LEN = 32;
     char max_run_duration_buf[MAX_RUN_DURATION_LEN];
     int64_t pos = job_attribute_value.get_string().to_string(max_run_duration_buf, MAX_RUN_DURATION_LEN);
     int64_t max_run_duration = atoll(max_run_duration_buf);

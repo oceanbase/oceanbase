@@ -38,5 +38,11 @@ CREATE OR REPLACE PACKAGE dbms_mview AUTHID CURRENT_USER IS
     refresh_parallel       IN     BINARY_INTEGER := 0,
     nested_refresh_mode    IN     VARCHAR2       := NULL);
 
+  PROCEDURE set_refresh_params(
+    mv_name        IN  VARCHAR2,
+    parameter_name    IN  VARCHAR2,
+    parameter_value   IN  VARCHAR2
+  );
+
 END dbms_mview;
 //

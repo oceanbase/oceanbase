@@ -15,6 +15,9 @@
 #include "pl/sys_package/ob_dbms_mview_mysql.h"
 #include "storage/mview/cmd/ob_mview_purge_log_executor.h"
 #include "storage/mview/cmd/ob_mview_refresh_executor.h"
+#include "storage/mview/cmd/ob_mview_executor_util.h"
+#include "storage/mview/ob_mview_sched_job_utils.h"
+#include "sql/resolver/ob_schema_checker.h"
 
 namespace oceanbase
 {
@@ -22,6 +25,7 @@ namespace pl
 {
 using namespace common;
 using namespace sql;
+using namespace share::schema;
 using namespace storage;
 
 /*
@@ -148,5 +152,74 @@ int ObDBMSMViewMysql::refresh(ObExecContext &ctx, ParamStore &params, ObObj &res
   return ret;
 }
 
+/*
+PROCEDURE set_refresh_params(
+    IN     mv_name                VARCHAR(65535),
+    IN     parameter_name         VARCHAR(65535),
+    IN     parameter_value        VARCHAR(65535));
+*/
+int ObDBMSMViewMysql::set_refresh_params(ObExecContext &ctx, ParamStore &params, ObObj &result)
+{
+  UNUSED(result);
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  const ObTableSchema *table_schema = nullptr;
+  ObSchemaChecker schema_checker;
+  ObString mv_name;
+  ObString database_name;
+  ObString table_name;
+  bool has_synonym = false;
+  ObString new_db_name;
+  ObString new_tbl_name;
+  ObNameCaseMode case_mode = OB_NAME_CASE_INVALID;
+  ObCollationType cs_type = CS_TYPE_INVALID;
+  if (OB_UNLIKELY(3 != params.count()
+                  || !params.at(0).is_varchar()
+                  || !params.at(1).is_varchar()
+                  || !params.at(2).is_varchar())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument for set_refresh_params", KR(ret));
+  } else if (OB_ISNULL(ctx.get_my_session()) || OB_ISNULL(ctx.get_sql_ctx())
+             || OB_ISNULL(ctx.get_sql_ctx()->schema_guard_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session or schema guard is null", KR(ret));
+  } else if (OB_FALSE_IT(tenant_id = ctx.get_my_session()->get_effective_tenant_id())) {
+  } else if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_checker.init(*ctx.get_sql_ctx()->schema_guard_,
+                                          ctx.get_my_session()->get_server_sid()))) {
+    LOG_WARN("fail to init schema checker", KR(ret));
+  } else if (OB_FALSE_IT(mv_name = params.at(0).get_varchar())) {
+  } else if (OB_FAIL(ctx.get_my_session()->get_name_case_mode(case_mode))) {
+    LOG_WARN("fail to get name case mode", KR(ret));
+  } else if (OB_FAIL(ctx.get_my_session()->get_collation_connection(cs_type))) {
+    LOG_WARN("fail to get collation connection", KR(ret));
+  } else if (OB_FAIL(ObMViewExecutorUtil::resolve_table_name(
+                 cs_type, case_mode, lib::is_oracle_mode(),
+                 mv_name, database_name, table_name))) {
+    LOG_WARN("fail to resolve table name", KR(ret), K(mv_name));
+    LOG_USER_ERROR(OB_WRONG_TABLE_NAME,
+                   static_cast<int>(mv_name.length()), mv_name.ptr());
+  } else if (database_name.empty() &&
+             FALSE_IT(database_name = ctx.get_my_session()->get_database_name())) {
+  } else if (OB_UNLIKELY(database_name.empty())) {
+    ret = OB_ERR_NO_DB_SELECTED;
+    LOG_WARN("No database selected", KR(ret));
+  } else if (OB_FAIL(schema_checker.get_table_schema_with_synonym(
+                 tenant_id, database_name, table_name, false /*is_index_table*/,
+                 has_synonym, new_db_name, new_tbl_name, table_schema))) {
+    LOG_WARN("fail to get table schema with synonym", KR(ret),
+             K(database_name), K(table_name));
+  } else if (OB_ISNULL(table_schema) || OB_UNLIKELY(!table_schema->is_materialized_view())) {
+    ret = OB_ERR_MVIEW_NOT_EXIST;
+    LOG_WARN("mview not exist", KR(ret), K(database_name), K(table_name));
+  } else if (OB_FAIL(storage::ObMViewSchedJobUtils::set_mview_refresh_params(
+                 tenant_id, table_schema->get_table_id(),
+                 params.at(1).get_varchar(), params.at(2).get_varchar()))) {
+    LOG_WARN("fail to set mview refresh params", KR(ret));
+  }
+  return ret;
+}
 } // namespace pl
 } // namespace oceanbase

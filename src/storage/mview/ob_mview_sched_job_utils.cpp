@@ -182,7 +182,8 @@ int ObMViewSchedJobUtils::add_scheduler_job(
     const ObString &repeat_interval,
     const ObString &exec_env,
     const ObString *job_owner,
-    const uint64_t job_owner_id)
+    const uint64_t job_owner_id,
+    const int64_t preserved_max_run_duration_sec)
 {
   int ret = OB_SUCCESS;
   if (OB_INVALID_TENANT_ID == tenant_id) {
@@ -191,6 +192,10 @@ int ObMViewSchedJobUtils::add_scheduler_job(
   } else {
     int64_t start_date_us = start_date.is_null() ? ObTimeUtility::current_time() : start_date.get_timestamp();
     int64_t end_date_us = 64060560000000000; // 4000-01-01
+    const int64_t default_max_run_sec = 24 * 60 * 60; // 1 day
+    const int64_t default_min_run_sec = 10 * 60; // 10 minutes
+    int64_t period_sec = 0;
+    int tmp_ret = OB_SUCCESS;
     HEAP_VAR(ObDBMSSchedJobInfo, job_info) {
       job_info.tenant_id_ = tenant_id;
       job_info.job_ = job_id;
@@ -209,14 +214,35 @@ int ObMViewSchedJobUtils::add_scheduler_job(
       job_info.job_class_ = ObString("DEFAULT_JOB_CLASS");
       job_info.start_date_ = start_date_us;
       job_info.end_date_ = end_date_us;
+      job_info.interval_ = repeat_interval;
       job_info.repeat_interval_ = repeat_interval;
       job_info.enabled_ = 1;
       job_info.auto_drop_ = 0;
-      job_info.max_run_duration_ = 24 * 60 * 60; // set to 1 day
       job_info.exec_env_ = exec_env;
+      job_info.is_oracle_tenant_ = lib::is_oracle_mode();
       job_info.scheduler_flags_ = dbms_scheduler::ObDBMSSchedJobInfo::JOB_SCHEDULER_FLAG_DATE_EXPRESSION_JOB_CLASS; // for compat old version
       job_info.func_type_ = dbms_scheduler::ObDBMSSchedFuncType::MVIEW_JOB;
 
+      if (!repeat_interval.empty() && 0 != repeat_interval.case_compare("null")) {
+        int64_t next_date_ts = 0;
+        if (OB_TMP_FAIL(calc_date_expression(job_info, next_date_ts))) {
+          LOG_WARN("failed to calc period_sec from date expression", KR(tmp_ret),
+                   K(repeat_interval), K(start_date_us));
+        } else {
+          period_sec = (next_date_ts - start_date_us) / 1000000L;
+        }
+      }
+      LOG_INFO("calc mview job refresh period", K(period_sec), K(tenant_id),
+               K(start_date_us), K(repeat_interval));
+      if (preserved_max_run_duration_sec >= 0) {
+        job_info.max_run_duration_ = preserved_max_run_duration_sec;
+      } else if (period_sec > 0 && period_sec <= default_min_run_sec / 5) {
+        job_info.max_run_duration_ = default_min_run_sec;
+      } else if (period_sec <= 0 || period_sec >= default_max_run_sec / 5) {
+        job_info.max_run_duration_ = default_max_run_sec;
+      } else {
+        job_info.max_run_duration_ = period_sec * 5;
+      }
       if (OB_FAIL(ObDBMSSchedJobUtils::create_dbms_sched_job(
           sql_client, tenant_id, job_id, job_info))) {
         LOG_WARN("failed to create dbms scheduler job", KR(ret));
@@ -237,7 +263,8 @@ int ObMViewSchedJobUtils::create_mview_scheduler_job(
     const common::ObString &exec_env,
     const share::schema::ObMVNestedRefreshMode nested_refresh_mode,
     ObArenaAllocator &allocator,
-    common::ObString &job_name)
+    common::ObString &job_name,
+    const int64_t preserved_max_run_duration_sec)
 {
   int ret = OB_SUCCESS;
   ObString refresh_job;
@@ -296,7 +323,7 @@ int ObMViewSchedJobUtils::create_mview_scheduler_job(
       LOG_WARN("fail to append job action", KR(ret), K(db_name), K(table_name));
     } else if (OB_FAIL(ObMViewSchedJobUtils::add_scheduler_job(
                    sql_client, tenant_id, job_id, refresh_job, job_action.string(), start_date,
-                   repeat_interval, exec_env, &job_owner, job_owner_id))) {
+                   repeat_interval, exec_env, &job_owner, job_owner_id, preserved_max_run_duration_sec))) {
       LOG_WARN("failed to add mview scheduler job", KR(ret), K(refresh_job), K(job_action),
                "start with", start_date, "next", repeat_interval);
     } else {
@@ -319,7 +346,8 @@ int ObMViewSchedJobUtils::create_mlog_scheduler_job(
     const common::ObString &repeat_interval,
     const common::ObString &exec_env,
     ObArenaAllocator &allocator,
-    common::ObString &job_name)
+    common::ObString &job_name,
+    const int64_t preserved_max_run_duration_sec)
 {
   int ret = OB_SUCCESS;
   const ObString mlog_purge_func("DBMS_MVIEW.purge_log");
@@ -334,7 +362,8 @@ int ObMViewSchedJobUtils::create_mlog_scheduler_job(
   } else if (OB_FAIL(generate_job_action(allocator, mlog_purge_func, db_name, table_name, job_action))) {
     LOG_WARN("failed to generate mview job action", KR(ret));
   } else if (OB_FAIL(add_scheduler_job(trans, tenant_id, job_id, purge_job, job_action, start_date,
-                                       repeat_interval, exec_env))) {
+                                       repeat_interval, exec_env, NULL, OB_INVALID_ID,
+                                       preserved_max_run_duration_sec))) {
     LOG_WARN("failed to add mview scheduler job", KR(ret), K(purge_job), K(job_action),
              K(start_date), K(repeat_interval));
   } else {
@@ -683,6 +712,7 @@ int ObMViewSchedJobUtils::replace_mview_refresh_job(common::ObISQLClient &sql_cl
   int tmp_ret = OB_SUCCESS;
   const uint64_t tenant_id = mview_info.get_tenant_id();
   ObArenaAllocator allocator("CreateMVTmp");
+  int64_t preserved_max_run_duration_sec = -1;
   // remove old job and try stop running job
   // stop job use sys tenant, can not use trans as sql client
   if (!mview_info.get_refresh_job().empty()) {
@@ -692,16 +722,21 @@ int ObMViewSchedJobUtils::replace_mview_refresh_job(common::ObISQLClient &sql_cl
     if (OB_ISNULL(GCTX.sql_proxy_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("sql proxy is null", KR(ret));
-    } else if (OB_FAIL(ObDBMSSchedJobUtils::remove_dbms_sched_job(sql_client,
-                       tenant_id, job_name, true /*if_exists*/))) {
+    } else if (OB_TMP_FAIL(ObDBMSSchedJobUtils::get_dbms_sched_job_info(
+                   sql_client, tenant_id, is_oracle_mode, job_name, allocator, job_info))) {
+      LOG_WARN("fail to get job info before replace mview refresh job", KR(tmp_ret), K(job_name));
+    } else {
+      preserved_max_run_duration_sec = job_info.max_run_duration_;
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObDBMSSchedJobUtils::remove_dbms_sched_job(
+                sql_client, tenant_id, job_name, true /*if_exists*/))) {
       LOG_WARN("failed to remove dbms sched job", KR(ret), K(tenant_id),
-             K(mview_info.get_refresh_job()));
-    } else if (OB_FAIL(ObDBMSSchedJobUtils::get_dbms_sched_job_info(*GCTX.sql_proxy_,
-                tenant_id, is_oracle_mode, job_name, allocator, job_info))) {
-      LOG_WARN("fail to get job info", K(tmp_ret));
+            K(mview_info.get_refresh_job()));
     } else if (OB_TMP_FAIL(ObDBMSSchedJobUtils::stop_dbms_sched_job(
                            *GCTX.sql_proxy_, job_info, false))) {
-      if (tmp_ret == OB_ENTRY_NOT_EXIST) {
+      if (OB_ENTRY_NOT_EXIST == tmp_ret) {
         tmp_ret = OB_SUCCESS;
         LOG_INFO("job not running", K(tmp_ret));
       } else {
@@ -718,7 +753,7 @@ int ObMViewSchedJobUtils::replace_mview_refresh_job(common::ObISQLClient &sql_cl
     if (OB_FAIL(create_mview_scheduler_job(
             sql_client, tenant_id, mview_info.get_mview_id(), db_name, table_name, start_date,
             mview_info.get_refresh_next(), exec_env, mview_info.get_nested_refresh_mode(),
-            allocator, refresh_job))) {
+            allocator, refresh_job, preserved_max_run_duration_sec))) {
       LOG_WARN("failed to create scheduler job", KR(ret));
     } else {
       mview_info.set_refresh_job(refresh_job);
@@ -735,21 +770,37 @@ int ObMViewSchedJobUtils::replace_mlog_purge_job(common::ObISQLClient &sql_clien
                                                  const common::ObString &exec_env)
 {
   int ret = OB_SUCCESS;
-
   const uint64_t tenant_id = mlog_info.get_tenant_id();
-  if (!mlog_info.get_purge_job().empty() &&
-      OB_FAIL(ObDBMSSchedJobUtils::remove_dbms_sched_job(
-          sql_client, tenant_id, mlog_info.get_purge_job(), true /*if_exists*/))) {
-    LOG_WARN("failed to remove dbms sched job", KR(ret), K(tenant_id),
-             K(mlog_info.get_purge_job()));
+  ObArenaAllocator allocator("CreateMLogTmp");
+  int64_t preserved_max_run_duration_sec = -1;
+  if (!mlog_info.get_purge_job().empty()) {
+    ObDBMSSchedJobInfo job_info;
+    bool is_oracle_mode = lib::is_oracle_mode();
+    ObString job_name = mlog_info.get_purge_job();
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(ObDBMSSchedJobUtils::get_dbms_sched_job_info(
+                   sql_client, tenant_id, is_oracle_mode, job_name, allocator, job_info))) {
+      LOG_WARN("fail to get job info before replace mlog purge job", KR(tmp_ret), K(job_name));
+    } else {
+      preserved_max_run_duration_sec = job_info.max_run_duration_;
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObDBMSSchedJobUtils::remove_dbms_sched_job(
+                sql_client, tenant_id, job_name, true /*if_exists*/))) {
+      LOG_WARN("failed to remove dbms sched job", KR(ret), K(tenant_id),
+            K(mlog_info.get_purge_job()));
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else {
     common::ObObj start_date;
     ObString purge_job;
-    ObArenaAllocator allocator("CreateMLogTmp");
     start_date.set_timestamp(mlog_info.get_purge_start());
-    if (OB_FAIL(create_mlog_scheduler_job(sql_client, tenant_id, mlog_info.get_mlog_id(), db_name,
-                                          table_name, start_date, mlog_info.get_purge_next(),
-                                          exec_env, allocator, purge_job))) {
+    if (OB_FAIL(create_mlog_scheduler_job(
+            sql_client, tenant_id, mlog_info.get_mlog_id(), db_name, table_name, start_date,
+            mlog_info.get_purge_next(), exec_env, allocator,
+            purge_job, preserved_max_run_duration_sec))) {
       LOG_WARN("failed to create scheduler job", KR(ret));
     } else {
       mlog_info.set_purge_job(purge_job);
@@ -794,6 +845,46 @@ int ObMViewSchedJobUtils::disable_and_stop_job(
       }
     }
     LOG_INFO("disable and stop job when drop mview", K(ret), K(job_info));
+  }
+  return ret;
+}
+
+int ObMViewSchedJobUtils::set_mview_refresh_params(
+    const uint64_t tenant_id,
+    const uint64_t mview_id,
+    const ObString &parameter_name,
+    const ObString &parameter_value)
+{
+  int ret = OB_SUCCESS;
+  ObMViewInfo mview_info;
+  ObDBMSSchedJobInfo job_info;
+  ObArenaAllocator allocator("MVSetParam");
+  ObObj attr_value;
+  bool is_oracle_mode = lib::is_oracle_mode();
+  attr_value.set_varchar(parameter_value);
+  if (0 != parameter_name.case_compare("max_run_duration")) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("only max_run_duration is supported", KR(ret), K(parameter_name));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "parameter_name, only max_run_duration is supported");
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", KR(ret));
+  } else if (OB_FAIL(ObMViewInfo::fetch_mview_info(*GCTX.sql_proxy_, tenant_id,
+                                                    mview_id, mview_info))) {
+    LOG_WARN("fail to fetch mview info", KR(ret), K(tenant_id), K(mview_id));
+  } else if (mview_info.get_refresh_job().empty()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("mview refresh job is empty, set refresh params not supported", KR(ret), K(mview_info));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "set refresh params for mview without refresh job");
+  } else if (OB_FAIL(ObDBMSSchedJobUtils::get_dbms_sched_job_info(
+                  *GCTX.sql_proxy_, tenant_id, is_oracle_mode,
+                  mview_info.get_refresh_job(), allocator, job_info))) {
+    LOG_WARN("fail to get job info", KR(ret), K(tenant_id),
+             K(mview_info.get_refresh_job()));
+  } else if (OB_FAIL(ObDBMSSchedJobUtils::update_dbms_sched_job_info(
+                  *GCTX.sql_proxy_, job_info, parameter_name, attr_value))) {
+    LOG_WARN("fail to update job max_run_duration", KR(ret), K(job_info),
+             K(parameter_value));
   }
   return ret;
 }
