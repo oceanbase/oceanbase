@@ -463,7 +463,7 @@ int ObExpandAggregateUtils::extract_candi_aggr(ObDMLStmt *stmt,
         if (OB_ISNULL(aggr_items.at(i))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(ret), K(aggr_items.at(i)));
-        } else if (is_valid_aggr_type(aggr_items.at(i)->get_expr_type())) {
+        } else if (is_valid_aggr_type(stmt, aggr_items.at(i)->get_expr_type())) {
           if (OB_FAIL(candi_aggr_items.push_back(aggr_items.at(i)))) {
             LOG_WARN("failed to push back aggr items", K(ret));
           } else {/*do nothing*/}
@@ -492,7 +492,7 @@ int ObExpandAggregateUtils::extract_candi_window_aggr(ObSelectStmt *select_stmt,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret), K(win_expr));
       } else if (win_expr->get_agg_expr() != NULL &&
-                 is_valid_aggr_type(win_expr->get_agg_expr()->get_expr_type())) {
+                 is_valid_aggr_type(select_stmt, win_expr->get_agg_expr()->get_expr_type())) {
         if (OB_FAIL(candi_win_items.push_back(win_expr))) {
           LOG_WARN("failed to push back win expr", K(ret));
         } else {/*do nothing*/}
@@ -1299,13 +1299,23 @@ int ObExpandAggregateUtils::expand_regr_s_expr(ObAggFunRawExpr *aggr_expr,
   return ret;
 }
 
-bool ObExpandAggregateUtils::is_valid_aggr_type(const ObItemType aggr_type) const
+bool ObExpandAggregateUtils::is_valid_aggr_type(ObDMLStmt *stmt, const ObItemType aggr_type) const
 {
   bool ret = false;
-  if (aggr_type == T_FUN_VAR_SAMP || aggr_type == T_FUN_STDDEV_SAMP) {
+  bool rowsets_enabled = true;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(stmt));
+  } else if (OB_FAIL(ObSQLUtils::check_rowsets_enabled(session_info_,
+                                                       stmt->get_query_ctx()->get_global_hint(),
+                                                       rowsets_enabled))) {
+    LOG_WARN("failed to check rowsets enabled", K(ret));
+  } else if (aggr_type == T_FUN_VAR_SAMP || aggr_type == T_FUN_STDDEV_SAMP) {
     if (!lib::is_oracle_mode()
         && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_1_0
-        && session_info_ != nullptr ? session_info_->use_rich_format() : false) {
+        && session_info_ != nullptr
+        && session_info_->use_rich_format()
+        && rowsets_enabled) {
       ret = false;
     } else {
       ret = true;

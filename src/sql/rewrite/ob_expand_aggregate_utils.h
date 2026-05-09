@@ -92,7 +92,7 @@ private:
                          ObRawExpr *&replace_expr,
                          ObIArray<ObAggFunRawExpr*> &new_aggr_items);
 
-  bool is_valid_aggr_type(const ObItemType aggr_type) const;
+  bool is_valid_aggr_type(ObDMLStmt *stmt, const ObItemType aggr_type) const;
 
   static bool is_covar_expr_type(const ObItemType aggr_type) {
     return aggr_type == T_FUN_COVAR_POP || aggr_type == T_FUN_COVAR_SAMP;
