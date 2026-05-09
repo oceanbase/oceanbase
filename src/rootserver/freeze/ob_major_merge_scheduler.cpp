@@ -235,7 +235,7 @@ int ObMajorMergeScheduler::try_idle(
       }
 #ifdef ERRSIM
       else if (EN_CLEAR_PROGRESS_CHECKER_CACHED_INFO) {
-        (void) progress_checker_.clear_cached_info();
+        (void) progress_checker_->clear_cached_info();
         clear_cached_info = true;
         LOG_INFO("clear cached info when errsim", KR(ret), K(start_ts));
       }

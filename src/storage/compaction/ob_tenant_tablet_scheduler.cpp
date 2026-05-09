@@ -1726,9 +1726,13 @@ void ObTenantTabletScheduler::errsim_schedule_adaptive(
 
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(EN_COMPACTION_DISABLE_META_MERGE_AFTER_MINI)) {
-    reason = ObAdaptiveMergePolicy::NONE;
-    LOG_INFO("ERRSIM EN_COMPACTION_DISABLE_META_MERGE_AFTER_MINI: disable meta merge after mini", K(ret), K(ls_id), K(tablet_id));
-  } 
+    if (ObAdaptiveMergePolicy::AdaptiveCompactionEvent::SCHEDULE_AFTER_MINI == event) {
+      reason = ObAdaptiveMergePolicy::NONE;
+      LOG_INFO("ERRSIM EN_COMPACTION_DISABLE_META_MERGE_AFTER_MINI: disable meta merge after mini", K(ret), K(ls_id), K(tablet_id));
+    } else {
+      ret = OB_SUCCESS;  // 不阻断后台 SCHEDULE_META 路径
+    }
+  }
 
   bool is_tombstone_scene = ObAdaptiveMergePolicy::NONE != reason;
   STORAGE_LOG(INFO, "try_schedule_adaptive_merge hit errsim", K(ret), K(ls_id), K(tablet_id), K(event), K(is_tombstone_scene), K(medium_is_cooling_down));
