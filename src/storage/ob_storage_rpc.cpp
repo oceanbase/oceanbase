@@ -1391,6 +1391,31 @@ bool ObRebuildTabletSSTableInfoArg::is_valid() const
 OB_SERIALIZE_MEMBER(ObRebuildTabletSSTableInfoArg,
     tenant_id_, ls_id_, tablet_id_, dest_major_sstable_snapshot_, version_);
 
+ObAdvanceSrcLSCheckpointArg::ObAdvanceSrcLSCheckpointArg()
+  : tenant_id_(OB_INVALID_ID),
+    ls_id_(),
+    recycle_scn_()
+{
+}
+
+ObAdvanceSrcLSCheckpointArg::~ObAdvanceSrcLSCheckpointArg()
+{
+}
+
+bool ObAdvanceSrcLSCheckpointArg::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_ && ls_id_.is_valid() && recycle_scn_.is_valid();
+}
+
+void ObAdvanceSrcLSCheckpointArg::reset()
+{
+  tenant_id_ = OB_INVALID_ID;
+  ls_id_.reset();
+  recycle_scn_.reset();
+}
+
+OB_SERIALIZE_MEMBER(ObAdvanceSrcLSCheckpointArg, tenant_id_, ls_id_, recycle_scn_);
+
 template <ObRpcPacketCode RPC_CODE>
 ObStorageStreamRpcP<RPC_CODE>::ObStorageStreamRpcP(common::ObInOutBandwidthThrottle *bandwidth_throttle)
   : bandwidth_throttle_(bandwidth_throttle),
@@ -5262,6 +5287,34 @@ int ObRebuildTabletSSTableInfoP::build_sstable_info_(ObLS *ls)
   return ret;
 }
 
+int ObAdvanceSrcLSCheckpointP::process()
+{
+  int ret = OB_SUCCESS;
+
+  MTL_SWITCH(arg_.tenant_id_) {
+    ObLSHandle ls_handle;
+    ObLSService *ls_service = nullptr;
+    ObLS *ls = nullptr;
+    ObLSMigrationHandler *ls_migration_handler = nullptr;
+    if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls service should not be null", KR(ret), KP(ls_service));
+    } else if (OB_FAIL(ls_service->get_ls(arg_.ls_id_, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+      LOG_WARN("failed to get log stream", KR(ret), K(arg_));
+    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls should not be NULL", KR(ret), K(arg_), KP(ls));
+    } else if (OB_ISNULL(ls_migration_handler = ls->get_ls_migration_handler())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("ls migration handler should not be NULL", KR(ret), K(arg_), KP(ls_migration_handler));
+    } else if (OB_FAIL(ls_migration_handler->update_advance_ls_checkpoint_scn(arg_.recycle_scn_))) {
+      LOG_WARN("failed to check and update need advance ls checkpoint", K(ret), K(arg_));
+    }
+  }
+
+  return ret;
+}
+
 } //namespace obrpc
 
 namespace storage
@@ -5793,6 +5846,36 @@ int ObStorageRpc::fetch_ls_member_and_learner_list(
       .group_id(share::OBCG_STORAGE)
       .fetch_ls_member_and_learner_list(arg, member_info))) {
     LOG_WARN("fail to check ls is valid member", K(ret), K(tenant_id), K(ls_id));
+  }
+  return ret;
+}
+
+int ObStorageRpc::advance_src_ls_checkpoint(
+    const uint64_t tenant_id,
+    const ObStorageHASrcInfo &src_info,
+    const share::ObLSID &ls_id,
+    const share::SCN &recycle_scn)
+{
+  int ret = OB_SUCCESS;
+  obrpc::ObAdvanceSrcLSCheckpointArg arg;
+  obrpc::Int64 res = 0;
+  arg.tenant_id_ = tenant_id;
+  arg.ls_id_ = ls_id;
+  arg.recycle_scn_ = recycle_scn;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    STORAGE_LOG(WARN, "storage rpc is not inited", K(ret));
+  } else if (OB_INVALID_ID == tenant_id || !src_info.is_valid() || !ls_id.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument", K(ret), K(tenant_id), K(src_info), K(ls_id));
+  } else if (OB_FAIL(rpc_proxy_->to(src_info.src_addr_).dst_cluster_id(src_info.cluster_id_)
+        .by(tenant_id)
+        .group_id(share::OBCG_STORAGE)
+        .advance_src_ls_checkpoint(arg, res))) {
+    LOG_WARN("fail to advance src ls checkpoint", K(ret), K(tenant_id), K(ls_id), K(src_info));
+  } else {
+    LOG_INFO("succeed to advance src ls checkpoint", K(ret), K(tenant_id), K(ls_id), K(src_info));
   }
   return ret;
 }

@@ -513,7 +513,7 @@ int ObStorageHADagUtils::get_migration_src_info(
 {
   int ret = OB_SUCCESS;
   ObStorageHAChooseSrcHelper choose_src_helper;
-  ObStorageHASrcProvider::ChooseSourcePolicy policy = ObStorageHASrcProvider::ChooseSourcePolicy::IDC;
+  ObMigrationChooseSourcePolicy policy(ObMigrationChooseSourcePolicy::IDC);
   ObStorageHAGetMemberHelper member_helper;
   bool enable_choose_source_policy = true;
   SMART_VAR(ObMigrationChooseSrcHelperInitParam, param) {

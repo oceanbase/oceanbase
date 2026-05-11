@@ -21,6 +21,7 @@
 #include "observer/omt/ob_tenant.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
 #include "share/ob_io_device_helper.h"
+#include "storage/high_availability/ob_storage_ha_src_provider.h"
 
 using namespace oceanbase::share;
 
@@ -559,16 +560,19 @@ int ObStorageHAUtils::extract_macro_id_from_datum(
   return ret;
 }
 
-int ObStorageHAUtils::check_replica_validity(const obrpc::ObFetchLSMetaInfoResp &ls_info)
+int ObStorageHAUtils::check_replica_validity(
+    const obrpc::ObFetchLSMetaInfoResp &ls_info,
+    ObMigrationSourceValidationResult &result)
 {
   int ret = OB_SUCCESS;
-  ObMigrationStatus migration_status;
+  ObMigrationStatus migration_status = ObMigrationStatus::OB_MIGRATION_STATUS_MAX;
   share::ObLSRestoreStatus restore_status;
   if (!ls_info.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument!", K(ls_info));
   } else if (OB_FAIL(check_server_version(ls_info.version_))) {
     if (OB_MIGRATE_NOT_COMPATIBLE == ret) {
+      result = ObMigrationSourceValidationResult::VERSION_INCOMPATIBLE;
       LOG_WARN("this src is not compatible", K(ret), K(ls_info));
     } else {
       LOG_WARN("failed to check version", K(ret), K(ls_info));
@@ -577,11 +581,13 @@ int ObStorageHAUtils::check_replica_validity(const obrpc::ObFetchLSMetaInfoResp 
     LOG_WARN("failed to get migration status", K(ret), K(ls_info));
   } else if (!ObMigrationStatusHelper::check_can_migrate_out(migration_status)) {
     ret = OB_DATA_SOURCE_NOT_VALID;
+    result = ObMigrationSourceValidationResult::SOURCE_IN_MIGRATION;
     LOG_WARN("this src is not suitable, migration status check failed", K(ret), K(ls_info));
   } else if (OB_FAIL(ls_info.ls_meta_package_.ls_meta_.get_restore_status(restore_status))) {
     LOG_WARN("failed to get restore status", K(ret), K(ls_info));
   } else if (restore_status.is_failed()) {
     ret = OB_DATA_SOURCE_NOT_EXIST;
+    result = ObMigrationSourceValidationResult::SOURCE_RESTORE_FAILED;
     LOG_WARN("some ls replica restore failed, can not migrate", K(ret), K(ls_info));
   }
   return ret;

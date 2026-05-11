@@ -28,6 +28,7 @@ namespace storage
 {
 class ObBackfillTXCtx;
 class ObTransferHandler;
+class ObMigrationSourceValidationResult;
 class ObStorageHAUtils
 {
 public:
@@ -73,7 +74,9 @@ public:
       const bool is_normal_cg_sstable,
       const storage::ObITableReadInfo *&index_read_info);
 
-  static int check_replica_validity(const obrpc::ObFetchLSMetaInfoResp &ls_info);
+  static int check_replica_validity(
+      const obrpc::ObFetchLSMetaInfoResp &ls_info,
+      ObMigrationSourceValidationResult &result);
   static int check_log_status(
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,

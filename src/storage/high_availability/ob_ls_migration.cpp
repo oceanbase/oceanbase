@@ -1224,7 +1224,6 @@ int ObStartMigrationTask::choose_src_()
 {
   int ret = OB_SUCCESS;
   ObStorageHAChooseSrcHelper choose_src_helper;
-  ObStorageHASrcProvider::ChooseSourcePolicy policy = ObStorageHASrcProvider::ChooseSourcePolicy::IDC;
   const char *str = "idc";
   ObStorageHAGetMemberHelper member_helper;
   bool enable_choose_source_policy = true;
