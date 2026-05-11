@@ -2924,65 +2924,96 @@ int ObTransformOrExpansion::is_expected_multi_index_plan(ObLogicalOperator* op,
   ObSEArray<ObRawExpr*, 4> candi_exprs;
   ObSEArray<ObRawExpr*, 4> result_exprs;
   TemporaryEqualSets deduced_index_expr_equal_sets;
-  if (OB_ISNULL(op) || OB_ISNULL(op->get_plan())) {
+  if (OB_ISNULL(op) || OB_ISNULL(op->get_plan())
+      || OB_ISNULL(op->get_plan()->get_optimizer_context().get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpect null", K(ret), K(op));
-  } else if (OB_FAIL(get_range_exprs(op, range_exprs))) {
-    LOG_WARN("failed to get range exprs", K(ret));
-  } else if (range_exprs.empty()) {
-    is_valid = false;
-  } else if (OB_FAIL(build_deduced_index_expr_equal_sets(
-                       op->get_plan()->get_optimizer_context().get_deduce_info(),
-                       deduced_index_expr_equal_sets))) {
-    LOG_WARN("failed to build deduce index expr equal sets", K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < N; ++i) {
-      candi_exprs.reuse();
-      result_exprs.reuse();
-      if (OB_FAIL(get_candi_match_index_exprs(ctx.expand_exprs_.at(i), candi_exprs))) {
-        LOG_WARN("failed to get candi match index exprs", K(ret));
-      } else if (candi_exprs.empty()) {
-        is_valid = false;
-        LOG_TRACE("expr is not candi match index expr", K(*ctx.expand_exprs_.at(i)));
-      } else if (OB_FAIL(ObOptimizerUtil::intersect_exprs(candi_exprs,
-                                                          range_exprs,
-                                                          deduced_index_expr_equal_sets,
-                                                          result_exprs))) {
-        LOG_WARN("failed to intersect exprs", K(ret));
-      } else if (result_exprs.empty()) {
-        is_valid = false;
+    bool include_unprecise =
+        op->get_plan()->get_optimizer_context()
+          .get_query_ctx()->check_opt_compat_version(
+              COMPAT_VERSION_4_2_5_BP8, COMPAT_VERSION_4_3_0,
+              COMPAT_VERSION_4_3_5_BP6, COMPAT_VERSION_4_4_0,
+              COMPAT_VERSION_4_4_2_BP2, COMPAT_VERSION_4_5_0,
+              COMPAT_VERSION_4_6_1);
+    if (OB_FAIL(get_range_exprs(op, range_exprs, include_unprecise))) {
+      LOG_WARN("failed to get range exprs", K(ret));
+    } else if (range_exprs.empty()) {
+      is_valid = false;
+    } else if (OB_FAIL(build_deduced_index_expr_equal_sets(
+                         op->get_plan()->get_optimizer_context().get_deduce_info(),
+                         deduced_index_expr_equal_sets))) {
+      LOG_WARN("failed to build deduce index expr equal sets", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < N; ++i) {
+        candi_exprs.reuse();
+        result_exprs.reuse();
+        if (OB_FAIL(get_candi_match_index_exprs(ctx.expand_exprs_.at(i), candi_exprs))) {
+          LOG_WARN("failed to get candi match index exprs", K(ret));
+        } else if (candi_exprs.empty()) {
+          is_valid = false;
+        } else if (OB_FAIL(ObOptimizerUtil::intersect_exprs(candi_exprs,
+                                                            range_exprs,
+                                                            deduced_index_expr_equal_sets,
+                                                            result_exprs))) {
+          LOG_WARN("failed to intersect exprs", K(ret));
+        } else if (result_exprs.empty()) {
+          is_valid = false;
+        }
       }
     }
   }
-  LOG_TRACE("is expand exprs match range exprs", K(range_exprs), K(ctx.expand_exprs_), K(is_valid));
+  return ret;
+}
+
+int ObTransformOrExpansion::add_range_exprs_from_array(
+    const ObIArray<ObRawExpr*> &src,
+    ObIArray<ObRawExpr*> &dst)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < src.count(); i++) {
+    ObRawExpr *expr = src.at(i);
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("got unexpected null ptr", K(ret));
+    } else if (T_OP_OR == expr->get_expr_type() ||
+               T_OP_AND == expr->get_expr_type()) {
+      if (OB_FAIL(ObRawExprUtils::get_exprs_inside_and_or(expr, dst))) {
+        LOG_WARN("failed to get all expr inside and or", K(ret));
+      }
+    } else if (OB_FAIL(dst.push_back(expr))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
   return ret;
 }
 
 int ObTransformOrExpansion::get_range_exprs(ObLogicalOperator* op,
-                                            ObIArray<ObRawExpr*> &range_exprs)
+                                            ObIArray<ObRawExpr*> &range_exprs,
+                                            bool include_unprecise_range)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(op)) {
     /* do nothing */
   } else if (log_op_def::LOG_TABLE_SCAN == op->get_type()) {
     ObLogTableScan *table_scan = static_cast<ObLogTableScan*>(op);
-    for (int64_t i = 0; OB_SUCC(ret) && i < table_scan->get_range_conditions().count(); i++) {
-      ObRawExpr *range_expr = table_scan->get_range_conditions().at(i);
-      if (OB_ISNULL(range_expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("got unexpected null ptr", K(ret));
-      } else if (T_OP_OR == range_expr->get_expr_type() ||
-                 T_OP_AND == range_expr->get_expr_type()) {
-        if (OB_FAIL(ObRawExprUtils::get_exprs_inside_and_or(range_expr, range_exprs))) {
-          LOG_WARN("failed to get all expr inside and or", K(ret));
+    if (OB_FAIL(add_range_exprs_from_array(table_scan->get_range_conditions(),
+                                           range_exprs))) {
+      LOG_WARN("failed to add range exprs from range conditions", K(ret));
+    } else if (include_unprecise_range) {
+      const ObQueryRangeProvider *pre_range = table_scan->get_pre_graph();
+      if (pre_range != NULL) {
+        if (OB_FAIL(add_range_exprs_from_array(
+                      pre_range->get_unprecise_range_exprs(), range_exprs))) {
+          LOG_WARN("failed to add unprecise range exprs", K(ret));
         }
-      } else if (OB_FAIL(range_exprs.push_back(range_expr))) {
-        LOG_WARN("failed to push back", K(ret));
       }
     }
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < op->get_num_of_child(); ++i) {
-      if (OB_FAIL(SMART_CALL(get_range_exprs(op->get_child(i), range_exprs)))) {
+      if (OB_FAIL(SMART_CALL(get_range_exprs(op->get_child(i),
+                                             range_exprs,
+                                             include_unprecise_range)))) {
         LOG_WARN("failed to remove filter exprs", K(ret));
       }
     }

@@ -364,7 +364,10 @@ private:
   int is_expected_multi_index_plan(ObLogicalOperator* op,
                                    ObCostBasedRewriteCtx &ctx,
                                    bool &is_valid);
-  int get_range_exprs(ObLogicalOperator* op, ObIArray<ObRawExpr*> &candi_exprs);
+  int get_range_exprs(ObLogicalOperator* op, ObIArray<ObRawExpr*> &candi_exprs,
+                      bool include_unprecise_range = false);
+  int add_range_exprs_from_array(const ObIArray<ObRawExpr*> &src,
+                                 ObIArray<ObRawExpr*> &dst);
   int is_candi_match_index_exprs(ObRawExpr *expr, bool &result);
   int get_candi_match_index_exprs(ObRawExpr *expr,
                                   ObIArray<ObRawExpr*> &candi_exprs);
