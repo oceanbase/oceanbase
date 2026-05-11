@@ -4595,9 +4595,11 @@ int ObSelectIntoOp::check_orc_file_size(ObOrcFileWriter &data_writer)
 
 bool ObSelectIntoOp::file_need_split(int64_t file_size)
 {
-  return (file_location_ == IntoFileLocation::SERVER_DISK
+  return ((file_location_ == IntoFileLocation::SERVER_DISK
+            || file_location_ == IntoFileLocation::REMOTE_HDFS)
           && !MY_SPEC.is_single_ && file_size > MY_SPEC.max_file_size_)
         || (file_location_ != IntoFileLocation::SERVER_DISK
+            && file_location_ != IntoFileLocation::REMOTE_HDFS
             && ((!MY_SPEC.is_single_ && file_size > min(MY_SPEC.max_file_size_, MAX_OSS_FILE_SIZE))
                 || (MY_SPEC.is_single_ && file_size > MAX_OSS_FILE_SIZE)));
 }

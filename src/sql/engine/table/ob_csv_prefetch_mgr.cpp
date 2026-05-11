@@ -32,7 +32,8 @@ ObCSVPrefetchMgr::ObCSVPrefetchMgr()
     compressed_data_(nullptr),
     compressed_data_capacity_(0),
     compress_data_size_(0),
-    consumed_data_size_(0)
+    consumed_data_size_(0),
+    timeout_ts_(0)
 {}
 
 ObCSVPrefetchMgr::~ObCSVPrefetchMgr()
@@ -42,6 +43,7 @@ ObCSVPrefetchMgr::~ObCSVPrefetchMgr()
 
 int ObCSVPrefetchMgr::init(common::ObIAllocator &allocator,
                            ObCSVGeneralFormat::ObCSVCompression compression_format,
+                           const int64_t timeout_ts,
                            const int64_t buf_size,
                            const int64_t prefetch_count)
 {
@@ -57,7 +59,7 @@ int ObCSVPrefetchMgr::init(common::ObIAllocator &allocator,
     prefetch_buf_size_ = buf_size;
     prefetch_count_ = prefetch_count;
     compression_format_ = compression_format;
-
+    timeout_ts_ = timeout_ts;
     // slot
     void *slot_mem = allocator_->alloc(sizeof(PrefetchSlot) * prefetch_count_);
     if (OB_ISNULL(slot_mem)) {
@@ -173,10 +175,11 @@ int ObCSVPrefetchMgr::submit_prefetch(int64_t slot_idx)
       if (read_size <= 0) {
         all_prefetched_ = true;
       } else {
+        const int64_t io_timeout_ms = MAX(0, (timeout_ts_ - ObTimeUtility::current_time()) / 1000);
         ObExternalReadInfo read_info(next_prefetch_offset_,
                                     slot.buf_,
                                     read_size,
-                                    DEFAULT_IO_TIMEOUT_MS);
+                                    io_timeout_ms);
         if (OB_FAIL(file_access_.async_read(read_info, slot.handle_))) {
           LOG_WARN("[CSV PREFETCH] fail to issue async read", K(ret), K(slot_idx),
                   K(next_prefetch_offset_), K(read_size));

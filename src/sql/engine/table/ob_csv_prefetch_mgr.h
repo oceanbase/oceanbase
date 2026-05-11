@@ -23,6 +23,7 @@ public:
 
   int init(common::ObIAllocator &allocator,
            ObCSVGeneralFormat::ObCSVCompression compression_format,
+           const int64_t timeout_ts,
            const int64_t buf_size = OB_MALLOC_BIG_BLOCK_SIZE,
            const int64_t prefetch_count = 5);
 
@@ -95,6 +96,7 @@ private:
   int64_t compressed_data_capacity_;
   int64_t compress_data_size_;
   int64_t consumed_data_size_;
+  int64_t timeout_ts_;
 
   DISALLOW_COPY_AND_ASSIGN(ObCSVPrefetchMgr);
 };

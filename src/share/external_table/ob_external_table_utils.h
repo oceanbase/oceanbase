@@ -956,7 +956,7 @@ public:
       file_reader.close();
     } else {
       ObCSVPrefetchMgr prefetch_mgr;
-      OZ (prefetch_mgr.init(allocator_for_read, external_file_format.csv_format_.compression_algorithm_));
+      OZ (prefetch_mgr.init(allocator_for_read, external_file_format.csv_format_.compression_algorithm_, THIS_WORKER.get_timeout_ts()));
       ObExternalFileUrlInfo *file_url_info = nullptr;
       OZ (create_external_file_url_info(external_location, external_access_info, full_path.string(), allocator_for_read, file_url_info));
       ObExternalFileCacheOptions cache_options;  // no cache for csv prefetch
