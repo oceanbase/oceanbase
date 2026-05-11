@@ -1371,6 +1371,7 @@ int ob_sql_type_str(const common::ObObjMeta &obj_meta,
                     const uint64_t sub_type = static_cast<uint64_t>(common::ObGeoType::GEOTYPEMAX),
                     const bool is_string_lob = false);
 
+int ob_append_quoted_str(char *buff, int64_t buff_length, int64_t &pos, const ObString &str);
 
 //such as "double". without any accuracy.
 int ob_sql_type_str(char *buff,

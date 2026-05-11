@@ -2518,9 +2518,11 @@ int ObObj::print_varchar_literal(const ObIArray<ObString> &type_infos, char *buf
       LOG_WARN("fail to get set str val", K(str_val), K(type_infos), K(ret));
     }
   }
-  if (OB_SUCC(ret) && databuff_printf(buffer, length, pos, "'%.*s'",
-                                      static_cast<int32_t>(str_val.length()), str_val.ptr())) {
-    LOG_WARN("fail to print string", KP(buffer), K(length), K(pos), K(str_val), K(ret));
+  if (OB_SUCC(ret)) {
+    const ObString out_str(static_cast<int32_t>(str_val.length()), str_val.ptr());
+    if (OB_FAIL(ob_append_quoted_str(buffer, length, pos, out_str))) {
+      LOG_WARN("fail to print string", KP(buffer), K(length), K(pos), K(str_val), K(ret));
+    }
   }
   return ret;
 }
