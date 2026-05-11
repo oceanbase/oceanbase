@@ -40,7 +40,8 @@ public:
                                         const ObObjectID &first_level_part_id,
                                         const common::ObTabletID &tablet_id,
                                         const share::ObLSLocation &partition_location,
-                                        const ObRoutePolicyType route_policy);
+                                        const ObRoutePolicyType route_policy,
+                                        bool is_weak);
 
   bool is_valid() const;
   bool operator==(const ObOptTabletLoc &other) const;
@@ -108,7 +109,8 @@ public:
                                               const ObObjectID &first_level_part_id,
                                               const common::ObTabletID &tablet_id,
                                               const share::ObLSLocation &partition_location,
-                                              const ObRoutePolicyType route_policy);
+                                              const ObRoutePolicyType route_policy,
+                                              bool is_weak);
   const ObOptTabletLoc &get_partition_location() const { return opt_tablet_loc_; }
   ObOptTabletLoc &get_partition_location() { return opt_tablet_loc_; }
   const common::ObIArray<int64_t> &get_priority_replica_idxs() const { return priority_replica_idxs_; }

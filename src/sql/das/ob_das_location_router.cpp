@@ -992,40 +992,41 @@ int ObDASLocationRouter::nonblock_get_readable_replica(const uint64_t tenant_id,
   }
   ObBLKey bl_key;
   bool in_black_list = true;
+  bool has_blacklisted_right_type_replica = false;
   ObSEArray<const ObLSReplicaLocation *, 3> remote_replicas;
   const ObLSReplicaLocation *local_replica = nullptr;
   for (int64_t i = 0; OB_SUCC(ret) && i < ls_loc.get_replica_locations().count(); ++i) {
     const ObLSReplicaLocation &tmp_replica_loc = ls_loc.get_replica_locations().at(i);
-    if (OB_FAIL(bl_key.init(tmp_replica_loc.get_server(), tenant_id, tablet_loc.ls_id_))) {
+    if (ObRoutePolicy::is_replica_type_not_allowed(route_policy, tmp_replica_loc.get_replica_type(), is_weak_read)) {
+      // skip the tmp_replica_loc
+      LOG_TRACE("skip the replica due to the replica policy.", K(ret), K(tmp_replica_loc.get_replica_type()), K(tmp_replica_loc));
+    } else if (OB_FAIL(bl_key.init(tmp_replica_loc.get_server(), tenant_id, tablet_loc.ls_id_))) {
       LOG_WARN("init black list key failed", K(ret));
     } else if (OB_FAIL(ObBLService::get_instance().check_in_black_list(bl_key, in_black_list))) {
       LOG_WARN("check in black list failed", K(ret));
     } else if (!in_black_list) {
-      if ((route_policy == COLUMN_STORE_ONLY && tmp_replica_loc.get_replica_type() != REPLICA_TYPE_COLUMNSTORE) ||
-          (route_policy != COLUMN_STORE_ONLY && tmp_replica_loc.get_replica_type() == REPLICA_TYPE_COLUMNSTORE) ||
-          (is_weak_read && route_policy == FORCE_READONLY_ZONE && tmp_replica_loc.get_replica_type() != REPLICA_TYPE_READONLY)) {
-        // skip the tmp_replica_loc
-        LOG_TRACE("skip the replica due to the replica policy.", K(ret), K(tmp_replica_loc.get_replica_type()), K(tmp_replica_loc));
-      } else if (tmp_replica_loc.get_server() == GCTX.self_addr()) {
+      if (tmp_replica_loc.get_server() == GCTX.self_addr()) {
         //prefer choose the local replica
         local_replica = &tmp_replica_loc;
       } else if (OB_FAIL(remote_replicas.push_back(&tmp_replica_loc))) {
         LOG_WARN("store tmp replica failed", K(ret));
       }
     } else {
+      has_blacklisted_right_type_replica = true;
       LOG_INFO("this replica is in the blacklist, thus filtered it", K(bl_key));
     }
   }
   if (OB_SUCC(ret)) {
     if (local_replica != nullptr) {
       tablet_loc.server_ = local_replica->get_server();
-    } else if (route_policy == COLUMN_STORE_ONLY && remote_replicas.empty()) {
-      //do not retry
-      ret = OB_NO_REPLICA_VALID;
-      LOG_USER_ERROR(OB_NO_REPLICA_VALID);
     } else if (remote_replicas.empty()) {
-      ret = OB_NO_READABLE_REPLICA;
-      LOG_WARN("there has no readable replica", K(ret), K(tablet_id), K(ls_loc), K(route_policy));
+      if (!has_blacklisted_right_type_replica) {
+        ret = OB_NO_REPLICA_VALID;
+        LOG_USER_ERROR(OB_NO_REPLICA_VALID);
+      } else {
+        ret = OB_NO_READABLE_REPLICA;
+        LOG_WARN("there has no readable replica", K(ret), K(tablet_id), K(ls_loc), K(route_policy));
+      }
     } else {
       //no local copy, randomly select a readable replica
       int64_t select_idx = rand() % remote_replicas.count();
@@ -1179,7 +1180,8 @@ int ObDASLocationRouter::nonblock_get_candi_tablet_location(const ObDASTableLocM
                                                                          first_level_part_id,
                                                                          tablet_id,
                                                                          location,
-                                                                         static_cast<ObRoutePolicyType>(loc_meta.route_policy_)))) {
+                                                                         static_cast<ObRoutePolicyType>(loc_meta.route_policy_),
+                                                                         loc_meta.is_weak_read_))) {
       LOG_WARN("fail to set partition location with only readable replica",
                K(ret), K(location), K(candi_tablet_loc), K(tablet_id), K(partition_id));
     }

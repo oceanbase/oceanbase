@@ -59,6 +59,15 @@ int ObRoutePolicy::strong_sort_replicas(ObIArray<CandidateReplica>& candi_replic
   return ret;
 }
 
+bool ObRoutePolicy::is_replica_type_not_allowed(ObRoutePolicyType policy_type,
+                                                 ObReplicaType replica_type,
+                                                 bool is_weak)
+{
+  return (policy_type == COLUMN_STORE_ONLY && !ObReplicaTypeCheck::is_columnstore_replica(replica_type))
+         || (policy_type != COLUMN_STORE_ONLY && ObReplicaTypeCheck::is_columnstore_replica(replica_type))
+         || (is_weak && policy_type == FORCE_READONLY_ZONE && !ObReplicaTypeCheck::is_readonly_replica(replica_type));
+}
+
 int ObRoutePolicy::filter_replica(const ObAddr &local_server,
                                   const ObLSID &ls_id,
                                   ObIArray<CandidateReplica>& candi_replicas,
@@ -67,6 +76,8 @@ int ObRoutePolicy::filter_replica(const ObAddr &local_server,
   int ret = OB_SUCCESS;
   ObRoutePolicyType policy_type = get_calc_route_policy_type(ctx);
   bool need_break = false;
+  bool has_ls_unreadable = false;
+  bool is_weak = ctx.consistency_level_ == WEAK;
   for (int64_t i = 0; !need_break && OB_SUCC(ret) && i < candi_replicas.count(); ++i) {
     CandidateReplica &cur_replica = candi_replicas.at(i);
     bool can_read = true;
@@ -81,17 +92,18 @@ int ObRoutePolicy::filter_replica(const ObAddr &local_server,
     } else {
       LOG_TRACE("check ls readable", K(ctx), K(ls_id), K(cur_replica.get_server()), K(can_read));
       if ((policy_type == ONLY_READONLY_ZONE && cur_replica.attr_.zone_type_ == ZONE_TYPE_READWRITE)
-          || (policy_type == COLUMN_STORE_ONLY && !ObReplicaTypeCheck::is_columnstore_replica(cur_replica.get_replica_type()))
-          || (policy_type != COLUMN_STORE_ONLY && ObReplicaTypeCheck::is_columnstore_replica(cur_replica.get_replica_type()))
-          || (policy_type == FORCE_READONLY_ZONE && !ObReplicaTypeCheck::is_readonly_replica(cur_replica.get_replica_type()))
+          || is_replica_type_not_allowed(policy_type, cur_replica.get_replica_type(), is_weak)
           || cur_replica.attr_.zone_status_ == ObZoneStatus::INACTIVE
           || cur_replica.attr_.server_status_ != ObServerStatus::OB_SERVER_ACTIVE
           || cur_replica.attr_.start_service_time_ == 0
           || cur_replica.attr_.server_stop_time_ != 0
           || (0 == cur_replica.get_property().get_memstore_percent()
               && is_follower(cur_replica.get_role()))// 作为Follower的D副不能选择
-          || !can_read) {
+          ) {
         cur_replica.is_filter_ = true;
+      } else if (!can_read) {
+        cur_replica.is_filter_ = true;
+        has_ls_unreadable = true;
       }
 
       // if is local replica and can read, filter all replicas and only select this replica.
@@ -105,30 +117,22 @@ int ObRoutePolicy::filter_replica(const ObAddr &local_server,
     }
   }
   if (OB_SUCC(ret)) {
-    for (int64_t i = candi_replicas.count()-1; OB_SUCC(ret) && i >= 0; --i) {
+    int64_t i = candi_replicas.count() - 1;
+    for (; OB_SUCC(ret) && i >= 0; --i) {
       CandidateReplica &cur_replica = candi_replicas.at(i);
-      if (cur_replica.is_filter_ &&
-          ((policy_type == COLUMN_STORE_ONLY && !ObReplicaTypeCheck::is_columnstore_replica(cur_replica.get_replica_type()))
-          || (policy_type != COLUMN_STORE_ONLY && ObReplicaTypeCheck::is_columnstore_replica(cur_replica.get_replica_type()))) &&
-          OB_FAIL(candi_replicas.remove(i))) {
-        LOG_WARN("failed to remove filted replica", K(ret));
-      }
-    }
-    if (OB_SUCC(ret) && candi_replicas.count() == 0) {
-      ret = OB_NO_REPLICA_VALID;
-      LOG_USER_ERROR(OB_NO_REPLICA_VALID);
-    }
-  }
-  if (OB_SUCC(ret) && policy_type == FORCE_READONLY_ZONE) {
-    for (int64_t i = candi_replicas.count() - 1; OB_SUCC(ret) && i >= 0; --i) {
-      CandidateReplica &cur_replica = candi_replicas.at(i);
-      if (cur_replica.is_filter_ && OB_FAIL(candi_replicas.remove(i))) {
+      if (cur_replica.is_filter_ && is_replica_type_not_allowed(policy_type, cur_replica.get_replica_type(), is_weak)
+          && OB_FAIL(candi_replicas.remove(i))) {
         LOG_WARN("failed to remove filtered replica", K(ret));
       }
     }
     if (OB_SUCC(ret) && candi_replicas.count() == 0) {
-      ret = OB_NO_READABLE_REPLICA;
-      LOG_WARN("all replicas are filted", K(ret), K(policy_type));
+      if (has_ls_unreadable) {
+        ret = OB_NO_READABLE_REPLICA;
+        LOG_WARN("all replicas are filtered", K(ret), K(policy_type));
+      } else {
+        ret = OB_NO_REPLICA_VALID;
+        LOG_USER_ERROR(OB_NO_REPLICA_VALID);
+      }
     }
   }
   return ret;
@@ -146,17 +150,8 @@ int ObRoutePolicy::calculate_replica_priority(const ObAddr &local_server,
     LOG_WARN("not init", K(ret));
   } else if (candi_replicas.count() <= 1) {
     ObRoutePolicyType policy_type = get_calc_route_policy_type(ctx);
-    if (1 == candi_replicas.count() &&
-        policy_type == COLUMN_STORE_ONLY &&
-        !is_inner_table &&
-        !ObReplicaTypeCheck::is_columnstore_replica(candi_replicas.at(0).get_replica_type())) {
-      ret = OB_NO_REPLICA_VALID;
-      LOG_USER_ERROR(OB_NO_REPLICA_VALID);
-    }
-    if (1 == candi_replicas.count() &&
-        policy_type == FORCE_READONLY_ZONE &&
-        !is_inner_table &&
-        !ObReplicaTypeCheck::is_readonly_replica(candi_replicas.at(0).get_replica_type())) {
+    if (1 == candi_replicas.count() && !is_inner_table &&
+        is_replica_type_not_allowed(policy_type, candi_replicas.at(0).get_replica_type(), ctx.consistency_level_ == WEAK)) {
       ret = OB_NO_REPLICA_VALID;
       LOG_USER_ERROR(OB_NO_REPLICA_VALID);
     }

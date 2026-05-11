@@ -208,6 +208,9 @@ public:
                           const share::ObServerLocality &locality2);
   static bool is_same_region(const share::ObServerLocality &locality1,
                              const share::ObServerLocality &locality2);
+  static bool is_replica_type_not_allowed(ObRoutePolicyType policy_type,
+                                          common::ObReplicaType replica_type,
+                                          bool is_weak);
 
 protected:
   int init_candidate_replica(const common::ObIArray<share::ObServerLocality> &server_locality_array,

@@ -249,6 +249,7 @@ void ObBLService::do_thread_task_(const int64_t begin_tstamp,
   }
 }
 
+ERRSIM_POINT_DEF(EN_BLACK_LIST_ADD_NON_LEADER_LS, "Add non-leader ls into blacklist when tracepoint is enabled")
 int ObBLService::do_black_list_check_(sqlclient::ObMySQLResult *result)
 {
   int ret = OB_SUCCESS;
@@ -267,6 +268,11 @@ int ObBLService::do_black_list_check_(sqlclient::ObMySQLResult *result)
     } else if (ls_info.is_leader() && check_need_skip_leader_(bl_key.get_tenant_id())) {
       // cannot add leader into blacklist
       need_remove = true;
+    } else if (OB_UNLIKELY(EN_BLACK_LIST_ADD_NON_LEADER_LS)) {
+      if (OB_FAIL(ls_bl_mgr_.update(bl_key, ls_info))) {
+        TRANS_LOG(WARN, "ls_bl_mgr_ add fail ", KR(ret), K(bl_key), K(ls_info));
+      }
+      TRANS_LOG(INFO, "force ls_bl_mgr_ add finish ", KR(ret), KTIME(gts), KTIME(weak_read_scn), K(max_stale_time), K(bl_key), K(ls_info));
     } else if (ls_info.weak_read_scn_ == 0 && ls_info.migrate_status_ == OB_MIGRATION_STATUS_NONE) {
       // log stream is initializing, should't be put into blacklist
       need_remove = true;

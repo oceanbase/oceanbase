@@ -505,7 +505,8 @@ int ObLakeTablePartitionInfo::init_tablet_loc_by_addr(ObCandiTabletLoc &tablet_l
                                                                    first_level_part_id,
                                                                    mock_tablet_id,
                                                                    location,
-                                                                   ObRoutePolicyType::READONLY_ZONE_FIRST))) {
+                                                                   ObRoutePolicyType::READONLY_ZONE_FIRST,
+                                                                   false))) {
       LOG_WARN("failed to set partition location with only readable replica", K(location));
     } else {
       tablet_loc.set_selected_replica_idx(0);
