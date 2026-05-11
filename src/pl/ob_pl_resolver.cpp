@@ -6677,7 +6677,15 @@ int ObPLResolver::resolve_static_sql(const ObStmtNodeTree *parse_tree,
       question_mark_cnt_ = parse_tree->value_; // 更新解析到当前语句时question mark的数量(包含当前语句)
       ObString new_sql;
       ObString old_sql(parse_tree->str_value_);
-      OZ (replace_plsql_line(resolve_ctx_.allocator_, parse_tree, old_sql, new_sql));
+      const ObStmtNodeTree *check_node = parse_tree;
+      if (T_SQL_STMT == parse_tree->type_
+          && parse_tree->num_child_ > 0
+          && OB_NOT_NULL(parse_tree->children_[0])) {
+        check_node = parse_tree->children_[0];
+      }
+      if (OB_NOT_NULL(check_node) && check_node->has_plsql_variable_) {
+        OZ (replace_plsql_line(resolve_ctx_.allocator_, parse_tree, old_sql, new_sql));
+      }
       if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObSPIService::spi_prepare(resolve_ctx_.allocator_,
                                             resolve_ctx_.session_info_,
