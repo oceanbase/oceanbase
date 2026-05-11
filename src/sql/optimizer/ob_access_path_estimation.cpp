@@ -1627,42 +1627,50 @@ int ObAccessPathEstimation::get_valid_partition_info(ObOptimizerContext &ctx,
       valid_table_loc.set_table_location_key(table_loc.get_table_location_key(), table_loc.get_ref_table_id());
       valid_table_loc.set_duplicate_type(table_loc.get_duplicate_type());
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < all_partitions.count(); ++i) {
-      const ObOptTabletLoc &part_loc = all_partitions.at(i).get_partition_location();
-      if (OB_FAIL(all_part_ids.push_back(part_loc.get_partition_id()))) {
-        LOG_WARN("failed to push back part id", K(ret));
+    if (OB_FAIL(ret)) {
+    } else if (ctx.use_default_stat()) {
+      if (OB_FAIL(valid_partitions.assign(all_partitions))) {
+        LOG_WARN("failed to assign tablet loc", K(ret));
       }
-    }
-    if (FAILEDx(ctx.get_opt_stat_manager()->get_table_stat(ctx.get_session_info()->get_effective_tenant_id(),
-                                                          table_partition_info.get_ref_table_id(),
-                                                          all_part_ids,
-                                                          part_stats))) {
-      LOG_WARN("failed to get table stats", K(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < part_stats.count(); i ++) {
-      const ObOptTableStat &stat = part_stats.at(i);
-      if (stat.get_last_analyzed() <= 0 || stat.is_stat_expired() || stat.get_row_count() > 0) {
-        ++valid_partition_count;
-      }
-    }
-    if (OB_SUCC(ret) && OB_FAIL(valid_partitions.reserve(valid_partition_count))) {
-      LOG_WARN("failed to reserve valid partitions", K(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < part_stats.count(); i ++) {
-      const ObOptTableStat &stat = part_stats.at(i);
-      if (stat.get_last_analyzed() <= 0 || stat.is_stat_expired() || stat.get_row_count() > 0) {
-        if (OB_FAIL(valid_partitions.push_back(all_partitions.at(i)))) {
-          LOG_WARN("failed to push back tablet loc", K(ret), K(all_partitions.at(i)));
+      OPT_TRACE("use default stat, choose all partitions");
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < all_partitions.count(); ++i) {
+        const ObOptTabletLoc &part_loc = all_partitions.at(i).get_partition_location();
+        if (OB_FAIL(all_part_ids.push_back(part_loc.get_partition_id()))) {
+          LOG_WARN("failed to push back part id", K(ret));
         }
-      } else {
-        OPT_TRACE("partition", stat.get_partition_id(), "is empty with stat version", stat.get_last_analyzed());
       }
-    }
-    if (OB_SUCC(ret)) {
-      if (valid_partitions.empty()) {
-        OPT_TRACE("All partitions are empty, choose partitions from all");
-        if (OB_FAIL(valid_partitions.assign(all_partitions))) {
-          LOG_WARN("failed to assign tablet loc", K(ret));
+      if (FAILEDx(ctx.get_opt_stat_manager()->get_table_stat(ctx.get_session_info()->get_effective_tenant_id(),
+                                                            table_partition_info.get_ref_table_id(),
+                                                            all_part_ids,
+                                                            part_stats))) {
+        LOG_WARN("failed to get table stats", K(ret));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < part_stats.count(); i ++) {
+        const ObOptTableStat &stat = part_stats.at(i);
+        if (stat.get_last_analyzed() <= 0 || stat.is_stat_expired() || stat.get_row_count() > 0) {
+          ++valid_partition_count;
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(valid_partitions.reserve(valid_partition_count))) {
+        LOG_WARN("failed to reserve valid partitions", K(ret));
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < part_stats.count(); i ++) {
+        const ObOptTableStat &stat = part_stats.at(i);
+        if (stat.get_last_analyzed() <= 0 || stat.is_stat_expired() || stat.get_row_count() > 0) {
+          if (OB_FAIL(valid_partitions.push_back(all_partitions.at(i)))) {
+            LOG_WARN("failed to push back tablet loc", K(ret), K(all_partitions.at(i)));
+          }
+        } else {
+          OPT_TRACE("partition", stat.get_partition_id(), "is empty with stat version", stat.get_last_analyzed());
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (valid_partitions.empty()) {
+          OPT_TRACE("All partitions are empty, choose partitions from all");
+          if (OB_FAIL(valid_partitions.assign(all_partitions))) {
+            LOG_WARN("failed to assign tablet loc", K(ret));
+          }
         }
       }
     }
