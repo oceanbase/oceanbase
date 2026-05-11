@@ -26,7 +26,9 @@ ObMySQLField::ObMySQLField()
       default_value_(MYSQL_TYPE_NOT_DEFINED),
       charsetnr_(0),
       length_(0),
-      inout_mode_(0)
+      inout_mode_(0),
+      elem_type_owner_(),
+      elem_type_name_()
 {
 }
 
@@ -148,10 +150,30 @@ int ObMySQLField::serialize_pro41(char *buf, const int64_t len, int64_t &pos) co
       if (OB_UNLIKELY(OB_SIZE_OVERFLOW != ret)) {
         LOG_WARN("serialize length failed", K(ret));
       }
-    } else if (type_name_.empty()
-               && OB_FAIL(ObMySQLUtil::store_int1(buf, len, (int8_t)default_value_, pos))) {
-      if (OB_UNLIKELY(OB_SIZE_OVERFLOW != ret)) {
-        LOG_WARN("serialize type failed", K(ret));
+    } else if (type_name_.empty()) {
+      // anonymous collection, serialize element type
+      if (OB_FAIL(ObMySQLUtil::store_int1(buf, len, (int8_t)default_value_, pos))) {
+        if (OB_UNLIKELY(OB_SIZE_OVERFLOW != ret)) {
+          LOG_WARN("serialize element type failed", K(ret));
+        }
+      } else if (MYSQL_TYPE_COMPLEX == default_value_
+                 && !elem_type_owner_.empty() && !elem_type_name_.empty()) {
+        // element type is complex with known type_info, serialize element's type_info
+        if (OB_FAIL(ObMySQLUtil::store_str_v(buf, len, elem_type_owner_.ptr(),
+                                             elem_type_owner_.length(), pos))) {
+          if (OB_UNLIKELY(OB_SIZE_OVERFLOW != ret)) {
+            LOG_WARN("serialize element type_owner failed", K(ret));
+          }
+        } else if (OB_FAIL(ObMySQLUtil::store_str_v(buf, len, elem_type_name_.ptr(),
+                                                    elem_type_name_.length(), pos))) {
+          if (OB_UNLIKELY(OB_SIZE_OVERFLOW != ret)) {
+            LOG_WARN("serialize element type_name failed", K(ret));
+          }
+        } else if (OB_FAIL(ObMySQLUtil::store_length(buf, len, OB_INVALID_VERSION, pos))) {
+          if (OB_UNLIKELY(OB_SIZE_OVERFLOW != ret)) {
+            LOG_WARN("serialize element version failed", K(ret));
+          }
+        }
       }
     }
   }

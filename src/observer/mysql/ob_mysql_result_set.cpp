@@ -69,6 +69,11 @@ int ObMySQLResultSet::to_mysql_field(const ObField &field, ObMySQLField &mfield)
       ObScale num_decimals;
       ret = ObSMUtils::get_mysql_type(
         field.default_value_.get_type(), mfield.default_value_, flags, num_decimals);
+      // copy element type info for complex element type
+      if (OB_SUCC(ret) && EMySQLFieldType::MYSQL_TYPE_COMPLEX == mfield.default_value_) {
+        mfield.elem_type_owner_ = field.elem_type_owner_;
+        mfield.elem_type_name_ = field.elem_type_name_;
+      }
     }
     if (field.is_hidden_rowid_) {
       mfield.inout_mode_ |= 0x04;
@@ -153,6 +158,11 @@ int ObMySQLResultSet::to_oracle_field(const ObField &field, ObMySQLField &mfield
       ObScale num_decimals;
       ret = ObSMUtils::get_mysql_type(
         field.default_value_.get_type(), mfield.default_value_, flags, num_decimals);
+      // copy element type info for complex element type
+      if (OB_SUCC(ret) && EMySQLFieldType::MYSQL_TYPE_COMPLEX == mfield.default_value_) {
+        mfield.elem_type_owner_ = field.elem_type_owner_;
+        mfield.elem_type_name_ = field.elem_type_name_;
+      }
     }
     if (field.is_hidden_rowid_) {
       mfield.inout_mode_ |= 0x04;

@@ -98,6 +98,8 @@ public:
   int execute(ObExecContext &ctx, ObAnonymousBlockStmt &stmt);
   int fill_field_with_udt_id(
     ObExecContext &ctx, uint64_t udt_id, common::ObField &field);
+  int fill_field_for_anonymous_collection(
+    ObExecContext &ctx, uint64_t elem_udt_id, common::ObField &field);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObAnonymousBlockExecutor);
