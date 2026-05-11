@@ -1161,7 +1161,7 @@ int ObAlterTableExecutor::execute_alter_external_table(ObExecContext &ctx, ObAlt
       OZ (ObExternalTableUtils::get_external_file_location(arg.alter_table_schema_, schema_guard, ctx.get_allocator(), file_location));
       OZ (ObExternalTableUtils::get_external_file_location_access_info(arg.alter_table_schema_, schema_guard, access_info));
       if (OB_SUCC(ret) && ObSQLUtils::is_external_files_on_local_disk(file_location)) {
-        OZ (ObSQLUtils::check_location_access_priv(access_info, ctx.get_my_session()));
+        OZ (ObSQLUtils::check_location_access_priv(file_location, ctx.get_my_session()));
       }
       ObSqlString full_path;
       bool is_opt_hive_table = false;
