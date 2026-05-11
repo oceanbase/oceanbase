@@ -3518,7 +3518,7 @@ int ObOptimizerUtil::check_has_risky_state_func(const ObRawExpr *qual, bool &has
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("qual expr is null", K(ret));
   } else if (qual->is_deterministic()) {
-    // do nothing
+    has_risky_state_func = (!qual->is_const_expr() && !qual->has_flag(CNT_COLUMN));
   } else if (qual->has_flag(CNT_ASSIGN_EXPR)) {
     // do nothing
   } else if (qual->has_flag(CNT_OR) && qual->get_relation_ids().num_members() > 1) {
