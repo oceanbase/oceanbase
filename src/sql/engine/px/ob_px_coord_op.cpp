@@ -645,6 +645,10 @@ int ObPxCoordOp::destroy_all_channel()
   if (tmp_ret != common::OB_SUCCESS) {
     LOG_TRACE("release interm result failed", KR(tmp_ret));
   }
+  // 上面已经把 channel 全部 unregister/unlink，这些容器里残留的都是已释放对象的指针。
+  // 立刻 reset，避免与 free_allocator() 之间出现 use-after-free 的窗口。
+  task_ch_set_.reset();
+  task_channels_.reset();
   return ret;
 }
 
