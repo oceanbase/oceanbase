@@ -2518,7 +2518,7 @@ ObOrcTableRowIterator::DataLoader::LOAD_FUNC ObOrcTableRowIterator::DataLoader::
     }
   } else if (ob_is_year_tc(datum_type.type_) && orc::TypeKind::INT == type_kind) {
     func = &DataLoader::load_year_vec;
-  } else if (ob_is_string_tc(datum_type.type_) || ob_is_enum_or_set_type(datum_type.type_)
+  } else if (ob_is_string_type(datum_type.type_) || ob_is_enum_or_set_type(datum_type.type_)
              || ob_is_large_text(datum_type.type_)) {
     //convert orc enum/string to enum/string vector
     bool is_lob = ob_is_large_text(datum_type.type_);
