@@ -7916,6 +7916,7 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
             //FORALL的BULK是追加模式，仅在非追加模式或追加模式的第一次需要spi_reset_collection
             OZ (spi_set_collection(ctx->exec_ctx_->get_my_session()->get_effective_tenant_id(),
                                      ctx, *table, 0));
+            OX (table->set_is_null(false));
           }
         }
       }
@@ -8168,6 +8169,7 @@ int ObSPIService::get_result(ObPLExecCtx *ctx,
             //FORALL的BULK是追加模式，仅在非追加模式或追加模式的第一次需要spi_reset_collection
             OZ (spi_set_collection(ctx->exec_ctx_->get_my_session()->get_effective_tenant_id(),
                                      ctx, *table, 0));
+            OX (table->set_is_null(false));
           }
           OZ (get_package_var_info_by_expr(result_expr, package_var_info.first, package_var_info.second));
           if (OB_INVALID_ID != package_var_info.first && OB_INVALID_ID != package_var_info.second) {
@@ -8646,6 +8648,16 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
             int64_t init_size = OB_INVALID_SIZE;
             OZ (ctx->get_user_type(udt_id, type));
             OZ (type->newx(*cast_ctx.allocator_v2_, ctx, ptr));
+            if (OB_FAIL(ret)) {
+            } else if (PL_RECORD_TYPE == in_result_type.get_meta_type().get_extend_type()) {
+              reinterpret_cast<pl::ObPLComposite*>(ptr)->set_null();
+            } else if (PL_NESTED_TABLE_TYPE == in_result_type.get_meta_type().get_extend_type() ||
+                       PL_VARRAY_TYPE == in_result_type.get_meta_type().get_extend_type()) {
+              ObPLCollection *coll = reinterpret_cast<ObPLCollection*>(ptr);
+              OZ (spi_set_collection(ctx->exec_ctx_->get_my_session()->get_effective_tenant_id(),
+                                    ctx, *coll, 0, false));
+              OX (coll->set_inited());
+            }
             OZ (type->get_size(PL_TYPE_INIT_SIZE, init_size));
             OX (tmp_obj.set_extend(ptr, type->get_type(), init_size));
           } else if (current_type.get_meta_type().is_ext() && PL_REF_CURSOR_TYPE == current_type.get_meta_type().get_extend_type()) {
