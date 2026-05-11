@@ -133,7 +133,8 @@ int ObCSVTableRowIterator::init(const storage::ObTableScanParam *scan_param)
       }
     } else {
       OZ (prefetch_mgr_.init(malloc_alloc_,
-                             scan_param_->external_file_format_.csv_format_.compression_algorithm_));
+                             scan_param_->external_file_format_.csv_format_.compression_algorithm_,
+                             scan_param->timeout_));
     }
 
     OZ (expand_buf());
