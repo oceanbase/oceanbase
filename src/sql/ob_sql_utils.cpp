@@ -900,7 +900,8 @@ int ObSQLUtils::se_calc_const_expr(ObSQLSessionInfo *session,
           } else if (OB_ISNULL(calc_expr)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("invalid null expr", K(ret));
-          } else if (FALSE_IT(phy_plan_ctx->set_cur_time(ObTimeUtility::current_time(), *session))) {
+          } else if (!phy_plan_ctx->has_cur_time()
+                  && FALSE_IT(phy_plan_ctx->set_cur_time(ObTimeUtility::current_time(), *session))) {
             // do nothing
           } else if (FALSE_IT(phy_plan_ctx->set_last_trace_id(session->get_last_trace_id()))) {
             // do nothing
