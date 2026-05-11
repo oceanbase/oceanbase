@@ -42,6 +42,7 @@
 #include "share/vector_index/ob_plugin_vector_index_service.h"
 #include "share/vector_index/ob_vector_index_util.h"
 #include "storage/meta_mem/ob_tablet_pointer.h"
+#include "storage/meta_store/ob_tenant_storage_meta_service.h"
 #include "storage/truncate_info/ob_truncate_partition_filter.h"
 #include "storage/access/ob_old_row_check_dumper.h"
 #include "storage/lob/ob_lob_tablet_dml.h"
