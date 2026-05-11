@@ -631,14 +631,50 @@ int MockDataSourceOp::fill_value_directly(ObExpr *expr, int64_t row_idx,
     case VEC_TC_DEC_INT128:
     case VEC_TC_DEC_INT256:
     case VEC_TC_DEC_INT512: {
-      // Convert value to string first
-      std::string str_val;
+      const int16_t target_scale = expr->datum_meta_.scale_;
+      // Build string with exactly target_scale fractional digits so that
+      // wide::from_string produces a decimal int whose implicit scale
+      // matches the column's storage scale.  Without this normalization,
+      // std::to_string(double) produces 6 decimal places and
+      // std::to_string(int) produces 0 — both mismatch the column scale
+      // and yield values that are off by powers of 10.
+      char buf[128];
       if (value.is_string()) {
-        str_val = value.get_string();
+        // Normalize the string to have exactly target_scale fractional digits
+        // via string manipulation, avoiding double conversion which loses
+        // precision for high-precision decimals (> 15 significant digits).
+        const std::string &str = value.get_string();
+        size_t dot_pos = str.find('.');
+        if (dot_pos == std::string::npos) {
+          // No decimal point, append target_scale zeros
+          int written = snprintf(buf, sizeof(buf), "%s.%0*d",
+                                 str.c_str(), target_scale, 0);
+          if (written < 0 || written >= static_cast<int>(sizeof(buf))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to format string for decimal int", K(ret));
+            break;
+          }
+        } else {
+          int frac_len = static_cast<int>(str.length()) - static_cast<int>(dot_pos) - 1;
+          if (frac_len == target_scale) {
+            // Already correct scale, copy as-is
+            snprintf(buf, sizeof(buf), "%s", str.c_str());
+          } else if (frac_len < target_scale) {
+            // Pad fractional part with zeros
+            snprintf(buf, sizeof(buf), "%s%0*d",
+                     str.c_str(), target_scale - frac_len, 0);
+          } else {
+            // Truncate fractional part to target_scale digits
+            snprintf(buf, sizeof(buf), "%.*s",
+                     static_cast<int>(dot_pos + 1 + target_scale), str.c_str());
+          }
+        }
       } else if (value.is_int()) {
-        str_val = std::to_string(value.get_int());
+        snprintf(buf, sizeof(buf), "%.*f", target_scale,
+                 static_cast<double>(value.get_int()));
       } else if (value.is_double()) {
-        str_val = std::to_string(value.get_double());
+        snprintf(buf, sizeof(buf), "%.*f", target_scale,
+                 value.get_double());
       } else {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unsupported value type for decimal int", K(ret));
@@ -652,9 +688,9 @@ int MockDataSourceOp::fill_value_directly(ObExpr *expr, int64_t row_idx,
       int16_t calc_scale = 0, calc_precision = 0;
       int32_t val_len = 0;
       common::ObArenaAllocator arena;
-      if (OB_FAIL(wide::from_string(str_val.c_str(), str_val.length(), arena,
+      if (OB_FAIL(wide::from_string(buf, strlen(buf), arena,
                                      calc_scale, calc_precision, val_len, decint))) {
-        LOG_WARN("failed to parse decimal int from string", K(str_val.c_str()), K(ret));
+        LOG_WARN("failed to parse decimal int from string", K(buf), K(ret));
         break;
       }
       // Copy to vector buffer with sign extension.

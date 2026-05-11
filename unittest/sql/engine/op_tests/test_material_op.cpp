@@ -1128,6 +1128,55 @@ TEST_F(MaterialOpTest, DecimalIntHighPrecision)
   EXPECT_EQ(1, result.row_count());
 }
 
+// TC4: decimal string without decimal point → append target_scale zeros
+TEST_F(MaterialOpTest, DecimalIntScalePad_NoDecimalPoint)
+{
+  auto result = material_test()
+      .table("t", "a decimal(30,5)")
+      .select("a")
+      .with_data({{std::string("9876543210987654321")}})
+      .run(engine_);  // No dual-format: scale differs from 1.0 natural scale
+  EXPECT_EQ(1, result.row_count());
+  EXPECT_TRUE(result.verify_ordered({{"9876543210987654321.00000"}}));
+}
+
+// TC5: decimal string with fewer fractional digits → pad zeros to target scale
+TEST_F(MaterialOpTest, DecimalIntScalePad_LessFractionDigits)
+{
+  auto result = material_test()
+      .table("t", "a decimal(10,3)")
+      .select("a")
+      .with_data({{std::string("123.4")}})
+      .run(engine_);  // No dual-format: scale differs from 1.0 natural scale
+  EXPECT_EQ(1, result.row_count());
+  EXPECT_TRUE(result.verify_ordered({{"123.400"}}));
+}
+
+// TC6: decimal string with more fractional digits → truncate to target scale
+TEST_F(MaterialOpTest, DecimalIntScaleTruncate_MoreFractionDigits)
+{
+  auto result = material_test()
+      .table("t", "a decimal(10,3)")
+      .select("a")
+      .with_data({{std::string("123.456789")}})
+      .run(engine_);  // No dual-format: scale differs from 1.0 natural scale
+  EXPECT_EQ(1, result.row_count());
+  EXPECT_TRUE(result.verify_ordered({{"123.456"}}));
+}
+
+// TC7: high precision decimal (int256 width) — verify string path preserves all digits
+TEST_F(MaterialOpTest, DecimalIntInt256Precision)
+{
+  auto result = material_test()
+      .table("t", "a decimal(45,15)")
+      .select("a")
+      .with_data({{std::string("123456789012345678901234567890.123456789012345")}})
+      .enable_dual_format_check()
+      .run(engine_);
+  EXPECT_EQ(1, result.row_count());
+  EXPECT_TRUE(result.verify_ordered({{"123456789012345678901234567890.123456789012345"}}));
+}
+
 // ===== T4b Acceptance Tests: expr_unit_test API =====
 
 // TC1: expr_unit_test basic usage

@@ -116,3 +116,24 @@ sql_unittest(test_framework_extensions
   ob_op_test_engine.cpp
   ob_op_test_data_source.cpp
 )
+
+# Phase 10: Hash Distinct operator tests
+sql_unittest(test_hash_distinct_op
+  test_hash_distinct_op.cpp
+  ob_op_test_engine.cpp
+  ob_op_test_data_source.cpp
+)
+
+# Decimal encoding bug regression test
+sql_unittest(test_decimal_encoding_bug
+  test_decimal_encoding_bug.cpp
+  ob_op_test_engine.cpp
+  ob_op_test_data_source.cpp
+)
+
+# Phase 10: Merge Distinct operator tests
+sql_unittest(test_merge_distinct_op
+  test_merge_distinct_op.cpp
+  ob_op_test_engine.cpp
+  ob_op_test_data_source.cpp
+)
