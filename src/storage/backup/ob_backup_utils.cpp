@@ -22,6 +22,7 @@
 #include "storage/compaction/ob_partition_merge_policy.h"
 #include "storage/backup/ob_backup_meta_cache.h"
 #include "share/backup/ob_backup_path.h"
+#include "share/ls/ob_ls_operator.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -36,6 +37,8 @@ namespace backup {
 
 /* ObBackupUtils */
 int ObBackupUtils::calc_start_replay_scn(
+    const uint64_t tenant_id,
+    common::ObISQLClient &sql_client,
     const share::ObBackupSetTaskAttr &set_task_attr,
     const storage::ObBackupLSMetaInfosDesc &ls_meta_infos,
     const share::ObTenantArchiveRoundAttr &round_attr,
@@ -45,12 +48,46 @@ int ObBackupUtils::calc_start_replay_scn(
   SCN tmp_start_replay_scn = set_task_attr.start_scn_;
   // To ensure that restore can be successfully initiated,
   // we need to avoid clearing too many logs and the start_replay_scn less than the start_scn of the first piece.
-  // so we choose the minimum palf_base_info.prev_log_info_.scn firstly, to ensure keep enough logs.
-  // Then we choose the max(minimum palf_base_info.prev_log_info_.scn, round_attr.start_scn) as the start_replay_scn,
-  // to ensure the start_replay_scn is greater than the start scn of first piece
+  // For each LS, we pick the lower bound of "from where archive logs are actually needed":
+  //   - normally, palf_base_info.prev_log_info_.scn_ is a safe (smaller-or-equal) approximation
+  //     of that lower bound;
+  //   - but if PalfBaseInfo is still the default placeholder (log_id == 0 && lsn == 0 && scn is min),
+  //     it means the LS has never executed advance_base_info (e.g. just migrated in), so
+  //     prev_log_info.scn_ is a fake 0 which would pull the global min down to 0 and then bumped up
+  //     to round_attr.start_scn_, possibly pointing to pieces that have already been recycled.
+  //     Fall back to the LS's create_scn from __all_ls in that case.
+  // Then we choose the max(minimum, round_attr.start_scn) as the start_replay_scn,
+  // to ensure the start_replay_scn is greater than the start scn of first piece.
+  const palf::LSN init_lsn(0);
   ARRAY_FOREACH_X(ls_meta_infos.ls_meta_packages_, i, cnt, OB_SUCC(ret)) {
-    const palf::PalfBaseInfo &palf_base_info = ls_meta_infos.ls_meta_packages_.at(i).palf_meta_;
-    tmp_start_replay_scn = SCN::min(tmp_start_replay_scn, palf_base_info.prev_log_info_.scn_);
+    const storage::ObLSMetaPackage &ls_meta_package = ls_meta_infos.ls_meta_packages_.at(i);
+    const palf::PalfBaseInfo &palf_base_info = ls_meta_package.palf_meta_;
+    const palf::LogInfo &prev_log_info = palf_base_info.prev_log_info_;
+    SCN ls_lower_bound = prev_log_info.scn_;
+    const bool is_default_palf_base_info = (0 == prev_log_info.log_id_
+                                            && prev_log_info.lsn_ == init_lsn
+                                            && prev_log_info.scn_.is_min());
+    if (is_default_palf_base_info) {
+      const share::ObLSID &ls_id = ls_meta_package.ls_meta_.ls_id_;
+      share::ObLSAttr ls_attr;
+      share::ObLSAttrOperator ls_attr_operator(tenant_id, &sql_client);
+      if (OB_FAIL(ls_attr_operator.get_ls_attr(ls_id, false /*for_update*/, sql_client,
+                                               ls_attr, false /*only_existing_ls*/))) {
+        LOG_WARN("PalfBaseInfo is default placeholder, but failed to query create_scn from __all_ls",
+            K(ret), K(tenant_id), K(ls_id), K(palf_base_info));
+      } else if (!ls_attr.get_create_scn().is_valid_and_not_min()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("PalfBaseInfo is default placeholder, but create_scn from __all_ls is invalid",
+            K(ret), K(tenant_id), K(ls_id), K(palf_base_info), K(ls_attr));
+      } else {
+        ls_lower_bound = ls_attr.get_create_scn();
+        LOG_INFO("PalfBaseInfo is default placeholder, fallback to create_scn for start_replay_scn calc",
+            K(ls_id), K(palf_base_info), "create_scn", ls_attr.get_create_scn());
+      }
+    }
+    if (OB_SUCC(ret)) {
+      tmp_start_replay_scn = SCN::min(tmp_start_replay_scn, ls_lower_bound);
+    }
   }
   if (OB_SUCC(ret)) {
     start_replay_scn = SCN::max(tmp_start_replay_scn, round_attr.start_scn_);
