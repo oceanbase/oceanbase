@@ -23,7 +23,7 @@ struct ObMergeLog final {
 public:
   OB_UNIS_VERSION(1);
 public:
-  enum OpType : uint8_t {
+  enum OpType : uint8_t { //FARM COMPAT WHITELIST
     INSERT = 1,
     UPDATE,
     DELETE,

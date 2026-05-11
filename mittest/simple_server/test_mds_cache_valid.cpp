@@ -263,7 +263,7 @@ TEST_F(ObMDSCacheValidTest, mds_cache_valid_after_truncate_and_dump_test)
 
 int main(int argc, char **argv)
 {
-  oceanbase::unittest::init_log_and_gtest(argc, argv);
+  oceanbase::unittest::init_log_and_gtest(argc, argv, false/*delete_log_files*/);
   OB_LOGGER.set_log_level("INFO");
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
