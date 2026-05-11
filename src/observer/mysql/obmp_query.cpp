@@ -599,7 +599,12 @@ int ObMPQuery::do_process_single_stmt(const ObMultiStmtItem &multi_stmt_item,
                                          need_disconnect);
         }
         //set session retry state
-        session.set_session_in_retry(retry_ctrl_.need_retry());
+        if (OB_BATCHED_MULTI_STMT_ROLLBACK == ret) {
+          // Preserve is_in_retry so the sequential fallback retains retry context
+          // (e.g., send-plan-directly for remote plans).
+        } else {
+          session.set_session_in_retry(retry_ctrl_.need_retry());
+        }
       } while (RETRY_TYPE_LOCAL == retry_ctrl_.get_retry_type());
       //@notice: after the async packet is responsed,
       //the easy_buf_ hold by the sql string may have been released.
