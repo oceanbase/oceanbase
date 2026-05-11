@@ -298,6 +298,7 @@ public:
   bool is_sharding_none() const { return sharding_ == OB_PARTITION_SHARDING_NONE; }
   bool is_sharding_partition() const { return sharding_ == OB_PARTITION_SHARDING_PARTITION; }
   bool is_sharding_adaptive() const { return sharding_ == OB_PARTITION_SHARDING_ADAPTIVE; }
+  bool is_sharding_subpartition() const { return sharding_ == OB_PARTITION_SHARDING_SUBPARTITION; }
 private:
   uint64_t tenant_id_;
   uint64_t tablegroup_id_;

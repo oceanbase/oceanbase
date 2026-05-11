@@ -723,6 +723,7 @@ const char *const OB_TRACE_ID_VAR_NAME = "__ob_trace_id";
 const char *const OB_PARTITION_SHARDING_NONE = "NONE";
 const char *const OB_PARTITION_SHARDING_PARTITION = "PARTITION";
 const char *const OB_PARTITION_SHARDING_ADAPTIVE = "ADAPTIVE";
+const char *const OB_PARTITION_SHARDING_SUBPARTITION = "SUBPARTITION";
 
 // partid pseudo column
 const char *const OB_PART_ID_PSEUDO_COLUMN_NAME = "__ob_partition_id";

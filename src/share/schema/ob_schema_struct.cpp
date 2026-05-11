@@ -8087,6 +8087,120 @@ bool ObPartitionUtils::is_types_equal_for_partition_check(
   return is_equal;
 }
 
+int ObPartitionUtils::check_global_index_match_primary_subpart(
+    const share::schema::ObSimpleTableSchemaV2 &index_schema,
+    const share::schema::ObSimpleTableSchemaV2 &primary_table_schema,
+    bool &is_matched)
+{
+  // compare global index's level-one partition with primary table's level-two (sub) partition
+  // same as ObSimpleTableSchemaV2::compare_partition_option
+  int ret = OB_SUCCESS;
+  is_matched = true;
+  bool index_oracle_mode = false;
+  bool primary_table_oracle_mode = false;
+  const schema::ObPartition *first_partition = NULL;
+  const schema::ObPartitionOption &index_part_option = index_schema.get_part_option();
+  const schema::ObPartitionOption &sub_part_option = primary_table_schema.get_sub_part_option();
+  schema::ObPartitionFuncType index_part_func_type = index_part_option.get_part_func_type();
+  schema::ObPartitionFuncType sub_part_func_type = sub_part_option.get_part_func_type();
+  if (OB_FAIL(index_schema.check_if_oracle_compat_mode(index_oracle_mode))) {
+    LOG_WARN("fail to get index mode", KR(ret), K(index_schema));
+  } else if (OB_FAIL(primary_table_schema.check_if_oracle_compat_mode(primary_table_oracle_mode))) {
+    LOG_WARN("fail to get primary table mode", KR(ret), K(primary_table_schema));
+  } else if (index_oracle_mode != primary_table_oracle_mode) {
+    is_matched = false;
+    LOG_INFO("table compatibilty mode not match", K(index_oracle_mode), K(primary_table_oracle_mode));
+  } else if (schema::PARTITION_LEVEL_ONE != index_schema.get_part_level()
+          || schema::PARTITION_LEVEL_TWO != primary_table_schema.get_part_level()) {
+    is_matched = false;
+    LOG_INFO("global index or primary table part level not matched",
+        K(index_schema.get_part_level()), K(primary_table_schema.get_part_level()));
+  } else if (index_part_func_type != sub_part_func_type
+          && (!is_key_part(index_part_func_type) || !is_key_part(sub_part_func_type))) {
+    is_matched = false;
+    LOG_INFO("partition func type not matched", K(index_part_func_type), K(sub_part_func_type));
+  } else if (OB_FAIL(primary_table_schema.get_partition_by_partition_index(0, CHECK_PARTITION_MODE_NORMAL, first_partition))) {
+    LOG_WARN("fail to get first partition of primary table", KR(ret));
+  } else if (OB_ISNULL(first_partition)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("first partition is null", KR(ret));
+  } else if (index_schema.get_partition_num() != first_partition->get_subpartition_num()) {
+    is_matched = false;
+    LOG_INFO("partition num not matched", K(index_schema.get_partition_num()), K(first_partition->get_subpartition_num()));
+  } else if (OB_FAIL(compare_partition_value_array(
+                  index_oracle_mode,
+                  index_schema.get_part_array(),
+                  first_partition->get_subpart_array(),
+                  index_schema.get_partition_num(),
+                  index_part_func_type,
+                  is_matched,
+                  NULL/*user_error*/))) {
+    LOG_WARN("fail to compare partition value array", KR(ret));
+  }
+  return ret;
+}
+
+int ObPartitionUtils::check_subpart_matched_within_table(
+    const share::schema::ObSimpleTableSchemaV2 &table_schema,
+    bool &is_matched)
+{
+  // check if all partitions within a single table have matched subpartition definition
+  // (same subpartition count and same subpartition values for range/list)
+  int ret = OB_SUCCESS;
+  is_matched = true;
+  bool is_oracle_mode = false;
+  const schema::ObPartition *first_partition = NULL;
+  if (OB_UNLIKELY(schema::PARTITION_LEVEL_TWO != table_schema.get_part_level())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("table is not two-level partition table, cannot check subpart matched within table", KR(ret), K(table_schema));
+  } else if (table_schema.get_partition_num() <= 1) {
+    // only one partition, no need to compare
+    is_matched = true;
+  } else if (OB_FAIL(table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("fail to get oracle mode", KR(ret), K(table_schema));
+  } else if (OB_FAIL(table_schema.get_partition_by_partition_index(0, CHECK_PARTITION_MODE_NORMAL, first_partition))) {
+    LOG_WARN("fail to get first partition", KR(ret));
+  } else if (OB_ISNULL(first_partition)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("first partition is null", KR(ret));
+  } else {
+    const int64_t first_subpart_num = first_partition->get_subpartition_num();
+    const schema::ObPartitionFuncType subpart_func_type = table_schema.get_sub_part_option().get_part_func_type();
+    // compare each partition's subpartitions with first partition's subpartitions
+    for (int64_t i = 1; OB_SUCC(ret) && i < table_schema.get_partition_num() && is_matched; i++) {
+      const schema::ObPartition *cur_partition = NULL;
+      if (OB_FAIL(table_schema.get_partition_by_partition_index(i, CHECK_PARTITION_MODE_NORMAL, cur_partition))) {
+        LOG_WARN("fail to get partition", KR(ret), K(i));
+      } else if (OB_ISNULL(cur_partition)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("partition is null", KR(ret), K(i));
+      } else if (first_subpart_num != cur_partition->get_subpartition_num()) {
+        is_matched = false;
+        LOG_INFO("subpartition num not aligned within table",
+            "table_id", table_schema.get_table_id(),
+            "first_part_subpart_num", first_subpart_num,
+            "cur_part_idx", i,
+            "cur_part_subpart_num", cur_partition->get_subpartition_num());
+      } else if (OB_FAIL(compare_partition_value_array(
+                      is_oracle_mode,
+                      first_partition->get_subpart_array(),
+                      cur_partition->get_subpart_array(),
+                      first_subpart_num,
+                      subpart_func_type,
+                      is_matched,
+                      NULL/*user_error*/))) {
+        LOG_WARN("fail to compare subpartition value array", KR(ret), K(i));
+      } else if (!is_matched) {
+        LOG_INFO("subpartition value not matched within table",
+            "table_id", table_schema.get_table_id(),
+            "first_part_idx", 0,
+            "cur_part_idx", i);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObPartitionUtils::convert_rows_to_sql_literal(
     const bool is_oracle_mode,
     const common::ObIArray<common::ObNewRow>& rows,

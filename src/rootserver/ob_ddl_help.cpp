@@ -7,6 +7,7 @@
 #include "rootserver/ob_ddl_help.h"
 #include "rootserver/ob_ddl_service.h"
 #include "share/schema/ob_schema_service_sql_impl.h"
+#include "share/ob_share_util.h"
 namespace oceanbase
 {
 using namespace common;
@@ -269,11 +270,11 @@ int ObTableGroupHelp::check_table_partition_in_tablegroup(const ObTableSchema *f
 int ObTableGroupHelp::check_all_table_partition_option(const ObTablegroupSchema &tablegroup_schema,
                                                        ObSchemaGetterGuard &schema_guard,
                                                        bool check_subpart,
-                                                       bool &is_matched)
+                                                       bool &is_matched,
+                                                       ObSqlString &user_error)
 {
   int ret = OB_SUCCESS;
   is_matched = true;
-  ObSqlString user_error;
   const uint64_t tenant_id = tablegroup_schema.get_tenant_id();
   const uint64_t tablegroup_id = tablegroup_schema.get_tablegroup_id();
   ObArray<const schema::ObSimpleTableSchemaV2 *> table_schemas;
@@ -295,10 +296,9 @@ int ObTableGroupHelp::check_all_table_partition_option(const ObTablegroupSchema 
                                                                         check_subpart, is_matched, &user_error))) {
         LOG_WARN("fail to check partition option", KR(ret), K(*table_schemas.at(i)), K(*primary_table_schema));
       } else if (!is_matched) {
-        LOG_WARN("two tables’ part method not consistent, not suit sharding type",
+        LOG_INFO("two tables' part method not consistent, not suit sharding type",
                 K(tablegroup_id), K(*table_schemas.at(i)),
                 K(*primary_table_schema), K(tablegroup_schema.get_sharding()));
-        PRINT_CHECK_PARTITION_ERROR(user_error, ", modify tablegroup sharding attribute");
       }
     }
   }
@@ -350,6 +350,53 @@ int ObTableGroupHelp::check_table_partition_option(const ObTableSchema *table_sc
   return ret;
 }
 
+int ObTableGroupHelp::check_all_partition_option_for_subpart_sharding(
+    const ObTablegroupSchema &tablegroup_schema,
+    ObSchemaGetterGuard &schema_guard,
+    bool &is_matched,
+    ObSqlString &user_error)
+{
+  int ret = OB_SUCCESS;
+  is_matched = true;
+  const uint64_t tenant_id = tablegroup_schema.get_tenant_id();
+  const uint64_t tablegroup_id = tablegroup_schema.get_tablegroup_id();
+  ObArray<const schema::ObSimpleTableSchemaV2 *> table_schemas;
+  if (OB_FAIL(schema_guard.get_table_schemas_in_tablegroup(tenant_id, tablegroup_id, table_schemas))) {
+    LOG_WARN("fail get table schemas from tablegroup", KR(ret), K(tenant_id), K(tablegroup_id));
+  } else {
+    // check all tables must be two-level partition table and subpartitions are matched within each table
+    for (int64_t i = 0; OB_SUCC(ret) && i < table_schemas.count() && is_matched; i++) {
+      const ObSimpleTableSchemaV2 *table_schema = table_schemas.at(i);
+      if (OB_ISNULL(table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table schema is null", KR(ret), K(tablegroup_schema), K(i));
+      } else if (table_schema->get_part_level() != PARTITION_LEVEL_TWO) {
+        is_matched = false;
+        LOG_INFO("table is not two-level partition table, cannot change to SUBPARTITION sharding",
+            KR(ret), "table_id", table_schema->get_table_id(),
+            "part_level", table_schema->get_part_level());
+        if (OB_FAIL(user_error.assign("tablegroup contains non-two-level partition table"))) {
+          LOG_WARN("fail to assign user error", KR(ret));
+        }
+      } else if (OB_FAIL(schema::ObPartitionUtils::check_subpart_matched_within_table(*table_schema, is_matched))) {
+        LOG_WARN("fail to check subpart matched within table", KR(ret), KPC(table_schema));
+      } else if (!is_matched) {
+        LOG_INFO("subpartitions not matched within table, cannot change to SUBPARTITION sharding", KR(ret), KPC(table_schema));
+        if (OB_FAIL(user_error.assign("partition mismatch within table"))) {
+          LOG_WARN("fail to assign user error", KR(ret));
+        }
+      }
+    }
+    // check both level one and two partition definition
+    if (OB_SUCC(ret) && is_matched) {
+      if (OB_FAIL(check_all_table_partition_option(tablegroup_schema, schema_guard, true/*check_subpart*/, is_matched, user_error))) {
+        LOG_WARN("fail to check table partition option for SUBPARTITION sharding", KR(ret), K(tablegroup_schema));
+      }
+    }
+  }
+  return ret;
+}
+
 /**
  * If partition data distribution methods are same, in the following scenarios,
  * the partition types of table and tablegroup are considered to be the same:
@@ -389,6 +436,23 @@ int ObTableGroupHelp::check_partition_option(
     if (OB_FAIL(check_table_partition_option(&table, first_table_schema, schema_guard, true, is_matched))) {
       LOG_WARN("fail to check adaptive sharding type", KR(ret), K(tablegroup_id), K(table_id), K(is_matched));
     }
+  } else if (tablegroup.get_sharding() == OB_PARTITION_SHARDING_SUBPARTITION) {
+    // check must be two-level partition table
+    if (table.get_part_level() != PARTITION_LEVEL_TWO) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("only two-level partition table can be added to SUBPARTITION sharding tablegroup",
+          KR(ret), K(tablegroup_id), K(table_id), "part_level", table.get_part_level());
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "add non-two-level partition table to SUBPARTITION sharding tablegroup");
+    } else if (OB_FAIL(schema::ObPartitionUtils::check_subpart_matched_within_table(table, is_matched))) {
+      LOG_WARN("fail to check subpart matched within table", KR(ret), K(table_id));
+    } else if (!is_matched) {
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("subpartitions not matched within table, cannot add to SUBPARTITION sharding tablegroup",
+          KR(ret), K(tablegroup_id), K(table_id));
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, "add table with non-matched subpartitions to SUBPARTITION sharding tablegroup");
+    } else if (OB_FAIL(check_table_partition_option(&table, first_table_schema, schema_guard, true/*check_subpart*/, is_matched))) {
+      LOG_WARN("fail to check subpartition sharding type", KR(ret), K(tablegroup_id), K(table_id), K(is_matched));
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("not found sharding", KR(ret), K(tablegroup));
@@ -408,6 +472,7 @@ int ObTableGroupHelp::modify_sharding_type(const ObAlterTablegroupArg &arg,
   int ret = OB_SUCCESS;
   bool is_matched = false;
   ObTablegroupSchema new_tablegroup_schema;
+  ObSqlString user_error;
   if (arg.alter_option_bitset_.has_member(ObAlterTablegroupArg::SHARDING)) {
     if (is_sys_tablegroup_id(tablegroup_schema.get_tablegroup_id())) {
       ret = OB_OP_NOT_ALLOW;
@@ -420,15 +485,33 @@ int ObTableGroupHelp::modify_sharding_type(const ObAlterTablegroupArg &arg,
     } else if (new_tablegroup_schema.get_sharding().empty()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("new tablegroup schema's sharding should not be empty", KR(ret));
+    } else if (new_tablegroup_schema.get_sharding() == OB_PARTITION_SHARDING_SUBPARTITION) {
+      if (OB_FAIL(ObShareUtil::check_compat_version_for_subpartition_sharding(tablegroup_schema.get_tenant_id()))) {
+        LOG_WARN("fail to check compat version for subpartition sharding", KR(ret), K(tablegroup_schema));
+      } else if (OB_FAIL(check_all_partition_option_for_subpart_sharding(new_tablegroup_schema, schema_guard, is_matched, user_error))) {
+        LOG_WARN("fail to check table sharding subpartition", KR(ret), K(new_tablegroup_schema));
+      } else if (!is_matched) {
+        PRINT_CHECK_PARTITION_ERROR(user_error, ", modify tablegroup sharding attribute");
+        ret = OB_OP_NOT_ALLOW;
+        LOG_WARN("can not modify sharding type to SUBPARTITION", KR(ret), K(new_tablegroup_schema.get_sharding()));
+      }
     } else if (new_tablegroup_schema.get_sharding() == OB_PARTITION_SHARDING_NONE) {
       is_matched = true;
     } else if (new_tablegroup_schema.get_sharding() == OB_PARTITION_SHARDING_PARTITION) {
-      if (OB_FAIL(check_all_table_partition_option(new_tablegroup_schema, schema_guard, false, is_matched))) {
+      if (OB_FAIL(check_all_table_partition_option(new_tablegroup_schema, schema_guard, false, is_matched, user_error))) {
         LOG_WARN("fail to check table sharding partition", KR(ret), K(new_tablegroup_schema));
+      } else if (!is_matched) {
+        PRINT_CHECK_PARTITION_ERROR(user_error, ", modify tablegroup sharding attribute");
+        ret = OB_OP_NOT_ALLOW;
+        LOG_WARN("can not modify sharding type to PARTITION", KR(ret), K(new_tablegroup_schema.get_sharding()));
       }
     } else if (new_tablegroup_schema.get_sharding() == OB_PARTITION_SHARDING_ADAPTIVE) {
-      if (OB_FAIL(check_all_table_partition_option(new_tablegroup_schema, schema_guard, true, is_matched))) {
+      if (OB_FAIL(check_all_table_partition_option(new_tablegroup_schema, schema_guard, true, is_matched, user_error))) {
         LOG_WARN("fail to check table sharding adaptive", KR(ret), K(new_tablegroup_schema));
+      } else if (!is_matched) {
+        PRINT_CHECK_PARTITION_ERROR(user_error, ", modify tablegroup sharding attribute");
+        ret = OB_OP_NOT_ALLOW;
+        LOG_WARN("can not modify sharding type to ADAPTIVE", KR(ret), K(new_tablegroup_schema.get_sharding()));
       }
     }
     if (OB_SUCC(ret) && is_matched) {
@@ -437,9 +520,6 @@ int ObTableGroupHelp::modify_sharding_type(const ObAlterTablegroupArg &arg,
       if (OB_FAIL(ddl_operator.alter_tablegroup(new_tablegroup_schema, trans, &arg.ddl_stmt_str_))) {
         LOG_WARN("fail to alter tablegroup sharding type", KR(ret), K(new_tablegroup_schema));
       }
-    } else if (OB_SUCC(ret) && !is_matched) {
-      ret = OB_OP_NOT_ALLOW;
-      LOG_WARN("can not modify sharding type", KR(ret), K(new_tablegroup_schema.get_sharding()));
     }
   }
   return ret;

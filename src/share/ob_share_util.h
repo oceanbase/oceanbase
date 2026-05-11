@@ -121,6 +121,9 @@ public:
       const uint64_t tenant_id,
       bool &is_compatible);
 
+  static int check_compat_version_for_subpartition_sharding(
+      const uint64_t tenant_id);
+
   static bool check_compat_version_for_hetero_zone(
       const uint64_t data_version);
 

@@ -3621,6 +3621,27 @@ public:
              const ObRowkey &transition_point,
              const ObRowkey &interval_range);
 
+  static int check_global_index_match_primary_subpart(
+             const share::schema::ObSimpleTableSchemaV2 &index_schema,
+             const share::schema::ObSimpleTableSchemaV2 &primary_table_schema,
+             bool &is_matched);
+
+  static int check_subpart_matched_within_table(
+             const share::schema::ObSimpleTableSchemaV2 &table_schema,
+             bool &is_matched);
+
+  // Compare partition values in two partition arrays (for range/list partitions)
+  // This is a common utility used by compare_partition_option, check_global_index_match_primary_subpart, etc.
+  template <typename PARTITION1, typename PARTITION2>
+  static int compare_partition_value_array(
+             const bool is_oracle_mode,
+             PARTITION1 * const *part_array1,
+             PARTITION2 * const *part_array2,
+             const int64_t part_num,
+             const ObPartitionFuncType part_func_type,
+             bool &is_matched,
+             common::ObSqlString *user_error = NULL);
+
   static int check_interval_partition_table_with_context(
              const ObRowkey &transition_point_obj,
              const ObRowkey &interval_range_obj,
@@ -8144,7 +8165,9 @@ int ObPartitionUtils::check_partition_value(
             find_equal_item = true;
           }
         } //end for (int64_t j = 0
-        if (!find_equal_item) {
+        if (!find_equal_item && is_equal) {
+          // set the error message only if is_equal is still true
+          // avoid overriding more precise error reasons already set in the inner loop
           is_equal = false;
           ASSIGN_PARTITION_ERROR(user_error, "list_part partition value not equal");
           SHARE_SCHEMA_LOG(TRACE,"list_part partition value not equal");
@@ -8154,6 +8177,51 @@ int ObPartitionUtils::check_partition_value(
   } else {
     ret = common::OB_INVALID_ARGUMENT;
     SHARE_SCHEMA_LOG(WARN, "invalid part_type", K(ret), K(part_type));
+  }
+  return ret;
+}
+
+template<typename PARTITION1, typename PARTITION2>
+int ObPartitionUtils::compare_partition_value_array(
+    const bool is_oracle_mode,
+    PARTITION1 * const *part_array1,
+    PARTITION2 * const *part_array2,
+    const int64_t part_num,
+    const ObPartitionFuncType part_func_type,
+    bool &is_matched,
+    common::ObSqlString *user_error)
+{
+  int ret = common::OB_SUCCESS;
+  is_matched = true;
+  if (is_hash_part(part_func_type) || is_key_part(part_func_type)) {
+    // for hash/key just need to compare part func type and part num, already done outside
+    is_matched = true;
+  } else if (is_range_part(part_func_type) || is_list_part(part_func_type)) {
+    if (OB_ISNULL(part_array1) || OB_ISNULL(part_array2)) {
+      ret = common::OB_ERR_UNEXPECTED;
+      SHARE_SCHEMA_LOG(WARN, "partition array is null", KR(ret), KP(part_array1), KP(part_array2));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < part_num && is_matched; i++) {
+        if (OB_ISNULL(part_array1[i]) || OB_ISNULL(part_array2[i])) {
+          ret = common::OB_ERR_UNEXPECTED;
+          SHARE_SCHEMA_LOG(WARN, "partition is null", KR(ret), K(i),
+              "part1_is_null", OB_ISNULL(part_array1[i]),
+              "part2_is_null", OB_ISNULL(part_array2[i]));
+        } else {
+          // use base class reference to allow template to work with different derived types
+          const ObBasePartition &base_part1 = *part_array1[i];
+          const ObBasePartition &base_part2 = *part_array2[i];
+          if (OB_FAIL(check_partition_value(
+                        is_oracle_mode, base_part1, base_part2,
+                        part_func_type, is_matched, user_error))) {
+            SHARE_SCHEMA_LOG(WARN, "fail to check partition value", KR(ret), K(i));
+          }
+        }
+      }
+    }
+  } else {
+    ret = common::OB_NOT_SUPPORTED;
+    SHARE_SCHEMA_LOG(WARN, "unsupported partition func type", KR(ret), K(part_func_type));
   }
   return ret;
 }

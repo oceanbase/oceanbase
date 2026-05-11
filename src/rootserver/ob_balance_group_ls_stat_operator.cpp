@@ -562,6 +562,12 @@ int ObNewTableTabletAllocator::prepare(
           if (OB_FAIL(alloc_ls_for_in_tablegroup_tablet(table_schema, *tablegroup_schema))) {
             LOG_WARN("fail to alloc ls for in tablegroup tablet", KR(ret));
           }
+        } else if (OB_NOT_NULL(tablegroup_schema) && tablegroup_schema->get_sharding() == OB_PARTITION_SHARDING_SUBPARTITION) {
+          // For SUBPARTITION sharding, global index may be implicitly bound to data table's subpartitions
+          // if global index's partition method/key/count matches data table's subpartition
+          if (OB_FAIL(alloc_ls_for_global_index_in_subpart_sharding_tablegroup_(table_schema, *tablegroup_schema))) {
+            LOG_WARN("fail to alloc ls for global index in subpart sharding tablegroup", KR(ret));
+          }
         } else if (OB_FAIL(alloc_ls_for_global_index_tablet(table_schema))) {
           LOG_WARN("fail to alloc ls for global index tablet", KR(ret));
         }
@@ -1372,6 +1378,85 @@ int ObNewTableTabletAllocator::alloc_ls_for_local_index_tablet(
   return ret;
 }
 
+int ObNewTableTabletAllocator::alloc_ls_for_global_index_in_subpart_sharding_tablegroup_(
+    const share::schema::ObTableSchema &index_schema,
+    const share::schema::ObTablegroupSchema &tablegroup_schema)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("alloc ls for global index in subpart sharding tablegroup",
+           "tenant_id", index_schema.get_tenant_id(),
+           "index_id", index_schema.get_table_id(),
+           "data_table_id", index_schema.get_data_table_id(),
+           "tablegroup_id", tablegroup_schema.get_tablegroup_id());
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObNewTableTabletAllocator not init", KR(ret));
+  } else {
+    const uint64_t tenant_id = index_schema.get_tenant_id();
+    const ObTableSchema *primary_table_schema = NULL;
+    const ObSimpleTableSchemaV2 *simple_primary_table_schema = NULL;
+    if (OB_FAIL(schema_guard_.get_primary_table_schema_in_tablegroup(tenant_id,
+                                                                     tablegroup_schema.get_tablegroup_id(),
+                                                                     simple_primary_table_schema))) {
+      LOG_WARN("fail to get primary table schema in tablegroup", KR(ret),
+               K(tenant_id), "tablegroup_id", tablegroup_schema.get_tablegroup_id());
+    } else if (OB_ISNULL(simple_primary_table_schema)) {
+      // such as CREATE TABLE ... WITH INDEX scenario, data table not yet visible
+      LOG_INFO("tablegroup is empty, alloc global index independently (will be aligned by balance)",
+                K(index_schema.get_table_id()), "tablegroup_id", tablegroup_schema.get_tablegroup_id());
+      if (OB_FAIL(alloc_ls_for_global_index_tablet(index_schema))) {
+        LOG_WARN("fail to alloc ls for global index tablet", KR(ret));
+      }
+    } else if (OB_FAIL(schema_guard_.get_table_schema(tenant_id, simple_primary_table_schema->get_table_id(), primary_table_schema))) {
+      LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), KPC(simple_primary_table_schema));
+    } else if (OB_ISNULL(primary_table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("primary table schema is null", KR(ret), K(tenant_id), KP(primary_table_schema));
+    } else if (OB_UNLIKELY(schema::PARTITION_LEVEL_TWO != primary_table_schema->get_part_level())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("primary table should be two-level partition for SUBPARTITION sharding", KR(ret),
+               "primary_table_id", primary_table_schema->get_table_id(), "part_level", primary_table_schema->get_part_level());
+    } else {
+      // check if global index's partition matches primary table's subpartition
+      bool is_matched = false;
+      if (OB_FAIL(schema::ObPartitionUtils::check_global_index_match_primary_subpart(index_schema, *primary_table_schema, is_matched))) {
+        LOG_WARN("fail to check global index match primary subpart", KR(ret), K(index_schema), K(*primary_table_schema));
+      } else if (is_matched) {
+        LOG_INFO("global index implicitly bound to primary table subpartitions",
+                 K(index_schema.get_table_id()), "primary_table_id", primary_table_schema->get_table_id());
+        common::ObArray<share::ObLSID> primary_table_ls_array;
+        if (OB_FAIL(generate_ls_array_by_primary_schema(*primary_table_schema, primary_table_ls_array))) {
+          LOG_WARN("fail to generate ls array by primary table schema", KR(ret), "primary_table_id", primary_table_schema->get_table_id());
+        } else if (primary_table_ls_array.count() != primary_table_schema->get_all_part_num()) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("ls array count mismatch", KR(ret),
+              K(primary_table_ls_array.count()), K(primary_table_schema->get_all_part_num()));
+        } else {
+          for (int64_t i = 0; OB_SUCC(ret) && i < index_schema.get_partition_num(); i++) {
+            int64_t subpart_offset = i;  // subpart_index in first partition
+            if (subpart_offset < primary_table_ls_array.count()) {
+              if (OB_FAIL(ls_id_array_.push_back(primary_table_ls_array.at(subpart_offset)))) {
+                LOG_WARN("fail to push back ls id", KR(ret), K(i), K(subpart_offset));
+              }
+            } else {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("subpart offset out of range", KR(ret),
+                  K(subpart_offset), K(primary_table_ls_array.count()));
+            }
+          }
+        }
+      } else {
+        LOG_INFO("global index partition not match primary table subpartition, use normal allocation",
+            K(index_schema.get_table_id()), "primary_table_id", primary_table_schema->get_table_id());
+        if (OB_FAIL(alloc_ls_for_global_index_tablet(index_schema))) {
+          LOG_WARN("fail to alloc tablet by count balance", KR(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObNewTableTabletAllocator::alloc_ls_for_global_index_tablet(
     const share::schema::ObTableSchema &index_schema)
 {
@@ -1464,8 +1549,9 @@ int ObNewTableTabletAllocator::alloc_ls_for_in_tablegroup_tablet(
             LOG_WARN("fail to alloc tablet for tablegroup", KR(ret), K(is_add_partition_), K(tablegroup_schema), K(*table_schema_array.at(0)), K(table_schema));
           }
         }
-      } else if (tablegroup_schema.get_sharding() == OB_PARTITION_SHARDING_ADAPTIVE) {
-        // add partition for tablegroup table may break the constraint of sharding ADAPTIVE
+      } else if (tablegroup_schema.get_sharding() == OB_PARTITION_SHARDING_ADAPTIVE
+              || tablegroup_schema.get_sharding() == OB_PARTITION_SHARDING_SUBPARTITION) {
+        // add partition for tablegroup table may break the constraint of sharding ADAPTIVE/SUBPARTITION
         // so alloc tablet as new table
         if (OB_FAIL(alloc_tablet_for_tablegroup(table_schema, tablegroup_schema))) {
           LOG_WARN("fail to alloc tablet for tablegroup", KR(ret), K(table_schema), K(tablegroup_schema));
@@ -1618,6 +1704,37 @@ int ObNewTableTabletAllocator::alloc_tablet_for_tablegroup(
         LOG_WARN("unexpected part_level", KR(ret), K(table_schema.get_part_level()));
       }
     }
+  } else if (tablegroup_schema.get_sharding() == OB_PARTITION_SHARDING_SUBPARTITION) {
+    const schema::ObPartition *first_partition = NULL;
+    if (schema::PARTITION_LEVEL_TWO != table_schema.get_part_level()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("SUBPARTITION sharding requires two-level partition table", KR(ret),
+          K(table_schema.get_part_level()), K(table_schema));
+    } else if (OB_FAIL(table_schema.get_partition_by_partition_index(0, schema::CHECK_PARTITION_MODE_NORMAL, first_partition))) {
+      LOG_WARN("get first partition fail", KR(ret), K(table_schema));
+    } else if (OB_ISNULL(first_partition)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("first partition is null", KR(ret), K(table_schema));
+    } else {
+      int64_t part_num = table_schema.get_partition_num();
+      int64_t sub_part_num = first_partition->get_subpartition_num();
+      common::ObArray<share::ObLSID> subpart_ls_array;
+      int64_t start_idx = fetch_ls_offset();
+      for (int64_t sp = 0; OB_SUCC(ret) && sp < sub_part_num; sp++) {
+        ObLSID dest_ls_id = ls_id_array.at((start_idx + sp) % ls_id_array.count());
+        if (OB_FAIL(subpart_ls_array.push_back(dest_ls_id))) {
+          LOG_WARN("failed to push ls_id to subpart_ls_array", KR(ret), K(sp), K(dest_ls_id));
+        }
+      }
+      for (int64_t i = 0; OB_SUCC(ret) && i < part_num; i++) {
+        for (int64_t sp = 0; OB_SUCC(ret) && sp < sub_part_num; sp++) {
+          const ObLSID &dest_ls_id = subpart_ls_array.at(sp);
+          if (OB_FAIL(ls_id_array_.push_back(dest_ls_id))) {
+            LOG_WARN("failed to push ls_id to array", KR(ret), K(dest_ls_id));
+          }
+        }
+      }
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unknow sharding option", KR(ret), K(tablegroup_schema.get_sharding()));
@@ -1754,6 +1871,19 @@ int ObNewTableTabletAllocator::alloc_tablet_for_tablegroup(
       LOG_WARN("mismatch partition in tablegroup", KR(ret), K(table_schema), K(primary_schema));
     } else if (OB_FAIL(alloc_tablet_by_primary_schema(primary_schema))) {
       LOG_WARN("fail to alloc tablet by primary_schema", KR(ret), K(primary_schema));
+    }
+  } else if (tablegroup_schema.get_sharding() == OB_PARTITION_SHARDING_SUBPARTITION) {
+    // global index table should not be here
+    if (schema::PARTITION_LEVEL_TWO != table_schema.get_part_level()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("SUBPARTITION sharding requires two-level partition table", KR(ret),
+          K(table_schema.get_part_level()), K(table_schema));
+    } else if (primary_schema.get_all_part_num() != table_schema.get_all_part_num()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("mismatch partition in tablegroup for SUBPARTITION sharding", KR(ret),
+          K(table_schema), K(primary_schema));
+    } else if (OB_FAIL(alloc_tablet_by_primary_schema(primary_schema))) {
+      LOG_WARN("fail to alloc tablet by primary_schema for SUBPARTITION sharding", KR(ret), K(primary_schema));
     }
   } else {
     ret = OB_ERR_UNEXPECTED;

@@ -994,34 +994,15 @@ int ObSimpleTableSchemaV2::compare_partition_option(const schema::ObSimpleTableS
       is_matched = false;
       LOG_WARN("partition num is not equal", K(t1.get_partition_num()), K(t2.get_partition_num()));
       ASSIGN_COMPARE_PARTITION_ERROR(user_error, "partition num not equal");
-    } else if (::oceanbase::is_hash_part(t1_part_func_type)
-              || ::oceanbase::is_key_part(t1_part_func_type)) {
-      //level one is hash and key, just need to compare part num and part type
-      //do nothing
-    } else if (::oceanbase::is_range_part(t1_part_func_type)
-            || ::oceanbase::is_list_part(t1_part_func_type)) {
-      if (OB_ISNULL(t1.get_part_array())
-          || OB_ISNULL(t2.get_part_array())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("partition_array is null", KR(ret), K(t1), K(t2));
-      } else {
-        int64_t t1_part_num = t1.get_partition_num();
-        for (int64_t i = 0; i < t1_part_num && is_matched && OB_SUCC(ret); i++) {
-          is_matched = false;
-          schema::ObPartition *table_part1 = t1.get_part_array()[i];
-          schema::ObPartition *table_part2 = t2.get_part_array()[i];
-          if (OB_ISNULL(table_part1) || OB_ISNULL(table_part2)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("partition is null", KR(ret), KP(table_part1), KP(table_part2));
-          } else if (OB_FAIL(schema::ObPartitionUtils::check_partition_value(
-                        t1_oracle_mode, *table_part1, *table_part2, t1_part_func_type, is_matched, user_error))) {
-            LOG_WARN("fail to check partition value", KR(ret), KPC(table_part1), KPC(table_part2), K(t1_part_func_type));
-          }
-        }
-      }
-    } else {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("invalid part func type", KR(ret), K(t1_part), K(t2_part));
+    } else if (OB_FAIL(schema::ObPartitionUtils::compare_partition_value_array(
+                    t1_oracle_mode,
+                    t1.get_part_array(),
+                    t2.get_part_array(),
+                    t1.get_partition_num(),
+                    t1_part_func_type,
+                    is_matched,
+                    user_error))) {
+      LOG_WARN("fail to compare level one partition value", KR(ret));
     }
     if (OB_SUCC(ret) && is_matched && check_subpart) {
       if (t1.get_part_level() != t2.get_part_level()) {
@@ -1060,28 +1041,15 @@ int ObSimpleTableSchemaV2::compare_partition_option(const schema::ObSimpleTableS
               is_matched = false;
               LOG_WARN("subpartition num is not equal", K(table_part1->get_subpartition_num()), K(table_part2->get_subpartition_num()));
               ASSIGN_COMPARE_PARTITION_ERROR(user_error, "subpartition num not matched");
-            } else if (::oceanbase::is_hash_part(t1_subpart_func_type)
-                     || ::oceanbase::is_key_part(t1_subpart_func_type)) {
-              //level two is hash and key, just need to compare part num and part type
-              //do nothing
-            } else if (::oceanbase::is_range_part(t1_subpart_func_type)
-                    || ::oceanbase::is_list_part(t1_subpart_func_type)) {
-              const int64_t t1_level_two_part_num = table_part1->get_subpartition_num();
-              for (int64_t j = 0; OB_SUCC(ret) && j < t1_level_two_part_num && is_matched; j++) {
-                is_matched = false;
-                schema::ObSubPartition *table_subpart1 = table_part1->get_subpart_array()[j];
-                schema::ObSubPartition *table_subpart2 = table_part2->get_subpart_array()[j];
-                if (OB_ISNULL(table_subpart1) || OB_ISNULL(table_subpart2)) {
-                  ret = OB_ERR_UNEXPECTED;
-                  LOG_WARN("subpartition is null", KR(ret), KP(table_subpart1), KP(table_subpart2));
-                } else if (OB_FAIL(schema::ObPartitionUtils::check_partition_value(
-                            t1_oracle_mode, *table_subpart1, *table_subpart2, t1_subpart_func_type, is_matched, user_error))) {
-                  LOG_WARN("fail to check subpartition value", KR(ret), KPC(table_subpart1), KPC(table_subpart1), K(t1_subpart_func_type));
-                }
-              }
-            } else {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("invalid subpart func type", KR(ret), K(t1_subpart), K(t2_subpart));
+            } else if (OB_FAIL(schema::ObPartitionUtils::compare_partition_value_array(
+                            t1_oracle_mode,
+                            table_part1->get_subpart_array(),
+                            table_part2->get_subpart_array(),
+                            table_part1->get_subpartition_num(),
+                            t1_subpart_func_type,
+                            is_matched,
+                            user_error))) {
+              LOG_WARN("fail to compare level two partition value", KR(ret), K(i));
             }
           }
         }

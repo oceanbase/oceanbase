@@ -38,8 +38,8 @@ int ObBalanceGroup::init_by_tablegroup(const ObSimpleTablegroupSchema &tg,
       id_ = ObBalanceGroupID::SHARDING_NONE_TABLEGROUP_BG_ID;
     }
   } else if (tg.is_sharding_partition()
-      || (tg.is_sharding_adaptive()
-          && (PARTITION_LEVEL_ZERO == max_part_level || PARTITION_LEVEL_ONE == max_part_level))) {
+          || tg.is_sharding_subpartition()
+          || (tg.is_sharding_adaptive() && (PARTITION_LEVEL_ZERO == max_part_level || PARTITION_LEVEL_ONE == max_part_level))) {
     // Table Group is a independent balance group
     if (OB_FAIL(bg_name_str.append_fmt("TABLEGROUP_%s", tg_name.ptr()))) {
       LOG_WARN("fail to append fmt", KR(ret), K(tg));

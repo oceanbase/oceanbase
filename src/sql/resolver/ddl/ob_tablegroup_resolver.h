@@ -11,6 +11,7 @@
 #include "share/ob_rpc_struct.h"
 #include "sql/resolver/ob_stmt.h"
 #include "share/config/ob_server_config.h"
+#include "share/ob_share_util.h"
 
 namespace oceanbase
 {
@@ -212,14 +213,24 @@ int ObTableGroupResolver::resolve_tablegroup_option(T *stmt, ParseNode *node)
             const char *sharding_str = option_node->children_[0]->str_value_;
             common::ObString tablegroup_sharding;
             tablegroup_sharding.assign_ptr(sharding_str, static_cast<int32_t>(sharding_length));
-            if (tablegroup_sharding != OB_PARTITION_SHARDING_NONE && tablegroup_sharding != OB_PARTITION_SHARDING_PARTITION
-                && tablegroup_sharding != OB_PARTITION_SHARDING_ADAPTIVE) {
+            if (tablegroup_sharding != OB_PARTITION_SHARDING_NONE
+             && tablegroup_sharding != OB_PARTITION_SHARDING_PARTITION
+             && tablegroup_sharding != OB_PARTITION_SHARDING_ADAPTIVE
+             && tablegroup_sharding != OB_PARTITION_SHARDING_SUBPARTITION) {
               ret = OB_INVALID_ARGUMENT;
               SQL_RESV_LOG(WARN, "invalid tablegroup sharding attribute", K(ret),
                          "sharding", tablegroup_sharding);
               LOG_USER_ERROR(OB_INVALID_ARGUMENT, "sharding");
             } else if (OB_FAIL(stmt->set_tablegroup_sharding(tablegroup_sharding))) {
               SQL_LOG(WARN, "set_tablegroup_sharding", K(ret));
+            } else if (tablegroup_sharding == OB_PARTITION_SHARDING_SUBPARTITION) {
+              if (OB_ISNULL(session_info_)) {
+                ret = OB_ERR_UNEXPECTED;
+                SQL_LOG(WARN, "session_info_ is null", KR(ret));
+              } else if (OB_FAIL(ObShareUtil::check_compat_version_for_subpartition_sharding(
+                      session_info_->get_effective_tenant_id()))) {
+                SQL_LOG(WARN, "fail to check compat version for subpartition sharding", KR(ret));
+              }
             }
           }
           if (OB_SUCC(ret) && OB_FAIL(alter_option_bitset_.add_member(obrpc::ObAlterTablegroupArg::SHARDING))) {

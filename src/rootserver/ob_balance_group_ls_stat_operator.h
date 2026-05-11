@@ -201,6 +201,9 @@ private:
       const share::schema::ObTableSchema &table_schema);
   int alloc_ls_for_duplicate_table_(
       const share::schema::ObTableSchema &table_schema);
+  int alloc_ls_for_global_index_in_subpart_sharding_tablegroup_(
+      const share::schema::ObTableSchema &index_schema,
+      const share::schema::ObTablegroupSchema &tablegroup_schema);
 private:
   int alloc_tablet_for_tablegroup(
       const share::schema::ObTableSchema &table_schema,

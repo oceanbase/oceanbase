@@ -220,6 +220,24 @@ int ObShareUtil::check_compat_version_for_columnstore_replica(
                                     tenant_id, is_compatible);
 }
 
+int ObShareUtil::check_compat_version_for_subpartition_sharding(
+    const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
+  if (OB_UNLIKELY(OB_INVALID_TENANT_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("fail to get tenant data version", KR(ret), K(tenant_id));
+  } else if (data_version < DATA_VERSION_4_6_1_0) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("subpartition sharding is not supported in this version", KR(ret), K(data_version));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "Data version does not match, subpartition sharding is");
+  }
+  return ret;
+}
+
 bool ObShareUtil::check_compat_version_for_hetero_zone(
     const uint64_t data_version)
 {

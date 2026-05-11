@@ -159,10 +159,18 @@ private:
       const share::schema::ObSimpleTablegroupSchema &tablegroup_schema,
       const common::ObArray<const share::schema::ObSimpleTableSchemaV2*> &table_schemas,
       const int64_t max_part_level);
-  int build_bg_for_tablegroup_sharding_subpart_(
+  int build_bg_for_tablegroup_sharding_adaptive_subpart_(
       const share::schema::ObSimpleTablegroupSchema &tablegroup_schema,
       const common::ObArray<const share::schema::ObSimpleTableSchemaV2*> &table_schemas,
       const int max_part_level);
+  int build_bg_for_tablegroup_sharding_subpartition_(
+      const share::schema::ObSimpleTablegroupSchema &tablegroup_schema,
+      const common::ObArray<const share::schema::ObSimpleTableSchemaV2*> &table_schemas,
+      const int max_part_level);
+  int get_matched_global_indexes_for_subpart_sharding_(
+      const common::ObArray<const share::schema::ObSimpleTableSchemaV2*> &table_schemas,
+      const share::schema::ObSimpleTableSchemaV2* primary_table_schema,
+      common::ObIArray<const share::schema::ObSimpleTableSchemaV2*> &matched_global_indexes);
   int build_bg_for_partlevel_zero_(const share::schema::ObSimpleTableSchemaV2 &table_schema);
   int build_bg_for_partlevel_one_(const share::schema::ObSimpleTableSchemaV2 &table_schema);
   int build_bg_for_partlevel_two_(const share::schema::ObSimpleTableSchemaV2 &table_schema);

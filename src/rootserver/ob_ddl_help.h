@@ -83,7 +83,14 @@ private:
   int check_all_table_partition_option(const ObTablegroupSchema &tablegroup_schema,
                                        ObSchemaGetterGuard &schema_guard,
                                        bool check_subpart,
-                                       bool &is_matched);
+                                       bool &is_matched,
+                                       common::ObSqlString &user_error);
+
+  int check_all_partition_option_for_subpart_sharding(
+      const ObTablegroupSchema &tablegroup_schema,
+      ObSchemaGetterGuard &schema_guard,
+      bool &is_matched,
+      common::ObSqlString &user_error);
 
   int check_partition_option(const share::schema::ObTablegroupSchema &tablegroup,
                              const share::schema::ObTableSchema *fist_table_schema,

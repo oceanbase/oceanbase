@@ -31168,6 +31168,9 @@ int ObDDLService::create_tablegroup(const bool if_not_exist,
     } else if (compat_version < DATA_VERSION_4_2_0_0) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("can not create tablegroup while observer is upgrading", KR(ret), K(tenant_id));
+    } else if (tablegroup_schema.get_sharding() == OB_PARTITION_SHARDING_SUBPARTITION
+            && OB_FAIL(ObShareUtil::check_compat_version_for_subpartition_sharding(tenant_id))) {
+      LOG_WARN("fail to check compat version for subpartition sharding", KR(ret), K(tenant_id));
     }
   }
   if (OB_SUCC(ret)) {

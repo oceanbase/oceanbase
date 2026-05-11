@@ -364,9 +364,19 @@ int ObAllBalanceGroupBuilder::build_balance_group_for_tablegroup_(
       // should be two-level part tables, other part level should not be here
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid partition level", KR(ret), K(max_part_level), K(tenant_id_), K(tablegroup_schema));
-    } else if (OB_FAIL(build_bg_for_tablegroup_sharding_subpart_(tablegroup_schema, table_schemas,
+    } else if (OB_FAIL(build_bg_for_tablegroup_sharding_adaptive_subpart_(tablegroup_schema, table_schemas,
         max_part_level))) {
       LOG_WARN("fail build balance group for tablegroup ADAPTIVE sharding and two level partition tables",
+          KR(ret), K(tenant_id_), K(tablegroup_schema), K(max_part_level));
+    }
+  } else if (tablegroup_schema.is_sharding_subpartition()) {
+    if (PARTITION_LEVEL_TWO != max_part_level) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid partition level for SUBPARTITION sharding", KR(ret),
+          K(max_part_level), K(tenant_id_), K(tablegroup_schema));
+    } else if (OB_FAIL(build_bg_for_tablegroup_sharding_subpartition_(tablegroup_schema, table_schemas,
+        max_part_level))) {
+      LOG_WARN("fail build balance group for tablegroup SUBPARTITION sharding",
           KR(ret), K(tenant_id_), K(tablegroup_schema), K(max_part_level));
     }
   } else {
@@ -681,7 +691,7 @@ int ObAllBalanceGroupBuilder::build_bg_for_tablegroup_sharding_partition_(
   return ret;
 }
 
-int ObAllBalanceGroupBuilder::build_bg_for_tablegroup_sharding_subpart_(
+int ObAllBalanceGroupBuilder::build_bg_for_tablegroup_sharding_adaptive_subpart_(
     const ObSimpleTablegroupSchema &tablegroup_schema,
     const ObArray<const ObSimpleTableSchemaV2*> &table_schemas,
     const int max_part_level)
@@ -730,11 +740,161 @@ int ObAllBalanceGroupBuilder::build_bg_for_tablegroup_sharding_subpart_(
     }
   }
 
-  ISTAT("build balance group for table group of SUBPARTITION sharding",
+  ISTAT("build balance group for table group of SUBPARTITION ADAPTIVE sharding",
       KR(ret),
       K(max_part_level),
       K(tablegroup_schema),
       "table_count", table_schemas.count());
+  return ret;
+}
+
+/**
+ * Build balance group for SUBPARTITION sharding tablegroup.
+ *
+ * SUBPARTITION sharding aligns subpartitions across different one-level partitions:
+ * - Only ONE balance group for the entire tablegroup
+ * - All tables' all partitions are in this single BG
+ * - Subpartitions with same sub_part_index across different one-level partitions belong to same LS
+ *
+ * Partition Group assignment:
+ * - part_group_uid = sub_part_index (subpartitions with same index go to same LS)
+ * - This ensures cross-one-level-partition alignment
+ * - Global indexes with matching partition definition share the same part_group_uid
+ */
+int ObAllBalanceGroupBuilder::build_bg_for_tablegroup_sharding_subpartition_(
+    const ObSimpleTablegroupSchema &tablegroup_schema,
+    const ObArray<const ObSimpleTableSchemaV2*> &table_schemas,
+    const int max_part_level)
+{
+  int ret = OB_SUCCESS;
+  const ObSimpleTableSchemaV2* primary_table_schema = nullptr;
+  ObArray<const ObSimpleTableSchemaV2*> matched_global_indexes;
+  if (OB_UNLIKELY(PARTITION_LEVEL_TWO != max_part_level)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("max part level is not 2", KR(ret), K(max_part_level));
+  // 1. get primary table schema and check all tables have matching partition definition
+  } else if (OB_FAIL(get_primary_schema_and_check_all_partition_matched_(tablegroup_schema, table_schemas,
+      primary_table_schema, true/*is_subpart*/))) {
+    LOG_WARN("get primary schema and check all partition matched fail", KR(ret),
+        K(tablegroup_schema), K(table_schemas.count()));
+  } else if (OB_ISNULL(primary_table_schema)) {
+    // empty tablegroup or partition does not match, skip building balance group
+    LOG_INFO("no primary table found, skip building balance group", K(tablegroup_schema));
+  // 2. get matched global indexes (partition definition matches subpartition definition)
+  } else if (OB_FAIL(get_matched_global_indexes_for_subpart_sharding_(table_schemas, primary_table_schema, matched_global_indexes))) {
+    LOG_WARN("get matched global indexes failed", KR(ret), K(table_schemas.count()));
+  } else {
+    // 3. build one balance group for entire tablegroup
+    ObBalanceGroup bg;
+    const ObPartition *first_partition = NULL;
+    if (OB_FAIL(bg.init_by_tablegroup(tablegroup_schema, max_part_level))) {
+      LOG_WARN("init balance group by tablegroup fail", KR(ret), K(bg), K(max_part_level), K(tablegroup_schema));
+    } else if (OB_FAIL(primary_table_schema->get_partition_by_partition_index(0, CHECK_PARTITION_MODE_NORMAL, first_partition))) {
+      LOG_WARN("get first partition fail", KR(ret), KPC(primary_table_schema));
+    } else if (OB_ISNULL(first_partition)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("first partition is null", KR(ret), KPC(primary_table_schema));
+    } else {
+      int64_t sub_part_num = first_partition->get_subpartition_num();
+      // add all subpartitions from all tables
+      // part_group_uid = sub_part_index, so same sub_part_index across all tables/partitions go to same LS
+      // IMPORTANT: iterate by subpartition index first to ensure all partitions with same part_group_uid
+      // are added consecutively, which is required by add_new_part_() logic
+      for (int64_t sp = 0; OB_SUCC(ret) && sp < sub_part_num; sp++) {
+        const uint64_t part_group_uid = sp;
+        // add all tables' all partitions' sp-th subpartition
+        ARRAY_FOREACH(table_schemas, t) {
+          if (OB_ISNULL(table_schemas.at(t))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("table schema is null", KR(ret), K(t), K(tablegroup_schema));
+          } else {
+            const ObSimpleTableSchemaV2 &table_schema = *table_schemas.at(t);
+            for (int64_t p = 0; OB_SUCC(ret) && p < table_schema.get_partition_num(); p++) {
+              ObPartitionHelper::ObPartInfo part_info;
+              if (OB_FAIL(ObPartitionHelper::get_sub_part_info(table_schema, p, sp, part_info))) {
+                LOG_WARN("get sub partition info fail", KR(ret), K(table_schema), K(p), K(sp));
+              } else {
+                ObObjectID part_object_id = part_info.get_part_id();
+                ObTabletID tablet_id = part_info.get_tablet_id();
+                const int64_t obj_weight = 0; // TODO: support subpart balance weight later
+                ADD_NEW_PART(bg, table_schema, part_object_id, tablet_id, part_group_uid, obj_weight);
+              }
+            }
+          }
+        }
+        // add matched global indexes' sp-th partition
+        // global index's sp-th partition has part_group_uid = sp, aligning with primary table's subpartitions
+        ARRAY_FOREACH(matched_global_indexes, gi) {
+          if (OB_ISNULL(matched_global_indexes.at(gi))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("matched global index is null", KR(ret), K(gi));
+          } else {
+            const ObSimpleTableSchemaV2 &index_schema = *matched_global_indexes.at(gi);
+            // only add the sp-th partition of this global index
+            if (sp < index_schema.get_partition_num()) {
+              ObPartitionHelper::ObPartInfo part_info;
+              if (OB_FAIL(ObPartitionHelper::get_part_info(index_schema, sp, part_info))) {
+                LOG_WARN("get partition info fail", KR(ret), K(index_schema), K(sp));
+              } else {
+                ObObjectID part_object_id = part_info.get_part_id();
+                ObTabletID tablet_id = part_info.get_tablet_id();
+                const int64_t obj_weight = 0; // TODO: support global index balance weight later
+                ADD_NEW_PART(bg, index_schema, part_object_id, tablet_id, part_group_uid, obj_weight);
+              }
+            } else {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("subpartition index is out of range", KR(ret), K(sp), K(index_schema));
+            }
+          }
+        }  // end for global indexes
+      } // end for subpartitions
+    }
+  }
+  ISTAT("build balance group for tablegroup of SUBPARTITION sharding",
+      KR(ret),
+      K(max_part_level),
+      K(tablegroup_schema),
+      "table_count", table_schemas.count(),
+      "matched_global_index_count", matched_global_indexes.count());
+  return ret;
+}
+
+int ObAllBalanceGroupBuilder::get_matched_global_indexes_for_subpart_sharding_(
+    const ObArray<const ObSimpleTableSchemaV2*> &table_schemas,
+    const ObSimpleTableSchemaV2* primary_table_schema,
+    ObIArray<const ObSimpleTableSchemaV2*> &matched_global_indexes)
+{
+  int ret = OB_SUCCESS;
+  matched_global_indexes.reset();
+  ObArray<const ObSimpleTableSchemaV2*> all_global_indexes;
+  if (OB_ISNULL(primary_table_schema) || OB_UNLIKELY(table_schemas.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("primary table schema is null or table schemas is empty",
+      KR(ret), KP(primary_table_schema), K(table_schemas.count()));
+  } else if (OB_FAIL(get_global_indexes_of_tables_(table_schemas, all_global_indexes))) {
+    LOG_WARN("get global indexes of tables fail", KR(ret));
+  } else {
+    ARRAY_FOREACH(all_global_indexes, i) {
+      const ObSimpleTableSchemaV2* index_schema = all_global_indexes.at(i);
+      if (OB_ISNULL(index_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("index schema is null", KR(ret), K(i));
+      } else if (PARTITION_LEVEL_ONE != index_schema->get_part_level()) {
+        // only one-level partition global index can be matched
+        continue;
+      } else {
+        bool is_matched = true;
+        if (OB_FAIL(ObPartitionUtils::check_global_index_match_primary_subpart(*index_schema, *primary_table_schema, is_matched))) {
+          LOG_WARN("fail to check global index match primary subpart", KR(ret), KPC(index_schema), KPC(primary_table_schema));
+        } else if (is_matched && OB_FAIL(matched_global_indexes.push_back(index_schema))) {
+          LOG_WARN("push back matched global index fail", KR(ret), KPC(index_schema));
+        } else {
+          LOG_INFO("check global index matched for SUBPARTITION sharding", K(is_matched),
+              "index_table_id", index_schema->get_table_id(), "data_table_id", index_schema->get_data_table_id());
+        }
+      }
+    }
+  }
   return ret;
 }
 
