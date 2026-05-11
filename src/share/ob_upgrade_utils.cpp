@@ -37,6 +37,7 @@
 #include "share/system_variable/ob_sys_var_class_type.h"          // SYS_VAR_PARALLEL_SERVERS_TARGET
 #include "share/ob_global_stat_proxy.h"
 #include "share/compaction/ob_schedule_daily_maintenance_window.h"
+#include "share/stat/ob_dbms_stats_preferences.h"
 
 namespace oceanbase
 {
@@ -2495,6 +2496,8 @@ int ObUpgradeFor4510Processor::post_upgrade()
     LOG_WARN("fail to post upgrade set parallel target", KR(ret));
   } else if (OB_FAIL(post_upgrade_for_metadata_ls_())) {
     LOG_WARN("fail to post upgrade for metadata ls", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_optimizer_invalidation_period())) {
+    LOG_WARN("fail to post upgrade for optimizer invalidation period", KR(ret));
   }
   return ret;
 }
@@ -2545,6 +2548,31 @@ int ObUpgradeFor4510Processor::post_upgrade_for_set_paralllel_target_()
                   K(px_target_workers_per_cpu), K(affected_rows));
       }
     }
+  }
+  return ret;
+}
+int ObUpgradeFor4510Processor::post_upgrade_for_optimizer_invalidation_period()
+{
+  int ret = OB_SUCCESS;
+  ObSqlString raw_sql;
+  int64_t affected_rows = 0;
+  bool is_primary_tenant = false;
+  if (OB_ISNULL(sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_proxy is null", K(ret), K(tenant_id_));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::is_primary_tenant(sql_proxy_, tenant_id_, is_primary_tenant))) {
+    LOG_WARN("check is primary tenant failed", K(ret), K(tenant_id_));
+  } else if (!is_primary_tenant) {
+    LOG_INFO("tenant is not primary, skip optimizer invalidation period upgrade", K(tenant_id_));
+  } else if (OB_FAIL(common::ObDbmsStatsPreferences::get_optimizer_invalidation_period_for_upgrade(raw_sql))) {
+    LOG_WARN("failed to get optimizer invalidation period for upgrade", K(ret));
+  } else if (OB_FAIL(sql_proxy_->write(tenant_id_, raw_sql.ptr(), affected_rows))) {
+    LOG_WARN("failed to write optimizer invalidation period for upgrade", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+    LOG_WARN("[UPGRADE] post upgrade for optimizer invalidation period failed", KR(ret), K_(tenant_id));
+  } else {
+    LOG_INFO("[UPGRADE] post upgrade for optimizer invalidation period succeed", K_(tenant_id));
   }
   return ret;
 }

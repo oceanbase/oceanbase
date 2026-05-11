@@ -3445,6 +3445,13 @@ int ObDbmsStats::update_stat_cache(const uint64_t rpc_tenant_id,
       LOG_WARN("failed to push back partition ids", K(ret));
     }
   }
+  if (OB_SUCC(ret) && !stat_arg.no_invalidate_) {
+    if (param.optimizer_invalidation_period_sec_ > 0) {
+      stat_arg.plan_expired_before_ = ObTimeUtility::current_time() + param.optimizer_invalidation_period_sec_ * 1000000;
+    } else {
+      stat_arg.plan_expired_before_ = 0;
+    }
+  }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(update_stat_cache(rpc_tenant_id, stat_arg, running_monitor))) {
       LOG_WARN("failed to update stat cache", K(ret));
@@ -3492,6 +3499,12 @@ int ObDbmsStats::update_stat_cache(const uint64_t tenant_id,
       }
     }
     LOG_TRACE("update stat cache", K(stat_arg), K(failed_server_arr), K(all_server_arr));
+    if (OB_SUCC(ret) && running_monitor != NULL) {
+      ObOptStatGatherStatList::instance().update_need_flush_cache(true,
+                                                                   !stat_arg.no_invalidate_,
+                                                                   stat_arg.plan_expired_before_,
+                                                                   running_monitor->opt_stat_gather_stat_);
+    }
     if (OB_SUCC(ret) && !failed_server_arr.empty() && running_monitor != NULL) {
       ObSqlString tmp_str;
       char *buf = NULL;
@@ -4413,6 +4426,7 @@ int ObDbmsStats::parse_gather_stat_options(ObExecContext &ctx,
   if (OB_SUCC(ret)) {
     if (no_invalidate.is_null()) {
       stat_options |= StatOptionFlags::OPT_NO_INVALIDATE;
+      stat_options |= StatOptionFlags::OPT_OPTIMIZER_INVALIDATION_PERIOD;
     } else if (OB_FAIL(no_invalidate.get_bool(param.no_invalidate_))) {
       LOG_WARN("failed to get noinvalidate value", K(ret), K(no_invalidate));
     }
@@ -4553,6 +4567,14 @@ int ObDbmsStats::get_default_stat_options(ObExecContext &ctx,
   }
   if (OB_SUCC(ret) && stat_options & StatOptionFlags::OPT_NO_INVALIDATE) {
     ObNoInvalidatePrefs *tmp_pref = NULL;
+    if (OB_FAIL(new_stat_prefs(*param.allocator_, ctx.get_my_session(), ObString(), tmp_pref))) {
+      LOG_WARN("failed to new stat prefs", K(ret));
+    } else if (OB_FAIL(stat_prefs.push_back(tmp_pref))) {
+      LOG_WARN("failed to push back", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && stat_options & StatOptionFlags::OPT_OPTIMIZER_INVALIDATION_PERIOD) {
+    ObOptimizerInvalidationPeriodPrefs *tmp_pref = NULL;
     if (OB_FAIL(new_stat_prefs(*param.allocator_, ctx.get_my_session(), ObString(), tmp_pref))) {
       LOG_WARN("failed to new stat prefs", K(ret));
     } else if (OB_FAIL(stat_prefs.push_back(tmp_pref))) {
@@ -6551,6 +6573,13 @@ int ObDbmsStats::get_new_stat_pref(ObExecContext &ctx,
     } else {
       stat_pref = tmp_pref;
     }
+  } else if (0 == opt_name.case_compare("OPTIMIZER_INVALIDATION_PERIOD")) {
+    ObOptimizerInvalidationPeriodPrefs *tmp_pref = NULL;
+    if (OB_FAIL(new_stat_prefs(allocator, ctx.get_my_session(), opt_value, tmp_pref))) {
+      LOG_WARN("failed to new stat prefs", K(ret));
+    } else {
+      stat_pref = tmp_pref;
+    }
   } else {
     ret = OB_ERR_DBMS_STATS_PL;
     LOG_WARN("Invalid input values for pname", K(ret), K(opt_name));
@@ -6562,7 +6591,7 @@ int ObDbmsStats::get_new_stat_pref(ObExecContext &ctx,
                                        "ASYNC_STALE_MAX_TABLE_SIZE|HIST_EST_PERCENT|HIST_BLOCK_SAMPLE|"\
                                        "APPROXIMATE_NDV(global prefs unique)|ONLINE_ESTIMATE_PERCENT|"\
                                        "AUTO_SAMPLE_ROW_COUNT(global prefs unique)|GATHER_STATS_BATCH_SIZE|"\
-                                       "SKIP_RATE_SAMPLE_COUNT prefs" );
+                                       "SKIP_RATE_SAMPLE_COUNT|OPTIMIZER_INVALIDATION_PERIOD prefs" );
   }
   return ret;
 }

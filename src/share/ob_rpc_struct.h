@@ -1641,7 +1641,9 @@ public:
       partition_ids_(),
       column_ids_(),
       no_invalidate_(false),
-      update_system_stats_only_(false)
+      update_system_stats_only_(false),
+      plan_expired_before_(0),
+      standby_last_evict_time_(0)
   {}
   virtual ~ObUpdateStatCacheArg() {}
   void rest()
@@ -1652,6 +1654,8 @@ public:
     column_ids_.reset();
     no_invalidate_ = false;
     update_system_stats_only_ = false;
+    plan_expired_before_ = 0;
+    standby_last_evict_time_ = 0;
   }
   bool is_valid() const;
   int assign(const ObUpdateStatCacheArg &other) {
@@ -1660,6 +1664,8 @@ public:
     table_id_ = other.table_id_;
     no_invalidate_ = other.no_invalidate_;
     update_system_stats_only_ = other.update_system_stats_only_;
+    plan_expired_before_ = other.plan_expired_before_;
+    standby_last_evict_time_ = other.standby_last_evict_time_;
     if (OB_FAIL(ObDDLArg::assign(other))) {
       SHARE_LOG(WARN, "fail to assign ddl arg", KR(ret));
     } else if (OB_FAIL(partition_ids_.assign(other.partition_ids_))) {
@@ -1676,6 +1682,8 @@ public:
   common::ObSArray<uint64_t> column_ids_;
   bool no_invalidate_;
   bool update_system_stats_only_;
+  int64_t plan_expired_before_;
+  int64_t standby_last_evict_time_;  // The last time the standby opt stat kvcache was evicted
 
   DECLARE_VIRTUAL_TO_STRING;
 };

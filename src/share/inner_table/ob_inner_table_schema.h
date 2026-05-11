@@ -724,6 +724,7 @@ public:
   static int all_ss_gc_reserved_snapshot_schema(share::schema::ObTableSchema &table_schema);
   static int all_java_policy_schema(share::schema::ObTableSchema &table_schema);
   static int all_java_policy_history_schema(share::schema::ObTableSchema &table_schema);
+  static int all_table_opt_stat_invalidate_plan_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_all_table_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_table_column_schema(share::schema::ObTableSchema &table_schema);
   static int tenant_virtual_table_index_schema(share::schema::ObTableSchema &table_schema);
@@ -1298,6 +1299,7 @@ public:
   static int all_virtual_java_policy_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_java_policy_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tenant_worker_group_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_table_opt_stat_invalidate_plan_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_stat_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_cache_plan_explain_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -1651,6 +1653,7 @@ public:
   static int all_virtual_external_resource_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_java_policy_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_tenant_worker_group_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_table_opt_stat_invalidate_plan_real_agent_ora_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_plan_cache_stat_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_plan_cache_plan_stat_schema(share::schema::ObTableSchema &table_schema);
   static int schemata_schema(share::schema::ObTableSchema &table_schema);
@@ -3178,6 +3181,7 @@ public:
   static int all_ss_gc_reserved_snapshot_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_java_policy_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_java_policy_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_table_opt_stat_invalidate_plan_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_table_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_column_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_ddl_operation_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
@@ -3549,6 +3553,7 @@ public:
   static int all_ss_gc_reserved_snapshot_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_java_policy_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_java_policy_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_table_opt_stat_invalidate_plan_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_table_real_agent_ora_idx_data_table_id_real_agent_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_table_real_agent_ora_idx_db_tb_name_real_agent_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_table_real_agent_ora_idx_tb_name_real_agent_schema(share::schema::ObTableSchema &table_schema);
@@ -4175,6 +4180,7 @@ const schema_create_func sys_table_schema_creators [] = {
   ObInnerTableSchema::all_ss_gc_reserved_snapshot_schema,
   ObInnerTableSchema::all_java_policy_schema,
   ObInnerTableSchema::all_java_policy_history_schema,
+  ObInnerTableSchema::all_table_opt_stat_invalidate_plan_schema,
   NULL,};
 
 const schema_create_func virtual_table_schema_creators [] = {
@@ -4752,6 +4758,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_java_policy_schema,
   ObInnerTableSchema::all_virtual_java_policy_history_schema,
   ObInnerTableSchema::all_virtual_tenant_worker_group_schema,
+  ObInnerTableSchema::all_virtual_table_opt_stat_invalidate_plan_schema,
   ObInnerTableSchema::all_virtual_sql_audit_ora_schema,
   ObInnerTableSchema::all_virtual_plan_stat_ora_schema,
   ObInnerTableSchema::all_virtual_plan_cache_plan_explain_ora_schema,
@@ -5105,6 +5112,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_external_resource_real_agent_ora_schema,
   ObInnerTableSchema::all_virtual_java_policy_real_agent_ora_schema,
   ObInnerTableSchema::all_virtual_tenant_worker_group_ora_schema,
+  ObInnerTableSchema::all_virtual_table_opt_stat_invalidate_plan_real_agent_ora_schema,
   NULL,};
 
 const schema_create_func virtual_table_index_schema_creators [] = {
@@ -6867,6 +6875,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_SS_GC_RESERVED_SNAPSHOT_TID,
   OB_ALL_JAVA_POLICY_TID,
   OB_ALL_JAVA_POLICY_HISTORY_TID,
+  OB_ALL_TABLE_OPT_STAT_INVALIDATE_PLAN_TID,
   OB_TENANT_VIRTUAL_ALL_TABLE_TID,
   OB_TENANT_VIRTUAL_TABLE_COLUMN_TID,
   OB_TENANT_VIRTUAL_TABLE_INDEX_TID,
@@ -7183,6 +7192,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_VECTOR_SEGMENT_INFO_TID,
   OB_ALL_VIRTUAL_JAVA_POLICY_HISTORY_TID,
   OB_ALL_VIRTUAL_TENANT_WORKER_GROUP_TID,
+  OB_ALL_VIRTUAL_TABLE_OPT_STAT_INVALIDATE_PLAN_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TID,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TID,
@@ -7546,6 +7556,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_EXTERNAL_RESOURCE_REAL_AGENT_ORA_TID,
   OB_ALL_VIRTUAL_JAVA_POLICY_REAL_AGENT_ORA_TID,
   OB_ALL_VIRTUAL_TENANT_WORKER_GROUP_ORA_TID,
+  OB_ALL_VIRTUAL_TABLE_OPT_STAT_INVALIDATE_PLAN_REAL_AGENT_ORA_TID,
   OB_GV_OB_PLAN_CACHE_STAT_TID,
   OB_GV_OB_PLAN_CACHE_PLAN_STAT_TID,
   OB_SCHEMATA_TID,
@@ -9092,6 +9103,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_SS_GC_RESERVED_SNAPSHOT_AUX_LOB_META_TID,
   OB_ALL_JAVA_POLICY_AUX_LOB_META_TID,
   OB_ALL_JAVA_POLICY_HISTORY_AUX_LOB_META_TID,
+  OB_ALL_TABLE_OPT_STAT_INVALIDATE_PLAN_AUX_LOB_META_TID,
   OB_ALL_TABLE_AUX_LOB_PIECE_TID,
   OB_ALL_COLUMN_AUX_LOB_PIECE_TID,
   OB_ALL_DDL_OPERATION_AUX_LOB_PIECE_TID,
@@ -9435,7 +9447,8 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_ROUTINE_LOAD_JOB_AUX_LOB_PIECE_TID,
   OB_ALL_SS_GC_RESERVED_SNAPSHOT_AUX_LOB_PIECE_TID,
   OB_ALL_JAVA_POLICY_AUX_LOB_PIECE_TID,
-  OB_ALL_JAVA_POLICY_HISTORY_AUX_LOB_PIECE_TID,  };
+  OB_ALL_JAVA_POLICY_HISTORY_AUX_LOB_PIECE_TID,
+  OB_ALL_TABLE_OPT_STAT_INVALIDATE_PLAN_AUX_LOB_PIECE_TID,  };
 
 const uint64_t all_ora_mapping_virtual_table_org_tables [] = {
   OB_ALL_VIRTUAL_SQL_AUDIT_TID,
@@ -10204,6 +10217,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_SS_GC_RESERVED_SNAPSHOT_TNAME,
   OB_ALL_JAVA_POLICY_TNAME,
   OB_ALL_JAVA_POLICY_HISTORY_TNAME,
+  OB_ALL_TABLE_OPT_STAT_INVALIDATE_PLAN_TNAME,
   OB_TENANT_VIRTUAL_ALL_TABLE_TNAME,
   OB_TENANT_VIRTUAL_TABLE_COLUMN_TNAME,
   OB_TENANT_VIRTUAL_TABLE_INDEX_TNAME,
@@ -10520,6 +10534,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_VECTOR_SEGMENT_INFO_TNAME,
   OB_ALL_VIRTUAL_JAVA_POLICY_HISTORY_TNAME,
   OB_ALL_VIRTUAL_TENANT_WORKER_GROUP_TNAME,
+  OB_ALL_VIRTUAL_TABLE_OPT_STAT_INVALIDATE_PLAN_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TNAME,
   OB_ALL_VIRTUAL_PLAN_STAT_ORA_TNAME,
@@ -10883,6 +10898,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_EXTERNAL_RESOURCE_REAL_AGENT_ORA_TNAME,
   OB_ALL_VIRTUAL_JAVA_POLICY_REAL_AGENT_ORA_TNAME,
   OB_ALL_VIRTUAL_TENANT_WORKER_GROUP_ORA_TNAME,
+  OB_ALL_VIRTUAL_TABLE_OPT_STAT_INVALIDATE_PLAN_REAL_AGENT_ORA_TNAME,
   OB_GV_OB_PLAN_CACHE_STAT_TNAME,
   OB_GV_OB_PLAN_CACHE_PLAN_STAT_TNAME,
   OB_SCHEMATA_TNAME,
@@ -12429,6 +12445,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_SS_GC_RESERVED_SNAPSHOT_AUX_LOB_META_TNAME,
   OB_ALL_JAVA_POLICY_AUX_LOB_META_TNAME,
   OB_ALL_JAVA_POLICY_HISTORY_AUX_LOB_META_TNAME,
+  OB_ALL_TABLE_OPT_STAT_INVALIDATE_PLAN_AUX_LOB_META_TNAME,
   OB_ALL_TABLE_AUX_LOB_PIECE_TNAME,
   OB_ALL_COLUMN_AUX_LOB_PIECE_TNAME,
   OB_ALL_DDL_OPERATION_AUX_LOB_PIECE_TNAME,
@@ -12772,7 +12789,8 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_ROUTINE_LOAD_JOB_AUX_LOB_PIECE_TNAME,
   OB_ALL_SS_GC_RESERVED_SNAPSHOT_AUX_LOB_PIECE_TNAME,
   OB_ALL_JAVA_POLICY_AUX_LOB_PIECE_TNAME,
-  OB_ALL_JAVA_POLICY_HISTORY_AUX_LOB_PIECE_TNAME,  };
+  OB_ALL_JAVA_POLICY_HISTORY_AUX_LOB_PIECE_TNAME,
+  OB_ALL_TABLE_OPT_STAT_INVALIDATE_PLAN_AUX_LOB_PIECE_TNAME,  };
 
 const uint64_t only_rs_vtables [] = {
   OB_ALL_VIRTUAL_CORE_META_TABLE_TID,
@@ -16347,6 +16365,14 @@ LOBMapping const lob_aux_table_mappings [] = {
     OB_ALL_JAVA_POLICY_HISTORY_AUX_LOB_PIECE_TID,
     ObInnerTableSchema::all_java_policy_history_aux_lob_meta_schema,
     ObInnerTableSchema::all_java_policy_history_aux_lob_piece_schema
+  },
+
+  {
+    OB_ALL_TABLE_OPT_STAT_INVALIDATE_PLAN_TID,
+    OB_ALL_TABLE_OPT_STAT_INVALIDATE_PLAN_AUX_LOB_META_TID,
+    OB_ALL_TABLE_OPT_STAT_INVALIDATE_PLAN_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_table_opt_stat_invalidate_plan_aux_lob_meta_schema,
+    ObInnerTableSchema::all_table_opt_stat_invalidate_plan_aux_lob_piece_schema
   },
 
 };

@@ -13,6 +13,9 @@
 #include "lib/time/ob_time_utility.h"
 #include "lib/hash/ob_hashset.h"
 #include "lib/hash/ob_hashmap.h"
+#include "storage/ob_locality_manager.h"
+#include "share/ob_srv_rpc_proxy.h"
+#include "src/pl/sys_package/ob_dbms_stats.h"
 
 namespace oceanbase {
 namespace common {
@@ -699,6 +702,31 @@ int ObOptStatService::load_external_table_stat_and_put_cache(const uint64_t tena
   return ret;
 }
 
+static int broadcast_evict_opt_stat_kvcache(const uint64_t tenant_id,
+                                            ObIArray<share::ObServerLocality> & all_server_arr,
+                                            int64_t timeout,
+                                            obrpc::ObUpdateStatCacheArg &arg)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; i < all_server_arr.count(); i++) {
+    if (!all_server_arr.at(i).is_active()
+        || share::ObServerStatus::OB_SERVER_ACTIVE != all_server_arr.at(i).get_server_status()
+        || 0 != all_server_arr.at(i).get_server_stop_time()) {
+    //server may not serving
+    } else {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = GCTX.srv_rpc_proxy_->to(all_server_arr.at(i).get_addr())
+                                                        .timeout(timeout)
+                                                        .by(tenant_id)
+                                                        .update_local_stat_cache(arg))) {
+        LOG_WARN("failed to evict table stat cache caused by unknow error",
+                 K(tmp_ret), K(all_server_arr.at(i).get_addr()), K(arg));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObOptStatService::extract_column_names_from_table_schema(const share::schema::ObTableSchema &table_schema,
                                                              ObIArray<ObString> &column_names)
 {
@@ -1055,7 +1083,134 @@ int ObOptStatService::generate_default_external_table_statistics(ObIAllocator &a
       LOG_WARN("failed to generate missing external column statistics", K(ret));
     }
   }
+  return ret;
+}
 
+static int get_dbms_stats_column_ids(const share::schema::ObTableSchema &table_schema,
+                                     ObIArray<uint64_t> &column_ids)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < table_schema.get_column_count(); ++i) {
+    const share::schema::ObColumnSchemaV2 *col = table_schema.get_column_schema_by_idx(i);
+    if (OB_ISNULL(col)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("column is null", K(ret), K(col));
+    //here add extra column id condition, because func index in oracle mode, the column will mark is
+    //hidden, that's will cause the fewer columns.
+    } else if (!pl::ObDbmsStats::check_column_validity(table_schema, *col)){
+      continue;
+    } else if (OB_FAIL(column_ids.push_back(col->get_column_id()))) {
+      LOG_WARN("failed to push column id", K(ret));
+    }
+  }
+  return ret;
+}
+
+static int evict_one_table_opt_stat_kvcache(const uint64_t tenant_id,
+                                            const ObEvictTableKey &key,
+                                            ObSchemaGetterGuard &schema_guard,
+                                            ObIArray<share::ObServerLocality> &all_server_arr,
+                                            int64_t timeout,
+                                            int64_t &last_gmt_modified)
+{
+  int ret = OB_SUCCESS;
+  const share::schema::ObTableSchema *table_schema = NULL;
+  const int64_t NO_EXPIRED_AT = -1;
+  obrpc::ObUpdateStatCacheArg update_stat_cache_arg;
+  if (OB_FAIL(schema_guard.get_table_schema(tenant_id, key.table_id_, table_schema))) {
+    LOG_WARN("failed to get table schema", K(ret), K(key.table_id_));
+  } else if (OB_ISNULL(table_schema)) {
+    LOG_INFO("get null table schema, skip evict", K(key.table_id_));
+    last_gmt_modified = key.gmt_modified_;
+  } else if (OB_FAIL(get_dbms_stats_column_ids(*table_schema, update_stat_cache_arg.column_ids_))) {
+    LOG_WARN("failed to get dbms stats column ids", K(ret));
+  } else if (OB_FAIL(ObDbmsStatsUtils::get_all_part_ids(*table_schema,
+                                                        update_stat_cache_arg.partition_ids_))) {
+    LOG_WARN("failed to push back partition ids", K(ret));
+  } else {
+    update_stat_cache_arg.tenant_id_ = tenant_id;
+    update_stat_cache_arg.table_id_ = key.table_id_;
+    update_stat_cache_arg.no_invalidate_ = (key.plan_expired_before_ == NO_EXPIRED_AT);
+    update_stat_cache_arg.plan_expired_before_ =
+        (key.plan_expired_before_ == NO_EXPIRED_AT) ? 0 : key.plan_expired_before_;
+    update_stat_cache_arg.standby_last_evict_time_ = key.gmt_modified_;
+    if (OB_FAIL(broadcast_evict_opt_stat_kvcache(tenant_id, all_server_arr,
+                                                  timeout, update_stat_cache_arg))) {
+      LOG_WARN("failed to broadcast evict opt stat kvcache", K(ret));
+    } else {
+      last_gmt_modified = key.gmt_modified_;
+      LOG_INFO("successfully evict standby opt stat kvcache",
+               K(key.table_id_), K(key.plan_expired_before_));
+    }
+  }
+  return ret;
+}
+
+int ObOptStatService::evict_all_opt_stat_kvcache(const uint64_t tenant_id,
+                                                 int64_t &last_gmt_modified)
+{
+  int ret = OB_SUCCESS;
+  const static int64_t max_table_cnt = 2000;
+  ObSEArray<ObEvictTableKey, 32> keys;
+  ObSEArray<share::ObServerLocality, 4> all_server_arr;
+  bool has_read_only_zone = false; // UNUSED;
+  int64_t timeout = MAX_OPT_STATS_PROCESS_RPC_TIMEOUT;
+  ObSchemaGetterGuard schema_guard;
+  hash::ObHashSet<uint64_t> table_ids_set;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("statistics service is not initialized. ", K(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.srv_rpc_proxy_) || OB_ISNULL(GCTX.locality_manager_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("rpc_proxy or session is null", K(ret), K(GCTX.srv_rpc_proxy_), K(GCTX.locality_manager_));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(GCTX.schema_service_));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("get tenant schema guard failed", K(ret));
+  } else if (OB_FAIL(GCTX.locality_manager_->get_server_locality_array(all_server_arr,
+                                                                       has_read_only_zone))) {
+    LOG_WARN("fail to get server locality", K(ret));
+  } else if (OB_FAIL(table_ids_set.create(max_table_cnt, "TableIdsSet", "TableIdsSetNode", tenant_id))) {
+    LOG_WARN("failed to create table ids set", K(ret));
+  } else {
+    LOG_INFO("begin evict standby opt stat kvcache", K(tenant_id), K(last_gmt_modified));
+    do {
+      keys.reuse();
+      if (OB_FAIL(sql_service_.get_recent_updated_stats(tenant_id,
+                                                        last_gmt_modified,
+                                                        max_table_cnt,
+                                                        keys))) {
+        LOG_WARN("failed to get recent updated stats", K(ret));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < keys.count(); ++i) {
+          const ObEvictTableKey &key = keys.at(i);
+          if (OB_FAIL(THIS_WORKER.check_status())) {
+            LOG_WARN("failed to check status", K(ret));
+          } else if (OB_FAIL(table_ids_set.set_refactored(key.table_id_))) {
+            if (OB_HASH_EXIST == ret) {
+              ret = OB_SUCCESS;
+              last_gmt_modified = key.gmt_modified_;
+              LOG_TRACE("table id already exists, skip evict", K(key.table_id_));
+            } else {
+              LOG_WARN("failed to set refactored", K(ret), K(key.table_id_));
+            }
+          } else {
+            timeout = std::min(MAX_OPT_STATS_PROCESS_RPC_TIMEOUT, THIS_WORKER.get_timeout_remain());
+            int tmp_ret = evict_one_table_opt_stat_kvcache(tenant_id, key, schema_guard,
+                                                           all_server_arr, timeout,
+                                                           last_gmt_modified);
+            if (OB_SUCCESS != tmp_ret) {
+              LOG_WARN("failed to evict one table opt stat kvcache, skip",
+                       K(tmp_ret), K(key.table_id_));
+              last_gmt_modified = key.gmt_modified_;
+            }
+          }
+        }
+      }
+    } while (OB_SUCC(ret) && max_table_cnt == keys.count());
+    LOG_INFO("end evict standby opt stat kvcache", K(tenant_id), K(last_gmt_modified), K(table_ids_set.size()));
+  }
   return ret;
 }
 

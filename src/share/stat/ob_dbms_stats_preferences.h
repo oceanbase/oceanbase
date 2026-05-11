@@ -153,6 +153,21 @@ class ObNoInvalidatePrefs : public ObStatPrefs
     virtual int check_pref_value_validity(ObTableStatParam *param = NULL) override;
     virtual const char* get_stat_pref_name() const { return "NO_INVALIDATE"; }
     virtual const char* get_stat_pref_default_value() const { return "DBMS_STATS.AUTO_INVALIDATE"; }
+    static int check_no_invalidate_value(const ObString &pvalue, bool &no_invalidate);
+};
+
+class ObOptimizerInvalidationPeriodPrefs : public ObStatPrefs
+{
+  public:
+    ObOptimizerInvalidationPeriodPrefs() : ObStatPrefs() {}
+    ObOptimizerInvalidationPeriodPrefs(ObIAllocator *alloc,
+                                        ObSQLSessionInfo *session_info,
+                                        const ObString &pvalue) :
+      ObStatPrefs(alloc, session_info, pvalue) {}
+    virtual int check_pref_value_validity(ObTableStatParam *param = NULL) override;
+    virtual const char* get_stat_pref_name() const { return "OPTIMIZER_INVALIDATION_PERIOD"; }
+    virtual const char* get_stat_pref_default_value() const { return "18000"; }
+    static int check_optimizer_invalidation_period_value(const ObString &pvalue, int64_t &period_sec);
 };
 
 class ObOptionsPrefs : public ObStatPrefs
@@ -406,6 +421,8 @@ public:
   static int get_extra_stats_perfs_for_upgrade_4351(ObSqlString &sql);
 
   static int get_extra_stats_perfs_for_upgrade_4352(ObSqlString &sql);
+
+  static int get_optimizer_invalidation_period_for_upgrade(ObSqlString &sql);
 
 private:
   static int do_get_prefs(ObMySQLProxy *mysql_proxy,

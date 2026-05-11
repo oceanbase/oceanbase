@@ -11,6 +11,9 @@
 #include "observer/ob_server.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 #include "share/stat/ob_opt_stat_manager.h"
+#include "logservice/ob_log_service.h"
+#include "common/ob_role.h"
+#include "lib/profile/ob_trace_id.h"
 
 namespace oceanbase
 {
@@ -109,16 +112,36 @@ void ObOptStatMonitorCheckTask::runTimerTask()
     LOG_INFO("run opt stat monitor check task", K(optstat_monitor_mgr_->tenant_id_));
     uint64_t tenant_id = optstat_monitor_mgr_->tenant_id_;
     bool is_primary = true;
+    bool is_standby = true;
     THIS_WORKER.set_timeout_ts(CHECK_INTERVAL + ObTimeUtility::current_time());
     if (OB_FAIL(ObShareUtil::mtl_check_if_tenant_role_is_primary(tenant_id, is_primary))) {
       LOG_WARN("fail to execute mtl_check_if_tenant_role_is_primary", KR(ret), K(tenant_id));
-    } else if (!is_primary) {
-      // do nothing
-    } else if (OB_FAIL(optstat_monitor_mgr_->update_column_usage_info(true))) {
-      LOG_WARN("failed to update column usage info", K(ret));
-    } else if (OB_FAIL(optstat_monitor_mgr_->update_dml_stat_info())) {
-      LOG_WARN("failed to failed to update dml stat info", K(ret));
-    } else {/*do nothing*/}
+    } else if (is_primary) {
+      if (OB_FAIL(optstat_monitor_mgr_->update_column_usage_info(true))) {
+        LOG_WARN("failed to update column usage info", K(ret));
+      } else if (OB_FAIL(optstat_monitor_mgr_->update_dml_stat_info())) {
+        LOG_WARN("failed to failed to update dml stat info", K(ret));
+      } else {/*do nothing*/}
+    } else if (OB_FAIL(ObShareUtil::mtl_check_if_tenant_role_is_standby(tenant_id, is_standby))) {
+      LOG_WARN("fail to execute mtl_check_if_tenant_role_is_standby", KR(ret), K(tenant_id));
+    } else if (is_standby) {
+      bool is_leader = false;
+      if (OB_FAIL(optstat_monitor_mgr_->check_is_standby_leader(is_leader))) {
+        LOG_WARN("fail to check is standby leader", K(ret));
+      } else if (!is_leader) {
+      } else {
+        ObCurTraceId::init(GCONF.self_addr_);
+        int64_t check_time = optstat_monitor_mgr_->last_standby_updated_time_;
+        if (0 == check_time) {
+          check_time = ObTimeUtility::current_time() - 15L * 60L * 1000L * 1000L;
+        }
+        if (OB_FAIL(optstat_monitor_mgr_->check_standby_kvcache_expired(check_time))) {
+          LOG_WARN("fail to check standby kvcache expired", K(ret));
+        } else {
+          optstat_monitor_mgr_->last_standby_updated_time_ = check_time;
+        }
+      }
+    }
   }
 }
 
@@ -275,9 +298,19 @@ int ObOptStatMonitorManager::update_local_cache(ObOptDmlStat &dml_stat)
 int ObOptStatMonitorManager::update_opt_stat_monitoring_info(const obrpc::ObFlushOptStatArg &arg)
 {
   int ret = OB_SUCCESS;
+  bool is_standby = false;
   if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected error", K(ret), K(arg));
+  } else if (OB_FAIL(ObShareUtil::mtl_check_if_tenant_role_is_standby(tenant_id_, is_standby))) {
+    LOG_WARN("fail to execute mtl_check_if_tenant_role_is_standby", KR(ret), K(tenant_id_));
+  } else if (is_standby) {
+    if (0 == last_standby_updated_time_) {
+      last_standby_updated_time_ = ObTimeUtility::current_time() - 15L * 60L * 1000L * 1000L;
+    }
+    if (OB_FAIL(check_standby_kvcache_expired(last_standby_updated_time_))) {
+      LOG_WARN("fail to check standby kvcache expired", K(ret));
+    }
   } else if (arg.is_flush_col_usage_ && OB_FAIL(update_column_usage_info(false))) {
     LOG_WARN("failed to update tenant column usage info", K(ret));
   } else if (arg.is_flush_dml_stat_ && OB_FAIL(update_dml_stat_info())) {
@@ -1498,6 +1531,36 @@ int ObOptStatMonitorManager::get_async_stale_max_table_size(const uint64_t tenan
     LOG_WARN("Illegal async stale max table size", K(ret), K(async_stale_max_table_size));
   }
   LOG_TRACE("get_async_stale_max_table_size", K(async_stale_max_table_size), K(result));
+  return ret;
+}
+
+int ObOptStatMonitorManager::check_standby_kvcache_expired(int64_t &recent_update_time)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObOptStatManager::get_instance().evict_all_opt_stat_kvcache(tenant_id_,
+                                                                          recent_update_time))) {
+    LOG_WARN("failed to evict all opt stat kvcache", K(ret));
+  }
+  return ret;
+}
+
+int ObOptStatMonitorManager::check_is_standby_leader(bool &is_leader)
+{
+  int ret = OB_SUCCESS;
+  is_leader = false;
+  logservice::ObLogService *log_svr = MTL(logservice::ObLogService*);
+  if (OB_ISNULL(log_svr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("mtl pointer is null", KR(ret), KP(log_svr));
+  } else {
+    common::ObRole role = common::ObRole::INVALID_ROLE;
+    int64_t proposal_id = 0;
+    if (OB_FAIL(log_svr->get_palf_role(share::SYS_LS, role, proposal_id))) {
+      LOG_WARN("failed to get palf role", KR(ret), K(tenant_id_));
+    } else if (is_strong_leader(role)) {
+      is_leader = true;
+    }
+  }
   return ret;
 }
 

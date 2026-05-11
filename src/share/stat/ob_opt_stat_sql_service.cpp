@@ -7,6 +7,7 @@
 #include "ob_opt_stat_sql_service.h"
 #include "observer/ob_sql_client_decorator.h"
 #include "share/stat/ob_opt_stat_monitor_manager.h"
+#include "share/stat/ob_dbms_stats_preferences.h"
 
 #define ALL_HISTOGRAM_STAT_COLUMN_NAME "tenant_id, "     \
                                        "table_id, "      \
@@ -143,6 +144,11 @@
                                                          "stat_refresh_failed_list," \
                                                          "properties," \
                                                          "spare3) VALUES (%s);"
+
+#define INSERT_TABLE_OPT_STAT_CACHE_INVALIDATE_SQL "INSERT INTO %s(tenant_id," \
+                                                                  "last_analyzed," \
+                                                                  "table_id," \
+                                                                  "plan_expired_before) VALUES (%s);"
 
 
 #define ALL_HISTOGRAM_STAT_COLUMN_NAME "tenant_id, "     \
@@ -2346,6 +2352,69 @@ int ObOptStatSqlService::get_gather_stat_value(const ObOptStatGatherStat &gather
   return ret;
 }
 
+int ObOptStatSqlService::insert_cache_invalidate_event(const ObOptStatGatherStat &gather_stat)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString raw_sql;
+  ObSqlString value_str;
+  int64_t affected_rows = 0;
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(gather_stat.get_tenant_id(), data_version))) {
+    LOG_WARN("failed to get data version", K(ret));
+  } else if (data_version < DATA_VERSION_4_5_1_0) {
+  } else if (OB_FAIL(get_cache_invalidate_value(gather_stat, value_str))) {
+    LOG_WARN("failed to get cache invalidate value", K(ret));
+  } else if (OB_FAIL(raw_sql.append_fmt(INSERT_TABLE_OPT_STAT_CACHE_INVALIDATE_SQL,
+                                        share::OB_ALL_TABLE_OPT_STAT_INVALIDATE_PLAN_TNAME,
+                                        value_str.ptr()))) {
+    LOG_WARN("failed to append fmt", K(ret), K(raw_sql));
+  } else {
+    ObMySQLTransaction trans;
+    LOG_TRACE("sql string of insert cache invalidate event", K(raw_sql));
+    if (OB_FAIL(trans.start(mysql_proxy_, gather_stat.get_tenant_id()))) {
+      LOG_WARN("fail to start transaction", K(ret), K(gather_stat.get_tenant_id()));
+    } else if (OB_FAIL(trans.write(gather_stat.get_tenant_id(), raw_sql.ptr(), affected_rows))) {
+      LOG_WARN("failed to exec sql", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(trans.end(true))) {
+        LOG_WARN("fail to commit transaction", K(ret));
+      }
+    } else {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
+        LOG_WARN("fail to roll back transaction", K(tmp_ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObOptStatSqlService::get_cache_invalidate_value(const ObOptStatGatherStat &gather_stat,
+                                                    ObSqlString &values_ptr)
+{
+  int ret = OB_SUCCESS;
+  share::ObDMLSqlSplicer dml_splicer;
+  uint64_t tenant_id = ObSchemaUtils::get_extract_tenant_id(gather_stat.get_tenant_id(), gather_stat.get_tenant_id());
+  uint64_t table_id = gather_stat.get_table_id();
+  uint64_t pure_table_id = ObSchemaUtils::get_extract_schema_id(tenant_id, table_id);
+  int64_t last_analyzed = gather_stat.get_end_time();
+  int64_t plan_expired_before = -1;
+  if (!gather_stat.invalidate_plan()) {
+    plan_expired_before = -1;
+  } else if (gather_stat.get_plan_expired_before() >= 0) {
+    plan_expired_before = gather_stat.get_plan_expired_before();
+  }
+  if (OB_FAIL(dml_splicer.add_pk_column("tenant_id", tenant_id)) ||
+      OB_FAIL(dml_splicer.add_time_column("last_analyzed", last_analyzed)) ||
+      OB_FAIL(dml_splicer.add_pk_column("table_id", pure_table_id)) ||
+      OB_FAIL(dml_splicer.add_column("plan_expired_before", plan_expired_before))) {
+    LOG_WARN("failed to add dml splicer column", K(ret));
+  } else if (OB_FAIL(dml_splicer.splice_values(values_ptr))) {
+    LOG_WARN("failed to get sql string", K(ret));
+  }
+  return ret;
+}
 
 int ObOptStatSqlService::update_system_stats(const uint64_t tenant_id,
                                             const ObOptSystemStat *system_stat)
@@ -2489,6 +2558,77 @@ int ObOptStatSqlService::delete_system_stats(const uint64_t tenant_id)
       int tmp_ret = OB_SUCCESS;
       if (OB_SUCCESS != (tmp_ret = trans.end(false))) {
         LOG_WARN("fail to roll back transaction", K(tmp_ret));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObOptStatSqlService::get_recent_updated_stats(const uint64_t tenant_id,
+                                                  const int64_t last_gmt_modified,
+                                                  const uint64_t max_table_count,
+                                                  ObIArray<ObEvictTableKey> &keys)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString raw_sql;
+  ObEvictTableKey tmp_key(-1, 0, -1);
+  const int64_t table_idx = 0;
+  const int64_t plan_expired_before_idx = 1;
+  const int64_t last_analyzed_idx = 2;
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("failed to get data version", K(ret));
+  } else if (data_version < DATA_VERSION_4_5_1_0) {
+  } else if (OB_FAIL(raw_sql.append_fmt("SELECT table_id, plan_expired_before, last_analyzed FROM oceanbase.%s \
+                                  WHERE tenant_id = %lu AND last_analyzed > usec_to_time(%ld) \
+                                  ORDER BY last_analyzed LIMIT %lu;",
+                                 share::OB_ALL_TABLE_OPT_STAT_INVALIDATE_PLAN_TNAME,
+                                 share::schema::ObSchemaUtils::get_extract_tenant_id(tenant_id, tenant_id),
+                                 last_gmt_modified,
+                                 max_table_count))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, proxy_result) {
+      sqlclient::ObMySQLResult *client_result = NULL;
+      ObSQLClientRetryWeak sql_client_retry_weak(mysql_proxy_, false, OB_INVALID_TIMESTAMP, false);
+      if (OB_FAIL(sql_client_retry_weak.read(proxy_result, tenant_id, raw_sql.ptr()))) {
+        LOG_WARN("failed to execute sql", K(ret), K(raw_sql));
+      } else if (OB_ISNULL(client_result = proxy_result.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to execute sql", K(ret));
+      } else {
+        while (OB_SUCC(ret)) {
+          ObObj table_obj;
+          ObObj plan_expired_before_obj;
+          ObObj last_analyzed_obj;
+          if (OB_FAIL(client_result->next())) {
+            if (OB_ITER_END != ret) {
+              LOG_WARN("result next failed", K(ret));
+            } else {
+              ret = OB_SUCCESS;
+              break;
+            }
+          } else if (OB_FAIL(client_result->get_obj(table_idx, table_obj))) {
+            LOG_WARN("failed to get object", K(ret));
+          } else if (OB_FAIL(table_obj.get_int(tmp_key.table_id_))) {
+            LOG_WARN("failed to get int", K(ret), K(table_obj), K(tmp_key.table_id_));
+          } else if (OB_FAIL(client_result->get_obj(plan_expired_before_idx, plan_expired_before_obj))) {
+            LOG_WARN("failed to get object", K(ret));
+          } else if (plan_expired_before_obj.is_null()) {
+            tmp_key.plan_expired_before_ = -1;
+          } else if (OB_FAIL(plan_expired_before_obj.get_int(tmp_key.plan_expired_before_))) {
+            LOG_WARN("failed to get int", K(ret), K(plan_expired_before_obj));
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(client_result->get_obj(last_analyzed_idx, last_analyzed_obj))) {
+            LOG_WARN("failed to get object", K(ret));
+          } else if (OB_FAIL(last_analyzed_obj.get_timestamp(tmp_key.gmt_modified_))) {
+            LOG_WARN("failed to get timestamp", K(ret), K(last_analyzed_obj), K(tmp_key.gmt_modified_));
+          } else if (OB_FAIL(keys.push_back(tmp_key))) {
+            LOG_WARN("failed to push back table ids", K(ret));
+          }
+        }
+        LOG_TRACE("succeed to get recent updated stats", K(raw_sql));
       }
     }
   }

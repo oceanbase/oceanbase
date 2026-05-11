@@ -286,6 +286,10 @@ public:
                                             const uint64_t column_id,
                                             bool &find_it,
                                             const ObColumnStatParam *&column_param);
+  static int get_all_part_ids(const ObTableSchema &table_schema,
+                              ObIArray<int64_t> &part_ids);
+
+
 private:
   static int batch_write(share::schema::ObSchemaGetterGuard *schema_guard,
                          const uint64_t tenant_id,

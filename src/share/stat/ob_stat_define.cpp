@@ -182,6 +182,7 @@ int ObTableStatParam::assign(const ObTableStatParam &other)
   stat_id_ = other.stat_id_;
   stat_own_ = other.stat_own_;
   no_invalidate_ = other.no_invalidate_;
+  optimizer_invalidation_period_sec_ = other.optimizer_invalidation_period_sec_;
   force_ = other.force_;
   is_subpart_name_ = other.is_subpart_name_;
   stat_category_ = other.stat_category_;
@@ -256,6 +257,7 @@ int ObTableStatParam::assign_common_property(const ObTableStatParam &other)
   stat_id_ = other.stat_id_;
   stat_own_ = other.stat_own_;
   no_invalidate_ = other.no_invalidate_;
+  optimizer_invalidation_period_sec_ = other.optimizer_invalidation_period_sec_;
   force_ = other.force_;
   stat_category_ = other.stat_category_;
   stattype_ = other.stattype_;

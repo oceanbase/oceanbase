@@ -95,6 +95,8 @@ public:
   int get_external_column_stats(const uint64_t tenant_id,
                                 ObIArray<ObOptExternalColumnStat::Key> &keys,
                                 ObIArray<ObOptExternalColumnStatHandle> &handles);
+  int evict_all_opt_stat_kvcache(const uint64_t tenant_id,
+                                 int64_t &recent_update_time);
 
 private:
   /**

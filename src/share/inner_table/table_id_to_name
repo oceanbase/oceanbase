@@ -439,6 +439,7 @@
 # 586: __all_java_policy
 # 587: __all_java_policy_history
 # 587: __all_java_policy  # BASE_TABLE_NAME
+# 596: __all_table_opt_stat_invalidate_plan
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
 # 10003: __tenant_virtual_table_index
@@ -1405,6 +1406,8 @@
 # 12595: __all_java_policy  # BASE_TABLE_NAME
 # 12595: __all_java_policy_history  # BASE_TABLE_NAME1
 # 12603: __all_virtual_tenant_worker_group
+# 12608: __all_virtual_table_opt_stat_invalidate_plan
+# 12608: __all_table_opt_stat_invalidate_plan  # BASE_TABLE_NAME
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -2194,6 +2197,8 @@
 # 15551: __all_java_policy  # BASE_TABLE_NAME
 # 15552: ALL_VIRTUAL_TENANT_WORKER_GROUP
 # 15552: __all_virtual_tenant_worker_group  # BASE_TABLE_NAME
+# 15555: ALL_VIRTUAL_TABLE_OPT_STAT_INVALIDATE_PLAN_REAL_AGENT
+# 15555: __all_table_opt_stat_invalidate_plan  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA

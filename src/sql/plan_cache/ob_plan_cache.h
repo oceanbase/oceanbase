@@ -280,7 +280,7 @@ public:
   int add_cache_obj(ObILibCacheCtx &ctx, ObILibCacheKey *key, ObILibCacheObject *cache_obj);
   int get_cache_obj(ObILibCacheCtx &ctx, ObILibCacheKey *key, ObCacheObjGuard &guard);
   int cache_node_exists(ObILibCacheCtx &ctx, ObILibCacheKey* key, bool& is_exists);
-  int evict_plan(uint64_t table_id);
+  int evict_plan(uint64_t table_id, int64_t plan_expired_before);
   int evict_plan_by_table_name(uint64_t database_id, ObString tab_name);
 
   /**

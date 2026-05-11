@@ -241,8 +241,8 @@ struct ObGetEvolutionTaskPcvSetOp : public ObKVEntryTraverseOp
 
 struct ObGetTableIdOp
 {
-  explicit ObGetTableIdOp(uint64_t table_id)
-    : table_id_(table_id)
+  explicit ObGetTableIdOp(uint64_t table_id, int64_t plan_expired_before)
+    : table_id_(table_id), plan_expired_before_(plan_expired_before)
   {}
 
   int operator()(common::hash::HashMapPair<ObCacheObjID, ObILibCacheObject *> &entry)
@@ -262,11 +262,19 @@ struct ObGetTableIdOp
     } else if (OB_FAIL(plan->get_base_table_version(table_id_, version))) {
       LOG_WARN("failed to get base table version", K(ret));
     } else if (version > 0) {
+      if (!plan->is_plan_expired_time_exists()) {
+        int64_t current_time = ObTimeUtility::current_time();
+        int64_t plan_expired_at = plan_expired_before_ <= current_time ?
+                                       plan_expired_before_ :
+                                       ObRandom::rand(current_time, plan_expired_before_);
+        plan->set_opt_stat_plan_expired_at(plan_expired_at);
+      }
       plan->set_is_expired(EXPIRED_BY_OPT_STAT);
     }
     return ret;
   }
   const uint64_t table_id_;
+  const int64_t plan_expired_before_;
 };
 
 // true means entry_left is more active than entry_right
@@ -1388,10 +1396,10 @@ int ObPlanCache::get_value(ObILibCacheKey *key,
   return ret;
 }
 
-int ObPlanCache::evict_plan(uint64_t table_id)
+int ObPlanCache::evict_plan(uint64_t table_id, int64_t plan_expired_before)
 {
   int ret = OB_SUCCESS;
-  ObGetTableIdOp get_ids_op(table_id);
+  ObGetTableIdOp get_ids_op(table_id, plan_expired_before);
   if (OB_FAIL(co_mgr_.foreach_cache_obj(get_ids_op))) {
     SQL_PC_LOG(WARN, "fail to get all sql_ids in id2value_map", K(ret));
   }

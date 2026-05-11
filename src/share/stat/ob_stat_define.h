@@ -29,7 +29,7 @@ typedef common::hash::ObHashMap<ObOptColumnStat::Key, ObOptOSGColumnStat *, comm
 typedef common::hash::ObHashMap<ObOptColumnStat::Key, ObOptColumnStat *, common::hash::NoPthreadDefendMode> ColStatIndMap;
 typedef hash::ObHashMap<int64_t, SkipRateStat*, common::hash::NoPthreadDefendMode> PartitionIdSkipRateMap;
 
-enum StatOptionFlags
+enum StatOptionFlags  // FARM COMPAT WHITELIST
 {
   OPT_ESTIMATE_PERCENT = 1,
   OPT_BLOCK_SAMPLE     = 1 << 1,
@@ -52,7 +52,8 @@ enum StatOptionFlags
   OPT_HIST_BLOCK_SAMPLE = 1 << 18,
   OPT_AUTO_SAMPLE_ROW_COUNT = 1 << 19,
   OPT_SKIP_RATE_SAMPLE_COUNT = 1 << 20,
-  OPT_STAT_OPTION_ALL  = (1 << 21) -1
+  OPT_OPTIMIZER_INVALIDATION_PERIOD = 1 << 21,
+  OPT_STAT_OPTION_ALL  = (1 << 22) -1
 };
 const static double OPT_DEFAULT_STALE_PERCENT = 0.1;
 const static int64_t OPT_DEFAULT_STATS_RETENTION = 31;
@@ -570,6 +571,7 @@ struct ObTableStatParam {
     stat_own_(),
     column_params_(),
     no_invalidate_(false),
+    optimizer_invalidation_period_sec_(0),
     force_(false),
     no_regather_partition_ids_(),
     is_subpart_name_(false),
@@ -665,6 +667,7 @@ struct ObTableStatParam {
   ObSEArray<ObColumnStatParam, 4> column_params_;
 
   bool no_invalidate_;
+  int64_t optimizer_invalidation_period_sec_;
   bool force_;
   ObSEArray<int64_t, 4> no_regather_partition_ids_;
 
@@ -730,6 +733,7 @@ struct ObTableStatParam {
                K(stat_own_),
                K(column_params_),
                K(no_invalidate_),
+               K(optimizer_invalidation_period_sec_),
                K(force_),
                K(no_regather_partition_ids_),
                K(is_subpart_name_),

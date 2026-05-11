@@ -179,7 +179,7 @@ public:
                      ObOptTableStat &tstat);
   int add_refresh_stat_task(const obrpc::ObUpdateStatCacheArg &analyze_arg);
 
-  int invalidate_plan(const uint64_t tenant_id, const uint64_t table_id);
+  int invalidate_plan(const uint64_t tenant_id, const uint64_t table_id, int64_t plan_expired_before);
 
   int handle_refresh_stat_task(const obrpc::ObUpdateStatCacheArg &arg);
 
@@ -243,6 +243,8 @@ public:
                                const int64_t row_cnt,
                                const double scale_ratio,
                                ObIArray<ObLakeColumnStat*> &column_stats);
+  int evict_all_opt_stat_kvcache(const uint64_t tenant_id,
+                                 int64_t &recent_update_time);
 
 private:
   int trans_col_handle_to_evals(const ObArray<ObOptColumnStatHandle> &new_handles,

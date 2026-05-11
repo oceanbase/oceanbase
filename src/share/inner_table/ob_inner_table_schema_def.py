@@ -9131,6 +9131,24 @@ def_table_schema(**gen_history_table_def(587, all_java_policy))
 # 594: __all_optstat_catalog_global_prefs
 # 595: __all_ss_gc_history
 
+def_table_schema(
+  owner = 'dingjincheng.djc',
+  table_name = '__all_table_opt_stat_invalidate_plan',
+  table_id = '596',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = [],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('last_analyzed', 'timestamp'),
+    ('table_id', 'int'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = False,
+  normal_columns = [
+    ('plan_expired_before', 'int', 'false', '-1'),
+  ],
+)
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -18346,6 +18364,12 @@ def_table_schema(
 # 12606: __all_virtual_table_archive_history
 # 12607: __all_virtual_log_transport_stat
 
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12608',
+  table_name = '__all_virtual_table_opt_stat_invalidate_plan',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__all_table_opt_stat_invalidate_plan']))
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -18944,6 +18968,8 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15551', all_def_ke
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15552', all_def_keywords['__all_virtual_tenant_worker_group']))
 # 15553: __all_virtual_keyword
 # 15554: ALL_VIRTUAL_LOG_TRANSPORT_STAT
+
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15555', all_def_keywords['__all_table_opt_stat_invalidate_plan']))
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位

@@ -7420,7 +7420,9 @@ DEF_TO_STRING(ObUpdateStatCacheArg)
        K_(partition_ids),
        K_(column_ids),
        K_(no_invalidate),
-       K_(update_system_stats_only));
+       K_(update_system_stats_only),
+       K_(plan_expired_before),
+       K_(standby_last_evict_time));
   return pos;
 }
 OB_SERIALIZE_MEMBER(ObUpdateStatCacheArg,
@@ -7429,7 +7431,9 @@ OB_SERIALIZE_MEMBER(ObUpdateStatCacheArg,
                     partition_ids_,
                     column_ids_,
                     no_invalidate_,
-                    update_system_stats_only_);
+                    update_system_stats_only_,
+                    plan_expired_before_,
+                    standby_last_evict_time_);
 OB_SERIALIZE_MEMBER(ObSplitPartitionBatchArg, split_info_);
 OB_SERIALIZE_MEMBER((ObSequenceDDLArg, ObDDLArg),
                     stmt_type_,

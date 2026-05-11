@@ -465,7 +465,16 @@ int ObOptStatManager::handle_refresh_stat_task(const obrpc::ObUpdateStatCacheArg
     }
   }
   if (OB_SUCC(ret) && !arg.no_invalidate_) {
-    if (OB_FAIL(invalidate_plan(arg.tenant_id_, table_id))) {
+    if (arg.standby_last_evict_time_ > 0) {
+      ObOptStatMonitorManager *optstat_monitor_mgr = MTL(ObOptStatMonitorManager*);
+      if (OB_ISNULL(optstat_monitor_mgr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("optstat monitor mgr is NULL", K(ret), K(arg.tenant_id_));
+      } else {
+        optstat_monitor_mgr->set_last_standby_updated_time(arg.standby_last_evict_time_);
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(invalidate_plan(arg.tenant_id_, table_id, arg.plan_expired_before_))) {
       LOG_WARN("failed to invalidate plan", K(ret));
     }
   }
@@ -497,13 +506,13 @@ int ObOptStatManager::handle_refresh_system_stat_task(const obrpc::ObUpdateStatC
   return ret;
 }
 
-int ObOptStatManager::invalidate_plan(const uint64_t tenant_id, const uint64_t table_id)
+int ObOptStatManager::invalidate_plan(const uint64_t tenant_id, const uint64_t table_id, int64_t plan_expired_before)
 {
   int ret = OB_SUCCESS;
   MTL_SWITCH(tenant_id) {
     sql::ObPlanCache *pc = MTL(sql::ObPlanCache*);
 
-    if (OB_FAIL(pc->evict_plan(table_id))) {
+    if (OB_FAIL(pc->evict_plan(table_id, plan_expired_before))) {
       LOG_WARN("failed to evict plan", K(ret));
       // use OB_SQL_PC_NOT_EXIST represent evict plan failed
       ret = OB_SQL_PC_NOT_EXIST;
@@ -1013,7 +1022,15 @@ int ObOptStatManager::erase_ds_stat(const ObOptDSStat::Key &key)
 
 int ObOptStatManager::update_opt_stat_gather_stat(const ObOptStatGatherStat &gather_stat)
 {
-  return stat_service_.get_sql_service().update_opt_stat_gather_stat(gather_stat);
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(stat_service_.get_sql_service().update_opt_stat_gather_stat(gather_stat))) {
+    LOG_WARN("failed to update opt stat gather stat", K(ret));
+  } else if (!gather_stat.need_flush_cache()) {
+    // do nothing
+  } else if (OB_FAIL(stat_service_.get_sql_service().insert_cache_invalidate_event(gather_stat))) {
+    LOG_WARN("failed to insert cache invalidate event", K(ret));
+  }
+  return ret;
 }
 
 int ObOptStatManager::update_table_stat_failed_count(const uint64_t tenant_id,
@@ -1207,6 +1224,19 @@ int ObOptStatManager::get_external_column_stat(ObIAllocator &alloc,
         }
       }
     }
+  }
+  return ret;
+}
+
+int ObOptStatManager::evict_all_opt_stat_kvcache(const uint64_t tenant_id,
+                                                 int64_t &recent_update_time)
+{
+  int ret = OB_SUCCESS;
+  if (!inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("optimizer statistics manager has not been initialized.", K(ret), K(inited_));
+  } else if (OB_FAIL(stat_service_.evict_all_opt_stat_kvcache(tenant_id, recent_update_time))) {
+    LOG_WARN("failed to evict all opt stat kvcache", K(ret));
   }
   return ret;
 }

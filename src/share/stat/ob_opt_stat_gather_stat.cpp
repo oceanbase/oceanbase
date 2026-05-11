@@ -79,7 +79,10 @@ ObOptStatGatherStat::ObOptStatGatherStat() :
   stat_refresh_failed_list_(),
   properties_(),
   table_gather_progress_(),
-  consecutive_failed_count_(0)
+  consecutive_failed_count_(0),
+  need_flush_cache_(false),
+  invalidate_plan_(false),
+  plan_expired_before_(-1)
 {
 }
 
@@ -96,7 +99,10 @@ ObOptStatGatherStat::ObOptStatGatherStat(ObOptStatTaskInfo &task_info) :
   properties_(),
   table_gather_progress_(),
   consecutive_failed_count_(0),
-  gather_audit_()
+  gather_audit_(),
+  need_flush_cache_(false),
+  invalidate_plan_(false),
+  plan_expired_before_(-1)
 {
 }
 
@@ -119,6 +125,9 @@ int ObOptStatGatherStat::assign(const ObOptStatGatherStat &other)
   properties_ = other.properties_;
   table_gather_progress_ = other.table_gather_progress_;
   gather_audit_ = other.gather_audit_;
+  need_flush_cache_ = other.need_flush_cache_;
+  invalidate_plan_ = other.invalidate_plan_;
+  plan_expired_before_ = other.plan_expired_before_;
   return ret;
 }
 
@@ -373,6 +382,17 @@ void ObOptStatGatherStatList::update_gather_stat_audit(const ObString &audit,
 {
   ObSpinLockGuard guard(lock_);
   stat_value.set_gather_audit(audit.ptr(), audit.length());
+}
+
+void ObOptStatGatherStatList::update_need_flush_cache(bool need_flush_cache,
+                                                      bool invalidate_plan,
+                                                      int64_t plan_expired_before,
+                                                      ObOptStatGatherStat &stat_value)
+{
+  ObSpinLockGuard guard(lock_);
+  stat_value.set_need_flush_cache(need_flush_cache);
+  stat_value.set_invalidate_plan(invalidate_plan);
+  stat_value.set_plan_expired_before(plan_expired_before);
 }
 
 int ObOptStatGatherStatList::list_to_array(common::ObIAllocator &allocator,

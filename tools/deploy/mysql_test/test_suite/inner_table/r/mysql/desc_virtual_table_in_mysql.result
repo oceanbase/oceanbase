@@ -6907,3 +6907,12 @@ IF(count(*) >= 0, 1, 0)
 "oceanbase.__all_virtual_tenant_worker_group runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_table_opt_stat_invalidate_plan;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+last_analyzed	timestamp(6)	NO	PRI	NULL	
+table_id	bigint(20)	NO	PRI	NULL	
+plan_expired_before	bigint(20)	NO		-1	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table_opt_stat_invalidate_plan;
+IF(count(*) >= 0, 1, 0)
+1

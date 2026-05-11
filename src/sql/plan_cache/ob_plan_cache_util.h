@@ -723,6 +723,7 @@ struct ObPlanStat
   ObPlanExecutingStat executing_stat_;
   uint64_t gen_plan_usec_;  // plan generation time cost
   ObCollationType collation_connection_;
+  int64_t opt_stat_plan_expired_at_; // statistics expired time
 
   ObPlanStat()
     : plan_id_(0),
@@ -808,7 +809,8 @@ struct ObPlanStat
       vec_index_exec_ctx_(),
       executing_stat_(),
       gen_plan_usec_(0),
-      collation_connection_(CS_TYPE_INVALID)
+      collation_connection_(CS_TYPE_INVALID),
+      opt_stat_plan_expired_at_(0)
 {
   exact_mode_sql_id_[0] = '\0';
 }
@@ -896,7 +898,8 @@ struct ObPlanStat
       vec_index_exec_ctx_(rhs.vec_index_exec_ctx_),
       executing_stat_(rhs.executing_stat_),
       gen_plan_usec_(rhs.gen_plan_usec_),
-      collation_connection_(rhs.collation_connection_)
+      collation_connection_(rhs.collation_connection_),
+      opt_stat_plan_expired_at_(rhs.opt_stat_plan_expired_at_)
   {
     exact_mode_sql_id_[0] = '\0';
     MEMCPY(plan_sel_info_str_, rhs.plan_sel_info_str_, rhs.plan_sel_info_str_len_);
@@ -1079,7 +1082,8 @@ struct ObPlanStat
                K_(evolution_stat),
                K_(plan_hash_value),
                K_(hints_all_worked),
-               K_(vec_index_exec_ctx));
+               K_(vec_index_exec_ctx),
+               K_(opt_stat_plan_expired_at));
 };
 
 struct SysVarNameVal

@@ -157,8 +157,20 @@ public:
   bool is_plan_unstable(const int64_t sample_count,
                         const int64_t sample_exec_row_count,
                         const int64_t sample_exec_usec) const;
-  bool is_expired() const { return NOT_EXPIRED != stat_.is_expired_; }
+  bool is_expired() const {
+    bool expired = false;
+    if (NOT_EXPIRED == stat_.is_expired_) {
+      expired = false;
+    } else if (EXPIRED_BY_OPT_STAT == stat_.is_expired_) {
+      expired = stat_.opt_stat_plan_expired_at_ < ObTimeUtil::current_time();
+    } else {
+      expired = true;
+    }
+    return expired;
+  }
   void set_is_expired(ObPlanExpiredStat expired_stat) { stat_.is_expired_ = expired_stat; }
+  void set_opt_stat_plan_expired_at(int64_t expired_at) { stat_.opt_stat_plan_expired_at_ = expired_at; }
+  bool is_plan_expired_time_exists() const { return stat_.opt_stat_plan_expired_at_ > 0; }
   void inc_large_querys();
   void inc_delayed_large_querys();
   void inc_delayed_px_querys();

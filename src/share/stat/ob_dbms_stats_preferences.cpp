@@ -407,7 +407,8 @@ int ObDbmsStatsPreferences::gen_init_global_prefs_sql(ObSqlString &raw_sql,
   init_perfs_value(ObHistBlockSamplePrefs, false/*last value*/);//init hist_block_sample
   init_perfs_value(ObGatherStatBatchSizePrefs, false/*last value*/);//init async/auto gather batch size
   init_perfs_value(ObAutoSampleRowCountPrefs, false/*last value*/);//init auto_sample_row_count
-  init_perfs_value(ObSkipRateSamplePrefs, true/*last value*/);//init skip_rate_sample_count
+  init_perfs_value(ObSkipRateSamplePrefs, false/*last value*/);//init skip_rate_sample_count
+  init_perfs_value(ObOptimizerInvalidationPeriodPrefs, true/*last value*/);//init optimizer_invalidation_period
   if (OB_SUCC(ret)) {
     if (OB_FAIL(raw_sql.append_fmt(INIT_GLOBAL_PREFS,
                                    share::OB_ALL_OPTSTAT_GLOBAL_PREFS_TNAME,
@@ -810,21 +811,75 @@ int ObMethodOptPrefs::check_pref_value_validity(ObTableStatParam *param/*default
 int ObNoInvalidatePrefs::check_pref_value_validity(ObTableStatParam *param/*default null*/)
 {
   int ret = OB_SUCCESS;
-  if (0 == pvalue_.case_compare("TRUE")) {
-    if (param != NULL) {
-      param->no_invalidate_ = true;
-    }
-  } else if (pvalue_.empty() ||
-             0 == pvalue_.case_compare("FALSE") ||
-             0 == pvalue_.case_compare("DBMS_STATS.AUTO_INVALIDATE")) {
-    if (param != NULL) {
-      param->no_invalidate_ = false;
-    }
+  bool no_invalidate = false;
+  if (OB_FAIL(check_no_invalidate_value(pvalue_, no_invalidate))) {
+    LOG_WARN("failed to check no invalidate value", K(ret));
+  } else if (param != NULL) {
+    param->no_invalidate_ = no_invalidate;
+  }
+  return ret;
+}
+
+int ObNoInvalidatePrefs::check_no_invalidate_value(const ObString &pvalue, bool &no_invalidate)
+{
+  int ret = OB_SUCCESS;
+  if (0 == pvalue.case_compare("TRUE")) {
+     no_invalidate = true;
+  } else if (pvalue.empty() ||
+             0 == pvalue.case_compare("FALSE") ||
+             0 == pvalue.case_compare("DBMS_STATS.AUTO_INVALIDATE")) {
+    no_invalidate = false;
   } else {
     ret = OB_ERR_DBMS_STATS_PL;
-    LOG_WARN("Illegal value for CASCADE", K(ret), K(pvalue_));
+    LOG_WARN("Illegal value for CASCADE", K(ret), K(pvalue));
     LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL, "Illegal value for CASCADE : must be \
                                           {TRUE, FALSE, DBMS_STATS.AUTO_INVALIDATE}");
+  }
+  return ret;
+}
+
+int ObOptimizerInvalidationPeriodPrefs::check_pref_value_validity(ObTableStatParam *param)
+{
+  int ret = OB_SUCCESS;
+  int64_t period_sec = 0;
+  if (OB_FAIL(check_optimizer_invalidation_period_value(pvalue_, period_sec))) {
+    LOG_WARN("failed to check optimizer invalidation period value", K(ret));
+  } else if (param != NULL) {
+    param->optimizer_invalidation_period_sec_ = period_sec;
+  }
+  return ret;
+}
+
+int ObOptimizerInvalidationPeriodPrefs::check_optimizer_invalidation_period_value(
+    const ObString &pvalue, int64_t &period_sec)
+{
+  int ret = OB_SUCCESS;
+  period_sec = 0;
+  if (pvalue.empty()) {
+  } else {
+    const int64_t max_period_sec = 12 * 3600; // 12 hours
+    const int64_t min_period_sec = 60; // 1 minute
+    ObObj src_obj;
+    ObObj dest_obj;
+    src_obj.set_string(ObVarcharType, pvalue);
+    ObArenaAllocator calc_buf(ObModIds::OB_SQL_PARSER);
+    ObCastCtx cast_ctx(&calc_buf, NULL, CM_NONE, ObCharset::get_system_collation());
+    if (OB_FAIL(ObObjCaster::to_type(ObIntType, cast_ctx, src_obj, dest_obj))) {
+      ret = OB_ERR_DBMS_STATS_PL;
+      LOG_WARN("Illegal value for OPTIMIZER_INVALIDATION_PERIOD", K(ret), K(pvalue));
+      LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,
+          "Illegal value for OPTIMIZER_INVALIDATION_PERIOD : must be non-negative integer in seconds");
+    } else if (OB_FAIL(dest_obj.get_int(period_sec))) {
+      ret = OB_ERR_DBMS_STATS_PL;
+      LOG_WARN("failed to get int", K(ret), K(dest_obj));
+    } else if (period_sec == 0) {
+      // do nothing
+    } else if (period_sec < min_period_sec || period_sec > max_period_sec) {
+      ret = OB_ERR_DBMS_STATS_PL;
+      LOG_WARN("OPTIMIZER_INVALIDATION_PERIOD out of range", K(ret), K(period_sec), K(max_period_sec));
+      LOG_USER_ERROR(OB_ERR_DBMS_STATS_PL,
+          "OPTIMIZER_INVALIDATION_PERIOD must be 0 or [60, 43200] seconds");
+    }
   }
   return ret;
 }
@@ -1442,6 +1497,30 @@ int ObDbmsStatsPreferences::get_extra_stats_perfs_for_upgrade_4352(ObSqlString &
                                           prefs.get_stat_pref_default_value()))) {
     LOG_WARN("failed to append", K(ret));
   } else if (OB_FAIL(raw_sql.append_fmt(INIT_GLOBAL_PREFS,
+                                        share::OB_ALL_OPTSTAT_GLOBAL_PREFS_TNAME,
+                                        value_str.ptr()))) {
+    LOG_WARN("failed to append fmt", K(ret));
+  }
+  return ret;
+}
+
+int ObDbmsStatsPreferences::get_optimizer_invalidation_period_for_upgrade(ObSqlString &raw_sql)
+{
+  int ret = OB_SUCCESS;
+  const char *null_str = "NULL";
+  const char *time_str = "CURRENT_TIMESTAMP";
+  ObSqlString value_str;
+  ObOptimizerInvalidationPeriodPrefs prefs;
+  if (OB_ISNULL(prefs.get_stat_pref_name())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected error", K(ret), K(prefs.get_stat_pref_name()));
+  } else if (OB_FAIL(value_str.append_fmt("('%s', %s, %s, '%s')",
+                                          prefs.get_stat_pref_name(),
+                                          null_str,
+                                          time_str,
+                                          "0"))) {
+    LOG_WARN("failed to append", K(ret));
+  } else if (OB_FAIL(raw_sql.append_fmt(UPGRADE_GLOBAL_PREFS,
                                         share::OB_ALL_OPTSTAT_GLOBAL_PREFS_TNAME,
                                         value_str.ptr()))) {
     LOG_WARN("failed to append fmt", K(ret));

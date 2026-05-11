@@ -432,6 +432,7 @@ private:
   int wait_metadata_ls_leader_(common::ObAddr &leader);
   int create_tiered_metadata_tablet_(const common::ObAddr &leader);
   int post_upgrade_for_set_paralllel_target_();
+  int post_upgrade_for_optimizer_invalidation_period();
   int finish_upgrade_for_daily_maintenance_window();
   int finish_upgrade_for_grant_sys_privs();
   int grant_priv(const ObPrivSet user_priv_set,
