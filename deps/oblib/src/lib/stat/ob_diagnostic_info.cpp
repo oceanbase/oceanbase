@@ -291,6 +291,26 @@ void ObDiagnosticInfo::end_wait_event(const int64_t event_no, const bool is_idle
         ++event_record->total_timeouts_;
       }
     }
+    switch (OB_WAIT_EVENTS[event_no].wait_class_) {
+      case ObWaitClassIds::CONCURRENCY: {
+        add_stat(ObStatEventIds::CCWAIT_TIME, curr_wait_.wait_time_);
+        break;
+      }
+      case ObWaitClassIds::USER_IO: {
+        add_stat(ObStatEventIds::USER_IO_WAIT_TIME, curr_wait_.wait_time_);
+        break;
+      }
+      case ObWaitClassIds::APPLICATION: {
+        add_stat(ObStatEventIds::APWAIT_TIME, curr_wait_.wait_time_);
+        break;
+      }
+      case ObWaitClassIds::SCHEDULER: {
+        add_stat(ObStatEventIds::SCHEDULE_WAIT_TIME, curr_wait_.wait_time_);
+        break;
+      }
+      default:
+        break;
+    }
   } else {
     // do noting
   }
