@@ -3605,7 +3605,7 @@ int ObJsonBinFastLocator::get_value_offset_len(size_t idx, char *&res_ptr, int64
       ObJsonNodeType node_type_inline = ObJsonVerType::get_json_type(vertype_inline);
       int64_t sval;
       if (node_type_inline == ObJsonNodeType::J_INT || node_type_inline == ObJsonNodeType::J_OINT) {
-        sval = ObJsonVar::var_uint2int(uval, entry_size_);
+        sval = ObJsonVar::var_uint2int(uval, entry_type_);
       } else {
         sval = static_cast<int64_t>(uval);
       }
@@ -3615,6 +3615,11 @@ int ObJsonBinFastLocator::get_value_offset_len(size_t idx, char *&res_ptr, int64
         res_ptr = inline_buf_;
         res_len = pos;
       }
+    } else if (res_type == static_cast<uint8_t>(J_FORWARD_V0)) {
+      // J_FORWARD_V0 references the extension segment; the fast path cannot follow
+      // forward pointers, so fall back to the general path.
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported forward pointer in fast path", K(ret), K(res_type));
     } else {
       res_offset = get_var_local(res_ptr, entry_type_);
       res_ptr = data_ptr_ + res_offset;
