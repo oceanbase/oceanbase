@@ -16937,7 +16937,9 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
           }
           if (FAILEDx(adjust_cg_for_offline(new_table_schema))) {
             LOG_WARN("fail to adjust cg  after alter column", KR(ret));
-          } else if (FAILEDx(create_user_hidden_table(*orig_table_schema,
+          } else if (alter_table_arg.is_convert_to_character_) {
+            LOG_TRACE("for modify column and convert to character set in one sql, create user hidden table in convert_to_character");
+          } else if (OB_FAIL(create_user_hidden_table(*orig_table_schema,
                                                       new_table_schema,
                                                       alter_table_arg.alter_table_schema_,
                                                       &alter_table_arg.sequence_ddl_arg_,
