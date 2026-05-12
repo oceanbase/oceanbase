@@ -122,6 +122,9 @@ int ObLogExprValues::compute_fd_item_set()
     LOG_WARN("get unexpect parameter", K(my_plan_), K(get_stmt()));
   } else if (!get_stmt()->is_select_stmt()) {
     set_fd_item_set(&empty_fd_item_set_);
+  } else if (contain_array_binding_param()) {
+    /* array binding param is not a single row */
+    set_fd_item_set(&empty_fd_item_set_);
   } else {
     ObFdItemSet *fd_item_set = NULL;
     ObSEArray<ObRawExpr*, 8> select_exprs;
@@ -260,6 +263,9 @@ int ObLogExprValues::compute_one_row_info()
     LOG_WARN("get unexpected null", K(ret));
   } else if (get_stmt()->is_insert_stmt()) {
     /* do nothing */
+  } else if (contain_array_binding_param()) {
+    /* array binding param is not a single row */
+    is_at_most_one_row_ = false;
   } else if (is_values_table_) {
     if (OB_ISNULL(table_def_)) {
       ret = OB_ERR_UNEXPECTED;
