@@ -691,9 +691,9 @@ int ObLSTxCtxMgr::replay_start_working_log(const ObTxStartWorkingLog &log, SCN s
     TRANS_LOG(INFO, "[LsTxCtxMgr Role Change] replay start working log success", K(tenant_id_), K(ls_id_));
   }
 
-  if (OB_TMP_FAIL(log_cb_pool_mgr_.clear_log_cb_pool(false /*for_replay*/))) {
-    TRANS_LOG(WARN, "clear log cb pool failed", K(ret), K(ls_id_), K(log_cb_pool_mgr_));
-  }
+  // if (OB_TMP_FAIL(log_cb_pool_mgr_.clear_log_cb_pool(false /*for_replay*/))) {
+  //   TRANS_LOG(WARN, "clear log cb pool failed", K(ret), K(ls_id_), K(log_cb_pool_mgr_));
+  // }
   return ret;
 }
 

@@ -2471,6 +2471,118 @@ TEST_F(ObTestTx, participant_abort_asynchronously)
 /// SEE EXAMPLE: TEST_F(ObTestTx, rollback_savepoint_timeout)
 ///
 
+// Test: verify switch_to_follower_gracefully can complete when log_cb_pool
+// has groups still held by tx_ctx (not freed back to pool).
+// The clear_log_cb_pool should timeout (10ms per pool) and return OB_EAGAIN,
+// but switch_to_follower_gracefully itself should still succeed because it
+// uses OB_TMP_FAIL for the pool cleanup result.
+TEST_F(ObTestTx, switch_to_follower_gracefully_with_unreleased_log_cb_pool)
+{
+  int ret = OB_SUCCESS;
+  ObTxNode::reset_localtion_adapter();
+
+  auto n1 = new ObTxNode(1, ObAddr(ObAddr::VER::IPV4, "127.0.0.1", 8888), bus_);
+  DEFER(delete(n1));
+
+  ASSERT_EQ(OB_SUCCESS, n1->start());
+
+  ObTxParam tx_param;
+  tx_param.timeout_us_ = 10 * 1000000; // 10s
+  tx_param.access_mode_ = ObTxAccessMode::RW;
+  tx_param.isolation_ = ObTxIsolationLevel::RC;
+  tx_param.cluster_id_ = 100;
+
+  // Create multiple transactions with writes, so each gets a tx_ctx
+  const int64_t TX_CNT = 4;
+  ObTxDesc *tx_ptr_arr[TX_CNT] = { nullptr };
+  for (int64_t i = 0; i < TX_CNT; ++i) {
+    ASSERT_EQ(OB_SUCCESS, n1->acquire_tx(tx_ptr_arr[i]));
+    ObTxDesc &tx = *tx_ptr_arr[i];
+    ObTxReadSnapshot snapshot;
+    ASSERT_EQ(OB_SUCCESS, n1->get_read_snapshot(tx,
+                             tx_param.isolation_,
+                             n1->ts_after_ms(100),
+                             snapshot));
+    ObTxSEQ sp;
+    ASSERT_EQ(OB_SUCCESS, n1->create_implicit_savepoint(tx, tx_param, sp));
+    ASSERT_EQ(OB_SUCCESS, n1->write(tx, snapshot, 100 + i, 200 + i));
+  }
+
+  // Wait for all redo logs to be synced so log_cbs are returned
+  n1->wait_all_redolog_applied();
+
+  ObLSTxCtxMgr *ls_tx_ctx_mgr = NULL;
+  ASSERT_EQ(OB_SUCCESS, n1->txs_.tx_ctx_mgr_.get_ls_tx_ctx_mgr(n1->ls_id_, ls_tx_ctx_mgr));
+
+  // Manually create a log_cb_pool for the LS (normally created by adjust_log_cb_pool
+  // in the loop worker, but the test environment doesn't run the loop worker)
+  ObTxLogCbPoolMgr &pool_mgr = ls_tx_ctx_mgr->get_log_cb_pool_mgr();
+  ASSERT_EQ(OB_SUCCESS, pool_mgr.append_new_log_cb_pool_());
+  TRANS_LOG(INFO, "[TEST] log_cb_pool appended", K(pool_mgr));
+
+  // Make each tx_ctx acquire extra log_cb_groups from the pool.
+  // This simulates the scenario where ctx holds log_cb from pool.
+  {
+    ObLSTxCtxIterator iter;
+    ObPartTransCtx *tx_ctx = nullptr;
+    int acquired_count = 0;
+
+    ASSERT_EQ(OB_SUCCESS, iter.set_ready(ls_tx_ctx_mgr));
+    while (OB_SUCC(iter.get_next_tx_ctx(tx_ctx))) {
+      {
+        ObSpinLockGuard guard(tx_ctx->log_cb_lock_);
+        int tmp_ret = tx_ctx->extend_log_cb_group_();
+        if (OB_SUCCESS == tmp_ret) {
+          acquired_count++;
+          TRANS_LOG(INFO, "[TEST] tx_ctx acquired extra log_cb_group from pool",
+                    K(tx_ctx->trans_id_), K(acquired_count));
+        } else {
+          TRANS_LOG(WARN, "[TEST] tx_ctx failed to acquire extra log_cb_group",
+                    K(tmp_ret), K(tx_ctx->trans_id_));
+        }
+      }
+      iter.revert_tx_ctx(tx_ctx);
+    }
+    ASSERT_EQ(OB_ITER_END, ret);
+    iter.reset();
+
+    // Ensure at least one ctx acquired extra groups from pool
+    ASSERT_GT(acquired_count, 0);
+    TRANS_LOG(INFO, "[TEST] total acquired extra log_cb_groups", K(acquired_count));
+  }
+
+  // Now call switch_to_follower_gracefully.
+  // The ctx still holds extra log_cb_groups from the pool.
+  // clear_log_cb_pool will try to free the pool but can_be_freed() returns false
+  // because groups are still occupied. It will wait up to 10ms then return OB_EAGAIN.
+  // switch_to_follower_gracefully should still succeed (uses OB_TMP_FAIL for pool cleanup).
+  int64_t start_time = ObTimeUtility::current_time();
+  ASSERT_EQ(OB_SUCCESS, ls_tx_ctx_mgr->switch_to_follower_gracefully());
+  int64_t elapsed_us = ObTimeUtility::current_time() - start_time;
+
+  TRANS_LOG(INFO, "[TEST] switch_to_follower_gracefully completed with unreleased log_cb_pool",
+            K(elapsed_us), "elapsed_ms", elapsed_us / 1000);
+
+  // Verify: switch_to_follower completed. The elapsed time includes:
+  // - Processing each tx_ctx's switch_to_follower_gracefully
+  // - clear_log_cb_pool timeout (~10ms since pool can't be freed)
+  // The pool cleanup failure is logged as WARNING but doesn't fail the switch.
+
+  // Cleanup: switch back to leader and release transactions
+  n1->wait_all_redolog_applied();
+  ASSERT_EQ(OB_SUCCESS, ls_tx_ctx_mgr->switch_to_leader());
+  n1->wait_all_redolog_applied();
+
+  for (int64_t i = 0; i < TX_CNT; ++i) {
+    ObTxDesc &tx = *tx_ptr_arr[i];
+    ASSERT_EQ(OB_SUCCESS, n1->commit_tx(tx, n1->ts_after_ms(10000)));
+    ASSERT_EQ(OB_SUCCESS, n1->release_tx(tx));
+  }
+
+  ASSERT_EQ(OB_SUCCESS, n1->wait_all_tx_ctx_is_destoryed());
+  ASSERT_EQ(OB_SUCCESS, n1->txs_.tx_ctx_mgr_.revert_ls_tx_ctx_mgr(ls_tx_ctx_mgr));
+}
+
 } // oceanbase
 
 int main(int argc, char **argv)
