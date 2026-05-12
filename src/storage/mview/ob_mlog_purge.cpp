@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/mview/ob_mlog_purge.h"
+#include "lib/mysqlclient/ob_mysql_transaction.h"
 #include "share/schema/ob_mview_info.h"
 #include "sql/engine/ob_exec_context.h"
 #include "storage/mview/ob_mview_refresh_helper.h"
@@ -60,50 +61,13 @@ int ObMLogPurger::purge()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObMLogPurger not init", KR(ret), KP(this));
-  } else if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->get_my_session())) {
-    ret = OB_INNER_STAT_ERROR;
-    LOG_WARN("ctx can not be NULL", KR(ret));
-  } else {
-    const ObDatabaseSchema *database_schema = nullptr;
-    if (OB_FAIL(get_and_check_mlog_database_schema(database_schema))) {
-      LOG_WARN("failed to get and check mlog database schema", KR(ret));
-    } else if (OB_FAIL(trans_.start(ctx_->get_my_session(),
-                                    ctx_->get_sql_proxy(),
-                                    database_schema->get_database_id(),
-                                    database_schema->get_database_name_str()))) {
-      LOG_WARN("fail to start trans", KR(ret), K(database_schema->get_database_id()),
-          K(database_schema->get_database_name_str()));
-    } else if (OB_FAIL(prepare_for_purge())) {
-      LOG_WARN("fail to prepare for purge", KR(ret));
-    } else if (need_purge_) {
-      ObMViewOpArg arg;
-      arg.table_id_ =  mlog_info_.get_mlog_id();
-      arg.mview_op_type_ = MVIEW_OP_TYPE::PURGE_MLOG;
-      arg.parallel_ = purge_param_.purge_log_parallel_;
-      arg.session_id_ = ctx_->get_my_session()->get_server_sid();
-      arg.start_ts_ = ObTimeUtil::current_time();
-      share::SCN curr_scn;
-      if (OB_FAIL(ObMViewRefreshHelper::get_current_scn(curr_scn))) {
-        LOG_WARN("get current_scn failed", KR(ret));
-      } else if (FALSE_IT(arg.read_snapshot_ = curr_scn.get_val_for_tx())) {
-      } else if (OB_FAIL(ObMViewMdsOpHelper::register_mview_mds(purge_param_.tenant_id_,
-                                                         arg,
-                                                         trans_))) {
-        LOG_WARN("register mview mds failed", KR(ret), K(arg));
-      } else if (OB_FAIL(do_purge())) {
-        LOG_WARN("fail to do purge", KR(ret));
-      }
-    }
-    if (trans_.is_started()) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_SUCCESS != (tmp_ret = trans_.end(OB_SUCC(ret)))) {
-        LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
-        ret = COVER_SUCC(tmp_ret);
-      }
-    }
-    LOG_INFO("mlog purge finish", KR(ret), K(purge_param_), K(mlog_info_), K(need_purge_),
-             K(purge_scn_));
+  } else if (OB_FAIL(prepare_for_purge())) {
+    LOG_WARN("fail to prepare for purge", KR(ret));
+  } else if (need_purge_ && OB_FAIL(do_purge())) {
+    LOG_WARN("fail to do purge", KR(ret));
   }
+  LOG_INFO("mlog purge finish", KR(ret), K(purge_param_), K(mlog_info_), K(need_purge_),
+           K(purge_scn_));
   return ret;
 }
 
@@ -120,7 +84,10 @@ int ObMLogPurger::prepare_for_purge()
   ObArray<ObDependencyInfo> deps;
   uint64_t min_mview_refresh_scn = UINT64_MAX;
   // get refreshed schema and scn
-  if (OB_ISNULL(GCTX.schema_service_)) {
+  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->get_sql_proxy())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx or sql proxy is null", KR(ret), KP(ctx_), KP(ctx_->get_sql_proxy()));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
     ret = OB_ERR_SYS;
     LOG_WARN("schema service is null", KR(ret));
   } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
@@ -162,51 +129,44 @@ int ObMLogPurger::prepare_for_purge()
   }
   // fetch mlog info and dep objs
   if (OB_SUCC(ret)) {
-    WITH_MVIEW_TRANS_INNER_MYSQL_GUARD(trans_)
-    {
-      if (OB_FAIL(ObMLogInfo::fetch_mlog_info(trans_, tenant_id, mlog_table_id, mlog_info_,
-                                              true /*for_update*/))) {
-        if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
-          LOG_WARN("fail to fetch mlog info", KR(ret), K(mlog_table_id));
-        } else {
-          ret = OB_ERR_TABLE_NO_MLOG;
-          LOG_WARN("materialized view log may dropped", KR(ret), K(mlog_table_id));
-        }
-      } else if (OB_FAIL(
-                   ObDependencyInfo::collect_dep_infos(tenant_id, master_table_id, trans_, deps))) {
-        LOG_WARN("fail to collect dep infos", KR(ret), K(master_table_id));
+    if (OB_FAIL(ObMLogInfo::fetch_mlog_info(*ctx_->get_sql_proxy(), tenant_id, mlog_table_id,
+                                            mlog_info_, false /*for_update*/))) {
+      if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
+        LOG_WARN("fail to fetch mlog info", KR(ret), K(mlog_table_id));
+      } else {
+        ret = OB_ERR_TABLE_NO_MLOG;
+        LOG_WARN("materialized view log may dropped", KR(ret), K(mlog_table_id));
       }
+    } else if (OB_FAIL(ObDependencyInfo::collect_dep_infos(tenant_id, master_table_id,
+                                                           *ctx_->get_sql_proxy(), deps))) {
+      LOG_WARN("fail to collect dep infos", KR(ret), K(master_table_id));
     }
   }
   // collect min refresh scn of mviews
-  if (OB_SUCC(ret)) {
-    WITH_MVIEW_TRANS_INNER_MYSQL_GUARD(trans_)
-    {
-      for (int64_t i = 0; OB_SUCC(ret) && i < deps.count(); ++i) {
-        const uint64_t table_id = deps.at(i).get_dep_obj_id();
-        const ObTableSchema *table_schema = nullptr;
-        if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
-          LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
-        } else if (OB_NOT_NULL(table_schema) && table_schema->is_materialized_view()) {
-          ObMViewInfo mview_info;
-          if (OB_FAIL(ObMViewInfo::fetch_mview_info(trans_, tenant_id, table_id, mview_info))) {
-            if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
-              LOG_WARN("fail to fetch mview info", KR(ret), K(table_id));
-            } else {
-              ret = OB_SUCCESS;
-            }
-          } else if (OB_INVALID_SCN_VAL == mview_info.get_last_refresh_scn() || 0 == mview_info.get_last_refresh_scn()) {
-            // do nothing
-          } else if (mview_info.get_refresh_method()== ObMVRefreshMethod::FAST
-              || mview_info.get_refresh_method()== ObMVRefreshMethod::FORCE
-              || table_schema->mv_on_query_computation()) {
-            // for fast refresh mv or real-query mv
-            if (mview_info.get_is_synced()) {
-              min_mview_refresh_scn = MIN(min_mview_refresh_scn, mview_info.get_data_sync_scn());
-            } else {
-              min_mview_refresh_scn = MIN(min_mview_refresh_scn, mview_info.get_last_refresh_scn());
-            }
-          }
+  for (int64_t i = 0; OB_SUCC(ret) && i < deps.count(); ++i) {
+    const uint64_t table_id = deps.at(i).get_dep_obj_id();
+    const ObTableSchema *table_schema = nullptr;
+    if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+      LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(table_id));
+    } else if (OB_NOT_NULL(table_schema) && table_schema->is_materialized_view()) {
+      ObMViewInfo mview_info;
+      if (OB_FAIL(ObMViewInfo::fetch_mview_info(*ctx_->get_sql_proxy(), tenant_id, table_id,
+                                                mview_info))) {
+        if (OB_UNLIKELY(OB_ENTRY_NOT_EXIST != ret)) {
+          LOG_WARN("fail to fetch mview info", KR(ret), K(table_id));
+        } else {
+          ret = OB_SUCCESS;
+        }
+      } else if (OB_INVALID_SCN_VAL == mview_info.get_last_refresh_scn() || 0 == mview_info.get_last_refresh_scn()) {
+        // do nothing
+      } else if (mview_info.get_refresh_method()== ObMVRefreshMethod::FAST
+          || mview_info.get_refresh_method()== ObMVRefreshMethod::FORCE
+          || table_schema->mv_on_query_computation()) {
+        // for fast refresh mv or real-query mv
+        if (mview_info.get_is_synced()) {
+          min_mview_refresh_scn = MIN(min_mview_refresh_scn, mview_info.get_data_sync_scn());
+        } else {
+          min_mview_refresh_scn = MIN(min_mview_refresh_scn, mview_info.get_last_refresh_scn());
         }
       }
     }
@@ -228,7 +188,8 @@ int ObMLogPurger::prepare_for_purge()
   }
   if (OB_SUCC(ret) && need_purge_) {
     if (OB_FAIL(ObMViewRefreshHelper::generate_purge_mlog_sql(
-          schema_guard, tenant_id, mlog_table_id, purge_scn_, purge_param_.purge_log_parallel_, purge_sql_))) {
+          schema_guard, tenant_id, mlog_table_id, purge_scn_, purge_param_.purge_log_parallel_,
+          MLOG_PURGE_BATCH_ROW_LIMIT, purge_sql_))) {
       LOG_WARN("fail to generate purge mlog sql", KR(ret), K(mlog_table_id), K(purge_scn_));
     }
   }
@@ -239,31 +200,125 @@ int ObMLogPurger::do_purge()
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = purge_param_.tenant_id_;
-  // 1. execute purge sql
   const int64_t start_time = ObTimeUtil::current_time();
-  int64_t affected_rows = 0;
-  if (OB_FAIL(trans_.write(tenant_id, purge_sql_.ptr(), affected_rows))) {
-    LOG_WARN("fail to execute sql", KR(ret), K(purge_sql_));
+  bool purge_finished = false;
+  int64_t total_affected_rows = 0;
+  ObArenaAllocator allocator("MLogPurge");
+  ObString database_name;
+  uint64_t database_id = OB_INVALID_ID;
+  if (OB_FAIL(get_database_info(allocator, database_id, database_name))) {
+    LOG_WARN("fail to get database info", KR(ret));
   }
-  const int64_t end_time = ObTimeUtil::current_time();
-  LOG_INFO("do_purge", K(tenant_id), K_(purge_sql), "time", end_time - start_time);
-  // 2. update mlog last purge info
-  if (OB_SUCC(ret)) {
-    WITH_MVIEW_TRANS_INNER_MYSQL_GUARD(trans_)
-    {
-      char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
-      mlog_info_.set_last_purge_scn(purge_scn_.get_val_for_inner_table_field());
-      mlog_info_.set_last_purge_date(start_time);
-      mlog_info_.set_last_purge_time((end_time - start_time) / 1000 / 1000);
-      mlog_info_.set_last_purge_rows(affected_rows);
-      if (OB_FAIL(mlog_info_.set_last_purge_trace_id(ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf))))) {
-        LOG_WARN("fail to set last purge trace id", KR(ret));
-      } else if (OB_FAIL(ObMLogInfo::update_mlog_last_purge_info(trans_, mlog_info_))) {
-        LOG_WARN("fail to update mlog last purge info", KR(ret), K(mlog_info_));
+  // 1. batch delete loop
+  while (OB_SUCC(ret) && !purge_finished) {
+    int64_t affected_rows = 0;
+    ObMViewTransaction trans;
+    if (OB_FAIL(start_trans(trans, database_id, database_name))) {
+      LOG_WARN("fail to start trans for batch purge", KR(ret));
+    } else if (OB_FAIL(register_mds(trans))) {
+      LOG_WARN("fail to register purge mds", KR(ret));
+    } else if (OB_FAIL(trans.write(tenant_id, purge_sql_.ptr(), affected_rows))) {
+      LOG_WARN("fail to execute purge sql", KR(ret), K(purge_sql_));
+    } else {
+      total_affected_rows += affected_rows;
+      purge_finished = affected_rows < MLOG_PURGE_BATCH_ROW_LIMIT;
+    }
+    if (trans.is_started()) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN("failed to commit batch purge trans", KR(ret), KR(tmp_ret));
+        ret = COVER_SUCC(tmp_ret);
       }
     }
+    if (OB_SUCC(ret) && !purge_finished) {
+      LOG_INFO("mlog batch purge progress", K(tenant_id), K(total_affected_rows));
+    }
   }
-  // 3. erase mlog's dynamic sampling KV cache
+  const int64_t end_time = ObTimeUtil::current_time();
+  LOG_INFO("do_purge", K(tenant_id), K_(purge_sql), K(total_affected_rows),
+           "time", end_time - start_time);
+  // 2. update mlog last purge info
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(update_mlog_info(start_time, end_time, total_affected_rows))) {
+      LOG_WARN("fail to update mlog info", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObMLogPurger::start_trans(ObMViewTransaction &trans,
+                              uint64_t database_id, const ObString &database_name)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->get_my_session()) || OB_ISNULL(ctx_->get_sql_proxy())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx can not be NULL", KR(ret));
+  } else if (OB_FAIL(trans.start(ctx_->get_my_session(),
+                                 ctx_->get_sql_proxy(),
+                                 database_id,
+                                 database_name))) {
+    LOG_WARN("fail to start trans", KR(ret), K(database_id), K(database_name));
+  }
+  return ret;
+}
+
+int ObMLogPurger::register_mds(ObMViewTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = purge_param_.tenant_id_;
+  ObMViewOpArg arg;
+  share::SCN curr_scn;
+  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx can not be NULL", KR(ret));
+  } else if (OB_FAIL(ObMViewRefreshHelper::get_current_scn(curr_scn))) {
+    LOG_WARN("get current_scn failed", KR(ret));
+  } else {
+    arg.table_id_ = mlog_info_.get_mlog_id();
+    arg.mview_op_type_ = MVIEW_OP_TYPE::PURGE_MLOG;
+    arg.parallel_ = purge_param_.purge_log_parallel_;
+    arg.session_id_ = ctx_->get_my_session()->get_server_sid();
+    arg.start_ts_ = ObTimeUtil::current_time();
+    arg.read_snapshot_ = curr_scn.get_val_for_tx();
+    if (OB_FAIL(ObMViewMdsOpHelper::register_mview_mds(tenant_id, arg, trans))) {
+      LOG_WARN("register mview mds failed", KR(ret), K(arg));
+    }
+  }
+  return ret;
+}
+
+int ObMLogPurger::update_mlog_info(int64_t start_time, int64_t end_time,
+                                   int64_t total_affected_rows)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = purge_param_.tenant_id_;
+  ObMySQLTransaction trans;
+  if (OB_ISNULL(ctx_) || OB_ISNULL(ctx_->get_sql_proxy())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx or sql proxy is null", KR(ret));
+  } else if (OB_FAIL(trans.start(ctx_->get_sql_proxy(), tenant_id))) {
+    LOG_WARN("fail to start trans", KR(ret), K(tenant_id));
+  } else {
+    char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {'\0'};
+    mlog_info_.set_last_purge_scn(purge_scn_.get_val_for_inner_table_field());
+    mlog_info_.set_last_purge_date(start_time);
+    mlog_info_.set_last_purge_time((end_time - start_time) / 1000 / 1000);
+    mlog_info_.set_last_purge_rows(total_affected_rows);
+    if (OB_FAIL(mlog_info_.set_last_purge_trace_id(
+            ObCurTraceId::get_trace_id_str(trace_id_buf, sizeof(trace_id_buf))))) {
+      LOG_WARN("fail to set last purge trace id", KR(ret));
+    } else if (OB_FAIL(ObMLogInfo::update_mlog_last_purge_info(trans, mlog_info_))) {
+      LOG_WARN("fail to update mlog last purge info", KR(ret), K(mlog_info_));
+    }
+  }
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("failed to commit update mlog info trans", KR(ret), KR(tmp_ret));
+      ret = COVER_SUCC(tmp_ret);
+    }
+  }
+  // erase mlog's dynamic sampling KV cache
   if (OB_SUCC(ret)) {
     ObOptDSStat::Key key;
     key.tenant_id_ = tenant_id;
@@ -279,11 +334,13 @@ int ObMLogPurger::do_purge()
   return ret;
 }
 
-int ObMLogPurger::get_and_check_mlog_database_schema(
-    const ObDatabaseSchema *&database_schema)
+int ObMLogPurger::get_database_info(ObIAllocator &allocator,
+                                    uint64_t &database_id,
+                                    ObString &database_name)
 {
   int ret = OB_SUCCESS;
   const share::schema::ObTableSchema *master_table_schema = nullptr;
+  const share::schema::ObDatabaseSchema *database_schema = nullptr;
   share::schema::ObSchemaGetterGuard schema_guard;
   const uint64_t tenant_id = purge_param_.tenant_id_;
   const uint64_t master_table_id = purge_param_.master_table_id_;
@@ -306,6 +363,11 @@ int ObMLogPurger::get_and_check_mlog_database_schema(
   } else if (OB_ISNULL(database_schema)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("database schema is nullptr", KR(ret));
+  } else if (OB_FAIL(ob_write_string(allocator, database_schema->get_database_name_str(),
+                                     database_name))) {
+    LOG_WARN("fail to deep copy database name", KR(ret));
+  } else {
+    database_id = database_schema->get_database_id();
   }
   return ret;
 }

@@ -99,6 +99,7 @@ int ObMViewRefreshHelper::lock_mview(ObMViewTransaction &trans, const uint64_t t
 int ObMViewRefreshHelper::generate_purge_mlog_sql(ObSchemaGetterGuard &schema_guard,
                                                   const uint64_t tenant_id, const uint64_t mlog_id,
                                                   const SCN &purge_scn, const int64_t purge_log_parallel,
+                                                  const int64_t batch_size,
                                                   ObSqlString &sql_string)
 {
   int ret = OB_SUCCESS;
@@ -153,12 +154,18 @@ int ObMViewRefreshHelper::generate_purge_mlog_sql(ObSchemaGetterGuard &schema_gu
       }
       if (OB_SUCC(ret)
           && OB_FAIL(sql_string.append_fmt(is_oracle_mode ?
-                                           " FROM \"%.*s\".\"%.*s\" WHERE ora_rowscn <= %lu;" :
-                                           " FROM `%.*s`.`%.*s` WHERE ora_rowscn <= %lu;",
+                                           " FROM \"%.*s\".\"%.*s\" WHERE ora_rowscn <= %lu" :
+                                           " FROM `%.*s`.`%.*s` WHERE ora_rowscn <= %lu",
                                            static_cast<int>(database_name.length()), database_name.ptr(),
                                            static_cast<int>(table_name.length()), table_name.ptr(),
                                            purge_scn.get_val_for_sql()))) {
         LOG_WARN("fail to append sql", KR(ret));
+      } else if (batch_size > 0 &&
+                 OB_FAIL(sql_string.append_fmt(is_oracle_mode ?
+                                               " AND ROWNUM <= %ld" :
+                                               " LIMIT %ld",
+                                               batch_size))) {
+        LOG_WARN("fail to append limit", KR(ret));
       }
     }
   }
