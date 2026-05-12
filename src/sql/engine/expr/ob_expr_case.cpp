@@ -377,8 +377,8 @@ static int check_when_is_match(const ObExpr &expr, ObEvalCtx &ctx,
       vec = _mm512_mask_blend_epi64(~((uint8_t*)case_when_match.data_)[i / 8], zero_vec, vec);
       uint8_t cmp = _mm512_cmpneq_epi64_mask(vec, zero_vec);
       *(reinterpret_cast<uint8_t *>(case_when_match.data_) + (i / 8)) |= cmp;
-      __m512i idx_vec = _mm512_loadu_si512(reinterpret_cast<const __m512i*>(match_then_expr_idx + i));
-      _mm512_storeu_si512(match_then_expr_idx + i, _mm512_mask_blend_epi64(cmp, idx_vec, const_vec));
+      __m512i idx_vec = _mm512_loadu_si512(reinterpret_cast<const __m512i*>(match_then_expr_idx + (i - bound.start())));
+      _mm512_storeu_si512(match_then_expr_idx + (i - bound.start()), _mm512_mask_blend_epi64(cmp, idx_vec, const_vec));
     }
     for (; i < bound.end(); ++i) {
       if (!case_when_match.at(i) && when_expr_result[i] != 0) {
