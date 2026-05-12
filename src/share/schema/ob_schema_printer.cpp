@@ -2271,7 +2271,12 @@ int ObSchemaPrinter::print_table_definition_partition_options(const ObTableSchem
                                                               const ObTimeZoneInfo *tz_info) const
 {
   int ret = OB_SUCCESS;
-  if ((table_schema.is_partitioned_table() || table_schema.is_auto_partitioned_table())
+  const bool skip_auto_split_index_part_info =
+      table_schema.is_index_table()
+      && table_schema.is_auto_partitioned_table()
+      && nullptr == table_schema.get_part_array();
+  if (!skip_auto_split_index_part_info
+      && (table_schema.is_partitioned_table() || table_schema.is_auto_partitioned_table())
       && !table_schema.is_index_local_storage()
       && !table_schema.is_oracle_tmp_table()
       && !table_schema.is_oracle_tmp_table_v2()) {
