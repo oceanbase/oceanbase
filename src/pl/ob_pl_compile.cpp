@@ -502,7 +502,7 @@ int ObPLCompiler::compile(
     ObDataTypeCastParams dtc_params = session_info_.get_dtc_params();
     ObPLParser parser(allocator_, session_info_.get_charsets4parser(), session_info_.get_sql_mode());
     OZ (ObSQLUtils::convert_sql_text_from_schema_for_resolve(allocator_, dtc_params, body), K(body));
-    OZ (parser.parse_routine_body(body, parse_tree, session_info_.is_for_trigger_package(), is_wrap), K(body));
+    OZ (parser.parse_routine_body(body, parse_tree, false/*is_for_trigger*/, is_wrap), K(body));
   }
 
   func.set_is_wrap(is_wrap);
@@ -762,7 +762,8 @@ int ObPLCompiler::check_package_body_legal(const ObPLBlockNS *parent_ns,
       ObPL::insert_error_msg(ret);
       ObPLResolver::record_error_line(session_info_,
                                       spec_routine_info->get_line_number(),
-                                      spec_routine_info->get_col_number(), package_ast.get_db_name(), package_ast.get_name(), ObString());
+                                      spec_routine_info->get_col_number(), package_ast.get_db_name(), package_ast.get_name(), ObString(),
+                                      parent_ns->is_for_trigger_package());
     }
   }
   CK (OB_NOT_NULL(parent_ns->get_cursor_table()));
@@ -792,9 +793,7 @@ int ObPLCompiler::analyze_package(const ObString &source,
                                   bool &is_wrap)
 {
   int ret = OB_SUCCESS;
-  bool origin_is_for_trigger = session_info_.is_for_trigger_package();
   ObPLResolveCache *resolve_cache = nullptr;
-  session_info_.set_for_trigger_package(is_for_trigger);
   OZ (ObPLResolveCache::gen_reoslve_cache(allocator_, resolve_cache));
   CK (!source.empty());
   CK (package_ast.is_inited());
@@ -821,6 +820,7 @@ int ObPLCompiler::analyze_package(const ObString &source,
       uint64_t trg_id = ObTriggerInfo::get_package_trigger_id(package_ast.get_id());
       OZ (schema_guard_.get_trigger_info(session_info_.get_effective_tenant_id(), trg_id, trg_info));
       CK (OB_NOT_NULL(trg_info));
+      OX (resolver.get_resolve_ctx().tg_timing_event_ = const_cast<ObTriggerInfo *>(trg_info)->get_timing_event());
     }
     if (OB_SUCC(ret) && is_for_trigger && PL_PACKAGE_SPEC == package_ast.get_package_type()) {
       const uint64_t trg_id = ObTriggerInfo::get_package_trigger_id(package_ast.get_id());
@@ -828,6 +828,7 @@ int ObPLCompiler::analyze_package(const ObString &source,
       const uint64_t tenant_id = session_info_.get_effective_tenant_id();
       OZ (schema_guard_.get_trigger_info(tenant_id, trg_id, trg_info));
       OV (OB_NOT_NULL(trg_info), OB_ERR_UNEXPECTED, trg_id);
+      OX (resolver.get_resolve_ctx().tg_timing_event_ = const_cast<ObTriggerInfo *>(trg_info)->get_timing_event());
       if (OB_SUCC(ret) && !trg_info->get_ref_trg_db_name().empty() && lib::is_oracle_mode()) {
         uint64_t ref_db_id = OB_INVALID_ID;
         const ObTriggerInfo *ref_trg_info = NULL;
@@ -869,7 +870,6 @@ int ObPLCompiler::analyze_package(const ObString &source,
   if (OB_SUCC(ret) && OB_NOT_NULL(parent_ns)) { // after resolve package body, check package legal
     OZ (check_package_body_legal(parent_ns, package_ast));
   }
-  session_info_.set_for_trigger_package(origin_is_for_trigger);
   if (OB_NOT_NULL(resolve_cache)) {
     resolve_cache->~ObPLResolveCache();
   }
@@ -945,7 +945,6 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(pl_compile);
-  bool saved_trigger_flag = session_info_.is_for_trigger_package();
   ObString source;
   ObString copy_exec_env;
   bool is_wrap = false;
@@ -953,7 +952,6 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
 
   ObPLCompilerEnvGuard guard(package_info, session_info_, schema_guard_, package_ast, ret, parent_ns);
   ObPLASHGuard plash_guard(ObPLASHGuard::ObPLASHStatus::IS_PLSQL_COMPILATION);
-  session_info_.set_for_trigger_package(package_info.is_for_trigger());
   if (OB_NOT_NULL(parent_ns)) {
     if (parent_ns->get_compile_flag().compile_with_invoker_right()) {
       OZ (package_ast.get_compile_flag().add_invoker_right());
@@ -1039,7 +1037,6 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
   OZ (generate_package(copy_exec_env, package_ast, package, is_from_disk));
   OX (package.set_can_cached(package_ast.get_can_cached()));
   OX (package_ast.get_serially_reusable() ? package.set_serially_reusable() : void(NULL));
-  session_info_.set_for_trigger_package(saved_trigger_flag);
   OZ (check_dep_schema(schema_guard_, package.get_dependency_table()));
 
   if (OB_SUCC(ret) && !is_from_disk) {

@@ -432,10 +432,10 @@ public:
                                 ObRawExprFactory &expr_factory,
                                 common::ObIArray<ObObjAccessIdent> &obj_access_idents,
                                 ObSQLSessionInfo &session_info);
-  static
   int record_error_line(const ObStmtNodeTree *parse_tree, ObSQLSessionInfo &session_info, const ObString &db_name, const ObString &package_name, const ObString &name);
   static
-  int record_error_line(ObSQLSessionInfo &session_info, const int32_t line, const int32_t col, const ObString &db_name, const ObString &package_name, const ObString &name);
+  int record_error_line(ObSQLSessionInfo &session_info, const int32_t line, const int32_t col, const ObString &db_name, const ObString &package_name, const ObString &name,
+                        const bool is_for_trigger);
   static
   int resolve_access_ident(const ObObjAccessIdent &access_ident,
                            ObPLExternalNS &external_ns,
@@ -733,7 +733,8 @@ public:
                                   int32_t upper,
                                   ObRawExpr *&expr);
   static int check_update_column(const ObPLBlockNS &ns, uint64_t var_idx, const ObIArray<ObObjAccessIdx>& access_idxs,
-                                 sql::ObSQLSessionInfo &session_info, share::schema::ObSchemaGetterGuard &schema_guard);
+                                 sql::ObSQLSessionInfo &session_info, share::schema::ObSchemaGetterGuard &schema_guard,
+                                 bool is_for_trigger = false);
   static bool is_parameterized_null_param(const ObRawExpr *expr);
 
   static int modify_null_param_using_deduced_type(const ObRawExpr *expr,

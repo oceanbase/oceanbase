@@ -1102,8 +1102,6 @@ public:
   int add_dblink_sequence_schema(ObSequenceSchema *schema);
   int get_dblink_sequence_schema(int64_t sequence_id, const ObSequenceSchema* &schema)const;
 
-  void set_for_trigger_package(bool value) { is_for_trigger_package_ = value; }
-  bool is_for_trigger_package() const { return is_for_trigger_package_; }
   void set_trans_type(transaction::ObTxClass t) { trans_type_ = t; }
   transaction::ObTxClass get_trans_type() const { return trans_type_; }
 
@@ -1906,8 +1904,6 @@ private:
   bool has_temp_table_flag_;  //会话是否创建过临时表
   bool has_accessed_session_level_temp_table_;  //是否访问过Session临时表
   bool enable_early_lock_release_;
-  // trigger.
-  bool is_for_trigger_package_;
   transaction::ObTxClass trans_type_;
   const common::ObVersionProvider *version_provider_;
   const ObSQLConfigProvider *config_provider_;

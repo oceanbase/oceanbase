@@ -1574,6 +1574,7 @@ public:
   const ObPLBlockNS* get_udt_routine_ns() const;
 
   int extract_external_record_default_expr(ObRawExpr &expr) const;
+  inline bool is_for_trigger_package() const { return ObTriggerInfo::is_trigger_package_id(package_id_); }
 
   DECLARE_TO_STRING;
 

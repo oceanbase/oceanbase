@@ -494,13 +494,10 @@ int TriggerHandle::calc_trigger_routine(
   ObArray<int64_t> path;
   ObArray<int64_t> nocopy_params;
   trigger_id = ObTriggerInfo::get_trigger_body_package_id(trigger_id);
-  bool old_flag = false;
   common::ObArenaAllocator tmp_allocator(common::ObMemAttr(MTL_ID(), "TriggerExec"));
   pl::ObPLExecuteArg pl_execute_arg;
   OX (pl_execute_arg.get_pl_ctx().set_disable_pl_exec_cache(true));
   CK (OB_NOT_NULL(exec_ctx.get_my_session()));
-  OX (old_flag = exec_ctx.get_my_session()->is_for_trigger_package());
-  OX (exec_ctx.get_my_session()->set_for_trigger_package(true));
   OV (OB_NOT_NULL(exec_ctx.get_pl_engine()));
   OX (pl_execute_arg.get_pl_ctx().set_is_system_trigger(is_system_trigger));
   OZ (pl_execute_arg.obtain_routine(exec_ctx, trigger_id, routine_id, path));
@@ -508,10 +505,6 @@ int TriggerHandle::calc_trigger_routine(
     exec_ctx, tmp_allocator, trigger_id, routine_id, path, params, nocopy_params, result, pl_execute_arg),
       trigger_id, routine_id, params);
   OZ (exec_ctx.get_my_session()->reset_all_package_state_by_dbms_session(true));
-  if (exec_ctx.get_my_session()->is_for_trigger_package()) {
-    // whether `ret == OB_SUCCESS`, need to restore flag
-    exec_ctx.get_my_session()->set_for_trigger_package(old_flag);
-  }
   return ret;
 }
 

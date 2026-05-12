@@ -2307,7 +2307,8 @@ int ObResolverUtils::resolve_column_ref(const ParseNode *node, const ObNameCaseM
 int ObResolverUtils::resolve_obj_access_ref_node(ObRawExprFactory &expr_factory,
                                                  const ParseNode *node,
                                                  ObQualifiedName &q_name,
-                                                 const ObSQLSessionInfo &session_info)
+                                                 const ObSQLSessionInfo &session_info,
+                                                 TgTimingEvent tg_timing_event)
 {
   int ret = OB_SUCCESS;
   // generate raw expr
@@ -2320,6 +2321,7 @@ int ObResolverUtils::resolve_obj_access_ref_node(ObRawExprFactory &expr_factory,
     ObNameCaseMode case_mode = OB_NAME_CASE_INVALID;
     ObExprResolveContext ctx(expr_factory, &tz_info, case_mode);
     ctx.session_info_ = &session_info;
+    ctx.tg_timing_event_ = tg_timing_event;
     //not set query_ctx, 这个函数只会由PL Resolver调用, PL Resolver中没有query ctx
     // ??
     //ctx.is_oracle_compatible_ = (T_OBJ_ACCESS_REF == node->type_);

@@ -332,7 +332,8 @@ public:
   static int resolve_obj_access_ref_node(ObRawExprFactory &expr_factory,
                                          const ParseNode *node,
                                          ObQualifiedName &q_name,
-                                         const ObSQLSessionInfo &session_info);
+                                         const ObSQLSessionInfo &session_info,
+                                         TgTimingEvent tg_timing_event = TgTimingEvent::TG_TIMING_EVENT_INVALID);
 
   static int set_parallel_info(sql::ObSQLSessionInfo &session_info,
                                share::schema::ObSchemaGetterGuard &schema_guard,

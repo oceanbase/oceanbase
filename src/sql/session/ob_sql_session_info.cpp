@@ -103,7 +103,6 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       has_temp_table_flag_(false),
       has_accessed_session_level_temp_table_(false),
       enable_early_lock_release_(false),
-      is_for_trigger_package_(false),
       trans_type_(transaction::ObTxClass::USER),
       version_provider_(NULL),
       config_provider_(NULL),
@@ -299,7 +298,6 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
     last_refresh_temp_table_time_ = 0;
     has_temp_table_flag_ = false;
     has_accessed_session_level_temp_table_ = false;
-    is_for_trigger_package_ = false;
     trans_type_ = transaction::ObTxClass::USER;
     version_provider_ = NULL;
     config_provider_ = NULL;

@@ -1176,7 +1176,8 @@ int ObRawExprUtils::resolve_udf_param_exprs(ObResolverParams &params,
                                                         obj_access->get_var_indexs().at(0),
                                                         obj_access->get_access_idxs(),
                                                         *(params.session_info_),
-                                                        *(params.schema_checker_->get_schema_guard())));
+                                                        *(params.schema_checker_->get_schema_guard()),
+                                                        params.secondary_namespace_->is_for_trigger_package()));
             }
           }
 #define GET_CONST_EXPR_VALUE(expr, val)                                         \

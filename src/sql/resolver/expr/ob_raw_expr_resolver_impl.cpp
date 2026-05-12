@@ -4558,7 +4558,9 @@ int ObRawExprResolverImpl::process_column_ref_node(
   if (OB_ISNULL(node) || OB_ISNULL(ctx_.columns_) || OB_ISNULL(ctx_.session_info_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(node), K_(ctx_.columns), KPC(ctx_.session_info_), K(ret));
-  } else if (ctx_.session_info_->is_for_trigger_package()
+  } else if ((TgTimingEvent::TG_TIMING_EVENT_INVALID != ctx_.tg_timing_event_
+              || (NULL != ctx_.secondary_namespace_
+                  && ctx_.secondary_namespace_->is_for_trigger_package()))
              && ObRawExprUtils::is_new_old_column_ref(node) && !lib::is_oracle_mode()) {
     ParseNode *obj_access_node = NULL;
     OZ (ObRawExprUtils::mock_obj_access_ref_node(ctx_.expr_factory_.get_allocator(),

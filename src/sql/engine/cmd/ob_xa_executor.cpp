@@ -434,7 +434,8 @@ int ObPlXaStartExecutor::execute(ObExecContext &ctx, ObXaStartStmt &stmt)
     ret = OB_TRANS_XA_OUTSIDE;
     LOG_WARN("already start trans", K(ret), K(xid), K(tx_desc->tid()),
         K(tx_desc->get_xid()));
-  } else if (true == my_session->is_for_trigger_package()) {
+  } else if (OB_NOT_NULL(my_session->get_pl_context())
+             && my_session->get_pl_context()->is_in_trigger_context()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support xa start in trigger", K(ret), K(xid));
   } else if (OB_FAIL(ObXaExecutorUtil::get_org_cluster_id(my_session, org_cluster_id))) {
@@ -542,7 +543,8 @@ int ObPlXaEndExecutor::execute(ObExecContext &ctx, ObXaEndStmt &stmt)
   } else if (!my_session->get_in_transaction()) {
     ret = OB_TRANS_XA_PROTO;
     LOG_WARN("not in a trans", K(ret));
-  } else if (true == my_session->is_for_trigger_package()) {
+  } else if (OB_NOT_NULL(my_session->get_pl_context())
+             && my_session->get_pl_context()->is_in_trigger_context()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support xa end in trigger", K(ret), K(xid));
   } else if (my_session->get_xid().empty()) {

@@ -153,7 +153,7 @@ int ObPLResolver::init_default_expr(ObPLFunctionAST &func_ast,
     ObRawExpr *default_expr = NULL;
     ObString default_value = param.get_default_value();
     bool is_for_trigger = false;
-    if (resolve_ctx_.session_info_.is_for_trigger_package()
+    if (TgTimingEvent::TG_TIMING_EVENT_INVALID != resolve_ctx_.tg_timing_event_
         && lib::is_oracle_mode()
         && ObTriggerInfo::is_trigger_body_package_id(func_ast.get_package_id())) {
       is_for_trigger = true;
@@ -679,7 +679,7 @@ int ObPLResolver::resolve(const ObStmtNodeTree *parse_tree, ObPLFunctionAST &fun
       case T_TG_ALTER:
       case T_TG_DROP:
       case T_TG_CREATE: {
-        if ((resolve_ctx_.session_info_.is_for_trigger_package() || func.is_function())) {
+        if ((TgTimingEvent::TG_TIMING_EVENT_INVALID != resolve_ctx_.tg_timing_event_ || func.is_function())) {
          ret = OB_ER_COMMIT_NOT_ALLOWED_IN_SF_OR_TRG;
          LOG_WARN("DDL SQL is not allowed in stored function", K(ret));
         } else {
@@ -4342,7 +4342,8 @@ int ObPLResolver::resolve_assign(const ObStmtNodeTree *parse_tree, ObPLAssignStm
         } else if (T_QUESTIONMARK == into_node->type_/*Oracle mode*/) {
           OZ (resolve_question_mark_node(into_node, into_expr));
         } else if (OB_FAIL(ObResolverUtils::resolve_obj_access_ref_node(expr_factory_,
-                            into_node, q_name, resolve_ctx_.session_info_))) {
+                            into_node, q_name, resolve_ctx_.session_info_,
+                            static_cast<TgTimingEvent>(resolve_ctx_.tg_timing_event_)))) {
           LOG_WARN("resolve obj access ref node failed", K(ret));
         }
         if (OB_SUCC(ret)) {
@@ -4375,7 +4376,7 @@ int ObPLResolver::resolve_assign(const ObStmtNodeTree *parse_tree, ObPLAssignStm
             if (T_OP_GET_SYS_VAR == into_expr->get_expr_type()) {
               ObString var_name(into_node->str_len_, into_node->str_value_);
               if (OB_UNLIKELY(var_name.case_compare_equal("autocommit"))) {
-                if (func.is_function() || resolve_ctx_.session_info_.is_for_trigger_package()) {
+                if (func.is_function() || TgTimingEvent::TG_TIMING_EVENT_INVALID != resolve_ctx_.tg_timing_event_) {
                   ret = OB_ER_SP_CANT_SET_AUTOCOMMIT;
                   LOG_USER_ERROR(OB_ER_SP_CANT_SET_AUTOCOMMIT);
                   LOG_WARN("Not allowed to set autocommit from a stored function or trigger",
@@ -6060,7 +6061,7 @@ int ObPLResolver::check_and_record_stmt_type(ObPLFunctionAST &func,
   // FUNCTION 中不允许含有的SQL语句包括 PS, DDL, SELECT WITHOUT INTO
   int ret = OB_SUCCESS;
   stmt::StmtType type = prepare_result.type_;
-  bool in_tg = resolve_ctx_.session_info_.is_for_trigger_package();
+  bool in_tg = (TgTimingEvent::TG_TIMING_EVENT_INVALID != resolve_ctx_.tg_timing_event_);
   switch (type) {
     case stmt::T_PREPARE:
     case stmt::T_EXECUTE:
@@ -7995,7 +7996,8 @@ int ObPLResolver::resolve_inout_param(ObRawExpr *param_expr, ObPLRoutineParamMod
           = access_idxs.at(ObObjAccessIdx::get_local_variable_idx(access_idxs)).var_index_;
         CK (var_idx >= 0 && var_idx < obj_expr->get_var_indexs().count());
         OZ (check_update_column(current_block_->get_namespace(), obj_expr->get_var_indexs().at(var_idx), access_idxs,
-                                resolve_ctx_.session_info_, resolve_ctx_.schema_guard_));
+                                resolve_ctx_.session_info_, resolve_ctx_.schema_guard_,
+                                TgTimingEvent::TG_TIMING_EVENT_INVALID != resolve_ctx_.tg_timing_event_));
         OZ (check_local_variable_read_only(
           current_block_->get_namespace(),
           obj_expr->get_var_indexs().at(var_idx),
@@ -11888,7 +11890,9 @@ int ObPLResolver::resolve_raw_expr(const ParseNode &node,
                             params.is_prepare_protocol_,
                             false, /*check mode*/
                             true, /*sql mode*/
-                            params.param_list_);
+                            params.param_list_,
+                            nullptr,
+                            static_cast<TgTimingEvent>(ns.get_external_ns()->get_resolve_ctx().tg_timing_event_));
       OZ (resolver.init(func_ast));
       OX (resolver.get_current_namespace() = ns);
       OZ (resolver.resolve_expr(&node, func_ast, expr,
@@ -11932,7 +11936,9 @@ int ObPLResolver::resolve_raw_expr(const ParseNode &node,
                           is_prepare_protocol,
                           false,
                           false,
-                          ns.get_external_ns()->get_resolve_ctx().param_list_);
+                          ns.get_external_ns()->get_resolve_ctx().param_list_,
+                          nullptr,
+                          static_cast<TgTimingEvent>(ns.get_external_ns()->get_resolve_ctx().tg_timing_event_));
     HEAP_VAR(pl::ObPLFunctionAST, func_ast, allocator) {
       OC( (resolver.init)(func_ast) );
       if (OB_SUCC(ret)) {
@@ -12388,7 +12394,10 @@ int ObPLResolver::resolve_obj_access_node(const ParseNode &node,
     }
   }
   if (OB_FAIL(ret)) {
-    record_error_line(const_cast<const ObStmtNodeTree*>(&node), session_info, ObString(), ObString(), ObString());
+    (void)ObPLResolver::record_error_line(session_info,
+                                           node.stmt_loc_.first_line_,
+                                           node.stmt_loc_.first_column_,
+                                           ObString(), ObString(), ObString(), false);
   }
   return ret;
 }
@@ -12473,7 +12482,10 @@ int ObPLResolver::resolve_obj_access_idents(const ParseNode &node,
     }
   }
   if (OB_FAIL(ret)) {
-    record_error_line(const_cast<const ObStmtNodeTree*>(&node), session_info,  ObString(), ObString(), ObString());
+    (void)ObPLResolver::record_error_line(session_info,
+                                         node.stmt_loc_.first_line_,
+                                         node.stmt_loc_.first_column_,
+                                         ObString(), ObString(), ObString(), false);
   }
 #undef PROCESS_IDENT_NODE
 #undef PROCESS_CPARAM_LIST_NODE
@@ -14335,7 +14347,7 @@ int ObPLResolver::check_local_variable_read_only(
               LOG_MYSQL_USER_ERROR(OB_ERR_TRIGGER_CANT_CHANGE_ROW, "OLD", "");
             }
           }
-        } else if (resolve_ctx_.session_info_.is_for_trigger_package()
+        } else if (TgTimingEvent::TG_TIMING_EVENT_INVALID != resolve_ctx_.tg_timing_event_
                    && lib::is_oracle_mode()
                    && ObTriggerInfo::is_trigger_body_package_id(ns.get_package_id())) {
           GET_TRIGGER_INFO;
@@ -14366,7 +14378,7 @@ int ObPLResolver::check_local_variable_read_only(
           LOG_WARN("variable is read only", K(ret), K(var_idx), KPC(var));
         }
       }
-    } else if (resolve_ctx_.session_info_.is_for_trigger_package()) {
+    } else if (TgTimingEvent::TG_TIMING_EVENT_INVALID != resolve_ctx_.tg_timing_event_) {
       if (ObTriggerInfo::is_trigger_body_package_id(ns.get_package_id()) && lib::is_oracle_mode()) {
         GET_TRIGGER_INFO;
         if (OB_SUCC(ret)
@@ -14547,7 +14559,7 @@ int ObPLResolver::get_caller_accessor_item(const ObPLStmtBlock *caller, Accessor
   CK (OB_NOT_NULL(block_ns = &(caller->get_namespace())));
   if (OB_SUCC(ret)) {
     if (block_ns->get_package_id() != OB_INVALID_ID) {
-      if (ObTriggerInfo::is_trigger_package_id(block_ns->get_package_id())) { //trigger
+      if (block_ns->is_for_trigger_package()) { //trigger
         caller_item.kind_ = AccessorItemKind::PL_ACCESSOR_TRIGGER;
         caller_item.schema_ = block_ns->get_db_name();
         caller_item.name_ = block_ns->get_package_name();
@@ -15081,7 +15093,8 @@ int ObPLResolver::check_variable_accessible(
   } else if (ObObjAccessIdx::is_local_variable(access_idxs)) {
     if (for_write) {
       OZ (check_update_column(ns, access_idxs.at(ObObjAccessIdx::get_local_variable_idx(access_idxs)).var_index_,
-                              access_idxs, resolve_ctx_.session_info_, resolve_ctx_.schema_guard_));
+                              access_idxs, resolve_ctx_.session_info_, resolve_ctx_.schema_guard_,
+                              TgTimingEvent::TG_TIMING_EVENT_INVALID != resolve_ctx_.tg_timing_event_));
       OZ (check_local_variable_read_only(
         ns, access_idxs.at(ObObjAccessIdx::get_local_variable_idx(access_idxs)).var_index_
         /*access_idxs.at(access_idxs.count() - 1).var_index_*/, is_inout_param), access_idxs);
@@ -15144,7 +15157,8 @@ int ObPLResolver::check_variable_accessible(
         uint64_t actual_var_idx = OB_INVALID_INDEX;
         OZ (get_const_expr_value(f_expr->get_param_expr(2), actual_var_idx));
         OZ (check_update_column(*subprogram_ns, actual_var_idx, access_idxs,
-                                resolve_ctx_.session_info_, resolve_ctx_.schema_guard_));
+                                resolve_ctx_.session_info_, resolve_ctx_.schema_guard_,
+                                TgTimingEvent::TG_TIMING_EVENT_INVALID != resolve_ctx_.tg_timing_event_));
         OZ (check_local_variable_read_only(*subprogram_ns, actual_var_idx));
       } else {
         OZ (check_local_variable_read_only(
@@ -15199,7 +15213,8 @@ int ObPLResolver::check_variable_accessible(ObRawExpr *expr, bool for_write)
           access_idxs.at(ObObjAccessIdx::get_local_variable_idx(access_idxs)).var_index_;
         CK (var_idx >= 0 && var_idx < obj_access->get_var_indexs().count());
         OZ (check_update_column(current_block_->get_namespace(), obj_access->get_var_indexs().at(var_idx), access_idxs,
-                                resolve_ctx_.session_info_, resolve_ctx_.schema_guard_));
+                                resolve_ctx_.session_info_, resolve_ctx_.schema_guard_,
+                                TgTimingEvent::TG_TIMING_EVENT_INVALID != resolve_ctx_.tg_timing_event_));
         OZ (check_local_variable_read_only(
           current_block_->get_namespace(), obj_access->get_var_indexs().at(var_idx)));
       }
@@ -15218,7 +15233,8 @@ int ObPLResolver::check_variable_accessible(ObRawExpr *expr, bool for_write)
         uint64_t actual_var_idx = OB_INVALID_INDEX;
         GET_CONST_EXPR_VALUE(f_expr->get_param_expr(2), actual_var_idx);
         OZ (check_update_column(*subprogram_ns, actual_var_idx, access_idxs,
-                                resolve_ctx_.session_info_, resolve_ctx_.schema_guard_));
+                                resolve_ctx_.session_info_, resolve_ctx_.schema_guard_,
+                                TgTimingEvent::TG_TIMING_EVENT_INVALID != resolve_ctx_.tg_timing_event_));
         OZ (check_local_variable_read_only(*subprogram_ns, actual_var_idx));
       } else {
         OZ (check_variable_accessible(current_block_->get_namespace(),
@@ -17023,7 +17039,8 @@ int ObPLResolver::resolve_into(const ParseNode *into_node, ObPLInto &into, ObPLF
         OZ (q_name.access_idents_.push_back(access_ident));
       } else { /*Mysql mode*/
         OZ (ObResolverUtils::resolve_obj_access_ref_node(expr_factory_,
-                                into_list->children_[i], q_name, resolve_ctx_.session_info_));
+                                into_list->children_[i], q_name, resolve_ctx_.session_info_,
+                                static_cast<TgTimingEvent>(resolve_ctx_.tg_timing_event_)));
       }
       if (OB_SUCC(ret) && OB_ISNULL(expr)) {
         OZ (resolve_var(q_name, func, expr, true/*fo write*/));
@@ -18583,7 +18600,7 @@ int ObPLResolver::resolve_routine_decl_param_list(const ParseNode *param_list,
       } else {
         param_name.assign_ptr(name_node->str_value_, static_cast<int32_t>(name_node->str_len_));
         bool with_rowid = check_with_rowid(routine_info.get_name(),
-                                           resolve_ctx_.session_info_.is_for_trigger_package());
+                                           TgTimingEvent::TG_TIMING_EVENT_INVALID != resolve_ctx_.tg_timing_event_);
         if (OB_FAIL(resolve_sp_data_type(type_node, param_name, unit_ast,
                                          param_type, &extern_type_info, with_rowid, true))) {
           LOG_WARN("resolve data type failed", K(ret), K(param_name));
@@ -19090,7 +19107,7 @@ int ObPLResolver::resolve_routine_block(const ObStmtNodeTree *parse_tree,
                           false/*is_check_mode_ = false*/, false/*bool is_sql_scope_ = false*/,
                           resolve_ctx_.param_list_,
                           nullptr,
-                          TgTimingEvent::TG_TIMING_EVENT_INVALID,
+                          static_cast<TgTimingEvent>(resolve_ctx_.tg_timing_event_),
                           resolve_ctx_.pl_resolve_cache_);
     // note: init函数中引用了resolver的external_ns_, 而resolver是一个栈变量，使用的时候需要小心
     if (OB_FAIL(resolver.init(routine_ast))) {
@@ -19738,14 +19755,19 @@ int ObPLResolver::record_error_line(const ObStmtNodeTree *parse_tree,
       (0 < parse_tree->stmt_loc_.first_line_ || 0 < parse_tree->stmt_loc_.first_column_)) {
     ret = record_error_line(session_info,
                             parse_tree->stmt_loc_.first_line_,
-                            parse_tree->stmt_loc_.first_column_, db_name, package_name, name);
+                            parse_tree->stmt_loc_.first_column_, db_name, package_name, name,
+                            TgTimingEvent::TG_TIMING_EVENT_INVALID != resolve_ctx_.tg_timing_event_);
   }
   return ret;
 }
 
 int ObPLResolver::record_error_line(ObSQLSessionInfo &session_info,
                                     int32_t line,
-                                    int32_t col, const ObString &db_name, const ObString &package_name, const ObString &name)
+                                    int32_t col,
+                                    const ObString &db_name,
+                                    const ObString &package_name,
+                                    const ObString &name,
+                                    bool is_for_trigger)
 {
   int ret = OB_SUCCESS;
   // comp oracle, oracle line is begin with 1 while ob is begin with 0
@@ -19762,13 +19784,13 @@ int ObPLResolver::record_error_line(ObSQLSessionInfo &session_info,
          OZ (err_msg.append_fmt("%.*s.", db_name.length(), db_name.ptr()));
         }
         if (!package_name.empty()) {
-          if (!session_info.is_for_trigger_package() && !name.empty()) {
+          if (!is_for_trigger && !name.empty()) {
             OZ (err_msg.append_fmt("%.*s.", package_name.length(), package_name.ptr()));
           } else {
             OZ (err_msg.append_fmt("%.*s", package_name.length(), package_name.ptr()));
           }
         }
-        if (!name.empty() && !session_info.is_for_trigger_package()) {
+        if (!name.empty() && !is_for_trigger) {
           OZ (err_msg.append_fmt("%.*s", name.length(), name.ptr()));
         }
       }
@@ -20047,7 +20069,8 @@ int ObPLResolver::check_var_type(ObString &name1, ObString &name2, uint64_t db_i
 }
 
 int ObPLResolver::check_update_column(const ObPLBlockNS &ns,uint64_t var_idx, const ObIArray<ObObjAccessIdx>& access_idxs,
-                                      ObSQLSessionInfo &session_info, ObSchemaGetterGuard &schema_guard)
+                                      ObSQLSessionInfo &session_info, ObSchemaGetterGuard &schema_guard,
+                                      bool is_for_trigger)
 {
   int ret = OB_SUCCESS;
 #define COLLECT_ASSIGN_COLUMN \
@@ -20063,7 +20086,7 @@ int ObPLResolver::check_update_column(const ObPLBlockNS &ns,uint64_t var_idx, co
     } \
   } while (0)
 
-  if (session_info.is_for_trigger_package() && access_idxs.count() >= 2) {
+  if (is_for_trigger && access_idxs.count() >= 2) {
     if (lib::is_oracle_mode()
         && !access_idxs.at(1).var_name_.case_compare_equal(OB_HIDDEN_LOGICAL_ROWID_COLUMN_NAME)
         && access_idxs.at(0).var_name_.prefix_match(":")) {

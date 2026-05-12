@@ -9638,7 +9638,8 @@ int ObSPIService::resolve_exec_params(const ParseResult &parse_result,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("param node is NULL", K(ret));
     } else {
-      if (session.is_for_trigger_package()
+      if ((TgTimingEvent::TG_TIMING_EVENT_INVALID != prepare_result.tg_timing_event_
+           || secondary_namespace.is_for_trigger_package())
           && ObRawExprUtils::is_new_old_column_ref(current_param->node_)) {
         ParseNode *obj_access_node = NULL;
         OZ (ObRawExprUtils::mock_obj_access_ref_node(allocator, obj_access_node,

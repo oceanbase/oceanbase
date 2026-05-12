@@ -1244,10 +1244,12 @@ int ObSql::do_real_prepare(const ObString &sql,
     LOG_WARN("session info is NULL", K(ret));
   } else if (OB_ISNULL(context.parse_result_)) {
     ObParser parser(allocator, session.get_sql_mode(), session.get_charsets4parser());
-    ParseMode parse_mode = context.is_dbms_sql_               ? DBMS_SQL_MODE
-                           : context.is_dynamic_sql_          ? DYNAMIC_SQL_MODE
-                           : session.is_for_trigger_package() ? TRIGGER_MODE
-                                                              : STD_MODE;
+    bool is_for_trigger = (NULL != context.secondary_namespace_
+        && context.secondary_namespace_->is_for_trigger_package());
+    ParseMode parse_mode = context.is_dbms_sql_      ? DBMS_SQL_MODE
+                           : context.is_dynamic_sql_ ? DYNAMIC_SQL_MODE
+                           : is_for_trigger           ? TRIGGER_MODE
+                                                      : STD_MODE;
     CHECK_COMPATIBILITY_MODE(context.session_info_);
     MEMSET(&parse_result, 0, SIZEOF(ParseResult));
     if (FAILEDx(parser.parse(sql, parse_result, parse_mode, false, false, is_inner_sql, context.is_dbms_sql_, is_parser_dynamic_sql))) {
@@ -1578,7 +1580,7 @@ int ObSql::handle_pl_prepare(const ObString &sql,
     ObParser parser(allocator, sess.get_sql_mode(), sess.get_charsets4parser());
     bool is_for_trigger = false;
     if (NULL != pl_prepare_ctx.secondary_ns_) {
-      is_for_trigger = ObTriggerInfo::is_trigger_package_id(pl_prepare_ctx.secondary_ns_->get_package_id());
+      is_for_trigger = pl_prepare_ctx.secondary_ns_->is_for_trigger_package();
     }
     ParseMode parse_mode = pl_prepare_ctx.is_dbms_sql_ ? DBMS_SQL_MODE :
                           pl_prepare_ctx.is_dynamic_sql_ ? DYNAMIC_SQL_MODE :
@@ -1740,8 +1742,9 @@ int ObSql::handle_pl_execute(const ObString &sql,
   if (!context.is_dbms_sql_ && !context.is_dynamic_sql_ && lib::is_oracle_mode()) {
     param_byorder = true;
   }
-  if (ObParser::is_pl_stmt(sql, nullptr, &is_call_procedure) || is_call_procedure
-      || session_info.is_for_trigger_package()) {
+  if (ObParser::is_pl_stmt(sql, nullptr, &is_call_procedure) || is_call_procedure) {
+    try_paramlize = false;
+  } else if (NULL != context.secondary_namespace_ && context.secondary_namespace_->is_for_trigger_package()) {
     try_paramlize = false;
   }
 
@@ -2707,9 +2710,11 @@ int ObSql::handle_ps_execute(const ObPsStmtId client_stmt_id,
                         session.get_charsets4parser());
         ParseResult parse_result;
         ObSqlTraits sql_traits;
+        bool is_for_trigger = (NULL != context.secondary_namespace_
+            && context.secondary_namespace_->is_for_trigger_package());
         ParseMode parse_mode = context.is_dbms_sql_ ? DBMS_SQL_MODE :
                                 context.is_dynamic_sql_ ? DYNAMIC_SQL_MODE :
-                                (context.session_info_->is_for_trigger_package() ? TRIGGER_MODE : STD_MODE);
+                                (is_for_trigger ? TRIGGER_MODE : STD_MODE);
         if (OB_FAIL(parser.parse(sql, parse_result, parse_mode))) {
           LOG_WARN("failed to parse sql", K(ret), K(stmt_type),
                    "sql", parse_result.contain_sensitive_data_ ? ObString(OB_MASKED_STR) : sql);

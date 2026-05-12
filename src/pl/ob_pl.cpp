@@ -3006,8 +3006,23 @@ int ObPL::execute(ObExecContext &ctx,
         }
       }
       CK (OB_NOT_NULL(ctx.get_my_session()));
-      OZ (ObPLContext::check_routine_legal(*routine, in_function,
-                                          ctx.get_my_session()->is_for_trigger_package()));
+      {
+        // check_routine_legal runs before stack_ctx.init(): session may not have get_pl_context()
+        // yet, and exec_stack may be empty. Mirror init()'s trigger detection and stack walk:
+        // (1) current routine is trigger package; (2) any frame on stack is trigger (nested call).
+        bool in_trigger =
+          (package_id != OB_INVALID_ID && ObTriggerInfo::is_trigger_package_id(package_id));
+        if (!in_trigger) {
+          ObPLContext *pl_ctx = ctx.get_my_session()->get_pl_context();
+          if (OB_ISNULL(pl_ctx)) {
+            pl_ctx = ctx.get_pl_stack_ctx();
+          }
+          if (OB_NOT_NULL(pl_ctx)) {
+            in_trigger = pl_ctx->is_in_trigger_context();
+          }
+        }
+        OZ (ObPLContext::check_routine_legal(*routine, in_function, in_trigger));
+      }
       OZ (check_trigger_arg(params, *routine, stack_ctx, ctx));
       if (OB_SUCC(ret) && ctx.get_my_session()->is_pl_debug_on()) {
         int tmp_ret = OB_SUCCESS;
@@ -3458,8 +3473,7 @@ int ObPL::generate_pl_function(ObExecContext &ctx,
                     ctx.get_my_session()->get_sql_mode(),
                     ctx.get_my_session()->get_charsets4parser());
     ParseResult parse_result;
-    ParseMode parse_mode = ctx.get_sql_ctx()->is_dynamic_sql_ ? DYNAMIC_SQL_MODE
-        : (ctx.get_my_session()->is_for_trigger_package() ? TRIGGER_MODE : STD_MODE);
+    ParseMode parse_mode = ctx.get_sql_ctx()->is_dynamic_sql_ ? DYNAMIC_SQL_MODE : STD_MODE;
     const ParseNode *parse_tree = NULL;
     OZ (parser.parse(anonymouse_sql, parse_result, parse_mode));
     if (OB_FAIL(ret)) {
@@ -3482,7 +3496,7 @@ int ObPL::generate_pl_function(ObExecContext &ctx,
           parse_tree,
           parse_tree,
           false, /*inner_parse*/
-          ctx.get_my_session()->is_for_trigger_package(),
+          false, /*is_for_trigger*/
           ctx.get_sql_ctx()->is_dynamic_sql_));
       CK (OB_NOT_NULL(parse_tree));
     }
