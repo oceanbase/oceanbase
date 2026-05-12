@@ -20,6 +20,7 @@ namespace transaction
 {
 namespace tablelock
 {
+ERRSIM_POINT_DEF(EN_DETECT_SESSION_ALIVE_FAILED);
 int ObTableLockDetectFuncList::detect_session_alive(const uint32_t session_id, bool &is_alive)
 {
   int ret = OB_SUCCESS;
@@ -123,8 +124,15 @@ int ObTableLockDetectFuncList::batch_detect_session_alive_at_least_one(const uin
       ARRAY_FOREACH_X(proxy.get_results(), idx, cnt, OB_SUCC(ret)) {
         const obrpc::ObBatchDetectSessionAliveResult *result = proxy.get_results().at(idx);
         const ObAddr &dest_addr = proxy.get_dests().at(idx);
+#ifdef ERRSIM
+        if (OB_TMP_FAIL(EN_DETECT_SESSION_ALIVE_FAILED ? : return_code_array.at(idx))) {
+          LOG_WARN("fake batch detect session alive error", K(tmp_ret), K(return_code_array));
+        }
+#else
         tmp_ret = return_code_array.at(idx);
+#endif
         if (OB_SUCCESS != tmp_ret) {
+          ret = tmp_ret;
           LOG_WARN("fail to send rpc to detect alive session", KR(ret), KR(tmp_ret), K(dest_addr),
                                                                K(session_id_array), K(idx));
           break;
