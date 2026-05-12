@@ -292,7 +292,7 @@ int ObTableGroupChecker::check_part_option(const ObSimpleTableSchemaV2 &table, O
       //no need to check,just ignore
     } else if (tablegroup->get_sharding() == OB_PARTITION_SHARDING_PARTITION
               || tablegroup->get_sharding() == OB_PARTITION_SHARDING_ADAPTIVE) {
-      bool check_sub_part = tablegroup->get_sharding() == OB_PARTITION_SHARDING_PARTITION ? false : true;
+      const bool check_sub_part = tablegroup->get_sharding() == OB_PARTITION_SHARDING_ADAPTIVE;
       if (OB_FAIL(check_part_option_map_.get_refactored(tablegroup_id, table_in_map))) {
         //set to the map while not in check_part_option_map_
         if (OB_HASH_NOT_EXIST == ret) {
@@ -314,6 +314,41 @@ int ObTableGroupChecker::check_part_option(const ObSimpleTableSchemaV2 &table, O
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("table_is_map is NULL", KR(ret), K(tablegroup_id));
       } else if (OB_FAIL(ObSimpleTableSchemaV2::compare_partition_option(table, *table_in_map, check_sub_part, is_matched, &user_error))) {
+        LOG_WARN("fail to check partition option", KR(ret), K(table), KPC(table_in_map));
+      }
+    } else if (tablegroup->get_sharding() == OB_PARTITION_SHARDING_SUBPARTITION) {
+      if (table.get_part_level() != PARTITION_LEVEL_TWO) {
+        is_matched = false;
+        if (OB_FAIL(user_error.assign("table is not two-level partition table"))) {
+          LOG_WARN("fail to assign user error", KR(ret), K(tablegroup_id), K(table));
+        }
+      } else if (OB_FAIL(ObPartitionUtils::check_subpart_matched_within_table(table, is_matched))) {
+        LOG_WARN("fail to check subpart matched within table", KR(ret), K(tablegroup_id), K(table));
+      } else if (!is_matched) {
+        if (OB_FAIL(user_error.assign("partition mismatch within table"))) {
+          LOG_WARN("fail to assign user error", KR(ret), K(tablegroup_id), K(table));
+        }
+      } else if (OB_FAIL(check_part_option_map_.get_refactored(tablegroup_id, table_in_map))) {
+        //set to the map while not in check_part_option_map_
+        if (OB_HASH_NOT_EXIST == ret) {
+          ObSimpleTableSchemaV2 *new_table_schema = NULL;
+          if (OB_FAIL(schema_guard.get_primary_table_schema_in_tablegroup(tenant_id, tablegroup_id, primary_table_schema))) {
+            LOG_WARN("fail to get primary table schema in tablegroup", KR(ret), K(tablegroup_id));
+          } else if (OB_ISNULL(primary_table_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("primary table schema is NULL", KR(ret), K(tenant_id), K(tablegroup_id));
+          } else if (OB_FAIL(ObSchemaUtils::alloc_schema(allocator_, *primary_table_schema, new_table_schema))) {
+            LOG_WARN("alloc schema failed", KR(ret), KPC(primary_table_schema));
+          } else if (OB_FAIL(check_part_option_map_.set_refactored(tablegroup_id, new_table_schema))) {
+            LOG_WARN("set table_schema in hashmap fail", KR(ret), K(tablegroup_id), KPC(primary_table_schema));
+          }
+        } else {
+          LOG_WARN("check tablegroup_id in hashmap fail", KR(ret), K(tablegroup_id));
+        }
+      } else if (OB_ISNULL(table_in_map)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table_is_map is NULL", KR(ret), K(tablegroup_id));
+      } else if (OB_FAIL(ObSimpleTableSchemaV2::compare_partition_option(table, *table_in_map, true, is_matched, &user_error))) {
         LOG_WARN("fail to check partition option", KR(ret), K(table), KPC(table_in_map));
       }
     } else {
