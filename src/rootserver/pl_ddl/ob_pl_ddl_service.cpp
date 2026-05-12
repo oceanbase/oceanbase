@@ -175,7 +175,17 @@ int ObPLDDLService::create_routine(ObRoutineInfo &routine_info,
     }
     if (OB_SUCC(ret)) {
       if (replace) {
-        if (OB_FAIL(pl_operator.replace_routine(routine_info,
+        ObArray<CriticalDepInfo> dep_objs;
+        if (OB_FAIL(ObDependencyInfo::collect_all_dep_objs(tenant_id,
+                                                           old_routine_info->get_routine_id(),
+                                                           old_routine_info->get_object_type(),
+                                                           trans,
+                                                           dep_objs))) {
+          LOG_WARN("failed to collect all dependent objects", K(ret));
+        } else if (OB_FAIL(ObDependencyInfo::batch_invalidate_dependents(
+                       dep_objs, trans, tenant_id, old_routine_info->get_routine_id()))) {
+          LOG_WARN("failed to invalidate dependents", K(ret));
+        } else if (OB_FAIL(pl_operator.replace_routine(routine_info,
                                                  old_routine_info,
                                                  trans,
                                                  error_info,
