@@ -157,7 +157,8 @@ public:
       uint64_t is_external_files_on_disk_       : 1; //mark if files in external table are located at local disk
       uint64_t das_empty_part_                  : 1; //mark there is false startup filter on DAS access table
       uint64_t is_lake_table_                   : 1; //mark if this table is an lake table
-      uint64_t reserved_                        : 55;
+      uint64_t is_shared_external_files_on_disk_: 1; //mark if external files using shared_file:// (need de-dup across observers)
+      uint64_t reserved_                        : 54;
     };
   };
   int64_t route_policy_;
