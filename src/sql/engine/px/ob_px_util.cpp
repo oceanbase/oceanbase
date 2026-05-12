@@ -17,6 +17,9 @@
 #include "sql/engine/px/ob_dfo_scheduler.h"
 #include "sql/engine/dml/ob_table_merge_op.h"
 #include "share/stat/ob_opt_stat_manager.h"
+#include "share/schema/ob_table_schema.h"
+#include "sql/session/ob_sql_session_info.h"
+#include "sql/ob_sql_context.h"
 #ifdef OB_BUILD_CPP_ODPS
 #include "sql/engine/table/ob_odps_table_row_iter.h"
 #endif
@@ -4117,6 +4120,484 @@ int ObSlaveMapUtil::build_partition_map_by_sqcs(
   return ret;
 }
 
+// sort + zigzag
+int ObSlaveMapUtil::dispatch_weighted_threads_for_affinitized_lt(const int64_t thread_cnt,
+                                                                 const int64_t prefix_task_count,
+                                                                 AffinitizedPartRowMetaArray &metas_by_row_desc,
+                                                                 ObPxPartChMapArray &map,
+                                                                 const int64_t task_idx_base)
+{
+  int ret = OB_SUCCESS;
+  const int64_t T = thread_cnt;
+  const int64_t N = metas_by_row_desc.count();
+  for (int64_t pi = 0; OB_SUCC(ret) && pi < N; ++pi) {
+    const AffinitizedPartitionRowMeta &meta = metas_by_row_desc.at(pi);
+    const int64_t tablet_id = meta.loc_->tablet_id_.id();
+    const int64_t ch = affinitized_zigzag_channel_idx(pi, T);
+    if (OB_FAIL(map.push_back(ObPxPartChMapItem(tablet_id, prefix_task_count, task_idx_base + ch)))) {
+      LOG_WARN("push map item failed", K(ret));
+    }
+  }
+  return ret;
+}
+
+// sort + round-robin
+int ObSlaveMapUtil::dispatch_light_partitions_abundant(const int64_t t_available,
+                                                       const int64_t prefix_task_count,
+                                                       const int64_t task_offset,
+                                                       AffinitizedPartRowMetaArray &metas,
+                                                       ObPxPartChMapArray &map)
+{
+  int ret = OB_SUCCESS;
+  const int64_t light_cnt = metas.count();
+  const int64_t base = t_available / light_cnt;
+  const int64_t remainder = t_available % light_cnt;
+  int64_t cursor = task_offset;
+  for (int64_t li = 0; OB_SUCC(ret) && li < light_cnt; ++li) {
+    const int64_t tablet_id = metas.at(li).loc_->tablet_id_.id();
+    const int64_t tasks = (li < remainder) ? (base + 1) : base;
+    for (int64_t j = 0; OB_SUCC(ret) && j < tasks; ++j) {
+      if (OB_FAIL(map.push_back(ObPxPartChMapItem(tablet_id, prefix_task_count, cursor + j)))) {
+        LOG_WARN("push abundant light map failed", K(ret));
+      }
+    }
+    cursor += tasks;
+  }
+  return ret;
+}
+
+// find big partitions and give them more tasks
+// then dispatch the remaining threads and partitions
+int ObSlaveMapUtil::dispatch_affinitized_heavy_then_zigzag(const int64_t thread_cnt,
+                                                           const int64_t prefix_task_count,
+                                                           AffinitizedPartRowMetaArray &row_metas,
+                                                           ObPxPartChMapArray &map)
+{
+  int ret = OB_SUCCESS;
+  const int64_t T = thread_cnt;
+  const int64_t N = row_metas.count();
+  if (OB_UNLIKELY(T <= 0 || N <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid thread or partition for unified affinitized", K(ret), K(T), K(N));
+  } else {
+    AffinitizedRowMetaDescCmp row_desc_cmp;
+    int64_t total_rows = 0;
+    bool total_rows_overflow = false;
+    bool no_heavy_partition_detection = false;
+    if (OB_UNLIKELY(T <= 2)) {
+      // 没有必要做heavy partition detection
+      no_heavy_partition_detection = true;
+    }
+    for (int64_t ii = 0; ii < N; ++ii) {
+      const int64_t row_count = row_metas.at(ii).row_count_;
+      if (OB_UNLIKELY(total_rows > INT64_MAX - row_count)) {
+        total_rows_overflow = true;  // 溢出，直接 sort + zigzag 分配
+        LOG_WARN("total_rows overflow, skip heavy partition detection", K(total_rows), K(row_count));
+        break;
+      }
+      total_rows += row_count;
+    }
+    no_heavy_partition_detection = no_heavy_partition_detection || total_rows_overflow;
+    if (OB_SUCC(ret)) {
+      // Find partitions that are worth assigning multiple worker threads.
+      // Skip if total_rows overflowed; treat all partitions as light.
+      int64_t sum_heavy = 0;
+      AffinitizedPartRowMetaArray heavy_metas;
+      ObSEArray<int64_t, 64> heavy_alloc;
+      AffinitizedPartRowMetaArray light_metas;
+      int64_t min_heavy_idx = -1;
+      double min_share_times_t = std::numeric_limits<double>::max();
+      if (OB_LIKELY(!no_heavy_partition_detection)) {
+        if (OB_FAIL(heavy_metas.reserve(N))) {
+          LOG_WARN("reserve heavy_metas failed", K(ret), K(N));
+        } else if (OB_FAIL(light_metas.reserve(N))) {
+          LOG_WARN("reserve light_metas failed", K(ret), K(N));
+        } else if (OB_FAIL(heavy_alloc.reserve(N))) {
+          LOG_WARN("reserve heavy_alloc failed", K(ret), K(N));
+        } else {
+          static const double AFFINITIZED_HEAVY_PART_SHARE_TIMES_T = 2.0;
+          for (int64_t pi = 0; OB_SUCC(ret) && pi < N; ++pi) {
+            const AffinitizedPartitionRowMeta &meta = row_metas.at(pi);
+            const double share_times_t = static_cast<double>(T)
+                                        * static_cast<double>(meta.row_count_)
+                                        / static_cast<double>(total_rows);
+            if (share_times_t > AFFINITIZED_HEAVY_PART_SHARE_TIMES_T) {
+              int64_t k = static_cast<int64_t>(floor(share_times_t));
+              if (OB_FAIL(heavy_metas.push_back(meta))) {
+                LOG_WARN("push heavy meta failed", K(ret));
+              } else if (OB_FAIL(heavy_alloc.push_back(k))) {
+                LOG_WARN("push heavy alloc failed", K(ret));
+              } else {
+                sum_heavy += k;
+                if (share_times_t < min_share_times_t) {
+                  min_heavy_idx = heavy_metas.count() - 1;
+                  min_share_times_t = share_times_t;
+                }
+              }
+            } else {
+              if (OB_FAIL(light_metas.push_back(meta))) {
+                LOG_WARN("push light meta failed", K(ret));
+              }
+            }
+          }
+        }
+      } else if (OB_FAIL(light_metas.assign(row_metas))) {
+        LOG_WARN("assign row_metas to light_metas failed", K(ret));
+      }
+      if (OB_UNLIKELY(sum_heavy > T)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("heavy thread sum exceeds T", K(ret), K(sum_heavy), K(T));
+      } else {
+        // handle partitions that are worth assigning multiple worker threads.
+        int64_t t_cursor = 0;
+        if (OB_SUCC(ret) && heavy_metas.count() > 0) {
+          for (int64_t hi = 0; OB_SUCC(ret) && hi < heavy_metas.count(); ++hi) {
+            const int64_t k = heavy_alloc.at(hi);
+            const int64_t tablet_id = heavy_metas.at(hi).loc_->tablet_id_.id();
+            for (int64_t j = 0; OB_SUCC(ret) && j < k; ++j) {
+              if (OB_FAIL(map.push_back(ObPxPartChMapItem(tablet_id,
+                                                          prefix_task_count,
+                                                          t_cursor + j)))) {
+                LOG_WARN("push heavy partition map failed", K(ret), K(tablet_id), K(t_cursor), K(j));
+              }
+            }
+            t_cursor += k;
+          }
+        }
+        // handle remaining threads and partitions.
+        if (OB_SUCC(ret)) {
+          const int64_t t_rem = T - t_cursor;
+          const int64_t light_cnt = light_metas.count();
+          if (light_cnt > 0) {
+            oceanbase::lib::ob_sort(light_metas.begin(), light_metas.end(), row_desc_cmp);
+            if (t_rem > light_cnt) {
+              // 线程充裕：base=t_rem/light_cnt，remainder=t_rem%light_cnt，前 remainder 个分区多一个 task
+              if (OB_FAIL(dispatch_light_partitions_abundant(
+                      t_rem, prefix_task_count, t_cursor, light_metas, map))) {
+                LOG_WARN("affinitized light abundant dispatch failed", K(ret));
+              }
+            } else if (light_cnt >= t_rem && t_rem > 0) {
+              // sort + zigzag
+              if (OB_FAIL(dispatch_weighted_threads_for_affinitized_lt(
+                      t_rem, prefix_task_count, light_metas, map, t_cursor))) {
+                LOG_WARN("affinitized light zigzag dispatch failed", K(ret));
+              }
+            } else {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("unexpected light count or remaining threads", K(ret), K(light_cnt), K(t_rem));
+            }
+          } else if (light_cnt == 0 && t_rem == 1) {
+            if (OB_UNLIKELY(min_heavy_idx < 0 || min_heavy_idx >= heavy_metas.count())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("min_heavy_idx is invalid", K(ret), K(min_heavy_idx), K(heavy_metas.count()));
+            } else if (OB_ISNULL(heavy_metas.at(min_heavy_idx).loc_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("loc_ is null", K(ret), K(min_heavy_idx));
+            } else {
+              const int64_t min_tablet_id = heavy_metas.at(min_heavy_idx).loc_->tablet_id_.id();
+              if (OB_FAIL(map.push_back(ObPxPartChMapItem(min_tablet_id,
+                                                          prefix_task_count,
+                                                          t_cursor)))) {
+                LOG_WARN("push heavy partition map failed", K(ret), K(min_tablet_id), K(t_cursor));
+              } else {
+                t_cursor += 1;
+              }
+            }
+          } else if (light_cnt == 0 && t_rem == 0) {
+            // do nothing
+          } else {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected light count or remaining threads", K(ret), K(light_cnt), K(t_rem));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+
+// 从schema中查询的局部索引的分区列表和主表的分区列表是一一对应的
+int ObSlaveMapUtil::get_ddl_local_index_part_arrays(ObExecContext &ctx,
+                                                    const uint64_t tenant_id,
+                                                    bool &local_index_and_one_level,
+                                                    uint64_t &data_table_id,
+                                                    int64_t &part_num,
+                                                    schema::ObPartition **&data_parts,
+                                                    schema::ObPartition **&index_parts,
+                                                    schema::ObSchemaGetterGuard &schema_guard)
+{
+  int ret = OB_SUCCESS;
+  local_index_and_one_level = false;
+  const ObPhysicalPlanCtx *plan_ctx = ctx.get_physical_plan_ctx();
+  const ObPhysicalPlan *plan = OB_NOT_NULL(plan_ctx) ? plan_ctx->get_phy_plan() : nullptr;
+  int64_t ddl_index_table_id = OB_INVALID_ID;
+  const schema::ObTableSchema *idx_schema  = nullptr;
+  const schema::ObTableSchema *data_schema = nullptr;
+  if (OB_ISNULL(plan)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("plan is null", K(ret));
+  } else if (plan->get_ddl_task_id() <= 0) {
+    // 非 DDL 场景，不视为错误
+    local_index_and_one_level = false; // no use
+  } else if (OB_FALSE_IT(ddl_index_table_id = plan->get_ddl_table_id())) {
+  } else if (ddl_index_table_id <= 0) {
+    // ddl_table_id 无效，不视为错误
+    local_index_and_one_level = false; // no use
+  } else if (OB_ISNULL(ctx.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", K(ret));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is null", K(ret), K(tenant_id), K(ddl_index_table_id));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("get_tenant_schema_guard failed", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(
+                 tenant_id, static_cast<uint64_t>(ddl_index_table_id), idx_schema))) {
+    LOG_WARN("get_table_schema failed", K(ret), K(ddl_index_table_id));
+  } else if (OB_ISNULL(idx_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("idx_schema is null", K(ret), K(ddl_index_table_id));
+  } else if (!idx_schema->is_index_table()) {
+    local_index_and_one_level = false; // no use
+  } else if (!schema::is_index_local_storage(idx_schema->get_index_type())) {
+    // 非局部索引，不支持，不视为错误
+    local_index_and_one_level = false; // no use
+  } else if (OB_FALSE_IT(data_table_id = idx_schema->get_data_table_id())) {
+  } else if (OB_INVALID_ID == data_table_id) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("data_table_id is invalid", K(ret), K(ddl_index_table_id));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, data_table_id, data_schema))) {
+    LOG_WARN("get data_table_schema failed", K(ret), K(data_table_id));
+  } else if (OB_ISNULL(data_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("data_table_schema is null", K(ret), K(data_table_id));
+  } else if (schema::PARTITION_LEVEL_ONE != data_schema->get_part_level()) {
+    // 不支持非一级分区，不视为错误
+    local_index_and_one_level = false;
+    LOG_WARN("data table is not PARTITION_LEVEL_ONE, skip stat path",
+             K(data_table_id), "part_level", data_schema->get_part_level());
+  } else {
+    data_parts  = data_schema->get_part_array();
+    index_parts = idx_schema->get_part_array();
+    part_num    = data_schema->get_part_option().get_part_num();
+    if (OB_ISNULL(data_parts) || OB_ISNULL(index_parts) || part_num <= 0) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("part_array is null or part_num <= 0", K(ret),
+               KP(data_parts), KP(index_parts), K(part_num));
+    } else {
+      local_index_and_one_level = true;
+      LOG_INFO("pkey zigzag: schema part arrays loaded",
+               K(ddl_index_table_id), K(data_table_id), K(part_num));
+    }
+  }
+  return ret;
+}
+
+// 构建主表分区id数组和索引分区id数组（顺序一一对应）
+int ObSlaveMapUtil::build_part_id_arrays(const int64_t part_num,
+                                         schema::ObPartition **data_parts,
+                                         schema::ObPartition **index_parts,
+                                         ObIArray<int64_t> &data_part_ids,
+                                         ObIArray<int64_t> &idx_part_ids)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(data_part_ids.reserve(part_num))) {
+    LOG_WARN("reserve data_part_ids failed", K(ret), K(part_num));
+  } else if (OB_FAIL(idx_part_ids.reserve(part_num))) {
+    LOG_WARN("reserve idx_part_ids failed", K(ret), K(part_num));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < part_num; ++i) {
+      if (OB_ISNULL(data_parts[i]) || OB_ISNULL(index_parts[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("NULL partition ptr", K(ret), K(i));
+      } else if (OB_FAIL(data_part_ids.push_back(data_parts[i]->get_part_id()))) {
+        LOG_WARN("push data_part_id failed", K(ret));
+      } else if (OB_FAIL(idx_part_ids.push_back(index_parts[i]->get_part_id()))) {
+        LOG_WARN("push idx_part_id failed", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
+// 获取主表的分区统计信息，直接用数组下标对应 idx_part_id
+// 负责创建 out_part_row_count_map；析构由调用方（build_pkey_average_task_ch_mn_map）负责
+int ObSlaveMapUtil::collect_part_stats_to_idx_map(const uint64_t tenant_id,
+                                                  const uint64_t data_table_id,
+                                                  const int64_t part_num,
+                                                  const ObIArray<int64_t> &data_part_ids,
+                                                  const ObIArray<int64_t> &idx_part_ids,
+                                                  bool &part_row_count_valid,
+                                                  PartRowCountMap &out_part_row_count_map)
+{
+  int ret = OB_SUCCESS;
+  part_row_count_valid = false;
+  // 批量查询数据表统计信息
+  ObSEArray<ObOptTableStat, 64> tstats;
+  if (OB_FAIL(tstats.reserve(part_num))) {
+    LOG_WARN("reserve tstats failed", K(ret), K(part_num));
+  } else if (OB_FAIL(ObOptStatManager::get_instance().get_table_stat(tenant_id,
+                                                              data_table_id,
+                                                              data_part_ids,
+                                                              tstats))) {
+    LOG_WARN("batch get_table_stat failed", K(ret), K(data_table_id));
+  } else if (tstats.count() != data_part_ids.count()) {
+    // 统计信息不完整，不走统计路径，不视为错误
+    part_row_count_valid = false;
+    LOG_WARN("stat count mismatch, skip stat path",
+             "expect", data_part_ids.count(), "actual", tstats.count());
+  } else {
+    // tstats 与 data_part_ids/idx_part_ids 顺序一致，直接用下标对应
+    bool stat_ready = true;
+    if (OB_FAIL(out_part_row_count_map.create(part_num, "PkeyZigzag"))) {
+      LOG_WARN("create out_part_row_count_map failed", K(ret), K(part_num));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && stat_ready && i < tstats.count(); ++i) {
+      if (tstats.at(i).get_last_analyzed() <= 0) {
+        stat_ready = false;
+        LOG_WARN("partition stat not analyzed, skip stat path",
+                "data_part_id", tstats.at(i).get_partition_id(),
+                "last_analyzed", tstats.at(i).get_last_analyzed());
+      } else {
+        const int64_t row_count = MAX(1L, tstats.at(i).get_row_count());
+        const uint64_t idx_pid = static_cast<uint64_t>(idx_part_ids.at(i));
+        if (OB_FAIL(out_part_row_count_map.set_refactored(idx_pid, row_count))) {
+          LOG_WARN("set_refactored failed", K(ret), "idx_part_id", idx_pid);
+        }
+      }
+    }
+    if (OB_SUCC(ret) && stat_ready) {
+      part_row_count_valid = true;
+      LOG_INFO("pkey zigzag: DDL local index part row counts collected",
+               K(data_table_id), "part_cnt", out_part_row_count_map.size());
+    }
+  }
+  return ret;
+}
+
+
+// 尝试获取index表对应的主表的分区统计信息
+int ObSlaveMapUtil::try_collect_ddl_local_index_part_row_counts(ObExecContext &ctx,
+                                                                const ObDfo &child,
+                                                                const uint64_t tenant_id,
+                                                                bool &part_row_count_valid,
+                                                                PartRowCountMap &out_part_row_count_map)
+{
+  int ret = OB_SUCCESS;
+  part_row_count_valid = false;
+  bool local_index_and_one_level = false;
+  uint64_t data_table_id = OB_INVALID_ID;
+  int64_t part_num = 0;
+  schema::ObPartition **data_parts  = nullptr;
+  schema::ObPartition **index_parts = nullptr;
+  schema::ObSchemaGetterGuard schema_guard;
+  ObSEArray<int64_t, 64> data_part_ids;
+  ObSEArray<int64_t, 64> idx_part_ids;
+  if (OB_FAIL(get_ddl_local_index_part_arrays(ctx, tenant_id, local_index_and_one_level,
+                                              data_table_id, part_num, data_parts,
+                                              index_parts, schema_guard))) {
+    LOG_WARN("get_ddl_local_index_part_arrays failed", K(ret));
+  } else if (!local_index_and_one_level) {
+    // 非局部索引，或非一级分区，不支持，跳过
+  } else if (OB_FAIL(build_part_id_arrays(part_num, data_parts, index_parts,
+                                          data_part_ids, idx_part_ids))) {
+    LOG_WARN("build_part_id_arrays failed", K(ret));
+  } else if (OB_FAIL(collect_part_stats_to_idx_map(tenant_id, data_table_id, part_num,
+                                                    data_part_ids, idx_part_ids,
+                                                    part_row_count_valid, out_part_row_count_map))) {
+    LOG_WARN("collect_part_stats_to_idx_map failed", K(ret));
+  }
+  return ret;
+}
+
+// DDL 建局部索引场景：按数据表分区统计信息做 zigzag 均衡分配。
+// 没有统计信息退化为几何均分 / round-robin
+int ObSlaveMapUtil::build_average_task_partition_map_by_sqcs(common::ObIArray<ObPxSqcMeta> &sqcs,
+                                                             ObDfo &child,
+                                                             ObIArray<int64_t> &prefix_task_counts,
+                                                             int64_t total_task_cnt,
+                                                             ObPxPartChMapArray &map,
+                                                             const PartRowCountMap *part_row_count_map)
+{
+  int ret = OB_SUCCESS;
+  DASTabletLocArray locations;
+  if (OB_UNLIKELY(sqcs.count() <= 0 || prefix_task_counts.count() != sqcs.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("prefix task counts is not match sqcs count", K(sqcs.count()), K(ret));
+  } else {
+    for (int64_t i = 0; i < sqcs.count() && OB_SUCC(ret); i++) {
+      int64_t sqc_task_count = 0;
+      int64_t prefix_task_count = prefix_task_counts.at(i);
+      if (i + 1 == prefix_task_counts.count()) {
+        sqc_task_count = total_task_cnt - prefix_task_counts.at(i);
+      } else {
+        sqc_task_count = prefix_task_counts.at(i + 1) - prefix_task_counts.at(i);
+      }
+      ObPxSqcMeta &sqc = sqcs.at(i);
+      locations.reset();
+      if (OB_FAIL(get_pkey_table_locations(child.get_pkey_table_loc_id(), sqc, locations))) {
+        LOG_WARN("fail to get pkey table locations", K(ret));
+      } else if (locations.count() <= 0 || sqc_task_count <= 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("the size of location is zero in one sqc", K(ret), K(sqc_task_count), K(sqc));
+      } else {
+        // 统计路径：从预收集的全量字典里按 partition_id O(1) 查每个索引分区对应的行数
+        AffinitizedPartRowMetaArray row_metas;
+        bool stat_valid = (OB_NOT_NULL(part_row_count_map) && part_row_count_map->size() > 0);
+        if (OB_FAIL(row_metas.reserve(locations.count()))) {
+          LOG_WARN("reserve row_metas failed", K(ret));
+        } else {
+          for (int64_t p = 0; OB_SUCC(ret) && stat_valid && p < locations.count(); ++p) {
+            ObDASTabletLoc *idx_loc = locations.at(p);
+            const int64_t *row_count_ptr = nullptr;
+            if (OB_ISNULL(idx_loc)) {
+              stat_valid = false;
+              LOG_WARN("pkey average map: idx_loc is null", K(ret));
+            } else if (OB_ISNULL(row_count_ptr = part_row_count_map->get(static_cast<uint64_t>(idx_loc->partition_id_)))) {
+              stat_valid = false;
+              LOG_WARN("pkey average map: no stat entry for index partition, fallback",
+                      "sqc", i, "partition_id", idx_loc->partition_id_,
+                      "tablet_id", idx_loc->tablet_id_.id());
+            } else if (*row_count_ptr < 0) {
+              stat_valid = false;
+              LOG_WARN("pkey average map: row_count_ptr is less than 0", K(ret), "partition_id_", idx_loc->partition_id_, "row_count_ptr", *row_count_ptr);
+            } else {
+              AffinitizedPartitionRowMeta item;
+              item.loc_       = idx_loc;
+              item.row_count_ = *row_count_ptr;
+              if (OB_FAIL(row_metas.push_back(item))) {
+                LOG_WARN("push row_meta failed", K(ret));
+              }
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (stat_valid && row_metas.count() == locations.count()) {
+            if (OB_FAIL(dispatch_affinitized_heavy_then_zigzag(sqc_task_count,
+                                                               prefix_task_count,
+                                                               row_metas,
+                                                               map))) {
+              LOG_WARN("dispatch_affinitized_heavy_then_zigzag failed", K(ret), "sqc", i);
+            }
+          } else {
+            LOG_WARN("pkey average map: stat invalid for sqc, fallback to affinitized", "sqc", i);
+            if (OB_FAIL(dispatch_affinitized_partition_map_for_one_sqc(locations,
+                                                                       sqc_task_count,
+                                                                       prefix_task_count,
+                                                                       map))) {
+              LOG_WARN("fallback dispatch affinitized partition map failed", K(ret), "sqc", i);
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+
+// PDML PARTITION_HASH：为 child 生成 part_ch_map；每 SQC 上仅按分区数与线程数做连续 task 均分，T<N 时 round-robin。
 int ObSlaveMapUtil::build_affinitized_partition_map_by_sqcs(
   common::ObIArray<ObPxSqcMeta> &sqcs,
   ObDfo &child,
@@ -4170,48 +4651,57 @@ int ObSlaveMapUtil::build_affinitized_partition_map_by_sqcs(
     if (OB_FAIL(get_pkey_table_locations(child.get_pkey_table_loc_id(),
         sqc, locations))) {
       LOG_WARN("fail to get pkey table locations", K(ret));
-    }
-    if (locations.count() <= 0 || sqc_task_count <= 0) {
+    } else if (locations.count() <= 0 || sqc_task_count <= 0) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("the size of location is zero in one sqc", K(ret), K(sqc_task_count), K(sqc));
-      break;
-    }
-
-    // task_per_part: 每个分区有多少个线程服务，
-    // rest_task: 这些task每个再多负责一个分区，别浪费 cpu
-    // 例如：
-    // 13 个线程，3个分区， task_per_part = 4， rest_task = 1 去做第一个分区
-    // 3 个线程，5个分区，task_per_part = 0， rest_task = 3 去做1,2,3三个分区
-    int64_t task_per_part = sqc_task_count / locations.count();
-    int64_t rest_task = sqc_task_count % locations.count();
-    if (task_per_part > 0) {
-      // 场景1： 线程数 > 分区数
-      // 要点：每个分区分配的线程数要连续
-      int64_t t = 0;
-      for (int64_t p = 0; OB_SUCC(ret) && p < locations.count(); ++p) {
-        int64_t tablet_id = locations.at(p)->tablet_id_.id();
-        int64_t next = (p >= rest_task) ? task_per_part : task_per_part + 1;
-        for (int64_t loop = 0; OB_SUCC(ret) && loop < next; ++loop) {
-          // first：tablet id, second: prefix_task_count, third: sqc_task_idx
-          OZ(map.push_back(ObPxPartChMapItem(tablet_id, prefix_task_count, t)));
-          LOG_DEBUG("t>p: push partition map", K(tablet_id), "sqc", i, "g_t", prefix_task_count + t, K(t));
-          t++;
-        }
-      }
-    } else {
-      // 场景2：线程数 < 分区数
-      // 要点：保证每个分区至少有一个线程处理
-      for (int64_t p = 0; OB_SUCC(ret) && p < locations.count(); ++p) {
-        int64_t t = p % rest_task;
-        int64_t tablet_id = locations.at(p)->tablet_id_.id();
-        // 具体含义，参考 ObPxPartChMapItem:
-        // first：tablet_id, second: prefix_task_count, third: sqc_task_idx
-        OZ(map.push_back(ObPxPartChMapItem(tablet_id, prefix_task_count, t)));
-        LOG_DEBUG("t<=p: push partition map", K(tablet_id), "sqc", i, "g_t", prefix_task_count + t, K(t));
-      }
+    } else if (OB_FAIL(dispatch_affinitized_partition_map_for_one_sqc(
+                   locations, sqc_task_count, prefix_task_count, map))) {
+      LOG_WARN("dispatch affinitized partition map failed", K(ret), "sqc", i);
     }
   }
   LOG_DEBUG("debug push partition map", K(map));
+  return ret;
+}
+
+// 单个 SQC 内的几何均分 / round-robin 分配：
+//   T >= N（线程充裕）：连续 task 均分，前 rest 个分区各多一个 task；
+//   T <  N（线程不足）：round-robin，保证每个分区至少一个线程。
+int ObSlaveMapUtil::dispatch_affinitized_partition_map_for_one_sqc(const DASTabletLocArray &locations,
+                                                                   const int64_t sqc_task_count,
+                                                                   const int64_t prefix_task_count,
+                                                                   ObPxPartChMapArray &map)
+{
+  int ret = OB_SUCCESS;
+  // task_per_part: 每个分区有多少个线程服务，
+  // rest_task: 这些task每个再多负责一个分区，别浪费 cpu
+  // 例如：
+  // 13 个线程，3个分区， task_per_part = 4， rest_task = 1 去做第一个分区
+  // 3 个线程，5个分区，task_per_part = 0， rest_task = 3 去做1,2,3三个分区
+  const int64_t task_per_part = sqc_task_count / locations.count();
+  const int64_t rest_task = sqc_task_count % locations.count();
+  if (task_per_part > 0) {
+    // 场景1： 线程数 >= 分区数
+    // 要点：每个分区分配的线程数要连续
+    int64_t t = 0;
+    for (int64_t p = 0; OB_SUCC(ret) && p < locations.count(); ++p) {
+      int64_t tablet_id = locations.at(p)->tablet_id_.id();
+      int64_t next = (p >= rest_task) ? task_per_part : task_per_part + 1;
+      for (int64_t loop = 0; OB_SUCC(ret) && loop < next; ++loop) {
+        OZ(map.push_back(ObPxPartChMapItem(tablet_id, prefix_task_count, t)));
+        LOG_DEBUG("t>p: push partition map", K(tablet_id), "g_t", prefix_task_count + t, K(t));
+        t++;
+      }
+    }
+  } else {
+    // 场景2：线程数 < 分区数
+    // 要点：保证每个分区至少有一个线程处理
+    for (int64_t p = 0; OB_SUCC(ret) && p < locations.count(); ++p) {
+      int64_t t = p % rest_task;
+      int64_t tablet_id = locations.at(p)->tablet_id_.id();
+      OZ(map.push_back(ObPxPartChMapItem(tablet_id, prefix_task_count, t)));
+      LOG_DEBUG("t<=p: push partition map", K(tablet_id), "g_t", prefix_task_count + t, K(t));
+    }
+  }
   return ret;
 }
 
@@ -4289,7 +4779,6 @@ int ObSlaveMapUtil::build_ppwj_slave_mn_map(ObExecContext &ctx, ObDfo &parent,
 //  1. 当分区数小于线程数，将一个 partition 映射到对应 SQC 的一组线程上
 //  2. 当分区数大于线程数，将一组 partitions 映射到对应 SQC 的一个线程上
 // 并且保证：pkey 最小化分布（在充分运用算力的前提下，让尽可能少的线程并发处理同一个分区）
-// pkey-hash, pkey-range 等都可以用这个 map
 int ObSlaveMapUtil::build_pkey_affinitized_ch_mn_map(ObDfo &parent,
                                                      ObDfo &child,
                                                      uint64_t tenant_id)
@@ -4298,8 +4787,7 @@ int ObSlaveMapUtil::build_pkey_affinitized_ch_mn_map(ObDfo &parent,
   if (1 != parent.get_child_count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected dfo", K(ret), K(parent));
-  } else if (ObPQDistributeMethod::PARTITION_HASH == child.get_dist_method()
-      || ObPQDistributeMethod::PARTITION_RANGE == child.get_dist_method()) {
+  } else if (ObPQDistributeMethod::PARTITION_HASH == child.get_dist_method()) {
     LOG_TRACE("build pkey affinitized channel map",
       K(parent.get_dfo_id()), K(parent.get_sqcs_count()),
       K(child.get_dfo_id()), K(child.get_sqcs_count()));
@@ -4342,6 +4830,74 @@ int ObSlaveMapUtil::build_pkey_affinitized_ch_mn_map(ObDfo &parent,
   return ret;
 }
 
+// PDML PARTITION_RANGE：在 MN channel 上按 parent SQC 与 child pkey 分区对齐建 part_ch_map。
+// DDL 建局部索引场景：调 build_average_task_partition_map_by_sqcs 按数据表统计做均衡分配。
+// 非 DDL 或全局索引：调 build_affinitized_partition_map_by_sqcs 做几何 / RR。
+int ObSlaveMapUtil::build_pkey_average_task_ch_mn_map(ObExecContext &ctx,
+                                                      ObDfo &parent,
+                                                      ObDfo &child,
+                                                      uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (1 != parent.get_child_count()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected dfo", K(ret), K(parent));
+  } else if (ObPQDistributeMethod::PARTITION_RANGE == child.get_dist_method()) {
+    LOG_TRACE("build pkey average-task channel map (partition range)",
+              K(parent.get_dfo_id()), K(parent.get_sqcs_count()),
+              K(child.get_dfo_id()), K(child.get_sqcs_count()));
+    ObPxPartChMapArray &map = child.get_part_ch_map();
+    ObIArray<ObPxSqcMeta> &sqcs = parent.get_sqcs();
+    ObPxChTotalInfos *dfo_ch_total_infos = &child.get_dfo_ch_total_infos();
+    int64_t child_dfo_idx = -1;
+    if (OB_UNLIKELY(sqcs.count() <= 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("the count of sqc is unexpected", K(ret), K(sqcs.count()));
+    } else if (OB_FAIL(ObDfo::check_dfo_pair(parent, child, child_dfo_idx))) {
+      LOG_WARN("failed to check dfo pair", K(ret));
+    } else if (OB_FAIL(build_mn_channel(dfo_ch_total_infos, child, parent, tenant_id))) {
+      LOG_WARN("failed to build mn channels", K(ret));
+    } else if (OB_ISNULL(dfo_ch_total_infos) || 1 != dfo_ch_total_infos->count()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected status: receive ch info is error", K(ret), KP(dfo_ch_total_infos));
+    } else {
+      PartRowCountMap part_row_count_map;
+      bool part_row_count_valid = false;
+      if (OB_FAIL(try_collect_ddl_local_index_part_row_counts(
+              ctx, child, tenant_id, part_row_count_valid, part_row_count_map))) {
+        LOG_WARN("try_collect_ddl_local_index_part_row_counts failed", K(ret));
+      } else if (part_row_count_valid) {
+        if (OB_FAIL(build_average_task_partition_map_by_sqcs(sqcs, child,
+                                                             dfo_ch_total_infos->at(0).receive_exec_server_.prefix_task_counts_,
+                                                             dfo_ch_total_infos->at(0).receive_exec_server_.total_task_cnt_,
+                                                             map, &part_row_count_map))) {
+          LOG_WARN("failed to build ddl local index partition map by sqc", K(ret));
+        }
+      } else {
+        // 统计信息不可用（非 DDL、非局部索引、统计未收集等），降级为几何均分 / RR
+        if (OB_FAIL(build_affinitized_partition_map_by_sqcs(sqcs, child,
+                                                            dfo_ch_total_infos->at(0).receive_exec_server_.prefix_task_counts_,
+                                                            dfo_ch_total_infos->at(0).receive_exec_server_.total_task_cnt_,
+                                                            map))) {
+          LOG_WARN("failed to build affinitized partition map by sqc", K(ret));
+        }
+      }
+      if (OB_SUCC(ret) && map.count() <= 0) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("the size of channel map is unexpected",
+                 K(ret), K(map.count()), K(parent.get_tasks()), K(sqcs));
+      }
+      if (part_row_count_map.created()) {
+        part_row_count_map.destroy();
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected child dfo for average-task map", K(ret), K(child.get_dist_method()));
+  }
+  return ret;
+}
+
 // 本函数用于 pdml 场景，支持：
 // 将每个 partition 映射到对应 SQC 的所有线程上
 int ObSlaveMapUtil::build_pkey_scatter_ch_mn_map(ObDfo &parent, ObDfo &child, uint64_t tenant_id)
@@ -4350,9 +4906,9 @@ int ObSlaveMapUtil::build_pkey_scatter_ch_mn_map(ObDfo &parent, ObDfo &child, ui
   if (1 != parent.get_child_count()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected dfo", K(ret), K(parent));
-  } else if (ObPQDistributeMethod::PARTITION_RANDOM == child.get_dist_method()
-          || ObPQDistributeMethod::PARTITION_HASH == child.get_dist_method()) {
-      LOG_TRACE("build pkey random channel map",
+  } else if (ObPQDistributeMethod::PARTITION_RANDOM == child.get_dist_method() ||
+             ObPQDistributeMethod::PARTITION_HASH == child.get_dist_method()) {
+    LOG_TRACE("build pkey scatter channel map",
       K(parent.get_dfo_id()), K(parent.get_sqcs_count()),
       K(child.get_dfo_id()), K(child.get_sqcs_count()));
       //  .....
@@ -4561,9 +5117,9 @@ int ObSlaveMapUtil::build_pkey_mn_ch_map(ObExecContext &ctx, ObDfo &child, ObDfo
     break;
   }
   case ObPQDistributeMethod::Type::PARTITION_RANGE: {
-      if (OB_FAIL(build_pkey_affinitized_ch_mn_map(parent, child, tenant_id))) {
-        LOG_WARN("failed to build pkey affinitized channel map", K(ret));
-      }
+    if (OB_FAIL(build_pkey_average_task_ch_mn_map(ctx, parent, child, tenant_id))) {
+      LOG_WARN("failed to build pkey average-task channel map", K(ret));
+    }
     break;
   }
   case ObPQDistributeMethod::Type::PARTITION_RANDOM: {
