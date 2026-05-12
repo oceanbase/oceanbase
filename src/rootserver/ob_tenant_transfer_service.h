@@ -213,7 +213,11 @@ private:
       const transaction::tablelock::ObTableLockOwnerID &lock_owner_id,
       share::schema::ObSimpleTableSchemaV2 &table_schema,
       const share::ObTransferPartInfo &part_info,
-      const common::ObIArray<common::ObTabletID> &tablet_ids);
+      const common::ObIArray<common::ObTabletID> &tablet_ids,
+      const common::ObIArray<common::ObTabletID> &gtt_index_tablet_ids);
+  // For oracle tmp table v2, `gtt_index_tablet_ids` must be the precomputed
+  // index session tablets returned by generate_related_tablet_ids_for_oracle_tmp_table_v2_.
+  // It is ignored for other table types.
   int generate_related_tablet_ids_(
       const share::schema::ObSimpleTableSchemaV2 *table_schema,
       const ObIArray<share::schema::ObSimpleTableSchemaV2 *> &related_table_schemas,
@@ -221,13 +225,22 @@ private:
       const int64_t subpart_idx,
       const share::ObLSID &src_ls,
       common::ObIArray<common::ObTabletID> &tablet_ids_get_by_data_table_id,
+      const common::ObIArray<common::ObTabletID> &gtt_index_tablet_ids,
       common::ObIArray<common::ObTabletID> &tablet_ids);
+  // For GTT (oracle tmp table v2), output the index session tablets on `src_ls`
+  // whose session group (session_id, sequence) shares any tablet with
+  // `tablet_ids_get_by_data_table_id`. The data table tablets themselves are
+  // excluded from the output. The output array is reset before being populated.
   int generate_related_tablet_ids_for_oracle_tmp_table_v2_(
       const share::schema::ObSimpleTableSchemaV2 *table_schema,
       const common::ObIArray<share::schema::ObSimpleTableSchemaV2 *> &related_table_schemas,
       const share::ObLSID &src_ls,
       const common::ObIArray<common::ObTabletID> &tablet_ids_get_by_data_table_id,
-      common::ObIArray<common::ObTabletID> &tablet_ids);
+      common::ObIArray<common::ObTabletID> &index_tablet_ids);
+  int add_in_trans_lock_for_gtt_index_tablets_(
+      ObMySQLTransaction &trans,
+      const common::ObIArray<common::ObTabletID> &index_tablet_ids,
+      bool &is_lock_conflict);
   int get_temp_tablet_ids_can_be_transferred_for_oracle_tmp_table_v2_(
       const uint64_t related_table_count, // 1 data table + N related tables
       const common::ObIArray<common::ObTabletID> &tablet_ids_will_be_transferred,
