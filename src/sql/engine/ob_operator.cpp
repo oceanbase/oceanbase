@@ -2254,5 +2254,70 @@ int ObBatchRescanParams::append_batch_rescan_param(const ObIArray<int64_t> &para
   return ret;
 }
 
+int ObBatchRescanParams::extract_params_by_range(const common::ObIArray<int64_t> &param_end_idxs_per_child,
+                                                  int64_t child_idx,
+                                                  ObBatchRescanParams &output)
+{
+  int ret = OB_SUCCESS;
+  output.reset();
+  if (OB_UNLIKELY(child_idx < 1 || child_idx > param_end_idxs_per_child.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid child index", K(ret), K(child_idx), K(param_end_idxs_per_child.count()));
+  } else {
+    int64_t offset = (child_idx >= 2) ? param_end_idxs_per_child.at(child_idx - 2) : 0;
+    int64_t count = param_end_idxs_per_child.at(child_idx - 1) - offset;
+    common::ObSEArray<int64_t, 8> sub_param_idxs;
+    sql::ObTMArray<common::ObObjParam> sub_row_params;
+    common::ObSEArray<int64_t, 8> sub_param_expr_idxs;
+    if (OB_UNLIKELY(count <= 0 || offset < 0 || offset + count > param_idxs_.count()
+                    || offset + count > param_expr_idxs_.count())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid range", K(ret), K(offset), K(count), K(param_idxs_.count()),
+               K(param_expr_idxs_.count()));
+    } else if (OB_FAIL(sub_param_idxs.reserve(count))) {
+      LOG_WARN("fail to reserve sub param idxs", K(ret), K(count));
+    } else if (OB_FAIL(sub_row_params.reserve(count))) {
+      LOG_WARN("fail to reserve sub row params", K(ret), K(count));
+    } else if (OB_FAIL(sub_param_expr_idxs.reserve(count))) {
+      LOG_WARN("fail to reserve sub param expr idxs", K(ret), K(count));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+        if (OB_FAIL(sub_param_idxs.push_back(param_idxs_.at(offset + i)))) {
+          LOG_WARN("fail to push back param idx", K(ret));
+        } else if (OB_FAIL(sub_param_expr_idxs.push_back(param_expr_idxs_.at(offset + i)))) {
+          LOG_WARN("fail to push back param expr idx", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_UNLIKELY(params_.empty())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("params is empty", K(ret));
+      } else if (OB_UNLIKELY(offset + count > params_.at(0).count())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("range out of row params", K(ret), K(offset), K(count), K(params_.at(0).count()));
+      } else {
+        // for reuse, to keep the capacity of sub_row_params
+        sub_row_params.set_block_size(count * static_cast<int64_t>(sizeof(common::ObObjParam)));
+        for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < params_.count(); ++row_idx) {
+          const sql::ObTMArray<common::ObObjParam> &row_params = params_.at(row_idx);
+          sub_row_params.reuse();
+          for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+            if (OB_FAIL(sub_row_params.push_back(row_params.at(offset + i)))) {
+              LOG_WARN("fail to push back row param", K(ret));
+            }
+          }
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(output.append_batch_rescan_param(sub_param_idxs, sub_row_params,
+                                                        sub_param_expr_idxs))) {
+              LOG_WARN("fail to append batch rescan param", K(ret));
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 } // end namespace sql
 } // end namespace oceanbase

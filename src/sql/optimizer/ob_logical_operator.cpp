@@ -3743,7 +3743,7 @@ int ObLogicalOperator::px_rescan_pre()
           LOG_WARN("fail to find nested rescan", K(ret));
         } else if (nested_rescan) {
           /*do nothing*/
-        } else if (OB_FAIL(get_child(i)->find_px_for_batch_rescan(this, find_px))) {
+        } else if (OB_FAIL(get_child(i)->find_px_for_batch_rescan(this, find_px, i))) {
           LOG_WARN("fail to find px for batch rescan", K(ret));
         }
         if (OB_SUCC(ret) && 0 != i) {
@@ -6619,7 +6619,7 @@ int ObLogicalOperator::get_part_column_exprs(const uint64_t table_id,
   return ret;
 }
 
-int ObLogicalOperator::find_px_for_batch_rescan(ObLogicalOperator *px_batch_op, bool &find)
+int ObLogicalOperator::find_px_for_batch_rescan(ObLogicalOperator *px_batch_op, bool &find, int64_t spf_child_idx)
 {
   int ret = OB_SUCCESS;
   if (LOG_SUBPLAN_FILTER == get_type() ||
@@ -6630,6 +6630,7 @@ int ObLogicalOperator::find_px_for_batch_rescan(ObLogicalOperator *px_batch_op, 
     ObLogExchange *op = static_cast<ObLogExchange *>(this);
     if (op->is_rescanable() && !op->is_task_order()) {
       op->set_px_batch_op(px_batch_op);
+      op->set_spf_child_idx(spf_child_idx);
       find = true;
     }
   } else {
@@ -6638,7 +6639,7 @@ int ObLogicalOperator::find_px_for_batch_rescan(ObLogicalOperator *px_batch_op, 
       if (OB_ISNULL(child = get_child(i))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(get_child(i)), K(ret));
-      } else if (OB_FAIL(SMART_CALL(child->find_px_for_batch_rescan(px_batch_op, find)))) {
+      } else if (OB_FAIL(SMART_CALL(child->find_px_for_batch_rescan(px_batch_op, find, spf_child_idx)))) {
         LOG_WARN("fail to find px for batch rescan", K(ret));
       }
     }

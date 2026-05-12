@@ -354,7 +354,7 @@ public:
   bool transmit_use_interm_result() const { return transmit_use_interm_result_; }
   bool recieve_use_interm_result() const { return recieve_use_interm_result_; }
   int add_serial_recieve_channel(const ObPxReceiveDataChannelMsg &channel);
-  int set_rescan_batch_params(ObBatchRescanParams &params) { return rescan_batch_params_.assign(params); }
+  int set_rescan_batch_params(const ObBatchRescanParams &params) { return rescan_batch_params_.assign(params); }
   ObBatchRescanParams &get_rescan_batch_params() { return rescan_batch_params_; }
   common::ObIArray<ObTableLocation> &get_pruning_table_locations()
   { return partition_pruning_table_locations_; }

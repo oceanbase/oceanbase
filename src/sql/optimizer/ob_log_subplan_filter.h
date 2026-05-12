@@ -154,6 +154,7 @@ public:
                                        bool &need_compare);
   int pre_check_spf_can_px_batch_rescan(bool &can_px_batch_rescan, bool &rescan_contain_match_all) const;
   bool is_px_batch_rescan_enabled();
+  int64_t get_enabled_px_batch_rescan_child_count();
 private:
   int expr_contains_my_subquery(const ObRawExpr *expr, bool &result) const;
   int check_subquery_ownership(const ObRawExpr *expr, bool &has_mine, bool &all_mine) const;

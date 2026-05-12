@@ -1371,3 +1371,16 @@ bool ObLogSubPlanFilter::is_px_batch_rescan_enabled()
   }
   return enable_px_batch_rescan;
 }
+
+int64_t ObLogSubPlanFilter::get_enabled_px_batch_rescan_child_count()
+{
+  int64_t enabled_px_batch_rescan_child_count = 0;
+  if (!enable_px_batch_rescans_.empty()) {
+    for (int64_t i = 0; i < enable_px_batch_rescans_.count(); i++) {
+      if (enable_px_batch_rescans_.at(i)) {
+        enabled_px_batch_rescan_child_count += 1;
+      }
+    }
+  }
+  return enabled_px_batch_rescan_child_count;
+}

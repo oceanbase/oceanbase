@@ -32,11 +32,12 @@ public:
   {
     OB_UNIS_VERSION_V(1);
     public:
-    ObPxBatchOpInfo() : op_type_(PHY_INVALID), op_id_(OB_INVALID_ID) {}
+    ObPxBatchOpInfo() : op_type_(PHY_INVALID), op_id_(OB_INVALID_ID), spf_child_idx_(OB_INVALID_ID) {}
     bool is_inited() const { return PHY_INVALID != op_type_;  }
     ObPhyOperatorType op_type_;
     int64_t op_id_;
-    TO_STRING_KV(K(op_type_), K(op_id_));
+    int64_t spf_child_idx_;  // child index in SPF (subplan filter), 1-based
+    TO_STRING_KV(K(op_type_), K(op_id_), K(spf_child_idx_));
   };
 public:
   virtual int inner_open() override;
@@ -175,6 +176,10 @@ public:
   {
     batch_op_info_.op_id_ = id;
     batch_op_info_.op_type_ = type;
+  }
+  inline void set_spf_child_idx(int64_t idx)
+  {
+    batch_op_info_.spf_child_idx_ = idx;
   }
   TableLocationFixedArray &get_table_locations()
   { return table_locations_; }

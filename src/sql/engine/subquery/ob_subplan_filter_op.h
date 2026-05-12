@@ -171,6 +171,8 @@ public:
   ExprFixedArray output_exprs_;
   common::ObFixedArray<ObDynamicParamSetter, common::ObIAllocator> left_rescan_params_;
   common::ObFixedArray<ObDynamicParamSetter, common::ObIAllocator> right_rescan_params_;
+  // end index of px rescan param positions per child, include unuse px batch rescan child
+  common::ObFixedArray<int64_t, common::ObIAllocator> px_rescan_param_positions_per_child_;
 };
 
 class ObSubPlanFilterOp : public ObOperator

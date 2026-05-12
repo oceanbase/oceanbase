@@ -420,7 +420,8 @@ ObSubPlanFilterSpec::ObSubPlanFilterSpec(ObIAllocator &alloc, const ObPhyOperato
     filter_exprs_(alloc),
     output_exprs_(alloc),
     left_rescan_params_(alloc),
-    right_rescan_params_(alloc)
+    right_rescan_params_(alloc),
+    px_rescan_param_positions_per_child_(alloc)
 {
 }
 
@@ -437,7 +438,8 @@ OB_SERIALIZE_MEMBER((ObSubPlanFilterSpec, ObOpSpec),
                     filter_exprs_,
                     output_exprs_,
                     left_rescan_params_,
-                    right_rescan_params_);
+                    right_rescan_params_,
+                    px_rescan_param_positions_per_child_);
 
 DEF_TO_STRING(ObSubPlanFilterSpec)
 {

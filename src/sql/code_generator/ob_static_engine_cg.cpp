@@ -4833,6 +4833,7 @@ int ObStaticEngineCG::generate_basic_receive_spec(ObLogExchange &op, ObPxReceive
           coord->set_px_batch_op_info(op.get_px_batch_op_id(), PHY_NESTED_LOOP_JOIN);
         } else if (log_op_def::LOG_SUBPLAN_FILTER == op.get_px_batch_op_type()) {
           coord->set_px_batch_op_info(op.get_px_batch_op_id(), PHY_SUBPLAN_FILTER);
+          coord->set_spf_child_idx(op.get_spf_child_idx());
         } else {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("batch op type is unexpected", K(ret), K(op.get_px_batch_op_type()));
@@ -7954,6 +7955,26 @@ int ObStaticEngineCG::generate_spec(
           } else if (OB_FAIL(enable_phy_px_batch_flags.push_back(
                 enable_op_px_batch_flags.at(i)))) {
             LOG_WARN("fail to push back batch flag", K(ret));
+          }
+        }
+      }
+    }
+  }
+  // for subplan filter with px batch rescan
+  if (OB_SUCC(ret) && op.get_enabled_px_batch_rescan_child_count() > 1) {
+    if (OB_FAIL(spec.px_rescan_param_positions_per_child_.init(spec.get_child_cnt() - 1))) {
+      LOG_WARN("fail to init px rescan param positions per child", K(ret));
+    } else {
+      int64_t end = 0;
+      for (int64_t child_idx = 1; OB_SUCC(ret) && child_idx < spec.get_child_cnt(); ++child_idx) {
+        const ObQueryRefRawExpr *subquery_expr = op.get_subquery_expr(child_idx - 1);
+        if (OB_ISNULL(subquery_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected null subquery expr", K(ret), K(child_idx));
+        } else {
+          end += subquery_expr->get_param_count();
+          if (OB_FAIL(spec.px_rescan_param_positions_per_child_.push_back(end))) {
+            LOG_WARN("fail to push back param end index per child", K(ret));
           }
         }
       }

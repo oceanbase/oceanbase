@@ -126,6 +126,10 @@ public:
 
   int assign(const ObBatchRescanParams &other);
   int deep_copy_param(const common::ObObjParam &org_param, common::ObObjParam &new_param);
+  // for subplan filter extract params for subplan with px batch rescan
+  int extract_params_by_range(const common::ObIArray<int64_t> &param_end_idxs_per_child,
+                               int64_t child_idx,
+                               ObBatchRescanParams &output);
 public:
   common::ObArenaAllocator allocator_;
   common::ObSArray<sql::ObTMArray<common::ObObjParam>> params_;

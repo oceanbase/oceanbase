@@ -57,6 +57,7 @@ public:
       px_batch_op_(NULL),
       px_batch_op_id_(OB_INVALID_ID),
       px_batch_op_type_(log_op_def::LOG_OP_INVALID),
+      spf_child_idx_(OB_INVALID_ID),
       partition_id_expr_(NULL),
       ddl_slice_id_expr_(NULL),
       random_expr_(NULL),
@@ -157,6 +158,8 @@ public:
   log_op_def::ObLogOpType get_px_batch_op_type() { return px_batch_op_type_;}
   void set_px_batch_op_type(log_op_def::ObLogOpType px_batch_op_type)
   { px_batch_op_type_ = px_batch_op_type; }
+  int64_t get_spf_child_idx() { return spf_child_idx_; }
+  void set_spf_child_idx(int64_t idx) { spf_child_idx_ = idx; }
 
   void set_rollup_hybrid(bool is_rollup_hybrid) { is_rollup_hybrid_ = is_rollup_hybrid; }
   bool is_rollup_hybrid() { return is_rollup_hybrid_; }
@@ -294,6 +297,7 @@ private:
   ObLogicalOperator *px_batch_op_;
   int64_t px_batch_op_id_;
   log_op_def::ObLogOpType px_batch_op_type_;
+  int64_t spf_child_idx_;  // child index in SPF (subplan filter), 1-based
   ObOpPseudoColumnRawExpr *partition_id_expr_;
   ObRawExpr *ddl_slice_id_expr_;
 
