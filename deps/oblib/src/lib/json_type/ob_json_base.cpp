@@ -5981,7 +5981,6 @@ int ObIJsonBase::to_date(int32_t &value) const
 int ObIJsonBase::to_mdate(ObMySQLDate &value, ObDateSqlMode date_sql_mode) const
 {
   INIT_SUCC(ret);
-  ObMySQLDate date;
   switch (json_type()) {
     case ObJsonNodeType::J_MYSQL_DATETIME:
     case ObJsonNodeType::J_MYSQL_DATE: {
@@ -5990,10 +5989,10 @@ int ObIJsonBase::to_mdate(ObMySQLDate &value, ObDateSqlMode date_sql_mode) const
         LOG_WARN("fail to get json obtime", K(ret));
       } else if (OB_FAIL(ObTimeConverter::validate_datetime(t, date_sql_mode))) {
         LOG_WARN("datetime is invalid or out of range", K(ret), K(t), K(date_sql_mode));
-        date = ObTimeConverter::MYSQL_ZERO_DATE;
+        value = ObTimeConverter::MYSQL_ZERO_DATE;
         ret = OB_SUCCESS;
       } else {
-        date = ObTimeConverter::ob_time_to_mdate(t);
+        value = ObTimeConverter::ob_time_to_mdate(t);
       }
       break;
     }
@@ -6006,7 +6005,7 @@ int ObIJsonBase::to_mdate(ObMySQLDate &value, ObDateSqlMode date_sql_mode) const
         LOG_WARN("data is null", K(ret));
       } else {
         ObString str(static_cast<int32_t>(length), static_cast<int32_t>(length), data);
-        if (OB_FAIL(ObTimeConverter::str_to_mdate(str, date, date_sql_mode))) {
+        if (OB_FAIL(ObTimeConverter::str_to_mdate(str, value, date_sql_mode))) {
           LOG_WARN("fail to cast string to date", K(ret), K(str));
         }
       }
@@ -6035,10 +6034,6 @@ int ObIJsonBase::to_mdate(ObMySQLDate &value, ObDateSqlMode date_sql_mode) const
       LOG_WARN("fail to cast json type to date", K(ret), K(json_type()));
       break;
     }
-  }
-
-  if (OB_SUCC(ret)) {
-    value = date;
   }
 
   return ret;
