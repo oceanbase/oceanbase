@@ -188,7 +188,7 @@ int ObHDFSStorageInfo::parse_storage_info_(const char *storage_info, bool &has_n
           LOG_WARN("device don't support TICKET_CACHE_PATH yet", K(ret),
               K_(device_type), KP(token));
         } else if (OB_FAIL(set_storage_info_field_(token, hdfs_extension_, sizeof(hdfs_extension_)))) {
-          LOG_WARN("failed to set ticiket_cache_path", K(ret), KP(token));
+          LOG_WARN("failed to set ticket_cache_path", K(ret), KP(token));
         }
       } else if (0 == strncmp(HDFS_CONFIGS, token, strlen(HDFS_CONFIGS))) {
         if (ObStorageType::OB_STORAGE_HDFS != device_type_) {
