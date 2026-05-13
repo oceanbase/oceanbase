@@ -64,6 +64,8 @@ public:
 public:
   void create_ls(const ObLSID ls_id, ObLS *&ls);
   void create_tablets(const ObLSID ls_id);
+  void prepare_valid_weak_read_scn();
+  void wait_async_freeze_finished();
   void loop_tablet_freeze(const bool is_sync);
   void loop_ls_freeze(const bool is_sync);
 
@@ -97,15 +99,18 @@ void TestTabletFreeze::create_ls(const ObLSID ls_id, ObLS *&ls)
                                                     paxos_replica_num,
                                                     learner_list));
 
-  for (int i=0;i<15;i++) {
+  bool is_leader = false;
+  for (int i = 0; i < 15; i++) {
     ObRole role;
     int64_t proposal_id = 0;
     ASSERT_EQ(OB_SUCCESS, ls->get_log_handler()->get_role(role, proposal_id));
     if (role == ObRole::LEADER) {
+      is_leader = true;
       break;
     }
     ::sleep(1);
   }
+  ASSERT_TRUE(is_leader);
 }
 
 void TestTabletFreeze::create_tablets(const ObLSID ls_id){
@@ -140,12 +145,67 @@ void TestTabletFreeze::create_tablets(const ObLSID ls_id){
   fprintf(stdout, "create tablets finish. spend_time_ms = %ld\n", spend_time_ms);
 }
 
+void TestTabletFreeze::prepare_valid_weak_read_scn()
+{
+  share::SCN max_decided_scn;
+  bool weak_read_scn_ready = false;
+  for (int64_t i = 0; i < 60 && !weak_read_scn_ready; i++) {
+    ASSERT_EQ(OB_SUCCESS, ls_->get_max_decided_scn(max_decided_scn));
+    if (max_decided_scn > share::ObScnRange::MIN_SCN && !max_decided_scn.is_max()) {
+      ls_->get_ls_wrs_handler()->ls_weak_read_ts_ = max_decided_scn;
+      weak_read_scn_ready = true;
+    } else {
+      ::sleep(1);
+    }
+  }
+  ASSERT_TRUE(weak_read_scn_ready);
+}
+
+void TestTabletFreeze::wait_async_freeze_finished()
+{
+  ObFreezer *freezer = ls_->get_freezer();
+  ASSERT_NE(nullptr, freezer);
+
+  bool async_freeze_finished = false;
+  int64_t stable_times = 0;
+  int64_t max_retry_times = 120;
+  while (max_retry_times-- > 0) {
+    const bool async_tablet_task_running = ATOMIC_LOAD(&freezer->is_async_tablet_freeze_task_existing_);
+    const bool async_ls_task_running = ATOMIC_LOAD(&freezer->is_async_ls_freeze_task_existing_);
+    const int64_t high_priority_freeze_cnt = ATOMIC_LOAD(&freezer->high_priority_freeze_cnt_);
+    const int64_t low_priority_freeze_cnt = ATOMIC_LOAD(&freezer->low_priority_freeze_cnt_);
+    if (!async_tablet_task_running
+        && !async_ls_task_running
+        && 0 == high_priority_freeze_cnt
+        && 0 == low_priority_freeze_cnt
+        && freezer->get_async_freeze_tablets().empty()) {
+      if (++stable_times >= 2) {
+        async_freeze_finished = true;
+        break;
+      }
+    } else {
+      stable_times = 0;
+    }
+
+    if (0 == max_retry_times % 10) {
+      STORAGE_LOG(INFO,
+                  "wait async freeze finish",
+                  K(async_tablet_task_running),
+                  K(async_ls_task_running),
+                  K(high_priority_freeze_cnt),
+                  K(low_priority_freeze_cnt));
+    }
+    ::sleep(1);
+  }
+  ASSERT_TRUE(async_freeze_finished);
+}
+
 void TestTabletFreeze::loop_tablet_freeze(const bool is_sync)
 {
   const int64_t ASYNC_FREEZE_CNT = 1000;
   const int64_t start_time = ObClockGenerator::getClock();
 
-  for (int64_t i = 0; i <= TEST_TABLET_COUNT; i++) {
+  for (int64_t i = 1; i < TEST_TABLET_COUNT; i++) {
     ObTabletID tablet_id(START_TABLET_ID + i);
     STORAGE_LOG(INFO, "commit async tablet freeze", K(tablet_id));
     (void)ls_->tablet_freeze(tablet_id, false /* need_rewrite_meta */, is_sync, 0);
@@ -179,6 +239,7 @@ void TestTabletFreeze::frequently_tablet_freeze()
 {
   create_ls(TEST_LS_ID, ls_);
   create_tablets(TEST_LS_ID);
+  prepare_valid_weak_read_scn();
 
   const int64_t ASYNC_TABLET_FREEZE_THREAD = 5;
   const int64_t SYNC_TABLET_FREEZE_THREAD = 2;
@@ -220,16 +281,7 @@ void TestTabletFreeze::frequently_tablet_freeze()
     alloc_threads[i].join();
   }
 
-  bool async_freeze_finished = false;
-  int64_t max_retry_times = 20;
-  while (max_retry_times-- > 0) {
-    if (ls_->get_freezer()->get_async_freeze_tablets().empty()) {
-      async_freeze_finished = true;
-      break;
-    }
-    ::sleep(1);
-  }
-  ASSERT_EQ(true, async_freeze_finished);
+  wait_async_freeze_finished();
 
   int ret = OB_SUCCESS;
   MTL_SWITCH(TEST_TENANT_ID) {
