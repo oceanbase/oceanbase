@@ -440,6 +440,7 @@ void ObDBLinkTransStatistics::inc_dblink_trans_promotion_count()
 
 void ObDBLinkTransStatistics::inc_dblink_trans_commit_count()
 {
+  EVENT_ADD(TRANSACTION_COMMIT_STMT_TOTAL_COUNT, 1);
   EVENT_ADD(DBLINK_TRANS_COMMIT_COUNT, 1);
   ATOMIC_INC(&dblink_trans_commit_count_);
 }
@@ -458,6 +459,7 @@ void ObDBLinkTransStatistics::inc_dblink_trans_commit_fail_count()
 
 void ObDBLinkTransStatistics::inc_dblink_trans_rollback_count()
 {
+  EVENT_ADD(TRANSACTION_ROLLBACK_STMT_TOTAL_COUNT, 1);
   EVENT_ADD(DBLINK_TRANS_ROLLBACK_COUNT, 1);
   ATOMIC_INC(&dblink_trans_rollback_count_);
 }

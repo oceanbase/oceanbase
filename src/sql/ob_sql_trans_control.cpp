@@ -349,6 +349,14 @@ int ObSqlTransControl::end_trans(ObSQLSessionInfo *session,
              "trans_id", tx_id, "action", (is_rollback ? "ROLLBACK" : "COMMIT"),
              K(ret), K(hint), "session_id", session->get_server_sid());
   }
+  // for statistics
+  if (is_explicit && OB_NOT_NULL(session) && session->is_user_session()) {
+    if (is_rollback) {
+      EVENT_ADD(TRANSACTION_ROLLBACK_STMT_TOTAL_COUNT, 1);
+    } else {
+      EVENT_ADD(TRANSACTION_COMMIT_STMT_TOTAL_COUNT, 1);
+    }
+  }
   FLT_SET_TAG(trans_id, tx_id);
   return ret;
 }
