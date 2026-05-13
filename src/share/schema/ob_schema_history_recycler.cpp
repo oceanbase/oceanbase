@@ -511,8 +511,19 @@ int ObSchemaHistoryRecycler::execute(
     // 6.dblink
     // 7.user-role
 
-    // ---------------------------- table related ------------------------------------
-    RECYCLE_FIRST_SCHEMA(RECYCLE_AND_ARCHIVE, table, OB_ALL_TABLE_HISTORY_TNAME, table_id);
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
+    bool enable_archive = false;
+    if (OB_UNLIKELY(!tenant_config.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("tenant config is invalid", KR(ret), K_(tenant_id));
+    } else {
+      enable_archive = tenant_config->_enable_schema_history_archive;
+      if (enable_archive) {
+        RECYCLE_FIRST_SCHEMA(RECYCLE_AND_ARCHIVE, table, OB_ALL_TABLE_HISTORY_TNAME, table_id);
+      } else {
+        RECYCLE_FIRST_SCHEMA(RECYCLE_ONLY, table, OB_ALL_TABLE_HISTORY_TNAME, table_id);
+      }
+    }
 
     RECYCLE_SECOND_SCHEMA(column, OB_ALL_COLUMN_HISTORY_TNAME, table_id, column_id);
 

@@ -3283,3 +3283,9 @@ DEF_TIME_WITH_CHECKER(schema_history_archive_expire_time, OB_TENANT_PARAMETER, "
                       "0 means disable GC, otherwise keep at least 30 days and at most 365 days. "
                       "Default 0. Range: {0} & [30d, 365d]",
                       ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_schema_history_archive, OB_TENANT_PARAMETER, "False",
+         "specifies whether to enable schema history archiving into __all_xxx_archive_history "
+         "during schema history recycling. If disabled, schema history will be recycled directly "
+         "without archiving. Default: False.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
