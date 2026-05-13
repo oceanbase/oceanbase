@@ -2348,13 +2348,25 @@ int ObTransformGroupByPushdown::do_groupby_push_down_into_join(
   }
   if ((OB_SUCC(ret))) {
     if (has_cross_join) {
-    // push count * into cross join
-      if (OB_FAIL(push_down_groupby_into_cross_join(trans_stmt,
-                                                    flatten_joined_tables,
-                                                    outer_join_tables,
-                                                    push_down_ctx,
-                                                    cross_join_params))) {
-      LOG_WARN("failed to transform eager count pushdown to cross joins", K(ret));
+      // push non-cross-join params' filter_exprs_ back to joined_table
+      // to ensure the cross-join path's inline view inherits the complete ON clause
+      for (int64_t i = 0; OB_SUCC(ret) && i < params.count(); ++i) {
+        PushDownParam &param = params.at(i);
+        for (int64_t j = 0; OB_SUCC(ret) && j < param.filter_exprs_.count(); ++j) {
+          JoinedTable *jt = param.correlated_joined_tables_.at(j);
+          if (jt != NULL && OB_FAIL(jt->join_conditions_.push_back(param.filter_exprs_.at(j)))) {
+            LOG_WARN("failed to push back filter expr to joined table", K(ret));
+          }
+        }
+      }
+      // push count * into cross join
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(push_down_groupby_into_cross_join(trans_stmt,
+                                                           flatten_joined_tables,
+                                                           outer_join_tables,
+                                                           push_down_ctx,
+                                                           cross_join_params))) {
+        LOG_WARN("failed to transform eager count pushdown to cross joins", K(ret));
       } else {
         trans_happened = true;
       }
