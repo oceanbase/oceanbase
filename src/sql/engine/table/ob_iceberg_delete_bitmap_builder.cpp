@@ -207,7 +207,7 @@ int ObIcebergDeleteBitmapBuilder::OrcDeleteFileReader::open_delete_file(
                                   scan_param->external_file_access_info_, delete_file.file_url_,
                                   ObString::make_empty_string(), file_size,
                                   delete_file.modification_time_);
-  ObExternalFileCacheOptions cache_options(options->enable_page_cache_,
+  ObExternalFileCacheOptions cache_options(options->enable_memory_cache_,
                                             options->enable_disk_cache_);
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(file_access_driver.open(file_info, cache_options))) {
@@ -341,7 +341,7 @@ int ObIcebergDeleteBitmapBuilder::ParquetDeleteFileReader::open_delete_file(
                                     scan_param->external_file_access_info_, delete_file.file_url_,
                                     ObString::make_empty_string(), file_size,
                                     delete_file.modification_time_);
-    ObExternalFileCacheOptions cache_options(options->enable_page_cache_,
+    ObExternalFileCacheOptions cache_options(options->enable_memory_cache_,
                                             options->enable_disk_cache_);
     if (OB_SUCC(ret)) {
       if (options->enable_prebuffer_) {
@@ -487,7 +487,7 @@ int ObIcebergDeleteBitmapBuilder::PuffinDeleteFileReader::open_delete_file(
                                     ObString::make_empty_string(),
                                     delete_file.file_size_,
                                     delete_file.modification_time_);
-    ObExternalFileCacheOptions cache_options(options->enable_page_cache_,
+    ObExternalFileCacheOptions cache_options(options->enable_memory_cache_,
                                              options->enable_disk_cache_);
 
     if (OB_FAIL(file_access_driver.open(file_info, cache_options))) {
