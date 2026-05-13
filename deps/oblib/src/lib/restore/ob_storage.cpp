@@ -742,7 +742,8 @@ int ObStorageUtil::read_seal_meta_if_needed(
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  ObArenaAllocator allocator(APPENDABLE_OBJECT_ALLOCATOR);
+  ObArenaAllocator allocator(ObMemAttr(
+      ObObjectStorageTenantGuard::get_tenant_id(), APPENDABLE_OBJECT_ALLOCATOR));
   int64_t pos = 0;
   char *seal_meta_uri = NULL;
 
@@ -1096,7 +1097,8 @@ int ObStorageUtil::list_adaptive_files(
   int ret = OB_SUCCESS;
   OBJECT_STORAGE_GUARD(storage_info_, uri, IO_HANDLED_SIZE_ZERO);
 
-  ObArenaAllocator allocator(APPENDABLE_OBJECT_ALLOCATOR);
+  ObArenaAllocator allocator(ObMemAttr(
+      ObObjectStorageTenantGuard::get_tenant_id(), APPENDABLE_OBJECT_ALLOCATOR));
   ObStorageListObjectsCtx list_obj_ctx;
   ObStorageListFilesCtx list_file_ctx;
   ObStorageListCtxBase *list_ctx = NULL;
@@ -2414,7 +2416,8 @@ int ObStorageAdaptiveReader::pread(char *buf,
   } else if (meta_.is_simulate_append_type()) {
     // To enable parallel pread,
     // use a temporary allocator/reader for each pread call instead of using allocator_/reader_
-    ObArenaAllocator tmp_allocator(APPENDABLE_OBJECT_ALLOCATOR);
+    ObArenaAllocator tmp_allocator(ObMemAttr(
+        ObObjectStorageTenantGuard::get_tenant_id(), APPENDABLE_OBJECT_ALLOCATOR));
     ObIStorageReader *tmp_reader = nullptr;
     char uri[OB_MAX_URI_LENGTH] = { 0 };
     ObArray<ObAppendableFragmentMeta> fragments_need_to_read;
@@ -2840,7 +2843,8 @@ int ObStorageAppender::repeatable_pwrite_(const char *buf, const int64_t size, c
   int64_t actual_write_offset = 0;
   char *read_buffer = nullptr;
   ObStorageReader *reader = nullptr;
-  ObArenaAllocator allocator;
+  ObArenaAllocator allocator(ObMemAttr(
+      ObObjectStorageTenantGuard::get_tenant_id(), APPENDABLE_OBJECT_ALLOCATOR));
 
   if (OB_ISNULL(appender_)) {
     ret = OB_NOT_INIT;
