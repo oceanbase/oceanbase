@@ -182,6 +182,7 @@ int ObCreateTableLikeHelper::generate_table_schema_()
       new_table_schema.set_define_user_id(arg_.define_user_id_);
       new_table_schema.reset_foreign_key_infos();
       new_table_schema.reset_trigger_list();
+      new_table_schema.reset_progressive_merge();
       if (new_table_schema.has_constraint()) {
         ObTableSchema::const_constraint_iterator iter = new_table_schema.constraint_begin();
         ObTableSchema::const_constraint_iterator iter_last = iter;

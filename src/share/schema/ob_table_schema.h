@@ -33,6 +33,7 @@
 #include "storage/blocksstable/index_block/ob_index_block_util.h"
 #include "storage/compaction_ttl/ob_ttl_filter_info.h"
 #include "storage/blocksstable/index_block/ob_index_block_util.h"
+#include "storage/compaction/ob_progressive_merge_helper.h"
 namespace oceanbase
 {
 
@@ -2107,6 +2108,10 @@ public:
   int add_foreign_key_info(const ObForeignKeyInfo &foreign_key_info);
   int remove_foreign_key_info(const uint64_t foreign_key_id);
   inline void reset_foreign_key_infos() { foreign_key_infos_.reset(); }
+  inline void reset_progressive_merge() {
+    progressive_merge_round_ = compaction::ObProgressiveMergeMgr::INIT_PROGRESSIVE_MERGE_ROUND;
+    progressive_merge_num_ = 0;
+  }
   int add_simple_index_info(const ObAuxTableMetaInfo &simple_index_info);
 
   int get_fk_check_index_tid(ObSchemaGetterGuard &schema_guard, const common::ObIArray<uint64_t> &parent_column_ids, uint64_t &scan_index_tid) const;

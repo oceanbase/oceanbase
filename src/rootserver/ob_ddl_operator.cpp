@@ -4311,6 +4311,8 @@ int ObDDLOperator::inner_alter_table_rename_index_(
   int64_t new_schema_version = OB_INVALID_VERSION;
   ObSchemaService *schema_service = schema_service_.get_schema_service();
   const bool in_offline_ddl_white_list = new_index_table_schema.get_in_offline_ddl_white_list();
+  ObRefreshSchemaStatus schema_status;
+  schema_status.tenant_id_ = tenant_id;
   if (OB_ISNULL(schema_service)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("schema_service is NULL", K(ret));
@@ -4325,8 +4327,11 @@ int ObDDLOperator::inner_alter_table_rename_index_(
     LOG_WARN("index table is in recyclebin", K(ret));
   } else if (OB_FAIL(schema_service_.gen_new_schema_version(tenant_id, new_schema_version))) {
     LOG_WARN("fail to gen new schema_version", K(ret), K(tenant_id));
-  } else if (OB_FAIL(new_index_table_schema.assign(*index_table_schema))) {
-    LOG_WARN("fail to assign schema", K(ret));
+  } else if (OB_FAIL(schema_service->get_table_schema_from_inner_table(schema_status, //here should get the newest index table schema in transaction
+                                                      index_table_schema->get_table_id(),
+                                                      trans,
+                                                      new_index_table_schema))) {
+    LOG_WARN("fail to get the latest index table schema", K(ret));
   } else {
     new_index_table_schema.set_schema_version(new_schema_version);
     if (nullptr != new_index_status) {
