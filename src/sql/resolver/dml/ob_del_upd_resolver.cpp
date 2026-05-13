@@ -3317,7 +3317,7 @@ int ObDelUpdResolver::build_column_conv_function_with_default_expr(ObInsertTable
       LOG_WARN("unexpected null column item", K(ret), K(column_item));
     } else if (!table_info.is_link_table_ && OB_FAIL(schema_checker_->get_column_schema(
                                                      session_info_->get_effective_tenant_id(),
-                                                     table_info.ref_table_id_,
+                                                     OB_INVALID_ID == column_item->base_cid_ || OB_INVALID_ID == column_item->base_tid_ ? table_info.ref_table_id_ : column_item->base_tid_,
                                                      OB_INVALID_ID == column_item->base_cid_ ? column_item->column_id_ : column_item->base_cid_,
                                                      col_schema,
                                                      true/*get_hidden*/))) {
