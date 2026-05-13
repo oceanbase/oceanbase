@@ -287,6 +287,10 @@ int ObTenantVirtualOutline::fill_cells(const ObOutlineInfo *outline_info)
           cells[cell_idx].set_int(static_cast<int64_t>(outline_info->is_format()));
           break;
         }
+        case PATTERN_RULES : {
+          cells[cell_idx].set_null();
+          break;
+        }
         default: {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("unexpected column id", K(col_id), K(cell_idx), K(ret));
