@@ -64,12 +64,14 @@ public:
         transport_(nullptr),
         listen_port_(listen_port),
         try_listen_cnt_(0),
+        is_inited_(false),
         queue_(),
         proc_map_()
   {}
-  virtual ~Service() {}
+  virtual ~Service() { destroy(); }
 
   int init();
+  void destroy();
   int get_listen_port() const { return listen_port_; }
   int get_proxy(ObRpcProxy &proxy) { return proxy.init(transport_); }
   const common::ObAddr get_dst() const
@@ -93,6 +95,7 @@ private:
 
   int listen_port_;
   int try_listen_cnt_;
+  bool is_inited_;
 
   ObReqQueueThread queue_;
   ObReqProcessor* proc_map_[65536];
@@ -111,6 +114,9 @@ ObReqProcessor *Service::Translator::get_processor(ObRequest &req)
 int Service::init()
 {
   int ret = OB_SUCCESS;
+  if (is_inited_) {
+    return ret;
+  }
   queue_.set_qhandler(&qhandler_);
   if (OB_FAIL(queue_.get_thread().start())) {
   }
@@ -128,7 +134,25 @@ int Service::init()
       ret = easy_.add_rpc_listen(++listen_port_, handler_, transport_);
     }
   }
+  if (OB_SUCC(ret)) {
+    is_inited_ = true;
+  } else {
+    destroy();
+  }
   return ret;
+}
+
+void Service::destroy()
+{
+  if (is_inited_) {
+    easy_.stop();
+    queue_.get_thread().stop();
+    easy_.wait();
+    queue_.get_thread().wait();
+    easy_.destroy();
+    transport_ = nullptr;
+    is_inited_ = false;
+  }
 }
 
 ObReqProcessor *Service::translate(ObRequest &req)

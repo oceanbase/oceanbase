@@ -236,6 +236,7 @@ enum RegMode
 };
 
 static void mulit_reg_unreg(RegMode reg_mod) {
+  ob_set_thread_tenant_id(OB_SERVER_TENANT_ID);
   int ret = OB_SUCCESS;
   ObRandom random;
   uint64_t slp_time = abs(random.get_int32()) % 100 + 1;
@@ -295,6 +296,7 @@ TEST(ObGlobalInterruptManager, multi_thread_register_unregister)
 
 static void thread_wait_interrupt(void *ready_thr_cnt)
 {
+  ob_set_thread_tenant_id(OB_SERVER_TENANT_ID);
   ObInterruptibleTaskID interrupt_id(2, 2);
   SET_INTERRUPTABLE(interrupt_id);
   std::atomic<int> *ready_cnt = static_cast<std::atomic<int>*> (ready_thr_cnt);
@@ -343,5 +345,10 @@ int main(int argc, char **argv)
   OB_LOGGER.set_file_name("test_ob_interrupt_manager.log", true, true);
   OB_LOGGER.set_log_level("DEBUG");
   testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
+  const int ret = RUN_ALL_TESTS();
+  if (nullptr != oceanbase::common::g_manager) {
+    oceanbase::common::g_manager->destroy();
+  }
+  oceanbase::common::g_service.destroy();
+  return ret;
 }
