@@ -795,7 +795,7 @@ int ObMPPacketSender::send_ok_packet_without_lock(ObSQLSessionInfo &session,
       flags.status_flags_.OB_SERVER_STATUS_CURSOR_EXISTS = ok_param.cursor_exist_ ? 1 : 0;
       flags.status_flags_.OB_SERVER_STATUS_LAST_ROW_SENT = ok_param.send_last_row_ ? 1 : 0;
       flags.status_flags_.OB_SERVER_PS_OUT_PARAMS = ok_param.has_pl_out_ ? 1 : 0;
-      if (ok_param.is_on_connect_) {
+      if (ok_param.is_on_connect_ || ok_param.is_on_change_user_) {
         flags.status_flags_.OB_SERVER_STATUS_RESERVED_OR_ORACLE_MODE = (ORACLE_MODE == session.get_compatibility_mode() ? 1 : 0);
       }
       // todo: set OB_SERVER_STATUS_IN_TRANS_READONLY flag if need?
