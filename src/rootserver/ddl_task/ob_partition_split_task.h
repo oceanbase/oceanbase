@@ -238,6 +238,7 @@ private:
       const ObAddr &leader_addr,
       ObIArray<obrpc::ObTabletSplitArg> &split_info_array);
   int update_task_message();
+  int check_unfinished_items(ObIArray<ObTabletID> &not_finished_tablets);
 private:
   static const int64_t OB_PARTITION_SPLIT_TASK_VERSION = 1;
   using ObDDLTask::is_inited_;

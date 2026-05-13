@@ -2026,6 +2026,7 @@ int ObTabletLobSplitUtil::process_tablet_split_request(
   ObIDag *stored_dag = nullptr;
   ObTabletLobSplitDag *lob_split_dag = nullptr;
   ObTabletSplitDag *data_split_dag = nullptr;
+  ObArray<ObTabletID> *dest_tablet_ids = nullptr;
   if (OB_UNLIKELY(nullptr == request_arg || nullptr == request_res)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), KP(request_arg), KP(request_res));
@@ -2038,6 +2039,7 @@ int ObTabletLobSplitUtil::process_tablet_split_request(
       LOG_WARN("failed to schedule dag", K(ret));
     }
     ls_id = lob_split_param.ls_id_;
+    dest_tablet_ids = &lob_split_param.new_lob_tablet_ids_;
     dag_param = &lob_split_param;
     stored_dag = lob_split_dag;
   } else {
@@ -2050,15 +2052,9 @@ int ObTabletLobSplitUtil::process_tablet_split_request(
       LOG_WARN("failed to schedule dag", K(ret));
     }
     ls_id = data_split_param.ls_id_;
+    dest_tablet_ids = &data_split_param.dest_tablets_id_;
     dag_param = &data_split_param;
     stored_dag = data_split_dag;
-  }
-
-  if (OB_SUCC(ret) && !is_start_request) {
-    share::SCN unused_finish_scn = SCN::min_scn();
-    if (OB_FAIL(ObTabletLobSplitUtil::write_split_log(is_lob_tablet, is_start_request, ls_id, dag_param, unused_finish_scn))) {
-      LOG_WARN("write split log failed", K(ret));
-    }
   }
 
   if (OB_SUCC(ret)) {
@@ -2100,6 +2096,22 @@ int ObTabletLobSplitUtil::process_tablet_split_request(
     }
   }
 
+  if (OB_SUCC(ret) && !is_start_request) {
+    share::SCN unused_finish_scn = SCN::min_scn();
+    bool is_split_finished = false;
+    if (OB_ISNULL(dest_tablet_ids)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null ptr", K(ret));
+    } else if (OB_FAIL(ObTabletSplitUtil::check_data_split_finished(ls_id, *dest_tablet_ids, is_split_finished))) {
+      LOG_WARN("failed to check data split finished", K(ret), K(*dest_tablet_ids));
+    } else if (is_split_finished && OB_FAIL(ObTabletLobSplitUtil::write_split_log(is_lob_tablet, is_start_request, ls_id, dag_param, unused_finish_scn))) {
+      LOG_WARN("write split log failed", K(ret));
+    } else if (!is_split_finished) {
+      ret = OB_EAGAIN;
+      LOG_TRACE("set eagain to write finish log after leader split data finished", K(ret));
+    }
+  }
+  
   if (OB_NOT_NULL(stored_dag)) {
     // to free dag.
     MTL(ObTenantDagScheduler*)->free_dag(*stored_dag);
