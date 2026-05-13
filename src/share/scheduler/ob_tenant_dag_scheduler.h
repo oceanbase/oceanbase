@@ -1003,7 +1003,9 @@ public:
     : allocator_(nullptr),
       ha_allocator_(nullptr),
       scheduler_(nullptr),
-      dag_net_map_rwlock_(ObLatchIds::DAG_NET_SCHEDULER)
+      dag_net_map_rwlock_(ObLatchIds::DAG_NET_SCHEDULER),
+      max_co_major_running_dag_net_cnt_(0),
+      co_major_running_cnt_(0)
   {}
   ~ObDagNetScheduler() { destroy(); }
   void destroy();
@@ -1021,7 +1023,15 @@ public:
   void finish_dag_net_without_lock(ObIDagNet &dag_net);
   void erase_dag_net_list_or_abort(const ObDagNetListIndex &dag_net_list_index, ObIDagNet *dag_net);
   void add_dag_net_list_or_abort(const ObDagNetListIndex &dag_net_list_index, ObIDagNet *dag_net);
+  static inline bool is_co_major_running_event_(const ObDagNetListIndex &dag_net_list_index,
+                                                const ObIDagNet *dag_net)
+  {
+    return RUNNING_DAG_NET_LIST == dag_net_list_index
+        && OB_NOT_NULL(dag_net)
+        && ObDagNetType::DAG_NET_TYPE_CO_MAJOR == dag_net->get_type();
+  }
   void finish_dag_net(ObIDagNet &dag_net);
+  void refresh_co_major_cap(const int64_t compaction_dag_limit);
   void dump_dag_status();
   int64_t get_dag_net_count();
   void get_all_dag_scheduler_info(
@@ -1060,7 +1070,12 @@ private:
   static const int64_t PRINT_SLOW_DAG_NET_THREASHOLD = 30 * 60 * 1000 * 1000L; // 30m
   static const int64_t SLOW_COMPACTION_DAG_NET_THREASHOLD = 6 * 60 * 60 * 1000 * 1000L; // 6hours
   static const int64_t LOOP_PRINT_LOG_INTERVAL = 30 * 1000 * 1000L; // 30s
+  static const int64_t STARVATION_LOG_INTERVAL = 30 * 1000 * 1000L; // 30s
 
+  // CO_MAJOR sub-cap = compaction_dag_limit * 90% (min 1), reserves ~10% for other types
+  // (MIGRATION/BACKUP/RESTORE, etc.) to avoid starvation from tablet-granularity CO_MAJOR floods.
+  // Init snapshots from dag_limit; refresh_co_major_cap keeps it in sync at runtime.
+  static constexpr int64_t CO_MAJOR_RATIO_PERCENT = 90;
 private:
   ObIAllocator* allocator_;
   ObIAllocator* ha_allocator_;
@@ -1074,6 +1089,8 @@ private:
   DagNetList dag_net_list_[DAG_NET_LIST_MAX];
   DagNetIdMap dag_net_id_map_; // for HA to search dag_net of specified dag_id  // lock by dag_net_map_rwlock_
   int64_t dag_net_cnts_[ObDagNetType::DAG_NET_TYPE_MAX];  // lock by dag_net_map_rwlock_
+  int64_t max_co_major_running_dag_net_cnt_;  // lock by dag_net_map_rwlock_; refreshed via refresh_co_major_cap
+  int64_t co_major_running_cnt_;  // lock by dag_net_map_rwlock_
 };
 
 class ObReclaimUtil
