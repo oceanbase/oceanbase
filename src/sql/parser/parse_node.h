@@ -148,6 +148,8 @@ typedef struct _ParseNode
       uint32_t is_input_quoted_ : 1; // indicate name_ob input whether with double quote
       uint32_t is_forbid_parameter_ : 1; //1 indicate forbid parameter
       uint32_t is_default_literal_expression_ : 1; // 1 indicate in default literal expression, "DEFAULT NOW()"
+      uint32_t is_forbid_param_partial_ : 1; // 1 indicate anonymous block parameterization is prohibited in certain scenarios
+      uint32_t has_plsql_variable_ : 1; // 1 indicates the SQL parse tree contains $$xxx (T_PLSQL_VARIABLE_IDENTIFIER)
       uint32_t reserved_;
     };
   };
@@ -225,6 +227,7 @@ typedef struct _PLParseInfo
   int last_pl_symbol_pos_; //上一个pl变量的结束位置
   bool is_parse_dynamic_sql_;
   int plsql_line_;
+  bool has_plsql_variable_; // whether $$xxx (T_PLSQL_VARIABLE_IDENTIFIER) exists
   /*for mysql pl*/
   void *pl_ns_; //ObPLBlockNS
   RefObjList *ref_object_nodes_; //依赖对象链表头
