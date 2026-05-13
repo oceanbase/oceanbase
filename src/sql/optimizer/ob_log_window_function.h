@@ -29,15 +29,18 @@ namespace sql
     };
     ObLogWindowFunction(ObLogPlan &plan)
         : ObLogicalOperator(plan),
+        win_exprs_(plan.get_allocator()),
         algo_(WinDistAlgo::WIN_DIST_INVALID),
         use_hash_sort_(false),
         use_topn_sort_(false),
         single_part_parallel_(false),
         range_dist_parallel_(false),
         role_type_(WindowFunctionRoleType::NORMAL),
+        sort_keys_(plan.get_allocator()),
         rd_sort_keys_cnt_(0),
         rd_pby_sort_cnt_(0),
         wf_aggr_status_expr_(NULL),
+        pushdown_info_(plan.get_allocator()),
         origin_sort_card_(0.0),
         input_rows_mem_bound_ratio_(0.0),
         estimated_part_cnt_(0.0)
@@ -123,7 +126,7 @@ namespace sql
     virtual int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)override;
     virtual int compute_op_parallel_and_server_info() override;
   private:
-    ObSEArray<ObWinFunRawExpr *, 4, common::ModulePageAllocator, true> win_exprs_;
+    ObSqlArray<ObWinFunRawExpr *> win_exprs_;
 
     // for print PQ_DISTRIBUTE_WINDOW hint outline
     WinDistAlgo algo_;
@@ -152,7 +155,7 @@ namespace sql
     WindowFunctionRoleType role_type_;
 
     // sort keys needed for window function
-    common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true> sort_keys_;
+    ObSqlArray<OrderItem> sort_keys_;
     // sort keys count for range distributed parallel.
     int64_t rd_sort_keys_cnt_;
     // the first %rd_pby_sort_cnt_ of %rd_sort_keys_ is the partition by of window function.
@@ -160,7 +163,7 @@ namespace sql
 
     // for reporting window function adaptive pushdown
     ObOpPseudoColumnRawExpr *wf_aggr_status_expr_;
-    common::ObSEArray<bool, 8, common::ModulePageAllocator, true> pushdown_info_;
+    ObSqlArray<bool> pushdown_info_;
 
     //for est_cost when use topn sort
     double origin_sort_card_;

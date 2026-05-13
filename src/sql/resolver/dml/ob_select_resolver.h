@@ -184,6 +184,13 @@ protected:
                                  common::ObIArray<ObRawExpr*> &rollup_exprs,
                                  common::ObIArray<OrderItem> &order_items,
                                  bool &has_explicit_dir);
+  int init_stmt_group_clause_capacity(const ParseNode *node);
+  int resolve_group_by_element_num(const ParseNode *node,
+                                   bool ignore_empty_group_by,
+                                   int64_t &group_num,
+                                   int64_t &rollup_num,
+                                   int64_t &cube_num,
+                                   int64_t &grouping_num);
   int resolve_for_update_clause(const ParseNode *node);
   int resolve_for_update_clause_oracle(const ParseNode &node);
   int get_cursor_for_update_table(ObSelectStmt *select_stmt, int64_t &for_update_cnt, TableItem *&add_rowid_table_item, uint64_t &base_table_id);

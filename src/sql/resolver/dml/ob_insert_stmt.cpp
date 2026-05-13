@@ -47,10 +47,10 @@ int ObUniqueConstraintInfo::deep_copy(const ObUniqueConstraintInfo &other,
   return ret;
 }
 
-ObInsertStmt::ObInsertStmt()
-  : ObDelUpdStmt(stmt::T_INSERT),
+ObInsertStmt::ObInsertStmt(ObIAllocator &allocator)
+  : ObDelUpdStmt(stmt::T_INSERT, allocator),
     is_all_const_values_(true),
-    table_info_()
+    table_info_(allocator)
 {
 }
 

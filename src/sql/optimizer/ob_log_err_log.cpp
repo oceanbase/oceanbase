@@ -20,7 +20,7 @@ using namespace sql;
 using namespace oceanbase::common;
 ObLogErrLog::ObLogErrLog(ObLogPlan &plan)
   : ObLogicalOperator(plan),
-    err_log_define_(),
+    err_log_define_(plan.get_allocator()),
     del_upd_stmt_(NULL)
 {}
 

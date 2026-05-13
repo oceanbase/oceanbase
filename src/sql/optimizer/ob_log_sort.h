@@ -53,8 +53,8 @@ public:
   ObLogSort(ObLogPlan &plan)
       : ObLogicalOperator(plan),
         hash_sortkey_(),
-        sort_keys_(),
-        encode_sortkeys_(),
+        sort_keys_(plan.get_allocator()),
+        encode_sortkeys_(plan.get_allocator()),
         topn_expr_(NULL),
         minimum_row_count_(0),
         topk_precision_(0),
@@ -149,13 +149,13 @@ protected:
 private:
   int get_candidate_pushdown_sort_keys(
       uint64_t &table_id,
-      common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> &candidate_sk_exprs);
+      common::ObIArray<ObRawExpr *> &candidate_sk_exprs);
   int check_expr_can_pushdown(ObRawExpr *expr, uint64_t &table_id, bool &can_push_down);
   int is_expr_in_pushdown_whitelist(ObRawExpr *expr, bool &in_pushdown_whitelist);
 private:
   OrderItem hash_sortkey_;
-  common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true> sort_keys_;
-  common::ObSEArray<OrderItem, 1, common::ModulePageAllocator, true> encode_sortkeys_;
+  ObSqlArray<OrderItem> sort_keys_;
+  ObSqlArray<OrderItem> encode_sortkeys_;
   ObRawExpr *topn_expr_;
   int64_t minimum_row_count_;
   int64_t topk_precision_;

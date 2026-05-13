@@ -1,0 +1,44 @@
+create database big_insert;
+use big_insert;
+
+CREATE TABLE `track_metadata_mongo_new` (
+  `_id` varchar(24) NOT NULL COMMENT 'MongoDB ObjectId',
+  `orgId` bigint(20) DEFAULT NULL COMMENT 'Organization ID',
+  `orderNo` varchar(255) DEFAULT NULL COMMENT 'Order Number',
+  `waybillNo` varchar(255) DEFAULT NULL COMMENT 'Waybill Number',
+  `operateStationCode` varchar(255) DEFAULT NULL COMMENT 'Operation Station Code',
+  `operateStationName` varchar(255) DEFAULT NULL COMMENT 'Operation Station Name',
+  `operateUserCode` varchar(255) DEFAULT NULL COMMENT 'Operation User Code',
+  `operateUserName` varchar(255) DEFAULT NULL COMMENT 'Operation User Name',
+  `operateTime` datetime DEFAULT NULL COMMENT 'Operation Time',
+  `operateType` varchar(255) DEFAULT NULL COMMENT 'Operation Type',
+  `operateSubType` varchar(255) DEFAULT NULL COMMENT 'Operation Subtype',
+  `showType` varchar(32) DEFAULT NULL COMMENT 'Show Type',
+  `stage` varchar(32) DEFAULT NULL COMMENT 'Stage',
+  `stageDetail` varchar(32) DEFAULT NULL COMMENT 'Stage Detail',
+  `currentCountry` varchar(255) DEFAULT NULL COMMENT 'Current Country',
+  `sendSiteCode` varchar(255) DEFAULT NULL COMMENT 'Send Site Code',
+  `dispatchStationCode` varchar(255) DEFAULT NULL COMMENT 'Dispatch Station Code',
+  `dataSource` varchar(32) DEFAULT NULL COMMENT 'Data Source',
+  `currentOcProvince` varchar(255) DEFAULT NULL COMMENT 'Current Province',
+  `currentOcCity` varchar(255) DEFAULT NULL COMMENT 'Current City',
+  `nonstandard` text DEFAULT NULL COMMENT 'Non-standard Data',
+  `isDelete` varchar(16) DEFAULT NULL COMMENT 'Is Deleted',
+  `recordVersion` varchar(128) DEFAULT NULL COMMENT 'Record Version',
+  `createDate` datetime DEFAULT NULL COMMENT 'Create Date',
+  `createUserCode` varchar(255) DEFAULT NULL COMMENT 'Create User Code',
+  `createUserName` varchar(255) DEFAULT NULL COMMENT 'Create User Name',
+  `_class` varchar(255) DEFAULT NULL COMMENT 'Class Name',
+  `status` varchar(255) DEFAULT NULL COMMENT '轨迹状态',
+  `businessId` varchar(128) DEFAULT NULL COMMENT '业务ID',
+  `fixedTracking` varchar(255) DEFAULT NULL COMMENT '固定轨迹',
+  `system` varchar(32) DEFAULT NULL COMMENT '系统(0:TMS 1:WMS)',
+  `isVendorSyncTrack` varchar(32) DEFAULT NULL COMMENT '是否供应商同步轨迹',
+  `last_modify_time` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  KEY (`_id`),
+  KEY `idx_create_time` (`createDate`),
+  KEY `idx_waybillno` (`waybillNo`),
+  KEY `idx_last_modify_time` (`last_modify_time`)
+);
+
+create table t1(c1 int primary key, c2 int, c3 int, c4 int, c5 int, c6 int, c7 int, c8 int, c9 int, c10 int, c11 int, c12 int, c13 int, c14 int, c15 int, c16 int, c17 int, c18 int, c19 int, c20 int, c21 int, c22 int, c23 int, c24 int, c25 int, c26 int, c27 int, c28 int, c29 int, c30 int, c31 int, c32 int, c33 int, c34 int, c35 int, c36 int, c37 int, c38 int, c39 int, c40 int, c41 int, c42 int, c43 int, c44 int, c45 int, c46 int, c47 int, c48 int, c49 int, c50 int);

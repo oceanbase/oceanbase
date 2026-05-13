@@ -654,7 +654,7 @@ int ObOuterJoinMJVPrinter::gen_update_for_left_join(const TableItem *delta_table
   } else if (OB_ISNULL((ptr = ctx_.alloc_.alloc(sizeof(ObUpdateTableInfo))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate table info", K(ret));
-  } else if (OB_FALSE_IT(table_info = new(ptr)ObUpdateTableInfo())) {
+  } else if (OB_FALSE_IT(table_info = new(ptr)ObUpdateTableInfo(ctx_.alloc_))) {
   } else if (OB_FAIL(upd_stmt->get_update_table_info().push_back(table_info))) {
     LOG_WARN("failed to push back", K(ret));
   }

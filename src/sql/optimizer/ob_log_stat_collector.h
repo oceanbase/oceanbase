@@ -25,7 +25,7 @@ class ObLogStatCollector : public ObLogicalOperator
 public:
   ObLogStatCollector(ObLogPlan &plan)
       : ObLogicalOperator(plan),
-        sort_keys_(),
+        sort_keys_(plan.get_allocator()),
         is_none_partition_(),
         type_(ObStatCollectorType::NOT_INIT_TYPE)
         {}
@@ -41,7 +41,7 @@ public:
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
   virtual int inner_replace_op_exprs(ObRawExprReplacer &replacer) override;
 private:
-  common::ObSEArray<OrderItem, 8, common::ModulePageAllocator, true> sort_keys_;
+  ObSqlArray<OrderItem> sort_keys_;
   bool is_none_partition_;
   ObStatCollectorType type_;
 };

@@ -59,8 +59,7 @@ int ObInterestOrderDim::compare(const ObSkylineDim &other, CompareStat &status) 
     const ObInterestOrderDim &tmp = static_cast<const ObInterestOrderDim &>(other);
     if (is_interesting_order_ && tmp.is_interesting_order_) {
       KeyPrefixComp comp;
-      if (OB_FAIL(comp(column_ids_, column_cnt_,
-                       tmp.column_ids_, tmp.column_cnt_))) {
+      if (OB_FAIL(comp(column_ids_, tmp.column_ids_))) {
         LOG_WARN("compare key prefix failed", K(ret), K(*this), K(other));
       } else {
         status = comp.get_result();
@@ -82,12 +81,8 @@ int ObInterestOrderDim::add_interest_prefix_ids(const common::ObIArray<uint64_t>
   if (column_ids.count() < 0 || column_ids.count() > OB_MAX_ROWKEY_COLUMN_NUMBER) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("too many rowkey ids", K(ret), K(column_ids.count()));
-  } else {
-    MEMSET(column_ids_, 0, sizeof(uint64_t) * OB_MAX_ROWKEY_COLUMN_NUMBER);
-    for (int i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
-      column_ids_[i] = column_ids.at(i);
-    }
-    column_cnt_ = column_ids.count();
+  } else if (OB_FAIL(column_ids_.assign(column_ids))) {
+    LOG_WARN("failed to assign", K(ret));
   }
   return ret;
 }
@@ -99,10 +94,11 @@ int ObInterestOrderDim::add_interest_prefix_ids(const common::ObIArray<uint64_t>
  * [16, 17] UNCOMPARABLE [17, 16]
  * [16, 18] EQUAL [16, 18]
  * */
-int KeyPrefixComp::operator()(const uint64_t *left, const int64_t left_cnt,
-                              const uint64_t *right, const int64_t right_cnt)
+int KeyPrefixComp::operator()(const ObIArrayWrap<uint64_t> &left, const ObIArrayWrap<uint64_t> &right)
 {
   int ret = OB_SUCCESS;
+  const int64_t left_cnt = left.count();
+  const int64_t right_cnt = right.count();
 
   if (OB_UNLIKELY(left_cnt < 0) || OB_UNLIKELY(right_cnt < 0)) {
     ret = OB_INVALID_ARGUMENT;
@@ -112,17 +108,14 @@ int KeyPrefixComp::operator()(const uint64_t *left, const int64_t left_cnt,
   } else if (left_cnt == 0 || right_cnt == 0) {
     status_ = left_cnt > right_cnt
         ? ObSkylineDim::LEFT_DOMINATED : ObSkylineDim::RIGHT_DOMINATED;
-  } else if (OB_ISNULL(left) || OB_ISNULL(right)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("ptr should not be null", K(ret), K(left), K(right));
   } else if (left_cnt <= right_cnt) {
-    if (OB_FAIL(do_compare(left, left_cnt, right, right_cnt, status_))) {
+    if (OB_FAIL(do_compare(left, right, status_))) {
       LOG_WARN("compare key prefix failed", K(ret));
     }
   } else {
     //reverse
     ObSkylineDim::CompareStat tmp = ObSkylineDim::UNCOMPARABLE;
-    if (OB_FAIL(do_compare(right, right_cnt, left, left_cnt, tmp))) {
+    if (OB_FAIL(do_compare(right, left, tmp))) {
       LOG_WARN("compare key prefix failed", K(ret));
     } else {
       if (ObSkylineDim::RIGHT_DOMINATED == tmp) {
@@ -135,11 +128,13 @@ int KeyPrefixComp::operator()(const uint64_t *left, const int64_t left_cnt,
   return ret;
 }
 
-int KeyPrefixComp::do_compare(const uint64_t *left, const int64_t left_cnt,
-                              const uint64_t *right, const int64_t right_cnt,
+int KeyPrefixComp::do_compare(const ObIArrayWrap<uint64_t> &left,
+                              const ObIArrayWrap<uint64_t> &right,
                               ObSkylineDim::CompareStat &status)
 {
   int ret = OB_SUCCESS;
+  const int64_t left_cnt = left.count();
+  const int64_t right_cnt = right.count();
   if (left_cnt > right_cnt) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("left cnt is bigger than right count", K(left_cnt), K(right_cnt), K(ret));
@@ -147,7 +142,7 @@ int KeyPrefixComp::do_compare(const uint64_t *left, const int64_t left_cnt,
     status = ObSkylineDim::EQUAL;
     int i = 0;
     while (i < left_cnt && ObSkylineDim::EQUAL == status) {
-      if (left[i] == right[i]) {
+      if (left.at(i) == right.at(i)) {
         i++;
       } else {
         status = ObSkylineDim::UNCOMPARABLE;
@@ -171,10 +166,11 @@ int KeyPrefixComp::do_compare(const uint64_t *left, const int64_t left_cnt,
  * [16, 18] RIGHT_DOMINATED [16, 18 ,20]
  * [16, 19] UNCOMPARABLE [17, 18]
  * */
-int RangeSubsetComp::operator()(const uint64_t *left, const int64_t left_cnt,
-                                const uint64_t *right, const int64_t right_cnt)
+int RangeSubsetComp::operator()(const ObIArrayWrap<uint64_t> &left, const ObIArrayWrap<uint64_t> &right)
 {
   int ret = OB_SUCCESS;
+  const int64_t left_cnt = left.count();
+  const int64_t right_cnt = right.count();
   if (left_cnt < 0 || right_cnt < 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(left_cnt), K(right_cnt), K(ret));
@@ -183,17 +179,14 @@ int RangeSubsetComp::operator()(const uint64_t *left, const int64_t left_cnt,
   } else if (left_cnt == 0 || right_cnt == 0) {
     status_ = left_cnt > right_cnt
         ? ObSkylineDim::LEFT_DOMINATED : ObSkylineDim::RIGHT_DOMINATED;
-  } else if (OB_ISNULL(left) || OB_ISNULL(right)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("ptr should not be null", K(ret), K(left), K(right));
   } else if (left_cnt <= right_cnt) {
-    if (OB_FAIL(do_compare(left, left_cnt, right, right_cnt, status_))) {
+    if (OB_FAIL(do_compare(left, right, status_))) {
       LOG_WARN("compare key prefix failed", K(ret));
     }
   } else {
     //reverse
     ObSkylineDim::CompareStat tmp = ObSkylineDim::UNCOMPARABLE;
-    if (OB_FAIL(do_compare(right, right_cnt, left, left_cnt, tmp))) {
+    if (OB_FAIL(do_compare(right, left, tmp))) {
       LOG_WARN("compare range subset failed", K(ret));
     } else {
       if (ObSkylineDim::RIGHT_DOMINATED == tmp) {
@@ -209,12 +202,14 @@ int RangeSubsetComp::operator()(const uint64_t *left, const int64_t left_cnt,
 /**
  * @status could be EQUAL, UNCOMPARABLE, ANTI_DOMINATED
  */
-int RangeSubsetComp::do_compare(const uint64_t *left, const int64_t left_cnt,
-                                const uint64_t *right, const int64_t right_cnt,
+int RangeSubsetComp::do_compare(const ObIArrayWrap<uint64_t> &left,
+                                const ObIArrayWrap<uint64_t> &right,
                                 ObSkylineDim::CompareStat &status)
 {
   int ret = OB_SUCCESS;
-  if (left_cnt > right_cnt) {
+  const int64_t left_cnt = left.count();
+  const int64_t right_cnt = right.count();
+  if (OB_UNLIKELY(left_cnt > right_cnt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("left cnt is bigger than right count", K(left_cnt), K(right_cnt));
   } else {
@@ -225,12 +220,12 @@ int RangeSubsetComp::do_compare(const uint64_t *left, const int64_t left_cnt,
     for (int64_t i = 0; i < left_cnt; ++i) {
       bool found = false;
       for (int64_t j = last_pos; !found && j < right_cnt; ++j) {
-        if (left[i] == right[j]) {
+        if (left.at(i) == right.at(j)) {
           found = true;
           found_cnt++;
           last_pos = ++j;
         } else {
-          LOG_TRACE("not equal", K(left[i]), K(right[j]));
+          LOG_TRACE("not equal", K(left.at(i)), K(right.at(j)));
         }
       }
       if (!found) {
@@ -249,12 +244,11 @@ int RangeSubsetComp::do_compare(const uint64_t *left, const int64_t left_cnt,
   return ret;
 }
 
-ObQueryRangeDim::ObQueryRangeDim(ObSkylineDim::Dimension dim_type)
+ObQueryRangeDim::ObQueryRangeDim(ObIAllocator &allocator, ObSkylineDim::Dimension dim_type)
   : ObSkylineDim(dim_type),
-    column_cnt_(0),
+    column_ids_(allocator),
     contain_always_false_(false)
 {
-  MEMSET(column_ids_, 0, sizeof(uint64_t) * OB_MAX_ROWKEY_COLUMN_NUMBER);
 }
 
 int ObQueryRangeDim::compare(const ObSkylineDim &other, CompareStat &status) const
@@ -271,12 +265,11 @@ int ObQueryRangeDim::compare(const ObSkylineDim &other, CompareStat &status) con
       status = EQUAL;
     } else if (contain_always_false_ || tmp.contain_always_false_) {
       status = UNCOMPARABLE;
-    } else if (column_cnt_ == 0 && tmp.column_cnt_ == 0) {
+    } else if (column_ids_.empty() && tmp.column_ids_.empty()) {
       status = EQUAL; //both can't not extract query range, equal
     } else {
       RangeSubsetComp comp;
-      if (OB_FAIL(comp(column_ids_, column_cnt_,
-                       tmp.column_ids_, tmp.column_cnt_))) {
+      if (OB_FAIL(comp(column_ids_, tmp.column_ids_))) {
         LOG_WARN("compare query range failed", K(ret),
                  K(*this), K(other));
       } else {
@@ -293,13 +286,12 @@ int ObQueryRangeDim::add_rowkey_ids(const common::ObIArray<uint64_t> &rowkey_ids
   if (rowkey_ids.count() < 0 || rowkey_ids.count() > OB_MAX_ROWKEY_COLUMN_NUMBER) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("too many rowkey ids", K(ret), K(rowkey_ids.count()));
+  } else if (OB_FAIL(column_ids_.assign(rowkey_ids))) {
+    LOG_WARN("failed to assign", K(ret));
+  } else if (column_ids_.empty()) {
+    // do nothing
   } else {
-    MEMSET(column_ids_, 0, sizeof(uint64_t) * OB_MAX_ROWKEY_COLUMN_NUMBER);
-    for (int i = 0; OB_SUCC(ret) && i < rowkey_ids.count(); ++i) {
-      column_ids_[i] = rowkey_ids.at(i);
-    }
-    column_cnt_ = rowkey_ids.count();
-    lib::ob_sort(column_ids_, column_ids_ + column_cnt_);//do sort, for quick compare
+    lib::ob_sort(&column_ids_.at(0), &column_ids_.at(0) + column_ids_.count());//do sort, for quick compare
   }
   return ret;
 }
@@ -343,7 +335,7 @@ int ObShardingInfoDim::compare(const ObSkylineDim &other, CompareStat &status) c
     status = ObSkylineDim::EQUAL;
     const ObShardingInfoDim &tmp = static_cast<const ObShardingInfoDim &>(other);
     DominateRelation strong_relation = DominateRelation::OBJ_UNCOMPARABLE;
-    EqualSets dummy;
+    TemporaryEqualSets dummy;
     if (is_single_get_ && tmp.is_single_get_) {
       status = ObSkylineDim::EQUAL;
     } else if (OB_FAIL(ObOptimizerUtil::compute_sharding_relationship(sharding_info_,
@@ -762,7 +754,7 @@ int ObSkylineDimFactory::create_skyline_dim(common::ObIAllocator &allocator,
     ret = common::OB_ALLOCATE_MEMORY_FAILED;
     SQL_OPT_LOG(WARN, "allocate memory for skyline dim failed", K(ret));
   } else {
-    skyline_dim = new (ptr) ObQueryRangeDim(dim_type);
+    skyline_dim = new (ptr) ObQueryRangeDim(allocator, dim_type);
   }
   return ret;
 }

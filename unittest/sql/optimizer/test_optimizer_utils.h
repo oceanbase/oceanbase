@@ -160,7 +160,6 @@ protected:
   //::test::MockColumnStatService cs_;
   // ::test::MockOptTableStatService opt_ts_;
   // ::test::MockOptColumnStatService opt_cs_;
-  ::test::MockOptStatService opt_stat_;
 //  ::test::MockPartitionService partition_service_;
   // data members
 private:

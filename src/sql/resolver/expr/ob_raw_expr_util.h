@@ -179,7 +179,7 @@ private:
   int build_and_add_attr_exprs(ObRawExpr *raw_expr);
   DISALLOW_COPY_AND_ASSIGN(ObRawExprUniqueSet);
 private:
-  ObSEArray<ObRawExpr *, 16, common::ModulePageAllocator, true> expr_array_;
+  ObSEArray<ObRawExpr *, 16> expr_array_;
   bool need_unique_;
   ObRawExprFactory *expr_factory_;
   ObSQLSessionInfo *session_info_;

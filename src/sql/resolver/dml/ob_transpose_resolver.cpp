@@ -204,7 +204,7 @@ int ObTransposeResolver::resolve_transpose_clause(
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("create unpivot info failed");
     } else {
-      PivotDef * pivot_def = new (ptr) PivotDef();
+      PivotDef * pivot_def = new (ptr) PivotDef(*cur_resolver_->params_.allocator_);
       // resolve pivot clause
       if (OB_FAIL(resolve_pivot_clause(transpose_node, orig_table_item, *pivot_def, columns_in_aggrs))) {
         LOG_WARN("failed to resolve pivot clause", K(ret));
@@ -217,7 +217,7 @@ int ObTransposeResolver::resolve_transpose_clause(
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_ERROR("create unpivot info failed");
     } else {
-      UnpivotDef * unpivot_def = new (ptr) UnpivotDef();
+      UnpivotDef * unpivot_def = new (ptr) UnpivotDef(*cur_resolver_->params_.allocator_);
       // resolve unpivot clause
       if (OB_FAIL(resolve_unpivot_clause(transpose_node, orig_table_item, *unpivot_def))) {
         LOG_WARN("failed to resolve pivot clause", K(ret));
@@ -312,11 +312,13 @@ int ObTransposeResolver::resolve_pivot_clause(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("in_node is unexpected", K(in_node.type_), K(in_node.num_child_),
                 KP(in_node.children_), K(ret));
+    } else if (OB_FAIL(pivot_def.in_pairs_.prepare_allocate(in_node.num_child_))) {
+      LOG_WARN("failed to prepare allocate", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < in_node.num_child_; ++i) {
         const ParseNode *column_node = in_node.children_[i];
         const ParseNode *alias_node = NULL;
-        PivotDef::InPair in_pair;
+        PivotDef::InPair &in_pair = pivot_def.in_pairs_.at(i);
         if (OB_ISNULL(column_node)
             || OB_UNLIKELY(column_node->type_ != T_PIVOT_IN)
             || OB_UNLIKELY(column_node->num_child_ != 2)
@@ -343,9 +345,6 @@ int ObTransposeResolver::resolve_pivot_clause(
           if (OB_FAIL(get_combine_name(in_pair.const_exprs_, in_pair.name_))) {
             LOG_WARN("failed to get combine name", K(ret));
           }
-        }
-        if (OB_SUCC(ret) && OB_FAIL(pivot_def.in_pairs_.push_back(in_pair))) {
-          LOG_WARN("fail to push_back in_pair", K(in_pair), K(ret));
         }
       }//end of for in node
     }
@@ -383,10 +382,12 @@ int ObTransposeResolver::resolve_unpivot_clause(const ParseNode &transpose_node,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("in_node is unexpected", K(in_node.type_), K(in_node.num_child_),
                 KP(in_node.children_), K(ret));
+    } else if (OB_FAIL(unpivot_def.in_pairs_.prepare_allocate(in_node.num_child_))) {
+      LOG_WARN("failed to prepare allocate", K(ret));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < in_node.num_child_; ++i) {
         const ParseNode *column_node = in_node.children_[i];
-        UnpivotDef::InPair in_pair;
+        UnpivotDef::InPair &in_pair = unpivot_def.in_pairs_.at(i);
         if (OB_ISNULL(column_node)
             || OB_UNLIKELY(column_node->type_ != T_UNPIVOT_IN)
             || OB_UNLIKELY(column_node->num_child_ != 2)
@@ -434,9 +435,6 @@ int ObTransposeResolver::resolve_unpivot_clause(const ParseNode &transpose_node,
               LOG_WARN("failed to push back", K(ret));
             }
           }
-        }
-        if (OB_SUCC(ret) && OB_FAIL(unpivot_def.in_pairs_.push_back(in_pair))) {
-          LOG_WARN("fail to push_back in_pair", K(in_pair), K(ret));
         }
       }//end of for in node
     }
@@ -968,7 +966,7 @@ int ObTransposeResolver::get_exprs_for_pivot_table(PivotDef &pivot_def,
   }
   // get other select exprs
   for (int64_t i = 0; OB_SUCC(ret) && i < pivot_def.in_pairs_.count(); ++i) {
-    PivotDef::InPair in_pair = pivot_def.in_pairs_.at(i);
+    PivotDef::InPair &in_pair = pivot_def.in_pairs_.at(i);
     for (int64_t j = 0; OB_SUCC(ret) && j < pivot_def.aggr_pairs_.count(); ++j) {
       PivotDef::AggrPair &aggr_pair = pivot_def.aggr_pairs_.at(j);
       ObRawExpr *select_expr = NULL;
@@ -1237,7 +1235,7 @@ int ObTransposeResolver::get_unpivot_item(UnpivotDef &unpivot_def,
   } else if (OB_ISNULL(ptr = allocator->alloc(sizeof(ObUnpivotItem)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("create unpivot info failed");
-  } else if (OB_ISNULL(unpivot_item = new (ptr) ObUnpivotItem())) {
+  } else if (OB_ISNULL(unpivot_item = new (ptr) ObUnpivotItem(*allocator))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
   } else {
@@ -1348,7 +1346,7 @@ int ObTransposeResolver::push_transpose_table_into_view(
     TableItem *table = NULL;
     ObArray<ColumnItem> column_items;
     ObArray<PartExprItem> part_expr_items;
-    CheckConstraintItem check_constraint_item;
+    CheckConstraintItem *check_constraint_item = NULL;
     if (OB_ISNULL(table = stmt->get_table_item_by_id(table_id))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table is null", K(ret), K(table));

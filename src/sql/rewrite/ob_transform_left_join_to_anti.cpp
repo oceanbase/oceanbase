@@ -77,15 +77,14 @@ int ObTransformLeftJoinToAnti::construct_transform_hint(ObDMLStmt &stmt, void *t
     LOG_WARN("failed to push back hint", K(ret));
   } else if (OB_FAIL(ctx_->add_used_trans_hint(get_hint(stmt.get_stmt_hint())))) {
     LOG_WARN("failed to add used trans hint", K(ret));
+  } else if (OB_FAIL(hint->get_tb_name_list().prepare_allocate(trans_tables->count()))) {
+    LOG_WARN("failed to prepare allocate", K(ret));
   } else {
     hint->set_qb_name(ctx_->src_qb_name_);
     for (int64_t i = 0; OB_SUCC(ret) && i < trans_tables->count(); ++i) {
-      ObHint::TablesInHint single_or_joined_hint_table;
       if (OB_FAIL(ObTransformUtils::get_sorted_table_hint(trans_tables->at(i),
-                                                          single_or_joined_hint_table))) {
+                                                          hint->get_tb_name_list().at(i)))) {
         LOG_WARN("failed to get table hint", K(ret));
-      } else if (OB_FAIL(hint->get_tb_name_list().push_back(single_or_joined_hint_table))) {
-        LOG_WARN("failed to push back table name list", K(ret));
       }
     }
   }
@@ -227,7 +226,7 @@ int ObTransformLeftJoinToAnti::trans_stmt_to_anti(ObDMLStmt *stmt, JoinedTable *
   } else if (OB_ISNULL(semi_info = static_cast<SemiInfo *>(ctx_->allocator_->alloc(sizeof(SemiInfo))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate semi info", K(ret));
-  } else if (OB_FALSE_IT(semi_info = new(semi_info)SemiInfo())) {
+  } else if (OB_FALSE_IT(semi_info = new(semi_info)SemiInfo(*ctx_->allocator_))) {
   } else if (lib::is_oracle_mode() && OB_FAIL(clear_for_update(right_table))) {
     // avoid for update op in the right side of the anti/semi.
     LOG_WARN("failed to clear for update", K(ret));

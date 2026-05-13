@@ -21,17 +21,10 @@ using namespace share::schema;
 namespace sql
 {
 
-ObCreateTenantStmt::ObCreateTenantStmt(common::ObIAllocator *name_pool)
-  : ObDDLStmt(name_pool, stmt::T_CREATE_TENANT),
+ObCreateTenantStmt::ObCreateTenantStmt(ObIAllocator &allocator)
+  : ObDDLStmt(&allocator, stmt::T_CREATE_TENANT),
     create_tenant_arg_(),
-    sys_var_nodes_()
-{
-}
-
-ObCreateTenantStmt::ObCreateTenantStmt()
-  : ObDDLStmt(stmt::T_CREATE_TENANT),
-    create_tenant_arg_(),
-    sys_var_nodes_()
+    sys_var_nodes_(allocator)
 {
 }
 

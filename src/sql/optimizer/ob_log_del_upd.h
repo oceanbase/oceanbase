@@ -23,17 +23,20 @@ namespace sql
 struct IndexDMLInfo
 {
 public:
-  typedef common::ObSEArray<common::ObTableID, 4, common::ModulePageAllocator, true> TableIDArray;
-  IndexDMLInfo() :
+  typedef ObSqlArray<common::ObTableID> TableIDArray;
+  IndexDMLInfo(common::ObIAllocator &allocator) :
     table_id_(common::OB_INVALID_ID),
     loc_table_id_(common::OB_INVALID_ID),
     ref_table_id_(common::OB_INVALID_ID),
     rowkey_cnt_(0),
     spk_cnt_(0),
+    column_exprs_(allocator),
+    column_convert_exprs_(allocator),
+    assignments_(allocator),
     need_filter_null_(false),
     is_primary_index_(false),
-    ck_cst_exprs_(),
-    part_ids_(),
+    ck_cst_exprs_(allocator),
+    part_ids_(allocator),
     is_update_unique_key_(false),
     is_update_part_key_(false),
     is_update_primary_key_(false),
@@ -44,8 +47,9 @@ public:
     old_rowid_expr_(NULL),
     new_rowid_expr_(NULL),
     trans_info_expr_(NULL),
-    related_index_ids_(),
-    fk_lookup_part_id_expr_(),
+    column_old_values_exprs_(allocator),
+    related_index_ids_(allocator),
+    fk_lookup_part_id_expr_(allocator),
     is_vec_hnsw_index_vid_opt_(false)
   {
   }
@@ -148,16 +152,16 @@ public:
   //        - column_exprs_ 为  (c1, c3)，它会显示在 explain 结果 table_columns 中
   //       如果 binlog_row_image = FULL 那么这个 update 计划中：
   //        - column_exprs_ 为  (c1,c2,c3,c4,c5,c6)，它会显示在 explain 结果 table_columns 中
-  common::ObSEArray<ObColumnRefRawExpr*, 8, common::ModulePageAllocator, true> column_exprs_;
-  common::ObSEArray<ObRawExpr*, 8, common::ModulePageAllocator, true> column_convert_exprs_;
+  ObSqlArray<ObColumnRefRawExpr*> column_exprs_;
+  ObSqlArray<ObRawExpr*> column_convert_exprs_;
   // 更新表达式，因为可以有多个列被更新，所以有多个 assignment
   // 至于这个索引表的分区键有没有被更新，由 ObTablesAssignment 中的 is_updated_part_key_ 记录
   ObAssignments assignments_;
   bool need_filter_null_;
   bool is_primary_index_;
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> ck_cst_exprs_;
+  ObSqlArray<ObRawExpr*> ck_cst_exprs_;
   //partition used for base table
-  common::ObSEArray<ObObjectID, 1, common::ModulePageAllocator, true> part_ids_;
+  ObSqlArray<ObObjectID> part_ids_;
   bool is_update_unique_key_;
   bool is_update_part_key_;
   bool is_update_primary_key_;
@@ -172,11 +176,11 @@ public:
   ObRawExpr *trans_info_expr_;
   // for generated column, the diff between column_exprs_ and column_old_values_exprs_
   // is virtual generated column is replaced.
-  common::ObSEArray<ObRawExpr*, 64, common::ModulePageAllocator, true> column_old_values_exprs_;
+  ObSqlArray<ObRawExpr*> column_old_values_exprs_;
   // local index id related to current dml
   TableIDArray related_index_ids_;
 
-  common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> fk_lookup_part_id_expr_;
+  ObSqlArray<ObRawExpr*> fk_lookup_part_id_expr_;
 
   bool is_vec_hnsw_index_vid_opt_;
 
@@ -425,10 +429,10 @@ protected:
 
   ObDelUpdLogPlan &my_dml_plan_;
 
-  common::ObSEArray<IndexDMLInfo *, 1, common::ModulePageAllocator, true> index_dml_infos_;
-  common::ObSEArray<uint64_t, 1, common::ModulePageAllocator, true> loc_table_list_;
+  ObSqlArray<IndexDMLInfo *> index_dml_infos_;
+  ObSqlArray<uint64_t> loc_table_list_;
 
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> view_check_exprs_;
+  ObSqlArray<ObRawExpr *> view_check_exprs_;
   // 用于保存当前 DML 算子的 partition 信息
   ObTablePartitionInfo *table_partition_info_;
   const ObRawExpr *stmt_id_expr_;
@@ -462,7 +466,7 @@ protected:
   // the expression will be added to produced_trans_exprs_
   // When trans_info_expr does not find a producer operator,
   // the upper layer dml operator cannot consume the expression
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> produced_trans_exprs_;
+  ObSqlArray<ObRawExpr *> produced_trans_exprs_;
 };
 }
 }

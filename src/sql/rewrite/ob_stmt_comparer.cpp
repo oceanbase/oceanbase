@@ -86,7 +86,7 @@ int StmtCompareHelper::alloc_compare_helper(ObIAllocator &allocator, StmtCompare
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("allocate memory failed", K(ret));
   } else {
-    helper = new(buf)StmtCompareHelper();
+    helper = new(buf)StmtCompareHelper(allocator);
   }
   return ret;
 }
@@ -1968,8 +1968,8 @@ int ObStmtComparer::check_stmt_set_containment(const ObDMLStmt *first,
   } else {
     const ObSelectStmt *first_sel = static_cast<const ObSelectStmt*>(first);
     const ObSelectStmt *second_sel = static_cast<const ObSelectStmt*>(second);
-    EqualSets first_equal_sets;
-    EqualSets second_equal_sets;
+    TemporaryEqualSets first_equal_sets;
+    TemporaryEqualSets second_equal_sets;
     ObArenaAllocator alloc;
     if (OB_FAIL(first_sel->get_stmt_equal_sets(first_equal_sets, alloc, true))) {
       LOG_WARN("failed to get first stmt equal sets", K(ret));

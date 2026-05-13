@@ -1,0 +1,2 @@
+sql_unittest(test_sql_compile)
+sql_unittest(test_struct_size)

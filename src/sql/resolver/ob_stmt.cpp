@@ -217,7 +217,7 @@ ObQueryCtx *ObStmtFactory::get_query_ctx()
   void *ptr = NULL;
   if (NULL == query_ctx_) {
     if ((ptr = allocator_.alloc(sizeof(ObQueryCtx))) != NULL) {
-      query_ctx_ = new(ptr) ObQueryCtx();
+      query_ctx_ = new(ptr) ObQueryCtx(allocator_);
     } else {
       LOG_WARN_RET(OB_ALLOCATE_MEMORY_FAILED, "create query ctx failed", "query_ctx size", sizeof(ObQueryCtx));
     }
@@ -264,7 +264,7 @@ int ObStmtFactory::create_stmt<ObSelectStmt>(ObSelectStmt *&stmt)
     ret = common::OB_ALLOCATE_MEMORY_FAILED;
     SQL_RESV_LOG(ERROR, "no more memory to stmt");
   } else {
-    stmt = new(ptr) ObSelectStmt();
+    stmt = new(ptr) ObSelectStmt(allocator_);
     if (OB_FAIL(stmt_store_.store_obj(stmt))) {
       SQL_RESV_LOG(WARN, "store stmt failed", K(ret));
       stmt->~ObSelectStmt();

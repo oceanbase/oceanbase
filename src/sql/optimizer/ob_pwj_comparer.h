@@ -353,11 +353,11 @@ public:
 
 private:
   // 保存基表part_id(一级逻辑分区id)的映射关系
-  common::ObSEArray<std::pair<uint64_t, uint64_t>, 8, common::ModulePageAllocator, true> part_tablet_id_map_;
+  common::ObSEArray<std::pair<uint64_t, uint64_t>, 8> part_tablet_id_map_;
   // 保存基表part_index(一级逻辑分区在part_array中的偏移)的映射关系
-  common::ObSEArray<std::pair<int64_t, int64_t>, 8, common::ModulePageAllocator, true> part_index_map_;
+  common::ObSEArray<std::pair<int64_t, int64_t>, 8> part_index_map_;
   // 保存基表subpart_id(二级逻辑分区id)的映射关系
-  common::ObSEArray<std::pair<uint64_t, uint64_t>, 8, common::ModulePageAllocator, true> subpart_tablet_id_map_;
+  common::ObSEArray<std::pair<uint64_t, uint64_t>, 8> subpart_tablet_id_map_;
   // 保存基表partition_id(物理分区id)的映射关系
   TabletIdIdMap phy_part_map_;
   // 保存一组pwj约束中基表的tablet_id的映射关系
@@ -365,7 +365,7 @@ private:
   //      t1,t2 的tablet_id映射关系是 [0,1,2] <-> [1,2,0]
   //      t2,t3 的tablet_id映射关系是 [0,1,2] <-> [2,1,0]
   // tablet_id_group_ = [[0,1,2], [1,2,0], [1,0,2]]
-  common::ObSEArray<TabletIdArray, 4, common::ModulePageAllocator, true> tablet_id_group_;
+  common::ObSEArray<TabletIdArray, 4> tablet_id_group_;
   DISALLOW_COPY_AND_ASSIGN(ObStrictPwjComparer);
 };
 

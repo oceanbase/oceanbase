@@ -93,10 +93,10 @@ struct ObStmtMapInfo {
 };
 
 struct StmtCompareHelper {
-  StmtCompareHelper()
-  :stmt_map_infos_(),
-  similar_stmts_(),
-  hint_force_stmt_set_(),
+  StmtCompareHelper(ObIAllocator &allocator)
+  :stmt_map_infos_(allocator),
+  similar_stmts_(allocator),
+  hint_force_stmt_set_(allocator),
   stmt_(NULL)
   {}
 
@@ -110,8 +110,8 @@ struct StmtCompareHelper {
     K_(stmt)
   );
 
-  ObSEArray<ObStmtMapInfo, 8, common::ModulePageAllocator, true> stmt_map_infos_;
-  ObSEArray<ObSelectStmt*, 8, common::ModulePageAllocator, true> similar_stmts_;
+  ObSqlArray<ObStmtMapInfo> stmt_map_infos_;
+  ObSqlArray<ObSelectStmt*> similar_stmts_;
   QbNameList hint_force_stmt_set_;
   ObSelectStmt *stmt_;
 

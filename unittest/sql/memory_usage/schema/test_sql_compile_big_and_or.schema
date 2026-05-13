@@ -1,0 +1,38 @@
+create database big_and_or;
+use big_and_or;
+
+CREATE TABLE `dwd_plan_stu_min` (
+  `plan_id` int(11) unsigned NOT NULL DEFAULT '0' COMMENT '讲次id',
+  `stu_id` int(11) unsigned NOT NULL DEFAULT '0' COMMENT '学生id',
+  `brand_id` int(11) unsigned NOT NULL DEFAULT '1' COMMENT '品牌id',
+  `layer_practice_commit_status` int(11) unsigned NOT NULL DEFAULT '0' COMMENT '分层练习提交状态',
+  `layer_practice_object_right_rate` int(11) unsigned NOT NULL DEFAULT '0' COMMENT '分层练习客观题正确率',
+  `layer_practice_subject_correct_status` int(11) unsigned NOT NULL DEFAULT '0' COMMENT '分层练习主观题��改状态',
+  `layer_practice_subject_correct_pics` varchar(4096) NOT NULL DEFAULT '' COMMENT '分层练习主观题批改图片',
+  `real_practice_commit_status` int(11) unsigned NOT NULL DEFAULT '0' COMMENT '真题练习提交状态',
+  `real_practice_object_right_rate` int(11) unsigned NOT NULL DEFAULT '0' COMMENT '真题练习客观题正确率',
+  `dwd_utime` int(11) unsigned NOT NULL DEFAULT '0' COMMENT '记录更新时间',
+  `retell_commit_status` int(11) unsigned NOT NULL DEFAULT '0' COMMENT '课后反讲提交状态',
+  `retell_commit_video` text DEFAULT NULL COMMENT '课后反讲提交视频',
+  `retell_correct_status` int(11) unsigned NOT NULL DEFAULT '0' COMMENT '课后反讲批改状态',
+  `retell_correct_video` text DEFAULT NULL COMMENT '课后反讲已批改视频',
+  `headshot` text DEFAULT NULL COMMENT '大头照',
+  `pre_class_assessment_is_finish` int(11) unsigned NOT NULL DEFAULT '0' COMMENT '课前诊断是否完成',
+  `correct_audio_name` text DEFAULT NULL COMMENT '批改���音名称',
+  `learning_diagnosis_object_right_rate` int(11) unsigned DEFAULT NULL COMMENT '课前诊断客观题正确率',
+  `mistake_rework_status` int(11) unsigned DEFAULT NULL COMMENT '错题重做进度',
+  `retell_audit_remark` text DEFAULT NULL COMMENT '课后反讲提交视频审核备注',
+  `adventure_right_rate` int(11) unsigned NOT NULL DEFAULT '0' COMMENT '闯关冒险首答正确率',
+  `challenge_right_rate` int(11) unsigned NOT NULL DEFAULT '0' COMMENT '思维挑战首答正确率',
+  `number_right_rate` int(11) unsigned NOT NULL DEFAULT '0' COMMENT '数感大联盟首答正确率',
+  `time_limit_practice_is_submit` tinyint(1) NOT NULL DEFAULT '0' COMMENT '限时练是否提交，0否；1是',
+  `time_limit_practice_right_rate` int(11) NOT NULL DEFAULT '0' COMMENT '限时练正确率',
+  `time_limit_practice_total_rank` int(11) NOT NULL DEFAULT '0' COMMENT '限时练总排名',
+  `time_limit_practice_answer_num` int(11) NOT NULL DEFAULT '0' COMMENT '限时练做了几题',
+  `time_limit_practice_error_answer_record` text DEFAULT NULL COMMENT '限时练错误题目记录',
+  `program_url` text DEFAULT NULL COMMENT '编程url',
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+  PRIMARY KEY (`plan_id`, `stu_id`, `brand_id`),
+  KEY `idx_DWD_UTIME` (`dwd_utime`),
+  KEY `idx_updated_at` (`updated_at`)
+);

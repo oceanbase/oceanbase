@@ -26,20 +26,11 @@ ObModifyTenantSpecialOption::ObModifyTenantSpecialOption()
 {
 }
 
-ObModifyTenantStmt::ObModifyTenantStmt(common::ObIAllocator *name_pool)
-  : ObDDLStmt(name_pool, stmt::T_MODIFY_TENANT),
+ObModifyTenantStmt::ObModifyTenantStmt(common::ObIAllocator &allocator)
+  : ObDDLStmt(&allocator, stmt::T_MODIFY_TENANT),
     for_current_tenant_(false),
     modify_tenant_arg_(),
-    sys_var_nodes_(),
-    special_option_()
-{
-}
-
-ObModifyTenantStmt::ObModifyTenantStmt()
-  : ObDDLStmt(stmt::T_MODIFY_TENANT),
-    for_current_tenant_(false),
-    modify_tenant_arg_(),
-    sys_var_nodes_(),
+    sys_var_nodes_(allocator),
     special_option_()
 {
 }

@@ -25,7 +25,7 @@ ObLogForUpdate::ObLogForUpdate(ObLogPlan &plan)
     gi_charged_(false),
     wait_ts_(-1),
     lock_rownum_(NULL),
-    index_dml_info_()
+    index_dml_info_(plan.get_allocator())
 {}
 
 const char* ObLogForUpdate::get_name() const

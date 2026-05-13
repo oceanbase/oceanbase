@@ -83,7 +83,7 @@ private:
   int check_target_generated_table(const ObSelectStmt &ref_stmt);
   int resolve_merge_constraint();
 private:
-  ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> join_column_exprs_;
+  ObSEArray<ObRawExpr *, 4> join_column_exprs_;
   MergeResolveClause resolve_clause_;
   int64_t insert_select_items_count_;
 };

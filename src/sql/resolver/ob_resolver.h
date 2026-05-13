@@ -46,7 +46,7 @@ private:
   int select_stmt_resolver_func(ObResolverParams &params, const ParseNode &parse_tree, ObStmt *&stmt);
 private:
   // data members
-  ObResolverParams params_;
+  ObResolverParams &params_;
 private:
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObResolver);

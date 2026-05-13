@@ -395,6 +395,7 @@ int ObTransformRule::evaluate_cost(common::ObIArray<ObParentDMLStmt> &parent_stm
                                    void *check_ctx /* = NULL*/)
 {
   int ret = OB_SUCCESS;
+  ObMemPerfGuard mem_perf_guard("evaluate_cost");
   ObEvalCostHelper eval_cost_helper;
   is_expected = true;
   if (OB_ISNULL(stmt) || OB_ISNULL(ctx_) || OB_UNLIKELY(!ctx_->is_valid())

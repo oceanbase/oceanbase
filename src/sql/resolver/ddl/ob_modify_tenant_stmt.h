@@ -37,8 +37,7 @@ private:
 class ObModifyTenantStmt : public ObDDLStmt
 {
 public:
-  explicit ObModifyTenantStmt(common::ObIAllocator *name_pool);
-  ObModifyTenantStmt();
+  ObModifyTenantStmt(common::ObIAllocator &allocator);
   virtual ~ObModifyTenantStmt();
   inline obrpc::ObModifyTenantArg &get_modify_tenant_arg();
   virtual void print(FILE *fp, int32_t level, int32_t index = 0);
@@ -86,7 +85,7 @@ public:
 private:
   bool for_current_tenant_;
   obrpc::ObModifyTenantArg modify_tenant_arg_;
-  common::ObArray<ObVariableSetStmt::VariableSetNode, common::ModulePageAllocator, true> sys_var_nodes_;
+  ObSqlArray<ObVariableSetStmt::VariableSetNode> sys_var_nodes_;
   ObModifyTenantSpecialOption special_option_;
   DISALLOW_COPY_AND_ASSIGN(ObModifyTenantStmt);
 };

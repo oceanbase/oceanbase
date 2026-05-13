@@ -29,7 +29,8 @@ namespace sql
           limit_expr_(NULL),
           offset_expr_(NULL),
           percent_expr_(NULL),
-          is_partial_(false)
+          is_partial_(false),
+          order_items_(plan.get_allocator())
     {}
     virtual ~ObLogLimit() {}
     virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
@@ -90,7 +91,7 @@ namespace sql
     ObRawExpr *offset_expr_;
     ObRawExpr *percent_expr_;
     bool is_partial_;
-    ObSEArray<OrderItem, 4, common::ModulePageAllocator, true> order_items_;
+    ObSqlArray<OrderItem> order_items_;
   };
 }
 }

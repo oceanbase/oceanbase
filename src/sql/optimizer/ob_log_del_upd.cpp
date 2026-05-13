@@ -292,7 +292,9 @@ int IndexDMLInfo::is_new_row_expr(const ObRawExpr *expr, bool &bret) const
 ObLogDelUpd::ObLogDelUpd(ObDelUpdLogPlan &plan)
   : ObLogicalOperator(plan),
     my_dml_plan_(plan),
-    view_check_exprs_(NULL),
+    index_dml_infos_(plan.get_allocator()),
+    loc_table_list_(plan.get_allocator()),
+    view_check_exprs_(plan.get_allocator()),
     table_partition_info_(NULL),
     stmt_id_expr_(nullptr),
     lock_row_flag_expr_(NULL),
@@ -310,10 +312,10 @@ ObLogDelUpd::ObLogDelUpd(ObDelUpdLogPlan &plan)
     pdml_partition_id_expr_(NULL),
     ddl_slice_id_expr_(NULL),
     pdml_is_returning_(false),
-    err_log_define_(),
+    err_log_define_(plan.get_allocator()),
     need_alloc_part_id_expr_(false),
     has_instead_of_trigger_(false),
-    produced_trans_exprs_()
+    produced_trans_exprs_(plan.get_allocator())
 {
 }
 

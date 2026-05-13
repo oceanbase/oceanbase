@@ -33,7 +33,7 @@ public:
   inline ObIArray<int64_t> &get_related_dblink_ids() { return related_dblink_ids_; }
 private:
   stmt::StmtType dml_type_;
-  common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true> related_dblink_ids_; // all dblinks related in this link dml sql
+  ObSqlArray<int64_t> related_dblink_ids_; // all dblinks related in this link dml sql
 };
 
 } // namespace sql

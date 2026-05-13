@@ -19,7 +19,7 @@ namespace oceanbase
 {
 namespace sql
 {
-ObExplainStmt::ObExplainStmt() : ObDMLStmt(stmt::T_EXPLAIN),
+ObExplainStmt::ObExplainStmt(ObIAllocator &allocator) : ObDMLStmt(stmt::T_EXPLAIN, allocator),
                                  format_(EXPLAIN_UNINITIALIZED),
                                  explain_query_stmt_(NULL)
 {

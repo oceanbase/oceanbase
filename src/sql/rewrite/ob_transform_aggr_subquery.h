@@ -60,32 +60,39 @@ private:
    * a candidate ja query for transformation
    */
   struct TransformParam {
-    TransformParam() : ja_query_ref_(NULL), nested_conditions_(), pullup_flag_(0),
-        not_null_expr_(NULL), parent_expr_of_query_ref(NULL), limit_for_exists_(false),
-        limit_value_(0), limit_to_aggr_(false), any_all_to_aggr_(false), exists_to_aggr_(false)
+    TransformParam(common::ObIAllocator &allocator)
+      : ja_query_ref_(NULL), query_refs_(allocator), nested_conditions_(allocator),
+        is_null_prop_(allocator), not_null_const_(allocator), pullup_flag_(0),
+        not_null_expr_(NULL), parent_expr_of_query_ref_(NULL), limit_for_exists_(false),
+        limit_value_(0), limit_to_aggr_(false), any_all_to_aggr_(false), exists_to_aggr_(false),
+        equal_param_info_(allocator), upper_filters_(allocator)
     {}
 
-    TransformParam(int64_t trans_strategy) 
-      : ja_query_ref_(NULL), nested_conditions_(), pullup_flag_(trans_strategy),
-        not_null_expr_(NULL), parent_expr_of_query_ref(NULL), limit_for_exists_(false),
-        limit_value_(0), limit_to_aggr_(false), any_all_to_aggr_(false), exists_to_aggr_(false)
+    TransformParam(common::ObIAllocator &allocator, int64_t trans_strategy)
+      : ja_query_ref_(NULL), query_refs_(allocator), nested_conditions_(allocator),
+        is_null_prop_(allocator), not_null_const_(allocator), pullup_flag_(trans_strategy),
+        not_null_expr_(NULL), parent_expr_of_query_ref_(NULL), limit_for_exists_(false),
+        limit_value_(0), limit_to_aggr_(false), any_all_to_aggr_(false), exists_to_aggr_(false),
+        equal_param_info_(allocator), upper_filters_(allocator)
     {}
+
+    int assign(const TransformParam &other);
 
     ObQueryRefRawExpr *ja_query_ref_;  // the ja query ref expr
-    ObSEArray<ObRawExpr *, 4> query_refs_;
-    ObSEArray<ObRawExpr *, 4> nested_conditions_; // nested conditions in the ja query
-    ObSEArray<bool, 4> is_null_prop_; // need case when for a expr
-    ObArray<ObRawExpr *> not_null_const_;
+    ObSqlArray<ObRawExpr *> query_refs_;
+    ObSqlArray<ObRawExpr *> nested_conditions_; // nested conditions in the ja query
+    ObSqlArray<bool> is_null_prop_; // need case when for a expr
+    ObSqlArray<ObRawExpr *> not_null_const_;
     int64_t pullup_flag_; // the methods uesd when pulling up the ja query
     ObRawExpr *not_null_expr_;  //  not null expr of subquery if correlated join happened
-    ObRawExpr *parent_expr_of_query_ref;  // parent expr need to be modified for vector subquery comparison
+    ObRawExpr *parent_expr_of_query_ref_;  // parent expr need to be modified for vector subquery comparison
     bool limit_for_exists_;
     int64_t limit_value_;
     bool limit_to_aggr_;  // convert limit 1 single set as scala groupby
     bool any_all_to_aggr_;  // convert any/all subquery as scala groupby
     bool exists_to_aggr_; // convert exists subquery as scala groupby
-    ObSEArray<ObPCParamEqualInfo, 1, common::ModulePageAllocator, true> equal_param_info_;
-    ObSEArray<ObRawExpr *, 4> upper_filters_; // filters can be pulled up to upper stmt (aggr first)
+    ObSqlArray<ObPCParamEqualInfo> equal_param_info_;
+    ObSqlArray<ObRawExpr *> upper_filters_; // filters can be pulled up to upper stmt (aggr first)
     TO_STRING_KV(K_(ja_query_ref),
                  K_(query_refs),
                  K_(nested_conditions),
@@ -130,7 +137,8 @@ private:
                               ObRawExpr *child_expr,
                               int64_t pullup_strategy,
                               const bool is_select_item_expr,
-                              ObIArray<TransformParam> &params);
+                              common::ObIAllocator &allocator,
+                              ObIArray<TransformParam*> &params);
 
   int check_ja_query_ref_param_validity(ObQueryRefRawExpr &ja_query_ref, bool &is_valid);
 
@@ -271,7 +279,7 @@ private:
 
   int modify_vector_comparison_expr_if_necessary(ObSelectStmt &select_stmt,
                                                  ObRawExprFactory *expr_factory,
-                                                 ObSEArray<ObRawExpr*, 4> &select_exprs,
+                                                 ObIArray<ObRawExpr*> &select_exprs,
                                                  ObRawExpr *parent_expr_of_query_ref,
                                                  ObRawExpr *&vec_cmp_expr);
 
@@ -331,8 +339,8 @@ private:
   int eliminate_redundant_aggregation_if_need(ObSelectStmt &stmt, TransformParam &trans_param);
 
 private:
-  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> no_rewrite_exprs_;
-  common::ObSEArray<TransStmtInfo, 4, common::ModulePageAllocator, true> trans_stmt_infos_;
+  common::ObSEArray<ObRawExpr *, 8> no_rewrite_exprs_;
+  common::ObSEArray<TransStmtInfo, 4> trans_stmt_infos_;
   bool join_first_happened_;
 };
 

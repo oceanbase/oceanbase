@@ -66,7 +66,8 @@ int ObDistPlans::get_plan(ObPlanCacheCtx &pc_ctx,
       // fill table location for single plan using px
       // for single dist plan without px, we already fill the phy locations while calculating plan type
       // for multi table px plan, physical location is calculated in match step
-      ObArray<ObCandiTableLoc> candi_table_locs;
+      ObArenaAllocator tmp_allocator(ObModIds::OB_SQL_COMPILE);
+      ObSqlArray<ObCandiTableLoc, true> candi_table_locs(tmp_allocator);
       if (OB_ISNULL(plan_set_)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid null plan set", K(ret), K(plan_set_));
@@ -89,7 +90,8 @@ int ObDistPlans::get_plan(ObPlanCacheCtx &pc_ctx,
   }
 
   ObPlanMatchHelper helper(plan_set_);
-  ObArray<ObCandiTableLoc> phy_tbl_infos;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObSqlArray<ObCandiTableLoc, true> phy_tbl_infos(allocator);
   ObArray<ObTableLocation> out_tbl_locations;
   for (int64_t i = 0; OB_SUCC(ret) && !is_matched && i < dist_plans_.count();
        i++) {
@@ -128,7 +130,8 @@ int ObDistPlans::add_evolution_plan(ObPhysicalPlan &plan, ObPlanCacheCtx &pc_ctx
   int ret = OB_SUCCESS;
   bool is_matched = false;
   ObPlanMatchHelper helper(plan_set_);
-  ObArray<ObCandiTableLoc> phy_tbl_infos;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObSqlArray<ObCandiTableLoc, true> phy_tbl_infos(allocator);
   ObArray<ObTableLocation> out_tbl_locations;
   for (int64_t i = 0; OB_SUCC(ret) && !is_matched && i < dist_plans_.count(); i++) {
     const ObPhysicalPlan *tmp_plan = dist_plans_.at(i);
@@ -159,7 +162,8 @@ int ObDistPlans::add_plan(ObPhysicalPlan &plan,
   int ret = OB_SUCCESS;
   bool is_matched = false;
   ObPlanMatchHelper helper(plan_set_);
-  ObArray<ObCandiTableLoc> phy_tbl_infos;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObSqlArray<ObCandiTableLoc, true> phy_tbl_infos(allocator);
   ObArray<ObTableLocation> out_tbl_locations;
 
   for (int64_t i = 0; OB_SUCC(ret) && !is_matched && i < dist_plans_.count(); i++) {

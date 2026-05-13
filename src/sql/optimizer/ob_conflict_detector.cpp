@@ -28,7 +28,7 @@ int ObConflictDetector::build_detector(ObIAllocator &allocator, ObConflictDetect
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_ERROR("allocate memory for conflict detector failed");
   } else {
-    new(detector) ObConflictDetector();
+    new(detector) ObConflictDetector(allocator);
   }
   return ret;
 }
@@ -1694,7 +1694,7 @@ int ObConflictDetectorGenerator::deduce_redundant_join_conds(const ObDMLStmt *st
                                                              ObIArray<ObRawExpr*> &redundant_quals)
 {
   int ret = OB_SUCCESS;
-  EqualSets all_equal_sets;
+  TemporaryEqualSets all_equal_sets;
   ObSEArray<ObRawExpr*, 8> normal_quals;
   ObSEArray<ObRawExpr*, 8> subquery_quals;
   ObSEArray<ObRelIds, 8> connect_infos;

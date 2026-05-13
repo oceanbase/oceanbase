@@ -24,6 +24,7 @@ class ObLogValuesTableAccess : public ObLogicalOperator
   public:
     ObLogValuesTableAccess(ObLogPlan &plan)
         : ObLogicalOperator(plan),
+          column_exprs_(plan.get_allocator()),
           table_def_(NULL),
           table_name_(),
           table_id_(common::OB_INVALID_ID),
@@ -56,7 +57,7 @@ class ObLogValuesTableAccess : public ObLogicalOperator
   private:
 
   private:
-    common::ObSEArray<ObColumnRefRawExpr*, 4, common::ModulePageAllocator, true> column_exprs_;
+    ObSqlArray<ObColumnRefRawExpr*> column_exprs_;
     ObValuesTableDef *table_def_;
     common::ObString table_name_;
     uint64_t table_id_;

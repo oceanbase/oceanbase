@@ -23,7 +23,9 @@ class ObLogExprValues : public ObLogicalOperator
   public:
     ObLogExprValues(ObLogPlan &plan)
         : ObLogicalOperator(plan),
-          err_log_define_(),
+          value_exprs_(plan.get_allocator()),
+          value_desc_(plan.get_allocator()),
+          err_log_define_(plan.get_allocator()),
           is_values_table_(false),
           table_name_(),
           table_id_(common::OB_INVALID_ID),
@@ -91,8 +93,8 @@ class ObLogExprValues : public ObLogicalOperator
     int construct_array_binding_values();
     int construct_sequence_values();
   private:
-    common::ObSEArray<ObRawExpr*, 4, common::ModulePageAllocator, true> value_exprs_;
-    common::ObSEArray<ObColumnRefRawExpr*, 4, common::ModulePageAllocator, true> value_desc_;
+    ObSqlArray<ObRawExpr*> value_exprs_;
+    ObSqlArray<ObColumnRefRawExpr*> value_desc_;
     //add for error_logging
     ObErrLogDefine err_log_define_;
     //for values table

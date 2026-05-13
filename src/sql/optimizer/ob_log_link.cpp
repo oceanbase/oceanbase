@@ -24,12 +24,11 @@ namespace sql
 
 ObLogLink::ObLogLink(ObLogPlan &plan)
   : ObLogicalOperator(plan),
-    allocator_(plan.get_allocator()),
     stmt_fmt_buf_(NULL),
     stmt_fmt_len_(0),
     is_reverse_link_(false),
     tm_dblink_id_(OB_INVALID_ID),
-    param_infos_()
+    param_infos_(plan.get_allocator())
 {}
 
 int ObLogLink::compute_sharding_info()

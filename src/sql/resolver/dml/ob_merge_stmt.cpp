@@ -21,9 +21,9 @@ using namespace common;
 namespace sql
 {
 
-ObMergeStmt::ObMergeStmt()
-    : ObDelUpdStmt(stmt::T_MERGE),
-      table_info_()
+ObMergeStmt::ObMergeStmt(ObIAllocator &allocator)
+    : ObDelUpdStmt(stmt::T_MERGE, allocator),
+      table_info_(allocator)
 {
 }
 

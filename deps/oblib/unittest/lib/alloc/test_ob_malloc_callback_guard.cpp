@@ -26,9 +26,10 @@ class MallocCallback final : public ObMallocCallback
 {
 public:
   MallocCallback(int64_t& hold) : hold_(hold) {}
-  virtual void operator()(const ObMemAttr& attr, int64_t used) override
+  virtual void operator()(const ObMemAttr& attr, int64_t used, const AObject &obj) override
   {
     UNUSED(attr);
+    UNUSED(obj);
     hold_ += used;
     std::cout << hold_ << " " << used << std::endl;
   }

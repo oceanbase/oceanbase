@@ -16,10 +16,11 @@ namespace oceanbase
 {
 namespace lib
 {
-void ObDefaultMallocCallback::operator()(const ObMemAttr& attr, int64_t used)
+void ObDefaultMallocCallback::operator()(const ObMemAttr& attr, int64_t used, const lib::AObject &obj)
 {
   UNUSED(attr);
   UNUSED(used);
+  UNUSED(obj);
 }
 
 _RLOCAL(ObMallocCallback *, malloc_callback);

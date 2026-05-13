@@ -13,10 +13,10 @@
 #include "sql/resolver/cmd/ob_help_stmt.h"
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
-ObHelpStmt::ObHelpStmt()
-    :ObDMLStmt(stmt::T_HELP),
+ObHelpStmt::ObHelpStmt(ObIAllocator &allocator)
+  : ObDMLStmt(stmt::T_HELP, allocator),
     row_store_(),
-     col_names_()
+    col_names_(allocator)
 {
 }
 

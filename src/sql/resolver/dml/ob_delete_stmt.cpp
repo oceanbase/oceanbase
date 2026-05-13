@@ -19,9 +19,9 @@ namespace sql
 {
 using namespace oceanbase::common;
 
-ObDeleteStmt::ObDeleteStmt()
-  : ObDelUpdStmt(stmt::T_DELETE),
-    table_info_()
+ObDeleteStmt::ObDeleteStmt(ObIAllocator &allocator)
+  : ObDelUpdStmt(stmt::T_DELETE, allocator),
+    table_info_(allocator)
 {
 }
 

@@ -13,7 +13,8 @@
 #ifndef _OB_LOG_MERGE_H
 #define _OB_LOG_MERGE_H 1
 #include "sql/optimizer/ob_logical_operator.h"
-#include "sql/optimizer/ob_log_insert.h"
+#include "sql/optimizer/ob_log_del_upd.h"
+#include "sql/optimizer/ob_del_upd_log_plan.h"
 namespace oceanbase
 {
 namespace sql
@@ -24,8 +25,9 @@ class ObLogMerge : public ObLogDelUpd
 public:
   ObLogMerge(ObDelUpdLogPlan &plan)
       : ObLogDelUpd(plan),
-		index_upd_infos_(),
-		index_del_infos_()
+		index_upd_infos_(plan.get_allocator()),
+		index_del_infos_(plan.get_allocator()),
+		equal_pairs_(plan.get_allocator())
   { }
   virtual ~ObLogMerge() {}
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
@@ -64,9 +66,9 @@ protected:
   virtual int gen_location_constraint(void *ctx) override;
   DISALLOW_COPY_AND_ASSIGN(ObLogMerge);
 private:
-  ObSEArray<IndexDMLInfo *, 4, common::ModulePageAllocator, true> index_upd_infos_;
-  ObSEArray<IndexDMLInfo *, 4, common::ModulePageAllocator, true> index_del_infos_;
-  common::ObSEArray<std::pair<ObRawExpr*, ObRawExpr*>, 4, common::ModulePageAllocator, true> equal_pairs_;
+  ObSqlArray<IndexDMLInfo *> index_upd_infos_;
+  ObSqlArray<IndexDMLInfo *> index_del_infos_;
+  ObSqlArray<std::pair<ObRawExpr*, ObRawExpr*>> equal_pairs_;
 };
 }//sql
 }//oceanbase

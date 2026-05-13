@@ -165,8 +165,9 @@ ObOptimizerTraceImpl::ObOptimizerTraceImpl()
     section_(0),
     trace_level_(0),
     enable_(false),
-    trace_state_(1),
-    enable_trace_cost_model_(false)
+    enable_trace_cost_model_(false),
+    enable_mem_perf_(false),
+    trace_state_(1)
 {
 
 }
@@ -210,13 +211,25 @@ int ObOptimizerTraceImpl::set_parameters(const common::ObString &identifier,
   return ret;
 }
 
+int ObOptimizerTraceImpl::enable_mem_perf(const common::ObString &identifier)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(log_handle_.set_identifier(identifier))) {
+    LOG_WARN("ObStringBuf write string error", K(ret));
+  } else {
+    set_mem_perf_enable(true);
+  }
+  return ret;
+}
+
 void ObOptimizerTraceImpl::reset()
 {
   log_handle_.close();
   sql_id_.reset();
   enable_ = false;
-  trace_state_ = 1;
   enable_trace_cost_model_ = false;
+  enable_mem_perf_ = false;
+  trace_state_ = 1;
 }
 
 bool ObOptimizerTraceImpl::enable(const common::ObString &sql_id)
@@ -881,7 +894,7 @@ int ObOptimizerTraceImpl::append(const ObSkylineDim &dim)
     case ObSkylineDim::INTERESTING_ORDER: {
       const ObInterestOrderDim &order_dim = static_cast<const ObInterestOrderDim &>(dim);
       append("[intersting order dim] is interesting order:", order_dim.is_interesting_order_);
-      append(", column ids:", common::ObArrayWrap<uint64_t>(order_dim.column_ids_,  order_dim.column_cnt_));
+      append(", column ids:", order_dim.column_ids_);
       break;
     }
     case ObSkylineDim::QUERY_RANGE:
@@ -892,7 +905,7 @@ int ObOptimizerTraceImpl::append(const ObSkylineDim &dim)
       } else {
         append("[query range dim] contain false range:", range_dim.contain_always_false_);
       }
-      append(", rowkey ids:", common::ObArrayWrap<uint64_t>(range_dim.column_ids_, range_dim.column_cnt_));
+      append(", rowkey ids:", range_dim.column_ids_);
       break;
     }
     case ObSkylineDim::UNIQUE_RANGE: {
@@ -1289,6 +1302,21 @@ int ObOptimizerTraceImpl::trace_mem_used()
     }
   }
   return ret;
+}
+
+ObMemPerfGuard::ObMemPerfGuard(const ObString &section) : section_(section)
+{
+  print_trace("begin");
+}
+
+ObMemPerfGuard::~ObMemPerfGuard()
+{
+  print_trace("end");
+}
+
+void ObMemPerfGuard::print_trace(const ObString &stage)
+{
+  MEM_TRACE("[MEM PERF]", K_(section), stage);
 }
 
 }

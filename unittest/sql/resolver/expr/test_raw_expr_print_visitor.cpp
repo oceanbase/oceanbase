@@ -97,7 +97,8 @@ TEST_F(TestRawExprPrintVisitor, const_test)
 
 TEST_F(TestRawExprPrintVisitor, unary_ref_test)
 {
-  ObQueryRefRawExpr expr(1, T_REF_QUERY);
+  ObArenaAllocator allocator(ObModIds::TEST);
+  ObQueryRefRawExpr expr(allocator, 1, T_REF_QUERY);
   ObCStringHelper helper;
   _OB_LOG(INFO, "unary=%s", helper.convert(ObRawExprPrintVisitor(expr)));
 }
@@ -132,6 +133,7 @@ TEST_F(TestRawExprPrintVisitor, multi_op_test)
 
 TEST_F(TestRawExprPrintVisitor, case_op_test)
 {
+  ObArenaAllocator allocator(ObModIds::TEST);
   ObObj obj;
   obj.set_int(123);
   ObConstRawExpr const_expr1(obj, T_INT);
@@ -139,7 +141,7 @@ TEST_F(TestRawExprPrintVisitor, case_op_test)
   ObConstRawExpr const_expr3(obj, T_INT);
   ObConstRawExpr const_expr4(obj, T_INT);
 
-  ObCaseOpRawExpr expr;
+  ObCaseOpRawExpr expr(allocator);
   expr.set_arg_param_expr(&const_expr1);
   OK(expr.add_when_param_expr(&const_expr2));
   OK(expr.add_then_param_expr(&const_expr3));
@@ -150,16 +152,19 @@ TEST_F(TestRawExprPrintVisitor, case_op_test)
 
 TEST_F(TestRawExprPrintVisitor, agg_op_test)
 {
+  ObArenaAllocator allocator(ObModIds::TEST);
   ObObj obj;
   obj.set_int(123);
   ObConstRawExpr const_expr1(obj, T_INT);
-  ObSEArray<ObRawExpr *, 1, ModulePageAllocator, true> real_param_exprs1;
+  ObSEArray<ObRawExpr *, 1> real_param_exprs1;
   OK(real_param_exprs1.push_back(&const_expr1));
-  ObAggFunRawExpr expr(real_param_exprs1, true, T_FUN_MAX);
+  ObAggFunRawExpr expr(allocator, true, T_FUN_MAX);
+  OK(expr.get_real_param_exprs_for_update().assign(real_param_exprs1));
   ObCStringHelper helper;
   _OB_LOG(INFO, "%s", helper.convert(ObRawExprPrintVisitor(expr)));
-  ObSEArray<ObRawExpr *, 1, ModulePageAllocator, true> real_param_exprs2;
-  ObAggFunRawExpr expr2(real_param_exprs2, false, T_FUN_COUNT);
+  ObSEArray<ObRawExpr *, 1> real_param_exprs2;
+  ObAggFunRawExpr expr2(allocator, false, T_FUN_COUNT);
+  OK(expr.get_real_param_exprs_for_update().assign(real_param_exprs2));
   _OB_LOG(INFO, "%s", helper.convert(ObRawExprPrintVisitor(expr2)));
 }
 

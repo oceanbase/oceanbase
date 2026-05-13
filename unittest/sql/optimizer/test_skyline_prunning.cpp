@@ -144,10 +144,11 @@ void ObSkylinePrunningTest::check_index_back_dim(const bool left_index_back,
                                                  const ObSkylineDim::CompareStat status,
                                                  const ObSkylineDim::CompareStat reverse_status)
 {
-  ObIndexBackDim left_dim;
+  ObArenaAllocator allocator;
+  ObIndexBackDim left_dim(allocator);
   left_dim.set_index_back(left_index_back);
 
-  ObIndexBackDim right_dim;
+  ObIndexBackDim right_dim(allocator);
   right_dim.set_index_back(right_index_back);
 
   check(&left_dim, &right_dim, status, reverse_status);
@@ -158,12 +159,13 @@ void ObSkylinePrunningTest::check_interest_dim(const uint64_t *left, const int64
                                                const ObSkylineDim::CompareStat status,
                                                const ObSkylineDim::CompareStat reverse_status)
 {
+  ObArenaAllocator allocator;
   ObArray<uint64_t> left_ids;
   ObArray<uint64_t> right_ids;
   to_array(left, left_cnt, left_ids);
   to_array(right, right_cnt, right_ids);
 
-  ObInterestOrderDim left_dim;
+  ObInterestOrderDim left_dim(allocator);
   if (left_cnt > 0) {
     left_dim.set_interesting_order(true);
     left_dim.add_interest_prefix_ids(left_ids);
@@ -171,7 +173,7 @@ void ObSkylinePrunningTest::check_interest_dim(const uint64_t *left, const int64
     left_dim.set_interesting_order(false);
   }
 
-  ObInterestOrderDim right_dim;
+  ObInterestOrderDim right_dim(allocator);
   if (right_cnt > 0) {
     right_dim.set_interesting_order(true);
     right_dim.add_interest_prefix_ids(right_ids);
@@ -186,17 +188,18 @@ void ObSkylinePrunningTest::check_query_range_dim(const uint64_t *left, const in
                                                   const ObSkylineDim::CompareStat status,
                                                   const ObSkylineDim::CompareStat reverse_status)
 {
+  ObArenaAllocator allocator;
   ObArray<uint64_t> left_ids;
   ObArray<uint64_t> right_ids;
   to_array(left, left_cnt, left_ids);
   to_array(right, right_cnt, right_ids);
 
-  ObQueryRangeDim left_dim;
+  ObQueryRangeDim left_dim(allocator);
   if (left_cnt > 0) {
     left_dim.add_rowkey_ids(left_ids);
   }
 
-  ObQueryRangeDim right_dim;
+  ObQueryRangeDim right_dim(allocator);
   if (right_cnt > 0) {
     right_dim.add_rowkey_ids(right_ids);
   }
@@ -230,13 +233,14 @@ TEST_F(ObSkylinePrunningTest, basic)
 TEST_F(ObSkylinePrunningTest, index_dim)
 {
   {
-    ObIndexBackDim dim_true;
+    ObArenaAllocator allocator;
+    ObIndexBackDim dim_true(allocator);
     dim_true.set_index_back(true);
-    ObIndexBackDim dim_false;
+    ObIndexBackDim dim_false(allocator);
     dim_false.set_index_back(false);
-    ObIndexBackDim dim2_true;
+    ObIndexBackDim dim2_true(allocator);
     dim2_true.set_index_back(true);
-    ObIndexBackDim dim2_false;
+    ObIndexBackDim dim2_false(allocator);
     dim2_false.set_index_back(false);
 
 //    check(&dim_true, &dim_false, ObSkylineDim::RIGHT_DOMINATED, ObSkylineDim::LEFT_DOMINATED);
@@ -635,8 +639,8 @@ TEST_F(ObSkylinePrunningTest, key_prefix_compare)
     uint64_t left[] = {15, 16};
     uint64_t right[] = {15, 16, 17, 18, 19};
     KeyPrefixComp comp;
-    int ret = comp(left, sizeof(left)/sizeof(uint64_t),
-                   right, sizeof(right)/sizeof(uint64_t));
+    int ret = comp(ObArrayWrap<uint64_t>(left, sizeof(left)/sizeof(uint64_t)),
+                   ObArrayWrap<uint64_t>(right, sizeof(right)/sizeof(uint64_t)));
     ASSERT_EQ(ret, OB_SUCCESS);
     ASSERT_EQ(comp.get_result(), ObSkylineDim::RIGHT_DOMINATED);
   }
@@ -645,8 +649,8 @@ TEST_F(ObSkylinePrunningTest, key_prefix_compare)
     uint64_t left[] = {15, 17};
     uint64_t right[] = {15, 16, 17, 18, 19};
     KeyPrefixComp comp;
-    int ret = comp(left, sizeof(left)/sizeof(uint64_t),
-                   right, sizeof(right)/sizeof(uint64_t));
+    int ret = comp(ObArrayWrap<uint64_t>(left, sizeof(left)/sizeof(uint64_t)),
+                   ObArrayWrap<uint64_t>(right, sizeof(right)/sizeof(uint64_t)));
     ASSERT_EQ(ret, OB_SUCCESS);
     ASSERT_EQ(comp.get_result(), ObSkylineDim::UNCOMPARABLE);
   }
@@ -655,8 +659,8 @@ TEST_F(ObSkylinePrunningTest, key_prefix_compare)
     uint64_t left[] = {17};
     uint64_t right[] = {15, 16, 17};
     KeyPrefixComp comp;
-    int ret = comp(left, sizeof(left)/sizeof(uint64_t),
-                   right, sizeof(right)/sizeof(uint64_t));
+    int ret = comp(ObArrayWrap<uint64_t>(left, sizeof(left)/sizeof(uint64_t)),
+                   ObArrayWrap<uint64_t>(right, sizeof(right)/sizeof(uint64_t)));
     ASSERT_EQ(ret, OB_SUCCESS);
     ASSERT_EQ(comp.get_result(), ObSkylineDim::UNCOMPARABLE);
   }
@@ -665,8 +669,8 @@ TEST_F(ObSkylinePrunningTest, key_prefix_compare)
     uint64_t left[] = {15, 16, 17};
     uint64_t right[] = {15, 16, 17};
     KeyPrefixComp comp;
-    int ret = comp(left, sizeof(left)/sizeof(uint64_t),
-                   right, sizeof(right)/sizeof(uint64_t));
+    int ret = comp(ObArrayWrap<uint64_t>(left, sizeof(left)/sizeof(uint64_t)),
+                   ObArrayWrap<uint64_t>(right, sizeof(right)/sizeof(uint64_t)));
     ASSERT_EQ(ret, OB_SUCCESS);
     ASSERT_EQ(comp.get_result(), ObSkylineDim::EQUAL);
   }
@@ -675,8 +679,8 @@ TEST_F(ObSkylinePrunningTest, key_prefix_compare)
     uint64_t left[] = {15, 17};
     uint64_t right[] = {15, 16, 17};
     KeyPrefixComp comp;
-    int ret = comp(left, sizeof(left)/sizeof(uint64_t),
-                   right, sizeof(right)/sizeof(uint64_t));
+    int ret = comp(ObArrayWrap<uint64_t>(left, sizeof(left)/sizeof(uint64_t)),
+                   ObArrayWrap<uint64_t>(right, sizeof(right)/sizeof(uint64_t)));
     ASSERT_EQ(ret, OB_SUCCESS);
     ASSERT_EQ(comp.get_result(), ObSkylineDim::UNCOMPARABLE);
   }
@@ -685,8 +689,8 @@ TEST_F(ObSkylinePrunningTest, key_prefix_compare)
     uint64_t left[] = {15};
     uint64_t right[] = {15, 16, 17};
     KeyPrefixComp comp;
-    int ret = comp(left, sizeof(left)/sizeof(uint64_t),
-                   right, sizeof(right)/sizeof(uint64_t));
+    int ret = comp(ObArrayWrap<uint64_t>(left, sizeof(left)/sizeof(uint64_t)),
+                   ObArrayWrap<uint64_t>(right, sizeof(right)/sizeof(uint64_t)));
     ASSERT_EQ(ret, OB_SUCCESS);
     ASSERT_EQ(comp.get_result(), ObSkylineDim::RIGHT_DOMINATED);
   }
@@ -695,8 +699,8 @@ TEST_F(ObSkylinePrunningTest, key_prefix_compare)
     uint64_t left[] = {15, 16};
     uint64_t right[] = {15, 16, 17};
     KeyPrefixComp comp;
-    int ret = comp(left, sizeof(left)/sizeof(uint64_t),
-                   right, sizeof(right)/sizeof(uint64_t));
+    int ret = comp(ObArrayWrap<uint64_t>(left, sizeof(left)/sizeof(uint64_t)),
+                   ObArrayWrap<uint64_t>(right, sizeof(right)/sizeof(uint64_t)));
     ASSERT_EQ(ret, OB_SUCCESS);
     ASSERT_EQ(comp.get_result(), ObSkylineDim::RIGHT_DOMINATED);
   }
@@ -705,8 +709,8 @@ TEST_F(ObSkylinePrunningTest, key_prefix_compare)
     uint64_t left[] = {15, 16};
     uint64_t right[] = {17, 15, 16};
     KeyPrefixComp comp;
-    int ret = comp(left, sizeof(left)/sizeof(uint64_t),
-                   right, sizeof(right)/sizeof(uint64_t));
+    int ret = comp(ObArrayWrap<uint64_t>(left, sizeof(left)/sizeof(uint64_t)),
+                   ObArrayWrap<uint64_t>(right, sizeof(right)/sizeof(uint64_t)));
     ASSERT_EQ(ret, OB_SUCCESS);
     ASSERT_EQ(comp.get_result(), ObSkylineDim::UNCOMPARABLE);
   }
@@ -715,8 +719,8 @@ TEST_F(ObSkylinePrunningTest, key_prefix_compare)
     uint64_t left[] = {15, 16};
     uint64_t right[] = {15, 17, 18};
     KeyPrefixComp comp;
-    int ret = comp(left, sizeof(left)/sizeof(uint64_t),
-                   right, sizeof(right)/sizeof(uint64_t));
+    int ret = comp(ObArrayWrap<uint64_t>(left, sizeof(left)/sizeof(uint64_t)),
+                   ObArrayWrap<uint64_t>(right, sizeof(right)/sizeof(uint64_t)));
     ASSERT_EQ(ret, OB_SUCCESS);
     ASSERT_EQ(comp.get_result(), ObSkylineDim::UNCOMPARABLE);
   }
@@ -725,8 +729,8 @@ TEST_F(ObSkylinePrunningTest, key_prefix_compare)
     uint64_t left[] = {15, 16};
     uint64_t right[] = {15, 16};
     KeyPrefixComp comp;
-    int ret = comp(left, sizeof(left)/sizeof(uint64_t),
-                   right, sizeof(right)/sizeof(uint64_t));
+    int ret = comp(ObArrayWrap<uint64_t>(left, sizeof(left)/sizeof(uint64_t)),
+                   ObArrayWrap<uint64_t>(right, sizeof(right)/sizeof(uint64_t)));
     ASSERT_EQ(ret, OB_SUCCESS);
     ASSERT_EQ(comp.get_result(), ObSkylineDim::EQUAL);
   }
@@ -738,8 +742,8 @@ TEST_F(ObSkylinePrunningTest, range_subset_compare)
     uint64_t left[] = {16, 18};
     uint64_t right[] = {15, 16, 17, 18, 19};
     RangeSubsetComp comp;
-    int ret = comp(left, sizeof(left)/sizeof(uint64_t),
-                   right, sizeof(right)/sizeof(uint64_t));
+    int ret = comp(ObArrayWrap<uint64_t>(left, sizeof(left)/sizeof(uint64_t)),
+                   ObArrayWrap<uint64_t>(right, sizeof(right)/sizeof(uint64_t)));
     ASSERT_EQ(ret, OB_SUCCESS);
     ASSERT_EQ(comp.get_result(), ObSkylineDim::RIGHT_DOMINATED);
   }
@@ -748,8 +752,8 @@ TEST_F(ObSkylinePrunningTest, range_subset_compare)
     uint64_t left2[] = {17, 18, 19};
     uint64_t right2[] = {17, 18, 19};
     RangeSubsetComp comp2;
-    int ret = comp2(left2, sizeof(left2)/sizeof(uint64_t),
-                    right2, sizeof(right2)/sizeof(uint64_t));
+    int ret = comp2(ObArrayWrap<uint64_t>(left2, sizeof(left2)/sizeof(uint64_t)),
+                    ObArrayWrap<uint64_t>(right2, sizeof(right2)/sizeof(uint64_t)));
     ASSERT_EQ(ret, OB_SUCCESS);
     ASSERT_EQ(comp2.get_result(), ObSkylineDim::EQUAL);
   }
@@ -758,8 +762,8 @@ TEST_F(ObSkylinePrunningTest, range_subset_compare)
     uint64_t left2[] = {17, 18, 19};
     uint64_t right2[] = {17, 18, 20};
     RangeSubsetComp comp2;
-    int ret = comp2(left2, sizeof(left2)/sizeof(uint64_t),
-                    right2, sizeof(right2)/sizeof(uint64_t));
+    int ret = comp2(ObArrayWrap<uint64_t>(left2, sizeof(left2)/sizeof(uint64_t)),
+                    ObArrayWrap<uint64_t>(right2, sizeof(right2)/sizeof(uint64_t)));
     ASSERT_EQ(ret, OB_SUCCESS);
     ASSERT_EQ(comp2.get_result(), ObSkylineDim::UNCOMPARABLE);
   }
@@ -768,8 +772,8 @@ TEST_F(ObSkylinePrunningTest, range_subset_compare)
     uint64_t left2[] = {20};
     uint64_t right2[] = {17, 18, 20};
     RangeSubsetComp comp2;
-    int ret = comp2(left2, sizeof(left2)/sizeof(uint64_t),
-                    right2, sizeof(right2)/sizeof(uint64_t));
+    int ret = comp2(ObArrayWrap<uint64_t>(left2, sizeof(left2)/sizeof(uint64_t)),
+                    ObArrayWrap<uint64_t>(right2, sizeof(right2)/sizeof(uint64_t)));
     ASSERT_EQ(ret, OB_SUCCESS);
     ASSERT_EQ(comp2.get_result(), ObSkylineDim::RIGHT_DOMINATED);
   }

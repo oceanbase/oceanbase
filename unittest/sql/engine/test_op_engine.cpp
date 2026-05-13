@@ -192,7 +192,11 @@ int TestOpEngine::do_rewrite(ObStmt *&stmt, ObPhysicalPlan *phy_plan)
   int ret = OB_SUCCESS;
 
   ObSchemaChecker schema_checker;
-  if (OB_FAIL(schema_checker.init(sql_schema_guard_))) {
+  ObQueryCtx *query_ctx = stmt_factory_.get_query_ctx();
+  if (OB_ISNULL(query_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("query_ctx is null", K(ret));
+  } else if (OB_FAIL(schema_checker.init(query_ctx->sql_schema_guard_))) {
     LOG_WARN("fail to init schema_checker", K(ret));
   } else {
     ObTransformerCtx transformer_ctx;
@@ -203,7 +207,7 @@ int TestOpEngine::do_rewrite(ObStmt *&stmt, ObPhysicalPlan *phy_plan)
     transformer_ctx.expr_factory_ = &expr_factory_;
     transformer_ctx.stmt_factory_ = &stmt_factory_;
     // ctx.stat_mgr_ = &stat_manager_;
-    transformer_ctx.sql_schema_guard_ = &sql_schema_guard_;
+    transformer_ctx.sql_schema_guard_ = &query_ctx->sql_schema_guard_;
     transformer_ctx.self_addr_ = &addr_;
     transformer_ctx.merged_version_ = OB_MERGED_VERSION_INIT;
 
@@ -229,12 +233,13 @@ int TestOpEngine::do_optimize(ObStmt *stmt, ObLogPlan *&plan, ObPhyPlanType dist
 {
   int ret = OB_SUCCESS;
   ObDMLStmt *dml_stmt = dynamic_cast<ObDMLStmt *>(stmt);
+  ObQueryCtx *query_ctx = stmt_factory_.get_query_ctx();
   ObOptimizerContext *ctx_ptr = static_cast<ObOptimizerContext *>(allocator.alloc(sizeof(ObOptimizerContext)));
   exec_ctx.get_sql_ctx()->session_info_ = &session_info_;
   ObOptimizerContext *opt_ctx = new (ctx_ptr) ObOptimizerContext(
     &session_info_, &exec_ctx,
     // schema_mgr_, // schema manager
-    &sql_schema_guard_,
+    &query_ctx->sql_schema_guard_,
     //&stat_manager_, // statistics manager
     NULL, // statistics manager
     static_cast<ObIAllocator &>(allocator_), &param_store_, addr_, NULL, dml_stmt->get_query_ctx()->get_global_hint(),
@@ -316,7 +321,7 @@ int TestOpEngine::get_tested_op_from_string(const std::string &sql, bool vector_
   // 1.resolve
   // 2.rewrite
   // 3.optimize
-  do_resolve(sql.c_str(), stmt, true, JSON_FORMAT, OB_SUCCESS, false);
+  do_resolve(sql.c_str(), stmt, JSON_FORMAT, OB_SUCCESS, false);
   if (OB_FAIL(do_rewrite(stmt, phy_plan))) {
     LOG_ERROR("rewrite failed", K(ret));
   } else if (OB_FAIL(do_optimize(stmt, log_plan, OB_PHY_PLAN_LOCAL, *p_alloc, *p_exec_ctx))) {

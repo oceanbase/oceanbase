@@ -1229,7 +1229,7 @@ int ObTableLocation::init_table_location_with_column_ids(ObSqlSchemaGuard &schem
     ObResolverParams resolver_ctx;
     ObRawExprFactory expr_factory(allocator_);
     ObStmtFactory stmt_factory(allocator_);
-    TableItem table_item;
+    TableItem table_item(allocator_);
     resolver_ctx.allocator_  = &allocator_;
     resolver_ctx.schema_checker_ = &schema_checker;
     resolver_ctx.session_info_ = session_info;

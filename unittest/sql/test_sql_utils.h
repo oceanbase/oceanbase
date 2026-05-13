@@ -13,8 +13,8 @@
 #ifndef TEST_SQL_UTILS_H_
 #define TEST_SQL_UTILS_H_
 
-#undef private
 #undef protected
+#undef private
 #include <fstream>
 #include <dirent.h>
 #include <getopt.h>
@@ -43,6 +43,7 @@
 #include "sql/ob_sql_context.h"
 #include "sql/engine/ob_exec_context.h"
 #include "../share/schema/mock_schema_service.h"
+#include "optimizer/ob_mock_location_service.h"
 
 using namespace oceanbase;
 using namespace oceanbase::common;
@@ -97,6 +98,45 @@ enum ParserResultFormat
   JSON_FORMAT
 };
 
+struct MemoryUsage
+{
+public:
+  MemoryUsage()
+    : parse_mem_used_(0),
+      resolve_mem_used_(0),
+      transform_mem_used_(0),
+      optimize_mem_used_(0),
+      total_mem_used_(0),
+      parse_mem_max_used_(0),
+      resolve_mem_max_used_(0),
+      transform_mem_max_used_(0),
+      optimize_mem_max_used_(0),
+      total_mem_max_used_(0)
+  {
+  }
+  TO_STRING_KV(K_(parse_mem_used),
+               K_(resolve_mem_used),
+               K_(transform_mem_used),
+               K_(optimize_mem_used),
+               K_(total_mem_used),
+               K_(parse_mem_max_used),
+               K_(resolve_mem_max_used),
+               K_(transform_mem_max_used),
+               K_(optimize_mem_max_used),
+               K_(total_mem_max_used));
+public:
+  int64_t parse_mem_used_;
+  int64_t resolve_mem_used_;
+  int64_t transform_mem_used_;
+  int64_t optimize_mem_used_;
+  int64_t total_mem_used_;
+  int64_t parse_mem_max_used_;
+  int64_t resolve_mem_max_used_;
+  int64_t transform_mem_max_used_;
+  int64_t optimize_mem_max_used_;
+  int64_t total_mem_max_used_;
+};
+
 class TestSqlUtils
 {
 public:
@@ -108,10 +148,11 @@ public:
   static const int64_t MAX_SCHEMA_FILE_PATH = 128 - 1;
 // function members
   void load_schema_from_file(const char *file_path);
-  void do_load_sql(const char *query_str, ObStmt *&stmt, bool is_print,  ParserResultFormat format = TREE_FORMAT, int64_t expect_error = OB_SUCCESS, int64_t case_line = 0);
-  void do_resolve(const char* query, ObStmt *&stmt, bool is_print = false,
+  void do_load_sql(const ObString &query_str, ObStmt *&stmt, ParserResultFormat format = TREE_FORMAT, int64_t expect_error = OB_SUCCESS, int64_t case_line = 0, MemoryUsage *memory_usage = NULL);
+  void do_resolve(const ObString &query, ObStmt *&stmt,
                   ParserResultFormat format = JSON_FORMAT, int64_t expect_error = OB_SUCCESS,
-                  bool parameterized = true, bool need_replace_param_expr = true, int64_t case_line = 0);
+                  bool parameterized = true, bool need_replace_param_expr = true, int64_t case_line = 0,
+                  MemoryUsage *memory_usage = NULL);
   int create_system_table();
   void create_system_db();
   void do_create_table(const char *query_str);
@@ -121,21 +162,28 @@ public:
   void do_create_database(ObStmt *&stmt);
   void do_use_database(ObStmt *&stmt);
   void do_create_user(ObStmt *&stmt);
+  void mock_table_schema_ids(ObTableSchema &table_schema);
   void generate_index_schema(ObCreateIndexStmt &stmt);
   void generate_index_column_schema(ObCreateIndexStmt &stmt, ObTableSchema &index_schema);
   int get_hidden_column_value(ObResolverParams &resolver_ctx, ParamStore &params);
   void is_equal_content(const char* tmp_file, const char* result_file);
   uint64_t get_next_table_id(const uint64_t user_tenant_id);
+  uint64_t get_next_tablet_id(const uint64_t user_tenant_id);
   int add_table_schema(ObTableSchema &table_schema);
   int add_database_schema(ObDatabaseSchema &database_schema);
   int drop_table_schema(const ObTableSchema &table_schema);
   int parse_row_from_json(const ObString &json_str, ObString &table_name, ObIArray<ObSEArray<ObObj, 3> > &row_array);
   int parse_json_array(json::Value &value, ObIArray<ObSEArray<ObObj, 3> > &row_array);
-  ObSqlSchemaGuard &get_sql_schema_guard() { return sql_schema_guard_; }
+  void init_ls_service();
   ObSchemaGetterGuard &get_schema_guard() { return schema_guard_; }
+  void init_schema();
+  void init_sql_ctx();
+  void reset_schema();
+  void reset_sql_ctx();
 public:
   //table id
   oceanbase::common::hash::ObHashMap<uint64_t,uint64_t> next_user_table_id_map_;
+  oceanbase::common::hash::ObHashMap<uint64_t,uint64_t> next_user_tablet_id_map_;
   //user_id
   uint64_t sys_user_id_;
   uint64_t next_user_id_;
@@ -148,7 +196,6 @@ public:
   int64_t schema_version_;
   char schema_file_path_[MAX_SCHEMA_FILE_PATH + 1];
   ObSQLSessionInfo session_info_;
-  ObSqlSchemaGuard sql_schema_guard_;
   share::schema::ObSchemaGetterGuard schema_guard_;
   MockSchemaService *schema_service_;
   ObArenaAllocator allocator_;
@@ -158,6 +205,8 @@ public:
   ObSqlCtx sql_ctx_;
   ObExecContext exec_ctx_;
   ParamStore param_list_;
+  MockLocationService location_service_;
+  common::ObAddr local_addr_;
 private:
   DISALLOW_COPY_AND_ASSIGN(TestSqlUtils);
 };

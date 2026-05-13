@@ -161,6 +161,7 @@ int ObSql::stmt_query(const common::ObString &stmt, ObSqlCtx &context, ObResultS
   int ret = OB_SUCCESS;
   LinkExecCtxGuard link_guard(result.get_session(), result.get_exec_context());
   FLTSpanGuard(sql_compile);
+  ObMemPerfGuard mem_perf_guard("sql_compile");
   {
     ObTruncatedString trunc_stmt(stmt);
 #ifndef NDEBUG
@@ -3099,6 +3100,7 @@ int ObSql::generate_stmt(ParseResult &parse_result,
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(resolve);
+  ObMemPerfGuard mem_perf_guard("resolve");
   uint64_t session_id = 0;
   ObResolverParams resolver_ctx;
   ObPhysicalPlanCtx *plan_ctx = NULL;
@@ -3959,6 +3961,7 @@ int ObSql::transform_stmt(ObSqlSchemaGuard *sql_schema_guard,
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(rewrite);
+  ObMemPerfGuard mem_perf_guard("rewrite");
   ACTIVE_SESSION_FLAG_SETTER_GUARD(in_rewrite);
   ObDMLStmt *transform_stmt = stmt;
   int64_t last_mem_usage = exec_ctx.get_allocator().total();
@@ -4055,6 +4058,7 @@ int ObSql::optimize_stmt(
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(optimize);
+  ObMemPerfGuard mem_perf_guard("optimize");
   logical_plan = NULL;
   LOG_TRACE("stmt to generate plan", K(stmt));
   OPT_TRACE_TITLE("START GENERATE PLAN");
@@ -4091,6 +4095,7 @@ int ObSql::code_generate(
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(code_generate);
+  ObMemPerfGuard mem_perf_guard("code_generate");
   int64_t last_mem_usage = 0;
   int64_t codegen_mem_usage = 0;
   ObPhysicalPlanCtx *pctx = result.get_exec_context().get_physical_plan_ctx();
@@ -5405,6 +5410,7 @@ OB_NOINLINE int ObSql::handle_physical_plan(const ObString &trimed_stmt,
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(hard_parse);
+  ObMemPerfGuard mem_perf_guard("hard_parse");
   bool is_valid = true;
   int64_t gen_plan_start_time = ObTimeUtility::current_time();
   PlanCacheMode mode = pc_ctx.mode_;
@@ -5635,6 +5641,7 @@ int ObSql::handle_parser(const ObString &sql,
 {
   int ret = OB_SUCCESS;
   FLTSpanGuard(parse);
+  ObMemPerfGuard mem_perf_guard("parse");
   int64_t last_mem_usage = pc_ctx.allocator_.total();
   int64_t parser_mem_usage = 0;
   ObPhysicalPlanCtx *pctx = exec_ctx.get_physical_plan_ctx();

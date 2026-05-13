@@ -170,48 +170,6 @@ int ObOptEstUtils::extract_var_op_const(const ObRawExpr *qual,
   return ret;
 }
 
-int ObOptEstUtils::extract_simple_cond_filters(ObRawExpr &qual,
-                                               bool &can_be_extracted,
-                                               ObIArray<RangeExprs> &column_exprs_array)
-{
-  int ret = OB_SUCCESS;
-  can_be_extracted = true;
-  ObArray<ObRawExpr*> column_exprs;
-  if (OB_FAIL(is_range_expr(&qual, can_be_extracted))) {
-    LOG_WARN("judge range expr failed", K(ret));
-  } else if (!can_be_extracted) {
-    // do nothing
-  } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(&qual, column_exprs))) {
-    LOG_WARN("extract_column_exprs error in clause_selectivity", K(ret));
-  } else if (column_exprs.count() != 1) {
-    can_be_extracted = false;
-  } else {
-    ObColumnRefRawExpr *column_expr = static_cast<ObColumnRefRawExpr *>(column_exprs.at(0));
-    bool find = false;
-    for (int64_t i = 0; OB_SUCC(ret) && !find && i < column_exprs_array.count(); ++i) {
-      if (column_exprs_array.at(i).column_expr_ == column_expr) {
-        if (OB_FAIL(column_exprs_array.at(i).range_exprs_.push_back(&qual))) {
-          LOG_WARN("failed to push back expr", K(ret));
-        } else {
-          find = true;
-        }
-      }
-    }
-    if (OB_SUCC(ret) && !find) {
-      RangeExprs *range_exprs = column_exprs_array.alloc_place_holder();
-      if (OB_ISNULL(range_exprs)) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to alloc place holder", K(ret));
-      } else if (OB_FAIL(range_exprs->range_exprs_.push_back(&qual))) {
-        LOG_WARN("failed to push back expr", K(ret));
-      } else {
-        range_exprs->column_expr_ = column_expr;
-      }
-    }
-  }
-  return ret;
-}
-
 bool ObOptEstUtils::is_calculable_expr(const ObRawExpr &expr, const int64_t param_count)
 {
   UNUSED(param_count);

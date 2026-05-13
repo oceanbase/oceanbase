@@ -20,7 +20,6 @@ namespace sql
 {
 class ObDMLStmt;
 class ObInsertAllStmt;
-typedef common::ObSEArray<common::ObSEArray<int64_t, 8, common::ModulePageAllocator, true>, 1, common::ModulePageAllocator, true> RowParamMap;
 class ObInsertAllLogPlan: public ObDelUpdLogPlan
 {
 public:

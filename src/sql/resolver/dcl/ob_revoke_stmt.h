@@ -25,8 +25,7 @@ namespace sql
 class ObRevokeStmt: public ObDDLStmt
 {
 public:
-  explicit ObRevokeStmt(common::ObIAllocator *name_pool);
-  ObRevokeStmt();
+  explicit ObRevokeStmt(common::ObIAllocator &allocator);
   virtual ~ObRevokeStmt();
 
   int add_user(const uint64_t user_id);
@@ -95,7 +94,7 @@ private:
   common::ObString database_;
   common::ObString table_;
   uint64_t tenant_id_;
-  common::ObArray<uint64_t, common::ModulePageAllocator, true> users_;
+  ObSqlArray<uint64_t> users_;
   bool revoke_all_;
   common::ObStrings grantees_;
   obrpc::ObRevokeUserArg user_arg_;
@@ -113,7 +112,7 @@ private:
   uint64_t grantor_id_;
   bool revoke_all_ora_;
   bool has_warning_;
-  ObSEArray<std::pair<ObString, ObPrivType>, 4, common::ModulePageAllocator, true> column_names_priv_;
+  ObSqlArray<std::pair<ObString, ObPrivType>> column_names_priv_;
   int64_t table_schema_version_;
   obrpc::ObRevokeCatalogArg catalog_arg_;
   obrpc::ObRevokeSensitiveRuleArg sensitive_rule_arg_;

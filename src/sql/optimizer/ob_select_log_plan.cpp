@@ -99,8 +99,9 @@ int ObSelectLogPlan::candi_allocate_group_by()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(best_plan), K(ret));
   } else if (stmt->has_grouping_sets()) {
-    ObSEArray<ObGroupbyExpr, 8> groupset_exprs;
-    ObSEArray<ObGroupbyExpr, 8> pruned_groupset_exprs;
+    ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+    ObSqlArray<ObGroupbyExpr, true> groupset_exprs(allocator);
+    ObSqlArray<ObGroupbyExpr, true> pruned_groupset_exprs(allocator);
     if (OB_FAIL(get_groupby_groupset_exprs(best_plan, false, groupset_exprs))) {
       LOG_WARN("get groupset exprs failed", K(ret));
     } else if (OB_FAIL(get_groupby_groupset_exprs(best_plan, true, pruned_groupset_exprs))) {
@@ -315,19 +316,22 @@ int ObSelectLogPlan::get_groupby_groupset_exprs(const ObLogicalOperator *top,
     LOG_WARN("invalid empty grouping sets", K(ret), K(stmt->get_grouping_sets_items().count()));
   } else {
     const ObGroupingSetsItem &groupset_item = stmt->get_grouping_sets_items().at(0);
+    const ObIArray<ObGroupbyExpr> &group_exprs = groupset_item.grouping_sets_exprs_;
+    ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+    ObGroupbyExpr tmp_gby_expr(allocator);
     if (OB_UNLIKELY(groupset_item.grouping_sets_exprs_.count() <= 0)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid empty grouping sets", K(ret));
+    } else if (OB_FAIL(groupby_sets.reserve(group_exprs.count()))) {
+      LOG_WARN("failed to reserve groupby sets", K(ret));
     }
-    const ObIArray<ObGroupbyExpr> &group_exprs = groupset_item.grouping_sets_exprs_;
     for (int64_t i = 0; OB_SUCC(ret) && i < group_exprs.count(); i++) {
       const ObIArray<ObRawExpr *> &gby_exprs = group_exprs.at(i).groupby_exprs_;
+      ObSEArray<ObRawExpr *, 8> tmp_gp_exprs;
       bool is_pruned_id = has_exist_in_array(groupset_item.pruned_grouping_set_ids_, i);
       if ((is_pruned_sets && !is_pruned_id) || (!is_pruned_sets && is_pruned_id)) {
         continue;
       }
-      ObGroupbyExpr tmp_gby_expr;
-      ObSEArray<ObRawExpr *, 8> tmp_gp_exprs;
       for (int j = 0; OB_SUCC(ret) && j < gby_exprs.count(); j++) {
         bool is_const = false;
         ObRawExpr *gp_expr = gby_exprs.at(j);
@@ -607,8 +611,9 @@ int ObSelectLogPlan::candi_allocate_rollup_group_by(const ObIArray<ObRawExpr*> &
   if (OB_FAIL(ret)) {
     // do nothing
   } else if (enable_hash_rollup) {
-     ObSEArray<ObGroupbyExpr, 4> groupset_exprs;
-     ObSEArray<ObGroupbyExpr, 1> dummy_groupset_exprs;
+    ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+    ObSqlArray<ObGroupbyExpr, true> groupset_exprs(allocator);
+    ObSqlArray<ObGroupbyExpr, true> dummy_groupset_exprs(allocator);
     if (OB_FAIL(extend_rollup_to_groupset(group_by_exprs, rollup_exprs, *best_plan, groupset_exprs))) {
       LOG_WARN("extend rollup to groupig set exprs failed", K(ret));
     } else if (OB_FAIL(candi_allocate_groupingset_group_by(
@@ -3389,8 +3394,8 @@ int ObSelectLogPlan::check_if_union_all_match_partition_wise(const ObIArray<ObLo
                                                              bool &is_partition_wise)
 {
   int ret = OB_SUCCESS;
-  EqualSets equal_sets;
-  EqualSets first_equal_sets;
+  TemporaryEqualSets equal_sets;
+  TemporaryEqualSets first_equal_sets;
   ObShardingInfo *first_sharding = NULL;
   ObShardingInfo *child_sharding = NULL;
   const ObSelectStmt *child_stmt = NULL;
@@ -3412,8 +3417,9 @@ int ObSelectLogPlan::check_if_union_all_match_partition_wise(const ObIArray<ObLo
       is_partition_wise = false;
     } else if (i == 0) {
       first_sharding = child_sharding;
-      first_equal_sets = child_ops.at(i)->get_output_equal_sets();
-      if (OB_FAIL(child_stmt->get_select_exprs(first_select_exprs))) {
+      if (OB_FAIL(first_equal_sets.assign(child_ops.at(i)->get_output_equal_sets()))) {
+        LOG_WARN("failed to assign", K(ret));
+      } else if (OB_FAIL(child_stmt->get_select_exprs(first_select_exprs))) {
         LOG_WARN("failed to get select exprs", K(ret));
       }
     } else if (OB_FAIL(child_stmt->get_select_exprs(child_select_exprs))) {
@@ -3904,7 +3910,7 @@ int ObSelectLogPlan::allocate_recursive_union_as_top(ObLogicalOperator *left_chi
 int ObSelectLogPlan::candi_allocate_distinct_set(const ObIArray<ObSelectLogPlan*> &child_plans)
 {
   int ret = OB_SUCCESS;
-  EqualSets equal_sets;
+  TemporaryEqualSets equal_sets;
   ObSelectLogPlan *left_plan = NULL;
   ObSelectLogPlan *right_plan = NULL;
   const ObSelectStmt *left_stmt = NULL;
@@ -5745,7 +5751,7 @@ int ObSelectLogPlan::compute_set_hash_hash_sharding(const EqualSets &equal_sets,
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
   } else {
-    sharding = new (sharding) ObShardingInfo();
+    sharding = new (sharding) ObShardingInfo(get_allocator());
     sharding->set_distributed();
     if (OB_FAIL(sharding->get_partition_keys().assign(left_keys))) {
       LOG_WARN("failed to assign partition exprs", K(ret));
@@ -9145,7 +9151,8 @@ int ObSelectLogPlan::generate_late_materialization_table_get(ObLogTableScan *ind
     LOG_WARN("failed to allocate cost table info", K(ret));
   } else if (FALSE_IT(est_cost_info = new (est_cost_info) ObCostTableScanInfo(OB_INVALID_ID,
                                                                               OB_INVALID_ID,
-                                                                              OB_INVALID_ID))) {
+                                                                              OB_INVALID_ID,
+                                                                              allocator))) {
   } else if (OB_FAIL(est_cost_info->assign(*index_scan->get_est_cost_info()))) {
     LOG_WARN("failed to assigin table cost info", K(ret));
   } else {
@@ -10029,7 +10036,7 @@ int ObSelectLogPlan::create_transform_distinct_agg_plan(
       if (OB_ISNULL(buf = get_allocator().alloc(sizeof(ObGroupingSetInfo)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("allocate memory failed", K(ret));
-      } else if (FALSE_IT(outter_grouping_set = new(buf)ObGroupingSetInfo())) {
+      } else if (FALSE_IT(outter_grouping_set = new(buf)ObGroupingSetInfo(get_allocator()))) {
       } else if (OB_FAIL(outter_grouping_set->assign(*groupby_helper.grouping_set_info_))) {
         LOG_WARN("assign grouping set info failed", K(ret));
       }

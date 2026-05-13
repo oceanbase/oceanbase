@@ -24,7 +24,7 @@ namespace sql
 class ObHelpStmt : public ObDMLStmt
 {
 public:
-  ObHelpStmt();
+  ObHelpStmt(ObIAllocator &allocator);
   virtual ~ObHelpStmt();
   int add_row(const common::ObNewRow &row) { return row_store_.add_row(row); }
   int clear_row_store()
@@ -41,7 +41,7 @@ public:
   int add_col_name(common::ObString col_name);
 private:
   common::ObRowStore row_store_;
-  common::ObSEArray<common::ObString, 3, common::ModulePageAllocator, true> col_names_;
+  ObSqlArray<common::ObString> col_names_;
   DISALLOW_COPY_AND_ASSIGN(ObHelpStmt);
 };
 }//sql

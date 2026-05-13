@@ -1,0 +1,3 @@
+select /*+USE_PLAN_CACHE(none)*/ * from t_parts;
+
+select /*+USE_PLAN_CACHE(none)*/ * from t_subparts;

@@ -61,7 +61,7 @@ private:
   bool gi_charged_;
   int64_t wait_ts_;
   ObRawExpr *lock_rownum_; // only used for skip locked
-  ObSEArray<IndexDMLInfo*, 1, common::ModulePageAllocator, true> index_dml_info_;
+  ObSqlArray<IndexDMLInfo*> index_dml_info_;
   DISALLOW_COPY_AND_ASSIGN(ObLogForUpdate);
 };
 } // end of namespace sql

@@ -1860,7 +1860,8 @@ int ObTransformSubqueryCoalesce::get_coalesce_infos(ObDMLStmt &parent_stmt,
       map_info.reset();
       StmtCompareHelper *helper = NULL;
       bool force_no_trans = false;
-      QbNameList qb_names;
+      ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+      QbNameList qb_names(allocator);
       if (OB_FAIL(get_hint_force_set(parent_stmt,
                                      *stmt, 
                                      qb_names, 
@@ -2390,12 +2391,14 @@ int ObTransformSubqueryCoalesce::construct_transform_hint(ObDMLStmt &stmt, void 
     LOG_WARN("failed to create hint", K(ret));
   } else if (OB_FAIL(sort_coalesce_stmts(*all_subqueries))) {
     LOG_WARN("failed to sort stmts", K(ret));
+  } else if (OB_FAIL(hint->get_qb_name_list().prepare_allocate(all_subqueries->count()))) {
+    LOG_WARN("failed to prepare allocate", K(ret));
   } else {
     bool use_hint = false;
     const ObCoalesceSqHint *myhint = static_cast<const ObCoalesceSqHint*>(get_hint(stmt.get_stmt_hint()));
     for (int64_t i = 0; OB_SUCC(ret) && i < all_subqueries->count(); ++i) {
       CoalesceStmts *subqueries = all_subqueries->at(i);
-      QbNameList qb_names;
+      QbNameList &qb_names = hint->get_qb_name_list().at(i);
       if (OB_ISNULL(subqueries)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpect null stmts", K(ret));
@@ -2415,8 +2418,6 @@ int ObTransformSubqueryCoalesce::construct_transform_hint(ObDMLStmt &stmt, void 
         }
       }
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(hint->add_qb_name_list(qb_names))) {
-        LOG_WARN("failed to add qb names", K(ret));
       } else if (NULL != myhint && (myhint->get_qb_name_list().count() == 0 ||
                                     myhint->enable_coalesce_sq(qb_names.qb_names_))) {
         use_hint = true;

@@ -1,0 +1,105 @@
+create database tpch;
+use tpch;
+
+CREATE TABLE lineitem (
+    l_orderkey int(11) NOT NULL,
+    l_partkey int(11) NOT NULL,
+    l_suppkey int(11) NOT NULL,
+    l_linenumber int(11) NOT NULL,
+    l_quantity decimal(15,2) NOT NULL,
+    l_extendedprice decimal(15,2) NOT NULL,
+    l_discount decimal(15,2) NOT NULL,
+    l_tax decimal(15,2) NOT NULL,
+    l_returnflag varchar(1) DEFAULT NULL,
+    l_linestatus varchar(1) DEFAULT NULL,
+    l_shipdate date NOT NULL,
+    l_commitdate date DEFAULT NULL,
+    l_receiptdate date DEFAULT NULL,
+    l_shipinstruct varchar(25) DEFAULT NULL,
+    l_shipmode varchar(10) DEFAULT NULL,
+    l_comment varchar(44) DEFAULT NULL,
+primary key(l_shipdate, l_orderkey, l_linenumber)
+)row_format = condensed
+partition by key (l_orderkey) partitions 256 with column group(each column);
+
+CREATE TABLE orders (
+    o_orderkey int(11) NOT NULL,
+    o_custkey int(11) NOT NULL,
+    o_orderstatus varchar(1) DEFAULT NULL,
+    o_totalprice decimal(15,2) DEFAULT NULL,
+    o_orderdate date NOT NULL,
+    o_orderpriority varchar(15) DEFAULT NULL,
+    o_clerk varchar(15) DEFAULT NULL,
+    o_shippriority int(11) DEFAULT NULL,
+    o_comment varchar(79) DEFAULT NULL,
+PRIMARY KEY (o_orderkey, o_orderdate)
+) row_format = condensed
+partition by key(o_orderkey) partitions 256 with column group(each column);
+
+CREATE TABLE partsupp (
+    ps_partkey int(11) NOT NULL,
+    ps_suppkey int(11) NOT NULL,
+    ps_availqty int(11) DEFAULT NULL,
+    ps_supplycost decimal(15,2) DEFAULT NULL,
+    ps_comment varchar(199) DEFAULT NULL,
+    PRIMARY KEY (ps_partkey, ps_suppkey)) row_format = condensed
+partition by key(ps_partkey) partitions 256 with column group(each column);
+
+CREATE TABLE part (
+  p_partkey int(11) NOT NULL,
+  p_name varchar(55) DEFAULT NULL,
+  p_mfgr varchar(25) DEFAULT NULL,
+  p_brand varchar(10) DEFAULT NULL,
+  p_type varchar(25) DEFAULT NULL,
+  p_size int(11) DEFAULT NULL,
+  p_container varchar(10) DEFAULT NULL,
+  p_retailprice decimal(12,2) DEFAULT NULL,
+  p_comment varchar(23) DEFAULT NULL,
+  PRIMARY KEY (p_partkey)) row_format = condensed
+partition by key(p_partkey) partitions 256 with column group(each column);
+
+CREATE TABLE customer (
+  c_custkey int(11) NOT NULL,
+  c_name varchar(25) DEFAULT NULL,
+  c_address varchar(40) DEFAULT NULL,
+  c_nationkey int(11) DEFAULT NULL,
+  c_phone varchar(15) DEFAULT NULL,
+  c_acctbal decimal(15,2) DEFAULT NULL,
+  c_mktsegment char(10) DEFAULT NULL,
+  c_comment varchar(117) DEFAULT NULL,
+  PRIMARY KEY (c_custkey)) row_format = condensed
+partition by key(c_custkey) partitions 256 with column group(each column);
+
+CREATE TABLE supplier (
+  s_suppkey int(11) NOT NULL,
+  s_name varchar(25) DEFAULT NULL,
+  s_address varchar(40) DEFAULT NULL,
+  s_nationkey int(11) DEFAULT NULL,
+  s_phone varchar(15) DEFAULT NULL,
+  s_acctbal decimal(15,2) DEFAULT NULL,
+  s_comment varchar(101) DEFAULT NULL,
+  PRIMARY KEY (s_suppkey)
+) row_format = condensed partition by key(s_suppkey) partitions 256 with column group(each column);
+
+CREATE TABLE nation (
+  n_nationkey int(11) NOT NULL,
+  n_name varchar(25) DEFAULT NULL,
+  n_regionkey int(11) DEFAULT NULL,
+  n_comment varchar(152) DEFAULT NULL,
+  PRIMARY KEY (n_nationkey)
+) row_format = condensed with column group(each column);
+
+CREATE TABLE region (
+  r_regionkey int(11) NOT NULL,
+  r_name varchar(25) DEFAULT NULL,
+  r_comment varchar(152) DEFAULT NULL,
+  PRIMARY KEY (r_regionkey)
+) row_format = condensed with column group(each column);
+
+CREATE VIEW revenue0 AS
+SELECT l_suppkey as supplier_no,
+         SUM(l_extendedprice * ( 1 - l_discount )) as total_revenue
+              FROM   lineitem
+              WHERE  l_shipdate >= DATE '1996-01-01'
+                     AND l_shipdate < DATE '1996-04-01'
+              GROUP  BY l_suppkey;

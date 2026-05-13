@@ -1,0 +1,5 @@
+create database many_partition;
+use many_partition;
+
+create table t_parts(c1 int, c2 int, c3 int, c4 int) partition by hash(c1) partitions 8000;
+create table t_subparts(c1 int, c2 int, c3 int, c4 int) partition by hash(c1) subpartition by hash(c2) subpartitions 20 partitions 400;

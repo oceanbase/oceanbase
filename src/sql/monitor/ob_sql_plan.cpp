@@ -258,7 +258,8 @@ int ObSqlPlan::get_plan_used_hint_info_one_line(PlanText &plan_text,
 int ObSqlPlan::get_global_hint_outline(PlanText &plan_text, ObLogPlan &plan)
 {
   int ret = OB_SUCCESS;
-  ObGlobalHint outline_global_hint;
+  ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+  ObGlobalHint outline_global_hint(allocator);
   if (OB_FAIL(outline_global_hint.assign(plan.get_optimizer_context().get_global_hint()))) {
     LOG_WARN("failed to assign global hint", K(ret));
   } else if (OB_FAIL(construct_outline_global_hint(plan, outline_global_hint))) {

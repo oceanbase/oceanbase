@@ -31,15 +31,9 @@ enum class PartitionInfoType
 class ObTablePartitionInfo
 {
 public:
-  ObTablePartitionInfo(PartitionInfoType type = PartitionInfoType::INTERNAL_TABLE) :
-  inner_allocator_(common::ObModIds::OB_SQL_TABLE_LOCATION),
-  allocator_(inner_allocator_),
-  type_(type)
-  {}
-  ObTablePartitionInfo(common::ObIAllocator &allocator, PartitionInfoType type = PartitionInfoType::INTERNAL_TABLE)
-  : allocator_(allocator),
-  table_location_(allocator),
-  type_(type)
+  ObTablePartitionInfo(common::ObIAllocator &allocator)
+  : table_location_(allocator),
+    candi_table_loc_(allocator)
   {}
   virtual ~ObTablePartitionInfo() {}
 
@@ -47,7 +41,8 @@ public:
   virtual uint64_t get_table_id() const { return table_location_.get_table_id(); }
   virtual uint64_t get_ref_table_id() const { return table_location_.get_ref_table_id(); }
   virtual share::schema::ObPartitionLevel get_part_level() const { return table_location_.get_part_level(); }
-  virtual bool is_lake_table_partition_info() const { return type_ != PartitionInfoType::INTERNAL_TABLE; }
+  virtual PartitionInfoType get_partition_info_type() const { return PartitionInfoType::INTERNAL_TABLE; }
+  bool is_lake_table_partition_info() const { return get_partition_info_type() != PartitionInfoType::INTERNAL_TABLE; }
 
   int init_table_location(ObSqlSchemaGuard &schema_guard,
                           const ObDMLStmt &stmt,
@@ -129,11 +124,8 @@ protected:
    * since we can skip a bunch of steps in query processing, such as parsing, resolving,
    * optimization and code generation.
    */
-  common::ObArenaAllocator inner_allocator_;
-  ObIAllocator &allocator_;
   ObTableLocation table_location_;
   ObCandiTableLoc candi_table_loc_;
-  PartitionInfoType type_;
 };
 
 }

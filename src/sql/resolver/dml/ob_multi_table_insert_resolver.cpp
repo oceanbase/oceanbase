@@ -610,7 +610,7 @@ int ObMultiTableInsertResolver::resolve_insert_values_node(const ParseNode *node
 {
   int ret = OB_SUCCESS;
   ObInsertAllStmt *insert_all_stmt = get_insert_all_stmt();
-  common::ObSEArray<ObRawExpr *, 16, common::ModulePageAllocator, true> value_row;
+  common::ObSEArray<ObRawExpr *, 16> value_row;
   ObInsertAllTableInfo *table_info = nullptr;
   if (OB_ISNULL(insert_all_stmt) ||
       OB_UNLIKELY(table_offset < 0) ||
@@ -881,7 +881,7 @@ int ObMultiTableInsertResolver::generate_insert_all_table_info(const TableItem& 
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory for insert all table info", K(ret));
   } else {
-    table_info = new(ptr) ObInsertAllTableInfo();
+    table_info = new(ptr) ObInsertAllTableInfo(*allocator_);
     table_info->when_cond_idx_ = when_cond_idx;
     if (OB_FAIL(generate_insert_table_info(table_item, *table_info))) {
       LOG_WARN("failed to generate insert table info", K(ret));

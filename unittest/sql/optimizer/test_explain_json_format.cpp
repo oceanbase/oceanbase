@@ -66,7 +66,7 @@ TEST_F(ObLogPlanTest, ob_explain_test)
   ObArenaAllocator mempool(ObModIds::OB_SQL_COMPILE, OB_MALLOC_NORMAL_BLOCK_SIZE);
   ObExecContext exec_ctx(mempool);
   ObAddr addr;
-  ObGlobalHint global_hint;
+  ObGlobalHint global_hint(mempool);
   ObRawExprFactory expr_factory(mempool);
   ObLogPlanFactory log_plan_factory_(mempool);
   ObOptimizerContext ctx(&session_info, &exec_ctx, NULL, NULL,

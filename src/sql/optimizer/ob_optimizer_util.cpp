@@ -4018,7 +4018,7 @@ int ObOptimizerUtil::convert_subplan_scan_equal_sets(ObIAllocator *allocator,
                                                      EqualSets &output_equal_sets)
 {
   int ret = OB_SUCCESS;
-  EqualSets dummy_equal_sets;
+  TemporaryEqualSets dummy_equal_sets;
   ObSEArray<ObRawExpr *, 8> raw_eset;
   TableItem *table_item = NULL;
   if (OB_ISNULL(table_item = parent_stmt.get_table_item_by_id(table_id))) {
@@ -8886,7 +8886,7 @@ int ObOptimizerUtil::compute_duplicate_table_sharding(const ObAddr &local_addr,
                                   allocator.alloc(sizeof(ObShardingInfo))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
-  } else if (OB_FALSE_IT(target_sharding = new(target_sharding) ObShardingInfo())) {
+  } else if (OB_FALSE_IT(target_sharding = new(target_sharding) ObShardingInfo(allocator))) {
   } else if (OB_FAIL(target_sharding->copy_with_part_keys(src_sharding))) {
     LOG_WARN("failed to copy sharding info", K(ret));
   } else if (OB_ISNULL(src_sharding.get_phy_table_location_info()) ||
@@ -8941,7 +8941,7 @@ int ObOptimizerUtil::generate_duplicate_table_replicas(ObIAllocator &allocator,
                        allocator.alloc(sizeof(ObCandiTableLoc))))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(ret));
-  } else if (OB_FALSE_IT(target_table_loc = new(target_table_loc) ObCandiTableLoc())) {
+  } else if (OB_FALSE_IT(target_table_loc = new(target_table_loc) ObCandiTableLoc(allocator))) {
     // do nothing
   } else if (OB_FAIL(target_table_loc->assign(*source_table_loc))) {
     LOG_WARN("failed to assign table location", K(ret));
@@ -9730,7 +9730,7 @@ int ObOptimizerUtil::check_can_encode_sortkey(const common::ObIArray<OrderItem> 
   bool has_hint = false;
   can_sort_opt = true;
   bool old_can_opt = false;
-  const ObOptParamHint opt_params = plan.get_optimizer_context().get_global_hint().opt_params_;
+  const ObOptParamHint &opt_params = plan.get_optimizer_context().get_global_hint().opt_params_;
   if (OB_FAIL(opt_params.has_opt_param(ObOptParamHint::ENABLE_NEWSORT, has_hint))) {
     LOG_WARN("failed to check whether has hint param", K(ret));
   } else if (has_hint) {

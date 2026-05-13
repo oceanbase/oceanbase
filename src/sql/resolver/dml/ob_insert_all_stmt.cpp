@@ -20,11 +20,11 @@ using namespace common;
 namespace sql
 {
 
-ObInsertAllStmt::ObInsertAllStmt()
-  : ObDelUpdStmt(stmt::T_INSERT_ALL),
+ObInsertAllStmt::ObInsertAllStmt(ObIAllocator &allocator)
+  : ObDelUpdStmt(stmt::T_INSERT_ALL, allocator),
     is_multi_insert_first_(false),
     is_multi_condition_insert_(false),
-    table_info_()
+    table_info_(allocator)
 {
   // TODO Auto-generated constructor stub
 

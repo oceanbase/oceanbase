@@ -44,8 +44,9 @@ public:
   ObPLCGMallocCallback(int64_t &mem_used)
     : mem_used_(mem_used) {}
   virtual ~ObPLCGMallocCallback() {}
-  virtual void operator()(const ObMemAttr &attr, int64_t add_size) override
+  virtual void operator()(const ObMemAttr &attr, int64_t add_size, const lib::AObject &obj) override
   {
+    UNUSED(obj);
     if ((ObLabel(GET_PL_MOD_STRING(pl::OB_PL_JIT)) == attr.label_
         || ObLabel(GET_PL_MOD_STRING(pl::OB_PL_CODE_GEN)) == attr.label_)
         && attr.ctx_id_ == ObCtxIds::GLIBC) {

@@ -54,15 +54,22 @@ struct PivotDef : TransposeDef
 
   struct InPair
   {
-    common::ObSEArray<ObRawExpr*, 1, common::ModulePageAllocator, true> const_exprs_;
+    ObSqlArray<ObRawExpr*> const_exprs_;
     ObString name_;
-    InPair() : name_() {}
+    InPair(common::ObIAllocator &allocator) : const_exprs_(allocator), name_() {}
     ~InPair() {}
     int assign(const InPair &other);
     TO_STRING_KV(K_(const_exprs), K_(name));
   };
 
-  PivotDef () {}
+  PivotDef(common::ObIAllocator &allocator)
+    : group_columns_(allocator),
+      group_column_names_(allocator),
+      for_columns_(allocator),
+      for_column_names_(allocator),
+      aggr_pairs_(allocator),
+      in_pairs_(allocator)
+  {}
   void reset()
   {
     TransposeDef::reset();
@@ -80,28 +87,41 @@ struct PivotDef : TransposeDef
                K_(aggr_pairs), K_(group_columns), K_(for_columns), K_(in_pairs), K_(alias_name));
 
   // group columns of pivot / old columns of unpivot
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> group_columns_;
-  common::ObSEArray<ObString, 4, common::ModulePageAllocator, true> group_column_names_;
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> for_columns_;
-  common::ObSEArray<ObString, 4, common::ModulePageAllocator, true> for_column_names_;
-  common::ObSEArray<AggrPair, 4, common::ModulePageAllocator, true> aggr_pairs_;
-  common::ObSEArray<InPair, 4, common::ModulePageAllocator, true> in_pairs_;
+  ObSqlArray<ObRawExpr *> group_columns_;
+  ObSqlArray<ObString> group_column_names_;
+  ObSqlArray<ObRawExpr *> for_columns_;
+  ObSqlArray<ObString> for_column_names_;
+  ObSqlArray<AggrPair> aggr_pairs_;
+  ObSqlArray<InPair, true> in_pairs_;
 };
 
 struct UnpivotDef : TransposeDef
 {
   struct InPair
   {
-    common::ObSEArray<ObRawExpr*, 1, common::ModulePageAllocator, true> const_exprs_;
-    common::ObSEArray<ObString, 1, common::ModulePageAllocator, true> column_names_;
-    common::ObSEArray<ObRawExpr*, 1, common::ModulePageAllocator, true> column_exprs_;
-    InPair() {}
+    ObSqlArray<ObRawExpr*> const_exprs_;
+    ObSqlArray<ObString> column_names_;
+    ObSqlArray<ObRawExpr*> column_exprs_;
+    InPair(common::ObIAllocator &allocator)
+      : const_exprs_(allocator),
+        column_names_(allocator),
+        column_exprs_(allocator)
+    {}
     ~InPair() {}
     int assign(const InPair &other);
     TO_STRING_KV(K_(const_exprs), K_(column_names), K_(column_exprs));
   };
 
-  UnpivotDef() {}
+  UnpivotDef(common::ObIAllocator &allocator)
+    : is_include_null_(false),
+      orig_columns_(allocator),
+      orig_column_names_(allocator),
+      label_columns_(allocator),
+      label_col_types_(allocator),
+      value_columns_(allocator),
+      value_col_types_(allocator),
+      in_pairs_(allocator)
+  {}
   void reset()
   {
     TransposeDef::reset();
@@ -124,13 +144,13 @@ struct UnpivotDef : TransposeDef
                K_(label_columns), K_(value_columns), K_(in_pairs));
 
   bool is_include_null_;
-  common::ObSEArray<ObRawExpr *, 4, common::ModulePageAllocator, true> orig_columns_;
-  common::ObSEArray<ObString, 4, common::ModulePageAllocator, true> orig_column_names_;
-  common::ObSEArray<ObString, 4, common::ModulePageAllocator, true> label_columns_;
-  common::ObSEArray<ObRawExprResType, 4, common::ModulePageAllocator, true> label_col_types_;
-  common::ObSEArray<ObString, 4, common::ModulePageAllocator, true> value_columns_;
-  common::ObSEArray<ObRawExprResType, 4, common::ModulePageAllocator, true> value_col_types_;
-  common::ObSEArray<InPair, 4, common::ModulePageAllocator, true> in_pairs_;
+  ObSqlArray<ObRawExpr *> orig_columns_;
+  ObSqlArray<ObString> orig_column_names_;
+  ObSqlArray<ObString> label_columns_;
+  ObSqlArray<ObRawExprResType> label_col_types_;
+  ObSqlArray<ObString> value_columns_;
+  ObSqlArray<ObRawExprResType> value_col_types_;
+  ObSqlArray<InPair, true> in_pairs_;
 };
 
 class ObTransposeResolver

@@ -63,6 +63,14 @@ public:
                                         sql::ParamStore &params,
                                         common::ObObj &result);
 
+  static int enable_mem_perf(ObPLExecCtx &ctx,
+                             sql::ParamStore &params,
+                             common::ObObj &result);
+
+  static int disable_mem_perf(ObPLExecCtx &ctx,
+                              sql::ParamStore &params,
+                              common::ObObj &result);
+
 private:
 
   static int get_server_ip_port(ObPLExecCtx &ctx,

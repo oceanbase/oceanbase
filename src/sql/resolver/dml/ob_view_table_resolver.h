@@ -36,6 +36,18 @@ struct ObViewStateGuard
   ObResolverParams &params_;
 };
 
+struct ViewItem
+{
+  ViewItem() {}
+  ~ViewItem() {}
+
+  TO_STRING_KV(K_(table_name), K_(database_name), K_(ref_id));
+
+  common::ObString table_name_;
+  common::ObString database_name_;
+  uint64_t ref_id_;
+};
+
 class ObViewTableResolver : public ObSelectResolver
 {
 public:
@@ -62,9 +74,17 @@ public:
 
   void set_current_view_item(const TableItem &view_item)
   {
-    current_view_item = view_item;
+    current_view_item_.table_name_ = view_item.table_name_;
+    current_view_item_.database_name_ = view_item.database_name_;
+    current_view_item_.ref_id_ = view_item.ref_id_;
     ori_is_in_sys_view_ = params_.is_in_sys_view_;
-    params_.is_in_sys_view_ = params_.is_in_sys_view_ || is_sys_view(current_view_item.ref_id_);
+    params_.is_in_sys_view_ = params_.is_in_sys_view_ || is_sys_view(current_view_item_.ref_id_);
+  }
+  void set_current_view_item(const ViewItem &view_item)
+  {
+    current_view_item_ = view_item;
+    ori_is_in_sys_view_ = params_.is_in_sys_view_;
+    params_.is_in_sys_view_ = params_.is_in_sys_view_ || is_sys_view(current_view_item_.ref_id_);
   }
   void set_parent_view_resolver(ObViewTableResolver *parent_view_resolver)
   { parent_view_resolver_ = parent_view_resolver; }
@@ -91,7 +111,7 @@ protected:
 protected:
   //在视图的namespace解析当中，所有子查询都必须由ObViewTableResolver来解析
   //current_view_item用来记录当前namespace是由哪个视图(用户创建的视图,不包含generated table)展开的
-  TableItem current_view_item;
+  ViewItem current_view_item_;
   //parent_view_resolver用来记录当前namespace所处的视图是由哪个视图展开的
   ObViewTableResolver *parent_view_resolver_;
   //ObViewTableResolver was called by create view stmt

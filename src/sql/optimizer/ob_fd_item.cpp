@@ -176,14 +176,15 @@ int ObExprFdItem::check_expr_in_child(const ObRawExpr *expr,
 int ObFdItemFactory::create_fd_item_set(ObFdItemSet *&fd_item_set)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(fd_item_set = (ObFdItemSet *)allocator_.alloc(sizeof(ObFdItemSet)))) {
+  ObFdItemSql *buf = NULL;
+  if (OB_ISNULL(buf = (ObFdItemSql *)allocator_.alloc(sizeof(ObFdItemSql)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc fd item sets", K(ret));
   } else {
-    fd_item_set = new(fd_item_set) ObFdItemSet();
+    fd_item_set = new(buf) ObFdItemSql(allocator_);
     if (OB_FAIL(item_set_store_.store_obj(fd_item_set))) {
       LOG_WARN("failed to store obj", K(ret));
-      fd_item_set->~ObFdItemSet();
+      buf->~ObFdItemSql();
       fd_item_set = NULL;
     }
   }

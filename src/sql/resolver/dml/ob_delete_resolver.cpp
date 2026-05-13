@@ -427,7 +427,7 @@ int ObDeleteResolver::generate_delete_table_info(const TableItem &table_item)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate table info", K(ret));
   } else {
-    table_info = new(ptr) ObDeleteTableInfo();
+    table_info = new(ptr) ObDeleteTableInfo(*allocator_);
     if (OB_FAIL(table_info->part_ids_.assign(base_table_item.part_ids_))) {
       LOG_WARN("failed to assign part ids", K(ret));
     } else if (!delete_stmt->has_instead_of_trigger()) {

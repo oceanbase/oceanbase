@@ -24,13 +24,13 @@ namespace sql
 class ObLogSort;
 struct ObThreeStageAggrInfo
 {
-  ObThreeStageAggrInfo() :
+  ObThreeStageAggrInfo(common::ObIAllocator &allocator) :
     aggr_stage_(ObThreeStageAggrStage::NONE_STAGE),
     distinct_aggr_count_(-1),
     aggr_code_idx_(-1),
     aggr_code_expr_(NULL),
-    distinct_aggr_batch_(),
-    distinct_exprs_(),
+    distinct_aggr_batch_(allocator),
+    distinct_exprs_(allocator),
     aggr_code_ndv_(1.0)
   {}
 
@@ -38,8 +38,8 @@ struct ObThreeStageAggrInfo
   int64_t distinct_aggr_count_;
   int64_t aggr_code_idx_;
   ObRawExpr *aggr_code_expr_;
-  ObArray<ObDistinctAggrBatch, ModulePageAllocator, true> distinct_aggr_batch_;
-  common::ObArray<ObRawExpr *, common::ModulePageAllocator, true> distinct_exprs_;
+  ObSqlArray<ObDistinctAggrBatch, true> distinct_aggr_batch_;
+  ObSqlArray<ObRawExpr *> distinct_exprs_;
   double aggr_code_ndv_;
 
   int assign(const ObThreeStageAggrInfo &info);
@@ -60,18 +60,18 @@ struct ObThreeStageAggrInfo
 
 struct ObRollupAdaptiveInfo
 {
-  ObRollupAdaptiveInfo()
+  ObRollupAdaptiveInfo(common::ObIAllocator &allocator)
   : rollup_id_expr_(NULL),
     rollup_status_(ObRollupStatus::NONE_ROLLUP),
-    sort_keys_(),
-    ecd_sort_keys_(),
+    sort_keys_(allocator),
+    ecd_sort_keys_(allocator),
     enable_encode_sort_(false)
   {}
 
   ObRawExpr *rollup_id_expr_;
   ObRollupStatus rollup_status_;
-  ObArray<OrderItem, common::ModulePageAllocator, true> sort_keys_;
-  ObArray<OrderItem, common::ModulePageAllocator, true> ecd_sort_keys_;
+  ObSqlArray<OrderItem> sort_keys_;
+  ObSqlArray<OrderItem> ecd_sort_keys_;
   bool enable_encode_sort_;
 
   int assign(const ObRollupAdaptiveInfo &info);
@@ -79,29 +79,43 @@ struct ObRollupAdaptiveInfo
 
 struct ObHashRollupInfo
 {
-  ObHashRollupInfo()
-  :rollup_grouping_id_(nullptr)
+  ObHashRollupInfo(common::ObIAllocator &allocator)
+  : expand_exprs_(allocator),
+    gby_exprs_(allocator),
+    dup_expr_pairs_(allocator),
+    rollup_grouping_id_(nullptr),
+    replaced_agg_pairs_(allocator)
   {
 
   }
   int assign(const ObHashRollupInfo &other);
-  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> expand_exprs_;
-  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> gby_exprs_;
-  common::ObSEArray<ObTuple<ObRawExpr *, ObRawExpr *>, 8, common::ModulePageAllocator, true> dup_expr_pairs_;
+  ObSqlArray<ObRawExpr *> expand_exprs_;
+  ObSqlArray<ObRawExpr *> gby_exprs_;
+  ObSqlArray<ObTuple<ObRawExpr *, ObRawExpr *>> dup_expr_pairs_;
   ObOpPseudoColumnRawExpr *rollup_grouping_id_;
-  common::ObSEArray<ObTuple<ObRawExpr *, ObRawExpr *>, 8, common::ModulePageAllocator, true> replaced_agg_pairs_;
+  ObSqlArray<ObTuple<ObRawExpr *, ObRawExpr *>> replaced_agg_pairs_;
 };
 
 struct ObGroupingSetInfo
 {
-  ObGroupingSetInfo(): grouping_set_id_(nullptr) {}
-  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> common_group_exprs_;
-  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> group_exprs_;
-  common::ObSEArray<ObOrderDirection, 8, common::ModulePageAllocator, true> group_dirs_;
-  common::ObSEArray<ObGroupbyExpr, 8, common::ModulePageAllocator, true> groupset_exprs_;
-  common::ObSEArray<ObGroupbyExpr, 8, common::ModulePageAllocator, true> pruned_groupset_exprs_;
-  common::ObSEArray<ObTuple<ObRawExpr *, ObRawExpr *>, 8, common::ModulePageAllocator, true> dup_expr_pairs_;
-  common::ObSEArray<ObTuple<ObRawExpr *, ObRawExpr *>, 8, common::ModulePageAllocator, true> replaced_agg_pairs_;
+  ObGroupingSetInfo(common::ObIAllocator &allocator)
+    : common_group_exprs_(allocator),
+      group_exprs_(allocator),
+      group_dirs_(allocator),
+      groupset_exprs_(allocator),
+      pruned_groupset_exprs_(allocator),
+      dup_expr_pairs_(allocator),
+      replaced_agg_pairs_(allocator),
+      grouping_set_id_(nullptr)
+  {
+  }
+  ObSqlArray<ObRawExpr *> common_group_exprs_;
+  ObSqlArray<ObRawExpr *> group_exprs_;
+  ObSqlArray<ObOrderDirection> group_dirs_;
+  ObSqlArray<ObGroupbyExpr, true> groupset_exprs_;
+  ObSqlArray<ObGroupbyExpr, true> pruned_groupset_exprs_;
+  ObSqlArray<ObTuple<ObRawExpr *, ObRawExpr *>> dup_expr_pairs_;
+  ObSqlArray<ObTuple<ObRawExpr *, ObRawExpr *>> replaced_agg_pairs_;
   ObOpPseudoColumnRawExpr *grouping_set_id_;
   TO_STRING_KV(KP_(grouping_set_id), K_(group_exprs), K_(groupset_exprs), K_(pruned_groupset_exprs),
                K_(dup_expr_pairs));
@@ -113,9 +127,9 @@ class ObLogGroupBy : public ObLogicalOperator
 public:
   ObLogGroupBy(ObLogPlan &plan)
       : ObLogicalOperator(plan),
-        group_exprs_(),
-        rollup_exprs_(),
-        aggr_exprs_(),
+        group_exprs_(plan.get_allocator()),
+        rollup_exprs_(plan.get_allocator()),
+        aggr_exprs_(plan.get_allocator()),
         algo_(AGGREGATE_UNINITIALIZED),
         step_(SINGLE),
         from_pivot_(false),
@@ -123,8 +137,8 @@ public:
         is_partition_gi_(false),
         total_ndv_(-1.0),
         origin_child_card_(-1.0),
-        three_stage_info_(),
-        rollup_adaptive_info_(),
+        three_stage_info_(plan.get_allocator()),
+        rollup_adaptive_info_(plan.get_allocator()),
         force_push_down_(false),
         use_hash_aggr_(false),
         has_push_down_(false),
@@ -133,7 +147,7 @@ public:
         is_pushdown_scalar_aggr_(false),
         hash_rollup_info_(nullptr),
         grouping_set_info_(nullptr),
-        distinct_pairs_()
+        distinct_pairs_(plan.get_allocator())
   {}
   virtual ~ObLogGroupBy()
   {}
@@ -325,9 +339,9 @@ private:
   virtual int check_use_child_ordering(bool &used, int64_t &inherit_child_ordering_index)override;
   virtual int compute_op_parallel_and_server_info() override;
 private:
-  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> group_exprs_;
-  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> rollup_exprs_;
-  common::ObSEArray<ObRawExpr *, 8, common::ModulePageAllocator, true> aggr_exprs_;
+  ObSqlArray<ObRawExpr *> group_exprs_;
+  ObSqlArray<ObRawExpr *> rollup_exprs_;
+  ObSqlArray<ObRawExpr *> aggr_exprs_;
   AggregateAlgo algo_;
   AggregatePathType step_;
   bool from_pivot_;
@@ -350,7 +364,7 @@ private:
   ObHashRollupInfo *hash_rollup_info_;
   ObGroupingSetInfo *grouping_set_info_;
   // used for transform distinct agg plan
-  common::ObSEArray<ObTuple<ObRawExpr *, ObRawExpr *>, 4, common::ModulePageAllocator, true> distinct_pairs_;
+  ObSqlArray<ObTuple<ObRawExpr *, ObRawExpr *>> distinct_pairs_;
 };
 } // end of namespace sql
 } // end of namespace oceanbase

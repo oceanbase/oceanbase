@@ -593,7 +593,7 @@ int ObTransformUtils::add_new_joined_table(ObTransformerCtx *ctx,
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate memory", K(ret));
     } else {
-      joined_table = new (joined_table) JoinedTable();
+      joined_table = new (joined_table) JoinedTable(*ctx->allocator_);
       joined_table->type_ = TableItem::JOINED_TABLE;
       joined_table->table_id_ = stmt.get_query_ctx()->available_tb_id_ --;
       joined_table->joined_type_ = join_type;
@@ -1502,10 +1502,10 @@ int ObTransformUtils::update_table_id_for_part_item(const ObIArray<PartExprItem>
 }
 
 int ObTransformUtils::update_table_id_for_check_constraint_items(
-    const common::ObIArray<CheckConstraintItem> &other_check_constraint_items,
+    const common::ObIArray<CheckConstraintItem*> &other_check_constraint_items,
     const uint64_t old_table_id,
     const uint64_t new_table_id,
-    common::ObIArray<CheckConstraintItem> &check_constraint_items)
+    common::ObIArray<CheckConstraintItem*> &check_constraint_items)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(other_check_constraint_items.count() != check_constraint_items.count())) {
@@ -1514,8 +1514,12 @@ int ObTransformUtils::update_table_id_for_check_constraint_items(
         K(check_constraint_items.count()), K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < other_check_constraint_items.count(); i++) {
-    if (other_check_constraint_items.at(i).table_id_ == old_table_id) {
-      check_constraint_items.at(i).table_id_ = new_table_id;
+    if (OB_ISNULL(other_check_constraint_items.at(i)) || OB_ISNULL(check_constraint_items.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null check constraint item", K(other_check_constraint_items.at(i)),
+               K(check_constraint_items.at(i)), K(ret));
+    } else if (old_table_id == other_check_constraint_items.at(i)->table_id_) {
+      check_constraint_items.at(i)->table_id_ = new_table_id;
     } else { /*do nothing*/ }
   }
   return ret;
@@ -4671,7 +4675,7 @@ int ObTransformUtils::compute_set_stmt_property(const ObSelectStmt *stmt,
   ObSEArray<ObRawExpr*, 4> set_exprs;
   UniqueCheckInfo right_info;
   ObSEArray<ObRawExpr*, 4> equal_conds;
-  EqualSets tmp_equal_sets;
+  TemporaryEqualSets tmp_equal_sets;
   const ObSelectStmt::SetOperator set_type = stmt->get_set_op();
   ObFdItemFactory *fd_factory = NULL;
   if (OB_ISNULL(stmt) || OB_ISNULL(fd_factory = check_helper.fd_factory_)
@@ -5211,7 +5215,7 @@ int ObTransformUtils::compute_generate_table_property(const ObDMLStmt *stmt,
 {
   int ret = OB_SUCCESS;
   UniqueCheckInfo child_info;
-  EqualSets tmp_equal_set;
+  TemporaryEqualSets tmp_equal_set;
   ObSelectStmt *ref_query = NULL;
   ObSEArray<ObRawExpr*, 4> cur_cond_exprs;
   ObSqlBitSet<> table_set;
@@ -5331,7 +5335,7 @@ int ObTransformUtils::compute_inner_join_property(const ObDMLStmt *stmt,
   ObSEArray<ObRawExpr*, 4> all_left_join_exprs;
   ObSEArray<ObRawExpr*, 4> all_right_join_exprs;
   ObSEArray<ObRawExpr*, 4> cur_cond_exprs;
-  EqualSets tmp_equal_sets;
+  TemporaryEqualSets tmp_equal_sets;
   ObSqlBitSet<> table_set;
   int ret = OB_SUCCESS;
   if (OB_ISNULL(stmt) || OB_ISNULL(check_helper.alloc_) || OB_ISNULL(check_helper.fd_factory_)) {
@@ -5440,7 +5444,7 @@ int ObTransformUtils::compute_outer_join_property(const ObDMLStmt *stmt,
     ObSEArray<ObRawExpr*, 4> all_left_join_exprs;
     ObSEArray<ObRawExpr*, 4> all_right_join_exprs;
     ObSEArray<ObRawExpr*, 4> cur_cond_exprs;
-    EqualSets tmp_equal_sets;
+    TemporaryEqualSets tmp_equal_sets;
     ObSqlBitSet<> table_set;
     if (OB_FAIL(table_set.add_members(left_info.table_set_))
              || OB_FAIL(table_set.add_members(right_info.table_set_))
@@ -7917,7 +7921,7 @@ int ObTransformUtils::create_inline_view(ObTransformerCtx *ctx,
     TableItem *table = NULL;
     ObArray<ColumnItem> column_items;
     ObArray<PartExprItem> part_expr_items;
-    CheckConstraintItem check_constraint_item;
+    CheckConstraintItem *check_constraint_item = NULL;
     if (OB_ISNULL(table = stmt->get_table_item_by_id(table_id))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table is null", K(ret), K(table));

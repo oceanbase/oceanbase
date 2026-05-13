@@ -581,9 +581,12 @@ int ObLogWindowFunction::print_outline_data(PlanText &plan_text)
     LOG_WARN("get qb name failed", K(ret));
   } else {
     get_plan()->set_added_win_dist();
-    ObWindowDistHint win_dist_hint;
+    ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+    ObWindowDistHint win_dist_hint(allocator);
     win_dist_hint.set_qb_name(qb_name);
-    if (OB_FAIL(add_win_dist_options(this, stmt->get_window_func_exprs(), win_dist_hint))) {
+    if (OB_FAIL(win_dist_hint.init_win_dist_options(stmt->get_window_func_exprs().count()))) {
+      LOG_WARN("failed to init win dist options", K(ret));
+    } else if (OB_FAIL(add_win_dist_options(this, stmt->get_window_func_exprs(), win_dist_hint))) {
       LOG_WARN("failed to add win dist options", K(ret));
     } else if (OB_FAIL(win_dist_hint.print_hint(plan_text))) {
       LOG_WARN("print hint failed", K(ret));
@@ -640,8 +643,11 @@ int ObLogWindowFunction::print_used_hint(PlanText &plan_text)
     /* do nothing */
   } else {
     get_plan()->set_added_win_dist();
-    ObWindowDistHint outline_hint;
-    if (OB_FAIL(add_win_dist_options(this, stmt->get_window_func_exprs(), outline_hint))) {
+    ObArenaAllocator allocator(ObModIds::OB_SQL_COMPILE);
+    ObWindowDistHint outline_hint(allocator);
+    if (OB_FAIL(outline_hint.init_win_dist_options(stmt->get_window_func_exprs().count()))) {
+      LOG_WARN("failed to init win dist options", K(ret));
+    } else if (OB_FAIL(add_win_dist_options(this, stmt->get_window_func_exprs(), outline_hint))) {
       LOG_WARN("failed to add win dist options", K(ret));
     } else if (win_dist_hint->get_win_dist_options().count() > outline_hint.get_win_dist_options().count()) {
       /* do nothing */
