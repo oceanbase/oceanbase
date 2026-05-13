@@ -516,7 +516,7 @@ bool ObTruncatePartition::is_valid() const
 {
   bool bret = false;
   int64_t part_key_cnt = 0;
-  if (OB_UNLIKELY(part_op_ < INCLUDE && part_op_ >= PART_OP_MAX)) {
+  if (OB_UNLIKELY(!is_valid_part_op(part_op_))) {
     LOG_WARN_RET(OB_INVALID_DATA, "invalid part_op", K_(part_op));
   } else if (OB_UNLIKELY(!part_key_idxs_.is_valid())) {
     LOG_WARN_RET(OB_INVALID_DATA, "invalid part_key_idxs", K_(part_key_idxs));
@@ -783,7 +783,7 @@ int ObTruncatePartition::compare(const ObTruncatePartition &other, bool &equal) 
     equal = true;
   } else if ((part_type_ == other.part_type_)
       && (part_op_ == other.part_op_)
-      && OB_SUCC(part_key_idxs_.compare(other.part_key_idxs_, equal) && equal)) {
+      && OB_SUCC(part_key_idxs_.compare(other.part_key_idxs_, equal)) && equal) {
     if (is_range_part(part_type_)) {
       if (OB_SUCC(low_bound_val_.equal(other.low_bound_val_, equal)) && equal) {
         ret = high_bound_val_.equal(other.high_bound_val_, equal);

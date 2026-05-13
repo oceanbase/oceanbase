@@ -2289,7 +2289,7 @@ TEST_F(ObTableLockServiceTest, retry_out_trans_with_4038)
 
 int main(int argc, char **argv)
 {
-  oceanbase::unittest::init_log_and_gtest(argc, argv);
+  oceanbase::unittest::init_log_and_gtest(argc, argv, true);
   OB_LOGGER.set_log_level(OB_LOG_LEVEL_INFO);
   OB_LOGGER.set_mod_log_levels("STORAGE.TABLELOCK:DEBUG");
   OB_LOGGER.set_enable_async_log(false);

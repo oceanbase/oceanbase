@@ -28,7 +28,7 @@ int set_trace_id(char *buf)
 }
 
 
-void init_log_and_gtest(int argc, char **argv)
+void init_log_and_gtest(int argc, char **argv, const bool delete_log_files)
 {
   if (argc < 1) {
     abort();
@@ -42,12 +42,14 @@ void init_log_and_gtest(int argc, char **argv)
   std::string app_gtest_log_name = app_name + "_gtest.log";
   std::string app_trace_log_name = app_name + "_trace.log";
 
-  system(("rm -rf " + app_log_name + "*").c_str());
-  system(("rm -rf " + app_rs_log_name + "*").c_str());
-  system(("rm -rf " + app_ele_log_name + "*").c_str());
-  system(("rm -rf " + app_gtest_log_name + "*").c_str());
-  system(("rm -rf " + app_trace_log_name + "*").c_str());
-  system(("rm -rf " + app_name + "_*").c_str());
+  if (delete_log_files) {
+    system(("rm -rf " + app_log_name + "*").c_str());
+    system(("rm -rf " + app_rs_log_name + "*").c_str());
+    system(("rm -rf " + app_ele_log_name + "*").c_str());
+    system(("rm -rf " + app_gtest_log_name + "*").c_str());
+    system(("rm -rf " + app_trace_log_name + "*").c_str());
+    system(("rm -rf " + app_name + "_*").c_str());
+  }
 
   init_gtest_output(app_gtest_log_name);
   OB_LOGGER.set_file_name(app_log_name.c_str(), true, false, app_rs_log_name.c_str(), app_ele_log_name.c_str(), app_trace_log_name.c_str());
