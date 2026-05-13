@@ -118,6 +118,7 @@ protected:
   virtual int append_row(const ObTabletID &tablet_id, const ObDirectLoadDatumRow &datum_row) = 0;
   virtual int append_batch(common::ObIVector *tablet_id_vector,
                            const storage::ObDirectLoadBatchRows &batch_rows) = 0;
+  virtual int push_batch() { return OB_SUCCESS; }
   virtual int close(ObTableLoadStoreTrans *trans, const int32_t session_id) = 0;
 
 protected:

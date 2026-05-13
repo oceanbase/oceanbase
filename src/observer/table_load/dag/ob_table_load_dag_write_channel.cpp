@@ -163,6 +163,11 @@ int ObTableLoadDagChunkWriter::write(const ObTableLoadTabletObjRowArray &row_arr
         LOG_WARN("fail to append row", KR(ret));
       }
     }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(push_batch())) {
+        LOG_WARN("fail to push batch", KR(ret));
+      }
+    }
   }
   return ret;
 }
@@ -176,6 +181,8 @@ int ObTableLoadDagChunkWriter::px_write(ObIVector *tablet_id_vector,
     LOG_WARN("ObTableLoadDagPXWriter not init", KR(ret), KP(this));
   } else if (OB_FAIL(append_batch(tablet_id_vector, batch_rows))) {
     LOG_WARN("fail to append batch", KR(ret));
+  } else if (OB_FAIL(push_batch())) {
+    LOG_WARN("fail to push batch", KR(ret));
   }
   return ret;
 }

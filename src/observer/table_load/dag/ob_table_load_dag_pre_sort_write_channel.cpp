@@ -495,11 +495,6 @@ int ObTableLoadDagPreSortChunkWriter::append_batch(ObIVector *tablet_id_vector,
         ++start;
       }
     }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(push_chunk())) {
-        LOG_WARN("fail to push chunk", KR(ret));
-      }
-    }
   }
   return ret;
 }
