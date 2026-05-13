@@ -370,25 +370,38 @@ int ObMviewAlterService::update_mlog_in_modify_column(
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < new_mlog_schema.get_column_count(); ++i) {
       ObColumnSchemaV2 *new_mlog_column = new_mlog_schema.get_column_schema_by_idx(i);
+      const ObColumnSchemaV2 *orig_mlog_column = mlog_schema->get_column_schema_by_idx(i);
       const ObColumnSchemaV2 *base_table_column = NULL;
-      if (OB_ISNULL(new_mlog_column)) {
+      if (OB_ISNULL(new_mlog_column) || OB_ISNULL(orig_mlog_column)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get null mlog column", K(ret));
+        LOG_WARN("get null mlog column", K(ret), KP(new_mlog_column), KP(orig_mlog_column));
       } else if (is_mlog_special_column(new_mlog_column->get_column_id())) {
         // do nothing
       } else if (OB_ISNULL(base_table_column = new_table_schema.get_column_schema(new_mlog_column->get_column_id()))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get null base column", K(ret));
-      } else if (new_mlog_column->get_meta_type() == base_table_column->get_meta_type() &&
-                 new_mlog_column->get_accuracy() == base_table_column->get_accuracy() &&
-                 new_mlog_column->get_sub_data_type() == base_table_column->get_sub_data_type()) {
-        // do nothing
-      } else if (FALSE_IT(new_mlog_column->set_meta_type(base_table_column->get_meta_type()))) {
-      } else if (FALSE_IT(new_mlog_column->set_accuracy(base_table_column->get_accuracy()))) {
-      } else if (FALSE_IT(new_mlog_column->set_sub_data_type(base_table_column->get_sub_data_type()))) {
-      } else if (OB_FAIL(ddl_operator.update_column_and_column_group(trans, *mlog_schema, *mlog_schema,
-                                                                     *new_mlog_column, false))) {
-        LOG_WARN("fail to update mlog column", K(ret));
+      } else if (OB_FAIL(new_mlog_column->assign(*base_table_column))) {
+        LOG_WARN("fail to assign base column to mlog column", K(ret), KPC(base_table_column));
+      } else {
+        new_mlog_column->set_autoincrement(orig_mlog_column->is_autoincrement());
+        new_mlog_column->set_is_hidden(orig_mlog_column->is_hidden());
+        new_mlog_column->set_rowkey_position(orig_mlog_column->get_rowkey_position());
+        new_mlog_column->set_index_position(orig_mlog_column->get_index_position());
+        new_mlog_column->set_prev_column_id(orig_mlog_column->get_prev_column_id());
+        new_mlog_column->set_next_column_id(orig_mlog_column->get_next_column_id());
+        new_mlog_column->set_table_id(orig_mlog_column->get_table_id());
+        new_mlog_column->set_column_id(orig_mlog_column->get_column_id());
+        new_mlog_column->set_column_flags(orig_mlog_column->get_column_flags());
+        new_mlog_column->set_order_in_rowkey(orig_mlog_column->get_order_in_rowkey());
+        new_mlog_column->set_tbl_part_key_pos(orig_mlog_column->get_tbl_part_key_pos());
+        if (OB_FAIL(new_mlog_column->set_cur_default_value(orig_mlog_column->get_cur_default_value(), orig_mlog_column->is_default_expr_v2_column()))) {
+          LOG_WARN("fail to set mlog column current default value", K(ret));
+        } else if (OB_FAIL(new_mlog_column->set_orig_default_value(orig_mlog_column->get_orig_default_value()))) {
+          LOG_WARN("fail to set mlog column original default value", K(ret));
+        } else if (OB_FAIL(ddl_operator.update_column_and_column_group(trans, *mlog_schema, *mlog_schema,
+                                                                       *new_mlog_column, false))) {
+          LOG_WARN("fail to update mlog column", K(ret));
+        }
       }
     }
     if (OB_SUCC(ret)) {
