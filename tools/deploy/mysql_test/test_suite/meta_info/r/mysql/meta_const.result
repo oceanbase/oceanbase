@@ -183,9 +183,9 @@ field(0,'a')
 1
 show warnings;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def		subquery_alias	subquery_alias	Level	Level	253	128	7	N	1	0	45
-def		subquery_alias	subquery_alias	Code	Code	8	20	4	N	32769	0	63
-def		subquery_alias	subquery_alias	Message	Message	253	2048	37	N	1	0	45
+def		subquery_alias	subquery_alias	Level	Level	253	128	7	N	4097	0	45
+def		subquery_alias	subquery_alias	Code	Code	8	20	4	N	36865	0	63
+def		subquery_alias	subquery_alias	Message	Message	253	2048	37	N	4097	0	45
 Level	Code	Message
 Warning	1292	Truncated incorrect DOUBLE value: 'a'
 select field(1,'a', 'b');
@@ -195,9 +195,9 @@ field(1,'a', 'b')
 0
 show warnings;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def		subquery_alias	subquery_alias	Level	Level	253	128	7	N	1	0	45
-def		subquery_alias	subquery_alias	Code	Code	8	20	4	N	32769	0	63
-def		subquery_alias	subquery_alias	Message	Message	253	2048	37	N	1	0	45
+def		subquery_alias	subquery_alias	Level	Level	253	128	7	N	4097	0	45
+def		subquery_alias	subquery_alias	Code	Code	8	20	4	N	36865	0	63
+def		subquery_alias	subquery_alias	Message	Message	253	2048	37	N	4097	0	45
 Level	Code	Message
 Warning	1292	Truncated incorrect DOUBLE value: 'a'
 Warning	1292	Truncated incorrect DOUBLE value: 'b'
@@ -208,9 +208,9 @@ field(3,'a', 2, 'c')
 0
 show warnings;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def		subquery_alias	subquery_alias	Level	Level	253	128	7	N	1	0	45
-def		subquery_alias	subquery_alias	Code	Code	8	20	4	N	32769	0	63
-def		subquery_alias	subquery_alias	Message	Message	253	2048	37	N	1	0	45
+def		subquery_alias	subquery_alias	Level	Level	253	128	7	N	4097	0	45
+def		subquery_alias	subquery_alias	Code	Code	8	20	4	N	36865	0	63
+def		subquery_alias	subquery_alias	Message	Message	253	2048	37	N	4097	0	45
 Level	Code	Message
 Warning	1292	Truncated incorrect DOUBLE value: 'a'
 Warning	1292	Truncated incorrect DOUBLE value: 'c'

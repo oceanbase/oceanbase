@@ -329,7 +329,7 @@ ceil(avg(ceil(i4)))	ceil(avg(ceil(i5)))
 1	0
 select * from tbl1 where floor(i4)=2;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def	test	tbl1	tbl1	i1	i1	3	11	0	N	49155	0	63
+def	test	tbl1	tbl1	i1	i1	3	11	0	N	53251	0	63
 def	test	tbl1	tbl1	v2	v2	253	320	0	Y	0	0	45
 def	test	tbl1	tbl1	i3	i3	254	80	0	Y	0	0	45
 def	test	tbl1	tbl1	i4	i4	4	12	0	Y	32768	31	63
@@ -338,7 +338,7 @@ def	test	tbl1	tbl1	i5	i5	246	7	0	Y	32768	3	63
 i1	v2	i3	i4	d4	i5
 select * from tbl1 where floor(i4)=ceil(i4)-1;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def	test	tbl1	tbl1	i1	i1	3	11	1	N	49155	0	63
+def	test	tbl1	tbl1	i1	i1	3	11	1	N	53251	0	63
 def	test	tbl1	tbl1	v2	v2	253	320	4	Y	0	0	45
 def	test	tbl1	tbl1	i3	i3	254	80	5	Y	0	0	45
 def	test	tbl1	tbl1	i4	i4	4	12	8	Y	32768	31	63
@@ -354,7 +354,7 @@ i1	v2	i3	i4	d4	i5
 7	now3	haha4	0.6256	2014-05-04 12:00:00.000000	1.677
 select * from tbl1 where floor(i1)=ceil(i1);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def	test	tbl1	tbl1	i1	i1	3	11	1	N	49155	0	63
+def	test	tbl1	tbl1	i1	i1	3	11	1	N	53251	0	63
 def	test	tbl1	tbl1	v2	v2	253	320	4	Y	0	0	45
 def	test	tbl1	tbl1	i3	i3	254	80	5	Y	0	0	45
 def	test	tbl1	tbl1	i4	i4	4	12	8	Y	32768	31	63
@@ -394,7 +394,7 @@ ceil(i1/10*8)	i1/10*8
 6	5.6000
 select * from tbl1 order by floor(i4);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def	test	tbl1	tbl1	i1	i1	3	11	1	N	49155	0	63
+def	test	tbl1	tbl1	i1	i1	3	11	1	N	53251	0	63
 def	test	tbl1	tbl1	v2	v2	253	320	4	Y	0	0	45
 def	test	tbl1	tbl1	i3	i3	254	80	5	Y	0	0	45
 def	test	tbl1	tbl1	i4	i4	4	12	8	Y	32768	31	63
@@ -410,7 +410,7 @@ i1	v2	i3	i4	d4	i5
 4	now	haha1	5.9256	2014-05-04 12:00:00.000000	3.450
 select * from tbl1 order by floor(i4) desc;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def	test	tbl1	tbl1	i1	i1	3	11	1	N	49155	0	63
+def	test	tbl1	tbl1	i1	i1	3	11	1	N	53251	0	63
 def	test	tbl1	tbl1	v2	v2	253	320	4	Y	0	0	45
 def	test	tbl1	tbl1	i3	i3	254	80	5	Y	0	0	45
 def	test	tbl1	tbl1	i4	i4	4	12	8	Y	32768	31	63

@@ -531,7 +531,7 @@ time_to_usec(null)
 NULL
 select usec_to_time(null);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					usec_to_time(null)	7	26	0	Y	1152	6	63
+def					usec_to_time(null)	7	26	0	Y	128	6	63
 usec_to_time(null)
 NULL
 select EXTRACT(DAY FROM null);

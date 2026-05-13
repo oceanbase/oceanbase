@@ -7434,6 +7434,9 @@ uint32_t ObRawExprUtils::calc_column_result_flag(const ObColumnSchemaV2 &column_
 
   if (column_schema.is_not_null_for_read()) {
     flag |= NOT_NULL_FLAG;
+    if (!column_schema.is_autoincrement() && column_schema.get_cur_default_value().is_null()) {
+      flag |= NO_DEFAULT_VALUE_FLAG;
+    }
   }
   if (column_schema.is_not_null_for_write()) {
     flag |= NOT_NULL_WRITE_FLAG;

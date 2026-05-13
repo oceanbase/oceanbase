@@ -322,6 +322,16 @@ int ObSql::fill_result_set(ObResultSet &result_set,
           field.type_.set_type(expr->get_data_type());
           field.accuracy_ = expr->get_accuracy();
           field.flags_ = static_cast<uint16_t>(expr->get_result_flag());
+          if (T_FUN_SET_TO_STR == expr->get_expr_type()
+              || T_FUN_ENUM_TO_STR == expr->get_expr_type()) {
+            ObRawExpr *child = expr->get_param_expr(1);
+            if (OB_NOT_NULL(child)) {
+              field.flags_ |= static_cast<uint16_t>(child->get_result_flag()
+                  & (NOT_NULL_FLAG | NO_DEFAULT_VALUE_FLAG));
+              field.flags_ |= (T_FUN_ENUM_TO_STR == expr->get_expr_type())
+                  ? ENUM_FLAG : SET_FLAG;
+            }
+          }
           // Setup Collation and Collation levl
           if (ob_is_string_or_lob_type(static_cast<ObObjType>(expr->get_data_type()))
               || ob_is_raw(static_cast<ObObjType>(expr->get_data_type()))
@@ -766,6 +776,16 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
         field.type_.set_type(expr->get_data_type());
         field.accuracy_ = expr->get_accuracy();
         field.flags_ = static_cast<uint16_t>(expr->get_result_flag());
+        if (T_FUN_SET_TO_STR == expr->get_expr_type()
+            || T_FUN_ENUM_TO_STR == expr->get_expr_type()) {
+          ObRawExpr *child = expr->get_param_expr(1);
+          if (OB_NOT_NULL(child)) {
+            field.flags_ |= static_cast<uint16_t>(child->get_result_flag()
+                & (NOT_NULL_FLAG | NO_DEFAULT_VALUE_FLAG));
+            field.flags_ |= (T_FUN_ENUM_TO_STR == expr->get_expr_type())
+                ? ENUM_FLAG : SET_FLAG;
+          }
+        }
         // Setup Collation and Collation level
         if (ob_is_string_or_lob_type(static_cast<ObObjType>(expr->get_data_type()))
             || ob_is_raw(static_cast<ObObjType>(expr->get_data_type()))

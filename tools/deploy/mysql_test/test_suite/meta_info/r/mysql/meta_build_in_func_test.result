@@ -666,7 +666,7 @@ def					time_to_usec(utc_timestamp())-time_to_usec(utc_timestamp())	8	21	1	Y	328
 set timestamp = 0;
 select usec_to_time(12) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					usec_to_time(12)	7	26	26	Y	1152	6	63
+def					usec_to_time(12)	7	26	26	Y	128	6	63
 +----------------------------+
 | usec_to_time(12)           |
 +----------------------------+
@@ -674,7 +674,7 @@ def					usec_to_time(12)	7	26	26	Y	1152	6	63
 +----------------------------+
 select usec_to_time(65535) from build_in_func_test_table;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					usec_to_time(65535)	7	26	26	Y	1152	6	63
+def					usec_to_time(65535)	7	26	26	Y	128	6	63
 +----------------------------+
 | usec_to_time(65535)        |
 +----------------------------+
@@ -1753,7 +1753,7 @@ create table test_0 (test_id varchar(10) primary key,name varchar(20),create_dat
 insert into test_0 values('13','12','2014-03-21');
 select test_id,name,DATE_FORMAT(create_date,'%Y-%m-%d') as value from test_0;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def	test	test_0	test_0	test_id	test_id	253	40	2	N	16387	0	45
+def	test	test_0	test_0	test_id	test_id	253	40	2	N	20483	0	45
 def	test	test_0	test_0	name	name	253	80	2	Y	0	0	45
 def					value	253	104	10	Y	0	0	45
 +---------+------+------------+
@@ -1763,7 +1763,7 @@ def					value	253	104	10	Y	0	0	45
 +---------+------+------------+
 select test_id,name,DATE_FORMAT(create_date,'%Y-%m-%d') as value from test_0 where test_id='13';
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def	test	test_0	test_0	test_id	test_id	253	40	2	N	16387	0	45
+def	test	test_0	test_0	test_id	test_id	253	40	2	N	20483	0	45
 def	test	test_0	test_0	name	name	253	80	2	Y	0	0	45
 def					value	253	104	10	Y	0	0	45
 +---------+------+------------+
@@ -1773,7 +1773,7 @@ def					value	253	104	10	Y	0	0	45
 +---------+------+------------+
 select test_id,name,DATE_FORMAT(create_date,'%Y-%m-%d') as value from test_0 where test_id='12';
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def	test	test_0	test_0	test_id	test_id	253	40	0	N	16387	0	45
+def	test	test_0	test_0	test_id	test_id	253	40	0	N	20483	0	45
 def	test	test_0	test_0	name	name	253	80	0	Y	0	0	45
 def					value	253	104	0	Y	0	0	45
 +---------+------+-------+
@@ -1782,7 +1782,7 @@ def					value	253	104	0	Y	0	0	45
 +---------+------+-------+
 select test_id,name,DATE_FORMAT(create_date,'%Y-%m-%d') as value from test_0 where test_id='13' and name='12';
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def	test	test_0	test_0	test_id	test_id	253	40	2	N	16387	0	45
+def	test	test_0	test_0	test_id	test_id	253	40	2	N	20483	0	45
 def	test	test_0	test_0	name	name	253	80	2	Y	0	0	45
 def					value	253	104	10	Y	0	0	45
 +---------+------+------------+
@@ -1792,7 +1792,7 @@ def					value	253	104	10	Y	0	0	45
 +---------+------+------------+
 select test_id,name,DATE_FORMAT(create_date,'%Y-%m-%d') as value from test_0 where test_id='13' and name='11';
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def	test	test_0	test_0	test_id	test_id	253	40	0	N	16387	0	45
+def	test	test_0	test_0	test_id	test_id	253	40	0	N	20483	0	45
 def	test	test_0	test_0	name	name	253	80	0	Y	0	0	45
 def					value	253	104	0	Y	0	0	45
 +---------+------+-------+
@@ -1801,7 +1801,7 @@ def					value	253	104	0	Y	0	0	45
 +---------+------+-------+
 select test_id,name,DATE_FORMAT(create_date,'%Y-%m-%d') as value from test_0 where test_id='11';
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def	test	test_0	test_0	test_id	test_id	253	40	0	N	16387	0	45
+def	test	test_0	test_0	test_id	test_id	253	40	0	N	20483	0	45
 def	test	test_0	test_0	name	name	253	80	0	Y	0	0	45
 def					value	253	104	0	Y	0	0	45
 +---------+------+-------+
@@ -1829,7 +1829,7 @@ insert into test_format values(date_FORMAT('2003-01-02 10:20:10.44AM', '%Y-%m-%d
 select * from test_format;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
 def	test	test_format	test_format	datetest	datetest	253	200	29	Y	0	0	45
-def	test	test_format	test_format	pk	pk	3	11	2	N	49155	0	63
+def	test	test_format	test_format	pk	pk	3	11	2	N	53251	0	63
 +-------------------------------+----+
 | datetest                      | pk |
 +-------------------------------+----+
@@ -2576,7 +2576,7 @@ def					time_to_usec(null)	8	20	0	Y	32896	0	63
 +--------------------+
 select usec_to_time(null);
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def					usec_to_time(null)	7	26	0	Y	1152	6	63
+def					usec_to_time(null)	7	26	0	Y	128	6	63
 +--------------------+
 | usec_to_time(null) |
 +--------------------+
