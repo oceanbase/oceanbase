@@ -933,7 +933,8 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     route_to_column_replica_,
                     enable_inc_major_,
                     need_strong_routing_,
-                    enable_vec_batch_accum_);
+                    enable_vec_batch_accum_,
+                    phy_hint_.lookup_batch_rpc_flag_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)

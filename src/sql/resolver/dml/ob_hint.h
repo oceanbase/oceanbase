@@ -687,6 +687,7 @@ struct ObPhyPlanHint
 {
   OB_UNIS_VERSION(1);
 public:
+  static const int64_t LOOKUP_BATCH_RPC_FLAG_DEFAULT = -1;
   ObPhyPlanHint()
       : read_consistency_(common::INVALID_CONSISTENCY),
         query_timeout_(-1),
@@ -695,7 +696,8 @@ public:
         log_level_(),
         parallel_(-1),
         monitor_(false),
-        table_lock_mode_(0)
+        table_lock_mode_(0),
+        lookup_batch_rpc_flag_(LOOKUP_BATCH_RPC_FLAG_DEFAULT)
   {}
 
   ObPhyPlanHint(const ObGlobalHint &global_hint)
@@ -706,7 +708,8 @@ public:
         log_level_(global_hint.log_level_),
         parallel_(global_hint.parallel_),
         monitor_(global_hint.monitor_),
-        table_lock_mode_(global_hint.table_lock_mode_)
+        table_lock_mode_(global_hint.table_lock_mode_),
+        lookup_batch_rpc_flag_(LOOKUP_BATCH_RPC_FLAG_DEFAULT)
   {}
 
   int deep_copy(const ObPhyPlanHint &other, common::ObIAllocator &allocator);
@@ -720,7 +723,8 @@ public:
                K_(log_level),
                K_(parallel),
                K_(monitor),
-               K_(table_lock_mode));
+               K_(table_lock_mode),
+               K_(lookup_batch_rpc_flag));
 
   common::ObConsistencyLevel read_consistency_;
   int64_t query_timeout_;
@@ -731,6 +735,7 @@ public:
   bool monitor_;
   int64_t table_lock_mode_;
   int64_t max_execution_time_;
+  int64_t lookup_batch_rpc_flag_;
 };
 
 struct ObLeadingTable {
