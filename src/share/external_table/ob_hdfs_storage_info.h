@@ -29,7 +29,7 @@ const int64_t OB_MAX_HDFS_BACKUP_EXTENSION_LENGTH = 1536;
 const char *const KRB5CONF = "krb5conf=";
 const char *const PRINCIPAL = "principal=";
 const char *const KEYTAB = "keytab=";
-const char *const TICKET_CACHE_PATH = "ticiket_cache_path=";
+const char *const TICKET_CACHE_PATH = "ticket_cache_path=";
 const char *const HADOOP_USERNAME = "username=";
 const char *const HDFS_CONFIGS = "configs=";
 
