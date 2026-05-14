@@ -9149,6 +9149,13 @@ def_table_schema(
   ],
 )
 
+# 597: __all_ai_model_provider
+# 598: __all_ai_model_provider_history
+# 599: __all_ai_model_profile
+
+# 600: __all_ai_gateway
+# 601: __all_ai_gateway_history
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -18369,6 +18376,10 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_name = '__all_virtual_table_opt_stat_invalidate_plan',
   in_tenant_space = True,
   keywords = all_def_keywords['__all_table_opt_stat_invalidate_plan']))
+
+# 12609: __all_virtual_ai_model_provider
+# 12610: __all_virtual_ai_model_parameter
+# 12611: __all_virtual_ai_gateway
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -47249,6 +47260,16 @@ FROM
 # 21729: V$OB_LS_LOG_REPLAY_STAT
 # 21730: GV$OB_LS_LOG_TRANSPORT_STAT
 # 21731: V$OB_LS_LOG_TRANSPORT_STAT
+
+# 21732: DBA_OB_AI_MODEL_PROVIDERS
+# 21733: CDB_OB_AI_MODEL_PROVIDERS
+# 21734: DBA_OB_AI_MODEL_PROFILES
+# 21735: CDB_OB_AI_MODEL_PROFILES
+# 21736: DBA_OB_AI_MODEL_GATEWAYS
+# 21737: CDB_OB_AI_MODEL_GATEWAYS
+# 21738: DBA_OB_AI_GATEWAY_ENDPOINTS
+# 21739: CDB_OB_AI_GATEWAY_ENDPOINTS
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################

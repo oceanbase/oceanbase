@@ -402,6 +402,16 @@ enum ObSchemaOperationCategory
   ACT(OB_DDL_DROP_JAVA_POLICY,)                                  \
   ACT(OB_DDL_MODIFY_JAVA_POLICY,)                                \
   ACT(OB_DDL_JAVA_POLICY_OPERATION_END, = 2170)                  \
+  ACT(OB_DDL_AI_PROVIDER_OPERATION_BEGIN, = 2171)                \
+  ACT(OB_DDL_CREATE_AI_PROVIDER, )                               \
+  ACT(OB_DDL_ALTER_AI_PROVIDER, )                                \
+  ACT(OB_DDL_DROP_AI_PROVIDER, )                                 \
+  ACT(OB_DDL_AI_PROVIDER_OPERATION_END, = 2180)                  \
+  ACT(OB_DDL_AI_GATEWAY_OPERATION_BEGIN, = 2181)                \
+  ACT(OB_DDL_CREATE_AI_GATEWAY, )                               \
+  ACT(OB_DDL_ALTER_AI_GATEWAY, )                                \
+  ACT(OB_DDL_DROP_AI_GATEWAY, )                                 \
+  ACT(OB_DDL_AI_GATEWAY_OPERATION_END, = 2190)                  \
   ACT(OB_DDL_MAX_OP,)
 
 DECLARE_ENUM(ObSchemaOperationType, op_type, OP_TYPE_DEF);

@@ -1416,6 +1416,8 @@ typedef enum {
   ICEBERG_TABLE_SCHEMA = 49,
   SENSITIVE_RULE_SCHEMA = 50,
   JAVA_POLICY_SCHEMA = 51,
+  AI_PROVIDER_SCHEMA = 52,
+  AI_GATEWAY_SCHEMA = 53,
   ///<<< add schema type before this line
   OB_MAX_SCHEMA
 } ObSchemaType;

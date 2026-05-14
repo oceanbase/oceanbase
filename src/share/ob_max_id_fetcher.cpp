@@ -78,7 +78,10 @@ const char *ObMaxIdFetcher::max_id_name_info_[OB_MAX_ID_TYPE][2] = {
   { "ob_max_sensitive_rule_id", "max sensitive rule id"},
   { "ob_max_used_ai_model_id", "max used ai model id"},
   { "ob_max_used_ai_model_endpoint_id", "max used ai model endpoint id"},
-  { "ob_max_used_java_policy_id", "max used java policy id"}
+  { "ob_max_used_java_policy_id", "max used java policy id"},
+  { "ob_max_used_ai_model_provider_id", "max used ai model provider id"},
+  { "ob_max_used_ai_gateway_id", "max used ai gateway id"},
+  { "ob_max_used_ai_model_profile_id", "max used ai model profile id"}
 };
 
 ObMaxIdFetcher::ObMaxIdFetcherMutexWrapper ObMaxIdFetcher::mutex_bucket_[MAX_TENANT_MUTEX_BUCKET_CNT];
