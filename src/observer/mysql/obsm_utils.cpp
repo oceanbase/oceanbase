@@ -54,7 +54,7 @@ static const ObMySQLTypeMap type_maps_[ObMaxType] =
   {EMySQLFieldType::MYSQL_TYPE_NEWDECIMAL,0, 0},                                  /* ObNumberType */
   {EMySQLFieldType::MYSQL_TYPE_NEWDECIMAL,UNSIGNED_FLAG, 0},                      /* ObUNumberType */
   {EMySQLFieldType::MYSQL_TYPE_DATETIME,  BINARY_FLAG, 0},                        /* ObDateTimeType */
-  {EMySQLFieldType::MYSQL_TYPE_TIMESTAMP, BINARY_FLAG | TIMESTAMP_FLAG, 0},       /* ObTimestampType */
+  {EMySQLFieldType::MYSQL_TYPE_TIMESTAMP, BINARY_FLAG, 0},       /* ObTimestampType */
   {EMySQLFieldType::MYSQL_TYPE_DATE,      BINARY_FLAG, 0},                        /* ObDateType */
   {EMySQLFieldType::MYSQL_TYPE_TIME,      BINARY_FLAG, 0},                        /* ObTimeType */
   {EMySQLFieldType::MYSQL_TYPE_YEAR,      UNSIGNED_FLAG | ZEROFILL_FLAG, 0},      /* ObYearType */

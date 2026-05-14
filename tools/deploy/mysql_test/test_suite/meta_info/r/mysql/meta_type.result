@@ -307,7 +307,7 @@ def	test	t6	t6	a	a	10	10	0	Y	128	0	63
 def	test	t6	t6	b	b	11	10	0	Y	128	0	63
 def	test	t6	t6	c	c	13	4	0	Y	32864	0	63
 def	test	t6	t6	d	d	12	19	0	Y	128	0	63
-def	test	t6	t6	e	e	7	19	0	Y	1152	0	63
+def	test	t6	t6	e	e	7	19	0	Y	128	0	63
 a	b	c	d	e
 insert into t6 value('20010303', '10:20:30', '2008', '20010303012030', '20010303012030');
 select * from t6;
@@ -316,7 +316,7 @@ def	test	t6	t6	a	a	10	10	10	Y	128	0	63
 def	test	t6	t6	b	b	11	10	8	Y	128	0	63
 def	test	t6	t6	c	c	13	4	4	Y	32864	0	63
 def	test	t6	t6	d	d	12	19	19	Y	128	0	63
-def	test	t6	t6	e	e	7	19	19	Y	1152	0	63
+def	test	t6	t6	e	e	7	19	19	Y	128	0	63
 a	b	c	d	e
 2001-03-03	10:20:30	2008	2001-03-03 01:20:30	2001-03-03 01:20:30
 create table t7(a date, b time(3), c year, d datetime(3), e timestamp(3));
@@ -326,7 +326,7 @@ def	test	t7	t7	a	a	10	10	0	Y	128	0	63
 def	test	t7	t7	b	b	11	14	0	Y	128	3	63
 def	test	t7	t7	c	c	13	4	0	Y	32864	0	63
 def	test	t7	t7	d	d	12	23	0	Y	128	3	63
-def	test	t7	t7	e	e	7	23	0	Y	1152	3	63
+def	test	t7	t7	e	e	7	23	0	Y	128	3	63
 a	b	c	d	e
 insert into t7 value('20010303', '10:20:30', '2008', '20010303012030', '20010303012030');
 select * from t7;
@@ -335,7 +335,7 @@ def	test	t7	t7	a	a	10	10	10	Y	128	0	63
 def	test	t7	t7	b	b	11	14	12	Y	128	3	63
 def	test	t7	t7	c	c	13	4	4	Y	32864	0	63
 def	test	t7	t7	d	d	12	23	23	Y	128	3	63
-def	test	t7	t7	e	e	7	23	23	Y	1152	3	63
+def	test	t7	t7	e	e	7	23	23	Y	128	3	63
 a	b	c	d	e
 2001-03-03	10:20:30.000	2008	2001-03-03 01:20:30.000	2001-03-03 01:20:30.000
 create table t71(a date, b time(6), c year, d datetime(6), e timestamp(6));
@@ -345,7 +345,7 @@ def	test	t71	t71	a	a	10	10	0	Y	128	0	63
 def	test	t71	t71	b	b	11	17	0	Y	128	6	63
 def	test	t71	t71	c	c	13	4	0	Y	32864	0	63
 def	test	t71	t71	d	d	12	26	0	Y	128	6	63
-def	test	t71	t71	e	e	7	26	0	Y	1152	6	63
+def	test	t71	t71	e	e	7	26	0	Y	128	6	63
 a	b	c	d	e
 insert into t71 value('20010303', '10:20:30', '2008', '20010303012030', '20010303012030');
 select * from t71;
@@ -354,7 +354,7 @@ def	test	t71	t71	a	a	10	10	10	Y	128	0	63
 def	test	t71	t71	b	b	11	17	15	Y	128	6	63
 def	test	t71	t71	c	c	13	4	4	Y	32864	0	63
 def	test	t71	t71	d	d	12	26	26	Y	128	6	63
-def	test	t71	t71	e	e	7	26	26	Y	1152	6	63
+def	test	t71	t71	e	e	7	26	26	Y	128	6	63
 a	b	c	d	e
 2001-03-03	10:20:30.000000	2008	2001-03-03 01:20:30.000000	2001-03-03 01:20:30.000000
 drop table if exists t1, t11, t12, t13, t14, t2, t21, t22, t23, t24, t3, t31, t32, t33,t4, t5, t51, t52, t6, t7, t71, t8;

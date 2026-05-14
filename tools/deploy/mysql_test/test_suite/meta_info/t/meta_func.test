@@ -105,6 +105,29 @@ select UNIX_TIMESTAMP(20100101112233);
 drop table t1, t2, tbl1;
 drop view v1;
 
+# test NO_DEFAULT_VALUE_FLAG for NOT NULL columns without explicit DEFAULT
+--disable_warnings
+drop table if exists t_no_default;
+--enable_warnings
+create table t_no_default(
+  id int auto_increment primary key,
+  c_notnull_no_default int not null,
+  c_notnull_with_default int not null default 1,
+  c_char_notnull char(10) not null,
+  c_char_notnull_default char(10) not null default 'hello',
+  c_datetime_notnull datetime not null,
+  c_datetime_notnull_default datetime not null default '2024-01-01 00:00:00',
+  c_enum_notnull ENUM('one','two') NOT NULL,
+  c_enum_default ENUM('one','two') NOT NULL DEFAULT 'one',
+  c_set_notnull SET('a','b','c') NOT NULL,
+  c_set_default SET('a','b','c') NOT NULL DEFAULT 'a',
+  c_enum_nullable ENUM('x','y'),
+  c_set_nullable SET('p','q'),
+  c_nullable int,
+  c_nullable_default_null int default null
+);
+select * from t_no_default;
+drop table t_no_default;
 
 --disable_metadata
 

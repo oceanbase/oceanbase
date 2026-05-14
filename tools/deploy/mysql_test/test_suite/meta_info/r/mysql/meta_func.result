@@ -138,14 +138,14 @@ def					1	8	20	1	N	32897	0	63
 1
 SELECT a, UNIX_TIMESTAMP(a), UNIX_TIMESTAMP('a') FROM t2;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def	test	t2	t2	a	a	253	128	1	N	1	0	45
+def	test	t2	t2	a	a	253	128	1	N	4097	0	45
 def					UNIX_TIMESTAMP(a)	246	20	8	Y	32896	6	63
 def					UNIX_TIMESTAMP('a')	246	20	8	Y	32896	6	63
 a	UNIX_TIMESTAMP(a)	UNIX_TIMESTAMP('a')
 a	0.000000	0.000000
 SELECT a, UNIX_TIMESTAMP(a), UNIX_TIMESTAMP('5000-01-01 00:00:00') FROM t2;
 Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
-def	test	t2	t2	a	a	253	128	1	N	1	0	45
+def	test	t2	t2	a	a	253	128	1	N	4097	0	45
 def					UNIX_TIMESTAMP(a)	246	20	8	Y	32896	6	63
 def					UNIX_TIMESTAMP('5000-01-01 00:00:00')	8	12	11	Y	32896	0	63
 a	UNIX_TIMESTAMP(a)	UNIX_TIMESTAMP('5000-01-01 00:00:00')
@@ -186,3 +186,40 @@ UNIX_TIMESTAMP(20100101112233)
 1262330553
 drop table t1, t2, tbl1;
 drop view v1;
+drop table if exists t_no_default;
+create table t_no_default(
+id int auto_increment primary key,
+c_notnull_no_default int not null,
+c_notnull_with_default int not null default 1,
+c_char_notnull char(10) not null,
+c_char_notnull_default char(10) not null default 'hello',
+c_datetime_notnull datetime not null,
+c_datetime_notnull_default datetime not null default '2024-01-01 00:00:00',
+c_enum_notnull ENUM('one','two') NOT NULL,
+c_enum_default ENUM('one','two') NOT NULL DEFAULT 'one',
+c_set_notnull SET('a','b','c') NOT NULL,
+c_set_default SET('a','b','c') NOT NULL DEFAULT 'a',
+c_enum_nullable ENUM('x','y'),
+c_set_nullable SET('p','q'),
+c_nullable int,
+c_nullable_default_null int default null
+);
+select * from t_no_default;
+Catalog	Database	Table	Table_alias	Column	Column_alias	Type	Length	Max length	Is_null	Flags	Decimals	Charsetnr
+def	test	t_no_default	t_no_default	id	id	3	11	0	N	49667	0	63
+def	test	t_no_default	t_no_default	c_notnull_no_default	c_notnull_no_default	3	11	0	N	36865	0	63
+def	test	t_no_default	t_no_default	c_notnull_with_default	c_notnull_with_default	3	11	0	N	32769	0	63
+def	test	t_no_default	t_no_default	c_char_notnull	c_char_notnull	254	40	0	N	4097	0	45
+def	test	t_no_default	t_no_default	c_char_notnull_default	c_char_notnull_default	254	40	0	N	1	0	45
+def	test	t_no_default	t_no_default	c_datetime_notnull	c_datetime_notnull	12	19	0	N	4225	0	63
+def	test	t_no_default	t_no_default	c_datetime_notnull_default	c_datetime_notnull_default	12	19	0	N	129	0	63
+def	test	t_no_default	t_no_default	c_enum_notnull	c_enum_notnull	254	12	0	N	4353	0	45
+def	test	t_no_default	t_no_default	c_enum_default	c_enum_default	254	12	0	N	257	0	45
+def	test	t_no_default	t_no_default	c_set_notnull	c_set_notnull	254	20	0	N	6145	0	45
+def	test	t_no_default	t_no_default	c_set_default	c_set_default	254	20	0	N	2049	0	45
+def	test	t_no_default	t_no_default	c_enum_nullable	c_enum_nullable	254	4	0	Y	256	0	45
+def	test	t_no_default	t_no_default	c_set_nullable	c_set_nullable	254	12	0	Y	2048	0	45
+def	test	t_no_default	t_no_default	c_nullable	c_nullable	3	11	0	Y	32768	0	63
+def	test	t_no_default	t_no_default	c_nullable_default_null	c_nullable_default_null	3	11	0	Y	32768	0	63
+id	c_notnull_no_default	c_notnull_with_default	c_char_notnull	c_char_notnull_default	c_datetime_notnull	c_datetime_notnull_default	c_enum_notnull	c_enum_default	c_set_notnull	c_set_default	c_enum_nullable	c_set_nullable	c_nullable	c_nullable_default_null
+drop table t_no_default;
