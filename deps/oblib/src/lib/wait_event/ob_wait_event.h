@@ -206,6 +206,7 @@ WAIT_EVENT_DEF(ODPS_PARTITION_DOWNLOADER_COND_WAIT, 18266, "odps partition downl
 WAIT_EVENT_DEF(GI_PARALLEL_TASK_STAGE_COND, 18267, "gi parallel task stage cond", "address", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(GI_STAGE_COND_WAIT, 18268, "gi stage cond wait", "address", "", "", CONCURRENCY, true, true)
 WAIT_EVENT_DEF(UDF_PROCESS_EXECUTE_WAIT, 18269, "wait udf process execute", "pid", "timeout_us", "", CONCURRENCY, true, false)
+WAIT_EVENT_DEF(PAIMON_TASK_GROUP_COND_WAIT, 18270, "paimon task group cond wait", "address", "", "", CONCURRENCY, true, true)
 
 //sleep
 WAIT_EVENT_DEF(BANDWIDTH_THROTTLE_SLEEP, 20000, "sleep: bandwidth throttle sleep wait", "sleep_interval", "", "", NETWORK, true, true)
