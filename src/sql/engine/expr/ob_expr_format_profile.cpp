@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_format_profile.h"
 #include "share/diagnosis/ob_runtime_profile.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/ob_exec_context.h"
 
 using namespace oceanbase::common;
@@ -35,9 +36,9 @@ int ObExprFormatProfile::calc_result_typeN(ObExprResType &result_type, ObExprRes
   } else if (param_num != 1 && param_num != 2) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("should has 1 or 2 parameters", K(param_num));
-  } else if (!types_stack[0].is_varbinary()) {
+  } else if (!types_stack[0].is_varbinary() && !types_stack[0].is_blob()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("first param must be varbinary");
+    LOG_WARN("first param must be varbinary or blob");
   } else if (param_num == 2 && !types_stack[1].is_int()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("second param must be int");
@@ -69,8 +70,14 @@ int ObExprFormatProfile::format_profile(const ObExpr &expr, ObEvalCtx &ctx, ObDa
   } else {
     ObProfile *real_time_profile = nullptr;
     const char *json = nullptr;
-    char *persist_profile = const_cast<char *>(raw_profile->get_string().ptr());
-    const int64_t persist_len = raw_profile->get_string().length();
+    ObString payload;
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator, *raw_profile,
+                expr.args_[0]->datum_meta_,
+                expr.args_[0]->obj_meta_.has_lob_header(), payload))) {
+      LOG_WARN("fail to read raw profile payload", K(ret));
+    }
+    char *persist_profile = const_cast<char *>(payload.ptr());
+    const int64_t persist_len = payload.length();
     metric::Level display_level = metric::Level::STANDARD;
     if (nullptr != metric_level && !metric_level->is_null()) {
       int64_t int_val = metric_level->get_int();

@@ -927,9 +927,17 @@ int ObVirtualSqlPlanMonitor::convert_node_to_row(ObMonitorNode &node, ObNewRow *
         if (OB_ISNULL(node.raw_profile_)) {
           cells[cell_idx].set_null();
         } else {
-          cells[cell_idx].set_varchar(node.raw_profile_, node.raw_profile_len_);
-          cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
-                                    ObCharset::get_default_charset()));
+          uint64_t data_version = 0;
+          if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+            SERVER_LOG(WARN, "failed to get min data version", K(ret));
+          } else if (data_version >= DATA_VERSION_4_6_1_0) {
+            cells[cell_idx].set_lob_value(ObLongTextType, node.raw_profile_, node.raw_profile_len_);
+            cells[cell_idx].set_collation_type(CS_TYPE_BINARY);
+          } else {
+            cells[cell_idx].set_varchar(node.raw_profile_, node.raw_profile_len_);
+            cells[cell_idx].set_collation_type(ObCharset::get_default_collation(
+                                      ObCharset::get_default_charset()));
+          }
         }
         break;
       }
