@@ -3526,9 +3526,11 @@ bool ObLogInstance::need_pause_redo_dispatch() const
     TCTX.dml_parser_->get_log_entry_task_count(dml_parser_log_entry_count);
     int64_t formatter_br_count = 0;
     int64_t formatter_log_entry_count = 0;
-    int64_t formatter_stmt_in_lob_merger_count = 0; // unused
+    int64_t formatter_stmt_in_lob_merger_count = 0;
     TCTX.formatter_->get_task_count(formatter_br_count, formatter_log_entry_count, formatter_stmt_in_lob_merger_count);
-    const int64_t log_entry_count_handling = dml_parser_log_entry_count + formatter_log_entry_count; // TODO: 使用formatter_log_entry_count是否可能导致流控被提前触发？
+    // Formatter log entry count includes in-flight LOB tasks that may need later redo fragments.
+    // Use formatter queue depth to avoid pausing redo dispatch while LOB merger is waiting for redo.
+    const int64_t task_count_handling = dml_parser_log_entry_count + formatter_br_count;
     const int64_t rc_br_thread_count = TCONF.resource_collector_thread_num_for_br;
     const int64_t rc_thread_queue_len = CDC_CFG_MGR.get_resource_collector_queue_length();
     int64_t resource_collector_part_trans_task_count = 0;
@@ -3588,7 +3590,7 @@ bool ObLogInstance::need_pause_redo_dispatch() const
     } else if (out_dml_br_count > queue_backlog_lowest_tolerance) {
       current_need_pause = (is_redo_dispatch_over_exceed || touch_memory_warn_limit);
       reason = "DOWNSTREAM_HOLDING_TOO_MUCH_BR";
-    } else if (log_entry_count_handling > queue_backlog_lowest_tolerance) {
+    } else if (task_count_handling > queue_backlog_lowest_tolerance) {
       current_need_pause = (is_redo_dispatch_over_exceed || touch_memory_warn_limit);
       reason = "TOO_MUCH_LOG_ENTRY_TO_HANDLE";
     } else {
@@ -3601,7 +3603,7 @@ bool ObLogInstance::need_pause_redo_dispatch() const
           "[REASON:%s]"
           "[REDO_DISPATCH:%s/%s]"
           "[THRESHOLD:%.2f]"
-          "[LOG_ENTRY_COUNT_HANDLING:%ld (DML_PARSER=%ld, FORMATTER=%ld)]"
+          "[TASK_COUNT_HANDLING:%ld (DML_PARSER_LOG=%ld, FORMATTER_BR=%ld, FORMATTER_LOG=%ld, LOB_STMT=%ld)]"
           "[QUEUE_DML_BR:%ld]"
           "[RESOURCE_COLLECTOR(BR=%ld, LOG_ENTRY=%ld, PART_TRANS=%ld, QUEUE=%ld, STORE_DELETE=%ld)]"
           "[OUT_TRANS:%ld]"
@@ -3611,9 +3613,11 @@ bool ObLogInstance::need_pause_redo_dispatch() const
           reason,
           SIZE_TO_STR(dispatched_redo_memory), SIZE_TO_STR(redo_memory_limit),
           pause_dispatch_percent,
-          log_entry_count_handling,
+          task_count_handling,
           dml_parser_log_entry_count,
+          formatter_br_count,
           formatter_log_entry_count,
+          formatter_stmt_in_lob_merger_count,
           user_queue_br_count,
           resource_collector_br_count,
           resource_collector_log_entry_task_count,
