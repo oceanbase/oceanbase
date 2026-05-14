@@ -2568,6 +2568,10 @@ int ObExprRangeConverter::get_nvl_cmp_node(const ObRawExpr &l_expr,
                                          cmp_range_node))) {
     LOG_WARN("failed to gen column cmp node", K(ret));
   } else if (OB_FALSE_IT(is_precise &= ctx_.cur_is_precise_)) {
+  } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(nvl_second_expr,
+                                                                     nvl_second_expr,
+                                                                     use_implicit_cast_feature))) {
+    LOG_WARN("failed to get expr without lossless cast for nvl second arg", K(ret));
   } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(*ctx_.expr_factory_,
                                                            ctx_.session_info_,
                                                            cmp_type,
