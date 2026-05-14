@@ -1500,6 +1500,12 @@ static ObExpr::EvalFunc g_expr_eval_functions[] = {
   NULL, // ObExprNchr::calc_nchr_expr,                                /* 909 */
   NULL, // ObExprToMonday::calc_to_monday,                            /* 910 */
   NULL, // ObExprSplitByString::calc_split_by_string,                 /* 911 */
+  NULL, // ObExprRegexp::eval_re2_regexp,                               /* 912 */
+  NULL, // ObExprRegexpCount::eval_re2_regexp_count,                    /* 913 */
+  NULL, // ObExprRegexpInstr::eval_re2_regexp_instr,                    /* 914 */
+  NULL, // ObExprRegexpLike::eval_re2_regexp_like,                      /* 915 */
+  NULL, // ObExprRegexpReplace::eval_re2_regexp_replace,                /* 916 */
+  NULL, // ObExprRegexpSubstr::eval_re2_regexp_substr,                  /* 917 */
 };
 
 static ObExpr::EvalBatchFunc g_expr_eval_batch_functions[] = {
@@ -2022,6 +2028,7 @@ static ObExpr::EvalVectorFunc g_expr_eval_vector_functions[] = {
   NULL, // ObExprE::eval_e_vector,                                       /* 331 */
   NULL, // ObExprCountSubstrings::eval_count_substrings_vector,          /* 332 */
   NULL, // ObExprImageType::eval_image_type_vector,                      /* 333 */
+  NULL, // ObExprRegexpReplace::eval_re2_regexp_replace_vector,            /* 334 */
 };
 
 REG_SER_FUNC_ARRAY(OB_SFA_SQL_EXPR_EVAL,
