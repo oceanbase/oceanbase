@@ -11358,25 +11358,29 @@ int ObLogPlan::check_enable_plan_expiration(bool &enable) const
   int ret = OB_SUCCESS;
   enable = false;
   ObOptimizerContext &opt_ctx = get_optimizer_context();
-  const ObSqlCtx *sql_ctx = NULL;
-  if (OB_ISNULL(get_stmt()) || OB_ISNULL(opt_ctx.get_query_ctx())
-      || OB_ISNULL(opt_ctx.get_exec_ctx())
-      || OB_ISNULL(sql_ctx = opt_ctx.get_exec_ctx()->get_sql_ctx())) {
+  ObSQLSessionInfo *session_info = opt_ctx.get_session_info();
+  ObQueryCtx *query_ctx = opt_ctx.get_query_ctx();
+  if (OB_ISNULL(get_stmt()) || OB_ISNULL(query_ctx) || OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), K(get_stmt()), K(opt_ctx.get_query_ctx()), K(sql_ctx));
+    LOG_WARN("unexpected null", K(ret), K(get_stmt()), K(query_ctx), K(session_info));
   } else if (!get_stmt()->is_select_stmt()) {
     // do nothing
   } else if (opt_ctx.get_phy_plan_type() != OB_PHY_PLAN_LOCAL &&
              opt_ctx.get_phy_plan_type() != OB_PHY_PLAN_DISTRIBUTED) {
     // do nothing
-  } else if (opt_ctx.get_query_ctx()->get_query_hint().has_outline_data()
+  } else if (query_ctx->get_query_hint().has_outline_data()
 #ifdef OB_BUILD_SPM
-             && !opt_ctx.get_query_ctx()->is_spm_evolution_
+             && !query_ctx->is_spm_evolution_
 #endif
             ) {
     // do nothing
   } else {
-    enable = true;
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(session_info->get_effective_tenant_id()));
+    const ObOptParamHint &opt_params = query_ctx->get_global_hint().opt_params_;
+    enable = !tenant_config.is_valid() ? true : enable = tenant_config->_enable_plan_expiration_by_exec_feedback;
+    if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ENABLE_PLAN_EXPIRATION_BY_EXEC_FEEDBACK, enable))) {
+      LOG_WARN("failed to get enable_plan_expiration_by_exec_feedback opt_param", K(ret));
+    }
   }
   return ret;
 }

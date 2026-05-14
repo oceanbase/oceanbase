@@ -953,6 +953,7 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
     case ENABLE_FAST_REFRESH_WITH_CUR_TIME:
     case DISABLE_SHARED_EXPR_EXTRACTION:
     case ENABLE_MERGE_INTO:
+    case ENABLE_PLAN_EXPIRATION_BY_EXEC_FEEDBACK:
     case PRESERVE_ORDER_FOR_GROUPBY: {
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("true")
                                       || 0 == val.get_varchar().case_compare("false"));

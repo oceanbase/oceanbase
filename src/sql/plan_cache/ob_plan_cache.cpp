@@ -530,8 +530,13 @@ int ObPlanCache::check_after_get_plan(int tmp_ret,
       RECORD_CACHE_MISS(EXPIRED_PHY_PLAN, ctx, "Physical plan is expired",
                           K(pc_ctx.regenerating_expired_plan_), K(plan->stat_.is_expired_));
     }
-    LOG_INFO("the statistics of table is stale and evict plan.", K(plan->stat_.is_expired_),
-                                        K(pc_ctx.regenerating_expired_plan_), K(plan->stat_));
+    if (EXPIRED_BY_OPT_STAT == plan->stat_.is_expired_) {
+      LOG_INFO("the statistics of table is stale and evict plan.", K(plan->stat_.is_expired_),
+                                          K(pc_ctx.regenerating_expired_plan_), K(plan->stat_));
+    } else {
+      LOG_INFO("the execution stat of plan is unstable and evict plan.", K(plan->stat_.is_expired_),
+                                      K(pc_ctx.regenerating_expired_plan_), K(plan->stat_));
+    }
   }
   return ret;
 }
