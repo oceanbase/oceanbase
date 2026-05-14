@@ -225,16 +225,43 @@ void ObTabletMiniMergeCtx::register_upload_task_(ObTabletHandle &new_tablet_hand
 #undef PRINT_TS_WRAPPER
 #endif
 
+void ObTabletMiniMergeCtx::try_schedule_minor_merge_after_mini(ObTabletHandle &tablet_handle)
+{
+  int ret = OB_SUCCESS;
+  const share::ObLSID &ls_id = get_ls_id();
+  const ObTabletID &tablet_id = get_tablet_id();
+  bool need_minor = false;
+  if (OB_UNLIKELY(!tablet_handle.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tablet handle", K(ret), K(ls_id), K(tablet_id));
+  } else if (tablet_id.is_special_merge_tablet()) {
+    need_minor = true;
+  } else if (OB_FAIL(ObAfterMiniMinorHelper::decide_need_minor_after_mini(tablet_handle, ls_id, need_minor))) {
+    LOG_WARN("decide_need_minor_after_mini failed", K(ret), K(ls_id), K(tablet_id));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (need_minor) {
+    if (OB_FAIL(ObTenantTabletScheduler::schedule_tablet_minor_merge<ObTabletMergeExecuteDag>(
+            MINOR_MERGE, static_param_.ls_handle_, tablet_handle))) {
+      if (OB_SIZE_OVERFLOW != ret && OB_NO_NEED_MERGE != ret) {
+        LOG_WARN("failed to schedule tablet minor merge", K(ret), K(ls_id), K(tablet_id));
+      }
+    }
+  }
+}
+
 void ObTabletMiniMergeCtx::try_schedule_compaction_after_mini(ObTabletHandle &tablet_handle)
 {
   int tmp_ret = OB_SUCCESS;
   bool create_dag = false;
   bool during_restore = false;
-  // when restoring, some log stream may be not ready,
-  // thus the inner sql in ObTenantFreezeInfoMgr::try_update_info may timeout
-  if (OB_SUCCESS == ObBasicMergeScheduler::get_merge_scheduler()->during_restore(during_restore) && !during_restore) {
-    if (get_tablet_id().is_ls_inner_tablet() ||
-        0 == get_merge_info().get_merge_history().get_macro_block_count()) {
+  if (0 == get_merge_info().get_merge_history().get_macro_block_count()) {
+    // empty mini, do nothing
+  } else if (OB_SUCCESS != ObBasicMergeScheduler::get_merge_scheduler()->during_restore(during_restore) || during_restore) {
+    // when restoring, some log stream may be not ready, thus the inner sql in ObTenantFreezeInfoMgr::try_update_info may timeout
+  } else {
+    if (get_tablet_id().is_ls_inner_tablet()) {
       // do nothing
     } else if (nullptr != static_param_.schema_ && static_param_.schema_->is_mv_major_refresh_table()) {
       // do nothing
@@ -250,14 +277,10 @@ void ObTabletMiniMergeCtx::try_schedule_compaction_after_mini(ObTabletHandle &ta
     }
     if (GCTX.is_shared_storage_mode()) {
       // disable minor merge in shared storage mode
-    } else if (create_dag || 0 == get_merge_info().get_merge_history().get_macro_block_count()) {
+    } else if (create_dag) {
       // no need to schedule minor merge
-    } else if (OB_TMP_FAIL(ObTenantTabletScheduler::schedule_tablet_minor_merge<ObTabletMergeExecuteDag>(
-        static_param_.ls_handle_, tablet_handle))) {
-      if (OB_SIZE_OVERFLOW != tmp_ret) {
-        LOG_WARN_RET(tmp_ret, "failed to schedule special tablet minor merge",
-                     "ls_id", get_ls_id(), "tablet_id", get_tablet_id());
-      }
+    } else {
+      (void) try_schedule_minor_merge_after_mini(tablet_handle);
     }
   }
   time_guard_click(ObStorageCompactionTimeGuard::SCHEDULE_OTHER_COMPACTION);

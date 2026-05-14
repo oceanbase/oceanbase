@@ -84,6 +84,7 @@ private:
   virtual int update_tablet(
     ObTabletHandle &new_tablet_handle) override;
   void try_schedule_compaction_after_mini(storage::ObTabletHandle &tablet_handle);
+  void try_schedule_minor_merge_after_mini(storage::ObTabletHandle &tablet_handle);
   int try_report_tablet_stat_after_mini();
   void record_uncommitted_sstable_cnt();
 private:

@@ -1075,7 +1075,8 @@ public:
   // force_cancel: whether to cancel running dag
   int cancel_dag(const ObIDag &dag, const bool force_cancel = false);
   int check_dag_exist(const ObIDag &dag, bool &exist, bool &is_emergency);
-  int64_t get_limit();
+  int64_t get_limit(); // without lock
+  int64_t get_dag_list_size_without_lock() const; // without lock, sum of RANK & READY & WAITING dag lists
   int64_t get_adaptive_limit();
   void set_adaptive_limit(const int64_t limit);
   int64_t get_running_task_cnt();
@@ -1260,6 +1261,7 @@ public:
   bool dag_count_overflow(const ObDagType::ObDagTypeEnum type);
   int64_t allowed_schedule_dag_count(const ObDagType::ObDagTypeEnum type);
   int64_t get_dag_count(const ObDagType::ObDagTypeEnum type);
+  int64_t get_prio_dag_count_without_lock(const ObDagPrio::ObDagPrioEnum prio); // without lock
   int64_t get_running_task_cnt(const ObDagPrio::ObDagPrioEnum priority);
   int get_limit(const int64_t prio, int64_t &limit);
   int get_adaptive_limit(const int64_t prio, int64_t &limit);

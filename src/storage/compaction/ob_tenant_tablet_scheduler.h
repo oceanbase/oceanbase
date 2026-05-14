@@ -297,8 +297,6 @@ public:
   typedef common::ObSEArray<ObGetMergeTablesResult, compaction::ObPartitionMergePolicy::OB_MINOR_PARALLEL_INFO_ARRAY_SIZE> MinorParallelResultArray;
 private:
   static const int64_t BLOOM_FILTER_LOAD_BUILD_THREAD_CNT = 1;
-  static const int64_t NO_MAJOR_MERGE_TYPE_CNT = 3;
-  static const int64_t INNER_TABLET_NO_MAJOR_MERGE_TYPE_CNT = 1;
   static const int64_t BF_TASK_QUEUE_SIZE = 10L * 1000;
   static const int64_t BF_TASK_MAP_SIZE = 10L * 1000;
   static const int64_t BF_TASK_TOTAL_LIMIT = 512L * 1024L * 1024L;
