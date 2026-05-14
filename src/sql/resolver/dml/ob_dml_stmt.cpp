@@ -2627,7 +2627,7 @@ int ObDMLStmt::get_all_table_item_by_tname(const ObSQLSessionInfo *session_info,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table item is null");
     } else {
-      const ObString &tname = item->alias_name_.length() > 0 ? item->alias_name_ : item->table_name_;
+      const ObString &tname = item->get_object_name();
       bool is_equal = true;
       if (!db_name.empty()) {
         if (OB_FAIL(ObResolverUtils::name_case_cmp(session_info, db_name, item->database_name_, OB_TABLE_NAME_CLASS, is_equal))) {
