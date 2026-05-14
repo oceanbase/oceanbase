@@ -1036,6 +1036,10 @@ public:
                                      common::number::ObNumber &next_value);
   int alter_target_sequence_start_with(const share::schema::ObSequenceSchema &sequence_schema,
                                        common::ObMySQLTransaction &trans);
+  int sync_sequence_value(const uint64_t tenant_id,
+                          const uint64_t src_sequence_id,
+                          const uint64_t dest_sequence_id,
+                          const share::ObSequenceOption &option);
   int alter_user_proxy(const share::schema::ObUserInfo* client_user_info,
                         const share::schema::ObUserInfo* proxy_user_info,
                         const uint64_t flags,

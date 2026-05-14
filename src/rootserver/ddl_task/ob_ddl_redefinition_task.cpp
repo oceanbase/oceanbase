@@ -1309,6 +1309,88 @@ int ObDDLRedefinitionTask::sync_auto_increment_position()
   return ret;
 }
 
+int ObDDLRedefinitionTask::sync_identity_column_sequence_value()
+{
+  int ret = OB_SUCCESS;
+  ObRootService *root_service = GCTX.root_service_;
+  ObSchemaGetterGuard hold_buf_src_tenant_schema_guard;
+  ObSchemaGetterGuard hold_buf_dst_tenant_schema_guard;
+  ObSchemaGetterGuard *src_tenant_schema_guard = nullptr;
+  ObSchemaGetterGuard *dst_tenant_schema_guard = nullptr;
+  const ObTableSchema *data_table_schema = nullptr;
+  const ObTableSchema *dest_table_schema = nullptr;
+  bool is_oracle_mode = false;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObDDLRedefinitionTask has not been inited", K(ret));
+  } else if (OB_ISNULL(root_service)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("root service is nullptr", K(ret));
+  } else if (OB_UNLIKELY(tenant_id_ != dst_tenant_id_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("identity column sequence value sync is not supported across tenants", K(ret), K(tenant_id_), K(dst_tenant_id_));
+  } else if (OB_FAIL(ObDDLUtil::get_tenant_schema_guard(tenant_id_, dst_tenant_id_,
+      hold_buf_src_tenant_schema_guard, hold_buf_dst_tenant_schema_guard,
+      src_tenant_schema_guard, dst_tenant_schema_guard))) {
+    LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id_), K(dst_tenant_id_));
+  } else if (OB_FAIL(src_tenant_schema_guard->get_table_schema(tenant_id_, object_id_, data_table_schema))) {
+    LOG_WARN("get data table schema failed", K(ret), K(tenant_id_), K(object_id_));
+  } else if (OB_ISNULL(data_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("data_table_schema is NULL", KR(ret), K_(tenant_id), K_(object_id));
+  } else if (OB_FAIL(dst_tenant_schema_guard->get_table_schema(dst_tenant_id_, target_object_id_, dest_table_schema))) {
+    LOG_WARN("get data table schema failed", KR(ret), K(dst_tenant_id_), K(target_object_id_));
+  } else if (OB_ISNULL(dest_table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("data_table_schema is NULL", K(ret), K_(dst_tenant_id), K_(target_object_id));
+  } else if (OB_FAIL(data_table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("check_if_oracle_compat_mode failed", K(ret), K(is_oracle_mode));
+  } else if (!is_oracle_mode) {
+    // do nothing
+  } else {
+    ObArray<uint64_t> column_ids;
+    if (OB_FAIL(data_table_schema->get_column_ids(column_ids))) {
+      LOG_WARN("get column ids failed", K(ret), K(object_id_));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); ++i) {
+      uint64_t cur_column_id = column_ids.at(i);
+      const ObColumnSchemaV2 *cur_column_schema = data_table_schema->get_column_schema(cur_column_id);
+      const ObColumnSchemaV2 *dst_column_schema = NULL;
+      if (OB_ISNULL(cur_column_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("current column schema is null", K(ret), K(target_object_id_), K(cur_column_id));
+      } else if (cur_column_schema->is_identity_column() &&
+                 nullptr != (dst_column_schema = dest_table_schema->get_column_schema(
+                               cur_column_schema->get_column_name())) &&
+                 dst_column_schema->is_identity_column()) {
+        const int64_t save_timeout_ts = THIS_WORKER.get_timeout_ts();
+        THIS_WORKER.set_timeout_ts(ObTimeUtility::current_time() + max(GCONF.rpc_timeout, 1000 * 1000 * 20L));
+        ObDDLService &ddl_service = root_service->get_ddl_service();
+        ObDDLOperator ddl_operator(ddl_service.get_schema_service(), *GCTX.sql_proxy_);
+        const ObSequenceSchema *src_sequence_schema = NULL;
+        if (OB_FAIL(src_tenant_schema_guard->get_sequence_schema(tenant_id_,
+                                                                 cur_column_schema->get_sequence_id(),
+                                                                 src_sequence_schema))) {
+          LOG_WARN("get sequence schema fail", K(ret), KPC(cur_column_schema));
+        } else if (OB_ISNULL(src_sequence_schema)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("sequence schema is null", K(ret), K(tenant_id_),
+                   K(cur_column_schema->get_sequence_id()), KPC(cur_column_schema));
+        } else if (OB_FAIL(ddl_operator.sync_sequence_value(tenant_id_,
+                                                            cur_column_schema->get_sequence_id(),
+                                                            dst_column_schema->get_sequence_id(),
+                                                            src_sequence_schema->get_sequence_option()))) {
+          LOG_WARN("fail to sync sequence value", K(ret), K(tenant_id_), K(object_id_),
+                   K(target_object_id_), KPC(cur_column_schema), KPC(dst_column_schema),
+                   KPC(src_sequence_schema));
+        }
+        THIS_WORKER.set_timeout_ts(save_timeout_ts);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLRedefinitionTask::modify_autoinc(const ObDDLTaskStatus next_task_status)
 {
   int ret = OB_SUCCESS;
