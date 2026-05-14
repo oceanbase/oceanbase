@@ -228,8 +228,10 @@ int ObSimpleLogClusterTestBase::close()
   OB_LOG_KV_CACHE.destroy();
   ObKVGlobalCache::get_instance().destroy();
 
-  LOG_IO_DEVICE_WRAPPER.destroy();
+  // 1. 先停掉所有的后台 IO 线程，切断调用源
   ObIOManager::get_instance().stop();
+  // 2. 再清理设备资源
+  LOG_IO_DEVICE_WRAPPER.destroy();
   ObIOManager::get_instance().destroy();
   ObDeviceManager::get_instance().destroy();
   return ret;
