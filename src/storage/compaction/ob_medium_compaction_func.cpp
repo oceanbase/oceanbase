@@ -1131,7 +1131,7 @@ int ObMediumCompactionScheduleFunc::get_table_schema_to_merge(
   // for old version medium info, need generate old version schema
   if (FAILEDx(storage_schema.init(allocator, *table_schema, tablet.get_tablet_meta().compat_mode_, false/*skip_column_info*/, data_version, false/*generate_cs_replica_cg_array*/))) {
     LOG_WARN("failed to init storage schema", K(ret), K(schema_version), K(tablet), KPC(table_schema));
-  } else if (!tablet.is_row_store() && storage_schema.is_row_store()) {
+  } else if (!tablet.is_row_store() && !tablet.is_last_major_row_store() && storage_schema.is_row_store()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tablet is column store but storage schema is row store", K(ret),
       K(tablet_id), K(table_id), KPC(table_schema), K(storage_schema), K(tablet));

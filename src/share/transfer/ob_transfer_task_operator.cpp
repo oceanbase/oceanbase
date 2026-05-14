@@ -262,8 +262,8 @@ int ObTransferTaskOperator::fill_dml_splicer_(
       || OB_FAIL(dml_splicer.add_column("table_lock_tablet_list", table_lock_tablet_list_str))
       || OB_FAIL(dml_splicer.add_column("tablet_list", tablet_list_str))
       || OB_FAIL(dml_splicer.add_column("tablet_count", task.get_tablet_list().count()))
-      || OB_FAIL(dml_splicer.add_column("start_scn", task.get_start_scn().get_val_for_inner_table_field()))
-      || OB_FAIL(dml_splicer.add_column("finish_scn", task.get_finish_scn().get_val_for_inner_table_field()))
+      || OB_FAIL(dml_splicer.add_uint64_column("start_scn", task.get_start_scn().get_val_for_inner_table_field()))
+      || OB_FAIL(dml_splicer.add_uint64_column("finish_scn", task.get_finish_scn().get_val_for_inner_table_field()))
       || OB_FAIL(dml_splicer.add_column("status", task.get_status().str()))
       || OB_FAIL(dml_splicer.add_column("trace_id", trace_id))
       || OB_FAIL(dml_splicer.add_column("result", task.get_result()))
@@ -655,7 +655,7 @@ int ObTransferTaskOperator::update_start_scn(
     int64_t affected_rows = 0;
 
     if (FAILEDx(dml_splicer.add_pk_column("task_id", task_id.id()))
-        || OB_FAIL(dml_splicer.add_column("start_scn", start_scn.get_val_for_inner_table_field()))) {
+        || OB_FAIL(dml_splicer.add_uint64_column("start_scn", start_scn.get_val_for_inner_table_field()))) {
       LOG_WARN("fail to add column", KR(ret), K(tenant_id), K(task_id), K(start_scn));
     } else if (OB_FAIL(dml_splicer.finish_row())) {
       LOG_WARN("fail to finish row", K(tenant_id), KR(ret));
@@ -699,7 +699,7 @@ int ObTransferTaskOperator::update_finish_scn(
     int64_t affected_rows = 0;
 
     if (FAILEDx(dml_splicer.add_pk_column("task_id", task_id.id()))
-        || OB_FAIL(dml_splicer.add_column("finish_scn", finish_scn.get_val_for_inner_table_field()))) {
+        || OB_FAIL(dml_splicer.add_uint64_column("finish_scn", finish_scn.get_val_for_inner_table_field()))) {
       LOG_WARN("fail to add column", KR(ret), K(tenant_id), K(task_id), K(finish_scn));
     } else if (OB_FAIL(dml_splicer.finish_row())) {
       LOG_WARN("fail to finish row", K(tenant_id), KR(ret));
