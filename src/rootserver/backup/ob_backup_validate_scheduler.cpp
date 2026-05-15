@@ -685,7 +685,7 @@ int ObBackupValidateScheduler::get_need_validate_tenants_(
 
     if (OB_FAIL(ret)) {
     } else if (tenants.empty()) {
-      ret = OB_ERR_UNEXPECTED;
+      ret = OB_BACKUP_NOT_FIND_ANY_SET_OR_PIECE;
       LOG_WARN("[BACKUP_VALIDATE]all tenant can not do validation task", K(ret));
       LOG_USER_ERROR(OB_ERR_UNEXPECTED, "all tenant can not do validation task");
     }

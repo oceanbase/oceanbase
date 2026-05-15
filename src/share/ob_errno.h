@@ -1623,6 +1623,7 @@ constexpr int OB_OBJECT_STORAGE_INVALID_OBJECT_TYPE = -9158;
 constexpr int OB_BACKUP_SET_NOT_FOUND = -9159;
 constexpr int OB_INC_MAJOR_COUNT_REACH_LIMIT = -9160;
 constexpr int OB_BACKUP_SSLOG_TABLE_SIZE_EXCEEDED = -9161;
+constexpr int OB_BACKUP_NOT_FIND_ANY_SET_OR_PIECE = -9162;
 constexpr int OB_ERR_RESIZE_FILE_TO_SMALLER = -9200;
 constexpr int OB_MARK_BLOCK_INFO_TIMEOUT = -9201;
 constexpr int OB_NOT_READY_TO_EXTEND_FILE = -9202;
@@ -3972,7 +3973,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_INIT_MD5_ERROR__USER_ERROR_MSG "Init MD5 fail"
 #define OB_OUT_OF_ELEMENT__USER_ERROR_MSG "Out of element"
 #define OB_UPDATE_MD5_ERROR__USER_ERROR_MSG "Update MD5 fail"
-#define OB_FILE_LENGTH_INVALID__USER_ERROR_MSG "Invalid OSS file length"
+#define OB_FILE_LENGTH_INVALID__USER_ERROR_MSG "Invalid file length"
 #define OB_NOT_READ_ALL_DATA__USER_ERROR_MSG "Read all data fail"
 #define OB_BUILD_MD5_ERROR__USER_ERROR_MSG "Build MD5 fail"
 #define OB_MD5_NOT_MATCH__USER_ERROR_MSG "OSS file MD5 not match"
@@ -4122,6 +4123,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_BACKUP_SET_NOT_FOUND__USER_ERROR_MSG "available data backup set is not found"
 #define OB_INC_MAJOR_COUNT_REACH_LIMIT__USER_ERROR_MSG "number of inc major has reached limit"
 #define OB_BACKUP_SSLOG_TABLE_SIZE_EXCEEDED__USER_ERROR_MSG "backup failed because sslog table size exceeded the threshold while garbage collection was disabled during backup. Please retry backup later after sslog table space is reclaimed"
+#define OB_BACKUP_NOT_FIND_ANY_SET_OR_PIECE__USER_ERROR_MSG "can not find any backup set or archive piece"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__USER_ERROR_MSG "Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__USER_ERROR_MSG "Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__USER_ERROR_MSG "Auto extend param is not ready to start extending file"
@@ -8396,8 +8398,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_OUT_OF_ELEMENT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9005, Out of element"
 #define OB_UPDATE_MD5_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9006, Update MD5 fail"
 #define OB_UPDATE_MD5_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9006, Update MD5 fail"
-#define OB_FILE_LENGTH_INVALID__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9007, Invalid OSS file length"
-#define OB_FILE_LENGTH_INVALID__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9007, Invalid OSS file length"
+#define OB_FILE_LENGTH_INVALID__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9007, Invalid file length"
+#define OB_FILE_LENGTH_INVALID__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9007, Invalid file length"
 #define OB_NOT_READ_ALL_DATA__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9008, Read all data fail"
 #define OB_NOT_READ_ALL_DATA__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9008, Read all data fail"
 #define OB_BUILD_MD5_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9009, Build MD5 fail"
@@ -8696,6 +8698,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_INC_MAJOR_COUNT_REACH_LIMIT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9160, number of inc major has reached limit"
 #define OB_BACKUP_SSLOG_TABLE_SIZE_EXCEEDED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9161, backup failed because sslog table size exceeded the threshold while garbage collection was disabled during backup. Please retry backup later after sslog table space is reclaimed"
 #define OB_BACKUP_SSLOG_TABLE_SIZE_EXCEEDED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9161, backup failed because sslog table size exceeded the threshold while garbage collection was disabled during backup. Please retry backup later after sslog table space is reclaimed"
+#define OB_BACKUP_NOT_FIND_ANY_SET_OR_PIECE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9162, can not find any backup set or archive piece"
+#define OB_BACKUP_NOT_FIND_ANY_SET_OR_PIECE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9162, can not find any backup set or archive piece"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9201, Mark blocks timeout(5s) in auto extend process when alloc block fail"
@@ -9745,7 +9749,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2546];
+extern int g_all_ob_errnos[2547];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
