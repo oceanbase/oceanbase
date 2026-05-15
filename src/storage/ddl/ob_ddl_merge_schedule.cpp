@@ -314,6 +314,7 @@ int ObDDLMergeScheduler::check_need_merge_for_memory(bool &need_schedule)
       // already reach merge task cnt limit
     } else {
       need_schedule = true;
+      LOG_INFO("need schedule merge for memory", K(ctx_hold), K(threshold), K(ddl_merge_dag_cnt));
     }
   }
   return ret;
