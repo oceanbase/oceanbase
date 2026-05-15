@@ -6548,7 +6548,20 @@ int ObPLResolver::remove_cast_expr_for_temporal_type(ObRawExpr *&expr)
   }
   return ret;
 }
-
+static int add_implicit_cast_for_in_param(ObRawExpr *&expr)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(expr)) {
+    if (T_OP_IN == expr->get_expr_type() || T_OP_NOT_IN == expr->get_expr_type()) {
+      ObOpRawExpr *op_expr = static_cast<ObOpRawExpr*>(expr);
+      op_expr->set_add_implicit_cast_for_in_param(true);
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+      OZ (SMART_CALL(add_implicit_cast_for_in_param(expr->get_param_expr(i))));
+    }
+  }
+  return ret;
+}
 int ObPLResolver::transform_value_expr(ObRawExpr *&value_expr, ObPLDataType &into_expr_type)
 {
   int ret = OB_SUCCESS;
@@ -6556,6 +6569,9 @@ int ObPLResolver::transform_value_expr(ObRawExpr *&value_expr, ObPLDataType &int
   CK (OB_NOT_NULL(current_block_));
   OZ (replace_seq_expr_recursively(value_expr, &current_block_->get_namespace()));
   OZ (remove_cast_expr_for_temporal_type(value_expr));
+  if (OB_SUCC(ret) && resolve_ctx_.session_info_.get_local_plsql_can_transform_sql_to_assign()) {
+    OZ (add_implicit_cast_for_in_param(value_expr));
+  }
   OZ (formalize_expr(*value_expr));
   if (OB_SUCC(ret) && OB_NOT_NULL(value_expr) && into_expr_type.is_obj_type()) {
     // The basic type need check whether to add a column convert expr
