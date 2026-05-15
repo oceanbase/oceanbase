@@ -197,6 +197,7 @@ TEST_F(ObTestObLockWaitMgr, local_lock_conflict_placeholder_test)
     ASSERT_EQ(true, wait_succ);
 
     ASSERT_EQ(OB_SUCCESS, n1->commit_tx(tx1, n1->ts_after_ms(500)));
+    sleep(5); // 5s - wait for async retry to complete after wakeup
     ASSERT_EQ(OB_SUCCESS, n1->abort_tx(tx2, OB_TRANS_CTX_NOT_EXIST));
     ASSERT_EQ(OB_SUCCESS, n1->release_tx(tx1));
     ASSERT_EQ(OB_SUCCESS, n1->release_tx(tx2));
@@ -258,6 +259,7 @@ TEST_F(ObTestObLockWaitMgr, local_lock_conflict_placeholder_test)
 
 
     ASSERT_EQ(OB_SUCCESS, n1->commit_tx(tx1, n1->ts_after_ms(500)));
+    usleep(5); // 5s - wait for async retry to complete after wakeup
     ASSERT_EQ(OB_SUCCESS, n1->abort_tx(tx2, OB_TRANS_CTX_NOT_EXIST));
     ASSERT_EQ(OB_SUCCESS, n1->abort_tx(tx3, OB_TRANS_CTX_NOT_EXIST));
     ASSERT_EQ(OB_SUCCESS, n1->release_tx(tx1));
