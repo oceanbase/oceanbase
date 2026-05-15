@@ -83620,6 +83620,10 @@ def_sys_index_table(
   index_type = 'INDEX_TYPE_NORMAL_LOCAL',
   keywords = all_def_keywords['__all_tenant_macro_block_ha_task'])
 
+# 101126: idx_ai_model_provider_name
+# 101127: idx_ai_model_profile_name
+# 101128: idx_ai_gateway_name
+
 # 余留位置（此行之前占位）
 # 索引表占位建议：基于基表（数据表）表名来占位，其他方式包括：索引名（index_name）、索引表表名
 ################################################################################
