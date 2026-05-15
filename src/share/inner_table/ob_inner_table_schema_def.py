@@ -9156,6 +9156,9 @@ def_table_schema(
 # 600: __all_ai_gateway
 # 601: __all_ai_gateway_history
 
+# 602: __all_ai_batch_task
+# 603: __all_ai_batch_task_history
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -18380,6 +18383,9 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12609: __all_virtual_ai_model_provider
 # 12610: __all_virtual_ai_model_parameter
 # 12611: __all_virtual_ai_gateway
+
+# 12612: __all_virtual_ai_batch_task
+# 12613: __all_virtual_ai_batch_task_history
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -47269,6 +47275,11 @@ FROM
 # 21737: CDB_OB_AI_MODEL_GATEWAYS
 # 21738: DBA_OB_AI_GATEWAY_ENDPOINTS
 # 21739: CDB_OB_AI_GATEWAY_ENDPOINTS
+
+# 21740: DBA_OB_AI_BATCH_TASK
+# 21741: CDB_OB_AI_BATCH_TASK
+# 21742: DBA_OB_AI_BATCH_TASK_HISTORY
+# 21743: CDB_OB_AI_BATCH_TASK_HISTORY
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位

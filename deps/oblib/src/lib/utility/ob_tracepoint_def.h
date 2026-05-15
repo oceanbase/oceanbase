@@ -701,4 +701,22 @@ GLOBAL_ERRSIM_POINT_DEF(2704, EN_VSLICE_ALLOC_INIT_MEM, "Used to enable ObVSlice
 GLOBAL_ERRSIM_POINT_DEF(2705, EN_ROW_STORE_GEN_SKIP_INDEX_ADAPTIVELY, "Whether to generate skip index adaptively for row store delta sstable");
 GLOBAL_ERRSIM_POINT_DEF(2706, EN_DISABLE_INC_SKIP_INDEX_SCAN, "Whether disable skip index scan in inc table");
 GLOBAL_ERRSIM_POINT_DEF(2707, EN_SQL_MEM_TOTAL_ALLOC_SIZE_CHECK, "Log error when sql memory total alloc size is negative");
+
+// BatchFile Pipeline begin 2710 - 2730
+GLOBAL_ERRSIM_POINT_DEF(2710, EN_AI_SERVICE_CREATE_TASK_ERR, "ai access service create prepare task error");
+GLOBAL_ERRSIM_POINT_DEF(2711, EN_AI_SERVICE_ADD_BATCH_LINE_ERR, "ai access service add batch line error");
+GLOBAL_ERRSIM_POINT_DEF(2712, EN_AI_SERVICE_FINISH_PREPARE_ERR, "ai access service finish prepare task error");
+GLOBAL_ERRSIM_POINT_DEF(2713, EN_AI_SERVICE_REGISTER_TASK_ERR, "ai access service register task object error");
+GLOBAL_ERRSIM_POINT_DEF(2714, EN_AI_TASK_PREPARE_DATA_FLUSH_ERR, "ai task prepare data flush jsonl error");
+GLOBAL_ERRSIM_POINT_DEF(2715, EN_AI_TASK_PREPARE_TO_RUNNING_ERR, "ai task prepare data transition to running error");
+GLOBAL_ERRSIM_POINT_DEF(2716, EN_AI_TASK_FILE_UPLOAD_ERR, "ai task file uploading phase error");
+GLOBAL_ERRSIM_POINT_DEF(2717, EN_AI_TASK_BATCH_SUBMIT_ERR, "ai task batch submitting phase error");
+GLOBAL_ERRSIM_POINT_DEF(2718, EN_AI_TASK_BATCH_POLL_ERR, "ai task batch polling phase error");
+GLOBAL_ERRSIM_POINT_DEF(2719, EN_AI_TASK_RESULT_DOWNLOAD_ERR, "ai task result downloading phase error");
+GLOBAL_ERRSIM_POINT_DEF(2720, EN_BATCH_FILE_OP_COLLECT_DATA_ERR, "batch file operator collect data error");
+GLOBAL_ERRSIM_POINT_DEF(2721, EN_BATCH_FILE_OP_SUBMIT_TASK_ERR, "batch file operator submit task error");
+GLOBAL_ERRSIM_POINT_DEF(2722, EN_BATCH_FILE_OP_POLL_SLOT_ERR, "batch file operator poll slot error");
+GLOBAL_ERRSIM_POINT_DEF(2723, EN_BATCH_FILE_OP_OUTPUT_RESULT_ERR, "batch file operator output result error");
+// BatchFile Pipeline end
+
 #endif /*GLOBAL_ERRSIM_POINT_DEF*/
