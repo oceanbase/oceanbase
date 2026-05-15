@@ -1358,6 +1358,8 @@ int ObSysTabletsRestoreTask::process()
     LOG_WARN("failed to create or update tablets", K(ret), K(*ctx_));
   } else if (OB_FAIL(ObStorageHAUtils::deal_compat_with_ls_inner_tablet(ctx_->arg_.ls_id_))) {
     LOG_WARN("failed to deal compcat with ls inner tablet", K(ret), KPC(ctx_));
+  } else if (OB_FAIL(try_remove_tablets_info_())) {
+    LOG_WARN("failed to try remove tablets info", K(ret), KPC(ctx_));
   } else if (OB_FAIL(build_tablets_sstable_info_())) {
     LOG_WARN("failed to build tablets sstable info", K(ret), K(*ctx_));
   } else if (OB_FAIL(generate_sys_tablet_restore_dag_())) {
@@ -1499,6 +1501,54 @@ int ObSysTabletsRestoreTask::generate_sys_tablet_restore_dag_()
         }
       }
       tablet_restore_dag_array.reset();
+    }
+  }
+  return ret;
+}
+
+int ObSysTabletsRestoreTask::try_remove_tablets_info_()
+{
+  // The whole sys tablets restore dag may be retried (e.g., when a retryable
+  // error is encountered after build_tablets_sstable_info_ has already
+  // populated ctx_->ha_table_info_mgr_). On retry, the stale entries make the
+  // following init_tablet_info() in build_tablets_sstable_info() fail with
+  // -4016. Clean them up before rebuilding, mirroring the migration path.
+  int ret = OB_SUCCESS;
+  bool is_in_retry = false;
+  ObSysTabletsRestoreDag *dag = nullptr;
+
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("sys tablets restore task do not init", K(ret), KPC(ctx_));
+  } else if (OB_ISNULL(dag = static_cast<ObSysTabletsRestoreDag *>(this->get_dag()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sys tablets restore dag should not be NULL", K(ret), KPC(ctx_), KP(dag));
+  } else if (OB_FAIL(dag->check_is_in_retry(is_in_retry))) {
+    LOG_WARN("failed to check is in retry", K(ret), KPC(ctx_), KP(dag));
+  } else if (!is_in_retry) {
+    //do nothing
+  } else if (OB_FAIL(remove_tablets_info_())) {
+    LOG_WARN("failed to try remove tablets info", K(ret), KPC(ctx_));
+  }
+  return ret;
+}
+
+int ObSysTabletsRestoreTask::remove_tablets_info_()
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("sys tablets restore task do not init", K(ret), KPC(ctx_));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < ctx_->sys_tablet_id_array_.count(); ++i) {
+      const ObTabletID &tablet_id = ctx_->sys_tablet_id_array_.at(i).tablet_id_;
+      if (OB_FAIL(ctx_->ha_table_info_mgr_.remove_tablet_table_info(tablet_id))) {
+        if (OB_HASH_NOT_EXIST == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to remove tablet info", K(ret), K(tablet_id), KPC(ctx_));
+        }
+      }
     }
   }
   return ret;

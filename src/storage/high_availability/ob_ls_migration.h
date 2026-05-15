@@ -292,6 +292,8 @@ public:
 private:
   int build_tablets_sstable_info_();
   int generate_sys_tablet_migartion_dag_();
+  int try_remove_tablets_info_();
+  int remove_tablets_info_();
   int record_server_event_();
 
 private:
