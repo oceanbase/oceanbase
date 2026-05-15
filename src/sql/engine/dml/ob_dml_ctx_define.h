@@ -319,7 +319,8 @@ public:
       uint64_t is_ref_old_rowid_ : 1;
       uint64_t is_ref_new_rowid_ : 1;
       uint64_t is_prune_columns_ : 1;
-      uint64_t reserved_: 59;
+      uint64_t is_precise_batch_exec_ : 1;  // set at CG time from _enable_trigger_precise_batch_exec
+      uint64_t reserved_: 58;
     };
   };
   bool inline is_ref_old_row() const { return is_ref_old_row_ || !is_prune_columns_; }
