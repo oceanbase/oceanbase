@@ -247,7 +247,8 @@ public:
               interrupt_by_dm_(false),
               p2p_dh_map_info_(),
               sqc_order_gi_tasks_(false),
-              locations_order_()
+              locations_order_(),
+              collect_finish_res_succ_(false)
   {}
   ~ObPxSqcMeta() = default;
   int assign(const ObPxSqcMeta &other);
@@ -371,6 +372,8 @@ public:
   int64_t get_sqc_count() const { return sqc_count_;}
   void set_sqc_order_gi_tasks(bool v) { sqc_order_gi_tasks_ = v; }
   bool sqc_order_gi_tasks() const { return sqc_order_gi_tasks_; }
+  void set_collect_finish_res_succ(bool v) { collect_finish_res_succ_ = v; }
+  bool collect_finish_res_succ() const { return collect_finish_res_succ_; }
   ObQCMonitoringInfo &get_monitoring_info() { return monitoring_info_; }
   const ObQCMonitoringInfo &get_monitoring_info() const { return monitoring_info_; }
   ObIArray<std::pair<int64_t, bool>> &get_locations_order() { return locations_order_; }
@@ -459,6 +462,7 @@ private:
   bool partition_random_affinitize_{true}; // whether do partition random in gi task split
   // record ordering of locations. first is operator id of table scan and second is asc.
   ObSEArray<std::pair<int64_t, bool>, 18> locations_order_;
+  bool collect_finish_res_succ_;
 };
 
 class ObDfo
