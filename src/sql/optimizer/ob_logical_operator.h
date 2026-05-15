@@ -465,6 +465,7 @@ struct ObExchangeInfo
     unmatch_row_dist_method_(ObPQDistributeMethod::LOCAL),
     null_row_dist_method_(ObNullDistributeMethod::NONE),
     slave_mapping_type_(SlaveMappingType::SM_NONE),
+    slave_mapping_id_(0),
     strong_sharding_(NULL),
     weak_sharding_(),
     need_null_aware_shuffle_(false),
@@ -521,6 +522,7 @@ struct ObExchangeInfo
   ObPQDistributeMethod::Type unmatch_row_dist_method_;
   ObNullDistributeMethod::Type null_row_dist_method_;
   SlaveMappingType slave_mapping_type_;
+  int64_t slave_mapping_id_;
   // for repart transmit with pkey range
   ObSEArray<uint64_t, 4> repart_all_tablet_ids_;
   // for hash-hash, re-partition and broadcast, remember the consumer exchange sharding

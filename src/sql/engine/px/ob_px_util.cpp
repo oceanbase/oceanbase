@@ -1239,7 +1239,9 @@ int ObPXServerAddrUtil::alloc_by_reference_child_distribution(
 {
   int ret = OB_SUCCESS;
   ObDfo *reference_child = nullptr;
-  if (OB_FAIL(find_reference_child(parent, reference_child))) {
+  // only get the first slave mapping child as the reference one
+  int64_t slave_mapping_id = parent.get_first_ref_child_sm_id();
+  if (OB_FAIL(find_reference_child(parent, slave_mapping_id, reference_child))) {
     LOG_WARN("find reference child failed", K(ret));
   } else if (OB_ISNULL(reference_child)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1257,7 +1259,9 @@ int ObPXServerAddrUtil::alloc_distribution_of_reference_child(
 {
   int ret = OB_SUCCESS;
   ObDfo *reference_child = nullptr;
-  if (OB_FAIL(find_reference_child(parent, reference_child))) {
+  // only get the first slave mapping child as the reference one
+  int64_t slave_mapping_id = parent.get_first_ref_child_sm_id();
+  if (OB_FAIL(find_reference_child(parent, slave_mapping_id, reference_child))) {
     LOG_WARN("find reference child failed", K(ret));
   } else if (OB_ISNULL(reference_child)) {
     ret = OB_ERR_UNEXPECTED;
@@ -1268,8 +1272,9 @@ int ObPXServerAddrUtil::alloc_distribution_of_reference_child(
   return ret;
 }
 
-int ObPXServerAddrUtil::find_reference_child(ObDfo &parent, ObDfo *&reference_child)
-{
+int ObPXServerAddrUtil::find_reference_child(ObDfo &parent,
+                                             int64_t slave_mapping_id,
+                                             ObDfo *&reference_child) {
   int ret = OB_SUCCESS;
   reference_child = nullptr;
   for (int64_t i = 0;
@@ -1281,7 +1286,8 @@ int ObPXServerAddrUtil::find_reference_child(ObDfo &parent, ObDfo *&reference_ch
     } else if (OB_ISNULL(candi_child)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null child", K(ret));
-    } else if (ObPQDistributeMethod::HASH == candi_child->get_dist_method() &&
+    } else if (candi_child->get_out_slave_mapping_id() == slave_mapping_id &&
+               ObPQDistributeMethod::HASH == candi_child->get_dist_method() &&
                candi_child->is_out_slave_mapping()) {
       reference_child = candi_child;
     }
@@ -4731,15 +4737,17 @@ int ObSlaveMapUtil::build_ppwj_bcast_slave_mn_map(ObDfo &parent, ObDfo &child, u
   return ret;
 }
 
-int ObSlaveMapUtil::build_ppwj_slave_mn_map(ObDfo &parent, ObDfo &child, uint64_t tenant_id)
-{
+int ObSlaveMapUtil::build_ppwj_slave_mn_map(ObExecContext &ctx, ObDfo &parent,
+                                            ObDfo &child, uint64_t tenant_id) {
   int ret = OB_SUCCESS;
   if (ObPQDistributeMethod::PARTITION_HASH == child.get_dist_method()) {
     ObDfo *reference_child = nullptr;
     int64_t child_dfo_idx = -1;
     ObPxChTotalInfos *dfo_ch_total_infos = &child.get_dfo_ch_total_infos();
     ObPxPartChMapArray &map = child.get_part_ch_map();
-    if (OB_FAIL(ObPXServerAddrUtil::find_reference_child(parent, reference_child))) {
+    // find reference child of slave mapping
+    if (OB_FAIL(ObPXServerAddrUtil::find_reference_child(
+        parent, child.get_out_slave_mapping_id(), reference_child))) {
       LOG_WARN("find reference child", K(ret));
     } else if (OB_ISNULL(reference_child)) {
       ret = OB_ERR_UNEXPECTED;
@@ -4751,16 +4759,20 @@ int ObSlaveMapUtil::build_ppwj_slave_mn_map(ObDfo &parent, ObDfo &child, uint64_
     } else if (OB_ISNULL(dfo_ch_total_infos) || 1 != dfo_ch_total_infos->count()) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected status: receive ch info is error", K(ret), KP(dfo_ch_total_infos));
+    // alloc the reference child if it has not been built yet
+    } else if (reference_child->get_sqcs_count() == 0 &&
+        OB_FAIL(ObPXServerAddrUtil::alloc_by_data_distribution(nullptr, ctx, *reference_child))) {
+      LOG_WARN("failed to alloc by data distribution", K(*reference_child));
     } else if (OB_UNLIKELY(reference_child->get_sqcs_count() <= 0)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("the count of sqc is unexpected", K(ret));
+      LOG_WARN("the count of sqc is unexpected", K(ret), K(*reference_child));
     } else if (OB_FAIL(build_partition_map_by_sqcs(
         reference_child->get_sqcs(), child,
         dfo_ch_total_infos->at(0).receive_exec_server_.prefix_task_counts_, map))) {
-      LOG_WARN("failed to build channel map by sqc", K(ret));
+      LOG_WARN("failed to build channel map by sqc", K(ret), K(*reference_child), K(child), K(parent));
     }
   } else if (OB_FAIL(build_pwj_slave_map_mn_group(parent, child, tenant_id))) {
-    LOG_WARN("failed to build ppwj slave map", K(ret));
+    LOG_WARN("failed to build ppwj slave map", K(ret), K(parent), K(child));
   }
   return ret;
 }
@@ -5048,7 +5060,7 @@ int ObSlaveMapUtil::build_slave_mapping_mn_ch_map(ObExecContext &ctx, ObDfo &chi
                                                   uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
-  SlaveMappingType slave_type = parent.get_in_slave_mapping_type();
+  SlaveMappingType slave_type = child.get_out_slave_mapping_type();
   switch(slave_type) {
   case SlaveMappingType::SM_PWJ_HASH_HASH : {
     if (OB_FAIL(build_pwj_slave_map_mn_group(parent, child, tenant_id))) {
@@ -5064,7 +5076,7 @@ int ObSlaveMapUtil::build_slave_mapping_mn_ch_map(ObExecContext &ctx, ObDfo &chi
     break;
   }
   case SlaveMappingType::SM_PPWJ_HASH_HASH : {
-    if (OB_FAIL(build_ppwj_slave_mn_map(parent, child, tenant_id))) {
+    if (OB_FAIL(build_ppwj_slave_mn_map(ctx, parent, child, tenant_id))) {
       LOG_WARN("fail to build pwj slave map", K(ret));
     }
     break;

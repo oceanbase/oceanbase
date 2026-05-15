@@ -709,11 +709,17 @@ int ObDfoMgr::do_split(ObExecContext &exec_ctx,
         dfo->set_dist_method(transmit->dist_method_);
         if (transmit->is_slave_mapping()) {
           dfo->set_out_slave_mapping_type(transmit->get_slave_mapping_type());
-          parent_dfo->set_in_slave_mapping_type(transmit->get_slave_mapping_type());
+          dfo->set_out_slave_mapping_id(transmit->get_slave_mapping_id());
+          if (OB_FAIL(parent_dfo->append_in_slave_mapping_child(
+                  transmit->get_slave_mapping_type(),
+                  transmit->get_slave_mapping_id()))) {
+            LOG_WARN("failed to append slave mapping child", K(ret));
+          }
         }
         dfo->set_pkey_table_loc_id(
           (reinterpret_cast<const ObPxTransmitSpec *>(transmit))->repartition_table_id_);
-        if (OB_ISNULL(parent_dfo)) {
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(parent_dfo)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("parent dfo should not be null", K(ret));
         } else if (transmit->get_px_dop() <= 0) {

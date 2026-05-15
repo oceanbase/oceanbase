@@ -569,6 +569,7 @@ int ObLogExchange::set_exchange_info(const ObExchangeInfo &exch_info)
   unmatch_row_dist_method_ = exch_info.unmatch_row_dist_method_;
   null_row_dist_method_ = exch_info.null_row_dist_method_;
   slave_mapping_type_ = exch_info.slave_mapping_type_;
+  slave_mapping_id_ = exch_info.slave_mapping_id_;
   if (is_producer()) {
     in_server_cnt_ = exch_info.server_cnt_;
     slice_count_ = exch_info.slice_count_;

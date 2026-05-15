@@ -164,6 +164,8 @@ enum ObMatchFiledsType {
   MAX_MATCH_FIELDS_TYPE = 3,
 };
 
+#define IS_SLAVE_MAPPING(type)                                                                     \
+   ((type) != SlaveMappingType::SM_NONE)
 #define IS_HASH_SLAVE_MAPPING(type)                                                                \
   (((type) == SlaveMappingType::SM_PWJ_HASH_HASH)                                                  \
    || ((type) == SlaveMappingType::SM_PPWJ_HASH_HASH))

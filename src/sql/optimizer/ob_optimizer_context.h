@@ -323,7 +323,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     need_retry_plan_(false),
     min_cluster_version_(GET_MIN_CLUSTER_VERSION()),
     udf_cost_factor_(1.0),
-    udf_selectivity_(0.005)
+    udf_selectivity_(0.005),
+    slave_mapping_id_gen_(0)
   { }
   inline common::ObOptStatManager *get_opt_stat_manager() { return opt_stat_manager_; }
   inline void set_opt_stat_manager(common::ObOptStatManager *sm) { opt_stat_manager_ = sm; }
@@ -849,6 +850,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_nested_sql_try_basic_first(bool is_first) { nested_sql_try_basic_first_ = is_first; }
   inline bool need_retry_plan() const { return need_retry_plan_; }
   inline void set_need_retry_plan(bool need_retry) { need_retry_plan_ = need_retry; }
+  inline int64_t generate_slave_mapping_id() { return ++slave_mapping_id_gen_; }
 private:
   ObSQLSessionInfo *session_info_;
   ObExecContext *exec_ctx_;
@@ -990,6 +992,7 @@ private:
   uint64_t min_cluster_version_; // Record the unified cluster version during the optimizer phase
   double udf_cost_factor_;
   double udf_selectivity_;
+  int64_t slave_mapping_id_gen_; // generate slave mapping id, start from 1
 };
 }
 }

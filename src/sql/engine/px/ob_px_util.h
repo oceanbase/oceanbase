@@ -219,7 +219,7 @@ public:
   static int alloc_distribution_of_reference_child(const ObIArray<ObTableLocation> *table_locations,
                                                    ObExecContext &exec_ctx,
                                                    ObDfo &parent);
-  static int find_reference_child(ObDfo &parent, ObDfo *&reference_child);
+  static int find_reference_child(ObDfo &parent, int64_t slave_mapping_id, ObDfo *&reference_child);
   static int add_pdml_merge_gindex_locations(const ObTableModifySpec &dml_op,
                                              ObExecContext &ctx,
                                              ObDfo &dfo);
@@ -625,7 +625,7 @@ private:
                                        ObDfo &parent, int64_t sqc_count, uint64_t tenant_id);
 
   // for SlaveMappingType::SM_PPWJ_HASH_HASH
-  static int build_ppwj_slave_mn_map(ObDfo &parent, ObDfo &child, uint64_t tenant_id);
+  static int build_ppwj_slave_mn_map(ObExecContext &ctx, ObDfo &parent, ObDfo &child, uint64_t tenant_id);
 
   // for SlaveMappingType::SM_PPWJ_BCAST_NONE && SlaveMappingType::SM_PPWJ_NONE_BCAST
   static int build_ppwj_bcast_slave_mn_map(ObDfo &parent, ObDfo &child, uint64_t tenant_id);

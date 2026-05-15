@@ -275,7 +275,7 @@ int ObSerialDfoScheduler::init_all_dfo_channel(ObExecContext &ctx) const
       /*do nothing*/
     }
     if (OB_SUCC(ret)) {
-      const bool has_reference_child = IS_HASH_SLAVE_MAPPING(parent->get_in_slave_mapping_type());
+      const bool has_reference_child = parent->has_reference_child();
       if (parent->is_thread_inited()) {
       } else if (has_reference_child && OB_FAIL(ObPXServerAddrUtil::alloc_distribution_of_reference_child(
             coord_info_.pruning_table_location_, ctx, *parent))) {
@@ -1388,7 +1388,7 @@ int ObParallelDfoScheduler::schedule_pair(ObExecContext &exec_ctx,
   }
   if (OB_SUCC(ret)) {
     if (!parent.is_scheduled()) {
-      const bool has_reference_child = IS_HASH_SLAVE_MAPPING(parent.get_in_slave_mapping_type());
+      const bool has_reference_child = parent.has_reference_child();
       if (has_reference_child && OB_FAIL(ObPXServerAddrUtil::alloc_distribution_of_reference_child(
             coord_info_.pruning_table_location_, exec_ctx, parent))) {
         LOG_WARN("alloc distribution of reference child failed", K(ret));
