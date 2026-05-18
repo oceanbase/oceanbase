@@ -2329,7 +2329,7 @@ int ObTenantDDLService::add_extra_tenant_init_config_(
   ObString config_name_spf_batch_rescan("_enable_spf_batch_rescan");
   ObString config_value_spf_batch_rescan("true");
   ObString config_name_batch_rescan_flag("_enable_das_batch_rescan_flag");
-  ObString config_value_batch_rescan_flag("15");
+  ObString config_value_batch_rescan_flag("2047");
   ObString config_name_enable_mlog_auto_maintenance("enable_mlog_auto_maintenance");
   ObString config_value_enable_mlog_auto_maintenance("true");
   ObString config_name_prexec_prepare_with_params("_prexec_prepare_with_params");
