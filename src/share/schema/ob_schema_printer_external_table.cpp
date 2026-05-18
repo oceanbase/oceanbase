@@ -123,6 +123,7 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
     int64_t default_enclosed_char = ObDataInFileStruct::DEFAULT_FIELD_ENCLOSED_CHAR;
     ObString default_field_term_str = ObDataInFileStruct::DEFAULT_FIELD_TERM_STR;
     bool is_standard_csv_format = true;
+    bool default_escaped_char_is_none = true;
     uint64_t compat_version = 0;
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(share::ObExternalTableUtils::get_tenant_compat_version(schema_guard_,
@@ -134,10 +135,18 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
                                 ObCompatFeatureType::STANDARD_CSV_FORMAT_IN_EXTERNAL_TABLE,
                                 is_standard_csv_format))) {
       LOG_WARN("failed to check standard csv format feature", K(ret), K(compat_version));
+    } else if (OB_FAIL(ObCompatControl::check_feature_enable(
+                                compat_version,
+                                ObCompatFeatureType::DEFAULT_CSV_ESCAPE_CHAR_IS_NONE,
+                                default_escaped_char_is_none))) {
+      LOG_WARN("failed to check default csv escape char is none feature", K(ret), K(compat_version));
+
     } else if (is_standard_csv_format) {
       default_escaped_char = INT64_MAX;
       default_enclosed_char = '"';
       default_field_term_str = ",";
+    } else if (default_escaped_char_is_none) {
+      default_escaped_char = INT64_MAX;
     }
 
     if (OB_SUCC(ret) && ObExternalFileFormat::CSV_FORMAT == format.format_type_) {

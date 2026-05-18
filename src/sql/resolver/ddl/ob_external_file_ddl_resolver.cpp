@@ -28,18 +28,29 @@ int ObDDLResolver::resolve_external_file_format(const ParseNode *format_node,
   OZ(params.session_info_->check_feature_enable(
                       ObCompatFeatureType::STANDARD_CSV_FORMAT_IN_EXTERNAL_TABLE,
                       enable_standard_csv_format));
+  bool default_escaped_char_is_none = true;
+  OZ(params.session_info_->check_feature_enable(
+                      ObCompatFeatureType::DEFAULT_CSV_ESCAPE_CHAR_IS_NONE,
+                      default_escaped_char_is_none));
   // feature version >= 4.5.1.0, use standard CSV format in external table and url table
-  if (OB_SUCC(ret) && enable_standard_csv_format) {
+  if (OB_FAIL(ret)) {
+  } else if (enable_standard_csv_format) {
     data_in_file_struct.field_escaped_char_ = INT64_MAX;
     data_in_file_struct.field_escaped_str_ = "";
     data_in_file_struct.field_term_str_ = ",";
     data_in_file_struct.field_enclosed_char_ = '"';
     data_in_file_struct.field_enclosed_str_ = "\"";
+  } else if (default_escaped_char_is_none) {
+    data_in_file_struct.field_escaped_char_ = INT64_MAX;
+    data_in_file_struct.field_escaped_str_ = "";
   }
+
   if (OB_SUCC(ret) && OB_FAIL(format.csv_format_.init_format(data_in_file_struct,
                                             OB_MAX_COLUMN_NUMBER,
                                             CS_TYPE_UTF8MB4_BIN))) {
     LOG_WARN("failed to init csv format", K(ret));
+  } else if (enable_standard_csv_format) {
+    format.csv_format_.ignore_last_empty_col_ = false;
   }
   // resolve file type and encoding type
   if (OB_SUCC(ret)) {

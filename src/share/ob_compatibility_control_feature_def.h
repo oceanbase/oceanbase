@@ -63,7 +63,12 @@ DEF_COMPAT_CONTROL_FEATURE(PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN,
 DEF_COMPAT_CONTROL_FEATURE(EXTERNAL_COLUMN_NAME_CASE_INSENSITIVE,
     "Whether column name mapping in Parquet/ORC file is case insensitive",
     CLUSTER_VERSION_4_5_0_0)
+
+DEF_COMPAT_CONTROL_FEATURE(DEFAULT_CSV_ESCAPE_CHAR_IS_NONE,
+    "Whether the default CSV escape character is none",
+    MOCK_CLUSTER_VERSION_4_4_2_1, CLUSTER_VERSION_4_5_0_0, CLUSTER_VERSION_4_6_0_0)
+
 DEF_COMPAT_CONTROL_FEATURE(STANDARD_CSV_FORMAT_IN_EXTERNAL_TABLE,
-    "Whether to use standard CSV format (comma delimiter, '\\n' as line delimiter, double-quote enclosed, no escape char) in external table",
-    CLUSTER_VERSION_4_6_0_0)
+    "Whether to use standard CSV format in external table (comma delimiter, '\\n' line delimiter, double-quote enclosed, no escape char, preserve trailing empty columns)",
+    CLUSTER_VERSION_4_6_1_0)
 #endif
