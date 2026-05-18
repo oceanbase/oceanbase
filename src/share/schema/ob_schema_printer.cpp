@@ -2124,7 +2124,7 @@ int ObSchemaPrinter::print_partition_func(const ObTableSchema &table_schema,
                                     auto_split_size))) {
           SHARE_SCHEMA_LOG(WARN, "fail to append display auto split expr", K(ret));
         }
-      } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "partition by %.*s(%.*s)",
+      } else if (table_schema.is_partitioned_table() && OB_FAIL(databuff_printf(buf, buf_len, pos, "partition by %.*s(%.*s)",
                                          type_str.length(),
                                          type_str.ptr(),
                                          func_expr.length(),
