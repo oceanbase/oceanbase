@@ -240,7 +240,7 @@ public:
   {}
   virtual ~ObTabletSplitTaskCache() override { destroy(); }
   int init(const int64_t capacity, const uint64_t tenant_id, const uint64_t host_tenant_id);
-  void destroy() {};
+  void destroy();
   virtual int pop_tasks(const int64_t num_tasks_to_pop, ObIArray<ObSplitTask*> &task_array, ObIAllocator &allocator) override;
   virtual int push_tasks(const ObIArray<const ObSplitTask*> &task_array) override;
   static int mtl_init(ObTabletSplitTaskCache *&task_cache);

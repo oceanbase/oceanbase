@@ -650,6 +650,26 @@ int ObTabletSplitTaskCache::mtl_init(ObTabletSplitTaskCache *&task_cache)
   }
   return ret;
 }
+
+void ObTabletSplitTaskCache::destroy()
+{
+  ObLockGuard<ObSpinLock> guard(lock_);
+  const ObIArray<ObTabletSplitTask *> &heap_array = schedule_time_min_heap_.get_heap_data();
+  for (int64_t i = 0; i < heap_array.count(); ++i) {
+    ObTabletSplitTask *task_ptr = heap_array.at(i);
+    if (OB_NOT_NULL(task_ptr)) {
+      task_ptr->~ObTabletSplitTask();
+      cache_malloc_.free(task_ptr);
+      task_ptr = nullptr;
+    }
+  }
+  inited_ = false;
+  total_tasks_ = 0;
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  host_tenant_id_ = OB_INVALID_TENANT_ID;
+  schedule_time_min_heap_.reset();
+  (void) tasks_set_.destroy();
+}
 #endif
 
 ObRsAutoSplitScheduler &ObRsAutoSplitScheduler::get_instance()
