@@ -120,6 +120,72 @@ int ObSplitPartitionHelper::execute(ObDDLTaskRecord &task_record)
   return ret;
 }
 
+int ObSplitPartitionHelper::check_split_supported_index(
+    const share::schema::ObTableSchema &data_table_schema,
+    const share::schema::ObTableSchema &index_table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (data_table_schema.is_user_table()) {
+    bool is_local_index_column_store = false;
+    const share::schema::ObIndexType &index_type = index_table_schema.get_index_type();
+    if (index_table_schema.is_spatial_index()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("partition split and spatial index coexist on a table", KR(ret), K(index_type));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "partition split and spatial index coexist on a table is");
+    } else if (share::schema::is_fts_index(index_type)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("partition split and fulltext index coexist on a table", KR(ret), K(index_type));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "partition split and fulltext index coexist on a table is");
+    } else if (share::schema::is_multivalue_index(index_type)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("partition split and multivalue index coexist on a table", KR(ret), K(index_type));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "partition split and multivalue index coexist on a table is");
+    } else if (share::schema::is_vec_index(index_type)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("partition split and vector index coexist on a table", KR(ret), K(index_type));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "partition split and vector index coexist on a table is");
+    } else if (INDEX_TYPE_DOMAIN_CTXCAT_DEPRECATED == index_type) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("partition split and domain index coexist on a table", KR(ret));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "partition split and domain index coexist on a table is");
+    } else if (index_table_schema.is_index_local_storage() && OB_FAIL(index_table_schema.get_is_column_store(is_local_index_column_store))) {
+      LOG_WARN("failed to get is column store", KR(ret), K(index_type), "index_tid", index_table_schema.get_table_id());
+    } else if (is_local_index_column_store) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("partition split and column store local index coexist on a table", KR(ret), K(index_type), "index_tid", index_table_schema.get_table_id());
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "partition split and a column store local index coexist on a table is");
+    }
+  }
+  return ret;
+}
+
+int ObSplitPartitionHelper::check_split_supported_index(
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    const share::schema::ObTableSchema &data_table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (data_table_schema.is_user_table()) {
+    ObArray<ObAuxTableMetaInfo> simple_index_infos;
+    if (OB_FAIL(data_table_schema.get_simple_index_infos(simple_index_infos))) {
+      LOG_WARN("get_simple_index_infos failed", KR(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); i++) {
+        const ObTableSchema *index_table_schema = nullptr;
+        const ObAuxTableMetaInfo &index_info = simple_index_infos.at(i);
+        if (OB_FAIL(schema_guard.get_table_schema(data_table_schema.get_tenant_id(), index_info.table_id_, index_table_schema))) {
+          LOG_WARN("failed to get table schema", KR(ret), K(index_info.table_id_));
+        } else if (OB_ISNULL(index_table_schema)) {
+          ret = OB_TABLE_NOT_EXIST;
+          LOG_WARN("failed to get table schema", KR(ret), K(index_info.table_id_));
+        } else if (OB_FAIL(check_split_supported_index(data_table_schema, *index_table_schema))) {
+          LOG_WARN("failed to check split supported index", K(ret), K(data_table_schema));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSplitPartitionHelper::check_allow_split(
     share::schema::ObSchemaGetterGuard &schema_guard,
     const share::schema::ObTableSchema &table_schema)
@@ -131,6 +197,7 @@ int ObSplitPartitionHelper::check_allow_split(
   common::ObArray<const ObSimpleTableSchemaV2 *> table_schemas_in_tg;
   const uint64_t tablegroup_id = table_schema.get_tablegroup_id();
   ObArray<share::ObZoneReplicaAttrSet> zone_locality;
+  ObArray<uint64_t> lob_col_idxs;
   if (OB_UNLIKELY(table_schema.is_in_recyclebin())) {
     ret = OB_ERR_OPERATION_ON_RECYCLE_OBJECT;
     LOG_WARN("the table is in recyclebin.", KR(ret), K(table_schema));
@@ -144,6 +211,18 @@ int ObSplitPartitionHelper::check_allow_split(
   } else if (OB_UNLIKELY(!table_schema.is_user_table() && !table_schema.is_global_index_table())) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported table type", K(ret), K(table_schema));
+  } else if (OB_FAIL(ObDDLUtil::get_table_lob_col_idx(table_schema, lob_col_idxs))) {
+    LOG_WARN("failed to get tabel lob col idx", K(ret), K(table_schema));
+  } else if (lob_col_idxs.empty() && table_schema.has_lob_aux_table()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("can not support split table with lob aux table on gen column", K(ret), K(table_schema)); 
+  } else if (table_schema.is_interval_part()) {
+    // interval partition table is already defended in ObTableSchema::check_enable_split_partition
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("interval part table split partition is not supported", K(ret), K(table_schema));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "interval part table split partition is");
+  } else if (OB_FAIL(check_split_supported_index(schema_guard, table_schema))) {
+    LOG_WARN("failed to check split supported index", K(ret), K(table_schema));
   }
 
   if (OB_FAIL(ret)) {
