@@ -47276,8 +47276,8 @@ FROM
 # 21738: DBA_OB_AI_GATEWAY_ENDPOINTS
 # 21739: CDB_OB_AI_GATEWAY_ENDPOINTS
 
-# 21740: DBA_OB_AI_BATCH_TASK
-# 21741: CDB_OB_AI_BATCH_TASK
+# 21740: DBA_OB_AI_BATCH_TASKS
+# 21741: CDB_OB_AI_BATCH_TASKS
 # 21742: DBA_OB_AI_BATCH_TASK_HISTORY
 # 21743: CDB_OB_AI_BATCH_TASK_HISTORY
 
@@ -83623,6 +83623,9 @@ def_sys_index_table(
 # 101126: idx_ai_model_provider_name
 # 101127: idx_ai_model_profile_name
 # 101128: idx_ai_gateway_name
+
+# 101129: idx_ai_batch_task_ddl_task_id
+# 101130: idx_ai_batch_task_history_ddl_task_id
 
 # 余留位置（此行之前占位）
 # 索引表占位建议：基于基表（数据表）表名来占位，其他方式包括：索引名（index_name）、索引表表名
