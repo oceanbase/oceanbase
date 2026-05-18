@@ -115,6 +115,7 @@ int ObCreateTableHelper::lock_objects_()
   if (FAILEDx(lock_objects_by_id_())) {
     LOG_WARN("fail to lock objects by id", KR(ret), K_(tenant_id));
   }
+  DEBUG_SYNC(BEFORE_DDL_POST_LOCK_OBJECTS_BY_ID);
   // 5. lock objects by id after related objects are locked.
   if (FAILEDx(post_lock_objects_by_id_())) {
     LOG_WARN("fail to lock objects by id in post", KR(ret));

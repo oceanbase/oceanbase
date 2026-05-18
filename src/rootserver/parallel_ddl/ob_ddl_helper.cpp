@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX RS
 #include "observer/ob_inner_sql_connection.h"  //ObInnerSQLConnection
 #include "rootserver/parallel_ddl/ob_ddl_helper.h"
+#include "share/ob_debug_sync.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h" //ObInnerConnectionLockUtil
 
 using namespace oceanbase::lib;
@@ -621,12 +622,13 @@ int ObDDLHelper::lock_objects_in_map_(
       }
     } // end foreach
     if (OB_SUCC(ret)) {
+      const int64_t rpc_timeout = GCONF.rpc_timeout;
       lib::ob_sort(lock_pairs.begin(), lock_pairs.end(), ObLockObjPair::less_than);
       FOREACH_X(it, lock_pairs, OB_SUCC(ret)) {
-        const int64_t timeout = ctx.get_timeout();
-        if (OB_UNLIKELY(timeout <= 0)) {
+        const int64_t remaining_timeout = ctx.get_timeout();
+        if (OB_UNLIKELY(remaining_timeout <= 0)) {
           ret = OB_TIMEOUT;
-          LOG_WARN("already timeout", KR(ret), K(timeout));
+          LOG_WARN("already timeout", KR(ret), K(remaining_timeout));
         } else {
           transaction::tablelock::ObLockObjRequest lock_arg;
           lock_arg.obj_type_ = obj_type;
@@ -634,10 +636,16 @@ int ObDDLHelper::lock_objects_in_map_(
           lock_arg.obj_id_ = it->get_obj_id();
           lock_arg.lock_mode_ = it->get_lock_mode();
           lock_arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
-          lock_arg.timeout_us_ = timeout;
+          lock_arg.timeout_us_ = min(rpc_timeout, remaining_timeout);
           LOG_INFO("try lock object", KR(ret), K(lock_arg));
           if (OB_FAIL(ObInnerConnectionLockUtil::lock_obj(tenant_id_, lock_arg, conn))) {
             LOG_WARN("lock obj failed", KR(ret), K_(tenant_id), K(lock_arg));
+            if (OB_EAGAIN == ret && ctx.get_timeout() > 0) {
+              ret = OB_ERR_PARALLEL_DDL_CONFLICT;
+              LOG_WARN("convert OB_EAGAIN to OB_ERR_PARALLEL_DDL_CONFLICT", KR(ret), K_(tenant_id), K(lock_arg));
+            }
+          } else {
+            DEBUG_SYNC(AFTER_DDL_OBJ_LOCK);
           }
         }
       } // end foreach
@@ -950,11 +958,18 @@ int ObDDLHelper::obj_lock_with_lock_id_(
     lock_arg.obj_id_ = obj_id;
     lock_arg.lock_mode_ = lock_mode;
     lock_arg.op_type_ = ObTableLockOpType::IN_TRANS_COMMON_LOCK;
-    if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.rpc_timeout))) {
+    const int64_t rpc_timeout = GCONF.rpc_timeout;
+    if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, rpc_timeout))) {
       LOG_WARN("fail to set timeout ctx", KR(ret));
-    } else if (FALSE_IT(lock_arg.timeout_us_ = ctx.get_timeout())) {
+    } else if (FALSE_IT(lock_arg.timeout_us_ = min(rpc_timeout, ctx.get_timeout()))) {
     } else if (OB_FAIL(ObInnerConnectionLockUtil::lock_obj(tenant_id, lock_arg, conn))) {
       LOG_WARN("lock obj failed", KR(ret), K(tenant_id), K(lock_arg));
+      if (OB_EAGAIN == ret && ctx.get_timeout() > 0) {
+        ret = OB_ERR_PARALLEL_DDL_CONFLICT;
+        LOG_WARN("convert OB_EAGAIN to OB_ERR_PARALLEL_DDL_CONFLICT", KR(ret), K(tenant_id), K(lock_arg));
+      }
+    } else {
+      DEBUG_SYNC(AFTER_DDL_OBJ_LOCK);
     }
   }
   return ret;
