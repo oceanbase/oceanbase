@@ -105,6 +105,7 @@ public:
   bool is_dag_net_cleared() const;
   void set_dag_net_cleared();
   int set_result(const int32_t result);
+  int set_result_for_split(const int32_t result);
 private:
   void reuse_();
   void wakeup_();

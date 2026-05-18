@@ -22,7 +22,7 @@ namespace unittest
 {
 
 int set_trace_id(char *buf);
-void init_log_and_gtest(int argc, char **argv);
+void init_log_and_gtest(int argc, char **argv, const bool delete_log_file = true);
 void init_gtest_output(std::string &gtest_log_name);
 
 class ObSimpleClusterTestBase : public testing::Test

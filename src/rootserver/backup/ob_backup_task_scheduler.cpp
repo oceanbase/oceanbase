@@ -193,8 +193,9 @@ int ObBackupTaskSchedulerQueue::push_task_without_lock_(const ObBackupScheduleTa
         }
         if (nullptr != new_task) {
           new_task->~ObBackupScheduleTask();
+          task_allocator_.free(new_task);
           new_task = nullptr;
-        } 
+        }
       }
     }
   }

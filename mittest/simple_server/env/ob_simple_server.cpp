@@ -309,6 +309,11 @@ int ObSimpleServer::simple_start()
         if (OB_SUCC(ret)) {
           break;
         }
+        // A failed bootstrap may have already set server_id via check_server_empty_with_result
+        // (ob_service.cpp set_server_id_), after which every retry fails at check_server_empty
+        // with OB_ERR_SYS. Reset so the next retry can make progress on busy CI machines.
+        (void) GCTX.set_server_id(0);
+        GCONF.observer_id = 0;
         ::usleep(200 * 1000);
         curr_time = ObTimeUtility::current_time();
       }

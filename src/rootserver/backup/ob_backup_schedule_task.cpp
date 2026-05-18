@@ -590,6 +590,7 @@ int ObBackupDataLSTask::clone(common::ObIAllocator &allocator, ObBackupScheduleT
       out_task = my_task;
     } else if (OB_NOT_NULL(my_task)) {
       my_task->~ObBackupDataLSTask();
+      allocator.free(input_ptr);
       my_task = nullptr;
     }
   }
@@ -652,6 +653,7 @@ int ObBackupComplLogTask::clone(common::ObIAllocator &allocator, ObBackupSchedul
       out_task = my_task;
     } else if (OB_NOT_NULL(my_task)) {
       my_task->~ObBackupComplLogTask();
+      allocator.free(input_ptr);
       my_task = nullptr;
     }
   }
@@ -784,6 +786,7 @@ int ObBackupBuildIndexTask::clone(common::ObIAllocator &allocator, ObBackupSched
       out_task = my_task;
     } else if (OB_NOT_NULL(my_task)) {
       my_task->~ObBackupBuildIndexTask();
+      allocator.free(input_ptr);
       my_task = nullptr;
     }
   }
@@ -871,6 +874,7 @@ int ObBackupCleanLSTask::clone(common::ObIAllocator &allocator, ObBackupSchedule
       out_task = ls_task;
     } else if (OB_NOT_NULL(ls_task)) {
       ls_task->~ObBackupCleanLSTask();
+      allocator.free(input_ptr);
       ls_task = nullptr;
     }
   }
@@ -1035,6 +1039,7 @@ int ObBackupDataLSMetaTask::clone(common::ObIAllocator &allocator, ObBackupSched
       out_task = my_task;
     } else if (OB_NOT_NULL(my_task)) {
       my_task->~ObBackupDataLSMetaTask();
+      allocator.free(input_ptr);
       my_task = nullptr;
     }
   }
@@ -1096,6 +1101,7 @@ int ObBackupDataLSMetaFinishTask::clone(common::ObIAllocator &allocator, ObBacku
       out_task = my_task;
     } else if (OB_NOT_NULL(my_task)) {
       my_task->~ObBackupDataLSMetaFinishTask();
+      allocator.free(input_ptr);
       my_task = nullptr;
     }
   }
@@ -1145,6 +1151,7 @@ int ObBackupDataFuseTabletMetaTask::clone(common::ObIAllocator &allocator, ObBac
       out_task = my_task;
     } else if (OB_NOT_NULL(my_task)) {
       my_task->~ObBackupDataFuseTabletMetaTask();
+      allocator.free(input_ptr);
       my_task = nullptr;
     }
   }

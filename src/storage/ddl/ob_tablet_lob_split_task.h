@@ -163,6 +163,13 @@ public:
     K_(new_lob_tablet_ids), KPC_(total_map), K_(sub_maps), K_(main_table_ranges), 
     K_(skipped_split_major_keys), K_(row_inserted), K_(cg_row_inserted), K_(physical_row_count),
     K_(ls_rebuild_seq));
+
+private:
+  int get_dst_lob_main_tablet_handle(
+    const ObLobSplitParam& param,
+    const ObTabletID& main_tablet_id,
+    ObTabletHandle& main_tablet_handle);
+  int report_to_migrate_task();
 private:
   common::ObArenaAllocator range_allocator_; // for datum range.
 public:
