@@ -267,6 +267,10 @@ TEST_F(TestObSimpleLogReplayFunc, test_flashback_to_padding)
   {
     int ret = OB_SUCCESS;
     bool is_done = false;
+    // iterator看到的终点是padding日志头
+    iterator_end_lsn = padding_header;
+    // replay看到的committed位点是padding头
+    rp_st->unblock_submit();
     while (!is_done) {
       rp_sv.is_replay_done(ls_id, padding_header, is_done);
       usleep(10*1000);
