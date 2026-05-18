@@ -3304,7 +3304,8 @@ int ObSelectResolver::set_select_item(SelectItem &select_item, bool is_auto_gen)
   } else if (OB_FAIL(session_info_->get_collation_connection(cs_type))) {
     LOG_WARN("fail to get collation_connection", K(ret));
   } else if (!select_item.expr_->is_column_ref_expr()) {
-    if (NULL != params_.secondary_namespace_ && !select_item.is_real_alias_ && is_auto_gen
+    const bool is_alias_for_dynamic_sql = params_.is_dynamic_sql_ && params_.is_prepare_stage_ && params_.is_from_pl_;
+    if ((NULL != params_.secondary_namespace_ || is_alias_for_dynamic_sql) && !select_item.is_real_alias_ && is_auto_gen
         && select_item.alias_name_.length() > static_cast<size_t>(OB_MAX_COLUMN_NAME_LENGTH)) {
       ObString tmp_col_name;
       ObString col_name;
