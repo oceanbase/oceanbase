@@ -8,6 +8,7 @@
 
 #include "sql/engine/cmd/ob_kill_session_arg.h"
 #include "storage/tablelock/ob_table_lock_rpc_struct.h"
+#include "share/tablet/ob_drop_gtt_v2_session_tablet_arg.h"
 #include "rpc/obrpc/ob_rpc_proxy.h"
 #include "share/ob_common_id.h"
 #include "share/ob_rpc_struct.h"

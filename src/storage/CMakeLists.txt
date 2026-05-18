@@ -398,6 +398,7 @@ ob_set_subtarget(ob_storage tablet
   tablet/ob_mds_schema_helper.cpp
   tablet/ob_session_tablet_helper.cpp
   tablet/ob_session_tablet_info_map.cpp
+  tablet/ob_drop_gtt_v2_session_tablet_rpc.cpp
   tablet/ob_tablet_to_global_temporary_table_operator.cpp
   tablet/ob_tablet_binding_helper.cpp
   tablet/ob_tablet_binding_replay_executor.cpp

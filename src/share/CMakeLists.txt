@@ -465,6 +465,7 @@ ob_set_subtarget(ob_share tablet
   tablet/ob_tablet_filter.cpp
   tablet/ob_tablet_to_table_history_operator.cpp
   tablet/ob_tenant_tablet_to_ls_map.cpp
+  tablet/ob_drop_gtt_v2_session_tablet_arg.cpp
 )
 
 ob_set_subtarget(ob_share config

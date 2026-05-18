@@ -2611,26 +2611,26 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
       const uint64_t session_id = my_session->get_sessid_for_table();
       share::schema::ObSchemaGetterGuard schema_guard;
       const share::schema::ObTableSchema *table_schema = nullptr;
-      common::ObMySQLTransaction trans;
-      if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id))) {
-        LOG_WARN("failed to begin transaction", K(ret), K(tenant_id));
-      } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+      ObSEArray<uint64_t, 4> related_table_ids;
+      // Drop the main tablet plus its index / lob aux tablets in one cross-observer broadcast. The dispatch
+      // helper has the creator observer delete every is_creator_ entry inside a single inner transaction, so
+      // truncate is atomic without needing an outer trans here. See dispatch_drop_gtt_v2_session_tablet_on_creator.
+      if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
         LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id));
       } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
         LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(table_id));
       } else if (OB_ISNULL(table_schema)) {
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("table is not exist", K(ret), K(tenant_id), K(table_id));
-      } else if (OB_FAIL(truncate_oracle_temp_table_v2(*my_session, schema_guard, *table_schema, sequence, session_id, trans))) {
-        LOG_WARN("failed to truncate oracle temp table", K(ret), K(tenant_id), K(table_id), K(sequence), K(session_id));
-      }
-      if (trans.is_started()) {
-        int tmp_ret = OB_SUCCESS;
-        bool is_commit = (OB_SUCCESS == ret);
-        if (OB_TMP_FAIL(trans.end(is_commit))) {
-          LOG_WARN("failed to end transaction", KR(ret), KR(tmp_ret));
-          ret = is_commit ? tmp_ret : ret;
-        }
+      } else if (OB_FAIL(collect_oracle_temp_table_v2_related_ids(*table_schema, related_table_ids))) {
+        LOG_WARN("fail to collect related table ids for gtt v2 truncate", KR(ret), K(tenant_id), K(table_id));
+      } else if (OB_FAIL(storage::dispatch_drop_gtt_v2_session_tablet_on_creator(tenant_id, related_table_ids,
+              sequence, session_id))) {
+        LOG_WARN("fail to dispatch drop gtt v2 session tablet", KR(ret), K(tenant_id), K(table_id), K(sequence),
+            K(session_id), K(related_table_ids));
+      } else {
+        LOG_INFO("succeed to drop gtt v2 session tablet via dispatch", K(tenant_id), K(table_id), K(sequence),
+            K(session_id), K(related_table_ids));
       }
     } else {
       ObSqlString sql;
@@ -2670,78 +2670,37 @@ int ObTruncateTableExecutor::execute(ObExecContext &ctx, ObTruncateTableStmt &st
   return ret;
 }
 
-int ObTruncateTableExecutor::truncate_oracle_temp_table_v2(
-    sql::ObSQLSessionInfo &my_session,
-    share::schema::ObSchemaGetterGuard &schema_guard,
+int ObTruncateTableExecutor::collect_oracle_temp_table_v2_related_ids(
     const share::schema::ObTableSchema &table_schema,
-    const int64_t sequence,
-    const uint64_t session_id,
-    common::ObMySQLTransaction &trans)
+    common::ObIArray<uint64_t> &table_ids)
 {
   int ret = OB_SUCCESS;
-  const uint64_t tenant_id = table_schema.get_tenant_id();
-  const bool is_data_table = !table_schema.is_oracle_tmp_table_v2_index_table();
-  ObSessionTabletInfoKey info_key(table_schema.get_table_id(), sequence, session_id);
-  ObSessionTabletInfo session_tablet_info;
-  ObSEArray<storage::ObSessionTabletInfo *, 1> tablet_infos;
-  if (false == trans.is_started()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("transaction is not started", K(ret));
-  } else if (OB_FAIL(my_session.get_gtt_tablet_info_map().get_session_tablet(info_key, session_tablet_info))) {
-    if (OB_ENTRY_NOT_EXIST != ret) {
-      LOG_WARN("failed to get session tablet", K(ret));
-    } else {
-      ret = OB_SUCCESS;
-      LOG_INFO("session tablet not exist, may be already removed", K(ret), K(info_key));
-    }
-  } else if (OB_FAIL(my_session.get_gtt_tablet_info_map().remove_session_tablet(table_schema.get_table_id()))) {
-    LOG_WARN("failed to remove session tablet", K(ret));
-  } else if (OB_FAIL(tablet_infos.push_back(&session_tablet_info))) {
-    LOG_WARN("failed to push back tablet info", KR(ret), K(session_tablet_info));
+  if (OB_UNLIKELY(table_schema.is_oracle_tmp_table_v2_index_table())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("expect main gtt v2 table schema", KR(ret), K(table_schema));
+  } else if (OB_FAIL(table_ids.push_back(table_schema.get_table_id()))) {
+    LOG_WARN("failed to push back main table id", KR(ret), K(table_schema));
   } else {
-    storage::ObSessionTabletDeleteHelper tablet_delete_helper(tenant_id, tablet_infos, trans);
-    if (OB_FAIL(tablet_delete_helper.do_work())) {
-      LOG_WARN("failed to delete session tablet", K(ret));
-    } else {
-      LOG_INFO("succeed to remove session tablet", K(tenant_id), K(session_tablet_info));
-    }
-  }
-  if (OB_SUCC(ret) && is_data_table) {
     ObSEArray<ObAuxTableMetaInfo, 16> simple_index_infos;
     if (OB_FAIL(table_schema.get_simple_index_infos(simple_index_infos))) {
-      LOG_WARN("fail to get simple index infos", K(ret), K(table_schema));
-    } else {
-      for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); i++) {
-        const share::schema::ObTableSchema *index_schema = nullptr;
-        if (OB_FAIL(schema_guard.get_table_schema(tenant_id, simple_index_infos.at(i).table_id_, index_schema))) {
-          LOG_WARN("failed to get index table schema", K(ret), K(tenant_id), K(simple_index_infos.at(i).table_id_));
-        } else if (OB_ISNULL(index_schema)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("index table schema is null", K(ret), K(simple_index_infos.at(i).table_id_));
-        } else if (OB_FAIL(truncate_oracle_temp_table_v2(my_session, schema_guard, *index_schema, sequence, session_id, trans))) {
-          LOG_WARN("failed to truncate oracle temp table", K(ret));
-        }
+      LOG_WARN("failed to get simple index infos", KR(ret), K(table_schema));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
+      if (OB_FAIL(table_ids.push_back(simple_index_infos.at(i).table_id_))) {
+        LOG_WARN("failed to push back index table id", KR(ret),
+                 "index_table_id", simple_index_infos.at(i).table_id_);
       }
-      if (OB_SUCC(ret) && table_schema.has_lob_aux_table()) {
-        const uint64_t aux_lob_meta_tid = table_schema.get_aux_lob_meta_tid();
-        const uint64_t aux_lob_piece_tid = table_schema.get_aux_lob_piece_tid();
-        const share::schema::ObTableSchema *aux_lob_meta_schema = nullptr;
-        const share::schema::ObTableSchema *aux_lob_piece_schema = nullptr;
-        if (OB_FAIL(schema_guard.get_table_schema(tenant_id, aux_lob_meta_tid, aux_lob_meta_schema))) {
-          LOG_WARN("failed to get aux lob meta table schema", K(ret), K(tenant_id), K(aux_lob_meta_tid));
-        } else if (OB_ISNULL(aux_lob_meta_schema)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("aux lob meta table schema is null", K(ret), K(aux_lob_meta_tid));
-        } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, aux_lob_piece_tid, aux_lob_piece_schema))) {
-          LOG_WARN("failed to get aux lob piece table schema", K(ret), K(tenant_id), K(aux_lob_piece_tid));
-        } else if (OB_ISNULL(aux_lob_piece_schema)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("aux lob piece table schema is null", K(ret), K(aux_lob_piece_tid));
-        } else if (OB_FAIL(truncate_oracle_temp_table_v2(my_session, schema_guard, *aux_lob_meta_schema, sequence, session_id, trans))) {
-          LOG_WARN("failed to truncate oracle temp table", K(ret), K(aux_lob_meta_tid));
-        } else if (OB_FAIL(truncate_oracle_temp_table_v2(my_session, schema_guard, *aux_lob_piece_schema, sequence, session_id, trans))) {
-          LOG_WARN("failed to truncate oracle temp table", K(ret), K(aux_lob_piece_tid));
-        }
+    }
+    if (OB_SUCC(ret) && table_schema.has_lob_aux_table()) {
+      const uint64_t aux_lob_meta_tid = table_schema.get_aux_lob_meta_tid();
+      const uint64_t aux_lob_piece_tid = table_schema.get_aux_lob_piece_tid();
+      if (OB_UNLIKELY(OB_INVALID_ID == aux_lob_meta_tid || OB_INVALID_ID == aux_lob_piece_tid)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid lob aux table id", KR(ret), K(aux_lob_meta_tid), K(aux_lob_piece_tid));
+      } else if (OB_FAIL(table_ids.push_back(aux_lob_meta_tid))) {
+        LOG_WARN("failed to push back aux lob meta tid", KR(ret), K(aux_lob_meta_tid));
+      } else if (OB_FAIL(table_ids.push_back(aux_lob_piece_tid))) {
+        LOG_WARN("failed to push back aux lob piece tid", KR(ret), K(aux_lob_piece_tid));
       }
     }
   }

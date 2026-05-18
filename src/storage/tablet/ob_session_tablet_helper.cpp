@@ -4,6 +4,8 @@
  */
 
 #include "storage/tablet/ob_session_tablet_helper.h"
+
+#include "rootserver/ob_rs_async_rpc_proxy.h"
 #include "rootserver/ob_tablet_creator.h"
 #include "rootserver/ob_balance_group_ls_stat_operator.h"
 #include "share/ls/ob_ls_operator.h"
@@ -19,6 +21,10 @@
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
 #include "logservice/data_dictionary/ob_data_dict_storager.h"
 #include "share/tablet/ob_tablet_to_table_history_operator.h"
+#include "share/ob_unit_table_operator.h"
+#include "share/ob_cluster_version.h"
+#include "share/tablet/ob_drop_gtt_v2_session_tablet_arg.h"
+#include "storage/tablet/ob_drop_gtt_v2_session_tablet_rpc.h"
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -1262,6 +1268,152 @@ int ObSessionTabletGCHelper::group_by_session_and_seq(
     }
   }
 
+  return ret;
+}
+
+int dispatch_drop_gtt_v2_session_tablet_on_creator(
+    const uint64_t tenant_id,
+    const common::ObIArray<uint64_t> &table_ids,
+    const int64_t sequence,
+    const uint64_t session_id)
+{
+  int ret = OB_SUCCESS;
+  share::ObDropGTTV2SessionTabletArg arg;
+  uint64_t tenant_data_version = 0;
+  if (OB_UNLIKELY(table_ids.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("table ids must not be empty", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(arg.init(tenant_id, table_ids, sequence, session_id))) {
+    LOG_WARN("failed to init drop gtt v2 session tablet arg", KR(ret), K(tenant_id), K(table_ids),
+             K(sequence), K(session_id));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid drop gtt v2 session tablet arg", KR(ret), K(arg));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+    LOG_WARN("failed to get tenant data version", KR(ret), K(tenant_id));
+  } else if (!((tenant_data_version >= MOCK_DATA_VERSION_4_4_2_1
+                && tenant_data_version < DATA_VERSION_4_5_0_0)
+               || tenant_data_version >= DATA_VERSION_4_6_1_0)) {
+    // GTT v2 + this broadcast fix ship in 4.4.2.1 (BP line) and 4.6.1.0
+    // (main line). During a rolling upgrade window peers older than that do
+    // not handle the new PCODE; broadcasting would surface unknown-PCODE
+    // failures on those peers. Fall back to a local-only invalidation that
+    // matches the pre-broadcast behavior: clean up the originator's session
+    // map and (if the creator entry lives locally) execute the storage
+    // delete. The cross-observer fix kicks in once every observer is upgraded.
+    share::ObDropGTTV2SessionTabletRes local_res;
+    if (OB_FAIL(ObRpcDropGTTV2SessionTabletP::handle_in_tenant(arg, local_res))) {
+      LOG_WARN("failed to run local drop gtt v2 session tablet during compat window",
+               KR(ret), K(tenant_data_version), K(arg));
+    } else if (OB_SUCCESS != local_res.get_ret()) {
+      ret = local_res.get_ret();
+      LOG_WARN("local drop gtt v2 session tablet failed during compat window",
+               KR(ret), K(tenant_data_version), K(arg));
+    } else {
+      LOG_INFO("ran local drop gtt v2 session tablet during compat window",
+               K(tenant_data_version), K(arg), K(local_res));
+    }
+  } else if (OB_ISNULL(GCTX.sql_proxy_) || OB_ISNULL(GCTX.srv_rpc_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("global proxy is null", KR(ret), KP(GCTX.sql_proxy_), KP(GCTX.srv_rpc_proxy_));
+  } else {
+    common::ObArray<common::ObAddr> server_array;
+    share::ObUnitTableOperator ut_operator;
+    if (OB_FAIL(ut_operator.init(*GCTX.sql_proxy_))) {
+      LOG_WARN("failed to init unit table operator", KR(ret));
+    } else if (OB_FAIL(ut_operator.get_alive_servers_by_tenant(tenant_id, server_array))) {
+      LOG_WARN("failed to get alive servers by tenant", KR(ret), K(tenant_id));
+    } else if (OB_UNLIKELY(server_array.empty())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("no alive server found for tenant", KR(ret), K(tenant_id));
+    } else {
+      rootserver::ObDropGTTV2SessionTabletProxy proxy(
+          *GCTX.srv_rpc_proxy_, &obrpc::ObSrvRpcProxy::drop_gtt_v2_session_tablet);
+      // Bound the RPC by the worker's remaining time; if the worker is already
+      // very close to timing out, fall back to GCONF.rpc_timeout so the RPC has
+      // a sane minimum window instead of being issued with 0/negative timeout.
+      const int64_t worker_remain = THIS_WORKER.get_timeout_remain();
+      const int64_t default_timeout = GCONF.rpc_timeout.get_value();
+      const int64_t rpc_timeout = worker_remain > 0 ? MIN(default_timeout, worker_remain) : default_timeout;
+      // Dispatch to every alive server. proxy.call() failures here mean the
+      // request could not even be queued (e.g. unreachable address); those
+      // destinations will NOT appear in proxy.get_dests() / proxy.get_results()
+      // afterwards, so result iteration cannot observe them — we track the
+      // first such failure in dispatch_err for the post-loop accounting.
+      int dispatch_err = OB_SUCCESS;
+      ARRAY_FOREACH_X(server_array, idx, cnt, true) {
+        const common::ObAddr &dest = server_array.at(idx);
+        const int local_call_ret = proxy.call(dest, rpc_timeout, tenant_id, arg);
+        if (OB_SUCCESS != local_call_ret) {
+          LOG_WARN_RET(local_call_ret, "failed to dispatch drop gtt v2 session tablet rpc",
+                       K(dest), K(rpc_timeout), K(arg));
+          if (OB_SUCCESS == dispatch_err) {
+            dispatch_err = local_call_ret;
+          }
+        }
+      }
+      int tmp_ret = OB_SUCCESS;
+      common::ObArray<int> return_code_array;
+      if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
+        LOG_WARN("failed to wait all drop gtt v2 session tablet rpcs", KR(tmp_ret), K(arg));
+        ret = tmp_ret;
+      } else if (OB_FAIL(proxy.check_return_cnt(return_code_array.count()))) {
+        LOG_WARN("drop gtt v2 session tablet rpc return count mismatch", KR(ret),
+                 "return_cnt", return_code_array.count(),
+                 "dest_cnt", proxy.get_dests().count());
+      }
+      bool creator_executed = false;
+      bool any_local_map_hit = false;
+      int creator_ret = OB_SUCCESS;
+      // Iterate over every result (don't bail on the first peer error): in a
+      // mixed-version cluster some peers may reject the unknown PCODE while
+      // others — including the creator — handle it correctly. Peer-level
+      // failures are logged but do not fail the truncate; only the creator's
+      // storage delete result is authoritative.
+      ARRAY_FOREACH_X(proxy.get_results(), idx, cnt, OB_SUCC(ret)) {
+        const share::ObDropGTTV2SessionTabletRes *res = proxy.get_results().at(idx);
+        const common::ObAddr &dest_addr = proxy.get_dests().at(idx);
+        const int peer_ret = return_code_array.at(idx);
+        if (OB_SUCCESS != peer_ret) {
+          LOG_WARN("drop gtt v2 session tablet rpc failed on peer; cache on that peer may be stale",
+                   K(peer_ret), K(dest_addr), K(arg));
+        } else if (OB_ISNULL(res)) {
+          // by design: peer-level failure, not propagated (creator_ret is authoritative)
+          LOG_WARN("drop gtt v2 session tablet rpc result is null", K(dest_addr), K(arg));
+        } else {
+          if (res->is_local_map_hit()) {
+            any_local_map_hit = true;
+          }
+          if (res->is_executed_on_creator()) {
+            creator_executed = true;
+            creator_ret = res->get_ret();
+            if (OB_SUCCESS != creator_ret) {
+              LOG_WARN("creator failed to delete session tablets", K(creator_ret), K(dest_addr), K(arg));
+            } else {
+              LOG_INFO("creator finished session tablet drop", K(dest_addr), K(arg));
+            }
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (creator_executed) {
+          ret = creator_ret;
+        } else if (any_local_map_hit) {
+          // Some observer holds a stale entry for this (session, table) tuple but no observer
+          // claims is_creator_=true. This typically means the creator session terminated before
+          // truncate fired and its session-close path has already dropped the storage tablet;
+          // the functor has invalidated the lingering caches. Log loudly so we can catch
+          // unexpected leaks via observability.
+          LOG_WARN("no creator observer found while stale entries exist; "
+                   "creator session likely terminated, relying on session-close cleanup",
+                   K(arg), K(dispatch_err));
+        } else {
+          LOG_INFO("no observer holds the session tablet entry, drop is a no-op",
+                   K(arg), K(dispatch_err));
+        }
+      }
+    }
+  }
   return ret;
 }
 
