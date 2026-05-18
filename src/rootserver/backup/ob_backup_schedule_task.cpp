@@ -766,7 +766,9 @@ int ObBackupComplLogTask::calc_start_replay_scn_(const ObBackupJobAttr &job_attr
     LOG_WARN("backup is not supported when archive is interrupted", K(ret), K(round_attr), K(set_task_attr));
   } else if (OB_FAIL(store.read_ls_meta_infos(ls_meta_infos))) {
     LOG_WARN("fail to read ls meta infos", K(ret));
-  } else if (OB_FAIL(backup::ObBackupUtils::calc_start_replay_scn(set_task_attr, ls_meta_infos, round_attr, start_replay_scn))) {
+  } else if (OB_FAIL(backup::ObBackupUtils::calc_start_replay_scn(job_attr.tenant_id_, *sql_proxy,
+                                                                  set_task_attr, ls_meta_infos, round_attr,
+                                                                  start_replay_scn))) {
     LOG_WARN("failed to calc start replay scn", K(ret), K(set_task_attr), K(ls_meta_infos), K(round_attr));
   }
   LOG_INFO("calc start replay scn", K(ret), K(job_attr), K(set_task_attr), K(ls_attr), K(start_replay_scn));
