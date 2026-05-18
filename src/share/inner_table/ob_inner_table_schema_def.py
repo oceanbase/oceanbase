@@ -18381,7 +18381,7 @@ def_table_schema(**gen_iterate_virtual_table_def(
   keywords = all_def_keywords['__all_table_opt_stat_invalidate_plan']))
 
 # 12609: __all_virtual_ai_model_provider
-# 12610: __all_virtual_ai_model_parameter
+# 12610: __all_virtual_ai_model_profile
 # 12611: __all_virtual_ai_gateway
 
 # 12612: __all_virtual_ai_batch_task
@@ -47413,8 +47413,8 @@ FROM
 # 21733: CDB_OB_AI_MODEL_PROVIDERS
 # 21734: DBA_OB_AI_MODEL_PROFILES
 # 21735: CDB_OB_AI_MODEL_PROFILES
-# 21736: DBA_OB_AI_MODEL_GATEWAYS
-# 21737: CDB_OB_AI_MODEL_GATEWAYS
+# 21736: DBA_OB_AI_GATEWAYS
+# 21737: CDB_OB_AI_GATEWAYS
 # 21738: DBA_OB_AI_GATEWAY_ENDPOINTS
 # 21739: CDB_OB_AI_GATEWAY_ENDPOINTS
 
