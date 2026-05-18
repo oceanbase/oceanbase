@@ -1088,10 +1088,11 @@ int ObIndexBuildTask::check_build_single_replica(bool &is_end)
   return ret;
 }
 
-int ObIndexBuildTask::check_build_local_index_single_replica(bool &is_end)
+int ObIndexBuildTask::check_build_local_index_single_replica(bool &is_end, int &end_ret)
 {
   int ret = OB_SUCCESS;
   is_end = false;
+  end_ret = OB_SUCCESS;
   TCWLockGuard guard(lock_);
   if (INT64_MAX == complete_sstable_job_ret_code_) {
     // not complete
@@ -1105,6 +1106,7 @@ int ObIndexBuildTask::check_build_local_index_single_replica(bool &is_end)
       ret_code_ = OB_SUCCESS;
       LOG_INFO("retry complete sstable job", K(ret_code_), K(object_id_), K(index_table_id_));
     } else {
+      end_ret = complete_sstable_job_ret_code_;
       is_end = true;
     }
   }
@@ -1250,20 +1252,22 @@ int ObIndexBuildTask::wait_local_index_data_complement()
       LOG_WARN("fail to create schedule queue", K(ret), KPC(this));
     }
   }
-  if (OB_SUCC(ret) && !state_finished && is_sstable_complete_task_submitted()) {
-    if (OB_FAIL(wait_and_send_single_partition_replica_task(state_finished))) {
-      LOG_WARN("fail to send single partition replica task", K(ret), KPC(this));
-    }
-  }
 
   DEBUG_SYNC(CREATE_INDEX_REPLICA_BUILD);
 
   if (OB_SUCC(ret) && !state_finished && is_sstable_complete_task_submitted()) {
-    if (OB_FAIL(check_build_local_index_single_replica(is_request_end))) {
+    int end_ret = OB_SUCCESS;
+    if (OB_FAIL(check_build_local_index_single_replica(is_request_end, end_ret))) {
       LOG_WARN("fail to check build single replica", K(ret));
     } else if (is_request_end) {
-      ret = complete_sstable_job_ret_code_;
+      ret = end_ret;
       state_finished = true;
+    }
+  }
+
+  if (OB_SUCC(ret) && !state_finished && is_sstable_complete_task_submitted()) {
+    if (OB_FAIL(wait_and_send_single_partition_replica_task(state_finished))) {
+      LOG_WARN("fail to send single partition replica task", K(ret), KPC(this));
     }
   }
   if (OB_SUCC(ret) && state_finished && !create_index_arg_.is_spatial_index() && !create_index_arg_.is_multivalue_index()
@@ -1542,18 +1546,27 @@ int ObIndexBuildTask::update_complete_sstable_job_status(
         LOG_WARN("fail to confirm batch tablets status", K(ret), K(execution_id), K(ret_code), K(addition_info));
       } else if (OB_FAIL(remove_sql_exec_addr(addition_info.ls_leader_addr_))) {
         LOG_WARN("failed to remove sql execute addr", K(ret), K(addition_info));
+      } else {
+        if (INT64_MAX == complete_sstable_job_ret_code_ || OB_SUCCESS == complete_sstable_job_ret_code_) {
+          complete_sstable_job_ret_code_ = ret_code;
+        } else { // fails previously, cannot change to success
+          complete_sstable_job_ret_code_ = ret_code == OB_SUCCESS ? complete_sstable_job_ret_code_ : ret_code;
+        }
+        sstable_complete_ts_ = ObTimeUtility::current_time(); // always update because it should be greater than all partition's major create time
+        execution_id_ = execution_id;
       }
-    } else if (OB_UNLIKELY(execution_id < execution_id_)) {
-      ret = OB_TASK_EXPIRED;
-      LOG_WARN("receive a mismatch execution result", K(ret), K(ret_code), K(execution_id), K(execution_id_));
-    }
-    if (OB_SUCC(ret)) {
-      complete_sstable_job_ret_code_ = ret_code;
-      sstable_complete_ts_ = ObTimeUtility::current_time();
-      execution_id_ = execution_id;
+    } else {
+      if (OB_UNLIKELY(execution_id < execution_id_)) {
+        ret = OB_TASK_EXPIRED;
+        LOG_WARN("receive a mismatch execution result", K(ret), K(ret_code), K(execution_id), K(execution_id_));
+      } else {
+        complete_sstable_job_ret_code_ = ret_code;
+        sstable_complete_ts_ = ObTimeUtility::current_time();
+        execution_id_ = execution_id;
+      }
     }
   }
-  LOG_INFO("update complete sstable job return code", K(ret), K(addr), K(target_object_id_), K(tablet_id), K(snapshot_version), K(ret_code), K(execution_id_));
+  LOG_INFO("update complete sstable job return code", K(ret), K(addr), K(target_object_id_), K(tablet_id), K(snapshot_version), K(ret_code), K(execution_id_), K(complete_sstable_job_ret_code_), K(sstable_complete_ts_));
   return ret;
 }
 

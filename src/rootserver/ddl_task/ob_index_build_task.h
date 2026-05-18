@@ -160,7 +160,7 @@ private:
                                         const ObIArray<ObTabletID> &index_partition_ids);
   int wait_and_send_single_partition_replica_task(bool &state_finished);
   int check_build_single_replica(bool &is_end);
-  int check_build_local_index_single_replica(bool &is_end);
+  int check_build_local_index_single_replica(bool &is_end, int &end_ret);
   int check_need_verify_checksum(bool &need_verify);
   bool is_sstable_complete_task_submitted();
   int check_target_cg_cnt();
