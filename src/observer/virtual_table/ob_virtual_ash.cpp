@@ -20,6 +20,7 @@ using namespace oceanbase::share::schema;
 using namespace oceanbase::omt;
 using namespace oceanbase::share;
 
+#define META_TENANT_ID(tenant_id) (tenant_id - 1)
 ObVirtualASH::ObVirtualASH() :
     ObVirtualTableScannerIterator(),
     reverse_iterator_(),
@@ -84,7 +85,7 @@ int ObVirtualASH::inner_get_next_row(common::ObNewRow *&row)
   do {
     if (iterator_->has_next()) {
       const ObActiveSessionStatItem &node = iterator_->next();
-      if (OB_SYS_TENANT_ID == effective_tenant_id_ || node.tenant_id_ == effective_tenant_id_) {
+      if (OB_SYS_TENANT_ID == effective_tenant_id_ || node.tenant_id_ == effective_tenant_id_ || node.tenant_id_ == META_TENANT_ID(effective_tenant_id_)) {
         if (OB_FAIL(convert_node_to_row(node, row))) {
           LOG_WARN("fail convert row", K(ret));
         }
@@ -496,7 +497,7 @@ int ObVirtualASHI1::inner_get_next_row(common::ObNewRow *&row)
   do {
     if (iterator_->has_next()) {
       const ObActiveSessionStatItem &node = iterator_->next();
-      if (OB_SYS_TENANT_ID == effective_tenant_id_ || node.tenant_id_ == effective_tenant_id_) {
+      if (OB_SYS_TENANT_ID == effective_tenant_id_ || node.tenant_id_ == effective_tenant_id_ || node.tenant_id_ == META_TENANT_ID(effective_tenant_id_)) {
         if (OB_FAIL(convert_node_to_row(node, row))) {
           LOG_WARN("fail convert row", K(ret));
         }
