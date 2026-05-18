@@ -4512,7 +4512,8 @@ int ObDASIterUtils::create_vec_search_iter(
                                   ObVecIndexType::VEC_INDEX_PRE != vec_index_type;
       const bool need_pre_iter  = !user_forced_vec_path ||
                                   ObVecIndexType::VEC_INDEX_PRE == vec_index_type;
-      if (!user_forced_vec_path) {
+      if (!user_forced_vec_path
+          || ObKnnFilterMode::PRE_ADAPTIVE == vec_index_driver_ctdef->filter_mode_) {
         filter_rtdef_for_reeval = filter_rtdef;
       }
       if (OB_SUCC(ret) && need_post_iter) {

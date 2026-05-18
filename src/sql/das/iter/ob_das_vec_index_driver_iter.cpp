@@ -41,6 +41,8 @@ int ObDASVecIndexDriverIter::do_table_scan()
     profile_ = my_profile;
     common::ObProfileSwitcher switcher(my_profile);
     SET_METRIC_VAL(common::ObMetricId::HS_VEC_INDEX_PATH, static_cast<uint64_t>(get_vec_index_path_type()));
+    SET_METRIC_VAL(common::ObMetricId::HS_VEC_PARTITION_ROW_COUNT, static_cast<uint64_t>(last_partition_row_count_));
+    SET_METRIC_VAL(common::ObMetricId::HS_VEC_FILTER_EST_ROW_COUNT, static_cast<uint64_t>(last_filter_est_row_count_));
     if (OB_FAIL(vec_index_scan_iter_->do_table_scan())) {
       LOG_WARN("failed to do table scan", K(ret));
     } else if (OB_NOT_NULL(pre_filter_iter_) && OB_FAIL(pre_filter_iter_->do_table_scan())) {
@@ -73,8 +75,11 @@ int ObDASVecIndexDriverIter::rescan()
       LOG_WARN("failed to evaluate partition path for next partition", K(ret));
     } else if (OB_NOT_NULL(filter_iter_) && OB_FAIL(filter_iter_->rescan())) {
       LOG_WARN("failed to rescan filter iter", K(ret));
+    } else {
+      SET_METRIC_VAL(common::ObMetricId::HS_VEC_INDEX_PATH, static_cast<uint64_t>(get_vec_index_path_type()));
+      SET_METRIC_VAL(common::ObMetricId::HS_VEC_PARTITION_ROW_COUNT, static_cast<uint64_t>(last_partition_row_count_));
+      SET_METRIC_VAL(common::ObMetricId::HS_VEC_FILTER_EST_ROW_COUNT, static_cast<uint64_t>(last_filter_est_row_count_));
     }
-    SET_METRIC_VAL(common::ObMetricId::HS_VEC_INDEX_PATH, static_cast<uint64_t>(get_vec_index_path_type()));
   }
 
   return ret;
@@ -265,6 +270,9 @@ int ObDASVecIndexDriverIter::inner_reuse()
   iter_scan_total_num_ = 0;
   ready_to_output_ = false;
 
+  last_partition_row_count_ = 0;
+  last_filter_est_row_count_ = 0;
+
   // must be after memory reset
   if (OB_SUCC(ret) && OB_FAIL(set_vec_index_param(vec_index_driver_ctdef_->vec_index_param_))) {
     LOG_WARN("failed to set vec index param", K(ret));
@@ -359,8 +367,9 @@ int ObDASVecIndexDriverIter::evaluate_partition_path()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null in evaluate_partition_path", K(ret),
              KP(search_ctx_), KP(vec_index_driver_ctdef_));
-  } else if (ObVecIndexType::VEC_INDEX_INVALID != vec_index_driver_ctdef_->vec_type_) {
-    // User forced a specific path via search_option; skip per-partition evaluation.
+  } else if (ObVecIndexType::VEC_INDEX_INVALID != vec_index_driver_ctdef_->vec_type_
+             && ObKnnFilterMode::PRE_ADAPTIVE != vec_index_driver_ctdef_->filter_mode_) {
+    // User forced a specific sub-path (pre-knn/pre-brute); skip per-partition evaluation.
   } else if (OB_FALSE_IT(filter_rtdef_for_reeval_->reset_cost_recursive())) {
   } else if (OB_FAIL(search_ctx_->refresh_table_row_count())) {
     LOG_WARN("failed to refresh partition row count", K(ret));
@@ -371,7 +380,10 @@ int ObDASVecIndexDriverIter::evaluate_partition_path()
     LOG_WARN("invalid filter cost or partition row count", K(ret), K(p_cost), K(search_ctx_->get_row_count()));
   } else {
     int64_t partition_row_count = search_ctx_->get_row_count().cost();
-    ObVecIndexType new_type = ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER;
+    const bool is_pre_adaptive = (ObKnnFilterMode::PRE_ADAPTIVE == vec_index_driver_ctdef_->filter_mode_);
+    ObVecIndexType new_type = is_pre_adaptive
+        ? ObVecIndexType::VEC_INDEX_PRE
+        : ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER;
     bool new_bf = false;
     if (p_cost.cost() <= static_cast<int64_t>(ObVecIdxExtraInfo::MAX_HNSW_BRUTE_FORCE_SIZE)) {
       new_type = ObVecIndexType::VEC_INDEX_PRE;
@@ -398,10 +410,11 @@ int ObDASVecIndexDriverIter::evaluate_partition_path()
         switch_to_post_filter();
       }
       go_brute_force_ = new_bf;
+      last_partition_row_count_ = partition_row_count;
+      last_filter_est_row_count_ = p_cost.cost();
       vec_index_scan_iter_->set_vec_index_type(vec_index_type_, vec_idx_try_path_, go_brute_force_);
       LOG_TRACE("partition path result",
-                K(old_type), K(vec_index_type_), K(old_bf), K(new_bf),
-                K(p_cost.cost()), K(partition_row_count));
+                K(old_type), K(vec_index_type_), K(old_bf), K(new_bf), K(p_cost.cost()), K(partition_row_count));
     }
   }
 

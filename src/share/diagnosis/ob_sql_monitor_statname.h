@@ -230,6 +230,10 @@ SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_PARQUET_PAGE_MGR_CACHED_PAGE_HIT_SIZE, metri
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_PARQUET_PAGE_MGR_CACHED_PAGE_MISS_COUNT, metric::Unit::INT, "parquetPageMgr cached page miss count", "parquetPageMgr cached page miss count", M_SUM, metric::Level::CRITICAL)
 SQL_MONITOR_STATNAME_DEF(LAKE_TABLE_PARQUET_PAGE_MGR_CACHED_PAGE_MISS_SIZE, metric::Unit::BYTES, "parquetPageMgr cached page miss size", "parquetPageMgr cached page miss size", M_SUM, metric::Level::CRITICAL)
 
+// Hybrid Search Vector Index Driver Metrics for path selection
+SQL_MONITOR_STATNAME_DEF(HS_VEC_PARTITION_ROW_COUNT, metric::Unit::INT, "vec partition row count", "estimated total row count of the partition used for path selection", M_FIRST_VAL, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(HS_VEC_FILTER_EST_ROW_COUNT, metric::Unit::INT, "vec filter est row count", "estimated filter output row count used for path selection", M_FIRST_VAL, metric::Level::STANDARD)
+
 //end
 SQL_MONITOR_STATNAME_DEF(MONITOR_STATNAME_END, metric::Unit::INVALID, "monitor end", "monitor stat name end", E_MIN | E_MAX, metric::Level::AD_HOC)
 #endif

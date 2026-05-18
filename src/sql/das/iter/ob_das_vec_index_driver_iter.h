@@ -200,6 +200,8 @@ public:
       scalar_scan_rtdef_(nullptr),
       filter_rtdef_for_reeval_(nullptr),
       go_brute_force_(false),
+      last_partition_row_count_(-1),
+      last_filter_est_row_count_(-1),
       profile_(nullptr) {}
 
   virtual ~ObDASVecIndexDriverIter() {}
@@ -334,6 +336,8 @@ private:
   ObDASScalarScanRtDef *scalar_scan_rtdef_;
   ObIDASSearchRtDef *filter_rtdef_for_reeval_;
   bool go_brute_force_;
+  int64_t last_partition_row_count_;
+  int64_t last_filter_est_row_count_;
   common::ObObj vid_obj_for_lookup_;
   common::ObOpProfile<common::ObMetric> *profile_;
 };
