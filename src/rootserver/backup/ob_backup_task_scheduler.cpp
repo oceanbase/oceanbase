@@ -23,6 +23,14 @@ using namespace share;
 namespace rootserver
 {
 
+#ifdef ERRSIM
+// Errsim: forces prepare_disk_filtered_servers_ to behave as if every server is
+// over the disk-usage limit, exercising the source-selection-blocked code path
+// without needing real disk pressure. Enable via:
+//   alter system set_tp tp_name = EN_BACKUP_ALL_SERVERS_DISK_FULL, error_code = 4001, frequency = 1;
+ERRSIM_POINT_DEF(EN_BACKUP_ALL_SERVERS_DISK_FULL);
+#endif
+
 ObBackupTaskSchedulerQueue::ObBackupTaskSchedulerQueue()
   : is_inited_(false),
     mutex_(common::ObLatchIds::BACKUP_LOCK),
@@ -356,6 +364,89 @@ int ObBackupTaskSchedulerQueue::prepare_disk_filtered_servers_(
       LOG_WARN("fail to assign fallback servers", K(ret));
     }
   }
+#ifdef ERRSIM
+  if (OB_SUCC(ret) && OB_SUCCESS != EN_BACKUP_ALL_SERVERS_DISK_FULL) {
+    LOG_WARN("[BACKUP] errsim: clearing disk_filtered_servers to simulate "
+             "cluster-wide disk full at source selection");
+    disk_filtered_servers.reset();
+  }
+#endif
+  return ret;
+}
+
+int ObBackupTaskSchedulerQueue::collect_backup_data_set_task_keys_(
+    ObIArray<BlockedSetTaskKey> &keys)
+{
+  int ret = OB_SUCCESS;
+  keys.reset();
+  // Collect distinct (tenant_id, job_id, task_id) keys for every BACKUP_DATA
+  // entry in wait_list_. Clean/validate/archive jobs are skipped — they have
+  // their own retry semantics and don't honor _backup_disk_full_max_wait_duration.
+  // Must be called under mutex_; the caller is expected to drop the lock
+  // before issuing inner-table writes against these keys.
+  DLIST_FOREACH_X(t, wait_list_, OB_SUCC(ret)) {
+    if (BackupJobType::BACKUP_DATA_JOB != t->get_type()) {
+      continue;
+    }
+    BlockedSetTaskKey k;
+    k.tenant_id_ = t->get_tenant_id();
+    k.job_id_ = static_cast<int64_t>(t->get_job_id());
+    k.task_id_ = static_cast<int64_t>(t->get_task_id());
+    bool dup = false;
+    for (int64_t i = 0; !dup && i < keys.count(); ++i) {
+      if (keys.at(i) == k) {
+        dup = true;
+      }
+    }
+    if (!dup && OB_FAIL(keys.push_back(k))) {
+      LOG_WARN("fail to push key", K(ret), K(k));
+    }
+  }
+  return ret;
+}
+
+int ObBackupTaskSchedulerQueue::mark_wait_list_set_tasks_disk_full_(const int64_t now_ts)
+{
+  int ret = OB_SUCCESS;
+  ObArray<BlockedSetTaskKey> keys;
+  {
+    ObMutexGuard guard(mutex_);
+    if (OB_FAIL(collect_backup_data_set_task_keys_(keys))) {
+      LOG_WARN("fail to collect backup data set task keys", K(ret));
+    }
+  }
+  // Best-effort writes; one row's failure doesn't block others.
+  int tmp_ret = OB_SUCCESS;
+  for (int64_t i = 0; i < keys.count(); ++i) {
+    const BlockedSetTaskKey &k = keys.at(i);
+    if (OB_TMP_FAIL(ObBackupTaskOperator::record_first_disk_full_ts_if_unset(
+            *sql_proxy_, k.job_id_, k.task_id_, k.tenant_id_, now_ts))) {
+      LOG_WARN("[BACKUP] failed to record first_disk_full_ts", K(tmp_ret), K(k));
+    }
+  }
+  return ret;
+}
+
+int ObBackupTaskSchedulerQueue::clear_wait_list_set_tasks_disk_full_()
+{
+  int ret = OB_SUCCESS;
+  ObArray<BlockedSetTaskKey> keys;
+  {
+    ObMutexGuard guard(mutex_);
+    if (OB_FAIL(collect_backup_data_set_task_keys_(keys))) {
+      LOG_WARN("fail to collect backup data set task keys", K(ret));
+    }
+  }
+  // Inner-table call is a no-op when first_disk_full_ts_ is already 0, so this
+  // is cheap to invoke unconditionally on every successful selection round.
+  int tmp_ret = OB_SUCCESS;
+  for (int64_t i = 0; i < keys.count(); ++i) {
+    const BlockedSetTaskKey &k = keys.at(i);
+    if (OB_TMP_FAIL(ObBackupTaskOperator::clear_first_disk_full_ts_if_set(
+            *sql_proxy_, k.job_id_, k.task_id_, k.tenant_id_))) {
+      LOG_WARN("[BACKUP] failed to clear first_disk_full_ts", K(tmp_ret), K(k));
+    }
+  }
   return ret;
 }
 
@@ -386,7 +477,25 @@ int ObBackupTaskSchedulerQueue::pop_task(ObBackupScheduleTask *&output_task, com
                   K(all_servers.count()),
                   "limit_percentage", static_cast<int64_t>(GCONF._backup_server_disk_limit_percentage));
       }
+      // Start the disk-full wait timer on every blocked set_task. The matching
+      // timeout judgment runs at the top of ObBackupSetTaskMgr::process(), so
+      // failure fires even though LS tasks never leave PENDING in this path.
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(mark_wait_list_set_tasks_disk_full_(ObTimeUtility::current_time()))) {
+        LOG_WARN("[BACKUP] mark_wait_list_set_tasks_disk_full_ failed", K(tmp_ret));
+      }
     } else {
+      // Source selection succeeded this round — cluster-wide disk full has
+      // cleared (or never existed). Reset first_disk_full_ts_ on any set_task
+      // that still has it set, so a future disk-full streak measures from a
+      // fresh start instead of accumulating wall clock against a long-stale
+      // timestamp from an already-recovered episode. Idempotent: when no row
+      // has the timer set, the inner UPDATE is skipped. Best-effort — failure
+      // here must not block scheduling.
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(clear_wait_list_set_tasks_disk_full_())) {
+        LOG_WARN("[BACKUP] clear_wait_list_set_tasks_disk_full_ failed", K(tmp_ret));
+      }
       ObMutexGuard guard(mutex_);
       DLIST_FOREACH(t, wait_list_)
       {

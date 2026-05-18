@@ -120,6 +120,33 @@ private:
   int prepare_disk_filtered_servers_(
       const common::ObIArray<share::ObBackupServer> &all_servers,
       common::ObIArray<share::ObBackupServer> &disk_filtered_servers);
+  // Dedup key for the disk-full timer helpers below: distinct BACKUP_DATA
+  // set_tasks identified by (tenant_id, job_id, task_id).
+  struct BlockedSetTaskKey
+  {
+    uint64_t tenant_id_;
+    int64_t job_id_;
+    int64_t task_id_;
+    bool operator==(const BlockedSetTaskKey &o) const
+    {
+      return tenant_id_ == o.tenant_id_ && job_id_ == o.job_id_ && task_id_ == o.task_id_;
+    }
+    TO_STRING_KV(K_(tenant_id), K_(job_id), K_(task_id));
+  };
+  // Walk wait_list_ and emit one BlockedSetTaskKey per distinct BACKUP_DATA
+  // set_task. Caller must hold mutex_ for the wait_list_ traversal; mark/clear
+  // drop the lock before issuing inner-table writes against the returned keys.
+  int collect_backup_data_set_task_keys_(common::ObIArray<BlockedSetTaskKey> &keys);
+  // Mark every BACKUP_DATA set_task with at least one task in wait_list as
+  // blocked by cluster-wide disk-full. Persists first_disk_full_ts_ to
+  // __all_backup_task.extra_info via record_first_disk_full_ts_if_unset.
+  // Best-effort: errors are logged but never propagated.
+  int mark_wait_list_set_tasks_disk_full_(const int64_t now_ts);
+  // Symmetric reset path. Called from pop_task when disk_filtered_servers is
+  // non-empty (cluster-wide disk full has cleared), so a subsequent disk-full
+  // streak restarts the wait timer from zero instead of accumulating against
+  // a long-stale first_disk_full_ts_. Best-effort: errors are logged only.
+  int clear_wait_list_set_tasks_disk_full_();
 
 private:
   bool is_inited_;

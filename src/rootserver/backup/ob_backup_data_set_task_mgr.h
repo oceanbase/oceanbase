@@ -164,6 +164,13 @@ private:
 #endif
   int do_cancel_();
   int check_and_handle_sslog_table_size_(const share::ObBackupStatus::Status &status);
+  // Top-level disk-full wait timer judgment. Reads first_disk_full_ts_ from
+  // set_task_attr_.extra_info_ and compares against _backup_disk_full_max_wait_duration.
+  // On timeout, sets job_attr_->can_retry_=false and returns OB_SERVER_OUTOF_DISK_SPACE
+  // so handle_failed_job_ -> deal_non_reentrant_job marks the job FAILED.
+  // Runs at the top of process() so it fires even when LS tasks are stuck PENDING
+  // (the scheduler-side mark_wait_list_set_tasks_disk_full_ path).
+  int check_disk_full_timeout_();
   // new function for generate file list
   int generate_backup_set_file_list_();
   int generate_backup_meta_info_file_list_();

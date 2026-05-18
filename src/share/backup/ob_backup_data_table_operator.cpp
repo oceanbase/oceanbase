@@ -1883,6 +1883,110 @@ int ObBackupTaskOperator::update_extra_info(common::ObISQLClient &proxy, const i
   return ret;
 }
 
+int ObBackupTaskOperator::record_first_disk_full_ts_if_unset(
+    common::ObMySQLProxy &proxy,
+    const int64_t job_id,
+    const int64_t task_id,
+    const uint64_t tenant_id,
+    const int64_t now_ts)
+{
+  int ret = OB_SUCCESS;
+  ObMySQLTransaction trans;
+  ObBackupSetTaskAttr cur;
+  const uint64_t exec_tenant_id = get_exec_tenant_id(tenant_id);
+  if (job_id <= 0 || task_id <= 0 || OB_INVALID_TENANT_ID == tenant_id || now_ts <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(job_id), K(task_id), K(tenant_id), K(now_ts));
+  } else if (OB_FAIL(trans.start(&proxy, exec_tenant_id))) {
+    LOG_WARN("failed to start transaction", K(ret), K(tenant_id));
+  } else if (OB_FAIL(get_backup_task(trans, job_id, tenant_id, true /*for update*/, cur))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      // set_task already moved to history (terminal) — nothing to do
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to lock backup set task row", K(ret), K(job_id), K(tenant_id));
+    }
+  } else if (cur.status_.is_backup_finish()) {
+    // already terminal — don't pollute extra_info
+  } else if (cur.extra_info_.first_disk_full_ts_ > 0) {
+    // already set — keep earliest
+  } else if (cur.task_id_ != task_id) {
+    // very unlikely: job_id <-> task_id mismatch, refuse to write
+    LOG_WARN("set_task task_id mismatches caller's view, skip",
+             K(job_id), K(tenant_id), "expected_task_id", task_id,
+             "actual_task_id", cur.task_id_);
+  } else {
+    ObBackupExtraInfo new_extra = cur.extra_info_;
+    new_extra.first_disk_full_ts_ = now_ts;
+    if (OB_FAIL(update_extra_info(trans, task_id, tenant_id, new_extra))) {
+      LOG_WARN("failed to update extra_info", K(ret), K(task_id), K(tenant_id), K(new_extra));
+    } else {
+      LOG_INFO("[BACKUP] recorded first_disk_full_ts on set_task",
+               K(job_id), K(task_id), K(tenant_id), K(now_ts));
+    }
+  }
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("failed to end trans", K(tmp_ret), K(ret));
+      ret = COVER_SUCC(tmp_ret);
+    }
+  }
+  return ret;
+}
+
+int ObBackupTaskOperator::clear_first_disk_full_ts_if_set(
+    common::ObMySQLProxy &proxy,
+    const int64_t job_id,
+    const int64_t task_id,
+    const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObMySQLTransaction trans;
+  ObBackupSetTaskAttr cur;
+  const uint64_t exec_tenant_id = get_exec_tenant_id(tenant_id);
+  if (job_id <= 0 || task_id <= 0 || OB_INVALID_TENANT_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(job_id), K(task_id), K(tenant_id));
+  } else if (OB_FAIL(trans.start(&proxy, exec_tenant_id))) {
+    LOG_WARN("failed to start transaction", K(ret), K(tenant_id));
+  } else if (OB_FAIL(get_backup_task(trans, job_id, tenant_id, true /*for update*/, cur))) {
+    if (OB_ENTRY_NOT_EXIST == ret) {
+      // set_task already moved to history (terminal) — nothing to do
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to lock backup set task row", K(ret), K(job_id), K(tenant_id));
+    }
+  } else if (cur.status_.is_backup_finish()) {
+    // already terminal — don't pollute extra_info
+  } else if (cur.extra_info_.first_disk_full_ts_ <= 0) {
+    // already cleared — no row write needed
+  } else if (cur.task_id_ != task_id) {
+    // very unlikely: job_id <-> task_id mismatch, refuse to write
+    LOG_WARN("set_task task_id mismatches caller's view, skip",
+             K(job_id), K(tenant_id), "expected_task_id", task_id,
+             "actual_task_id", cur.task_id_);
+  } else {
+    const int64_t prev_ts = cur.extra_info_.first_disk_full_ts_;
+    ObBackupExtraInfo new_extra = cur.extra_info_;
+    new_extra.first_disk_full_ts_ = 0;
+    if (OB_FAIL(update_extra_info(trans, task_id, tenant_id, new_extra))) {
+      LOG_WARN("failed to update extra_info", K(ret), K(task_id), K(tenant_id), K(new_extra));
+    } else {
+      LOG_INFO("[BACKUP] cleared first_disk_full_ts on set_task (disk-full recovered)",
+               K(job_id), K(task_id), K(tenant_id), K(prev_ts));
+    }
+  }
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("failed to end trans", K(tmp_ret), K(ret));
+      ret = COVER_SUCC(tmp_ret);
+    }
+  }
+  return ret;
+}
+
 /*
  *--------------------------__all_backup_ls_task---------------------------------
  */

@@ -142,6 +142,41 @@ int ObBackupSetTaskMgr::advance_status_(
 }
 
 
+int ObBackupSetTaskMgr::check_disk_full_timeout_()
+{
+  int ret = OB_SUCCESS;
+  // Only check during active backup phases. INIT / terminal / cancel statuses are
+  // either pre-dispatch or already settling; first_disk_full_ts_ is meaningless there.
+  const int64_t first_ts = set_task_attr_.extra_info_.first_disk_full_ts_;
+  if (set_task_attr_.status_.is_task_doing_status() && first_ts > 0) {
+    const int64_t now = ObTimeUtility::current_time();
+    const int64_t limit = GCONF._backup_disk_full_max_wait_duration;
+    const int64_t elapsed = now - first_ts;
+    if (elapsed > limit) {
+      // Force non-retryable failure. is_can_retry() short-circuits on
+      // can_retry_=false, so handle_failed_job_ -> deal_non_reentrant_job
+      // moves the job to FAILED with this error code.
+      job_attr_->can_retry_ = false;
+      ret = OB_SERVER_OUTOF_DISK_SPACE;
+      LOG_WARN("[BACKUP] disk-full wait exceeded, failing backup",
+               "task_id", set_task_attr_.task_id_,
+               "tenant_id", set_task_attr_.tenant_id_,
+               K(first_ts), K(now), K(elapsed), K(limit));
+      ROOTSERVICE_EVENT_ADD("backup_data", "disk_full_source_select_timeout",
+                            "tenant_id", set_task_attr_.tenant_id_,
+                            "task_id", set_task_attr_.task_id_,
+                            "elapsed_us", elapsed,
+                            "limit_us", limit);
+    } else {
+      // Not yet timed out. Shrink the data service idle so the next iteration
+      // fires within OB_BACKUP_RETRY_TIME_INTERVAL instead of the default 10-min
+      // idle. This bounds the latency between hitting `limit` and the job failing.
+      backup_service_->set_idle_time(OB_BACKUP_RETRY_TIME_INTERVAL);
+    }
+  }
+  return ret;
+}
+
 ERRSIM_POINT_DEF(EN_BACKUP_SSLOG_TABLE_SIZE_EXCEEDED);
 int ObBackupSetTaskMgr::check_and_handle_sslog_table_size_(const ObBackupStatus::Status &status)
 {
@@ -192,6 +227,12 @@ int ObBackupSetTaskMgr::process()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("[DATA_BACKUP]tenant backup set task mgr not init", K(ret));
+  } else if (OB_FAIL(check_disk_full_timeout_())) {
+    // Disk-full wait window expired. Fail the job permanently.
+    // Covers the gap where LS tasks are stuck PENDING because the scheduler
+    // couldn't find any disk-OK source server, so finish_() never runs.
+    LOG_WARN("[DATA_BACKUP]disk-full timeout, set_task must fail",
+             K(ret), K(set_task_attr_));
   } else {
     ObBackupStatus::Status status = set_task_attr_.status_.status_;
     if (OB_FAIL(check_and_handle_sslog_table_size_(status))) {

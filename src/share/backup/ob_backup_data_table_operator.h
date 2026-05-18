@@ -167,6 +167,21 @@ public:
       const SCN &scn);
   static int update_extra_info(common::ObISQLClient &proxy, const int64_t task_id,
       const uint64_t tenant_id, const ObBackupExtraInfo &extra_info);
+  // Atomically set extra_info.first_disk_full_ts_ to now_ts only when the current
+  // value is 0. Preserves other extra_info fields. Skips when the set_task is
+  // already in a terminal status. Used by the scheduler to start the disk-full
+  // wait timer when source selection is blocked by disk-full filtering (the LS
+  // task itself never reaches finish_ in this case).
+  static int record_first_disk_full_ts_if_unset(common::ObMySQLProxy &proxy,
+      const int64_t job_id, const int64_t task_id, const uint64_t tenant_id,
+      const int64_t now_ts);
+  // Symmetric reset: clear extra_info.first_disk_full_ts_ back to 0 only when
+  // it is currently > 0. Called from the scheduler whenever source selection
+  // succeeds (i.e. the cluster-wide disk-full condition has cleared), so the
+  // _backup_disk_full_max_wait_duration window measures the *current* streak,
+  // not the cumulative wall clock since the first ever block.
+  static int clear_first_disk_full_ts_if_set(common::ObMySQLProxy &proxy,
+      const int64_t job_id, const int64_t task_id, const uint64_t tenant_id);
 private:
   static int fill_dml_with_backup_task_(const ObBackupSetTaskAttr &backup_set_task, ObDMLSqlSplicer &dml);
 };
