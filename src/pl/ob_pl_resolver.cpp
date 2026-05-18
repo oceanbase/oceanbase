@@ -19787,31 +19787,33 @@ int ObPLResolver::record_error_line(ObSQLSessionInfo &session_info,
 {
   int ret = OB_SUCCESS;
   // comp oracle, oracle line is begin with 1 while ob is begin with 0
-  line++;
-  col++;
-  const ObWarningBuffer *buf = common::ob_get_tsi_warning_buffer();
-  if (NULL != buf && buf->get_error_line() == 0) {
-      ObSqlString &err_msg = session_info.get_pl_exact_err_msg();
-      err_msg.reset();
-      if (OB_FAIL(err_msg.append_fmt("\nat "))) {
-        LOG_WARN("fail to get call stack name.", K(ret));
-      } else if (name.case_compare("__anonymous_block__") != 0) {
-        if (!db_name.empty()) {
-         OZ (err_msg.append_fmt("%.*s.", db_name.length(), db_name.ptr()));
-        }
-        if (!package_name.empty()) {
-          if (!is_for_trigger && !name.empty()) {
-            OZ (err_msg.append_fmt("%.*s.", package_name.length(), package_name.ptr()));
-          } else {
-            OZ (err_msg.append_fmt("%.*s", package_name.length(), package_name.ptr()));
+  if (0 < line || 0 < col) {
+    line++;
+    col++;
+    const ObWarningBuffer *buf = common::ob_get_tsi_warning_buffer();
+    if (NULL != buf && buf->get_error_line() == 0) {
+        ObSqlString &err_msg = session_info.get_pl_exact_err_msg();
+        err_msg.reset();
+        if (OB_FAIL(err_msg.append_fmt("\nat "))) {
+          LOG_WARN("fail to get call stack name.", K(ret));
+        } else if (name.case_compare("__anonymous_block__") != 0) {
+          if (!db_name.empty()) {
+           OZ (err_msg.append_fmt("%.*s.", db_name.length(), db_name.ptr()));
+          }
+          if (!package_name.empty()) {
+            if (!is_for_trigger && !name.empty()) {
+              OZ (err_msg.append_fmt("%.*s.", package_name.length(), package_name.ptr()));
+            } else {
+              OZ (err_msg.append_fmt("%.*s", package_name.length(), package_name.ptr()));
+            }
+          }
+          if (!name.empty() && !is_for_trigger) {
+            OZ (err_msg.append_fmt("%.*s", name.length(), name.ptr()));
           }
         }
-        if (!name.empty() && !is_for_trigger) {
-          OZ (err_msg.append_fmt("%.*s", name.length(), name.ptr()));
-        }
-      }
-      OZ (err_msg.append_fmt(" line : %d, col : %d", line, col));
-      LOG_USER_ERROR_LINE_COLUMN(line, col);
+        OZ (err_msg.append_fmt(" line : %d, col : %d", line, col));
+        LOG_USER_ERROR_LINE_COLUMN(line, col);
+    }
   }
   return ret;
 }
