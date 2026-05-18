@@ -20,7 +20,7 @@
 */
 
 #include "lib/charset/ob_ctype.h"
-#include "lib/charset/ob_ctype_bin_tab.h"
+#include "obcharset/ob_ctype_bin_tab.h"
 
 unsigned int ob_mbcharlen_8bit(const ObCharsetInfo *cs __attribute__((unused)),
                                unsigned int c __attribute__((unused)))

@@ -12,7 +12,7 @@
 
 #include "share/stat/hive/ob_hive_hll_dense_register.h"
 #include "lib/oblog/ob_log.h"
-#include "share/stat/hive/ob_hive_hll_constants.h"
+#include <ob_hive_hll_constants.h>
 #define USING_LOG_PREFIX SQL_ENG
 
 namespace oceanbase {

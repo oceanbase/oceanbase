@@ -20,7 +20,7 @@ namespace oceanbase
 {
 namespace common
 {
-enum ObCompressorType : uint8_t
+enum ObCompressorType : uint8_t //FARM COMPAT WHITELIST
 {
   INVALID_COMPRESSOR             = 0 ,
   NONE_COMPRESSOR                = 1,
@@ -33,7 +33,6 @@ enum ObCompressorType : uint8_t
   STREAM_LZ4_COMPRESSOR          = 8,//used for clog rpc compress
   STREAM_ZSTD_COMPRESSOR         = 9,//used for clog rpc compress
   STREAM_ZSTD_1_3_8_COMPRESSOR   = 10,//used for clog rpc compress
-  ZLIB_LITE_COMPRESSOR           = 11,//Composed of qpl+zlib
   ZSTD_1_5_7_COMPRESSOR          = 12,
   STREAM_ZSTD_1_5_7_COMPRESSOR   = 13,//used for clog rpc compress
   SNAPPY_1_2_2_COMPRESSOR        = 14,
@@ -54,7 +53,7 @@ const char *const all_compressor_name[] =
   "stream_lz4_1.0",
   "stream_zstd_1.0",
   "stream_zstd_1.3.8",
-  "zlib_lite_1.0",
+  "",
   "zstd_1.5.7",
   "stream_zstd_1.5.7",
   "snappy_1.2.2",
@@ -73,7 +72,6 @@ const char *const compress_funcs[] =
   "zstd_1.0",
   "zstd_1.3.8",
   "lz4_1.9.1",
-  "zlib_lite_1.0",
   "zstd_1.5.7",
   "stream_zstd_1.5.7",
 };

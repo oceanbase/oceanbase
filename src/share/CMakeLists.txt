@@ -688,7 +688,6 @@ ob_set_subtarget(ob_share stat
   stat/ob_opt_external_table_stat_cache.cpp
   stat/ob_opt_external_table_stat_builder.cpp
   stat/hive/ob_hive_hll_utils.cpp
-  stat/hive/ob_hive_hll_constants.cpp
   stat/hive/ob_hive_hll.cpp
   stat/hive/ob_hive_hll_dense_register.cpp
   stat/hive/ob_hive_hll_sparse_register.cpp
@@ -717,11 +716,6 @@ ob_set_subtarget(ob_share catalog
   catalog/odps/ob_odps_catalog_utils.cpp
   catalog/odps/ob_odps_catalog.cpp
   catalog/filesystem/ob_filesystem_catalog.cpp
-  catalog/hive/thrift/gen_cpp/FacebookService.cpp
-  catalog/hive/thrift/gen_cpp/fb303_types.cpp
-  catalog/hive/thrift/gen_cpp/hive_metastore_constants.cpp
-  catalog/hive/thrift/gen_cpp/hive_metastore_types.cpp
-  catalog/hive/thrift/gen_cpp/ThriftHiveMetastore.cpp
   catalog/hive/thrift/transport/ob_t_sasl_client_transport.cpp
   catalog/hive/thrift/transport/ob_t_sasl_transport.cpp
   catalog/hive/thrift/transport/ob_t_sasl.cpp
@@ -878,7 +872,9 @@ ob_add_new_object_target(ob_share_extra ob_share_extra)
 
 target_compile_options(ob_share PRIVATE)
 #target_compile_options(ob_share PRIVATE -Wshorten-64-to-32)
-target_link_libraries(ob_share PUBLIC ob_base)
+set(HIVE_THRIFT_LIB "${DEP_DIR}/lib/libhive_thrift.a")
+set(HIVE_HLL_LIB "${DEP_DIR}/lib/libhive_hll.a")
+target_link_libraries(ob_share PUBLIC ob_base ${HIVE_THRIFT_LIB} ${HIVE_HLL_LIB})
 target_compile_options(ob_share_extra PRIVATE)
 target_link_libraries(ob_share_extra PUBLIC ob_base_without_pass)
 

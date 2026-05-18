@@ -22,7 +22,7 @@
 #include "lib/charset/ob_ctype.h"
 #include "lib/charset/mb_wc.h"
 #include "lib/utility/ob_macro_utils.h"
-#include "lib/charset/ob_ctype_utf8_tab.h"
+#include "obcharset/ob_ctype_utf8_tab.h"
 
 #define IS_CONTINUATION_BYTE(code) (((code) >> 6) == 0x02)
 

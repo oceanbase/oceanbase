@@ -11,7 +11,7 @@
  */
 
 #include "lib/charset/ob_ctype.h"
-#include "ob_ctype_big5_tab.h"
+#include "obcharset/ob_ctype_big5_tab.h"
 
 static uint16 big5strokexfrm(uint16 i) {
   // storke order

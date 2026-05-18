@@ -15,7 +15,7 @@
 
 #include <float.h>
 #include "easy_define.h"  // for conflict of macro likely
-#include "lib/charset/ob_mysql_global.h"
+#include "obcharset/ob_mysql_global.h"
 
 /* From limits.h instead */
 /*

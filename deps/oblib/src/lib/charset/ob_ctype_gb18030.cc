@@ -11,8 +11,8 @@
  */
 
 #include "lib/charset/ob_charset.h"
-#include "lib/charset/ob_gb18030_2022_tab.h"
-#include "lib/charset/ob_ctype_gb18030_tab.h"
+#include "obcharset/ob_gb18030_2022_tab.h"
+#include "obcharset/ob_ctype_gb18030_tab.h"
 #define is_mb_1(c) ((unsigned char)(c) <= 0x7F)
 #define is_mb_odd(c) (0x81 <= (unsigned char)(c) && (unsigned char)(c) <= 0xFE)
 #define is_mb_even_2(c)                          \

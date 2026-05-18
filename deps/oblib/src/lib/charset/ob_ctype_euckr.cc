@@ -9,9 +9,9 @@
  * MERCHANTABILITY OR FIT FOR A PARTICULAR PURPOSE.
  * See the Mulan PubL v2 for more details.
  */
-#include "lib/charset/ob_mysql_global.h"
+#include "obcharset/ob_mysql_global.h"
 #include "lib/charset/ob_ctype.h"
-#include "lib/charset/ob_ctype_euckr_tab.h"
+#include "obcharset/ob_ctype_euckr_tab.h"
 
 extern "C" {
 static unsigned ismbchar_euc_kr(const ObCharsetInfo *cs __attribute__((unused)),

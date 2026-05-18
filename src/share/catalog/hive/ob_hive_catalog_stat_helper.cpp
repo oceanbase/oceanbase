@@ -14,7 +14,7 @@
 
 #include "ob_hive_catalog_stat_helper.h"
 #include "common/object/ob_obj_type.h"
-#include "lib/charset/ob_template_helper.h"
+#include "obcharset/ob_template_helper.h"
 #include "lib/number/ob_number_v2.h"
 #include "lib/time/ob_time_utility.h"
 #include "lib/wide_integer/ob_wide_integer.h"

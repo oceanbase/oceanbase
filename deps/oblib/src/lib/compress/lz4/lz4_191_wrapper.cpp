@@ -10,7 +10,7 @@
  * See the Mulan PubL v2 for more details.
  */
 
-#include "lz4_src/lz4_191.h"
+#include "lz4_191/lz4.h"
 #include "lz4_wrapper.h"
 
 namespace oceanbase {

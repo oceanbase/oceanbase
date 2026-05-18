@@ -12,7 +12,7 @@
  */
 
 #include "lib/charset/ob_ctype.h"
-#include "lib/charset/ob_ctype_gbk_tab.h"
+#include "obcharset/ob_ctype_gbk_tab.h"
 
 #define isgbkhead(c) (0x81<=(unsigned char)(c) && (unsigned char)(c)<=0xfe)
 #define isgbktail(c) ((0x40<=(unsigned char)(c) && (unsigned char)(c)<=0x7e) || \

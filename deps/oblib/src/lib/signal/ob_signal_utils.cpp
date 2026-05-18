@@ -17,7 +17,7 @@
 #include <sys/time.h>
 #include "lib/ob_errno.h"
 #include "lib/utility/ob_macro_utils.h"
-#include "lib/charset/ob_mysql_global.h"
+#include "obcharset/ob_mysql_global.h"
 #include "lib/signal/ob_libunwind.h"
 #include "lib/ash/ob_active_session_guard.h"
 
