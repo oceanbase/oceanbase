@@ -880,7 +880,9 @@ int ObCreatePackageBodyResolver::update_routine_route_sql(ObIAllocator &allocato
         }
       }
     }
-    OZ (public_routine_list.push_back(routine_info));
+    if (found) {
+      OZ (public_routine_list.push_back(routine_info));
+    }
   }
   return ret;
 }

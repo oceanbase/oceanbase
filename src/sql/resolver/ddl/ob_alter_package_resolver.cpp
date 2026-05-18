@@ -288,12 +288,22 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
           ObSEArray<ObRoutineInfo, 2> routine_spec_infos;
           ObPLRoutineTable &spec_routine_table = package_spec_ast.get_routine_table();
           ObPLRoutineTable &body_routine_table = package_body_ast.get_routine_table();
-          if (OB_SUCC(ret) && routine_infos.empty() && spec_routine_table.get_count() > 1) {
+          if (OB_SUCC(ret) && spec_routine_table.get_count() > 1) {
             OZ (ObCreatePackageResolver::resolve_functions_spec(
               *package_spec_info, routine_spec_infos, spec_routine_table));
             CK (routine_spec_infos.count() > 0);
             for (int64_t i = 0; OB_SUCC(ret) && i < routine_spec_infos.count(); ++i) {
-              OZ (routine_infos.push_back(&routine_spec_infos.at(i)));
+              bool already_in_schema = false;
+              for (int64_t j = 0; !already_in_schema && j < routine_infos.count(); ++j) {
+                if (routine_infos.at(j)->get_subprogram_id() ==
+                    routine_spec_infos.at(i).get_subprogram_id()) {
+                  already_in_schema = true;
+                  routine_infos.at(j) = &routine_spec_infos.at(i);
+                }
+              }
+              if (!already_in_schema) {
+                OZ (routine_infos.push_back(&routine_spec_infos.at(i)));
+              }
             }
           }
           OZ (ObCreatePackageBodyResolver::update_routine_route_sql(*allocator_,
