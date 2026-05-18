@@ -25,6 +25,8 @@
                                                   || (MOCK_DATA_VERSION_4_4_2_0 <= data_version && DATA_VERSION_4_5_0_0 > data_version) \
                                                   || (DATA_VERSION_4_5_1_0 <= data_version))
 #define DATA_VERSION_SUPPORT_JOB_CONFIG(data_version) (DATA_VERSION_4_5_1_0 <= data_version)
+#define DATA_VERSION_SUPPORT_EXECUTE_SESSION_ID(data_version) (MOCK_DATA_VERSION_4_4_2_1 <= data_version && DATA_VERSION_4_5_0_0 > data_version) \
+                                                  || (DATA_VERSION_4_6_0_0 <= data_version)
 
 
 namespace oceanbase
@@ -152,7 +154,8 @@ public:
     this_exec_date_(0),
     this_exec_addr_(),
     this_exec_trace_id_(),
-    job_config_() {}
+    job_config_(),
+    this_exec_sess_id_() {}
 
   TO_STRING_KV(K(tenant_id_),
                K(user_id_),
@@ -190,7 +193,8 @@ public:
                K(this_exec_date_),
                K(this_exec_addr_),
                K(this_exec_trace_id_),
-               K(job_config_));
+               K(job_config_),
+               K(this_exec_sess_id_));
 
   bool valid()
   {
@@ -214,6 +218,7 @@ public:
   int64_t  get_end_date() { return end_date_; }
   int64_t  get_auto_drop() { return auto_drop_; }
   int64_t  get_this_exec_date() { return this_exec_date_; }
+  uint64_t get_this_exec_sess_id() { return this_exec_sess_id_; }
   ObDBMSSchedFuncType get_func_type() const;
 
   bool is_completed() { return 0 == state_.case_compare("COMPLETED"); }
@@ -303,6 +308,7 @@ public:
   common::ObString this_exec_addr_;
   common::ObString this_exec_trace_id_;
   common::ObString job_config_;
+  uint64_t this_exec_sess_id_;
 
 public:
   static const int64_t JOB_SCHEDULER_FLAG_DATE_EXPRESSION_JOB_CLASS = 1;

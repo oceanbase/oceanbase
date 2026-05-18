@@ -10393,6 +10393,9 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_V_OB_HNSW_INDEX_SEGMENT_INFO_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_V_OB_HNSW_INDEX_SEGMENT_INFO_SCHEMA_VERSION); break;
     case OB_DBA_JAVA_POLICY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_JAVA_POLICY_SCHEMA_VERSION); break;
     case OB_USER_JAVA_POLICY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_USER_JAVA_POLICY_SCHEMA_VERSION); break;
+    case OB_DBA_SCHEDULER_RUNNING_JOBS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_SCHEDULER_RUNNING_JOBS_SCHEMA_VERSION); break;
+    case OB_CDB_SCHEDULER_RUNNING_JOBS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_CDB_SCHEDULER_RUNNING_JOBS_SCHEMA_VERSION); break;
+    case OB_CDB_SCHEDULER_JOBS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_CDB_SCHEDULER_JOBS_SCHEMA_VERSION); break;
     case OB_GV_OB_TENANT_WORKER_GROUPS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_GV_OB_TENANT_WORKER_GROUPS_SCHEMA_VERSION); break;
     case OB_DBA_SYNONYMS_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_SYNONYMS_ORACLE_SCHEMA_VERSION); break;
     case OB_DBA_OBJECTS_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_OBJECTS_ORACLE_SCHEMA_VERSION); break;
@@ -10650,6 +10653,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_DBA_OB_IMPORT_TABLE_TASK_HISTORY_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_OB_IMPORT_TABLE_TASK_HISTORY_ORACLE_SCHEMA_VERSION); break;
     case OB_DBA_WR_SYSTEM_EVENT_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_WR_SYSTEM_EVENT_ORACLE_SCHEMA_VERSION); break;
     case OB_DBA_WR_EVENT_NAME_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_WR_EVENT_NAME_ORACLE_SCHEMA_VERSION); break;
+    case OB_DBA_SCHEDULER_RUNNING_JOBS_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_SCHEDULER_RUNNING_JOBS_ORACLE_SCHEMA_VERSION); break;
     case OB_DBA_OB_FORMAT_OUTLINES_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_OB_FORMAT_OUTLINES_ORACLE_SCHEMA_VERSION); break;
     case OB_DBA_WR_SQLSTAT_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_WR_SQLSTAT_ORACLE_SCHEMA_VERSION); break;
     case OB_DBA_WR_SYS_TIME_MODEL_ORA_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_DBA_WR_SYS_TIME_MODEL_ORACLE_SCHEMA_VERSION); break;

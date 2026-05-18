@@ -2260,6 +2260,9 @@ public:
   static int v_ob_hnsw_index_segment_info_schema(share::schema::ObTableSchema &table_schema);
   static int dba_java_policy_schema(share::schema::ObTableSchema &table_schema);
   static int user_java_policy_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_scheduler_running_jobs_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_scheduler_running_jobs_schema(share::schema::ObTableSchema &table_schema);
+  static int cdb_scheduler_jobs_schema(share::schema::ObTableSchema &table_schema);
   static int gv_ob_tenant_worker_groups_schema(share::schema::ObTableSchema &table_schema);
   static int dba_synonyms_schema(share::schema::ObTableSchema &table_schema);
   static int dba_objects_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -2517,6 +2520,7 @@ public:
   static int dba_ob_import_table_task_history_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_wr_system_event_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_wr_event_name_ora_schema(share::schema::ObTableSchema &table_schema);
+  static int dba_scheduler_running_jobs_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_ob_format_outlines_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_wr_sqlstat_ora_schema(share::schema::ObTableSchema &table_schema);
   static int dba_wr_sys_time_model_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -5834,6 +5838,9 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::v_ob_hnsw_index_segment_info_schema,
   ObInnerTableSchema::dba_java_policy_schema,
   ObInnerTableSchema::user_java_policy_schema,
+  ObInnerTableSchema::dba_scheduler_running_jobs_schema,
+  ObInnerTableSchema::cdb_scheduler_running_jobs_schema,
+  ObInnerTableSchema::cdb_scheduler_jobs_schema,
   ObInnerTableSchema::gv_ob_tenant_worker_groups_schema,
   ObInnerTableSchema::dba_synonyms_schema,
   ObInnerTableSchema::dba_objects_ora_schema,
@@ -6091,6 +6098,7 @@ const schema_create_func sys_view_schema_creators [] = {
   ObInnerTableSchema::dba_ob_import_table_task_history_ora_schema,
   ObInnerTableSchema::dba_wr_system_event_ora_schema,
   ObInnerTableSchema::dba_wr_event_name_ora_schema,
+  ObInnerTableSchema::dba_scheduler_running_jobs_ora_schema,
   ObInnerTableSchema::dba_ob_format_outlines_ora_schema,
   ObInnerTableSchema::dba_wr_sqlstat_ora_schema,
   ObInnerTableSchema::dba_wr_sys_time_model_ora_schema,
@@ -7998,6 +8006,7 @@ const uint64_t tenant_space_tables [] = {
   OB_V_OB_HNSW_INDEX_SEGMENT_INFO_TID,
   OB_DBA_JAVA_POLICY_TID,
   OB_USER_JAVA_POLICY_TID,
+  OB_DBA_SCHEDULER_RUNNING_JOBS_TID,
   OB_GV_OB_TENANT_WORKER_GROUPS_TID,
   OB_DBA_SYNONYMS_TID,
   OB_DBA_OBJECTS_ORA_TID,
@@ -8255,6 +8264,7 @@ const uint64_t tenant_space_tables [] = {
   OB_DBA_OB_IMPORT_TABLE_TASK_HISTORY_ORA_TID,
   OB_DBA_WR_SYSTEM_EVENT_ORA_TID,
   OB_DBA_WR_EVENT_NAME_ORA_TID,
+  OB_DBA_SCHEDULER_RUNNING_JOBS_ORA_TID,
   OB_DBA_OB_FORMAT_OUTLINES_ORA_TID,
   OB_DBA_WR_SQLSTAT_ORA_TID,
   OB_DBA_WR_SYS_TIME_MODEL_ORA_TID,
@@ -11340,6 +11350,7 @@ const char* const tenant_space_table_names [] = {
   OB_V_OB_HNSW_INDEX_SEGMENT_INFO_TNAME,
   OB_DBA_JAVA_POLICY_TNAME,
   OB_USER_JAVA_POLICY_TNAME,
+  OB_DBA_SCHEDULER_RUNNING_JOBS_TNAME,
   OB_GV_OB_TENANT_WORKER_GROUPS_TNAME,
   OB_DBA_SYNONYMS_TNAME,
   OB_DBA_OBJECTS_ORA_TNAME,
@@ -11597,6 +11608,7 @@ const char* const tenant_space_table_names [] = {
   OB_DBA_OB_IMPORT_TABLE_TASK_HISTORY_ORA_TNAME,
   OB_DBA_WR_SYSTEM_EVENT_ORA_TNAME,
   OB_DBA_WR_EVENT_NAME_ORA_TNAME,
+  OB_DBA_SCHEDULER_RUNNING_JOBS_ORA_TNAME,
   OB_DBA_OB_FORMAT_OUTLINES_ORA_TNAME,
   OB_DBA_WR_SQLSTAT_ORA_TNAME,
   OB_DBA_WR_SYS_TIME_MODEL_ORA_TNAME,

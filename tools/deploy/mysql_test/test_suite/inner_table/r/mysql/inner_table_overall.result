@@ -1553,6 +1553,9 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21717	V$OB_HNSW_INDEX_SEGMENT_INFO	1	201001	1
 21718	DBA_JAVA_POLICY	1	201001	1
 21719	USER_JAVA_POLICY	1	201001	1
+21720	DBA_SCHEDULER_RUNNING_JOBS	1	201001	1
+21721	CDB_SCHEDULER_RUNNING_JOBS	1	201001	1
+21722	CDB_SCHEDULER_JOBS	1	201001	1
 21723	GV$OB_TENANT_WORKER_GROUPS	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success

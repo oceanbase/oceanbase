@@ -12195,6 +12195,38 @@ end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.USER_JAVA_POLICY limit 1);
 cnt
 1
+desc oceanbase.DBA_SCHEDULER_RUNNING_JOBS;
+Field	Type	Null	Key	Default	Extra
+OWNER	varchar(128)	NO		NULL	
+JOB_NAME	varchar(128)	NO		NULL	
+JOB_SUBNAME	varchar(128)	NO			
+JOB_STYLE	varchar(17)	YES		NULL	
+DETACHED	varchar(5)	NO			
+SESSION_ID	decimal(10,0)	YES		NULL	
+SLAVE_PROCESS_ID	decimal(10,0)	NO			
+SLAVE_OS_PROCESS_ID	decimal(10,0)	NO			
+RUNNING_INSTANCE	decimal(10,0)	NO			
+RESOURCE_CONSUMER_GROUP	varchar(128)	NO			
+ELAPSED_TIME	decimal(10,0)	NO			
+CPU_USED	decimal(10,0)	NO			
+DESTINATION_OWNER	varchar(261)	NO			
+DESTINATION	varchar(261)	YES		NULL	
+CREDENTIAL_OWNER	varchar(128)	NO			
+CREDENTIAL_NAME	varchar(128)	YES		NULL	
+THIS_DATE	datetime(6)	YES		NULL	
+THIS_EXEC_DATE	datetime(6)	YES		NULL	
+THIS_EXEC_ADDR	varchar(128)	YES		NULL	
+THIS_EXEC_TRACE_ID	varchar(128)	YES		NULL	
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|DBA_SCHEDULER_RUNNING_JOBS|%') then 2
+when ('' like '%|DBA_SCHEDULER_RUNNING_JOBS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_SCHEDULER_RUNNING_JOBS|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_SCHEDULER_RUNNING_JOBS limit 1);
+cnt
+1
 desc oceanbase.GV$OB_TENANT_WORKER_GROUPS;
 Field	Type	Null	Key	Default	Extra
 SVR_IP	varchar(46)	NO		NULL	
