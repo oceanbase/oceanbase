@@ -1687,6 +1687,11 @@ int ObIndexTreeMultiPassPrefetcher<DATA_PREFETCH_DEPTH, INDEX_PREFETCH_DEPTH>::r
     ObSSTableReadHandle &read_handle = read_handles_[cur_range_fetch_idx_ % max_range_prefetching_cnt_];
     if (start_micro_idx > read_handle.micro_end_idx_) {
       can_blockscan_ = false;
+      for (int16_t level = 0; level < index_tree_height_; level++) {
+        if (tree_handles_[level].can_blockscan_) {
+          LOG_INFO("tree handle can_blockscan_ is true", K(level), K(border_rowkey), K(start_micro_idx), K(read_handle.micro_end_idx_));
+        }
+      }
     } else {
       can_blockscan_ = true;
       if (OB_FAIL(check_data_infos_border(start_micro_idx, read_handle.micro_end_idx_, border_rowkey, access_ctx_->query_flag_.is_reverse_scan()))) {
