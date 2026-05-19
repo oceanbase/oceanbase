@@ -319,6 +319,8 @@ int ObCreateTableLikeHelper::generate_aux_table_schemas_()
           new_index_schema.set_database_id(new_database_id);
           //create table like, index always is valid
           new_index_schema.set_index_status(INDEX_STATUS_AVAILABLE);
+          // create table like, index no need to progressive merge
+          new_index_schema.reset_progressive_merge();
           const ObIndexType index_type = new_index_schema.get_index_type();
           if (new_index_schema.is_rowkey_doc_id() ||
               new_index_schema.is_doc_id_rowkey() ||
