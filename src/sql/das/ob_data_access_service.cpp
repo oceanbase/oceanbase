@@ -445,6 +445,8 @@ int ObDataAccessService::do_async_remote_das_task(ObDASRef &das_ref,
     LOG_WARN("assign snapshot fail", K(ret));
   } else if (OB_FAIL(das_ref.allocate_async_das_cb(das_async_cb, task_ops, timeout_ts))) {
     LOG_WARN("failed to allocate das async cb", K(ret));
+  } else {
+    das_async_cb->set_task_resp_addrs(task_arg.get_ctrl_svr(), task_arg.get_runner_svr());
   }
   // prepare op result in advance avoiding racing condition.
   for (int64_t i = 0; OB_SUCC(ret) && i < task_ops.count(); i++) {
