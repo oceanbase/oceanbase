@@ -7,7 +7,7 @@
 | ObLogJoin | 1624 |
 | ObLogTableScan | 4248 |
 | ObLogLimit | 1104 |
-| ObLogExchange | 1648 |
+| ObLogExchange | 1656 |
 | ObLogSubPlanScan | 1096 |
 | ObLogSubPlanFilter | 1656 |
 | ObLogInsert | 1520 |

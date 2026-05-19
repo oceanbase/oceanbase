@@ -1,6 +1,14 @@
 #!/bin/bash
 
-BRANCH=${1:-master}
+if [ -z "${1:-}" ]; then
+    OB_FLOW="${OBDEV_ROOT:-/usr/local/obdev}/libexec/ob-flow"
+    if [ -x "$OB_FLOW" ]; then
+        BRANCH=$("$OB_FLOW" 2>/dev/null | sed -n 's/.*Target Branch[^:]*: *//p')
+    fi
+    BRANCH=${BRANCH:-master}
+else
+    BRANCH=$1
+fi
 
 GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 if [ -z "$GIT_ROOT" ]; then
@@ -105,7 +113,7 @@ for table_name in ['memory usage', 'max memory usage']:
     for old_row, new_row in zip(old_rows, new_rows):
         query = old_row[0]
         results = [fmt_diff(old_row[i+1], new_row[i+1]) for i in range(len(COLS))]
-        if any(r[0] != '0.00%' for r in results):
+        if any(r[1] != '0' for r in results):
             diff_lines.append((query, results))
     if diff_lines:
         file_has_diff = True
