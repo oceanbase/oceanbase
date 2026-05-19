@@ -105,7 +105,7 @@ public:
   bool has_lob_out_row_;
   bool is_last_row_last_flag_;
   bool is_first_row_first_flag_;
-  bool single_version_rows_;  // only used for delta sstable
+  bool single_version_rows_;  // Whether all rows in this block have one single version (Attention!! The first rowkey may have other versions in previous block)
   bool is_serialized_agg_row_;
   bool is_clustered_index_;
   bool has_macro_block_bloom_filter_;
@@ -332,7 +332,7 @@ struct ObIndexBlockRowHeader
   OB_INLINE void set_has_shared_data_macro_id() { has_shared_data_macro_id_ = 1; }
   OB_INLINE void unset_has_shared_data_macro_id() { has_shared_data_macro_id_ = 0; }
   OB_INLINE bool is_mvcc_all_in() const { return is_first_row_first_flag_ && is_last_row_last_flag_; }
-  OB_INLINE bool is_single_version_rows() const { return single_version_rows_; }
+  OB_INLINE bool is_all_single_version_rows() const { return single_version_rows_ && is_mvcc_all_in(); }
 
   int fill_micro_des_meta(const bool need_deep_copy_key, ObMicroBlockDesMeta &des_meta) const;
   int deserialize(const char *data_buf, const int64_t data_len, int64_t &pos);
@@ -359,7 +359,7 @@ struct ObIndexBlockRowHeader
       uint64_t has_macro_block_bloom_filter_ : 1; // Whether this macro block has bloom filter (only in macro level)
       uint64_t is_last_row_last_flag_: 1;         // Whether the last row is with last flag
       uint64_t is_first_row_first_flag_: 1;       // Whether the first row is with first flag
-      uint64_t single_version_rows_: 1;           // Whether all rows in this block are insert row (only used for delta sstable)
+      uint64_t single_version_rows_: 1;           // Whether all rows in this block have one single version (Attention!! The first rowkey may have other versions in previous block)
       uint64_t reserved_ : 24;
     };
   };

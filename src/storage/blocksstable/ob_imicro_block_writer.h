@@ -49,7 +49,7 @@ struct ObMicroBlockDesc
   bool has_lob_out_row_;
   bool is_last_row_last_flag_;
   bool is_first_row_first_flag_;
-  bool single_version_rows_;  // only used for delta sstable
+  bool single_version_rows_;  // Whether all rows in this block have one single version (Attention!! The first rowkey may have other versions in previous block)
 
   ObMicroBlockDesc() { reset(); }
   bool is_valid() const;

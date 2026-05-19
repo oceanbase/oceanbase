@@ -127,7 +127,7 @@ public:
                 (index_info.is_macro_node() || skip_index_info.min_snapshot_ > context_.trans_version_range_.base_version_) &&
                 !agg_row_.check_need_access_data() &&
                 index_info.can_blockscan() &&
-                (index_info.row_header_->is_major_node() || (iter_param_->enable_inc_skip_index() && index_info.row_header_->is_single_version_rows())) &&
+                (index_info.row_header_->is_major_node() || (iter_param_->enable_inc_skip_index() && index_info.row_header_->is_all_single_version_rows())) &&
                 (!agg_row_.has_lob_column_out() || !index_info.has_lob_out_row()) &&
                 !index_info.is_left_border() &&
                 !index_info.is_right_border();
