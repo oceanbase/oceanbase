@@ -18387,6 +18387,9 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12612: __all_virtual_ai_batch_task
 # 12613: __all_virtual_ai_batch_task_history
 
+# 12614: __all_virtual_ai_model_provider_history
+# 12615: __all_virtual_ai_gateway_history
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
