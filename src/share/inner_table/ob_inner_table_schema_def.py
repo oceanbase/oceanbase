@@ -18991,6 +18991,9 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15552', all_def_keyword
 
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15555', all_def_keywords['__all_table_opt_stat_invalidate_plan']))
 
+
+# 15556: ALL_VIRTUAL_SYS_VARIABLE_HISTORY
+
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
 # - 示例：def_table_schema(**no_direct_access(gen_oracle_mapping_virtual_table_def('15009', all_def_keywords['__all_virtual_sql_audit'])))
@@ -47437,6 +47440,9 @@ FROM
 # 21741: CDB_OB_AI_BATCH_TASKS
 # 21742: DBA_OB_AI_BATCH_TASK_HISTORY
 # 21743: CDB_OB_AI_BATCH_TASK_HISTORY
+
+# 21744: DBA_OB_SYS_VARIABLE_HISTORY
+# 21745: CDB_OB_SYS_VARIABLE_HISTORY
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
@@ -82715,6 +82721,9 @@ FROM
 # 28298: V$OB_LS_LOG_REPLAY_STAT
 # 28299: GV$OB_LS_LOG_TRANSPORT_STAT
 # 28300: V$OB_LS_LOG_TRANSPORT_STAT
+
+# 28301: DBA_OB_SYS_VARIABLE_HISTORY
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
