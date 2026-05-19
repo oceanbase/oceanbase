@@ -260,6 +260,7 @@ private:
   int fill_results_to_eval_ctx(share::ObVectorQueryVidIterator *adaptor_vid_iter, int64_t &count, int64_t capacity);
 
   int post_query_vid_with_expr_filter();
+  int do_expr_filter_batch();
   int filter_by_index_back(int64_t vid, float distance, bool &filter_res);
   int set_rowkey_by_vid(int64_t vid);
   int get_single_row_from_filter_iter(bool is_vectorized);

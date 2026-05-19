@@ -1548,7 +1548,7 @@ int ObDASIvfBaseScanIter::do_table_post_filter(bool is_vectorized, ObIVFRowkeyDi
           guard.set_batch_idx(i);
           ObRowkey &main_rowkey = tmp_main_rowkey_;
           ObIvfRowkeyDistEntry* entry = nullptr;
-          if (OB_FAIL(get_main_rowkey(data_filter_ctdef_, main_rowkey))) {
+          if (OB_FAIL(ObDasVecScanUtils::get_main_rowkey(data_filter_ctdef_, vec_aux_rtdef_->eval_ctx_, main_rowkey))) {
             LOG_WARN("fail to get main rowkey", K(ret));
           } else if (OB_ISNULL(entry = rowkey_dist_map.get(main_rowkey))) {
             ret = OB_ENTRY_NOT_EXIST;
@@ -1570,7 +1570,7 @@ int ObDASIvfBaseScanIter::do_table_post_filter(bool is_vectorized, ObIVFRowkeyDi
           if (OB_ITER_END != ret) {
             LOG_WARN("failed to scan vid rowkey iter", K(ret));
           }
-        } else if (OB_FAIL(get_main_rowkey(data_filter_ctdef_, main_rowkey))) {
+        } else if (OB_FAIL(ObDasVecScanUtils::get_main_rowkey(data_filter_ctdef_, vec_aux_rtdef_->eval_ctx_, main_rowkey))) {
           LOG_WARN("fail to get main rowkey", K(ret));
         } else if (OB_ISNULL(entry = rowkey_dist_map.get(main_rowkey))) {
           ret = OB_ENTRY_NOT_EXIST;
@@ -3652,40 +3652,6 @@ int ObDASIvfPQScanIter::process_ivf_scan_post(bool is_vectorized)
     LOG_WARN("fail to calc nearest limit rowkeys in cids", K(ret), K(dim_));
   }
 
-  return ret;
-}
-
-// NOTICE: shadow copy from expr memory
-int ObDASIvfBaseScanIter::get_main_rowkey(
-    const ObDASScanCtDef *ctdef,
-    ObRowkey &main_rowkey)
-{
-  int ret = OB_SUCCESS;
-  ObObj *obj_ptr = nullptr;
-  void *buf = nullptr;
-
-  if (OB_ISNULL(ctdef)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ctdef or rtdef is null", K(ret), KP(ctdef));
-  } else {
-    const int64_t rowkey_cnt = main_rowkey.get_obj_cnt();
-    const ExprFixedArray& rowkey_exprs = ctdef->rowkey_exprs_;
-    if (rowkey_exprs.count() != rowkey_cnt) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("out expr is not enough for rowkey", K(ret), K(rowkey_cnt), K(rowkey_exprs.count()));
-    } else {
-      ObObj *obj_ptr = main_rowkey.get_obj_ptr();
-      for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_cnt; ++i) {
-        ObExpr *expr = rowkey_exprs.at(i);
-        if (OB_ISNULL(expr)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("should not be null", K(ret), K(i));
-        } else if (OB_FAIL(expr->locate_expr_datum(*vec_aux_rtdef_->eval_ctx_).to_obj(obj_ptr[i], expr->obj_meta_, expr->obj_datum_map_))) {
-          LOG_WARN("convert datum to obj failed", K(ret), K(i), KPC(expr));
-        }
-      }
-    }
-  }
   return ret;
 }
 

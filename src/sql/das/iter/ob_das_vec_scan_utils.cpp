@@ -2,9 +2,10 @@
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
  */
-#include "sql/das/iter/ob_das_vec_scan_utils.h"
 
 #define USING_LOG_PREFIX SQL_DAS
+
+#include "sql/das/iter/ob_das_vec_scan_utils.h"
 
 namespace oceanbase
 {
@@ -568,6 +569,36 @@ int ObDasVecScanUtils::get_rowkey_pre_filter(
     ret = OB_SUCCESS;
   }
 
+  return ret;
+}
+
+// NOTICE: shadow copy from expr memory
+int ObDasVecScanUtils::get_main_rowkey(const ObDASScanCtDef *ctdef, ObEvalCtx *eval_ctx, ObRowkey &main_rowkey)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ctdef) || OB_ISNULL(eval_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctdef or eval_ctx is null", K(ret), KP(ctdef), KP(eval_ctx));
+  } else {
+    const int64_t rowkey_cnt = main_rowkey.get_obj_cnt();
+    const ExprFixedArray &rk_exprs = ctdef->rowkey_exprs_;
+    if (rk_exprs.count() != rowkey_cnt) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("rowkey expr count mismatch", K(ret), K(rowkey_cnt), K(rk_exprs.count()));
+    } else {
+      ObObj *obj_ptr = main_rowkey.get_obj_ptr();
+      for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_cnt; ++i) {
+        ObExpr *expr = rk_exprs.at(i);
+        if (OB_ISNULL(expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("rowkey expr is null", K(ret), K(i));
+        } else if (OB_FAIL(expr->locate_expr_datum(*eval_ctx)
+                               .to_obj(obj_ptr[i], expr->obj_meta_, expr->obj_datum_map_))) {
+          LOG_WARN("datum to obj failed", K(ret), K(i));
+        }
+      }
+    }
+  }
   return ret;
 }
 
