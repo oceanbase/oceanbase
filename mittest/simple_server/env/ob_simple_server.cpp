@@ -294,6 +294,13 @@ int ObSimpleServer::simple_start()
   }
   // bootstrap
   if (!ObSimpleServerRestartHelper::is_restart_) {
+    // Reset server_id before bootstrap to handle upper-layer retry scenarios where the config
+    // file from a previous run may have persisted a non-zero observer_id. Without this reset,
+    // check_server_empty() would find server_id=1 and fail the first bootstrap attempt
+    // (logging "[CHECK_SERVER_EMPTY] server_id exists"), causing avoidable noise and potential
+    // instability when the data dir cleanup was incomplete between retries.
+    (void) GCTX.set_server_id(0);
+    GCONF.observer_id = 0;
     std::thread th([this]() {
       int64_t start_time = ObTimeUtility::current_time();
       int ret = OB_SUCCESS;
