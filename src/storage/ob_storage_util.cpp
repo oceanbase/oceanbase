@@ -50,15 +50,15 @@ OB_INLINE static int pad_on_local_buf(const ObString &space_pattern,
 {
   int ret = OB_SUCCESS;
   char *buf = nullptr;
-  const int32_t pad_len = length + pad_whitespace_length * space_pattern.length();
-  const int32_t buf_len = lib::is_oracle_mode() ? MIN(pad_len, OB_MAX_ORACLE_CHAR_LENGTH_BYTE) : pad_len;
-  if (OB_ISNULL((buf = (char*) padding_alloc.alloc(static_cast<int64_t>(buf_len))))) {
+  const int64_t pad_len = static_cast<int64_t>(length) + static_cast<int64_t>(pad_whitespace_length) * space_pattern.length();
+  const int64_t buf_len = lib::is_oracle_mode() ? MIN(pad_len, OB_MAX_ORACLE_CHAR_LENGTH_BYTE) : pad_len;
+  if (OB_ISNULL((buf = (char*) padding_alloc.alloc(buf_len)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     STORAGE_LOG(WARN, "no memory", K(ret));
   } else {
     int32_t true_len = 0;
     MEMCPY(buf, ptr, length);
-    append_padding_pattern(space_pattern, length, buf_len, buf, true_len);
+    append_padding_pattern(space_pattern, length, static_cast<int32_t>(buf_len), buf, true_len);
     ptr = buf;
     length = true_len;
   }
@@ -104,7 +104,7 @@ int pad_column(const ObObjMeta &obj_meta, const ObAccuracy accuracy, common::ObI
     int32_t cur_len = 0; // byte or char length
     bool is_ascii = can_do_ascii_optimize(cs_type) && is_ascii_str(datum.ptr_, datum.pack_);
     if (is_ascii || is_oracle_byte_length(lib::is_oracle_mode(), accuracy.get_length_semantics())) {
-      cur_len = datum.pack_;
+      cur_len = static_cast<int32_t>(datum.pack_);
     } else {
       cur_len = static_cast<int32_t>(ObCharset::strlen_char(cs_type, datum.ptr_, datum.pack_));
     }
@@ -129,14 +129,14 @@ int pad_column(const common::ObAccuracy accuracy, sql::ObEvalCtx &ctx, sql::ObEx
     int32_t cur_len = 0; // byte or char length
     bool is_ascii = can_do_ascii_optimize(cs_type) && is_ascii_str(datum.ptr_, datum.pack_);
     if (is_ascii || is_oracle_byte_length(lib::is_oracle_mode(), accuracy.get_length_semantics())) {
-      cur_len = datum.pack_;
+      cur_len = static_cast<int32_t>(datum.pack_);
     } else {
       cur_len = static_cast<int32_t>(ObCharset::strlen_char(cs_type, datum.ptr_, datum.pack_));
     }
     if (cur_len < length) {
       char *ptr = nullptr;
-      const int32_t pad_len = datum.pack_ + (length - cur_len) * space_pattern.length();
-      const int32_t buf_len = lib::is_oracle_mode() ? MIN(pad_len, OB_MAX_ORACLE_CHAR_LENGTH_BYTE) : pad_len;
+      const int64_t pad_len = static_cast<int64_t>(datum.pack_) + static_cast<int64_t>(length - cur_len) * space_pattern.length();
+      const int32_t buf_len = static_cast<int32_t>(lib::is_oracle_mode() ? MIN(pad_len, OB_MAX_ORACLE_CHAR_LENGTH_BYTE) : pad_len);
       if (OB_ISNULL(ptr = expr.get_str_res_mem(ctx, static_cast<int64_t>(buf_len)))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "no memory", K(ret));
@@ -182,7 +182,7 @@ int pad_on_datums(const common::ObAccuracy accuracy,
       }
     }
   } else if (can_do_ascii_optimize(cs_type)) {
-    int32_t buf_len = length * space_pattern.length() * row_count;
+    int64_t buf_len = static_cast<int64_t>(length) * space_pattern.length() * row_count;
     if (OB_ISNULL(buf = (char*) padding_alloc.alloc(buf_len))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "no memory", K(ret));
@@ -219,7 +219,7 @@ int pad_on_datums(const common::ObAccuracy accuracy,
       } else {
         int32_t cur_len = 0; // byte or char length
         if (is_oracle_byte) {
-          cur_len = datum.pack_;
+          cur_len = static_cast<int32_t>(datum.pack_);
         } else {
           cur_len = static_cast<int32_t>(ObCharset::strlen_char(cs_type, datum.ptr_, datum.pack_));
         }
@@ -272,7 +272,7 @@ int pad_on_rich_format_columns(const common::ObAccuracy accuracy,
         }
       }
     } else if (can_do_ascii_optimize(cs_type)) {
-      int32_t buf_len = length * space_pattern.length() * row_count;
+      int64_t buf_len = static_cast<int64_t>(length) * space_pattern.length() * row_count;
       if (OB_ISNULL(buf = (char*) padding_alloc.alloc(buf_len))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         STORAGE_LOG(WARN, "no memory", K(ret));
