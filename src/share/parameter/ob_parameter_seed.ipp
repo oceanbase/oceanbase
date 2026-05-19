@@ -3487,3 +3487,7 @@ DEF_STR_WITH_CHECKER(function_round_dialect, OB_TENANT_PARAMETER, "MYSQL",
                      "ORACLE: use Oracle-style format string rounding.",
                      ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
                      "MYSQL, ORACLE");
+
+DEF_BOOL(_enable_database_isolation_mode, OB_TENANT_PARAMETER, "False",
+    "enable database isolation mode",
+    ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
