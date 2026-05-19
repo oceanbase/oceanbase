@@ -61,6 +61,11 @@ public:
                               common::ObISQLClient &sql_client,
                               ObIAllocator &allocator,
                               common::number::ObNumber &next_value);
+  int sync_sequence_value(const uint64_t tenant_id,
+                          const uint64_t src_sequence_id,
+                          const uint64_t dest_sequence_id,
+                          const share::ObSequenceOption &option,
+                          common::ObMySQLTransaction &trans);
   int send_rpc_clean_sequence_cache(uint64_t tenant_id, uint64_t sequence_id,
                                     const uint64_t timeout, const common::ObAddr &server,
                                     const obrpc::ObSrvRpcProxy &srv_rpc_proxy,

@@ -174,6 +174,7 @@ protected:
   int add_constraint_ddl_task(const int64_t constraint_id);
   int add_fk_ddl_task(const int64_t fk_id);
   int sync_auto_increment_position();
+  int sync_identity_column_sequence_value();
   int modify_autoinc(const share::ObDDLTaskStatus next_task_status);
   int finish();
   int check_health();

@@ -12069,6 +12069,40 @@ int ObDDLOperator::alter_target_sequence_start_with(const ObSequenceSchema &sequ
   return ret;
 }
 
+int ObDDLOperator::sync_sequence_value(const uint64_t tenant_id,
+                                       const uint64_t src_sequence_id,
+                                       const uint64_t dest_sequence_id,
+                                       const ObSequenceOption &option)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaService *schema_service_impl = schema_service_.get_schema_service();
+  if (OB_ISNULL(schema_service_impl)) {
+    ret = OB_ERR_SYS;
+    LOG_ERROR("schema_service_impl must not null", K(ret));
+  } else {
+    ObSequenceSqlService &sequence_sql_service = schema_service_impl->get_sequence_sql_service();
+    ObMySQLTransaction trans;
+    if (OB_FAIL(trans.start(&sql_proxy_, tenant_id))) {
+      LOG_WARN("fail to start transaction", K(ret), K(tenant_id));
+    } else if (OB_FAIL(sequence_sql_service.sync_sequence_value(tenant_id,
+                                                                src_sequence_id,
+                                                                dest_sequence_id,
+                                                                option,
+                                                                trans))) {
+      LOG_WARN("fail to sync sequence value", K(ret), K(tenant_id), K(src_sequence_id),
+               K(dest_sequence_id), K(option));
+    }
+    if (trans.is_started()) {
+      int temp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (temp_ret = trans.end(OB_SUCC(ret)))) {
+        LOG_WARN_RET(temp_ret, "trans end failed", "is_commit", OB_SUCCESS == ret, K(temp_ret));
+        ret = (OB_SUCC(ret)) ? temp_ret : ret;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObDDLOperator::init_tenant_scheduled_job(
   const ObSysVariableSchema &sys_variable,
   const uint64_t tenant_id,

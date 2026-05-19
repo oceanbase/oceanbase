@@ -923,6 +923,8 @@ int ObTableRedefinitionTask::take_effect(const ObDDLTaskStatus next_task_status)
     } else {
       LOG_WARN("sync auto increment position failed", K(ret), K(object_id_), K(target_object_id_));
     }
+  } else if (is_direct_load_task(task_type_) && OB_FAIL(sync_identity_column_sequence_value())) {
+    LOG_WARN("sync indentity column sequence value failed", K(ret), K(object_id_), K(target_object_id_));
   } else if (OB_FAIL(sync_stats_info())) {
     LOG_WARN("fail to sync stats info", K(ret), K(object_id_), K(target_object_id_));
   } else if (alter_table_arg_.mview_refresh_info_.is_mview_complete_refresh_ &&

@@ -713,6 +713,88 @@ int ObSequenceSqlService::add_sequence_to_value_table(const uint64_t tenant_id,
   return ret;
 }
 
+int ObSequenceSqlService::sync_sequence_value(const uint64_t tenant_id,
+                                              const uint64_t src_sequence_id,
+                                              const uint64_t dest_sequence_id,
+                                              const ObSequenceOption &option,
+                                              ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+  const char *tname = OB_ALL_SEQUENCE_VALUE_TNAME;
+  ObSqlString sql;
+  ObSqlString values;
+  int64_t affected_rows = 0;
+  ObArenaAllocator allocator(lib::ObLabel("SeqSrv"));
+  ObNumber src_next_value;
+  ObNumber dest_next_value;
+  if (OB_FAIL(get_sequence_sync_value(tenant_id,
+                                      src_sequence_id,
+                                      false /*is_for_update*/,
+                                      trans,
+                                      allocator,
+                                      src_next_value))) {
+    if (OB_UNLIKELY(OB_ITER_END != ret)) {
+      LOG_WARN("fail to get sequence sync value", K(ret), K(tenant_id), K(src_sequence_id));
+    } else {
+      ret = OB_SUCCESS;
+      LOG_INFO("no need sync sequence value, because src sequence value not exist", K(tenant_id),
+               K(src_sequence_id), K(dest_sequence_id));
+    }
+  } else if (OB_FAIL(get_sequence_sync_value(tenant_id,
+                                             dest_sequence_id,
+                                             true /*is_for_update*/,
+                                             trans,
+                                             allocator,
+                                             dest_next_value))) {
+    if (OB_UNLIKELY(OB_ITER_END != ret)) {
+      LOG_WARN("fail to get sequence sync value", K(ret), K(tenant_id), K(dest_sequence_id));
+    } else {
+      ret = OB_SUCCESS;
+      // insert sequence value
+      if (OB_FAIL(sql.assign_fmt("INSERT INTO %s (", tname))) {
+        LOG_WARN("append table name failed, ", K(ret));
+      } else {
+        SQL_COL_APPEND_VALUE(sql, values, dest_sequence_id, "sequence_id", "%lu");
+        SQL_COL_APPEND_VALUE(sql, values, src_next_value.format(), "next_value", "%s");
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(sql.append_fmt(") VALUES (%.*s)", static_cast<int32_t>(values.length()),
+                                          values.ptr()))) {
+          LOG_WARN("append sql failed, ", K(ret));
+        } else if (OB_FAIL(trans.write(exec_tenant_id, sql.ptr(), affected_rows))) {
+          LOG_WARN("fail to execute sql", K(ret), K(sql));
+        } else if (OB_UNLIKELY(!is_single_row(affected_rows))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected value", K(ret), K(affected_rows), K(sql));
+        } else {
+          LOG_INFO("sync sequence value success", K(tenant_id), K(src_sequence_id),
+                   K(dest_sequence_id), K(src_next_value));
+        }
+      }
+    }
+  } else if ((option.get_increment_by() > static_cast<int64_t>(0) && src_next_value <= dest_next_value) ||
+             (option.get_increment_by() < static_cast<int64_t>(0) && src_next_value >= dest_next_value)) {
+    LOG_INFO("no need sync sequence value, because dest sequence has consumed more",
+             K(tenant_id), K(src_sequence_id), K(dest_sequence_id), K(src_next_value), K(dest_next_value),
+             K(option));
+  } else {
+    // update sequence value
+    if (OB_FAIL(sql.assign_fmt("UPDATE %s set next_value = %s where sequence_id = %lu", tname,
+                               src_next_value.format(), dest_sequence_id))) {
+      LOG_WARN("append table name failed", K(ret));
+    } else if (OB_FAIL(trans.write(exec_tenant_id, sql.ptr(), affected_rows))) {
+      LOG_WARN("fail to execute sql", K(sql), K(ret));
+    } else if (OB_UNLIKELY(!is_single_row(affected_rows))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected affected rows", K(ret), K(affected_rows), K(sql));
+    } else {
+      LOG_INFO("sync sequence value success", K(tenant_id), K(src_sequence_id), K(dest_sequence_id),
+               K(src_next_value));
+    }
+  }
+  return ret;
+}
+
 } //end of schema
 } //end of share
 } //end of oceanbase
