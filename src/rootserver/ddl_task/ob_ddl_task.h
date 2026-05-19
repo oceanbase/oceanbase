@@ -798,7 +798,7 @@ public:
       const share::ObDDLTaskStatus next_task_status);
   lib::Worker::CompatMode get_compat_mode() { return compat_mode_; }
   int batch_release_snapshot(
-      const int64_t snapshot_version, 
+      const int64_t snapshot_version,
       const common::ObIArray<common::ObTabletID> &tablet_ids);
   int set_sql_exec_addr(const common::ObAddr &addr);
   int remove_sql_exec_addr(const common::ObAddr &addr);
@@ -868,6 +868,13 @@ private:
   virtual int cleanup_impl() { return OB_NOT_SUPPORTED; }
   virtual bool task_can_retry() const { return true; }
   int inner_refresh_task_context(const share::ObDDLTaskStatus status);
+  int release_snapshot_by_tablets(
+      const share::SCN &snapshot_scn,
+      const common::ObIArray<common::ObTabletID> &tablet_ids,
+      common::ObMySQLTransaction &trans);
+  int release_snapshot_by_scn(
+      const share::SCN &snapshot_scn,
+      common::ObMySQLTransaction &trans);
 protected:
   virtual void clear_old_status_context();
 protected:

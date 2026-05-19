@@ -2622,7 +2622,7 @@ int ObFtsIndexBuildTask::try_release_snapshot(ObMySQLTransaction &trans)
     } else if (tablet_ids.count() <= 0) {
       snapshot_version_ = 0;
     } else if (OB_FAIL(snapshot_scn.convert_for_tx(snapshot_version_))) {
-      LOG_WARN("failed to convert scn", K(ret),K(snapshot_version_), K(snapshot_scn));
+      LOG_WARN("failed to convert scn", K(ret), K(snapshot_version_), K(snapshot_scn));
     } else if (OB_ISNULL(GCTX.root_service_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", KR(ret), KP(GCTX.root_service_));

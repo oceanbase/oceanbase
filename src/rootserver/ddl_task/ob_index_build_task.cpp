@@ -858,6 +858,7 @@ int ObIndexBuildTask::release_snapshot(const int64_t snapshot)
   } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, DDL_TASK_RELEASE_SNAPSHOT_FAILED))) {
     LOG_WARN("ddl sim failure: release snapshot failed", K(ret), K(tenant_id_), K(task_id_));
   } else {
+    DEBUG_SYNC(BEFORE_INDEX_BUILD_RELEASE_SNAPSHOT);
     ObDDLService &ddl_service = root_service_->get_ddl_service();
     ObSEArray<ObTabletID, 2> tablet_ids;
     ObSchemaGetterGuard schema_guard;
@@ -866,46 +867,52 @@ int ObIndexBuildTask::release_snapshot(const int64_t snapshot)
     ObMultiVersionSchemaService &schema_service = ObMultiVersionSchemaService::get_instance();
     if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, object_id_, tablet_ids))) {
       if (OB_TABLE_NOT_EXIST == ret || OB_TENANT_NOT_EXIST == ret) {
+        tablet_ids.reset();
         ret = OB_SUCCESS;
       } else {
         LOG_WARN("failed to get data table snapshot", K(ret));
       }
     } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, target_object_id_, tablet_ids))) {
       if (OB_TABLE_NOT_EXIST == ret || OB_TENANT_NOT_EXIST == ret) {
+        tablet_ids.reset();
         ret = OB_SUCCESS;
       } else {
         LOG_WARN("failed to get dest table snapshot", K(ret));
       }
     }
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(ret) || tablet_ids.count() <= 0) {
     } else if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id_, schema_guard))) {
       LOG_WARN("get tenant schema guard failed", K(ret));
     } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, object_id_, data_table_schema))) {
       LOG_WARN("get table schema failed", K(ret), K(object_id_));
     } else if (OB_ISNULL(data_table_schema)) {
       // ignore ret
+      tablet_ids.reset();
       LOG_INFO("table not exist", K(ret), K(object_id_), K(target_object_id_), KP(data_table_schema));
     } else if (data_table_schema->get_aux_lob_meta_tid() != OB_INVALID_ID &&
                 OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, data_table_schema->get_aux_lob_meta_tid(), tablet_ids))) {
       if (OB_TABLE_NOT_EXIST == ret) {
+        tablet_ids.reset();
         ret = OB_SUCCESS;
       } else {
         LOG_WARN("failed to get data lob meta table snapshot", K(ret));
       }
-    } else if ( data_table_schema->get_aux_lob_piece_tid() != OB_INVALID_ID &&
+    } else if (data_table_schema->get_aux_lob_piece_tid() != OB_INVALID_ID &&
                 OB_FAIL(ObDDLUtil::get_tablets(tenant_id_, data_table_schema->get_aux_lob_piece_tid(), tablet_ids))) {
       if (OB_TABLE_NOT_EXIST == ret) {
+        tablet_ids.reset();
         ret = OB_SUCCESS;
       } else {
         LOG_WARN("failed to get data lob piece table snapshot", K(ret));
       }
     }
 
-    if (OB_FAIL(ret)) {
+    if (OB_FAIL(ret) || tablet_ids.count() <= 0) {
     } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, target_object_id_, index_table_schema))) {
       LOG_WARN("get table schema failed", K(ret), K(object_id_));
     } else if (OB_ISNULL(index_table_schema)) {
       // ignore ret
+      tablet_ids.reset();
       LOG_INFO("table not exist", K(ret), K(object_id_), K(target_object_id_), KP(index_table_schema));
     } else if (index_table_schema->is_vec_vid_rowkey_type() &&
               OB_FAIL(ObDDLUtil::get_rs_specific_table_tablets(tenant_id_, object_id_, target_object_id_, task_id_, tablet_ids))) {
@@ -915,11 +922,12 @@ int ObIndexBuildTask::release_snapshot(const int64_t snapshot)
       LOG_WARN("failed to get dest rowkey vid table tablet", K(ret), K(target_object_id_));
     }
 
-    if (OB_SUCC(ret) && tablet_ids.count() > 0 && OB_FAIL(batch_release_snapshot(snapshot, tablet_ids))) {
-      LOG_WARN("batch relase snapshot failed", K(ret), K(tablet_ids));
+    if (OB_SUCC(ret) && OB_FAIL(batch_release_snapshot(snapshot, tablet_ids))) {
+      LOG_WARN("batch release snapshot failed", K(ret), K(snapshot), K(tablet_ids));
     }
+
+    LOG_INFO("release snapshot finished", K(ret), K(snapshot), K(object_id_), K(index_table_id_), K(schema_version_));
   }
-  LOG_INFO("release snapshot finished", K(ret), K(snapshot), K(object_id_), K(index_table_id_), K(schema_version_));
   return ret;
 }
 

@@ -279,7 +279,6 @@ int ObSnapshotTableProxy::remove_snapshot(
     const uint64_t tenant_id,
     ObSnapShotType snapshot_type)
 {
-  int ret = OB_SUCCESS;
   ObSnapshotInfo info;
   info.tenant_id_ = tenant_id;
   info.snapshot_type_ = snapshot_type;
