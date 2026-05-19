@@ -1256,6 +1256,7 @@ int ObTableColumns::resolve_view_definition(
           // set # of question marks
           resolver_ctx.query_ctx_->set_questionmark_count(static_cast<int64_t> (parse_result.question_mark_ctx_.count_));
           resolver_ctx.query_ctx_->sql_schema_guard_.set_schema_guard(schema_guard);
+          resolver_ctx.expr_factory_->set_query_ctx(resolver_ctx.query_ctx_);
           uint64_t session_id = 0;
           if (session->get_session_type() != ObSQLSessionInfo::INNER_SESSION) {
             session_id = session->get_sessid_for_table();
