@@ -46,6 +46,7 @@ enum ObEsQueryItem : int8_t {
   QUERY_ITEM_ARRAY_CONTAINS,
   QUERY_ITEM_ARRAY_CONTAINS_ALL,
   QUERY_ITEM_ARRAY_OVERLAPS,
+  QUERY_ITEM_WILDCARD, // FARM COMPAT WHITELIST
 };
 
 #define IS_QUERY_ITEM_BOOL(query_item) (query_item == QUERY_ITEM_BOOL)
@@ -61,6 +62,22 @@ enum ObFusionMethod
   RRF,
   MINMAX_NORMALIZER,
 };
+
+/*
+ * ObFusionIterExecMode is used to control the execution mode of the fusion iterator.
+ * It is used to determine the execution mode of the fusion iterator.
+ * - SKIP_FUSION_ITER: skip the fusion iterator.
+ * - ROWKEY_DISTINCT_ONLY: only collect the distinct rowkey.
+ * - ROWKEY_SCORE_FULL_RECALL: collect the rowkey and score.
+ * - SCORE_TOP_K_QUERY_HITS: collect the score and top k hits.
+ */
+ enum class ObFusionIterExecMode
+ {
+   SKIP_FUSION_ITER = 0,
+   ROWKEY_DISTINCT_ONLY,
+   ROWKEY_SCORE_FULL_RECALL,
+   SCORE_TOP_K_QUERY_HITS,
+ };
 
 enum ObMsmApplyType : int8_t {
   MSM_NOT_APPLY = 0,

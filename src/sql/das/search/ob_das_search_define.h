@@ -293,7 +293,9 @@ public:
       fusion_method_(ObFusionMethod::WEIGHT_SUM),
       has_hybrid_fusion_op_(false),
       enable_parallel_(false),
-      query_dop_(1)
+      query_dop_(1),
+      track_score_(true),
+      fusion_iter_exec_mode_(ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS)
   {}
   ~ObDASFusionCtDef() {}
   INHERIT_TO_STRING_KV("ObDASFusionCtDef", ObDASAttachCtDef, K(search_index_), K(has_search_subquery_), K(has_vector_subquery_), K(rowid_exprs_), K(score_exprs_), K(rank_exprs_), K(weight_exprs_), KPC_(size_expr), KPC_(offset_expr), KPC_(rank_window_size_expr), KPC_(rank_constant_expr), KPC_(min_score_expr), K(fusion_method_), K(enable_parallel_), K(query_dop_));
@@ -368,6 +370,8 @@ public:
   bool has_hybrid_fusion_op_;
   bool enable_parallel_;
   int64_t query_dop_;
+  bool track_score_;
+  ObFusionIterExecMode fusion_iter_exec_mode_;
 };
 
 struct ObDASFusionRtDef : ObDASAttachRtDef

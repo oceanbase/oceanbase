@@ -20,6 +20,7 @@ struct ObDASScalarCtDef : ObIDASSearchCtDef
 public:
   ObDASScalarCtDef(common::ObIAllocator &alloc)
     : ObIDASSearchCtDef(alloc, DAS_OP_SCALAR_QUERY),
+      boost_(nullptr),
       has_index_scan_(false),
       has_main_scan_(false)
   { }
@@ -32,6 +33,8 @@ public:
 
   const ObDASScalarScanCtDef* get_index_scan_ctdef() const;
   const ObDASScalarScanCtDef* get_main_scan_ctdef() const;
+
+  ObExpr *boost_;
 
 private:
   bool has_index_scan_;

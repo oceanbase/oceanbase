@@ -58,7 +58,7 @@ void ObIDASSearchRtDef::set_pushdown_filter(const bool query_optional, ObIDASSea
   UNUSED(query_optional);
 }
 
-OB_SERIALIZE_MEMBER((ObDASFusionCtDef, ObDASAttachCtDef), search_index_, rowid_exprs_, score_exprs_, rank_exprs_, weight_exprs_, path_top_k_limit_exprs_, size_expr_, offset_expr_, rank_window_size_expr_, rank_constant_expr_, min_score_expr_, has_search_subquery_, has_vector_subquery_, is_top_k_query_, fusion_method_, has_hybrid_fusion_op_, enable_parallel_, query_dop_);
+OB_SERIALIZE_MEMBER((ObDASFusionCtDef, ObDASAttachCtDef), search_index_, rowid_exprs_, score_exprs_, rank_exprs_, weight_exprs_, path_top_k_limit_exprs_, size_expr_, offset_expr_, rank_window_size_expr_, rank_constant_expr_, min_score_expr_, has_search_subquery_, has_vector_subquery_, is_top_k_query_, fusion_method_, has_hybrid_fusion_op_, enable_parallel_, query_dop_, track_score_, fusion_iter_exec_mode_);
 
 OB_SERIALIZE_MEMBER((ObDASFusionRtDef, ObDASAttachRtDef));
 

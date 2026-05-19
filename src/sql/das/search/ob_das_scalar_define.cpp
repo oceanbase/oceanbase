@@ -17,7 +17,7 @@ namespace sql
 
 ERRSIM_POINT_DEF(EN_FORCE_PRIMARY_ROR_SCAN, "Force to use primary ror scan");
 
-OB_SERIALIZE_MEMBER((ObDASScalarCtDef, ObIDASSearchCtDef), has_main_scan_, has_index_scan_);
+OB_SERIALIZE_MEMBER((ObDASScalarCtDef, ObIDASSearchCtDef), has_main_scan_, has_index_scan_, boost_);
 
 OB_SERIALIZE_MEMBER((ObDASScalarRtDef, ObIDASSearchRtDef));
 

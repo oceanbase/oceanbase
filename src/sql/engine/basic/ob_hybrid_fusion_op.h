@@ -106,6 +106,9 @@ public:
   common::ObFixedArray<ObExpr*, common::ObIAllocator> score_exprs_;
   common::ObFixedArray<ObExpr*, common::ObIAllocator> path_top_k_limit_exprs_;
   common::ObFixedArray<int64_t, common::ObIAllocator> score_expr_output_indices_;
+
+  int64_t search_index_;
+  ObFusionIterExecMode fusion_iter_exec_mode_;
 };
 
 class ObHybridFusionOp : public ObOperator

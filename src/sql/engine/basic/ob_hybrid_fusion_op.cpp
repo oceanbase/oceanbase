@@ -28,7 +28,9 @@ ObHybridFusionSpec::ObHybridFusionSpec(ObIAllocator &alloc, const ObPhyOperatorT
     weights_exprs_(alloc),
     score_exprs_(alloc),
     path_top_k_limit_exprs_(alloc),
-    score_expr_output_indices_(alloc)
+    score_expr_output_indices_(alloc),
+    search_index_(-1),
+    fusion_iter_exec_mode_(ObFusionIterExecMode::SCORE_TOP_K_QUERY_HITS)
 {
 }
 
@@ -42,7 +44,9 @@ OB_SERIALIZE_MEMBER((ObHybridFusionSpec, ObOpSpec),
                      weights_exprs_,
                      score_exprs_,
                      path_top_k_limit_exprs_,
-                     score_expr_output_indices_);
+                     score_expr_output_indices_,
+                     search_index_,
+                     fusion_iter_exec_mode_);
 
 int ObHybridFusionOp::inner_open()
 {
