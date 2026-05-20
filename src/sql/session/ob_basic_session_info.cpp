@@ -6269,10 +6269,11 @@ int ObBasicSessionInfo::set_session_temp_table_used(ObSQLSessionInfo &session, c
   obj.set_int(is_used);
   if (OB_FAIL(update_sys_variable(SYS_VAR__OB_PROXY_SESSION_TEMPORARY_TABLE_USED, obj))) {
     LOG_WARN("fail to update_system_variable", K(ret));
-  }
-  if (OB_SUCC(ret) && false == need_strong_routing && INVALID_SESSID != client_sessid_) {
+  } else {
     if (session.get_min_data_version_of_init_sess() >= DATA_VERSION_4_4_2_1) {
-      session.mark_session_temp_table_used(is_used);
+      const bool strong_routing = INVALID_SESSID != client_sessid_ ? need_strong_routing : true;
+      const bool flag = is_used && !strong_routing;
+      session.mark_session_temp_table_used(flag);
     }
   }
   return ret;

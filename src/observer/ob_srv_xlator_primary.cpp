@@ -20,6 +20,7 @@
 #include "sql/executor/ob_remote_executor_processor.h"
 #include "sql/engine/cmd/ob_kill_executor.h"
 #include "sql/engine/cmd/ob_load_data_rpc.h"
+#include "storage/tablet/ob_drop_gtt_v2_session_tablet_rpc.h"
 #include "sql/dtl/ob_dtl_rpc_processor.h"
 #include "sql/das/ob_das_rpc_processor.h"
 #include "storage/lock_wait_mgr/ob_lock_wait_mgr_rpc.h"
@@ -87,6 +88,8 @@ void oceanbase::observer::init_srv_xlator_for_sys(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObTenantFreezerP);
   //session
   RPC_PROCESSOR(ObRpcKillSessionP, gctx_);
+  // drop oracle gtt v2 session tablet across observers
+  RPC_PROCESSOR(storage::ObRpcDropGTTV2SessionTabletP, gctx_);
 
   // BatchRpc
   RPC_PROCESSOR(ObBatchP);

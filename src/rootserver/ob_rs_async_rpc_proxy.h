@@ -95,6 +95,7 @@ RPC_F(obrpc::OB_UPDATE_TENANT_INFO_CACHE, obrpc::ObUpdateTenantInfoCacheArg, obr
 RPC_F(obrpc::OB_BROADCAST_CONSENSUS_VERSION, obrpc::ObBroadcastConsensusVersionArg, obrpc::ObBroadcastConsensusVersionRes, ObBroadcstConsensusVersionProxy);
 RPC_F(obrpc::OB_CHECK_STORAGE_OPERATION_STATUS, obrpc::ObCheckStorageOperationStatusArg, obrpc::ObCheckStorageOperationStatusResult, ObCheckStorageOperationStatusProxy);
 RPC_F(obrpc::OB_KILL_CLIENT_SESSION, obrpc::ObKillClientSessionArg, obrpc::ObKillClientSessionRes, ObKillClientSessionProxy);
+RPC_F(obrpc::OB_DROP_GTT_V2_SESSION_TABLET, share::ObDropGTTV2SessionTabletArg, share::ObDropGTTV2SessionTabletRes, ObDropGTTV2SessionTabletProxy);
 #ifdef OB_BUILD_TDE_SECURITY
 RPC_F(obrpc::OB_RESTORE_KEY, obrpc::ObRestoreKeyArg, obrpc::ObRestoreKeyResult, ObRestoreKeyProxy);
 RPC_F(obrpc::OB_SET_ROOT_KEY, obrpc::ObRootKeyArg, obrpc::ObRootKeyResult, ObSetRootKeyProxy);

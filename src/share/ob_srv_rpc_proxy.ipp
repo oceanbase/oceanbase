@@ -301,6 +301,7 @@
   RPC_S(PR5 notify_logservice_access_point, OB_NOTIFY_LOGSERVICE_ACCESS_POINT, (obrpc::ObNotifyLogServiceAccessPointArg), obrpc::ObNotifyLogServiceAccessPointResult);
   RPC_S(PR5 broadcast_config_version, OB_BROADCAST_CONFIG_VERSION, (ObBroadcastConfigVersionArg));
   RPC_S(PR5 notify_ls_restore_finish, OB_NOTIFY_LS_RESTORE_FINISH, (obrpc::ObNotifyLSRestoreFinishArg));
+  RPC_AP(PR5 drop_gtt_v2_session_tablet, OB_DROP_GTT_V2_SESSION_TABLET, (share::ObDropGTTV2SessionTabletArg), share::ObDropGTTV2SessionTabletRes);
   RPC_S(PR5 notify_start_archive, OB_NOTIFY_START_ARCHIVE, (obrpc::ObNotifyStartArchiveArg));
   RPC_S(PR5 ha_rebuild_tablet, OB_HA_REBUILD_TABLET, (obrpc::ObRebuildTabletArg));
   RPC_S(PR5 trigger_dump_data_dict, OB_DATA_DICT_TRIGGER_DUMP, (ObTriggerDumpDataDictArg));

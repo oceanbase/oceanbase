@@ -270,6 +270,17 @@ private:
   uint64_t tenant_id_;
 };
 
+/// Broadcast drop GTT v2 session tablet to all alive observers; the creator
+/// observer performs the storage delete for all is_creator_ entries in one
+/// inner transaction. @p table_ids should carry the main table along with its
+/// index and lob aux tables so the broadcast is atomic per truncate.
+/// See ob_drop_gtt_v2_session_tablet_rpc.
+int dispatch_drop_gtt_v2_session_tablet_on_creator(
+    const uint64_t tenant_id,
+    const common::ObIArray<uint64_t> &table_ids,
+    const int64_t sequence,
+    const uint64_t session_id);
+
 } // namespace storage
 } // namespace oceanbase
 #endif // OCEANBASE_STORAGE_TABLET_OB_SESSION_TABLET_HELPER_H
