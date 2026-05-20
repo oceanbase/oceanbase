@@ -427,6 +427,9 @@ int ObInnerSQLConnection::init_session_info(
             ddl_info.set_is_ddl(is_ddl);
             session->reset_timezone();
             session->init_use_rich_format();
+            if (is_ddl && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_0_0) {
+              session->set_force_rich_format(sql::ObBasicSessionInfo::ForceRichFormatStatus::FORCE_ON);
+            }
             if (OB_FAIL(session->get_ddl_info().init(ddl_info, 0 /*session_id*/))) {
               LOG_WARN("fail to init ddl info", KR(ret), K(ddl_info));
             }

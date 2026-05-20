@@ -167,6 +167,10 @@ int ObPxMultiPartSSTableInsertVecOp::inner_get_next_batch(const int64_t max_row_
   if (OB_ISNULL(ddl_dag_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ddl dag is null", K(ret));
+  } else if (OB_ISNULL(MY_SPEC.plan_) || OB_UNLIKELY(!MY_SPEC.plan_->get_use_rich_format())) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("vec sstable insert operator must run under rich format",
+             K(ret), KP(MY_SPEC.plan_));
   } else if (ddl_dag_->is_final_status() || is_all_partition_finished_) {
     brs_.end_ = true;
     brs_.size_ = 0;
@@ -427,6 +431,10 @@ int ObPxMultiPartSSTableInsertOp::eval_current_batch(ObIArray<ObIVector *> &vect
     if (OB_ISNULL(e)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("expr is NULL", K(ret), K(i));
+    } else if (OB_UNLIKELY(UINT32_MAX == e->vector_header_off_)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("expr has no rich format VectorHeader under vec sstable insert batch path",
+               K(ret), K(i), KPC(e));
     } else if (OB_FAIL(e->eval_vector(eval_ctx, brs))) {
       LOG_WARN("evaluate expression failed", K(ret), K(i), KPC(e));
     } else if (e->type_ == T_PSEUDO_HIDDEN_CLUSTERING_KEY) {
@@ -436,8 +444,11 @@ int ObPxMultiPartSSTableInsertOp::eval_current_batch(ObIArray<ObIVector *> &vect
 
       // Step 1: Get tablet_id_vector based on whether it's a partitioned table or not
       if (nullptr != tablet_id_expr_) {
-        // Partitioned table: eval tablet_id_expr_ to get tablet_id_vector
-        if (OB_FAIL(tablet_id_expr_->eval_vector(eval_ctx, brs))) {
+        if (OB_UNLIKELY(UINT32_MAX == tablet_id_expr_->vector_header_off_)) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("tablet_id_expr_ has no rich format VectorHeader under vec sstable insert batch path",
+                   K(ret), KPC(tablet_id_expr_));
+        } else if (OB_FAIL(tablet_id_expr_->eval_vector(eval_ctx, brs))) {
           LOG_WARN("failed to eval tablet_id_expr vector", K(ret));
         } else {
           tablet_id_vector = tablet_id_expr_->get_vector(eval_ctx);
@@ -868,12 +879,21 @@ int ObPxMultiPartSSTableInsertOp::write_ordered_slice_by_batch()
       is_all_partition_finished_ = brs->end_;
     } else if (OB_FAIL(eval_current_batch(vectors, *brs))) {
       LOG_WARN("eval current batch failed", K(ret));
+    } else if (slice_info_expr_ != nullptr
+               && OB_UNLIKELY(UINT32_MAX == slice_info_expr_->vector_header_off_)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("slice_info_expr_ has no rich format VectorHeader, batch path is invalid",
+               K(ret), KPC(slice_info_expr_));
     } else if (slice_info_expr_ != nullptr && OB_FAIL(slice_info_expr_->eval_vector(eval_ctx, *brs))) {
       LOG_WARN("eval slice info expr failed", K(ret));
     } else if (slice_info_expr_ != nullptr && FALSE_IT(slice_info_vector = slice_info_expr_->get_vector(eval_ctx))) {
     } else if (nullptr != tablet_id_expr_) {
-      if (OB_FAIL(tablet_id_expr_->eval_vector(eval_ctx, *brs))) {
-        LOG_WARN("eval slice info expr failed", K(ret));
+      if (OB_UNLIKELY(UINT32_MAX == tablet_id_expr_->vector_header_off_)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("tablet_id_expr_ has no rich format VectorHeader, batch path is invalid",
+                 K(ret), KPC(tablet_id_expr_));
+      } else if (OB_FAIL(tablet_id_expr_->eval_vector(eval_ctx, *brs))) {
+        LOG_WARN("eval tablet_id expr failed", K(ret));
       } else {
         tablet_id_vector = tablet_id_expr_->get_vector(eval_ctx);
       }
