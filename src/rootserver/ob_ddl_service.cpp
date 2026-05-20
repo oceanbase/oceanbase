@@ -26460,7 +26460,8 @@ int ObDDLService::reconstruct_search_data_index(const uint64_t tenant_id,
                                                 ObSchemaGetterGuard &schema_guard,
                                                 ObIAllocator &allocator,
                                                 ObIArray<ObRecycleObject> &index_recycle_objs,
-                                                ObIArray<ObTableSchema> &table_schemas)
+                                                ObIArray<ObTableSchema> &table_schemas,
+                                                ObIArray<const ObTableSchema*> &orig_table_schemas)
 {
   int ret = OB_SUCCESS;
   ObSchemaService *schema_service = nullptr;
@@ -26538,6 +26539,8 @@ int ObDDLService::reconstruct_search_data_index(const uint64_t tenant_id,
                 if (OB_SUCC(ret)) {
                   if (OB_FAIL(table_schemas.push_back(new_search_data_index))) {
                     LOG_WARN("failed to add child search index schema!", KR(ret));
+                  } else if (OB_FAIL(orig_table_schemas.push_back(search_data_index))) {
+                    LOG_WARN("failed to push back orig child search index schema!", KR(ret));
                   }
                 }
               }
@@ -26712,6 +26715,12 @@ int ObDDLService::truncate_table(const ObTruncateTableArg &arg,
           LOG_WARN("truncate temp table not supported on RS", K(ret));
         } else if (OB_SUCC(ret)) {
           ObSArray<ObTableSchema> table_schemas;
+          // ATTENTION: table_schemas and orig_table_schemas must be kept one-to-one
+          // paired by construction. Whenever a new aux/child schema is pushed to
+          // table_schemas, the corresponding original schema MUST be pushed to
+          // orig_table_schemas in the same iteration. Otherwise downstream pairing
+          // (e.g. copy_balance_weights_for_truncate) will misalign and the count
+          // check below will emit OB_ERR_UNEXPECTED.
           ObSArray<const ObTableSchema*> orig_table_schemas;
           ObSArray<ObRecycleObject> index_recycle_objs;
           uint64_t new_table_id = OB_INVALID_ID;
@@ -26812,12 +26821,12 @@ int ObDDLService::truncate_table(const ObTruncateTableArg &arg,
                     if (OB_FAIL(ret)) {
                     } else if (OB_FAIL(table_schemas.push_back(new_index_schema))) {
                       LOG_WARN("failed to add table schema!", K(ret));
-                    } else if (index_table_schema->is_search_def_index()
-                      && OB_FAIL(reconstruct_search_data_index(tenant_id, *index_table_schema, new_idx_tid,
-                                 trans, schema_guard, allocator, index_recycle_objs, table_schemas))) {
-                      LOG_WARN("failed to reconstruct search data index schema", KR(ret));
                     } else if (OB_FAIL(orig_table_schemas.push_back(index_table_schema))) {
                       LOG_WARN("failed to push back orig index schema!", K(ret));
+                    } else if (index_table_schema->is_search_def_index()
+                      && OB_FAIL(reconstruct_search_data_index(tenant_id, *index_table_schema, new_idx_tid,
+                                 trans, schema_guard, allocator, index_recycle_objs, table_schemas, orig_table_schemas))) {
+                      LOG_WARN("failed to reconstruct search data index schema", KR(ret));
                     }
                   }
                 }

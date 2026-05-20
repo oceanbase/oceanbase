@@ -2784,7 +2784,8 @@ private:
       ObSchemaGetterGuard &schema_guard,
       ObIAllocator &allocator,
       ObIArray<ObRecycleObject> &index_recycle_objs,
-      ObIArray<ObTableSchema> &table_schemas);
+      ObIArray<ObTableSchema> &table_schemas,
+      ObIArray<const ObTableSchema*> &orig_table_schemas);
   int operate_drop_aux_table_in_truncate(
       const ObTableSchema &aux_table_schema,
       const bool to_recyclebin,
