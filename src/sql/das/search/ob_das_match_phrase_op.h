@@ -31,7 +31,6 @@ struct ObDASMatchPhraseOpParam : public ObIDASSearchOpParam
 {
   ObDASMatchPhraseOpParam()
     : ObIDASSearchOpParam(DAS_SEARCH_OP_MATCH_PHRASE),
-      allocator_(nullptr),
       ir_ctdef_(nullptr),
       ir_rtdef_(nullptr),
       block_max_param_(nullptr),
@@ -45,8 +44,7 @@ struct ObDASMatchPhraseOpParam : public ObIDASSearchOpParam
 
   bool is_valid() const
   {
-    return nullptr != allocator_
-        && nullptr != ir_ctdef_
+    return nullptr != ir_ctdef_
         && nullptr != ir_rtdef_
         && nullptr != block_max_param_
         && !query_tokens_.empty()
@@ -65,7 +63,6 @@ struct ObDASMatchPhraseOpParam : public ObIDASSearchOpParam
       K_(boost),
       K_(use_rich_format));
 
-  ObIAllocator *allocator_;
   const ObDASIRScanCtDef *ir_ctdef_;
   ObDASIRScanRtDef *ir_rtdef_;
   storage::ObBlockMaxScoreIterParam *block_max_param_;
@@ -101,7 +98,7 @@ private:
   int calculate_total_token_weight_on_demand();
   int estimate_bm25_param_on_demand();
 private:
-  ObIAllocator *allocator_;
+  ObArenaAllocator allocator_;
   const ObDASIRScanCtDef *ir_ctdef_;
   ObDASIRScanRtDef *ir_rtdef_;
   ObFixedArray<int64_t, ObIAllocator> token_ids_;
