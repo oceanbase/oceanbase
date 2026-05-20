@@ -97,6 +97,20 @@ public:
   // Check if log has been recovered to restore_scn.
   virtual int check_recover_finish(bool &is_finish) const override;
 
+  // Whether a tablet's clog_checkpoint_scn is acceptable given restore_scn.
+  //
+  // The LS_TX_CTX_TABLET (49401) carries a +1 bookkeeping offset in its
+  // sstable end_scn -- see ObTxCtxMemtable::flush(), which sets the
+  // freeze sstable end_scn to MAX(callbacked, max_end_scn_ + 1). That
+  // offset propagates to tablet_meta.clog_checkpoint_scn_ but does not
+  // correspond to a real log or data scn (the tx ctx sstable only stores
+  // transaction context snapshots). So it is safe for the tx ctx tablet's
+  // clog_checkpoint_scn to exceed restore_scn, and this check exempts it.
+  static bool is_tablet_clog_checkpoint_acceptable_for_restore(
+      const common::ObTabletID &tablet_id,
+      const share::SCN &clog_checkpoint_scn,
+      const share::SCN &restore_scn);
+
 private:
   int leader_quick_restore_();
   int follower_quick_restore_();
