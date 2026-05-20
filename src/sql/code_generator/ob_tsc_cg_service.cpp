@@ -2042,9 +2042,11 @@ int ObTscCgService::generate_table_loc_meta(uint64_t table_loc_id,
   loc_meta.is_lake_table_ = (table_schema.get_lake_table_format() == share::ObLakeTableFormat::ICEBERG
                              || table_schema.get_lake_table_format() == share::ObLakeTableFormat::HIVE);
   ObString file_location;
+  bool is_shared_external_files_on_disk = false;
   CK (OB_NOT_NULL(schema_guard->get_schema_guard()));
-  OZ (ObExternalTableUtils::get_external_file_location(table_schema, *schema_guard->get_schema_guard(), cg_.phy_plan_->get_allocator(), file_location));
+  OZ (ObExternalTableUtils::get_external_file_location(table_schema, *schema_guard->get_schema_guard(), cg_.phy_plan_->get_allocator(), file_location, &is_shared_external_files_on_disk));
   loc_meta.is_external_files_on_disk_ = ObSQLUtils::is_external_files_on_local_disk(file_location);
+  loc_meta.is_shared_external_files_on_disk_ = is_shared_external_files_on_disk;
   int64_t route_policy = 0;
   bool is_weak_read = false;
   // broadcast table (insert into select) read local for materialized view create,here three conditions:

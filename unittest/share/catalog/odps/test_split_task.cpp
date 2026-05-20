@@ -20,6 +20,7 @@
 #include <cmath>
 #include <iomanip>
 #include <cstdlib>
+#include <cstdio>
 
 using namespace std;
 using namespace oceanbase;
@@ -866,6 +867,108 @@ TEST_F(TestSplitTask, x1) {
 
   show(assigned_idx, sqc_count, total_file_size);
   show_files(files);
+}
+
+static ObExternalFileInfo make_shared_file(const ObString &path,
+                                           const int64_t file_id,
+                                           const int64_t file_size,
+                                           const int64_t modify_time = 100)
+{
+  ObExternalFileInfo file;
+  file.file_url_ = path;
+  file.file_id_ = file_id;
+  file.file_size_ = file_size;
+  file.modify_time_ = modify_time;
+  return file;
+}
+
+static void push_shared_file(common::ObIArray<ObExternalFileInfo> &files,
+                             const ObString &path,
+                             const char *ip,
+                             const int64_t port,
+                             const int64_t file_id,
+                             const int64_t file_size,
+                             const int64_t modify_time = 100)
+{
+  ObExternalFileInfo file = make_shared_file(path, file_id, file_size, modify_time);
+  ASSERT_TRUE(file.file_addr_.set_ip_addr(ip, static_cast<int32_t>(port)));
+  ASSERT_EQ(OB_SUCCESS, files.push_back(file));
+}
+
+TEST_F(TestSplitTask, shared_file_dedup_success)
+{
+  common::ObArenaAllocator allocator;
+  common::ObSEArray<ObExternalFileInfo, 8> files;
+  push_shared_file(files, ObString::make_string("/nas/a.dat"), "127.0.0.1", 1001, 1, 1024);
+  push_shared_file(files, ObString::make_string("/nas/a.dat"), "127.0.0.2", 1002, 2, 1024);
+  push_shared_file(files, ObString::make_string("/nas/b.dat"), "127.0.0.1", 1001, 3, 2048);
+  push_shared_file(files, ObString::make_string("/nas/b.dat"), "127.0.0.2", 1002, 4, 2048);
+
+  ASSERT_EQ(OB_SUCCESS, ObExternalTableUtils::dedup_shared_local_files(files, allocator));
+  ASSERT_EQ(2, files.count());
+  ASSERT_NE(files.at(0).file_url_, files.at(1).file_url_);
+}
+
+TEST_F(TestSplitTask, shared_file_dedup_keeps_distinct_paths)
+{
+  common::ObArenaAllocator allocator;
+  common::ObSEArray<ObExternalFileInfo, 8> files;
+  push_shared_file(files, ObString::make_string("/nas/a.dat"), "127.0.0.1", 1001, 1, 1024);
+  push_shared_file(files, ObString::make_string("/nas/b.dat"), "127.0.0.1", 1001, 2, 2048);
+  push_shared_file(files, ObString::make_string("/nas/c.dat"), "127.0.0.1", 1001, 3, 4096);
+
+  ASSERT_EQ(OB_SUCCESS, ObExternalTableUtils::dedup_shared_local_files(files, allocator));
+  ASSERT_EQ(3, files.count());
+  ASSERT_EQ(1, files.at(0).file_id_);
+  ASSERT_EQ(2, files.at(1).file_id_);
+  ASSERT_EQ(3, files.at(2).file_id_);
+}
+
+TEST_F(TestSplitTask, shared_file_dedup_detects_size_mismatch)
+{
+  common::ObArenaAllocator allocator;
+  common::ObSEArray<ObExternalFileInfo, 8> files;
+  push_shared_file(files, ObString::make_string("/nas/a.dat"), "127.0.0.1", 1001, 1, 1024);
+  push_shared_file(files, ObString::make_string("/nas/a.dat"), "127.0.0.2", 1002, 2, 2048);
+
+  ASSERT_EQ(OB_INVALID_EXTERNAL_FILE, ObExternalTableUtils::dedup_shared_local_files(files, allocator));
+}
+
+TEST_F(TestSplitTask, shared_file_dedup_tolerates_modify_time_mismatch)
+{
+  common::ObArenaAllocator allocator;
+  common::ObSEArray<ObExternalFileInfo, 8> files;
+  push_shared_file(files, ObString::make_string("/nas/a.dat"), "127.0.0.1", 1001, 1, 1024, 100);
+  push_shared_file(files, ObString::make_string("/nas/a.dat"), "127.0.0.2", 1002, 2, 1024, 200);
+
+  ASSERT_EQ(OB_SUCCESS, ObExternalTableUtils::dedup_shared_local_files(files, allocator));
+  ASSERT_EQ(1, files.count());
+}
+
+TEST_F(TestSplitTask, shared_file_dedup_empty_and_many_files)
+{
+  common::ObArenaAllocator allocator;
+  common::ObSEArray<ObExternalFileInfo, 8> empty_files;
+  ASSERT_EQ(OB_SUCCESS, ObExternalTableUtils::dedup_shared_local_files(empty_files, allocator));
+  ASSERT_EQ(0, empty_files.count());
+
+  common::ObSEArray<ObExternalFileInfo, 16> files;
+  ObSEArray<ObString, 16> paths;
+  for (int64_t i = 0; i < 256; ++i) {
+    char path_buf[32];
+    ObString path;
+    snprintf(path_buf, sizeof(path_buf), "/nas/%ld.dat", i);
+    ASSERT_EQ(OB_SUCCESS, ob_write_string(allocator, ObString::make_string(path_buf), path));
+    ASSERT_EQ(OB_SUCCESS, paths.push_back(path));
+    push_shared_file(files, paths.at(i), "127.0.0.1", 1001, i * 2 + 1, 1024 + i);
+    push_shared_file(files, paths.at(i), "127.0.0.2", 1002, i * 2 + 2, 1024 + i);
+  }
+
+  ASSERT_EQ(OB_SUCCESS, ObExternalTableUtils::dedup_shared_local_files(files, allocator));
+  ASSERT_EQ(256, files.count());
+  for (int64_t i = 0; i < files.count(); ++i) {
+    ASSERT_EQ(i + 1, files.at(i).file_id_);
+  }
 }
 
 int main(int argc, char **argv)

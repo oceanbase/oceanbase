@@ -97,7 +97,8 @@ int get_storage_type_from_path_for_external_table(const common::ObString &uri, O
              || uri.prefix_match(OB_S3A_PREFIX)
              || uri.prefix_match(OB_S3N_PREFIX)) {
     type = OB_STORAGE_S3;
-  } else if (uri.prefix_match(OB_FILE_PREFIX)) {
+  } else if (uri.prefix_match(OB_FILE_PREFIX)
+             || uri.prefix_match(OB_SHARED_FILE_PREFIX)) {
     type = OB_STORAGE_FILE;
   } else if (uri.prefix_match(OB_HDFS_PREFIX)) {
     type = OB_STORAGE_HDFS;

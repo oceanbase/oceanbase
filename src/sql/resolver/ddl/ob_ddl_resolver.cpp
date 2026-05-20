@@ -1269,20 +1269,30 @@ int ObDDLResolver::resolve_file_prefix(ObString &url,
     url += (strlen(ts) + 3);
   }
   if (OB_SUCC(ret)) {
-    ObString prefix;
-    const char *ts = get_storage_type_str(device_type);
-    if (OB_ISNULL(allocator)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("allocator is null", K(ret));
+    if (OB_UNLIKELY(url.prefix_match_ci(OB_SHARED_FILE_PREFIX))) {
+      // for `sfile://`, preserve the prefix
+      // because later processes rely on this prefix to perform file de-duplication across observers.
+      // the `device_type` should fall back to `OB_STORAGE_FILE`, and `url` should not be shifted before.
+      url += STRLEN(OB_SHARED_FILE_PREFIX);
+      if (OB_FAIL(prefix_str.append(OB_SHARED_FILE_PREFIX))) {
+        LOG_WARN("failed to append shared file prefix", K(ret));
+      }
     } else {
-      if (OB_FAIL(ob_write_string(*allocator, ObString(ts), prefix))) {
-        LOG_WARN("failed to write string", K(ret));
+      ObString prefix;
+      const char *ts = get_storage_type_str(device_type);
+      if (OB_ISNULL(allocator)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("allocator is null", K(ret));
       } else {
-        ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, prefix);
-        if (OB_FAIL(prefix_str.append(prefix))) {
-          LOG_WARN("failed to append prefix", K(ret));
-        } else if (OB_FAIL(prefix_str.append("://"))) {
-          LOG_WARN("failed to append '://'", K(ret));
+        if (OB_FAIL(ob_write_string(*allocator, ObString(ts), prefix))) {
+          LOG_WARN("failed to write string", K(ret));
+        } else {
+          ObCharset::casedn(CS_TYPE_UTF8MB4_GENERAL_CI, prefix);
+          if (OB_FAIL(prefix_str.append(prefix))) {
+            LOG_WARN("failed to append prefix", K(ret));
+          } else if (OB_FAIL(prefix_str.append("://"))) {
+            LOG_WARN("failed to append '://'", K(ret));
+          }
         }
       }
     }

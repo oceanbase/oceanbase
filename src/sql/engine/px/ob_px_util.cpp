@@ -202,6 +202,7 @@ int ObPXServerAddrUtil::get_external_table_loc(
   ObDASTableLoc *local_loc = NULL;
   uint64_t tenant_id = OB_INVALID_ID;
   bool is_external_files_on_disk = false;
+  bool is_shared_external_files_on_disk = false;
   ObIArray<ObExternalFileInfo> &ext_file_urls = dfo.get_external_table_files();
   ObSEArray<ObAddr, 16> all_locations;
   ObQueryRangeArray ranges;
@@ -217,6 +218,7 @@ int ObPXServerAddrUtil::get_external_table_loc(
   } else {
     tenant_id = ctx.get_my_session()->get_effective_tenant_id();
     is_external_files_on_disk = local_loc->loc_meta_->is_external_files_on_disk_;
+    is_shared_external_files_on_disk = local_loc->loc_meta_->is_shared_external_files_on_disk_;
     if (OB_FAIL(GCTX.location_service_->external_table_get(tenant_id, all_locations))) {
       LOG_WARN("fail to get external table location", K(ret));
     }
@@ -274,6 +276,9 @@ int ObPXServerAddrUtil::get_external_table_loc(
 
     if (is_external_files_on_disk) {
       OZ (ObExternalTableUtils::filter_files_in_locations(ext_file_urls, all_locations));
+      if (OB_SUCC(ret) && is_shared_external_files_on_disk) {
+        OZ (ObExternalTableUtils::dedup_shared_local_files(ext_file_urls, ctx.get_allocator()));
+      }
     }
 
     if (OB_SUCC(ret) && ext_file_urls.empty()) {

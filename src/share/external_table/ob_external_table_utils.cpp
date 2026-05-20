@@ -26,6 +26,7 @@
 #include "plugin/interface/ob_plugin_external_intf.h"
 #include "sql/engine/basic/ob_consistent_hashing_load_balancer.h"
 #include "lib/restore/ob_object_device.h"
+#include "lib/hash_func/murmur_hash.h"
 #include "src/share/ob_device_manager.h"
 
 namespace oceanbase
@@ -413,6 +414,7 @@ int ObExternalTableUtils::prepare_single_scan_task(const uint64_t tenant_id,
                                                     ObIAllocator &allocator,
                                                     ObIArray<ObIExtTblScanTask *> &scan_tasks,
                                                     bool is_file_on_disk,
+                                                    bool is_shared_file_on_disk,
                                                     ObExecContext &ctx)
 {
   int ret = OB_SUCCESS;
@@ -438,7 +440,8 @@ int ObExternalTableUtils::prepare_single_scan_task(const uint64_t tenant_id,
     }
   } else if (OB_FAIL(prepare_single_scan_task_(tenant_id, das_ctdef, das_rtdef,exec_ctx,
                                                 partition_ids, ranges, allocator,
-                                                scan_tasks, is_file_on_disk, ctx))) {
+                                                scan_tasks, is_file_on_disk,
+                                                is_shared_file_on_disk, ctx))) {
     LOG_WARN("failed to prepare single scan range");
   }
   return ret;
@@ -453,6 +456,7 @@ int ObExternalTableUtils::prepare_single_scan_task_(const uint64_t tenant_id,
                                                      ObIAllocator &allocator,
                                                      ObIArray<ObIExtTblScanTask *> &scan_tasks,
                                                      bool is_file_on_disk,
+                                                     bool is_shared_file_on_disk,
                                                      ObExecContext &ctx)
 {
   int ret = OB_SUCCESS;
@@ -491,6 +495,9 @@ int ObExternalTableUtils::prepare_single_scan_task_(const uint64_t tenant_id,
                                                                         all_locations))) {
         //For recovered cluster, the file addr may not in the cluster. Then igore it.
         LOG_WARN("filter files in location failed", K(ret));
+    } else if (is_shared_file_on_disk
+               && OB_FAIL(ObExternalTableUtils::dedup_shared_local_files(file_urls, allocator))) {
+      LOG_WARN("deduplicate shared local files failed", K(ret));
     } else {
       scan_tasks.reset();
     }
@@ -1640,6 +1647,109 @@ int ObExternalTableUtils::filter_files_in_locations(common::ObIArray<share::ObEx
   return ret;
 }
 
+// Group files by logical path via hashmap (O(N)), then pick one candidate per group via murmur hash
+// for shared-file de-duplication and load balancing across observers.
+int ObExternalTableUtils::dedup_shared_local_files(common::ObIArray<share::ObExternalFileInfo> &files,
+                                                   common::ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObSEArray<int64_t, 4>, 16> groups; // dim0: hash group idx, dim1: file idx
+  hash::ObHashMap<ObString, int64_t> path_to_group;
+  ObSEArray<ObExternalFileInfo, 16> dedup_files;
+  if (files.empty()) {
+    // do nothing
+  } else if (OB_FAIL(path_to_group.create(files.count(), "SharedFileDdp"))) {
+    LOG_WARN("failed to create path_to_group map", K(ret), K(files.count()));
+  }
+  // 1. group files by file_url_
+  for (int64_t i = 0; OB_SUCC(ret) && i < files.count(); ++i) {
+    // file_addr_ / file_url_ should be already split by the caller that
+    // the file_url_ should be the bare logical path and can be used as the grouping key directly.
+    const ObString &logical_path = files.at(i).file_url_;
+    int64_t group_idx = -1;
+    int tmp_ret = path_to_group.get_refactored(logical_path, group_idx);
+    if (OB_HASH_NOT_EXIST == tmp_ret) {
+      group_idx = groups.count();
+      ObSEArray<int64_t, 4> new_group;
+      if (OB_FAIL(new_group.push_back(i))) {
+        LOG_WARN("failed to push initial group member", K(ret), K(logical_path));
+      } else if (OB_FAIL(groups.push_back(new_group))) {
+        LOG_WARN("failed to push shared local file group", K(ret), K(logical_path));
+      } else if (OB_FAIL(path_to_group.set_refactored(logical_path, group_idx))) {
+        LOG_WARN("failed to record group index", K(ret), K(logical_path));
+      }
+    } else if (OB_SUCCESS == tmp_ret) {
+      const ObExternalFileInfo &first_file = files.at(groups.at(group_idx).at(0));
+      const ObExternalFileInfo &candidate = files.at(i);
+      if (first_file.file_size_ != candidate.file_size_) {
+        // sfile:// contract: same logical path across observers must point to identical data.
+        // A size mismatch means the user's deployment is broken (paths diverged), so surface a
+        // user-facing error that names both observers and their reported sizes.
+        char first_addr_buf[OB_IP_PORT_STR_BUFF] = {0};
+        char cand_addr_buf[OB_IP_PORT_STR_BUFF] = {0};
+        char err_msg[OB_MAX_ERROR_MSG_LEN] = {0};
+        if (OB_TMP_FAIL(first_file.file_addr_.ip_port_to_string(first_addr_buf, sizeof(first_addr_buf)))) {
+          LOG_WARN("fail to get file addr string", K(tmp_ret));
+        } else if (OB_TMP_FAIL(candidate.file_addr_.ip_port_to_string(cand_addr_buf, sizeof(cand_addr_buf)))) {
+          LOG_WARN("fail to get file addr string", K(tmp_ret));
+        }
+        snprintf(err_msg, sizeof(err_msg),
+                 "sfile '%.*s' has inconsistent size across observers: %s reports %ld bytes, %s reports %ld bytes",
+                 logical_path.length(), logical_path.ptr(),
+                 first_addr_buf, first_file.file_size_,
+                 cand_addr_buf, candidate.file_size_);
+        ret = OB_INVALID_EXTERNAL_FILE;
+        LOG_USER_ERROR(OB_INVALID_EXTERNAL_FILE, err_msg);
+        LOG_WARN("shared local file size is inconsistent", K(ret), K(logical_path),
+                 K(first_file), K(candidate));
+      } else if (OB_INVALID_TIMESTAMP != first_file.modify_time_
+                 && OB_INVALID_TIMESTAMP != candidate.modify_time_
+                 && first_file.modify_time_ != candidate.modify_time_) {
+        // Modify-time jitter across shared filesystems is tolerated; file size is the cheap hard check.
+        // Content digest is not compared because local/shared file backends usually cannot provide
+        // a stable low-cost digest without reading file contents.
+        LOG_INFO("shared local file modify time is inconsistent", K(logical_path),
+                 K(first_file), K(candidate));
+      }
+      if (OB_SUCC(ret) && OB_FAIL(groups.at(group_idx).push_back(i))) {
+        LOG_WARN("failed to push shared local file candidate", K(ret), K(logical_path));
+      }
+    } else {
+      ret = tmp_ret;
+      LOG_WARN("failed to lookup path_to_group", K(ret), K(logical_path));
+    }
+  }
+  // 2. pick one candidate file for each group (de-duplication and load balancing)
+  for (int64_t i = 0; OB_SUCC(ret) && i < groups.count(); ++i) {
+    ObSEArray<int64_t, 4> &group = groups.at(i);
+    if (OB_UNLIKELY(group.empty())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("empty shared local file candidate group", K(ret));
+    } else {
+      const ObExternalFileInfo &first_file = files.at(group.at(0));
+      const ObString &logical_path = first_file.file_url_;
+      const uint64_t hash_value = common::murmurhash(logical_path.ptr(), logical_path.length(), 0);
+      const int64_t selected_idx = group.at(hash_value % group.count());
+      ObExternalFileInfo selected_file;
+      if (OB_FAIL(selected_file.deep_copy(allocator, files.at(selected_idx)))) {
+        LOG_WARN("failed to copy selected shared local file", K(ret), K(logical_path));
+      // assign consecutive file_id_ after de-duplication
+      } else if (FALSE_IT(selected_file.file_id_ = dedup_files.count() + 1)) {
+      } else if (OB_FAIL(dedup_files.push_back(selected_file))) {
+        LOG_WARN("failed to push selected shared local file", K(ret), K(selected_file));
+      } else {
+        LOG_INFO("deduplicate shared local file", K(logical_path), K(group.count()), K(selected_file));
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(files.assign(dedup_files))) {
+    LOG_WARN("failed to assign deduplicated shared local files", K(ret));
+  }
+  path_to_group.destroy();
+  return ret;
+}
+
 int ObExternalTableUtils::collect_local_files_on_servers(
     const uint64_t tenant_id,
     const ObString &location,
@@ -1983,20 +2093,23 @@ int ObExternalTableUtils::collect_external_file_list(
     ObArray<ObString> content_digests;
     ObSEArray<ObAddr, 8> all_servers;
     share::schema::ObSchemaGetterGuard schema_guard;
+    ObString file_location = location;
+    bool is_shared = false;
     OZ (GCTX.location_service_->external_table_get(tenant_id, all_servers));
-    const bool is_local_storage = ObSQLUtils::is_external_files_on_local_disk(location);
+    OZ (normalize_shared_file_location(allocator, file_location, is_shared));
+    const bool is_local_storage = ObSQLUtils::is_external_files_on_local_disk(file_location);
     if (OB_SUCC(ret) && full_path.length() > 0
             && *(full_path.ptr() + full_path.length() - 1) != '/' ) {
       OZ (full_path.append("/"));
     }
     if (OB_FAIL(ret)) {
     } else if (is_local_storage) {
-      OZ(collect_local_files_on_servers(tenant_id, location, pattern, regexp_vars, all_servers,
+      OZ(collect_local_files_on_servers(tenant_id, file_location, pattern, regexp_vars, all_servers,
                                         file_urls, file_sizes, modify_times, content_digests,
                                         full_path, allocator));
     } else {
       OZ(ObExternalTableFileManager::get_external_file_list_on_device(
-        location, pattern, regexp_vars, file_urls, file_sizes, modify_times, content_digests,
+        file_location, pattern, regexp_vars, file_urls, file_sizes, modify_times, content_digests,
         access_info, allocator));
       for (int64_t i = 0; OB_SUCC(ret) && i < file_urls.count(); i++) {
         ObSqlString tmp_file_url;
@@ -2323,14 +2436,37 @@ int ObExternalTableUtils::resolve_location_for_load_and_select_into(ObSchemaGett
   return ret;
 }
 
+int ObExternalTableUtils::normalize_shared_file_location(ObIAllocator &allocator,
+                                                         ObString &location,
+                                                         bool &is_shared)
+{
+  int ret = OB_SUCCESS;
+  is_shared = ObSQLUtils::is_external_shared_files_on_local_disk(location);
+  if (is_shared) {
+    const int64_t shared_prefix_len = STRLEN(OB_SHARED_FILE_PREFIX);
+    ObSqlString tmp_location;
+    if (OB_FAIL(tmp_location.append(OB_FILE_PREFIX))) {
+      LOG_WARN("failed to append file prefix", K(ret));
+    } else if (OB_FAIL(tmp_location.append(ObString(location.length() - shared_prefix_len,
+                                                    location.ptr() + shared_prefix_len)))) {
+      LOG_WARN("failed to append shared file path", K(ret), K(location));
+    } else if (OB_FAIL(ob_write_string(allocator, tmp_location.string(), location, true))) {
+      LOG_WARN("failed to write normalized shared file location", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObExternalTableUtils::get_external_file_location(const ObTableSchema &table_schema,
                                                      ObSchemaGetterGuard &schema_guard,
                                                      ObIAllocator &allocator,
-                                                     ObString &file_location)
+                                                     ObString &file_location,
+                                                     bool *is_shared_file_on_disk)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = table_schema.get_tenant_id();
   const uint64_t location_id = table_schema.get_external_location_id();
+  bool is_shared = false;
   if (OB_INVALID_ID != location_id) {
     const ObLocationSchema *location_schema = NULL;
     if (OB_FAIL(schema_guard.get_location_schema_by_id(tenant_id, location_id, location_schema))) {
@@ -2346,6 +2482,11 @@ int ObExternalTableUtils::get_external_file_location(const ObTableSchema &table_
     }
   } else {
     file_location = table_schema.get_external_file_location();
+  }
+  // Collapse sfile:// into file:// here so only this entry surfaces the shared semantic via the out-param.
+  OZ (normalize_shared_file_location(allocator, file_location, is_shared));
+  if (OB_NOT_NULL(is_shared_file_on_disk)) {
+    *is_shared_file_on_disk = is_shared;
   }
   return ret;
 }
