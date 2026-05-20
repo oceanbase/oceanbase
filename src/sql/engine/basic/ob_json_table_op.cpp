@@ -3178,8 +3178,10 @@ int JsonTableFunc::eval_input(ObJsonTableOp &jt, JtScanCtx& ctx, ObEvalCtx &eval
     } else if (OB_FALSE_IT(tmp_allocator.set_baseline_size(j_str.length()))) {
     } else if ((ob_is_string_type(doc_type) || doc_type == ObLobType)
                 && (doc_cs_type != CS_TYPE_BINARY)
-                && (ObCharset::charset_type_by_coll(doc_cs_type) != CHARSET_UTF8MB4)) {
+                && (ObCharset::charset_type_by_coll(doc_cs_type) != CHARSET_UTF8MB4)
+                && j_str.length() > 0) {
       // need convert to utf8 first, we are using GenericInsituStringStream<UTF8<> >
+      // skip when j_str is empty: alloc(0) will return OB_ALLOCATE_MEMORY_FAILED; empty payload needs no convert
       char *buf = nullptr;
       const int64_t factor = 2;
       int64_t buf_len = j_str.length() * factor;
