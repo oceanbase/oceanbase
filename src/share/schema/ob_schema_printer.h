@@ -345,6 +345,10 @@ public:
                                               const int64_t &buf_len,
                                               int64_t &pos,
                                               const common::ObTimeZoneInfo *tz_info) const;
+  int is_subpart_match_template(const ObPartitionSchema *schema,
+                                const ObPartition *partition,
+                                const bool is_oracle_mode,
+                                bool &is_match) const;
   int print_tablegroup_definition(const uint64_t tenant_id,
                                   const uint64_t tablegroup_id,
                                   char* buf,

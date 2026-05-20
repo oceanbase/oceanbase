@@ -2292,15 +2292,16 @@ int ObSchemaPrinter::print_table_definition_partition_options(const ObTableSchem
       SHARE_SCHEMA_LOG(WARN, "fail to print enter", K(ret));
     } else if (OB_FAIL(print_partition_func(table_schema, buf, buf_len, pos, is_subpart, strict_compat_, tz_info))) {
       SHARE_SCHEMA_LOG(WARN, "failed to print part func", K(ret));
-    } else if (!strict_compat_ && is_subpart && partition_schema->sub_part_template_def_valid()) {
+    } else if (!strict_compat_ && is_subpart && partition_schema->has_sub_part_template_def()) {
       if (OB_FAIL(print_template_sub_partition_elements(partition_schema, buf, buf_len, pos, tz_info, false))) {
         SHARE_SCHEMA_LOG(WARN, "fail to print sub partition elements", K(ret));
       }
     }
 
     if (OB_SUCC(ret)) {
-      bool print_sub_part_element = is_subpart &&
-                                    (strict_compat_ || !partition_schema->sub_part_template_def_valid());
+      // With template defined, still print individual subpartitions for partitions
+      // that differ from template (per-partition filtering done in print_individual_sub_partition_elements)
+      bool print_sub_part_element = is_subpart;
       if (table_schema.is_range_part()) {
         if (OB_FAIL(print_range_partition_elements(partition_schema, buf, buf_len, pos,
                                                    print_sub_part_element, agent_mode, false, tz_info))) {
@@ -3627,7 +3628,7 @@ int ObSchemaPrinter::print_template_sub_partition_elements(const ObPartitionSche
   if (OB_ISNULL(schema)) {
     ret = OB_INVALID_ARGUMENT;
     SHARE_SCHEMA_LOG(WARN, "schema is null", K(ret));
-  } else if (!schema->sub_part_template_def_valid()) {
+  } else if (!schema->has_sub_part_template_def()) {
     ret = OB_INVALID_ARGUMENT;
     SHARE_SCHEMA_LOG(WARN, "schema is not sub part template", K(ret));
   } else if (OB_FAIL(schema->check_if_oracle_compat_mode(is_oracle_mode))) {
@@ -3665,14 +3666,17 @@ int ObSchemaPrinter::print_individual_sub_partition_elements(const ObPartitionSc
 {
   int ret = OB_SUCCESS;
   bool is_oracle_mode = false;
+  bool skip_print = false;
   if (OB_ISNULL(schema) || OB_ISNULL(partition)) {
     ret = OB_INVALID_ARGUMENT;
     SHARE_SCHEMA_LOG(WARN, "argument is null", K(ret), K(schema), K(partition));
-  } else if (!strict_compat_ && schema->sub_part_template_def_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    SHARE_SCHEMA_LOG(WARN, "schema is sub part template", K(ret));
   } else if (OB_FAIL(schema->check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("fail to check oracle mode", KR(ret), KPC(schema));
+  } else if (!strict_compat_ && schema->has_sub_part_template_def()
+             && OB_FAIL(is_subpart_match_template(schema, partition, is_oracle_mode, skip_print))) {
+    SHARE_SCHEMA_LOG(WARN, "fail to check subpart match template", KR(ret), KPC(schema), KPC(partition));
+  } else if (skip_print) {
+    // non-strict-compat mode with template: subpartitions match template, skip printing
   } else if (is_hash_like_part(schema->get_sub_part_option().get_part_func_type())) {
     ret = print_hash_sub_partition_elements(partition->get_subpart_array(),
                                             partition->get_sub_part_num(),
@@ -3687,6 +3691,74 @@ int ObSchemaPrinter::print_individual_sub_partition_elements(const ObPartitionSc
                                             partition->get_subpart_array(),
                                             partition->get_sub_part_num(),
                                             buf, buf_len, pos, tz_info);
+  }
+  return ret;
+}
+
+int ObSchemaPrinter::is_subpart_match_template(const ObPartitionSchema *schema,
+                                                const ObPartition *partition,
+                                                const bool is_oracle_mode,
+                                                bool &is_match) const
+{
+  int ret = OB_SUCCESS;
+  ObSubPartition **def_subpart_array = NULL;
+  ObSubPartition **subpart_array = NULL;
+  is_match = false;
+  if (OB_ISNULL(schema) || OB_ISNULL(partition)) {
+    ret = OB_INVALID_ARGUMENT;
+    SHARE_SCHEMA_LOG(WARN, "argument is null", KR(ret), KP(schema), KP(partition));
+  } else if (schema->get_def_subpartition_num() != partition->get_sub_part_num()) {
+    is_match = false;
+  } else if (OB_ISNULL(def_subpart_array = schema->get_def_subpart_array())
+             || OB_ISNULL(subpart_array = partition->get_subpart_array())) {
+    ret = OB_ERR_UNEXPECTED;
+    SHARE_SCHEMA_LOG(WARN, "subpart array is null", KR(ret), KP(def_subpart_array), KP(subpart_array));
+  } else {
+    const int64_t def_sub_part_num = schema->get_def_subpartition_num();
+    ObPartitionFuncType subpart_type = schema->get_sub_part_option().get_part_func_type();
+    const ObString &part_name = partition->get_part_name();
+    is_match = true;
+    for (int64_t i = 0; is_match && OB_SUCC(ret) && i < def_sub_part_num; ++i) {
+      if (OB_ISNULL(def_subpart_array[i]) || OB_ISNULL(subpart_array[i])) {
+        ret = OB_ERR_UNEXPECTED;
+        SHARE_SCHEMA_LOG(WARN, "subpart array element is null", KR(ret), K(i));
+      } else {
+        // Check subpartition name matches the template-generated naming convention:
+        // {partition_name}{S|s}{template_subpart_name}
+        const ObString &actual_name = subpart_array[i]->get_part_name();
+        const ObString &template_name = def_subpart_array[i]->get_part_name();
+        const int64_t BUF_SIZE = OB_MAX_PARTITION_NAME_LENGTH;
+        char expected_buf[BUF_SIZE];
+        ObString expected_name;
+        if (OB_FAIL(ObPartitionSchema::gen_template_subpart_name(part_name, template_name,
+                                                                 is_oracle_mode,
+                                                                 expected_buf, BUF_SIZE,
+                                                                 expected_name))) {
+          SHARE_SCHEMA_LOG(WARN, "fail to construct expected subpart name", KR(ret));
+        } else {
+          if (is_oracle_mode
+              ? (expected_name != actual_name)
+              : (expected_name.case_compare(actual_name) != 0)) {
+            is_match = false;
+          } else {
+            // Also check partition values match.
+            // For hash subpartitions, check_partition_value always returns is_equal=true
+            // (hash has no user-defined values), so template match relies solely on name comparison.
+            bool is_equal = false;
+            if (OB_FAIL(ObPartitionUtils::check_partition_value(
+                           is_oracle_mode, *def_subpart_array[i], *subpart_array[i],
+                           subpart_type, is_equal, NULL))) {
+              SHARE_SCHEMA_LOG(WARN, "fail to check partition value", KR(ret));
+            } else if (!is_equal) {
+              is_match = false;
+            }
+          }
+        }
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+    is_match = false;
   }
   return ret;
 }

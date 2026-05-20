@@ -107,10 +107,14 @@ int ObPartitionExecutorUtils::calc_values_exprs(ObExecContext &ctx,
                                        stmt.get_template_subpart_values_exprs() ,is_subpart))) {
           LOG_WARN("failed to set list part rows", K(ret));
         }
-      } else if (OB_FAIL(set_individual_list_part_rows(ctx, stmt, stmt_type, table_schema,
-                                                       stmt.get_subpart_fun_exprs(),
-                                                       stmt.get_individual_subpart_values_exprs()))) {
-        LOG_WARN("failed to set individual list part rows", K(ret));
+      }
+      // process individual subpartitions (pure individual or mixed with template)
+      if (OB_SUCC(ret) && !stmt.get_individual_subpart_values_exprs().empty()) {
+        if (OB_FAIL(set_individual_list_part_rows(ctx, stmt, stmt_type, table_schema,
+                                                         stmt.get_subpart_fun_exprs(),
+                                                         stmt.get_individual_subpart_values_exprs()))) {
+          LOG_WARN("failed to set individual list part rows", KR(ret));
+        }
       }
     } else if (table_schema.is_range_subpart()) {
       if (stmt.use_def_sub_part()) {
@@ -121,8 +125,12 @@ int ObPartitionExecutorUtils::calc_values_exprs(ObExecContext &ctx,
                                                         stmt_type))) {
           LOG_WARN("failed to check range value exprs", K(ret));
         }
-      } else if (OB_FAIL(set_individual_range_part_high_bound(ctx, stmt_type, table_schema, stmt))) {
-        LOG_WARN("failed to set individual range part high bound", K(ret));
+      }
+      // process individual subpartitions (pure individual or mixed with template)
+      if (OB_SUCC(ret) && !stmt.get_individual_subpart_values_exprs().empty()) {
+        if (OB_FAIL(set_individual_range_part_high_bound(ctx, stmt_type, table_schema, stmt))) {
+          LOG_WARN("failed to set individual range part high bound", KR(ret));
+        }
       }
     }
   } else {
@@ -1253,41 +1261,55 @@ int ObPartitionExecutorUtils::set_individual_range_part_high_bound(ObExecContext
   ObDDLStmt::array_array_t &range_values_exprs_array = stmt.get_individual_subpart_values_exprs();
   const int64_t fun_expr_num = range_fun_expr.count();
 
-  if (OB_UNLIKELY(stmt.use_def_sub_part())) {
+  // In mixed mode (template + individual subpartitions coexist), individual_subpart_values_exprs
+  // only contains expressions for partitions that have explicitly defined subpartitions, NOT for
+  // partitions that use the template. So we use a separate index expr_idx (instead of the partition
+  // loop variable i) to map each partition with individual subpartitions to its corresponding
+  // expressions. Template-using partitions (sub_part_num <= 0) are skipped without advancing expr_idx.
+  const bool is_mixed_mode = stmt.use_def_sub_part();
+  if (OB_ISNULL(partition_array)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("subpart is template", K(ret));
-  } else if (OB_ISNULL(partition_array)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("partition_array is NULL", K(ret));
+    LOG_WARN("partition_array is NULL", KR(ret));
   }
-  for (int64_t i =0; OB_SUCC(ret) && i < part_num; ++i) {
-    range_partition_obj.reset();
-    if (OB_ISNULL(partition = partition_array[i]) ||
-        OB_ISNULL(subpartition_array = partition->get_subpart_array())) {
+  int64_t expr_idx = 0;
+  for (int64_t i = 0; OB_SUCC(ret) && i < part_num; ++i) {
+    if (OB_ISNULL(partition = partition_array[i])) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret), K(partition), K(subpartition_array));
-    } else if (OB_FAIL(cast_expr_to_obj(ctx, stmt_type, false, range_fun_expr,
-                                        range_values_exprs_array.at(i), range_partition_obj))) {
-      LOG_WARN("fail to cast expr to obj", K(ret));
-    } else if (partition->get_sub_part_num() * fun_expr_num != range_partition_obj.count()) {
+      LOG_WARN("get unexpected null", KR(ret));
+    } else if (is_mixed_mode && partition->get_sub_part_num() <= 0) {
+      // mixed mode: skip partitions that use template (no individual subpartitions yet)
+    } else if (OB_ISNULL(subpartition_array = partition->get_subpart_array())) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid partition num", K(part_num), K(ret));
-    }
-    for (int64_t j = 0; OB_SUCC(ret) && j < partition->get_sub_part_num(); ++j) {
-      ObRowkey high_rowkey(&range_partition_obj.at(j * fun_expr_num), fun_expr_num);
-      if (OB_ISNULL(subpartition = subpartition_array[j])) {
+      LOG_WARN("get unexpected null", KR(ret), K(subpartition_array));
+    } else if (OB_UNLIKELY(expr_idx >= range_values_exprs_array.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expr index out of range", KR(ret), K(expr_idx), K(range_values_exprs_array.count()));
+    } else {
+      range_partition_obj.reset();
+      if (OB_FAIL(cast_expr_to_obj(ctx, stmt_type, false, range_fun_expr,
+                                          range_values_exprs_array.at(expr_idx), range_partition_obj))) {
+        LOG_WARN("fail to cast expr to obj", KR(ret));
+      } else if (partition->get_sub_part_num() * fun_expr_num != range_partition_obj.count()) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get null subpartition", K(ret));
-      } else if (OB_FAIL(subpartition->set_high_bound_val(high_rowkey))) {
-        LOG_WARN("failed to set high bound val", K(ret));
+        LOG_WARN("invalid partition num", KR(ret), K(part_num));
       }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(check_increasing_range_value(subpartition_array,
-                                               partition->get_sub_part_num(),
-                                               stmt_type))) {
-        LOG_WARN("failed to check range value exprs", K(ret));
+      for (int64_t j = 0; OB_SUCC(ret) && j < partition->get_sub_part_num(); ++j) {
+        ObRowkey high_rowkey(&range_partition_obj.at(j * fun_expr_num), fun_expr_num);
+        if (OB_ISNULL(subpartition = subpartition_array[j])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get null subpartition", KR(ret));
+        } else if (OB_FAIL(subpartition->set_high_bound_val(high_rowkey))) {
+          LOG_WARN("failed to set high bound val", KR(ret));
+        }
       }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(check_increasing_range_value(subpartition_array,
+                                                 partition->get_sub_part_num(),
+                                                 stmt_type))) {
+          LOG_WARN("failed to check range value exprs", KR(ret));
+        }
+      }
+      ++expr_idx;
     }
   }
   return ret;
@@ -1307,21 +1329,32 @@ int ObPartitionExecutorUtils::set_individual_list_part_rows(ObExecContext &ctx,
   ObPartition **partition_array = table_schema.get_part_array();
   const int64_t part_num = table_schema.get_first_part_num();
 
-  if (OB_UNLIKELY(stmt.use_def_sub_part())) {
+  // In mixed mode (template + individual subpartitions coexist), individual_subpart_values_exprs
+  // only contains expressions for partitions that have explicitly defined subpartitions, NOT for
+  // partitions that use the template. So we use a separate index expr_idx (instead of the partition
+  // loop variable i) to map each partition with individual subpartitions to its corresponding
+  // expressions. Template-using partitions (sub_part_num <= 0) are skipped without advancing expr_idx.
+  const bool is_mixed_mode = stmt.use_def_sub_part();
+  if (OB_ISNULL(partition_array)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("subpart is template", K(ret));
-  } else if (OB_ISNULL(partition_array)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("partition_array is NULL", K(ret));
+    LOG_WARN("partition_array is NULL", KR(ret));
   }
+  int64_t expr_idx = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < part_num; ++i) {
     if (OB_ISNULL(partition = partition_array[i])) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret), K(partition), K(subpartition));
+      LOG_WARN("get unexpected null", KR(ret), K(partition), K(subpartition));
+    } else if (is_mixed_mode && partition->get_sub_part_num() <= 0) {
+      // mixed mode: skip partitions that use template (no individual subpartitions yet)
+    } else if (OB_UNLIKELY(expr_idx >= list_values_exprs_array.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("expr index out of range", KR(ret), K(expr_idx), K(list_values_exprs_array.count()));
     } else if (OB_FAIL(cast_list_expr_to_obj(ctx, stmt_type, true, partition->get_sub_part_num(),
                                              partition_array, partition->get_subpart_array(),
-                                             list_fun_exprs, list_values_exprs_array.at(i)))) {
-      LOG_WARN("failed to cast list expr to obj", K(ret));
+                                             list_fun_exprs, list_values_exprs_array.at(expr_idx)))) {
+      LOG_WARN("failed to cast list expr to obj", KR(ret));
+    } else {
+      ++expr_idx;
     }
   }
   return ret;

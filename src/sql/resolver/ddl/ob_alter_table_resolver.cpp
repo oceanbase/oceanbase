@@ -2355,15 +2355,6 @@ int ObAlterTableResolver::resolve_add_partition(const ParseNode &node,
       }
     }
 
-    // In ddl_service, we will use alter_table_schema.sub_part_template_def_valid()
-    // to determine whether to set new_table_schema sub_part_template_def as valid.
-    if (OB_FAIL(ret)) {
-    } else if (orig_table_schema.sub_part_template_def_valid()) {
-      alter_table_schema.set_sub_part_template_def_valid();
-    } else {
-      alter_table_schema.unset_sub_part_template_def_valid();
-    }
-
     if (OB_FAIL(ret)) {
     } else if (no_subpart && orig_table_schema.has_sub_part_template_def()) {
       bool generated = false;
@@ -2380,11 +2371,6 @@ int ObAlterTableResolver::resolve_add_partition(const ParseNode &node,
       }
       alter_stmt->set_use_def_sub_part(false);
     } else {
-      if (!no_subpart && orig_table_schema.has_sub_part_template_def()) {
-        // add partition to subpartition template table with subpartition info specified by clause
-        // set sub_part_template_def to invalid, which is only used for schema printer
-        alter_table_schema.unset_sub_part_template_def_valid();
-      }
       const ObPartitionOption &subpart_option = orig_table_schema.get_sub_part_option();
       const ObPartitionFuncType subpart_type = subpart_option.get_part_func_type();
       ParseNode *subpart_func_node = NULL;
@@ -2548,10 +2534,10 @@ int ObAlterTableResolver::resolve_add_subpartition(const ParseNode &node,
         LOG_WARN("get tenant data version failed", KR(ret));
       } else if (compat_version < DATA_VERSION_4_4_1_0) {
         // do nothing
-      } else if (orig_table_schema.sub_part_template_def_valid()) {
-        // If the subpartition template is valid, set the subpartition template to alter_table_schema
+      } else if (orig_table_schema.has_sub_part_template_def()) {
+        // If the subpartition template exists, propagate the flag to alter_table_schema
         // Because later it is needed to decide whether to use storage_cache_policy based on whether it is a template partition
-        alter_table_schema.set_sub_part_template_def_valid();
+        alter_table_schema.set_sub_part_template_def_exist();
         alter_table_schema.set_part_level(orig_table_schema.get_part_level());
       }
     }

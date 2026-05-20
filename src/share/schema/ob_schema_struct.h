@@ -2969,9 +2969,7 @@ public:
   constexpr const static char * const ORACLE_NON_PARTITIONED_TABLE_PART_NAME = "P0";
 
   const static int64_t SUBPART_TEMPLATE_DEF_EXIST_SHIFT = 0;
-  const static int64_t SUBPART_TEMPLATE_DEF_VALID_SHIFT = 1;
   const static int64_t SUBPART_TEMPLATE_DEF_EXIST_MASK = 0x1 << SUBPART_TEMPLATE_DEF_EXIST_SHIFT;
-  const static int64_t SUBPART_TEMPLATE_DEF_VALID_MASK = 0x1 << SUBPART_TEMPLATE_DEF_VALID_SHIFT;
 
 
 public:
@@ -3044,24 +3042,14 @@ public:
     return PARTITION_LEVEL_TWO == part_level_
            && sub_part_template_flags_ > 0;
   }
-  inline bool sub_part_template_def_valid() const
-  {
-    return PARTITION_LEVEL_TWO == part_level_
-           && sub_part_template_flag_exist(SUBPART_TEMPLATE_DEF_VALID_MASK);
-  }
   inline bool sub_part_template_def_exist() const
   {
     return PARTITION_LEVEL_TWO == part_level_
            && sub_part_template_flag_exist(SUBPART_TEMPLATE_DEF_EXIST_MASK);
   }
-  inline void set_sub_part_template_def_valid()
+  inline void set_sub_part_template_def_exist()
   {
     add_sub_part_template_flag(SUBPART_TEMPLATE_DEF_EXIST_MASK);
-    add_sub_part_template_flag(SUBPART_TEMPLATE_DEF_VALID_MASK);
-  }
-  inline void unset_sub_part_template_def_valid()
-  {
-    del_sub_part_template_flag(SUBPART_TEMPLATE_DEF_VALID_MASK);
   }
   inline int64_t get_sub_part_template_flags() const
   {
@@ -3103,6 +3091,13 @@ public:
   inline const ObPartitionOption &get_sub_part_option() const { return sub_part_option_; }
   inline ObPartitionOption &get_sub_part_option() { return sub_part_option_; }
   inline int64_t get_auto_part_size() const { return part_option_.get_auto_part_size(); }
+
+  static int gen_template_subpart_name(const common::ObString &part_name,
+                                       const common::ObString &def_subpart_name,
+                                       const bool is_oracle_mode,
+                                       char *buf,
+                                       const int64_t buf_size,
+                                       common::ObString &subpart_name);
 
   // deal with partition schema from ddl resolver
   int try_generate_hash_part();
@@ -3335,14 +3330,10 @@ protected:
   ObPartitionStatus partition_status_;  // deprecated
   /*
    * Here is the different values for sub_part_template_flags_:
-   * 1) 0: sub_part_template is not defined.
-   * 2) sub_part_template_def_valid(exist & valid):
-   *     - if sub_part_template id defined and partition related ddl(except truncate) is executed.
-   *     - only used for schema_printer
-   * 3) sub_part_template_def_exist(exist):
-   *     - sub_part_template_def maybe not valid after partition related ddl is executed.
-   *
-   * For now, set/unset sub_part_template_def is not supported yet.
+   * 1) 0: sub_part_template is not defined, the table has no subpartition template.
+   * 2) sub_part_template_def_exist:
+   *     - the table actually has a subpartition template defined
+   *       (i.e., the SUBPARTITION TEMPLATE clause exists in the table definition).
    */
   int64_t sub_part_template_flags_;
   /* hidden partition */

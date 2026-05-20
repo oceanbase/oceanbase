@@ -11198,6 +11198,83 @@ int ObDDLResolver::resolve_subpartition_option(ObPartitionedStmt *stmt,
   return ret;
 }
 
+int ObDDLResolver::resolve_template_subpartition_before_elements(
+    ObPartitionedStmt *stmt,
+    ParseNode *subpart_node,
+    share::schema::ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(subpart_node) && stmt->use_def_sub_part()) {
+    if (OB_FAIL(resolve_subpartition_option(stmt, subpart_node, table_schema))) {
+      SQL_RESV_LOG(WARN, "failed to resolve subpartition", KR(ret));
+    }
+  }
+  return ret;
+}
+
+int ObDDLResolver::resolve_partition_element_subpartitions(
+    ObPartitionedStmt *stmt,
+    ParseNode *element_node,
+    share::schema::ObTableSchema &table_schema,
+    const int64_t part_index)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(element_node->children_[ELEMENT_SUBPARTITION_NODE])) {
+    // resolve individual subpartitions (including mixed with template case)
+    ObPartition *cur_partition = table_schema.get_part_array()[part_index];
+    if (OB_ISNULL(cur_partition)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", KR(ret));
+    } else if (stmt->use_def_sub_part()) {
+      // Mixed template + individual subpartitions only allowed in [4.4.2.2, 4.5.0.0).
+      // During rolling upgrade, old observers don't recognize the new flag encoding
+      // (EXIST-only without VALID bit), which causes template info loss in
+      // SHOW CREATE TABLE and OB_ERR_UNEXPECTED in try_generate_subpart_by_template.
+      uint64_t tenant_data_version = 0;
+      if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema.get_tenant_id(), tenant_data_version))) {
+        LOG_WARN("fail to get tenant data version", KR(ret));
+      } else if (tenant_data_version < DATA_VERSION_4_4_2_2
+                 || tenant_data_version >= DATA_VERSION_4_5_0_0) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "mixed template and non-template subpartitions in current version");
+      } else if (OB_FAIL(resolve_subpartition_elements(
+          stmt,
+          element_node->children_[ELEMENT_SUBPARTITION_NODE],
+          table_schema,
+          cur_partition,
+          false))) {
+        LOG_WARN("failed to resolve subpartition elements", KR(ret));
+      }
+    } else if (OB_FAIL(resolve_subpartition_elements(
+        stmt,
+        element_node->children_[ELEMENT_SUBPARTITION_NODE],
+        table_schema,
+        cur_partition,
+        false))) {
+      LOG_WARN("failed to resolve subpartition elements", KR(ret));
+    }
+  } else if (!stmt->use_def_sub_part()) {
+    // no template and no individual subpartitions specified, resolve defaults
+    ObPartition *cur_partition = table_schema.get_part_array()[part_index];
+    if (OB_ISNULL(cur_partition)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", KR(ret));
+    } else if (OB_FAIL(resolve_subpartition_elements(
+        stmt,
+        element_node->children_[ELEMENT_SUBPARTITION_NODE],
+        table_schema,
+        cur_partition,
+        false))) {
+      LOG_WARN("failed to resolve subpartition elements", KR(ret));
+    }
+  } else {
+    // template is defined but no individual subpartitions specified for this partition.
+    // Its subpartitions will be auto-expanded from the template definition later in
+    // DDL service layer (try_format_partition_schema -> try_generate_subpart_by_template).
+  }
+  return ret;
+}
+
 int ObDDLResolver::resolve_individual_subpartition(ObPartitionedStmt *stmt,
                                                    ParseNode *part_node,
                                                    ParseNode *partition_list_node,
@@ -11430,6 +11507,15 @@ int ObDDLResolver::resolve_partition_hash_or_key(
     }
   }
 
+  // resolve template subpartition definition before partition elements,
+  // so that sub_part_option is set when resolving individual subpartitions in mixed mode
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(resolve_template_subpartition_before_elements(
+        stmt, node->children_[HASH_SUBPARTITIOPPN_NODE], table_schema))) {
+      SQL_RESV_LOG(WARN, "failed to resolve template subpartition before elements", KR(ret));
+    }
+  }
+
   // 2. 处理每个分区的定义
   if (OB_SUCC(ret)) {
     /**
@@ -11533,14 +11619,6 @@ int ObDDLResolver::resolve_partition_hash_or_key(
     }
   }
 
-  // 6. 解析模板化二级分区定义
-  if (OB_SUCC(ret)) {
-    if (NULL != node->children_[HASH_SUBPARTITIOPPN_NODE] && stmt->use_def_sub_part()) {
-      if (OB_FAIL(resolve_subpartition_option(stmt, node->children_[HASH_SUBPARTITIOPPN_NODE], table_schema))) {
-        SQL_RESV_LOG(WARN, "failed to resolve subpartition", K(ret));
-      }
-    }
-  }
   return ret;
 }
 
@@ -11627,6 +11705,15 @@ int ObDDLResolver::resolve_partition_range(ObPartitionedStmt *stmt,
       }
     }
 
+    // resolve template subpartition definition before partition elements,
+    // so that sub_part_option is set when resolving individual subpartitions in mixed mode
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(resolve_template_subpartition_before_elements(
+          stmt, node->children_[RANGE_SUBPARTITION_NODE], table_schema))) {
+        SQL_RESV_LOG(WARN, "failed to resolve template subpartition before elements", KR(ret));
+      }
+    }
+
     // 2. resolve range partition define
     if (OB_SUCC(ret)) {
       if (NULL != node->children_[RANGE_PARTITION_NUM_NODE]) {
@@ -11669,15 +11756,6 @@ int ObDDLResolver::resolve_partition_range(ObPartitionedStmt *stmt,
       ObIntervalPartitionResolver interval_partition_resolver(params_);
       if (OB_FAIL(interval_partition_resolver.resolve_interval_clause(stmt, node, table_schema, range_values_exprs))) {
         LOG_WARN("failed to resolve interval clause", KR(ret));
-      }
-    }
-
-    // 解析模板化二级分区定义
-    if (OB_SUCC(ret)) {
-      if (NULL != node->children_[RANGE_SUBPARTITION_NODE] && stmt->use_def_sub_part()) {
-        if (OB_FAIL(resolve_subpartition_option(stmt, node->children_[RANGE_SUBPARTITION_NODE], table_schema))) {
-          SQL_RESV_LOG(WARN, "failed to resolve subpartition", K(ret));
-        }
       }
     }
 
@@ -12260,6 +12338,15 @@ int ObDDLResolver::resolve_partition_list(ObPartitionedStmt *stmt,
     }
   }
 
+  // resolve template subpartition definition before partition elements,
+  // so that sub_part_option is set when resolving individual subpartitions in mixed mode
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(resolve_template_subpartition_before_elements(
+        stmt, node->children_[LIST_SUBPARTITIOPPN_NODE], table_schema))) {
+      SQL_RESV_LOG(WARN, "failed to resolve template subpartition before elements", KR(ret));
+    }
+  }
+
   if (OB_SUCC(ret)) {
     if (!OB_ISNULL(node->children_[LIST_PARTITION_NUM_NODE])) {
       partition_num = node->children_[LIST_PARTITION_NUM_NODE]->value_;
@@ -12296,15 +12383,6 @@ int ObDDLResolver::resolve_partition_list(ObPartitionedStmt *stmt,
                                                     list_values_exprs))) {
           SQL_RESV_LOG(WARN, "resolve reange partition elements fail", K(ret));
         }
-      }
-    }
-  }
-
-  // 解析模板化二级分区定义
-  if (OB_SUCC(ret)) {
-    if (NULL != node->children_[LIST_SUBPARTITIOPPN_NODE] && stmt->use_def_sub_part()) {
-      if (OB_FAIL(resolve_subpartition_option(stmt, node->children_[LIST_SUBPARTITIOPPN_NODE], table_schema))) {
-        SQL_RESV_LOG(WARN, "failed to resolve subpartition", K(ret));
       }
     }
   }
@@ -12366,24 +12444,9 @@ int ObDDLResolver::resolve_hash_partition_elements(ObPartitionedStmt *stmt,
         partition.set_tablespace_id(tablespace_id);
         if (OB_FAIL(table_schema.add_partition(partition))) {
           LOG_WARN("failed to add partition", K(ret));
-        } else if (stmt->use_def_sub_part() &&
-                   OB_NOT_NULL(element_node->children_[ELEMENT_SUBPARTITION_NODE])) {
-          ret = OB_INVALID_SUB_PARTITION_TYPE;
-          LOG_WARN("individual subpartition with sub part template", K(ret));
-        } else if (!stmt->use_def_sub_part()) {
-          // resolve non template
-          ObPartition *cur_partition = table_schema.get_part_array()[i];
-          if (OB_ISNULL(cur_partition)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected null", K(ret));
-          } else if (OB_FAIL(resolve_subpartition_elements(
-              stmt,
-              element_node->children_[ELEMENT_SUBPARTITION_NODE],
-              table_schema,
-              cur_partition,
-              false))) {
-            LOG_WARN("failed to resolve subpartition elements", K(ret));
-          }
+        } else if (OB_FAIL(resolve_partition_element_subpartitions(
+            stmt, element_node, table_schema, i))) {
+          LOG_WARN("failed to resolve partition element subpartitions", KR(ret));
         }
       }
     }
@@ -12405,10 +12468,7 @@ int ObDDLResolver::resolve_hash_subpartition_elements(ObPartitionedStmt *stmt,
   if (OB_ISNULL(node) || OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(node), K(stmt));
-  } else if (FALSE_IT(is_template = stmt->use_def_sub_part())) {
-  } else if (!is_template && OB_ISNULL(partition)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("partition is null while not sub part template", K(ret));
+  } else if (FALSE_IT(is_template = (NULL == partition))) {
   } else {
     int64_t partition_num = node->num_child_;
     ObSubPartition subpartition;
@@ -12520,24 +12580,9 @@ int ObDDLResolver::resolve_range_partition_elements(ObPartitionedStmt *stmt,
         partition.set_tablespace_id(tablespace_id);
         if (OB_FAIL(table_schema.add_partition(partition))) {
           LOG_WARN("failed to add partition", K(ret));
-        } else if (stmt->use_def_sub_part() &&
-                   OB_NOT_NULL(element_node->children_[ELEMENT_SUBPARTITION_NODE])) {
-          ret = OB_ERR_PARSE_SQL;
-          LOG_WARN("individual subpartition with sub part template", K(ret));
-        } else if (!stmt->use_def_sub_part()) {
-          // resolve non template
-          ObPartition *cur_partition = table_schema.get_part_array()[i];
-          if (OB_ISNULL(cur_partition)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected null", K(ret));
-          } else if (OB_FAIL(resolve_subpartition_elements(
-              stmt,
-              element_node->children_[ELEMENT_SUBPARTITION_NODE],
-              table_schema,
-              cur_partition,
-              false))) {
-            LOG_WARN("failed to resolve subpartition elements", K(ret));
-          }
+        } else if (OB_FAIL(resolve_partition_element_subpartitions(
+            stmt, element_node, table_schema, i))) {
+          LOG_WARN("failed to resolve partition element subpartitions", KR(ret));
         }
       }
     }
@@ -12564,10 +12609,7 @@ int ObDDLResolver::resolve_range_subpartition_elements(ObPartitionedStmt *stmt,
   if (OB_ISNULL(node) || OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("node is null or stmt is null", K(ret), K(node), K(stmt));
-  } else if (FALSE_IT(is_template = stmt->use_def_sub_part())) {
-  } else if (!is_template && OB_ISNULL(partition)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("partition is null while not sub part template", K(ret));
+  } else if (FALSE_IT(is_template = (NULL == partition))) {
   } else {
     int64_t partition_num = node->num_child_;
     ObSubPartition subpartition;
@@ -12688,24 +12730,9 @@ int ObDDLResolver::resolve_list_partition_elements(ObPartitionedStmt *stmt,
         partition.set_tablespace_id(tablespace_id);
         if (OB_FAIL(table_schema.add_partition(partition))) {
           LOG_WARN("failed to add partition", K(ret));
-        } else if (stmt->use_def_sub_part() &&
-                   OB_NOT_NULL(element_node->children_[ELEMENT_SUBPARTITION_NODE])) {
-          ret = OB_ERR_PARSE_SQL;
-          LOG_WARN("individual subpartition with sub part template", K(ret));
-        } else if (!stmt->use_def_sub_part()) {
-          // resolve non template
-          ObPartition *cur_partition = table_schema.get_part_array()[i];
-          if (OB_ISNULL(cur_partition)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("get unexpected null", K(ret));
-          } else if (OB_FAIL(resolve_subpartition_elements(
-              stmt,
-              element_node->children_[ELEMENT_SUBPARTITION_NODE],
-              table_schema,
-              cur_partition,
-              false))) {
-            LOG_WARN("failed to resolve subpartition elements", K(ret));
-          }
+        } else if (OB_FAIL(resolve_partition_element_subpartitions(
+            stmt, element_node, table_schema, i))) {
+          LOG_WARN("failed to resolve partition element subpartitions", KR(ret));
         }
       }
     }
@@ -12732,7 +12759,7 @@ int ObDDLResolver::resolve_list_subpartition_elements(ObPartitionedStmt *stmt,
   if (OB_ISNULL(node) || OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("node is null or stmt is null", K(ret), K(node), K(stmt_));
-  } else if (FALSE_IT(is_template = stmt->use_def_sub_part())) {
+  } else if (FALSE_IT(is_template = (NULL == partition))) {
   } else {
     int64_t partition_num = node->num_child_;
     ObSubPartition subpartition;
@@ -13195,6 +13222,8 @@ int ObDDLResolver::check_and_set_partition_names(ObPartitionedStmt *stmt,
     if (stmt->use_def_sub_part()) {
       if (OB_FAIL(check_and_set_partition_names(stmt, table_schema, true))) {
         LOG_WARN("failed to check and set partition names", K(ret));
+      } else if (OB_FAIL(check_mixed_subpartition_names(table_schema))) {
+        LOG_WARN("failed to check mixed subpartition names", K(ret));
       }
     } else if (OB_FAIL(check_and_set_individual_subpartition_names(stmt, table_schema))) {
       LOG_WARN("failed to check and set individual subpartition names", K(ret));
@@ -13421,6 +13450,97 @@ int ObDDLResolver::check_and_set_individual_subpartition_names(ObPartitionedStmt
           }
         }
         ++max_part_id;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDDLResolver::check_mixed_subpartition_names(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  const int64_t partition_num = table_schema.get_first_part_num();
+  ObPartition **partition_array = table_schema.get_part_array();
+  ObSubPartition **def_subpart_array = table_schema.get_def_subpart_array();
+  const int64_t def_subpart_num = table_schema.get_def_subpartition_num();
+  void *set_buf = nullptr;
+  ObPartitionNameSet *name_set = nullptr;
+  if (OB_ISNULL(partition_array) || partition_num <= 0
+      || def_subpart_num <= 0 || OB_ISNULL(def_subpart_array)) {
+    // no partitions or no template, nothing to check
+  } else if (OB_ISNULL(set_buf = allocator_->alloc(sizeof(ObPartitionNameSet)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("fail to allocate memory for name set", KR(ret));
+  } else {
+    name_set = new(set_buf) ObPartitionNameSet();
+    // collect partition names and individual subpartition names, check duplicates.
+    for (int64_t i = 0; OB_SUCC(ret) && i < partition_num; ++i) {
+      ObPartition *part = partition_array[i];
+      if (OB_ISNULL(part)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("partition is null", KR(ret), K(i));
+      } else if (!part->is_empty_partition_name()) {
+        ObPartitionNameHashWrapper part_key(part->get_part_name());
+        if (OB_HASH_EXIST == name_set->exist_refactored(part_key)) {
+          // an individual subpartition from a prior partition claimed this name
+          ret = OB_ERR_SAME_NAME_SUBPARTITION;
+          const ObString &part_name = part->get_part_name();
+          LOG_USER_ERROR(OB_ERR_SAME_NAME_SUBPARTITION, part_name.length(), part_name.ptr());
+        } else if (OB_FAIL(set_partition_name_in_hashset(part_key, *name_set))) {
+          LOG_WARN("fail to add partition name", KR(ret));
+        }
+      }
+      if (OB_SUCC(ret) && part->get_sub_part_num() > 0) {
+        ObSubPartition **subpart_array = part->get_subpart_array();
+        for (int64_t j = 0; OB_SUCC(ret) && j < part->get_sub_part_num(); ++j) {
+          if (OB_ISNULL(subpart_array) || OB_ISNULL(subpart_array[j])) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("subpartition is null", KR(ret), K(i), K(j));
+          } else if (!subpart_array[j]->is_empty_partition_name()) {
+            const ObString &subpart_name = subpart_array[j]->get_part_name();
+            ObPartitionNameHashWrapper subpart_key(subpart_name);
+            if (OB_HASH_EXIST == name_set->exist_refactored(subpart_key)) {
+              ret = OB_ERR_SAME_NAME_SUBPARTITION;
+              LOG_USER_ERROR(OB_ERR_SAME_NAME_SUBPARTITION, subpart_name.length(), subpart_name.ptr());
+            } else if (OB_FAIL(set_partition_name_in_hashset(subpart_key, *name_set))) {
+              LOG_WARN("fail to add subpartition name", KR(ret));
+            }
+          }
+        }
+      }
+    }
+    // for template-expanded partitions, check generated names against names collected above.
+    if (OB_SUCC(ret)) {
+      const bool is_oracle_mode = lib::is_oracle_mode();
+      char gen_buf[OB_MAX_PARTITION_NAME_LENGTH];
+      ObString gen_name;
+      for (int64_t i = 0; OB_SUCC(ret) && i < partition_num; ++i) {
+        ObPartition *part = partition_array[i];
+        if (OB_ISNULL(part)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("partition is null", KR(ret), K(i));
+        } else if (part->get_sub_part_num() > 0) {
+          // individual subpartitions defined, template not expanded for this partition
+        } else {
+          for (int64_t j = 0; OB_SUCC(ret) && j < def_subpart_num; ++j) {
+            if (OB_ISNULL(def_subpart_array[j])) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("def subpartition is null", KR(ret), K(j));
+            } else if (OB_FAIL(ObPartitionSchema::gen_template_subpart_name(
+                part->get_part_name(), def_subpart_array[j]->get_part_name(),
+                is_oracle_mode, gen_buf, sizeof(gen_buf), gen_name))) {
+              LOG_WARN("failed to generate mixed template subpartition name", KR(ret));
+            } else {
+              ObPartitionNameHashWrapper gen_key(gen_name);
+              if (OB_HASH_EXIST == name_set->exist_refactored(gen_key)) {
+                ret = OB_ERR_SAME_NAME_SUBPARTITION;
+                LOG_USER_ERROR(OB_ERR_SAME_NAME_SUBPARTITION, gen_name.length(), gen_name.ptr());
+              } else if (OB_FAIL(set_partition_name_in_hashset(gen_key, *name_set))) {
+                LOG_WARN("fail to add generated subpartition name", KR(ret));
+              }
+            }
+          }
+        }
       }
     }
   }

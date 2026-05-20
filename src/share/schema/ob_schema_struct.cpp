@@ -3476,6 +3476,32 @@ int ObPartitionSchema::try_generate_hash_subpart(bool &generated)
   return ret;
 }
 
+int ObPartitionSchema::gen_template_subpart_name(const ObString &part_name,
+                                                   const ObString &def_subpart_name,
+                                                   const bool is_oracle_mode,
+                                                   char *buf,
+                                                   const int64_t buf_size,
+                                                   ObString &subpart_name)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(buf) || buf_size <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid buffer", KR(ret), KP(buf), K(buf_size));
+  } else {
+    MEMSET(buf, 0, buf_size);
+    int64_t pos = 0;
+    if (OB_FAIL(databuff_printf(buf, buf_size, pos, "%.*s%s%.*s",
+                                part_name.length(), part_name.ptr(),
+                                is_oracle_mode ? "S" : "s",
+                                def_subpart_name.length(), def_subpart_name.ptr()))) {
+      LOG_WARN("subpartition name is too long", KR(ret), K(part_name), K(def_subpart_name));
+    } else {
+      subpart_name.assign_ptr(buf, static_cast<int32_t>(pos));
+    }
+  }
+  return ret;
+}
+
 int ObPartitionSchema::try_generate_subpart_by_template(bool &generated)
 {
   int ret = OB_SUCCESS;
@@ -3484,67 +3510,71 @@ int ObPartitionSchema::try_generate_subpart_by_template(bool &generated)
   ObPartition **part_array = get_part_array();
   const int64_t def_subpart_num = get_def_subpartition_num();
   ObSubPartition **def_subpart_array = get_def_subpart_array();
-  int64_t all_partition_num = 0;
   generated = false;
   if (PARTITION_LEVEL_TWO != get_part_level()) {
     // skip
-  } else if (OB_FAIL(get_all_partition_num(
-             ObCheckPartitionMode::CHECK_PARTITION_MODE_NORMAL, all_partition_num))) {
-    LOG_WARN("fail to get partition num", KR(ret), K(all_partition_num));
-  } else if (all_partition_num > 0) {
-    // skip, this means each part has no subpartitions.
   } else if (OB_ISNULL(part_array) || part_num <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("part_array is null or part_num is invalid",
              KR(ret), KP(part_array), K(part_num));
   } else if (OB_ISNULL(def_subpart_array) || def_subpart_num <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("def_subpart_array is null or def_subpart_num is invalid", KR(ret), KPC(this));
-  } else if (OB_FAIL(check_if_oracle_compat_mode(is_oracle_mode))) {
-    LOG_WARN("fail to check if oracle mode", KR(ret), KPC(this));
+    // no template defined, nothing to expand (e.g. pure individual subpartitions)
+    LOG_INFO("skip generate subpart by template, def_subpart not available",
+             KP(def_subpart_array), K(def_subpart_num), KPC(this));
   } else {
-    const int64_t BUF_SIZE = OB_MAX_PARTITION_NAME_LENGTH;
-    char buf[BUF_SIZE];
-    ObSubPartition subpart;
-    for (int64_t i = 0; i < part_num && OB_SUCC(ret); ++i) {
-      ObPartition *part = part_array[i];
-      if (OB_ISNULL(part)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("partition is null", KR(ret), K(i), K(part_num), KPC(this));
-      } else if (part->get_subpartition_num() > 0) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("subpartition num should be 0", KR(ret), KPC(part));
-      } else if (OB_FAIL(part->preserve_subpartition(def_subpart_num))) {
-        LOG_WARN("fail to preserve subpartition", KR(ret), K(def_subpart_num));
-      } else {
-        part->set_sub_part_num(def_subpart_num);
-        for (int64_t j = 0; j < def_subpart_num && OB_SUCC(ret); j++) {
-          MEMSET(buf, 0, BUF_SIZE);
-          int64_t pos = 0;
-          ObString sub_part_name;
-          subpart.reset();
-          if (OB_ISNULL(def_subpart_array[j])) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("partition is null", KR(ret), K(i), K(j), K(def_subpart_num), KPC(this));
-          } else if (OB_FAIL(subpart.assign(*def_subpart_array[j]))) {
-            LOG_WARN("fail to assign subpart", KR(ret));
-          } else if (OB_FAIL(databuff_printf(buf, BUF_SIZE, pos, "%s%s%s",
-                     part->get_part_name().ptr(), is_oracle_mode ? "S" : "s",
-                     def_subpart_array[j]->get_part_name().ptr()))) {
-            LOG_WARN("part name is too long", KR(ret), KPC(part), K(subpart));
-          } else if (FALSE_IT(sub_part_name.assign_ptr(buf, static_cast<int32_t>(strlen(buf))))) {
-          } else if (OB_FAIL(subpart.set_part_name(sub_part_name))) {
-            LOG_WARN("set subpart name failed", KR(ret), K(sub_part_name), KPC(this));
-          } else if (OB_FAIL(part->add_partition(subpart))) {
-            LOG_WARN("failed to add partition", KR(ret), K(subpart));
-          } else {
-            generated = true;
-          }
-        } // end for subpart
+    bool all_expanded = true;
+    for (int64_t i = 0; all_expanded && i < part_num; ++i) {
+      if (OB_ISNULL(part_array[i]) || part_array[i]->get_subpartition_num() <= 0) {
+        all_expanded = false;
       }
-    } // end for part
-    if (OB_FAIL(ret)) {
-      generated = false;
+    }
+    if (all_expanded) {
+      generated = true;
+    } else if (OB_FAIL(check_if_oracle_compat_mode(is_oracle_mode))) {
+      LOG_WARN("fail to check if oracle mode", KR(ret), KPC(this));
+    } else {
+      const int64_t BUF_SIZE = OB_MAX_PARTITION_NAME_LENGTH;
+      char buf[BUF_SIZE];
+      ObSubPartition subpart;
+      for (int64_t i = 0; i < part_num && OB_SUCC(ret); ++i) {
+        ObPartition *part = part_array[i];
+        if (OB_ISNULL(part)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("partition is null", KR(ret), K(i), K(part_num), KPC(this));
+        } else if (part->get_subpartition_num() > 0) {
+          generated = true;
+        } else if (OB_FAIL(part->preserve_subpartition(def_subpart_num))) {
+          LOG_WARN("fail to preserve subpartition", KR(ret), K(def_subpart_num));
+        } else {
+          part->set_sub_part_num(def_subpart_num);
+          for (int64_t j = 0; j < def_subpart_num && OB_SUCC(ret); j++) {
+            MEMSET(buf, 0, BUF_SIZE);
+            int64_t pos = 0;
+            ObString sub_part_name;
+            subpart.reset();
+            if (OB_ISNULL(def_subpart_array[j])) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("partition is null", KR(ret), K(i), K(j), K(def_subpart_num), KPC(this));
+            } else if (OB_FAIL(subpart.assign(*def_subpart_array[j]))) {
+              LOG_WARN("fail to assign subpart", KR(ret));
+            } else if (OB_FAIL(gen_template_subpart_name(part->get_part_name(),
+                                                          def_subpart_array[j]->get_part_name(),
+                                                          is_oracle_mode,
+                                                          buf, BUF_SIZE, sub_part_name))) {
+              LOG_WARN("fail to generate subpart name", KR(ret), KPC(part), K(subpart));
+            } else if (OB_FAIL(subpart.set_part_name(sub_part_name))) {
+              LOG_WARN("set subpart name failed", KR(ret), K(sub_part_name), KPC(this));
+            } else if (OB_FAIL(part->add_partition(subpart))) {
+              LOG_WARN("failed to add partition", KR(ret), K(subpart));
+            } else {
+              generated = true;
+            }
+          } // end for subpart
+        }
+      } // end for part
+      if (OB_FAIL(ret)) {
+        generated = false;
+      }
     }
   }
   return ret;

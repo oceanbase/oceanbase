@@ -940,6 +940,17 @@ protected:
                                       share::schema::ObTableSchema &table_schema,
                                       bool &force_template);
 
+  int resolve_template_subpartition_before_elements(
+      ObPartitionedStmt *stmt,
+      ParseNode *subpart_node,
+      share::schema::ObTableSchema &table_schema);
+
+  int resolve_partition_element_subpartitions(
+      ObPartitionedStmt *stmt,
+      ParseNode *element_node,
+      share::schema::ObTableSchema &table_schema,
+      const int64_t part_index);
+
   int resolve_subpartition_elements(ObPartitionedStmt *stmt,
                                     ParseNode *node,
                                     share::schema::ObTableSchema &table_schema,
@@ -1058,6 +1069,7 @@ protected:
                                     bool is_subpart);
   int check_and_set_individual_subpartition_names(ObPartitionedStmt *stmt,
                                                   share::schema::ObTableSchema &table_schema);
+  int check_mixed_subpartition_names(share::schema::ObTableSchema &table_schema);
   int set_partition_name_in_hashset(const share::schema::ObPartitionNameHashWrapper &partition_name_key,
                                     ObPartitionNameSet &partition_name_set);
   int deep_copy_string_in_part_expr(ObPartitionedStmt* stmt);
