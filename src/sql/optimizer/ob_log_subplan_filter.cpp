@@ -632,7 +632,7 @@ int ObLogSubPlanFilter::compute_spf_batch_rescan(bool &can_batch)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null", K(ret), K(i), K(ref_expr), KPC(exec_params_.at(i)));
     } else {
-      can_batch &= !ref_expr->has_flag(CNT_ROWNUM);
+      can_batch &= !ref_expr->has_flag(CNT_ROWNUM) && ref_expr->is_deterministic();
       if (can_batch && !plan->get_optimizer_context().enable_contains_subquery_batch()) {
         can_batch &= !ref_expr->has_flag(CNT_SUB_QUERY);
       }
