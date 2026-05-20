@@ -13522,8 +13522,6 @@ int ObDDLResolver::check_mixed_subpartition_names(ObTableSchema &table_schema)
     // for template-expanded partitions, check generated names against names collected above.
     if (OB_SUCC(ret)) {
       const bool is_oracle_mode = lib::is_oracle_mode();
-      char gen_buf[OB_MAX_PARTITION_NAME_LENGTH];
-      ObString gen_name;
       for (int64_t i = 0; OB_SUCC(ret) && i < partition_num; ++i) {
         ObPartition *part = partition_array[i];
         if (OB_ISNULL(part)) {
@@ -13533,12 +13531,18 @@ int ObDDLResolver::check_mixed_subpartition_names(ObTableSchema &table_schema)
           // individual subpartitions defined, template not expanded for this partition
         } else {
           for (int64_t j = 0; OB_SUCC(ret) && j < def_subpart_num; ++j) {
+            char *gen_buf = nullptr;
+            ObString gen_name;
             if (OB_ISNULL(def_subpart_array[j])) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("def subpartition is null", KR(ret), K(j));
+            } else if (OB_ISNULL(gen_buf = static_cast<char *>(
+                           allocator_->alloc(OB_MAX_PARTITION_NAME_LENGTH)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("fail to allocate buffer for generated subpartition name", KR(ret));
             } else if (OB_FAIL(ObPartitionSchema::gen_template_subpart_name(
                 part->get_part_name(), def_subpart_array[j]->get_part_name(),
-                is_oracle_mode, gen_buf, sizeof(gen_buf), gen_name))) {
+                is_oracle_mode, gen_buf, OB_MAX_PARTITION_NAME_LENGTH, gen_name))) {
               LOG_WARN("failed to generate mixed template subpartition name", KR(ret));
             } else {
               ObPartitionNameHashWrapper gen_key(gen_name);
