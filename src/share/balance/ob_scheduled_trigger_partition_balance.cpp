@@ -225,12 +225,17 @@ int ObScheduledTriggerPartitionBalance::parse_repeat_interval(
       LOG_WARN("invalid repeat interval", KR(ret), K(repeat_interval_str));
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "REPEAT_INTERVAL. The format should be \'FREQ=x; INTERVAL=x\'");
     } else {
-      char freq_val[DEFAULT_BUF_LENGTH] = {0};
+      // Compare freq_str against "FREQ=<KEYWORD>" without copying the value into a fixed
+      // stack buffer, otherwise an unbounded sscanf would overflow it on long inputs.
+      const char *FREQ_PREFIX = "FREQ=";
+      const int64_t FREQ_PREFIX_LEN = 5;
+      ObString freq_token(freq_str);
       int32_t interval_val = 0;
       errno = 0;
-      if (OB_UNLIKELY(1 != sscanf(freq_str, "FREQ=%s", freq_val))) {
+      if (OB_UNLIKELY(!freq_token.prefix_match(FREQ_PREFIX)
+                      || freq_token.length() <= FREQ_PREFIX_LEN)) {
         ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid FREQ str", KR(ret), K(freq_str), K(errno), KERRMSG);
+        LOG_WARN("invalid FREQ str", KR(ret), K(freq_str));
         LOG_USER_ERROR(OB_INVALID_ARGUMENT, "FREQ. The format should be \'FREQ=x; INTERVAL=x\'");
       } else if (OB_UNLIKELY(1 != sscanf(interval_str, "INTERVAL=%d", &interval_val))) {
         ret = OB_INVALID_ARGUMENT;
@@ -241,7 +246,8 @@ int ObScheduledTriggerPartitionBalance::parse_repeat_interval(
         LOG_WARN("invalid INTERVAL", KR(ret), K(interval_val));
         LOG_USER_ERROR(OB_INVALID_ARGUMENT, "INTERVAL. The value can not be 0 and should be less than INT32_MAX");
       } else {
-        ObString frequency(freq_val);
+        ObString frequency(freq_token.length() - FREQ_PREFIX_LEN,
+                           freq_token.ptr() + FREQ_PREFIX_LEN);
         if (0 == frequency.case_compare("MINUTELY")) {
           freq_ts = SECS_PER_MIN;
         } else if (0 == frequency.case_compare("HOURLY")) {
