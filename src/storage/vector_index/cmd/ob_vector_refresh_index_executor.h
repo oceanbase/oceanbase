@@ -123,6 +123,7 @@ public:
     INDEX_ID_INDEX = 1,
     MOCK_INDEX_1 = 2,
     MOCK_INDEX_2 = 3,
+    SNAPSHOT_DATA_INDEX = 4,
   };
 
   ObVectorRefreshIndexExecutor();
