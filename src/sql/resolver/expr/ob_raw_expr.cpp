@@ -7376,7 +7376,7 @@ int ObRawExprFactory::create_raw_expr(ObRawExpr::ExprClass expr_class,
     break;
   }
   case ObRawExpr::EXPR_SYS_FUNC: {
-    if (T_FUN_SYS_SEQ_NEXTVAL == expr_type) {
+    if (T_FUN_SYS_SEQ_NEXTVAL == expr_type || T_FUN_SYS_PL_SEQ_NEXT_VALUE == expr_type) {
       ObSequenceRawExpr *dest_seq = NULL;
       if (OB_FAIL(create_raw_expr(expr_type, dest_seq))) {
         LOG_WARN("failed to allocate raw expr", K(dest_seq), K(ret));
