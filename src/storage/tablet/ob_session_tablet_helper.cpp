@@ -467,7 +467,9 @@ int ObSessionTabletDeleteHelper::do_work_for_gc(ObSessionTabletGCTaskSummary &su
     common::ObSEArray<ObSessionTabletInfo *, 4> schema_missing_tablet_infos;
     const bool is_atomic_batch = false;
     share::schema::ObSchemaGetterGuard schema_guard;
-    if (OB_FAIL(schema_service->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    if (OB_FAIL(schema_service->get_tenant_schema_guard(tenant_id_,
+                                                        schema_guard,
+                                                        schema_version_))) {
       LOG_WARN("fail to get schema guard", KR(ret), K(tenant_id_));
     } else if (OB_FAIL(check_and_lock_tables(is_atomic_batch,
                                              schema_guard,
@@ -733,7 +735,14 @@ int ObSessionTabletDeleteHelper::delete_tablets(const ObIArray<common::ObTabletI
 int ObSessionTabletDeleteHelper::delete_schema_missing_tablets(const ObIArray<ObSessionTabletInfo *> &tablet_infos, const int64_t schema_version)
 {
   int ret = OB_SUCCESS;
-#ifndef OB_BUILD_PACKAGE
+#ifdef ERRSIM
+  if (OB_FAIL(EN_SESSION_TABLET_GC_FAILED? : OB_SUCCESS)) {
+    LOG_WARN("failed to delete schema missing tablets due to fake err", K(ret));
+    return ret;
+  }
+#endif
+
+#ifdef OB_BUILD_PACKAGE
   const int64_t total_cnt = tablet_infos.count();
   LOG_ERROR("Prepare to delete schema missing tablets", K(ret), K(tablet_infos), K(schema_version));
   if (OB_UNLIKELY(0 == total_cnt)) {
@@ -759,8 +768,6 @@ int ObSessionTabletDeleteHelper::delete_schema_missing_tablets(const ObIArray<Ob
     FLOG_INFO("Finish to delete schema missing tablets", K(ret), K(tablet_infos), K(schema_version));
   }
 #else
-  // TODO(fanyin): delete schema missing tablets might be dangerous in
-  // production environment...
   ret = OB_ERR_UNEXPECTED;
   LOG_ERROR("The schema for tablets are missing, manual deletion required", K(ret), K(tablet_infos), K(schema_version));
 #endif
@@ -906,8 +913,22 @@ int ObSessionTabletGCHelper::do_work()
           }
         }
         LOG_INFO("tablet infos for delete", KR(ret), K(ls_ids), K(session_tablet_infos_for_delete.count()));
-        if (FAILEDx(group_by_session_and_seq(session_tablet_infos_for_delete, session_tablet_infos_for_delete_grouped))) {
+        int64_t latest_schema_version = OB_INVALID_VERSION;
+        if (OB_FAIL(ret)) {
+        } else if (session_tablet_infos_for_delete.empty()) {
+          // do nothing
+        } else if (OB_FAIL(group_by_session_and_seq(session_tablet_infos_for_delete, session_tablet_infos_for_delete_grouped))) {
           LOG_WARN("failed to group by session and sequence", KR(ret));
+        }
+        /// NOTE: Obtain the latest schema guard for GC.
+        /// The local schema version may lag behind the cluster's.
+        /// (for example after LS migration or RS leader switch over).
+        /// In that case, a lookup against the locally cached schema may fail to
+        /// resolve a table schema even though the table still exists. Session tablet
+        /// GC must not treat a NULL table schema as proof that the table was
+        /// dropped; therefore refresh to the latest schema before GC.
+        else if (OB_FAIL(refresh_tenant_schema_if_need(latest_schema_version))) {
+          LOG_WARN("failed to refresh tenant schema", K(ret));
         } else {
           ObSEArray<storage::ObSessionTabletInfo *, BATCH_DELETE_SESSION_TABLET_COUNT> session_tablet_infos_for_delete_batch;
           // Remove the session tablet which is not alive
@@ -927,7 +948,7 @@ int ObSessionTabletGCHelper::do_work()
                 LOG_WARN("failed to start transaction", KR(ret));
               } else {
                 if (OB_SUCC(ret)) {
-                  storage::ObSessionTabletDeleteHelper tablet_delete_helper(tenant_id_, session_tablet_infos_for_delete_batch, trans);
+                  storage::ObSessionTabletDeleteHelper tablet_delete_helper(tenant_id_, session_tablet_infos_for_delete_batch, trans, latest_schema_version);
                   tablet_delete_helper.set_timeout_us(0/* no timeout */);
                   if (OB_FAIL(tablet_delete_helper.do_work_for_gc(gc_summary))) {
                     LOG_WARN("failed to delete session tablets in batch", KR(ret), K(session_tablet_infos_for_delete_batch));
@@ -1413,6 +1434,37 @@ int dispatch_drop_gtt_v2_session_tablet_on_creator(
         }
       }
     }
+  }
+  return ret;
+}
+
+
+int ObSessionTabletGCHelper::refresh_tenant_schema_if_need(int64_t &latest_schema_version)
+{
+  int ret = OB_SUCCESS;
+  latest_schema_version = OB_INVALID_SCHEMA_VERSION;
+  ObRefreshSchemaStatus schema_stat;
+  schema_stat.tenant_id_ = tenant_id_;
+  ObMultiVersionSchemaService *schema_service = nullptr;
+
+#ifdef ERRSIM
+  if (OB_FAIL(EN_SESSION_TABLET_GC_FAILED? : OB_SUCCESS)) {
+    LOG_INFO("skip refresh tenant schema due to fake err", K(ret));
+    return OB_SUCCESS;
+  }
+#endif
+  if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", KR(ret));
+  } else if (OB_ISNULL(schema_service = GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null schema_service", K(ret), KP(schema_service));
+  } else if (OB_FAIL(schema_service->get_schema_version_in_inner_table(*GCTX.sql_proxy_,
+                                                                       schema_stat,
+                                                                       latest_schema_version))) {
+    LOG_WARN("fail to get schema version in inner table", K(ret), K(schema_stat));
+  } else if (OB_FAIL(schema_service->async_refresh_schema(tenant_id_, latest_schema_version))) {
+    LOG_WARN("fail to try refresh schema", K(ret), K(latest_schema_version));
   }
   return ret;
 }
