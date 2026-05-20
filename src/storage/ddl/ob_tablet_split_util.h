@@ -142,11 +142,7 @@ public:
       const ObTabletHandle &local_source_tablet_handle,
       const ObArray<ObTabletID> &dest_tablets_id,
       const int64_t compaction_scn,
-      const share::SCN &min_split_start_scn
-#ifdef OB_BUILD_SHARED_STORAGE
-      , bool &is_data_split_executor
-#endif
-      );
+      const share::SCN &min_split_start_scn);
   static int get_split_dest_tablets_info(
       const share::ObLSID &ls_id,
       const ObTabletID &source_tablet_id,
@@ -287,17 +283,6 @@ public:
       const ObTabletID &tablet_id,
       int64_t &epoch,
       bool &is_data_split_executor);
-
-  static int check_satisfy_ss_split_condition(
-      const ObLSHandle &ls_handle,
-      const ObTabletHandle &local_source_tablet_handle,
-      const ObArray<ObTabletID> &dest_tablets_id,
-      bool &is_data_split_executor);
-
-  static int check_ss_data_completed(
-      const ObLSHandle &ls_handle,
-      const ObIArray<ObTabletID> &dest_tablet_ids,
-      bool &is_completed);
 
   static int create_shared_tablet_if_not_exist(
       const ObLSID &ls_id,

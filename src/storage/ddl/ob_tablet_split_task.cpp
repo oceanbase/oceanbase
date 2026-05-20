@@ -257,11 +257,7 @@ int ObTabletSplitCtx::init(const ObTabletSplitParam &param)
       ObMDSGetTabletMode::READ_ALL_COMMITED))) {
     LOG_WARN("get local tablet failed", K(ret), K(param));
   } else if (OB_FAIL(ObTabletSplitUtil::check_satisfy_split_condition(ls_handle_, local_tablet_hdl,
-      param.dest_tablets_id_, param.compaction_scn_, param.min_split_start_scn_
-#ifdef OB_BUILD_SHARED_STORAGE
-      , is_data_split_executor_
-#endif
-      ))) {
+      param.dest_tablets_id_, param.compaction_scn_, param.min_split_start_scn_))) {
     if (OB_NEED_RETRY != ret) {
       LOG_WARN("check satisfy split condition failed", K(ret), K(param));
     }

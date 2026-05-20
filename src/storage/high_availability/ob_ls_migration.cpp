@@ -38,6 +38,7 @@ ERRSIM_POINT_DEF(EN_MIGRATION_RPC_NOT_SUPPORT);
 ERRSIM_POINT_DEF(EN_DATA_TABLET_MIGRATION_DAG_OUT_OF_RETRY);
 ERRSIM_POINT_DEF(MIGRATION_START_RUNNING_FAILED);
 ERRSIM_POINT_DEF(MIGRATION_WAIT_UPDATE_TABLET_HA_STATUS);
+ERRSIM_POINT_DEF(EN_MIGRATION_TABLET_STOPPED);
 /******************ObMigrationCtx*********************/
 ObMigrationCtx::ObMigrationCtx()
   : ObIHADagNetCtx(),
@@ -2708,6 +2709,19 @@ int ObTabletMigrationTask::init(ObCopyTabletCtx &copy_tablet_ctx)
     is_inited_ = true;
     LOG_INFO("succeed init tablet migration task", "ls id", ctx_->arg_.ls_id_, "tablet_id", copy_tablet_ctx.tablet_id_,
         "dag_id", *ObCurTraceId::get_trace_id(), "dag_net_id", ctx_->task_id_);
+
+#ifdef ERRSIM
+    SERVER_EVENT_ADD("storage_ha", "before_init_migration_task",
+      "tenant_id", ctx_->tenant_id_,
+      "ls_id", ctx_->arg_.ls_id_.id(),
+      "tablet_id", copy_tablet_ctx.tablet_id_.id());
+    int64_t tablet_id = -EN_MIGRATION_TABLET_STOPPED;
+    if (tablet_id == copy_tablet_ctx.tablet_id_.id()) {
+      FLOG_INFO("wait for tablet migration task to be stopped", K(copy_tablet_ctx.tablet_id_));
+      DEBUG_SYNC(BEFORE_INIT_MIGRATION_TASK);
+    }
+#endif
+
   }
   return ret;
 }
