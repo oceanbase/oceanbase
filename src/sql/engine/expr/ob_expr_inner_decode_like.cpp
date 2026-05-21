@@ -68,8 +68,8 @@ int ObExprInnerDecodeLike::eval_inner_decode_like(const ObExpr &expr, ObEvalCtx 
     //a like null return empty range
     expr_datum.set_null();
   } else if (col_length->get_int() <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument, unexpected length", K(ret));
+    // column length is 0 (e.g. CAST(NULL AS CHAR)), cannot extract valid like range, return empty range
+    expr_datum.set_null();
   } else if (OB_FAIL(cast_like_obj_if_needed(ctx, *expr.args_[0], pattern, expr, pattern_val))) {
     LOG_WARN("failed to cast like obj if needed", K(ret));
   } else {
