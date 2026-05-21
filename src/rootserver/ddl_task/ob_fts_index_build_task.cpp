@@ -2253,7 +2253,7 @@ int ObFtsIndexBuildTask::try_release_snapshot(ObMySQLTransaction &trans)
     if (OB_FAIL(ObDDLUtil::get_tablet_ids(tenant_id_, object_id_, target_object_id_, tablet_ids))) {
       LOG_WARN("fail to get tablet ids", K(ret), K(tenant_id_), K(object_id_), K(target_object_id_));
     } else if (OB_FAIL(snapshot_scn.convert_for_tx(snapshot_version_))) {
-      LOG_WARN("failed to convert scn", K(ret),K(snapshot_version_), K(snapshot_scn));
+      LOG_WARN("failed to convert scn", K(ret), K(snapshot_version_), K(snapshot_scn));
     } else if (OB_ISNULL(GCTX.root_service_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", KR(ret), KP(GCTX.root_service_));

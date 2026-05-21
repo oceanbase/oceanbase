@@ -19,6 +19,7 @@
 #include "storage/tablet/ob_tablet_binding_helper.h"
 #include "storage/tx/ob_ts_mgr.h"
 #include "share/ob_ddl_sim_point.h"
+#include "share/ob_snapshot_table_proxy.h"
 #include "rootserver/ddl_task/ob_rebuild_index_task.h"
 #include "rootserver/ddl_task/ob_vec_index_build_task.h"
 #include "rootserver/ddl_task/ob_vec_ivf_index_build_task.h"
@@ -1489,10 +1490,10 @@ int ObDDLTask::wait_trans_end(
   return ret;
 }
 
-// For idempotence, release snapshot version and update snapshot_version 0 
+// For idempotence, release snapshot version and update snapshot_version 0
 // in ALL_DDL_TASK_STATUS should be done in single trans.
 int ObDDLTask::batch_release_snapshot(
-      const int64_t snapshot_version, 
+      const int64_t snapshot_version,
       const common::ObIArray<common::ObTabletID> &tablet_ids)
 {
   int ret = OB_SUCCESS;
@@ -1501,45 +1502,83 @@ int ObDDLTask::batch_release_snapshot(
   SCN snapshot_scn;
   ObTimeoutCtx timeout_ctx;
   int64_t timeout = 0;
-  if (OB_ISNULL(GCTX.sql_proxy_)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
-  } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, BATCH_RELEASE_SNAPSHOT_FAILED))) {
-    LOG_WARN("ddl sim failure: remove snapshot failed", K(ret), K(tenant_id_), K(task_id_));
-  } else if (OB_FAIL(snapshot_scn.convert_for_tx(snapshot_version))) {
-    LOG_WARN("failed to convert scn", K(snapshot_scn), K(ret));
-  } else if (OB_FAIL(ObDDLUtil::get_ddl_tx_timeout(tablet_ids.count(), timeout))) {
-    LOG_WARN("get ddl tx timeout failed", K(ret));
-  } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(timeout))) {
-    LOG_WARN("set timeout ctx failed", K(ret));
-  } else if (OB_FAIL(timeout_ctx.set_timeout(timeout))) {
-    LOG_WARN("set timeout failed", K(ret));
-  } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id_))) {
-    LOG_WARN("fail to start trans", K(ret));
-  } else if (OB_ISNULL(GCTX.root_service_)) {
+  if (tablet_ids.count() > 0 || snapshot_version > 0) {
+    if (OB_ISNULL(GCTX.sql_proxy_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
+    } else if (OB_FAIL(DDL_SIM(tenant_id_, task_id_, BATCH_RELEASE_SNAPSHOT_FAILED))) {
+      LOG_WARN("ddl sim failure: remove snapshot failed", K(ret), K(tenant_id_), K(task_id_));
+    } else if (OB_FAIL(snapshot_scn.convert_for_tx(snapshot_version))) {
+      LOG_WARN("failed to convert scn", K(snapshot_scn), K(ret));
+    } else if (OB_FAIL(ObDDLUtil::get_ddl_tx_timeout(tablet_ids.count(), timeout))) {
+      LOG_WARN("get ddl tx timeout failed", K(ret));
+    } else if (OB_FAIL(timeout_ctx.set_trx_timeout_us(timeout))) {
+      LOG_WARN("set timeout ctx failed", K(ret));
+    } else if (OB_FAIL(timeout_ctx.set_timeout(timeout))) {
+      LOG_WARN("set timeout failed", K(ret));
+    } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id_))) {
+      LOG_WARN("fail to start trans", K(ret));
+    } else if (tablet_ids.count() > 0 &&
+              OB_FAIL(release_snapshot_by_tablets(snapshot_scn, tablet_ids, trans))) {
+      LOG_WARN("release snapshot by tablets failed", K(ret), K(tablet_ids));
+    } else if (tablet_ids.count() <= 0 &&
+              OB_FAIL(release_snapshot_by_scn(snapshot_scn, trans))) {
+      LOG_WARN("release snapshot by scn failed", K(ret), K(snapshot_scn));
+    } else if (OB_FAIL(ObDDLTaskRecordOperator::update_snapshot_version(trans,
+                                                                        tenant_id_,
+                                                                        task_id_,
+                                                                        0 /* snapshot_version */))) {
+      LOG_WARN("update snapshot version 0 failed", K(ret), K(task_id_));
+    } else {
+      need_commit = true;
+    }
+    if (trans.is_started()) {
+      const int tmp_ret = trans.end(need_commit);
+      if (OB_SUCCESS != tmp_ret) {
+        LOG_WARN("fail to end trans", K(tmp_ret), K(need_commit));
+      }
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    }
+    if (OB_SUCC(ret)) {
+      snapshot_version_ = 0;
+    }
+  }
+  return ret;
+}
+
+int ObDDLTask::release_snapshot_by_tablets(
+    const SCN &snapshot_scn,
+    const common::ObIArray<common::ObTabletID> &tablet_ids,
+    ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(GCTX.root_service_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), KP(GCTX.root_service_));
   } else if (OB_UNLIKELY(!GCTX.root_service_->get_ddl_service().is_inited())) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else if (OB_FAIL(GCTX.root_service_->get_ddl_service().get_snapshot_mgr().batch_release_snapshot_in_trans(
-          trans, SNAPSHOT_FOR_DDL, tenant_id_, schema_version_, snapshot_scn, tablet_ids))) {
+      trans, SNAPSHOT_FOR_DDL, tenant_id_, schema_version_, snapshot_scn, tablet_ids))) {
     LOG_WARN("batch release snapshot failed", K(ret), K(tablet_ids));
-  } else if (OB_FAIL(ObDDLTaskRecordOperator::update_snapshot_version(trans,
-                                                                      tenant_id_,
-                                                                      task_id_,
-                                                                      0 /* snapshot_version */))) {
-    LOG_WARN("update snapshot version 0 failed", K(ret), K(task_id_));
-  } else {
-    need_commit = true;
   }
-  int tmp_ret = trans.end(need_commit);
-  if (OB_SUCCESS != tmp_ret) {
-    LOG_WARN("fail to end trans", K(tmp_ret));
-  }
-  ret = OB_SUCC(ret) ? tmp_ret : ret;
-  if (OB_SUCC(ret)) {
-    snapshot_version_ = 0;
+  return ret;
+}
+
+int ObDDLTask::release_snapshot_by_scn(
+    const SCN &snapshot_scn,
+    ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  ObSnapshotInfo snapshot_info;
+  ObSnapshotTableProxy snapshot_proxy;
+  snapshot_info.snapshot_type_ = SNAPSHOT_FOR_DDL;
+  snapshot_info.tenant_id_ = tenant_id_;
+  snapshot_info.schema_version_ = schema_version_;
+  snapshot_info.snapshot_scn_ = snapshot_scn;
+  snapshot_info.tablet_id_ = 0;
+  if (OB_FAIL(snapshot_proxy.remove_snapshot(trans, tenant_id_, snapshot_info))) {
+    LOG_WARN("remove snapshot by scn failed", K(ret), K(snapshot_info));
   }
   return ret;
 }
