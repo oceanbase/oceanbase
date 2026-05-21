@@ -6750,7 +6750,8 @@ int ObCheckTabletDataComplementOp::construct_ls_tablet_map(
 int ObCheckTabletDataComplementOp::calculate_build_finish(
   const uint64_t tenant_id,
   const common::ObIArray<common::ObTabletID> &tablet_ids,
-  hash::ObHashMap<ObTabletID, int32_t> &tablets_commited_map,
+  const hash::ObHashMap<ObTabletID, int32_t> &tablets_commited_map,
+  const bool only_check_one_replica,
   int64_t &build_succ_count)
 {
   int ret = OB_SUCCESS;
@@ -6780,7 +6781,9 @@ int ObCheckTabletDataComplementOp::calculate_build_finish(
           K(ret), K(paxos_member_count), K(tablet_id), K(tenant_id));
       } else if (OB_FAIL(tablets_commited_map.get_refactored(tablet_id, commited_count))){
         LOG_WARN("fail to get tablet commited map, unexpected!", K(ret), K(tablet_id));
-      } else if (commited_count < ((paxos_member_count >> 1) + 1)) {  // not finished majority
+      } else if (only_check_one_replica && commited_count < 0) { // not finished in any replica
+        // do nothing
+      } else if (!only_check_one_replica && commited_count < ((paxos_member_count >> 1) + 1)) {  // not finished majority
         // do nothing
       } else {
         build_succ_count++;
@@ -6798,6 +6801,7 @@ int ObCheckTabletDataComplementOp::do_check_tablets_merge_status(
   const int64_t snapshot_version,
   const ObIArray<ObTabletID> &tablet_ids,
   const ObLSID &ls_id,
+  const bool only_check_one_replica,
   hash::ObHashMap<ObAddr, ObArray<ObTabletID>> &ip_tablets_map,
   hash::ObHashMap<ObTabletID, int32_t> &tablets_commited_map,
   int64_t &tablet_build_succ_count)
@@ -6893,7 +6897,7 @@ int ObCheckTabletDataComplementOp::do_check_tablets_merge_status(
         // 3. check any commit tablet
         if (OB_SUCC(ret)) {
           int64_t build_succ_count = 0;
-          if (OB_FAIL(calculate_build_finish(tenant_id, tablet_ids, tablets_commited_map, build_succ_count))) {
+          if (OB_FAIL(calculate_build_finish(tenant_id, tablet_ids, tablets_commited_map, only_check_one_replica, build_succ_count))) {
             LOG_WARN("check and commit tbalets commit log fail.", K(ret), K(tablet_ids), K(build_succ_count));
           } else {
             DEBUG_SYNC(DDL_CHECK_TABLET_MERGE_STATUS);
@@ -6910,6 +6914,7 @@ int ObCheckTabletDataComplementOp::check_tablet_merge_status(
   const uint64_t tenant_id,
   const ObIArray<common::ObTabletID> &tablet_ids,
   const int64_t snapshot_version,
+  const bool only_check_one_replica,
   bool &is_all_tablets_commited)
 {
   int ret = OB_SUCCESS;
@@ -6931,7 +6936,7 @@ int ObCheckTabletDataComplementOp::check_tablet_merge_status(
   } else if (OB_FAIL(tablets_commited_map.create(max_map_hash_bucket, "DdlTablet"))){
     LOG_WARN("fail to create tablets_commited_map", K(ret));
   } else {
-    const static int64_t batch_size = 100;  // batch tablet number
+    const static int64_t batch_size = 1024;  // batch tablet number
     int64_t total_build_succ_count = 0;
     int64_t one_batch_build_succ_count = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < tablet_ids.count(); ++i) {
@@ -6948,6 +6953,7 @@ int ObCheckTabletDataComplementOp::check_tablet_merge_status(
                                                       snapshot_version,
                                                       tablet_array,
                                                       ls_id,
+                                                      only_check_one_replica,
                                                       ip_tablets_map,
                                                       tablets_commited_map,
                                                       one_batch_build_succ_count))) {
@@ -7071,7 +7077,7 @@ int ObCheckTabletDataComplementOp::check_all_tablet_sstable_status(
     LOG_WARN("fail to check and wait complement task", K(ret), K(tenant_id), K(index_table_id), K(snapshot_version), K(execution_id), K(ddl_task_id));
   } else if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id, index_table_id, dest_tablet_ids))) {
     LOG_WARN("fail to get tablets", K(ret), K(tenant_id), K(index_table_id));
-  } else if (OB_FAIL(check_tablet_merge_status(tenant_id, dest_tablet_ids, snapshot_version, is_all_sstable_build_finished))){
+  } else if (OB_FAIL(check_tablet_merge_status(tenant_id, dest_tablet_ids, snapshot_version, false/*only_check_one_replica*/, is_all_sstable_build_finished))){
     LOG_WARN("fail to check tablet merge status.", K(ret), K(tenant_id), K(dest_tablet_ids), K(snapshot_version));
   } else {
     if (is_all_sstable_build_finished) {
@@ -7113,6 +7119,7 @@ int ObCheckTabletDataComplementOp::check_finish_report_checksum(
   }
   return ret;
 }
+
 
 /*
  * This func is used to check duplicate data completement inner sql
@@ -7171,6 +7178,31 @@ int ObCheckTabletDataComplementOp::check_and_wait_old_complement_task(
     } else if (OB_FAIL(check_tablet_checksum_update_status(tenant_id, table_id, ddl_task_id, execution_id, dest_tablet_ids, is_dst_checksums_all_report))) {
       LOG_WARN("fail to check tablet checksum update status.", K(ret), K(tenant_id), K(dest_tablet_ids), K(execution_id));
     } else if (is_dst_checksums_all_report) {
+      // aux tablets have no checksum, check major exist instead
+      ObArray<ObTabletID> aux_tablet_ids;
+      {
+        ObSchemaGetterGuard schema_guard;
+        const ObTableSchema *dst_table_schema = nullptr;
+        if (OB_FAIL(share::schema::ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id, schema_guard))) {
+          LOG_WARN("get tenant schema guard failed", K(ret), K(tenant_id));
+        } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, dst_table_schema))) {
+          LOG_WARN("get table schema failed", K(ret), K(table_id));
+        } else if (OB_ISNULL(dst_table_schema)) {
+          ret = OB_TABLE_NOT_EXIST;
+          LOG_WARN("table not exists", K(ret), K(table_id));
+        } else if (dst_table_schema->get_aux_lob_meta_tid() != OB_INVALID_ID) {
+          if (OB_FAIL(ObDDLUtil::get_tablets(tenant_id, dst_table_schema->get_aux_lob_meta_tid(), aux_tablet_ids))) {
+            LOG_WARN("failed to get tablets", K(ret), K(table_id));
+          }
+        }
+      }
+      if (OB_SUCC(ret) && !aux_tablet_ids.empty()) {
+        if (OB_FAIL(check_tablet_merge_status(tenant_id, aux_tablet_ids, 0/*snapshot_version*/, true/*only_check_one_replica*/, is_dst_checksums_all_report))) {
+          LOG_WARN("fail to check tablet merge status.", K(ret), K(tenant_id), K(aux_tablet_ids));
+        }
+      }
+    }
+    if (OB_SUCC(ret) && is_dst_checksums_all_report) {
       need_exec_new_inner_sql = false;
       LOG_INFO("no need execute because all tablet sstable has build finished", K(need_exec_new_inner_sql));
     }

@@ -31,6 +31,7 @@ namespace storage
 ERRSIM_POINT_DEF(ERRSIM_DDL_RETRY_WRITE_COMPLETE);
 ERRSIM_POINT_DEF(ERRSIM_DDL_RETRY_REPORT_CHECKSUM);
 ERRSIM_POINT_DEF(ERRSIM_DDL_PRINT_DDL_CHECKPOINT_SCN);
+ERRSIM_POINT_DEF(ERRSIM_SET_DDL_COMPLETE_FOR_LOB);
 
 int ObIDDLMergeHelper::get_merge_helper(ObIAllocator &allocator,
                                         const ObDirectLoadType direct_load_type,
@@ -127,6 +128,9 @@ int ObSNDDLMergeHelperV2::set_ddl_complete(ObIDag *dag, ObTablet &tablet, ObDDLT
   /* ddl kv has already been freeze in prepare task */
   if (OB_UNLIKELY(ERRSIM_DDL_RETRY_WRITE_COMPLETE)) {
     ret = OB_EAGAIN;
+    DEBUG_SYNC(AFTER_DDL_RETRY_WRITE_COMPLETE);
+  } else if (ddl_merge_param.for_lob_ && OB_FAIL(OB_E(ERRSIM_SET_DDL_COMPLETE_FOR_LOB) OB_SUCCESS)) {
+    LOG_WARN("errsim for lob", K(ret), K(ddl_merge_param));
     DEBUG_SYNC(AFTER_DDL_RETRY_WRITE_COMPLETE);
   } else if (OB_ISNULL(dag) || !ddl_merge_param.is_valid() || OB_ISNULL(tablet_context)) {
     ret = OB_INVALID_ARGUMENT;
@@ -273,7 +277,7 @@ int ObSNDDLMergeHelperV2::process_prepare_task(ObIDag *dag,
     LOG_WARN("fail to fetch table store", K(ret));
   } else if (OB_FALSE_IT(first_major_sstable = static_cast<ObSSTable *>(
                                                 table_store_wrapper.get_member()->get_major_sstables().get_boundary_table(false/*first*/)))) {
-  }else if (nullptr != first_major_sstable) {          /* if major exist, do nothing */
+  } else if (nullptr != first_major_sstable) {          /* if major exist, do nothing */
   } else if (for_major && !ddl_merge_param.for_replay_ && OB_FAIL(set_ddl_complete(dag, *(tablet_handle.get_obj()), ddl_merge_param))) {
     LOG_WARN("failed to set ddl complete", K(ret));
   }

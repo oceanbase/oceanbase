@@ -1857,6 +1857,7 @@ private:
       const int64_t snapshot_version,
       const ObIArray<ObTabletID> &tablet_ids,
       const ObLSID &ls_id,
+      const bool only_check_one_replica,
       hash::ObHashMap<ObAddr, ObArray<ObTabletID>> &ip_tablets_map,
       hash::ObHashMap<ObTabletID, int32_t> &tablets_commited_map,
       int64_t &tablet_commit_count);
@@ -1865,6 +1866,7 @@ private:
       const uint64_t tenant_id,
       const ObIArray<common::ObTabletID> &tablet_ids,
       const int64_t snapshot_version,
+      const bool only_check_one_replica,
       bool &is_all_tablets_commited);
 
   static int update_replica_merge_status(
@@ -1876,7 +1878,8 @@ private:
   static int calculate_build_finish(
       const uint64_t tenant_id,
       const common::ObIArray<common::ObTabletID> &tablet_ids,
-      hash::ObHashMap<ObTabletID, int32_t> &tablets_commited_map,
+      const hash::ObHashMap<ObTabletID, int32_t> &tablets_commited_map,
+      const bool only_check_one_replica,
       int64_t &commit_succ_count);
 
   static int construct_ls_tablet_map(
