@@ -40,7 +40,8 @@ int ObExternalLocationListFile::inner_open()
   uint64_t location_id = OB_INVALID_ID;
   ObString sub_path;
   ObString pattern;
-  if (OB_FAIL(resolve_param(location_id, sub_path, pattern))) {
+  ObExternalFilePatternType pattern_type = REGEXP_EXTERNAL_FILE_PATTERN;
+  if (OB_FAIL(resolve_param(location_id, sub_path, pattern, pattern_type))) {
     LOG_WARN("fail to calc show location id", K(ret));
   } else if (OB_UNLIKELY(OB_INVALID_ID == location_id)) {
     ret = OB_NOT_SUPPORTED;
@@ -70,6 +71,7 @@ int ObExternalLocationListFile::inner_open()
       full_path.string(),
       location_schema->get_location_access_info(),
       pattern,
+      pattern_type,
       "",
       false,
       regexp_vars,
@@ -79,7 +81,7 @@ int ObExternalLocationListFile::inner_open()
     for (int64_t i = 0; OB_SUCC(ret) && i < basic_file_infos.count(); i++) {
       const ObString &file_url = basic_file_infos.at(i).url_;
       int64_t file_size = basic_file_infos.at(i).size_;
-      if (OB_FAIL(fill_row_cells(location_id, sub_path, pattern, file_url, file_size))) {
+      if (OB_FAIL(fill_row_cells(location_id, sub_path, pattern, pattern_type, file_url, file_size))) {
         LOG_WARN("fail to fill row cells", K(ret), K(file_url));
       } else if (OB_FAIL(scanner_.add_row(cur_row_))) {
         LOG_WARN("fail to add row", K(ret), K(cur_row_));
@@ -106,7 +108,10 @@ int ObExternalLocationListFile::inner_get_next_row(common::ObNewRow *&row)
   return ret;
 }
 
-int ObExternalLocationListFile::resolve_param(uint64_t &location_id, ObString &sub_path, ObString &pattern)
+int ObExternalLocationListFile::resolve_param(uint64_t &location_id,
+                                              ObString &sub_path,
+                                              ObString &pattern,
+                                              ObExternalFilePatternType &pattern_type)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0;
@@ -132,6 +137,11 @@ int ObExternalLocationListFile::resolve_param(uint64_t &location_id, ObString &s
             && ObVarcharType == start_key_obj_ptr[2].get_type()) {
           start_key_obj_ptr[2].get_varchar(pattern);
         }
+        if (start_key.get_obj_cnt() >= 4
+            && start_key_obj_ptr[3] == end_key_obj_ptr[3]
+            && ObIntType == start_key_obj_ptr[3].get_type()) {
+          pattern_type = static_cast<ObExternalFilePatternType>(start_key_obj_ptr[3].get_int());
+        }
       }
     }
   }
@@ -141,6 +151,7 @@ int ObExternalLocationListFile::resolve_param(uint64_t &location_id, ObString &s
 int ObExternalLocationListFile::fill_row_cells(uint64_t location_id,
                                const ObString &sub_path,
                                const ObString &pattern,
+                               const share::schema::ObExternalFilePatternType &pattern_type,
                                const ObString &file_url,
                                int64_t file_size)
 {
@@ -148,7 +159,16 @@ int ObExternalLocationListFile::fill_row_cells(uint64_t location_id,
   bool strict_mode = false;
   bool sql_quote_show_create = true;
   bool ansi_quotes = false;
-  if (OB_ISNULL(cur_row_.cells_)
+  bool support_pattern_type = false;
+  if (OB_ISNULL(table_schema_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table_schema_ is null", K(ret));
+  } else {
+    support_pattern_type = table_schema_->get_rowkey_column_num() >= 4;
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(cur_row_.cells_)
       || OB_ISNULL(schema_guard_)
       || OB_ISNULL(allocator_)
       || OB_ISNULL(session_)) {
@@ -192,13 +212,30 @@ int ObExternalLocationListFile::fill_row_cells(uint64_t location_id,
           break;
         }
         case OB_APP_MIN_COLUMN_ID + 3 : {
-          // file name
-          cur_row_.cells_[cell_idx].set_varchar(file_url);
-          cur_row_.cells_[cell_idx].set_collation_type(
-              ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          if (!support_pattern_type) {
+            // In v1 schema, file_name is the 4th column and there is no pattern_type column.
+            cur_row_.cells_[cell_idx].set_varchar(file_url);
+            cur_row_.cells_[cell_idx].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          } else {
+            // pattern type
+            cur_row_.cells_[cell_idx].set_int(static_cast<int64_t>(pattern_type));
+          }
           break;
         }
         case OB_APP_MIN_COLUMN_ID + 4 : {
+          if (!support_pattern_type) {
+            // In v1 schema, file_size is the 5th column.
+            cur_row_.cells_[cell_idx].set_int(file_size);
+          } else {
+            // file name
+            cur_row_.cells_[cell_idx].set_varchar(file_url);
+            cur_row_.cells_[cell_idx].set_collation_type(
+                ObCharset::get_default_collation(ObCharset::get_default_charset()));
+          }
+          break;
+        }
+        case OB_APP_MIN_COLUMN_ID + 5 : {
           // file size
           cur_row_.cells_[cell_idx].set_int(file_size);
           break;

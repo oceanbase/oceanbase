@@ -93,6 +93,7 @@ public:
   int init(const common::ObString &location, const ObString &access_info);
   common::ObStorageType get_storage_type() { return storage_type_; }
   int get_file_list(const common::ObString &path, const common::ObString &pattern,
+                    const share::schema::ObExternalFilePatternType pattern_type,
                     const ObExprRegexpSessionVariables &regexp_vars,
                     common::ObIArray<common::ObString> &file_urls,
                     common::ObIArray<int64_t> &file_sizes, common::ObIArray<int64_t> &modify_times,
@@ -295,6 +296,7 @@ public:
     const ObString &location,
     const ObString &access_info,
     const ObString &pattern,
+    const share::schema::ObExternalFilePatternType pattern_type,
     const ObString &properties,
     const bool &is_partitioned_table,
     const sql::ObExprRegexpSessionVariables &regexp_vars,
@@ -306,6 +308,7 @@ public:
     const uint64_t tenant_id,
     const ObString &location,
     const ObString &pattern,
+    const share::schema::ObExternalFilePatternType pattern_type,
     const sql::ObExprRegexpSessionVariables &regexp_vars,
     ObIArray<ObAddr> &all_servers,
     ObIArray<ObString> &file_urls,
@@ -321,6 +324,7 @@ public:
                                     const ObIArray<ObString> &content_digests,
                                     ObIArray<share::ObExternalTableBasicFileInfo> &basic_file_infos);
   static int get_file_list(const common::ObString &path, const common::ObString &pattern,
+                           const share::schema::ObExternalFilePatternType pattern_type,
                            const ObString &access_info,
                            const ObExprRegexpSessionVariables &regexp_vars,
                            common::ObIArray<common::ObString> &file_urls,
@@ -387,6 +391,7 @@ public:
                                        const ObString &location,
                                        const ObString &access_info,
                                        const ObString &pattern,
+                                       const share::schema::ObExternalFilePatternType pattern_type,
                                        const sql::ObExprRegexpSessionVariables &regexp_vars,
                                        ObIAllocator &allocator);
   static int collect_file_basic_info(const common::ObString &location, const ObString &access_info,
@@ -400,6 +405,7 @@ public:
                                                    const ObIArray<int64_t> &part_id,
                                                    const ObString &access_info,
                                                    const ObString &pattern,
+                                                   const share::schema::ObExternalFilePatternType pattern_type,
                                                    ObIAllocator &allocator,
                                                    int64_t refresh_interval_ms,
                                                    ObIArray<ObHiveFileDesc> &hive_file_desc,
@@ -1016,7 +1022,6 @@ public:
   static int split_qc_for_odps_to_sqcs_storage_api_row(int64_t table_total_row_count,
       const ObString &session_str, const ObString &new_file_urls, ObIArray<ObPxSqcMeta> &sqcs, int parallel,
       ObIAllocator &range_allocator);
-
 
 };
 }

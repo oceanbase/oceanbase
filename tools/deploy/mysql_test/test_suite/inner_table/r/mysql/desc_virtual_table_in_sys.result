@@ -1036,6 +1036,7 @@ mview_expand_definition	longtext	NO
 ttl_flag	varbinary(1048576)	NO			
 delta_format	varchar(1048576)	NO		flat	
 skip_index_level	bigint(20)	NO		0	
+external_file_pattern_type	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_core_all_table;
 IF(count(*) >= 0, 1, 0)
 1
@@ -3019,6 +3020,7 @@ mview_expand_definition	longtext	NO
 ttl_flag	varbinary(1048576)	NO			
 delta_format	varchar(1048576)	NO		flat	
 skip_index_level	bigint(20)	NO		0	
+external_file_pattern_type	bigint(20)	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table;
 IF(count(*) >= 0, 1, 0)
 1
@@ -3130,6 +3132,7 @@ mview_expand_definition	longtext	YES
 ttl_flag	varbinary(1048576)	YES			
 delta_format	varchar(1048576)	YES		flat	
 skip_index_level	bigint(20)	YES		0	
+external_file_pattern_type	bigint(20)	YES		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_table_history;
 IF(count(*) >= 0, 1, 0)
 1
@@ -11803,6 +11806,7 @@ Field	Type	Null	Key	Default	Extra
 location_id	bigint(20)	NO	PRI	NULL	
 location_sub_path	varchar(128)	NO	PRI	NULL	
 pattern	varchar(128)	NO	PRI	NULL	
+pattern_type	bigint(20)	NO	PRI	NULL	
 file_name	varchar(16384)	NO		NULL	
 file_size	bigint(20)	NO		NULL	
 desc oceanbase.__all_virtual_external_resource;

@@ -1907,11 +1907,18 @@ void ObExprOperatorFactory::get_function_alias_name(const ObString &origin_name,
       alias_name = ObString::make_string(N_ST_CENTROID);
     } else if (0 == origin_name.case_compare("semantic_distance")) {
       alias_name = ObString::make_string(N_SEMANTIC_DISTANCE);
+    } else if (0 == origin_name.case_compare(N_CATALOG)) {
+      // catalog() is synonym for current_catalog()
+      alias_name = ObString::make_string(N_CURRENT_CATALOG);
     } else {
       //do nothing
     }
   } else {
     //for synonyms in oracle mode
+    if (0 == origin_name.case_compare(N_CATALOG)) {
+      // catalog() is synonym for current_catalog()
+      alias_name = ObString::make_string(N_CURRENT_CATALOG);
+    }
   }
 }
 

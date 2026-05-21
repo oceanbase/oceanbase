@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX SQL_RESV
 
 #include "ob_ddl_resolver.h"
+#include "share/external_table/ob_external_table_utils.h"
 
 namespace oceanbase
 {
@@ -127,15 +128,30 @@ int ObDDLResolver::resolve_external_file_pattern(const ParseNode *option_node,
                                                 bool is_external_table,
                                                 common::ObIAllocator &allocator,
                                                 const ObSQLSessionInfo *session_info,
-                                                ObString &pattern)
+                                                ObString &pattern,
+                                                share::schema::ObExternalFilePatternType &pattern_type)
 {
   int ret = OB_SUCCESS;
+  uint64_t data_version = 0;
   if (!is_external_table) {
     ret = OB_NOT_SUPPORTED;
     ObSqlString err_msg;
     err_msg.append_fmt("Using PATTERN as a CREATE TABLE option");
     LOG_USER_ERROR(OB_NOT_SUPPORTED, err_msg.ptr());
     LOG_WARN("using PATTERN as a table option is support in external table only", K(ret));
+  } else if (OB_ISNULL(option_node)
+             || (T_EXTERNAL_FILE_PATTERN != option_node->type_
+                 && T_EXTERNAL_FILE_GLOB_PATTERN != option_node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid external file pattern option", K(ret), KP(option_node));
+  } else if (option_node->type_ == T_EXTERNAL_FILE_GLOB_PATTERN
+             && OB_FAIL(GET_MIN_DATA_VERSION(session_info->get_effective_tenant_id(), data_version))) {
+    LOG_WARN("failed to get data version", K(ret));
+  } else if (option_node->type_ == T_EXTERNAL_FILE_GLOB_PATTERN
+             && data_version < DATA_VERSION_4_6_1_0) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("glob pattern is not supported before 4.6.1.0 data version", K(ret), K(data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "glob pattern is not supported before 4.6.1.0");
   } else if (option_node->num_child_ != 1 || OB_ISNULL(option_node->children_[0])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected child num", K(option_node->num_child_));
@@ -146,6 +162,9 @@ int ObDDLResolver::resolve_external_file_pattern(const ParseNode *option_node,
     LOG_USER_ERROR(OB_ERR_REGEXP_ERROR, err_msg.ptr());
     LOG_WARN("empty regular expression", K(ret));
   } else {
+    pattern_type = option_node->type_ == T_EXTERNAL_FILE_GLOB_PATTERN
+                     ? share::schema::GLOB_EXTERNAL_FILE_PATTERN
+                     : share::schema::REGEXP_EXTERNAL_FILE_PATTERN;
     pattern = ObString(option_node->children_[0]->str_len_,
                       option_node->children_[0]->str_value_);
     if (OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(allocator,

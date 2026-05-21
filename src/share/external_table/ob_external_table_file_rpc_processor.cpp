@@ -34,6 +34,7 @@ int ObAsyncLoadExternalTableFileListP::process()
   ObArenaAllocator allocator;
   if (OB_FAIL(ObExternalTableFileManager::get_external_file_list_on_device(req.location_,
                                                                            req.pattern_,
+                                                                           req.pattern_type_,
                                                                            req.regexp_vars_,
                                                                            file_urls,
                                                                            res.file_sizes_,

@@ -122,7 +122,8 @@ public:
       aggregate_param_props_(alloc),
       push_down_topn_(),
       semantic_index_info_(),
-      cache_aware_row_num_(0)
+      cache_aware_row_num_(0),
+      external_file_pattern_type_(static_cast<int64_t>(share::schema::REGEXP_EXTERNAL_FILE_PATTERN))
   { }
   //in das scan op, column described with column expr
   virtual bool has_expr() const override { return true; }
@@ -186,6 +187,7 @@ public:
                        K_(external_file_format_str),
                        K_(external_file_location),
                        K_(external_file_pattern),
+                       K_(external_file_pattern_type),
                        K_(external_pushdown_filters),
                        KPC_(trans_info_expr),
                        K_(ir_scan_type),
@@ -252,6 +254,7 @@ public:
   ObDASPushDownTopN push_down_topn_;
   share::ObDasSemanticIndexInfo semantic_index_info_;
   int64_t cache_aware_row_num_;
+  int64_t external_file_pattern_type_;
 };
 
 enum class ObDASScanTaskType

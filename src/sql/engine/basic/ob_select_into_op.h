@@ -169,7 +169,8 @@ public:
       arrow_alloc_(),
       parquet_writer_schema_(nullptr),
       orc_schema_(nullptr),
-      array_helpers_()
+      array_helpers_(),
+      export_csv_header_(false)
   {
   }
 
@@ -431,6 +432,8 @@ private:
                                   const bool is_strict_mode,
                                   const ObDateSqlMode date_sql_mode);
   #endif
+  int init_csv_writer(ObCsvFileWriter &data_writer);
+  int export_csv_header(ObCsvFileWriter &data_writer);
 public:
   static int check_secure_file_path(ObString file_name);
 private:
@@ -491,6 +494,7 @@ private:
   ObOrcMemPool orc_alloc_;
   std::unique_ptr<orc::Type> orc_schema_;
   ObSEArray<ObODPSArrayHelper*, 8> array_helpers_;
+  bool export_csv_header_;
 };
 
 

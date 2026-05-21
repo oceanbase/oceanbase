@@ -48,6 +48,7 @@ int ObLocationUtilsExecutor::execute(ObExecContext &ctx, ObLocationUtilsStmt &st
                                                             full_path.string(),
                                                             loc_schema->get_location_access_info_str(),
                                                             stmt.get_pattern(),
+                                                            stmt.get_pattern_type(),
                                                             regexp_vars,
                                                             ctx.get_allocator()
                                                             ));

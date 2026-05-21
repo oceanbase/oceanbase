@@ -1610,6 +1610,7 @@ public:
   int set_external_sub_path(const common::ObString &sub_path) { return deep_copy_str(sub_path, external_sub_path_); }
   int set_external_file_format(const common::ObString &format) { return deep_copy_str(format, external_file_format_); }
   int set_external_file_pattern(const common::ObString &pattern) { return deep_copy_str(pattern, external_file_pattern_); }
+  void set_external_file_pattern_type(ObExternalFilePatternType type) { external_file_pattern_type_ = static_cast<int64_t>(type); }
   int set_external_properties(const common::ObString &format) { return deep_copy_str(format, external_properties_); }
   void set_external_table_auto_refresh(const int64_t flag) { table_flags_ |= (flag << EXTERNAL_TABLE_AUTO_REFRESH_FLAG_OFFSET); }
   inline void set_user_specified_partition_for_external_table() { table_flags_ |= EXTERNAL_TABLE_USER_SPECIFIED_PARTITION_FLAG; }
@@ -1798,6 +1799,8 @@ public:
   const ObString &get_external_sub_path() const { return external_sub_path_; }
   const ObString &get_external_file_format() const { return external_file_format_; }
   const ObString &get_external_file_pattern() const { return external_file_pattern_; }
+  ObExternalFilePatternType get_external_file_pattern_type() const
+  { return static_cast<ObExternalFilePatternType>(external_file_pattern_type_); }
   const ObString &get_external_properties() const { return external_properties_; }
   int64_t get_external_table_auto_refresh() const { return (table_flags_ >> EXTERNAL_TABLE_AUTO_REFRESH_FLAG_OFFSET) & ((1 << EXTERNAL_TABLE_AUTO_REFRESH_FLAG_BITS) - 1); }
   bool is_external_table_immediate_refresh() const { return get_external_table_auto_refresh() == 1; }
@@ -2605,6 +2608,7 @@ protected:
   common::ObString semistruct_properties_;
   ObTTLFlag ttl_flag_;
   ObSkipIndexLevel skip_index_level_;
+  int64_t external_file_pattern_type_;
 };
 
 class ObPrintableTableSchema final : public ObTableSchema

@@ -492,7 +492,8 @@ public:
                                           bool is_external_table,
                                           common::ObIAllocator &allocator,
                                           const ObSQLSessionInfo *session_info,
-                                          ObString &pattern);
+                                          ObString &pattern,
+                                          share::schema::ObExternalFilePatternType &pattern_type);
 
   static int resolve_external_file_location(ObResolverParams &params,
                                             ObTableSchema &table_schema,

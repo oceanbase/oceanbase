@@ -234,6 +234,13 @@ enum ObTableDefType
   TABLE_DEF_TYPE_USER = 1,
   TABLE_DEF_TYPE_MAX = 2,
 };
+
+enum ObExternalFilePatternType
+{
+  REGEXP_EXTERNAL_FILE_PATTERN = 0,
+  GLOB_EXTERNAL_FILE_PATTERN = 1,
+  MAX_EXTERNAL_FILE_PATTERN_TYPE
+};
 //level of patition
 enum ObPartitionLevel
 {

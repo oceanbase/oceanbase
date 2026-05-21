@@ -84,12 +84,18 @@ struct ObExternalFileInfo
 
 struct ObExternalPathFilter {
   ObExternalPathFilter(sql::ObExprRegexContext &regex_ctx, common::ObIAllocator &allocator)
-    : regex_ctx_(regex_ctx), allocator_(allocator) {}
-  int init(const common::ObString &pattern, const sql::ObExprRegexpSessionVariables &regexp_vars);
+    : regex_ctx_(regex_ctx), allocator_(allocator), pattern_(),
+      pattern_type_(share::schema::REGEXP_EXTERNAL_FILE_PATTERN), is_inited_(false) {}
+  int init(const common::ObString &pattern,
+           const share::schema::ObExternalFilePatternType pattern_type,
+           const sql::ObExprRegexpSessionVariables &regexp_vars);
   bool is_inited();
   int is_filtered(const common::ObString &path, bool &is_filtered);
   sql::ObExprRegexContext &regex_ctx_;
   common::ObIAllocator &allocator_;
+  common::ObString pattern_;
+  share::schema::ObExternalFilePatternType pattern_type_;
+  bool is_inited_;
   common::ObArenaAllocator temp_allocator_;
 };
 
@@ -123,7 +129,9 @@ public:
 class ObExternalTableFileListKey : public ObIKVCacheKey
 {
 public:
-  ObExternalTableFileListKey() : tenant_id_(OB_INVALID_ID), path_(nullptr), pattern_(nullptr)
+  ObExternalTableFileListKey()
+    : tenant_id_(OB_INVALID_ID), path_(nullptr), pattern_(nullptr),
+      pattern_type_(share::schema::REGEXP_EXTERNAL_FILE_PATTERN)
   {
   }
   virtual ~ObExternalTableFileListKey() = default;
@@ -133,7 +141,8 @@ public:
         = reinterpret_cast<const ObExternalTableFileListKey &>(other);
     return this->tenant_id_ == other_key.tenant_id_
            && this->path_.case_compare(other_key.path_) == 0
-           && this->pattern_.case_compare(other_key.pattern_) == 0;
+           && this->pattern_.case_compare(other_key.pattern_) == 0
+           && this->pattern_type_ == other_key.pattern_type_;
   }
   uint64_t hash() const override;
   uint64_t get_tenant_id() const override
@@ -145,12 +154,13 @@ public:
     return sizeof(*this) + path_.length() + 1 + pattern_.length() + 1;
   }
   int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey *&key) const override;
-  TO_STRING_KV(K(tenant_id_), K(path_), K(pattern_));
+  TO_STRING_KV(K(tenant_id_), K(path_), K(pattern_), K(pattern_type_));
 
 public:
   uint64_t tenant_id_;
   ObString path_;
   ObString pattern_;
+  share::schema::ObExternalFilePatternType pattern_type_;
 };
 
 class ObExternalTablePartitionsKey : public ObIKVCacheKey
@@ -388,6 +398,7 @@ public:
       const uint64_t tenant_id,
       const ObIArray<int64_t> &part_id,
       const common::ObString &pattern,
+      const share::schema::ObExternalFilePatternType pattern_type,
       const common::ObString &access_info,
       common::ObIAllocator &allocator,
       int64_t refresh_interval_ms,
@@ -397,6 +408,7 @@ public:
   int get_external_file_list_on_device(const ObString &location,
                                        const uint64_t modify_ts,
                                        const ObString &pattern,
+                                       const share::schema::ObExternalFilePatternType pattern_type,
                                        const ObExprRegexpSessionVariables &regexp_vars,
                                        const ObString &access_info,
                                        ObIAllocator &allocator,
@@ -438,6 +450,7 @@ public:
                                           ObIAllocator &allocator);
   static int get_external_file_list_on_device(const common::ObString &location,
                                               const common::ObString &pattern,
+                                              const share::schema::ObExternalFilePatternType pattern_type,
                                               const sql::ObExprRegexpSessionVariables &regexp_vars,
                                               common::ObIArray<common::ObString> &file_urls,
                                               common::ObIArray<int64_t> &file_sizes,
@@ -606,6 +619,7 @@ private:
                                          uint64_t tenant_id,
                                          const ObIArray<ObString> &location,
                                          const ObString &pattern,
+                                         const share::schema::ObExternalFilePatternType pattern_type,
                                          const ObString &access_info,
                                          ObIAllocator &allocator,
                                          ObIArray<ObExternalTableFiles *> &files,
@@ -623,6 +637,7 @@ private:
                                   const uint64_t tenant_id,
                                   const int64_t &modify_ts,
                                   const common::ObString &pattern,
+                                  const share::schema::ObExternalFilePatternType pattern_type,
                                   ObIAllocator &allocator,
                                   ObIArray<ObExternalTableFiles *> &external_table_files,
                                   int64_t refresh_interval_ms);
@@ -630,6 +645,7 @@ private:
   int insert_one_location_to_cache(int64_t tenant_id,
                                    ObString location,
                                    const common::ObString &pattern,
+                                   const share::schema::ObExternalFilePatternType pattern_type,
                                    ObExternalTableFiles &file_list);
 
 private:

@@ -7,6 +7,7 @@
 #define OBDEV_SRC_EXTERNAL_TABLE_FILE_TASK_H_
 #include "rpc/obrpc/ob_rpc_result_code.h"
 #include "deps/oblib/src/lib/lock/ob_thread_cond.h"
+#include "share/schema/ob_schema_struct.h"
 #include "sql/engine/expr/ob_expr_regexp_context.h"
 namespace oceanbase
 {
@@ -41,13 +42,14 @@ class ObLoadExternalFileListReq
   OB_UNIS_VERSION(1);
 public:
   ObLoadExternalFileListReq() :
-   location_(), pattern_() {}
+   location_(), pattern_(), pattern_type_(schema::REGEXP_EXTERNAL_FILE_PATTERN), regexp_vars_() {}
 public:
   ObString location_;
   ObString pattern_;
+  schema::ObExternalFilePatternType pattern_type_;
   sql::ObExprRegexpSessionVariables regexp_vars_;
 public:
-  TO_STRING_KV(K_(location), K_(pattern), K_(regexp_vars));
+  TO_STRING_KV(K_(location), K_(pattern), K_(pattern_type), K_(regexp_vars));
 };
 
 class ObLoadExternalFileListRes

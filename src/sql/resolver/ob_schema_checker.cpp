@@ -686,9 +686,9 @@ int ObSchemaChecker::get_location_id_name(const uint64_t tenant_id,
     if (allow_not_exist) {
       // do nothing
     } else {
-      ret = OB_LOCATION_NOT_EXIST;
-      LOG_WARN("location not exist", K(ret), K(location_name));
-      LOG_USER_ERROR(OB_LOCATION_NOT_EXIST, location_name.length(), location_name.ptr());
+      ret = OB_LOCATION_OBJ_NOT_EXIST;
+      LOG_WARN("location obj not exist", K(ret), K(location_name));
+      LOG_USER_ERROR(OB_LOCATION_OBJ_NOT_EXIST, location_name.length(), location_name.ptr());
     }
   } else {
     location_id = location_schema->get_location_id();

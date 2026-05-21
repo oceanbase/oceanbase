@@ -224,6 +224,7 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
         OZ (alter_schema.set_external_file_pattern(table_schema_->get_external_file_pattern()));
         alter_schema.set_external_location_id(table_schema_->get_external_location_id());
         OZ (alter_schema.set_external_sub_path(table_schema_->get_external_sub_path()));
+        alter_schema.set_external_file_pattern_type(table_schema_->get_external_file_pattern_type());
         if (OB_SUCC(ret) && table_schema_->is_user_specified_partition_for_external_table()) {
           alter_schema.set_user_specified_partition_for_external_table();
         }
@@ -802,6 +803,7 @@ int ObAlterTableResolver::resolve_external_partition_options(const ParseNode &no
     alter_table_stmt->get_alter_table_arg().alter_table_schema_.set_part_level(table_schema_->get_part_level());
     OZ (alter_table_stmt->get_alter_table_arg().alter_table_schema_.set_external_file_location_access_info(table_schema_->get_external_file_location_access_info()));
     OZ (alter_table_stmt->get_alter_table_arg().alter_table_schema_.set_external_file_pattern(table_schema_->get_external_file_pattern()));
+    alter_table_stmt->get_alter_table_arg().alter_table_schema_.set_external_file_pattern_type(table_schema_->get_external_file_pattern_type());
     CK (OB_LIKELY(node.type_ == T_ALTER_EXTERNAL_PARTITION_OPTION));
     if (T_ALTER_EXTERNAL_PARTITION_ADD == node.children_[0]->type_) {
       CK (OB_LIKELY(node.num_child_ == 2));

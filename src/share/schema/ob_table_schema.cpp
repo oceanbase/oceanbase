@@ -2012,6 +2012,7 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       tmp_mlog_tid_ = src_schema.tmp_mlog_tid_;
       skip_index_level_ = src_schema.skip_index_level_;
       ttl_flag_ = src_schema.ttl_flag_;
+      external_file_pattern_type_ = src_schema.external_file_pattern_type_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {
         LOG_WARN("Fail to deep copy tablegroup_name", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.comment_, comment_))) {
@@ -4055,6 +4056,7 @@ int64_t ObTableSchema::get_convert_size() const
   convert_size += external_file_location_.length() + 1;
   convert_size += external_file_location_access_info_.length() + 1;
   convert_size += external_file_pattern_.length() + 1;
+  convert_size += sizeof(external_file_pattern_type_);
   convert_size += ttl_definition_.length() + 1;
   convert_size += kv_attributes_.length() + 1;
   convert_size += index_params_.length() + 1;
@@ -4190,6 +4192,7 @@ void ObTableSchema::reset()
   external_sub_path_.reset();
   semistruct_properties_.reset();
   ObSimpleTableSchemaV2::reset();
+  external_file_pattern_type_ = static_cast<int64_t>(REGEXP_EXTERNAL_FILE_PATTERN);
 }
 
 int ObTableSchema::get_all_tablet_and_object_ids(ObIArray<ObTabletID> &tablet_ids,
@@ -7926,6 +7929,7 @@ OB_DEF_SERIALIZE(ObTableSchema)
   OB_UNIS_ENCODE(ttl_flag_);
   OB_UNIS_ENCODE(minor_row_store_type_);
   OB_UNIS_ENCODE(skip_index_level_);
+  OB_UNIS_ENCODE(external_file_pattern_type_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -8180,6 +8184,7 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   OB_UNIS_DECODE(ttl_flag_);
   OB_UNIS_DECODE(minor_row_store_type_);
   OB_UNIS_DECODE(skip_index_level_);
+  OB_UNIS_DECODE(external_file_pattern_type_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -8334,6 +8339,7 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(ttl_flag_);
   OB_UNIS_ADD_LEN(minor_row_store_type_);
   OB_UNIS_ADD_LEN(skip_index_level_);
+  OB_UNIS_ADD_LEN(external_file_pattern_type_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员

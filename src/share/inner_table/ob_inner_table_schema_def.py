@@ -334,6 +334,7 @@ all_table_def = dict(
       ('ttl_flag', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'false', '\\x01'),
       ('delta_format', 'varchar:OB_MAX_VARCHAR_LENGTH', 'false', 'flat'),
       ('skip_index_level', 'int', 'false', '0'),
+      ('external_file_pattern_type', 'int', 'false', '0'),
     ],
 )
 
@@ -17779,6 +17780,7 @@ def_table_schema(
   ('location_id', 'int'),
   ('location_sub_path', 'varchar:OB_MAX_LOCATION_NAME_LENGTH'),
   ('pattern', 'varchar:OB_MAX_LOCATION_NAME_LENGTH'),
+  ('pattern_type', 'int'),
   ],
   in_tenant_space = True,
 

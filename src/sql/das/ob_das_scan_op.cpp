@@ -78,7 +78,8 @@ OB_SERIALIZE_MEMBER(ObDASScanCtDef, // FARM COMPAT WHITELIST
                     lake_table_format_,
                     push_down_topn_,
                     semantic_index_info_,
-                    cache_aware_row_num_);
+                    cache_aware_row_num_,
+                    external_file_pattern_type_);
 
 OB_DEF_SERIALIZE(ObDASScanRtDef)
 {

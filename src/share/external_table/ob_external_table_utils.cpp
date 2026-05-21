@@ -1629,6 +1629,7 @@ int ObExternalTableUtils::collect_local_files_on_servers(
     const uint64_t tenant_id,
     const ObString &location,
     const ObString &pattern,
+    const schema::ObExternalFilePatternType pattern_type,
     const ObExprRegexpSessionVariables &regexp_vars,
     ObIArray<ObAddr> &all_servers,
     ObIArray<ObString> &file_urls,
@@ -1696,6 +1697,7 @@ int ObExternalTableUtils::collect_local_files_on_servers(
       ObLoadExternalFileListReq req;
       req.location_ = location;
       req.pattern_ = pattern;
+      req.pattern_type_ = pattern_type;
       req.regexp_vars_ = regexp_vars;
 
       if (OB_ISNULL(async_cb = OB_NEWx(ObRpcAsyncLoadExternalTableFileCallBack, (&allocator), (&context)))) {
@@ -1783,6 +1785,7 @@ int ObExternalTableUtils::collect_external_file_list(
     const ObString &location,
     const ObString &access_info,
     const ObString &pattern,
+    const schema::ObExternalFilePatternType pattern_type,
     const ObString &properties,
     const bool &is_partitioned_table,
     const sql::ObExprRegexpSessionVariables &regexp_vars,
@@ -1977,12 +1980,12 @@ int ObExternalTableUtils::collect_external_file_list(
     }
     if (OB_FAIL(ret)) {
     } else if (is_local_storage) {
-      OZ(collect_local_files_on_servers(tenant_id, location, pattern, regexp_vars, all_servers,
+      OZ(collect_local_files_on_servers(tenant_id, location, pattern, pattern_type, regexp_vars, all_servers,
                                         file_urls, file_sizes, modify_times, content_digests,
                                         full_path, allocator));
     } else {
       OZ(ObExternalTableFileManager::get_external_file_list_on_device(
-        location, pattern, regexp_vars, file_urls, file_sizes, modify_times, content_digests,
+        location, pattern, pattern_type, regexp_vars, file_urls, file_sizes, modify_times, content_digests,
         access_info, allocator));
       for (int64_t i = 0; OB_SUCC(ret) && i < file_urls.count(); i++) {
         ObSqlString tmp_file_url;
@@ -2103,6 +2106,9 @@ int ObLocalFileListArrayOpWithFilter::func(const dirent *entry)
     } else {
       filter_path = full_path.string();
       filter_path += origin_path_.length();  // 只匹配location下的子路径
+      if (!filter_path.empty() && '/' == filter_path[0]) {
+        filter_path += 1;
+      }
     }
 
     if (OB_FAIL(ret)) {
@@ -2144,6 +2150,7 @@ int ObExternalTableUtils::collect_external_file_list_with_cache(
     const ObIArray<int64_t> &part_id,
     const ObString &access_info,
     const ObString &pattern,
+    const schema::ObExternalFilePatternType pattern_type,
     ObIAllocator &allocator,
     int64_t refresh_interval_ms,
     ObIArray<ObHiveFileDesc> &hive_file_desc,
@@ -2161,6 +2168,7 @@ int ObExternalTableUtils::collect_external_file_list_with_cache(
               tenant_id,
               part_id,
               pattern,
+              pattern_type,
               access_info,
               tmp_allocator,
               refresh_interval_ms,
@@ -2407,6 +2415,7 @@ int ObExternalTableUtils::remove_external_file_list(const uint64_t tenant_id,
                                                     const ObString &location,
                                                     const ObString &access_info,
                                                     const ObString &pattern,
+                                                    const schema::ObExternalFilePatternType pattern_type,
                                                     const sql::ObExprRegexpSessionVariables &regexp_vars,
                                                     ObIAllocator &allocator)
 {
@@ -2428,7 +2437,7 @@ int ObExternalTableUtils::remove_external_file_list(const uint64_t tenant_id,
       ObSqlString full_path;
       full_path.append(location);
       if (!is_del_all) {
-        OZ(collect_external_file_list(nullptr, tenant_id, -1, location, access_info, pattern, "",
+        OZ(collect_external_file_list(nullptr, tenant_id, -1, location, access_info, pattern, pattern_type, "",
                                       false, regexp_vars, allocator, full_path, basic_file_infos));
       }
       if (OB_SUCC(ret)) {
@@ -2772,6 +2781,7 @@ int ObExternalFileInfoCollector::collect_dirs_with_spec_level(
 
 int ObExternalFileInfoCollector::get_file_list(const common::ObString &path,
                                                const common::ObString &pattern,
+                                               const schema::ObExternalFilePatternType pattern_type,
                                                const ObExprRegexpSessionVariables &regexp_vars,
                                                common::ObIArray<common::ObString> &file_urls,
                                                common::ObIArray<int64_t> &file_sizes,
@@ -2793,7 +2803,7 @@ int ObExternalFileInfoCollector::get_file_list(const common::ObString &path,
   if (OB_UNLIKELY(!storage_info_->is_valid())) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret), K_(storage_info));
-  } else if (!pattern.empty() && OB_FAIL(filter.init(pattern, regexp_vars))) {
+  } else if (!pattern.empty() && OB_FAIL(filter.init(pattern, pattern_type, regexp_vars))) {
     LOG_WARN("fail to init filter", K(ret));
   } else if (OB_FAIL(ob_write_string(allocator_, path, path_cstring, true /*c_style*/))) {
     LOG_WARN("fail to copy string", KR(ret), K(path));
