@@ -989,7 +989,7 @@ const char *const OB_DIAG_TENANT_NAME = "diag";
 const char *const OB_DDL_ID_VAR_NAME = "__oceanbase_ddl_id";
 const int64_t OB_MAX_DDL_ID_STR_LENGTH = 64;
 #ifdef ERRSIM
-const int64_t OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT = 30L * 60L * 1000L * 1000L; // 30 minutes
+const int64_t OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT = 12L * 60L * 60L * 1000L * 1000L; // 12 hours
 #else
 const int64_t OB_MAX_DDL_SINGLE_REPLICA_BUILD_TIMEOUT = 7L * 24L * 60L * 60L * 1000L * 1000L; // 7days
 #endif
