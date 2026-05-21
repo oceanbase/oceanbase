@@ -872,9 +872,36 @@ int ObDelUpdResolver::add_assignment(common::ObIArray<ObTableAssignment> &assign
       // do nothing
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && !found && i < table_assign->assignments_.count(); ++i) {
-        if (assign.column_expr_ == table_assign->assignments_.at(i).column_expr_) {
+        ObColumnRefRawExpr *existing_col_expr = table_assign->assignments_.at(i).column_expr_;
+        const bool ptr_equal = (assign.column_expr_ == existing_col_expr);
+        bool base_col_equal = false;
+        // For updatable views, the same base column may be referenced via different
+        // view-column ObColumnRefRawExpr objects. Pointer compare misses that case,
+        // so also compare via (base_tid_, base_cid_) on ColumnItem. View-alias case is
+        // last-write-wins only and is NOT marked as is_duplicated_, since each view
+        // column is a syntactically distinct column to the user (matches Oracle, which
+        // does not raise ORA-00957 for this).
+        // Skip base-column dedup under INSTEAD OF trigger: the trigger sees view columns as
+        // syntactically distinct, and base column id is not maintained for those view columns
+        // (see resolve_assign_columns where get_base_column is also skipped for triggers).
+        if (!ptr_equal && col != NULL && existing_col_expr != NULL
+            && !get_stmt()->has_instead_of_trigger()
+            && col->base_tid_ != OB_INVALID_ID
+            && col->base_cid_ != OB_INVALID_ID) {
+          const ColumnItem *existing_ci = get_stmt()->get_column_item_by_id(
+              existing_col_expr->get_table_id(), existing_col_expr->get_column_id());
+          if (existing_ci != NULL
+              && existing_ci->base_tid_ == col->base_tid_
+              && existing_ci->base_cid_ == col->base_cid_) {
+            base_col_equal = true;
+          }
+        }
+        if (ptr_equal) {
           table_assign->assignments_.at(i) = assign;
           table_assign->assignments_.at(i).is_duplicated_ = true; //this column was updated repeatedly
+          found = true;
+        } else if (base_col_equal) {
+          table_assign->assignments_.at(i) = assign;
           found = true;
         }
       }
