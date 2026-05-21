@@ -237,6 +237,16 @@ SQL_MONITOR_STATNAME_DEF(HS_VEC_FILTER_EST_ROW_COUNT, metric::Unit::INT, "vec fi
 // Hybrid Search Parallel Execution
 SQL_MONITOR_STATNAME_DEF(HS_PARALLEL_TASK_COUNT, metric::Unit::INT, "parallel task count", "parallel task count", M_SUM, metric::Level::STANDARD)
 
+// AI Rerank Metrics
+SQL_MONITOR_STATNAME_DEF(AI_RERANK_ELAPSE_TIME, metric::Unit::TIME_NS, "ai rerank elapse time", "ai rerank total elapse time", M_SUM | E_MIN | E_MAX, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(AI_RERANK_HTTP_ELAPSE_TIME, metric::Unit::TIME_NS, "ai rerank http elapse time", "ai rerank http request elapse time", M_SUM | E_MIN | E_MAX, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(AI_RERANK_BATCH_COUNT, metric::Unit::INT, "ai rerank batch count", "ai rerank batch count", M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(AI_RERANK_DOCUMENT_COUNT, metric::Unit::INT, "ai rerank document count", "ai rerank total document count", M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(AI_RERANK_API_CALL_COUNT, metric::Unit::INT, "ai rerank api call count", "ai rerank api call count", M_SUM, metric::Level::STANDARD)
+
+// Hybrid Search Fusion Iter Exec Mode
+SQL_MONITOR_STATNAME_DEF(HS_FUSION_EXEC_MODE, metric::Unit::INT, "fusion exec mode", "fusion iter exec mode: 0 skip, 1 distinct_only, 2 full_recall, 3 top_k", M_FIRST_VAL, metric::Level::STANDARD)
+
 //end
 SQL_MONITOR_STATNAME_DEF(MONITOR_STATNAME_END, metric::Unit::INVALID, "monitor end", "monitor stat name end", E_MIN | E_MAX, metric::Level::AD_HOC)
 #endif
