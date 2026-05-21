@@ -327,7 +327,15 @@ if (OB_USE_CLANG)
   if (OB_USE_LLD)
     set(LD_OPT "-fuse-ld=${DEVTOOLS_DIR}/bin/ld.lld -Wno-unused-command-line-argument")
     set(REORDER_COMP_OPT "-ffunction-sections -fdata-sections -fdebug-info-for-profiling")
-    set(REORDER_LINK_OPT "-Wl,--no-rosegment,--build-id=sha1,--gc-sections ${HOTFUNC_OPT}")
+    # Enable ICF (Identical Code Folding) only for ASAN builds to shrink the
+    # heavily-instrumented binary back under the small code-model 2GB limit
+    # and avoid R_X86_64_PC32 relocation overflow at link time.
+    if (OB_USE_ASAN)
+      set(ICF_LINK_OPT "-Wl,--icf=all")
+    else()
+      set(ICF_LINK_OPT "")
+    endif()
+    set(REORDER_LINK_OPT "-Wl,--no-rosegment,--build-id=sha1,--gc-sections ${ICF_LINK_OPT} ${HOTFUNC_OPT}")
     set(OB_LD_BIN "${DEVTOOLS_DIR}/bin/ld.lld")
   endif()
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --gcc-toolchain=${GCC9} -gdwarf-4 ${DEBUG_PREFIX} ${FILE_PREFIX} ${AUTO_FDO_OPT} ${THIN_LTO_OPT} -fcolor-diagnostics ${REORDER_COMP_OPT} -fmax-type-align=8 ${CMAKE_ASAN_FLAG}")
