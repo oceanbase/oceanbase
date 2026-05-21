@@ -19,7 +19,7 @@ namespace sql
 {
 struct InListRewriteInfo {
   bool is_valid_as_values_table_;
-  bool is_question_mark_;
+  bool is_question_mark_; // true if all exprs in the inlist are question marks
   // the start_param_idx_ and end_param_idx_ are valid only if is_question_mark_ == true
   // the start_param_idx_ is the start index of question marks in inlist
   int64_t start_param_idx_;
@@ -31,13 +31,13 @@ struct InListRewriteInfo {
   ObSEArray<DistinctObjMeta, 4> param_types_; // for each column
 
   InListRewriteInfo(): is_valid_as_values_table_(true),
-                       is_question_mark_(false),
+                       is_question_mark_(true),
                        start_param_idx_(-1),
                        end_param_idx_(-1) {}
 
   void reset() {
     is_valid_as_values_table_ = true;
-    is_question_mark_ = false;
+    is_question_mark_ = true;
     start_param_idx_ = -1;
     end_param_idx_ = -1;
     param_types_.reuse();
@@ -225,7 +225,11 @@ int ObInListResolver::get_inlist_rewrite_info(const ParseNode &in_list,
         if (OB_ISNULL(node)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected param", K(ret));
-        } else if (FALSE_IT(rewrite_info.is_question_mark_ = T_QUESTIONMARK == node->type_)) {
+        } else if (FALSE_IT(rewrite_info.is_question_mark_ &= (T_QUESTIONMARK == node->type_))) {
+        } else if (OB_UNLIKELY(!rewrite_info.is_question_mark_ && -1 != rewrite_info.start_param_idx_)) {
+          // mixing question marks with non-parameterized literals
+          // (e.g. `c1 in (?, '1', '2')`) cannot be represented as a values table
+          rewrite_info.is_valid_as_values_table_ = false;
         } else if (rewrite_info.is_question_mark_) {
           // check if param indexes are continuous for values table
           if (-1 == rewrite_info.start_param_idx_
