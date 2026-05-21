@@ -254,6 +254,7 @@ struct ObOptParamHint
     DEF(FORCE_SUBQUERY_UNNEST,)                     \
     DEF(UDF_COST_FACTOR,)                      \
     DEF(UDF_SELECTIVITY,)                           \
+    DEF(ENABLE_PLAN_EXPIRATION_BY_EXEC_FEEDBACK,)                    \
 
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
