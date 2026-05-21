@@ -11870,7 +11870,14 @@ int ObDDLResolver::resolve_partition_range(ObPartitionedStmt *stmt,
       // e.g. create table t1 (c1 int primary key, c2 int) partition by range('c1')
       // 2.auto_partition clause allow sql with interval partition definition, not support
       // e.g. create table t1 (c1 int primary key, c2 int) partition by range('c1') interval(10) size('1MB')
-      if (node->num_child_ > RANGE_INTERVAL_NODE) {
+      // 3.auto_partition clause with subpartition but without partition definition, not support
+      // e.g. create table t1 (c1 int primary key, c2 int) partition by range(c1)
+      //          subpartition by hash(c2) subpartitions 2
+      if (OB_NOT_NULL(node->children_[RANGE_SUBPARTITION_NODE])) {
+        ret = OB_NOT_SUPPORTED;
+        SQL_RESV_LOG(WARN, "subpartition defined without partition definitions is not supported", KR(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "defining subpartitions without explicit partition definitions is");
+      } else if (node->num_child_ > RANGE_INTERVAL_NODE) {
         ParseNode *interval_node = node->children_[RANGE_INTERVAL_NODE];
         if (OB_NOT_NULL(interval_node)) {
           ret = OB_NOT_SUPPORTED;
