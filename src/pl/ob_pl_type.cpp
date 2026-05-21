@@ -2813,7 +2813,7 @@ int ObPsCursorInfo::close(sql::ObSQLSessionInfo &session,
                           bool close_by_open_thread)
 {
   int ret = OB_SUCCESS;
-  LOG_INFO("close ps cursor start", K(ret), K(session.get_server_sid()), K(is_reuse), K(close_by_open_thread), K(lbt()));
+  LOG_TRACE("close ps cursor start", K(ret), K(session.get_server_sid()), K(is_reuse), K(close_by_open_thread), K(lbt()));
   if (!close_by_open_thread && is_async()) {
     while (OB_SUCCESS == get_store_ret() && !is_client_close()) {
       ObSpinLockGuard guard(spin_lock_);
@@ -2865,7 +2865,7 @@ int ObPsCursorInfo::close(sql::ObSQLSessionInfo &session,
   if (FAILEDx(ObPLCursorInfo::close(session, is_reuse))) {
     LOG_WARN("pl cursor info close failed", K(ret));
   }
-  LOG_INFO("close ps cursor end", K(ret), K(session.get_server_sid()), K(lbt()));
+  LOG_TRACE("close ps cursor end", K(ret), K(session.get_server_sid()), K(lbt()));
   return ret;
 }
 
