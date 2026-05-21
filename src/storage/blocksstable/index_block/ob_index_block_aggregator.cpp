@@ -200,8 +200,8 @@ bool ObIColAggregator::need_set_not_aggregate(const ObObjType type, const ObDatu
   const bool is_outrow_lob = is_lob_storage(type) && !datum.is_null() && !datum.get_lob_data().in_row_;
   const bool datum_exceed_limit = !datum.is_null() && datum.len_ > ObSkipIndexColMeta::MAX_SKIP_INDEX_COL_LENGTH;
   const bool non_string_type_exceed_limit = datum_exceed_limit && !ob_is_string_type(type);
-  const bool exceed_limit = enable_skip_index_min_max_prefix(major_working_cluster_version_)
-      ? non_string_type_exceed_limit : datum_exceed_limit;
+  const bool enable_prefix = !is_major_ || enable_skip_index_min_max_prefix(major_working_cluster_version_);
+  const bool exceed_limit = enable_prefix ? non_string_type_exceed_limit : datum_exceed_limit;
   return is_outrow_lob || exceed_limit;
 }
 

@@ -44,6 +44,8 @@ struct ObMinMaxFilterParam {
     null_count_.set_null();
     min_datum_.set_null();
     max_datum_.set_null();
+    is_min_prefix_ = false;
+    is_max_prefix_ = false;
   }
   OB_INLINE bool is_uncertain() const
   {
