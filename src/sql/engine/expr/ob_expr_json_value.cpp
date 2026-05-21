@@ -265,9 +265,9 @@ int ObExprJsonValue::eval_json_value_fast_path(const ObExpr &expr,
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported fast path because json is null", K(ret));
   } else {
-    const ObLobCommon& lob = json_datum->get_lob_data();
     ObString path_str;
     bool is_null_path = false;
+    ObString json_data;
     common::ObJsonPathCache *path_cache = param_ctx->get_path_cache();
 
     if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(expr.args_[JSN_VAL_PATH], ctx,
@@ -276,7 +276,7 @@ int ObExprJsonValue::eval_json_value_fast_path(const ObExpr &expr,
     } else if (is_null_path) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not supported fast path because path is null", K(ret));
-    } else if (!(json_datum->len_ != 0 && !lob.is_mem_loc_ && lob.in_row_) || OB_ISNULL(path_cache)) {
+    } else if (OB_ISNULL(path_cache)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not supported fast path", K(ret));
     } else if (OB_FAIL(ObJsonExprHelper::convert_string_collation_type(
@@ -285,20 +285,21 @@ int ObExprJsonValue::eval_json_value_fast_path(const ObExpr &expr,
       LOG_WARN("fail to convert string collation type", K(ret));
     } else if (path_cache->is_fast_path_unchecked() &&
           OB_FAIL(ObJsonExprHelper::validate_and_cache_simple_path(path_cache, path_str, temp_allocator, JSN_VAL_PATH))) {
-        LOG_WARN("fail to validate and cache simple path", K(ret));
+      LOG_WARN("fail to validate and cache simple path", K(ret));
     } else if (path_cache->is_fast_path_unsupported()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not supported fast path because path cache is not inited", K(ret));
+    } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(
+          temp_allocator, *json_datum, expr.args_[JSN_VAL_DOC]->datum_meta_,
+          expr.args_[JSN_VAL_DOC]->obj_meta_.has_lob_header(), json_data, &ctx.exec_ctx_))) {
+      LOG_WARN("fail to get real data.", K(ret));
     } else {
       ObJsonBinFastLocator fast_locator;
-      ObString json_data;
       ObString res_bin_str;
       char *res_ptr = nullptr;
       int64_t res_len = 0;
       ObIJsonBase *j_base_found = NULL;
       uint8_t res_type = 0;
-      json_data.assign_ptr(lob.get_inrow_data_ptr(),
-                            static_cast<int32_t>(lob.get_byte_size(json_datum->len_)));
 
       const ObSEArray<ObJsonPathCache::ObMultiPathEntry, 4> &path_keys_arr = path_cache->get_multi_path_keys();
       if (path_keys_arr.empty()) {

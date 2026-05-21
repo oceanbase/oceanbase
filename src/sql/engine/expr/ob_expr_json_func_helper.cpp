@@ -3396,6 +3396,10 @@ int ObJsonBinFastLocator::init(const char *data, int64_t length)
     if (doc_header->type_ != J_DOC_HEADER_V0) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not supported type", K(ret), K(doc_header->type_));
+    } else if (has_extend_segment(doc_header, length)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported json bin with extension segment", K(ret),
+               K(doc_header->extend_seg_offset_), K(length));
     } else if (OB_FAIL(parse_json_bin_header(data_ptr_, total_len_))) {
       LOG_WARN("parse_json_bin_header fail", K(ret));
     } else {
