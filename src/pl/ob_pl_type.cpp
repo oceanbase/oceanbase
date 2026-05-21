@@ -2859,7 +2859,9 @@ int ObPsCursorInfo::close(sql::ObSQLSessionInfo &session,
     if (OB_NOT_NULL(spi_result)) {
       if (OB_NOT_NULL(spi_result->get_result_set())) {
         spi_result->destruct_exec_params(session);
+        const int64_t saved_affected_rows = session.get_affected_rows();
         int close_ret = spi_result->close_result_set();
+        session.set_affected_rows(saved_affected_rows);
         if (OB_SUCCESS != close_ret) {
           LOG_WARN("close mysql result failed", K(close_ret));
         }
