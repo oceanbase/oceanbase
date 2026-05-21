@@ -122,10 +122,11 @@ int ObBackupValidateInfoCollector::need_skip_backup_set_(
         || !backup_set_info.is_backup_set_support_quick_restore()) {
       is_skip = true;
       LOG_INFO("[BACKUP_VALIDATE]backup set status or version is not supported for validation, skip", K(backup_set_info));
-    } else if (is_basic_validate && backup_set_info.tenant_compatible_ < DATA_VERSION_4_5_1_0) {
-      //file list exists since 4.5.1
+    } else if (is_basic_validate
+               && !ObBackupValidateUtil::is_data_version_support_backup_validate(backup_set_info.tenant_compatible_)) {
+      //file list exists since 4.4.2.2 and 4.5.1
       is_skip = true;
-      LOG_INFO("[BACKUP_VALIDATE]backup set tenant compatible is less than 4.5.1, skip", K(backup_set_info));
+      LOG_INFO("[BACKUP_VALIDATE]backup set tenant compatible is not supported for basic validate, skip", K(backup_set_info));
     }
   }
 
@@ -566,7 +567,7 @@ int ObBackupValidateInfoCollector::collect_complement_log_piece_keys_(
     LOG_WARN("[BACKUP_VALIDATE]backup set info is not plus archive log", KR(ret), K(backup_set_info));
   } else if (OB_FAIL(get_complement_log_backup_dest_(backup_set_info, complement_dest))) {
     LOG_WARN("[BACKUP_VALIDATE]failed to get complement log backup dest", KR(ret), K(backup_set_info));
-  } else if (backup_set_info.tenant_compatible_ >= DATA_VERSION_4_5_1_0) {
+  } else if (ObBackupValidateUtil::is_data_version_support_backup_validate(backup_set_info.tenant_compatible_)) {
     if (OB_FAIL(collect_piece_keys_from_file_list_(complement_dest, piece_keys))) {
       LOG_WARN("[BACKUP_VALIDATE]failed to collect complement log piece keys from file list", KR(ret), K(complement_dest));
     }

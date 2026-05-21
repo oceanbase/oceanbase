@@ -12,6 +12,17 @@ namespace oceanbase
 {
 namespace share
 {
+class ObBackupValidateUtil
+{
+public:
+  // backup validate is supported on data versions [4.4.2.2, 4.5.0.0) and >= 4.5.1.0.
+  static bool is_data_version_support_backup_validate(const uint64_t data_version)
+  {
+    return (data_version >= MOCK_DATA_VERSION_4_4_2_2 && data_version < DATA_VERSION_4_5_0_0)
+           || data_version >= DATA_VERSION_4_5_1_0;
+  }
+};
+
 struct ObBackupValidateStatus
 {
   enum Status

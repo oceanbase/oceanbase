@@ -10613,10 +10613,10 @@ int ObRootService::handle_backup_validate_cancel(const obrpc::ObBackupManageArg 
     uint64_t tenant_data_version = 0;
     if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
       LOG_WARN("failed to get tenant data version", K(ret), K(tenant_id));
-    } else if (tenant_data_version < DATA_VERSION_4_5_1_0) {
+    } else if (!share::ObBackupValidateUtil::is_data_version_support_backup_validate(tenant_data_version)) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not supported with current data version", K(ret), K(tenant_data_version), K(tenant_id));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "cancel validate backup with data version less than 4.5.1");
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "cancel validate backup in current data version is");
     } else if (OB_FAIL(ObBackupServiceProxy::handle_backup_validate_cancel(arg))) {
       LOG_WARN("failed to handle backup validate cancel", K(ret), K(arg));
     }

@@ -36,10 +36,10 @@ int ObBackupValidateResolver::resolve(const ParseNode &parse_tree)
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "backup validate command in shared storage mode is");
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(cur_tenant_id, data_version))) {
     LOG_WARN("get tenant data version failed", KR(ret));
-  } else if (data_version < DATA_VERSION_4_5_1_0) {
+  } else if (!share::ObBackupValidateUtil::is_data_version_support_backup_validate(data_version)) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("BACKUP_VALIDATE command is not supported in data version less than 4.5.1", KR(ret), K(data_version));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "BACKUP_VALIDATE command is not supported in data version less than 4.5.1");
+    LOG_WARN("BACKUP_VALIDATE command is not supported in current data version", KR(ret), K(data_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "BACKUP_VALIDATE command in current data version is");
   } else if (OB_ISNULL(parse_tree.children_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("children should not be null");
