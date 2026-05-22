@@ -5699,9 +5699,12 @@ int ObTableSchema::check_alter_column_in_index(const ObColumnSchemaV2 &src_colum
         LOG_WARN("failed to check collection column type", K(ret));
       }
     } else {
-      // For non-collection types, compare basic types and meta types.
+      // For non-collection types, compare basic types, meta types, and collation type.
+      // Collation check is necessary to catch varchar->varbinary conversion on semantic index columns,
+      // since both share ObVarcharType but differ only in collation (CS_TYPE_BINARY for varbinary).
       is_same_type = (src_column.get_data_type() == dst_column.get_data_type() &&
-                     src_column.get_meta_type().get_type() == dst_column.get_meta_type().get_type());
+                     src_column.get_meta_type().get_type() == dst_column.get_meta_type().get_type() &&
+                     src_column.get_collation_type() == dst_column.get_collation_type());
     }
     if (OB_SUCC(ret) && !is_same_type) {
       ret = OB_NOT_SUPPORTED;
