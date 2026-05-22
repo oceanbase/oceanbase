@@ -1192,7 +1192,6 @@ int ObTabletTableStore::inner_calculate_inc_ddl_column_read_tables(
     } else {
       break;
     }
-    ++cur_sstable_idx;
   }
   while (cur_ddl_kv_idx < inc_major_ddl_mem_sstables_.count()) {
     ObDDLKV *ddlkv = inc_major_ddl_mem_sstables_[cur_ddl_kv_idx];

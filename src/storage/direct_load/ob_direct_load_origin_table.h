@@ -30,6 +30,7 @@ public:
                K_(ls_id),
                K_(tx_id),
                K_(tx_seq),
+               K_(snapshot_version),
                K_(rowkey_column_num),
                KP_(col_descs));
 public:
@@ -38,6 +39,7 @@ public:
   share::ObLSID ls_id_;
   transaction::ObTransID tx_id_;
   transaction::ObTxSEQ tx_seq_;
+  int64_t snapshot_version_;
   int64_t rowkey_column_num_;
   const common::ObIArray<share::schema::ObColDesc> *col_descs_;
 };
@@ -53,6 +55,7 @@ public:
                K_(ls_id),
                K_(tx_id),
                K_(tx_seq),
+               K_(snapshot_version),
                K_(rowkey_column_num),
                KP_(col_descs));
 public:
@@ -61,6 +64,7 @@ public:
   share::ObLSID ls_id_;
   transaction::ObTransID tx_id_;
   transaction::ObTxSEQ tx_seq_;
+  int64_t snapshot_version_;
   int64_t rowkey_column_num_;
   const common::ObIArray<share::schema::ObColDesc> *col_descs_;
 };

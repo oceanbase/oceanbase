@@ -25,6 +25,7 @@ using namespace observer;
 
 ObDirectLoadOriginTableCreateParam::ObDirectLoadOriginTableCreateParam()
   : table_id_(OB_INVALID_ID),
+    snapshot_version_(0),
     rowkey_column_num_(0),
     col_descs_(nullptr)
 {
@@ -37,7 +38,7 @@ ObDirectLoadOriginTableCreateParam::~ObDirectLoadOriginTableCreateParam()
 bool ObDirectLoadOriginTableCreateParam::is_valid() const
 {
   return OB_INVALID_ID != table_id_ && tablet_id_.is_valid() && ls_id_.is_valid() &&
-         0 < rowkey_column_num_ && nullptr != col_descs_;
+         snapshot_version_ > 0 && rowkey_column_num_ > 0 && nullptr != col_descs_;
 }
 
 /**
@@ -45,7 +46,7 @@ bool ObDirectLoadOriginTableCreateParam::is_valid() const
  */
 
 ObDirectLoadOriginTableMeta::ObDirectLoadOriginTableMeta()
-  : table_id_(OB_INVALID_ID), rowkey_column_num_(0), col_descs_(nullptr)
+  : table_id_(OB_INVALID_ID), snapshot_version_(0), rowkey_column_num_(0), col_descs_(nullptr)
 {
 }
 
@@ -60,6 +61,7 @@ void ObDirectLoadOriginTableMeta::reset()
   ls_id_.reset();
   tx_id_.reset();
   tx_seq_.reset();
+  snapshot_version_ = 0;
   rowkey_column_num_ = 0;
   col_descs_ = nullptr;
 }
@@ -98,6 +100,7 @@ int ObDirectLoadOriginTable::init(const ObDirectLoadOriginTableCreateParam &para
     meta_.tablet_id_ = param.tablet_id_;
     meta_.tx_id_ = param.tx_id_;
     meta_.tx_seq_ = param.tx_seq_;
+    meta_.snapshot_version_ = param.snapshot_version_;
     meta_.rowkey_column_num_ = param.rowkey_column_num_;
     meta_.col_descs_ = param.col_descs_;
     is_inited_ = true;
@@ -385,7 +388,7 @@ int ObDirectLoadOriginTableAccessor::init_table_access_ctx(bool skip_read_lob)
   const ObTabletID &tablet_id = origin_table_->get_meta().tablet_id_;
   const ObTransID &tx_id = origin_table_->get_meta().tx_id_;
   const ObTxSEQ &tx_seq = origin_table_->get_meta().tx_seq_;
-  const int64_t snapshot_version = ObTimeUtil::current_time_ns();
+  const int64_t snapshot_version = origin_table_->get_meta().snapshot_version_;
   ObQueryFlag query_flag(ObQueryFlag::Forward,
                          false /*daily_merge*/,
                          true /*optimize*/,

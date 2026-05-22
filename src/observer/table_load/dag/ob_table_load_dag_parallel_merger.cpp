@@ -9,6 +9,7 @@
 #include "observer/table_load/ob_table_load_schema.h"
 #include "observer/table_load/ob_table_load_store_ctx.h"
 #include "observer/table_load/ob_table_load_store_table_ctx.h"
+#include "observer/table_load/ob_table_load_table_ctx.h"
 #include "observer/table_load/plan/ob_table_load_table_op.h"
 
 namespace oceanbase
@@ -38,6 +39,7 @@ int ObTableLoadDagParallelMerger::init_merge_ctx()
   param.merge_mode_ = op_ctx_->merge_mode_;
   param.dml_row_handler_ = op_ctx_->dml_row_handler_;
   param.insert_table_ctx_ = op_ctx_->insert_table_ctx_;
+  param.snapshot_version_ = store_ctx_->ctx_->ddl_param_.snapshot_version_;
   param.trans_param_ = op_ctx_->insert_table_ctx_->get_param().trans_param_;
   param.file_mgr_ = store_ctx_->tmp_file_mgr_;
   param.ctx_ = store_ctx_->ctx_;
