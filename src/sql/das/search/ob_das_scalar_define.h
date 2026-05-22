@@ -137,7 +137,8 @@ public:
       stmt_allocator_("StmtScanAlloc"),
       scan_allocator_("TableScanAlloc"),
       key_ranges_(),
-      really_need_rowkey_order_(true)
+      really_need_rowkey_order_(true),
+      boost_weight_(0.0)
   { }
   virtual ~ObDASScalarScanRtDef() {}
 
@@ -153,7 +154,8 @@ public:
                         K_(sql_mode),
                         K_(scan_flag),
                         K_(key_ranges),
-                        K_(really_need_rowkey_order));
+                        K_(really_need_rowkey_order),
+                        K_(boost_weight));
 
   storage::ObRow2ExprsProjector *p_row2exprs_projector_;
   ObPushdownOperator *p_pd_expr_op_;
@@ -172,6 +174,7 @@ public:
   bool really_need_rowkey_order_;
 
 private:
+  double boost_weight_;
   union {
     storage::ObRow2ExprsProjector row2exprs_projector_;
   };
