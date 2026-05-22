@@ -645,14 +645,14 @@ private:
   // for child with ObPQDistributeMethod::Type::PARTITION_HASH
   static int build_pkey_affinitized_ch_mn_map(ObDfo &parent, ObDfo &child, uint64_t tenant_id);
   // for child with ObPQDistributeMethod::Type::PARTITION_RANGE
-  static int build_pkey_average_task_ch_mn_map(ObExecContext &ctx, ObDfo &parent, ObDfo &child, uint64_t tenant_id);
+  static int build_pkey_weighted_affinitized_ch_mn_map(ObExecContext &ctx, ObDfo &parent, ObDfo &child, uint64_t tenant_id);
   static int build_affinitized_partition_map_by_sqcs(common::ObIArray<ObPxSqcMeta> &sqcs,
                                                      ObDfo &child,
                                                      ObIArray<int64_t> &prefix_task_counts,
                                                      int64_t total_task_count,
                                                      ObPxPartChMapArray &map);
   typedef common::hash::ObHashMap<uint64_t, int64_t> PartRowCountMap;
-  static int build_average_task_partition_map_by_sqcs(
+  static int build_weighted_affinitized_partition_map_by_sqcs(
       common::ObIArray<ObPxSqcMeta> &sqcs,
       ObDfo &child,
       ObIArray<int64_t> &prefix_task_counts,
@@ -664,13 +664,14 @@ private:
   struct AffinitizedPartitionRowMeta {
     ObDASTabletLoc *loc_ = nullptr;
     int64_t row_count_ = 0;
-    TO_STRING_KV(KP(loc_), K(row_count_));
+    double need_threads_num_ = 0.0;
+    TO_STRING_KV(KP(loc_), K(row_count_), K(need_threads_num_));
   };
   struct AffinitizedRowMetaDescCmp {
     bool operator()(const AffinitizedPartitionRowMeta &a, const AffinitizedPartitionRowMeta &b) const
     {
-      if (a.row_count_ != b.row_count_) {
-        return a.row_count_ > b.row_count_;
+      if (a.need_threads_num_ != b.need_threads_num_) {
+        return a.need_threads_num_ > b.need_threads_num_;
       }
       const int64_t ida = OB_NOT_NULL(a.loc_) ? a.loc_->tablet_id_.id() : 0;
       const int64_t idb = OB_NOT_NULL(b.loc_) ? b.loc_->tablet_id_.id() : 0;
@@ -690,19 +691,19 @@ private:
     }
     return ch;
   }
-  static int dispatch_weighted_threads_for_affinitized_lt(
+  static int dispatch_parts_zigzag(
       const int64_t thread_cnt,
       const int64_t prefix_task_count,
       AffinitizedPartRowMetaArray &metas_by_row_desc,
       ObPxPartChMapArray &map,
       const int64_t task_idx_base);
-  static int dispatch_light_partitions_abundant(
+  static int dispatch_parts_abundant(
       const int64_t t_available,
       const int64_t prefix_task_count,
       const int64_t task_offset,
       AffinitizedPartRowMetaArray &metas,
       ObPxPartChMapArray &map);
-  static int dispatch_affinitized_heavy_then_zigzag(
+  static int dispatch_affinitized_partition_map_by_weight_for_one_sqc(
       const int64_t thread_cnt,
       const int64_t prefix_task_count,
       AffinitizedPartRowMetaArray &row_metas,

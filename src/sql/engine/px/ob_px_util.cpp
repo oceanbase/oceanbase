@@ -4128,11 +4128,11 @@ int ObSlaveMapUtil::build_partition_map_by_sqcs(
 }
 
 // sort + zigzag
-int ObSlaveMapUtil::dispatch_weighted_threads_for_affinitized_lt(const int64_t thread_cnt,
-                                                                 const int64_t prefix_task_count,
-                                                                 AffinitizedPartRowMetaArray &metas_by_row_desc,
-                                                                 ObPxPartChMapArray &map,
-                                                                 const int64_t task_idx_base)
+int ObSlaveMapUtil::dispatch_parts_zigzag(const int64_t thread_cnt,
+                                          const int64_t prefix_task_count,
+                                          AffinitizedPartRowMetaArray &metas_by_row_desc,
+                                          ObPxPartChMapArray &map,
+                                          const int64_t task_idx_base)
 {
   int ret = OB_SUCCESS;
   const int64_t T = thread_cnt;
@@ -4148,20 +4148,23 @@ int ObSlaveMapUtil::dispatch_weighted_threads_for_affinitized_lt(const int64_t t
   return ret;
 }
 
-// sort + round-robin
-int ObSlaveMapUtil::dispatch_light_partitions_abundant(const int64_t t_available,
-                                                       const int64_t prefix_task_count,
-                                                       const int64_t task_offset,
-                                                       AffinitizedPartRowMetaArray &metas,
-                                                       ObPxPartChMapArray &map)
+int ObSlaveMapUtil::dispatch_parts_abundant(const int64_t t_available,
+                                            const int64_t prefix_task_count,
+                                            const int64_t task_offset,
+                                            AffinitizedPartRowMetaArray &metas,
+                                            ObPxPartChMapArray &map)
 {
   int ret = OB_SUCCESS;
   const int64_t light_cnt = metas.count();
-  const int64_t base = t_available / light_cnt;
-  const int64_t remainder = t_available % light_cnt;
+  int64_t assigned = 0;
+  for (int64_t li = 0; li < light_cnt; ++li) {
+    assigned += static_cast<int64_t>(metas.at(li).need_threads_num_);
+  }
+  const int64_t remainder = t_available - assigned;
   int64_t cursor = task_offset;
   for (int64_t li = 0; OB_SUCC(ret) && li < light_cnt; ++li) {
     const int64_t tablet_id = metas.at(li).loc_->tablet_id_.id();
+    const int64_t base = static_cast<int64_t>(metas.at(li).need_threads_num_);
     const int64_t tasks = (li < remainder) ? (base + 1) : base;
     for (int64_t j = 0; OB_SUCC(ret) && j < tasks; ++j) {
       if (OB_FAIL(map.push_back(ObPxPartChMapItem(tablet_id, prefix_task_count, cursor + j)))) {
@@ -4175,7 +4178,7 @@ int ObSlaveMapUtil::dispatch_light_partitions_abundant(const int64_t t_available
 
 // find big partitions and give them more tasks
 // then dispatch the remaining threads and partitions
-int ObSlaveMapUtil::dispatch_affinitized_heavy_then_zigzag(const int64_t thread_cnt,
+int ObSlaveMapUtil::dispatch_affinitized_partition_map_by_weight_for_one_sqc(const int64_t thread_cnt,
                                                            const int64_t prefix_task_count,
                                                            AffinitizedPartRowMetaArray &row_metas,
                                                            ObPxPartChMapArray &map)
@@ -4192,54 +4195,41 @@ int ObSlaveMapUtil::dispatch_affinitized_heavy_then_zigzag(const int64_t thread_
     bool total_rows_overflow = false;
     bool no_heavy_partition_detection = false;
     if (OB_UNLIKELY(T <= 2)) {
-      // 没有必要做heavy partition detection
+      // 线程数过少无需均衡
       no_heavy_partition_detection = true;
-    }
-    for (int64_t ii = 0; ii < N; ++ii) {
-      const int64_t row_count = row_metas.at(ii).row_count_;
-      if (OB_UNLIKELY(total_rows > INT64_MAX - row_count)) {
-        total_rows_overflow = true;  // 溢出，直接 sort + zigzag 分配
-        LOG_WARN("total_rows overflow, skip heavy partition detection", K(total_rows), K(row_count));
-        break;
+    } else {
+      for (int64_t partition_idx = 0; partition_idx < N; ++partition_idx) {
+        const int64_t row_count = row_metas.at(partition_idx).row_count_;
+        if (OB_UNLIKELY(total_rows > INT64_MAX - row_count)) {
+          total_rows_overflow = true;  // 溢出，无法均衡
+          LOG_WARN("total_rows overflow, skip heavy partition detection", K(total_rows), K(row_count));
+          break;
+        }
+        total_rows += row_count;
       }
-      total_rows += row_count;
     }
     no_heavy_partition_detection = no_heavy_partition_detection || total_rows_overflow;
     if (OB_SUCC(ret)) {
-      // Find partitions that are worth assigning multiple worker threads.
-      // Skip if total_rows overflowed; treat all partitions as light.
-      int64_t sum_heavy = 0;
+      // Classify partitions into heavy (share > 1 thread) and light (share <= 1 thread).
+      // Then allocate threads proportionally to each group and distribute within each group
+      // using sort-desc + base+rem, so no group is over- or under-served.
       AffinitizedPartRowMetaArray heavy_metas;
-      ObSEArray<int64_t, 64> heavy_alloc;
       AffinitizedPartRowMetaArray light_metas;
-      int64_t min_heavy_idx = -1;
-      double min_share_times_t = std::numeric_limits<double>::max();
-      if (OB_LIKELY(!no_heavy_partition_detection)) {
+      if (!no_heavy_partition_detection) {
         if (OB_FAIL(heavy_metas.reserve(N))) {
           LOG_WARN("reserve heavy_metas failed", K(ret), K(N));
         } else if (OB_FAIL(light_metas.reserve(N))) {
           LOG_WARN("reserve light_metas failed", K(ret), K(N));
-        } else if (OB_FAIL(heavy_alloc.reserve(N))) {
-          LOG_WARN("reserve heavy_alloc failed", K(ret), K(N));
         } else {
-          static const double AFFINITIZED_HEAVY_PART_SHARE_TIMES_T = 2.0;
+          static const double AFFINITIZED_HEAVY_PART_SHARE_TIMES_T = 1.0;
           for (int64_t pi = 0; OB_SUCC(ret) && pi < N; ++pi) {
-            const AffinitizedPartitionRowMeta &meta = row_metas.at(pi);
-            const double share_times_t = static_cast<double>(T)
-                                        * static_cast<double>(meta.row_count_)
-                                        / static_cast<double>(total_rows);
-            if (share_times_t > AFFINITIZED_HEAVY_PART_SHARE_TIMES_T) {
-              int64_t k = static_cast<int64_t>(floor(share_times_t));
+            AffinitizedPartitionRowMeta &meta = row_metas.at(pi);
+            meta.need_threads_num_ = static_cast<double>(T)
+                                     * static_cast<double>(meta.row_count_)
+                                     / static_cast<double>(total_rows);
+            if (meta.need_threads_num_ > AFFINITIZED_HEAVY_PART_SHARE_TIMES_T) {
               if (OB_FAIL(heavy_metas.push_back(meta))) {
                 LOG_WARN("push heavy meta failed", K(ret));
-              } else if (OB_FAIL(heavy_alloc.push_back(k))) {
-                LOG_WARN("push heavy alloc failed", K(ret));
-              } else {
-                sum_heavy += k;
-                if (share_times_t < min_share_times_t) {
-                  min_heavy_idx = heavy_metas.count() - 1;
-                  min_share_times_t = share_times_t;
-                }
               }
             } else {
               if (OB_FAIL(light_metas.push_back(meta))) {
@@ -4251,70 +4241,39 @@ int ObSlaveMapUtil::dispatch_affinitized_heavy_then_zigzag(const int64_t thread_
       } else if (OB_FAIL(light_metas.assign(row_metas))) {
         LOG_WARN("assign row_metas to light_metas failed", K(ret));
       }
-      if (OB_UNLIKELY(sum_heavy > T)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("heavy thread sum exceeds T", K(ret), K(sum_heavy), K(T));
-      } else {
-        // handle partitions that are worth assigning multiple worker threads.
-        int64_t t_cursor = 0;
-        if (OB_SUCC(ret) && heavy_metas.count() > 0) {
-          for (int64_t hi = 0; OB_SUCC(ret) && hi < heavy_metas.count(); ++hi) {
-            const int64_t k = heavy_alloc.at(hi);
-            const int64_t tablet_id = heavy_metas.at(hi).loc_->tablet_id_.id();
-            for (int64_t j = 0; OB_SUCC(ret) && j < k; ++j) {
-              if (OB_FAIL(map.push_back(ObPxPartChMapItem(tablet_id,
-                                                          prefix_task_count,
-                                                          t_cursor + j)))) {
-                LOG_WARN("push heavy partition map failed", K(ret), K(tablet_id), K(t_cursor), K(j));
-              }
+      if (OB_SUCC(ret)) {
+        const int64_t heavy_cnt = heavy_metas.count();
+        const int64_t light_cnt = light_metas.count();
+        // threads = floor(T * heavy_row_sum / total_rows);
+        // If threads >= 1, the partition exclusively owns a group of threads;
+        // If threads < 1, the partition shares threads with other partitions.
+        int64_t heavy_threads = 0;
+        if (heavy_cnt > 0) {
+          if (light_cnt > 0) {
+            double heavy_threads_sum = 0.0;
+            for (int64_t partition_idx = 0; partition_idx < heavy_cnt; ++partition_idx) {
+              heavy_threads_sum += heavy_metas.at(partition_idx).need_threads_num_;
             }
-            t_cursor += k;
+            heavy_threads = MIN(floor(heavy_threads_sum), T - 1);
+          } else {
+            heavy_threads = T;
           }
         }
-        // handle remaining threads and partitions.
-        if (OB_SUCC(ret)) {
-          const int64_t t_rem = T - t_cursor;
-          const int64_t light_cnt = light_metas.count();
-          if (light_cnt > 0) {
-            oceanbase::lib::ob_sort(light_metas.begin(), light_metas.end(), row_desc_cmp);
-            if (t_rem > light_cnt) {
-              // 线程充裕：base=t_rem/light_cnt，remainder=t_rem%light_cnt，前 remainder 个分区多一个 task
-              if (OB_FAIL(dispatch_light_partitions_abundant(
-                      t_rem, prefix_task_count, t_cursor, light_metas, map))) {
-                LOG_WARN("affinitized light abundant dispatch failed", K(ret));
-              }
-            } else if (light_cnt >= t_rem && t_rem > 0) {
-              // sort + zigzag
-              if (OB_FAIL(dispatch_weighted_threads_for_affinitized_lt(
-                      t_rem, prefix_task_count, light_metas, map, t_cursor))) {
-                LOG_WARN("affinitized light zigzag dispatch failed", K(ret));
-              }
-            } else {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected light count or remaining threads", K(ret), K(light_cnt), K(t_rem));
-            }
-          } else if (light_cnt == 0 && t_rem == 1) {
-            if (OB_UNLIKELY(min_heavy_idx < 0 || min_heavy_idx >= heavy_metas.count())) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("min_heavy_idx is invalid", K(ret), K(min_heavy_idx), K(heavy_metas.count()));
-            } else if (OB_ISNULL(heavy_metas.at(min_heavy_idx).loc_)) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("loc_ is null", K(ret), K(min_heavy_idx));
-            } else {
-              const int64_t min_tablet_id = heavy_metas.at(min_heavy_idx).loc_->tablet_id_.id();
-              if (OB_FAIL(map.push_back(ObPxPartChMapItem(min_tablet_id,
-                                                          prefix_task_count,
-                                                          t_cursor)))) {
-                LOG_WARN("push heavy partition map failed", K(ret), K(min_tablet_id), K(t_cursor));
-              } else {
-                t_cursor += 1;
-              }
-            }
-          } else if (light_cnt == 0 && t_rem == 0) {
-            // do nothing
+        const int64_t light_threads = T - heavy_threads;
+        int64_t t_cursor = 0;
+        if (OB_SUCC(ret) && heavy_cnt > 0) {
+          if (OB_FAIL(dispatch_parts_abundant(
+                  heavy_threads, prefix_task_count, t_cursor, heavy_metas, map))) {
+            LOG_WARN("affinitized heavy abundant dispatch failed", K(ret));
           } else {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unexpected light count or remaining threads", K(ret), K(light_cnt), K(t_rem));
+            t_cursor += heavy_threads;
+          }
+        }
+        if (OB_SUCC(ret) && light_cnt > 0) {
+          oceanbase::lib::ob_sort(light_metas.begin(), light_metas.end(), row_desc_cmp);
+          if (OB_FAIL(dispatch_parts_zigzag(
+                  light_threads, prefix_task_count, light_metas, map, t_cursor))) {
+            LOG_WARN("affinitized light zigzag dispatch failed", K(ret));
           }
         }
       }
@@ -4429,7 +4388,6 @@ int ObSlaveMapUtil::build_part_id_arrays(const int64_t part_num,
 }
 
 // 获取主表的分区统计信息，直接用数组下标对应 idx_part_id
-// 负责创建 out_part_row_count_map；析构由调用方（build_pkey_average_task_ch_mn_map）负责
 int ObSlaveMapUtil::collect_part_stats_to_idx_map(const uint64_t tenant_id,
                                                   const uint64_t data_table_id,
                                                   const int64_t part_num,
@@ -4520,7 +4478,7 @@ int ObSlaveMapUtil::try_collect_ddl_local_index_part_row_counts(ObExecContext &c
 
 // DDL 建局部索引场景：按数据表分区统计信息做 zigzag 均衡分配。
 // 没有统计信息退化为几何均分 / round-robin
-int ObSlaveMapUtil::build_average_task_partition_map_by_sqcs(common::ObIArray<ObPxSqcMeta> &sqcs,
+int ObSlaveMapUtil::build_weighted_affinitized_partition_map_by_sqcs(common::ObIArray<ObPxSqcMeta> &sqcs,
                                                              ObDfo &child,
                                                              ObIArray<int64_t> &prefix_task_counts,
                                                              int64_t total_task_cnt,
@@ -4581,11 +4539,11 @@ int ObSlaveMapUtil::build_average_task_partition_map_by_sqcs(common::ObIArray<Ob
         }
         if (OB_SUCC(ret)) {
           if (stat_valid && row_metas.count() == locations.count()) {
-            if (OB_FAIL(dispatch_affinitized_heavy_then_zigzag(sqc_task_count,
+            if (OB_FAIL(dispatch_affinitized_partition_map_by_weight_for_one_sqc(sqc_task_count,
                                                                prefix_task_count,
                                                                row_metas,
                                                                map))) {
-              LOG_WARN("dispatch_affinitized_heavy_then_zigzag failed", K(ret), "sqc", i);
+              LOG_WARN("dispatch_affinitized_partition_map_by_weight_for_one_sqc failed", K(ret), "sqc", i);
             }
           } else {
             LOG_WARN("pkey average map: stat invalid for sqc, fallback to affinitized", "sqc", i);
@@ -4706,7 +4664,6 @@ int ObSlaveMapUtil::dispatch_affinitized_partition_map_for_one_sqc(const DASTabl
       int64_t t = p % rest_task;
       int64_t tablet_id = locations.at(p)->tablet_id_.id();
       OZ(map.push_back(ObPxPartChMapItem(tablet_id, prefix_task_count, t)));
-      LOG_DEBUG("t<=p: push partition map", K(tablet_id), "g_t", prefix_task_count + t, K(t));
     }
   }
   return ret;
@@ -4838,9 +4795,9 @@ int ObSlaveMapUtil::build_pkey_affinitized_ch_mn_map(ObDfo &parent,
 }
 
 // PDML PARTITION_RANGE：在 MN channel 上按 parent SQC 与 child pkey 分区对齐建 part_ch_map。
-// DDL 建局部索引场景：调 build_average_task_partition_map_by_sqcs 按数据表统计做均衡分配。
+// DDL 建局部索引场景：调 build_weighted_affinitized_partition_map_by_sqcs 按数据表统计做均衡分配。
 // 非 DDL 或全局索引：调 build_affinitized_partition_map_by_sqcs 做几何 / RR。
-int ObSlaveMapUtil::build_pkey_average_task_ch_mn_map(ObExecContext &ctx,
+int ObSlaveMapUtil::build_pkey_weighted_affinitized_ch_mn_map(ObExecContext &ctx,
                                                       ObDfo &parent,
                                                       ObDfo &child,
                                                       uint64_t tenant_id)
@@ -4874,7 +4831,7 @@ int ObSlaveMapUtil::build_pkey_average_task_ch_mn_map(ObExecContext &ctx,
               ctx, child, tenant_id, part_row_count_valid, part_row_count_map))) {
         LOG_WARN("try_collect_ddl_local_index_part_row_counts failed", K(ret));
       } else if (part_row_count_valid) {
-        if (OB_FAIL(build_average_task_partition_map_by_sqcs(sqcs, child,
+        if (OB_FAIL(build_weighted_affinitized_partition_map_by_sqcs(sqcs, child,
                                                              dfo_ch_total_infos->at(0).receive_exec_server_.prefix_task_counts_,
                                                              dfo_ch_total_infos->at(0).receive_exec_server_.total_task_cnt_,
                                                              map, &part_row_count_map))) {
@@ -5116,7 +5073,7 @@ int ObSlaveMapUtil::build_pkey_mn_ch_map(ObExecContext &ctx, ObDfo &child, ObDfo
     break;
   }
   case ObPQDistributeMethod::Type::PARTITION_RANGE: {
-    if (OB_FAIL(build_pkey_average_task_ch_mn_map(ctx, parent, child, tenant_id))) {
+    if (OB_FAIL(build_pkey_weighted_affinitized_ch_mn_map(ctx, parent, child, tenant_id))) {
       LOG_WARN("failed to build pkey average-task channel map", K(ret));
     }
     break;
