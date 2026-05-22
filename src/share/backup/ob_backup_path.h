@@ -64,6 +64,8 @@ public:
   int join_table_list_part_file(const share::SCN &scn, const int64_t part_no);
   int join_table_list_meta_info_file(const share::SCN &scn);
   int join_major_compaction_mview_dep_tablet_list_file();
+  int join_backup_file_list(const int64_t file_id);
+  int join_file_list(const int64_t file_id, const ObBackupFileSuffix &type);
   static int parse_checkpoint(const char *entry_d_name, const common::ObString &file_name, const ObBackupFileSuffix &type, uint64_t &checkpoint);
   static int parse_partial_table_list_file_name(const char *entry_d_name, const share::SCN &scn, int64_t &part_no);
   static int parse_table_list_meta_file_name(const char *entry_d_name, share::SCN &scn);
@@ -73,6 +75,8 @@ public:
   int64_t length() const { return cur_pos_; }
   int64_t capacity() const { return sizeof(path_); }
   common::ObString get_obstr() const;
+  // TODO(xingzhi): add test for get_basename + remove_first_level_dir + has_dir
+  int get_basename(ObBackupPathString &basename) const;
   bool operator ==(const ObBackupPath &path) const;
   ObBackupPath &operator=(const ObBackupPath &path);
   uint64_t hash() const;
@@ -311,8 +315,11 @@ struct ObBackupPathUtil
       const share::ObBackupSetDesc &backup_desc, share::ObBackupDest &backup_set_dest);
   static int construct_backup_complement_log_dest(const share::ObBackupDest &backup_tenant_dest,
       const share::ObBackupSetDesc &backup_desc, share::ObBackupDest &backup_set_dest);
-  static int construct_backup_complement_log_dest(const share::ObBackupDest &backup_tenant_dest,
-      share::ObBackupDest &backup_set_dest);
+  static int construct_backup_complement_log_dest(const share::ObBackupDest &backup_set_dest,
+    share::ObBackupDest &complement_log_dest);
+  static int get_meta_info_path(const share::ObBackupDest &backup_set_dest,
+      const share::ObLSID &ls_id, const int64_t turn_id, const int64_t retry_id,
+      const bool is_final_fuse, ObBackupPath &path);
 
 private:
   static int get_tenant_data_backup_set_placeholder_path_(

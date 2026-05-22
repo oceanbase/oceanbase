@@ -104,7 +104,7 @@ class ObTenantMdsService;
   class ObLobManager;
   class ObTransferService;
   class ObRebuildService;
-  class ObTenantRestoreInfoMgr;
+  class ObTenantBackupDestInfoMgr;
   class ObTableScanIterator;
   class ObTenantSnapshotService;
   class ObTenantCGReadInfoMgr;
@@ -216,7 +216,7 @@ namespace rootserver
   class ObBalanceTaskExecuteService;
   class ObBackupTaskScheduler;
   class ObBackupDataService;
-  class ObBackupCleanService;
+  class ObBackupMgrService;
   class ObArchiveSchedulerService;
   class ObArbitrationService;
   class ObDBMSSchedService;
@@ -421,7 +421,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       rootserver::ObTenantBalanceService*,           \
       rootserver::ObBackupTaskScheduler*,            \
       rootserver::ObBackupDataService*,              \
-      rootserver::ObBackupCleanService*,             \
+      rootserver::ObBackupMgrService*,             \
       rootserver::ObArchiveSchedulerService*,        \
       rootserver::ObDRService*,                      \
       rootserver::ObDRSSLOGService*,                 \
@@ -518,7 +518,7 @@ using ObTableScanIteratorObjPool = common::ObServerObjectPool<oceanbase::storage
       storage::ObGlobalIteratorPool*,                \
       common::ObRbMemMgr*,                           \
       share::ObPluginVectorIndexService*,            \
-      storage::ObTenantRestoreInfoMgr*,              \
+      storage::ObTenantBackupDestInfoMgr*,              \
       share::ObAutoSplitTaskCache*    ,              \
       sql::ObAuditLogger*,                           \
       sql::ObAuditLogUpdater*,                       \

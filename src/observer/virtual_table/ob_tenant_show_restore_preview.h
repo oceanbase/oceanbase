@@ -61,7 +61,7 @@ private:
   ObString uri_;
   share::SCN restore_scn_;
   bool only_contain_backup_set_;
-  ObArray<share::ObRestoreBackupSetBriefInfo> backup_set_list_;
+  ObArray<share::ObBackupSetBriefInfo> backup_set_list_;
   ObArray<share::ObRestoreLogPieceBriefInfo> backup_piece_list_;
   ObArray<share::ObBackupPathString> log_path_list_;
   common::ObArenaAllocator allocator_;

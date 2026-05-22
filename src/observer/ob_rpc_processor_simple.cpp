@@ -755,6 +755,18 @@ int ObRpcBackupLSCleanP::process()
   return ret;
 }
 
+int ObRpcBackupLSValidateP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", KP(gctx_.ob_service_), K(ret));
+  } else {
+    ret = gctx_.ob_service_->validate_backup_ls_task(arg_);
+  }
+  return ret;
+}
+
 int ObRpcNotifyArchiveP::process()
 {
   int ret = OB_SUCCESS;
@@ -3207,6 +3219,18 @@ int ObRpcBackupCleanLSResP::process()
     LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
   } else {
     ret = gctx_.ob_service_->report_backup_clean_over(arg_);
+  }
+  return ret;
+}
+
+int ObRpcBackupValidateLSResP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(gctx_.ob_service_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid argument", K(gctx_.ob_service_), K(ret));
+  } else {
+    ret = gctx_.ob_service_->report_backup_validate_over(arg_);
   }
   return ret;
 }

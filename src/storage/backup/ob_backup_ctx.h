@@ -189,6 +189,10 @@ private:
       const int64_t align_length, const ObCompressorType &compressor_type, share::ObBackupCommonHeader *&common_header);
   int write_data_align_(
       const blocksstable::ObBufferReader &buffer, const ObBackupBlockType &block_type, const int64_t alignment);
+#ifdef ERRSIM
+  int corrupt_macro_block_after_checksum_(const blocksstable::ObLogicMacroBlockId &logic_id,
+      const int64_t macro_data_len);
+#endif
   int check_trailer_(const ObBackupDataFileTrailer &trailer);
   int flush_trailer_();
 

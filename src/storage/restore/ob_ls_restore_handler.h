@@ -167,6 +167,7 @@ private:
   int construct_state_handler_(T *&new_handler);
   int deal_failed_restore_();
   bool need_update_state_handle_(share::ObLSRestoreStatus &new_status);
+  int refresh_restore_info_();
 private:
   bool is_inited_;
   bool is_stop_; // used by ls destory
@@ -180,6 +181,8 @@ private:
   common::ObFIFOAllocator allocator_;
   ObLSRestoreStat restore_stat_;
   share::ObTaskId trace_id_;
+  bool succeed_set_dest_info_;
+  int64_t restore_job_id_;
   DISALLOW_COPY_AND_ASSIGN(ObLSRestoreHandler);
 };
 

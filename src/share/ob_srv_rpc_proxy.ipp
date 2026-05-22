@@ -322,3 +322,5 @@
   RPC_S(PR5 run_inspection, OB_RUN_INSPECTION, (obrpc::ObRunInspectionArg));
   RPC_AP(PR5 async_run_inspection, OB_ASYNC_RUN_INSPECTION, (obrpc::ObRunInspectionArg));
   RPC_S(PR5 get_inspection_status, OB_GET_INSPECTION_STATUS, (obrpc::ObGetInspectionStatusArg), obrpc::ObGetInspectionStatusResult);
+  RPC_S(PR5 validate_backup_ls_task, OB_VALIDATE_BACKUP_LS_TASK, (ObBackupValidateLSArg));
+  RPC_S(PR5 report_backup_validate_over, OB_VALIDATE_BACKUP_LS_TASK_RES, (ObBackupTaskRes));

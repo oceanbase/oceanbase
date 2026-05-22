@@ -1614,7 +1614,9 @@ constexpr int OB_DISK_QUOTA_EXCEEDED = -9148;
 constexpr int OB_BACKUP_DEST_NOT_ALLOWED_TO_SET = -9149;
 constexpr int OB_LOG_ONLY_POLICY_NOT_ALLOWED_TO_SET = -9150;
 constexpr int OB_BACKUP_CLEAN_CAN_NOT_START = -9151;
+constexpr int OB_LS_ARCHIVE_MAX_SCN_LESS_THAN_CHECKPOINT = -9154;
 constexpr int OB_BACKUP_SET_NOT_FOUND = -9159;
+constexpr int OB_BACKUP_NOT_FIND_ANY_SET_OR_PIECE = -9162;
 constexpr int OB_ERR_RESIZE_FILE_TO_SMALLER = -9200;
 constexpr int OB_MARK_BLOCK_INFO_TIMEOUT = -9201;
 constexpr int OB_NOT_READY_TO_EXTEND_FILE = -9202;
@@ -3945,7 +3947,7 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_INIT_MD5_ERROR__USER_ERROR_MSG "Init MD5 fail"
 #define OB_OUT_OF_ELEMENT__USER_ERROR_MSG "Out of element"
 #define OB_UPDATE_MD5_ERROR__USER_ERROR_MSG "Update MD5 fail"
-#define OB_FILE_LENGTH_INVALID__USER_ERROR_MSG "Invalid OSS file length"
+#define OB_FILE_LENGTH_INVALID__USER_ERROR_MSG "Invalid file length"
 #define OB_NOT_READ_ALL_DATA__USER_ERROR_MSG "Read all data fail"
 #define OB_BUILD_MD5_ERROR__USER_ERROR_MSG "Build MD5 fail"
 #define OB_MD5_NOT_MATCH__USER_ERROR_MSG "OSS file MD5 not match"
@@ -4087,7 +4089,9 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_BACKUP_CLEAN_CAN_NOT_START__USER_ERROR_MSG "backup clean can not start, because %s"
 #define OB_BACKUP_DEVICE_NOT_MOUNTED__USER_ERROR_MSG "backup device may be not mounted, %s did not read any data written by %s"
 #define OB_BACKUP_DEVICE_NOT_STRONG_RW_CONSISTENT__USER_ERROR_MSG "backup device is not read and write strongly consistent. %s did not read the latest data written by %s."
+#define OB_LS_ARCHIVE_MAX_SCN_LESS_THAN_CHECKPOINT__USER_ERROR_MSG "ls archive max scn less than checkpoint scn"
 #define OB_BACKUP_SET_NOT_FOUND__USER_ERROR_MSG "available data backup set is not found"
+#define OB_BACKUP_NOT_FIND_ANY_SET_OR_PIECE__USER_ERROR_MSG "can not find any backup set or archive piece"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__USER_ERROR_MSG "Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__USER_ERROR_MSG "Mark blocks timeout(5s) in auto extend process when alloc block fail"
 #define OB_NOT_READY_TO_EXTEND_FILE__USER_ERROR_MSG "Auto extend param is not ready to start extending file"
@@ -8329,8 +8333,8 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_OUT_OF_ELEMENT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9005, Out of element"
 #define OB_UPDATE_MD5_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9006, Update MD5 fail"
 #define OB_UPDATE_MD5_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9006, Update MD5 fail"
-#define OB_FILE_LENGTH_INVALID__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9007, Invalid OSS file length"
-#define OB_FILE_LENGTH_INVALID__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9007, Invalid OSS file length"
+#define OB_FILE_LENGTH_INVALID__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9007, Invalid file length"
+#define OB_FILE_LENGTH_INVALID__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9007, Invalid file length"
 #define OB_NOT_READ_ALL_DATA__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9008, Read all data fail"
 #define OB_NOT_READ_ALL_DATA__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9008, Read all data fail"
 #define OB_BUILD_MD5_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9009, Build MD5 fail"
@@ -8613,8 +8617,12 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_BACKUP_DEVICE_NOT_MOUNTED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9152, backup device may be not mounted, %s did not read any data written by %s"
 #define OB_BACKUP_DEVICE_NOT_STRONG_RW_CONSISTENT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9153, backup device is not read and write strongly consistent. %s did not read the latest data written by %s."
 #define OB_BACKUP_DEVICE_NOT_STRONG_RW_CONSISTENT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9153, backup device is not read and write strongly consistent. %s did not read the latest data written by %s."
+#define OB_LS_ARCHIVE_MAX_SCN_LESS_THAN_CHECKPOINT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9154, ls archive max scn less than checkpoint scn"
+#define OB_LS_ARCHIVE_MAX_SCN_LESS_THAN_CHECKPOINT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9154, ls archive max scn less than checkpoint scn"
 #define OB_BACKUP_SET_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9159, available data backup set is not found"
 #define OB_BACKUP_SET_NOT_FOUND__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9159, available data backup set is not found"
+#define OB_BACKUP_NOT_FIND_ANY_SET_OR_PIECE__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9162, can not find any backup set or archive piece"
+#define OB_BACKUP_NOT_FIND_ANY_SET_OR_PIECE__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9162, can not find any backup set or archive piece"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_ERR_RESIZE_FILE_TO_SMALLER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -9200, Extend ssblock file to smaller is not allowed"
 #define OB_MARK_BLOCK_INFO_TIMEOUT__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -9201, Mark blocks timeout(5s) in auto extend process when alloc block fail"
@@ -9610,7 +9618,7 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 
-extern int g_all_ob_errnos[2509];
+extern int g_all_ob_errnos[2511];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

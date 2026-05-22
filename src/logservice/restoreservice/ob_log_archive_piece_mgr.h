@@ -403,6 +403,8 @@ public:
   int update_max_lsn(const palf::LSN &lsn);
   int update_min_lsn(const palf::LSN &lsn);
   int get_max_archive_log(palf::LSN &lsn, share::SCN &scn);
+  // For active piece without single LS index, compute [min_lsn, max_lsn]
+  int get_active_piece_ls_lsn_range(palf::LSN &min_lsn, palf::LSN &max_lsn);
 
   TO_STRING_KV(K_(is_inited), K_(id), K_(array), K_(index), K_(file_id),
       K_(min_file_id), K_(max_file_id), K_(min_lsn), K_(max_lsn), K_(file_offset));
@@ -421,6 +423,7 @@ private:
     char *buf,
     const int64_t buf_size,
     int64_t &read_size);
+  int get_min_log_in_file_(const int64_t file_id, palf::LSN &lsn);
 
 private:
   bool is_inited_;

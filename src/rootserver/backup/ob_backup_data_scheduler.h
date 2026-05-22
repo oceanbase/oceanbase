@@ -42,7 +42,7 @@ public:
   // virtual interfaces which should be realized
   // scheduler entrance
   virtual int process() override;
-  virtual int force_cancel(const uint64_t &tenant_id) override;
+  virtual int force_cancel(const uint64_t tenant_id) override;
   // if can_remove return true, scheudler can remove task from scheduler
   virtual int handle_execute_over(const ObBackupScheduleTask *task, const share::ObHAResultInfo &result_info, bool &can_remove) override;
   // reloading task from inner table which status is pending or doing

@@ -1136,6 +1136,22 @@ int ObArchiveStore::is_piece_info_file_exist(const int64_t dest_id, const int64_
   return ret;
 }
 
+int ObArchiveStore::read_piece_info(ObPieceInfoDesc &desc) const
+{
+  int ret = OB_SUCCESS;
+  ObBackupPath full_path;
+  const ObBackupDest &dest = get_backup_dest();
+  if (!is_init()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObArchiveStore not init", K(ret));
+  } else if (OB_FAIL(ObArchivePathUtil::get_piece_info_file_path(dest, full_path))) {
+    LOG_WARN("failed to get piece info file path", K(ret), K(dest));
+  } else if (OB_FAIL(read_single_file(full_path.get_ptr(), desc))) {
+    LOG_WARN("failed to read single file", K(ret), K(full_path));
+  }
+  return ret;
+}
+
 int ObArchiveStore::read_piece_info(const int64_t dest_id, const int64_t round_id, const int64_t piece_id, ObPieceInfoDesc &desc) const
 {
   int ret = OB_SUCCESS;
@@ -1785,7 +1801,12 @@ int ObArchiveStore::get_specific_piece_place_holder_paths(
   }
   return ret;
 }
-static int parse_piece_file_(ObString &dir_name, int64_t &dest_id, int64_t &round_id, int64_t &piece_id)
+
+int ObArchiveStoreUtil::parse_piece_file(
+    const ObString &dir_name,
+    int64_t &dest_id,
+    int64_t &round_id,
+    int64_t &piece_id)
 {
   int ret = OB_SUCCESS;
   if (3 != sscanf(dir_name.ptr(), "piece_d%ldr%ldp%ld", &dest_id, &round_id, &piece_id)) {
@@ -1798,7 +1819,7 @@ static int parse_piece_file_(ObString &dir_name, int64_t &dest_id, int64_t &roun
 }
 
 //suffix field only supports "start" or "end"
-static int is_piece_file_name_(ObString &file_name, const char *suffix, bool &is_target_piece_file)
+static int is_piece_file_name_(const ObString &file_name, const char *suffix, bool &is_target_piece_file)
 {
   // 1. parse file name like 'piece_d[dest_id]r[round_id]p[piece_id]_start_20220601T120000.obarc'
   // 2. parse file name like 'piece_d[dest_id]r[round_id]p[piece_id]_end_20220601T120000.obarc'
@@ -1854,7 +1875,7 @@ static int is_piece_file_name_(ObString &file_name, const char *suffix, bool &is
   return ret;
 }
 
-static int is_piece_start_file_name_(ObString &file_name, bool &is_start_file)
+int ObArchiveStoreUtil::is_piece_start_file_name(const ObString &file_name, bool &is_start_file)
 {
   const char *start_suffix = "start";
   return is_piece_file_name_(file_name, start_suffix, is_start_file);
@@ -1904,13 +1925,13 @@ int ObArchiveStore::ObPieceRangeFilter::func(const dirent *entry)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObPieceRangeFilter not init", K(ret));
-  } else if (OB_FAIL(is_piece_start_file_name_(file_name, is_piece_start))) {
+  } else if (OB_FAIL(ObArchiveStoreUtil::is_piece_start_file_name(file_name, is_piece_start))) {
     LOG_WARN("failed to check piece start file name", K(ret), K(file_name));
   } else if (! is_piece_start && OB_FAIL(is_piece_end_file_name_(file_name, is_piece_end))) {
     LOG_WARN("failed to check piece end file name", K(ret), K(file_name));
   } else if (! is_piece_start && ! is_piece_end) {
     LOG_WARN("skip not piece start or piece end file", K(ret), K(file_name));
-  } else if (OB_FAIL(parse_piece_file_(file_name, dest_id, round_id, piece_id))) {
+  } else if (OB_FAIL(ObArchiveStoreUtil::parse_piece_file(file_name, dest_id, round_id, piece_id))) {
     LOG_WARN("failed to parse dir name", K(ret), K(file_name));
   } else if (dest_id != dest_id_ || round_id != round_id_) {
     LOG_WARN("dest or round id not match", K(file_name), K(dest_id_), K(round_id_));
@@ -1955,7 +1976,7 @@ ObArray<int64_t> & ObArchiveStore::ObPieceRangeFilter::result() {
   return pieces_;
 }
 
-static int is_round_start_file_name_(ObString &file_name, bool &is_round_start)
+int ObArchiveStoreUtil::is_round_start_file_name(ObString &file_name, bool &is_round_start)
 {
   int ret = OB_SUCCESS;
   const char *PREFIX = "round_";
@@ -1979,7 +2000,7 @@ static int is_round_start_file_name_(ObString &file_name, bool &is_round_start)
   return ret;
 }
 
-static int parse_round_file_(ObString &dir_name, int64_t &dest_id, int64_t &round_id)
+int ObArchiveStoreUtil::parse_round_file(const ObString &dir_name, int64_t &dest_id, int64_t &round_id)
 {
   int ret = OB_SUCCESS;
   if (2 != sscanf(dir_name.ptr(), "round_d%ldr%ld", &dest_id, &round_id)) {
@@ -2024,11 +2045,11 @@ int ObArchiveStore::ObRoundFilter::func(const dirent *entry)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObRoundFilter not init", K(ret));
-  } else if (OB_FAIL(is_round_start_file_name_(dir_name, is_round_start))) {
+  } else if (OB_FAIL(ObArchiveStoreUtil::is_round_start_file_name(dir_name, is_round_start))) {
     LOG_WARN("failed to check round start file name", K(ret), K(dir_name));
   } else if (!is_round_start) {
     LOG_INFO("skip not round start file", K(dir_name));
-  } else if (OB_FAIL(parse_round_file_(dir_name, dest_id, round_id))) {
+  } else if (OB_FAIL(ObArchiveStoreUtil::parse_round_file(dir_name, dest_id, round_id))) {
     LOG_WARN("failed to parse dir name", K(ret), K(dir_name));
   } else if (OB_FAIL(store_->read_round_end(dest_id, round_id, end_desc))) {
     if (OB_OBJECT_NOT_EXIST == ret) {
@@ -2083,11 +2104,11 @@ int ObArchiveStore::ObPieceFilter::func(const dirent *entry)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObPieceFilter not init", K(ret));
-  } else if (OB_FAIL(is_piece_start_file_name_(file_name, is_piece_start))) {
+  } else if (OB_FAIL(ObArchiveStoreUtil::is_piece_start_file_name(file_name, is_piece_start))) {
     LOG_WARN("failed to check piece start file name", K(ret), K(file_name));
   } else if (! is_piece_start) {
     LOG_INFO("skip not piece start file", K(file_name));
-  } else if (OB_FAIL(parse_piece_file_(file_name, key.dest_id_, key.round_id_, key.piece_id_))) {
+  } else if (OB_FAIL(ObArchiveStoreUtil::parse_piece_file(file_name, key.dest_id_, key.round_id_, key.piece_id_))) {
     LOG_WARN("failed to parse piece key", K(ret), K(file_name));
   } else if (OB_FAIL(piece_keys_.push_back(key))) {
     LOG_WARN("push back failed", K(ret), K(key));
@@ -2134,11 +2155,11 @@ int ObArchiveStore::ObLocateRoundFilter::func(const dirent *entry)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLocateRoundFilter not init", K(ret));
-  } else if (OB_FAIL(is_round_start_file_name_(dir_name, is_round_start))) {
+  } else if (OB_FAIL(ObArchiveStoreUtil::is_round_start_file_name(dir_name, is_round_start))) {
     LOG_WARN("failed to check round start file name", K(ret), K(dir_name));
   } else if (! is_round_start) {
     LOG_WARN("skip not round start file", K(ret), K(dir_name));
-  } else if (OB_FAIL(parse_round_file_(dir_name, dest_id, round_id))) {
+  } else if (OB_FAIL(ObArchiveStoreUtil::parse_round_file(dir_name, dest_id, round_id))) {
     LOG_WARN("failed to parse dir name", K(ret), K(dir_name));
   } else if (OB_FAIL(store_->read_round_start(dest_id, round_id, start_desc))) {
     LOG_WARN("round start file not exist", K(ret), K(dest_id), K(round_id));
@@ -2245,11 +2266,11 @@ int ObArchiveStore::ObRoundRangeFilter::func(const dirent *entry)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObRoundRangeFilter not init", K(ret));
-  } else if (OB_FAIL(is_round_start_file_name_(file_name, is_round_start))) {
+  } else if (OB_FAIL(ObArchiveStoreUtil::is_round_start_file_name(file_name, is_round_start))) {
     LOG_WARN("failed to check round start file name", K(ret), K(file_name));
   } else if (! is_round_start) {
     LOG_WARN("skip not round start file", K(ret), K(file_name));
-  } else if (OB_FAIL(parse_round_file_(file_name, dest_id, round_id))) {
+  } else if (OB_FAIL(ObArchiveStoreUtil::parse_round_file(file_name, dest_id, round_id))) {
     LOG_WARN("failed to parse dir name", K(ret), K(file_name));
   } else if (dest_id != dest_id_) {
     LOG_WARN("dest id not match", K(dest_id_), K(file_name));
@@ -2352,13 +2373,13 @@ int ObArchiveStore::ObSpecificPieceFilter::func(const dirent *entry)
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObSpecificPieceFilter not init", K(ret));
-  } else if (OB_FAIL(is_piece_start_file_name_(file_name, is_piece_start))) {
+  } else if (OB_FAIL(ObArchiveStoreUtil::is_piece_start_file_name(file_name, is_piece_start))) {
     LOG_WARN("failed to check piece start file name", K(ret), K(file_name));
   } else if (OB_FAIL(is_piece_end_file_name_(file_name, is_piece_end))) {
     LOG_WARN("failed to check piece end file name", K(ret), K(file_name));
   } else if (!is_piece_start && !is_piece_end) {
     LOG_INFO("skip mismatched file", K(file_name));
-  } else if (OB_FAIL(parse_piece_file_(file_name, key.dest_id_, key.round_id_, key.piece_id_))) {
+  } else if (OB_FAIL(ObArchiveStoreUtil::parse_piece_file(file_name, key.dest_id_, key.round_id_, key.piece_id_))) {
     LOG_WARN("failed to parse piece key", K(ret), K(file_name));
   } else if (key == piece_key_) {
     int64_t pos = 0;

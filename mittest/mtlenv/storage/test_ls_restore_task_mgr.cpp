@@ -54,7 +54,7 @@ int ObLSRestoreHandler::check_meta_tenant_normal_(bool &is_normal) {
 int ObLSRestoreHandler::fill_restore_arg_()
 {
   int ret = OB_SUCCESS;
-  share::ObRestoreBackupSetBriefInfo info;
+  share::ObBackupSetBriefInfo info;
   info.backup_set_path_.assign("file:///data/backup_set_1_full/");
   info.backup_set_desc_.backup_set_id_ = 1;
   info.backup_set_desc_.backup_type_.type_ = share::ObBackupType::FULL_BACKUP;

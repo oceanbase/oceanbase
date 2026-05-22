@@ -2284,5 +2284,68 @@ int ObLogRawPathPieceContext::extract_file_base_lsn_(const char *buf,
   return ret;
 }
 
+int ObLogRawPathPieceContext::get_active_piece_ls_lsn_range(palf::LSN &min_lsn, palf::LSN &max_lsn)
+{
+  int ret = OB_SUCCESS;
+  min_lsn.reset();
+  max_lsn.reset();
+  if (OB_UNLIKELY(!is_valid() || index_ < 0 || index_ >= array_.count())) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "raw path piece context not valid", K(ret), KPC(this));
+  } else {
+    // 1) get file range in current piece for this LS
+    int64_t min_file_id = 0;
+    int64_t max_file_id = 0;
+    ObString uri(array_[index_].first.ptr());
+    share::ObBackupStorageInfo storage_info;
+    share::SCN max_scn;
+    ObLogRawPathPieceContext origin;
+    if (OB_FAIL(storage_info.set(uri.ptr(), array_[index_].second.ptr()))) {
+      CLOG_LOG(WARN, "fail to set storage info", K(ret), K_(id), K_(index), KPC(this));
+    } else if (OB_FAIL(list_dir_files(uri, &storage_info, min_file_id, max_file_id))) {
+      CLOG_LOG(WARN, "list dir files failed", K(ret), K_(id), KPC(this));
+    } else if (min_file_id <= 0 || max_file_id <= 0 || min_file_id > max_file_id) {
+      ret = OB_ENTRY_NOT_EXIST;
+      CLOG_LOG(WARN, "no archive file for this ls in piece", K(ret), K_(id), K_(index), K(min_file_id), K(max_file_id));
+    } else if (OB_FAIL(get_min_log_in_file_(min_file_id, min_lsn))) {
+      CLOG_LOG(WARN, "get min log in file failed", K(ret), K(min_file_id));
+    } else if (OB_FAIL(deep_copy_to(origin))) {
+      CLOG_LOG(WARN, "deep copy failed", K(ret), K_(id));
+    } else if (OB_FAIL(get_max_log_in_file_(origin, max_file_id, max_lsn, max_scn))) {
+      CLOG_LOG(WARN, "get max log in file failed", K(ret), K(max_file_id), K(max_scn));
+    }
+  }
+  return ret;
+}
+
+int ObLogRawPathPieceContext::get_min_log_in_file_(const int64_t file_id, palf::LSN &lsn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!is_valid() || index_ < 0 || index_ >= array_.count())) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "raw path piece context not valid", K(ret), KPC(this));
+  } else if (file_id <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid file id", K(ret), K(file_id));
+  } else {
+    const int64_t header_size = archive::ARCHIVE_FILE_HEADER_SIZE;
+    char *buf = static_cast<char *>(mtl_malloc(header_size, "ArcFile"));
+    int64_t read_size = 0;
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      CLOG_LOG(WARN, "alloc memory failed", K(ret));
+    } else if (OB_FAIL(read_part_file_(file_id, 0 /*offset*/, buf, header_size, read_size))) {
+      CLOG_LOG(WARN, "read part file failed", K(ret), K(file_id));
+    } else if (OB_FAIL(extract_file_base_lsn_(buf, header_size, lsn))) {
+      CLOG_LOG(WARN, "extract base lsn failed", K(ret), K(file_id));
+    }
+    if (NULL != buf) {
+      mtl_free(buf);
+      buf = NULL;
+    }
+  }
+  return ret;
+}
+
 } // namespace logservice
 } // namespace oceanbase

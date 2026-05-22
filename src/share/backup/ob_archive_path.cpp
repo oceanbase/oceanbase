@@ -158,6 +158,7 @@ int ObArchivePathUtil::get_piece_end_file_path(const ObBackupDest &dest, const i
   return ret;
 }
 
+// TODO(xingzhi): After manual cleanup is merged, integrate the path concatenation interface and basic utilities.
 // oss://archive/piece_d[dest_id]r[round_id]p[piece_id]
 int ObArchivePathUtil::get_piece_dir_path(const ObBackupDest &dest, const int64_t dest_id, 
     const int64_t round_id, const int64_t piece_id, ObBackupPath &path)
@@ -330,6 +331,19 @@ int ObArchivePathUtil::get_ls_file_info_path(const ObBackupDest &dest, const int
   return ret;
 }
 
+// oss://archive/file_info.obarc
+int ObArchivePathUtil::get_piece_info_file_path(const ObBackupDest &dest, ObBackupPath &path)
+{
+  int ret = OB_SUCCESS;
+  path.reset();
+  if (OB_FAIL(path.init(dest.get_root_path()))) {
+    LOG_WARN("fail to init path", K(ret), K(dest));
+  } else if (OB_FAIL(path.join(OB_STR_FILE_INFO, ObBackupFileSuffix::ARCHIVE))) {
+    LOG_WARN("failed to join ls file info ", K(ret), K(path));
+  }
+  return ret;
+}
+
 // oss://[user_specified_path]/logstream_[ls_id]/file_info.obarc
 int ObArchivePathUtil::get_ls_file_info_path(const ObBackupDest &dest, const ObLSID &ls_id, ObBackupPath &path)
 {
@@ -339,7 +353,7 @@ int ObArchivePathUtil::get_ls_file_info_path(const ObBackupDest &dest, const ObL
     LOG_WARN("fail to init path", K(ret), K(dest));
   } else if (OB_FAIL(path.join_ls(ls_id))) {
     LOG_WARN("fail to join ls", K(ret), K(path), K(ls_id));
-  } else if (OB_FAIL(path.join("file_info", ObBackupFileSuffix::ARCHIVE))) {
+  } else if (OB_FAIL(path.join(OB_STR_FILE_INFO, ObBackupFileSuffix::ARCHIVE))) {
     LOG_WARN("failed to join ls file info ", K(ret), K(path));
   }
   return ret;

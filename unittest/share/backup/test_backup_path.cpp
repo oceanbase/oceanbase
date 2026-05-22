@@ -75,6 +75,34 @@ TEST(ObBackupPathUtil, base_data_path)
       "data/1100611139453888/1152921509170249728/macro_block_9.33";
 }
 
+TEST(ObBackupPathUtil, get_basename)
+{
+  ObBackupPath path;
+  ObBackupPathString basename;
+
+  ASSERT_EQ(OB_NOT_INIT, path.get_basename(basename));
+
+  const char *p1 = "oss://root_backup_dir/cluster_name/file";
+  ASSERT_EQ(OB_SUCCESS, path.init(p1));
+  ASSERT_EQ(OB_SUCCESS, path.get_basename(basename));
+  ASSERT_STREQ("file", basename.ptr());
+
+  path.reset();
+  basename.reset();
+  const char *p2 = "oss://root_backup_dir//affea1";
+  ASSERT_EQ(OB_SUCCESS, path.init(p2));
+  ASSERT_EQ(OB_SUCCESS, path.get_basename(basename));
+  ASSERT_STREQ("affea1", basename.ptr());
+
+  path.reset();
+  basename.reset();
+  const char *p3 = "oss://root_backup_dir/cluster_name/1/incarnation_1/1002/data/backup_set_8/";
+  ASSERT_EQ(OB_SUCCESS, path.init(p3));
+  ASSERT_EQ(OB_SUCCESS, path.get_basename(basename));
+  ASSERT_STREQ("backup_set_8", basename.ptr());
+
+}
+
 int main(int argc, char **argv)
 {
   OB_LOGGER.set_log_level("INFO");

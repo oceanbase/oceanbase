@@ -56,7 +56,8 @@ public:
   virtual int get_backup_index_cache_key(const ObBackupFileType &backup_file_type, const int64_t offset,
       const int64_t length, ObBackupIndexCacheKey &cache_key) const = 0;
 
-  TO_STRING_KV(K_(mode), K_(index_level), K_(backup_dest), K_(tenant_id), K_(ls_id), K_(turn_id), K_(retry_id));
+  TO_STRING_KV(K_(mode), K_(index_level), K_(backup_dest), K_(tenant_id),
+                  K_(ls_id), K_(turn_id), K_(retry_id));
 
 protected:
   int pread_file_(const common::ObString &backup_path, const share::ObBackupStorageInfo *storage_info,

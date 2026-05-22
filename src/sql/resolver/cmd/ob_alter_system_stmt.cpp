@@ -56,6 +56,35 @@ int ObBackupSetEncryptionStmt::set_param(const int64_t mode, const common::ObStr
   return ret;
 }
 
+int ObBackupValidateStmt::set_param(
+  const uint64_t tenant_id,
+  const uint64_t validate_type_value,
+  const common::ObSArray<uint64_t> &set_or_piece_ids,
+  const share::ObBackupValidateLevel validate_level,
+  const share::ObBackupPathString &path,
+  const share::ObBackupDescription &description,
+  const common::ObSArray<uint64_t> &execute_tenant_ids)
+{
+  int ret = common::OB_SUCCESS;
+  if (tenant_id == OB_INVALID_ID) {
+    ret = OB_INVALID_ARGUMENT;
+    COMMON_LOG(WARN, "invalid args", K(tenant_id));
+  } else if (OB_FAIL(path_.assign(path))) {
+    COMMON_LOG(WARN, "set path failed", K(path));
+  } else if (OB_FAIL(append(set_or_piece_ids_, set_or_piece_ids))) {
+    COMMON_LOG(WARN, "append set or piece ids failed", K(set_or_piece_ids));
+  } else if (OB_FAIL(append(execute_tenant_ids_, execute_tenant_ids))) {
+    COMMON_LOG(WARN, "append execute tenant ids failed", K(execute_tenant_ids));
+  } else if (OB_FAIL(description_.assign(description))) {
+    COMMON_LOG(WARN, "set description failed", K(description));
+  } else if (OB_FAIL(validate_type_.set(validate_type_value))) {
+    COMMON_LOG(WARN, "set validate type failed", K(validate_type_value));
+  } else {
+    tenant_id_ = tenant_id;
+    validate_level_ = validate_level;
+  }
+  return ret;
+}
 
 ObBackupSetDecryptionStmt::ObBackupSetDecryptionStmt()
   : ObSystemCmdStmt(stmt::T_BACKUP_SET_DECRYPTION)

@@ -405,6 +405,7 @@ OB_STMT_TYPE_DEF_UNKNOWN_AT(T_HBASE_GET, err_stmt_type_priv, 398)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_HBASE_BATCH_PUT, err_stmt_type_priv, 399)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_HBASE_BATCH_DELETE, err_stmt_type_priv, 400)
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_HBASE_BATCH_GET, err_stmt_type_priv, 401)
+OB_STMT_TYPE_DEF_UNKNOWN_AT(T_BACKUP_VALIDATE, get_sys_tenant_alter_system_priv, 408)
 
 OB_STMT_TYPE_DEF_UNKNOWN_AT(T_MAX, err_stmt_type_priv, 500)
 #endif

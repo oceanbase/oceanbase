@@ -403,28 +403,12 @@ int ObBackupMetaIndexStore::get_backup_file_path(share::ObBackupPath &backup_pat
   if (is_tenant_level_) {
     if (OB_FAIL(share::ObBackupPathUtil::get_tenant_meta_index_backup_path(
             backup_dest_, backup_set_desc_, backup_data_type_, turn_id_, retry_id_, is_sec_meta_, backup_path))) {
-      LOG_WARN("failed to get tenant meta index file path",
-          K(ret),
-          K_(backup_dest),
-          K_(backup_set_desc),
-          K_(backup_data_type),
-          K_(turn_id),
-          K_(retry_id));
+      LOG_WARN("failed to get tenant meta index file path", K(ret));
     }
   } else {
     if (OB_FAIL(share::ObBackupPathUtilV_4_3_2::get_ls_meta_index_backup_path(backup_dest_,
-            backup_set_desc_,
-            ls_id_,
-            backup_data_type_,
-            turn_id_,
-            retry_id_,
-            backup_path))) {
-      LOG_WARN("failed to get log stream meta index backup path",
-          K(ret),
-          K_(backup_dest),
-          K_(backup_set_desc),
-          K_(ls_id),
-          K_(backup_data_type));
+            backup_set_desc_, ls_id_, backup_data_type_, turn_id_, retry_id_, backup_path))) {
+      LOG_WARN("failed to get log stream meta index file path", K(ret));
     }
   }
   return ret;

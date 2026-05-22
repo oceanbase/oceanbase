@@ -31,23 +31,23 @@ public:
       share::ObBackupCleanLSTaskAttr &ls_attr,
       ObBackupTaskScheduler &task_scheduler,
       common::ObISQLClient &sql_proxy,
-      ObBackupCleanService &backup_service);
+      ObBackupMgrService &backup_service);
   int process(int64_t &finish_cnt);
   int cancel(int64_t &finish_cnt);
   static int advance_ls_task_status(
-      ObBackupCleanService &backup_service,
+      ObBackupMgrService &backup_service,
       common::ObISQLClient &sql_proxy, 
       const share::ObBackupCleanLSTaskAttr &ls_attr, 
       const share::ObBackupTaskStatus &next_status, 
       const int result = OB_SUCCESS, 
       const int64_t end_ts = 0);
   static int redo_ls_task(
-      ObBackupCleanService &backup_service,
+      ObBackupMgrService &backup_service,
       common::ObISQLClient &sql_proxy, 
       const share::ObBackupCleanLSTaskAttr &ls_attr,
       const int64_t retry_id);
   static int statistic_info(
-      ObBackupCleanService &backup_service,
+      ObBackupMgrService &backup_service,
       common::ObISQLClient &sql_proxy, 
       const share::ObBackupCleanLSTaskAttr &ls_attr);
 private:
@@ -59,7 +59,7 @@ private:
   share::ObBackupCleanLSTaskAttr *ls_attr_;
   ObBackupTaskScheduler *task_scheduler_;
   common::ObISQLClient *sql_proxy_;
-  ObBackupCleanService *backup_service_;
+  ObBackupMgrService *backup_service_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupCleanLSTaskMgr);
 };
 

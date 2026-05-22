@@ -32,7 +32,9 @@ int ObGetMaxCheckpointOp::func(const dirent *entry)
     OB_LOG(WARN, "invalid list entry, d_name is null", K(ret));
   } else {
     uint64_t checkpoint_scn = 0;
-    if (OB_FAIL(ObBackupPath::parse_checkpoint(entry->d_name, file_name_, type_, checkpoint_scn))) {
+    if (OB_ISNULL(strstr(entry->d_name, file_name_))) {
+      // d_name without file_name_, do not need to parse
+    } else if (OB_FAIL(ObBackupPath::parse_checkpoint(entry->d_name, file_name_, type_, checkpoint_scn))) {
       OB_LOG(WARN, "failed to get checkpoint scn", K(ret), KP(entry->d_name));
     } else if (checkpoint_scn > max_checkpoint_scn_) {
       max_checkpoint_scn_ = checkpoint_scn;

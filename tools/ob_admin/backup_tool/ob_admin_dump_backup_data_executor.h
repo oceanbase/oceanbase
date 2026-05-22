@@ -219,11 +219,11 @@ private:
       storage::ObExternTenantLocalityInfoDesc &locality_info);
   int do_tenant_level_restore_preview_(
       const ObIArray<ObString> &backup_path_array,
-      ObIArray<ObRestoreBackupSetBriefInfo> &backup_set_list,
+      ObIArray<ObBackupSetBriefInfo> &backup_set_list,
       ObIArray<ObRestoreLogPieceBriefInfo> &backup_piece_list);
   int do_print_restore_preview_(
       ObIAllocator &allocator,
-      ObArray<ObRestoreBackupSetBriefInfo> backup_set_list,
+      ObArray<ObBackupSetBriefInfo> backup_set_list,
       ObArray<ObRestoreLogPieceBriefInfo> backup_piece_list);
 private:
   static const int64_t MAX_RESTORE_TIME_LENGTH = MAX(OB_MAX_TIME_STR_LENGTH, OB_MAX_INTEGER_DISPLAY_WIDTH);

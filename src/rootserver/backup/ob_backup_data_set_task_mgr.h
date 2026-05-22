@@ -15,6 +15,9 @@
 
 #include "ob_backup_data_scheduler.h"
 #include "share/backup/ob_backup_tablet_reorganize_helper.h"
+#include "share/backup/ob_archive_struct.h"
+#include "share/backup/ob_archive_store.h"
+#include "storage/backup/ob_backup_block_file_reader_writer.h"
 
 namespace oceanbase
 {
@@ -51,6 +54,7 @@ public:
 private:
   int persist_sys_ls_task_();
   int do_persist_sys_ls_task_();
+  int deal_generate_file_list_failed_(const int err, bool &can_retry);
   int persist_ls_attr_info_(const share::ObBackupLSTaskAttr &sys_ls_task, ObIArray<share::ObLSID> &ls_ids);
   int sync_wait_backup_user_ls_scn_(const share::ObBackupLSTaskAttr &sys_ls_task, share::SCN &scn);
   int generate_ls_tasks_(const ObIArray<share::ObLSID> &ls_ids, const share::ObBackupDataTaskType &type);
@@ -129,6 +133,44 @@ private:
   int do_backup_completing_log_(ObArray<share::ObBackupLSTaskAttr> &ls_task, int64_t &finish_cnt);
   int calculate_start_replay_scn_(share::SCN &start_replay_scn);
   int do_cancel_();
+  // new function for generate file list
+  int generate_backup_set_file_list_();
+  int generate_backup_meta_info_file_list_();
+  int generate_table_list_file_list_();
+  int generate_tenant_index_file_list_();
+  int generate_infos_file_list_();
+  int generate_log_stream_file_list_(const ObIArray<ObBackupLSTaskAttr> &ls_task);
+  int add_file_to_file_list_info_(
+      const ObBackupPath &path,
+      const ObBackupStorageInfo *storage_info,
+      backup::ObBackupFileListInfo &file_list_info);
+  int process_complement_log_logstream_dir_list_(
+    const ObBackupDest &complement_log_dest,
+    const int64_t dest_id,
+    const ObPieceKey &key,
+    backup::ObBackupFileListInfo &file_list_info);
+  int generate_logstream_dir_list_(
+      const ObBackupDest &backup_set_dest,
+      backup::ObBackupFileListInfo &file_list_info);
+  int add_log_stream_meta_dirs_(
+      const ObBackupLSTaskAttr &ls_attr,
+      const ObBackupDest &backup_set_dest,
+      backup::ObBackupFileListInfo &file_list_info);
+  int add_log_stream_data_dirs_(
+      const ObBackupLSTaskAttr &ls_attr,
+      const ObBackupDest &backup_set_dest,
+      backup::ObBackupFileListInfo &file_list_info);
+  int process_complement_log_rounds_(
+      const ObBackupDest &complement_log_dest,
+      backup::ObBackupFileListInfo &file_list_info);
+  int process_complement_log_pieces_dir_(
+      const ObBackupDest &complement_log_dest,
+      ObIArray<ObPieceKey> &key_array,
+      backup::ObBackupFileListInfo &file_list_info);
+  int add_piece_file_list_(const ObBackupDest &complement_log_dest, const int64_t dest_id, const ObPieceKey &key);
+  int generate_complement_log_file_list_();
+  int add_complement_log_format_file_(const ObBackupDest &complement_log_dest, const ObBackupStore &complement_store,
+      backup::ObBackupFileListInfo &file_list_info);
   int do_failed_ls_task_(ObMySQLTransaction &trans, const ObIArray<share::ObBackupLSTaskAttr> &ls_task);
   int write_backup_set_placeholder_(const bool is_start);
   int write_table_list_(const share::SCN &end_scn);
@@ -153,6 +195,7 @@ private:
   int get_backup_end_scn_(share::SCN &end_scn) const;
   int get_resource_pool_infos_(ObIArray<ObBackupResourcePool> &resource_pool_infos) const;
   int check_merge_error_();
+  bool is_plus_archive_log_() const { return job_attr_->plus_archivelog_; }
 private:
   bool is_inited_;
   uint64_t meta_tenant_id_;

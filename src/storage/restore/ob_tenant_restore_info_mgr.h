@@ -14,7 +14,6 @@
 #define OCEANBASE_STORAGE_TENANT_RESTORE_INFO_MGR_H_
 
 #include "lib/lock/ob_mutex.h"
-#include "lib/task/ob_timer.h"
 #include "share/backup/ob_backup_struct.h"
 
 namespace oceanbase
@@ -22,52 +21,45 @@ namespace oceanbase
 namespace storage
 {
 
-class ObTenantRestoreInfoMgr final
+class ObTenantBackupDestInfoMgr final
 {
 public:
-  ObTenantRestoreInfoMgr();
-  ~ObTenantRestoreInfoMgr();
-
-  static int mtl_init(ObTenantRestoreInfoMgr *&restore_info_mgr);
-  int init(const uint64_t tenant_id);
-  int start();
-  void wait();
-  void stop();
-  void destroy();
-
-  int refresh_restore_info();
-  bool is_refreshed() const { return is_refreshed_; }
-  int get_backup_dest(const int64_t backup_set_id, share::ObBackupDest &backup_dest);
-  int get_backup_type(const int64_t backup_set_id, share::ObBackupType &backup_type);
-  int get_restore_dest_id(int64_t &dest_id);
-
-private:
-  int get_restore_backup_set_brief_info_(const int64_t backup_set_id, int64_t &idx);
-  void set_refreshed_() { is_refreshed_ = true; }
-
-private:
-  class RestoreInfoRefresher : public common::ObTimerTask
-  {
-  public:
-    RestoreInfoRefresher(ObTenantRestoreInfoMgr &mgr) : mgr_(mgr) {}
-    virtual ~RestoreInfoRefresher() {}
-    virtual void runTimerTask();
-  private:
-    ObTenantRestoreInfoMgr &mgr_;
+  enum class InfoType {
+    NONE = 0,
+    RESTORE = 1,
+    VALIDATE = 2,
+    MAX
   };
 
+  ObTenantBackupDestInfoMgr();
+  ~ObTenantBackupDestInfoMgr();
+
+  static int mtl_init(ObTenantBackupDestInfoMgr *&restore_info_mgr);
+  int init(const uint64_t tenant_id);
+  int start();
+  void stop();
+  void wait();
+  void destroy();
+  int get_backup_dest(const int64_t backup_set_id, share::ObBackupDest &backup_dest);
+  int get_backup_type(const int64_t backup_set_id, share::ObBackupType &backup_type);
+  int get_dest_id(int64_t &dest_id);
+  int set_backup_set_info(
+      const common::ObIArray<share::ObBackupSetBriefInfo> &backup_set_list,
+      const int64_t dest_id,
+      const InfoType type);
+  void reset();
+
 private:
-  static constexpr const int64_t REFRESH_INFO_INTERVAL = 5 * 1000L * 1000L; //5s
+  int get_backup_set_brief_info_(const int64_t backup_set_id, int64_t &idx);
+  int check_restore_data_mode_();
 
 private:
   bool is_inited_;
   lib::ObMutex mutex_;
-  RestoreInfoRefresher refresh_info_task_;
-  bool is_refreshed_;
   uint64_t tenant_id_;
-  int64_t restore_job_id_;
-  common::ObArray<share::ObRestoreBackupSetBriefInfo> backup_set_list_;
+  common::ObArray<share::ObBackupSetBriefInfo> backup_set_list_;
   int64_t dest_id_;
+  InfoType type_;
 };
 
 }
