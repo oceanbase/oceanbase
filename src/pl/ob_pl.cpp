@@ -38,6 +38,9 @@
 #include "observer/mysql/ob_async_cmd_driver.h"
 #include "observer/ob_server.h"
 #include "pl/external_routine/ob_java_udf.h"
+#ifdef OB_BUILD_ORACLE_PL
+#include "close_modules/oracle_pl/pl/opaque/ob_pl_xmldom.h"
+#endif
 namespace oceanbase
 {
 using namespace common;
@@ -4377,6 +4380,7 @@ int ObPLExecState::final(int ret)
     DISABLE_SQL_MEMLEAK_GUARD;
     ObSQLSessionInfo *session = ctx_.exec_ctx_->get_my_session();
     ObPlJsonTypeManager::release_useless_resource(session->get_json_pl_mngr());
+    ObPlXmlTypeManager::release_useless_resource(session->get_xml_pl_mngr());
 #endif
   }
 

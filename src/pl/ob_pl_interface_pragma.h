@@ -35,6 +35,8 @@
 #include "pl/sys_package/ob_dbms_anytype.h"
 #include "pl/sys_package/ob_dbms_anydata.h"
 #include "pl/sys_package/ob_dbms_xmlgen.h"
+#include "close_modules/oracle_pl/pl/sys_package/ob_dbms_xmlparser.h"
+#include "close_modules/oracle_pl/pl/sys_package/ob_dbms_xmldom.h"
 #include "pl/sys_package/ob_dbms_crypto.h"
 #include "pl/sys_package/ob_dbms_ddl.h"
 #include "pl/sys_package/ob_dbms_job.h"
@@ -524,6 +526,26 @@
   //start of dbms_xmlgen
   INTERFACE_DEF(INTERFACE_DBMS_XMLGEN_CONVERT, "DBMS_XMLGEN_CONVERT", (ObDbmsXmlGen::convert))
   //end of dbms_xmlgen
+
+  //start of xml opaque constructors (Parser / DOMDocument / DOMNode / DOMNodeList)
+  INTERFACE_DEF(INTERFACE_XML_OPAQUE_CONSTRUCTOR_NOOP, "XML_OPAQUE_CONSTRUCTOR", (ObDbmsXmlDom::xml_opaque_constructor))
+  //end of xml opaque constructors
+
+  //start of dbms_xmlparser
+  INTERFACE_DEF(INTERFACE_DBMS_XMLPARSER_NEWPARSER, "DBMS_XMLPARSER_NEWPARSER", (ObDbmsXmlParser::newparser))
+  INTERFACE_DEF(INTERFACE_DBMS_XMLPARSER_PARSECLOB, "DBMS_XMLPARSER_PARSECLOB", (ObDbmsXmlParser::parseclob))
+  INTERFACE_DEF(INTERFACE_DBMS_XMLPARSER_GETDOCUMENT, "DBMS_XMLPARSER_GETDOCUMENT", (ObDbmsXmlParser::getdocument))
+  INTERFACE_DEF(INTERFACE_DBMS_XMLPARSER_FREEPARSER, "DBMS_XMLPARSER_FREEPARSER", (ObDbmsXmlParser::freeparser))
+  //end of dbms_xmlparser
+
+  //start of dbms_xmldom
+  INTERFACE_DEF(INTERFACE_DBMS_XMLDOM_FREEDOCUMENT, "DBMS_XMLDOM_FREEDOCUMENT", (ObDbmsXmlDom::freedocument))
+  INTERFACE_DEF(INTERFACE_DBMS_XMLDOM_GETCHILDNODES, "DBMS_XMLDOM_GETCHILDNODES", (ObDbmsXmlDom::getchildnodes))
+  INTERFACE_DEF(INTERFACE_DBMS_XMLDOM_GETELEMENTSBYTAGNAME, "DBMS_XMLDOM_GETELEMENTSBYTAGNAME", (ObDbmsXmlDom::getelementsbytagname))
+  INTERFACE_DEF(INTERFACE_DBMS_XMLDOM_GETLENGTH, "DBMS_XMLDOM_GETLENGTH", (ObDbmsXmlDom::getlength))
+  INTERFACE_DEF(INTERFACE_DBMS_XMLDOM_GETNODEVALUE, "DBMS_XMLDOM_GETNODEVALUE", (ObDbmsXmlDom::getnodevalue))
+  INTERFACE_DEF(INTERFACE_DBMS_XMLDOM_ITEM, "DBMS_XMLDOM_ITEM", (ObDbmsXmlDom::item))
+  //end of dbms_xmldom
 
   //start of dbms_crypto
   INTERFACE_DEF(INTERFACE_DBMS_CRYPTO_ENCRYPT, "DBMS_CRYPTO_ENCRYPT", (ObDbmsCrypto::encrypt))

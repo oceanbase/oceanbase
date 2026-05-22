@@ -19,6 +19,7 @@
 #include "share/system_variable/ob_nls_system_variable.h"
 #include "pl/ob_pl_package_state.h"
 #ifdef OB_BUILD_ORACLE_PL
+#include "close_modules/oracle_pl/pl/opaque/ob_pl_xmldom.h"
 #endif
 #include "rpc/obmysql/ob_sql_sock_session.h"
 #include "sql/engine/expr/ob_expr_regexp_context.h"
@@ -83,6 +84,7 @@ ObBasicSessionInfo::ObBasicSessionInfo(const uint64_t tenant_id)
       sess_level_name_pool_(SET_IGNORE_MEM_VERSION(lib::ObMemAttr(orig_tenant_id_, ObModIds::OB_SQL_SESSION)), OB_MALLOC_NORMAL_BLOCK_SIZE),
       conn_level_name_pool_(SET_IGNORE_MEM_VERSION(lib::ObMemAttr(orig_tenant_id_, ObModIds::OB_SQL_SESSION)), OB_MALLOC_NORMAL_BLOCK_SIZE),
       json_pl_mngr_(0),
+      xml_pl_mngr_(0),
       trans_flags_(),
       sql_scope_flags_(),
       need_reset_package_(false),
@@ -305,6 +307,7 @@ void ObBasicSessionInfo::destroy()
   cur_stmt_tables_.reset();
 #ifdef OB_BUILD_ORACLE_PL
   pl::ObPlJsonTypeManager::release(json_pl_mngr_);
+  pl::ObPlXmlTypeManager::release(xml_pl_mngr_);
 #endif
 }
 
@@ -8005,6 +8008,48 @@ intptr_t ObBasicSessionInfo::get_json_pl_mngr()
 #endif
 
   return json_pl_mngr_;
+}
+
+void ObBasicSessionInfo::destory_xml_pl_mngr()
+{
+#ifdef OB_BUILD_ORACLE_PL
+  if (xml_pl_mngr_) {
+    pl::ObPlXmlTypeManager* handle = reinterpret_cast<pl::ObPlXmlTypeManager*>(xml_pl_mngr_);
+    handle->destroy();
+    common::ObIAllocator& allocator = get_session_allocator();
+    allocator.free(handle);
+    xml_pl_mngr_ = 0;
+  }
+#endif
+}
+
+intptr_t ObBasicSessionInfo::get_xml_pl_mngr()
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_ORACLE_PL
+  if (!xml_pl_mngr_) {
+    common::ObIAllocator& allocator = get_session_allocator();
+    pl::ObPlXmlTypeManager* handle = static_cast<pl::ObPlXmlTypeManager*>(
+                                       allocator.alloc(sizeof(pl::ObPlXmlTypeManager)));
+    if (OB_ISNULL(handle)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate handle", K(ret));
+    } else {
+      handle = new (handle) pl::ObPlXmlTypeManager(orig_tenant_id_);
+      if (OB_FAIL(handle->init())) {
+        allocator.free(handle);
+        LOG_WARN("failed to init xml pl type manager", K(ret));
+      } else {
+        xml_pl_mngr_ = reinterpret_cast<intptr_t>(handle);
+      }
+    }
+  }
+#else
+  ret = OB_NOT_SUPPORTED;
+  LOG_WARN("failed to create xml pl type manager", K(ret));
+#endif
+
+  return xml_pl_mngr_;
 }
 
 

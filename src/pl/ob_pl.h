@@ -819,6 +819,7 @@ struct ObPLExecCtx : public ObPLINS
     }
   }
   inline sql::ObExecContext *get_exec_ctx() const { return exec_ctx_; }
+  inline common::ObIAllocator *get_allocator() const { return allocator_; }
 
   void set_saved_sql_code_info()
   {

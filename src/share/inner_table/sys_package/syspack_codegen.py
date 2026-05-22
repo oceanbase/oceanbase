@@ -269,6 +269,8 @@ syspack_config = [
     SysPackConfig(SysPackGroup.ORACLE, "dbms_plsql_code_coverage", "dbms_plsql_code_coverage.sql", "dbms_plsql_code_coverage_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     SysPackConfig(SysPackGroup.ORACLE, "dbms_java", "dbms_java.sql", "dbms_java_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     SysPackConfig(SysPackGroup.ORACLE, "dbms_schema", "dbms_schema.sql", "dbms_schema_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
+    SysPackConfig(SysPackGroup.ORACLE, "dbms_xmldom", "dbms_xmldom.sql", "dbms_xmldom_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
+    SysPackConfig(SysPackGroup.ORACLE, "dbms_xmlparser", "dbms_xmlparser.sql", "dbms_xmlparser_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     # MySQL
     SysPackConfig(SysPackGroup.MYSQL, "dbms_stats", "dbms_stats_mysql.sql", "dbms_stats_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_scheduler", "dbms_scheduler_mysql.sql", "dbms_scheduler_mysql_body.sql"),

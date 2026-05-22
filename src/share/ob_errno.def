@@ -2763,6 +2763,8 @@ DEFINE_PLS_ERROR(OB_ERR_FORALL_BULK_INDEX_IN_INTO_CLAUSE, -9836, -1, "HY000", "F
 DEFINE_PLS_ERROR(OB_ERR_FORALL_INVLIAD_IN_BIND_VARIABLE, -9837, -1, "HY000", "FORALL bulk IN-bind variables cannot be used here", 440, "FORALL bulk IN-bind variables cannot be used here");
 DEFINE_PLS_ERROR(OB_ERR_BULK_SQL_ATTRS_NOT_SINGLE_INDEX, -9838, -1, "HY000", "bulk SQL attributes must use a single index", 431, "bulk SQL attributes must use a single index");
 DEFINE_ORACLE_ERROR_EXT(OB_ERR_JAVA_SESSION_STATE_CHANGED, -9839, -1, "HY000", "class has changed, Java session state cleared", "class %.*s has changed, Java session state cleared", 29549, "class has changed, Java session state cleared", "class %.*s has changed, Java session state cleared");
+DEFINE_ORACLE_ERROR(OB_ERR_PL_DOM_HANDLE_INVALID, -9841, -1, "HY000", "PL/SQL DOM handle accesses node that is no longer available", 31181, "PL/SQL DOM handle accesses node that is no longer available");
+DEFINE_ORACLE_ERROR(OB_ERR_PL_PARSER_HANDLE_INVALID, -9842, -1, "HY000", "invalid PL/SQL XML parser handle", 64500, "invalid PL/SQL XML parser handle");
 
 // 余留位置
 ////////////////////////////////////////////////////////////////
