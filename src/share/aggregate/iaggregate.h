@@ -929,6 +929,9 @@ public:
           if (OB_FAIL(static_cast<Aggregate *>(agg_)->add_batch_rows(
                 agg_ctx, agg_col_id, mock_skip, bound, const_cast<char *>(agg_cell)))) {
             SQL_LOG(WARN, "add batch rows failed", K(ret));
+          } else if (OB_FAIL(static_cast<Aggregate *>(agg_)->eval_group_extra_result(
+                       agg_ctx, agg_col_id, group_id))) {
+            SQL_LOG(WARN, "eval_inner_agg_failed", K(ret));
           }
         }
       }
