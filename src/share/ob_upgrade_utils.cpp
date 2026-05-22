@@ -980,10 +980,13 @@ int ObBaseUpgradeProcessor::init(
 /* =========== special upgrade processor start ============= */
 int ObUpgradeForAllVersionProcessor::post_upgrade() {
   int ret = OB_SUCCESS;
+  LOG_WARN("UPGRADE_PROGRESSIVE_MERGE post_upgrade called", K(tenant_id_));
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(flush_ncomp_dll_job())) {
     LOG_WARN("fail to flush ncomp dll job", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_sys_table_progressive_merge_round_())) {
+    LOG_WARN("fail to post upgrade for sys table progressive merge round", KR(ret));
   }
   return ret;
 }
@@ -1931,22 +1934,11 @@ int ObUpgradeFor4352Processor::post_upgrade_for_dynamic_partition()
 }
 /* =========== 4352 upgrade processor end ============= */
 
-/* =========== 4355 upgrade processor begin ============= */
-
-int ObUpgradeFor4355Processor::post_upgrade()
+int ObBaseUpgradeProcessor::post_upgrade_for_sys_table_progressive_merge_round_()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(check_inner_stat())) {
-    LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (OB_FAIL(post_upgrade_for_sys_table_progressive_merge_round_())) {
-    LOG_WARN("fail to post upgrade for sys table progressive merge round", KR(ret));
-  }
-  return ret;
-}
-
-int ObUpgradeFor4355Processor::post_upgrade_for_sys_table_progressive_merge_round_()
-{
-  int ret = OB_SUCCESS;
+  LOG_INFO("UPGRADE_PROGRESSIVE_MERGE begin post_upgrade_for_sys_table_progressive_merge_round_",
+           K(tenant_id_));
   ObSqlString sql;
   ObArray<uint64_t> table_ids;
   obrpc::ObBatchUpgradeTableSchemaArg arg;
@@ -1966,7 +1958,7 @@ int ObUpgradeFor4355Processor::post_upgrade_for_sys_table_progressive_merge_roun
       " where progressive_merge_round = 1 and table_id in "
       "(select table_id from %s where tenant_id = %ld and table_id < %ld group by table_id having count(*) > 1)"
       "order by table_id",
-      // tenant_id in sys table is 0, tenant_id in virtual table is real tenant_id 
+      // tenant_id in sys table is 0, tenant_id in virtual table is real tenant_id
       OB_ALL_TABLE_TNAME, OB_INVALID_TENANT_ID, OB_ALL_VIRTUAL_CORE_ALL_TABLE_TNAME, tenant_id_,
       OB_ALL_TABLE_HISTORY_TNAME, OB_INVALID_TENANT_ID, OB_MAX_SYS_TABLE_ID))) {
     LOG_WARN("fail to assign sql", KR(ret));
@@ -2007,11 +1999,25 @@ int ObUpgradeFor4355Processor::post_upgrade_for_sys_table_progressive_merge_roun
     } else if (OB_FAIL(common_proxy_->timeout(timeout).batch_upgrade_table_schema(arg))) {
       LOG_WARN("fail to batch upgrade table schema", KR(ret), K(tenant_id_), K(arg));
     } else {
-      LOG_INFO("successfully batch upgrade table schema", KR(ret), K(tenant_id_), 
+      LOG_INFO("successfully batch upgrade table schema", KR(ret), K(tenant_id_),
                K(table_ids), "cost", ObTimeUtility::current_time() - start_time);
     }
   } else if (OB_SUCC(ret)) {
     LOG_INFO("no tables need to update", KR(ret), K(tenant_id_));
+  }
+  return ret;
+}
+
+/* =========== 4355 upgrade processor begin ============= */
+
+int ObUpgradeFor4355Processor::post_upgrade()
+{
+  int ret = OB_SUCCESS;
+  LOG_WARN("UPGRADE_PROGRESSIVE_MERGE 4355 post_upgrade called", K(tenant_id_));
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_sys_table_progressive_merge_round_())) {
+    LOG_WARN("fail to post upgrade for sys table progressive merge round", KR(ret));
   }
   return ret;
 }

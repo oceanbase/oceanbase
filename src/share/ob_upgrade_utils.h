@@ -117,6 +117,7 @@ public:
   TO_STRING_KV(K_(inited), K_(data_version), K_(tenant_id), K_(mode));
 protected:
   virtual int check_inner_stat() const;
+  int post_upgrade_for_sys_table_progressive_merge_round_();
 protected:
   bool inited_;
   int64_t data_version_;
@@ -382,8 +383,6 @@ public:
   virtual int pre_upgrade() override { return common::OB_SUCCESS; }
   virtual int post_upgrade() override;
   virtual int finish_upgrade() override { return common::OB_SUCCESS; }
-private:
-  int post_upgrade_for_sys_table_progressive_merge_round_();
 };
 
 /* =========== special upgrade processor end   ============= */
