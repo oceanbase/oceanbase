@@ -68,6 +68,7 @@ class ObPL;
 struct ObPLExecRecursionCtx;
 struct ObPLSqlCodeInfo;
 class ObPLContext;
+class ObPLTopContext;
 class ObDbmsCursorInfo;
 class ObOraJavaSessionState;
 #ifdef OB_BUILD_ORACLE_PL
@@ -1193,6 +1194,9 @@ public:
   {
     pl_context_ = pl_stack_ctx;
   }
+  inline pl::ObPLTopContext *get_pl_top_context() { return pl_top_context_; }
+  inline const pl::ObPLTopContext *get_pl_top_context() const { return pl_top_context_; }
+  inline void set_pl_top_context(pl::ObPLTopContext *pl_top_context) { pl_top_context_ = pl_top_context; }
 
 #ifdef OB_BUILD_ORACLE_PL
   inline pl::debugger::ObPLDebugger *get_pl_debugger() const { return pl_debugger_; }
@@ -2210,6 +2214,7 @@ private:
   private:
   pl::ObUtlHttp* ob_utl_http_info_ = NULL;
   pl::ObOraJavaSessionState* ora_java_session_state_ = nullptr;
+  pl::ObPLTopContext *pl_top_context_ = nullptr;
 
   public:
   pl::ObUtlHttp* get_ob_utl_http_info() {return ob_utl_http_info_;}

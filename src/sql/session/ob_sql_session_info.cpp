@@ -199,7 +199,8 @@ ObSQLSessionInfo::ObSQLSessionInfo(const uint64_t tenant_id) :
       curr_request_id_(0),
       trans_gtt_v2_sequence_(0),
       min_data_version_of_init_sess_(0),
-      ora_java_session_state_(nullptr)
+      ora_java_session_state_(nullptr),
+      pl_top_context_(nullptr)
 {
   MEMSET(tenant_buff_, 0, sizeof(share::ObTenantSpaceFetcher));
   MEMSET(vip_buf_, 0, sizeof(vip_buf_));
@@ -340,6 +341,7 @@ void ObSQLSessionInfo::reset(bool skip_sys_var)
 #endif
     curr_session_context_size_ = 0;
     pl_context_ = NULL;
+    pl_top_context_ = nullptr;
     pl_can_retry_ = true;
     plsql_exec_time_ = 0;
     plsql_compile_time_ = 0;
@@ -2038,19 +2040,20 @@ int ObSQLSessionInfo::make_ps_cursor(pl::ObPsCursorInfo *&cursor,
 
 int64_t ObSQLSessionInfo::get_plsql_exec_time()
 {
-  return (NULL == pl_context_ || 0 == pl_context_->get_exec_stack().count()
-          || NULL == pl_context_->get_exec_stack().at(pl_context_->get_exec_stack().count()-1))
+  return (NULL == pl_top_context_ || NULL == pl_top_context_->get_exec_stack() || 0 == pl_top_context_->get_exec_stack()->count()
+          || NULL == pl_top_context_->get_exec_stack()->at(pl_top_context_->get_exec_stack()->count()-1))
             ? plsql_exec_time_
-            : pl_context_->get_exec_stack().at(pl_context_->get_exec_stack().count()-1)->get_sub_plsql_exec_time();
+            : pl_top_context_->get_exec_stack()->at(pl_top_context_->get_exec_stack()->count()-1)->get_sub_plsql_exec_time();
 }
 
 void ObSQLSessionInfo::update_pure_sql_exec_time(int64_t elapsed_time)
 {
-  if (OB_NOT_NULL(pl_context_)
-      && pl_context_->get_exec_stack().count() > 0
-      && OB_NOT_NULL(pl_context_->get_exec_stack().at(pl_context_->get_exec_stack().count()-1))) {
-    int64_t pos = pl_context_->get_exec_stack().count()-1;
-    pl::ObPLExecState *state = pl_context_->get_exec_stack().at(pos);
+  if (OB_NOT_NULL(pl_top_context_)
+      && OB_NOT_NULL(pl_top_context_->get_exec_stack())
+      && pl_top_context_->get_exec_stack()->count() > 0
+      && OB_NOT_NULL(pl_top_context_->get_exec_stack()->at(pl_top_context_->get_exec_stack()->count()-1))) {
+    int64_t pos = pl_top_context_->get_exec_stack()->count()-1;
+    pl::ObPLExecState *state = pl_top_context_->get_exec_stack()->at(pos);
     state->add_pure_sql_exec_time(elapsed_time - state->get_sub_plsql_exec_time() - state->get_pure_sql_exec_time());
   }
 }
@@ -2486,20 +2489,20 @@ void ObSQLSessionInfo::set_early_lock_release(bool enable)
 
 ObPLCursorInfo *ObSQLSessionInfo::get_pl_implicit_cursor()
 {
-  return NULL != pl_context_ ? &(pl_context_->get_cursor_info()) : NULL;
+  return NULL != pl_top_context_ ? &(pl_top_context_->get_cursor_info()) : NULL;
 }
 const ObPLCursorInfo *ObSQLSessionInfo::get_pl_implicit_cursor() const
 {
-  return NULL != pl_context_ ? &(pl_context_->get_cursor_info()) : NULL;
+  return NULL != pl_top_context_ ? &(pl_top_context_->get_cursor_info()) : NULL;
 }
 
 ObPLSqlCodeInfo *ObSQLSessionInfo::get_pl_sqlcode_info()
 {
-  return NULL != pl_context_ ? &(pl_context_->get_sqlcode_info()) : NULL;
+  return NULL != pl_top_context_ ? &(pl_top_context_->get_sqlcode_info()) : NULL;
 }
 const ObPLSqlCodeInfo *ObSQLSessionInfo::get_pl_sqlcode_info() const
 {
-  return NULL != pl_context_ ? &(pl_context_->get_sqlcode_info()) : NULL;
+  return NULL != pl_top_context_ ? &(pl_top_context_->get_sqlcode_info()) : NULL;
 }
 
 bool ObSQLSessionInfo::has_pl_implicit_savepoint()
@@ -2661,16 +2664,16 @@ void ObSQLSessionInfo::reset_pl_profiler_resource()
 {
 #ifdef OB_BUILD_ORACLE_PL
   if (pl_profiler_ != nullptr) {
-    if (OB_NOT_NULL(pl_context_)) {
-      for (int64_t i = pl_context_->get_exec_stack().count() - 1; i >= 0 ; --i) {
-        if (OB_NOT_NULL(pl_context_->get_exec_stack().at(i))
-              && OB_NOT_NULL(pl_context_->get_exec_stack().at(i)->get_profiler_time_stack())) {
+    if (OB_NOT_NULL(pl_top_context_) && OB_NOT_NULL(pl_top_context_->get_exec_stack())) {
+      for (int64_t i = pl_top_context_->get_exec_stack()->count() - 1; i >= 0 ; --i) {
+        if (OB_NOT_NULL(pl_top_context_->get_exec_stack()->at(i))
+              && OB_NOT_NULL(pl_top_context_->get_exec_stack()->at(i)->get_profiler_time_stack())) {
           int ret = OB_SUCCESS;
 
-          ObPLExecState &curr = *pl_context_->get_exec_stack().at(i);
+          ObPLExecState &curr = *pl_top_context_->get_exec_stack()->at(i);
           if (OB_FAIL(curr.get_profiler_time_stack()->pop_all(*pl_profiler_))) {
             LOG_WARN("[DBMS_PROFILER] failed to flush profiler time stack",
-                      K(ret), K(i), K(pl_context_->get_exec_stack().count()), K(lbt()));
+                      K(ret), K(i), K(pl_top_context_->get_exec_stack()->count()), K(lbt()));
           }
         }
       }
@@ -2687,18 +2690,19 @@ int ObSQLSessionInfo::collect_pl_code_coverage_info()
 {
   int ret = OB_SUCCESS;
 #ifdef OB_BUILD_ORACLE_PL
-  if (pl_code_coverage_ != nullptr && pl_code_coverage_->is_inited() && OB_NOT_NULL(pl_context_)) {
-    for (int64_t i = pl_context_->get_exec_stack().count() - 1; i >= 0 ; --i) {
-      if (OB_NOT_NULL(pl_context_->get_exec_stack().at(i))
-          && !pl_context_->get_exec_stack().at(i)->get_coverage_info().empty()) {
-        ObPLExecState &curr = *pl_context_->get_exec_stack().at(i);
-        hash::ObHashSet<std::pair<uint64_t, uint64_t>> & curr_coverage_info = curr.get_coverage_info();
-        hash::ObHashSet<std::pair<uint64_t, uint64_t>>::const_iterator iter;
-        for (iter = curr_coverage_info.begin(); OB_SUCC(ret) && iter != curr_coverage_info.end(); ++iter) {
-          if (OB_FAIL(pl_code_coverage_->set_coverage_info(curr.get_function().get_profiler_unit_info().first,
-            iter->first.first, iter->first.second))) {
-            LOG_WARN("[DBMS_PLSQL_CODE_COVERAGE] failed to set coverage info",
-                      K(ret), K(i), K(pl_context_->get_exec_stack().count()), K(lbt()));
+  if (pl_code_coverage_ != nullptr && pl_code_coverage_->is_inited() && OB_NOT_NULL(pl_top_context_) && OB_NOT_NULL(pl_top_context_->get_exec_stack())) {
+    for (int64_t i = pl_top_context_->get_exec_stack()->count() - 1; i >= 0 ; --i) {
+      if (OB_NOT_NULL(pl_top_context_->get_exec_stack()->at(i))) {
+        ObPLExecState &curr = *pl_top_context_->get_exec_stack()->at(i);
+        hash::ObHashSet<std::pair<uint64_t, uint64_t>> *curr_coverage_info = curr.get_coverage_info();
+        if (OB_NOT_NULL(curr_coverage_info) && !curr_coverage_info->empty()) {
+          hash::ObHashSet<std::pair<uint64_t, uint64_t>>::const_iterator iter;
+          for (iter = curr_coverage_info->begin(); OB_SUCC(ret) && iter != curr_coverage_info->end(); ++iter) {
+            if (OB_FAIL(pl_code_coverage_->set_coverage_info(curr.get_function().get_profiler_unit_info().first,
+              iter->first.first, iter->first.second))) {
+              LOG_WARN("[DBMS_PLSQL_CODE_COVERAGE] failed to set coverage info",
+                        K(ret), K(i), K(pl_top_context_->get_exec_stack()->count()), K(lbt()));
+            }
           }
         }
       }

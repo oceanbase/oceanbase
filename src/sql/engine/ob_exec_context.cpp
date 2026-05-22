@@ -81,7 +81,6 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     expr_factory_(NULL),
     outline_params_wrapper_(NULL),
     execution_id_(OB_INVALID_ID),
-    has_non_trivial_expr_op_ctx_(false),
     sql_ctx_(NULL),
     pl_stack_ctx_(nullptr),
     need_disconnect_(true),
@@ -149,7 +148,8 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     lake_table_file_map_(nullptr),
     need_try_serialize_package_var_(false),
     current_granule_type_(OB_GRANULE_UNINITIALIZED),
-    tx_result_()
+    tx_result_(),
+    pl_top_context_(nullptr)
 {
 }
 
@@ -274,6 +274,10 @@ ObExecContext::~ObExecContext()
   }
   tx_result_.reset();
   pl_complex_type_lazy_mgr_.reset();
+  if (OB_NOT_NULL(pl_top_context_)) {
+    pl_top_context_->~ObPLTopContext();
+    pl_top_context_ = nullptr;
+  }
 }
 
 void ObExecContext::clean_resolve_ctx()
@@ -364,15 +368,14 @@ int ObExecContext::init_expr_op(uint64_t expr_op_size, ObIAllocator *allocator)
 void ObExecContext::reset_expr_op_ctx()
 {
   if (expr_op_ctx_store_ != NULL) {
-    int64_t ctx_store_size = expr_op_size_ * sizeof(ObExprOperatorCtx *);
     ObExprOperatorCtx **it = expr_op_ctx_store_;
     ObExprOperatorCtx **it_end = &expr_op_ctx_store_[expr_op_size_];
     for (; it != it_end; ++it) {
-      if (NULL != (*it)) {
+      if (NULL != (*it) && !IS_REUSE_EXPR_OP_CTX(*it)) {
         (*it)->~ObExprOperatorCtx();
+        (*it) = reinterpret_cast<ObExprOperatorCtx *>(ADD_REUSE_EXPR_OP_CTX_MASK(*it));
       }
     }
-    MEMSET(expr_op_ctx_store_, 0, ctx_store_size);
   }
 }
 
@@ -380,7 +383,6 @@ void ObExecContext::reset_expr_op()
 {
   if (expr_op_ctx_store_ != NULL) {
     reset_expr_op_ctx();
-    has_non_trivial_expr_op_ctx_ = false;
     expr_op_ctx_store_ = NULL;
     expr_op_size_ = 0;
   }
@@ -501,7 +503,11 @@ int ObExecContext::create_expr_op_ctx(uint64_t op_id, int64_t op_ctx_size, void 
   if (OB_UNLIKELY(op_id >= expr_op_size_ || op_ctx_size <= 0 || OB_ISNULL(expr_op_ctx_store_))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(op_id), K(op_ctx_size), K(expr_op_ctx_store_));
-  } else if (OB_UNLIKELY(NULL != get_expr_op_ctx(op_id))) {
+  } else if (OB_NOT_NULL(expr_op_ctx_store_[op_id]) && IS_REUSE_EXPR_OP_CTX(expr_op_ctx_store_[op_id])) {
+    int64_t ctx_ptr = reinterpret_cast<int64_t>(expr_op_ctx_store_[op_id]);
+    op_ctx = reinterpret_cast<void *>(ctx_ptr & ~RECONSTRUCT_EXPR_OP_CTX_MASK);
+    expr_op_ctx_store_[op_id] = static_cast<ObExprOperatorCtx *>(op_ctx);
+  } else if (OB_UNLIKELY(OB_NOT_NULL(expr_op_ctx_store_[op_id]))) {
     ret = OB_INIT_TWICE;
     LOG_WARN("expr operator context has been created", K(op_id));
   } else if (OB_ISNULL(op_ctx = allocator.alloc(op_ctx_size))) {
@@ -509,14 +515,19 @@ int ObExecContext::create_expr_op_ctx(uint64_t op_id, int64_t op_ctx_size, void 
     LOG_ERROR("allocate memory failed", K(ret), K(op_id), K(op_ctx_size));
   } else {
     expr_op_ctx_store_[op_id] = static_cast<ObExprOperatorCtx *>(op_ctx);
-    has_non_trivial_expr_op_ctx_ = true;
   }
   return ret;
 }
 
 void *ObExecContext::get_expr_op_ctx(uint64_t op_id)
 {
-  return (OB_LIKELY(op_id < expr_op_size_) && !OB_ISNULL(expr_op_ctx_store_)) ? expr_op_ctx_store_[op_id] : NULL;
+  void *ret = NULL;
+  if (OB_LIKELY(op_id < expr_op_size_) &&
+      !OB_ISNULL(expr_op_ctx_store_) &&
+      OB_NOT_NULL(expr_op_ctx_store_[op_id])) {
+    ret = IS_REUSE_EXPR_OP_CTX(expr_op_ctx_store_[op_id]) ? NULL : expr_op_ctx_store_[op_id];
+  }
+  return ret;
 }
 
 int ObExecContext::create_physical_plan_ctx()
@@ -1162,7 +1173,8 @@ int ObExecContext::get_package_guard(pl::ObPLPackageGuard *&package_guard)
 
   if (OB_NOT_NULL(my_session_) &&
       OB_NOT_NULL(my_session_->get_pl_context()) &&
-      !my_session_->get_pl_context()->get_disable_pl_exec_cache()) {
+      OB_NOT_NULL(my_session_->get_pl_top_context()) &&
+      !my_session_->get_pl_top_context()->get_disable_pl_exec_cache()) {
     top_ctx = my_session_->get_pl_context()->get_my_exec_ctx();
   }
   if (OB_ISNULL(top_ctx)) {
@@ -1563,6 +1575,39 @@ int ObExecContext::add_lake_table_file(uint64_t table_loc_id,
     key.tablet_id_ = tablet_id;
     if (OB_FAIL(lake_table_file_map->set_refactored(key, files))) {
       LOG_WARN("failed to set refactored", K(key), K(files));
+    }
+  }
+  return ret;
+}
+
+pl::ObPLTopContext* ObExecContext::get_pl_top_context()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(OB_ISNULL(pl_top_context_))) {
+    if (OB_ISNULL(pl_top_context_ = OB_NEWx(pl::ObPLTopContext, &allocator_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for pl top context");
+    } else if (OB_FAIL(pl_top_context_->init())) {
+      pl_top_context_->~ObPLTopContext();
+      pl_top_context_ = nullptr;
+      LOG_WARN("failed to init pl top context", K(ret));
+    }
+  }
+  return pl_top_context_;
+}
+
+int ObExecContext::get_pl_top_context(pl::ObPLTopContext *&pl_top_context)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_NOT_NULL(my_session_) &&
+      OB_NOT_NULL(my_session_->get_pl_top_context())) {
+    pl_top_context = my_session_->get_pl_top_context();
+  } else {
+    pl_top_context = get_pl_top_context();
+    if (OB_ISNULL(pl_top_context)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get pl exec state mgr failed", K(ret));
     }
   }
   return ret;

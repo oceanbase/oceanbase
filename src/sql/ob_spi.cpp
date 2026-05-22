@@ -613,14 +613,14 @@ int ObSPIService::calc_obj_access_expr(ObPLExecCtx *ctx,
   int ret = OB_SUCCESS;
   ObIAllocator *expr_alloc = nullptr;
   ObPLContext *pl_ctx = nullptr;
-  ObPLContext *top_context = nullptr;
+  ObPLTopContext *pl_top_context = nullptr;
   CK (OB_NOT_NULL(ctx));
   CK (OB_NOT_NULL(ctx->exec_ctx_));
   CK (OB_NOT_NULL(ctx->params_));
   OX (pl_ctx = ctx->exec_ctx_->get_pl_stack_ctx());
-  OX (top_context = ctx->exec_ctx_->get_my_session()->get_pl_context());
+  OZ (ctx->exec_ctx_->get_pl_top_context(pl_top_context));
   CK (OB_NOT_NULL(pl_ctx->get_pl_exec_info()));
-  OX (expr_alloc = pl_ctx->get_pl_exec_info()->is_cached_ ? &top_context->get_exec_cache_allocator() : &pl_ctx->get_exec_cache_allocator());
+  OX (expr_alloc = pl_ctx->get_pl_exec_info()->is_cached_ ? &pl_top_context->get_exec_state_allocator() : pl_ctx->get_pl_exec_info()->expr_ctx_op_alloc_);
   CK (OB_NOT_NULL(expr_alloc));
   if (OB_SUCC(ret)) {
     const ObExprObjAccess *obj_access = NULL;
@@ -1162,11 +1162,12 @@ int ObSPIService::calc_common_expr(ObPLExecCtx *ctx, const ObSqlExpression *expr
 
   bool has_implicit_savepoint = false;
   ObPLContext *pl_ctx = ctx->exec_ctx_->get_pl_stack_ctx();
-  ObPLContext *top_context = ctx->exec_ctx_->get_my_session()->get_pl_context();
+  ObPLTopContext *pl_top_context = nullptr;
 
   CK (OB_NOT_NULL(pl_ctx));
-  CK (OB_NOT_NULL(top_context));
   CK (OB_NOT_NULL(pl_ctx->get_pl_exec_info()));
+  OZ (ctx->exec_ctx_->get_pl_top_context(pl_top_context));
+  CK (OB_NOT_NULL(pl_top_context));
 
   if (OB_SUCC(ret) && lib::is_mysql_mode() && !pl_ctx->is_function_or_trigger()) {
     if (ctx->exec_ctx_->get_my_session()->is_in_transaction()) {
@@ -1177,8 +1178,8 @@ int ObSPIService::calc_common_expr(ObPLExecCtx *ctx, const ObSqlExpression *expr
   }
   if (OB_SUCC(ret)) {
     ObExprResType result_type;
-    ObIAllocator *cache_alloc = pl_ctx->get_pl_exec_info()->is_cached_
-                                  ? &top_context->get_exec_cache_allocator() : &pl_ctx->get_exec_cache_allocator();
+    ObIAllocator *cache_alloc = pl_ctx->get_pl_exec_info()->is_cached_ ? &pl_top_context->get_exec_state_allocator()
+                                                                       : pl_ctx->get_pl_exec_info()->expr_ctx_op_alloc_;
     OZ (ObSQLUtils::calc_sql_expression_without_row(*ctx->exec_ctx_, *expr, *result, cache_alloc, true), KPC(expr));
     OZ (get_result_type(*ctx, *expr, result_type));
     OX (result->set_param_meta(result_type));
@@ -1238,17 +1239,24 @@ int ObSPIService::spi_calc_subprogram_expr(ObPLExecCtx *ctx,
   ObSQLSessionInfo *session_info = NULL;
   ObPLExecState *state = NULL;
   ObSqlExpression *expr = NULL;
+  ObPLExecInfo *pl_exec_info = nullptr;
   CK (OB_NOT_NULL(exec_ctx = ctx->exec_ctx_));
   CK (OB_NOT_NULL(session_info = exec_ctx->get_my_session()));
   OZ (ObPLContext::get_exec_state_from_local(*session_info, package_id, routine_id, state));
   CK (OB_NOT_NULL(state));
+  CK (OB_NOT_NULL(pl_exec_info = state->get_cur_pl_ctx()->get_pl_exec_info()));
   CK (OB_NOT_NULL(exec_ctx = state->get_exec_ctx().exec_ctx_));
   CK (expr_idx >= 0 && expr_idx < state->get_function().get_expressions().count());
   CK (OB_NOT_NULL(expr = state->get_function().get_expressions().at(expr_idx)));
   if (OB_SUCC(ret)) {
     ExecCtxBak exec_ctx_bak;
-    OX (exec_ctx_bak.backup(*exec_ctx));
-    OX (state->get_exec_ctx_bak().restore(*exec_ctx));
+    exec_ctx_bak.backup(*exec_ctx);
+    exec_ctx->set_physical_plan_ctx(pl_exec_info->phy_plan_ctx_);
+    exec_ctx->set_expr_op_ctx_store(pl_exec_info->expr_op_ctx_store_);
+    exec_ctx->set_expr_op_size(pl_exec_info->expr_op_size_);
+    exec_ctx->set_frame_cnt(pl_exec_info->frame_cnt_);
+    exec_ctx->set_frames(pl_exec_info->frames_);
+    exec_ctx->set_pl_expr_alloc(pl_exec_info->expr_ctx_op_alloc_);
     OZ (spi_calc_expr(&(state->get_exec_ctx()), expr, OB_INVALID_ID, result), KPC(expr));
     exec_ctx_bak.restore(*exec_ctx);
   }
@@ -2064,7 +2072,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
                            into_count,
                            *spi_result,
                            spi_result->get_out_params(),
-                           &array_params), K(sql), K(ps_sql));
+                           &array_params));
             OZ (inner_fetch(ctx,
                             can_retry,
                             *spi_result,
@@ -2085,7 +2093,7 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
                             INT64_MAX,
                             NULL,
                             0,
-                            is_type_record), K(ps_sql), K(sql), K(type));
+                            is_type_record));
 
             if (OB_SUCC(ret) && (is_dynamic_sql || is_dbms_sql) && !is_bulk && !is_forall) {
               // if it is bulk into, not allow using out param, so no need deep copy
@@ -2119,8 +2127,8 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
         OX (session->set_pl_can_retry(false));
       }
       if (OB_SUCC(ret) && ObStmt::is_ddl_stmt(stmt_type, true)) {
-        CK (OB_NOT_NULL(session->get_pl_context()));
-        OX (session->get_pl_context()->set_disable_pl_exec_cache(true));
+        CK (OB_NOT_NULL(session->get_pl_top_context()));
+        OX (session->get_pl_top_context()->set_disable_pl_exec_cache(true));
       }
 
       if (OB_SUCC(ret) && 0 == param_count) {
@@ -2155,6 +2163,11 @@ int ObSPIService::spi_inner_execute(ObPLExecCtx *ctx,
 
     if (OB_NOT_NULL(spi_result)) {
       spi_result->~ObSPIResultSet();
+    }
+    if (OB_FAIL(ret)) {
+      ObString sql_str = nullptr == sql ? ps_sql : sql;
+      ObString print_sql(MIN(pl::ObPLParser::MAX_PRINT_LEN, sql_str.length()), sql_str.ptr());
+      LOG_WARN("spi_execute failed", K(ret), K(print_sql));
     }
   }
   ObThreadLogLevelUtils::clear();
@@ -4260,6 +4273,11 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
   if (OB_FAIL(ret) && OB_NOT_NULL(spi_result) && !cursor.isopen()) {
     spi_result->~ObSPIResultSet();
   }
+  if (OB_FAIL(ret)) {
+    ObString sql_str = sql.empty() ? ps_sql : sql;
+    ObString print_sql(MIN(pl::ObPLParser::MAX_PRINT_LEN, sql_str.length()), sql_str.ptr());
+    LOG_WARN("streaming_cursor_open failed", K(ret), K(print_sql));
+  }
   return ret;
 }
 
@@ -4409,6 +4427,11 @@ int ObSPIService::unstreaming_cursor_open(ObPLExecCtx *ctx,
     spi_result->end_nested_stmt_if_need(ctx, ret);
     if (OB_NOT_NULL(spi_result)) {
       spi_result->~ObSPIResultSet();
+    }
+    if (OB_FAIL(ret)) {
+      ObString sql_str = sql.empty() ? ps_sql : sql;
+      ObString print_sql(MIN(pl::ObPLParser::MAX_PRINT_LEN, sql_str.length()), sql_str.ptr());
+      LOG_WARN("unstreaming_cursor_open failed", K(ret), K(print_sql));
     }
   }
   return ret;
@@ -4994,16 +5017,18 @@ int ObSPIService::spi_adjust_error_trace(pl::ObPLExecCtx *ctx, int level)
 #ifndef OB_BUILD_ORACLE_PL
   UNUSEDx(ctx, level);
 #else
-  ObPLContext *pl_ctx = NULL;
   ObPLSqlCodeInfo *sqlcode_info = NULL;
+  ObIArray<ObPLExecState *> *exec_stack = nullptr;
+  ObPLTopContext *pl_top_context = nullptr;
   CK (OB_NOT_NULL(ctx));
   CK (OB_NOT_NULL(ctx->exec_ctx_));
   CK (OB_NOT_NULL(ctx->exec_ctx_->get_my_session()));
-  CK (OB_NOT_NULL(pl_ctx = ctx->exec_ctx_->get_my_session()->get_pl_context()));
-  if (OB_SUCC(ret) && OB_NOT_NULL(pl_ctx->get_call_stack_trace_directly())) {
-    OZ (pl_ctx->get_call_stack_trace_directly()->format_error_trace(pl_ctx->get_exec_stack().count(), level));
+  CK (OB_NOT_NULL(pl_top_context = ctx->exec_ctx_->get_my_session()->get_pl_top_context()));
+  CK (OB_NOT_NULL(exec_stack = pl_top_context->get_exec_stack()));
+  if (OB_SUCC(ret) && OB_NOT_NULL(pl_top_context->get_call_stack_trace_directly())) {
+    OZ (pl_top_context->get_call_stack_trace_directly()->format_error_trace(exec_stack->count(), level));
     CK (OB_NOT_NULL(sqlcode_info = ctx->exec_ctx_->get_my_session()->get_pl_sqlcode_info()));
-    OX (sqlcode_info->set_sqlcode(pl_ctx->get_call_stack_trace_directly()->get_last_error_code()));
+    OX (sqlcode_info->set_sqlcode(pl_top_context->get_call_stack_trace_directly()->get_last_error_code()));
   }
 #endif
   return ret;
@@ -5013,13 +5038,20 @@ int ObSPIService::spi_set_pl_exception_code(
   pl::ObPLExecCtx *ctx, int64_t code, bool is_pop_warning_buf, int level)
 {
   int ret = OB_SUCCESS;
-  ObPLContext *pl_ctx = NULL;
   ObPLSqlCodeInfo *sqlcode_info = NULL;
+  common::ObIArray<ObWarningBuffer> *stack_warning_buf = NULL;
+  ObIArray<ObPLExecState *> *exec_stack = nullptr;
+  ObPLTopContext *pl_top_context = nullptr;
   CK (OB_NOT_NULL(ctx));
   CK (OB_NOT_NULL(ctx->exec_ctx_));
   CK (OB_NOT_NULL(ctx->exec_ctx_->get_my_session()));
-  CK (OB_NOT_NULL(pl_ctx = ctx->exec_ctx_->get_my_session()->get_pl_context()));
+  CK (OB_NOT_NULL(pl_top_context = ctx->exec_ctx_->get_my_session()->get_pl_top_context()));
   CK (OB_NOT_NULL(sqlcode_info = ctx->exec_ctx_->get_my_session()->get_pl_sqlcode_info()));
+  CK (OB_NOT_NULL(exec_stack = pl_top_context->get_exec_stack()));
+  if (OB_SUCC(ret) && lib::is_mysql_mode()) {
+    OZ (sqlcode_info->get_stack_warning_buf(stack_warning_buf));
+    CK (OB_NOT_NULL(stack_warning_buf));
+  }
   if (OB_SUCC(ret) && code != sqlcode_info->get_sqlcode()) {
     if (lib::is_oracle_mode()) {
       OX (sqlcode_info->set_sqlcode(code > 0 ? 1 : code));
@@ -5027,19 +5059,19 @@ int ObSPIService::spi_set_pl_exception_code(
       OX (sqlcode_info->set_sqlcode(code));
     }
   }
-  if (is_pop_warning_buf && lib::is_mysql_mode() && sqlcode_info->get_stack_warning_buf().count() > 0) {
-    int64_t idx = sqlcode_info->get_stack_warning_buf().count() - 1;
-    OX (sqlcode_info->get_stack_warning_buf().at(idx).~ObWarningBuffer());
-    OX (sqlcode_info->get_stack_warning_buf().pop_back());
+  if (is_pop_warning_buf && OB_NOT_NULL(stack_warning_buf) && stack_warning_buf->count() > 0) {
+    int64_t idx = stack_warning_buf->count() - 1;
+    OX (stack_warning_buf->at(idx).~ObWarningBuffer());
+    OX (stack_warning_buf->pop_back());
     OX (ctx->exec_ctx_->get_my_session()->set_show_warnings_buf(OB_SUCCESS));
   }
 
 #ifdef OB_BUILD_ORACLE_PL
-  if (OB_FAIL(ret) || lib::is_mysql_mode() || OB_ISNULL(pl_ctx->get_call_stack_trace())) {
+  if (OB_FAIL(ret) || lib::is_mysql_mode() || OB_ISNULL(pl_top_context->get_call_stack_trace())) {
   } else if (!is_pop_warning_buf) {
-    OZ (pl_ctx->get_call_stack_trace()->format_error_trace(pl_ctx->get_exec_stack(), level));
+    OZ (pl_top_context->get_call_stack_trace()->format_error_trace(*exec_stack, level));
   } else {
-    OZ (pl_ctx->get_call_stack_trace()->format_error_trace(pl_ctx->get_exec_stack().count(), level));
+    OZ (pl_top_context->get_call_stack_trace()->format_error_trace(exec_stack->count(), level));
   }
 #endif
 
@@ -5063,7 +5095,10 @@ int ObSPIService::spi_get_pl_exception_code(pl::ObPLExecCtx *ctx, int64_t *code)
   OX (*code = sqlcode_info->get_sqlcode());
   if (lib::is_mysql_mode()
       && OB_NOT_NULL(wb = common::ob_get_tsi_warning_buffer())) {
-    OZ (sqlcode_info->get_stack_warning_buf().push_back(*wb));
+    ObIArray<ObWarningBuffer> *stack_warning_buf = NULL;
+    OZ (sqlcode_info->get_stack_warning_buf(stack_warning_buf));
+    CK (OB_NOT_NULL(stack_warning_buf));
+    OZ (stack_warning_buf->push_back(*wb));
   }
   return ret;
 }
@@ -5621,9 +5656,12 @@ int ObSPIService::spi_process_resignal(pl::ObPLExecCtx *ctx,
         }
       } else {
         int64_t idx;
-        CK (sqlcode_info->get_stack_warning_buf().count() > 0);
-        OX (idx = sqlcode_info->get_stack_warning_buf().count() - 1);
-        OX (error_msg = sqlcode_info->get_stack_warning_buf().at(idx).get_err_msg());
+        common::ObIArray<ObWarningBuffer> *stack_warning_buf = NULL;
+        OZ (sqlcode_info->get_stack_warning_buf(stack_warning_buf));
+        CK (OB_NOT_NULL(stack_warning_buf));
+        CK (stack_warning_buf->count() > 0);
+        OX (idx = stack_warning_buf->count() - 1);
+        OX (error_msg = stack_warning_buf->at(idx).get_err_msg());
       }
     } else {
       CALC(errmsg_expr, varchar, result);
@@ -7184,7 +7222,13 @@ int ObSPIService::construct_exec_params(ObPLExecCtx *ctx,
           OX (result.set_accuracy(result_type.get_accuracy()));
         }
       } else {
-        result.set_accuracy(result_type.get_accuracy());
+        const bool skip_set_accuracy_set = OB_NOT_NULL(ctx->func_)
+                                          && pl::STANDALONE_ANONYMOUS == ctx->func_->get_proc_type()
+                                          && ob_is_string_tc(result_type.get_type())
+                                          && -1 == result_type.get_length();
+        if (!skip_set_accuracy_set) {
+          result.set_accuracy(result_type.get_accuracy());
+        }
         result.set_param_meta(result_type);
         if (is_question_mark_expression(*expr)) {
           bool exist = false;
@@ -7382,7 +7426,7 @@ int ObSPIService::prepare_static_sql_params(ObPLExecCtx *ctx,
   if (NULL == sql) {
     OZ (construct_exec_params(ctx, param_allocator, param_exprs, param_count,
                               into_exprs, into_count, *exec_params, out_params, is_forall),
-      K(sql), K(ps_sql), K(type), K(param_count), K(out_params), KPC(exec_params));
+      K(type), K(param_count), K(out_params), KPC(exec_params));
 
     OZ (store_params_string(ctx, spi_result, exec_params));
   }
@@ -7539,7 +7583,7 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
                                                     *spi_result.get_result_set(),
                                                     spi_result.get_sql_ctx(),
                                                     false /* is_prepare_protocol */,
-                                                    false /* is_dynamic_sql*/), K(sql), K(ps_sql), K(exec_params));
+                                                    false /* is_dynamic_sql*/), K(exec_params));
           } else {
 #ifdef ERRSIM
             OX (ret = OB_E(EventTable::EN_SPI_SQL_EXEC) OB_SUCCESS);
@@ -7550,7 +7594,7 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
                                                     *spi_result.get_result_set(),
                                                     spi_result.get_sql_ctx(),
                                                     true /* is_prepare_protocol */,
-                                                    is_dynamic_sql /* is_dynamic_sql */), K(sql), K(ps_sql), K(exec_params));
+                                                    is_dynamic_sql /* is_dynamic_sql */), K(exec_params));
           }
         }
       }
@@ -10035,12 +10079,16 @@ int ObSPIService::spi_check_composite_not_null(ObObjParam *v)
 int ObSPIService::spi_update_location(pl::ObPLExecCtx *ctx, uint64_t location)
 {
   int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(ctx)
-      && OB_NOT_NULL(ctx->pl_ctx_)
-      && ctx->pl_ctx_->get_exec_stack().count() > 0) {
-    ObIArray<ObPLExecState *> &stack = ctx->pl_ctx_->get_exec_stack();
-    ObPLExecState *state = stack.at(stack.count() - 1);
-    state->set_loc(location);
+  ObPLTopContext *pl_top_context = nullptr;
+  if (OB_NOT_NULL(ctx) && OB_NOT_NULL(ctx->get_exec_ctx())) {
+    ObIArray<ObPLExecState *> *stack = nullptr;
+    OZ (ctx->get_exec_ctx()->get_pl_top_context(pl_top_context));
+    CK (OB_NOT_NULL(pl_top_context));
+    CK (OB_NOT_NULL(stack = pl_top_context->get_exec_stack()));
+    if (OB_SUCC(ret) && stack->count() > 0) {
+      ObPLExecState *state = stack->at(stack->count() - 1);
+      state->set_loc(location);
+    }
   }
   return ret;
 }
@@ -10051,7 +10099,7 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
                                      uint64_t dblink_id,
                                      uint64_t package_id,
                                      uint64_t proc_id,
-                                     ParamStore &params,
+                                     ObPLParamArray &params,
                                      ObObj *result,
                                      const ObRoutineInfo *dblink_routine_info)
 {
@@ -10080,7 +10128,7 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
                                      ObIAllocator &allocator,
                                      const pl::ObPLDbLinkInfo *dblink_info,
                                      const ObRoutineInfo *routine_info,
-                                     ParamStore &params,
+                                     ObPLParamArray &params,
                                      ObObj *result)
 {
   int ret = OB_SUCCESS;
@@ -10182,7 +10230,7 @@ int ObSPIService::spi_execute_dblink(ObExecContext &exec_ctx,
 int ObSPIService::spi_after_execute_dblink(ObExecContext &exec_ctx,
                                            const ObRoutineInfo *routine_info,
                                            ObIAllocator &allocator,
-                                           ParamStore &params,
+                                           ObPLParamArray &params,
                                            ParamStore &exec_params,
                                            ObObj *result,
                                            ObObj &tmp_result)
@@ -10270,12 +10318,13 @@ int ObSPIService::spi_pl_profiler_before_record(pl::ObPLExecCtx *ctx, int64_t li
   ObPLExecState *curr_state = nullptr;
   ObPLProfiler *profiler = nullptr;
   ObPLCodeCoverage *code_coverage = nullptr;
+  ObPLTopContext *pl_top_context = nullptr;
   CK (OB_NOT_NULL(ctx));
   CK (OB_NOT_NULL(ctx->exec_ctx_));
   CK (OB_NOT_NULL(session = ctx->exec_ctx_->get_my_session()));
 
-  CK (OB_NOT_NULL(ctx->pl_ctx_));
-  CK (OB_NOT_NULL(curr_state = ctx->pl_ctx_->get_current_state()));
+  CK (OB_NOT_NULL(pl_top_context = session->get_pl_top_context()));
+  CK (OB_NOT_NULL(curr_state = pl_top_context->get_current_state()));
 
   CK (OB_LIKELY(line > 0));
   CK (OB_LIKELY(level >= 0));
@@ -10322,7 +10371,9 @@ int ObSPIService::spi_pl_profiler_before_record(pl::ObPLExecCtx *ctx, int64_t li
   if (OB_SUCC(ret) && OB_NOT_NULL(code_coverage = session->get_pl_code_coverage())
      && curr_state->get_function().get_tenant_id()!= OB_SYS_TENANT_ID
      && curr_state->get_function().get_proc_type() != STANDALONE_ANONYMOUS) {
-    curr_state->get_coverage_info().set_refactored(std::make_pair(line, column));
+    hash::ObHashSet<std::pair<uint64_t, uint64_t>> *coverage_info = curr_state->get_coverage_info();
+    CK (OB_NOT_NULL(coverage_info));
+    OX (coverage_info->set_refactored(std::make_pair(line, column)));
   }
 #endif // OB_BUILD_ORACLE_PL
 
@@ -10339,13 +10390,14 @@ int ObSPIService::spi_pl_profiler_after_record(pl::ObPLExecCtx *ctx, int64_t lin
   ObPLExecState *curr_state = nullptr;
   ObPLProfiler *profiler = nullptr;
   ObPLProfilerTimeStack *time_stack = nullptr;
+  ObPLTopContext *pl_top_context = nullptr;
 
   CK (OB_NOT_NULL(ctx));
   CK (OB_NOT_NULL(ctx->exec_ctx_));
   CK (OB_NOT_NULL(session = ctx->exec_ctx_->get_my_session()));
 
-  CK (ctx->pl_ctx_);
-  CK (curr_state = ctx->pl_ctx_->get_current_state());
+  CK (OB_NOT_NULL(pl_top_context = session->get_pl_top_context()));
+  CK (OB_NOT_NULL(curr_state = pl_top_context->get_current_state()));
 
   CK (OB_LIKELY(line > 0));
   CK (OB_LIKELY(level >= 0));
@@ -10739,11 +10791,13 @@ ObPLSubPLSqlTimeGuard::ObPLSubPLSqlTimeGuard(pl::ObPLExecCtx *ctx) :
   state_(NULL)
 {
   if (OB_NOT_NULL(ctx)
-      && OB_NOT_NULL(ctx->pl_ctx_)
-      && ctx->pl_ctx_->get_exec_stack().count() > 0) {
+      && OB_NOT_NULL(ctx->get_exec_ctx())
+      && OB_NOT_NULL(ctx->get_exec_ctx()->get_pl_top_context())
+      && OB_NOT_NULL(ctx->get_exec_ctx()->get_pl_top_context()->get_exec_stack())
+      && ctx->get_exec_ctx()->get_pl_top_context()->get_exec_stack()->count() > 0) {
     // hold old time and reset sub time
-    ObIArray<ObPLExecState *> &stack = ctx->pl_ctx_->get_exec_stack();
-    state_ = stack.at(stack.count()-1);
+    ObIArray<ObPLExecState *> *stack = ctx->get_exec_ctx()->get_pl_top_context()->get_exec_stack();
+    state_ = stack->at(stack->count()-1);
     old_sub_plsql_exec_time_ = state_->get_sub_plsql_exec_time();
     old_pure_sql_exec_time_ = state_->get_pure_sql_exec_time();
     state_->reset_sub_plsql_exec_time();

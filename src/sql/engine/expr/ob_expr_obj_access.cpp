@@ -285,7 +285,7 @@ int ObExprObjAccess::ExtraInfo::get_collection_attr(int64_t* params,
           const pl::ObUserDefinedType *type = nullptr;
           int64_t ptr = 0;
           int64_t init_size = OB_INVALID_SIZE;
-          const pl::ObPLINS *ns = session_info->get_pl_context()->get_current_ctx();
+          const pl::ObPLINS *ns = session_info->get_pl_top_context()->get_current_ctx();
           CK (OB_NOT_NULL(ns));
           OZ (ns->get_user_type(current_access.var_type_.get_user_type_id(), type));
           CK (OB_NOT_NULL(type));
@@ -334,8 +334,8 @@ int ObExprObjAccess::ExtraInfo::get_record_attr(const pl::ObObjAccessIdx &curren
   CK (OB_NOT_NULL(ctx.exec_ctx_.get_sql_ctx()->schema_guard_));
   CK (OB_NOT_NULL(ctx.exec_ctx_.get_sql_proxy()));
   if (OB_FAIL(ret)) {
-  } else if (ctx.exec_ctx_.get_my_session()->get_pl_context()) {
-    pl::ObPLINS *ns = ctx.exec_ctx_.get_my_session()->get_pl_context()->get_current_ctx();
+  } else if (ctx.exec_ctx_.get_my_session()->get_pl_top_context()) {
+    pl::ObPLINS *ns = ctx.exec_ctx_.get_my_session()->get_pl_top_context()->get_current_ctx();
     CK (OB_NOT_NULL(ns));
     OZ (ns->get_user_type(udt_id, user_type));
   } else {

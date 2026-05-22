@@ -102,7 +102,7 @@ void ObTriggerInfo::reset()
   reset_string(ref_trg_name_);
   action_order_ = 0;
   ObSimpleTriggerSchema::reset();
-  analyze_flag_ = 0;
+  analyze_flag_.set_flag(0);
 }
 
 bool ObTriggerInfo::is_valid_for_create() const

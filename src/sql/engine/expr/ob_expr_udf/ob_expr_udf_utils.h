@@ -57,7 +57,7 @@ public:
                                           int64_t idx,
                                           const ObExpr &expr,
                                           ObEvalCtx &eval_ctx);
-  static int transfer_vec_to_obj(ObObj *objs, ObIVector **arg_vec, const ObExpr &expr, int64_t idx);
+  static int transfer_vec_to_obj(pl::ObPLParamArray &objs, ObIVector **arg_vec, const ObExpr &expr, int64_t idx);
   static int transfer_obj_to_vec(ObObj& result,
                                   ObIVector *res_vec,
                                   int64_t idx,
@@ -68,7 +68,7 @@ public:
     const ObObj &obj, ObObj &new_obj, ObIAllocator *&composite_allocator);
   static int is_child_of(const ObObj &parent, const ObObj &child, bool &is_child);
   static
-  int need_deep_copy_in_parameter(const ObObj *objs_stack,
+  int need_deep_copy_in_parameter(const pl::ObPLParamArray &objs_stack,
                                                 int64_t param_num,
                                                 const ObIArray<ObUDFParamDesc> &params_desc,
                                                 const ObIArray<ObExprResType> &params_type,
@@ -77,10 +77,10 @@ public:
   static
   int process_in_params(ObExprUDFCtx &udf_ctx, ObIArray<ObObj> &deep_in_objs);
   static
-  int process_in_params(const ObObj *objs_stack,
+  int process_in_params(const pl::ObPLParamArray &objs_stack,
                                       int64_t param_num,
                                       const ObIArray<ObExprResType> &params_type,
-                                      ParamStore& iparams);
+                                      pl::ObPLParamArray& iparams);
   static
   int process_return_value(ObObj &result,
                                          ObObj &tmp_result,
@@ -88,19 +88,19 @@ public:
                                          ObExprUDFCtx &udf_ctx,
                                          ObExprUDFEnvGuard &guard);
   static
-  int process_in_params(const ObObj *objs_stack,
+  int process_in_params(const pl::ObPLParamArray &objs_stack,
                                       int64_t param_num,
                                       const ObIArray<ObUDFParamDesc> &params_desc,
                                       const ObIArray<ObExprResType> &params_type,
-                                      ParamStore& iparams,
+                                      pl::ObPLParamArray& iparams,
                                       ObIAllocator &allocator,
                                       ObIArray<ObObj> *deep_in_objs = nullptr);
   static
   int process_out_params(ObExprUDFCtx &udf_ctx, ObEvalCtx &eval_ctx);
   static
-  int process_out_params(const ObObj *objs_stack,
+  int process_out_params(const pl::ObPLParamArray &objs_stack,
                                        int64_t param_num,
-                                       ParamStore& iparams,
+                                       pl::ObPLParamArray& iparams,
                                        ObIAllocator &alloc,
                                        ObExecContext &exec_ctx,
                                        const ObIArray<int64_t> &nocopy_params,
@@ -109,9 +109,9 @@ public:
   static
   int process_singal_out_param(int64_t i,
                                              ObIArray<bool> &dones,
-                                             const ObObj *objs_stack,
+                                             const pl::ObPLParamArray &objs_stack,
                                              int64_t param_num,
-                                             ParamStore& iparams,
+                                             pl::ObPLParamArray& iparams,
                                              ObIAllocator &alloc,
                                              ObExecContext &exec_ctx,
                                              const ObIArray<int64_t> &nocopy_params,
@@ -120,9 +120,9 @@ public:
   static
   int process_package_out_param(int64_t idx,
                                               ObIArray<bool> &dones,
-                                              const ObObj *objs_stack,
+                                              const pl::ObPLParamArray &objs_stack,
                                               int64_t param_num,
-                                              ParamStore& iparams,
+                                              pl::ObPLParamArray& iparams,
                                               ObIAllocator &alloc,
                                               ObExecContext &exec_ctx,
                                               const ObIArray<int64_t> &nocopy_params,
@@ -140,7 +140,7 @@ public:
                                         ObIAllocator &allocator,
                                         ObExprUDFCtx &udf_ctx);
   static
-  int transfer_datum_to_objs(const ObExpr &expr, ObEvalCtx &eval_ctx, ObObj *objs);
+  int transfer_datum_to_objs(const ObExpr &expr, ObEvalCtx &eval_ctx, pl::ObPLParamArray &objs);
 
 
 private:

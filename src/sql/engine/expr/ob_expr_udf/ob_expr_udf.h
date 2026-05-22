@@ -106,7 +106,6 @@ public:
 
   inline int64_t get_cur_obj_count() { return cur_obj_count_; }
   inline ObIArray<ObObj> &get_deep_in_objs() { return deep_in_objs_; }
-  inline pl::ExecCtxBak &get_exec_ctx_bak() { return exec_ctx_bak_; }
 
   void restore_exec_ctx();
 
@@ -118,7 +117,6 @@ private:
   ObEvalCtx &ctx_;
   ObExprUDFCtx &udf_ctx_;
   int ret_;
-  pl::ExecCtxBak exec_ctx_bak_;
   int64_t start_time_;
   ObObj &tmp_result_;
 };

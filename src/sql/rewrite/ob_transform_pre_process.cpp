@@ -10004,9 +10004,9 @@ int ObTransformPreProcess::add_constructor_to_multiset(ObDMLStmt &stmt,
                                     *ctx_->exec_ctx_->get_sql_proxy(),
                                     false);
       if (OB_ISNULL(ns =
-          ((NULL == session->get_pl_context()) ?
+          ((NULL == session->get_pl_top_context()) ?
           static_cast<pl::ObPLINS *>(&resolve_ctx) :
-          static_cast<pl::ObPLINS *>(session->get_pl_context()->get_current_ctx())))) {
+          static_cast<pl::ObPLINS *>(session->get_pl_top_context()->get_current_ctx())))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null", K(ret));
       } else if (OB_FAIL(object_type->get_size(pl::PL_TYPE_ROW_SIZE, rowsize))) {

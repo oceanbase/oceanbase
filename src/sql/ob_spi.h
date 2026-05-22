@@ -38,7 +38,6 @@ using common::ObPsStmtId;
 namespace pl
 {
 class ObDbmsCursorInfo;
-class ObPLSqlCodeInfo;
 class ObPLSqlAuditRecord;
 }
 
@@ -109,7 +108,6 @@ public:
 private:
   ObSQLSessionInfo &session_info_;
   int64_t query_start_time_bk_;
-  pl::ObPLSqlCodeInfo *sqlcode_info_bk_;
   bool is_ps_cursor_;
   char sql_id_[OB_MAX_SQL_ID_LENGTH + 1];
 };
@@ -1117,19 +1115,19 @@ public:
                                 uint64_t dblink_id,
                                 uint64_t package_id,
                                 uint64_t proc_id,
-                                ParamStore &params,
+                                pl::ObPLParamArray &params,
                                 ObObj *result,
                                 const ObRoutineInfo *dblink_routine_info);
   static int spi_execute_dblink(ObExecContext &exec_ctx,
                                 ObIAllocator &allocator,
                                 const pl::ObPLDbLinkInfo *dblink_info,
                                 const ObRoutineInfo *routine_info,
-                                ParamStore &params,
+                                pl::ObPLParamArray &params,
                                 ObObj *result);
   static int spi_after_execute_dblink(ObExecContext &exec_ctx,
                                       const ObRoutineInfo *routine_info,
                                       ObIAllocator &allocator,
-                                      ParamStore &params,
+                                      pl::ObPLParamArray &params,
                                       ParamStore &exec_params,
                                       ObObj *result,
                                       ObObj &tmp_result);

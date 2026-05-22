@@ -32,33 +32,57 @@ ObExprUDFCtx::~ObExprUDFCtx()
     deterministic_cache_->~ObExprUDFDeterministerCache();
     deterministic_cache_ = nullptr;
   }
+  if (OB_NOT_NULL(schema_guard_)) {
+    schema_guard_->~ObSchemaGetterGuard();
+    schema_guard_ = nullptr;
+  }
+  if (OB_NOT_NULL(sql_ctx_)) {
+    sql_ctx_->~ObSqlCtx();
+    sql_ctx_ = nullptr;
+  }
 }
 
 int ObExprUDFCtx::init_param_store(ObExecContext &exec_ctx, int param_num)
 {
   int ret = OB_SUCCESS;
-  ObIAllocator &allocator = ctx_allocator_;
-  void *param_store_buf = nullptr;
-  if (OB_ISNULL(param_store_buf = allocator.alloc(sizeof(ParamStore)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate memory", K(ret), K(param_num));
-  } else if (param_num > 0
-             && OB_ISNULL(obj_stack_ = reinterpret_cast<ObObj*>(allocator.alloc(sizeof(ObObj) * param_num)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate memory", K(ret), K(param_num));
-  } else {
-    params_ = new(param_store_buf)ParamStore(ObWrapperAllocator(allocator));
-    if (OB_ISNULL(params_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected params", K(ret), KP(params_));
-    } else if (OB_FAIL(params_->prepare_allocate(param_num))) {
-      LOG_WARN("failed to prepare allocate", K(ret), K(param_num));
+  params_.set_allocator(&ctx_allocator_);
+  obj_stack_.set_allocator(&ctx_allocator_);
+
+  return ret;
+}
+
+int ObExprUDFCtx::get_schema_guard(share::schema::ObSchemaGetterGuard *&schema_guard)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(schema_guard_)) {
+    void *buf = nullptr;
+    if (OB_ISNULL(buf = ctx_allocator_.alloc(sizeof(share::schema::ObSchemaGetterGuard)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for schema guard", K(ret));
     } else {
-      for (int64_t i = 0; i < param_num; ++i) {
-        new (&obj_stack_[i]) ObObj();
-      }
-      params_->reuse();
+      schema_guard_ = new (buf) share::schema::ObSchemaGetterGuard();
     }
+  }
+  if (OB_SUCC(ret)) {
+    schema_guard = schema_guard_;
+  }
+  return ret;
+}
+
+int ObExprUDFCtx::get_sql_ctx(ObSqlCtx *&sql_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(sql_ctx_)) {
+    void *buf = nullptr;
+    if (OB_ISNULL(buf = ctx_allocator_.alloc(sizeof(ObSqlCtx)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate memory for sql ctx", K(ret));
+    } else {
+      sql_ctx_ = new (buf) ObSqlCtx();
+    }
+  }
+  if (OB_SUCC(ret)) {
+    sql_ctx = sql_ctx_;
   }
   return ret;
 }
@@ -66,6 +90,7 @@ int ObExprUDFCtx::init_param_store(ObExecContext &exec_ctx, int param_num)
 int ObExprUDFCtx::init_exec_ctx(ObExecContext &exec_ctx)
 {
   int ret = OB_SUCCESS;
+  share::schema::ObSchemaGetterGuard *schema_guard = nullptr;
   if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected session info", K(ret));
@@ -73,8 +98,10 @@ int ObExprUDFCtx::init_exec_ctx(ObExecContext &exec_ctx)
              || OB_ISNULL(exec_ctx.get_sql_ctx()->schema_guard_)) {
     sql::ObTaskExecutorCtx &task_ctx = exec_ctx.get_task_exec_ctx();
     const observer::ObGlobalContext &gctx = observer::ObServer::get_instance().get_gctx();
-    if (OB_FAIL(gctx.schema_service_->get_tenant_schema_guard(exec_ctx.get_my_session()->get_effective_tenant_id(),
-                                                              schema_guard_,
+    if (OB_FAIL(get_schema_guard(schema_guard))) {
+      LOG_WARN("failed to get schema guard", K(ret));
+    } else if (OB_FAIL(gctx.schema_service_->get_tenant_schema_guard(exec_ctx.get_my_session()->get_effective_tenant_id(),
+                                                              *schema_guard,
                                                               task_ctx.get_query_tenant_begin_schema_version(),
                                                               task_ctx.get_query_sys_begin_schema_version()))) {
       LOG_WARN("get schema guard failed", K(ret));
@@ -83,11 +110,22 @@ int ObExprUDFCtx::init_exec_ctx(ObExecContext &exec_ctx)
   // 通过分布式计划执行的function没有sqlctx信息, 构造一个
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(exec_ctx.get_sql_ctx())) {
-    sql_ctx_.session_info_ = exec_ctx.get_my_session();
-    sql_ctx_.schema_guard_ = &schema_guard_;
-    exec_ctx.set_sql_ctx(&sql_ctx_);
+    ObSqlCtx *sql_ctx = nullptr;
+    if (OB_FAIL(get_sql_ctx(sql_ctx))) {
+      LOG_WARN("failed to get sql ctx", K(ret));
+    } else if (OB_FAIL(get_schema_guard(schema_guard))) {
+      LOG_WARN("failed to get schema guard", K(ret));
+    } else {
+      sql_ctx->session_info_ = exec_ctx.get_my_session();
+      sql_ctx->schema_guard_ = schema_guard;
+      exec_ctx.set_sql_ctx(sql_ctx);
+    }
   } else if (OB_ISNULL(exec_ctx.get_sql_ctx()->schema_guard_)) {
-    exec_ctx.get_sql_ctx()->schema_guard_ = &schema_guard_;
+    if (OB_FAIL(get_schema_guard(schema_guard))) {
+      LOG_WARN("failed to get schema guard", K(ret));
+    } else {
+      exec_ctx.get_sql_ctx()->schema_guard_ = schema_guard;
+    }
   }
   return ret;
 }
@@ -117,7 +155,7 @@ int ObExprUDFCtx::init(const ObExpr &expr, ObExecContext &exec_ctx)
     LOG_WARN("failed to init exec ctx", K(ret));
   } else if (OB_FAIL(init_pl_alloc())) {
     LOG_WARN("failed to init pl alloc", K(ret));
-  } else if (OB_FAIL(calc_cache_enabled())) {
+  } else if (OB_FAIL(calc_cache_enabled(*session_info_))) {
     LOG_WARN("failed to calc cache enabled", K(ret));
   } else if (is_cache_enabled()) {
     if (OB_FAIL(generate_influence_string())) {
@@ -183,9 +221,8 @@ int ObExprUDFCtx::reuse(const ObExpr &expr)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected expr", K(ret), KP(info_), KP(expr.extra_info_));
   } else {
-    if (OB_NOT_NULL(params_)) {
-      params_->reuse();
-    }
+    params_.reuse();
+    obj_stack_.reuse();
     allocator_.reuse();
     is_first_execute_ = false;
     pl_execute_arg_.reuse();
@@ -201,14 +238,14 @@ int ObExprUDFCtx::init_pl_alloc()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected session info", K(ret));
   } else if (!info_->is_called_in_sql_) {
-    if (OB_ISNULL(session_info_->get_pl_context())) {
+    if (OB_ISNULL(session_info_->get_pl_top_context())) {
       if (OB_ISNULL(exec_ctx_)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected exec ctx ptr", K(ret));
       } else {
         alloc_ = &(exec_ctx_->get_allocator());
       }
-    } else if (OB_ISNULL(pl_exec_ctx = session_info_->get_pl_context()->get_current_ctx())) {
+    } else if (OB_ISNULL(pl_exec_ctx = session_info_->get_pl_top_context()->get_current_ctx())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected pl exec context", K(ret));
     } else if (OB_ISNULL(alloc_ = pl_exec_ctx->get_top_expr_allocator())) {
@@ -266,15 +303,16 @@ int ObExprUDFCtx::init_row_key(ObIAllocator &allocator, int64_t arg_cnt)
 int ObExprUDFCtx::construct_key()
 {
   int ret = OB_SUCCESS;
+  CK (get_arg_count() == get_obj_stack().count());
   for (int64_t i = 0; OB_SUCC(ret) && i < get_arg_count(); ++i) {
-    if (OB_FAIL(row_key_.elems_[i].from_obj(get_obj_stack()[i]))) {
+    if (OB_FAIL(row_key_.elems_[i].from_obj(get_obj_stack().at(i)))) {
       LOG_WARN("failed to construct datum from obj", K(ret), K(i));
     }
   }
   return ret;
 }
 
-int ObExprUDFCtx::calc_cache_enabled()
+int ObExprUDFCtx::calc_cache_enabled(ObSQLSessionInfo &session_info)
 {
   int ret = OB_SUCCESS;
   bool is_cursor_type = ObExtendType == get_info()->result_type_.get_type()
@@ -282,20 +320,31 @@ int ObExprUDFCtx::calc_cache_enabled()
                             || pl::PL_REF_CURSOR_TYPE == get_info()->result_type_.get_extend_type());
   bool is_subprogram_routine = !get_info()->subprogram_path_.empty();
   bool is_dblink_routine = get_info()->dblink_id_ != OB_INVALID_ID;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
-  if (is_cursor_type || !tenant_config.is_valid() || is_subprogram_routine || is_dblink_routine) {
+  if (is_cursor_type || is_subprogram_routine || is_dblink_routine ||
+     (false == get_info()->is_result_cache_ && false == get_info()->is_deterministic_)) {
     enable_result_cache_ = false;
     enable_deterministic_cache_ = false;
-  } else {
-    int64_t result_cache_size = tenant_config->result_cache_max_size;
-    int64_t deterministic_cache_size = tenant_config->ob_deterministic_udf_cache_max_size;
-    enable_result_cache_ = get_info()->is_result_cache_ && result_cache_size > 0;
-    enable_deterministic_cache_ = !enable_result_cache_
+  } else if (OB_NOT_NULL(session_info.get_pl_top_context())) {
+    pl::ObPLConfigItems config_item;
+    OZ (session_info.get_pl_top_context()->get_pl_config_info().get_value(config_item));
+    OX (enable_result_cache_ = get_info()->is_result_cache_ && config_item.result_cache_max_size_ > 0);
+    OX (enable_deterministic_cache_ = !enable_result_cache_
                                   && get_info()->is_deterministic_
-                                  && deterministic_cache_size > 0;
-    result_cache_max_result_ = tenant_config->result_cache_max_result;
-    result_cache_max_size_ = result_cache_size;
-
+                                  && config_item.ob_deterministic_udf_cache_max_size_ > 0);
+    OX (result_cache_max_result_ = config_item.result_cache_max_result_);
+    OX (result_cache_max_size_ = config_item.result_cache_max_size_);
+  } else {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+    if (tenant_config.is_valid()) {
+      int64_t result_cache_size = tenant_config->result_cache_max_size;
+      int64_t deterministic_cache_size = tenant_config->ob_deterministic_udf_cache_max_size;
+      enable_result_cache_ = get_info()->is_result_cache_ && result_cache_size > 0;
+      enable_deterministic_cache_ = !enable_result_cache_
+                                    && get_info()->is_deterministic_
+                                    && deterministic_cache_size > 0;
+      result_cache_max_result_ = tenant_config->result_cache_max_result;
+      result_cache_max_size_ = result_cache_size;
+    }
   }
   return ret;
 }

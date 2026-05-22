@@ -125,11 +125,17 @@ int ObPLEH::eh_adjust_call_stack(ObPLContext *pl_ctx, uint64_t location, int err
 {
   int ret = OB_SUCCESS;
   int64_t stack_depth = 0;
-  if (lib::is_oracle_mode() && OB_NOT_NULL(pl_ctx) && OB_NOT_NULL(pl_ctx->get_call_stack_trace())) {
-    CK ((stack_depth = pl_ctx->get_exec_stack().count()) > 0);
-    CK (OB_NOT_NULL(pl_ctx->get_exec_stack().at(stack_depth - 1)));
-    OX (pl_ctx->get_exec_stack().at(stack_depth - 1)->set_loc(location));
-    OZ (pl_ctx->get_call_stack_trace()->format_exception_stack(err_code, pl_ctx->get_exec_stack()));
+  if (lib::is_oracle_mode() && OB_NOT_NULL(pl_ctx)) {
+    ObIArray<ObPLExecState *> *exec_stack = nullptr;
+    ObPLTopContext *pl_top_context = pl_ctx->get_session_info()->get_pl_top_context();
+    ObPLCallStackTrace *call_stack_trace = nullptr;
+    CK (OB_NOT_NULL(pl_top_context));
+    CK (OB_NOT_NULL(exec_stack = pl_top_context->get_exec_stack()));
+    CK ((stack_depth = exec_stack->count()) > 0);
+    CK (OB_NOT_NULL(exec_stack->at(stack_depth - 1)));
+    OX (exec_stack->at(stack_depth - 1)->set_loc(location));
+    CK (OB_NOT_NULL(call_stack_trace = pl_top_context->get_call_stack_trace()));
+    OZ (call_stack_trace->format_exception_stack(err_code, *exec_stack));
   }
   return ret;
 }
@@ -147,14 +153,17 @@ ObUnwindException *ObPLEH::eh_create_exception(int64_t pl_context,
   if (NULL != value) {
     int ret = OB_SUCCESS;
     ObPLContext *pl_ctx = reinterpret_cast<ObPLContext *>(pl_context);
-    if (OB_NOT_NULL(pl_ctx)) {
-      pl_ctx->register_stack_frames();
-    }
     ObPLExecState *frame = NULL;
     ObIAllocator *pl_allocator = NULL;
+    ObPLTopContext *pl_top_context = nullptr;
+    ObIArray<ObPLExecState *> *exec_stack = nullptr;
     CK (OB_NOT_NULL(pl_ctx));
-    CK (pl_ctx->get_exec_stack().count() > 0);
-    CK (OB_NOT_NULL(frame = pl_ctx->get_exec_stack().at(0)));
+    CK (OB_NOT_NULL(pl_ctx->get_session_info()));
+    CK (OB_NOT_NULL(pl_top_context = pl_ctx->get_session_info()->get_pl_top_context()));
+    OX (pl_top_context->register_stack_frames());
+    CK (OB_NOT_NULL(exec_stack = pl_top_context->get_exec_stack()));
+    CK (exec_stack->count() > 0);
+    CK (OB_NOT_NULL(frame = exec_stack->at(0)));
     CK (frame->is_top_call());
     CK (OB_NOT_NULL(pl_allocator = frame->get_exec_ctx().get_top_expr_allocator()));
     if (OB_FAIL(ret)) {

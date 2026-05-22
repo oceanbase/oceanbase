@@ -32,6 +32,74 @@ OB_SERIALIZE_MEMBER(ObTrigDMLCtDef,
                     ref_types_,
                     trig_flags_);
 
+bool ObTrigDMLCtDef::is_execute_single_row() const
+{
+  bool is_execute_single_row = false;
+  if (!is_precise_batch_exec_) {
+    // conservative: any trigger with a side-effect flag forces single-row execution
+    for (int64_t i = 0; i < tg_args_.count() && !is_execute_single_row; ++i) {
+      const ObTriggerArg &tg_arg = tg_args_.at(i);
+      is_execute_single_row = tg_arg.is_modifies_sql_data() || tg_arg.is_wps()
+                              || tg_arg.is_rps() || tg_arg.is_has_sequence()
+                              || tg_arg.is_reads_sql_data() || tg_arg.is_external_state();
+    }
+  } else if (tg_args_.count() == 1
+      && tg_args_.at(0).get_trigger_type() != static_cast<int64_t>(ObTriggerInfo::TT_COMPOUND_DML)) {
+  } else if (!all_tm_points_.has_before_row() || !all_tm_points_.has_after_row()) {
+  } else {
+    uint64_t before_row_flags = 0;
+    uint64_t after_row_flags = 0;
+
+    // 聚合行前和行后触发器的 analyze_flag_
+    for (int64_t i = 0; !is_execute_single_row && i < tg_args_.count(); i++) {
+      if (tg_args_.at(i).get_trigger_type() == static_cast<int64_t>(ObTriggerInfo::TT_COMPOUND_DML)) {
+        is_execute_single_row = true;
+      } else {
+        const ObTriggerArg &tg_arg = tg_args_.at(i);
+        if (tg_arg.has_before_row_point()) {
+          before_row_flags |= tg_arg.get_analyze_flag();
+        } else if (tg_arg.has_after_row_point()) {
+          after_row_flags |= tg_arg.get_analyze_flag();
+        }
+      }
+    }
+
+    // 检查行前和行后触发器的精确冲突条件（按域独立判定）
+    if (!is_execute_single_row) {
+      // SQL 数据域冲突：一方 modifies_sql，另一方 reads_sql 或 modifies_sql
+      bool sql_conflict =
+        ((before_row_flags & pl::ObPLAnalyzeFlag::FLAG_MODIFIES_SQL_DATA)
+          && (after_row_flags & (pl::ObPLAnalyzeFlag::FLAG_READS_SQL_DATA | pl::ObPLAnalyzeFlag::FLAG_MODIFIES_SQL_DATA)))
+        || ((after_row_flags & pl::ObPLAnalyzeFlag::FLAG_MODIFIES_SQL_DATA)
+          && (before_row_flags & (pl::ObPLAnalyzeFlag::FLAG_READS_SQL_DATA | pl::ObPLAnalyzeFlag::FLAG_MODIFIES_SQL_DATA)));
+
+      // 包变量域冲突：一方 wps，另一方 rps 或 wps
+      bool pkg_conflict =
+        ((before_row_flags & pl::ObPLAnalyzeFlag::FLAG_WPS)
+          && (after_row_flags & (pl::ObPLAnalyzeFlag::FLAG_RPS | pl::ObPLAnalyzeFlag::FLAG_WPS)))
+        || ((after_row_flags & pl::ObPLAnalyzeFlag::FLAG_WPS)
+          && (before_row_flags & (pl::ObPLAnalyzeFlag::FLAG_RPS | pl::ObPLAnalyzeFlag::FLAG_WPS)));
+
+      // 序列域冲突：行前行后同时使用序列
+      bool seq_conflict =
+        (before_row_flags & pl::ObPLAnalyzeFlag::FLAG_HAS_SEQUENCE)
+        && (after_row_flags & pl::ObPLAnalyzeFlag::FLAG_HAS_SEQUENCE);
+
+      // 外部状态域冲突：一方 external_state，另一方有任何副作用 flag
+      static const uint64_t ANY_EFFECT_FLAGS =
+        pl::ObPLAnalyzeFlag::FLAG_READS_SQL_DATA | pl::ObPLAnalyzeFlag::FLAG_MODIFIES_SQL_DATA
+        | pl::ObPLAnalyzeFlag::FLAG_WPS | pl::ObPLAnalyzeFlag::FLAG_RPS
+        | pl::ObPLAnalyzeFlag::FLAG_HAS_SEQUENCE | pl::ObPLAnalyzeFlag::FLAG_EXTERNAL_STATE;
+      bool ext_conflict =
+        ((before_row_flags & pl::ObPLAnalyzeFlag::FLAG_EXTERNAL_STATE) && (after_row_flags & ANY_EFFECT_FLAGS))
+        || ((after_row_flags & pl::ObPLAnalyzeFlag::FLAG_EXTERNAL_STATE) && (before_row_flags & ANY_EFFECT_FLAGS));
+
+      is_execute_single_row = sql_conflict || pkg_conflict || seq_conflict || ext_conflict;
+    }
+  }
+  return is_execute_single_row;
+}
+
 OB_SERIALIZE_MEMBER(ObErrLogCtDef,
                     is_error_logging_,
                     err_log_database_name_,

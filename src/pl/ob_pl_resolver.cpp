@@ -55,7 +55,6 @@ int ObPLResolver::init(ObPLFunctionAST &func_ast)
     current_block_->set_level(current_level_);
     func_ast.set_body(current_block_);
     arg_cnt_ = func_ast.get_arg_count();
-    question_mark_cnt_ = 0;
     external_ns_.set_dependency_table(&func_ast.get_dependency_table());
     if (!OB_ISNULL(external_ns_.get_parent_ns())) {
       uint64_t type_start_gen_id = external_ns_.get_parent_ns()->get_type_table()->get_type_start_gen_id();
@@ -172,7 +171,8 @@ int ObPLResolver::init_default_expr(ObPLFunctionAST &func_ast,
       resolve_ctx_.session_info_.get_charsets4parser(),
       resolve_ctx_.allocator_,
       default_node,
-      is_for_trigger));
+      is_for_trigger,
+      &question_mark_cnt_));
     CK (OB_NOT_NULL(default_node));
     OZ (resolve_expr(default_node, func_ast, default_expr,
          combine_line_and_col(default_node->stmt_loc_), true, &expected_type));
@@ -4210,31 +4210,78 @@ int ObPLResolver::check_assign_type(const ObPLDataType &dest_data_type, const Ob
   return ret;
 }
 
+int ObPLResolver::get_top_anony_symbol_table_for_subprogram(const ObPLBlockNS *&cur_ns, const ObPLSymbolTable *&symbol_table)
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(cur_ns));
+  CK (OB_NOT_NULL(symbol_table = cur_ns->get_symbol_table()));
+  while (OB_NOT_NULL(cur_ns)
+    && OB_NOT_NULL(cur_ns->get_external_ns())
+    && OB_NOT_NULL(cur_ns->get_external_ns()->get_parent_ns())) {
+    cur_ns = cur_ns->get_external_ns()->get_parent_ns();
+  }
+  if (OB_SUCC(ret)
+      && OB_NOT_NULL(cur_ns)
+      && OB_INVALID_ID == cur_ns->get_package_id()
+      && OB_INVALID_ID == cur_ns->get_routine_id())
+  {
+    CK (OB_NOT_NULL(symbol_table = cur_ns->get_symbol_table()));
+  }
+  return ret;
+}
+
 int ObPLResolver::resolve_question_mark_node(
   const ObStmtNodeTree *into_node, ObRawExpr *&into_expr)
 {
   int ret = OB_SUCCESS;
   ObConstRawExpr *expr = NULL;
   const ObPLVar *var = NULL;
-  CK (OB_NOT_NULL(current_block_->get_symbol_table()));
-  CK (OB_NOT_NULL(var = current_block_->get_symbol_table()->get_symbol(into_node->value_)));
+  ObExprResType *type_ptr =
+    static_cast<ObExprResType *>(expr_factory_.get_allocator().alloc(sizeof(ObExprResType)));
+  const ObPLBlockNS *cur_ns = &(current_block_->get_namespace());
+  const ObPLBlockNS *tmp_ns = cur_ns;
+  const ObPLSymbolTable *symbol_table = NULL;
+  if (OB_ISNULL(type_ptr)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory failed", K(ret));
+  } else {
+    new (type_ptr) ObExprResType();
+    OX (type_ptr->set_null());
+  }
+  OZ (get_top_anony_symbol_table_for_subprogram(cur_ns, symbol_table));
+  CK (OB_NOT_NULL(symbol_table));
+  OV (OB_NOT_NULL(var = symbol_table->get_symbol(into_node->value_)),
+    OB_ERR_UNEXPECTED, K(into_node->value_), K(symbol_table->get_count()));
   CK (var->get_name().prefix_match(ANONYMOUS_ARG));
   OX (const_cast<ObPLVar*>(var)->set_readonly(false)); // into value need set readonly false
   if (OB_SUCC(ret) && var->is_referenced()) {
     OX (const_cast<ObPLVar*>(var)->set_name(ANONYMOUS_INOUT_ARG));
   }
-  OZ (expr_factory_.create_raw_expr(T_QUESTIONMARK, expr));
-  CK (OB_NOT_NULL(expr));
+  if (OB_FAIL(ret)) {
+  } else if (cur_ns != tmp_ns) {
+    int64_t var_index = into_node->value_;
+    OZ (ObRawExprUtils::build_get_subprogram_var(expr_factory_,
+                                                cur_ns->get_package_id(),
+                                                cur_ns->get_routine_id(),
+                                                var_index,
+                                                type_ptr,
+                                                into_expr,
+                                                &(resolve_ctx_.session_info_)), cur_ns, var_index);
+  } else {
+    OZ (expr_factory_.create_raw_expr(T_QUESTIONMARK, expr));
+    CK (OB_NOT_NULL(expr));
+  }
   if (OB_SUCC(ret)) {
-    ObObjParam val;
-    ObRawExprResType type;
-    val.set_unknown(into_node->value_);
-    val.set_param_meta();
-    expr->set_value(val);
-    type.set_null();
-    expr->set_result_type(type);
-    OZ (expr->extract_info());
-    OX (into_expr = expr);
+    if (OB_NOT_NULL(expr)) {
+      ObObjParam val;
+      OX (val.set_unknown(into_node->value_));
+      OX (val.set_param_meta());
+      OX (expr->set_value(val));
+      OX (into_expr = expr);
+    }
+    CK (OB_NOT_NULL(into_expr));
+    OX (into_expr->set_result_type(*type_ptr));
+    OZ (into_expr->extract_info());
   }
   return ret;
 }
@@ -5025,7 +5072,6 @@ int ObPLResolver::resolve_cursor_for_loop(
   CK (OB_NOT_NULL(parse_tree->children_[0]));
   CK (OB_NOT_NULL(parse_tree->children_[1]));
   if (OB_SUCC(ret)) {
-    question_mark_cnt_ = parse_tree->value_;
     const ObStmtNodeTree* index_node = parse_tree->children_[0];
     const ObStmtNodeTree* cursor_node = parse_tree->children_[1];
     const ObStmtNodeTree* body_node = parse_tree->children_[2];
@@ -6719,7 +6765,6 @@ int ObPLResolver::resolve_static_sql(const ObStmtNodeTree *parse_tree,
       prepare_result.record_type_ = record_type;
       prepare_result.tg_timing_event_ = 
                             static_cast<TgTimingEvent>(resolve_ctx_.tg_timing_event_);
-      question_mark_cnt_ = parse_tree->value_; // 更新解析到当前语句时question mark的数量(包含当前语句)
       ObString new_sql;
       ObString old_sql(parse_tree->str_value_);
       const ObStmtNodeTree *check_node = parse_tree;
@@ -7526,7 +7571,7 @@ int ObPLResolver::resolve_declare_handler(const ObStmtNodeTree *parse_tree, ObPL
       //解析Action
       desc->set_action(static_cast<ObPLDeclareHandlerStmt::DeclareHandler::Action>(parse_tree->value_));
       if (desc->is_continue()) {
-        func.set_has_continue_handler(true);
+        func.set_has_continue_handler();
       }
 
       //解析body：这里必须先解析body后解析condition value，是因为handler的body解析过程不应受本handler自己的in_warning和in_notfound影响
@@ -8962,7 +9007,6 @@ int ObPLResolver::resolve_declare_cursor(
       int64_t cursor_index = common::OB_INVALID_INDEX;
       ObPLStmtBlock *current_block = current_block_;
       ObPLStmtBlock *cursor_block = current_block_;
-      question_mark_cnt_ = parse_tree->value_;
 
       OZ (resolve_cursor_common(name_node, type_node, func, name, return_type));
 
@@ -11248,8 +11292,8 @@ int ObPLResolver::resolve_expr(const ParseNode *node,
           || T_NULL == expr->get_expr_type()
           || ObTinyIntType == expr->get_result_type().get_type()) {
         // do nothing ...
-      } else if (T_QUESTIONMARK == expr->get_expr_type() &&
-                 ObNullType == expr->get_data_type()) {
+      } else if ((T_QUESTIONMARK == expr->get_expr_type() || T_OP_GET_SUBPROGRAM_VAR == expr->get_expr_type())
+        && ObNullType == expr->get_data_type()) {
         // do nothing ...
       } else {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
@@ -11529,7 +11573,6 @@ int ObPLResolver::transform_subquery_expr(const ParseNode *node,
     prepare_result.record_type_ = record_type;
     prepare_result.tg_timing_event_ =
                         static_cast<TgTimingEvent>(resolve_ctx_.tg_timing_event_);
-    question_mark_cnt_ = node->value_;
     int64_t total_size = 7 + node->str_len_ + strlen(" as 'subquery'") + 1;
     char *sql_str = static_cast<char *>(resolve_ctx_.allocator_.alloc(total_size));
     int64_t sql_len = 0;
@@ -15033,10 +15076,13 @@ int ObPLResolver::get_subprogram_ns(
   ObPLBlockNS &current_ns, uint64_t subprogram_id, ObPLBlockNS *&subprogram_ns)
 {
   int ret = OB_SUCCESS;
-  if (current_ns.get_routine_id() == subprogram_id) {
+  bool has_parent_ns = OB_NOT_NULL(current_ns.get_external_ns())
+                    && OB_NOT_NULL(current_ns.get_external_ns()->get_parent_ns());
+  if ((current_ns.get_routine_id() == subprogram_id
+      && current_ns.get_routine_id() != OB_INVALID_ID) ||
+      (OB_INVALID_ID == subprogram_id && !has_parent_ns)) {
     subprogram_ns = &current_ns;
-  } else if (OB_NOT_NULL(current_ns.get_external_ns())
-             && OB_NOT_NULL(current_ns.get_external_ns()->get_parent_ns())) {
+  } else if (has_parent_ns) {
     OZ (SMART_CALL(get_subprogram_ns(
       *(const_cast<ObPLBlockNS *>(current_ns.get_external_ns()->get_parent_ns())),
       subprogram_id, subprogram_ns)));
@@ -18874,6 +18920,10 @@ int ObPLResolver::resolve_routine_decl(const ObStmtNodeTree *parse_tree,
       LOG_USER_ERROR(OB_ERR_IDENTIFIER_TOO_LONG, routine_name.length(), routine_name.ptr());
       LOG_WARN("identifier too long", K(routine_name), K(ret));
     }
+    if (OB_SUCC(ret) && parse_tree->children_[0]->value_ >= 0
+        && parse_tree->children_[0]->value_ < INT64_MAX) {
+        question_mark_cnt_ = static_cast<uint64_t>(parse_tree->children_[0]->value_);
+    }
     CK (OB_NOT_NULL(routine_table = current_block_->get_namespace().get_routine_table()));
     OZ (routine_table->make_routine_info(resolve_ctx_.allocator_,
                                          routine_name,
@@ -19140,6 +19190,7 @@ int ObPLResolver::resolve_routine_block(const ObStmtNodeTree *parse_tree,
                           TgTimingEvent::TG_TIMING_EVENT_INVALID,
                           resolve_ctx_.pl_resolve_cache_);
     // note: init函数中引用了resolver的external_ns_, 而resolver是一个栈变量，使用的时候需要小心
+    resolver.question_mark_cnt_ = question_mark_cnt_;
     if (OB_FAIL(resolver.init(routine_ast))) {
       LOG_WARN("routine init failed ", K(ret));
     } else if (OB_FAIL(resolver.init_default_exprs(routine_ast, routine_info.get_params()))) {

@@ -153,7 +153,7 @@ int ObExprPLAssocIndex::do_eval_assoc_index(int64_t &assoc_idx,
       if (OB_FAIL(deep_copy_obj(*assoc_array->get_allocator(), key, new_key))) {
         LOG_WARN("failed to copy key", K(ret), K(key), K(new_key), KPC(assoc_array));
       } else if (OB_FAIL(ObSPIService::spi_extend_assoc_array(session->get_effective_tenant_id(),
-                                                              session->get_pl_context()->get_current_ctx(),
+                                                              session->get_pl_top_context()->get_current_ctx(),
                                                               allocator,
                                                               *assoc_array,
                                                               1))) {
@@ -177,7 +177,7 @@ int ObExprPLAssocIndex::do_eval_assoc_index(int64_t &assoc_idx,
         if (assoc_array->get_element_desc().is_composite_type()) { // renew a composite memmory
           if (OB_FAIL(ObSPIService::spi_new_coll_element(assoc_array->get_id(),
                                                          assoc_array->get_allocator(),
-                                                         session->get_pl_context()->get_current_ctx(),
+                                                         session->get_pl_top_context()->get_current_ctx(),
                                                          assoc_array->get_data() + index))) {
             LOG_WARN("failed to new coll element", K(ret), KPC(assoc_array), K(index));
           }

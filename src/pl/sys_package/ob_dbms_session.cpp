@@ -226,14 +226,19 @@ int ObDBMSSession::session_is_role_enabled(sql::ObExecContext &ctx,
       LOG_WARN("unexpected null", K(ret));
   } else {
     // find top definer, use roles in old_role_id_array
-    const ObIArray<uint64_t>& old_role_id_array = target_frame->get_exec_ctx().pl_ctx_->get_old_role_id_array();
-    bool find = false;
-    for (int64_t i = 0; OB_SUCC(ret) && !find && i < old_role_id_array.count(); ++i) {
-      if (old_role_id_array.at(i) == role_id) {
-        find = true;
+    const ObIArray<uint64_t>* old_role_id_array = target_frame->get_exec_ctx().pl_ctx_->get_old_role_id_array();
+    if (OB_ISNULL(old_role_id_array)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("old_role_id_array is nullptr", K(ret));
+    } else {
+      bool find = false;
+      for (int64_t i = 0; OB_SUCC(ret) && !find && i < old_role_id_array->count(); ++i) {
+        if (old_role_id_array->at(i) == role_id) {
+          find = true;
+        }
       }
+      result.set_bool(find);
     }
-    result.set_bool(find);
   }
   return ret;
 }
@@ -243,27 +248,33 @@ int ObDBMSSession::find_top_definer(ObPLContext *pl_ctx,
                                     ObPLExecState *&exec_state)
 {
   int ret = OB_SUCCESS;
-  uint64_t stack_cnt = pl_ctx->get_exec_stack().count();
-  ObPLExecState *frame = NULL;
-  for (int64_t i = stack_cnt - 1; OB_SUCC(ret) && i >= 0; --i) {
-    bool is_special_ir = false;
-    frame = pl_ctx->get_exec_stack().at(i);
-    if (OB_ISNULL(frame)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to get frame", K(i), K(stack_cnt), K(ret));
-    } else if (OB_FAIL(frame->get_function().is_special_pkg_invoke_right())) {
-      LOG_WARN("failed to check special pkg invoke right", K(ret));
-    } else if (frame->get_function().is_invoker_right() ||
-               frame->get_function().get_proc_type() == STANDALONE_ANONYMOUS ||
-               is_special_ir) {
-      // continue
-    } else {
-      exec_state = frame;
+  ObIArray<ObPLExecState *> *exec_stack = nullptr;
+  ObPLTopContext *pl_top_context = nullptr;
+  CK (OB_NOT_NULL(pl_top_context = pl_ctx->get_session_info()->get_pl_top_context()));
+  CK (OB_NOT_NULL(exec_stack = pl_top_context->get_exec_stack()));
+  if (OB_SUCC(ret)) {
+    uint64_t stack_cnt = exec_stack->count();
+    ObPLExecState *frame = NULL;
+    for (int64_t i = stack_cnt - 1; OB_SUCC(ret) && i >= 0; --i) {
+      bool is_special_ir = false;
+      frame = exec_stack->at(i);
+      if (OB_ISNULL(frame)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get frame", K(i), K(stack_cnt), K(ret));
+      } else if (OB_FAIL(frame->get_function().is_special_pkg_invoke_right())) {
+        LOG_WARN("failed to check special pkg invoke right", K(ret));
+      } else if (frame->get_function().is_invoker_right() ||
+                frame->get_function().get_proc_type() == STANDALONE_ANONYMOUS ||
+                is_special_ir) {
+        // continue
+      } else {
+        exec_state = frame;
+      }
     }
-  }
-  if (NULL == exec_state) {
-    //if no definer exists, return current frame instead
-    exec_state = pl_ctx->get_exec_stack().at(stack_cnt - 1);
+    if (NULL == exec_state) {
+      //if no definer exists, return current frame instead
+      exec_state = exec_stack->at(stack_cnt - 1);
+    }
   }
   return ret;
 }
@@ -546,16 +557,20 @@ int ObDBMSSession::check_privileges(pl::ObPLContext *pl_ctx,
   int ret = OB_SUCCESS;
   ObPLExecState *frame = NULL;
   bool trusted = false;
+  ObIArray<ObPLExecState *> *exec_stack = nullptr;
+  ObPLTopContext *pl_top_context = nullptr;
   // ob store sys package in oceanbase schema, to compat with oracle
   // we rewrite SYS to OCEANBASE
   ObString real_schema_name = (0 == schema_name.case_compare("SYS") 
                                && 0 == package_name.case_compare("DBMS_SESSION"))
                                ? "OCEANBASE" : schema_name;
   CK (OB_NOT_NULL(pl_ctx));
+  CK (OB_NOT_NULL(pl_top_context = pl_ctx->get_session_info()->get_pl_top_context()));
+  CK (OB_NOT_NULL(exec_stack = pl_top_context->get_exec_stack()));
   if (OB_SUCC(ret)) {
-    uint64_t stack_cnt = pl_ctx->get_exec_stack().count();
+    uint64_t stack_cnt = exec_stack->count();
     for (int64_t i = 0; OB_SUCC(ret) && i < stack_cnt && !trusted; ++i) {
-      frame = pl_ctx->get_exec_stack().at(i);
+      frame = exec_stack->at(i);
       if (OB_ISNULL(frame)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("failed to get frame", K(i), K(stack_cnt), K(ret));

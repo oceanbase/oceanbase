@@ -1003,33 +1003,33 @@ public:
   virtual void set_deterministic() { is_deterministic_ = true; }
   virtual bool is_deterministic() const { return is_deterministic_; }
 
-  virtual void set_no_sql() { is_no_sql_ = true; is_reads_sql_data_ = false; is_modifies_sql_data_ = false; is_contains_sql_ = false; }
-  virtual bool is_no_sql() const { return is_no_sql_; }
-  virtual void set_reads_sql_data() { is_no_sql_ = false; is_reads_sql_data_ = true; is_modifies_sql_data_ = false; is_contains_sql_ = false; }
-  virtual bool is_reads_sql_data() const { return is_reads_sql_data_; }
-  virtual void set_modifies_sql_data() { is_no_sql_ = false; is_reads_sql_data_ = false; is_modifies_sql_data_ = true; is_contains_sql_ = false; }
-  virtual bool is_modifies_sql_data() const { return is_modifies_sql_data_; }
-  virtual void set_contains_sql() { is_no_sql_ = false; is_reads_sql_data_ = false; is_modifies_sql_data_ = false; is_contains_sql_ = true; }
-  virtual bool is_contains_sql() const { return is_contains_sql_; }
+  virtual void set_no_sql() { analyze_flag_.set_no_sql(); }
+  virtual bool is_no_sql() const { return analyze_flag_.is_no_sql(); }
+  virtual void set_reads_sql_data() { analyze_flag_.set_reads_sql_data(); }
+  virtual bool is_reads_sql_data() const { return analyze_flag_.is_reads_sql_data(); }
+  virtual void set_modifies_sql_data() { analyze_flag_.set_modifies_sql_data(); }
+  virtual bool is_modifies_sql_data() const { return analyze_flag_.is_modifies_sql_data(); }
+  virtual void set_contains_sql() { analyze_flag_.set_contains_sql(); }
+  virtual bool is_contains_sql() const { return analyze_flag_.is_contains_sql(); }
 
   virtual void set_parallel_enable() { is_parallel_enable_ = true; }
   virtual bool is_parallel_enable() const { return is_parallel_enable_; }
 
   virtual bool is_invoker_right() const { return compile_flag_.compile_with_invoker_right(); }
 
-  inline void set_analyze_flag(uint64_t flag) { analyze_flag_ = flag; }
-  inline uint64_t get_analyze_flag() const { return analyze_flag_; }
+  inline void set_analyze_flag(uint64_t flag) { analyze_flag_.set_flag(flag); }
+  inline uint64_t get_analyze_flag() const { return analyze_flag_.get_flag(); }
 
-  virtual void set_wps() { is_wps_ = true; }
-  virtual bool is_wps() const { return is_wps_; }
-  virtual void set_rps() { is_rps_ = true; }
-  virtual bool is_rps() const { return is_rps_; }
-  virtual void set_has_sequence() { is_has_sequence_ = true; }
-  virtual bool is_has_sequence() const { return is_has_sequence_; }
-  virtual void set_has_out_param() { is_has_out_param_ = true; }
-  virtual bool is_has_out_param() const { return is_has_out_param_; }
-  virtual void set_external_state() { is_external_state_ = true; }
-  virtual bool is_external_state() const { return is_external_state_; }
+  virtual void set_wps() { analyze_flag_.set_wps(); }
+  virtual bool is_wps() const { return analyze_flag_.is_wps(); }
+  virtual void set_rps() { analyze_flag_.set_rps(); }
+  virtual bool is_rps() const { return analyze_flag_.is_rps(); }
+  virtual void set_has_sequence() { analyze_flag_.set_has_sequence(); }
+  virtual bool is_has_sequence() const { return analyze_flag_.is_has_sequence(); }
+  virtual void set_has_out_param() { analyze_flag_.set_has_out_param(); }
+  virtual bool is_has_out_param() const { return analyze_flag_.is_has_out_param(); }
+  virtual void set_external_state() { analyze_flag_.set_external_state(); }
+  virtual bool is_external_state() const { return analyze_flag_.is_external_state(); }
 
   virtual void set_result_cache() { is_result_cache_ = true; }
   virtual bool is_result_cache() const { return is_result_cache_; }
@@ -1078,7 +1078,7 @@ public:
                K_(is_udt_routine),
                K_(accessors),
                K_(loc),
-               K_(analyze_flag));
+               K_(analyze_flag_.flag));
 private:
   common::ObIAllocator &allocator_;
   uint64_t tenant_id_;
@@ -1106,21 +1106,7 @@ private:
   ObPLSEArray<AccessorItem> accessors_;
   common::ObString priv_user_;
   uint64_t loc_;
-  union {
-    uint64_t analyze_flag_;
-    struct {
-      uint64_t is_no_sql_ : 1;
-      uint64_t is_reads_sql_data_ : 1;
-      uint64_t is_modifies_sql_data_ : 1;
-      uint64_t is_contains_sql_ : 1;
-      uint64_t is_wps_ : 1;
-      uint64_t is_rps_ : 1;
-      uint64_t is_has_sequence_ : 1;
-      uint64_t is_has_out_param_ : 1;
-      uint64_t is_external_state_ : 1;
-      uint64_t reserved_:54;
-    };
-  };
+  ObPLAnalyzeFlag analyze_flag_;
 };
 
 class ObPLFunctionAST;
@@ -1751,29 +1737,29 @@ public:
   virtual int64_t get_version() const = 0;
   virtual uint64_t get_database_id() const = 0;
 
-  virtual uint64_t get_analyze_flag() const { return analyze_flag_; }
+  virtual uint64_t get_analyze_flag() const { return analyze_flag_.get_flag(); }
 
-  virtual void set_no_sql() { is_no_sql_ = true; is_reads_sql_data_ = false; is_modifies_sql_data_ = false; is_contains_sql_ = false; }
-  virtual bool is_no_sql() const { return is_no_sql_; }
-  virtual void set_reads_sql_data() { is_no_sql_ = false; is_reads_sql_data_ = true; is_modifies_sql_data_ = false; is_contains_sql_ = false; }
-  virtual bool is_reads_sql_data() const { return is_reads_sql_data_; }
-  virtual void set_modifies_sql_data() { is_no_sql_ = false; is_reads_sql_data_ = false; is_modifies_sql_data_ = true; is_contains_sql_ = false; }
-  virtual bool is_modifies_sql_data() const { return is_modifies_sql_data_; }
-  virtual void set_contains_sql() { is_no_sql_ = false; is_reads_sql_data_ = false; is_modifies_sql_data_ = false; is_contains_sql_ = true; }
-  virtual bool is_contains_sql() const { return is_contains_sql_; }
+  virtual void set_no_sql() { analyze_flag_.set_no_sql(); }
+  virtual bool is_no_sql() const { return analyze_flag_.is_no_sql(); }
+  virtual void set_reads_sql_data() { analyze_flag_.set_reads_sql_data(); }
+  virtual bool is_reads_sql_data() const { return analyze_flag_.is_reads_sql_data(); }
+  virtual void set_modifies_sql_data() { analyze_flag_.set_modifies_sql_data(); }
+  virtual bool is_modifies_sql_data() const { return analyze_flag_.is_modifies_sql_data(); }
+  virtual void set_contains_sql() { analyze_flag_.set_contains_sql(); }
+  virtual bool is_contains_sql() const { return analyze_flag_.is_contains_sql(); }
 
-  virtual void set_wps() { is_wps_ = true; }
-  virtual bool is_wps() const { return is_wps_; }
-  virtual void set_rps() { is_rps_ = true; }
-  virtual bool is_rps() const { return is_rps_; }
-  virtual void set_has_sequence() { is_has_sequence_ = true; }
-  virtual bool is_has_sequence() const { return is_has_sequence_; }
-  virtual void set_has_out_param() { is_has_out_param_ = true; }
-  virtual bool is_has_out_param() const { return is_has_out_param_; }
-  virtual void set_external_state() { is_external_state_ = true; }
-  virtual bool is_external_state() const { return is_external_state_; }
-  virtual void set_has_continue_handler(bool has_continue_handler) { has_continue_handler_ = has_continue_handler; }
-  virtual bool has_continue_handler() { return has_continue_handler_; }
+  virtual void set_wps() { analyze_flag_.set_wps(); }
+  virtual bool is_wps() const { return analyze_flag_.is_wps(); }
+  virtual void set_rps() { analyze_flag_.set_rps(); }
+  virtual bool is_rps() const { return analyze_flag_.is_rps(); }
+  virtual void set_has_sequence() { analyze_flag_.set_has_sequence(); }
+  virtual bool is_has_sequence() const { return analyze_flag_.is_has_sequence(); }
+  virtual void set_has_out_param() { analyze_flag_.set_has_out_param(); }
+  virtual bool is_has_out_param() const { return analyze_flag_.is_has_out_param(); }
+  virtual void set_external_state() { analyze_flag_.set_external_state(); }
+  virtual bool is_external_state() const { return analyze_flag_.is_external_state(); }
+  virtual void set_has_continue_handler() { analyze_flag_.set_has_continue_handler(); }
+  virtual bool has_continue_handler() { return analyze_flag_.has_continue_handler(); }
   void pop_value_exprs(int64_t remain_count);
 
 
@@ -1822,22 +1808,7 @@ protected:
 #endif
   char invoker_database_name_[common::OB_MAX_DATABASE_NAME_BUF_LENGTH * OB_MAX_CHAR_LEN];  //invoker database
   uint64_t invoker_database_id_; //invoker database_id
-  union {  // FARM COMPAT WHITELIST
-    uint64_t analyze_flag_;
-    struct {
-      uint64_t is_no_sql_ : 1;
-      uint64_t is_reads_sql_data_ : 1;
-      uint64_t is_modifies_sql_data_ : 1;
-      uint64_t is_contains_sql_ : 1;
-      uint64_t is_wps_ : 1;
-      uint64_t is_rps_ : 1;
-      uint64_t is_has_sequence_ : 1;
-      uint64_t is_has_out_param_ : 1;
-      uint64_t is_external_state_ : 1;
-      uint64_t has_continue_handler_ : 1;
-      uint64_t reserved_:53;
-    };
-  };
+  ObPLAnalyzeFlag analyze_flag_;  // FARM COMPAT WHITELIST
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPLCompileUnitAST);
 };

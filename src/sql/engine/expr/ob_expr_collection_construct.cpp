@@ -213,9 +213,9 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
   OX (alloc = &pl_complex_type_mgr->alloc_);
   // for collection construct in pl, use top_expr_allocator
   // we will destroy this obj in pl final interface
-  if (OB_SUCC(ret) && OB_NOT_NULL(session) &&
-      OB_NOT_NULL(session->get_pl_context()) &&
-      OB_NOT_NULL(pl_exec_ctx = session->get_pl_context()->get_current_ctx()) &&
+  if (OB_NOT_NULL(session) &&
+      OB_NOT_NULL(session->get_pl_top_context()) &&
+      OB_NOT_NULL(pl_exec_ctx = session->get_pl_top_context()->get_current_ctx()) &&
       pl_exec_ctx->get_exec_ctx() == &ctx.exec_ctx_) {
     alloc = pl_exec_ctx->get_top_expr_allocator();
   }
@@ -283,10 +283,10 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
                                    false);
     OZ (package_guard.init());
     pl::ObPLINS *ns = NULL;
-    if (NULL == session->get_pl_context()) {
+    if (NULL == session->get_pl_top_context()) {
       ns = &resolve_ctx;
     } else {
-      ns = session->get_pl_context()->get_current_ctx();
+      ns = session->get_pl_top_context()->get_current_ctx();
     }
 
     if (info->elem_type_.get_meta_type().is_ext()) {
@@ -406,7 +406,7 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
                   is_repeated_key = true;
                 } else {
                   OZ((ObSPIService::spi_extend_assoc_array(session->get_effective_tenant_id(),
-                                                           session->get_pl_context()->get_current_ctx(),
+                                                           session->get_pl_top_context()->get_current_ctx(),
                                                            *alloc,
                                                            *assoc_array,
                                                            1)));
@@ -522,7 +522,7 @@ int ObExprCollectionConstruct::eval_collection_construct(const ObExpr &expr,
                                 static_cast<ObObj*>(assoc_array->get_data())[index]));
             } else {
               OZ((ObSPIService::spi_extend_assoc_array(session->get_effective_tenant_id(),
-                                                       session->get_pl_context()->get_current_ctx(),
+                                                       session->get_pl_top_context()->get_current_ctx(),
                                                        *alloc,
                                                        *assoc_array,
                                                        1)));

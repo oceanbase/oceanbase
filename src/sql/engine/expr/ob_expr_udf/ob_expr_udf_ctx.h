@@ -77,7 +77,7 @@ class ObExprUDFCtx : public ObExprOperatorCtx
 public:
   ObExprUDFCtx()
   : ObExprOperatorCtx(),
-    params_(nullptr),
+    params_(),
 
     row_key_(),
     sys_var_str_(),
@@ -88,7 +88,9 @@ public:
     current_function_(nullptr),
     current_compile_unit_(nullptr),
 
-    obj_stack_(nullptr),
+    obj_stack_(),
+    schema_guard_(nullptr),
+    sql_ctx_(nullptr),
     exec_ctx_(nullptr),
     info_(nullptr),
     alloc_(nullptr),
@@ -107,11 +109,10 @@ public:
   ~ObExprUDFCtx();
 
   int init(const ObExpr &expr, ObExecContext &exec_ctx);
-  inline ParamStore* get_param_store() { return params_; }
+  inline pl::ObPLParamArray &get_param_store() { return params_; }
   inline ObExecContext* get_exec_ctx() { return exec_ctx_; }
-  inline int64_t get_param_count() { return OB_ISNULL(params_) ? 0 : params_->count(); }
-  inline void set_obj_stack(ObObj *obj_stack) { obj_stack_ = obj_stack; }
-  inline ObObj* get_obj_stack() { return obj_stack_; }
+  inline int64_t get_param_count() { return params_.count(); }
+  inline pl::ObPLParamArray &get_obj_stack() { return obj_stack_; }
   inline bool has_out_param() { return has_out_param_; }
   inline uint64_t get_package_id() { return package_id_; }
 
@@ -137,6 +138,9 @@ public:
 
   pl::ObPLExecuteArg &get_pl_execute_arg() { return pl_execute_arg_; }
 
+  inline int get_schema_guard(share::schema::ObSchemaGetterGuard *&schema_guard);
+  inline int get_sql_ctx(ObSqlCtx *&sql_ctx);
+
 private:
   int check_types(const ObExpr &expr);
   int init_param_store(ObExecContext &exec_ctx, int param_num);
@@ -147,7 +151,7 @@ private:
 
   int calc_result_cache_enabled();
   int calc_current_function();
-  int calc_cache_enabled();
+  int calc_cache_enabled(ObSQLSessionInfo &session_info);
 
   inline bool is_cache_enabled() { return enable_result_cache_ || enable_deterministic_cache_; }
   inline bool is_result_cache_enabled() { return enable_result_cache_; }
@@ -166,7 +170,7 @@ private:
   int add_result_to_result_cache(ObObj &result);
 
 private:
-  ParamStore* params_;
+  pl::ObPLParamArray params_;
 
   // for result cache
   pl::UDFArgRow row_key_;
@@ -179,9 +183,9 @@ private:
   pl::ObPLCompileUnit *current_compile_unit_;
 
   // for rusable member
-  ObObj* obj_stack_;
-  share::schema::ObSchemaGetterGuard schema_guard_;
-  ObSqlCtx sql_ctx_;
+  pl::ObPLParamArray obj_stack_;
+  share::schema::ObSchemaGetterGuard *schema_guard_;
+  ObSqlCtx *sql_ctx_;
   ObExecContext *exec_ctx_;
   ObExprUDFInfo *info_;
   ObIAllocator *alloc_;
@@ -189,7 +193,6 @@ private:
   bool has_out_param_;
   uint64_t package_id_;
   ObCacheObjGuard cacheobj_guard_;
-  pl::ExecCtxBak exec_ctx_bak_;
   ObArenaAllocator allocator_; // row level allocator
   ObArenaAllocator ctx_allocator_; // ctx level allocator
   int64_t arg_count_;

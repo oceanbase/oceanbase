@@ -15,6 +15,7 @@
 #include "share/schema/ob_schema_struct.h"
 #include "share/schema/ob_package_info.h"
 #include "share/schema/ob_trigger_mgr.h"
+#include "pl/ob_pl_analyze_flag.h"
 
 namespace oceanbase
 {
@@ -439,30 +440,30 @@ public:
   OB_INLINE const common::ObString &get_ref_trg_name() const { return ref_trg_name_; }
   OB_INLINE int64_t get_action_order() const { return action_order_; }
 
-  OB_INLINE void set_analyze_flag(uint64_t flag) { analyze_flag_ = flag; }
-  OB_INLINE uint64_t get_analyze_flag() const { return analyze_flag_; }
+  OB_INLINE void set_analyze_flag(uint64_t flag) { analyze_flag_.set_flag(flag); }
+  OB_INLINE uint64_t get_analyze_flag() const { return analyze_flag_.get_flag(); }
 
-  OB_INLINE void set_no_sql() { is_no_sql_ = true; is_reads_sql_data_ = false; is_modifies_sql_data_ = false; is_contains_sql_ = false; }
-  OB_INLINE bool is_no_sql() const { return is_no_sql_; }
-  OB_INLINE void set_reads_sql_data() { is_no_sql_ = false; is_reads_sql_data_ = true; is_modifies_sql_data_ = false; is_contains_sql_ = false; }
-  OB_INLINE bool is_reads_sql_data() const { return is_reads_sql_data_; }
-  OB_INLINE void set_modifies_sql_data() { is_no_sql_ = false; is_reads_sql_data_ = false; is_modifies_sql_data_ = true; is_contains_sql_ = false; }
-  OB_INLINE bool is_modifies_sql_data() const { return is_modifies_sql_data_; }
-  OB_INLINE void set_contains_sql() { is_no_sql_ = false; is_reads_sql_data_ = false; is_modifies_sql_data_ = false; is_contains_sql_ = true; }
-  OB_INLINE bool is_contains_sql() const { return is_contains_sql_; }
+  OB_INLINE void set_no_sql() { analyze_flag_.set_no_sql(); }
+  OB_INLINE bool is_no_sql() const { return analyze_flag_.is_no_sql(); }
+  OB_INLINE void set_reads_sql_data() { analyze_flag_.set_reads_sql_data(); }
+  OB_INLINE bool is_reads_sql_data() const { return analyze_flag_.is_reads_sql_data(); }
+  OB_INLINE void set_modifies_sql_data() { analyze_flag_.set_modifies_sql_data(); }
+  OB_INLINE bool is_modifies_sql_data() const { return analyze_flag_.is_modifies_sql_data(); }
+  OB_INLINE void set_contains_sql() { analyze_flag_.set_contains_sql(); }
+  OB_INLINE bool is_contains_sql() const { return analyze_flag_.is_contains_sql(); }
 
-  OB_INLINE void set_wps(bool v) { is_wps_ = v; }
-  OB_INLINE bool is_wps() const { return is_wps_; }
-  OB_INLINE void set_rps(bool v) { is_rps_ = v; }
-  OB_INLINE bool is_rps() const { return is_rps_; }
-  OB_INLINE void set_has_sequence(bool v) { is_has_sequence_ = v; }
-  OB_INLINE bool is_has_sequence() const { return is_has_sequence_; }
-  OB_INLINE void set_has_out_param(bool v) { is_has_out_param_ = v; }
-  OB_INLINE bool is_has_out_param() const { return is_has_out_param_; }
-  OB_INLINE void set_external_state(bool v) { is_external_state_ = v; }
-  OB_INLINE bool is_external_state() const { return is_external_state_; }
-  OB_INLINE void set_has_auto_trans(bool v) { is_has_auto_trans_ = v; }
-  OB_INLINE bool is_has_auto_trans() const { return is_has_auto_trans_; }
+  OB_INLINE void set_wps() { analyze_flag_.set_wps(); }
+  OB_INLINE bool is_wps() const { return analyze_flag_.is_wps(); }
+  OB_INLINE void set_rps() { analyze_flag_.set_rps(); }
+  OB_INLINE bool is_rps() const { return analyze_flag_.is_rps(); }
+  OB_INLINE void set_has_sequence() { analyze_flag_.set_has_sequence(); }
+  OB_INLINE bool is_has_sequence() const { return analyze_flag_.is_has_sequence(); }
+  OB_INLINE void set_has_out_param() { analyze_flag_.set_has_out_param(); }
+  OB_INLINE bool is_has_out_param() const { return analyze_flag_.is_has_out_param(); }
+  OB_INLINE void set_external_state() { analyze_flag_.set_external_state(); }
+  OB_INLINE bool is_external_state() const { return analyze_flag_.is_external_state(); }
+  OB_INLINE void set_has_auto_trans() { analyze_flag_.set_has_auto_trans(); }
+  OB_INLINE bool is_has_auto_trans() const { return analyze_flag_.is_has_auto_trans(); }
   OB_INLINE bool is_row_level_before_trigger() const { return is_simple_dml_type() && timing_points_.only_before_row(); }
   OB_INLINE bool is_row_level_after_trigger() const { return is_simple_dml_type() && timing_points_.only_after_row(); }
   OB_INLINE bool is_stmt_level_before_trigger() const { return is_simple_dml_type() && timing_points_.only_before_stmt(); }
@@ -571,7 +572,7 @@ public:
                K(ref_trg_db_name_),
                K(ref_trg_name_),
                K(action_order_),
-               K(analyze_flag_));
+               K(analyze_flag_.flag_));
 protected:
   static int gen_package_source_simple(const ObTriggerInfo &trigger_info,
                                        const common::ObString &base_object_database,
@@ -673,22 +674,7 @@ protected:
   common::ObString ref_trg_db_name_;              // 排序方式中指定的trigger的db name
   common::ObString ref_trg_name_;                 // 排序方式中指定的trigger的name
   int64_t action_order_;                          // 该值在rs端计算,从系统表里面读出来的值是有意义的
-  union {
-    uint64_t analyze_flag_;
-    struct {
-      uint64_t is_no_sql_ : 1;
-      uint64_t is_reads_sql_data_ : 1;
-      uint64_t is_modifies_sql_data_ : 1;
-      uint64_t is_contains_sql_ : 1;
-      uint64_t is_wps_ : 1;
-      uint64_t is_rps_ : 1;
-      uint64_t is_has_sequence_ : 1;
-      uint64_t is_has_out_param_ : 1;
-      uint64_t is_external_state_ : 1;
-      uint64_t is_has_auto_trans_ : 1; // only for system trigger, has PRAGMA_AUTONOMOUS_TRANSACTION
-      uint64_t reserved_:53;
-    };
-  };
+  pl::ObPLAnalyzeFlag analyze_flag_;
 };
 
 

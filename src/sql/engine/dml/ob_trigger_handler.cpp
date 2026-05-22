@@ -52,6 +52,200 @@ int TriggerHandle::init_trigger_row(
   return ret;
 }
 
+int TriggerHandle::init_trigger_execute_arg_array(
+  ObIAllocator &alloc,
+  int64_t trigger_arg_count,
+  pl::ObPLExecuteArg *&execute_args)
+{
+  int ret = OB_SUCCESS;
+  execute_args = nullptr;
+  if (trigger_arg_count > 0) {
+    void *buf = alloc.alloc(sizeof(pl::ObPLExecuteArg) * trigger_arg_count);
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate trigger execute args", K(ret), K(trigger_arg_count));
+    } else {
+      execute_args = reinterpret_cast<pl::ObPLExecuteArg *>(buf);
+      for (int64_t i = 0; i < trigger_arg_count; ++i) {
+        new (&execute_args[i]) pl::ObPLExecuteArg();
+      }
+    }
+  }
+  return ret;
+}
+
+int TriggerHandle::prepare_trigger_execute_arg(
+  ObExecContext &exec_ctx,
+  uint64_t trigger_id,
+  uint64_t routine_id,
+  pl::ObPLExecuteArg &execute_arg)
+{
+  int ret = OB_SUCCESS;
+  ObArray<int64_t> path;
+  OZ (obtain_trigger_routine(execute_arg, exec_ctx, trigger_id, routine_id, path));
+  return ret;
+}
+
+int TriggerHandle::check_trigger_record_count(const pl::ObPLFunction &func,
+                                              const ObTrigDMLRtDef &trig_rtdef)
+{
+  int ret = OB_SUCCESS;
+  const int64_t param_cnt = get_routine_param_count(func.get_routine_id());
+  if (param_cnt != ROW_POINT_PARAM_COUNT) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected trigger param count", K(ret), K(param_cnt), K(func));
+  } else if (func.get_variables().count() < param_cnt) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("trigger variable count is invalid", K(ret), K(func.get_variables().count()), K(param_cnt), K(func));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < param_cnt; ++i) {
+      const pl::ObPLRecord *record = (0 == i) ? trig_rtdef.old_record_ : trig_rtdef.new_record_;
+      if (nullptr == record) {
+        // old/new row not referenced, skip check
+      } else {
+        const pl::ObPLDataType &data_type = func.get_variables().at(i);
+        const pl::ObUserDefinedType *udt = nullptr;
+        const uint64_t udt_id = data_type.get_user_type_id();
+        CK (data_type.is_record_type());
+        OV (OB_INVALID_ID != udt_id, OB_ERR_UNEXPECTED, K(i), K(func));
+        for (int64_t j = 0; OB_SUCC(ret) && OB_ISNULL(udt) && j < func.get_type_table().count(); ++j) {
+          OV (OB_NOT_NULL(func.get_type_table().at(j)));
+          if (OB_SUCC(ret) && func.get_type_table().at(j)->get_user_type_id() == udt_id) {
+            udt = func.get_type_table().at(j);
+          }
+        }
+        OV (OB_NOT_NULL(udt), OB_ERR_UNEXPECTED, K(i), K(udt_id), K(func));
+        OV (udt->is_record_type(), OB_ERR_UNEXPECTED, K(i), KPC(udt), K(func));
+        CK (record->get_count() == static_cast<const pl::ObRecordType *>(udt)->get_member_count());
+      }
+    }
+  }
+  LOG_TRACE("check trigger record count", K(ret), K(func), K(trig_rtdef));
+  return ret;
+}
+
+int TriggerHandle::init_trigger_execute_args(ObExecContext &exec_ctx,
+                                             const ObTrigDMLCtDef &trig_ctdef,
+                                             ObTrigDMLRtDef &trig_rtdef)
+{
+  int ret = OB_SUCCESS;
+  ObIAllocator &alloc = exec_ctx.get_allocator();
+  trig_rtdef.trigger_execute_args_alloc_ = &alloc;
+  // Note: trigger_arg_count_ is already set in init_trigger_params()
+  // Note: check_trigger_record_count() is called in cold path of calc_when/calc_before_row/calc_after_row
+  CK (trig_rtdef.trigger_arg_count_ == trig_ctdef.tg_args_.count());
+  if (OB_SUCC(ret) && trig_rtdef.trigger_arg_count_ > 0) {
+    if (trig_ctdef.all_tm_points_.has_when_condition()) {
+      OZ (init_trigger_execute_arg_array(alloc, trig_rtdef.trigger_arg_count_, trig_rtdef.when_execute_args_));
+    }
+    if (trig_ctdef.all_tm_points_.has_before_row()) {
+      OZ (init_trigger_execute_arg_array(alloc, trig_rtdef.trigger_arg_count_, trig_rtdef.before_row_execute_args_));
+    }
+    if (trig_ctdef.all_tm_points_.has_after_row()) {
+      OZ (init_trigger_execute_arg_array(alloc, trig_rtdef.trigger_arg_count_, trig_rtdef.after_row_execute_args_));
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < trig_rtdef.trigger_arg_count_; ++i) {
+    const ObTriggerArg &tg_arg = trig_ctdef.tg_args_.at(i);
+    if (nullptr != trig_rtdef.when_execute_args_ && tg_arg.has_when_condition()) {
+      OZ (prepare_trigger_execute_arg(exec_ctx,
+                                      tg_arg.get_trigger_id(),
+                                      get_when_condition_routine_id(),
+                                      trig_rtdef.when_execute_args_[i]));
+    }
+    if (nullptr != trig_rtdef.before_row_execute_args_ && tg_arg.has_before_row_point()) {
+      OZ (prepare_trigger_execute_arg(exec_ctx,
+                                      tg_arg.get_trigger_id(),
+                                      get_before_row_routine_id(),
+                                      trig_rtdef.before_row_execute_args_[i]));
+    }
+    if (nullptr != trig_rtdef.after_row_execute_args_ && tg_arg.has_after_row_point()) {
+      OZ (prepare_trigger_execute_arg(exec_ctx,
+                                      tg_arg.get_trigger_id(),
+                                      get_after_row_routine_id(),
+                                      trig_rtdef.after_row_execute_args_[i]));
+    }
+  }
+  if (OB_FAIL(ret)) {
+    // clean up partially allocated arrays to avoid relying on external destructor
+    free_trigger_execute_args(trig_rtdef);
+  }
+  return ret;
+}
+
+int TriggerHandle::begin_trigger_row(
+  ObExecContext &exec_ctx,
+  const ObTrigDMLCtDef &trig_ctdef,
+  ObTrigDMLRtDef &trig_rtdef)
+{
+  int ret = OB_SUCCESS;
+  // Only count and init when row actually enters row trigger path (has row-point or when condition)
+  if (trig_ctdef.tg_args_.count() > 0
+      && (trig_ctdef.all_tm_points_.has_row_point() || trig_ctdef.all_tm_points_.has_when_condition())) {
+    ++trig_rtdef.trigger_row_seq_;
+    if (trig_rtdef.trigger_row_seq_ >= 2
+        && !trig_rtdef.trigger_execute_args_inited_
+        && OB_FAIL(ensure_trigger_execute_args_ready(exec_ctx, trig_ctdef, trig_rtdef))) {
+      LOG_WARN("failed to init trigger execute args lazily", K(ret),
+               K(trig_rtdef.trigger_row_seq_));
+    }
+  }
+  return ret;
+}
+
+int TriggerHandle::ensure_trigger_execute_args_ready(
+  ObExecContext &exec_ctx,
+  const ObTrigDMLCtDef &trig_ctdef,
+  ObTrigDMLRtDef &trig_rtdef)
+{
+  int ret = OB_SUCCESS;
+  if (trig_rtdef.trigger_execute_args_inited_) {
+    // already ready
+  } else if (OB_FAIL(init_trigger_execute_args(exec_ctx, trig_ctdef, trig_rtdef))) {
+    LOG_WARN("failed to init trigger execute args", K(ret));
+  } else {
+    trig_rtdef.trigger_execute_args_inited_ = true;
+  }
+  return ret;
+}
+
+int TriggerHandle::get_trigger_execute_arg(
+  ObTrigDMLRtDef &trig_rtdef,
+  uint64_t routine_id,
+  int64_t trigger_idx,
+  pl::ObPLExecuteArg *&execute_arg)
+{
+  int ret = OB_SUCCESS;
+  execute_arg = nullptr;
+  if (trigger_idx < 0 || trigger_idx >= trig_rtdef.trigger_arg_count_) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid trigger index", K(ret), K(trigger_idx), K(trig_rtdef.trigger_arg_count_));
+  } else if (get_before_row_routine_id() == routine_id) {
+    if (OB_NOT_NULL(trig_rtdef.before_row_execute_args_)) {
+      execute_arg = &trig_rtdef.before_row_execute_args_[trigger_idx];
+    }
+  } else if (get_after_row_routine_id() == routine_id) {
+    if (OB_NOT_NULL(trig_rtdef.after_row_execute_args_)) {
+      execute_arg = &trig_rtdef.after_row_execute_args_[trigger_idx];
+    }
+  } else if (get_when_condition_routine_id() == routine_id) {
+    if (OB_NOT_NULL(trig_rtdef.when_execute_args_)) {
+      execute_arg = &trig_rtdef.when_execute_args_[trigger_idx];
+    }
+  } else {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("unexpected trigger routine id", K(ret), K(routine_id));
+  }
+  if (OB_SUCC(ret) && OB_ISNULL(execute_arg)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("trigger execute arg is null", K(ret), K(routine_id), K(trigger_idx));
+  } else if (OB_SUCC(ret) && OB_ISNULL(execute_arg->get_routine())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("trigger routine is null", K(ret), K(routine_id), K(trigger_idx));
+  }
+  return ret;
+}
+
 /*
   drop table t3;
   create table t3 (
@@ -148,13 +342,58 @@ int TriggerHandle::init_trigger_params(
     }
     trig_rtdef.old_record_ = old_record;
     trig_rtdef.new_record_ = new_record;
+    // Initialize trigger_arg_count_ for lazy-init, but do not call init_trigger_execute_args() here.
+    // Execute args will be initialized lazily when the second actual trigger row is reached.
+    trig_rtdef.trigger_arg_count_ = trig_ctdef.tg_args_.count();
+    trig_rtdef.trigger_execute_args_inited_ = false;
+    trig_rtdef.trigger_row_seq_ = 0;
+    trig_rtdef.row_record_checked_ = false;
   }
   return ret;
+}
+
+void TriggerHandle::free_trigger_execute_args(ObTrigDMLRtDef &trig_rtdef)
+{
+  const int64_t trigger_arg_count = trig_rtdef.trigger_arg_count_;
+  common::ObIAllocator *execute_args_alloc = trig_rtdef.trigger_execute_args_alloc_;
+  if (OB_NOT_NULL(trig_rtdef.when_execute_args_)) {
+    for (int64_t i = 0; i < trigger_arg_count; ++i) {
+      trig_rtdef.when_execute_args_[i].~ObPLExecuteArg();
+    }
+    if (OB_NOT_NULL(execute_args_alloc)) {
+      execute_args_alloc->free(trig_rtdef.when_execute_args_);
+    }
+    trig_rtdef.when_execute_args_ = nullptr;
+  }
+  if (OB_NOT_NULL(trig_rtdef.before_row_execute_args_)) {
+    for (int64_t i = 0; i < trigger_arg_count; ++i) {
+      trig_rtdef.before_row_execute_args_[i].~ObPLExecuteArg();
+    }
+    if (OB_NOT_NULL(execute_args_alloc)) {
+      execute_args_alloc->free(trig_rtdef.before_row_execute_args_);
+    }
+    trig_rtdef.before_row_execute_args_ = nullptr;
+  }
+  if (OB_NOT_NULL(trig_rtdef.after_row_execute_args_)) {
+    for (int64_t i = 0; i < trigger_arg_count; ++i) {
+      trig_rtdef.after_row_execute_args_[i].~ObPLExecuteArg();
+    }
+    if (OB_NOT_NULL(execute_args_alloc)) {
+      execute_args_alloc->free(trig_rtdef.after_row_execute_args_);
+    }
+    trig_rtdef.after_row_execute_args_ = nullptr;
+  }
+  trig_rtdef.trigger_arg_count_ = 0;
+  trig_rtdef.trigger_execute_args_alloc_ = nullptr;
+  trig_rtdef.trigger_execute_args_inited_ = false;
+  trig_rtdef.trigger_row_seq_ = 0;
+  trig_rtdef.row_record_checked_ = false;
 }
 
 int TriggerHandle::free_trigger_param_memory(ObTrigDMLRtDef &trig_rtdef, bool keep_composite_attr)
 {
   int ret = OB_SUCCESS;
+  free_trigger_execute_args(trig_rtdef);
   pl::ObPLRecord *old_record = trig_rtdef.old_record_;
   pl::ObPLRecord *new_record = trig_rtdef.new_record_;
   ObObj tmp;
@@ -458,20 +697,109 @@ int TriggerHandle::calc_when_condition(
   ObTableModifyOp &dml_op,
   ObTrigDMLRtDef &trig_rtdef,
   uint64_t trigger_id,
+  int64_t trigger_idx,
   bool &need_fire)
 {
   int ret = OB_SUCCESS;
   ObObj result;
+  const uint64_t routine_idx = ROUTINE_IDX_CALC_WHEN;
   if (OB_ISNULL(trig_rtdef.tg_row_point_params_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(trig_rtdef.tg_row_point_params_));
-  } else if (OB_FAIL(calc_trigger_routine(dml_op.get_exec_ctx(),
-                           trigger_id, ROUTINE_IDX_CALC_WHEN,
-                           *trig_rtdef.tg_row_point_params_, result, false))) {
-    LOG_WARN("failed to calc trigger routine", K(ret));
+  } else if (!trig_rtdef.trigger_execute_args_inited_) {
+    OZ (calc_trigger_routine_cold_path(dml_op.get_exec_ctx(), trig_rtdef, trigger_id, routine_idx,
+                                       *trig_rtdef.tg_row_point_params_, result, false));
   } else {
+    // hot path: use cached execute arg
+    pl::ObPLExecuteArg *execute_arg = nullptr;
+    OZ (get_trigger_execute_arg(trig_rtdef, routine_idx, trigger_idx, execute_arg));
+    OZ (calc_trigger_routine(dml_op.get_exec_ctx(),
+                             trigger_id, routine_idx,
+                             *trig_rtdef.tg_row_point_params_, result, execute_arg, false));
+  }
+  if (OB_SUCC(ret)) {
     need_fire = result.is_true();
     LOG_DEBUG("TRIGGER", K(result), K(need_fire));
+  }
+  return ret;
+}
+
+int TriggerHandle::calc_trigger_routine_cold_path(
+  ObExecContext &exec_ctx,
+  ObTrigDMLRtDef &trig_rtdef,
+  uint64_t trigger_id,
+  uint64_t routine_id,
+  ParamStore &params,
+  ObObj &result,
+  bool is_system_trigger)
+{
+  int ret = OB_SUCCESS;
+  pl::ObPLExecuteArg local_execute_arg;
+  pl::ObPLTopContext *pl_top_context = nullptr;
+  OZ (exec_ctx.get_pl_top_context(pl_top_context));
+  OX (pl_top_context->set_disable_pl_exec_cache(true));
+  OZ (prepare_trigger_execute_arg(exec_ctx, trigger_id, routine_id, local_execute_arg));
+  if (OB_SUCC(ret) && !trig_rtdef.row_record_checked_) {
+    OV (OB_NOT_NULL(local_execute_arg.get_routine()), OB_ERR_UNEXPECTED, K(trigger_id), K(routine_id));
+    OZ (check_trigger_record_count(*local_execute_arg.get_routine(), trig_rtdef));
+    OX (trig_rtdef.row_record_checked_ = true);
+  }
+  OZ (calc_trigger_routine(exec_ctx, trigger_id, routine_id, params, result,
+                           &local_execute_arg, is_system_trigger));
+  return ret;
+}
+
+int TriggerHandle::calc_trigger_routine(
+  ObExecContext &exec_ctx,
+  uint64_t trigger_id,
+  uint64_t routine_id,
+  ParamStore &params,
+  pl::ObPLExecuteArg *reuse_execute_arg,
+  bool is_system_trigger)
+{
+  int ret = OB_SUCCESS;
+  ObObj result;
+  OZ (calc_trigger_routine(exec_ctx, trigger_id, routine_id, params, result, reuse_execute_arg, is_system_trigger));
+  return ret;
+}
+
+int TriggerHandle::check_trigger_arg(ParamStore &params, const pl::ObPLFunction &func, bool is_system_trigger, ObExecContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  if (TriggerHandle::is_trigger_body_routine(func.get_package_id(), func.get_routine_id(), func.get_proc_type())) {
+    if (!is_system_trigger) {
+      const int64_t param_cnt = TriggerHandle::get_routine_param_count(func.get_routine_id());
+      OV (params.count() == param_cnt, OB_ERR_UNEXPECTED, K(params.count()), K(param_cnt));
+      for (int64_t i = 0; OB_SUCC(ret) && i < param_cnt; i++) {
+        if (params.at(i).is_null()) {
+          // trigger body not ref the new row or old row
+        } else {
+          const pl::ObPLDataType &data_type = func.get_variables().at(i);
+          CK (data_type.is_record_type());
+          CK (params.at(i).is_ext());
+          if (OB_SUCC(ret)) {
+            uint64_t udt_id = data_type.get_user_type_id();
+            const pl::ObUserDefinedType *udt = NULL;
+            OV (OB_INVALID_ID != udt_id);
+            for (int64_t j = 0; OB_SUCC(ret) && OB_ISNULL(udt) && j < func.get_type_table().count(); j++) {
+              OV (OB_NOT_NULL(func.get_type_table().at(j)));
+              if (OB_SUCC(ret) && func.get_type_table().at(j)->get_user_type_id() == udt_id) {
+                udt = func.get_type_table().at(j);
+              }
+            }
+            OV (OB_NOT_NULL(udt));
+            OV (udt->is_record_type());
+            if (OB_SUCC(ret)) {
+              pl::ObPLRecord *record = reinterpret_cast<pl::ObPLRecord *>(params.at(i).get_ext());
+              CK (OB_NOT_NULL(record));
+              CK (record->get_count() == (static_cast<const pl::ObRecordType *>(udt))->get_member_count());
+              OX (params.at(i).set_udt_id(udt_id));
+            }
+          }
+        }
+      }
+    }
+    LOG_DEBUG("check trigger routine arg end", K(ret), K(func), K(params));
   }
   return ret;
 }
@@ -481,43 +809,43 @@ int TriggerHandle::calc_trigger_routine(
   uint64_t trigger_id,
   uint64_t routine_id,
   ParamStore &params,
-  bool is_system_trigger)
-{
-  int ret = OB_SUCCESS;
-  ObObj result;
-  OZ (calc_trigger_routine(exec_ctx, trigger_id, routine_id, params, result, is_system_trigger));
-  return ret;
-}
-
-int TriggerHandle::calc_trigger_routine(
-  ObExecContext &exec_ctx,
-  uint64_t trigger_id,
-  uint64_t routine_id,
-  ParamStore &params,
   ObObj &result,
+  pl::ObPLExecuteArg *reuse_execute_arg,
   bool is_system_trigger)
 {
   int ret = OB_SUCCESS;
   ObArray<int64_t> path;
   ObArray<int64_t> nocopy_params;
-  trigger_id = ObTriggerInfo::get_trigger_body_package_id(trigger_id);
   bool old_flag = false;
   common::ObArenaAllocator tmp_allocator(common::ObMemAttr(MTL_ID(), "TriggerExec"));
-  pl::ObPLExecuteArg pl_execute_arg;
-  OX (pl_execute_arg.get_pl_ctx().set_disable_pl_exec_cache(true));
+  pl::ObPLExecuteArg local_execute_arg;
+  pl::ObPLExecuteArg *execute_arg = OB_ISNULL(reuse_execute_arg) ? &local_execute_arg : reuse_execute_arg;
+  pl::ObPLTopContext *pl_top_context = nullptr;
+  pl::ObPLParamArray params_array;
+  params_array.set_allocator(&tmp_allocator);
   CK (OB_NOT_NULL(exec_ctx.get_my_session()));
+  OZ (exec_ctx.get_pl_top_context(pl_top_context));
   OX (old_flag = exec_ctx.get_my_session()->is_for_trigger_package());
   OX (exec_ctx.get_my_session()->set_for_trigger_package(true));
   OV (OB_NOT_NULL(exec_ctx.get_pl_engine()));
-  OX (pl_execute_arg.get_pl_ctx().set_is_system_trigger(is_system_trigger));
-  OZ (pl_execute_arg.obtain_routine(exec_ctx, trigger_id, routine_id, path));
+  if (OB_ISNULL(reuse_execute_arg)) {
+    OX (pl_top_context->set_disable_pl_exec_cache(true));
+    OZ (obtain_trigger_routine(*execute_arg, exec_ctx, trigger_id, routine_id, path));
+  }
+  trigger_id = ObTriggerInfo::get_trigger_body_package_id(trigger_id);
+  OX (execute_arg->get_pl_ctx().set_is_system_trigger(is_system_trigger));
+  OV (OB_NOT_NULL(execute_arg->get_routine()), OB_ERR_UNEXPECTED, K(trigger_id), K(routine_id));
+  OZ (pl::ObPLExecuteArg::transfer_params(params, params_array));
   OZ (exec_ctx.get_pl_engine()->execute(
-    exec_ctx, tmp_allocator, trigger_id, routine_id, path, params, nocopy_params, result, pl_execute_arg),
+    exec_ctx, tmp_allocator, trigger_id, routine_id, path, params_array, nocopy_params, result, *execute_arg),
       trigger_id, routine_id, params);
   OZ (exec_ctx.get_my_session()->reset_all_package_state_by_dbms_session(true));
   if (exec_ctx.get_my_session()->is_for_trigger_package()) {
     // whether `ret == OB_SUCCESS`, need to restore flag
     exec_ctx.get_my_session()->set_for_trigger_package(old_flag);
+  }
+  if (OB_NOT_NULL(reuse_execute_arg)) {
+    reuse_execute_arg->reuse();
   }
   return ret;
 }
@@ -681,7 +1009,7 @@ int TriggerHandle::do_handle_before_row(
         if (!tg_arg.has_before_row_point() || !tg_arg.has_trigger_events(tg_event)) {
           need_fire = false;
         } else if (tg_arg.has_when_condition()) {
-          OZ (calc_when_condition(dml_op, trig_rtdef, tg_arg.get_trigger_id(), need_fire));
+          OZ (calc_when_condition(dml_op, trig_rtdef, tg_arg.get_trigger_id(), i, need_fire));
         } else {
           need_fire = true;
         }
@@ -692,7 +1020,7 @@ int TriggerHandle::do_handle_before_row(
             LOG_WARN("trigger row point params is not init", K(ret));
           } else {
             const ObTableModifySpec &modify_spec = static_cast<const ObTableModifySpec&>(dml_op.get_spec());
-            if (OB_FAIL(calc_before_row(dml_op, trig_rtdef, tg_arg.get_trigger_id()))) {
+            if (OB_FAIL(calc_before_row(dml_op, trig_rtdef, tg_arg.get_trigger_id(), i))) {
               LOG_WARN("failed to calc before row", K(ret));
             } else if ((ObTriggerEvents::is_update_event(tg_event) || ObTriggerEvents::is_insert_event(tg_event))
                         && !trig_ctdef.all_tm_points_.has_instead_row()
@@ -725,33 +1053,51 @@ int TriggerHandle::do_handle_before_row(
 }
 
 int TriggerHandle::calc_after_row(
-  ObTableModifyOp &dml_op, ObTrigDMLRtDef &trig_rtdef, uint64_t trigger_id)
+  ObTableModifyOp &dml_op, ObTrigDMLRtDef &trig_rtdef, uint64_t trigger_id, int64_t trigger_idx)
 {
   int ret = OB_SUCCESS;
   uint64_t idx = lib::is_oracle_mode() ? ROUTINE_IDX_AFTER_ROW : ROUTINE_IDX_AFTER_ROW_MYSQL;
   if (OB_ISNULL(trig_rtdef.tg_row_point_params_)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid arguement", K(ret));
-  } else if (OB_FAIL(calc_trigger_routine(dml_op.get_exec_ctx(),
-                                          trigger_id, idx,
-                                          *trig_rtdef.tg_row_point_params_))) {
-    LOG_WARN("failed to calc trigger routine", K(ret));
+    LOG_WARN("invalid argument", K(ret));
+  } else if (!trig_rtdef.trigger_execute_args_inited_) {
+    ObObj result;
+    OZ (calc_trigger_routine_cold_path(dml_op.get_exec_ctx(), trig_rtdef, trigger_id, idx,
+                                       *trig_rtdef.tg_row_point_params_, result, false));
+    LOG_TRACE("calc after row with cold path", K(ret), K(trigger_id), K(idx), K(trigger_idx));
+  } else {
+    // hot path: use cached execute arg
+    pl::ObPLExecuteArg *execute_arg = nullptr;
+    OZ (get_trigger_execute_arg(trig_rtdef, idx, trigger_idx, execute_arg));
+    OZ (calc_trigger_routine(dml_op.get_exec_ctx(),
+                             trigger_id, idx,
+                             *trig_rtdef.tg_row_point_params_, execute_arg));
+    LOG_TRACE("calc after row with hot path", K(ret), K(trigger_id), K(idx), K(trigger_idx), K(lbt()));
   }
   return ret;
 }
 
 int TriggerHandle::calc_before_row(
-  ObTableModifyOp &dml_op, ObTrigDMLRtDef &trig_rtdef, uint64_t trigger_id)
+  ObTableModifyOp &dml_op, ObTrigDMLRtDef &trig_rtdef, uint64_t trigger_id, int64_t trigger_idx)
 {
   int ret = OB_SUCCESS;
   uint64_t idx = lib::is_oracle_mode() ? ROUTINE_IDX_BEFORE_ROW : ROUTINE_IDX_BEFORE_ROW_MYSQL;
   if (OB_ISNULL(trig_rtdef.tg_row_point_params_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(trig_rtdef.tg_row_point_params_));
-  } else if (OB_FAIL(calc_trigger_routine(dml_op.get_exec_ctx(),
-                                          trigger_id, idx,
-                                          *trig_rtdef.tg_row_point_params_))) {
-    LOG_WARN("failed to calc trigger routine", K(ret));
+  } else if (!trig_rtdef.trigger_execute_args_inited_) {
+    ObObj result;
+    OZ (calc_trigger_routine_cold_path(dml_op.get_exec_ctx(), trig_rtdef, trigger_id, idx,
+                                       *trig_rtdef.tg_row_point_params_, result, false));
+    LOG_TRACE("calc before row with cold path", K(ret), K(trigger_id), K(idx), K(trigger_idx));
+  } else {
+    // hot path: use cached execute arg
+    pl::ObPLExecuteArg *execute_arg = nullptr;
+    OZ (get_trigger_execute_arg(trig_rtdef, idx, trigger_idx, execute_arg));
+    OZ (calc_trigger_routine(dml_op.get_exec_ctx(),
+                             trigger_id, idx,
+                             *trig_rtdef.tg_row_point_params_, execute_arg));
+    LOG_TRACE("calc before row with hot path", K(ret), K(trigger_id), K(idx), K(trigger_idx), K(lbt()));
   }
   return ret;
 }
@@ -765,7 +1111,7 @@ int TriggerHandle::calc_before_stmt(
   int ret = OB_SUCCESS;
   ParamStore params;
   if (OB_FAIL(calc_trigger_routine(dml_op.get_exec_ctx(),
-                                   trigger_id, ROUTINE_IDX_BEFORE_STMT, params))) {
+                                   trigger_id, ROUTINE_IDX_BEFORE_STMT, params, nullptr))) {
     LOG_WARN("failed to calc trigger routine", K(ret));
   }
   return ret;
@@ -801,7 +1147,7 @@ int TriggerHandle::calc_after_stmt(
   int ret = OB_SUCCESS;
   ParamStore params;
   OZ (calc_trigger_routine(dml_op.get_exec_ctx(),
-                           trigger_id, ROUTINE_IDX_AFTER_STMT, params));
+                           trigger_id, ROUTINE_IDX_AFTER_STMT, params, nullptr));
   return ret;
 }
 
@@ -853,6 +1199,7 @@ int TriggerHandle::do_handle_rowid_after_row(
       }
       LOG_DEBUG("handle rowid after insert success", K(tg_event));
     } else if (NULL != trig_ctdef.rowid_old_expr_ && ObTriggerEvents::is_delete_event(tg_event)) {
+      trig_ctdef.rowid_old_expr_->get_eval_info(dml_op.get_eval_ctx()).clear_evaluated_flag();
       if (trig_ctdef.is_ref_new_rowid()) {
         // new.rowid should be same with old.rowid
         OZ (TriggerHandle::set_rowid_into_row(trig_ctdef.trig_col_info_,
@@ -884,13 +1231,13 @@ int TriggerHandle::do_handle_after_row(
         if (!tg_arg.has_after_row_point() || !tg_arg.has_trigger_events(tg_event)) {
           need_fire = false;
         } else if (tg_arg.has_when_condition()) {
-          OZ (calc_when_condition(dml_op, trig_rtdef, tg_arg.get_trigger_id(), need_fire));
+          OZ (calc_when_condition(dml_op, trig_rtdef, tg_arg.get_trigger_id(), i, need_fire));
         } else {
           need_fire = true;
         }
         LOG_DEBUG("TRIGGER", K(need_fire));
         if (need_fire) {
-          OZ (calc_after_row(dml_op, trig_rtdef, tg_arg.get_trigger_id()));
+          OZ (calc_after_row(dml_op, trig_rtdef, tg_arg.get_trigger_id(), i));
         }
       }
     }
@@ -934,7 +1281,7 @@ int TriggerHandle::calc_when_condition(ObExecContext &exec_ctx,
   int ret = OB_SUCCESS;
   ObObj result;
   ParamStore params;
-  if (OB_FAIL(calc_trigger_routine(exec_ctx, trigger_id, ROUTINE_IDX_CALC_WHEN, params, result, true))) {
+  if (OB_FAIL(calc_trigger_routine(exec_ctx, trigger_id, ROUTINE_IDX_CALC_WHEN, params, result, nullptr, true))) {
     LOG_WARN("calc trigger routine failed", K(ret), K(trigger_id));
   } else {
     need_fire = result.is_true();
@@ -1024,7 +1371,7 @@ int TriggerHandle::calc_system_body(ObExecContext &exec_ctx,
 {
   int ret = OB_SUCCESS;
   ParamStore params;
-  if (OB_FAIL(calc_trigger_routine(exec_ctx, trigger_id, ROUTINE_IDX_SYSTEM_BODY, params, true))) {
+  if (OB_FAIL(calc_trigger_routine(exec_ctx, trigger_id, ROUTINE_IDX_SYSTEM_BODY, params, nullptr, true))) {
     LOG_WARN("calc trigger routine failed", K(ret));
   }
   return ret;
@@ -1357,6 +1704,37 @@ int TriggerHandle::is_enabled_system_trigger(bool &is_enable)
       LOG_WARN("tenant role is not ready", K(ret));
     } else if (!tenant_role.is_standby()) {
       is_enable = tenant_config->_system_trig_enabled;
+    }
+  }
+  return ret;
+}
+
+int TriggerHandle::obtain_trigger_routine(pl::ObPLExecuteArg &execute_arg,
+                                          ObExecContext &exec_ctx,
+                                          uint64_t trigger_id,
+                                          uint64_t routine_id,
+                                          const ObIArray<int64_t> &subprogram_path)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = exec_ctx.get_my_session()->get_effective_tenant_id();
+  uint64_t package_id = ObTriggerInfo::get_trigger_body_package_id(trigger_id);
+  if (OB_FAIL(execute_arg.obtain_routine(exec_ctx, package_id, routine_id, subprogram_path))) {
+    LOG_WARN("failed to obtain trigger routine", K(ret), K(package_id), K(routine_id), K(subprogram_path));
+    int tmp_ret = ret;
+    const ObTriggerInfo *trg_info = NULL;
+    const ObDatabaseSchema *database_schema = NULL;
+    ret = OB_SUCCESS;
+    ObSqlString &err_msg = exec_ctx.get_my_session()->get_pl_exact_err_msg();
+    OZ (err_msg.append_fmt("\nerror during execution of trigger "));
+    OZ (exec_ctx.get_sql_ctx()->schema_guard_->get_trigger_info(tenant_id, trigger_id, trg_info));
+    CK (OB_NOT_NULL(trg_info));
+    OZ (exec_ctx.get_sql_ctx()->schema_guard_->get_database_schema(tenant_id, trg_info->get_database_id(),
+                                                                   database_schema));
+    OZ (err_msg.append_fmt("%.*s.", database_schema->get_database_name_str().length(),
+                           database_schema->get_database_name_str().ptr()));
+    OZ (err_msg.append_fmt("%.*s", trg_info->get_trigger_name().length(), trg_info->get_trigger_name().ptr()));
+    if (OB_SUCC(ret)) {
+      ret = tmp_ret;
     }
   }
   return ret;

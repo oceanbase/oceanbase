@@ -1074,7 +1074,7 @@ int ObOraJavaRoutineExecutor::init()
   return ret;
 }
 
-int ObOraJavaRoutineExecutor::execute(int64_t argc, int64_t *argv)
+int ObOraJavaRoutineExecutor::execute()
 {
   int ret = OB_SUCCESS;
 
@@ -1086,6 +1086,9 @@ int ObOraJavaRoutineExecutor::execute(int64_t argc, int64_t *argv)
     LOG_WARN("ObOraJavaRoutineExecutor not init", K(ret));
   } else if (OB_FAIL(is_valid())) {
     LOG_WARN("invalid ObOraJavaRoutineExecutor", K(ret), K(lbt()));
+  } else if (OB_ISNULL(ctx_.params_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NULL params in ObPLExecCtx", K(ret), K(lbt()));
   } else if (OB_ISNULL(session_state = ctx_.exec_ctx_->get_my_session()->get_ora_java_session_state())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected NULL ora java session state", K(ret), K(lbt()));
@@ -1116,7 +1119,7 @@ int ObOraJavaRoutineExecutor::execute(int64_t argc, int64_t *argv)
       LOG_WARN("unexpected NULL method_name", K(ret), K(info));
     } else if (OB_FAIL(ObJavaUtils::get_cached_class(*env, "java/lang/Object", object_clazz))) {
       LOG_WARN("failed to find java/lang/Object class", K(ret));
-    } else if (OB_FAIL(build_udf_arg_arrays(*env, ctx_.local_expr_alloc_, func_, argc, argv, arg_types, args, object_clazz, java_type_names))) {
+    } else if (OB_FAIL(build_udf_arg_arrays(*env, ctx_.local_expr_alloc_, func_, *ctx_.params_, arg_types, args, object_clazz, java_type_names))) {
       LOG_WARN("failed to build udf arg arrays", K(ret));
     } else if (OB_FAIL(ObJavaUDFExecutor::build_udf_args(*ctx_.exec_ctx_->get_my_session(),
                                                          *ctx_.exec_ctx_->get_sql_ctx()->schema_guard_,
@@ -1524,8 +1527,7 @@ int ObOraJavaRoutineExecutor::handle_function_result(JNIEnv *env, jobject java_r
 int ObOraJavaRoutineExecutor::build_udf_arg_arrays(JNIEnv &env,
                                                    ObIAllocator &alloc,
                                                    const ObPLFunction &func,
-                                                   int64_t argc,
-                                                   int64_t *argv,
+                                                   const ParamStore &params,
                                                    ObIArray<ObObjMeta> &arg_types,
                                                    ObIArray<ObIArray<ObObj> *> &args,
                                                    jclass object_clazz,
@@ -1535,6 +1537,7 @@ int ObOraJavaRoutineExecutor::build_udf_arg_arrays(JNIEnv &env,
 
   const ObOraJavaRoutineInfo *info_ptr = nullptr;
   const ObIArray<ObPLDataType> &variables = func.get_variables();
+  const int64_t argc = params.count();
 
   CK (OB_NOT_NULL(info_ptr = func.get_ora_java_routine_info()));
   CK (OB_NOT_NULL(object_clazz));
@@ -1573,11 +1576,8 @@ int ObOraJavaRoutineExecutor::build_udf_arg_arrays(JNIEnv &env,
         } else if (OB_ISNULL(arg_values = new (arg_values) ColumnType())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("failed to construct ColumnType", K(ret), K(i));
-        } else if (OB_UNLIKELY(0 == argv[i])) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected NULL argv", K(ret), K(i), K(lbt()));
         } else {
-          const ObObj &param = *reinterpret_cast<ObObj *>(argv[i]);
+          const ObObj &param = params.at(i);
 
           if (OB_FAIL(arg_values->push_back(param))) {
             LOG_WARN("failed to push back arg value", K(ret), K(i), K(param));

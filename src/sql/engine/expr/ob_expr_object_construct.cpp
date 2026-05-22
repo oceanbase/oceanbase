@@ -160,11 +160,11 @@ int ObExprObjectConstruct::newx(ObEvalCtx &ctx, ObObj &result, uint64_t udt_id, 
                                   *(exec_ctx.get_sql_proxy()),
                                   false);
     pl::ObPLINS *ns = NULL;
-    if (NULL == session->get_pl_context()) {
+    if (NULL == session->get_pl_top_context()) {
       OZ (package_guard.init());
       OX (ns = &resolve_ctx);
     } else {
-      ns = session->get_pl_context()->get_current_ctx();
+      ns = session->get_pl_top_context()->get_current_ctx();
     }
     if (OB_SUCC(ret)) {
       ObObj new_composite;
@@ -202,9 +202,9 @@ int ObExprObjectConstruct::eval_object_construct(const ObExpr &expr, ObEvalCtx &
   OX (alloc = &pl_complex_type_mgr->alloc_);
   // for ojbect construct in pl, use top_expr_allocator
   // we will destroy this obj in pl final interface
-  if (OB_SUCC(ret) && OB_NOT_NULL(session) &&
-      OB_NOT_NULL(session->get_pl_context()) &&
-      OB_NOT_NULL(pl_exec_ctx = session->get_pl_context()->get_current_ctx()) &&
+  if (OB_NOT_NULL(session) &&
+      OB_NOT_NULL(session->get_pl_top_context()) &&
+      OB_NOT_NULL(pl_exec_ctx = session->get_pl_top_context()->get_current_ctx()) &&
       pl_exec_ctx->get_exec_ctx() == &ctx.exec_ctx_) {
     alloc = pl_exec_ctx->get_top_expr_allocator();
   }

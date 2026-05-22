@@ -123,8 +123,8 @@ int ObPLCompiler::init_anonymous_ast(
           // try parent type if it is inner mock PL
           } else if (OB_NOT_NULL(session_info.get_pl_context())
                        && session_info.get_pl_context()->get_is_inner_mock()
-                       && OB_NOT_NULL(session_info.get_pl_context()->get_current_ctx())) {
-            const ObPLFunction *parent = session_info.get_pl_context()->get_current_ctx()->func_;
+                       && OB_NOT_NULL(session_info.get_pl_top_context()->get_current_ctx())) {
+            const ObPLFunction *parent = session_info.get_pl_top_context()->get_current_ctx()->func_;
 
             CK (OB_NOT_NULL(parent));
 
@@ -284,6 +284,7 @@ int ObPLCompiler::compile(
       func.set_ns(ObLibCacheNameSpace::NS_ANON);
       OZ (func.get_exec_env().load(session_info_, &(func.get_allocator())));
     }
+    OX (func.set_arg_count(func_ast.get_arg_count()));
     resolve_end = ObTimeUtility::current_time();
     FLT_SET_TAG(pl_compile_resolve_time, resolve_end - init_end);
     LOG_INFO(">>>>>>>>Final Compile Anonymous Block Time: ", K(ret), K(resolve_end - init_end));
@@ -315,6 +316,7 @@ int ObPLCompiler::compile(
         } else if (OB_FAIL(cg.generate(func))) {
           LOG_WARN("failed to code generate for stmt", K(ret));
         }
+        OX (func.set_compiled_analyze_flag(func_ast.get_analyze_flag()));
         OX (func.set_arg_count(func_ast.get_arg_count()));
         for (int64_t i = 0; OB_SUCC(ret) && i < func_ast.get_arg_count(); ++i) {
           const ObPLSymbolTable &symbol_table = func_ast.get_symbol_table();
@@ -396,6 +398,7 @@ int ObPLCompiler::read_dll_from_disk(bool enable_persistent,
     OX (func.set_can_cached(func_ast.get_can_cached()));
     OX (func.set_is_all_sql_stmt(func_ast.get_is_all_sql_stmt()));
     OX (func.set_has_parallel_affect_factor(func_ast.has_parallel_affect_factor()));
+    OX (func.set_compiled_analyze_flag(func_ast.get_analyze_flag()));
 #ifdef OB_BUILD_ORACLE_PL
     OZ (func.add_vaild_rows_info(func_ast.get_valid_row_info_array()));
 #endif
@@ -597,6 +600,7 @@ int ObPLCompiler::compile(
       if (OB_SUCC(ret)) {
         OZ (func.set_tenant_sys_schema_version(schema_guard_, session_info_.get_effective_tenant_id()));
         OX (func.set_ret_type(func_ast.get_ret_type()));
+        OX (func.set_compiled_analyze_flag(func_ast.get_analyze_flag()));
         OX (func.get_stat_for_update().schema_version_ = routine.get_schema_version());
         OX (func.get_stat_for_update().pl_cg_mem_hold_ = cg_jit_mem);
       }
@@ -1045,6 +1049,7 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
   bool is_from_disk = false;
   OZ (generate_package(copy_exec_env, package_ast, package, is_from_disk));
   OX (package.set_can_cached(package_ast.get_can_cached()));
+  OX (package.set_compiled_analyze_flag(package_ast.get_analyze_flag()));
   OX (package_ast.get_serially_reusable() ? package.set_serially_reusable() : void(NULL));
   session_info_.set_for_trigger_package(saved_trigger_flag);
   OZ (check_dep_schema(schema_guard_, package.get_dependency_table()));
@@ -1646,6 +1651,7 @@ int ObPLCompiler::compile_subprogram_table(common::ObIAllocator &allocator,
               LOG_WARN("code generate failed", "routine name", routine_ast->get_name(), K(ret));
             } else {
               routine->set_ret_type(routine_ast->get_ret_type());
+              OX (routine->set_compiled_analyze_flag(routine_ast->get_analyze_flag()));
               if (OB_FAIL(compile_unit.add_routine(routine))) {
                 LOG_WARN("package add routine failed", K(ret));
               }

@@ -2717,6 +2717,7 @@ int ObDmlCgService::generate_trigger_arg(ObTrigDMLCtDef &trig_ctdef,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get tenant config", K(ret));
   } else if (FALSE_IT(is_prune_columns = !tenant_config->_update_all_columns_for_trigger)) {
+  } else if (FALSE_IT(trig_ctdef.is_precise_batch_exec_ = tenant_config->_enable_trigger_precise_batch_exec)) {
   } else {
     int64_t col_cnt = table_schema.get_column_count();
     int64_t hidden_column_count = 0;
@@ -2758,7 +2759,6 @@ int ObDmlCgService::generate_trigger_arg(ObSQLSessionInfo &session_info,
   trigger_arg.set_trigger_id(trigger_info.get_trigger_id());
   trigger_arg.set_trigger_events(trigger_info.get_trigger_events());
   trigger_arg.set_timing_points(trigger_info.get_timing_points());
-  trigger_arg.set_analyze_flag(trigger_info.get_analyze_flag());
   trigger_arg.set_trigger_type(static_cast<int64_t>(trigger_info.get_trigger_type()));
   if (is_prune_columns && trigger_info.has_row_point()) {
     ObFixedArray<ObTriggerRowRefType, ObIAllocator> &ref_types = trigger_arg.get_ref_types();
@@ -2767,13 +2767,18 @@ int ObDmlCgService::generate_trigger_arg(ObSQLSessionInfo &session_info,
       ObTriggerRowRefType ref_type;
       OZ (ref_types.push_back(ref_type));
     }
+    // compiled_analyze_flag 初始化为 schema 值作为 fallback（trigger 不可用等边界情况）
+    uint64_t compiled_analyze_flag = trigger_info.get_analyze_flag();
     OZ (ObResolverUtils::collect_trigger_ref_column(session_info,
                                                     schema_guard,
                                                     trigger_info,
                                                     table_schema,
                                                     col_cnt,
-                                                    ref_types));
-
+                                                    ref_types,
+                                                    compiled_analyze_flag));
+    OX (trigger_arg.set_analyze_flag(compiled_analyze_flag));
+  } else {
+    trigger_arg.set_analyze_flag(trigger_info.get_analyze_flag());
   }
   return ret;
 }

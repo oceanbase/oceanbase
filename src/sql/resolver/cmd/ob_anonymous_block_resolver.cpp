@@ -112,6 +112,7 @@ int ObAnonymousBlockResolver::resolve_anonymous_block(
                               false,
                               false,
                               p_param_list);
+    resolver.get_resolve_ctx().is_ps_prepare_stage_ = params_.is_prepare_stage_;
     if (params_.param_list_ != NULL && params_.param_list_->count() > 0) {
       if (params_.param_list_->count() != params_.query_ctx_->question_marks_count_) {
         if (params_.param_list_->count() < params_.query_ctx_->question_marks_count_) {

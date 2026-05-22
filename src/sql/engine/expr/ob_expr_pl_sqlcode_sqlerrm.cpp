@@ -128,9 +128,9 @@ int ObExprPLSQLCodeSQLErrm::eval_pl_sql_code_errm(
                  && sqlcode <= OB_MAX_RAISE_APPLICATION_ERROR) {
         ObString error_trace_msg = ObString("");
 #ifdef OB_BUILD_ORACLE_PL
-        CK (OB_NOT_NULL(session->get_pl_context()));
-        CK (OB_NOT_NULL(session->get_pl_context()->get_call_stack_trace()));
-        OZ (session->get_pl_context()->get_call_stack_trace()->get_last_error_trace_msg(error_trace_msg));
+        CK (OB_NOT_NULL(session->get_pl_top_context()));
+        CK (OB_NOT_NULL(session->get_pl_top_context()->get_call_stack_trace()));
+        OZ (session->get_pl_top_context()->get_call_stack_trace()->get_last_error_trace_msg(error_trace_msg));
 #endif
         OX (max_buf_size = error_trace_msg.length() + 1);
         CK (OB_NOT_NULL(sqlerrm_result = expr.get_str_res_mem(ctx, max_buf_size)));
@@ -172,9 +172,9 @@ int ObExprPLSQLCodeSQLErrm::eval_pl_sql_code_errm(
         if (sqlcode_info->get_sqlcode() == sqlcode) {
           ObString error_trace_msg = ObString("");
 #ifdef OB_BUILD_ORACLE_PL
-          CK (OB_NOT_NULL(session->get_pl_context()));
-          CK (OB_NOT_NULL(session->get_pl_context()->get_call_stack_trace()));
-          OZ (session->get_pl_context()->get_call_stack_trace()->get_last_error_trace_msg(error_trace_msg));
+          CK (OB_NOT_NULL(session->get_pl_top_context()));
+          CK (OB_NOT_NULL(session->get_pl_top_context()->get_call_stack_trace()));
+          OZ (session->get_pl_top_context()->get_call_stack_trace()->get_last_error_trace_msg(error_trace_msg));
 #endif
           OX (max_buf_size = error_trace_msg.length() + 1);
           CK (OB_NOT_NULL(sqlerrm_result = expr.get_str_res_mem(ctx, max_buf_size)));

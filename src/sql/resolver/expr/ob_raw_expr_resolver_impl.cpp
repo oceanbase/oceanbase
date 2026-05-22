@@ -2744,7 +2744,8 @@ int ObRawExprResolverImpl::check_pl_variable(ObQualifiedName &q_name, bool &is_p
                                                            ctx_.param_list_,
                                                            false,/*is_prepare_protocol*/
                                                            true,/*is_check_mode*/
-                                                           ctx_.current_scope_ != T_PL_SCOPE /*is_sql_scope*/))) {
+                                                           ctx_.current_scope_ != T_PL_SCOPE, /*is_sql_scope*/
+                                                           false /*is_prepare_stage*/))) {
         LOG_INFO("failed to resolve external symbol", K(q_name), K(ret));
         if (OB_ERR_INVOKE_STATIC_BY_INSTANCE != ret) {
           ret = OB_SUCCESS;
@@ -3563,6 +3564,21 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("const expr is null", K(ret), K(c_expr));
   } else {
+    const pl::ObPLBlockNS *cur_ns = ctx_.secondary_namespace_;
+    bool is_subprogram_var = false;
+    if (OB_NOT_NULL(cur_ns) && ObUnknownType == val.get_param_meta().get_type()
+        && OB_NOT_NULL(cur_ns->get_external_ns())
+        && OB_NOT_NULL(cur_ns->get_external_ns()->get_parent_ns())) {
+      while (OB_NOT_NULL(cur_ns->get_external_ns())
+          && OB_NOT_NULL(cur_ns->get_external_ns()->get_parent_ns())) {
+        cur_ns = cur_ns->get_external_ns()->get_parent_ns();
+      }
+      if (!(const_cast<pl::ObPLBlockNS *>(cur_ns) == ctx_.secondary_namespace_)
+          && OB_INVALID_ID == cur_ns->get_package_id()
+          && OB_INVALID_ID == cur_ns->get_routine_id()) {
+        is_subprogram_var = true;
+      }
+    }
     if (node.is_date_unit_) {
       c_expr->set_is_date_unit();
     }
@@ -3620,6 +3636,9 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
               const pl::ObPLSymbolTable* symbol_table = NULL;
               const pl::ObPLVar* var = NULL;
               CK (OB_NOT_NULL(symbol_table = ctx_.secondary_namespace_->get_symbol_table()));
+              if (is_subprogram_var) {
+                CK (OB_NOT_NULL(symbol_table = cur_ns->get_symbol_table()));
+              }
               CK (OB_NOT_NULL(var = symbol_table->get_symbol(val.get_unknown())));
               if (OB_SUCC(ret)) {
                 if (0 == var->get_name().case_compare(pl::ObPLResolver::ANONYMOUS_ARG)) {
@@ -3729,6 +3748,9 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
             const pl::ObPLSymbolTable* symbol_table = NULL;
             const pl::ObPLVar* var = NULL;
             CK (OB_NOT_NULL(symbol_table = ctx_.secondary_namespace_->get_symbol_table()));
+            if (is_subprogram_var) {
+              CK (OB_NOT_NULL(symbol_table = cur_ns->get_symbol_table()));
+            }
             CK (OB_NOT_NULL(var = symbol_table->get_symbol(val.get_unknown())));
             if (OB_SUCC(ret)) {
               if (var->get_name().prefix_match(pl::ObPLResolver::ANONYMOUS_ARG)) {
@@ -3831,6 +3853,9 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
             const pl::ObPLSymbolTable* symbol_table = NULL;
             const pl::ObPLVar* var = NULL;
             CK (OB_NOT_NULL(symbol_table = ctx_.secondary_namespace_->get_symbol_table()));
+            if (is_subprogram_var) {
+              CK (OB_NOT_NULL(symbol_table = cur_ns->get_symbol_table()));
+            }
             CK (OB_NOT_NULL(var = symbol_table->get_symbol(val.get_unknown())));
             if (OB_SUCC(ret)) {
               if (var->get_name().prefix_match(pl::ObPLResolver::ANONYMOUS_ARG)) {
@@ -3860,8 +3885,43 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
            pl::PL_OPAQUE_TYPE == c_expr->get_result_type().get_extend_type())) {
         ctx_.stmt_->get_query_ctx()->disable_udf_parallel_ |= true;
       }
+      if (OB_SUCC(ret) && is_subprogram_var) {
+        int64_t var_index = val.v_.unknown_;
+        ObExprResType *subprog_var_result_type = static_cast<ObExprResType *>(
+          ctx_.expr_factory_.get_allocator().alloc(sizeof(ObExprResType)));
+        if (OB_ISNULL(subprog_var_result_type)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("allocate memory failed", K(ret));
+        } else {
+          new (subprog_var_result_type) ObExprResType(c_expr->get_result_type());
+        }
+        OZ (ObRawExprUtils::build_get_subprogram_var(ctx_.expr_factory_,
+                                                                cur_ns->get_package_id(),
+                                                                cur_ns->get_routine_id(),
+                                                                var_index,
+                                                                subprog_var_result_type,
+                                                                expr,
+                                                                session_info), cur_ns, var_index);
+        if (OB_SUCC(ret) && OB_NOT_NULL(expr)) {
+          OX (expr->set_result_type(c_expr->get_result_type()));
+          if (OB_SUCC(ret)
+            && OB_NOT_NULL(ctx_.param_list_)
+            && OB_NOT_NULL(ctx_.external_param_info_)
+            && ctx_.param_list_->empty()
+            && ctx_.external_param_info_->count() > 0) {
+            ObConstRawExpr *tmp = ctx_.external_param_info_->at(ctx_.external_param_info_->count() - 1).element<1>();
+            ExternalParamInfo param_info(expr, tmp, 1); // use sub_program_expr to replace param
+            OX (ctx_.external_param_info_->params_.pop_back());
+            OZ (ctx_.external_param_info_->push_back(param_info));
+          }
+        }
+      }
     }
-    expr = c_expr;
+    if (OB_SUCC(ret)
+      && OB_ISNULL(expr)
+      && OB_NOT_NULL(c_expr)) {
+      expr = c_expr;
+    }
   }
   return ret;
 }

@@ -371,7 +371,7 @@ int ObPLPackage::execute_init_routine(ObIAllocator &allocator, ObExecContext &ex
     CK (OB_NOT_NULL(pl_engine = exec_ctx.get_my_session()->get_pl_engine()));
 
     if (OB_SUCC(ret)) {
-      ParamStore params;
+      ObPLParamArray params;
       ObSEArray<int64_t, 2> nocopy_param;
       ObObj result;
       int status;

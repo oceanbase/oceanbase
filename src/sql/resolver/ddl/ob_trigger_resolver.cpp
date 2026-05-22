@@ -518,7 +518,7 @@ int ObTriggerResolver::resolve_has_auto_trans(const ParseNode &declare_node,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("node is NULL", K(ret), K(i));
     } else if (T_SP_PRAGMA_AUTONOMOUS_TRANSACTION == declare_node.children_[i]->type_) {
-      trigger_info.set_has_auto_trans(true);
+      trigger_info.set_has_auto_trans();
     }
   }
   return ret;

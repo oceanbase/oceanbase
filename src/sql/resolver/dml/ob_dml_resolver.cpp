@@ -14148,6 +14148,7 @@ int ObDMLResolver::resolve_external_name(ObQualifiedName &q_name,
                                                          params_.is_prepare_protocol_,
                                                          false, /*is_check_mode*/
                                                          current_scope_ != T_CURRENT_OF_SCOPE /*is_sql_scope*/,
+                                                         params_.is_prepare_stage_,
                                                          &dependency_objects,
                                                          params_.query_ctx_))) {
       LOG_WARN_IGNORE_COL_NOTFOUND(ret, "failed to resolve var", K(q_name), K(ret));

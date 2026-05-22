@@ -180,11 +180,11 @@ int ObGetDiagnosticsExecutor::assign_condition_val(ObExecContext &ctx, ObGetDiag
       if (T_QUESTIONMARK == const_expr->get_expr_type()) {
         ObCollationType collation_type;
         ObObjParam result;
-        pl::ObPLContext *pl_context = nullptr;
         pl::ObPLExecState *pl_state = nullptr;
+        pl::ObPLTopContext *pl_top_context = nullptr;
         char str[50] = {0};
-        CK (OB_NOT_NULL(pl_context = session_info->get_pl_context()));
-        CK (OB_NOT_NULL(pl_state = pl_context->get_current_state()));
+        CK (OB_NOT_NULL(pl_top_context = session_info->get_pl_top_context()));
+        CK (OB_NOT_NULL(pl_state = pl_top_context->get_current_state()));
         OZ (session_info->get_collation_connection(collation_type));
         DIAG_INFO_TYPE info_type;
         OZ (stmt.get_diag_info_type_by_name(val, info_type));
@@ -265,9 +265,9 @@ int ObGetDiagnosticsExecutor::get_condition_num(ObExecContext &ctx, ObGetDiagnos
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session_info = ctx.get_my_session();
-  pl::ObPLContext *pl_context = nullptr;
   pl::ObPLExecState *pl_state = nullptr;
   const ObRawExpr* cond_argument = nullptr;
+  pl::ObPLTopContext *pl_top_context = nullptr;
 
   CK(OB_NOT_NULL(session_info));
   if (0 == stmt.get_params().count()) {
@@ -281,8 +281,8 @@ int ObGetDiagnosticsExecutor::get_condition_num(ObExecContext &ctx, ObGetDiagnos
       if (OB_LIKELY(cond_argument->is_const_raw_expr())) {
         const ObConstRawExpr *const_expr = static_cast<const ObConstRawExpr *>(cond_argument);
         if (T_QUESTIONMARK == const_expr->get_expr_type()) {
-          CK (OB_NOT_NULL(pl_context = session_info->get_pl_context()));
-          CK (OB_NOT_NULL(pl_state = pl_context->get_current_state()));
+          CK (OB_NOT_NULL(pl_top_context = session_info->get_pl_top_context()));
+          CK (OB_NOT_NULL(pl_state = pl_top_context->get_current_state()));
           ObObjParam value;
           int64_t idx = const_expr->get_value().get_unknown();
           idx = stmt.get_origin_param_index(idx);
@@ -484,14 +484,17 @@ int ObGetDiagnosticsExecutor::execute(ObExecContext &ctx, ObGetDiagnosticsStmt &
       ObString err_msg_c, sqlstate_c;
       pl::ObPLSqlCodeInfo *sqlcode_info = NULL;
       int64_t idx;
+      common::ObIArray<ObWarningBuffer> *stack_warning_buf = NULL;
       CK (OB_NOT_NULL(session_info->get_pl_sqlcode_info()));
       OX (sqlcode_info = session_info->get_pl_sqlcode_info());
-      CK (sqlcode_info->get_stack_warning_buf().count() > 0);
-      OX (idx = sqlcode_info->get_stack_warning_buf().count() - 1);
+      OZ (sqlcode_info->get_stack_warning_buf(stack_warning_buf));
+      CK (OB_NOT_NULL(stack_warning_buf));
+      CK (stack_warning_buf->count() > 0);
+      OX (idx = stack_warning_buf->count() - 1);
       if (OB_SUCC(ret)) {
-        err_ret = sqlcode_info->get_stack_warning_buf().at(idx).get_err_code();
-        err_msg_c = sqlcode_info->get_stack_warning_buf().at(idx).get_err_msg();
-        sqlstate_c = sqlcode_info->get_stack_warning_buf().at(idx).get_sql_state();
+        err_ret = stack_warning_buf->at(idx).get_err_code();
+        err_msg_c = stack_warning_buf->at(idx).get_err_msg();
+        sqlstate_c = stack_warning_buf->at(idx).get_sql_state();
       }
       OZ (assign_condition_val(ctx, stmt, session_info, conn, err_ret, err_msg_c, sqlstate_c));
     }
@@ -505,11 +508,14 @@ int ObGetDiagnosticsExecutor::execute(ObExecContext &ctx, ObGetDiagnosticsStmt &
     } else {
       int64_t idx;
       pl::ObPLSqlCodeInfo *sqlcode_info = NULL;
+      common::ObIArray<ObWarningBuffer> *stack_warning_buf = NULL;
       CK (OB_NOT_NULL(session_info->get_pl_sqlcode_info()));
       OX (sqlcode_info = session_info->get_pl_sqlcode_info());
-      CK (sqlcode_info->get_stack_warning_buf().count() > 0);
-      OX (idx = sqlcode_info->get_stack_warning_buf().count() - 1);
-      OX (number = 1 + sqlcode_info->get_stack_warning_buf().at(idx).get_readable_warning_count());
+      OZ (sqlcode_info->get_stack_warning_buf(stack_warning_buf));
+      CK (OB_NOT_NULL(stack_warning_buf));
+      CK (stack_warning_buf->count() > 0);
+      OX (idx = stack_warning_buf->count() - 1);
+      OX (number = 1 + stack_warning_buf->at(idx).get_readable_warning_count());
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt.get_info_argument().count(); ++i) {
       ObString var;
@@ -549,10 +555,10 @@ int ObGetDiagnosticsExecutor::execute(ObExecContext &ctx, ObGetDiagnosticsStmt &
       } else if (OB_LIKELY(var_expr->is_const_raw_expr())) {
         const ObConstRawExpr *const_expr = static_cast<const ObConstRawExpr *>(var_expr);
         if (T_QUESTIONMARK == const_expr->get_expr_type()) {
-          pl::ObPLContext *pl_context = NULL;
           pl::ObPLExecState *pl_state = NULL;
-          CK (OB_NOT_NULL(pl_context = session_info->get_pl_context()));
-          CK (OB_NOT_NULL(pl_state = pl_context->get_current_state()));
+          pl::ObPLTopContext *pl_top_context = nullptr;
+          CK (OB_NOT_NULL(pl_top_context = session_info->get_pl_top_context()));
+          CK (OB_NOT_NULL(pl_state = pl_top_context->get_current_state()));
 
           ObObjParam result;
           ObObjParam origin_obj;

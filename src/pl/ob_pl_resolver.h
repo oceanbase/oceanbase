@@ -110,7 +110,8 @@ public:
         pl_resolve_cache_(resolve_cache),
         pl_sql_transpiled_exprs_(),
         forbid_pl_sql_transpiler_(false),
-        is_prepare_with_params_(false)
+        is_prepare_with_params_(false),
+        is_ps_prepare_stage_(false)
   {}
   virtual ~ObPLResolveCtx() {
     if (need_destruct_resolve_cache_ && OB_NOT_NULL(pl_resolve_cache_)) {
@@ -147,6 +148,7 @@ public:
   ObSEArray<ObUDFRawExpr *, 4, common::ModulePageAllocator, true> pl_sql_transpiled_exprs_;
   bool forbid_pl_sql_transpiler_;
   bool is_prepare_with_params_;
+  bool is_ps_prepare_stage_; // indicate if this context is in the prepare stage of ps
 };
 
 class ObPLMockSelfArg
@@ -1109,6 +1111,7 @@ private:
   int check_local_variable_read_only(
     const ObPLBlockNS &ns, uint64_t var_idx, bool is_for_inout_param = false);
   int get_const_expr_value(const ObRawExpr *expr, uint64_t &val);
+  int get_top_anony_symbol_table_for_subprogram(const ObPLBlockNS *&cur_ns, const ObPLSymbolTable *&symbol_table);
   int check_variable_accessible(const ObPLBlockNS &ns,
                                 const ObIArray<ObObjAccessIdx>& access_idxs,
                                 bool for_write,

@@ -324,6 +324,9 @@ int ObRoutinePersistentInfo::decode_dll(ObSQLSessionInfo &session_info,
     }
   }
 
+  if (OB_SUCC(ret)) {
+    unit.set_compiled_analyze_flag(unit_ast.get_analyze_flag());
+  }
   return ret;
 }
 

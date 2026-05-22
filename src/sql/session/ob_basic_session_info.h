@@ -510,6 +510,31 @@ public:
     int64_t nested_count_;
     transaction::ObXATransID xid_;
   };
+  class EnableRoleIdsWrapper
+  {
+  public:
+    EnableRoleIdsWrapper() : enable_role_ids_(), cur_enable_role_ids_ptr_(&enable_role_ids_) {}
+    ~EnableRoleIdsWrapper() {}
+    inline void reset()
+    {
+      enable_role_ids_.reset();
+      cur_enable_role_ids_ptr_ = &enable_role_ids_;
+    }
+    void switch_enable_role_ids(common::ObIArray<uint64_t> *enable_role_ids)
+    {
+#ifdef OB_BUILD_DEBUG
+      if (OB_ISNULL(enable_role_ids)) {
+        OB_ASSERT(false);
+      }
+#endif
+      cur_enable_role_ids_ptr_ = static_cast<common::ObSEArray<uint64_t, 4> *>(enable_role_ids);
+    }
+    common::ObSEArray<uint64_t, 4>& get_enable_role_ids() { return *cur_enable_role_ids_ptr_; }
+    const common::ObSEArray<uint64_t, 4>& get_enable_role_ids() const { return *cur_enable_role_ids_ptr_; }
+  private:
+    common::ObSEArray<uint64_t, 4> enable_role_ids_;
+    common::ObSEArray<uint64_t, 4> *cur_enable_role_ids_ptr_; // current enable role ids pointer
+  };
 
 public:
   ObBasicSessionInfo(const uint64_t tenant_id);
@@ -689,8 +714,9 @@ public:
     is_result_accurate = sys_vars_cache_.get_is_result_accurate();
     return common::OB_SUCCESS;
   }
-  common::ObIArray<uint64_t>& get_enable_role_ids() { return enable_role_ids_; }
-  const common::ObIArray<uint64_t>& get_enable_role_ids() const { return enable_role_ids_; }
+  void switch_enable_role_ids(common::ObIArray<uint64_t> *enable_role_ids) { enable_role_ids_wrapper_.switch_enable_role_ids(enable_role_ids); }
+  common::ObIArray<uint64_t>& get_enable_role_ids() { return enable_role_ids_wrapper_.get_enable_role_ids(); }
+  const common::ObIArray<uint64_t>& get_enable_role_ids() const { return enable_role_ids_wrapper_.get_enable_role_ids(); }
   int get_show_ddl_in_compat_mode(bool &show_ddl_in_compat_mode) const;
   int get_ob_hnsw_ef_search(uint64_t &ob_hnsw_ef_search) const;
   int get_ob_ivf_nprobes(uint64_t &ob_ivf_nprobes) const;
@@ -984,7 +1010,7 @@ public:
   }
     void set_pl_cur_query_start_time_bak(int64_t time)
   {
-    thread_data_.pl_cur_query_start_time_bak_ = time;
+    ATOMIC_STORE(&thread_data_.pl_cur_query_start_time_bak_, time);
   }
   void set_pl_spi_query_info(int64_t time) {
     LockGuard lock_guard(thread_data_mutex_);
@@ -992,12 +1018,13 @@ public:
     thread_data_.pl_internal_time_split_point_ = time;
   }
   void set_pl_internal_time_split_point(int64_t time) {
-    thread_data_.pl_internal_time_split_point_ = time;
+    ATOMIC_STORE(&thread_data_.pl_internal_time_split_point_, time);
   }
-  int64_t get_pl_internal_time_split_point() const { return thread_data_.pl_internal_time_split_point_; }
+  int64_t get_pl_internal_time_split_point_no_atomic() const { return thread_data_.pl_internal_time_split_point_; }
+  int64_t get_pl_internal_time_split_point() const { return ATOMIC_LOAD(&thread_data_.pl_internal_time_split_point_); }
   int64_t get_query_start_time() const { return thread_data_.cur_query_start_time_; }
   int64_t get_cur_state_start_time() const { return thread_data_.cur_state_start_time_; }
-  int64_t get_pl_cur_query_start_time_bak() const { return thread_data_.pl_cur_query_start_time_bak_; }
+  int64_t get_pl_cur_query_start_time_bak() const { return ATOMIC_LOAD(&thread_data_.pl_cur_query_start_time_bak_); }
   void set_interactive(bool is_interactive)
   {
     LockGuard lock_guard(thread_data_mutex_);
@@ -2929,6 +2956,7 @@ private:
   ForceRichFormatStatus force_rich_vector_format_;
   // just used to plan cache key
   bool config_use_rich_format_;
+  EnableRoleIdsWrapper enable_role_ids_wrapper_;
 
   uint64_t sys_var_config_hash_val_;
   char thread_name_[OB_THREAD_NAME_BUF_LEN];

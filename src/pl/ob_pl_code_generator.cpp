@@ -6774,14 +6774,17 @@ int ObPLCodeGenerator::generate_int8_array(const ObIArray<int8_t> &array, ObLLVM
 int ObPLCodeGenerator::generate_debug(const ObString &name, int64_t value)
 {
   int ret = OB_SUCCESS;
+#ifndef NDEBUG
   ObLLVMValue int_value;
   OZ (helper_.get_int64(value, int_value));
   OZ (generate_debug(name, int_value));
+#endif
   return ret;
 }
 int ObPLCodeGenerator::generate_debug(const ObString &name, ObLLVMValue &value)
 {
   int ret = OB_SUCCESS;
+#ifndef NDEBUG
   ObSEArray<ObLLVMValue, 4> args;
   ObLLVMValue str;
   ObLLVMValue len;
@@ -6877,6 +6880,7 @@ int ObPLCodeGenerator::generate_debug(const ObString &name, ObLLVMValue &value)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Unexpected value to debug", K(ret), K(value.get_type_id()));
   }
+#endif
   return ret;
 }
 
@@ -8552,29 +8556,16 @@ int ObPLCodeGenerator::generate_prototype()
   ObLLVMFunctionType ft;
   ObLLVMType pl_exec_context_type;
   ObLLVMType pl_exec_context_pointer_type;
-  ObLLVMType argv_type;
-  ObLLVMType argv_pointer_type;
   if (OB_FAIL(adt_service_.get_pl_exec_context(pl_exec_context_type))) {
     LOG_WARN("failed to get argv type", K(ret));
   } else if (OB_FAIL(pl_exec_context_type.get_pointer_to(pl_exec_context_pointer_type))) {
     LOG_WARN("failed to get_pointer_to", K(ret));
-  } else if (OB_FAIL(adt_service_.get_argv(argv_type))) {
-    LOG_WARN("failed to get argv type", K(ret));
-  } else if (OB_FAIL(argv_type.get_pointer_to(argv_pointer_type))) {
-    LOG_WARN("failed to get_pointer_to", K(ret));
   } else { /*do nothing*/ }
 
   if (OB_SUCC(ret)) {
-    ObLLVMType int64_type;
     if (OB_FAIL(arg_types.push_back(pl_exec_context_pointer_type))) { //函数第一个参数必须是基础环境信息隐藏参数ObPLExecCtx*
       LOG_WARN("push_back error", K(ret));
-    } else if (OB_FAIL(helper_.get_llvm_type(ObIntType, int64_type))) {
-      LOG_WARN("failed to get_llvm_type", K(ret));
-    } else if (OB_FAIL(arg_types.push_back(int64_type))) { //第二个参数是int64_t ArgC
-      LOG_WARN("push_back error", K(ret));
-    } else if (OB_FAIL(arg_types.push_back(argv_pointer_type))) { //第三个参数是int64_t[] ArgV
-      LOG_WARN("push_back error", K(ret));
-    } else { /*do nothing*/ }
+    }
   }
 
   if (OB_SUCC(ret)) {
@@ -9732,7 +9723,7 @@ int ObPLCodeGenerator::generate_normal(ObPLFunction &pl_func)
 
   // 初始化符号表
   for (int64_t i = 0;
-      OB_SUCC(ret) && i < USER_ARG_OFFSET + 1;
+      OB_SUCC(ret) && i < USER_ARG_OFFSET;
       ++i) {
     ObLLVMValue dummy_value;
     if (OB_FAIL(vars_.push_back(dummy_value))) {

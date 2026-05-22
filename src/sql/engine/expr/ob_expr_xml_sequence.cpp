@@ -121,10 +121,10 @@ int ObExprXmlSequence::eval_xml_sequence(const ObExpr &expr, ObEvalCtx &ctx, ObD
                                    false);
     OZ (package_guard.init());
     pl::ObPLINS *ns = NULL;
-    if (NULL == session->get_pl_context()) {
+    if (NULL == session->get_pl_top_context()) {
       ns = &resolve_ctx;
     } else {
-      ns = session->get_pl_context()->get_current_ctx();
+      ns = session->get_pl_top_context()->get_current_ctx();
     }
 
     CK (OB_NOT_NULL(ns));

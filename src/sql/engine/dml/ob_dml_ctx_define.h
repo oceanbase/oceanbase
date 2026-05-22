@@ -15,8 +15,13 @@
 #include "sql/das/ob_das_dml_ctx_define.h"
 #include "sql/das/ob_das_ref.h"
 #include "sql/das/ob_das_scan_op.h"
+#include "pl/ob_pl_analyze_flag.h"
 namespace oceanbase
 {
+namespace pl
+{
+class ObPLExecuteArg;
+}
 namespace sql
 {
 typedef ObDASOpType ObDMLOpType;
@@ -185,7 +190,7 @@ public:
     : trigger_id_(common::OB_INVALID_ID),
       trigger_events_(),
       timing_points_(),
-      analyze_flag_(0),
+      analyze_flag_(),
       trigger_type_(0),
       ref_types_()
   {}
@@ -193,7 +198,7 @@ public:
     : trigger_id_(common::OB_INVALID_ID),
       trigger_events_(),
       timing_points_(),
-      analyze_flag_(0),
+      analyze_flag_(),
       trigger_type_(0),
       ref_types_(alloc)
   {}
@@ -203,7 +208,7 @@ public:
     trigger_id_ = common::OB_INVALID_ID;
     trigger_events_.reset();
     timing_points_.reset();
-    analyze_flag_ = 0;
+    analyze_flag_.set_flag(0);
     trigger_type_ = 0;
     ref_types_.reset();
   }
@@ -220,22 +225,25 @@ public:
   {
     timing_points_.set_value(timing_points);
   }
-  inline void set_analyze_flag(uint64_t flag) { analyze_flag_ = flag; }
+  inline void set_analyze_flag(uint64_t flag) { analyze_flag_.set_flag(flag); }
+  inline uint64_t get_analyze_flag() const { return analyze_flag_.get_flag(); }
+  inline const pl::ObPLAnalyzeFlag &get_pl_analyze_flag() const { return analyze_flag_; }
 
-  inline bool is_no_sql() const { return is_no_sql_; }
-  inline bool is_reads_sql_data() const { return is_reads_sql_data_; }
-  inline bool is_modifies_sql_data() const { return is_modifies_sql_data_; }
-  inline bool is_contains_sql() const { return is_contains_sql_; }
-  inline bool is_wps() const { return is_wps_; }
-  inline bool is_rps() const { return is_rps_; }
-  inline bool is_has_sequence() const { return is_has_sequence_; }
-  inline bool is_has_out_param() const { return is_has_out_param_; }
-  inline bool is_external_state() const { return is_external_state_; }
+  inline bool is_no_sql() const { return analyze_flag_.is_no_sql(); }
+  inline bool is_reads_sql_data() const { return analyze_flag_.is_reads_sql_data(); }
+  inline bool is_modifies_sql_data() const { return analyze_flag_.is_modifies_sql_data(); }
+  inline bool is_contains_sql() const { return analyze_flag_.is_contains_sql(); }
+  inline bool is_wps() const { return analyze_flag_.is_wps(); }
+  inline bool is_rps() const { return analyze_flag_.is_rps(); }
+  inline bool is_has_sequence() const { return analyze_flag_.is_has_sequence(); }
+  inline bool is_has_out_param() const { return analyze_flag_.is_has_out_param(); }
+  inline bool is_external_state() const { return analyze_flag_.is_external_state(); }
 
   inline bool is_execute_single_row() const
   {
-    return (is_modifies_sql_data_ || is_wps_ || is_rps_ || is_has_sequence_ ||
-            is_reads_sql_data_ || is_external_state_);
+    return (analyze_flag_.is_modifies_sql_data() || analyze_flag_.is_wps() ||
+            analyze_flag_.is_rps() || analyze_flag_.is_has_sequence() ||
+            analyze_flag_.is_reads_sql_data() || analyze_flag_.is_external_state());
   }
 
   inline uint64_t get_trigger_id() const { return trigger_id_; }
@@ -254,7 +262,9 @@ public:
 
   TO_STRING_KV(K(trigger_id_),
                K(trigger_events_.bit_value_),
-               K(timing_points_.bit_value_));
+               K(timing_points_.bit_value_),
+               K(analyze_flag_.flag_));
+
 private:
   /**
    * trigger_events is only used for ObTableMerge now, which has two kinds of
@@ -265,21 +275,7 @@ private:
   share::schema::ObTimingPoints timing_points_;
   common::ObString package_spec_;
   common::ObString package_body_;
-  union {
-    uint64_t analyze_flag_;
-    struct {
-      uint64_t is_no_sql_ : 1;            // it marks trigger do not contain sql stmt
-      uint64_t is_reads_sql_data_ : 1;    // it marks trigger contain read sql stmt, such as select stmt
-      uint64_t is_modifies_sql_data_ : 1; // it marks trigger contain write sql stmt
-      uint64_t is_contains_sql_ : 1;      // it marks trigger do not contain read and write sql, but contain other sql stmt, such as set stmt
-      uint64_t is_wps_ : 1;               // it marks trigger write package var
-      uint64_t is_rps_ : 1;               // it marks trigger read package var
-      uint64_t is_has_sequence_ : 1;      // it marks trigger used sequence
-      uint64_t is_has_out_param_ : 1;     // it marks trigger has out param
-      uint64_t is_external_state_ : 1;    // it marks trigger access other store routine or global var etc..
-      uint64_t reserved_:54;
-    };
-  };
+  pl::ObPLAnalyzeFlag analyze_flag_;
   int64_t trigger_type_;
   // pair<old_row_ref_type, new_row_ref_type>
   ObFixedArray<ObTriggerRowRefType, ObIAllocator> ref_types_;
@@ -326,13 +322,15 @@ public:
       uint64_t is_ref_old_rowid_ : 1;
       uint64_t is_ref_new_rowid_ : 1;
       uint64_t is_prune_columns_ : 1;
-      uint64_t reserved_: 59;
+      uint64_t is_precise_batch_exec_ : 1;  // set at CG time from _enable_trigger_precise_batch_exec
+      uint64_t reserved_: 58;
     };
   };
   bool inline is_ref_old_row() const { return is_ref_old_row_ || !is_prune_columns_; }
   bool inline is_ref_new_row() const { return is_ref_new_row_ || !is_prune_columns_; }
   bool inline is_ref_old_rowid() const { return is_ref_old_rowid_ || !is_prune_columns_; }
   bool inline is_ref_new_rowid() const { return is_ref_new_rowid_ || !is_prune_columns_; }
+  bool is_execute_single_row() const;
 };
 
 //trigger runtime context definition
@@ -341,14 +339,36 @@ struct ObTrigDMLRtDef
   ObTrigDMLRtDef()
     : old_record_(nullptr),
       new_record_(nullptr),
-      tg_row_point_params_()
+      tg_row_point_params_(),
+      trigger_arg_count_(0),
+      when_execute_args_(nullptr),
+      before_row_execute_args_(nullptr),
+      after_row_execute_args_(nullptr),
+      trigger_execute_args_alloc_(nullptr),
+      trigger_row_seq_(0),
+      trigger_execute_args_inited_(false),
+      row_record_checked_(false)
   { }
   TO_STRING_KV(K_(old_record),
                K_(new_record),
-               K_(tg_row_point_params));
+               K_(tg_row_point_params),
+               K_(trigger_arg_count),
+               K_(trigger_execute_args_inited),
+               K_(trigger_row_seq),
+               K_(row_record_checked));
   pl::ObPLRecord *old_record_;
   pl::ObPLRecord *new_record_;
   ParamStore *tg_row_point_params_;
+  int64_t trigger_arg_count_;
+  pl::ObPLExecuteArg *when_execute_args_;
+  pl::ObPLExecuteArg *before_row_execute_args_;
+  pl::ObPLExecuteArg *after_row_execute_args_;
+  // allocator used by init_trigger_execute_args() for the three arrays above (for free in destructor)
+  common::ObIAllocator *trigger_execute_args_alloc_;
+  int64_t trigger_row_seq_;           // sequence number of actual triggered rows
+  // lazy-init state fields
+  bool trigger_execute_args_inited_;  // whether execute args have been initialized
+  bool row_record_checked_;           // whether check_trigger_record_count has been called
 };
 
 struct ObForeignKeyColumn

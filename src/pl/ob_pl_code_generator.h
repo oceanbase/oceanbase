@@ -36,15 +36,11 @@ friend class ObPLCGBufferGuard;
 public:
   static const int64_t RET_IDX = 0;
   static const int64_t CTX_IDX = 1;
-  static const int64_t ARGC_IDX = 2;
-  static const int64_t ARGV_IDX = 3;
-  static const int64_t USER_ARG_OFFSET = 4;
+  static const int64_t USER_ARG_OFFSET = 2;
   const char *ArgName[USER_ARG_OFFSET]
   {
     "__ret__",
-    "__hidden_exec_ctx__",
-    "__argc__",
-    "__argv__",
+    "__hidden_exec_ctx__"
   };
 
   static const int64_t EH_STACK_DEPTH = 64;

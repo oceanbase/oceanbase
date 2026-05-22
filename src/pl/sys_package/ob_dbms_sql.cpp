@@ -866,7 +866,7 @@ int ObPLDbmsSql::do_parse(ObPLExecCtx &ctx,
     bool skip_locked = false;
     ParamStore dummy_params;
     ObSqlString sql_str;
-    ObPLExecCtx pl_ctx(cursor->get_allocator(), cursor->get_allocator(), exec_ctx, &dummy_params,
+    ObPLExecCtx pl_ctx(cursor->get_allocator(), cursor->get_allocator(), *cursor->get_allocator(), exec_ctx, &dummy_params,
                      NULL/*result*/, &ret, NULL/*func*/, true);
   CK (OB_NOT_NULL(exec_ctx->get_my_session()));
     OZ (sql_str.append(sql_cs));
@@ -1170,7 +1170,7 @@ int ObPLDbmsSql::do_execute(ObPLExecCtx &ctx,
   sql::ObExecContext *exec_ctx = ctx.exec_ctx_;
   CK (OB_NOT_NULL(exec_ctx));
   if (OB_SUCC(ret)) {
-    ObPLExecCtx pl_ctx(dbms_cursor.get_allocator(), dbms_cursor.get_allocator(), exec_ctx, NULL/*params*/,
+    ObPLExecCtx pl_ctx(dbms_cursor.get_allocator(), dbms_cursor.get_allocator(), *dbms_cursor.get_allocator(), exec_ctx, NULL/*params*/,
                       NULL/*result*/, &ret, NULL/*func*/, true);
     OZ (ObSPIService::dbms_dynamic_open(&pl_ctx, dbms_cursor));
   }
@@ -1189,7 +1189,7 @@ int ObPLDbmsSql::do_execute(ObPLExecCtx &ctx,
   CK (OB_NOT_NULL(exec_ctx));
   CK (OB_NOT_NULL(expr_alloc));
   if (OB_SUCC(ret)) {
-    ObPLExecCtx pl_ctx(cursor.get_allocator(), cursor.get_allocator(), exec_ctx, &params,
+    ObPLExecCtx pl_ctx(cursor.get_allocator(), cursor.get_allocator(), *cursor.get_allocator(), exec_ctx, &params,
                       NULL/*result*/, &ret, NULL/*func*/, true);
     OZ (cursor.expand_params());
     OZ (ObSPIService::dbms_dynamic_open(&pl_ctx, cursor, true));
@@ -1234,7 +1234,7 @@ int ObPLDbmsSql::do_fetch(ObPLExecCtx &ctx,
   CK (OB_NOT_NULL(exec_ctx));
 
   if (OB_SUCC(ret)) {
-    ObPLExecCtx pl_ctx(cursor.get_allocator(), cursor.get_allocator(), exec_ctx, &params,
+    ObPLExecCtx pl_ctx(cursor.get_allocator(), cursor.get_allocator(), *cursor.get_allocator(), exec_ctx, &params,
                         NULL/*result*/, &ret, NULL/*func*/, true);
     int64_t fetch_cnt = 0;
     ObNumber row_count;

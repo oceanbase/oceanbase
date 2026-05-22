@@ -45,7 +45,7 @@ class ObPlAggUdfFunction
            const ObExprResType result_type,
            ObObjParam &pl_obj);
 
-  int call_pl_engine_exectue_udf(ParamStore& udf_params,
+  int call_pl_engine_exectue_udf(pl::ObPLParamArray& udf_params,
                                  const share::schema::ObRoutineInfo *routine_info,
                                  ObObj &result);
 
@@ -55,7 +55,7 @@ class ObPlAggUdfFunction
                             int64_t param_num,
                             ObIArray<ObUDFParamDesc> &params_desc,
                             ObIArray<ObExprResType> &params_type,
-                            ParamStore *&udf_params);
+                            pl::ObPLParamArray &udf_params);
 
   int process_init_pl_agg_udf(ObObjParam &pl_obj);
 

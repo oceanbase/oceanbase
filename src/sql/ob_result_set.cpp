@@ -1662,6 +1662,20 @@ int ObResultSet::ExternalRetrieveInfo::build(
       for (int64_t i = 0; OB_SUCC(ret) && i < cnt; ++i) {
         OX (param_info.pop_back());
       }
+      for (int64_t i = 0; OB_SUCC(ret) && i < param_info.count(); ++i) {
+        if (0 == param_info.at(i).element<2>()) {
+          ObConstRawExpr *null_expr = nullptr;
+          if (OB_FAIL(expr_factory.create_raw_expr(T_NULL, null_expr))) {
+            LOG_WARN("fail to create null expr", K(ret));
+          } else {
+            ObObjParam null_val;
+            null_val.set_null();
+            null_val.set_param_meta();
+            null_expr->set_value(null_val);
+            param_info.at(i).element<0>() = null_expr;
+          }
+        }
+      }
       OX (external_params_.set_capacity(param_info.count()));
       OX (external_params_cnt_ = param_info.count());
       OX (into_exprs_cnt_ = into_exprs_.count());

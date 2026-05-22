@@ -729,6 +729,9 @@ int ObDMLService::process_insert_row(const ObInsCtDef &ins_ctdef,
       LOG_WARN("session is NULL", K(ret));
     } else if (OB_FAIL(check_nested_sql_legality(dml_op.get_exec_ctx(), ins_ctdef.das_ctdef_.index_tid_))) {
       LOG_WARN("failed to check stmt table", K(ret), K(ref_table_id));
+    } else if (OB_FAIL(TriggerHandle::begin_trigger_row(
+                   dml_op.get_exec_ctx(), ins_ctdef.trig_ctdef_, ins_rtdef.trig_rtdef_))) {
+      LOG_WARN("failed to begin trigger row", K(ret));
     } else if (OB_FAIL(TriggerHandle::init_param_new_row(
         eval_ctx, ins_ctdef.trig_ctdef_, ins_rtdef.trig_rtdef_))) {
       LOG_WARN("failed to handle before trigger", K(ret));
@@ -1128,7 +1131,10 @@ int ObDMLService::process_delete_row(const ObDelCtDef &del_ctdef,
     }
 
     if (OB_SUCC(ret) && !is_skipped) {
-      if (OB_FAIL(TriggerHandle::init_param_old_row(
+      if (OB_FAIL(TriggerHandle::begin_trigger_row(
+              dml_op.get_exec_ctx(), del_ctdef.trig_ctdef_, del_rtdef.trig_rtdef_))) {
+        LOG_WARN("failed to begin trigger row", K(ret));
+      } else if (OB_FAIL(TriggerHandle::init_param_old_row(
         dml_op.get_eval_ctx(), del_ctdef.trig_ctdef_, del_rtdef.trig_rtdef_))) {
         LOG_WARN("failed to handle before trigger", K(ret));
       } else if (OB_FAIL(TriggerHandle::do_handle_before_row(
@@ -1231,6 +1237,9 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
         LOG_WARN("session is NULL", K(ret));
       } else if (OB_FAIL(check_nested_sql_legality(dml_op.get_exec_ctx(), upd_ctdef.dupd_ctdef_.index_tid_))) {
         LOG_WARN("failed to check stmt table", K(ret), K(ref_table_id));
+      } else if (OB_FAIL(TriggerHandle::begin_trigger_row(
+                   dml_op.get_exec_ctx(), upd_ctdef.trig_ctdef_, upd_rtdef.trig_rtdef_))) {
+        LOG_WARN("failed to begin trigger row", K(ret));
       } else if (OB_FAIL(TriggerHandle::init_param_rows(
           dml_op.get_eval_ctx(), upd_ctdef.trig_ctdef_, upd_rtdef.trig_rtdef_))) {
         LOG_WARN("failed to handle before trigger", K(ret));

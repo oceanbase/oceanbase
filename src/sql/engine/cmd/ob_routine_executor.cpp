@@ -120,7 +120,7 @@ int ObCallProcedureExecutor::execute(ObExecContext &ctx, ObCallProcedureStmt &st
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("call procedure info is null", K(ret));
   } else {
-    ParamStore params( (ObWrapperAllocator(ctx.get_allocator())) );
+    pl::ObPLParamArray params(ctx.get_allocator());
     const share::schema::ObRoutineInfo *routine_info = NULL;
     ObArray<bool> null_params;
 

@@ -362,6 +362,7 @@ public:
                                      bool is_prepare_protocol = false,
                                      bool is_check_mode = false,
                                      bool is_sql_scope = false,
+                                     bool is_prepare_stage = false,
                                      ObIArray<ObSchemaObjVersion> *dep_tbl = nullptr,
                                      ObQueryCtx *query_ctx = nullptr);
   static int resolve_external_param_info(ExternalParams &param_info,
@@ -1017,7 +1018,8 @@ public:
                                         const ObTriggerInfo &trigger_info,
                                         const ObTableSchema &table_schema,
                                         int64_t col_cnt,
-                                        ObIArray<ObTriggerRowRefType> &ref_types);
+                                        ObIArray<ObTriggerRowRefType> &ref_types,
+                                        uint64_t &compiled_analyze_flag);
   static int set_flashback_info_for_view(ObDMLStmt *stmt,
                                          ObRawExpr* const flashback_query_expr,
                                          const TableItem::FlashBackQueryType flashback_query_type);

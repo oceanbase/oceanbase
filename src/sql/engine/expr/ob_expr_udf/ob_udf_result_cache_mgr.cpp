@@ -24,7 +24,6 @@ namespace pl
 int ObPLUDFResultCacheMgr::get_udf_result_object(ObPlanCache *lib_cache, ObILibCacheCtx &ctx, ObCacheObjGuard& guard)
 {
   int ret = OB_SUCCESS;
-  FLTSpanGuard(pc_get_pl_object);
   ObPLUDFResultCacheCtx &rc_ctx = static_cast<ObPLUDFResultCacheCtx&>(ctx);
   //guard.get_cache_obj() = NULL;
   ObGlobalReqTimeService::check_req_timeinfo();
@@ -127,7 +126,6 @@ int ObPLUDFResultCacheMgr::add_udf_result_object(ObPlanCache *lib_cache,
 int ObPLUDFResultCacheMgr::add_udf_result_cache(ObPlanCache *lib_cache, ObILibCacheObject *result_object, ObPLUDFResultCacheCtx &rc_ctx)
 {
   int ret = OB_SUCCESS;
-  FLTSpanGuard(pc_add_pl_object);
   ObGlobalReqTimeService::check_req_timeinfo();
   int64_t max_result_size = 0;
   int64_t result_cache_max_size = 0;

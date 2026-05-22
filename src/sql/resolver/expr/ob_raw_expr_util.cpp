@@ -1568,8 +1568,11 @@ int ObRawExprUtils::make_raw_expr_from_str(const ObString &expr_str,
 }
 
 int ObRawExprUtils::parse_default_expr_from_str(const ObString &expr_str,
-  ObCharsets4Parser expr_str_cs_type, ObIAllocator &allocator, const ParseNode *&node,
-  bool is_for_trigger)
+                                                ObCharsets4Parser expr_str_cs_type,
+                                                ObIAllocator &allocator,
+                                                const ParseNode *&node,
+                                                bool is_for_trigger,
+                                                uint64_t* questionmark_cnt)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql_str;
@@ -1592,7 +1595,21 @@ int ObRawExprUtils::parse_default_expr_from_str(const ObString &expr_str,
   parse_result.connection_collation_ = expr_str_cs_type.string_collation_;
   parse_result.semicolon_start_col_ = INT32_MAX;
   parse_result.is_for_trigger_ = is_for_trigger;
-  if (OB_FAIL(sql_str.append_fmt("DO %.*s", expr_str.length(), expr_str.ptr()))) {
+  // for default expr, we will add "DO " before the expr, so we need to reserve 3 chars for "DO " and 1 char for '\0'
+  int64_t new_length = expr_str.length() + 4;
+  char *buf = static_cast<char *>(allocator.alloc(new_length));
+  if (OB_NOT_NULL(questionmark_cnt)) {
+    parse_result.question_mark_ctx_.count_ = *questionmark_cnt;
+  }
+  if (OB_UNLIKELY(NULL == buf)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_ERROR("no memory for parser");
+  } else {
+    parse_result.no_param_sql_ = buf;
+    parse_result.no_param_sql_buf_len_ = new_length;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(sql_str.append_fmt("DO %.*s", expr_str.length(), expr_str.ptr()))) {
     LOG_WARN("failed to concat expr str", K(expr_str), K(ret));
   } else if (OB_FAIL(parser.parse(
     sql_str.string().ptr(), sql_str.string().length(), parse_result))) {
@@ -1610,6 +1627,9 @@ int ObRawExprUtils::parse_default_expr_from_str(const ObString &expr_str,
   } else {
     if (OB_UNLIKELY(OB_LOGGER.get_log_level() >= OB_LOG_LEVEL_DEBUG)) {
       LOG_DEBUG("", "parser result", SJ(ObParserResultPrintWrapper(*parse_result.result_tree_)));
+    }
+    if (OB_NOT_NULL(questionmark_cnt)) {
+      *questionmark_cnt = parse_result.question_mark_ctx_.count_; // for the following default expr
     }
     ParseNode *expr_node = NULL;
     if (OB_ISNULL(expr_node = parse_result.result_tree_->children_[0])) {

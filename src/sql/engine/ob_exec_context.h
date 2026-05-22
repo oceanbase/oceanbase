@@ -62,6 +62,11 @@
   static_cast<ctx_type *>(exec_ctx.get_phy_op_ctx(op_id))
 #define DAS_CTX(ctx) ((ctx).get_das_ctx())
 
+#define RECONSTRUCT_EXPR_OP_CTX_MASK  0x8000000000000000
+#define IS_REUSE_EXPR_OP_CTX(ctx) (0 != (reinterpret_cast<int64_t>(ctx) & RECONSTRUCT_EXPR_OP_CTX_MASK))
+#define ADD_REUSE_EXPR_OP_CTX_MASK(ctx) (reinterpret_cast<int64_t>(ctx) | RECONSTRUCT_EXPR_OP_CTX_MASK)
+
+
 namespace oceanbase
 {
 namespace common
@@ -325,8 +330,6 @@ public:
   ObGIPruningInfo &get_gi_pruning_info() { return gi_pruning_info_; }
   const ObGIPruningInfo &get_gi_pruning_info() const { return gi_pruning_info_; }
 
-  bool has_non_trivial_expr_op_ctx() const { return has_non_trivial_expr_op_ctx_; }
-  void set_non_trivial_expr_op_ctx(bool v) { has_non_trivial_expr_op_ctx_ = v; }
   inline bool &get_tmp_alloc_used() { return tmp_alloc_used_; }
   // set write branch id for DML write
   void set_branch_id(const int16_t branch_id) { das_ctx_.set_write_branch_id(branch_id); }
@@ -602,6 +605,8 @@ public:
   bool is_block_granule_type() { return current_granule_type_ == OB_BLOCK_RANGE_GRANULE; }
   transaction::ObTxExecResult &get_trans_result() { return tx_result_; }
   ObPLComplexTypeLazyMgr &get_pl_complex_type_lazy_mgr() { return pl_complex_type_lazy_mgr_; }
+  pl::ObPLTopContext* get_pl_top_context();
+  int get_pl_top_context(pl::ObPLTopContext *&pl_top_context);
 
 private:
   pl::ObPLPackageGuard* get_package_guard();
@@ -665,7 +670,6 @@ protected:
   const share::schema::ObOutlineParamsWrapper *outline_params_wrapper_;
   uint64_t execution_id_;
   //common::ObInterruptibleTaskID interrupt_id_;
-  bool has_non_trivial_expr_op_ctx_;
   ObSqlCtx *sql_ctx_;
   pl::ObPLContext *pl_stack_ctx_;
   bool need_disconnect_; // 是否需要断掉与客户端的连接
@@ -817,6 +821,7 @@ protected:
   ObGranuleType current_granule_type_;
   transaction::ObTxExecResult tx_result_;
   ObPLComplexTypeLazyMgr pl_complex_type_lazy_mgr_;
+  pl::ObPLTopContext *pl_top_context_;
 
   common::hash::ObHashMap<ObOdpsPartitionKey, int64_t> odps_partition_str_to_file_size_;
 private:

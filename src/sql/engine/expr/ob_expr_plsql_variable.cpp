@@ -110,14 +110,14 @@ int ObExprPLSQLVariable::get_plsql_unit(common::ObObj &result,
                                         const ObString &plsql_variable)
 {
   int ret = OB_SUCCESS;
-  pl::ObPLContext *pl_context = NULL;
   ObPLExecState *pl_state = NULL;
   ObString plsql_unit;
-  CK (OB_NOT_NULL(pl_context = session_info.get_pl_context()));
-  CK (pl_context->is_top_stack());
-  CK (pl_context->get_exec_stack().count() > 0);
-  CK (OB_NOT_NULL(pl_state = pl_context
-    ->get_exec_stack().at(pl_context->get_exec_stack().count() - 1)));
+  ObIArray<ObPLExecState *> *exec_stack = nullptr;
+  ObPLTopContext *pl_top_context = nullptr;
+  CK (OB_NOT_NULL(pl_top_context = session_info.get_pl_top_context()));
+  CK (OB_NOT_NULL(exec_stack = pl_top_context->get_exec_stack()));
+  CK (exec_stack->count() > 0);
+  CK (OB_NOT_NULL(pl_state = exec_stack->at(exec_stack->count() - 1)));
   if (OB_FAIL(ret)) {
   } else if (0 == plsql_variable.case_compare("PLSQL_UNIT")) {
     if (pl_state->get_function().get_package_name().empty()) {

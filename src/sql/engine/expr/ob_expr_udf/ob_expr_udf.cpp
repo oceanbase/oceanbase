@@ -461,9 +461,9 @@ ObExprUDFEnvGuard::~ObExprUDFEnvGuard()
   if (OB_FAIL(ret)) {
     udf_ctx_.reset_cacheobj_guard();
   }
-  if (udf_ctx_.get_info()->is_udt_cons_ && udf_ctx_.get_param_store()->count() > 0) {
+  if (udf_ctx_.get_info()->is_udt_cons_ && udf_ctx_.get_param_store().count() > 0) {
     int tmp = OB_SUCCESS;
-    tmp = pl::ObUserDefinedType::destruct_obj(udf_ctx_.get_param_store()->at(0), ctx_.exec_ctx_.get_my_session());
+    tmp = pl::ObUserDefinedType::destruct_obj(udf_ctx_.get_param_store().at(0), ctx_.exec_ctx_.get_my_session());
     if (OB_SUCCESS != tmp) {
       LOG_WARN("fail to free udt self memory", K(ret_), K(tmp));
     }
@@ -606,7 +606,8 @@ int ObExprUDF::eval_external_udf_vector(const ObExpr &expr,
   ObSEArray<ObIArray<ObObj>*, 8> args;
   ObArray<int64_t> vec_indices;
   ObIVector **arg_vec = nullptr;
-  ObObj *row = nullptr;
+  pl::ObPLParamArray row(alloc);
+
 
   ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
   batch_info_guard.set_batch_size(bound.end() - bound.start());
@@ -626,17 +627,11 @@ int ObExprUDF::eval_external_udf_vector(const ObExpr &expr,
       LOG_WARN("failed to allocate memory", K(ret), K(expr));
     } else if (FALSE_IT(memset(static_cast<void*>(arg_vec), 0, sizeof(ObIVector*) * expr.arg_cnt_))) {
       // unreachable
-    } else if (OB_ISNULL(row = static_cast<ObObj*>(alloc.alloc(sizeof(ObObj) * expr.arg_cnt_)))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory", K(ret), K(expr));
     } else {
       for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
         ColumnType *column = nullptr;
 
-        if (OB_ISNULL(new (row + i) ObObj())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("failed to construct ObObj");
-        } else if (arg_types.push_back(udf_info.params_type_.at(i))) {
+        if (arg_types.push_back(udf_info.params_type_.at(i))) {
           LOG_WARN("failed to push_back", K(ret), K(i), K(udf_info));
         } else if (OB_ISNULL(column = static_cast<ColumnType*>(alloc.alloc(sizeof(ColumnType))))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -671,8 +666,8 @@ int ObExprUDF::eval_external_udf_vector(const ObExpr &expr,
         if (OB_ISNULL(curr)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected NULL column", K(ret), K(args), K(i));
-        } else if (OB_FAIL(curr->push_back(row[i]))) {
-          LOG_WARN("failed to push_back row[i]", K(args), KPC(curr), K(row[i]), K(i), K(idx));
+        } else if (OB_FAIL(curr->push_back(row.at(i)))) {
+          LOG_WARN("failed to push_back row[i]", K(args), KPC(curr), K(i), K(idx));
         }
       }
     }
@@ -743,7 +738,7 @@ int ObExprUDF::eval_udf_single(const ObExpr &expr, ObEvalCtx &eval_ctx, ObExprUD
                                                   udf_ctx.get_package_id(),
                                                   udf_ctx.get_info()->udf_id_,
                                                   udf_ctx.get_info()->subprogram_path_,
-                                                  *udf_ctx.get_param_store(),
+                                                  udf_ctx.get_param_store(),
                                                   udf_ctx.get_info()->nocopy_params_,
                                                   tmp_result,
                                                   udf_ctx.get_pl_execute_arg(),

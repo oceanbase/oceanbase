@@ -3420,7 +3420,7 @@ int ObMPStmtExecute::ps_cursor_open(ObSQLSessionInfo &session,
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc pl_ctx", K(ret));
     } else {
-      new(pl_ctx) ObPLExecCtx(cursor->get_allocator(), cursor->get_allocator(), &result.get_exec_context(), NULL/*params*/,
+      new(pl_ctx) ObPLExecCtx(cursor->get_allocator(), cursor->get_allocator(), *cursor->get_allocator(), &result.get_exec_context(), NULL/*params*/,
                               NULL/*result*/, &ret, NULL/*func*/, true);
       cursor->set_exec_ctx(pl_ctx);
       if (

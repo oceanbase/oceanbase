@@ -220,7 +220,7 @@ public:
   int is_valid() const;
   int init();
 
-  int execute(int64_t argc, int64_t *argv);
+  int execute();
 
   TO_STRING_KV(K_(is_inited), K_(func), KPC(func_.get_ora_java_routine_info()));
 
@@ -228,8 +228,7 @@ private:
   static int build_udf_arg_arrays(JNIEnv &env,
                                   ObIAllocator &alloc,
                                   const ObPLFunction &func,
-                                  int64_t argc,
-                                  int64_t *argv,
+                                  const ParamStore &params,
                                   ObIArray<ObObjMeta> &arg_types,
                                   ObIArray<ObIArray<ObObj> *> &args,
                                   jclass object_clazz,

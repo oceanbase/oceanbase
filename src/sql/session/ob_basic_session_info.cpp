@@ -3102,7 +3102,7 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
        // SYS_VAR__OB_ENABLE_ROLE_IDS was introduced in 4.3.2.0,
        // If Proxy Switch Route switches from an older version before 4.3.2.0 to the current version,
        // enable_role_ids_ MUST NOT be cleared, otherwise permissions will be lost.
-        enable_role_ids_.reuse();
+        enable_role_ids_wrapper_.get_enable_role_ids().reuse();
       }
       if (OB_FAIL(val.get_string(serialized_data))) {
         LOG_WARN("fail to get str value", K(ret), K(var));
@@ -3115,7 +3115,7 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("str to int64 failed", K(ret), K(id_str));
           } else {
-            OZ (enable_role_ids_.push_back(role_id));
+            OZ (enable_role_ids_wrapper_.get_enable_role_ids().push_back(role_id));
           }
           id_str = serialized_data.split_on(',');
         }
@@ -3126,7 +3126,7 @@ OB_INLINE int ObBasicSessionInfo::process_session_variable(ObSysVarClassType var
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("str to int64 failed", K(ret), K(serialized_data));
           } else {
-            OZ (enable_role_ids_.push_back(role_id));
+            OZ (enable_role_ids_wrapper_.get_enable_role_ids().push_back(role_id));
           }
         }
       }
@@ -5387,7 +5387,7 @@ int ObBasicSessionInfo::serialize_(char *buf, int64_t buf_len, int64_t &pos) con
                 proxy_user_id_,
                 thread_data_.proxy_user_name_,
                 thread_data_.proxy_host_name_,
-                enable_role_ids_);
+                enable_role_ids_wrapper_.get_enable_role_ids());
   }
   OB_UNIS_ENCODE(sys_var_config_hash_val_);
   OB_UNIS_ENCODE(enable_mysql_compatible_dates_);
@@ -5692,9 +5692,9 @@ int ObBasicSessionInfo::deserialize(const char *buf, const int64_t data_len, int
                   thread_data_.proxy_host_name_);
 
       if (version == 2) {
-        enable_role_ids_.reset();
+        enable_role_ids_wrapper_.get_enable_role_ids().reset();
       } else {
-        OB_UNIS_DECODE(enable_role_ids_);
+        OB_UNIS_DECODE(enable_role_ids_wrapper_.get_enable_role_ids());
       }
 
       if (OB_SUCC(ret)) {
@@ -6013,11 +6013,12 @@ OB_DEF_SERIALIZE_SIZE(ObBasicSessionInfo)
               is_client_sessid_support_,
               use_rich_vector_format_);
   OB_UNIS_ADD_LEN(ObString(sql_id_));
+  const common::ObSEArray<uint64_t, 4> enable_role_ids = enable_role_ids_wrapper_.get_enable_role_ids();
   LST_DO_CODE(OB_UNIS_ADD_LEN,
               proxy_user_id_,
               thread_data_.proxy_user_name_,
               thread_data_.proxy_host_name_,
-              enable_role_ids_);
+              enable_role_ids);
   OB_UNIS_ADD_LEN(sys_var_config_hash_val_);
   OB_UNIS_ADD_LEN(enable_mysql_compatible_dates_);
   OB_UNIS_ADD_LEN(is_diagnosis_enabled_);

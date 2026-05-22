@@ -1024,11 +1024,11 @@ int ObSqlUdtUtils::build_empty_record(sql::ObExecContext *exec_ctx, ObObj &resul
                                  *(exec_ctx->get_sql_proxy()),
                                  false);
   pl::ObPLINS *ns = NULL;
-  if (NULL == session->get_pl_context()) {
+  if (NULL == session->get_pl_top_context()) {
     OZ (package_guard.init());
     OX (ns = &resolve_ctx);
   } else {
-    ns = session->get_pl_context()->get_current_ctx();
+    ns = session->get_pl_top_context()->get_current_ctx();
   }
   if (OB_SUCC(ret)) {
     ObObj new_composite;
