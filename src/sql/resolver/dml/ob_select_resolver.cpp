@@ -2960,6 +2960,20 @@ int ObSelectResolver::get_real_cte_column_expr(
     if (OB_FAIL(select_stmt->get_child_stmts(child_stmts))) {
       LOG_WARN("failed to get child stmts", K(ret));
     }
+    // get_child_stmts() only descends through generated/lateral tables and subquery refs.
+    // CTE table items (TEMP_TABLE) are not included, so we add them explicitly to support
+    // CTEs that reference another (recursive) CTE through one or more non-recursive CTEs.
+    for (int64_t i = 0; OB_SUCC(ret) && i < select_stmt->get_table_size(); ++i) {
+      const TableItem *temp_table_item = select_stmt->get_table_item(i);
+      if (OB_ISNULL(temp_table_item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null table item", K(ret));
+      } else if (temp_table_item->is_temp_table() && OB_NOT_NULL(temp_table_item->ref_query_)) {
+        if (OB_FAIL(add_var_to_array_no_dup(child_stmts, temp_table_item->ref_query_))) {
+          LOG_WARN("failed to add temp table ref query", K(ret));
+        }
+      }
+    }
     for (int64_t i = 0; OB_SUCC(ret) && NULL == real_cte_col_expr && i < child_stmts.count(); ++i) {
       ObSelectStmt *child_stmt = child_stmts.at(i);
       if (OB_ISNULL(child_stmt)) {
