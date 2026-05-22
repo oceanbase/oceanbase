@@ -4945,6 +4945,7 @@ int ObRootService::update_mview_status(const obrpc::ObUpdateMViewStatusArg &arg)
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_DISABLE_CLONE_TENANT);
 int ObRootService::clone_tenant(const obrpc::ObCloneTenantArg &arg,
                                 obrpc::ObCloneTenantRes &res)
 {
@@ -4965,6 +4966,10 @@ int ObRootService::clone_tenant(const obrpc::ObCloneTenantArg &arg,
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
+  } else if (OB_SUCCESS == ERRSIM_DISABLE_CLONE_TENANT) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("clone tenant not supported", KR(ret));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "clone tenant");
   } else if (!arg.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", KR(ret), K(arg));
