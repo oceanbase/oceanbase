@@ -58,6 +58,31 @@ int ObLogSubPlanFilter::check_subquery_ownership(const ObRawExpr *expr,
   return ret;
 }
 
+int ObLogSubPlanFilter::contains_unproduced_generalized_column(const ObRawExpr *expr,
+                                                               ObAllocExprContext &ctx,
+                                                               bool &contains)
+{
+  int ret = OB_SUCCESS;
+  contains = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (expr->is_generalized_column()) {
+    bool has_been_produced = false;
+    if (OB_FAIL(expr_has_been_produced(expr, ctx, has_been_produced))) {
+      LOG_WARN("failed to check whether expr has been produced", K(ret));
+    } else if (!has_been_produced) {
+      contains = true;
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !contains && i < expr->get_param_count(); ++i) {
+    if (OB_FAIL(SMART_CALL(contains_unproduced_generalized_column(expr->get_param_expr(i), ctx, contains)))) {
+      LOG_WARN("failed to check unproduced generalized column", K(ret));
+    }
+  }
+  return ret;
+}
+
 // Claim root-level branch expressions (CASE/IF/NVL/...) that wrap this SPF's
 // subqueries, so they are produced here instead of at a parent operator.
 int ObLogSubPlanFilter::allocate_expr_post(ObAllocExprContext &ctx)
@@ -79,6 +104,7 @@ int ObLogSubPlanFilter::allocate_expr_post(ObAllocExprContext &ctx)
       ObRawExpr *expr = producer.expr_;
       bool can_be_produced = false;
       bool contains_my_subquery = false;
+      bool has_unproduced_gen_col = false;
       if (OB_ISNULL(expr)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
@@ -94,12 +120,18 @@ int ObLogSubPlanFilter::allocate_expr_post(ObAllocExprContext &ctx)
         LOG_WARN("failed to check expr can be produced", K(ret));
       } else if (!can_be_produced) {
         LOG_TRACE("branch expr cannot be produced at SPF, skip", KPC(expr), K(id_));
+      } else if (OB_FAIL(contains_unproduced_generalized_column(expr, ctx, has_unproduced_gen_col))) {
+        LOG_WARN("failed to check unproduced generalized column", K(ret));
+      } else if (has_unproduced_gen_col) {
+        LOG_TRACE("branch expr contains unproduced generalized column, skip", KPC(expr), K(id_));
       } else {
         producer.producer_id_ = id_;
         producer.producer_branch_ = branch_id_;
         if (producer.consumer_id_ > id_ && !is_plan_root()) {
           if (OB_FAIL(add_var_to_array_no_dup(output_exprs_, expr))) {
             LOG_WARN("failed to add expr to output", K(ret));
+          } else if (OB_FAIL(add_shared_sub_exprs(expr, ctx))) {
+            LOG_WARN("failed to add shared sub exprs to output", K(ret));
           }
         }
         LOG_TRACE("claimed branch expr at subplan filter", KPC(expr), K(id_), K(producer.consumer_id_));
@@ -1383,4 +1415,36 @@ int64_t ObLogSubPlanFilter::get_enabled_px_batch_rescan_child_count()
     }
   }
   return enabled_px_batch_rescan_child_count;
+}
+
+
+int ObLogSubPlanFilter::add_shared_sub_exprs(ObRawExpr *expr,
+                                             ObAllocExprContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+    ObRawExpr *param_expr = expr->get_param_expr(i);
+    ExprProducer *param_producer = NULL;
+    if (OB_ISNULL(param_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null param expr", K(ret));
+    } else if (OB_FAIL(ctx.find(param_expr, param_producer))) {
+      LOG_WARN("failed to find expr in ctx", K(ret));
+    } else if (OB_NOT_NULL(param_producer)
+               && param_producer->consumer_id_ > id_) {
+      if (OB_FAIL(add_var_to_array_no_dup(output_exprs_, param_expr))) {
+        LOG_WARN("failed to add shared sub expr to output", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && param_expr->get_param_count() > 0) {
+      if (OB_FAIL(SMART_CALL(add_shared_sub_exprs(param_expr, ctx)))) {
+        LOG_WARN("failed to recurse into sub expr", K(ret));
+      }
+    }
+  }
+  return ret;
 }

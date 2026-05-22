@@ -157,12 +157,14 @@ public:
   int64_t get_enabled_px_batch_rescan_child_count();
 private:
   int expr_contains_my_subquery(const ObRawExpr *expr, bool &result) const;
+  int contains_unproduced_generalized_column(const ObRawExpr *expr, ObAllocExprContext &ctx, bool &contains);
   int check_subquery_ownership(const ObRawExpr *expr, bool &has_mine, bool &all_mine) const;
   int extract_exist_style_subquery_exprs(ObRawExpr *expr,
                                          ObIArray<ObRawExpr*> &exist_style_exprs);
   int check_expr_contain_row_subquery(const ObRawExpr *expr,
                                          bool &contains);
   int get_sub_qb_names(ObIArray<ObString>& sub_qb_names);
+  int add_shared_sub_exprs(ObRawExpr *expr, ObAllocExprContext &ctx);
   int print_push_subq_outline(PlanText &plan_text);
   int print_push_subq_used_hint(PlanText &plan_text);
 

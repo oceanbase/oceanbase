@@ -2282,6 +2282,8 @@ int ObLogicalOperator::add_expr_to_ctx(ObAllocExprContext &ctx,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected null", K(ret));
       } else if (!ObOptimizerUtil::is_point_based_sub_expr(raw_expr, expr)) {
+      } else if (ObOptimizerUtil::find_item(ctx.inseparable_exprs_, expr)) {
+        // parent expr is inseparable (e.g. dblink select expr)
       } else if (OB_FAIL(ctx.find(raw_expr, raw_producer))) {
         LOG_WARN("failed to find expr in ctx", K(ret));
       } else if (NULL != raw_producer) {
