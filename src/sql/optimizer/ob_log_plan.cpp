@@ -13953,10 +13953,24 @@ int ObLogPlan::compute_rescan_plan_relationship(const ObLogicalOperator &first_p
     bool first_rescan_contain_match_all = false;
     bool second_rescan_contain_match_all = false;
     bool need_compare = false;
+    ObSQLSessionInfo *session_info = get_optimizer_context().get_session_info();
+    const bool is_fast_refreshing_mview = OB_NOT_NULL(session_info)
+        && session_info->get_ddl_info().is_refreshing_mview()
+        && !session_info->get_ddl_info().is_mview_complete_refresh();
     if (OB_FAIL(ObLogSubPlanFilter::need_compare_batch_rescan(*first_spf, *second_spf, need_compare))) {
       LOG_WARN("failed to check need compare batch rescan", K(ret));
     } else if (!need_compare) {
       /* do nothing */
+    } else if (is_fast_refreshing_mview
+               && first_spf->get_parallel() > ObGlobalHint::DEFAULT_PARALLEL
+               && second_spf->get_distributed_algo() == DIST_PULL_TO_LOCAL) {
+      relation = DominateRelation::OBJ_LEFT_DOMINATE;
+      OPT_TRACE("left plan dominate right plan because of parallel dist algo");
+    } else if (is_fast_refreshing_mview
+               && second_spf->get_parallel() > ObGlobalHint::DEFAULT_PARALLEL
+               && first_spf->get_distributed_algo() == DIST_PULL_TO_LOCAL) {
+      relation = DominateRelation::OBJ_RIGHT_DOMINATE;
+      OPT_TRACE("right plan dominate left plan because of parallel dist algo");
     } else if (!first_spf->enable_das_group_rescan() && second_spf->enable_das_group_rescan()) {
       relation = DominateRelation::OBJ_RIGHT_DOMINATE;
       OPT_TRACE("right plan dominate left plan because of group rescan subplan filter");
