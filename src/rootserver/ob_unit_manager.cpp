@@ -3129,7 +3129,7 @@ int ObUnitManager::check_tenant_exist_(
 
 int ObUnitManager::read_parameter_from_seed_tenant_(
     const char * parameter_name,
-    ObString &parameter_value)
+    ObSqlString &parameter_value)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
@@ -3146,6 +3146,7 @@ int ObUnitManager::read_parameter_from_seed_tenant_(
   } else {
     SMART_VAR(ObMySQLProxy::MySQLResult, res) {
       sqlclient::ObMySQLResult *result = NULL;
+      ObString tmp_value;
       if (OB_FAIL(GCTX.sql_proxy_->read(res, sql.ptr()))) {
         LOG_WARN("fail to execute sql", KR(ret), K(sql));
       } else if (OB_ISNULL(result = res.get_result())) {
@@ -3158,7 +3159,12 @@ int ObUnitManager::read_parameter_from_seed_tenant_(
           LOG_WARN("fail to get next row", KR(ret));
         }
       } else {
-        EXTRACT_VARCHAR_FIELD_MYSQL(*result, "value", parameter_value);
+        // tmp_value points to MySQLResult-owned buffer; deep copy into parameter_value
+        // before MySQLResult goes out of scope to avoid dangling reference.
+        EXTRACT_VARCHAR_FIELD_MYSQL(*result, "value", tmp_value);
+        if (FAILEDx(parameter_value.assign(tmp_value))) {
+          LOG_WARN("fail to deep copy parameter value", KR(ret), K(tmp_value));
+        }
       }
     }
   }
@@ -3171,7 +3177,7 @@ int ObUnitManager::check_tenant_enable_logonly_replica_(
   int ret = OB_SUCCESS;
   enable_logonly_replica = false;
   bool is_exist = false;
-  ObString parameter_value;
+  ObSqlString parameter_value;
   const char * parameter_name = ENABLE_LOGONLY_REPLICA;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
@@ -3188,7 +3194,6 @@ int ObUnitManager::check_tenant_enable_logonly_replica_(
         enable_logonly_replica = tenant_config->enable_logonly_replica;
       }
     } else {
-      ObSqlString param_value;
       // tenant not exist yet, it means it's being created and value of seed tenant will be used
       // as this tenant's initial value. So try to get value from __all_seed_parameter.
       if (OB_FAIL(read_parameter_from_seed_tenant_(parameter_name , parameter_value))) {
@@ -3196,18 +3201,16 @@ int ObUnitManager::check_tenant_enable_logonly_replica_(
       } else if (parameter_value.empty()) {
         enable_logonly_replica = false;
         LOG_INFO("seed not set, use default value", KR(ret));
-      } else if (OB_FAIL(param_value.assign(parameter_value))) {
-        LOG_WARN("fail to assign param value", KR(ret), K(parameter_value));
       } else {
         bool is_valid = false;
-        enable_logonly_replica = ObConfigBoolParser::get(param_value.ptr(), is_valid);
+        enable_logonly_replica = ObConfigBoolParser::get(parameter_value.ptr(), is_valid);
         if (OB_UNLIKELY(!is_valid)) {
           // defensive check
           enable_logonly_replica = false;
-          LOG_INFO("parameter value is not expected", K(param_value));
+          LOG_INFO("parameter value is not expected", K(parameter_value));
         }
         LOG_INFO("tenant does not exist yet, try to get enable_logonly_replica from seed",
-                 KR(ret), K(tenant_id), K(enable_logonly_replica), K(parameter_value), K(is_valid), K(param_value));
+                 KR(ret), K(tenant_id), K(enable_logonly_replica), K(parameter_value), K(is_valid));
       }
     }
   }
@@ -3219,7 +3222,7 @@ int ObUnitManager::check_tenant_in_heterogeneous_deploy_mode(
 {
   int ret = OB_SUCCESS;
   bool is_exist = false;
-  ObString parameter_value;
+  ObSqlString parameter_value;
   const char * parameter_name = ZONE_DEPLOY_MODE;
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id))) {
     ret = OB_INVALID_ARGUMENT;
@@ -3246,7 +3249,7 @@ int ObUnitManager::check_tenant_in_heterogeneous_deploy_mode(
         in_hetero_deploy_mode = false;
         LOG_INFO("seed not set, use default value HOMO", KR(ret));
       } else {
-        in_hetero_deploy_mode = 0 == parameter_value.case_compare(ObConfigZoneDeployModeChecker::HETERO_MODE_STR)
+        in_hetero_deploy_mode = 0 == parameter_value.string().case_compare(ObConfigZoneDeployModeChecker::HETERO_MODE_STR)
             ? true : false;
       }
       LOG_INFO("tenant does not exist yet, try to get zone_deploy_mode from seed",

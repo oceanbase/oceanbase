@@ -1028,7 +1028,7 @@ private:
          bool &is_exist);
   static int read_parameter_from_seed_tenant_(
          const char * parameter_name,
-         ObString &parameter_value);
+         ObSqlString &parameter_value);
   //LOCK IN
   int commit_alter_unit_num_in_trans_(
     const common::ObIArray<share::ObResourcePool *> &pools,
