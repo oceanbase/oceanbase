@@ -44,7 +44,8 @@ OB_DEF_SERIALIZE(ObDASScalarScanRtDef)
               sql_mode_,
               scan_flag_,
               key_ranges_,
-              really_need_rowkey_order_);
+              really_need_rowkey_order_,
+              boost_weight_);
   return ret;
 }
 
@@ -58,7 +59,8 @@ OB_DEF_DESERIALIZE(ObDASScalarScanRtDef)
               sql_mode_,
               scan_flag_,
               key_ranges_,
-              really_need_rowkey_order_);
+              really_need_rowkey_order_,
+              boost_weight_);
   if (OB_SUCC(ret)) {
     (void)ObSQLUtils::adjust_time_by_ntp_offset(timeout_ts_);
   }
@@ -75,7 +77,8 @@ OB_DEF_SERIALIZE_SIZE(ObDASScalarScanRtDef)
               sql_mode_,
               scan_flag_,
               key_ranges_,
-              really_need_rowkey_order_);
+              really_need_rowkey_order_,
+              boost_weight_);
   return len;
 }
 
