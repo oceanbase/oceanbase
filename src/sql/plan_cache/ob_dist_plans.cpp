@@ -197,8 +197,7 @@ bool ObDistPlans::is_plan_available(const ObPhysicalPlan &plan, ObPlanCacheCtx &
 {
   bool can_use = true;
   if (pc_ctx.try_get_plan_) {
-    if (pc_ctx.compare_plan_->get_plan_hash_value() != plan.get_plan_hash_value()
-        || !ObPlanSet::is_rich_format_matched(&plan, pc_ctx)) {
+    if (pc_ctx.compare_plan_->get_plan_hash_value() != plan.get_plan_hash_value()) {
       can_use = false;
     }
   } else if (pc_ctx.enable_adaptive_plan_cache_) {
@@ -209,6 +208,7 @@ bool ObDistPlans::is_plan_available(const ObPhysicalPlan &plan, ObPlanCacheCtx &
       pc_ctx.has_inactive_plan_ = false;
     }
   }
+  can_use = can_use && ObPlanSet::is_rich_format_matched(&plan, pc_ctx);
   return can_use;
 }
 
