@@ -19388,7 +19388,19 @@ def_table_schema(
                           AS CHAR(4194304)
                       ) AS DTD_IDENTIFIER,
                       CAST('SQL' AS CHAR(8)) as ROUTINE_BODY,
-                      CAST(mp.body AS CHAR(4194304)) as ROUTINE_DEFINITION,
+                      CAST(
+                        CASE
+                        WHEN (512 & CURRENT_USER_PRIV()) = 512
+                          THEN mp.body
+                        WHEN LOWER(REPLACE(REPLACE(SUBSTRING_INDEX(mp.DEFINER, '@', 1), CHAR(39), ''), '`', ''))
+                             = LOWER(REPLACE(REPLACE(SUBSTRING_INDEX(CURRENT_USER(), '@', 1), CHAR(39), ''), '`', ''))
+                          AND LOWER(REPLACE(REPLACE(SUBSTRING_INDEX(mp.DEFINER, '@', -1), CHAR(39), ''), '`', ''))
+                              = LOWER(REPLACE(REPLACE(SUBSTRING_INDEX(CURRENT_USER(), '@', -1), CHAR(39), ''), '`', ''))
+                          THEN mp.body
+                        ELSE NULL
+                        END
+                          AS CHAR(4194304)
+                      ) as ROUTINE_DEFINITION,
                       CAST(IF(r.external_routine_type = 0, NULL, JSON_OBJECT('file', CASE WHEN r.external_routine_type in (1, 3) THEN r.external_routine_url WHEN r.external_routine_type in (2, 4) THEN r.external_routine_resource ELSE NULL END, 'symbol', r.external_routine_entry, 'inner_type', CONCAT(CASE WHEN r.external_routine_type IN (1, 2) THEN 'JAVA' WHEN r.external_routine_type IN (3, 4) THEN 'PYTHON' ELSE NULL END, CASE WHEN r.flag & 16384 != 0 THEN ' UDAF' WHEN r.flag & 16777216 != 0 THEN ' UDTF' ELSE ' UDF' END))) AS CHAR(4194304)) as EXTERNAL_NAME,
                       CAST(CASE WHEN r.external_routine_type IN (1, 2) THEN 'JAVA' WHEN r.external_routine_type IN (3, 4) THEN 'PYTHON' ELSE NULL END AS CHAR(64)) as EXTERNAL_LANGUAGE,
                       CAST('SQL' AS CHAR(8)) as PARAMETER_STYLE,
