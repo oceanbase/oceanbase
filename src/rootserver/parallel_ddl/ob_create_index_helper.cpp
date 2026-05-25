@@ -423,7 +423,8 @@ int ObCreateIndexHelper::generate_index_schema_()
     if (OB_FAIL(ddl_service_->get_index_name_checker().check_index_name_exist(tenant_id_,
                                                                               index_schema->get_database_id(),
                                                                               index_schema->get_table_name_str(),
-                                                                              name_exist))) {
+                                                                              name_exist,
+                                                                              index_schema->is_built_in_index()))) {
     LOG_WARN("fail to check index name exist", KR(ret), K_(tenant_id), K(index_schema->get_table_name_str()));
     } else if (name_exist) {
       ret = OB_ERR_KEY_NAME_DUPLICATE;

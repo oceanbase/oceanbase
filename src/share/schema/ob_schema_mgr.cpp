@@ -2936,10 +2936,10 @@ int ObSchemaMgr::add_table(
         const bool is_built_in_index = new_table_schema->is_built_in_index();
         IndexNameMap &index_name_map = get_index_name_map_(is_built_in_index);
         if (new_table_schema->is_in_recyclebin()) {
-          ObIndexSchemaHashWrapper index_name_wrapper(new_table_schema->get_tenant_id(),
-                                                      new_table_schema->get_database_id(),
-                                                      common::OB_INVALID_ID,
-                                                      new_table_schema->get_table_name_str());
+          ObIndexSchemaHashWrapper index_name_wrapper =
+              ObIndexSchemaHashWrapper::make_for_recyclebin(new_table_schema->get_tenant_id(),
+                                                            new_table_schema->get_database_id(),
+                                                            new_table_schema->get_table_name_str());
           hash_ret = index_name_map.set_refactored(index_name_wrapper, new_table_schema, over_write);
           if (OB_SUCCESS != hash_ret && OB_HASH_EXIST != hash_ret) {
             ret = OB_ERR_UNEXPECTED;
@@ -2953,8 +2953,10 @@ int ObSchemaMgr::add_table(
           } else {
             ObIndexSchemaHashWrapper cutted_index_name_wrapper(new_table_schema->get_tenant_id(),
                                                                new_table_schema->get_database_id(),
-                                                               is_oracle_mode ? common::OB_INVALID_ID : new_table_schema->get_data_table_id(),
-                                                               new_table_schema->get_origin_index_name_str());
+                                                               new_table_schema->get_data_table_id(),
+                                                               new_table_schema->get_origin_index_name_str(),
+                                                               is_oracle_mode,
+                                                               is_built_in_index);
             hash_ret = index_name_map.set_refactored(cutted_index_name_wrapper, new_table_schema, over_write);
             if (OB_SUCCESS != hash_ret && OB_HASH_EXIST != hash_ret) {
               ret = OB_ERR_UNEXPECTED;
@@ -3674,10 +3676,10 @@ int ObSchemaMgr::del_table(const ObTenantTableId table)
         const bool is_built_in_index = schema_to_del->is_built_in_index();
         IndexNameMap &index_name_map = get_index_name_map_(is_built_in_index);
         if (schema_to_del->is_in_recyclebin()) { // index is in recyclebin
-          ObIndexSchemaHashWrapper index_schema_wrapper(schema_to_del->get_tenant_id(),
-                                                        schema_to_del->get_database_id(),
-                                                        common::OB_INVALID_ID,
-                                                        schema_to_del->get_table_name_str());
+          ObIndexSchemaHashWrapper index_schema_wrapper =
+              ObIndexSchemaHashWrapper::make_for_recyclebin(schema_to_del->get_tenant_id(),
+                                                            schema_to_del->get_database_id(),
+                                                            schema_to_del->get_table_name_str());
           int hash_ret = index_name_map.erase_refactored(index_schema_wrapper);
           if (OB_SUCCESS != hash_ret) {
             LOG_WARN("failed delete index from index name hashmap, ",
@@ -3695,8 +3697,10 @@ int ObSchemaMgr::del_table(const ObTenantTableId table)
             int hash_ret = OB_SUCCESS;
             ObIndexSchemaHashWrapper cutted_index_name_wrapper(schema_to_del->get_tenant_id(),
                                                                schema_to_del->get_database_id(),
-                                                               is_oracle_mode ? common::OB_INVALID_ID : schema_to_del->get_data_table_id(),
-                                                               schema_to_del->get_origin_index_name_str());
+                                                               schema_to_del->get_data_table_id(),
+                                                               schema_to_del->get_origin_index_name_str(),
+                                                               is_oracle_mode,
+                                                               is_built_in_index);
             hash_ret = index_name_map.erase_refactored(cutted_index_name_wrapper);
             if (OB_SUCCESS != hash_ret) {
               LOG_WARN("failed delete index from index name hashmap, ",
@@ -4081,8 +4085,8 @@ int ObSchemaMgr::get_index_schema(
     if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(tenant_id, compat_mode))) {
       LOG_WARN("fail to get tenant mode", K(ret));
     } else if (is_recyclebin_database_id(database_id)) { // in recyclebin
-      const ObIndexSchemaHashWrapper index_name_wrapper(
-          tenant_id, database_id, common::OB_INVALID_ID, table_name);
+      const ObIndexSchemaHashWrapper index_name_wrapper =
+          ObIndexSchemaHashWrapper::make_for_recyclebin(tenant_id, database_id, table_name);
       int hash_ret = index_name_map.get_refactored(index_name_wrapper, tmp_schema);
       if (OB_SUCCESS == hash_ret) {
         if (OB_ISNULL(tmp_schema)) {
@@ -4113,8 +4117,12 @@ int ObSchemaMgr::get_index_schema(
         // Notice that, operation on mysql_db table when compat_mode equals to lib::Worker::CompatMode::ORACLE is mysql mode.
         const bool is_oracle_mode = lib::Worker::CompatMode::ORACLE == compat_mode
                                      && !is_mysql_sys_database_id(database_id);
-        const ObIndexSchemaHashWrapper cutted_index_name_wrapper(tenant_id, database_id,
-            is_oracle_mode ? common::OB_INVALID_ID : data_table_id, cutted_index_name);
+        const ObIndexSchemaHashWrapper cutted_index_name_wrapper(tenant_id,
+                                                                 database_id,
+                                                                 data_table_id,
+                                                                 cutted_index_name,
+                                                                 is_oracle_mode,
+                                                                 is_built_in);
         int hash_ret = index_name_map.get_refactored(cutted_index_name_wrapper, tmp_schema);
         if (OB_SUCCESS == hash_ret) {
           if (OB_ISNULL(tmp_schema)) {
@@ -4175,19 +4183,22 @@ int ObSchemaMgr::deep_copy_index_name_map(
       } else if (OB_FAIL(index_name_info->init(allocator, *index_schema))) {
         LOG_WARN("fail to init index name info", KR(ret), KPC(index_schema));
       } else if (is_recyclebin_database_id(database_id)) {
-        data_table_id = OB_INVALID_ID;
         index_name = index_name_info->get_index_name();
       } else {
-        data_table_id = (is_oracle_mode && !is_mysql_sys_database_id(database_id)) ?
-                        OB_INVALID_ID : index_name_info->get_data_table_id();
         index_name = index_name_info->get_original_index_name();
       }
       if (OB_SUCC(ret)) {
         int overwrite = 0;
-        ObIndexSchemaHashWrapper index_name_wrapper(index_name_info->get_tenant_id(),
-                                                    database_id,
-                                                    data_table_id,
-                                                    index_name);
+        ObIndexSchemaHashWrapper index_name_wrapper = is_recyclebin_database_id(database_id)
+            ? ObIndexSchemaHashWrapper::make_for_recyclebin(index_name_info->get_tenant_id(),
+                                                            database_id,
+                                                            index_name)
+            : ObIndexSchemaHashWrapper(index_name_info->get_tenant_id(),
+                                       database_id,
+                                       index_name_info->get_data_table_id(),
+                                       index_name,
+                                       is_oracle_mode,
+                                       index_schema->is_built_in_index());
         if (OB_FAIL(index_name_cache.set_refactored(
             index_name_wrapper, index_name_info, overwrite))) {
           LOG_WARN("fail to set refactored", KR(ret), KPC(index_name_info));
@@ -5097,10 +5108,10 @@ int ObSchemaMgr::deal_with_change_table_state(const ObSimpleTableSchemaV2 &old_t
       if (OB_FAIL(old_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
         LOG_WARN("fail to check if tenant mode is oracle mode", K(ret));
       } else if (old_table_schema.is_in_recyclebin()) { // index is in recyclebin
-        ObIndexSchemaHashWrapper index_name_wrapper(old_table_schema.get_tenant_id(),
-                                                    old_table_schema.get_database_id(),
-                                                    common::OB_INVALID_ID,
-                                                    old_table_schema.get_table_name_str());
+        ObIndexSchemaHashWrapper index_name_wrapper =
+            ObIndexSchemaHashWrapper::make_for_recyclebin(old_table_schema.get_tenant_id(),
+                                                          old_table_schema.get_database_id(),
+                                                          old_table_schema.get_table_name_str());
         int hash_ret = index_name_map.erase_refactored(index_name_wrapper);
         if (OB_SUCCESS != hash_ret) {
           LOG_WARN("fail to delete index from index name hashmap",
@@ -5115,8 +5126,10 @@ int ObSchemaMgr::deal_with_change_table_state(const ObSimpleTableSchemaV2 &old_t
         } else {
           ObIndexSchemaHashWrapper cutted_index_name_wrapper(old_table_schema.get_tenant_id(),
                                                              old_table_schema.get_database_id(),
-                                                             is_oracle_mode ? common::OB_INVALID_ID : old_table_schema.get_data_table_id(),
-                                                             cutted_index_name);
+                                                             old_table_schema.get_data_table_id(),
+                                                             cutted_index_name,
+                                                             is_oracle_mode,
+                                                             is_built_in_index);
           int hash_ret = index_name_map.erase_refactored(cutted_index_name_wrapper);
           if (OB_SUCCESS != hash_ret) {
             LOG_WARN("failed delete index from index name hashmap, ",
@@ -5198,10 +5211,10 @@ int ObSchemaMgr::deal_with_table_rename(
         if (OB_FAIL(old_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
           LOG_WARN("fail to check if tenant mode is oracle mode", K(ret));
         } else if (old_table_schema.is_in_recyclebin()) { // index is in recyclebin
-          ObIndexSchemaHashWrapper index_name_wrapper(old_table_schema.get_tenant_id(),
-                                                      old_table_schema.get_database_id(),
-                                                      common::OB_INVALID_ID,
-                                                      old_table_schema.get_table_name_str());
+          ObIndexSchemaHashWrapper index_name_wrapper =
+              ObIndexSchemaHashWrapper::make_for_recyclebin(old_table_schema.get_tenant_id(),
+                                                            old_table_schema.get_database_id(),
+                                                            old_table_schema.get_table_name_str());
           int hash_ret = index_name_map.erase_refactored(index_name_wrapper);
           if (OB_SUCCESS != hash_ret) {
             LOG_WARN("fail to delete index from index name hashmap",
@@ -5216,8 +5229,10 @@ int ObSchemaMgr::deal_with_table_rename(
           } else {
             ObIndexSchemaHashWrapper cutted_index_name_wrapper(old_table_schema.get_tenant_id(),
                                                                old_table_schema.get_database_id(),
-                                                               is_oracle_mode ? common::OB_INVALID_ID : old_table_schema.get_data_table_id(),
-                                                               cutted_index_name);
+                                                               old_table_schema.get_data_table_id(),
+                                                               cutted_index_name,
+                                                               is_oracle_mode,
+                                                               is_built_in_index);
             int hash_ret = index_name_map.erase_refactored(cutted_index_name_wrapper);
             if (OB_SUCCESS != hash_ret) {
               LOG_WARN("failed delete index from index name hashmap, ",
@@ -5389,10 +5404,10 @@ int ObSchemaMgr::rebuild_table_hashmap(uint64_t &fk_cnt, uint64_t &cst_cnt)
             IndexNameMap &index_name_map = get_index_name_map_(is_built_in_index);
             // oracle mode and index is not in recyclebin
             if (table_schema->is_in_recyclebin()) {
-              ObIndexSchemaHashWrapper index_name_wrapper(table_schema->get_tenant_id(),
-                                                          table_schema->get_database_id(),
-                                                          common::OB_INVALID_ID,
-                                                          table_schema->get_table_name_str());
+              ObIndexSchemaHashWrapper index_name_wrapper =
+                  ObIndexSchemaHashWrapper::make_for_recyclebin(table_schema->get_tenant_id(),
+                                                                table_schema->get_database_id(),
+                                                                table_schema->get_table_name_str());
               hash_ret = index_name_map.set_refactored(index_name_wrapper, table_schema, over_write);
               if (OB_SUCCESS != hash_ret) {
                 ret = OB_HASH_EXIST == hash_ret ? OB_SUCCESS : OB_ERR_UNEXPECTED;
@@ -5412,8 +5427,10 @@ int ObSchemaMgr::rebuild_table_hashmap(uint64_t &fk_cnt, uint64_t &cst_cnt)
               } else {
                 ObIndexSchemaHashWrapper cutted_index_name_wrapper(table_schema->get_tenant_id(),
                                                                    table_schema->get_database_id(),
-                                                                   is_oracle_mode ? common::OB_INVALID_ID : table_schema->get_data_table_id(),
-                                                                   table_schema->get_origin_index_name_str());
+                                                                   table_schema->get_data_table_id(),
+                                                                   table_schema->get_origin_index_name_str(),
+                                                                   is_oracle_mode,
+                                                                   is_built_in_index);
                 hash_ret = index_name_map.set_refactored(cutted_index_name_wrapper, table_schema, over_write);
                 if (OB_SUCCESS != hash_ret) {
                   ret = OB_HASH_EXIST == hash_ret ? OB_SUCCESS : OB_ERR_UNEXPECTED;
@@ -5528,8 +5545,8 @@ int ObSchemaMgr::get_idx_schema_by_origin_idx_name(const uint64_t tenant_id,
              KR(ret), K(tenant_id), K(database_id), K(compat_mode));
   } else {
     ObSimpleTableSchemaV2 *tmp_schema = NULL;
-    const ObIndexSchemaHashWrapper index_name_wrapper(
-        tenant_id, database_id, common::OB_INVALID_ID, ori_index_name);
+    const ObIndexSchemaHashWrapper index_name_wrapper =
+        ObIndexSchemaHashWrapper::make_for_recyclebin(tenant_id, database_id, ori_index_name);
     lib::CompatModeGuard g(lib::Worker::CompatMode::ORACLE);
     int hash_ret = normal_index_name_map_.get_refactored(index_name_wrapper, tmp_schema);
     if (OB_SUCCESS == hash_ret) {

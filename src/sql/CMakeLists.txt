@@ -1571,6 +1571,7 @@ ob_set_subtarget(ob_sql resolver_expr
   resolver/expr/ob_raw_expr_print_visitor.cpp
   resolver/expr/ob_raw_expr_replacer.cpp
   resolver/expr/ob_raw_expr_resolver_impl.cpp
+  resolver/expr/ob_fts_oracle_resolver_match_util.cpp
   resolver/expr/ob_raw_expr_util.cpp
   resolver/expr/ob_raw_expr_wrap_enum_set.cpp
   resolver/expr/ob_shared_expr_resolver.cpp

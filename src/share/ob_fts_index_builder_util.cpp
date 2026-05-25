@@ -17,6 +17,12 @@
 #include "ob_index_builder_util.h"
 #include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "sql/resolver/expr/ob_raw_expr_util.h"
+#include "sql/resolver/expr/ob_raw_expr_resolver_impl.h"
+#include "sql/resolver/expr/ob_raw_expr.h"
+#include "sql/parser/parse_node.h"
+#include "sql/parser/sql_parser_base.h"
+#include "sql/ob_sql_define.h"
+#include "lib/number/ob_number_v2.h"
 #include "storage/fts/ob_fts_plugin_helper.h"
 #include "storage/fts/dict/ob_gen_dic_loader.h"
 #include "storage/fts/dict/ob_dic_lock.h"
@@ -30,6 +36,7 @@ namespace oceanbase
 using namespace common;
 using namespace obrpc;
 using namespace share::schema;
+using namespace sql;
 
 namespace share
 {
@@ -1263,7 +1270,11 @@ int ObFtsIndexBuilderUtil::generate_word_segment_column(
     int32_t max_data_length = 0;
     ObCollationType collation_type = CS_TYPE_INVALID;
     ObCharsetType charset_type = CHARSET_INVALID;
+    bool is_oracle_mode = false;
     ObColumnSchemaV2 column_schema;
+    if (OB_FAIL(data_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+      LOG_WARN("fail to check if oracle compat mode", K(ret));
+    }
     SMART_VAR(char[OB_MAX_DEFAULT_VALUE_LENGTH], ft_expr_def) {
       MEMSET(ft_expr_def, 0, sizeof(ft_expr_def));
       int64_t def_pos = 0;
@@ -1289,8 +1300,9 @@ int ObFtsIndexBuilderUtil::generate_word_segment_column(
         } else if (OB_FAIL(databuff_printf(ft_expr_def,
                                            OB_MAX_DEFAULT_VALUE_LENGTH,
                                            def_pos,
-                                           "`%s`, ",
-                                           col_schema->get_column_name()))) {
+                                           is_oracle_mode ? "%.*s, " : "`%.*s`, ",
+                                           col_schema->get_column_name_str().length(),
+                                           col_schema->get_column_name_str().ptr()))) {
           LOG_WARN("print column name to buffer failed", K(ret));
         } else {
           if (max_data_length < col_schema->get_data_length()) {
@@ -1389,7 +1401,11 @@ int ObFtsIndexBuilderUtil::generate_word_count_column(
           col_exists))) {
     LOG_WARN("check word count col failed", K(ret));
   } else if (!col_exists) {
+    bool is_oracle_mode = false;
     ObColumnSchemaV2 column_schema;
+    if (OB_FAIL(data_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+      LOG_WARN("fail to check if oracle compat mode", K(ret));
+    }
     SMART_VAR(char[OB_MAX_DEFAULT_VALUE_LENGTH], ft_expr_def) {
       MEMSET(ft_expr_def, 0, sizeof(ft_expr_def));
       ObCollationType collation_type = CS_TYPE_INVALID;
@@ -1416,8 +1432,9 @@ int ObFtsIndexBuilderUtil::generate_word_count_column(
         } else if (OB_FAIL(databuff_printf(ft_expr_def,
                                            OB_MAX_DEFAULT_VALUE_LENGTH,
                                            def_pos,
-                                           "`%s`, ",
-                                           col_schema->get_column_name()))) {
+                                           is_oracle_mode ? "%.*s, " : "`%.*s`, ",
+                                           col_schema->get_column_name_str().length(),
+                                           col_schema->get_column_name_str().ptr()))) {
           LOG_WARN("print column name to buffer failed", K(ret));
         } else if (CS_TYPE_INVALID == collation_type) {
           collation_type = col_schema->get_collation_type();
@@ -1502,7 +1519,11 @@ int ObFtsIndexBuilderUtil::generate_doc_length_column(
   } else if (OB_FAIL(check_fts_gen_col(data_schema, col_id, col_name_buf, name_pos, col_exists))) {
     LOG_WARN("fail to check document count", K(ret), K(col_id));
   } else if (!col_exists) {
+    bool is_oracle_mode = false;
     ObColumnSchemaV2 column_schema;
+    if (OB_FAIL(data_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
+      LOG_WARN("fail to check if oracle compat mode", K(ret));
+    }
     SMART_VAR(char[OB_MAX_DEFAULT_VALUE_LENGTH], ft_expr_def) {
       MEMSET(ft_expr_def, 0, sizeof(ft_expr_def));
       ObCollationType collation_type = CS_TYPE_INVALID;
@@ -1529,8 +1550,9 @@ int ObFtsIndexBuilderUtil::generate_doc_length_column(
         } else if (OB_FAIL(databuff_printf(ft_expr_def,
                                            OB_MAX_DEFAULT_VALUE_LENGTH,
                                            def_pos,
-                                           "`%s`, ",
-                                           col_schema->get_column_name()))) {
+                                           is_oracle_mode ? "%.*s, " : "`%.*s`, ",
+                                           col_schema->get_column_name_str().length(),
+                                           col_schema->get_column_name_str().ptr()))) {
           LOG_WARN("print column name to buffer failed", K(ret));
         } else if (CS_TYPE_INVALID == collation_type) {
           collation_type = col_schema->get_collation_type();
@@ -1994,17 +2016,15 @@ int ObFtsIndexBuilderUtil::generate_fts_parser_name(
   } else {
     share::ObPluginName parser_name;
     storage::ObFTParser parser;
-    const char *name_str = nullptr;
-    if (arg.index_option_.parser_name_.empty()) {
-      name_str = common::OB_DEFAULT_FULLTEXT_PARSER_NAME;
-    } else {
-      name_str = arg.index_option_.parser_name_.ptr();
-    }
-    if (OB_FAIL(parser_name.set_name(name_str))) {
-      LOG_WARN("fail to set plugin name", K(ret), KCSTRING(name_str));
-    } else if (OB_FAIL(plugin::ObPluginHelper::find_ftparser(name_str, parser))) {
+    // Use ObString with correct length (avoids -9203)
+    const common::ObString parser_name_for_lookup = arg.index_option_.parser_name_.empty()
+                                                    ? common::ObString::make_string(common::OB_DEFAULT_FULLTEXT_PARSER_NAME)
+                                                    : arg.index_option_.parser_name_;
+    if (OB_FAIL(parser_name.set_name(parser_name_for_lookup))) {
+      LOG_WARN("fail to set plugin name", K(ret), K(parser_name_for_lookup));
+    } else if (OB_FAIL(plugin::ObPluginHelper::find_ftparser(parser_name_for_lookup, parser))) {
       if (OB_FUNCTION_NOT_DEFINED == ret) {
-        LOG_DEBUG("no such parser", K(name_str));
+        LOG_DEBUG("no such parser", K(parser_name_for_lookup));
       } else {
         LOG_WARN("fail to get fulltext parser", K(ret), K(parser_name));
       }
@@ -2524,6 +2544,98 @@ int ObFtsIndexBuilderUtil::get_index_column_ids_for_fts(
           LOG_WARN("fail to get column schema", K(col_names.at(i)));
         } else if (OB_FAIL(index_column_ids.push_back(col_schema->get_column_id()))) {
           LOG_WARN("fail to get column schema", K(ret), KPC(col_schema));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+// Oracle FTS CREATE INDEX: parse optional PARAMETERS ('LEXER ...') and whitelist lexer names.
+int ObFtsIndexBuilderUtil::oracle_compat_resolve_parameters_node(
+    ParseNode *parameters_node,
+    const int index_keyname,  // ObDDLResolver::INDEX_KEYNAME
+    common::ObIAllocator &allocator,
+    common::ObString &parser_name,
+    obrpc::ObCreateIndexArg *index_arg)
+{
+  int ret = OB_SUCCESS;
+  // PARAMETERS clause only appears in Oracle mode full-text search index
+  if (!lib::is_oracle_mode() || ObDDLResolver::INDEX_KEYNAME::FTS_KEY != index_keyname) {
+    // Not Oracle mode or not FTS index, return directly (PARAMETERS clause won't appear in other scenarios)
+    return ret;
+  }
+  // PARAMETERS clause is optional, so NULL is acceptable
+  if (OB_ISNULL(parameters_node)) {
+    return ret;
+  }
+  // Check if parameters_node contains valid string
+  if (OB_ISNULL(parameters_node->str_value_) || parameters_node->str_len_ <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid parameters node: missing string value for lexer", K(ret),
+             KP(parameters_node->str_value_), K(parameters_node->str_len_));
+  } else {
+    // Parse 'LEXER xxx' string to extract parser name
+    const char *parameters_str = parameters_node->str_value_;
+    const int32_t parameters_len = static_cast<int32_t>(parameters_node->str_len_);
+    const char *lexer_keyword = "LEXER ";
+    const int32_t lexer_keyword_len = static_cast<int32_t>(strlen(lexer_keyword));
+
+    if (parameters_len < lexer_keyword_len) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "Oracle FTS PARAMETERS: expected 'LEXER <lexer_name>'");
+      LOG_WARN("parameters string too short", K(ret), K(parameters_len), K(lexer_keyword_len));
+    } else {
+      // Check if starts with "LEXER " (case-insensitive)
+      ObString prefix_str(lexer_keyword_len, parameters_str);
+      if (0 != prefix_str.case_compare(lexer_keyword)) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("parameters string does not start with LEXER", K(ret), K(prefix_str));
+      } else {
+        // Extract parser name after "LEXER "
+        const char *parser_start = parameters_str + lexer_keyword_len;
+        const char *parser_end = parameters_str + parameters_len;
+        // Trim whitespace
+        while (parser_start < parser_end && (*parser_start == ' ' || *parser_start == '\t')) {
+          parser_start++;
+        }
+        while (parser_end > parser_start && (*(parser_end - 1) == ' ' || *(parser_end - 1) == '\t')) {
+          parser_end--;
+        }
+        if (parser_start >= parser_end) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "Oracle FTS PARAMETERS: lexer name must be specified");
+          LOG_WARN("parser name is empty after trimming", K(ret));
+        } else {
+          ObString extracted(static_cast<int32_t>(parser_end - parser_start), parser_start);
+          // Convert to lowercase to match plugin registry (parsers are registered as lowercase: "beng", "ik", "ngram", etc.)
+          char *lower_buf = static_cast<char *>(allocator.alloc(extracted.length() + 1));
+          if (OB_ISNULL(lower_buf)) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to alloc buffer for lowercase parser_name", K(ret), K(extracted));
+          } else {
+            for (int32_t i = 0; i < extracted.length(); i++) {
+              lower_buf[i] = static_cast<char>(tolower(extracted[i]));
+            }
+            lower_buf[extracted.length()] = '\0';
+            ObString lower_parser_name(static_cast<int32_t>(extracted.length()), lower_buf);
+            // Oracle FTS only allows: space, beng, ik, ngram, ngram2 (case-insensitive)
+            if (0 != lower_parser_name.case_compare(ObFTSLiteral::PARSER_NAME_SPACE)
+                && 0 != lower_parser_name.case_compare(ObFTSLiteral::PARSER_NAME_BENG)
+                && 0 != lower_parser_name.case_compare(ObFTSLiteral::PARSER_NAME_IK)
+                && 0 != lower_parser_name.case_compare(ObFTSLiteral::PARSER_NAME_NGRAM)
+                && 0 != lower_parser_name.case_compare(ObFTSLiteral::PARSER_NAME_NGRAM2)) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "only space, beng, ik, ngram, ngram2 are allowed. other lexers are");
+              LOG_WARN("oracle FTS PARAMETERS: unsupported parser name", K(ret), K(lower_parser_name));
+            } else if (OB_FAIL(common::ob_write_string(allocator, lower_parser_name, parser_name))) {
+              LOG_WARN("fail to deep copy parser_name from PARAMETERS", K(ret), K(lower_parser_name));
+            } else {
+              if (OB_NOT_NULL(index_arg)) {
+                index_arg->index_option_.parser_name_ = parser_name;
+              }
+            }
+          }
         }
       }
     }
@@ -3480,5 +3592,6 @@ int ObFtsIndexSchemaPrinter::print_fts_parser_info(
   }
   return ret;
 }
+
 } // namespace share
 }//end namespace oceanbase

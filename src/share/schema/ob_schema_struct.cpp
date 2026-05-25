@@ -15283,19 +15283,16 @@ ObIndexSchemaHashWrapper GetIndexNameKey<ObIndexSchemaHashWrapper, ObIndexNameIn
       ObIndexSchemaHashWrapper null_wrap;
       return null_wrap;
     } else if (is_recyclebin_database_id(index_name_info->get_database_id())) {
-      ObIndexSchemaHashWrapper index_schema_hash_wrapper(
-          index_name_info->get_tenant_id(),
-          index_name_info->get_database_id(),
-          common::OB_INVALID_ID,
-          index_name_info->get_index_name());
-      return index_schema_hash_wrapper;
+      return ObIndexSchemaHashWrapper::make_for_recyclebin(index_name_info->get_tenant_id(),
+                                                           index_name_info->get_database_id(),
+                                                           index_name_info->get_index_name());
     } else {
-      ObIndexSchemaHashWrapper index_schema_hash_wrapper(
-          index_name_info->get_tenant_id(),
-          index_name_info->get_database_id(),
-          is_oracle_mode ? common::OB_INVALID_ID : index_name_info->get_data_table_id(),
-          index_name_info->get_original_index_name());
-      return index_schema_hash_wrapper;
+      return ObIndexSchemaHashWrapper(index_name_info->get_tenant_id(),
+                                      index_name_info->get_database_id(),
+                                      index_name_info->get_data_table_id(),
+                                      index_name_info->get_original_index_name(),
+                                      is_oracle_mode,
+                                      index_name_info->get_is_built_in_index());
     }
   } else {
     ObIndexSchemaHashWrapper null_wrap;
@@ -15308,6 +15305,7 @@ ObIndexNameInfo::ObIndexNameInfo()
     database_id_(OB_INVALID_ID),
     data_table_id_(OB_INVALID_ID),
     index_id_(OB_INVALID_ID),
+    is_built_in_index_(false),
     index_name_(),
     original_index_name_()
 {
@@ -15319,6 +15317,7 @@ void ObIndexNameInfo::reset()
   database_id_ = OB_INVALID_ID;
   data_table_id_ = OB_INVALID_ID;
   index_id_ = OB_INVALID_ID;
+  is_built_in_index_ = false;
   index_name_.reset();
   original_index_name_.reset();
 }
@@ -15338,6 +15337,7 @@ int ObIndexNameInfo::init(
     database_id_ = index_schema.get_database_id();
     data_table_id_ = index_schema.get_data_table_id();
     index_id_ = index_schema.get_table_id();
+    is_built_in_index_ = index_schema.is_built_in_index();
     // use shallow copy to reduce memory allocation
     if (is_recyclebin_database_id(database_id_)) {
       original_index_name_ = index_name_;

@@ -3377,7 +3377,7 @@ int ObRawExprDeduceType::visit(ObMatchFunRawExpr &expr)
     ObExprResType search_key_type = expr.get_search_key()->get_result_type();
     ObCastMode def_cast_mode = CM_NONE;
     search_key_type.set_varchar();
-    search_key_type.set_length(OB_MAX_MYSQL_VARCHAR_LENGTH);
+    search_key_type.set_length(lib::is_mysql_mode() ? OB_MAX_MYSQL_VARCHAR_LENGTH : OB_MAX_ORACLE_VARCHAR_LENGTH );
     search_key_type.set_collation_type(col_result_type.get_collation_type());
     search_key_type.set_collation_level(search_key_type.get_collation_level());
     search_key_type.set_calc_meta(search_key_type.get_obj_meta());

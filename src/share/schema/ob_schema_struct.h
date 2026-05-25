@@ -4313,20 +4313,22 @@ inline uint64_t ObColumnSchemaHashWrapper::hash() const
 //    - index_name is original_index_name
 class ObIndexSchemaHashWrapper
 {
-public :
+public:
   ObIndexSchemaHashWrapper()
       : tenant_id_(common::OB_INVALID_ID),
         database_id_(common::OB_INVALID_ID),
         pure_data_table_id_(common::OB_INVALID_ID)
   {
   }
-  ObIndexSchemaHashWrapper(uint64_t tenant_id, const uint64_t database_id,
-                           const uint64_t data_table_id, const common::ObString &index_name)
-      : tenant_id_(tenant_id), database_id_(database_id),
-        pure_data_table_id_(data_table_id), index_name_(index_name)
-  {
-    pure_data_table_id_ = data_table_id;
-  }
+  // Main constructor: key_id is derived from (is_oracle_mode, is_built_in_index, data_table_id) inside.
+  ObIndexSchemaHashWrapper(uint64_t tenant_id, uint64_t database_id,
+                           uint64_t data_table_id, const common::ObString &index_name,
+                           bool is_oracle_mode, bool is_built_in_index);
+  // Factory for recycle-bin lookups: pure_data_table_id is always OB_INVALID_ID.
+  static ObIndexSchemaHashWrapper make_for_recyclebin(uint64_t tenant_id, uint64_t database_id,
+                                                      const common::ObString &name);
+  ObIndexSchemaHashWrapper(uint64_t tenant_id, uint64_t database_id,
+                           uint64_t data_table_id, const common::ObString &index_name) = delete;
   ~ObIndexSchemaHashWrapper() {}
   inline uint64_t hash() const;
   inline bool operator ==(const ObIndexSchemaHashWrapper &rv) const;
@@ -4335,10 +4337,19 @@ public :
   inline uint64_t get_database_id() const { return database_id_; }
   inline const common::ObString &get_index_name() const { return index_name_; }
   TO_STRING_KV(K_(index_name));
-private :
+private:
+  ObIndexSchemaHashWrapper(uint64_t tenant_id, uint64_t database_id,
+                           uint64_t pure_data_table_id, const common::ObString &index_name,
+                           bool /* for_factory_only */)
+      : tenant_id_(tenant_id), database_id_(database_id),
+        pure_data_table_id_(pure_data_table_id), index_name_(index_name)
+  {
+  }
+  static ObIndexSchemaHashWrapper invalid_pure_data_table_id_key_(
+      uint64_t tenant_id, uint64_t database_id, const common::ObString &name);
   uint64_t tenant_id_;
   uint64_t database_id_;
-  uint64_t pure_data_table_id_; // only for mysql mode
+  uint64_t pure_data_table_id_;  // only for mysql mode
   common::ObString index_name_;
 };
 
@@ -4363,6 +4374,27 @@ inline bool ObIndexSchemaHashWrapper::operator ==(const ObIndexSchemaHashWrapper
          && (database_id_ == rv.database_id_)
          && (pure_data_table_id_ == rv.pure_data_table_id_)
          && (0 == name_cmp.compare(index_name_, rv.index_name_));
+}
+
+inline ObIndexSchemaHashWrapper::ObIndexSchemaHashWrapper(uint64_t tenant_id, uint64_t database_id,
+                                                          uint64_t data_table_id, const common::ObString &index_name,
+                                                          bool is_oracle_mode, bool is_built_in_index)
+    : tenant_id_(tenant_id), database_id_(database_id),
+      pure_data_table_id_((is_oracle_mode && !is_built_in_index) ? common::OB_INVALID_ID : data_table_id),
+      index_name_(index_name)
+{
+}
+
+inline ObIndexSchemaHashWrapper ObIndexSchemaHashWrapper::invalid_pure_data_table_id_key_(
+       uint64_t tenant_id, uint64_t database_id, const common::ObString &name)
+{
+  return ObIndexSchemaHashWrapper(tenant_id, database_id, common::OB_INVALID_ID, name, true);
+}
+
+inline ObIndexSchemaHashWrapper ObIndexSchemaHashWrapper::make_for_recyclebin(uint64_t tenant_id, uint64_t database_id,
+                                                                              const common::ObString &name)
+{
+  return invalid_pure_data_table_id_key_(tenant_id, database_id, name);
 }
 
 class ObTableSchemaHashWrapper
@@ -10001,6 +10033,7 @@ public:
   uint64_t get_index_id() const { return index_id_; }
   const ObString& get_index_name() const { return index_name_; }
   const ObString& get_original_index_name() const { return original_index_name_; }
+  bool get_is_built_in_index() const { return is_built_in_index_; }
   TO_STRING_KV(K_(tenant_id), K_(database_id),
                K_(data_table_id), K_(index_id),
                K_(index_name), K_(original_index_name));
@@ -10009,6 +10042,7 @@ private:
   uint64_t database_id_;
   uint64_t data_table_id_;
   uint64_t index_id_;
+  bool is_built_in_index_;
   ObString index_name_;
   ObString original_index_name_;
   DISALLOW_COPY_AND_ASSIGN(ObIndexNameInfo);

@@ -13,6 +13,8 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "sql/engine/expr/ob_expr_bm25.h"
+#include "lib/ob_lib_config.h"
+#include "common/object/ob_obj_type.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/das/iter/ob_das_scan_iter.h"
 #include "ob_block_stat_iter.h"
@@ -248,8 +250,21 @@ int ObBM25ParamEstimator::do_estimation(sql::ObEvalCtx &eval_ctx)
       LOG_WARN("unexpected null total doc cnt expr", K(ret));
     } else {
       ObDatum &total_doc_cnt = est_ctx_.total_doc_cnt_expr_->locate_datum_for_write(eval_ctx);
-      total_doc_cnt.set_int(est_ctx_.estimated_total_doc_cnt_);
-      total_doc_cnt_ = est_ctx_.estimated_total_doc_cnt_;
+      const ObObjType total_doc_cnt_dt = est_ctx_.total_doc_cnt_expr_->datum_meta_.type_;
+      if (lib::is_oracle_mode() && ob_is_number_tc(total_doc_cnt_dt)) {
+        sql::ObNumStackOnceAlloc tmp_alloc;
+        number::ObNumber nmb;
+        if (OB_FAIL(nmb.from(est_ctx_.estimated_total_doc_cnt_, tmp_alloc))) {
+          LOG_WARN("failed to set oracle number total doc cnt from estimate", K(ret),
+                   K(est_ctx_.estimated_total_doc_cnt_));
+        } else {
+          total_doc_cnt.set_number(nmb);
+          total_doc_cnt_ = est_ctx_.estimated_total_doc_cnt_;
+        }
+      } else {
+        total_doc_cnt.set_int(est_ctx_.estimated_total_doc_cnt_);
+        total_doc_cnt_ = est_ctx_.estimated_total_doc_cnt_;
+      }
     }
 
     if (OB_FAIL(ret)) {

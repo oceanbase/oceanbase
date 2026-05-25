@@ -15,6 +15,8 @@
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "lib/json/ob_json_print_utils.h"
 #include "pl/ob_pl_resolver.h"
+#include "sql/parser/ob_parser_utils.h"
+#include "sql/resolver/expr/ob_fts_oracle_resolver_match_util.h"
 #ifdef OB_BUILD_ORACLE_PL
 #include "pl/ob_pl_udt_object_manager.h"
 #endif
@@ -1332,6 +1334,45 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
       }
       case T_FUN_SYS_REGEXP_LIKE:
       case T_FUN_SYS: {
+        // Handle Oracle CONTAINS and SCORE functions as special operators (like MATCH AGAINST)
+        // These are not regular SQL functions, but special operators processed in storage layer
+        if (lib::is_oracle_mode() && OB_NOT_NULL(node->children_) && OB_NOT_NULL(node->children_[0])) {
+          ObString func_name(node->children_[0]->str_len_, node->children_[0]->str_value_);
+          if (0 == func_name.case_compare("contains")) {
+            // Convert CONTAINS to T_FUN_MATCH_AGAINST node, similar to MySQL MATCH AGAINST
+            ParseNode *match_against_node = NULL;
+            if (OB_ISNULL(ctx_.param_list_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("param_list is null", K(ret));
+            } else if (OB_FAIL(ObFtsOracleMatchExprUtil::convert_contains_to_match_against(
+                        *node, &ctx_.expr_factory_.get_allocator(), *ctx_.param_list_, match_against_node))) {
+              LOG_WARN("failed to convert CONTAINS to MATCH_AGAINST", K(ret));
+            } else if (OB_NOT_NULL(match_against_node)) {
+              // Recursively resolve the converted MATCH_AGAINST node
+              if (OB_FAIL(SMART_CALL(recursive_resolve(match_against_node, expr)))) {
+                LOG_WARN("failed to resolve converted MATCH_AGAINST node", K(ret));
+              }
+              break; // Skip process_fun_sys_node
+            }
+          } else if (0 == func_name.case_compare("score")) {
+            // Convert SCORE to T_FUN_ES_SCORE node, similar to MySQL SCORE()
+            ParseNode *score_node = NULL;
+            if (OB_ISNULL(ctx_.param_list_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("param_list is null", K(ret));
+            } else if (OB_FAIL(ObFtsOracleMatchExprUtil::convert_score_to_es_score(
+                        *node, &ctx_.expr_factory_.get_allocator(), *ctx_.param_list_, score_node))) {
+              LOG_WARN("failed to convert SCORE to T_FUN_ES_SCORE", K(ret));
+            } else if (OB_NOT_NULL(score_node)) {
+              // Recursively resolve the converted SCORE node
+              if (OB_FAIL(SMART_CALL(recursive_resolve(score_node, expr)))) {
+                LOG_WARN("failed to resolve converted SCORE node", K(ret));
+              }
+              break; // Skip process_fun_sys_node
+            }
+          }
+        }
+        // Fall through to process_fun_sys_node for other functions
         if (OB_FAIL(process_fun_sys_node(node, expr, is_root_expr))) {
           if (ret != OB_ERR_FUNCTION_UNKNOWN) {
             LOG_WARN("fail to process system function node", K(ret), K(node));
@@ -8036,6 +8077,7 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node,
   int ret = OB_SUCCESS;
   ObSysFunRawExpr *func_expr = NULL;
   ObString func_name;
+  bool is_oracle_fts_handled = false;
   if (OB_ISNULL(node) || OB_ISNULL(ctx_.session_info_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(node), KP(ctx_.session_info_));
@@ -8200,7 +8242,7 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node,
     }
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && !is_oracle_fts_handled) {
     if (ObRawExprUtils::is_audit_log_expr(func_expr)) {
       if (OB_UNLIKELY(!is_root_expr)) {
         ret = OB_NOT_SUPPORTED;
@@ -8549,29 +8591,25 @@ int ObRawExprResolverImpl::process_match_against(const ParseNode *node, ObRawExp
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-const search query");
       LOG_WARN("search query is not const expr", K(ret));
+    } else if (OB_ISNULL(ctx_.stmt_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("unexpect null pointer", KPC(ctx_.stmt_), K(ret));
     } else if (OB_ISNULL(ctx_.session_info_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpect null pointer", KPC(ctx_.session_info_), K(ret));
     } else if (OB_FAIL(GET_MIN_DATA_VERSION(ctx_.session_info_->get_effective_tenant_id(), data_version))) {
       LOG_WARN("fail to get data_version", K(ctx_.session_info_->get_effective_tenant_id()), K(data_version), K(ret));
-    } else if (data_version < DATA_VERSION_4_4_0_0 &&
-               ObMatchAgainstMode::NATURAL_LANGUAGE_MODE != static_cast<ObMatchAgainstMode>(node->value_) &&
-               ObMatchAgainstMode::BOOLEAN_MODE != static_cast<ObMatchAgainstMode>(node->value_)) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "search modes other than NATURAL_LANGUAGE_MODE or BOOLEAN_MODE");
-      LOG_WARN("unsupported match against mode", K(ret), K(node->value_));
-    } else if (data_version >= DATA_VERSION_4_4_0_0 &&
-               ObMatchAgainstMode::NATURAL_LANGUAGE_MODE != static_cast<ObMatchAgainstMode>(node->value_) &&
-               ObMatchAgainstMode::BOOLEAN_MODE != static_cast<ObMatchAgainstMode>(node->value_) &&
-               ObMatchAgainstMode::MATCH_PHRASE_MODE != static_cast<ObMatchAgainstMode>(node->value_)) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "search modes other than NATURAL_LANGUAGE_MODE, BOOLEAN_MODE or MATCH_PHRASE_MODE");
-      LOG_WARN("unsupported match against mode", K(ret), K(node->value_));
     } else {
       match_against->set_search_key(search_keywords);
-      match_against->set_mode_flag(static_cast<ObMatchAgainstMode>(node->value_));
+      // Use unified function to validate and set mode, which handles both MySQL and Oracle modes
+      const common::ObIArray<sql::ObMatchFunRawExpr *> *match_exprs = &static_cast<ObDMLStmt*>(ctx_.stmt_)->get_match_exprs();
+      if (OB_FAIL(ObFtsOracleMatchExprUtil::validate_and_set_match_against_mode(
+          *node, data_version, match_exprs, *match_against))) {
+        LOG_WARN("failed to validate and set match against mode", K(ret));
+      } else {
       expr = match_against;
       LOG_DEBUG("resolve match against expr finish", K(ret), KPC(expr));
+      }
     }
   }
   if (OB_SUCC(ret) && OB_FAIL(match_against->extract_info())) {
@@ -8675,26 +8713,68 @@ int ObRawExprResolverImpl::process_match_score(const ParseNode *node, ObRawExpr 
   } else if (node->type_ != T_FUN_ES_SCORE) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("match column list is unexpected", K(ret), K(node->children_[0]));
-  } else if (OB_ISNULL(ctx_.stmt_) || static_cast<ObDMLStmt*>(ctx_.stmt_)->get_match_exprs().count() == 0) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("The position of score() is not supported", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "The position of score() is");
-  } else if (FALSE_IT(result_expr = static_cast<ObDMLStmt*>(ctx_.stmt_)->get_match_exprs().at(0))) {
-  } else if (!static_cast<ObMatchFunRawExpr *>(result_expr)->is_es_match()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("The score with match agaisnt is not supported", K(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "The score with match agaisnt is");
+  } else if (OB_ISNULL(ctx_.stmt_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("stmt is null", K(ret));
   } else {
-    ObOpRawExpr *add_expr = NULL;
-    for (int64_t i = 1; OB_SUCC(ret) && i < static_cast<ObDMLStmt*>(ctx_.stmt_)->get_match_exprs().count(); ++i) {
-      ObMatchFunRawExpr *match_expr = static_cast<ObMatchFunRawExpr *>(static_cast<ObDMLStmt*>(ctx_.stmt_)->get_match_exprs().at(i));
-      if (OB_FAIL(ObRawExprUtils::build_add_expr(ctx_.expr_factory_, match_expr, result_expr, add_expr))) {
-        LOG_WARN("add column ref to column list failed", K(ret));
+    const common::ObIArray<ObMatchFunRawExpr *> &match_exprs = static_cast<ObDMLStmt*>(ctx_.stmt_)->get_match_exprs();
+    const int64_t match_exprs_count = match_exprs.count();
+    if (match_exprs_count == 0) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("The position of score() is not supported", K(ret), K(match_exprs_count));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "The position of score() is");
+    } else {
+      ObMatchFunRawExpr *matched_match_expr = NULL;
+      if (lib::is_mysql_mode()) {
+        // MySQL mode: use first match_expr (ES_MATCH only)
+        result_expr = match_exprs.at(0);
+        ObMatchFunRawExpr *match_expr = static_cast<ObMatchFunRawExpr *>(result_expr);
+        if (!match_expr->is_es_match()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("The score with match agaisnt is not supported", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "The score with match agaisnt is");
+        }
+        // MySQL mode: add all match_exprs, score is sum of all match_exprs
+        ObOpRawExpr *add_expr = NULL;
+        for (int64_t i = 1; OB_SUCC(ret) && i < static_cast<ObDMLStmt*>(ctx_.stmt_)->get_match_exprs().count(); ++i) {
+          ObMatchFunRawExpr *match_expr = static_cast<ObMatchFunRawExpr *>(static_cast<ObDMLStmt*>(ctx_.stmt_)->get_match_exprs().at(i));
+          if (OB_FAIL(ObRawExprUtils::build_add_expr(ctx_.expr_factory_, match_expr, result_expr, add_expr))) {
+            LOG_WARN("add column ref to column list failed", K(ret));
+          } else {
+            result_expr = add_expr;
+          }
+        }
       } else {
-        result_expr = add_expr;
+        // Oracle mode: find matching CONTAINS by label
+        const int64_t score_label = node->value_; // score_label is stored in node->value_
+        if (OB_FAIL(ObFtsOracleMatchExprUtil::find_and_validate_score_match(
+            score_label,
+            match_exprs,
+            matched_match_expr))) {
+          LOG_WARN("failed to find and validate score match", K(ret), K(score_label));
+        } else if (OB_ISNULL(matched_match_expr)) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("SCORE label does not match any CONTAINS label", K(ret), K(score_label));
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, "some SCORE labels do not match any CONTAINS labels");
+        } else {
+          // Oracle mode: use the matched match_expr
+          result_expr = matched_match_expr;
+          if (OB_FAIL(ObFtsOracleMatchExprUtil::wrap_oracle_phrase_score_expr_if_applicable(
+                  ctx_.expr_factory_,
+                  ctx_.session_info_,
+                  matched_match_expr,
+                  result_expr))) {
+            LOG_WARN("failed to wrap oracle phrase score expr", K(ret));
+          }
+        }
+      }
+
+      // Mysql mode: score is sum of all match_exprs
+      // Oracle mode: score is the matched match_expr
+      if (OB_SUCC(ret)) {
+        expr = result_expr;
       }
     }
-    expr = result_expr;
   }
   return ret;
 }

@@ -51,6 +51,9 @@
 #include "rootserver/mview/ob_mview_utils.h"
 #include "share/schema/ob_external_table_column_schema_helper.h"
 #include "src/share/hybrid_search/ob_hybrid_search_executor.h"
+#include "sql/resolver/expr/ob_raw_expr_resolver_impl.h"
+#include "sql/resolver/expr/ob_fts_oracle_resolver_match_util.h"
+#include "lib/charset/ob_charset.h"
 
 namespace oceanbase
 {
@@ -1799,6 +1802,10 @@ int ObDMLResolver::resolve_sql_expr(const ParseNode &node, ObRawExpr *&expr,
     if (OB_SUCC(ret) && match_exprs.count() > 0) {
       if (OB_FAIL(resolve_match_against_exprs(expr, match_exprs, current_scope_))) { // resolve and add match expr
         LOG_WARN("failed to resolve match against expr", K(ret));
+      } else if (OB_NOT_NULL(expr) && OB_FAIL(expr->extract_info())) {
+        // Re-extract info to propagate CNT_MATCH_EXPR flag to parent expressions
+        // This is critical for optimizer to recognize text retrieval scan opportunities
+        LOG_WARN("failed to extract info after resolve_match_against_exprs", K(ret));
       }
     }
 
@@ -9370,6 +9377,13 @@ int ObDMLResolver::resolve_and_split_sql_expr_with_bool_expr(const ParseNode &no
         and_exprs.at(i) = new_expr;
       }
     }
+    if (OB_SUCC(ret) && lib::is_oracle_mode()) {
+      for (int64_t i = 0; OB_SUCC(ret) && i < and_exprs.count(); ++i) {
+        if (OB_FAIL(ObFtsOracleMatchExprUtil::check_expr_after_resolve(and_exprs.at(i)))) {
+          LOG_WARN("oracle resolver CONTAINS WHERE policy failed", K(ret), K(i));
+        }
+      }
+    }
   }
   return ret;
 }
@@ -10222,6 +10236,8 @@ int ObDMLResolver::check_pad_generated_column(const ObSQLMode sql_mode,
     // do nothing
   } else if (is_pad_char_to_full_length(sql_mode)
              == column_schema.has_column_flag(PAD_WHEN_CALC_GENERATED_COLUMN_FLAG)) {
+    // do nothing
+  } else if (column_schema.is_fulltext_column()) {
     // do nothing
   } else {
     bool has_char_dep_column = false;
@@ -20982,6 +20998,11 @@ int ObDMLResolver::check_match_against_expr(ObIArray<ObMatchFunRawExpr*> &match_
       }
     }
   }
+  if (OB_SUCC(ret) && lib::is_oracle_mode() && stmt->get_match_exprs().count() > 1) {
+    if (OB_FAIL(ObFtsOracleMatchExprUtil::check_duplicate_contains_labels(stmt->get_match_exprs()))) {
+      LOG_WARN("duplicate CONTAINS labels in Oracle mode", K(ret));
+    }
+  }
   return ret;
 }
 
@@ -21078,6 +21099,30 @@ int ObDMLResolver::resolve_match_against_exprs(ObRawExpr *&expr,
         LOG_WARN("failed to add replace expr", K(ret));
       } else if (OB_FAIL(replacer.replace(expr))) {
         LOG_WARN("failed to replace expr", K(ret));
+      } else if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null expr after replace", K(ret));
+      } else {
+        // Ensure CNT_MATCH_EXPR flag is set on expressions containing match_expr
+        // This is critical for optimizer to recognize text retrieval scan opportunities
+        ObSEArray<ObMatchFunRawExpr*, 4> match_exprs_in_expr;
+        if (OB_FAIL(ObRawExprUtils::extract_match_exprs(expr, match_exprs_in_expr))) {
+          LOG_WARN("failed to extract match exprs from expr", K(ret));
+        } else if (match_exprs_in_expr.count() > 0) {
+          // Set CNT_MATCH_EXPR flag on current expr and propagate to parent exprs
+          if (!expr->has_flag(CNT_MATCH_EXPR)) {
+            if (OB_FAIL(expr->add_flag(CNT_MATCH_EXPR))) {
+              LOG_WARN("failed to add CNT_MATCH_EXPR flag", K(ret));
+            }
+          }
+          // Propagate CNT_MATCH_EXPR flag to parent expressions by re-extracting info
+          // This ensures parent expressions like "CONTAINS(...) > 0" also have the flag
+          if (OB_SUCC(ret) && OB_FAIL(expr->extract_info())) {
+            LOG_WARN("failed to extract info to propagate CNT_MATCH_EXPR flag", K(ret));
+          }
+        }
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(append(params_.query_ctx_->all_equal_param_constraints_, check_ctx.equal_pairs_))) {
         LOG_WARN("failed to append equal param info", K(ret));
       } else if (OB_FAIL(append(params_.query_ctx_->all_plan_const_param_constraints_, param_constraints))) {
@@ -21179,6 +21224,10 @@ int ObDMLResolver::resolve_match_against_expr_with_match_phrase_mode(ObRawExpr *
     LOG_WARN("build or expr failed", K(ret));
   } else if (OB_FAIL(like_expr->formalize(params_.session_info_))) {
     LOG_WARN("fail to formalize expr", K(ret));
+  }
+
+  if (OB_SUCC(ret) && OB_FAIL(ObFtsOracleMatchExprUtil::attach_oracle_phrase_like_for_score(cur_match_expr, like_expr))) {
+    LOG_WARN("attach oracle phrase like for score failed", K(ret));
   }
 
   if (OB_FAIL(ret)) {

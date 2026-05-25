@@ -3255,11 +3255,16 @@ int ObTscCgService::extract_text_ir_access_columns(
         LOG_WARN("failed to push token cnt column to access exprs", K(ret));
       }
       break;
-    case ObTSCIRScanType::OB_IR_FWD_IDX_AGG:
-      if (OB_FAIL(add_var_to_array_no_dup(access_exprs, tr_info.doc_token_cnt_->get_param_expr(0)))) {
+    case ObTSCIRScanType::OB_IR_FWD_IDX_AGG: {
+      ObRawExpr *expr = tr_info.doc_token_cnt_->get_param_expr(0);
+      if (lib::is_oracle_mode() && T_FUN_SYS_CAST == expr->get_expr_type()) {
+        expr = expr->get_param_expr(0);
+      }
+      if (OB_FAIL(add_var_to_array_no_dup(access_exprs, expr))) {
         LOG_WARN("failed to push token cnt column to access exprs", K(ret));
       }
       break;
+    }
     case ObTSCIRScanType::OB_IR_BLOCK_MAX_SCAN:
       // add all rowkey column here to make sure memtable scan column index is same with access column id index
       if (OB_FAIL(add_var_to_array_no_dup(access_exprs, static_cast<ObRawExpr*>(tr_info.token_column_)))) {

@@ -4240,8 +4240,10 @@ int ObDDLService::check_alter_heap_table_index(share::schema::ObSchemaGetterGuar
   const ObTableSchema *index_schema = NULL;
   ObIndexSchemaHashWrapper dest_index_schema_name_wrapper(tenant_id,
                                                          orig_table_schema.get_database_id(),
-                                                         is_oracle_mode ? common::OB_INVALID_ID : orig_table_schema.get_table_id(),
-                                                         index_table_name);
+                                                         orig_table_schema.get_table_id(),
+                                                         index_table_name,
+                                                         is_oracle_mode,
+                                                         false /* heap table primary, not built-in */);
   for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); i++) {
     ObIndexSchemaHashWrapper orgin_index_schema_name_wrapper;
     if (OB_FAIL(schema_guard.get_table_schema(tenant_id, simple_index_infos.at(i).table_id_, index_schema))) {
@@ -4254,8 +4256,10 @@ int ObDDLService::check_alter_heap_table_index(share::schema::ObSchemaGetterGuar
     } else {
       orgin_index_schema_name_wrapper = ObIndexSchemaHashWrapper(index_schema->get_tenant_id(),
                                                                  orig_table_schema.get_database_id(),
-                                                                 is_oracle_mode ? common::OB_INVALID_ID : orig_table_schema.get_table_id(),
-                                                                 index_schema->get_table_name_str());
+                                                                 orig_table_schema.get_table_id(),
+                                                                 index_schema->get_table_name_str(),
+                                                                 is_oracle_mode,
+                                                                 false /* heap table primary, not built-in */);
     }
     //RENAME_INDEX ddl needs to check whether it reuses the primary key name in the heap table
     if (OB_FAIL(ret)) {
@@ -4278,12 +4282,16 @@ int ObDDLService::check_alter_heap_table_index(share::schema::ObSchemaGetterGuar
       }
       ObIndexSchemaHashWrapper rename_from_name_wrapper(tenant_id,
                                                         orig_table_schema.get_database_id(),
-                                                        is_oracle_mode ? common::OB_INVALID_ID : index_schema->get_data_table_id(),
-                                                        ori_index_table_name);
+                                                        index_schema->get_data_table_id(),
+                                                        ori_index_table_name,
+                                                        is_oracle_mode,
+                                                        false /* heap table primary, not built-in */);
       ObIndexSchemaHashWrapper rename_to_name_wrapper(tenant_id,
                                                       orig_table_schema.get_database_id(),
-                                                      is_oracle_mode ? common::OB_INVALID_ID : index_schema->get_data_table_id(),
-                                                      new_index_table_name);
+                                                      index_schema->get_data_table_id(),
+                                                      new_index_table_name,
+                                                      is_oracle_mode,
+                                                      false /* heap table primary, not built-in */);
       if (OB_FAIL(ret)) {
       } else if (rename_from_name_wrapper == orgin_index_schema_name_wrapper) {
         ret = OB_NOT_SUPPORTED;
@@ -7106,6 +7114,12 @@ int ObDDLService::create_aux_index(
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("parser properties isn't supported before version 4.3.5.1", K(ret));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "parser properties before version 4.3.5.1 is");
+    } else if (lib::is_oracle_mode()
+               && share::schema::is_fts_index(create_index_arg.index_type_)
+               && tenant_data_version < DATA_VERSION_4_4_2_1) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("tenant data version is less than 4.4.2.1, in oracle mode, create fulltext index on existing table not supported", K(ret), K(tenant_data_version));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.4.2.1, in oracle mode, fulltext index");
     /* is_fts_index means: rowkey-doc, doc-rowkey, fts, word-doc multivalue-index, fts-index all run here*/
     } else if (share::schema::is_fts_index(create_index_arg.index_type_)
       && OB_FAIL(ObFtsIndexBuilderUtil::adjust_fts_args(create_index_arg,

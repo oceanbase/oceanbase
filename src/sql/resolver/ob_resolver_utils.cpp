@@ -6232,7 +6232,24 @@ int ObResolverUtils::resolve_generated_column_info(const ObString &expr_str,
     LOG_WARN("failed to resolve column into");
   } else {
     ObItemType type = node->type_;
-    if (T_FUN_SYS == type) {
+    if (lib::is_oracle_mode() && (expr_str.prefix_match_ci(N_DOC_ID)
+                               || expr_str.prefix_match_ci(N_WORD_SEGMENT)
+                               || expr_str.prefix_match_ci(N_WORD_COUNT)
+                               || expr_str.prefix_match_ci(N_DOC_LENGTH))) {
+      // In Oracle mode, expressions like DOC_ID(), WORD_SEGMENT() are parsed as:
+      // root node -> function call node (T_FUN_SYS) -> function name node
+      // So we need to go one level deeper to get the actual function call node
+      if (OB_ISNULL(node->children_) || OB_ISNULL(node->children_[0])) {
+        ret = OB_ERR_PARSER_SYNTAX;
+        LOG_WARN("invalid node children for oracle fts function", K(ret));
+      } else {
+        type = node->children_[0]->type_;
+        node = node->children_[0];
+      }
+    }
+    if (OB_SUCC(ret) && T_FUN_SYS == type) {
+      // After going one level deeper (if in Oracle mode), we need to go one more level
+      // to get the function name node: node->children_[0]->children_[0]
       if (OB_UNLIKELY(1 > node->num_child_) || OB_ISNULL(node->children_) || OB_ISNULL(node->children_[0])) {
         ret = OB_ERR_PARSER_SYNTAX;
         LOG_WARN("invalid node children for fun_sys node", K(ret));

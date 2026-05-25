@@ -21111,16 +21111,66 @@ int ObJoinOrder::extract_scan_match_expr_candidates(const ObIArray<ObRawExpr *> 
     if (OB_ISNULL(filter)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected nullptr to filter expr", K(ret), K(i), KPC(filter));
-    } else if (filter->get_expr_type() == T_OP_BOOL && filter->has_flag(CNT_MATCH_EXPR)) {
+    } else if (filter->has_flag(CNT_MATCH_EXPR)) {
       ObRawExpr *param_expr = filter->get_param_expr(0);
       if (OB_ISNULL(param_expr)) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null param expr for bool op", K(ret));
+        LOG_WARN("unexpected null param expr", K(ret), K(filter->get_expr_type()));
       } else if (param_expr->has_flag(IS_MATCH_EXPR)) {
-        if (OB_FAIL(add_var_to_array_no_dup(scan_match_exprs, static_cast<ObMatchFunRawExpr*>(param_expr)))) {
-          LOG_WARN("failed to append match expr to array", K(ret));
-        } else if (OB_FAIL(scan_match_filters.push_back(filter))) {
-          LOG_WARN("failed to append match filter to array", K(ret));
+        bool is_valid = false;
+        if (lib::is_mysql_mode()) {
+          // MySQL: MATCH() AGAINST() is wrapped as T_OP_BOOL
+          is_valid = (filter->get_expr_type() == T_OP_BOOL);
+        } else if (lib::is_oracle_mode()) {
+          // Oracle: only support CONTAINS(...) > 0
+          if (filter->get_expr_type() == T_OP_GT) {
+            ObRawExpr *right_expr = filter->get_param_expr(1);
+            // Handle CAST(0, BINARY_DOUBLE) case: unwrap CAST to get inner constant
+            if (OB_NOT_NULL(right_expr) && right_expr->get_expr_type() == T_FUN_SYS_CAST) {
+              right_expr = right_expr->get_param_expr(0);
+            }
+            if (OB_NOT_NULL(right_expr) && right_expr->is_const_expr()) {
+              ObConstRawExpr *const_expr = static_cast<ObConstRawExpr*>(right_expr);
+              const ObObj &value = const_expr->get_value();
+              // When SQL uses prepared statements or parameterized queries (e.g., CONTAINS(text, 'search string', ?) > ?),
+              // the right-hand side value might be a placeholder (T_QUESTIONMARK) which is stored as UNKNOWN type.
+              const ObObj *actual_value = &value;
+              if (value.is_unknown()) {
+                int64_t param_idx = value.get_unknown();
+                const ParamStore *params = OPT_CTX.get_params();
+                if (OB_NOT_NULL(params) && param_idx >= 0 && param_idx < params->count()) {
+                  actual_value = &params->at(param_idx);
+                } else {
+                  ret = OB_INVALID_ARGUMENT;
+                  LOG_WARN("CONTAINS > 0 check: failed to resolve parameterized value",
+                           K(ret), K(param_idx), K(params != NULL ? params->count() : 0));
+                  LOG_USER_ERROR(OB_INVALID_ARGUMENT, "CONTAINS() must use '> 0', others is");
+                }
+              }
+              // Check if value is exactly 0
+              if (OB_SUCC(ret)) {
+                if (actual_value->is_integer_type() && actual_value->get_int() == 0) {
+                  is_valid = true;
+                } else if (actual_value->is_number() && actual_value->is_zero_number()) {
+                  is_valid = true;
+                }
+                if (!is_valid) {
+                  ret = OB_NOT_SUPPORTED;
+                  LOG_USER_ERROR(OB_NOT_SUPPORTED, "CONTAINS() must use '> 0', others is");
+                }
+              }
+            }
+          } else {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "CONTAINS() must use '> 0', others is");
+          }
+        }
+        if (OB_SUCC(ret) && is_valid) {
+          if (OB_FAIL(add_var_to_array_no_dup(scan_match_exprs, static_cast<ObMatchFunRawExpr*>(param_expr)))) {
+            LOG_WARN("failed to append match expr to array", K(ret));
+          } else if (OB_FAIL(scan_match_filters.push_back(filter))) {
+            LOG_WARN("failed to append match filter to array", K(ret));
+          }
         }
       }
     }
@@ -21518,6 +21568,7 @@ int ObJoinOrder::get_query_tokens_by_boolean_mode(ObMatchFunRawExpr *match_expr,
                                                                     cs_type,
                                                                     token_expr))) {
             LOG_WARN("failed to build const string expr", K(ret));
+          } else if (FALSE_IT(token_expr->set_length_semantics(OPT_CTX.get_exec_ctx()->get_my_session()->get_actual_nls_length_semantics()))) {
           } else if (OB_FAIL(query_tokens.push_back(token_expr))) {
             LOG_WARN("failed to append query token", K(ret));
           }
@@ -21593,6 +21644,7 @@ int ObJoinOrder::get_query_tokens(ObMatchFunRawExpr *match_expr,
                                key_meta.get_collation_type(),
                                token_expr))) {
           LOG_WARN("failed to build const string expr", K(ret));
+        } else if (FALSE_IT(token_expr->set_length_semantics(OPT_CTX.get_exec_ctx()->get_my_session()->get_actual_nls_length_semantics()))) {
         } else if (OB_FAIL(query_tokens.push_back(token_expr))) {
           LOG_WARN("failed to append query token", K(ret));
         }
@@ -21622,6 +21674,7 @@ int ObJoinOrder::get_range_of_query_tokens(ObIArray<ObConstRawExpr*> &query_toke
       LOG_WARN("get unexpected null", K(col_schema), K(ret));
     } else if (col_schema->is_word_segment_column()) {
       word_col = range_columns.at(i).expr_;
+      word_col->set_length_semantics(OPT_CTX.get_exec_ctx()->get_my_session()->get_actual_nls_length_semantics());
     }
   }
 

@@ -423,19 +423,16 @@ struct GetTableKeyV2<ObIndexSchemaHashWrapper, ObSimpleTableSchemaV2 *>
         ObIndexSchemaHashWrapper null_wrap;
         return null_wrap;
       } else if (index_schema->is_in_recyclebin()) { // index is in recyclebin
-        ObIndexSchemaHashWrapper index_schema_hash_wrapper(
-            index_schema->get_tenant_id(),
-            index_schema->get_database_id(),
-            common::OB_INVALID_ID,
-            index_schema->get_table_name_str());
-        return index_schema_hash_wrapper;
+        return ObIndexSchemaHashWrapper::make_for_recyclebin(index_schema->get_tenant_id(),
+                                                             index_schema->get_database_id(),
+                                                             index_schema->get_table_name_str());
       } else {
-        ObIndexSchemaHashWrapper index_schema_hash_wrapper(
-            index_schema->get_tenant_id(),
-            index_schema->get_database_id(),
-            is_oracle_mode ? common::OB_INVALID_ID : index_schema->get_data_table_id(),
-            index_schema->get_origin_index_name_str());
-        return index_schema_hash_wrapper;
+        return ObIndexSchemaHashWrapper(index_schema->get_tenant_id(),
+                                        index_schema->get_database_id(),
+                                        index_schema->get_data_table_id(),
+                                        index_schema->get_origin_index_name_str(),
+                                        is_oracle_mode,
+                                        index_schema->is_built_in_index());
       }
     } else {
       ObIndexSchemaHashWrapper null_wrap;

@@ -1092,7 +1092,8 @@ int ObTableHelper::inner_generate_aux_table_schema_(const ObCreateTableArg &arg)
                    index_schema.get_tenant_id(),
                    index_schema.get_database_id(),
                    index_schema.get_table_name_str(),
-                   index_exist))) {
+                   index_exist,
+                   index_schema.is_built_in_index()))) {
         } else if (index_exist) {
           // actually, only index name in oracle tenant will be checked.
           ret = OB_ERR_KEY_NAME_DUPLICATE;

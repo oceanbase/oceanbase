@@ -40,7 +40,8 @@ public:
   int check_index_name_exist(const uint64_t tenant_id,
                              const uint64_t database_id,
                              const ObString &index_name,
-                             bool &is_exist);
+                             bool &is_exist,
+                             const bool is_built_in_index = false);
   int add_index_name(const share::schema::ObTableSchema &index_schema);
 private:
   void inner_reset_cache_();
@@ -85,7 +86,8 @@ public:
   int check_index_name_exist(const uint64_t tenant_id,
                              const uint64_t database_id,
                              const ObString &index_name,
-                             bool &is_exist);
+                             bool &is_exist,
+                             const bool is_built_in_index = false);
 
   // call add_index_name() before parallel ddl trans commit.
   int add_index_name(const share::schema::ObTableSchema &index_schema);

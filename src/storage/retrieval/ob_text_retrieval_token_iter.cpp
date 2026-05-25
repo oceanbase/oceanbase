@@ -15,6 +15,8 @@
 #include "ob_text_retrieval_token_iter.h"
 #include "sql/engine/expr/ob_expr_bm25.h"
 #include "sql/das/iter/sparse_retrieval/ob_das_tr_merge_iter.h"
+#include "sql/engine/expr/ob_expr_util.h"
+#include "lib/ob_lib_config.h"
 
 namespace oceanbase
 {
@@ -303,14 +305,31 @@ int ObTextRetrievalTokenIter::fill_token_cnt_with_doc_len()
 int ObTextRetrievalTokenIter::fill_token_doc_cnt()
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(inv_idx_agg_expr_->datum_meta_.get_type() != ObIntType)) {
+  // Oracle mode uses ObNumberType, MySQL mode uses ObIntType
+  if (OB_ISNULL(inv_idx_agg_expr_) || OB_ISNULL(eval_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null expr", K(ret), KP_(inv_idx_agg_expr), KP_(eval_ctx));
+  } else if ((lib::is_mysql_mode() && OB_UNLIKELY(inv_idx_agg_expr_->datum_meta_.get_type() != ObIntType))
+             || (lib::is_oracle_mode() && OB_UNLIKELY(inv_idx_agg_expr_->datum_meta_.get_type() != ObNumberType))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected expr type", K(ret),
+             K(inv_idx_agg_expr_->datum_meta_.get_type()),
+             K(lib::is_oracle_mode()));
   } else {
     ObEvalCtx::BatchInfoScopeGuard guard(*eval_ctx_);
     guard.set_batch_idx(0);
     ObDatum &doc_cnt_datum = inv_idx_agg_expr_->locate_datum_for_write(*eval_ctx_);
-    doc_cnt_datum.set_int(token_doc_cnt_);
+    if (lib::is_mysql_mode()) {
+      doc_cnt_datum.set_int(token_doc_cnt_);
+    } else {
+      // Oracle mode: convert int64_t to ObNumber
+      number::ObNumber nmb;
+      if (OB_FAIL(nmb.from(token_doc_cnt_, mem_context_->get_arena_allocator()))) {
+        LOG_WARN("fail to convert int to number", K(ret), K(token_doc_cnt_));
+      } else {
+        doc_cnt_datum.set_number(nmb);
+      }
+    }
   }
   return ret;
 }
@@ -620,14 +639,43 @@ int ObTextRetrievalTokenIter::estimate_token_doc_cnt()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected null total doc cnt expr", K(ret));
     } else {
-      int64_t total_doc_cnt = 0;
-      if (total_doc_cnt_param_expr->enable_rich_format()
-          && is_valid_format(total_doc_cnt_param_expr->get_format(*eval_ctx_))) {
-        total_doc_cnt = total_doc_cnt_param_expr->get_vector(*eval_ctx_)->get_int(0);
-      } else {
-        total_doc_cnt = total_doc_cnt_param_expr->locate_expr_datum(*eval_ctx_, 0).get_int();
+      // Unwrap CAST expression if present (Oracle mode may wrap NUMBER with CAST)
+      if (T_FUN_SYS_CAST == total_doc_cnt_param_expr->type_) {
+        total_doc_cnt_param_expr = total_doc_cnt_param_expr->args_[0];
+        if (OB_ISNULL(total_doc_cnt_param_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null total doc cnt expr after unwrap CAST", K(ret));
+        }
       }
-      max_token_relevance_ = sql::ObExprBM25::query_token_weight(token_doc_cnt_, total_doc_cnt);
+      if (OB_SUCC(ret)) {
+        int64_t total_doc_cnt = 0;
+        // Use ObExprUtil::get_int_param_val which handles both MySQL (ObIntType) and Oracle (ObNumberType)
+        // Use locate_expr_datum(*eval_ctx_, 0) instead of eval() to avoid batch_idx offset issue
+        // eval() returns datum pointer offset by ctx.get_batch_idx(), which may point to wrong row
+        // locate_expr_datum(*eval_ctx_, 0) explicitly gets datum at index 0, which is safer
+        if (total_doc_cnt_param_expr->enable_rich_format()
+            && is_valid_format(total_doc_cnt_param_expr->get_format(*eval_ctx_))) {
+          total_doc_cnt = total_doc_cnt_param_expr->get_vector(*eval_ctx_)->get_int(0);
+          max_token_relevance_ = sql::ObExprBM25::query_token_weight(token_doc_cnt_, total_doc_cnt);
+        } else {
+          ObDatum &total_doc_cnt_datum = total_doc_cnt_param_expr->locate_expr_datum(*eval_ctx_, 0);
+          const bool is_decint = total_doc_cnt_param_expr->obj_meta_.is_decimal_int();
+          if (is_decint) {
+            if (OB_FAIL(sql::ObExprUtil::get_int_param_val(&total_doc_cnt_datum, true, total_doc_cnt))) {
+              LOG_WARN("failed to get decimal integer param val from datum", K(ret));
+            }
+          } else {
+            if (OB_FAIL(sql::ObExprUtil::get_int_param_val(&total_doc_cnt_datum, false, total_doc_cnt))) {
+              LOG_WARN("failed to get int param val from datum", K(ret));
+            }
+          }
+          if (OB_FAIL(ret)) {
+            LOG_WARN("failed to get int param val from datum", K(ret));
+          } else {
+            max_token_relevance_ = sql::ObExprBM25::query_token_weight(token_doc_cnt_, total_doc_cnt);
+          }
+        }
+      }
     }
   }
   return ret;

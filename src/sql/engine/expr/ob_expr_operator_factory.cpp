@@ -1697,6 +1697,11 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprCheckLocationAccess, EAGER_EVALUATION);
   REG_OP_ORCL(ObExprCollectFileList, SHORT_CIRCUIT_EVALUATION);
   REG_OP_ORCL(ObExprEnhancedAesEncrypt, SHORT_CIRCUIT_EVALUATION);
+  REG_OP_ORCL(ObExprDocID, EAGER_EVALUATION);
+  REG_OP_ORCL(ObExprDocLength, EAGER_EVALUATION);
+  REG_OP_ORCL(ObExprWordSegment, EAGER_EVALUATION);
+  REG_OP_ORCL(ObExprWordCount, EAGER_EVALUATION);
+  REG_OP_ORCL(ObExprBM25, SHORT_CIRCUIT_EVALUATION);
 }
 
 bool ObExprOperatorFactory::is_expr_op_type_valid(ObExprOperatorType type)

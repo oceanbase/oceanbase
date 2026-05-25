@@ -5348,7 +5348,9 @@ public:
       match_columns_(alloc),
       search_key_(NULL),
       columns_boosts_(alloc),
-      param_text_expr_(NULL)
+      param_text_expr_(NULL),
+      score_label_(-1),
+      oracle_phrase_like_expr_(NULL)
   {
     set_expr_class(EXPR_MATCH_AGAINST);
   }
@@ -5394,6 +5396,12 @@ public:
   int replace_param_expr(int64_t index, ObRawExpr *expr);
 
   bool is_es_match() const { return get_expr_type() == T_FUN_ES_MATCH; }
+  inline void set_score_label(int64_t score_label) { score_label_ = score_label; }
+  inline int64_t get_score_label() const { return score_label_; }
+  /** Oracle CONTAINS phrase rewrite: LIKE('%'||search||'%'); used to gate SCORE(label). */
+  inline void set_oracle_phrase_like_expr(ObRawExpr *expr) { oracle_phrase_like_expr_ = expr; }
+  inline ObRawExpr *get_oracle_phrase_like_expr() { return oracle_phrase_like_expr_; }
+  inline const ObRawExpr *get_oracle_phrase_like_expr() const { return oracle_phrase_like_expr_; }
   VIRTUAL_TO_STRING_KVP(
       N_ITEM_TYPE, type_,
       N_RESULT_TYPE, result_type_,
@@ -5402,7 +5410,8 @@ public:
       K_(mode_flag),
       K_(match_columns),
       KPC_(search_key),
-      KPC_(param_text_expr));
+      KPC_(param_text_expr),
+      KPC_(oracle_phrase_like_expr));
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMatchFunRawExpr);
@@ -5413,6 +5422,8 @@ private:
 
   ObSqlArray<ObRawExpr*> columns_boosts_; // boost values for each column
   ObRawExpr *param_text_expr_; // param text expr for should_match_expr_
+  int64_t score_label_; // Oracle CONTAINS label, -1 means no label
+  ObRawExpr *oracle_phrase_like_expr_; // phrase LIKE for Oracle SCORE gating (NULL if N/A)
 };
 
 class ObUnpivotRawExpr : public ObRawExpr

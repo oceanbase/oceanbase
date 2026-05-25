@@ -18,6 +18,7 @@
 #include "share/schema/ob_schema_struct.h"
 #include "sql/resolver/ob_schema_checker.h"
 #include "storage/fts/ob_fts_literal.h"
+#include "sql/resolver/expr/ob_raw_expr.h"
 
 namespace oceanbase
 {
@@ -145,6 +146,12 @@ public:
       const share::schema::ObTableSchema &data_schema,
       const share::schema::ObColumnSchemaV2 &column_schema,
       common::ObIArray<uint64_t> &index_column_ids);
+  static int oracle_compat_resolve_parameters_node(
+      ParseNode *parameters_node,
+      const int index_keyname,  // ObDDLResolver::INDEX_KEYNAME
+      common::ObIAllocator &allocator,
+      common::ObString &parser_name,
+      obrpc::ObCreateIndexArg *index_arg);  // when non-null, set index_arg->index_option_.parser_name_ (for Oracle FTS LEXER)
   static int generate_fts_parser_name_and_property(
       const share::schema::ObTableSchema &data_schema,
       obrpc::ObCreateIndexArg &arg,
@@ -191,6 +198,10 @@ public:
         const share::schema::ObIndexType index_type,
         const int64_t original_parallelism,
         int64_t &decided_parallelism);
+  // CONTAINS-related parse / resolver-match / plan-filter helpers: ObFtsOracleMatchExprUtil in
+  // CONTAINS-related resolver helpers: ob_fts_oracle_resolver_match_util.* (WHERE vs-zero) —
+  // not this DDL-oriented util. Optimizer-side CONTAINS > 0 gating lives in ob_join_order.cpp.
+
 private:
   static int build_fts_aux_index_name(
     const ObIndexType type,

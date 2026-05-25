@@ -1816,6 +1816,10 @@ int ObIndexBuilder::generate_schema(
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("tenant data version is less than 4.3.2, create fulltext index on existing table is not supported", K(ret), K(tenant_data_version));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.2, fulltext index");
+        } else if (is_oracle_mode && tenant_data_version < DATA_VERSION_4_4_2_1) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("tenant data version is less than 4.4.2.1, in oracle mode, create fulltext index on existing table not supported", K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.4.2.1, in oracle mode, fulltext index");
         } else if (data_schema.is_mysql_tmp_table()) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("mysql temp table not support fulltext index", KR(ret));

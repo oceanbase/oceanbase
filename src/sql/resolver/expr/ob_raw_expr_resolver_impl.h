@@ -341,7 +341,6 @@ inline bool ObRawExprResolverImpl::is_pseudo_column_valid_scope(ObStmtScope scop
       || scope == T_START_WITH_SCOPE;
 }
 
-
 } // end namespace sql
 } // end namespace oceanbase
 

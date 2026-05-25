@@ -1696,6 +1696,14 @@ int ObAlterTableResolver::resolve_index_column_list(const ParseNode &node,
     sort_column_array_.reset();
     cnt_func_index = false;
     OZ (add_new_indexkey_for_oracle_temp_table(index_arg));
+    // Oracle CONTEXT index does not support composite index (multiple columns).
+    if (OB_SUCC(ret) && lib::is_oracle_mode()
+        && index_name_value == static_cast<int64_t>(FTS_KEY)
+        && node.num_child_ > 1) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("Oracle mode full-text index does not support composite index", K(ret), K(node.num_child_));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "composite fulltext index in Oracle mode is");
+    }
     for (int32_t i = 0; OB_SUCC(ret) && i < node.num_child_; ++i) {
       ParseNode *sort_column_node = node.children_[i];
       if (OB_ISNULL(sort_column_node) ||
@@ -2007,6 +2015,10 @@ int ObAlterTableResolver::resolve_add_index(const ParseNode &node)
                                                          cnt_func_index))) {
               SQL_RESV_LOG(WARN, "resolve index name failed", K(ret));
             }
+          }
+          if (OB_SUCC(ret) && lib::is_oracle_mode() && FTS_KEY == index_keyname_) {
+            create_index_arg->index_type_ = INDEX_TYPE_FTS_INDEX_LOCAL;
+            create_index_arg->index_key_ = static_cast<int64_t>(FTS_KEY);
           }
           if (OB_SUCC(ret)) {
             if (!lib::is_oracle_mode()) {

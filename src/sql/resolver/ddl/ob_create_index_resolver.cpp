@@ -161,6 +161,13 @@ int ObCreateIndexResolver::resolve_index_column_node(
       LOG_WARN("multi column of vector index is not support yet", K(ret), K(index_column_node->num_child_));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "multi vector index column is");
     }
+    // Oracle CONTEXT index (INDEXTYPE IS CTXSYS.CONTEXT) does not support composite index (multiple columns).
+    if (OB_SUCC(ret) && lib::is_oracle_mode() && index_keyname_ == INDEX_KEYNAME::FTS_KEY
+        && index_column_node->num_child_ > 1) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("Oracle mode full-text index does not support composite index", K(ret), K(index_column_node->num_child_));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "composite fulltext index in Oracle mode is");
+    }
     for (int32_t i = 0; OB_SUCC(ret) && i < index_column_node->num_child_; ++i) {
       ParseNode *col_node = index_column_node->children_[i];
       ObColumnSortItem sort_item;
@@ -452,6 +459,12 @@ int ObCreateIndexResolver::resolve_index_column_node(
       }
   }
 
+    // Oracle: refresh FTS markers before same-column check (covers preset skipped or overwritten).
+    if (OB_SUCC(ret) && lib::is_oracle_mode() && FTS_KEY == index_keyname_) {
+      ObCreateIndexArg &idx_arg = crt_idx_stmt->get_create_index_arg();
+      idx_arg.index_type_ = INDEX_TYPE_FTS_INDEX_LOCAL;
+      idx_arg.index_key_ = static_cast<int64_t>(FTS_KEY);
+    }
     // In oracle mode, we need to check if the new index is on the same cols with old indexes.
     CHECK_COMPATIBILITY_MODE(session_info_);
     if (OB_SUCC(ret) && lib::is_oracle_mode()) {
@@ -763,62 +776,74 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
   }
   if (FAILEDx(resolve_index_name_node(parse_node.children_[0], crt_idx_stmt))) {
     LOG_WARN("fail to resolve index name node", K(ret));
-  } else if (OB_FAIL(resolve_index_column_node(parse_node.children_[2],
-                                               parse_tree.children_[0]->value_,
-                                               parse_tree.children_[3],
-                                               crt_idx_stmt,
-                                               data_tbl_schema))) {
-    LOG_WARN("fail to resolve index column node", K(ret));
-  } else if (NULL != parse_node.children_[4]
-      && OB_FAIL(resolve_index_method_node(parse_node.children_[4], crt_idx_stmt))) {
-    LOG_WARN("fail to resolve index method node", K(ret));
-  } else if (OB_FAIL(resolve_index_option_node(parse_node.children_[3],
-                                               crt_idx_stmt,
-                                               data_tbl_schema,
-                                               NULL != parse_node.children_[5]))) {
-    LOG_WARN("fail to resolve index option node", K(ret));
-  } else if (global_ && OB_FAIL(generate_global_index_schema(crt_idx_stmt))) {
-    LOG_WARN("fail to generate index schema", K(ret));
   } else {
-    if (NULL != parse_node.children_[5]) {
-      // 0: 普通分区node // 1: 垂直分区node, 不支持建全局索引时指定垂直分区
-      if (1 != parse_node.children_[5]->num_child_
-          || T_PARTITION_OPTION != parse_node.children_[5]->type_) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "column vertical partition for index table");
-        LOG_WARN("node is invalid", K(ret));
-      } else if (NULL == parse_node.children_[5]->children_[0]) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("node is null", K(ret));
-      } else {
-        ParseNode *index_partition_node = parse_node.children_[5]->children_[0]; // 普通分区partition node
-        if (OB_FAIL(resolve_index_partition_node(index_partition_node, crt_idx_stmt))) {
-          LOG_WARN("fail to resolve index partition node", K(ret));
+    // Oracle: set FTS index_type_/index_key_ early so same-column check sees fulltext vs btree.
+    if (lib::is_oracle_mode() && FTS_KEY == index_keyname_) {
+      ObCreateIndexArg &idx_arg = crt_idx_stmt->get_create_index_arg();
+      idx_arg.index_type_ = INDEX_TYPE_FTS_INDEX_LOCAL;
+      idx_arg.index_key_ = static_cast<int64_t>(FTS_KEY);
+    }
+    if (OB_FAIL(resolve_index_column_node(parse_node.children_[2],
+                                          parse_tree.children_[0]->value_,
+                                          parse_tree.children_[3],
+                                          crt_idx_stmt,
+                                          data_tbl_schema))) {
+      LOG_WARN("fail to resolve index column node", K(ret));
+    } else if (NULL != parse_node.children_[4]
+      && OB_FAIL(resolve_index_method_node(parse_node.children_[4], crt_idx_stmt))) {
+      LOG_WARN("fail to resolve index method node", K(ret));
+    } else if (OB_FAIL(ObFtsIndexBuilderUtil::oracle_compat_resolve_parameters_node(
+                     parse_tree.children_[7], index_keyname_, *allocator_, parser_name_,
+                     &crt_idx_stmt->get_create_index_arg()))) {
+      LOG_WARN("fail to resolve oracle fts index parameters node", K(ret));
+    } else if (OB_FAIL(resolve_index_option_node(parse_node.children_[3],
+                                                 crt_idx_stmt,
+                                                 data_tbl_schema,
+                                                 NULL != parse_node.children_[5]))) {
+      LOG_WARN("fail to resolve index option node", K(ret));
+    } else if (global_ && OB_FAIL(generate_global_index_schema(crt_idx_stmt))) {
+      LOG_WARN("fail to generate index schema", K(ret));
+    } else {
+      if (NULL != parse_node.children_[5]) {
+        // 0: 普通分区node // 1: 垂直分区node, 不支持建全局索引时指定垂直分区
+        if (1 != parse_node.children_[5]->num_child_
+            || T_PARTITION_OPTION != parse_node.children_[5]->type_) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "column vertical partition for index table");
+          LOG_WARN("node is invalid", K(ret));
+        } else if (NULL == parse_node.children_[5]->children_[0]) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("node is null", K(ret));
+        } else {
+          ParseNode *index_partition_node = parse_node.children_[5]->children_[0]; // 普通分区partition node
+          if (OB_FAIL(resolve_index_partition_node(index_partition_node, crt_idx_stmt))) {
+            LOG_WARN("fail to resolve index partition node", K(ret));
+          }
         }
       }
-    }
 
-    // index column_group
-    if (OB_FAIL(ret)) {
-    } else if (NULL != parse_node.children_[6]) {
-      if (T_COLUMN_GROUP != parse_node.children_[6]->type_ || parse_node.children_[6]->num_child_ <= 0) {
-        ret = OB_INVALID_ARGUMENT;
-        SQL_RESV_LOG(WARN, "invalid argument", K(ret), K(parse_node.children_[6]->type_), K(parse_node.children_[6]->num_child_));
-      } else if (OB_ISNULL(parse_node.children_[6]->children_[0])) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("node is null", K(ret));
-      } else if (OB_FAIL(resolve_index_column_group(parse_node.children_[6], crt_idx_stmt->get_create_index_arg()))) {
-        SQL_RESV_LOG(WARN, "resolve index column group failed", K(ret));
+      // index column_group
+      if (OB_FAIL(ret)) {
+      } else if (NULL != parse_node.children_[6]) {
+        if (T_COLUMN_GROUP != parse_node.children_[6]->type_ || parse_node.children_[6]->num_child_ <= 0) {
+          ret = OB_INVALID_ARGUMENT;
+          SQL_RESV_LOG(WARN, "invalid argument", K(ret), K(parse_node.children_[6]->type_), K(parse_node.children_[6]->num_child_));
+        } else if (OB_ISNULL(parse_node.children_[6]->children_[0])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("node is null", K(ret));
+        } else if (OB_FAIL(resolve_index_column_group(parse_node.children_[6], crt_idx_stmt->get_create_index_arg()))) {
+          SQL_RESV_LOG(WARN, "resolve index column group failed", K(ret));
+        }
       }
-    }
 
-    if (OB_SUCC(ret)) {
-      crt_idx_stmt->set_if_not_exists(NULL != if_not_exist_node);
-      // 设置block size, 如果未指定block size，则使用主表block size
-      // 否则使用默认block_size
-      if (!is_spec_block_size) {
-        ObCreateIndexArg &index_arg = crt_idx_stmt->get_create_index_arg();
-        index_arg.index_option_.block_size_ = tbl_schema->get_block_size();
+      if (OB_SUCC(ret)) {
+        crt_idx_stmt->set_if_not_exists(NULL != if_not_exist_node);
+        // 设置block size, 如果未指定block size，则使用主表block size
+        // 否则使用默认block_size
+        if (!is_spec_block_size) {
+          ObCreateIndexArg &index_arg = crt_idx_stmt->get_create_index_arg();
+          index_arg.index_option_.block_size_ = tbl_schema->get_block_size();
+        }
       }
     }
   }
@@ -878,8 +903,7 @@ int ObCreateIndexResolver::resolve(const ParseNode &parse_tree)
     }
   }
 
-
-if (OB_SUCC(ret) &&
+  if (OB_SUCC(ret) &&
       OB_FAIL(ObFtsIndexBuilderUtil::check_supportability_for_building_index(
           data_tbl_schema, &crt_idx_stmt->get_create_index_arg()))) {
     LOG_WARN("fail to check supportability for building index",
@@ -1011,7 +1035,18 @@ int ObCreateIndexResolver::set_table_option_to_stmt(
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("tenant data version is less than 4.3.4, create fulltext index on existing table not supported", K(ret), K(tenant_data_version));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.3, fulltext index");
+      } else if (lib::is_oracle_mode() && tenant_data_version < DATA_VERSION_4_4_2_1) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("tenant data version is less than 4.4.2.1, in oracle mode, create fulltext index on existing table not supported", K(ret), K(tenant_data_version));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.4.2.1, in oracle mode, fulltext index");
+      } else if (lib::is_oracle_mode() && NOT_SPECIFIED == index_scope_) {
+        // In Oracle mode, fts index must specify 'LOCAL'
+        // not specifying is not supported
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("In Oracle mode, fulltext index must specify 'LOCAL' keyword in create statement", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "In Oracle mode, fulltext index must specify 'LOCAL' keyword in create statement. Not specifying is");
       } else if (global_) {
+        // Fulltext index does not support GLOBAL in both MySQL and Oracle mode
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not support global fts index now", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "global fulltext index is");

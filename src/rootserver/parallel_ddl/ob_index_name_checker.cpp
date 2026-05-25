@@ -50,7 +50,8 @@ int ObIndexNameCache::check_index_name_exist(
     const uint64_t tenant_id,
     const uint64_t database_id,
     const ObString &index_name,
-    bool &is_exist)
+    bool &is_exist,
+    const bool is_built_in_index)
 {
   int ret = OB_SUCCESS;
   is_exist = false;
@@ -73,25 +74,19 @@ int ObIndexNameCache::check_index_name_exist(
       LOG_WARN("fail to load index name cache", KR(ret), K(tenant_id));
     } else if (is_recyclebin_database_id(database_id)) {
       idx_name = index_name;
-      data_table_id = OB_INVALID_ID;
     } else {
-      uint64_t data_table_id = ObSimpleTableSchemaV2::extract_data_table_id_from_index_name(index_name);
+      data_table_id = ObSimpleTableSchemaV2::extract_data_table_id_from_index_name(index_name);
       if (OB_INVALID_ID == data_table_id) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid index name", KR(ret), K(index_name));
       } else if (OB_FAIL(ObSimpleTableSchemaV2::get_index_name(index_name, idx_name))) {
         LOG_WARN("fail to get original index name", KR(ret), K(index_name));
-      } else {
-        data_table_id = (is_oracle_mode && !is_mysql_sys_database_id(database_id)) ?
-                        OB_INVALID_ID : data_table_id;
       }
     }
     if (OB_SUCC(ret)) {
-      ObIndexSchemaHashWrapper index_name_wrapper(
-                               tenant_id,
-                               database_id,
-                               data_table_id,
-                               idx_name);
+      ObIndexSchemaHashWrapper index_name_wrapper = is_recyclebin_database_id(database_id)
+          ? ObIndexSchemaHashWrapper::make_for_recyclebin(tenant_id, database_id, idx_name)
+          : ObIndexSchemaHashWrapper(tenant_id, database_id, data_table_id, idx_name, is_oracle_mode, is_built_in_index);
       ObIndexNameInfo *index_name_info = NULL;
       if (OB_FAIL(cache_.get_refactored(index_name_wrapper, index_name_info))) {
         if (OB_HASH_NOT_EXIST == ret) {
@@ -180,19 +175,22 @@ int ObIndexNameCache::add_index_name(
       } else if (OB_FAIL(index_name_info->init(allocator_, index_schema))) {
         LOG_WARN("fail to init index name info", KR(ret), K(index_schema));
       } else if (is_recyclebin_database_id(database_id)) {
-        data_table_id = OB_INVALID_ID;
         idx_name = index_name_info->get_index_name();
       } else {
-        data_table_id = (is_oracle_mode && !is_mysql_sys_database_id(database_id)) ?
-                        OB_INVALID_ID : index_name_info->get_data_table_id();
         idx_name = index_name_info->get_original_index_name();
       }
       if (OB_SUCC(ret)) {
         int overwrite = 0;
-        ObIndexSchemaHashWrapper index_name_wrapper(index_name_info->get_tenant_id(),
-                                                    database_id,
-                                                    data_table_id,
-                                                    idx_name);
+        ObIndexSchemaHashWrapper index_name_wrapper = is_recyclebin_database_id(database_id)
+            ? ObIndexSchemaHashWrapper::make_for_recyclebin(index_name_info->get_tenant_id(),
+                                                            database_id,
+                                                            idx_name)
+            : ObIndexSchemaHashWrapper(index_name_info->get_tenant_id(),
+                                       database_id,
+                                       index_name_info->get_data_table_id(),
+                                       idx_name,
+                                       is_oracle_mode,
+                                       index_schema.is_built_in_index());
         if (OB_FAIL(cache_.set_refactored(index_name_wrapper, index_name_info, overwrite))) {
           LOG_WARN("fail to set refactored", KR(ret), KPC(index_name_info));
           if (OB_HASH_EXIST == ret) {
@@ -359,7 +357,8 @@ int ObIndexNameChecker::check_index_name_exist(
     const uint64_t tenant_id,
     const uint64_t database_id,
     const ObString &index_name,
-    bool &is_exist)
+    bool &is_exist,
+    const bool is_built_in_index)
 {
   int ret = OB_SUCCESS;
   bool can_skip = false;
@@ -387,7 +386,7 @@ int ObIndexNameChecker::check_index_name_exist(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("cache is null", KR(ret));
     } else if (OB_FAIL(cache->check_index_name_exist(
-      tenant_id, database_id, index_name, is_exist))) {
+      tenant_id, database_id, index_name, is_exist, is_built_in_index))) {
       LOG_WARN("fail to check index name exist",
                KR(ret), K(tenant_id), K(database_id), K(index_name));
     }

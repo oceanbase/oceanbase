@@ -20,6 +20,7 @@
 #include "sql/rewrite/ob_stmt_comparer.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/optimizer/ob_logical_operator.h"
+#include "sql/resolver/expr/ob_fts_oracle_resolver_match_util.h"
 #include "sql/engine/expr/ob_expr_autoinc_nextval.h"
 #include "sql/engine/expr/ob_expr_udf/ob_expr_udf.h"
 #include "sql/engine/expr/ob_expr_pl_get_cursor_attr.h"
@@ -7599,6 +7600,8 @@ int ObMatchFunRawExpr::assign(const ObRawExpr &other)
       } else {
         mode_flag_ = tmp.mode_flag_;
         search_key_ = tmp.search_key_;
+        score_label_ = tmp.score_label_;
+        oracle_phrase_like_expr_ = tmp.oracle_phrase_like_expr_;
       }
       if (OB_SUCC(ret) && is_es_match()) {
         if (OB_FAIL(columns_boosts_.assign(tmp.columns_boosts_))) {
@@ -7633,6 +7636,10 @@ int ObMatchFunRawExpr::replace_expr(const common::ObIArray<ObRawExpr *> &other_e
   } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs,
                                                     new_exprs,
                                                     param_text_expr_))) {
+    LOG_WARN("failed to replace expr", K(ret));
+  } else if (OB_FAIL(ObTransformUtils::replace_expr(other_exprs,
+                                                    new_exprs,
+                                                    oracle_phrase_like_expr_))) {
     LOG_WARN("failed to replace expr", K(ret));
   } else { /*do nothing*/ }
   return ret;
@@ -7761,8 +7768,16 @@ int ObMatchFunRawExpr::get_name_internal(char *buf, const int64_t buf_len, int64
         }
       }
     }
-  } else {
-    // jinmao TODO: serialize oracle contains()
+  } else if (lib::is_oracle_mode()) {
+    // Oracle mode: serialize as CONTAINS(column, 'search') via ObFtsOracleMatchExprUtil
+    // Defense check: oracle mode should not have es_match
+    if (OB_UNLIKELY(is_es_match())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected es_match in oracle mode", K(ret));
+    } else if (OB_FAIL(ObFtsOracleMatchExprUtil::serialize_contains_expr(
+            *this, type, buf, buf_len, pos))) {
+      LOG_WARN("fail to serialize oracle contains expr", K(ret));
+    }
   }
   return ret;
 }
@@ -7775,7 +7790,8 @@ bool ObMatchFunRawExpr::inner_same_as(const ObRawExpr &expr, ObExprEqualCheckCon
   } else if (is_es_match()) {
     const ObMatchFunRawExpr *match_expr = static_cast<const ObMatchFunRawExpr*>(&expr);
     if (match_columns_.count() != match_expr->match_columns_.count() ||
-        columns_boosts_.count() != match_expr->columns_boosts_.count()) {
+        columns_boosts_.count() != match_expr->columns_boosts_.count() ||
+        score_label_ != match_expr->score_label_) {
       bret = false;
     } else if (OB_ISNULL(search_key_) || OB_ISNULL(match_expr->search_key_) ||
                !search_key_->same_as(*match_expr->search_key_, check_context)) {
@@ -7796,10 +7812,15 @@ bool ObMatchFunRawExpr::inner_same_as(const ObRawExpr &expr, ObExprEqualCheckCon
   } else {
     const ObMatchFunRawExpr *match_expr = static_cast<const ObMatchFunRawExpr*>(&expr);
     if (mode_flag_ != match_expr->mode_flag_ ||
-        match_columns_.count() != match_expr->match_columns_.count()) {
+        match_columns_.count() != match_expr->match_columns_.count() ||
+        score_label_ != match_expr->score_label_) {
       bret = false;
     } else if (OB_ISNULL(search_key_) || OB_ISNULL(match_expr->search_key_) ||
                !search_key_->same_as(*match_expr->search_key_, check_context)) {
+      bret = false;
+    } else if ((OB_ISNULL(oracle_phrase_like_expr_) != OB_ISNULL(match_expr->oracle_phrase_like_expr_)) ||
+               (OB_NOT_NULL(oracle_phrase_like_expr_) && OB_NOT_NULL(match_expr->oracle_phrase_like_expr_) &&
+                !oracle_phrase_like_expr_->same_as(*match_expr->oracle_phrase_like_expr_, check_context))) {
       bret = false;
     }
     for (int64_t i = 0; bret && i < match_columns_.count(); i++) {
@@ -7816,6 +7837,7 @@ void ObMatchFunRawExpr::inner_calc_hash()
 {
   expr_hash_ = common::do_hash(get_expr_type(), expr_hash_);
   expr_hash_ = common::do_hash(mode_flag_, expr_hash_);
+  expr_hash_ = common::do_hash(score_label_, expr_hash_);
   if (search_key_ != NULL) {
     expr_hash_ = common::do_hash(search_key_->get_expr_hash(), expr_hash_);
   }
@@ -7830,6 +7852,9 @@ void ObMatchFunRawExpr::inner_calc_hash()
   if (is_es_match() && param_text_expr_ != NULL) {
     expr_hash_ = common::do_hash(param_text_expr_->get_expr_hash(), expr_hash_);
   }
+  if (OB_NOT_NULL(oracle_phrase_like_expr_)) {
+    expr_hash_ = common::do_hash(oracle_phrase_like_expr_->get_expr_hash(), expr_hash_);
+  }
 }
 
 void ObMatchFunRawExpr::clear_child()
@@ -7837,6 +7862,8 @@ void ObMatchFunRawExpr::clear_child()
   match_columns_.reset();
   search_key_ = NULL;
   mode_flag_ = NATURAL_LANGUAGE_MODE;
+  score_label_ = -1;
+  oracle_phrase_like_expr_ = NULL;
   if (is_es_match()) {
     columns_boosts_.reset();
     param_text_expr_ = NULL;
@@ -7854,7 +7881,11 @@ int64_t ObMatchFunRawExpr::get_param_count() const
   if (is_es_match()) {
     return match_columns_.count() + 1 /*search key*/ + columns_boosts_.count() + 1 /*param_text_expr_*/;
   } else {
-    return match_columns_.count() + 1 /*search key*/;
+    int64_t param_count = match_columns_.count() + 1 /*search key*/;
+    if (OB_NOT_NULL(oracle_phrase_like_expr_)) {
+      param_count++;
+    }
+    return param_count;
   }
 }
 
@@ -7876,6 +7907,9 @@ const ObRawExpr *ObMatchFunRawExpr::get_param_expr(int64_t index) const
       ptr_ret = match_columns_.at(index);
     } else if (index == match_columns_.count()) {
       ptr_ret = search_key_;
+    } else if (OB_NOT_NULL(oracle_phrase_like_expr_) &&
+               index == match_columns_.count() + 1) {
+      ptr_ret = oracle_phrase_like_expr_;
     } else { /*do nothing*/ }
   }
   return ptr_ret;
@@ -7900,6 +7934,9 @@ ObRawExpr *&ObMatchFunRawExpr::get_param_expr(int64_t index)
       return match_columns_.at(index);
     } else if (index == match_columns_.count()) {
       return search_key_;
+    } else if (OB_NOT_NULL(oracle_phrase_like_expr_) &&
+               index == match_columns_.count() + 1) {
+      return oracle_phrase_like_expr_;
     } else {
       return USELESS_POINTER;
     }

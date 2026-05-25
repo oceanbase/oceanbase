@@ -8860,6 +8860,18 @@ int ObDDLResolver::check_indexes_on_same_cols(const ObTableSchema &table_schema,
     } else if (OB_FAIL(ObResolverUtils::check_match_columns_strict_with_order(
                        index_table_schema, create_index_arg, has_other_indexes_on_same_cols))) {
       LOG_WARN("Failed to check_match_columns", K(ret));
+    } else if (has_other_indexes_on_same_cols) {
+      // Allow btree (and other non-domain) indexes on the same columns as a CONTEXT/fulltext index
+      const ObIndexType new_idx_type = create_index_arg.index_type_;
+      const ObIndexType exist_idx_type = index_table_schema->get_index_type();
+      const bool new_is_fts_domain = share::schema::is_fts_index_aux(new_idx_type)
+                                   || INDEX_TYPE_DOMAIN_CTXCAT_DEPRECATED == new_idx_type
+                                   || create_index_arg.index_key_ == static_cast<int64_t>(INDEX_KEYNAME::FTS_KEY);
+      const bool exist_is_fts_domain = share::schema::is_fts_index_aux(exist_idx_type)
+                                     || INDEX_TYPE_DOMAIN_CTXCAT_DEPRECATED == exist_idx_type;
+      if (new_is_fts_domain != exist_is_fts_domain) {
+        has_other_indexes_on_same_cols = false;
+      }
     }
   }
 
