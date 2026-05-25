@@ -146,6 +146,7 @@ copy_continuous_base(const ObContinuousBase &vec,
   }
   if (OB_SUCC(ret)) {
     offsets_ = const_cast<uint32_t *> (vec.get_offsets());
+    frame_offsets_ptr_ = expr_->get_continuous_vector_offsets(eval_ctx);
     continuous_data_ = const_cast<char *> (vec.get_data());
     if (OB_NOT_NULL(expr_)) {
       MEMCPY(frame_offsets_, expr_->get_continuous_vector_offsets(eval_ctx), sizeof(uint32_t) * (max_row_cnt_ + 1));
@@ -328,8 +329,9 @@ void ObVectorsResultHolder::ObColResultHolder::convert_continuous_to_discrete(Ob
                                                                               int64_t from_idx,
                                                                               int64_t to_idx) const
 {
-  int32_t offset = offsets_[from_idx];
-  int32_t len = offsets_[from_idx + 1] - offsets_[from_idx];
+  uint32_t *offset_arry = frame_offsets_ptr_ == offsets_ ? frame_offsets_ : offsets_;
+  int32_t offset = offset_arry[from_idx];
+  int32_t len = offset_arry[from_idx + 1] - offset_arry[from_idx];
   char *ptr = continuous_data_ + offset;
   uint64_t const_skip = 0;
   ObBitVector *skip = to_bit_vector(&const_skip);

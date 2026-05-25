@@ -77,7 +77,7 @@ private:
                                                 offsets_(nullptr), continuous_data_(nullptr),
                                                 expr_(expr), frame_nulls_(nullptr), frame_datums_(nullptr),
                                                 frame_data_(nullptr), frame_lens_(nullptr), frame_ptrs_(nullptr),
-                                                frame_offsets_(nullptr), frame_continuous_data_(nullptr) {}
+                                                frame_offsets_(nullptr), frame_continuous_data_(nullptr), frame_offsets_ptr_(nullptr) {}
     void reset(common::ObIAllocator &alloc);
     int copy_vector_base(const ObVectorBase &vec);
     int copy_bitmap_null_base(const ObBitmapNullVectorBase &vec,
@@ -150,6 +150,7 @@ private:
     char **frame_ptrs_; //ObDiscreteBase
     uint32_t *frame_offsets_; //ObContinuousBase
     char *frame_continuous_data_; //ObContinuousBase
+    uint32_t *frame_offsets_ptr_;
   };
   const common::ObIArray<ObExpr *> *exprs_;
   ObEvalCtx *eval_ctx_;
