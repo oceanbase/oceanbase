@@ -4929,16 +4929,51 @@ int ObVectorExprOperator::calc_result_typeN(ObExprResType &type,
     } else {
       const ObRawExpr *left_param = get_raw_expr()->get_param_expr(0);
       const ObRawExpr *right_vec_param = get_raw_expr()->get_param_expr(1);
+      ObSEArray<ObScale, 4> max_scales;
+      ObSEArray<ObPrecision, 4> max_precs;
+      for (int64_t j = 0; OB_SUCC(ret) && j < row_dimension_; ++j) {
+        if (OB_FAIL(max_scales.push_back(SCALE_UNKNOWN_YET))) {
+          LOG_WARN("push back failed", K(ret));
+        } else if (OB_FAIL(max_precs.push_back(PRECISION_UNKNOWN_YET))) {
+          LOG_WARN("push back failed", K(ret));
+        }
+      }
       for (int64_t i = 0; OB_SUCC(ret) && i < right_element_count;
-           ++i, right_start_idx += row_dimension_) {
+          ++i, right_start_idx += row_dimension_) {
         tmp_res_type.reset();
         for (int64_t j = 0; OB_SUCC(ret) && j < row_dimension_; ++j) {
-          if (OB_FAIL(ret)) {
-            // do nothing
-          } else if (OB_FAIL(ObVectorExprOperator::calc_result_type2_(
-                       tmp_res_type, types[left_start_idx + j], types[right_start_idx + j],
-                       type_ctx))) {
+          if (OB_FAIL(ObVectorExprOperator::calc_result_type2_(
+                      tmp_res_type, types[left_start_idx + j], types[right_start_idx + j],
+                      type_ctx))) {
             LOG_WARN("failed to calc result types", K(ret));
+          } else {
+            const ObAccuracy &left_acc = types[left_start_idx + j].get_calc_accuracy();
+            if (ob_is_double_tc(types[left_start_idx + j].get_calc_type())
+                && SCALE_UNKNOWN_YET != left_acc.get_scale()
+                && left_acc.get_scale() <= OB_MAX_DOUBLE_FLOAT_SCALE) {
+              max_scales.at(j) = MAX(max_scales.at(j), left_acc.get_scale());
+              max_precs.at(j) = MAX(max_precs.at(j), left_acc.get_precision());
+            }
+          }
+        }
+      }
+      for (int64_t j = 0; OB_SUCC(ret) && j < row_dimension_; ++j) {
+        ObExprResType &ltype = types[left_start_idx + j];
+        if (SCALE_UNKNOWN_YET == max_scales.at(j) || !ob_is_double_tc(ltype.get_calc_type())) {
+        } else {
+          ObAccuracy acc = ltype.get_calc_accuracy();
+          acc.set_scale(max_scales.at(j));
+          acc.set_precision(max_precs.at(j));
+          ltype.set_calc_accuracy(acc);
+          int64_t right_align_idx = left_start_idx + row_dimension_;
+          for (int64_t i = 0; i < right_element_count;
+              ++i, right_align_idx += row_dimension_) {
+            ObExprResType &rtype = types[right_align_idx + j];
+            if (ob_is_double_tc(rtype.get_calc_type())
+                && SCALE_UNKNOWN_YET != rtype.get_calc_accuracy().get_scale()
+                && rtype.get_calc_accuracy().get_scale() <= OB_MAX_DOUBLE_FLOAT_SCALE) {
+              rtype.set_calc_accuracy(acc);
+            }
           }
         }
       }
