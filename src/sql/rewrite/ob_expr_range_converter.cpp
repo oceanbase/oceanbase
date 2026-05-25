@@ -2742,12 +2742,26 @@ int ObExprRangeConverter::get_nvl_cmp_node(const ObRawExpr &l_expr,
              OB_ISNULL(ctx_.session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected nvl expr", K(ret));
+  } else if (!ObSQLUtils::is_same_type_for_compare(const_expr->get_result_type().get_obj_meta(),
+                                                   nvl_first_expr->get_result_type().get_obj_meta()) ||
+             !ObSQLUtils::is_same_type_for_compare(const_expr->get_result_type().get_obj_meta(),
+                                                   nvl_second_expr->get_result_type().get_obj_meta())) {
+    // The NVL column and the NVL default value carry different types after
+    // stripping lossless casts (a residual implicit cast remains on the
+    // default value). Building a new comparison expression here would force
+    // deduce_type to stack another implicit cast on an existing one, which
+    // try_add_cast_expr_above rejects with OB_ERR_INVALID_TYPE_FOR_OP. Skip
+    // range extraction and let the fall-through produce always_true.
   } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(nvl_first_expr,
                                                                      nvl_first_expr,
                                                                      use_implicit_cast_feature))) {
     LOG_WARN("failed to get expr without lossless cast", K(ret));
   } else if (!nvl_first_expr->is_column_ref_expr()) {
     // do nothing
+  } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(nvl_second_expr,
+                                                                     nvl_second_expr,
+                                                                     use_implicit_cast_feature))) {
+    LOG_WARN("failed to get expr without lossless cast for nvl second arg", K(ret));
   } else if (OB_FAIL(gen_column_cmp_node(*nvl_first_expr,
                                          *const_expr,
                                          cmp_type,
@@ -2757,10 +2771,6 @@ int ObExprRangeConverter::get_nvl_cmp_node(const ObRawExpr &l_expr,
                                          cmp_range_node))) {
     LOG_WARN("failed to gen column cmp node", K(ret));
   } else if (OB_FALSE_IT(is_precise &= ctx_.cur_is_precise_)) {
-  } else if (OB_FAIL(ObOptimizerUtil::get_expr_without_lossless_cast(nvl_second_expr,
-                                                                     nvl_second_expr,
-                                                                     use_implicit_cast_feature))) {
-    LOG_WARN("failed to get expr without lossless cast for nvl second arg", K(ret));
   } else if (OB_FAIL(ObRawExprUtils::create_double_op_expr(*ctx_.expr_factory_,
                                                            ctx_.session_info_,
                                                            cmp_type,
