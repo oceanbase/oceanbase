@@ -4215,8 +4215,10 @@ int ObDmlCgService::generate_table_loc_meta(const IndexDMLInfo &index_dml_info,
     loc_meta.is_lake_table_ = (table_schema->get_lake_table_format() == share::ObLakeTableFormat::ICEBERG
                                || table_schema->get_lake_table_format() == share::ObLakeTableFormat::HIVE);
     ObString file_location;
-    OZ(ObExternalTableUtils::get_external_file_location(*table_schema, *schema_guard, cg_.phy_plan_->get_allocator(), file_location));
+    bool is_shared_external_files_on_disk = false;
+    OZ(ObExternalTableUtils::get_external_file_location(*table_schema, *schema_guard, cg_.phy_plan_->get_allocator(), file_location, &is_shared_external_files_on_disk));
     loc_meta.is_external_files_on_disk_ = ObSQLUtils::is_external_files_on_local_disk(file_location);
+    loc_meta.is_shared_external_files_on_disk_ = is_shared_external_files_on_disk;
   }
   if (OB_SUCC(ret) && index_dml_info.is_primary_index_) {
     TableLocRelInfo *rel_info = nullptr;
@@ -5170,8 +5172,10 @@ int ObDmlCgService::generate_rowkey_domain_ctdef(
     loc_meta->is_lake_table_ = (rowkey_domain_schema->get_lake_table_format() == share::ObLakeTableFormat::ICEBERG);
     ObString file_location;
     share::ObDasSemanticIndexInfo &semantic_index_info = scan_ctdef->semantic_index_info_;
-    OZ(ObExternalTableUtils::get_external_file_location(*rowkey_domain_schema, *schema_guard->get_schema_guard(), cg_.phy_plan_->get_allocator(), file_location));
+    bool is_shared_external_files_on_disk = false;
+    OZ(ObExternalTableUtils::get_external_file_location(*rowkey_domain_schema, *schema_guard->get_schema_guard(), cg_.phy_plan_->get_allocator(), file_location, &is_shared_external_files_on_disk));
     loc_meta->is_external_files_on_disk_ = ObSQLUtils::is_external_files_on_local_disk(file_location);
+    loc_meta->is_shared_external_files_on_disk_ = is_shared_external_files_on_disk;
     scan_ctdef->table_param_.get_enable_lob_locator_v2()
         = (cg_.get_cur_cluster_version() >= CLUSTER_VERSION_4_1_0_0);
     scan_ctdef->schema_version_ = rowkey_domain_schema->get_schema_version();

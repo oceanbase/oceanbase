@@ -1015,9 +1015,11 @@ int ObTableLocation::init_table_location(ObExecContext &exec_ctx,
     table_type_ = table_schema->get_table_type();
     loc_meta_.is_external_table_ = table_schema->is_external_table();
     ObString file_location;
+    bool is_shared_external_files_on_disk = false;
     CK (OB_NOT_NULL(schema_guard.get_schema_guard()));
-    OZ (ObExternalTableUtils::get_external_file_location(*table_schema, *schema_guard.get_schema_guard(), exec_ctx.get_allocator(), file_location));
+    OZ (ObExternalTableUtils::get_external_file_location(*table_schema, *schema_guard.get_schema_guard(), exec_ctx.get_allocator(), file_location, &is_shared_external_files_on_disk));
     loc_meta_.is_external_files_on_disk_ = ObSQLUtils::is_external_files_on_local_disk(file_location);
+    loc_meta_.is_shared_external_files_on_disk_ = is_shared_external_files_on_disk;
   }
 
   if (OB_FAIL(ret)) {
@@ -1353,8 +1355,10 @@ int ObTableLocation::init(
     table_type_ = table_schema->get_table_type();
     loc_meta_.is_external_table_ = table_schema->is_external_table();
     ObString file_location;
-    OZ(ObExternalTableUtils::get_external_file_location(*table_schema, schema_guard, exec_ctx->get_allocator(), file_location));
+    bool is_shared_external_files_on_disk = false;
+    OZ(ObExternalTableUtils::get_external_file_location(*table_schema, schema_guard, exec_ctx->get_allocator(), file_location, &is_shared_external_files_on_disk));
     loc_meta_.is_external_files_on_disk_ = ObSQLUtils::is_external_files_on_local_disk(file_location);
+    loc_meta_.is_shared_external_files_on_disk_ = is_shared_external_files_on_disk;
     loc_meta_.route_policy_ = route_policy;
     if (route_policy == COLUMN_STORE_ONLY && (is_dml_table || !(table_schema->is_user_table() || table_schema->is_index_table()))) {
       loc_meta_.route_policy_ = READONLY_ZONE_FIRST;

@@ -258,6 +258,7 @@ public:
                                        common::ObIAllocator &allocator,
                                        common::ObIArray<ObIExtTblScanTask *> &scan_tasks,
                                        bool is_file_on_disk,
+                                       bool is_shared_external_files_on_disk,
                                        ObExecContext &ctx);
   static int prepare_lake_table_single_scan_task(ObExecContext &exec_ctx,
                                                 ObDASTableLoc *tab_loc,
@@ -281,6 +282,11 @@ public:
 
   static int filter_files_in_locations(common::ObIArray<share::ObExternalFileInfo> &files,
       common::ObIArray<common::ObAddr> &locations);
+  // PRECONDITION: filter_files_in_locations() must have been called first so candidates whose
+  // file_addr_ belongs to a departed observer are already removed. Otherwise the murmur hash
+  // may pick a departed observer and the file would be silently dropped downstream.
+  static int dedup_shared_local_files(common::ObIArray<share::ObExternalFileInfo> &files,
+                                      common::ObIAllocator &allocator);
 
   static int plugin_split_tasks(
       ObIAllocator &allocator,
@@ -383,7 +389,8 @@ public:
   static int get_external_file_location(const ObTableSchema &table_schema,
                                         ObSchemaGetterGuard &schema_guard,
                                         ObIAllocator &allocator,
-                                        ObString &file_location);
+                                        ObString &file_location,
+                                        bool *is_shared_external_files_on_disk = nullptr);
   static int get_external_file_location_access_info(const ObTableSchema &table_schema,
                                                     ObSchemaGetterGuard &schema_guard,
                                                     ObString &access_info);
@@ -426,6 +433,11 @@ public:
 
 
 private:
+  // Rewrite `sfile://<path>` to `file://<path>` in-place via allocator.
+  // Returns is_shared=true when the input used the shared prefix; false otherwise (location untouched).
+  static int normalize_shared_file_location(common::ObIAllocator &allocator,
+                                            common::ObString &location,
+                                            bool &is_shared);
   static int classification_file_basic_info(
     const ObIArray<share::ObExternalTableBasicFileInfo> &basic_file_infos,
     ObIArray<common::ObString> &file_urls, ObIArray<int64_t> *file_sizes = nullptr,
@@ -440,6 +452,7 @@ private:
                                         common::ObIAllocator &allocator,
                                         common::ObIArray<ObIExtTblScanTask *> &scan_tasks,
                                         bool is_file_on_disk,
+                                        bool is_shared_external_files_on_disk,
                                         ObExecContext &ctx);
 private:
   static bool is_left_edge(const common::ObObj &value);

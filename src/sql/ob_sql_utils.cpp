@@ -6294,7 +6294,13 @@ void ObSQLUtils::adjust_time_by_ntp_offset(int64_t &dst_timeout_ts)
 
 bool ObSQLUtils::is_external_files_on_local_disk(const ObString &url)
 {
-  return url.empty() ? false : url.prefix_match_ci(OB_FILE_PREFIX);
+  return url.empty() ? false
+                     : (url.prefix_match_ci(OB_FILE_PREFIX) || url.prefix_match_ci(OB_SHARED_FILE_PREFIX));
+}
+
+bool ObSQLUtils::is_external_shared_files_on_local_disk(const ObString &url)
+{
+  return url.empty() ? false : url.prefix_match_ci(OB_SHARED_FILE_PREFIX);
 }
 
 int ObSQLUtils::split_remote_object_storage_url(ObString &url, common::ObObjectStorageInfo *storage_info)
@@ -6359,7 +6365,9 @@ int ObSQLUtils::check_location_access_priv(const ObString &location, ObSQLSessio
   } else if (is_external_files_on_local_disk(location) && !session->is_inner()) {
     ObArenaAllocator allocator;
     ObString real_location = location;
-    real_location += strlen(OB_FILE_PREFIX);
+    real_location += is_external_shared_files_on_local_disk(location)
+                     ? strlen(OB_SHARED_FILE_PREFIX)
+                     : strlen(OB_FILE_PREFIX);
     if (!real_location.empty()) {
       ObArrayWrap<char> buffer;
       OZ (buffer.allocate_array(allocator, PATH_MAX));

@@ -700,6 +700,7 @@ public:
 
   static int split_remote_object_storage_url(common::ObString &url, common::ObObjectStorageInfo *storage_info);
   static bool is_external_files_on_local_disk(const common::ObString &url);
+  static bool is_external_shared_files_on_local_disk(const common::ObString &url);
   static int check_location_access_priv(const common::ObString &location, ObSQLSessionInfo *session);
   static int check_sql_map_expected_resource_group(const ObSqlCtx &context,
                                             const ObResultSet &result,
