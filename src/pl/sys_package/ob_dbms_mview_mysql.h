@@ -23,6 +23,7 @@ enum ObDBMSMViewRefreshParam
   REFRESH_PARALLEL = 2,
   NESTED = 3,
   NESTED_REFRESH_MODE = 4,
+  ASYNC = 5,
   MAX_PARAM
 };
 

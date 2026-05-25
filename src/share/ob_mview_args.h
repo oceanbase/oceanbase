@@ -251,7 +251,9 @@ public:
     is_alter_refresh_next_(false),
     next_time_expr_(),
     is_alter_nested_refresh_mode_(false),
-    nested_refresh_mode_(share::schema::ObMVNestedRefreshMode::MAX)
+    nested_refresh_mode_(share::schema::ObMVNestedRefreshMode::MAX),
+    is_alter_table_dop_(false),
+    table_dop_(0)
   {
   }
   ~ObAlterMViewArg() = default;
@@ -273,7 +275,9 @@ public:
                K_(is_alter_refresh_next),
                K_(next_time_expr),
                K_(is_alter_nested_refresh_mode),
-               K_(nested_refresh_mode));
+               K_(nested_refresh_mode),
+               K_(is_alter_table_dop),
+               K_(table_dop));
 public:
   void set_exec_env(const ObString &exec_env)
   {
@@ -314,6 +318,11 @@ public:
     is_alter_nested_refresh_mode_ = true;
     nested_refresh_mode_ = nested_refresh_mode;
   }
+  void set_table_dop(int64_t table_dop)
+  {
+    is_alter_table_dop_ = true;
+    table_dop_ = table_dop;
+  }
   const ObString &get_exec_env() const { return exec_env_; }
   bool is_alter_on_query_computation() const { return is_alter_on_query_computation_; }
   bool get_enable_on_query_computation() const { return enable_on_query_computation_; }
@@ -329,6 +338,8 @@ public:
   const ObString &get_next_time_expr() const { return next_time_expr_; }
   bool is_alter_nested_refresh_mode() const { return is_alter_nested_refresh_mode_; }
   share::schema::ObMVNestedRefreshMode get_nested_refresh_mode() const { return nested_refresh_mode_; }
+  bool is_alter_table_dop() const { return is_alter_table_dop_; }
+  int64_t get_table_dop() const { return table_dop_; }
 private:
   ObString exec_env_;
   bool is_alter_on_query_computation_;
@@ -346,6 +357,8 @@ private:
   // placeholer
   bool is_alter_nested_refresh_mode_;
   share::schema::ObMVNestedRefreshMode nested_refresh_mode_;
+  bool is_alter_table_dop_;
+  int64_t table_dop_;
 };
 
 struct ObAlterMLogArg

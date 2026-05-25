@@ -3491,3 +3491,16 @@ DEF_STR_WITH_CHECKER(function_round_dialect, OB_TENANT_PARAMETER, "MYSQL",
 DEF_BOOL(_enable_database_isolation_mode, OB_TENANT_PARAMETER, "False",
     "enable database isolation mode",
     ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
+
+DEF_BOOL(_enable_mview_refresh_queuing, OB_TENANT_PARAMETER, "True",
+        "Enable the new MV refresh engine based on pending task scheduling. "
+        "When set to True, refresh requests are submitted to the pending task queue and executed asynchronously. "
+        "When set to False, the legacy synchronous refresh engine is used.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_mview_refresh_concurrency, OB_TENANT_PARAMETER, "10", "[1,]",
+        "The maximum number of materialized view refresh tasks that can run concurrently. "
+        "Range: [1, +inf) in integer",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_mv_adaptive_refresh_step, OB_TENANT_PARAMETER, "True",
+        "Enable the dynamic generation of the MV refresh SQL based on the delta data",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

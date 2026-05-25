@@ -37,6 +37,7 @@ private:
     PARALLEL,
     JOB_START_TIME,
     TARGET_DATA_SYNC_SCN,
+    REFRESH_ID,
   };
   class FillScanner
   {

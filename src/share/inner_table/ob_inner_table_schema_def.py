@@ -6426,7 +6426,9 @@ def_table_schema(
     ('elapsed_time', 'int'),
     ('log_purge_time', 'int'),
     ('complete_stats_avaliable', 'bool'),
-    ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true')
+    ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true'),
+    ('mview_id', 'int', 'true'),
+    ('data_target_scn', 'uint', 'true')
   ]
 )
 
@@ -6452,7 +6454,10 @@ def_table_schema(
     ('initial_num_rows', 'int'),
     ('final_num_rows', 'int'),
     ('num_steps', 'int'),
-    ('result', 'int')
+    ('result', 'int'),
+    ('refresh_scn', 'uint', 'true'),
+    ('svr_ip', 'varchar:OB_IP_STR_BUFF', 'true'),
+    ('svr_port', 'int', 'true')
   ]
 )
 
@@ -6497,7 +6502,9 @@ def_table_schema(
     ('stmt', 'longtext'),
     ('execution_time', 'int'),
     ('execution_plan', 'longtext', 'true'),
-    ('result', 'int')
+    ('result', 'int'),
+    ('start_time', 'timestamp', 'true'),
+    ('parallelism', 'int', 'true')
   ]
 )
 
@@ -9159,6 +9166,8 @@ def_table_schema(
 
 # 602: __all_ai_batch_task
 # 603: __all_ai_batch_task_history
+
+# 604: __all_mview_refresh_pending_task
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -17614,6 +17623,7 @@ def_table_schema(
   ('parallel', 'int'),
   ('job_start_time', 'timestamp'),
   ('target_data_sync_scn', 'uint'),
+  ('refresh_id', 'uint'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -18392,6 +18402,9 @@ def_table_schema(**gen_iterate_virtual_table_def(
 # 12614: __all_virtual_ai_model_provider_history
 # 12615: __all_virtual_ai_gateway_history
 
+# 12616: __all_virtual_mview_dep
+# 12617: __all_virtual_mview_refresh_pending_task
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -18995,6 +19008,8 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15555', all_def_ke
 
 
 # 15556: ALL_VIRTUAL_SYS_VARIABLE_HISTORY
+
+# 15557: __all_mview_refresh_pending_task
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -47445,6 +47460,8 @@ FROM
 
 # 21744: DBA_OB_SYS_VARIABLE_HISTORY
 # 21745: CDB_OB_SYS_VARIABLE_HISTORY
+
+# 21746: CDB_MVIEW_DEPS
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位

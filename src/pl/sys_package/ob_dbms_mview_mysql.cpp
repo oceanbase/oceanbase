@@ -72,7 +72,8 @@ int ObDBMSMViewMysql::refresh(ObExecContext &ctx, ParamStore &params, ObObj &res
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("data version below 4.3.0.0, not support mview", K(ret), K(data_version));
   } else {
-    if (params.count() < ObDBMSMViewRefreshParam::MAX_PARAM) {
+    // TODO: MAX is temporarily changed to ASYNC for placeholder. Further handling is required when merging the feature.
+    if (params.count() < ObDBMSMViewRefreshParam::ASYNC) {
       if (params.count() < ObDBMSMViewRefreshParam::NESTED
           || (data_version >= MOCK_DATA_VERSION_4_3_5_3 && data_version < DATA_VERSION_4_4_0_0)
           || (data_version >= MOCK_DATA_VERSION_4_4_2_0 && data_version < DATA_VERSION_4_5_0_0)
@@ -82,7 +83,8 @@ int ObDBMSMViewMysql::refresh(ObExecContext &ctx, ParamStore &params, ObObj &res
       } else {
         LOG_WARN("use lowere version of admin pkg", K(params.count()));
       }
-    } else if (params.count() == ObDBMSMViewRefreshParam::MAX_PARAM) {
+      // TODO: MAX is temporarily changed to ASYNC for placeholder. Further handling is required when merging the feature.
+    } else if (params.count() == ObDBMSMViewRefreshParam::ASYNC) {
       if (!params.at(ObDBMSMViewRefreshParam::NESTED).is_tinyint() ||
           (!params.at(ObDBMSMViewRefreshParam::NESTED_REFRESH_MODE).is_null() &&
            !params.at(ObDBMSMViewRefreshParam::NESTED_REFRESH_MODE).is_varchar())) {

@@ -297,6 +297,8 @@ bool ObAlterMViewArg::is_valid() const
     is_valid = false;
   } else if (is_alter_nested_refresh_mode_ && ObMVNestedRefreshMode::MAX <= nested_refresh_mode_) {
     is_valid = false;
+  } else if (is_alter_table_dop_ && table_dop_ <= 0) {
+    is_valid = false;
   }
   return is_valid;
 }
@@ -318,6 +320,8 @@ void ObAlterMViewArg::reset()
   next_time_expr_.reset();
   is_alter_nested_refresh_mode_ = false;
   nested_refresh_mode_ = ObMVNestedRefreshMode::MAX;
+  is_alter_table_dop_ = false;
+  table_dop_ = 0;
 }
 
 int ObAlterMViewArg::assign(const ObAlterMViewArg &other)
@@ -339,6 +343,8 @@ int ObAlterMViewArg::assign(const ObAlterMViewArg &other)
     next_time_expr_ = other.next_time_expr_;
     is_alter_nested_refresh_mode_ = other.is_alter_nested_refresh_mode_;
     nested_refresh_mode_ = other.nested_refresh_mode_;
+    is_alter_table_dop_ = other.is_alter_table_dop_;
+    table_dop_ = other.table_dop_;
   }
   return ret;
 }
@@ -358,7 +364,9 @@ OB_SERIALIZE_MEMBER(ObAlterMViewArg,
                     is_alter_refresh_next_,
                     next_time_expr_,
                     is_alter_nested_refresh_mode_,
-                    nested_refresh_mode_);
+                    nested_refresh_mode_,
+                    is_alter_table_dop_,
+                    table_dop_);
 
 bool ObAlterMLogArg::is_valid() const
 {

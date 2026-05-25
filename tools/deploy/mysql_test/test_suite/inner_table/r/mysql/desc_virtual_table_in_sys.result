@@ -9296,6 +9296,8 @@ elapsed_time	bigint(20)	NO		NULL
 log_purge_time	bigint(20)	NO		NULL	
 complete_stats_avaliable	tinyint(4)	NO		NULL	
 trace_id	varchar(64)	YES		NULL	
+mview_id	bigint(20)	YES		NULL	
+data_target_scn	bigint(20) unsigned	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_mview_refresh_run_stats;
 IF(count(*) >= 0, 1, 0)
 1
@@ -9317,6 +9319,9 @@ initial_num_rows	bigint(20)	NO		NULL
 final_num_rows	bigint(20)	NO		NULL	
 num_steps	bigint(20)	NO		NULL	
 result	bigint(20)	NO		NULL	
+refresh_scn	bigint(20) unsigned	YES		NULL	
+svr_ip	varchar(46)	YES		NULL	
+svr_port	bigint(20)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_mview_refresh_stats;
 IF(count(*) >= 0, 1, 0)
 1
@@ -9352,6 +9357,8 @@ stmt	longtext	NO		NULL
 execution_time	bigint(20)	NO		NULL	
 execution_plan	longtext	YES		NULL	
 result	bigint(20)	NO		NULL	
+start_time	timestamp(6)	YES		NULL	
+parallelism	bigint(20)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_mview_refresh_stmt_stats;
 IF(count(*) >= 0, 1, 0)
 1
@@ -11634,6 +11641,7 @@ read_snapshot	bigint(20)	NO		NULL
 parallel	bigint(20)	NO		NULL	
 job_start_time	timestamp(6)	NO		NULL	
 target_data_sync_scn	bigint(20) unsigned	NO		NULL	
+refresh_id	bigint(20) unsigned	NO		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_mview_running_job;
 IF(count(*) >= 0, 1, 0)
 1
