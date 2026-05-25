@@ -22,6 +22,8 @@ using namespace oceanbase::rootserver;
 using namespace oceanbase::share;
 using namespace oceanbase::common;
 
+ERRSIM_POINT_DEF(EN_RESTORE_ROOT_KEY_FAILED);
+
 int ObRestoreCommonUtil::notify_root_key(
     obrpc::ObSrvRpcProxy *srv_rpc_proxy_,
     common::ObMySQLProxy *sql_proxy_,
@@ -477,6 +479,15 @@ int ObRestoreCommonUtil::restore_root_key(
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid root key", K(ret), K(root_key));
       }
+    }
+  }
+#endif
+
+#ifdef ERRSIM
+  if (OB_SUCC(ret)) {
+    ret = EN_RESTORE_ROOT_KEY_FAILED ? : OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      LOG_WARN("fake EN_RESTORE_ROOT_KEY_FAILED", K(ret));
     }
   }
 #endif
