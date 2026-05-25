@@ -698,7 +698,8 @@ public:
       related_upd_rtdefs_(),
       related_del_rtdefs_(),
       related_ins_rtdefs_(),
-      table_rowkey_()
+      table_rowkey_(),
+      batch_rowkey_()
   { }
   virtual ~ObUpdRtDef()
   {
@@ -719,6 +720,7 @@ public:
       dlock_rtdef_ = nullptr;
     }
     table_rowkey_.reset();
+    batch_rowkey_.reset();
   }
   INHERIT_TO_STRING_KV("base_rtdef", ObDMLBaseRtDef,
                        K_(dupd_rtdef),
@@ -744,6 +746,7 @@ public:
   DASDelRtDefArray related_del_rtdefs_;
   DASInsRtDefArray related_ins_rtdefs_;
   ObRowkey table_rowkey_;
+  ObRowkey batch_rowkey_;
 };
 
 struct ObMultiLockCtDef
