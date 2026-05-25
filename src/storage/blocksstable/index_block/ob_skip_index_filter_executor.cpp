@@ -223,7 +223,7 @@ int ObSkipIndexFilterExecutor::filter_on_min_max(
 {
   int ret = OB_SUCCESS;
   sql::ObBoolMask &fal_desc = filter.get_filter_bool_mask();
-  if (param.is_no_agg_data()) {
+  if (param.is_uncertain()) {
     fal_desc.set_uncertain();
   } else if (OB_UNLIKELY(!param.null_count_.is_null() &&
                          (param.null_count_.get_int() < 0 || param.null_count_.get_int() > row_count))) {
