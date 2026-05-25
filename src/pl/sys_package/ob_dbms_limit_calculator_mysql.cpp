@@ -518,7 +518,8 @@ int ObDBMSLimitCalculator::parse_dict_like_args_(
   char key[50] = "";
   int64_t value = 0;
   // parse the argument like: "ls: 1, tablet: 2, xxxx"
-  while (OB_SUCC(ret) && sscanf(ptr, "%[^:]: %ld", key, &value) == 2) {
+  // Use width specifier 49 to prevent stack buffer overflow of key[50].
+  while (OB_SUCC(ret) && sscanf(ptr, "%49[^:]: %ld", key, &value) == 2) {
     int64_t type = get_logic_res_type_by_name(key);
     if (!is_valid_logic_res_type(type)) {
       ret = OB_INVALID_ARGUMENT;
