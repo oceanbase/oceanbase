@@ -68,7 +68,9 @@ public:
       const share::ObTaskId &dag_id, const int64_t result, ObBackupReportCtx &report_ctx);
   static int check_ls_validity(const uint64_t tenant_id, const share::ObLSID &ls_id);
   static int check_ls_valid_for_backup(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t local_rebuild_seq);
-  static int calc_start_replay_scn(const share::ObBackupSetTaskAttr &set_task_attr,
+  static int calc_start_replay_scn(const uint64_t tenant_id,
+      common::ObISQLClient &sql_client,
+      const share::ObBackupSetTaskAttr &set_task_attr,
       const storage::ObBackupLSMetaInfosDesc &ls_meta_infos, const share::ObTenantArchiveRoundAttr &round_attr,
       share::SCN &start_replay_scn);
 private:
