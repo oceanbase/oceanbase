@@ -1265,6 +1265,13 @@ int ObTableInsertUpOp::do_update(const ObConflictValue &constraint_value)
       if (MY_SPEC.insert_up_ctdefs_.at(0)->enable_do_update_directly_) {
         OZ(constraint_value.baseline_datum_row_->to_expr(get_primary_table_upd_old_row(), eval_ctx_));
         OZ(constraint_value.current_datum_row_->to_expr(get_primary_table_upd_new_row(), eval_ctx_));
+        // Reaching FROM_UPDATE implies at least one in-batch process_update_row
+        // judged is_row_changed_=true and invoked conflict_checker_.update_row.
+        // The classic delete+insert path below issues writes unconditionally, so
+        // the direct_update path must skip the redundant baseline-vs-final
+        // re-judgement to stay semantically aligned and to keep ON UPDATE
+        // CURRENT_TIMESTAMP columns correctly refreshed even when assignment
+        // columns have a net zero change (e.g. c1 flipped twice).
         OZ(update_row_to_das());
       } else {
         OZ(constraint_value.baseline_datum_row_->to_expr(get_primary_table_upd_old_row(), eval_ctx_));
@@ -1331,9 +1338,21 @@ int ObTableInsertUpOp::update_row_to_das()
     } else if (OB_UNLIKELY(i == 0 && old_tablet_loc != new_tablet_loc)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected location change with primary table", K(ret));
+    } else if (i == 0) {
+      // Force primary table to be treated as changed. See do_update() for
+      // rationale: FROM_UPDATE means the row was actually modified during
+      // in-batch processing; the merged baseline-vs-final compare may show a
+      // net zero change on assignment columns and would incorrectly drop the
+      // write (also dropping ON UPDATE CURRENT_TIMESTAMP refresh). Global
+      // indexes (i > 0) still go through their own check_row_whether_changed
+      // so an index whose own columns did not change still falls back to
+      // lock_row, which is consistent with the (primary=true, index=false)
+      // case already enumerated in the comment block below.
+      upd_rtdef.is_row_changed_ = true;
     } else if (OB_FAIL(ObDMLService::check_row_whether_changed(*upd_ctdef, upd_rtdef, eval_ctx_))) {
       LOG_WARN("check row whether changed failed", K(ret), KPC(upd_ctdef));
-    } else if (i > 0 && !insert_up_rtdefs_.at(0).upd_rtdef_.is_row_changed_) {
+    } else if (OB_UNLIKELY(!insert_up_rtdefs_.at(0).upd_rtdef_.is_row_changed_
+               && upd_rtdef.is_row_changed_)) {
       /* Fix for is_row_changed_ inconsistency between primary table and global indexes.
       *
       * Background:
@@ -1370,7 +1389,8 @@ int ObTableInsertUpOp::update_row_to_das()
       * index does delete+insert, causing data inconsistency between main table
       * and global index.
       */
-      upd_rtdef.is_row_changed_ = false;
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected is_row_changed_ inconsistency between primary table and global indexes", K(ret));
     }
 
     if (OB_FAIL(ret)) {
