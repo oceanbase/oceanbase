@@ -55,6 +55,7 @@ int ObTableLoadParallelMerger::init_merge_ctx(ObTableLoadMergeTableBaseOp *op)
   param.use_batch_mode_ = op->merge_table_ctx_->use_batch_mode_;
   param.dml_row_handler_ = op->merge_table_ctx_->dml_row_handler_;
   param.insert_table_ctx_ = op->merge_table_ctx_->insert_table_ctx_;
+  param.snapshot_version_ = op->store_ctx_->ctx_->ddl_param_.snapshot_version_;
   param.trans_param_ = op->merge_phase_ctx_->trans_param_;
   param.file_mgr_ = op->store_ctx_->tmp_file_mgr_;
   param.ctx_ = op->ctx_;
