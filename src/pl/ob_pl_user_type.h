@@ -161,6 +161,7 @@ public:
   static int alloc_for_second_level_composite(ObObj &src, ObIAllocator &allocator);
   static int serialize_obj(const ObObj &obj, char* buf, const int64_t len, int64_t& pos);
   static int deserialize_obj(ObObj &obj, const char* buf, const int64_t len, int64_t& pos);
+  static int do_deserialize_obj(ObIAllocator &allocator, ObObj &obj, const char* buf, const int64_t len, int64_t& pos, bool is_nested);
   static int64_t get_serialize_obj_size(const ObObj &obj);
 
   static int generate_init_composite(ObPLCodeGenerator &generator,
@@ -997,6 +998,11 @@ public:
   inline bool is_inited() const { return count_ != OB_INVALID_COUNT && data_ != nullptr; }
   void print() const;
 
+  /*serialize functions*/
+  int get_serialize_size(int64_t &size);
+  int serialize(char* buf, const int64_t len, int64_t& pos);
+  int deserialize(common::ObIAllocator &allocator, const char *buf, const int64_t len, int64_t &pos);
+
   TO_STRING_KV(K_(type), K_(count), K(id_), K(is_null_));
 
 private:
@@ -1040,9 +1046,9 @@ public:
   }
   inline bool is_composite_type() const { return meta_.is_ext(); }
 
-  int64_t get_serialize_size() const;
-  int serialize(char *buf, int64_t len, int64_t &pos) const;
-  int deserialize(const char* buf, const int64_t len, int64_t &pos);
+  int64_t get_serialize_size(bool full_format = false) const;
+  int serialize(char *buf, int64_t len, int64_t &pos, bool full_format = false) const;
+  int deserialize(const char* buf, const int64_t len, int64_t &pos, bool full_format = false);
 
   TO_STRING_KV(K_(meta), K_(type), K_(not_null), K_(field_cnt));
 

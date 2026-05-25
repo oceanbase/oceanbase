@@ -2763,6 +2763,12 @@ private:
       const share::schema::ObDatabaseSchema &new_database_schema);
   bool can_keep_prefix_semantic(const share::schema::ObColumnSchemaV2 &new_col,
                                 const share::schema::ObColumnSchemaV2 &prefix_gen_col);
+  int alter_table_update_dependencies(
+      const ObTableSchema &orig_table_schema,
+      const ObTableSchema &new_table_schema,
+      ObSchemaGetterGuard &schema_guard,
+      common::ObMySQLTransaction &trans,
+      ObDDLOperator &ddl_operator);
 
 private:
   bool inited_;

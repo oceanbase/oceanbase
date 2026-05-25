@@ -256,6 +256,28 @@ int ObTableColumns::calc_show_table_id(uint64_t &show_table_id)
   return ret;
 }
 
+int ObTableColumns::get_udt_type_name(share::schema::ObSchemaGetterGuard *schema_guard,
+                                     uint64_t tenant_id,
+                                     int64_t udt_id,
+                                     char *buff,
+                                     int64_t buff_length,
+                                     int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  const ObUDTTypeInfo *udt_info = NULL;
+  if (OB_ISNULL(schema_guard)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema guard is null", K(ret));
+  } else if (OB_FAIL(schema_guard->get_udt_info(tenant_id, udt_id, udt_info))) {
+    LOG_WARN("failed to get udt info", K(ret), K(tenant_id), K(udt_id));
+  } else if (OB_ISNULL(udt_info)) {
+    ret = databuff_printf(buff, buff_length, pos, "UDT");
+  } else {
+    ret = databuff_printf(buff, buff_length, pos, "%.*s", udt_info->get_type_name().length(), udt_info->get_type_name().ptr());
+  }
+  return ret;
+}
+
 int ObTableColumns::get_type_str(
     const share::schema::ObColumnSchemaV2 &column_schema,
     const int16_t default_length_semantics,
@@ -272,11 +294,15 @@ int ObTableColumns::get_type_str(
     acc.set_precision(38);
   }
   const common::ObIArray<ObString> &type_info = column_schema.get_extended_type_info();
-  const uint64_t sub_type = column_schema.is_xmltype() ?
+  const uint64_t sub_type = (column_schema.is_xmltype() || column_schema.is_user_defined_sql_type()) ?
                             column_schema.get_sub_data_type() : static_cast<uint64_t>(column_schema.get_geo_type());
   int64_t pos = 0;
 
-  if (OB_FAIL(ob_sql_type_str(obj_meta, acc, type_info, default_length_semantics,
+  if (lib::is_oracle_mode() && column_schema.is_common_user_defined_sql_type()) {
+    if (OB_FAIL(get_udt_type_name(schema_guard_, pl::get_tenant_id_by_object_id(sub_type), sub_type, column_type_str_, column_type_str_len_, pos))) {
+      LOG_WARN("failed to get udt type name", K(ret), K(column_schema.get_tenant_id()), K(sub_type));
+    }
+  } else if (OB_FAIL(ob_sql_type_str(obj_meta, acc, type_info, default_length_semantics,
                               column_type_str_, column_type_str_len_, pos, sub_type,
                               column_schema.is_string_lob()))) {
     if (OB_MAX_SYS_PARAM_NAME_LENGTH == column_type_str_len_ && OB_SIZE_OVERFLOW == ret) {
@@ -405,7 +431,7 @@ int ObTableColumns::fill_row_cells(const ObTableSchema &table_schema,
           LOG_WARN("fail to get data type str",K(ret), K(column_schema.get_data_type()));
           break;
         } else {
-          if (is_oracle_mode) {
+          if (is_oracle_mode && !column_schema.is_user_defined_sql_type()) {
             ObCharset::caseup(ObCollationType::CS_TYPE_UTF8MB4_BIN, type_val);
           }
           cur_row_.cells_[cell_idx].set_varchar(type_val);
@@ -805,7 +831,8 @@ int ObTableColumns::fill_row_cells(
           break;
         }
       case TYPE: {
-          if (is_oracle_mode) {
+          if (is_oracle_mode
+              && !column_attributes.result_type_.is_user_defined_sql_type()) {
             ObCharset::caseup(ObCollationType::CS_TYPE_UTF8MB4_BIN, column_attributes.type_);
           }
           cur_row_.cells_[cell_idx].set_varchar(column_attributes.type_);
@@ -998,7 +1025,7 @@ int ObTableColumns::deduce_column_attributes(
         }
       }
     } else if (result_type.is_user_defined_sql_type()) {
-      sub_type = result_type.get_subschema_id();
+      sub_type = result_type.get_udt_id();
     } else if ((result_type.get_udt_id() == T_OBJ_XML) || (result_type.get_udt_id() == T_OBJ_SDO_GEOMETRY)) {
       sub_type = result_type.get_udt_id();
     } else if (result_type.is_enum_or_set() || result_type.is_collection_sql_type()) {
@@ -1010,7 +1037,13 @@ int ObTableColumns::deduce_column_attributes(
     }
     if (OB_SUCC(ret) && !skip_type_str) {
       int64_t pos = 0;
-      if (OB_FAIL(ob_sql_type_str(column_type_str,
+      if (lib::is_oracle_mode() && result_type.is_user_defined_sql_type()
+          && sub_type != T_OBJ_XML && sub_type != T_OBJ_SDO_GEOMETRY) {
+        if (OB_FAIL(get_udt_type_name(schema_guard, pl::get_tenant_id_by_object_id(sub_type),
+                                      sub_type, column_type_str, column_type_str_len, pos))) {
+          LOG_WARN("failed to get udt type name", K(ret), K(sub_type));
+        }
+      } else if (OB_FAIL(ob_sql_type_str(column_type_str,
                                   column_type_str_len,
                                   pos,
                                   result_type.get_type(),

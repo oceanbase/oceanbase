@@ -99,7 +99,7 @@ public:
   int resolve_modify_all_trigger(const ParseNode &node);
 
   int add_udt_hidden_column(ObAlterTableStmt *alter_table_stmt, AlterColumnSchema &column_schema);
-  int check_sdo_geom_default_value(ObAlterTableStmt *alter_table_stmt, AlterColumnSchema &column_schema);
+  int check_udt_default_value(ObAlterTableStmt *alter_table_stmt, AlterColumnSchema &column_schema);
 
   int add_new_indexkey_for_oracle_temp_table(obrpc::ObCreateIndexArg &index_arg);
 

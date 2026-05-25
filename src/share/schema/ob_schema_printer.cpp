@@ -213,16 +213,47 @@ int ObSchemaPrinter::print_table_definition_columns(const ObTableSchema &table_s
 
         if (OB_SUCC(ret)) {
           int64_t start = pos;
-          const uint64_t sub_type = col->is_xmltype() ?
+          const uint64_t sub_type = (col->is_user_defined_sql_type()) ?
                                     col->get_sub_data_type() : static_cast<uint64_t>(col->get_geo_type());
-          if (OB_FAIL(ob_sql_type_str(col->get_meta_type(),
+          if (is_oracle_mode && col->is_common_user_defined_sql_type()) {
+            const ObUDTTypeInfo *udt_info = NULL;
+            if (OB_FAIL(schema_guard_.get_udt_info(pl::get_tenant_id_by_object_id(sub_type), sub_type, udt_info))) {
+              SHARE_SCHEMA_LOG(WARN, "fail to get udt info", K(ret), K(sub_type));
+            } else if (OB_ISNULL(udt_info)) {
+              if (OB_FAIL(databuff_printf(buf, buf_len, pos, "UDT"))) {
+                SHARE_SCHEMA_LOG(WARN, "fail to print UDT", K(ret));
+              }
+            } else {
+              const ObDatabaseSchema *db_schema = NULL;
+              if (OB_FAIL(schema_guard_.get_database_schema(table_schema.get_tenant_id(),
+                          udt_info->get_database_id(), db_schema))) {
+                SHARE_SCHEMA_LOG(WARN, "fail to get database schema", K(ret),
+                                 K(udt_info->get_database_id()));
+              } else if (OB_NOT_NULL(db_schema)) {
+                if (OB_FAIL(print_identifier(buf, buf_len, pos,
+                            db_schema->get_database_name_str(), is_oracle_mode))) {
+                  SHARE_SCHEMA_LOG(WARN, "fail to print schema name", K(ret));
+                } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "."))) {
+                  SHARE_SCHEMA_LOG(WARN, "fail to print dot", K(ret));
+                }
+              }
+              if (OB_SUCC(ret)) {
+                if (OB_FAIL(print_identifier(buf, buf_len, pos,
+                            udt_info->get_type_name(), is_oracle_mode))) {
+                  SHARE_SCHEMA_LOG(WARN, "fail to print udt type name", K(ret));
+                }
+              }
+            }
+          } else if (OB_FAIL(ob_sql_type_str(col->get_meta_type(),
                                       col->get_accuracy(),
                                       col->get_extended_type_info(),
                                       default_length_semantics,
                                       buf, buf_len, pos, sub_type,
                                       col->is_string_lob()))) {
             SHARE_SCHEMA_LOG(WARN, "fail to get data type str", K(col->get_data_type()), K(*col), K(ret));
-          } else if (is_oracle_mode) {
+          }
+          if (OB_SUCC(ret) && is_oracle_mode
+              && !col->is_user_defined_sql_type()) {
             int64_t end = pos;
             ObString col_type_str(end - start, buf + start);
             ObCharset::caseup(ObCollationType::CS_TYPE_UTF8MB4_BIN, col_type_str);

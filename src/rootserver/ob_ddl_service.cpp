@@ -93,6 +93,7 @@
 #include "rootserver/mview/ob_mview_utils.h"
 #include "storage/tablet/ob_session_tablet_helper.h"
 #include "storage/ddl/ob_ddl_hidden_table_partition_utils.h"
+#include "share/schema/ob_dependency_info.h"
 
 namespace oceanbase
 {
@@ -3839,7 +3840,7 @@ int ObDDLService::handle_drop_all_lob_columns_(const ObTableSchema &orig_table_s
       } else if (OB_ISNULL(col)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected null column", KR(ret), K(lob_cols_cnt_in_table), K(orig_table_schema));
-      } else if (is_lob_storage(col->get_data_type())) {
+      } else if (is_lob_storage(col->get_data_type()) && !col->is_udt_hidden_column()) {
         lob_cols_cnt_in_table++;
       }
     }
@@ -12206,6 +12207,82 @@ int ObDDLService::alter_table_column(const ObTableSchema &origin_table_schema,
         LOG_WARN("failed to lock ddl lock", K(ret));
       }
     }
+    if (OB_SUCC(ret) && !new_table_schema.is_view_table() && !new_table_schema.is_aux_table()) {
+      if (OB_FAIL(alter_table_update_dependencies(origin_table_schema, new_table_schema, schema_guard, trans, ddl_operator))) {
+        LOG_WARN("failed to update table UDT dependencies", K(ret));
+      }
+    }
+
+  }
+
+  return ret;
+}
+
+int ObDDLService::alter_table_update_dependencies(
+    const ObTableSchema &orig_table_schema,
+    const ObTableSchema &new_table_schema,
+    ObSchemaGetterGuard &schema_guard,
+    common::ObMySQLTransaction &trans,
+    ObDDLOperator &ddl_operator)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = new_table_schema.get_tenant_id();
+  const uint64_t table_id = new_table_schema.get_table_id();
+  const uint64_t database_id = new_table_schema.get_database_id();
+  int64_t new_schema_version = OB_INVALID_VERSION;
+  ObArray<ObDependencyInfo> new_dep_infos;
+
+  if (OB_ISNULL(schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service_ is null", K(ret));
+  } else if (OB_FAIL(schema_service_->gen_new_schema_version(tenant_id, new_schema_version))) {
+    LOG_WARN("fail to gen new schema_version", KR(ret), K(tenant_id));
+  } else {
+    ObTableSchema::const_column_iterator col_iter = new_table_schema.column_begin();
+    ObTableSchema::const_column_iterator col_iter_end = new_table_schema.column_end();
+
+    for (; OB_SUCC(ret) && col_iter != col_iter_end; ++col_iter) {
+      const ObColumnSchemaV2 *column_schema = *col_iter;
+      if (OB_ISNULL(column_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column_schema is null", K(ret));
+      } else {
+        if (!column_schema->is_unused() && column_schema->get_meta_type().is_user_defined_sql_type()) { //add udt dependency
+          uint64_t udt_id = column_schema->get_sub_data_type();
+          CK (udt_id != OB_INVALID_ID);
+          if (OB_SUCC(ret)) {
+            const ObUDTTypeInfo *udt_info = nullptr;
+            uint64_t udt_tenant_id = is_inner_object_id(udt_id) ? OB_SYS_TENANT_ID : tenant_id;
+            if (OB_FAIL(schema_guard.get_udt_info(udt_tenant_id, udt_id, udt_info))) {
+              LOG_WARN("failed to get_udt_info", K(ret), K(udt_tenant_id), K(udt_id));
+            }
+
+            if (OB_SUCC(ret) && OB_NOT_NULL(udt_info)) {
+              ObDependencyTableType dep_table_type = ObSchemaObjVersion::get_dependency_table_type(ObObjectType::TYPE);
+              if (OB_FAIL(ObDependencyInfo::collect_dep_info(new_dep_infos,
+                                                            ObObjectType::TABLE,
+                                                            udt_id,
+                                                            udt_info->get_schema_version(),
+                                                            dep_table_type))) {
+                LOG_WARN("failed to collect dependency info", K(ret), K(udt_id), K(udt_info));
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(ObDependencyInfo::delete_schema_object_dependency( //offline ddl, will create a new table_id, so need to delete the dependency of the original table_id
+          trans, orig_table_schema.get_tenant_id(), orig_table_schema.get_table_id(), new_schema_version, ObObjectType::TABLE))) {
+        LOG_WARN("delete schema object dependency failed", K(ret), K(orig_table_schema.get_tenant_id()), K(orig_table_schema.get_table_id()));
+      } else if (new_dep_infos.count() > 0) {
+        if (OB_FAIL(ObDependencyInfo::insert_dependency_infos(
+            trans, new_dep_infos, tenant_id, table_id, new_schema_version, database_id))) {
+          LOG_WARN("insert dependency infos failed", K(ret));
+        }
+      }
+    }
   }
 
   return ret;
@@ -16576,6 +16653,12 @@ int ObDDLService::do_offline_ddl_in_trans(obrpc::ObAlterTableArg &alter_table_ar
                                                       ignore_cs_replica))) {
             LOG_WARN("fail to create user hidden table", KR(ret));
           }
+
+          if (OB_SUCC(ret) && !new_table_schema.is_view_table() && !new_table_schema.is_aux_table()) {
+            if (OB_FAIL(alter_table_update_dependencies(*orig_table_schema, new_table_schema, schema_guard, trans, ddl_operator))) {
+              LOG_WARN("failed to update table UDT dependencies", K(ret));
+            }
+          }
         }
       }
       if (OB_SUCC(ret) && alter_table_arg.is_alter_partitions_) {
@@ -20820,7 +20903,8 @@ int ObDDLService::delete_unused_columns_and_redistribute_schema(
       } else { // update new table in memory.
         // TODO @xingrui drop column group when drop column in truncate
         // Operation on the new table: remove column from memory.
-        if (unused_col_schema->is_udt_hidden_column() && is_lob_storage(unused_col_schema->get_data_type())) {
+        if (unused_col_schema->is_udt_hidden_column() && !unused_col_schema->is_user_defined_sql_type()
+            && is_lob_storage(unused_col_schema->get_data_type())) {
           // hidden lob of udt column will be dropped when dropping udt column.
         } else if (OB_FAIL(drop_column_update_new_table(unused_col_schema->get_column_name_str(), new_table_schema))) {
           LOG_WARN("drop unused column failed", KR(ret), KPC(unused_col_schema));
@@ -35210,7 +35294,26 @@ int ObDDLService::create_synonym(share::schema::ObSynonymInfo &synonym_info,
       if (!is_update) {
         ret = ddl_operator.create_synonym(synonym_info, trans, ddl_stmt_str);
       } else {
-        ret = ddl_operator.replace_synonym(synonym_info, trans, ddl_stmt_str);
+        ObArray<CriticalDepInfo> objs;
+        bool has_type_dep_obj = false;
+        bool has_table_dep_obj = false;
+        if (OB_FAIL(ObPLDDLService::check_udt_dep_objs(tenant_id,
+                                                      synonym_info.get_synonym_id(),
+                                                      ObObjectType::SYNONYM,
+                                                      trans,
+                                                      schema_guard,
+                                                      ddl_operator,
+                                                      objs,
+                                                      has_type_dep_obj,
+                                                      has_table_dep_obj,
+                                                      false))) {
+          LOG_WARN("failed to check udt dependent objects", K(ret));
+        } else if (has_table_dep_obj) {
+          ret = OB_ERR_OBJECT_HAS_TYPE_OR_TABLE_DEPENDENT;
+          LOG_WARN("cannot change object with type or table dependents", K(ret), K(synonym_info.get_synonym_id()));
+        } else {
+          ret = ddl_operator.replace_synonym(synonym_info, trans, ddl_stmt_str);
+        }
       }
       if (OB_FAIL(ret)) {
         LOG_WARN("failed to create synonym", K(synonym_info), K(is_update), K(ret));
@@ -35295,7 +35398,24 @@ int ObDDLService::drop_synonym(const obrpc::ObDropSynonymArg &arg)
       LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
     } else {
       ObDDLOperator ddl_operator(*schema_service_, *sql_proxy_);
-      if (OB_FAIL(ObDependencyInfo::modify_dep_obj_status(trans, tenant_id, synonym_id,
+      ObArray<CriticalDepInfo> objs;
+      bool has_type_dep_obj = false;
+      bool has_table_dep_obj = false;
+      if (OB_FAIL(ObPLDDLService::check_udt_dep_objs(tenant_id,
+                                                     synonym_id,
+                                                     ObObjectType::SYNONYM,
+                                                     trans,
+                                                     schema_guard,
+                                                     ddl_operator,
+                                                     objs,
+                                                     has_type_dep_obj,
+                                                     has_table_dep_obj,
+                                                     false))) {
+        LOG_WARN("failed to check udt dependent objects", K(ret));
+      } else if (has_table_dep_obj) {
+        ret = OB_ERR_OBJECT_HAS_TYPE_OR_TABLE_DEPENDENT;
+        LOG_WARN("cannot change object with type or table dependents", K(ret), K(synonym_id));
+      } else if (OB_FAIL(ObDependencyInfo::modify_dep_obj_status(trans, tenant_id, synonym_id,
                                                       ddl_operator, *schema_service_))) {
         LOG_WARN("failed to modify obj status", K(ret));
       } else if (OB_FAIL(ddl_operator.drop_synonym(tenant_id, database_id, synonym_id, trans, &arg.ddl_stmt_str_))) {

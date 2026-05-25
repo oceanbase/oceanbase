@@ -5858,7 +5858,7 @@ int ObAlterTableResolver::process_timestamp_column(ObColumnResolveStat &stat,
   return ret;
 }
 
-int ObAlterTableResolver::check_sdo_geom_default_value(ObAlterTableStmt *alter_table_stmt,
+int ObAlterTableResolver::check_udt_default_value(ObAlterTableStmt *alter_table_stmt,
                                                        AlterColumnSchema &column_schema)
 {
   int ret = OB_SUCCESS;
@@ -5895,6 +5895,39 @@ int ObAlterTableResolver::check_sdo_geom_default_value(ObAlterTableStmt *alter_t
         LOG_WARN("fail to get real data.", K(ret));
       } else {
         default_val.set_common_value(swkb);
+        default_val.set_meta_type(column_schema.get_meta_type());
+        if (OB_FAIL(column_schema.set_orig_default_value(default_val))) {
+          LOG_WARN("fail to set orig default value", K(default_val), K(ret));
+        }
+      }
+    }
+  } else if (is_oracle_mode() && column_schema.is_user_defined_sql_type() && !column_schema.is_xmltype()) {
+    ObObj orig_default_value;
+    if (!ObObjUDTUtil::ob_is_supported_sql_udt(column_schema.get_sub_data_type())) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("unsupported udt type", K(ret), K(column_schema.get_sub_data_type()));
+    } else if (OB_ISNULL(alter_table_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("alter table stmt not exist", K(ret));
+    } else if (column_schema.get_cur_default_value().is_null()) {
+    } else if (OB_FAIL(get_udt_column_default_values(column_schema.get_cur_default_value(),
+                                               session_info_->get_tz_info_wrap(),
+                                               *allocator_,
+                                               column_schema,
+                                               session_info_->get_sql_mode(),
+                                               session_info_,
+                                               schema_checker_,
+                                               orig_default_value,
+                                               alter_table_stmt->get_ddl_arg()))) {
+      LOG_WARN("fail to calc udt default value expr", K(ret));
+    } else if (orig_default_value.is_null()) {
+    } else {
+      ObObj default_val;
+      ObString udt_data;
+      if (OB_FAIL(ObTextStringHelper::read_real_string_data(allocator_, orig_default_value, udt_data))) {
+        LOG_WARN("fail to get real data.", K(ret));
+      } else {
+        default_val.set_common_value(udt_data);
         default_val.set_meta_type(column_schema.get_meta_type());
         if (OB_FAIL(column_schema.set_orig_default_value(default_val))) {
           LOG_WARN("fail to set orig default value", K(default_val), K(ret));
@@ -6112,7 +6145,7 @@ int ObAlterTableResolver::resolve_add_column(const ParseNode &node, ObColumnName
 
         //add column
         if (OB_SUCC(ret)) {
-          if (OB_FAIL(check_sdo_geom_default_value(alter_table_stmt, alter_column_schema))) {
+          if (OB_FAIL(check_udt_default_value(alter_table_stmt, alter_column_schema))) {
             SQL_RESV_LOG(WARN, "check sdo geometry default value failed!", K(ret));
           } else if (OB_FAIL(alter_table_stmt->add_column(alter_column_schema))) {
             SQL_RESV_LOG(WARN, "Add alter column schema failed!", K(ret));
@@ -7015,7 +7048,13 @@ int ObAlterTableResolver::resolve_modify_column(const ParseNode &node,
         }
         if (OB_SUCC(ret) && alter_column_schema.is_udt_related_column(lib::is_oracle_mode())) {
           ObString tmp_str;
-          if (OB_FAIL(ObDDLResolver::check_udt_default_value(alter_column_schema.get_cur_default_value(),
+          if (alter_column_schema.is_user_defined_sql_type() && !alter_column_schema.is_xmltype()
+             && !alter_column_schema.get_cur_default_value().is_null()) {
+            //udt column default value is not allowed to be modified
+            ret = OB_INVALID_MODIFICATION_OF_COLUMNS;
+            LOG_USER_ERROR(OB_INVALID_MODIFICATION_OF_COLUMNS);
+            SQL_RESV_LOG(WARN, "modify udt column default value not allowed", K(ret));
+          } else if (OB_FAIL(ObDDLResolver::check_udt_default_value(alter_column_schema.get_cur_default_value(),
                                                              session_info_->get_tz_info_wrap(),
                                                              &tmp_str,    // useless
                                                              *allocator_,

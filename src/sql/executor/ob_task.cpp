@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_EXE
 
 #include "ob_task.h"
+#include "sql/engine/expr/ob_expr_sql_udt_utils.h"
 #include "sql/engine/px/ob_px_util.h"
 
 using namespace oceanbase::common;
@@ -21,6 +22,40 @@ namespace oceanbase
 {
 namespace sql
 {
+
+namespace
+{
+int restore_pl_extend_params_after_deserialize(ObExecContext *exec_ctx, ParamStore &param_store)
+{
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(exec_ctx)) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < param_store.count(); ++i) {
+      ObObjParam &obj_param = param_store.at(i);
+      if (obj_param.is_pl_extend() && obj_param.get_ext() != 0) {
+        const int64_t val_len = obj_param.get_val_len();
+        if (OB_UNLIKELY(val_len <= 0)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid pl extend buffer length", K(ret), K(i), K(val_len), K(obj_param));
+        } else {
+          int64_t pos = 0;
+          if (OB_FAIL(pl::ObUserDefinedType::do_deserialize_obj(exec_ctx->get_allocator(),
+                                                                obj_param,
+                                                                reinterpret_cast<char *>(obj_param.get_ext()),
+                                                                val_len,
+                                                                pos,
+                                                                true))) {
+            LOG_WARN("failed to deserialize obj param", K(ret), K(i), K(obj_param));
+          } else if (OB_FAIL(ObSqlUdtUtils::add_pl_record_to_pl_ctx(exec_ctx, obj_param))) {
+            LOG_WARN("failed to add pl record to pl ctx", K(ret), K(i), K(obj_param));
+            (void)pl::ObUserDefinedType::destruct_obj(obj_param, nullptr);
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+} // namespace
 
 ObTask::ObTask()
     : exec_ctx_(NULL),
@@ -472,6 +507,9 @@ OB_DEF_DESERIALIZE(ObRemoteTask)
           for (int64_t i = 0; OB_SUCC(ret) && i < ps_params->count(); ++i) {
             ps_params->at(i).set_param_meta();
           }
+        }
+        if (OB_FAIL(restore_pl_extend_params_after_deserialize(exec_ctx_, *ps_params))) {
+            LOG_WARN("failed to restore pl extend params", K(ret), KPC(remote_sql_info_), KP(exec_ctx_));
         }
       }
       OB_UNIS_DECODE(remote_sql_info_->is_original_ps_mode_);

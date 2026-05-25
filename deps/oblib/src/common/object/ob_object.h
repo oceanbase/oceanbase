@@ -366,6 +366,7 @@ public:
   { return ob_is_large_text(get_type())
            || ob_is_json_tc(get_type())
            || ob_is_geometry_tc(get_type())
+           || ob_is_user_defined_sql_type(get_type())
            || ob_is_roaringbitmap_tc(get_type())
            || ob_is_collection_sql_type(get_type()); }
   OB_INLINE bool is_lob() const { return ob_is_text_tc(get_type()); }
@@ -1889,7 +1890,7 @@ public:
     int ret = OB_SUCCESS;
     udt_data = get_string();
     if (is_lob) {
-      ObLobLocatorV2 loc(reinterpret_cast<char *>(v_.ptr_), val_len_, true);
+      ObLobLocatorV2 loc(reinterpret_cast<char *>(v_.ptr_), val_len_, has_lob_header());
       if (OB_UNLIKELY(!loc.is_valid(false))) {
         // do nothing, warn log inside
         COMMON_LOG(WARN, "Lob: invalid udt lob", K(ret), K(udt_data));
@@ -4580,7 +4581,10 @@ public:
   static int ob_udt_obj_value_get_serialize_size(const ObObj &obj, int64_t &value_len);
 
   static bool ob_is_supported_sql_udt(const uint64_t udt_id)
-  { // only oracle gis related udt is supported currently
+  {
+    return udt_id != OB_INVALID_ID;
+  }
+  static bool ob_is_sys_sql_udt(const uint64_t udt_id) {
     return udt_id == T_OBJ_XML
           || udt_id == T_OBJ_SDO_POINT
           || udt_id == T_OBJ_SDO_GEOMETRY

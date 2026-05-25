@@ -1954,6 +1954,7 @@ constexpr int OB_ERR_FORALL_BULK_INDEX_IN_INTO_CLAUSE = -9836;
 constexpr int OB_ERR_FORALL_INVLIAD_IN_BIND_VARIABLE = -9837;
 constexpr int OB_ERR_BULK_SQL_ATTRS_NOT_SINGLE_INDEX = -9838;
 constexpr int OB_ERR_JAVA_SESSION_STATE_CHANGED = -9839;
+constexpr int OB_ERR_OBJECT_HAS_TYPE_OR_TABLE_DEPENDENT = -9840;
 constexpr int OB_ERR_PL_DOM_HANDLE_INVALID = -9841;
 constexpr int OB_ERR_PL_PARSER_HANDLE_INVALID = -9842;
 constexpr int OB_ERR_KV_GLOBAL_INDEX_ROUTE = -10500;
@@ -2074,8 +2075,8 @@ constexpr int OB_ERR_UPDATE_TWICE = -30926;
 constexpr int OB_ERR_FLASHBACK_QUERY_WITH_UPDATE = -32491;
 constexpr int OB_ERR_UPDATE_ON_EXPR = -38104;
 constexpr int OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS = -38105;
-constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
+constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 
 
 #define OB_SUCCESS__USER_ERROR_MSG "Success"
@@ -4434,6 +4435,7 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_FORALL_INVLIAD_IN_BIND_VARIABLE__USER_ERROR_MSG "FORALL bulk IN-bind variables cannot be used here"
 #define OB_ERR_BULK_SQL_ATTRS_NOT_SINGLE_INDEX__USER_ERROR_MSG "bulk SQL attributes must use a single index"
 #define OB_ERR_JAVA_SESSION_STATE_CHANGED__USER_ERROR_MSG "class %.*s has changed, Java session state cleared"
+#define OB_ERR_OBJECT_HAS_TYPE_OR_TABLE_DEPENDENT__USER_ERROR_MSG "cannot change object with type or table dependents"
 #define OB_ERR_PL_DOM_HANDLE_INVALID__USER_ERROR_MSG "PL/SQL DOM handle accesses node that is no longer available"
 #define OB_ERR_PL_PARSER_HANDLE_INVALID__USER_ERROR_MSG "invalid PL/SQL XML parser handle"
 #define OB_ERR_KV_GLOBAL_INDEX_ROUTE__USER_ERROR_MSG "incorrect route for obkv global index, client router should refresh."
@@ -4591,8 +4593,8 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_FLASHBACK_QUERY_WITH_UPDATE__USER_ERROR_MSG "snapshot expression not allowed here"
 #define OB_ERR_UPDATE_ON_EXPR__USER_ERROR_MSG "Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__USER_ERROR_MSG "specified row no longer exists"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__USER_ERROR_MSG "Data too long for column '%.*s' at row %ld"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
 
 
 #define OB_SUCCESS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: 0, Success"
@@ -9307,6 +9309,8 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_BULK_SQL_ATTRS_NOT_SINGLE_INDEX__OBE_USER_ERROR_MSG "PLS-00431: bulk SQL attributes must use a single index"
 #define OB_ERR_JAVA_SESSION_STATE_CHANGED__ORA_USER_ERROR_MSG "ORA-29549: class %.*s has changed, Java session state cleared"
 #define OB_ERR_JAVA_SESSION_STATE_CHANGED__OBE_USER_ERROR_MSG "OBE-29549: class %.*s has changed, Java session state cleared"
+#define OB_ERR_OBJECT_HAS_TYPE_OR_TABLE_DEPENDENT__ORA_USER_ERROR_MSG "ORA-22933: cannot change object with type or table dependents"
+#define OB_ERR_OBJECT_HAS_TYPE_OR_TABLE_DEPENDENT__OBE_USER_ERROR_MSG "OBE-22933: cannot change object with type or table dependents"
 #define OB_ERR_PL_DOM_HANDLE_INVALID__ORA_USER_ERROR_MSG "ORA-31181: PL/SQL DOM handle accesses node that is no longer available"
 #define OB_ERR_PL_DOM_HANDLE_INVALID__OBE_USER_ERROR_MSG "OBE-31181: PL/SQL DOM handle accesses node that is no longer available"
 #define OB_ERR_PL_PARSER_HANDLE_INVALID__ORA_USER_ERROR_MSG "ORA-64500: invalid PL/SQL XML parser handle"
@@ -9621,12 +9625,12 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_UPDATE_ON_EXPR__OBE_USER_ERROR_MSG "OBE-38104: Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__ORA_USER_ERROR_MSG "ORA-08006: specified row no longer exists"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__OBE_USER_ERROR_MSG "OBE-08006: specified row no longer exists"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2513];
+extern int g_all_ob_errnos[2514];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);

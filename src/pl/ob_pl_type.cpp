@@ -20,6 +20,7 @@
 #include "sql/resolver/ob_stmt_resolver.h"
 #include "observer/mysql/ob_query_driver.h"
 #include "pl/ob_pl_dependency_util.h"
+#include "sql/engine/expr/ob_expr_sql_udt_utils.h"
 namespace oceanbase
 {
 using namespace common;
@@ -62,12 +63,16 @@ int ObPLDataType::get_udt_type_by_name(uint64_t tenant_id,
                                        sql::ObSQLSessionInfo &session_info,
                                        share::schema::ObSchemaGetterGuard &schema_guard,
                                        ObPLDataType &pl_type,
-                                       ObIArray<ObSchemaObjVersion> *deps)
+                                       ObIArray<ObSchemaObjVersion> *deps,
+                                       const bool specify_schema)
 {
   int ret = OB_SUCCESS;
   const ObUDTTypeInfo *udt_info = NULL;
   ObPLType type = ObPLType::PL_INVALID_TYPE;
   OZ (schema_guard.get_udt_info(tenant_id, owner_id, OB_INVALID_ID, udt, udt_info));
+  if (OB_SUCC(ret) && OB_ISNULL(udt_info) && !specify_schema) {
+    OZ (schema_guard.get_udt_info(OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID, OB_INVALID_ID, udt, udt_info));
+  }
   if (OB_SUCC(ret) && OB_ISNULL(udt_info)) {
     uint64_t object_owner_id = owner_id;
     ObString object_name = udt;
@@ -343,7 +348,8 @@ int ObPLDataType::transform_from_iparam(const ObRoutineParam *iparam,
                                  session_info,
                                  schema_guard,
                                  pl_type,
-                                 deps));
+                                 deps,
+                                 true));
         break;
       }
 #ifdef OB_BUILD_ORACLE_PL

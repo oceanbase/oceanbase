@@ -2489,13 +2489,13 @@ template <>
 inline int obj_val_serialize<ObExtendType>(const ObObj &obj, char* buf, const int64_t buf_len, int64_t& pos)
 {
   int ret = OB_SUCCESS;
-  if (obj.is_pl_extend()) {
+  if (obj.is_pl_extend() && obj.get_ext() != 0) {
     OB_UNIS_ENCODE(obj.get_ext());
-    COMMON_LOG(ERROR, "Unexpected serialize", K(OB_NOT_SUPPORTED), K(obj), K(obj.get_meta().get_extend_type()));
-    return OB_NOT_SUPPORTED; //TODO:@ryan.ly: close this feature before composite refactor
-    if (NULL == serialize_composite_callback) {
+    if (NULL == serialize_composite_callback || NULL == composite_serialize_size_callback) {
       ret = OB_ERR_UNEXPECTED;
     } else {
+      int64_t composite_len = composite_serialize_size_callback(obj);
+      OB_UNIS_ENCODE(composite_len);
       ret = serialize_composite_callback(obj, buf, buf_len, pos);
     }
   } else if (obj.is_ext_sql_array()) {
@@ -2520,13 +2520,22 @@ inline int obj_val_deserialize<ObExtendType>(ObObj &obj, const char* buf, const 
   int64_t v = int64_t();
   OB_UNIS_DECODE(v);
   if (OB_SUCC(ret)) {
-    if (!obj.is_ext_sql_array() && !ObObj::is_ext_val(v) && 0 != v) {
-      COMMON_LOG(ERROR, "Unexpected serialize", K(OB_NOT_SUPPORTED), K(v));
-      return OB_NOT_SUPPORTED; //TODO:@ryan.ly: close this feature before composite refactor
+    if (obj.is_pl_extend() && !ObObj::is_ext_val(v) && 0 != v) {
       if (NULL == deserialize_composite_callback) {
         ret = OB_ERR_UNEXPECTED;
       } else {
-        ret = deserialize_composite_callback(obj, buf, data_len, pos);
+        int64_t composite_len = 0;
+        OB_UNIS_DECODE(composite_len);
+        /* record the buffer and delay it's deserialize.
+         * should call ObUserDefinedType::do_deserialize_obj which need an allocator
+         */
+        if (composite_len < 0 || composite_len > INT32_MAX || pos + composite_len > data_len) {
+          ret = OB_DESERIALIZE_ERROR;
+          COMMON_LOG(WARN, "invalid composite length", K(ret), K(composite_len), K(pos), K(data_len));
+        } else {
+          obj.set_extend(reinterpret_cast<int64_t>(buf + pos), obj.get_meta().get_extend_type(), int32_t(composite_len));
+          pos += composite_len;
+        }
       }
     } else if (obj.is_ext_sql_array()) {
       if (OB_UNLIKELY(v != 0)) {
@@ -2552,14 +2561,14 @@ template <>
 inline int64_t obj_val_get_serialize_size<ObExtendType>(const ObObj &obj)
 {
   int64_t len = 0;
-  if (obj.is_pl_extend()) {
-    OB_UNIS_ADD_LEN(obj.get_ext());
-    COMMON_LOG_RET(ERROR, OB_NOT_SUPPORTED, "Unexpected serialize", K(OB_NOT_SUPPORTED), K(obj), K(obj.get_meta().get_extend_type()));
-    return len; //TODO:@ryan.ly: close this feature before composite refactor
+  if (obj.is_pl_extend() && obj.get_ext() != 0) {
     if (NULL == composite_serialize_size_callback) {
       COMMON_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "Unexpected callback", K(OB_ERR_UNEXPECTED), K(obj));
     } else {
-      len += composite_serialize_size_callback(obj);
+      int64_t composite_len = composite_serialize_size_callback(obj);
+      OB_UNIS_ADD_LEN(obj.get_ext());
+      OB_UNIS_ADD_LEN(composite_len);
+      len += composite_len;
     }
   } else if (obj.is_ext_sql_array()) {
     int64_t v = 0;
@@ -3525,9 +3534,16 @@ inline int obj_print_sql<ObUserDefinedSQLType>(const ObObj &obj, char *buffer, i
       pos += sql_str.to_string(buffer + pos, length - pos);
       ret = databuff_printf(buffer, length, pos, "'");
     }
-  } else { // should not come here currently!
-    ret = OB_NOT_SUPPORTED;
-    COMMON_LOG(WARN, "unsupported udt type", K(ret), K(obj.get_meta()), K(length), K(pos));
+  } else {
+    ObString udt_data;
+    if (OB_FAIL(obj.get_udt_print_data(udt_data, buffer, length, pos, true))) {
+      COMMON_LOG(WARN, "failed to get udt print data", K(ret));
+    } else if (OB_FAIL(databuff_printf(buffer, length, pos, "'"))) {
+    } else {
+      ObHexEscapeSqlStr sql_str(udt_data);
+      pos += sql_str.to_string(buffer + pos, length - pos);
+      ret = databuff_printf(buffer, length, pos, "'");
+    }
   }
   return ret;
 }
@@ -3545,8 +3561,11 @@ inline int obj_print_str<ObUserDefinedSQLType>(const ObObj &obj, char *buffer, i
       ret = databuff_printf(buffer, length, pos, "'%.*s'", udt_data.length(), udt_data.ptr());
     }
   } else {
-    ret = OB_NOT_SUPPORTED;
-    COMMON_LOG(WARN, "unsupported udt type", K(ret), K(obj.get_meta()), K(length), K(pos));
+    ObString udt_data;
+    if (OB_FAIL(obj.get_udt_print_data(udt_data, buffer, length, pos, true))) {
+    } else {
+      ret = databuff_printf(buffer, length, pos, "'%.*s'", udt_data.length(), udt_data.ptr());
+    }
   }
   return ret;
 }
@@ -3566,8 +3585,8 @@ inline int obj_print_plain_str<ObUserDefinedSQLType>(const ObObj &obj, char *buf
       ret = obj_print_plain_str<ObVarcharType>(tmp_obj, buffer, length, pos, params);
     }
   } else {
-    ret = OB_NOT_SUPPORTED;
-    COMMON_LOG(WARN, "unsupported udt type", K(ret), K(obj.get_meta()), K(length), K(pos));
+    ObString str = obj.get_text_print_string(length - pos);
+    ret = databuff_memcpy(buffer, length, pos, str.length(), str.ptr());
   }
   return ret;
 }
@@ -3577,20 +3596,16 @@ inline int obj_print_json<ObUserDefinedSQLType>(const ObObj &obj, char *buf, int
 {
   UNUSED(params);
   int ret = OB_SUCCESS;
-  if (obj.get_meta().is_xml_sql_type()) {
-    ObString udt_data;
-    if (OB_FAIL(obj.get_udt_print_data(udt_data, buf, buf_len, pos, true))) {
-    } else {
-      J_OBJ_START();
-      PRINT_META();
-      BUF_PRINTO("XML");
-      J_COLON();
-      BUF_PRINTO(udt_data);
-      J_OBJ_END();
-    }
+  ObString udt_data;
+  if (OB_FAIL(obj.get_udt_print_data(udt_data, buf, buf_len, pos, obj.get_meta().is_xml_sql_type()))) {
+    COMMON_LOG(WARN, "failed to get udt print data", K(ret), K(obj.get_meta()), K(buf_len), K(pos));
   } else {
-    ret = OB_NOT_SUPPORTED;
-    COMMON_LOG(WARN, "unsupported udt type", K(ret), K(obj.get_meta()), K(buf_len), K(pos));
+    J_OBJ_START();
+    PRINT_META();
+    BUF_PRINTO(obj.get_meta().is_xml_sql_type() ? "XML" : "UDT");
+    J_COLON();
+    BUF_PRINTO(udt_data);
+    J_OBJ_END();
   }
   return ret;
 }

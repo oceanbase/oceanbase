@@ -81,6 +81,7 @@ int ObExprNvlUtil::calc_result_type(ObExprResType &type,
     ObExprResType &udt_type = !type1.is_null() ? type1 : type2;
     if (type1.is_xml_sql_type() || type2.is_xml_sql_type()) {
       type.set_subschema_id(ObXMLSqlType);
+      type.set_udt_id(T_OBJ_XML);
     } else if ((is_one_type_null || type1.get_udt_id() == type2.get_udt_id())
                 && udt_type.get_udt_id() != OB_INVALID_ID) {
       type.set_subschema_id(udt_type.get_subschema_id());
@@ -302,7 +303,7 @@ int ObExprOracleNvl::calc_nvl_oralce_result_type(ObExprResType &type,
     } else if (lib::is_oracle_mode() && type.is_ext()) {
       ObExprResType &null_type = type1.is_null() ? type1 : type2;
       ObExprResType &res_type = !type1.is_null() ? type1 : type2;
-      CK ((type1.get_udt_id() == type2.get_udt_id()) || type1.is_null() || type2.is_null());
+      OV ((type1.get_udt_id() == type2.get_udt_id()) || type1.is_null() || type2.is_null(), OB_ERR_INVALID_TYPE_FOR_OP, type1, type2);
       OX (type.set_udt_id(res_type.get_udt_id()));
       OX (type.set_extend_type(res_type.get_extend_type()));
       if (null_type.is_null()) {
@@ -310,13 +311,20 @@ int ObExprOracleNvl::calc_nvl_oralce_result_type(ObExprResType &type,
       }
     } else if (type.is_temporal_type()) {
       type.set_scale(0);
-    } else if (type.is_user_defined_sql_type()) {
-      // only two situations:
-      // 1. both type1 and type2 are UDT, and have same udt_id
-      // 2. one of type1 and type2 is null, need to set accuracy for udt_id_
+    } else if (type.is_xml_sql_type()) {
       ObExprResType &null_type = type1.is_null() ? type1 : type2;
       if (null_type.is_null()) {
         null_type.set_calc_accuracy(type.get_accuracy());
+      }
+    } else if (type.is_user_defined_sql_type()) {
+      // only two situations:
+      // 1. both type1 and type2 are sql UDT, and have same udt_id
+      // 2. one of type1 and type2 is null or ext, need to set calc accuracy for udt_id_
+      if (OB_SUCC(ret) && (type1.is_ext() || type1.is_null())) {
+        OX (type1.set_calc_accuracy(type.get_accuracy()));
+      }
+      if (OB_SUCC(ret) && (type2.is_ext() || type2.is_null())) {
+        OX (type2.set_calc_accuracy(type.get_accuracy()));
       }
     }
     /*

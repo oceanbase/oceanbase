@@ -457,7 +457,9 @@ int TriggerHandle::init_param_old_row(
           trig_ctdef.old_row_exprs_.at(i)->obj_meta_))) {
         LOG_WARN("failed to datum to obj", K(ret));
       } else if (lib::is_oracle_mode()
-                 && (is_udt = ob_is_geometry(trig_ctdef.old_row_exprs_.at(i)->obj_meta_.get_type()))) {
+                 && (is_udt = ob_is_geometry(trig_ctdef.old_row_exprs_.at(i)->obj_meta_.get_type())
+                     || (ob_is_user_defined_sql_type(trig_ctdef.old_row_exprs_.at(i)->obj_meta_.get_type())
+                         && !trig_ctdef.old_row_exprs_.at(i)->obj_meta_.is_xml_sql_type()))) {
         if (OB_FAIL(OB_ISNULL(eval_ctx.exec_ctx_.get_sql_ctx()))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("sql ctx is null", K(ret));
@@ -467,7 +469,7 @@ int TriggerHandle::init_param_old_row(
                                                 eval_ctx.exec_ctx_.get_allocator(),
                                                 result,
                                                 dst,
-                                                trig_ctdef.old_row_exprs_.at(i)->obj_meta_.get_type()))) {
+                                                trig_ctdef.old_row_exprs_.at(i)->obj_meta_))) {
           LOG_WARN("failed to convert sql type to pl type", K(ret));
         }
       }
@@ -530,8 +532,9 @@ int TriggerHandle::init_param_new_row(
           trig_ctdef.new_row_exprs_.at(i)->obj_meta_))) {
         LOG_WARN("failed to datum to obj", K(ret));
       } else if (lib::is_oracle_mode()
-                 &&(is_udt = ob_is_geometry(trig_ctdef.new_row_exprs_.at(i)->obj_meta_.get_type())
-                             || ob_is_extend(trig_ctdef.new_row_exprs_.at(i)->obj_meta_.get_type()))) {
+                 && (is_udt = ob_is_geometry(trig_ctdef.new_row_exprs_.at(i)->obj_meta_.get_type())
+                             || ob_is_extend(trig_ctdef.new_row_exprs_.at(i)->obj_meta_.get_type())
+                             || (ob_is_user_defined_sql_type(trig_ctdef.new_row_exprs_.at(i)->obj_meta_.get_type()) && !trig_ctdef.new_row_exprs_.at(i)->obj_meta_.is_xml_sql_type()))) {
         if (OB_FAIL(OB_ISNULL(eval_ctx.exec_ctx_.get_sql_ctx()))) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("sql ctx is null", K(ret));
@@ -541,7 +544,7 @@ int TriggerHandle::init_param_new_row(
                                                 eval_ctx.exec_ctx_.get_allocator(),
                                                 result,
                                                 dst,
-                                                trig_ctdef.new_row_exprs_.at(i)->obj_meta_.get_type()))) {
+                                                trig_ctdef.new_row_exprs_.at(i)->obj_meta_))) {
           LOG_WARN("failed to convert sql type to pl type", K(ret));
         }
       }
@@ -934,13 +937,15 @@ int TriggerHandle::check_and_update_new_row(
           ObObj tmp_obj = new_cells[i];
           ObDatum &write_datum = expr->locate_datum_for_write(eval_ctx);
           if (lib::is_oracle_mode()
-              && ob_is_geometry(expr->obj_meta_.get_type())) {
+              && (ob_is_geometry(expr->obj_meta_.get_type())
+                  || (ob_is_user_defined_sql_type(expr->obj_meta_.get_type())
+                      && !expr->obj_meta_.is_xml_sql_type()))) {
             if (OB_FAIL(convert_pl_type_to_sql_type(eval_ctx.exec_ctx_.get_my_session(),
                                                     eval_ctx.exec_ctx_,
                                                     eval_ctx.exec_ctx_.get_allocator(),
                                                     new_cells[i],
                                                     tmp_obj,
-                                                    expr->obj_meta_.get_type()))) {
+                                                    expr->obj_meta_))) {
               LOG_WARN("failed to convert pl type to sql type", K(ret));
             }
           } else if (OB_FAIL(deep_copy_obj(eval_ctx.exec_ctx_.get_allocator(), new_cells[i], tmp_obj))) {
@@ -1295,9 +1300,10 @@ int TriggerHandle::convert_sql_type_to_pl_type(ObSQLSessionInfo *session,
                                                ObIAllocator &alloc,
                                                ObObj &src,
                                                ObObj &dst,
-                                               ObObjType obj_type)
+                                               const ObObjMeta &obj_meta)
 {
   int ret = OB_SUCCESS;
+  const ObObjType obj_type = obj_meta.get_type();
   if (src.is_null()) {
     if (OB_ISNULL(schema_guard)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1308,12 +1314,21 @@ int TriggerHandle::convert_sql_type_to_pl_type(ObSQLSessionInfo *session,
       const pl::ObUserDefinedType *user_type = NULL;
       int64_t ptr = 0;
       int64_t init_size = OB_INVALID_SIZE;
+      uint64_t tenant_id = OB_INVALID_ID;
       pl::ObPLUDTNS udt_ns(*schema_guard);
+      ObSqlUDTMeta udt_meta;
       if (ob_is_geometry(obj_type)) {
         udt_id = 300028;
+        tenant_id = pl::get_tenant_id_by_object_id(udt_id);
+      } else if (OB_FAIL(exec_ctx.get_sqludt_meta_by_subschema_id(obj_meta.get_subschema_id(), udt_meta))) {
+        LOG_WARN("failed to get sql udt meta by subschema id", K(ret), K(obj_meta.get_subschema_id()));
+      } else {
+        udt_id = udt_meta.udt_id_;
+        tenant_id = pl::get_tenant_id_by_object_id(udt_id);
       }
-      uint64_t tenant_id = pl::get_tenant_id_by_object_id(udt_id);
-      if (OB_INVALID_ID == udt_id) {
+
+      if (OB_FAIL(ret)) {
+      } else if (OB_INVALID_ID == udt_id) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid udt id", K(ret), K(obj_type));
       } else if (OB_FAIL(schema_guard->get_udt_info(tenant_id, udt_id, udt_info))) {
@@ -1329,6 +1344,7 @@ int TriggerHandle::convert_sql_type_to_pl_type(ObSQLSessionInfo *session,
         LOG_WARN("failed to get size", K(ret));
       } else {
         dst.set_extend(ptr, user_type->get_type(), init_size);
+        reinterpret_cast<pl::ObPLComposite *>(ptr)->set_null();
       }
       if (OB_NOT_NULL(user_type)) {
         user_type->~ObUserDefinedType();
@@ -1342,7 +1358,7 @@ int TriggerHandle::convert_sql_type_to_pl_type(ObSQLSessionInfo *session,
     ObCastCtx cast_ctx(&alloc, &dtc_params, CM_NONE, src.get_collation_type());
     cast_ctx.exec_ctx_ = &exec_ctx;
     if (OB_FAIL(ObObjCaster::to_type(ObExtendType, cast_ctx, src, dst))) {
-      LOG_WARN("failed to cast to extend type", K(ret), K(src), K(dst), K(obj_type));
+      LOG_WARN("failed to cast to extend type", K(ret), K(src), K(dst), K(obj_meta));
     }
   }
   return ret;
@@ -1353,14 +1369,16 @@ int TriggerHandle::convert_pl_type_to_sql_type(ObSQLSessionInfo *session,
                                                ObIAllocator &alloc,
                                                ObObj &src,
                                                ObObj &dst,
-                                               ObObjType obj_type)
+                                               const ObObjMeta &obj_meta)
 {
   int ret = OB_SUCCESS;
-  if (ob_is_geometry(obj_type)) {
+  const ObObjType obj_type = obj_meta.get_type();
+  if (ob_is_geometry(obj_type) || (ob_is_user_defined_sql_type(obj_type) && !obj_meta.is_xml_sql_type())) {
     const ObDataTypeCastParams dtc_params = ObBasicSessionInfo::create_dtc_params(session);
     ObCastCtx cast_ctx(&alloc, &dtc_params, CM_NONE, src.get_collation_type());
+    cast_ctx.exec_ctx_ = &exec_ctx;
     if (OB_FAIL(ObObjCaster::to_type(obj_type, cast_ctx, src, dst))) {
-      LOG_WARN("failed to cast to extend type", K(ret), K(src), K(dst), K(obj_type));
+      LOG_WARN("failed to cast pl type to sql type", K(ret), K(src), K(dst), K(obj_meta));
     }
   }
   return ret;

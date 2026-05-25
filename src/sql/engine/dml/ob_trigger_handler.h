@@ -190,13 +190,13 @@ private:
                                          ObIAllocator &alloc,
                                          ObObj &src,
                                          ObObj &dst,
-                                         ObObjType obj_type);
+                                         const ObObjMeta &obj_meta);
   static int convert_pl_type_to_sql_type(ObSQLSessionInfo *session,
                                          ObExecContext &exec_ctx,
                                          ObIAllocator &alloc,
                                          ObObj &src,
                                          ObObj &dst,
-                                         ObObjType obj_type);
+                                         const ObObjMeta &obj_meta);
   static int init_trigger_execute_args(ObExecContext &exec_ctx,
                                        const ObTrigDMLCtDef &trig_ctdef,
                                        ObTrigDMLRtDef &trig_rtdef);

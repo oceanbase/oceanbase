@@ -5432,13 +5432,13 @@ int ObDDLOperator::drop_table(
               table_schema, trans, ddl_stmt_str, is_truncate_table,
               drop_table_set, is_drop_db, delete_priv, is_force_drop_lonely_lob_aux_table))) {
     LOG_WARN("drop table for not dropped shema failed", K(ret));
-  } else if (table_schema.is_view_table()
+  } else if ((table_schema.is_view_table() || !table_schema.is_aux_table())
             && OB_FAIL(ObDependencyInfo::delete_schema_object_dependency(
                       trans,
                       tenant_id,
                       table_schema.get_table_id(),
                       table_schema.get_schema_version(),
-                      ObObjectType::VIEW))) {
+                      table_schema.is_view_table() ? ObObjectType::VIEW : ObObjectType::TABLE))) {
     LOG_WARN("failed to delete_schema_object_dependency", K(ret), K(tenant_id),
     K(table_schema.get_table_id()));
   }

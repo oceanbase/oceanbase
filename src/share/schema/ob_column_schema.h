@@ -212,6 +212,9 @@ int assign(const ObColumnSchemaV2 &src_schema);
   }
 
   inline bool is_collection() const { return meta_type_.is_collection_sql_type(); }
+  inline bool is_user_defined_sql_type() const { return meta_type_.is_user_defined_sql_type(); }
+  // common user defined sql type is not xmltype
+  inline bool is_common_user_defined_sql_type() const { return is_user_defined_sql_type() && !is_xmltype(); }
   inline bool is_extend() const { return meta_type_.is_ext() || meta_type_.is_user_defined_sql_type(); }
   inline bool is_udt_hidden_column() const { return get_udt_set_id() > 0 && is_hidden(); }
   inline bool is_udt_related_column(bool is_oracle_mode) const { return is_extend() || is_udt_hidden_column() ||

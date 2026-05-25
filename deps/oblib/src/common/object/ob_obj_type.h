@@ -1611,9 +1611,16 @@ inline bool ob_is_var_len_type(const ObObjType type) {
       || ob_is_lob_locator(type);
 }
 inline bool ob_is_collection_sql_type(const ObObjType type) { return ObCollectionSQLType == type; }
+
+inline bool ob_is_user_defined_sql_type(const ObObjType type) { return ObUserDefinedSQLType == type; }
+inline bool ob_is_user_defined_pl_type(const ObObjType type) { return ObExtendType == type; }
+inline bool ob_is_user_defined_type(const ObObjType type) {
+  return ob_is_user_defined_sql_type(type) || ob_is_user_defined_pl_type(type);
+}
 inline bool is_lob_storage(const ObObjType type) { return ob_is_large_text(type)
                                                           || ob_is_json_tc(type)
                                                           || ob_is_geometry_tc(type)
+                                                          || ob_is_user_defined_sql_type(type)
                                                           || ob_is_collection_sql_type(type)
                                                           || ob_is_roaringbitmap_tc(type); }
 inline bool ob_is_geometry(const ObObjType type) { return ObGeometryType == type; }
@@ -1625,11 +1632,6 @@ inline bool is_decimal_int_accuracy_valid(const int16_t precision, const int16_t
   return scale >= 0 && precision >= scale;
 }
 
-inline bool ob_is_user_defined_sql_type(const ObObjType type) { return ObUserDefinedSQLType == type; }
-inline bool ob_is_user_defined_pl_type(const ObObjType type) { return ObExtendType == type; }
-inline bool ob_is_user_defined_type(const ObObjType type) {
-  return ob_is_user_defined_sql_type(type) || ob_is_user_defined_pl_type(type);
-}
 // xml type without schema
 inline bool ob_is_xml_sql_type(const ObObjType type, const uint16_t sub_schema_id) {
   return (ObUserDefinedSQLType == type) && (sub_schema_id == ObXMLSqlType);

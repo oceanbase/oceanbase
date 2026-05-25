@@ -599,7 +599,8 @@ public:
                                   sql::ObSQLSessionInfo &session_info,
                                   share::schema::ObSchemaGetterGuard &schema_guard,
                                   ObPLDataType &pl_type,
-                                  ObIArray<share::schema::ObSchemaObjVersion> *deps);
+                                  ObIArray<share::schema::ObSchemaObjVersion> *deps,
+                                  const bool specify_schema = false);
 #ifdef OB_BUILD_ORACLE_PL
   static int get_pkg_type_by_name(uint64_t tenant_id,
                                   uint64_t owner_id,

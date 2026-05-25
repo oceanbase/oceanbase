@@ -61,7 +61,7 @@ int ObExprUdtConstruct::calc_result_typeN(ObExprResType &type,
       type.set_type(ObUserDefinedSQLType);
     } else if (udt_id_ == T_OBJ_SDO_ORDINATE_ARRAY ||
                udt_id_ == T_OBJ_SDO_ELEMINFO_ARRAY) {
-      type.set_type(ObCollectionSQLType);
+      type.set_type(ObUserDefinedSQLType);
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid udt type", K(ret), K(udt_id_));
@@ -313,12 +313,11 @@ int ObExprUdtConstruct::eval_sdo_geom_udt_access(ObIAllocator &allocator, const 
           res.set_null();
         } else if (OB_FAIL(pl::ObSdoGeometry::write_sdo_point(sdo_geo.get_point(), alloc, pl_ext))) {
           LOG_WARN("fail to transform sdo point", K(ret));
-        } else if (OB_FAIL(ObSqlUdtUtils::cast_pl_record_to_sql_record(allocator,
-                                                                        expr_res_alloc,
-                                                                        &ctx.exec_ctx_,
-                                                                        res_str,
-                                                                        sql_udt,
-                                                                        pl_ext))) {
+        } else if (OB_FAIL(ObSqlUdtUtils::pl_extend_serialize_to_sql_udt(expr_res_alloc,
+                                                                                &ctx.exec_ctx_,
+                                                                                res_str,
+                                                                                pl_ext,
+                                                                                sql_udt_meta))) {
           LOG_WARN("fail to cast udt sdo point", K(ret));
         } else {
           res.set_string(res_str.ptr(), res_str.length());
@@ -330,7 +329,7 @@ int ObExprUdtConstruct::eval_sdo_geom_udt_access(ObIAllocator &allocator, const 
           res.set_null();
         } else if (OB_FAIL(pl::ObSdoGeometry::write_sdo_elem_info(ctx.exec_ctx_, sdo_geo.get_elem_info(), alloc, pl_ext))) {
           LOG_WARN("fail to transform sdo point", K(ret));
-        } else if (OB_FAIL(ObSqlUdtUtils::cast_pl_varray_to_sql_varray(expr_res_alloc, res_str, pl_ext))) {
+        } else if (OB_FAIL(ObSqlUdtUtils::pl_extend_serialize_to_sql_udt(expr_res_alloc, &ctx.exec_ctx_, res_str, pl_ext, sql_udt_meta))) {
           LOG_WARN("fail to cast udt sdo element", K(ret));
         } else {
           res.set_string(res_str.ptr(), res_str.length());
@@ -342,7 +341,7 @@ int ObExprUdtConstruct::eval_sdo_geom_udt_access(ObIAllocator &allocator, const 
           res.set_null();
         } else if (OB_FAIL(pl::ObSdoGeometry::write_sdo_ordinate(ctx.exec_ctx_, sdo_geo.get_ordinates(), alloc, pl_ext))) {
           LOG_WARN("fail to transform sdo point", K(ret));
-        } else if (OB_FAIL(ObSqlUdtUtils::cast_pl_varray_to_sql_varray(expr_res_alloc, res_str, pl_ext))) {
+        } else if (OB_FAIL(ObSqlUdtUtils::pl_extend_serialize_to_sql_udt(expr_res_alloc, &ctx.exec_ctx_, res_str, pl_ext, sql_udt_meta))) {
           LOG_WARN("fail to cast udt sdo element", K(ret));
         } else {
           res.set_string(res_str.ptr(), res_str.length());

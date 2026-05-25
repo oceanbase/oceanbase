@@ -53,6 +53,16 @@ public:
   static int alter_udt(const obrpc::ObAlterUDTArg &arg,
                         obrpc::ObRoutineDDLRes *res,
                         rootserver::ObDDLService &ddl_service);
+  static int check_udt_dep_objs(uint64_t tenant_id,
+                                uint64_t ref_obj_id,
+                                schema::ObObjectType ref_obj_type,
+                                common::ObMySQLTransaction &trans,
+                                schema::ObSchemaGetterGuard &schema_guard,
+                                rootserver::ObDDLOperator &ddl_operator,
+                                common::ObIArray<CriticalDepInfo> &objs,
+                                bool &has_type_dep_obj,
+                                bool &has_table_dep_obj,
+                                bool purge_table_in_recyclebin);
   //----End of functions for managing udt----
 
   //----Functions for managing package----

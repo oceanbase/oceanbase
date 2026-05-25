@@ -411,7 +411,7 @@ int ObExprValuesOp::eval_values_op_dynamic_cast_to_lob(ObExpr &real_src_expr,
   ObDatum &dst_datum = dst_expr->locate_datum_for_write(eval_ctx_);
   if (!string_to_lob_withsame_cs_type) {
     if (OB_FAIL(datum_caster_.to_type(dst_expr->datum_meta_, real_src_expr,
-                                      cm_, datum))) {
+                                      cm_, datum, 0, dst_expr->obj_meta_.get_subschema_id()))) {
       LOG_WARN("fail to dynamic cast", K(dst_expr->datum_meta_),
                                         K(real_src_expr), K(cm_), K(ret));
     } else if (lib::is_oracle_mode() && dst_expr->datum_meta_.type_ == common::ObLongTextType) {
@@ -538,6 +538,8 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
       bool need_cast_collection_element =
         (src_meta.type_ == ObCollectionSQLType && dst_expr->datum_meta_.type_ == ObCollectionSQLType
          && src_expr->obj_meta_.get_subschema_id() != dst_expr->obj_meta_.get_subschema_id());
+      bool need_cast_sql_udt = (ob_is_user_defined_sql_type(src_meta.type_) && ob_is_user_defined_sql_type(dst_expr->datum_meta_.type_)
+                               && (src_expr->obj_meta_.get_subschema_id() != dst_expr->obj_meta_.get_subschema_id()));
       if (OB_FAIL(ret)) {
         // do nothing
       } else if (src_expr == dst_expr) {
@@ -554,6 +556,7 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
       } else if (src_meta.type_ == dst_expr->datum_meta_.type_
                  && src_meta.cs_type_ == dst_expr->datum_meta_.cs_type_
                  && src_obj_meta.has_lob_header() == dst_expr->obj_meta_.has_lob_header()
+                 && !need_cast_sql_udt
                  && !need_adjust_decimal_int
                  && !need_cast_collection_element) {
         // 将values中数据copy到output中
@@ -643,7 +646,7 @@ OB_INLINE int ObExprValuesOp::calc_next_row()
           }
         }
 
-        if (OB_SUCC(ret) && !dst_expr->obj_meta_.is_lob_storage()) {
+        if (OB_SUCC(ret) && (!dst_expr->obj_meta_.is_lob_storage())) {
           ObDatum &dst_datum = dst_expr->locate_datum_for_write(eval_ctx_);
           if (ObObjDatumMapType::OBJ_DATUM_STRING == dst_expr->obj_datum_map_) {
             ObExprStrResAlloc res_alloc(*dst_expr, eval_ctx_);

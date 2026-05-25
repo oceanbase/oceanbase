@@ -1548,6 +1548,8 @@ int ObCreateViewResolver::fill_column_meta_infos(const ObRawExpr &expr,
   }
   if (column_meta.is_xml_sql_type()) {
     column.set_sub_data_type(T_OBJ_XML);
+  } else if (column_meta.is_user_defined_sql_type()) {
+    column.set_sub_data_type(expr.get_result_type().get_udt_id());
   }
   column.set_meta_type(column_meta);
   column.set_charset_type(charset_type);

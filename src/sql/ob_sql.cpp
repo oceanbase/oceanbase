@@ -365,7 +365,7 @@ int ObSql::fill_result_set(ObResultSet &result_set,
               LOG_WARN("unsupported udt id", K(ret), K(subschema_id));
             } else if (OB_FAIL(result_set.get_exec_context().get_sqludt_meta_by_subschema_id(subschema_id, udt_meta))) {
               LOG_WARN("failed to get udt meta", K(ret), K(subschema_id));
-            } else if(ObObjUDTUtil::ob_is_supported_sql_udt(udt_meta.udt_id_)) {
+            } else if(ObObjUDTUtil::ob_is_sys_sql_udt(udt_meta.udt_id_)) {
               field.type_.set_subschema_id(subschema_id);
               if (OB_FAIL(ob_write_string(alloc, ObString(udt_meta.udt_name_len_, udt_meta.udt_name_), field.type_name_))) {
                 LOG_WARN("fail to alloc string", K(i), K(field), K(ret));
@@ -835,7 +835,7 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
             field.accuracy_.set_accuracy(T_OBJ_SDO_GEOMETRY);
           }
           if (expr->get_result_type().is_collection_sql_type()
-              && !ObObjUDTUtil::ob_is_supported_sql_udt(udt_id)) {
+              && !ObObjUDTUtil::ob_is_sys_sql_udt(udt_id)) {
             // array type
             field.type_.set_subschema_id(subschema_id);
             field.charsetnr_ = CS_TYPE_UTF8MB4_BIN;

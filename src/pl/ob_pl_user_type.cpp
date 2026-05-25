@@ -652,93 +652,199 @@ int ObUserDefinedType::alloc_for_second_level_composite(ObObj &dest, ObIAllocato
 int ObUserDefinedType::serialize_obj(const ObObj &obj, char* buf, const int64_t len, int64_t& pos)
 {
   int ret = OB_SUCCESS;
+#ifdef OB_BUILD_ORACLE_PL
   CK (obj.is_pl_extend());
   OZ (serialization::encode(buf, len, pos, GET_MIN_CLUSTER_VERSION()));
-  OZ (serialization::encode(buf, len, pos, obj.get_meta().get_extend_type()));
-  if (OB_SUCC(ret)) {
-    switch (obj.get_meta().get_extend_type()) {
-    case PL_RECORD_TYPE: {
-      //todo:
-      ret = OB_NOT_SUPPORTED;
-    }
-      break;
-#ifdef OB_BUILD_ORACLE_PL
+  if (OB_FAIL(ret)) {
+
+  } else if (PL_OPAQUE_TYPE == obj.get_meta().get_extend_type()) {
+    ObPLOpaque *opaque = reinterpret_cast<ObPLOpaque*>(obj.get_ext());
+    CK (OB_NOT_NULL(opaque));
+    OZ (serialization::encode(buf, len, pos, PL_OPAQUE_TYPE));
+    OZ (opaque->serialize(buf, len, pos));
+  } else {
+    ObPLComposite *composite = reinterpret_cast<ObPLComposite*>(obj.get_ext());
+    CK (OB_NOT_NULL(composite));
+    OZ (composite->serialize(buf, len, pos));
+    if (OB_SUCC(ret)) {
+      switch (obj.get_meta().get_extend_type()) {
+      case PL_RECORD_TYPE: {
+        ObPLRecord *record = reinterpret_cast<ObPLRecord*>(obj.get_ext());
+        CK (OB_NOT_NULL(record));
+        OZ (record->serialize(buf, len, pos));
+      }
+        break;
 #define SERIALIZE_COLLECTION(type, class) \
-    case type: { \
-      class *collection = reinterpret_cast<class*>(obj.get_ext()); \
-      OZ (collection->serialize(buf, len, pos)); \
-    } \
-      break;
+      case type: { \
+        class *collection = reinterpret_cast<class*>(obj.get_ext()); \
+        OZ (collection->serialize(buf, len, pos)); \
+      } \
+        break;
 
-    SERIALIZE_COLLECTION(PL_NESTED_TABLE_TYPE, ObPLNestedTable)
+      SERIALIZE_COLLECTION(PL_NESTED_TABLE_TYPE, ObPLNestedTable)
 
-    SERIALIZE_COLLECTION(PL_ASSOCIATIVE_ARRAY_TYPE, ObPLAssocArray)
+      SERIALIZE_COLLECTION(PL_ASSOCIATIVE_ARRAY_TYPE, ObPLAssocArray)
 
-    SERIALIZE_COLLECTION(PL_VARRAY_TYPE, ObPLVArray)
+      SERIALIZE_COLLECTION(PL_VARRAY_TYPE, ObPLVArray)
 
 #undef SERIALIZE_COLLECTION
-#endif
-    default: {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected type to serialize", K(obj), K(ret));
-    }
-      break;
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("Unexpected type to serialize", K(obj), K(ret));
+      }
+        break;
+      }
     }
   }
+#endif
   return ret;
 }
 
 int ObUserDefinedType::deserialize_obj(ObObj &obj, const char* buf, const int64_t len, int64_t& pos)
 {
   int ret = OB_SUCCESS;
+  //deserialize will be executed in ObUserDefinedType::do_deserialize_obj
+  return ret;
+}
+
+int ObUserDefinedType::do_deserialize_obj(ObIAllocator &allocator, ObObj &obj, const char* buf, const int64_t len, int64_t& pos, bool is_nested)
+{
+  int ret = OB_SUCCESS;
+#ifdef OB_BUILD_ORACLE_PL
   int64_t version = OB_INVALID_VERSION;
-  uint8_t pl_type = PL_INVALID_TYPE;
+  ObPLType pl_type = PL_INVALID_TYPE;
+  bool is_null = false;
   uint64_t id = OB_INVALID_ID;
   OZ (serialization::decode(buf, len, pos, version));
   OZ (serialization::decode(buf, len, pos, pl_type));
-  OZ (serialization::decode(buf, len, pos, id));
-  if (OB_SUCC(ret)) {
-    switch (pl_type) {
-    case PL_RECORD_TYPE: {
-      //todo:
-      ret = OB_NOT_SUPPORTED;
-    }
-      break;
-#ifdef OB_BUILD_ORACLE_PL
-#define DESERIALIZE_COLLECTION(type, class) \
-  case type: { \
-    if (OB_SUCC(ret)) { \
-      class *new_coll = NULL; \
-      ObIAllocator &allocator = CURRENT_CONTEXT->get_arena_allocator(); \
-      if (OB_ISNULL(new_coll = reinterpret_cast<class *>(allocator.alloc(sizeof(class))))) { \
-        ret = OB_ALLOCATE_MEMORY_FAILED; \
-        LOG_WARN("failed to allocator memory for collection", K(ret)); \
-      } else { \
-        new(new_coll) class(id); \
-        OX (new_coll->set_allocator(&allocator)); \
-        OZ (new_coll->deserialize(allocator, buf, len, pos)); \
-        OX (obj.set_extend(reinterpret_cast<int64_t>(new_coll), type)); \
-      } \
-    } \
-  } \
-    break;
 
-  DESERIALIZE_COLLECTION(PL_NESTED_TABLE_TYPE, ObPLNestedTable)
-
-  DESERIALIZE_COLLECTION(PL_ASSOCIATIVE_ARRAY_TYPE, ObPLAssocArray)
-
-  DESERIALIZE_COLLECTION(PL_VARRAY_TYPE, ObPLVArray)
-
-#undef DESERIALIZE_COLLECTION
-#endif
-    default: {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected type to deserialize", K(obj), K(ret));
-    }
-      break;
-    }
+#define DESTRUCT_PL_EXTEND(ptr, type) \
+  ObObj tmp_obj; \
+  tmp_obj.set_extend(reinterpret_cast<int64_t>(ptr), type); \
+  int tmp_ret = destruct_obj(tmp_obj, nullptr); \
+  if (OB_SUCCESS != tmp_ret) { \
+    LOG_WARN("failed to destruct pl obj on deserialize failure", K(tmp_ret), K(type)); \
   }
 
+  if (OB_SUCC(ret)) {
+    switch (pl_type) {
+      case PL_OPAQUE_TYPE: {
+        ObPLOpaqueType opaque_type = ObPLOpaqueType::PL_INVALID;
+        OZ (serialization::decode(buf, len, pos, opaque_type));
+        if (OB_SUCC(ret)) {
+          ObPLOpaque *new_opaque = NULL;
+          switch (opaque_type) {
+          case ObPLOpaqueType::PL_XML_TYPE: {
+            ObPLXmlType *xml = static_cast<ObPLXmlType *>(allocator.alloc(sizeof(ObPLXmlType)));
+            if (OB_ISNULL(xml)) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("failed to allocate memory for xmltype", K(ret));
+            } else {
+              new(xml) ObPLXmlType();
+              new_opaque = xml;
+            }
+          } break;
+          default: {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("unsupported opaque type for deserialization", K(ret), K(opaque_type));
+          } break;
+          }
+          if (OB_SUCC(ret)) {
+            if (OB_FAIL(new_opaque->deserialize(buf, len, pos))) {
+              LOG_WARN("failed to deserialize opaque", K(ret), K(opaque_type));
+              new_opaque->~ObPLOpaque();
+              allocator.free(new_opaque);
+            } else {
+              obj.set_extend(reinterpret_cast<int64_t>(new_opaque), PL_OPAQUE_TYPE);
+            }
+          }
+        }
+      } break;
+      case PL_RECORD_TYPE: {
+        ObPLRecord *new_record = NULL;
+        int32_t count = OB_INVALID_COUNT;
+        OZ (serialization::decode(buf, len, pos, id));
+        OZ (serialization::decode(buf, len, pos, is_null));
+        OZ (serialization::decode(buf, len, pos, count));
+
+        if (OB_FAIL(ret)) {
+        } else if (OB_UNLIKELY(count < 0)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid record count after deserialize", K(ret), K(count), K(id));
+        } else {
+          int64_t init_size = ObRecordType::get_init_size(count);
+          if (OB_ISNULL(new_record = reinterpret_cast<ObPLRecord *>(allocator.alloc(init_size)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("failed to allocate memory for record", K(ret), K(init_size), K(count), K(id));
+          } else {
+            new(new_record) ObPLRecord(id, count);
+            if (OB_FAIL(new_record->init_data(allocator, is_nested))) {
+              allocator.free(new_record);
+              new_record = NULL;
+            }
+            OX (new_record->set_is_null(is_null));
+            if (OB_FAIL(ret)) {
+            } else if (OB_ISNULL(new_record->get_allocator())) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("record allocator is null", K(ret));
+              DESTRUCT_PL_EXTEND(new_record, PL_RECORD_TYPE);
+            } else if (OB_FAIL(new_record->deserialize(*new_record->get_allocator(), buf, len, pos))) {
+              LOG_WARN("failed to deserialize record", K(ret));
+              DESTRUCT_PL_EXTEND(new_record, PL_RECORD_TYPE);
+            } else {
+              OX (obj.set_extend(reinterpret_cast<int64_t>(new_record), PL_RECORD_TYPE));
+            }
+          }
+        }
+      } break;
+#define DESERIALIZE_COLLECTION(type, class) \
+    case type: { \
+      OZ (serialization::decode(buf, len, pos, id)); \
+      OZ (serialization::decode(buf, len, pos, is_null)); \
+      if (OB_SUCC(ret)) { \
+        class *new_coll = NULL; \
+        if (OB_ISNULL(new_coll = reinterpret_cast<class *>(allocator.alloc(sizeof(class))))) { \
+          ret = OB_ALLOCATE_MEMORY_FAILED; \
+          LOG_WARN("failed to allocator memory for collection", K(ret)); \
+        } else { \
+          new(new_coll) class(id); \
+          if (OB_FAIL(new_coll->init_allocator(allocator, is_nested))) { \
+            allocator.free(new_coll); \
+            new_coll = NULL; \
+          } \
+          OX (new_coll->set_is_null(is_null)); \
+          if (OB_FAIL(ret)) { \
+          } else if (OB_ISNULL(new_coll->get_allocator())) { \
+            ret = OB_ERR_UNEXPECTED; \
+            LOG_WARN("collection allocator is null", K(ret)); \
+            DESTRUCT_PL_EXTEND(new_coll, type); \
+          } else if (OB_FAIL(new_coll->deserialize(*new_coll->get_allocator(), buf, len, pos))) { \
+            LOG_WARN("failed to deserialize collection", K(ret)); \
+            DESTRUCT_PL_EXTEND(new_coll, type); \
+          } else { \
+            OX (obj.set_extend(reinterpret_cast<int64_t>(new_coll), type)); \
+          } \
+        } \
+      } \
+    } \
+      break;
+
+    DESERIALIZE_COLLECTION(PL_NESTED_TABLE_TYPE, ObPLNestedTable)
+
+    DESERIALIZE_COLLECTION(PL_ASSOCIATIVE_ARRAY_TYPE, ObPLAssocArray)
+
+    DESERIALIZE_COLLECTION(PL_VARRAY_TYPE, ObPLVArray)
+
+#undef DESERIALIZE_COLLECTION
+#undef DESTRUCT_PL_EXTEND
+      default: {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("not support type to deserialize", K(obj), K(ret));
+      }
+        break;
+      }
+    }
+#endif // OB_BUILD_ORACLE_PL
   return ret;
 }
 
@@ -746,39 +852,49 @@ int64_t ObUserDefinedType::get_serialize_obj_size(const ObObj &obj)
 {
   int64_t size = 0;
   int ret = OB_SUCCESS;
+#ifdef OB_BUILD_ORACLE_PL
   CK (obj.is_pl_extend());
   OX (size += serialization::encoded_length(GET_MIN_CLUSTER_VERSION()));
-  OX (size += serialization::encoded_length(obj.get_meta().get_extend_type()));
-  if (OB_SUCC(ret)) {
-    switch (obj.get_meta().get_extend_type()) {
-    case PL_RECORD_TYPE: {
-      //todo:
-      ret = OB_NOT_SUPPORTED;
-    }
-      break;
-#ifdef OB_BUILD_ORACLE_PL
+  if (OB_FAIL(ret)) {
+
+  } else if (PL_OPAQUE_TYPE == obj.get_meta().get_extend_type()) {
+    ObPLOpaque *opaque = reinterpret_cast<ObPLOpaque*>(obj.get_ext());
+    CK (OB_NOT_NULL(opaque));
+    OX (size += serialization::encoded_length(PL_OPAQUE_TYPE));
+    OX (size += opaque->get_serialize_size());
+  } else {
+    ObPLComposite *composite = reinterpret_cast<ObPLComposite*>(obj.get_ext());
+    CK (OB_NOT_NULL(composite));
+    OX (size += composite->get_serialize_size());
+    if (OB_SUCC(ret)) {
+      switch (obj.get_meta().get_extend_type()) {
+      case PL_RECORD_TYPE: {
+        ObPLRecord *record = static_cast<ObPLRecord*>(composite);
+        OZ (record->get_serialize_size(size));
+      } break;
 #define COLLECTION_SERIALIZE_SIZE(type, class) \
-    case type: { \
-      class *collection = reinterpret_cast<class*>(obj.get_ext()); \
-      OZ (collection->get_serialize_size(size)); \
-    } \
-      break;
+      case type: { \
+        class *collection = reinterpret_cast<class*>(obj.get_ext()); \
+        OZ (collection->get_serialize_size(size)); \
+      } \
+        break;
 
-    COLLECTION_SERIALIZE_SIZE(PL_NESTED_TABLE_TYPE, ObPLNestedTable)
+      COLLECTION_SERIALIZE_SIZE(PL_NESTED_TABLE_TYPE, ObPLNestedTable)
 
-    COLLECTION_SERIALIZE_SIZE(PL_ASSOCIATIVE_ARRAY_TYPE, ObPLAssocArray)
+      COLLECTION_SERIALIZE_SIZE(PL_ASSOCIATIVE_ARRAY_TYPE, ObPLAssocArray)
 
-    COLLECTION_SERIALIZE_SIZE(PL_VARRAY_TYPE, ObPLVArray)
+      COLLECTION_SERIALIZE_SIZE(PL_VARRAY_TYPE, ObPLVArray)
 
 #undef COLLECTION_SERIALIZE_SIZE
-#endif
-    default: {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("Unexpected type to get serialize size", K(obj), K(ret));
-    }
-      break;
+      default: {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("Unexpected type to get serialize size", K(obj), K(ret));
+      }
+        break;
+      }
     }
   }
+#endif
   return size;
 }
 
@@ -2040,7 +2156,7 @@ int ObRecordType::get_serialize_size(
   ObPLRecord *record = reinterpret_cast<ObPLRecord *>(src);
   CK (OB_NOT_NULL(record));
   OV (record->get_count() == record_members_.count(), OB_ERR_WRONG_TYPE_FOR_VAR, KPC(record), K(record_members_));
-  OX (size += record->get_serialize_size());
+  OX (size += static_cast<ObPLComposite*>(record)->get_serialize_size());
   OX (size += serialization::encoded_length(record->get_count()));
 
   char *data = reinterpret_cast<char*>(record->get_element());
@@ -2060,7 +2176,7 @@ int ObRecordType::serialize(
   ObPLRecord *record = reinterpret_cast<ObPLRecord *>(src);
   CK (OB_NOT_NULL(record));
   CK (record->get_count() == record_members_.count());
-  OX (record->serialize(dst, dst_len, dst_pos));
+  OZ (static_cast<ObPLComposite*>(record)->serialize(dst, dst_len, dst_pos));
   OZ (serialization::encode(dst, dst_len, dst_pos, record->get_count()));
 
   char *data = reinterpret_cast<char*>(record->get_element());
@@ -2083,7 +2199,7 @@ int ObRecordType::deserialize(
   CK (OB_NOT_NULL(record));
   int32_t count = OB_INVALID_COUNT;
   // when record be delete , type will be PL_INVALID_TYPE
-  OX (record->deserialize(src, src_len, src_pos));
+  OZ (static_cast<ObPLComposite*>(record)->deserialize(src, src_len, src_pos));
   if (OB_SUCC(ret) && record->get_type() != PL_INVALID_TYPE) {
     OZ (serialization::decode(src, src_len, src_pos, count));
     CK (count == record_members_.count());
@@ -4517,27 +4633,151 @@ void ObPLRecord::print() const
   }
 }
 
-int64_t ObElemDesc::get_serialize_size() const
+int ObPLRecord::get_serialize_size(int64_t &size)
+{
+  int ret = OB_SUCCESS;
+  CK (is_inited());
+  if (OB_SUCC(ret)) {
+    size += serialization::encoded_length(get_count());
+    // serialize not_null array
+    bool *not_null = get_not_null();
+    CK (OB_NOT_NULL(not_null));
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_count(); ++i) {
+      size += serialization::encoded_length(not_null[i]);
+    }
+    // serialize element_type array
+    ObDataType *element_type = get_element_type();
+    CK (OB_NOT_NULL(element_type));
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_count(); ++i) {
+      size += element_type[i].get_serialize_size();
+    }
+    // serialize data array
+    ObObj *data = get_element();
+    CK (OB_NOT_NULL(data));
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_count(); ++i) {
+      size += data[i].get_serialize_size();
+    }
+  }
+  return ret;
+}
+
+int ObPLRecord::serialize(char* buf, const int64_t len, int64_t& pos)
+{
+  int ret = OB_SUCCESS;
+  CK (is_inited());
+  OZ (serialization::encode(buf, len, pos, get_count()));
+  if (OB_SUCC(ret)) {
+    // serialize not_null array
+    bool *not_null = get_not_null();
+    CK (OB_NOT_NULL(not_null));
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_count(); ++i) {
+      OZ (serialization::encode(buf, len, pos, not_null[i]));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    // serialize element_type array
+    ObDataType *element_type = get_element_type();
+    CK (OB_NOT_NULL(element_type));
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_count(); ++i) {
+      OZ (element_type[i].serialize(buf, len, pos));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    // serialize data array
+    ObObj *data = get_element();
+    CK (OB_NOT_NULL(data));
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_count(); ++i) {
+      OZ (data[i].serialize(buf, len, pos));
+    }
+  }
+  return ret;
+}
+
+int ObPLRecord::deserialize(common::ObIAllocator &allocator,
+                            const char *buf, const int64_t len, int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  if (OB_SUCC(ret)) {
+    // deserialize not_null array
+    bool *not_null = get_not_null();
+    CK (OB_NOT_NULL(not_null));
+    for (int64_t i = 0; OB_SUCC(ret) && i < count_; ++i) {
+      OZ (serialization::decode(buf, len, pos, not_null[i]));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    // deserialize element_type array
+    ObDataType *element_type = get_element_type();
+    CK (OB_NOT_NULL(element_type));
+    for (int64_t i = 0; OB_SUCC(ret) && i < count_; ++i) {
+      OZ (element_type[i].deserialize(buf, len, pos));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    // deserialize data array
+    ObObj *data = get_element();
+    CK (OB_NOT_NULL(data));
+    for (int64_t i = 0; OB_SUCC(ret) && i < count_; ++i) {
+      ObObj src_obj;
+      OZ (src_obj.meta_.deserialize(buf, len, pos));
+      if (OB_FAIL(ret)) {
+      } else if (OB_UNLIKELY(src_obj.is_invalid_type())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid source object type", K(ret), K(src_obj));
+      } else if (src_obj.is_ext()) {
+        int64_t ext_val = 0;
+        OZ (serialization::decode(buf, len, pos, ext_val));
+        if (OB_FAIL(ret)) {
+        } else if (ext_val == 0) {
+          OX (data[i].set_obj_value(ext_val));
+        } else if (!ObObj::is_ext_val(ext_val)) {
+          int64_t composite_len = 0;
+          OZ (serialization::decode(buf, len, pos, composite_len));
+          OZ (ObUserDefinedType::do_deserialize_obj(allocator, src_obj, buf, len, pos, true));
+          OX (data[i] = src_obj);
+        } else {
+          ObObj *obj = &(data[i]);
+          OX (new(obj)ObObj(ObMaxType));
+        }
+      } else {
+        OZ (ObObjUDTUtil::ob_udt_obj_value_deserialize(src_obj, buf, len, pos));
+        OZ (deep_copy_obj(allocator, src_obj, data[i]));
+      }
+    }
+  }
+  return ret;
+}
+
+int64_t ObElemDesc::get_serialize_size(bool full_format) const
 {
   int64_t size = 0;
+  if (full_format) {
+    size += static_cast<const common::ObDataType &>(*this).get_serialize_size();
+  }
   size += serialization::encoded_length(type_);
   size += serialization::encoded_length(not_null_);
   size += serialization::encoded_length(field_cnt_);
   return size;
 }
 
-int ObElemDesc::serialize(char *buf, int64_t len, int64_t &pos) const
+int ObElemDesc::serialize(char *buf, int64_t len, int64_t &pos, bool full_format) const
 {
   int ret = OB_SUCCESS;
+  if (full_format) {
+    OZ (static_cast<const common::ObDataType &>(*this).serialize(buf, len, pos));
+  }
   OZ (serialization::encode(buf, len, pos, type_));
   OZ (serialization::encode(buf, len, pos, not_null_));
   OZ (serialization::encode(buf, len, pos, field_cnt_));
   return ret;
 }
 
-int ObElemDesc::deserialize(const char* buf, const int64_t len, int64_t &pos)
+int ObElemDesc::deserialize(const char* buf, const int64_t len, int64_t &pos, bool full_format)
 {
   int ret = OB_SUCCESS;
+  if (full_format) {
+    OZ (static_cast<common::ObDataType &>(*this).deserialize(buf, len, pos));
+  }
   OZ (serialization::decode(buf, len, pos, type_));
   OZ (serialization::decode(buf, len, pos, not_null_));
   OZ (serialization::decode(buf, len, pos, field_cnt_));
@@ -4953,15 +5193,21 @@ int64_t ObPLCollection::get_last()
 int ObPLCollection::get_serialize_size(int64_t &size)
 {
   int ret = OB_SUCCESS;
-  CK (is_inited());
-  OX (size += serialization::encoded_length(get_count()));
-  OX (size += serialization::encoded_length(get_pure_first()));
-  OX (size += serialization::encoded_length(get_pure_last()));
-  if (OB_SUCC(ret)) {
+  const bool coll_inited = is_inited();
+  OX (size += get_element_desc().get_serialize_size(true));
+  OX (size += serialization::encoded_length(coll_inited ? get_count() : OB_INVALID_COUNT));
+  OX (size += serialization::encoded_length(coll_inited ? get_pure_first() : OB_INVALID_INDEX));
+  OX (size += serialization::encoded_length(coll_inited ? get_pure_last() : OB_INVALID_INDEX));
+  if (OB_SUCC(ret) && coll_inited) {
       char *data = reinterpret_cast<char *>(get_data());
       for (int64_t i = 0; OB_SUCC(ret) && i < get_count(); ++i) {
         ObObj *obj = reinterpret_cast<ObObj*>(data + sizeof(ObObj) * i);
-        OX (size += obj->get_serialize_size());
+        if (ObMaxType == obj->get_type()) {
+          ObObj max_obj = ObObj::make_max_obj();
+          OX (size += max_obj.get_serialize_size());
+        } else {
+          OX (size += obj->get_serialize_size());
+        }
       }
     }
   return ret;
@@ -4970,16 +5216,22 @@ int ObPLCollection::get_serialize_size(int64_t &size)
 int ObPLCollection::serialize(char* buf, const int64_t len, int64_t& pos)
 {
   int ret = OB_SUCCESS;
-  CK (is_inited());
-  OZ (serialization::encode(buf, len, pos, get_count()));
-  OZ (serialization::encode(buf, len, pos, get_pure_first()));
-  OZ (serialization::encode(buf, len, pos, get_pure_last()));
+  const bool coll_inited = is_inited();
+  OZ (get_element_desc().serialize(buf, len, pos, true));
+  OZ (serialization::encode(buf, len, pos, coll_inited ? get_count() : OB_INVALID_COUNT));
+  OZ (serialization::encode(buf, len, pos, coll_inited ? get_pure_first() : OB_INVALID_INDEX));
+  OZ (serialization::encode(buf, len, pos, coll_inited ? get_pure_last() : OB_INVALID_INDEX));
 
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && coll_inited) {
     char *data = reinterpret_cast<char *>(get_data());
     for (int64_t i = 0; OB_SUCC(ret) && i < get_count(); ++i) {
       ObObj *obj = reinterpret_cast<ObObj*>(data + sizeof(ObObj) * i);
-      OZ (obj->serialize(buf, len, pos));
+      if (ObMaxType == obj->get_type()) {
+        ObObj max_obj = ObObj::make_max_obj();
+        OZ (max_obj.serialize(buf, len, pos));
+      } else {
+        OZ (obj->serialize(buf, len, pos));
+      }
     }
   }
   return ret;
@@ -5026,38 +5278,66 @@ int ObPLCollection::deserialize(common::ObIAllocator &allocator,
   UNUSEDx(allocator, buf, len, pos);
 #else
   int64_t count = 0;
-  int64_t rowsize = 0;
   int64_t first = 0;
   int64_t last = 0;
 
+  OZ (get_element_desc().deserialize(buf, len, pos, true));
   OZ (serialization::decode(buf, len, pos, count));
-  OZ (serialization::decode(buf, len, pos, rowsize));
   OZ (serialization::decode(buf, len, pos, first));
   OZ (serialization::decode(buf, len, pos, last));
-  CK (rowsize > 0);
 
   UNUSED(allocator);
   CK (OB_NOT_NULL(get_allocator()));
-  OX (set_inited());
-  OX (set_first(first));
-  OX (set_last(last));
+  OX (count != OB_INVALID_COUNT ? set_inited() : (void)NULL);
   if (OB_FAIL(ret)) {
-  } else if (is_associative_array()) {
-    ObPLAssocArray *assoc_table = static_cast<ObPLAssocArray *>(this);
-    OZ (ObSPIService::spi_extend_assoc_array( //TODO:@ryan.ly myst be bug here!!!
-      OB_INVALID_ID, NULL, *get_allocator(), *assoc_table, count));
+  } else if (OB_INVALID_COUNT == count) { //not inited collection
+    OX (set_count(OB_INVALID_COUNT));
+    OX (set_first(OB_INVALID_INDEX));
+    OX (set_last(OB_INVALID_INDEX));
+    OX (set_data(NULL, 0));
   } else {
-    OZ (ObSPIService::spi_set_collection(
-      OB_INVALID_ID, NULL, *this, count, true));
-  }
-  CK (OB_NOT_NULL(get_data()));
-
-  if (OB_SUCC(ret)) {
-    char *table_data = reinterpret_cast<char*>(get_data());
-    for (int64_t i = 0; OB_SUCC(ret) && i < count * rowsize / sizeof(ObObj); ++i) {
-      ObObj src_obj;
-      OZ (src_obj.deserialize(buf, len, pos));
-      OZ (deep_copy_obj(*get_allocator(), src_obj, reinterpret_cast<ObObj*>(table_data)[i]));
+    OX (set_inited());
+    OX (set_first(first));
+    OX (set_last(last));
+    if (OB_FAIL(ret)) {
+    } else if (is_associative_array()) {
+      ObPLAssocArray *assoc_table = static_cast<ObPLAssocArray *>(this);
+      OZ (ObSPIService::spi_extend_assoc_array( //TODO:@ryan.ly myst be bug here!!!
+        OB_INVALID_ID, NULL, *get_allocator(), *assoc_table, count));
+    } else {
+      OZ (ObSPIService::spi_set_collection(
+        OB_INVALID_ID, NULL, *this, count, true));
+    }
+    CK (OB_NOT_NULL(get_data()) || count == 0);
+    if (OB_SUCC(ret)) {
+      char *table_data = reinterpret_cast<char*>(get_data());
+      for (int64_t i = 0; OB_SUCC(ret) && i < count; ++i) {
+        ObObj src_obj;
+        OZ (src_obj.meta_.deserialize(buf, len, pos));
+        if (OB_FAIL(ret)) {
+        } else if (OB_UNLIKELY(src_obj.is_invalid_type())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("invalid source object type", K(ret), K(src_obj));
+        } else if (src_obj.is_ext()) {
+          int64_t ext_val = 0;
+          OZ (serialization::decode(buf, len, pos, ext_val));
+          if (OB_FAIL(ret)) {
+          } else if (ext_val == 0) {
+            OX (reinterpret_cast<ObObj*>(table_data)[i].set_obj_value(ext_val));
+          } else if (!ObObj::is_ext_val(ext_val)) {
+            int64_t composite_len = 0;
+            OZ (serialization::decode(buf, len, pos, composite_len));
+            OZ (ObUserDefinedType::do_deserialize_obj(allocator, src_obj, buf, len, pos, true));
+            OX (reinterpret_cast<ObObj*>(table_data)[i] = src_obj);
+          } else {
+            ObObj *obj = &(reinterpret_cast<ObObj*>(table_data)[i]);
+            OX (new(obj)ObObj(ObMaxType));
+          }
+        } else {
+          OZ (ObObjUDTUtil::ob_udt_obj_value_deserialize(src_obj, buf, len, pos));
+          OZ (deep_copy_obj(*get_allocator(), src_obj, reinterpret_cast<ObObj*>(table_data)[i]));
+        }
+      }
     }
   }
 #endif
@@ -5633,11 +5913,11 @@ int ObPLAssocArray::get_serialize_size(int64_t &size)
   int64_t* compatible_sort = NULL;
   OZ (get_compatible_sort(allocator, compatible_sort));
   OZ (ObPLCollection::get_serialize_size(size));
-  OX (key_sort_cnt = OB_NOT_NULL(get_key()) ? get_count() : 0);
+  OX (key_sort_cnt = (OB_NOT_NULL(get_key()) && is_inited()) ? get_count() : 0);
   OX (size += serialization::encoded_length(key_sort_cnt));
   for (int64_t i = 0; OB_SUCC(ret) && i < key_sort_cnt; ++i) {
     CK (OB_NOT_NULL(compatible_sort));
-    OZ (size += get_key(i)->get_serialize_size());
+    OX (size += get_key(i)->get_serialize_size());
     OX (size += serialization::encoded_length(compatible_sort[i]));
   }
   return ret;
@@ -5647,12 +5927,16 @@ int ObPLAssocArray::serialize(char* buf, const int64_t len, int64_t& pos)
 {
   int ret = OB_SUCCESS;
   int64_t key_sort_cnt = 0;
+  ObArenaAllocator allocator(GET_PL_MOD_STRING(PL_MOD_IDX::OB_PL_ARENA), OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
+  int64_t *compatible_sort = NULL;
   OZ (ObPLCollection::serialize(buf, len, pos));
-  OX (key_sort_cnt = OB_NOT_NULL(get_key()) ? get_count() : 0);
+  OZ (get_compatible_sort(allocator, compatible_sort));
+  OX (key_sort_cnt = (OB_NOT_NULL(get_key()) && is_inited()) ? get_count() : 0);
   OZ (serialization::encode(buf, len, pos, key_sort_cnt));
   for (int64_t i = 0; OB_SUCC(ret) && i < key_sort_cnt; ++i) {
+    CK (OB_NOT_NULL(compatible_sort));
     OZ (get_key(i)->serialize(buf, len, pos));
-    OZ (serialization::encode(buf, len, pos, get_sort(i)));
+    OZ (serialization::encode(buf, len, pos, compatible_sort[i]));
   }
   return ret;
 }
@@ -5941,16 +6225,16 @@ int ObPLVArray::deep_copy(ObPLCollection *src, ObIAllocator *allocator, bool nee
 int ObPLVArray::get_serialize_size(int64_t &size)
 {
   int ret = OB_SUCCESS;
-  OZ (ObPLCollection::get_serialize_size(size));
   OX (size += serialization::encoded_length(get_capacity()));
+  OZ (ObPLCollection::get_serialize_size(size));
   return ret;
 }
 
 int ObPLVArray::serialize(char* buf, const int64_t len, int64_t& pos)
 {
   int ret = OB_SUCCESS;
-  OZ (ObPLCollection::serialize(buf, len, pos));
   OZ (serialization::encode(buf, len, pos, get_capacity()));
+  OZ (ObPLCollection::serialize(buf, len, pos));
   return ret;
 }
 
@@ -5958,8 +6242,8 @@ int ObPLVArray::deserialize(common::ObIAllocator &allocator,
                                 const char *buf, const int64_t len, int64_t &pos)
 {
   int ret = OB_SUCCESS;
-  OZ (ObPLCollection::deserialize(allocator, buf, len, pos));
   OZ (serialization::decode(buf, len, pos, capacity_));
+  OZ (ObPLCollection::deserialize(allocator, buf, len, pos));
   return ret;
 }
 #endif

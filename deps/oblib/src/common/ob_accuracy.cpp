@@ -70,7 +70,7 @@ const ObAccuracy ObAccuracy::DDL_DEFAULT_ACCURACY[ObMaxType] = {
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),     // lob, todo
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),     // json
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),     // geometry
-  ObAccuracy(),              // user defined type in sql
+  ObAccuracy(OB_MAX_LONGTEXT_LENGTH),              // user defined type in sql
   ObAccuracy(10, 0),         // decimal int
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),     // collection type in sql
   ObAccuracy(10, 0),         // mysql date.
@@ -129,7 +129,7 @@ const ObAccuracy ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE + 1][ObMaxType] =
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // lob, todo
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // json
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // geometry
-    ObAccuracy(),              // user defined type in sql
+    ObAccuracy(OB_MAX_LONGTEXT_LENGTH),              // user defined type in sql
     ObAccuracy(10, 0),         // decimal int
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),        // collection type in sql
     ObAccuracy(10, 0),         // mysql date.
@@ -186,7 +186,7 @@ const ObAccuracy ObAccuracy::DDL_DEFAULT_ACCURACY2[ORACLE_MODE + 1][ObMaxType] =
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // lob, todo
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // json
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // geometry
-    ObAccuracy(),              // user defined type in sql
+    ObAccuracy(OB_MAX_LONGTEXT_LENGTH),              // user defined type in sql
     ObAccuracy(10, 0),         // decimal int
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // collection type in sql
     ObAccuracy(10, 0),         // mysql date.
@@ -245,7 +245,7 @@ const ObAccuracy ObAccuracy::MAX_ACCURACY[ObMaxType] = {
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // lob, todo
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // json
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // geometry
-  ObAccuracy(),              // user defined type in sql
+  ObAccuracy(OB_MAX_LONGTEXT_LENGTH),              // user defined type in sql
   ObAccuracy(OB_MAX_DECIMAL_PRECISION, OB_MAX_DECIMAL_SCALE), // decimal int
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // collection type in sql
   ObAccuracy(10, 0),         // mysql date.
@@ -304,7 +304,7 @@ const ObAccuracy ObAccuracy::MAX_ACCURACY2[ORACLE_MODE + 1][ObMaxType] = {
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // lob, todo
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // json
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // geometry
-    ObAccuracy(),              // user defined type in sql
+    ObAccuracy(OB_MAX_LONGTEXT_LENGTH),              // user defined type in sql
     ObAccuracy(OB_MAX_DECIMAL_PRECISION, OB_MAX_DECIMAL_SCALE), // decimal int
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),  // collection type in sql
     ObAccuracy(10, 0),         // mysql date.
@@ -361,7 +361,7 @@ const ObAccuracy ObAccuracy::MAX_ACCURACY2[ORACLE_MODE + 1][ObMaxType] = {
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // lob, todo
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // json
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // geometry
-    ObAccuracy(),              // user defined type in sql
+    ObAccuracy(OB_MAX_LONGTEXT_LENGTH),              // user defined type in sql
     ObAccuracy(OB_MAX_DECIMAL_PRECISION, OB_MAX_DECIMAL_SCALE), // decimal int
     ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // collection type in sql
     ObAccuracy(10, 0),         // mysql date.
@@ -420,7 +420,7 @@ const ObAccuracy ObAccuracy::DML_DEFAULT_ACCURACY[ObMaxType] = {
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // lob, only scale will be use
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // json
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // geometry
-  ObAccuracy(),              // user defined type in sql
+  ObAccuracy(OB_MAX_LONGTEXT_LENGTH),              // user defined type in sql
   ObAccuracy(),              // decimal int
   ObAccuracy(OB_MAX_LONGTEXT_LENGTH),         // collection type in sql
   ObAccuracy(0, 0),         // mysql date.

@@ -1671,7 +1671,7 @@ struct ObSchemaObjVersion
     return ret_type;
   }
 
-  static ObDependencyTableType get_depemdency_table_type(ObObjectType object_type)
+  static ObDependencyTableType get_dependency_table_type(ObObjectType object_type)
   {
     ObDependencyTableType ret_type = DEPENDENCY_INVALID;
     switch (object_type) {

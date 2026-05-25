@@ -4491,6 +4491,7 @@ int ObTableSqlService::gen_column_dml_without_check(
       ob_is_string_type(column.get_data_type()) ||
       ob_is_json(column.get_data_type()) ||
       ob_is_geometry(column.get_data_type()) ||
+      column.is_common_user_defined_sql_type() ||
       ob_is_roaringbitmap(column.get_data_type())) {
     //The default value of the generated column is the expression definition of the generated column
     ObString orig_default_value_str = column.get_orig_default_value().get_string();
@@ -4671,6 +4672,10 @@ int ObTableSqlService::gen_column_dml(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("tenant data version is less than 4.3.5.1, string type is not supported", K(ret), K(tenant_data_version), K(column));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.3.5.1, string type");
+  } else if (tenant_data_version < DATA_VERSION_4_4_2_2 && column.is_common_user_defined_sql_type()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("tenant data version is less than 4.4.2.2, udt type is not supported", K(ret), K(tenant_data_version), K(column));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant data version is less than 4.4.2.2, udt type");
   } else if (OB_FAIL(sql::ObSQLUtils::is_charset_data_version_valid(column.get_charset_type(),
                                                                     exec_tenant_id))) {
     LOG_WARN("failed to check charset data version valid",  K(column.get_charset_type()), K(ret));

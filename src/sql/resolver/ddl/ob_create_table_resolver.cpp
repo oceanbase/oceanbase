@@ -244,7 +244,26 @@ int ObCreateTableResolver::add_udt_hidden_column(ObTableSchema &table_schema,
                                               create_table_stmt->get_ddl_arg()))) {
       SQL_RESV_LOG(WARN, "check udt column default value failed", K(ret), K(udt_column.get_cur_default_value()));
     }
-
+  } else if (lib::is_oracle_mode() && (udt_column.is_user_defined_sql_type())) {
+    if (tenant_data_version < DATA_VERSION_4_4_2_2) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("udt column is not supported when data version is below 4.4.2.2", K(ret), K(tenant_data_version), K(udt_column));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "udt column is not supported when data version is below 4.4.2.2");
+    } else if (OB_ISNULL(create_table_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null create table stmt", K(ret));
+    } else if (OB_FAIL(check_udt_default_value(udt_column.get_cur_default_value(),
+                                          session_info_->get_tz_info_wrap(),
+                                          &tmp_str,    // useless
+                                          *allocator_,
+                                          table_schema,
+                                          udt_column,
+                                          session_info_->get_sql_mode(),
+                                          session_info_,
+                                          schema_checker_,
+                                          create_table_stmt->get_ddl_arg()))) {
+      SQL_RESV_LOG(WARN, "check udt column default value failed", K(ret), K(udt_column.get_cur_default_value()));
+    }
   }
   return ret;
 }
@@ -2368,6 +2387,8 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
             ObObjMeta column_meta = expr->get_result_type().get_obj_meta();
             if (column_meta.is_lob_locator()) {
               column_meta.set_type(ObLongTextType);
+            } else if (is_oracle_mode() && column_meta.is_ext()) {
+              column_meta.set_type(ObUserDefinedSQLType);
             }
             column.set_meta_type(column_meta);
             ObCharsetType char_type = table_schema.get_charset_type();
@@ -2391,12 +2412,12 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
                 LOG_WARN("failed to fill column with subschema", K(ret));
               }
             }
-            if (OB_SUCC(ret) && lib::is_oracle_mode() && expr->get_result_type().is_user_defined_sql_type()) {
+            if (OB_SUCC(ret) && lib::is_oracle_mode() && column.is_user_defined_sql_type()) {
               // udt column is varbinary used for null bitmap
               column.set_collation_type(CS_TYPE_BINARY);
-              column.set_udt_set_id(gen_udt_set_id());
               if (expr->get_result_type().get_subschema_id() == ObXMLSqlType) {
                 column.set_sub_data_type(T_OBJ_XML);
+                column.set_udt_set_id(gen_udt_set_id());
               } else if (!ObObjUDTUtil::ob_is_supported_sql_udt(expr->get_result_type().get_udt_id())) {
                 ret = OB_NOT_SUPPORTED;
                 LOG_WARN("unsupported udt type for sql udt",
@@ -2461,6 +2482,8 @@ int ObCreateTableResolver::resolve_table_elements_from_select(const ParseNode &p
                   if (OB_FAIL(add_udt_hidden_column(table_schema, *org_column))) {
                     LOG_WARN("add udt hidden column to table_schema failed", K(ret), K(column));
                   }
+                } else if (is_oracle_mode() && column.is_user_defined_sql_type()) {
+                  org_column->set_sub_data_type(column.get_sub_data_type());
                 }
               }
             }

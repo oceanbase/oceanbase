@@ -30,6 +30,7 @@
 #include "plugin/external_table/ob_external_struct.h"
 #include "plugin/sys/ob_plugin_helper.h"
 #include "sql/resolver/ddl/ob_interval_partition_resolver.h"
+#include "pl/ob_pl_type.h"
 
 namespace oceanbase
 {
@@ -3555,55 +3556,85 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
         uint64_t udt_id = OB_INVALID_ID;
         uint64_t db_id = session_info_->get_database_id();
         uint64_t tenant_id = session_info_->get_effective_tenant_id();
+        const bool specify_schema = (NULL != name_node->children_[0]);
         ObString udt_name = ObString(name_node->children_[1]->str_len_, name_node->children_[1]->str_value_);
-        if (NULL != name_node->children_[0]) {
+        if (specify_schema) {
           OZ (schema_checker_->get_database_id(tenant_id,
                                                ObString(name_node->children_[0]->str_len_,
                                                         name_node->children_[0]->str_value_),
                                                db_id));
         }
-        OZ (schema_checker_->get_udt_id(tenant_id, db_id, OB_INVALID_ID, udt_name, udt_id));
-        if (OB_SUCC(ret) && udt_id == OB_INVALID_ID) {
-          // not found in current tenant, try get from tenant schema
-          if (tenant_data_version < DATA_VERSION_4_2_0_0) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("tenant version is less than 4.2, udt type not supported", K(ret), K(tenant_data_version));
-            LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant version is less than 4.2, udt type");
-          } else if (OB_FAIL(schema_checker_->get_sys_udt_id(udt_name, udt_id))) {
-            LOG_WARN("failed to get sys udt id", K(ret));
-          } else if (udt_id == OB_INVALID_ID) {
-            ret = OB_ERR_INVALID_DATATYPE;
-            SQL_RESV_LOG(WARN, "type_node or stmt_ or datatype is invalid", K(ret));
-          } else {
-            tenant_id = OB_SYS_TENANT_ID;
+        if (OB_FAIL(ret)) {
+        } else if (tenant_data_version < DATA_VERSION_4_2_0_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("tenant version is less than 4.2, udt type not supported", K(ret), K(tenant_data_version));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant version is less than 4.2, udt type");
+        } else {
+          ObSchemaGetterGuard *schema_guard = schema_checker_->get_schema_guard();
+          CK (OB_NOT_NULL(schema_guard));
+          if (OB_SUCC(ret)) {
+            pl::ObPLDataType pl_type;
+            ObSEArray<ObSchemaObjVersion, 4> udt_deps_storage;
+            if (OB_FAIL(pl::ObPLDataType::get_udt_type_by_name(tenant_id, db_id, udt_name,
+                                                              *session_info_, *schema_guard,
+                                                              pl_type,
+                                                              (stmt::T_CREATE_TABLE == stmt_->get_stmt_type()) ? &udt_deps_storage : NULL,
+                                                              specify_schema))) {
+              if (OB_ERR_SP_UNDECLARED_TYPE == ret) {
+                ret = OB_ERR_INVALID_DATATYPE;
+                SQL_RESV_LOG(WARN, "type_node or stmt_ or datatype is invalid", K(ret));
+              }
+            } else if (pl_type.get_user_type_id() == OB_INVALID_ID) {
+              ret = OB_ERR_INVALID_DATATYPE;
+              SQL_RESV_LOG(WARN, "type_node or stmt_ or datatype is invalid", K(ret));
+            } else {
+              udt_id = pl_type.get_user_type_id();
+              tenant_id = pl::get_tenant_id_by_object_id(udt_id);
+              if (stmt::T_CREATE_TABLE == stmt_->get_stmt_type() && !udt_deps_storage.empty()) {
+                ObString dep_attr;
+                OZ (ObDependencyInfo::collect_dep_infos(udt_deps_storage,
+                    static_cast<ObCreateTableStmt*>(stmt_)->get_create_table_arg().dep_infos_,
+                    ObObjectType::TABLE, 0, dep_attr, dep_attr, false));
+              }
+            }
           }
         }
 
         if (OB_SUCC(ret)) {
+          const ObUDTTypeInfo *udt_info = NULL;
+          ObDDLArg *ddl_arg = NULL;
           data_type.set_udt_id(udt_id);
           column.set_sub_data_type(udt_id);
-          if (udt_id == T_OBJ_XML) {
-            data_type.set_obj_type(ObUserDefinedSQLType);
-            data_type.set_collation_type(CS_TYPE_BINARY);
-            // udt column is varbinary used for null bitmap
-            ObDDLArg *ddl_arg = NULL;
+          data_type.set_obj_type(ObUserDefinedSQLType);
+          data_type.set_collation_type(CS_TYPE_BINARY);
+          if (OB_FAIL(schema_checker_->get_udt_info(tenant_id, udt_id, udt_info))) {
+            LOG_WARN("failed to get udt info", K(ret));
+          } else if (OB_ISNULL(udt_info)) {
+            ret = OB_OBJECT_NAME_NOT_EXIST;
+            LOG_USER_ERROR(OB_OBJECT_NAME_NOT_EXIST, "UDT");
+            LOG_WARN("udt not exist", KR(ret), K(tenant_id), K(udt_id));
+          } else if (udt_info->is_nested_table()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "nested table type");
+            LOG_WARN("nested table type not supported", K(ret));
+          } else if (udt_info->is_opaque() && udt_info->get_type_id() != T_OBJ_XML) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "opaque type as table column");
+            LOG_WARN("opaque type not supported as table column", K(ret));
+          } else if (udt_info->get_type_id() != T_OBJ_XML
+                     && tenant_data_version < DATA_VERSION_4_4_2_2) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "tenant version is less than 4.4.2.2, udt type as table column");
+            LOG_WARN("udt as table column not supported before 4.4.2.2", K(ret), K(tenant_data_version));
+          }
+
+          if (OB_SUCC(ret)) {
             if (stmt::T_CREATE_TABLE == stmt_->get_stmt_type()) {
-              ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
-              ddl_arg = &create_table_stmt->get_ddl_arg();
+              ddl_arg = &(static_cast<ObCreateTableStmt*>(stmt_))->get_ddl_arg();
             } else if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
-              ObAlterTableStmt *alter_table_stmt = static_cast<ObAlterTableStmt*>(stmt_);
-              ddl_arg = &alter_table_stmt->get_ddl_arg();
-            } else {
-              // do nothing.
+              ddl_arg = &(static_cast<ObAlterTableStmt*>(stmt_))->get_ddl_arg();
             }
-            const ObUDTTypeInfo *udt_info = NULL;
-            if (OB_ISNULL(ddl_arg)) {
-            } else if (OB_FAIL(schema_checker_->get_udt_info(tenant_id, udt_id, udt_info))) {
-              LOG_WARN("failed to get udt info", K(ret));
-            } else if (OB_ISNULL(udt_info)) {
-              ret = OB_ERR_OBJECT_NOT_EXIST;
-              LOG_WARN("udt not exist", KR(ret), K(tenant_id), K(udt_id));
-            } else if (OB_FAIL(ob_add_ddl_dependency(udt_id,
+            if (OB_NOT_NULL(ddl_arg) && OB_FAIL(ob_add_ddl_dependency(udt_id,
                                                      UDT_SCHEMA,
                                                      udt_info->get_schema_version(),
                                                      udt_info->get_tenant_id(),
@@ -7473,7 +7504,7 @@ int ObDDLResolver::get_udt_column_default_values(const ObObj &default_value,
   if (OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session is null", K(ret));
-  } else if (!(column.is_extend()) && !(lib::is_oracle_mode() && column.is_geometry())) {
+  } else if (!(column.is_extend()) && !(column.is_user_defined_sql_type()) && !(lib::is_oracle_mode() && column.is_geometry())) {
     // do nothing
   } else if (column.is_identity_column() || column.is_generated_column()) {
     ret = OB_ERR_INVALID_VIRTUAL_COLUMN_TYPE;
@@ -7508,6 +7539,7 @@ int ObDDLResolver::get_udt_column_default_values(const ObObj &default_value,
     ObCollationType collation_type = column.get_collation_type();
     const ObDataTypeCastParams dtc_params = session_info->get_dtc_params();
     ObCastCtx cast_ctx(&allocator, &dtc_params, CM_NONE, collation_type);
+    cast_ctx.exec_ctx_ = session_info->get_cur_exec_ctx();
 
     if (OB_FAIL(input_default_value.get_string(expr_str))) {
       LOG_WARN("get expr string from default value failed", K(ret), K(input_default_value));
@@ -7535,7 +7567,18 @@ int ObDDLResolver::get_udt_column_default_values(const ObObj &default_value,
         tmp_dest_obj.set_type(data_type);
         tmp_dest_obj.meta_.set_sql_udt(ObXMLSqlType);
       }
-    } else { /* do nothing */ }
+    } else if (column.is_user_defined_sql_type()) {
+      //check default value type and udt id
+      bool is_type_matched = (expr->get_result_type().get_type() == ObNullType) ||
+                           (expr->get_result_type().get_type() == ObExtendType &&
+                            expr->get_result_type().get_udt_id() == column.get_sub_data_type());
+      if (!is_type_matched) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("inconsistent datatypes", K(ret), K(expr->get_result_type().get_type()),
+                 "expected_udt_id", column.get_sub_data_type(),
+                 "actual_udt_id", expr->get_result_type().get_udt_id());
+      }
+    }
 
     if (OB_FAIL(ret)) {
     } else if (column.is_xmltype() && (ob_is_numeric_type(tmp_default_value.get_type()) || is_lob(tmp_default_value.get_type()))) {

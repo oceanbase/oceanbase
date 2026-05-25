@@ -247,7 +247,7 @@ int ob_adjust_lob_datum(ObDatum &datum,
                         ObIAllocator &allocator)
 {
   int ret = OB_SUCCESS;
-  if (!is_lob_storage(in_obj_meta.get_type())) { // null & nop is not lob
+  if (!is_lob_storage(in_obj_meta.get_type()) || in_obj_meta.is_xml_sql_type()) { // null & nop & xmltype is not lob;
   } else if (in_obj_meta.get_type_class() != out_obj_meta.get_type_class()) {
     // lob casted to other type do nothing
   } else if (in_obj_meta.has_lob_header() != out_obj_meta.has_lob_header()) {

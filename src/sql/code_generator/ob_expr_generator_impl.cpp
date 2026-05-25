@@ -802,7 +802,7 @@ inline int ObExprGeneratorImpl::visit_in_expr(ObOpRawExpr &expr, ObExprInOrNotIn
         ObCollationLevel first_obj_cs_level = param1->get_param_expr(0)->get_param_expr(j)
                                                                         ->get_collation_level();
         ObCollationLevel cur_obj_cs_level = CS_LEVEL_INVALID;
-        param_all_is_ext &= (ObExtendType == first_obj_type);
+        param_all_is_ext &= (ObExtendType == first_obj_type || ObUserDefinedSQLType == first_obj_type);
         for (int64_t i = 1; OB_SUCC(ret) && i < param_count; ++i) {
           cur_obj_type = param1->get_param_expr(i)->get_param_expr(j)->get_data_type();
           cur_obj_cs_type = param1->get_param_expr(i)->get_param_expr(j)->get_collation_type();
@@ -818,7 +818,7 @@ inline int ObExprGeneratorImpl::visit_in_expr(ObOpRawExpr &expr, ObExprInOrNotIn
             param_all_same_cs_type &= (first_obj_cs_type == cur_obj_cs_type);
             param_all_same_cs_level &= (first_obj_cs_level == cur_obj_cs_level);
           }
-          param_all_is_ext &= (ObExtendType == first_obj_type);
+          param_all_is_ext &= (ObExtendType == first_obj_type || ObUserDefinedSQLType == first_obj_type);
         }
       }
       in_op->set_param_all_const(param_all_const);
@@ -856,7 +856,7 @@ inline int ObExprGeneratorImpl::visit_in_expr(ObOpRawExpr &expr, ObExprInOrNotIn
       ObCollationType cur_obj_cs_type = CS_TYPE_INVALID;
       ObCollationLevel first_obj_cs_level = param1->get_param_expr(0)->get_collation_level();
       ObCollationLevel cur_obj_cs_level = CS_LEVEL_INVALID;
-      param_all_is_ext &= (ObExtendType == first_obj_type);
+      param_all_is_ext &= (ObExtendType == first_obj_type || ObUserDefinedSQLType == first_obj_type);
       for (int i = 1; OB_SUCC(ret) && i < param_count; ++i) {
         cur_obj_type = param1->get_param_expr(i)->get_data_type();
         cur_obj_cs_type = param1->get_param_expr(i)->get_collation_type();
@@ -872,7 +872,7 @@ inline int ObExprGeneratorImpl::visit_in_expr(ObOpRawExpr &expr, ObExprInOrNotIn
           param_all_same_cs_type &= (first_obj_cs_type == cur_obj_cs_type);
           param_all_same_cs_level &= (first_obj_cs_level == cur_obj_cs_level);
         }
-        param_all_is_ext &= (ObExtendType == first_obj_type);
+        param_all_is_ext &= (ObExtendType == first_obj_type || ObUserDefinedSQLType == first_obj_type);
       }
       in_op->set_param_all_const(param_all_const);
       in_op->set_param_all_same_type(param_all_same_type);

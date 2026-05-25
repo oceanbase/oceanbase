@@ -1251,8 +1251,7 @@ int ObComplementWriteTask::generate_col_param()
             int64_t column_id = 0;
             int64_t index_col = 0;
             if (!data_column_schema->is_xmltype()) {
-              ret = OB_NOT_SUPPORTED;
-              LOG_WARN("The udt type is not adapted", K(ret), K(*data_column_schema));
+              // do nothing
             } else if (OB_FAIL(ObTableSchema::get_xml_hidden_column_id(data_table_schema,
                                                                        data_column_schema,
                                                                        column_id))) {
@@ -2029,8 +2028,7 @@ int ObLocalScan::get_exist_column_mapping(
         ObSEArray<ObColumnSchemaV2 *, 1> hidden_cols;
         int64_t index_col = 0;
         if (!data_column_schema->is_xmltype()) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("The udt type is not adapted", K(ret), K(*data_column_schema));
+          // do nothing
         } else if (OB_FAIL(ObTableSchema::find_xml_hidden_column_index(&hidden_table_schema,
                                                                        hidden_column_schema,
                                                                        tmp_col_ids,
@@ -2337,8 +2335,7 @@ int ObLocalScan::get_origin_table_checksum(
           int64_t column_id = 0;
           int64_t index_col = 0;
           if (!data_col_schema->is_xmltype()) {
-            ret = OB_NOT_SUPPORTED;
-            LOG_WARN("The udt type is not adapted", K(ret), K(*data_col_schema));
+            // do nothing
           } else if (OB_FAIL(ObTableSchema::get_xml_hidden_column_id(data_table_schema, data_col_schema, column_id))) {
             LOG_WARN("failed to get xml hidden column id.", K(ret));
           } else if (OB_FAIL(ObTableSchema::find_xml_hidden_column_index(hidden_table_schema,

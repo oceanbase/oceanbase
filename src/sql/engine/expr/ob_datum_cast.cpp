@@ -11602,12 +11602,10 @@ CAST_FUNC_NAME(udt, udt)
       LOG_WARN("fail to get udt id from obj meta", K(ret));
     } else if (OB_FAIL(get_udt_id(ctx, out_obj_meta, out_udt_id))) {
       LOG_WARN("fail to get udt id from obj meta", K(ret));
-    } else if (ObGeometryTypeCastUtil::is_sdo_geometry_type_compatible(in_udt_id, out_udt_id)) {
-      ObDatum *child_res = NULL;
+    } else if (ObGeometryTypeCastUtil::is_sdo_geometry_type_compatible(in_udt_id, out_udt_id)
+               || in_udt_id == out_udt_id) {
       ObExprStrResAlloc expr_res_alloc(expr, ctx);
-      if (OB_FAIL(expr.args_[0]->eval(ctx, child_res))) {
-        LOG_WARN("eval arg failed", K(ret), K(ctx));
-      } else if (OB_FAIL(res_datum.deep_copy(*child_res, expr_res_alloc))) {
+      if (OB_FAIL(res_datum.deep_copy(*child_res, expr_res_alloc))) {
         LOG_WARN("Failed to deep copy from res datum", K(ret));
       }
     } else {
@@ -11901,13 +11899,15 @@ CAST_FUNC_NAME(sql_udt, pl_extend)
         LOG_WARN("failed to cast sql xmltype to pl xmltype", K(ret));
       }
     } else if (udt_meta.pl_type_ == pl::PL_RECORD_TYPE || udt_meta.pl_type_ == pl::PL_VARRAY_TYPE) {
-      ObString udt_data = child_res->get_string();
       ObObj result;
-      if (OB_FAIL(ObSqlUdtUtils::cast_sql_record_to_pl_record(&ctx.exec_ctx_,
+      ObObj udt_obj;
+      if (OB_FAIL(child_res->to_obj(udt_obj, in_obj_meta))) {
+        LOG_WARN("failed to get udt obj", K(ret), K(in_obj_meta), K(child_res));
+      } else if (OB_FAIL(ObSqlUdtUtils::sql_udt_deserialize_to_pl_extend(&ctx.exec_ctx_,
                                                               result,
-                                                              udt_data,
+                                                              udt_obj,
                                                               udt_meta))) {
-        LOG_WARN("failed to cast sql collection to pl collection", K(ret), K(udt_meta.udt_id_));
+        LOG_WARN("failed to cast sql udt to pl extend", K(ret), K(udt_meta.udt_id_));
       } else if (OB_FAIL(res_datum.from_obj(result, expr.obj_datum_map_))) {
         LOG_WARN("Failed to deep copy element object value", K(ret), K(result));
       }
@@ -12004,6 +12004,10 @@ CAST_FUNC_NAME(pl_extend, sql_udt)
       LOG_WARN("inconsistent datatypes", K(ret), K(out_obj_meta.get_type()),
                K(in_obj_meta.get_type()), K(subschema_id), K(udt_meta.udt_id_));
     } else if (FALSE_IT(sql_udt.set_udt_meta(udt_meta))) {
+    } else if (root_obj.get_meta().get_extend_type() != sql_udt.get_udt_meta().pl_type_) {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN("inconsistent datatypes", K(ret), K(out_obj_meta.get_type()),
+               K(in_obj_meta.get_type()), K(root_obj.get_meta().get_extend_type()), K(sql_udt.get_udt_meta().pl_type_));
     } else if (root_obj.get_ext() == 0) {
       res_datum.set_null();
     } else if (sql_udt.get_udt_meta().pl_type_ == pl::PL_VARRAY_TYPE) { // single varray
@@ -12013,7 +12017,10 @@ CAST_FUNC_NAME(pl_extend, sql_udt)
         LOG_WARN("failed to get pl data type info", K(ret));
       } else if (varray->is_null()) {
         res_datum.set_null();
-      } else if (OB_FAIL(ObSqlUdtUtils::cast_pl_varray_to_sql_varray(expr_res_alloc, res_str, root_obj))) {
+      } else if (varray->get_id() != sql_udt.get_udt_meta().udt_id_) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("inconsistent datatypes", K(varray->get_id()), K(sql_udt.get_udt_meta().udt_id_));
+      } else if (OB_FAIL(ObSqlUdtUtils::pl_extend_serialize_to_sql_udt(expr_res_alloc, &ctx.exec_ctx_, res_str, root_obj, udt_meta))) {
         LOG_WARN("convert pl record to sql record failed",
                  K(ret), K(subschema_id), K(udt_meta.udt_id_));
       } else {
@@ -12026,14 +12033,16 @@ CAST_FUNC_NAME(pl_extend, sql_udt)
       if (OB_ISNULL(record)) {
         ret = OB_ERR_NULL_VALUE;
         LOG_WARN("failed to get pl data type info", K(ret));
+      } else if (record->get_id() != sql_udt.get_udt_meta().udt_id_) {
+        ret = OB_ERR_INVALID_TYPE_FOR_OP;
+        LOG_WARN("inconsistent datatypes", K(record->get_id()), K(sql_udt.get_udt_meta().udt_id_));
       } else if (record->is_null()) {
         res_datum.set_null();
-      } else if (OB_FAIL(ObSqlUdtUtils::cast_pl_record_to_sql_record(temp_allocator,
-                                                              expr_res_alloc,
-                                                              &ctx.exec_ctx_,
-                                                              res_str,
-                                                              sql_udt,
-                                                              root_obj))) {
+      } else if (OB_FAIL(ObSqlUdtUtils::pl_extend_serialize_to_sql_udt(expr_res_alloc,
+                                                                      &ctx.exec_ctx_,
+                                                                      res_str,
+                                                                      root_obj,
+                                                                      udt_meta))) {
         LOG_WARN("convert pl record to sql record failed",
                  K(ret), K(subschema_id), K(udt_meta.udt_id_));
       } else {
@@ -18725,6 +18734,8 @@ int ObDatumCast::is_trivial_cast(const ObObjType in_type,
               (ObIntervalDSType == in_type && ObIntervalDSType == out_type))) {
     // Oracle模式没有bit/year/date/time类型(Oracle的date类型在OB中用ObDateTimeType表示)
     is_trivial_cast = true;
+  } else if (lib::is_oracle_mode() && ob_is_user_defined_sql_type(in_type) && ob_is_user_defined_sql_type(out_type)) {
+    is_trivial_cast = false;
   } else if (ObUIntTC == in_tc && ObIntTC == out_tc &&
               CM_IS_EXTERNAL_CALL(cast_mode) && CM_SKIP_CAST_INT_UINT(cast_mode)) {
     is_trivial_cast = true;
@@ -18978,16 +18989,18 @@ int ObDatumCaster::to_type(const ObDatumMeta &dst_type,
                                          dst_type.scale_, dst_type.precision_);
   bool need_cast_collection = (src_type.type_ == dst_type.type_) &&
       ob_is_collection_sql_type(src_type.type_) && (src_type.cs_type_ != dst_type.cs_type_);
+  bool need_cast_user_defined_sql_type = ob_is_user_defined_sql_type(src_type.type_) && ob_is_user_defined_sql_type(dst_type.type_);
   if (OB_UNLIKELY(!inited_) || OB_ISNULL(eval_ctx_) || OB_ISNULL(cast_expr_) ||
       OB_ISNULL(extra_cast_expr_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDatumCaster is invalid", K(ret), K(inited_), KP(eval_ctx_),
                                          KP(cast_expr_), KP(extra_cast_expr_));
   } else if (FALSE_IT(eval_ctx_->batch_idx_ = batch_idx)) {
-  } else if ((ob_is_string_or_lob_type(src_type.type_) && src_type.type_ == dst_type.type_
+  } else if (!need_cast_user_defined_sql_type &&
+             ((ob_is_string_or_lob_type(src_type.type_) && src_type.type_ == dst_type.type_
               && src_cs == dst_cs)
              || (!ob_is_string_or_lob_type(src_type.type_) && !need_cast_decimalint
-                 && src_type.type_ == dst_type.type_ && !need_cast_collection)) {
+                 && src_type.type_ == dst_type.type_ && !need_cast_collection ))) {
     LOG_DEBUG("no need to cast, just eval src_expr", K(ret), K(src_expr), K(dst_type));
     if (OB_FAIL(src_expr.eval(*eval_ctx_, res))) { LOG_WARN("eval src_expr failed", K(ret)); }
   } else {
@@ -18998,7 +19011,7 @@ int ObDatumCaster::to_type(const ObDatumMeta &dst_type,
     bool need_extra_cast_for_src_type = false;
     bool need_extra_cast_for_dst_type = false;
 
-    if (need_cast_collection) {
+    if (need_cast_collection || need_cast_user_defined_sql_type) {
       // do nothing
     } else if (str_to_nonstr) {
       if (CHARSET_BINARY != src_cs && ObCharset::get_default_charset() != src_cs) {

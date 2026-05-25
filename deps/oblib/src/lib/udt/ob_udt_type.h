@@ -44,7 +44,7 @@ typedef struct ObSqlUDTAttrMeta
 public:
   int32_t order_; // only used in flattern leaf attrs meta;
   ObObjMeta type_info_;
-  // may need udt id ?
+
   bool is_same(ObSqlUDTAttrMeta &other) {
     bool is_same = (order_ == other.order_);
     if (is_same) {

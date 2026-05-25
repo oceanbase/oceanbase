@@ -756,14 +756,21 @@ int ObPLDDLService::create_udt(ObUDTTypeInfo &udt_info,
       if (udt_dependency_feature_enabled && exist_valid_udt) {
         // check if the udt which is to be replaced has any type or table dependent
         ObArray<CriticalDepInfo> objs;
+        bool has_type_dep_obj = false;
+        bool has_table_dep_obj = false;
         if (OB_ISNULL(old_udt_info)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("value contradict", K(ret), K(need_replace), K(old_udt_info));
-        } else if (OB_FAIL(ObDependencyInfo::collect_all_dep_objs(tenant_id,
-                                                                  old_udt_info->get_type_id(),
-                                                                  udt_info.get_object_type(),
-                                                                  trans,
-                                                                  objs))) {
+        } else if (OB_FAIL(check_udt_dep_objs(tenant_id,
+                                              old_udt_info->get_type_id(),
+                                              udt_info.get_object_type(),
+                                              trans,
+                                              schema_guard,
+                                              pl_operator,
+                                              objs,
+                                              has_type_dep_obj,
+                                              has_table_dep_obj,
+                                              true))) {
           // TODO: @haohao.hao type body id design flaw
           // Here we pass `udt_info.get_object_type()` to `collect_all_dep_objs` instead of
           // `old_udt_info->get_object_type()`, because the type body and type share the same id
@@ -771,17 +778,6 @@ int ObPLDDLService::create_udt(ObUDTTypeInfo &udt_info,
           // id as the key for storage, which casues retrieving the wrong schema from the cache.
           LOG_WARN("failed to collect all dependent objects", K(ret));
         } else {
-          bool has_type_dep_obj = false;
-          bool has_table_dep_obj = false;
-          for (int64_t i = 0; i < objs.count(); i++) {
-            schema::ObObjectType dep_obj_type =
-                static_cast<schema::ObObjectType>(objs.at(i).element<1>());
-            if (schema::ObObjectType::TABLE == dep_obj_type) {
-              has_table_dep_obj = true;
-            } else if (schema::ObObjectType::TYPE == dep_obj_type) {
-              has_type_dep_obj = true;
-            }
-          }
           if (!has_type_dep_obj && !has_table_dep_obj) {
             // pass
           } else if (!specify_force && (has_type_dep_obj || has_table_dep_obj)) {
@@ -975,33 +971,29 @@ int ObPLDDLService::drop_udt(const ObUDTTypeInfo &udt_info,
       // 2) otherwise depednency should have been invalid already
     } else {
       // check if the udt which is to be drop has any type or table dependent
-      bool has_type_or_table_dep_obj = false;
+      // has table dependent is not supported for drop it
+      bool has_type_dep_obj = false;
+      bool has_table_dep_obj = false;
       ObArray<CriticalDepInfo> objs;
       if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ObDependencyInfo::collect_all_dep_objs(tenant_id,
-                                                                udt_info.get_type_id(),
-                                                                udt_info.get_object_type(),
-                                                                trans,
-                                                                objs))) {
-        LOG_WARN("failed to collect all dependent objects");
-      } else {
-        for (int64_t i = 0; i < objs.count(); i++) {
-          schema::ObObjectType dep_obj_type =
-              static_cast<schema::ObObjectType>(objs.at(i).element<1>());
-          if (schema::ObObjectType::TABLE == dep_obj_type
-              || schema::ObObjectType::TYPE == dep_obj_type) {
-            has_type_or_table_dep_obj = true;
-            break;
-          }
-        }
+      } else if (OB_FAIL(check_udt_dep_objs(tenant_id,
+                                            udt_info.get_type_id(),
+                                            udt_info.get_object_type(),
+                                            trans,
+                                            schema_guard,
+                                            pl_operator,
+                                            objs,
+                                            has_type_dep_obj,
+                                            has_table_dep_obj,
+                                            true))) {
+        LOG_WARN("failed to collect all dependent objects", K(ret), K(tenant_id), K(udt_info.get_type_id()), K(udt_info.get_object_type()));
       }
 
       if (OB_FAIL(ret)) {
-      } else if (!specify_force && has_type_or_table_dep_obj) {
+      } else if ((!specify_force && has_type_dep_obj) || has_table_dep_obj) {
         ret = OB_ERR_HAS_TYPE_OR_TABLE_DEPENDENT;
         LOG_WARN("cannot drop or replace a type with type or table dependents", K(ret));
-      } else if ((specify_force || !has_type_or_table_dep_obj)
-                 && OB_FAIL(ObDependencyInfo::batch_invalidate_dependents(
+      } else if (OB_FAIL(ObDependencyInfo::batch_invalidate_dependents(
                         objs, trans, tenant_id, udt_info.get_type_id()))) {
         LOG_WARN("invalidate dependents failed");
       }
@@ -1140,6 +1132,52 @@ int ObPLDDLService::alter_udt_remove_body_dep(ObArray<CriticalDepInfo> &objs,
   return ret;
 }
 
+int ObPLDDLService::check_udt_dep_objs(uint64_t tenant_id,
+                                      uint64_t ref_obj_id,
+                                      schema::ObObjectType ref_obj_type,
+                                      common::ObMySQLTransaction &trans,
+                                      schema::ObSchemaGetterGuard &schema_guard,
+                                      rootserver::ObDDLOperator &ddl_operator,
+                                      common::ObIArray<CriticalDepInfo> &objs,
+                                      bool &has_type_dep_obj,
+                                      bool &has_table_dep_obj,
+                                      bool purge_table_in_recyclebin)
+{
+  int ret = OB_SUCCESS;
+  has_type_dep_obj = false;
+  has_table_dep_obj = false;
+  objs.reset();
+  if (OB_FAIL(ObDependencyInfo::collect_all_dep_objs(tenant_id, ref_obj_id, ref_obj_type, trans, objs))) {
+    LOG_WARN("failed to collect all dependent objects", K(ret), K(tenant_id), K(ref_obj_id), K(ref_obj_type));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < objs.count(); i++) {
+      schema::ObObjectType dep_obj_type =
+          static_cast<schema::ObObjectType>(objs.at(i).element<1>());
+      if (schema::ObObjectType::TYPE == dep_obj_type) {
+        has_type_dep_obj = true;
+      } else if (schema::ObObjectType::TABLE == dep_obj_type) {
+        uint64_t table_id = objs.at(i).element<0>();
+        const ObTableSchema *table_schema = nullptr;
+        if (OB_FAIL(schema_guard.get_table_schema(tenant_id, table_id, table_schema))) {
+          LOG_WARN("failed to get table schema", K(ret), K(tenant_id), K(table_id));
+        } else if (OB_ISNULL(table_schema)) {
+          LOG_INFO("table schema is null, table may have been dropped", K(table_id));
+        } else if (table_schema->is_in_recyclebin() && purge_table_in_recyclebin) {
+          if (OB_FAIL(ddl_operator.purge_table_with_aux_table(*table_schema,
+                                                                  schema_guard,
+                                                                  trans,
+                                                                  NULL /*ddl_stmt_str*/))) {
+            LOG_WARN("purge table in recyclebin failed", K(ret), K(table_id), K(*table_schema));
+          }
+        } else {
+          has_table_dep_obj = true;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObPLDDLService::alter_udt_compile(ObSchemaGetterGuard &schema_guard,
                                       ObUDTTypeInfo &udt_info,
                                       const ObUDTTypeInfo *old_udt_info,
@@ -1216,7 +1254,8 @@ int ObPLDDLService::alter_udt_alter(ObSchemaGetterGuard &schema_guard,
     uint64_t tenant_id = udt_info.get_tenant_id();
     ObDDLSQLTransaction trans(ddl_service.schema_service_);
     ObPLDDLOperator pl_operator(*ddl_service.schema_service_, *ddl_service.sql_proxy_);
-    bool has_type_or_table_dep_obj = false;
+    bool has_type_dep_obj = false;
+    bool has_table_dep_obj = false;
     ObArray<CriticalDepInfo> objs;
     int64_t refreshed_schema_version = 0;
 
@@ -1224,25 +1263,20 @@ int ObPLDDLService::alter_udt_alter(ObSchemaGetterGuard &schema_guard,
       LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
     } else if (OB_FAIL(trans.start(ddl_service.sql_proxy_, tenant_id, refreshed_schema_version))) {
       LOG_WARN("start transaction failed", KR(ret), K(tenant_id), K(refreshed_schema_version));
-    } else if (OB_FAIL(ObDependencyInfo::collect_all_dep_objs(tenant_id,
-                                                      udt_info.get_type_id(),
-                                                      udt_info.get_object_type(),
-                                                      trans,
-                                                      objs))) {
+    } else if (OB_FAIL(check_udt_dep_objs(tenant_id,
+                                           udt_info.get_type_id(),
+                                           udt_info.get_object_type(),
+                                           trans,
+                                           schema_guard,
+                                           pl_operator,
+                                           objs,
+                                           has_type_dep_obj,
+                                           has_table_dep_obj,
+                                           true))) {
       LOG_WARN("failed to collect all dependent objects");
-    } else {
-        for (int64_t i = 0; i < objs.count(); i++) {
-          schema::ObObjectType dep_obj_type =
-          static_cast<schema::ObObjectType>(objs.at(i).element<1>());
-          if (schema::ObObjectType::TABLE == dep_obj_type
-              || schema::ObObjectType::TYPE == dep_obj_type) {
-            has_type_or_table_dep_obj = true;
-            break;
-          }
-        }
     }
     if (OB_FAIL(ret)) {
-    } else if (has_type_or_table_dep_obj && !cascade) {
+    } else if ((has_type_dep_obj && !cascade) || has_table_dep_obj) { //has table dependent is not supported for alter it
       ret = OB_ERR_ALTER_HAS_DEPENDENT;
       LOG_WARN("cannot alter a type with type or table dependents without cascade", K(ret));
     } else if (OB_FAIL(ObDependencyInfo::batch_invalidate_dependents(objs, trans, tenant_id, udt_info.get_type_id()))) {

@@ -340,6 +340,7 @@ public:
   OB_INLINE int set_coll_name(const common::ObString &coll_name) { return deep_copy_str(coll_name, coll_name_); }
 
   OB_INLINE bool is_varray() const { return upper_bound_ != OB_INVALID_ID; }
+  OB_INLINE bool is_nested_table() const { return upper_bound_ == OB_INVALID_ID; }
 
   TO_STRING_KV(K_(coll_type_id),
                K_(elem_type_id),
@@ -377,6 +378,7 @@ public:
   bool is_collection() const { return UDT_TYPE_COLLECTION == typecode_; }
   bool is_varray() const {
       return UDT_TYPE_COLLECTION == typecode_ && coll_info_->is_varray(); }
+  bool is_nested_table() const { return UDT_TYPE_COLLECTION == typecode_ && coll_info_->is_nested_table(); }
   uint8_t get_extend_type() const
   {
     uint8_t extend_type = 0;

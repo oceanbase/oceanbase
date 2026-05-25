@@ -1592,6 +1592,14 @@ int ObDropTableHelper::drop_table_(const ObTableSchema &table_schema, const ObSt
                        NULL/*schema_guard*/,
                        &drop_table_ids_))) {
       LOG_WARN("fail to drop table", KR(ret), K_(tenant_id), K(table_schema));
+    } else if (!table_schema.is_view_table()
+               && !table_schema.is_aux_table()
+               && OB_FAIL(ObDependencyInfo::delete_schema_object_dependency(get_trans_(),
+                                                                          tenant_id_,
+                                                                          table_schema.get_table_id(),
+                                                                          new_schema_version,
+                                                                          ObObjectType::TABLE))) {
+      LOG_WARN("fail to delete schema object dependency", KR(ret), K_(tenant_id), K(table_schema.get_table_id()));
     } else if (OB_FAIL(ddl_operator.sync_version_for_cascade_table(tenant_id_, table_schema.get_base_table_ids(), get_trans_())
                || OB_FAIL(ddl_operator.sync_version_for_cascade_table(tenant_id_, table_schema.get_depend_table_ids(), get_trans_())))) {
       LOG_WARN("fail to sync version for cascade tables", KR(ret), K_(tenant_id));

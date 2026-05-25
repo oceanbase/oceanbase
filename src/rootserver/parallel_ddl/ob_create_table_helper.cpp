@@ -22,6 +22,7 @@
 #include "share/ob_index_builder_util.h"
 #include "share/sequence/ob_sequence_option_builder.h" // ObSequenceOptionBuilder
 #include "share/schema/ob_table_sql_service.h"
+#include "share/schema/ob_dependency_info.h"
 #include "share/schema/ob_security_audit_sql_service.h"
 #include "share/schema/ob_sequence_sql_service.h"
 #include "share/vector_index/ob_vector_index_util.h"
@@ -1350,6 +1351,28 @@ int ObCreateTableHelper::operate_schemas_() {
   } else if (OB_FAIL(inner_create_table_(&arg_.ddl_stmt_str_,
                                          replace_mock_fk_parent_table_id_))) {
     LOG_WARN("fail create table", KR(ret));
+  } else if (OB_FAIL(insert_schema_object_dependency_())) {
+    LOG_WARN("fail to insert schema object dependency", KR(ret));
+  }
+  return ret;
+}
+
+int ObCreateTableHelper::insert_schema_object_dependency_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_UNLIKELY(new_tables_.count() <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("new tables count is invalid", KR(ret), K(new_tables_.count()));
+  } else {
+    const ObTableSchema &data_table = new_tables_.at(0);
+    common::ObSArray<ObDependencyInfo> &dep_infos = const_cast<common::ObSArray<ObDependencyInfo>&>(arg_.dep_infos_);
+    if (OB_FAIL(ObDependencyInfo::insert_dependency_infos(get_trans_(), dep_infos, tenant_id_, data_table.get_table_id(),
+                                                          data_table.get_schema_version(),
+                                                          data_table.get_database_id()))) {
+      LOG_WARN("insert dependency infos failed", KR(ret));
+    }
   }
   return ret;
 }

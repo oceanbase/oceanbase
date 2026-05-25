@@ -144,7 +144,7 @@ public:
       if (is_xml_sql_type()) {
         udt_id = T_OBJ_XML;
       } else {
-        // NOTICE: process new sql type id in here.
+        udt_id = get_udt_id();
       }
     } else {
       udt_id = get_udt_id();

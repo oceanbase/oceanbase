@@ -5173,7 +5173,8 @@ int ObTableSchema::check_alter_column_accuracy(const ObColumnSchemaV2 &src_colum
        || ob_is_double_tc(src_col_type)
        || src_meta.is_datetime()
        || src_meta.is_blob()
-       || src_meta.is_clob()) {
+       || src_meta.is_clob()
+       || (src_column.is_user_defined_sql_type() && !src_column.is_xmltype())) {
          // online, do nothing
       } else if (is_type_reduction) {
         if (src_meta.is_varchar() || src_meta.is_nvarchar2()
@@ -5390,12 +5391,12 @@ int ObTableSchema::check_alter_column_type(const ObColumnSchemaV2 &src_column,
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "Alter non string type");
         }
 
-      } else if (dst_column.is_xmltype()) {
-        // if xmltype, must be oracle mode
+      } else if (dst_column.is_xmltype() || dst_column.is_user_defined_sql_type()) {
+        // if xmltype/udt, must be oracle mode
         ret = OB_INVALID_ALTERATIONG_DATATYPE;
         LOG_USER_ERROR(OB_INVALID_ALTERATIONG_DATATYPE);
-      } else if (src_column.is_xmltype()) {
-        // if xmltype, must be oracle mode
+      } else if (src_column.is_xmltype() || src_column.is_user_defined_sql_type()) {
+        // if xmltype/udt, must be oracle mode
         ret = OB_INVALID_MODIFICATION_OF_COLUMNS;
         LOG_USER_ERROR(OB_INVALID_MODIFICATION_OF_COLUMNS);
       } else if (!is_oracle_mode) {
@@ -5415,6 +5416,10 @@ int ObTableSchema::check_alter_column_type(const ObColumnSchemaV2 &src_column,
     } else {
       is_offline = !is_same;
     }
+  } else if (src_column.is_user_defined_sql_type()
+             && src_column.get_sub_data_type() != dst_column.get_sub_data_type()) {
+    ret = OB_INVALID_MODIFICATION_OF_COLUMNS;
+    LOG_USER_ERROR(OB_INVALID_MODIFICATION_OF_COLUMNS);
   }
   return ret;
 }
@@ -5828,6 +5833,8 @@ int ObTableSchema::check_is_exactly_same_type(const ObColumnSchemaV2 &src_column
       if (OB_FAIL(src_column.is_same_collection_column(dst_column, is_same))) {
         LOG_WARN("failed to check whether is same collection cols", K(ret));
       }
+    } else if (src_column.is_user_defined_sql_type()) {
+      is_same = src_column.get_sub_data_type() == dst_column.get_sub_data_type();
     } else {
       if (src_column.is_string_type() || src_column.is_raw()
           || ob_is_rowid_tc(src_column.get_data_type())

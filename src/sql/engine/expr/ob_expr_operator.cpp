@@ -24,6 +24,8 @@
 
 #include "common/object/ob_object.h"
 #include "sql/engine/expr/ob_expr_multiset.h"
+#include "sql/engine/expr/ob_expr_sql_udt_utils.h"
+#include "sql/engine/ob_exec_context.h"
 
 namespace oceanbase
 {
@@ -1229,16 +1231,14 @@ int ObExprOperator::is_same_kind_type_for_case(const ObExprResType &type1, const
       match = ob_is_blob_locator(type2.get_type(), type2.get_collation_type());
     } else if (ob_is_clob_locator(type1.get_type(), type1.get_collation_type())) {
       match = ob_is_clob_locator(type2.get_type(), type2.get_collation_type());
-    } else if (ob_is_extend(type1.get_type()) && ob_is_extend(type2.get_type())) {
-      match = (type1.get_accuracy() == type2.get_accuracy());
     } else if (ob_is_json(type1.get_type())) {
       match = ob_is_json(type2.get_type());
     } else if (type1.is_xml_sql_type() || (type1.is_ext() && type1.get_udt_id() == T_OBJ_XML)) {
       match = type2.is_xml_sql_type() || (type2.is_ext() && type2.get_udt_id() == T_OBJ_XML);
     } else if (type1.is_geometry()) {
       match = type2.is_geometry();
-    } else if (type1.is_user_defined_sql_type()) {
-      match = type2.is_user_defined_sql_type() && type1.get_udt_id() == type2.get_udt_id();
+    } else if (type1.is_user_defined_sql_type() || ob_is_extend(type1.get_type())) {
+      match = (type2.is_user_defined_sql_type() || ob_is_extend(type2.get_type())) && (type1.get_udt_id() == type2.get_udt_id());
     } else if (type1.is_roaringbitmap()) {
       match = type2.is_roaringbitmap();
     }
@@ -2682,8 +2682,35 @@ int ObRelationalExprOperator::calc_result_type2(ObExprResType &type,
                                                 ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  if (lib::is_oracle_mode() && (type1.is_ext() || type2.is_ext())) {
-    // Only nested table support equality and inequality.
+  if (lib::is_oracle_mode()
+      && (type1.is_user_defined_sql_type() || type2.is_user_defined_sql_type())) {
+    // SQL UDT on at least one side: keep sql_udt types (no cast to pl_extend) so serialization stays safe.
+    // Conversion to pl_extend happens at eval time inside pl_udt_compare2.
+    const bool support_udt_compare =
+        (type1.is_user_defined_sql_type() || type1.is_ext() || type1.is_null())
+        && (type2.is_user_defined_sql_type() || type2.is_ext() || type2.is_null());
+
+    if (!support_udt_compare) {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN("invalid type for op", K(ret), K(type_), K(type1), K(type2));
+    } else if (type1.is_xml_sql_type() && type2.is_xml_sql_type()) {
+      ret = OB_ERR_NO_ORDER_MAP_SQL;
+      LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret), K(type1), K(type2));
+    } else if (type1.is_xml_sql_type() || type2.is_xml_sql_type()) {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN("invalid type for op", K(ret), K(type_), K(type1), K(type2));
+    } else if (T_OP_EQ != type_ && T_OP_NE != type_) {
+      ret = OB_ERR_INVALID_TYPE_FOR_OP;
+      LOG_WARN("invalid type for op", K(ret), K(type_), K(type1), K(type2));
+    } else {
+      type.set_int32();
+      type.set_precision(DEFAULT_PRECISION_FOR_BOOL);
+      type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
+      type.set_calc_type((type1.is_user_defined_sql_type()) ? type1.get_calc_type() : type2.get_calc_type());
+    }
+  } else if (lib::is_oracle_mode()
+             && (type1.is_ext() || type2.is_ext())) {
+    // PL extend only (ext vs ext or null): nested table supports equality and inequality.
     bool support = (T_OP_EQ == type_ || T_OP_NE == type_);
     if (support && !type1.is_ext() && !type1.is_null()) {
       support = false;
@@ -2709,11 +2736,6 @@ int ObRelationalExprOperator::calc_result_type2(ObExprResType &type,
       type.set_scale(DEFAULT_SCALE_FOR_INTEGER);
       type.set_calc_type(type1.get_calc_type());
     }
-  } else if (lib::is_oracle_mode()
-            && (type1.is_user_defined_sql_type() && type2.is_user_defined_sql_type())) {
-    // other udt types not supported, xmltype does not have order or map member function
-    ret = OB_ERR_NO_ORDER_MAP_SQL;
-    LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
   } else {
     OZ(deduce_cmp_type(*this, type, type1, type2, type_ctx));
   }
@@ -3167,8 +3189,34 @@ int ObRelationalExprOperator::pl_udt_compare2(CollectionPredRes &cmp_result,
                                               const ObCmpOp cmp_op)
 {
   int ret = OB_SUCCESS;
-  pl::ObPLCollection *c1 = reinterpret_cast<pl::ObPLCollection *>(obj1.get_ext());
-  pl::ObPLCollection *c2 = reinterpret_cast<pl::ObPLCollection *>(obj2.get_ext());
+  pl::ObPLCollection *c1 = NULL;
+  pl::ObPLCollection *c2 = NULL;
+  const ObObj *cmp_obj1 = &obj1;
+  const ObObj *cmp_obj2 = &obj2;
+  ObObj pl_obj1, pl_obj2;
+  // Dynamically convert sql_udt to pl_extend when needed (no cast expr in plan)
+  if (ob_is_user_defined_sql_type(obj1.get_type())) {
+    ObSqlUDTMeta udt_meta;
+    uint16_t subschema_id = obj1.get_meta().get_subschema_id();
+    if (OB_FAIL(exec_ctx.get_sqludt_meta_by_subschema_id(subschema_id, udt_meta))) {
+      LOG_WARN("failed to get udt meta by subschema_id", K(ret), K(subschema_id));
+    } else if (OB_FAIL(ObSqlUdtUtils::sql_udt_deserialize_to_pl_extend(&exec_ctx, pl_obj1, obj1, udt_meta))) {
+      LOG_WARN("failed to cast sql udt to pl extend", K(ret), K(subschema_id));
+    } else {
+      cmp_obj1 = &pl_obj1;
+    }
+  }
+  if (OB_SUCC(ret) && ob_is_user_defined_sql_type(obj2.get_type())) {
+    ObSqlUDTMeta udt_meta;
+    uint16_t subschema_id = obj2.get_meta().get_subschema_id();
+    if (OB_FAIL(exec_ctx.get_sqludt_meta_by_subschema_id(subschema_id, udt_meta))) {
+      LOG_WARN("failed to get udt meta by subschema_id", K(ret), K(subschema_id));
+    } else if (OB_FAIL(ObSqlUdtUtils::sql_udt_deserialize_to_pl_extend(&exec_ctx, pl_obj2, obj2, udt_meta))) {
+      LOG_WARN("failed to cast sql udt to pl extend", K(ret), K(subschema_id));
+    } else {
+      cmp_obj2 = &pl_obj2;
+    }
+  }
   #define SET_CMP_RESULT(eq_cond, ne_cond, other_cond) \
   do { \
     cmp_result = CO_EQ == cmp_op ? eq_cond : CO_NE == cmp_op ? ne_cond : other_cond;\
@@ -3181,11 +3229,15 @@ int ObRelationalExprOperator::pl_udt_compare2(CollectionPredRes &cmp_result,
      * 5、除上面情况，不相等，false
      * 6、其它情况，true
   */
-  if (OB_ISNULL(c1) || OB_ISNULL(c2)) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_ISNULL(cmp_obj1) || OB_ISNULL(cmp_obj2)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("compare udt failed due to null udt", K(ret), K(obj1), K(obj2));
-  } else if ((pl::PL_NESTED_TABLE_TYPE != obj1.get_meta().get_extend_type() && pl::PL_VARRAY_TYPE != obj1.get_meta().get_extend_type())
-               || (pl::PL_NESTED_TABLE_TYPE != obj2.get_meta().get_extend_type() && pl::PL_VARRAY_TYPE != obj2.get_meta().get_extend_type())
+  } else if (OB_ISNULL(c1 = reinterpret_cast<pl::ObPLCollection *>(cmp_obj1->get_ext())) || OB_ISNULL(c2 = reinterpret_cast<pl::ObPLCollection *>(cmp_obj2->get_ext()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("compare udt failed due to null udt", K(ret), K(obj1), K(obj2));
+  } else if ((pl::PL_NESTED_TABLE_TYPE != cmp_obj1->get_meta().get_extend_type() && pl::PL_VARRAY_TYPE != cmp_obj1->get_meta().get_extend_type())
+               || (pl::PL_NESTED_TABLE_TYPE != cmp_obj2->get_meta().get_extend_type() && pl::PL_VARRAY_TYPE != cmp_obj2->get_meta().get_extend_type())
                || (pl::PL_NESTED_TABLE_TYPE != c1->get_type() && pl::PL_VARRAY_TYPE != c1->get_type())
                || (pl::PL_NESTED_TABLE_TYPE != c2->get_type() && pl::PL_VARRAY_TYPE != c2->get_type())
                || (T_OBJ_SDO_ELEMINFO_ARRAY == c1->get_id() || T_OBJ_SDO_ELEMINFO_ARRAY == c2->get_id())
@@ -3210,8 +3262,8 @@ int ObRelationalExprOperator::pl_udt_compare2(CollectionPredRes &cmp_result,
   } else if (c1->is_of_composite()) {
     if (c1->is_collection_null() || c2->is_collection_null()) {
       cmp_result = CollectionPredRes::COLL_PRED_NULL;
-    } else if (OB_FAIL(eval_compare_composite(cmp_result, obj1, obj2, exec_ctx, cmp_op))) {
-      LOG_WARN("failed to eval_compare_composite", K(ret), K(cmp_result), K(obj1), K(obj2));
+    } else if (OB_FAIL(eval_compare_composite(cmp_result, *cmp_obj1, *cmp_obj2, exec_ctx, cmp_op))) {
+      LOG_WARN("failed to eval_compare_composite", K(ret), K(cmp_result), K(*cmp_obj1), K(*cmp_obj2));
     }
   } else if (!c1->is_inited() || !c2->is_inited()) {
     cmp_result = CollectionPredRes::COLL_PRED_NULL;
@@ -3330,22 +3382,26 @@ int ObRelationalExprOperator::eval_pl_udt_compare(const ObExpr &expr,
     if (l->is_null() || r->is_null()) {
       expr_datum.set_null();
     } else {
-      CollectionPredRes cmp_res = CollectionPredRes::COLL_PRED_INVALID;
-      OZ(pl_udt_compare2(cmp_res, *l->extend_obj_, *r->extend_obj_,
-                         ctx.exec_ctx_, get_cmp_op(expr.type_)));
+      ObObj obj1, obj2;
+      OZ(l->to_obj(obj1, expr.args_[0]->obj_meta_));
+      OZ(r->to_obj(obj2, expr.args_[1]->obj_meta_));
       if (OB_SUCC(ret)) {
-        switch (cmp_res) {
-          case COLL_PRED_NULL: {
-            expr_datum.set_null();
-            break;
+        CollectionPredRes cmp_res = CollectionPredRes::COLL_PRED_INVALID;
+        OZ(pl_udt_compare2(cmp_res, obj1, obj2, ctx.exec_ctx_, get_cmp_op(expr.type_)));
+        if (OB_SUCC(ret)) {
+          switch (cmp_res) {
+            case COLL_PRED_NULL: {
+              expr_datum.set_null();
+              break;
+            }
+            case COLL_PRED_TRUE:
+            case COLL_PRED_FALSE: {
+              expr_datum.set_int32(cmp_res);
+              break;
+            }
+            default:
+              expr_datum.set_int32(0);
           }
-          case COLL_PRED_TRUE:
-          case COLL_PRED_FALSE: {
-            expr_datum.set_int32(cmp_res);
-            break;
-          }
-          default:
-            expr_datum.set_int32(0);
         }
       }
     }
@@ -4907,10 +4963,11 @@ int ObVectorExprOperator::calc_result_typeN(ObExprResType &type,
     bool has_composite_elem = false;
     // in 可能是nest table, (nt1 in (nt2, nt3, nt4))
     for (int64_t k = 0; lib::is_oracle_mode() && k < param_num; ++k) {
-      if (!types[k].is_ext() && !types[k].is_null()) {
+      bool is_composite = types[k].is_ext() || (types[k].is_user_defined_sql_type() && !types[k].is_xml_sql_type());
+      if (!is_composite && !types[k].is_null()) {
         not_composite_elem_idx = k;
       }
-      has_composite_elem |= types[k].is_ext();
+      has_composite_elem |= is_composite;
     }
     if (lib::is_oracle_mode() && has_composite_elem) {
       if (row_dimension_ != 1) {
@@ -7611,16 +7668,21 @@ int ObRelationalExprOperator::cg_datum_cmp_expr(ObIAllocator &allocator,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret));
   } else if (lib::is_oracle_mode()
-             && (rt_expr.args_[0]->obj_meta_.is_ext()
-                 || rt_expr.args_[1]->obj_meta_.is_ext())) {
+             && ((rt_expr.args_[0]->obj_meta_.is_ext()
+                  || (ob_is_user_defined_sql_type(rt_expr.args_[0]->obj_meta_.get_type()) && !rt_expr.args_[0]->obj_meta_.is_xml_sql_type()))
+                 || (rt_expr.args_[1]->obj_meta_.is_ext()
+                     || (ob_is_user_defined_sql_type(rt_expr.args_[1]->obj_meta_.get_type()) && !rt_expr.args_[1]->obj_meta_.is_xml_sql_type())))) {
     const auto &l = rt_expr.args_[0]->obj_meta_;
     const auto &r = rt_expr.args_[1]->obj_meta_;
-    if (!(l.is_null() || l.is_ext())
-        || !(r.is_null() || r.is_ext())) {
+    const bool l_ok = l.is_null() || l.is_ext()
+        || ob_is_user_defined_sql_type(l.get_type());
+    const bool r_ok = r.is_null() || r.is_ext()
+        || ob_is_user_defined_sql_type(r.get_type());
+    if (!l_ok || !r_ok) {
       ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected type for UDT compare", K(ret), K(l), K(r));
     } else {
       rt_expr.eval_func_ = &eval_pl_udt_compare;
-      LOG_WARN("unexpected type", K(ret), K(l), K(r));
     }
   } else {
     rt_expr.inner_func_cnt_ = 0;

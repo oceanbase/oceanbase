@@ -585,6 +585,7 @@ public:
                             VectorHeader *&vec_header);
 private:
   int init_param_store_after_deserialize();
+  int restore_pl_extend_in_param_store();
   void reset_datum_frame(char *frame, int64_t expr_cnt);
   int extend_param_frame(const int64_t old_size);
   int reserve_param_frame(const int64_t capacity);

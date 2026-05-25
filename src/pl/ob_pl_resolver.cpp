@@ -13773,7 +13773,7 @@ int ObPLResolver::resolve_qualified_name(ObQualifiedName &q_name,
   //"case a when b xx when c xx" to "case when a == b then xx case when a == c then xx"
   if (OB_SUCC(ret)) {
     bool transformed = false;
-    if (!ObObjUDTUtil::ob_is_supported_sql_udt(expr->get_result_type().get_udt_id())) {
+    if (!ObObjUDTUtil::ob_is_sys_sql_udt(expr->get_result_type().get_udt_id())) {
       OZ (formalize_expr(*expr)); // bugfix: 53193337, need get real type in that case
     }
     OZ (ObTransformPreProcess::transform_expr(expr_factory_,
@@ -16516,7 +16516,7 @@ int ObPLResolver::resolve_sys_func_access(ObObjAccessIdent &access_ident,
         LOG_WARN("deduce type failed for sys func ident", K(ret));
       }
     }
-    uint64_t udt_id = 0;
+    uint64_t udt_id = OB_INVALID_ID;
     if (OB_FAIL(ret)) {
     } else if (access_ident.sys_func_expr_->get_result_type().is_user_defined_sql_type()) {
       uint16_t subschema_id = access_ident.sys_func_expr_->get_result_type().get_subschema_id();

@@ -137,7 +137,7 @@ int ObRawExprUtils::resolve_op_expr_implicit_cast(ObRawExprFactory &expr_factory
           ret = OB_ERR_INVALID_CMP_OP;
           LOG_WARN("can't calculate with json type in oracle mode",
                   K(ret), K(r_type1), K(r_type2), K(op_type));
-        } else if (ob_is_user_defined_sql_type(r_type1) && ob_is_user_defined_sql_type(r_type2)) {
+        } else if (sub_expr1->get_result_type().is_xml_sql_type() && sub_expr2->get_result_type().is_xml_sql_type()) {
           // other udt types not supported, xmltype does not have order or map member function
           ret = OB_ERR_NO_ORDER_MAP_SQL;
           LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
@@ -7318,10 +7318,14 @@ int ObRawExprUtils::init_column_expr(const share::schema::ObColumnSchemaV2 &colu
       LOG_WARN("extract column expr info failed", K(ret));
     }
   }
-  if (OB_SUCC(ret) && column_schema.is_xmltype()) {
+  if (OB_SUCC(ret) && (column_schema.is_xmltype() || column_schema.is_user_defined_sql_type())) {
     column_expr.set_data_type(ObUserDefinedSQLType);
     column_expr.set_udt_id(column_schema.get_sub_data_type());
-    column_expr.set_subschema_id(ObXMLSqlType);
+    if (column_schema.is_xmltype()) {
+      column_expr.set_subschema_id(ObXMLSqlType);
+    } else {
+      column_expr.set_subschema_id(ObInvalidSqlType); // ObInvalidSqlType means subschema id not set
+    }
   }
   if (OB_SUCC(ret) && column_schema.is_collection()) {
     column_expr.set_subschema_id(UINT_MAX16);

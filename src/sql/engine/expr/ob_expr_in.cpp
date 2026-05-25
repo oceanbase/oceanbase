@@ -15,8 +15,10 @@
 #include "ob_expr_in.h"
 #include "sql/engine/expr/ob_expr_subquery_ref.h"
 #include "sql/engine/expr/ob_expr_multiset.h"
+#include "sql/engine/expr/ob_expr_sql_udt_utils.h"
 #include "sql/engine/subquery/ob_subplan_filter_op.h"
 #include "share/vector/expr_cmp_func.h"
+#include "common/object/ob_obj_type.h"
 
 
 namespace oceanbase
@@ -647,6 +649,8 @@ int ObExprInOrNotIn::eval_pl_udt_in(const ObExpr &expr,
   ObObj lhs;
   ObObj rhs;
   ObObj result;
+  ObObj pl_lhs;  // for sql udt cast result (left)
+  ObObj pl_rhs;  // for sql udt cast result (right)
 
   pl::ObPLComposite *left = nullptr;
   pl::ObPLComposite *right = nullptr;
@@ -659,81 +663,116 @@ int ObExprInOrNotIn::eval_pl_udt_in(const ObExpr &expr,
   CK (OB_NOT_NULL(expr.args_[0]));
   OZ (expr.args_[0]->eval(ctx, val));
   CK (OB_NOT_NULL(val));
-  OZ (val->to_obj(lhs, expr.args_[0]->obj_meta_));
-  CK (OB_NOT_NULL(left = reinterpret_cast<pl::ObPLComposite*>(lhs.get_ext())))
-  OX (list = expr.args_[1]);
-  CK (OB_NOT_NULL(list));
-
-  if (OB_SUCC(ret)) {
-    ObArenaAllocator alloc;
-    ParamStore params((ObWrapperAllocator(alloc)));
-
-    ObBitSet<> out_args;
-
-    for (int64_t i = 0; OB_SUCC(ret) && i < list->arg_cnt_; ++i) {
-      result.set_bool(false);
-      params.reuse();
-
-      if (OB_FAIL(list->args_[i]->eval(ctx, curr))) {
-        LOG_WARN("failed to eval IN list expr", K(ret), K(i), KPC(list));
-      } else if (OB_ISNULL(curr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected NULL datum", K(ret), K(i), KPC(list));
-      } else if (OB_FAIL(curr->to_obj(rhs, list->args_[i]->obj_meta_))) {
-        LOG_WARN("failed to convert IN list datum to obj",
-                 K(ret), K(i), KPC(list), KPC(curr), K(rhs));
-      } else if (OB_ISNULL(right = reinterpret_cast<pl::ObPLComposite*>(rhs.get_ext()))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected NULL udt", K(ret), K(i), KPC(list), K(rhs));
-      } else if (OB_UNLIKELY(left->get_id() != right->get_id())) {
-        ret = OB_ERR_CALL_WRONG_ARG;
-
-        static const ObString err_arg = "IN or NOT IN clause";
-        LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, err_arg.length(), err_arg.ptr());
-        LOG_WARN("failed to eval_pl_udt_in", K(ret), KPC(left), KPC(right));
-      } else if (OB_FAIL(params.push_back(lhs))) {
-        LOG_WARN("failed to push back lhs", K(ret), K(lhs), K(params));
-      } else if (OB_FAIL(params.push_back(rhs))) {
-        LOG_WARN("failed to push back rhs", K(ret), K(rhs), K(params));
-      } else if (OB_FAIL(params.push_back(result))) {
-        LOG_WARN("failed to push back result", K(ret), K(result), K(params));
+  if (OB_FAIL(ret)) {
+    // do nothing
+  } else if (val->is_null()) {
+    expr_datum.set_null();
+  } else {
+    OZ (val->to_obj(lhs, expr.args_[0]->obj_meta_));
+    // Dynamically cast SQL UDT to PL extend when left is from table column (SQL UDT)
+    if (OB_SUCC(ret) && ob_is_user_defined_sql_type(expr.args_[0]->obj_meta_.get_type())) {
+      ObSqlUDTMeta udt_meta;
+      uint16_t subschema_id = expr.args_[0]->obj_meta_.get_subschema_id();
+      if (OB_FAIL(ctx.exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, udt_meta))) {
+        LOG_WARN("failed to get udt meta by subschema_id", K(ret), K(subschema_id));
+      } else if (OB_FAIL(ObSqlUdtUtils::sql_udt_deserialize_to_pl_extend(&ctx.exec_ctx_, pl_lhs, lhs, udt_meta))) {
+        LOG_WARN("failed to cast sql udt to pl extend", K(ret), K(subschema_id));
       } else {
-        params.at(0).set_udt_id(left->get_id());
-        params.at(0).set_param_meta();
-
-        params.at(1).set_udt_id(right->get_id());
-        params.at(1).set_param_meta();
-
-        params.at(2).set_param_meta();
-      }
-
-      if (OB_SUCC(ret)) {
-        is_equal = false;
-        out_args.reuse();
-
-        if (OB_FAIL(ObExprMultiSet::eval_composite_relative_anonymous_block(ctx.exec_ctx_,
-                                                                            CMP_PL,
-                                                                            params,
-                                                                            out_args))) {
-          LOG_WARN("failed to execute PS anonymous bolck",
-                   K(ret), K(i), K(lhs), K(rhs), K(params));
-        } else if (out_args.num_members() != 1 || !out_args.has_member(2)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected out args",
-                   K(ret), K(i), K(lhs), K(rhs), K(params), K(out_args));
-        } else if (params.at(2).is_null()) {
-          has_null = true;
-        } else if (OB_FAIL(params.at(2).get_bool(is_equal))) {
-          LOG_WARN("failed to get bool result from out arg", K(ret), K(i), K(params));
-        } else if (is_equal) {
-          break;
-        } else {
-          // do nothing
-        }
+        lhs = pl_lhs;
       }
     }
+    CK (OB_NOT_NULL(left = reinterpret_cast<pl::ObPLComposite*>(lhs.get_ext())))
+    OX (list = expr.args_[1]);
+    CK (OB_NOT_NULL(list));
 
-    OX (set_datum_result(T_OP_IN == expr.type_, is_equal, has_null, expr_datum));
+    if (OB_SUCC(ret)) {
+      ObArenaAllocator alloc;
+      ParamStore params((ObWrapperAllocator(alloc)));
+
+      ObBitSet<> out_args;
+
+      for (int64_t i = 0; OB_SUCC(ret) && i < list->arg_cnt_; ++i) {
+        result.set_bool(false);
+        params.reuse();
+
+        if (OB_FAIL(list->args_[i]->eval(ctx, curr))) {
+          LOG_WARN("failed to eval IN list expr", K(ret), K(i), KPC(list));
+        } else if (OB_ISNULL(curr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected NULL datum", K(ret), K(i), KPC(list));
+        } else if (curr->is_null()) {
+          has_null = true;
+          continue;
+        } else if (OB_FAIL(curr->to_obj(rhs, list->args_[i]->obj_meta_))) {
+          LOG_WARN("failed to convert IN list datum to obj",
+                  K(ret), K(i), KPC(list), KPC(curr), K(rhs));
+        } else if (ob_is_user_defined_sql_type(list->args_[i]->obj_meta_.get_type())) {
+          // Dynamically cast SQL UDT to PL extend when right is SQL UDT
+          ObSqlUDTMeta udt_meta;
+          uint16_t subschema_id = list->args_[i]->obj_meta_.get_subschema_id();
+          if (OB_FAIL(ctx.exec_ctx_.get_sqludt_meta_by_subschema_id(subschema_id, udt_meta))) {
+            LOG_WARN("failed to get udt meta by subschema_id", K(ret), K(subschema_id));
+          } else if (OB_FAIL(ObSqlUdtUtils::sql_udt_deserialize_to_pl_extend(&ctx.exec_ctx_, pl_rhs, rhs, udt_meta))) {
+            LOG_WARN("failed to cast sql udt to pl extend", K(ret), K(subschema_id));
+          } else {
+            rhs = pl_rhs;
+          }
+        }
+        if (OB_FAIL(ret)) {
+          // do nothing
+        } else if (OB_ISNULL(right = reinterpret_cast<pl::ObPLComposite*>(rhs.get_ext()))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected NULL udt", K(ret), K(i), KPC(list), K(rhs));
+        } else if (OB_UNLIKELY(left->get_id() != right->get_id())) {
+          ret = OB_ERR_CALL_WRONG_ARG;
+
+          static const ObString err_arg = "IN or NOT IN clause";
+          LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, err_arg.length(), err_arg.ptr());
+          LOG_WARN("failed to eval_pl_udt_in", K(ret), KPC(left), KPC(right));
+        } else if (OB_FAIL(params.push_back(lhs))) {
+          LOG_WARN("failed to push back lhs", K(ret), K(lhs), K(params));
+        } else if (OB_FAIL(params.push_back(rhs))) {
+          LOG_WARN("failed to push back rhs", K(ret), K(rhs), K(params));
+        } else if (OB_FAIL(params.push_back(result))) {
+          LOG_WARN("failed to push back result", K(ret), K(result), K(params));
+        } else {
+          params.at(0).set_udt_id(left->get_id());
+          params.at(0).set_param_meta();
+
+          params.at(1).set_udt_id(right->get_id());
+          params.at(1).set_param_meta();
+
+          params.at(2).set_param_meta();
+        }
+
+        if (OB_SUCC(ret)) {
+          is_equal = false;
+          out_args.reuse();
+
+          if (OB_FAIL(ObExprMultiSet::eval_composite_relative_anonymous_block(ctx.exec_ctx_,
+                                                                              CMP_PL,
+                                                                              params,
+                                                                              out_args))) {
+            LOG_WARN("failed to execute PS anonymous bolck",
+                    K(ret), K(i), K(lhs), K(rhs), K(params));
+          } else if (out_args.num_members() != 1 || !out_args.has_member(2)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected out args",
+                    K(ret), K(i), K(lhs), K(rhs), K(params), K(out_args));
+          } else if (params.at(2).is_null()) {
+            has_null = true;
+          } else if (OB_FAIL(params.at(2).get_bool(is_equal))) {
+            LOG_WARN("failed to get bool result from out arg", K(ret), K(i), K(params));
+          } else if (is_equal) {
+            break;
+          } else {
+            // do nothing
+          }
+        }
+      }
+
+      OX (set_datum_result(T_OP_IN == expr.type_, is_equal, has_null, expr_datum));
+    }
   }
 
   return ret;

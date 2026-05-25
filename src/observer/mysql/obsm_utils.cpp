@@ -246,7 +246,7 @@ int ObSMUtils::cell_str(
                    !field->type_.is_collection_sql_type()) { // sql udt will cast to extend in ps mode
           ret = OB_ERR_UNEXPECTED;
           OB_LOG(WARN, "field type is not ObExtended", K(ret));
-        } else if (field->type_.is_user_defined_sql_type() || field->type_.is_collection_sql_type()
+        } else if (field->type_.is_xml_sql_type() || field->type_.is_collection_sql_type()
                    || (field->type_.get_type() == ObExtendType && field->accuracy_.get_accuracy() == T_OBJ_SDO_GEOMETRY)) {
           const uint64_t udt_id = field->accuracy_.get_accuracy();
           const uint64_t tenant_id = pl::get_tenant_id_by_object_id(udt_id);

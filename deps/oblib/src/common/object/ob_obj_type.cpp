@@ -530,18 +530,17 @@ int ob_udt_sub_type_str(char *buff,
                         int64_t buff_length,
                         int64_t &pos, const common::ObIArray<ObString> &type_info,
                         const uint64_t sub_type,
-                        bool is_sql_type = false)
+                        const ObObjType type)
 {
   int ret = OB_SUCCESS;
-  if (is_sql_type && sub_type == ObXMLSqlType) {
-    ret = databuff_printf(buff, buff_length, pos, "XMLTYPE");
-  } else if (sub_type == T_OBJ_XML) {
+  if (sub_type == T_OBJ_XML) {
     ret = databuff_printf(buff, buff_length, pos, "XMLTYPE");
   } else if (sub_type == T_OBJ_SDO_GEOMETRY) {
     ret = databuff_printf(buff, buff_length, pos, "SDO_GEOMETRY");
+  } else if (ob_is_user_defined_sql_type(type)) {
+    ret = databuff_printf(buff, buff_length, pos, "UDT");
   } else if (type_info.empty()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected column sub type", K(ret), K(sub_type), K(is_sql_type));
+    ret = databuff_printf(buff, buff_length, pos, "EXT");
   } else {
     ret = databuff_printf(buff, buff_length, pos, "%.*s", type_info.at(0).length(), type_info.at(0).ptr());
   }
@@ -849,7 +848,7 @@ int ob_sql_type_str(char *buff,
     }
   } else if (lib::is_oracle_mode() && (ob_is_user_defined_sql_type(type) || sub_type == T_OBJ_XML || sub_type == T_OBJ_SDO_GEOMETRY)) {
     ObSEArray<ObString, 1> dummy_arr;
-    if (OB_FAIL(ob_udt_sub_type_str(buff, buff_length, pos, dummy_arr, sub_type, true))) {
+    if (OB_FAIL(ob_udt_sub_type_str(buff, buff_length, pos, dummy_arr, sub_type, type))) {
       LOG_WARN("fail to get udt sub type str", K(ret), K(sub_type), K(buff), K(buff_length), K(pos));
     }
   } else if (ob_is_collection_sql_type(type)) {
@@ -1004,7 +1003,7 @@ int ob_sql_type_str(const ObObjMeta &obj_meta,
       LOG_WARN("fail to get geometry sub type str", K(ret), K(sub_type), K(buff), K(buff_length), K(pos));
     }
   } else if (lib::is_oracle_mode() && obj_meta.is_ext()) {
-     if (OB_FAIL(ob_udt_sub_type_str(buff, buff_length, pos, type_info, sub_type))) {
+     if (OB_FAIL(ob_udt_sub_type_str(buff, buff_length, pos, type_info, sub_type, obj_meta.get_type()))) {
        LOG_WARN("fail to get udt sub type str", K(ret), K(sub_type), K(buff), K(buff_length), K(pos));
      }
   } else if (obj_meta.is_collection_sql_type()) {

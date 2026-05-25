@@ -198,7 +198,7 @@ int ObRawExprDeduceType::visit(ObColumnRefRawExpr &expr)
     } else if (OB_ISNULL(exec_ctx)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("need context to search subschema mapping", K(ret), K(udt_id));
-    } else if (ObObjUDTUtil::ob_is_supported_sql_udt(udt_id)) {
+    } else if (expr.get_result_type().is_user_defined_sql_type() || ObObjUDTUtil::ob_is_sys_sql_udt(udt_id)) {
       subschema_id = ObMaxSystemUDTSqlType;
       if (OB_FAIL(exec_ctx->get_subschema_id_by_udt_id(udt_id, subschema_id))) {
         LOG_WARN("failed to get subschema id by udt id", K(ret), K(udt_id));
@@ -823,7 +823,7 @@ int ObRawExprDeduceType::calc_result_type(ObNonTerminalRawExpr &expr,
         cast_mode |= CM_ZERO_FILL;
       }
       if (ob_is_collection_sql_type(expr.get_result_type().get_type())
-          && !ObObjUDTUtil::ob_is_supported_sql_udt(expr.get_result_type().get_udt_id())) {
+          && !ObObjUDTUtil::ob_is_sys_sql_udt(expr.get_result_type().get_udt_id())) {
         if (expr.get_expr_class() == ObRawExpr::EXPR_OPERATOR
             || expr.get_expr_class() == ObRawExpr::EXPR_SYS_FUNC
             || expr.get_expr_class() == ObRawExpr::EXPR_SET_OP
@@ -2785,7 +2785,7 @@ int ObRawExprDeduceType::visit(ObSysFunRawExpr &expr)
       } else if (lib::is_oracle_mode() && !expr.is_pl_expr() && expr.is_called_in_sql()
         && T_FUN_SYS_CAST != expr.get_expr_type() && param_expr->get_expr_type() != T_FUN_SYS_CAST
         && param_expr->get_result_type().get_type() == ObExtendType
-        && ObObjUDTUtil::ob_is_supported_sql_udt(param_expr->get_result_type().get_udt_id())) {
+        && ObObjUDTUtil::ob_is_sys_sql_udt(param_expr->get_result_type().get_udt_id())) {
         if (OB_FAIL(ObRawExprUtils::implict_cast_pl_udt_to_sql_udt(expr_factory_, my_session_, param_expr))) {
           LOG_WARN("add implict cast to pl udt expr failed", K(ret));
         } else if (OB_FAIL(push_back_types(param_expr, types))) {
@@ -3948,12 +3948,12 @@ int ObRawExprDeduceType::set_xmlagg_result_type(ObAggFunRawExpr &expr,
         LOG_WARN("internal order expr is null", K(ret));
       } else if (order_expr->get_expr_type() == T_REF_COLUMN) {
         const ObColumnRefRawExpr *order_column = static_cast<const ObColumnRefRawExpr *>(order_expr);
-        if (order_column->is_lob_column()) {
-          ret = OB_ERR_INVALID_TYPE_FOR_OP;
-          LOG_WARN("Column of LOB type cannot be used for sorting", K(ret));
-        } else if (order_column->is_xml_column()) {
+        if (order_column->is_xml_column()) {
           ret = OB_ERR_NO_ORDER_MAP_SQL;
           LOG_WARN("cannot ORDER objects without MAP or ORDER method", K(ret));
+        } else if (order_column->is_lob_column()) {
+          ret = OB_ERR_INVALID_TYPE_FOR_OP;
+          LOG_WARN("Column of LOB type cannot be used for sorting", K(ret));
         }
       } else {
         ObObjType result_type = order_expr->get_result_type().get_type();

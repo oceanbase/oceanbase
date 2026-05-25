@@ -174,7 +174,7 @@ public:
                                           ObSqlUDT &sql_udt,
                                           const ObObj &root_obj);
 
-  static int build_empty_record(sql::ObExecContext *exec_ctx, ObObj &result, uint64_t udt_id);
+  static int build_empty_complex_obj(sql::ObExecContext *exec_ctx, ObObj &result, uint64_t udt_id, common::ObIAllocator &allocator, bool need_new_allocator = false);
   static int cast_sql_udt_varray_to_pl_varray(sql::ObExecContext *exec_ctx,
                                               ObString &udt_varray_buf,
                                               ObSqlUDTMeta &udt_meta,
@@ -195,6 +195,16 @@ public:
   static int get_sqludt_meta_by_subschema_id(sql::ObExecContext *exec_ctx,
                                              const uint16_t subschema_id,
                                              ObSqlUDTMeta &udt_meta);
+  static int add_pl_record_to_pl_ctx(sql::ObExecContext *exec_ctx, ObObj &result);
+  static int pl_extend_serialize_to_sql_udt(common::ObIAllocator &res_allocator,
+                                            sql::ObExecContext *exec_ctx,
+                                            ObString &res,
+                                            const ObObj &root_obj,
+                                            ObSqlUDTMeta &udt_meta);
+  static int sql_udt_deserialize_to_pl_extend(sql::ObExecContext *exec_ctx,
+                                              ObObj &result,
+                                              const ObObj &udt_obj,
+                                              ObSqlUDTMeta &udt_meta);
 };
 
 class ObSqlUdtMetaUtils final

@@ -1114,7 +1114,7 @@
         res_obj.meta_.set_collation_level(CS_LEVEL_IMPLICIT); \
         ret = (class_obj).set_##column_name(res_obj); \
       } \
-      else if (column.is_identity_column() || ob_is_string_type(data_type) || ob_is_geometry(data_type)|| ob_is_roaringbitmap(data_type) || ob_is_collection_sql_type(data_type)) \
+      else if (column.is_identity_column() || ob_is_string_type(data_type) || ob_is_geometry(data_type)|| ob_is_user_defined_sql_type(data_type) || ob_is_roaringbitmap(data_type) || ob_is_collection_sql_type(data_type)) \
       { \
         res_obj.set_string(data_type, str_value); \
         res_obj.meta_.set_collation_type(column.get_collation_type());  \
@@ -1126,7 +1126,7 @@
           SQL_LOG(WARN, "outrow lob unsupported", "column_name", #column_name); \
         } \
         else { \
-          if (ob_is_text_tc(data_type) || ob_is_geometry(data_type) || ob_is_roaringbitmap(data_type) || ob_is_collection_sql_type(data_type)) { res_obj.set_inrow(); } \
+          if (ob_is_text_tc(data_type) || ob_is_geometry(data_type) || ob_is_roaringbitmap(data_type) || ob_is_user_defined_sql_type(data_type) || ob_is_collection_sql_type(data_type)) { res_obj.set_inrow(); } \
           ret = (class_obj).set_##column_name(res_obj); \
         } \
       }                                               \
@@ -1262,7 +1262,7 @@
         res_obj.meta_.set_collation_level(CS_LEVEL_IMPLICIT);                                    \
         ret = (class_obj).set_cur_default_value(res_obj, column.is_default_expr_v2_column());    \
       }                                                                                          \
-      else if (column.is_identity_column() || ob_is_string_type(data_type) || ob_is_geometry(data_type) || ob_is_collection_sql_type(data_type)) \
+      else if (column.is_identity_column() || ob_is_string_type(data_type) || ob_is_geometry(data_type) || ob_is_user_defined_sql_type(data_type) || ob_is_roaringbitmap(data_type) || ob_is_collection_sql_type(data_type)) \
       {                                                                                          \
         res_obj.set_string(data_type, str_value);                                                \
         res_obj.meta_.set_collation_type(column.get_collation_type());                           \

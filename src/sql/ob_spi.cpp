@@ -8571,12 +8571,6 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
       LOG_DEBUG("same type directyly copy", K(obj), K(dst_obj), K(in_result_type));
     } else if (current_type.get_obj_type() != ObExtendType && !ObPLResolver::check_need_cast(in_result_type, current_type.get_meta_type(), current_type.get_accuracy())) {
       dst_obj = obj;
-    } else if (obj.is_null()
-               && in_result_type.get_meta_type().is_ext()
-               && (current_type.get_meta_type().is_user_defined_sql_type() && !current_type.get_meta_type().is_xml_sql_type())) {
-      // only support xml null cast to xmltype, others will report error.
-      ret = OB_ERR_INTO_EXPR_ILLEGAL;
-      LOG_WARN("PLS-00597: expression 'string' in the INTO list is of wrong type", K(ret), K(obj), K(current_type), K(in_result_type));
     } else if (!obj.is_pl_extend()
                && !obj.is_user_defined_sql_type()
                && !obj.is_geometry()
@@ -8684,7 +8678,9 @@ int ObSPIService::convert_obj(ObPLExecCtx *ctx,
               tmp_obj.set_extend(reinterpret_cast<int64_t>(opaque), pl::PL_OPAQUE_TYPE);
             }
   #endif
-          } else if (!current_type.get_meta_type().is_ext() && in_result_type.get_meta_type().is_ext() &&
+          } else if (!current_type.get_meta_type().is_ext()
+                     && !current_type.get_meta_type().is_user_defined_sql_type()
+                     && in_result_type.get_meta_type().is_ext() &&
                      (PL_NESTED_TABLE_TYPE == in_result_type.get_meta_type().get_extend_type() ||
                      PL_VARRAY_TYPE == in_result_type.get_meta_type().get_extend_type())) {
             ret = OB_ERR_INTO_EXPR_ILLEGAL;

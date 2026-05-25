@@ -141,6 +141,12 @@ private:
   int get_type_str(const share::schema::ObColumnSchemaV2 &column_schema,
                    const int16_t default_length_semantics,
                    ObString &type_val);
+  static int get_udt_type_name(share::schema::ObSchemaGetterGuard *schema_guard,
+                               uint64_t tenant_id,
+                               int64_t udt_id,
+                               char *buff,
+                               int64_t buff_length,
+                               int64_t &pos);
   int fill_col_privs(
       const ObSessionPrivInfo &session_priv,
       const common::ObIArray<uint64_t> &enable_role_id_array,

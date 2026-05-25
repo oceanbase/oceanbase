@@ -1089,6 +1089,11 @@ int ObExprMultiSet::eval_multiset(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &r
         }
       }
     }
+  } else if (datum1->is_null() || datum2->is_null()) {
+  } else {
+    ret = OB_ERR_CALL_WRONG_ARG;
+    LOG_USER_ERROR(OB_ERR_CALL_WRONG_ARG, static_cast<int>(strlen("MULTISET")), "MULTISET");
+    LOG_WARN("failed to eval MULTISET", K(ret));
   }
 #endif
   return ret;

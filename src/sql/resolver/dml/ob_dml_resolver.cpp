@@ -568,162 +568,166 @@ int ObDMLResolver::transform_dot_notation2_json_value(ParseNode &node, const ObS
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(check_column_json_type(tmp_node, is_json_cst, is_json_type, col_expr))) {
     LOG_WARN("check column type failed", K(ret));
+  } else if (OB_NOT_NULL(col_expr) && col_expr->get_result_type().is_user_defined_sql_type() && !col_expr->get_result_type().is_xml_sql_type()) {
+    // For UDT column attribute access, keep T_OBJ_ACCESS_REF and convert to PL EXTEND in Resolve stage
+    // Do nothing here, let it pass through to Resolve stage
   } else if (!(is_json_cst || is_json_type)) {
     ret = OB_WRONG_COLUMN_NAME;
     LOG_USER_ERROR(OB_WRONG_COLUMN_NAME, static_cast<int32_t>(sql_str.length() - 1), sql_str.ptr());
     LOG_WARN("column type not json", K(ret));
-  }
-  // create path node
-  if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(node.children_[1]->children_[1])) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("node transform fail", K(ret));
-    // do nothing
-  } else if (OB_ISNULL(path_node = static_cast<ParseNode*>(allocator_->alloc(sizeof(ParseNode))))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate memory", K(ret), K(sizeof(ParseNode)));
   } else {
-    path_node = new(path_node) ParseNode;
-    ParseNode *tmp_path = node.children_[1]->children_[1];
-    ObJsonBuffer res_str(allocator_);
-    if (OB_FAIL(res_str.append("$"))) {
-      LOG_WARN("path symbol write fail", K(ret));
-    } else {
-      while (OB_SUCC(ret) && OB_NOT_NULL(tmp_path)) {
-        if (OB_ISNULL(tmp_path->children_[0])) {
-          tmp_path = NULL;
-          // do nothing
-        } else {
-          if (tmp_path->children_[0]->type_ == T_FUN_SYS) {
-            tmp_path = tmp_path->children_[0];
-          }
-          if (OB_FAIL(print_json_path(tmp_path, res_str))) {
-            LOG_WARN("generate path fail", K(ret));
-          }
-        }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(res_str.append("()"))) {
-        LOG_WARN("() write fail", K(ret));
-      } else if (OB_FAIL(ObRawExprResolverImpl::malloc_new_specified_type_node(*allocator_, res_str.string(), path_node, T_CHAR))) {
-        LOG_WARN("create path node failed", K(ret));
-      } else {
-        param_vec[1] = path_node;
-      }
-    }
-  }
-  // create return node
-  if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(ret_node = static_cast<ParseNode*>(allocator_->alloc(sizeof(ParseNode))))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate memory", K(ret), K(sizeof(ParseNode)));
-  } else {
-    ret_node = new(ret_node) ParseNode;
-    memset(ret_node, 0, sizeof(ParseNode));
-    ret_node->type_ = T_CAST_ARGUMENT;
-    ret_node->value_ = 0;
-    ret_node->is_hidden_const_ = 1;
-    ret_node->num_child_ = 0;
-    ret_node->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_VARCHAR;
-    ret_node->int16_values_[OB_NODE_CAST_COLL_IDX] = INVALID_COLLATION;
-    ret_node->int32_values_[0] = 22;
-    ret_node->int32_values_[OB_NODE_CAST_C_LEN_IDX] = 4000;
-    ret_node->is_tree_not_param_ = 1;
-    ret_node->length_semantics_ = 0;
-    ret_node->raw_text_ = "default";
-    ret_node->text_len_ = 7;
-    param_vec[2] = ret_node;          // return type pos is 2 in json value clause
-  }
-  //  opt_truncate(3) opt_ascii(4) opt_value_on_empty(5)_or_error(6) mismatch (7, 8)
-  for (int8_t i = 3; OB_SUCC(ret) && i < 9; i++) {
-    opt_node = NULL;
-    if (OB_ISNULL(opt_node = static_cast<ParseNode*>(allocator_->alloc(sizeof(ParseNode))))) {
+    // create path node
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(node.children_[1]->children_[1])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("node transform fail", K(ret));
+      // do nothing
+    } else if (OB_ISNULL(path_node = static_cast<ParseNode*>(allocator_->alloc(sizeof(ParseNode))))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate memory", K(ret), K(sizeof(ParseNode)));
     } else {
-      opt_node = new(opt_node) ParseNode;
-      if (i == 6 || i == 8) {
-        if (OB_FAIL(ObRawExprResolverImpl::malloc_new_specified_type_node(*allocator_, "", opt_node, T_NULL))) {
-          LOG_WARN("create path node failed", K(ret));
-        } else {
-          param_vec[i] = opt_node;
-        }
+      path_node = new(path_node) ParseNode;
+      ParseNode *tmp_path = node.children_[1]->children_[1];
+      ObJsonBuffer res_str(allocator_);
+      if (OB_FAIL(res_str.append("$"))) {
+        LOG_WARN("path symbol write fail", K(ret));
       } else {
-        if (OB_FAIL(ObRawExprResolverImpl::malloc_new_specified_type_node(*allocator_, "", opt_node, T_INT))) {
-          LOG_WARN("create path node failed", K(ret));
-        } else {
-          int8_t val = 0;
-          if (i == 3) {
-            val = 0;
-          } else if (i == 5) {
-            val = 3;
-          } else if (i == 7) {
-            val = 1;
+        while (OB_SUCC(ret) && OB_NOT_NULL(tmp_path)) {
+          if (OB_ISNULL(tmp_path->children_[0])) {
+            tmp_path = NULL;
+            // do nothing
+          } else {
+            if (tmp_path->children_[0]->type_ == T_FUN_SYS) {
+              tmp_path = tmp_path->children_[0];
+            }
+            if (OB_FAIL(print_json_path(tmp_path, res_str))) {
+              LOG_WARN("generate path fail", K(ret));
+            }
           }
-          opt_node->value_ = val;
-          opt_node->int32_values_[0] = val;
-          opt_node->int16_values_[0] = val;
-          param_vec[i] = opt_node;
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(res_str.append("()"))) {
+          LOG_WARN("() write fail", K(ret));
+        } else if (OB_FAIL(ObRawExprResolverImpl::malloc_new_specified_type_node(*allocator_, res_str.string(), path_node, T_CHAR))) {
+          LOG_WARN("create path node failed", K(ret));
+        } else {
+          param_vec[1] = path_node;
         }
       }
     }
-  }
-  // create mismatch
-  if (OB_FAIL(ret)) {
-  } else if (OB_ISNULL(match_node = static_cast<ParseNode*>(allocator_->alloc(sizeof(ParseNode))))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to allocate memory", K(ret), K(sizeof(ParseNode)));
-  } else {
-    match_node = new(match_node) ParseNode;
-    if (OB_FAIL(ObRawExprResolverImpl::malloc_new_specified_type_node(*allocator_, "", match_node, T_NULL))) {
-      LOG_WARN("create mismatch node failed", K(ret));
+    // create return node
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(ret_node = static_cast<ParseNode*>(allocator_->alloc(sizeof(ParseNode))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory", K(ret), K(sizeof(ParseNode)));
     } else {
-      int64_t alloc_match_size = sizeof(ParseNode *) * 2;
-      if (OB_ISNULL(param_mismatch = static_cast<ParseNode **>(allocator_->alloc(alloc_match_size)))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to allocate memory", K(ret), K(sizeof(ParseNode)));
-      } else if (OB_ISNULL(match_node_l = static_cast<ParseNode*>(allocator_->alloc(sizeof(ParseNode))))) {
+      ret_node = new(ret_node) ParseNode;
+      memset(ret_node, 0, sizeof(ParseNode));
+      ret_node->type_ = T_CAST_ARGUMENT;
+      ret_node->value_ = 0;
+      ret_node->is_hidden_const_ = 1;
+      ret_node->num_child_ = 0;
+      ret_node->int16_values_[OB_NODE_CAST_TYPE_IDX] = T_VARCHAR;
+      ret_node->int16_values_[OB_NODE_CAST_COLL_IDX] = INVALID_COLLATION;
+      ret_node->int32_values_[0] = 22;
+      ret_node->int32_values_[OB_NODE_CAST_C_LEN_IDX] = 4000;
+      ret_node->is_tree_not_param_ = 1;
+      ret_node->length_semantics_ = 0;
+      ret_node->raw_text_ = "default";
+      ret_node->text_len_ = 7;
+      param_vec[2] = ret_node;          // return type pos is 2 in json value clause
+    }
+    //  opt_truncate(3) opt_ascii(4) opt_value_on_empty(5)_or_error(6) mismatch (7, 8)
+    for (int8_t i = 3; OB_SUCC(ret) && i < 9; i++) {
+      opt_node = NULL;
+      if (OB_ISNULL(opt_node = static_cast<ParseNode*>(allocator_->alloc(sizeof(ParseNode))))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("fail to allocate memory", K(ret), K(sizeof(ParseNode)));
       } else {
-        match_node_l = new(match_node_l) ParseNode;
-        if (OB_FAIL(ObRawExprResolverImpl::malloc_new_specified_type_node(*allocator_, "", match_node_l, T_INT))) {
-          LOG_WARN("create mismatch left node failed", K(ret));
+        opt_node = new(opt_node) ParseNode;
+        if (i == 6 || i == 8) {
+          if (OB_FAIL(ObRawExprResolverImpl::malloc_new_specified_type_node(*allocator_, "", opt_node, T_NULL))) {
+            LOG_WARN("create path node failed", K(ret));
+          } else {
+            param_vec[i] = opt_node;
+          }
         } else {
-          match_node_l->value_ = 3;
-          match_node_l->int32_values_[0] = 3;
-          match_node_l->int16_values_[0] = 3;
-          param_mismatch[0] = match_node_l;
+          if (OB_FAIL(ObRawExprResolverImpl::malloc_new_specified_type_node(*allocator_, "", opt_node, T_INT))) {
+            LOG_WARN("create path node failed", K(ret));
+          } else {
+            int8_t val = 0;
+            if (i == 3) {
+              val = 0;
+            } else if (i == 5) {
+              val = 3;
+            } else if (i == 7) {
+              val = 1;
+            }
+            opt_node->value_ = val;
+            opt_node->int32_values_[0] = val;
+            opt_node->int16_values_[0] = val;
+            param_vec[i] = opt_node;
+          }
         }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_ISNULL(match_node_r = static_cast<ParseNode*>(allocator_->alloc(sizeof(ParseNode))))) {
-        ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("fail to allocate memory", K(ret), K(sizeof(ParseNode)));
-      } else {
-        match_node_r = new(match_node_r) ParseNode;
-        if (OB_FAIL(ObRawExprResolverImpl::malloc_new_specified_type_node(*allocator_, "", match_node_r, T_INT))) {
-          LOG_WARN("create mismatch left node failed", K(ret));
-        } else {
-          match_node_r->value_ = 8;
-          match_node_r->int32_values_[0] = 8;
-          match_node_r->int16_values_[0] = 8;
-          param_mismatch[1] = match_node_r;
-        }
-      }
-      if (OB_SUCC(ret)) {
-        match_node->num_child_ = 2;
-        match_node->type_ = T_LINK_NODE;
-        match_node->children_ = param_mismatch;
-        param_vec[9] = match_node;
       }
     }
-  }
-  // create json value node
-  if (OB_SUCC(ret)) {
-    node.num_child_ = 10;
-    node.type_ = T_FUN_SYS_JSON_VALUE;
-    node.children_ = param_vec;
+    // create mismatch
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(match_node = static_cast<ParseNode*>(allocator_->alloc(sizeof(ParseNode))))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("fail to allocate memory", K(ret), K(sizeof(ParseNode)));
+    } else {
+      match_node = new(match_node) ParseNode;
+      if (OB_FAIL(ObRawExprResolverImpl::malloc_new_specified_type_node(*allocator_, "", match_node, T_NULL))) {
+        LOG_WARN("create mismatch node failed", K(ret));
+      } else {
+        int64_t alloc_match_size = sizeof(ParseNode *) * 2;
+        if (OB_ISNULL(param_mismatch = static_cast<ParseNode **>(allocator_->alloc(alloc_match_size)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocate memory", K(ret), K(sizeof(ParseNode)));
+        } else if (OB_ISNULL(match_node_l = static_cast<ParseNode*>(allocator_->alloc(sizeof(ParseNode))))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocate memory", K(ret), K(sizeof(ParseNode)));
+        } else {
+          match_node_l = new(match_node_l) ParseNode;
+          if (OB_FAIL(ObRawExprResolverImpl::malloc_new_specified_type_node(*allocator_, "", match_node_l, T_INT))) {
+            LOG_WARN("create mismatch left node failed", K(ret));
+          } else {
+            match_node_l->value_ = 3;
+            match_node_l->int32_values_[0] = 3;
+            match_node_l->int16_values_[0] = 3;
+            param_mismatch[0] = match_node_l;
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_ISNULL(match_node_r = static_cast<ParseNode*>(allocator_->alloc(sizeof(ParseNode))))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocate memory", K(ret), K(sizeof(ParseNode)));
+        } else {
+          match_node_r = new(match_node_r) ParseNode;
+          if (OB_FAIL(ObRawExprResolverImpl::malloc_new_specified_type_node(*allocator_, "", match_node_r, T_INT))) {
+            LOG_WARN("create mismatch left node failed", K(ret));
+          } else {
+            match_node_r->value_ = 8;
+            match_node_r->int32_values_[0] = 8;
+            match_node_r->int16_values_[0] = 8;
+            param_mismatch[1] = match_node_r;
+          }
+        }
+        if (OB_SUCC(ret)) {
+          match_node->num_child_ = 2;
+          match_node->type_ = T_LINK_NODE;
+          match_node->children_ = param_mismatch;
+          param_vec[9] = match_node;
+        }
+      }
+    }
+    // create json value node
+    if (OB_SUCC(ret)) {
+      node.num_child_ = 10;
+      node.type_ = T_FUN_SYS_JSON_VALUE;
+      node.children_ = param_vec;
+    }
   }
   return ret;
 }
@@ -964,6 +968,9 @@ int ObDMLResolver::transform_dot_notation2_json_query(ParseNode &node, const ObS
     if (OB_FAIL(transform_geo_dot_notation_attr(node, sql_str, *col_expr))) {
       LOG_WARN("transform dot notation udt attribute failed", K(ret));
     }
+  } else if (OB_NOT_NULL(col_expr) && col_expr->get_result_type().is_user_defined_sql_type() && !col_expr->get_result_type().is_xml_sql_type()) {
+    // For UDT column attribute access, keep T_OBJ_ACCESS_REF and convert to PL EXTEND in Resolve stage
+    // Do nothing here, let it pass through to Resolve stage
   } else if (!(is_json_cst || is_json_type)) {
     ret = OB_WRONG_COLUMN_NAME;
     LOG_USER_ERROR(OB_WRONG_COLUMN_NAME, static_cast<int32_t>(sql_str.length() - 1), sql_str.ptr());
@@ -1453,17 +1460,22 @@ int ObDMLResolver::replace_col_udt_qname(ObQualifiedName& q_name)
 {
   int ret = OB_SUCCESS;
   ObQualifiedName udt_col_func_q_name;
+  bool has_member_func = false;
   // Only support:
   // 1. table_alias.col_name.udf_member_func, for example: select a.c2.getclobval() from t1 a;
   // 2. table_alias.col_name.member_func.udf, for example: select a.c2.transfrom(xxx).getclobval() from t1 a;
+  // 3. table_alias.col_name.attr.udf_member_func, for example: select a.c2.attr.member_func() from t1 a;
   // Notice:
   // 1. must have table alias name;
   // 2. table_alias.col_name.static_func.udf is not supported, for example:
   //    select a.c2.createxml(xxx).getclobval() from t1 a; creatxml is an static function, not support
+  for (int64_t i = 2; i < q_name.access_idents_.count() && !has_member_func; ++i) {
+    has_member_func = (q_name.access_idents_.at(i).type_ == PL_UDF);
+  }
   if (q_name.access_idents_.count() >= 3
         && q_name.access_idents_.at(0).type_ == UNKNOWN
         && q_name.access_idents_.at(1).type_ == UNKNOWN
-        && q_name.access_idents_.at(2).type_ == PL_UDF) {
+        && has_member_func) {
     ObQualifiedName udt_col_candidate;
     ObRawExpr* udt_col_ref_expr = NULL;
     if (OB_FAIL(udt_col_candidate.access_idents_.push_back(q_name.access_idents_.at(0)))) {
@@ -3267,11 +3279,17 @@ int ObDMLResolver::resolve_qualified_identifier(ObQualifiedName &q_name,
     // TODO: move these code to type deduce
     if (q_name.parent_qname_exists()) {
       // do nothing
-    } else if (OB_FAIL(ObRawExprUtils::implict_cast_pl_udt_to_sql_udt(params_.expr_factory_,
-                                        params_.session_info_, real_ref_expr))) {
-      LOG_WARN("add implict cast to pl udt expr failed", K(ret));
+    } else if (OB_NOT_NULL(real_ref_expr)
+               && real_ref_expr->get_result_type().is_ext()
+               && ObObjUDTUtil::ob_is_sys_sql_udt(real_ref_expr->get_result_type().get_udt_id())) {
+      // Only convert sys sql udt from PL extend to SQL UDT
+      if (OB_FAIL(ObRawExprUtils::implict_cast_pl_udt_to_sql_udt(params_.expr_factory_,
+                                          params_.session_info_, real_ref_expr))) {
+        LOG_WARN("add implict cast to pl udt expr failed", K(ret));
+      }
     }
   }
+
   // column/sys_func/udf等identifier都会被先解析成ObQualifiedName. 以 f1(concat(c1+1, 'a'), 2) 为例
   // 这个表达式会解析成3个qname [q1,q2,q3]，每个qname对应一个子树，对应关系如下
   // q1 -> c1
@@ -7801,6 +7819,12 @@ int ObDMLResolver::resolve_function_table_item(const ParseNode &parse_tree,
   }
   CK (OB_NOT_NULL(function_table_expr));
   OZ (function_table_expr->deduce_type(session_info_));
+  // Convert SQL UDT to PL extend for table function
+  if (OB_SUCC(ret) && function_table_expr->get_result_type().is_user_defined_sql_type()) {
+    OZ (ObRawExprUtils::implict_cast_sql_udt_to_pl_udt(params_.expr_factory_,
+                                                       params_.session_info_,
+                                                       function_table_expr));
+  }
   if (OB_SUCC(ret)) {
     if (function_table_expr->get_result_type().is_ext()) {
       // PL collection used in TABLE(), extract PL info from schema
@@ -10963,7 +10987,6 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
     LOG_WARN("fail to fill vec vid expr param", K(ret), K(table_item), KP(table_schema), KP(ref_expr));
   }
 
-  bool is_default_udt_constructor = false;
   ObArray<ObRawExpr*> udf_construct_exprs;
   ColumnItem *basic_column_item = NULL;
   for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
@@ -11007,7 +11030,6 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
           ret = update_errno_if_sequence_object(columns.at(i), ret);
           LOG_WARN("no need referece other column, it should not happened", K(expr_str), K(ret));
         } else {
-          is_default_udt_constructor = true;
           // column_ref is replaced inside build_generated_column_expr with udf,
           // here replace udf with object/collection constructor
           if (OB_FAIL(udf_construct_exprs.push_back(real_ref_expr))) {
@@ -11016,10 +11038,13 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
 
           for (int64_t i = 0; OB_SUCC(ret) && i < udf_construct_exprs.count(); ++i) {
             ObQualifiedName &q_name = columns.at(i);
-            if (OB_FAIL(ObRawExprUtils::replace_ref_column(real_ref_expr,
-                                                            q_name.ref_expr_,
-                                                            udf_construct_exprs.at(i)))) {
-              LOG_WARN("replace column ref expr failed", K(ret));
+            const ObUDFInfo &udf_info = q_name.access_idents_.at(q_name.access_idents_.count() - 1).udf_info_;
+            if (OB_NOT_NULL(udf_info.ref_expr_)) {
+              if (OB_FAIL(ObRawExprUtils::replace_ref_column(real_ref_expr,
+                                                              udf_info.ref_expr_,
+                                                              udf_construct_exprs.at(i)))) {
+                LOG_WARN("replace column ref expr failed", K(ret));
+              }
             }
           }
           // replace expr, only outside ref_expr_ is equal to expr
@@ -11051,7 +11076,7 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
       }
     }
 
-    if (OB_SUCC(ret) && !is_default_udt_constructor) {
+    if (OB_SUCC(ret)) {
       if (OB_FAIL(real_exprs.push_back(ref_expr))) {
         LOG_WARN("push back error", K(ret));
       } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(ref_expr, columns.at(i).ref_expr_, real_ref_expr))) {

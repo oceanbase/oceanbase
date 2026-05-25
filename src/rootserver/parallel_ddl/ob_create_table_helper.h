@@ -81,6 +81,7 @@ private:
   virtual int clean_on_fail_commit_() override;
   virtual int construct_and_adjust_result_(int &return_ret) override;
   int add_index_name_to_cache_();
+  int insert_schema_object_dependency_();
 
   int lock_database_by_obj_name_();
   int lock_objects_by_name_();
