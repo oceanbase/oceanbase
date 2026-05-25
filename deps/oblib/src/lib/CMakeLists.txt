@@ -411,6 +411,7 @@ ob_set_subtarget(ob_malloc_object_list common_alloc
   alloc/memory_sanity.cpp
   alloc/ob_futex_v2.cpp
   alloc/ob_latch_v2.cpp
+  alloc/ob_memory_placeholder.cpp
   resource/achunk_mgr.cpp
   resource/ob_resource_mgr.cpp
   resource/ob_resource_limiter.cpp

@@ -542,6 +542,28 @@ int ObCgroupCtrl::get_group_path(
   return ret;
 }
 
+int ObCgroupCtrl::add_process_to_cgroup(const pid_t pid, const uint64_t tenant_id, const uint64_t group_id)
+{
+  int ret = OB_SUCCESS;
+  if (is_valid()) {
+    char group_path[PATH_BUFSIZE];
+    char pid_value[VALUE_BUFSIZE + 1];
+    snprintf(pid_value, VALUE_BUFSIZE, "%d", pid);
+    if (OB_FAIL(get_group_path(group_path,
+            PATH_BUFSIZE,
+            tenant_id,
+            group_id,
+            false))) {
+      LOG_WARN("fail get group path", K(tenant_id), K(ret));
+    } else if (OB_FAIL(set_cgroup_config_(group_path, CGROUP_PROCS_FILE, pid_value))) {
+      LOG_WARN("add pid to cgroup.procs failed", K(ret), K(group_path), K(pid_value), K(tenant_id));
+    } else {
+      LOG_INFO("add pid to cgroup.procs success", K(group_path), K(pid_value), K(tenant_id), K(group_id));
+    }
+  }
+  return ret;
+}
+
 int ObCgroupCtrl::add_self_to_cgroup_(const uint64_t tenant_id, const uint64_t group_id, const bool is_background)
 {
   return add_thread_to_cgroup_(GETTID(), tenant_id, group_id, is_background);

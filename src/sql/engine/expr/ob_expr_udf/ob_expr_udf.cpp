@@ -240,7 +240,7 @@ int ObExprUDF::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr, ObEx
     } else {
       rt_expr.eval_func_ = eval_external_udf;
 
-      if (!info->is_py_udf() && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0) {
+      if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_1_0) {
         rt_expr.eval_vector_func_ = eval_external_udf_vector;
       }
     }
@@ -631,7 +631,7 @@ int ObExprUDF::eval_external_udf_vector(const ObExpr &expr,
       for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; ++i) {
         ColumnType *column = nullptr;
 
-        if (arg_types.push_back(udf_info.params_type_.at(i))) {
+        if (OB_FAIL(arg_types.push_back(udf_info.params_type_.at(i)))) {
           LOG_WARN("failed to push_back", K(ret), K(i), K(udf_info));
         } else if (OB_ISNULL(column = static_cast<ColumnType*>(alloc.alloc(sizeof(ColumnType))))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -675,20 +675,30 @@ int ObExprUDF::eval_external_udf_vector(const ObExpr &expr,
     if (OB_SUCC(ret)) {
       ObArray<ObObj> res_array;
 
-      pl::ObJavaUDFExecutor executor(ctx.exec_ctx_, udf_info.external_routine_entry_);
-
       int64_t batch_size = vec_indices.count();
 
       if (OB_FAIL(res_array.reserve(batch_size))) {
         LOG_WARN("failed to reserve space for results", K(ret), K(batch_size));
-      } else if (OB_FAIL(executor.init(udf_info.udf_id_,
-                                       udf_info.external_routine_type_,
-                                       udf_info.external_routine_url_,
-                                       udf_info.external_routine_resource_))) {
-        LOG_WARN("failed to init java udf executor", K(ret));
-      } else if (OB_FAIL(executor.execute(batch_size, "evaluate", arg_types, args, udf_info.result_type_, alloc, res_array))) {
-        LOG_WARN("failed to execute udf", K(ret), K(batch_size), K(res_array));
-      } else if (batch_size != res_array.count()) {
+      } else if (udf_info.is_py_udf()) {
+        pl::ObPyUDFExecutor executor(ctx.exec_ctx_, udf_info);
+        if (OB_FAIL(executor.init())) {
+          LOG_WARN("failed to init python udf executor", K(ret));
+        } else if (OB_FAIL(executor.execute(batch_size, arg_types, args, alloc, res_array))) {
+          LOG_WARN("failed to execute python udf", K(ret), K(batch_size));
+        }
+      } else {
+        pl::ObJavaUDFExecutor executor(ctx.exec_ctx_, udf_info.external_routine_entry_);
+        if (OB_FAIL(executor.init(udf_info.udf_id_,
+                                  udf_info.external_routine_type_,
+                                  udf_info.external_routine_url_,
+                                  udf_info.external_routine_resource_))) {
+          LOG_WARN("failed to init java udf executor", K(ret));
+        } else if (OB_FAIL(executor.execute(batch_size, "evaluate", arg_types, args, udf_info.result_type_, alloc, res_array))) {
+          LOG_WARN("failed to execute udf", K(ret), K(batch_size), K(res_array));
+        }
+      }
+
+      if (OB_SUCC(ret) && batch_size != res_array.count()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected res_array count", K(ret), K(res_array), K(batch_size));
       }

@@ -513,6 +513,7 @@ public:
   OB_INLINE double get_token_usage() const { return token_usage_; }
   OB_INLINE int64_t get_worker_time() const { return ATOMIC_LOAD(&worker_us_); }
   OB_INLINE int64_t get_cpu_time() const { return ATOMIC_LOAD(&cpu_time_us_); }
+  OB_INLINE void add_cpu_time(int64_t v) { ATOMIC_AAF(&cpu_time_us_, v); }
   OB_INLINE bool is_kill_session_success() const { return ATOMIC_LOAD(&kill_session_success_); }
   OB_INLINE void set_kill_session_success(bool val) { ATOMIC_STORE(&kill_session_success_, val); }
   int64_t get_rusage_time();

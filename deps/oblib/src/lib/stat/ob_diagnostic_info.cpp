@@ -282,8 +282,11 @@ void ObDiagnosticInfo::end_wait_event(const int64_t event_no, const bool is_idle
     ash_stat_.fixup_last_stat(desc);
 
     ash_stat_.reset_event();
-    total_wait_.time_waited_ += curr_wait_.wait_time_;
-    ++total_wait_.total_waits_;
+    // udf execution runs in a child process and consumes CPU time, so it is not counted as wait time
+    if (OB_LIKELY(event_no != ObWaitEventIds::UDF_PROCESS_EXECUTE_WAIT)) {
+      total_wait_.time_waited_ += curr_wait_.wait_time_;
+      ++total_wait_.total_waits_;
+    }
     ObWaitEventStat *event_record = nullptr;
     if (OB_FAIL(events_.get_and_set(
             static_cast<ObWaitEventIds::ObWaitEventIdEnum>(event_no), event_record))) {

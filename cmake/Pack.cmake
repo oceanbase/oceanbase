@@ -59,6 +59,7 @@ install(PROGRAMS
   tools/import_srs_data.py
   ${CMAKE_BINARY_DIR}/tools/ob_admin/ob_admin
   ${CMAKE_BINARY_DIR}/src/logservice/logminer/oblogminer
+  ${CMAKE_BINARY_DIR}/tools/ob_sandbox/ob_sandbox
   ${CMAKE_BINARY_DIR}/close_modules/oracle_pl/pl/wrap/wrap
   tools/ob_admin/io_bench/bench_io.sh
   ${CMAKE_BINARY_DIR}/src/observer/observer
@@ -135,6 +136,11 @@ install(FILES
   ${INSTALL_EXTRA_FILES}
   ${CMAKE_BINARY_DIR}/ob_all_available_parameters.json
   DESTINATION etc
+  COMPONENT server)
+
+install(FILES
+  src/pl/external_routine/ob_python_executor.py
+  DESTINATION lib
   COMPONENT server)
 
 message(STATUS "system package release directory: " ${SYS_PACK_RELEASE_DIR})
@@ -439,6 +445,7 @@ if(OB_BUILD_OPENSOURCE AND OB_BUILD_OBADMIN)
     ${CMAKE_BINARY_DIR}/tools/ob_admin/ob_admin
     ${CMAKE_BINARY_DIR}/tools/ob_error/src/ob_error
     ${CMAKE_BINARY_DIR}/src/logservice/logminer/oblogminer
+    ${CMAKE_BINARY_DIR}/tools/ob_sandbox/ob_sandbox
     ${DEVTOOLS_DIR}/bin/obstack
     DESTINATION /usr/bin
     COMPONENT utils

@@ -196,6 +196,7 @@
 #include "observer/virtual_table/ob_all_virtual_dup_ls_tablets.h"
 #include "observer/virtual_table/ob_all_virtual_opt_stat_gather_monitor.h"
 #include "observer/virtual_table/ob_all_virtual_thread.h"
+#include "observer/virtual_table/ob_all_virtual_sandbox_process.h"
 #include "observer/virtual_table/ob_all_virtual_dup_ls_tablet_set.h"
 #include "observer/virtual_table/ob_all_virtual_px_p2p_datahub.h"
 #include "observer/virtual_table/ob_all_virtual_ls_log_restore_status.h"
@@ -2814,6 +2815,13 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             ObAllVirtualThread *all_virtual_thread = NULL;
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualThread, all_virtual_thread))) {
               vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_thread);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_SANDBOX_PROCESS_TID: {
+            ObAllVirtualSandboxProcess *all_virtual_sandbox_process = NULL;
+            if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualSandboxProcess, all_virtual_sandbox_process))) {
+              vt_iter = static_cast<ObVirtualTableIterator *>(all_virtual_sandbox_process);
             }
             break;
           }

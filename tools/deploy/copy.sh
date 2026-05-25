@@ -65,35 +65,6 @@ function do_install {
   fi
 }
 
-function do_install_python3 {
-  quiet=false
-  if [ $# -eq 3 ] && [[ "$3" == "true" ]]
-  then
-    quiet=true
-  fi
-  [[ "$quiet" == "false" ]] && echo -n "Installing $1 "
-  if [ ! -e "$1" ]; then
-    [[ "$quiet" == "false" ]] && echo -e "\033[0;31mFAIL\033[0m\nNo such file: $1"
-    if [ "$quiet" == "false" ]
-    then
-      return 1
-    else
-      return 0
-    fi
-  fi
-  if [ -d "$1" ]; then
-    err_msg=$(cp -r "$1" "$2"/ 2>&1)
-  else
-    do_install "$@"
-  fi
-  if [ $? -eq 0 ]
-  then
-    [[ "$quiet" == "false" ]] && echo -e "\033[0;32mOK\033[0m"
-  else
-    [[ "$quiet" == "false" ]] && echo -e "\033[0;31mFAIL\033[0m\n$err_msg"
-  fi
-}
-
 function do_install_java_extensions {
   local target_dir=$1
   local deps_compat_file="$SOURCE_DIR/tools/upgrade/deps_compat.yml"
@@ -184,11 +155,8 @@ then
   do_install ./usr/lib/oracle/12.2/client64/lib/libmql1.so $LIB_DIR true
   do_install ./usr/lib/oracle/12.2/client64/lib/libipc1.so $LIB_DIR true
 
-
-  do_install_python3 ./usr/local/oceanbase/deps/devel/python3/lib/python3.13 $LIB_DIR true
-  do_install_python3 ./usr/local/oceanbase/deps/devel/python3/lib/pkgconfig $LIB_DIR true
-  do_install_python3 ./usr/local/oceanbase/deps/devel/python3/lib/libpython3.so $LIB_DIR true
-  do_install_python3 ./usr/local/oceanbase/deps/devel/python3/lib/libpython3.13.so.1.0 $LIB_DIR true
+  do_install $SOURCE_DIR/src/pl/external_routine/ob_python_executor.py $LIB_DIR true
+  do_install $BUILD_DIR/tools/ob_sandbox/ob_sandbox $BIN_DIR/ob_sandbox true
 
   do_install $SOURCE_DIR/deps/3rd/usr/local/oceanbase/deps/devel/lib/libhdfs.so $LIB_DIR true
 

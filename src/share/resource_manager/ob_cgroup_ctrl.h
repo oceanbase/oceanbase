@@ -210,6 +210,8 @@ public:
       uint64_t group_id = OB_INVALID_GROUP_ID,
       const bool is_background = false);
 
+  int add_process_to_cgroup(const pid_t pid, const uint64_t tenant_id, const uint64_t group_id = OBCG_DEFAULT);
+
   class DirProcessor
   {
   public:

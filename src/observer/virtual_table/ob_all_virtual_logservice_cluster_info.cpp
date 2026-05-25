@@ -21,7 +21,9 @@ namespace oceanbase
 {
 namespace observer
 {
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
 using namespace libpalf;
+#endif
 int ObAllVirtualLogServiceClusterInfo::inner_get_next_row(common::ObNewRow *&row)
 {
   int ret = OB_SUCCESS;

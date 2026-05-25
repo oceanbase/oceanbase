@@ -87,6 +87,7 @@
 #include "share/ob_license_utils.h"
 #include "lib/encrypt/ob_caching_sha2_cache_mgr.h"
 #include "lib/encrypt/ob_rsa_getter.h"
+#include "observer/ob_sandbox_manager.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -461,6 +462,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
       LOG_ERROR("init refresh network speed task failed", KR(ret));
     } else if (OB_FAIL(init_refresh_cpu_frequency())) {
       LOG_ERROR("init refresh cpu frequency failed", KR(ret));
+    } else if (OB_FAIL(ObSandboxManager::get_instance().init())) {
+      LOG_ERROR("init sandbox manager failed", KR(ret));
 #ifdef OB_BUILD_SHARED_STORAGE
     } else if (gctx_.is_shared_storage_mode() &&
                OB_FAIL(init_device_manifest_task())) {

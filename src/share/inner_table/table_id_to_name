@@ -1391,6 +1391,7 @@
 # 12595: __all_java_policy_history  # BASE_TABLE_NAME1
 # 12599: __all_virtual_audit_log_encryption_password
 # 12599: __all_audit_log_encryption_password  # BASE_TABLE_NAME
+# 12601: __all_virtual_sandbox_process
 # 12607: __all_virtual_log_transport_stat
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME

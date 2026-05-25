@@ -46,7 +46,7 @@ devdeps-apache-avro-cpp-1.12.0-72025062510.el7.x86_64.rpm
 devdeps-apache-thrift-0.16.0-132025070909.el7.x86_64.rpm
 devdeps-mit-krb5-1.21.3-212025063015.el7.x86_64.rpm
 devdeps-cyrus-sasl-2.1.28-102025070115.el7.x86_64.rpm
-devdeps-python3-3.13.3-132025070111.el7.x86_64.rpm
+devdeps-libminijail-18-32026021010.el7.x86_64.rpm
 devdeps-lz4-1.7.1-42025110616.el7.x86_64.rpm
 devdeps-lz4-1.9.1-32025110616.el7.x86_64.rpm
 devdeps-snappy-1.0.3-22025110616.el7.x86_64.rpm

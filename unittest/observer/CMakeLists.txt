@@ -16,5 +16,6 @@ ob_unittest(test_uniq_task_queue)
 ob_unittest(test_table_connection tableapi/test_table_connection.cpp)
 ob_unittest(test_check_os_params test_check_os_params.cpp)
 ob_unittest(test_dbms_sched_calendar dbms_scheduler/test_dbms_sched_calendar.cpp)
+ob_unittest(test_ob_sandbox test_ob_sandbox.cpp)
 
 add_subdirectory(rpc EXCLUDE_FROM_ALL)

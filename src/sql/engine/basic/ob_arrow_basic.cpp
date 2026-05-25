@@ -101,6 +101,7 @@ arrow::Status ObArrowMemPool::Allocate(int64_t size, int64_t alignment, uint8_t*
       status_ret = arrow::Status::Invalid("allocate memory failed");
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate memory", K(size), K(lbt()));
+      throw ObErrorCodeException(ret);
     } else {
       *out = static_cast<uint8_t*>(buf);
       ++num_allocations_;

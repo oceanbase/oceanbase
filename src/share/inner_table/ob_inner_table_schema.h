@@ -1292,6 +1292,7 @@ public:
   static int all_virtual_java_policy_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_java_policy_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_audit_log_encryption_password_schema(share::schema::ObTableSchema &table_schema);
+  static int all_virtual_sandbox_process_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_log_transport_stat_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_sql_audit_ora_schema(share::schema::ObTableSchema &table_schema);
   static int all_virtual_plan_stat_ora_schema(share::schema::ObTableSchema &table_schema);
@@ -4709,6 +4710,7 @@ const schema_create_func virtual_table_schema_creators [] = {
   ObInnerTableSchema::all_virtual_java_policy_schema,
   ObInnerTableSchema::all_virtual_java_policy_history_schema,
   ObInnerTableSchema::all_virtual_audit_log_encryption_password_schema,
+  ObInnerTableSchema::all_virtual_sandbox_process_schema,
   ObInnerTableSchema::all_virtual_log_transport_stat_schema,
   ObInnerTableSchema::all_virtual_sql_audit_ora_schema,
   ObInnerTableSchema::all_virtual_plan_stat_ora_schema,
@@ -7107,6 +7109,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_VIRTUAL_WR_SQLSTAT_V2_TID,
   OB_ALL_VIRTUAL_SYNC_STANDBY_DEST_TID,
   OB_ALL_VIRTUAL_JAVA_POLICY_HISTORY_TID,
+  OB_ALL_VIRTUAL_SANDBOX_PROCESS_TID,
   OB_ALL_VIRTUAL_LOG_TRANSPORT_STAT_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TID,
@@ -10395,6 +10398,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_VIRTUAL_WR_SQLSTAT_V2_TNAME,
   OB_ALL_VIRTUAL_SYNC_STANDBY_DEST_TNAME,
   OB_ALL_VIRTUAL_JAVA_POLICY_HISTORY_TNAME,
+  OB_ALL_VIRTUAL_SANDBOX_PROCESS_TNAME,
   OB_ALL_VIRTUAL_LOG_TRANSPORT_STAT_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TNAME,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TNAME,
@@ -12816,6 +12820,7 @@ const uint64_t tenant_distributed_vtables [] = {
   OB_ALL_VIRTUAL_SS_GC_STATUS_TID,
   OB_ALL_VIRTUAL_HMS_CLIENT_POOL_STAT_TID,
   OB_ALL_VIRTUAL_SS_OBJECT_TYPE_IO_STAT_TID,
+  OB_ALL_VIRTUAL_SANDBOX_PROCESS_TID,
   OB_ALL_VIRTUAL_LOG_TRANSPORT_STAT_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_TID,
   OB_ALL_VIRTUAL_SQL_AUDIT_ORA_ALL_VIRTUAL_SQL_AUDIT_I1_TID,

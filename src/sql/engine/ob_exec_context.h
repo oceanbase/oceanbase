@@ -592,12 +592,8 @@ public:
 
   void *get_external_url_resource_cache() { return external_url_resource_cache_; }
   void set_external_url_resource_cache(void *cache) { external_url_resource_cache_ = cache; }
-  void *get_external_py_url_resource_cache() { return external_py_url_resource_cache_; }
-  void set_external_py_url_resource_cache(void *cache) { external_py_url_resource_cache_ = cache; }
-  void *get_external_py_sch_resource_cache() { return external_py_sch_resource_cache_; }
-  void set_external_py_sch_resource_cache(void *cache) { external_py_sch_resource_cache_ = cache; }
-  void *get_py_sub_inter_ctx() { return py_sub_inter_ctx_; }
-  void set_py_sub_inter_ctx(void *sub_inter_ctx) { py_sub_inter_ctx_ = sub_inter_ctx; }
+  void *get_py_udf_ctx() { return py_udf_ctx_; }
+  void set_py_udf_ctx(void *ctx) { py_udf_ctx_ = ctx; }
   bool need_try_serialize_package_var() const { return need_try_serialize_package_var_; }
   void set_need_try_serialize_package_var(bool need_try_serialize_package_var) { need_try_serialize_package_var_ = need_try_serialize_package_var; }
   common::hash::ObHashMap<ObOdpsPartitionKey, int64_t>& get_odps_partition_str_to_file_size() { return odps_partition_str_to_file_size_; }
@@ -806,9 +802,7 @@ protected:
   common::ObArenaAllocator deterministic_udf_cache_allocator_;
 
   void *external_url_resource_cache_;
-  void *external_py_url_resource_cache_;
-  void *external_py_sch_resource_cache_;
-  void *py_sub_inter_ctx_;
+  void *py_udf_ctx_;
   /*
    * lake table file map, no need to serialize.
    * @brief The key is (table_loc_id, tablet_id),

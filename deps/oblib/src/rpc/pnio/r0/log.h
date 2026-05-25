@@ -17,7 +17,7 @@
 #include <pthread.h>
 
 typedef void (*log_func_t)(int level, const char *file, int line, const char *function, const char *fmt, va_list ap);
-extern void do_log(int level, const char* file, int line, const char* func, const char* format, ...) __attribute__((format(printf, 5, 6)));
+extern void pnio_do_log(int level, const char* file, int line, const char* func, const char* format, ...) __attribute__((format(printf, 5, 6)));
 extern void ob_set_thread_name(const char* type);
 extern int ob_pthread_create(void **ptr, void *(*start_routine) (void *), void *arg);
 extern void ob_pthread_join(void *ptr);
@@ -28,7 +28,7 @@ enum { LOG_LEVEL_ERROR = 0, LOG_LEVEL_USER_LEVEL = 1, LOG_LEVEL_WARN = 2, LOG_LE
 
 
 #ifndef rk_log_macro
-#define rk_log_macro(level, ret, ...) {  if (LOG_LEVEL_ ## level <= g_log_level)  do_log(LOG_LEVEL_ ## level, __FILE__, __LINE__, __func__, ##__VA_ARGS__); }
+#define rk_log_macro(level, ret, ...) {  if (LOG_LEVEL_ ## level <= g_log_level)  pnio_do_log(LOG_LEVEL_ ## level, __FILE__, __LINE__, __func__, ##__VA_ARGS__); }
 void ob_set_thread_name(const char* type)
 {
   prctl(PR_SET_NAME, type);
