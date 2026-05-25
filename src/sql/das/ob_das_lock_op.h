@@ -47,6 +47,7 @@ public:
   {
     return lock_buffer_.dump_data(*lock_ctdef_);
   }
+  virtual int64_t get_write_buffer_mem_used() const override { return lock_buffer_.get_mem_used(); }
   int64_t get_affected_rows() { return affected_rows_; }
 
   INHERIT_TO_STRING_KV("parent", ObIDASTaskOp,

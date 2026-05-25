@@ -221,18 +221,20 @@ struct EmptyUnisStruct
     OB_UNIS_ENCODE(UNIS_VERSION);                                            \
     if (OB_SUCC(ret)) {                                                  \
       int64_t size_nbytes = NS_::OB_SERIALIZE_SIZE_NEED_BYTES;           \
-      int64_t pos_bak = (pos += size_nbytes);                            \
-      if (OB_SUCC(ret)) {                                               \
-        if (OB_FAIL(serialize_(buf, buf_len, pos))) {                   \
-          RPC_WARN("serialize fail", K(ret));                           \
-        }                                                               \
-      }                                                                 \
-      int64_t serial_size = pos - pos_bak;                               \
-      int64_t tmp_pos = 0;                                               \
-      if (OB_SUCC(ret)) {                                                \
-        CHECK_SERIALIZE_SIZE(CLS, serial_size);                          \
-        ret = NS_::encode_fixed_bytes_i64(buf + pos_bak - size_nbytes,   \
-          size_nbytes, tmp_pos, serial_size);                            \
+      if (OB_UNLIKELY(pos + size_nbytes > buf_len)) {                    \
+        ret = ::oceanbase::common::OB_SIZE_OVERFLOW;                     \
+      } else {                                                           \
+        int64_t pos_bak = (pos += size_nbytes);                          \
+        if (OB_FAIL(serialize_(buf, buf_len, pos))) {                    \
+          RPC_WARN("serialize fail", K(ret));                            \
+        }                                                                \
+        int64_t serial_size = pos - pos_bak;                             \
+        int64_t tmp_pos = 0;                                             \
+        if (OB_SUCC(ret)) {                                              \
+          CHECK_SERIALIZE_SIZE(CLS, serial_size);                        \
+          ret = NS_::encode_fixed_bytes_i64(buf + pos_bak - size_nbytes, \
+            size_nbytes, tmp_pos, serial_size);                          \
+        }                                                                \
       }                                                                  \
     }                                                                    \
     return ret;                                                          \

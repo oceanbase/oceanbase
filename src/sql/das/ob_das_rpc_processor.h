@@ -28,6 +28,8 @@ namespace sql
 typedef obrpc::ObRpcProcessor<obrpc::ObDASRpcProxy::ObRpc<obrpc::OB_DAS_SYNC_FETCH_RESULT> > ObDASSyncFetchResRpcProcessor;
 typedef obrpc::ObRpcProcessor<obrpc::ObDASRpcProxy::ObRpc<obrpc::OB_DAS_ASYNC_ERASE_RESULT> > ObDASAsyncEraseResRpcProcessor;
 
+bool is_skip_detect_mgr_lookup_task(const ObIDASTaskOp *task_op);
+
 template<obrpc::ObRpcPacketCode pcode>
 class ObDASBaseAccessP : public obrpc::ObRpcProcessor<obrpc::ObDASRpcProxy::ObRpc<pcode>>
 {
@@ -124,7 +126,10 @@ public:
         context_(context),
         net_time_us_(0),
         server_cost_us_(0),
-        has_net_time_(false)
+        has_net_time_(false),
+        is_lookup_batch_request_(false),
+        lookup_batch_request_id_(OB_INVALID_ID),
+        finish_state_(0)
   {
     // we need das_factory to allocate task op result on receiving rpc response.
     result_.set_das_factory(factory);
@@ -143,6 +148,16 @@ public:
   int32_t get_net_time_us() const { return net_time_us_; }
   int32_t get_server_cost_us() const { return server_cost_us_; }
   const common::ObAddr &get_dst_addr() const { return dst_; }
+  int decode_lookup_batch_result(const char *buf, const int32_t size, int64_t &request_id);
+  void mark_lookup_batch_request(const int64_t request_id)
+  {
+    is_lookup_batch_request_ = true;
+    lookup_batch_request_id_ = request_id;
+  }
+  bool is_lookup_batch_request() const { return is_lookup_batch_request_; }
+  int64_t get_lookup_batch_request_id() const { return lookup_batch_request_id_; }
+  void complete_lookup_batch_result();
+  void fail_lookup_batch_result(int ret);
   void set_args(const Request &arg);
   oceanbase::rpc::frame::ObReqTransport::AsyncCB *clone(
       const oceanbase::rpc::frame::SPAlloc &alloc) const;
@@ -162,6 +177,9 @@ private:
   int32_t net_time_us_;
   int32_t server_cost_us_;
   bool has_net_time_;
+  bool is_lookup_batch_request_;
+  int64_t lookup_batch_request_id_;
+  int32_t finish_state_;
 };
 
 class ObDASSyncFetchP : public ObDASSyncFetchResRpcProcessor
@@ -186,6 +204,13 @@ public:
 private:
   DISALLOW_COPY_AND_ASSIGN(ObDASAsyncEraseP);
 };
+
+int execute_lookup_batch_task(const char *buf,
+                              const int32_t size,
+                              uint64_t &tenant_id,
+                              int64_t &request_id,
+                              ObDASTaskResp &task_resp,
+                              common::ObAddr &ctrl_svr);
 }  // namespace sql
 }  // namespace oceanbase
 #endif /* OBDEV_SRC_SQL_DAS_OB_DAS_RPC_PROCESSOR_H_ */

@@ -858,6 +858,7 @@ public:
                                  json_document_max_depth_(100),
                                  multimodel_memory_trace_level_(0),
                                  enable_fast_json_path_lookup_(false),
+                                 enable_das_batch_rpc_(0),
                                  session_(session)
     {
     }
@@ -920,6 +921,7 @@ public:
     int64_t get_json_document_max_depth() const { return ATOMIC_LOAD(&json_document_max_depth_); }
     int64_t get_multimodel_memory_trace_level() const { return ATOMIC_LOAD(&multimodel_memory_trace_level_); }
     bool enable_fast_json_path_lookup() const { return enable_fast_json_path_lookup_; }
+    int64_t enable_das_batch_rpc() const { return enable_das_batch_rpc_; }
   private:
     //租户级别配置项缓存session 上，避免每次获取都需要刷新
     bool is_external_consistent_;
@@ -967,6 +969,7 @@ public:
     int64_t json_document_max_depth_;
     int64_t multimodel_memory_trace_level_;
     bool enable_fast_json_path_lookup_;
+    int64_t enable_das_batch_rpc_;
     ObSQLSessionInfo *session_;
   };
 
@@ -1741,6 +1744,11 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.force_unstreaming_cursor();
+  }
+  bool is_enable_global_index_lookup_batch_rpc()
+  {
+    cached_tenant_config_info_.refresh();
+    return (cached_tenant_config_info_.enable_das_batch_rpc() & 0x1) == 1;
   }
   bool is_enable_enum_set_with_subschema()
   {

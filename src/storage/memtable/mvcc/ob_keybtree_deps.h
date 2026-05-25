@@ -502,11 +502,6 @@ private:
 public:
   explicit WriteHandle(ObKeyBtree &tree): BaseHandle(tree.get_qclock()), base_(tree) {}
   ~WriteHandle() {}
-  OB_INLINE bool &get_is_in_delete()
-  {
-    RLOCAL_INLINE(bool, is_in_delete);
-    return is_in_delete;
-  }
   BtreeNode *alloc_node();
   void free_node(BtreeNode *p);
   // reuse the nodes in retire list and free the nodes in alloc_list
@@ -531,6 +526,9 @@ public:
       path_.resize(0);
     }
     ret = OB_SUCCESS;
+    if (OB_NOT_NULL(root)) {
+      root->prefetch();
+    }
     while (OB_NOT_NULL(root) && OB_SUCCESS == ret) {
       if (!may_exist) {
         pos = -1;
@@ -541,10 +539,6 @@ public:
       }
       if (pos < 0) {
         may_exist = false;
-        if (get_is_in_delete()) {
-          ret = OB_ENTRY_NOT_EXIST;
-          break;
-        }
       }
       if (OB_FAIL(path_.push(root, pos))) {
         // do nothing
@@ -556,6 +550,7 @@ public:
         root = nullptr;
       } else {
         root = (BtreeNode *)root->get_val(std::max(pos, 0));
+        root->prefetch();
       }
     }
     return ret;

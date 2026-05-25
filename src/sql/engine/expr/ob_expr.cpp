@@ -1520,11 +1520,14 @@ int expr_default_eval_batch_func(const ObExpr &expr,
       }
 
       if (OB_FAIL(ret) && ctx.exec_ctx_.get_my_session()->is_diagnosis_enabled()) {
-        // overwrite ret on diagnosis node
-        if (OB_FAIL(ctx.exec_ctx_.get_diagnosis_manager().add_warning_info(ret, i))) {
+        ObDiagnosisManager *dm = ctx.exec_ctx_.get_or_create_diagnosis_manager();
+        if (OB_ISNULL(dm)) {
+          //ignore ret
+          LOG_WARN("failed to create diagnosis manager", K(ret), K(i));
+        } else if (OB_FAIL(dm->add_warning_info(ret, i))) {
+          //overwrite ret
           LOG_WARN("failed to add warning info", K(ret), K(i));
-        } else if (OB_FAIL(ObExprColumnConv::calc_column_name_for_diagnosis(expr, ctx,
-                                                          ctx.exec_ctx_.get_diagnosis_manager()))) {
+        } else if (OB_FAIL(ObExprColumnConv::calc_column_name_for_diagnosis(expr, ctx, *dm))) {
           LOG_WARN("fail to calculate column name for diagnosis", K(ret), K(expr));
         } else {
           // set null to avoid accessing invalid data before setting skip

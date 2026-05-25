@@ -12,16 +12,370 @@
 
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/ob_das_rpc_processor.h"
+#include "lib/utility/ob_tracepoint.h"
+#include "lib/utility/utility.h"
 #include "sql/ob_sql.h"
 #include "sql/das/ob_data_access_service.h"
+#include "sql/das/ob_das_scan_op.h"
 #include "sql/engine/px/ob_px_interruption.h"
 #include "share/detect/ob_detect_manager_utils.h"
+#include "share/ob_cluster_version.h"
+#include "share/rpc/ob_batch_rpc.h"
 #include "rpc/obrpc/ob_poc_rpc_proxy.h"
 
 namespace oceanbase
 {
 namespace sql
 {
+ERRSIM_POINT_DEF(ERRSIM_LOOKUP_BATCH_PROCESS_TASK_FAIL);
+ERRSIM_POINT_DEF(ERRSIM_LOOKUP_BATCH_DESERIALIZE_FAIL);
+
+bool is_skip_detect_mgr_lookup_task(const ObIDASTaskOp *task_op)
+{
+  const int64_t DEFAULT_VECTORIZED_BATCH_SIZE = 256;
+  bool bret = false;
+  if (OB_NOT_NULL(task_op) && task_op->get_global_lookup_generated_task()) {
+    const ObDASScanOp *scan_op = static_cast<const ObDASScanOp *>(task_op);
+    bret = scan_op->get_scan_param().key_ranges_.count() < DEFAULT_VECTORIZED_BATCH_SIZE;
+  }
+  return bret;
+}
+
+
+class ObDASLookupBatchExecutor
+{
+public:
+  explicit ObDASLookupBatchExecutor(const observer::ObGlobalContext &gctx)
+    : das_factory_(CURRENT_CONTEXT->get_arena_allocator()),
+      exec_ctx_(CURRENT_CONTEXT->get_arena_allocator(), gctx.session_mgr_),
+      frame_info_(CURRENT_CONTEXT->get_arena_allocator()),
+      das_remote_info_()
+  {
+    das_remote_info_.exec_ctx_ = &exec_ctx_;
+    das_remote_info_.frame_info_ = &frame_info_;
+  }
+  ~ObDASLookupBatchExecutor() { cleanup(); }
+  int execute(const char *buf,
+              const int32_t size,
+              uint64_t &tenant_id,
+              int64_t &request_id,
+              ObDASTaskResp &task_resp,
+              common::ObAddr &ctrl_svr);
+private:
+  int deserialize_task(const char *buf,
+                       const int32_t size,
+                       uint64_t &tenant_id,
+                       int64_t &request_id,
+                       ObDASTaskArg &task_arg);
+  int peek_task_server_info(const char *buf,
+                            const int32_t size,
+                            common::ObAddr &ctrl_svr,
+                            common::ObAddr &runner_svr);
+  int before_process(ObDASTaskArg &task_arg);
+  int process_task(ObDASTaskArg &task_arg, ObDASTaskResp &task_resp);
+  void cleanup();
+private:
+  ObDASTaskFactory das_factory_;
+  ObDesExecContext exec_ctx_;
+  ObExprFrameInfo frame_info_;
+  share::schema::ObSchemaGetterGuard schema_guard_;
+  ObDASRemoteInfo das_remote_info_;
+};
+
+int ObDASLookupBatchExecutor::deserialize_task(const char *buf,
+                                               const int32_t size,
+                                               uint64_t &tenant_id,
+                                               int64_t &request_id,
+                                               ObDASTaskArg &task_arg)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  int simulate_ret = OB_SUCCESS;
+  if (OB_FAIL(serialization::decode(buf, size, pos, tenant_id))) {
+    LOG_WARN("decode tenant id failed", K(ret), K(size));
+  } else if (OB_FAIL(serialization::decode(buf, size, pos, request_id))) {
+    LOG_WARN("decode request id failed", K(ret), K(size), K(tenant_id));
+  } else if (OB_UNLIKELY(OB_SUCCESS != (simulate_ret = EVENT_CALL(ERRSIM_LOOKUP_BATCH_DESERIALIZE_FAIL)))) {
+    ret = simulate_ret;
+    LOG_WARN("simulate lookup batch deserialize task failed", K(ret), K(size), K(tenant_id),
+             K(request_id));
+  } else {
+    ObDASBaseAccessP<obrpc::OB_DAS_ASYNC_ACCESS>::get_das_factory() = &das_factory_;
+    task_arg.set_remote_info(&das_remote_info_);
+    ObDASRemoteInfo::get_remote_info() = &das_remote_info_;
+    if (OB_FAIL(serialization::decode(buf, size, pos, task_arg))) {
+      LOG_WARN("decode task arg failed", K(ret), K(size), K(tenant_id), K(request_id));
+    }
+    ObDASBaseAccessP<obrpc::OB_DAS_ASYNC_ACCESS>::get_das_factory() = nullptr;
+  }
+  return ret;
+}
+
+int ObDASLookupBatchExecutor::peek_task_server_info(const char *buf,
+                                                    const int32_t size,
+                                                    common::ObAddr &ctrl_svr,
+                                                    common::ObAddr &runner_svr)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  int64_t request_id = OB_INVALID_ID;
+  int64_t timeout_ts = 0;
+  if (OB_ISNULL(buf) || size <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid lookup batch task buffer", K(ret), KP(buf), K(size));
+  } else if (OB_FAIL(serialization::decode(buf, size, pos, tenant_id))) {
+    LOG_WARN("peek tenant id failed", K(ret), K(size), K(pos));
+  } else if (OB_FAIL(serialization::decode(buf, size, pos, request_id))) {
+    LOG_WARN("peek request id failed", K(ret), K(size), K(pos), K(tenant_id));
+  } else if (OB_FAIL(serialization::decode(buf, size, pos, timeout_ts))) {
+    LOG_WARN("peek timeout ts failed", K(ret), K(size), K(pos), K(tenant_id), K(request_id));
+  } else if (OB_FAIL(serialization::decode(buf, size, pos, ctrl_svr))) {
+    LOG_WARN("peek ctrl svr failed", K(ret), K(size), K(pos), K(tenant_id), K(request_id));
+  } else if (OB_FAIL(serialization::decode(buf, size, pos, runner_svr))) {
+    LOG_WARN("peek runner svr failed", K(ret), K(size), K(pos), K(tenant_id), K(request_id),
+             K(ctrl_svr));
+  }
+  return ret;
+}
+
+int ObDASLookupBatchExecutor::before_process(ObDASTaskArg &task_arg)
+{
+  int ret = OB_SUCCESS;
+  ObMemAttr mem_attr;
+  mem_attr.tenant_id_ = task_arg.get_task_op()->get_tenant_id();
+  mem_attr.label_ = "DASRpcPCtx";
+  exec_ctx_.get_allocator().set_attr(mem_attr);
+  ObDiagnosticInfo *di = ObLocalDiagnosticInfo::get();
+  if (OB_NOT_NULL(di)) {
+    di->get_ash_stat().in_sql_execution_ = true;
+    di->get_ash_stat().in_das_remote_exec_ = true;
+    di->get_ash_stat().trace_id_ = *ObCurTraceId::get_trace_id();
+    di->get_ash_stat().user_id_ = das_remote_info_.user_id_;
+    di->get_ash_stat().plan_id_ = das_remote_info_.plan_id_;
+    di->get_ash_stat().plan_hash_ = das_remote_info_.plan_hash_;
+    MEMCPY(di->get_ash_stat().sql_id_, das_remote_info_.sql_id_,
+        min(sizeof(di->get_ash_stat().sql_id_), sizeof(das_remote_info_.sql_id_)));
+    di->get_ash_stat().fixup_last_stat(*ObCurTraceId::get_trace_id(),
+                                       di->get_ash_stat().session_id_,
+                                       das_remote_info_.sql_id_,
+                                       das_remote_info_.plan_id_,
+                                       das_remote_info_.plan_hash_,
+                                       das_remote_info_.stmt_type_);
+  }
+  if (das_remote_info_.need_calc_expr_ &&
+      OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(MTL_ID(), schema_guard_))) {
+    LOG_WARN("fail to get schema guard", K(ret));
+  } else {
+    exec_ctx_.get_sql_ctx()->schema_guard_ = &schema_guard_;
+  }
+  return ret;
+}
+
+int ObDASLookupBatchExecutor::process_task(ObDASTaskArg &task_arg,
+                                           ObDASTaskResp &task_resp)
+{
+  int ret = OB_SUCCESS;
+  const common::ObSEArray<ObIDASTaskOp*, 2> &task_ops = task_arg.get_task_ops();
+  common::ObSEArray<ObIDASTaskResult*, 2> &task_results = task_resp.get_op_results();
+  ObIDASTaskResult *op_result = nullptr;
+  ObIDASTaskOp *task_op = nullptr;
+  bool has_more = false;
+  int64_t memory_limit = das::OB_DAS_MAX_PACKET_SIZE;
+  ObDASTCBInterruptInfo interrupt_info;
+  bool has_set_interrupt = false;
+  ObInterruptibleTaskID interrupt_id;
+  ObRegisterDmInfo dm_info;
+  dm_info.detectable_id_ = task_arg.get_remote_info()->detectable_id_;
+  dm_info.addr_ = task_arg.get_ctrl_svr();
+  SQL_INFO_GUARD(ObString("DAS LOOKUP BATCH PROCESS"), task_arg.get_remote_info()->sql_id_);
+  task_resp.set_ctrl_svr(task_arg.get_ctrl_svr());
+  task_resp.set_runner_svr(task_arg.get_runner_svr());
+  if (task_ops.count() == 0 || task_results.count() != 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("task op unexpected", K(ret), K(task_ops), K(task_results));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < task_ops.count(); ++i) {
+      uint64_t check_node_sequence_id = 0;
+      bool has_register_check_item = false;
+      int simulate_ret = OB_SUCCESS;
+      if (OB_ISNULL(task_op = task_ops.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("task op is null", KR(ret));
+      } else {
+        GET_DIAGNOSTIC_INFO->get_ash_stat().plan_line_id_ = task_op->plan_line_id_;
+        ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(ls_id_, task_op->get_ls_id().id());
+        if ((task_op->get_type() == DAS_OP_TABLE_BATCH_SCAN || task_op->get_type() == DAS_OP_TABLE_SCAN)
+            && !dm_info.detectable_id_.is_invalid()
+            && !is_skip_detect_mgr_lookup_task(task_op)) {
+          if (!has_set_interrupt) {
+            if (OB_ISNULL(GCTX.sql_engine_)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("sql engine is null", K(ret), KPC(task_op));
+            } else if (OB_FAIL(ObInterruptUtil::generate_query_interrupt_id((uint32_t)GCTX.get_server_index(),
+                                                                            (uint64_t)GCTX.sql_engine_->get_px_sequence_id(),
+                                                                            interrupt_id))) {
+              LOG_WARN("generate interrupt id failed", KR(ret));
+            } else if (OB_FAIL(SET_INTERRUPTABLE(interrupt_id))) {
+              LOG_WARN("register interrupt failed", KR(ret));
+            } else {
+              has_set_interrupt = true;
+              interrupt_info.interrupt_id_ = interrupt_id;
+              interrupt_info.self_addr_ = task_arg.get_runner_svr();
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(ObDetectManagerUtils::das_task_register_check_item_into_dm(dm_info,
+                                                                                        interrupt_id,
+                                                                                        DASTCBInfo(task_op->get_task_id()),
+                                                                                        check_node_sequence_id))) {
+            LOG_WARN("[DM] register check item result to dm failed", K(ret));
+          } else {
+            has_register_check_item = true;
+            interrupt_info.detectable_id_ = dm_info.detectable_id_;
+            interrupt_info.check_node_sequence_id_ = check_node_sequence_id;
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(das_factory_.create_das_task_result(task_op->get_type(), op_result))) {
+          LOG_WARN("create das task result failed", K(ret));
+        } else if (OB_FAIL(task_resp.add_op_result(op_result))) {
+          LOG_WARN("failed to add op result", K(ret));
+        } else if (OB_FAIL(op_result->init(*task_op, CURRENT_CONTEXT->get_arena_allocator()))) {
+          LOG_WARN("failed to init op result", K(ret));
+        } else if (FALSE_IT(op_result->set_task_id(task_op->get_task_id()))) {
+        } else if (OB_UNLIKELY(OB_SUCCESS != (simulate_ret = EVENT_CALL(ERRSIM_LOOKUP_BATCH_PROCESS_TASK_FAIL)))) {
+          ret = simulate_ret;
+          LOG_WARN("simulate lookup batch process task failed", K(ret), KPC(task_op),
+                   K(task_arg.get_ctrl_svr()), K(task_arg.get_runner_svr()));
+        } else if (OB_FAIL(task_op->start_das_task())) {
+          LOG_WARN("start das task failed", K(ret));
+        } else {
+          if (OB_FAIL(task_op->fill_task_result(*task_results.at(i), has_more, memory_limit))) {
+            LOG_WARN("fill task result to controller failed", K(ret));
+          } else if (OB_UNLIKELY(has_more) && OB_FAIL(task_op->fill_extra_result(interrupt_info))) {
+            LOG_WARN("fill extra result to controller failed", KR(ret));
+          } else {
+            task_resp.set_has_more(has_more);
+            ObWarningBuffer *wb = ob_get_tsi_warning_buffer();
+            if (wb != nullptr) {
+              (void)task_resp.store_warning_msg(*wb);
+            }
+          }
+        }
+        if (OB_FAIL(ret) && OB_NOT_NULL(op_result)) {
+          op_result->reuse();
+        }
+        int tmp_ret = OB_SUCCESS;
+        tmp_ret = task_op->end_das_task();
+        if (OB_SUCCESS != tmp_ret) {
+          LOG_WARN("end das task failed", K(ret), K(tmp_ret), K(task_arg));
+        }
+        ret = COVER_SUCC(tmp_ret);
+        if (OB_NOT_NULL(task_op->get_trans_desc())) {
+          tmp_ret = MTL(transaction::ObTransService*)->get_tx_exec_result(*task_op->get_trans_desc(),
+                                                                          task_resp.get_trans_result());
+          if (OB_SUCCESS != tmp_ret) {
+            LOG_WARN("get trans exec result failed", K(ret), K(task_arg));
+          }
+          ret = COVER_SUCC(tmp_ret);
+        }
+        if (OB_SUCCESS != ret && is_schema_error(ret)) {
+          ret = GSCHEMASERVICE.is_schema_error_need_retry(NULL, task_op->get_tenant_id()) ?
+              OB_ERR_REMOTE_SCHEMA_NOT_FULL : OB_ERR_WAIT_REMOTE_SCHEMA_REFRESH;
+        }
+        task_resp.set_err_code(ret);
+        if (OB_SUCCESS != ret) {
+          task_resp.store_err_msg(ob_get_tsi_err_msg(ret));
+          LOG_WARN("process lookup batch task failed", K(ret), K(task_arg.get_ctrl_svr()), K(task_arg.get_runner_svr()));
+        }
+        if (has_register_check_item && (OB_FAIL(ret) || !has_more)) {
+          ObDetectManagerUtils::das_task_unregister_check_item_from_dm(dm_info.detectable_id_, check_node_sequence_id);
+        }
+        if (has_more || memory_limit < 0) {
+          break;
+        }
+      }
+    }
+    if (OB_LIKELY(has_set_interrupt)) {
+      UNSET_INTERRUPTABLE(interrupt_id);
+    }
+  }
+  return ret;
+}
+
+void ObDASLookupBatchExecutor::cleanup()
+{
+  GET_DIAGNOSTIC_INFO->get_ash_stat().in_das_remote_exec_ = false;
+  GET_DIAGNOSTIC_INFO->get_ash_stat().in_sql_execution_ = false;
+  das_factory_.cleanup();
+  if (das_remote_info_.trans_desc_ != nullptr) {
+    MTL(transaction::ObTransService*)->release_tx(*das_remote_info_.trans_desc_);
+    das_remote_info_.trans_desc_ = nullptr;
+  }
+}
+
+int ObDASLookupBatchExecutor::execute(const char *buf,
+                                      const int32_t size,
+                                      uint64_t &tenant_id,
+                                      int64_t &request_id,
+                                      ObDASTaskResp &task_resp,
+                                      common::ObAddr &ctrl_svr)
+{
+  int ret = OB_SUCCESS;
+  ObDASTaskArg task_arg;
+  if (OB_FAIL(deserialize_task(buf, size, tenant_id, request_id, task_arg))) {
+    common::ObAddr runner_svr;
+    int tmp_ret = OB_SUCCESS;
+    LOG_WARN("deserialize lookup batch task failed", K(ret), K(size));
+    task_resp.set_err_code(ret);
+    task_resp.store_err_msg(ob_get_tsi_err_msg(ret));
+    ctrl_svr = task_arg.get_ctrl_svr();
+    runner_svr = task_arg.get_runner_svr();
+    if (!ctrl_svr.is_valid() || !runner_svr.is_valid()) {
+      tmp_ret = peek_task_server_info(buf, size, ctrl_svr, runner_svr);
+      if (OB_FAIL(tmp_ret)) {
+        LOG_WARN("peek lookup batch task server info failed", K(tmp_ret), K(size), K(tenant_id),
+                 K(request_id));
+      }
+    }
+    if (ctrl_svr.is_valid()) {
+      task_resp.set_ctrl_svr(ctrl_svr);
+    }
+    if (runner_svr.is_valid()) {
+      task_resp.set_runner_svr(runner_svr);
+    }
+    ret = OB_SUCCESS;
+  } else {
+    ctrl_svr = task_arg.get_ctrl_svr();
+    task_resp.set_ctrl_svr(task_arg.get_ctrl_svr());
+    task_resp.set_runner_svr(task_arg.get_runner_svr());
+    if (tenant_id != MTL_ID()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("lookup batch task tenant mismatch", K(ret), K(tenant_id), K(MTL_ID()));
+      task_resp.set_err_code(ret);
+      task_resp.store_err_msg(ob_get_tsi_err_msg(ret));
+      ret = OB_SUCCESS;
+    } else if (OB_FAIL(before_process(task_arg))) {
+      LOG_WARN("before process lookup batch task failed", K(ret), K(tenant_id), K(request_id));
+      task_resp.set_err_code(ret);
+      task_resp.store_err_msg(ob_get_tsi_err_msg(ret));
+      ret = OB_SUCCESS;
+    } else {
+      ret = process_task(task_arg, task_resp);
+      if (OB_FAIL(ret)) {
+        if (OB_SUCCESS == task_resp.get_err_code()) {
+          task_resp.set_err_code(ret);
+          task_resp.store_err_msg(ob_get_tsi_err_msg(ret));
+        }
+        //overwrite ret to OB_SUCCESS to continue process the next task
+        ret = OB_SUCCESS;
+      }
+    }
+  }
+  return ret;
+}
+
 template<obrpc::ObRpcPacketCode pcode>
 int ObDASBaseAccessP<pcode>::init()
 {
@@ -145,7 +499,8 @@ int ObDASBaseAccessP<pcode>::process()
 
         if ((task_op->get_type() == DAS_OP_TABLE_BATCH_SCAN ||
              task_op->get_type() == DAS_OP_TABLE_SCAN) &&
-            !dm_info.detectable_id_.is_invalid()) {
+            !dm_info.detectable_id_.is_invalid() &&
+            !is_skip_detect_mgr_lookup_task(task_op)) {
           if (!has_set_interrupt) {
             if (OB_ISNULL(GCTX.sql_engine_)) {
               ret = OB_ERR_UNEXPECTED;
@@ -377,6 +732,46 @@ void ObRpcDasAsyncAccessCallBack::set_args(const Request &arg)
   UNUSED(arg);
 }
 
+int ObRpcDasAsyncAccessCallBack::decode_lookup_batch_result(const char *buf,
+                                                            const int32_t size,
+                                                            int64_t &request_id)
+{
+  int ret = OB_SUCCESS;
+  const int64_t data_len = size;
+  int64_t pos = 0;
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  if (OB_FAIL(serialization::decode(buf, size, pos, tenant_id))) {
+    LOG_WARN("decode tenant id failed", K(ret), K(size), K(pos));
+    common::hex_dump(buf, size, true, OB_LOG_LEVEL_WARN);
+  } else if (OB_FAIL(serialization::decode(buf, size, pos, request_id))) {
+    LOG_WARN("decode request id failed", K(ret), K(size), K(pos), K(tenant_id));
+    common::hex_dump(buf, size, true, OB_LOG_LEVEL_WARN);
+  } else if (OB_FAIL(result_.deserialize(buf, data_len, pos))) {
+    LOG_WARN("decode lookup batch task resp failed", K(ret), K(size), K(pos),
+             K(tenant_id), K(request_id));
+    common::hex_dump(buf, size, true, OB_LOG_LEVEL_WARN);
+  }
+  return ret;
+}
+
+void ObRpcDasAsyncAccessCallBack::complete_lookup_batch_result()
+{
+  fail_lookup_batch_result(OB_SUCCESS);
+}
+
+void ObRpcDasAsyncAccessCallBack::fail_lookup_batch_result(int ret)
+{
+  if (ATOMIC_BCAS(&finish_state_, 0, 1)) {
+    if (OB_SUCCESS != ret) {
+      result_.set_err_code(ret);
+      result_.get_op_results().reuse();
+    }
+    is_processed_ = true;
+    context_->get_ref_count_ctx().dec_pending_batch_request();
+    context_->get_ref_count_ctx().inc_concurrency_limit_with_signal();
+  }
+}
+
 int ObRpcDasAsyncAccessCallBack::process()
 {
   int ret = OB_SUCCESS;
@@ -490,6 +885,37 @@ int ObDASAsyncEraseP::process()
     LOG_WARN("das is null", KR(ret), KP(das));
   } else if (OB_FAIL(das->get_task_res_mgr().erase_task_result(task_id, true))) {
     LOG_WARN("erase task result failed", KR(ret), K(task_id));
+  }
+  return ret;
+}
+int execute_lookup_batch_task(const char *buf,
+                              const int32_t size,
+                              uint64_t &tenant_id,
+                              int64_t &request_id,
+                              ObDASTaskResp &task_resp,
+                              common::ObAddr &ctrl_svr)
+{
+  int ret = OB_SUCCESS;
+  {
+    ObDASLookupBatchExecutor executor(GCTX);
+    ret = executor.execute(buf, size, tenant_id, request_id, task_resp, ctrl_svr);
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(GCTX.batch_rpc_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("batch rpc is null, cannot send lookup batch result", K(ret), K(tenant_id), K(request_id));
+      } else {
+        ObDASLookupBatchResult batch_result;
+        batch_result.init(tenant_id, request_id, task_resp);
+        if (OB_FAIL(GCTX.batch_rpc_->post(tenant_id,
+                                          ctrl_svr,
+                                          GCONF.cluster_id,
+                                          obrpc::LOOKUP_DAS_BATCH_REQ1,
+                                          obrpc::OB_SQL_LOOKUP_DAS_RESULT_TYPE,
+                                          batch_result))) {
+          LOG_WARN("post lookup batch result failed", K(ret), K(tenant_id), K(request_id), K(ctrl_svr));
+        }
+      }
+    }
   }
   return ret;
 }

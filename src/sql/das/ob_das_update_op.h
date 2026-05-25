@@ -45,6 +45,7 @@ public:
   void set_das_rtdef(ObDASUpdRtDef *upd_rtdef) { upd_rtdef_ = upd_rtdef; }
   virtual int dump_data() const override
   { return write_buffer_.dump_data(*upd_ctdef_); }
+  virtual int64_t get_write_buffer_mem_used() const override { return write_buffer_.get_mem_used(); }
   int64_t get_affected_rows() { return affected_rows_; }
 
   INHERIT_TO_STRING_KV("parent", ObIDASTaskOp,

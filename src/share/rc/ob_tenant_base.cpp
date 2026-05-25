@@ -17,6 +17,7 @@
 #include "observer/omt/ob_tenant_mtl_helper.h"
 #include "share/ob_tenant_info_proxy.h"
 #include "lib/resource/ob_affinity_ctrl.h"
+#include "lib/stat/ob_diagnostic_info_container.h"
 
 namespace oceanbase
 {
@@ -66,6 +67,23 @@ void __attribute__((used)) lib_mtl_switch(int64_t tenant_id, std::function<void(
     }
   }
   fn(ret);
+}
+
+int __attribute__((used)) lib_mtl_get_summary_slot(int64_t tenant_id, int64_t group_id,
+    int64_t session_id, ObDiagnosticInfoSlot *&slot)
+{
+  int ret = OB_SUCCESS;
+  MTL_TENANT(tenant_id) {
+    ObDiagnosticInfoContainer *container = MTL_TENANT_GET(ObDiagnosticInfoContainer *);
+    if (OB_ISNULL(container)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null di container", K(ret), K(tenant_id), K(group_id));
+    } else if (OB_FAIL(container->get_summary_slot(
+                   tenant_id, group_id, session_id, slot))) {
+      LOG_WARN("failed to get di slot", K(ret), K(tenant_id), K(group_id), K(session_id));
+    }
+  }
+  return ret;
 }
 
 int64_t __attribute__((used)) lib_mtl_cpu_count()

@@ -110,6 +110,12 @@ struct ObMtHashNode : public ObHashNode
   {
     hash_ = mark_hash(mtk.hash());
   }
+  // construct with pre-computed key hash to avoid redundant hash() call in lookup path
+  ObMtHashNode(const Key &mtk, const uint64_t key_hash)
+    : key_(mtk), value_(NULL)
+  {
+    hash_ = key_hash;
+  }
   ~ObMtHashNode() { value_ = NULL; }
 };
 
@@ -573,7 +579,7 @@ private:
       // no memory, do nothing
     } else {
       ObHashNode *op_bucket_node = fill_bucket(bucket_node, genealogy);
-      ObMtHashNode target_node(*query_key);
+      ObMtHashNode target_node(*query_key, query_key_hash);
       ObHashNode *prev_node = NULL;
       ObHashNode *next_node = NULL;
       int cmp = 0;

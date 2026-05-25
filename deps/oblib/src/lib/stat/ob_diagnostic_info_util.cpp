@@ -46,6 +46,13 @@ void __attribute__((weak, noinline)) lib_mtl_switch(int64_t tenant_id, std::func
   fn(OB_NOT_IMPLEMENT);
 }
 
+int __attribute__((weak, noinline)) lib_mtl_get_summary_slot(int64_t tenant_id,
+    int64_t group_id, int64_t session_id, ObDiagnosticInfoSlot *&slot)
+{
+  UNUSEDx(tenant_id, group_id, session_id, slot);
+  return OB_NOT_IMPLEMENT;
+}
+
 int64_t __attribute__((weak, noinline)) lib_mtl_cpu_count()
 {
   return 1;

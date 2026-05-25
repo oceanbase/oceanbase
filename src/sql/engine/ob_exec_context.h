@@ -586,7 +586,8 @@ public:
     return query_ctx;
   }
 
-  ObDiagnosisManager& get_diagnosis_manager() { return diagnosis_manager_; }
+  ObDiagnosisManager* get_diagnosis_manager() { return diagnosis_manager_; }
+  ObDiagnosisManager* get_or_create_diagnosis_manager();
   common::ObArenaAllocator &get_deterministic_udf_cache_allocator() { return deterministic_udf_cache_allocator_; }
 
   void *get_external_url_resource_cache() { return external_url_resource_cache_; }
@@ -801,7 +802,7 @@ protected:
   ObLobAccessCtx *lob_access_ctx_;
   AutoDopHashMap auto_dop_map_;
   bool force_local_plan_;
-  ObDiagnosisManager diagnosis_manager_;
+  ObDiagnosisManager *diagnosis_manager_;
   common::ObArenaAllocator deterministic_udf_cache_allocator_;
 
   void *external_url_resource_cache_;

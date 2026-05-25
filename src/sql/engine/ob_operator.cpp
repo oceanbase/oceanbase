@@ -585,7 +585,7 @@ ObOperator::ObOperator(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput 
     dummy_allocator_(nullptr),
     dummy_ptr_(nullptr),
     check_stack_overflow_(false),
-    monitor_profile_(static_cast<ObProfileId>(spec.get_type()), &ctx_.get_allocator(), spec_.use_rich_format_)
+    monitor_profile_(nullptr)
 {
   eval_ctx_.max_batch_size_ = spec.max_batch_size_;
   eval_ctx_.batch_size_ = spec.max_batch_size_;
@@ -863,7 +863,15 @@ int ObOperator::open()
     }
     if ((spec_.plan_->get_phy_plan_hint().monitor_ || spec_.plan_->get_px_dop() > 1)
         && spec_.plan_->extend_sql_plan_monitor_metrics()) {
-      op_monitor_info_.profile_ = &monitor_profile_;
+      void *buf = ctx_.get_allocator().alloc(sizeof(ObProfile));
+      if (OB_ISNULL(buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("alloc monitor profile failed", K(ret), K(sizeof(ObProfile)));
+      } else {
+        monitor_profile_ = new (buf) ObProfile(
+            static_cast<ObProfileId>(spec_.get_type()), &ctx_.get_allocator(), spec_.use_rich_format_);
+        op_monitor_info_.profile_ = monitor_profile_;
+      }
     }
     ObProfileSwitcher switcher(op_monitor_info_.profile_);
     while (OB_SUCC(ret) && open_order != OPEN_EXIT) {

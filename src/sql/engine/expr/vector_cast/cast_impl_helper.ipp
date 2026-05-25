@@ -60,7 +60,7 @@ public:
                                   const ObBitVector &skip,
                                   const EvalBound &bound,
                                   bool is_diagnosis,
-                                  ObDiagnosisManager& diagnosis_manager) {
+                                  ObDiagnosisManager *diagnosis_manager) {
     int ret = OB_SUCCESS;
 
     bool no_skip_no_null = bound.get_all_rows_active()
@@ -81,8 +81,10 @@ public:
         }
         ret = calc(expr, idx);
         if (OB_FAIL(ret) && is_diagnosis) {
+          if (OB_ISNULL(diagnosis_manager)) {
+            SQL_LOG(WARN, "diagnosis manager is null", K(ret), K(idx));
           // overwrite ret on diagnosis node
-          if (OB_FAIL(diagnosis_manager.add_warning_info(ret, idx))) {
+          } else if (OB_FAIL(diagnosis_manager->add_warning_info(ret, idx))) {
             SQL_LOG(WARN, "failed to add warning info", K(ret), K(idx));
           } else {
             // set null to avoid accessing invalid data before setting skip

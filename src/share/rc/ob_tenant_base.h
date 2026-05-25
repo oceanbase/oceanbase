@@ -1043,7 +1043,7 @@ inline ObTenantSimpleGuard _make_tenant_simple_guard()
 
 // 获取租户对象，但不切换上下文
 #define MTL_TENANT(tenant_id) \
-  ObTenantBase *_tenant_base = nullptr; \
+  share::ObTenantBase *_tenant_base = nullptr; \
   for (share::ObTenantSimpleGuard g = share::_make_tenant_simple_guard(); g.loop_num_ == 0; g.loop_num_++, _tenant_base = nullptr) \
     if (OB_SUCC(g.get_tenant_base(tenant_id, _tenant_base)))
 

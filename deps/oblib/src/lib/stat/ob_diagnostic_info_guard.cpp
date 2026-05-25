@@ -456,20 +456,12 @@ ObTenantDiagnosticInfoSummaryGuard::ObTenantDiagnosticInfoSummaryGuard(
             // get slot successfully
           }
         } else {
-          lib_mtl_switch(
-              tenant_id, [&ret, &di, &slot, tenant_id, group_id](int switch_ret) -> void {
-                if (OB_SUCC(switch_ret)) {
-                  if (OB_FAIL(MTL_DI_CONTAINER()->summarys_.get_di_slot(
-                          tenant_id, group_id, di->get_session_id(), slot))) {
-                    LOG_WARN("failed to get summary slot", K(ret), K(tenant_id), K(group_id));
-                  } else {
-                    // get slot successfully
-                  }
-                } else {
-                  LOG_WARN("failed to switch to tenant diagnostic info summary mode", K(ret),
-                      K(tenant_id), K(group_id), K(lbt()));
-                }
-              });
+          if (OB_FAIL(lib_mtl_get_summary_slot(
+                  tenant_id, group_id, di->get_session_id(), slot))) {
+            LOG_WARN("failed to get summary slot", K(ret), K(tenant_id), K(group_id), K(lbt()));
+          } else {
+            // get slot successfully
+          }
         }
       } else {
         ret = OB_ERROR;

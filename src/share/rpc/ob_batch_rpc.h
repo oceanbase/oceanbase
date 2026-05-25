@@ -124,6 +124,14 @@ public:
             } else {
               if (OB_FAIL(req.fill_buffer(buf + pos, req_size, filled_size))) {
                 RPC_LOG(WARN, "fill buffer failed", K(ret), K(req_size), K(total_size));
+                if (LOOKUP_DAS_BATCH_REQ1 == batch_type
+                    || LOOKUP_DAS_BATCH_REQ2 == batch_type) {
+                  // invalidate type so receiver skips this ghost entry,
+                  // keep size_ unchanged for correct next() traversal
+                  header->set(0, INVALID_BATCH_REQ, 0, (int32_t)total_size);
+                  header = NULL;
+                  break;
+                }
                 header = NULL;
               }
             }
@@ -359,7 +367,7 @@ public:
   typedef common::FixedHash2<RpcBuffer> BufferMap;
   typedef SingleWaitCond SendCond;
   static const int64_t SVR_IDLE_TIME_THRESHOLD = 10 * 60 * 1000 * 1000L;  // 10 minutes
-  ObBatchRpcBase(): is_inited_(false), batch_type_(-1), self_(), delay_us_(0), rpc_(nullptr), buffer_map_(nullptr)
+  ObBatchRpcBase(): is_inited_(false), batch_type_(-1), batch_req_idx_(0), self_(), rpc_(nullptr), buffer_map_(nullptr)
   {}
   ~ObBatchRpcBase()
   {
@@ -381,7 +389,7 @@ public:
       RPC_LOG(INFO, "ObBatchRpcBase destroy finished");
     }
   }
-  int init(int64_t delay_us, const uint32_t batch_type, Rpc* rpc, const common::ObAddr &self_addr)
+  int init(const uint32_t batch_req_idx, Rpc* rpc, const common::ObAddr &self_addr)
   {
     int ret = common::OB_SUCCESS;
     void *obj_buf = common::ob_malloc(sizeof(BufferMap), common::ObModIds::OB_RPC_BUFFER);
@@ -392,12 +400,12 @@ public:
     } else {
       int64_t size = BUCKET_NUM * sizeof(common::SpHashNode);
       buffer_map_ = new (obj_buf) BufferMap(buf, size);
-      if (CLOG_BATCH_REQ_NODELAY2 != batch_type) {
-        batch_type_ = batch_type;
+      batch_req_idx_ = batch_req_idx;
+      if (CLOG_BATCH_REQ_NODELAY2 != batch_req_idx) {
+        batch_type_ = static_cast<int>(batch_req_idx);
       } else {
         batch_type_ = CLOG_BATCH_REQ_NODELAY;
       }
-      delay_us_ = delay_us;
       self_ = self_addr;
       rpc_ = rpc;
       is_inited_ = true;
@@ -432,8 +440,8 @@ private:
 private:
   bool is_inited_;
   int batch_type_;
+  uint32_t batch_req_idx_;
   common::ObAddr self_;
-  int64_t delay_us_;
   Rpc* rpc_;
   SendCond cond_;
   BufferMap *buffer_map_;
@@ -463,11 +471,12 @@ public:
     } else if (is_hp_eio_enabled && OB_FAIL(hp_rpc_.init(hp_transport, self_addr))) {
       RPC_LOG(WARN, "hp_rpc init failed", K(ret));
     } else {
+      refresh_batch_rpc_delay_us_cache();
       for(int i = 0; i < thread_cnt_; i++) {
         if (is_hp_eio_enabled && is_hp_rpc(i)) {
-          base_[i].init(get_batch_delay_us(i), i, &hp_rpc_, self_addr);
+          base_[i].init(i, &hp_rpc_, self_addr);
         } else {
-          base_[i].init(get_batch_delay_us(i), i, &rpc_, self_addr);
+          base_[i].init(i, &rpc_, self_addr);
         }
         RPC_LOG(INFO, "base thread init finished", K(is_hp_eio_enabled));
       }

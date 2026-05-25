@@ -69,8 +69,11 @@ struct StringFloatCastImpl
           for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); i++) {
             convert_string_to_float_task(i);
             if(OB_FAIL(ret) && is_diagnosis) {
+              ObDiagnosisManager *dm = ctx.exec_ctx_.get_or_create_diagnosis_manager();
+              if (OB_ISNULL(dm)) {
+                SQL_LOG(WARN, "diagnosis manager is null", K(ret), K(i));
               // overwrite ret on diagnosis node
-              if (OB_FAIL(ctx.exec_ctx_.get_diagnosis_manager().add_warning_info(ret, i))) {
+              } else if (OB_FAIL(dm->add_warning_info(ret, i))) {
                 SQL_LOG(WARN, "failed to add warning info", K(ret), K(i));
               } else {
                 // set null to avoid accessing invalid data before setting skip
@@ -86,8 +89,11 @@ struct StringFloatCastImpl
             } else {
               convert_string_to_float_task(i);
               if(OB_FAIL(ret) && is_diagnosis) {
+                ObDiagnosisManager *dm = ctx.exec_ctx_.get_or_create_diagnosis_manager();
+                if (OB_ISNULL(dm)) {
+                  SQL_LOG(WARN, "diagnosis manager is null", K(ret), K(i));
                 // overwrite ret on diagnosis node
-                if (OB_FAIL(ctx.exec_ctx_.get_diagnosis_manager().add_warning_info(ret, i))) {
+                } else if (OB_FAIL(dm->add_warning_info(ret, i))) {
                   SQL_LOG(WARN, "failed to add warning info", K(ret), K(i));
                 } else {
                   // set null to avoid accessing invalid data before setting skip
@@ -107,8 +113,11 @@ struct StringFloatCastImpl
           } else {
             convert_string_to_float_task(i);
             if(OB_FAIL(ret) && is_diagnosis) {
+              ObDiagnosisManager *dm = ctx.exec_ctx_.get_or_create_diagnosis_manager();
+              if (OB_ISNULL(dm)) {
+                SQL_LOG(WARN, "diagnosis manager is null", K(ret), K(i));
               // overwrite ret on diagnosis node
-              if (OB_FAIL(ctx.exec_ctx_.get_diagnosis_manager().add_warning_info(ret, i))) {
+              } else if (OB_FAIL(dm->add_warning_info(ret, i))) {
                 SQL_LOG(WARN, "failed to add warning info", K(ret), K(i));
               } else {
                 // set null to avoid accessing invalid data before setting skip

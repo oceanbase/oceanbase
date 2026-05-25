@@ -89,6 +89,9 @@ DEF_INT(net_thread_count, OB_CLUSTER_PARAMETER, "0", "[0,128]",
 DEF_INT(high_priority_net_thread_count, OB_CLUSTER_PARAMETER, "0", "[0,64]",
         "the number of rpc I/O threads for high priority messages, 0 means set off. Range: [0, 64] in integer",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::STATIC_EFFECTIVE));
+DEF_INT(das_batch_rpc_delay_us, OB_CLUSTER_PARAMETER, "100", "[0, 1000000]",
+        "delay in microseconds for LOOKUP_DAS_BATCH_REQ1/2 batch rpc. Range: [0, 1000000]",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(tenant_task_queue_size, OB_CLUSTER_PARAMETER, "16384", "[1024,]",
         "the size of the task queue for each tenant. Range: [1024,+∞)",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1771,6 +1774,10 @@ DEF_BOOL(_enable_distributed_das_scan, OB_TENANT_PARAMETER, "True",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(_enable_das_batch_rescan_flag, OB_TENANT_PARAMETER, "0",
         "enable das batch rescan for multiple scenarios.",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_enable_das_batch_rpc, OB_TENANT_PARAMETER, "0", "[0,65535]",
+        "enable batch rpc for das. The lowest bit (bit 0) controls async remote "
+        "global index lookup batch rpc: 1 to enable, 0 to disable. Range: [0,65535]",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_INT(_parallel_max_active_sessions, OB_TENANT_PARAMETER, "0", "[0,]",

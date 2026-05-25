@@ -139,7 +139,7 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     lob_access_ctx_(nullptr),
     auto_dop_map_(),
     force_local_plan_(false),
-    diagnosis_manager_(),
+    diagnosis_manager_(nullptr),
     deterministic_udf_cache_allocator_("UDFCACHE", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     external_url_resource_cache_(nullptr),
     external_py_url_resource_cache_(nullptr),
@@ -235,6 +235,10 @@ ObExecContext::~ObExecContext()
   if (OB_NOT_NULL(lob_access_ctx_)) {
     lob_access_ctx_->~ObLobAccessCtx();
     lob_access_ctx_ = nullptr;
+  }
+  if (OB_NOT_NULL(diagnosis_manager_)) {
+    diagnosis_manager_->~ObDiagnosisManager();
+    diagnosis_manager_ = nullptr;
   }
   auto_dop_map_.destroy();
 
@@ -1472,6 +1476,17 @@ int ObExecContext::get_subschema_id_by_type_string(const ObString &type_string, 
     ret = phy_plan_ctx_->get_subschema_id_by_type_string(type_string, subschema_id);
   }
   return ret;
+}
+
+ObDiagnosisManager* ObExecContext::get_or_create_diagnosis_manager()
+{
+  if (OB_ISNULL(diagnosis_manager_)) {
+    void *buf = allocator_.alloc(sizeof(ObDiagnosisManager));
+    if (OB_NOT_NULL(buf)) {
+      diagnosis_manager_ = new(buf) ObDiagnosisManager();
+    }
+  }
+  return diagnosis_manager_;
 }
 
 int ObExecContext::get_lob_access_ctx(ObLobAccessCtx *&lob_access_ctx)

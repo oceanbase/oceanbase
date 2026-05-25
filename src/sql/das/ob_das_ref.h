@@ -120,6 +120,9 @@ public:
   void reuse() { need_wait_ = false; }
   void set_need_wait(bool v) { need_wait_ = v; }
   bool is_need_wait() { return need_wait_; }
+  void inc_pending_batch_request() { ATOMIC_INC(&pending_batch_request_count_); }
+  void dec_pending_batch_request() { ATOMIC_DEC(&pending_batch_request_count_); }
+  int64_t get_pending_batch_request_count() const { return ATOMIC_LOAD(&pending_batch_request_count_); }
   TO_STRING_KV(K(max_das_task_concurrency_), K(das_task_concurrency_limit_));
 public:
   int32_t max_das_task_concurrency_;
@@ -128,6 +131,8 @@ public:
   common::ObThreadCond cond_;
   bool need_wait_;
   bool is_inited_;
+  int64_t pending_batch_request_count_;
+  int64_t last_batch_timeout_check_ts_;
 };
 
 struct ObDasAggregatedTask
@@ -178,7 +183,7 @@ struct ObDasAggregatedTask
   {
     return (start_status_ == DAS_AGG_TASK_PARALLEL_EXEC || start_status_ == DAS_AGG_TASK_REMOTE_EXEC);
   }
-  ObDasAggTaskStartStatus get_start_status() { return start_status_; }
+  ObDasAggTaskStartStatus get_start_status() const { return start_status_; }
   TO_STRING_KV(K(server_),
                K(start_status_),
                K(tasks_.get_size()),
@@ -287,6 +292,7 @@ public:
   void clear_task_map();
   int wait_tasks_and_process_response();
   int get_detectable_id(ObDetectableId &detectable_id);
+  void check_lookup_batch_task_timeout();
 private:
   DISABLE_COPY_ASSIGN(ObDASRef);
   int create_task_map();

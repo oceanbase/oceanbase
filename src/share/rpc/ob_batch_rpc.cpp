@@ -106,6 +106,8 @@ int64_t ObRpcBuffer::send(Rpc& rpc, uint64_t tenant_id, const ObAddr &sender, bo
       uint32_t new_port = dest.get_port() + BATCH_RPC_PORT_DELTA;
       dest.set_port(new_port);
     }
+    RPC_LOG_RET(TRACE, OB_SUCCESS, "batch rpc send aggregated sub request count", K(req_cnt), K(batch_type_),
+            K(tenant_id), K(dest), K(dst_cluster_id_), K(size));
     rpc.post_batch(tenant_id, dest, dst_cluster_id_, batch_type_, *pkt);
     buffer_.reuse(seq);
   }
@@ -144,7 +146,7 @@ int ObBatchRpcBase::post(const uint64_t tenant_id, const ObAddr &dest, const int
       }
     }
   } else {
-    if (delay_us_ <= 0) {
+    if (get_batch_delay_us(static_cast<int>(batch_req_idx_)) <= 0) {
       cond_.signal();
     }
   }
@@ -250,7 +252,7 @@ int ObBatchRpcBase::post(const uint64_t tenant_id, const ObAddr &dest, const int
       }
     }
   } else {
-    if (delay_us_ <= 0) {
+    if (get_batch_delay_us(static_cast<int>(batch_req_idx_)) <= 0) {
       cond_.signal();
     }
   }
@@ -330,12 +332,13 @@ void ObBatchRpcBase::do_work()
       }
     }
     const int64_t cost_time = common::ObTimeUtility::current_time() - start_ts;
-    int64_t sleep_ts = delay_us_ > 0 ? delay_us_ : (10 * 1000);
+    const int64_t delay_us = get_batch_delay_us(static_cast<int>(batch_req_idx_));
+    int64_t sleep_ts = delay_us > 0 ? delay_us : (10 * 1000);
     sleep_ts -= cost_time;
     if (sleep_ts < 0) {
       sleep_ts = 0;
     }
-    if (delay_us_ > 0) {
+    if (delay_us > 0) {
       ob_usleep((int32_t)sleep_ts, true/*is_idle_sleep*/);
     } else {
       common::ObBKGDSessInActiveGuard inactive_guard;

@@ -507,12 +507,15 @@ int ObCSVTableRowIterator::handle_error_msgs(
   int ret = OB_SUCCESS;
   ObExecContext &exec_ctx = scan_param_->op_->get_eval_ctx().exec_ctx_;
   ObSQLSessionInfo* session_info = exec_ctx.get_my_session();
-  ObDiagnosisManager& diagnosis_manager = exec_ctx.get_diagnosis_manager();
-
   if (session_info->is_diagnosis_enabled()) {
+    ObDiagnosisManager *diagnosis_manager = exec_ctx.get_or_create_diagnosis_manager();
+    if (OB_ISNULL(diagnosis_manager)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to create diagnosis manager", K(ret));
+    }
     for (int i = 0; OB_SUCC(ret) && i < error_msgs.count(); ++i) {
       int64_t line_num = error_msgs.at(i).line_no + 1 + parser_.get_format().skip_header_lines_;
-      if (OB_FAIL(diagnosis_manager.missing_col_idxs_.push_back(line_num))) {
+      if (OB_FAIL(diagnosis_manager->missing_col_idxs_.push_back(line_num))) {
         LOG_WARN("failed to push back missing column number into array", K(ret), K(line_num));
       }
     }
@@ -555,8 +558,11 @@ int ObCSVTableRowIterator::handle_bad_file_line(ObCSVTableRowIterator *csv_iter,
     }
   }
   if (OB_SUCC(ret)) {
-    ObDiagnosisManager& diagnosis_manager = eval_ctx.exec_ctx_.get_diagnosis_manager();
-    if (OB_FAIL(diagnosis_manager.data_.push_back(param.line_data_))) {
+    ObDiagnosisManager *diagnosis_manager = eval_ctx.exec_ctx_.get_or_create_diagnosis_manager();
+    if (OB_ISNULL(diagnosis_manager)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to create diagnosis manager", K(ret));
+    } else if (OB_FAIL(diagnosis_manager->data_.push_back(param.line_data_))) {
       LOG_WARN("failed to push back line data into array", K(ret), K(param.line_data_));
     }
   }

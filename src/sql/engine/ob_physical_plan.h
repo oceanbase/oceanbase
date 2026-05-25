@@ -788,6 +788,7 @@ public:
   // for detector manager
   bool is_enable_px_fast_reclaim_;
   bool use_rich_format_;
+  bool enable_vec_batch_accum_;
   ObSubSchemaCtx subschema_ctx_;
   int64_t das_dop_;
   bool disable_auto_memory_mgr_;

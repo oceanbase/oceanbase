@@ -791,7 +791,7 @@ protected:
   common::ObIAllocator *dummy_allocator_;
   char *dummy_ptr_;
   bool check_stack_overflow_;
-  ObProfile monitor_profile_;
+  ObProfile *monitor_profile_;
   DISALLOW_COPY_AND_ASSIGN(ObOperator);
 };
 
@@ -846,8 +846,16 @@ int ObOpSpec::find_target_specs(T &spec, const FILTER &f, common::ObIArray<T *> 
 
 inline void ObOperator::destroy()
 {
-  dummy_ptr_ = nullptr;
-  dummy_allocator_ = nullptr;
+  if (nullptr != monitor_profile_) {
+    monitor_profile_->~ObProfile();
+    monitor_profile_ = nullptr;
+    op_monitor_info_.profile_ = nullptr;
+  }
+  if (nullptr != dummy_allocator_ && nullptr != dummy_ptr_) {
+    dummy_allocator_->free(dummy_ptr_);
+    dummy_ptr_ = nullptr;
+    dummy_allocator_ = nullptr;
+  }
 }
 
 OB_INLINE void ObOperator::clear_evaluated_flag()

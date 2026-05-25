@@ -18,6 +18,7 @@
 #include "storage/tx/ob_trans_define.h"
 #include "storage/tx/ob_clog_encrypt_info.h"
 #include "rpc/obrpc/ob_rpc_result_code.h"
+#include "share/rpc/ob_batch_proxy.h"
 #include "sql/das/ob_das_define.h"
 #include "storage/access/ob_dml_param.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
@@ -40,6 +41,8 @@ class ObDASScanOp;
 class ObDASTaskFactory;
 class ObDasAggregatedTask;
 struct ObDASTCBInterruptInfo;
+class ObDASLookupBatchTask;
+class ObDASLookupBatchResult;
 
 typedef ObDLinkNode<ObIDASTaskOp*> DasTaskNode;
 typedef ObDList<DasTaskNode> DasTaskLinkedList;
@@ -155,6 +158,7 @@ class ObIDASTaskOp
   friend class ObRpcDasAsyncAccessCallBack;
   friend class ObDataAccessService;
   friend class ObDASParallelHandler;
+  friend class ObDASLookupBatchExecutor;
   OB_UNIS_VERSION_V(1);
 public:
   ObIDASTaskOp(common::ObIAllocator &op_alloc)
@@ -262,6 +266,7 @@ public:
   transaction::ObTxDesc *get_trans_desc() { return trans_desc_; }
   void set_snapshot(transaction::ObTxReadSnapshot *snapshot) { snapshot_ = snapshot; }
   transaction::ObTxReadSnapshot *get_snapshot() { return snapshot_; }
+  const transaction::ObTxReadSnapshot *get_snapshot() const { return snapshot_; }
   int16_t get_write_branch_id() const { return write_branch_id_; }
   void set_write_branch_id(const int16_t branch_id) { write_branch_id_ = branch_id; }
   bool is_local_task() const { return task_started_; }
@@ -290,8 +295,11 @@ public:
   void set_inner_rescan(bool flag) { inner_rescan_ = flag; }
   void set_write_buff_full(bool v) { write_buff_full_ = v; }
   bool is_write_buff_full() { return write_buff_full_; }
+  void set_global_lookup_generated_task(bool flag) { global_lookup_generated_task_ = flag; }
+  bool get_global_lookup_generated_task() const { return global_lookup_generated_task_; }
   ObDASGTSOptInfo &get_das_gts_opt_info() { return das_gts_opt_info_; }
   int init_das_gts_opt_info(transaction::ObTxIsolationLevel isolation_level);
+  virtual int64_t get_write_buffer_mem_used() const { return 0; }
 
 protected:
   int start_das_task();
@@ -315,7 +323,8 @@ protected:
     {
       /*the first 16 bits are static flags*/
       uint16_t can_part_retry_   : 1;
-      uint16_t flag_reserved_    : 15;
+      uint16_t global_lookup_generated_task_ : 1;
+      uint16_t flag_reserved_    : 14;
       /*the last 16 bits are status masks*/
       uint16_t task_started_     : 1;
       uint16_t in_part_retry_    : 1;
@@ -379,6 +388,7 @@ public:
   }
   void set_task_id(int64_t task_id) { task_id_ = task_id; }
   int64_t get_task_id() { return task_id_; }
+  int64_t get_task_id() const { return task_id_; }
   VIRTUAL_TO_STRING_KV(K_(task_id));
 protected:
   int64_t task_id_; //DAS Task的id编号, 在DAS层每个server上的id是递增并且唯一的
@@ -436,6 +446,7 @@ class ObDASTaskArg
 {
   OB_UNIS_VERSION(1);
 public:
+  static const int64_t META_SERIALIZE_SIZE_ESTIMATE = 8000L;
   ObDASTaskArg();
   ~ObDASTaskArg() { }
 
@@ -451,6 +462,7 @@ public:
   bool is_local_task() const { return ctrl_svr_ == runner_svr_; }
   void set_timeout_ts(int64_t ts) { timeout_ts_ = ts; }
   int64_t get_timeout_ts() const { return timeout_ts_; }
+  int64_t get_estimated_serialize_size() const;
   TO_STRING_KV(K_(timeout_ts),
                K_(ctrl_svr),
                K_(runner_svr),
@@ -474,6 +486,7 @@ public:
   common::ObSEArray<ObIDASTaskResult*, 2> &get_op_results() { return op_results_; };
   void set_err_code(int err_code) { rcode_.rcode_ = err_code; }
   int get_err_code() const { return rcode_.rcode_; }
+  obrpc::ObRpcResultCode &get_rcode() { return rcode_; }
   const obrpc::ObRpcResultCode &get_rcode() const { return rcode_; }
   void store_err_msg(const common::ObString &msg);
   const char *get_err_msg() const { return rcode_.msg_; }
@@ -481,6 +494,7 @@ public:
   void set_has_more(bool has_more) { has_more_ = has_more; }
   bool has_more() const { return has_more_; }
   void set_ctrl_svr(const common::ObAddr &ctrl_svr) { ctrl_svr_ = ctrl_svr; }
+  common::ObAddr get_ctrl_svr() const { return ctrl_svr_; }
   void set_runner_svr(const common::ObAddr &runner_svr) { runner_svr_ = runner_svr; }
   common::ObAddr get_runner_svr() const { return runner_svr_; }
   transaction::ObTxExecResult &get_trans_result() { return trans_result_; }
@@ -610,6 +624,52 @@ struct DASRtEncoder
     int32_t idx = 0;
     return common::serialization::encoded_length_i32(idx);
   }
+};
+
+class ObDASLookupBatchTask : public obrpc::ObIFill
+{
+public:
+  ObDASLookupBatchTask();
+  virtual ~ObDASLookupBatchTask() {}
+  void init(const uint64_t tenant_id,
+            const int64_t request_id,
+            const ObDASTaskArg &task_arg);
+  virtual int fill_buffer(char *buf, int64_t size, int64_t &filled_size) const;
+  virtual int64_t get_req_size() const;
+  static int peek_request_id(const char *buf, int64_t size, uint64_t &tenant_id, int64_t &request_id);
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  int64_t get_request_id() const { return request_id_; }
+  const ObDASTaskArg *get_task_arg() const { return task_arg_; }
+  TO_STRING_KV(K_(tenant_id), K_(request_id), KP_(task_arg));
+private:
+  uint64_t tenant_id_;
+  int64_t request_id_;
+  const ObDASTaskArg *task_arg_;
+  // Set by fill_buffer() when serialization overflows the estimated buffer.
+  // Once true, get_req_size() falls back to exact encoded_length() instead of
+  // the fast but approximate get_estimated_serialize_size()
+  mutable bool estimate_failed_;
+};
+
+class ObDASLookupBatchResult : public obrpc::ObIFill
+{
+public:
+  ObDASLookupBatchResult();
+  virtual ~ObDASLookupBatchResult() {}
+  void init(const uint64_t tenant_id,
+            const int64_t request_id,
+            const ObDASTaskResp &task_resp);
+  virtual int fill_buffer(char *buf, int64_t size, int64_t &filled_size) const;
+  virtual int64_t get_req_size() const;
+  virtual int64_t get_estimate_size() const { return 0; }
+  uint64_t get_tenant_id() const { return tenant_id_; }
+  int64_t get_request_id() const { return request_id_; }
+  const ObDASTaskResp *get_task_resp() const { return task_resp_; }
+  TO_STRING_KV(K_(tenant_id), K_(request_id), KP_(task_resp));
+private:
+  uint64_t tenant_id_;
+  int64_t request_id_;
+  const ObDASTaskResp *task_resp_;
 };
 
 class ObDASDataFetchReq

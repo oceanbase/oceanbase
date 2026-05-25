@@ -1565,7 +1565,6 @@ int ObKeyBtree<BtreeKey, BtreeVal>::insert(const BtreeKey key, BtreeVal &value)
   BtreeNode *new_root = nullptr;
   WriteHandle handle(*this);
   BTREE_ASSERT(((uint64_t)value & 7ULL) == 0);
-  handle.get_is_in_delete() = false;
   if (OB_FAIL(handle.acquire_ref())) {
     OB_LOG(ERROR, "acquire_ref fail", K(ret));
   } else {
@@ -1607,7 +1606,6 @@ int ObKeyBtree<BtreeKey, BtreeVal>::insert_or_get(const BtreeKey key,
   BtreeNode *old_root = nullptr;
   BtreeNode *new_root = nullptr;
   WriteHandle handle(*this);
-  handle.get_is_in_delete() = false;
   if (OB_FAIL(handle.acquire_ref())) {
     OB_LOG(ERROR, "acquire_ref fail", K(ret));
   } else {

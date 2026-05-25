@@ -224,6 +224,7 @@ struct ObOptParamHint
     DEF(ENABLE_ENUM_SET_SUBSCHEMA,)                 \
     DEF(ENABLE_OPTIMIZER_ROWGOAL,)                  \
     DEF(DAS_BATCH_RESCAN_FLAG,)                     \
+    DEF(LOOKUP_BATCH_RPC_FLAG,)                     \
     DEF(DISABLE_GTT_SESSION_ISOLATION,)             \
     DEF(ENABLE_CONSTANT_TYPE_DEMOTION,)             \
     DEF(NON_STANDARD_COMPARISON_LEVEL,)             \
@@ -675,6 +676,9 @@ struct ObPhyPlanHint
 {
   OB_UNIS_VERSION(1);
 public:
+  static const int64_t LOOKUP_BATCH_RPC_FLAG_DEFAULT = -1;
+  static const int64_t LOOKUP_BATCH_RPC_ENABLE_BASIC = 1LL << 0;
+
   ObPhyPlanHint()
       : read_consistency_(common::INVALID_CONSISTENCY),
         query_timeout_(-1),
@@ -684,7 +688,8 @@ public:
         parallel_(-1),
         monitor_(false),
         table_lock_mode_(0),
-        max_execution_time_(ObGlobalHint::UNSET_MAX_EXECUTION_TIME)
+        max_execution_time_(ObGlobalHint::UNSET_MAX_EXECUTION_TIME),
+        lookup_batch_rpc_flag_(LOOKUP_BATCH_RPC_FLAG_DEFAULT)
   {}
 
   ObPhyPlanHint(const ObGlobalHint &global_hint)
@@ -696,7 +701,8 @@ public:
         parallel_(global_hint.parallel_),
         monitor_(global_hint.monitor_),
         table_lock_mode_(global_hint.table_lock_mode_),
-        max_execution_time_(global_hint.max_execution_time_)
+        max_execution_time_(global_hint.max_execution_time_),
+        lookup_batch_rpc_flag_(LOOKUP_BATCH_RPC_FLAG_DEFAULT)
   {}
 
   int deep_copy(const ObPhyPlanHint &other, common::ObIAllocator &allocator);
@@ -711,7 +717,8 @@ public:
                K_(parallel),
                K_(monitor),
                K_(table_lock_mode),
-               K_(max_execution_time));
+               K_(max_execution_time),
+               K_(lookup_batch_rpc_flag));
 
   common::ObConsistencyLevel read_consistency_;
   int64_t query_timeout_;
@@ -722,6 +729,7 @@ public:
   bool monitor_;
   int64_t table_lock_mode_;
   int64_t max_execution_time_;
+  int64_t lookup_batch_rpc_flag_;
 };
 
 struct ObLeadingTable {

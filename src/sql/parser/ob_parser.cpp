@@ -40,12 +40,24 @@ bool ObParser::is_pl_stmt(const ObString &stmt, bool *is_create_func, bool *is_c
 {
   int ret = OB_SUCCESS;
 
+  const char *p = stmt.ptr();
+  const char *p_end = p + stmt.length();
+  while (p < p_end && ISSPACE(*p)) {
+    p++;
+  }
+  int64_t len_remaining = p_end - p;
+  if (len_remaining >= 6) {
+    if (0 == STRNCASECMP(p, "insert", 6) && (len_remaining == 6 || ISSPACE(p[6]))) {
+      return false;
+    }
+    if (lib::is_mysql_mode() && 0 == STRNCASECMP(p, "update", 6) && (len_remaining == 6 || ISSPACE(p[6]))) {
+      return false;
+    }
+  }
+
   State state = S_START;
   State save_state = state;
-
-  const char *p = stmt.ptr();
   const char *p_start = p;
-  const char *p_end = p + stmt.length();
   bool is_pl = false;
   bool is_not_pl = false;
   const char *p_normal_start = nullptr;
@@ -342,62 +354,142 @@ bool ObParser::is_comment(const char *&p,
 ObParser::State ObParser::transform_normal(ObString &normal)
 {
   State state = S_INVALID;
+  const int64_t len = normal.length();
+  const char *p = normal.ptr();
 
-#define IF(len, s, str) \
-  if (len == normal.length() && 0 == STRNCASECMP(normal.ptr(), str, len)) { \
-    state = s; \
-  }
-#define ELSIF(len, s, str) \
-  else if (len == normal.length() && 0 == STRNCASECMP(normal.ptr(), str, len)) { \
-    state = s; \
-  }
-#define ELSE() \
-  else { \
-    LOG_DEBUG("transform_normal", K(state), K(normal)); \
+  // Branch on length first so we do at most a few STRNCASECMP per call
+  // instead of O(n) in the original if-else chain.
+  switch (len) {
+    case 2: {
+      if (0 == STRNCASECMP(p, "or", 2)) {
+        state = S_OR;
+      } else if (0 == STRNCASECMP(p, "do", 2)) {
+        state = S_DO;
+      } else if (0 == STRNCASECMP(p, "dd", 2)) {
+        state = S_DD;
+      } else if (0 == STRNCASECMP(p, "<<", 2)) {
+        state = S_DECLARE;
+      } else if (0 == STRNCASECMP(p, "of", 2)) {
+        state = S_OF;
+      } else {
+        LOG_DEBUG("transform_normal", K(state), K(normal));
+      }
+      break;
+    }
+    case 3: {
+      if (0 == STRNCASECMP(p, "job", 3)) {
+        state = S_JOB;
+      } else {
+        LOG_DEBUG("transform_normal", K(state), K(normal));
+      }
+      break;
+    }
+    case 4: {
+      if (0 == STRNCASECMP(p, "type", 4)) {
+        state = S_TYPE;
+      } else if (0 == STRNCASECMP(p, "drop", 4)) {
+        state = S_DROP;
+      } else if (0 == STRNCASECMP(p, "call", 4)) {
+        state = S_CALL;
+      } else {
+        LOG_DEBUG("transform_normal", K(state), K(normal));
+      }
+      break;
+    }
+    case 5: {
+      if (0 == STRNCASECMP(p, "event", 5)) {
+        state = S_EVENT;
+      } else if (0 == STRNCASECMP(p, "begin", 5)) {
+        state = S_BEGIN;
+      } else if (0 == STRNCASECMP(p, "alter", 5)) {
+        state = S_ALTER;
+      } else if (0 == STRNCASECMP(p, "force", 5)) {
+        state = S_FORCE;
+      } else {
+        LOG_DEBUG("transform_normal", K(state), K(normal));
+      }
+      break;
+    }
+    case 6: {
+      if (0 == STRNCASECMP(p, "create", 6)) {
+        state = S_CREATE;
+      } else if (0 == STRNCASECMP(p, "update", 6)) {
+        state = S_UPDATE;
+      } else if (0 == STRNCASECMP(p, "signal", 6)) {
+        state = S_SIGNAL;
+      } else if (0 == STRNCASECMP(p, "submit", 6)) {
+        state = S_SUBMIT;
+      } else if (0 == STRNCASECMP(p, "cancel", 6)) {
+        state = S_CANCEL;
+      } else {
+        LOG_DEBUG("transform_normal", K(state), K(normal));
+      }
+      break;
+    }
+    case 7: {
+      if (0 == STRNCASECMP(p, "package", 7)) {
+        state = S_PACKAGE;
+      } else if (0 == STRNCASECMP(p, "trigger", 7)) {
+        state = S_TRIGGER;
+      } else if (0 == STRNCASECMP(p, "replace", 7)) {
+        state = S_REPLACE;
+      } else if (0 == STRNCASECMP(p, "definer", 7)) {
+        state = S_DEFINER;
+      } else if (0 == STRNCASECMP(p, "declare", 7)) {
+        state = S_DECLARE;
+      } else {
+        LOG_DEBUG("transform_normal", K(state), K(normal));
+      }
+      break;
+    }
+    case 8: {
+      if (0 == STRNCASECMP(p, "function", 8)) {
+        state = S_FUNCTION;
+      } else if (0 == STRNCASECMP(p, "resignal", 8)) {
+        state = S_RESIGNAL;
+      } else {
+        LOG_DEBUG("transform_normal", K(state), K(normal));
+      }
+      break;
+    }
+    case 9: {
+      if (0 == STRNCASECMP(p, "procedure", 9)) {
+        state = S_PROCEDURE;
+      } else {
+        LOG_DEBUG("transform_normal", K(state), K(normal));
+      }
+      break;
+    }
+    case 11: {
+      if (0 == STRNCASECMP(p, "editionable", 11)) {
+        state = S_EDITIONABLE;
+      } else {
+        LOG_DEBUG("transform_normal", K(state), K(normal));
+      }
+      break;
+    }
+    case 14: {
+      if (0 == STRNCASECMP(p, "noneditionable", 14)) {
+        state = S_EDITIONABLE;
+      } else {
+        LOG_DEBUG("transform_normal", K(state), K(normal));
+      }
+      break;
+    }
+    default: {
+      LOG_DEBUG("transform_normal", K(state), K(normal));
+      break;
+    }
   }
 
-  IF(6, S_CREATE, "create")
-  ELSIF(8, S_FUNCTION, "function")
-  ELSIF(9, S_PROCEDURE, "procedure")
-  ELSIF(7, S_PACKAGE, "package")
-  ELSIF(7, S_TRIGGER, "trigger")
-  ELSIF(5, S_EVENT, "event")
-  ELSIF(4, S_TYPE, "type")
-  ELSIF(2, S_OR, "or")
-  ELSIF(7, S_REPLACE, "replace")
-  ELSIF(7, S_DEFINER, "definer")
-  ELSIF(2, S_DO, "do")
-  ELSIF(2, S_DD, "dd")
-  ELSIF(5, S_BEGIN, "begin")
-  ELSIF(7, S_DECLARE, "declare")
-  ELSIF(2, S_DECLARE, "<<")
-  ELSIF(4, S_DROP, "drop")
-  ELSIF(4, S_CALL, "call")
-  ELSIF(5, S_ALTER, "alter")
-  ELSIF(6, S_UPDATE, "update")
-  ELSIF(2, S_OF, "of")
-  ELSIF(11, S_EDITIONABLE, "editionable")
-  ELSIF(14, S_EDITIONABLE, "noneditionable")
-  ELSIF(6, S_SIGNAL, "signal")
-  ELSIF(8, S_RESIGNAL, "resignal")
-  ELSIF(5, S_FORCE, "force")
-  ELSIF(6, S_SUBMIT, "submit")
-  ELSIF(6, S_CANCEL, "cancel")
-  ELSIF(3, S_JOB, "job")
-  ELSE()
-
-  if (S_INVALID == state
-      && normal.length() >= 2 && 0 == STRNCASECMP(normal.ptr(), "<<", 2)) {
+  // Prefix matches for tokens that may be followed by more characters
+  if (S_INVALID == state && len >= 2 && 0 == STRNCASECMP(p, "<<", 2)) {
     state = S_DECLARE;
   }
-  if (S_INVALID == state
-      && normal.length() >= 7 && 0 == STRNCASECMP(normal.ptr(), "definer", 7)) {
+  if (S_INVALID == state && len >= 7 && 0 == STRNCASECMP(p, "definer", 7)) {
     state = S_DEFINER;
   }
 
-#undef IF
-#undef ELSIF
-#undef ELSE
   return state;
 }
 

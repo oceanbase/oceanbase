@@ -330,16 +330,10 @@ int ObDeadLockDetectorMgr::unregister_key_(const UserBinaryKey &key)
 {
   #define PRINT_WRAPPER KR(ret), K(key)
   int ret = common::OB_SUCCESS;
-  DetectorRefGuard ref_guard;
-  if (OB_FAIL(get_detector_(key, ref_guard))) {
-    // DETECT_LOG(WARN, "get_detector failed", PRINT_WRAPPER);
+  if (OB_FAIL(detector_map_.del(key))) {
+    DETECT_LOG(WARN, "detector_map_ erase node failed", PRINT_WRAPPER);
   } else {
-    ref_guard.get_detector()->unregister_timer_task();
-    if (OB_FAIL(detector_map_.del(key))) {
-      DETECT_LOG(WARN, "detector_map_ erase node failed", PRINT_WRAPPER);
-    } else {
-      DETECT_LOG(TRACE, "unregister key success", PRINT_WRAPPER);
-    }
+    DETECT_LOG(TRACE, "unregister key success", PRINT_WRAPPER);
   }
   return ret;
   #undef PRINT_WRAPPER

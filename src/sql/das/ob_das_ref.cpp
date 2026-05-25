@@ -33,7 +33,9 @@ DASRefCountContext::DASRefCountContext()
     err_ret_(OB_SUCCESS),
     cond_(),
     need_wait_(false),
-    is_inited_(false)
+    is_inited_(false),
+    pending_batch_request_count_(0),
+    last_batch_timeout_check_ts_(0)
 {
 }
 
@@ -474,20 +476,71 @@ int ObDASRef::get_detectable_id(ObDetectableId &detectable_id) {
 int ObDASRef::cancel_all_async_callbacks()
 {
   int ret = OB_SUCCESS;
+  ObDataAccessService *das = MTL(ObDataAccessService *);
   DLIST_FOREACH_NORET(curr, async_cb_list_.get_obj_list()) {
     ObRpcDasAsyncAccessCallBack *cb = curr->get_obj();
     if (!cb->is_visited() &&
         !(cb->is_processed() || cb->is_timeout() || cb->is_invalid())) {
-      uint64_t gtid = cb->gtid_;
-      uint32_t pkt_id = cb->pkt_id_;
-      int err = 0;
-      if ((err = pn_terminate_pkt(gtid, pkt_id)) != 0) {
-        ret = tranlate_to_ob_error(err);
-        LOG_WARN("terminate pkt failed", K(ret), K(err));
+      if (cb->is_lookup_batch_request()) {
+        const int64_t request_id = cb->get_lookup_batch_request_id();
+        ObRpcDasAsyncAccessCallBack *erased = NULL;
+        if (OB_NOT_NULL(das)
+            && OB_SUCC(das->fetch_and_erase_das_batch_request(request_id, erased))
+            && erased == cb) {
+          cb->fail_lookup_batch_result(OB_CANCELED);
+        }
+      } else {
+        uint64_t gtid = cb->gtid_;
+        uint32_t pkt_id = cb->pkt_id_;
+        if (0 != gtid) {
+          int err = 0;
+          if ((err = pn_terminate_pkt(gtid, pkt_id)) != 0) {
+            ret = tranlate_to_ob_error(err);
+            LOG_WARN("terminate pkt failed", K(ret), K(err));
+          }
+        }
       }
     }
   }
   return ret;
+}
+
+void ObDASRef::check_lookup_batch_task_timeout()
+{
+  int ret = OB_SUCCESS;
+  const int64_t current_ts = ObTimeUtility::current_time();
+  if (das_ref_count_ctx_.get_pending_batch_request_count() == 0) {
+    //do nothing
+  } else if (current_ts - das_ref_count_ctx_.last_batch_timeout_check_ts_ < 100 * 1000) {
+    //do nothing
+  } else {
+    das_ref_count_ctx_.last_batch_timeout_check_ts_ = current_ts;
+    ObDataAccessService *das = MTL(ObDataAccessService *);
+    if (OB_ISNULL(das)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("das is null", K(current_ts), K(ret));
+    } else {
+      DLIST_FOREACH_NORET(curr, async_cb_list_.get_obj_list()) {
+        ObRpcDasAsyncAccessCallBack *cb = curr->get_obj();
+        if (OB_NOT_NULL(cb)
+            && cb->is_lookup_batch_request()
+            && !cb->is_visited()
+            && !(cb->is_processed() || cb->is_timeout() || cb->is_invalid())
+            && cb->get_async_cb_context()->get_timeout_ts() <= current_ts) {
+          const int64_t request_id = cb->get_lookup_batch_request_id();
+          if (OB_SUCC(das->erase_das_batch_request(request_id))) {
+            cb->fail_lookup_batch_result(OB_TIMEOUT);
+            LOG_WARN("lookup batch request timeout without callback, force complete",
+              K(request_id), K(current_ts),
+              "timeout_ts", cb->get_async_cb_context()->get_timeout_ts(),
+              "dst", cb->get_dst_addr());
+          } else {
+            //already get by processor
+          }
+        }
+      }
+    }
+  }
 }
 
 void ObDASRef::record_max_wait_diagnostic_info()
@@ -536,6 +589,7 @@ int ObDASRef::wait_all_executing_tasks()
     ObWaitEventGuard das_wait_guard(ObWaitEventIds::DAS_ASYNC_RPC_LOCK_WAIT, 0, 0, 0, 0);
     while (OB_SUCC(ret) && OB_SUCC(get_exec_ctx().check_status()) &&
            das_ref_count_ctx_.get_current_concurrency() < das_ref_count_ctx_.get_max_das_task_concurrency()) {
+      check_lookup_batch_task_timeout();
       // we cannot use ObCond here because it can not explicitly lock mutex, causing concurrency problem.
       if (OB_FAIL(das_ref_count_ctx_.get_cond().wait(1000))) {
         if (ret != OB_TIMEOUT) {
@@ -564,6 +618,7 @@ int ObDASRef::wait_all_executing_tasks()
 
     ObThreadCondGuard guard(das_ref_count_ctx_.get_cond());
     while (das_ref_count_ctx_.get_current_concurrency() < das_ref_count_ctx_.get_max_das_task_concurrency()) {
+      check_lookup_batch_task_timeout();
       if (OB_FAIL(das_ref_count_ctx_.get_cond().wait_us(1000))) {
         if (ret != OB_TIMEOUT) {
           LOG_WARN("failed to wait all das tasks to be finished.", K(ret));

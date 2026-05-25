@@ -71,6 +71,7 @@ ObLCLNode::ObLCLNode(const UserBinaryKey &user_key,
 
 ObLCLNode::~ObLCLNode()
 {
+  unregister_timer_task();
   ATOMIC_INC(&(ObIDeadLockDetector::total_destructed_count));
 }
 
@@ -958,7 +959,11 @@ void ObLCLNode::PushStateTask::runTimerTask()
   if (current_ts > warn_threshold_ts) {
     DETECT_LOG(WARN, "long lived lcl node, maybe leaked", K(*this));
   }
-  if (false == ATOMIC_LOAD(&lcl_node_.is_timer_task_canceled_)) {
+  if (ATOMIC_LOAD(&lcl_node_.is_timer_task_canceled_)
+      || lcl_node_.get_uref() < common::RefHandle::BORN_REF) {
+    // may destroy itself here, make sure it is the last action of this function
+    lcl_node_.revert_self_ref_count_();
+  } else {
     if (expected_executed_ts > current_ts) {
       DETECT_LOG(WARN, "schedule error", K(current_ts), K(expected_executed_ts));
     } else if (current_ts - expected_executed_ts > 100 * 1000) {// 100ms
@@ -978,9 +983,6 @@ void ObLCLNode::PushStateTask::runTimerTask()
     if (CLICK() && OB_TMP_FAIL(lcl_node_.register_timer_with_necessary_retry_with_lock_())) {
       DETECT_LOG(ERROR, "register timer task with retry failed", K(tmp_ret), K(*this));
     } else {}
-  } else {
-    // may destory itself here, make sure it is the last action of this function
-    lcl_node_.revert_self_ref_count_();
   }
 }
 

@@ -2025,8 +2025,10 @@ int ObTableScanOp::inner_close()
   if (OB_SUCC(ret)) {
     ObSQLSessionInfo *session = GET_MY_SESSION(ctx_);
     if (OB_NOT_NULL(session) && session->is_diagnosis_enabled()) {
-      ObDiagnosisManager& diagnosis_manager = ctx_.get_diagnosis_manager();
-      diagnosis_manager.close();
+      ObDiagnosisManager *diagnosis_manager = ctx_.get_diagnosis_manager();
+      if (OB_NOT_NULL(diagnosis_manager)) {
+        diagnosis_manager->close();
+      }
     }
   }
   if (OB_SUCC(ret)) {
@@ -3692,9 +3694,12 @@ int ObTableScanOp::transform_physical_rowid(ObIAllocator &allocator,
 int ObTableScanOp::do_diagnosis(ObExecContext &exec_ctx, ObBitVector &skip)
 {
   int ret = OB_SUCCESS;
-  ObDiagnosisManager& diagnosis_manager = exec_ctx.get_diagnosis_manager();
+  ObDiagnosisManager *diagnosis_manager = exec_ctx.get_or_create_diagnosis_manager();
   const ObSQLSessionInfo *session = nullptr;
-  if (OB_ISNULL(session = ctx_.get_my_session()) || OB_ISNULL(output_)) {
+  if (OB_ISNULL(diagnosis_manager)) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to create diagnosis manager", K(ret));
+  } else if (OB_ISNULL(session = ctx_.get_my_session()) || OB_ISNULL(output_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session or output is null", K(ret), K(session), K(output_));
   } else if (output_->get_type() != DAS_ITER_MERGE) {
@@ -3702,10 +3707,10 @@ int ObTableScanOp::do_diagnosis(ObExecContext &exec_ctx, ObBitVector &skip)
     LOG_WARN("unexpected iter type", K(ret), K(output_->get_type()));
   } else {
     ObDASMergeIter *das_merge_iter = static_cast<ObDASMergeIter *>(output_);
-    if (OB_FAIL(das_merge_iter->get_cur_diagnosis_info(&diagnosis_manager))) {
+    if (OB_FAIL(das_merge_iter->get_cur_diagnosis_info(diagnosis_manager))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("fail to get diagnosis info", K(ret));
-    } else if (OB_FAIL(diagnosis_manager.do_diagnosis(skip, session->get_diagnosis_info(),
+    } else if (OB_FAIL(diagnosis_manager->do_diagnosis(skip, session->get_diagnosis_info(),
                                                     ctx_.get_px_sqc_id(), ctx_.get_px_task_id(),
                                                     ctx_.get_allocator()))){
       LOG_WARN("fail to do diagnosis", K(ret));

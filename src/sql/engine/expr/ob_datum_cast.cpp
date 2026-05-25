@@ -3747,8 +3747,12 @@ int cast_eval_arg_batch(const ObExpr &expr,
         LOG_WARN("fail to eval one row", K(ret), K(i));
       }
       if (OB_FAIL(ret) && ctx.exec_ctx_.get_my_session()->is_diagnosis_enabled()) {
-        // overwrite ret on diagnosis node
-        if (OB_FAIL(ctx.exec_ctx_.get_diagnosis_manager().add_warning_info(ret, i))) {
+        ObDiagnosisManager *dm = ctx.exec_ctx_.get_or_create_diagnosis_manager();
+        if (OB_ISNULL(dm)) {
+          //ignore ret
+          LOG_WARN("failed to create diagnosis manager", K(ret), K(i));
+        } else if (OB_FAIL(dm->add_warning_info(ret, i))) {
+          //overwrite ret
           LOG_WARN("failed to add warning info", K(ret), K(i));
         } else {
           // set null to avoid accessing invalid data before setting skip

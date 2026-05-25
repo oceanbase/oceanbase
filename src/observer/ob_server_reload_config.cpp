@@ -27,6 +27,7 @@
 #include "storage/shared_storage/ob_disk_space_manager.h"
 #endif
 #include "lib/stat/ob_diagnostic_info_container.h"
+#include "share/rpc/ob_batch_proxy.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -127,6 +128,7 @@ int ObServerReloadConfig::operator()()
     }
     ObDiagnosticInfoContainer::get_di_experimental_feature_flag().set_flags(
         GCONF._enable_di_experimental_feature_flags);
+    oceanbase::obrpc::refresh_batch_rpc_delay_us_cache();
   }
   {
 #ifdef OB_BUILD_SHARED_STORAGE

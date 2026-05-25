@@ -13,6 +13,8 @@
 #include "ob_batch_processor.h"
 #include "sql/ob_sql.h"
 #include "sql/ob_sql_task.h"
+#include "sql/das/ob_das_rpc_processor.h"
+#include "sql/das/ob_data_access_service.h"
 #include "observer/omt/ob_tenant.h"
 #include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "logservice/ob_log_service.h"
@@ -42,6 +44,7 @@ int ObBatchP::process()
     int64_t clog_batch_cnt = 0;
     int64_t trx_batch_cnt = 0;
     int64_t sql_batch_cnt = 0;
+    int64_t das_batch_cnt = 0;
     int64_t lock_wait_mgr_batch_cnt = 0;
     while(NULL != (req = arg_.next(req_pos))) {
       // rewrite ret
@@ -90,11 +93,20 @@ int ObBatchP::process()
             sql_batch_cnt++;
             handle_sql_req(sender, msg_type, buf + pos, req->size_ - (int32_t)pos);
             break;
+          case LOOKUP_DAS_BATCH_REQ1:
+            // go through
+          case LOOKUP_DAS_BATCH_REQ2:
+            das_batch_cnt++;
+            handle_das_req(msg_type, buf + pos, req->size_ - (int32_t)pos);
+            break;
           case LOCK_WAIT_MGR_REQ:
             lock_wait_mgr_batch_cnt++;
             handle_lock_wait_mgr_req(msg_type, buf + pos, req->size_ - (int32_t)pos);
             break;
-
+          case INVALID_BATCH_REQ:
+            RPC_LOG(INFO, "skip ghost batch entry from sender fill_buffer failure",
+                K(sender), K(src_cluster_id), K(req->size_), K(req_pos), K(arg_.size_));
+            break;
           default:
             RPC_LOG(ERROR, "unknown batch req type", K(req->type_));
             break;
@@ -107,7 +119,8 @@ int ObBatchP::process()
     }
     if (REACH_TIME_INTERVAL(3000000)) {
       RPC_LOG(INFO, "batch rpc statistics",
-          K(clog_batch_nodelay_cnt), K(clog_batch_cnt), K(trx_batch_cnt), K(sql_batch_cnt), K(lock_wait_mgr_batch_cnt));
+          K(clog_batch_nodelay_cnt), K(clog_batch_cnt), K(trx_batch_cnt), K(sql_batch_cnt),
+          K(das_batch_cnt), K(lock_wait_mgr_batch_cnt));
     }
   }
   return ret;
@@ -172,6 +185,67 @@ int ObBatchP::handle_sql_req(common::ObAddr& sender, int type, const char* buf, 
         task = NULL;
       }
     }
+  }
+  return ret;
+}
+
+int ObBatchP::handle_das_req(int type, const char* buf, int32_t size)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tenant_id = OB_INVALID_TENANT_ID;
+  int64_t request_id = OB_INVALID_ID;
+  switch (type) {
+    case OB_SQL_LOOKUP_DAS_TASK_TYPE: {
+      sql::ObDASTaskResp task_resp;
+      common::ObAddr ctrl_svr;
+      if (OB_FAIL(sql::execute_lookup_batch_task(buf, size, tenant_id, request_id, task_resp, ctrl_svr))) {
+        RPC_LOG(WARN, "execute lookup batch task failed", K(ret), K(type), K(size));
+      }
+      break;
+    }
+    case OB_SQL_LOOKUP_DAS_RESULT_TYPE: {
+      sql::ObDataAccessService *das = MTL(sql::ObDataAccessService *);
+      sql::ObRpcDasAsyncAccessCallBack *async_cb = nullptr;
+      int64_t pos = 0;
+      bool need_fail_cb = false;
+      if (OB_ISNULL(das)) {
+        ret = OB_ERR_UNEXPECTED;
+        RPC_LOG(WARN, "das is null", K(ret));
+      } else if (OB_FAIL(serialization::decode(buf, size, pos, tenant_id))) {
+        RPC_LOG(WARN, "decode lookup batch tenant id failed", K(ret), K(size), K(pos));
+      } else if (OB_FAIL(serialization::decode(buf, size, pos, request_id))) {
+        RPC_LOG(WARN, "decode lookup batch request id failed", K(ret), K(size), K(pos), K(tenant_id));
+      } else if (OB_FAIL(das->fetch_and_erase_das_batch_request(request_id, async_cb))) {
+        RPC_LOG(WARN, "fetch and erase das batch request failed",
+                K(ret), K(request_id), K(tenant_id), K(size), K(pos));
+      } else if (OB_ISNULL(async_cb)) {
+        ret = OB_ERR_UNEXPECTED;
+        RPC_LOG(WARN, "lookup batch callback is null",
+                K(ret), K(request_id), K(tenant_id), K(size), K(pos));
+      } else {
+        need_fail_cb = true;
+        int64_t real_request_id = OB_INVALID_ID;
+        if (OB_FAIL(async_cb->decode_lookup_batch_result(buf, size, real_request_id))) {
+          RPC_LOG(WARN, "decode lookup batch result failed", K(ret), K(real_request_id),
+                  K(request_id), K(tenant_id), K(size), K(pos));
+        } else if (request_id != real_request_id) {
+          ret = OB_ERR_UNEXPECTED;
+          RPC_LOG(WARN, "lookup batch request id mismatch", K(ret), K(request_id),
+                  K(real_request_id), K(tenant_id), K(size), K(pos));
+        } else {
+          async_cb->complete_lookup_batch_result();
+          need_fail_cb = false;
+        }
+        if (need_fail_cb) {
+          async_cb->fail_lookup_batch_result(ret);
+        }
+      }
+      break;
+    }
+    default:
+      ret = OB_ERR_UNEXPECTED;
+      RPC_LOG(WARN, "unknown das batch req type", K(ret), K(type), K(size));
+      break;
   }
   return ret;
 }

@@ -4177,7 +4177,13 @@ int ObSql::code_generate(
       phy_hint.query_timeout_ *= 10;
     } else {}//do nothing
     ObSEArray<ObTablePartitionInfo *, 3> tbl_part_infos;
-    phy_plan->set_phy_plan_hint(phy_hint);//remember in phy_plan
+    if (OB_FAIL(logical_plan->get_optimizer_context().get_global_hint().opt_params_.get_integer_opt_param(
+            ObOptParamHint::LOOKUP_BATCH_RPC_FLAG,
+            phy_hint.lookup_batch_rpc_flag_))) {
+      LOG_WARN("failed to get lookup batch rpc flag", K(ret));
+    } else {
+      phy_plan->set_phy_plan_hint(phy_hint);//remember in phy_plan
+    }
     if (OB_FAIL(ret)) {
       // do nothing
     } else {

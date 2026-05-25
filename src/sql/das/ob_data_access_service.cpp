@@ -19,6 +19,7 @@
 #include "observer/omt/ob_multi_tenant.h"
 #include "lib/allocator/ob_sql_mem_leak_checker.h"
 #include "share/detect/ob_detect_manager_utils.h"
+#include "share/ob_cluster_version.h"
 
 namespace oceanbase
 {
@@ -29,14 +30,51 @@ using namespace transaction;
 using namespace observer;
 namespace sql
 {
+namespace
+{
+
+static const int64_t DAS_BATCH_REQ_MAP_BUCKET_NUM = 1024;
+static const int64_t DAS_BATCH_REQ_MAP_MIN_SHARD_COUNT = 2;
+static const int64_t DAS_BATCH_REQ_MAP_MAX_SHARD_COUNT = 16;
+
+int64_t calc_das_batch_req_map_shard_count()
+{
+  ObTenantBase *tenant = MTL_CTX();
+  const int64_t unit_min_cpu =
+      (tenant != NULL && tenant->unit_min_cpu() > 0) ? tenant->unit_min_cpu() : 1;
+  int64_t shard_count = next_pow2(unit_min_cpu / 8);
+  if (shard_count < DAS_BATCH_REQ_MAP_MIN_SHARD_COUNT) {
+    shard_count = DAS_BATCH_REQ_MAP_MIN_SHARD_COUNT;
+  } else if (shard_count > DAS_BATCH_REQ_MAP_MAX_SHARD_COUNT) {
+    shard_count = DAS_BATCH_REQ_MAP_MAX_SHARD_COUNT;
+  }
+  return shard_count;
+}
+
+}
 
 ObDataAccessService::ObDataAccessService()
   : das_rpc_proxy_(),
     ctrl_addr_(),
     id_cache_(),
     task_result_mgr_(),
+    das_batch_req_maps_(nullptr),
+    das_batch_req_map_shard_count_(0),
+    next_lookup_batch_request_id_(0),
     das_concurrency_limit_(INT32_MAX)
 {
+}
+
+ObDataAccessService::~ObDataAccessService()
+{
+  if (OB_NOT_NULL(das_batch_req_maps_)) {
+    for (int64_t i = 0; i < das_batch_req_map_shard_count_; ++i) {
+      das_batch_req_maps_[i].~DasBatchReqMap();
+    }
+    ob_free_align(das_batch_req_maps_);
+    das_batch_req_maps_ = nullptr;
+    das_batch_req_map_shard_count_ = 0;
+  }
 }
 
 ObDataAccessService &ObDataAccessService::get_instance()
@@ -75,8 +113,263 @@ int ObDataAccessService::init(rpc::frame::ObReqTransport *transport, const ObAdd
     LOG_WARN("init das rpc proxy failed", K(ret));
   } else if (OB_FAIL(task_result_mgr_.init())) {
     LOG_WARN("init das task result manager failed", KR(ret));
-  } else {
+  }
+  if (OB_SUCC(ret)) {
+    const int64_t shard_count = calc_das_batch_req_map_shard_count();
+    const ObMemAttr attr(MTL_ID(), "DasBatchReq");
+    void *buf = ob_malloc_align(alignof(DasBatchReqMap),
+                                 sizeof(DasBatchReqMap) * shard_count, attr);
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("alloc das batch request map shards failed", K(ret), K(shard_count));
+    } else {
+      das_batch_req_maps_ = new (buf) DasBatchReqMap[shard_count];
+      das_batch_req_map_shard_count_ = shard_count;
+      for (int64_t i = 0; OB_SUCC(ret) && i < shard_count; ++i) {
+        if (OB_FAIL(das_batch_req_maps_[i].create(DAS_BATCH_REQ_MAP_BUCKET_NUM, attr))) {
+          LOG_WARN("init das batch request map shard failed", K(ret), K(i), K(shard_count));
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
     ctrl_addr_ = self_addr;
+    LOG_INFO("das batch request map inited", K(das_batch_req_map_shard_count_),
+             K(DAS_BATCH_REQ_MAP_BUCKET_NUM));
+  }
+  return ret;
+}
+
+bool ObDataAccessService::is_lookup_batch_task(const ObDasAggregatedTask &aggregated_tasks,
+                                               const ObDASTaskArg &task_arg) const
+{
+  bool bret = !task_arg.is_local_task() && aggregated_tasks.get_start_status() == DAS_AGG_TASK_UNSTART;
+  const common::ObSEArray<ObIDASTaskOp *, 2> &task_ops = task_arg.get_task_ops();
+  if (bret && task_ops.empty()) {
+    bret = false;
+  }
+  for (int64_t i = 0; bret && i < task_ops.count(); ++i) {
+    const ObIDASTaskOp *task_op = task_ops.at(i);
+    if (OB_ISNULL(task_op)) {
+      bret = false;
+    } else if ((DAS_OP_TABLE_SCAN != task_op->get_type() && DAS_OP_TABLE_BATCH_SCAN != task_op->get_type())
+               || !task_op->get_global_lookup_generated_task()) {
+      bret = false;
+    }
+  }
+  return bret;
+}
+
+int ObDataAccessService::register_das_batch_request(const int64_t request_id,
+                                                    ObRpcDasAsyncAccessCallBack *async_cb)
+{
+  int ret = OB_SUCCESS;
+  if (OB_INVALID_ID == request_id || OB_ISNULL(async_cb)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid das batch request", K(ret), K(request_id), KP(async_cb));
+  } else {
+    const int64_t shard_idx = request_id & (das_batch_req_map_shard_count_ - 1);
+    if (OB_FAIL(das_batch_req_maps_[shard_idx].set_refactored(request_id, async_cb))) {
+      LOG_WARN("register das batch request failed", K(ret), K(request_id), K(shard_idx));
+    }
+  }
+  return ret;
+}
+
+int ObDataAccessService::fetch_and_erase_das_batch_request(const int64_t request_id,
+                                                           ObRpcDasAsyncAccessCallBack *&async_cb)
+{
+  int ret = OB_SUCCESS;
+  async_cb = nullptr;
+  if (OB_INVALID_ID == request_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid request id", K(ret), K(request_id));
+  } else {
+    const int64_t shard_idx = request_id & (das_batch_req_map_shard_count_ - 1);
+    if (OB_FAIL(das_batch_req_maps_[shard_idx].erase_refactored(request_id, &async_cb))) {
+      LOG_WARN("fetch and erase das batch request failed", K(ret), K(request_id), K(shard_idx));
+    }
+  }
+  return ret;
+}
+
+int ObDataAccessService::peek_das_batch_request(const int64_t request_id,
+                                                 ObRpcDasAsyncAccessCallBack *&async_cb)
+{
+  int ret = OB_SUCCESS;
+  async_cb = nullptr;
+  if (OB_INVALID_ID == request_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid request id", K(ret), K(request_id));
+  } else {
+    const int64_t shard_idx = request_id & (das_batch_req_map_shard_count_ - 1);
+    if (OB_FAIL(das_batch_req_maps_[shard_idx].get_refactored(request_id, async_cb))) {
+      if (OB_HASH_NOT_EXIST != ret) {
+        LOG_WARN("peek das batch request failed", K(ret), K(request_id), K(shard_idx));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDataAccessService::erase_das_batch_request(const int64_t request_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_INVALID_ID == request_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid request id", K(ret), K(request_id));
+  } else {
+    const int64_t shard_idx = request_id & (das_batch_req_map_shard_count_ - 1);
+    if (OB_FAIL(das_batch_req_maps_[shard_idx].erase_refactored(request_id))) {
+      LOG_WARN("erase das batch request failed", K(ret), K(request_id), K(shard_idx));
+    }
+  }
+  return ret;
+}
+
+int ObDataAccessService::try_post_lookup_batch_task(ObDASRef &das_ref,
+                                                    ObDasAggregatedTask &aggregated_tasks,
+                                                    ObDASTaskArg &task_arg,
+                                                    int32_t group_id,
+                                                    bool &use_batch_rpc)
+{
+  UNUSED(group_id);
+  int ret = OB_SUCCESS;
+  use_batch_rpc = false;
+  ObSQLSessionInfo *session = das_ref.get_exec_ctx().get_my_session();
+  ObPhysicalPlanCtx *plan_ctx = das_ref.get_exec_ctx().get_physical_plan_ctx();
+  const ObPhysicalPlan *phy_plan = OB_NOT_NULL(plan_ctx) ? plan_ctx->get_phy_plan() : nullptr;
+  const int64_t lookup_batch_rpc_flag = OB_NOT_NULL(phy_plan)
+      ? phy_plan->get_phy_plan_hint().lookup_batch_rpc_flag_
+      : ObPhyPlanHint::LOOKUP_BATCH_RPC_FLAG_DEFAULT;
+  const uint64_t tenant_id = OB_NOT_NULL(session) ? session->get_rpc_tenant_id() : OB_INVALID_TENANT_ID;
+  bool effective_enable = false;
+  if (OB_ISNULL(session)) {
+    effective_enable = false;
+  } else if (ObPhyPlanHint::LOOKUP_BATCH_RPC_FLAG_DEFAULT == lookup_batch_rpc_flag) {
+    effective_enable = session->is_enable_global_index_lookup_batch_rpc();
+  } else {
+    effective_enable = (lookup_batch_rpc_flag & ObPhyPlanHint::LOOKUP_BATCH_RPC_ENABLE_BASIC) != 0;
+  }
+  if (!effective_enable) {
+    LOG_TRACE("lookup batch rpc disabled, fallback to normal das rpc",
+              K(tenant_id), K(lookup_batch_rpc_flag));
+  } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_2_2) {
+    LOG_TRACE("cluster version not ready for lookup batch rpc, fallback to normal das rpc",
+              K(tenant_id), "min_version", GET_MIN_CLUSTER_VERSION());
+  } else if (!is_lookup_batch_task(aggregated_tasks, task_arg)) {
+    LOG_TRACE("lookup batch rpc not eligible, fallback to normal das rpc", K(tenant_id), K(task_arg));
+  } else if (OB_ISNULL(GCTX.batch_rpc_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("batch rpc is null, fallback to normal das rpc", K(tenant_id));
+  } else if (OB_ISNULL(plan_ctx)) {
+    LOG_TRACE("plan ctx is null, fallback to normal das rpc", K(tenant_id));
+  } else {
+    const int64_t timeout_ts = plan_ctx->get_timeout_timestamp();
+    ObRpcDasAsyncAccessCallBack *das_async_cb = nullptr;
+    ObDASRemoteInfo remote_info;
+    common::ObSEArray<ObIDASTaskOp*, 2> &task_ops = task_arg.get_task_ops();
+    ObIDASTaskOp *task_op = nullptr;
+    ObIDASTaskResult *op_result = nullptr;
+    const ObIDASTaskOp *first_task_op = task_arg.get_task_op();
+    ObDASLookupBatchTask batch_task;
+    const int64_t request_id = gen_lookup_batch_request_id();
+    bool request_registered = false;
+    remote_info.exec_ctx_ = &das_ref.get_exec_ctx();
+    remote_info.frame_info_ = das_ref.get_expr_frame_info();
+    session->get_cur_sql_id(remote_info.sql_id_, sizeof(remote_info.sql_id_));
+    remote_info.user_id_ = session->get_user_id();
+    remote_info.session_id_ = session->get_server_sid();
+    remote_info.stmt_type_ = session->get_stmt_type();
+    if (OB_NOT_NULL(plan_ctx->get_phy_plan())) {
+      remote_info.plan_id_ = plan_ctx->get_phy_plan()->get_plan_id();
+      remote_info.plan_hash_ = plan_ctx->get_phy_plan()->get_plan_hash_value();
+      remote_info.need_subschema_ctx_ = plan_ctx->is_subschema_ctx_inited();
+    }
+    task_arg.set_remote_info(&remote_info);
+    ObDASRemoteInfo::get_remote_info() = &remote_info;
+    if (das_ref.is_parallel_submit()) {
+      if (OB_ISNULL(das_ref.get_das_parallel_ctx().get_tx_desc_bak())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null ptr of tx_desc", K(ret));
+      } else {
+        remote_info.trans_desc_ = das_ref.get_das_parallel_ctx().get_tx_desc_bak();
+      }
+    } else {
+      remote_info.trans_desc_ = session->get_tx_desc();
+    }
+    remote_info.need_tx_ = (remote_info.trans_desc_ != nullptr);
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(first_task_op) || OB_ISNULL(first_task_op->get_snapshot())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("lookup batch task snapshot is null", K(ret), KP(first_task_op));
+    } else if (OB_FAIL(remote_info.snapshot_.assign(*first_task_op->get_snapshot()))) {
+      LOG_WARN("assign snapshot fail", K(ret));
+    } else if (OB_FAIL(das_ref.allocate_async_das_cb(das_async_cb, task_ops, timeout_ts))) {
+      LOG_WARN("failed to allocate das async cb", K(ret));
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < task_ops.count(); i++) {
+      if (OB_ISNULL(task_op = task_ops.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("task op is null", KR(ret));
+      } else {
+        if (OB_UNLIKELY(ObDasTaskStatus::UNSTART != task_op->get_task_status())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("task status unexpected", K(ret), K(task_op->get_task_status()), KPC(task_op));
+        } else if (NULL != (op_result = task_op->get_op_result())) {
+          if (OB_FAIL(op_result->reuse())) {
+            LOG_WARN("reuse task result failed", K(ret));
+          }
+        } else if (OB_FAIL(das_ref.get_das_factory().create_das_task_result(task_op->get_type(), op_result))) {
+          LOG_WARN("failed to create das task result", K(ret));
+        } else if (OB_ISNULL(op_result)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to get op result", K(ret));
+        } else if (OB_FAIL(op_result->init(*task_op, das_async_cb->get_result_alloc()))) {
+          LOG_WARN("failed to init task result", K(ret));
+        } else {
+          task_op->set_op_result(op_result);
+        }
+        if (OB_SUCC(ret) && OB_FAIL(das_async_cb->get_op_results().push_back(op_result))) {
+          LOG_WARN("failed to add task result", K(ret));
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(collect_das_task_info(task_ops, remote_info))) {
+      LOG_WARN("collect das task info failed", K(ret));
+    } else if (OB_FAIL(register_das_batch_request(request_id, das_async_cb))) {
+      LOG_WARN("register das batch request failed", K(ret), K(request_id));
+    } else {
+      request_registered = true;
+      batch_task.init(tenant_id, request_id, task_arg);
+      das_async_cb->mark_lookup_batch_request(request_id);
+      das_ref.get_das_ref_count_ctx().inc_pending_batch_request();
+      if (OB_FAIL(GCTX.batch_rpc_->post(tenant_id,
+                                        task_arg.get_runner_svr(),
+                                        GCONF.cluster_id,
+                                        obrpc::LOOKUP_DAS_BATCH_REQ1,
+                                        obrpc::OB_SQL_LOOKUP_DAS_TASK_TYPE,
+                                        batch_task))) {
+        LOG_WARN("post lookup batch task failed", K(ret), K(request_id), K(tenant_id), K(task_arg));
+        das_ref.get_das_ref_count_ctx().dec_pending_batch_request();
+      } else {
+        use_batch_rpc = true;
+        LOG_TRACE("post lookup batch task success", K(request_id), K(tenant_id), "runner", task_arg.get_runner_svr(),
+                  "task_cnt", task_ops.count());
+      }
+    }
+    if (OB_FAIL(ret)) {
+      if (request_registered) {
+        (void)erase_das_batch_request(request_id);
+      }
+      if (nullptr != das_async_cb) {
+        das_ref.remove_async_das_cb(das_async_cb);
+      }
+      LOG_WARN("try post lookup batch task failed, fallback to normal das rpc",
+               K(ret), K(request_id), K(tenant_id), K(task_arg));
+      ret = OB_SUCCESS;
+    }
   }
   return ret;
 }
@@ -186,9 +479,14 @@ OB_NOINLINE int ObDataAccessService::execute_dist_das_task(
       LOG_WARN("do local das task failed", K(ret), K(task_arg));
     }
   } else {
+    bool use_lookup_batch_rpc = false;
     if (async) {
       if (OB_FAIL(das_ref.get_das_ref_count_ctx().acquire_task_execution_resource(timeout_ts))) {
         LOG_WARN("failed to acquire execution resource", K(ret));
+      } else if (OB_FAIL(try_post_lookup_batch_task(das_ref, task_ops, task_arg,
+                                                    THIS_WORKER.get_group_id(), use_lookup_batch_rpc))) {
+        // try-post swallows errors internally and falls back via use_lookup_batch_rpc = false
+      } else if (use_lookup_batch_rpc) {
       } else if (OB_FAIL(do_async_remote_das_task(das_ref, task_ops, task_arg, THIS_WORKER.get_group_id()))) {
         das_ref.get_das_ref_count_ctx().inc_concurrency_limit();
         LOG_WARN("do remote das task failed", K(ret));
@@ -461,7 +759,8 @@ int ObDataAccessService::do_async_remote_das_task(ObDASRef &das_ref,
     } else {
       if ((task_op->get_type() == DAS_OP_TABLE_BATCH_SCAN ||
            task_op->get_type() == DAS_OP_TABLE_SCAN) &&
-          remote_info.detectable_id_.is_invalid()) {
+          remote_info.detectable_id_.is_invalid() &&
+          !is_skip_detect_mgr_lookup_task(task_op)) {
         if (OB_FAIL(das_ref.get_detectable_id(remote_info.detectable_id_))) {
           LOG_WARN("get detectable id failed", K(ret));
         }
@@ -596,7 +895,8 @@ int ObDataAccessService::do_sync_remote_das_task(
       } else {
         if ((task_op->get_type() == DAS_OP_TABLE_BATCH_SCAN ||
              task_op->get_type() == DAS_OP_TABLE_SCAN) &&
-            remote_info.detectable_id_.is_invalid()) {
+            remote_info.detectable_id_.is_invalid() &&
+            !is_skip_detect_mgr_lookup_task(task_op)) {
           if (OB_FAIL(das_ref.get_detectable_id(remote_info.detectable_id_))) {
             LOG_WARN("get detectable id failed", K(ret));
           }

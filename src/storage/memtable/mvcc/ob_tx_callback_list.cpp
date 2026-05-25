@@ -348,6 +348,7 @@ int ObTxCallbackList::callback_(ObITxCallbackFunctor &functor,
       iter_end = true;
     } else {
       next = (is_reverse ? iter->get_prev() : iter->get_next());
+      __builtin_prefetch(next, 0, 1);
       iter_end = end_inclusive ? iter == end : next == end;
       if (OB_FAIL(functor(iter))) {
         // don't print log, print it in functor

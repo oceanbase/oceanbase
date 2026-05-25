@@ -104,16 +104,17 @@ void* ObFifoArena::alloc(int64_t adv_idx, Handle& handle, int64_t size)
 {
   int ret = OB_SUCCESS;
   void* ptr = NULL;
+  if (adv_idx < 0 || size < 0) {
+    COMMON_LOG(INFO, "invalid argument", K(adv_idx), K(size));
+    return NULL;
+  }
   int64_t rsize = size + sizeof(Page) + sizeof(Ref);
 
   CriticalGuard(get_qs());
   int64_t way_id = get_way_id();
   int64_t idx = get_idx(adv_idx, way_id);
   Page** paddr = cur_pages_ + idx;
-  if (adv_idx < 0 || size < 0) {
-    COMMON_LOG(INFO, "invalid argument", K(adv_idx), K(size));
-    ret = OB_INVALID_ARGUMENT;
-  } else if (rsize > PAGE_SIZE) {
+  if (rsize > PAGE_SIZE) {
     Page* page = NULL;
     if (NULL == (page = alloc_page(rsize))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -189,9 +190,10 @@ ObFifoArena::Page* ObFifoArena::alloc_page(int64_t size)
 {
   Page* page = (Page*)allocator_->alloc(size, attr_);
   if (NULL != page) {
-    ATOMIC_FAA(&allocated_, page->get_actual_hold_size());
-    ATOMIC_FAA(&total_hold_, page->get_actual_hold_size());
-    ATOMIC_AAF(&hold_, page->get_actual_hold_size());
+    const int64_t hold_size = page->get_actual_hold_size();
+    ATOMIC_FAA(&allocated_, hold_size);
+    ATOMIC_FAA(&total_hold_, hold_size);
+    ATOMIC_AAF(&hold_, hold_size);
     page->set(size);
   }
   return page;
@@ -200,9 +202,10 @@ ObFifoArena::Page* ObFifoArena::alloc_page(int64_t size)
 void ObFifoArena::free_page(Page* page)
 {
   if (NULL != page && NULL != allocator_) {
-    ATOMIC_FAA(&reclaimed_, page->get_actual_hold_size());
-    ATOMIC_FAA(&total_hold_, -page->get_actual_hold_size());
-    ATOMIC_FAA(&hold_, -page->get_actual_hold_size());
+    const int64_t hold_size = page->get_actual_hold_size();
+    ATOMIC_FAA(&reclaimed_, hold_size);
+    ATOMIC_FAA(&total_hold_, -hold_size);
+    ATOMIC_FAA(&hold_, -hold_size);
     allocator_->free(page);
   }
 }
@@ -218,9 +221,10 @@ void ObFifoArena::retire_page(int64_t idx, Handle& handle, Page* page)
 void ObFifoArena::destroy_page(Page* page)
 {
   if (NULL != page && NULL != allocator_) {
-    ATOMIC_FAA(&allocated_, -page->get_actual_hold_size());
-    ATOMIC_FAA(&total_hold_, -page->get_actual_hold_size());
-    ATOMIC_FAA(&hold_, -page->get_actual_hold_size());
+    const int64_t hold_size = page->get_actual_hold_size();
+    ATOMIC_FAA(&allocated_, -hold_size);
+    ATOMIC_FAA(&total_hold_, -hold_size);
+    ATOMIC_FAA(&hold_, -hold_size);
     allocator_->free(page);
   }
 }

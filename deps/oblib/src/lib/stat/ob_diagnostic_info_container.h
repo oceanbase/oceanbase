@@ -172,6 +172,11 @@ public:
   {
     return summarys_;
   }
+  int get_summary_slot(int64_t tenant_id, int64_t group_id, int64_t session_id,
+      ObDiagnosticInfoSlot *&slot)
+  {
+    return summarys_.get_di_slot(tenant_id, group_id, session_id, slot);
+  }
   int get_session_diag_info(int64_t session_id, ObDISessionCollect &diag_info);
   // only needed for global_di_container
   void purge_tenant_summary(int64_t tenant_id);

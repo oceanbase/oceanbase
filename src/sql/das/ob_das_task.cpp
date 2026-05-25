@@ -12,6 +12,9 @@
 
 #define USING_LOG_PREFIX SQL_DAS
 #include "ob_das_task.h"
+#include "lib/utility/ob_tracepoint.h"
+#include "lib/utility/utility.h"
+#include "sql/das/ob_das_scan_op.h"
 #include "sql/das/ob_das_rpc_processor.h"
 #include "sql/engine/px/ob_px_util.h"
 
@@ -37,6 +40,8 @@ using namespace common;
 using namespace transaction;
 namespace sql
 {
+ERRSIM_POINT_DEF(ERRSIM_LOOKUP_BATCH_FILL_BUFFER);
+
 OB_DEF_SERIALIZE(ObDASRemoteInfo)
 {
   int ret = OB_SUCCESS;
@@ -567,6 +572,18 @@ OB_DEF_SERIALIZE_SIZE(ObDASTaskArg)
   return len;
 }
 
+int64_t ObDASTaskArg::get_estimated_serialize_size() const
+{
+  int64_t len = 0;
+  if (task_ops_.count() != 0) {
+    len = META_SERIALIZE_SIZE_ESTIMATE;
+    for (int64_t i = 0; i < task_ops_.count(); i++) {
+      len += task_ops_.at(i)->get_write_buffer_mem_used();
+    }
+  }
+  return len;
+}
+
 int ObDASTaskArg::add_task_op(ObIDASTaskOp *task_op)
 {
   return task_ops_.push_back(task_op);
@@ -717,6 +734,135 @@ int ObDASTaskResp::add_op_result(ObIDASTaskResult *op_result)
 
 OB_SERIALIZE_MEMBER(ObIDASTaskResult, task_id_);
 
+
+ObDASLookupBatchTask::ObDASLookupBatchTask()
+  : tenant_id_(OB_INVALID_TENANT_ID),
+    request_id_(OB_INVALID_ID),
+    task_arg_(nullptr),
+    estimate_failed_(false)
+{
+}
+
+void ObDASLookupBatchTask::init(const uint64_t tenant_id,
+                                const int64_t request_id,
+                                const ObDASTaskArg &task_arg)
+{
+  tenant_id_ = tenant_id;
+  request_id_ = request_id;
+  task_arg_ = &task_arg;
+  estimate_failed_ = false;
+}
+
+int ObDASLookupBatchTask::fill_buffer(char *buf, int64_t size, int64_t &filled_size) const
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  int simulate_ret = OB_SUCCESS;
+  if (OB_ISNULL(task_arg_)) {
+    ret = OB_ERR_UNEXPECTED;
+  } else if (OB_FAIL(serialization::encode(buf, size, pos, tenant_id_))) {
+    LOG_WARN("encode tenant id failed", K(ret), K_(tenant_id));
+  } else if (OB_FAIL(serialization::encode(buf, size, pos, request_id_))) {
+    LOG_WARN("encode request id failed", K(ret), K_(request_id));
+  // Inject size errors only once so the retry can fall back to exact
+  // encoded_length() after estimate_failed_ is set.
+  } else if (OB_UNLIKELY(OB_SUCCESS != (simulate_ret = EVENT_CALL(ERRSIM_LOOKUP_BATCH_FILL_BUFFER)))
+             && ((OB_SIZE_OVERFLOW != simulate_ret && OB_BUF_NOT_ENOUGH != simulate_ret)
+                 || !estimate_failed_)) {
+    ret = simulate_ret;
+    if (OB_SIZE_OVERFLOW == ret || OB_BUF_NOT_ENOUGH == ret) {
+      estimate_failed_ = true;
+    }
+    LOG_WARN("simulate lookup batch fill buffer failed", K(ret), K_(tenant_id), K_(request_id));
+  } else if (OB_FAIL(serialization::encode(buf, size, pos, *task_arg_))) {
+    if (OB_SIZE_OVERFLOW == ret || OB_BUF_NOT_ENOUGH == ret) {
+      estimate_failed_ = true;
+    }
+    LOG_WARN("encode task arg failed", K(ret), KPC_(task_arg));
+  } else {
+    filled_size = pos;
+  }
+  return ret;
+}
+
+int64_t ObDASLookupBatchTask::get_req_size() const
+{
+  int64_t len = serialization::encoded_length(tenant_id_);
+  len += serialization::encoded_length(request_id_);
+  if (OB_NOT_NULL(task_arg_)) {
+    if (!estimate_failed_) {
+      int64_t estimate = task_arg_->get_estimated_serialize_size();
+      len += (estimate > 0) ? estimate : serialization::encoded_length(*task_arg_);
+    } else {
+      len += serialization::encoded_length(*task_arg_);
+    }
+  }
+  return len;
+}
+
+int ObDASLookupBatchTask::peek_request_id(const char *buf, int64_t size,
+                                          uint64_t &tenant_id, int64_t &request_id)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  tenant_id = OB_INVALID_TENANT_ID;
+  request_id = OB_INVALID_ID;
+  if (OB_ISNULL(buf) || size <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(serialization::decode(buf, size, pos, tenant_id))) {
+    LOG_WARN("peek tenant id failed", K(ret), K(size));
+  } else if (OB_FAIL(serialization::decode(buf, size, pos, request_id))) {
+    LOG_WARN("peek request id failed", K(ret), K(size), K(pos), K(tenant_id));
+  }
+  return ret;
+}
+
+ObDASLookupBatchResult::ObDASLookupBatchResult()
+  : tenant_id_(OB_INVALID_TENANT_ID),
+    request_id_(OB_INVALID_ID),
+    task_resp_(nullptr)
+{
+}
+
+void ObDASLookupBatchResult::init(const uint64_t tenant_id,
+                                  const int64_t request_id,
+                                  const ObDASTaskResp &task_resp)
+{
+  tenant_id_ = tenant_id;
+  request_id_ = request_id;
+  task_resp_ = &task_resp;
+}
+
+int ObDASLookupBatchResult::fill_buffer(char *buf, int64_t size, int64_t &filled_size) const
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  if (OB_ISNULL(task_resp_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("lookup batch task resp is null", K(ret), K_(tenant_id), K_(request_id));
+  } else if (OB_FAIL(serialization::encode(buf, size, pos, tenant_id_))) {
+    LOG_WARN("encode tenant id failed", K(ret), K_(tenant_id), K(size), K(pos));
+  } else if (OB_FAIL(serialization::encode(buf, size, pos, request_id_))) {
+    LOG_WARN("encode request id failed", K(ret), K_(request_id), K(size), K(pos));
+  } else if (OB_FAIL(task_resp_->serialize(buf, size, pos))) {
+    LOG_WARN("encode lookup batch task resp failed", K(ret), K(size), K(pos),
+             K_(tenant_id), K_(request_id));
+  } else {
+    filled_size = pos;
+  }
+  return ret;
+}
+
+int64_t ObDASLookupBatchResult::get_req_size() const
+{
+  int64_t len = serialization::encoded_length(tenant_id_);
+  len += serialization::encoded_length(request_id_);
+  if (OB_NOT_NULL(task_resp_)) {
+    len += task_resp_->get_serialize_size();
+  }
+  return len;
+}
+
 OB_SERIALIZE_MEMBER(ObDASDataFetchReq, tenant_id_, task_id_);
 
 int ObDASDataFetchReq::init(const uint64_t tenant_id, const int64_t task_id)
@@ -865,4 +1011,177 @@ int DASOpResultIter::reset_wild_datums_ptr()
 }
 
 }  // namespace sql
+namespace obrpc
+{
+  int rpc_encode_req(ObRpcProxy & proxy, uint64_t gtid, ObRpcPacketCode pcode,
+                     const ObDASTaskArg &args, const ObRpcOpts &opts,
+                     char *&req, int64_t &req_sz, bool unneed_resp,
+                     bool is_next = false, bool is_last = false,
+                     int64_t session_id = 0) {
+    ACTIVE_SESSION_FLAG_SETTER_GUARD(in_rpc_encode);
+    int ret = common::OB_SUCCESS;
+    ObRpcPacket pkt;
+    const int64_t header_sz = pkt.get_header_size();
+    int64_t extra_payload_size = calc_extra_payload_size();
+    int64_t args_len = 0;
+    int64_t payload_sz = 0;
+    char *header_buf = NULL;
+    char *payload_buf = NULL;
+    int64_t pos = 0;
+    bool fast_path_ok = false;
+    UNIS_VERSION_GUARD(opts.unis_version_);
+
+    // Fast path: try with fixed buffer size, skip encoded_length
+    int64_t estimated_serialize_size = args.get_estimated_serialize_size();
+    if (estimated_serialize_size < 16000) {
+      // only small serialize_size can reach the fast path
+      payload_sz = estimated_serialize_size;
+      header_buf = (char *)pn_send_alloc(gtid, header_sz + payload_sz);
+      if (NULL != header_buf) {
+        payload_buf = header_buf + header_sz;
+        int64_t encode_limit = payload_sz - extra_payload_size;
+        ret =
+            common::serialization::encode(payload_buf, encode_limit, pos, args);
+        if (OB_SUCC(ret)) {
+          args_len = pos;
+          payload_sz = pos + extra_payload_size;
+          fast_path_ok = true;
+        } else if (common::OB_SIZE_OVERFLOW == ret || OB_BUF_NOT_ENOUGH == ret) {
+          RPC_OBRPC_LOG(WARN, "rpc encode req fast path failed, fallback to slow path",
+              K(estimated_serialize_size), K(extra_payload_size));
+          pn_send_free(header_buf);
+          header_buf = NULL;
+          payload_buf = NULL;
+          ret = common::OB_SUCCESS;
+        }
+      }
+    }
+
+    // Slow path: fallback to original logic with encoded_length
+    if (OB_SUCC(ret) && !fast_path_ok) {
+#ifdef ENABLE_SERIALIZATION_CHECK
+      lib::begin_record_serialization();
+      args_len = common::serialization::encoded_length(args);
+      lib::finish_record_serialization();
+#else
+      args_len = common::serialization::encoded_length(args);
+#endif
+      payload_sz = extra_payload_size + args_len;
+      if (payload_sz > get_max_rpc_packet_size()) {
+        ret = common::OB_RPC_PACKET_TOO_LONG;
+        RPC_OBRPC_LOG(ERROR, "obrpc packet payload execced its limit",
+                      K(payload_sz), "limit", get_max_rpc_packet_size(),
+                      K(ret));
+      } else {
+        header_buf = (char *)pn_send_alloc(gtid, header_sz + payload_sz);
+        payload_buf = header_buf + header_sz;
+      }
+      pos = 0;
+      if (OB_FAIL(ret)) {
+        // OB_RPC_PACKET_TOO_LONG
+      } else if (NULL == header_buf) {
+        ret = common::OB_ALLOCATE_MEMORY_FAILED;
+        RPC_OBRPC_LOG(WARN, "alloc buffer fail", K(payload_sz));
+      } else if (OB_FAIL(common::serialization::encode(payload_buf, payload_sz,
+                                                       pos, args))) {
+        RPC_OBRPC_LOG(WARN, "serialize argument fail", K(pos), K(payload_sz),
+                      K(ret));
+      } else if (OB_UNLIKELY(args_len < pos)) {
+#ifdef ENABLE_SERIALIZATION_CHECK
+        lib::begin_check_serialization();
+        common::serialization::encoded_length(args);
+        lib::finish_check_serialization();
+#endif
+        ret = OB_ERR_UNEXPECTED;
+        RPC_OBRPC_LOG(ERROR, "arg encoded length greater than arg length",
+                      K(ret), K(payload_sz), K(args_len), K(extra_payload_size),
+                      K(pos), K(pcode));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(fill_extra_payload(pkt, payload_buf, payload_sz, pos))) {
+      RPC_OBRPC_LOG(WARN, "fill extra payload fail", K(ret), K(pos),
+                    K(payload_sz), K(args_len), K(extra_payload_size),
+                    K(pcode));
+    } else {
+      const common::ObCompressorType &compressor_type =
+          get_proxy_compressor_type(proxy);
+      bool need_compressed =
+          common::ObCompressorPool::get_instance().need_common_compress(
+              compressor_type);
+      if (need_compressed) {
+        // compress
+        EVENT_INC(RPC_COMPRESS_ORIGINAL_PACKET_CNT);
+        EVENT_ADD(RPC_COMPRESS_ORIGINAL_SIZE, payload_sz);
+        int tmp_ret = OB_SUCCESS;
+        common::ObCompressor *compressor = NULL;
+        char *compressed_buf = NULL;
+        int64_t dst_data_size = 0;
+        int64_t max_overflow_size = 0;
+        if (OB_FAIL(common::ObCompressorPool::get_instance().get_compressor(
+                compressor_type, compressor))) {
+          RPC_OBRPC_LOG(WARN, "get_compressor failed", K(ret),
+                        K(compressor_type));
+        } else if (OB_FAIL(compressor->get_max_overflow_size(
+                       payload_sz, max_overflow_size))) {
+          RPC_OBRPC_LOG(WARN, "get_max_overflow_size failed", K(ret),
+                        K(payload_sz), K(max_overflow_size));
+        } else if (NULL ==
+                   (compressed_buf = static_cast<char *>(common::ob_malloc(
+                        payload_sz + max_overflow_size,
+                        common::ObModIds::OB_RPC_PROCESSOR)))) {
+          ret = common::OB_ALLOCATE_MEMORY_FAILED;
+          RPC_OBRPC_LOG(WARN, "Allocate memory failed", K(ret));
+        } else if (OB_SUCCESS !=
+                   (tmp_ret = compressor->compress(
+                        payload_buf, payload_sz, compressed_buf,
+                        payload_sz + max_overflow_size, dst_data_size))) {
+          RPC_OBRPC_LOG(WARN, "compress failed", K(tmp_ret));
+        } else if (dst_data_size >= payload_sz) {
+        } else {
+          RPC_OBRPC_LOG(DEBUG, "compress request success", K(compressor_type),
+                        K(dst_data_size), K(payload_sz));
+          // replace buf
+          pkt.set_compressor_type(compressor_type);
+          pkt.set_original_len(static_cast<int32_t>(payload_sz));
+          memcpy(payload_buf, compressed_buf, dst_data_size);
+          payload_sz = dst_data_size;
+          EVENT_INC(RPC_COMPRESS_COMPRESSED_PACKET_CNT);
+          EVENT_ADD(RPC_COMPRESS_COMPRESSED_SIZE, dst_data_size);
+        }
+        if (NULL != compressed_buf) {
+          ob_free(compressed_buf);
+          compressed_buf = NULL;
+        }
+      }
+      int64_t header_pos = 0;
+      pkt.set_content(payload_buf, payload_sz);
+      if (OB_FAIL(init_packet(proxy, pkt, pcode, opts, unneed_resp))) {
+        RPC_OBRPC_LOG(WARN, "init packet fail", K(ret));
+      } else {
+        if (is_next) {
+          pkt.set_stream_next();
+        }
+        if (is_last) {
+          pkt.set_stream_last();
+        }
+        if (session_id) {
+          pkt.set_session_id(session_id);
+        }
+        if (OB_FAIL(pkt.encode_header(header_buf, header_sz, header_pos))) {
+          RPC_OBRPC_LOG(WARN, "encode header fail", K(ret));
+        } else {
+          req = header_buf;
+          req_sz = header_sz + payload_sz;
+        }
+      }
+    }
+    if (OB_FAIL(ret) && NULL != header_buf) {
+      pn_send_free(header_buf);
+    }
+    return ret;
+  }
+
+} // namespace obrpc
 }  // namespace oceanbase

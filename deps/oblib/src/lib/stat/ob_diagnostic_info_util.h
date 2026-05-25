@@ -28,6 +28,8 @@ extern int64_t get_mtl_id();
 extern ObDiagnosticInfoContainer *get_di_container();
 extern uint64_t lib_get_cpu_khz();
 extern void lib_mtl_switch(int64_t tenant_id, std::function<void(int)> fn);
+extern int lib_mtl_get_summary_slot(int64_t tenant_id, int64_t group_id,
+    int64_t session_id, ObDiagnosticInfoSlot *&slot);
 extern int64_t lib_mtl_cpu_count();
 extern bool lib_enable_diagnostic_info_cache();
 extern share::ObActiveSessHistList* lib_get_ash_list_instance();

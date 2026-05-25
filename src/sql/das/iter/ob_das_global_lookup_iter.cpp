@@ -120,6 +120,7 @@ int ObDASGlobalLookupIter::add_rowkey()
       LOG_WARN("failed to get tablet loc by tablet_id", K(ret));
     } else if (OB_FAIL(merge_iter->create_das_task(tablet_loc, das_scan_op, reuse_das_op))) {
       LOG_WARN("failed to create das task", K(ret));
+    } else if (FALSE_IT(das_scan_op->set_global_lookup_generated_task(true))) {
     } else if (!reuse_das_op) {
       das_scan_op->set_scan_ctdef(lookup_ctdef_);
       das_scan_op->set_scan_rtdef(lookup_rtdef_);

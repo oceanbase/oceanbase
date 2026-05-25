@@ -1062,11 +1062,27 @@ int ObStaticEngineCG::generate_spec_final(ObLogicalOperator &op, ObOpSpec &spec)
     ObDASScanCtDef *lookup_ctdef = tsc_spec.tsc_ctdef_.lookup_ctdef_;
     if (OB_FAIL(scan_ctdef.pd_expr_spec_.set_calc_exprs(spec.calc_exprs_, tsc_spec.max_batch_size_))) {
       LOG_WARN("assign all pushdown exprs failed", K(ret));
-    } else if (lookup_ctdef != nullptr &&
-        OB_FAIL(lookup_ctdef->pd_expr_spec_.set_calc_exprs(spec.calc_exprs_, tsc_spec.max_batch_size_))) {
-      LOG_WARN("assign all pushdown exprs failed", K(ret));
     } else if (OB_FAIL(tsc_spec.tsc_ctdef_.attach_spec_.set_calc_exprs(spec.calc_exprs_, tsc_spec.max_batch_size_))) {
       LOG_WARN("set max batch size to attach spec failed", K(ret));
+    } else if (lookup_ctdef != nullptr) {
+      ObSEArray<ObExpr*, 8> lookup_calc_exprs;
+      if (OB_FAIL(lookup_calc_exprs.reserve(spec.calc_exprs_.count()))) {
+        LOG_WARN("failed to init lookup calc exprs", K(ret));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < spec.calc_exprs_.count(); ++i) {
+          ObExpr *expr = spec.calc_exprs_.at(i);
+          if (tsc_spec.is_index_global_ && OB_NOT_NULL(expr) && T_FUN_SYS_CALC_PARTITION_TABLET_ID == expr->type_) {
+            // do nothing
+          } else if (OB_FAIL(lookup_calc_exprs.push_back(expr))) {
+            LOG_WARN("failed to push back lookup calc expr", K(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(lookup_ctdef->pd_expr_spec_.set_calc_exprs(lookup_calc_exprs, tsc_spec.max_batch_size_))) {
+          LOG_WARN("failed to set lookup calc exprs", K(ret));
+        }
+      }
     }
   }
 

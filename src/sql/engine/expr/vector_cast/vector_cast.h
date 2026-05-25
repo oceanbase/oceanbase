@@ -291,7 +291,8 @@ struct VectorCasterUtil
   ObScale out_scale = expr.datum_meta_.scale_;                                              \
   ObPrecision out_prec = expr.datum_meta_.precision_;                                       \
   bool is_diagnosis = ctx.exec_ctx_.get_my_session()->is_diagnosis_enabled();             \
-  ObDiagnosisManager& diagnosis_manager = ctx.exec_ctx_.get_diagnosis_manager();            \
+  ObDiagnosisManager *diagnosis_manager = is_diagnosis ?                                   \
+      ctx.exec_ctx_.get_or_create_diagnosis_manager() : nullptr;                           \
   if (eval_flags.accumulate_bit_cnt(bound) == bound.range_size()) {                         \
   } else
 
