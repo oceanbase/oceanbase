@@ -23,7 +23,6 @@
   https://github.com/mcmilk/zstdmt
   http://www.xxhash.com
   http://www.example.com*
-  https://example.com/*
 
 
 
@@ -458,6 +457,7 @@
 /tools/codestyle/**
 /src/objit/deps/googletest/**
 /.git/**
+/test/ci/**
 /deps/oblib/src/lib/compress/**
 --------------------------------------------------------
 # Config the ignored fold to escape the Chinese scan by GLOB wildcard
