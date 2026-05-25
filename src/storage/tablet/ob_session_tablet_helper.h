@@ -123,14 +123,21 @@ public:
 class ObSessionTabletDeleteHelper final
 {
 public:
+  /// @param[in] schema_version: When not @c common::OB_INVALID_VERSION, @c do_work_for_gc obtains
+  ///                            the tenant @c ObSchemaGetterGuard at this schema revision via
+  ///                            @c ObMultiVersionSchemaService::get_tenant_schema_guard (GC path).
+  ///                            @c common::OB_INVALID_VERSION keeps the default (unpinned) resolution
+  ///                            for callers that do not need an explicit snapshot.
   ObSessionTabletDeleteHelper(
     const uint64_t tenant_id,
     ObIArray<storage::ObSessionTabletInfo *> &tablet_infos,
-    common::ObMySQLTransaction &trans)
+    common::ObMySQLTransaction &trans,
+    const int64_t schema_version = common::OB_INVALID_VERSION)
     : tenant_id_(tenant_id),
       tablet_infos_(tablet_infos),
       trans_(&trans),
       allocator_("SessTabDelH"),
+      schema_version_(schema_version),
       timeout_us_(MIN(THIS_WORKER.get_timeout_remain(), 10000000/* us */))
   {}
   ~ObSessionTabletDeleteHelper() = default;
@@ -207,6 +214,7 @@ private:
   ObIArray<storage::ObSessionTabletInfo *> &tablet_infos_;
   common::ObMySQLTransaction *trans_;
   common::ObArenaAllocator allocator_;
+  int64_t schema_version_;
   int64_t timeout_us_;
 };
 
@@ -267,6 +275,11 @@ private:
   static int group_by_session_and_seq(
     const ObIArray<storage::ObSessionTabletInfo *> &session_tablet_infos_for_delete,
     ObIArray<common::ObSEArray<storage::ObSessionTabletInfo *, TABLET_GROUP_SIZE>> &session_tablet_infos_for_delete_grouped/* out */);
+
+private:
+  int refresh_tenant_schema_if_need(int64_t &latest_schema_version);
+
+private:
   uint64_t tenant_id_;
 };
 
