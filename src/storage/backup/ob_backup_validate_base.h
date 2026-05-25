@@ -101,7 +101,7 @@ public:
   int set_tablet_array(const common::ObIArray<common::ObTabletID> &tablet_array);
   int get_tablet_id(const int64_t task_id, common::ObTabletID &tablet_id);
   int add_archive_piece_lsn_range(const ObBackupArchivePieceLSNRange &lsn_range);
-  int get_archive_piece_lsn_range(const int64_t group_id, ObBackupArchivePieceLSNRange* &lsn_range, bool &is_last_task);
+  int get_archive_piece_lsn_range(const int64_t group_id, ObBackupArchivePieceLSNRange* &lsn_range);
   int set_validate_result(
       const int result,
       const char *error_msg,

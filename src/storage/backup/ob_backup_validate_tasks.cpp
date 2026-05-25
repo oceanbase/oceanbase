@@ -598,20 +598,22 @@ int ObBackupValidatePrepareTask::prepare_archive_piece_physical_validate_()
       } else if (min_lsn < max_lsn) {
         ObBackupArchivePieceLSNRange range;
         int64_t group_id = 0;
-        palf::LSN end_lsn = min_lsn;
-        while (OB_SUCC(ret) && end_lsn < max_lsn) {
+        palf::LSN start_lsn = min_lsn;
+        const int64_t file_size = archive::MAX_ARCHIVE_FILE_SIZE;
+        while (OB_SUCC(ret) && start_lsn < max_lsn) {
           range.reset();
-          range.start_lsn_ = end_lsn;
-          end_lsn = end_lsn + palf::PALF_BLOCK_SIZE;
+          palf::LSN end_lsn((start_lsn.val_ / file_size + 1) * file_size);
           if (end_lsn > max_lsn) {
             end_lsn = max_lsn;
           }
-          range.group_id_ = group_id;
+          range.start_lsn_ = start_lsn;
           range.end_lsn_ = end_lsn;
+          range.group_id_ = group_id;
           if (OB_FAIL(ctx_->add_archive_piece_lsn_range(range))) {
             LOG_WARN("failed to push back lsn range", KR(ret), K(range));
           } else {
             group_id++;
+            start_lsn = end_lsn;
           }
         }
         if (FAILEDx(set_task_id_())) {
@@ -2254,7 +2256,6 @@ int ObBackupValidateArchivePiecePhysicalTask::GetSourceFunctor::operator()(
 ObBackupValidateArchivePiecePhysicalTask::ObBackupValidateArchivePiecePhysicalTask()
   : ObITask(ObITaskType::TASK_TYPE_BACKUP_VALIDATE_ARCHIVE_PIECE_PHYSICAL),
     is_inited_(false),
-    is_last_task_(false),
     param_(),
     report_ctx_(),
     storage_info_(),
@@ -2298,7 +2299,7 @@ int ObBackupValidateArchivePiecePhysicalTask::init(
     } else if (OB_ISNULL(ctx_ = static_cast<ObBackupValidateArchivePiecePhysicalDag*>(dag)->get_task_context())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ctx is null", KR(ret));
-    } else if (OB_FAIL(ctx_->get_archive_piece_lsn_range(lsn_group_id, lsn_range_, is_last_task_))) {
+    } else if (OB_FAIL(ctx_->get_archive_piece_lsn_range(lsn_group_id, lsn_range_))) {
       LOG_WARN("failed to get archive piece lsn range", KR(ret), K(lsn_group_id), KPC(ctx_));
     } else if (OB_ISNULL(lsn_range_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -2430,12 +2431,6 @@ int ObBackupValidateArchivePiecePhysicalTask::do_validate_ls_range_()
           } else {
             validated_log_bytes_ += buf_len;
           }
-        }
-        if (OB_FAIL(ret) || !is_last_task_) {
-        } else if (FALSE_IT(archive_scn = entry.get_scn())) {
-        } else if (archive_scn < checkpoint_scn) {
-          ret = OB_LS_ARCHIVE_MAX_SCN_LESS_THAN_CHECKPOINT;
-          LOG_WARN("max archive log scn is less than checkpoint scn", KR(ret), K(archive_scn), K(checkpoint_scn));
         }
       }
       iter.reset();

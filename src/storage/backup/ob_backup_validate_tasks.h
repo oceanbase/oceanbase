@@ -180,7 +180,6 @@ private:
 
 protected:
   bool is_inited_;
-  bool is_last_task_;
   ObBackupValidateDagNetInitParam param_;
   backup::ObBackupReportCtx report_ctx_;
   share::ObBackupStorageInfo storage_info_;

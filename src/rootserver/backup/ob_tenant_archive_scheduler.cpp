@@ -154,36 +154,29 @@ static int add_ls_meta_recorder_file_file_list(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(single_ls_desc), K(store));
   } else {
-    bool is_exist = false;
-    if (OB_FAIL(store.is_file_list_file_exist(shema_meta_dir, ObBackupFileSuffix::ARCHIVE, is_exist))) {
-      LOG_WARN("failed to check file list file exist", KR(ret), K(shema_meta_dir));
-    } else if (is_exist) {
-      //do nothing
-    } else {
-      ObBackupPath file_path;
-      const ObBackupDest &dest = store.get_backup_dest();
-      ObBackupFileListInfo file_list_info;
-      const ObBackupStorageInfo *storage_info = store.get_storage_info();
-      const int64_t dest_id = storage_info->get_dest_id();
-      ObBackupPath file_list_path;
-      share::ObArchiveLSMetaType meta_type(share::ObArchiveLSMetaType::Type::SCHEMA_META);
-      for (int64_t i = 0; OB_SUCC(ret) && i < array.count(); i++) {
-        const int64_t file_id = array.at(i);
-        file_path.reset();
-        if (OB_FAIL(share::ObArchivePathUtil::get_ls_meta_record_path(dest, single_ls_desc.dest_id_,
-                                                  single_ls_desc.round_id_, single_ls_desc.piece_id_,
-                                                  single_ls_desc.ls_id_, meta_type, file_id, file_path))) {
-          LOG_WARN("failed to get ls meta record path", KR(ret), K(dest), K(single_ls_desc), K(file_id));
-        } else if (OB_FAIL(ObBackupFileListWriterUtil::add_file_to_file_list_info(file_path,
-                                                                                      *storage_info, file_list_info))) {
-          LOG_WARN("failed to push file info", KR(ret), K(file_path), KP(storage_info));
-        }
+    ObBackupPath file_path;
+    const ObBackupDest &dest = store.get_backup_dest();
+    ObBackupFileListInfo file_list_info;
+    const ObBackupStorageInfo *storage_info = store.get_storage_info();
+    const int64_t dest_id = storage_info->get_dest_id();
+    ObBackupPath file_list_path;
+    share::ObArchiveLSMetaType meta_type(share::ObArchiveLSMetaType::Type::SCHEMA_META);
+    for (int64_t i = 0; OB_SUCC(ret) && i < array.count(); i++) {
+      const int64_t file_id = array.at(i);
+      file_path.reset();
+      if (OB_FAIL(share::ObArchivePathUtil::get_ls_meta_record_path(dest, single_ls_desc.dest_id_,
+                                                single_ls_desc.round_id_, single_ls_desc.piece_id_,
+                                                single_ls_desc.ls_id_, meta_type, file_id, file_path))) {
+        LOG_WARN("failed to get ls meta record path", KR(ret), K(dest), K(single_ls_desc), K(file_id));
+      } else if (OB_FAIL(ObBackupFileListWriterUtil::add_file_to_file_list_info(file_path,
+                                                                                    *storage_info, file_list_info))) {
+        LOG_WARN("failed to push file info", KR(ret), K(file_path), KP(storage_info));
       }
-      if (OB_FAIL(ret) || file_list_info.is_empty() || GCTX.is_shared_storage_mode()) {
-      } else if (OB_FAIL(ObBackupFileListWriterUtil::write_file_list_to_path(storage_info, ObBackupFileSuffix::ARCHIVE,
-                                                                            shema_meta_dir, dest_id, file_list_info))) {
-        LOG_WARN("failed to write file list", KR(ret), K(shema_meta_dir), K(file_list_info), KP(storage_info), K(dest_id));
-      }
+    }
+    if (OB_FAIL(ret) || file_list_info.is_empty() || GCTX.is_shared_storage_mode()) {
+    } else if (OB_FAIL(ObBackupFileListWriterUtil::write_file_list_to_path(storage_info, ObBackupFileSuffix::ARCHIVE,
+                                                                          shema_meta_dir, dest_id, file_list_info))) {
+      LOG_WARN("failed to write file list", KR(ret), K(shema_meta_dir), K(file_list_info), KP(storage_info), K(dest_id));
     }
   }
   return ret;
@@ -241,13 +234,9 @@ static int record_piece_ls_file_list(
     const ObBackupStorageInfo *storage_info = store.get_storage_info();
     const int64_t dest_id = storage_info->get_dest_id();
     const ObLSID &ls_id = single_ls_desc.ls_id_;
-    bool is_exist = false;
     if (OB_FAIL(ObArchivePathUtil::get_piece_ls_dir_path(dest, single_ls_desc.dest_id_, single_ls_desc.round_id_,
                                                             single_ls_desc.piece_id_, ls_id, dir_path))) {
       LOG_WARN("failed to get piece ls dir path", KR(ret), K(dest), K(single_ls_desc));
-    } else if (OB_FAIL(store.is_file_list_file_exist(dir_path, suffix, is_exist))) {
-      LOG_WARN("failed to check file list file exist", KR(ret), K(dir_path));
-    } else if (is_exist) {
     } else if (0 != file_count && OB_FAIL(ObArchivePathUtil::get_piece_ls_log_dir_path(dest, single_ls_desc.dest_id_,
                                                   single_ls_desc.round_id_, single_ls_desc.piece_id_,
                                                   single_ls_desc.ls_id_, ls_log_dir_path))) {
@@ -282,7 +271,6 @@ static int record_piece_ls_log_file_list(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(single_ls_desc), K(store));
   } else {
-    bool is_exist = false;
     ObBackupPath ls_log_dir_path;
     const ObBackupFileSuffix suffix(ObBackupFileSuffix::ARCHIVE);
     const ObBackupDest &dest = store.get_backup_dest();
@@ -299,13 +287,11 @@ static int record_piece_ls_log_file_list(
     const int64_t max_file_size = DEFAULT_BACKUP_DATA_FILE_SIZE;
     const ObBackupBlockFileDataType data_type = ObBackupBlockFileDataType::FILE_PATH_INFO;
     const int64_t file_count = single_ls_desc.filelist_.count();
-    if (OB_FAIL(ObArchivePathUtil::get_piece_ls_log_dir_path(dest, single_ls_desc.dest_id_,
+    if (0 == file_count) {
+    } else if (OB_FAIL(ObArchivePathUtil::get_piece_ls_log_dir_path(dest, single_ls_desc.dest_id_,
                                                   single_ls_desc.round_id_, single_ls_desc.piece_id_,
                                                   single_ls_desc.ls_id_, ls_log_dir_path))) {
       LOG_WARN("failed to get ls log dir path", KR(ret), K(dest), K(single_ls_desc));
-    } else if (OB_FAIL(store.is_file_list_file_exist(ls_log_dir_path, suffix, is_exist))) {
-      LOG_WARN("failed to check file list file exist", KR(ret), K(ls_log_dir_path));
-    } else if (is_exist || 0 == file_count) {
     } else if (OB_FAIL(writer.init(storage_info, data_type, suffix, ls_log_dir_path, dest_id, max_file_size))) {
       LOG_WARN("failed to init writer", KR(ret), K(storage_info), K(suffix), K(ls_log_dir_path), K(dest_id), K(max_file_size));
     } else {
@@ -466,9 +452,6 @@ static int record_single_piece_file_list(
     if (OB_FAIL(share::ObArchivePathUtil::get_piece_dir_path(dest, piece_info.key_.dest_id_, piece_info.key_.round_id_,
                                                                 piece_info.key_.piece_id_, piece_path))) {
       LOG_WARN("failed to get piece dir path", K(ret), K(dest), K(piece_info));
-    } else if (OB_FAIL(store.is_file_list_file_exist(piece_path, suffix, is_exist))) {
-      LOG_WARN("failed to check file list file exist", K(ret), K(piece_path));
-    } else if (is_exist) {
     } else if (OB_FAIL(share::ObArchivePathUtil::get_piece_checkpoint_dir_path(dest,
         piece_info.key_.dest_id_, piece_info.key_.round_id_, piece_info.key_.piece_id_, checkpoint_dir_path))) {
       LOG_WARN("failed to get piece checkpoint dir path", K(ret), K(dest), K(piece_info));
@@ -526,9 +509,6 @@ static int record_checkpoint_dir_file_list(
     if (OB_FAIL(share::ObArchivePathUtil::get_piece_checkpoint_dir_path(dest,
         piece_info.key_.dest_id_, piece_info.key_.round_id_, piece_info.key_.piece_id_, checkpoint_dir_path))) {
       LOG_WARN("failed to get piece checkpoint dir path", K(ret), K(dest), K(piece_info));
-    } else if (OB_FAIL(store.is_file_list_file_exist(checkpoint_dir_path, suffix, is_exist))) {
-      LOG_WARN("failed to check file list file exist", K(ret), K(checkpoint_dir_path));
-    } else if (is_exist) {
     } else if (OB_FAIL(checkpoint_file_path.init(checkpoint_dir_path.get_ptr()))) {
       LOG_WARN("failed to init checkpoint file path", K(ret));
     } else if (OB_FAIL(checkpoint_file_path.join_checkpoint_info_file(OB_STR_CHECKPOINT_FILE_NAME,

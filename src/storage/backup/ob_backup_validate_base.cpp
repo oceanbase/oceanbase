@@ -342,11 +342,9 @@ int ObBackupValidateTaskContext::add_archive_piece_lsn_range(const ObBackupArchi
 
 int ObBackupValidateTaskContext::get_archive_piece_lsn_range(
     const int64_t group_id,
-    ObBackupArchivePieceLSNRange* &lsn_range,
-    bool &is_last_task)
+    ObBackupArchivePieceLSNRange* &lsn_range)
 {
   int ret = OB_SUCCESS;
-  is_last_task = false;
   common::SpinWLockGuard guard(ctx_lock_);
   if (!inited_) {
     ret = OB_NOT_INIT;
@@ -359,9 +357,6 @@ int ObBackupValidateTaskContext::get_archive_piece_lsn_range(
     LOG_WARN("invalid range id", KR(ret), K(group_id));
   } else {
     lsn_range = &(archive_piece_lsn_ranges_.at(group_id));
-    if (group_id == archive_piece_lsn_ranges_.count() - 1) {
-      is_last_task = true;
-    }
   }
   return ret;
 }
