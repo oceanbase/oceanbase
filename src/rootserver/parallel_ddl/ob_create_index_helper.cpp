@@ -642,6 +642,8 @@ int ObCreateIndexHelper::create_tablets_()
     LOG_WARN("fail to get wait major frozen scn", KR(ret));
   } else {
     ObTableSchema &index_schema = index_schemas_.at(0);
+    const bool need_create_empty_major = create_index_on_empty_table_opt_
+        || index_schema.is_search_def_index();
     ObTableCreator table_creator(tenant_id_, frozen_scn, get_trans_());
     ObNewTableTabletAllocator new_table_tablet_allocator(
                               tenant_id_,
@@ -673,7 +675,7 @@ int ObCreateIndexHelper::create_tablets_()
     } else if (index_schema.is_index_local_storage()) {
       ObSEArray<const share::schema::ObTableSchema*, 1> schemas;
       if (OB_FAIL(schemas.push_back(&index_schema))
-          || OB_FAIL(need_create_empty_majors.push_back(create_index_on_empty_table_opt_))) {
+          || OB_FAIL(need_create_empty_majors.push_back(need_create_empty_major))) {
         LOG_WARN("fail to push back index schema", KR(ret), K(index_schema));
       } else if (OB_FAIL(new_table_tablet_allocator.prepare(get_trans_(), index_schema, data_tablegroup_schema))) {
         LOG_WARN("fail to prepare ls for index schema tablets", KR(ret));
@@ -693,7 +695,7 @@ int ObCreateIndexHelper::create_tablets_()
       } else if (OB_FAIL(new_table_tablet_allocator.get_ls_id_array(ls_id_array))) {
         LOG_WARN("fail to get ls id array", KR(ret));
       } else if (OB_FAIL(table_creator.add_create_tablets_of_table_arg(index_schema, ls_id_array,
-                                       tenant_data_version, create_index_on_empty_table_opt_/*need create major sstable*/))) {
+                                       tenant_data_version, need_create_empty_major/*need create major sstable*/))) {
         LOG_WARN("create table tablet failed", KR(ret), K(index_schema));
       }
     }
