@@ -71,6 +71,8 @@ static void get_tcp_diag_info(int fd, char* tcp_diag, size_t size) {
 #define MAX_CREDIBLE_WINDOW 10 * 1000 * 1000  // 10s
 #define SERVER_EXPIRED_TIME 600L * 1000 * 1000 // 10min
 
+#define CONNECT_KEEPALIVE_INTERVAL 60L * 1000 * 1000 // 60s
+
 constexpr int32_t KP_MAGIC = 0x2c15c364;
 struct Header
 {
@@ -158,6 +160,44 @@ int set_nonblocking(int fd)
 {
   int no_block_flag = 1;
   return ioctl(fd, FIONBIO, &no_block_flag);
+}
+
+/**
+ * @brief check if the socket fd is connected ok
+ * @return OB_SUCCESS if connected, OB_EAGAIN if connecting, other if failed
+ */
+static int check_probe_socket_connected_ok(const int fd)
+{
+  int ret = OB_SUCCESS;
+  struct pollfd fds[1];
+  fds[0].fd = fd;
+  fds[0].events = POLLOUT;
+  fds[0].revents = 0;
+  const int tret = poll(fds, 1, 0);
+  if (tret < 0) {
+    ret = OB_IO_ERROR;
+    LOG_WARN_RET(ret, "probe poll failed", K(fd), K(errno));
+  } else if (0 == tret) {
+    ret = OB_EAGAIN;
+  } else {
+    if (fds[0].revents & POLLOUT) {
+      int so_error = 0;
+      socklen_t len = sizeof(so_error);
+      if (0 != getsockopt(fd, SOL_SOCKET, SO_ERROR, &so_error, &len)) {
+        ret = OB_IO_ERROR;
+        LOG_WARN_RET(ret, "probe getsockopt(SO_ERROR) failed", K(fd), K(errno));
+      } else if (0 == so_error) {
+        ret = OB_SUCCESS;
+      } else {
+        ret = OB_IO_ERROR;
+        LOG_WARN_RET(ret, "probe connect not ok", K(fd), K(so_error));
+      }
+    } else if (fds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
+      ret = OB_IO_ERROR;
+      LOG_WARN_RET(ret, "probe poll revents error", K(fd), K(fds[0].revents));
+    }
+  }
+  return ret;
 }
 
 struct server
@@ -307,6 +347,100 @@ bool ObNetKeepAlive::in_black(const easy_addr_t &addr)
   return in_blacklist;
 }
 
+int ObNetKeepAlive::probe_connectivity(const common::ObAddr &addr, bool &in_blacklist)
+{
+  //       ▼
+  // ┌──────────────────┐
+  // │       IDLE       │◀──────────────────────────────────────────────────────────────────────────┐
+  // │------------------│                                                                           │
+  // │probe_connect_fd  │                                                                           │
+  // │      == -1       │                                                                           │
+  // └────────┬─────────┘                                                                           │
+  //          │                                                                                     │
+  //          │ now_ts - last_probe_connect_ts > CONNECT_KEEPALIVE_INTERVAL                         │
+  //          │ [Action: probe_connect_fd = connect(), last_probe_connect_ts = now_ts]              │
+  //          │                                                                                     │
+  // ┌────────V─────────┐                                                                           │
+  // │    CONNECTING    │───────────────────────────────────────────────────────────────────────────┤
+  // │------------------│                          Connection Success                               │
+  // │probe_connect_fd  │                                                                           │
+  // │      != -1       │                                                                           │
+  // └────────┬─────────┘                                                                           │
+  //          │                                                                                     │
+  //          └─────────────────────────────────────────────────────────────────────────────────────┘
+  //                          Connection Failure OR Connection Timeout
+  //                          [Action: in_black = True]
+
+  int ret = OB_SUCCESS;
+  in_blacklist = false;
+  easy_addr_t ez_addr = to_ez_addr(addr);
+  DestKeepAliveState *dst_server = regist_dest_if_need(ez_addr);
+  if (OB_ISNULL(dst_server)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dst server not found", K(addr));
+  } else if (OB_FAIL(dst_server->probe_connect_mutex_.trylock())) {
+    LOG_WARN("probe connect mutex lock failed", K(addr));
+  } else {
+    const int64_t now = get_usec();
+    ATOMIC_STORE(&dst_server->last_access_ts_, now);
+    if (-1 == dst_server->probe_connect_fd_) {
+      // IDLE state, try to connect each CONNECT_KEEPALIVE_INTERVAL
+      if (now - dst_server->last_probe_connect_ts_ >= CONNECT_KEEPALIVE_INTERVAL) {
+        dst_server->last_probe_connect_ts_ = now;
+        struct sockaddr_storage sock_addr;
+        easy_inet_etoa(&dst_server->svr_addr_, &sock_addr);
+        int connect_fd = socket(sock_addr.ss_family, SOCK_STREAM, 0);
+        if (connect_fd < 0) {
+          ret = OB_IO_ERROR;
+          LOG_WARN("probe create socket failed", K(addr), K(errno));
+        } else if (set_nonblocking(connect_fd) < 0) {
+          ret = OB_IO_ERROR;
+          LOG_WARN("probe set nonblocking failed", K(connect_fd), K(errno));
+          close(connect_fd);
+        } else if (connect(connect_fd, (struct sockaddr *)&sock_addr, sizeof(sock_addr)) < 0) {
+          if (EINPROGRESS == errno) {
+            // switch to CONNECTING state
+            dst_server->probe_connect_fd_ = connect_fd;
+            LOG_INFO("probe start connect", K(addr), K(connect_fd));
+          } else {
+            close(connect_fd);
+            dst_server->is_probe_black_ = true;
+            LOG_WARN("probe connect failed", K(addr), K(errno));
+          }
+        } else {
+          close(connect_fd);
+          dst_server->is_probe_black_ = false;
+          LOG_INFO("probe connect ok immediately", K(addr));
+        }
+      } else {
+        // still in IDLE state
+      }
+    } else {
+      // CONNECTING state, check if connected ok
+      int conn_ret = check_probe_socket_connected_ok(dst_server->probe_connect_fd_);
+      if (OB_SUCCESS == conn_ret) {
+        const int old_fd = dst_server->probe_connect_fd_;
+        close(dst_server->probe_connect_fd_);
+        dst_server->probe_connect_fd_ = -1;
+        dst_server->is_probe_black_ = false;
+        LOG_INFO("probe connect ok", K(addr), K(old_fd));
+      } else if (OB_EAGAIN != conn_ret || now - dst_server->last_probe_connect_ts_ > WINDOW_LENGTH) {
+        const int old_fd = dst_server->probe_connect_fd_;
+        close(old_fd);
+        dst_server->probe_connect_fd_ = -1;
+        dst_server->is_probe_black_ = true;
+        LOG_WARN("probe connect check failed or timeout", K(addr), K(old_fd), K(conn_ret), K(dst_server->last_probe_connect_ts_));
+      } else {
+        // conn_ret == OB_EAGAIN and now - dst_server->last_probe_connect_ts_ <= WINDOW_LENGTH
+        // still in CONNECTING state
+      }
+    }
+    in_blacklist = dst_server->is_probe_black_;
+    (void)dst_server->probe_connect_mutex_.unlock();
+  }
+  return ret;
+}
+
 DestKeepAliveState *ObNetKeepAlive::regist_dest_if_need(const easy_addr_t &addr)
 {
   DestKeepAliveState *ret = NULL;
@@ -323,6 +457,10 @@ DestKeepAliveState *ObNetKeepAlive::regist_dest_if_need(const easy_addr_t &addr)
         bzero(s, sizeof(DestKeepAliveState));
         s->svr_addr_ = addr;
         s->last_read_ts_ = get_usec();
+        s->probe_connect_fd_ = -1;
+        s->last_probe_connect_ts_ = 0;
+        s->is_probe_black_ = false;
+        new (&s->probe_connect_mutex_) lib::ObMutex(common::ObLatchIds::RPC_STAT_LOCK);
         keepalive_init_data(s->ka_data_);
         DestKeepAliveState *ns = ATOMIC_VCAS(&rs, NULL, s);
         if (ns != NULL) {
@@ -694,6 +832,18 @@ int ret = OB_SUCCESS;
           rs->in_black_ = 0;
           destroy_client(rs->c_);
         }
+        if (rs->probe_connect_fd_ != -1) {
+          char addr_buf[OB_IP_PORT_STR_BUFF] = {'\0'};
+          ObMutexGuard guard(rs->probe_connect_mutex_);
+          _LOG_INFO("try clean up probe connect fd, addr=%s, fd=%d, last_probe_connect_ts=%ld, is_probe_black=%d",
+              addr_to_string(addr_buf, sizeof(addr_buf), rs->svr_addr_), rs->probe_connect_fd_,
+              rs->last_probe_connect_ts_, rs->is_probe_black_);
+          rs->is_probe_black_ = false;
+          if (rs->probe_connect_fd_ != -1) {
+            close(rs->probe_connect_fd_);
+            rs->probe_connect_fd_ = -1;
+          }
+        }
         continue;
       } else if (0 == rs->last_write_ts_) {
         rs->last_read_ts_ = get_usec();
@@ -713,6 +863,9 @@ int ret = OB_SUCCESS;
         _LOG_INFO("dump dest keepalive data states, addr: %s, last_write_ts_=%ld, last_read_ts_=%ld, in_black_=%d, tcp_fd:%d, tcp_diag: %s",
             addr_to_string(addr_buf, sizeof(addr_buf), rs->svr_addr_),
             rs->last_write_ts_, rs->last_read_ts_, rs->in_black_, tcp_fd, tcp_diag);
+        _LOG_INFO("dump dest probe connect states, addr: %s, probe_connect_fd_=%d, last_probe_connect_ts_=%ld, is_probe_black_=%d",
+          addr_buf,
+          rs->probe_connect_fd_, rs->last_probe_connect_ts_, rs->is_probe_black_);
       }
       client *c = rs->c_;
       if (!c) {

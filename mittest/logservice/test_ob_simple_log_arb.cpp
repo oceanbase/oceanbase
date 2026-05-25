@@ -60,6 +60,18 @@ int ObArbitrationService::try_probe_rs_(bool &connected)
 namespace unittest
 {
 
+static bool has_probe_addr(const logservice::ObLogActiveKeepAlive::AddrSet &targets,
+    const common::ObAddr &addr)
+{
+  bool found = false;
+  for (auto iter = targets.begin(); !found && iter != targets.end(); ++iter) {
+    if (iter->first == addr) {
+      found = true;
+    }
+  }
+  return found;
+}
+
 class TestObSimpleLogClusterArbService : public ObSimpleLogClusterTestEnv
 {
 public:
@@ -72,6 +84,59 @@ int64_t ObSimpleLogClusterTestBase::node_cnt_ = 5;
 bool ObSimpleLogClusterTestBase::need_add_arb_server_ = true;
 bool ObSimpleLogClusterTestBase::need_shared_storage_ = false;
 std::string ObSimpleLogClusterTestBase::test_name_ = TEST_NAME;
+
+TEST_F(TestObSimpleLogClusterArbService, active_keepalive_discovers_peer_addrs_from_palf_env)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "active_keepalive_discovers_peer_addrs_from_palf_env");
+  OB_LOGGER.set_log_level("TRACE");
+  int64_t leader_idx = -1;
+  int64_t arb_replica_idx = -1;
+  PalfHandleImplGuard leader1;
+  PalfHandleImplGuard leader2;
+  PalfHandleLiteGuard arb_handle1;
+  PalfHandleLiteGuard arb_handle2;
+  const int64_t id1 = ATOMIC_AAF(&palf_id_, 1);
+  const int64_t id2 = ATOMIC_AAF(&palf_id_, 1);
+  ASSERT_EQ(OB_SUCCESS, create_paxos_group_with_arb(id1, arb_replica_idx, leader_idx, leader1));
+  ASSERT_EQ(OB_SUCCESS, create_paxos_group_with_arb(id2, arb_replica_idx, leader_idx, leader2));
+  ASSERT_EQ(OB_SUCCESS, get_arb_member_guard(id1, arb_handle1));
+  ASSERT_EQ(OB_SUCCESS, get_arb_member_guard(id2, arb_handle2));
+
+  ObISimpleLogServer *iserver = get_cluster()[arb_replica_idx];
+  ASSERT_NE(nullptr, iserver);
+  ASSERT_TRUE(iserver->is_arb_server());
+  ObSimpleArbServer *arb_server = dynamic_cast<ObSimpleArbServer *>(iserver);
+  ASSERT_NE(nullptr, arb_server);
+
+  auto &worker = arb_server->timer_.active_keep_alive_worker_;
+  ASSERT_TRUE(worker.is_inited());
+  worker.addr_set_.clear();
+  ASSERT_EQ(OB_SUCCESS, worker.collect_addr_from_handle_(1, arb_handle1.get_palf_handle_impl()));
+  ASSERT_EQ(OB_SUCCESS, worker.collect_addr_from_handle_(1, arb_handle2.get_palf_handle_impl()));
+
+  const ObMemberList &member_list = get_member_list();
+  const common::ObAddr self_addr = iserver->get_addr();
+  int64_t expected_peer_cnt = 0;
+  for (int64_t i = 0; i < member_list.get_member_number(); ++i) {
+    ObMember member;
+    ASSERT_EQ(OB_SUCCESS, member_list.get_member_by_index(i, member));
+    if (member.get_server() != self_addr) {
+      ++expected_peer_cnt;
+    }
+  }
+
+  bool found_all_targets = (worker.addr_set_.size() == expected_peer_cnt);
+  for (int64_t i = 0; found_all_targets && i < member_list.get_member_number(); ++i) {
+    ObMember member;
+    ASSERT_EQ(OB_SUCCESS, member_list.get_member_by_index(i, member));
+    if (member.get_server() != self_addr) {
+      found_all_targets = has_probe_addr(worker.addr_set_, member.get_server());
+    }
+  }
+
+  ASSERT_TRUE(found_all_targets);
+  ASSERT_EQ(expected_peer_cnt, worker.addr_set_.size());
+}
 
 TEST_F(TestObSimpleLogClusterArbService, test_2f1a_degrade_upgrade)
 {

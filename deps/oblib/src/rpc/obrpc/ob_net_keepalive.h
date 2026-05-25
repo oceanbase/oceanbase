@@ -53,6 +53,10 @@ public:
     char client_buf_[sizeof(client)];
     int in_black_;
     ObNetKeepAliveData ka_data_;
+    int probe_connect_fd_; // used to check the connectivity of dst server
+    int64_t last_probe_connect_ts_;
+    bool is_probe_black_;
+    lib::ObMutex probe_connect_mutex_;
   };
 
 public:
@@ -66,6 +70,16 @@ public:
   int in_black(const easy_addr_t &addr, bool &in_blacklist, ObNetKeepAliveData *ka_data);
   int in_black(const common::ObAddr &addr, bool &in_blacklist, ObNetKeepAliveData *ka_data);
   virtual bool in_black(const easy_addr_t &addr);
+
+  /**
+   * @description: Check if the destination server can establish a new connection
+   *               asynchronous interface, needs to be called periodically to detect when the server is unable to connect.
+   * @param[in] addr                destination server address
+   * @param[out] in_blacklist       true if the destination server cannot establish a new connection
+   * @return
+   * - OB_SUCCESS   succeed to check connectivity
+   */
+  int probe_connectivity(const common::ObAddr &addr, bool &in_blacklist);
   int get_last_resp_ts(const common::ObAddr &addr, int64_t &last_resp_ts);
 private:
   void do_server_loop();

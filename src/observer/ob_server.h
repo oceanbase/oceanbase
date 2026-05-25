@@ -70,6 +70,7 @@
 #include "storage/ob_disk_usage_reporter.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_rpc_proxy.h"
 #include "logservice/ob_server_log_block_mgr.h"
+#include "logservice/ob_active_keep_alive.h"
 #ifdef OB_BUILD_ARBITRATION
 #include "logservice/arbserver/ob_arb_srv_garbage_collect_service.h"
 #include "logservice/arbserver/ob_arb_server_timer.h"
@@ -268,6 +269,7 @@ private:
   int init_device_manifest_task();
   int check_all_device_connectivity();
   int init_refresh_io_calibration();
+  int init_active_keep_alive();
   int set_running_mode();
   void check_user_tenant_schema_refreshed(const common::ObIArray<uint64_t> &tenant_ids, const int64_t expire_time);
   void check_log_replay_over(const common::ObIArray<uint64_t> &tenant_ids, const int64_t expire_time);
@@ -427,6 +429,7 @@ private:
   ObDiskUsageReportTask disk_usage_report_task_;
 
   logservice::ObServerLogBlockMgr log_block_mgr_;
+  logservice::ObActiveKeepAlive active_keep_alive_;
 #ifdef OB_BUILD_ARBITRATION
   arbserver::ObArbGarbageCollectService arb_gcs_;
   arbserver::ObArbServerTimer arb_timer_;

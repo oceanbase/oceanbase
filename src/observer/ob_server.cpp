@@ -470,6 +470,8 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
 #endif
     } else if (OB_FAIL(init_refresh_io_calibration())) {
       LOG_ERROR("init refresh io calibration failed", KR(ret));
+    } else if (OB_FAIL(init_active_keep_alive())) {
+      LOG_ERROR("init active keep alive failed", KR(ret));
     } else if (OB_FAIL(ObOptStatManager::get_instance().init(
                          &sql_proxy_, &config_))) {
       LOG_ERROR("init opt stat manager failed", KR(ret));
@@ -3797,6 +3799,21 @@ int ObServer::init_refresh_io_calibration()
   return ret;
 }
 
+int ObServer::init_active_keep_alive()
+{
+  int ret = OB_SUCCESS;
+  const common::ObAddr &self_addr = get_self();
+#ifdef OB_BUILD_SHARED_LOG_SERVICE
+  if (GCONF.enable_logservice) {
+    LOG_WARN_RET(OB_NOT_SUPPORTED, "active keep alive is not supported in shared log service");
+  } else
+#endif
+  if (OB_FAIL(active_keep_alive_.init(lib::TGDefIDs::ServerGTimer, self_addr))) {
+    LOG_ERROR("fail to init active keep alive", KR(ret));
+  }
+  return ret;
+}
+
 
 // ---------------------------------- arb server start -------------------------------
 #ifdef OB_BUILD_ARBITRATION
@@ -3862,7 +3879,7 @@ int ObServer::init_server_in_arb_mode()
     LOG_ERROR("log_io_adapter init failed", K(ret));
   } else if (OB_FAIL(palf_env_mgr.init(GCONF.data_dir, self_addr_, net_work_farme.get_req_transport(), LOG_IO_DEVICE_WRAPPER.get_local_device(), &G_RES_MGR, &OB_IO_MANAGER))) {
     LOG_ERROR("init PalfEnvLiteMgr failed", K(ret), K(arb_opts));
-  } else if (OB_FAIL(arb_timer_.init(lib::TGDefIDs::ArbServerTimer, &palf_env_mgr))) {
+  } else if (OB_FAIL(arb_timer_.init(lib::TGDefIDs::ArbServerTimer, &palf_env_mgr, self_addr_))) {
     LOG_ERROR("init ArbServerTimer failed", K(ret));
   #ifndef OB_USE_ASAN
   } else if (OB_FAIL(ObMemoryDump::get_instance().init())) {

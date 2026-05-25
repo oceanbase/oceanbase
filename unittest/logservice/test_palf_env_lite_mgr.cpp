@@ -18,7 +18,6 @@
 namespace oceanbase
 {
 using namespace common;
-using namespace arbserver;
 using namespace palflite;
 
 namespace unittest

@@ -13,6 +13,17 @@
 #define private public
 #include "env/ob_simple_log_cluster_env.h"
 #undef private
+#include <atomic>
+#include <thread>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <fcntl.h>
+
+#define private public
+#include "rpc/obrpc/ob_net_keepalive.h"
+#undef private
+#include "rpc/frame/ob_net_easy.h"
+#include "lib/time/ob_time_utility.h"
 const std::string TEST_NAME = "single_arb_server";
 
 using namespace oceanbase::common;
@@ -46,6 +57,60 @@ bool check_dir_exist(const char *base_dir, const int64_t id)
   }
   return result;
 }
+
+static int find_free_port()
+{
+  int sock = socket(AF_INET, SOCK_STREAM, 0);
+  if (sock < 0) return -1;
+  struct sockaddr_in sin;
+  memset(&sin, 0, sizeof(sin));
+  sin.sin_family = AF_INET;
+  sin.sin_addr.s_addr = htonl(INADDR_ANY);
+  const int start_port = 20000;
+  int port = -1;
+  for (int candidate = start_port; candidate <= 65535; ++candidate) {
+    sin.sin_port = htons(candidate);
+    if (bind(sock, (struct sockaddr *)&sin, sizeof(sin)) == 0) {
+      port = candidate;
+      break;
+    }
+  }
+  close(sock);
+  return port;
+}
+
+static void start_loopback_server(const int port, std::atomic<bool> &stop)
+{
+  int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
+  if (listen_fd < 0) { return; }
+  struct sockaddr_in sin;
+  memset(&sin, 0, sizeof(sin));
+  sin.sin_family = AF_INET;
+  sin.sin_port = htons(port);
+  sin.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+  int opt = 1;
+  setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+  if (bind(listen_fd, (struct sockaddr *)&sin, sizeof(sin)) < 0) {
+    close(listen_fd);
+    return;
+  }
+  listen(listen_fd, 5);
+  int flags = fcntl(listen_fd, F_GETFL, 0);
+  fcntl(listen_fd, F_SETFL, flags | O_NONBLOCK);
+  while (!stop.load()) {
+    struct sockaddr_in client_addr;
+    socklen_t len = sizeof(client_addr);
+    int client_fd = accept(listen_fd, (struct sockaddr *)&client_addr, &len);
+    if (client_fd >= 0) {
+      close(client_fd);
+    }
+    usleep(10000);
+  }
+  close(listen_fd);
+}
+
+// consistent with deps/oblib/unittest/rpc/test_ob_net_keepalive.cpp
+static const int64_t CONNECT_KEEPALIVE_INTERVAL = 60L * 1000 * 1000;
 
 TEST_F(TestObSimpleMutilArbServer, create_mutil_tenant)
 {
@@ -392,6 +457,109 @@ TEST_F(TestObSimpleMutilArbServer, multi_thread)
   }
   ASSERT_EQ(thread_count*ls_ids.size(), remove_success_count);
 
+}
+
+TEST_F(TestObSimpleMutilArbServer, active_keepalive_isolation_to_blacklist_and_recover)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "active_keepalive_isolation_to_blacklist_and_recover");
+  OB_LOGGER.set_log_level("TRACE");
+
+  // In mittest mode, ObNetKeepAlive is registered but not started by network frame.
+  oceanbase::rpc::frame::ObNetEasy net;
+  int ret = net.net_keepalive_register();
+  ASSERT_TRUE(OB_SUCCESS == ret || OB_INIT_TWICE == ret) << "net_keepalive_register ret=" << ret;
+  oceanbase::obrpc::ObNetKeepAlive &ka = oceanbase::obrpc::ObNetKeepAlive::get_instance();
+  ret = ka.start();
+  ASSERT_TRUE(OB_SUCCESS == ret || OB_INIT_TWICE == ret) << "keepalive start ret=" << ret;
+  const bool need_cleanup = (OB_SUCCESS == ret);
+  struct KeepAliveGuard
+  {
+    oceanbase::obrpc::ObNetKeepAlive &ka_;
+    bool need_cleanup_;
+    ~KeepAliveGuard()
+    {
+      if (need_cleanup_) {
+        ka_.stop();
+        ka_.destroy();
+      }
+    }
+  } ka_guard{ka, need_cleanup};
+
+  const int port = find_free_port();
+  if (port <= 0) {
+    CLOG_LOG(INFO, "skip test because no available local tcp port in current environment");
+    return;
+  }
+  std::atomic<bool> stop(false);
+  std::thread server_thread(start_loopback_server, port, std::ref(stop));
+  usleep(100000);
+
+  ObAddr dst;
+  dst.set_ip_addr("127.0.0.1", port);
+  easy_addr_t ez_dst = to_ez_addr(dst);
+
+  ObISimpleLogServer *iserver = get_cluster()[0];
+  ASSERT_TRUE(iserver->is_arb_server());
+  ObSimpleArbServer *arb_server = dynamic_cast<ObSimpleArbServer*>(iserver);
+  ASSERT_NE(nullptr, arb_server);
+
+  auto &worker = arb_server->timer_.active_keep_alive_worker_;
+  worker.addr_set_.clear();
+  ASSERT_EQ(OB_SUCCESS, worker.addr_set_.set_refactored(dst, 1));
+
+  oceanbase::obrpc::ObNetKeepAlive::DestKeepAliveState *rs = nullptr;
+  bool seen_state = false;
+  for (int i = 0; i < 100; ++i) {
+    worker.probe_once_();
+    rs = ka.regist_dest_if_need(ez_dst);
+    if (nullptr != rs && rs->last_probe_connect_ts_ > 0) {
+      seen_state = true;
+      break;
+    }
+    usleep(10000);
+  }
+  ASSERT_TRUE(seen_state);
+  ASSERT_NE(nullptr, rs);
+
+  // Isolation: stop loopback server and force reconnect.
+  stop = true;
+  server_thread.join();
+  rs->last_probe_connect_ts_ = ObTimeUtility::current_time() - (CONNECT_KEEPALIVE_INTERVAL * 2);
+
+  bool blacklisted = false;
+  for (int i = 0; i < 200; ++i) {
+    worker.probe_once_();
+    rs = ka.regist_dest_if_need(ez_dst);
+    if (nullptr != rs && rs->is_probe_black_) {
+      blacklisted = true;
+      break;
+    }
+    usleep(10000);
+  }
+  ASSERT_TRUE(blacklisted);
+
+  // Recovery: restart server and expect it to become non-black again.
+  stop = false;
+  std::thread server_thread2(start_loopback_server, port, std::ref(stop));
+  usleep(100000);
+  rs->last_probe_connect_ts_ = ObTimeUtility::current_time() - (CONNECT_KEEPALIVE_INTERVAL * 2);
+
+  bool recovered = false;
+  for (int i = 0; i < 300; ++i) {
+    worker.probe_once_();
+    bool in_black = false;
+    (void)ka.probe_connectivity(dst, in_black);
+    rs = ka.regist_dest_if_need(ez_dst);
+    if (nullptr != rs && !rs->is_probe_black_ && !in_black && rs->probe_connect_fd_ == -1) {
+      recovered = true;
+      break;
+    }
+    usleep(10000);
+  }
+  EXPECT_TRUE(recovered);
+
+  stop = true;
+  server_thread2.join();
 }
 
 } // end unittest

@@ -51,6 +51,7 @@ ob_set_subtarget(ob_logservice common
   ob_server_log_block_mgr.cpp
   ob_log_flashback_service.cpp
   ob_net_keepalive_adapter.cpp
+  ob_active_keep_alive.cpp
   ob_log_external_storage_handler.cpp
   ob_log_external_storage_utils.cpp
   ob_log_monitor.cpp
@@ -256,6 +257,7 @@ ob_set_subtarget(ob_logservice logfetcher
 ob_set_subtarget(ob_logservice common_util
   common_util/ob_log_time_utils.cpp
   common_util/ob_log_ls_define.cpp
+  common_util/ob_log_active_keep_alive.cpp
 )
 
 ob_server_add_target(ob_logservice)
