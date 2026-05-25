@@ -12883,6 +12883,7 @@ int ObJoinOrder::get_distributed_join_method(Path &left_path,
                          right_path.available_parallel_ > 1 || 
                          join_parallel > 1)
                                 && !left_path.parent_->get_is_at_most_one_row()
+                                && !get_plan()->get_optimizer_context().is_batched_multi_stmt()
                                 && distributed_methods & (DIST_RANDOM_ALL | DIST_RANDOM_BROADCAST | DIST_HASH_HASH)
                                 && query_ctx->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP4);
     }

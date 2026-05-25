@@ -1180,19 +1180,42 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
       }
     }
 
+    bool is_batch_update = false;
+    if (OB_SUCC(ret) && !is_skipped && !has_instead_of_trg
+        && upd_ctdef.dupd_ctdef_.is_batch_stmt_
+        && DAS_OP_TABLE_UPDATE == upd_ctdef.dupd_ctdef_.op_type_) {
+      const int64_t distinct_cnt = upd_ctdef.distinct_key_.count();
+      const int64_t dedup_key_cnt = distinct_cnt - 1;
+      if (OB_UNLIKELY(distinct_cnt < 2
+          || dedup_key_cnt < upd_ctdef.dupd_ctdef_.rowkey_cnt_
+          || upd_ctdef.distinct_key_.at(dedup_key_cnt) != dml_op.get_spec().ab_stmt_id_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("batch update distinct_key check failed in process_update_row",
+                  K(ret), K(upd_ctdef.dupd_ctdef_.rowkey_cnt_), K(distinct_cnt), K(dedup_key_cnt),
+                  KP(dml_op.get_spec().ab_stmt_id_));
+      } else {
+        is_batch_update = true;
+      }
+    }
+
     if (OB_SUCC(ret) && !is_skipped && !has_instead_of_trg) {
       bool is_distinct = false;
       if (OB_FAIL(check_rowkey_whether_distinct(upd_ctdef.distinct_key_,
                                                 upd_ctdef.distinct_algo_,
                                                 dml_op.get_eval_ctx(),
                                                 dml_op.get_exec_ctx(),
-                                                upd_rtdef.table_rowkey_,
+                                                is_batch_update ? upd_rtdef.batch_rowkey_ : upd_rtdef.table_rowkey_,
                                                 upd_rtdef.se_rowkey_dist_ctx_,
                                                 is_distinct))) {
         LOG_WARN("check rowkey whether distinct failed", K(ret),
-                 K(upd_ctdef), K(upd_rtdef), K(dml_op.get_spec().rows_));
+                 K(upd_ctdef), K(upd_rtdef), K(dml_op.get_spec().rows_), K(is_batch_update));
       } else if (!is_distinct) {
-        is_skipped = true;
+        if (is_batch_update) {
+          ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
+          LOG_TRACE("batch update same row detected, need rollback", K(ret), K(upd_rtdef.batch_rowkey_));
+        } else {
+          is_skipped = true;
+        }
       }
     }
     if (OB_SUCC(ret) && !is_skipped) {
@@ -2025,6 +2048,23 @@ int ObDMLService::init_upd_rtdef(
     ObIAllocator &allocator = dml_rtctx.get_exec_ctx().get_allocator();
     if (OB_FAIL(init_ob_rowkey(allocator, upd_ctdef.distinct_key_.count(), upd_rtdef.table_rowkey_))) {
       LOG_WARN("fail to init ObRowkey used for distinct check", K(ret));
+    }
+
+    if (OB_SUCC(ret) && upd_ctdef.dupd_ctdef_.is_batch_stmt_
+      && DAS_OP_TABLE_UPDATE == upd_ctdef.dupd_ctdef_.op_type_
+      && upd_ctdef.is_primary_index_) {
+      const int64_t distinct_cnt = upd_ctdef.distinct_key_.count();
+      const int64_t dedup_key_cnt = distinct_cnt - 1;
+      ObIAllocator &allocator = dml_rtctx.get_exec_ctx().get_allocator();
+      if (OB_UNLIKELY(distinct_cnt < 2 
+        || dedup_key_cnt < upd_ctdef.dupd_ctdef_.rowkey_cnt_
+        || upd_ctdef.distinct_key_.at(dedup_key_cnt) != dml_rtctx.op_.get_spec().ab_stmt_id_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("batch update distinct_key check failed in init_upd_rtdef",
+                  K(ret), K(upd_ctdef.dupd_ctdef_.rowkey_cnt_), K(distinct_cnt), K(dedup_key_cnt));
+      } else if (OB_FAIL(init_ob_rowkey(allocator, dedup_key_cnt, upd_rtdef.batch_rowkey_))) {
+        LOG_WARN("fail to init batch_rowkey for batch update in init_upd_rtdef", K(ret), K(dedup_key_cnt));
+      }
     }
   }
   
