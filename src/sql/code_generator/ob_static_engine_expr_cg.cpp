@@ -16,7 +16,9 @@
 #include "sql/resolver/expr/ob_raw_expr_util.h"
 #include "sql/code_generator/ob_expr_generator_impl.h"
 #include "sql/engine/expr/ob_expr_get_path.h"
+#include "sql/engine/expr/ob_expr_column_conv.h"
 #include "sql/engine/aggregate/ob_aggregate_processor.h"
+#include "common/ob_version_def.h"
 
 namespace oceanbase
 {
@@ -62,6 +64,8 @@ int ObStaticEngineExprCG::generate(const ObRawExprUniqueSet &all_raw_exprs,
     // do nothing
   } else if (OB_FAIL(flattened_raw_exprs.flatten_and_add_raw_exprs(all_raw_exprs))) {
     LOG_WARN("failed to flatten raw exprs", K(ret));
+  } else if (OB_FAIL(trim_column_conv_const_children(flattened_raw_exprs))) {
+    LOG_WARN("failed to trim column conv const children", K(ret));
   } else if (OB_FAIL(generate_extra_questionmarks(flattened_raw_exprs, expr_factory))) {
     LOG_WARN("generate extra question marks failed", K(ret));
   } else if (OB_FAIL(divide_probably_local_exprs(
@@ -87,6 +91,8 @@ int ObStaticEngineExprCG::generate(ObRawExpr *expr,
   flattened_raw_exprs.set_session_info(op_cg_ctx_.session_);
   if (OB_FAIL(flattened_raw_exprs.flatten_temp_expr(expr))) {
     LOG_WARN("failed to flatten raw exprs", K(ret));
+  } else if (OB_FAIL(trim_column_conv_const_children(flattened_raw_exprs))) {
+    LOG_WARN("failed to trim column conv const children", K(ret));
   } else if (OB_FAIL(generate_extra_questionmarks(flattened_raw_exprs, expr_factory))) {
     LOG_WARN("generate extra questionmarks failed", K(ret));
   } else if (OB_FAIL(construct_exprs(flattened_raw_exprs.get_expr_array(),
@@ -94,6 +100,34 @@ int ObStaticEngineExprCG::generate(ObRawExpr *expr,
     LOG_WARN("failed to construct rt exprs", K(ret));
   } else if (OB_FAIL(cg_exprs(flattened_raw_exprs.get_expr_array(), expr_info))) {
     LOG_WARN("failed to cg exprs", K(ret));
+  }
+  return ret;
+}
+
+int ObStaticEngineExprCG::trim_column_conv_const_children(ObRawExprUniqueSet &flattened_exprs)
+{
+  int ret = OB_SUCCESS;
+  if (cur_cluster_version_ < CLUSTER_VERSION_4_4_2_2) {
+    // 版本不满足，不做裁剪
+  } else {
+    ObSEArray<ObRawExpr *, 16> to_remove;
+    const ObIArray<ObRawExpr *> &expr_arr = flattened_exprs.get_expr_array();
+    for (int64_t i = 0; OB_SUCC(ret) && i < expr_arr.count(); i++) {
+      ObRawExpr *expr = expr_arr.at(i);
+      if (OB_ISNULL(expr)) {
+        // do nothing
+      } else if (expr->get_expr_type() == T_FUN_COLUMN_CONV) {
+        for (int64_t j = 0; j < ObExprColumnConv::VALUE_EXPR && j < expr->get_param_count(); j++) {
+          ObRawExpr *child = expr->get_param_expr(j);
+          if (OB_NOT_NULL(child) && child->is_const_expr()) {
+            OZ(add_var_to_array_no_dup(to_remove, child));
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret) && to_remove.count() > 0) {
+      OZ(flattened_exprs.remove_exprs(to_remove));
+    }
   }
   return ret;
 }
@@ -164,7 +198,12 @@ int ObStaticEngineExprCG::detect_batch_size(const ObRawExprUniqueSet &exprs,
   } else if (size == ObExprBatchSize::small) {
     batch_size = static_cast<int64_t>(ObExprBatchSize::small); //
   } else {
-    batch_size = static_cast<int64_t>(ObExprBatchSize::one);
+    if (OB_NOT_NULL(op_cg_ctx_.log_plan_) && op_cg_ctx_.log_plan_->get_optimizer_context().get_enable_vec_batch_accum()) {
+      // do nothing, keep batch_size for batch row wrapper
+      batch_size = MAX(static_cast<int64_t>(ObExprBatchSize::one), batch_size);
+    } else {
+      batch_size = static_cast<int64_t>(ObExprBatchSize::one);
+    }
   }
 
   if (is_oltp_workload(scan_cardinality)) {
@@ -384,9 +423,18 @@ int ObStaticEngineExprCG::cg_expr_basic(const ObIArray<ObRawExpr *> &raw_exprs)
     } else {
       // init arg_cnt_
       bool is_dyn_qm = is_dynamic_eval_qm(*raw_expr);
+      bool is_column_conv = (raw_expr->get_expr_type() == T_FUN_COLUMN_CONV);
+      // 集群最低版本 < CLUSTER_VERSION_4_4_2_2 时保持 5/6 子节点（与远程序列化/老 observer 一致），
+      // 否则可省略前 4 个 meta 常量子式，只生成 VALUE(0) 与可选 COLUMN_INFO(1)。
+      const bool column_conv_rt_compact = is_column_conv
+          && op_cg_ctx_.cur_cluster_version_ >= CLUSTER_VERSION_4_4_2_2;
       rt_expr->arg_cnt_ = raw_expr->get_param_count();
       if (is_dyn_qm) {
         rt_expr->arg_cnt_ = 1;
+      } else if (column_conv_rt_compact) {
+        rt_expr->arg_cnt_ = (raw_expr->get_param_count() >= ObExprColumnConv::PARAMS_COUNT_WITH_COLUMN_INFO)
+                            ? ObExprColumnConv::RT_PARAMS_COUNT_WITH_COLUMN_INFO
+                            : ObExprColumnConv::RT_PARAMS_COUNT_WITHOUT_COLUMN_INFO;
       }
       // init args_;
       if (rt_expr->arg_cnt_ > 0) {
@@ -398,17 +446,33 @@ int ObStaticEngineExprCG::cg_expr_basic(const ObIArray<ObRawExpr *> &raw_exprs)
         } else {
           memset(buf, 0, alloc_size);
           rt_expr->args_ = buf;
-          for (int64_t i = 0; OB_SUCC(ret) && i < raw_expr->get_param_count();
-               i++) {
-            ObRawExpr *child_expr = NULL;
-            if (OB_ISNULL(child_expr = raw_expr->get_param_expr(i))) {
+          if (column_conv_rt_compact) {
+            ObRawExpr *value_expr = raw_expr->get_param_expr(ObExprColumnConv::VALUE_EXPR);
+            if (OB_ISNULL(value_expr) || OB_ISNULL(get_rt_expr(*value_expr))) {
               ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("invalid argument", K(ret));
-            } else if (OB_ISNULL(get_rt_expr(*child_expr))) {
-              ret = OB_INVALID_ARGUMENT;
-              LOG_WARN("expr is null", K(ret));
+              LOG_WARN("value expr is null", K(ret));
             } else {
-              rt_expr->args_[i] = get_rt_expr(*child_expr);
+              rt_expr->args_[0] = get_rt_expr(*value_expr);
+              if (rt_expr->arg_cnt_ > ObExprColumnConv::RT_PARAMS_COUNT_WITHOUT_COLUMN_INFO) {
+                ObRawExpr *column_info_expr = raw_expr->get_param_expr(ObExprColumnConv::COLUMN_INFO);
+                if (OB_NOT_NULL(column_info_expr) && OB_NOT_NULL(get_rt_expr(*column_info_expr))) {
+                  rt_expr->args_[1] = get_rt_expr(*column_info_expr);
+                }
+              }
+            }
+          } else {
+            for (int64_t i = 0; OB_SUCC(ret) && i < raw_expr->get_param_count();
+                 i++) {
+              ObRawExpr *child_expr = NULL;
+              if (OB_ISNULL(child_expr = raw_expr->get_param_expr(i))) {
+                ret = OB_INVALID_ARGUMENT;
+                LOG_WARN("invalid argument", K(ret));
+              } else if (OB_ISNULL(get_rt_expr(*child_expr))) {
+                ret = OB_INVALID_ARGUMENT;
+                LOG_WARN("expr is null", K(ret));
+              } else {
+                rt_expr->args_[i] = get_rt_expr(*child_expr);
+              }
             }
           }
           if (is_dyn_qm) {
@@ -484,8 +548,14 @@ int ObStaticEngineExprCG::cg_expr_parents(const ObIArray<ObRawExpr *> &raw_exprs
          OB_SUCC(ret) && child_idx < rt_expr->arg_cnt_;
          child_idx++) {
       if (OB_ISNULL(rt_expr->args_[child_idx])) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid argument", K(ret), K(rt_expr->args_[child_idx]));
+        // 仅紧凑 RT 下 COLUMN_INFO 在 args_[1] 上可缺省为 NULL
+        if (rt_expr->type_ == T_FUN_COLUMN_CONV && child_idx == 1
+            && rt_expr->arg_cnt_ == static_cast<uint32_t>(ObExprColumnConv::RT_PARAMS_COUNT_WITH_COLUMN_INFO)
+            && OB_ISNULL(rt_expr->args_[1])) {
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid argument", K(ret), K(child_idx));
+        }
       } else {
         rt_expr->args_[child_idx]->parent_cnt_ += 1;
       }
@@ -516,8 +586,13 @@ int ObStaticEngineExprCG::cg_expr_parents(const ObIArray<ObRawExpr *> &raw_exprs
          OB_SUCC(ret) && arg_idx < rt_expr->arg_cnt_;
          arg_idx++) {
       if (OB_ISNULL(rt_expr->args_[arg_idx])) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("child expr is null", K(ret), K(arg_idx));
+        if (rt_expr->type_ == T_FUN_COLUMN_CONV && arg_idx == 1
+            && rt_expr->arg_cnt_ == static_cast<uint32_t>(ObExprColumnConv::RT_PARAMS_COUNT_WITH_COLUMN_INFO)
+            && OB_ISNULL(rt_expr->args_[1])) {
+        } else {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("child expr is null", K(ret), K(arg_idx));
+        }
       } else {
         uint32_t &parent_cnt = rt_expr->args_[arg_idx]->parent_cnt_;
         rt_expr->args_[arg_idx]->parents_[parent_cnt] = rt_expr;

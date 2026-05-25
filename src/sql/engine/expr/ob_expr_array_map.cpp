@@ -189,7 +189,8 @@ int ObExprArrayMapCommon::eval_lambda_array(ObEvalCtx &ctx, ObArenaAllocator &tm
       if (OB_UNLIKELY(OB_ISNULL(elem_type))) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("filter array collection element type is null", K(ret));
-      } else if (OB_FAIL(ObArrayUtil::append(*lambda_arr, elem_type->basic_meta_.get_obj_type(), datum))) {
+      } else if (OB_FAIL(ObArrayUtil::append(*lambda_arr, elem_type->basic_meta_.get_obj_type(), datum,
+                                             lambda_expr->obj_meta_.has_lob_header()))) {
         LOG_WARN("failed to append array value", K(ret), K(i));
       }
     }
@@ -282,10 +283,22 @@ int ObExprArrayMapCommon::set_lambda_para(ObIAllocator &alloc,
           lambda_para->locate_datum_for_write(ctx).set_double(val);
           break;
         }
-        case ObVarcharType: {
+        case ObVarcharType:
+        case ObTinyTextType:
+        case ObTextType:
+        case ObMediumTextType:
+        case ObLongTextType: {
           ObArrayBinary *binary_array = static_cast<ObArrayBinary *>(arr_obj[para_idx]);
           ObString val = (*binary_array)[idx];
-          lambda_para->locate_datum_for_write(ctx).set_string(val);
+          ObDatum &param_datum = lambda_para->locate_datum_for_write(ctx);
+          if (lambda_para->obj_meta_.has_lob_header()) {
+            if (OB_FAIL(ObTextStringHelper::string_to_templob_result(
+                    lambda_para->datum_meta_.type_, true, alloc, val, param_datum))) {
+              LOG_WARN("failed to wrap string to lob for lambda param", K(ret), K(val));
+            }
+          } else {
+            param_datum.set_string(val);
+          }
           break;
         }
         case ObCollectionSQLType: {

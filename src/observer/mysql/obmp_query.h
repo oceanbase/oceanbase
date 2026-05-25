@@ -80,12 +80,6 @@ private:
                             bool &async_resp_used,
                             bool &need_disconnect,
                             stmt::StmtType stmt_type);
-  int process_trans_ctrl_cmd(ObSQLSessionInfo &session,
-                             bool &need_disconnect,
-                             bool &async_resp_used,
-                             const bool is_rollback,
-                             const bool force_sync_resp,
-                             stmt::StmtType stmt_type);
   int process_with_tmp_context(sql::ObSQLSessionInfo &session,
                     bool has_more_result,
                     bool force_sync_resp,
@@ -114,9 +108,6 @@ private:
                              bool force_sync_resp,
                              bool &async_resp_used,
                              bool &need_disconnect);
-  void check_is_trans_ctrl_cmd(const ObString &sql,
-                               bool &is_trans_ctrl_cmd,
-                               stmt::StmtType &stmt_type);
 
   void record_stat(const sql::stmt::StmtType type, const int64_t end_time,
                    const sql::ObSQLSessionInfo& session,

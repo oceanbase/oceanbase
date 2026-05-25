@@ -14,7 +14,9 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "sql/engine/expr/ob_expr_array_max.h"
 #include "lib/udt/ob_array_type.h"
+#include "lib/udt/ob_array_utils.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
 
@@ -86,7 +88,7 @@ int ObExprArrayExtreme::calc_result_type1(ObExprResType &type,
   return ret;
 }
 
-int ObExprArrayExtreme::calc_extreme(ObIArrayType* src_arr, ObObj &res_obj, bool is_max)
+int ObExprArrayExtreme::calc_extreme(ObIArrayType *src_arr, ObObj &res_obj, ObIAllocator &alloc, bool is_max)
 {
   int ret = OB_SUCCESS;
   ObCollectionBasicType *elem_type = NULL;
@@ -107,13 +109,33 @@ int ObExprArrayExtreme::calc_extreme(ObIArrayType* src_arr, ObObj &res_obj, bool
         // do nothing
       } else if (OB_FAIL(src_arr->elem_at(i, elem_obj))) {
         LOG_WARN("failed to get element", K(ret), K(i));
+      } else if (src_arr->is_lob_element()
+                 && OB_FAIL(ObArrayUtil::varchar_obj_to_lob_obj(
+                        alloc, elem_obj, static_cast<ObObjType>(src_arr->get_element_type())))) {
+        LOG_WARN("failed to convert varchar obj to lob obj", K(ret), K(i), K(src_arr->get_element_type()));
       } else if (res_obj.is_null()) {
         res_obj = elem_obj;
-      } else if (elem_obj.is_varchar()) {
-        if (is_max && elem_obj.get_string() > res_obj.get_string()) {
-          res_obj = elem_obj;
-        } else if (!is_max && elem_obj.get_string() < res_obj.get_string()) {
-          res_obj = elem_obj;
+      } else if (elem_obj.is_string_type() || elem_obj.is_text()) {
+        ObString elem_cmp_str;
+        ObString res_cmp_str;
+        if (elem_obj.is_text() &&
+            OB_FAIL(ObTextStringHelper::read_real_string_data(&alloc, elem_obj, elem_cmp_str))) {
+          LOG_WARN("failed to read text element", K(ret), K(i));
+        } else if (res_obj.is_text() &&
+                   OB_FAIL(ObTextStringHelper::read_real_string_data(&alloc, res_obj, res_cmp_str))) {
+          LOG_WARN("failed to read text result", K(ret), K(i));
+        } else {
+          if (!elem_obj.is_text()) {
+            elem_cmp_str = elem_obj.get_string();
+          }
+          if (!res_obj.is_text()) {
+            res_cmp_str = res_obj.get_string();
+          }
+          if (is_max && elem_cmp_str > res_cmp_str) {
+            res_obj = elem_obj;
+          } else if (!is_max && elem_cmp_str < res_cmp_str) {
+            res_obj = elem_obj;
+          }
         }
       } else {
         if (is_max && elem_obj > res_obj) {
@@ -144,7 +166,7 @@ int ObExprArrayExtreme::eval_array_extreme(const ObExpr &expr, ObEvalCtx &ctx, O
     res.set_null();
   } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_datum->get_string(), src_arr))) {
     LOG_WARN("construct array obj failed", K(ret));
-  } else if (OB_FAIL(calc_extreme(src_arr, res_obj, is_max))) {
+  } else if (OB_FAIL(calc_extreme(src_arr, res_obj, tmp_allocator, is_max))) {
     LOG_WARN("calc array extreme value failed", K(ret));
   } else {
     res.from_obj(res_obj);
@@ -182,7 +204,7 @@ int ObExprArrayExtreme::eval_array_extreme_batch(const ObExpr &expr, ObEvalCtx &
         res_datum.at(j)->set_null();
       } else if (OB_FAIL(ObArrayExprUtils::get_array_obj(tmp_allocator, ctx, subschema_id, arr_array.at(j)->get_string(), src_arr))) {
         LOG_WARN("construct array obj failed", K(ret));
-      } else if (OB_FAIL(calc_extreme(src_arr, res_obj, is_max))) {
+      } else if (OB_FAIL(calc_extreme(src_arr, res_obj, tmp_allocator, is_max))) {
         LOG_WARN("calc array extreme value failed", K(ret));
       } else {
         res_datum.at(j)->from_obj(res_obj);
@@ -231,7 +253,7 @@ int ObExprArrayExtreme::eval_array_extreme_vector(const ObExpr &expr, ObEvalCtx 
       if (OB_FAIL(ret)) {
       } else if (is_null_res) {
         res_vec->set_null(idx);
-      } else if (OB_FAIL(calc_extreme(src_arr, res_obj, is_max))) {
+      } else if (OB_FAIL(calc_extreme(src_arr, res_obj, tmp_allocator, is_max))) {
         LOG_WARN("calc array extreme value failed", K(ret));
       } else if (OB_FAIL(ObArrayExprUtils::set_obj_to_vector(res_vec, idx, res_obj, res_alloc))) {
         LOG_WARN("failed to set object value to result vector", K(ret), K(idx), K(res_obj));

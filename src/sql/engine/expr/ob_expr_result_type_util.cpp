@@ -950,7 +950,34 @@ int ObExprResultTypeUtil::get_array_calc_type(ObExecContext *exec_ctx,
   }
   elem_data.meta_.set_type(coll_calc_type);
   elem_data.set_accuracy(ObAccuracy::DDL_DEFAULT_ACCURACY[coll_calc_type]);
-  if (type1 == ObVarcharType || type2 == ObVarcharType) {
+  if (ob_is_text_tc(type1) || ob_is_text_tc(type2)) {
+    // LOB types (TEXT, MEDIUMTEXT, LONGTEXT) should not be demoted to VARCHAR.
+    // When both are LOB types, pick the wider one; otherwise pick the LOB type.
+    if (ob_is_text_tc(type1) && ob_is_text_tc(type2)) {
+      coll_calc_type = (ObAccuracy::MAX_ACCURACY[type1].get_precision() >= ObAccuracy::MAX_ACCURACY[type2].get_precision()) ? type1 : type2;
+    } else {
+      coll_calc_type = ob_is_text_tc(type1) ? type1 : type2;
+    }
+    ObLength len1 = 0;
+    ObLength len2 = 0;
+    if (ob_is_string_type(type1)) {
+      len1 = coll_elem1_type.get_length();
+      calc_collection_type = coll_elem1_type.get_collation_type();
+    } else {
+      len1 = ObAccuracy::MAX_ACCURACY[type1].get_precision();
+    }
+    if (ob_is_string_type(type2)) {
+      len2 = coll_elem2_type.get_length();
+      if (calc_collection_type == CS_TYPE_INVALID) {
+        calc_collection_type = coll_elem2_type.get_collation_type();
+      }
+    } else {
+      len2 = ObAccuracy::MAX_ACCURACY[type2].get_precision();
+    }
+    elem_data.meta_.set_type(coll_calc_type);
+    elem_data.meta_.set_collation_type(calc_collection_type);
+    elem_data.set_length(MAX(len1, len2));
+  } else if (type1 == ObVarcharType || type2 == ObVarcharType) {
     coll_calc_type = ObVarcharType;
     ObLength len1 = 0;
     ObLength len2 = 0;
@@ -1011,8 +1038,8 @@ int ObExprResultTypeUtil::get_deduce_element_type(ObExprResType &input_type, ObD
   if (ob_is_collection_sql_type(elem_type.get_obj_type())) {
     ret = OB_ERR_ILLEGAL_ARGUMENT_FOR_FUNCTION;
     LOG_USER_ERROR(OB_ERR_ILLEGAL_ARGUMENT_FOR_FUNCTION);
-  } else if (ob_is_string_tc(res_type)) {
-    if (ob_is_string_tc(type2)) {
+  } else if (ob_is_string_type(res_type)) {
+    if (ob_is_string_type(type2)) {
       // do nothing
     } else {
       // set max len to fix plan cache issue

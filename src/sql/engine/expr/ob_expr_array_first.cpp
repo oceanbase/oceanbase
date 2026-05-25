@@ -172,6 +172,10 @@ int ObExprArrayFirst::eval_array_first(const ObExpr &expr, ObEvalCtx &ctx, ObDat
           ObObj elem_obj;
           if (OB_FAIL(src_arrs[0]->elem_at(i, elem_obj))) {
             LOG_WARN("failed to get element", K(ret), K(i));
+          } else if (src_arrs[0]->is_lob_element()
+                     && OB_FAIL(ObArrayUtil::varchar_obj_to_lob_obj(
+                            tmp_allocator, elem_obj, static_cast<ObObjType>(src_arrs[0]->get_element_type())))) {
+            LOG_WARN("failed to convert varchar obj to lob obj", K(ret), K(i), K(src_arrs[0]->get_element_type()));
           } else {
             res.from_obj(elem_obj);
             ObExprStrResAlloc res_alloc(expr, ctx);

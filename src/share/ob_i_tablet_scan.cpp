@@ -68,7 +68,8 @@ DEF_TO_STRING(ObVTableScanParam)
        K_(auto_split_filter),
        K_(auto_split_params),
        K_(is_tablet_spliting),
-       K_(ext_tbl_filter_pd_level));
+       K_(ext_tbl_filter_pd_level),
+       K_(vt_pd_colums_ids));
   J_OBJ_END();
   return pos;
 }

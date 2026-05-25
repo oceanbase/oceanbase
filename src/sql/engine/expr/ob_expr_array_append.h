@@ -42,12 +42,14 @@ public:
 
   static int append_elem(ObIAllocator &tmp_allocator, ObEvalCtx &ctx,
                          ObDatum *val_datum, uint16_t val_subschema_id,
-                         ObIArrayType *val_arr, ObIArrayType *res_arr);
+                         ObIArrayType *val_arr, ObIArrayType *res_arr,
+                         bool has_lob_header);
 
   static int append_elem_vector(ObIAllocator &tmp_allocator, ObEvalCtx &ctx,
                                 ObIVector *val_vec, int64_t idx,
                                 uint16_t val_subschema_id, ObExpr &param_expr,
-                                ObIArrayType *val_arr, ObIArrayType *res_arr);
+                                ObIArrayType *val_arr, ObIArrayType *res_arr,
+                                bool has_lob_header);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprArrayAppendCommon);
 };

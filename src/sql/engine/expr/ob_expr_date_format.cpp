@@ -451,7 +451,7 @@ int ObExprDateFormat::analyze_format(
           }
         } break;
         // MODE_YEAR_MONTH
-        case 'b': case 'c': case 'D': case 'd': case 'e': case 'M': case 'm': {
+        case 'b': case 'c': case 'D': case 'd': case 'e': case 'M': case 'm': case 'Q': {
           if (MODE_WEEK_ONLY == mode || MODE_YEAR_WEEK == mode) {
             mode = MODE_YEAR_MONTH_WEEK;
           } else if (MODE_YEAR_MONTH_WEEK != mode) {
@@ -469,7 +469,7 @@ int ObExprDateFormat::analyze_format(
           }
         } break;
         // MODE_YEAR_WEEK
-        case 'U': case 'u': case 'X': case 'x': case 'V': case 'v': {
+        case 'U': case 'u': case 'X': case 'x': case 'V': case 'v': case 'G': {
           if (MODE_YEAR_MONTH == mode) {
             mode = MODE_YEAR_MONTH_WEEK;
           } else if (MODE_YEAR_MONTH_WEEK != mode) {
@@ -660,6 +660,8 @@ int ObExprDateFormat::vector_date_format(const ObExpr &expr,
                 PROCESS_FORMAT_CASE('x', ObExprDateFormat::get_from_format_x);
                 PROCESS_FORMAT_CASE('V', ObExprDateFormat::get_from_format_V);
                 PROCESS_FORMAT_CASE('v', ObExprDateFormat::get_from_format_v);
+                PROCESS_FORMAT_CASE('Q', ObExprDateFormat::get_from_format_Q);
+                PROCESS_FORMAT_CASE('G', ObExprDateFormat::get_from_format_G);
                 default: {
                   if (no_skip_no_null) {
                     for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
@@ -1150,6 +1152,32 @@ OB_INLINE int ObExprDateFormat::get_from_format_v(FORMAT_FUNC_ARG_DECL)
   }
   memcpy(res_buf, &ObFastFormatInt::DIGITS[week_monday << 1], 2);
   len += 2;
+  return ret;
+}
+OB_INLINE int ObExprDateFormat::get_from_format_Q(FORMAT_FUNC_ARG_DECL)
+{
+  int ret = OB_SUCCESS;
+  // Calculate quarter: (month + 2) / 3, result is 1-4
+  int32_t quarter = (month + 2) / 3;
+  *res_buf = quarter + '0';
+  len += 1;
+  return ret;
+}
+OB_INLINE int ObExprDateFormat::get_from_format_G(FORMAT_FUNC_ARG_DECL)
+{
+  int ret = OB_SUCCESS;
+  // ISO week year (4-digit), similar to %x but 4 digits instead of 2
+  // Use WEEK_MODE[3] which is ISO-8601 standard week (Monday as first day, first week must contain at least 4 days)
+  if (-2 == delta_monday) {
+    ObTimeConverter::to_week(WEEK_MODE[3], year, dt_yday, dt_wday, week_monday, delta_monday);
+  }
+  year += (int32_t)(delta_monday);
+  if (OB_UNLIKELY(-1 == year)) {
+    year = 0;
+  }
+  memcpy(res_buf, &ObFastFormatInt::DIGITS[(year / 100) * 2], 2);
+  memcpy(res_buf + 2, &ObFastFormatInt::DIGITS[(year % 100) * 2], 2);
+  len += 4;
   return ret;
 }
 OB_INLINE int ObExprDateFormat::get_from_format_f(FORMAT_FUNC_ARG_DECL) {

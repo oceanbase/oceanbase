@@ -29,6 +29,7 @@ class ObLCObjectManager
 {
 public:
   typedef common::hash::ObHashMap<ObCacheObjID, ObILibCacheObject*> IdCacheObjectMap;
+  const int64_t OB_LC_ALLOC_PAGE_SIZE = (1LL << 12) - 256;  // 4KB
 
   ObLCObjectManager() : object_id_(0) {}
   int init(int64_t hash_bucket, uint64_t tenant_id);

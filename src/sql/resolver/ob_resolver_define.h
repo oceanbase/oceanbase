@@ -393,7 +393,8 @@ struct ObResolverParams
        is_in_view_(false),
        is_htable_(false),
        disable_shared_expr_(false),
-       alter_view_compile_args_(NULL)
+       alter_view_compile_args_(NULL),
+       is_from_pl_(false)
   {}
   int assign(const ObResolverParams &other);
   bool is_force_trace_log() { return force_trace_log_; }
@@ -473,6 +474,7 @@ public:
   bool is_htable_;
   bool disable_shared_expr_;
   common::ObIArray<obrpc::ObDependencyObjDDLArg> *alter_view_compile_args_;
+  bool is_from_pl_;
 };
 } // end namespace sql
 } // end namespace oceanbase

@@ -1345,6 +1345,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprVectorL2Squared, SHORT_CIRCUIT_EVALUATION);
     REG_OP(ObExprCollectFileList, SHORT_CIRCUIT_EVALUATION);
     REG_OP(ObExprVoid, EAGER_EVALUATION);
+    REG_OP(ObExprToSingleByte, EAGER_EVALUATION);
   }();
 // 注册oracle系统函数
   REG_OP_ORCL(ObExprSysConnectByPath, EAGER_EVALUATION);

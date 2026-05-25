@@ -40,6 +40,7 @@ class ObArrayUtil
 public :
   static int get_type_name(ObNestedType coll_type, const ObDataType &elem_type, char *buf, int buf_len, uint32_t depth = 1);
   static int push_back_decimal_int(const ObPrecision prec, const ObDecimalInt *dec_val, bool is_null, ObIArrayType *arr_obj);
+  static int varchar_obj_to_lob_obj(ObIAllocator &alloc, ObObj &obj, ObObjType lob_type);
   template<typename Elem_Type>
   static int contains(const ObIArrayType &array, const Elem_Type &elem, bool &bret)
   {
@@ -123,7 +124,8 @@ public :
   static int get_mysql_type(const common::ObIArray<common::ObString> &extended_type_info,
                             obmysql::EMySQLFieldType &type);
 
-  static int append(ObIArrayType &array, const ObObjType elem_type, const ObDatum *datum);
+  static int append(ObIArrayType &array, const ObObjType elem_type, const ObDatum *datum,
+                  bool has_lob_header = true);
 
   template<typename Elem_Type>
   static int clone_except(ObIAllocator &alloc, const ObIArrayType &src_array, const Elem_Type *elem, bool is_null, ObIArrayType *&dst_array)
@@ -158,17 +160,17 @@ public :
       break;
     case ArrayFormat::Binary_Varlen :
       if (OB_FAIL(static_cast<const ObArrayBinary *>(&src_array)->clone_except(alloc, elem, is_null, dst_array))) {
-        OB_LOG(WARN, "failed to do src_array contains", K(ret));
+        OB_LOG(WARN, "failed to do src_array clone_except", K(ret));
       }
       break;
     case ArrayFormat::Vector :
       if (static_cast<ObObjType>(src_array.get_element_type()) == ObUTinyIntType) {
         if (OB_FAIL(static_cast<const ObVectorU8Data *>(&src_array)->clone_except(alloc, elem, is_null, dst_array))) {
-          OB_LOG(WARN, "failed to do src_array contains", K(ret));
+          OB_LOG(WARN, "failed to do src_array clone_except", K(ret));
         }
       } else if (static_cast<ObObjType>(src_array.get_element_type()) == ObFloatType) {
         if (OB_FAIL(static_cast<const ObVectorF32Data *>(&src_array)->clone_except(alloc, elem, is_null, dst_array))) {
-          OB_LOG(WARN, "failed to do src_array contains", K(ret));
+          OB_LOG(WARN, "failed to do src_array clone_except", K(ret));
         }
       } else {
         ret = OB_ERR_UNEXPECTED;
@@ -177,7 +179,7 @@ public :
       break;
     case ArrayFormat::Nested_Array :
       if (OB_FAIL(static_cast<const ObArrayNested *>(&src_array)->clone_except(alloc, elem, is_null, dst_array))) {
-        OB_LOG(WARN, "failed to do src_array contains", K(ret));
+        OB_LOG(WARN, "failed to do src_array clone_except", K(ret));
       }
       break;
     default:

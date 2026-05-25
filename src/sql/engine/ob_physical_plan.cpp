@@ -148,7 +148,11 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     extend_sql_plan_monitor_metrics_(false),
     optimizer_features_enable_version_(0),
     route_to_column_replica_(false),
-    is_gtt_temp_table_v2_(false)
+    is_gtt_temp_table_v2_(false),
+    create_reason_(),
+    cache_node_id_(common::OB_INVALID_ID),
+    pcv_id_(common::OB_INVALID_ID),
+    plan_set_id_(common::OB_INVALID_ID)
 {
 }
 
@@ -271,6 +275,7 @@ void ObPhysicalPlan::reset()
   px_worker_share_plan_enabled_ = false;
   extend_sql_plan_monitor_metrics_ = false;
   optimizer_features_enable_version_ = 0;
+  enable_vec_batch_accum_ = false;
 }
 void ObPhysicalPlan::destroy()
 {
@@ -328,13 +333,13 @@ int ObPhysicalPlan::set_vars(const common::ObIArray<ObVarInfo> &vars)
   return ret;
 }
 
-int ObPhysicalPlan::init_params_info_str()
+int ObPhysicalPlan::gen_params_info_str(ObIAllocator *allocator, ObString &str) const
 {
   int ret = common::OB_SUCCESS;
   int64_t N = params_info_.count();
   int64_t buf_len = N * ObParamInfo::MAX_STR_DES_LEN + 1;
   int64_t pos = 0;
-  char *buf = (char *)allocator_.alloc(buf_len);
+  char *buf = (char *)allocator->alloc(buf_len);
   if (OB_ISNULL(buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     SQL_PC_LOG(WARN, "fail to alloc memory for param info", K(ret));
@@ -361,11 +366,7 @@ int ObPhysicalPlan::init_params_info_str()
       }
     }
   }
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(ob_write_string(allocator_, ObString(pos, buf), stat_.param_infos_))) {
-      SQL_PC_LOG(WARN, "fail to deep copy param infos", K(ret));
-    }
-  }
+  str.assign_ptr(buf, pos);
 
   return ret;
 }
@@ -569,15 +570,6 @@ void ObPhysicalPlan::update_plan_stat(const ObAuditRecordData &record,
 
     ATOMIC_STORE(&(stat_.last_active_time_), current_time);
     update_evolution_stat(record);  //for spm
-    if (stat_.is_bind_sensitive_ && execute_count > 0) {
-      int64_t pos = execute_count % ObPlanStat::MAX_SCAN_STAT_SIZE;
-      ATOMIC_STORE(&(stat_.table_scan_stat_[pos].query_range_row_count_),
-                   record.table_scan_stat_.query_range_row_count_);
-      ATOMIC_STORE(&(stat_.table_scan_stat_[pos].indexback_row_count_),
-                   record.table_scan_stat_.indexback_row_count_);
-      ATOMIC_STORE(&(stat_.table_scan_stat_[pos].output_row_count_),
-                   record.table_scan_stat_.output_row_count_);
-    }
   } // long route stat ends
 
   if (!is_expired()) {
@@ -1394,8 +1386,6 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
                                        pc_ctx.fp_result_.pc_key_.config_str_,
                                        stat_.config_str_))) {
       SQL_PC_LOG(DEBUG, "failed to add plan statistic", "plan_id", get_plan_id(), K(ret));
-    } else if (OB_FAIL(init_params_info_str())) {
-      SQL_PC_LOG(DEBUG, "fail to gen param info str", K(ret));
     } else if (OB_FAIL(ob_write_string(get_allocator(),
                                        trunc_raw_sql.string(),
                                        stat_.raw_sql_))) {
@@ -1426,20 +1416,22 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
       // do nothing
     } else if (pc_ctx.tmp_table_names_.count() > 0) {
       LOG_DEBUG("set tmp table name str", K(pc_ctx.tmp_table_names_));
+      char *buf = static_cast<char *>(get_allocator().alloc(TMP_TABLES_NAME_STR_LEN));
+      if (OB_ISNULL(buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("allocate memory for tmp table name failed", K(ret));
+      }
       stat_.sessid_ = pc_ctx.sql_ctx_.session_info_->get_sessid_for_table();\
       int64_t pos = 0;
       // fill temporary table name
-      for (int64_t i = 0; OB_SUCC(ret) && i < pc_ctx.tmp_table_names_.count(); i++) {
-        if (OB_ISNULL(stat_.plan_tmp_tbl_name_str_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_DEBUG("null plan tmp tbl id str", K(ret));
-        } else if (OB_FAIL(databuff_printf(stat_.plan_tmp_tbl_name_str_,
-                                           ObPlanStat::STMT_MAX_LEN,
-                                           pos,
-                                           "%.*s%s",
-                                           pc_ctx.tmp_table_names_.at(i).length(),
-                                           pc_ctx.tmp_table_names_.at(i).ptr(),
-                                           ((i == pc_ctx.tmp_table_names_.count() - 1) ? "" : ", ")))) {
+      for (int64_t i = 0; OB_SUCC(ret) && OB_NOT_NULL(buf) && i < pc_ctx.tmp_table_names_.count(); i++) {
+        if (OB_FAIL(databuff_printf(buf,
+                                    TMP_TABLES_NAME_STR_LEN,
+                                    pos,
+                                    "%.*s%s",
+                                    pc_ctx.tmp_table_names_.at(i).length(),
+                                    pc_ctx.tmp_table_names_.at(i).ptr(),
+                                    ((i == pc_ctx.tmp_table_names_.count() - 1) ? "" : ", ")))) {
           if (OB_SIZE_OVERFLOW == ret) {
             ret = OB_SUCCESS;
             break;
@@ -1450,9 +1442,8 @@ int ObPhysicalPlan::update_cache_obj_stat(ObILibCacheCtx &ctx)
         }
       }
       if (OB_SUCC(ret)) {
-        stat_.plan_tmp_tbl_name_str_[pos] = '\0';
-        pos += 1;
-        stat_.plan_tmp_tbl_name_str_len_ = static_cast<int32_t>(pos);
+        stat_.plan_tmp_tbl_name_str_.assign_buffer(buf, TMP_TABLES_NAME_STR_LEN);
+        stat_.plan_tmp_tbl_name_str_.set_length(pos);
       }
     }
     if (OB_SUCC(ret)) {

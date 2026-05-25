@@ -3620,6 +3620,8 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       ATOMIC_STORE(&json_document_max_depth_, json_max_depth);
       ATOMIC_STORE(&multimodel_memory_trace_level_,
                    tenant_config->_multimodel_memory_trace_level > 2 ? 0 : tenant_config->_multimodel_memory_trace_level);
+      ATOMIC_STORE(&record_ps_execute_params_, tenant_config->_record_ps_execute_params);
+      ATOMIC_STORE(&enable_pl_sql_parameterize_, tenant_config->_enable_pl_sql_parameterize);
     }
     conf_enable_sql_audit_ = GCONF.enable_sql_audit;
     ATOMIC_STORE(&last_check_ec_ts_, cur_ts);

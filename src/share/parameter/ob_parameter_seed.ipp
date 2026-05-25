@@ -3250,6 +3250,9 @@ DEF_CAP(syslog_sync_size_threshold, OB_CLUSTER_PARAMETER, "0M", "[0M,)",
         "Value 0 disables this function.",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_BOOL(_enable_vec_batch_accum, OB_TENANT_PARAMETER, "True",
+        "Control whether use batch row wrapper for non-vectorized operator under vectorized parent. ",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_restricted_session, OB_TENANT_PARAMETER, "False",
          "specifies whether to enable restricted session",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -3296,7 +3299,6 @@ DEF_TIME_WITH_CHECKER(schema_history_archive_expire_time, OB_TENANT_PARAMETER, "
                       "0 means disable GC, otherwise keep at least 30 days and at most 365 days. "
                       "Default 0. Range: {0} & [30d, 365d]",
                       ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
 DEF_BOOL(_enable_trigger_precise_batch_exec, OB_TENANT_PARAMETER, "False",
          "enable precise cross-trigger-point conflict detection for batched DML with row triggers."
          " When false (default), use conservative judgment: any trigger with side-effect flags"
@@ -3310,3 +3312,14 @@ DEF_BOOL(_enable_schema_history_archive, OB_TENANT_PARAMETER, "False",
          "during schema history recycling. If disabled, schema history will be recycled directly "
          "without archiving. Default: False.",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_sql_audit_filter_pushdown, OB_TENANT_PARAMETER, "True",
+         "Enable or disable sql audit filter pushdown.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_record_ps_execute_params, OB_TENANT_PARAMETER, "True",
+         "specifies whether record prepared statement execute params for sql audit. The default value is True.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_pl_sql_parameterize, OB_TENANT_PARAMETER, "False",
+      "enable/disable pl sql parameterize optimization",
+      ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

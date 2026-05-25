@@ -18,6 +18,7 @@
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
+#include "lib/udt/ob_array_utils.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -139,6 +140,10 @@ int ObExprElementAt::eval_element_at(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     ObObj elem_obj;
     if (OB_FAIL(src_arr->elem_at(idx, elem_obj))) {
       LOG_WARN("failed to get element", K(ret), K(idx));
+    } else if (src_arr->is_lob_element()
+               && OB_FAIL(ObArrayUtil::varchar_obj_to_lob_obj(
+                      tmp_allocator, elem_obj, static_cast<ObObjType>(src_arr->get_element_type())))) {
+      LOG_WARN("failed to convert varchar obj to lob obj", K(ret), K(idx), K(src_arr->get_element_type()));
     } else {
       res.from_obj(elem_obj);
       if (elem_obj.is_string_type() && OB_FAIL(res.deep_copy(res, res_alloc))) {
@@ -215,6 +220,10 @@ int ObExprElementAt::eval_element_at_batch(const ObExpr &expr, ObEvalCtx &ctx,
         ObObj elem_obj;
         if (OB_FAIL(src_arr->elem_at(static_cast<uint32_t>(idx), elem_obj))) {
           LOG_WARN("failed to get element", K(ret), K(idx));
+        } else if (src_arr->is_lob_element()
+                   && OB_FAIL(ObArrayUtil::varchar_obj_to_lob_obj(
+                          tmp_allocator, elem_obj, static_cast<ObObjType>(src_arr->get_element_type())))) {
+          LOG_WARN("failed to convert varchar obj to lob obj", K(ret), K(idx), K(src_arr->get_element_type()));
         } else {
           res_datum.at(j)->from_obj(elem_obj);
           if (elem_obj.is_string_type() && OB_FAIL(res_datum.at(j)->deep_copy(*res_datum.at(j), res_alloc))) {
@@ -298,6 +307,10 @@ int ObExprElementAt::eval_element_at_vector(const ObExpr &expr, ObEvalCtx &ctx,
         ObObj elem_obj;
         if (OB_FAIL(src_arr->elem_at(static_cast<uint32_t>(arr_idx), elem_obj))) {
           LOG_WARN("failed to get element", K(ret), K(arr_idx));
+        } else if (src_arr->is_lob_element()
+                   && OB_FAIL(ObArrayUtil::varchar_obj_to_lob_obj(
+                          tmp_allocator, elem_obj, static_cast<ObObjType>(src_arr->get_element_type())))) {
+          LOG_WARN("failed to convert varchar obj to lob obj", K(ret), K(arr_idx), K(src_arr->get_element_type()));
         } else if (OB_FAIL(ObArrayExprUtils::set_obj_to_vector(res_vec, idx, elem_obj, res_alloc))) {
           LOG_WARN("failed to set object value to result vector", K(ret), K(idx), K(elem_obj));
         }

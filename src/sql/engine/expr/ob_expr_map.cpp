@@ -277,7 +277,8 @@ int ObExprMap::deduce_element_type(ObExecContext *exec_ctx, ObExprResType* types
     ObDatum *datum = NULL;                                                             \
     if (OB_FAIL(expr.args_[i]->eval(ctx, datum))) {                                    \
       LOG_WARN("failed to eval args", K(ret), K(i));                                   \
-    } else if (OB_FAIL(ObArrayUtil::append(*full_key_arr, elem_type, datum))) {        \
+    } else if (OB_FAIL(ObArrayUtil::append(*full_key_arr, elem_type, datum,                      \
+                                           expr.args_[i]->obj_meta_.has_lob_header()))) {        \
       LOG_WARN("failed to append array value", K(ret), K(i));                          \
     } else if (datum->is_null()) {                                                     \
       idx_arr[0] = i;                                                                  \

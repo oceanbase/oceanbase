@@ -26,12 +26,15 @@ int ObCodeGenerator::generate(const ObLogPlan &log_plan,
   int ret = OB_SUCCESS;
   int64_t batch_size = 0;
   const uint64_t cur_cluster_version = CLUSTER_CURRENT_VERSION;
+  const bool disable_vec_batch_accum_for_ddl = log_plan.get_optimizer_context().is_online_ddl();
   OZ(detect_batch_size(log_plan, batch_size));
   if (OB_SUCC(ret) && batch_size > 0) {
     log_plan.get_optimizer_context().set_batch_size(batch_size);
     phy_plan.set_batch_size(batch_size);
   }
   phy_plan.set_min_cluster_version(GET_MIN_CLUSTER_VERSION());
+  phy_plan.set_enable_vec_batch_accum(log_plan.get_optimizer_context().get_enable_vec_batch_accum()
+                                      && !disable_vec_batch_accum_for_ddl);
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(generate_exprs(log_plan, phy_plan, cur_cluster_version))) {
     LOG_WARN("fail to get all raw exprs", K(ret));
@@ -97,6 +100,7 @@ int ObCodeGenerator::detect_batch_size(
   int ret = OB_SUCCESS;
   bool vectorize = false;
   bool stop_checking = false;
+  bool force_disable_batch_row_wrapper = false;
   batch_size = 0;
   ObBasicSessionInfo *session =
       log_plan.get_optimizer_context().get_session_info();
@@ -132,18 +136,11 @@ int ObCodeGenerator::detect_batch_size(
       OZ(ObStaticEngineCG::check_vectorize_supported(vectorize,
                                                      stop_checking,
                                                      scan_cardinality,
-                                                     log_plan.get_plan_root()));
+                                                     force_disable_batch_row_wrapper,
+                                                     log_plan.get_plan_root(),
+                                                     true));
     }
-    if (OB_FAIL(ret)) {
-    } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0 && !vectorize) {
-      // set max_batch_size = 1
-      // if all physical operator is not registered as vec op, disable vectorization
-      if (rowsets_enabled && has_registered_vec_op) {
-        batch_size = 1;
-      } else {
-        batch_size = 0;
-      }
-    } else if (vectorize) {
+    if (OB_SUCC(ret)) {
       ObArenaAllocator alloc;
       ObRawExprUniqueSet flattened_exprs(true);
       OZ(flattened_exprs.flatten_and_add_raw_exprs(log_plan.get_optimizer_context()
@@ -172,12 +169,28 @@ int ObCodeGenerator::detect_batch_size(
         batch_size = common::ObRandom::rand(min, max);
       }
       LOG_TRACE("detect_batch_size", K(vectorize), K(scan_cardinality), K(batch_size),
-                K(rowsets_max_rows), K(tmp_ret));
+                K(rowsets_max_rows), K(tmp_ret), K(rowsets_enabled), K(has_registered_vec_op),
+                K(force_disable_batch_row_wrapper));
     }
-    // TODO qubin.qb: remove the tracelog when rowsets/batch_size is displayed
-    // in plan
-    LOG_TRACE("detect_batch_size", K(vectorize), K(scan_cardinality), K(batch_size),
-              K(rowsets_enabled), K(batch_size), K(has_registered_vec_op));
+    // int tmp_ret = OB_E(EventTable::EN_DISABLE_VEC_SORT) OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+    } else if (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0 && !vectorize) {
+      // set max_batch_size = 1
+      // if all physical operator is not registered as vec op, disable vectorization
+      // batch_row_wrapper is a solution designed to mitigate performance degradation in scenarios where batch_size=1.
+      // However, there are still cases where batch_row_wrapper cannot be used, requiring batch_size to be explicitly set to 1.
+      // For example, this applies when user variables are involved. We use `force_disable_batch_row_wrapper` to flag such scenarios.
+      if (rowsets_enabled && has_registered_vec_op) {
+        if (log_plan.get_optimizer_context().get_enable_vec_batch_accum()
+            && !force_disable_batch_row_wrapper) {
+          batch_size = MAX(1, batch_size);
+        } else {
+          batch_size = 1;
+        }
+      } else {
+        batch_size = 0;
+      }
+    }
   }
   return ret;
 }

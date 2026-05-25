@@ -539,6 +539,18 @@ int ObSqlCollectionInfo::set_element_meta(const std::string &name, ObCollectionB
     //   basic_meta.meta_.set_geometry();
     // } else if (0 == name.compare("DECIMAL_INT")) {
     //   basic_meta.meta_.set_decimal_int();
+    } else if (0 == name.compare("TEXT")) {
+      basic_meta.meta_.set_type_simple(ObTextType);
+      basic_meta.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+      basic_meta.set_collation_level(CS_LEVEL_COERCIBLE);
+    } else if (0 == name.compare("MEDIUMTEXT")) {
+      basic_meta.meta_.set_type_simple(ObMediumTextType);
+      basic_meta.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+      basic_meta.set_collation_level(CS_LEVEL_COERCIBLE);
+    } else if (0 == name.compare("LONGTEXT")) {
+      basic_meta.meta_.set_type_simple(ObLongTextType);
+      basic_meta.set_collation_type(CS_TYPE_UTF8MB4_BIN);
+      basic_meta.set_collation_level(CS_LEVEL_COERCIBLE);
     } else {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("unsupported element type", K(ret), K(ObString(name.length(), name.c_str())));

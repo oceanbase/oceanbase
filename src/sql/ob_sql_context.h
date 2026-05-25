@@ -232,6 +232,7 @@ class ObSQLSessionInfo;
 class ObIVirtualTableIteratorFactory;
 class ObRawExpr;
 class ObSQLSessionInfo;
+class ObPsStmtInfo;
 
 class ObSelectStmt;
 class ObCCLRuleConcurrencyValueWrapper;
@@ -804,6 +805,10 @@ public:
   uint64_t ccl_match_time_;
   common::ObSEArray<ObCCLRuleConcurrencyValueWrapper*, 4> matched_ccl_rule_level_values_;
   common::ObSEArray<ObCCLRuleConcurrencyValueWrapper*, 4> matched_ccl_format_sqlid_level_values_;
+  ObPsStmtInfo *ps_stmt_info_;
+  ObPsStmtId inner_stmt_id_;
+  int32_t origin_pl_param_count_;
+  bool enable_pl_sql_parameterize_;
   TO_STRING_KV(K(stmt_type_));
 private:
   share::ObFeedbackRerouteInfo *reroute_info_;

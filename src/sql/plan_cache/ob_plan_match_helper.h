@@ -31,7 +31,7 @@ public:
     : plan_set_(plan_set)
   {
   }
-  int match_plan(const ObPlanCacheCtx &pc_ctx,
+  int match_plan(ObPlanCacheCtx &pc_ctx,
                  const ObPhysicalPlan *plan,
                  bool &is_matched,
                  common::ObIArray<ObCandiTableLoc> &phy_tbl_infos,
@@ -73,7 +73,7 @@ private:
    * in base table constraints
    *
    */
-  int check_partition_constraint(const ObPlanCacheCtx &pc_ctx,
+  int check_partition_constraint(ObPlanCacheCtx &pc_ctx,
                                  const ObIArray<LocationConstraint> &loc_cons,
                                  const common::ObIArray<ObCandiTableLoc> &phy_tbl_infos,
                                  bool &is_match) const;

@@ -1742,6 +1742,9 @@ public:
 
   inline void set_is_order_by_plan_top(const bool is_top) { is_order_by_plan_top_ = is_top; }
   inline bool is_order_by_plan_top() const { return is_order_by_plan_top_; }
+
+  void set_vectorized(bool is_vectorized_op) { is_vectorized_op_ = is_vectorized_op; }
+  bool is_vectorized() const { return is_vectorized_op_; }
 public:
   ObSqlArray<ObLogicalOperator *> child_;
   ObSqlArray<ObPCParamEqualInfo> equal_param_constraints_;
@@ -1932,6 +1935,8 @@ private:
 private:
   ObLogicalOperator *parent_;                           // parent operator
   bool is_plan_root_;                                // plan root operator
+  // updated during cg
+  bool is_vectorized_op_;
 protected:
   double cost_;                                  // cost up to this point
   double op_cost_;                               // cost for this operator

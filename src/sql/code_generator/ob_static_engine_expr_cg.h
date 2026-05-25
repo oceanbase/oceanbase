@@ -223,6 +223,8 @@ private:
   int alloc_so_check_exprs(const common::ObIArray<ObRawExpr *> &raw_exprs,
                            ObExprFrameInfo &expr_info);
 
+  int trim_column_conv_const_children(ObRawExprUniqueSet &flattened_exprs);
+
   // calculate res_buf_len_ for exprs' datums
   int calc_exprs_res_buf_len(const common::ObIArray<ObRawExpr *> &raw_exprs);
 

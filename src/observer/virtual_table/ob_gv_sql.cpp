@@ -29,18 +29,21 @@ using namespace pl;
 ObGVSql::ObGVSql()
     :plan_id_array_(),
      plan_id_array_idx_(OB_INVALID_ID),
-     plan_cache_(NULL)
+     plan_cache_(NULL),
+     tmp_buff_()
 {
 }
 
 ObGVSql::~ObGVSql()
 {
+  reset();
 }
 
 void ObGVSql::reset()
 {
   ObAllPlanCacheBase::reset();
   plan_id_array_.reset();
+  tmp_buff_.reset();
   plan_id_array_idx_ = OB_INVALID_ID;
   plan_cache_ = NULL;
 }
@@ -61,6 +64,7 @@ int ObGVSql::inner_open()
           K(tenant_id_array_));
     }
   }
+  tmp_buff_.inner_allocator_.set_attr(lib::ObMemAttr(effective_tenant_id_, "GVSQL"));
   SERVER_LOG(TRACE,"get tenant_id array", K(effective_tenant_id_), K(is_sys_tenant(effective_tenant_id_)), K(tenant_id_array_));
   return ret;
 }
@@ -128,6 +132,39 @@ int ObGVSql::get_row_from_specified_tenant(uint64_t tenant_id, bool &is_end)
              "add plan from a tenant",
              K(ret),
              K(tenant_id));
+  return ret;
+}
+
+template<typename T>
+OB_INLINE int dump_obj(const T &obj, ObGVSql::ReuseableBuffer &buffer, int64_t &len)
+{
+  int ret = OB_SUCCESS;
+  int64_t tmp_buf_len = 1024;
+  bool print_succ = false;
+  char *buf;
+  if (OB_ISNULL(buf = buffer.alloc(tmp_buf_len))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    SERVER_LOG(WARN, "failed to alloc memory", K(ret), K(tmp_buf_len));
+  }
+  while (OB_SUCC(ret) && !print_succ) {
+    int64_t pos = 0;
+    buf[0] = '\0';
+    if (OB_FAIL(databuff_printf(buf, tmp_buf_len, pos, obj))) {
+      if (ret == OB_SIZE_OVERFLOW) {
+        ret = OB_SUCCESS;
+        tmp_buf_len *= 2;
+        if (OB_ISNULL(buf = buffer.alloc(tmp_buf_len))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          SERVER_LOG(WARN, "unexpected null pl pkg", K(ret));
+        }
+      } else {
+        SERVER_LOG(WARN, "failed to print obj", K(ret), KP(buf), K(tmp_buf_len), K(obj));
+      }
+    } else {
+      print_succ = true;
+      len = pos;
+    }
+  }
   return ret;
 }
 
@@ -246,23 +283,11 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::IS_BIND_SENSITIVE: {
-      if (!cache_stat_updated) {
-        cells[i].set_null();
-      } else if (cache_obj->is_sql_crsr()) {
-        cells[i].set_int(plan->stat_.is_bind_sensitive_);
-      } else {
-        cells[i].set_int(0);
-      }
+      cells[i].set_null();
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::IS_BIND_AWARE: {
-      if (!cache_stat_updated) {
-        cells[i].set_null();
-      } else if (cache_obj->is_sql_crsr()) {
-        cells[i].set_int(plan->stat_.is_bind_aware_);
-      } else {
-        cells[i].set_int(0);
-      }
+      cells[i].set_null();
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::DB_ID: {
@@ -403,7 +428,7 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
           ret = OB_ALLOCATE_MEMORY_FAILED;
           SERVER_LOG(ERROR, "allocate memory failed!", K(ret), K(buf_len));
         } else if (OB_FALSE_IT(plan->stat_.sp_info_str_.to_string(buf, buf_len))) {
-        } else if (OB_FALSE_IT(sp_info_str.assign(buf, buf_len))) {
+        } else if (OB_FALSE_IT(sp_info_str.assign(buf, buf_len - 1))) {
         } else {
           cells[i].set_varchar(sp_info_str);
           cells[i].set_collation_type(ObCharset::get_default_collation(
@@ -420,12 +445,16 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       } else if (cache_obj->is_sql_crsr() ||
                  NULL != pl_object) {
         ObString param_info_lob_str;
-        const ObString& param_infos = NULL != pl_object ? pl_object->get_stat().param_infos_ : plan->stat_.param_infos_;
-        if (OB_FAIL(ob_write_string(*allocator_,
-                                    param_infos,
-                                    param_info_lob_str))) {
-          SERVER_LOG(ERROR, "copy param_infos failed", K(ret));
+        if (NULL != pl_object) {
+          if (OB_FAIL(pl_object->gen_params_info_str(allocator_, param_info_lob_str))) {
+            SERVER_LOG(ERROR, "gen gen_params_info_str failed", K(ret));
+          }
         } else {
+          if (OB_FAIL(plan->gen_params_info_str(allocator_, param_info_lob_str))) {
+            SERVER_LOG(ERROR, "gen gen_params_info_str failed", K(ret));
+          }
+        }
+        if (OB_SUCC(ret)) {
           cells[i].set_lob_value(ObLongTextType, param_info_lob_str.ptr(),
                                   static_cast<int32_t>(param_info_lob_str.length()));
           cells[i].set_collation_type(ObCharset::get_default_collation(
@@ -467,7 +496,7 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
           ret = OB_ALLOCATE_MEMORY_FAILED;
           SERVER_LOG(ERROR, "allocate memory failed!", K(ret), K(buf_len));
         } else if (OB_FALSE_IT(origin_str.to_string(buf, buf_len))) {
-        } else if (OB_FALSE_IT(sys_vars_str.assign(buf, buf_len))) {
+        } else if (OB_FALSE_IT(sys_vars_str.assign(buf, buf_len - 1))) {
         } else {
           cells[i].set_varchar(sys_vars_str);
           cells[i].set_collation_type(ObCharset::get_default_collation(
@@ -498,7 +527,7 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
           ret = OB_ALLOCATE_MEMORY_FAILED;
           SERVER_LOG(ERROR, "allocate memory failed!", K(ret), K(buf_len));
         } else if (OB_FALSE_IT(origin_str.to_string(buf, buf_len))) {
-        } else if (OB_FALSE_IT(config_str.assign(buf, buf_len))) {
+        } else if (OB_FALSE_IT(config_str.assign(buf, buf_len - 1))) {
         } else {
           cells[i].set_varchar(config_str);
           cells[i].set_collation_type(ObCharset::get_default_collation(
@@ -882,24 +911,7 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::ACS_SEL_INFO: {
-      if (!cache_stat_updated) {
-        cells[i].set_null();
-      } else if (cache_obj->is_sql_crsr()) {
-        ObString acs_info;
-        stmt.assign_ptr(plan->stat_.plan_sel_info_str_, plan->stat_.plan_sel_info_str_len_);
-        if (OB_FAIL(ob_write_string(*allocator_,
-                                    stmt,
-                                    acs_info))) {
-          SERVER_LOG(ERROR, "copy acs_info failed", K(ret));
-        } else {
-          cells[i].set_lob_value(ObLongTextType, acs_info.ptr(),
-                               static_cast<int32_t>(acs_info.length()));
-          cells[i].set_collation_type(ObCharset::get_default_collation(
-                                        ObCharset::get_default_charset()));
-        }
-      } else {
-        cells[i].set_null();
-      }
+      cells[i].set_null();
       break;
     }
     case share::ALL_VIRTUAL_PLAN_STAT_CDE::TABLE_SCAN: {
@@ -995,9 +1007,8 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
         cells[i].set_null();
       } else if (cache_obj->is_sql_crsr()) {
         ObString tmp_tbls;
-        stmt.assign_ptr(plan->stat_.plan_tmp_tbl_name_str_, plan->stat_.plan_tmp_tbl_name_str_len_);
         if (OB_FAIL(ob_write_string(*allocator_,
-                                    stmt,
+                                    plan->stat_.plan_tmp_tbl_name_str_,
                                     tmp_tbls))) {
           SERVER_LOG(ERROR, "copy acs_info failed", K(ret));
         } else {
@@ -1272,6 +1283,149 @@ int ObGVSql::fill_cells(const ObILibCacheObject *cache_obj, const ObPlanCache &p
         cg_time = static_cast<uint64_t>(pl_object->get_stat().cg_time_);
       }
       cells[i].set_uint64(cg_time);
+      break;
+    }
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::CACHE_NODE_ID: {
+      if (cache_obj->is_sql_crsr()) {
+        cells[i].set_int(plan->cache_node_id_);
+      } else {
+        cells[i].set_null();
+      }
+      break;
+    }
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::PCV_ID: {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
+        cells[i].set_int(plan->pcv_id_);
+      } else {
+        cells[i].set_null();
+      }
+      break;
+    }
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::PLAN_SET_ID: {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
+        cells[i].set_int(plan->plan_set_id_);
+      } else {
+        cells[i].set_null();
+      }
+      break;
+    }
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::CREATE_REASON: {
+      if (!cache_stat_updated) {
+        cells[i].set_null();
+      } else if (cache_obj->is_sql_crsr()) {
+        ObString reason_str;
+        char *buf = nullptr;
+        int64_t buf_len = 0;
+        if (OB_FAIL(plan->create_reason_.dump(allocator_, buf, buf_len))) {
+          SERVER_LOG(WARN, "failed to calc buf length", K(ret));
+        } else if (OB_FALSE_IT(reason_str.assign(buf, buf_len))) {
+        } else {
+          cells[i].set_varchar(reason_str);
+          cells[i].set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+        }
+      } else {
+        cells[i].set_null();
+      }
+      break;
+    }
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::BASE_TABLE_LOCATION_CONSTRAINT: {
+      if (cache_obj->is_sql_crsr()) {
+        int64_t len = 0;
+        if (OB_FAIL(dump_obj(plan->get_base_constraints(), tmp_buff_, len))) {
+          SERVER_LOG(WARN, "print base constraint failed", K(ret), K(plan->get_base_constraints()));
+        } else {
+          ObString tmp(len, tmp_buff_.buff_);
+          ObString str;
+          if (OB_FAIL(ob_write_string(*allocator_,
+                                      tmp,
+                                      str))) {
+            SERVER_LOG(WARN, "copy base constraints failed", K(ret));
+          } else {
+            cells[i].set_lob_value(ObLongTextType, str.ptr(),
+                                  static_cast<int32_t>(str.length()));
+            cells[i].set_collation_type(ObCharset::get_default_collation(
+                                          ObCharset::get_default_charset()));
+          }
+        }
+      } else {
+        cells[i].set_null();
+      }
+      break;
+    }
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::DUPLICATE_TABLE_REPLICA_CONSTRAINT: {
+      if (cache_obj->is_sql_crsr()) {
+        int64_t len = 0;
+        if (OB_FAIL(dump_obj(plan->get_dup_table_replica_constraints(), tmp_buff_, len))) {
+          SERVER_LOG(WARN, "print duplicate table replica constraint failed", K(ret), K(plan->get_dup_table_replica_constraints()));
+        } else {
+          ObString tmp(len, tmp_buff_.buff_);
+          ObString str;
+          if (OB_FAIL(ob_write_string(*allocator_,
+                                      tmp,
+                                      str))) {
+            SERVER_LOG(WARN, "copy duplicate table constraints failed", K(ret));
+          } else {
+            cells[i].set_lob_value(ObLongTextType, str.ptr(),
+                                  static_cast<int32_t>(str.length()));
+            cells[i].set_collation_type(ObCharset::get_default_collation(
+                                          ObCharset::get_default_charset()));
+          }
+        }
+      } else {
+        cells[i].set_null();
+      }
+      break;
+    }
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::STRICT_LOCATION_CONSTRAINT: {
+      if (cache_obj->is_sql_crsr()) {
+        int64_t len = 0;
+        if (OB_FAIL(dump_obj(plan->get_strict_constraints(), tmp_buff_, len))) {
+          SERVER_LOG(WARN, "print strict replica constraint failed", K(ret), K(plan->get_strict_constraints()));
+        } else {
+          ObString tmp(len, tmp_buff_.buff_);
+          ObString str;
+          if (OB_FAIL(ob_write_string(*allocator_,
+                                      tmp,
+                                      str))) {
+            SERVER_LOG(WARN, "copy strict location constraints failed", K(ret));
+          } else {
+            cells[i].set_lob_value(ObLongTextType, str.ptr(),
+                                  static_cast<int32_t>(str.length()));
+            cells[i].set_collation_type(ObCharset::get_default_collation(
+                                          ObCharset::get_default_charset()));
+          }
+        }
+      } else {
+        cells[i].set_null();
+      }
+      break;
+    }
+    case share::ALL_VIRTUAL_PLAN_STAT_CDE::NON_STRICT_LOCATION_CONSTRAINT: {
+      if (cache_obj->is_sql_crsr()) {
+        int64_t len = 0;
+        if (OB_FAIL(dump_obj(plan->get_non_strict_constraints(), tmp_buff_, len))) {
+          SERVER_LOG(WARN, "print non-strict replica constraint failed", K(ret), K(plan->get_non_strict_constraints()));
+        } else {
+          ObString tmp(len, tmp_buff_.buff_);
+          ObString str;
+          if (OB_FAIL(ob_write_string(*allocator_,
+                                      tmp,
+                                      str))) {
+            SERVER_LOG(WARN, "copy non-strict constraints failed", K(ret));
+          } else {
+            cells[i].set_lob_value(ObLongTextType, str.ptr(),
+                                  static_cast<int32_t>(str.length()));
+            cells[i].set_collation_type(ObCharset::get_default_collation(
+                                          ObCharset::get_default_charset()));
+          }
+        }
+      } else {
+        cells[i].set_null();
+      }
       break;
     }
     default: {

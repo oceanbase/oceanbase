@@ -106,11 +106,13 @@ int ObExprArrayAppendCommon::eval_append(const ObExpr &expr, ObEvalCtx &ctx, ObD
   } else if (!is_prepend) {
     if (OB_FAIL(res_arr->insert_from(*src_arr))) {
       LOG_WARN("failed to insert elements from array", K(ret));
-    } else if (OB_FAIL(append_elem(tmp_allocator, ctx, val_datum, val_subschema_id, val_arr, res_arr))) {
+    } else if (OB_FAIL(append_elem(tmp_allocator, ctx, val_datum, val_subschema_id, val_arr, res_arr,
+                                    expr.args_[1]->obj_meta_.has_lob_header()))) {
       LOG_WARN("failed to append element", K(ret));
     }
   } else {
-    if (OB_FAIL(append_elem(tmp_allocator, ctx, val_datum, val_subschema_id, val_arr, res_arr))) {
+    if (OB_FAIL(append_elem(tmp_allocator, ctx, val_datum, val_subschema_id, val_arr, res_arr,
+                            expr.args_[1]->obj_meta_.has_lob_header()))) {
       LOG_WARN("failed to append element", K(ret));
     } else if (OB_FAIL(res_arr->insert_from(*src_arr))) {
       LOG_WARN("failed to insert elements from array", K(ret));
@@ -175,11 +177,13 @@ int ObExprArrayAppendCommon::eval_append_batch(const ObExpr &expr, ObEvalCtx &ct
       } else if (!is_prepend) {
         if (OB_FAIL(res_arr->insert_from(*src_arr))) {
           LOG_WARN("failed to insert elements from array", K(ret));
-        } else if (OB_FAIL(append_elem(tmp_allocator, ctx, val_datum.at(j), val_subschema_id, val_arr, res_arr))) {
+        } else if (OB_FAIL(append_elem(tmp_allocator, ctx, val_datum.at(j), val_subschema_id, val_arr, res_arr,
+                                      expr.args_[1]->obj_meta_.has_lob_header()))) {
           LOG_WARN("failed to append element", K(ret));
         }
       } else {
-        if (OB_FAIL(append_elem(tmp_allocator, ctx, val_datum.at(j), val_subschema_id, val_arr, res_arr))) {
+        if (OB_FAIL(append_elem(tmp_allocator, ctx, val_datum.at(j), val_subschema_id, val_arr, res_arr,
+                                expr.args_[1]->obj_meta_.has_lob_header()))) {
           LOG_WARN("failed to append element", K(ret));
         } else if (OB_FAIL(res_arr->insert_from(*src_arr))) {
           LOG_WARN("failed to insert elements from array", K(ret));
@@ -264,12 +268,14 @@ int ObExprArrayAppendCommon::eval_append_vector(const ObExpr &expr, ObEvalCtx &c
         if (OB_FAIL(res_arr->insert_from(*src_arr))) {
           LOG_WARN("failed to insert elements from array", K(ret));
         } else if (OB_FAIL(append_elem_vector(tmp_allocator, ctx, val_vec, idx,
-                                              val_subschema_id, *expr.args_[1], val_arr, res_arr))){
+                                              val_subschema_id, *expr.args_[1], val_arr, res_arr,
+                                              expr.args_[1]->obj_meta_.has_lob_header()))){
           LOG_WARN("append array element failed", K(ret));
         }
       } else {
         if (OB_FAIL(append_elem_vector(tmp_allocator, ctx, val_vec, idx,
-                                              val_subschema_id, *expr.args_[1], val_arr, res_arr))){
+                                              val_subschema_id, *expr.args_[1], val_arr, res_arr,
+                                              expr.args_[1]->obj_meta_.has_lob_header()))){
           LOG_WARN("failed to append element", K(ret));
         } else if (OB_FAIL(res_arr->insert_from(*src_arr))) {
           LOG_WARN("failed to insert elements from array", K(ret));
@@ -296,7 +302,8 @@ int ObExprArrayAppendCommon::eval_append_vector(const ObExpr &expr, ObEvalCtx &c
 
 int ObExprArrayAppendCommon::append_elem(ObIAllocator &tmp_allocator, ObEvalCtx &ctx,
                                          ObDatum *val_datum, uint16_t val_subschema_id,
-                                         ObIArrayType *val_arr, ObIArrayType *res_arr)
+                                         ObIArrayType *val_arr, ObIArrayType *res_arr,
+                                         bool has_lob_header)
 {
   int ret = OB_SUCCESS;
   if (res_arr->get_format() == Nested_Array) {
@@ -314,7 +321,8 @@ int ObExprArrayAppendCommon::append_elem(ObIAllocator &tmp_allocator, ObEvalCtx 
     }
   } else {
     ObCollectionBasicType *elem_type = dynamic_cast<ObCollectionBasicType *>(dynamic_cast<const ObCollectionArrayType*>(res_arr->get_array_type())->element_type_);
-    if (OB_FAIL(ObArrayUtil::append(*res_arr, elem_type->basic_meta_.get_obj_type(), val_datum))) {
+    if (OB_FAIL(ObArrayUtil::append(*res_arr, elem_type->basic_meta_.get_obj_type(), val_datum,
+                                    has_lob_header))) {
       LOG_WARN("failed to append array value", K(ret));
     }
   }
@@ -324,7 +332,8 @@ int ObExprArrayAppendCommon::append_elem(ObIAllocator &tmp_allocator, ObEvalCtx 
 int ObExprArrayAppendCommon::append_elem_vector(ObIAllocator &tmp_allocator, ObEvalCtx &ctx,
                                                 ObIVector *val_vec, int64_t idx,
                                                 uint16_t val_subschema_id, ObExpr &param_expr,
-                                                ObIArrayType *val_arr, ObIArrayType *res_arr)
+                                                ObIArrayType *val_arr, ObIArrayType *res_arr,
+                                                bool has_lob_header)
 {
   int ret = OB_SUCCESS;
   if (res_arr->get_format() == Nested_Array) {
@@ -344,6 +353,7 @@ int ObExprArrayAppendCommon::append_elem_vector(ObIAllocator &tmp_allocator, ObE
     }
   } else {
     ObCollectionBasicType *elem_type = dynamic_cast<ObCollectionBasicType *>(dynamic_cast<const ObCollectionArrayType*>(res_arr->get_array_type())->element_type_);
+    ObObjType obj_type = elem_type->basic_meta_.get_obj_type();
     ObDatum val_datum;
     if (val_vec->is_null(idx)) {
       val_datum.set_null();
@@ -354,7 +364,7 @@ int ObExprArrayAppendCommon::append_elem_vector(ObIAllocator &tmp_allocator, ObE
       val_datum.ptr_ = payload;
       val_datum.pack_ = payload_len;
     }
-    if (OB_FAIL(ObArrayUtil::append(*res_arr, elem_type->basic_meta_.get_obj_type(), &val_datum))) {
+    if (OB_FAIL(ObArrayUtil::append(*res_arr, obj_type, &val_datum, has_lob_header))) {
       LOG_WARN("failed to append array value", K(ret));
     }
   }

@@ -15,6 +15,7 @@
 #include "sql/engine/expr/ob_expr_array_compact.h"
 #include "lib/udt/ob_collection_type.h"
 #include "lib/udt/ob_array_type.h"
+#include "lib/udt/ob_array_utils.h"
 #include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "sql/engine/ob_exec_context.h"
@@ -297,6 +298,25 @@ int ObExprArrayCompact::eval_compact(ObIAllocator &tmp_allocator, ObEvalCtx &ctx
         }
       } else if (OB_FAIL(src_arr->elem_at(i, this_elem))) {
           LOG_WARN("failed to get element", K(ret), K(i));
+      } else if (src_arr->is_lob_element()
+                 && OB_FAIL(ObArrayUtil::varchar_obj_to_lob_obj(
+                        tmp_allocator, this_elem, static_cast<ObObjType>(src_arr->get_element_type())))) {
+          LOG_WARN("failed to convert varchar obj to lob obj", K(ret), K(i), K(src_arr->get_element_type()));
+      } else if (i > 0 && !is_last_null && this_elem.is_text()) {
+        ObString this_cmp_str;
+        ObString last_cmp_str;
+        if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator, this_elem, this_cmp_str))) {
+          LOG_WARN("failed to read current text element", K(ret), K(i));
+        } else if (OB_FAIL(ObTextStringHelper::read_real_string_data(&tmp_allocator, last_elem, last_cmp_str))) {
+          LOG_WARN("failed to read last text element", K(ret), K(i));
+        } else if (this_cmp_str == last_cmp_str) {
+          // do nothing
+        } else if (OB_FAIL(res_arr->insert_from(*src_arr, i))) {
+          LOG_WARN("failed to insert element to result array", K(ret), K(i));
+        } else {
+          is_last_null = false;
+          last_elem = this_elem;
+        }
       } else if (i > 0 && !is_last_null && this_elem == last_elem) {
         // do nothing
       } else if (OB_FAIL(res_arr->insert_from(*src_arr, i))) {

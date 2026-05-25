@@ -289,8 +289,20 @@ int ObExprArrayPosition::array_position(const ObExpr &expr,
     }
     break;
   }
-  case ObStringTC: {
-    if (OB_FAIL(ObArrayUtil::position(*src_arr, val_datum->get_string(), idx))) {
+  case ObStringTC:
+  case ObTextTC: {
+    ObString val = val_datum->get_string();
+    if (ob_is_text_tc(expr.args_[1]->datum_meta_.type_)) {
+      if (OB_FAIL(ObTextStringHelper::read_real_string_data(alloc,
+              *val_datum,
+              expr.args_[1]->datum_meta_,
+              expr.args_[1]->obj_meta_.has_lob_header(),
+              val,
+              &ctx.exec_ctx_))) {
+        LOG_WARN("read search real string failed", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(ObArrayUtil::position(*src_arr, val, idx))) {
       LOG_WARN("array position failed", K(ret));
     }
     break;
@@ -353,8 +365,23 @@ int ObExprArrayPosition::array_position_vector(const ObExpr &expr,
     }
     break;
   }
-  case ObStringTC: {
-    if (OB_FAIL(ObArrayUtil::position(*src_arr, val_vec->get_string(vec_idx), idx))) {
+  case ObStringTC:
+  case ObTextTC: {
+    ObString val;
+    if (ob_is_text_tc(expr.args_[1]->datum_meta_.type_)) {
+      if (OB_FAIL(ObTextStringHelper::read_real_string_data(alloc,
+              val_vec,
+              expr.args_[1]->datum_meta_,
+              expr.args_[1]->obj_meta_.has_lob_header(),
+              val,
+              vec_idx,
+              &ctx.exec_ctx_))) {
+        LOG_WARN("read search real string failed", K(ret));
+      }
+    } else {
+      val = val_vec->get_string(vec_idx);
+    }
+    if (OB_SUCC(ret) && OB_FAIL(ObArrayUtil::position(*src_arr, val, idx))) {
       LOG_WARN("array position failed", K(ret));
     }
     break;

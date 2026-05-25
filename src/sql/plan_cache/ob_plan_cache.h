@@ -333,9 +333,7 @@ public:
 
   int64_t get_mem_used() const
   {
-    lib::ObLabel label;
-    label = ObNewModIds::OB_SQL_PLAN_CACHE;
-    return mem_used_ + get_label_hold(label);
+    return get_tenant_memory_approx_used(tenant_id_, ObCtxIds::PLAN_CACHE_CTX_ID);
   }
   int64_t get_mem_hold() const;
   int64_t get_label_hold(lib::ObLabel &label) const;
@@ -454,9 +452,9 @@ private:
                 ObLibCacheAtomicOp &op);
   int add_cache_obj_stat(ObILibCacheCtx &ctx,
                          ObILibCacheObject *cache_obj);
-  bool calc_evict_num(int64_t &plan_cache_evict_num);
+  bool calc_evict_num(int64_t mem_used, int64_t &plan_cache_evict_num);
 
-  bool is_reach_memory_limit() { return get_mem_hold() > get_mem_limit(); }
+  bool is_reach_memory_limit() { return get_mem_used() > get_mem_limit(); }
   int construct_plan_cache_key(ObPlanCacheCtx &plan_ctx, ObLibCacheNameSpace ns);
   static int construct_plan_cache_key(ObSQLSessionInfo &session,
                                       ObLibCacheNameSpace ns,

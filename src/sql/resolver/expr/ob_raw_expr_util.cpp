@@ -8202,6 +8202,28 @@ int ObRawExprUniqueSet::flatten_temp_expr(ObRawExpr *raw_expr)
   return ret;
 }
 
+int ObRawExprUniqueSet::remove_exprs(const common::ObIArray<ObRawExpr *> &exprs_to_remove)
+{
+  int ret = OB_SUCCESS;
+  if (exprs_to_remove.empty()) {
+    // do nothing
+  } else {
+    int64_t write_idx = 0;
+    for (int64_t i = 0; i < expr_array_.count(); i++) {
+      if (!has_exist_in_array(exprs_to_remove, expr_array_.at(i))) {
+        if (write_idx != i) {
+          expr_array_.at(write_idx) = expr_array_.at(i);
+        }
+        write_idx++;
+      }
+    }
+    while (expr_array_.count() > write_idx) {
+      expr_array_.pop_back();
+    }
+  }
+  return ret;
+}
+
 ObCollectionAttrBuilder::ObCollectionAttrBuilder(ObRawExprFactory *expr_factory,
                                                  const ObSQLSessionInfo *session_info,
                                                  ObRawExprUniqueSet &expr_set)

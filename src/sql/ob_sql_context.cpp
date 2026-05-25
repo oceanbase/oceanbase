@@ -211,8 +211,11 @@ ObSqlCtx::ObSqlCtx()
     flags_(0),
     ccl_rule_id_(0),
     ccl_match_time_(0),
+    ps_stmt_info_(nullptr),
+    inner_stmt_id_(OB_INVALID_ID),
+    origin_pl_param_count_(0),
+    enable_pl_sql_parameterize_(false),
     reroute_info_(nullptr)
-
 {
   sql_id_[0] = '\0';
   sql_id_[common::OB_MAX_SQL_ID_LENGTH] = '\0';
@@ -283,6 +286,10 @@ void ObSqlCtx::reset()
   ccl_match_time_ = 0;
   matched_ccl_rule_level_values_.reset();
   matched_ccl_format_sqlid_level_values_.reset();
+  ps_stmt_info_ = nullptr;
+  inner_stmt_id_ = OB_INVALID_ID;
+  origin_pl_param_count_ = 0;
+  enable_pl_sql_parameterize_ = false;
 }
 
 //release dynamic allocated memory
@@ -300,6 +307,8 @@ void ObSqlCtx::clear()
   is_text_ps_mode_ = false;
   ins_opt_ctx_.clear();
   cur_plan_ = nullptr;
+  ps_stmt_info_ = nullptr;
+  inner_stmt_id_ = OB_INVALID_ID;
 }
 
 OB_SERIALIZE_MEMBER(ObSqlCtx, stmt_type_);

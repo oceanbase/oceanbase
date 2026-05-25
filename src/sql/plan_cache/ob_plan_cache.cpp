@@ -465,7 +465,7 @@ int ObPlanCache::check_after_get_plan(int tmp_ret,
   bool need_late_compilation = false;
   ObJITEnableMode jit_mode = ObJITEnableMode::OFF;
   ObPlanCacheCtx &pc_ctx = static_cast<ObPlanCacheCtx&>(ctx);
-
+  MATCH_GUARD(cache_obj == NULL ? -1 : cache_obj->get_object_id(), ctx);
   if (cache_obj != NULL && ObLibCacheNameSpace::NS_CRSR == cache_obj->get_ns()) {
     plan = static_cast<ObPhysicalPlan *>(cache_obj);
   }
@@ -479,7 +479,9 @@ int ObPlanCache::check_after_get_plan(int tmp_ret,
       enable_udr = pc_ctx.sql_ctx_.session_info_->enable_udr();
     }
   }
+
   if (OB_SUCC(ret) && plan != NULL) {
+
     bool is_exists = false;
     uint64_t pattern_digest = 0;
     sql::ObUDRMgr *rule_mgr = MTL(sql::ObUDRMgr*);
@@ -496,6 +498,8 @@ int ObPlanCache::check_after_get_plan(int tmp_ret,
         LOG_TRACE("Obsolete user-defined rewrite rules require eviction plan", K(ret),
         K(is_exists), K(pc_ctx.raw_sql_), K(plan->is_enable_udr()), K(enable_udr),
         K(plan->is_rewrite_sql()), K(plan->get_rule_version()), K(rule_mgr->get_rule_version()));
+        RECORD_CACHE_MISS(EXPIRED_PHY_PLAN, ctx, "Obsolete user-defined rewrite rules require eviction plan", K(is_exists),
+                          K(plan->is_rewrite_sql()), K(plan->get_rule_version()), K(rule_mgr->get_rule_version()));
       } else {
         plan->set_rule_version(rule_mgr->get_rule_version());
         plan->set_is_enable_udr(enable_udr);
@@ -522,6 +526,8 @@ int ObPlanCache::check_after_get_plan(int tmp_ret,
   } else if (plan != NULL && plan->is_expired()) {
     if (pc_ctx.regenerating_expired_plan_) {
       ret = OB_SQL_PC_NOT_EXIST;
+      RECORD_CACHE_MISS(EXPIRED_PHY_PLAN, ctx, "Physical plan is expired",
+                          K(pc_ctx.regenerating_expired_plan_));
     }
     if (EXPIRED_BY_OPT_STAT == plan->stat_.is_expired_) {
       LOG_INFO("the statistics of table is stale and evict plan.", K(plan->stat_.is_expired_),
@@ -1070,7 +1076,7 @@ int ObPlanCache::add_plan(ObPhysicalPlan *plan, ObPlanCacheCtx &pc_ctx)
     ret = OB_REACH_MEMORY_LIMIT;
     if (REACH_TIME_INTERVAL(1000000)) { //1s, 当内存达到上限时, 该日志打印会比较频繁, 所以以1s为间隔打印
       SQL_PC_LOG(WARN, "plan cache memory used reach limit",
-                        K_(tenant_id), K(get_mem_hold()), K(get_mem_limit()), K(ret));
+                        K_(tenant_id), K(get_mem_hold()), K(get_mem_used()), K(get_mem_limit()), K(ret));
     }
   } else if (plan->get_mem_size() >= get_mem_high()) {
     // plan mem is too big, do not add plan
@@ -1280,6 +1286,7 @@ int ObPlanCache::get_cache_obj(ObILibCacheCtx &ctx,
   ObILibCacheObject *cache_obj = NULL;
   // get the read lock and increase reference count
   ObLibCacheRlockAndRef r_ref_lock(LC_NODE_RD_HANDLE, ctx.get_lock_timeout());
+  MATCH_GUARD(-1, ctx);
   if (OB_ISNULL(key)) {
     ret = OB_INVALID_ARGUMENT;
     SQL_PC_LOG(WARN, "invalid null argument", K(ret), K(key));
@@ -1288,15 +1295,19 @@ int ObPlanCache::get_cache_obj(ObILibCacheCtx &ctx,
   } else if (OB_UNLIKELY(NULL == cache_node)) {
     ret = OB_SQL_PC_NOT_EXIST;
     SQL_PC_LOG(DEBUG, "cache obj does not exist!", K(key));
+    RECORD_CACHE_MISS(KEY_NOT_MATCH, ctx, "Cache node not exists", K(cache_node));
   } else {
     LOG_DEBUG("inner_get_cache_obj", K(key), K(cache_node));
     if (cache_node->is_invalid()) {
       ret = OB_SQL_PC_NOT_EXIST;
+      RECORD_CACHE_MISS(KEY_NOT_MATCH, ctx, "Cache node is invalid", KPC(cache_node));
     } else if (OB_FAIL(cache_node->update_node_stat(ctx))) {
       SQL_PC_LOG(WARN, "failed to update node stat",  K(ret));
+      RECORD_CACHE_MISS(KEY_NOT_MATCH, ctx, "Some error happened during update node stat", K(ret));
     } else if (OB_FAIL(cache_node->get_cache_obj(ctx, key, cache_obj))) {
       if (OB_SQL_PC_NOT_EXIST != ret) {
         LOG_DEBUG("cache_node fail to get cache obj", K(ret));
+        RECORD_CACHE_MISS(KEY_NOT_MATCH, ctx, "Some error happened during get cache obj", K(ret));
       }
     } else {
       if (OB_SUCC(ret) && cache_obj != NULL && ObLibCacheNameSpace::NS_CRSR == cache_obj->get_ns()
@@ -1519,15 +1530,19 @@ int ObPlanCache::cache_evict()
   int ret = OB_SUCCESS;
   int64_t cache_evict_num = 0;
   ObGlobalReqTimeService::check_req_timeinfo();
+  int64_t mem_hold = get_mem_hold();
+  int64_t mem_used = get_mem_used();
+  int64_t mem_limit = get_mem_limit();
   SQL_PC_LOG(INFO, "start lib cache evict",
              K_(tenant_id),
-             "mem_hold", get_mem_hold(),
-             "mem_limit", get_mem_limit(),
+             "mem_hold", mem_hold,
+             "mem_used", mem_used,
+             "mem_limit", mem_limit,
              "cache_obj_num", get_cache_obj_size(),
              "cache_node_num", cache_key_node_map_.size());
   //determine whether it is still necessary to evict
-  if (get_mem_hold() > get_mem_high()) {
-    if (calc_evict_num(cache_evict_num) && cache_evict_num > 0) {
+  if (mem_used > get_mem_high()) {
+    if (calc_evict_num(mem_used, cache_evict_num) && cache_evict_num > 0) {
       LCKeyValueArray to_evict_keys;
       ObNodeStatFilterOp filter(cache_evict_num, &to_evict_keys, PCV_EXPIRE_BY_MEM_HANDLE);
       if (OB_FAIL(foreach_cache_evict(filter))) {
@@ -1539,6 +1554,7 @@ int ObPlanCache::cache_evict()
              K_(tenant_id),
              "cache_evict_num", cache_evict_num,
              "mem_hold", get_mem_hold(),
+             "mem_used", get_mem_used(),
              "mem_limit", get_mem_limit(),
              "cache_obj_num", get_cache_obj_size(),
              "cache_node_num", cache_key_node_map_.size());
@@ -1550,7 +1566,8 @@ int ObPlanCache::cache_evict_by_glitch_node()
   int ret = OB_SUCCESS;
   int64_t cache_evict_num = 0;
   ObGlobalReqTimeService::check_req_timeinfo();
-  if (get_mem_hold() > get_mem_high()) {
+  int64_t mem_used = get_mem_used();
+  if (mem_used > get_mem_high()) {
     LCKeyValueArray co_list;
     ObKVEntryTraverseOp traverse_op(&co_list, PCV_EXPIRE_BY_MEM_HANDLE);
     if (OB_FAIL(cache_key_node_map_.foreach_refactored(traverse_op))) {
@@ -1561,6 +1578,7 @@ int ObPlanCache::cache_evict_by_glitch_node()
       SQL_PC_LOG(INFO, "cache evict plan by glitch node start",
              K_(tenant_id),
              "mem_hold", get_mem_hold(),
+             "mem_used", mem_used,
              "mem_high", get_mem_high(),
              "mem_to_free", mem_to_free,
              "cache_obj_num", get_cache_obj_size(),
@@ -1587,6 +1605,7 @@ int ObPlanCache::cache_evict_by_glitch_node()
              K_(tenant_id),
              "cache_evict_num", cache_evict_num,
              "mem_hold", get_mem_hold(),
+             "mem_used", get_mem_used(),
              "mem_high", get_mem_high(),
              "mem_low", get_mem_low(),
              "cache_obj_num", get_cache_obj_size(),
@@ -1724,20 +1743,19 @@ int ObPlanCache::batch_load_plan_baseline(const obrpc::ObLoadPlanBaselineArg &ar
 
 // 计算plan_cache需要淘汰的pcv_set个数
 // ret = true表示执行正常，否则失败
-bool ObPlanCache::calc_evict_num(int64_t &plan_cache_evict_num)
+bool ObPlanCache::calc_evict_num(int64_t mem_used, int64_t &plan_cache_evict_num)
 {
   bool ret = true;
   //按照当前各自的内存比例，先计算各自需要淘汰多少内存
-  int64_t pc_hold = get_mem_hold();
-  int64_t mem_to_free = pc_hold - get_mem_low();
+  int64_t mem_to_free = mem_used - get_mem_low();
   if (mem_to_free <= 0) {
     ret = false;
   }
 
   //然后计算需要淘汰的条数
   if (ret) {
-    if (pc_hold > 0) {
-      double evict_percent = static_cast<double>(mem_to_free) / static_cast<double>(pc_hold);
+    if (mem_used > 0) {
+      double evict_percent = static_cast<double>(mem_to_free) / static_cast<double>(mem_used);
       plan_cache_evict_num = static_cast<int64_t>(std::ceil(evict_percent * static_cast<double>(cache_key_node_map_.size())));
     } else {
       plan_cache_evict_num = 0;

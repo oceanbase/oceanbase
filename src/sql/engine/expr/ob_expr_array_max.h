@@ -37,7 +37,7 @@ public:
   static int eval_array_extreme_vector(const ObExpr &expr, ObEvalCtx &ctx,
                                      const ObBitVector &skip, const EvalBound &bound,
                                      bool is_max = true);
-  static int calc_extreme(ObIArrayType* src_arr, ObObj &res_obj, bool is_max = true);
+  static int calc_extreme(ObIArrayType *src_arr, ObObj &res_obj, common::ObIAllocator &alloc, bool is_max = true);
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprArrayExtreme);

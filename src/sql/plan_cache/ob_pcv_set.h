@@ -69,7 +69,8 @@ public:
       min_cluster_version_(0),
       plan_num_(0),
       need_check_gen_tbl_col_(false),
-      expired_time_(0)
+      expired_time_(0),
+      next_pcv_id_(0)
   {
   }
   virtual ~ObPCVSet()
@@ -110,6 +111,7 @@ private:
                               ObPlanCacheCtx &pc_ctx,
                               const common::ObIArray<PCVSchemaObj> &schema_array,
                               ObPlanCacheValue *&value);
+  OB_INLINE uint64_t get_next_pcv_id() { return __sync_add_and_fetch(&next_pcv_id_, 1); }
   int64_t get_plan_num() const { return plan_num_; }
   int create_new_pcv(ObPlanCacheValue *&new_pcv);
   void free_pcv(ObPlanCacheValue *pcv);
@@ -135,6 +137,7 @@ private:
   bool need_check_gen_tbl_col_;
   common::ObFixedArray<PCColStruct, common::ObIAllocator> col_field_arr_;
   int64_t expired_time_;
+  uint64_t next_pcv_id_;
 };
 
 }

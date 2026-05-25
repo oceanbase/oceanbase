@@ -214,6 +214,7 @@ public:
   // Mark support true if any operator (in the plan tree) supports vectorization
   static int check_vectorize_supported(bool &support, bool &stop_checking,
                                        double &scan_cardinality,
+                                       bool &force_disable_batch_row_wrapper,
                                        ObLogicalOperator *op,
                                        bool is_root_job = true);
   inline static void exprs_not_support_vectorize(const ObIArray<ObRawExpr *> &exprs,

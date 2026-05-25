@@ -118,7 +118,7 @@ int ObExprRbBuild::eval_rb_build(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &re
     for (uint32_t i = 0; OB_SUCC(ret) && i < arr_obj->cardinality(); ++i) {
       ObObj elem_obj;
       bool is_null_elem = false;
-      if (OB_FAIL(ObArrayExprUtils::get_basic_elem(arr_obj, i, elem_obj, is_null_elem))) {
+      if (OB_FAIL(ObArrayExprUtils::get_basic_elem(tmp_allocator, arr_obj, i, elem_obj, is_null_elem))) {
         LOG_WARN("failed to cast get element", K(ret));
       } else if (is_null_elem) {
         ret = OB_ERR_NULL_VALUE;

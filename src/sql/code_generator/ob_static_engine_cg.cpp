@@ -325,6 +325,9 @@ int ObStaticEngineCG::postorder_generate_op(ObLogicalOperator &op,
         LOG_WARN("set child failed", K(ret));
       }
     }
+    if (OB_SUCC(ret)) {
+      spec->is_block_ = op.is_block_op();
+    }
   }
 
   // disable operator support rich format
@@ -644,6 +647,7 @@ void ObStaticEngineCG::exprs_not_support_vectorize(const ObIArray<ObRawExpr *> &
 int ObStaticEngineCG::check_vectorize_supported(bool &support,
                                        bool &stop_checking,
                                        double &scan_cardinality,
+                                       bool &force_disable_batch_row_wrapper,
                                        ObLogicalOperator *op,
                                        bool is_root_job /* = true */)
 {
@@ -690,6 +694,7 @@ int ObStaticEngineCG::check_vectorize_supported(bool &support,
               LOG_WARN("user var expr is null", K(ret));
             } else if (user_var_expr->get_is_contain_assign()) {
               disable_vectorize = true;
+              force_disable_batch_row_wrapper = true;  // user var assignment requires strict row-by-row execution
               break;
             }
           }
@@ -697,15 +702,17 @@ int ObStaticEngineCG::check_vectorize_supported(bool &support,
       }
       if (disable_vectorize) {
         support = false;
-        stop_checking = true;
+        if (!op->get_plan()->get_optimizer_context().get_enable_vec_batch_accum()) {
+          stop_checking = true;
+        }
       }
       LOG_DEBUG("check_vectorize_supported", K(disable_vectorize), K(support), K(stop_checking),
-                K(op->get_num_of_child()));
+                K(op->get_num_of_child()), K(force_disable_batch_row_wrapper));
       // continue searching until found an operator with vectorization explicitly disabled
       for (int64_t i = 0; !stop_checking && OB_SUCC(ret) && i < op->get_num_of_child(); i++) {
         const bool root = is_root_job && (log_op_def::LOG_EXCHANGE != op->get_type());
         OZ(SMART_CALL(check_vectorize_supported(
-            support, stop_checking, scan_cardinality, op->get_child(i), root)));
+            support, stop_checking, scan_cardinality, force_disable_batch_row_wrapper, op->get_child(i), root)));
       }
     }
     }
@@ -11310,6 +11317,9 @@ int ObStaticEngineCG::check_op_vectorization(ObLogicalOperator *op, ObSqlSchemaG
          }
        }
      }
+  }
+  if (OB_SUCC(ret)) {
+    op->set_vectorized(!disable_vectorize);
   }
   return ret;
 }

@@ -9700,7 +9700,8 @@ int ObAggregateProcessor::get_array_agg_result(const ObAggrInfo &aggr_info,
                                                                  datum_val, nest_array))) {
             LOG_WARN("failed to push back value", K(ret));
           }
-        } else if (OB_FAIL(ObArrayUtil::append(*arr_obj, elem_type, &datum_val))) {
+        } else if (OB_FAIL(ObArrayUtil::append(*arr_obj, elem_type, &datum_val,
+                                               elem_meta.has_lob_header()))) {
           LOG_WARN("failed to append array value", K(ret));
         }
       }

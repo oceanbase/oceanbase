@@ -68,6 +68,7 @@ public :
   bool contain_null() const { return false; }
   int insert_from(const ObIArrayType &src, uint32_t begin, uint32_t len) { return OB_NOT_SUPPORTED; }
   int32_t get_element_type() const { return values_->get_element_type(); }
+  bool is_lob_element() const { return false; }
   const ObCollectionMapType *get_array_type() const { return map_type_; }
 
   char *get_data() const { return NULL; }; // not supported now

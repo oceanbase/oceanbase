@@ -111,7 +111,8 @@ int ObExprArray::eval_array(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
         } else {
           if (arr_type->element_type_->type_id_ == ObNestedType::OB_BASIC_TYPE) {
             ObCollectionBasicType *elem_type = static_cast<ObCollectionBasicType *>(arr_type->element_type_);
-            if (OB_FAIL(ObArrayUtil::append(*arr_obj, elem_type->basic_meta_.get_obj_type(), datum))) {
+            if (OB_FAIL(ObArrayUtil::append(*arr_obj, elem_type->basic_meta_.get_obj_type(), datum,
+                                            expr.args_[i]->obj_meta_.has_lob_header()))) {
               LOG_WARN("failed to append array value", K(ret), K(i));
             }
           } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE ||

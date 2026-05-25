@@ -21,6 +21,7 @@ namespace oceanbase
 namespace sql
 {
 struct ObDiagnosisManager;
+class ObExpr;
 
 class ObBaseExprColumnConv
 {
@@ -99,8 +100,12 @@ public:
     TEXT_TC,
   };
 
+  // 原始参数数量（用于 resolver 和类型推导阶段）
   static const int64_t PARAMS_COUNT_WITHOUT_COLUMN_INFO = 5;
   static const int64_t PARAMS_COUNT_WITH_COLUMN_INFO = 6;
+  // 运行时实际需要的参数数量（CG 后只保留 VALUE_EXPR 和 COLUMN_INFO）
+  static const int64_t RT_PARAMS_COUNT_WITHOUT_COLUMN_INFO = 1;
+  static const int64_t RT_PARAMS_COUNT_WITH_COLUMN_INFO = 2;
   class ObExprColumnConvCtx : public ObExprOperatorCtx
   {
   public:
@@ -163,6 +168,8 @@ public:
                                         ObEvalCtx &ctx,
                                         const ObBitVector &skip,
                                         const EvalBound &bound);
+  // 远程序列化：老版本可能仍为 5/6 子节点（value 在 [4]），反序列化后归一为当前 RT 1/2。
+  static int repack_rt_args_after_deserialize(ObExpr &expr, common::ObIAllocator &alloc);
   template <typename ArgVec, typename ResVec>
   static int inner_calc_column_convert_vector_fast(const ObExpr &expr,
                                                    ObEvalCtx &ctx,

@@ -17,6 +17,7 @@
 #include "observer/ob_server.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
 #include "lib/utility/ob_tracepoint.h"
+#include "sql/engine/basic/ob_temp_row_store.h"
 #include "lib/trace/ob_trace_event.h"
 
 namespace oceanbase
@@ -24,6 +25,36 @@ namespace oceanbase
 using namespace common;
 namespace sql
 {
+
+// used to save rows from non-vectorized operator
+class ObOpBatchRowWrapper
+{
+private:
+  constexpr static const char *ROW_STORE_LABEL = "OpWrapperHolder";
+public:
+  ObOpBatchRowWrapper(ObOperator &op, const int64_t max_batch_size, ObEvalCtx &eval_ctx) :
+    op_(op), row_store_(), eval_ctx_(eval_ctx), max_batch_size_(max_batch_size), brs_(),
+    skip_buf_(nullptr), need_init_vector_(false)
+  {}
+
+  void destroy();
+  virtual ~ObOpBatchRowWrapper() {
+    destroy();
+  }
+  int init(ObIAllocator &allocator);
+
+  int get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&output_brs);
+
+  void rescan();
+private:
+  ObOperator &op_;
+  ObTempRowStore row_store_;
+  ObEvalCtx &eval_ctx_;
+  const int64_t max_batch_size_;
+  ObBatchRows brs_;
+  void *skip_buf_;
+  bool need_init_vector_;
+};
 
 OB_SERIALIZE_MEMBER(ObDynamicParamSetter, param_idx_, src_, dst_);
 OB_SERIALIZE_MEMBER(ObOpSchemaObj, obj_type_, is_not_null_, order_type_);
@@ -208,7 +239,8 @@ ObOpSpec::ObOpSpec(ObIAllocator &alloc, const ObPhyOperatorType type)
     max_batch_size_(0),
     need_check_output_datum_(false),
     use_rich_format_(false),
-    compress_type_(NONE_COMPRESSOR)
+    compress_type_(NONE_COMPRESSOR),
+    is_block_(false)
 {
 }
 
@@ -230,7 +262,8 @@ OB_SERIALIZE_MEMBER(ObOpSpec,
                     max_batch_size_,
                     need_check_output_datum_,
                     use_rich_format_,
-                    compress_type_);
+                    compress_type_,
+                    is_block_);
 
 DEF_TO_STRING(ObOpSpec)
 {
@@ -247,7 +280,8 @@ DEF_TO_STRING(ObOpSpec)
        K_(max_batch_size),
        K_(filters),
        K_(use_rich_format),
-       K_(compress_type));
+       K_(compress_type),
+       K_(is_block));
   J_OBJ_END();
   return pos;
 }
@@ -976,6 +1010,29 @@ static int init_brs(ObIAllocator *alloc, int64_t batch_size, ObBatchRows &brs)
   return ret;
 }
 
+bool ObOperator::need_batch_row_wrapper() const
+{
+  bool need_wrapper = false;
+  if (spec_.get_parent() != nullptr
+      && spec_.get_parent()->use_rich_format_
+      && !spec_.is_vectorized()
+      && !spec_.get_parent()->is_block_
+      && spec_.get_phy_plan()->is_enable_vec_batch_accum()
+      && spec_.get_parent()->max_batch_size_ > 1) {
+    need_wrapper = true;
+  }
+  LOG_DEBUG("[BatchRowWrapper] need_batch_row_wrapper",
+            "op_id", spec_.id_,
+            "op_name", op_name(),
+            "result", need_wrapper,
+            "parent_use_rich_format", spec_.get_parent() ? spec_.get_parent()->use_rich_format_ : false,
+            "self_is_vectorized", spec_.is_vectorized(),
+            "parent_is_block", spec_.get_parent() ? spec_.get_parent()->is_block_ : false,
+            "vec_batch_accum_enabled", spec_.get_phy_plan()->is_enable_vec_batch_accum(),
+            "parent_max_batch_size", spec_.get_parent() ? spec_.get_parent()->max_batch_size_ : 0);
+  return need_wrapper;
+}
+
 // default batch_size is 1
 int ObOperator::init_skip_vector()
 {
@@ -984,6 +1041,8 @@ int ObOperator::init_skip_vector()
     int batch_size = 0;
     if (spec_.max_batch_size_ > 0) {
       batch_size = spec_.max_batch_size_;
+    } else if (need_batch_row_wrapper()) { // when using batch row wrapper, the brs_.skip_ must be large enough to hold the wrapper's batch output.
+      batch_size = MAX(1, spec_.get_parent()->max_batch_size_);
     } else {
       batch_size = 1;
     }
@@ -1046,6 +1105,9 @@ int ObOperator::inner_rescan()
   startup_passed_ = spec_.startup_filters_.empty();
   if (br_it_) {
     br_it_->rescan();
+  }
+  if (op_batch_row_wrapper_ != nullptr) {
+    op_batch_row_wrapper_->rescan();
   }
   // If an operator rescan after drained, the exch_drained_ must be reset
   // so it can be drained again.
@@ -1187,6 +1249,14 @@ int check_child_closed_helper(ObOperator *child, bool &closed)
 int ObOperator::close()
 {
   int ret = OB_SUCCESS;
+  if (op_batch_row_wrapper_ != nullptr) {
+    ObIAllocator *default_alloc = nullptr;
+    op_batch_row_wrapper_->destroy();
+    if (OB_SUCC(eval_ctx_.exec_ctx_.get_malloc_allocator(default_alloc)) && OB_NOT_NULL(default_alloc)) {
+      default_alloc->free(op_batch_row_wrapper_);
+    }
+    op_batch_row_wrapper_ = nullptr;
+  }
   ObProfileSwitcher switcher(op_monitor_info_.profile_);
   if (io_event_observer_.get_io_time() > 0) {
     SET_METRIC_VAL(ObMetricId::DUMP_RW_TIME, io_event_observer_.get_io_time());
@@ -1655,9 +1725,27 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
         }
       }
     } else {
-      // Operator does NOT support vectorization, while its parent does. Return
-      // the batch with only 1 row
-      if (OB_FAIL(get_next_batch_with_onlyone_row())) {
+      const bool use_batch_wrapper = need_batch_row_wrapper();
+      LOG_DEBUG("[BatchRowWrapper] non-vec op dispatch",
+                "op_id", spec_.id_,
+                "op_name", op_name(),
+                "use_wrapper", use_batch_wrapper,
+                "max_row_cnt", max_row_cnt);
+      if (use_batch_wrapper) {
+        if (OB_FAIL(init_op_wrapper_if_needed(true))) {
+          LOG_WARN("init op wrapper failed", K(ret));
+        } else if (OB_FAIL(op_batch_row_wrapper_->get_next_batch(max_row_cnt, batch_rows))) {
+          LOG_WARN("get next batch failed", K(ret));
+        } else if (OB_FAIL(brs_.copy(batch_rows))) {
+          // Sync operator's brs_ from wrapper's brs_ so that convert_vector_format(),
+          // save_brs() and need_check_brs_ logic see correct size_/end_/skip_.
+          LOG_WARN("copy wrapper brs to operator brs failed", K(ret));
+        } else {
+          batch_rows = &brs_;
+        }
+      } else if (OB_FAIL(get_next_batch_with_onlyone_row())) {
+         // Operator does NOT support vectorization, while its parent does. Return
+         // the batch with only 1 row
         // do nothing
       }
     }
@@ -1690,8 +1778,12 @@ int ObOperator::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&ba
 int ObOperator::convert_vector_format()
 {
   int ret = OB_SUCCESS;
-  if (NULL != spec_.get_parent() &&
-       spec_.get_parent()->use_rich_format_ && !spec_.use_rich_format_) {
+  // for old operator-> new operator
+  const bool need_init_old_to_new = NULL != spec_.get_parent()
+      && spec_.get_parent()->use_rich_format_
+      && !spec_.use_rich_format_
+      && !need_batch_row_wrapper();
+  if (need_init_old_to_new) {
     // old operator -> new operator
     FOREACH_CNT_X(e, spec_.output_, OB_SUCC(ret)) {
       VectorFormat format = (*e)->is_batch_result() ? VEC_UNIFORM : VEC_UNIFORM_CONST;
@@ -2134,6 +2226,43 @@ int ObOperator::save_brs()
   }
   return ret;
 }
+int ObOperator::init_op_wrapper_if_needed(bool from_non_vec_op)
+{
+  int ret = OB_SUCCESS;
+  int64_t batch_size = 1;
+  if (need_batch_row_wrapper() && OB_NOT_NULL(spec_.get_parent())) {
+    batch_size = MAX(1, spec_.get_parent()->max_batch_size_);
+  }
+
+  if (op_batch_row_wrapper_ == nullptr) {
+    ObIAllocator *default_alloc = nullptr;
+    void *wrapper_buf = nullptr;
+    if (OB_FAIL(eval_ctx_.exec_ctx_.get_malloc_allocator(default_alloc))) {
+      LOG_WARN("get default context allocator failed", K(ret));
+    } else if (OB_ISNULL(default_alloc)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("default context allocator is null", K(ret));
+    } else if (OB_ISNULL(wrapper_buf = default_alloc->alloc(sizeof(ObOpBatchRowWrapper)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate memory failed", K(ret));
+    } else if (FALSE_IT(op_batch_row_wrapper_ = new(wrapper_buf) ObOpBatchRowWrapper(*this, batch_size , eval_ctx_))) {
+      LOG_WARN("init op batch row wrapper failed", K(ret));
+    } else if (OB_FAIL(op_batch_row_wrapper_->init(*default_alloc))) {
+      LOG_WARN("init op batch row wrapper failed", K(ret));
+      op_batch_row_wrapper_->~ObOpBatchRowWrapper();
+      default_alloc->free(wrapper_buf);
+      op_batch_row_wrapper_ = nullptr;
+    } else {
+      LOG_TRACE("[BatchRowWrapper] wrapper initialized",
+               "op_id", spec_.id_,
+               "op_name", op_name(),
+               "parent_op_id", spec_.get_parent()->id_,
+               "parent_op_name", spec_.get_parent()->get_name(),
+               "batch_size", batch_size);
+    }
+  }
+  return ret;
+}
 
 int ObBatchRowIter::get_next_row()
 {
@@ -2286,6 +2415,156 @@ int ObBatchRescanParams::append_batch_rescan_param(const ObIArray<int64_t> &para
   OZ(append_batch_rescan_param(param_idxs, res_objs));
   OZ(param_expr_idxs_.assign(param_expr_idxs));
   return ret;
+}
+
+int ObOpBatchRowWrapper::init(ObIAllocator &allocator)
+{
+  int ret = OB_SUCCESS;
+  int64_t skip_buf_len = ObBitVector::memory_size(max_batch_size_);
+  if (OB_ISNULL(eval_ctx_.exec_ctx_.get_my_session())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid null session", K(ret));
+  } else if (OB_ISNULL(skip_buf_ = allocator.alloc(skip_buf_len))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("allocate memory failed", K(ret));
+  } else {
+    MEMSET(skip_buf_, 0, skip_buf_len);
+    brs_.skip_ = to_bit_vector(skip_buf_);
+    const ObExprPtrIArray &output = op_.get_spec().output_;
+    uint64_t tenant_id = eval_ctx_.exec_ctx_.get_my_session()->get_effective_tenant_id();
+    lib::ObMemAttr mem_attr(tenant_id, ROW_STORE_LABEL, ObCtxIds::DEFAULT_CTX_ID);
+    if (OB_FAIL(row_store_.init(output, max_batch_size_, mem_attr, INT64_MAX, false, 0,
+                                op_.get_spec().compress_type_))) {
+      LOG_WARN("init row store failed", K(ret));
+    } else {
+      row_store_.set_allocator(allocator);
+      // expr->eval will set VEC_INVALID to exprs which do not have vector_func.
+      // we need to recover it, otherwise it will cause row size calc error.
+      for (int i = 0; i < output.count(); i++) {
+        if (!output.at(i)->enable_rich_format()) {
+          need_init_vector_ = true;
+          break;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+void ObOpBatchRowWrapper::destroy()
+{
+  if (skip_buf_ != nullptr) {
+    ObIAllocator *default_alloc = nullptr;
+    if (OB_SUCCESS == eval_ctx_.exec_ctx_.get_malloc_allocator(default_alloc)
+        && default_alloc != nullptr) {
+      default_alloc->free(skip_buf_);
+    }
+    skip_buf_ = nullptr;
+  }
+  row_store_.destroy();
+}
+
+int ObOpBatchRowWrapper::get_next_batch(const int64_t max_row_cnt, const ObBatchRows *&output_brs)
+{
+  int ret = OB_SUCCESS;
+  // this is a little trick
+  // nlj may call get_next_batch with max_row_cnt = 0 if its left child is non-vectorized op
+  // in this condition, we use batch_size of 1 to avoid unexpected conditions
+  int64_t batch_size = std::max(std::min(max_row_cnt, max_batch_size_), 1L);
+  const ObExprPtrIArray &output = op_.get_spec().output_;
+  for (int i = 0; OB_SUCC(ret) && i < output.count(); i++) {
+    ObExpr *expr = output.at(i);
+    VectorFormat expr_fmt = expr->get_format(eval_ctx_);
+    if (expr_fmt != VEC_UNIFORM && expr_fmt != VEC_UNIFORM_CONST && OB_FAIL(expr->init_vector(
+              eval_ctx_, expr->is_batch_result() ? VEC_UNIFORM : VEC_UNIFORM_CONST, 1))) {
+      LOG_WARN("init vector failed", K(ret));
+    }
+  }
+
+  output_brs = &brs_;
+  brs_.end_ = false;
+  brs_.all_rows_active_ = false;
+  brs_.size_ = 0;
+  row_store_.reuse();
+  ObCompactRow *stored_row = nullptr;
+  while (OB_SUCC(ret) && brs_.size_ < batch_size && !brs_.end_) {
+    op_.clear_evaluated_flag();
+    if (OB_FAIL(op_.get_next_row())) {
+      if (OB_ITER_END != ret) {
+        LOG_WARN("get next row failed", K(ret));
+      } else {
+        brs_.end_ = true;
+        ret = OB_SUCCESS;
+        LOG_DEBUG("iter end", K(brs_));
+      }
+    } else {
+      brs_.skip_->reset(1);
+      {
+        ObEvalCtx::BatchInfoScopeGuard batch_guard(eval_ctx_);
+        batch_guard.set_batch_size(1);
+        batch_guard.set_batch_idx(0);
+        for (int i = 0; OB_SUCC(ret) && i < output.count(); i++) {
+          ObDatum *datum = nullptr;
+          if (OB_FAIL(output.at(i)->eval(eval_ctx_, datum))) {
+            LOG_WARN("failed to eval output expr", K(ret), K(i));
+          } else {
+            output.at(i)->get_eval_info(eval_ctx_).set_projected(true);
+            VectorFormat expr_fmt = output.at(i)->get_format(eval_ctx_);
+            if (need_init_vector_ && expr_fmt != VEC_UNIFORM && expr_fmt != VEC_UNIFORM_CONST
+                && OB_FAIL(output.at(i)->init_vector(
+                      eval_ctx_,
+                      output.at(i)->is_batch_result() ? VEC_UNIFORM : VEC_UNIFORM_CONST,
+                      1))) {
+              LOG_WARN("failed to init vector after eval", K(ret), K(i));
+            }
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (OB_FAIL(row_store_.add_row(output, 0, eval_ctx_, stored_row))) {
+            LOG_WARN("failed to add row", K(ret));
+          } else {
+            brs_.size_ += 1;
+          }
+        }
+      }
+    }
+  }
+  LOG_DEBUG("[BatchRowWrapper] batch accumulated",
+            "op_id", op_.get_spec().id_,
+            "op_name", op_.op_name(),
+            "requested_batch_size", batch_size,
+            "accumulated_rows", brs_.size_,
+            "is_end", brs_.end_);
+  int64_t read_rows = 0;
+  ObTempRowStore::Iterator store_it;
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(row_store_.finish_add_row())) {
+    LOG_WARN("failed to finish add row", K(ret));
+  } else if (OB_FAIL(row_store_.begin(store_it))) {
+    LOG_WARN("failed to begin row store", K(ret));
+  } else if (!store_it.has_next()) {
+    brs_.end_ = true;
+    brs_.size_ = 0;
+  } else if (OB_FAIL(store_it.get_next_batch(op_.get_spec().output_, eval_ctx_, brs_.size_, read_rows))) {
+    LOG_WARN("failed to get next batch", K(ret));
+  } else if (OB_UNLIKELY(read_rows != brs_.size_)) {
+    LOG_WARN("unexpected read rows", K(ret), K(read_rows), K(brs_.size_));
+  } else {
+    brs_.all_rows_active_ = true;
+    brs_.skip_->reset(brs_.size_);
+    for (int i = 0; i < op_.get_spec().output_.count(); i++) {
+      op_.get_spec().output_.at(i)->set_evaluated_projected(eval_ctx_);
+    }
+    if (read_rows > 0) {
+      brs_.end_ = false;
+    }
+  }
+  return ret;
+}
+
+void ObOpBatchRowWrapper::rescan()
+{
+  row_store_.reuse();
 }
 
 } // end namespace sql

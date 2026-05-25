@@ -7583,7 +7583,8 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
                                                     *spi_result.get_result_set(),
                                                     spi_result.get_sql_ctx(),
                                                     false /* is_prepare_protocol */,
-                                                    false /* is_dynamic_sql*/), K(exec_params));
+                                                    false /* is_dynamic_sql*/,
+                                                    true /* try_paramlize */), K(exec_params));
           } else {
 #ifdef ERRSIM
             OX (ret = OB_E(EventTable::EN_SPI_SQL_EXEC) OB_SUCCESS);
@@ -7594,7 +7595,9 @@ int ObSPIService::inner_open(ObPLExecCtx *ctx,
                                                     *spi_result.get_result_set(),
                                                     spi_result.get_sql_ctx(),
                                                     true /* is_prepare_protocol */,
-                                                    is_dynamic_sql /* is_dynamic_sql */), K(exec_params));
+                                                    is_dynamic_sql /* is_dynamic_sql */,
+                                                    true /* try_paramlize */), K(exec_params));
+            OZ (adjust_out_params(*spi_result.get_result_set(), out_params));
           }
         }
       }

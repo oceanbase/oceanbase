@@ -223,13 +223,13 @@ int ObPLCacheObject::set_param_info_for_null_param(bool is_anonymous,
   return ret;
 }
 
-int ObPLCacheObject::init_params_info_str()
+int ObPLCacheObject::gen_params_info_str(ObIAllocator *allocator, ObString &str) const
 {
   int ret = OB_SUCCESS;
   int64_t N = params_info_.count();
   int64_t buf_len = N * ObPlParamInfo::MAX_STR_DES_LEN_PL + 1;
   int64_t pos = 0;
-  char *buf = (char *)allocator_.alloc(buf_len);
+  char *buf = (char *)allocator->alloc(buf_len);
   if (OB_ISNULL(buf)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory for param info", K(ret));
@@ -263,10 +263,9 @@ int ObPLCacheObject::init_params_info_str()
     }
   }
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(ob_write_string(allocator_, ObString(pos, buf), stat_.param_infos_))) {
-      LOG_WARN("fail to deep copy param infos", K(ret));
-    }
+    str.assign_ptr(buf, pos);
   }
+
   return ret;
 }
 
@@ -307,10 +306,6 @@ int ObPLCacheObject::update_cache_obj_stat(sql::ObILibCacheCtx &ctx)
         LOG_WARN("failed to write sql", K(ret));
       }
     }
-  }
-  if (OB_SUCC(ret) && OB_FAIL(init_params_info_str())) {
-    // init param info str
-    LOG_WARN("fail to init param info str", K(ret));
   }
   if (OB_SUCC(ret)) {
     if (ObLibCacheNameSpace::NS_ANON == get_ns() && OB_INVALID_ID != pc_ctx.key_.key_id_) {

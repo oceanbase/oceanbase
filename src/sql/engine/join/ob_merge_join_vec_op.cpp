@@ -495,9 +495,7 @@ int ObMergeJoinVecOp::ObMergeJoinCursor::init(bool is_left,
   all_exprs_ = all_exprs;
   // child operator's spec batch_size might be zero(vectorization NOT enabled
   // case) In that case, child return 1 row at a time, set local batch default 1
-  max_batch_size_ = child->get_spec().max_batch_size_ == 0
-                        ? 1
-                        : child->get_spec().max_batch_size_;
+  max_batch_size_ = mj_op_.get_spec().max_batch_size_;
   if (OB_ISNULL(mj_op_.allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("null memory context", K(ret));

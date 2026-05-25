@@ -32,6 +32,10 @@
 #include "common/ob_version_def.h"
 #include "lib/net/ob_net_util.h"
 #include "share/ob_get_compat_mode.h"
+#include "sql/ob_sql_trans_control.h"
+#include "observer/mysql/ob_mysql_end_trans_cb.h"
+#include "lib/trace/ob_trace.h"
+#include "sql/resolver/ob_stmt_type.h"
 namespace oceanbase
 {
 using namespace share;
@@ -44,6 +48,7 @@ namespace sql
 {
   class ObPiece;
 }
+using namespace sql;
 
 namespace observer
 {
@@ -1437,6 +1442,108 @@ void ObMemPerfCallback::operator()(const ObMemAttr &attr, int64_t add_size, cons
     }
     is_enable_ = old_value;
   }
+}
+
+void ObMPBase::check_is_trans_ctrl_cmd(const ObString &sql,
+                                       bool &is_trans_ctrl_cmd,
+                                       sql::stmt::StmtType &stmt_type)
+{
+  is_trans_ctrl_cmd = false;
+  const uint32_t cmd_len = sql.length();
+  if (5 <= cmd_len && cmd_len <= 8) {
+    if (cmd_len == 5) {
+      if (0 == sql.case_compare("begin")) {
+        is_trans_ctrl_cmd = true;
+        stmt_type = sql::stmt::T_START_TRANS;
+      }
+    } else if (cmd_len == 6) {
+      if (0 == sql.case_compare("commit")) {
+        is_trans_ctrl_cmd = true;
+        stmt_type = sql::stmt::T_END_TRANS;
+      }
+    } else if (cmd_len == 8) {
+      if (0 == sql.case_compare("rollback")) {
+        is_trans_ctrl_cmd = true;
+        stmt_type = sql::stmt::T_END_TRANS;
+      }
+    }
+  }
+  LOG_DEBUG("check is trans ctrl cmd ", K(sql), K(is_trans_ctrl_cmd), K(stmt_type));
+}
+
+int ObMPBase::process_trans_ctrl_cmd(ObSQLSessionInfo &session,
+                                     bool &need_disconnect,
+                                     bool &async_resp_used,
+                                     const bool is_rollback,
+                                     const bool force_sync_resp,
+                                     sql::stmt::StmtType stmt_type)
+{
+  int ret = OB_SUCCESS;
+  if (stmt_type == sql::stmt::T_START_TRANS) {
+    bool read_only = session.get_tx_read_only();
+    transaction::ObTxParam tx_param;
+    sql::TransState trans_state;
+    if (OB_FAIL(ObSqlTransControl::end_trans_before_cmd_execute(session,
+                                                                  need_disconnect,
+                                                                  trans_state,
+                                                                  stmt_type))) {
+      LOG_WARN("end trans before start fail", KR(ret), K(need_disconnect), K(read_only));
+    }
+    if (OB_SUCC(ret) && OB_FAIL(ObSqlTransControl::explicit_start_trans(&session,
+                                                                         tx_param,
+                                                                         need_disconnect,
+                                                                         read_only))) {
+      LOG_WARN("explicit start trans fail", KR(ret), K(need_disconnect), K(read_only));
+    }
+  } else if (stmt_type == sql::stmt::T_END_TRANS) {
+    bool is_async_end_trans = false;
+    bool need_end_trans_callback = false;
+    sql::ObEndTransAsyncCallback *callback = nullptr;
+    sql::TransState trans_state;
+    sql::ObEndTransCbPacketParam pkt_param;
+
+    if (session.get_has_temp_table_flag() || session.has_tx_level_temp_table()) {
+      need_end_trans_callback = false;
+    } else {
+      need_end_trans_callback = true;
+    }
+
+    bool need_trans_cb = need_end_trans_callback && (!force_sync_resp);
+    if (need_trans_cb) {
+      is_async_end_trans = true;
+      ObSqlEndTransCb &sql_end_cb = session.get_mysql_end_trans_cb();
+      ObCurTraceId::TraceId *cur_trace_id = NULL;
+      if (OB_ISNULL(cur_trace_id = ObCurTraceId::get_trace_id())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_ERROR("current trace id is NULL", K(ret));
+      } else if (OB_FAIL(sql_end_cb.init(packet_sender_, &session))) {
+        LOG_WARN("failed to init sql end callback", K(ret));
+      } else if (OB_FAIL(sql_end_cb.set_packet_param(pkt_param.fill("\0", // message
+                                                                      0,  // affected_rows
+                                                                      0,  // last_insert_id_to_client
+                                                                      session.partition_hit().get_bool(),
+                                                                      *cur_trace_id)))) {
+        LOG_WARN("fail to set packet param", K(ret));
+      } else {
+        callback = &session.get_end_trans_cb();
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      // do nothing
+    } else if (OB_FAIL(ObSqlTransControl::end_trans(&session,
+                                                     need_disconnect,
+                                                     trans_state,
+                                                     is_rollback,
+                                                     true, // is_explicit
+                                                     callback))) {
+      LOG_WARN("explicit end trans fail", K(ret));
+    }
+    if (trans_state.is_end_trans_executed() && trans_state.is_end_trans_success()) {
+      async_resp_used = true;
+    }
+  }
+  return ret;
 }
 
 } // namespace observer

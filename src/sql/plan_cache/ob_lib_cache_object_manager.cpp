@@ -60,7 +60,8 @@ int ObLCObjectManager::alloc(ObCacheObjGuard& guard,
     LOG_WARN("out of the max type", K(ret), K(ns));
   } else if (FALSE_IT(mem_attr.label_ = LC_NS_TYPE_LABELS[ns])) {
   } else if (OB_FAIL(parent_context->CREATE_CONTEXT(entity,
-                     lib::ContextParam().set_mem_attr(mem_attr)))) {
+                     lib::ContextParam().set_mem_attr(mem_attr)
+                     .set_page_size(ObLCObjectManager::OB_LC_ALLOC_PAGE_SIZE)))) {
     LOG_WARN("create entity failed", K(ret), K(mem_attr));
   } else if (OB_ISNULL(entity)) {
     ret = OB_ERR_UNEXPECTED;

@@ -23,10 +23,39 @@ namespace oceanbase
 namespace sql
 {
 
+static OB_INLINE bool column_conv_is_compact_rt_layout(const uint32_t arg_cnt)
+{
+  return arg_cnt == static_cast<uint32_t>(ObExprColumnConv::RT_PARAMS_COUNT_WITHOUT_COLUMN_INFO)
+         || arg_cnt == static_cast<uint32_t>(ObExprColumnConv::RT_PARAMS_COUNT_WITH_COLUMN_INFO);
+}
+
+// CG 紧凑布局：value 在 [0]；老布局（低版本集群 CG）：value 在 [VALUE_EXPR]。
+static OB_INLINE ObExpr *column_conv_get_value_arg(const ObExpr &expr)
+{
+  return column_conv_is_compact_rt_layout(expr.arg_cnt_) ? expr.args_[0]
+         : expr.args_[ObExprColumnConv::VALUE_EXPR];
+}
+
+static OB_INLINE ObExpr *column_conv_get_column_info_arg(const ObExpr &expr)
+{
+  if (expr.arg_cnt_ == static_cast<uint32_t>(ObExprColumnConv::RT_PARAMS_COUNT_WITH_COLUMN_INFO)) {
+    return expr.args_[1];
+  } else if (expr.arg_cnt_ == static_cast<uint32_t>(ObExprColumnConv::PARAMS_COUNT_WITH_COLUMN_INFO)) {
+    return expr.args_[ObExprColumnConv::COLUMN_INFO];
+  }
+  return nullptr;
+}
+
+static OB_INLINE bool column_conv_has_column_info_arg(const ObExpr &expr)
+{
+  return nullptr != column_conv_get_column_info_arg(expr);
+}
+
 static bool is_string_text_cast(const ObExpr &expr)
 {
-  return lib::is_mysql_mode() && ob_is_text_tc(expr.datum_meta_.type_)
-      && T_FUN_SYS_CAST == expr.args_[4]->type_ && ob_is_string_tc(expr.args_[4]->args_[0]->datum_meta_.type_);
+  ObExpr *v = column_conv_get_value_arg(expr);
+  return lib::is_mysql_mode() && ob_is_text_tc(expr.datum_meta_.type_) && nullptr != v
+         && T_FUN_SYS_CAST == v->type_ && ob_is_string_tc(v->args_[0]->datum_meta_.type_);
 }
 
 ObFastColumnConvExpr::ObFastColumnConvExpr(ObIAllocator &alloc)
@@ -380,8 +409,10 @@ int ObExprColumnConv::cg_expr(ObExprCGCtx &op_cg_ctx,
 {
   int ret = OB_SUCCESS;
   UNUSED(raw_expr);
-  //compatible with old code
-  CK((PARAMS_COUNT_WITHOUT_COLUMN_INFO == rt_expr.arg_cnt_)
+  // 紧凑 CG：1/2；低版本集群 CG：完整 5/6（与 raw 一致）
+  CK((RT_PARAMS_COUNT_WITHOUT_COLUMN_INFO == rt_expr.arg_cnt_)
+    || (RT_PARAMS_COUNT_WITH_COLUMN_INFO == rt_expr.arg_cnt_)
+    || (PARAMS_COUNT_WITHOUT_COLUMN_INFO == rt_expr.arg_cnt_)
     || (PARAMS_COUNT_WITH_COLUMN_INFO == rt_expr.arg_cnt_));
   if (OB_ISNULL(op_cg_ctx.session_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -400,13 +431,13 @@ int ObExprColumnConv::cg_expr(ObExprCGCtx &op_cg_ctx,
         && (enumset_info->cast_mode_ & CM_FAST_COLUMN_CONV)
         && !ob_is_enum_or_set_type(rt_expr.datum_meta_.type_)) {
       rt_expr.eval_func_ = column_convert_fast;
-      if (rt_expr.args_[4]->is_batch_result()) {
+      if (column_conv_get_value_arg(rt_expr)->is_batch_result()) {
         rt_expr.eval_batch_func_ = column_convert_batch_fast;
         rt_expr.eval_vector_func_ = column_convert_vector_fast;
       }
     } else {
       rt_expr.eval_func_ = column_convert;
-      if (rt_expr.args_[4]->is_batch_result()
+      if (column_conv_get_value_arg(rt_expr)->is_batch_result()
           && !ob_is_enum_or_set_type(rt_expr.datum_meta_.type_)
           && GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_3_0) {
         if (!is_lob_storage(rt_expr.datum_meta_.type_)
@@ -443,12 +474,16 @@ static OB_INLINE int column_convert_datum_accuracy_check(const ObExpr &expr,
     LOG_WARN("fail to check accuracy", K(ret), K(expr), K(warning));
     //compatible with old code
     if (OB_ERR_DATA_TOO_LONG == ret && lib::is_oracle_mode()
-        && ObExprColumnConv::PARAMS_COUNT_WITH_COLUMN_INFO == expr.arg_cnt_
+        && column_conv_has_column_info_arg(expr)
         && !ctx.exec_ctx_.get_my_session()->is_diagnosis_enabled()) {
       ObString column_info_str;
       ObDatum *column_info = NULL;
-      if (OB_FAIL(expr.args_[5]->eval(ctx, column_info))) {
+      ObExpr *ci = column_conv_get_column_info_arg(expr);
+      if (OB_ISNULL(ci)) {
+        ret = OB_ERR_DATA_TOO_LONG;
+      } else if (OB_FAIL(ci->eval(ctx, column_info))) {
         LOG_WARN("evaluate parameter failed", K(ret));
+        ret = OB_ERR_DATA_TOO_LONG;
       } else {
         column_info_str = column_info->get_string();
         int64_t col_length = str_len_byte;
@@ -458,18 +493,19 @@ static OB_INLINE int column_convert_datum_accuracy_check(const ObExpr &expr,
         }
         LOG_ORACLE_USER_ERROR(OB_ERR_DATA_TOO_LONG_MSG_FMT_V2, column_info_str.length(),
                               column_info_str.ptr(), col_length, max_accuracy_len);
+        ret = OB_ERR_DATA_TOO_LONG;
       }
-      ret = OB_ERR_DATA_TOO_LONG;
     }
   }
   if (OB_SUCC(ret) && lib::is_mysql_mode() && OB_ERR_DATA_TOO_LONG == warning) {
     ObDatum *column_info = NULL;
     int64_t rownum = ctx.exec_ctx_.get_cur_rownum();
-    if (rownum > 0
-        && ObExprColumnConv::PARAMS_COUNT_WITH_COLUMN_INFO == expr.arg_cnt_
-        && OB_SUCCESS == expr.args_[5]->eval(ctx, column_info)) {
-      LOG_USER_WARN(OB_ERR_DATA_TRUNCATED, column_info->get_string().length(),
-                                           column_info->get_string().ptr(), rownum);
+    if (rownum > 0 && column_conv_has_column_info_arg(expr)) {
+      ObExpr *ci = column_conv_get_column_info_arg(expr);
+      if (OB_NOT_NULL(ci) && OB_SUCCESS == ci->eval(ctx, column_info)) {
+        LOG_USER_WARN(OB_ERR_DATA_TRUNCATED, column_info->get_string().length(),
+                         column_info->get_string().ptr(), rownum);
+      }
     }
   }
   return ret;
@@ -499,7 +535,7 @@ static OB_INLINE int column_convert_vector_accuracy_check(const ObExpr &expr,
     LOG_WARN("fail to check accuracy", K(ret), K(expr), K(warning));
     //compatible with old code
     if (OB_ERR_DATA_TOO_LONG == ret && lib::is_oracle_mode()
-        && ObExprColumnConv::PARAMS_COUNT_WITH_COLUMN_INFO == expr.arg_cnt_
+        && column_conv_has_column_info_arg(expr)
         && !ctx.exec_ctx_.get_my_session()->is_diagnosis_enabled()) {
       ObString column_info_str;
       ObDatum *column_info = NULL;
@@ -507,10 +543,11 @@ static OB_INLINE int column_convert_vector_accuracy_check(const ObExpr &expr,
       batch_info_guard.set_batch_size(ctx.max_batch_size_);
       batch_info_guard.set_batch_idx(idx);
       EvalBound bound(ctx.max_batch_size_, idx, idx + 1, false);
-      if (OB_FAIL(expr.args_[5]->eval_vector(ctx, skip, bound))) {
+      ObExpr *ci = column_conv_get_column_info_arg(expr);
+      if (OB_NOT_NULL(ci) && OB_FAIL(ci->eval_vector(ctx, skip, bound))) {
         LOG_WARN("evaluate parameter failed", K(ret));
-      } else {
-        column_info_str = expr.args_[5]->get_vector(ctx)->get_string(idx);
+      } else if (OB_NOT_NULL(ci)) {
+        column_info_str = ci->get_vector(ctx)->get_string(idx);
         int64_t col_length = str_len_byte;
         if (ObStringTC == ob_obj_type_class(expr.datum_meta_.get_type())
             && !is_oracle_byte_length(lib::is_oracle_mode(), expr.datum_meta_.length_semantics_)) {
@@ -529,11 +566,12 @@ static OB_INLINE int column_convert_vector_accuracy_check(const ObExpr &expr,
     batch_info_guard.set_batch_size(ctx.max_batch_size_);
     batch_info_guard.set_batch_idx(idx);
     EvalBound bound(ctx.max_batch_size_, idx, idx + 1, false);
-    if (rownum > 0
-        && ObExprColumnConv::PARAMS_COUNT_WITH_COLUMN_INFO == expr.arg_cnt_
-        && OB_SUCCESS == expr.args_[5]->eval_vector(ctx, skip, bound)) {
-      LOG_USER_WARN(OB_ERR_DATA_TRUNCATED, expr.args_[5]->get_vector(ctx)->get_string(idx).length(),
-                                           expr.args_[5]->get_vector(ctx)->get_string(idx).ptr(), rownum);
+    if (rownum > 0 && column_conv_has_column_info_arg(expr)) {
+      ObExpr *ci = column_conv_get_column_info_arg(expr);
+      if (OB_NOT_NULL(ci) && OB_SUCCESS == ci->eval_vector(ctx, skip, bound)) {
+        LOG_USER_WARN(OB_ERR_DATA_TRUNCATED, ci->get_vector(ctx)->get_string(idx).length(),
+                      ci->get_vector(ctx)->get_string(idx).ptr(), rownum);
+      }
     }
   }
   return ret;
@@ -573,12 +611,12 @@ int ObExprColumnConv::column_convert(const ObExpr &expr,
     ObObjType out_type = expr.datum_meta_.type_;
     ObCollationType out_cs_type = expr.datum_meta_.cs_type_;
     ObDatum *val = NULL;
-    if (ob_is_enum_or_set_type(out_type) && !expr.args_[4]->obj_meta_.is_enum_or_set()) {
+    if (ob_is_enum_or_set_type(out_type) && !column_conv_get_value_arg(expr)->obj_meta_.is_enum_or_set()) {
       if (OB_FAIL(eval_enumset(expr, ctx, val))) {
         LOG_WARN("fail to eval enumset result", K(ret));
       }
     } else {
-      if (OB_FAIL(expr.args_[4]->eval(ctx, val))) {
+      if (OB_FAIL(column_conv_get_value_arg(expr)->eval(ctx, val))) {
         LOG_WARN("evaluate parameter failed", K(ret));
       }
     }
@@ -613,18 +651,18 @@ int ObExprColumnConv::column_convert(const ObExpr &expr,
         if (OB_SUCC(ret)) {
           LOG_DEBUG("after column convert", K(expr), K(datum), K(cast_mode));
         }
-      } else if (is_lob_storage(out_type) && expr.args_[4]->obj_meta_.is_xml_sql_type()) {
+      } else if (is_lob_storage(out_type) && column_conv_get_value_arg(expr)->obj_meta_.is_xml_sql_type()) {
         // udt types can only insert to lob columns by rewrite.
         // but before rewrite, column convert type deducing may happen
         // so prevent the convertion during execution
         ret = OB_ERR_INVALID_XML_DATATYPE;
         LOG_USER_ERROR(OB_ERR_INVALID_XML_DATATYPE, ob_obj_type_str(out_type), "ANYDATA");
         LOG_WARN("convert xmltype to character type is not supported in PL",
-                 K(ret), K(expr.args_[4]->obj_meta_), K(out_type));
+                 K(ret), K(column_conv_get_value_arg(expr)->obj_meta_), K(out_type));
       } else {
-        ObObjType in_type = expr.args_[4]->obj_meta_.get_type();
-        ObCollationType in_cs_type = expr.args_[4]->obj_meta_.get_collation_type();
-        bool has_lob_header = expr.args_[4]->obj_meta_.has_lob_header();
+        ObObjType in_type = column_conv_get_value_arg(expr)->obj_meta_.get_type();
+        ObCollationType in_cs_type = column_conv_get_value_arg(expr)->obj_meta_.get_collation_type();
+        bool has_lob_header = column_conv_get_value_arg(expr)->obj_meta_.has_lob_header();
         bool has_lob_header_for_check = has_lob_header;
         ObString raw_str = val->get_string();
         ObLobLocatorV2 input_lob(raw_str.ptr(), raw_str.length(), has_lob_header);
@@ -704,7 +742,7 @@ int ObExprColumnConv::column_convert_fast(const ObExpr &expr,
 {
   int ret = OB_SUCCESS;
   ObDatum *val = nullptr;
-  if (OB_FAIL(expr.args_[4]->eval(ctx, val))) {
+  if (OB_FAIL(column_conv_get_value_arg(expr)->eval(ctx, val))) {
     LOG_WARN("evaluate parameter failed", K(ret));
   } else {
     datum.set_datum(*val);
@@ -723,13 +761,13 @@ int ObExprColumnConv::column_convert_batch(const ObExpr &expr,
   const ObEnumSetInfo *enumset_info = static_cast<ObEnumSetInfo *>(expr.extra_info_);
   const uint64_t cast_mode = enumset_info->cast_mode_;
   bool is_strict = CM_IS_STRICT_MODE(cast_mode) && !CM_IS_IGNORE_CHARSET_CONVERT_ERR(cast_mode);
-  ObEvalInfo &eval_info = expr.args_[4]->get_eval_info(ctx);
-  bool param_not_eval = !expr.args_[4]->get_eval_info(ctx).is_evaluated(ctx)
-                        && !expr.args_[4]->get_eval_info(ctx).is_projected();
-  if (OB_FAIL(expr.args_[4]->eval_batch(ctx, skip, batch_size))) {
+  ObEvalInfo &eval_info = column_conv_get_value_arg(expr)->get_eval_info(ctx);
+  bool param_not_eval = !column_conv_get_value_arg(expr)->get_eval_info(ctx).is_evaluated(ctx)
+                        && !column_conv_get_value_arg(expr)->get_eval_info(ctx).is_projected();
+  if (OB_FAIL(column_conv_get_value_arg(expr)->eval_batch(ctx, skip, batch_size))) {
     LOG_WARN("failed to eval batch vals", K(ret));
   } else {
-    ObDatum *vals = expr.args_[4]->locate_batch_datums(ctx);
+    ObDatum *vals = column_conv_get_value_arg(expr)->locate_batch_datums(ctx);
     ObDatum *results = expr.locate_batch_datums(ctx);
     ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
     bool is_string_type = ob_is_string_type(out_type);
@@ -783,21 +821,21 @@ int ObExprColumnConv::column_convert_batch(const ObExpr &expr,
           LOG_WARN("failed to convert batch for OTHER_TC", K(ret));
         }
       }
-    } else if (expr.args_[4]->obj_meta_.is_xml_sql_type()) {
+    } else if (column_conv_get_value_arg(expr)->obj_meta_.is_xml_sql_type()) {
       ret = OB_ERR_INVALID_XML_DATATYPE;
       LOG_USER_ERROR(OB_ERR_INVALID_XML_DATATYPE, ob_obj_type_str(out_type), "ANYDATA");
       LOG_WARN("convert xmltype to character type is not supported in PL",
-                K(ret), K(expr.args_[4]->obj_meta_), K(out_type));
+                K(ret), K(column_conv_get_value_arg(expr)->obj_meta_), K(out_type));
     } else {
       ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx); // temp alloc only used for lob types
       common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
-      ObObjType in_type = expr.args_[4]->obj_meta_.get_type();
-      ObCollationType in_cs_type = expr.args_[4]->obj_meta_.get_collation_type();
-      bool has_lob_header = expr.args_[4]->obj_meta_.has_lob_header();
+      ObObjType in_type = column_conv_get_value_arg(expr)->obj_meta_.get_type();
+      ObCollationType in_cs_type = column_conv_get_value_arg(expr)->obj_meta_.get_collation_type();
+      bool has_lob_header = column_conv_get_value_arg(expr)->obj_meta_.has_lob_header();
       bool has_lob_header_for_check = has_lob_header;
-      bool can_use_raw_str = T_FUN_SYS_CAST == expr.args_[4]->type_
+      bool can_use_raw_str = T_FUN_SYS_CAST == column_conv_get_value_arg(expr)->type_
                              && param_not_eval
-                             && ob_is_string_tc(expr.args_[4]->args_[0]->datum_meta_.type_)
+                             && ob_is_string_tc(column_conv_get_value_arg(expr)->args_[0]->datum_meta_.type_)
                              && !ob_is_geometry(out_type);
       for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; ++i) {
         if (skip.at(i) || eval_flags.at(i)) {
@@ -822,7 +860,7 @@ int ObExprColumnConv::column_convert_batch(const ObExpr &expr,
             ObString str;
             ObTextStringIter striter(in_type, in_cs_type, vals[i].get_string(), has_lob_header);
             if (can_use_raw_str) {
-              str = expr.args_[4]->args_[0]->locate_expr_datum(ctx).get_string();
+              str = column_conv_get_value_arg(expr)->args_[0]->locate_expr_datum(ctx).get_string();
               if (str.length() >= max_accuracy_len) {
                 can_use_raw_str = false;
               }
@@ -926,8 +964,8 @@ int ObExprColumnConv::calc_column_name_for_diagnosis(const ObExpr &expr,
 
   if (diagnosis_manager.col_names_.count() < diagnosis_manager.rets_.count()) {
     ObDatum *column_info = NULL;
-    if (ObExprColumnConv::PARAMS_COUNT_WITH_COLUMN_INFO == expr.arg_cnt_
-        && OB_SUCCESS == expr.args_[5]->eval(ctx, column_info)) {
+    ObExpr *ci = column_conv_get_column_info_arg(expr);
+    if (OB_NOT_NULL(ci) && OB_SUCCESS == ci->eval(ctx, column_info)) {
       ObString column_name(column_info->get_string().length(), column_info->get_string().ptr());
 
       int64_t gap_cnt = diagnosis_manager.rets_.count() - diagnosis_manager.col_names_.count();
@@ -956,10 +994,10 @@ int ObExprColumnConv::column_convert_vector(const ObExpr &expr,
   const ObEnumSetInfo *enumset_info = static_cast<ObEnumSetInfo *>(expr.extra_info_);
   const uint64_t cast_mode = enumset_info->cast_mode_;
   bool is_strict = CM_IS_STRICT_MODE(cast_mode) && !CM_IS_IGNORE_CHARSET_CONVERT_ERR(cast_mode);
-  ObEvalInfo &eval_info = expr.args_[4]->get_eval_info(ctx);
-  bool param_not_eval = !expr.args_[4]->get_eval_info(ctx).is_evaluated(ctx)
-                        && !expr.args_[4]->get_eval_info(ctx).is_projected();
-  if (OB_FAIL(expr.args_[4]->eval_vector(ctx, skip, bound))) {
+  ObEvalInfo &eval_info = column_conv_get_value_arg(expr)->get_eval_info(ctx);
+  bool param_not_eval = !column_conv_get_value_arg(expr)->get_eval_info(ctx).is_evaluated(ctx)
+                        && !column_conv_get_value_arg(expr)->get_eval_info(ctx).is_projected();
+  if (OB_FAIL(column_conv_get_value_arg(expr)->eval_vector(ctx, skip, bound))) {
     LOG_WARN("failed to eval args", K(ret));
   } else {
     ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
@@ -973,16 +1011,16 @@ int ObExprColumnConv::column_convert_vector(const ObExpr &expr,
     const ObObjTypeClass &dst_tc = ob_obj_type_class(expr.datum_meta_.type_);
     const ObLength max_accuracy_len = accuracy.get_length();
     VectorFormat res_format = expr.get_format(ctx);
-    VectorFormat arg_format = expr.args_[4]->get_format(ctx);
+    VectorFormat arg_format = column_conv_get_value_arg(expr)->get_format(ctx);
     if (is_string_type) {
       accuracy.set_length_semantics(expr.datum_meta_.length_semantics_);
     }
     if (!is_lob_storage(out_type) || is_string2text) {
       if (is_string2text) {
         if (VEC_DISCRETE == arg_format && VEC_DISCRETE == res_format) {
-          bool has_null = expr.args_[4]->get_vector(ctx)->has_null()
+          bool has_null = column_conv_get_value_arg(expr)->get_vector(ctx)->has_null()
                           && (static_cast<ObDiscreteBase *>
-                              (expr.args_[4]->get_vector(ctx))->get_nulls()->accumulate_bit_cnt(bound) != 0);
+                              (column_conv_get_value_arg(expr)->get_vector(ctx))->get_nulls()->accumulate_bit_cnt(bound) != 0);
           if (bound.get_all_rows_active()) {
             if (has_null) {
               ret = inner_loop_for_convert_vector<PARAM_TC::TEXT_TC, ObDiscreteFormat, ObDiscreteFormat, true, true>(expr, ctx, skip, bound,
@@ -1012,9 +1050,9 @@ int ObExprColumnConv::column_convert_vector(const ObExpr &expr,
         }
       } else if (is_string_type) {
         if (VEC_DISCRETE == arg_format && VEC_DISCRETE == res_format) {
-          bool has_null = expr.args_[4]->get_vector(ctx)->has_null()
+          bool has_null = column_conv_get_value_arg(expr)->get_vector(ctx)->has_null()
                           && (static_cast<ObDiscreteBase *>
-                              (expr.args_[4]->get_vector(ctx))->get_nulls()->accumulate_bit_cnt(bound) != 0);
+                              (column_conv_get_value_arg(expr)->get_vector(ctx))->get_nulls()->accumulate_bit_cnt(bound) != 0);
           if (bound.get_all_rows_active()) {
             if (has_null) {
               ret = inner_loop_for_convert_vector<PARAM_TC::STRING_TC, ObDiscreteFormat, ObDiscreteFormat, true, true>(expr, ctx, skip, bound,
@@ -1044,9 +1082,9 @@ int ObExprColumnConv::column_convert_vector(const ObExpr &expr,
         }
       } else if (is_int_tc) {
         if (VEC_FIXED == arg_format && VEC_FIXED == res_format) {
-          bool has_null = expr.args_[4]->get_vector(ctx)->has_null()
+          bool has_null = column_conv_get_value_arg(expr)->get_vector(ctx)->has_null()
                           && (static_cast<ObFixedLengthBase *>
-                              (expr.args_[4]->get_vector(ctx))->get_nulls()->accumulate_bit_cnt(bound) != 0);
+                              (column_conv_get_value_arg(expr)->get_vector(ctx))->get_nulls()->accumulate_bit_cnt(bound) != 0);
           if (bound.get_all_rows_active()) {
             if (has_null) {
               ret = inner_loop_for_convert_vector<PARAM_TC::INT_TC,
@@ -1111,10 +1149,10 @@ int ObExprColumnConv::column_convert_batch_fast(const ObExpr &expr,
                                                 const int64_t batch_size)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(expr.args_[4]->eval_batch(ctx, skip, batch_size))) {
+  if (OB_FAIL(column_conv_get_value_arg(expr)->eval_batch(ctx, skip, batch_size))) {
     LOG_WARN("failed to eval batch vals", K(ret));
   } else {
-    ObDatum *vals = expr.args_[4]->locate_batch_datums(ctx);
+    ObDatum *vals = column_conv_get_value_arg(expr)->locate_batch_datums(ctx);
     ObDatum *results = expr.locate_batch_datums(ctx);
     ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
     for (int64_t i = 0; OB_SUCC(ret) && i < batch_size; ++i) {
@@ -1134,9 +1172,9 @@ int ObExprColumnConv::column_convert_vector_fast(const ObExpr &expr,
 {
   int ret = OB_SUCCESS;
   VectorFormat res_format = expr.get_format(ctx);
-  VectorFormat arg_format = expr.args_[4]->get_format(ctx);
+  VectorFormat arg_format = column_conv_get_value_arg(expr)->get_format(ctx);
   ObObjType out_type = expr.datum_meta_.type_;
-  if (OB_FAIL(expr.args_[4]->eval_vector(ctx, skip, bound))) {
+  if (OB_FAIL(column_conv_get_value_arg(expr)->eval_vector(ctx, skip, bound))) {
     LOG_WARN("failed to eval args", K(ret));
   } else {
     if (VEC_FIXED == res_format && VEC_FIXED == arg_format) {
@@ -1175,7 +1213,7 @@ int ObExprColumnConv::inner_calc_column_convert_vector_fast(const ObExpr &expr,
   int ret = OB_SUCCESS;
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
   ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
-  ArgVec *arg_vec = static_cast<ArgVec *>(expr.args_[4]->get_vector(ctx));
+  ArgVec *arg_vec = static_cast<ArgVec *>(column_conv_get_value_arg(expr)->get_vector(ctx));
   if (bound.get_all_rows_active()) {
     for (int64_t i = bound.start(); i < bound.end(); ++i) {
       if (arg_vec->is_null(i)) {
@@ -1205,17 +1243,25 @@ int ObExprColumnConv::eval_enumset(const ObExpr &expr, ObEvalCtx &ctx, common::O
   const ObEnumSetInfo *enumset_info = static_cast<ObEnumSetInfo *>(expr.extra_info_);
   const uint64_t cast_mode = enumset_info->cast_mode_;
   const uint64_t expr_ctx_id = static_cast<uint64_t>(expr.expr_ctx_id_);
-  if (OB_UNLIKELY(expr_ctx_id == ObExpr::INVALID_EXP_CTX_ID)) {
-    ObExpr *old_expr = expr.args_[0];
-    expr.args_[0] = expr.args_[4];
+  // 仅紧凑布局且未分配 rt ctx 时可直接对 expr 做 eval_enumset（value 在 args_[0]）；
+  // 老 5/6 布局下 eval_enumset 依赖的 value 在 VALUE_EXPR 位，需走 column_conv_ctx（setup 内交换到 [0]）。
+  if (OB_UNLIKELY(expr_ctx_id == ObExpr::INVALID_EXP_CTX_ID)
+      && column_conv_is_compact_rt_layout(expr.arg_cnt_)) {
     if (OB_FAIL(expr.eval_enumset(ctx, enumset_info->str_values_, cast_mode, datum))) {
       LOG_WARN("fail to eval_enumset", KPC(enumset_info), K(ret));
     }
-    expr.args_[0] = old_expr;
+  } else if (expr_ctx_id == ObExpr::INVALID_EXP_CTX_ID
+             && !column_conv_is_compact_rt_layout(expr.arg_cnt_)) {
+    ObExprColumnConvCtx oneshot;
+    if (OB_FAIL(oneshot.setup_eval_expr(ctx.exec_ctx_.get_allocator(), expr))) {
+      LOG_WARN("fail to init column conv oneshot ctx for legacy layout", K(ret));
+    } else if (OB_FAIL(oneshot.expr_.eval_enumset(ctx, enumset_info->str_values_, cast_mode, datum))) {
+      LOG_WARN("fail to eval_enumset", KPC(enumset_info), K(ret));
+    }
   } else {
     ObExprColumnConvCtx *column_conv_ctx = NULL;
-    if (OB_ISNULL(column_conv_ctx = static_cast<ObExprColumnConvCtx *>
-        (ctx.exec_ctx_.get_expr_op_ctx(expr_ctx_id)))) {
+    if (OB_ISNULL(column_conv_ctx = static_cast<ObExprColumnConvCtx *>(
+            ctx.exec_ctx_.get_expr_op_ctx(expr_ctx_id)))) {
       if (OB_FAIL(ctx.exec_ctx_.create_expr_op_ctx(expr_ctx_id, column_conv_ctx))) {
         LOG_WARN("fail to create expr op ctx", K(ret), K(expr_ctx_id));
       } else if (OB_FAIL(column_conv_ctx->setup_eval_expr(ctx.exec_ctx_.get_allocator(), expr))) {
@@ -1223,8 +1269,7 @@ int ObExprColumnConv::eval_enumset(const ObExpr &expr, ObEvalCtx &ctx, common::O
       }
     }
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(column_conv_ctx->expr_.eval_enumset(ctx, enumset_info->str_values_, cast_mode,
-                                                      datum))) {
+      if (OB_FAIL(column_conv_ctx->expr_.eval_enumset(ctx, enumset_info->str_values_, cast_mode, datum))) {
         LOG_WARN("fail to eval_enumset", KPC(enumset_info), K(ret));
       }
     }
@@ -1244,7 +1289,14 @@ int ObExprColumnConv::ObExprColumnConvCtx::setup_eval_expr(ObIAllocator &allocat
     expr_ = expr;
     expr_.args_ = args_;
     MEMCPY(args_, expr.args_, mem_size);
-    args_[0] = args_[4];
+    // 紧凑 RT：value 已在 [0]；老布局 value 在 [VALUE_EXPR]，与 enumset 子求值约定交换到 [0]。
+    if (!column_conv_is_compact_rt_layout(expr.arg_cnt_)
+        && expr.arg_cnt_ > static_cast<uint32_t>(ObExprColumnConv::VALUE_EXPR)
+        && OB_NOT_NULL(args_[0]) && OB_NOT_NULL(args_[ObExprColumnConv::VALUE_EXPR])) {
+      ObExpr *const t = args_[0];
+      args_[0] = args_[ObExprColumnConv::VALUE_EXPR];
+      args_[ObExprColumnConv::VALUE_EXPR] = t;
+    }
   }
   return ret;
 }
@@ -1277,7 +1329,7 @@ int ObExprColumnConv::inner_loop_for_convert_batch(const ObExpr &expr,
   int32_t int_bytes = 0;
   const ObDecimalInt *min_decint = nullptr, *max_decint = nullptr;
   common::ObPrecision precision = expr.datum_meta_.precision_;
-  const bool has_lob_header = expr.args_[4]->obj_meta_.has_lob_header();
+  const bool has_lob_header = column_conv_get_value_arg(expr)->obj_meta_.has_lob_header();
   decint_cmp_fp cmp_fp;
   if (TC == PARAM_TC::DECIMAL_INT_TC) {
     min_decint = wide::ObDecimalIntConstValue::get_min_value(precision);
@@ -1382,10 +1434,10 @@ int ObExprColumnConv::inner_loop_for_convert_vector(const ObExpr &expr,
   int32_t int_bytes = 0;
   const ObDecimalInt *min_decint = nullptr, *max_decint = nullptr;
   common::ObPrecision precision = expr.datum_meta_.precision_;
-  const bool has_lob_header = expr.args_[4]->obj_meta_.has_lob_header();
+  const bool has_lob_header = column_conv_get_value_arg(expr)->obj_meta_.has_lob_header();
   decint_cmp_fp cmp_fp;
   ResVec *res_vec = static_cast<ResVec *> (expr.get_vector(ctx));
-  ArgVec *arg_vec = static_cast<ArgVec *> (expr.args_[4]->get_vector(ctx));
+  ArgVec *arg_vec = static_cast<ArgVec *> (column_conv_get_value_arg(expr)->get_vector(ctx));
   if (TC == PARAM_TC::DECIMAL_INT_TC) {
     min_decint = wide::ObDecimalIntConstValue::get_min_value(precision);
     max_decint = wide::ObDecimalIntConstValue::get_max_value(precision);

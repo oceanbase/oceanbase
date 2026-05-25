@@ -100,6 +100,7 @@ public:
   static const int64_t SLOW_QUERY_SAMPLE_SIZE = 20; // smaller than ObPlanStat::MAX_SCAN_STAT_SIZE
   static const int64_t TABLE_ROW_CHANGE_THRESHOLD = 2;
   static const int64_t EXPIRED_PLAN_TABLE_ROW_THRESHOLD = 100;
+  static const int32_t TMP_TABLES_NAME_STR_LEN = 4096;
   OB_UNIS_VERSION(1);
 public:
   explicit ObPhysicalPlan(lib::MemoryContext &mem_context = CURRENT_CONTEXT);
@@ -341,7 +342,7 @@ public:
   bool is_limited_concurrent_num() const {return max_concurrent_num_ != share::schema::ObMaxConcurrentParam::UNLIMITED;}
   inline const PhyRowParamMap &get_row_param_map() const { return row_param_map_; }
   inline PhyRowParamMap &get_row_param_map() { return row_param_map_; }
-  int init_params_info_str();
+  int gen_params_info_str(ObIAllocator *allocator, ObString &str) const;
   inline void set_first_array_index(int64_t first_array_index) { first_array_index_ = first_array_index; }
   inline int64_t get_first_array_index() const { return first_array_index_; }
   inline void set_is_batched_multi_stmt(bool is_batched_multi_stmt) {
@@ -376,6 +377,8 @@ public:
   inline bool get_is_insert_overwrite() const { return insert_overwrite_; }
   inline void set_use_rich_format(const bool v) { use_rich_format_ = v; }
   inline bool get_use_rich_format() const { return use_rich_format_; }
+  inline void set_enable_vec_batch_accum(const bool v) { enable_vec_batch_accum_ = v; }
+  inline bool is_enable_vec_batch_accum() const { return enable_vec_batch_accum_; }
   inline uint64_t get_append_table_id() const { return append_table_id_; }
   void set_record_plan_info(bool v) { need_record_plan_info_ = v; }
   bool need_record_plan_info() const { return need_record_plan_info_; }
@@ -824,6 +827,11 @@ private:
   uint64_t optimizer_features_enable_version_;
   bool route_to_column_replica_;
   bool is_gtt_temp_table_v2_;
+public:
+  ObLibCacheMissReason create_reason_;
+  uint64_t cache_node_id_; // indicate this plan belong to which Cache Node
+  uint64_t pcv_id_; // indicate this plan belong to which Plan Cache Value
+  uint64_t plan_set_id_; // indicate this plan belong to which Plan Set
 };
 
 struct ObPhyPlanClusterVersion

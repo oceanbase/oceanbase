@@ -162,6 +162,7 @@ public:
                                   = [](ObRawExpr *e){ return NULL != e;});
 
   int flatten_temp_expr(ObRawExpr *raw_expr);
+  int remove_exprs(const common::ObIArray<ObRawExpr *> &exprs_to_remove);
   void set_expr_factory(ObRawExprFactory *expr_factory)
   {
     expr_factory_ = expr_factory;

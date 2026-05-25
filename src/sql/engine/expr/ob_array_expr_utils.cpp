@@ -20,6 +20,8 @@
 #include "sql/engine/expr/ob_array_cast.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_minus.h"
+#include "storage/lob/ob_lob_manager.h"
+#include "lib/udt/ob_array_utils.h"
 #include <map>
 
 using namespace oceanbase::common;
@@ -1366,7 +1368,8 @@ int ObArrayExprUtils::add_elem_to_array(const ObExpr &expr, ObEvalCtx &ctx, ObIA
     if (OB_ISNULL(value_elem = dynamic_cast<ObCollectionBasicType *>(arr_type->element_type_))) {
       ret = OB_ERR_NULL_VALUE;
       LOG_WARN("value_elem_type is null", K(ret), K(arr_type));
-    } else if (OB_FAIL(ObArrayUtil::append(*arr_obj, value_elem->basic_meta_.get_obj_type(), datum))) {
+    } else if (OB_FAIL(ObArrayUtil::append(*arr_obj, value_elem->basic_meta_.get_obj_type(), datum,
+                                           expr.args_[args_idx]->obj_meta_.has_lob_header()))) {
       LOG_WARN("failed to append array value", K(ret));
     }
   } else if (arr_type->element_type_->type_id_ == ObNestedType::OB_ARRAY_TYPE ||
@@ -1475,6 +1478,13 @@ int ObArrayExprUtils::deduce_array_type(ObExecContext *exec_ctx, ObExprResType &
           }
         }
         if (calc_meta.get_type() == static_cast<ObCollectionBasicType *>(elem_type)->basic_meta_.get_obj_type()) {
+          type2.set_calc_meta(calc_meta);
+        } else if (ob_is_string_type(calc_meta.get_type())
+                   && ob_is_string_type(static_cast<ObCollectionBasicType *>(elem_type)->basic_meta_.get_obj_type())) {
+          ObCollectionBasicType *basic_elem = static_cast<ObCollectionBasicType *>(elem_type);
+          calc_meta.set_type(basic_elem->basic_meta_.get_obj_type());
+          calc_meta.set_collation_type(basic_elem->basic_meta_.get_collation_type());
+          calc_meta.set_collation_level(basic_elem->basic_meta_.get_collation_level());
           type2.set_calc_meta(calc_meta);
         } else {
           uint32_t depth = 0;
@@ -1619,12 +1629,12 @@ int ObNestedVectorFunc::construct_params(ObIAllocator &alloc, ObEvalCtx &ctx, co
   return ret;
 }
 
-int ObArrayExprUtils::get_basic_elem(ObIArrayType *src, uint32_t idx, ObObj &elem_obj, bool &is_null)
+int ObArrayExprUtils::get_basic_elem(ObIAllocator &alloc, ObIArrayType *src, uint32_t idx, ObObj &elem_obj, bool &is_null)
 {
   int ret = OB_SUCCESS;
   if (src->get_format() == Nested_Array) {
     ObArrayNested *arr_nested = static_cast<ObArrayNested *>(src);
-    if (OB_FAIL(get_basic_elem(arr_nested->get_child_array(), idx, elem_obj, is_null))) {
+    if (OB_FAIL(get_basic_elem(alloc, arr_nested->get_child_array(), idx, elem_obj, is_null))) {
       LOG_WARN("failed to cast get element", K(ret));
     }
   } else {
@@ -1632,6 +1642,10 @@ int ObArrayExprUtils::get_basic_elem(ObIArrayType *src, uint32_t idx, ObObj &ele
       is_null = true;
     } else if (OB_FAIL(src->elem_at(idx, elem_obj))) {
       LOG_WARN("get elem obj failed", K(ret));
+    } else if (src->is_lob_element()
+               && OB_FAIL(ObArrayUtil::varchar_obj_to_lob_obj(
+                      alloc, elem_obj, static_cast<ObObjType>(src->get_element_type())))) {
+      LOG_WARN("failed to convert varchar obj to lob obj", K(ret), K(idx), K(src->get_element_type()));
     }
   }
   return ret;
@@ -1652,6 +1666,16 @@ int ObArrayExprUtils::set_obj_to_vector(ObIVector *vec, int64_t idx, ObObj obj, 
     vec->set_double(idx, obj.get_double());
   } else if (ObVarcharType == obj.get_type()) {
     ObString obj_str = obj.get_varchar();
+    char *res_buf = (char *)allocator.alloc(obj_str.length());
+    if (OB_ISNULL(res_buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("result buffer allocation failed", K(ret), K(obj_str.length()));
+    } else {
+      MEMCPY(res_buf, obj_str.ptr(), obj_str.length());
+      vec->set_string(idx, res_buf, obj_str.length());
+    }
+  } else if (ob_is_text_tc(obj.get_type())) {
+    ObString obj_str = obj.get_string();
     char *res_buf = (char *)allocator.alloc(obj_str.length());
     if (OB_ISNULL(res_buf)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;

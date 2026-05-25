@@ -28,6 +28,11 @@ public :
   ArrayFormat get_format() const { return ArrayFormat::Binary_Varlen; }
   uint32_t *get_offsets() const { return offsets_; }
   char *get_data() const { return data_;}
+
+  bool is_lob_element() const {
+    return ob_is_text_tc(static_cast<ObObjType>(element_type_));
+  }
+
   int push_back(const ObString &value, bool is_null = false);
   void set_scale(ObScale scale) { UNUSED(scale); }
   int static escape_append(ObStringBuffer &format_str, ObString elem_str);

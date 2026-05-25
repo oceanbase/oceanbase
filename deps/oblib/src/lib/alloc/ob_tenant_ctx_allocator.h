@@ -132,6 +132,8 @@ public:
 
   int64_t get_used() const;
 
+  int64_t get_approx_used();
+
   int64_t get_tenant_limit() const
   {
     int64_t limit = 0;
@@ -325,6 +327,8 @@ public:
 
   int64_t get_used() const { return ctx_allocator_.get_used(); }
 
+  int64_t get_approx_used() { return obj_mgr_.get_stat().used_; }
+
   int64_t get_tenant_limit() const { return ctx_allocator_.get_tenant_limit(); }
 
   int64_t get_tenant_hold() const { return ctx_allocator_.get_tenant_hold(); }
@@ -455,6 +459,15 @@ private:
   AChunkUsingList using_list_;
   ChunkMgr chunk_mgr_;
 }; // end of class ObTenantCtxAllocator
+
+inline int64_t ObTenantCtxAllocatorV2::get_approx_used()
+{
+  int64_t used = 0;
+  ARRAY_FOREACH_NORET(*this, idx) {
+    used += allocators_[idx]->get_approx_used();
+  }
+  return used;
+}
 
 } // end of namespace lib
 } // end of namespace oceanbase

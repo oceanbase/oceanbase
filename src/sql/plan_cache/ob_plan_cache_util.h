@@ -600,8 +600,6 @@ struct ObPlanStat
         common::hash::equal_to<ObAddr>,
         common::hash::SimpleAllocer<typename common::hash::HashMapTypes<ObAddr, int64_t>::AllocType,
                                     DEFAULT_ADDR_NODE_NUM>> AddrMap;
-  static const int32_t STMT_MAX_LEN = 4096;
-  static const int32_t MAX_SCAN_STAT_SIZE = 100;
   static const int64_t CACHE_POLICY_UPDATE_INTERVAL = 60 * 1000 * 1000; // 1 min
  // static const int64_t CACHE_POLICY_UPDATE_INTERVAL = 30L * 60 * 1000 * 1000; // 30 min
   static const int64_t CACHE_POLICY_UDPATE_THRESHOLD = 1 << 20;
@@ -662,14 +660,6 @@ struct ObPlanStat
   common::ObString format_sql_id_;
   ObEvolutionStat evolution_stat_; //baseline相关统计信息
   //******** for spm end ******
-  // ***** for acs
-  bool is_bind_sensitive_;
-  bool is_bind_aware_;
-  char plan_sel_info_str_[STMT_MAX_LEN];
-  int32_t plan_sel_info_str_len_;
-  common::ObSEArray<ObAcsIdxSelRange*, 4> plan_sel_info_array_;
-  ObTableScanStat table_scan_stat_[MAX_SCAN_STAT_SIZE];
-  // ***** for acs end ****
 
   int64_t timeout_count_; //超时次数
   int64_t ps_stmt_id_;//prepare stmt id
@@ -690,8 +680,7 @@ struct ObPlanStat
   // 临时表计划的sessid表示对应的会话id，非临时表sessid为0
   uint64_t sessid_;
   // 临时表计划所包含的临时表名
-  char plan_tmp_tbl_name_str_[STMT_MAX_LEN];
-  int32_t plan_tmp_tbl_name_str_len_;
+  ObString plan_tmp_tbl_name_str_;
 
   // plan是否使用了jit编译表达式
   bool is_use_jit_;
@@ -769,10 +758,6 @@ struct ObPlanStat
       constructed_sql_(),
       sql_id_(),
       format_sql_id_(),
-      is_bind_sensitive_(false),
-      is_bind_aware_(false),
-      plan_sel_info_str_len_(0),
-      plan_sel_info_array_(),
       timeout_count_(0),
       ps_stmt_id_(common::OB_INVALID_ID),
       table_row_count_first_exec_(NULL),
@@ -785,7 +770,7 @@ struct ObPlanStat
       sample_exec_row_count_(0),
       sample_exec_usec_(0),
       sessid_(0),
-      plan_tmp_tbl_name_str_len_(0),
+      plan_tmp_tbl_name_str_(),
       is_use_jit_(false),
       enable_bf_cache_(true),
       enable_fuse_row_cache_(true),
@@ -855,10 +840,6 @@ struct ObPlanStat
       is_evolution_(rhs.is_evolution_),
       db_id_(rhs.db_id_),
       evolution_stat_(rhs.evolution_stat_),
-      is_bind_sensitive_(rhs.is_bind_sensitive_),
-      is_bind_aware_(rhs.is_bind_aware_),
-      plan_sel_info_str_len_(rhs.plan_sel_info_str_len_),
-      plan_sel_info_array_(rhs.plan_sel_info_array_),
       timeout_count_(rhs.timeout_count_),
       ps_stmt_id_(rhs.ps_stmt_id_),
       table_row_count_first_exec_(NULL),
@@ -871,7 +852,7 @@ struct ObPlanStat
       sample_exec_row_count_(rhs.sample_exec_row_count_),
       sample_exec_usec_(rhs.sample_exec_usec_),
       sessid_(rhs.sessid_),
-      plan_tmp_tbl_name_str_len_(rhs.plan_tmp_tbl_name_str_len_),
+      plan_tmp_tbl_name_str_(rhs.plan_tmp_tbl_name_str_),
       is_use_jit_(rhs.is_use_jit_),
       enable_bf_cache_(rhs.enable_bf_cache_),
       enable_fuse_row_cache_(rhs.enable_fuse_row_cache_),
@@ -899,39 +880,6 @@ struct ObPlanStat
       collation_connection_(rhs.collation_connection_)
   {
     exact_mode_sql_id_[0] = '\0';
-    MEMCPY(plan_sel_info_str_, rhs.plan_sel_info_str_, rhs.plan_sel_info_str_len_);
-    MEMCPY(table_scan_stat_, rhs.table_scan_stat_, sizeof(rhs.table_scan_stat_));
-    MEMCPY(plan_tmp_tbl_name_str_, rhs.plan_tmp_tbl_name_str_, rhs.plan_tmp_tbl_name_str_len_);
-  }
-
-  int to_str_acs_sel_info()
-  {
-   int ret = OB_SUCCESS;
-   int64_t pos = 0;
-   for (int64_t i = 0; OB_SUCC(ret) && i < plan_sel_info_array_.count(); i++) {
-     if (OB_ISNULL(plan_sel_info_array_.at(i))) {
-       ret = OB_ERR_UNEXPECTED;
-       SQL_PC_LOG(WARN, "null plan sel info", K(ret));
-     } else if (OB_ISNULL(plan_sel_info_str_)) {
-       ret = OB_ERR_UNEXPECTED;
-       SQL_PC_LOG(WARN, "null plan sel info str", K(ret));
-     } else if (OB_FAIL(databuff_printf(plan_sel_info_str_, STMT_MAX_LEN, pos, "{%.*s%s%f%s%f%s}",
-                                        plan_sel_info_array_.at(i)->index_name_.length(),
-                                        plan_sel_info_array_.at(i)->index_name_.ptr(), "[",
-                                        plan_sel_info_array_.at(i)->low_bound_sel_, ",",
-                                        plan_sel_info_array_.at(i)->high_bound_sel_, "]"))) {
-       if (OB_SIZE_OVERFLOW == ret) {
-         ret = OB_SUCCESS;
-         break;
-       } else {
-         SQL_PC_LOG(WARN, "failed to write plan sel info", K(plan_sel_info_array_.at(i)), K(ret));
-       }
-     }
-   }
-   if (OB_SUCC(ret)) {
-     plan_sel_info_str_len_ = static_cast<int32_t>(pos);
-   }
-   return ret;
   }
 
   //包含超时和SUCC的执行次数
@@ -1068,8 +1016,6 @@ struct ObPlanStat
                K_(outline_id),
                K_(is_evolution),
                K_(is_last_exec_succ),
-               K_(is_bind_sensitive),
-               K_(is_bind_aware),
                K_(is_last_exec_succ),
                K_(timeout_count),
                K_(evolution_stat),
@@ -1220,6 +1166,7 @@ public:
     enable_mysql_compatible_dates_(false),
     enable_px_task_rebalance_(false),
     enable_nested_sql_local_optimize_(false),
+    enable_vec_batch_accum_(false),
     cluster_config_version_(-1),
     tenant_config_version_(-1),
     tenant_id_(0)
@@ -1283,6 +1230,7 @@ public:
   bool enable_mysql_compatible_dates_;
   bool enable_px_task_rebalance_;
   bool enable_nested_sql_local_optimize_;
+  bool enable_vec_batch_accum_;
 private:
   // current cluster config version_
   int64_t cluster_config_version_;

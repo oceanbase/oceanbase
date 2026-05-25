@@ -215,23 +215,27 @@ protected:
                      const char *&pos,
                      const int64_t all_param_num,
                      const int64_t input_param_num,
-                     ParamTypeArray &param_types);
+                     const ParamTypeArray &existing_param_types,
+                     ParamTypeArray &out_new_param_types);
   int parse_request_type(const char* &pos,
                          int64_t num_of_params,
                          int8_t new_param_bound_flag,
                          ObCollationType cs_type,
                          ObCollationType ncs_type,
                          sql::ParamTypeArray &param_types,
-                         sql::ParamTypeInfoArray &param_type_infos
-                         /*ParamCastArray param_cast_infos*/);
+                         sql::ParamTypeInfoArray &param_type_infos);
   int parse_request_param_value(ObIAllocator &alloc,
-                                sql::ObSQLSessionInfo *session,
                                 const char* &pos,
                                 int64_t idx,
-                                obmysql::EMySQLFieldType &param_type,
+                                obmysql::EMySQLFieldType param_type,
                                 sql::TypeInfo &param_type_info,
                                 ObObjParam &param,
-                                const char *bitmap);
+                                const char *bitmap,
+                                const ObCharsetType charset,
+                                const ObCharsetType ncharset,
+                                const ObCollationType cs_type,
+                                const ObCollationType ncs_type,
+                                const common::ObTimeZoneInfo *tz_info);
   int store_params_value_to_str(ObIAllocator &alloc, sql::ObSQLSessionInfo &session);
   int execute_response(sql::ObSQLSessionInfo &session,
                         ObMySQLResultSet &result,
@@ -269,6 +273,14 @@ protected:
   int init_arraybinding_field(int64_t column_field_cnt, const ColumnsFieldIArray *column_fields);
   int init_row_for_arraybinding(ObIAllocator &alloc, int64_t array_binding_row_num);
   int construct_execute_param_for_arraybinding(int64_t pos);
+  int get_my_session(ObSQLSessionInfo *&sess_info);
+  int init_tenant_schema_info_once_(ObSQLSessionInfo &session);
+  void reset_tenant_schema_info_();
+  int get_tenant_schema_info_(const uint64_t tenant_id,
+                              ObTenantCachedSchemaGuardInfo *cache_info,
+                              share::schema::ObSchemaGetterGuard *&schema_guard,
+                              int64_t &tenant_version,
+                              int64_t &sys_version);
 
 private:
   int check_precondition_for_arraybinding(const ObSQLSessionInfo &session_info);
@@ -303,7 +315,23 @@ private:
                            sql::ObSQLSessionInfo &session,
                            bool has_more_result,
                            bool fore_sync_resp,
-                           bool &async_resp_used);
+                           bool &async_resp_used,
+                           bool &need_disconnect);
+
+  int try_get_ps_sql_for_trans_opt(sql::ObSQLSessionInfo &session, common::ObString &ps_sql);
+  int do_process_trans_ctrl_ps(sql::ObSQLSessionInfo &session,
+                               bool has_more_result,
+                               bool force_sync_resp,
+                               bool &async_resp_used,
+                               bool &need_disconnect,
+                               sql::stmt::StmtType stmt_type,
+                               const common::ObString &ps_sql);
+  void record_stat_for_ps_trans_ctrl(sql::stmt::StmtType type,
+                                     const int64_t end_time,
+                                     const sql::ObSQLSessionInfo &session,
+                                     const int64_t ret,
+                                     const bool is_commit_cmd,
+                                     const bool is_rollback_cmd) const;
 
   int try_batch_multi_stmt_optimization(sql::ObSQLSessionInfo &session,
                                         bool has_more_result,
@@ -402,6 +430,10 @@ protected:
   bool ps_cursor_has_destroy_;
   lib::MemoryContext retry_mem_context_; // for retry sql
   bool inited_; // indicates whether `retry_mem_context_` is initialized
+  ObSQLSessionInfo *my_session_;
+  share::schema::ObSchemaGetterGuard *tenant_schema_guard_;
+  int64_t tenant_local_schema_version_;
+  int64_t sys_local_schema_version_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMPStmtExecute);
 

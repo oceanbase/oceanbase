@@ -222,6 +222,12 @@ int ObUDRUtils::clac_dynamic_param_store(const DynamicParamInfoArray& dynamic_pa
         } else if (OB_FAIL(param_store.push_back(*pc_ctx.fp_result_.parameterized_params_.at(raw_param->value_)))) {
           LOG_WARN("pushback param failed", K(ret));
         }
+      } else if ((T_NUMBER == raw_param->type_ ||
+                  T_INT == raw_param->type_ ||
+                  T_FLOAT == raw_param->type_ ||
+                  T_DOUBLE == raw_param->type_) &&
+                OB_FAIL(ObResolverUtils::rm_space_for_neg_num(raw_param, allocator))) {
+        LOG_WARN("fail to remove space for neg num", K(ret));
       } else if (OB_FAIL(ObResolverUtils::resolve_const(raw_param,
                                                         stmt::T_NONE,
                                                         allocator,

@@ -36,7 +36,7 @@ void UDRBackupRecoveryGuard::recovery()
   sql_ctx_.cur_sql_ = cur_sql_;
   pc_ctx_.def_name_ctx_ = nullptr;
   pc_ctx_.mode_ = mode_;
-  if (!is_prepare_protocol_) {
+  if (!is_prepare_protocol_ && PC_PL_MODE != mode_) {
     const_cast<ObString &>(pc_ctx_.raw_sql_) = cur_sql_;
     pc_ctx_.is_parameterized_execute_ = false;
     pc_ctx_.fp_result_.parameterized_params_.reuse();

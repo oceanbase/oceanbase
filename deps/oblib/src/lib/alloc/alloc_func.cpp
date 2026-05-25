@@ -87,6 +87,22 @@ int64_t get_tenant_memory_hold(const uint64_t tenant_id, const uint64_t ctx_id)
   return bytes;
 }
 
+int64_t get_tenant_memory_approx_used(const uint64_t tenant_id, const uint64_t ctx_id)
+{
+  int64_t bytes = 0;
+  ObMallocAllocator *allocator = ObMallocAllocator::get_instance();
+  if (!OB_ISNULL(allocator)) {
+    auto ta = allocator->get_tenant_ctx_allocator(tenant_id, ctx_id);
+    if (ta != nullptr) {
+      ObTenantCtxAllocatorV2 *v2 = ta->get_ctx_allocator();
+      if (OB_NOT_NULL(v2)) {
+        bytes = v2->get_approx_used();
+      }
+    }
+  }
+  return bytes;
+}
+
 int64_t get_tenant_cache_hold(uint64_t tenant_id)
 {
   int64_t bytes = 0;

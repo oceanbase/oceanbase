@@ -13,10 +13,13 @@
 
 #include "ob_array_cast.h"
 #include "ob_array_expr_utils.h"
+#include "ob_expr_lob_utils.h"
+#include "lib/udt/ob_array_utils.h"
 #include "lib/json_type/ob_json_parse.h"
 #include <fast_float/fast_float.h>
 #include "src/share/object/ob_obj_cast_util.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "common/ob_accuracy.h"
 #include <string>
 #include <regex>
 
@@ -43,7 +46,7 @@ int ObVectorDataCast::cast(common::ObIAllocator &alloc, ObIArrayType *src, const
       if (OB_FAIL(dst->push_null())) {
         LOG_WARN("failed to add null to array", K(ret), K(i));
       }
-    } else if (OB_FAIL(ObArrayCastUtils::cast_get_element(src, src_type, i, src_elem))) {
+    } else if (OB_FAIL(ObArrayCastUtils::cast_get_element(alloc, src, src_type, i, src_elem))) {
       LOG_WARN("failed to get cast element", K(ret), K(i));
     } else {
       ObObjType dst_obj_type = dst_type->basic_meta_.get_obj_type();
@@ -86,7 +89,7 @@ int ObArrayFixedSizeCast::cast(common::ObIAllocator &alloc, ObIArrayType *src, c
       if (OB_FAIL(dst->push_null())) {
         LOG_WARN("failed to add null to array", K(ret), K(i));
       }
-    } else if (OB_FAIL(ObArrayCastUtils::cast_get_element(src, src_type, i, src_elem))) {
+    } else if (OB_FAIL(ObArrayCastUtils::cast_get_element(alloc, src, src_type, i, src_elem))) {
       LOG_WARN("failed to get cast element", K(ret), K(i));
     } else if (OB_FAIL(ObArrayCastUtils::cast_add_element(alloc, src_elem, dst, dst_type, mode))) {
       LOG_WARN("failed to cast and add element", K(ret));
@@ -95,7 +98,7 @@ int ObArrayFixedSizeCast::cast(common::ObIAllocator &alloc, ObIArrayType *src, c
   return ret;
 }
 
-int ObArrayCastUtils::cast_get_element(ObIArrayType *src, const ObCollectionBasicType *elem_type, uint32_t idx, ObObj &src_elem)
+int ObArrayCastUtils::cast_get_element(common::ObIAllocator &alloc, ObIArrayType *src, const ObCollectionBasicType *elem_type, uint32_t idx, ObObj &src_elem)
 {
   int ret = OB_SUCCESS;
   ObObjType obj_type = elem_type->basic_meta_.get_obj_type();
@@ -166,6 +169,16 @@ int ObArrayCastUtils::cast_get_element(ObIArrayType *src, const ObCollectionBasi
     case ObVarcharType : {
       ObArrayBinary *arr = static_cast<ObArrayBinary *>(src);
       src_elem.set_varchar((*arr)[idx]);
+      break;
+    }
+    case ObTextType:
+    case ObMediumTextType:
+    case ObLongTextType: {
+      if (OB_FAIL(src->elem_at(idx, src_elem))) {
+        LOG_WARN("failed to get lob element", K(ret), K(idx));
+      } else if (OB_FAIL(ObArrayUtil::varchar_obj_to_lob_obj(alloc, src_elem, elem_type->basic_meta_.get_obj_type()))) {
+        LOG_WARN("failed to convert varchar obj to lob obj", K(ret), K(idx), K(elem_type->basic_meta_.get_obj_type()));
+      }
       break;
     }
     case ObUDoubleType:
@@ -288,6 +301,26 @@ int ObArrayCastUtils::cast_add_element(common::ObIAllocator &alloc, ObObj &src_e
         ObArrayBinary *dst_arr = static_cast<ObArrayBinary *>(dst);
         if (OB_FAIL(dst_arr->push_back(res.get_varchar()))) {
           LOG_WARN("failed to push back array value", K(ret));
+        }
+        break;
+      }
+      case ObTextType:
+      case ObMediumTextType:
+      case ObLongTextType: {
+        ObArrayBinary *dst_arr = static_cast<ObArrayBinary *>(dst);
+        ObString lob_data;
+        if (OB_FAIL(ObTextStringHelper::read_real_string_data(&alloc, res, lob_data))) {
+          LOG_WARN("failed to read real text payload", K(ret), K(res));
+        }
+        // Get the default max length for this TEXT type
+        const ObAccuracy &type_accuracy = ObAccuracy::DDL_DEFAULT_ACCURACY[dst_obj_type];
+        int64_t max_length = type_accuracy.get_length();
+        if (OB_SUCC(ret) && lob_data.length() > max_length) {
+          ret = OB_ERR_DATA_TOO_LONG;
+          LOG_WARN("text type length exceeds max length", K(ret),
+                   K(lob_data.length()), K(max_length), K(dst_obj_type));
+        } else if (OB_SUCC(ret) && OB_FAIL(dst_arr->push_back(lob_data, false))) {
+          LOG_WARN("failed to push back lob value", K(ret));
         }
         break;
       }
@@ -439,6 +472,26 @@ int ObArrayCastUtils::add_json_node_to_array(common::ObIAllocator &alloc, ObJson
             LOG_WARN("char type length is too long", K(ret), K(str_buf.length()), K(dst_acc.get_length()));
           } else if (OB_FAIL(dst_arr->push_back(str_buf.string()))) {
             LOG_WARN("failed to push back array value", K(ret));
+          }
+          break;
+        }
+        case ObTextType:
+        case ObMediumTextType:
+        case ObLongTextType: {
+          ObArrayBinary *dst_arr = static_cast<ObArrayBinary *>(dst);
+          ObStringBuffer str_buf(&alloc);
+          if (OB_FAIL(j_node.print(str_buf, false))) {
+            LOG_WARN("failed to print json node", K(ret));
+          } else {
+            const ObAccuracy &type_accuracy = ObAccuracy::DDL_DEFAULT_ACCURACY[dst_obj_type];
+            int64_t max_length = type_accuracy.get_length();
+            if (str_buf.length() > max_length) {
+              ret = OB_ERR_DATA_TOO_LONG;
+              LOG_WARN("text type length exceeds max length", K(ret),
+                       K(str_buf.length()), K(max_length), K(dst_obj_type));
+            } else if (OB_FAIL(dst_arr->push_back(str_buf.string(), false))) {
+              LOG_WARN("failed to push back lob value", K(ret));
+            }
           }
           break;
         }
@@ -920,7 +973,7 @@ int ObArrayBinaryCast::cast(common::ObIAllocator &alloc, ObIArrayType *src, cons
         if (OB_FAIL(dst->push_null())) {
           LOG_WARN("failed to add null to array", K(ret), K(i));
         }
-      } else if (OB_FAIL(ObArrayCastUtils::cast_get_element(src, src_type, i, src_elem))) {
+      } else if (OB_FAIL(ObArrayCastUtils::cast_get_element(alloc, src, src_type, i, src_elem))) {
         LOG_WARN("failed to get cast element", K(ret), K(i));
       } else if (FALSE_IT(src_elem.set_collation_type(elem_cs_type))) {
       } else if (FALSE_IT(src_elem.set_collation_level(elem_ncl_type))) {
@@ -1036,8 +1089,11 @@ int ObArrayTypeCastFactory::alloc(ObIAllocator &alloc, const ObCollectionTypeBas
     const ObCollectionArrayType *arr_type = dynamic_cast<const ObCollectionArrayType *>(&dst_array_meta);
     if (arr_type->element_type_->type_id_ == ObNestedType::OB_BASIC_TYPE) {
       ObCollectionBasicType *elem_type = static_cast<ObCollectionBasicType *>(arr_type->element_type_);
-      if (ob_is_string_tc(elem_type->basic_meta_.get_obj_type())
-          && ObCharType != elem_type->basic_meta_.get_obj_type()) {
+      ObObjType obj_type = elem_type->basic_meta_.get_obj_type();
+      if (ob_is_text_tc(obj_type)) {
+        arr_cast = OB_NEWx(ObArrayBinaryCast, &alloc);
+      } else if (ob_is_string_tc(obj_type)
+          && ObCharType != obj_type) {
         arr_cast = OB_NEWx(ObArrayBinaryCast, &alloc);
       } else if (arr_type->type_id_ == ObNestedType::OB_VECTOR_TYPE) {
         arr_cast = OB_NEWx(ObVectorDataCast, &alloc);

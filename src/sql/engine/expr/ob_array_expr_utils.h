@@ -257,7 +257,7 @@ public:
 
   // update inplace
   static int vector_datum_add(ObDatum &res, const ObDatum &data, ObIAllocator &allocator, ObDatum *tmp_res = nullptr, bool negative = false);
-  static int get_basic_elem(ObIArrayType *src, uint32_t idx, ObObj &elem_obj, bool &is_null);
+  static int get_basic_elem(common::ObIAllocator &alloc, ObIArrayType *src, uint32_t idx, ObObj &elem_obj, bool &is_null);
   static int set_obj_to_vector(ObIVector *vec, int64_t idx, ObObj obj, ObIAllocator &allocator);
 
   // check

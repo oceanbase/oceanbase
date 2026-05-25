@@ -315,6 +315,7 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
     enable_partial_distinct_pushdown_(true),
     enable_runtime_filter_adaptive_apply_(true),
     enable_rich_vector_format_(false),
+    enable_vec_batch_accum_(false),
     rowsets_enabled_(false),
     extend_sql_plan_monitor_metrics_(false),
     enable_delete_insert_scan_(false),
@@ -839,6 +840,8 @@ ObOptimizerContext(ObSQLSessionInfo *session_info,
   inline void set_enable_runtime_filter_adaptive_apply(bool enabled) { enable_runtime_filter_adaptive_apply_ = enabled; }
   inline bool get_enable_rich_vector_format() const { return enable_rich_vector_format_; }
   inline void set_enable_rich_vector_format(bool enabled) { enable_rich_vector_format_ = enabled; }
+  inline bool get_enable_vec_batch_accum() const { return enable_vec_batch_accum_; }
+  inline void set_enable_vec_batch_accum(bool enabled) { enable_vec_batch_accum_ = enabled; }
   inline void set_extend_sql_plan_monitor_metrics(bool enabled) { extend_sql_plan_monitor_metrics_ = enabled; }
   inline bool extend_sql_plan_monitor_metrics() { return extend_sql_plan_monitor_metrics_; }
   inline uint64_t get_min_cluster_version() const { return min_cluster_version_; }
@@ -983,6 +986,7 @@ private:
   bool enable_partial_distinct_pushdown_;
   bool enable_runtime_filter_adaptive_apply_;
   bool enable_rich_vector_format_;
+  bool enable_vec_batch_accum_;
   bool rowsets_enabled_;
   bool extend_sql_plan_monitor_metrics_;
   bool enable_delete_insert_scan_;

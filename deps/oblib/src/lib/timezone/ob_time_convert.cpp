@@ -5579,6 +5579,23 @@ int ObTimeConverter::ob_time_to_str_format(const ObTime &ob_time, const ObString
             }
             break;
           }
+          case 'Q': { //Quarter (1..4)
+            int32_t quarter = (parts[DT_MON] + 2) / 3;
+            ret = data_fmt_d(buf, buf_len, pos, quarter);
+            break;
+          }
+          case 'G': { //ISO week year, numeric, four digits; same as %x
+            if (-2 == delta_monday) {
+              week_monday = ob_time_to_week(ob_time, WEEK_MODE[3], delta_monday);
+            }
+            int32_t year = ob_time.parts_[DT_YEAR] + delta_monday;
+            if (OB_UNLIKELY(-1 == year)) {
+              ret = data_fmt_nd(buf, buf_len, pos, 4, 0);
+            } else {
+              ret = data_fmt_nd(buf, buf_len, pos, 4, year);
+            }
+            break;
+          }
           case '%': { //A literal "%" character
             if (pos >= buf_len) {
               ret = OB_SIZE_OVERFLOW;

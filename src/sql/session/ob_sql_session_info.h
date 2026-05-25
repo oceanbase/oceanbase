@@ -859,6 +859,8 @@ public:
                                  multimodel_memory_trace_level_(0),
                                  enable_fast_json_path_lookup_(false),
                                  enable_das_batch_rpc_(0),
+                                 record_ps_execute_params_(true),
+                                 enable_pl_sql_parameterize_(false),
                                  session_(session)
     {
     }
@@ -907,6 +909,10 @@ public:
     {
       return enable_adaptive_plan_cache_;
     }
+    bool record_ps_execute_params() const
+    {
+      return record_ps_execute_params_;
+    }
     bool enable_sql_ccl_rule() const
     {
       return enable_sql_ccl_rule_;
@@ -922,6 +928,7 @@ public:
     int64_t get_multimodel_memory_trace_level() const { return ATOMIC_LOAD(&multimodel_memory_trace_level_); }
     bool enable_fast_json_path_lookup() const { return enable_fast_json_path_lookup_; }
     int64_t enable_das_batch_rpc() const { return enable_das_batch_rpc_; }
+    bool enable_pl_sql_parameterize() const { return enable_pl_sql_parameterize_; }
   private:
     //租户级别配置项缓存session 上，避免每次获取都需要刷新
     bool is_external_consistent_;
@@ -970,6 +977,8 @@ public:
     int64_t multimodel_memory_trace_level_;
     bool enable_fast_json_path_lookup_;
     int64_t enable_das_batch_rpc_;
+    bool record_ps_execute_params_;
+    bool enable_pl_sql_parameterize_;
     ObSQLSessionInfo *session_;
   };
 
@@ -1792,6 +1801,11 @@ public:
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.enable_plan_cache_adaptive();
   }
+  bool record_ps_execute_params()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.record_ps_execute_params();
+  }
   bool is_enable_ps_parameterize()
   {
     cached_tenant_config_info_.refresh();
@@ -1801,6 +1815,11 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.enable_sql_ccl_rule();
+  }
+  bool is_enable_pl_sql_parameterize()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.enable_pl_sql_parameterize();
   }
 
   bool enable_monitor_profile() {

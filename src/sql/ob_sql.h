@@ -195,7 +195,8 @@ public:
                          ObSqlCtx &context,
                          ObResultSet &result,
                          ParamStore &params,
-                         PlanCacheMode mode);
+                         PlanCacheMode mode,
+                         ObPlanCacheCtx &pc_ctx);
 
   int handle_pl_prepare(const ObString &sql,
                         ObSPIService::PLPrepareCtx &pl_prepare_ctx,
@@ -208,7 +209,17 @@ public:
                         ObResultSet &result,
                         ObSqlCtx &context,
                         bool is_prepare_protocol,
-                        bool is_dynamic_sql);
+                        bool is_dynamic_sql,
+                        bool try_paramlize = false);
+
+  int inner_handle_pl_execute(const ObString &sql,
+                             ObSQLSessionInfo &session_info,
+                             ParamStore &params,
+                             ObResultSet &result,
+                             ObSqlCtx &context,
+                             bool is_prepare_protocol,
+                             bool is_dynamic_sql,
+                             ObPlanCacheCtx &pc_ctx);
   static int construct_parameterized_params(const ParamStore &params,
                                             ObPlanCacheCtx &phy_ctx);
 
@@ -327,8 +338,8 @@ private:
                                   ObSqlCtx &context,
                                   const ParamStore &params,
                                   const ParamStore &fixed_params,
-                                  ObPsStmtInfo *ps_info,
-                                  ParamStore &ps_param_store,
+                                  const ObPsStmtInfo &ps_info,
+                                  const ParamStore *&ps_param_store,
                                   ParamStore *&ps_ab_params);
 
   int handle_text_query(const common::ObString &stmt,
@@ -527,6 +538,23 @@ private:
                    ObResultSet &result,
                    bool is_enable_pc,
                    bool &add_plan_to_pc);
+  int get_inner_ps_stmt_id(const ObPsStmtId client_stmt_id,
+                           ObSqlCtx &context,
+                           ObSQLSessionInfo &session,
+                           ObPsStmtId &inner_ps_stmt_id);
+  int get_ps_stmt_info(const ObPsStmtId inner_ps_stmt_id,
+                       ObSqlCtx &context,
+                       ObSQLSessionInfo &session,
+                       ObPsStmtInfoGuard &guard,
+                       ObPsStmtInfo *&ps_info);
+  int construct_ps_params_store(const ObPsStmtInfo &ps_stmt_info,
+                                const ParamStore &ori_params,
+                                ObSqlCtx &context,
+                                ObPhysicalPlanCtx &pctx,
+                                ObSQLSessionInfo &session,
+                                ObIAllocator &allocator,
+                                const ParamStore *&ps_params,
+                                ParamStore *&ps_ab_params);
   typedef hash::ObHashMap<uint64_t, ObPlanCache*> PlanCacheMap;
   friend class ::test::TestOptimizerUtils;
 

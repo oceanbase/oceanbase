@@ -247,6 +247,7 @@ struct ObOptParamHint
     DEF(ENABLE_FAST_REFRESH_SIMPLIFY_AGGR_DEP,)         \
     DEF(DISABLE_SHARED_EXPR_EXTRACTION,)            \
     DEF(ENABLE_MERGE_INTO,)                         \
+    DEF(VEC_BATCH_ACCUM_ENABLED,)                         \
     DEF(_OB_JAVA_ODPS_DATA_TRANSFER_MODE,)          \
     DEF(_USE_ODPS_JNI_CONNECTOR,)                   \
     DEF(ODPS_JDK_STORAGE_BATCH_SIZE,)               \

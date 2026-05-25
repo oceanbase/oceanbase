@@ -42,6 +42,7 @@ class ObSchemaGetterGuard;
 namespace observer
 {
 struct ObSMConnection;
+ERRSIM_POINT_DEF(ERRSIM_BEGIN_COMMIT_OPT_DISABLE)
 
 class AuthSwitchResonseMemPool : public obmysql::ObICSMemPool
 {
@@ -258,6 +259,16 @@ protected:
       int64_t client_data_len,
       share::schema::ObUserLoginInfo &login_info,
       obmysql::ObICSMemPool &mem_pool);
+
+  static void check_is_trans_ctrl_cmd(const common::ObString &sql,
+                                      bool &is_trans_ctrl_cmd,
+                                      sql::stmt::StmtType &stmt_type);
+  int process_trans_ctrl_cmd(sql::ObSQLSessionInfo &session,
+                             bool &need_disconnect,
+                             bool &async_resp_used,
+                             const bool is_rollback,
+                             const bool force_sync_resp,
+                             sql::stmt::StmtType stmt_type);
 
 protected:
   static const int64_t MAX_TRY_STEPS = 5;

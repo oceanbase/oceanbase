@@ -229,7 +229,10 @@ int ObArrayTypeObjFactory::construct_basic_elem(common::ObIAllocator &alloc, con
       }
       break;
     }
-    case ObVarcharType : {
+    case ObVarcharType :
+    case ObTextType :
+    case ObMediumTextType :
+    case ObLongTextType : {
       CONSTRUCT_ARRAY_OBJ(ObArrayBinary, char);
       break;
     }

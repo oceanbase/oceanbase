@@ -14,6 +14,8 @@
 
 #include "ob_temp_row_store.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
+#include "common/object/ob_obj_type.h"
+#include "share/vector/ob_vector_base.h"
 
 namespace oceanbase
 {

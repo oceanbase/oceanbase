@@ -15,6 +15,7 @@
 #include "sql/engine/ob_operator_factory.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/code_generator/ob_static_engine_cg.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 #include "ob_log_exchange.h"
 #include "ob_log_group_by.h"
 #include "ob_log_distinct.h"
@@ -396,6 +397,7 @@ ObLogicalOperator::ObLogicalOperator(ObLogPlan &plan)
     op_id_(OB_INVALID_ID),
     parent_(NULL),
     is_plan_root_(false),
+    is_vectorized_op_(true),
     cost_(0.0),
     op_cost_(0.0),
     card_(0.0),
@@ -1472,7 +1474,11 @@ int ObLogicalOperator::get_plan_item_info(PlanText &plan_text,
     } else if (NULL != get_plan() &&
                get_plan()->get_optimizer_context().get_batch_size() > 0 &&
                ObOperatorFactory::is_vectorized(phy_type)) {
-      plan_item.rowset_ = get_plan()->get_optimizer_context().get_batch_size();
+      if (get_plan()->get_optimizer_context().get_enable_vec_batch_accum()) {
+        plan_item.rowset_ = is_vectorized() ? get_plan()->get_optimizer_context().get_batch_size() : 0;
+      } else {
+        plan_item.rowset_ = get_plan()->get_optimizer_context().get_batch_size();
+      }
     } else { /* Do nothing */ }
   }
   return ret;

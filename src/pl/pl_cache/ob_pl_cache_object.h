@@ -241,7 +241,7 @@ public:
   inline PLCacheObjStat &get_stat_for_update() { return stat_; }
 
   virtual int update_cache_obj_stat(sql::ObILibCacheCtx &ctx);
-  int init_params_info_str();
+  int gen_params_info_str(ObIAllocator *allocator, ObString &str) const;
   int update_execute_time(int64_t exec_time);
   static int get_times(const ObPLCacheObject *pl_object, int64_t& execute_times, int64_t& elapsed_time);
   inline bool is_limited_concurrent_num() const { return max_concurrent_num_ != share::schema::ObMaxConcurrentParam::UNLIMITED; }

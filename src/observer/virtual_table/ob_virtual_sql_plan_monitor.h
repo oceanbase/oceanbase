@@ -47,6 +47,8 @@ public:
   int check_ip_and_port(bool &is_valid);
   void use_index_scan() { is_use_index_ = true; }
   bool is_index_scan() const { return is_use_index_; }
+  bool enable_pd_filter() override final { return enable_filter_pushdown_; }
+  int fill_full_columns(common::ObNewRow *&row) override final;
 private:
   int convert_node_to_row(sql::ObMonitorNode &node, ObNewRow *&row);
   int extract_tenant_ids();
@@ -149,6 +151,8 @@ private:
   int64_t rt_end_idx_;
   bool fetch_profile_;
   ObArenaAllocator profile_allocator_;
+  bool enable_filter_pushdown_;
+  sql::ObMonitorNode *cur_monitor_node_;
 };
 
 } //namespace observer

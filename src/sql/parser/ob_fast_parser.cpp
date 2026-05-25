@@ -167,6 +167,7 @@ ObFastParserBase::ObFastParserBase(ObIAllocator &allocator, const FPContext fp_c
   question_mark_ctx_.capacity_ = 0;
   question_mark_ctx_.by_ordinal_ = false;
   question_mark_ctx_.by_name_ = false;
+  question_mark_ctx_.by_order_ = fp_ctx.question_mark_by_order_;
   question_mark_ctx_.name_ = nullptr;
   charset_type_ = ObCharset::charset_type_by_coll(fp_ctx.charsets4parser_.string_collation_);
   charset_info_ = ObCharset::get_charset(fp_ctx.charsets4parser_.string_collation_);
@@ -2026,7 +2027,33 @@ int ObFastParserBase::process_ps_statement()
   int64_t need_mem_size = FIEXED_PARAM_NODE_SIZE;
   int64_t text_len = raw_sql_.cur_pos_ - cur_token_begin_pos_;
   need_mem_size += (text_len + 1);
-  if (question_mark_ctx_.by_ordinal_) {
+  if (question_mark_ctx_.by_order_ && is_oracle_mode_) {
+    // byorder mode: placeholder value directly maps to parameter index
+    // e.g., :1 means use parameter at index 1, :0 means use parameter at index 0
+    if (is_num) {
+      if (is_udr_mode_) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "question mark by number");
+        LOG_WARN("question mark by number not supported in udr mode", K(ret));
+      } else if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(need_mem_size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc memory", K(ret), K(need_mem_size));
+      } else {
+        ParseNode *node = new_node(buf, T_QUESTIONMARK);
+        node->text_len_ = text_len;
+        node->raw_text_ = raw_sql_.ptr(cur_token_begin_pos_);
+        // directly use the number after ':'
+        node->value_ = strtoll(&node->raw_text_[1], NULL, 10);
+        buf += text_len + 1;
+        node->raw_sql_offset_ = cur_token_begin_pos_;
+        lex_store_param(node, buf);
+      }
+    } else {
+      // byorder mode does not support named placeholders
+      ret = OB_ERR_PARSER_SYNTAX;
+      LOG_WARN("named placeholder not supported in byorder mode", K(ret), K(raw_sql_.to_string()), K_(raw_sql_.cur_pos));
+    }
+  } else if (question_mark_ctx_.by_ordinal_) {
     ret = OB_ERR_PARSER_SYNTAX;
     LOG_WARN("parser syntax error", K(ret), K(raw_sql_.to_string()), K_(raw_sql_.cur_pos));
   } else if (OB_ISNULL(buf = static_cast<char *>(allocator_.alloc(need_mem_size)))) {
@@ -2034,30 +2061,22 @@ int ObFastParserBase::process_ps_statement()
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to alloc memory", K(ret), K(need_mem_size));
   } else {
+    // byname mode: placeholders are assigned sequential indices
     ParseNode *node = new_node(buf, T_QUESTIONMARK);
     node->text_len_ = text_len;
     node->raw_text_ = raw_sql_.ptr(cur_token_begin_pos_);
-    if (is_num) {
-      if (is_udr_mode_) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "question mark by number");
-        LOG_WARN("question mark by number not supported", K(ret));
-      } else {
-        node->value_ = strtoll(&node->raw_text_[1], NULL, 10);
-      }
+    int64_t ind = -1;
+    if (is_udr_mode_ && nullptr != def_name_ctx_) {
+      ind = get_question_mark_by_defined_name(def_name_ctx_, node->raw_text_, text_len);
     } else {
-      int64_t ind = -1;
-      if (is_udr_mode_ && nullptr != def_name_ctx_) {
-        ind = get_question_mark_by_defined_name(def_name_ctx_, node->raw_text_, text_len);
-      } else {
-        ind = get_question_mark(&question_mark_ctx_, &allocator_,
-                                node->raw_text_, text_len, buf);
-      }
-      node->value_ = ind;
-      // buf points to the beginning of the next available memory
-      buf += text_len + 1;
-      question_mark_ctx_.by_name_ = true;
+      ind = get_question_mark(&question_mark_ctx_, &allocator_,
+                              node->raw_text_, text_len, buf);
     }
+    node->value_ = ind;
+    // buf points to the beginning of the next available memory
+    buf += text_len + 1;
+    question_mark_ctx_.by_name_ = true;
+
     if (OB_SUCC(ret)) {
       if (node->value_ < 0) {
         ret = OB_ERR_PARSER_SYNTAX;

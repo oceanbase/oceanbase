@@ -46,7 +46,8 @@ struct ObArrayAttr {
 OB_INLINE bool ob_is_array_supported_type(ObObjType type)
 {
   return (ObUNumberType >= type && ObMediumIntType != type && ObUMediumIntType != type)
-         || ObVarcharType == type || ObDecimalIntType == type;
+         || ObVarcharType == type || ObDecimalIntType == type
+         || ObTextType == type || ObMediumTextType == type || ObLongTextType == type;
 }
 
 template<typename T>
@@ -106,6 +107,7 @@ public:
   virtual int insert_from(const ObIArrayType &src, uint32_t begin, uint32_t len = 1) = 0;
   int insert_from(const ObIArrayType &src) { return insert_from(src, 0, src.size()); }
   virtual int32_t get_element_type() const = 0;
+  virtual bool is_lob_element() const = 0;  // Check if element type is LOB (TEXT, MEDIUMTEXT, LONGTEXT)
   virtual const ObCollectionTypeBase *get_array_type() const = 0;
   virtual char *get_data() const = 0;
   virtual uint32_t *get_offsets() const = 0;
@@ -154,6 +156,9 @@ public :
   }
   virtual ArrayFormat get_format() const = 0;
   int32_t get_element_type() const { return element_type_; }
+  // Default implementation: non-LOB element types return false
+  // ObArrayBinary overrides this to check ob_is_text_tc(element_type_)
+  virtual bool is_lob_element() const { return false; }
   const ObCollectionTypeBase *get_array_type() const { return array_type_; }
   void set_element_type(int32_t type) { element_type_ = type; }
   void set_array_type(const ObCollectionTypeBase *array_type) { array_type_ = static_cast<const ObCollectionArrayType *>(array_type); }

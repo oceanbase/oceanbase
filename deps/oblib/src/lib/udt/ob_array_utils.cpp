@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX LIB
 #include "ob_array_utils.h"
+#include "common/object/ob_object.h"
 
 namespace oceanbase {
 namespace common {
@@ -103,6 +104,37 @@ int ObArrayUtil::push_back_decimal_int(const ObPrecision prec, const ObDecimalIn
   } else {
     ret = OB_ERR_UNEXPECTED;
     OB_LOG(WARN, "unexpected precision", K(ret), K(prec));
+  }
+  return ret;
+}
+
+int ObArrayUtil::varchar_obj_to_lob_obj(ObIAllocator &alloc, ObObj &obj, ObObjType lob_type)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!ob_is_text_tc(lob_type))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("target type is not lob type", K(ret), K(lob_type));
+  } else if (OB_UNLIKELY(!obj.is_varchar())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("source object is not varchar", K(ret), K(obj));
+  } else {
+    const ObString data = obj.get_string();
+    const uint32_t hdr = ObLobLocatorV2::MEM_LOB_COMMON_HEADER_LEN;
+    const int32_t payload_len = static_cast<int32_t>(data.length());
+    const uint32_t total_len = hdr + static_cast<uint32_t>(payload_len);
+    void *buf = alloc.alloc(static_cast<int64_t>(total_len));
+    if (OB_ISNULL(buf)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("allocate lob obj buffer failed", K(ret), K(total_len));
+    } else {
+      ObMemLobCommon *mem_common = new (buf) ObMemLobCommon(ObMemLobType::TEMP_FULL_LOB, true);
+      UNUSED(mem_common);
+      if (payload_len > 0) {
+        MEMCPY(static_cast<char *>(buf) + hdr, data.ptr(), payload_len);
+      }
+      obj.set_lob_value(lob_type, static_cast<char *>(buf), static_cast<int32_t>(total_len));
+      obj.set_has_lob_header();
+    }
   }
   return ret;
 }
@@ -201,7 +233,8 @@ int ObArrayUtil::get_mysql_type(const common::ObIArray<common::ObString> &extend
     LOG_WARN("failed to push back value", K(ret));                                                    \
   }
 
-int ObArrayUtil::append(ObIArrayType &array, const ObObjType elem_type, const ObDatum *datum)
+int ObArrayUtil::append(ObIArrayType &array, const ObObjType elem_type, const ObDatum *datum,
+                        bool has_lob_header)
 {
   int ret = OB_SUCCESS;
   if (datum->is_null()) {
@@ -261,6 +294,25 @@ int ObArrayUtil::append(ObIArrayType &array, const ObObjType elem_type, const Ob
         ObArrayBinary *binary_array = static_cast<ObArrayBinary *>(&array);
         if (OB_FAIL(binary_array->push_back(datum->get_string()))) {
           LOG_WARN("failed to push back null value", K(ret));
+        }
+        break;
+      }
+      case ObTextType:
+      case ObMediumTextType:
+      case ObLongTextType: {
+        ObArrayBinary *binary_array = static_cast<ObArrayBinary *>(&array);
+        const ObString lob_data = datum->get_string();
+        ObString payload;
+        ObLobLocatorV2 loc(const_cast<char *>(lob_data.ptr()),
+                           static_cast<uint32_t>(lob_data.length()),
+                           has_lob_header);
+        if (OB_FAIL(loc.get_inrow_data(payload))) {
+          LOG_WARN("get inrow lob payload failed", K(ret), K(lob_data.length()));
+        } else if (static_cast<ObLength>(payload.length()) > ObAccuracy::MAX_ACCURACY[elem_type].get_length()) {
+          ret = OB_ERR_DATA_TOO_LONG;
+          LOG_WARN("data too long for array element", K(ret), K(payload.length()), K(elem_type));
+        } else if (OB_FAIL(binary_array->push_back(payload, false))) {
+          LOG_WARN("failed to push back lob value", K(ret));
         }
         break;
       }

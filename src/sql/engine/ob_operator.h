@@ -44,6 +44,7 @@ class ObOperator;
 class ObOpInput;
 class ObTaskInfo;
 class ObExecFeedbackNode;
+class ObOpBatchRowWrapper;
 
 struct ObPhyOpSeriCtx
 {
@@ -348,6 +349,7 @@ public:
   bool need_check_output_datum_;
   bool use_rich_format_;
   ObCompressorType compress_type_;
+  bool is_block_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObOpSpec);
@@ -448,6 +450,8 @@ public:
 // (same with the old ObPhyOperatorCtx)
 class ObOperator
 {
+public:
+friend class ObOpBatchRowWrapper;
 public:
   const static uint64_t CHECK_STATUS_TRY_TIMES = 1024;
   const static uint64_t CHECK_STATUS_ROWS = 8192;
@@ -563,6 +567,7 @@ public:
   bool is_opened() { return opened_; }
   ObMonitorNode &get_monitor_info() { return op_monitor_info_; }
   bool is_vectorized() const { return spec_.is_vectorized(); }
+  bool need_batch_row_wrapper() const;
   int init_evaluated_flags();
   static int filter_row(ObEvalCtx &eval_ctx,
                         const common::ObIArray<ObExpr *> &exprs,
@@ -700,6 +705,7 @@ private:
   int try_push_stash_rows(const int64_t max_row_cnt);
   int push_stash_rows(const int64_t max_row_cnt, const int64_t output_row_cnt);
   int pop_stash_rows(const int64_t max_row_cnt);
+  int init_op_wrapper_if_needed(bool from_non_vec);
 protected:
   const ObOpSpec &spec_;
   ObExecContext &ctx_;
@@ -792,6 +798,7 @@ protected:
   char *dummy_ptr_;
   bool check_stack_overflow_;
   ObProfile *monitor_profile_;
+  ObOpBatchRowWrapper *op_batch_row_wrapper_ = nullptr;
   DISALLOW_COPY_AND_ASSIGN(ObOperator);
 };
 

@@ -20,6 +20,7 @@
 #include "lib/xml/ob_binary_aggregate.h"
 #include "sql/engine/expr/ob_expr_rb_func_helper.h"
 #include "sql/engine/expr/ob_array_expr_utils.h"
+#include "lib/udt/ob_array_utils.h"
 #include "lib/roaringbitmap/ob_rb_utils.h"
 
 namespace oceanbase
@@ -1021,9 +1022,15 @@ int RegularCol::eval_unnest_col(ObRegCol &col_node, void* in, JtScanCtx* ctx, Ob
       res_datum.set_string(res_str);
     }
   } else {
+    ObEvalCtx::TempAllocGuard tmp_alloc_g(*ctx->eval_ctx_);
+    common::ObArenaAllocator &temp_allocator = tmp_alloc_g.get_allocator();
     ObObj elem_obj;
     if (OB_FAIL(arr_obj->elem_at(idx, elem_obj))) {
       LOG_WARN("failed to get element", K(ret), K(idx));
+    } else if (arr_obj->is_lob_element()
+               && OB_FAIL(ObArrayUtil::varchar_obj_to_lob_obj(
+                      temp_allocator, elem_obj, static_cast<ObObjType>(arr_obj->get_element_type())))) {
+      LOG_WARN("failed to convert varchar obj to lob obj", K(ret), K(idx), K(arr_obj->get_element_type()));
     } else {
       res_datum.from_obj(elem_obj);
     }

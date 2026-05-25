@@ -335,13 +335,12 @@ int ObMPStmtPrexecute::extract_packet_params(ObSQLSessionInfo &session, const ch
                                    ps_session_info->get_param_count(),
                                    ps_session_info->get_num_of_returning_into()))) {
     LOG_WARN("fail to verify ps params num", K(params_num_), KPC(ps_session_info));
-  } else if (OB_FAIL(param_types.assign(ps_session_info->get_param_types()))) {
-    LOG_WARN("fail to assign param types", K(params_num_), KPC(ps_session_info));
   } else if (OB_FAIL(request_params(&session,
                                     *allocator_,
                                     pos,
                                     params_num_,
                                     ps_session_info->get_param_count(),
+                                    ps_session_info->get_param_types(),
                                     param_types))) {
     LOG_WARN("fail to request params", K(params_num_), K(ps_session_info->get_param_count()));
   } else if (1 == new_param_bound_flag_) {
@@ -393,13 +392,15 @@ int ObMPStmtPrexecute::prepare_sql_with_params(ObSQLSessionInfo &session, const 
   } else {
     is_arraybinding_ = false;
   }
-  if (FAILEDx(
-          request_params(&session, *allocator_, pos, params_num_, input_param_num, param_types))) {
-    LOG_WARN("fail to request params", K(params_num_), K(input_param_num));
-  } else if (is_arraybinding_) {
-    OV (arraybinding_size_ > 0, OB_NOT_SUPPORTED, "arraybinding has no parameters", arraybinding_size_);
-    // use first group of params for arraybinding sql prepare
-    OZ (construct_execute_param_for_arraybinding(0));
+  {
+    const ParamTypeArray empty_existing;
+    if (FAILEDx(
+            request_params(&session, *allocator_, pos, params_num_, input_param_num, empty_existing, param_types))) {
+      LOG_WARN("fail to request params", K(params_num_), K(input_param_num));
+    } else if (is_arraybinding_) {
+      OV (arraybinding_size_ > 0, OB_NOT_SUPPORTED, "arraybinding has no parameters", arraybinding_size_);
+      OZ (construct_execute_param_for_arraybinding(0));
+    }
   }
   // 3. resolve sql with params, retry if needed, will reuse the parse result
   //    resolve is not neccessary here, because resolve will be redo in execute phase.

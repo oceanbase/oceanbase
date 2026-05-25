@@ -848,6 +848,7 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
   int64_t das_batch_rescan_flag = tenant_config.is_valid() ? tenant_config->_enable_das_batch_rescan_flag : 0;
   bool enable_distributed_das_scan = tenant_config.is_valid() ? tenant_config->_enable_distributed_das_scan : true;
   bool enable_index_merge = tenant_config.is_valid() ? tenant_config->_enable_index_merge : false;
+  bool enable_vec_batch_accum = tenant_config.is_valid() && tenant_config->_enable_vec_batch_accum;
   const ObOptParamHint &opt_params = ctx_.get_global_hint().opt_params_;
   bool aggr_pushdown_allowed = false;
   int64_t udf_cost_factor = 100;
@@ -929,6 +930,8 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     LOG_WARN("failed to get das batch rescan flag", K(ret));
   } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::ENABLE_INDEX_MERGE, enable_index_merge))) {
     LOG_WARN("failed to get opt param enable index merge", K(ret));
+  } else if (OB_FAIL(opt_params.get_bool_opt_param(ObOptParamHint::VEC_BATCH_ACCUM_ENABLED, enable_vec_batch_accum))) {
+    LOG_WARN("failed to get opt param vec_batch_accum_enabled", K(ret));
   } else if (OB_FAIL(session.if_aggr_pushdown_allowed(aggr_pushdown_allowed))) {
     LOG_WARN("failed to get sys var enable aggr pushdown", K(ret));
   } else if (OB_FAIL(session.get_udf_cost_factor(udf_cost_factor))) {
@@ -956,6 +959,8 @@ int ObOptimizer::extract_opt_ctx_basic_flags(const ObDMLStmt &stmt, ObSQLSession
     ctx_.set_is_skip_scan_enabled(is_skip_scan_enable);
     ctx_.set_enable_better_inlist_costing(better_inlist_costing);
     ctx_.set_enable_index_merge(enable_index_merge);
+    ctx_.set_enable_vec_batch_accum(GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_4_2_2 && enable_vec_batch_accum);
+
     if (query_ctx->get_query_hint().has_outline_data()) {
       ctx_.set_push_join_pred_into_view_enabled(true);
     } else {

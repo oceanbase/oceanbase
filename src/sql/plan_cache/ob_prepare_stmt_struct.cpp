@@ -678,7 +678,7 @@ ObPsStmtInfoGuard::~ObPsStmtInfoGuard()
     } else {
       LOG_WARN("stmt info is null", K(stmt_id_));
     }
-  } else {
+  } else if (NULL != stmt_info_) {
     LOG_WARN("ps_cache is null", K(stmt_id_), K(stmt_info_));
   }
 }
