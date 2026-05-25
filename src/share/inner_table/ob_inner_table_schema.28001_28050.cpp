@@ -665,7 +665,7 @@ int ObInnerTableSchema::gv_ob_memory_ora_schema(ObTableSchema &table_schema)
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT TENANT_ID AS CON_ID,     SVR_IP AS SVR_IP,     SVR_PORT AS SVR_PORT,     CTX_NAME AS CTX_NAME,     MOD_NAME AS MOD_NAME,     SUM(COUNT) AS COUNT,     SUM(HOLD) AS HOLD,     SUM(USED) AS USED     FROM SYS.ALL_VIRTUAL_MEMORY_INFO     WHERE MOD_TYPE = 'USER' GROUP BY TENANT_ID, SVR_IP, SVR_PORT, CTX_NAME, MOD_NAME     ORDER BY TENANT_ID, SVR_IP, SVR_PORT, CTX_NAME, MOD_NAME )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT TENANT_ID AS CON_ID,     SVR_IP AS SVR_IP,     SVR_PORT AS SVR_PORT,     CTX_NAME AS CTX_NAME,     MOD_NAME AS MOD_NAME,     SUM(COUNT) AS COUNT,     SUM(HOLD) AS HOLD,     SUM(USED) AS USED     FROM SYS.ALL_VIRTUAL_MEMORY_INFO     WHERE MOD_TYPE = 'user' GROUP BY TENANT_ID, SVR_IP, SVR_PORT, CTX_NAME, MOD_NAME     ORDER BY TENANT_ID, SVR_IP, SVR_PORT, CTX_NAME, MOD_NAME )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
