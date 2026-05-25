@@ -105,19 +105,36 @@ int ObBackupValidateLSTaskMgr::add_task_()
 {
   int ret = OB_SUCCESS;
   ObBackupValidateLSTask task;
-  ObBackupTaskStatus next_status;
-  next_status.status_ = ObBackupTaskStatus::Status::PENDING;
   if (OB_FAIL(task.build(*task_attr_, *ls_attr_))) {
     LOG_WARN("failed to build task", KR(ret), KP(task_attr_), KP(ls_attr_));
-  } else if (OB_FAIL(validate_service_->check_leader())) {
-    LOG_WARN("failed to check leader", K(ret));
-  } else if (OB_FAIL(ObBackupValidateLSTaskOperator::advance_ls_task_status(*sql_proxy_, *ls_attr_, next_status,
-                                                OB_SUCCESS, 0/*end_ts*/))) {
-    LOG_WARN("failed to advance ls task status", KR(ret), K(*task_attr_));
-  } else if (OB_FAIL(task_scheduler_->add_task(task))) {
-    LOG_WARN("failed to add validate ls task", KR(ret), K(*task_attr_));
   } else {
-    LOG_INFO("[BACKUP_VALIDATE]success add validate ls task", K(*task_attr_), K(*ls_attr_));
+    ObBackupTaskStatus next_status;
+    ObBackupValidateLSTaskAttr lock_ls_attr;
+    next_status.status_ = ObBackupTaskStatus::Status::PENDING;
+    ObMySQLTransaction trans;
+    if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(ls_attr_->tenant_id_)))) {
+      LOG_WARN("failed to start trans", KR(ret), KPC(ls_attr_));
+    } else {
+      if (OB_FAIL(ObBackupValidateLSTaskOperator::get_ls_task(trans, true/*need_lock*/,
+                      ls_attr_->task_id_, ls_attr_->tenant_id_, ls_attr_->ls_id_, lock_ls_attr))) {
+        LOG_WARN("failed to lock ls task row for update", KR(ret), KPC(ls_attr_));
+      } else if (lock_ls_attr.status_.status_ != ls_attr_->status_.status_) {
+        ret = OB_STATE_NOT_MATCH;
+        LOG_WARN("ls task status changed, skip add_task", KR(ret), K(lock_ls_attr), KPC(ls_attr_));
+      } else if (OB_FAIL(ObBackupValidateLSTaskOperator::advance_ls_task_status(trans, *ls_attr_, next_status,
+                                                                                    OB_SUCCESS, 0/*end_ts*/))) {
+        LOG_WARN("failed to advance ls task status", KR(ret), K(*task_attr_));
+      }
+      int trans_ret = validate_service_->end_transaction(trans, ret);
+      ret = COVER_SUCC(trans_ret);
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(task_scheduler_->add_task(task))) {
+        LOG_WARN("failed to add validate ls task", KR(ret), K(*task_attr_));
+      } else {
+        LOG_INFO("[BACKUP_VALIDATE]success add validate ls task", K(*task_attr_), K(*ls_attr_));
+      }
+    }
   }
   return ret;
 }
@@ -132,12 +149,28 @@ int ObBackupValidateLSTaskMgr::finish_(int64_t &finish_cnt)
     if (cur_ts < ls_attr_->end_ts_ + OB_BACKUP_RETRY_TIME_INTERVAL) {
       validate_service_->set_idle_time(OB_BACKUP_RETRY_TIME_INTERVAL);
     } else {
-      if (OB_FAIL(validate_service_->check_leader())) {
-        LOG_WARN("failed to check leader", K(ret));
-      } else if (OB_FAIL(ObBackupValidateLSTaskOperator::redo_ls_task(*sql_proxy_, *ls_attr_, ls_attr_->retry_id_ + 1))) {
-        LOG_WARN("failed to redo ls task", K(ret), KP(ls_attr_));
+      ObMySQLTransaction trans;
+      ObBackupValidateLSTaskAttr lock_ls_attr;
+      if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(ls_attr_->tenant_id_)))) {
+        LOG_WARN("failed to start trans", KR(ret), KPC(ls_attr_));
       } else {
-        validate_service_->wakeup();
+        if (OB_FAIL(ObBackupValidateLSTaskOperator::get_ls_task(trans, true/*need_lock*/,
+            ls_attr_->task_id_, ls_attr_->tenant_id_, ls_attr_->ls_id_, lock_ls_attr))) {
+          LOG_WARN("failed to lock ls task row for update", KR(ret), KPC(ls_attr_));
+        } else if (lock_ls_attr.status_.status_ != ls_attr_->status_.status_
+            || lock_ls_attr.retry_id_ != ls_attr_->retry_id_) {
+          ret = OB_STATE_NOT_MATCH;
+          LOG_WARN("ls task state changed, skip redo_ls_task",
+              KR(ret), "expect_status", ls_attr_->status_, "actual_status", lock_ls_attr.status_,
+              "expect_retry_id", ls_attr_->retry_id_, "actual_retry_id", lock_ls_attr.retry_id_, KPC(ls_attr_));
+        } else if (OB_FAIL(ObBackupValidateLSTaskOperator::redo_ls_task(trans, *ls_attr_, ls_attr_->retry_id_ + 1))) {
+          LOG_WARN("failed to redo ls task", K(ret), KP(ls_attr_));
+        }
+        int trans_ret = validate_service_->end_transaction(trans, ret);
+        ret = COVER_SUCC(trans_ret);
+        if (OB_SUCC(ret)) {
+          validate_service_->wakeup();
+        }
       }
     }
   } else {
@@ -169,8 +202,6 @@ int ObBackupValidateLSTaskMgr::cancel(int64_t &finish_cnt)
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(validate_service_->check_leader())) {
-    LOG_WARN("failed to check leader", K(ret));
   } else if (OB_FAIL(ObBackupValidateLSTaskOperator::advance_ls_task_status(*sql_proxy_, *ls_attr_,
                                                 next_status, OB_CANCELED, end_ts))) {
     LOG_WARN("failed to advance status", KR(ret), K(*ls_attr_), K(next_status));

@@ -27,7 +27,7 @@ public:
   void reset();
 
   int init(
-      common::ObMySQLProxy &sql_proxy,
+      common::ObISQLClient &sql_proxy,
       share::ObBackupValidateJobAttr &job_attr,
       const int64_t backup_dest_id,
       const int64_t archive_dest_id);
@@ -94,7 +94,7 @@ private:
 
 private:
   bool is_inited_;
-  common::ObMySQLProxy *sql_proxy_;
+  common::ObISQLClient *sql_proxy_;
   share::ObBackupValidateJobAttr *job_attr_;
   uint64_t tenant_id_;
   int64_t backup_dest_id_;

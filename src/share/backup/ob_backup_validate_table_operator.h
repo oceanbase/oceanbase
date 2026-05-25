@@ -80,8 +80,8 @@ class ObBackupValidateTaskOperator : public ObBackupValidateBaseTableOperator
 {
 public:
   static int insert_task(common::ObISQLClient &proxy, const ObBackupValidateTaskAttr &task_attr);
-  static int get_backup_validate_task(common::ObISQLClient &proxy, const int64_t task_id,
-    const uint64_t tenant_id, ObBackupValidateTaskAttr &task_attr);
+  static int get_backup_validate_task(common::ObISQLClient &proxy, const bool need_lock,
+    const int64_t task_id, const uint64_t tenant_id, ObBackupValidateTaskAttr &task_attr);
   static int get_tasks(common::ObISQLClient &proxy, const uint64_t tenant_id, const int64_t job_id,
     ObIArray<ObBackupValidateTaskAttr> &task_attrs);
   static int advance_task_status(common::ObMySQLTransaction &trans, const ObBackupValidateTaskAttr &task_attr,

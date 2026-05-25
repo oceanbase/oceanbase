@@ -1044,44 +1044,49 @@ int ObUserTenantBackupValidateJobMgr::deal_non_reentrant_job(const int err)
         LOG_WARN("[BACKUP_VALIDATE]failed to get comment str", KR(ret), K(result_info));
       }
     }
+    ObBackupValidateJobAttr lock_job_attr;
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(job_attr_->tenant_id_)))) {
       LOG_WARN("[BACKUP_VALIDATE]failed to start trans", KR(ret), KPC_(job_attr));
-    } else if (OB_FAIL(ObBackupValidateJobOperator::append_comment(trans, job_attr_->tenant_id_,
-                                                                    job_attr_->job_id_, job_attr_->comment_.ptr()))) {
-      LOG_WARN("[BACKUP_VALIDATE]failed to update comment", KR(ret), KPC(job_attr_));
-    } else if (ObBackupValidateStatus::Status::INIT == job_attr_->status_.status_) {
-    } else if (OB_FAIL(ObBackupValidateTaskOperator::get_tasks(*sql_proxy_, job_attr_->tenant_id_,
-                                                            job_attr_->job_id_, task_attrs))) {
-      LOG_WARN("[BACKUP_VALIDATE]failed to get tasks", KR(ret), KPC(job_attr_));
-    } else if (ObBackupValidateStatus::Status::DOING == job_attr_->status_.status_) {
-      ObBackupValidateTaskMgr set_task_mgr;
-      for (int i = 0; OB_SUCC(ret) && i < task_attrs.count(); i++) {
-        const ObBackupValidateTaskAttr &task_attr = task_attrs.at(i);
-        if (ObBackupValidateStatus::Status::INIT == task_attr.status_.status_
-            || ObBackupValidateStatus::Status::DOING == task_attr.status_.status_
-            || ObBackupValidateStatus::Status::CANCELING == task_attr.status_.status_) {
-          if (OB_FAIL(set_task_mgr.init(tenant_id_, task_attr.task_id_, *job_attr_, *sql_proxy_,
-            *rpc_proxy_, *task_scheduler_, *backup_validate_service_))) {
-            LOG_WARN("[BACKUP_VALIDATE]failed to init set task mgr", KR(ret), KPC(job_attr_));
-          } else if (OB_FAIL(set_task_mgr.deal_failed_task(OB_CANCELED))) {
-            LOG_WARN("[BACKUP_VALIDATE]failed to deal failed set task", KR(ret));
+    } else {
+      if (OB_FAIL(ObBackupValidateJobOperator::get_job(trans, true/*need_lock*/,
+                      job_attr_->tenant_id_, job_attr_->job_id_, false/*is_initiator*/, lock_job_attr))) {
+        LOG_WARN("[BACKUP_VALIDATE]failed to lock job row for update", KR(ret), KPC(job_attr_));
+      } else if (lock_job_attr.status_.status_ != job_attr_->status_.status_) {
+        ret = OB_STATE_NOT_MATCH;
+        LOG_WARN("[BACKUP_VALIDATE]job status changed, skip deal_non_reentrant_job", KR(ret), KPC(job_attr_), K(lock_job_attr));
+      } else if (OB_FAIL(ObBackupValidateJobOperator::append_comment(trans, job_attr_->tenant_id_,
+                                                                      job_attr_->job_id_, job_attr_->comment_.ptr()))) {
+        LOG_WARN("[BACKUP_VALIDATE]failed to update comment", KR(ret), KPC(job_attr_));
+      } else if (ObBackupValidateStatus::Status::INIT == job_attr_->status_.status_) {
+      } else if (OB_FAIL(ObBackupValidateTaskOperator::get_tasks(trans, job_attr_->tenant_id_,
+                                                              job_attr_->job_id_, task_attrs))) {
+        LOG_WARN("[BACKUP_VALIDATE]failed to get tasks", KR(ret), KPC(job_attr_));
+      } else if (ObBackupValidateStatus::Status::DOING == job_attr_->status_.status_) {
+        ObBackupValidateTaskMgr set_task_mgr;
+        for (int i = 0; OB_SUCC(ret) && i < task_attrs.count(); i++) {
+          const ObBackupValidateTaskAttr &task_attr = task_attrs.at(i);
+          if (ObBackupValidateStatus::Status::INIT == task_attr.status_.status_
+              || ObBackupValidateStatus::Status::DOING == task_attr.status_.status_
+              || ObBackupValidateStatus::Status::CANCELING == task_attr.status_.status_) {
+            if (OB_FAIL(set_task_mgr.init(tenant_id_, task_attr.task_id_, *job_attr_, *sql_proxy_,
+              *rpc_proxy_, *task_scheduler_, *backup_validate_service_))) {
+              LOG_WARN("[BACKUP_VALIDATE]failed to init set task mgr", KR(ret), KPC(job_attr_));
+            } else if (OB_FAIL(set_task_mgr.deal_failed_task(OB_CANCELED))) {
+              LOG_WARN("[BACKUP_VALIDATE]failed to deal failed set task", KR(ret));
+            }
           }
         }
       }
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(advance_status(trans, next_status, err, job_attr_->end_ts_))) {
-        LOG_WARN("[BACKUP_VALIDATE]failed to move job status to FAILED", KR(ret), KPC(job_attr_));
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(advance_status(trans, next_status, err, job_attr_->end_ts_))) {
+          LOG_WARN("[BACKUP_VALIDATE]failed to move job status to FAILED", KR(ret), KPC(job_attr_));
+        }
       }
+      int trans_ret = backup_validate_service_->end_transaction(trans, ret);
+      ret = COVER_SUCC(trans_ret);
     }
-    if (trans.is_started()) {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
-        LOG_WARN("[BACKUP_VALIDATE]failed to end trans", KR(ret), K(tmp_ret));
-        ret = OB_SUCC(ret) ? tmp_ret : ret;
-      }
-    }
+
     if (OB_SUCC(ret)) {
       share::ObTaskId trace_id(*ObCurTraceId::get_trace_id());
       LOG_INFO("[BACKUP_VALIDATE]succeed deal with failed job, advance job status to FAILED", KPC(job_attr_));
@@ -1188,13 +1193,30 @@ int ObUserTenantBackupValidateJobMgr::do_validate_task_()
   } else if (ObBackupValidateStatus::Status::COMPLETED == next_status.status_
                 || ObBackupValidateStatus::Status::FAILED == next_status.status_) {
     int64_t end_ts = ObTimeUtility::current_time();
-    if (OB_FAIL(advance_status(*sql_proxy_, next_status, result, end_ts))) {
-      LOG_WARN("[BACKUP_VALIDATE]failed to move job status to FAILED", KR(ret),
-                  KPC(job_attr_), K(next_status), K(result));
-    } else if (OB_FAIL(ObBackupValidateJobOperator::update_task_count(*sql_proxy_, *job_attr_, false/*is_total*/))) {
-      LOG_WARN("[BACKUP_VALIDATE]failed to update task count", KR(ret), KPC(job_attr_));
+    ObMySQLTransaction trans;
+    ObBackupValidateJobAttr lock_job_attr;
+    if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(job_attr_->tenant_id_)))) {
+      LOG_WARN("[BACKUP_VALIDATE]failed to start trans", KR(ret), KPC(job_attr_));
     } else {
-      backup_validate_service_->wakeup();
+      if (OB_FAIL(ObBackupValidateJobOperator::get_job(trans, true/*need_lock*/,
+          job_attr_->tenant_id_, job_attr_->job_id_, false/*is_initiator*/, lock_job_attr))) {
+        LOG_WARN("[BACKUP_VALIDATE]failed to lock job row for update", KR(ret), KPC(job_attr_));
+      } else if (lock_job_attr.status_.status_ != job_attr_->status_.status_) {
+        ret = OB_STATE_NOT_MATCH;
+        LOG_WARN("[BACKUP_VALIDATE]job status changed, skip do_validate_task",
+            KR(ret), "expect_status", job_attr_->status_, "actual_status", lock_job_attr.status_,
+            KPC(job_attr_));
+      } else if (OB_FAIL(advance_status(trans, next_status, result, end_ts))) {
+        LOG_WARN("[BACKUP_VALIDATE]failed to advance job status", KR(ret),
+                    KPC(job_attr_), K(next_status), K(result));
+      } else if (OB_FAIL(ObBackupValidateJobOperator::update_task_count(trans, *job_attr_, false/*is_total*/))) {
+        LOG_WARN("[BACKUP_VALIDATE]failed to update task count", KR(ret), KPC(job_attr_));
+      }
+      int trans_ret = backup_validate_service_->end_transaction(trans, ret);
+      ret = COVER_SUCC(trans_ret);
+      if (OB_SUCC(ret)) {
+        backup_validate_service_->wakeup();
+      }
     }
   }
   return ret;
@@ -1351,7 +1373,7 @@ int ObUserTenantBackupValidateJobMgr::get_initiator_task_backup_set_id_(
   } else {
     ObBackupValidateTaskAttr initiator_task_attr;
     if (OB_FAIL(ObBackupValidateTaskOperator::get_backup_validate_task(
-            *sql_proxy_, task_attr.initiator_task_id_, task_attr.tenant_id_, initiator_task_attr))) {
+            *sql_proxy_, false/*need_lock*/, task_attr.initiator_task_id_, task_attr.tenant_id_, initiator_task_attr))) {
       LOG_WARN("[BACKUP_VALIDATE]failed to get initiator backup validate task", KR(ret),
           K(task_attr.tenant_id_), K(task_attr.initiator_task_id_));
     } else if (!initiator_task_attr.type_.is_backupset()) {
@@ -1431,18 +1453,24 @@ int ObUserTenantBackupValidateJobMgr::update_task_to_canceling_(ObArray<share::O
         || ObBackupValidateStatus::Status::DOING == task_attr.status_.status_) {
       ObBackupValidateStatus next_status(ObBackupValidateStatus::Status::CANCELING);
       common::ObMySQLTransaction trans;
+      ObBackupValidateTaskAttr lock_task_attr;
       if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(task_attr.tenant_id_)))) {
         LOG_WARN("[BACKUP_VALIDATE]failed to start trans", KR(ret));
-      } else if (OB_FAIL(ObBackupValidateTaskOperator::advance_task_status(trans, task_attr,
-                                                  next_status, OB_SUCCESS, 0/*end_ts*/))) {
-        LOG_WARN("[BACKUP_VALIDATE]failed to advance task status", KR(ret));
-      }
-      if (trans.is_started()) {
-        int tmp_ret = OB_SUCCESS;
-        if (OB_TMP_FAIL(trans.end(OB_SUCC(ret)))) {
-          LOG_WARN("[BACKUP_VALIDATE]failed to end trans", KR(ret), K(tmp_ret));
-          ret = OB_SUCC(ret) ? tmp_ret : ret;
+      } else {
+        if (OB_FAIL(ObBackupValidateTaskOperator::get_backup_validate_task(trans, true/*need_lock*/,
+            task_attr.task_id_, task_attr.tenant_id_, lock_task_attr))) {
+          LOG_WARN("[BACKUP_VALIDATE]failed to lock task row for update", KR(ret), K(task_attr));
+        } else if (lock_task_attr.status_.status_ != task_attr.status_.status_) {
+          ret = OB_STATE_NOT_MATCH;
+          LOG_WARN("[BACKUP_VALIDATE]task status changed, skip update_task_to_canceling",
+              KR(ret), "expect_status", task_attr.status_, "actual_status", lock_task_attr.status_,
+              K(task_attr));
+        } else if (OB_FAIL(ObBackupValidateTaskOperator::advance_task_status(trans, task_attr,
+                                                    next_status, OB_SUCCESS, 0/*end_ts*/))) {
+          LOG_WARN("[BACKUP_VALIDATE]failed to advance task status", KR(ret));
         }
+        int trans_ret = backup_validate_service_->end_transaction(trans, ret);
+        ret = COVER_SUCC(trans_ret);
       }
     }
   }
@@ -1452,24 +1480,38 @@ int ObUserTenantBackupValidateJobMgr::update_task_to_canceling_(ObArray<share::O
 int ObUserTenantBackupValidateJobMgr::persist_set_task_()
 {
   int ret = OB_SUCCESS;
-  ObBackupValidateStatus next_status;
   ObMySQLTransaction trans;
   ObArray<share::ObBackupSetFileDesc> set_list;
   ObArray<ObPieceKey> piece_list;
   ObHashMap<int64_t/*backup_set_id*/, ObArray<ObPieceKey>> complement_piece_map;
+  share::ObBackupValidateJobAttr lock_job_attr;
   if (OB_FAIL(complement_piece_map.create(16, ObMemAttr(MTL_ID(), "BackupValidate")))) {
     LOG_WARN("[BACKUP_VALIDATE]failed to create complement piece map", KR(ret));
   } else if (OB_FAIL(check_dest_validity_())) {
     LOG_WARN("[BACKUP_VALIDATE]failed to get backup dest id", KR(ret));
-  } else if (OB_FAIL(get_need_validate_infos_(set_list, piece_list, complement_piece_map))) {
+  } else if (OB_FAIL(get_need_validate_infos_(*sql_proxy_, set_list, piece_list, complement_piece_map))) {
     LOG_WARN("[BACKUP_VALIDATE]failed to get need validate backup infos", KR(ret), KPC(job_attr_));
-  } else if (OB_FAIL(inner_persist_set_task_(set_list, piece_list, complement_piece_map))) {
+  } else if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(job_attr_->tenant_id_)))) {
+    LOG_WARN("[BACKUP_VALIDATE]failed to start trans", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(ObBackupValidateJobOperator::get_job(trans, true/*need_lock*/,
+                        job_attr_->tenant_id_, job_attr_->job_id_, false/*is_initiator*/, lock_job_attr))) {
+    LOG_WARN("[BACKUP_VALIDATE]failed to lock job row for update", KR(ret), KPC(job_attr_));
+  } else if (lock_job_attr.status_.status_ != job_attr_->status_.status_) {
+    ret = OB_STATE_NOT_MATCH;
+    LOG_WARN("[BACKUP_VALIDATE]job status changed, skip persist_set_task", KR(ret), K(lock_job_attr), K(job_attr_));
+  } else if (OB_FAIL(inner_persist_set_task_(trans, set_list, piece_list, complement_piece_map))) {
     LOG_WARN("[BACKUP_VALIDATE]failed to generate set task", KR(ret), KPC(job_attr_));
+  }
+  int trans_ret = backup_validate_service_->end_transaction(trans, ret);
+  ret = COVER_SUCC(trans_ret);
+  if (OB_SUCC(ret)) {
+    backup_validate_service_->wakeup();
   }
   return ret;
 }
 
 int ObUserTenantBackupValidateJobMgr::get_need_validate_infos_(
+    common::ObISQLClient &sql_proxy,
     ObArray<share::ObBackupSetFileDesc> &set_list,
     ObArray<ObPieceKey> &piece_list,
     ObHashMap<int64_t, ObArray<ObPieceKey>> &complement_piece_map)
@@ -1478,7 +1520,7 @@ int ObUserTenantBackupValidateJobMgr::get_need_validate_infos_(
   const ObBackupValidateType &validate_type = job_attr_->type_;
   const ObBackupPathString &validate_path = job_attr_->validate_path_;
 
-  if (OB_FAIL(info_collector_.init(*sql_proxy_, *job_attr_, backup_dest_id_, archive_dest_id_))) {
+  if (OB_FAIL(info_collector_.init(sql_proxy, *job_attr_, backup_dest_id_, archive_dest_id_))) {
     LOG_WARN("[BACKUP_VALIDATE]failed to init info collector", KR(ret));
   } else {
     if (validate_type.need_validate_backup_set()) {
@@ -1637,16 +1679,13 @@ int ObUserTenantBackupValidateJobMgr::get_backup_set_info_by_desc_(
 }
 
 int ObUserTenantBackupValidateJobMgr::inner_persist_set_task_(
+    common::ObMySQLTransaction &trans,
     const ObArray<share::ObBackupSetFileDesc> &set_list,
     const ObArray<share::ObPieceKey> &piece_list,
     const common::hash::ObHashMap<int64_t, ObArray<share::ObPieceKey>> &complement_piece_map)
 {
   int ret = OB_SUCCESS;
-  ObMySQLTransaction trans;
-
-  if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(tenant_id_)))) {
-    LOG_WARN("[BACKUP_VALIDATE]failed to start trans", KR(ret));
-  } else if (!set_list.empty() && OB_FAIL(persist_backup_set_tasks_(trans, set_list, complement_piece_map))) {
+  if (!set_list.empty() && OB_FAIL(persist_backup_set_tasks_(trans, set_list, complement_piece_map))) {
     LOG_WARN("[BACKUP_VALIDATE]failed to persist backup set tasks", KR(ret));
   } else if (!piece_list.empty() && OB_FAIL(persist_archive_piece_tasks_(trans, piece_list))) {
     LOG_WARN("[BACKUP_VALIDATE]failed to persist archive piece tasks", KR(ret));
@@ -1662,18 +1701,6 @@ int ObUserTenantBackupValidateJobMgr::inner_persist_set_task_(
       LOG_WARN("[BACKUP_VALIDATE]failed to advance job status", KR(ret));
     } else if (OB_FAIL(ObBackupValidateJobOperator::update_task_count(trans, *job_attr_, true/*is_total*/))) {
       LOG_WARN("[BACKUP_VALIDATE]failed to update job task count", KR(ret), KPC(job_attr_));
-    }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(trans.end(true))) {
-        LOG_WARN("[BACKUP_VALIDATE]failed to commit trans", KR(ret));
-      } else {
-        backup_validate_service_->wakeup();
-      }
-    } else {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(trans.end(false))) {
-        LOG_WARN("[BACKUP_VALIDATE]failed to roll back trans", KR(ret), K(tmp_ret));
-      }
     }
   }
   return ret;
@@ -1695,8 +1722,6 @@ int ObUserTenantBackupValidateJobMgr::persist_backup_set_tasks_(
       task_attr.reset();
       if (OB_FAIL(construct_backup_set_task_(backup_set_info, task_attr))) {
         LOG_WARN("[BACKUP_VALIDATE]failed to construct backup set task", KR(ret), K(backup_set_info));
-      } else if (OB_FAIL(backup_validate_service_->check_leader())) {
-        LOG_WARN("[BACKUP_VALIDATE]failed to check leader", KR(ret));
       } else if (OB_FAIL(ObBackupValidateTaskOperator::insert_task(trans, task_attr))) {
         LOG_WARN("[BACKUP_VALIDATE]failed to insert backup set task", KR(ret), K(task_attr));
       } else {
@@ -1810,8 +1835,6 @@ int ObUserTenantBackupValidateJobMgr::persist_archive_piece_tasks_(
       } else if (OB_FAIL(construct_piece_task_common_(piece_dest, piece_key,
                                                           false/*is_complement*/, 0/*initiator_task_id*/, task_attr))) {
         LOG_WARN("[BACKUP_VALIDATE]failed to construct archive piece task", KR(ret), K(piece_key));
-      } else if (OB_FAIL(backup_validate_service_->check_leader())) {
-        LOG_WARN("[BACKUP_VALIDATE]failed to check leader", KR(ret));
       } else if (OB_FAIL(ObBackupValidateTaskOperator::insert_task(trans, task_attr))) {
         LOG_WARN("[BACKUP_VALIDATE]failed to insert archive piece task", KR(ret), K(task_attr));
       } else {
@@ -2093,10 +2116,26 @@ int ObUserTenantBackupValidateJobMgr::advance_status_canceled()
     next_status.status_ = ObBackupValidateStatus::Status::CANCELED;
     job_attr_->end_ts_ = ObTimeUtility::current_time();
     job_attr_->result_ = (true == has_failed_task) ? job_attr_->result_ : OB_CANCELED;
-    if (OB_FAIL(advance_status(*sql_proxy_, next_status, job_attr_->result_, job_attr_->end_ts_))) {
-      LOG_WARN("[BACKUP_VALIDATE]failed to advance_job_status", KR(ret));
-    } else if (OB_FAIL(ObBackupValidateJobOperator::update_task_count(*sql_proxy_, *job_attr_, false/*is_total*/))) {
-      LOG_WARN("[BACKUP_VALIDATE]failed to update job task count", KR(ret));
+    ObMySQLTransaction trans;
+    ObBackupValidateJobAttr lock_job_attr;
+    if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(job_attr_->tenant_id_)))) {
+      LOG_WARN("[BACKUP_VALIDATE]failed to start trans", KR(ret), KPC(job_attr_));
+    } else {
+      if (OB_FAIL(ObBackupValidateJobOperator::get_job(trans, true/*need_lock*/,
+          job_attr_->tenant_id_, job_attr_->job_id_, false/*is_initiator*/, lock_job_attr))) {
+        LOG_WARN("[BACKUP_VALIDATE]failed to lock job row for update", KR(ret), KPC(job_attr_));
+      } else if (lock_job_attr.status_.status_ != job_attr_->status_.status_) {
+        ret = OB_STATE_NOT_MATCH;
+        LOG_WARN("[BACKUP_VALIDATE]job status changed, skip advance_status_canceled",
+            KR(ret), "expect_status", job_attr_->status_, "actual_status", lock_job_attr.status_,
+            KPC(job_attr_));
+      } else if (OB_FAIL(advance_status(trans, next_status, job_attr_->result_, job_attr_->end_ts_))) {
+        LOG_WARN("[BACKUP_VALIDATE]failed to advance_job_status", KR(ret));
+      } else if (OB_FAIL(ObBackupValidateJobOperator::update_task_count(trans, *job_attr_, false/*is_total*/))) {
+        LOG_WARN("[BACKUP_VALIDATE]failed to update job task count", KR(ret));
+      }
+      int trans_ret = backup_validate_service_->end_transaction(trans, ret);
+      ret = COVER_SUCC(trans_ret);
     }
   }
   return ret;

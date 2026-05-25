@@ -676,6 +676,7 @@ int ObBackupValidateTaskOperator::fill_dml_with_task_(const ObBackupValidateTask
 
 int ObBackupValidateTaskOperator::get_backup_validate_task(
     common::ObISQLClient &proxy,
+    const bool need_lock,
     const int64_t task_id,
     const uint64_t tenant_id,
     ObBackupValidateTaskAttr &task_attr)
@@ -691,6 +692,8 @@ int ObBackupValidateTaskOperator::get_backup_validate_task(
       if (OB_FAIL(sql.assign_fmt("select * from %s where %s=%ld and %s=%lu",
           OB_ALL_BACKUP_VALIDATE_TASK_TNAME, OB_STR_TENANT_ID, tenant_id, OB_STR_TASK_ID, task_id))) {
         LOG_WARN("[BACKUP_VALIDATE]failed to append fmt", KR(ret));
+      } else if (need_lock && OB_FAIL(sql.append_fmt(" for update"))) {
+        LOG_WARN("[BACKUP_VALIDATE]failed to append for update", KR(ret));
       } else if (OB_FAIL(proxy.read(res, gen_meta_tenant_id(tenant_id), sql.ptr()))) {
         LOG_WARN("[BACKUP_VALIDATE]failed to exec sql", KR(ret), K(sql));
       } else if (OB_ISNULL(result = res.get_result())) {

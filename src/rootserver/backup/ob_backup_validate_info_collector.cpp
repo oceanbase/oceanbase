@@ -43,7 +43,7 @@ void ObBackupValidateInfoCollector::reset()
 }
 
 int ObBackupValidateInfoCollector::init(
-    common::ObMySQLProxy &sql_proxy,
+    common::ObISQLClient &sql_proxy,
     share::ObBackupValidateJobAttr &job_attr,
     const int64_t backup_dest_id,
     const int64_t archive_dest_id)
