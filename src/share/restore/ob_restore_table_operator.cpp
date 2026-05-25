@@ -186,6 +186,7 @@ int ObTenantRestoreTableOperator::fill_log_restore_source_(const ObLogRestoreSou
     ObDMLSqlSplicer &dml)
 {
   int ret = OB_SUCCESS;
+  bool delay_enabled = false;
   if (OB_FAIL(dml.add_pk_column(OB_STR_TENANT_ID, item.tenant_id_))) {
     LOG_WARN("failed to add column", K(ret), K(item));
   } else if (OB_FAIL(dml.add_pk_column(OB_STR_LOG_RESTORE_SOURCE_ID, item.id_))) {
@@ -197,6 +198,10 @@ int ObTenantRestoreTableOperator::fill_log_restore_source_(const ObLogRestoreSou
     LOG_WARN("failed to add column", K(ret), K(item));
   } else if (OB_FAIL(dml.add_uint64_column(OB_STR_LOG_RESTORE_SOURCE_UNTIL_SCN, item.until_scn_.get_val_for_inner_table_field()))) {
     LOG_WARN("failed to add column", K(ret), K(item));
+  } else if (OB_FAIL(ObLogRestoreSourceItem::check_delay_data_version(user_tenant_id_, delay_enabled))) {
+    LOG_WARN("check delay data version failed", K(ret), K_(user_tenant_id));
+  } else if (delay_enabled && OB_FAIL(dml.add_column(OB_STR_LOG_RESTORE_SOURCE_RECOVERY_DELAY, item.recover_delay_us_))) {
+    LOG_WARN("failed to add column", K(ret), K(item));
   }
   return ret;
 }
@@ -204,7 +209,10 @@ int ObTenantRestoreTableOperator::fill_log_restore_source_(const ObLogRestoreSou
 int ObTenantRestoreTableOperator::fill_select_source_(common::ObSqlString &sql)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(sql.append_fmt("select %s", OB_STR_TENANT_ID))) {
+  bool delay_enabled = false;
+  if (OB_FAIL(ObLogRestoreSourceItem::check_delay_data_version(user_tenant_id_, delay_enabled))) {
+    LOG_WARN("check delay data version failed", K(ret), K_(user_tenant_id));
+  } else if (OB_FAIL(sql.append_fmt("select %s", OB_STR_TENANT_ID))) {
     LOG_WARN("sql append failed", K(ret));
   } else if (OB_FAIL(sql.append_fmt(", %s", OB_STR_LOG_RESTORE_SOURCE_ID))) {
     LOG_WARN("sql append failed", K(ret));
@@ -213,6 +221,8 @@ int ObTenantRestoreTableOperator::fill_select_source_(common::ObSqlString &sql)
   } else if  (OB_FAIL(sql.append_fmt(", %s", OB_STR_LOG_RESTORE_SOURCE_VALUE))) {
     LOG_WARN("sql append failed", K(ret));
   } else if  (OB_FAIL(sql.append_fmt(", %s", OB_STR_LOG_RESTORE_SOURCE_UNTIL_SCN))) {
+    LOG_WARN("sql append failed", K(ret));
+  } else if (delay_enabled && OB_FAIL(sql.append_fmt(", %s", OB_STR_LOG_RESTORE_SOURCE_RECOVERY_DELAY))) {
     LOG_WARN("sql append failed", K(ret));
   } else if (OB_FAIL(sql.append_fmt(" from %s", OB_ALL_LOG_RESTORE_SOURCE_TNAME))) {
     LOG_WARN("sql append failed", K(ret));
@@ -237,6 +247,10 @@ int ObTenantRestoreTableOperator::parse_log_restore_source_(ObMySQLResult &resul
 
   if (OB_SUCC(ret) && OB_FAIL(item_local.until_scn_.convert_for_inner_table_field(scn_val))) {
     LOG_WARN("set scn failed", K(ret), K(scn_val));
+  }
+
+  if (OB_SUCC(ret)) {
+    EXTRACT_INT_FIELD_MYSQL_WITH_DEFAULT_VALUE(result, OB_STR_LOG_RESTORE_SOURCE_RECOVERY_DELAY, item_local.recover_delay_us_, int64_t, true/*skip_null_error*/, true/*skip_column_error*/, 0/*default_value*/);
   }
 
   OZ (item.deep_copy(item_local));

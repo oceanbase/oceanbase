@@ -337,6 +337,18 @@ void ObLogHandler::switch_sync_mode(const palf::SyncMode &sync_mode, const int64
   proposal_id_ = proposal_id;
 }
 
+void ObLogHandler::switch_role_and_sync_mode(const common::ObRole &role,
+                                             const int64_t proposal_id,
+                                             const palf::SyncMode &sync_mode)
+{
+  WLockGuard guard(lock_);
+  role_ = role;
+  proposal_id_ = proposal_id;
+  if (common::LEADER == role_) {
+    sync_mode_ = sync_mode;
+  }
+}
+
 int ObLogHandler::get_role(common::ObRole &role, int64_t &proposal_id) const
 {
   return ObLogHandlerBase::get_role(role, proposal_id);

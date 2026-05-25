@@ -232,7 +232,7 @@ public:
   virtual void destroy() override;
 
   // 执行初始化逻辑
-  int do_init();
+  int do_sync_mode_init();
 
   VIRTUAL_TO_STRING_KV(K(ls_id_), K(proposal_id_), K(sync_mode_), K(begin_lsn_));
 
@@ -241,7 +241,12 @@ private:
   int64_t proposal_id_;
   palf::SyncMode sync_mode_;
   palf::LSN begin_lsn_;
-  int enable_sync_status_(LogTransportStatus *transport_status);
+  // proposal_id / sync_mode 由 do_sync_mode_init 的 snapshot 传入，避免这些 helper 读成员字段时
+  // 与 init() 的并发写入产生撕裂读。ls_id_ 在首次 init 后即与 LogTransportStatus 永久
+  // 绑定，后续 init() 只是写入同一值，直接读成员即可。
+  int enable_sync_status_(LogTransportStatus *transport_status,
+                          const int64_t proposal_id,
+                          const palf::SyncMode &sync_mode);
   int update_standby_info_(LogTransportStatus *transport_status,
                            palf::LSN &standby_end_lsn,
                            share::SCN &standby_end_scn);
@@ -273,7 +278,8 @@ struct LogTransportStat
 {
   LogTransportStat() : ls_id_(0), role_(common::ObRole::INVALID_ROLE), proposal_id_(0),
                        palf_committed_end_lsn_(), standby_committed_end_lsn_(),
-                       last_sent_lsn_(), last_acked_lsn_() {}
+                       last_sent_lsn_(), last_acked_lsn_(),
+                       is_enabled_(false), last_sent_scn_(), standby_addr_() {}
   ~LogTransportStat() {}
 
   void reset() {
@@ -281,9 +287,15 @@ struct LogTransportStat
     role_ = common::ObRole::INVALID_ROLE;
     proposal_id_ = 0;
     palf_committed_end_lsn_.reset();
+    palf_committed_end_scn_.reset();
     standby_committed_end_lsn_.reset();
+    standby_committed_end_scn_.reset();
+    min_committed_end_lsn_.reset();
     last_sent_lsn_.reset();
     last_acked_lsn_.reset();
+    is_enabled_ = false;
+    last_sent_scn_.reset();
+    standby_addr_.reset();
   }
 
   share::ObLSID ls_id_;
@@ -296,10 +308,14 @@ struct LogTransportStat
   palf::LSN min_committed_end_lsn_;
   palf::LSN last_sent_lsn_;
   palf::LSN last_acked_lsn_;
+  bool is_enabled_;
+  share::SCN last_sent_scn_;
+  common::ObAddr standby_addr_;
 
   TO_STRING_KV(K(ls_id_), K(role_), K(proposal_id_),
                K(palf_committed_end_lsn_), K(standby_committed_end_lsn_),
-               K(last_sent_lsn_), K(last_acked_lsn_));
+               K(last_sent_lsn_), K(last_acked_lsn_),
+               K(is_enabled_), K(last_sent_scn_), K(standby_addr_));
 };
 
 struct StandbyAckInfo
@@ -416,7 +432,7 @@ public:
   int batch_push_all_status_task_queue();
   // 当sync_standby_dest恢复时，重新提交所有有任务的status_task到全局队列
   int retry_all_status_task_queue();
-  int is_standby_sync_done(bool &is_done);
+  int is_standby_sync_done(const palf::LSN &end_lsn, bool &is_done);
   int get_sync_end_scn(share::SCN &sync_end_scn) const;
 
   // 检查是否还有未发送的已提交日志
@@ -437,6 +453,7 @@ public:
   int submit_init_task(const int64_t proposal_id,
                        const palf::SyncMode &sync_mode,
                        const palf::LSN &begin_lsn);
+  int query_sync_standby_dest();
 
   TO_STRING_KV(K(ls_id_),
                K(role_),
@@ -453,7 +470,7 @@ private:
   int submit_task_to_transport_service_(ObTransportServiceTask &task);
 
   // RPC发送日志
-  int send_log_via_rpc_(const ObLogTransportReq &req, const int64_t timeout_us);
+  int send_log_via_rpc_(const ObLogTransportReq &req);
   int get_rpc_proxy_(obrpc::ObLogTransportRpcProxy *&rpc_proxy);
 
   // 周期性重传方法
@@ -568,7 +585,8 @@ public:
         obrpc::ObLogTransportRpcProxy::AsyncCB<pcode>::result_;
 
     if (OB_SUCCESS != rcode.rcode_) {
-      CLOG_LOG_RET(WARN, rcode.rcode_, "log transport rpc error", K(rcode), K(dst), K(pcode));
+      ret = OB_ERR_UNEXPECTED;
+      CLOG_LOG_RET(WARN, ret, "log transport rpc error", K(rcode), K(dst), K(pcode));
     } else if (OB_ISNULL(guard_.get_transport_status())) {
       ret = OB_ERR_UNEXPECTED;
       CLOG_LOG_RET(WARN, ret, "transport_status is NULL", K(dst), K(pcode));
@@ -579,19 +597,17 @@ public:
           static_cast<const logservice::ObLogSyncStandbyInfo &>(resp);
 
       if (OB_SUCCESS != transport_resp.ret_code_) {
-        CLOG_LOG_RET(WARN, transport_resp.ret_code_, "standby returned error",
-                     K(dst), K(transport_resp.ret_code_), K(transport_resp.ls_id_));
+        ret = OB_ERR_UNEXPECTED;
+        CLOG_LOG_RET(WARN, ret, "standby returned error",
+                     K(dst), K_(transport_resp.ret_code), K_(transport_resp.ls_id));
       } else {
         CLOG_LOG(TRACE, "log transport rpc success", K(dst), K(transport_resp));
       }
 
-      if (OB_SUCCESS != transport_resp.refresh_info_ret_code_) {
-        CLOG_LOG_RET(WARN, transport_resp.refresh_info_ret_code_, "refresh info returned error",
-                     K(dst), K(transport_resp.refresh_info_ret_code_), K(transport_resp.ls_id_));
-      } else if (!transport_resp.standby_committed_end_lsn_.is_valid() || !transport_resp.standby_committed_end_scn_.is_valid()) {
-        ret = OB_ERR_UNEXPECTED;
+      if (!transport_resp.standby_committed_end_lsn_.is_valid() || !transport_resp.standby_committed_end_scn_.is_valid()) {
+        ret = OB_EAGAIN;
         CLOG_LOG_RET(WARN, ret, "standby committed_end_lsn or standby committed_end_scn is invalid",
-                     K(dst), K(transport_resp.ls_id_));
+                     K(dst), K_(transport_resp.ls_id));
       // RPC接收端会best-effort更新备库的committed位点
       } else {
         // 更新备库的committed_end_lsn
@@ -691,7 +707,23 @@ public:
   // 获取sync_standby_dest结构
   int set_sync_standby_dest(const share::ObSyncStandbyDestStruct &sync_standby_dest);
   int get_sync_standby_dest(share::ObSyncStandbyDestStruct &sync_standby_dest) const;
-  int is_standby_sync_done(const share::ObLSID &ls_id, bool &is_done);
+  int is_standby_sync_done(const share::ObLSID &ls_id, const palf::LSN &end_lsn, bool &is_done);
+
+  int stat_for_each(const common::ObFunction<int(const LogTransportStatus&)> &func);
+
+  class StatTransportStatusFunctor
+  {
+  public:
+    explicit StatTransportStatusFunctor(const common::ObFunction<int(const LogTransportStatus&)> &func)
+        : ret_code_(common::OB_SUCCESS), func_(func) {}
+    ~StatTransportStatusFunctor() {}
+    bool operator()(const share::ObLSID &id, LogTransportStatus *transport_status);
+    int get_ret_code() const { return ret_code_; }
+    TO_STRING_KV(K(ret_code_));
+  private:
+    int ret_code_;
+    const common::ObFunction<int(const LogTransportStatus&)> func_;
+  };
 
 private:
   // 查询备库地址

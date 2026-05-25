@@ -118,6 +118,8 @@ public:
   int init(const ObArray<obrpc::ObCheckpoint> &switchover_checkpoints);
   int64_t to_string (char *buf, const int64_t buf_len) const;
   bool is_sync() const { return is_sync_; }
+  int64_t get_not_sync_count() const { return not_sync_checkpoints_.count(); }
+  int64_t to_ls_id_string(char *buf, const int64_t buf_len) const;
 private:
   static constexpr int64_t MAX_PRINT_LS_NUM = 5;
   bool is_sync_;
@@ -138,12 +140,14 @@ public:
     cost_detail_(NULL),
     all_ls_info_(NULL),
     has_restore_source_(false),
-    is_verify_(false) {}
+    is_verify_(false),
+    is_verify_nowait_(false) {}
   virtual ~ObTenantRoleTransitionService() {}
   int init(
       uint64_t tenant_id,
       const obrpc::ObSwitchTenantArg::OpType &switch_optype,
       const bool is_verify,
+      const bool is_verify_nowait,
       common::ObMySQLProxy *sql_proxy,
       obrpc::ObSrvRpcProxy *rpc_proxy,
       ObTenantRoleTransCostDetail *cost_detail,
@@ -213,6 +217,9 @@ public:
   share::SCN get_so_scn() const { return so_scn_; }
   static int notify_thread(const uint64_t tenant_id,
       const obrpc::ObNotifyTenantThreadArg::TenantThreadType &thread_type);
+  // Wake up ObRecoveryLSService background thread when LS_ALTER tasks remain
+  // unsettled so they get processed promptly instead of waiting up to 10s.
+  static int notify_recovery_ls_service(uint64_t tenant_id);
 
 private:
   int clear_log_restore_source_();
@@ -277,8 +284,13 @@ private:
       const bool is_failover,
       const ObAllTenantInfo &tenant_info,
       bool &is_sys_ls_synced,
-      bool &is_all_ls_synced);
+      bool &is_all_ls_synced,
+      ObTenantRoleTransNonSyncInfo *non_sync_info_out = nullptr);
 
+  int check_sync_readiness_(const share::ObAllTenantInfo &tenant_info, bool &is_ready);
+  int check_replay_readiness_(const share::ObAllTenantInfo &tenant_info, bool &is_ready);
+  int check_failover_to_primary_readiness_(const share::ObAllTenantInfo &tenant_info, bool &is_ready);
+  int do_readiness_check_(share::ObAllTenantInfo &tenant_info);
   int do_prepare_flashback_for_switch_to_primary_(share::ObAllTenantInfo &tenant_info);
   int do_prepare_flashback_for_failover_to_primary_(share::ObAllTenantInfo &tenant_info);
   int do_prepare_flashback_for_lossless_failover_to_primary_(share::ObAllTenantInfo &tenant_info);
@@ -292,10 +304,7 @@ private:
       const SCN &target_tenant_sync_scn/* tenant target sync scn in switchover */);
   int wait_ls_balance_task_finish_();
   int wait_rebuild_master_key_version_finish_();
-  int check_ls_balance_task_finish_(
-      ObBalanceTaskArray &balance_task_array, ObArray<ObBalanceTaskHelper> &ls_balance_tasks,
-      share::ObAllTenantInfo &cur_tenant_info, bool &is_finish);
-  int notify_recovery_ls_service_();
+
   int get_all_ls_status_and_change_access_mode_(
       const ObAllTenantInfo &tenant_info,
       const palf::AccessMode target_access_mode,
@@ -323,6 +332,7 @@ private:
   ObTenantRoleTransAllLSInfo *all_ls_info_;
   bool has_restore_source_;
   bool is_verify_;
+  bool is_verify_nowait_;
 };
 }
 }

@@ -3781,6 +3781,23 @@ int ObService::get_ls_sync_scn(
       LOG_WARN("the ls not master", KR(ret), K(ls_id), K(first_leader_epoch),
           K(second_leader_epoch), K(role));
     }
+    // When checking sync to latest (verify phase), update the standby's fetch log
+    // upper limit to break the 6s hardcoded cap, allowing all LS to catch up.
+    // Only available since 4.4.2.2; older versions do not support this.
+    if (OB_SUCC(ret) && arg.check_sync_to_latest()
+        && cur_restore_source_max_scn.is_valid_and_not_min()) {
+      uint64_t tenant_compat_version = 0;
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(GET_MIN_DATA_VERSION(arg.get_tenant_id(), tenant_compat_version))) {
+        LOG_WARN("fail to get min data version, skip setting fetch_log_upper_limit_scn",
+            KR(tmp_ret), K(arg.get_tenant_id()));
+      } else if (tenant_compat_version >= DATA_VERSION_4_4_2_2) {
+        logservice::ObLogRestoreService *restore_service = log_ls_svr->get_log_restore_service();
+        if (OB_NOT_NULL(restore_service)) {
+          restore_service->set_fetch_log_upper_limit_scn(cur_restore_source_max_scn);
+        }
+      }
+    }
     if (OB_SUCC(ret) && ERRSIM_GET_LS_SYNC_SCN_ERROR) {
       cur_sync_scn = ls_id.is_sys_ls() ? cur_sync_scn : SCN::minus(cur_sync_scn, 1000);
       ret = result.init(arg.get_tenant_id(), ls_id, cur_sync_scn, cur_restore_source_max_scn);

@@ -409,11 +409,9 @@ int ObSyncModeManager::handle_sync_mode_upgrade(const int64_t mode_version,
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "ObSyncModeManager not inited", K(ret));
   } else if (!need_write_log) { // For Standby
-    if (OB_FAIL(log_handler_->change_sync_mode(mode_version, palf::SyncMode::SYNC, new_mode_version, new_proposal_id))) {
-      CLOG_LOG(WARN, "change_sync_mode to SYNC failed", K(ret), K(ls_id), K(mode_version));
-    } else {
-      CLOG_LOG(INFO, "change_sync_mode success", K(ls_id));
-    }
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(ERROR, "receive sync mode upgrade log when raw write", K(ret), K(ls_id), K(need_write_log), K(mode_version),
+      K(new_mode_version), K(new_proposal_id), K(protection_info), K(ref_scn), K(end_scn), K(abs_timeout_us));
   } else { // For Primary
     // 1. 修改日志流的 sync_mode 为 SYNC
     if (OB_FAIL(log_handler_->change_sync_mode(mode_version, palf::SyncMode::SYNC, new_mode_version, new_proposal_id))) {
@@ -423,17 +421,8 @@ int ObSyncModeManager::handle_sync_mode_upgrade(const int64_t mode_version,
     // 此处使用change_sync_mode返回的proposal id，确保没有切主
     else if (OB_FAIL(wait_log_handler_leader_(new_proposal_id, abs_timeout_us))) {
       CLOG_LOG(WARN, "wait_log_handler_leader_ failed", K(ret), K(ls_id), K(new_proposal_id), K(abs_timeout_us));
-    // }
-    // 3. 修改transport_service的sync_mode为SYNC
-    // else if (OB_ISNULL(log_handler_->transport_service_)) {
-    //   ret = OB_ERR_UNEXPECTED;
-    //   CLOG_LOG(WARN, "transport_service is null", K(ret), K(ls_id));
-    // } else if (OB_FAIL(log_handler_->transport_service_->enable_sync_mode(ls_id, new_proposal_id))) {
-    //   CLOG_LOG(WARN, "transport_service enable_sync_mode failed", K(ret), K(ls_id));
-    // } else if (OB_FAIL(log_handler_->apply_status_->enable_sync_mode(new_proposal_id))) {
-    //   CLOG_LOG(WARN, "apply status enable_sync_mode failed", K(ret), K(ls_id), K(new_proposal_id));
     }
-    // 4. 写 SYNC 特殊日志
+    // 3. 写 SYNC 特殊日志
     else {
       palf::LSN lsn;
       if (OB_FAIL(write_sync_mode_log(ObSyncModeLogType::SYNC, ref_scn, protection_info, lsn, end_scn, new_proposal_id,
@@ -458,38 +447,19 @@ int ObSyncModeManager::handle_sync_mode_downgrade(const int64_t mode_version,
 {
   int ret = OB_SUCCESS;
   int64_t new_proposal_id = palf::INVALID_PROPOSAL_ID;
+  palf::LSN lsn;
   if (!is_inited_ || OB_ISNULL(log_handler_)) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "ObSyncModeManager not inited", K(ret));
-  } else if (!need_write_log) { // For Standby
-    if (OB_FAIL(log_handler_->change_sync_mode(mode_version, palf::SyncMode::PRE_ASYNC, new_mode_version, new_proposal_id))) {
-      CLOG_LOG(WARN, "change_sync_mode to PRE_ASYNC failed", K(ret), K(log_handler_->id_), K(mode_version), K(new_mode_version));
-    }
-  } else if (need_write_log) { // For Primary
-    // 1. 修改日志流的 sync_mode 为 PRE_ASYNC
-    if (OB_FAIL(log_handler_->change_sync_mode(mode_version, palf::SyncMode::PRE_ASYNC, new_mode_version, new_proposal_id))) {
-      CLOG_LOG(WARN, "change_sync_mode to PRE_ASYNC failed", K(ret), K(ls_id), K(mode_version), K(new_mode_version));
-    } else if (OB_ISNULL(log_handler_->transport_service_) || OB_ISNULL(log_handler_->apply_status_)) {
-      ret = OB_ERR_UNEXPECTED;
-      CLOG_LOG(WARN, "transport_service is null", K(ret), K(ls_id));
-    } else if (OB_FAIL(log_handler_->apply_status_->disable_sync_mode(new_proposal_id))) {
-      CLOG_LOG(WARN, "apply status disable_sync_mode failed", K(ret), K(ls_id), K(new_proposal_id));
-    } else if (OB_FAIL(log_handler_->transport_service_->disable_sync_mode(ls_id, new_proposal_id))) {
-      CLOG_LOG(WARN, "transport service disable_sync_mode failed", K(ret), K(ls_id), K(new_proposal_id));
-      // clear_standby_info 已在 disable_sync_mode 内部调用，无需单独调用
-    }
-    // 2. 写 PRE_ASYNC 日志
-    else {
-      palf::LSN lsn;
-      if (OB_FAIL(write_sync_mode_log(ObSyncModeLogType::PRE_ASYNC, ref_scn, protection_info, lsn, end_scn,
-                                      new_proposal_id, abs_timeout_us))) {
-        CLOG_LOG(WARN, "write PRE_ASYNC mode log failed", K(ret), K(ls_id));
-      } else {
-        CLOG_LOG(INFO, "write PRE_ASYNC mode log success", K(ls_id), K(lsn), K(end_scn));
-      }
-    }
+  } else if (OB_FAIL(log_handler_->change_sync_mode(mode_version, palf::SyncMode::PRE_ASYNC, new_mode_version, new_proposal_id))) {
+    CLOG_LOG(WARN, "change_sync_mode to PRE_ASYNC failed", K(ret), K(ls_id), K(mode_version), K(new_mode_version));
+    // for primary, write PRE_ASYNC log after change_sync_mode to PRE_ASYNC
+  } else if (need_write_log && OB_FAIL(write_sync_mode_log(ObSyncModeLogType::PRE_ASYNC, ref_scn, protection_info, lsn, end_scn,
+    new_proposal_id, abs_timeout_us))) {
+    CLOG_LOG(WARN, "write PRE_ASYNC mode log failed", K(ret), K(ls_id));
+  } else {
+    CLOG_LOG(INFO, "write PRE_ASYNC mode log success", K(ls_id), K(lsn), K(end_scn));
   }
-
   return ret;
 }
 

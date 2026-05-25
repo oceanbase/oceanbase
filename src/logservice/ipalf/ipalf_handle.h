@@ -195,8 +195,6 @@ public:
   virtual int get_end_scn(share::SCN &scn) const = 0;
   virtual int get_max_lsn(palf::LSN &lsn) const = 0;
   virtual int get_max_scn(share::SCN &scn) const = 0;
-  virtual int get_max_log_id(int64_t &log_id) const = 0;
-  virtual int get_end_log_id(int64_t &log_id) const = 0;
 
   //================= 分布式相关接口 =========================
 

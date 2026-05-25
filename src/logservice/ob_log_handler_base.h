@@ -61,7 +61,7 @@ public:
   // switch role/proposal_id, and update sync_mode_ with the specified value when switching to leader.
   virtual void switch_role_and_sync_mode(const common::ObRole &role,
                                          const int64_t proposal_id,
-                                         const palf::SyncMode &sync_mode);
+                                         const palf::SyncMode &sync_mode) = 0;
   // NB: only called by ObRoleChangeService
   virtual void switch_role(const common::ObRole &role, const int64_t proposal_id) = 0;
   virtual void switch_sync_mode(const palf::SyncMode &sync_mode, const int64_t proposal_id) = 0;

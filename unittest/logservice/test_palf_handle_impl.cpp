@@ -287,78 +287,55 @@ int TestLogService::generate_data(LogWriteBuf &write_buf, char *&buf, int buf_le
 //   palf_handle_impl_guard_.get_palf_handle_impl()->free_log_entry_iterator();
 // }
 
-TEST(TestPalfHandleImpl, get_end_log_id_no_submit)
+TEST(TestPalfHandleImpl, get_lsn_scn_no_submit)
 {
   PalfHandleImpl impl;
   share::SCN scn = share::SCN::base_scn();
   const int64_t base_log_id = FIRST_VALID_LOG_ID - 1;
-  ASSERT_EQ(OB_SUCCESS, impl.sw_.lsn_allocator_.init(base_log_id, scn, LSN(0)));
+  const LSN base_lsn(0);
+  ASSERT_EQ(OB_SUCCESS, impl.sw_.lsn_allocator_.init(base_log_id, scn, base_lsn));
+  impl.sw_.is_inited_ = true;
+  impl.sw_.committed_end_lsn_ = base_lsn;
+  impl.sw_.max_flushed_end_lsn_ = base_lsn;
+  impl.sw_.last_slide_scn_ = scn;
 
-  int64_t end_log_id = OB_INVALID_LOG_ID;
-  int64_t max_log_id = OB_INVALID_LOG_ID;
-  EXPECT_EQ(OB_SUCCESS, impl.get_end_log_id(end_log_id));
-  EXPECT_EQ(OB_SUCCESS, impl.get_max_log_id(max_log_id));
-  EXPECT_EQ(OB_INVALID_LOG_ID, end_log_id);
-  EXPECT_EQ(base_log_id, max_log_id);
-  EXPECT_LT(end_log_id, max_log_id);
+  EXPECT_EQ(base_lsn, impl.get_end_lsn());
+  EXPECT_EQ(base_lsn, impl.get_max_lsn());
+  EXPECT_EQ(scn, impl.get_end_scn());
+  EXPECT_EQ(scn, impl.get_max_scn());
 }
 
-TEST(TestPalfHandleImpl, get_end_log_id_before_slide)
+TEST(TestPalfHandleImpl, get_end_lsn_returns_committed_flushed_min)
+{
+  PalfHandleImpl impl;
+  share::SCN scn = share::SCN::base_scn();
+  ASSERT_EQ(OB_SUCCESS, impl.sw_.lsn_allocator_.init(10, scn, LSN(100)));
+  impl.sw_.is_inited_ = true;
+  impl.sw_.committed_end_lsn_ = LSN(250);
+  impl.sw_.max_flushed_end_lsn_ = LSN(240);
+
+  EXPECT_EQ(LSN(240), impl.get_end_lsn());
+
+  impl.sw_.max_flushed_end_lsn_ = LSN(260);
+  EXPECT_EQ(LSN(250), impl.get_end_lsn());
+}
+
+TEST(TestPalfHandleImpl, get_max_lsn_scn_tracks_allocator)
 {
   PalfHandleImpl impl;
   share::SCN scn = share::SCN::base_scn();
   const int64_t base_log_id = FIRST_VALID_LOG_ID - 1;
   ASSERT_EQ(OB_SUCCESS, impl.sw_.lsn_allocator_.init(base_log_id, scn, LSN(0)));
+  impl.sw_.is_inited_ = true;
 
   const int64_t max_log_id = base_log_id + 5;
   const LSN max_lsn(100);
   ASSERT_EQ(OB_SUCCESS, impl.sw_.lsn_allocator_.inc_update_last_log_info(max_lsn, max_log_id, scn));
-  ATOMIC_STORE(&impl.sw_.last_slide_log_id_, base_log_id);
 
-  int64_t end_log_id = OB_INVALID_LOG_ID;
-  int64_t queried_max_log_id = OB_INVALID_LOG_ID;
-  EXPECT_EQ(OB_SUCCESS, impl.get_end_log_id(end_log_id));
-  EXPECT_EQ(OB_SUCCESS, impl.get_max_log_id(queried_max_log_id));
-  EXPECT_EQ(base_log_id, end_log_id);
-  EXPECT_EQ(max_log_id, queried_max_log_id);
-  EXPECT_LT(end_log_id, queried_max_log_id);
+  EXPECT_EQ(max_lsn, impl.get_max_lsn());
+  EXPECT_EQ(scn, impl.get_max_scn());
 }
 
-TEST(TestPalfHandleImpl, get_end_log_id_tracks_last_slide)
-{
-  PalfHandleImpl impl;
-  share::SCN scn = share::SCN::base_scn();
-  ASSERT_EQ(OB_SUCCESS, impl.sw_.lsn_allocator_.init(10, scn, LSN(0)));
-  ATOMIC_STORE(&impl.sw_.last_slide_log_id_, 10);
-
-  int64_t end_log_id = OB_INVALID_LOG_ID;
-  int64_t max_log_id = OB_INVALID_LOG_ID;
-  EXPECT_EQ(OB_SUCCESS, impl.get_end_log_id(end_log_id));
-  EXPECT_EQ(OB_SUCCESS, impl.get_max_log_id(max_log_id));
-  EXPECT_EQ(10, end_log_id);
-  EXPECT_EQ(10, max_log_id);
-  EXPECT_LE(end_log_id, max_log_id);
-}
-
-#ifdef OB_BUILD_ARBITRATION
-TEST(TestPalfHandleLite, get_end_log_id_not_supported)
-{
-  palflite::PalfHandleLite handle;
-  int64_t log_id = 0;
-  EXPECT_EQ(OB_NOT_SUPPORTED, handle.get_end_log_id(log_id));
-  EXPECT_EQ(OB_INVALID_LOG_ID, log_id);
-}
-#endif
-
-#ifdef OB_BUILD_SHARED_LOG_SERVICE
-TEST(TestLibPalfHandle, get_end_log_id_not_supported)
-{
-  libpalf::LibPalfHandle handle;
-  int64_t log_id = 0;
-  EXPECT_EQ(OB_NOT_SUPPORTED, handle.get_end_log_id(log_id));
-  EXPECT_EQ(OB_INVALID_LOG_ID, log_id);
-}
-#endif
 } // END of unittest
 } // end of oceanbase
 

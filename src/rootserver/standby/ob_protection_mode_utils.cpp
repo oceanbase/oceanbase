@@ -225,6 +225,28 @@ int ObProtectionModeUtils::check_standby_tenant_sync(bool &is_sync)
   return ret;
 }
 
+int ObProtectionModeUtils::check_standby_tenant_recovery_config()
+{
+  int ret = OB_SUCCESS;
+  bool is_empty = false;
+  share::ObLogRestoreSourceItem item;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("failed to check inner stat", KR(ret));
+  } else if (OB_FAIL(restore_proxy_util_.get_log_restore_source(is_empty, item))) {
+    LOG_WARN("failed to get log restore source recovery config", KR(ret), K(user_tenant_id_));
+  } else if (!item.until_scn_.is_max()) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("standby tenant recovery_until_scn is not max_scn", KR(ret), K(user_tenant_id_),
+        K(item.until_scn_));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "standby tenant recovery_until_scn is set, set protection mode is");
+  } else if (item.recover_delay_us_ > 0) {
+    ret = OB_OP_NOT_ALLOW;
+    LOG_WARN("standby tenant recovery_delay is set", KR(ret), K(user_tenant_id_), K(item.recover_delay_us_));
+    LOG_USER_ERROR(OB_OP_NOT_ALLOW, "standby tenant delay in log_restore_source is set, set protection mode is");
+  }
+  return ret;
+}
+
 int ObProtectionModeUtils::get_all_ls_largest_end_scn(const uint64_t user_tenant_id, share::SCN &largest_scn)
 {
   int ret = OB_SUCCESS;

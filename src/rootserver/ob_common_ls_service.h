@@ -87,7 +87,6 @@ private:
   bool need_update_ip_list_(ObLogRestoreSourceItem &item);
   int do_update_restore_source_(const ObRestoreSourceServiceAttr &old_attr, ObLogRestoreSourceMgr &restore_source_mgr);
   int get_restore_source_value_(ObLogRestoreSourceItem &item, ObSqlString &standby_source_value);
-  int update_source_inner_table_(char *buf, const int64_t buf_size, ObMySQLTransaction &trans, const ObLogRestoreSourceItem &item);
 };
 class ObStandbyRestoreSourceAttrUpdater : public ObRestoreSourceAttrUpdater
 {

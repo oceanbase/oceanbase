@@ -772,9 +772,10 @@ int ObLogRestoreProxyUtil::get_tenant_info(ObAllTenantInfo &tenant_info, ObTenan
   return change_mysql_error_(ret);
 }
 
-int ObLogRestoreProxyUtil::get_log_restore_source(bool &is_empty, ObRestoreSourceServiceAttr &restore_source_service_attr)
+int ObLogRestoreProxyUtil::get_log_restore_source(bool &is_empty, ObLogRestoreSourceItem &item)
 {
   int ret = OB_SUCCESS;
+  item.reset();
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObLogRestoreProxyUtil not inited", KR(ret));
@@ -783,7 +784,6 @@ int ObLogRestoreProxyUtil::get_log_restore_source(bool &is_empty, ObRestoreSourc
       SMART_VAR(common::ObMySQLProxy::MySQLResult, res) {
         common::sqlclient::ObMySQLResult *result = NULL;
         common::ObSqlString sql;
-        ObLogRestoreSourceItem restore_source_item;
         if (OB_FAIL(sql.append_fmt("SELECT * FROM %s WHERE ID=%ld", OB_DBA_OB_LOG_RESTORE_SOURCE_TNAME,
             ObLogRestoreSourceMgr::get_default_log_restore_source_id()))) {
           LOG_WARN("append_fmt failed");
@@ -796,23 +796,29 @@ int ObLogRestoreProxyUtil::get_log_restore_source(bool &is_empty, ObRestoreSourc
           LOG_WARN("next failed", KR(ret), K(sql));
           if (OB_ITER_END == ret) {
             is_empty = true;
+            item.until_scn_.set_max();
             ret = OB_SUCCESS;
           }
         } else {
           ObString type_str;
-          ObLogRestoreSourceType type;
-          common::ObSqlString sql_value;
           ObString value;
+          uint64_t scn_val = 0;
+          ObLogRestoreSourceItem item_local;
           EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(*result, "TYPE", type_str);
           EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(*result, "VALUE", value);
+          EXTRACT_UINT_FIELD_MYSQL(*result, "RECOVERY_UNTIL_SCN", scn_val, uint64_t);
+          EXTRACT_INT_FIELD_MYSQL(*result, "RECOVERY_DELAY", item_local.recover_delay_us_, int64_t);
           if (OB_FAIL(ret)) {
-          } else if (ObLogRestoreSourceItem::get_source_type(type_str) != share::ObLogRestoreSourceType::SERVICE) {
+          } else if (OB_FALSE_IT(item_local.type_ = ObLogRestoreSourceItem::get_source_type(type_str))) {
+          } else if (!is_valid_log_source_type(item_local.type_)) {
             ret = OB_INVALID_ARGUMENT;
-            LOG_WARN("standby tenant log restore source type is not service", KR(ret), K(restore_source_item.type_));
-          } else if (OB_FAIL(sql_value.assign(value))) {
-            LOG_WARN("failed to assign value to sql_value", KR(ret), K(value));
-          } else if (OB_FAIL(restore_source_service_attr.parse_service_attr_from_str(sql_value))) {
-            LOG_WARN("failed to parse service attr from str", KR(ret), K(sql_value));
+            LOG_WARN("invalid log restore source type", KR(ret), K(type_str));
+          } else if (OB_FAIL(ob_write_string(item_local.allocator_, value, item_local.value_))) {
+            LOG_WARN("failed to copy value string", KR(ret), K(value));
+          } else if (OB_FAIL(item_local.until_scn_.convert_for_inner_table_field(scn_val))) {
+            LOG_WARN("failed to convert until_scn", KR(ret), K(scn_val));
+          } else if (OB_FAIL(item.deep_copy(item_local))) {
+            LOG_WARN("failed to deep copy item", KR(ret), K(item_local));
           } else {
             is_empty = false;
           }
@@ -825,6 +831,27 @@ int ObLogRestoreProxyUtil::get_log_restore_source(bool &is_empty, ObRestoreSourc
     }
   }
   return change_mysql_error_(ret);
+}
+
+int ObLogRestoreProxyUtil::get_log_restore_source(bool &is_empty,
+    ObRestoreSourceServiceAttr &restore_source_service_attr)
+{
+  int ret = OB_SUCCESS;
+  ObLogRestoreSourceItem item;
+  common::ObSqlString sql_value;
+  if (OB_FAIL(get_log_restore_source(is_empty, item))) {
+    LOG_WARN("failed to get log restore source", KR(ret));
+  } else if (is_empty) {
+    // empty, service_attr left uninitialized
+  } else if (item.type_ != share::ObLogRestoreSourceType::SERVICE) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("standby tenant log restore source type is not service", KR(ret), K(item.type_));
+  } else if (OB_FAIL(sql_value.assign(item.value_))) {
+    LOG_WARN("failed to assign value to sql_value", KR(ret), K(item.value_));
+  } else if (OB_FAIL(restore_source_service_attr.parse_service_attr_from_str(sql_value))) {
+    LOG_WARN("failed to parse service attr from str", KR(ret), K(sql_value));
+  }
+  return ret;
 }
 
 int ObLogRestoreProxyUtil::get_max_log_info(const ObLSID &id, palf::AccessMode &mode, SCN &scn)

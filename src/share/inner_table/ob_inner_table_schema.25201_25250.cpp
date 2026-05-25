@@ -1641,7 +1641,7 @@ int ObInnerTableSchema::dba_ob_log_restore_source_ora_schema(ObTableSchema &tabl
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT TENANT_ID,     ID,     TYPE,     VALUE,     RECOVERY_UNTIL_SCN   FROM SYS.ALL_VIRTUAL_LOG_RESTORE_SOURCE   WHERE TENANT_ID=EFFECTIVE_TENANT_ID();   )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(   SELECT TENANT_ID,     ID,     TYPE,     VALUE,     RECOVERY_UNTIL_SCN,     RECOVERY_DELAY   FROM SYS.ALL_VIRTUAL_LOG_RESTORE_SOURCE   WHERE TENANT_ID=EFFECTIVE_TENANT_ID();   )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

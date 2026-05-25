@@ -235,10 +235,11 @@ void ObLogStandbyTransportWorker::do_thread_task_()
           CLOG_LOG(ERROR, "restore handler is null", K(ret), K(ls->get_ls_id()));
         } else {
           // 处理该日志流的 transport tasks
-          int tmp_ret = restore_handler->process_transport_tasks(BATCH_SIZE);
-          if (OB_NOT_INIT == tmp_ret) {
+          int tmp_ret = restore_handler->process_transport_tasks();
+          if (OB_NOT_INIT == tmp_ret || OB_ENTRY_NOT_EXIST == tmp_ret) {
             if (palf::palf_reach_time_interval(1 * 1000 * 1000L, not_init_warn_time_us_)) {
-              CLOG_LOG(WARN, "process transport tasks not init", K(tmp_ret), "ls_id", ls->get_ls_id());
+              CLOG_LOG(WARN, "process transport tasks not init or empty or disorder received log",
+                K(tmp_ret), "ls_id", ls->get_ls_id());
             }
           } else if (OB_SUCCESS != tmp_ret && OB_NOT_MASTER != tmp_ret) {
             CLOG_LOG(WARN, "process transport tasks failed", K(tmp_ret), "ls_id", ls->get_ls_id());

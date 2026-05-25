@@ -412,7 +412,7 @@ int ObReplayServiceReplayTask::get_min_unreplayed_log_info(LSN &lsn,
                                                            int64_t &first_handle_ts,
                                                            int64_t &replay_cost,
                                                            int64_t &retry_cost,
-                                                           bool &is_queue_empty)
+                                                           bool &is_queue_empty) const
 {
   int ret = OB_SUCCESS;
   ObLockGuard<ObSpinLock> guard(lock_);
@@ -1015,7 +1015,7 @@ int ObReplayStatus::get_min_unreplayed_log_info(LSN &lsn,
                                                 ObLogBaseType &log_type,
                                                 int64_t &first_handle_ts,
                                                 int64_t &replay_cost,
-                                                int64_t &retry_cost)
+                                                int64_t &retry_cost) const
 {
   int ret = OB_SUCCESS;
   SCN base_scn = SCN::min_scn();
@@ -1387,6 +1387,24 @@ int ObReplayStatus::stat(LSReplayStat &stat) const
       CLOG_LOG(WARN, "get_next_to_submit_log_info failed", KPC(this), K(ret));
     } else if (OB_FAIL(palf_handle_->get_end_lsn(stat.end_lsn_))) {
       CLOG_LOG(WARN, "get_end_lsn from palf failed", KPC(this), K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      if (!is_enabled_) {
+        stat.min_unreplayed_lsn_.reset();
+        stat.min_unreplayed_scn_.reset();
+      } else {
+        int64_t replay_hint = 0;
+        ObLogBaseType log_type = INVALID_LOG_BASE_TYPE;
+        int64_t first_handle_ts = 0;
+        int64_t replay_cost = 0;
+        int64_t retry_cost = 0;
+        if (OB_FAIL(get_min_unreplayed_log_info(
+            stat.min_unreplayed_lsn_, stat.min_unreplayed_scn_,
+            replay_hint, log_type, first_handle_ts,
+            replay_cost, retry_cost))) {
+          CLOG_LOG(WARN, "get_min_unreplayed_log_info failed", K(ret), KPC(this));
+        }
+      }
     }
   }
   return ret;

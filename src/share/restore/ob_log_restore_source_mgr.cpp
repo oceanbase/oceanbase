@@ -70,7 +70,7 @@ int ObLogRestoreSourceMgr::delete_source()
 }
 
 int ObLogRestoreSourceMgr::add_service_source(const SCN &recovery_until_scn,
-    const ObString &service_source)
+    const ObString &service_source, const int64_t recover_delay_us)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
@@ -84,18 +84,19 @@ int ObLogRestoreSourceMgr::add_service_source(const SCN &recovery_until_scn,
                                 OB_DEFAULT_LOG_RESTORE_SOURCE_ID,
                                 ObLogRestoreSourceType::SERVICE,
                                 service_source,
-                                recovery_until_scn);
+                                recovery_until_scn,
+                                recover_delay_us);
     if (OB_FAIL(table_operator_.insert_source(item))) {
       LOG_WARN("table_operator_ insert_source failed", K(ret), K(item));
     } else {
-      LOG_INFO("add service source succ", K(recovery_until_scn), K(service_source));
+      LOG_INFO("add service source succ", K(recovery_until_scn), K(service_source), K(recover_delay_us));
     }
   }
   return ret;
 }
 
 int ObLogRestoreSourceMgr::add_location_source(const SCN &recovery_until_scn,
-    const ObString &archive_dest)
+    const ObString &archive_dest, const int64_t recover_delay_us)
 {
   int ret = OB_SUCCESS;
   ObBackupDest dest;
@@ -117,11 +118,12 @@ int ObLogRestoreSourceMgr::add_location_source(const SCN &recovery_until_scn,
                                 OB_DEFAULT_LOG_RESTORE_SOURCE_ID,
                                 ObLogRestoreSourceType::LOCATION,
                                 ObString(dest_buf),
-                                recovery_until_scn);
+                                recovery_until_scn,
+                                recover_delay_us);
     if (OB_FAIL(table_operator_.insert_source(item))) {
       LOG_WARN("table_operator_ insert_source failed", K(ret), K(item));
     } else {
-      LOG_INFO("add location source succ", K(recovery_until_scn), K(archive_dest));
+      LOG_INFO("add location source succ", K(recovery_until_scn), K(archive_dest), K(recover_delay_us));
     }
   }
   return ret;

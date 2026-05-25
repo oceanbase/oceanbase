@@ -5236,6 +5236,7 @@ def_table_schema(
         ('type', 'varchar:32'),
         ('value', 'longtext'),
         ('recovery_until_scn', 'uint'),
+        ('recovery_delay', 'int', 'false', '0'),
   ],
 )
 
@@ -14193,6 +14194,8 @@ def_table_schema(
     ('unsubmitted_lsn', 'uint'),
     ('unsubmitted_log_scn', 'uint'),
     ('pending_cnt', 'int'),
+    ('min_unreplayed_lsn', 'uint'),
+    ('min_unreplayed_scn', 'uint'),
   ],
 
   partition_columns = ['svr_ip', 'svr_port'],
@@ -17909,6 +17912,37 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_name = '__all_virtual_audit_log_encryption_password',
   keywords = all_def_keywords['__all_audit_log_encryption_password']))
 
+
+def_table_schema(
+  owner = 'shouju.zyp',
+  table_name = '__all_virtual_log_transport_stat',
+  table_id = '12607',
+  table_type = 'VIRTUAL_TABLE',
+  gm_columns = [],
+  in_tenant_space = True,
+  rowkey_columns = [
+  ],
+
+  normal_columns = [
+    ('tenant_id', 'int'),
+    ('ls_id', 'int'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH'),
+    ('svr_port', 'int'),
+    ('role', 'varchar:32'),
+    ('enabled', 'bool'),
+    ('end_lsn', 'uint'),
+    ('end_scn', 'uint'),
+    ('last_sent_lsn', 'uint'),
+    ('last_sent_scn', 'uint'),
+    ('standby_end_lsn', 'uint'),
+    ('standby_end_scn', 'uint'),
+    ('standby_addr', 'varchar:MAX_IP_PORT_LENGTH'),
+  ],
+
+  partition_columns = ['svr_ip', 'svr_port'],
+  vtable_route_policy = 'distributed',
+)
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -18495,6 +18529,9 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15550', all_def_ke
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15551', all_def_keywords['__all_java_policy']))
 
 # 15550: __all_external_resource
+
+
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15554', all_def_keywords['__all_virtual_log_transport_stat']))
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -36438,7 +36475,8 @@ def_table_schema(
     ID,
     TYPE,
     VALUE,
-    RECOVERY_UNTIL_SCN
+    RECOVERY_UNTIL_SCN,
+    RECOVERY_DELAY
   FROM OCEANBASE.__ALL_VIRTUAL_LOG_RESTORE_SOURCE;
   """.replace("\n", " ")
 )
@@ -36458,7 +36496,8 @@ def_table_schema(
     ID,
     TYPE,
     VALUE,
-    RECOVERY_UNTIL_SCN
+    RECOVERY_UNTIL_SCN,
+    RECOVERY_DELAY
   FROM OCEANBASE.__ALL_VIRTUAL_LOG_RESTORE_SOURCE
   WHERE TENANT_ID=EFFECTIVE_TENANT_ID();
   """.replace("\n", " ")
@@ -46094,6 +46133,84 @@ def_table_schema(
   FROM oceanbase.__all_virtual_tenant_scheduler_job T WHERE T.JOB_NAME != '__dummy_guard' and T.JOB > 0
 """.replace("\n", " ")
 )
+
+
+def_table_schema(
+  owner = 'shouju.zyp',
+  table_name = 'GV$OB_LS_LOG_REPLAY_STAT',
+  table_id = '21728',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT TENANT_ID, SVR_IP, SVR_PORT, LS_ID, ROLE,
+           ENABLED, END_LSN,
+           UNSUBMITTED_LSN, UNSUBMITTED_LOG_SCN AS UNSUBMITTED_SCN,
+           MIN_UNREPLAYED_LSN, MIN_UNREPLAYED_SCN,
+           PENDING_CNT
+    FROM OCEANBASE.__all_virtual_replay_stat
+  """.replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'shouju.zyp',
+  table_name = 'V$OB_LS_LOG_REPLAY_STAT',
+  table_id = '21729',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT TENANT_ID, SVR_IP, SVR_PORT, LS_ID, ROLE,
+           ENABLED, END_LSN,
+           UNSUBMITTED_LSN, UNSUBMITTED_SCN,
+           MIN_UNREPLAYED_LSN, MIN_UNREPLAYED_SCN,
+           PENDING_CNT
+    FROM OCEANBASE.GV$OB_LS_LOG_REPLAY_STAT
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
+  """.replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'shouju.zyp',
+  table_name = 'GV$OB_LS_LOG_TRANSPORT_STAT',
+  table_id = '21730',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT TENANT_ID, LS_ID, SVR_IP, SVR_PORT, ROLE, ENABLED,
+           END_LSN, END_SCN, LAST_SENT_LSN, LAST_SENT_SCN,
+           STANDBY_END_LSN, STANDBY_END_SCN, STANDBY_ADDR
+    FROM OCEANBASE.__all_virtual_log_transport_stat
+  """.replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'shouju.zyp',
+  table_name = 'V$OB_LS_LOG_TRANSPORT_STAT',
+  table_id = '21731',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT TENANT_ID, LS_ID, SVR_IP, SVR_PORT, ROLE, ENABLED,
+           END_LSN, END_SCN, LAST_SENT_LSN, LAST_SENT_SCN,
+           STANDBY_END_LSN, STANDBY_END_SCN, STANDBY_ADDR
+    FROM OCEANBASE.GV$OB_LS_LOG_TRANSPORT_STAT
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
+  """.replace("\n", " "),
+)
+
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################
@@ -65601,7 +65718,8 @@ def_table_schema(
     ID,
     TYPE,
     VALUE,
-    RECOVERY_UNTIL_SCN
+    RECOVERY_UNTIL_SCN,
+    RECOVERY_DELAY
   FROM SYS.ALL_VIRTUAL_LOG_RESTORE_SOURCE
   WHERE TENANT_ID=EFFECTIVE_TENANT_ID();
   """.replace("\n", " ")
@@ -80536,7 +80654,6 @@ def_table_schema(
 # 28266: V$OB_LOGSTORE_SERVICE_STATUS
 # 28267: GV$OB_LOGSTORE_SERVICE_INFO
 # 28268: V$OB_LOGSTORE_SERVICE_INFO
-
 # 28269: GV$OB_STANDBY_LOG_TRANSPORT_STAT
 # 28270: V$OB_STANDBY_LOG_TRANSPORT_STAT
 
@@ -81104,6 +81221,91 @@ def_table_schema(
   FROM SYS.ALL_VIRTUAL_SYNC_STANDBY_DEST
   WHERE TENANT_ID = EFFECTIVE_TENANT_ID();
   """.replace("\n", " ")
+)
+
+
+def_table_schema(
+  owner = 'shouju.zyp',
+  table_name = 'GV$OB_LS_LOG_REPLAY_STAT',
+  name_postfix = '_ORA',
+  database_id = 'OB_ORA_SYS_DATABASE_ID',
+  table_id = '28297',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT TENANT_ID, SVR_IP, SVR_PORT, LS_ID, ROLE,
+           ENABLED, END_LSN,
+           UNSUBMITTED_LSN, UNSUBMITTED_LOG_SCN AS UNSUBMITTED_SCN,
+           MIN_UNREPLAYED_LSN, MIN_UNREPLAYED_SCN,
+           PENDING_CNT
+    FROM SYS.ALL_VIRTUAL_REPLAY_STAT
+  """.replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'shouju.zyp',
+  table_name = 'V$OB_LS_LOG_REPLAY_STAT',
+  name_postfix = '_ORA',
+  database_id = 'OB_ORA_SYS_DATABASE_ID',
+  table_id = '28298',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT TENANT_ID, SVR_IP, SVR_PORT, LS_ID, ROLE,
+           ENABLED, END_LSN,
+           UNSUBMITTED_LSN, UNSUBMITTED_SCN,
+           MIN_UNREPLAYED_LSN, MIN_UNREPLAYED_SCN,
+           PENDING_CNT
+    FROM SYS.GV$OB_LS_LOG_REPLAY_STAT
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
+  """.replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'shouju.zyp',
+  table_name = 'GV$OB_LS_LOG_TRANSPORT_STAT',
+  name_postfix = '_ORA',
+  database_id = 'OB_ORA_SYS_DATABASE_ID',
+  table_id = '28299',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT TENANT_ID, LS_ID, SVR_IP, SVR_PORT, ROLE, ENABLED,
+           END_LSN, END_SCN, LAST_SENT_LSN, LAST_SENT_SCN,
+           STANDBY_END_LSN, STANDBY_END_SCN, STANDBY_ADDR
+    FROM SYS.ALL_VIRTUAL_LOG_TRANSPORT_STAT
+  """.replace("\n", " "),
+)
+
+def_table_schema(
+  owner = 'shouju.zyp',
+  table_name = 'V$OB_LS_LOG_TRANSPORT_STAT',
+  name_postfix = '_ORA',
+  database_id = 'OB_ORA_SYS_DATABASE_ID',
+  table_id = '28300',
+  table_type = 'SYSTEM_VIEW',
+  gm_columns = [],
+  rowkey_columns = [],
+  normal_columns = [],
+  in_tenant_space = True,
+  view_definition = """
+    SELECT TENANT_ID, LS_ID, SVR_IP, SVR_PORT, ROLE, ENABLED,
+           END_LSN, END_SCN, LAST_SENT_LSN, LAST_SENT_SCN,
+           STANDBY_END_LSN, STANDBY_END_SCN, STANDBY_ADDR
+    FROM SYS.GV$OB_LS_LOG_TRANSPORT_STAT
+    WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
+          AND SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
+  """.replace("\n", " "),
 )
 
 # 余留位置（此行之前占位）

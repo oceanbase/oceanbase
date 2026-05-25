@@ -294,22 +294,6 @@ int PalfHandle::get_max_lsn(LSN &lsn) const
   return ret;
 }
 
-int PalfHandle::get_max_log_id(int64_t &log_id) const
-{
-  int ret = OB_SUCCESS;
-  CHECK_VALID;
-  ret = palf_handle_impl_->get_max_log_id(log_id);
-  return ret;
-}
-
-int PalfHandle::get_end_log_id(int64_t &log_id) const
-{
-  int ret = OB_SUCCESS;
-  CHECK_VALID;
-  ret = palf_handle_impl_->get_end_log_id(log_id);
-  return ret;
-}
-
 int PalfHandle::get_max_scn(SCN &scn) const
 {
   int ret = OB_SUCCESS;

@@ -39,14 +39,16 @@ public:
   int init(const uint64_t tenant_id, ObISQLClient *proxy);
 public:
   // add source with net service
-  int add_service_source(const SCN &recovery_until_scn, const ObString &service_source);
+  int add_service_source(const SCN &recovery_until_scn, const ObString &service_source,
+                         const int64_t recover_delay_us = 0);
   // add source with archive dest
   // 1. nfs example
   // file:///data/1/
   // 2. oss example
   // oss://backup_dir/?host=xxx.com&access_id=111&access_key=222
   // 3. cos example
-  int add_location_source(const SCN &recovery_until_scn, const ObString &archive_dest);
+  int add_location_source(const SCN &recovery_until_scn, const ObString &archive_dest,
+                          const int64_t recover_delay_us = 0);
   // add source with raw pieces
   int add_rawpath_source(const SCN &recovery_until_scn, const DirArray &array);
 

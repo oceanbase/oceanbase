@@ -205,6 +205,7 @@ public:
   int iterate_palf(const ObFunction<int(const ipalf::IPalfHandle&)> &func);
   int iterate_apply(const ObFunction<int(const ObApplyStatus&)> &func);
   int iterate_replay(const ObFunction<int(const ObReplayStatus&)> &func);
+  int iterate_transport(const ObFunction<int(const LogTransportStatus&)> &func);
 
   // @desc: flashback all log_stream's redo log of tenant 'tenant_id'
   // @params [in] const uint64_t tenant_id: id of tenant which should be flashbacked

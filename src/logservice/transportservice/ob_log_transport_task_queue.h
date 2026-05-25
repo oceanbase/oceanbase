@@ -13,14 +13,18 @@
 #ifndef OCEANBASE_LOGSERVICE_OB_LOG_TRANSPORT_TASK_QUEUE_H_
 #define OCEANBASE_LOGSERVICE_OB_LOG_TRANSPORT_TASK_QUEUE_H_
 
-#include "lib/lock/ob_spin_lock.h"
+#include "lib/atomic/ob_atomic.h"
 #include "lib/lock/ob_spin_rwlock.h"
+#include "lib/hash/ob_linear_hash_map.h"
+#include "share/ob_ls_id.h"
 #include "share/scn.h"
-#include "logservice/palf/fixed_sliding_window.h"
 #include "logservice/palf/lsn.h"
 #include "logservice/transportservice/ob_log_transport_rpc_define.h"
-#include "logservice/transportservice/ob_log_transport_task_owner_state.h"
-#include "lib/atomic/atomic128.h"
+
+#if defined(ENABLE_DEBUG_LOG) && !defined(OB_LOG_RESTORE_QUEUE_TEST_INFRA)
+#define OB_LOG_RESTORE_QUEUE_TEST_INFRA
+#endif
+
 #ifdef OB_LOG_RESTORE_QUEUE_TEST_INFRA
 #include <functional>
 #endif
@@ -36,170 +40,168 @@ namespace logservice
 
 class ObLogRestoreHandler;
 
-// TODO by qingxia: move queue into tansport worker
-class ObLogTransportTaskQueue : public palf::ISlidingCallBack
+struct LogReceivedTransportTask
+{
+  explicit LogReceivedTransportTask(share::ObLSID ls_id, palf::LSN start_lsn, palf::LSN end_lsn,
+    share::SCN scn, const char *log_data, int64_t log_size);
+  ~LogReceivedTransportTask();
+  bool is_valid() const;
+  TO_STRING_KV(K_(ls_id), K_(start_lsn), K_(end_lsn), K_(scn), KP_(log_data), K_(log_size), K(ref_cnt_));
+
+  int64_t inc_ref();
+  int64_t dec_ref();
+
+  const share::ObLSID ls_id_;
+  const palf::LSN start_lsn_;
+  const palf::LSN end_lsn_;
+  const share::SCN scn_;
+  const char *log_data_;
+  const int64_t log_size_;
+
+  int64_t ref_cnt_;
+  DISABLE_COPY_ASSIGN(LogReceivedTransportTask);
+};
+
+class ObLogTransportTaskHandle
 {
 public:
-  static const int64_t MAX_QUEUE_SIZE = (1 << 11); // 2048
-  static const int64_t DEFAULT_MAX_CACHED_BYTES = palf::FOLLOWER_DEFAULT_GROUP_BUFFER_SIZE;
+  ObLogTransportTaskHandle();
+  ~ObLogTransportTaskHandle();
+  ObLogTransportTaskHandle(const ObLogTransportTaskHandle &other);
+  ObLogTransportTaskHandle &operator=(const ObLogTransportTaskHandle &other);
+  void reset();
+  bool is_valid() const;
+  const LogReceivedTransportTask *task() const;
+  // Deep Copy |task| to LogReceivedTransportTask.
+  int init(const ObLogTransportReq *task);
+  TO_STRING_KV(KP_(task), KPC_(task));
+private:
+  ObLogTransportTaskHandle(ObLogTransportTaskHandle &&other) = delete;
+  ObLogTransportTaskHandle &operator=(ObLogTransportTaskHandle &&other) = delete;
+  LogReceivedTransportTask *task_;
+};
+
+class ObLogTransportTaskQueue
+{
+public:
+  static constexpr int64_t MAX_QUEUE_SIZE = (1 << 11); // 2048
+  static constexpr int64_t DEFAULT_MAX_CACHED_BYTES = palf::FOLLOWER_DEFAULT_GROUP_BUFFER_SIZE;
+  // 分批处理大小：每次处理每个日志流的任务数量，控制排序开销
+  static constexpr int64_t BATCH_SIZE = 512;
+
+public:
 
   ObLogTransportTaskQueue();
   ~ObLogTransportTaskQueue();
 
-  int init(common::ObILogAllocator *alloc_mgr,
-           ObLogRestoreHandler *restore_handler,
-           const int64_t queue_size);
+  int init(const int64_t id, const int64_t queue_size);
   void stop();
   void destroy();
-  void clear();
+  void switch_to_follower();
+  void switch_to_leader(const palf::LSN &end_lsn);
 
-  int push(ObLogTransportTaskHolder task_holder, const int64_t end_log_id);
-  int process(const int64_t proposal_id,
-              const int64_t end_log_id,
-              int64_t &processed,
-              const int64_t batch_size);
+  int push(const ObLogTransportReq *task);
+  int update_end_lsn(const palf::LSN &end_lsn);
+  int front(ObLogTransportTaskHandle &handle);
+  int success(const ObLogTransportTaskHandle &handle);
+  int failure(const ObLogTransportTaskHandle &handle);
 
-  void get_drop_stats(int64_t &drop_stale,
-                      int64_t &drop_duplicate,
-                      int64_t &reject_out_of_window,
-                      int64_t &parse_fail) const;
-  void get_drop_stats(int64_t &drop_stale,
-                      int64_t &drop_duplicate,
-                      int64_t &reject_out_of_window,
-                      int64_t &parse_fail,
-                      int64_t &early_drop_far_lsn,
-                      int64_t &evict_trigger,
-                      int64_t &evict_scan_slots,
-                      int64_t &evicted_slot_cnt,
-                      int64_t &evicted_task_bytes) const;
-  void inc_early_drop_far_lsn();
+  uint64_t count() const;
+  void clear_stats();
 
-#ifdef OB_LOG_RESTORE_QUEUE_TEST_INFRA
-  typedef std::function<int(const int64_t,
-                            const palf::LSN &,
-                            const share::SCN &,
-                            const char *,
-                            const int64_t)> RawWriteTestHook;
-  void set_raw_write_test_hook(const RawWriteTestHook &hook) { raw_write_test_hook_ = hook; }
-  void reset_raw_write_test_hook() { raw_write_test_hook_ = nullptr; }
-#endif
-
-  TO_STRING_KV(K_(is_inited),
-               K_(is_stopped),
-               KP_(restore_handler),
-               KP_(alloc_mgr),
-               "sw_begin_sn", sw_.get_begin_sn(),
-               "sw_end_sn", sw_.get_end_sn(),
-               "first_slot", get_first_slot_info_(),
+  TO_STRING_KV(KP(this),
+               "is_inited", ATOMIC_LOAD(&is_inited_),
+               "is_stopped", ATOMIC_LOAD(&is_stopped_),
+               K_(id),
+               K_(next_submit_lsn),
+               "task_count", task_map_.count(),
+               "task_load_factor", task_map_.get_load_factor(),
+               "task_bkt_count", task_map_.get_bkt_cnt(),
                K_(queue_size),
                K_(cached_bytes),
                K_(max_cached_bytes),
-               K_(drop_stale_cnt),
                K_(drop_duplicate_cnt),
-               K_(reject_out_of_window_cnt),
-               K_(parse_fail_cnt),
                K_(early_drop_far_lsn_cnt),
-               K_(evict_trigger_cnt),
-               K_(evict_scan_slots),
-               K_(evicted_slot_cnt),
-               K_(evicted_task_bytes));
-
+               K_(total_inserted_cnt),
+               K_(total_inserted_bytes),
+               K_(total_processed_cnt),
+               K_(total_success_cnt),
+               K_(total_success_bytes),
+               K_(total_skipped_cnt));
 private:
-  class TransportTaskSlot : public palf::FixedSlidingWindowSlot
+  class LSNWarp
   {
   public:
-    TransportTaskSlot();
-    ~TransportTaskSlot() override;
-    bool can_be_slid() override;
-    void reset() override;
-    bool is_valid() const;
-    ObLogTransportTaskHolder task_holder_;
-    int64_t task_bytes_;
-    int64_t *cached_bytes_ptr_;
-    bool is_submitted_;
-  };
-
-  struct SwRevertGuard
-  {
-    SwRevertGuard();
-    SwRevertGuard(palf::FixedSlidingWindow<TransportTaskSlot> &sw,
-                  const int64_t log_id,
-                  TransportTaskSlot *slot);
-    SwRevertGuard(const SwRevertGuard &) = delete;
-    SwRevertGuard &operator=(const SwRevertGuard &) = delete;
-    SwRevertGuard(SwRevertGuard &&other);
-    SwRevertGuard &operator=(SwRevertGuard &&other);
-    ~SwRevertGuard();
-
-    bool is_valid() const
+    LSNWarp() : lsn_() {}
+    explicit LSNWarp(const palf::LSN lsn) : lsn_(lsn) {}
+    ~LSNWarp() { reset(); }
+    void reset() { lsn_.reset(); }
+    uint64_t hash() const { return common::do_hash(lsn_.val_); }
+    int hash(uint64_t &hash_val) const { hash_val = hash(); return OB_SUCCESS; }
+    palf::LSN get_value() const { return lsn_; }
+    int compare(const LSNWarp &other) const
     {
-      return nullptr != sw_;
+      int ret = 0;
+      if (lsn_ == other.lsn_) {
+        ret = 0;
+      } else if (lsn_ > other.lsn_) {
+        ret = 1;
+      } else {
+        ret = -1;
+      }
+      return ret;
     }
-
-    TransportTaskSlot *get_slot() const
+    bool operator==(const LSNWarp &other) const
     {
-      return slot_;
+      return 0 == compare(other);
     }
-
-    void reset();
-
-    palf::FixedSlidingWindow<TransportTaskSlot> *sw_;
-    TransportTaskSlot *slot_;
-    int64_t log_id_;
+    bool operator!=(const LSNWarp &other) const
+    {
+      return !operator==(other);
+    }
+    TO_STRING_KV(K_(lsn));
+  private:
+    palf::LSN lsn_;
   };
-
-  int sliding_cb(const int64_t sn, const palf::FixedSlidingWindowSlot *data) override;
-  int submit_tasks_sequentially_(const int64_t proposal_id, const int64_t batch_size, int64_t &processed);
-
-  int parse_group_entry_log_id_(const char *buf, const int64_t buf_size, int64_t &log_id) const;
-  int get_slot_guard_for_push_(const int64_t log_id, SwRevertGuard &revert_guard);
-  int try_init_or_advance_base_log_id_(const int64_t end_log_id);
-  int self_heal_();
-  void reserve_bytes_(const int64_t bytes);
-  void release_bytes_(const int64_t bytes);
-  int raw_write_(const int64_t proposal_id,
-                 const palf::LSN &lsn,
-                 const share::SCN &scn,
-                 const char *buf,
-                 const int64_t buf_size);
-
-  struct FirstSlotInfo
+  struct TaskRemoveFunctor
   {
-    bool has_task_ = false;
-    const void *task_ptr_ = nullptr;
-    int64_t task_bytes_ = 0;
-    bool is_submitted_ = false;
-    TO_STRING_KV(K(has_task_), KP(task_ptr_), K(task_bytes_), K(is_submitted_));
+    TaskRemoveFunctor(const palf::LSN &end_lsn);
+    ~TaskRemoveFunctor();
+    bool operator()(const LSNWarp &key, const ObLogTransportTaskHandle &value);
+    palf::LSN end_lsn_;
+    int64_t removed_cnt_;
+    int64_t removed_bytes_;
   };
-  FirstSlotInfo get_first_slot_info_() const;
-
 private:
-  palf::FixedSlidingWindow<TransportTaskSlot> sw_;
-  ObLogRestoreHandler *restore_handler_;
+  static void add_container_cached_bytes_(int64_t *container_cached_bytes,
+                                          const int64_t bytes);
+  static void sub_container_cached_bytes_(int64_t *container_cached_bytes,
+                                          const ObLogTransportTaskHandle &task_handle);
+private:
+  common::ObLinearHashMap<LSNWarp, ObLogTransportTaskHandle> task_map_;
+private:
+  int can_push_task_(const ObLogTransportReq *task);
+private:
+
   bool is_inited_;
   int64_t is_stopped_;
-  common::ObILogAllocator *alloc_mgr_;
+  int64_t id_;
+  palf::LSN next_submit_lsn_;
   int64_t queue_size_;
+  // approximate and not used for actual control
   int64_t cached_bytes_;
   int64_t max_cached_bytes_;
-  common::ObSpinLock process_lock_;
-  mutable common::SpinRWLock lock_;
-  common::ObSpinLock self_heal_lock_;
+  common::SpinRWLock lock_;
 
   // stats
-  int64_t drop_stale_cnt_;
   int64_t drop_duplicate_cnt_;
-  int64_t reject_out_of_window_cnt_;
-  int64_t parse_fail_cnt_;
   int64_t early_drop_far_lsn_cnt_;
-  int64_t evict_trigger_cnt_;
-  int64_t evict_scan_slots_;
-  int64_t evicted_slot_cnt_;
-  int64_t evicted_task_bytes_;
-  int64_t queue_stats_print_time_us_;
-#ifdef OB_LOG_RESTORE_QUEUE_TEST_INFRA
-  RawWriteTestHook raw_write_test_hook_;
-#endif
+  int64_t total_inserted_cnt_;
+  int64_t total_inserted_bytes_;
+  int64_t total_processed_cnt_;
+  int64_t total_success_cnt_;
+  int64_t total_success_bytes_;
+  int64_t total_skipped_cnt_;
 };
 
 static_assert((ObLogTransportTaskQueue::MAX_QUEUE_SIZE & (ObLogTransportTaskQueue::MAX_QUEUE_SIZE - 1)) == 0,

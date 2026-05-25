@@ -1,7 +1,3 @@
-if (ENABLE_DEBUG_LOG)
-  add_definitions(-DOB_LOG_RESTORE_QUEUE_TEST_INFRA)
-endif()
-
 add_library(ob_base_without_pass INTERFACE)
 add_library(ob_base INTERFACE)
 target_include_directories(

@@ -66,6 +66,7 @@ public:
   int check_log_restore_source_is_self();
   int wait_standby_tenant_sync(const ObTimeoutCtx &ctx);
   int check_standby_tenant_sync(bool &is_sync);
+  int check_standby_tenant_recovery_config();
   int get_tenant_info(share::ObAllTenantInfo &tenant_info);
 private:
   static int get_all_ls_end_scn_info_(const uint64_t user_tenant_id, share::SCN &largest_scn,

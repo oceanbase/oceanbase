@@ -450,8 +450,6 @@ public:
   // return the block length which the previous data was committed
   virtual const LSN get_end_lsn() const = 0;
   virtual LSN get_max_lsn() const = 0;
-  virtual int get_max_log_id(int64_t &log_id) const = 0;
-  virtual int get_end_log_id(int64_t &log_id) const = 0;
   virtual const share::SCN get_max_scn() const = 0;
   virtual const share::SCN get_end_scn() const = 0;
   virtual int get_last_rebuild_lsn(LSN &last_rebuild_lsn) const = 0;
@@ -898,18 +896,6 @@ public:
   LSN get_max_lsn() const override final
   {
     return sw_.get_max_lsn();
-  }
-
-  int get_max_log_id(int64_t &log_id) const override final
-  {
-    log_id = sw_.get_max_log_id();
-    return OB_SUCCESS;
-  }
-
-  int get_end_log_id(int64_t &log_id) const override final
-  {
-    log_id = sw_.get_last_slide_log_id();
-    return OB_SUCCESS;
   }
 
   const share::SCN get_max_scn() const override final

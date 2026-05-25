@@ -45,6 +45,7 @@ int ObSwitchTenantResolver::resolve_switch_tenant(const ParseNode &parse_tree)
   ObString tenant_name;
   obrpc::ObSwitchTenantArg::OpType op_type = obrpc::ObSwitchTenantArg::OpType::INVALID;
   bool is_verify = false;
+  bool is_verify_nowait = false;
   if (OB_UNLIKELY(T_SWITCHOVER != parse_tree.type_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid parse node, type is not T_SWITCHOVER", KR(ret), "type",
@@ -94,12 +95,15 @@ int ObSwitchTenantResolver::resolve_switch_tenant(const ParseNode &parse_tree)
     // not verify
   } else if (T_VERIFY == parse_tree.children_[1]->type_) {
     is_verify = true;
+  } else if (T_VERIFY_NOWAIT == parse_tree.children_[1]->type_) {
+    is_verify = true;
+    is_verify_nowait = true;
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(stmt->get_arg().init(session_info_->get_effective_tenant_id(), op_type, tenant_name, is_verify))) {
+    if (OB_FAIL(stmt->get_arg().init(session_info_->get_effective_tenant_id(), op_type, tenant_name, is_verify, is_verify_nowait))) {
       LOG_WARN("fail to init arg", KR(ret), K(stmt->get_arg()),
-                K(session_info_->get_effective_tenant_id()), K(tenant_name), K(op_type), K(is_verify));
+                K(session_info_->get_effective_tenant_id()), K(tenant_name), K(op_type), K(is_verify), K(is_verify_nowait));
     } else {
       stmt_ = stmt;
     }

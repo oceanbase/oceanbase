@@ -294,6 +294,7 @@ const char *const OB_STR_LOG_RESTORE_SOURCE_ID = "id";
 const char *const OB_STR_LOG_RESTORE_SOURCE_TYPE = "type";
 const char *const OB_STR_LOG_RESTORE_SOURCE_VALUE = "value";
 const char *const OB_STR_LOG_RESTORE_SOURCE_UNTIL_SCN = "recovery_until_scn";
+const char *const OB_STR_LOG_RESTORE_SOURCE_RECOVERY_DELAY = "recovery_delay";
 const char *const OB_STR_BACKUP_SKIPPED_TYPE = "skipped_type";
 
 const char *const OB_STR_TENANT = "tenant";
@@ -414,6 +415,7 @@ const char *const OB_STR_IP_LIST = "ip_list";
 const char *const OB_STR_CLUSTER_ID = "cluster_id";
 const char *const OB_COMPATIBILITY_MODE = "compatibility_mode";
 const char *const OB_STR_IS_ENCRYPTED = "is_encrypted";
+const char *const OB_STR_DELAY = "delay";
 const char *const OB_STR_LAG_TARGET = "lag_target";
 const char *const OB_STR_COMPRESSION = "compression";
 const char *const OB_STR_BINDING = "binding";

@@ -185,14 +185,13 @@ private:
                                        const int64_t timeout_us);
 
   int wait_replay_service_submit_task_clear_(const share::ObLSID &ls_id);
-  int wait_apply_service_apply_done_(const share::ObLSID &ls_id,
+  int wait_apply_service_apply_done_(ObLS *ls,
                                      palf::LSN &end_lsn);
   int wait_apply_service_apply_done_when_change_leader_(const ObLogHandler *log_handler,
                                                         const int64_t proposal_id,
                                                         const share::ObLSID &ls_id,
-                                                        palf::LSN &end_lsn,
-                                                        const common::ObAddr &dst_addr);
-  int wait_standby_sync_in_sync_mode_(const share::ObLSID &ls_id, const int64_t timeout_us);
+                                                        palf::LSN &end_lsn);
+  int wait_standby_sync_in_sync_mode_(ObLS *ls, const palf::LSN &end_lsn, const int64_t timeout_us);
   bool need_execute_role_change(const int64_t curr_proposal_id,
                                 const common::ObRole curr_role,
                                 const int64_t new_proposal_id,

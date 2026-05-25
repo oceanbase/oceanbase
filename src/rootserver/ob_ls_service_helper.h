@@ -244,6 +244,11 @@ public:
       const share::ObLSID &dest_id,
       const share::SCN &transfer_scn,
       bool &replay_finish);
+  static int check_transfer_task_replay(
+      const share::ObLSID &src_ls,
+      const share::ObLSID &dest_ls,
+      const share::ObAllTenantInfo &tenant_info,
+      bool &replay_finish);
   static int check_transfer_task_replay_for_lossless_failover(
       const share::ObLSID &src_ls,
       const share::ObLSID &dest_ls,

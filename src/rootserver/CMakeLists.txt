@@ -272,6 +272,7 @@ ob_set_subtarget(ob_rootserver standby
   standby/ob_flashback_standby_log_command.cpp
   standby/ob_protection_mode_utils.cpp
   standby/ob_protection_mode_mgr.cpp
+  standby/ob_standby_transfer_task_util.cpp
 )
 
 ob_set_subtarget(ob_rootserver truncate_info

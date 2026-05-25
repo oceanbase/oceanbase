@@ -1475,6 +1475,25 @@ int ObLSServiceHelper::check_transfer_task_replay(const uint64_t tenant_id,
   return ret;
 }
 
+int ObLSServiceHelper::check_transfer_task_replay(
+    const share::ObLSID &src_ls,
+    const share::ObLSID &dest_ls,
+    const share::ObAllTenantInfo &tenant_info,
+    bool &replay_finish)
+{
+  int ret = OB_SUCCESS;
+  replay_finish = true;
+  const uint64_t tenant_id = tenant_info.get_tenant_id();
+  if (OB_UNLIKELY(!src_ls.is_valid() || !dest_ls.is_valid() || !tenant_info.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(src_ls), K(dest_ls), K(tenant_info));
+  } else {
+    ret = check_transfer_task_replay(tenant_id, src_ls, dest_ls,
+        tenant_info.get_sync_scn(), replay_finish);
+  }
+  return ret;
+}
+
 int ObLSServiceHelper::check_transfer_task_replay_for_lossless_failover(
     const share::ObLSID &src_ls,
     const share::ObLSID &dest_ls,

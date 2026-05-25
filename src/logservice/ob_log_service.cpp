@@ -846,6 +846,17 @@ int ObLogService::iterate_replay(const ObFunction<int(const ObReplayStatus&)> &f
   return ret;
 }
 
+int ObLogService::iterate_transport(const ObFunction<int(const LogTransportStatus&)> &func)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+  } else {
+    ret = transport_service_.stat_for_each(func);
+  }
+  return ret;
+}
+
 int ObLogService::create_ls_(const share::ObLSID &id,
                              const common::ObReplicaType &replica_type,
                              const share::ObTenantRole &tenant_role,

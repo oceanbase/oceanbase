@@ -186,7 +186,6 @@ ob_set_subtarget(ob_logservice restoreservice
   restoreservice/ob_fetch_log_task.cpp
   restoreservice/ob_log_restore_define.cpp
   restoreservice/ob_log_restore_handler.cpp
-  transportservice/ob_log_transport_task_owner_state.cpp
   transportservice/ob_log_transport_task_queue.cpp
   restoreservice/ob_log_restore_rpc.cpp
   restoreservice/ob_log_restore_rpc_define.cpp

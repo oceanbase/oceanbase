@@ -172,6 +172,7 @@ private:
       const uint64_t tenant_id,
       const obrpc::ObSwitchTenantArg::OpType &switch_optype,
       const bool is_verify,
+      const bool is_verify_nowait,
       const share::ObAllTenantInfo &tenant_info,
       share::SCN &switch_scn,
       ObTenantRoleTransCostDetail &cost_detail,
@@ -198,6 +199,7 @@ private:
       const uint64_t tenant_id,
       const obrpc::ObSwitchTenantArg::OpType &switch_optype,
       const bool is_verify,
+      const bool is_verify_nowait,
       share::SCN &switch_scn,
       ObTenantRoleTransCostDetail &cost_detail,
       ObTenantRoleTransAllLSInfo &all_ls);

@@ -179,14 +179,12 @@ public:
   void mark_ls_gc_state();
   bool is_ls_gc_state() const { return true == ATOMIC_LOAD(&is_ls_gc_state_); }
   int switch_sync_mode(const int64_t new_proposal_id, const palf::SyncMode &sync_mode);
+  int disable_sync();
   //palf相关
   int update_palf_committed_end_lsn(const palf::LSN &end_lsn, const share::SCN &end_scn, const int64_t proposal_id);
   share::SCN get_palf_committed_end_scn() const;
   // For MPT
   int update_standby_committed_end_lsn(const palf::LSN &end_lsn, const share::SCN &end_scn);
-  int clear_standby_committed_end_lsn();  // 关闭强同步时清除备库位点
-  int enable_sync_mode(const int64_t new_proposal_id);
-  int disable_sync_mode(const int64_t proposal_id);
   int update_min_committed_end_lsn_();
   int unregister_file_size_cb();
   void close_palf_handle();
@@ -252,6 +250,7 @@ private:
                            const int64_t cb_start_time,
                            const int64_t idx,
                            ObLogTsInfo &ts_info);
+  int disable_sync_();
 private:
   typedef common::RWLock RWLock;
   typedef RWLock::RLockGuard RLockGuard;
@@ -273,7 +272,7 @@ private:
   palf::LSN standby_committed_end_lsn_;
   share::SCN standby_committed_end_scn_;
   bool is_sync_mode_;
-  palf::LSN min_committed_end_lsn_;
+  palf::LSN min_committed_end_lsn_; // this lsn need to be initialized to PALF_INITIAL_LSN_VAL, because of is_sync_mode and min_committed_end_lsn is updated seperately
   share::SCN last_check_scn_; //当前待确认的最大连续回调位点
   share::SCN max_applied_cb_scn_; //该位点前的cb保证都已经回调完成
   ObApplyServiceSubmitTask submit_task_;
@@ -362,6 +361,7 @@ public:
   int wait_append_sync(const share::ObLSID &ls_id);
   int stat_for_each(const common::ObFunction<int (const ObApplyStatus &)> &func);
   int diagnose(const share::ObLSID &id, ApplyDiagnoseInfo &diagnose_info);
+  int disable_sync(const share::ObLSID &id);
 public:
   class RemoveApplyStatusFunctor
   {

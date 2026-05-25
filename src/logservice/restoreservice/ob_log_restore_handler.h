@@ -14,6 +14,9 @@
 #define OCEANBASE_LOGSERVICE_OB_LOG_RESTORE_HANDLER_H_
 
 #include <cstdint>
+#ifdef OB_LOG_RESTORE_QUEUE_TEST_INFRA
+#include <functional>
+#endif
 #include "lib/lock/ob_tc_rwlock.h"         // RWLock
 #include "lib/lock/ob_spin_lock.h"         // ObSpinLock
 #include "lib/ob_define.h"
@@ -215,6 +218,12 @@ public:
   // @param[in], sync_mode, SYNC or ASYNC or PRE_ASYNC
   // @param[in], proposal_id, global monotonically increasing id
   virtual void switch_sync_mode(const palf::SyncMode &sync_mode, const int64_t proposal_id) override;
+  // NB: only called by ObRoleChangeService
+  // @brief switch role and proposal_id
+  // @brief update sync_mode when new role is leader
+  virtual void switch_role_and_sync_mode(const common::ObRole &role,
+                                         const int64_t proposal_id,
+                                         const palf::SyncMode &sync_mode) override;
   // @brief query role and proposal_id from ObLogRestoreHandler
   // @param[out], role:
   //    LEADER, if 'role_' of ObLogRestoreHandler is LEADER and 'proposal_id' is same with PalfHandle.
@@ -251,6 +260,21 @@ public:
       const share::SCN &scn,
       const char *buf,
       const int64_t buf_size);
+  // @brief detect sync mode control log in buf and drive sync_mode change if needed.
+  //        does NOT write the log. call raw_write afterwards.
+  // @param[in] proposal_id, lsn, scn, buf, buf_size  as in raw_write
+  // @param[out] new_proposal_id  differs from proposal_id iff a sync_mode change occurred
+  // @retval  OB_SUCCESS  no sync mode log, or sync mode log handled successfully
+  //          OB_EAGAIN   ASYNC log acceptance condition not yet met, caller should retry
+  int try_handle_sync_mode_log(const int64_t proposal_id,
+      const palf::LSN &lsn,
+      const share::SCN &scn,
+      const char *buf,
+      const int64_t buf_size,
+      int64_t &new_proposal_id);
+  // @brief whether current replica is acting as a strong-sync standby
+  //        (sync_mode_ is SYNC or PRE_ASYNC)
+  bool is_strong_sync_context() const;
   // @brief update max fetch info
   // @param[in] const int64_t, proposal_id used to distinguish stale logs after flashback
   // @param[in] const palf::LSN, the max_lsn submitted
@@ -328,7 +352,7 @@ public:
   int get_next_sorted_task(ObFetchLogTask *&task);
   bool restore_to_end() const;
   // 提交 transport task 到该日志流的队列
-  // @retval OB_SIZE_OVERFLOW    task num more than queue limit
+  // @retval OB_ERR_OUT_OF_UPPER_BOUND   task end lsn larger than queue limit
   // @retval other code          unexpected error
   int submit_transport_task(const ObLogTransportReq &req);
   // 处理该日志流的 transport tasks：排序后按序调用 raw_write
@@ -336,7 +360,7 @@ public:
   // @retval OB_SUCCESS     处理成功
   // @retval OB_NOT_MASTER  不是 leader
   // @retval other code      unexpected error
-  int process_transport_tasks(const int64_t batch_size);
+  int process_transport_tasks();
   int get_restore_error_unlock_(share::ObTaskId &trace_id, int &ret_code, bool &error_exist);
   int diagnose(RestoreDiagnoseInfo &diagnose_info) const;
   int refresh_error_context();
@@ -345,11 +369,16 @@ public:
   void inc_delay_count();
   void print_stat();
 #ifdef OB_LOG_RESTORE_QUEUE_TEST_INFRA
-  void set_raw_write_test_hook(const ObLogTransportTaskQueue::RawWriteTestHook &hook) { transport_task_queue_.set_raw_write_test_hook(hook); }
-  void reset_raw_write_test_hook() { transport_task_queue_.reset_raw_write_test_hook(); }
-  void set_ignore_restore_source_for_test(const bool ignore) { ignore_restore_source_for_test_ = ignore; }
+  typedef std::function<int(const int64_t,
+                            const palf::LSN &,
+                            const share::SCN &,
+                            const char *,
+                            const int64_t)> RawWriteTestHook;
+  void set_raw_write_test_hook(const RawWriteTestHook &hook) { raw_write_test_hook_ = hook; }
+  void reset_raw_write_test_hook() { raw_write_test_hook_ = nullptr; }
 #endif
-  TO_STRING_KV(K_(is_inited), K_(is_in_stop_state), K_(id), K_(proposal_id), K_(role), KP_(parent), K_(context), K_(restore_context), K_(sync_mode));
+  TO_STRING_KV(K_(is_inited), K_(is_in_stop_state), K_(id), K_(proposal_id), K_(role),
+      KP_(parent), K_(context), K_(restore_context), K_(sync_mode), K_(transport_task_queue));
 
 private:
   bool is_valid() const;
@@ -372,6 +401,8 @@ private:
   void deep_copy_source_(ObRemoteSourceGuard &guard);
   int check_if_ls_gc_(bool &done);
   int check_offline_log_(bool &done);
+  bool is_sync_mode_log_(const ObLogBaseType log_type,
+                         const ObSyncModeLogType sync_mode_log_type);
   int parse_log_type_(const char *buf,
                                   const int64_t buf_size,
                                   ObLogBaseType &log_type,
@@ -402,8 +433,6 @@ private:
                                const palf::LSN &lsn,
                                const char *buf,
                                const int64_t buf_size);
-  // 清理 transport task 队列
-  void clear_transport_task_queue_();
 
 private:
   ObRemoteLogParent *parent_;
@@ -414,14 +443,15 @@ private:
   int64_t last_delay_count_;
   ObRemoteFetchStat cur_stat_info_;
   ObRemoteFetchStat last_stat_info_;
-#ifdef OB_LOG_RESTORE_QUEUE_TEST_INFRA
-  bool ignore_restore_source_for_test_;
-#endif
   // Transport task 队列：每个日志流维护自己的 transport task 队列
   // 记录最近收到的 PRE_ASYNC 日志的 SCN，用于判断 ASYNC 日志是否可以接受
   // ASYNC 日志必须等到租户的 sync_scn > pre_async_scn_ 后才可以接受
   share::SCN pre_async_scn_;
   ObLogTransportTaskQueue transport_task_queue_;
+  int64_t queue_stats_print_time_us_;
+#ifdef OB_LOG_RESTORE_QUEUE_TEST_INFRA
+  RawWriteTestHook raw_write_test_hook_;
+#endif
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogRestoreHandler);
 };

@@ -218,8 +218,6 @@ public:
   virtual int get_end_scn(share::SCN &scn) const override final;
   virtual int get_max_lsn(LSN &lsn) const override final;
   virtual int get_max_scn(share::SCN &scn) const override final;
-  virtual int get_max_log_id(int64_t &log_id) const override final;
-  virtual int get_end_log_id(int64_t &log_id) const override final;
   int get_last_rebuild_lsn(LSN &last_rebuild_lsn) const;
   // @brief get readable end lsn for this replica, all logs before it can be readable.
   // @param[out] lsn, readable end lsn.

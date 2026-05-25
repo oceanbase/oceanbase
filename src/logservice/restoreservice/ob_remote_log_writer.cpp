@@ -297,7 +297,12 @@ int ObRemoteLogWriter::submit_log_(const ObLSID &id,
   int ret = OB_SUCCESS;
   do {
     GET_RESTORE_HANDLER_CTX(id) {
-      if (OB_FAIL(restore_handler->raw_write(proposal_id, lsn, scn, buf, buf_size))) {
+      int64_t new_proposal_id = proposal_id;
+      if (restore_handler->is_strong_sync_context()
+          && OB_FAIL(restore_handler->try_handle_sync_mode_log(
+                  proposal_id, lsn, scn, buf, buf_size, new_proposal_id))) {
+        LOG_WARN("try handle sync mode log failed", K(ret), K(id), K(proposal_id), K(lsn), K(scn), K(buf), K(buf_size));
+      } else if (OB_FAIL(restore_handler->raw_write(new_proposal_id, lsn, scn, buf, buf_size))) {
         if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
           ret = OB_SUCCESS;
         } else if (OB_RESTORE_LOG_TO_END == ret) {

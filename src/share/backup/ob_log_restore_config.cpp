@@ -58,7 +58,8 @@ int ObLogRestoreSourceLocationConfigParser::update_inner_config_table(common::Ob
                                                                 true /* for update */, tenant_info))) {
         LOG_WARN("failed to load tenant info", KR(ret), K_(tenant_id));
       } else if (OB_FAIL(restore_source_mgr.add_location_source(tenant_info.get_recovery_until_scn(),
-                                                                value_string))) {
+                                                                value_string,
+                                                                recover_delay_us_))) {
         LOG_WARN("failed to add log restore source", KR(ret), K(tenant_info), K(value_string), KPC(this));
       }
     }
@@ -122,6 +123,8 @@ int ObLogRestoreSourceLocationConfigParser::do_parse_sub_config_(const common::O
       if (OB_FAIL(do_parse_log_archive_dest_(token, saveptr))) {
         LOG_WARN("fail to do parse log archive dest", KR(ret), K(token), K(saveptr));
       }
+    } else if (0 == STRCASECMP(token, OB_STR_DELAY)) {
+      // DELAY is handled by ObBackupConfigParserGenerator, skip here
     } else {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("log restore source does not has this config", KR(ret), K(token));
@@ -174,7 +177,8 @@ int ObLogRestoreSourceServiceConfigParser::update_inner_config_table(common::ObI
       LOG_USER_ERROR(OB_OP_NOT_ALLOW,"Set log_restore_source when the tenant's switchover_status is "
           "'FLASHBACK AND STAY STANDBY' is");
     } else if (OB_FAIL(restore_source_mgr.add_service_source(tenant_info.get_recovery_until_scn(),
-                                                            value_string))) {
+                                                            value_string,
+                                                            recover_delay_us_))) {
       LOG_WARN("failed to add log restore source", K(tenant_info), K(value_string), KPC(this));
     }
   }
@@ -342,6 +346,8 @@ int ObServiceConfigParser::do_parse_token_(char *token, char *value)
     if (OB_FAIL(do_parse_restore_service_passwd_(token, value))) {
       LOG_WARN("fail to do parse restore service passwd", K(token), K(value));
     }
+  } else if (0 == STRCASECMP(token, OB_STR_DELAY)) {
+    // DELAY is handled by ObBackupConfigParserGenerator, skip here
   } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("log restore source does not has this config", K(token));

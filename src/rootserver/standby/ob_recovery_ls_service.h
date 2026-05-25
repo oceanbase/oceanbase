@@ -18,6 +18,7 @@
 #include "logservice/restoreservice/ob_log_restore_handler.h"//RestoreStatusInfo
 #include "rootserver/ob_primary_ls_service.h" //ObTenantThreadHelper
 #include "lib/lock/ob_spin_lock.h" //ObSpinLock
+#include "share/restore/ob_log_restore_source.h" //ObLogRestoreSourceItem
 #include "storage/tx/ob_multi_data_source.h" //ObTxBufferNode
 
 namespace oceanbase
@@ -160,16 +161,11 @@ private:
  //thread1
  int do_standby_balance_();
  int do_ls_balance_task_();
- int try_do_ls_balance_task_(const share::ObBalanceTaskHelper &ls_balance_task,
-     const share::ObAllTenantInfo &tenant_info);
- int check_transfer_begin_can_remove_(const share::ObBalanceTaskHelper &ls_balance_task,
-     const share::ObAllTenantInfo &tenant_info,
-     bool &can_remove);
- int check_transfer_end_can_remove_(const share::ObBalanceTaskHelper &ls_balance_task,
-     bool &can_remove);
  int do_ls_balance_alter_task_(const share::ObBalanceTaskHelper &ls_balance_task,
                                common::ObMySQLTransaction &trans);
  int get_ls_(storage::ObLSHandle &ls_handle, storage::ObLS *&ls);
+ int compute_effective_upper_scn_(const ObAllTenantInfo &tenant_info, share::SCN &effective_upper_scn);
+ int refresh_restore_source_();
  int reset_restore_proxy_(ObRestoreSourceServiceAttr &service_attr);
  int get_ls_all_replica_readable_scn_(const share::ObLSID &ls_id, share::SCN &reabable_scn);
 #ifdef OB_BUILD_LOG_STORAGE_COMPRESS
@@ -185,6 +181,8 @@ private:
   common::ObMySQLProxy *proxy_;
   int64_t last_report_ts_;
   logservice::RestoreStatusInfo restore_status_;
+  share::ObLogRestoreSourceItem cached_restore_source_;
+  int64_t last_refresh_restore_source_ts_;
 };
 }
 }

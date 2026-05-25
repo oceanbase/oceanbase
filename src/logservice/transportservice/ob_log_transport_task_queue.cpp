@@ -15,547 +15,519 @@
 #include <utility>
 
 #include "ob_log_transport_task_queue.h"
-#include "lib/oblog/ob_log.h"
+#include "lib/alloc/alloc_assist.h"
+#include "lib/allocator/ob_malloc.h"
 #include "lib/atomic/ob_atomic.h"
-#include "lib/lock/ob_small_spin_lock.h"
+#include "lib/oblog/ob_log.h"
+#include "lib/utility/ob_defer.h"
 #include "share/ob_define.h"
 #include "share/ob_debug_sync.h"
 #include "share/rc/ob_tenant_base.h"
 #include "logservice/palf/log_define.h"
 #include "logservice/palf/log_group_entry.h"
-#include "logservice/restoreservice/ob_log_restore_handler.h"
 
 namespace oceanbase
 {
 namespace logservice
 {
 
-ObLogTransportTaskQueue::TransportTaskSlot::TransportTaskSlot()
-  : task_bytes_(0),
-    cached_bytes_ptr_(nullptr),
-    is_submitted_(false)
+LogReceivedTransportTask::LogReceivedTransportTask(
+    share::ObLSID ls_id,
+    palf::LSN start_lsn,
+    palf::LSN end_lsn,
+    share::SCN scn,
+    const char *log_data,
+    int64_t log_size)
+  : ls_id_(ls_id),
+    start_lsn_(start_lsn),
+    end_lsn_(end_lsn),
+    scn_(scn),
+    log_data_(log_data),
+    log_size_(log_size),
+    ref_cnt_(0) {}
+
+LogReceivedTransportTask::~LogReceivedTransportTask() {}
+
+bool LogReceivedTransportTask::is_valid() const
 {
+  return ls_id_.is_valid()
+      && start_lsn_.is_valid()
+      && end_lsn_.is_valid()
+      && scn_.is_valid()
+      && end_lsn_ > start_lsn_
+      && log_data_ != nullptr
+      && log_size_ > 0
+      && end_lsn_ == start_lsn_ + log_size_;
 }
 
-ObLogTransportTaskQueue::TransportTaskSlot::~TransportTaskSlot()
+int64_t LogReceivedTransportTask::inc_ref()
 {
-  reset();
+  return ATOMIC_AAF(&ref_cnt_, 1);
 }
 
-bool ObLogTransportTaskQueue::TransportTaskSlot::can_be_slid()
+int64_t LogReceivedTransportTask::dec_ref()
 {
-  return is_valid() && is_submitted_;
+  return ATOMIC_SAF(&ref_cnt_, 1);
 }
 
-void ObLogTransportTaskQueue::TransportTaskSlot::reset()
+ObLogTransportTaskHandle::ObLogTransportTaskHandle()
+  : task_(nullptr) {}
+
+ObLogTransportTaskHandle::ObLogTransportTaskHandle(const ObLogTransportTaskHandle &other)
+  : task_(nullptr)
 {
-  DEBUG_SYNC(common::LOG_TP_QUEUE_SLOT_RESET_BEGIN);
-  if (task_holder_.ptr() != nullptr) {
-    if (OB_NOT_NULL(cached_bytes_ptr_) && task_bytes_ > 0) {
-      ATOMIC_AAF(cached_bytes_ptr_, -task_bytes_);
-    }
-    task_holder_.reset();
-    task_bytes_ = 0;
-    is_submitted_ = false;
-  }
-  DEBUG_SYNC(common::LOG_TP_QUEUE_SLOT_RESET_END);
+  *this = other;
 }
 
-bool ObLogTransportTaskQueue::TransportTaskSlot::is_valid() const
+ObLogTransportTaskHandle &ObLogTransportTaskHandle::operator=(
+    const ObLogTransportTaskHandle &other)
 {
-  return task_holder_.ptr() != nullptr;
-}
-
-ObLogTransportTaskQueue::SwRevertGuard::SwRevertGuard()
-  : sw_(nullptr),
-    slot_(nullptr),
-    log_id_(OB_INVALID_LOG_ID)
-{
-}
-
-ObLogTransportTaskQueue::SwRevertGuard::SwRevertGuard(
-    palf::FixedSlidingWindow<TransportTaskSlot> &sw,
-    const int64_t log_id,
-    TransportTaskSlot *slot)
-  : sw_(&sw),
-    slot_(slot),
-    log_id_(log_id)
-{
-}
-
-ObLogTransportTaskQueue::SwRevertGuard::SwRevertGuard(SwRevertGuard &&other)
-  : sw_(other.sw_),
-    slot_(other.slot_),
-    log_id_(other.log_id_)
-{
-  other.sw_ = nullptr;
-  other.slot_ = nullptr;
-  other.log_id_ = OB_INVALID_LOG_ID;
-}
-
-ObLogTransportTaskQueue::SwRevertGuard &ObLogTransportTaskQueue::SwRevertGuard::operator=(SwRevertGuard &&other)
-{
+  int ret = OB_SUCCESS;
   if (this != &other) {
     reset();
-    sw_ = other.sw_;
-    slot_ = other.slot_;
-    log_id_ = other.log_id_;
-    other.sw_ = nullptr;
-    other.slot_ = nullptr;
-    other.log_id_ = OB_INVALID_LOG_ID;
+    if (other.is_valid()) {
+      this->task_ = other.task_;
+      this->task_->inc_ref();
+    }
   }
   return *this;
 }
 
-ObLogTransportTaskQueue::SwRevertGuard::~SwRevertGuard()
+ObLogTransportTaskHandle::~ObLogTransportTaskHandle()
 {
   reset();
 }
 
-void ObLogTransportTaskQueue::SwRevertGuard::reset()
+void ObLogTransportTaskHandle::reset()
 {
-  if (OB_NOT_NULL(sw_)) {
-    int ret = sw_->revert(log_id_);
-    if (OB_SUCCESS != ret) {
-      CLOG_LOG(ERROR, "revert fixed sliding window failed", KR(ret), K(log_id_));
+  int ret = OB_SUCCESS;
+  if (OB_NOT_NULL(task_)) {
+    if (OB_UNLIKELY(false == task_->is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      CLOG_LOG(ERROR, "invalid transport task during reset", KR(ret), KPC(this));
     }
+    int ref = task_->dec_ref();
+    if (0 == ref) {
+      task_->~LogReceivedTransportTask();
+      share::mtl_free(task_);
+    } else if (0 > ref) {
+      ret = OB_ERR_UNEXPECTED;
+      CLOG_LOG(ERROR, "ref less than zero", KR(ret), KPC(this));
+    }
+    task_ = nullptr;
   }
-  sw_ = nullptr;
-  slot_ = nullptr;
-  log_id_ = OB_INVALID_LOG_ID;
+}
+
+bool ObLogTransportTaskHandle::is_valid() const
+{
+  return OB_NOT_NULL(task_) && task_->is_valid();
+}
+
+const LogReceivedTransportTask *ObLogTransportTaskHandle::task() const
+{
+  return task_;
+}
+
+int ObLogTransportTaskHandle::init(const ObLogTransportReq *task)
+{
+  int ret = OB_SUCCESS;
+  common::ObMemAttr attr(MTL_ID(), "LogTpReceivedTk");
+  LogReceivedTransportTask *copied = nullptr;
+  char* log_data = nullptr;
+  if (OB_ISNULL(task) || OB_UNLIKELY(false == task->is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid transport task for owned ptr", K(ret), KP(task));
+  } else if (OB_NOT_NULL(this->task_)) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "handle is not empty", K(ret), KPC(this));
+  } else if (OB_ISNULL(copied = static_cast<LogReceivedTransportTask*>(
+      share::mtl_malloc(sizeof(LogReceivedTransportTask) + task->log_size_, attr)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    CLOG_LOG(WARN, "failed to allocate memory for copied transport task",
+        K(ret), KP(task), KPC(task));
+  } else {
+    log_data = reinterpret_cast<char*>(copied) + sizeof(LogReceivedTransportTask);
+    new (copied) LogReceivedTransportTask(task->ls_id_,
+        task->start_lsn_, task->end_lsn_, task->scn_, log_data, task->log_size_);
+    MEMCPY(const_cast<char*>(copied->log_data_), task->log_data_, task->log_size_);
+    copied->inc_ref();
+    this->task_ = copied;
+  }
+  return ret;
 }
 
 ObLogTransportTaskQueue::ObLogTransportTaskQueue()
-  : sw_(),
-    restore_handler_(nullptr),
+  : task_map_(),
     is_inited_(false),
     is_stopped_(false),
-    alloc_mgr_(nullptr),
+    id_(0),
+    next_submit_lsn_(),
     queue_size_(OB_INVALID_SIZE),
     cached_bytes_(0),
     max_cached_bytes_(DEFAULT_MAX_CACHED_BYTES),
-    process_lock_(common::ObLatchIds::TRANSPORT_SERVICE_TASK_LOCK),
     lock_(common::ObLatchIds::TRANSPORT_SERVICE_TASK_LOCK),
-    self_heal_lock_(common::ObLatchIds::TRANSPORT_SERVICE_TASK_LOCK),
-    drop_stale_cnt_(0),
     drop_duplicate_cnt_(0),
-    reject_out_of_window_cnt_(0),
-    parse_fail_cnt_(0),
     early_drop_far_lsn_cnt_(0),
-    evict_trigger_cnt_(0),
-    evict_scan_slots_(0),
-    evicted_slot_cnt_(0),
-    evicted_task_bytes_(0),
-    queue_stats_print_time_us_(0)
-{
-}
+    total_inserted_cnt_(0),
+    total_inserted_bytes_(0),
+    total_processed_cnt_(0),
+    total_success_cnt_(0),
+    total_success_bytes_(0),
+    total_skipped_cnt_(0) {}
 
 ObLogTransportTaskQueue::~ObLogTransportTaskQueue()
 {
   destroy();
 }
 
-int ObLogTransportTaskQueue::init(common::ObILogAllocator *alloc_mgr,
-                                  ObLogRestoreHandler *restore_handler,
-                                  const int64_t queue_size)
+int ObLogTransportTaskQueue::init(const int64_t id, const int64_t queue_size)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(is_inited_)) {
+  if (IS_INIT) {
     ret = OB_INIT_TWICE;
-  } else if (OB_ISNULL(alloc_mgr) || OB_ISNULL(restore_handler)
-             || queue_size <= 0 || 0 != (queue_size & (queue_size - 1))) {
+  } else if (id < 0 || queue_size <= 0 || 0 != (queue_size & (queue_size - 1))) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid init argument", KR(ret), KP(alloc_mgr), KP(restore_handler), K(queue_size));
-  } else if (OB_FAIL(sw_.init(palf::FIRST_VALID_LOG_ID, queue_size, alloc_mgr))) {
-    CLOG_LOG(WARN, "init fixed sliding window failed", KR(ret));
+    CLOG_LOG(WARN, "invalid init argument", KR(ret), K(id), K(queue_size));
+  } else if (OB_FAIL(task_map_.init("TransportQueMap", MTL_ID()))) {
+    CLOG_LOG(WARN, "init task map failed", KR(ret));
+  } else if (OB_FAIL(task_map_.resize(2 * queue_size))) {
+    CLOG_LOG(WARN, "resize task map failed", KR(ret));
+  } else if (OB_FAIL(task_map_.set_load_factor_lmt(0.0, 1.0))) {
+    CLOG_LOG(WARN, "set load factor limit failed", KR(ret));
   } else {
-    alloc_mgr_ = alloc_mgr;
-    restore_handler_ = restore_handler;
     queue_size_ = queue_size;
-    is_inited_ = true;
     ATOMIC_STORE(&is_stopped_, false);
+    id_ = id;
+    next_submit_lsn_.reset();
     cached_bytes_ = 0;
     max_cached_bytes_ = DEFAULT_MAX_CACHED_BYTES;
-    drop_stale_cnt_ = 0;
     drop_duplicate_cnt_ = 0;
-    reject_out_of_window_cnt_ = 0;
-    parse_fail_cnt_ = 0;
     early_drop_far_lsn_cnt_ = 0;
-    evict_trigger_cnt_ = 0;
-    evict_scan_slots_ = 0;
-    evicted_slot_cnt_ = 0;
-    evicted_task_bytes_ = 0;
-    queue_stats_print_time_us_ = 0;
+    total_inserted_cnt_ = 0;
+    total_inserted_bytes_ = 0;
+    total_processed_cnt_ = 0;
+    total_success_cnt_ = 0;
+    total_success_bytes_ = 0;
+    total_skipped_cnt_ = 0;
+    is_inited_ = true;
+    CLOG_LOG(INFO, "init transport task queue success", KP(this), KPC(this));
+  }
+  if (OB_SUCCESS != ret && OB_INIT_TWICE != ret) {
+    if (task_map_.is_inited()) {
+      task_map_.destroy();
+    }
   }
   return ret;
 }
 
 void ObLogTransportTaskQueue::stop()
 {
+  common::SpinWLockGuard guard(lock_);
   ATOMIC_STORE(&is_stopped_, true);
 }
 
 void ObLogTransportTaskQueue::destroy()
 {
   common::SpinWLockGuard guard(lock_);
-  sw_.destroy();
-  is_inited_ = false;
-  ATOMIC_STORE(&is_stopped_, true);
-  alloc_mgr_ = nullptr;
-  restore_handler_ = nullptr;
-  queue_size_ = OB_INVALID_SIZE;
-  cached_bytes_ = 0;
-  max_cached_bytes_ = DEFAULT_MAX_CACHED_BYTES;
-  drop_stale_cnt_ = 0;
-  drop_duplicate_cnt_ = 0;
-  reject_out_of_window_cnt_ = 0;
-  parse_fail_cnt_ = 0;
-  early_drop_far_lsn_cnt_ = 0;
-  evict_trigger_cnt_ = 0;
-  evict_scan_slots_ = 0;
-  evicted_slot_cnt_ = 0;
-  evicted_task_bytes_ = 0;
-  queue_stats_print_time_us_ = 0;
-}
-
-void ObLogTransportTaskQueue::clear()
-{
-  DEBUG_SYNC(common::LOG_TP_QUEUE_CLEAR_BEFORE_QUEUE_LOCK);
-  common::SpinWLockGuard guard(lock_);
-  DEBUG_SYNC(common::LOG_TP_QUEUE_CLEAR_AFTER_QUEUE_LOCK);
-  if (IS_NOT_INIT) {
-    // do nothing
-  } else {
-    DEBUG_SYNC(common::LOG_TP_QUEUE_CLEAR_BEFORE_TRUNCATE);
-    // destroy and init sliding window to clear all slots [begin_sn, end_sn)
-    // because truncate_and_reset_begin_sn will not change begin_sn back to the original value
-    int ret = OB_SUCCESS;
-    sw_.destroy();
-    if (OB_FAIL(sw_.init(palf::FIRST_VALID_LOG_ID, queue_size_, alloc_mgr_))) {
-      CLOG_LOG(ERROR, "init sliding window failed", KR(ret), K_(queue_size));
-    } else {
-      CLOG_LOG(INFO, "clear sliding window success", K_(queue_size));
-    }
-    DEBUG_SYNC(common::LOG_TP_QUEUE_CLEAR_AFTER_TRUNCATE);
-    ATOMIC_STORE(&cached_bytes_, 0);
+  if (IS_INIT) {
+    CLOG_LOG(INFO, "destroy transport task queue", KP(this));
+    is_inited_ = false;
+    task_map_.destroy();
+    ATOMIC_STORE(&is_stopped_, true);
+    id_ = 0;
+    next_submit_lsn_.reset();
+    queue_size_ = OB_INVALID_SIZE;
+    cached_bytes_ = 0;
+    max_cached_bytes_ = DEFAULT_MAX_CACHED_BYTES;
+    drop_duplicate_cnt_ = 0;
+    early_drop_far_lsn_cnt_ = 0;
+    total_inserted_cnt_ = 0;
+    total_inserted_bytes_ = 0;
+    total_processed_cnt_ = 0;
+    total_success_cnt_ = 0;
+    total_success_bytes_ = 0;
+    total_skipped_cnt_ = 0;
   }
 }
 
-int ObLogTransportTaskQueue::push(ObLogTransportTaskHolder task_holder, const int64_t end_log_id)
+void ObLogTransportTaskQueue::switch_to_follower()
 {
   int ret = OB_SUCCESS;
-  const ObLogTransportReq *task = task_holder.ptr();
-  int64_t log_id = OB_INVALID_LOG_ID;
-  common::ObMemAttr attr(MTL_ID(), "StandbyTpTask");
+  common::SpinWLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "not init", KR(ret));
+  } else {
+    next_submit_lsn_.reset();
+    task_map_.clear();
+    ATOMIC_STORE(&cached_bytes_, 0);
+  }
+  CLOG_LOG(INFO, "switch to follower", KR(ret), KP(this), KPC(this));
+}
+
+void ObLogTransportTaskQueue::switch_to_leader(const palf::LSN &end_lsn)
+{
+  int ret = OB_SUCCESS;
+  common::SpinWLockGuard guard(lock_);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "not init", KR(ret));
+  } else {
+    next_submit_lsn_.atomic_store(end_lsn);
+  }
+  CLOG_LOG(INFO, "switch to leader", KR(ret), KP(this), KPC(this));
+}
+
+int ObLogTransportTaskQueue::push(const ObLogTransportReq *task)
+{
+  int ret = OB_SUCCESS;
   common::SpinRLockGuard guard(lock_);
+  ObLogTransportTaskHandle handle;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "ObLogTransportTaskQueue not init", KR(ret));
   } else if (ATOMIC_LOAD(&is_stopped_)) {
     ret = OB_IN_STOP_STATE;
     CLOG_LOG(WARN, "ObLogTransportTaskQueue is in stop state", KR(ret));
-  } else if (OB_ISNULL(task) || !task->is_valid() || end_log_id < 0) {
+  } else if (OB_ISNULL(task) || !task->is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "task is null or log size is invalid", KR(ret), KPC(task), K(end_log_id));
-  } else if (OB_FAIL(parse_group_entry_log_id_(task->log_data_, task->log_size_, log_id))) {
-    ATOMIC_AAF(&parse_fail_cnt_, 1);
-    CLOG_LOG(WARN, "parse group entry log id failed", KR(ret), K(task->log_size_), KPC(task));
-  } else if (OB_FAIL(self_heal_())) {
-    CLOG_LOG(ERROR, "self heal failed", KR(ret), K_(queue_size), KP_(alloc_mgr),
-      K(end_log_id), KPC(task));
-  } else {
-    const int64_t task_bytes = task->log_size_;
-    CLOG_LOG(INFO, "transport task push begin", K(log_id), K(end_log_id),
-             "sw_begin_sn", sw_.get_begin_sn(), "sw_end_sn", sw_.get_end_sn(),
-             "task_start_lsn", task->start_lsn_, "task_end_lsn", task->end_lsn_,
-             "task_bytes", task_bytes);
-    SwRevertGuard revert_guard;
-    if (OB_FAIL(get_slot_guard_for_push_(log_id, revert_guard))) {
-      CLOG_LOG(WARN, "get slot guard for push failed", KR(ret), K(log_id));
-    } else {
-      TransportTaskSlot *slot = revert_guard.get_slot();
-      ObByteLockGuard slot_guard(slot->slot_lock_);
-      if (slot->task_holder_.ptr() != nullptr) {
-        ATOMIC_AAF(&drop_duplicate_cnt_, 1);
-        ret = OB_ENTRY_EXIST;
-        CLOG_LOG(WARN, "drop duplicate transport task", KR(ret), K(log_id), "sw_begin_sn", sw_.get_begin_sn(), "sw_end_sn", sw_.get_end_sn());
-      } else if (OB_FAIL(task_holder.ensure_owned(attr))) {
-        CLOG_LOG(WARN, "ensure transport task owned failed", KR(ret), K(log_id), K(task_bytes), KPC(task));
-      } else {
-        reserve_bytes_(task_bytes);
-        slot->task_holder_ = std::move(task_holder);
-        slot->task_bytes_ = task_bytes;
-        slot->cached_bytes_ptr_ = &cached_bytes_;
-      }
+    CLOG_LOG(WARN, "task is null or invalid", KR(ret), KP(task), KPC(task));
+  } else if (OB_FAIL(can_push_task_(task))) {
+    CLOG_LOG(WARN, "cannot push task", KR(ret), KPC(task), KPC(this));
+  } else if (OB_FAIL(handle.init(task))) {
+    CLOG_LOG(WARN, "copy transport task failed", KR(ret), KPC(task));
+  } else if (OB_FAIL(task_map_.insert(LSNWarp(task->start_lsn_), handle))) {
+    CLOG_LOG(WARN, "insert transport task failed", KR(ret), KPC(task));
+    if (OB_ENTRY_EXIST == ret) {
+      ATOMIC_AAF(&drop_duplicate_cnt_, 1);
+      ret = OB_SUCCESS;
     }
+  // possible race condition
+  // - next_submit_lsn_ 100
+  // - push task 100
+  //
+  // race timeline:
+  // push                   process
+  // can_push_task_() succ
+  //                        update next_submit_lsn_ to 200
+  //                        erase task 100
+  // insert task 100
+  //
+  // without switch_to_follower() or node restart, task 100 will permanent exist
+  } else if (OB_FAIL(can_push_task_(task))) {
+    // OB_ENTRY_NOT_EXIST or OB_NOT_INIT. both two error code are ok.
+    (void) task_map_.erase(LSNWarp(task->start_lsn_));
+    CLOG_LOG(WARN, "task has been already processed",
+        KR(ret), KPC(task), K(next_submit_lsn_.atomic_load()));
+  } else {
+    add_container_cached_bytes_(&cached_bytes_, task->log_size_);
+    ATOMIC_AAF(&total_inserted_cnt_, 1);
+    ATOMIC_AAF(&total_inserted_bytes_, task->log_size_);
+  }
+
+  CLOG_LOG(TRACE, "push transport task", KR(ret), KPC(task), K(handle));
+  return ret;
+}
+
+int ObLogTransportTaskQueue::can_push_task_(const ObLogTransportReq *task)
+{
+  int ret = OB_SUCCESS;
+  palf::LSN next_submit_lsn = next_submit_lsn_.atomic_load();
+  if (false == next_submit_lsn.is_valid()) {
+    ret = OB_STATE_NOT_MATCH;
+    CLOG_LOG(WARN, "end_lsn is not set to queue", KR(ret), K(next_submit_lsn), KPC(task));
+  } else if (task->start_lsn_ < next_submit_lsn) {
+    ret = OB_ERR_OUT_OF_LOWER_BOUND;
+    CLOG_LOG(WARN, "task has been already submitted", KR(ret), KPC(task), K(next_submit_lsn));
+  } else if (task->end_lsn_ - next_submit_lsn > max_cached_bytes_) {
+    int64_t cached_bytes = ATOMIC_LOAD(&cached_bytes_);
+    ATOMIC_AAF(&early_drop_far_lsn_cnt_, 1);
+    ret = OB_ERR_OUT_OF_UPPER_BOUND;
+    CLOG_LOG(WARN, "task overflows lsn distance limit",
+        KR(ret), K(cached_bytes), K(next_submit_lsn), KPC(task), K_(max_cached_bytes));
   }
   return ret;
 }
 
-// Cannot be called concurrently, cause it will modify proposal_id_.
-int ObLogTransportTaskQueue::process(const int64_t proposal_id,
-                                     const int64_t end_log_id,
-                                     int64_t &processed,
-                                     const int64_t batch_size)
+int ObLogTransportTaskQueue::update_end_lsn(const palf::LSN &end_lsn)
 {
   int ret = OB_SUCCESS;
   common::SpinRLockGuard guard(lock_);
-  // serialize process to prevent concurrent process and slide
-  common::ObSpinLockGuard process_lock_guard(process_lock_);
+  TaskRemoveFunctor functor(end_lsn);
+  palf::LSN next_submit_lsn;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ObLogTransportTaskQueue not init", KR(ret));
+  } else if (ATOMIC_LOAD(&is_stopped_)) {
+    ret = OB_IN_STOP_STATE;
+    CLOG_LOG(WARN, "ObLogTransportTaskQueue is in stop state", KR(ret));
+  } else if (false == end_lsn.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid process argument", KR(ret), K(end_lsn));
+  } else if (FALSE_IT(next_submit_lsn = next_submit_lsn_.atomic_load())) {
+  } else if (false == next_submit_lsn.is_valid()) {
+    ret = OB_NOT_MASTER;
+    CLOG_LOG(WARN, "next submit lsn is invalid", KR(ret), K(next_submit_lsn));
+  } else if (end_lsn > next_submit_lsn) {
+    next_submit_lsn_.atomic_store(end_lsn);
+    if (OB_FAIL(task_map_.remove_if(functor))) {
+      CLOG_LOG(WARN, "remove task from map failed", KR(ret), KPC(this));
+    } else {
+      CLOG_LOG(INFO, "update next submit lsn success", KR(ret), K(next_submit_lsn), K(end_lsn));
+    }
+    // DoRemoveIfOnBkt<Function> make sure when TaskRemoveFunctor return true, the kv is deleted
+    ATOMIC_SAF(&cached_bytes_, functor.removed_bytes_);
+    ATOMIC_AAF(&total_skipped_cnt_, functor.removed_cnt_);
+  }
+  return ret;
+}
+
+int ObLogTransportTaskQueue::front(ObLogTransportTaskHandle &handle)
+{
+  int ret = OB_SUCCESS;
+  common::SpinRLockGuard guard(lock_);
+  palf::LSN next_submit_lsn;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     CLOG_LOG(WARN, "ObLogTransportTaskQueue not init or sliding window not init", KR(ret));
   } else if (ATOMIC_LOAD(&is_stopped_)) {
     ret = OB_IN_STOP_STATE;
     CLOG_LOG(WARN, "ObLogTransportTaskQueue is in stop state", KR(ret));
-  } else if (proposal_id == palf::INVALID_PROPOSAL_ID || proposal_id < 0 || end_log_id < 0 || batch_size <= 0) {
+  } else if (handle.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    CLOG_LOG(WARN, "invalid process argument", KR(ret), K(proposal_id), K(end_log_id), K(batch_size));
-  } else if (OB_FAIL(self_heal_())) {
-    CLOG_LOG(ERROR, "self heal failed", KR(ret), K_(queue_size), KP_(alloc_mgr),
-      K(proposal_id), K(end_log_id), K(batch_size));
-  } else if (OB_FAIL(try_init_or_advance_base_log_id_(end_log_id))) {
-    // Try to init sliding window or advance begin_sn to end_log_id + 1 if needed,
-    // to prevent stuck when there are empty slots before end_log_id.
-    CLOG_LOG(WARN, "try init or advance base log id failed", KR(ret), K(end_log_id));
-  } else {
-    processed = 0;
-    (void)submit_tasks_sequentially_(proposal_id, batch_size, processed);
-    ret = sw_.slide(0, this);
-    if (OB_EAGAIN == ret) {
-      ret = OB_SUCCESS;
-    }
-    if (palf::palf_reach_time_interval(1_s, queue_stats_print_time_us_)) {
-      CLOG_LOG(INFO, "transport task queue stats", K(proposal_id), K(end_log_id), K(batch_size), K(processed), KPC(this));
-    }
+    CLOG_LOG(WARN, "invalid process argument", KR(ret), K(handle));
+  } else if (FALSE_IT(next_submit_lsn = next_submit_lsn_.atomic_load())) {
+  } else if (false == next_submit_lsn.is_valid()) {
+    ret = OB_NOT_MASTER;
+    CLOG_LOG(WARN, "next submit lsn is invalid", KR(ret), K(next_submit_lsn));
+  } else if (OB_FAIL(task_map_.get(LSNWarp(next_submit_lsn), handle))) {
+    CLOG_LOG(WARN, "get task failed", KR(ret), K(next_submit_lsn));
   }
   return ret;
 }
 
-int ObLogTransportTaskQueue::submit_tasks_sequentially_(const int64_t proposal_id, const int64_t batch_size, int64_t &processed)
+int ObLogTransportTaskQueue::success(const ObLogTransportTaskHandle &handle)
 {
   int ret = OB_SUCCESS;
-  int64_t cur_sn = sw_.get_begin_sn();
-  const int64_t end_sn = sw_.get_end_sn();
-  while (OB_SUCC(ret) && cur_sn < end_sn && processed < batch_size) {
-    TransportTaskSlot *slot = nullptr;
-    const ObLogTransportReq *task = nullptr;
-    SwRevertGuard revert_guard = SwRevertGuard();
-    if (OB_FAIL(sw_.get(cur_sn, slot))) {
-      CLOG_LOG(ERROR, "get slot failed", KR(ret), K(cur_sn));
-    } else if (FALSE_IT(revert_guard = SwRevertGuard(sw_, cur_sn, slot))) { // do nothing
-    } else if (!slot->is_valid()) {
-      ret = OB_ITER_END;
-    } else if (slot->is_submitted_) {
-      cur_sn++;
-    } else if (FALSE_IT(task = slot->task_holder_.ptr())) { // do nothing
-    } else if (OB_FAIL(raw_write_(proposal_id, task->start_lsn_, task->scn_, task->log_data_, task->log_size_))) {
-      CLOG_LOG(WARN, "raw write failed", KR(ret), K(proposal_id), K(cur_sn), KPC(task));
-    } else {
-      slot->is_submitted_ = true;
-      cur_sn++;
-      processed++;
-    }
-  }
-  return ret;
-}
-
-void ObLogTransportTaskQueue::get_drop_stats(int64_t &drop_stale,
-                                             int64_t &drop_duplicate,
-                                             int64_t &reject_out_of_window,
-                                             int64_t &parse_fail) const
-{
-  int64_t early_drop_far_lsn = 0;
-  int64_t evict_trigger = 0;
-  int64_t evict_scan_slots = 0;
-  int64_t evicted_slot_cnt = 0;
-  int64_t evicted_task_bytes = 0;
-  get_drop_stats(drop_stale,
-                 drop_duplicate,
-                 reject_out_of_window,
-                 parse_fail,
-                 early_drop_far_lsn,
-                 evict_trigger,
-                 evict_scan_slots,
-                 evicted_slot_cnt,
-                 evicted_task_bytes);
-}
-
-void ObLogTransportTaskQueue::get_drop_stats(int64_t &drop_stale,
-                                             int64_t &drop_duplicate,
-                                             int64_t &reject_out_of_window,
-                                             int64_t &parse_fail,
-                                             int64_t &early_drop_far_lsn,
-                                             int64_t &evict_trigger,
-                                             int64_t &evict_scan_slots,
-                                             int64_t &evicted_slot_cnt,
-                                             int64_t &evicted_task_bytes) const
-{
-  drop_stale = ATOMIC_LOAD(&drop_stale_cnt_);
-  drop_duplicate = ATOMIC_LOAD(&drop_duplicate_cnt_);
-  reject_out_of_window = ATOMIC_LOAD(&reject_out_of_window_cnt_);
-  parse_fail = ATOMIC_LOAD(&parse_fail_cnt_);
-  early_drop_far_lsn = ATOMIC_LOAD(&early_drop_far_lsn_cnt_);
-  evict_trigger = ATOMIC_LOAD(&evict_trigger_cnt_);
-  evict_scan_slots = ATOMIC_LOAD(&evict_scan_slots_);
-  evicted_slot_cnt = ATOMIC_LOAD(&evicted_slot_cnt_);
-  evicted_task_bytes = ATOMIC_LOAD(&evicted_task_bytes_);
-}
-
-void ObLogTransportTaskQueue::inc_early_drop_far_lsn()
-{
-  ATOMIC_AAF(&early_drop_far_lsn_cnt_, 1);
-}
-
-int ObLogTransportTaskQueue::raw_write_(const int64_t proposal_id,
-                                        const palf::LSN &lsn,
-                                        const share::SCN &scn,
-                                        const char *buf,
-                                        const int64_t buf_size)
-{
-  int ret = OB_SUCCESS;
-  DEBUG_SYNC(common::LOG_TP_QUEUE_SLIDING_CB_BEFORE_RAW_WRITE);
-#ifdef OB_LOG_RESTORE_QUEUE_TEST_INFRA
-  if (raw_write_test_hook_) {
-    return raw_write_test_hook_(proposal_id, lsn, scn, buf, buf_size);
-  }
-#endif
-  if (OB_NOT_NULL(restore_handler_)) {
-    ret = restore_handler_->raw_write(proposal_id, lsn, scn, buf, buf_size);
-  } else {
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(ERROR, "restore handler is null", KR(ret));
-  }
-  return ret;
-}
-
-int ObLogTransportTaskQueue::sliding_cb(const int64_t sn, const palf::FixedSlidingWindowSlot *data)
-{
-  int ret = OB_SUCCESS;
-  const TransportTaskSlot *slot = static_cast<const TransportTaskSlot*>(data);
-  const ObLogTransportReq *task = slot->task_holder_.ptr();
-  if (!slot->is_valid() || !slot->is_submitted_) {
-    ret = OB_EAGAIN;
-  } else {
-    // slide out this task
-  }
-  return ret;
-}
-
-int ObLogTransportTaskQueue::parse_group_entry_log_id_(const char *buf,
-                                                       const int64_t buf_size,
-                                                       int64_t &log_id) const
-{
-  int ret = OB_SUCCESS;
-  log_id = OB_INVALID_LOG_ID;
-  if (OB_ISNULL(buf) || buf_size <= 0) {
+  common::SpinRLockGuard guard(lock_);
+  palf::LSN next_submit_lsn;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ObLogTransportTaskQueue not init or sliding window not init", KR(ret));
+  } else if (ATOMIC_LOAD(&is_stopped_)) {
+    ret = OB_IN_STOP_STATE;
+    CLOG_LOG(WARN, "ObLogTransportTaskQueue is in stop state", KR(ret));
+  } else if (false == handle.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid handle", KR(ret), K(handle));
+  } else if (FALSE_IT(next_submit_lsn = next_submit_lsn_.atomic_load())) {
+  } else if (false == next_submit_lsn.is_valid()) {
+    ret = OB_NOT_MASTER;
+    CLOG_LOG(WARN, "next submit lsn is invalid", KR(ret), K(next_submit_lsn));
+  } else if (handle.task()->start_lsn_ != next_submit_lsn) {
+    ret = OB_STATE_NOT_MATCH;
+    CLOG_LOG(WARN,
+        "handle and next_submit_lsn_ not match", KR(ret), K(handle), K(next_submit_lsn));
   } else {
-    palf::LogGroupEntry group_entry;
-    int64_t pos = 0;
-    if (OB_FAIL(group_entry.deserialize(buf, buf_size, pos))) {
-      CLOG_LOG(WARN, "deserialize log group entry failed", KR(ret), K(buf_size));
-    } else if (false == group_entry.check_integrity()) {
-      ret = OB_INVALID_DATA;
-      CLOG_LOG(WARN, "log group entry integrity check failed", KR(ret), K(buf_size));
-    } else {
-      log_id = group_entry.get_header().get_log_id();
+    int tmp_ret = OB_SUCCESS;
+    sub_container_cached_bytes_(&cached_bytes_, handle);
+    next_submit_lsn_.atomic_store(next_submit_lsn + handle.task()->log_size_);
+    ATOMIC_AAF(&total_success_cnt_, 1);
+    ATOMIC_AAF(&total_success_bytes_, handle.task()->log_size_);
+    // OB_ENTRY_NOT_EXIST or OB_NOT_INIT. both two error code are ok.
+    if (OB_TMP_FAIL(task_map_.erase(LSNWarp(handle.task()->start_lsn_)))) {
+      CLOG_LOG(ERROR, "erase submitted task failed", KR(tmp_ret), K(handle));
     }
   }
+  ATOMIC_AAF(&total_processed_cnt_, 1);
   return ret;
 }
 
-int ObLogTransportTaskQueue::get_slot_guard_for_push_(const int64_t log_id, SwRevertGuard &revert_guard)
+int ObLogTransportTaskQueue::failure(const ObLogTransportTaskHandle &handle)
 {
   int ret = OB_SUCCESS;
-  revert_guard.reset();
-  TransportTaskSlot *slot = nullptr;
-  DEBUG_SYNC(common::LOG_TP_QUEUE_PUSH_BEFORE_SW_GET);
-  if (OB_FAIL(sw_.get(log_id, slot))) {
-    if (OB_ERR_OUT_OF_LOWER_BOUND == ret) {
-      ATOMIC_AAF(&drop_stale_cnt_, 1);
-      CLOG_LOG(INFO, "drop stale transport task", K(log_id), "sw_begin_sn", sw_.get_begin_sn(), "sw_end_sn", sw_.get_end_sn());
-    } else if (OB_ERR_OUT_OF_UPPER_BOUND == ret) {
-      ATOMIC_AAF(&reject_out_of_window_cnt_, 1);
-      CLOG_LOG(WARN, "reject out of window transport task", K(log_id), "sw_begin_sn", sw_.get_begin_sn(), "sw_end_sn", sw_.get_end_sn());
-    } else if (OB_ERR_UNEXPECTED == ret) {
-      CLOG_LOG(ERROR, "get slot failed unexpectedly", KR(ret), K(log_id), "sw_begin_sn", sw_.get_begin_sn(), "sw_end_sn", sw_.get_end_sn());
-    } else {
-      CLOG_LOG(WARN, "get slot failed", KR(ret), K(log_id), "sw_begin_sn", sw_.get_begin_sn(), "sw_end_sn", sw_.get_end_sn());
-    }
-  } else {
-    DEBUG_SYNC(common::LOG_TP_QUEUE_PUSH_AFTER_SW_GET);
-    revert_guard = SwRevertGuard(sw_, log_id, slot);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "ObLogTransportTaskQueue not init or sliding window not init", KR(ret));
+  } else if (ATOMIC_LOAD(&is_stopped_)) {
+    ret = OB_IN_STOP_STATE;
+    CLOG_LOG(WARN, "ObLogTransportTaskQueue is in stop state", KR(ret));
+  } else if (false == handle.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    CLOG_LOG(WARN, "invalid handle", KR(ret), K(handle));
   }
+  ATOMIC_AAF(&total_processed_cnt_, 1);
   return ret;
 }
 
-int ObLogTransportTaskQueue::try_init_or_advance_base_log_id_(const int64_t end_log_id)
+ObLogTransportTaskQueue::TaskRemoveFunctor::TaskRemoveFunctor(const palf::LSN &end_lsn)
+  : end_lsn_(end_lsn), removed_cnt_(0), removed_bytes_(0) {}
+
+ObLogTransportTaskQueue::TaskRemoveFunctor::~TaskRemoveFunctor()
+{
+  end_lsn_.reset();
+  removed_cnt_ = 0;
+  removed_bytes_ = 0;
+}
+
+bool ObLogTransportTaskQueue::TaskRemoveFunctor::operator()(const LSNWarp &key,
+                                                            const ObLogTransportTaskHandle &value)
 {
   int ret = OB_SUCCESS;
-  const int64_t new_begin_sn = end_log_id + 1;
-  // Advance begin_sn only when end_log_id increases.
-  // if sw is cleared, its begin_sn is -1, and the min value of new_begin_sn is 1, so we need to init and truncate
-  if (sw_.get_begin_sn() >= new_begin_sn) { // do nothing
-  } else if (OB_FAIL(sw_.truncate_and_reset_begin_sn(new_begin_sn))) {
-    CLOG_LOG(ERROR, "truncate_and_reset_begin_sn failed", KR(ret), K(new_begin_sn),
-              "sw_begin_sn", sw_.get_begin_sn(), "sw_end_sn", sw_.get_end_sn());
-  } else {
-    CLOG_LOG(INFO, "truncate_and_reset_begin_sn success", K(new_begin_sn),
-              "sw_begin_sn", sw_.get_begin_sn(), "sw_end_sn", sw_.get_end_sn());
+  bool remove = false;
+  if (key.get_value() < end_lsn_) {
+    remove = true;
   }
-  return ret;
+  if (remove) {
+    ++removed_cnt_;
+    removed_bytes_ += value.task()->log_size_;
+  }
+  return remove;
 }
 
-int ObLogTransportTaskQueue::self_heal_()
+void ObLogTransportTaskQueue::add_container_cached_bytes_(int64_t *container_cached_bytes,
+                                                          const int64_t bytes)
+{
+  if (OB_NOT_NULL(container_cached_bytes) && bytes > 0) {
+    ATOMIC_AAF(container_cached_bytes, bytes);
+  }
+}
+
+void ObLogTransportTaskQueue::sub_container_cached_bytes_(
+    int64_t *container_cached_bytes,
+    const ObLogTransportTaskHandle &task_handle)
 {
   int ret = OB_SUCCESS;
-  common::ObSpinLockGuard guard(self_heal_lock_);
-  if (OB_FAIL(sw_.init(palf::FIRST_VALID_LOG_ID, queue_size_, alloc_mgr_)) && OB_INIT_TWICE != ret) {
-    CLOG_LOG(ERROR, "re-init sliding window failed", KR(ret), K_(queue_size), KP_(alloc_mgr));
-  } else if (OB_INIT_TWICE == ret) {
-    ret = OB_SUCCESS;
-  } else {
-    // do nothing
-  }
-  return ret;
-}
-
-void ObLogTransportTaskQueue::reserve_bytes_(const int64_t bytes)
-{
-  if (bytes > 0) {
-    ATOMIC_AAF(&cached_bytes_, bytes);
-  }
-}
-
-void ObLogTransportTaskQueue::release_bytes_(const int64_t bytes)
-{
-  if (bytes > 0) {
-    ATOMIC_AAF(&cached_bytes_, -bytes);
-  }
-}
-
-ObLogTransportTaskQueue::FirstSlotInfo ObLogTransportTaskQueue::get_first_slot_info_() const
-{
-  FirstSlotInfo info;
-  if (IS_INIT) {
-    TransportTaskSlot *slot = nullptr;
-    int64_t begin_sn = sw_.get_begin_sn();
-    if (OB_SUCCESS == const_cast<palf::FixedSlidingWindow<TransportTaskSlot>&>(sw_).get(begin_sn, slot)) {
-      {
-        ObByteLockGuard slot_guard(slot->slot_lock_);
-        const ObLogTransportReq *task = slot->task_holder_.ptr();
-        info.has_task_ = (task != nullptr);
-        if (info.has_task_) {
-          info.task_ptr_ = task;
-          info.task_bytes_ = slot->task_bytes_;
-          info.is_submitted_ = slot->is_submitted_;
-        }
-      }
-      (void)const_cast<palf::FixedSlidingWindow<TransportTaskSlot>&>(sw_).revert(begin_sn);
+  if (OB_NOT_NULL(container_cached_bytes) && OB_NOT_NULL(task_handle.task())
+      && task_handle.task()->log_size_ > 0) {
+    const LogReceivedTransportTask *task = task_handle.task();
+    const int64_t bytes = task->log_size_;
+    const int64_t cached_bytes = ATOMIC_SAF(container_cached_bytes, bytes);
+    if (OB_UNLIKELY(cached_bytes < 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      CLOG_LOG(ERROR, "transport task queue cached bytes is negative", K(cached_bytes), K(bytes));
     }
   }
-  return info;
+}
+
+uint64_t ObLogTransportTaskQueue::count() const
+{
+  common::SpinRLockGuard guard(lock_);
+  return task_map_.count();
+}
+
+// stats, not precise, can be slightly inconsistent with each other
+void ObLogTransportTaskQueue::clear_stats()
+{
+  common::SpinRLockGuard guard(lock_);
+  ATOMIC_STORE(&drop_duplicate_cnt_, 0);
+  ATOMIC_STORE(&early_drop_far_lsn_cnt_, 0);
+  ATOMIC_STORE(&total_inserted_cnt_, 0);
+  ATOMIC_STORE(&total_inserted_bytes_, 0);
+  ATOMIC_STORE(&total_processed_cnt_, 0);
+  ATOMIC_STORE(&total_success_cnt_, 0);
+  ATOMIC_STORE(&total_success_bytes_, 0);
+  ATOMIC_STORE(&total_skipped_cnt_, 0);
 }
 
 } // namespace logservice

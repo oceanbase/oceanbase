@@ -27,6 +27,7 @@
 #include "share/ob_root_addr_agent.h"//ObRootAddr
 #include "share/schema/ob_schema_struct.h"
 #include "share/ob_tenant_switchover_status.h"
+#include "share/restore/ob_log_restore_source.h"
 #include "logservice/palf/palf_options.h"
 #include <cstdint>
 
@@ -159,7 +160,9 @@ public:
   int check_begin_lsn(const uint64_t tenant_id);
   // get log restore source tenant info, includes tenant role and tennat status
   int get_tenant_info(ObAllTenantInfo &tenant_info, schema::ObTenantStatus &tenant_status);
-  // get log restore source from log restore source tenant
+  // get log restore source from log restore source tenant, returns ObLogRestoreSourceItem containing all fields
+  int get_log_restore_source(bool &is_empty, ObLogRestoreSourceItem &item);
+  // convenience wrapper: get log restore source and parse service attr (SERVICE type only)
   int get_log_restore_source(bool &is_empty, ObRestoreSourceServiceAttr &restore_source_service_attr);
   // get the access_mode and max_scn of the specific LS in log restore source tenant
   int get_max_log_info(const ObLSID &id, palf::AccessMode &mode, SCN &scn);

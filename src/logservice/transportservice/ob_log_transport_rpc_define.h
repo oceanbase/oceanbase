@@ -49,10 +49,12 @@ struct ObLogTransportReq
            end_lsn_ > start_lsn_ &&
            log_data_ != nullptr &&
            log_size_ > 0 &&
+           end_lsn_ == start_lsn_ + log_size_ &&
            scn_.is_valid();
   }
 
-  TO_STRING_KV(K(standby_cluster_id_), K(standby_tenant_id_), K(ls_id_), K(start_lsn_), K(end_lsn_), K(scn_), K(log_size_), K(src_));
+  TO_STRING_KV(K_(standby_cluster_id), K_(standby_tenant_id), K_(ls_id),
+      K_(start_lsn), K_(end_lsn), K_(scn), KP_(log_data), K_(log_size), K_(src));
 
   OB_UNIS_VERSION(1);
 };
@@ -67,6 +69,7 @@ struct ObLogSyncStandbyInfo
   uint64_t standby_tenant_id_;
   share::ObLSID ls_id_;
   int ret_code_;
+  // dead response ret code, not used any more
   int refresh_info_ret_code_;
   palf::LSN standby_committed_end_lsn_;
   share::SCN standby_committed_end_scn_;

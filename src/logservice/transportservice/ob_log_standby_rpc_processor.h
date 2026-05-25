@@ -27,16 +27,10 @@ namespace logservice
 class ObLogStandbyTransportP : public obrpc::ObRpcProcessor<obrpc::ObLogTransportRpcProxy::ObRpc<obrpc::OB_LOG_TRANSPORT_REQ> >
 {
 public:
-  ObLogStandbyTransportP() : filter_(nullptr) {}
-  virtual ~ObLogStandbyTransportP() { filter_ = nullptr; }
+  ObLogStandbyTransportP() {}
+  virtual ~ObLogStandbyTransportP() {}
 
   int process();
-
-  void set_filter(void *filter) { filter_ = reinterpret_cast<ObFunction<bool(const ObAddr &src)> *>(filter); }
-
-private:
-  ObFunction<bool(const ObAddr &src)> *filter_;
-
 };
 
 } // namespace logservice

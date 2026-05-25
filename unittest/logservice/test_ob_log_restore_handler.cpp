@@ -1,9 +1,7 @@
 #include <gtest/gtest.h>
-#include <atomic>
 #include <cstdlib>
 #include <string>
 #include <cstdio>
-#include <utility>
 
 #include "lib/ob_define.h"
 #include "lib/ob_errno.h"
@@ -31,25 +29,25 @@ namespace unittest
 using namespace common;
 using namespace palf;
 
-#ifndef OB_LOG_RESTORE_QUEUE_TEST_INFRA
-#define SKIP_IF_NO_TEST_INFRA() do { fprintf(stderr, "[SKIP] OB_LOG_RESTORE_QUEUE_TEST_INFRA not enabled\n"); return; } while (0)
-#else
-#define SKIP_IF_NO_TEST_INFRA() do {} while (0)
-#endif
-
 class FakePalfHandle final : public ipalf::IPalfHandle
 {
 public:
   FakePalfHandle()
     : end_lsn_(LSN(0)),
+      end_scn_(share::SCN::base_scn()),
       end_log_id_(OB_INVALID_LOG_ID),
       role_(FOLLOWER),
       proposal_id_(0),
       pending_state_(false),
+      access_mode_(palf::AccessMode::RAW_WRITE),
+      raw_write_ret_(OB_SUCCESS),
+      raw_write_count_(0),
+      last_raw_write_lsn_(),
       valid_(true)
   {}
 
   void set_end_lsn(const LSN &lsn) { end_lsn_ = lsn; }
+  void set_end_scn(const share::SCN &scn) { end_scn_ = scn; }
   void set_end_log_id(const int64_t log_id) { end_log_id_ = log_id; }
   void set_role(const ObRole &role, const int64_t proposal_id, const bool pending_state = false)
   {
@@ -57,6 +55,10 @@ public:
     proposal_id_ = proposal_id;
     pending_state_ = pending_state;
   }
+  void set_access_mode(const palf::AccessMode &access_mode) { access_mode_ = access_mode; }
+  void set_raw_write_ret(const int ret) { raw_write_ret_ = ret; }
+  int64_t raw_write_count() const { return raw_write_count_; }
+  LSN last_raw_write_lsn() const { return last_raw_write_lsn_; }
   void set_valid(const bool valid) { valid_ = valid; }
 
   bool is_valid() const override { return valid_; }
@@ -86,10 +88,11 @@ public:
                 const int64_t nbytes) override
   {
     UNUSED(opts);
-    UNUSED(lsn);
     UNUSED(buffer);
     UNUSED(nbytes);
-    return OB_NOT_SUPPORTED;
+    ++raw_write_count_;
+    last_raw_write_lsn_ = lsn;
+    return raw_write_ret_;
   }
 
   int raw_read(const LSN &lsn,
@@ -206,8 +209,8 @@ public:
 
   int get_end_scn(share::SCN &scn) const override
   {
-    UNUSED(scn);
-    return OB_NOT_SUPPORTED;
+    scn = end_scn_;
+    return OB_SUCCESS;
   }
 
   int get_max_lsn(LSN &lsn) const override
@@ -222,13 +225,13 @@ public:
     return OB_NOT_SUPPORTED;
   }
 
-  int get_max_log_id(int64_t &log_id) const override
+  int get_max_log_id(int64_t &log_id) const
   {
     log_id = end_log_id_;
     return OB_SUCCESS;
   }
 
-  int get_end_log_id(int64_t &log_id) const override
+  int get_end_log_id(int64_t &log_id) const
   {
     log_id = end_log_id_;
     return OB_SUCCESS;
@@ -286,15 +289,15 @@ public:
 
   int get_access_mode(int64_t &mode_version, ipalf::AccessMode &access_mode) const override
   {
-    UNUSED(mode_version);
-    UNUSED(access_mode);
-    return OB_NOT_SUPPORTED;
+    mode_version = 1;
+    access_mode = access_mode_;
+    return OB_SUCCESS;
   }
 
   int get_access_mode(ipalf::AccessMode &access_mode) const override
   {
-    UNUSED(access_mode);
-    return OB_NOT_SUPPORTED;
+    access_mode = access_mode_;
+    return OB_SUCCESS;
   }
 
   int get_access_mode_version(int64_t &mode_version) const override
@@ -413,11 +416,39 @@ public:
 
 private:
   LSN end_lsn_;
+  share::SCN end_scn_;
   int64_t end_log_id_;
   ObRole role_;
   int64_t proposal_id_;
   bool pending_state_;
+  palf::AccessMode access_mode_;
+  int raw_write_ret_;
+  int64_t raw_write_count_;
+  LSN last_raw_write_lsn_;
   bool valid_;
+};
+
+class FakeRemoteLogParent final : public ObRemoteLogParent
+{
+public:
+  FakeRemoteLogParent()
+    : ObRemoteLogParent(share::ObLogRestoreSourceType::SERVICE, share::ObLSID(1))
+  {
+    upper_limit_scn_ = share::SCN::max_scn();
+    to_end_ = false;
+  }
+
+  int deep_copy_to(ObRemoteLogParent &other) override { UNUSED(other); return OB_SUCCESS; }
+  bool is_valid() const override { return true; }
+  int64_t to_string(char *buf, const int64_t buf_len) const override
+  {
+    return snprintf(buf, buf_len, "FakeRemoteLogParent");
+  }
+  int update_locate_info(ObRemoteLogParent &source) override
+  {
+    UNUSED(source);
+    return OB_SUCCESS;
+  }
 };
 
 static share::SCN build_scn()
@@ -449,7 +480,6 @@ static int build_task_with_lsn(const int64_t log_id,
 }
 
 static void setup_handler(ObLogRestoreHandler &handler,
-                          ObILogAllocator *alloc_mgr,
                           ipalf::IPalfHandle *palf_handle,
                           const ObRole &role,
                           const int64_t proposal_id)
@@ -461,9 +491,7 @@ static void setup_handler(ObLogRestoreHandler &handler,
   handler.proposal_id_ = proposal_id;
   handler.is_inited_ = true;
   handler.is_in_stop_state_ = false;
-  ASSERT_EQ(OB_SUCCESS, handler.transport_task_queue_.init(alloc_mgr,
-                                                          &handler,
-                                                          ObLogTransportTaskQueue::MAX_QUEUE_SIZE));
+  ASSERT_EQ(OB_SUCCESS, handler.transport_task_queue_.init(handler.id_, ObLogTransportTaskQueue::MAX_QUEUE_SIZE));
 }
 
 class TestLogRestoreHandler : public ::testing::Test
@@ -491,19 +519,14 @@ TEST_F(TestLogRestoreHandler, stop_destroy_clear_queue)
   handler.is_in_stop_state_ = false;
   handler.palf_handle_ = nullptr;
   handler.palf_env_ = nullptr;
-  ASSERT_EQ(OB_SUCCESS, handler.transport_task_queue_.init(alloc_mgr_,
-                                                          &handler,
-                                                          ObLogTransportTaskQueue::MAX_QUEUE_SIZE));
+  ASSERT_EQ(OB_SUCCESS, handler.transport_task_queue_.init(1, ObLogTransportTaskQueue::MAX_QUEUE_SIZE));
 
   GroupEntryBuffer buffer;
   ObLogTransportReq *req = nullptr;
   ASSERT_EQ(OB_SUCCESS, build_task_with_lsn(2, 32, LSN(100), req, buffer));
   TransportReqGuard guard(req);
-  ObLogTransportTaskHolder task_holder;
-  ASSERT_EQ(OB_SUCCESS, ObLogTransportTaskHolder::owned(guard.get(), task_holder));
-  guard.release();
-  ASSERT_EQ(OB_SUCCESS,
-            handler.transport_task_queue_.push(std::move(task_holder), 1));
+  handler.transport_task_queue_.switch_to_leader(LSN(100));
+  ASSERT_EQ(OB_SUCCESS, handler.transport_task_queue_.push(guard.get()));
   EXPECT_GT(handler.transport_task_queue_.cached_bytes_, 0);
 
   EXPECT_EQ(OB_SUCCESS, handler.stop());
@@ -520,19 +543,14 @@ TEST_F(TestLogRestoreHandler, switch_role_clears_queue)
   handler.is_in_stop_state_ = false;
   handler.palf_handle_ = nullptr;
   handler.palf_env_ = nullptr;
-  ASSERT_EQ(OB_SUCCESS, handler.transport_task_queue_.init(alloc_mgr_,
-                                                          &handler,
-                                                          ObLogTransportTaskQueue::MAX_QUEUE_SIZE));
+  ASSERT_EQ(OB_SUCCESS, handler.transport_task_queue_.init(1, ObLogTransportTaskQueue::MAX_QUEUE_SIZE));
 
   GroupEntryBuffer buffer;
   ObLogTransportReq *req = nullptr;
   ASSERT_EQ(OB_SUCCESS, build_task_with_lsn(2, 32, LSN(100), req, buffer));
   TransportReqGuard guard(req);
-  ObLogTransportTaskHolder task_holder;
-  ASSERT_EQ(OB_SUCCESS, ObLogTransportTaskHolder::owned(guard.get(), task_holder));
-  guard.release();
-  ASSERT_EQ(OB_SUCCESS,
-            handler.transport_task_queue_.push(std::move(task_holder), 1));
+  handler.transport_task_queue_.switch_to_leader(LSN(100));
+  ASSERT_EQ(OB_SUCCESS, handler.transport_task_queue_.push(guard.get()));
   EXPECT_GT(handler.transport_task_queue_.cached_bytes_, 0);
 
   handler.switch_role(FOLLOWER, 2);
@@ -548,7 +566,8 @@ TEST_F(TestLogRestoreHandler, submit_transport_task_behaviors)
   palf_handle.set_end_log_id(1);
   palf_handle.set_role(LEADER, 1);
 
-  setup_handler(handler, alloc_mgr_, &palf_handle, LEADER, 1);
+  setup_handler(handler, &palf_handle, LEADER, 1);
+  handler.transport_task_queue_.switch_to_leader(LSN(1000));
 
   ObLogTransportReq invalid_req;
   invalid_req.log_size_ = 0;
@@ -561,26 +580,27 @@ TEST_F(TestLogRestoreHandler, submit_transport_task_behaviors)
   stale_req.standby_tenant_id_ = 1;
   stale_req.ls_id_ = share::ObLSID(1);
   stale_req.start_lsn_ = LSN(10);
-  stale_req.end_lsn_ = LSN(100);
+  stale_req.end_lsn_ = stale_req.start_lsn_ + stale_buf.size_;
   stale_req.scn_ = build_scn();
   stale_req.log_data_ = stale_buf.buf_;
   stale_req.log_size_ = stale_buf.size_;
-  EXPECT_EQ(OB_ERR_OUT_OF_LOWER_BOUND, handler.submit_transport_task(stale_req));
+  EXPECT_EQ(OB_SUCCESS, handler.submit_transport_task(stale_req));
   EXPECT_EQ(0, handler.transport_task_queue_.cached_bytes_);
 
-  handler.transport_task_queue_.max_cached_bytes_ = ObLogTransportTaskQueue::DEFAULT_MAX_CACHED_BYTES;
+  handler.transport_task_queue_.max_cached_bytes_ = 1;
   GroupEntryBuffer overflow_buf;
   ASSERT_EQ(OB_SUCCESS, build_group_entry_buffer(2, build_scn(), 64, overflow_buf));
   ObLogTransportReq overflow_req;
   overflow_req.standby_cluster_id_ = 1;
   overflow_req.standby_tenant_id_ = 1;
   overflow_req.ls_id_ = share::ObLSID(1);
-  overflow_req.start_lsn_ = LSN(1000 + ObLogTransportTaskQueue::DEFAULT_MAX_CACHED_BYTES);
+  overflow_req.start_lsn_ = LSN(2000);
   overflow_req.end_lsn_ = overflow_req.start_lsn_ + overflow_buf.size_;
   overflow_req.scn_ = build_scn();
   overflow_req.log_data_ = overflow_buf.buf_;
   overflow_req.log_size_ = overflow_buf.size_;
   EXPECT_EQ(OB_ERR_OUT_OF_UPPER_BOUND, handler.submit_transport_task(overflow_req));
+  EXPECT_EQ(1, handler.transport_task_queue_.early_drop_far_lsn_cnt_);
 
   handler.transport_task_queue_.max_cached_bytes_ = ObLogTransportTaskQueue::DEFAULT_MAX_CACHED_BYTES;
   GroupEntryBuffer dup_buf1;
@@ -602,11 +622,8 @@ TEST_F(TestLogRestoreHandler, submit_transport_task_behaviors)
   dup_req2.log_data_ = dup_buf2.buf_;
   EXPECT_EQ(OB_SUCCESS, handler.submit_transport_task(dup_req2));
 
-  int64_t drop_stale = 0;
   int64_t drop_duplicate = 0;
-  int64_t reject_out_of_window = 0;
-  int64_t parse_fail = 0;
-  handler.transport_task_queue_.get_drop_stats(drop_stale, drop_duplicate, reject_out_of_window, parse_fail);
+  drop_duplicate = handler.transport_task_queue_.drop_duplicate_cnt_;
   EXPECT_EQ(1, drop_duplicate);
 }
 
@@ -618,7 +635,8 @@ TEST_F(TestLogRestoreHandler, submit_transport_task_deep_copy_test)
   palf_handle.set_end_log_id(1);
   palf_handle.set_role(LEADER, 1);
 
-  setup_handler(handler, alloc_mgr_, &palf_handle, LEADER, 1);
+  setup_handler(handler, &palf_handle, LEADER, 1);
+  handler.transport_task_queue_.switch_to_leader(LSN(1000));
 
   const int64_t log_id = 2;
   GroupEntryBuffer buffer;
@@ -639,35 +657,29 @@ TEST_F(TestLogRestoreHandler, submit_transport_task_deep_copy_test)
 
   memset(buffer.buf_, 'b', buffer.size_);
 
-  ObLogTransportTaskQueue::TransportTaskSlot *slot = nullptr;
-  ASSERT_EQ(OB_SUCCESS, handler.transport_task_queue_.sw_.get(log_id, slot));
-  {
-    ObByteLockGuard slot_guard(slot->slot_lock_);
-    ASSERT_NE(nullptr, slot->task_holder_.ptr());
-    EXPECT_NE(slot->task_holder_.ptr()->log_data_, buffer.buf_);
-    EXPECT_EQ(buffer.size_, slot->task_holder_.ptr()->log_size_);
-    EXPECT_EQ(0, memcmp(slot->task_holder_.ptr()->log_data_, original.data(), original.size()));
-  }
-  EXPECT_EQ(OB_SUCCESS, handler.transport_task_queue_.sw_.revert(log_id));
+  UNUSED(log_id);
+  ObLogTransportTaskHandle handle;
+  ASSERT_EQ(OB_SUCCESS, handler.transport_task_queue_.task_map_.get(
+      ObLogTransportTaskQueue::LSNWarp(req.start_lsn_), handle));
+  ASSERT_TRUE(handle.is_valid());
+  ASSERT_NE(nullptr, handle.task());
+  EXPECT_NE(handle.task()->log_data_, buffer.buf_);
+  EXPECT_EQ(buffer.size_, handle.task()->log_size_);
+  EXPECT_EQ(0, memcmp(handle.task()->log_data_, original.data(), original.size()));
 }
 
-#ifdef OB_LOG_RESTORE_QUEUE_TEST_INFRA
-TEST_F(TestLogRestoreHandler, process_transport_tasks_with_raw_write_hook)
+TEST_F(TestLogRestoreHandler, process_transport_tasks_writes_and_advances_queue)
 {
   ObLogRestoreHandler handler;
   FakePalfHandle palf_handle;
+  FakeRemoteLogParent parent;
   palf_handle.set_end_lsn(LSN(100));
   palf_handle.set_end_log_id(1);
   palf_handle.set_role(LEADER, 1);
+  palf_handle.set_raw_write_ret(OB_ERR_OUT_OF_LOWER_BOUND);
 
-  setup_handler(handler, alloc_mgr_, &palf_handle, LEADER, 1);
-  SKIP_IF_NO_TEST_INFRA();
-
-  std::atomic<int64_t> call_count(0);
-  handler.set_raw_write_test_hook([&](const int64_t, const LSN &, const share::SCN &, const char *, const int64_t) {
-    call_count++;
-    return OB_SUCCESS;
-  });
+  setup_handler(handler, &palf_handle, LEADER, 1);
+  handler.transport_task_queue_.switch_to_leader(LSN(100));
 
   GroupEntryBuffer buffer;
   ASSERT_EQ(OB_SUCCESS, build_group_entry_buffer(2, build_scn(), 32, buffer));
@@ -682,20 +694,126 @@ TEST_F(TestLogRestoreHandler, process_transport_tasks_with_raw_write_hook)
   req.log_size_ = buffer.size_;
   ASSERT_EQ(OB_SUCCESS, handler.submit_transport_task(req));
 
-  EXPECT_EQ(OB_SUCCESS, handler.process_transport_tasks(10));
-  EXPECT_EQ(1, call_count.load());
+  handler.parent_ = &parent;
+  EXPECT_EQ(OB_ENTRY_NOT_EXIST, handler.process_transport_tasks());
+  handler.parent_ = nullptr;
+  EXPECT_EQ(1, palf_handle.raw_write_count());
+  EXPECT_EQ(req.start_lsn_, palf_handle.last_raw_write_lsn());
+  EXPECT_EQ(0, handler.transport_task_queue_.task_map_.count());
+  EXPECT_EQ(req.end_lsn_, handler.transport_task_queue_.next_submit_lsn_.atomic_load());
 
-  handler.role_ = FOLLOWER;
-  EXPECT_EQ(OB_NOT_MASTER, handler.process_transport_tasks(10));
+  palf_handle.set_role(FOLLOWER, 1);
+  EXPECT_EQ(OB_NOT_MASTER, handler.process_transport_tasks());
 }
-#else
-TEST_F(TestLogRestoreHandler, process_transport_tasks_with_raw_write_hook)
+
+TEST_F(TestLogRestoreHandler, process_transport_tasks_failure_preserves_task)
 {
-  SKIP_IF_NO_TEST_INFRA();
-}
-#endif
+  ObLogRestoreHandler handler;
+  FakePalfHandle palf_handle;
+  FakeRemoteLogParent parent;
+  palf_handle.set_end_lsn(LSN(100));
+  palf_handle.set_end_log_id(1);
+  palf_handle.set_role(LEADER, 1);
+  palf_handle.set_raw_write_ret(OB_ALLOCATE_MEMORY_FAILED);
 
-#ifdef OB_LOG_RESTORE_QUEUE_TEST_INFRA
+  setup_handler(handler, &palf_handle, LEADER, 1);
+  handler.transport_task_queue_.switch_to_leader(LSN(100));
+
+  GroupEntryBuffer buffer;
+  ASSERT_EQ(OB_SUCCESS, build_group_entry_buffer(2, build_scn(), 32, buffer));
+  ObLogTransportReq req;
+  req.standby_cluster_id_ = 1;
+  req.standby_tenant_id_ = 1;
+  req.ls_id_ = share::ObLSID(1);
+  req.start_lsn_ = LSN(100);
+  req.end_lsn_ = req.start_lsn_ + buffer.size_;
+  req.scn_ = build_scn();
+  req.log_data_ = buffer.buf_;
+  req.log_size_ = buffer.size_;
+  ASSERT_EQ(OB_SUCCESS, handler.submit_transport_task(req));
+
+  handler.parent_ = &parent;
+  EXPECT_EQ(OB_ALLOCATE_MEMORY_FAILED, handler.process_transport_tasks());
+  handler.parent_ = nullptr;
+  EXPECT_EQ(1, palf_handle.raw_write_count());
+  EXPECT_EQ(1, handler.transport_task_queue_.total_processed_cnt_);
+  EXPECT_EQ(0, handler.transport_task_queue_.total_success_cnt_);
+  EXPECT_EQ(1, handler.transport_task_queue_.task_map_.count());
+  EXPECT_EQ(req.start_lsn_, handler.transport_task_queue_.next_submit_lsn_.atomic_load());
+}
+
+TEST_F(TestLogRestoreHandler, process_transport_tasks_respects_batch_size)
+{
+  ObLogRestoreHandler handler;
+  FakePalfHandle palf_handle;
+  FakeRemoteLogParent parent;
+  palf_handle.set_end_lsn(LSN(100));
+  palf_handle.set_end_log_id(1);
+  palf_handle.set_role(LEADER, 1);
+  palf_handle.set_raw_write_ret(OB_ERR_OUT_OF_LOWER_BOUND);
+
+  setup_handler(handler, &palf_handle, LEADER, 1);
+  handler.transport_task_queue_.switch_to_leader(LSN(100));
+
+  LSN next_lsn(100);
+  LSN after_first_batch;
+  for (int64_t i = 0; i < ObLogTransportTaskQueue::BATCH_SIZE + 1; ++i) {
+    GroupEntryBuffer buffer;
+    ObLogTransportReq *req = nullptr;
+    ASSERT_EQ(OB_SUCCESS, build_task_with_lsn(2 + i, 32, next_lsn, req, buffer));
+    TransportReqGuard guard(req);
+    next_lsn = req->end_lsn_;
+    if (ObLogTransportTaskQueue::BATCH_SIZE - 1 == i) {
+      after_first_batch = req->end_lsn_;
+    }
+    ASSERT_EQ(OB_SUCCESS, handler.submit_transport_task(*req));
+  }
+
+  handler.parent_ = &parent;
+  EXPECT_EQ(OB_SUCCESS, handler.process_transport_tasks());
+  EXPECT_EQ(ObLogTransportTaskQueue::BATCH_SIZE, palf_handle.raw_write_count());
+  EXPECT_EQ(ObLogTransportTaskQueue::BATCH_SIZE, handler.transport_task_queue_.total_success_cnt_);
+  EXPECT_EQ(1, handler.transport_task_queue_.task_map_.count());
+  EXPECT_EQ(after_first_batch, handler.transport_task_queue_.next_submit_lsn_.atomic_load());
+
+  EXPECT_EQ(OB_ENTRY_NOT_EXIST, handler.process_transport_tasks());
+  handler.parent_ = nullptr;
+  EXPECT_EQ(ObLogTransportTaskQueue::BATCH_SIZE + 1, palf_handle.raw_write_count());
+  EXPECT_EQ(ObLogTransportTaskQueue::BATCH_SIZE + 1, handler.transport_task_queue_.total_success_cnt_);
+  EXPECT_EQ(0, handler.transport_task_queue_.task_map_.count());
+  EXPECT_EQ(next_lsn, handler.transport_task_queue_.next_submit_lsn_.atomic_load());
+}
+
+TEST_F(TestLogRestoreHandler, process_transport_tasks_skips_append_mode)
+{
+  ObLogRestoreHandler handler;
+  FakePalfHandle palf_handle;
+  palf_handle.set_end_lsn(LSN(100));
+  palf_handle.set_end_log_id(1);
+  palf_handle.set_role(LEADER, 1);
+  palf_handle.set_access_mode(palf::AccessMode::APPEND);
+
+  setup_handler(handler, &palf_handle, LEADER, 1);
+  handler.transport_task_queue_.switch_to_leader(LSN(100));
+
+  GroupEntryBuffer buffer;
+  ASSERT_EQ(OB_SUCCESS, build_group_entry_buffer(2, build_scn(), 32, buffer));
+  ObLogTransportReq req;
+  req.standby_cluster_id_ = 1;
+  req.standby_tenant_id_ = 1;
+  req.ls_id_ = share::ObLSID(1);
+  req.start_lsn_ = LSN(100);
+  req.end_lsn_ = req.start_lsn_ + buffer.size_;
+  req.scn_ = build_scn();
+  req.log_data_ = buffer.buf_;
+  req.log_size_ = buffer.size_;
+  ASSERT_EQ(OB_SUCCESS, handler.submit_transport_task(req));
+
+  EXPECT_EQ(OB_STATE_NOT_MATCH, handler.process_transport_tasks());
+  EXPECT_EQ(0, palf_handle.raw_write_count());
+  EXPECT_EQ(1, handler.transport_task_queue_.task_map_.count());
+}
+
 TEST_F(TestLogRestoreHandler, print_stat_reports_drop_stats)
 {
   ObLogRestoreHandler handler;
@@ -704,8 +822,8 @@ TEST_F(TestLogRestoreHandler, print_stat_reports_drop_stats)
   palf_handle.set_end_log_id(1);
   palf_handle.set_role(LEADER, 1);
 
-  setup_handler(handler, alloc_mgr_, &palf_handle, LEADER, 1);
-  SKIP_IF_NO_TEST_INFRA();
+  setup_handler(handler, &palf_handle, LEADER, 1);
+  handler.transport_task_queue_.switch_to_leader(LSN(0));
 
   // Create a known drop counter (duplicate): push same log_id twice.
   GroupEntryBuffer dup_buf1;
@@ -728,26 +846,10 @@ TEST_F(TestLogRestoreHandler, print_stat_reports_drop_stats)
   dup_req2.log_data_ = dup_buf2.buf_;
   ASSERT_EQ(OB_SUCCESS, handler.submit_transport_task(dup_req2));
 
-  // Verify drop stats via get_drop_stats() directly.
-  int64_t drop_stale = 0;
   int64_t drop_duplicate = 0;
-  int64_t reject_out_of_window = 0;
-  int64_t parse_fail = 0;
-  handler.transport_task_queue_.get_drop_stats(drop_stale,
-                                              drop_duplicate,
-                                              reject_out_of_window,
-                                              parse_fail);
-  EXPECT_EQ(0, drop_stale);
+  drop_duplicate = handler.transport_task_queue_.drop_duplicate_cnt_;
   EXPECT_EQ(1, drop_duplicate);
-  EXPECT_EQ(0, reject_out_of_window);
-  EXPECT_EQ(0, parse_fail);
 }
-#else
-TEST_F(TestLogRestoreHandler, print_stat_reports_drop_stats)
-{
-  SKIP_IF_NO_TEST_INFRA();
-}
-#endif
 
 } // namespace unittest
 } // namespace logservice

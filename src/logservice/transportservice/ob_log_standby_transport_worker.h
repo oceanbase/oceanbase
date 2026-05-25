@@ -73,8 +73,6 @@ private:
   int64_t running_info_print_time_us_;
 
   static const int64_t THREAD_RUN_INTERVAL = 10 * 1000L;  // 10ms
-  // 分批处理大小：每次处理每个日志流的任务数量，控制排序开销
-  static const int64_t BATCH_SIZE = 512;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogStandbyTransportWorker);

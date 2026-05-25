@@ -23,7 +23,8 @@ ObLogRestoreDriverBase::ObLogRestoreDriverBase() :
   inited_(false),
   tenant_id_(OB_INVALID_TENANT_ID),
   ls_svr_(NULL),
-  log_service_(NULL)
+  log_service_(NULL),
+  fetch_log_upper_limit_scn_(share::SCN::min_scn())
 {}
 
 ObLogRestoreDriverBase::~ObLogRestoreDriverBase()
@@ -59,6 +60,7 @@ void ObLogRestoreDriverBase::destroy()
   tenant_id_ = OB_INVALID_TENANT_ID;
   ls_svr_ = NULL;
   log_service_ = NULL;
+  fetch_log_upper_limit_scn_.reset();
 }
 
 int ObLogRestoreDriverBase::do_schedule()
@@ -120,6 +122,7 @@ int ObLogRestoreDriverBase::check_replica_status_(storage::ObLS &ls, bool &can_f
 // Restore log need be under control, otherwise log disk may be full as single ls restore log too fast
 // NB: Logs can be replayed only if its scn not bigger than replayable_point
 ERRSIM_POINT_DEF(ERRSIM_CANCEL_FETCH_LOG_LIMIT);
+ERRSIM_POINT_DEF(ERRSIM_REDUCE_FETCH_LOG_LIMIT);
 int ObLogRestoreDriverBase::get_upper_resotore_scn(share::SCN &scn)
 {
   int ret = OB_SUCCESS;
@@ -132,8 +135,21 @@ int ObLogRestoreDriverBase::get_upper_resotore_scn(share::SCN &scn)
   } else if (OB_FAIL(log_service_->get_replayable_point(replayable_point))) {
     LOG_WARN("get replayable point failed", K(ret));
   } else {
-    share::SCN advance_scn = share::SCN::plus(replayable_point, FETCH_LOG_AHEAD_THRESHOLD_NS);
-    scn = global_recovery_scn_ <= advance_scn ? global_recovery_scn_ : advance_scn;
+    int64_t threshold = FETCH_LOG_AHEAD_THRESHOLD_NS;
+    const int errsim_limit_ms = ERRSIM_REDUCE_FETCH_LOG_LIMIT;
+    if (OB_UNLIKELY(0 != errsim_limit_ms)) {
+      // error_code is in milliseconds, e.g. 1000 means 1s. Take absolute value.
+      threshold = abs(errsim_limit_ms) * 1000L * 1000L; // ms -> ns
+      LOG_WARN("ERRSIM_REDUCE_FETCH_LOG_LIMIT: override fetch log ahead threshold",
+          K(errsim_limit_ms), K(threshold));
+    }
+    share::SCN advance_scn = share::SCN::plus(replayable_point, threshold);
+    share::SCN upper = advance_scn;
+    if (fetch_log_upper_limit_scn_.is_valid_and_not_min()
+        && fetch_log_upper_limit_scn_ > upper) {
+      upper = fetch_log_upper_limit_scn_;
+    }
+    scn = global_recovery_scn_ <= upper ? global_recovery_scn_ : upper;
     if (OB_UNLIKELY(ERRSIM_CANCEL_FETCH_LOG_LIMIT)) {
       scn = global_recovery_scn_;
       LOG_WARN("ERRSIM_CANCEL_FETCH_LOG_LIMIT opened", KR(ret));
@@ -159,6 +175,14 @@ int ObLogRestoreDriverBase::check_fetch_log_unlimited_(bool &limit)
     limit = false;
   }
   return ret;
+}
+
+void ObLogRestoreDriverBase::set_fetch_log_upper_limit_scn(const share::SCN &scn)
+{
+  if (scn.is_valid_and_not_min() && scn > fetch_log_upper_limit_scn_) {
+    fetch_log_upper_limit_scn_ = scn;
+    LOG_INFO("update fetch_log_upper_limit_scn", K(scn), K_(fetch_log_upper_limit_scn));
+  }
 }
 
 } // namespace logservice

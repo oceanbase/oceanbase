@@ -63,7 +63,7 @@ private:
   ObLogBaseHeader header_;
   int16_t version_;
   int16_t log_type_;
-  share::ObSyncStandbyStatusAttr protection_info_; //TODO by ziqi: 恢复类型实现
+  share::ObSyncStandbyStatusAttr protection_info_;
 };
 
 // SyncModeLogCb: Callback for sync mode log with reference counting mechanism.

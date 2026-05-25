@@ -307,6 +307,15 @@ public:
   // @param[in], sync_mode, SYNC or ASYNC or PRE_ASYNC
   // @param[in], proposal_id, global monotonically increasing id
   virtual void switch_sync_mode(const palf::SyncMode &sync_mode, const int64_t proposal_id) override;
+
+  // NB: only called by ObRoleChangeService
+  // @brief switch role and proposal_id
+  // @brief update sync_mode when new role is leader
+  virtual void switch_role_and_sync_mode(const common::ObRole &role,
+                                         const int64_t proposal_id,
+                                         const palf::SyncMode &sync_mode) override;
+
+
   // @brief query role and proposal_id from ObLogHandler.
   // @param[out], role:
   //    LEADER, if 'role_' of ObLogHandler is LEADER and 'proposal_id' is same with PalfHandle.

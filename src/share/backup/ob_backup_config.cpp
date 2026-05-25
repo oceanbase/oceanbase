@@ -22,6 +22,8 @@
 #include "share/backup/ob_backup_clean_util.h"
 #include "share/ob_rpc_struct.h"
 #include "share/ob_license_utils.h"
+#include "share/ob_tenant_info_proxy.h"
+#include "share/ob_server_struct.h"
 
 
 using namespace oceanbase;
@@ -141,7 +143,7 @@ int ObBackupConfigParserGenerator::set(const ObBackupConfigType &type, const uin
     config_parser_ = nullptr;
   }
   if (OB_SUCC(ret)) {
-    if ((ObBackupConfigType::Type::LOG_RESTORE_SOURCE == type.get_type()) && OB_FAIL(set_restore_source_type_(value))) {
+    if ((ObBackupConfigType::Type::LOG_RESTORE_SOURCE == type.get_type()) && OB_FAIL(set_restore_source_type_(tenant_id, value))) {
       LOG_WARN("fail to get restore source type");
     } else if (OB_FAIL(generate_parser_(type, tenant_id))) {
       LOG_WARN("fail to generate_parser", K(ret));
@@ -158,7 +160,7 @@ the restore_source_type_ will be parsed into SERVICE type.
 If the value is "LOCATION=file:///data/1/zhaoyongheng.zyh/archivelog";
 the restore_source_type_ will be parsed into LOCATION type.
 */
-int ObBackupConfigParserGenerator::set_restore_source_type_(const common::ObSqlString &value)
+int ObBackupConfigParserGenerator::set_restore_source_type_(const uint64_t tenant_id, const common::ObSqlString &value)
 {
   int ret = OB_SUCCESS;
   char tmp_str[OB_MAX_BACKUP_DEST_LENGTH] = { 0 };
@@ -187,6 +189,10 @@ int ObBackupConfigParserGenerator::set_restore_source_type_(const common::ObSqlS
         is_location = true;
       } else if (0 == STRCASECMP(tmp_token, OB_STR_SERVICE)) {
         is_service = true;
+      } else if (0 == STRCASECMP(tmp_token, OB_STR_DELAY)) {
+        if (OB_FAIL(parse_delay_with_check_(tenant_id, tmp_saveptr))) {
+          LOG_WARN("failed to parse DELAY with version and protection mode check", KR(ret), K(tenant_id));
+        }
       }
     }
     if (OB_FAIL(ret)) {
@@ -201,6 +207,36 @@ int ObBackupConfigParserGenerator::set_restore_source_type_(const common::ObSqlS
       restore_source_type_ = share::ObLogRestoreSourceType::SERVICE;
     }
     LOG_DEBUG("log restore source type", K(is_location), K(is_service));
+  }
+  return ret;
+}
+
+int ObBackupConfigParserGenerator::parse_delay_with_check_(
+    const uint64_t tenant_id,
+    char *delay_str)
+{
+  int ret = OB_SUCCESS;
+  bool delay_enabled = false;
+  if (OB_FAIL(share::ObLogRestoreSourceItem::check_delay_data_version(
+          tenant_id, delay_enabled))) {
+    LOG_WARN("delay data version check failed", KR(ret));
+  } else if (!delay_enabled) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("DELAY is not supported before version 4.4.2.2", KR(ret), K(tenant_id));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "set DELAY in log_restore_source before version 4.4.2.2 is");
+  } else {
+    share::ObAllTenantInfo tenant_info;
+    if (OB_FAIL(share::ObAllTenantInfoProxy::load_tenant_info(tenant_id, GCTX.sql_proxy_,
+            false/*for_update*/, tenant_info))) {
+      LOG_WARN("failed to load tenant info", KR(ret), K(tenant_id));
+    } else if (!tenant_info.get_protection_mode().is_maximum_performance()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("DELAY is only supported in MAXIMUM PERFORMANCE mode", KR(ret), K(tenant_id),
+          "protection_mode", tenant_info.get_protection_mode());
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "set DELAY in non-MAXIMUM PERFORMANCE mode is");
+    } else if (OB_FAIL(share::ObLogRestoreSourceItem::parse_delay_value(delay_str, recover_delay_us_))) {
+      LOG_WARN("failed to parse delay value", KR(ret));
+    }
   }
   return ret;
 }
@@ -241,7 +277,10 @@ int ObBackupConfigParserGenerator::generate_parser_(const ObBackupConfigType &ty
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("parser generator alloc memory failed", K(ret));
         } else {
-          config_parser_ = new(tmp_ptr) ObLogRestoreSourceServiceConfigParser(ObBackupConfigType::LOG_RESTORE_SOURCE, tenant_id);
+          ObLogRestoreSourceServiceConfigParser *parser =
+              new(tmp_ptr) ObLogRestoreSourceServiceConfigParser(ObBackupConfigType::LOG_RESTORE_SOURCE, tenant_id);
+          parser->set_recover_delay_us(recover_delay_us_);
+          config_parser_ = parser;
         }
         break;
       } else if (share::ObLogRestoreSourceType::LOCATION == restore_source_type_) {
@@ -251,7 +290,10 @@ int ObBackupConfigParserGenerator::generate_parser_(const ObBackupConfigType &ty
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("parser generator alloc memory failed", K(ret));
         } else {
-          config_parser_ = new(tmp_ptr) ObLogRestoreSourceLocationConfigParser(ObBackupConfigType::LOG_RESTORE_SOURCE, tenant_id, 0);
+          ObLogRestoreSourceLocationConfigParser *parser =
+              new(tmp_ptr) ObLogRestoreSourceLocationConfigParser(ObBackupConfigType::LOG_RESTORE_SOURCE, tenant_id, 0);
+          parser->set_recover_delay_us(recover_delay_us_);
+          config_parser_ = parser;
         }
         break;
       }

@@ -2256,6 +2256,7 @@ int ObRootUtils::check_ls_balance_and_commit_rs_job(
 }
 
 ERRSIM_POINT_DEF(ERRSIM_USER_LS_SYNC_SCN);
+ERRSIM_POINT_DEF(ERRSIM_INFLATE_SYS_LS_END_SCN);
 int ObRootUtils::wait_user_ls_sync_scn_locally(
     const share::SCN &sys_ls_target_scn,
     logservice::ObLogService *log_ls_svr,
@@ -2277,12 +2278,20 @@ int ObRootUtils::wait_user_ls_sync_scn_locally(
   } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.rpc_timeout))) {
     LOG_WARN("fail to set timeout", KR(ret));
   } else {
+    share::SCN effective_target_scn = sys_ls_target_scn;
+    const int errsim_inflate_ms = ERRSIM_INFLATE_SYS_LS_END_SCN;
+    if (OB_UNLIKELY(0 != errsim_inflate_ms)) {
+      const int64_t inflate_ns = abs(errsim_inflate_ms) * 1000L * 1000L; // ms -> ns
+      effective_target_scn = share::SCN::plus(sys_ls_target_scn, inflate_ns);
+      LOG_WARN("ERRSIM_INFLATE_SYS_LS_END_SCN: inflated sys_ls_target_scn",
+          K(sys_ls_target_scn), K(effective_target_scn), K(inflate_ns));
+    }
     bool need_retry = true;
     share::SCN curr_end_scn;
     curr_end_scn.set_min();
     common::ObRole role;
     int64_t leader_epoch = 0;
-    (void) keep_alive_handler->set_sys_ls_end_scn(sys_ls_target_scn);
+    (void) keep_alive_handler->set_sys_ls_end_scn(effective_target_scn);
     do {
       if (OB_UNLIKELY(ctx.is_timeouted())) {
         ret = OB_TIMEOUT;
@@ -2297,13 +2306,13 @@ int ObRootUtils::wait_user_ls_sync_scn_locally(
         if (OB_FAIL(log_handler->get_end_scn(curr_end_scn))) {
           LOG_WARN("fail to get ls end scn", KR(ret), K(ls_id));
         } else {
-          curr_end_scn = ERRSIM_USER_LS_SYNC_SCN ? SCN::scn_dec(sys_ls_target_scn) : curr_end_scn;
-          LOG_TRACE("wait curr_end_scn >= sys_ls_target_scn", K(curr_end_scn), K(sys_ls_target_scn),
+          curr_end_scn = ERRSIM_USER_LS_SYNC_SCN ? SCN::scn_dec(effective_target_scn) : curr_end_scn;
+          LOG_TRACE("wait curr_end_scn >= effective_target_scn", K(curr_end_scn), K(effective_target_scn),
               "is_errsim_opened", ERRSIM_USER_LS_SYNC_SCN ? true : false);
         }
-        if (OB_SUCC(ret) && curr_end_scn >= sys_ls_target_scn) {
+        if (OB_SUCC(ret) && curr_end_scn >= effective_target_scn) {
           LOG_INFO("current user ls end scn >= sys ls target scn now", K(curr_end_scn),
-              K(sys_ls_target_scn), "is_errsim_opened", ERRSIM_USER_LS_SYNC_SCN ? true : false,
+              K(effective_target_scn), "is_errsim_opened", ERRSIM_USER_LS_SYNC_SCN ? true : false,
               K(tenant_id), K(ls_id));
           need_retry = false;
         }

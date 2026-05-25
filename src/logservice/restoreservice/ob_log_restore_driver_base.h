@@ -38,6 +38,7 @@ public:
   void destroy();
   int do_schedule();
   int set_global_recovery_scn(const share::SCN &recovery_scn);
+  void set_fetch_log_upper_limit_scn(const share::SCN &scn);
 protected:
   virtual int do_fetch_log_(ObLS &ls) = 0;
   int check_replica_status_(storage::ObLS &ls, bool &can_fetch_log);
@@ -50,6 +51,7 @@ protected:
   storage::ObLSService *ls_svr_;
   ObLogService *log_service_;
   share::SCN global_recovery_scn_;
+  share::SCN fetch_log_upper_limit_scn_;
 };
 } // namespace logservice
 } // namespace oceanbase

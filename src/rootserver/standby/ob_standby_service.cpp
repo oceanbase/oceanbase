@@ -271,6 +271,7 @@ int ObStandbyService::check_tenant_can_set_protection_mode_(ObMySQLTransaction &
   ObProtectionModeUtils protectioin_mode_utils;
   bool is_sync = false;
   bool is_empty = false;
+  uint64_t user_data_version = 0;
   ObSyncStandbyDestStruct sync_standby_dest_struct;
   ObProtectionStat protection_stat;
   ObTimeoutCtx ctx;
@@ -294,10 +295,19 @@ int ObStandbyService::check_tenant_can_set_protection_mode_(ObMySQLTransaction &
   } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.internal_sql_execute_timeout))) {
     LOG_WARN("failed to set default timeout", KR(ret));
   }
-  // 4. standby tenant is sync
-  if (!target_protection_mode.is_maximum_protection() || OB_FAIL(ret)) {
+  // 4. for sync mode, check standby tenant recovery config (recovery_until_scn and recovery_delay)
+  if (!target_protection_mode.is_sync_mode() || OB_FAIL(ret)) {
   } else if (OB_FAIL(protectioin_mode_utils.init(user_tenant_id))) {
     LOG_WARN("failed to init protection mode utils", KR(ret), K(user_tenant_id));
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(user_tenant_id, user_data_version))) {
+    LOG_WARN("failed to get user data version", KR(ret), K(user_tenant_id));
+  } else if (user_data_version < DATA_VERSION_4_4_2_2) {
+    // tenant data version is not upgraded, skip the check
+  } else if (OB_FAIL(protectioin_mode_utils.check_standby_tenant_recovery_config())) {
+    LOG_WARN("failed to check standby tenant recovery config", KR(ret), K(user_tenant_id));
+  }
+  // 5. for maximum protection, wait standby tenant sync
+  if (OB_FAIL(ret) || !target_protection_mode.is_maximum_protection()) {
   } else if (OB_FAIL(protectioin_mode_utils.wait_standby_tenant_sync(ctx))) {
     if (OB_TIMEOUT == ret) {
       ret = OB_OP_NOT_ALLOW;
@@ -306,12 +316,12 @@ int ObStandbyService::check_tenant_can_set_protection_mode_(ObMySQLTransaction &
     } else {
       LOG_WARN("failed to wait standby tenant sync", KR(ret), K(user_tenant_id));
     }
-  // 5. no ls is creating
+  // 6. no ls is creating
   } else if (OB_FAIL(ObProtectionModeUtils::check_ls_status_for_upgrade_protection_level(
       user_tenant_id, trans))) {
     LOG_WARN("failed to check no ls is creating for set protection mode", KR(ret), K(user_tenant_id));
   }
-  // 6. check sync standby dest is not empty
+  // 7. check sync standby dest is not empty
   if (OB_FAIL(ret)) {
   } else if (protection_stat.get_protection_mode().is_maximum_availability()) {
     // if current protection mode is maximum availability, sync_standby_dest is always valid
@@ -414,6 +424,7 @@ int ObStandbyService::switch_tenant(const obrpc::ObSwitchTenantArg &arg)
   int64_t begin_ts = ObTimeUtility::current_time();
   uint64_t switch_tenant_id = OB_INVALID_ID;
   bool is_verify = arg.get_is_verify();
+  bool is_verify_nowait = arg.get_is_verify_nowait();
   uint64_t compat_version = 0;
   ObAllTenantInfo tenant_info;
   share::SCN switch_scn = SCN::min_scn();
@@ -440,6 +451,10 @@ int ObStandbyService::switch_tenant(const obrpc::ObSwitchTenantArg &arg)
     LOG_WARN("only (version >= 4_2_1_8 and version < 4_2_2_0) "
       "or version >= 4_2_2_0 and version < 4_3_0_0 "
       "or version >= 4_3_3_0 support this operation", KR(ret), K(compat_version));
+  } else if (OB_UNLIKELY(is_verify_nowait && compat_version < DATA_VERSION_4_4_2_2)) {
+    ret = common::OB_NOT_SUPPORTED;
+    LOG_WARN("verify nowait requires version >= 4_4_2_2", KR(ret), K(compat_version));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "verify nowait on version below 4.4.2.2 is");
   } else if (OB_FAIL(check_if_tenant_status_is_normal_(switch_tenant_id, arg.get_op_type()))) {
     LOG_WARN("fail to check if tenant status is normal", KR(ret), K(switch_tenant_id), K(arg));
   } else if (OB_FAIL(all_ls.init())) {
@@ -458,7 +473,7 @@ int ObStandbyService::switch_tenant(const obrpc::ObSwitchTenantArg &arg)
     switch (arg.get_op_type()) {
       case ObSwitchTenantArg::SWITCH_TO_PRIMARY :
         if (OB_FAIL(switch_to_primary(switch_tenant_id, arg.get_op_type(), is_verify,
-            switch_scn, cost_detail, all_ls))) {
+            is_verify_nowait, switch_scn, cost_detail, all_ls))) {
           LOG_WARN("failed to switch_to_primary", KR(ret), K(switch_tenant_id), K(arg));
         }
         break;
@@ -470,7 +485,7 @@ int ObStandbyService::switch_tenant(const obrpc::ObSwitchTenantArg &arg)
         break;
       case ObSwitchTenantArg::FAILOVER_TO_PRIMARY :
         if (OB_FAIL(failover_to_primary(switch_tenant_id, arg.get_op_type(), is_verify,
-            tenant_info, switch_scn, cost_detail, all_ls))) {
+            is_verify_nowait, tenant_info, switch_scn, cost_detail, all_ls))) {
           LOG_WARN("failed to failover_to_primary", KR(ret), K(switch_tenant_id), K(arg));
         }
         break;
@@ -497,6 +512,7 @@ int ObStandbyService::failover_to_primary(
     const uint64_t tenant_id,
     const obrpc::ObSwitchTenantArg::OpType &switch_optype,
     const bool is_verify,
+    const bool is_verify_nowait,
     const share::ObAllTenantInfo &tenant_info,
     share::SCN &switch_scn,
     ObTenantRoleTransCostDetail &cost_detail,
@@ -516,6 +532,7 @@ int ObStandbyService::failover_to_primary(
       tenant_id,
       switch_optype,
       is_verify,
+      is_verify_nowait,
       sql_proxy_,
       GCTX.srv_rpc_proxy_,
       &cost_detail,
@@ -788,6 +805,7 @@ int ObStandbyService::switch_to_primary(
     const uint64_t tenant_id,
     const obrpc::ObSwitchTenantArg::OpType &switch_optype,
     const bool is_verify,
+    const bool is_verify_nowait,
     share::SCN &switch_scn,
     ObTenantRoleTransCostDetail &cost_detail,
     ObTenantRoleTransAllLSInfo &all_ls)
@@ -808,6 +826,7 @@ int ObStandbyService::switch_to_primary(
       tenant_id,
       switch_optype,
       is_verify,
+      is_verify_nowait,
       sql_proxy_,
       GCTX.srv_rpc_proxy_,
       &cost_detail,
@@ -893,6 +912,7 @@ int ObStandbyService::switch_to_standby(
             tenant_id,
             switch_optype,
             is_verify,
+            false/*is_verify_nowait*/,
             sql_proxy_,
             GCTX.srv_rpc_proxy_,
             &cost_detail,

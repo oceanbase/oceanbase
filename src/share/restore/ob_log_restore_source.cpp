@@ -13,6 +13,9 @@
 #define USING_LOG_PREFIX SHARE
 #include "ob_log_restore_source.h"
 #include "share/ob_define.h"
+#include "share/config/ob_config_helper.h"  // ObConfigTimeParser
+#include "share/ob_cluster_version.h"       // GET_MIN_DATA_VERSION, DATA_VERSION_4_4_2_2
+#include "deps/oblib/src/lib/literals/ob_literals.h"
 
 using namespace oceanbase::share;
 static const char* LogRestoreSourceTypeArray[static_cast<int64_t>(ObLogRestoreSourceType::MAX)] = {
@@ -24,7 +27,8 @@ static const char* LogRestoreSourceTypeArray[static_cast<int64_t>(ObLogRestoreSo
 
 bool ObLogRestoreSourceItem::is_valid() const
 {
-  return id_ > 0 && is_valid_log_source_type(type_) && !value_.empty() && until_scn_.is_valid();
+  return id_ > 0 && is_valid_log_source_type(type_) && !value_.empty() && until_scn_.is_valid()
+      && recover_delay_us_ >= 0;
 }
 
 ObLogRestoreSourceType ObLogRestoreSourceItem::get_source_type(const ObString &type_str)
@@ -56,6 +60,46 @@ int ObLogRestoreSourceItem::deep_copy(ObLogRestoreSourceItem &other)
   id_ = other.id_;
   type_ = other.type_;
   until_scn_ = other.until_scn_;
+  recover_delay_us_ = other.recover_delay_us_;
   OZ (ob_write_string(allocator_, other.value_, value_));
+  return ret;
+}
+
+int ObLogRestoreSourceItem::parse_delay_value(const char *str, int64_t &delay_us)
+{
+  int ret = OB_SUCCESS;
+  delay_us = 0;
+  if (OB_ISNULL(str) || 0 == STRLEN(str)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid delay value", KR(ret), KP(str));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "DELAY, e.g. DELAY=30s, DELAY=1h");
+  } else {
+    bool valid = false;
+    const int64_t val = ObConfigTimeParser::get(str, valid);
+    if (!valid || val < 0) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid delay value", KR(ret), K(str));
+      LOG_USER_ERROR(OB_INVALID_ARGUMENT, "DELAY, e.g. DELAY=30s, DELAY=1h");
+    } else {
+      delay_us = val;
+    }
+  }
+  return ret;
+}
+
+
+int ObLogRestoreSourceItem::check_delay_data_version(
+    const uint64_t tenant_id, bool &enabled)
+{
+  int ret = OB_SUCCESS;
+  enabled = false;
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(gen_meta_tenant_id(tenant_id), data_version))) {
+    LOG_WARN("failed to get data version", KR(ret), K(tenant_id));
+  } else if (data_version < DATA_VERSION_4_4_2_2) {
+    enabled = false;
+  } else {
+    enabled = true;
+  }
   return ret;
 }

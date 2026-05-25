@@ -25250,7 +25250,10 @@ ACTIVATE STANDBY opt_tenant_name
 ;
 
 opt_verify:
-VERIFY
+VERIFY NOWAIT
+{
+  malloc_terminal_node($$, result->malloc_pool_, T_VERIFY_NOWAIT); }
+| VERIFY
 {
   malloc_terminal_node($$, result->malloc_pool_, T_VERIFY); }
 | /* EMPTY */

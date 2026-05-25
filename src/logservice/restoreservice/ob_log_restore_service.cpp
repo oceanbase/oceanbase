@@ -399,5 +399,11 @@ bool ObLogRestoreService::reach_time_interval_(const int64_t current_ts,
   return bret;
 }
 
+void ObLogRestoreService::set_fetch_log_upper_limit_scn(const share::SCN &scn)
+{
+  archive_driver_.set_fetch_log_upper_limit_scn(scn);
+  net_driver_.set_fetch_log_upper_limit_scn(scn);
+}
+
 } // namespace logservice
 } // namespace oceanbase

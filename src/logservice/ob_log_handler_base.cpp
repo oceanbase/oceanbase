@@ -77,18 +77,6 @@ int ObLogHandlerBase::prepare_switch_role(int64_t &curr_proposal_id,
   return ret;
 }
 
-void ObLogHandlerBase::switch_role_and_sync_mode(const common::ObRole &role,
-                                                 const int64_t proposal_id,
-                                                 const palf::SyncMode &sync_mode)
-{
-  WLockGuard guard(lock_);
-  role_ = role;
-  proposal_id_ = proposal_id;
-  if (common::LEADER == role_) {
-    sync_mode_ = sync_mode;
-  }
-}
-
 int ObLogHandlerBase::advance_election_epoch_and_downgrade_priority(const int64_t downgrade_priority_time_us,
                                                                     const char *reason)
 {

@@ -75,6 +75,7 @@ public:
   void wait();
   void signal();
   ObLogRestoreAllocator *get_log_restore_allocator() { return &allocator_;}
+  void set_fetch_log_upper_limit_scn(const share::SCN &scn);
 
 private:
   void run1();

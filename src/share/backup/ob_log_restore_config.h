@@ -33,22 +33,25 @@ class ObLogRestoreSourceLocationConfigParser : public ObLogArchiveDestConfigPars
 {
 public:
   ObLogRestoreSourceLocationConfigParser(const ObBackupConfigType::Type &type, const uint64_t tenant_id, const int64_t dest_no)
-    : ObLogArchiveDestConfigParser(type, tenant_id, dest_no) {}
+    : ObLogArchiveDestConfigParser(type, tenant_id, dest_no), recover_delay_us_(0) {}
   virtual ~ObLogRestoreSourceLocationConfigParser() {}
   virtual int update_inner_config_table(common::ObISQLClient &trans) override;
   virtual int check_before_update_inner_config(obrpc::ObSrvRpcProxy &rpc_proxy, common::ObISQLClient &trans) override;
+  void set_recover_delay_us(const int64_t delay_us) { recover_delay_us_ = delay_us; }
 
 protected:
   virtual int do_parse_sub_config_(const common::ObString &config_str) override;
 
 private:
+  int64_t recover_delay_us_;
   DISALLOW_COPY_AND_ASSIGN(ObLogRestoreSourceLocationConfigParser);
 };
 
 class ObServiceConfigParser
 {
 public:
-  ObServiceConfigParser(ObRestoreSourceServiceAttr &service_attr) : service_attr_(service_attr) {}
+  ObServiceConfigParser(ObRestoreSourceServiceAttr &service_attr)
+    : service_attr_(service_attr) {}
   ~ObServiceConfigParser() {}
   int parse_from(const common::ObString &value);
 protected:
@@ -66,7 +69,7 @@ class ObLogRestoreSourceServiceConfigParser : public ObIBackupConfigItemParser
 {
 public:
   ObLogRestoreSourceServiceConfigParser(const ObBackupConfigType::Type &type, const uint64_t tenant_id)
-    : ObIBackupConfigItemParser(type, tenant_id), parser_(service_attr_) {}
+    : ObIBackupConfigItemParser(type, tenant_id), parser_(service_attr_), recover_delay_us_(0) {}
   virtual ~ObLogRestoreSourceServiceConfigParser() {}
   virtual int parse_from(const common::ObSqlString &value) override;
   virtual int update_inner_config_table(common::ObISQLClient &trans) override;
@@ -78,6 +81,7 @@ public:
   int get_primary_server_addr(const common::ObSqlString &value,
   uint64_t &primary_tenant_id, uint64_t &primary_cluster_id,
   ObIArray<common::ObAddr> &addr_list);
+  void set_recover_delay_us(const int64_t delay_us) { recover_delay_us_ = delay_us; }
 
 private:
   int check_doing_service_restore_(common::ObISQLClient &trans, bool &is_doing);
@@ -87,6 +91,7 @@ private:
   ObServiceConfigParser parser_;
   ObRestoreSourceServiceAttr service_attr_;
   bool is_empty_;
+  int64_t recover_delay_us_;
   DISALLOW_COPY_AND_ASSIGN(ObLogRestoreSourceServiceConfigParser);
 };
 

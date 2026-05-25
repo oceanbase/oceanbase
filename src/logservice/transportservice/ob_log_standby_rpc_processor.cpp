@@ -46,8 +46,8 @@ int ObLogStandbyTransportP::process()
   const int64_t cluster_id = GCONF.cluster_id;
   const uint64_t tenant_id = MTL_ID();
 
-  CLOG_LOG(TRACE, "ObLogStandbyTransportP process start", K(req), K(cluster_id), K(tenant_id),
-           K(req.start_lsn_), K(req.end_lsn_), K(req.log_size_));
+  CLOG_LOG(TRACE, "ObLogStandbyTransportP process start", K(req),
+      K(cluster_id), K(tenant_id), K(req.start_lsn_), K(req.end_lsn_), K(req.log_size_));
 
   if (OB_UNLIKELY(!req.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
@@ -58,17 +58,15 @@ int ObLogStandbyTransportP::process()
   } else if (req.standby_tenant_id_ != MTL_ID()) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(ERROR, "standby tenant id not match", K(req.standby_tenant_id_), K(tenant_id), K(ret));
-  } else if (OB_UNLIKELY(nullptr != filter_ && true == (*filter_)(server))) {
-    CLOG_LOG(INFO, "need filter this packet", K(req));
-    ret = OB_ERR_UNEXPECTED;
   } else if (OB_UNLIKELY(req.end_lsn_ != req.start_lsn_ + req.log_size_)) {
     ret = OB_INVALID_ARGUMENT;
     CLOG_LOG(ERROR, "log size mismatch with lsn range", K(ret), K(req.start_lsn_), K(req.end_lsn_), K(req.log_size_));
   } else { } // success
 
-  if (OB_SUCCESS != ret) {
+  if (OB_FAIL(ret)) {
     resp.ret_code_ = ret;
-    resp.refresh_info_ret_code_ = ret;
+    resp.standby_committed_end_lsn_.reset();
+    resp.standby_committed_end_scn_.reset();
   } else {
     ObLogService *log_service = MTL(ObLogService*);
     ObLogRestoreService *restore_service = nullptr;
@@ -103,6 +101,9 @@ int ObLogStandbyTransportP::process()
     }
 
     // 提交任务流程结束，设置 ret_code_
+    // ret_code_ only reflects request validation/submission result.
+    // Failures when refreshing best-effort committed ack do not fail the RPC;
+    // they are represented by invalid standby_committed_end_lsn_/scn_.
     resp.ret_code_ = ret;
 
     // 最后获取 palf 的 committed_end_lsn 和 committed_end_scn，确保获取到最新的值
@@ -121,7 +122,7 @@ int ObLogStandbyTransportP::process()
       ret = OB_ERR_UNEXPECTED;
       CLOG_LOG(ERROR, "ObLogService is null", K(ret));
     } else if (OB_FAIL(log_service->open_palf(req.ls_id_, palf_handle_guard))) {
-      CLOG_LOG(WARN, "open_palf failed, use req value", K(ret), K(req.ls_id_));
+      CLOG_LOG(WARN, "open_palf failed, skip returning committed ack", K(ret), K(req.ls_id_));
     } else if (OB_FAIL(ObLogStandbyAckService::check_leader_and_raw_write_mode(
         palf_handle_guard.get_palf_handle(), first_proposal_id, is_valid))) {
       CLOG_LOG(WARN, "first check leader and access mode failed", K(ret), K(req.ls_id_));
@@ -164,17 +165,19 @@ int ObLogStandbyTransportP::process()
     }
 
     // 设置 committed 位点
-    resp.refresh_info_ret_code_ = ret;
-    if (!skip_return_stale_ack) {
+    if (OB_SUCC(ret) && !skip_return_stale_ack && palf_committed_end_lsn.is_valid() && palf_committed_end_scn.is_valid()) {
       resp.standby_committed_end_lsn_ = palf_committed_end_lsn;
       resp.standby_committed_end_scn_ = palf_committed_end_scn;
+    } else {
+      resp.standby_committed_end_lsn_.reset();
+      resp.standby_committed_end_scn_.reset();
     }
   }
 
   // 设置 resp 基本字段
   resp.ls_id_ = req.ls_id_;
-  resp.standby_cluster_id_ = GCONF.cluster_id;
-  resp.standby_tenant_id_ = MTL_ID();
+  resp.standby_cluster_id_ = cluster_id;
+  resp.standby_tenant_id_ = tenant_id;
   return OB_SUCCESS;
 }
 

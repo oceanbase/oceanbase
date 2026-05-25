@@ -20,6 +20,7 @@
 #include "share/ob_sync_standby_dest_operator.h"
 #include "share/ob_cluster_version.h"
 #include "rootserver/standby/ob_protection_mode_utils.h"
+#include "share/restore/ob_restore_table_operator.h"
 
 namespace oceanbase
 {
@@ -591,8 +592,14 @@ int ObPrimaryRestoreSourceAttrUpdater::do_update_restore_source_(
   } else if (0 != STRCMP(tmp_service_attr.encrypt_passwd_, old_attr.encrypt_passwd_)) {
     ret = OB_EAGAIN;
     LOG_WARN("log restore source password may be modified", KR(ret), K(user_tenant_id_));
-  } else if (OB_FAIL(update_source_inner_table_(updated_value_str, sizeof(updated_value_str), trans, tmp_item))) {
-    LOG_WARN("fail to add service source", KR(ret), K(updated_value_str), K(tmp_item.until_scn_));
+  } else {
+    tmp_item.value_.assign_ptr(updated_value_str, static_cast<int32_t>(STRLEN(updated_value_str)));
+    ObTenantRestoreTableOperator table_op;
+    if (OB_FAIL(table_op.init(user_tenant_id_, &trans))) {
+      LOG_WARN("failed to init table operator with trans", KR(ret), K(user_tenant_id_));
+    } else if (OB_FAIL(table_op.insert_source(tmp_item))) {
+      LOG_WARN("failed to update restore source", KR(ret), K(tmp_item));
+    }
   }
 
   int temp_ret = OB_SUCCESS;
@@ -614,36 +621,6 @@ int ObPrimaryRestoreSourceAttrUpdater::get_restore_source_value_(ObLogRestoreSou
     LOG_WARN("log restore source item is invalid");
   } else if (OB_FAIL(standby_source_value.assign(item.value_))) {
     LOG_WARN("fail to assign standby source value", K(item.value_));
-  }
-  return ret;
-}
-
-int ObPrimaryRestoreSourceAttrUpdater::update_source_inner_table_(char *buf,
-                                                    const int64_t buf_size,
-                                                    ObMySQLTransaction &trans,
-                                                    const ObLogRestoreSourceItem &item)
-{
-  int ret = OB_SUCCESS;
-  int64_t affected_rows = 0;
-
-  if (OB_ISNULL(buf) || OB_UNLIKELY(buf_size <= 0)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument when get source for update",K(buf_size));
-  } else {
-    uint64_t meta_tenant_id = gen_meta_tenant_id(user_tenant_id_);
-    ObDMLSqlSplicer dml;
-    ObSqlString sql;
-    if (OB_FAIL(dml.add_pk_column(OB_STR_TENANT_ID, user_tenant_id_))) {
-      LOG_WARN("failed to add column", K(meta_tenant_id), K(item));
-    } else if (OB_FAIL(dml.add_pk_column(OB_STR_LOG_RESTORE_SOURCE_ID, item.id_))) {
-      LOG_WARN("failed to add column", K(meta_tenant_id), K(item));
-    } else if (OB_FAIL(dml.add_column(OB_STR_LOG_RESTORE_SOURCE_VALUE, buf))) {
-      LOG_WARN("failed to add column", K(meta_tenant_id), K(item));
-    } else if (OB_FAIL(dml.splice_update_sql(OB_ALL_LOG_RESTORE_SOURCE_TNAME, sql))) {
-      LOG_WARN("fill update source value sql failed", K(item));
-    } else if (OB_FAIL(trans.write(meta_tenant_id, sql.ptr(), affected_rows))) {
-      LOG_WARN("failed to exec sql", K(sql), K(meta_tenant_id));
-    }
   }
   return ret;
 }
