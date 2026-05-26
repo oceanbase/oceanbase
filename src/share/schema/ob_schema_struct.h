@@ -2626,7 +2626,7 @@ private:
 
 public:
   static const int64_t MIN_AUTO_PART_SIZE = 1LL; // 1
-  static const int64_t MIN_AUTO_PART_SIZE_BY_USER = 1LL * 1024 * 1024; // 8MB
+  static const int64_t MIN_AUTO_PART_SIZE_BY_USER = 1LL * 1024 * 1024; // 1MB
 
 private:
   ObPartitionFuncType part_func_type_;
