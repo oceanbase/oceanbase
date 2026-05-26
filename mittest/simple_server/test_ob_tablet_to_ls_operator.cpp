@@ -37,7 +37,7 @@ using namespace common;
 class TestTabletToLSOperator : public unittest::ObSimpleClusterTestBase
 {
 public:
-  TestTabletToLSOperator() : unittest::ObSimpleClusterTestBase("test_ls_status_operator") {}
+  TestTabletToLSOperator() : unittest::ObSimpleClusterTestBase("test_ob_tablet_to_ls_operator") {}
 };
 
 TEST_F(TestTabletToLSOperator, UpdateLSAndTransSeq)
