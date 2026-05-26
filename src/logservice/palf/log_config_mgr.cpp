@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX PALF
 #include "log_config_mgr.h"
 #include "log_engine.h"
+#include "share/config/ob_server_config.h"
 #include "log_io_task_cb_utils.h"                // FlushMetaCbCtx
 #include "log_sliding_window.h"
 #include "log_mode_mgr.h"
@@ -64,6 +65,8 @@ LogConfigMgr::LogConfigMgr()
       parent_keepalive_time_us_(OB_INVALID_TIMESTAMP),
       last_submit_register_req_time_us_(OB_INVALID_TIMESTAMP),
       last_first_register_time_us_(OB_INVALID_TIMESTAMP),
+      stagnant_parent_(),
+      stagnant_avoid_until_us_(OB_INVALID_TIMESTAMP),
       child_lock_(common::ObLatchIds::PALF_CM_CHILD_LOCK),
       children_(),
       log_sync_children_(),
@@ -2739,9 +2742,11 @@ int LogConfigMgr::handle_register_parent_resp(const LogLearner &server,
       do_after_register_parent_done = true;
     } else if (REGISTER_CONTINUE == reg_ret && candidate_list.get_member_number() > 0) {
       common::ObAddr reg_dst;
-      const int64_t reg_dst_idx = ObRandom::rand(0, candidate_list.get_member_number() - 1);
+      int64_t reg_dst_idx = -1;
       LogLearner child_self(self_, region_, register_time_us_);
-      if (OB_FAIL(candidate_list.get_server_by_index(reg_dst_idx, reg_dst))) {
+      if (OB_FAIL(choose_parent_candidate_index_(candidate_list, reg_dst_idx))) {
+        PALF_LOG(WARN, "choose_parent_candidate_index_ failed", KR(ret), K_(palf_id), K_(self), K(candidate_list));
+      } else if (OB_FAIL(candidate_list.get_server_by_index(reg_dst_idx, reg_dst))) {
         PALF_LOG(WARN, "get_server_by_index failed", KR(ret), K_(palf_id), K_(self), K(candidate_list), K(reg_dst));
       } else if (OB_FAIL(log_engine_->submit_register_parent_req(reg_dst, child_self, false))) {
         PALF_LOG(WARN, "submit_register_parent_req failed", KR(ret), K_(palf_id), K_(self), K(reg_dst));
@@ -2883,6 +2888,27 @@ int LogConfigMgr::check_parent_health()
         PALF_LOG(WARN, "register request timeout, re_register_parent failed", KR(ret), K_(palf_id), K_(self));
       } else {
         PALF_LOG(INFO, "re register_parent success", KR(ret), K_(palf_id), K_(self));
+      }
+    }
+    // fetch source stagnation detection: parent alive but fetch not making progress.
+    const bool enable_fetch_stagnation_avoidance = enable_fetch_stagnation_avoidance_();
+    const bool is_sync_enabled = state_mgr_->is_sync_enabled();
+    if (OB_SUCC(ret) && (!enable_fetch_stagnation_avoidance || !is_sync_enabled)) {
+      sw_->reset_fetch_stagnant_check_state();
+    } else if (OB_SUCC(ret) && parent_.is_valid()
+        && sw_->is_fetch_stagnant(PALF_FETCH_SRC_STAGNANT_THRESHOLD_US)) {
+      PALF_LOG(WARN, "fetch from parent stagnant, retire and re-register",
+               K_(palf_id), K_(self), K_(parent), K_(stagnant_parent),
+               K_(stagnant_avoid_until_us), K(curr_time_us));
+      const common::ObAddr old_parent = parent_;
+      if (OB_FAIL(retire_parent_(RetireParentReason::LOG_STAGNANT))) {
+        PALF_LOG(WARN, "retire_parent_ failed on log stagnant", KR(ret), K_(palf_id), K_(self),
+                 K(old_parent));
+      } else if (FALSE_IT(stagnant_parent_ = old_parent)) {
+      } else if (FALSE_IT(stagnant_avoid_until_us_ = curr_time_us + PALF_STAGNANT_AVOID_TTL_US)) {
+      } else if (OB_FAIL(register_parent_(RegisterParentReason::PARENT_PROGRESS_STAGNANT))) {
+        PALF_LOG(WARN, "register_parent_ failed after stagnant retire", KR(ret), K_(palf_id), K_(self),
+                 K(old_parent));
       }
     }
   }
@@ -3290,6 +3316,9 @@ int LogConfigMgr::generate_candidate_list_(const LogLearner &child, LogCandidate
   } else if (OB_FAIL(generate_candidate_list_from_children_(child, candidate_list))) {
     PALF_LOG(WARN, "generate_candidate_list_from_children_ failed", KR(ret), K(child), K(candidate_list));
   } else {
+    PALF_LOG(TRACE, "generate_candidate_list_ done", K_(palf_id), K_(self), K(child), K(candidate_list),
+             "member_cnt", log_ms_meta_.curr_.config_.log_sync_memberlist_.get_member_number(),
+             "children_cnt", children_.get_member_number());
   }
   return ret;
 }
@@ -3297,6 +3326,7 @@ int LogConfigMgr::generate_candidate_list_(const LogLearner &child, LogCandidate
 int LogConfigMgr::generate_candidate_list_from_member_(const LogLearner &child, LogCandidateList &candidate_list)
 {
   int ret = OB_SUCCESS;
+  const bool enable_fetch_stagnation_avoidance = enable_fetch_stagnation_avoidance_();
   const ObMemberList &curr_member_list = log_ms_meta_.curr_.config_.log_sync_memberlist_;
   for (int64_t i = 0; i < curr_member_list.get_member_number(); ++i) {
     ObAddr addr;
@@ -3309,18 +3339,104 @@ int LogConfigMgr::generate_candidate_list_from_member_(const LogLearner &child, 
       PALF_LOG(WARN, "get_server_region failed", KR(tmp_ret), K_(palf_id), K_(self), K(addr));
     } else if (addr == self_ || region != child.region_) {
       // skip
-    } else if (OB_SUCCESS == (tmp_ret = candidate_list.add_learner(common::ObMember(addr, 1)))) {
-    } else if (OB_ENTRY_EXIST == tmp_ret) {
-      continue;
-    } else if (OB_SIZE_OVERFLOW == tmp_ret) {
-      break;
-    } else {
-      ret = tmp_ret;
-      PALF_LOG(WARN, "add_learner failed", KR(ret));
-      break;
+    } else if (need_add_parent_candidate_(addr, enable_fetch_stagnation_avoidance)) {
+      if (OB_SUCCESS == (tmp_ret = candidate_list.add_learner(common::ObMember(addr, 1)))) {
+      } else if (OB_ENTRY_EXIST == tmp_ret) {
+        continue;
+      } else if (OB_SIZE_OVERFLOW == tmp_ret) {
+        break;
+      } else {
+        ret = tmp_ret;
+        PALF_LOG(WARN, "add_learner failed", KR(ret));
+        break;
+      }
     }
   }
   return ret;
+}
+
+int LogConfigMgr::choose_parent_candidate_index_(const LogCandidateList &candidate_list, int64_t &reg_dst_idx) const
+{
+  int ret = OB_SUCCESS;
+  const int64_t cand_count = candidate_list.get_member_number();
+  if (cand_count <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    PALF_LOG(WARN, "invalid candidate_list", KR(ret), K_(palf_id), K_(self), K(candidate_list));
+  } else {
+    reg_dst_idx = ObRandom::rand(0, cand_count - 1);
+    const bool enable_fetch_stagnation_avoidance = enable_fetch_stagnation_avoidance_();
+    // avoid re-registering to a recently stagnant parent if other candidates exist
+    if (enable_fetch_stagnation_avoidance && cand_count > 1 && stagnant_parent_.is_valid()
+        && common::ObTimeUtility::current_time() < stagnant_avoid_until_us_) {
+      PALF_LOG(INFO, "stagnant_avoid: attempting to avoid recently stagnant parent",
+               K_(palf_id), K_(self), K_(stagnant_parent), K(candidate_list),
+               K(cand_count), K_(stagnant_avoid_until_us));
+      for (int64_t tries = 0; OB_SUCCESS == ret && tries < cand_count; ++tries) {
+        common::ObAddr tmp_dst;
+        if (OB_FAIL(candidate_list.get_server_by_index(reg_dst_idx, tmp_dst))) {
+          PALF_LOG(WARN, "get_server_by_index failed", KR(ret), K_(palf_id), K_(self),
+                   K(candidate_list), K(reg_dst_idx));
+        } else if (tmp_dst != stagnant_parent_) {
+          PALF_LOG(INFO, "stagnant_avoid: successfully picked non-stagnant candidate",
+                   K_(palf_id), K_(self), K(tmp_dst), K(tries));
+          break;
+        } else {
+          reg_dst_idx = (reg_dst_idx + 1) % cand_count;
+        }
+      }
+      if (OB_SUCCESS == ret) {
+        common::ObAddr picked_dst;
+        if (OB_FAIL(candidate_list.get_server_by_index(reg_dst_idx, picked_dst))) {
+          PALF_LOG(WARN, "get_server_by_index failed", KR(ret), K_(palf_id), K_(self),
+                   K(candidate_list), K(reg_dst_idx));
+        } else if (picked_dst == stagnant_parent_) {
+          PALF_LOG(WARN, "stagnant_avoid: failed to pick non-stagnant candidate, fallback to stagnant parent",
+                   K_(palf_id), K_(self), K_(stagnant_parent), K(candidate_list),
+                   K(cand_count), K_(stagnant_avoid_until_us), K(reg_dst_idx));
+        }
+      }
+    } else if (enable_fetch_stagnation_avoidance && stagnant_parent_.is_valid()
+               && common::ObTimeUtility::current_time() < stagnant_avoid_until_us_) {
+      PALF_LOG(WARN, "stagnant_avoid: only one candidate and it may be the stagnant parent, cannot avoid",
+               K_(palf_id), K_(self), K_(stagnant_parent), K(candidate_list),
+               K(cand_count), K_(stagnant_avoid_until_us));
+    }
+  }
+  return ret;
+}
+
+bool LogConfigMgr::enable_fetch_stagnation_avoidance_() const
+{
+  bool bool_ret = true;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    bool_ret = tenant_config->_enable_palf_fetch_stagnation_avoidance;
+  }
+  return bool_ret;
+}
+
+bool LogConfigMgr::need_add_parent_candidate_(
+    const common::ObAddr &addr,
+    const bool enable_fetch_stagnation_avoidance) const
+{
+  bool bool_ret = true;
+  int ret = OB_SUCCESS;
+  // check if the server is stagnant
+  if (enable_fetch_stagnation_avoidance) {
+    LsnTsInfo ack_info;
+    int tmp_ret = sw_->get_server_ack_info(addr, ack_info);
+    if (OB_SUCCESS == tmp_ret
+        && ack_info.is_valid()
+        && common::ObTimeUtility::current_time() - ack_info.last_advance_time_us_
+           > PALF_PARENT_CANDIDATE_MIN_ACK_ADVANCE_US) {
+      bool_ret = false;
+      PALF_LOG(WARN, "addr is stagnant, skip add to candidate", K_(palf_id), K_(self), K(addr), K(ack_info));
+    } else {
+      PALF_LOG(TRACE, "addr ack check passed, add to candidate", K_(palf_id), K_(self), K(addr),
+               K(ack_info), K(tmp_ret));
+    }
+  }
+  return bool_ret;
 }
 
 int LogConfigMgr::generate_candidate_list_from_children_(const LogLearner &child, LogCandidateList &candidate_list)

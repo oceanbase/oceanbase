@@ -355,6 +355,7 @@ public:
     UNUSED(server);
     ack_info.last_ack_time_us_ = common::ObTimeUtility::current_time();
     ack_info.lsn_ = LSN(PALF_INITIAL_LSN_VAL);
+    ack_info.last_advance_time_us_ = common::ObTimeUtility::current_time();
     return OB_SUCCESS;
   }
   int get_leader_from_cache(common::ObAddr &leader) const

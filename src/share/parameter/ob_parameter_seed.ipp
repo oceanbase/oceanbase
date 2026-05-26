@@ -933,6 +933,10 @@ DEF_TIME(_keepalive_interval, OB_TENANT_PARAMETER, "100ms", "[10ms, 10s]",
         "This configuration item is used to control the write interval of the keepalive log, "
         "ensuring that the readable point of the standby database can be advanced in a timely manner.",
         ObParameterAttr(Section::TRANS, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE))
+DEF_BOOL(_enable_palf_fetch_stagnation_avoidance, OB_TENANT_PARAMETER, "True",
+        "When enabled, a follower whose parent stops advancing for over 5s will retire and re-register. "
+        "The previous stagnant parent will be avoided for 30s if alternative candidates exist.",
+        ObParameterAttr(Section::LOGSERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 //// rpc config
 DEF_TIME(rpc_timeout, OB_CLUSTER_PARAMETER, "2s",

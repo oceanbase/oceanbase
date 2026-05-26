@@ -88,6 +88,8 @@ LogSlidingWindow::LogSlidingWindow()
     last_fetch_max_log_id_(OB_INVALID_LOG_ID),
     last_fetch_committed_end_lsn_(),
     last_fetch_trigger_type_(FetchTriggerType::LOG_LOOP_TH),
+    last_checked_max_flushed_end_lsn_(),
+    stagnant_since_us_(OB_INVALID_TIMESTAMP),
     match_lsn_map_lock_(common::ObLatchIds::PALF_SW_MATCH_LSN_MAP_LOCK),
     match_lsn_map_(),
     last_truncate_lsn_(),
@@ -127,6 +129,7 @@ LogSlidingWindow::LogSlidingWindow()
 
 void LogSlidingWindow::destroy()
 {
+  reset_fetch_stagnant_check_state();
   is_inited_ = false;
   is_truncating_ = false;
   is_rebuilding_ = false;
@@ -182,6 +185,7 @@ int LogSlidingWindow::flashback(const PalfBaseInfo &palf_base_info, const int64_
     last_slide_log_accum_checksum_ = prev_log_info.accum_checksum_;
 
     committed_end_lsn_ = palf_base_info.curr_lsn_;
+    reset_fetch_stagnant_check_state();
     reset_match_lsn_map_();
 
     LogGroupEntryHeader group_header;
@@ -1931,6 +1935,76 @@ bool LogSlidingWindow::need_execute_fetch_(const FetchTriggerType &fetch_trigger
     bool_ret = false;
   } else {}
   return bool_ret;
+}
+
+bool LogSlidingWindow::is_fetch_stagnant_(const int64_t threshold_us)
+{
+  bool bool_ret = false;
+  int ret = OB_SUCCESS;
+  const int64_t now = ObTimeUtility::current_time();
+  ObSpinLockGuard guard(fetch_info_lock_);
+  // Sync may be disabled during migration prepare / rebuild. In that state PALF will
+  // not issue fetch_log_req and will not accept push_log, so max_flushed_end_lsn cannot advance
+  // by design. Skip stagnation detection and reset baseline so the first check after re-enable
+  // starts from a clean state.
+  if (false == state_mgr_->is_sync_enabled()) {
+    last_checked_max_flushed_end_lsn_.reset();
+    stagnant_since_us_ = OB_INVALID_TIMESTAMP;
+  } else {
+    LSN curr_max_flushed;
+    get_max_flushed_end_lsn(curr_max_flushed);
+    if (!last_checked_max_flushed_end_lsn_.is_valid()) {
+      // first check after init or after stagnation trigger reset, establish baseline
+      last_checked_max_flushed_end_lsn_ = curr_max_flushed;
+      stagnant_since_us_ = OB_INVALID_TIMESTAMP;
+      PALF_LOG(INFO, "fetch_stagnant_check: baseline established",
+               K(curr_max_flushed), K_(last_fetch_end_lsn));
+    } else if (last_fetch_end_lsn_.is_valid() && curr_max_flushed >= last_fetch_end_lsn_) {
+      // caught up to fetch target, not stagnant
+      last_checked_max_flushed_end_lsn_ = curr_max_flushed;
+      stagnant_since_us_ = OB_INVALID_TIMESTAMP;
+    } else if (curr_max_flushed < last_checked_max_flushed_end_lsn_) {
+      // truncation / flashback / rebuild may make max_flushed_end_lsn go backward.
+      const LSN last_checked_max_flushed_end_lsn = last_checked_max_flushed_end_lsn_;
+      last_checked_max_flushed_end_lsn_ = curr_max_flushed;
+      stagnant_since_us_ = OB_INVALID_TIMESTAMP;
+      PALF_LOG(INFO, "fetch_stagnant_check: max_flushed_end_lsn rollback, reset baseline",
+               K(curr_max_flushed), K(last_checked_max_flushed_end_lsn),
+               K_(last_fetch_end_lsn));
+    } else if (curr_max_flushed > last_checked_max_flushed_end_lsn_) {
+      // max_flushed_end_lsn advanced since last check, making progress
+      last_checked_max_flushed_end_lsn_ = curr_max_flushed;
+      stagnant_since_us_ = OB_INVALID_TIMESTAMP;
+    } else if (OB_INVALID_TIMESTAMP == stagnant_since_us_) {
+      // first detection of no progress, start timer
+      stagnant_since_us_ = now;
+      PALF_LOG(INFO, "fetch_stagnant_check: no progress detected, start timer",
+               K(curr_max_flushed), K_(last_checked_max_flushed_end_lsn),
+               K_(last_fetch_end_lsn), K(now), K(threshold_us));
+    } else if (now - stagnant_since_us_ > threshold_us) {
+      bool_ret = true;
+      PALF_LOG(WARN, "fetch_stagnant_check: stagnant confirmed",
+               K(curr_max_flushed), K_(last_checked_max_flushed_end_lsn),
+               K_(last_fetch_end_lsn), K_(stagnant_since_us), K(now), K(threshold_us),
+               "stagnant_duration_us", now - stagnant_since_us_);
+      // reset tracking state so new parent won't be immediately flagged
+      last_checked_max_flushed_end_lsn_ = curr_max_flushed;
+      stagnant_since_us_ = OB_INVALID_TIMESTAMP;
+    }
+  }
+  return bool_ret;
+}
+
+bool LogSlidingWindow::is_fetch_stagnant(const int64_t threshold_us)
+{
+  return is_fetch_stagnant_(threshold_us);
+}
+
+void LogSlidingWindow::reset_fetch_stagnant_check_state()
+{
+  ObSpinLockGuard guard(fetch_info_lock_);
+  last_checked_max_flushed_end_lsn_.reset();
+  stagnant_since_us_ = OB_INVALID_TIMESTAMP;
 }
 
 bool LogSlidingWindow::need_use_batch_rpc_(const int64_t buf_size,
