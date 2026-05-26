@@ -46,11 +46,11 @@ devdeps-apache-avro-cpp-1.12.0-72025062510.el8.aarch64.rpm
 devdeps-apache-thrift-0.16.0-132025070909.el8.aarch64.rpm
 devdeps-mit-krb5-1.21.3-212025063015.el8.aarch64.rpm
 devdeps-cyrus-sasl-2.1.28-102025070115.el8.aarch64.rpm
-devdeps-lz4-1.7.1-42025110616.el8.aarch64.rpm
-devdeps-lz4-1.9.1-32025110616.el8.aarch64.rpm
+devdeps-lz4-1.7.1-62026052518.el8.aarch64.rpm
+devdeps-lz4-1.9.1-52026052518.el8.aarch64.rpm
 devdeps-snappy-1.0.3-22025110616.el8.aarch64.rpm
-devdeps-zstd-1.1.1-32025110617.el8.aarch64.rpm
-devdeps-zstd-1.3.8-32025110617.el8.aarch64.rpm
+devdeps-zstd-1.1.1-52026052517.el8.aarch64.rpm
+devdeps-zstd-1.3.8-52026052517.el8.aarch64.rpm
 devdeps-obcharset-1.0.0-32025111215.el8.aarch64.rpm
 devdeps-hms-client-1.0.0-22025112014.el8.aarch64.rpm
 
