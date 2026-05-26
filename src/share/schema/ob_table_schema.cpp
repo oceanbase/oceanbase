@@ -5223,6 +5223,7 @@ int ObTableSchema::check_alter_column_accuracy(const ObColumnSchemaV2 &src_colum
     } else {
       // in mysql mode
       if (src_meta.is_date()
+       || src_meta.is_mysql_date()
        || src_meta.is_year()) {
          // online, do nothing
       } else if (ObEnumSetTC == src_column.get_data_type_class()) {
@@ -5244,7 +5245,7 @@ int ObTableSchema::check_alter_column_accuracy(const ObColumnSchemaV2 &src_colum
         // increase column length
         if (ob_is_number_tc(src_col_type) || src_meta.is_bit() || src_meta.is_char()
          || src_meta.is_varchar() || src_meta.is_varbinary() || src_meta.is_text()
-         || src_meta.is_blob() || src_meta.is_timestamp() || src_meta.is_datetime()
+         || src_meta.is_blob() || src_meta.is_timestamp() || src_meta.is_mysql_datetime_or_datetime()
          || src_meta.is_integer_type() || src_meta.is_json()) {
            // online, do nothing
         } else if (ob_is_decimal_int_tc(src_col_type)
@@ -5606,10 +5607,10 @@ int ObTableSchema::check_ddl_type_change_rules(const ObColumnSchemaV2 &src_colum
           !src_meta.is_varchar() &&
           !src_meta.is_varbinary() &&
           !src_meta.is_enum_or_set() &&
-          !src_meta.is_datetime()) ||
+          !src_meta.is_mysql_datetime_or_datetime()) ||
           src_col_type != dst_col_type) &&
           (!src_meta.is_timestamp() &&
-            !dst_meta.is_datetime()) &&
+            !dst_meta.is_mysql_datetime_or_datetime()) &&
           !((src_meta.is_char() && dst_meta.is_char()) && // char(x) -> char(y) (y>=x) && src_column has no generated column depended on (rowkey or index)
             !src_column.has_generated_column_deps()) &&
           !(src_meta.is_integer_type() && dst_meta.is_integer_type() && data_version >= DATA_VERSION_4_2_2_0)) {
