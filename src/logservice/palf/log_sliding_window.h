@@ -328,6 +328,8 @@ public:
                                     int64_t &out_read_size) const;
   int64_t get_last_slide_log_id() const;
   virtual int try_handle_next_submit_log();
+  virtual bool is_fetch_stagnant(const int64_t threshold_us);
+  void reset_fetch_stagnant_check_state();
   TO_STRING_KV(K_(palf_id), K_(self), K_(lsn_allocator), K_(group_buffer),                         \
   K_(last_submit_lsn), K_(last_submit_end_lsn), K_(last_submit_log_id), K_(last_submit_log_pid),   \
   K_(max_flushed_lsn), K_(max_flushed_end_lsn), K_(max_flushed_log_pid), K_(committed_end_lsn),    \
@@ -481,6 +483,7 @@ private:
                                 const LSN &lsn,
                                 const LogWriteBuf &log_write_buf);
   bool need_execute_fetch_(const FetchTriggerType &fetch_trigger_type);
+  bool is_fetch_stagnant_(const int64_t threshold_us);
   bool need_use_batch_rpc_(const int64_t buf_size,
                            const bool is_fetch_log) const;
   bool is_sync_mode_() const;
@@ -580,6 +583,8 @@ private:
   int64_t last_fetch_max_log_id_;
   LSN last_fetch_committed_end_lsn_;
   FetchTriggerType last_fetch_trigger_type_;
+  LSN last_checked_max_flushed_end_lsn_;   // max_flushed_end_lsn at last is_fetch_stagnant() check
+  int64_t stagnant_since_us_;               // when stagnation started; OB_INVALID_TIMESTAMP = not stagnant
   // ---------------- fetch log info end --------------------------
   // used to record synchronization points for each replica
   mutable common::ObSpinLock match_lsn_map_lock_;

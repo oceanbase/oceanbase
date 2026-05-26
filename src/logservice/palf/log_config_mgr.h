@@ -629,6 +629,7 @@ enum class RegisterParentReason
   PARENT_NOT_ALIVE = 2,
   SELF_REGION_CHANGED = 3,
   RETIRED_BY_PARENT = 4,
+  PARENT_PROGRESS_STAGNANT = 5,
 };
 
 inline const char *register_parent_reason_2_str_(const RegisterParentReason &reason) const
@@ -640,6 +641,7 @@ inline const char *register_parent_reason_2_str_(const RegisterParentReason &rea
     CHECK_REASON_STR(PARENT_NOT_ALIVE);
     CHECK_REASON_STR(SELF_REGION_CHANGED);
     CHECK_REASON_STR(RETIRED_BY_PARENT);
+    CHECK_REASON_STR(PARENT_PROGRESS_STAGNANT);
     default:
       return "Invalid";
   }
@@ -652,6 +654,7 @@ enum class RetireParentReason
   IS_FULL_MEMBER = 1,
   SELF_REGION_CHANGED = 2,
   PARENT_CHILD_LOOP = 3,
+  LOG_STAGNANT = 4,
 };
 
 inline const char *retire_parent_reason_2_str_(const RetireParentReason &reason) const
@@ -662,6 +665,7 @@ inline const char *retire_parent_reason_2_str_(const RetireParentReason &reason)
     CHECK_REASON_STR(IS_FULL_MEMBER);
     CHECK_REASON_STR(SELF_REGION_CHANGED);
     CHECK_REASON_STR(PARENT_CHILD_LOOP);
+    CHECK_REASON_STR(LOG_STAGNANT);
     default:
       return "Invalid";
   }
@@ -715,6 +719,10 @@ private:
   int generate_candidate_list_(const LogLearner &child, LogCandidateList &candidate_list);
   int generate_candidate_list_from_member_(const LogLearner &child, LogCandidateList &candidate_list);
   int generate_candidate_list_from_children_(const LogLearner &child, LogCandidateList &candidate_list);
+  bool need_add_parent_candidate_(const common::ObAddr &addr,
+                                  const bool enable_fetch_stagnation_avoidance) const;
+  bool enable_fetch_stagnation_avoidance_() const;
+  int choose_parent_candidate_index_(const LogCandidateList &candidate_list, int64_t &reg_dst_idx) const;
   int remove_timeout_child_(LogLearnerList &dead_children);
   int remove_diff_region_child_(LogLearnerList &diff_region_children);
   int remove_duplicate_region_child_(LogLearnerList &dup_region_children);
@@ -795,6 +803,9 @@ private:
   int64_t last_submit_register_req_time_us_;
   // control register req frequency
   int64_t last_first_register_time_us_;
+  // fetch source stagnation avoidance (detection lives in LogSlidingWindow)
+  common::ObAddr stagnant_parent_;         // most recently stagnant parent (for avoidance)
+  int64_t stagnant_avoid_until_us_;        // avoid re-registering to stagnant_parent_ until this time
   // ==================== Child ========================
   // ==================== Parent ========================
   mutable common::ObSpinLock child_lock_;
