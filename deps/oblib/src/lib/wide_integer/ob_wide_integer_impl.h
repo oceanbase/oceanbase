@@ -664,8 +664,8 @@ struct ObWideInteger<Bits, Signed>::_impl
     if (check_overflow && rhs == 0) {
       ret = OB_OPERATE_OVERFLOW;
     } else if (lhs == 0) {
-      quotient = 0;
       remain = lhs;
+      quotient = 0;
     } else {
       ObWideInteger<Bits, unsigned> numerator = make_positive(lhs);
       dw_type denominator;
@@ -675,8 +675,8 @@ struct ObWideInteger<Bits, Signed>::_impl
         denominator = rhs;
       }
       if (numerator < denominator) {
-        quotient = 0;
         remain = lhs;
+        quotient = 0;
       } else {
         bool r_neg = is_negative(rhs);
         bool l_neg = is_negative(lhs);
@@ -736,14 +736,14 @@ struct ObWideInteger<Bits, Signed>::_impl
     if (check_overflow && rhs == 0) {
       ret = OB_OPERATE_OVERFLOW;
     } else if (lhs == 0) {
-      quotient = 0;
       remain = lhs;
+      quotient = 0;
     } else if (Bits >= Bits2) {
       ObWideInteger<Bits, unsigned> numerator = make_positive(lhs);
       ObWideInteger<Bits, unsigned> denominator = make_positive(rhs);
       if (numerator < denominator) {
-        quotient = 0;
         remain = lhs;
+        quotient = 0;
       } else if (denominator == 1) {
         bool lhs_neg = is_negative(lhs);
         bool rhs_neg = is_negative(rhs);

@@ -150,3 +150,10 @@ sql_unittest(test_merge_distinct_op
   ob_op_test_engine.cpp
   ob_op_test_data_source.cpp
 )
+
+# DecimalInt CAST to integer aliasing bug regression test
+sql_unittest(test_decimalint_cast_to_int
+  test_decimalint_cast_to_int.cpp
+  ob_op_test_engine.cpp
+  ob_op_test_data_source.cpp
+)
