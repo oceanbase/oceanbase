@@ -1230,6 +1230,7 @@ jbyteArray ObOraJavaRoutineExecutor::jni_fetch_class(JNIEnv *env, jobject sessio
   } else {
     ObSchemaGetterGuard &schema_guard = *executor->ctx_.exec_ctx_->get_sql_ctx()->schema_guard_;
     ObSQLSessionInfo &session = *executor->ctx_.exec_ctx_->get_my_session();
+    uint64_t tenant_id = session.get_effective_tenant_id();
     ObOraJavaSessionState &state = *session.get_ora_java_session_state();
     jsize class_name_length = env->GetArrayLength(class_name);
     jbyte *class_name_ptr = env->GetByteArrayElements(class_name, nullptr);
@@ -1242,7 +1243,12 @@ jbyteArray ObOraJavaRoutineExecutor::jni_fetch_class(JNIEnv *env, jobject sessio
     ObObj obj;
     int64_t jar_id = OB_INVALID_ID;
 
-    if (OB_FAIL(schema_guard.get_external_resource_schema(MTL_ID(), session.get_database_id(), class_name_str, class_schema))) {
+    ObTraceIdGuard trace_id_guard(session.get_current_trace_id());
+
+    if (OB_FAIL(schema_guard.get_external_resource_schema(tenant_id,
+                                                          session.get_database_id(),
+                                                          class_name_str,
+                                                          class_schema))) {
       LOG_WARN("failed to get external resource schema", K(ret), K(session.get_database_id()), K(class_name_str));
     } else if (OB_ISNULL(class_schema)) {
       // ClassNotFound
@@ -1263,7 +1269,7 @@ jbyteArray ObOraJavaRoutineExecutor::jni_fetch_class(JNIEnv *env, jobject sessio
       SMART_VAR(ObMySQLProxy::MySQLResult, res) {
         ObMySQLResult *result = nullptr;
 
-        if (OB_FAIL(sql_proxy->read(res, MTL_ID(), sql.ptr()))) {
+        if (OB_FAIL(sql_proxy->read(res, tenant_id, sql.ptr()))) {
           LOG_WARN("failed to read sql", K(ret), K(sql));
         } else if (OB_ISNULL(result = res.get_result())) {
           ret = OB_ERR_UNEXPECTED;
@@ -1282,7 +1288,7 @@ jbyteArray ObOraJavaRoutineExecutor::jni_fetch_class(JNIEnv *env, jobject sessio
             if (OB_HASH_NOT_EXIST == ret) {
               ret = OB_SUCCESS;
 
-              ObArenaAllocator tmp_alloc(ObMemAttr(MTL_ID(), GET_PL_MOD_STRING(OB_PL_ARENA)));
+              ObArenaAllocator tmp_alloc(ObMemAttr(tenant_id, GET_PL_MOD_STRING(OB_PL_ARENA)));
               ObString jar_binary;
 
               if (obj.is_lob_storage()) {
@@ -1423,7 +1429,12 @@ jboolean ObOraJavaRoutineExecutor::jni_check_class_obsolete(JNIEnv *env, jobject
 
     const ObSimpleExternalResourceSchema *class_schema = nullptr;
 
-    if (OB_FAIL(schema_guard.get_external_resource_schema(MTL_ID(), session.get_database_id(), class_name_str, class_schema))) {
+    ObTraceIdGuard trace_id_guard(session.get_current_trace_id());
+
+    if (OB_FAIL(schema_guard.get_external_resource_schema(session.get_effective_tenant_id(),
+                                                          session.get_database_id(),
+                                                          class_name_str,
+                                                          class_schema))) {
       LOG_WARN("failed to get external resource schema", K(ret), K(session.get_database_id()), K(class_name_str));
     } else if (OB_ISNULL(class_schema)) {
       // ClassNotFound
