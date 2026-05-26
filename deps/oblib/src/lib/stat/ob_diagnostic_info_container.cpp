@@ -745,6 +745,41 @@ int ObDiagnosticInfoContainer::for_each_and_delay_release_ref(
   return ret;
 }
 
+int ObDiagnosticInfoContainer::for_each_and_delay_release_ref(
+    std::function<bool(const SessionID &, ObDiagnosticInfo *)> &fn, ObArray<ObDiagnosticInfo *> &di_array, int64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  ObRunningDiagnosticInfoContainer &runnings = runnings_;
+  std::function<bool(const SessionID &, ObDiagnosticInfo *)> fn_wrapper =
+      [&di_array, &runnings, &fn, tenant_id](const SessionID &id, ObDiagnosticInfo *di) {
+        int ret = OB_SUCCESS;
+        if (di->get_tenant_id() != static_cast<uint64_t>(tenant_id)) {
+          // skip DI objects not belonging to the target tenant
+        } else if (OB_FAIL(runnings.inc_ref(di))) {
+          LOG_WARN("failed to inc ref di", K(ret));
+          ret = OB_SUCCESS;
+        } else if (OB_FAIL(di_array.push_back(di))) {
+          LOG_WARN("faield to push back id to di_array", K(ret));
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(runnings.dec_ref(di))) {
+            LOG_ERROR("failed to dec ref", K(tmp_ret));
+          }
+
+          if (tmp_ret != OB_SUCCESS) {
+            ret = tmp_ret;
+          }
+        } else if (OB_FAIL(fn(id, di))) {
+          LOG_WARN("faield to exec fn", K(ret));
+        }
+        return ret == OB_SUCCESS;
+      };
+
+  if (OB_FAIL(for_each_running_di(fn_wrapper))) {
+    LOG_WARN("failed to for each running di", K(ret));
+  }
+  return ret;
+}
+
 int ObDiagnosticInfoContainer::release_diagnostic_info(ObArray<ObDiagnosticInfo *>&di_array)
 {
   int ret = OB_SUCCESS;

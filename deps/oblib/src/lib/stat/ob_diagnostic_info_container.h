@@ -127,6 +127,7 @@ public:
     return runnings_.for_each(fn);
   }
   int for_each_and_delay_release_ref(std::function<bool(const SessionID &, ObDiagnosticInfo *)> &fn, ObArray<ObDiagnosticInfo *>&di_array);
+  int for_each_and_delay_release_ref(std::function<bool(const SessionID &, ObDiagnosticInfo *)> &fn, ObArray<ObDiagnosticInfo *>&di_array, int64_t tenant_id);
   int release_diagnostic_info(ObArray<ObDiagnosticInfo *>&di_array);
   bool is_inited() const
   {
