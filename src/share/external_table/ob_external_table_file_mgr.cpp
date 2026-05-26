@@ -2040,7 +2040,8 @@ int ObExternalTableFileManager::get_external_file_list_on_device_with_cache(
                              = ObTimeUtil::current_time_ms())) {
       } else if (OB_FALSE_IT(external_table_files.at(cnt_from_cache + i)->modify_ts_
                              = (refresh_interval_ms <= 0 && try_cache) ? modify_ts.at(idx) : 0)) {
-      } else if (OB_FALSE_IT(reorder_part_id.push_back(part_id.at(idx)))) {
+      } else if (OB_FAIL(reorder_part_id.push_back(part_id.at(idx)))) {
+        LOG_WARN("failed to push back part_id to reorder_part_id");
       } else if (OB_FAIL(insert_one_location_to_cache(tenant_id,
                                                       tmp_location.at(i),
                                                       pattern,
