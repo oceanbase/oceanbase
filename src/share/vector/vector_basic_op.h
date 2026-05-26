@@ -269,14 +269,15 @@ struct VecTCHashCalc<VEC_TC_GEO, HashMethod, hash_v2>
     int ret = OB_SUCCESS;
     common::ObString wkb;
     res = 0;
-    const char *in_str = reinterpret_cast<const char *>(data);
-    ObLobLocatorV2 loc(in_str, false);
-    if (!loc.is_valid()) {
-      COMMON_LOG(WARN, "invalid lob", K(ret));
-    } else if (!loc.has_inrow_data()) {
-      COMMON_LOG(WARN, "meet outrow lob do calc hash value", K(loc));
-    } else if (OB_FAIL(loc.get_inrow_data(wkb))) {
-      COMMON_LOG(WARN, "fail to get inrow data", K(ret), K(loc));
+    common::ObArenaAllocator allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE,
+                                       MTL_ID());
+    ObTextStringIter str_iter(ObGeometryType, CS_TYPE_BINARY,
+                              ObString(len, reinterpret_cast<const char *>(data)),
+                              meta.has_lob_header());
+    if (OB_FAIL(str_iter.init(0, NULL, &allocator))) {
+      COMMON_LOG(WARN, "Lob: str iter init failed", K(ret));
+    } else if (OB_FAIL(str_iter.get_full_data(wkb))) {
+      COMMON_LOG(WARN, "Lob: str iter get full data failed", K(ret));
     } else {
       res = seed;
       if (wkb.length() > 0) {
