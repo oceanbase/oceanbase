@@ -197,6 +197,7 @@ int ObDirectLoadTabletMergeCtx::init(ObTableLoadTableCtx *ctx,
     origin_table_param.table_id_ = param.table_id_;
     origin_table_param.tablet_id_ = ls_partition_id.part_tablet_id_.tablet_id_;
     origin_table_param.ls_id_ = ls_partition_id.ls_id_;
+    origin_table_param.snapshot_version_ = param.snapshot_version_;
     if (OB_FAIL(origin_table_.init(origin_table_param))) {
       LOG_WARN("fail to init origin sstable", KR(ret));
     } else {
