@@ -9298,6 +9298,8 @@ complete_stats_avaliable	tinyint(4)	NO		NULL
 trace_id	varchar(64)	YES		NULL	
 mview_id	bigint(20)	YES		NULL	
 data_target_scn	bigint(20) unsigned	YES		NULL	
+result	bigint(20)	YES		NULL	
+error_message	varchar(512)	YES		NULL	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_mview_refresh_run_stats;
 IF(count(*) >= 0, 1, 0)
 1

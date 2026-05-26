@@ -6428,7 +6428,9 @@ def_table_schema(
     ('complete_stats_avaliable', 'bool'),
     ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true'),
     ('mview_id', 'int', 'true'),
-    ('data_target_scn', 'uint', 'true')
+    ('data_target_scn', 'uint', 'true'),
+    ('result', 'int', 'true'),
+    ('error_message', 'varchar:OB_MAX_ERROR_MSG_LEN', 'true')
   ]
 )
 
