@@ -52,6 +52,7 @@ ObDirectLoadMergeParam::ObDirectLoadMergeParam()
     merge_mode_(ObDirectLoadMergeMode::INVALID_MERGE_MODE),
     dml_row_handler_(nullptr),
     insert_table_ctx_(nullptr),
+    snapshot_version_(0),
     trans_param_(),
     file_mgr_(nullptr),
     ctx_(nullptr)
@@ -65,7 +66,7 @@ bool ObDirectLoadMergeParam::is_valid() const
   return OB_INVALID_ID != table_id_ && 0 < rowkey_column_num_ && 0 < column_count_ &&
          nullptr != col_descs_ && nullptr != datum_utils_ && nullptr != lob_column_idxs_ &&
          ObDirectLoadMergeMode::is_type_valid(merge_mode_) && nullptr != insert_table_ctx_ &&
-         nullptr != file_mgr_ && nullptr != ctx_;
+         snapshot_version_ > 0 && nullptr != file_mgr_ && nullptr != ctx_;
 }
 
 /**
@@ -373,6 +374,7 @@ int ObDirectLoadTabletMergeCtx::init(ObDirectLoadMergeCtx *merge_ctx,
       origin_table_param.tablet_id_ = tablet_id_;
       origin_table_param.tx_id_ = param_->trans_param_.tx_id_;
       origin_table_param.tx_seq_ = param_->trans_param_.tx_seq_;
+      origin_table_param.snapshot_version_ = param_->snapshot_version_;
       if (OB_FAIL(origin_table_.init(origin_table_param))) {
         LOG_WARN("fail to init origin table", KR(ret));
       }
