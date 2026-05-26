@@ -655,11 +655,6 @@ TEST_F(TestTransferHandler, test_transfer_with_cancel_retry)
   ObMySQLProxy &inner_sql_proxy = get_curr_observer().get_mysql_proxy();
   ObSqlString sql;
   int64_t affected_rows = 0;
-  // stuck storage transfer
-  INNER_EXE_SQL(OB_SYS_TENANT_ID, "alter system set debug_sync_timeout = '1000s'");
-  usleep(100000); // wait for debug_sync_timeout to take effect
-  sql.reset();
-  INNER_EXE_SQL(OB_SYS_TENANT_ID, "set ob_global_debug_sync = 'BEFORE_TRANSFER_LOCK_TABLE_AND_PART wait_for signal_target execute 10000'");
 
   ASSERT_EQ(PART_LIST_COUNT, g_part_list.count());
   ObSEArray<ObTableID, PART_LIST_COUNT> table_ids;
@@ -681,6 +676,10 @@ TEST_F(TestTransferHandler, test_transfer_with_cancel_retry)
   ObTenantTransferService *tenant_transfer = MTL(ObTenantTransferService*);
   ASSERT_TRUE(OB_NOT_NULL(tenant_transfer));
 
+  // stop transfer service to prevent it from picking up the task
+  tenant_transfer->stop();
+  tenant_transfer->wait();
+
   // generate transfer task
   ObTransferTaskID task_id;
   ObTransferTask transfer_task;
@@ -698,10 +697,11 @@ TEST_F(TestTransferHandler, test_transfer_with_cancel_retry)
       ret = OB_SUCC(ret) ? tmp_ret : ret;
     }
   }
-  usleep(1000000);
+  // cancel the task while transfer service is stopped, no lock conflict
   ASSERT_EQ(OB_SUCCESS, tenant_transfer->try_cancel_transfer_task(task_id));
-  INNER_EXE_SQL(OB_SYS_TENANT_ID, "set ob_global_debug_sync = 'BEFORE_TRANSFER_LOCK_TABLE_AND_PART clear'");
-  INNER_EXE_SQL(OB_SYS_TENANT_ID, "set ob_global_debug_sync = 'now signal signal_target'");
+
+  // restart transfer service to process the canceled task cleanup
+  ASSERT_EQ(OB_SUCCESS, tenant_transfer->start());
 
   //check observer transfer
   ObTransferStatus expected_status(ObTransferStatus::CANCELED);
