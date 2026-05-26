@@ -12,34 +12,49 @@
 
 #pragma once
 
-#include "lib/task/ob_timer.h"
-#include "rootserver/mview/ob_mview_timer_task.h"
+#include "lib/lock/ob_thread_cond.h"
+#include "lib/thread/thread_mgr_interface.h"
 
 namespace oceanbase
 {
 namespace rootserver
 {
-class ObMViewUpdateDepsTask : public ObMViewTimerTask
+class ObMViewPendingTaskManager;
+} // namespace rootserver
+} // namespace oceanbase
+
+namespace oceanbase
+{
+namespace rootserver
+{
+
+class ObMviewPendingTaskScheduler : public lib::TGRunnable
 {
 public:
-  ObMViewUpdateDepsTask();
-  virtual ~ObMViewUpdateDepsTask();
-  DISABLE_COPY_ASSIGN(ObMViewUpdateDepsTask);
-  int init();
+  ObMviewPendingTaskScheduler();
+  ~ObMviewPendingTaskScheduler();
+  DISALLOW_COPY_AND_ASSIGN(ObMviewPendingTaskScheduler);
+
+  int init(ObMViewPendingTaskManager &manager);
   int start();
   void stop();
   void wait();
   void destroy();
-  // for TimerTask
-  void runTimerTask() override;
-  int need_schedule(bool &need_sche);
-  static const int64_t MVIEW_UPDATE_DEPS_INTERVAL = 5 * 1000 * 1000; // 5s
+  void wakeup();
+  void run1() override;
+
 private:
+  int process_one_task();
+  int check_concurrent_limit(uint64_t tenant_id) const;
+  void idle_wait();
+
+private:
+  int tg_id_;
+  common::ObThreadCond idle_cond_;
+  bool has_pending_work_;
+  ObMViewPendingTaskManager *manager_;
+  bool is_started_;
   bool is_inited_;
-  bool in_sched_;
-  bool is_stop_;
-  uint64_t tenant_id_;
-  int64_t last_sched_ts_;
 };
 
 } // namespace rootserver

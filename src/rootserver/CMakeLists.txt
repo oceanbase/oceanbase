@@ -242,6 +242,14 @@ ob_set_subtarget(ob_rootserver tenant_snapshot
 
 ob_set_subtarget(ob_rootserver mview
   mview/ob_mview_maintenance_service.cpp
+  mview/ob_mview_pending_task_rpc_processor.cpp
+  mview/ob_mview_pending_task_define.cpp
+  mview/ob_mview_pending_task_queue.cpp
+  mview/ob_mview_pending_task_table_operator.cpp
+  mview/ob_mview_pending_task_executor.cpp
+  mview/ob_mview_pending_task_manager.cpp
+  mview/ob_mview_pending_task_scheduler.cpp
+  mview/ob_mview_pending_task_inspection_task.cpp
   mview/ob_mlog_maintenance_task.cpp
   mview/ob_mview_maintenance_task.cpp
   mview/ob_mview_refresh_stats_maintenance_task.cpp
@@ -255,8 +263,6 @@ ob_set_subtarget(ob_rootserver mview
   mview/ob_mview_update_cache_task.cpp
   mview/ob_mview_mds_op_task.cpp
   mview/ob_mview_alter_service.cpp
-  mview/ob_mview_update_deps_task.cpp
-  mview/ob_mview_trim_mlog_task.cpp
   mview/ob_mview_utils.cpp
 )
 

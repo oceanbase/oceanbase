@@ -12,20 +12,26 @@
 
 #pragma once
 
-#include "lib/mysqlclient/ob_mysql_proxy.h"
-#include "share/schema/ob_mview_refresh_stats.h"
+#include <cstdint>
 
 namespace oceanbase
 {
+namespace sql
+{
+class ObExecContext;
+} // namespace sql
 namespace storage
 {
-class ObMViewRefreshStatsPurgeUtil final
+struct MViewReportContext;
+
+class ObMViewRefreshReportFetcher
 {
 public:
-  static int purge_refresh_stats(
-    ObISQLClient &sql_client, uint64_t tenant_id,
-    const share::schema::ObMViewRefreshStats::FilterParam &filter_param, int64_t &affected_rows,
-    int64_t limit = -1);
+  static int fetch_all(sql::ObExecContext &ctx,
+                       uint64_t conn_tenant_id,
+                       uint64_t target_tenant_id,
+                       int64_t refresh_id,
+                       MViewReportContext &context);
 };
 
 } // namespace storage

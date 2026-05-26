@@ -65,30 +65,50 @@ struct SharedPrinterRawExprs
 };
 
 struct ObMVPrinterRefreshInfo  {
-  ObMVPrinterRefreshInfo(const share::SCN &last_refresh_scn,
-                         const share::SCN &refresh_scn,
-                         const int64_t part_idx = OB_INVALID_INDEX,
-                         const int64_t sub_part_idx = OB_INVALID_INDEX,
-                         const ObNewRange *range = NULL)
-    : last_refresh_scn_(last_refresh_scn),
-      refresh_scn_(refresh_scn),
+  ObMVPrinterRefreshInfo(const share::ObScnRange &refresh_scn_range,
+                         const int64_t part_idx,
+                         const int64_t sub_part_idx,
+                         const ObNewRange &range)
+    : last_refresh_scn_(refresh_scn_range.start_scn_),
+      refresh_scn_(refresh_scn_range.end_scn_),
       mv_last_refresh_scn_(NULL),
       mv_refresh_scn_(NULL),
       part_idx_(part_idx),
       sub_part_idx_(sub_part_idx),
-      range_(range)
+      range_(&range),
+      tables_without_delete_(NULL),
+      tables_without_insert_(NULL)
+  {}
+  ObMVPrinterRefreshInfo(const share::ObScnRange &refresh_scn_range,
+                         const share::ObScnRange &mview_refresh_scn_range,
+                         const ObIArray<uint64_t> &tables_without_delete,
+                         const ObIArray<uint64_t> &tables_without_insert)
+    : last_refresh_scn_(refresh_scn_range.start_scn_),
+      refresh_scn_(refresh_scn_range.end_scn_),
+      mv_last_refresh_scn_(&mview_refresh_scn_range.start_scn_),
+      mv_refresh_scn_(&mview_refresh_scn_range.end_scn_),
+      part_idx_(OB_INVALID_INDEX),
+      sub_part_idx_(OB_INVALID_INDEX),
+      range_(NULL),
+      tables_without_delete_(&tables_without_delete),
+      tables_without_insert_(&tables_without_insert)
   {}
 
   TO_STRING_KV(K_(last_refresh_scn), K_(refresh_scn), KPC_(mv_last_refresh_scn), KPC_(mv_refresh_scn),
-              K_(part_idx), K_(sub_part_idx), KPC_(range));
+              K_(part_idx), K_(sub_part_idx), KPC_(range), KPC_(tables_without_delete), KPC_(tables_without_insert));
 
   const share::SCN &last_refresh_scn_;
   const share::SCN &refresh_scn_;
+  // for mview nested consistent refresh
   const share::SCN *mv_last_refresh_scn_;
   const share::SCN *mv_refresh_scn_;
+  // for major refresh
   const int64_t part_idx_;
   const int64_t sub_part_idx_;
   const ObNewRange *range_;
+  // for fast refresh adaptive skip refresh SQL
+  const ObIArray<uint64_t> *tables_without_delete_; // ref id for tables without delete (including update)
+  const ObIArray<uint64_t> *tables_without_insert_; // ref id for tables without insert (including update)
 };
 
 struct ObMVPrinterCtx {
@@ -302,7 +322,16 @@ protected:
   int add_mv_rowkey_into_select(ObSelectStmt *stmt, const TableItem *mv_table);
   int add_semi_to_inner_hint(ObDMLStmt *stmt);
   int add_dynamic_sampling_hint(ObDMLStmt *stmt, const TableItem *table);
-  bool is_table_skip_refresh(const TableItem &table) const;
+  // is_table_skip_refresh
+  // we do not add (table_without_delete && table_without_insert)
+  // to avoid changes to the SQL ID of the remaining refresh SQL.
+  // table_skip_refresh will not generate the mlog exists condition.
+  inline bool is_table_skip_refresh(const TableItem &table) const
+  { return table.is_mv_proctime_table_; }
+  inline bool is_table_without_delta_data(const TableItem &table) const
+  { return is_table_without_delete(table) && is_table_without_insert(table); }
+  bool is_table_without_delete(const TableItem &table) const;
+  bool is_table_without_insert(const TableItem &table) const;
   int create_simple_exists_expr(const TableItem *ori_table,
                                 ObSelectStmt *from_view,
                                 const char *from_view_name_fmt,

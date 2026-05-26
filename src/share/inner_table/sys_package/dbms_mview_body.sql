@@ -56,7 +56,9 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
     out_of_place           IN     BOOLEAN        := false,
     skip_ext_data          IN     BOOLEAN        := false,
     refresh_parallel       IN     BINARY_INTEGER := 0,
-    nested_refresh_mode    IN     VARCHAR2       := NULL);
+    nested_refresh_mode    IN     VARCHAR2       := NULL,
+    -- TEMPORARY v2 (task 0036): async param, see dbms_mview.sql
+    async                  IN     BOOLEAN        := FALSE);
   PRAGMA INTERFACE(C, DBMS_MVIEW_REFRESH);
 
   PROCEDURE refresh(
@@ -73,7 +75,9 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
     out_of_place           IN     BOOLEAN        := false,
     skip_ext_data          IN     BOOLEAN        := false,
     refresh_parallel       IN     BINARY_INTEGER := 0,
-    nested_refresh_mode    IN     VARCHAR2       := NULL)
+    nested_refresh_mode    IN     VARCHAR2       := NULL,
+    -- TEMPORARY v2 (task 0036): async param, see dbms_mview.sql
+    async                  IN     BOOLEAN        := FALSE)
   IS
   BEGIN
     COMMIT;
@@ -90,7 +94,8 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
                out_of_place,
                skip_ext_data,
                refresh_parallel,
-               nested_refresh_mode);
+               nested_refresh_mode,
+               async);
   END;
 
   PROCEDURE refresh(
@@ -107,7 +112,9 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
     out_of_place           IN     BOOLEAN        := false,
     skip_ext_data          IN     BOOLEAN        := false,
     refresh_parallel       IN     BINARY_INTEGER := 0,
-    nested_refresh_mode    IN     VARCHAR2       := NULL)
+    nested_refresh_mode    IN     VARCHAR2       := NULL,
+    -- TEMPORARY v2 (task 0036): async param, see dbms_mview.sql
+    async                  IN     BOOLEAN        := FALSE)
   IS
   list                VARCHAR2(4000);
   BEGIN
@@ -126,7 +133,26 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
                out_of_place,
                skip_ext_data,
                refresh_parallel,
-               nested_refresh_mode);
+               nested_refresh_mode,
+               async);
+  END;
+
+  FUNCTION refresh_report(
+    refresh_id          IN     NUMBER        DEFAULT NULL,
+    mv_name             IN     VARCHAR2      DEFAULT NULL,
+    tenant_id           IN     NUMBER        DEFAULT NULL,
+    format              IN     VARCHAR2      DEFAULT 'TEXT')
+  RETURN CLOB;
+  PRAGMA INTERFACE(C, DBMS_MVIEW_REFRESH_REPORT);
+
+  PROCEDURE do_kill_refresh(refresh_id IN BINARY_INTEGER);
+  PRAGMA INTERFACE(C, DBMS_MVIEW_KILL_REFRESH);
+
+  PROCEDURE kill_refresh(refresh_id IN BINARY_INTEGER)
+  IS
+  BEGIN
+    COMMIT;
+    do_kill_refresh(refresh_id);
   END;
 
   PROCEDURE set_refresh_params(

@@ -67,7 +67,12 @@ int ObOuterJoinMAVPrinter::gen_refresh_dmls_for_inner_join(const TableItem *delt
 {
   int ret = OB_SUCCESS;
   ObSelectStmt *inner_delta_mav = NULL;
-  if (OB_FAIL(gen_inner_delta_mav_for_simple_join_mav(delta_table_idx, inner_delta_mav))) {
+  if (OB_ISNULL(delta_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("delta table is null", K(ret), K(delta_table_idx));
+  } else if (is_table_without_delta_data(*delta_table)) {
+    // do nothing, for the table without delta data, skip the inner delta mav
+  } else if (OB_FAIL(gen_inner_delta_mav_for_simple_join_mav(delta_table_idx, inner_delta_mav))) {
     LOG_WARN("failed to gen inner delta mav for simple join mav", K(ret));
   } else if (OB_FAIL(dml_stmts.push_back(inner_delta_mav))) {
     LOG_WARN("failed to push back inner delta mav", K(ret));
@@ -85,9 +90,14 @@ int ObOuterJoinMAVPrinter::gen_refresh_dmls_for_left_join(const TableItem *delta
   ObSelectStmt *inner_delta_mav_joined = NULL;   // joined part
   ObSelectStmt *inner_delta_mav_new_null = NULL; // non-padded NULL TO padded NULL
   ObSelectStmt *inner_delta_mav_pre_null = NULL; // padded NULL TO non-padded NULL
-  if (OB_FAIL(gen_inner_delta_mav_for_left_join_joined_data(delta_table_idx,
-                                                            upper_table,
-                                                            inner_delta_mav_joined))) {
+  if (OB_ISNULL(delta_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("delta table is null", K(ret), K(delta_table_idx));
+  } else if (is_table_without_delta_data(*delta_table)) {
+    // do nothing, for the table without delta data, skip the inner delta mav
+  } else if (OB_FAIL(gen_inner_delta_mav_for_left_join_joined_data(delta_table_idx,
+                                                                   upper_table,
+                                                                   inner_delta_mav_joined))) {
     LOG_WARN("failed to generate the first inner delta mav for left join", K(ret));
   } else if (OB_FAIL(dml_stmts.push_back(inner_delta_mav_joined))) {
     LOG_WARN("failed to push back inner delta mav", K(ret));
@@ -97,9 +107,11 @@ int ObOuterJoinMAVPrinter::gen_refresh_dmls_for_left_join(const TableItem *delta
                                                                         inner_delta_mav_new_null,
                                                                         inner_delta_mav_pre_null))) {
     LOG_WARN("failed to generate the second inner delta mav for left join", K(ret));
-  } else if (OB_FAIL(dml_stmts.push_back(inner_delta_mav_new_null))) {
+  } else if (!is_table_without_delete(*delta_table)
+             && OB_FAIL(dml_stmts.push_back(inner_delta_mav_new_null))) {
     LOG_WARN("failed to push back inner delta mav", K(ret));
-  } else if (OB_FAIL(dml_stmts.push_back(inner_delta_mav_pre_null))) {
+  } else if (!is_table_without_insert(*delta_table)
+             && OB_FAIL(dml_stmts.push_back(inner_delta_mav_pre_null))) {
     LOG_WARN("failed to push back inner delta mav", K(ret));
   }
   return ret;

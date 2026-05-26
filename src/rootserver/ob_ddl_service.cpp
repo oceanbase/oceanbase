@@ -77,6 +77,7 @@
 #include "share/truncate_info/ob_truncate_info_util.h"
 #include "share/schema/ob_mview_info.h"
 #include "sql/resolver/mv/ob_mv_provider.h"
+#include "sql/resolver/mv/ob_mv_dep_utils.h"
 #include "rootserver/mview/ob_mview_alter_service.h"
 #include "storage/tablet/ob_tablet_binding_helper.h"
 #include "share/ob_dynamic_partition_manager.h"
@@ -2004,6 +2005,7 @@ int ObDDLService::start_mview_complete_refresh_task(
     const uint64_t tenant_data_version,
     const ObMViewInfo &mview_info,
     const ObString &ddl_stmt_str,
+    const int64_t ddl_parallel_hint,
     ObDDLTaskRecord &task_record)
 {
   int ret = OB_SUCCESS;
@@ -2068,7 +2070,7 @@ int ObDDLService::start_mview_complete_refresh_task(
                                                                          arg.direct_dep_cnt_))) {
     LOG_WARN("fail to collect based schema object infos", KR(ret), K(tenant_id), K(tenant_data_version));
   } else {
-    arg.parallelism_ = mv_refresh_info->parallel_;
+    arg.parallelism_ = (ddl_parallel_hint > 0 ? ddl_parallel_hint : mv_refresh_info->refresh_dop_);
     arg.tz_info_ =  arg.tz_info_wrap_.get_tz_info_offset();
     arg.nls_formats_[ObNLSFormatEnum::NLS_DATE] = data_format_schema->get_value();
     arg.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP] = nls_timestamp_format->get_value();
@@ -3454,7 +3456,8 @@ int ObDDLService::check_is_add_column_online_(const AlterTableSchema &alter_tabl
   }
 
   if (OB_SUCC(ret)) {
-    if (alter_column_schema.is_autoincrement_ || alter_column_schema.is_primary_key_ || alter_column_schema.has_not_null_constraint()) {
+    if (alter_column_schema.is_autoincrement_ || alter_column_schema.is_primary_key_ ||
+        (!table_schema.is_mlog_table() && alter_column_schema.has_not_null_constraint())) {
       tmp_ddl_type = ObDDLType::DDL_TABLE_REDEFINITION;
     } else if (nullptr != table_schema.get_column_schema(alter_column_schema.get_column_name())) {
       ObTableSchema::const_column_iterator it_begin = alter_table_schema.column_begin();
@@ -10915,7 +10918,30 @@ int ObDDLService::add_new_column_to_table_schema(
   } else {
     int64_t max_used_column_id = new_table_schema.get_max_used_column_id();
     const uint64_t tenant_id = new_table_schema.get_tenant_id();
-    if (is_inner_table(new_table_schema.get_table_id())
+    if (OB_FAIL(ret)) {
+    } else if (new_table_schema.is_mlog_table()) {
+      const ObTableSchema *base_table_schema = nullptr;
+      const ObColumnSchemaV2 *base_column_schema = nullptr;
+      const ObColumnSchemaV2 *old_mlog_column_schema = nullptr;
+      const uint64_t base_table_id = new_table_schema.get_data_table_id();
+      if (OB_FAIL(schema_guard.get_table_schema(tenant_id, base_table_id, base_table_schema))) {
+        LOG_WARN("failed to get base table schema", KR(ret), K(tenant_id), K(base_table_id));
+      } else if (OB_ISNULL(base_table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("base table schema is null", K(ret), K(tenant_id), K(base_table_id));
+      } else if (OB_ISNULL(base_column_schema = base_table_schema->get_column_schema(alter_column_schema.get_column_name_str()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("base column schema is null", K(ret), K(alter_column_schema));
+      } else if (NULL != (old_mlog_column_schema = new_table_schema.get_column_schema(base_column_schema->get_column_id()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("old mlog column schema already existed",
+                  K(ret), K(alter_column_schema), KPC(old_mlog_column_schema));
+      } else {
+        alter_column_schema.set_column_id(base_column_schema->get_column_id());
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (is_inner_table(new_table_schema.get_table_id())
         && (OB_INVALID_ID == alter_column_schema.get_column_id()
         || alter_column_schema.get_column_id() != max_used_column_id + 1)) {
       // 225 is barrier version, after this adding column in system table need specify column_id
@@ -10934,7 +10960,11 @@ int ObDDLService::add_new_column_to_table_schema(
         }
       }
       if (OB_SUCC(ret)) {
-        alter_column_schema.set_column_id(++max_used_column_id);
+        if (OB_INVALID_ID == alter_column_schema.get_column_id()) {
+          alter_column_schema.set_column_id(++max_used_column_id);
+        } else {
+          max_used_column_id = MAX(max_used_column_id, alter_column_schema.get_column_id());
+        }
         alter_column_schema.set_rowkey_position(0);
         alter_column_schema.set_index_position(0);
         alter_column_schema.set_not_part_key();
@@ -10953,6 +10983,8 @@ int ObDDLService::add_new_column_to_table_schema(
     }
   }
   if (OB_FAIL(ret)) {
+  } else if (new_table_schema.is_mlog_table()) {
+    // columns with constraints/sequences in aux tables need not create related schema objects
   } else if (OB_FAIL(refill_columns_id_for_check_constraint(origin_table_schema,
                                                             alter_table_schema,
                                                             alter_column_schema,
@@ -11621,7 +11653,28 @@ int ObDDLService::update_prev_id_for_add_column(const ObTableSchema &origin_tabl
   const bool is_last = !(is_first || is_after || is_before);
   const bool update_inner_table = nullptr != ddl_operator && nullptr != trans;
   const bool need_del_stats = false;
-  if (is_last) {
+  if (new_table_schema.is_mlog_table()) {
+    ObColumnIterByPrevNextID iter(new_table_schema);
+    const ObColumnSchemaV2 *column = NULL;
+    const ObColumnSchemaV2 *last_column = NULL;
+    while (OB_SUCC(ret) && OB_SUCC(iter.next(column))) {
+      if (OB_ISNULL(column)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("The column is null", K(ret));
+      } else {
+        last_column = column;
+      }
+    }
+    if (OB_UNLIKELY(ret != OB_ITER_END)) {
+      LOG_WARN("Failed to iterate all table columns. iter quit. ", K(ret));
+    } else if (OB_ISNULL(last_column)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Failed to get last column", K(ret));
+    } else {
+      ret = OB_SUCCESS;
+      alter_column_schema.set_prev_column_id(last_column->get_column_id());
+    }
+  } else if (is_last) {
     // do nothing
   } else {
     ObString pos_column_name;
@@ -15915,13 +15968,7 @@ int ObDDLService::check_alter_column_group(const obrpc::ObAlterTableArg &alter_t
 int ObDDLService::check_long_run_ddl_table_type_(const ObTableSchema &orig_table_schema)
 {
   int ret = OB_SUCCESS;
-  if (orig_table_schema.has_mlog_table()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("double table long running ddl on table with materialized view log is not supported",
-              KR(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                    "double table long running ddl on table with materialized view log is");
-  } else if (orig_table_schema.table_referenced_by_mv()) {
+  if (orig_table_schema.required_by_mv_refresh()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("double table long running ddl on table required by materialized view is not supported",
               KR(ret));
@@ -17782,7 +17829,8 @@ int ObDDLService::get_and_check_table_schema(
                && !(orig_table_schema->is_view_table() && is_alter_comment
                     && ObSQLUtils::is_data_version_ge_422_or_431(compat_version))
                && !orig_table_schema->is_tmp_table()
-               && !orig_table_schema->is_external_table()) {
+               && !orig_table_schema->is_external_table()
+               && !(orig_table_schema->is_mlog_table() && compat_version >= DATA_VERSION_4_4_2_2)) {
       ret = OB_ERR_WRONG_OBJECT;
       ObCStringHelper helper;
       LOG_USER_ERROR(OB_ERR_WRONG_OBJECT,
@@ -19904,12 +19952,7 @@ int ObDDLService::validate_rename_table_args(const ObTableSchema *table_schema)
     LOG_WARN("rename materialized view log is not supported", KR(ret),
              K(table_schema->get_table_name()));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "rename materialized view log is");
-  } else if (table_schema->has_mlog_table()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("rename table with materialized view log is not supported", KR(ret),
-             K(table_schema->get_table_name()));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "rename table with materialized view log is");
-  } else if (table_schema->table_referenced_by_fast_lsm_mv()) {
+  } else if (table_schema->required_by_mv_refresh()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("rename table required by materialized view is not supported", KR(ret),
              K(table_schema->get_table_name()));
@@ -21432,7 +21475,12 @@ int ObDDLService::build_aux_lob_table_schema_if_need(
   ObLobMetaBuilder lob_meta_builder(*this);
   ObLobPieceBuilder lob_piece_builder(*this);
   const uint64_t new_table_id = OB_INVALID_ID;
-  if (data_table_schema.has_lob_column(true/*ignore_unused_column*/)) {
+  // Creating aux tables on aux table is forbidden and aux tables can not handle out-row lob data
+  // by now (not implemented).
+  // Then there is no need to create aux lob table for mlog table. It has already been skipped when
+  // create mlog, so we can just skip creating aux lob table when add column to mlog table.
+  if (data_table_schema.has_lob_column(true/*ignore_unused_column*/) &&
+      !data_table_schema.is_mlog_table()) {
     HEAP_VARS_2((ObTableSchema, lob_meta_schema), (ObTableSchema, lob_piece_schema)) {
       if (OB_FAIL(lob_meta_builder.generate_aux_lob_meta_schema(
         schema_service_->get_schema_service(), data_table_schema, new_table_id, lob_meta_schema, true))) {
@@ -23787,6 +23835,15 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
           }
         }
         if (OB_SUCC(ret)) {
+          ObMViewDependencyService mv_dep_service(*schema_service_);
+          if (OB_FAIL(mv_dep_service.swap_mview_dep_base_table(trans,
+                                                               tenant_id,
+                                                               new_orig_table_schema,
+                                                               new_hidden_table_schema))) {
+            LOG_WARN("failed to swap mview dep base table", KR(ret));
+          }
+        }
+        if (OB_SUCC(ret)) {
           new_orig_table_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_HIDDEN_OFFLINE_DDL);
           new_hidden_table_schema.set_table_state_flag(ObTableStateFlag::TABLE_STATE_OFFLINE_DDL);
           if (OB_FAIL(new_orig_table_schema.set_table_name(hidden_table_schema->get_table_name_str()))) {
@@ -23948,21 +24005,16 @@ int ObDDLService::swap_orig_and_hidden_table_state(obrpc::ObAlterTableArg &alter
                        K(mview_info));
             } else {
               DEBUG_SYNC(BEFORE_MV_FINISH_COMPLETE_REFRESH);
-              mview_info.set_last_refresh_scn(refresh_scn_val);
-              mview_info.set_last_refresh_type(share::schema::ObMVRefreshType::COMPLETE);
-              mview_info.set_last_refresh_date(start_time);
-              mview_info.set_last_refresh_time((ObTimeUtil::current_time() - start_time) / 1000 / 1000);
-              uint64_t data_version = 0;
-              if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
-                LOG_WARN("fail to get data version", K(ret), K(tenant_id));
-              } else if (OB_FAIL(mview_info.set_last_refresh_trace_id(ObCurTraceId::get_trace_id_str()))) {
-                LOG_WARN("fail to set last refresh trace id", KR(ret));
-              } else if (OB_FAIL(ObMViewInfo::update_mview_data_attr(trans, tenant_id,
-                                 refresh_scn_val, target_data_sync_scn_val, mview_info, alter_table_arg.based_schema_object_infos_.empty()))) {
-                LOG_WARN("fail to update mview data scn", KR(ret), K(mview_info),
-                         K(refresh_scn_val));
-              } else if (OB_FAIL(ObMViewInfo::update_mview_last_refresh_info(trans, mview_info))) {
-                LOG_WARN("fail to update mview last refresh info", KR(ret), K(mview_info));
+              if (OB_FAIL(mview_info.set_last_refresh_info(trans,
+                                                           tenant_id,
+                                                           refresh_scn_val,
+                                                           target_data_sync_scn_val,
+                                                           ObMVRefreshType::COMPLETE,
+                                                           start_time,
+                                                           ObTimeUtil::current_time()))) {
+                LOG_WARN("fail to set last refresh info", KR(ret), K(mview_info));
+              } else if (OB_FAIL(ObMViewInfo::record_mview_info(trans, mview_info))) {
+                LOG_WARN("fail to record mview info into __all_mview table", KR(ret), K(mview_info));
               }
             }
           }
@@ -25952,12 +26004,7 @@ int ObDDLService::check_table_schema_is_legal(const obrpc::ObTruncateTableArg &a
     LOG_WARN("can not truncate table in recyclebin",
             KR(ret), K(table_name), K(table_id), K(database_name));
   } else if (table_schema.is_user_table() || table_schema.is_mysql_tmp_table()) {
-    if (table_schema.has_mlog_table()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("truncate table with materialized view log is not supported", KR(ret),
-               K(table_schema), K(table_id));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "truncate table with materialized view log is");
-    } else if (table_schema.table_referenced_by_fast_lsm_mv()) {
+    if (table_schema.required_by_mv_fast_refresh()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("truncate table required by materialized view is not supported", KR(ret),
                K(table_schema), K(table_id));
@@ -26205,12 +26252,7 @@ int ObDDLService::truncate_table(const ObTruncateTableArg &arg,
         }
       } else if (OB_FAIL(check_enable_sys_table_ddl(*orig_table_schema, OB_DDL_TRUNCATE_TABLE_CREATE))) {
         LOG_WARN("ddl is not allowed on system table", K(ret));
-      } else if (orig_table_schema->has_mlog_table()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("truncate table with materialized view log is not supported",
-            KR(ret), KPC(orig_table_schema));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "truncate table with materialized view log is");
-      } else if (orig_table_schema->table_referenced_by_fast_lsm_mv()) {
+      } else if (orig_table_schema->required_by_mv_fast_refresh()) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("truncate table required by materialized view is not supported",
             KR(ret), KPC(orig_table_schema));
@@ -26711,6 +26753,9 @@ int ObDDLService::drop_table_in_trans(
       } else if (OB_FAIL((drop_aux_table_in_drop_table(trans, ddl_operator, schema_guard,
           *container_table_schema, AUX_LOB_PIECE, false)))) {
         LOG_WARN("drop_aux_table_in_drop_table failed", KR(ret));
+      } else if (OB_FAIL((drop_aux_table_in_drop_table(trans, ddl_operator, schema_guard,
+          *container_table_schema, MATERIALIZED_VIEW_LOG, false)))) {
+        LOG_WARN("drop_aux_table_in_drop_table failed", KR(ret));
       } else if (OB_FAIL((drop_aux_table_in_drop_table(trans, ddl_operator, schema_guard, // drop mv container table
                 table_schema, MATERIALIZED_VIEW, false)))) {
         LOG_WARN("drop_aux_table_in_drop_table failed", KR(ret));
@@ -26718,19 +26763,54 @@ int ObDDLService::drop_table_in_trans(
 
       if (OB_SUCC(ret)) {
         const uint64_t mview_table_id = table_schema.get_table_id();
-        ObMViewDependencyService mv_dep_service(*schema_service_);
-        if (OB_FAIL(mv_dep_service.remove_mview_dep_infos(
-            trans, schema_guard, tenant_id, mview_table_id))) {
-          LOG_WARN("failed to remove mview dep infos", KR(ret));
+        ObSEArray<sql::ObMVDepInfo, 16> mv_dep_infos;
+        if (OB_FAIL(sql::ObMVDepUtils::get_mview_dep_infos(
+            trans, tenant_id, mview_table_id, mv_dep_infos, true/*ignore_udt_udf*/))) {
+          LOG_WARN("failed to get mview dep infos", KR(ret), K(mview_table_id));
+        }
+        if (OB_SUCC(ret)) {
+          ObMViewDependencyService mv_dep_service(*schema_service_);
+          if (OB_FAIL(mv_dep_service.remove_mview_dep_infos(
+              trans, schema_guard, tenant_id, mview_table_id))) {
+            LOG_WARN("failed to remove mview dep infos", KR(ret));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+          if (tenant_config.is_valid() && tenant_config->enable_mlog_auto_maintenance) {
+            for (int64_t i = 0; OB_SUCC(ret) && i < mv_dep_infos.count(); ++i) {
+              const uint64_t base_table_id = mv_dep_infos.at(i).p_obj_;
+              const ObTableSchema *base_table_schema = nullptr;
+              if (OB_FAIL(schema_guard.get_table_schema(tenant_id, base_table_id, base_table_schema))) {
+                LOG_WARN("failed to get base table schema", KR(ret), K(base_table_id));
+              } else if (OB_ISNULL(base_table_schema) || !base_table_schema->has_mlog_table()) {
+              } else {
+                ObSEArray<uint64_t, 4> relevent_mviews;
+                if (OB_FAIL(ObMViewUtils::get_relevent_mviews(
+                    trans, schema_guard, tenant_id, base_table_schema,
+                    relevent_mviews, mview_table_id))) {
+                  LOG_WARN("failed to get relevent mviews", KR(ret), K(base_table_id));
+                } else if (relevent_mviews.empty()) {
+                  if (OB_FAIL(drop_aux_table_in_drop_table(
+                      trans, ddl_operator, schema_guard,
+                      *base_table_schema, MATERIALIZED_VIEW_LOG, false/*to_recyclebin*/))) {
+                    LOG_WARN("failed to cascade drop mlog", KR(ret), K(base_table_id));
+                  } else {
+                    LOG_INFO("cascade dropped mlog for drop mview", K(mview_table_id),
+                             K(base_table_id), K(base_table_schema->get_mlog_tid()));
+                  }
+                }
+              }
+            }
+          }
         }
       }
     } else if (!table_schema.is_aux_table()) {
       if (OB_FAIL((drop_aux_table_in_drop_table(trans, ddl_operator, schema_guard,
           table_schema, USER_INDEX, to_recyclebin)))) {
         LOG_WARN("drop_aux_table_in_drop_table failed", KR(ret));
-      } else if (table_schema.mv_container_table()
-          && OB_FAIL((drop_aux_table_in_drop_table(trans, ddl_operator, schema_guard,
-                          table_schema, MATERIALIZED_VIEW_LOG, to_recyclebin)))) {
+      } else if (OB_FAIL((drop_aux_table_in_drop_table(trans, ddl_operator, schema_guard,
+          table_schema, MATERIALIZED_VIEW_LOG, false)))) {
         LOG_WARN("drop_aux_table_in_drop_table failed", KR(ret));
       } else if (OB_FAIL((drop_aux_table_in_drop_table(trans, ddl_operator, schema_guard,
           table_schema, AUX_VERTIAL_PARTITION_TABLE, to_recyclebin)))) {
@@ -28565,11 +28645,8 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
         } else if (table_schema->is_materialized_view() && OB_ISNULL(data_table_schema)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("data_table_schema should not be null", KR(ret));
-        } else if (table_schema->has_mlog_table() || (table_schema->is_materialized_view() && data_table_schema->has_mlog_table())) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("drop table with materialized view log is not supported", KR(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop table with materialized view log is");
-        } else if (table_schema->table_referenced_by_fast_lsm_mv() && !table_schema->is_index_table()) {
+        } else if (table_schema->table_referenced_by_mv() ||
+                   (table_schema->is_materialized_view() && data_table_schema->table_referenced_by_mv())) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("drop table required by materialized view is not supported", KR(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop table required by materialized view is");
@@ -28589,6 +28666,11 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
         } else if (is_drop_index_or_mlog && OB_ISNULL(data_table_schema)) {
           ret = OB_TABLE_NOT_EXIST;
           LOG_WARN("data table not found", K(ret), K(tmp_table_schema.get_data_table_id()));
+        } else if (is_drop_index_or_mlog && ObTableSchema::is_mlog_table(drop_table_arg.table_type_)
+                   && data_table_schema->table_referenced_by_mv()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("drop materialized view log on table required by materialized view is not supported", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop materialized view log on table required by materialized view is");
         } else if (FALSE_IT(tmp_table_schema.set_in_offline_ddl_white_list(table_item.is_hidden_ ||
             (nullptr != data_table_schema && ObTableStateFlag::TABLE_STATE_HIDDEN_OFFLINE_DDL == data_table_schema->get_table_state_flag())))) {
         // to drop a data table, in_offline_ddl_white_list is decided by the `table_item.is_hidden_`.

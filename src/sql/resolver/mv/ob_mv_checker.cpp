@@ -11,7 +11,6 @@
  */
 
 #define USING_LOG_PREFIX SQL_RESV
-#include "sql/rewrite/ob_expand_aggregate_utils.h"
 #include "sql/resolver/mv/ob_mv_checker.h"
 #include "sql/optimizer/ob_optimizer_util.h"
 #include "sql/rewrite/ob_transform_utils.h"
@@ -25,6 +24,7 @@ namespace sql
 {
 
 int ObMVChecker::check_mv_fast_refresh_type(const ObSelectStmt *view_stmt,
+                                            const bool need_pre_process_view_stmt,
                                             ObIAllocator *allocator,
                                             ObSchemaChecker *schema_checker,
                                             ObStmtFactory *stmt_factory,
@@ -35,16 +35,18 @@ int ObMVChecker::check_mv_fast_refresh_type(const ObSelectStmt *view_stmt,
                                             ObMVRefreshableType &refresh_type,
                                             FastRefreshableNotes &note,
                                             ObIArray<std::pair<ObRawExpr*, int64_t>> &fast_refresh_dependent_columns,
-                                            ObIArray<obrpc::ObMVRequiredColumnsInfo> &required_columns_infos)
+                                            ObTableReferencedColumnsInfo *table_referenced_columns_info /* = NULL */,
+                                            MvCheckerExtraInfo *extra_info /* = NULL */)
 {
   int ret = OB_SUCCESS;
   ObDMLStmt *copied_stmt = NULL;
   refresh_type = OB_MV_REFRESH_INVALID;
-  ObTableReferencedColumnsInfo table_referenced_columns_info;
   if (OB_ISNULL(view_stmt) || OB_ISNULL(stmt_factory)
       || OB_ISNULL(expr_factory) || OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(view_stmt), K(expr_factory), K(session_info));
+  } else if (!need_pre_process_view_stmt) {
+    // do nothing
   } else if (OB_FAIL(ObTransformUtils::deep_copy_stmt(*stmt_factory, *expr_factory,
                                                       view_stmt, copied_stmt))) {
     LOG_WARN("failed to deep copy stmt", K(ret));
@@ -55,21 +57,30 @@ int ObMVChecker::check_mv_fast_refresh_type(const ObSelectStmt *view_stmt,
                                                          expr_factory,
                                                          stmt_factory))) {
     LOG_WARN("failed to transform mv stmt", K(ret));
-  } else if (OB_FAIL(table_referenced_columns_info.init())) {
-    LOG_WARN("failed to init table referenced columns info", KR(ret));
-  } else {
-    ObMVChecker checker(*static_cast<ObSelectStmt *>(copied_stmt), *expr_factory, session_info,
+  } else if (OB_FAIL(pre_process_view_stmt(expr_factory, session_info, *static_cast<ObSelectStmt *>(copied_stmt)))) {
+    LOG_WARN("failed to pre process view stmt", K(ret));
+  }
+  if (OB_SUCC(ret)) {
+    ObMVChecker checker(session_info->get_effective_tenant_id(),
+                        NULL == copied_stmt ? *view_stmt : *static_cast<ObSelectStmt *>(copied_stmt),
+                        *expr_factory, session_info,
                         container_table_schema, need_on_query_computation, note,
-                        fast_refresh_dependent_columns,&table_referenced_columns_info);
-    if (OB_FAIL(pre_process_view_stmt(expr_factory, session_info, *static_cast<ObSelectStmt *>(copied_stmt)))) {
-      LOG_WARN("failed to pre process view stmt", K(ret));
-    } else if (OB_FAIL(checker.check_mv_refresh_type())) {
+                        fast_refresh_dependent_columns, table_referenced_columns_info);
+    if (OB_FAIL(checker.check_mv_refresh_type())) {
       LOG_WARN("failed to check mv refresh type", K(ret));
-    } else if (OB_FAIL(table_referenced_columns_info.convert_to_required_columns_infos(required_columns_infos))) {
-      LOG_WARN("failed to convert to required columns infos", K(ret));
     } else {
-      refresh_type = checker.get_refersh_type();
-      LOG_INFO("check mv fast refresh type", KR(ret), K(refresh_type), K(required_columns_infos));
+      refresh_type = checker.get_refresh_type();
+      LOG_INFO("check mv fast refresh type", KR(ret), K(refresh_type));
+      // if not need to print refresh sql or real-time mview, the extra_info is NULL
+      if (NULL != extra_info) {
+        if (OB_FAIL(extra_info->mlog_tables_.assign(checker.get_mlog_tables()))) {
+          LOG_WARN("failed to assign mlog tables", K(ret));
+        } else if (OB_FAIL(extra_info->child_refresh_types_.assign(checker.get_child_refresh_types()))) {
+          LOG_WARN("failed to assign child refresh types", K(ret));
+        } else {
+          extra_info->union_all_marker_idx_ = checker.get_union_all_marker_idx();
+        }
+      }
     }
   }
   return ret;
@@ -79,7 +90,6 @@ void ObMVChecker::reset()
 {
   refresh_type_ = OB_MV_REFRESH_INVALID;
   mlog_tables_.reuse();
-  expand_aggrs_.reuse();
   marker_idx_ = OB_INVALID_INDEX;
   child_refresh_types_.reuse();
   refresh_dep_columns_.reuse();
@@ -345,13 +355,12 @@ int ObMVChecker::check_mv_dependency_mlog_tables(const ObSelectStmt &stmt, bool 
   int ret = OB_SUCCESS;
   is_valid = false;
   ObSqlSchemaGuard *sql_schema_guard = NULL;
-  const uint64_t tenant_id = MTL_ID();
   uint64_t data_version = 0;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id_));
   if (OB_ISNULL(stmt.get_query_ctx()) || OB_ISNULL(sql_schema_guard = &stmt.get_query_ctx()->sql_schema_guard_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(sql_schema_guard));
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
     LOG_WARN("fail to get tenant data version", KR(ret), K(data_version));
   } else if (stmt.get_table_size() == 0) {
     is_valid = false;
@@ -483,7 +492,7 @@ int ObMVChecker::check_mav_refresh_type(const ObSelectStmt &stmt, ObMVRefreshabl
     LOG_WARN("failed to check refresh type basic", K(ret));
   } else if (!is_valid) {
     refresh_type = OB_MV_COMPLETE_REFRESH;
-  } else if (OB_FAIL(check_and_expand_mav_aggrs(stmt, expand_aggrs_, is_valid))) {
+  } else if (OB_FAIL(check_mav_aggr_items(stmt, is_valid))) {
     LOG_WARN("failed to check mav aggr valid", K(ret));
   } else if (!is_valid) {
     refresh_type = OB_MV_COMPLETE_REFRESH;
@@ -508,12 +517,11 @@ int ObMVChecker::check_mav_refresh_type_basic(const ObSelectStmt &stmt, bool &is
 {
   int ret = OB_SUCCESS;
   is_valid = true;
-  const ObAggFunRawExpr *default_count = NULL;  // count(*) need for non scalar group by
-  if (!stmt.is_scala_group_by() && OB_FAIL(get_mav_default_count(stmt.get_aggr_items(), default_count))) {
-    LOG_WARN("failed to check target aggr exist", K(ret));
-  } else if (!stmt.is_scala_group_by() && NULL == default_count) {
-    fast_refreshable_error_.assign_fmt("a count(*) item is required to be added to the select item list");
-    is_valid = false;
+  // For the scalar group by, COUNT(*) also may be dependent by MV fast refresh,
+  // but for the compatibility reasons, we can not collect default count here.
+  // Because the existing scalar group by MVs may not have a COUNT(*) column.
+  if (!stmt.is_scala_group_by() && OB_FAIL(collect_mav_default_count(stmt))) {
+    LOG_WARN("failed to collect default count", K(ret));
   } else if (lib::is_mysql_mode() && OB_FAIL(check_is_valid_mysql_mode_group_by(stmt, is_valid))) {
     LOG_WARN("failed to check is valid mysql mode group by", K(ret));
   } else if (!is_valid) {
@@ -630,14 +638,11 @@ int ObMVChecker::is_standard_select_in_group_by(const hash::ObHashSet<uint64_t> 
   return ret;
 }
 
-int ObMVChecker::check_and_expand_mav_aggrs(const ObSelectStmt &stmt,
-                                            ObIArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>> &expand_aggrs,
-                                            bool &is_valid)
+int ObMVChecker::check_mav_aggr_items(const ObSelectStmt &stmt,
+                                      bool &is_valid)
 {
   int ret = OB_SUCCESS;
   is_valid = true;
-  ObSEArray<ObAggFunRawExpr*, 8> all_aggrs;
-  const ObIArray<ObAggFunRawExpr*> &aggrs = stmt.get_aggr_items();
   enable_simplify_aggr_dep_ = false;
   if (OB_ISNULL(stmt.get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
@@ -646,25 +651,21 @@ int ObMVChecker::check_and_expand_mav_aggrs(const ObSelectStmt &stmt,
              get_bool_opt_param(ObOptParamHint::ENABLE_FAST_REFRESH_SIMPLIFY_AGGR_DEP,
                                 enable_simplify_aggr_dep_))) {
     LOG_WARN("failed to get enable fast refresh with cur time", K(ret));
-  } else if (OB_FAIL(all_aggrs.assign(aggrs))) {
-    LOG_WARN("failed to assign exprs", K(ret));
-  } else {
-    for (int64_t i = 0; is_valid && OB_SUCC(ret) && i < aggrs.count(); ++i) {
-      if (OB_FAIL(check_and_expand_mav_aggr(stmt, aggrs.at(i), all_aggrs, expand_aggrs,
-                                            is_valid))) {
-        LOG_WARN("failed to check and expand mav aggr", K(ret));
-      }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < stmt.get_aggr_item_size(); ++i) {
+    if (OB_FAIL(check_mav_aggr_item(stmt,
+                                    stmt.get_aggr_item(i),
+                                    is_valid))) {
+      LOG_WARN("failed to check mav aggr item", K(ret), K(i), KPC(stmt.get_aggr_item(i)));
     }
   }
   return ret;
 }
 
 // fast refres can not support for these funs if there is only insert dml on base table.
-int ObMVChecker::check_and_expand_mav_aggr(const ObSelectStmt &stmt,
-                                           ObAggFunRawExpr *aggr,
-                                           ObIArray<ObAggFunRawExpr*> &all_aggrs,
-                                           ObIArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>> &expand_aggrs,
-                                           bool &is_valid)
+int ObMVChecker::check_mav_aggr_item(const ObSelectStmt &stmt,
+                                     ObAggFunRawExpr *aggr,
+                                     bool &is_valid)
 {
   int ret = OB_SUCCESS;
   is_valid = false;
@@ -675,65 +676,51 @@ int ObMVChecker::check_and_expand_mav_aggr(const ObSelectStmt &stmt,
     is_valid = false;
     fast_refreshable_error_.assign_fmt("query with nested aggregate functions or distinct keyword is not supported");
   } else {
-    const int64_t orig_aggr_count = all_aggrs.count();
+    is_valid = true;
     switch (aggr->get_expr_type()) {
       case T_FUN_COUNT: {
-        if (!stmt.check_is_select_item_expr(aggr)) {
-          fast_refreshable_error_.assign_fmt("a standalone count expression is required in the select item list when using expressions that derive from that count operation");
-          LOG_WARN("need count item", KPC(aggr));
-        } else {
-          is_valid = true;
+        if (0 == aggr->get_real_param_count()) {
+          if (stmt.is_scala_group_by() && !stmt.check_is_select_item_expr(aggr)) {
+            if (OB_FAIL(add_dep_columns_no_dup(aggr))) {
+              LOG_WARN("failed to push back dependent column", K(ret), KPC(aggr));
+            }
+          } else {
+            // do nothing, for normal group by, COUNT(*) has already been handled in collect_mav_default_count
+          }
+        } else if (1 != aggr->get_real_param_count()) {
+          is_valid = false;
+          fast_refreshable_error_.assign_fmt("COUNT() with multiple parameters is not supported");
+        } else if (!stmt.check_is_select_item_expr(aggr)
+                   && OB_FAIL(collect_equivalent_count_aggr(stmt,
+                                                            aggr->get_param_expr(0)))) {
+          LOG_WARN("failed to collect dependent count aggr", K(ret), KPC(aggr));
         }
         break;
       }
       case T_FUN_SUM: {
-        const ObAggFunRawExpr *dependent_aggr = NULL;
-        if (!stmt.check_is_select_item_expr(aggr)) {
-          fast_refreshable_error_.assign_fmt("a standalone sum expression is required in the select item list when using expressions that derive from that sum operation");
-        } else if (OB_FAIL(get_dependent_aggr_of_fun_sum(stmt, aggr->get_param_expr(0), enable_simplify_aggr_dep_, dependent_aggr))) {
-          LOG_WARN("failed to check sum aggr fast refresh valid", K(ret));
-        } else if (NULL == dependent_aggr) {
-          fast_refreshable_error_.assign_fmt("when using sum/avg/stddev/variance functions, a standalone count function of the corresponding column is required in the select item list");
-        } else {
-          is_valid = true;
-        }
-        break;
-      }
-      case T_FUN_AVG:
-      case T_FUN_STDDEV:
-      case T_FUN_VARIANCE:  {
-        ObRawExpr *replace_expr = NULL;
-        ObExpandAggregateUtils expand_aggr_utils(expr_factory_, session_info_);
-        expand_aggr_utils.set_expand_for_mv();
-        if (OB_FAIL(expand_aggr_utils.expand_common_aggr_expr(aggr, replace_expr, all_aggrs))) {
-          LOG_WARN("failed to expand common aggr expr", K(ret));
-        } else if (all_aggrs.count() != orig_aggr_count
-                   && OB_FAIL(try_replace_equivalent_count_aggr(stmt, orig_aggr_count, all_aggrs, replace_expr))) {
-          LOG_WARN("failed to try replace equivalent count aggr ", K(ret));
-        } else if (all_aggrs.count() != orig_aggr_count) {
-          /* expand aggr generate new aggr, can not fast refresh */
-          is_valid = false;
-          LOG_TRACE("aggr can not fast refresh", KPC(aggr), KPC(replace_expr), K(orig_aggr_count), K(all_aggrs));
-          fast_refreshable_error_.assign_fmt("when using sum/avg/stddev/variance functions, a standalone count function of the corresponding column is required in the select item list");
-          ObOptimizerUtil::revert_items(all_aggrs, orig_aggr_count);
-        } else if (OB_FAIL(expand_aggrs.push_back(std::make_pair(aggr, replace_expr)))) {
-          LOG_WARN("failed to push back", K(ret));
-        } else {
-          /* need not check this aggr in select item, expand aggr will check when call this function by itself */
-          is_valid = true;
+        if (OB_UNLIKELY(1 != aggr->get_real_param_count())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get unexpected sum expr", K(ret), KPC(aggr));
+        } else if (!stmt.check_is_select_item_expr(aggr)
+                   && OB_FAIL(add_dep_columns_no_dup(aggr))) {
+          LOG_WARN("failed to push back dependent column", K(ret), KPC(aggr));
+        } else if (OB_FAIL(collect_equivalent_count_aggr(stmt,
+                                                         aggr->get_param_expr(0)))) {
+          LOG_WARN("failed to collect dependent count aggr of fun sum", K(ret), KPC(aggr));
         }
         break;
       }
       case T_FUN_MAX:
       case T_FUN_MIN: {
         if (!stmt.is_single_table_stmt()) {
+          is_valid = false;
           fast_refreshable_error_.assign_fmt("min/max aggregation function only support for single table query");
         } else if (stmt.is_scala_group_by()) {
+          is_valid = false;
           fast_refreshable_error_.assign_fmt("min/max aggregation function not support for scala group by");
         } else if (need_on_query_computation_) {
+          is_valid = false;
           fast_refreshable_error_.assign_fmt("on query computation is not supported for min/max aggr");
-        } else {
-          is_valid = true;
         }
         break;
       }
@@ -742,42 +729,6 @@ int ObMVChecker::check_and_expand_mav_aggr(const ObSelectStmt &stmt,
         fast_refreshable_error_.assign_fmt("the aggregate function type is not supported yet (only count/sum/avg/stddev/variance/min/max is supported)");
         break;
       }
-    }
-  }
-  return ret;
-}
-
-int ObMVChecker::try_replace_equivalent_count_aggr(const ObSelectStmt &stmt,
-                                                   const int64_t orig_aggr_count,
-                                                   ObIArray<ObAggFunRawExpr*> &all_aggrs,
-                                                   ObRawExpr *&replace_expr)
-{
-  int ret = OB_SUCCESS;
-  const ObAggFunRawExpr *aggr = NULL;
-  const ObAggFunRawExpr *equal_aggr = NULL;
-  bool aggr_not_support = false;
-  ObRawExprCopier copier(expr_factory_);
-  for (int64_t i = orig_aggr_count; !aggr_not_support && OB_SUCC(ret) && i < all_aggrs.count(); ++i) {
-    if (OB_ISNULL(aggr = all_aggrs.at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected NULL", K(ret), K(i), K(aggr));
-    } else if (T_FUN_COUNT != aggr->get_expr_type() || 1 != aggr->get_real_param_count()) {
-      aggr_not_support = true;
-    } else if (OB_FAIL(get_dependent_aggr_of_fun_sum(stmt, aggr->get_param_expr(0), enable_simplify_aggr_dep_, equal_aggr))) {
-      LOG_WARN("failed to get equivalent count aggr", K(ret));
-    } else if (NULL == equal_aggr) {
-      aggr_not_support = true;
-    } else if (OB_FAIL(copier.add_replaced_expr(aggr, equal_aggr))) {
-      LOG_WARN("failed to add replace pair", K(ret));
-    }
-  }
-  if (OB_SUCC(ret) && !aggr_not_support) {
-    ObRawExpr *new_replace_expr = NULL;
-    ObOptimizerUtil::revert_items(all_aggrs, orig_aggr_count);
-    if (OB_FAIL(copier.copy_on_replace(replace_expr, new_replace_expr))) {
-      LOG_WARN("failed to generate group by exprs", K(ret));
-    } else {
-      replace_expr = new_replace_expr;
     }
   }
   return ret;
@@ -811,53 +762,163 @@ int ObMVChecker::extract_group_recalculate_aggrs(const ObIArray<ObAggFunRawExpr*
   return ret;
 }
 
-//  count(c1) is needed for refresh sum(c1)
-int ObMVChecker::get_dependent_aggr_of_fun_sum(const ObSelectStmt &stmt,
-                                               const ObRawExpr *sum_param,
-                                               const bool enable_simplify_aggr_dep,
-                                               const ObAggFunRawExpr *&dep_aggr)
+/**
+ * @brief ObMVChecker::get_equivalent_count_aggr
+ *
+ * Find the equivalent count expr of COUNT(count_param) from the select list.
+ * 1. if the count_param is not NULL, it is equivalent to COUNT(*).
+ * 2. COUNT(c1*c1) is equivalent to COUNT(c1).
+ *
+ * Return the select_idx (index in the stmt'sselect list) of the equivalent
+ * count expr.
+ * select_idx == -1:
+ *     the equivalent count expr is not found.
+ * select_idx in [0, stmt.get_select_item_size() - 1]:
+ *     the select_idx is the select_idx of the equivalent count expr.
+ * select_idx == stmt.get_select_item_size():
+ *     equivalent to COUNT(*), and the COUNT(*) is not exists in the
+ *     current select list.
+ */
+int ObMVChecker::get_equivalent_count_aggr(const ObSelectStmt &stmt,
+                                           const ObRawExpr *count_param,
+                                           ObSQLSessionInfo *session_info,
+                                           const bool enable_simplify_aggr_dep,
+                                           int64_t &select_idx)
 {
   int ret = OB_SUCCESS;
-  dep_aggr = NULL;
+  bool is_not_null = false;
   const ObRawExpr *check_param = NULL;
-  if (OB_ISNULL(sum_param)) {
+  select_idx = -1;
+  if (OB_ISNULL(count_param) || OB_ISNULL(session_info)
+      || OB_ISNULL(session_info->get_cur_exec_ctx())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null", K(ret), K(sum_param));
-  } else if (OB_FAIL(get_equivalent_null_check_param(sum_param, check_param))) {
-    LOG_WARN("failed to get null check param", K(ret));
+    LOG_WARN("unexpected null", K(ret), K(count_param), K(session_info));
   } else {
-    const ObIArray<ObAggFunRawExpr*> &aggrs = stmt.get_aggr_items();
-    const ObAggFunRawExpr *cur_aggr = NULL;
-    const ObRawExpr *cur_check_param = NULL;
-    for (int64_t i = 0; NULL == dep_aggr && OB_SUCC(ret) && i < aggrs.count(); ++i) {
-      if (OB_ISNULL(cur_aggr = aggrs.at(i))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected null", K(ret));
-      } else if (T_FUN_COUNT != cur_aggr->get_expr_type()
-                 || cur_aggr->is_param_distinct()
-                 || 1 != cur_aggr->get_real_param_count()) {
-        /* do nothing */
-      } else if (OB_FAIL(get_equivalent_null_check_param(cur_aggr->get_param_expr(0),
-                                                         cur_check_param))) {
-        LOG_WARN("failed to get null check param", K(ret));
-      } else if (cur_check_param->same_as(*check_param)) {
-        dep_aggr = cur_aggr;
+    ObNotNullContext not_null_ctx(session_info->get_cur_exec_ctx(),
+                                  &session_info->get_cur_exec_ctx()->get_allocator(),
+                                  &stmt);
+    if (OB_FAIL(ObTransformUtils::is_expr_not_null(not_null_ctx,
+                                                   count_param,
+                                                   is_not_null,
+                                                   NULL))) {
+      LOG_WARN("failed to check expr not null", K(ret));
+    } else if (is_not_null) {
+      // equivalent to count(*)
+      if (OB_FAIL(find_default_count_expr(stmt, select_idx))) {
+        LOG_WARN("failed to find default count expr", K(ret));
+      } else if (-1 == select_idx) {
+        // COUNT(*) is not exists in the select list
+        // If the stmt is normal group by
+        //     For creating materialized view, COUNT(*) already has been added
+        //     into the dependent columns list.
+        //     For refreshing materialized view, it is unexpected and will be
+        //     handled in the MVPrinter (ObSimpleMAVPrinter).
+        // If the stmt is scalar group by
+        //     COUNT(*) may not be added into the dependent columns list, check
+        //     whether there has other equivalent first (set select_idx later).
+        if (!stmt.is_scala_group_by()) {
+          select_idx = stmt.get_select_item_size();
+        }
       }
     }
-    if (OB_SUCC(ret) && NULL == dep_aggr
-        && T_OP_CASE == sum_param->get_expr_type()
-        && enable_simplify_aggr_dep) {
-      /* for case when expr, just use count(*) as dep_aggr temporary */
-      if (OB_FAIL(get_mav_default_count(stmt.get_aggr_items(), dep_aggr))) {
-        LOG_WARN("failed to check target aggr exist", K(ret));
-      }
+  }
+  if (OB_FAIL(ret) || -1 != select_idx) {
+    // do nothing
+  } else if (OB_FAIL(get_equivalent_null_check_param(count_param, check_param))) {
+    LOG_WARN("failed to get null check param", K(ret));
+  } else if (OB_ISNULL(check_param)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), KPC(count_param), K(check_param));
+  }
+  // try to find equivalent count expr in select list
+  for (int64_t i = 0; OB_SUCC(ret) && -1 == select_idx && i < stmt.get_select_item_size(); ++i) {
+    const ObRawExpr *expr = NULL;
+    const ObAggFunRawExpr *aggr_expr = NULL;
+    const ObRawExpr *aggr_param = NULL;
+    if (OB_ISNULL(expr = stmt.get_select_item(i).expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null select expr", K(ret));
+    } else if (!expr->is_aggr_expr()) {
+      // do nothing
+    } else if (OB_FALSE_IT(aggr_expr = static_cast<const ObAggFunRawExpr*>(expr))) {
+    } else if (T_FUN_COUNT != aggr_expr->get_expr_type()
+               || aggr_expr->is_param_distinct()
+               || 1 != aggr_expr->get_real_param_count()) {
+      // do nothing
+    } else if (OB_FAIL(get_equivalent_null_check_param(aggr_expr->get_param_expr(0),
+                                                       aggr_param))) {
+      LOG_WARN("failed to get null check param", K(ret));
+    } else if (OB_ISNULL(aggr_param)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret), KPC(aggr_expr), K(aggr_param));
+    } else if (aggr_param->same_as(*check_param)) {
+      select_idx = i;
+    }
+  }
+  if (OB_SUCC(ret)
+      && -1 == select_idx
+      && is_not_null) {
+    // For not null param in scalar group by and there is not other
+    // equivalent count, will build a dependent COUNT(*) expr.
+    select_idx = stmt.get_select_item_size();
+  }
+  if (OB_SUCC(ret)
+      && -1 == select_idx
+      && T_OP_CASE == count_param->get_expr_type()
+      && enable_simplify_aggr_dep) {
+    /* for case when expr, just use count(*) as dep_aggr temporary */
+    if (OB_FAIL(find_default_count_expr(stmt, select_idx))) {
+      LOG_WARN("failed to find default count expr", K(ret));
+    } else if (-1 == select_idx) {
+      select_idx = stmt.get_select_item_size();
     }
   }
   return ret;
 }
 
+// count(c1) is needed for refresh sum(c1)
+// add to dependent columns when not exists
+int ObMVChecker::collect_equivalent_count_aggr(const ObSelectStmt &stmt,
+                                               const ObRawExpr *count_param)
+{
+  int ret = OB_SUCCESS;
+  const ObRawExpr *check_param = NULL;
+  ObAggFunRawExpr *count_expr = NULL;
+  int64_t select_idx = -1;
+  if (OB_FAIL(get_equivalent_count_aggr(stmt, count_param, session_info_, enable_simplify_aggr_dep_, select_idx))) {
+    LOG_WARN("failed to get equivalent count aggr", K(ret), KPC(count_param));
+  } else if (-1 != select_idx) {
+    if (select_idx == stmt.get_select_item_size()
+        && stmt.is_scala_group_by()) {
+      // Equivalent to COUNT(*), and it is not exists in the select list
+      // For normal group by, do nothing, dependent COUNT(*) has already
+      // been handled in collect_mav_default_count.
+      // For scalar group by, dependent COUNT(*) may not yet be built.
+      if (OB_FAIL(collect_mav_default_count(stmt))) {
+        LOG_WARN("failed to collect mav default count", K(ret));
+      }
+    } else {
+      // do nothing, equivalent count aggr is already found
+    }
+  } else if (OB_FAIL(get_equivalent_null_check_param(count_param, check_param))) {
+    LOG_WARN("failed to get null check param", K(ret));
+  } else if (OB_FAIL(expr_factory_.create_raw_expr(T_FUN_COUNT, count_expr))) {
+    LOG_WARN("failed to create count expr", K(ret));
+  } else if (OB_ISNULL(count_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FAIL(count_expr->add_real_param_expr(const_cast<ObRawExpr*>(check_param)))) {
+    LOG_WARN("failed to add param expr to count", K(ret));
+  } else if (OB_FAIL(count_expr->formalize(session_info_))) {
+    LOG_WARN("failed to formalize count expr", K(ret));
+  } else if (OB_FAIL(add_dep_columns_no_dup(count_expr))) {
+    LOG_WARN("failed to add dep column for count expr", K(ret));
+  }
+  return ret;
+}
+
 //  We need calculate sum(c1*c1) to get the value of stddev(c1).
-//  To refrsh sum(c1*c1) and avoid calculate count(c1*c1), count(c1) can also used to refrsh sum(c1*c1).
+//  To refresh sum(c1*c1) and avoid calculate count(c1*c1), count(c1) can also used to refresh sum(c1*c1).
 //  Here try to get c1 as equivalent aggr param of c1*c1 only.
 int ObMVChecker::get_equivalent_null_check_param(const ObRawExpr *param_expr,
                                                  const ObRawExpr *&check_param)
@@ -891,18 +952,45 @@ int ObMVChecker::get_equivalent_null_check_param(const ObRawExpr *param_expr,
   return ret;
 }
 
-int ObMVChecker::get_mav_default_count(const ObIArray<ObAggFunRawExpr*> &aggrs,
-                                       const ObAggFunRawExpr *&count_aggr)
+// check count(*) exist in the select list (semantic match),
+// and add to dependent columns when not exists
+int ObMVChecker::collect_mav_default_count(const ObSelectStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  count_aggr = NULL;
-  const ObAggFunRawExpr *aggr = NULL;
-  for (int64_t i = 0; NULL == count_aggr && OB_SUCC(ret) && i < aggrs.count(); ++i) {
-    if (OB_ISNULL(aggr = aggrs.at(i))) {
+  ObAggFunRawExpr *count_expr = NULL;
+  int64_t default_count_select_idx = -1;
+  if (OB_FAIL(find_default_count_expr(stmt, default_count_select_idx))) {
+    LOG_WARN("failed to find default count expr", K(ret));
+  } else if (-1 != default_count_select_idx) {
+    // do nothing
+  } else if (OB_FAIL(expr_factory_.create_raw_expr(T_FUN_COUNT, count_expr))) {
+    LOG_WARN("failed to create count expr", K(ret));
+  } else if (OB_FAIL(count_expr->formalize(session_info_))) {
+    LOG_WARN("failed to formalize count expr", K(ret));
+  } else if (OB_FAIL(add_dep_columns_no_dup(count_expr))) {
+    LOG_WARN("failed to add dep column for default count(*)", K(ret));
+  }
+  return ret;
+}
+
+int ObMVChecker::find_default_count_expr(const ObSelectStmt &stmt,
+                                         int64_t &select_idx)
+{
+  int ret = OB_SUCCESS;
+  select_idx = -1;
+  for (int64_t i = 0; OB_SUCC(ret) && -1 == select_idx && i < stmt.get_select_item_size(); ++i) {
+    const ObRawExpr *expr = NULL;
+    const ObAggFunRawExpr *aggr_expr = NULL;
+    if (OB_ISNULL(expr = stmt.get_select_item(i).expr_)) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected null", K(ret));
-    } else if (T_FUN_COUNT == aggr->get_expr_type() && 0 == aggr->get_real_param_count()) {
-      count_aggr = aggr;
+      LOG_WARN("null select expr", K(ret));
+    } else if (!expr->is_aggr_expr()) {
+      // do nothing
+    } else if (OB_FALSE_IT(aggr_expr = static_cast<const ObAggFunRawExpr*>(expr))) {
+    } else if (T_FUN_COUNT == aggr_expr->get_expr_type()
+               && !aggr_expr->is_param_distinct()
+               && 0 == aggr_expr->get_real_param_count()) {
+      select_idx = i;
     }
   }
   return ret;
@@ -916,9 +1004,8 @@ int ObMVChecker::check_mjv_refresh_type(const ObSelectStmt &stmt, ObMVRefreshabl
   bool match_major_refresh = false;
   bool has_outer_join = false;
   bool is_valid = false;
-  uint64_t tenant_id = MTL_ID();
   uint64_t data_version = 0;
-  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
     LOG_WARN("fail to get tenant data version", KR(ret), K(data_version));
   } else if (OB_FAIL(check_join_mv_fast_refresh_valid(stmt, false, is_valid, has_outer_join))) {
     LOG_WARN("failed to check join mv fast refresh valid", K(ret));
@@ -1674,10 +1761,8 @@ int ObMVChecker::check_union_all_refresh_type(const ObSelectStmt &stmt,
   } else if (need_on_query_computation_) {
     is_valid = false;
     fast_refreshable_error_.assign_fmt("on query computation is not supported for materialized view with UNION ALL");
-  } else if (OB_FAIL(check_union_all_mv_marker_column_valid(stmt, is_valid))) {
-    LOG_WARN("failed to check union all mv marker column valid", K(ret));
-  } else if (!is_valid) {
-    fast_refreshable_error_.assign_fmt("UNION ALL query without valid marker select item");
+  } else if (OB_FAIL(collect_union_all_mv_marker_column(stmt))) {
+    LOG_WARN("failed to collect union all mv marker column", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && is_valid && i < set_queries.count(); ++i) {
       stmt_idx_ = i;
@@ -1710,15 +1795,14 @@ int ObMVChecker::check_union_all_refresh_type(const ObSelectStmt &stmt,
   return ret;
 }
 
-int ObMVChecker::check_union_all_mv_marker_column_valid(const ObSelectStmt &stmt,
-                                                        bool &is_valid)
+int ObMVChecker::collect_union_all_mv_marker_column(const ObSelectStmt &stmt)
 {
   int ret = OB_SUCCESS;
-  is_valid = false;
   const ObIArray<ObSelectStmt*> &set_queries = stmt.get_set_query();
-  const int64_t sel_size = stmt.get_select_item_size();
   ObSEArray<ObRawExpr*, 4> marker_exprs;
-  for (int64_t i = 0; OB_SUCC(ret) && !is_valid && i < sel_size; ++i) {
+  marker_idx_ = OB_INVALID_INDEX;
+  // try to find marker column in select list
+  for (int64_t i = 0; OB_SUCC(ret) && OB_INVALID_INDEX == marker_idx_ && i < stmt.get_select_item_size(); ++i) {
     bool cur_sel_is_valid = true;
     ObRawExpr *expr = NULL;
     marker_exprs.reuse();
@@ -1740,9 +1824,32 @@ int ObMVChecker::check_union_all_mv_marker_column_valid(const ObSelectStmt &stmt
       }
     }
     if (OB_SUCC(ret) && cur_sel_is_valid) {
-      is_valid = true;
       marker_idx_ = i;
     }
+  }
+  // if marker column is not found, add a dependent column
+  ObConstRawExpr *const_expr = NULL;
+  if (OB_FAIL(ret) || OB_INVALID_INDEX != marker_idx_) {
+    // do nothing
+  } else if (!lib::is_oracle_mode() &&
+             OB_FAIL(ObRawExprUtils::build_const_int_expr(expr_factory_,
+                                                          ObIntType,
+                                                          0,
+                                                          const_expr))) {
+    LOG_WARN("failed to build const int expr for union all marker", K(ret));
+  } else if (lib::is_oracle_mode() &&
+             OB_FAIL(ObRawExprUtils::build_const_number_expr(expr_factory_,
+                                                             ObNumberType,
+                                                             number::ObNumber::get_zero(),
+                                                             const_expr))) {
+    LOG_WARN("failed to build const number expr for union all marker", K(ret));
+  } else if (OB_ISNULL(const_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(const_expr));
+  } else if (OB_FAIL(const_expr->formalize(session_info_))) {
+    LOG_WARN("failed to formalize count expr", K(ret));
+  } else if (OB_FAIL(refresh_dep_columns_.push_back(std::make_pair(const_expr, -1)))) {
+    LOG_WARN("failed to push back union all marker dep column", K(ret));
   }
   return ret;
 }
@@ -1822,6 +1929,8 @@ int ObMVChecker::add_dep_columns_no_dup(ObRawExpr* expr)
   if (OB_SUCC(ret) && !found) {
     if (OB_FAIL(refresh_dep_columns_.push_back(std::make_pair(expr, stmt_idx_)))) {
       LOG_WARN("failed to push back dependent column", K(ret));
+    } else {
+      LOG_DEBUG("add refresh dependent column", KPC(expr), K(stmt_idx_), K(lbt()));
     }
   }
   return ret;

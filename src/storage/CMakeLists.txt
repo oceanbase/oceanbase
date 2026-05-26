@@ -1059,13 +1059,17 @@ ob_set_subtarget(ob_storage mview
   mview/cmd/ob_mview_executor_util.cpp
   mview/cmd/ob_mview_purge_log_executor.cpp
   mview/cmd/ob_mview_refresh_executor.cpp
+  mview/cmd/ob_mview_refresh_report.cpp
+  mview/cmd/ob_mview_refresh_report_executor.cpp
+  mview/cmd/ob_mview_refresh_report_fetcher.cpp
+  mview/cmd/ob_mview_refresh_report_formatter.cpp
   mview/cmd/ob_mview_stats_purge_refresh_stats_executor.cpp
   mview/cmd/ob_mview_stats_set_mvref_stats_params_executor.cpp
   mview/cmd/ob_mview_stats_set_system_default_executor.cpp
   mview/ob_mlog_purge.cpp
   mview/ob_mview_refresh_helper.cpp
-  mview/ob_mview_refresh_stats_collect.cpp
-  mview/ob_mview_refresh_stats_purge.cpp
+  mview/ob_mview_refresh_plan_format.cpp
+  mview/ob_mview_refresh_stats_utils.cpp
   mview/ob_mview_refresh.cpp
   mview/ob_mview_transaction.cpp
   mview/ob_mview_sched_job_utils.cpp

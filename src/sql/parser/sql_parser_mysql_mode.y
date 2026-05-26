@@ -391,7 +391,7 @@ END_P SET_VAR DELIMITER
 %type <node> sql_stmt stmt_list stmt opt_end_p
 %type <node> select_stmt update_stmt delete_stmt merge_stmt
 %type <node> insert_stmt single_table_insert values_clause dml_table_name
-%type <node> create_table_stmt create_table_like_stmt opt_table_option_list table_option_list table_option table_option_list_space_seperated create_function_stmt drop_function_stmt parallel_option lob_storage_clause lob_storage_parameter lob_storage_parameters lob_chunk_size
+%type <node> create_table_stmt create_table_like_stmt opt_table_option_list table_option_list table_option table_option_list_space_seperated create_function_stmt drop_function_stmt parallel_option parallel_option_opt lob_storage_clause lob_storage_parameter lob_storage_parameters lob_chunk_size
 %type <node> opt_force
 %type <node> index_or_heap
 %type <node> create_sequence_stmt alter_sequence_stmt drop_sequence_stmt opt_sequence_option_list sequence_option_list sequence_option simple_num
@@ -8600,6 +8600,17 @@ PARALLEL opt_equal_mark INTNUM
 }
 ;
 
+parallel_option_opt:
+parallel_option
+{
+  $$ = $1;
+}
+|
+{
+  $$ = NULL;
+}
+;
+
 ttl_definition:
 ttl_expr
 {
@@ -10224,10 +10235,10 @@ DISABLE
 ;
 
 mview_refresh_opt:
-REFRESH mv_refresh_method mv_nested_refresh_opt mv_refresh_on_clause mv_refresh_interval
+REFRESH mv_refresh_method parallel_option_opt mv_nested_refresh_opt mv_refresh_on_clause mv_refresh_interval
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_MV_REFRESH_INFO,
-                           3, $3, $4, $5);
+                           4, $3, $4, $5, $6);
   $$->int32_values_[0] = 0;
   $$->int32_values_[1] = $2[0];
 }
@@ -10246,25 +10257,22 @@ $$ = NULL;
 mv_refresh_on_clause:
 ON mv_refresh_mode
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_MV_REFRESH_ON_CLAUSE, 1,
-                $2);
-
+  $$ = $2;
 }
 |
 {
-$$ = NULL;
+  $$ = NULL;
 }
 ;
 
 mv_nested_refresh_opt:
 mview_nested_refresh_mode
 {
-  malloc_non_terminal_node($$, result->malloc_pool_, T_MV_NESTED_REFRESH_CLAUSE, 1,
-                           $1);
+  $$ = $1;
 }
 |
 {
-$$ = NULL;
+  $$ = NULL;
 }
 ;
 
@@ -10307,19 +10315,19 @@ $$[0] = 2;
 mv_refresh_mode:
 DEMAND
 {
-  malloc_terminal_node($$, result->malloc_pool_, T_MV_REFRESH_METHOD);
+  malloc_terminal_node($$, result->malloc_pool_, T_MV_REFRESH_ON_CLAUSE);
   $$->value_ = 0;
 }
 |
 COMMIT
 {
-  malloc_terminal_node($$, result->malloc_pool_, T_MV_REFRESH_METHOD);
+  malloc_terminal_node($$, result->malloc_pool_, T_MV_REFRESH_ON_CLAUSE);
   $$->value_ = 1;
 }
 |
 STATEMENT
 {
-  malloc_terminal_node($$, result->malloc_pool_, T_MV_REFRESH_METHOD);
+  malloc_terminal_node($$, result->malloc_pool_, T_MV_REFRESH_ON_CLAUSE);
   $$->value_ = 2;
 }
 ;
@@ -10388,14 +10396,12 @@ alter_mview_action:
 mview_enable_disable ON QUERY COMPUTATION
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_MV_OPTIONS, 1, NULL);
-  $$->value_ = 0;
   $$->int32_values_[0] = 1;
   $$->int32_values_[1] = $1[0];
 }
 | mview_enable_disable QUERY REWRITE
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_MV_OPTIONS, 1, NULL);
-  $$->value_ = 0;
   $$->int32_values_[0] = 2;
   $$->int32_values_[1] = $1[0];
 }
@@ -10403,42 +10409,51 @@ mview_enable_disable ON QUERY COMPUTATION
 {
   (void)$1;
   malloc_non_terminal_node($$, result->malloc_pool_, T_MV_OPTIONS, 1, $2);
-  $$->value_ = 0;
   $$->int32_values_[0] = 3;
 }
 | REFRESH mv_refresh_method
 {
   ParseNode *refresh_info = NULL;
-  malloc_non_terminal_node(refresh_info, result->malloc_pool_, T_MV_REFRESH_INFO, 2, NULL, NULL);
+  malloc_non_terminal_node(refresh_info, result->malloc_pool_, T_MV_REFRESH_INFO, 4, NULL, NULL, NULL, NULL);
   refresh_info->int32_values_[0] = 0;
   refresh_info->int32_values_[1] = $2[0];
   malloc_non_terminal_node($$, result->malloc_pool_, T_MV_OPTIONS, 1, refresh_info);
-  $$->value_ = 0;
+  $$->int32_values_[0] = 0;
 }
 | NEVER REFRESH
 {
   ParseNode *refresh_info = NULL;
-  malloc_non_terminal_node(refresh_info, result->malloc_pool_, T_MV_REFRESH_INFO, 2, NULL, NULL);
+  malloc_terminal_node(refresh_info, result->malloc_pool_, T_MV_REFRESH_INFO);
   refresh_info->int32_values_[0] = 1;
   malloc_non_terminal_node($$, result->malloc_pool_, T_MV_OPTIONS, 1, refresh_info);
-  $$->value_ = 0;
+  $$->int32_values_[0] = 0;
+}
+| REFRESH parallel_option
+{
+  ParseNode *refresh_info = NULL;
+  malloc_non_terminal_node(refresh_info, result->malloc_pool_, T_MV_REFRESH_INFO, 4, $2, NULL, NULL, NULL);
+  refresh_info->int32_values_[0] = 0;
+  refresh_info->int32_values_[1] = -1;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MV_OPTIONS, 1, refresh_info);
+  $$->int32_values_[0] = 0;
+}
+| REFRESH mview_nested_refresh_mode
+{
+  ParseNode *refresh_info = NULL;
+  malloc_non_terminal_node(refresh_info, result->malloc_pool_, T_MV_REFRESH_INFO, 4, NULL, $2, NULL, NULL);
+  refresh_info->int32_values_[0] = 0;
+  refresh_info->int32_values_[1] = -1;
+  malloc_non_terminal_node($$, result->malloc_pool_, T_MV_OPTIONS, 1, refresh_info);
+  $$->int32_values_[0] = 0;
 }
 | REFRESH mv_refresh_interval
 {
   ParseNode *refresh_info = NULL;
-  malloc_non_terminal_node(refresh_info, result->malloc_pool_, T_MV_REFRESH_INFO, 2, NULL, $2);
-  refresh_info->int32_values_[0] = 2;
+  malloc_non_terminal_node(refresh_info, result->malloc_pool_, T_MV_REFRESH_INFO, 4, NULL, NULL, NULL, $2);
+  refresh_info->int32_values_[0] = 0;
+  refresh_info->int32_values_[1] = -1;
   malloc_non_terminal_node($$, result->malloc_pool_, T_MV_OPTIONS, 1, refresh_info);
-  $$->value_ = 0;
-}
-| REFRESH mview_nested_refresh_mode
-{
-  ParseNode *nested_refresh_node = NULL;
-  malloc_terminal_node(nested_refresh_node, result->malloc_pool_, T_MV_NESTED_REFRESH_CLAUSE);
-  nested_refresh_node->int32_values_[0] = $2->value_;
-  malloc_non_terminal_node($$, result->malloc_pool_, T_MV_OPTIONS, 1, nested_refresh_node);
-  $$->value_ = 0;
-  $$->int32_values_[0] = 4;
+  $$->int32_values_[0] = 0;
 }
 ;
 

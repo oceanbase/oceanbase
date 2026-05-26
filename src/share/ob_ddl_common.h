@@ -1159,21 +1159,6 @@ public:
       const ObString &partition_names,
       ObSqlString &sql_string);
 
-  static int generate_build_mview_replica_sql(
-      const uint64_t tenant_id,
-      const int64_t mview_table_id,
-      const int64_t container_table_id,
-      share::schema::ObSchemaGetterGuard &schema_guard,
-      const int64_t snapshot_version,
-      const uint64_t mview_target_data_sync_scn,
-      const int64_t execution_id,
-      const int64_t task_id,
-      const int64_t parallelism,
-      const bool use_schema_version_hint_for_src_table,
-      const common::ObIArray<share::schema::ObBasedSchemaObjectInfo> &based_schema_object_infos,
-      const ObString &mview_select_sql,
-      ObSqlString &sql_string);
-
   static int get_tablet_leader_addr(
       share::ObLocationService *location_service,
       const uint64_t tenant_id,

@@ -20,7 +20,6 @@
 #include "pl/sys_package/ob_dbms_stats.h"
 #include "storage/ob_partition_pre_split.h"
 #include "storage/mview/ob_mview_mds.h"
-#include "storage/mview/ob_mview_refresh_helper.h"
 #include "rootserver/mview/ob_mview_utils.h"
 
 using namespace oceanbase::lib;
@@ -286,10 +285,9 @@ int ObDDLRedefinitionSSTableBuildTask::procress_mview_complete_refresh_(
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *mview_table_schema = nullptr;
   ObSqlString sql_string;
+  SCN snapshot_scn;
   ObCurTraceId::set(trace_id_); // reset trace id again to avoid trace id use 0x10 prefix
-  uint64_t mview_target_data_sync_scn = OB_INVALID_SCN_VAL;
   const uint64_t mview_table_id = mview_refresh_info_.mview_table_id_;
-  const bool nested_consistent_refresh = mview_refresh_info_.mview_target_data_sync_scn_.is_valid();
   if (OB_UNLIKELY(!is_inited_ || OB_ISNULL(GCTX.sql_proxy_))) {
     ret = OB_NOT_INIT;
     LOG_WARN("ddl redefinition sstable build task not inited", K(ret));
@@ -302,20 +300,20 @@ int ObDDLRedefinitionSSTableBuildTask::procress_mview_complete_refresh_(
   } else if (OB_ISNULL(mview_table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("mview table not exist", K(ret), K(tenant_id_), K(mview_refresh_info_));
-  } else if (nested_consistent_refresh &&
-             OB_FALSE_IT(mview_target_data_sync_scn =
-             mview_refresh_info_.mview_target_data_sync_scn_.get_val_for_tx())) {
-  } else if (nested_consistent_refresh &&
-             OB_FAIL(ObMViewRefreshHelper::collect_deps_and_check_satisfy(
-                     tenant_id_, mview_table_id, mview_target_data_sync_scn,
-                     snapshot_version_, *GCTX.sql_proxy_, schema_guard))) {
-      LOG_WARN("fail to check satisfied", K(ret), K(oracle_mode),
-                K(mview_table_id), K(mview_target_data_sync_scn), K(snapshot_version_));
-  } else if (OB_FAIL(ObMViewUtils::generate_mview_complete_refresh_sql(tenant_id_, mview_table_id,
-                      data_table_id_, schema_guard, snapshot_version_, mview_target_data_sync_scn,
-                      execution_id_, task_id_, parallelism_,
-                      true/*use_schema_version_hint_for_src_table*/,
-                      based_schema_object_infos_, mview_refresh_info_.select_sql_, sql_string))) {
+  } else if (OB_FAIL(snapshot_scn.convert_for_tx(snapshot_version_))) {
+    LOG_WARN("fail to convert snapshot_version to scn", KR(ret), K(snapshot_version_));
+  } else if (OB_FAIL(ObMViewUtils::generate_mview_complete_refresh_sql(tenant_id_,
+                                                                       mview_table_id,
+                                                                       data_table_id_,
+                                                                       schema_guard,
+                                                                       snapshot_scn,
+                                                                       mview_refresh_info_.mview_target_data_sync_scn_,
+                                                                       execution_id_,
+                                                                       task_id_,
+                                                                       parallelism_,
+                                                                       true /*use_schema_version_hint_for_src_table*/,
+                                                                       based_schema_object_infos_,
+                                                                       sql_string))) {
     LOG_WARN("fail to generate build mview replica sql", K(ret), K(mview_refresh_info_));
   }
   add_event_info(ret, "ddl redefinition sstable build task generate innersql for mview");
@@ -375,10 +373,8 @@ int ObDDLRedefinitionSSTableBuildTask::procress_mview_complete_refresh_(
       arg.start_ts_ = ObTimeUtil::current_time();
       arg.mview_op_type_ = MVIEW_OP_TYPE::COMPLETE_REFRESH;
       arg.read_snapshot_ = snapshot_version_;
-      if (mview_target_data_sync_scn != OB_INVALID_SCN_VAL &&
-          OB_FAIL(arg.target_data_sync_scn_.convert_for_tx(mview_target_data_sync_scn))) {
-        LOG_WARN("fail to convert to scn", K(ret), K(mview_target_data_sync_scn), K(arg));
-      } else if (OB_FAIL(trans.start(user_sql_proxy, tenant_id_))) {
+      arg.target_data_sync_scn_ = mview_refresh_info_.mview_target_data_sync_scn_;
+      if (OB_FAIL(trans.start(user_sql_proxy, tenant_id_))) {
         LOG_WARN("fail to start trans", K(ret), K(tenant_id_));
       } else if (OB_FAIL(ObMViewMdsOpHelper::register_mview_mds(tenant_id_, arg, trans))) {
         LOG_WARN("register mview mds failed", K(ret), K(tenant_id_), K(arg));

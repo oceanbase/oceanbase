@@ -551,6 +551,8 @@ public:
 public:
   static TableItem *get_table_item_by_ref_id(const ObDMLStmt *stmt, uint64_t ref_table_id);
   static bool is_link_table(const ObDMLStmt *stmt, uint64_t table_id);
+private:
+  uint64_t get_tenant_id() const;
 
 private:
   share::schema::ObSchemaGetterGuard *schema_guard_;

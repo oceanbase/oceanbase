@@ -99,13 +99,13 @@ int ObDBMSMViewStatsMysql::purge_refresh_stats(ObExecContext &ctx, ParamStore &p
   CK(OB_LIKELY(params.at(0).is_null() || params.at(0).is_varchar()) /*mv_name*/,
      OB_LIKELY(params.at(1).is_null() || params.at(1).is_int32()) /*retention_period*/);
   if (OB_SUCC(ret)) {
-    ObMViewStatsPurgeRefreshStatsArg purge_arg;
+    int64_t retention_period = INT64_MAX;
+    if (!params.at(1).is_null()) {
+      retention_period = params.at(1).get_int();
+    }
     ObMViewStatsPurgeRefreshStatsExecutor purge_executor;
-    if (!params.at(0).is_null() && FALSE_IT(purge_arg.mv_list_ = params.at(0).get_string())) {
-    } else if (!params.at(1).is_null() &&
-               FALSE_IT(purge_arg.retention_period_ = params.at(1).get_int())) {
-    } else if (OB_FAIL(purge_executor.execute(ctx, purge_arg))) {
-      LOG_WARN("fail to execute mview purge refresh stats", KR(ret), K(purge_arg));
+    if (OB_SUCC(ret) && OB_FAIL(purge_executor.execute(ctx, retention_period))) {
+      LOG_WARN("fail to execute mview purge refresh stats", KR(ret), K(retention_period));
     }
   }
   return ret;

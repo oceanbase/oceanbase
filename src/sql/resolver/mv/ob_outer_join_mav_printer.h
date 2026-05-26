@@ -27,9 +27,8 @@ public:
                                  const share::schema::ObTableSchema &mv_schema,
                                  const share::schema::ObTableSchema &mv_container_schema,
                                  const ObSelectStmt &mv_def_stmt,
-                                 const MlogSchemaPairIArray &mlog_tables,
-                                 const ObIArray<std::pair<ObAggFunRawExpr*, ObRawExpr*>> &expand_aggrs)
-    : ObSimpleJoinMAVPrinter(ctx, mv_schema, mv_container_schema, mv_def_stmt, mlog_tables, expand_aggrs),
+                                 const MlogSchemaPairIArray &mlog_tables)
+    : ObSimpleJoinMAVPrinter(ctx, mv_schema, mv_container_schema, mv_def_stmt, mlog_tables),
       ObOuterJoinMVPrinterHelper(static_cast<const ObMVPrinter&>(*this))
     {}
 

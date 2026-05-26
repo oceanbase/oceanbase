@@ -401,6 +401,36 @@ int ObKillSession::kill_session(const ObKillSessionArg &arg, ObSQLSessionMgr &se
   return ret;
 }
 
+int ObKillSession::kill_one_session(uint32_t sessid, const ObAddr &addr, uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  const ObAddr &self = GCONF.self_addr_;
+  ObKillSessionArg arg;
+  arg.sess_id_ = sessid;
+  arg.tenant_id_ = tenant_id;
+  if (OB_UNLIKELY(!addr.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("addr is invalid", K(ret), K(addr));
+  } else if (addr == self) {
+    ObKillSession killer;
+    if (OB_ISNULL(GCTX.session_mgr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session_mgr is null", KR(ret));
+    } else if (OB_FAIL(killer.kill_session(arg, *GCTX.session_mgr_))) {
+      LOG_WARN("kill local session failed", KR(ret), K(sessid));
+    }
+  } else {
+    const int64_t rpc_timeout = GCONF.rpc_timeout;
+    if (OB_ISNULL(GCTX.srv_rpc_proxy_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret));
+    } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(addr).by(tenant_id).timeout(rpc_timeout).kill_session(arg))) {
+      LOG_WARN("kill remote session via rpc failed", KR(ret), K(sessid), K(addr));
+    }
+  }
+  return ret;
+}
+
 // is_client_session = true, for finding kill client session
 int ObKillExecutor::get_remote_session_location(const ObKillSessionArg &arg,
                   ObExecContext &ctx, ObAddr &addr, bool is_client_session)

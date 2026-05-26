@@ -2491,10 +2491,11 @@ int ObSQLUtils::reconstruct_sql(ObIAllocator &allocator, const ObStmt *stmt, ObS
                                 ObSchemaGetterGuard *schema_guard,
                                 ObObjPrintParams print_params,
                                 const ParamStore *param_store,
-                                const ObSQLSessionInfo *session)
+                                const ObSQLSessionInfo *session,
+                                bool c_style)
 {
   int ret = OB_SUCCESS;
-  ObSqlPrinter sql_printer(stmt, schema_guard, print_params, param_store, session);
+  ObSqlPrinter sql_printer(stmt, schema_guard, print_params, param_store, session, c_style);
   if (OB_ISNULL(stmt)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("stmt is NULL", K(stmt), K(ret));
@@ -2511,6 +2512,75 @@ int ObSQLUtils::reconstruct_sql(ObIAllocator &allocator, const ObStmt *stmt, ObS
   return ret;
 }
 
+// todo: this function may can not get the same sql_id compared with ob_sql.cpp normal path.
+// need to be improved.
+int ObSQLUtils::gen_sql_id_from_sql_string(ObSQLSessionInfo &session,
+                                           const common::ObString &raw_sql,
+                                           char *sql_id_buf,
+                                           int64_t buf_len)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(sql_id_buf) || buf_len <= 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid output buffer", K(ret), KP(sql_id_buf), K(buf_len));
+  } else {
+    sql_id_buf[0] = '\0';
+    if (raw_sql.empty()) {
+      /* leave sql_id_buf empty */
+    } else {
+      ObArenaAllocator temp_allocator(ObModIds::OB_SQL_EXPR_CALC);
+      HEAP_VARS_3((ObExecContext, exec_ctx, temp_allocator),
+                  (ObPhysicalPlanCtx, phy_plan_ctx, temp_allocator),
+                  (ObSqlCtx, sql_ctx))
+      {
+        uint64_t tenant_id = session.get_effective_tenant_id();
+        exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
+        exec_ctx.set_my_session(&session);
+        exec_ctx.set_mem_attr(ObMemAttr(tenant_id, ObModIds::OB_SQL_EXEC_CONTEXT,
+                                        ObCtxIds::EXECUTE_CTX_ID));
+        sql_ctx.session_info_ = &session;
+        ObPlanCacheCtx pc_ctx(raw_sql, PC_TEXT_MODE, temp_allocator, sql_ctx, exec_ctx, tenant_id);
+        ObCharsets4Parser charsets4parser = session.get_charsets4parser();
+        ObParser parser(temp_allocator, session.get_sql_mode(), charsets4parser);
+        ParseResult parse_result;
+        ParamStore tmp_params((ObWrapperAllocator(temp_allocator)));
+        stmt::StmtType stmt_type = stmt::T_NONE;
+        ObString signature_sql;
+        FPContext fp_ctx(charsets4parser);
+        fp_ctx.enable_batched_multi_stmt_ = false;
+        fp_ctx.sql_mode_ = session.get_sql_mode();
+        if (OB_FAIL(ObSqlParameterization::fast_parser(temp_allocator, fp_ctx, raw_sql,
+                                                       pc_ctx.fp_result_))) {
+          LOG_WARN("failed to fast parse sql", K(ret), K(raw_sql));
+        } else if (OB_FAIL(parser.parse(raw_sql, parse_result))) {
+          LOG_WARN("failed to parse sql", K(ret), K(raw_sql));
+        } else if (OB_ISNULL(parse_result.result_tree_)
+                  || OB_ISNULL(parse_result.result_tree_->children_[0])) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null parse result", K(ret));
+        } else if (OB_FAIL(ObResolverUtils::resolve_stmt_type(parse_result, stmt_type))) {
+          LOG_WARN("failed to resolve stmt type", K(ret));
+        } else if (ObStmt::is_dml_stmt(stmt_type) && !ObStmt::is_show_stmt(stmt_type)) {
+          if (OB_FAIL(ObSqlParameterization::parameterize_syntax_tree(temp_allocator,
+                                                                      false/*is_transform_outline*/,
+                                                                      pc_ctx,
+                                                                      parse_result.result_tree_,
+                                                                      tmp_params,
+                                                                      charsets4parser))) {
+            LOG_WARN("failed to parameterize syntax tree, fallback to raw sql", K(ret), K(raw_sql));
+            ret = OB_SUCCESS;
+          } else if (OB_FALSE_IT(signature_sql = pc_ctx.sql_ctx_.spm_ctx_.bl_key_.constructed_sql_)) {
+          } else if (OB_FAIL(md5(signature_sql, sql_id_buf, static_cast<int32_t>(buf_len)))) {
+            LOG_WARN("failed to compute md5 for sql_id", K(ret), K(signature_sql));
+          }
+        }
+        exec_ctx.set_physical_plan_ctx(NULL);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObISqlPrinter::do_print(ObIAllocator &allocator, ObString &result)
 {
   int ret = OB_SUCCESS;
@@ -2521,7 +2591,7 @@ int ObISqlPrinter::do_print(ObIAllocator &allocator, ObString &result)
     MEMSET(buf, 0, sizeof(buf));
     if (OB_FAIL(inner_print(buf, sizeof(buf), res_len))) {
         LOG_WARN("failed to print", K(sizeof(buf)), K(ret));
-    } else if (OB_FAIL(ob_write_string(allocator, ObString(res_len, buf), result))) {
+    } else if (OB_FAIL(ob_write_string(allocator, ObString(res_len, buf), result, get_c_style()))) {
       LOG_WARN("fail to deep copy string", K(ret));
     }
   }
@@ -2531,7 +2601,7 @@ int ObISqlPrinter::do_print(ObIAllocator &allocator, ObString &result)
       MEMSET(buf, 0, sizeof(buf));
       if (OB_FAIL(inner_print(buf, sizeof(buf), res_len))) {
         LOG_WARN("failed to print", K(sizeof(buf)), K(ret));
-      } else if (OB_FAIL(ob_write_string(allocator, ObString(res_len, buf), result))) {
+      } else if (OB_FAIL(ob_write_string(allocator, ObString(res_len, buf), result, get_c_style()))) {
         LOG_WARN("fail to deep copy string", K(ret));
       }
     }
@@ -2549,7 +2619,7 @@ int ObISqlPrinter::do_print(ObIAllocator &allocator, ObString &result)
       } else if (FALSE_IT(MEMSET(buf, 0, length))) {
       } else if (OB_FAIL(inner_print(buf, length, res_len))) {
         LOG_WARN("failed to print", K(sizeof(buf)), K(ret));
-      } else if (OB_FAIL(ob_write_string(allocator, ObString(res_len, buf), result))) {
+      } else if (OB_FAIL(ob_write_string(allocator, ObString(res_len, buf), result, get_c_style()))) {
         LOG_WARN("fail to deep copy string", K(ret));
       }
       if (OB_SUCC(ret)) {
@@ -2559,7 +2629,6 @@ int ObISqlPrinter::do_print(ObIAllocator &allocator, ObString &result)
       }
     }
   }
-
   return ret;
 }
 

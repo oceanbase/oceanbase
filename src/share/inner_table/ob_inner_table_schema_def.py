@@ -6391,27 +6391,31 @@ def_table_schema(
   in_tenant_space = True,
   normal_columns = [
     ('run_user_id', 'int'),
-    ('num_mvs_total', 'int'),
-    ('num_mvs_current', 'int'),
-    ('mviews', 'varchar:4000'),
-    ('base_tables', 'varchar:4000', 'true'),
+    ('num_mvs_total', 'int'), # Deprecated, no longer maintained
+    ('num_mvs_current', 'int'), # Deprecated, no longer maintained
+    ('mviews', 'varchar:4000'), # Deprecated, no longer maintained
+    ('base_tables', 'varchar:4000', 'true'), # Deprecated, no longer maintained
     ('method', 'varchar:4000', 'true'),
-    ('rollback_seg', 'varchar:4000', 'true'),
-    ('push_deferred_rpc', 'bool'),
-    ('refresh_after_errors', 'bool'),
-    ('purge_option', 'int'),
+    ('rollback_seg', 'varchar:4000', 'true'), # Unused, written as default placeholder
+    ('push_deferred_rpc', 'bool'), # Unused, written as default placeholder
+    ('refresh_after_errors', 'bool'), # Unused, written as default placeholder
+    ('purge_option', 'int'), # Unused, written as default placeholder
     ('parallelism', 'int'),
-    ('heap_size', 'int'),
-    ('atomic_refresh', 'bool'),
+    ('heap_size', 'int'), # Unused, written as default placeholder
+    ('atomic_refresh', 'bool'), # Unused, written as default placeholder
     ('nested', 'bool'),
-    ('out_of_place', 'bool'),
+    ('out_of_place', 'bool'), # Unused, written as default placeholder
     ('number_of_failures', 'int'),
     ('start_time', 'timestamp'),
     ('end_time', 'timestamp'),
     ('elapsed_time', 'int'),
     ('log_purge_time', 'int'),
-    ('complete_stats_avaliable', 'bool'),
-    ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true')
+    ('complete_stats_avaliable', 'bool'), # Unused, written as default placeholder
+    ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true'),
+    ('mview_id', 'int', 'true'),
+    ('data_target_scn', 'uint', 'true'),
+    ('result', 'int', 'true'),
+    ('error_message', 'varchar:OB_MAX_ERROR_MSG_LEN', 'true')
   ]
 )
 
@@ -6437,7 +6441,10 @@ def_table_schema(
     ('initial_num_rows', 'int'),
     ('final_num_rows', 'int'),
     ('num_steps', 'int'),
-    ('result', 'int')
+    ('result', 'int'),
+    ('refresh_scn', 'uint', 'true'),
+    ('svr_ip', 'varchar:OB_IP_STR_BUFF', 'true'),
+    ('svr_port', 'int', 'true')
   ]
 )
 
@@ -6482,7 +6489,9 @@ def_table_schema(
     ('stmt', 'longtext'),
     ('execution_time', 'int'),
     ('execution_plan', 'longtext', 'true'),
-    ('result', 'int')
+    ('result', 'int'),
+    ('start_time', 'timestamp', 'true'),
+    ('parallelism', 'int', 'true')
   ]
 )
 
@@ -8998,6 +9007,33 @@ def_table_schema(
   ],
 )
 
+def_table_schema(
+  owner = 'dingjincheng.djc',
+  table_name = '__all_mview_refresh_pending_task',
+  table_id = '604',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('refresh_id', 'int'),
+    ('mview_id', 'int'),
+  ],
+  in_tenant_space = True,
+  normal_columns = [
+    ('status', 'int', 'false', '0'),
+    ('flags', 'int', 'false', '0'),
+    ('skip_cnt', 'int', 'false', '0'),
+    ('target_data_sync_scn', 'uint', 'false', '0'),
+    ('retry_count', 'int', 'false', '0'),
+    ('next_retry_time', 'timestamp', 'true'),
+    ('refresh_method', 'int', 'false', '0'),
+    ('refresh_parallel', 'int', 'false', '0'),
+    ('seq', 'int', 'false', '0'),
+    ('session_id', 'int', 'true'),
+    ('svr_ip', 'varchar:MAX_IP_ADDR_LENGTH', 'true'),
+    ('svr_port', 'int', 'true'),
+  ],
+)
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
 ################################################################################
@@ -17427,6 +17463,7 @@ def_table_schema(
   ('parallel', 'int'),
   ('job_start_time', 'timestamp'),
   ('target_data_sync_scn', 'uint'),
+  ('refresh_id', 'uint'),
   ],
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
@@ -17977,6 +18014,18 @@ def_table_schema(
   partition_columns = ['svr_ip', 'svr_port'],
   vtable_route_policy = 'distributed',
 )
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12616',
+  table_name = '__all_virtual_mview_dep',
+  keywords = all_def_keywords['__all_mview_dep'],
+  in_tenant_space = True))
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12617',
+  table_name = '__all_virtual_mview_refresh_pending_task',
+  keywords = all_def_keywords['__all_mview_refresh_pending_task'],
+  in_tenant_space = True))
 
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实表名进行占位
@@ -18565,8 +18614,8 @@ def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15551', all_def_ke
 
 # 15550: __all_external_resource
 
-
 def_table_schema(**gen_oracle_mapping_virtual_table_def('15554', all_def_keywords['__all_virtual_log_transport_stat']))
+def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15557', all_def_keywords['__all_mview_refresh_pending_task']))
 
 # 余留位置（此行之前占位）
 # 本区域定义的Oracle表名比较复杂，一般都采用gen_xxx_table_def()方式定义，占位建议采用基表表名占位
@@ -40666,9 +40715,9 @@ def_table_schema(
       B.TENANT_ID AS TENANT_ID,
       CAST(A.USER_NAME AS CHAR(128)) AS RUN_OWNER,
       B.REFRESH_ID AS REFRESH_ID,
-      B.NUM_MVS_TOTAL AS NUM_MVS,
-      CAST(B.MVIEWS AS CHAR(4000)) AS MVIEWS,
-      CAST(B.BASE_TABLES AS CHAR(4000)) AS BASE_TABLES,
+      CAST(C.NUM_MVS AS SIGNED) AS NUM_MVS,
+      CAST(C.MVIEWS AS CHAR(4000)) AS MVIEWS,
+      CAST(D.BASE_TABLES AS CHAR(4000)) AS BASE_TABLES,
       CAST(B.METHOD AS CHAR(4000)) AS METHOD,
       CAST(B.ROLLBACK_SEG AS CHAR(4000)) AS ROLLBACK_SEG,
       CAST(IF(B.PUSH_DEFERRED_RPC = 1, 'Y', 'N') AS CHAR(1)) AS PUSH_DEFERRED_RPC,
@@ -40685,25 +40734,48 @@ def_table_schema(
       B.ELAPSED_TIME AS ELAPSED_TIME,
       CAST(0 AS SIGNED) AS LOG_SETUP_TIME,
       B.LOG_PURGE_TIME AS LOG_PURGE_TIME,
-      CAST(IF(B.COMPLETE_STATS_AVALIABLE = 1, 'Y', 'N') AS CHAR(1)) AS COMPLETE_STATS_AVAILABLE
+      CAST(IF(B.COMPLETE_STATS_AVALIABLE = 1, 'Y', 'N') AS CHAR(1)) AS COMPLETE_STATS_AVAILABLE,
+      B.MVIEW_ID AS MVIEW_ID,
+      CAST(MT.TABLE_NAME AS CHAR(128)) AS MVIEW_NAME,
+      B.DATA_TARGET_SCN AS DATA_TARGET_SCN,
+      B.TRACE_ID AS TRACE_ID
     FROM
       oceanbase.__all_virtual_user A,
-      oceanbase.__all_virtual_mview_refresh_run_stats B,
-      (
+      oceanbase.__all_virtual_mview_refresh_run_stats B
+      JOIN (
         SELECT
           C1.TENANT_ID AS TENANT_ID,
-          C1.REFRESH_ID AS REFRESH_ID
+          C1.REFRESH_ID AS REFRESH_ID,
+          COUNT(DISTINCT C1.MVIEW_ID) AS NUM_MVS,
+          GROUP_CONCAT(DISTINCT C2.TABLE_NAME ORDER BY C2.TABLE_NAME SEPARATOR ',') AS MVIEWS
         FROM
           oceanbase.__all_virtual_mview_refresh_stats C1,
           oceanbase.__all_virtual_table C2
         WHERE C1.TENANT_ID = C2.TENANT_ID
           AND C1.MVIEW_ID = C2.TABLE_ID
         GROUP BY TENANT_ID, REFRESH_ID
-      ) C
+      ) C ON B.TENANT_ID = C.TENANT_ID AND B.REFRESH_ID = C.REFRESH_ID
+      JOIN (
+        SELECT
+          D1.TENANT_ID AS TENANT_ID,
+          D1.REFRESH_ID AS REFRESH_ID,
+          GROUP_CONCAT(DISTINCT D2.TABLE_NAME ORDER BY D2.TABLE_NAME SEPARATOR ',') AS BASE_TABLES
+        FROM
+          oceanbase.__all_virtual_mview_refresh_change_stats D1,
+          oceanbase.__all_virtual_table D2
+            LEFT JOIN oceanbase.__all_virtual_table D3
+              ON D3.TENANT_ID = D2.TENANT_ID
+              AND D3.DATA_TABLE_ID = D2.TABLE_ID
+              AND D3.TABLE_TYPE = 7
+        WHERE D1.TENANT_ID = D2.TENANT_ID
+          AND D1.DETAIL_TABLE_ID = D2.TABLE_ID
+          AND D3.TABLE_ID IS NULL
+        GROUP BY TENANT_ID, REFRESH_ID
+      ) D ON B.TENANT_ID = D.TENANT_ID AND B.REFRESH_ID = D.REFRESH_ID
+      JOIN oceanbase.__all_virtual_table MT ON B.TENANT_ID = MT.TENANT_ID
+        AND B.MVIEW_ID = MT.TABLE_ID AND MT.TABLE_TYPE = 7
     WHERE A.TENANT_ID = B.TENANT_ID
       AND A.USER_ID = B.RUN_USER_ID
-      AND B.TENANT_ID = C.TENANT_ID
-      AND B.REFRESH_ID = C.REFRESH_ID
 """.replace("\n", " ")
 )
 
@@ -40720,9 +40792,9 @@ def_table_schema(
     SELECT
       CAST(A.USER_NAME AS CHAR(128)) AS RUN_OWNER,
       B.REFRESH_ID AS REFRESH_ID,
-      B.NUM_MVS_TOTAL AS NUM_MVS,
-      CAST(B.MVIEWS AS CHAR(4000)) AS MVIEWS,
-      CAST(B.BASE_TABLES AS CHAR(4000)) AS BASE_TABLES,
+      CAST(C.NUM_MVS AS SIGNED) AS NUM_MVS,
+      CAST(C.MVIEWS AS CHAR(4000)) AS MVIEWS,
+      CAST(D.BASE_TABLES AS CHAR(4000)) AS BASE_TABLES,
       CAST(B.METHOD AS CHAR(4000)) AS METHOD,
       CAST(B.ROLLBACK_SEG AS CHAR(4000)) AS ROLLBACK_SEG,
       CAST(IF(B.PUSH_DEFERRED_RPC = 1, 'Y', 'N') AS CHAR(1)) AS PUSH_DEFERRED_RPC,
@@ -40739,25 +40811,48 @@ def_table_schema(
       B.ELAPSED_TIME AS ELAPSED_TIME,
       CAST(0 AS SIGNED) AS LOG_SETUP_TIME,
       B.LOG_PURGE_TIME AS LOG_PURGE_TIME,
-      CAST(IF(B.COMPLETE_STATS_AVALIABLE = 1, 'Y', 'N') AS CHAR(1)) AS COMPLETE_STATS_AVAILABLE
+      CAST(IF(B.COMPLETE_STATS_AVALIABLE = 1, 'Y', 'N') AS CHAR(1)) AS COMPLETE_STATS_AVAILABLE,
+      B.MVIEW_ID AS MVIEW_ID,
+      CAST(MT.TABLE_NAME AS CHAR(128)) AS MVIEW_NAME,
+      B.DATA_TARGET_SCN AS DATA_TARGET_SCN,
+      B.TRACE_ID AS TRACE_ID
     FROM
       oceanbase.__all_user A,
-      oceanbase.__all_mview_refresh_run_stats B,
-      (
+      oceanbase.__all_mview_refresh_run_stats B
+      JOIN (
         SELECT
           C1.TENANT_ID AS TENANT_ID,
-          C1.REFRESH_ID AS REFRESH_ID
+          C1.REFRESH_ID AS REFRESH_ID,
+          COUNT(DISTINCT C1.MVIEW_ID) AS NUM_MVS,
+          GROUP_CONCAT(DISTINCT C2.TABLE_NAME ORDER BY C2.TABLE_NAME SEPARATOR ',') AS MVIEWS
         FROM
           oceanbase.__all_mview_refresh_stats C1,
           oceanbase.__all_table C2
         WHERE C1.TENANT_ID = C2.TENANT_ID
           AND C1.MVIEW_ID = C2.TABLE_ID
         GROUP BY TENANT_ID, REFRESH_ID
-      ) C
+      ) C ON B.TENANT_ID = C.TENANT_ID AND B.REFRESH_ID = C.REFRESH_ID
+      JOIN (
+        SELECT
+          D1.TENANT_ID AS TENANT_ID,
+          D1.REFRESH_ID AS REFRESH_ID,
+          GROUP_CONCAT(DISTINCT D2.TABLE_NAME ORDER BY D2.TABLE_NAME SEPARATOR ',') AS BASE_TABLES
+        FROM
+          oceanbase.__all_mview_refresh_change_stats D1,
+          oceanbase.__all_table D2
+            LEFT JOIN oceanbase.__all_table D3
+              ON D3.TENANT_ID = D2.TENANT_ID
+              AND D3.DATA_TABLE_ID = D2.TABLE_ID
+              AND D3.TABLE_TYPE = 7
+        WHERE D1.TENANT_ID = D2.TENANT_ID
+          AND D1.DETAIL_TABLE_ID = D2.TABLE_ID
+          AND D3.TABLE_ID IS NULL
+        GROUP BY TENANT_ID, REFRESH_ID
+      ) D ON B.TENANT_ID = D.TENANT_ID AND B.REFRESH_ID = D.REFRESH_ID
+      JOIN oceanbase.__all_table MT ON B.TENANT_ID = MT.TENANT_ID
+        AND B.MVIEW_ID = MT.TABLE_ID AND MT.TABLE_TYPE = 7
     WHERE A.TENANT_ID = B.TENANT_ID
       AND A.USER_ID = B.RUN_USER_ID
-      AND B.TENANT_ID = C.TENANT_ID
-      AND B.REFRESH_ID = C.REFRESH_ID
 """.replace("\n", " ")
 )
 
@@ -40791,7 +40886,11 @@ def_table_schema(
       C.LOG_PURGE_TIME AS LOG_PURGE_TIME,
       C.INITIAL_NUM_ROWS AS INITIAL_NUM_ROWS,
       C.FINAL_NUM_ROWS AS FINAL_NUM_ROWS,
-      C.RESULT AS RESULT
+      C.NUM_STEPS AS NUM_STEPS,
+      C.RESULT AS RESULT,
+      C.REFRESH_SCN AS REFRESH_SCN,
+      CAST(C.SVR_IP AS CHAR(64)) AS SVR_IP,
+      C.SVR_PORT AS SVR_PORT
     FROM
       oceanbase.__all_virtual_database A,
       oceanbase.__all_virtual_table B,
@@ -40834,7 +40933,11 @@ def_table_schema(
       C.LOG_PURGE_TIME AS LOG_PURGE_TIME,
       C.INITIAL_NUM_ROWS AS INITIAL_NUM_ROWS,
       C.FINAL_NUM_ROWS AS FINAL_NUM_ROWS,
-      C.RESULT AS RESULT
+      C.NUM_STEPS AS NUM_STEPS,
+      C.RESULT AS RESULT,
+      C.REFRESH_SCN AS REFRESH_SCN,
+      CAST(C.SVR_IP AS CHAR(64)) AS SVR_IP,
+      C.SVR_PORT AS SVR_PORT
     FROM
       oceanbase.__all_database A,
       oceanbase.__all_table B,
@@ -40859,10 +40962,11 @@ def_table_schema(
     SELECT
       E.TENANT_ID AS TENANT_ID,
       CAST(C.DATABASE_NAME AS CHAR(128)) AS TBL_OWNER,
-      CAST(D.TABLE_NAME AS CHAR(128)) AS TBL_NAME,
+      CAST(IFNULL(F.TABLE_NAME, D.TABLE_NAME) AS CHAR(128)) AS TBL_NAME,
       CAST(A.DATABASE_NAME AS CHAR(128)) AS MV_OWNER,
       CAST(B.TABLE_NAME AS CHAR(128)) AS MV_NAME,
       E.REFRESH_ID AS REFRESH_ID,
+      E.RETRY_ID AS RETRY_ID,
       E.NUM_ROWS_INS AS NUM_ROWS_INS,
       E.NUM_ROWS_UPD AS NUM_ROWS_UPD,
       E.NUM_ROWS_DEL AS NUM_ROWS_DEL,
@@ -40874,7 +40978,11 @@ def_table_schema(
       oceanbase.__all_virtual_database A,
       oceanbase.__all_virtual_table B,
       oceanbase.__all_virtual_database C,
-      oceanbase.__all_virtual_table D,
+      oceanbase.__all_virtual_table D
+        LEFT JOIN oceanbase.__all_virtual_table F
+          ON F.TENANT_ID = D.TENANT_ID
+          AND F.DATA_TABLE_ID = D.TABLE_ID
+          AND F.TABLE_TYPE = 7,
       oceanbase.__all_virtual_mview_refresh_change_stats E
     WHERE A.TENANT_ID = B.TENANT_ID
       AND A.DATABASE_ID = B.DATABASE_ID
@@ -40899,10 +41007,11 @@ def_table_schema(
     view_definition = """
     SELECT
       CAST(C.DATABASE_NAME AS CHAR(128)) AS TBL_OWNER,
-      CAST(D.TABLE_NAME AS CHAR(128)) AS TBL_NAME,
+      CAST(IFNULL(F.TABLE_NAME, D.TABLE_NAME) AS CHAR(128)) AS TBL_NAME,
       CAST(A.DATABASE_NAME AS CHAR(128)) AS MV_OWNER,
       CAST(B.TABLE_NAME AS CHAR(128)) AS MV_NAME,
       E.REFRESH_ID AS REFRESH_ID,
+      E.RETRY_ID AS RETRY_ID,
       E.NUM_ROWS_INS AS NUM_ROWS_INS,
       E.NUM_ROWS_UPD AS NUM_ROWS_UPD,
       E.NUM_ROWS_DEL AS NUM_ROWS_DEL,
@@ -40914,7 +41023,11 @@ def_table_schema(
       oceanbase.__all_database A,
       oceanbase.__all_table B,
       oceanbase.__all_database C,
-      oceanbase.__all_table D,
+      oceanbase.__all_table D
+        LEFT JOIN oceanbase.__all_table F
+          ON F.TENANT_ID = D.TENANT_ID
+          AND F.DATA_TABLE_ID = D.TABLE_ID
+          AND F.TABLE_TYPE = 7,
       oceanbase.__all_mview_refresh_change_stats E
     WHERE A.TENANT_ID = B.TENANT_ID
       AND A.DATABASE_ID = B.DATABASE_ID
@@ -40941,11 +41054,14 @@ def_table_schema(
       CAST(A.DATABASE_NAME AS CHAR(128)) AS MV_OWNER,
       CAST(B.TABLE_NAME AS CHAR(128)) AS MV_NAME,
       C.REFRESH_ID AS REFRESH_ID,
+      C.RETRY_ID AS RETRY_ID,
       C.STEP AS STEP,
       CAST(C.SQLID AS CHAR(32)) AS SQLID,
       C.STMT AS STMT,
+      CAST(C.START_TIME AS DATETIME) AS START_TIME,
       C.EXECUTION_TIME AS EXECUTION_TIME,
-      C.EXECUTION_PLAN AS EXECUTION_PLAN
+      C.EXECUTION_PLAN AS EXECUTION_PLAN,
+      C.RESULT AS RESULT
     FROM
       oceanbase.__all_virtual_database A,
       oceanbase.__all_virtual_table B,
@@ -40971,11 +41087,14 @@ def_table_schema(
       CAST(A.DATABASE_NAME AS CHAR(128)) AS MV_OWNER,
       CAST(B.TABLE_NAME AS CHAR(128)) AS MV_NAME,
       C.REFRESH_ID AS REFRESH_ID,
+      C.RETRY_ID AS RETRY_ID,
       C.STEP AS STEP,
       CAST(C.SQLID AS CHAR(32)) AS SQLID,
       C.STMT AS STMT,
+      CAST(C.START_TIME AS DATETIME) AS START_TIME,
       C.EXECUTION_TIME AS EXECUTION_TIME,
-      C.EXECUTION_PLAN AS EXECUTION_PLAN
+      C.EXECUTION_PLAN AS EXECUTION_PLAN,
+      C.RESULT AS RESULT
     FROM
       oceanbase.__all_database A,
       oceanbase.__all_table B,
@@ -44446,13 +44565,15 @@ def_table_schema(
         WHEN 1 THEN 'COMPLETE REFRESH'
         WHEN 2 THEN 'FAST REFRESH'
         WHEN 3 THEN 'PURGE MLOG'
+        WHEN 4 THEN 'NESTED SYNC REFRESH'
         ELSE NULL
        END AS CHAR(64)
       ) AS JOB_TYPE,
       A.SESSION_ID AS SESSION_ID,
       A.READ_SNAPSHOT AS READ_SNAPSHOT,
       A.PARALLEL AS PARALLEL,
-      A.JOB_START_TIME AS JOB_START_TIME
+      A.JOB_START_TIME AS JOB_START_TIME,
+      A.REFRESH_ID AS REFRESH_ID
     FROM oceanbase.__all_virtual_mview_running_job A,
          oceanbase.__all_table B
     WHERE A.table_id = B.table_id
@@ -44480,13 +44601,15 @@ def_table_schema(
         WHEN 1 THEN 'COMPLETE REFRESH'
         WHEN 2 THEN 'FAST REFRESH'
         WHEN 3 THEN 'PURGE MLOG'
+        WHEN 4 THEN 'NESTED SYNC REFRESH'
         ELSE NULL
        END AS CHAR(64)
       ) AS JOB_TYPE,
       A.SESSION_ID,
       A.READ_SNAPSHOT,
       A.PARALLEL,
-      A.JOB_START_TIME
+      A.JOB_START_TIME,
+      A.REFRESH_ID
     FROM oceanbase.__all_virtual_mview_running_job A,
          oceanbase.__all_virtual_table B
     WHERE A.table_id = B.table_id
@@ -46186,7 +46309,6 @@ def_table_schema(
 """.replace("\n", " ")
 )
 
-
 def_table_schema(
   owner = 'shouju.zyp',
   table_name = 'GV$OB_LS_LOG_REPLAY_STAT',
@@ -46261,6 +46383,47 @@ def_table_schema(
     WHERE TENANT_ID = EFFECTIVE_TENANT_ID()
           AND SVR_IP = HOST_IP() AND SVR_PORT = RPC_PORT()
   """.replace("\n", " "),
+)
+
+def_table_schema(
+    owner           = 'lijinmao.ljm',
+    table_name      = 'CDB_MVIEW_DEPS',
+    table_id        = '21746',
+    table_type      = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    view_definition = """
+    SELECT
+      A.TENANT_ID AS TENANT_ID,
+      D.DATABASE_NAME AS MVIEW_OWNER,
+      B.TABLE_NAME AS MVIEW_NAME,
+      E.DATABASE_NAME AS DEP_OWNER,
+      C.TABLE_NAME AS DEP_NAME,
+      CAST (
+       CASE C.TABLE_TYPE
+        WHEN 3 THEN 'TABLE'
+        WHEN 4 THEN 'VIEW'
+        WHEN 7 THEN 'MV'
+        WHEN 14 THEN 'EXTERNAL TABLE'
+        ELSE 'INVALID TYPE'
+       END AS CHAR(64)
+      ) AS DEP_TYPE
+    FROM oceanbase.__all_virtual_mview_dep A,
+         oceanbase.__all_virtual_table B,
+         oceanbase.__all_virtual_table C,
+         oceanbase.__all_virtual_database D,
+         oceanbase.__all_virtual_database E
+    WHERE A.mview_id = B.table_id
+    AND   A.tenant_id = B.tenant_id
+    AND   A.p_obj = C.table_id
+    AND   A.tenant_id = C.tenant_id
+    AND   B.database_id = D.database_id
+    AND   B.tenant_id = D.tenant_id
+    AND   C.database_id = E.database_id
+    AND   C.tenant_id = E.tenant_id
+    AND   (C.table_mode >> 24 & 1 ) = 0
+""".replace("\n", " ")
 )
 
 # 余留位置（此行之前占位）
@@ -68073,9 +68236,9 @@ def_table_schema(
     SELECT
       CAST(A.USER_NAME AS VARCHAR2(128)) AS RUN_OWNER,
       CAST(B.REFRESH_ID AS NUMBER) AS REFRESH_ID,
-      CAST(B.NUM_MVS_TOTAL AS NUMBER) AS NUM_MVS,
-      CAST(B.MVIEWS AS VARCHAR2(4000)) AS MVIEWS,
-      CAST(B.BASE_TABLES AS VARCHAR2(4000)) AS BASE_TABLES,
+      CAST(C.NUM_MVS AS NUMBER) AS NUM_MVS,
+      CAST(C.MVIEWS AS VARCHAR2(4000)) AS MVIEWS,
+      CAST(D.BASE_TABLES AS VARCHAR2(4000)) AS BASE_TABLES,
       CAST(B.METHOD AS VARCHAR2(4000)) AS METHOD,
       CAST(B.ROLLBACK_SEG AS VARCHAR2(4000)) AS ROLLBACK_SEG,
       CAST(DECODE(B.PUSH_DEFERRED_RPC, 1, 'Y', 'N') AS CHAR(1)) AS PUSH_DEFERRED_RPC,
@@ -68092,26 +68255,64 @@ def_table_schema(
       CAST(B.ELAPSED_TIME AS NUMBER) AS ELAPSED_TIME,
       CAST(0 AS NUMBER) AS LOG_SETUP_TIME,
       CAST(B.LOG_PURGE_TIME AS NUMBER) AS LOG_PURGE_TIME,
-      CAST(DECODE(B.COMPLETE_STATS_AVALIABLE, 1, 'Y', 'N') AS CHAR(1)) AS COMPLETE_STATS_AVAILABLE
+      CAST(DECODE(B.COMPLETE_STATS_AVALIABLE, 1, 'Y', 'N') AS CHAR(1)) AS COMPLETE_STATS_AVAILABLE,
+      CAST(B.MVIEW_ID AS NUMBER) AS MVIEW_ID,
+      CAST(MT.TABLE_NAME AS VARCHAR2(128)) AS MVIEW_NAME,
+      CAST(B.DATA_TARGET_SCN AS NUMBER) AS DATA_TARGET_SCN,
+      CAST(B.TRACE_ID AS VARCHAR2(64)) AS TRACE_ID
     FROM
       SYS.ALL_VIRTUAL_USER_REAL_AGENT A,
       SYS.ALL_VIRTUAL_MVIEW_REFRESH_RUN_STATS_REAL_AGENT B,
       (
         SELECT
-          C1.TENANT_ID AS TENANT_ID,
-          C1.REFRESH_ID AS REFRESH_ID
+          C2.TENANT_ID AS TENANT_ID,
+          C2.REFRESH_ID AS REFRESH_ID,
+          COUNT(DISTINCT C2.TABLE_NAME) AS NUM_MVS,
+          LISTAGG(C2.TABLE_NAME, ',') WITHIN GROUP (ORDER BY C2.TABLE_NAME) AS MVIEWS
         FROM
-          SYS.ALL_VIRTUAL_MVIEW_REFRESH_STATS_REAL_AGENT C1,
-          SYS.ALL_VIRTUAL_TABLE_REAL_AGENT C2
-        WHERE C1.TENANT_ID = C2.TENANT_ID
-          AND C1.MVIEW_ID = C2.TABLE_ID
-        GROUP BY C1.TENANT_ID, C1.REFRESH_ID
-      ) C
+          (SELECT DISTINCT C1I.TENANT_ID, C1I.REFRESH_ID, C2I.TABLE_NAME
+           FROM SYS.ALL_VIRTUAL_MVIEW_REFRESH_STATS_REAL_AGENT C1I,
+                SYS.ALL_VIRTUAL_TABLE_REAL_AGENT C2I
+           WHERE C1I.TENANT_ID = C2I.TENANT_ID
+             AND C1I.MVIEW_ID = C2I.TABLE_ID
+             AND C1I.TENANT_ID = EFFECTIVE_TENANT_ID()
+             AND C2I.TENANT_ID = EFFECTIVE_TENANT_ID()
+          ) C2
+        GROUP BY C2.TENANT_ID, C2.REFRESH_ID
+      ) C,
+      (
+        SELECT
+          D1.TENANT_ID AS TENANT_ID,
+          D1.REFRESH_ID AS REFRESH_ID,
+          LISTAGG(TBL_NAME, ',') WITHIN GROUP (ORDER BY TBL_NAME) AS BASE_TABLES
+        FROM
+          (SELECT DISTINCT D1I.TENANT_ID, D1I.REFRESH_ID, D2I.TABLE_NAME AS TBL_NAME
+           FROM SYS.ALL_VIRTUAL_MVIEW_REFRESH_CHANGE_STATS_REAL_AGENT D1I,
+                SYS.ALL_VIRTUAL_TABLE_REAL_AGENT D2I,
+                SYS.ALL_VIRTUAL_TABLE_REAL_AGENT D3I
+           WHERE D1I.TENANT_ID = D2I.TENANT_ID
+             AND D1I.DETAIL_TABLE_ID = D2I.TABLE_ID
+             AND D3I.DATA_TABLE_ID(+) = D2I.TABLE_ID
+             AND D3I.TABLE_TYPE(+) = 7
+             AND D1I.TENANT_ID = EFFECTIVE_TENANT_ID()
+             AND D2I.TENANT_ID = EFFECTIVE_TENANT_ID()
+             AND D3I.TENANT_ID(+) = EFFECTIVE_TENANT_ID()
+             AND D3I.TABLE_ID IS NULL
+          ) D1
+        GROUP BY D1.TENANT_ID, D1.REFRESH_ID
+      ) D,
+      SYS.ALL_VIRTUAL_TABLE_REAL_AGENT MT
     WHERE A.USER_ID = B.RUN_USER_ID
       AND B.REFRESH_ID = C.REFRESH_ID
+      AND B.REFRESH_ID = D.REFRESH_ID
+      AND B.TENANT_ID = MT.TENANT_ID
+      AND B.MVIEW_ID = MT.TABLE_ID
+      AND MT.TABLE_TYPE = 7
       AND A.TENANT_ID = EFFECTIVE_TENANT_ID()
       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()
       AND C.TENANT_ID = EFFECTIVE_TENANT_ID()
+      AND D.TENANT_ID = EFFECTIVE_TENANT_ID()
+      AND MT.TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")
 )
 
@@ -68129,9 +68330,9 @@ def_table_schema(
     view_definition = """
     SELECT
       CAST(B.REFRESH_ID AS NUMBER) AS REFRESH_ID,
-      CAST(B.NUM_MVS_TOTAL AS NUMBER) AS NUM_MVS,
-      CAST(B.MVIEWS AS VARCHAR2(4000)) AS MVIEWS,
-      CAST(B.BASE_TABLES AS VARCHAR2(4000)) AS BASE_TABLES,
+      CAST(C.NUM_MVS AS NUMBER) AS NUM_MVS,
+      CAST(C.MVIEWS AS VARCHAR2(4000)) AS MVIEWS,
+      CAST(D.BASE_TABLES AS VARCHAR2(4000)) AS BASE_TABLES,
       CAST(B.METHOD AS VARCHAR2(4000)) AS METHOD,
       CAST(B.ROLLBACK_SEG AS VARCHAR2(4000)) AS ROLLBACK_SEG,
       CAST(DECODE(B.PUSH_DEFERRED_RPC, 1, 'Y', 'N') AS CHAR(1)) AS PUSH_DEFERRED_RPC,
@@ -68148,26 +68349,64 @@ def_table_schema(
       CAST(B.ELAPSED_TIME AS NUMBER) AS ELAPSED_TIME,
       CAST(0 AS NUMBER) AS LOG_SETUP_TIME,
       CAST(B.LOG_PURGE_TIME AS NUMBER) AS LOG_PURGE_TIME,
-      CAST(DECODE(B.COMPLETE_STATS_AVALIABLE, 1, 'Y', 'N') AS CHAR(1)) AS COMPLETE_STATS_AVAILABLE
+      CAST(DECODE(B.COMPLETE_STATS_AVALIABLE, 1, 'Y', 'N') AS CHAR(1)) AS COMPLETE_STATS_AVAILABLE,
+      CAST(B.MVIEW_ID AS NUMBER) AS MVIEW_ID,
+      CAST(MT.TABLE_NAME AS VARCHAR2(128)) AS MVIEW_NAME,
+      CAST(B.DATA_TARGET_SCN AS NUMBER) AS DATA_TARGET_SCN,
+      CAST(B.TRACE_ID AS VARCHAR2(64)) AS TRACE_ID
     FROM
       SYS.ALL_VIRTUAL_USER_REAL_AGENT A,
       SYS.ALL_VIRTUAL_MVIEW_REFRESH_RUN_STATS_REAL_AGENT B,
       (
         SELECT
-          C1.TENANT_ID AS TENANT_ID,
-          C1.REFRESH_ID AS REFRESH_ID
+          C2.TENANT_ID AS TENANT_ID,
+          C2.REFRESH_ID AS REFRESH_ID,
+          COUNT(DISTINCT C2.TABLE_NAME) AS NUM_MVS,
+          LISTAGG(C2.TABLE_NAME, ',') WITHIN GROUP (ORDER BY C2.TABLE_NAME) AS MVIEWS
         FROM
-          SYS.ALL_VIRTUAL_MVIEW_REFRESH_STATS_REAL_AGENT C1,
-          SYS.ALL_VIRTUAL_TABLE_REAL_AGENT C2
-        WHERE C1.TENANT_ID = C2.TENANT_ID
-          AND C1.MVIEW_ID = C2.TABLE_ID
-        GROUP BY C1.TENANT_ID, C1.REFRESH_ID
-      ) C
+          (SELECT DISTINCT C1I.TENANT_ID, C1I.REFRESH_ID, C2I.TABLE_NAME
+           FROM SYS.ALL_VIRTUAL_MVIEW_REFRESH_STATS_REAL_AGENT C1I,
+                SYS.ALL_VIRTUAL_TABLE_REAL_AGENT C2I
+           WHERE C1I.TENANT_ID = C2I.TENANT_ID
+             AND C1I.MVIEW_ID = C2I.TABLE_ID
+             AND C1I.TENANT_ID = EFFECTIVE_TENANT_ID()
+             AND C2I.TENANT_ID = EFFECTIVE_TENANT_ID()
+          ) C2
+        GROUP BY C2.TENANT_ID, C2.REFRESH_ID
+      ) C,
+      (
+        SELECT
+          D1.TENANT_ID AS TENANT_ID,
+          D1.REFRESH_ID AS REFRESH_ID,
+          LISTAGG(TBL_NAME, ',') WITHIN GROUP (ORDER BY TBL_NAME) AS BASE_TABLES
+        FROM
+          (SELECT DISTINCT D1I.TENANT_ID, D1I.REFRESH_ID, D2I.TABLE_NAME AS TBL_NAME
+           FROM SYS.ALL_VIRTUAL_MVIEW_REFRESH_CHANGE_STATS_REAL_AGENT D1I,
+                SYS.ALL_VIRTUAL_TABLE_REAL_AGENT D2I,
+                SYS.ALL_VIRTUAL_TABLE_REAL_AGENT D3I
+           WHERE D1I.TENANT_ID = D2I.TENANT_ID
+             AND D1I.DETAIL_TABLE_ID = D2I.TABLE_ID
+             AND D3I.DATA_TABLE_ID(+) = D2I.TABLE_ID
+             AND D3I.TABLE_TYPE(+) = 7
+             AND D1I.TENANT_ID = EFFECTIVE_TENANT_ID()
+             AND D2I.TENANT_ID = EFFECTIVE_TENANT_ID()
+             AND D3I.TENANT_ID(+) = EFFECTIVE_TENANT_ID()
+             AND D3I.TABLE_ID IS NULL
+          ) D1
+        GROUP BY D1.TENANT_ID, D1.REFRESH_ID
+      ) D,
+      SYS.ALL_VIRTUAL_TABLE_REAL_AGENT MT
     WHERE A.USER_ID = B.RUN_USER_ID
       AND B.REFRESH_ID = C.REFRESH_ID
+      AND B.REFRESH_ID = D.REFRESH_ID
+      AND B.TENANT_ID = MT.TENANT_ID
+      AND B.MVIEW_ID = MT.TABLE_ID
+      AND MT.TABLE_TYPE = 7
       AND A.TENANT_ID = EFFECTIVE_TENANT_ID()
       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()
       AND C.TENANT_ID = EFFECTIVE_TENANT_ID()
+      AND D.TENANT_ID = EFFECTIVE_TENANT_ID()
+      AND MT.TENANT_ID = EFFECTIVE_TENANT_ID()
       AND A.USER_NAME = SYS_CONTEXT('USERENV','CURRENT_USER')
 """.replace("\n", " ")
 )
@@ -68203,7 +68442,11 @@ def_table_schema(
       CAST(C.LOG_PURGE_TIME AS NUMBER) AS LOG_PURGE_TIME,
       CAST(C.INITIAL_NUM_ROWS AS NUMBER) AS INITIAL_NUM_ROWS,
       CAST(C.FINAL_NUM_ROWS AS NUMBER) AS FINAL_NUM_ROWS,
-      CAST(C.RESULT AS NUMBER) AS RESULT
+      CAST(C.NUM_STEPS AS NUMBER) AS NUM_STEPS,
+      CAST(C.RESULT AS NUMBER) AS RESULT,
+      CAST(C.REFRESH_SCN AS NUMBER) AS REFRESH_SCN,
+      CAST(C.SVR_IP AS VARCHAR2(64)) AS SVR_IP,
+      CAST(C.SVR_PORT AS NUMBER) AS SVR_PORT
     FROM
       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,
       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,
@@ -68247,7 +68490,11 @@ def_table_schema(
       CAST(C.LOG_PURGE_TIME AS NUMBER) AS LOG_PURGE_TIME,
       CAST(C.INITIAL_NUM_ROWS AS NUMBER) AS INITIAL_NUM_ROWS,
       CAST(C.FINAL_NUM_ROWS AS NUMBER) AS FINAL_NUM_ROWS,
-      CAST(C.RESULT AS NUMBER) AS RESULT
+      CAST(C.NUM_STEPS AS NUMBER) AS NUM_STEPS,
+      CAST(C.RESULT AS NUMBER) AS RESULT,
+      CAST(C.REFRESH_SCN AS NUMBER) AS REFRESH_SCN,
+      CAST(C.SVR_IP AS VARCHAR2(64)) AS SVR_IP,
+      CAST(C.SVR_PORT AS NUMBER) AS SVR_PORT
     FROM
       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,
       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,
@@ -68276,10 +68523,11 @@ def_table_schema(
     view_definition = """
     SELECT
       CAST(C.DATABASE_NAME AS VARCHAR2(128)) AS TBL_OWNER,
-      CAST(D.TABLE_NAME AS VARCHAR2(128)) AS TBL_NAME,
+      CAST(NVL(F.TABLE_NAME, D.TABLE_NAME) AS VARCHAR2(128)) AS TBL_NAME,
       CAST(A.DATABASE_NAME AS VARCHAR2(128)) AS MV_OWNER,
       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS MV_NAME,
       CAST(E.REFRESH_ID AS NUMBER) AS REFRESH_ID,
+      CAST(E.RETRY_ID AS NUMBER) AS RETRY_ID,
       CAST(E.NUM_ROWS_INS AS NUMBER) AS NUM_ROWS_INS,
       CAST(E.NUM_ROWS_UPD AS NUMBER) AS NUM_ROWS_UPD,
       CAST(E.NUM_ROWS_DEL AS NUMBER) AS NUM_ROWS_DEL,
@@ -68292,16 +68540,20 @@ def_table_schema(
       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,
       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT C,
       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT D,
-      SYS.ALL_VIRTUAL_MVIEW_REFRESH_CHANGE_STATS_REAL_AGENT E
+      SYS.ALL_VIRTUAL_MVIEW_REFRESH_CHANGE_STATS_REAL_AGENT E,
+      SYS.ALL_VIRTUAL_TABLE_REAL_AGENT F
     WHERE A.DATABASE_ID = B.DATABASE_ID
       AND C.DATABASE_ID = D.DATABASE_ID
       AND E.MVIEW_ID = B.TABLE_ID
       AND E.DETAIL_TABLE_ID = D.TABLE_ID
+      AND F.DATA_TABLE_ID(+) = D.TABLE_ID
+      AND F.TABLE_TYPE(+) = 7
       AND A.TENANT_ID = EFFECTIVE_TENANT_ID()
       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()
       AND C.TENANT_ID = EFFECTIVE_TENANT_ID()
       AND D.TENANT_ID = EFFECTIVE_TENANT_ID()
       AND E.TENANT_ID = EFFECTIVE_TENANT_ID()
+      AND F.TENANT_ID(+) = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")
 )
 
@@ -68319,10 +68571,11 @@ def_table_schema(
     view_definition = """
     SELECT
       CAST(C.DATABASE_NAME AS VARCHAR2(128)) AS TBL_OWNER,
-      CAST(D.TABLE_NAME AS VARCHAR2(128)) AS TBL_NAME,
+      CAST(NVL(F.TABLE_NAME, D.TABLE_NAME) AS VARCHAR2(128)) AS TBL_NAME,
       CAST(A.DATABASE_NAME AS VARCHAR2(128)) AS MV_OWNER,
       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS MV_NAME,
       CAST(E.REFRESH_ID AS NUMBER) AS REFRESH_ID,
+      CAST(E.RETRY_ID AS NUMBER) AS RETRY_ID,
       CAST(E.NUM_ROWS_INS AS NUMBER) AS NUM_ROWS_INS,
       CAST(E.NUM_ROWS_UPD AS NUMBER) AS NUM_ROWS_UPD,
       CAST(E.NUM_ROWS_DEL AS NUMBER) AS NUM_ROWS_DEL,
@@ -68335,16 +68588,20 @@ def_table_schema(
       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,
       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT C,
       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT D,
-      SYS.ALL_VIRTUAL_MVIEW_REFRESH_CHANGE_STATS_REAL_AGENT E
+      SYS.ALL_VIRTUAL_MVIEW_REFRESH_CHANGE_STATS_REAL_AGENT E,
+      SYS.ALL_VIRTUAL_TABLE_REAL_AGENT F
     WHERE A.DATABASE_ID = B.DATABASE_ID
       AND C.DATABASE_ID = D.DATABASE_ID
       AND E.MVIEW_ID = B.TABLE_ID
       AND E.DETAIL_TABLE_ID = D.TABLE_ID
+      AND F.DATA_TABLE_ID(+) = D.TABLE_ID
+      AND F.TABLE_TYPE(+) = 7
       AND A.TENANT_ID = EFFECTIVE_TENANT_ID()
       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()
       AND C.TENANT_ID = EFFECTIVE_TENANT_ID()
       AND D.TENANT_ID = EFFECTIVE_TENANT_ID()
       AND E.TENANT_ID = EFFECTIVE_TENANT_ID()
+      AND F.TENANT_ID(+) = EFFECTIVE_TENANT_ID()
       AND A.DATABASE_NAME = SYS_CONTEXT('USERENV','CURRENT_USER')
 """.replace("\n", " ")
 )
@@ -68365,11 +68622,14 @@ def_table_schema(
       CAST(A.DATABASE_NAME AS VARCHAR2(128)) AS MV_OWNER,
       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS MV_NAME,
       CAST(C.REFRESH_ID AS NUMBER) AS REFRESH_ID,
+      CAST(C.RETRY_ID AS NUMBER) AS RETRY_ID,
       CAST(C.STEP AS NUMBER) AS STEP,
       CAST(C.SQLID AS VARCHAR2(32)) AS SQLID /* TODO: VARCHAR2(14) */,
       C.STMT AS STMT /* TODO: CLOB */,
+      CAST(C.START_TIME AS TIMESTAMP(6)) AS START_TIME,
       CAST(C.EXECUTION_TIME AS NUMBER) AS EXECUTION_TIME,
-      C.EXECUTION_PLAN AS EXECUTION_PLAN /* TODO: XMLTYPE STORAGE BINARY */
+      C.EXECUTION_PLAN AS EXECUTION_PLAN /* TODO: XMLTYPE STORAGE BINARY */,
+      CAST(C.RESULT AS NUMBER) AS RESULT
     FROM
       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,
       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,
@@ -68398,11 +68658,13 @@ def_table_schema(
       CAST(A.DATABASE_NAME AS VARCHAR2(128)) AS MV_OWNER,
       CAST(B.TABLE_NAME AS VARCHAR2(128)) AS MV_NAME,
       CAST(C.REFRESH_ID AS NUMBER) AS REFRESH_ID,
+      CAST(C.RETRY_ID AS NUMBER) AS RETRY_ID,
       CAST(C.STEP AS NUMBER) AS STEP,
       CAST(C.SQLID AS VARCHAR2(14)) AS SQLID /* TODO: VARCHAR2(14) */,
       C.STMT AS STMT /* TODO: CLOB */,
       CAST(C.EXECUTION_TIME AS NUMBER) AS EXECUTION_TIME,
-      C.EXECUTION_PLAN AS EXECUTION_PLAN /* TODO: XMLTYPE STORAGE BINARY */
+      C.EXECUTION_PLAN AS EXECUTION_PLAN /* TODO: XMLTYPE STORAGE BINARY */,
+      CAST(C.RESULT AS NUMBER) AS RESULT
     FROM
       SYS.ALL_VIRTUAL_DATABASE_REAL_AGENT A,
       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B,
@@ -68798,13 +69060,15 @@ def_table_schema(
         WHEN 1 THEN 'COMPLETE REFRESH'
         WHEN 2 THEN 'FAST REFRESH'
         WHEN 3 THEN 'PURGE MLOG'
+        WHEN 4 THEN 'NESTED SYNC REFRESH'
         ELSE NULL
        END AS CHAR(64)
       ) AS JOB_TYPE,
       A.SESSION_ID AS SESSION_ID,
       A.READ_SNAPSHOT AS READ_SNAPSHOT,
       A.PARALLEL AS PARALLEL,
-      A.JOB_START_TIME AS JOB_START_TIME
+      A.JOB_START_TIME AS JOB_START_TIME,
+      A.REFRESH_ID AS REFRESH_ID
     FROM SYS.ALL_VIRTUAL_MVIEW_RUNNING_JOB A,
          SYS.ALL_VIRTUAL_TABLE_REAL_AGENT B
     WHERE A.TABLE_ID = B.TABLE_ID

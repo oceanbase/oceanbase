@@ -134,6 +134,10 @@ int ObDropMLogResolver::resolve(const ParseNode &parse_tree)
       } else if (!real_table_schema->has_mlog_table()) {
         ret = OB_ERR_TABLE_NO_MLOG;
         LOG_WARN("table has no materialized view log", KR(ret), K(mlog_table_id));
+      } else if (real_table_schema->table_referenced_by_mv()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("drop materialized view log on table required by materialized view is not supported", KR(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop materialized view log on table required by materialized view is");
       } else if (OB_FALSE_IT(mlog_table_id = real_table_schema->get_mlog_tid())) {
       } else if (OB_FAIL(schema_checker_->get_table_schema(tenant_id,
                                                            mlog_table_id,

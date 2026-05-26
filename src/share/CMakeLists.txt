@@ -571,6 +571,7 @@ ob_set_subtarget(ob_share schema
   schema/ob_schema_mgr_cache.cpp
   schema/ob_schema_printer.cpp
   schema/ob_schema_printer_external_table.cpp
+  schema/ob_schema_printer_materialized_view.cpp
   schema/ob_schema_retrieve_utils.ipp
   schema/ob_schema_service.cpp
   schema/ob_schema_service_rpc_proxy.cpp
@@ -623,7 +624,6 @@ ob_set_subtarget(ob_share schema
   schema/ob_mlog_info.cpp
   schema/ob_mview_info.cpp
   schema/ob_mview_refresh_stats_params.cpp
-  schema/ob_mview_refresh_stats.cpp
   schema/ob_list_row_values.cpp
   schema/ob_catalog_schema_struct.cpp
   schema/ob_catalog_mgr.cpp

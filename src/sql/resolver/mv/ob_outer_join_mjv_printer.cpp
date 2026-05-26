@@ -78,8 +78,17 @@ int ObOuterJoinMJVPrinter::gen_refresh_dmls_for_inner_join(const TableItem *delt
                                                            ObIArray<ObDMLStmt*> &dml_stmts)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(gen_delete_for_inner_join(delta_table, dml_stmts))) {
+  if (OB_ISNULL(delta_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("delta table is null", K(ret), K(delta_table_idx));
+  } else if (is_table_without_delete(*delta_table)) {
+    // for table without delete, skip the delete
+  } else if (OB_FAIL(gen_delete_for_inner_join(delta_table, dml_stmts))) {
     LOG_WARN("failed to gen delete stmt for inner join", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (is_table_without_insert(*delta_table)) {
+    // for table without insert, skip the insert
   } else if (OB_FAIL(gen_insert_for_outer_join_mjv(delta_table_idx,
                                                    NULL, /* upper_table */
                                                    false, /* is_outer_join */
@@ -95,16 +104,25 @@ int ObOuterJoinMJVPrinter::gen_refresh_dmls_for_left_join(const TableItem *delta
                                                           ObIArray<ObDMLStmt*> &dml_stmts)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(gen_delete_for_left_join(delta_table,
-                                       delta_table_idx,
-                                       upper_table,
-                                       true, /* is_first_delete */
-                                       dml_stmts))) {
+  if (OB_ISNULL(delta_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("delta table is null", K(ret), K(delta_table_idx));
+  } else if (is_table_without_delete(*delta_table)) {
+    // for tables without delete, skip the first delete and the update
+  } else if (OB_FAIL(gen_delete_for_left_join(delta_table,
+                                              delta_table_idx,
+                                              upper_table,
+                                              true, /* is_first_delete */
+                                              dml_stmts))) {
     LOG_WARN("failed to generate the first delete stmt for left join", K(ret));
   } else if (OB_FAIL(gen_update_for_left_join(delta_table,
                                               delta_table_idx,
                                               dml_stmts))) {
     LOG_WARN("failed to generate update stmt for left join", K(ret));
+  }
+  if (OB_FAIL(ret)) {
+  } else if (is_table_without_insert(*delta_table)) {
+    // for tables without insert, skip the insert and the second delete
   } else if (OB_FAIL(gen_insert_for_outer_join_mjv(delta_table_idx,
                                                    upper_table,
                                                    true, /* is_outer_join */

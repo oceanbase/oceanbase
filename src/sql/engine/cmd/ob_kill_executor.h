@@ -33,8 +33,8 @@ class ObKillSession
 public:
   ObKillSession() {}
   virtual ~ObKillSession() {}
-protected:
   int kill_session(const ObKillSessionArg &arg, ObSQLSessionMgr &sess_mgr);
+  static int kill_one_session(uint32_t sessid, const common::ObAddr &addr, uint64_t tenant_id);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObKillSession);
 };

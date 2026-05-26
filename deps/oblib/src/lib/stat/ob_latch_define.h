@@ -996,7 +996,9 @@ LATCH_DEF(MA_SYNC_MODE_SWITCH_LOCK, 960, "ma protection level switch helper lock
 LATCH_DEF(OB_INSPECTION_SERVICE_LOCK, 962, "ob inspection service lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(OB_SCHEMA_HISTORY_RECYCLE_SERVICE_LOCK, 963, "ob schema history recycle service lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(SANDBOX_LOCK, 966, "ob_sandbox and sandbox manager lock", LATCH_FIFO, 2000, 0, true)
-LATCH_DEF(LATCH_END, 967, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(MVIEW_TASK_QUEUE_LOCK, 969, "mview task queue lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(MVIEW_PENDING_TASK_INSPECTION_LOCK, 970, "mview pending task inspection lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(LATCH_END, 971, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 

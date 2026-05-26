@@ -162,7 +162,7 @@ int ObInnerTableSchema::dba_mview_running_jobs_schema(ObTableSchema &table_schem
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       A.SVR_IP AS SVR_IP,       A.SVR_PORT AS SVR_PORT,       B.TABLE_NAME AS TABLE_NAME,       CAST (        CASE A.JOB_TYPE         WHEN 0 THEN 'INVALID'         WHEN 1 THEN 'COMPLETE REFRESH'         WHEN 2 THEN 'FAST REFRESH'         WHEN 3 THEN 'PURGE MLOG'         ELSE NULL        END AS CHAR(64)       ) AS JOB_TYPE,       A.SESSION_ID AS SESSION_ID,       A.READ_SNAPSHOT AS READ_SNAPSHOT,       A.PARALLEL AS PARALLEL,       A.JOB_START_TIME AS JOB_START_TIME     FROM oceanbase.__all_virtual_mview_running_job A,          oceanbase.__all_table B     WHERE A.table_id = B.table_id     AND A.TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       A.SVR_IP AS SVR_IP,       A.SVR_PORT AS SVR_PORT,       B.TABLE_NAME AS TABLE_NAME,       CAST (        CASE A.JOB_TYPE         WHEN 0 THEN 'INVALID'         WHEN 1 THEN 'COMPLETE REFRESH'         WHEN 2 THEN 'FAST REFRESH'         WHEN 3 THEN 'PURGE MLOG'         WHEN 4 THEN 'NESTED SYNC REFRESH'         ELSE NULL        END AS CHAR(64)       ) AS JOB_TYPE,       A.SESSION_ID AS SESSION_ID,       A.READ_SNAPSHOT AS READ_SNAPSHOT,       A.PARALLEL AS PARALLEL,       A.JOB_START_TIME AS JOB_START_TIME,       A.REFRESH_ID AS REFRESH_ID     FROM oceanbase.__all_virtual_mview_running_job A,          oceanbase.__all_table B     WHERE A.table_id = B.table_id     AND A.TENANT_ID = EFFECTIVE_TENANT_ID() )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }
@@ -213,7 +213,7 @@ int ObInnerTableSchema::cdb_mview_running_jobs_schema(ObTableSchema &table_schem
   table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       A.SVR_IP,       A.SVR_PORT,       A.TENANT_ID,       B.TABLE_NAME,       CAST (        CASE A.JOB_TYPE         WHEN 0 THEN 'INVALID'         WHEN 1 THEN 'COMPLETE REFRESH'         WHEN 2 THEN 'FAST REFRESH'         WHEN 3 THEN 'PURGE MLOG'         ELSE NULL        END AS CHAR(64)       ) AS JOB_TYPE,       A.SESSION_ID,       A.READ_SNAPSHOT,       A.PARALLEL,       A.JOB_START_TIME     FROM oceanbase.__all_virtual_mview_running_job A,          oceanbase.__all_virtual_table B     WHERE A.table_id = B.table_id     AND A.tenant_id = B.tenant_id )__"))) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(     SELECT       A.SVR_IP,       A.SVR_PORT,       A.TENANT_ID,       B.TABLE_NAME,       CAST (        CASE A.JOB_TYPE         WHEN 0 THEN 'INVALID'         WHEN 1 THEN 'COMPLETE REFRESH'         WHEN 2 THEN 'FAST REFRESH'         WHEN 3 THEN 'PURGE MLOG'         WHEN 4 THEN 'NESTED SYNC REFRESH'         ELSE NULL        END AS CHAR(64)       ) AS JOB_TYPE,       A.SESSION_ID,       A.READ_SNAPSHOT,       A.PARALLEL,       A.JOB_START_TIME,       A.REFRESH_ID     FROM oceanbase.__all_virtual_mview_running_job A,          oceanbase.__all_virtual_table B     WHERE A.table_id = B.table_id     AND A.tenant_id = B.tenant_id )__"))) {
       LOG_ERROR("fail to set view_definition", K(ret));
     }
   }

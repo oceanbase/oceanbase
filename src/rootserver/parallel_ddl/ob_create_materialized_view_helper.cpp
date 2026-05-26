@@ -184,6 +184,7 @@ int ObCreateMaterializedViewHelper::create_schemas_for_mv_()
                                                                        tenant_data_version,
                                                                        mview_info,
                                                                        arg_.ddl_stmt_str_,
+                                                                       arg_.parallelism_,
                                                                        task_record_))) {
       LOG_WARN("failed to start mview complete refresh task", KR(ret));
     }

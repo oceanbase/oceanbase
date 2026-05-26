@@ -135,6 +135,7 @@ class ObISqlPrinter
 {
 protected:
   virtual int inner_print(char *buf, int64_t buf_len, int64_t &pos) = 0;
+  virtual bool get_c_style() const { return false; }
 public:
   virtual int do_print(ObIAllocator &allocator, ObString &result);
   virtual ~ObISqlPrinter() = default;
@@ -147,21 +148,26 @@ public:
                ObSchemaGetterGuard *schema_guard,
                ObObjPrintParams print_params,
                const ParamStore *param_store,
-               const ObSQLSessionInfo *session) :
+               const ObSQLSessionInfo *session,
+               bool c_style = false) :
     stmt_(stmt),
     schema_guard_(schema_guard),
     print_params_(print_params),
     param_store_(param_store),
-    session_(session)
+    session_(session),
+    c_style_(c_style)
     {}
   virtual int inner_print(char *buf, int64_t buf_len, int64_t &res_len) override;
 
+protected:
+  virtual bool get_c_style() const override { return c_style_; }
 protected:
   const ObStmt *stmt_;
   ObSchemaGetterGuard *schema_guard_;
   ObObjPrintParams print_params_;
   const ParamStore *param_store_;
   const ObSQLSessionInfo *session_;
+  bool c_style_;
 };
 
 class ObSQLUtils
@@ -430,6 +436,10 @@ public:
                               bool &has_questionmark_in_sql,
                               bool need_format);
   static int md5(const common::ObString &stmt, char *sql_id, int32_t len);
+  static int gen_sql_id_from_sql_string(ObSQLSessionInfo &session,
+                                        const common::ObString &raw_sql,
+                                        char *sql_id_buf,
+                                        int64_t buf_len);
   static int filter_hint_in_query_sql(common::ObIAllocator &allocator,
                                       const ObSQLSessionInfo &session,
                                       const common::ObString &sql,
@@ -447,7 +457,8 @@ public:
                              ObSchemaGetterGuard *schema_guard,
                              ObObjPrintParams print_params = ObObjPrintParams(),
                              const ParamStore *param_store = NULL,
-                             const ObSQLSessionInfo *session = NULL);
+                             const ObSQLSessionInfo *session = NULL,
+                             bool c_style = false);
   static int reconstruct_ps_sql(ObSqlString &reconstruct_sql, const ObString &ps_sql,
                                 const ObIArray<const common::ObObjParam *> &const_tokens);
   static int append_obj_param(ObSqlString &reconstruct_sql, const common::ObObjParam & obj_param);

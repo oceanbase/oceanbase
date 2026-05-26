@@ -110,14 +110,7 @@ int ObCreateTableLikeHelper::check_schema_valid_(const ObTableSchema *&orig_tabl
         KR(ret));
     LOG_USER_ERROR(OB_NOT_SUPPORTED,
                    "create temporary table like on table with partition is");
-  } else if (orig_table_schema->has_mlog_table()) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN(
-        "create table like on table with materialized view log is not supported",
-        KR(ret));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED,
-                   "create table like on table with materialized view log is");
-  } else if (orig_table_schema->table_referenced_by_fast_lsm_mv()) {
+  } else if (orig_table_schema->required_by_mv_fast_refresh()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN(
         "create table like on table required by materialized view is not supported", KR(ret));

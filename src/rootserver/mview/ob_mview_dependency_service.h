@@ -80,6 +80,10 @@ public:
       const uint64_t tenant_id,
       const ObIArray<uint64_t> &ref_table_ids,
       const ObUpdateMViewRefTableOpt &update_opt);
+  int swap_mview_dep_base_table(common::ObMySQLTransaction &trans,
+                                const uint64_t tenant_id,
+                                share::schema::ObTableSchema &new_orig_table_schema,
+                                share::schema::ObTableSchema &new_hidden_table_schema);
 private:
   int check_table_exist_(ObISQLClient &sql_client,
                          const uint64_t tenant_id,

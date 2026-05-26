@@ -3282,7 +3282,15 @@ DEF_BOOL(_enable_foreign_key_gts_opt, OB_TENANT_PARAMETER, "False",
 DEF_BOOL(_enable_nested_sql_local_optimize, OB_TENANT_PARAMETER, "False",
          "enable or disable nested sql use local plan first",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-
+DEF_BOOL(_enable_mview_refresh_queuing, OB_TENANT_PARAMETER, "True",
+        "Enable the new MV refresh engine based on pending task scheduling. "
+        "When set to True, refresh requests are submitted to the pending task queue and executed asynchronously. "
+        "When set to False, the legacy synchronous refresh engine is used.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_mview_refresh_concurrency, OB_TENANT_PARAMETER, "10", "[1,]",
+        "The maximum number of materialized view refresh tasks that can run concurrently. "
+        "Range: [1, +∞) in integer",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_pl_null_literal_parameterization, OB_TENANT_PARAMETER, "False",
         "Enable parameterization of NULL literals in anonymous blocks to improve cache hit rate.",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -3303,6 +3311,11 @@ DEF_TIME_WITH_CHECKER(schema_history_archive_expire_time, OB_TENANT_PARAMETER, "
                       "0 means disable GC, otherwise keep at least 30 days and at most 365 days. "
                       "Default 0. Range: {0} & [30d, 365d]",
                       ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_mv_adaptive_refresh_step, OB_TENANT_PARAMETER, "True",
+        "Enable the dynamic generation of the MV refresh SQL based on the delta data",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_BOOL(_enable_trigger_precise_batch_exec, OB_TENANT_PARAMETER, "False",
          "enable precise cross-trigger-point conflict detection for batched DML with row triggers."
          " When false (default), use conservative judgment: any trigger with side-effect flags"

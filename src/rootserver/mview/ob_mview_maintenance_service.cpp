@@ -13,7 +13,6 @@
 #define USING_LOG_PREFIX RS
 
 #include "rootserver/mview/ob_mview_maintenance_service.h"
-#include "sql/resolver/mv/ob_mv_dep_utils.h"
 #include "logservice/ob_log_service.h"
 
 namespace oceanbase
@@ -21,6 +20,7 @@ namespace oceanbase
 namespace rootserver
 {
 using namespace common;
+
 /**
  * ObMViewMaintenanceService
  */
@@ -28,8 +28,6 @@ using namespace common;
 ObMViewMaintenanceService::ObMViewMaintenanceService() : is_inited_(false),
                                                          mview_refresh_info_timestamp_(0),
                                                          mview_mds_timestamp_(0),
-                                                         mview_deps_timestamp_(0),
-                                                         mview_deps_lock_(common::ObLatchIds::MVIEW_MAINTENANCE_SERVICE_LOCK),
                                                          proposal_id_(0)
   {}
 
@@ -80,16 +78,12 @@ int ObMViewMaintenanceService::init()
       LOG_WARN("fail to init mview update cache task", KR(ret));
     } else if (OB_FAIL(mview_mds_task_.init())) {
       LOG_WARN("fail to init mview mds task", KR(ret));
-    } else if (OB_FAIL(mview_update_deps_task_.init())) {
-      LOG_WARN("fail to init mview update deps task");
-    } else if (OB_FAIL(trim_mlog_task_.init())) {
-      LOG_WARN("fail to init trim mlog task", KR(ret));
     } else if (OB_FAIL(mview_refresh_info_cache_.create(bucket_num, attr))) {
       LOG_WARN("fail to create mview refresh info cache", KR(ret));
     } else if (OB_FAIL(mview_mds_map_.create(bucket_num, attr))) {
       LOG_WARN("fail to create mview mds map", KR(ret));
-    } else if (OB_FAIL(mview_deps_.create(bucket_num, attr))) {
-      LOG_WARN("fail to create mview deps", KR(ret));
+    } else if (OB_FAIL(pending_task_manager_.init())) {
+      LOG_WARN("fail to init pending task manager", KR(ret));
     } else {
       is_inited_ = true;
     }
@@ -115,7 +109,6 @@ void ObMViewMaintenanceService::stop()
 {
   sys_ls_task_stop_();
   mview_update_cache_task_.stop();
-  mview_update_deps_task_.stop();
 }
 
 void ObMViewMaintenanceService::sys_ls_task_stop_()
@@ -129,7 +122,7 @@ void ObMViewMaintenanceService::sys_ls_task_stop_()
   collect_mv_merge_info_task_.stop();
   mview_clean_snapshot_task_.stop();
   mview_mds_task_.stop();
-  trim_mlog_task_.stop();
+  pending_task_manager_.stop();
 }
 
 void ObMViewMaintenanceService::wait()
@@ -144,8 +137,7 @@ void ObMViewMaintenanceService::wait()
   mview_clean_snapshot_task_.wait();
   mview_update_cache_task_.wait();
   mview_mds_task_.wait();
-  mview_update_deps_task_.wait();
-  trim_mlog_task_.wait();
+  pending_task_manager_.wait();
 }
 
 void ObMViewMaintenanceService::destroy()
@@ -163,8 +155,7 @@ void ObMViewMaintenanceService::destroy()
   mview_refresh_info_cache_.destroy();
   mview_mds_task_.destroy();
   mview_mds_map_.destroy();
-  mview_deps_.destroy();
-  trim_mlog_task_.destroy();
+  pending_task_manager_.destroy();
 }
 
 int ObMViewMaintenanceService::inner_switch_to_leader()
@@ -196,15 +187,13 @@ int ObMViewMaintenanceService::inner_switch_to_leader()
       LOG_WARN("fail to start mview clean snapshot task", KR(ret));
     } else if (OB_FAIL(mview_mds_task_.start())) {
       LOG_WARN("fail to start mview mds task", KR(ret));
-    } else if (OB_FAIL(mview_update_deps_task_.start())) {
-      LOG_WARN("fail to start mview update deps task", KR(ret));
     } else if (OB_FAIL(mview_mds_task_.update_mview_mds_op())) {
       LOG_WARN("fail to update mview mds op", KR(ret));
-    } else if (OB_FAIL(trim_mlog_task_.start())) {
-      LOG_WARN("fail to start trim mlog task", KR(ret));
     } else if (OB_FAIL(MTL(logservice::ObLogService *)->
                        get_palf_role(share::SYS_LS, role, proposal_id))) {
       LOG_WARN("fail to get palf role", KR(ret), K(role), K(proposal_id));
+    } else if (OB_FAIL(pending_task_manager_.start())) {
+      LOG_WARN("fail to start pending task manager", KR(ret));
     } else {
       proposal_id_ = proposal_id;
     }
@@ -545,6 +534,15 @@ int ObMViewMaintenanceService::get_min_mview_mds_snapshot(share::SCN &scn)
   return ret;
 }
 
+int ObMViewMaintenanceService::get_min_mview_pending_task_snapshot(share::SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(pending_task_manager_.get_min_pending_task_snapshot(scn))) {
+    LOG_WARN("fail to get min mview pending task snapshot", K(ret));
+  }
+  return ret;
+}
+
 // read from __all_mview_dep and filter those table not mview
 // for example: all tables are mviews
 // A
@@ -553,374 +551,6 @@ int ObMViewMaintenanceService::get_min_mview_mds_snapshot(share::SCN &scn)
 // ├── C
 // └── D
 // E ── F
-// mview_deps_ like:
-// {A : B, C, D}
-// {B : D}
-// {C : }
-// {D : }
-// {E : F}
-// {F : }
-int ObMViewMaintenanceService::get_all_mview_deps()
-{
-  int ret = OB_SUCCESS;
-  using namespace sql;
-  const uint64_t tenant_id = MTL_ID();
-  ObSEArray<ObMVDepInfo, 32> mv_dep_infos;
-  hash::ObHashSet<uint64_t> update_set;
-  uint64_t start_ts = ObTimeUtility::current_time();
-  ObSchemaGetterGuard schema_guard;
-  if (!is_valid_tenant_id(tenant_id) || OB_ISNULL(GCTX.sql_proxy_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected tenant id or sql porxy", KR(ret), K(tenant_id), KP(GCTX.sql_proxy_));
-  } else if (OB_FAIL(update_set.create(10))) {
-    LOG_WARN("fail to create update set", K(ret));
-  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
-    LOG_WARN("fail to get tenant schema guard", KR(ret), K(tenant_id));
-  } else if (OB_FAIL(ObMVDepUtils::get_all_mview_dep_infos(
-                     GCTX.sql_proxy_, tenant_id, mv_dep_infos))) {
-    LOG_WARN("fail to get mv deps", K(ret));
-  } else {
-    // TODO:: optimise rwlock
-    SpinWLockGuard g(mview_deps_lock_);
-    uint64_t pre_mview_id = OB_INVALID_ID;
-    ObSEArray<uint64_t, 2> dep_ids;
-    ARRAY_FOREACH(mv_dep_infos, idx) {
-      ObMVDepInfo curr_dep_info = mv_dep_infos.at(idx);
-      // LOG_INFO("get mv deps", K(idx), K(pre_mview_id), K(curr_dep_info.mview_id_), K(curr_dep_info.p_obj_));
-      if (OB_INVALID_ID != pre_mview_id && curr_dep_info.mview_id_ != pre_mview_id) {
-        if (OB_FAIL(mview_deps_.set_refactored(pre_mview_id, dep_ids, 1/*overwrite*/))) {
-          LOG_WARN("fail to update mview deps", K(ret));
-        } else if (OB_FAIL(update_set.set_refactored(pre_mview_id))) {
-          LOG_WARN("fail to insert update set", K(ret));
-        } else {
-          dep_ids.reuse();
-        }
-      }
-      const ObTableSchema *table_schema = nullptr;
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, curr_dep_info.p_obj_, table_schema))) {
-        LOG_WARN("fail to get table schema", K(ret), K(tenant_id), K(curr_dep_info.p_obj_));
-      } else if (OB_ISNULL(table_schema)) {
-        // A dep on B and B complete refreshed, container table changed, ignore this null
-        // if can not refresh success, it would return error when refreshing
-        // ignore udt and udf, casue of they can not get table schema and not need to refresh
-        LOG_INFO("table schema is null, maybe dep is deleted", K(ret), K(tenant_id), K(curr_dep_info.p_obj_));
-      } else if (table_schema->is_materialized_view()) {
-        dep_ids.push_back(curr_dep_info.p_obj_);
-      }
-      pre_mview_id = curr_dep_info.mview_id_;
-    }
-    // add last mview's dep map
-    if (OB_SUCC(ret) && pre_mview_id != OB_INVALID_ID) {
-      if (OB_FAIL(mview_deps_.set_refactored(pre_mview_id, dep_ids, 1/*overwrite*/))) {
-        LOG_WARN("fail to update mview deps", K(ret));
-      } else if (OB_FAIL(update_set.set_refactored(pre_mview_id))) {
-        LOG_WARN("fail to insert update set", K(ret));
-      }
-    }
-    // clean not existed mviewid in cache
-    if (OB_SUCC(ret)) {
-      ObSEArray<uint64_t, 1> del_mview_ids;
-      for (MViewDeps::iterator it = mview_deps_.begin();
-           OB_SUCC(ret) && it != mview_deps_.end(); it++) {
-        if (OB_FAIL(update_set.exist_refactored(it->first))) {
-          if (OB_HASH_EXIST == ret) {
-            ret = OB_SUCCESS;
-          } else if (OB_HASH_NOT_EXIST) {
-            ret = OB_SUCCESS;
-            if (OB_FAIL(del_mview_ids.push_back(it->first))) {
-              LOG_WARN("fail to push back del mview id", K(ret), K(it->first));
-            }
-          } else {
-            LOG_WARN("fail to exist refactored", K(ret), K(it->first));
-          }
-        }
-      }
-      ARRAY_FOREACH(del_mview_ids, idx) {
-        if (OB_FAIL(mview_deps_.erase_refactored(del_mview_ids.at(idx)))) {
-          LOG_WARN("fail to earse del mview id", K(ret), K(del_mview_ids.at(idx)), K(idx));
-        }
-      }
-    }
-    uint64_t end_ts = ObTimeUtility::current_time();
-    mview_deps_timestamp_ = start_ts;
-    LOG_INFO("update all mview deps cache", K(ret), K(mv_dep_infos.count()),
-             K(update_set.size()), K(mview_deps_.size()),
-             K(start_ts), K(end_ts), "cost ts:", end_ts - start_ts);
-  }
-  return ret;
-}
-
-int ObMViewMaintenanceService::get_nested_mview_list_check_sql(
-                               const MViewDeps &target_mview_deps,
-                               ObSqlString &check_sql)
-{
-  int ret = OB_SUCCESS;
-  ObSqlString mview_id_array;
-  for (MViewDeps::const_iterator it = target_mview_deps.begin();
-        OB_SUCC(ret) && it != target_mview_deps.end(); it++) {
-    if (OB_FAIL(mview_id_array.append_fmt((it == target_mview_deps.begin()) ?
-                                            "%ld" : ",%ld", it->first))) {
-      LOG_WARN("fail to append fmt", K(ret));
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(check_sql.assign_fmt(
-                      "SELECT (COUNT(DISTINCT MVIEW_ID) = %ld) AS RES FROM"
-                      " %s.%s WHERE MVIEW_ID IN (%.*s)",
-                      target_mview_deps.size(), OB_SYS_DATABASE_NAME, OB_ALL_MVIEW_DEP_TNAME,
-                      (int)mview_id_array.length(), mview_id_array.ptr()))) {
-    LOG_WARN("fail to assign fmt", K(ret));
-  }
-  return ret;
-}
-
-int ObMViewMaintenanceService::get_target_nested_mview_deps(
-                               const uint64_t mview_id,
-                               MViewDeps &target_mview_deps)
-{
-  int ret = OB_SUCCESS;
-  target_mview_deps.reuse();
-  const uint64_t tenant_id = MTL_ID();
-  bool check_res = false;
-  uint64_t curr_ts = ObTimeUtility::current_time();
-  if (!is_valid_tenant_id(tenant_id) || OB_ISNULL(GCTX.sql_proxy_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected tenant id or sql porxy", KR(ret), K(tenant_id), KP(GCTX.sql_proxy_));
-  } else if (curr_ts - mview_deps_timestamp_ > CacheValidInterval ||
-             OB_ISNULL(mview_deps_.get(mview_id))) {
-    LOG_INFO("no cached mview deps or cache expired", K(mview_id));
-    if (OB_FAIL(get_all_mview_deps())) {
-      LOG_WARN("fail to get all mview deps", K(ret));
-    }
-  }
-  if (OB_SUCC(ret)) {
-    ObSqlString check_sql;
-    if (OB_FAIL(get_target_nested_mview_deps_in_lock(mview_id, target_mview_deps))) {
-      LOG_WARN("fail to get target nested mview deps in lock", K(ret), K(mview_id));
-    } else {
-      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-        common::sqlclient::ObMySQLResult *result = nullptr;
-        if (OB_FAIL(get_nested_mview_list_check_sql(target_mview_deps, check_sql))) {
-          LOG_WARN("fail to get target nested mview list check sql", K(ret), K(mview_id));
-        } else if (OB_FAIL(GCTX.sql_proxy_->read(res, tenant_id, check_sql.ptr()))) {
-          LOG_WARN("fail to exec sql", K(ret), K(check_sql));
-        } else if (OB_ISNULL(result = res.get_result())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("result is null", KR(ret));
-        } else if (OB_FAIL(result->next())) {
-          if (OB_ITER_END == ret) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("result is empty", KR(ret));
-          } else {
-            LOG_WARN("get next result failed", KR(ret));
-          }
-        } else {
-          EXTRACT_BOOL_FIELD_MYSQL(*result, "RES", check_res);
-        }
-        LOG_INFO("recehck cache", K(ret), K(check_res), K(check_sql));
-      }
-    }
-    if (OB_SUCC(ret) && !check_res) {
-      LOG_INFO("target nested mview deps not correct, maybe cache is stale", K(ret), K(check_res));
-      // refresh cache and get new targe_mview_deps;
-      if (OB_FAIL(get_all_mview_deps())) {
-        LOG_WARN("fail to get all mview deps", K(ret));
-      } else if (OB_FAIL(get_target_nested_mview_deps_in_lock(mview_id, target_mview_deps))) {
-        LOG_WARN("fail to get all mview deps in lock", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-// get target mview's depends mv map from mview_deps_
-int ObMViewMaintenanceService::get_target_nested_mview_deps_in_lock(
-                               const uint64_t mview_id,
-                               MViewDeps &target_mview_deps)
-{
-  int ret = OB_SUCCESS;
-  target_mview_deps.reuse();
-  ObSEArray<uint64_t, 2> dep_ids;
-  std::deque<uint64_t> mvs;
-  mvs.push_back(mview_id);
-  SpinRLockGuard g(mview_deps_lock_);
-  while (!mvs.empty() && OB_SUCC(ret)) {
-    dep_ids.reuse();
-    uint64_t curr_mview_id = mvs.front();
-    if (OB_FAIL(mview_deps_.get_refactored(curr_mview_id, dep_ids))) {
-      LOG_WARN("fail to get mview deps", K(ret), K(curr_mview_id));
-    } else {
-      ARRAY_FOREACH(dep_ids, idx) {
-        mvs.push_back(dep_ids.at(idx));
-      }
-      if (OB_SUCC(ret) &&
-          OB_ISNULL(target_mview_deps.get(curr_mview_id))) {
-        if (OB_FAIL(target_mview_deps.set_refactored(
-                    curr_mview_id, dep_ids, 1/*overwrite*/))) {
-          LOG_WARN("fail to push back mview degree", K(ret), K(curr_mview_id), K(dep_ids.count()));
-        }
-      }
-    }
-    mvs.pop_front();
-  }
-  return ret;
-}
-// A
-// ├── B
-// │   └── D
-// ├── C
-// └── D
-// mview_dep_ like:    mview_reverse_deps like:     degree_map like:
-// {A : B, C, D}       {D : B, A}                   {A : 3}
-// {B : D}             {B : A}                      {B : 1}
-// {C : }              {C : A}                      {C : 0}
-// {D : }              {A : }                       {D : 0}
-int ObMViewMaintenanceService::gen_target_nested_mview_topo_order(
-                               const MViewDeps &target_mview_deps,
-                               MViewDeps &mview_reverse_deps,
-                               ObIArray<uint64_t> &mview_topo_order)
-{
-  int ret = OB_SUCCESS;
-  MViewDegrees mview_degrees;
-  mview_reverse_deps.clear();
-  const uint64_t bucket_num = 16;
-  const uint64_t tenant_id = MTL_ID();
-  ObMemAttr attr(tenant_id, "MViewService");
-  if (target_mview_deps.empty()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(target_mview_deps.size()));
-  } else if (OB_FAIL(mview_degrees.create(bucket_num, attr))) {
-    LOG_WARN("fail to create mview degrees hashmap", K(ret));
-  } else {
-    for (MViewDeps::const_iterator it = target_mview_deps.begin();
-         OB_SUCC(ret) && it != target_mview_deps.end(); it++) {
-      const uint64_t curr_mview_id = it->first;
-      if (OB_FAIL(mview_degrees.set_refactored(curr_mview_id,
-                  it->second.count(), 1/*overwrite*/))) {
-        LOG_WARN("fail to push back mview degree", K(ret),
-                 K(curr_mview_id), K(it->second.count()));
-      } else {
-        ARRAY_FOREACH(it->second, idx) {
-          const uint64_t dep_id = it->second.at(idx);
-          ObSEArray<uint64_t, 2> reverse_dep_ids;
-          if (OB_ISNULL(mview_reverse_deps.get(dep_id))) {
-            if (OB_FAIL(reverse_dep_ids.push_back(curr_mview_id))) {
-              LOG_WARN("fail to push back mview id", K(ret), K(curr_mview_id));
-            } else if (OB_FAIL(mview_reverse_deps.set_refactored(it->second.at(idx),
-                               reverse_dep_ids, 1/*overwrite*/))) {
-              LOG_WARN("fail to push back mview degree", K(ret),
-                       K(curr_mview_id), K(it->second.at(idx)));
-            }
-          } else if (OB_FAIL(mview_reverse_deps.get_refactored(dep_id, reverse_dep_ids))) {
-            LOG_WARN("fail to get refactored reverse dep ids", K(ret), K(dep_id));
-          } else {
-            bool find = false;
-            ARRAY_FOREACH_X(reverse_dep_ids, i, cnt, !find) {
-              if (reverse_dep_ids.at(i) == curr_mview_id) {
-                find = true;
-              }
-            }
-            if (!find && OB_SUCC(ret)) {
-              if (OB_FAIL(reverse_dep_ids.push_back(curr_mview_id))) {
-                LOG_WARN("fail to push back target id", K(ret), K(curr_mview_id));
-              } else if (OB_FAIL(mview_reverse_deps.set_refactored(dep_id,
-                                 reverse_dep_ids, 1/*overwrite*/))) {
-                LOG_WARN("fail to set refactored", K(ret), K(dep_id));
-              }
-            }
-          }
-        }
-      }
-    }
-    // fill empty record
-    if (OB_SUCC(ret)) {
-      for (MViewDegrees::iterator it = mview_degrees.begin();
-           OB_SUCC(ret) && it != mview_degrees.end(); it++) {
-        LOG_INFO("get nested mview degrees", K(it->first), K(it->second));
-        ObSEArray<uint64_t, 2> reverse_dep_ids;
-        if (OB_ISNULL(mview_reverse_deps.get(it->first)))  {
-          if (OB_FAIL(mview_reverse_deps.set_refactored(it->first, reverse_dep_ids, 1/*overwrite*/))) {
-            LOG_WARN("fail to set refactored", K(ret), K(it->first));
-          }
-        }
-      }
-    }
-    LOG_INFO("gen mview degree and target map", K(ret), K(mview_degrees.size()),
-             K(mview_reverse_deps.size()));
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(get_nested_mview_topo_order(mview_degrees,
-                     mview_reverse_deps, mview_topo_order))) {
-    LOG_WARN("fail to get nested mview topo order", K(ret));
-  }
-  // destory hashmap
-  int tmp_ret = OB_SUCCESS;
-  if (OB_TMP_FAIL(mview_degrees.destroy())) {
-    ret = ret == OB_SUCCESS ? tmp_ret : ret;
-    LOG_WARN("fail to destory mview degrees", K(tmp_ret));
-  }
-  return ret;
-}
-
-// A
-// ├── B
-// │   └── D
-// ├── C
-// └── D
-// generate topo order like C, D, B, A
-int ObMViewMaintenanceService::get_nested_mview_topo_order(
-                               MViewDegrees &mview_degrees,
-                               const MViewDeps &mview_reverse_deps,
-                               ObIArray<uint64_t> &mview_topo_order)
-{
-  int ret = OB_SUCCESS;
-  if (mview_degrees.size() == 0 ||mview_reverse_deps.size() == 0 ||
-      mview_degrees.size() != mview_reverse_deps.size()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(mview_degrees.size()), K(mview_reverse_deps.size()));
-  } else {
-    std::deque<uint64_t> mvs;
-    for (MViewDegrees::iterator it = mview_degrees.begin();
-         it != mview_degrees.end(); it++) {
-      if (it->second == 0) {
-        mvs.push_back(it->first);
-      }
-    }
-    while (!mvs.empty() && OB_SUCC(ret)) {
-      uint64_t curr_mview_id = mvs.front();
-      if (OB_FAIL(mview_topo_order.push_back(curr_mview_id))) {
-        LOG_WARN("fail to push back mview id", K(ret), K(curr_mview_id));
-      } else {
-        mvs.pop_front();
-        ObSEArray<uint64_t, 2> reverse_dep_ids;
-        if (OB_FAIL(mview_reverse_deps.get_refactored(curr_mview_id, reverse_dep_ids))) {
-          LOG_WARN("fail to get target ids", K(ret), K(curr_mview_id));
-        } else {
-          ARRAY_FOREACH(reverse_dep_ids, idx) {
-            uint64_t dep_id = reverse_dep_ids.at(idx);
-            uint64_t degree = 0;
-            if (OB_FAIL(mview_degrees.get_refactored(dep_id, degree))) {
-              LOG_WARN("fail to get degree", K(ret), K(dep_id));
-            } else if (degree == 0) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("degee can not be 0", K(curr_mview_id), K(dep_id), K(degree));
-            } else {
-              degree--;
-              if (OB_FAIL(mview_degrees.set_refactored(dep_id, degree, 1/*overwrite*/))) {
-                LOG_WARN("fail to set refactored", K(ret), K(dep_id), K(degree));
-              } else if (degree == 0) {
-                mvs.push_back(dep_id);
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 int ObMViewMaintenanceService::check_nested_mview_mds_exists(
                                const uint64_t refresh_id,
                                const share::SCN &target_data_sync_scn)
@@ -1041,6 +671,7 @@ int ObMViewMaintenanceService::GetMVMinTargetDataSyncScnFunctor::
   }
   return ret;
 }
+
 
 } // namespace rootserver
 } // namespace oceanbase

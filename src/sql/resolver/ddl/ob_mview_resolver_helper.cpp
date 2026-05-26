@@ -23,6 +23,7 @@
 #include "sql/engine/expr/ob_expr_operator.h"
 #include "sql/resolver/ob_resolver_utils.h"
 #include "storage/mview/ob_mview_refresh.h"
+#include "storage/mview/cmd/ob_mview_executor_util.h"
 #include "sql/resolver/mv/ob_mv_provider.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "sql/printer/ob_raw_expr_printer.h"
@@ -162,18 +163,30 @@ int ObMViewResolverHelper::resolve_mv_options(const ObSelectStmt *stmt,
       FastRefreshableNotes fast_refreshable_note;
       ObSEArray<std::pair<ObRawExpr*, int64_t>, 8> fast_refresh_dependency_columns;
       ObDMLStmt *copied_stmt = NULL;
+      ObTableReferencedColumnsInfo table_referenced_columns_info;
       if (OB_FAIL(ObTransformUtils::deep_copy_stmt(*resolver.params_.stmt_factory_,
               *resolver.params_.expr_factory_,
               stmt, copied_stmt))) {
         LOG_WARN("failed to deep copy stmt", K(ret));
-      } else if (OB_FAIL(ObMVChecker::check_mv_fast_refresh_type(
-              static_cast<ObSelectStmt*>(copied_stmt), resolver.allocator_, resolver.schema_checker_,
-              resolver.params_.stmt_factory_,
-              resolver.params_.expr_factory_, resolver.session_info_, container_table_schema,
-              table_schema.mv_on_query_computation(), refresh_type, fast_refreshable_note,
-              fast_refresh_dependency_columns, required_columns_infos))) {
+      } else if (OB_FAIL(table_referenced_columns_info.init())) {
+        LOG_WARN("failed to init table referenced columns info", KR(ret));
+      } else if (OB_FAIL(ObMVChecker::check_mv_fast_refresh_type(static_cast<ObSelectStmt*>(copied_stmt),
+                                                                 true,
+                                                                 resolver.allocator_,
+                                                                 resolver.schema_checker_,
+                                                                 resolver.params_.stmt_factory_,
+                                                                 resolver.params_.expr_factory_,
+                                                                 resolver.session_info_,
+                                                                 container_table_schema,
+                                                                 table_schema.mv_on_query_computation(),
+                                                                 refresh_type, fast_refreshable_note,
+                                                                 fast_refresh_dependency_columns,
+                                                                 &table_referenced_columns_info,
+                                                                 NULL))) {
         LOG_WARN("fail to check mv type", KR(ret));
-      } else if (fast_refresh_dependency_columns.count() > 0 && ((data_version < MOCK_DATA_VERSION_4_3_5_5) || (data_version >= DATA_VERSION_4_4_0_0 && data_version < DATA_VERSION_4_4_2_0))) {
+      } else if (OB_UNLIKELY(fast_refresh_dependency_columns.count() > 0
+                             && ((data_version < MOCK_DATA_VERSION_4_3_5_5)
+                                 || (data_version >= DATA_VERSION_4_4_0_0 && data_version < DATA_VERSION_4_4_2_0)))) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("data version below 4.3.5.5, not support fast refresh auto add dependency columns", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "data version below 4.3.5.5, not support fast refresh auto add dependency columns");
@@ -190,6 +203,8 @@ int ObMViewResolverHelper::resolve_mv_options(const ObSelectStmt *stmt,
                           fast_refreshable_note.error_.ptr());
         }
         LOG_WARN("fast refresh is not supported for this mv", KR(ret), K(refresh_type));
+      } else if (OB_FAIL(table_referenced_columns_info.convert_to_required_columns_infos(required_columns_infos))) {
+        LOG_WARN("failed to convert to required columns infos", K(ret));
       } else if (OB_MV_FAST_REFRESH_MAJOR_REFRESH_MJV == refresh_type) {
         table_schema.set_mv_major_refresh(IS_MV_MAJOR_REFRESH);
         container_table_schema.set_mv_major_refresh(IS_MV_MAJOR_REFRESH);
@@ -222,7 +237,20 @@ int ObMViewResolverHelper::resolve_mv_options(const ObSelectStmt *stmt,
             for (; column_index < append_columns_count && OB_SUCC(ret);
                  select_item_index++, column_index++, hidden_column_index++) {
               const SelectItem &select_item = static_cast<ObSelectStmt*>(copied_stmt)->get_select_item(select_item_index);
-              if (OB_FAIL(add_hidden_cols_for_mv(container_table_schema, hidden_column_index, select_item, resolver))) {
+              char comment_buf[MAX_COLUMN_COMMENT_CHAR_LENGTH];
+              ObString comment_string;
+              if (OB_FAIL(generate_hidden_column_comment(fast_refresh_dependency_columns.at(column_index),
+                                                         copied_stmt->is_set_stmt(),
+                                                         resolver.schema_checker_->get_schema_guard(),
+                                                         resolver.session_info_,
+                                                         comment_buf,
+                                                         comment_string))) {
+                LOG_WARN("failed to generate hidden column comment", KR(ret));
+              } else if (OB_FAIL(add_hidden_cols_for_mv(container_table_schema,
+                                                        hidden_column_index,
+                                                        select_item,
+                                                        comment_string,
+                                                        resolver))) {
                 LOG_WARN("failed to add hidden cols for mv", KR(ret));
               }
             }
@@ -286,149 +314,255 @@ int ObMViewResolverHelper::resolve_mv_refresh_info(ParseNode *refresh_info_node,
     if (refresh_info_node->int32_values_[0] == 1) { //never refresh
       refresh_info.refresh_method_ = ObMVRefreshMethod::NEVER;
       refresh_info.refresh_mode_ = ObMVRefreshMode::NEVER;
-    } else if ((3 == refresh_info_node->num_child_)
-               && OB_NOT_NULL(refresh_info_node->children_)) {
-      int32_t refresh_method = refresh_info_node->int32_values_[1];
-      ParseNode *refresh_on_clause = refresh_info_node->children_[1];
-      ParseNode *refresh_interval_node = refresh_info_node->children_[2];
-      ParseNode *nested_refresh_node = refresh_info_node->children_[0];
-
-      switch (refresh_method) {
-        case 0:
-          refresh_info.refresh_method_ = ObMVRefreshMethod::FAST;
-          break;
-        case 1:
-          refresh_info.refresh_method_ = ObMVRefreshMethod::COMPLETE;
-          break;
-        case 2:
-          refresh_info.refresh_method_ = ObMVRefreshMethod::FORCE;
-          break;
-      }
-
-      if (refresh_on_clause != nullptr) {
-        ParseNode *refresh_mode_node = refresh_on_clause->children_[0];
-        if (refresh_mode_node != nullptr) {
-          switch (refresh_mode_node->value_) {
-            case 0:
-              refresh_info.refresh_mode_ = ObMVRefreshMode::DEMAND;
-              break;
-            case 1:
-              refresh_info.refresh_mode_ = ObMVRefreshMode::COMMIT;
-              ret = OB_NOT_SUPPORTED;
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "mview refresh on commit");
-              break;
-            case 2:
-              refresh_info.refresh_mode_ = ObMVRefreshMode::STATEMENT;
-              ret = OB_NOT_SUPPORTED;
-              LOG_USER_ERROR(OB_NOT_SUPPORTED, "mview refresh on statement");
-              break;
-            default:
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("invalid refresh mode", K(refresh_mode_node->value_));
-              break;
-          }
+    } else if (refresh_info_node->int32_values_[0] == 0) {
+      if (OB_UNLIKELY(4 != refresh_info_node->num_child_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected refresh info node", K(ret), K(refresh_info_node->type_), K(refresh_info_node->num_child_));
+      } else {
+        int32_t refresh_method = refresh_info_node->int32_values_[1];
+        ParseNode *refresh_parallel_node = refresh_info_node->children_[0];
+        ParseNode *nested_refresh_node = refresh_info_node->children_[1];
+        ParseNode *refresh_on_node = refresh_info_node->children_[2];
+        ParseNode *refresh_interval_node = refresh_info_node->children_[3];
+        // refresh method
+        if (OB_FAIL(resolve_refresh_method(refresh_method,
+                                           refresh_info.refresh_method_))) {
+          LOG_WARN("fail to resolve refresh method", KR(ret));
         }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_NOT_NULL(nested_refresh_node)) {
-        ParseNode *nested_refresh_mode_node = nested_refresh_node->children_[0];
-        if (data_version < MOCK_DATA_VERSION_4_3_5_3 || (data_version >= DATA_VERSION_4_4_0_0 && data_version < DATA_VERSION_4_4_2_0)) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("data version below 4.3.5.3 or between 4.4.0.0 and 4.4.2.0, not support nested refresh type", K(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "data version below 4.3.5.3 or between 4.4.0.0 and 4.4.2.0, set nested refresh type");
-        } else if (OB_ISNULL(nested_refresh_mode_node) ||
-                   OB_UNLIKELY(T_MV_NESTED_REFRESH_CLAUSE != nested_refresh_node->type_)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid nested refresh node", K(ret), K(nested_refresh_node->type_),
-                   KP(nested_refresh_mode_node));
-        } else if ((data_version >= MOCK_DATA_VERSION_4_3_5_3 && data_version < DATA_VERSION_4_4_0_0) || (data_version >= DATA_VERSION_4_4_2_0)) {
-          switch (nested_refresh_mode_node->value_) {
-            case 0:
-              refresh_info.nested_refresh_mode_ = ObMVNestedRefreshMode::INDIVIDUAL;
-              break;
-            case 1:
-              refresh_info.nested_refresh_mode_ = ObMVNestedRefreshMode::INCONSISTENT;
-              break;
-            case 2:
-              // ret = OB_NOT_SUPPORTED;
-              // LOG_WARN("sync refresh not supported now", K(ret));
-              // LOG_USER_ERROR(OB_NOT_SUPPORTED, "nested sync refresh");
-              refresh_info.nested_refresh_mode_ = ObMVNestedRefreshMode::CONSISTENT;
-              break;
-            default:
-              break;
-          }
+        // refresh parallel
+        if (OB_FAIL(ret)) {
+        } else if (NULL == refresh_parallel_node) {
+          refresh_info.refresh_dop_ = 0;
+        } else if (OB_FAIL(resolve_refresh_parallel_node(refresh_parallel_node,
+                                                         refresh_info.refresh_dop_))) {
+          LOG_WARN("failed to resolve refresh parallel node", KR(ret));
         }
-        LOG_INFO("nested refresh mode", K(nested_refresh_mode_node->value_));
-      } else if (OB_ISNULL(nested_refresh_node)) {
-        refresh_info.nested_refresh_mode_ = ObMVNestedRefreshMode::INDIVIDUAL;
-      }
-
-      if (OB_SUCC(ret) && refresh_interval_node != nullptr
-          && 2 == refresh_interval_node->num_child_
-          && (OB_NOT_NULL(refresh_interval_node->children_[0])
-              || OB_NOT_NULL(refresh_interval_node->children_[1]))) {
-        if (refresh_info.refresh_mode_ == ObMVRefreshMode::COMMIT) {
+        // nested refresh mode
+        if (OB_FAIL(ret)) {
+        } else if (NULL == nested_refresh_node) {
+          refresh_info.nested_refresh_mode_ = ObMVNestedRefreshMode::INDIVIDUAL;
+        } else if (OB_UNLIKELY(data_version < MOCK_DATA_VERSION_4_3_5_3
+                               || (data_version >= DATA_VERSION_4_4_0_0 && data_version < DATA_VERSION_4_4_2_0))) {
           ret = OB_NOT_SUPPORTED;
-          LOG_WARN("ON COMMIT attribute followed by start with/next clause is not supported", KR(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "ON COMMIT attribute followed by start with/next clause is");
-        } else if (refresh_info.refresh_mode_ == ObMVRefreshMode::STATEMENT) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("ON STATEMENT attribute followed by start with/next clause is not supported", KR(ret));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "ON STATEMENT attribute followed by start with/next clause is");
+          LOG_WARN("data version below 4.3.5.3 or between 4.4.0.0 and 4.4.2.0 not support nested refresh type", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "data version below 4.3.5.3 or between 4.4.0.0 and 4.4.2.0 set nested refresh type is");
+        } else if (OB_FAIL(resolve_nested_refresh_node(nested_refresh_node,
+                                                       refresh_info.nested_refresh_mode_))) {
+          LOG_WARN("failed to resolve nested refresh node", KR(ret));
+        }
+        // refresh on mode
+        if (OB_FAIL(ret)) {
+        } else if (NULL == refresh_on_node) {
+          refresh_info.refresh_mode_ = ObMVRefreshMode::DEMAND;
+        } else if (OB_FAIL(resolve_refresh_on_node(refresh_on_node, refresh_info.refresh_mode_))) {
+          LOG_WARN("fail to resolve refresh on node", KR(ret));
+        }
+        // refresh interval
+        if (OB_FAIL(ret)) {
+        } else if (NULL == refresh_interval_node) {
+          refresh_info.start_time_.reset();
+          refresh_info.next_time_expr_.reset();
         } else {
-          ParseNode *start_date = refresh_interval_node->children_[0];
-          ParseNode *next_date = refresh_interval_node->children_[1];
-          int64_t current_time = ObTimeUtility::current_time() / 1000000L * 1000000L; // ignore micro seconds
           int64_t start_time = OB_INVALID_TIMESTAMP;
-
-          if (OB_NOT_NULL(start_date)
-              && (T_MV_REFRESH_START_EXPR == start_date->type_)
-              && (1 == start_date->num_child_)
-              && (OB_NOT_NULL(start_date->children_))
-              && (OB_NOT_NULL(start_date->children_[0]))) {
-            if (OB_FAIL(ObMViewSchedJobUtils::resolve_date_expr_to_timestamp(resolver.params_,
-                *resolver.session_info_, *(start_date->children_[0]), *resolver.allocator_, start_time))) {
-              LOG_WARN("failed to resolve date expr to timestamp", KR(ret));
-            } else if (start_time < current_time) {
-              ret = OB_ERR_TIME_EARLIER_THAN_SYSDATE;
-              LOG_WARN("the parameter start date must evaluate to a time in the future",
-                  KR(ret), K(current_time), K(start_time));
-              LOG_USER_ERROR(OB_ERR_TIME_EARLIER_THAN_SYSDATE, "start date");
+          ObString next_time_expr;
+          if (OB_FAIL(resolve_refresh_interval_node(refresh_interval_node,
+                                                    resolver.session_info_,
+                                                    resolver.allocator_,
+                                                    resolver.params_,
+                                                    start_time,
+                                                    next_time_expr))) {
+            LOG_WARN("failed to resolve interval node", KR(ret));
+          } else if (OB_INVALID_TIMESTAMP != start_time || NULL != next_time_expr) {
+            // refresh interval has been set
+            if (OB_UNLIKELY(ObMVRefreshMode::COMMIT == refresh_info.refresh_mode_)) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("ON COMMIT attribute followed by start with/next clause is not supported", KR(ret));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "ON COMMIT attribute followed by start with/next clause is");
+            } else if (OB_UNLIKELY(ObMVRefreshMode::STATEMENT == refresh_info.refresh_mode_)) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("ON STATEMENT attribute followed by start with/next clause is not supported", KR(ret));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "ON STATEMENT attribute followed by start with/next clause is");
+            } else {
+              refresh_info.start_time_.set_timestamp(start_time);
+              refresh_info.next_time_expr_ = next_time_expr;
             }
+          } else {
+            // refresh interval has not been set, use default value
+            refresh_info.start_time_.reset();
+            refresh_info.next_time_expr_.reset();
           }
+        }
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected refresh_info_node node", K(ret), K(refresh_info_node->type_), K(refresh_info_node->int32_values_[0]));
+    }
+  }
+  return ret;
+}
 
-          if (OB_SUCC(ret) && OB_NOT_NULL(next_date)) {
-            int64_t next_time = OB_INVALID_TIMESTAMP;
-            if (OB_FAIL(ObMViewSchedJobUtils::resolve_date_expr_to_timestamp(resolver.params_,
-                *resolver.session_info_, *next_date, *resolver.allocator_, next_time))) {
-              LOG_WARN("fail to resolve date expr to timestamp", KR(ret));
-            } else if (next_time < current_time) {
-              ret = OB_ERR_TIME_EARLIER_THAN_SYSDATE;
-              LOG_WARN("the parameter next date must evaluate to a time in the future",
-                  KR(ret), K(current_time), K(next_time));
-              LOG_USER_ERROR(OB_ERR_TIME_EARLIER_THAN_SYSDATE, "next date");
-            } else if (OB_INVALID_TIMESTAMP == start_time) {
-              start_time = next_time;
-            }
+int ObMViewResolverHelper::resolve_refresh_method(const int32_t refresh_method_value,
+                                                  ObMVRefreshMethod &refresh_method)
+{
+  int ret = OB_SUCCESS;
+  switch (refresh_method_value) {
+    case 0:
+      refresh_method = ObMVRefreshMethod::FAST;
+      break;
+    case 1:
+      refresh_method = ObMVRefreshMethod::COMPLETE;
+      break;
+    case 2:
+      refresh_method = ObMVRefreshMethod::FORCE;
+      break;
+    default:
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid refresh method value", KR(ret), K(refresh_method_value));
+      break;
+  }
+  return ret;
+}
 
-            if (OB_SUCC(ret)) {
-              ObString next_date_str(next_date->str_len_, next_date->str_value_);
-              if (OB_FAIL(ob_write_string(*resolver.allocator_, next_date_str, refresh_info.next_time_expr_))) {
-                LOG_WARN("fail to write string", KR(ret));
-              }
-            }
-          }
+int ObMViewResolverHelper::resolve_refresh_parallel_node(const ParseNode *refresh_parallel_node,
+                                                         int64_t &refresh_dop)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(refresh_parallel_node)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null refresh parallel node", K(ret));
+  } else if (OB_UNLIKELY(T_PARALLEL != refresh_parallel_node->type_)
+             || OB_UNLIKELY(1 != refresh_parallel_node->num_child_)
+             || OB_ISNULL(refresh_parallel_node->children_)
+             || OB_ISNULL(refresh_parallel_node->children_[0])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected refresh parallel node", K(ret), K(refresh_parallel_node->type_), K(refresh_parallel_node->children_));
+  } else if (OB_UNLIKELY(refresh_parallel_node->children_[0]->value_ < 0)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("invalid refresh dop", KR(ret), K(refresh_parallel_node->children_[0]->value_));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "value of REFRESH PARALLEL less than 0 is");
+  } else {
+    refresh_dop = refresh_parallel_node->children_[0]->value_;
+  }
+  return ret;
+}
 
-          if (OB_SUCC(ret)) {
-            refresh_info.start_time_.set_timestamp(start_time);
-          }
+int ObMViewResolverHelper::resolve_nested_refresh_node(const ParseNode *nested_refresh_node,
+                                                       ObMVNestedRefreshMode &nested_refresh_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(nested_refresh_node)
+      || OB_UNLIKELY(T_MV_NESTED_REFRESH_CLAUSE != nested_refresh_node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null nested refresh node", K(ret), K(nested_refresh_node));
+  } else {
+    switch (nested_refresh_node->value_) {
+      case 0:
+        nested_refresh_mode = ObMVNestedRefreshMode::INDIVIDUAL;
+        break;
+      case 1:
+        nested_refresh_mode = ObMVNestedRefreshMode::INCONSISTENT;
+        break;
+      case 2:
+        nested_refresh_mode = ObMVNestedRefreshMode::CONSISTENT;
+        break;
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid nested refresh mode", KR(ret), K(nested_refresh_node->value_));
+        break;
+    }
+  }
+  return ret;
+}
+
+int ObMViewResolverHelper::resolve_refresh_on_node(const ParseNode *refresh_on_node,
+                                                   ObMVRefreshMode &refresh_mode)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(refresh_on_node)
+      || OB_UNLIKELY(T_MV_REFRESH_ON_CLAUSE != refresh_on_node->type_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null refresh on node", K(ret));
+  } else {
+    switch (refresh_on_node->value_) {
+      case 0:
+        refresh_mode = ObMVRefreshMode::DEMAND;
+        break;
+      case 1:
+        refresh_mode = ObMVRefreshMode::COMMIT;
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "mview refresh on commit is");
+        break;
+      case 2:
+        refresh_mode = ObMVRefreshMode::STATEMENT;
+        ret = OB_NOT_SUPPORTED;
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "mview refresh on statement is");
+        break;
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid refresh mode", K(ret), K(refresh_on_node->value_));
+        break;
+    }
+  }
+  return ret;
+}
+
+int ObMViewResolverHelper::resolve_refresh_interval_node(const ParseNode *refresh_interval_node,
+                                                         ObSQLSessionInfo *session_info,
+                                                         common::ObIAllocator *allocator,
+                                                         ObResolverParams &resolver_params,
+                                                         int64_t &start_time,
+                                                         ObString &next_time_expr)
+{
+  int ret = OB_SUCCESS;
+  start_time = OB_INVALID_TIMESTAMP;
+  next_time_expr.reset();
+  if (OB_ISNULL(refresh_interval_node) || OB_ISNULL(session_info) || OB_ISNULL(allocator)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", KR(ret), K(session_info), K(allocator));
+  } else if (OB_UNLIKELY(T_MV_REFRESH_INTERVAL != refresh_interval_node->type_
+                         || 2 != refresh_interval_node->num_child_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected node type", KR(ret), K(refresh_interval_node->type_), K(refresh_interval_node->num_child_));
+  } else {
+    const ParseNode *start_date = refresh_interval_node->children_[0];
+    const ParseNode *next_date = refresh_interval_node->children_[1];
+    int64_t current_time = ObTimeUtility::current_time() / 1000000L * 1000000L; // ignore micro seconds
+    if (NULL != start_date) {
+      if (T_MV_REFRESH_START_EXPR != start_date->type_ || OB_ISNULL(start_date->children_[0])) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected node type", KR(ret), K(start_date->type_),
+                 K(start_date->children_[0]));
+      } else if (OB_FAIL(ObMViewSchedJobUtils::resolve_date_expr_to_timestamp(
+                     resolver_params, *session_info, *(start_date->children_[0]), *allocator,
+                     start_time))) {
+        LOG_WARN("failed to resolve date expr to timestamp", KR(ret));
+      } else if (start_time < current_time) {
+        ret = OB_ERR_TIME_EARLIER_THAN_SYSDATE;
+        LOG_WARN("the parameter start date must evaluate to a time in the future", KR(ret),
+                 K(current_time), K(start_time));
+        LOG_USER_ERROR(OB_ERR_TIME_EARLIER_THAN_SYSDATE, "start date");
+      }
+    }
+    if (OB_SUCC(ret) && NULL != next_date) {
+      int64_t next_time = OB_INVALID_TIMESTAMP;
+      if (OB_FAIL(ObMViewSchedJobUtils::resolve_date_expr_to_timestamp(
+              resolver_params, *session_info, *next_date, *allocator, next_time))) {
+        LOG_WARN("failed to resolve date expr to timestamp", KR(ret));
+      } else if (next_time < current_time) {
+        ret = OB_ERR_TIME_EARLIER_THAN_SYSDATE;
+        LOG_WARN("the parameter next date must evaluate to a time in the future", KR(ret),
+                 K(current_time), K(next_time));
+        LOG_USER_ERROR(OB_ERR_TIME_EARLIER_THAN_SYSDATE, "next date");
+      } else if (OB_INVALID_TIMESTAMP == start_time) {
+        start_time = next_time;
+      }
+      if (OB_SUCC(ret)) {
+        ObString next_date_str(next_date->str_len_, next_date->str_value_);
+        if (OB_FAIL(ob_write_string(*allocator, next_date_str, next_time_expr))) {
+          LOG_WARN("fail to write string", KR(ret));
         }
       }
     }
-  }
-  if (OB_SUCC(ret)) {
-    refresh_info.refresh_dop_ = resolver.mv_refresh_dop_;
   }
   return ret;
 }
@@ -550,22 +684,66 @@ int ObMViewResolverHelper::resolve_materialized_view(const ParseNode &parse_tree
       ret = OB_NOT_SUPPORTED;
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "data version is less than 4.4.2, create materialized view with table AS OF PROCTIME() is");
     }
-    if (OB_SUCC(ret)) {
-      int64_t refresh_parallelism = 0;
-      if (OB_FAIL(resolver.resolve_hints(parse_tree.children_[ObCreateViewResolver::HINT_NODE],
-                                         *stmt, mv_ainfo->container_table_schema_))) {
-        LOG_WARN("resolve hints failed", K(ret));
-      } else if (tenant_data_version < DATA_VERSION_4_3_5_1) {
-        mv_ainfo->mv_refresh_info_.parallel_ = stmt->get_parallelism();
-      } else if (OB_FAIL(storage::ObMViewRefresher::calc_mv_refresh_parallelism(
-                     mv_ainfo->mv_refresh_info_.refresh_dop_, resolver.session_info_,
-                     refresh_parallelism))) {
-        LOG_WARN("fail to calculate refresh parallelism", KR(ret), "explicit_parallelism",
-                 mv_ainfo->mv_refresh_info_.refresh_dop_);
-      } else {
-        mv_ainfo->mv_refresh_info_.parallel_ = refresh_parallelism;
-      }
+  }
+  return ret;
+}
+
+int ObMViewResolverHelper::generate_hidden_column_comment(const std::pair<ObRawExpr*, int64_t> &dependency_info,
+                                                          const bool is_set_stmt,
+                                                          ObSchemaGetterGuard *schema_guard,
+                                                          ObSQLSessionInfo *session_info,
+                                                          char *buf,
+                                                          ObString &comment_string)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  ObRawExprPrinter expr_printer;
+  if (OB_ISNULL(buf) || OB_ISNULL(schema_guard) || OB_ISNULL(session_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(buf), K(schema_guard), K(session_info));
+  } else {
+    static constexpr char comment_prefix[] = "refresh dependent: ";
+    static constexpr int64_t prefix_len = sizeof(comment_prefix) - 1;
+    MEMCPY(buf, comment_prefix, prefix_len);
+    pos = prefix_len;
+  }
+  if (OB_FAIL(ret)) {
+  } else if (is_set_stmt && -1 == dependency_info.second) {
+    // it is a union all marker column
+    static constexpr char marker_comment[] = "union all branch marker";
+    static constexpr int64_t marker_len = sizeof(marker_comment) - 1;
+    if (OB_LIKELY(pos + marker_len <= MAX_COLUMN_COMMENT_CHAR_LENGTH)) {
+      MEMCPY(buf + pos, marker_comment, marker_len);
+      pos += marker_len;
     }
+  } else if (OB_ISNULL(dependency_info.first)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (OB_FALSE_IT(expr_printer.init(buf, MAX_COLUMN_COMMENT_CHAR_LENGTH, &pos,
+                                           schema_guard, TZ_INFO(session_info)))) {
+  } else if (OB_FAIL(expr_printer.do_print(const_cast<ObRawExpr*>(dependency_info.first),
+                                           T_FIELD_LIST_SCOPE))) {
+    if (OB_LIKELY(OB_SIZE_OVERFLOW == ret && pos > 0)) {
+      // comment may be truncated, just ignore it
+      LOG_WARN("select item expr is too long, comment may be truncated", K(ret), K(pos));
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to print select item expr", K(ret));
+    }
+  } else if (is_set_stmt
+             && OB_FAIL(common::databuff_printf(buf, MAX_COLUMN_COMMENT_CHAR_LENGTH, pos,
+                                                " in the %ld-th set child query",
+                                                dependency_info.second + 1))) {
+    if (OB_LIKELY(OB_SIZE_OVERFLOW == ret && pos > 0)) {
+      // comment may be truncated, just ignore it
+      LOG_WARN("set stmt branch index is too long, comment may be truncated", K(ret), K(pos));
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("failed to append set stmt branch index", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    comment_string.assign(buf, pos);
   }
   return ret;
 }
@@ -573,6 +751,7 @@ int ObMViewResolverHelper::resolve_materialized_view(const ParseNode &parse_tree
 int ObMViewResolverHelper::add_hidden_cols_for_mv(ObTableSchema &table_schema,
                                                   const uint64_t column_id,
                                                   const SelectItem &select_item,
+                                                  const ObString &comment_string,
                                                   ObCreateViewResolver &resolver)
 {
   int ret = OB_SUCCESS;
@@ -582,15 +761,6 @@ int ObMViewResolverHelper::add_hidden_cols_for_mv(ObTableSchema &table_schema,
     LOG_WARN("unexpected null", K(ret), KP(expr), KP(resolver.schema_checker_));
   } else {
     ObColumnSchemaV2 hidden_column;
-    char buf[MAX_COLUMN_COMMENT_CHAR_LENGTH];
-    int64_t pos = 0;
-    static constexpr char comment_prefix[] = "refresh dependent: ";
-    static constexpr int64_t prefix_len = sizeof(comment_prefix) - 1;
-    MEMCPY(buf, comment_prefix, prefix_len);
-    pos = prefix_len;
-    ObRawExprPrinter expr_printer(buf, MAX_COLUMN_COMMENT_CHAR_LENGTH, &pos,
-                                  resolver.schema_checker_->get_schema_guard(),
-                                  TZ_INFO(resolver.session_info_));
     hidden_column.reset();
     hidden_column.set_column_id(column_id);
     hidden_column.set_is_hidden(true);
@@ -604,23 +774,13 @@ int ObMViewResolverHelper::add_hidden_cols_for_mv(ObTableSchema &table_schema,
                                                        hidden_column,
                                                        true))) {
       LOG_WARN("failed to fill column meta infos for mv", K(ret), K(hidden_column));
-    } else if (OB_FAIL(expr_printer.do_print(const_cast<ObRawExpr*>(expr), T_FIELD_LIST_SCOPE))) {
-      if (OB_LIKELY(OB_SIZE_OVERFLOW == ret && pos > 0)) {
-        // comment may be truncated, just ignore it
-        LOG_WARN("select item expr is too long, comment may be truncated", K(ret), K(pos));
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("failed to print select item expr", K(ret));
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(hidden_column.set_comment(ObString(static_cast<ObString::obstr_size_t>(pos), buf)))) {
-      LOG_WARN("failed to set hidden column comment", K(ret), K(pos), K(buf));
+    } else if (OB_FAIL(hidden_column.set_comment(comment_string))) {
+      LOG_WARN("failed to set hidden column comment", K(ret), K(comment_string));
     } else if (OB_FAIL(table_schema.add_column(hidden_column))) {
       LOG_WARN("add column to table_schema failed", K(ret), K(hidden_column));
     } else {
       // for debug
-      LOG_TRACE("add hidden column for materialized view", K(hidden_column), K(table_schema));
+      LOG_TRACE("add hidden column for materialized view", KPC(expr), K(hidden_column), K(table_schema));
     }
   }
   return ret;

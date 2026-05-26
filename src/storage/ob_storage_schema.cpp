@@ -1703,8 +1703,7 @@ int ObStorageSchema::generate_column_array(
     STORAGE_LOG(WARN, "invalid schema", K(ret), K(input_schema));
   }
 
-  ObTableSchema::const_column_iterator iter = input_schema.column_begin();
-  ObColumnSchemaV2 *col = NULL;
+  const ObColumnSchemaV2 *col = NULL;
   ObStorageColumnSchema col_schema;
   if (FAILEDx(column_array_.reserve(input_schema.get_column_count()))) {
     STORAGE_LOG(WARN, "Fail to reserve column array", K(ret));
@@ -1713,7 +1712,8 @@ int ObStorageSchema::generate_column_array(
   int64_t col_cnt_in_sstable = 0;
   blocksstable::ObStorageDatum datum;
   ObSEArray<share::schema::ObSkipIndexAttrWithId, 16> tmp_skip_array;
-  for ( ; OB_SUCC(ret) && iter != input_schema.column_end(); iter++) {
+  ObNonRowkeyStoreColumnIterator iter(input_schema, true/*contain_rowkey*/);
+  while (OB_SUCC(ret) && OB_SUCC(iter.next()) && !iter.is_end()) {
     if (OB_ISNULL(col = *iter)) {
       ret = OB_ERR_UNEXPECTED;
       STORAGE_LOG(WARN, "The column is NULL", K(col));

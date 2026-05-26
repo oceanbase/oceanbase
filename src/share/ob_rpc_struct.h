@@ -14989,6 +14989,133 @@ public:
   int ret_;
 };
 
+struct ObRunMViewPendingTaskArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObRunMViewPendingTaskArg()
+    : tenant_id_(common::OB_INVALID_ID),
+      refresh_id_(common::OB_INVALID_ID),
+      mview_id_(common::OB_INVALID_ID),
+      target_data_sync_scn_(0),
+      refresh_method_(share::schema::ObMVRefreshMethod::MAX),
+      refresh_parallel_(0),
+      retry_count_(0),
+      is_consistent_refresh_(false)
+  {}
+  ObRunMViewPendingTaskArg(uint64_t tenant_id,
+                          int64_t refresh_id,
+                          uint64_t mview_id,
+                          uint64_t target_data_sync_scn,
+                          const share::schema::ObMVRefreshMethod refresh_method,
+                          const int64_t refresh_parallel,
+                          const int64_t retry_count,
+                          const bool is_consistent_refresh)
+    : tenant_id_(tenant_id),
+      refresh_id_(refresh_id),
+      mview_id_(mview_id),
+      target_data_sync_scn_(target_data_sync_scn),
+      refresh_method_(refresh_method),
+      refresh_parallel_(refresh_parallel),
+      retry_count_(retry_count),
+      is_consistent_refresh_(is_consistent_refresh)
+  {}
+  inline bool is_valid() const
+  {
+    return common::is_valid_tenant_id(tenant_id_)
+        && refresh_id_ != common::OB_INVALID_ID
+        && mview_id_ != common::OB_INVALID_ID;
+  }
+  TO_STRING_KV(K_(tenant_id), K_(refresh_id), K_(mview_id), K_(target_data_sync_scn),
+               K_(refresh_method), K_(refresh_parallel), K_(retry_count),
+               K_(is_consistent_refresh));
+  uint64_t tenant_id_;
+  int64_t refresh_id_;
+  uint64_t mview_id_;
+  uint64_t target_data_sync_scn_;
+  share::schema::ObMVRefreshMethod refresh_method_;
+  int64_t refresh_parallel_;
+  int64_t retry_count_;
+  bool is_consistent_refresh_;
+};
+
+struct ObRunMViewPendingTaskResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObRunMViewPendingTaskResult() : ret_(common::OB_SUCCESS) { msg_[0] = '\0'; }
+  TO_STRING_KV(K_(ret), K_(msg));
+  int ret_;
+  char msg_[common::OB_MAX_ERROR_MSG_LEN];
+};
+
+struct ObScheduleMViewRefreshArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObScheduleMViewRefreshArg()
+    : tenant_id_(common::OB_INVALID_ID),
+      run_user_id_(common::OB_INVALID_ID),
+      mview_id_(common::OB_INVALID_ID),
+      is_nested_(false),
+      refresh_method_(share::schema::ObMVRefreshMethod::MAX),
+      refresh_parallel_(0)
+  {}
+  inline bool is_valid() const
+  {
+    return common::is_valid_tenant_id(tenant_id_) && mview_id_ != common::OB_INVALID_ID;
+  }
+
+  TO_STRING_KV(K_(tenant_id), K_(run_user_id), K_(mview_id), K_(is_nested), K_(refresh_method), K_(refresh_parallel));
+  uint64_t tenant_id_;
+  uint64_t run_user_id_;
+  uint64_t mview_id_;
+  bool is_nested_;
+  share::schema::ObMVRefreshMethod refresh_method_;
+  int64_t refresh_parallel_;
+};
+
+struct ObScheduleMViewRefreshResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObScheduleMViewRefreshResult()
+    : refresh_id_(common::OB_INVALID_ID),
+      ret_(common::OB_SUCCESS)
+  {}
+  TO_STRING_KV(K_(refresh_id), K_(ret));
+  int64_t refresh_id_;
+  int ret_;
+};
+
+struct ObKillMViewRefreshArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObKillMViewRefreshArg()
+    : tenant_id_(common::OB_INVALID_ID),
+      refresh_id_(common::OB_INVALID_ID)
+  {}
+  inline bool is_valid() const
+  {
+    return common::is_valid_tenant_id(tenant_id_) && refresh_id_ > 0;
+  }
+  TO_STRING_KV(K_(tenant_id), K_(refresh_id));
+  uint64_t tenant_id_;
+  int64_t refresh_id_;
+};
+
+struct ObKillMViewRefreshResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObKillMViewRefreshResult()
+    : ret_(common::OB_SUCCESS)
+  {}
+  TO_STRING_KV(K_(ret));
+  int ret_;
+};
+
 enum class ObHTableDDLType : uint8_t
 {
   INVALID = 0,

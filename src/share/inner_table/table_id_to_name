@@ -438,6 +438,7 @@
 # 587: __all_java_policy_history
 # 587: __all_java_policy  # BASE_TABLE_NAME
 # 591: __all_audit_log_encryption_password
+# 604: __all_mview_refresh_pending_task
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
 # 10003: __tenant_virtual_table_index
@@ -1393,6 +1394,10 @@
 # 12599: __all_audit_log_encryption_password  # BASE_TABLE_NAME
 # 12601: __all_virtual_sandbox_process
 # 12607: __all_virtual_log_transport_stat
+# 12616: __all_virtual_mview_dep
+# 12616: __all_mview_dep  # BASE_TABLE_NAME
+# 12617: __all_virtual_mview_refresh_pending_task
+# 12617: __all_mview_refresh_pending_task  # BASE_TABLE_NAME
 # 15009: ALL_VIRTUAL_SQL_AUDIT
 # 15009: __all_virtual_sql_audit  # BASE_TABLE_NAME
 # 15010: ALL_VIRTUAL_PLAN_STAT
@@ -2163,6 +2168,8 @@
 # 15551: __all_java_policy  # BASE_TABLE_NAME
 # 15554: ALL_VIRTUAL_LOG_TRANSPORT_STAT
 # 15554: __all_virtual_log_transport_stat  # BASE_TABLE_NAME
+# 15557: ALL_VIRTUAL_MVIEW_REFRESH_PENDING_TASK_REAL_AGENT
+# 15557: __all_mview_refresh_pending_task  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA
@@ -2758,6 +2765,7 @@
 # 21729: V$OB_LS_LOG_REPLAY_STAT
 # 21730: GV$OB_LS_LOG_TRANSPORT_STAT
 # 21731: V$OB_LS_LOG_TRANSPORT_STAT
+# 21746: CDB_MVIEW_DEPS
 # 25001: DBA_SYNONYMS
 # 25002: DBA_OBJECTS
 # 25003: ALL_OBJECTS

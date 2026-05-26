@@ -322,5 +322,8 @@
   RPC_S(PR5 run_inspection, OB_RUN_INSPECTION, (obrpc::ObRunInspectionArg));
   RPC_AP(PR5 async_run_inspection, OB_ASYNC_RUN_INSPECTION, (obrpc::ObRunInspectionArg));
   RPC_S(PR5 get_inspection_status, OB_GET_INSPECTION_STATUS, (obrpc::ObGetInspectionStatusArg), obrpc::ObGetInspectionStatusResult);
+  RPC_AP(PR5 run_mview_pending_task, OB_RUN_MVIEW_PENDING_TASK, (obrpc::ObRunMViewPendingTaskArg), obrpc::ObRunMViewPendingTaskResult);
+  RPC_S(PR5 schedule_mview_refresh, OB_SCHEDULE_MVIEW_REFRESH, (obrpc::ObScheduleMViewRefreshArg), obrpc::ObScheduleMViewRefreshResult);
+  RPC_S(PR5 kill_mview_refresh, OB_KILL_MVIEW_REFRESH, (obrpc::ObKillMViewRefreshArg), obrpc::ObKillMViewRefreshResult);
   RPC_S(PR5 validate_backup_ls_task, OB_VALIDATE_BACKUP_LS_TASK, (ObBackupValidateLSArg));
   RPC_S(PR5 report_backup_validate_over, OB_VALIDATE_BACKUP_LS_TASK_RES, (ObBackupTaskRes));

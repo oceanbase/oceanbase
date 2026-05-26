@@ -2535,6 +2535,7 @@ public:
       const uint64_t tenant_data_version,
       const share::schema::ObMViewInfo &mview_info,
       const ObString &ddl_stmt_str,
+      const int64_t ddl_parallel_hint,
       ObDDLTaskRecord &task_record);
   //not check belong to the same table
   int check_same_partition(const bool is_oracle_mode, const ObPartition &l, const ObPartition &r,

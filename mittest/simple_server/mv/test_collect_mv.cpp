@@ -644,9 +644,9 @@ TEST_F(ObCollectMV, tablegroup)
   EQ(0, sql_proxy.write("alter table mv100 tablegroup=''", affected_rows));
   EQ(0, sql_proxy.write("alter table t100 tablegroup=''", affected_rows));
 
+  EQ(0, sql_proxy.write("drop materialized view mv100", affected_rows));
   EQ(0, sql_proxy.write("drop tablegroup tg100", affected_rows));
   EQ(0, sql_proxy.write("drop table t100", affected_rows));
-  EQ(0, sql_proxy.write("drop materialized view mv100", affected_rows));
 }
 
 TEST_F(ObCollectMV, new_ls)

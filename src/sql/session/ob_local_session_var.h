@@ -78,6 +78,11 @@ public:
   int get_different_vars_from_session(const ObBasicSessionInfo *session,
                                       common::ObIArray<const ObSessionSysVar*> &local_diff_vars,
                                       common::ObIArray<ObObj> &session_vals) const;
+  int apply_different_vars_to_session(ObBasicSessionInfo &session,
+                                      common::ObIAllocator *saved_vals_alloc,
+                                      common::ObIArray<ObSessionSysVar> *saved_old_values) const;
+  static int restore_saved_session_vars(ObBasicSessionInfo &session,
+                                        const common::ObIArray<ObSessionSysVar> &saved_old_values);
   int check_var_same_with_session(const ObBasicSessionInfo &session,
                                   const ObSessionSysVar *local_var,
                                   bool &is_same,

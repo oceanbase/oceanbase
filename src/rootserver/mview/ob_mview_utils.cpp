@@ -13,6 +13,7 @@
 
 #include "rootserver/mview/ob_mview_utils.h"
 #include "share/schema/ob_mview_info.h"
+#include "share/schema/ob_dependency_info.h"
 #include "share/ob_common_rpc_proxy.h"
 #include "storage/mview/ob_mview_refresh_helper.h"
 #include "sql/resolver/mv/ob_mv_provider.h"
@@ -22,6 +23,8 @@
 #include "deps/oblib/src/lib/utility/utility.h"
 #include "deps/oblib/src/common/object/ob_object.h"
 #include "rootserver/ob_tenant_event_def.h"
+#include "observer/omt/ob_tenant_timezone_mgr.h"
+#include "rootserver/ob_mlog_builder.h"
 
 namespace oceanbase
 {
@@ -214,19 +217,105 @@ int ObMViewUtils::submit_build_mlog_task(const uint64_t tenant_id,
   return ret;
 }
 
+int ObMViewUtils::add_missing_columns_to_mlog(const uint64_t tenant_id,
+                                              ObIArray<ObString> &missing_columns,
+                                              share::schema::ObSchemaGetterGuard &schema_guard,
+                                              const share::schema::ObTableSchema *base_table_schema)
+{
+  int ret = OB_SUCCESS;
+  const share::schema::ObTableSchema *mlog_schema = NULL;
+  const ObDatabaseSchema *database_schema = NULL;
+  bool is_oracle_mode = false;
+  int64_t ddl_rpc_timeout = 0;
+  ObTZMapWrap tz_map_wrap;
+  ObAlterTableArg alter_table_arg;
+  ObAlterTableRes alter_table_res;
+  if (OB_INVALID_TENANT_ID == tenant_id || OB_ISNULL(base_table_schema) ||
+      OB_UNLIKELY(!base_table_schema->has_mlog_table())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), KP(base_table_schema));
+  } else if (missing_columns.empty()) {
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, base_table_schema->get_mlog_tid(), mlog_schema))) {
+    LOG_WARN("failed to get mlog schema", KR(ret), K(tenant_id), K(base_table_schema->get_mlog_tid()));
+  } else if (OB_ISNULL(mlog_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("mlog schema is null", KR(ret), K(tenant_id), K(base_table_schema->get_mlog_tid()));
+  } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, base_table_schema->get_database_id(), database_schema))) {
+    LOG_WARN("failed to get database schema", KR(ret), K(tenant_id), K(base_table_schema->get_database_id()));
+  } else if (OB_ISNULL(database_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("database schema is null", KR(ret), K(tenant_id), KPC(base_table_schema));
+  } else if (OB_FAIL(base_table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
+    LOG_WARN("failed to check if oracle compat mode", K(ret));
+  } else {
+    AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
+    MLogColumnUtils mlog_column_utils;
+
+    alter_table_arg.exec_tenant_id_ = tenant_id;
+    alter_table_arg.table_id_ = mlog_schema->get_table_id();
+    alter_table_arg.is_alter_columns_ = true;
+    alter_table_arg.is_inner_ = true;
+    alter_table_arg.tz_info_wrap_.set_tz_info_offset(0);
+    alter_table_arg.nls_formats_[ObNLSFormatEnum::NLS_DATE] = ObTimeConverter::COMPAT_OLD_NLS_DATE_FORMAT;
+    alter_table_arg.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP] = ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_FORMAT;
+    alter_table_arg.nls_formats_[ObNLSFormatEnum::NLS_TIMESTAMP_TZ] = ObTimeConverter::COMPAT_OLD_NLS_TIMESTAMP_TZ_FORMAT;
+    alter_table_arg.compat_mode_ = is_oracle_mode ? lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL;
+    alter_table_schema.alter_type_ = OB_DDL_ALTER_TABLE;
+    alter_table_schema.set_tenant_id(tenant_id);
+    alter_table_schema.set_origin_database_name(database_schema->get_database_name_str());
+    alter_table_schema.set_origin_table_name(mlog_schema->get_table_name_str());
+    HEAP_VAR(ObRowDesc, row_desc) {
+      if (OB_FAIL(mlog_column_utils.add_base_table_columns(missing_columns, row_desc,
+                                                           *base_table_schema, true))) {
+        LOG_WARN("failed to add base table columns", KR(ret));
+      }
+      for (int i = 0; OB_SUCC(ret) && i < mlog_column_utils.mlog_table_column_array_.count(); ++i) {
+        const ObColumnSchemaV2 *column = mlog_column_utils.mlog_table_column_array_.at(i);
+        AlterColumnSchema alter_column_schema;
+        if (OB_ISNULL(column)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null", K(ret));
+        } else if (OB_FAIL(alter_column_schema.assign(*column))) {
+          LOG_WARN("failed to assign alter column schema", KR(ret), KPC(column));
+        } else {
+          alter_column_schema.alter_type_ = OB_DDL_ADD_COLUMN;
+          if (OB_FAIL(alter_table_schema.add_alter_column(alter_column_schema, true))) {
+            LOG_WARN("failed to add alter column schema", KR(ret), K(alter_table_schema));
+          }
+        }
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (OB_ISNULL(GCTX.rs_rpc_proxy_)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("invalid argument", KR(ret), KP(GCTX.rs_rpc_proxy_));
+    } else if (OB_FAIL(OTTZ_MGR.get_tenant_tz(tenant_id, tz_map_wrap))) {
+      LOG_WARN("failed to get tenant timezone map", KR(ret), K(tenant_id));
+    } else if (FALSE_IT(alter_table_arg.set_tz_info_map(tz_map_wrap.get_tz_map()))) {
+    } else if (OB_FAIL(share::ObDDLUtil::get_ddl_rpc_timeout(tenant_id, mlog_schema->get_table_id(), ddl_rpc_timeout))) {
+      LOG_WARN("failed to get ddl rpc timeout", KR(ret), K(tenant_id), KPC(mlog_schema));
+    } else if (OB_FAIL(GCTX.rs_rpc_proxy_->to(GCTX.self_addr())
+                           .timeout(ddl_rpc_timeout)
+                           .alter_table(alter_table_arg, alter_table_res))) {
+      LOG_WARN("failed to add missing columns to mlog", KR(ret), K(alter_table_arg));
+    }
+  }
+  LOG_INFO("add missing columns to mlog", KR(ret), K(tenant_id), K(missing_columns), KPC(base_table_schema), KPC(mlog_schema));
+  return ret;
+}
+
 int ObMViewUtils::generate_mview_complete_refresh_sql(
                   const uint64_t tenant_id,
                   const int64_t mview_table_id,
                   const int64_t container_table_id,
                   ObSchemaGetterGuard &schema_guard,
-                  const int64_t snapshot_version,
-                  const uint64_t mview_target_data_sync_scn,
+                  const share::SCN &refresh_scn,
+                  const share::SCN &target_data_scn,
                   const int64_t execution_id,
                   const int64_t task_id,
                   const int64_t parallelism,
                   const bool use_schema_version_hint_for_src_table,
                   const ObIArray<ObBasedSchemaObjectInfo> &based_schema_object_infos,
-                  const ObString &mview_select_sql,
                   ObSqlString &sql_string)
 {
   int ret = OB_SUCCESS;
@@ -241,13 +330,16 @@ int ObMViewUtils::generate_mview_complete_refresh_sql(
   ObArenaAllocator allocator("ObDDLMviewTmp");
   ObString database_name;
   ObString container_table_name;
+  ObString mview_select_sql;
   bool is_oracle_mode = false;
+  ObSqlString insert_columns;
+  const int64_t real_parallelism = ObDDLUtil::get_real_parallelism(parallelism, true/*is mv refresh*/);
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == mview_table_id ||
-                  OB_INVALID_ID == container_table_id || snapshot_version <= 0 ||
+                  OB_INVALID_ID == container_table_id || !refresh_scn.is_valid() ||
                   execution_id < 0 || task_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", KR(ret), K(tenant_id), K(mview_table_id), K(container_table_id),
-             K(snapshot_version), K(execution_id), K(task_id), K(based_schema_object_infos));
+             K(refresh_scn), K(execution_id), K(task_id), K(based_schema_object_infos));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, mview_table_id, mview_table_schema))) {
     LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(mview_table_id));
   } else if (OB_ISNULL(mview_table_schema)) {
@@ -285,67 +377,46 @@ int ObMViewUtils::generate_mview_complete_refresh_sql(
                       is_oracle_mode, src_table_schema_version_hint))) {
     LOG_WARN("failed to generated mview ddl schema hint", KR(ret));
   } else {
-    // generate mview complete refresh sql
-    const bool nested_consistent_refresh = mview_target_data_sync_scn == OB_INVALID_SCN_VAL ? false : true;
-    const int64_t real_parallelism = ObDDLUtil::get_real_parallelism(parallelism, true/*is mv refresh*/);
-    const ObString &select_sql_string = mview_table_schema->get_view_schema().get_expand_view_definition_for_mv_str().empty() ?
-      mview_table_schema->get_view_schema().get_view_definition_str() :
-      mview_table_schema->get_view_schema().get_expand_view_definition_for_mv_str();
-    std::string real_sql;
-    ObSqlString insert_columns;
-    if (nested_consistent_refresh) {
-      if (OB_UNLIKELY(mview_select_sql.empty())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("nested sync refresh with empty sql string", K(mview_select_sql), K(mview_table_id));
-      } else if (OB_FAIL(ObMViewRefreshHelper::replace_all_snapshot_zero(
-                         mview_select_sql, snapshot_version, real_sql, is_oracle_mode))) {
-        LOG_WARN("fail to replace snapshot", K(ret));
-      }
+    // ObSqlSchemaGuard with two parameters obtains table schema by using MTL_ID().
+    // On RS, the MV definition should be parsed only after the session's tenant is switched to the correct one.
+    lib::CompatModeGuard compat_mode_guard(is_oracle_mode ? lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL);
+    share::ObTenantSwitchGuard mtl_guard = share::_make_tenant_switch_guard();
+    if (OB_FAIL(mtl_guard.switch_to(tenant_id))) {
+      LOG_WARN("failed to switch mtl for mv complete refresh", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(sql::ObMVProvider::get_complete_refresh_mview_str(*mview_table_schema,
+                                                                         schema_guard,
+                                                                         &refresh_scn, // mv refresh scn
+                                                                         target_data_scn.is_valid() ? &target_data_scn : &refresh_scn, // table refresh scn
+                                                                         allocator,
+                                                                         mview_select_sql))) {
+      LOG_WARN("fail to generate mview select sql", K(ret), K(refresh_scn), K(target_data_scn));
     }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(generate_mview_insert_hint(
-                       insert_hint_str, real_parallelism, execution_id, task_id,
-                       true/*load_data_hint*/, true/*use_pdml_hint*/))) {
-      LOG_WARN("failed to generate mview insert hint", KR(ret));
-    } else if (OB_FAIL(extract_columns_from_schema(*container_table_schema, is_oracle_mode, insert_columns, allocator))) {
-      LOG_WARN("failed to extract columns from container table schema", KR(ret));
-    } else if (OB_FAIL(sql_string.assign("INSERT "))) {
-      LOG_WARN("failed to assign sql string", KR(ret));
-    } else if (OB_FAIL(sql_string.append(insert_hint_str.string()))) {
-      LOG_WARN("failed to append insert hint", KR(ret));
-    } else if (is_oracle_mode &&
-               OB_FAIL(sql_string.append_fmt(" INTO \"%.*s\".\"%.*s\" ",
-                       static_cast<int>(database_name.length()), database_name.ptr(),
-                       static_cast<int>(container_table_name.length()), container_table_name.ptr()))) {
-      LOG_WARN("failed to append insert hint", KR(ret), K(database_name), K(container_table_name));
-    } else if (!is_oracle_mode &&
-               OB_FAIL(sql_string.append_fmt(" INTO `%.*s`.`%.*s` ",
-                       static_cast<int>(database_name.length()), database_name.ptr(),
-                       static_cast<int>(container_table_name.length()), container_table_name.ptr()))) {
-      LOG_WARN("failed to append insert hint", KR(ret), K(database_name), K(container_table_name));
-    } else if (OB_FAIL(sql_string.append_fmt(" %.*s ",
-                       static_cast<int>(insert_columns.length()), insert_columns.ptr()))) {
-      LOG_WARN("failed to append select sql string", KR(ret));
-    } else if (OB_FAIL(sql_string.append_fmt(" SELECT /*+ %.*s */ * FROM ",
-                       static_cast<int>(src_table_schema_version_hint.length()), src_table_schema_version_hint.ptr()))) {
-      LOG_WARN("failed to append select sql string", KR(ret));
-    } else if (!nested_consistent_refresh &&
-                OB_FAIL(sql_string.append_fmt(" (%.*s) ",
-                        static_cast<int>(select_sql_string.length()), select_sql_string.ptr()))) {
-      LOG_WARN("failed to append select sql string", KR(ret));
-    } else if (nested_consistent_refresh &&
-               OB_FAIL(sql_string.append_fmt(" (%.*s) ",
-                       static_cast<int>(real_sql.length()), real_sql.c_str()))) {
-      LOG_WARN("failed to append select sql string", KR(ret));
-    } else if (nested_consistent_refresh) {
-      // nested consistent refresh, no need to append snapshot version
-    } else if (is_oracle_mode && OB_FAIL(sql_string.append_fmt(" as of scn %ld ;", snapshot_version))) {
-      LOG_WARN("failed to append snapshot version", KR(ret));
-    } else if (!is_oracle_mode && OB_FAIL(sql_string.append_fmt(" as of snapshot %ld ;", snapshot_version))) {
-      LOG_WARN("failed to append snapshot version", KR(ret));
-    }
-    LOG_INFO("prepare mview complete refresh sql", K(sql_string));
   }
+  // generate mview complete refresh sql
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(generate_mview_insert_hint(
+                     insert_hint_str, real_parallelism, execution_id, task_id,
+                     true/*load_data_hint*/, true/*use_pdml_hint*/))) {
+    LOG_WARN("failed to generate mview insert hint", KR(ret));
+  } else if (OB_FAIL(extract_columns_from_schema(*container_table_schema, is_oracle_mode, insert_columns, allocator))) {
+    LOG_WARN("failed to extract columns from container table schema", KR(ret));
+  } else if (OB_FAIL(sql_string.assign("INSERT "))) {
+    LOG_WARN("failed to assign sql string", KR(ret));
+  } else if (OB_FAIL(sql_string.append(insert_hint_str.string()))) {
+    LOG_WARN("failed to append insert hint", KR(ret));
+  } else if (OB_FAIL(sql_string.append_fmt(is_oracle_mode ? " INTO \"%.*s\".\"%.*s\" " : " INTO `%.*s`.`%.*s` ",
+                     static_cast<int>(database_name.length()), database_name.ptr(),
+                     static_cast<int>(container_table_name.length()), container_table_name.ptr()))) {
+    LOG_WARN("failed to append insert hint", KR(ret), K(database_name), K(container_table_name));
+  } else if (OB_FAIL(sql_string.append_fmt(" %.*s ",
+                     static_cast<int>(insert_columns.length()), insert_columns.ptr()))) {
+    LOG_WARN("failed to append select sql string", KR(ret));
+  } else if (OB_FAIL(sql_string.append_fmt(" SELECT /*+ %.*s */ * FROM (%.*s) ",
+                     static_cast<int>(src_table_schema_version_hint.length()), src_table_schema_version_hint.ptr(),
+                     static_cast<int>(mview_select_sql.length()), mview_select_sql.ptr()))) {
+    LOG_WARN("failed to append select sql string", KR(ret));
+  }
+  LOG_INFO("prepare mview complete refresh sql", K(sql_string));
   return ret;
 }
 
@@ -726,6 +797,50 @@ int ObMViewUtils::get_schema_object_from_dependency(
       default:
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid obj type", KR(ret), K(tenant_id), K(ref_obj_type));
+    }
+  }
+  return ret;
+}
+
+int ObMViewUtils::get_relevent_mviews(ObISQLClient &sql_client,
+                                      ObSchemaGetterGuard &schema_guard,
+                                      const uint64_t tenant_id,
+                                      const ObTableSchema *base_table_schema,
+                                      ObIArray<uint64_t> &relevent_mviews,
+                                      const uint64_t excluded_mview_id)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<ObDependencyInfo, 16> dependency_infos;
+  if (OB_ISNULL(base_table_schema)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("arg is null", KR(ret), K(base_table_schema));
+  } else {
+    uint64_t base_table_id = base_table_schema->get_table_id();
+    if (base_table_schema->mv_container_table() &&
+        OB_FAIL(ObMViewInfo::get_mview_id_from_container_id(
+            sql_client, tenant_id, base_table_id, base_table_id))) {
+      LOG_WARN("failed to get mview id from container id", KR(ret), K(tenant_id), K(base_table_id));
+    } else if (OB_FAIL(ObDependencyInfo::collect_dep_infos(
+                   tenant_id, base_table_id, sql_client, dependency_infos))) {
+      LOG_WARN("failed to get dependency infos", KR(ret), K(tenant_id), K(base_table_id));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < dependency_infos.count(); ++i) {
+        const ObDependencyInfo &dependency_info = dependency_infos.at(i);
+        const uint64_t dep_obj_id = dependency_info.get_dep_obj_id();
+        if (dep_obj_id == excluded_mview_id) {
+        } else if (ObObjectType::VIEW == dependency_info.get_dep_obj_type()) {
+          const ObTableSchema *mview_schema = nullptr;
+          if (OB_FAIL(schema_guard.get_table_schema(tenant_id, dep_obj_id, mview_schema))) {
+            LOG_WARN("failed to get mview schema", KR(ret), K(tenant_id), K(dep_obj_id));
+          } else if (OB_ISNULL(mview_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("mview schema is null", KR(ret), K(tenant_id), K(dep_obj_id));
+          } else if (!mview_schema->is_materialized_view()) {
+          } else if (OB_FAIL(relevent_mviews.push_back(dep_obj_id))) {
+            LOG_WARN("failed to push back mview id", KR(ret), K(dep_obj_id));
+          }
+        }
+      }
     }
   }
   return ret;

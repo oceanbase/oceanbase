@@ -317,6 +317,8 @@ void ObAlterMViewArg::reset()
   refresh_method_ = ObMVRefreshMethod::MAX;
   is_alter_refresh_dop_ = false;
   refresh_dop_ = 0;
+  is_alter_table_dop_ = false;
+  table_dop_ = 0;
   is_alter_refresh_start_ = false;
   start_time_.reset();
   is_alter_refresh_next_ = false;
@@ -338,6 +340,8 @@ int ObAlterMViewArg::assign(const ObAlterMViewArg &other)
     refresh_method_ = other.refresh_method_;
     is_alter_refresh_dop_ = other.is_alter_refresh_dop_;
     refresh_dop_ = other.refresh_dop_;
+    is_alter_table_dop_ = other.is_alter_table_dop_;
+    table_dop_ = other.table_dop_;
     is_alter_refresh_start_ = other.is_alter_refresh_start_;
     start_time_ = other.start_time_;
     is_alter_refresh_next_ = other.is_alter_refresh_next_;
@@ -363,7 +367,9 @@ OB_SERIALIZE_MEMBER(ObAlterMViewArg,
                     is_alter_refresh_next_,
                     next_time_expr_,
                     is_alter_nested_refresh_mode_,
-                    nested_refresh_mode_);
+                    nested_refresh_mode_,
+                    is_alter_table_dop_,
+                    table_dop_);
 
 bool ObAlterMLogArg::is_valid() const
 {

@@ -248,7 +248,7 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
         LOG_USER_ERROR(OB_OP_NOT_ALLOW, "alter table localiy and tablegroup at the same time");
       } else if (OB_FAIL(set_table_options())) {
         SQL_RESV_LOG(WARN, "failed to set table options.", K(ret));
-      } else if ((table_schema_->required_by_mview_refresh() || table_schema_->is_mlog_table())
+      } else if ((table_schema_->required_by_mv_refresh() || table_schema_->is_mlog_table())
           && !alter_table_stmt->get_alter_table_arg().is_alter_mlog_attributes_
           && OB_FAIL(ObResolverUtils::check_allowed_alter_operations_for_mlog(
               alter_table_stmt->get_tenant_id(),
@@ -871,7 +871,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
                                                            static_cast<int64_t>(action_node->type_))) {
         ret = OB_NOT_SUPPORTED;
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter external table option is");
-      } else if (OB_FAIL(ObAlterMviewUtils::check_action_node_for_mlog_master(
+      } else if (OB_FAIL(ObAlterMviewUtils::check_action_node_for_mv_base_table(
                      *table_schema_, action_node->type_))) {
         LOG_WARN("mlog master is not supported", KR(ret));
       } else {
@@ -1523,7 +1523,7 @@ int ObAlterTableResolver::resolve_column_options(const ParseNode &node,
       if (OB_ISNULL(column_node)) {
         ret = OB_ERR_UNEXPECTED;
         SQL_RESV_LOG(WARN, "invalid parse tree!", K(ret));
-      } else if (OB_FAIL(ObAlterMviewUtils::check_column_option_for_mlog_master(
+      } else if (OB_FAIL(ObAlterMviewUtils::check_column_option_for_mv_base_table(
                      *table_schema_, column_node->type_))) {
         LOG_WARN("mlog master is not supported", KR(ret));
       } else {
@@ -5146,7 +5146,7 @@ int ObAlterTableResolver::resolve_partition_options(const ParseNode &node)
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("can't re-partitioned a temporary table", K(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "Re-partition a temporary table");
-      } else if (OB_FAIL(ObAlterMviewUtils::check_partition_option_for_mlog_master(
+      } else if (OB_FAIL(ObAlterMviewUtils::check_partition_option_for_mv_base_table(
                      *table_schema_, partition_node->type_))) {
         LOG_WARN("mlog master is not supported", KR(ret));
       }

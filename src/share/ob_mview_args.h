@@ -253,6 +253,8 @@ public:
     refresh_method_(share::schema::ObMVRefreshMethod::MAX),
     is_alter_refresh_dop_(false),
     refresh_dop_(0),
+    is_alter_table_dop_(false),
+    table_dop_(0),
     is_alter_refresh_start_(false),
     start_time_(),
     is_alter_refresh_next_(false),
@@ -275,6 +277,8 @@ public:
                K_(refresh_method),
                K_(is_alter_refresh_dop),
                K_(refresh_dop),
+               K_(is_alter_table_dop),
+               K_(table_dop),
                K_(is_alter_refresh_start),
                K_(start_time),
                K_(is_alter_refresh_next),
@@ -306,6 +310,11 @@ public:
     is_alter_refresh_dop_ = true;
     refresh_dop_ = refresh_dop;
   }
+  void set_table_dop(int64_t table_dop)
+  {
+    is_alter_table_dop_ = true;
+    table_dop_ = table_dop;
+  }
   void set_start_time(int64_t start_time)
   {
     is_alter_refresh_start_ = true;
@@ -330,6 +339,8 @@ public:
   share::schema::ObMVRefreshMethod get_refresh_method() const { return refresh_method_; }
   bool is_alter_refresh_dop() const { return is_alter_refresh_dop_; }
   int64_t get_refresh_dop() const { return refresh_dop_; }
+  bool is_alter_table_dop() const { return is_alter_table_dop_; }
+  int64_t get_table_dop() const { return table_dop_; }
   bool is_alter_refresh_start() const { return is_alter_refresh_start_; }
   const common::ObObj &get_start_time() const { return start_time_; }
   bool is_alter_refresh_next() const { return is_alter_refresh_next_; }
@@ -346,6 +357,8 @@ private:
   share::schema::ObMVRefreshMethod refresh_method_;
   bool is_alter_refresh_dop_;
   int64_t refresh_dop_;
+  bool is_alter_table_dop_;
+  int64_t table_dop_;
   bool is_alter_refresh_start_;
   common::ObObj start_time_;
   bool is_alter_refresh_next_;

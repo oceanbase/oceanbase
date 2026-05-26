@@ -1,0 +1,3 @@
+ob_unittest(test_mview_pending_task_queue)
+ob_unittest(test_mview_pending_task_manager)
+ob_unittest(test_mview_pending_task_table_operator)
