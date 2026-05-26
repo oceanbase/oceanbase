@@ -1489,8 +1489,6 @@ int ObUserTenantBackupValidateJobMgr::persist_set_task_()
     LOG_WARN("[BACKUP_VALIDATE]failed to create complement piece map", KR(ret));
   } else if (OB_FAIL(check_dest_validity_())) {
     LOG_WARN("[BACKUP_VALIDATE]failed to get backup dest id", KR(ret));
-  } else if (OB_FAIL(get_need_validate_infos_(*sql_proxy_, set_list, piece_list, complement_piece_map))) {
-    LOG_WARN("[BACKUP_VALIDATE]failed to get need validate backup infos", KR(ret), KPC(job_attr_));
   } else if (OB_FAIL(trans.start(sql_proxy_, gen_meta_tenant_id(job_attr_->tenant_id_)))) {
     LOG_WARN("[BACKUP_VALIDATE]failed to start trans", KR(ret), K_(tenant_id));
   } else if (OB_FAIL(ObBackupValidateJobOperator::get_job(trans, true/*need_lock*/,
@@ -1499,6 +1497,8 @@ int ObUserTenantBackupValidateJobMgr::persist_set_task_()
   } else if (lock_job_attr.status_.status_ != job_attr_->status_.status_) {
     ret = OB_STATE_NOT_MATCH;
     LOG_WARN("[BACKUP_VALIDATE]job status changed, skip persist_set_task", KR(ret), K(lock_job_attr), K(job_attr_));
+  } else if (OB_FAIL(get_need_validate_infos_(trans, set_list, piece_list, complement_piece_map))) {
+    LOG_WARN("[BACKUP_VALIDATE]failed to get need validate backup infos", KR(ret), KPC(job_attr_));
   } else if (OB_FAIL(inner_persist_set_task_(trans, set_list, piece_list, complement_piece_map))) {
     LOG_WARN("[BACKUP_VALIDATE]failed to generate set task", KR(ret), KPC(job_attr_));
   }
