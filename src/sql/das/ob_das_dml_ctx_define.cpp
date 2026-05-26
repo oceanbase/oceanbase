@@ -38,7 +38,8 @@ OB_DEF_SERIALIZE(ObDASDMLBaseRtDef)
     sql_mode_,
     prelock_,
     tenant_schema_version_,
-    is_for_foreign_key_check_);
+    is_for_foreign_key_check_,
+    is_fk_skip_parent_pure_lock_);
   return ret;
 }
 
@@ -50,7 +51,8 @@ OB_DEF_DESERIALIZE(ObDASDMLBaseRtDef)
     sql_mode_,
     prelock_,
     tenant_schema_version_,
-    is_for_foreign_key_check_);
+    is_for_foreign_key_check_,
+    is_fk_skip_parent_pure_lock_);
   if (OB_SUCC(ret)) {
     (void)ObSQLUtils::adjust_time_by_ntp_offset(timeout_ts_);
   }
@@ -65,7 +67,8 @@ OB_DEF_SERIALIZE_SIZE(ObDASDMLBaseRtDef)
     sql_mode_,
     prelock_,
     tenant_schema_version_,
-    is_for_foreign_key_check_);
+    is_for_foreign_key_check_,
+    is_fk_skip_parent_pure_lock_);
   return len;
 }
 

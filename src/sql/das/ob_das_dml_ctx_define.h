@@ -131,7 +131,8 @@ public:
                        K_(tenant_schema_version),
                        K_(is_for_foreign_key_check),
                        K_(affected_rows),
-                       K_(is_immediate_row_conflict_check));
+                       K_(is_immediate_row_conflict_check),
+                       K_(is_fk_skip_parent_pure_lock));
   int64_t timeout_ts_;
   ObSQLMode sql_mode_;
   bool prelock_;
@@ -141,6 +142,7 @@ public:
   const DASDMLCtDefArray *related_ctdefs_;
   DASDMLRtDefArray *related_rtdefs_;
   bool is_immediate_row_conflict_check_;
+  bool is_fk_skip_parent_pure_lock_;
 protected:
   ObDASDMLBaseRtDef(ObDASOpType op_type)
     : ObDASBaseRtDef(op_type),
@@ -152,7 +154,8 @@ protected:
       affected_rows_(0),
       related_ctdefs_(nullptr),
       related_rtdefs_(nullptr),
-      is_immediate_row_conflict_check_(true)
+      is_immediate_row_conflict_check_(true),
+      is_fk_skip_parent_pure_lock_(false)
   {}
 };
 
