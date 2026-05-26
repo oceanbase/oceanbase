@@ -177,6 +177,8 @@ public:
 
   void do_print_leak_slice_test();
 
+  void do_hot_cache_stale_running_test();
+
 private:
   void insert_tx_data_();
   void insert_abort_tx_data_();
@@ -759,6 +761,101 @@ void TestTxDataTable::do_print_leak_slice_test()
   slice_allocator.destroy();
 }
 
+// Regression test for the OB_ERR_UNEXPECTED(-4016) "read a running state tx
+// data from tx data table" issue caused by stale RUNNING snapshots being
+// pinned in ObTxDataHashMap's per-bucket hot_cache_val_.
+//
+// Reproduction (without the fix):
+//   1. Insert a RUNNING+undo snapshot A for tx_id X (simulates
+//      replay_undo_action_to_tx_table_ during ROLLBACK TO SAVEPOINT).
+//   2. Trigger a get(X) so the bucket's hot_cache_val_ is populated to A.
+//   3. Insert a COMMIT snapshot B for the same tx_id (simulates tx_end_'s
+//      insert_into_tx_table after commit). B is head-inserted into the list;
+//      hot_cache_val_ is NOT invalidated and still points at A.
+//   4. Issue another get(X). The fast-path hits hot_cache_val_=A and
+//      returns the stale RUNNING node, bypassing the COMMIT terminal at the
+//      list head.
+//
+// With the fix (do not cache RUNNING nodes in hot_cache_val_), step 2 leaves
+// hot_cache_val_ as nullptr, and step 4 walks the list and finds B (COMMIT).
+void TestTxDataTable::do_hot_cache_stale_running_test()
+{
+  ASSERT_EQ(OB_SUCCESS, tx_data_table_.init(ls_));
+  set_freezer_();
+
+  ObTxDataMemtableMgr *memtable_mgr = tx_data_table_.get_memtable_mgr_();
+  init_memtable_mgr_(memtable_mgr);
+
+  insert_start_scn.convert_for_logservice(ObTimeUtil::current_time_ns());
+  const transaction::ObTransID target_tx_id(123456789);
+
+  // Step 1: insert RUNNING + undo snapshot A
+  {
+    ObTxDataGuard guard;
+    ObTxData *tx_data = nullptr;
+    ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(guard, false));
+    ASSERT_NE(nullptr, tx_data = guard.tx_data());
+    ASSERT_EQ(OB_SUCCESS, tx_data->init_tx_op());
+
+    tx_data->tx_id_ = target_tx_id;
+    tx_data->start_scn_ = insert_start_scn;
+    tx_data->commit_version_ = share::SCN::invalid_scn();
+    tx_data->end_scn_ = share::SCN::plus(insert_start_scn, 1);
+    transaction::ObUndoAction undo_action(ObTxSEQ(100, 0), ObTxSEQ(10, 0));
+    ASSERT_EQ(OB_SUCCESS, tx_data->add_undo_action(&tx_table_, undo_action));
+    tx_data->state_ = ObTxData::RUNNING;
+
+    ASSERT_EQ(OB_SUCCESS, tx_data_table_.insert(tx_data));
+  }
+
+  // Step 2: drive a get() against the active memtable so the bucket's
+  // hot_cache_val_ would be populated to A (only happens without the fix).
+  ObTxDataMemtable *active_memtable = nullptr;
+  {
+    ObTableHandleV2 handle;
+    ASSERT_EQ(OB_SUCCESS, memtable_mgr->get_active_memtable(handle));
+    ASSERT_EQ(OB_SUCCESS, handle.get_tx_data_memtable(active_memtable));
+    ASSERT_NE(nullptr, active_memtable);
+
+    ObTxDataGuard guard;
+    ASSERT_EQ(OB_SUCCESS, active_memtable->get_tx_data(target_tx_id, guard));
+    ASSERT_NE(nullptr, guard.tx_data());
+    ASSERT_EQ(ObTxData::RUNNING, guard.tx_data()->state_);
+  }
+
+  // Step 3: insert COMMIT snapshot B for the same tx_id. After this insert,
+  // the bucket's linked list is [B (COMMIT), A (RUNNING)] (head-inserted).
+  const share::SCN commit_version = share::SCN::plus(insert_start_scn, 100);
+  {
+    ObTxDataGuard guard;
+    ObTxData *tx_data = nullptr;
+    ASSERT_EQ(OB_SUCCESS, tx_data_table_.alloc_tx_data(guard, false));
+    ASSERT_NE(nullptr, tx_data = guard.tx_data());
+
+    tx_data->tx_id_ = target_tx_id;
+    tx_data->start_scn_ = insert_start_scn;
+    tx_data->commit_version_ = commit_version;
+    tx_data->end_scn_ = share::SCN::plus(insert_start_scn, 50);
+    tx_data->state_ = ObTxData::COMMIT;
+
+    ASSERT_EQ(OB_SUCCESS, tx_data_table_.insert(tx_data));
+  }
+
+  // Step 4: get(X) must return the COMMIT terminal at the list head, not
+  // the stale RUNNING node previously cached in hot_cache_val_.
+  {
+    ObTxDataGuard guard;
+    ASSERT_EQ(OB_SUCCESS, active_memtable->get_tx_data(target_tx_id, guard));
+    ASSERT_NE(nullptr, guard.tx_data());
+    ASSERT_EQ(ObTxData::COMMIT, guard.tx_data()->state_)
+        << "expected COMMIT terminal, but got state=" << guard.tx_data()->state_
+        << " (hot_cache_val_ likely returned a stale RUNNING snapshot)";
+    ASSERT_EQ(commit_version, guard.tx_data()->commit_version_);
+  }
+
+  memtable_mgr->offline();
+}
+
 TEST_F(TestTxDataTable, basic_test)
 {
   tx_data_num = const_data_num;
@@ -772,6 +869,8 @@ TEST_F(TestTxDataTable, undo_status_test) { do_undo_status_test(); }
 TEST_F(TestTxDataTable, serialize_test) { do_tx_data_serialize_test(); }
 
 TEST_F(TestTxDataTable, split_range_test) { do_tx_data_serialize_test(); }
+
+TEST_F(TestTxDataTable, hot_cache_stale_running_test) { do_hot_cache_stale_running_test(); }
 
 // TEST_F(TestTxDataTable, print_leak_slice) { do_print_leak_slice_test(); }
 
