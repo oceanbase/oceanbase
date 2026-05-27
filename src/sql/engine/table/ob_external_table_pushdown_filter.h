@@ -142,7 +142,8 @@ public:
   };
 
   ObExternalTablePushdownFilter() : is_eager_column_(allocator_), is_dup_project_(allocator_),
-    eager_columns_(), lazy_columns_(), skip_filter_executor_(), skipping_filter_nodes_(),
+    eager_columns_(), lazy_columns_(), meta_filter_col_ids_(),
+    skip_filter_executor_(), skipping_filter_nodes_(),
     file_filter_col_ids_(allocator_), file_filter_col_metas_(allocator_),
     pd_storage_filters_(nullptr), ext_tbl_filter_pd_level_(0),
     column_ids_(nullptr), filter_enabled_(false), bloom_filter_enabled_(false) {}
@@ -242,6 +243,7 @@ protected:
 
   ObArray<uint64_t> eager_columns_;
   ObArray<uint64_t> lazy_columns_;
+  ObArray<uint64_t> meta_filter_col_ids_;
 private:
   ObArenaAllocator allocator_;
   blocksstable::ObSkipIndexFilterExecutor skip_filter_executor_;

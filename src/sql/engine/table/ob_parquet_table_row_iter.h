@@ -595,6 +595,7 @@ private:
   int init_filter_evaluated_datums(ObPushdownFilterExecutor *curr_filter);
   int ensure_filter_eval_inited_once(ObPushdownFilterExecutor *root_filter);
   int calc_file_meta_column(const int64_t read_count, ObEvalCtx &eval_ctx);
+  int calc_meta_column_convert(const int64_t read_count, ObEvalCtx &eval_ctx);
   static bool is_contain_field_id(std::shared_ptr<parquet::FileMetaData> file_meta);
   // 根据字典编码检查结果，动态更新 load_funcs_
   int update_load_funcs_for_dict_optimization();

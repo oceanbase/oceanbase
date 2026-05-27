@@ -121,10 +121,14 @@ int ObParquetTableRowIterator::init(const storage::ObTableScanParam *scan_param)
     OZ(parquet_page_mgr_.register_io_metrics(reader_profile_, PARQUET_PAGE_MGR_IO_METRICS_LABEL));
   }
 
+  bool filter_expr_rels_built = false;
   if (OB_SUCC(ret)) {
     if (!scan_param->ext_enable_late_materialization_
         || nullptr == scan_param->pd_storage_filters_) {
       mode_ = FilterCalcMode::FORCE_LAZY_CALC;
+    } else if (OB_FAIL(build_filter_expr_rels(scan_param->pd_storage_filters_, this))) {
+      LOG_WARN("failed to build filter expr rels", K(ret));
+    } else if (FALSE_IT(filter_expr_rels_built = true)) {
     } else if (OB_FAIL(ObExternalTablePushdownFilter::gather_eager_exprs(mapping_column_ids_,
                                                               scan_param->pd_storage_filters_))) {
       if (OB_SEARCH_NOT_FOUND != ret) {
@@ -133,6 +137,9 @@ int ObParquetTableRowIterator::init(const storage::ObTableScanParam *scan_param)
         ret = OB_SUCCESS;
         mode_ = FilterCalcMode::FORCE_LAZY_CALC;
       }
+    } else if (0 == eager_columns_.count()) {
+      // filter references only meta columns (partition, file URL), no file columns to eagerly read
+      mode_ = FilterCalcMode::FORCE_LAZY_CALC;
     } else if (FALSE_IT(lib::ob_sort(eager_columns_.begin(), eager_columns_.end()))) {
     } else if (OB_FAIL(ObExternalTablePushdownFilter::generate_lazy_exprs(mapping_column_ids_,
                                                                           column_exprs_,
@@ -175,7 +182,8 @@ int ObParquetTableRowIterator::init(const storage::ObTableScanParam *scan_param)
 
     if (OB_SUCC(ret)) {
       if (scan_param_->ext_enable_late_materialization_
-          && scan_param->pd_storage_filters_ != nullptr) {
+          && scan_param->pd_storage_filters_ != nullptr
+          && !filter_expr_rels_built) {
         // build filter expr rels for late materialization
         OZ(build_filter_expr_rels(scan_param->pd_storage_filters_, this));
       }
@@ -3001,7 +3009,7 @@ int ObParquetTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
     if (OB_ITER_END != ret) {
       LOG_WARN("failed to read next batch", K(ret));
     }
-  } else if (OB_FAIL(calc_file_meta_column(read_count, eval_ctx))) {
+  } else if (!has_eager_columns() && OB_FAIL(calc_file_meta_column(read_count, eval_ctx))) {
     LOG_WARN("failed to calc file meta column", K(ret));
   } else if (OB_FAIL(calc_exprs_for_rowid(read_count, state_))) {
     LOG_WARN("failed to calc rowid", K(ret));
@@ -5138,6 +5146,35 @@ int ObParquetTableRowIterator::calc_file_meta_column(const int64_t read_count,
   return ret;
 }
 
+int ObParquetTableRowIterator::calc_meta_column_convert(const int64_t read_count,
+                                                        ObEvalCtx &eval_ctx)
+{
+  int ret = OB_SUCCESS;
+  FilterExprRel rel;
+  for (int64_t i = 0; OB_SUCC(ret) && i < meta_filter_col_ids_.count(); ++i) {
+    int64_t col_id = static_cast<int64_t>(meta_filter_col_ids_.at(i));
+    if (OB_FAIL(filter_expr_rels_.get_refactored(col_id, rel))) {
+      LOG_WARN("fail to get filter expr rel", K(ret), K(col_id));
+    } else if (OB_ISNULL(rel.column_conv_expr_) || OB_ISNULL(rel.column_expr_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null expr in meta filter rel", K(ret), K(col_id));
+    } else {
+      ObExpr *conv_expr = const_cast<ObExpr *>(rel.column_conv_expr_);
+      ObExpr *col_expr = const_cast<ObExpr *>(rel.column_expr_);
+      if (!conv_expr->get_eval_info(eval_ctx).is_evaluated(eval_ctx)) {
+        OZ(conv_expr->init_vector_default(eval_ctx, read_count));
+        OZ(conv_expr->eval_vector(eval_ctx, *bit_vector_cache_, read_count, true));
+        conv_expr->set_evaluated_projected(eval_ctx);
+      }
+      if (OB_SUCC(ret)) {
+        OZ(col_expr->get_vector_header(eval_ctx).assign(conv_expr->get_vector_header(eval_ctx)));
+        col_expr->set_evaluated_projected(eval_ctx);
+      }
+    }
+  }
+  return ret;
+}
+
 int ObParquetTableRowIterator::update_load_funcs_for_dict_optimization()
 {
   int ret = OB_SUCCESS;
@@ -5332,6 +5369,12 @@ int ObParquetTableRowIterator::read_batch(const int64_t actual_capacity,
       LOG_WARN("failed to apply dict code filters", K(ret));
     } else if (OB_FAIL(calc_eager_column_convert(eager_read_total))) {
       LOG_WARN("failed to calc eager column convert", K(ret));
+    } else if (OB_FAIL(calc_file_meta_column(eager_read_total, eval_ctx))) {
+      LOG_WARN("failed to calc eager file meta column", K(ret));
+    } else if (OB_FAIL(calc_meta_column_convert(eager_read_total, eval_ctx))) {
+      LOG_WARN("failed to calc meta column convert", K(ret));
+    } else if (OB_FAIL(calc_exprs_for_rowid(eager_read_total, state_, false /* update_state */))) {
+      LOG_WARN("failed to calc eager rowid", K(ret));
     } else if (OB_FAIL(ensure_filter_eval_inited_once(filter))) {
       LOG_WARN("failed to init eager filter evaluated datums once", K(ret));
     } else if (OB_FAIL(calc_filters(eager_read_total, filter, nullptr))) {

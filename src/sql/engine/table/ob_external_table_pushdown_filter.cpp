@@ -741,6 +741,8 @@ int ObExternalTablePushdownFilter::build_filter_expr_rel(
           // update eager column flag
           is_eager_column_.at(file_col_expr_index) = true;
           is_dup_project_.at(file_col_expr_index) = row_iter->column_sel_mask_.at(index);
+        } else if (OB_FAIL(meta_filter_col_ids_.push_back(col_id))) {
+          LOG_WARN("fail to push back meta filter col id", K(ret), K(col_id));
         }
       }
     }
@@ -819,8 +821,17 @@ int ObExternalTablePushdownFilter::gather_eager_exprs(
           }
         }
         if (!is_matched) {
-          ret = OB_SEARCH_NOT_FOUND;
-          LOG_WARN("get lazy filter", K(ret), K(column_ids.at(i)), K(mapping_col_ids), K(eager_columns_));
+          FilterExprRel *filter_expr_rel = filter_expr_rels_.get(column_ids.at(i));
+          if (OB_NOT_NULL(filter_expr_rel) && filter_expr_rel->is_file_meta_column_) {
+            // Meta columns are prepared outside normal parquet file-column readers.
+          } else {
+            ret = OB_SEARCH_NOT_FOUND;
+            LOG_WARN("get lazy filter",
+                     K(ret),
+                     K(column_ids.at(i)),
+                     K(mapping_col_ids),
+                     K(eager_columns_));
+          }
         }
       }
     } else if (root_filter->is_logic_op_node()) {
