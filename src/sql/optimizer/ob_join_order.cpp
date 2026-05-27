@@ -13502,6 +13502,19 @@ int ObJoinOrder::generate_subquery_paths(PathHelper &helper)
     log_plan->set_need_accurate_cardinality(get_plan()->get_need_accurate_cardinality() ||
                                             parent_stmt->has_multi_base_tables());
     log_plan->set_nonrecursive_plan_for_fake_cte(get_plan()->get_nonrecursive_plan_for_fake_cte());
+    if (parent_stmt->is_select_stmt()) {
+      const TableItem *view_table = parent_stmt->get_table_item_by_id(table_id_);
+      if (OB_ISNULL(view_table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(view_table), K(ret));
+      } else if (view_table->is_generated_table()) {
+        // e.g. `select * from (select /*+no_merge*/ * from t1) v where rownum <= 1 FOR UPDATE;`
+        // Suppress generating `FOR_UPDATE` op for the subquery because
+        // the `FOR_UPDATE` op should be placed on top of the outer stmt rather than the inner one
+        // or else all the rows of t1 would be locked instead of the first row
+        log_plan->set_for_update_suppressed(true);
+      }
+    }
     if (parent_stmt->is_insert_stmt()) {
       log_plan->set_insert_stmt(static_cast<const ObInsertStmt*>(parent_stmt));
     }

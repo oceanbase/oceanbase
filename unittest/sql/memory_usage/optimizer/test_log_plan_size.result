@@ -1,6 +1,6 @@
 | class | sizeof(class) |
 | --- | --- |
-| ObLogPlan | 5392 |
+| ObLogPlan | 5440 |
 | ObLogicalOperator | 1032 |
 | ObLogGroupBy | 1640 |
 | ObLogSort | 1272 |
