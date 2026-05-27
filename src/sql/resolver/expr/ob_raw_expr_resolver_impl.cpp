@@ -3954,6 +3954,7 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
             ExternalParamInfo param_info(expr, tmp, 1); // use sub_program_expr to replace param
             OX (ctx_.external_param_info_->params_.pop_back());
             OZ (ctx_.external_param_info_->push_back(param_info));
+            OX (expr = tmp);
           }
         }
       }
