@@ -735,7 +735,7 @@ int ObMallocAllocator::recycle_tenant_allocator(uint64_t tenant_id)
         char first_bt[MAX_BACKTRACE_LENGTH] = {'\0'};
         ctx_allocator->do_cleanup();
         bool has_unfree = ctx_allocator->check_has_unfree(first_label, first_bt);
-        if (has_unfree) {
+        if (has_unfree && ctx_allocator->get_hold() > 0) {
           if (ObCtxIds::GLIBC == ctx_id
               && 0 == strncmp("Pl", first_label, 2)
               && pl_leaked_times_++ < 10) {
