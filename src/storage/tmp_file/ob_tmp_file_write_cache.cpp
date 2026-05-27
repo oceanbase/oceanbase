@@ -491,11 +491,13 @@ int ObTmpFileWriteCache::expand_()
     } else {
       uint32_t index = pages_.size();
       ObDList<PageNode> tmp_list;
-      for (int32_t i = 0; i < BLOCK_PAGE_NUMS; ++i, ++index) {
+      for (int32_t i = 0; i < BLOCK_PAGE_NUMS && OB_SUCC(ret); ++i, ++index) {
         void *page_buf = nullptr;
         ObTmpFilePage *page = nullptr;
         int64_t buffer_offset = i * ObTmpFileGlobal::PAGE_SIZE;
         if (OB_ISNULL(page_buf = page_allocator_.alloc(sizeof(ObTmpFilePage)))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocate memory for page", KR(ret), K(i), K(pages_.size()));
         } else if (FALSE_IT(page = new (page_buf) ObTmpFilePage(buffer + buffer_offset, index))) {
         } else if (OB_FAIL(pages_.push_back(page))) {
           LOG_WARN("fail to push back page", KR(ret), K(i), K(pages_.size()));
@@ -511,7 +513,7 @@ int ObTmpFileWriteCache::expand_()
         if (OB_NOT_NULL(buffer)) {
           ob_free(buffer);
         }
-        for (int32_t i = pages_.size() - 1; i > old_size; --i) {
+        for (int32_t i = pages_.size() - 1; i >= old_size; --i) {
           page_allocator_.free(pages_.get_ptr(i));
           pages_.pop_back();
         }
