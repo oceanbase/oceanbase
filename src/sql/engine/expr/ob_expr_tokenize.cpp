@@ -383,6 +383,8 @@ int ObExprTokenize::parse_parser_properties(const ObExpr &expr,
     bool is_null = false;
     if (OB_FAIL(ObJsonExprHelper::get_json_doc(expr, ctx, mm_alloc, 2, base, is_null))) {
       LOG_WARN("Fail to get json doc", K(ret));
+    } else if (is_null) {
+      // NULL dict arg: treat as no properties, use defaults
     } else {
       if (ObJsonNodeType::J_ARRAY != base->json_type()) {
         ret = OB_INVALID_ARGUMENT;
