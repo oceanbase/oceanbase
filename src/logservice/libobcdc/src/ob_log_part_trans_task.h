@@ -242,6 +242,7 @@ public:
   virtual uint64_t get_table_id() const = 0;
   virtual blocksstable::ObDmlRowFlag get_dml_flag() const  = 0;
   virtual const transaction::ObTxSEQ &get_seq_no() const = 0;
+  virtual int64_t get_update_split_trace_id() const { return 0; }
 
 public:
   TO_STRING_KV(
@@ -449,6 +450,10 @@ public:
   uint64_t get_table_id() const { return table_id_; }
   blocksstable::ObDmlRowFlag get_dml_flag() const { return dml_flag_; }
   const transaction::ObTxSEQ &get_seq_no() const { return seq_no_; }
+  int64_t get_update_split_trace_id() const override
+  {
+    return memtable::ObMemtableMutatorRow::get_update_split_trace_id();
+  }
 
 public:
   TO_STRING_KV(
@@ -569,6 +574,9 @@ public:
   ObLogEntryTask &get_redo_log_entry_task() { return log_entry_task_; }
 
   const transaction::ObTxSEQ &get_row_seq_no() const { return row_.get_seq_no(); }
+
+  int64_t get_update_split_trace_id() const { return row_.get_update_split_trace_id(); }
+  bool has_update_split_trace_id() const { return row_.get_update_split_trace_id() > 0; }
 
   bool is_callback() const { return 1 == is_callback_; }
   void mark_callback() { is_callback_ = 1; }

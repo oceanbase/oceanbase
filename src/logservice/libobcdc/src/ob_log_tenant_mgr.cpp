@@ -289,6 +289,7 @@ int ObLogTenantMgr::do_add_tenant_(const uint64_t tenant_id,
   IObStoreService *store_service = TCTX.store_service_;
   void *column_family_handle = NULL;
   void *lob_storage_cf_handle = nullptr;
+  void *merge_cf_handle = nullptr;
   const int64_t start_tstamp_usec = start_tstamp_ns / NS_CONVERSION;
   int64_t tenant_start_serve_ts_ns = start_tstamp_ns;
   bool use_add_tenant_start_ddl_commit_version = false;
@@ -348,10 +349,17 @@ int ObLogTenantMgr::do_add_tenant_(const uint64_t tenant_id,
       if (OB_IN_STOP_STATE != ret) {
         LOG_ERROR("create_column_family fail", KR(ret), K(tenant_id), K(tenant_name), K(lob_storage_cf_handle));
       }
+    } else if (OB_FAIL(store_service->create_column_family(
+        std::to_string(tenant_id) + ":" + std::string(tenant_name) + ":merge",
+        merge_cf_handle))) {
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("create_column_family fail", KR(ret), K(tenant_id), K(tenant_name), K(merge_cf_handle));
+      }
     }
     // init tenant
     else if (OB_FAIL(tenant->init(tenant_id, tenant_name, tenant_start_serve_ts_ns, start_seq,
-            tenant_start_schema_version, tenant_checkpoint, column_family_handle, lob_storage_cf_handle, *this))) {
+            tenant_start_schema_version, tenant_checkpoint,
+            column_family_handle, lob_storage_cf_handle, merge_cf_handle, *this))) {
       LOG_ERROR("tenant init fail", KR(ret), K(tenant_id), K(tenant_name), K(start_tstamp_ns), K(start_seq), K(tenant_checkpoint),
           K(tenant_start_schema_version), K(tenant_start_serve_ts_ns), K(use_add_tenant_start_ddl_commit_version));
     }

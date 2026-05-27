@@ -342,6 +342,9 @@ private:
   int convert_upd_assign_infos(bool is_heap_table,
                                const IndexDMLInfo &index_dml_info,
                                ColContentFixedArray &assign_infos);
+  int mark_key_columns_for_update(ObLogDelUpd &op,
+                                  const IndexDMLInfo &index_dml_info,
+                                  ColContentFixedArray &assign_infos);
   int convert_check_constraint(ObLogDelUpd &log_op,
                                uint64_t ref_table_id,
                                ObDMLBaseCtDef &dml_base_ctdef,

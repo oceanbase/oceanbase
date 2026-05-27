@@ -28,6 +28,8 @@ namespace oceanbase
 namespace libobcdc
 {
 
+class ObCDCUpdateSplitMergeCache;
+
 class IObLogTransMsgSorter
 {
 public:
@@ -95,12 +97,25 @@ private:
   int sort_br_by_seq_no_(TransCtx &trans);
   // output all br of part trans
   int handle_partition_br_(TransCtx &trans, PartTransTask &part_trans_task);
+  // output all remaining br of part trans with merge enabled.
+  // only used by sort_br_by_seq_no_ to avoid affecting sort_br_by_part_order_.
+  int handle_partition_br_with_merge_(
+      TransCtx &trans,
+      PartTransTask &part_trans_task,
+      ObCDCUpdateSplitMergeCache &merge_cache,
+      const bool enable_merge);
   // get next valid br of specified part trans and statistic feedback info
   int next_stmt_contains_valid_br_(PartTransTask &part_trans_task, DmlStmtTask *&dml_stmt_task);
   // feedback br output static info for PartTransTask
   // note: this can safely called by sorter because PartTransTask won't be revert before sorter mark TransCtx is sorted
   //       should change this function if the guarantee above is changed otherwise will core or unexpected behave
   void feedback_br_output_info_(PartTransTask &part_trans_task);
+
+private:
+  int try_merge_update_split_(
+      ObCDCUpdateSplitMergeCache &merge_cache,
+      DmlStmtTask *dml_stmt,
+      ObLogBR *&output_br);
 
 private:
   bool                      is_inited_;

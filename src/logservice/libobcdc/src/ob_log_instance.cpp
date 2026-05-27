@@ -1063,6 +1063,14 @@ int ObLogInstance::init_components_(const uint64_t start_tstamp_ns)
     }
   }
 
+  if (OB_SUCC(ret) && enable_update_split_merge_) {
+    if (OB_FAIL(update_split_merge_storager_.init(
+            store_service_,
+            trans_stat_mgr_->get_update_split_merge_stat()))) {
+      LOG_ERROR("update_split_merge_storager_ init failed", KR(ret));
+    }
+  }
+
   INIT(trans_redo_dispatcher_, ObLogTransRedoDispatcher, redo_dispatcher_mem_limit,
       enable_sort_by_seq_no, TCONF.redo_dispatcher_thread_num, CDC_CFG_MGR.get_redo_dispatcher_queue_length(),
       *trans_stat_mgr_, *err_handler);
@@ -1451,6 +1459,7 @@ void ObLogInstance::destroy_components_()
   DESTROY(formatter_, ObLogFormatter);
   DESTROY(lob_data_merger_, ObCDCLobDataMerger);
   lob_aux_meta_storager_.destroy();
+  update_split_merge_storager_.destroy();
   DESTROY(committer_, ObLogCommitter);
   DESTROY(systable_helper_, ObLogSysTableHelper);
   DESTROY(ss_matcher_, ObLogStartSchemaMatcher);
@@ -3428,6 +3437,18 @@ int ObLogInstance::check_observer_version_valid_()
   if (OB_SUCC(ret) && enable_output_virtual_generated_column && is_ob_not_support_cdc_vir_gen_col) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("OBCDC SYNC VIRTUAL GENERATED COLUMN IS NOT SUPPORTED, REQUIRED OB VERSION: [4.2.5.0, 4.3.0.0) U [4.3.4.0, 4.4.0.0) U [4.4.2.0,), SET enable_out_virtual_generated_column=0", KR(ret), K(ob_version));
+  }
+
+  // Auto disable update_split_merge if cluster version doesn't support update_split_trace_id
+  if (OB_SUCC(ret) && (1 == TCONF.enable_update_split_merge)) {
+    if (ob_version < CLUSTER_VERSION_4_4_2_1 || ob_version >= CLUSTER_VERSION_4_5_0_0) {
+      // TODO: replace CLUSTER_VERSION_4_4_2_1 with the actual minimum version after kernel MR merges and refresh code in bash_branch!!!
+      enable_update_split_merge_ = false;
+      LOG_WARN("auto disabled enable_update_split_merge: "
+        "update_split_trace_id is only support in ob_cluster_version [4.4.2.2, 4.5.0.0).", K(ob_version));
+    } else {
+      enable_update_split_merge_ = true;
+    }
   }
 
   return ret;

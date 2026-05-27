@@ -94,6 +94,9 @@ public:
   inline void *get_stmt_task() { return stmt_task_; }
   void set_stmt_task(void *stmt_task) { stmt_task_ = stmt_task; }
 
+  void set_merged_delete_stmt(void *stmt) { merged_delete_stmt_ = stmt; }
+  void *get_merged_delete_stmt() { return merged_delete_stmt_; }
+
   uint64_t get_tenant_id() const { return tenant_id_; }
   int64_t get_schema_version() const { return schema_version_; }
   uint64_t get_row_index() const { return row_index_; }
@@ -140,6 +143,8 @@ private:
   // 1. DDL
   // 2. DML begin/commit binglog record will carry this info
   int64_t       part_trans_task_count_;
+
+  void          *merged_delete_stmt_; // DmlStmtTask* of merged DELETE, nullptr when unused
 
 protected:
   /*

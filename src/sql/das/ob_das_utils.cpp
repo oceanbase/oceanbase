@@ -195,7 +195,8 @@ int ObDASUtils::project_storage_row(const ObDASDMLBaseCtDef &dml_ctdef,
                                     const ObDASWriteBuffer::DmlRow &dml_row,
                                     const IntFixedArray &row_projector,
                                     ObIAllocator &allocator,
-                                    blocksstable::ObDatumRow &storage_row)
+                                    blocksstable::ObDatumRow &storage_row,
+                                    uint32_t row_extend_size)
 {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < row_projector.count(); ++i) {
@@ -212,6 +213,15 @@ int ObDASUtils::project_storage_row(const ObDASDMLBaseCtDef &dml_ctdef,
       LOG_WARN("reshape storage value failed", K(ret));
     } else if (col_type.is_lob_storage() && col_type.has_lob_header()) {
       storage_row.storage_datums_[i].set_has_lob_header();
+    }
+  }
+
+  if (OB_SUCC(ret) &&
+      dml_ctdef.enable_update_split_trace_id_ &&
+      ObDASWriteBuffer::has_update_split_trace_id_slot(row_extend_size) &&
+      !dml_ctdef.table_param_.get_data_table().is_index_local_storage()) {
+    if (OB_FAIL(ObDASWriteBuffer::get_update_split_trace_id(dml_row, row_extend_size, storage_row.update_split_trace_id_))) {
+      LOG_WARN("get update_split_trace_id failed", K(ret), K(row_extend_size));
     }
   }
 

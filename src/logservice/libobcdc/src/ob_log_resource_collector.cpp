@@ -1175,6 +1175,18 @@ int ObLogResourceCollector::revert_dml_binlog_record_(ObLogBR &br)
   }
 
   if (OB_SUCC(ret)) {
+    DmlStmtTask *merged_del = static_cast<DmlStmtTask*>(br.get_merged_delete_stmt());
+    if (OB_NOT_NULL(merged_del)) {
+      ObLogBR *del_br = merged_del->get_binlog_record();
+      if (OB_NOT_NULL(del_br)) {
+        if (OB_FAIL(revert_dml_binlog_record_(*del_br))) {
+          LOG_ERROR("revert merged delete br failed", KR(ret));
+        }
+      }
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     if (OB_FAIL(revert_single_binlog_record_(&br))) {
       LOG_ERROR("revert_single_binlog_record_ fail", KR(ret));
     }

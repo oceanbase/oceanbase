@@ -32,6 +32,9 @@ ob_set_subtarget(obcdc_object_list common
   ob_cdc_lob_ctx.cpp
   ob_cdc_lob_data_merger.cpp
   ob_cdc_lob_aux_meta_storager.cpp
+  ob_cdc_update_split_merge_storager.cpp
+  ob_cdc_update_split_merge_cache.cpp
+  ob_cdc_update_split_merge_payload.cpp
   ob_cdc_global_info.cpp
   ob_cdc_lob_aux_table_schema_info.cpp
   ob_cdc_lob_aux_table_parse.cpp

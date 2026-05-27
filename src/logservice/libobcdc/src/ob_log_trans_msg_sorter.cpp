@@ -17,8 +17,9 @@
 
 
 #include "ob_log_trans_msg_sorter.h"
-#include "ob_log_instance.h"            // IObLogErrHandler
+#include "ob_log_instance.h"            // IObLogErrHandler, TCTX, TCONF
 #include "ob_log_trace_id.h"            // ObLogTraceIdGuard
+#include "ob_cdc_update_split_merge_cache.h"
 
 #define RETRY_FUNC_ON_ERROR_WITH_USLEEP(err_no, var, func, args...) \
   do {\
@@ -246,6 +247,64 @@ int ObLogTransMsgSorter::sort_br_by_part_order_(TransCtx &trans)
   return ret;
 }
 
+int ObLogTransMsgSorter::handle_partition_br_with_merge_(
+    TransCtx &trans,
+    PartTransTask &part_trans_task,
+    ObCDCUpdateSplitMergeCache &merge_cache,
+    const bool enable_merge)
+{
+  int ret = OB_SUCCESS;
+  DmlStmtTask *dml_stmt_task = NULL;
+
+  while (OB_SUCC(ret) && ! has_set_stop()) {
+    if (OB_FAIL(next_stmt_contains_valid_br_(part_trans_task, dml_stmt_task))) {
+      if (OB_ITER_END != ret && OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("failed to get next valid br of part trans", KR(ret), K(part_trans_task), K(trans));
+      }
+    } else {
+      ObLogBR *output_br = nullptr;
+      LOG_TRACE("[MERGE] sorter candidate stmt",
+          "trans_id", part_trans_task.get_trans_id(),
+          "commit_version", part_trans_task.get_trans_commit_version(),
+          "table_id", dml_stmt_task->get_table_id(),
+          "seq_no", dml_stmt_task->get_row_seq_no(),
+          "dml_flag", dml_stmt_task->get_dml_flag(),
+          "trace_id", dml_stmt_task->get_update_split_trace_id(),
+          "has_trace_id", dml_stmt_task->has_update_split_trace_id(),
+          "enable_merge", enable_merge,
+          KP(dml_stmt_task));
+
+      if (!enable_merge || !dml_stmt_task->has_update_split_trace_id()) {
+        output_br = dml_stmt_task->get_binlog_record();
+      } else if (OB_FAIL(try_merge_update_split_(merge_cache, dml_stmt_task, output_br))) {
+        LOG_ERROR("try_merge_update_split_ failed", KR(ret), KPC(dml_stmt_task));
+      }
+
+      if (OB_SUCC(ret) && OB_NOT_NULL(output_br)) {
+        if (OB_FAIL(trans.append_sorted_br(output_br))) {
+          LOG_ERROR("failed to append trans br", KR(ret), KPC(dml_stmt_task), K(trans));
+        } else {
+          feedback_br_output_info_(part_trans_task);
+        }
+      }
+    }
+
+    dml_stmt_task = NULL;
+  }
+
+  if (has_set_stop()) {
+    ret = OB_IN_STOP_STATE;
+  }
+
+  if (OB_ITER_END == ret) {
+    ret = OB_SUCCESS;
+  }
+
+  LOG_DEBUG("handle_partition_br_with_merge_ end", KR(ret), K(trans), K(part_trans_task));
+
+  return ret;
+}
+
 int ObLogTransMsgSorter::sort_br_by_seq_no_(TransCtx &trans)
 {
   int ret = OB_SUCCESS;
@@ -273,6 +332,19 @@ int ObLogTransMsgSorter::sort_br_by_seq_no_(TransCtx &trans)
     dml_stmt_task = NULL;
   }
 
+  // 2.5. init merge cache if enabled
+  const bool enable_merge = (1 == TCTX.enable_update_split_merge_);
+  ObCDCUpdateSplitMergeCache merge_cache;
+  if (OB_SUCC(ret) && enable_merge) {
+    if (OB_FAIL(merge_cache.init(
+        trans.get_trans_id(),
+        TCTX.update_split_merge_storager_,
+        *TCTX.resource_collector_,
+        TCTX.trans_stat_mgr_->get_update_split_merge_stat()))) {
+      LOG_ERROR("merge_cache init failed", KR(ret));
+    }
+  }
+
   // 3. pop br from heap and push a new br into the heap
   while(OB_SUCC(ret) && ! has_set_stop() && !heap.empty()) {
     // 3.1. get the min br from heap top and then pop the br
@@ -281,24 +353,49 @@ int ObLogTransMsgSorter::sort_br_by_seq_no_(TransCtx &trans)
     DmlStmtTask *next_dml_stmt = NULL;
     heap.pop();
 
-    // 3.2. output br to TransCtx
-    if (OB_FAIL(trans.append_sorted_br(dml_stmt_task->get_binlog_record()))) {
-      LOG_ERROR("failed to append trans br", KR(ret), K(cur_part_trans), K_(enable_sort_by_seq_no), K(trans));
-    } else {
-      feedback_br_output_info_(cur_part_trans);
+    // 3.2. determine output br: merge or direct output
+    ObLogBR *output_br = nullptr;
+    LOG_TRACE("[MERGE] sorter candidate stmt",
+        "trans_id", cur_part_trans.get_trans_id(),
+        "commit_version", cur_part_trans.get_trans_commit_version(),
+        "table_id", dml_stmt_task->get_table_id(),
+        "seq_no", dml_stmt_task->get_row_seq_no(),
+        "dml_flag", dml_stmt_task->get_dml_flag(),
+        "trace_id", dml_stmt_task->get_update_split_trace_id(),
+        "has_trace_id", dml_stmt_task->has_update_split_trace_id(),
+        "enable_merge", enable_merge,
+        KP(dml_stmt_task));
+    if (!enable_merge || !dml_stmt_task->has_update_split_trace_id()) {
+      output_br = dml_stmt_task->get_binlog_record();
+    } else if (OB_FAIL(try_merge_update_split_(merge_cache, dml_stmt_task, output_br))) {
+      LOG_ERROR("try_merge_update_split_ failed", KR(ret), KPC(dml_stmt_task));
+    }
+
+    // 3.3. output br to TransCtx if we have one
+    if (OB_SUCC(ret) && OB_NOT_NULL(output_br)) {
+      if (OB_FAIL(trans.append_sorted_br(output_br))) {
+        LOG_ERROR("failed to append trans br", KR(ret), K(cur_part_trans), K_(enable_sort_by_seq_no), K(trans));
+      } else {
+        feedback_br_output_info_(cur_part_trans);
+      }
+    }
+
+    // 3.4. push next stmt from the same partition into heap
+    if (OB_SUCC(ret)) {
       if (heap.empty()) {
-        // 3.3.1. if heap is empty, output all valid br that belongs to the part_trans_task
-        if (OB_FAIL(handle_partition_br_(trans, cur_part_trans))) {
+        // 3.4.1. if heap is empty, continue handling remaining stmt of the current
+        // partition with the same merge logic as heap path. Keep part-order path unchanged.
+        if (OB_FAIL(handle_partition_br_with_merge_(trans, cur_part_trans, merge_cache, enable_merge))) {
           if (OB_IN_STOP_STATE != ret) {
             LOG_ERROR("failed to handle the last partition br", KR(ret), K_(enable_sort_by_seq_no), K(cur_part_trans), K(trans));
           }
         }
       } else if (OB_FAIL(next_stmt_contains_valid_br_(cur_part_trans, next_dml_stmt))) {
-        // 3.3.2 if heap not empty, get next valid br in current part_trans_task and push into heap
+        // 3.4.2 if heap not empty, get next valid br in current part_trans_task and push into heap
           if (OB_ITER_END != ret && OB_IN_STOP_STATE != ret) {
             LOG_ERROR("failed to get next stmt with valid br", KR(ret), K(cur_part_trans));
           } else {
-            // 3.3.3. if all br in current partition has put into heap, skip current partition and go on with sort
+            // 3.4.3. if all br in current partition has put into heap, skip current partition and go on with sort
             LOG_DEBUG("current partition all br has output, go on with other partitions", K(cur_part_trans));
             ret = OB_SUCCESS;
           }
@@ -306,6 +403,14 @@ int ObLogTransMsgSorter::sort_br_by_seq_no_(TransCtx &trans)
         heap.push(next_dml_stmt);
       }
     }
+  }
+
+  // 4. handle remaining unmatched split stmts
+  if (OB_SUCC(ret) && enable_merge) {
+    if (OB_FAIL(merge_cache.handle_unmatched())) {
+      LOG_ERROR("handle_unmatched failed", KR(ret));
+    }
+    merge_cache.destroy();
   }
 
   if (has_set_stop()) {
@@ -385,6 +490,30 @@ void ObLogTransMsgSorter::feedback_br_output_info_(PartTransTask &part_trans_tas
 {
   part_trans_task.inc_sorted_br();
   trans_stat_mgr_->do_sort_br_stat();
+}
+
+int ObLogTransMsgSorter::try_merge_update_split_(
+    ObCDCUpdateSplitMergeCache &merge_cache,
+    DmlStmtTask *dml_stmt,
+    ObLogBR *&output_br)
+{
+  int ret = OB_SUCCESS;
+  output_br = nullptr;
+  const int64_t trace_id = dml_stmt->get_update_split_trace_id();
+
+  if (dml_stmt->is_delete()) {
+    if (OB_FAIL(merge_cache.put(trace_id, dml_stmt))) {
+      LOG_ERROR("merge_cache put failed", KR(ret), K(trace_id));
+    }
+  } else if (dml_stmt->is_insert()) {
+    if (OB_FAIL(merge_cache.get_and_merge(trace_id, dml_stmt, output_br))) {
+      LOG_ERROR("merge_cache get_and_merge failed", KR(ret), K(trace_id));
+    }
+  } else {
+    output_br = dml_stmt->get_binlog_record();
+  }
+
+  return ret;
 }
 
 }

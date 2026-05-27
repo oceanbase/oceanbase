@@ -91,7 +91,8 @@ int ObIMvccCtx::register_row_commit_cb(const storage::ObTableIterParam &param,
               is_replay,
               seq_no,
               column_cnt,
-              is_non_unique_local_index);
+              is_non_unique_local_index,
+              arg.update_split_trace_id_);
       cb->set_is_link();
 
 #ifdef OB_BUILD_SHARED_STORAGE
@@ -186,7 +187,8 @@ int ObIMvccCtx::register_row_commit_cb(const storage::ObTableIterParam &param,
                 is_replay,
                 seq_no,
                 column_cnt,
-                is_non_unique_local_index);
+                is_non_unique_local_index,
+                tx_node_arg.update_split_trace_id_);
         cb->set_is_link();
 
         if (nullptr == head) {
@@ -277,7 +279,8 @@ int ObIMvccCtx::register_row_replay_cb(
     ObMemtable *memtable,
     const transaction::ObTxSEQ seq_no,
     const SCN scn,
-    const int64_t column_cnt)
+    const int64_t column_cnt,
+    const int64_t update_split_trace_id)
 {
   int ret = OB_SUCCESS;
   const bool is_replay = true;
@@ -298,7 +301,8 @@ int ObIMvccCtx::register_row_replay_cb(
             is_replay,
             seq_no,
             column_cnt,
-            false/*is_non_unique_local_index_cb, not setted correctly now, fix later*/);
+            false/*is_non_unique_local_index_cb, not setted correctly now, fix later*/,
+            update_split_trace_id);
     {
       ObRowLatchGuard guard(value->latch_);
       cb->link_trans_node();

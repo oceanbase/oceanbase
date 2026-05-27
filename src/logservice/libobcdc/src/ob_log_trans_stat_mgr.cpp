@@ -115,6 +115,72 @@ void SorterStatInfo::calc_and_print_stat(int64_t delta_time)
   }
 }
 
+void UpdateSplitMergeStatInfo::calc_and_print_stat(int64_t delta_time)
+{
+  // Snapshot cumulative counters, then derive interval deltas from the last snapshot.
+  const int64_t contract_violation = ATOMIC_LOAD(&contract_violation_count_);
+  const int64_t data_loss = ATOMIC_LOAD(&data_loss_count_);
+  const int64_t success = ATOMIC_LOAD(&success_count_);
+
+  const int64_t t1_put = ATOMIC_LOAD(&kept_in_stmt_put_count_);
+  const int64_t t1_cur = ATOMIC_LOAD(&kept_in_stmt_current_);
+  const int64_t t1_peak = ATOMIC_LOAD(&kept_in_stmt_peak_);
+
+  const int64_t t2_put = ATOMIC_LOAD(&storager_disk_put_count_);
+  const int64_t t2_hit = ATOMIC_LOAD(&storager_disk_hit_count_);
+  const int64_t t2_bytes = ATOMIC_LOAD(&storager_disk_bytes_put_total_);
+  const int64_t t2_cur = ATOMIC_LOAD(&storager_disk_approx_current_);
+
+  const int64_t d_contract_viol = contract_violation - last_contract_violation_count_;
+  const int64_t d_data_loss = data_loss - last_data_loss_count_;
+  const int64_t d_success = success - last_success_count_;
+  const int64_t d_t1_put = t1_put - last_kept_in_stmt_put_count_;
+  const int64_t d_t2_put = t2_put - last_storager_disk_put_count_;
+  const int64_t d_t2_hit = t2_hit - last_storager_disk_hit_count_;
+  const int64_t d_t2_bytes = t2_bytes - last_storager_disk_bytes_put_total_;
+
+  double success_rps = 0.0;
+  double t1_put_rps = 0.0;
+  double t2_put_rps = 0.0;
+  double contract_viol_rps = 0.0;
+  double data_loss_rps = 0.0;
+  double t2_mbps = 0.0;
+  if (delta_time > 0) {
+    const double denom = static_cast<double>(delta_time);
+    success_rps = static_cast<double>(d_success) * 1000000.0 / denom;
+    t1_put_rps = static_cast<double>(d_t1_put) * 1000000.0 / denom;
+    t2_put_rps = static_cast<double>(d_t2_put) * 1000000.0 / denom;
+    contract_viol_rps = static_cast<double>(d_contract_viol) * 1000000.0 / denom;
+    data_loss_rps = static_cast<double>(d_data_loss) * 1000000.0 / denom;
+    t2_mbps = static_cast<double>(d_t2_bytes) * 1000000.0 / denom / static_cast<double>(1024 * 1024);
+  }
+
+  const int64_t d_t_merges = d_t1_put + d_t2_put;
+  const double offload_rate = (d_t_merges > 0)
+      ? (static_cast<double>(d_t2_put) * 100.0 / static_cast<double>(d_t_merges))
+      : 0.0;
+  const int64_t t2_mb_total = t2_bytes / (1024 * 1024);
+
+  _ISTAT("[MERGE_STAT] SUCCESS=%ld CONTRACT_VIOL=%ld DATA_LOSS=%ld "
+      "SUCCESS_RPS=%.3lf CONTRACT_VIOL_RPS=%.3lf DATA_LOSS_RPS=%.3lf ",
+      success, contract_violation, data_loss,
+      success_rps, contract_viol_rps, data_loss_rps);
+  _ISTAT("[MERGE_STAT][T1_kept_in_stmt] CUR=%ld PEAK=%ld PUT_TOTAL=%ld PUT_RPS=%.3lf ",
+      t1_cur, t1_peak, t1_put, t1_put_rps);
+  _ISTAT("[MERGE_STAT][T2_storager_disk] APPROX_CUR=%ld PUT_TOTAL=%ld PUT_RPS=%.3lf "
+      "HIT_TOTAL=%ld HIT_DELTA=%ld BYTES_PUT_MB=%ld MBPS=%.3lf OFFLOAD_RATE=%.2lf ",
+      t2_cur, t2_put, t2_put_rps,
+      t2_hit, d_t2_hit, t2_mb_total, t2_mbps, offload_rate);
+
+  last_contract_violation_count_ = contract_violation;
+  last_data_loss_count_ = data_loss;
+  last_success_count_ = success;
+  last_kept_in_stmt_put_count_ = t1_put;
+  last_storager_disk_put_count_ = t2_put;
+  last_storager_disk_hit_count_ = t2_hit;
+  last_storager_disk_bytes_put_total_ = t2_bytes;
+}
+
 ///////////////////////////// TransTpsRpsStatInfo ///////////////////////////
 ObLogTransStatMgr::ObLogTransStatMgr() :
     inited_(false),
@@ -127,6 +193,7 @@ ObLogTransStatMgr::ObLogTransStatMgr() :
     release_record_stat_(),
     dispatcher_stat_(),
     sorter_stat_(),
+    update_split_merge_stat_(),
     last_stat_time_(0)
 {
 }
@@ -156,6 +223,7 @@ int ObLogTransStatMgr::init()
     release_record_stat_.reset();
     dispatcher_stat_.reset();
     sorter_stat_.reset();
+    update_split_merge_stat_.reset();
     last_stat_time_ = 0;
     inited_ = true;
   }
@@ -177,6 +245,7 @@ void ObLogTransStatMgr::destroy()
     release_record_stat_.reset();
     dispatcher_stat_.reset();
     sorter_stat_.reset();
+    update_split_merge_stat_.reset();
     last_stat_time_ = 0;
     inited_ = false;
   }
@@ -248,6 +317,7 @@ void ObLogTransStatMgr::print_stat_info()
   // calc and print stat info of dispatcher and sorter
   dispatcher_stat_.calc_and_print_stat(delta_time);
   sorter_stat_.calc_and_print_stat(delta_time);
+  update_split_merge_stat_.calc_and_print_stat(delta_time);
 
   double create_tps = tps_stat_info_.calc_tps(delta_time);
   double create_rps_before_filter = rps_stat_info_before_filter_.calc_rps(delta_time);

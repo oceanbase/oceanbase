@@ -80,15 +80,18 @@ struct ObConflictValue
   ObConflictValue()
     : baseline_datum_row_(NULL),
       current_datum_row_(NULL),
-      new_row_source_(ObNewRowSource::FROM_SCAN)
+      new_row_source_(ObNewRowSource::FROM_SCAN),
+      update_split_trace_id_(0)
   {}
   //在进行check_duplicate_rowkey时, 会将冲突的行去重(add_var_to_array_no_dup)
   //需要使用该操作符
   bool operator==(const ObConflictValue &other) const;
-  TO_STRING_KV(KPC_(baseline_datum_row), KPC_(current_datum_row), K_(new_row_source));
+  TO_STRING_KV(KPC_(baseline_datum_row), KPC_(current_datum_row), K_(new_row_source),
+               K_(update_split_trace_id));
   const ObChunkDatumStore::StoredRow *baseline_datum_row_;
   const ObChunkDatumStore::StoredRow *current_datum_row_;
   ObNewRowSource new_row_source_;
+  int64_t update_split_trace_id_;
 };
 
 typedef common::hash::ObHashMap<ObRowkey,
@@ -226,14 +229,17 @@ public:
 
   // 从hash map中删除冲突行
   int delete_old_row(const ObChunkDatumStore::StoredRow *replace_row,
-                     ObNewRowSource from);
+                     ObNewRowSource from,
+                     int64_t update_split_trace_id = 0);
 
   // 插入新行到hash map中
   int insert_new_row(const ObChunkDatumStore::StoredRow *new_row,
-                     ObNewRowSource from);
+                     ObNewRowSource from,
+                     int64_t update_split_trace_id = 0);
 
   int update_row(const ObChunkDatumStore::StoredRow *new_row,
-                 const ObChunkDatumStore::StoredRow *old_row);
+                 const ObChunkDatumStore::StoredRow *old_row,
+                 int64_t update_split_trace_id = 0);
 
   int lock_row(const ObChunkDatumStore::StoredRow *lock_row);
 

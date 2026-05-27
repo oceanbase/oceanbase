@@ -37,7 +37,8 @@ ObLogBR::ObLogBR() : ObLogResourceRecycleTask(ObLogResourceRecycleTask::BINLOG_R
                      schema_version_(OB_INVALID_VERSION),
                      commit_version_(0),
                      row_index_(0),
-                     part_trans_task_count_(0)
+                     part_trans_task_count_(0),
+                     merged_delete_stmt_(nullptr)
 {
 }
 
@@ -97,6 +98,7 @@ void ObLogBR::reset()
   schema_version_ = OB_INVALID_VERSION;
   commit_version_ = 0;
   part_trans_task_count_ = 0;
+  merged_delete_stmt_ = nullptr;
 }
 
 int ObLogBR::set_table_meta(ITableMeta *table_meta)

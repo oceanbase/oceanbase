@@ -171,13 +171,15 @@ int ObDASUpdIterator::get_next_row(blocksstable::ObDatumRow *&row)
                                                          *sr,
                                                          das_ctdef_->old_row_projector_,
                                                          allocator_,
-                                                         *old_row_))) {
+                                                         *old_row_,
+                                                         write_buffer_.get_row_extend_size()))) {
         LOG_WARN("project old storage row failed", K(ret));
       } else if (OB_FAIL(ObDASUtils::project_storage_row(*das_ctdef_,
                                                          *sr,
                                                          das_ctdef_->new_row_projector_,
                                                          allocator_,
-                                                         *new_row_))) {
+                                                         *new_row_,
+                                                         write_buffer_.get_row_extend_size()))) {
         LOG_WARN("project new storage row failed", K(ret));
       } else {
         row = old_row_;
@@ -247,13 +249,15 @@ int ObDASUpdIterator::get_next_rows(blocksstable::ObDatumRow *&rows, int64_t &ro
                                                          *sr,
                                                          das_ctdef_->old_row_projector_,
                                                          allocator_,
-                                                         old_rows_[row_count]))) {
+                                                         old_rows_[row_count],
+                                                         write_buffer_.get_row_extend_size()))) {
         LOG_WARN("project old storage row failed", K(ret));
       } else if (OB_FAIL(ObDASUtils::project_storage_row(*das_ctdef_,
                                                          *sr,
                                                          das_ctdef_->new_row_projector_,
                                                          allocator_,
-                                                         new_rows_[row_count]))) {
+                                                         new_rows_[row_count],
+                                                         write_buffer_.get_row_extend_size()))) {
         LOG_WARN("project new storage row failed", K(ret));
       } else {
         LOG_DEBUG("DAS update get row", K_(das_ctdef_->old_row_projector), K_(das_ctdef_->new_row_projector),

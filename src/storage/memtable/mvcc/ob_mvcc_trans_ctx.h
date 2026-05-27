@@ -64,8 +64,10 @@ struct RedoDataNode
            const int32_t flag,
            const transaction::ObTxSEQ seq_no,
            const common::ObTabletID &tablet_id,
-           const int64_t column_cnt);
+           const int64_t column_cnt,
+           const int64_t update_split_trace_id = 0);
   void set_callback(ObITransCallback *callback) { callback_ = callback; }
+  void set_update_split_trace_id(int64_t trace_id) { update_split_trace_id_ = trace_id; }
   ObMemtableKey key_;
   ObRowData old_row_;
   ObRowData new_row_;
@@ -78,6 +80,7 @@ struct RedoDataNode
   ObITransCallback *callback_;
   common::ObTabletID tablet_id_;
   int64_t column_cnt_;
+  int64_t update_split_trace_id_;
 };
 
 struct TableLockRedoDataNode
@@ -436,7 +439,8 @@ public:
       not_calc_checksum_(false),
       is_non_unique_local_index_cb_(false),
       seq_no_(),
-      column_cnt_(0)
+      column_cnt_(0),
+      update_split_trace_id_(0)
   {}
   ObMvccRowCallback(ObMvccRowCallback &cb, ObMemtable *memtable) :
       ObITransCallback(cb.need_submit_log_),
@@ -449,7 +453,8 @@ public:
       not_calc_checksum_(cb.not_calc_checksum_),
       is_non_unique_local_index_cb_(cb.is_non_unique_local_index_cb_),
       seq_no_(cb.seq_no_),
-      column_cnt_(cb.column_cnt_)
+      column_cnt_(cb.column_cnt_),
+      update_split_trace_id_(cb.update_split_trace_id_)
   {
     (void)key_.encode(cb.key_.get_rowkey());
   }
@@ -465,7 +470,8 @@ public:
            const bool is_replay,
            const transaction::ObTxSEQ seq_no,
            const int64_t column_cnt,
-           const bool is_non_unique_local_index_cb)
+           const bool is_non_unique_local_index_cb,
+           const int64_t update_split_trace_id = 0)
   {
     UNUSED(is_replay);
 
@@ -482,6 +488,7 @@ public:
     }
     column_cnt_ = column_cnt;
     is_non_unique_local_index_cb_ = is_non_unique_local_index_cb;
+    update_split_trace_id_ = update_split_trace_id;
   }
   bool on_memtable(const storage::ObIMemtable * const memtable) override;
   storage::ObIMemtable *get_memtable() const override;
@@ -561,6 +568,7 @@ private:
   };
   transaction::ObTxSEQ seq_no_;
   int64_t column_cnt_;
+  int64_t update_split_trace_id_;
 };
 
 }; // end namespace memtable

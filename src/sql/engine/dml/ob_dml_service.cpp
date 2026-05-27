@@ -585,6 +585,55 @@ int ObDMLService::check_row_whether_changed(const ObUpdCtDef &upd_ctdef,
   return ret;
 }
 
+int ObDMLService::check_update_key_column_changed(const ObUpdCtDef &upd_ctdef,
+                                                  ObUpdRtDef &upd_rtdef,
+                                                  ObEvalCtx &eval_ctx)
+{
+  int ret = OB_SUCCESS;
+  upd_rtdef.is_key_changed_ = false;
+  if (!upd_ctdef.enable_update_split_trace_id_) {
+    // do nothing
+  } else {
+    // Rely on ColumnContent.is_key_column_ to match any rowkey / partition
+    // key / unique-index key. We do NOT short-circuit on is_update_pk_
+    // because SET may touch only a partition key or UK without touching the
+    // primary rowkey (e.g. heap table partitioned on a non-rowkey column,
+    // or SET updating only a UK column).
+    const ObExprPtrIArray &old_row = upd_ctdef.old_row_;
+    const ObExprPtrIArray &new_row = upd_ctdef.new_row_;
+    FOREACH_CNT_X(info, upd_ctdef.assign_columns_, OB_SUCC(ret) && !upd_rtdef.is_key_changed_) {
+      if (!info->is_key_column_) {
+        // do nothing
+      } else {
+        const uint64_t idx = info->projector_index_;
+        ObDatum *old_datum = NULL;
+        ObDatum *new_datum = NULL;
+        if (OB_FAIL(old_row.at(idx)->eval(eval_ctx, old_datum))
+            || OB_FAIL(new_row.at(idx)->eval(eval_ctx, new_datum))) {
+          LOG_WARN("evaluate key column failed", K(ret), K(idx));
+        } else if (is_lob_storage(old_row.at(idx)->datum_meta_.type_)
+                   && is_lob_storage(new_row.at(idx)->datum_meta_.type_)) {
+          int64_t cmp_res = 0;
+          if (OB_FAIL(check_lob_column_changed(eval_ctx,
+                                               *old_row.at(idx), *old_datum,
+                                               *new_row.at(idx), *new_datum,
+                                               cmp_res))) {
+            LOG_WARN("compare lob key column failed", K(ret));
+          } else {
+            upd_rtdef.is_key_changed_ = (cmp_res != 0);
+          }
+        } else {
+          upd_rtdef.is_key_changed_ = !ObDatum::binary_equal(*old_datum, *new_datum);
+        }
+      }
+    }
+    LOG_TRACE("after check update key column changed", K(ret), K(upd_rtdef.is_key_changed_),
+                                                       K(upd_ctdef.is_primary_index_),
+                                                       K(upd_ctdef.das_base_ctdef_.is_update_pk_));
+  }
+  return ret;
+}
+
 int ObDMLService::filter_row_for_check_cst(const ExprFixedArray &cst_exprs,
                                            ObEvalCtx &eval_ctx,
                                            bool &filtered)
@@ -1260,6 +1309,8 @@ int ObDMLService::process_update_row(const ObUpdCtDef &upd_ctdef,
         LOG_WARN("check row null failed", K(ret), K(upd_ctdef), K(upd_rtdef));
       } else if (OB_FAIL(check_row_whether_changed(upd_ctdef, upd_rtdef, dml_op.get_eval_ctx()))) {
         LOG_WARN("check row whether changed failed", K(ret), K(upd_ctdef), K(upd_rtdef));
+      } else if (OB_FAIL(check_update_key_column_changed(upd_ctdef, upd_rtdef, dml_op.get_eval_ctx()))) {
+        LOG_WARN("check update key column changed failed", K(ret), K(upd_ctdef), K(upd_rtdef));
       } else if (OB_UNLIKELY(!upd_rtdef.is_row_changed_)) {
         //do nothing
       } else if (OB_FAIL(filter_row_for_view_check(upd_ctdef.view_check_exprs_, dml_op.get_eval_ctx(), is_filtered))) {
@@ -1455,7 +1506,12 @@ int ObDMLService::split_upd_to_del_and_ins(const ObUpdCtDef &upd_ctdef,
     //if the updated row is moved across partitions, we must delete old row at first
     //and then store new row to a temporary buffer,
     //only when all old rows have been deleted, new rows can be inserted
-    if (OB_FAIL(write_row_to_das_op<DAS_OP_TABLE_DELETE>(*upd_ctdef.ddel_ctdef_,
+    // scene 1: key value unchanged → stamp trace_id, CDC merges DEL+INS into UPDATE
+    // scene 2: key value changed → skip trace_id, CDC outputs DEL+INS as-is
+    if (!upd_rtdef.is_key_changed_ &&
+        OB_FAIL(dml_rtctx.generate_update_split_trace_id(upd_ctdef))) {
+      LOG_WARN("generate update split trace_id failed", K(ret));
+    } else if (OB_FAIL(write_row_to_das_op<DAS_OP_TABLE_DELETE>(*upd_ctdef.ddel_ctdef_,
                                                          *upd_rtdef.ddel_rtdef_,
                                                          old_tablet_loc,
                                                          dml_rtctx,
@@ -1481,6 +1537,7 @@ int ObDMLService::split_upd_to_del_and_ins(const ObUpdCtDef &upd_ctdef,
                 "old row", ROWEXPR2STR(dml_rtctx.get_eval_ctx(), upd_ctdef.old_row_),
                 "new row", ROWEXPR2STR(dml_rtctx.get_eval_ctx(), upd_ctdef.new_row_));
     }
+    dml_rtctx.clear_update_split_trace_id();
   }
   return ret;
 }
@@ -1566,25 +1623,39 @@ int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
                                                     new_row))) {
           LOG_WARN("fail to update row", K(ret), KPC(old_row), KPC(new_row));
         }
-      } else if (OB_FAIL(write_row_to_das_op<DAS_OP_TABLE_UPDATE>(upd_ctdef.dupd_ctdef_,
-                                                                upd_rtdef.dupd_rtdef_,
-                                                                old_tablet_loc,
-                                                                dml_rtctx,
-                                                                upd_ctdef.full_row_,
-                                                                upd_ctdef.trans_info_expr_,
-                                                                full_row))) {
-        LOG_WARN("write row to das op failed", K(ret), K(upd_ctdef), K(upd_rtdef));
       } else {
-        LOG_DEBUG("update pkey", K(ret), KPC(old_tablet_loc),
-                  "old row", ROWEXPR2STR(dml_rtctx.get_eval_ctx(), upd_ctdef.old_row_),
-                  "new row", ROWEXPR2STR(dml_rtctx.get_eval_ctx(), upd_ctdef.new_row_));
+        // is_update_pk_ but same-partition, handled as UPDATE (not split).
+        // key value unchanged → trace_id for MOW storage split
+        // key value changed → skip trace_id, CDC outputs DEL+INS as-is
+        if (!upd_rtdef.is_key_changed_ &&
+            OB_FAIL(dml_rtctx.generate_update_split_trace_id(upd_ctdef))) {
+          LOG_WARN("generate update split trace_id failed", K(ret));
+        } else if (OB_FAIL(write_row_to_das_op<DAS_OP_TABLE_UPDATE>(upd_ctdef.dupd_ctdef_,
+                                                                    upd_rtdef.dupd_rtdef_,
+                                                                    old_tablet_loc,
+                                                                    dml_rtctx,
+                                                                    upd_ctdef.full_row_,
+                                                                    upd_ctdef.trans_info_expr_,
+                                                                    full_row))) {
+          LOG_WARN("write row to das op failed", K(ret), K(upd_ctdef), K(upd_rtdef));
+        } else {
+          LOG_DEBUG("update pkey", K(ret), KPC(old_tablet_loc),
+                    "old row", ROWEXPR2STR(dml_rtctx.get_eval_ctx(), upd_ctdef.old_row_),
+                    "new row", ROWEXPR2STR(dml_rtctx.get_eval_ctx(), upd_ctdef.new_row_));
+        }
+        dml_rtctx.clear_update_split_trace_id();
       }
     }
   } else {
-    // do update
+    // !is_update_pk_: upper layer keeps this as a single UPDATE op.
+    // MOW table: storage forces DEL+INS split → trace_id so CDC can merge back
+    // But if key column (UK) truly changed, skip trace_id to avoid CDC merge ordering bugs
     if (new_tablet_loc != old_tablet_loc) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected location change", K(ret), KPC(new_tablet_loc), KPC(old_tablet_loc), KPC(old_row), KPC(new_row));
+    } else if (!upd_rtdef.is_key_changed_ &&
+               OB_FAIL(dml_rtctx.generate_update_split_trace_id(upd_ctdef))) {
+      LOG_WARN("generate update split trace_id failed", K(ret));
     } else if (OB_FAIL(write_row_to_das_op<DAS_OP_TABLE_UPDATE>(upd_ctdef.dupd_ctdef_,
                                                                 upd_rtdef.dupd_rtdef_,
                                                                 old_tablet_loc,
@@ -1598,6 +1669,7 @@ int ObDMLService::update_row(const ObUpdCtDef &upd_ctdef,
                 "old row", ROWEXPR2STR(dml_rtctx.get_eval_ctx(), upd_ctdef.old_row_),
                 "new row", ROWEXPR2STR(dml_rtctx.get_eval_ctx(), upd_ctdef.new_row_));
     }
+    dml_rtctx.clear_update_split_trace_id();
   }
   return ret;
 }
@@ -2144,9 +2216,8 @@ int ObDMLService::add_trans_info_datum(ObExpr *trans_info_expr,
     LOG_WARN("unexpected null pointer", K(ret));
   } else {
     char *buf = static_cast<char *>(stored_row->get_extra_payload());
-    *static_cast<int32_t *>(stored_row->get_extra_payload()) = datum->len_;
-    int64_t pos = sizeof(int32_t);
-    MEMCPY(buf + pos, datum->ptr_, datum->len_);
+    *reinterpret_cast<int32_t *>(buf) = datum->len_;
+    MEMCPY(buf + sizeof(int32_t), datum->ptr_, datum->len_);
   }
 
   return ret;
@@ -2309,6 +2380,7 @@ int ObDMLService::write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
   OB_ASSERT(typeid(rtdef) == typeid(RtDefType));
   int64_t extend_size = is_strict_defensive_check ?
       ObDASWriteBuffer::DAS_WITH_TRANS_INFO_EXTEND_SIZE : ObDASWriteBuffer::DAS_ROW_DEFAULT_EXTEND_SIZE;
+  extend_size += ctdef.enable_update_split_trace_id_ ? ObDASWriteBuffer::DAS_UPDATE_SPLIT_TRACE_ID_SIZE : 0;
   ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(table_id_, ctdef.table_id_);
   ACTIVE_SESSION_RETRY_DIAG_INFO_SETTER(table_schema_version_, ctdef.schema_version_);
   // 1. find das dml op
@@ -2346,6 +2418,9 @@ int ObDMLService::write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
     LOG_WARN("unexpected null ptr", K(ret));
   } else if (FALSE_IT(dml_rtctx.add_das_task_memory_size(stored_row->row_size_))) {
     // do nothing
+  } else if (ctdef.enable_update_split_trace_id_ &&
+             OB_FAIL(ObDASWriteBuffer::set_update_split_trace_id(*stored_row, extend_size, dml_rtctx.get_update_split_trace_id()))) {
+    LOG_WARN("set update_split_trace_id failed", K(ret), K(extend_size));
   } else if (OB_NOT_NULL(trans_info_expr) &&
       OB_FAIL(ObDMLService::add_trans_info_datum(trans_info_expr, dml_rtctx.get_eval_ctx(), stored_row))) {
     LOG_WARN("fail to add trans info datum", K(ret));

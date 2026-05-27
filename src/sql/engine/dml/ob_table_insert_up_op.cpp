@@ -155,6 +155,7 @@ int ObTableInsertUpOp::inner_open()
     const ObInsertUpCtDef *insert_up_ctdef = MY_SPEC.insert_up_ctdefs_.at(0);
     const ObDASInsCtDef &das_ins_ctdef = insert_up_ctdef->ins_ctdef_->das_ctdef_;
     is_ignore_ = das_ins_ctdef.is_ignore_;
+    enable_update_split_trace_id_ = insert_up_ctdef->upd_ctdef_->enable_update_split_trace_id_;
     conflict_checker_.set_local_tablet_loc(MY_INPUT.get_tablet_loc());
   }
   return ret;
@@ -472,9 +473,20 @@ int ObTableInsertUpOp::do_insert_up_cache()
         update_rows++;
         modify_row.old_row_ = const_cast<ObChunkDatumStore::StoredRow *>(upd_old_row);
         modify_row.new_row_ = upd_new_row;
-        if (OB_FAIL(conflict_checker_.update_row(upd_new_row, upd_old_row))) {
-          LOG_WARN("fail to update row in conflict_checker", K(ret),
-                   KPC(upd_new_row), KPC(upd_old_row));
+        // key value unchanged → stamp trace_id, CDC merges DEL+INS into UPDATE
+        // key value changed → clear trace_id, CDC outputs DEL+INS as-is
+        if (enable_update_split_trace_id_) {
+          if (!upd_rtdef.is_key_changed_) {
+            if (OB_FAIL(upd_rtctx_.generate_update_split_trace_id(upd_ctdef))) {
+              LOG_WARN("generate update split trace id failed", K(ret));
+            }
+          } else {
+            upd_rtctx_.clear_update_split_trace_id();
+          }
+        }
+        if (OB_FAIL(ret)) {
+        } else if (OB_FAIL(conflict_checker_.update_row(upd_new_row, upd_old_row, upd_rtctx_.get_update_split_trace_id()))) {
+          LOG_WARN("fail to update row in conflict_checker", K(ret), KPC(upd_new_row), KPC(upd_old_row));
         } else if (need_after_row_process(upd_ctdef) && OB_FAIL(dml_modify_rows_.push_back(modify_row))) {
           LOG_WARN("failed to push dml modify row to modified row list", K(ret));
         }
@@ -701,6 +713,7 @@ int ObTableInsertUpOp::lock_one_row_to_das(const ObUpdCtDef &upd_ctdef,
   return ret;
 }
 
+
 int ObTableInsertUpOp::insert_upd_new_row_to_das()
 {
   int ret = OB_SUCCESS;
@@ -713,6 +726,7 @@ int ObTableInsertUpOp::insert_upd_new_row_to_das()
     // must do update
     // do insert update new_row
     OZ(calc_upd_new_row_tablet_loc(*upd_ctdef, upd_rtdef, tablet_loc));
+    if (i > 0) upd_rtctx_.clear_update_split_trace_id();
     OZ(insert_one_upd_new_row_das(*upd_ctdef, upd_rtdef, tablet_loc));
   }
   return ret;
@@ -730,6 +744,7 @@ int ObTableInsertUpOp::insert_row_to_das()
     ObDASTabletLoc *tablet_loc = nullptr;
     // do insert
     OZ(calc_insert_tablet_loc(*ins_ctdef, ins_rtdef, tablet_loc));
+    if (i > 0) upd_rtctx_.clear_update_split_trace_id();
     OZ(insert_row_to_das(*ins_ctdef, ins_rtdef, tablet_loc));
   }
   return ret;
@@ -746,6 +761,7 @@ int ObTableInsertUpOp::delete_upd_old_row_to_das()
     ObDASTabletLoc *tablet_loc = nullptr;
     // must do update
     OZ(calc_upd_old_row_tablet_loc(*upd_ctdef, upd_rtdef, tablet_loc));
+    if (i > 0) upd_rtctx_.clear_update_split_trace_id();
     // do delete
     OZ(delete_one_upd_old_row_das(*upd_ctdef, upd_rtdef, tablet_loc));
   }
@@ -1313,9 +1329,11 @@ int ObTableInsertUpOp::prepare_final_insert_up_task()
   ObConflictRowMap *primary_map = NULL;
   OZ(conflict_checker_.get_primary_table_map(primary_map));
   CK(OB_NOT_NULL(primary_map));
+
   ObConflictRowMap::iterator start_row_iter = primary_map->begin();
   ObConflictRowMap::iterator end_row_iter = primary_map->end();
   for (; OB_SUCC(ret) && start_row_iter != end_row_iter; ++start_row_iter) {
+    upd_rtctx_.clear_update_split_trace_id();
     clear_datum_eval_flag();
     ObConflictValue &constraint_value = start_row_iter->second;
     LOG_DEBUG("get one constraint_value from primary hash map", K(constraint_value));
@@ -1370,17 +1388,17 @@ int ObTableInsertUpOp::do_update(const ObConflictValue &constraint_value)
   bool only_do_upd_ins = false;
   bool only_do_lock = false;
   if (constraint_value.new_row_source_ == ObNewRowSource::FROM_UPDATE) {
-    // current_datum_row_ 是update的new_row
     if (NULL != constraint_value.baseline_datum_row_ &&
         NULL != constraint_value.current_datum_row_) {
-      // base_line 和 curr_row 都存在
+      upd_rtctx_.set_update_split_trace_id(constraint_value.update_split_trace_id_);
       OZ(constraint_value.baseline_datum_row_->to_expr(get_primary_table_upd_old_row(), eval_ctx_));
       OZ(delete_upd_old_row_to_das());
+      // restore trace_id: delete_upd_old_row_to_das clears it after the primary table (i>0)
+      upd_rtctx_.set_update_split_trace_id(constraint_value.update_split_trace_id_);
       OZ(constraint_value.current_datum_row_->to_expr(get_primary_table_upd_new_row(), eval_ctx_));
       OZ(insert_upd_new_row_to_das());
     } else if (NULL == constraint_value.baseline_datum_row_ &&
                NULL != constraint_value.current_datum_row_) {
-      // base_line不存在 但是 curr_row 存在，说明curr_row是从其他行update来的
       OZ(constraint_value.current_datum_row_->to_expr(get_primary_table_upd_new_row(), eval_ctx_));
       OZ(insert_upd_new_row_to_das());
     } else {
@@ -1425,22 +1443,18 @@ int ObTableInsertUpOp::do_insert(const ObConflictValue &constraint_value)
   int ret = OB_SUCCESS;
   bool has_insert = false;
   bool has_delete = false;
-  // curr_row来自于insert
   if (NULL != constraint_value.baseline_datum_row_ &&
       NULL != constraint_value.current_datum_row_) {
-    // delete + insert
     OZ(constraint_value.baseline_datum_row_->to_expr(get_primary_table_upd_old_row(), eval_ctx_));
     OZ(delete_upd_old_row_to_das());
     OZ(constraint_value.current_datum_row_->to_expr(get_primary_table_insert_row(), eval_ctx_));
     OZ(insert_row_to_das());
   } else if (NULL != constraint_value.baseline_datum_row_ &&
              NULL == constraint_value.current_datum_row_) {
-    // only delete
     OZ(constraint_value.baseline_datum_row_->to_expr(get_primary_table_upd_old_row(), eval_ctx_));
     OZ(delete_upd_old_row_to_das());
   } else if (NULL == constraint_value.baseline_datum_row_ &&
              NULL != constraint_value.current_datum_row_) {
-    // only insert
     OZ(constraint_value.current_datum_row_->to_expr(get_primary_table_insert_row(), eval_ctx_));
     OZ(insert_row_to_das());
   }
@@ -1505,6 +1519,7 @@ int ObTableInsertUpOp::reuse()
     }
   }
 
+  upd_rtctx_.clear_update_split_trace_id();
   return ret;
 }
 

@@ -162,7 +162,8 @@ public:
                        const int64_t version,
                        const int32_t flag,
                        const transaction::ObTxSEQ seq_no,
-                       const int64_t column_cnt);
+                       const int64_t column_cnt,
+                       const int64_t update_split_trace_id = 0);
   virtual ~ObMemtableMutatorRow();
   void reset();
   int copy(uint64_t &table_id,
@@ -176,7 +177,8 @@ public:
            int64_t &version,
            int32_t &flag,
            transaction::ObTxSEQ &seq_no,
-           int64_t &column_cnt) const;
+           int64_t &column_cnt,
+           int64_t &update_split_trace_id) const;
   int serialize(char *buf, int64_t &buf_len, int64_t &pos,
                 const transaction::ObTxEncryptMeta *encrypt_meta,
                 transaction::ObCLogEncryptInfo &new_encrypt_info,
@@ -192,6 +194,7 @@ public:
                           const bool is_big_row = false);
   uint32_t get_flag() const { return flag_; };
   int64_t get_column_cnt() const { return column_cnt_; }
+  int64_t get_update_split_trace_id() const { return update_split_trace_id_; }
 
   TO_STRING_KV(K_(row_size),
                K_(table_id),
@@ -205,7 +208,8 @@ public:
                K_(version),
                K_(flag),
                K_(seq_no),
-               K_(column_cnt));
+               K_(column_cnt),
+               K_(update_split_trace_id));
 
 public:
   blocksstable::ObDmlFlag dml_flag_;
@@ -217,6 +221,7 @@ public:
   int32_t flag_; // currently, unused
   uint8_t rowid_version_;
   int64_t column_cnt_;
+  int64_t update_split_trace_id_;
 #ifdef OB_BUILD_TDE_SECURITY
 private:
   int handle_encrypt_row_(char *buf, const int64_t buf_len,

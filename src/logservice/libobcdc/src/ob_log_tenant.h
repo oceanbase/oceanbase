@@ -101,6 +101,7 @@ public:
     const TenantCheckpoint &tenant_checkpoint,
     void *cf_handle,
     void *lob_storage_cf_handle,
+    void *merge_cf_handle,
     ObLogTenantMgr &tenant_mgr);
   void reset();
   bool is_inited() const { return inited_; }
@@ -138,6 +139,10 @@ public:
   int64_t get_global_seq() const { return global_seq_and_schema_version_.lo; }
   void *get_redo_storage_cf_handle() { return redo_cf_handle_; }
   void *get_lob_storage_cf_handle() { return lob_storage_cf_handle_; }
+  // Dedicated cf for update-split-merge serialized DELETE payloads.
+  // Physically isolated from lob cf so lob_aux's DeleteRange-based cleanup
+  // cannot accidentally sweep merge entries.
+  void *get_merge_cf_handle() { return merge_cf_handle_; }
   ObCDCLobAuxDataCleanTask& get_lob_storage_clean_task() { return lob_storage_clean_task_; }
 
 public:
@@ -347,6 +352,7 @@ private:
 
   void                       *redo_cf_handle_;
   void                       *lob_storage_cf_handle_;
+  void                       *merge_cf_handle_;
   ObCDCLobAuxDataCleanTask   lob_storage_clean_task_;
 
 private:

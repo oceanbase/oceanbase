@@ -647,6 +647,32 @@ public:
   DEF_CAP(lob_data_storage_memory_limit, OB_CLUSTER_PARAMETER, "1G", "[128M,]", "lob data storage memory limit");
   T_DEF_INT_INFT(lob_data_storage_clean_interval_sec, OB_CLUSTER_PARAMETER, 5, 1,
                  "lob_data_storage clean task nterval in seconds");
+
+  // update split merge
+  // Merge DELETE + INSERT split from a logical UPDATE back into a single UPDATE event,
+  // when OB kernel wrote update_split_trace_id_ in clog (i.e. rowkey and all unique keys unchanged).
+  // Relies on OB kernel contract: trace_id is only written for safe-to-merge scenarios.
+  //
+  // Storage sub-system settings are intentionally NOT exposed as separate configs:
+  //   - memory tier: always enabled
+  //   - memory limit: auto-derived as min(256M, memory_limit * 3%)
+  //   - batch cleanup interval: reuses lob_data_storage_clean_interval_sec
+  //   - strict check: will be added when the diagnostic mode is implemented.
+  // Test-only persist policy for deciding whether DELETE enters persistent storage:
+  //   - auto: follow runtime memory pressure (default)
+  //   - always: always persist
+  //   - hash50: persist about half of trace_id deterministically
+  T_DEF_BOOL(enable_update_split_merge, OB_CLUSTER_PARAMETER, 0,
+             "0:disabled (default), 1:enabled. "
+             "Merge split delete+insert back to update when kernel writes trace_id");
+  DEF_STR(update_split_merge_persist_mode, OB_CLUSTER_PARAMETER, "auto",
+          "test-only persist mode for update split merge: auto, always, hash50");
+  // When an OB contract violation is detected (e.g., unmatched trace_id at transaction end),
+  // whether to abort the CDC process via error_handler.
+  // Emergency bypass: set to 0 so the pipeline keeps running but contract-violation entries will be lost.
+  T_DEF_BOOL(update_split_merge_abort_on_data_loss, OB_CLUSTER_PARAMETER, 1,
+             "0:emergency mode, continue with data loss; "
+             "1 (default):abort CDC process via error_handler on contract violation");
   DEF_TIME(print_mod_memory_usage_interval, OB_CLUSTER_PARAMETER, "1m", "[0s,]", "print mod memory usage interval");
   DEF_CAP(print_mod_memory_usage_threshold, OB_CLUSTER_PARAMETER, "0M", "[0M,]", "print mod memory usage threshold");
   DEF_STR(print_mod_memory_usage_label, OB_CLUSTER_PARAMETER, "|", "mod label for print memmory usage");

@@ -171,7 +171,8 @@ public:
       ObMemtable *memtable,
       const transaction::ObTxSEQ seq_no,
       const share::SCN scn,
-      const int64_t column_cnt);
+      const int64_t column_cnt,
+      const int64_t update_split_trace_id = 0);
   int register_table_lock_cb(
       transaction::tablelock::ObLockMemtable *memtable,
       ObMemCtxLockOpLinkNode *lock_op);

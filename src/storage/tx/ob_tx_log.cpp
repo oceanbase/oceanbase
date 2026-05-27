@@ -831,6 +831,7 @@ int ObTxRedoLog::format_mutator_row_(const memtable::ObMemtableMutatorRow &row,
   int32_t flag = 0;
   transaction::ObTxSEQ seq_no;
   int64_t column_cnt = 0;
+  int64_t update_split_trace_id = 0;
   ObStoreRowkey rowkey;
   memtable::ObRowData new_row;
   memtable::ObRowData old_row;
@@ -838,7 +839,8 @@ int ObTxRedoLog::format_mutator_row_(const memtable::ObMemtableMutatorRow &row,
   blocksstable::ObDmlFlag dml_flag = blocksstable::ObDmlFlag::DF_NOT_EXIST;
 
   if (OB_FAIL(row.copy(table_id, rowkey, table_version, new_row, old_row, dml_flag,
-                       modify_count, acc_checksum, version, flag, seq_no, column_cnt))) {
+                       modify_count, acc_checksum, version, flag, seq_no, column_cnt,
+                       update_split_trace_id))) {
     TRANS_LOG(WARN, "row_.copy fail", K(ret), K(table_id), K(rowkey), K(table_version), K(new_row),
               K(old_row), K(dml_flag), K(modify_count), K(acc_checksum), K(version), K(column_cnt));
   } else {
@@ -883,6 +885,10 @@ int ObTxRedoLog::format_mutator_row_(const memtable::ObMemtableMutatorRow &row,
     arg.writer_ptr_->dump_int64(old_row.size_);
     arg.writer_ptr_->dump_key("ColumnCnt");
     arg.writer_ptr_->dump_int64(column_cnt);
+    if (update_split_trace_id != 0) {
+      arg.writer_ptr_->dump_key("UpdateSplitTraceId");
+      arg.writer_ptr_->dump_int64(update_split_trace_id);
+    }
   }
   return ret;
 }

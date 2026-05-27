@@ -175,7 +175,8 @@ int ObDASDMLIterator::get_next_row(blocksstable::ObDatumRow *&datum_row)
                                                         *sr,
                                                         *row_projector_,
                                                         allocator_,
-                                                        *cur_datum_row_))) {
+                                                        *cur_datum_row_,
+                                                        write_buffer_.get_row_extend_size()))) {
         LOG_WARN("project storage row failed", K(ret));
       } else {
         datum_row = cur_datum_row_;
@@ -222,7 +223,8 @@ int ObDASDMLIterator::get_next_rows(blocksstable::ObDatumRow *&rows, int64_t &ro
                                                            *sr,
                                                            *row_projector_,
                                                            allocator_,
-                                                           cur_datum_rows_[row_count]))) {
+                                                           cur_datum_rows_[row_count],
+                                                           write_buffer_.get_row_extend_size()))) {
           LOG_WARN("Failed to project storage row", K(ret));
         } else {
           ++row_count;
@@ -772,6 +774,36 @@ int ObDASWriteBuffer::begin(NewRowIterator &it, const ObIArray<ObObjMeta> &col_t
   return ret;
 }
 
+int ObDASWriteBuffer::set_update_split_trace_id(ObChunkDatumStore::StoredRow &row,
+                                                uint32_t row_extend_size,
+                                                int64_t update_split_trace_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!has_update_split_trace_id_slot(row_extend_size))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("row_extend_size does not reserve update_split_trace_id slot", K(ret), K(row_extend_size));
+  } else {
+    char *buf = static_cast<char *>(row.get_extra_payload());
+    *reinterpret_cast<int64_t *>(buf + row_extend_size - DAS_UPDATE_SPLIT_TRACE_ID_SIZE) = update_split_trace_id;
+  }
+  return ret;
+}
+
+int ObDASWriteBuffer::get_update_split_trace_id(const ObChunkDatumStore::StoredRow &row,
+                                                uint32_t row_extend_size,
+                                                int64_t &update_split_trace_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!has_update_split_trace_id_slot(row_extend_size))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("row_extend_size does not reserve update_split_trace_id slot", K(ret), K(row_extend_size));
+  } else {
+    const char *buf = static_cast<const char *>(row.get_extra_payload());
+    update_split_trace_id = *reinterpret_cast<const int64_t *>(buf + row_extend_size - DAS_UPDATE_SPLIT_TRACE_ID_SIZE);
+  }
+  return ret;
+}
+
 int ObDASWriteBuffer::dump_data(const ObDASDMLBaseCtDef &das_base_ctdef) const
 {
   int ret = OB_SUCCESS;
@@ -803,7 +835,8 @@ int ObDASWriteBuffer::dump_data(const ObDASDMLBaseCtDef &das_base_ctdef) const
                                                             *store_row,
                                                             das_base_ctdef.old_row_projector_,
                                                             tmp_alloc,
-                                                            *old_row))) {
+                                                            *old_row,
+                                                            row_extend_size_))) {
           LOG_WARN("project storage row failed", K(ret), K(das_base_ctdef.old_row_projector_));
         }
       }
@@ -818,7 +851,8 @@ int ObDASWriteBuffer::dump_data(const ObDASDMLBaseCtDef &das_base_ctdef) const
                                                            *store_row,
                                                            das_base_ctdef.new_row_projector_,
                                                            tmp_alloc,
-                                                           *new_row))) {
+                                                           *new_row,
+                                                           row_extend_size_))) {
           LOG_WARN("project storage row failed", K(ret), K(das_base_ctdef.new_row_projector_));
         }
 
@@ -826,20 +860,24 @@ int ObDASWriteBuffer::dump_data(const ObDASDMLBaseCtDef &das_base_ctdef) const
     }
 
     if (OB_SUCC(ret)) {
-      if (row_extend_size_ > ObDASWriteBuffer::DAS_ROW_DEFAULT_EXTEND_SIZE) {
-        // It means the payload contain trans_info string
+      if (row_extend_size_ >= ObDASWriteBuffer::DAS_WITH_TRANS_INFO_EXTEND_SIZE) {
         char *buf = static_cast<char *>(store_row->get_extra_payload());
-        int32_t *str_len = reinterpret_cast<int32_t *>(store_row->get_extra_payload());
-        int64_t pos = sizeof(int32_t);
-        trans_info_str.assign(buf + pos, *str_len);
+        int32_t *str_len = reinterpret_cast<int32_t *>(buf);
+        trans_info_str.assign(buf + sizeof(int32_t), *str_len);
       }
     }
 
     if (OB_SUCC(ret)) {
-      // do print
-      LOG_INFO("DASWriteBuffer dump", K(rownum), "task_type", das_base_ctdef.op_type_,
-          K(trans_info_str), KPC(new_row), KPC(old_row), KPC(store_row));
-      rownum++;
+      int64_t update_split_trace_id = 0;
+      if (das_base_ctdef.enable_update_split_trace_id_ &&
+          OB_FAIL(ObDASWriteBuffer::get_update_split_trace_id(*store_row, row_extend_size_, update_split_trace_id))) {
+        LOG_WARN("get update_split_trace_id failed", K(ret), K(row_extend_size_));
+      } else {
+        LOG_INFO("DASWriteBuffer dump", K(rownum), "task_type", das_base_ctdef.op_type_,
+                                        K(update_split_trace_id), K(trans_info_str),
+                                        KPC(new_row), KPC(old_row), KPC(store_row));
+        rownum++;
+      }
     }
   } // end while
 

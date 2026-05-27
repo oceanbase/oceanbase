@@ -166,6 +166,101 @@ struct SorterStatInfo
   void calc_and_print_stat(int64_t delta_time);
 };
 
+// Single struct gathering ALL update-split-merge monitoring metrics.
+// Two tiers mirror the two physical locations a DELETE payload can live in:
+//   T1 kept_in_stmt   — cache retains the original DmlStmtTask pointer
+//   T2 storager_disk  — serialized payload written to RocksDB via storager
+// Cache bumps T1 and the T2 approximate current gauge (since it is the only
+// caller of storager.put/del); storager bumps T2 cumulative put/hit/bytes.
+struct UpdateSplitMergeStatInfo
+{
+  // ===== Alarm counters (non-zero indicates an issue worth attention) =====
+  // OB contract violations: unmatched DELETE remaining at trans end,
+  // duplicate trace_id, unexpected DML type.
+  int64_t contract_violation_count_;
+  // Entries dropped in emergency mode (update_split_merge_abort_on_data_loss=0).
+  int64_t data_loss_count_;
+
+  // ===== Result counter =====
+  int64_t success_count_;                 // cumulative successful DEL+INS → UPDATE merges
+
+  // ===== T1: kept_in_stmt (cache holds DmlStmtTask directly) =====
+  int64_t kept_in_stmt_put_count_;        // cumulative put
+  int64_t kept_in_stmt_current_;          // live gauge (put - erase)
+  int64_t kept_in_stmt_peak_;             // historical peak
+
+  // ===== T2: storager_disk (serialized payload in RocksDB) =====
+  int64_t storager_disk_put_count_;       // cumulative successful put
+  int64_t storager_disk_hit_count_;       // cumulative successful get
+  int64_t storager_disk_bytes_put_total_; // cumulative bytes put
+  int64_t storager_disk_approx_current_;  // approximate live gauge (put - del)
+
+  // ===== Last snapshot for interval deltas / rates =====
+  int64_t last_contract_violation_count_;
+  int64_t last_data_loss_count_;
+  int64_t last_success_count_;
+  int64_t last_kept_in_stmt_put_count_;
+  int64_t last_storager_disk_put_count_;
+  int64_t last_storager_disk_hit_count_;
+  int64_t last_storager_disk_bytes_put_total_;
+
+  void reset()
+  {
+    ATOMIC_SET(&contract_violation_count_, 0);
+    ATOMIC_SET(&data_loss_count_, 0);
+    ATOMIC_SET(&success_count_, 0);
+    ATOMIC_SET(&kept_in_stmt_put_count_, 0);
+    ATOMIC_SET(&kept_in_stmt_current_, 0);
+    ATOMIC_SET(&kept_in_stmt_peak_, 0);
+    ATOMIC_SET(&storager_disk_put_count_, 0);
+    ATOMIC_SET(&storager_disk_hit_count_, 0);
+    ATOMIC_SET(&storager_disk_bytes_put_total_, 0);
+    ATOMIC_SET(&storager_disk_approx_current_, 0);
+    last_contract_violation_count_ = 0;
+    last_data_loss_count_ = 0;
+    last_success_count_ = 0;
+    last_kept_in_stmt_put_count_ = 0;
+    last_storager_disk_put_count_ = 0;
+    last_storager_disk_hit_count_ = 0;
+    last_storager_disk_bytes_put_total_ = 0;
+  }
+
+  void inc_contract_violation(const int64_t delta = 1)
+  { ATOMIC_AAF(&contract_violation_count_, delta); }
+  void inc_data_loss(const int64_t delta)
+  { ATOMIC_AAF(&data_loss_count_, delta); }
+  void inc_success() { ATOMIC_INC(&success_count_); }
+
+  // T1 put: bump cumulative + current (and peak). Call on Cache::put kept-in-stmt path.
+  void add_kept_in_stmt()
+  {
+    ATOMIC_INC(&kept_in_stmt_put_count_);
+    const int64_t cur = ATOMIC_AAF(&kept_in_stmt_current_, 1);
+    int64_t peak = ATOMIC_LOAD(&kept_in_stmt_peak_);
+    while (cur > peak && !ATOMIC_BCAS(&kept_in_stmt_peak_, peak, cur)) {
+      peak = ATOMIC_LOAD(&kept_in_stmt_peak_);
+    }
+  }
+  void dec_kept_in_stmt() { ATOMIC_AAF(&kept_in_stmt_current_, -1); }
+
+  // T2 put: bump cumulative put / bytes / current. Called from storager on successful put.
+  void add_storager_disk_put(const int64_t bytes)
+  {
+    ATOMIC_INC(&storager_disk_put_count_);
+    ATOMIC_AAF(&storager_disk_bytes_put_total_, bytes);
+    ATOMIC_INC(&storager_disk_approx_current_);
+  }
+  void inc_storager_disk_hit() { ATOMIC_INC(&storager_disk_hit_count_); }
+  void dec_storager_disk_current() { ATOMIC_AAF(&storager_disk_approx_current_, -1); }
+
+  void calc_and_print_stat(int64_t delta_time);
+
+  TO_STRING_KV(K_(contract_violation_count), K_(data_loss_count), K_(success_count),
+               K_(kept_in_stmt_put_count), K_(kept_in_stmt_current), K_(kept_in_stmt_peak),
+               K_(storager_disk_put_count), K_(storager_disk_hit_count),
+               K_(storager_disk_bytes_put_total), K_(storager_disk_approx_current));
+};
+
 class IObLogTransStatMgr
 {
 public:
@@ -199,6 +294,12 @@ public:
   virtual void do_sort_trans_stat() = 0;
   virtual void do_sort_br_stat() = 0;
 
+  // update split merge
+  // Single access entry for all merge-related metrics bumps.
+  // Callers (sorter, storager, resource_collector) go through this one accessor
+  // rather than each keeping their own stat fields.
+  virtual UpdateSplitMergeStatInfo &get_update_split_merge_stat() = 0;
+
   // print stat info
   virtual void print_stat_info() = 0;
 };
@@ -231,6 +332,9 @@ public:
   void do_dispatch_redo_stat();
   void do_sort_trans_stat();
   void do_sort_br_stat();
+
+  UpdateSplitMergeStatInfo &get_update_split_merge_stat() override
+  { return update_split_merge_stat_; }
 
   void print_stat_info();
 
@@ -375,6 +479,7 @@ private:
   TransTpsRpsStatInfo   release_record_stat_ CACHE_ALIGNED;  // Statistics release_record: tps and rps information
   DispatcherStatInfo    dispatcher_stat_ CACHE_ALIGNED;
   SorterStatInfo        sorter_stat_ CACHE_ALIGNED;
+  UpdateSplitMergeStatInfo update_split_merge_stat_ CACHE_ALIGNED;
 
   // 记录统计时间
   int64_t               last_stat_time_ CACHE_ALIGNED;

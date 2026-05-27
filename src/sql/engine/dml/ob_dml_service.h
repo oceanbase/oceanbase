@@ -63,6 +63,10 @@ public:
               const ObExpr& new_expr, ObDatum& new_datum,
               int64_t& result);
   static int check_row_whether_changed(const ObUpdCtDef &upd_ctdef, ObUpdRtDef &upd_rtdef, ObEvalCtx &eval_ctx);
+
+  static int check_update_key_column_changed(const ObUpdCtDef &upd_ctdef,
+                                             ObUpdRtDef &upd_rtdef,
+                                             ObEvalCtx &eval_ctx);
   static int filter_row_for_check_cst(const ExprFixedArray &cst_exprs,
                                       ObEvalCtx &eval_ctx,
                                       bool &filtered);

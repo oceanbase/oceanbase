@@ -1074,6 +1074,7 @@ int ObMemtable::replay_row(ObStoreCtx &ctx,
   int32_t flag = 0;
   transaction::ObTxSEQ seq_no;
   int64_t column_cnt = 0;
+  int64_t update_split_trace_id = 0;
   ObStoreRowkey rowkey;
   ObRowData row;
   ObRowData old_row;
@@ -1084,7 +1085,7 @@ int ObMemtable::replay_row(ObStoreCtx &ctx,
 
   if (OB_FAIL(mmi->get_mutator_row().copy(table_id, rowkey, table_version, row,
                                         old_row, dml_flag, modify_count, acc_checksum, version,
-                                        flag, seq_no, column_cnt))) {
+                                        flag, seq_no, column_cnt, update_split_trace_id))) {
     if (OB_ITER_END != ret) {
       TRANS_LOG(WARN, "get next row error", K(ret));
     }
@@ -1098,14 +1099,15 @@ int ObMemtable::replay_row(ObStoreCtx &ctx,
     ObMemtableKey mtk;
     ObRowData empty_old_row;
     const transaction::ObTransID tx_id = ctx.mvcc_acc_ctx_.tx_id_;
-    ObTxNodeArg arg(tx_id,        /*trans id*/
-                    &mtd,         /*memtable_data*/
-                    version,      /*memstore_version*/
-                    seq_no,       /*seq_no*/
-                    modify_count, /*modify_count*/
-                    acc_checksum, /*acc_checksum*/
-                    scn,          /*scn*/
-                    column_cnt    /*column_cnt*/);
+    ObTxNodeArg arg(tx_id,                   /*trans id*/
+                    &mtd,                    /*memtable_data*/
+                    version,                 /*memstore_version*/
+                    seq_no,                  /*seq_no*/
+                    modify_count,            /*modify_count*/
+                    acc_checksum,            /*acc_checksum*/
+                    scn,                     /*scn*/
+                    column_cnt,              /*column_cnt*/
+                    update_split_trace_id    /*update_split_trace_id*/);
 
     if (OB_FAIL(mtk.encode(&rowkey))) {
       TRANS_LOG(WARN, "mtk encode fail", "ret", ret);
@@ -2598,7 +2600,8 @@ int ObMemtable::set_(
                                                                 /* take two seq cnt, delete takes the former, need -1 in write seq*/
                                       (is_delete_insert_table() && new_row->row_flag_.is_delete()) ? write_seq - 1 : write_seq,
                                       write_epoch,               /*write_epoch*/
-                                      column_cnt                 /*column_cnt*/))) {
+                                      column_cnt,                /*column_cnt*/
+                                      new_row->update_split_trace_id_))) {
     // Step2: build and insert the tx node into the active memtable, it will
     // throw concurrency control related conflicts(write-write conflict, TSC and
     // primary key duplication) or sucessfully complete without errors. You need
@@ -2849,7 +2852,8 @@ int ObMemtable::mvcc_replay_(storage::ObStoreCtx &ctx,
                                                      this,
                                                      arg.seq_no_,
                                                      arg.scn_,
-                                                     arg.column_cnt_))) {
+                                                     arg.column_cnt_,
+                                                     arg.update_split_trace_id_))) {
     TRANS_LOG(WARN, "register_row_replay_cb fail", K(ret));
   } else if (FALSE_IT(timeguard.click("register_row_replay_cb"))) {
   } else {
@@ -2935,7 +2939,8 @@ int ObMemtable::batch_mvcc_write_(const storage::ObTableIterParam &param,
                                             init_timestamp_,           /*memstore_version*/
                                             write_seq,                 /*seq_no*/
                                             write_epoch,               /*write_epoch*/
-                                            column_cnt                 /*column_cnt*/))) {
+                                            column_cnt,                /*column_cnt*/
+                                            memtable_set_arg.new_row_[i].update_split_trace_id_))) {
     } else {
       // preallocate the memory for all ObMvccTransNode
       int64_t real_data_size = sizeof(ObMvccTransNode) + mtd.dup_size();

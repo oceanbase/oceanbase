@@ -493,6 +493,7 @@ struct ColumnContent
     is_nullable_(false),
     is_implicit_(false),
     is_predicate_column_(false),
+    is_key_column_(false),
     srs_id_(UINT64_MAX),
     column_name_()
   {}
@@ -502,6 +503,7 @@ struct ColumnContent
                N_NULLABLE, is_nullable_,
                "implicit", is_implicit_,
                K_(is_predicate_column),
+               K_(is_key_column),
                K_(srs_id),
                N_COLUMN_NAME, column_name_);
 
@@ -510,6 +512,10 @@ struct ColumnContent
   bool is_nullable_;
   bool is_implicit_;
   bool is_predicate_column_;
+  // the column is a rowkey / partition key / unique index key,
+  // consumed by check_update_key_column_changed to decide if the UPDATE
+  // actually changed a key value (used to gate update_split_trace_id).
+  bool is_key_column_;
   union { // only for gis
     struct {
       uint32_t geo_type_ : 5;
@@ -723,6 +729,7 @@ public:
   ObUpdCtDef(common::ObIAllocator &alloc)
     : ObDMLBaseCtDef(alloc, dupd_ctdef_, DAS_OP_TABLE_UPDATE),
       dupd_ctdef_(alloc),
+      enable_update_split_trace_id_(false),
       need_check_filter_null_(false),
       need_check_table_cycle_(false),
       distinct_algo_(T_DISTINCT_NONE),
@@ -739,6 +746,7 @@ public:
   { }
   INHERIT_TO_STRING_KV("ObDMLBaseCtDef", ObDMLBaseCtDef,
                        K_(dupd_ctdef),
+                       K_(enable_update_split_trace_id),
                        K_(need_check_filter_null),
                        K_(need_check_table_cycle),
                        K_(distinct_algo),
@@ -753,6 +761,7 @@ public:
                        K_(related_del_ctdefs),
                        K_(related_ins_ctdefs));
   ObDASUpdCtDef dupd_ctdef_;
+  bool enable_update_split_trace_id_;
   bool need_check_filter_null_;
   // need_check_table_cycle_ is true if the fk cascade update may cause a cycle reference.
   bool need_check_table_cycle_;
@@ -785,6 +794,7 @@ public:
       dlock_rtdef_(nullptr),
       primary_rtdef_(nullptr),
       is_row_changed_(false),
+      is_key_changed_(false),
       has_table_cycle_(false),
       found_rows_(0),
       related_upd_rtdefs_(),
@@ -820,6 +830,7 @@ public:
                        KPC_(dins_rtdef),
                        KPC_(dlock_rtdef),
                        K_(is_row_changed),
+                       K_(is_key_changed),
                        K_(has_table_cycle),
                        K_(found_rows),
                        K_(related_upd_rtdefs),
@@ -832,6 +843,11 @@ public:
   ObDASLockRtDef *dlock_rtdef_;
   ObUpdRtDef *primary_rtdef_; //reference the data table's rtdef
   bool is_row_changed_;
+  // true when the UPDATE actually changed a rowkey / partition key / unique
+  // index key value. Gates update_split_trace_id: when true (scenario 2)
+  // we skip trace_id so CDC receives DEL+INS as-is; when false (scenario 1)
+  // we stamp trace_id so CDC merges DEL+INS back into UPDATE.
+  bool is_key_changed_;
   bool has_table_cycle_;
   int64_t found_rows_;
   DASUpdRtDefArray related_upd_rtdefs_;
@@ -1128,6 +1144,57 @@ union DasTaskStatus
   };
 };
 
+class ObUpdateSplitTraceInfo
+{
+public:
+  ObUpdateSplitTraceInfo()
+    : pending_trace_id_(0),
+      next_reserved_trace_seq_(),
+      reserved_trace_cnt_(0),
+      branch_id_(-1),
+      cur_tx_id_()
+  {}
+
+  void reuse() { clear_pending_trace_id(); }
+
+  void reset()
+  {
+    clear_pending_trace_id();
+    next_reserved_trace_seq_.reset();
+    reserved_trace_cnt_ = 0;
+    branch_id_ = -1;
+    cur_tx_id_.reset();
+  }
+
+  int generate_trace_id(transaction::ObTxDesc &tx_desc, const int16_t branch_id);
+  void set_pending_trace_id(const int64_t trace_id) { pending_trace_id_ = trace_id; }
+  int64_t get_pending_trace_id() const { return pending_trace_id_; }
+  void clear_pending_trace_id() { pending_trace_id_ = 0; }
+
+  TO_STRING_KV(K_(pending_trace_id),
+               K_(next_reserved_trace_seq),
+               K_(reserved_trace_cnt),
+               K_(branch_id),
+               K_(cur_tx_id));
+
+private:
+  static const int64_t DEFAULT_RESERVE_CNT = 128;
+
+  int consume_reserved_trace_id();
+  OB_INLINE bool need_refresh_binding(const transaction::ObTxDesc &tx_desc, const int16_t branch_id) const {
+    return cur_tx_id_ != tx_desc.get_tx_id() || branch_id_ != branch_id;
+  }
+  int bind(const transaction::ObTxDesc &tx_desc, const int16_t branch_id);
+  OB_INLINE bool need_reserve() const { return reserved_trace_cnt_ <= 0; }
+  OB_INLINE bool reserved_trace_id_valid() const { return next_reserved_trace_seq_.is_valid(); }
+
+  int64_t pending_trace_id_;
+  transaction::ObTxSEQ next_reserved_trace_seq_;
+  int32_t reserved_trace_cnt_;
+  int16_t branch_id_;
+  transaction::ObTransID cur_tx_id_;
+};
+
 struct ObDMLRtCtx
 {
   ObDMLRtCtx(ObEvalCtx &eval_ctx, ObExecContext &exec_ctx, ObTableModifyOp &op)
@@ -1136,7 +1203,8 @@ struct ObDMLRtCtx
       op_(op),
       exec_ctx_(exec_ctx),
       das_task_memory_size_(0),
-      das_parallel_task_size_(0)
+      das_parallel_task_size_(0),
+      update_split_trace_()
   { }
 
   void reuse()
@@ -1144,16 +1212,27 @@ struct ObDMLRtCtx
     das_ref_.reuse();
     das_task_memory_size_ = 0;
     das_parallel_task_size_ = 0;
+    update_split_trace_.reuse();
   }
 
   void cleanup()
   {
     das_ref_.reset();
+    update_split_trace_.reset();
   }
 
   common::ObIAllocator &get_das_alloc() { return das_ref_.get_das_alloc(); }
   ObExecContext &get_exec_ctx() { return das_ref_.get_exec_ctx(); }
   ObEvalCtx &get_eval_ctx() { return das_ref_.get_eval_ctx(); }
+  // Arm with a tx-level unique trace ID so that subsequent write_row_to_das_op
+  // calls stamp it on each row, enabling CDC to pair a split DELETE+INSERT back
+  // into one logical UPDATE.  Sets 0 when the feature is disabled.
+  // Caller MUST call clear_update_split_trace_id after all related
+  // write_row_to_das_op calls finish.
+  int generate_update_split_trace_id(const ObUpdCtDef &upd_ctdef);
+  void set_update_split_trace_id(const int64_t trace_id) { update_split_trace_.set_pending_trace_id(trace_id); }
+  int64_t get_update_split_trace_id() const { return update_split_trace_.get_pending_trace_id(); }
+  void clear_update_split_trace_id() { update_split_trace_.clear_pending_trace_id(); }
   void set_pick_del_task_first() { das_task_status_.PICK_DEL_TASK_FIRST = 1; }
   void set_non_sub_full_task() { das_task_status_.NON_SUB_FULL_TASK = 1; }
   bool need_pick_del_task_first()
@@ -1185,6 +1264,7 @@ struct ObDMLRtCtx
   ObExecContext &exec_ctx_;
   int64_t das_task_memory_size_;
   int64_t das_parallel_task_size_;
+  ObUpdateSplitTraceInfo update_split_trace_;
 };
 
 template <typename T>

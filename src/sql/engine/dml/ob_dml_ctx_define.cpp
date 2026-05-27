@@ -275,7 +275,8 @@ OB_SERIALIZE_MEMBER(ColumnContent,
                     is_nullable_,
                     is_implicit_,
                     is_predicate_column_,
-                    srs_id_);
+                    srs_id_,
+                    is_key_column_);
 
 int SeRowkeyItem::init(
     const ObExprPtrIArray &row, ObEvalCtx &ctx, ObIAllocator &alloc, const int64_t rowkey_cnt)
@@ -588,6 +589,7 @@ OB_DEF_SERIALIZE(ObUpdCtDef)
   OZ(ObDASUtils::serialize_das_ctdefs(buf, buf_len, pos, related_upd_ctdefs_));
   OZ(ObDASUtils::serialize_das_ctdefs(buf, buf_len, pos, related_del_ctdefs_));
   OZ(ObDASUtils::serialize_das_ctdefs(buf, buf_len, pos, related_ins_ctdefs_));
+  OB_UNIS_ENCODE(enable_update_split_trace_id_);
   return ret;
 }
 
@@ -647,6 +649,7 @@ OB_DEF_DESERIALIZE(ObUpdCtDef)
   OZ(ObDASUtils::deserialize_das_ctdefs(buf, data_len, pos,
                                         alloc_, DAS_OP_TABLE_INSERT,
                                         related_ins_ctdefs_));
+  OB_UNIS_DECODE(enable_update_split_trace_id_);
   return ret;
 }
 
@@ -680,6 +683,7 @@ OB_DEF_SERIALIZE_SIZE(ObUpdCtDef)
   len += ObDASUtils::das_ctdefs_serialize_size(related_upd_ctdefs_);
   len += ObDASUtils::das_ctdefs_serialize_size(related_del_ctdefs_);
   len += ObDASUtils::das_ctdefs_serialize_size(related_ins_ctdefs_);
+  OB_UNIS_ADD_LEN(enable_update_split_trace_id_);
   return len;
 }
 
@@ -903,5 +907,92 @@ ObDMLBaseRtDef::~ObDMLBaseRtDef()
   fk_checker_array_.release_array();
   (void)TriggerHandle::free_trigger_param_memory(trig_rtdef_, false);
 }
+
+int ObDMLRtCtx::generate_update_split_trace_id(const ObUpdCtDef &upd_ctdef)
+{
+  int ret = OB_SUCCESS;
+  const int16_t branch_id = get_exec_ctx().get_das_ctx().get_write_branch_id();
+  if (upd_ctdef.enable_update_split_trace_id_) {
+    ObSQLSessionInfo *session = nullptr;
+    transaction::ObTxDesc *tx_desc = nullptr;
+    if (OB_ISNULL(session = get_exec_ctx().get_my_session()) ||
+        OB_ISNULL(tx_desc = session->get_tx_desc())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null", K(ret), K(session), K(tx_desc), K(update_split_trace_));
+    } else if (OB_FAIL(update_split_trace_.generate_trace_id(*tx_desc, branch_id))) {
+      LOG_WARN("generate update split trace_id failed", K(ret), K(update_split_trace_));
+    }
+  }
+  // when disabled, pending_trace_id stays 0 (cleared by the previous clear_update_split_trace_id)
+  return ret;
+}
+
+int ObUpdateSplitTraceInfo::bind(const transaction::ObTxDesc &tx_desc, const int16_t branch_id)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!tx_desc.get_tx_id().is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected tx_id", K(ret), K(tx_desc));
+  } else {
+    reserved_trace_cnt_ = 0;
+    branch_id_ = branch_id;
+    next_reserved_trace_seq_.reset();
+    cur_tx_id_ = tx_desc.get_tx_id();
+  }
+  return ret;
+}
+
+int ObUpdateSplitTraceInfo::consume_reserved_trace_id()
+{
+  int ret = OB_SUCCESS;
+  pending_trace_id_ = 0;
+  if (OB_UNLIKELY(!reserved_trace_id_valid() || reserved_trace_cnt_ < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("reserved trace_id is invalid",
+             K(ret), K_(next_reserved_trace_seq), K_(reserved_trace_cnt), K_(branch_id));
+  } else {
+    pending_trace_id_ = next_reserved_trace_seq_.cast_to_int();
+    ++next_reserved_trace_seq_;
+    --reserved_trace_cnt_;
+  }
+  return ret;
+}
+
+int ObUpdateSplitTraceInfo::generate_trace_id(transaction::ObTxDesc &tx_desc,
+                                              const int16_t branch_id)
+{
+  int ret = OB_SUCCESS;
+  transaction::ObTxSEQ reserved_trace_seq;
+  if (need_refresh_binding(tx_desc, branch_id) && OB_FAIL(bind(tx_desc, branch_id))) {
+    LOG_WARN("bind update split trace info failed", K(ret), K(branch_id));
+  } else if (need_reserve()) {
+    if (OB_FAIL(tx_desc.get_and_inc_tx_seq(branch_id, DEFAULT_RESERVE_CNT, reserved_trace_seq))) {
+      LOG_WARN("reserve update split trace ids failed",
+               K(ret), K(branch_id), "tx_id", tx_desc.get_tx_id());
+    } else if (OB_UNLIKELY(!reserved_trace_seq.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("reserved invalid update split trace_id range", K(ret), K(branch_id));
+    } else {
+      next_reserved_trace_seq_ = reserved_trace_seq;
+      reserved_trace_cnt_ = DEFAULT_RESERVE_CNT;
+      LOG_TRACE("reserve update split trace ids",
+                K(branch_id),
+                K(next_reserved_trace_seq_),
+                K(reserved_trace_cnt_));
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(consume_reserved_trace_id())) {
+    LOG_WARN("consume reserved trace_id failed", K(ret), K(branch_id));
+  } else {
+    LOG_TRACE("update_split generated trace_id",
+              K_(pending_trace_id),
+              K(branch_id),
+              K(reserved_trace_cnt_));
+  }
+  return ret;
+}
+
 }  // namespace sql
 }  // namespace oceanbase

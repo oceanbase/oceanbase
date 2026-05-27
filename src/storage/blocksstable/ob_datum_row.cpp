@@ -76,7 +76,8 @@ ObDatumRow::ObDatumRow(const uint64_t tenant_id)
     delete_version_(0),
     storage_datums_(nullptr),
     datum_buffer_(),
-    trans_info_(nullptr)
+    trans_info_(nullptr),
+    update_split_trace_id_(0)
 {
   if (share::is_reserve_mode()) {
     local_allocator_.set_ctx_id(ObCtxIds::MERGE_RESERVE_CTX_ID);
@@ -197,6 +198,7 @@ void ObDatumRow::reset()
   count_ = 0;
   local_allocator_.reset();
   trans_info_ = nullptr;
+  update_split_trace_id_ = 0;
 }
 
 void ObDatumRow::reuse()
@@ -217,6 +219,7 @@ void ObDatumRow::reuse()
   if (OB_NOT_NULL(trans_info_)) {
     trans_info_[0] = '\0';
   }
+  update_split_trace_id_ = 0;
 }
 
 int ObDatumRow::deep_copy(const ObDatumRow &src, ObIAllocator &allocator)
@@ -314,6 +317,7 @@ int ObDatumRow::copy_attributes_except_datums(const ObDatumRow &other)
     snapshot_version_ = other.snapshot_version_;
     insert_version_ = other.insert_version_;
     delete_version_ = other.delete_version_;
+    update_split_trace_id_ = other.update_split_trace_id_;
   }
   return ret;
 }
@@ -337,6 +341,7 @@ int ObDatumRow::shallow_copy(const ObDatumRow &other)
     row_flag_ = other.row_flag_;
     read_flag_ = other.read_flag_;
     count_ = other.count_;
+    update_split_trace_id_ = other.update_split_trace_id_;
   }
   return ret;
 }
@@ -423,6 +428,9 @@ DEF_TO_STRING(ObDatumRow)
   }
   if (trans_info_) {
     databuff_printf(buf, buf_len, pos, ",trans_info[version, scn, txid, seq_no(branch_id, seq)]:%s", trans_info_);
+  }
+  if (update_split_trace_id_ != 0) {
+    databuff_printf(buf, buf_len, pos, ",update_split_trace_id:%ld", update_split_trace_id_);
   }
   J_OBJ_END();
   return pos;

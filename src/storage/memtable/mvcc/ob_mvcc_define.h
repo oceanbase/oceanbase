@@ -52,6 +52,9 @@ struct ObTxNodeArg
   share::SCN scn_;
   // colume_cnt_ is the column count of the insert row
   int64_t column_cnt_;
+  // update_split_trace_id_ pairs the DELETE+INSERT rows when an UPDATE is split,
+  // 0 means not set. Stored as raw int64_t to avoid unnecessary ObTxSEQ conversions.
+  int64_t update_split_trace_id_;
 
   TO_STRING_KV(K_(tx_id),
                KP_(data),
@@ -62,7 +65,8 @@ struct ObTxNodeArg
                K_(seq_no),
                K_(write_epoch),
                K_(scn),
-               K_(column_cnt));
+               K_(column_cnt),
+               K_(update_split_trace_id));
 
   ObTxNodeArg()
     : tx_id_(),
@@ -73,7 +77,8 @@ struct ObTxNodeArg
     memstore_version_(0),
     seq_no_(),
     scn_(share::SCN::max_scn()),
-    column_cnt_(0) {}
+    column_cnt_(0),
+    update_split_trace_id_(0) {}
 
   // Constructor for leader
   ObTxNodeArg(const transaction::ObTransID tx_id,
@@ -92,7 +97,8 @@ struct ObTxNodeArg
     seq_no_(seq_no),
     write_epoch_(write_epoch),
     scn_(share::SCN::max_scn()),
-    column_cnt_(column_cnt) {}
+    column_cnt_(column_cnt),
+    update_split_trace_id_(0) {}
 
   // Constructor for follower
   ObTxNodeArg(const transaction::ObTransID tx_id,
@@ -102,7 +108,8 @@ struct ObTxNodeArg
               const uint32_t modify_count,
               const uint32_t acc_checksum,
               const share::SCN scn,
-              const int64_t column_cnt)
+              const int64_t column_cnt,
+              const int64_t update_split_trace_id = 0)
     : tx_id_(tx_id),
     data_(data),
     old_row_(),
@@ -112,7 +119,8 @@ struct ObTxNodeArg
     seq_no_(seq_no),
     write_epoch_(0),
     scn_(scn),
-    column_cnt_(column_cnt) {}
+    column_cnt_(column_cnt),
+    update_split_trace_id_(update_split_trace_id) {}
 
   // Setter for leader
   void set(const transaction::ObTransID tx_id,
@@ -121,7 +129,8 @@ struct ObTxNodeArg
               const int64_t memstore_version,
               const transaction::ObTxSEQ seq_no,
               const int64_t write_epoch,
-              const int64_t column_cnt)
+              const int64_t column_cnt,
+              const int64_t update_split_trace_id = 0)
   {
     tx_id_ = tx_id;
     data_ = data;
@@ -133,6 +142,7 @@ struct ObTxNodeArg
     write_epoch_ = write_epoch;
     scn_ = share::SCN::max_scn();
     column_cnt_ = column_cnt;
+    update_split_trace_id_ = update_split_trace_id;
   }
 
   // Setter for follower
@@ -143,7 +153,8 @@ struct ObTxNodeArg
            const uint32_t modify_count,
            const uint32_t acc_checksum,
            const share::SCN scn,
-           const int64_t column_cnt)
+           const int64_t column_cnt,
+           const int64_t update_split_trace_id = 0)
   {
     tx_id_ = tx_id;
     data_ = data;
@@ -154,6 +165,7 @@ struct ObTxNodeArg
     seq_no_ = seq_no;
     scn_ = scn;
     column_cnt_ = column_cnt;
+    update_split_trace_id_ = update_split_trace_id;
   }
 
   void reset() {
@@ -167,6 +179,7 @@ struct ObTxNodeArg
     write_epoch_ = 0;
     scn_ = share::SCN::min_scn();
     column_cnt_ = 0;
+    update_split_trace_id_ = 0;
   }
 };
 

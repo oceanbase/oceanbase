@@ -326,7 +326,8 @@ ObMemtableMutatorRow::ObMemtableMutatorRow():
     acc_checksum_(0),
     version_(0),
     flag_(0),
-    column_cnt_(0)
+    column_cnt_(0),
+    update_split_trace_id_(0)
 {
 }
 
@@ -341,7 +342,8 @@ ObMemtableMutatorRow::ObMemtableMutatorRow(const uint64_t table_id,
                                            const int64_t version,
                                            const int32_t flag,
                                            const transaction::ObTxSEQ seq_no,
-                                           const int64_t column_cnt):
+                                           const int64_t column_cnt,
+                                           const int64_t update_split_trace_id):
     ObMutator(table_id, rowkey, table_version, seq_no),
     dml_flag_(dml_flag),
     update_seq_((uint32_t)modify_count),
@@ -350,7 +352,8 @@ ObMemtableMutatorRow::ObMemtableMutatorRow(const uint64_t table_id,
     acc_checksum_(acc_checksum),
     version_(version),
     flag_(flag),
-    column_cnt_(column_cnt)
+    column_cnt_(column_cnt),
+    update_split_trace_id_(update_split_trace_id)
 {}
 
 ObMemtableMutatorRow::~ObMemtableMutatorRow()
@@ -366,6 +369,7 @@ void ObMemtableMutatorRow::reset()
   acc_checksum_ = 0;
   version_ = 0;
   flag_ = 0;
+  update_split_trace_id_ = 0;
 }
 
 int ObMemtableMutatorRow::copy(uint64_t &table_id,
@@ -379,7 +383,8 @@ int ObMemtableMutatorRow::copy(uint64_t &table_id,
                                int64_t &version,
                                int32_t &flag,
                                transaction::ObTxSEQ &seq_no,
-                               int64_t &column_cnt) const
+                               int64_t &column_cnt,
+                               int64_t &update_split_trace_id) const
 {
   int ret = OB_SUCCESS;
   table_id = table_id_;
@@ -394,6 +399,7 @@ int ObMemtableMutatorRow::copy(uint64_t &table_id,
   flag = flag_;
   seq_no = seq_no_;
   column_cnt = column_cnt_;
+  update_split_trace_id = update_split_trace_id_;
   return ret;
 }
 
@@ -514,7 +520,8 @@ int ObMemtableMutatorRow::serialize(char *buf, int64_t &buf_len, int64_t &pos,
         || OB_FAIL(encode_vi64(buf, buf_len, new_pos, version_))
         || OB_FAIL(encode_vi32(buf, buf_len, new_pos, flag_))
         || OB_FAIL(seq_no_.serialize(buf, buf_len, new_pos))
-        || OB_FAIL(encode_vi64(buf, buf_len, new_pos, column_cnt_))) {
+        || OB_FAIL(encode_vi64(buf, buf_len, new_pos, column_cnt_))
+        || OB_FAIL(encode_vi64(buf, buf_len, new_pos, update_split_trace_id_))) {
         if (OB_BUF_NOT_ENOUGH != ret || buf_len > common::OB_MAX_LOG_ALLOWED_SIZE) {
           TRANS_LOG(INFO, "serialize row fail", K(ret), KP(buf), K(buf_len), K(pos), K(new_pos));
         }
@@ -687,6 +694,12 @@ int ObMemtableMutatorRow::deserialize(const char *buf, const int64_t buf_len, in
         if (OB_SUCC(ret) && (new_pos < decrypted_len)) {
           if (OB_FAIL(decode_vi64(decrypted_buf, decrypted_len, new_pos, (int64_t *)&column_cnt_))) {
             TRANS_LOG(WARN, "deserialize column cnt fail", K(ret), K(table_id_), K(decrypted_len), K(new_pos));
+          }
+        }
+        // Tail-compatible: old clog without this field keeps 0 default
+        if (OB_SUCC(ret) && (new_pos < decrypted_len)) {
+          if (OB_FAIL(decode_vi64(decrypted_buf, decrypted_len, new_pos, &update_split_trace_id_))) {
+            TRANS_LOG(WARN, "deserialize update_split_trace_id fail", K(ret), K(table_id_), K(decrypted_len), K(new_pos));
           }
         }
         if (OB_SUCC(ret)) {
@@ -908,6 +921,7 @@ int ObMutatorWriter::append_row_kv(
     row_header.tablet_id_ = redo.tablet_id_;
     //TODO: table_id is just used as encrypt_index,
     //      if table_id is no longer used, we may rename it in the future
+    // 构造 Clog 行记录，携带 Update 拆分追踪标识（如有）供 CDC 解析配对
     ObMemtableMutatorRow row(table_id,
                              rowkey,
                              table_version,
@@ -919,7 +933,8 @@ int ObMutatorWriter::append_row_kv(
                              redo.version_,
                              redo.flag_,
                              redo.seq_no_,
-                             redo.column_cnt_);
+                             redo.column_cnt_,
+                             redo.update_split_trace_id_);
     int64_t tmp_pos = buf_.get_position();
     int64_t row_capacity = row_capacity_;
 

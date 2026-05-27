@@ -508,7 +508,8 @@ int ObConflictChecker::check_duplicate_rowkey(const ObChunkDatumStore::StoredRow
 
 // 从hash map中删除冲突base行
 int ObConflictChecker::delete_old_row(const ObChunkDatumStore::StoredRow *replace_row,
-                                      ObNewRowSource from)
+                                      ObNewRowSource from,
+                                      int64_t update_split_trace_id)
 {
   int ret = OB_SUCCESS;
 
@@ -535,6 +536,7 @@ int ObConflictChecker::delete_old_row(const ObChunkDatumStore::StoredRow *replac
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("constraint_value is unexpected", K(ret));
       } else {
+        constraint_value->update_split_trace_id_ = update_split_trace_id;
         constraint_value->current_datum_row_ = NULL;
         constraint_value->new_row_source_ = from;
       }
@@ -545,7 +547,8 @@ int ObConflictChecker::delete_old_row(const ObChunkDatumStore::StoredRow *replac
 
 // 插入新行到hash map中
 int ObConflictChecker::insert_new_row(const ObChunkDatumStore::StoredRow *new_row,
-                                      ObNewRowSource from)
+                                      ObNewRowSource from,
+                                      int64_t update_split_trace_id)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(to_expr(new_row))) {
@@ -586,6 +589,8 @@ int ObConflictChecker::insert_new_row(const ObChunkDatumStore::StoredRow *new_ro
         // map中命中，说明base行被删除了，然后插入新行
         constraint_value->current_datum_row_ = new_row;
         constraint_value->new_row_source_ = from;
+        constraint_value->update_split_trace_id_ = update_split_trace_id;
+
         LOG_DEBUG("add one row to hash map and current_datum_row_ is null",
                   K(i), KPC(constraint_key), KPC(constraint_value));
       }
@@ -594,6 +599,8 @@ int ObConflictChecker::insert_new_row(const ObChunkDatumStore::StoredRow *new_ro
       ObConflictValue new_constraint_value;
       new_constraint_value.current_datum_row_ = new_row;
       new_constraint_value.new_row_source_ = from;
+      new_constraint_value.update_split_trace_id_ = update_split_trace_id;
+
       if (OB_FAIL(build_rowkey(insert_rowkey, rowkey_cst_ctdef))) {
         LOG_WARN("fail to build insert_rowkey rowkey", K(ret), K(i), KPC(rowkey_cst_ctdef));
       } else if (OB_ISNULL(insert_rowkey)) {
@@ -610,12 +617,13 @@ int ObConflictChecker::insert_new_row(const ObChunkDatumStore::StoredRow *new_ro
 }
 
 int ObConflictChecker::update_row(const ObChunkDatumStore::StoredRow *new_row,
-                                  const ObChunkDatumStore::StoredRow *old_row)
+                                  const ObChunkDatumStore::StoredRow *old_row,
+                                  int64_t update_split_trace_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(delete_old_row(old_row, ObNewRowSource::FROM_INSERT))) {
+  if (OB_FAIL(delete_old_row(old_row, ObNewRowSource::FROM_INSERT, update_split_trace_id))) {
     LOG_WARN("fail to delete old_row", K(ret), KPC(old_row));
-  } else if (OB_FAIL(insert_new_row(new_row, ObNewRowSource::FROM_UPDATE))) {
+  } else if (OB_FAIL(insert_new_row(new_row, ObNewRowSource::FROM_UPDATE, update_split_trace_id))) {
     LOG_WARN("fail to insert new_row", K(ret), KPC(new_row));
   }
   return ret;

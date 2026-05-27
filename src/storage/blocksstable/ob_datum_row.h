@@ -409,6 +409,9 @@ public:
   // add by @zimiao ObDatumRow does not care about the free of trans_info_ptr's memory
   // The caller must guarantee the life cycle and release of this memory
   char *trans_info_;
+  // pairs the DELETE+INSERT rows when an UPDATE is split.
+  // 0 means not set. Written to clog for CDC to reassemble UPDATE semantics.
+  int64_t update_split_trace_id_;
 };
 
 class ObNewRowBuilder

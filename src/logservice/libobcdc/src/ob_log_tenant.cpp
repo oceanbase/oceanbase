@@ -60,6 +60,7 @@ ObLogTenant::ObLogTenant() :
     committer_next_trans_schema_version_(OB_INVALID_VERSION),
     redo_cf_handle_(NULL),
     lob_storage_cf_handle_(nullptr),
+    merge_cf_handle_(nullptr),
     lob_storage_clean_task_()
 {
   tenant_name_[0] = '\0';
@@ -81,6 +82,7 @@ int ObLogTenant::init(
     const TenantCheckpoint &tenant_checkpoint,
     void *redo_cf_handle,
     void *lob_storage_cf_handle,
+    void *merge_cf_handle,
     ObLogTenantMgr &tenant_mgr)
 {
   int ret = OB_SUCCESS;
@@ -101,6 +103,7 @@ int ObLogTenant::init(
   } else if (FALSE_IT(tenant_id_ = tenant_id)) {
   } else if (FALSE_IT(redo_cf_handle_ = redo_cf_handle)) {
   } else if (FALSE_IT(lob_storage_cf_handle_ = lob_storage_cf_handle)) {
+  } else if (FALSE_IT(merge_cf_handle_ = merge_cf_handle)) {
   } else if (OB_ISNULL(task_queue_ = OB_NEW(ObLogTenantTaskQueue, ObModIds::OB_LOG_TENANT_TASK_QUEUE, *this))) {
     LOG_ERROR("create task queue fail", K(task_queue_));
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -283,6 +286,9 @@ void ObLogTenant::reset()
     if (OB_NOT_NULL(redo_cf_handle_) && OB_FAIL(store_service->drop_column_family(redo_cf_handle_))) {
       LOG_WARN("drop_redo_column_family failed", K(tenant_id));
     }
+    if (OB_NOT_NULL(merge_cf_handle_) && OB_FAIL(store_service->drop_column_family(merge_cf_handle_))) {
+      LOG_WARN("drop_merge_column_family failed", K(tenant_id));
+    }
     LOG_INFO("prepare destroy tenant column family", K(tenant_id));
     if (OB_NOT_NULL(lob_storage_cf_handle_) && OB_FAIL(store_service->destory_column_family(lob_storage_cf_handle_))) {
       LOG_WARN("destroy_lob_column_family failed", K(tenant_id));
@@ -290,8 +296,12 @@ void ObLogTenant::reset()
     if (OB_NOT_NULL(redo_cf_handle_) && OB_FAIL(store_service->destory_column_family(redo_cf_handle_))) {
       LOG_WARN("destroy_redo_column_family failed", K(tenant_id));
     }
+    if (OB_NOT_NULL(merge_cf_handle_) && OB_FAIL(store_service->destory_column_family(merge_cf_handle_))) {
+      LOG_WARN("destroy_merge_column_family failed", K(tenant_id));
+    }
     redo_cf_handle_ = nullptr;
     lob_storage_cf_handle_ = nullptr;
+    merge_cf_handle_ = nullptr;
     LOG_INFO("handle tenant column family done", K(tenant_id));
   }
 

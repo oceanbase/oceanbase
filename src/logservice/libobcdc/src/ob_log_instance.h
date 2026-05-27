@@ -34,6 +34,7 @@
 #include "ob_log_work_mode.h"                             // WorkingMode
 #include "ob_log_meta_data_refresh_mode.h"                // RefreshMode
 #include "ob_cdc_lob_aux_meta_storager.h"                 // ObCDCLobAuxMetaStorager
+#include "ob_cdc_update_split_merge_storager.h"           // ObCDCUpdateSplitMergeStorager
 #include "ob_cdc_global_info.h"                           // ObCDCGlobalInfo
 #include "ob_log_fetcher_dispatcher.h"                    // ObLogFetcherDispatcher
 #include "ob_log_meta_data_service.h"                     // ObLogMetaDataService
@@ -360,6 +361,7 @@ public:
   bool                      is_schema_split_mode_;
   bool                      enable_filter_sys_tenant_;
   bool                      enable_filter_mow_lob_;
+  bool                      enable_update_split_merge_;
   std::string               drc_message_factory_binlog_record_type_;
   WorkingMode               working_mode_;
   RefreshMode               refresh_mode_;
@@ -396,6 +398,7 @@ public:
   IObLogFormatter           *formatter_;
   IObCDCLobDataMerger       *lob_data_merger_;
   ObCDCLobAuxMetaStorager   lob_aux_meta_storager_;
+  ObCDCUpdateSplitMergeStorager update_split_merge_storager_;
   ObLogDDLProcessor         *ddl_processor_;
   IObLogSequencer           *sequencer_;
   IObLogPartTransParser     *part_trans_parser_;

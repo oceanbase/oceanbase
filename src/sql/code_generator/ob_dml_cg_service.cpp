@@ -440,8 +440,13 @@ int ObDmlCgService::generate_update_ctdef(ObLogDelUpd &op,
   bool is_update_uk = false;
   const ObAssignments &assigns = index_dml_info.assignments_;
   bool gen_expand_ctdef = false;
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   LOG_TRACE("begin to generate update ctdef", K(index_dml_info));
-  if (OB_FAIL(old_row.assign(index_dml_info.column_old_values_exprs_))) {
+
+  if (!tenant_config.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant_config is not valid", K(ret), K(MTL_ID()));
+  } else if (OB_FAIL(old_row.assign(index_dml_info.column_old_values_exprs_))) {
     LOG_WARN("fail to assign update old row", K(ret));
   } else if (OB_FAIL(new_row.assign(old_row))) {
     LOG_WARN("assign new row failed", K(ret));
@@ -498,6 +503,12 @@ int ObDmlCgService::generate_update_ctdef(ObLogDelUpd &op,
                                               index_dml_info,
                                               upd_ctdef.assign_columns_))) {
     LOG_WARN("convert upd assign infos failed", K(ret), K(index_dml_info));
+  } else if (FALSE_IT(upd_ctdef.enable_update_split_trace_id_ = tenant_config->_enable_update_split_with_unique_id &&
+                                                                index_dml_info.is_primary_index_)) {
+  } else if (FALSE_IT(upd_ctdef.dupd_ctdef_.enable_update_split_trace_id_ = upd_ctdef.enable_update_split_trace_id_)) {
+  } else if (upd_ctdef.enable_update_split_trace_id_ &&
+            OB_FAIL(mark_key_columns_for_update(op, index_dml_info, upd_ctdef.assign_columns_))) {
+    LOG_WARN("mark key columns failed", K(ret), K(index_dml_info));
   } else {
     upd_ctdef.need_check_filter_null_ = index_dml_info.need_filter_null_;
     upd_ctdef.distinct_algo_ = index_dml_info.distinct_algo_;
@@ -550,6 +561,9 @@ int ObDmlCgService::generate_update_ctdef(ObLogDelUpd &op,
                                                   new_row,
                                                   upd_ctdef.related_ins_ctdefs_))) {
       LOG_WARN("generate related ins ctdef failed", K(ret));
+    } else {
+      upd_ctdef.ddel_ctdef_->enable_update_split_trace_id_ = upd_ctdef.enable_update_split_trace_id_;
+      upd_ctdef.dins_ctdef_->enable_update_split_trace_id_ = upd_ctdef.enable_update_split_trace_id_;
     }
   }
   if (OB_SUCC(ret) && lib::is_mysql_mode()) {
@@ -850,6 +864,7 @@ int ObDmlCgService::generate_insert_up_ctdef(ObLogInsert &op,
   } else {
     insert_up_ctdef->ins_ctdef_ = ins_ctdef;
     insert_up_ctdef->upd_ctdef_ = upd_ctdef;
+    ins_ctdef->das_base_ctdef_.enable_update_split_trace_id_ = upd_ctdef->enable_update_split_trace_id_;
   }
 
   return ret;
@@ -3405,6 +3420,99 @@ int ObDmlCgService::convert_upd_assign_infos(bool is_heap_table,
       //do nothing
     } else if (OB_FAIL(assign_infos.push_back(column_content))) {
       LOG_WARN("store colum content to assign infos failed", K(ret), K(column_content));
+    }
+  }
+  return ret;
+}
+
+int ObDmlCgService::mark_key_columns_for_update(ObLogDelUpd &op,
+                                                const IndexDMLInfo &index_dml_info,
+                                                ColContentFixedArray &assign_infos)
+{
+  int ret = OB_SUCCESS;
+  ObLogPlan *log_plan = op.get_plan();
+  ObSchemaGetterGuard *schema_guard = nullptr;
+  const ObTableSchema *table_schema = nullptr;
+  if (OB_ISNULL(log_plan) ||
+      OB_ISNULL(schema_guard = log_plan->get_optimizer_context().get_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), KP(log_plan));
+  } else if (OB_FAIL(schema_guard->get_table_schema(MTL_ID(),
+                                                    index_dml_info.ref_table_id_,
+                                                    table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(index_dml_info.ref_table_id_));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", K(ret));
+  } else {
+    ObSEArray<uint64_t, 16> uk_rowkey_cids;
+    // collect UK rowkey column IDs from all unique indexes on this table,
+    // including global unique indexes which are NOT in related_index_ids_
+    const ObIArray<ObAuxTableMetaInfo> &index_infos = table_schema->get_simple_index_infos();
+    for (int64_t i = 0; OB_SUCC(ret) && i < index_infos.count(); ++i) {
+      const ObTableSchema *idx_schema = nullptr;
+      if (OB_FAIL(schema_guard->get_table_schema(MTL_ID(), index_infos.at(i).table_id_, idx_schema))) {
+        LOG_WARN("get index schema failed", K(ret), "tid", index_infos.at(i).table_id_);
+      } else if (OB_ISNULL(idx_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("index schema is null", K(ret), "tid", index_infos.at(i).table_id_);
+      } else if (!idx_schema->is_unique_index()) {
+        // only unique-index rowkey columns drive split
+      } else {
+        ObSEArray<uint64_t, 8> rowkey_cids;
+        if (OB_FAIL(idx_schema->get_rowkey_column_ids(rowkey_cids))) {
+          LOG_WARN("get index rowkey cids failed", K(ret));
+        } else {
+          for (int64_t j = 0; OB_SUCC(ret) && j < rowkey_cids.count(); ++j) {
+            if (OB_FAIL(add_var_to_array_no_dup(uk_rowkey_cids, rowkey_cids.at(j)))) {
+              LOG_WARN("append uk rowkey cid failed", K(ret));
+            }
+          }
+        }
+      }
+    }
+
+    // assign_infos may be shorter than assigns because convert_upd_assign_infos
+    // skips T_TABLET_AUTOINC_NEXTVAL for heap tables, so indices are not aligned.
+    // Use projector_index_ to locate the corresponding col_expr in column_exprs_.
+    const ObIArray<ObColumnRefRawExpr*> &column_exprs = index_dml_info.column_exprs_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < assign_infos.count(); ++i) {
+      const uint64_t projector_idx = assign_infos.at(i).projector_index_;
+      if (projector_idx >= static_cast<uint64_t>(column_exprs.count())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("projector index out of range", K(ret), K(i), K(projector_idx),
+                 K(column_exprs.count()));
+      } else {
+        const ObColumnRefRawExpr *col_expr = column_exprs.at(projector_idx);
+        if (OB_ISNULL(col_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("column expr is null", K(ret), K(i), K(projector_idx));
+        } else {
+          // col_expr may reference a generated view (e.g. UPDATE t1 AS t1_0),
+          // whose column_id is renumbered within the view. Translate to the
+          // main-table base col_id before schema lookup.
+          uint64_t base_cid = OB_INVALID_ID;
+          if (OB_FAIL(get_column_ref_base_cid(op, col_expr, base_cid))) {
+            LOG_WARN("get base column id failed", K(ret), KPC(col_expr));
+          } else {
+            const ObColumnSchemaV2 *col_schema = table_schema->get_column_schema(base_cid);
+            if (OB_ISNULL(col_schema)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("column schema is null", K(ret), K(i), K(base_cid), KPC(col_expr));
+            } else {
+              bool is_key = false;
+              if (col_schema->is_rowkey_column() || col_schema->is_part_key_column()) {
+                is_key = true;
+              } else if (has_exist_in_array(uk_rowkey_cids, base_cid)) {
+                is_key = true;
+              }
+              if (is_key) {
+                assign_infos.at(i).is_key_column_ = true;
+              }
+            }
+          }
+        }
+      }
     }
   }
   return ret;

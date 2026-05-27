@@ -94,7 +94,12 @@ public:
       uint64_t is_main_table_in_fts_ddl_        : 1; // main table is in fts ddl for mode of unstable ftparser.
       uint64_t is_update_pk_                    : 1;
       uint64_t is_vec_hnsw_index_vid_opt_       : 1;  // hnsw index vid opt for tables without pk
-      uint64_t reserved_                        : 47; //add new flag before reserved_
+      uint64_t is_embedded_vec_ref_column_      : 1;  // semantic embeding table column change flags
+      // Backward compatibility: default 0 means DAS builds vec_index_acquire_ctxs_.
+      // CG writes 1 only when build_vec_index_tablet_infos can be safely skipped.
+      uint64_t not_need_build_vec_index_tablet_infos_ : 1;
+      uint64_t enable_update_split_trace_id_    : 1;
+      uint64_t reserved_                        : 44; //add new flag before reserved_
       uint64_t compat_version_                  : 4; //prohibited to insert new flags between compat_version_ and reserved_
     };
   };
@@ -471,6 +476,30 @@ public:
   const static uint32_t DAS_ROW_TRANS_STRING_SIZE = 128;
   const static uint32_t DAS_WITH_TRANS_INFO_EXTEND_SIZE =
       DAS_ROW_DEFAULT_EXTEND_SIZE + sizeof(int32_t) + DAS_ROW_TRANS_STRING_SIZE;
+  // extra_payload layout:
+  //   trans_info at offset 0 (unchanged from old version)
+  //   trace_id appended after base extend area (last 8 bytes of allocation)
+  //
+  // row_extend_size_ = 16 or 148: no trace_id
+  // row_extend_size_ = 24 or 156: trace_id at offset 16 or 148
+  const static uint32_t DAS_UPDATE_SPLIT_TRACE_ID_SIZE = sizeof(int64_t);
+
+  // Only two extend sizes reserve a trailing trace_id slot:
+  //   DAS_ROW_DEFAULT_EXTEND_SIZE     + 8  (no trans_info)
+  //   DAS_WITH_TRANS_INFO_EXTEND_SIZE + 8  (with trans_info)
+  // Any other size means either no slot at all, or writing would overwrite trans_info.
+  static bool has_update_split_trace_id_slot(uint32_t row_extend_size)
+  {
+    return row_extend_size == DAS_ROW_DEFAULT_EXTEND_SIZE + DAS_UPDATE_SPLIT_TRACE_ID_SIZE ||
+           row_extend_size == DAS_WITH_TRANS_INFO_EXTEND_SIZE + DAS_UPDATE_SPLIT_TRACE_ID_SIZE;
+  }
+
+  static int set_update_split_trace_id(ObChunkDatumStore::StoredRow &row,
+                                       uint32_t row_extend_size,
+                                       int64_t update_split_trace_id);
+  static int get_update_split_trace_id(const ObChunkDatumStore::StoredRow &row,
+                                       uint32_t row_extend_size,
+                                       int64_t &update_split_trace_id);
 private:
   static const int64_t DAS_WRITE_ROW_LIST_LEN = 128;
 private:

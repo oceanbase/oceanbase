@@ -90,6 +90,7 @@ public:
                         MY_SPEC.conflict_checker_ctdef_),
       insert_up_row_store_("InsertUpRow"),
       is_ignore_(false),
+      enable_update_split_trace_id_(false),
       gts_state_(WITHOUT_GTS_OPT_STATE),
       has_guarantee_last_insert_id_(false)
   {
@@ -154,6 +155,8 @@ protected:
   int delete_upd_old_row_to_das();
 
   int insert_upd_new_row_to_das();
+
+  int update_row_to_das();
 
   int delete_one_upd_old_row_das(const ObUpdCtDef &upd_ctdef,
                                  ObUpdRtDef &upd_rtdef,
@@ -253,6 +256,7 @@ protected:
   common::ObArrayWrap<ObInsertUpRtDef> insert_up_rtdefs_;
   ObChunkDatumStore insert_up_row_store_; //所有的insert_up的行的集合
   bool is_ignore_; // 暂时记录一下是否是ignore的insert_up SQL语句
+  bool enable_update_split_trace_id_;
   ObDmlGTSOptState gts_state_;
   bool has_guarantee_last_insert_id_;
 };
