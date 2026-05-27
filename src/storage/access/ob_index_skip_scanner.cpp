@@ -69,9 +69,14 @@ int ObIndexSkipCtlStrategy::check_disabled(const ObIndexSkipState &state, bool &
   return ret;
 }
 
-ObISkipScanner::ObISkipScanner(const bool is_for_memtable, const ObSkipScannerType type, const ObStorageDatumUtils &datum_utils)
+ObISkipScanner::ObISkipScanner(
+    const bool is_for_memtable,
+    const bool is_multi_version_sstable,
+    const ObSkipScannerType type,
+    const blocksstable::ObStorageDatumUtils &datum_utils)
   : range_alloc_("SS_RANGE", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     is_inited_(false),
+    is_multi_version_sstable_(is_multi_version_sstable),
     type_(type),
     micro_start_(-1),
     micro_last_(-1),
@@ -79,6 +84,7 @@ ObISkipScanner::ObISkipScanner(const bool is_for_memtable, const ObSkipScannerTy
     index_skip_strategy_(is_for_memtable ? ObIndexSkipCtlStrategyType::COUNT_BASED : ObIndexSkipCtlStrategyType::RATIO_BASED),
     datum_utils_(datum_utils),
     complete_range_(),
+    multi_version_complete_range_(),
     range_datums_(nullptr),
     scan_range_(nullptr),
     read_info_(nullptr),
@@ -96,11 +102,13 @@ ObISkipScanner::~ObISkipScanner()
 void ObISkipScanner::reset()
 {
   is_inited_ = false;
+  is_multi_version_sstable_ = false;
   micro_start_ = -1;
   micro_last_ = -1;
   micro_current_ = -1;
   index_skip_strategy_.reset();
   complete_range_.reset();
+  multi_version_complete_range_.reset();
   if (OB_LIKELY(nullptr != range_datums_ && nullptr != stmt_alloc_)) {
     stmt_alloc_->free(range_datums_);
   }
@@ -111,8 +119,10 @@ void ObISkipScanner::reset()
   range_alloc_.reset();
 }
 
-ObIndexSkipScanner::ObIndexSkipScanner(const bool is_for_memtable, const ObStorageDatumUtils &datum_utils)
-  : ObISkipScanner(is_for_memtable, ObSkipScannerType::INDEX_SKIP_SCAN, datum_utils),
+ObIndexSkipScanner::ObIndexSkipScanner(const bool is_for_memtable,
+                                       const bool is_multi_version_sstable,
+                                       const ObStorageDatumUtils &datum_utils)
+  : ObISkipScanner(is_for_memtable, is_multi_version_sstable, ObSkipScannerType::INDEX_SKIP_SCAN, datum_utils),
     prefix_alloc_("SS_PREFIX", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
     is_disabled_(false),
     is_border_after_disabled_(false),
@@ -166,6 +176,8 @@ int ObIndexSkipScanner::init(
   } else if (OB_FAIL(prepare_ranges(is_reverse_scan, prefix_cnt, scan_range, skip_range,
                                     read_info.get_schema_rowkey_count(), stmt_allocator))) {
     LOG_WARN("failed to prepare range", KR(ret));
+  } else if (is_multi_version_sstable_ && OB_FAIL(complete_range_.to_multi_version_range(range_alloc_, multi_version_complete_range_))) {
+    LOG_WARN("failed to build multi version complete range", KR(ret));
   } else {
     is_reverse_scan_ = is_reverse_scan;
     prefix_cnt_ = prefix_cnt;
@@ -203,6 +215,8 @@ int ObIndexSkipScanner::switch_info(
   } else if (OB_FAIL(prepare_ranges(is_reverse_scan, prefix_cnt, scan_range, skip_range,
                                     read_info.get_schema_rowkey_count(), stmt_allocator))) {
     LOG_WARN("failed to init ranges", KR(ret));
+  } else if (is_multi_version_sstable_ && OB_FAIL(complete_range_.to_multi_version_range(range_alloc_, multi_version_complete_range_))) {
+    LOG_WARN("failed to build multi version complete range", KR(ret));
   } else {
     is_reverse_scan_ = is_reverse_scan;
     scan_range_ = &scan_range;
@@ -233,14 +247,14 @@ int ObIndexSkipScanner::skip(ObMicroIndexInfo &index_info, ObIndexSkipState &pre
     bool need_check_end = false;
     bool left_prefix_not_change = false;
     const bool cmp_datum_cnt = false;
-    const ObDatumRowkey &left_border = complete_range_.start_key_;
-    const ObDatumRowkey &right_border = complete_range_.end_key_;
-    const ObBorderFlag &border_flag = complete_range_.border_flag_;
+    const ObDatumRowkey &left_border = get_sst_complete_range().start_key_;
+    const ObDatumRowkey &right_border = get_sst_complete_range().end_key_;
+    const ObBorderFlag &border_flag = get_sst_complete_range().border_flag_;
     const bool prev_right_pendding = !is_reverse_scan_ &&
                                      (index_skip_state_.is_range_finished() || // this means current prefix range is already determined
                                      (prev_state.range_idx() == index_skip_state_.range_idx() &&
                                      (prev_state.is_pendding_right() || prev_state.is_skipped_right())));
-    if (OB_UNLIKELY(!complete_range_.is_valid())) {
+    if (OB_UNLIKELY(!get_sst_complete_range().is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected complete range", KR(ret), K(prev_state), K(state), K_(complete_range), K(endkey), KPC(this));
     } else if (OB_FAIL(endkey.compare(left_border, datum_utils_, left_cmp_ret, cmp_datum_cnt, &left_ne_pos))) {
@@ -393,10 +407,10 @@ int ObIndexSkipScanner::skip(
   } else if (state.is_skipped()) {
   } else if (is_disabled() && first) {
     bool has_data = false;
-    if (OB_FAIL(check_after_range_updated(is_reverse_scan_, complete_range_, micro_scanner, is_border_after_disabled_))) {
+    if (OB_FAIL(check_after_range_updated(is_reverse_scan_, get_sst_complete_range(), micro_scanner, is_border_after_disabled_))) {
       LOG_WARN("failed to check after range updated", KR(ret));
     } else if (!is_border_after_disabled_) {
-    } else if (OB_FAIL(skip_in_micro(micro_scanner, index_info, complete_range_, false, has_data))) {
+    } else if (OB_FAIL(skip_in_micro(micro_scanner, index_info, get_sst_complete_range(), false, has_data))) {
       LOG_WARN("failed to skip in micro", KR(ret));
     }
   } else if (!is_disabled() && !state.is_skipped()) {
@@ -418,7 +432,7 @@ int ObIndexSkipScanner::skip(
       } else if (prefix_changed && OB_FAIL(update_complete_range(store_row))) {
         LOG_WARN("failed to update complete range", KR(ret));
       } else if (FALSE_IT(is_prefix_filled_ = true)) {
-      } else if (OB_FAIL(skip_in_micro(micro_scanner, index_info, complete_range_, false, has_data))) {
+      } else if (OB_FAIL(skip_in_micro(micro_scanner, index_info, get_sst_complete_range(), false, has_data))) {
         LOG_WARN("failed to skip in micro", KR(ret));
       }
     } else {
@@ -437,7 +451,7 @@ int ObIndexSkipScanner::skip(
           }
         } else if (OB_FAIL(update_complete_range(store_row))) {
           LOG_WARN("failed to update complete range", KR(ret));
-        } else if (OB_FAIL(skip_in_micro(micro_scanner, index_info, complete_range_, false, has_data))) {
+        } else if (OB_FAIL(skip_in_micro(micro_scanner, index_info, get_sst_complete_range(), false, has_data))) {
           LOG_WARN("failed to skip in micro", KR(ret));
         }
       }
@@ -811,6 +825,8 @@ int ObIndexSkipScanner::update_complete_range(
   }
   if (FAILEDx(check_disabled())) {
     LOG_WARN("failed to check disabled", KR(ret));
+  } else if (is_multi_version_sstable_ && OB_FAIL(complete_range_.to_multi_version_range(range_alloc_, multi_version_complete_range_))) {
+    LOG_WARN("failed to build multi version complete range", KR(ret));
   }
   return ret;
 }
@@ -976,8 +992,8 @@ int ObIndexSkipScanner::check_disabled()
 
 #undef SET_ROWKEY_TO_SCAN_ROWKEY
 
-ObAdvanceSkipScanner::ObAdvanceSkipScanner(const bool is_for_memtable, const blocksstable::ObStorageDatumUtils &datum_utils)
-  : ObISkipScanner(is_for_memtable, ObSkipScannerType::ADVANCE_SCAN, datum_utils),
+ObAdvanceSkipScanner::ObAdvanceSkipScanner(const bool is_for_memtable, const bool is_multi_version_sstable, const blocksstable::ObStorageDatumUtils &datum_utils)
+  : ObISkipScanner(is_for_memtable, is_multi_version_sstable, ObSkipScannerType::ADVANCE_SCAN, datum_utils),
     left_border_reached_(false),
     range_prefix_in_advance_scan_(0)
 {
@@ -1013,6 +1029,8 @@ int ObAdvanceSkipScanner::init(
   // can use parital copy as complete range is only used in sstable
   } else if (OB_FAIL(complete_range_.partial_copy(scan_range, range_alloc_))) {
     LOG_WARN("failed to partial copy scan range", KR(ret));
+  } else if (is_multi_version_sstable_ && OB_FAIL(complete_range_.to_multi_version_range(range_alloc_, multi_version_complete_range_))) {
+    LOG_WARN("failed to build multi version complete range", KR(ret));
   } else {
     scan_range_ = &scan_range;
     read_info_ = &read_info;
@@ -1047,6 +1065,8 @@ int ObAdvanceSkipScanner::switch_info(
   // can use parital copy as complete range is only used in sstable
   } else if (OB_FAIL(complete_range_.partial_copy(scan_range, range_alloc_))) {
     LOG_WARN("failed to partial copy scan range", KR(ret));
+  } else if (is_multi_version_sstable_ && OB_FAIL(complete_range_.to_multi_version_range(range_alloc_, multi_version_complete_range_))) {
+    LOG_WARN("failed to build multi version complete range", KR(ret));
   } else {
     scan_range_ = &scan_range;
     LOG_TRACE("[INDEX SKIP SCAN] success to switch info", KR(ret), K(*this));
@@ -1075,6 +1095,8 @@ int ObAdvanceSkipScanner::advance_scan(const ObDatumRange &scan_range)
   // can use parital copy as complete range is only used in sstable
   } else if (OB_FAIL(complete_range_.partial_copy(scan_range, range_alloc_))) {
     LOG_WARN("failed to partial copy scan range", KR(ret));
+  } else if (is_multi_version_sstable_ && OB_FAIL(complete_range_.to_multi_version_range(range_alloc_, multi_version_complete_range_))) {
+    LOG_WARN("failed to build multi version complete range", KR(ret));
   } else {
     left_border_reached_ = false;
   }
@@ -1096,9 +1118,9 @@ int ObAdvanceSkipScanner::skip(ObMicroIndexInfo &index_info, ObIndexSkipState &p
     int64_t left_ne_pos = -1;
     int left_cmp_ret = 0;
     const bool cmp_datum_cnt = true;
-    const ObDatumRowkey &left_border = complete_range_.start_key_;
-    const ObBorderFlag &border_flag = complete_range_.border_flag_;
-    if (OB_UNLIKELY(!complete_range_.is_valid())) {
+    const ObDatumRowkey &left_border = get_sst_complete_range().start_key_;
+    const ObBorderFlag &border_flag = get_sst_complete_range().border_flag_;
+    if (OB_UNLIKELY(!get_sst_complete_range().is_valid())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected complete range", KR(ret), K(prev_state), K(state), K_(complete_range), K(endkey), KPC(this));
     } else if (OB_FAIL(endkey.compare(left_border, datum_utils_, left_cmp_ret, cmp_datum_cnt, &left_ne_pos))) {
@@ -1168,8 +1190,8 @@ int ObAdvanceSkipScanner::skip(
     const int64_t common_prefix_len = range_prefix_in_advance_scan_ > 0 ? range_prefix_in_advance_scan_ : 0;
     // For advance scan, only left boundary changes, right boundary is unchanged
     // Use skip_to_rowkey to skip end key location for better performance
-    if (OB_FAIL(micro_scanner.skip_to_rowkey(micro_start_, micro_last_, complete_range_.get_start_key(),
-                                             complete_range_.get_border_flag().inclusive_start(),
+    if (OB_FAIL(micro_scanner.skip_to_rowkey(micro_start_, micro_last_, get_sst_complete_range().get_start_key(),
+                                             get_sst_complete_range().get_border_flag().inclusive_start(),
                                              is_left_border, is_right_border,
                                              micro_current_, has_data, common_prefix_len))) {
       LOG_WARN("failed to skip to start key", KR(ret), K(micro_scanner), KPC(this));
@@ -1192,7 +1214,8 @@ int ObIndexSkipScanFactory::build_index_skip_scanner(
     ObTableAccessContext &access_ctx,
     const ObDatumRange *range,
     ObISkipScanner *&skip_scanner,
-    const bool is_for_memtable)
+    const bool is_for_memtable,
+    const bool is_multi_version_sstable)
 {
   int ret = OB_SUCCESS;
   const bool is_reverse_scan = access_ctx.query_flag_.is_reverse_scan();
@@ -1219,11 +1242,11 @@ int ObIndexSkipScanFactory::build_index_skip_scanner(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("skip scanner is not null", KR(ret), K(lbt()));
   } else if (iter_param.is_index_skip_scan() &&
-             OB_ISNULL(skip_scanner = OB_NEWx(ObIndexSkipScanner, &stmt_allocator, is_for_memtable, read_info->get_datum_utils()))) {
+             OB_ISNULL(skip_scanner = OB_NEWx(ObIndexSkipScanner, &stmt_allocator, is_for_memtable, is_multi_version_sstable, read_info->get_datum_utils()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc index skip scanner", KR(ret));
   } else if (iter_param.is_advance_skip_scan() &&
-             OB_ISNULL(skip_scanner = OB_NEWx(ObAdvanceSkipScanner, &stmt_allocator, is_for_memtable, read_info->get_datum_utils()))) {
+             OB_ISNULL(skip_scanner = OB_NEWx(ObAdvanceSkipScanner, &stmt_allocator, is_for_memtable, is_multi_version_sstable, read_info->get_datum_utils()))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc index skip scanner", KR(ret));
   } else if (OB_FAIL(skip_scanner->init(is_reverse_scan, prefix_cnt, *range,  *skip_range,

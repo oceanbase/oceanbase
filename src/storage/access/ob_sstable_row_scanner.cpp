@@ -110,7 +110,9 @@ int ObSSTableRowScanner<PrefetchType>::advance_scan(const blocksstable::ObDatumR
 {
   int ret = OB_SUCCESS;
   if (nullptr == skip_scanner_) {
-    if (OB_FAIL(ObIndexSkipScanFactory::build_index_skip_scanner(*iter_param_, *access_ctx_, &range, skip_scanner_))) {
+    const bool is_mv_sstable = nullptr != sstable_ && sstable_->is_multi_version_minor_sstable();
+    if (OB_FAIL(ObIndexSkipScanFactory::build_index_skip_scanner(*iter_param_, *access_ctx_, &range, skip_scanner_,
+                                                                  false/*is_for_memtable*/, is_mv_sstable))) {
       LOG_WARN("failed to build index skip scanner", K(ret));
     }
   } else if (OB_FAIL(skip_scanner_->advance_scan(range))) {
@@ -189,7 +191,9 @@ int ObSSTableRowScanner<PrefetchType>::inner_open(
                  OB_FAIL(ObIndexSkipScanFactory::build_index_skip_scanner(iter_param,
                                                                           access_ctx,
                                                                           static_cast<const ObDatumRange *>(query_range),
-                                                                          skip_scanner_)))) {
+                                                                          skip_scanner_,
+                                                                          false/*is_for_memtable*/,
+                                                                          sstable_->is_multi_version_minor_sstable())))) {
         LOG_WARN("failed to build index skip scanner", K(ret));
       } else if (FALSE_IT(prefetcher_.skip_scanner_ = skip_scanner_)) {
       } else if (OB_FAIL(prefetcher_.prefetch())) {
