@@ -501,12 +501,34 @@ int ObLogService::remove_ls(const ObLSID &id,
     //
     // In normal case(for gc), stop has been executed, this stop has no effect.
     // In abnormal case(create ls failed, need remove ls directlly), there is no possibility for dead lock.
-    log_handler.stop();
-    restore_handler.stop();
-    if (OB_FAIL(palf_env_->remove(id.id()))) {
-      CLOG_LOG(WARN, "failed to remove from palf_env_", K(ret), K(id));
-    } else {
-      FLOG_INFO("ObLogService remove_ls success", K(ret), K(id));
+
+    // Disable PALF entry points (ack_log / handle_committed_info / IO callbacks) before
+    // log_handler.stop() triggers ApplyStatus::switch_to_follower_, which fails
+    // pending callbacks. Otherwise an in-flight LogPushResp can still drive
+    // ack_log -> slide -> sliding_cb and touch a LogTask::first_cb_ that has
+    // already been released by cb on_failure (use-after-free).
+    // NB: fail-fast on disable failure. Not expected to fail; if it does,
+    // upper-layer GC MUST retry. Skipping stop/remove here is required:
+    // proceeding without the barrier would re-open the UAF window.
+    if (!enable_logservice_) {
+      palf::PalfEnv *concrete_palf_env = static_cast<palf::PalfEnv *>(palf_env_);
+      palf::PalfEnvImpl *palf_env_impl = NULL;
+      if (OB_ISNULL(concrete_palf_env)
+          || OB_ISNULL(palf_env_impl = static_cast<palf::PalfEnvImpl *>(concrete_palf_env->get_palf_env_impl()))) {
+        ret = OB_ERR_UNEXPECTED;
+        CLOG_LOG(ERROR, "palf_env_impl is null", K(ret), K(id));
+      } else if (OB_FAIL(palf_env_impl->disable_palf_handle_impl(id.id()))) {
+        CLOG_LOG(ERROR, "disable_palf_handle_impl failed", K(ret), K(id));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      log_handler.stop();
+      restore_handler.stop();
+      if (OB_FAIL(palf_env_->remove(id.id()))) {
+        CLOG_LOG(WARN, "failed to remove from palf_env_", K(ret), K(id));
+      } else {
+        FLOG_INFO("ObLogService remove_ls success", K(ret), K(id));
+      }
     }
   }
 

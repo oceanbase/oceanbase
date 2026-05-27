@@ -512,6 +512,7 @@ int LogSlidingWindow::submit_log(const char *buf,
           if (OB_SUCCESS != (tmp_ret = try_feedback_freeze_log_task_(log_id))) {
             PALF_LOG(ERROR, "try_feedback_freeze_log_task failed", KR(tmp_ret), K(log_id));
           }
+#ifdef ENABLE_DEBUG_LOG
           if (OB_NOT_NULL(cb)) {
             cb->set_log_id(log_id);
             LogTaskGuard guard(this);
@@ -520,6 +521,7 @@ int LogSlidingWindow::submit_log(const char *buf,
               log_task->set_first_cb(cb);
             }
           }
+#endif
         }
       } else {
         // this log need to be appended to last log

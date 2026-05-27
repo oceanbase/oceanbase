@@ -493,6 +493,122 @@ TEST_F(TestObSimpleLogClusterBasicFunc, create_palf_via_middle_lsn)
     EXPECT_EQ(OB_ITER_END, read_log(leader, mid_lsn));
   }
 }
+
+// wait all in-flight ack log arrive when remove ls:
+// After disable_palf_handle_impl, ack_log / handle_committed_info /
+// receive_log_ must immediately return OB_STATE_NOT_MATCH (entry barrier
+// via check_can_be_used).
+// disable_palf_handle_impl is idempotent: calling it again on an
+// already-disabled palf, or on a palf that has been removed from the
+// map, still returns OB_SUCCESS.
+TEST_F(TestObSimpleLogClusterBasicFunc, disable_palf_handle_impl)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "disable_palf_handle_impl");
+  const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  int64_t leader_idx = 0;
+  PalfHandleImplGuard leader;
+  EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 5, id));
+  const LSN max_lsn = leader.palf_handle_impl_->get_max_lsn();
+  EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, max_lsn));
+
+  PalfHandleImpl *palf_handle_impl = leader.palf_handle_impl_;
+  PalfEnvImpl *palf_env_impl = leader.palf_env_impl_;
+  const common::ObAddr self = palf_handle_impl->self_;
+  const int64_t proposal_id = palf_handle_impl->state_mgr_.get_proposal_id();
+  const char fake_buf[16] = {0};
+
+  // Baseline: before disable, ack_log on leader succeeds (the OB_STATE_NOT_MATCH
+  // observed below must come from the new barrier, not pre-existing state).
+  EXPECT_EQ(true, palf_handle_impl->check_can_be_used());
+  EXPECT_EQ(OB_SUCCESS, palf_handle_impl->ack_log(self, proposal_id, max_lsn));
+
+  // After disable, all guarded entries are immediately rejected with OB_STATE_NOT_MATCH.
+  EXPECT_EQ(OB_SUCCESS, palf_env_impl->disable_palf_handle_impl(id));
+  EXPECT_EQ(false, palf_handle_impl->check_can_be_used());
+  EXPECT_EQ(OB_STATE_NOT_MATCH, palf_handle_impl->ack_log(self, proposal_id, max_lsn));
+  EXPECT_EQ(OB_STATE_NOT_MATCH,
+      palf_handle_impl->handle_committed_info(self, proposal_id, 1 /*prev_log_id*/,
+          proposal_id /*prev_log_proposal_id*/, max_lsn));
+  EXPECT_EQ(OB_STATE_NOT_MATCH,
+      palf_handle_impl->receive_log(self, PUSH_LOG, proposal_id, LSN(0) /*prev_lsn*/,
+          proposal_id /*prev_log_proposal_id*/, LSN(0) /*lsn*/, fake_buf, sizeof(fake_buf)));
+  share::SCN flush_scn;
+  flush_scn.convert_for_logservice(ObTimeUtility::current_time_ns());
+  FlushLogCbCtx flush_log_cb_ctx(1 /*log_id*/, flush_scn, LSN(0) /*lsn*/,
+      proposal_id /*log_proposal_id*/, 1 /*total_len*/, proposal_id /*curr_proposal_id*/,
+      ObTimeUtility::current_time());
+  EXPECT_EQ(OB_STATE_NOT_MATCH, palf_handle_impl->inner_after_flush_log(flush_log_cb_ctx));
+
+  // Idempotent: calling disable again on an already-disabled palf still returns OB_SUCCESS.
+  EXPECT_EQ(OB_SUCCESS, palf_env_impl->disable_palf_handle_impl(id));
+  EXPECT_EQ(false, palf_handle_impl->check_can_be_used());
+
+  // Idempotent: after the palf has been removed from the map, disable returns
+  // OB_SUCCESS via the OB_ENTRY_NOT_EXIST -> OB_SUCCESS branch.
+  leader.reset();
+  EXPECT_EQ(OB_SUCCESS, delete_paxos_group(id));
+  EXPECT_EQ(OB_SUCCESS, palf_env_impl->disable_palf_handle_impl(id));
+
+  PALF_LOG(INFO, "end test disable_palf_handle_impl", K(id));
+}
+
+// Cover scenario: disable_palf_handle_impl must wait for in-flight readers
+// that are inside the RLock critical section of ack_log / handle_committed_info /
+// receive_log_ to exit before returning. Strategy: hold the per-palf RLock from
+// a side thread, run disable on another thread, and verify that disable does
+// NOT return until the RLock holder releases it; meanwhile mark_deleted_atomic_only
+// has already taken effect so check_can_be_used flips to false promptly.
+TEST_F(TestObSimpleLogClusterBasicFunc, disable_palf_handle_impl_drain_concurrent)
+{
+  SET_CASE_LOG_FILE(TEST_NAME, "disable_palf_handle_impl_drain_concurrent");
+  const int64_t id = ATOMIC_AAF(&palf_id_, 1);
+  int64_t leader_idx = 0;
+  PalfHandleImplGuard leader;
+  EXPECT_EQ(OB_SUCCESS, create_paxos_group(id, leader_idx, leader));
+  EXPECT_EQ(OB_SUCCESS, submit_log(leader, 5, id));
+  const LSN max_lsn = leader.palf_handle_impl_->get_max_lsn();
+  EXPECT_EQ(OB_SUCCESS, wait_until_has_committed(leader, max_lsn));
+
+  PalfHandleImpl *palf_handle_impl = leader.palf_handle_impl_;
+  PalfEnvImpl *palf_env_impl = leader.palf_env_impl_;
+
+  std::atomic<bool> reader_entered(false);
+  std::atomic<bool> reader_can_exit(false);
+  std::thread reader_thread([&]() {
+    common::RWLock::RLockGuard guard(palf_handle_impl->lock_);
+    reader_entered.store(true);
+    while (!reader_can_exit.load()) {
+      ob_usleep(1 * 1000);
+    }
+  });
+  while (!reader_entered.load()) {
+    ob_usleep(100);
+  }
+
+  std::atomic<bool> disable_returned(false);
+  std::thread disable_thread([&]() {
+    EXPECT_EQ(OB_SUCCESS, palf_env_impl->disable_palf_handle_impl(id));
+    disable_returned.store(true);
+  });
+
+  // Give the disable_thread enough time to reach drain_inflight_readers and
+  // block on WLock(lock_). It MUST still be blocked because reader_thread
+  // holds the RLock.
+  ob_usleep(100 * 1000);
+  EXPECT_EQ(false, disable_returned.load());
+  // mark_deleted_atomic_only runs before drain, so the deleted flag is already
+  // visible even while drain is still waiting.
+  EXPECT_EQ(false, palf_handle_impl->check_can_be_used());
+
+  // Release the reader; drain (and disable) must now finish.
+  reader_can_exit.store(true);
+  reader_thread.join();
+  disable_thread.join();
+  EXPECT_EQ(true, disable_returned.load());
+
+  PALF_LOG(INFO, "end test disable_palf_handle_impl_drain_concurrent", K(id));
+}
 } // end unittest
 } // end oceanbase
 

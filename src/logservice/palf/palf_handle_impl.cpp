@@ -2132,9 +2132,20 @@ int PalfHandleImpl::get_block_id_by_scn_for_flashback_(const SCN &scn, block_id_
   return ret;
 }
 
-void PalfHandleImpl::set_deleted()
+void PalfHandleImpl::mark_deleted_atomic_only()
 {
   ATOMIC_STORE(&has_set_deleted_, true);
+}
+
+void PalfHandleImpl::drain_inflight_readers()
+{
+  WLockGuard guard(lock_);
+}
+
+void PalfHandleImpl::set_deleted()
+{
+  mark_deleted_atomic_only();
+  drain_inflight_readers();
   PALF_LOG(INFO, "set_deleted success", KPC(this));
 }
 
@@ -2968,7 +2979,11 @@ int PalfHandleImpl::period_freeze_last_log()
   } else if (OB_UNLIKELY(true == state_mgr_.is_arb_replica())) {
   } else {
     RLockGuard guard(lock_);
-    sw_.period_freeze_last_log();
+    if (false == check_can_be_used()) {
+      // palf has been disabled, skip silently
+    } else {
+      sw_.period_freeze_last_log();
+    }
   }
   return ret;
 }
@@ -3369,7 +3384,9 @@ int PalfHandleImpl::handle_committed_info(const common::ObAddr &server,
     PALF_LOG(WARN, "try_update_proposal_id_ failed", K(ret), KPC(this), K(server), K(msg_proposal_id));
   } else {
     RLockGuard guard(lock_);
-    if (!state_mgr_.can_handle_committed_info(msg_proposal_id)) {
+    if (false == check_can_be_used()) {
+      ret = OB_STATE_NOT_MATCH;
+    } else if (!state_mgr_.can_handle_committed_info(msg_proposal_id)) {
       ret = OB_STATE_NOT_MATCH;
       if (palf_reach_time_interval(2 * 1000 * 1000, cannot_handle_committed_info_time_)) {
         PALF_LOG(WARN, "can not handle_committed_info", K(ret), KPC(this), K(server), K(msg_proposal_id),
@@ -3422,7 +3439,9 @@ int PalfHandleImpl::receive_log_(const common::ObAddr &server,
   } else {
     // rdlock
     RLockGuard guard(lock_);
-    if (false == palf_env_impl_->check_disk_space_enough()) {
+    if (false == check_can_be_used()) {
+      ret = OB_STATE_NOT_MATCH;
+    } else if (false == palf_env_impl_->check_disk_space_enough()) {
       ret = OB_LOG_OUTOF_DISK_SPACE;
       if (palf_reach_time_interval(1 * 1000 * 1000, log_disk_full_warn_time_)) {
         PALF_LOG(WARN, "log outof disk space", K(ret), KPC(this), K(server), K(push_log_type), K(lsn));
@@ -3454,7 +3473,9 @@ int PalfHandleImpl::receive_log_(const common::ObAddr &server,
         K(lsn), K(buf_len), K(truncate_log_info));
     // write lock
     WLockGuard guard(lock_);
-    if (!state_mgr_.can_receive_log(msg_proposal_id)) {
+    if (false == check_can_be_used()) {
+      ret = OB_STATE_NOT_MATCH;
+    } else if (!state_mgr_.can_receive_log(msg_proposal_id)) {
       ret = OB_STATE_NOT_MATCH;
       PALF_LOG(WARN, "can not receive log", K(ret), KPC(this), K(server), K(msg_proposal_id), K(lsn),
           "role", state_mgr_.get_role());
@@ -3627,6 +3648,8 @@ int PalfHandleImpl::ack_log(const common::ObAddr &server,
   RLockGuard guard(lock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (false == check_can_be_used()) {
+    ret = OB_STATE_NOT_MATCH;
   } else if (!server.is_valid() || INVALID_PROPOSAL_ID == proposal_id || !log_end_lsn.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     PALF_LOG(WARN, "invalid argument", K(ret), KPC(this), K(server), K(proposal_id), K(log_end_lsn));
@@ -4536,6 +4559,8 @@ int PalfHandleImpl::try_handle_next_submit_log()
   RLockGuard guard(lock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (false == check_can_be_used()) {
+    ret = OB_STATE_NOT_MATCH;
   } else if (OB_FAIL(sw_.try_handle_next_submit_log())) {
     PALF_LOG(WARN, "sw_.try_handle_next_submit_log failed", K(ret), KPC(this));
   } else {
@@ -4555,6 +4580,8 @@ int PalfHandleImpl::inner_after_flush_log(const FlushLogCbCtx &flush_log_cb_ctx)
   RLockGuard guard(lock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
+  } else if (false == check_can_be_used()) {
+    ret = OB_STATE_NOT_MATCH;
   } else if (OB_FAIL(sw_.after_flush_log(flush_log_cb_ctx))) {
     PALF_LOG(WARN, "sw_.after_flush_log failed", K(ret), K(flush_log_cb_ctx));
   } else {
@@ -4574,27 +4601,35 @@ int PalfHandleImpl::inner_after_flush_meta(const FlushMetaCbCtx &flush_meta_cb_c
     ret = OB_NOT_INIT;
   } else if (MODE_META == flush_meta_cb_ctx.type_) {
     WLockGuard guard(lock_);
-    ret = after_flush_mode_meta_(flush_meta_cb_ctx.proposal_id_,
-                                 flush_meta_cb_ctx.is_applied_mode_meta_,
-                                 flush_meta_cb_ctx.log_mode_meta_);
+    if (false == check_can_be_used()) {
+      ret = OB_STATE_NOT_MATCH;
+    } else {
+      ret = after_flush_mode_meta_(flush_meta_cb_ctx.proposal_id_,
+                                   flush_meta_cb_ctx.is_applied_mode_meta_,
+                                   flush_meta_cb_ctx.log_mode_meta_);
+    }
   } else {
     RLockGuard guard(lock_);
-    switch(flush_meta_cb_ctx.type_) {
-      case PREPARE_META:
-        ret = after_flush_prepare_meta_(flush_meta_cb_ctx.proposal_id_);
-        break;
-      case CHANGE_CONFIG_META:
-        ret = after_flush_config_change_meta_(flush_meta_cb_ctx.proposal_id_, flush_meta_cb_ctx.config_version_);
-        break;
-      case SNAPSHOT_META:
-        ret = after_flush_snapshot_meta_(flush_meta_cb_ctx.base_lsn_);
-        break;
-      case REPLICA_PROPERTY_META:
-        ret = after_flush_replica_property_meta_(flush_meta_cb_ctx.allow_vote_);
-        break;
-      default:
-        ret = OB_ERR_UNEXPECTED;
-        break;
+    if (false == check_can_be_used()) {
+      ret = OB_STATE_NOT_MATCH;
+    } else {
+      switch(flush_meta_cb_ctx.type_) {
+        case PREPARE_META:
+          ret = after_flush_prepare_meta_(flush_meta_cb_ctx.proposal_id_);
+          break;
+        case CHANGE_CONFIG_META:
+          ret = after_flush_config_change_meta_(flush_meta_cb_ctx.proposal_id_, flush_meta_cb_ctx.config_version_);
+          break;
+        case SNAPSHOT_META:
+          ret = after_flush_snapshot_meta_(flush_meta_cb_ctx.base_lsn_);
+          break;
+        case REPLICA_PROPERTY_META:
+          ret = after_flush_replica_property_meta_(flush_meta_cb_ctx.allow_vote_);
+          break;
+        default:
+          ret = OB_ERR_UNEXPECTED;
+          break;
+      }
     }
   }
   return ret;
@@ -4604,7 +4639,9 @@ int PalfHandleImpl::inner_after_truncate_prefix_blocks(const TruncatePrefixBlock
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(lock_);
-  if (OB_FAIL(sw_.after_rebuild(truncate_prefix_cb_ctx.lsn_))) {
+  if (false == check_can_be_used()) {
+    ret = OB_STATE_NOT_MATCH;
+  } else if (OB_FAIL(sw_.after_rebuild(truncate_prefix_cb_ctx.lsn_))) {
     PALF_LOG(WARN, "update_truncate_prefix_blocks_base_lsn failed", K(ret), K(truncate_prefix_cb_ctx));
   }
   return ret;
@@ -4704,7 +4741,9 @@ int PalfHandleImpl::inner_after_truncate_log(const TruncateLogCbCtx &truncate_lo
 {
   int ret = OB_SUCCESS;
   WLockGuard guard(lock_);
-  if (OB_FAIL(sw_.after_truncate(truncate_log_cb_ctx))) {
+  if (false == check_can_be_used()) {
+    ret = OB_STATE_NOT_MATCH;
+  } else if (OB_FAIL(sw_.after_truncate(truncate_log_cb_ctx))) {
     PALF_LOG(WARN, "inner_after_truncate_log failed", K(ret), K(truncate_log_cb_ctx));
   } else {
     PALF_LOG(INFO, "after_truncate_log success", K(ret), K_(self), K_(palf_id));

@@ -472,6 +472,37 @@ int PalfEnvImpl::remove_palf_handle_impl(const int64_t palf_id)
   return ret;
 }
 
+int PalfEnvImpl::disable_palf_handle_impl(const int64_t palf_id)
+{
+  int ret = OB_SUCCESS;
+  IPalfHandleImpl *palf_handle_impl = NULL;
+  LSKey hash_map_key(palf_id);
+  {
+    WLockGuard guard(palf_meta_lock_);
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+      PALF_LOG(ERROR, "PalfEnvImpl is not inited", K(ret));
+    } else if (OB_FAIL(palf_handle_impl_map_.get(hash_map_key, palf_handle_impl))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        // already removed
+        ret = OB_SUCCESS;
+      } else {
+        PALF_LOG(WARN, "get palf_handle_impl failed", K(ret), K(palf_id));
+      }
+    } else {
+      palf_handle_impl->mark_deleted_atomic_only();
+    }
+  }
+  if (OB_SUCC(ret) && NULL != palf_handle_impl) {
+    palf_handle_impl->drain_inflight_readers();
+    PALF_LOG(INFO, "disable_palf_handle_impl success", K(palf_id));
+  }
+  if (NULL != palf_handle_impl) {
+    palf_handle_impl_map_.revert(palf_handle_impl);
+  }
+  return ret;
+}
+
 int PalfEnvImpl::get_palf_handle_impl(const int64_t palf_id,
                                       IPalfHandleImplGuard &palf_handle_impl_guard)
 {
@@ -1226,7 +1257,7 @@ int PalfEnvImpl::remove_palf_handle_impl_from_map_not_guarded_by_lock_(const int
   LSKey hash_map_key(palf_id);
   auto set_delete_func = [](const LSKey &key, IPalfHandleImpl *value) {
     UNUSED(key);
-    value->set_deleted();
+    value->mark_deleted_atomic_only();
   };
   if (OB_FAIL(palf_handle_impl_map_.operate(hash_map_key, set_delete_func))) {
     PALF_LOG(WARN, "operate palf_handle_impl_map_ failed", K(ret), K(palf_id), KPC(this));

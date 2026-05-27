@@ -386,6 +386,10 @@ public:
   virtual int disable_sync() = 0;
   // 标记palf实例已经删除
   virtual void set_deleted() = 0;
+  // 仅设置 has_set_deleted_ 标志位（ATOMIC_STORE），不做 drain
+  virtual void mark_deleted_atomic_only() = 0;
+  // 等待已进入 ack_log / handle_committed_info / IO回调等 RLock 临界区的 reader 退出
+  virtual void drain_inflight_readers() = 0;
   virtual bool is_sync_enabled() const = 0;
 
   // 迁移/rebuild场景目的端推进base_lsn
@@ -813,6 +817,8 @@ public:
   int enable_sync() override final;
   int disable_sync() override final;
   void set_deleted() override final;
+  void mark_deleted_atomic_only() override final;
+  void drain_inflight_readers() override final;
   bool is_sync_enabled() const override final;
   int advance_base_info(const PalfBaseInfo &palf_base_info, const bool is_rebuild) override final;
   int locate_by_scn_coarsely(const share::SCN &scn, LSN &result_lsn) override final;

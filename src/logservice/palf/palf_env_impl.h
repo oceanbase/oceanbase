@@ -270,6 +270,9 @@ public:
   //
   // @return :TODO
   int remove_palf_handle_impl(const int64_t palf_id) override final;
+  // 将 palf handle 标记为已删除，并等待正在执行的ack_log / handle_committed_info / IO回调完成
+  // 该函数会在 ApplyStatus::switch_to_follower_ 使回调失败之前调用，建立入口屏障（check_can_be_used）
+  int disable_palf_handle_impl(const int64_t palf_id);
   int get_palf_handle_impl(const int64_t palf_id,
                            IPalfHandleImpl *&palf_handle_impl) override final;
   int get_palf_handle_impl(const int64_t palf_id,
