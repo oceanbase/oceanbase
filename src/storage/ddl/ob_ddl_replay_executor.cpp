@@ -28,6 +28,56 @@ using namespace oceanbase::transaction;
 
 ERRSIM_POINT_DEF(EN_REPLAY_REDO_DDL_LOG_WAIT);
 
+namespace oceanbase
+{
+namespace storage
+{
+namespace
+{
+
+enum class ObSplitReplayWaitPolicy : uint8_t
+{
+  START_REPLAY,
+  FINISH_REPLAY,
+};
+
+int check_need_wait_split_finished(
+    const oceanbase::share::ObLSID &ls_id,
+    const ObTabletHandle &handle,
+    const ObIArray<ObTabletID> &dest_tablets_id,
+    const ObSplitReplayWaitPolicy policy,
+    bool &need_wait_split_finished)
+{
+  int ret = OB_SUCCESS;
+  need_wait_split_finished = (ObSplitReplayWaitPolicy::FINISH_REPLAY == policy);
+  if (MTL_TENANT_ROLE_CACHE_IS_RESTORE()) {
+    ObLSHandle ls_handle;
+    bool is_tablet_status_need_to_split = true;
+    ObTabletRestoreStatus::STATUS restore_status;
+    if (OB_FAIL(handle.get_obj()->get_restore_status(restore_status))) {
+      LOG_WARN("get restore status failed", K(ret), K(handle));
+    } else if (ObTabletRestoreStatus::is_full(restore_status)) {
+      if (ObSplitReplayWaitPolicy::START_REPLAY == policy) {
+        LOG_TRACE("full restore status, ignore to wait", K(ret), K(restore_status));
+      } else {
+        LOG_TRACE("full restore status, still need check data split finished", K(ret), K(restore_status));
+      }
+    } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
+      LOG_WARN("failed to get log stream", K(ret), K(ls_id));
+    } else if (OB_FAIL(ObTabletSplitUtil::check_tablet_restore_status(
+        dest_tablets_id, ls_handle, handle, is_tablet_status_need_to_split))) {
+      LOG_WARN("failed to check tablet status", K(ret), K(handle));
+    } else {
+      need_wait_split_finished = is_tablet_status_need_to_split;
+    }
+  }
+  return ret;
+}
+
+} // namespace
+} // namespace storage
+} // namespace oceanbase
+
 ObDDLReplayExecutor::ObDDLReplayExecutor()
   : logservice::ObTabletReplayExecutor(), ls_(nullptr), scn_()
 {}
@@ -1122,34 +1172,6 @@ int ObSplitStartReplayExecutor::check_can_skip_replay(
 }
 
 
-int ObSplitStartReplayExecutor::check_need_wait_split_finished(
-    const share::ObLSID &ls_id,
-    const ObTabletHandle &handle,
-    const ObIArray<ObTabletID> &dest_tablets_id,
-    bool &need_wait_split_finished)
-{
-  int ret = OB_SUCCESS;
-  need_wait_split_finished = false;
-  if (MTL_TENANT_ROLE_CACHE_IS_RESTORE()) {
-    ObLSHandle ls_handle;
-    bool is_tablet_status_need_to_split = true;
-    ObTabletRestoreStatus::STATUS restore_status;
-    if (OB_FAIL(handle.get_obj()->get_restore_status(restore_status))) {
-      LOG_WARN("get restore status failed", K(ret), K(handle));
-    } else if (ObTabletRestoreStatus::is_full(restore_status)) {
-      LOG_TRACE("full restore status, ignore to wait", K(ret), K(restore_status));
-    } else if (OB_FAIL(MTL(ObLSService *)->get_ls(ls_id, ls_handle, ObLSGetMod::DDL_MOD))) {
-      LOG_WARN("failed to get log stream", K(ret), K(ls_id));
-    } else if (OB_FAIL(ObTabletSplitUtil::check_tablet_restore_status(
-        dest_tablets_id, ls_handle, handle, is_tablet_status_need_to_split))) {
-      LOG_WARN("failed to check tablet status", K(ret), K(handle));
-    } else if (is_tablet_status_need_to_split) {
-      need_wait_split_finished = true;
-    }
-  }
-  return ret;
-}
-
 int ObSplitStartReplayExecutor::do_replay_(ObTabletHandle &handle)
 {
   int ret = OB_SUCCESS;
@@ -1171,7 +1193,8 @@ int ObSplitStartReplayExecutor::do_replay_(ObTabletHandle &handle)
   } else if (can_skip) {
     LOG_INFO("skip replay split finish log", KPC(log_));
   } else if (OB_FAIL(check_need_wait_split_finished(
-      ls_->get_ls_id(), handle, *dest_tablet_ids, need_wait_split_finished))) {
+      ls_->get_ls_id(), handle, *dest_tablet_ids,
+      ObSplitReplayWaitPolicy::START_REPLAY, need_wait_split_finished))) {
     LOG_WARN("check need wait split finished failed", K(ret));
   } else if (log_->basic_info_.lob_col_idxs_.count() > 0) {
     // lob tablet.
@@ -1281,6 +1304,7 @@ int ObSplitFinishReplayExecutor::do_replay_(ObTabletHandle &handle)
   bool is_lob_tablet = false;
   bool is_split_finish_with_meta_flag = false;
   bool can_skip = false;
+  bool need_wait_split_finished = true;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObDDLRedoLogReplayer has not been inited", K(ret));
@@ -1294,6 +1318,12 @@ int ObSplitFinishReplayExecutor::do_replay_(ObTabletHandle &handle)
   } else if (OB_ISNULL(dest_tablet_ids = &(log_->basic_info_.dest_tablets_id_))) {
     ret = OB_NULL_CHECK_ERROR;
     LOG_WARN("unexpected nullptr of dest_tablet_ids", K(ret), KPC(dest_tablet_ids));
+  } else if (OB_FAIL(check_need_wait_split_finished(
+      ls_->get_ls_id(), handle, *dest_tablet_ids,
+      ObSplitReplayWaitPolicy::FINISH_REPLAY, need_wait_split_finished))) {
+    LOG_WARN("check need wait split finished failed", K(ret));
+  } else if (!need_wait_split_finished) {
+    ret = OB_TABLET_STATUS_NO_NEED_TO_SPLIT;
   } else if (OB_FALSE_IT(is_lob_tablet = log_->basic_info_.lob_col_idxs_.count() > 0)) {
   } else if (OB_FALSE_IT(ls_id = ls_->get_ls_id())) {
   } else if (is_lob_tablet &&
