@@ -2097,8 +2097,9 @@ int ObPL::execute(ObExecContext &ctx,
                 && pl.get_params().at(i).get_meta().get_extend_type() != PL_CURSOR_TYPE
                 && pl.get_params().at(i).get_ext() != params->at(i).get_ext()) {
               if (!pl.param_converted(i)) {
+                int64_t backup = params->at(i).get_ext();
                 OX (params->at(i) = pl.get_params().at(i));
-                OX (params->at(i).set_int(0));
+                OX (params->at(i).set_ext(backup));
               }
               OZ (ObUserDefinedType::deep_copy_obj(allocator, pl.get_params().at(i), params->at(i)));
               ObUserDefinedType::destruct_objparam(*top_pl_sym_allocator,
@@ -2164,8 +2165,9 @@ int ObPL::execute(ObExecContext &ctx,
           if (pl.get_params().at(i).is_pl_extend()) {
             if (pl.get_params().at(i).get_meta().get_extend_type() != PL_REF_CURSOR_TYPE
                 && pl.get_params().at(i).get_ext() != params->at(i).get_ext()) {
+              int64_t backup = params->at(i).get_ext();
               OX (params->at(i) = pl.get_params().at(i));
-              params->at(i).set_int(0);
+              OX (params->at(i).set_ext(backup));
               OZ (ObUserDefinedType::deep_copy_obj(allocator, pl.get_params().at(i), params->at(i)));
               ObUserDefinedType::destruct_objparam(*top_pl_sym_allocator,
                                                     pl.get_params().at(i),
