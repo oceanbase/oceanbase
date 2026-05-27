@@ -295,6 +295,8 @@ int ObSMUtils::cell_str(
               if (OB_ISNULL(coll)) {
                 ret = OB_ERR_UNEXPECTED;
                 OB_LOG(WARN, "coll is null", K(ret));
+              } else if (!coll->is_inited()) {
+                ret = ObMySQLUtil::null_cell_str(buf, len, type, pos, cell_idx, bitmap);
               } else if (OB_ISNULL(nested_type =
                 reinterpret_cast<ObNestedTableType*>(allocator.alloc(sizeof(ObNestedTableType))))) {
                 ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -385,6 +387,11 @@ int ObSMUtils::cell_str(
           } else if (OB_ISNULL(user_type)) {
             ret = OB_ERR_UNEXPECTED;
             OB_LOG(WARN, "user type is null", K(ret));
+          } else if (user_type->is_collection_type()
+                     && obj.is_pl_extend()
+                     && 0 != obj.get_ext()
+                     && !reinterpret_cast<ObPLCollection *>(obj.get_ext())->is_inited()) {
+            ret = ObMySQLUtil::null_cell_str(buf, len, type, pos, cell_idx, bitmap);
           } else if (OB_FAIL(user_type->serialize(*schema_guard, session, dtc_params.tz_info_, type, src, buf, len, pos))) {
             OB_LOG(WARN, "failed to serialize", K(ret));
           }
