@@ -27,12 +27,11 @@ public:
   ObDirectLoadOriginTableCreateParam();
   ~ObDirectLoadOriginTableCreateParam();
   bool is_valid() const;
-  TO_STRING_KV(K_(table_id), K_(tablet_id), K_(ls_id), K_(snapshot_version));
+  TO_STRING_KV(K_(table_id), K_(tablet_id), K_(ls_id));
 public:
   uint64_t table_id_;
   common::ObTabletID tablet_id_;
   share::ObLSID ls_id_;
-  int64_t snapshot_version_;
 };
 
 struct ObDirectLoadOriginTableMeta
@@ -40,12 +39,11 @@ struct ObDirectLoadOriginTableMeta
 public:
   ObDirectLoadOriginTableMeta();
   ~ObDirectLoadOriginTableMeta();
-  TO_STRING_KV( K_(table_id), K_(tablet_id), K_(ls_id), K_(snapshot_version));
+  TO_STRING_KV( K_(table_id), K_(tablet_id), K_(ls_id));
 public:
   uint64_t table_id_;
   common::ObTabletID tablet_id_;
   share::ObLSID ls_id_;
-  int64_t snapshot_version_;
 };
 
 class ObDirectLoadOriginTable

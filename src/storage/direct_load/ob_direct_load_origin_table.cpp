@@ -30,7 +30,7 @@ using namespace share::schema;
  */
 
 ObDirectLoadOriginTableCreateParam::ObDirectLoadOriginTableCreateParam()
-  : table_id_(OB_INVALID_ID), snapshot_version_(0)
+  : table_id_(OB_INVALID_ID)
 {
 }
 
@@ -40,8 +40,7 @@ ObDirectLoadOriginTableCreateParam::~ObDirectLoadOriginTableCreateParam()
 
 bool ObDirectLoadOriginTableCreateParam::is_valid() const
 {
-  return OB_INVALID_ID != table_id_ && tablet_id_.is_valid() && ls_id_.is_valid() &&
-         snapshot_version_ > 0;
+  return OB_INVALID_ID != table_id_ && tablet_id_.is_valid() && ls_id_.is_valid();
 }
 
 /**
@@ -49,7 +48,7 @@ bool ObDirectLoadOriginTableCreateParam::is_valid() const
  */
 
 ObDirectLoadOriginTableMeta::ObDirectLoadOriginTableMeta()
-  : table_id_(OB_INVALID_ID), snapshot_version_(0)
+  : table_id_(OB_INVALID_ID)
 {
 }
 
@@ -105,7 +104,6 @@ int ObDirectLoadOriginTable::init(const ObDirectLoadOriginTableCreateParam &para
       meta_.ls_id_ = param.ls_id_;
       meta_.table_id_ = param.table_id_;
       meta_.tablet_id_ = param.tablet_id_;
-      meta_.snapshot_version_ = param.snapshot_version_;
       is_inited_ = true;
     }
   }
@@ -294,7 +292,7 @@ int ObDirectLoadOriginTableScanner::init_table_access_ctx()
   int ret = OB_SUCCESS;
   const uint64_t table_id = origin_table_->get_meta().table_id_;
   const ObTabletID &tablet_id = origin_table_->get_meta().tablet_id_;
-  const int64_t snapshot_version = origin_table_->get_meta().snapshot_version_;
+  const int64_t snapshot_version = ObTimeUtil::current_time_ns();
   ObQueryFlag query_flag(ObQueryFlag::Forward,
                          false /*daily_merge*/,
                          true /*optimize*/,
