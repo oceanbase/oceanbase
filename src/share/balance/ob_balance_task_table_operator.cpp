@@ -615,9 +615,10 @@ int ObBalanceTaskTableOperator::finish_transfer_task(
     LOG_WARN("append failed", KR(ret), K(transfer_finished_part_list), K(new_finished_part_list));
   } else if (OB_FAIL(new_finished_part_list.to_display_str(allocator, new_finished_part_list_str))) {
     LOG_WARN("failed to transfer list to str", KR(ret), K(new_finished_part_list));
+  // Remove transfer_finished_part_list from part_list
   } else if (OB_FAIL(common::get_difference(
       balance_task.get_part_list(),
-      new_finished_part_list,
+      transfer_finished_part_list,
       to_do_part_list))) {
     LOG_WARN("get difference failed", KR(ret), K(balance_task), K(transfer_finished_part_list));
   } else if (OB_FAIL(to_do_part_list.to_display_str(allocator, to_do_part_list_str))) {
