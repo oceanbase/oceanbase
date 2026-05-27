@@ -751,10 +751,16 @@ bool ObTxDesc::contain_savepoint(const ObString &sp)
   return hit;
 }
 
-int ObTxDesc::update_part_(ObTxPart &a, const bool append, const bool check_only_if_exist)
+int ObTxDesc::update_part_(ObTxPart &a,
+                           const bool append,
+                           const bool check_only_if_exist,
+                           const bool is_for_px)
 {
   int ret = OB_SUCCESS;
   bool hit = false;
+  const bool for_px = (true == append
+                       && false == check_only_if_exist
+                       && true == is_for_px);
   if (exec_info_reap_ts_ == 0) {
     exec_info_reap_ts_ = ObSequence::get_max_seq_no();
   }
@@ -776,12 +782,28 @@ int ObTxDesc::update_part_(ObTxPart &a, const bool append, const bool check_only
         TRANS_LOG(WARN, "tx-part epoch changed", K(ret), K(a), K(p));
       }
       if (OB_SUCC(ret) && !check_only_if_exist) {
+        bool update_last_touch_ts = false;
+        ObTxSEQ first_scn = p.first_scn_;
+        ObTxSEQ last_scn = p.last_scn_;
         if (a.addr_.is_valid()) { p.addr_ = a.addr_; }
         p.first_scn_ = MIN(a.first_scn_, p.first_scn_);
         p.last_scn_ = p.last_scn_.is_max() ? a.last_scn_ : MAX(a.last_scn_, p.last_scn_);
-        p.last_touch_ts_ = exec_info_reap_ts_ + 1;
+        if (for_px) {
+          // new logic for px
+          if (p.first_scn_ != first_scn || p.last_scn_ != last_scn) {
+            p.last_touch_ts_ = exec_info_reap_ts_ + 1;
+            update_last_touch_ts = true;
+          }
+        } else {
+          // original logic
+          p.last_touch_ts_ = exec_info_reap_ts_ + 1;
+          update_last_touch_ts = true;
+        }
         if (p.is_clean() && !a.is_clean()) {
           p.flag_.set_dirty();
+          if (!update_last_touch_ts) {
+            p.last_touch_ts_ = exec_info_reap_ts_ + 1;
+          }
         }
       }
       break;
@@ -948,11 +970,24 @@ int ObTxDesc::update_parts_(const ObTxPartList &list)
   return ret;
 }
 
-int ObTxDesc::merge_exec_info_with(const ObTxDesc &src)
+int ObTxDesc::update_parts_for_px_(const ObTxPartList &list)
+{
+  int ret = OB_SUCCESS;
+  ARRAY_FOREACH(list, i) {
+    const ObTxPart &a = list[i];
+    if (OB_FAIL(update_part_(const_cast<ObTxPart&>(a), true, false, true))) {
+      TRANS_LOG(WARN, "update part failed", K(ret), K(a));
+    }
+  }
+  return ret;
+}
+
+// NOTE that this is only for px
+int ObTxDesc::merge_exec_info_for_px(const ObTxDesc &src)
 {
   int ret = OB_SUCCESS;
   ObSpinLockGuard guard(lock_);
-  if (OB_FAIL(update_parts_(src.parts_))) {
+  if (OB_FAIL(update_parts_for_px_(src.parts_))) {
     TRANS_LOG(WARN, "update parts failed", K(ret), KPC(this), K(src));
   }
   if (src.flags_.PARTS_INCOMPLETE_) {

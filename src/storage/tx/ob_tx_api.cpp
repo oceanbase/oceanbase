@@ -2013,10 +2013,11 @@ inline int ObTransService::sync_rollback_savepoint__(ObTxDesc &tx,
   return ret;
 }
 
+// NOTE that this is only for px
 int ObTransService::merge_tx_state(ObTxDesc &to, const ObTxDesc &from)
 {
   TRANS_LOG(TRACE, "merge_tx_state", K(to), K(from));
-  int ret = to.merge_exec_info_with(from);
+  int ret = to.merge_exec_info_for_px(from);
   ObTransTraceLog &tlog = to.get_tlog();
   REC_TRANS_TRACE_EXT(&tlog, merge_tx_state, OB_Y(ret),
                       OB_ID(to), (void*)&to,

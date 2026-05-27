@@ -515,7 +515,7 @@ int stash_pop_savepoints(ObTxDesc &tx, ObString &name);
 /**
  * merge_tx_state - merge trans state from other trans state
  *
- * used in SQL execution which parallel execution with copied private tx state
+ * used in SQL PX execution which parallel execution with copied private tx state
  *
  * @to:             dest transaction descriptor
  * @from:           src transaction descriptor

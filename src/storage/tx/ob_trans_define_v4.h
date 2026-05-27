@@ -763,11 +763,15 @@ private:
   int set_commit_cb(ObITxCallback *cb);
   bool execute_commit_cb();
 private:
-  int update_part_(ObTxPart &p, const bool append = true, const bool check_only_if_exist = false);
+  int update_part_(ObTxPart &p,
+                   const bool append = true,
+                   const bool check_only_if_exist = false,
+                   const bool is_for_px = false);
   int add_conflict_info_(const storage::ObRowConflictInfo &conflict_info);
   int merge_conflict_info_array_(const ObIArray<storage::ObRowConflictInfo> &conflict_info_array,
                                  const ObIArray<ObTransIDAndAddr> &conflict_info_array_old);
   int update_parts_(const ObTxPartList &list);
+  int update_parts_for_px_(const ObTxPartList &list);
   void post_rb_savepoint_(ObTxPartRefList &parts, const ObTxSEQ &savepoint);
   void implicit_start_tx_();
   bool acq_commit_cb_lock_if_need_();
@@ -934,7 +938,8 @@ public:
   ObITxCallback *get_end_tx_cb() { return commit_cb_; }
   void reset_end_tx_cb() { commit_cb_ = NULL; }
   const ObString &get_tx_state_str() const;
-  int merge_exec_info_with(const ObTxDesc &other);
+  // NOTE that this is only for px
+  int merge_exec_info_for_px(const ObTxDesc &other);
   int get_inc_exec_info(ObTxExecResult &exec_info);
   int add_exec_info(const ObTxExecResult &exec_info);
   bool has_implicit_savepoint() const;
