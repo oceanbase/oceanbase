@@ -113,7 +113,7 @@ public:
 
 private:
   int64_t get_total_need_reblance_part_cnt_() const;
-  void set_normal_priority_budget_(const int64_t &average_budget);
+  void set_normal_priority_budget_(const int64_t &average_budget, const TransCtx &trans);
   int collect_sorter_feedback_();
 
 private:

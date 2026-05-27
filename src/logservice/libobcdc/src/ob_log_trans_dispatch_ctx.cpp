@@ -17,8 +17,6 @@
 #include "ob_log_trans_dispatch_ctx.h"
 #include "ob_log_config.h"              // TCONF
 #include "ob_log_instance.h"            // TCTX
-#include "ob_log_trans_msg_sorter.h"    // IObLogTransMsgSorter
-#include "ob_cdc_lob_data_merger.h"     // IObCDCLobDataMerger
 #include "ob_cdc_auto_config_mgr.h"     // CDC_CFG_MGR
 #include "ob_cdc_lob_data_merger.h"     // IObCDCLobDataMerger
 
@@ -102,8 +100,9 @@ int TransDispatchCtx::reblance_budget(
         int64_t dispatch_budget = total_budget > 0 ? total_budget : 0;
         const int64_t average_budget = current_used_memory >= redo_memory_limit ?
             0 : (dispatch_budget / total_count) + 1;
-        set_normal_priority_budget_(average_budget);
-        LOG_DEBUG("reblance budget result:", K(total_budget), K(total_count), K(average_budget));
+        set_normal_priority_budget_(average_budget, trans);
+        LOG_DEBUG("reblance budget result:", K(total_budget), K(total_count), K(average_budget),
+            "trans_br_sort_status", trans.print_trans_br_sort_status());
       }
     }
   }
@@ -116,12 +115,13 @@ int64_t TransDispatchCtx::get_total_need_reblance_part_cnt_() const
   return normal_priority_part_budget_arr_.count() + high_priority_part_budget_arr_.count();
 }
 
-void TransDispatchCtx::set_normal_priority_budget_(const int64_t &average_budget)
+void TransDispatchCtx::set_normal_priority_budget_(const int64_t &average_budget, const TransCtx &trans)
 {
   const static int64_t PRINT_STAT_INTERVAL = 10 * _SEC_;
   const bool need_pause = TCTX.need_pause_redo_dispatch();
-  IObLogTransMsgSorter *msg_sorter = TCTX.trans_msg_sorter_;
+  const bool is_trans_sorting = trans.is_trans_sorting();
   const bool is_new_trans_can_dispatch = (! is_dispatching_ && average_budget > 0 && !need_pause);
+  bool has_dispatch_budget = false;
   bool touch_memory_warn_limit = false;
   bool memory_overused = false;
   TCTX.get_memory_usage_status(touch_memory_warn_limit, memory_overused);
@@ -139,24 +139,15 @@ void TransDispatchCtx::set_normal_priority_budget_(const int64_t &average_budget
     if (is_new_trans_can_dispatch) {
       // only dispatch 1 redo for each part of trans for the first round dispatch
       budget.reset_budget(1);
-    } else if (need_pause || ! is_dispatching_) {
-      if (REACH_TIME_INTERVAL(PRINT_STAT_INTERVAL)) {
-        LOG_INFO("[NOTICE][REDO_DISPATCH][PAUSE]",
-            K(budget),
-            K(average_budget),
-            K_(is_dispatching),
-            "trans_id", part_trans_task->get_trans_id(),
-            "tls_id", part_trans_task->get_tls_id(),
-            "redo_sorted_progress", part_trans_task->get_sorted_redo_list().sorted_progress_);
-      }
-      budget.reset_budget(0);
-    } else if (average_budget <= 0
+      has_dispatch_budget = true;
+    } else if (!need_pause
+        && average_budget <= 0
         && OB_NOT_NULL(part_trans_task)
-        && OB_NOT_NULL(msg_sorter)
-        && (part_trans_task->get_trans_id() == msg_sorter->get_cur_sort_trans_id()) // wait last trans handled in sorter
+        && is_trans_sorting
         && (part_trans_task->is_dispatched_redo_be_sorted() || lob_data_merger_task_count > 0)) {
 
-      const int64_t extra_redo_dispatch_size = touch_memory_warn_limit ? 1 : CDC_CFG_MGR.get_extra_redo_dispatch_memory_size();
+      const int64_t extra_redo_dispatch_size = is_dispatching_ ?
+          (touch_memory_warn_limit ? 1 : CDC_CFG_MGR.get_extra_redo_dispatch_memory_size()) : 1;
 
       if (REACH_TIME_INTERVAL(PRINT_STAT_INTERVAL)) {
         LOG_TRACE("[NOTICE][REDO_DISPATCH][DATA_SKEW] budget usedup but dispatched_redo all sorted, or waiting lob data to merge, use extra_redo budget",
@@ -165,17 +156,35 @@ void TransDispatchCtx::set_normal_priority_budget_(const int64_t &average_budget
             K(need_pause),
             K(touch_memory_warn_limit),
             K(lob_data_merger_task_count),
+            "is_trans_sorting", is_trans_sorting,
+            K_(is_dispatching),
             "extra_redo_dispatch_size", SIZE_TO_STR(extra_redo_dispatch_size),
             "part_trans_task", part_trans_task->get_part_trans_info(),
             "redo_sorted_progress", part_trans_task->get_sorted_redo_list().sorted_progress_);
       }
 
       budget.reset_budget(extra_redo_dispatch_size);
+      has_dispatch_budget = has_dispatch_budget || (extra_redo_dispatch_size > 0);
+    } else if (need_pause || (! is_dispatching_ && ! is_trans_sorting)) {
+      if (REACH_TIME_INTERVAL(PRINT_STAT_INTERVAL)) {
+        LOG_INFO("[NOTICE][REDO_DISPATCH][PAUSE]",
+            K(budget),
+            K(average_budget),
+            K_(is_dispatching),
+            K(is_trans_sorting),
+            "trans_id", part_trans_task->get_trans_id(),
+            "tls_id", part_trans_task->get_tls_id(),
+            "redo_sorted_progress", part_trans_task->get_sorted_redo_list().sorted_progress_);
+      }
+      budget.reset_budget(0);
     } else {
       budget.reset_budget(average_budget);
+      LOG_DEBUG("reset budget", K(budget), K(average_budget), "trans_id", trans.get_trans_id(),
+          "is_trans_sorting", is_trans_sorting);
+      has_dispatch_budget = has_dispatch_budget || (average_budget > 0);
     }
   }
-  if (is_new_trans_can_dispatch) {
+  if (has_dispatch_budget) {
     is_dispatching_ = true;
   }
 }

@@ -99,7 +99,7 @@ TransCtx::TransCtx() :
     valid_part_trans_task_count_(0),
     revertable_ref_info_(0),
     is_trans_redo_dispatched_(false),
-    is_trans_sorted_(false),
+    trans_br_sort_status_(TRANS_BR_SORT_NOT_STARTED),
     br_out_queue_(),
     allocator_(ObModIds::OB_LOG_TRANS_CTX, PAGE_SIZE),
     lock_(ObLatchIds::OBCDC_TRANS_CTX_LOCK)
@@ -134,7 +134,7 @@ void TransCtx::reset()
   revertable_ref_info_ = 0;
   has_ddl_participant_ = false;
   is_trans_redo_dispatched_ = false;
-  is_trans_sorted_ = false;
+  trans_br_sort_status_ = TRANS_BR_SORT_NOT_STARTED;
 
   allocator_.reset();
 }
@@ -908,7 +908,8 @@ void TransCtx::wait_trans_redo_dispatched_(volatile bool &stop_flag)
       LOG_INFO("waiting redo dispatch finish...", K_(tenant_id), K_(trans_id),
           K_(participant_count), K_(ready_participant_count),
           "revertable_participant_count", get_revertable_participant_count_(revertable_ref_info_),
-          K_(total_br_count), K_(committed_br_count), K_(is_trans_sorted));
+          K_(total_br_count), K_(committed_br_count),
+          "trans_br_sort_status", print_trans_br_sort_status());
     }
   }
   if (OB_UNLIKELY(stop_flag)) {

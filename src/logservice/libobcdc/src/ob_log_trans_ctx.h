@@ -108,6 +108,13 @@ public:
     TRANS_CTX_STATE_MAX
   };
 
+  enum TransBrSortStatus
+  {
+    TRANS_BR_SORT_NOT_STARTED = 0,
+    TRANS_BR_SORT_SORTING = 1,
+    TRANS_BR_SORT_SORTED = 2,
+  };
+
   enum { DATA_OP_TIMEOUT = 10 * 1000 * 1000 };
 
 public:
@@ -256,8 +263,18 @@ public:
   int set_ready_participant_objs(PartTransTask *part_trans_task);
   int append_sorted_br(ObLogBR *br);
   OB_INLINE void set_trans_redo_dispatched() { ATOMIC_SET(&is_trans_redo_dispatched_, true); }
-  OB_INLINE bool is_trans_sorted() const { return ATOMIC_LOAD(&is_trans_sorted_); }
-  OB_INLINE void set_trans_sorted() { ATOMIC_SET(&is_trans_sorted_, true); }
+  OB_INLINE TransBrSortStatus get_trans_br_sort_status() const
+  {
+    return static_cast<TransBrSortStatus>(ATOMIC_LOAD(&trans_br_sort_status_));
+  }
+  OB_INLINE void set_trans_br_sort_status(const TransBrSortStatus status)
+  {
+    ATOMIC_SET(&trans_br_sort_status_, static_cast<int8_t>(status));
+  }
+  OB_INLINE bool is_trans_sorted() const { return TRANS_BR_SORT_SORTED == get_trans_br_sort_status(); }
+  OB_INLINE void set_trans_sorted() { set_trans_br_sort_status(TRANS_BR_SORT_SORTED); }
+  OB_INLINE bool is_trans_sorting() const { return TRANS_BR_SORT_SORTING == get_trans_br_sort_status(); }
+  OB_INLINE void set_trans_sorting() { set_trans_br_sort_status(TRANS_BR_SORT_SORTING); }
   /// check if trans has valid br
   /// note: call this function before any br output
   /// @retval OB_SUCCESS      trans has valid br to output
@@ -303,6 +320,26 @@ public:
     return ret;
   }
 
+  const char *print_trans_br_sort_status() const
+  {
+    const char *ret = "UNKNOWN";
+    switch (get_trans_br_sort_status()) {
+    case TRANS_BR_SORT_NOT_STARTED:
+      ret = "NOT_STARTED";
+      break;
+    case TRANS_BR_SORT_SORTING:
+      ret = "SORTING";
+      break;
+    case TRANS_BR_SORT_SORTED:
+      ret = "SORTED";
+      break;
+    default:
+      ret = "UNKNOWN";
+      break;
+    }
+    return ret;
+  }
+
 public:
   TO_STRING_KV(
       "state", print_state(),
@@ -313,7 +350,7 @@ public:
       KP_(ready_participant_objs),
       K_(ready_participant_count),
       K_(is_trans_redo_dispatched),
-      K_(is_trans_sorted),
+      "trans_br_sort_status", print_trans_br_sort_status(),
       K_(total_br_count),
       K_(committed_br_count),
       "revertable_participant_count", get_revertable_participant_count_(revertable_ref_info_),
@@ -389,7 +426,7 @@ private:
   // status info
   uint64_t revertable_ref_info_;  // Low 62 bits: participant count, High 2 bits: begin/commit BR released flags
   bool                      is_trans_redo_dispatched_ CACHE_ALIGNED;
-  bool                      is_trans_sorted_ CACHE_ALIGNED;
+  int8_t                    trans_br_sort_status_ CACHE_ALIGNED;
   common::ObSpLinkQueue     br_out_queue_;
 
   // allocator

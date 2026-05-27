@@ -59,7 +59,6 @@ ObLogTransMsgSorter::ObLogTransMsgSorter() :
   total_task_count_(0),
   trans_stat_mgr_(NULL),
   enable_sort_by_seq_no_(false),
-  cur_sort_trans_id_(),
   err_handler_(NULL)
 {
   br_sort_func_ = NULL;
@@ -116,7 +115,6 @@ void ObLogTransMsgSorter::destroy()
     task_limit_ = 0;
     total_task_count_ = 0;
     trans_stat_mgr_ = NULL;
-    cur_sort_trans_id_.reset();
     err_handler_ = NULL;
     br_sort_func_ = NULL;
     LOG_INFO("TransMsgSorter destroy succ");
@@ -200,17 +198,20 @@ void ObLogTransMsgSorter::handle(void *data)
   } else if (OB_ISNULL(trans = static_cast<TransCtx*>(data))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("task to be handled should not null!", KR(ret));
-  } else if (OB_FAIL(((*this).*br_sort_func_)(*trans))) {
-    if (OB_IN_STOP_STATE != ret) {
-      LOG_ERROR("failed to sort trans br", KR(ret), K_(enable_sort_by_seq_no), KPC(trans));
-    }
   } else {
-    LOG_DEBUG("br sorter handle trans done", K_(enable_sort_by_seq_no), KPC(trans));
-    /* trans status change to TRANS_BR_SORTED */
-    trans->set_trans_sorted();
-    // no more access to trans cause it may be freed by anytime.
-    ATOMIC_DEC(&total_task_count_);
-    trans_stat_mgr_->do_sort_trans_stat();
+    trans->set_trans_sorting();
+    if (OB_FAIL(((*this).*br_sort_func_)(*trans))) {
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("failed to sort trans br", KR(ret), K_(enable_sort_by_seq_no), KPC(trans));
+      }
+    } else {
+      LOG_DEBUG("br sorter handle trans done", K_(enable_sort_by_seq_no), KPC(trans));
+      ATOMIC_DEC(&total_task_count_);
+      trans_stat_mgr_->do_sort_trans_stat();
+      /* trans status change to TRANS_BR_SORTED */
+      trans->set_trans_sorted();
+      // no more access to trans cause it may be freed by anytime.
+    }
   }
 
   if (OB_SUCCESS != ret && OB_IN_STOP_STATE != ret && NULL != err_handler_) {
@@ -223,7 +224,6 @@ int ObLogTransMsgSorter::sort_br_by_part_order_(TransCtx &trans)
   int ret = OB_SUCCESS;
   LOG_DEBUG("br sorter handle trans begin", K(trans));
   PartTransTask *part_trans_task = trans.get_participant_objs();
-  cur_sort_trans_id_ = trans.get_trans_id();
 
   if (OB_ISNULL(part_trans_task)) {
     ret = OB_ERR_UNEXPECTED;
@@ -310,7 +310,6 @@ int ObLogTransMsgSorter::sort_br_by_seq_no_(TransCtx &trans)
   int ret = OB_SUCCESS;
   LOG_DEBUG("br sorter handle trans begin", K(trans));
   DmlStmtTask *dml_stmt_task = NULL;
-  cur_sort_trans_id_ = trans.get_trans_id();
   // 1. build a min-top heap
   std::priority_queue<DmlStmtTask*, std::vector<DmlStmtTask*>, StmtSequerenceCompFunc> heap;
   PartTransTask *part_trans_task = trans.get_participant_objs();
