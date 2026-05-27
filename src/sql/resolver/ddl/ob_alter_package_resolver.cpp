@@ -305,6 +305,7 @@ int ObAlterPackageResolver::compile_package(const ObString& db_name,
                 if (routine_infos.at(j)->get_subprogram_id() ==
                     routine_spec_infos.at(i).get_subprogram_id()) {
                   already_in_schema = true;
+                  routine_spec_infos.at(i).set_routine_id(routine_infos.at(j)->get_routine_id());
                   routine_infos.at(j) = &routine_spec_infos.at(i);
                 }
               }
