@@ -868,28 +868,31 @@ int ObTableApiRowIterator::open()
 int ObTableApiRowIterator::get_next_row(ObNewRow *&row)
 {
   int ret = OB_SUCCESS;
+  row = nullptr;
   if (OB_FAIL(ObTableApiScanRowIterator::get_next_row(row))){
     if (ret != OB_ITER_END) {
       ret_code_ = ret;
       LOG_WARN("fail to get next row", K(ret));
     }
-  } else {
+  } else if (OB_NOT_NULL(row)) {
     row_count_++;
+    LOG_DEBUG("ObTableApiRowIterator::get_next_row", K(ret), KPC(row));
   }
-  LOG_DEBUG("ObTableApiRowIterator::get_next_row", K(ret), KPC(row));
   return ret;
 }
 
 int ObTableApiRowIterator::get_next_row(ObNewRow *&row, common::ObIAllocator &allocator)
 {
-    int ret = OB_SUCCESS;
+  int ret = OB_SUCCESS;
+  row = nullptr;
   if (OB_FAIL(ObTableApiScanRowIterator::get_next_row(row, allocator))){
     if (ret != OB_ITER_END) {
       ret_code_ = ret;
       LOG_WARN("fail to get next row", K(ret));
     }
-  } else {
+  } else if (OB_NOT_NULL(row)) {
     row_count_++;
+    LOG_DEBUG("ObTableApiRowIterator::get_next_row", K(ret), KPC(row));
   }
   return ret;
 }
