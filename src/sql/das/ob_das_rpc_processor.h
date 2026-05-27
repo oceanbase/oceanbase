@@ -165,6 +165,13 @@ public:
   const common::ObSEArray<ObIDASTaskResult*, 2> &get_op_results() const { return result_.get_op_results(); };
   common::ObSEArray<ObIDASTaskResult*, 2> &get_op_results() { return result_.get_op_results(); };
   const sql::ObDASTaskResp &get_task_resp() const { return result_; };
+
+  void set_task_resp_addrs(const common::ObAddr &ctrl_svr, const common::ObAddr &runner_svr)
+  {
+    result_.set_ctrl_svr(ctrl_svr);
+    result_.set_runner_svr(runner_svr);
+  }
+
   const common::ObSEArray<ObIDASTaskOp*, 2> &get_task_ops() const { return context_->get_task_ops(); };
   common::ObIAllocator &get_result_alloc() { return context_->get_alloc(); }
   ObDasAsyncRpcCallBackContext *get_async_cb_context() { return context_; };
