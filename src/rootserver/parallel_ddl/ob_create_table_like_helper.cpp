@@ -180,6 +180,7 @@ int ObCreateTableLikeHelper::generate_table_schema_()
       new_table_schema.set_define_user_id(arg_.define_user_id_);
       new_table_schema.reset_foreign_key_infos();
       new_table_schema.reset_trigger_list();
+      new_table_schema.reset_progressive_merge();
       if (new_table_schema.has_constraint()) {
         ObTableSchema::const_constraint_iterator iter = new_table_schema.constraint_begin();
         ObTableSchema::const_constraint_iterator iter_last = iter;
@@ -308,6 +309,8 @@ int ObCreateTableLikeHelper::generate_aux_table_schemas_()
           new_index_schema.set_database_id(new_database_id);
           //create table like, index always is valid
           new_index_schema.set_index_status(INDEX_STATUS_AVAILABLE);
+          // create table like, index no need to progressive merge
+          new_index_schema.reset_progressive_merge();
           const ObIndexType index_type = new_index_schema.get_index_type();
           if (new_index_schema.is_rowkey_doc_id() ||
               new_index_schema.is_doc_id_rowkey() ||

@@ -4075,7 +4075,6 @@ void ObTableSchema::reset()
   subpart_key_column_num_ = 0;
   block_size_ = common::OB_DEFAULT_SSTABLE_BLOCK_SIZE;
   is_use_bloomfilter_ = false;
-  progressive_merge_num_ = 0;
   tablet_size_ = OB_DEFAULT_TABLET_SIZE;
   pctfree_ = OB_DEFAULT_PCTFREE;
   autoinc_column_id_ = 0;
@@ -4090,13 +4089,13 @@ void ObTableSchema::reset()
   index_attributes_set_ = OB_DEFAULT_INDEX_ATTRIBUTES_SET;
   row_store_type_ = ObStoreFormat::get_default_row_store_type();
   store_format_ = OB_STORE_FORMAT_INVALID;
-  progressive_merge_round_ = 0;
   storage_format_version_ = OB_STORAGE_FORMAT_VERSION_INVALID;
   define_user_id_ = OB_INVALID_ID;
   aux_lob_meta_tid_ = OB_INVALID_ID;
   aux_lob_piece_tid_ = OB_INVALID_ID;
   compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE;
+  reset_progressive_merge();
   reset_string(tablegroup_name_);
   reset_string(comment_);
   reset_string(pk_comment_);
