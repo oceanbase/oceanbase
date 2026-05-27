@@ -841,6 +841,7 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
     case ENABLE_TOPN_RUNTIME_FILTER:
     case DISABLE_GTT_SESSION_ISOLATION:
     case ENABLE_RUNTIME_FILTER_ADAPTIVE_APPLY:
+    case ENABLE_MERGE_INTO:
     case ENABLE_DELETE_INSERT_SCAN:
     case ENABLE_FAST_REFRESH_WITH_CUR_TIME:
     case DISABLE_SHARED_EXPR_EXTRACTION:

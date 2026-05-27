@@ -25,9 +25,7 @@ int ObSimpleJoinMAVPrinter::gen_refresh_dmls(ObIArray<ObDMLStmt*> &dml_stmts)
   int ret = OB_SUCCESS;
   dml_stmts.reuse();
   const bool mysql_mode = lib::is_mysql_mode();
-  if (mysql_mode && OB_FAIL(gen_update_insert_delete_for_simple_join_mav(dml_stmts))) {
-    LOG_WARN("failed to gen update insert delete for simple mav", K(ret));
-  } else if (!mysql_mode && OB_FAIL(gen_merge_for_simple_join_mav(dml_stmts))) {
+  if (OB_FAIL(gen_merge_for_simple_join_mav(dml_stmts))) {
     LOG_WARN("failed to gen merge into for simple mav", K(ret));
   }
   return ret;
@@ -79,40 +77,6 @@ int ObSimpleJoinMAVPrinter::gen_delta_pre_data_views()
       // do nothing, no need to gen delta data access stmt
     } else if (OB_FAIL(gen_delta_data_access_stmt(*source_table, all_delta_datas_.at(i)))) {
       LOG_WARN("failed to gen delta data access stmt", K(ret));
-    }
-  }
-  return ret;
-}
-
-int ObSimpleJoinMAVPrinter::gen_update_insert_delete_for_simple_join_mav(ObIArray<ObDMLStmt*> &dml_stmts)
-{
-  int ret = OB_SUCCESS;
-  dml_stmts.reuse();
-  ObSEArray<ObSelectStmt*, 4> inner_delta_mavs;
-  if (OB_FAIL(gen_inner_delta_mav_for_mav(inner_delta_mavs))) {
-    LOG_WARN("failed to gen inner delta mav for simple join mav", K(ret));
-  } else {
-    ObUpdateStmt *update_stmt = NULL;
-    ObInsertStmt *insert_stmt = NULL;
-    for (int64_t i = 0; OB_SUCC(ret) && i < inner_delta_mavs.count(); ++i) {
-      // zhanyue todo: call gen_merge_for_simple_mav once, and assign stmt, adjust inner_delta_mavs
-      if (OB_FAIL(gen_insert_for_mav(inner_delta_mavs.at(i), insert_stmt))) {
-        LOG_WARN("failed to gen insert for mav", K(ret));
-      } else if (OB_FAIL(gen_update_for_mav(inner_delta_mavs.at(i), update_stmt))) {
-        LOG_WARN("failed to gen update for mav", K(ret));
-      } else if (OB_FAIL(dml_stmts.push_back(update_stmt))  // pushback and execute in this ordering
-                 || OB_FAIL(dml_stmts.push_back(insert_stmt))) {
-        LOG_WARN("failed to push back", K(ret));
-      }
-    }
-
-    if (OB_SUCC(ret) && !mv_def_stmt_.is_scala_group_by()) {
-      ObDeleteStmt *delete_stmt = NULL;
-      if (OB_FAIL(gen_delete_for_mav(delete_stmt))) {
-        LOG_WARN("failed gen delete for mav", K(ret));
-      } else if (OB_FAIL(dml_stmts.push_back(delete_stmt))) { // pushback and execute in this ordering
-        LOG_WARN("failed to push back", K(ret));
-      }
     }
   }
   return ret;

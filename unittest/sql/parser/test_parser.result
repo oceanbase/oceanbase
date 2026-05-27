@@ -22464,22 +22464,2693 @@ question_mask_size: 0
 }
 **************   Case 173   ***************
 merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_MERGE",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_ALIAS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_RELATION_FACTOR",
+              "int_val":9223372036854775807,
+              "str_len":11,
+              "str_val":"targetTable",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":11,
+                  "str_val":"targetTable"
+                },
+                 { }
+              ]
+            },
+             {
+              "type":"T_IDENT",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"t1"
+            },
+             { },
+             { }
+          ]
+        },
+         {
+          "type":"T_ALIAS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_RELATION_FACTOR",
+              "int_val":9223372036854775807,
+              "str_len":11,
+              "str_val":"sourceTable",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":11,
+                  "str_val":"sourceTable"
+                },
+                 { }
+              ]
+            },
+             {
+              "type":"T_IDENT",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"t2"
+            },
+             { },
+             { }
+          ]
+        },
+         {
+          "type":"T_OP_EQ",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_COLUMN_REF",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"id",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"t1"
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"id"
+                }
+              ]
+            },
+             {
+              "type":"T_COLUMN_REF",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"id",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"t2"
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"id"
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_UPDATE",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_ASSIGN_LIST",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_ASSIGN_ITEM",
+                  "int_val":9223372036854775807,
+                  "str_len":0,
+                  "str_val":"",
+                  "children": [
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"sales",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t1"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":5,
+                          "str_val":"sales"
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"sales",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t2"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":5,
+                          "str_val":"sales"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+             { },
+             { }
+          ]
+        },
+         {
+          "type":"T_INSERT",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_COLUMN_LIST",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_COLUMN_REF",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"id",
+                  "children": [
+                     { },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"t1"
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"id"
+                    }
+                  ]
+                },
+                 {
+                  "type":"T_COLUMN_REF",
+                  "int_val":9223372036854775807,
+                  "str_len":5,
+                  "str_val":"sales",
+                  "children": [
+                     { },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"t1"
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"sales"
+                    }
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_VALUE_LIST",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_VALUE_VECTOR",
+                  "int_val":2,
+                  "str_len":0,
+                  "str_val":"",
+                  "children": [
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"id",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t2"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"id"
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"sales",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t2"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":5,
+                          "str_val":"sales"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+             { }
+          ]
+        },
+         { }
+      ]
+    }
+  ]
+}
 **************   Case 174   ***************
 merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales where t2.id!= t1.id when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_MERGE",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_ALIAS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_RELATION_FACTOR",
+              "int_val":9223372036854775807,
+              "str_len":11,
+              "str_val":"targetTable",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":11,
+                  "str_val":"targetTable"
+                },
+                 { }
+              ]
+            },
+             {
+              "type":"T_IDENT",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"t1"
+            },
+             { },
+             { }
+          ]
+        },
+         {
+          "type":"T_ALIAS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_RELATION_FACTOR",
+              "int_val":9223372036854775807,
+              "str_len":11,
+              "str_val":"sourceTable",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":11,
+                  "str_val":"sourceTable"
+                },
+                 { }
+              ]
+            },
+             {
+              "type":"T_IDENT",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"t2"
+            },
+             { },
+             { }
+          ]
+        },
+         {
+          "type":"T_OP_EQ",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_COLUMN_REF",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"id",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"t1"
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"id"
+                }
+              ]
+            },
+             {
+              "type":"T_COLUMN_REF",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"id",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"t2"
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"id"
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_UPDATE",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_ASSIGN_LIST",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_ASSIGN_ITEM",
+                  "int_val":9223372036854775807,
+                  "str_len":0,
+                  "str_val":"",
+                  "children": [
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"sales",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t1"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":5,
+                          "str_val":"sales"
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"sales",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t2"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":5,
+                          "str_val":"sales"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_WHERE_CLAUSE",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_OP_NE",
+                  "int_val":9223372036854775807,
+                  "str_len":0,
+                  "str_val":"",
+                  "children": [
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"id",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t2"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"id"
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"id",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t1"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"id"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                 { }
+              ]
+            },
+             { }
+          ]
+        },
+         {
+          "type":"T_INSERT",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_COLUMN_LIST",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_COLUMN_REF",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"id",
+                  "children": [
+                     { },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"t1"
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"id"
+                    }
+                  ]
+                },
+                 {
+                  "type":"T_COLUMN_REF",
+                  "int_val":9223372036854775807,
+                  "str_len":5,
+                  "str_val":"sales",
+                  "children": [
+                     { },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"t1"
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"sales"
+                    }
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_VALUE_LIST",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_VALUE_VECTOR",
+                  "int_val":2,
+                  "str_len":0,
+                  "str_val":"",
+                  "children": [
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"id",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t2"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"id"
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"sales",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t2"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":5,
+                          "str_val":"sales"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+             { }
+          ]
+        },
+         { }
+      ]
+    }
+  ]
+}
 **************   Case 175   ***************
 merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales where t1.id < 3 delete where t1.id < 5 when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_MERGE",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_ALIAS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_RELATION_FACTOR",
+              "int_val":9223372036854775807,
+              "str_len":11,
+              "str_val":"targetTable",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":11,
+                  "str_val":"targetTable"
+                },
+                 { }
+              ]
+            },
+             {
+              "type":"T_IDENT",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"t1"
+            },
+             { },
+             { }
+          ]
+        },
+         {
+          "type":"T_ALIAS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_RELATION_FACTOR",
+              "int_val":9223372036854775807,
+              "str_len":11,
+              "str_val":"sourceTable",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":11,
+                  "str_val":"sourceTable"
+                },
+                 { }
+              ]
+            },
+             {
+              "type":"T_IDENT",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"t2"
+            },
+             { },
+             { }
+          ]
+        },
+         {
+          "type":"T_OP_EQ",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_COLUMN_REF",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"id",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"t1"
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"id"
+                }
+              ]
+            },
+             {
+              "type":"T_COLUMN_REF",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"id",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"t2"
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"id"
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_UPDATE",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_ASSIGN_LIST",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_ASSIGN_ITEM",
+                  "int_val":9223372036854775807,
+                  "str_len":0,
+                  "str_val":"",
+                  "children": [
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"sales",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t1"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":5,
+                          "str_val":"sales"
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"sales",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t2"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":5,
+                          "str_val":"sales"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_WHERE_CLAUSE",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_OP_LT",
+                  "int_val":9223372036854775807,
+                  "str_len":0,
+                  "str_val":"",
+                  "children": [
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"id",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t1"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"id"
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_INT",
+                      "int_val":3,
+                      "str_len":1,
+                      "str_val":"3"
+                    }
+                  ]
+                },
+                 { }
+              ]
+            },
+             {
+              "type":"T_WHERE_CLAUSE",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_OP_LT",
+                  "int_val":9223372036854775807,
+                  "str_len":0,
+                  "str_val":"",
+                  "children": [
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"id",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t1"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"id"
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_INT",
+                      "int_val":5,
+                      "str_len":1,
+                      "str_val":"5"
+                    }
+                  ]
+                },
+                 { }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_INSERT",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_COLUMN_LIST",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_COLUMN_REF",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"id",
+                  "children": [
+                     { },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"t1"
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"id"
+                    }
+                  ]
+                },
+                 {
+                  "type":"T_COLUMN_REF",
+                  "int_val":9223372036854775807,
+                  "str_len":5,
+                  "str_val":"sales",
+                  "children": [
+                     { },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"t1"
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"sales"
+                    }
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_VALUE_LIST",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_VALUE_VECTOR",
+                  "int_val":2,
+                  "str_len":0,
+                  "str_val":"",
+                  "children": [
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"id",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t2"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"id"
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"sales",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t2"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":5,
+                          "str_val":"sales"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+             { }
+          ]
+        },
+         { }
+      ]
+    }
+  ]
+}
 **************   Case 176   ***************
 merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales delete where t1.sales =2 when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales);
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_MERGE",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_ALIAS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_RELATION_FACTOR",
+              "int_val":9223372036854775807,
+              "str_len":11,
+              "str_val":"targetTable",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":11,
+                  "str_val":"targetTable"
+                },
+                 { }
+              ]
+            },
+             {
+              "type":"T_IDENT",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"t1"
+            },
+             { },
+             { }
+          ]
+        },
+         {
+          "type":"T_ALIAS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_RELATION_FACTOR",
+              "int_val":9223372036854775807,
+              "str_len":11,
+              "str_val":"sourceTable",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":11,
+                  "str_val":"sourceTable"
+                },
+                 { }
+              ]
+            },
+             {
+              "type":"T_IDENT",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"t2"
+            },
+             { },
+             { }
+          ]
+        },
+         {
+          "type":"T_OP_EQ",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_COLUMN_REF",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"id",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"t1"
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"id"
+                }
+              ]
+            },
+             {
+              "type":"T_COLUMN_REF",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"id",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"t2"
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"id"
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_UPDATE",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_ASSIGN_LIST",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_ASSIGN_ITEM",
+                  "int_val":9223372036854775807,
+                  "str_len":0,
+                  "str_val":"",
+                  "children": [
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"sales",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t1"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":5,
+                          "str_val":"sales"
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"sales",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t2"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":5,
+                          "str_val":"sales"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+             { },
+             {
+              "type":"T_WHERE_CLAUSE",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_OP_EQ",
+                  "int_val":9223372036854775807,
+                  "str_len":0,
+                  "str_val":"",
+                  "children": [
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"sales",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t1"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":5,
+                          "str_val":"sales"
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_INT",
+                      "int_val":2,
+                      "str_len":1,
+                      "str_val":"2"
+                    }
+                  ]
+                },
+                 { }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_INSERT",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_COLUMN_LIST",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_COLUMN_REF",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"id",
+                  "children": [
+                     { },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"t1"
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"id"
+                    }
+                  ]
+                },
+                 {
+                  "type":"T_COLUMN_REF",
+                  "int_val":9223372036854775807,
+                  "str_len":5,
+                  "str_val":"sales",
+                  "children": [
+                     { },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"t1"
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"sales"
+                    }
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_VALUE_LIST",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_VALUE_VECTOR",
+                  "int_val":2,
+                  "str_len":0,
+                  "str_val":"",
+                  "children": [
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"id",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t2"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"id"
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"sales",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t2"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":5,
+                          "str_val":"sales"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+             { }
+          ]
+        },
+         { }
+      ]
+    }
+  ]
+}
 **************   Case 177   ***************
 merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales) where t2.id > 0;
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_MERGE",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_ALIAS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_RELATION_FACTOR",
+              "int_val":9223372036854775807,
+              "str_len":11,
+              "str_val":"targetTable",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":11,
+                  "str_val":"targetTable"
+                },
+                 { }
+              ]
+            },
+             {
+              "type":"T_IDENT",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"t1"
+            },
+             { },
+             { }
+          ]
+        },
+         {
+          "type":"T_ALIAS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_RELATION_FACTOR",
+              "int_val":9223372036854775807,
+              "str_len":11,
+              "str_val":"sourceTable",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":11,
+                  "str_val":"sourceTable"
+                },
+                 { }
+              ]
+            },
+             {
+              "type":"T_IDENT",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"t2"
+            },
+             { },
+             { }
+          ]
+        },
+         {
+          "type":"T_OP_EQ",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_COLUMN_REF",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"id",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"t1"
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"id"
+                }
+              ]
+            },
+             {
+              "type":"T_COLUMN_REF",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"id",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"t2"
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"id"
+                }
+              ]
+            }
+          ]
+        },
+         { },
+         {
+          "type":"T_INSERT",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_COLUMN_LIST",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_COLUMN_REF",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"id",
+                  "children": [
+                     { },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"t1"
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"id"
+                    }
+                  ]
+                },
+                 {
+                  "type":"T_COLUMN_REF",
+                  "int_val":9223372036854775807,
+                  "str_len":5,
+                  "str_val":"sales",
+                  "children": [
+                     { },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"t1"
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"sales"
+                    }
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_VALUE_LIST",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_VALUE_VECTOR",
+                  "int_val":2,
+                  "str_len":0,
+                  "str_val":"",
+                  "children": [
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"id",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t2"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"id"
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"sales",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t2"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":5,
+                          "str_val":"sales"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_WHERE_CLAUSE",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_OP_GT",
+                  "int_val":9223372036854775807,
+                  "str_len":0,
+                  "str_val":"",
+                  "children": [
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"id",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t2"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"id"
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_INT",
+                      "int_val":0,
+                      "str_len":1,
+                      "str_val":"0"
+                    }
+                  ]
+                },
+                 { }
+              ]
+            }
+          ]
+        },
+         { }
+      ]
+    }
+  ]
+}
 **************   Case 178   ***************
 merge into targetTable t1 using sourceTable t2 on (1 = 2) when not matched then insert(t1.id, t1.sales) values(t2.id, t2.sales) where t2.id > 0;
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_MERGE",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_ALIAS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_RELATION_FACTOR",
+              "int_val":9223372036854775807,
+              "str_len":11,
+              "str_val":"targetTable",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":11,
+                  "str_val":"targetTable"
+                },
+                 { }
+              ]
+            },
+             {
+              "type":"T_IDENT",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"t1"
+            },
+             { },
+             { }
+          ]
+        },
+         {
+          "type":"T_ALIAS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_RELATION_FACTOR",
+              "int_val":9223372036854775807,
+              "str_len":11,
+              "str_val":"sourceTable",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":11,
+                  "str_val":"sourceTable"
+                },
+                 { }
+              ]
+            },
+             {
+              "type":"T_IDENT",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"t2"
+            },
+             { },
+             { }
+          ]
+        },
+         {
+          "type":"T_OP_EQ",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_INT",
+              "int_val":1,
+              "str_len":1,
+              "str_val":"1"
+            },
+             {
+              "type":"T_INT",
+              "int_val":2,
+              "str_len":1,
+              "str_val":"2"
+            }
+          ]
+        },
+         { },
+         {
+          "type":"T_INSERT",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_COLUMN_LIST",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_COLUMN_REF",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"id",
+                  "children": [
+                     { },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"t1"
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"id"
+                    }
+                  ]
+                },
+                 {
+                  "type":"T_COLUMN_REF",
+                  "int_val":9223372036854775807,
+                  "str_len":5,
+                  "str_val":"sales",
+                  "children": [
+                     { },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"t1"
+                    },
+                     {
+                      "type":"T_IDENT",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"sales"
+                    }
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_VALUE_LIST",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_VALUE_VECTOR",
+                  "int_val":2,
+                  "str_len":0,
+                  "str_val":"",
+                  "children": [
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"id",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t2"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"id"
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"sales",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t2"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":5,
+                          "str_val":"sales"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+             {
+              "type":"T_WHERE_CLAUSE",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_OP_GT",
+                  "int_val":9223372036854775807,
+                  "str_len":0,
+                  "str_val":"",
+                  "children": [
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":2,
+                      "str_val":"id",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t2"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"id"
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_INT",
+                      "int_val":0,
+                      "str_len":1,
+                      "str_val":"0"
+                    }
+                  ]
+                },
+                 { }
+              ]
+            }
+          ]
+        },
+         { }
+      ]
+    }
+  ]
+}
 **************   Case 179   ***************
 merge into targetTable t1 using sourceTable t2 on (t1.id = t2.id) when matched then update set t1.sales = t2.sales;
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_MERGE",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_ALIAS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_RELATION_FACTOR",
+              "int_val":9223372036854775807,
+              "str_len":11,
+              "str_val":"targetTable",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":11,
+                  "str_val":"targetTable"
+                },
+                 { }
+              ]
+            },
+             {
+              "type":"T_IDENT",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"t1"
+            },
+             { },
+             { }
+          ]
+        },
+         {
+          "type":"T_ALIAS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_RELATION_FACTOR",
+              "int_val":9223372036854775807,
+              "str_len":11,
+              "str_val":"sourceTable",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":11,
+                  "str_val":"sourceTable"
+                },
+                 { }
+              ]
+            },
+             {
+              "type":"T_IDENT",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"t2"
+            },
+             { },
+             { }
+          ]
+        },
+         {
+          "type":"T_OP_EQ",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_COLUMN_REF",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"id",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"t1"
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"id"
+                }
+              ]
+            },
+             {
+              "type":"T_COLUMN_REF",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"id",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"t2"
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"id"
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_UPDATE",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_ASSIGN_LIST",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_ASSIGN_ITEM",
+                  "int_val":9223372036854775807,
+                  "str_len":0,
+                  "str_val":"",
+                  "children": [
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"sales",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t1"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":5,
+                          "str_val":"sales"
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"sales",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t2"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":5,
+                          "str_val":"sales"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+             { },
+             { }
+          ]
+        },
+         { },
+         { }
+      ]
+    }
+  ]
+}
 **************   Case 180   ***************
 merge into targetTable using sourceTable on (targetTable.id = sourceTable.id) when matched then update set targetTable.sales = sourceTable.sales;
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_MERGE",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_ALIAS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_RELATION_FACTOR",
+              "int_val":9223372036854775807,
+              "str_len":11,
+              "str_val":"targetTable",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":11,
+                  "str_val":"targetTable"
+                },
+                 { }
+              ]
+            },
+             { },
+             { },
+             { }
+          ]
+        },
+         {
+          "type":"T_ALIAS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_RELATION_FACTOR",
+              "int_val":9223372036854775807,
+              "str_len":11,
+              "str_val":"sourceTable",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":11,
+                  "str_val":"sourceTable"
+                },
+                 { }
+              ]
+            },
+             { },
+             { },
+             { }
+          ]
+        },
+         {
+          "type":"T_OP_EQ",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_COLUMN_REF",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"id",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":11,
+                  "str_val":"targetTable"
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"id"
+                }
+              ]
+            },
+             {
+              "type":"T_COLUMN_REF",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"id",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":11,
+                  "str_val":"sourceTable"
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"id"
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_UPDATE",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_ASSIGN_LIST",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_ASSIGN_ITEM",
+                  "int_val":9223372036854775807,
+                  "str_len":0,
+                  "str_val":"",
+                  "children": [
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"sales",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":11,
+                          "str_val":"targetTable"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":5,
+                          "str_val":"sales"
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"sales",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":11,
+                          "str_val":"sourceTable"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":5,
+                          "str_val":"sales"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+             { },
+             { }
+          ]
+        },
+         { },
+         { }
+      ]
+    }
+  ]
+}
 **************   Case 181   ***************
 merge into targetTable using (select * from t1 ) sourceTable on (targetTable.id = sourceTable.id) when matched then update set targetTable.sales = sourceTable.sales;
+question_mask_size: 0
+{
+  "type":"T_STMT_LIST",
+  "int_val":9223372036854775807,
+  "str_len":0,
+  "str_val":"",
+  "children": [
+     {
+      "type":"T_MERGE",
+      "int_val":0,
+      "str_len":0,
+      "str_val":"",
+      "children": [
+         {
+          "type":"T_ALIAS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_RELATION_FACTOR",
+              "int_val":9223372036854775807,
+              "str_len":11,
+              "str_val":"targetTable",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":11,
+                  "str_val":"targetTable"
+                },
+                 { }
+              ]
+            },
+             { },
+             { },
+             { }
+          ]
+        },
+         {
+          "type":"T_ALIAS",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_SELECT",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 { },
+                 { },
+                 {
+                  "type":"T_PROJECT_LIST",
+                  "int_val":9223372036854775807,
+                  "str_len":0,
+                  "str_val":"",
+                  "children": [
+                     {
+                      "type":"T_PROJECT_STRING",
+                      "int_val":9223372036854775807,
+                      "str_len":1,
+                      "str_val":"*",
+                      "children": [
+                         {
+                          "type":"T_STAR",
+                          "int_val":9223372036854775807,
+                          "str_len":0,
+                          "str_val":""
+                        }
+                      ]
+                    }
+                  ]
+                },
+                 { },
+                 {
+                  "type":"T_FROM_LIST",
+                  "int_val":9223372036854775807,
+                  "str_len":0,
+                  "str_val":"",
+                  "children": [
+                     {
+                      "type":"T_ORG",
+                      "int_val":9223372036854775807,
+                      "str_len":0,
+                      "str_val":"",
+                      "children": [
+                         {
+                          "type":"T_RELATION_FACTOR",
+                          "int_val":9223372036854775807,
+                          "str_len":2,
+                          "str_val":"t1",
+                          "children": [
+                             { },
+                             {
+                              "type":"T_IDENT",
+                              "int_val":9223372036854775807,
+                              "str_len":2,
+                              "str_val":"t1"
+                            },
+                             { }
+                          ]
+                        },
+                         { },
+                         { },
+                         { }
+                      ]
+                    }
+                  ]
+                },
+                 { },
+                 { },
+                 { },
+                 { },
+                 { },
+                 { },
+                 { },
+                 { },
+                 { },
+                 { },
+                 { },
+                 { },
+                 { },
+                 { },
+                 { },
+                 { },
+                 { },
+                 { },
+                 { },
+                 { }
+              ]
+            },
+             {
+              "type":"T_IDENT",
+              "int_val":9223372036854775807,
+              "str_len":11,
+              "str_val":"sourceTable"
+            },
+             { },
+             { }
+          ]
+        },
+         {
+          "type":"T_OP_EQ",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_COLUMN_REF",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"id",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":11,
+                  "str_val":"targetTable"
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"id"
+                }
+              ]
+            },
+             {
+              "type":"T_COLUMN_REF",
+              "int_val":9223372036854775807,
+              "str_len":2,
+              "str_val":"id",
+              "children": [
+                 { },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":11,
+                  "str_val":"sourceTable"
+                },
+                 {
+                  "type":"T_IDENT",
+                  "int_val":9223372036854775807,
+                  "str_len":2,
+                  "str_val":"id"
+                }
+              ]
+            }
+          ]
+        },
+         {
+          "type":"T_UPDATE",
+          "int_val":9223372036854775807,
+          "str_len":0,
+          "str_val":"",
+          "children": [
+             {
+              "type":"T_ASSIGN_LIST",
+              "int_val":9223372036854775807,
+              "str_len":0,
+              "str_val":"",
+              "children": [
+                 {
+                  "type":"T_ASSIGN_ITEM",
+                  "int_val":9223372036854775807,
+                  "str_len":0,
+                  "str_val":"",
+                  "children": [
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"sales",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":11,
+                          "str_val":"targetTable"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":5,
+                          "str_val":"sales"
+                        }
+                      ]
+                    },
+                     {
+                      "type":"T_COLUMN_REF",
+                      "int_val":9223372036854775807,
+                      "str_len":5,
+                      "str_val":"sales",
+                      "children": [
+                         { },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":11,
+                          "str_val":"sourceTable"
+                        },
+                         {
+                          "type":"T_IDENT",
+                          "int_val":9223372036854775807,
+                          "str_len":5,
+                          "str_val":"sales"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+             { },
+             { }
+          ]
+        },
+         { },
+         { }
+      ]
+    }
+  ]
+}
 **************   Case 182   ***************
 select unique(c1), c2 from t1;
 question_mask_size: 0
