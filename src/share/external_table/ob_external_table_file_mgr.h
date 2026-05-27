@@ -16,12 +16,13 @@
 #include "sql/optimizer/file_prune/ob_opt_hive_define_fwd.h"
 #include "share/ob_rpc_struct.h"
 #include "observer/ob_server_struct.h"
-#include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr_frame_info.h"
-#include "sql/session/ob_sql_session_info.h"
-#include "sql/resolver/ob_resolver_utils.h"
-#include "src/sql/resolver/ob_stmt_resolver.h"
+#include "sql/engine/expr/ob_expr_regexp_context.h"
+#include "sql/engine/ob_exec_context.h"
 #include "sql/engine/table/ob_odps_table_row_iter.h"
+#include "sql/resolver/ob_resolver_utils.h"
+#include "sql/session/ob_sql_session_info.h"
+#include "src/sql/resolver/ob_stmt_resolver.h"
 
 namespace oceanbase {
 namespace sql {
@@ -89,6 +90,17 @@ struct ObExternalFileInfo
   OB_UNIS_VERSION(1);
 };
 
+struct ObExternalPathFilter {
+  ObExternalPathFilter(sql::ObExprRegexContext &regex_ctx, common::ObIAllocator &allocator)
+    : regex_ctx_(regex_ctx), allocator_(allocator) {}
+  int init(const common::ObString &pattern, const sql::ObExprRegexpSessionVariables &regexp_vars);
+  bool is_inited();
+  int is_filtered(const common::ObString &path, bool &is_filtered);
+  sql::ObExprRegexContext &regex_ctx_;
+  common::ObIAllocator &allocator_;
+  common::ObArenaAllocator temp_allocator_;
+};
+
 class ObExternalTableFilesKey : public ObIKVCacheKey
 {
 public:
@@ -119,7 +131,7 @@ public:
 class ObExternalTableFileListKey : public ObIKVCacheKey
 {
 public:
-  ObExternalTableFileListKey() : tenant_id_(OB_INVALID_ID), path_(nullptr)
+  ObExternalTableFileListKey() : tenant_id_(OB_INVALID_ID), path_(nullptr), pattern_(nullptr)
   {
   }
   virtual ~ObExternalTableFileListKey() = default;
@@ -128,7 +140,8 @@ public:
     const ObExternalTableFileListKey &other_key
         = reinterpret_cast<const ObExternalTableFileListKey &>(other);
     return this->tenant_id_ == other_key.tenant_id_
-           && this->path_.case_compare(other_key.path_) == 0;
+           && this->path_.case_compare(other_key.path_) == 0
+           && this->pattern_.case_compare(other_key.pattern_) == 0;
   }
   uint64_t hash() const override;
   uint64_t get_tenant_id() const override
@@ -137,14 +150,15 @@ public:
   }
   int64_t size() const override
   {
-    return sizeof(*this) + path_.length() + 1;
+    return sizeof(*this) + path_.length() + 1 + pattern_.length() + 1;
   }
   int deep_copy(char *buf, const int64_t buf_len, ObIKVCacheKey *&key) const override;
-  TO_STRING_KV(K(tenant_id_), K(path_));
+  TO_STRING_KV(K(tenant_id_), K(path_), K(pattern_));
 
 public:
   uint64_t tenant_id_;
   ObString path_;
+  ObString pattern_;
 };
 
 class ObExternalTablePartitionsKey : public ObIKVCacheKey
@@ -236,6 +250,10 @@ public:
       file_url_(), content_digest_(), file_size_(0), modify_time_(0), part_id_(0),
       delete_version_(0)
     {}
+    ObExternalFileInfoTmp(ObString file_url) :
+      file_url_(file_url), content_digest_(), file_size_(0), modify_time_(0), part_id_(0),
+      delete_version_(0)
+    {}
     common::ObString file_url_;
     common::ObString content_digest_;
     int64_t file_size_;
@@ -268,15 +286,17 @@ public:
       const bool is_local_file_on_disk,
       common::ObIAllocator &allocator,
       common::ObIArray<ObExternalFileInfo> &external_files,
+      ObExecContext &ctx,
       common::ObIArray<ObNewRange *> *range_filter = NULL);
 
-  int get_external_files(
-      const uint64_t tenant_id,
-      const uint64_t table_id,
-      const bool is_local_file_on_disk,
-      common::ObIAllocator &allocator,
-      common::ObIArray<ObExternalFileInfo> &external_files,
-      common::ObIArray<ObNewRange *> *range_filter = NULL);
+  int get_external_files_from_cache(const uint64_t table_id,
+                                    const ObTableSchema *table_schema,
+                                    ObIArray<int64_t> &partition_ids,
+                                    const bool is_local_file_on_disk,
+                                    ObIAllocator &allocator,
+                                    ObIArray<ObExternalFileInfo> &external_files,
+                                    ObIArray<ObNewRange *> *range_filter,
+                                    ObExecContext &ctx);
 
   int get_mocked_external_table_files(
       const uint64_t tenant_id,
@@ -294,6 +314,21 @@ public:
       common::ObIArray<ObExternalFileInfo> &external_files,
       common::ObIArray<ObNewRange *> *range_filter = NULL);
 
+  int convert_cached_files_to_infos(ObIAllocator &allocator,
+        const ObExternalTableFiles *ext_files,
+        ObIArray<ObNewRange *> *range_filter,
+        int64_t partition_id,
+        const bool is_local_file_on_disk,
+        ObIArray<ObExternalFileInfo> &external_files);
+
+  int convert_collected_files_to_infos(ObIAllocator &allocator,
+           const ObExternalTableFiles *ext_files,
+           ObIArray<ObNewRange *> *range_filter,
+           int64_t partition_id,
+           const bool is_local_file_on_disk,
+           ObExternalPathFilter &filter,
+           int64_t &file_id_base,
+           ObIArray<ObExternalFileInfo> &external_files);
 
 
 
@@ -314,6 +349,25 @@ public:
                                     int64_t partition_id,
                                     ObIArray<ObExternalFileInfoTmp> &file_infos,
                                     ObIArray<int64_t> &file_ids);
+
+  int get_partitions_info_from_filesystem(ObExecContext &exec_ctx,
+                                          const ObTableSchema &table_schema,
+                                          common::ObIAllocator &allocator,
+                                          bool &has_partition_changed);
+
+
+  static int get_dirs_with_spec_level(ObIAllocator &allocator,
+                                      const ObString &location,
+                                      int64_t spec_level,
+                                      const ObString &access_info,
+                                      ObIArray<ObString> &dir_urls,
+                                      ObIArray<int64_t> &modify_times);
+
+  int construct_partition_values(common::ObIAllocator &allocator,
+                                 const common::ObIArray<common::ObString> &partition_column_names,
+                                 const ObNewRow &partition_row,
+                                 common::ObString &partition_values);
+
   int clear_inner_table_files(
       const uint64_t tenant_id,
       const uint64_t table_id,
@@ -512,14 +566,34 @@ private:
                               const ObAlterTableArg::AlterPartitionType alter_part_type,
                               ObAlterTableStmt *&alter_table_stmt);
 
-  int alter_partition_for_ext_table(ObMySQLTransaction &trans,
-                                    sql::ObExecContext &exec_ctx,
+  int alter_partition_for_ext_table(sql::ObExecContext &exec_ctx,
                                     ObAlterTableStmt *alter_table_stmt,
                                     ObIArray<int64_t> &file_part_ids);
 
   int add_partition_for_alter_stmt(ObAlterTableStmt *&alter_table_stmt,
-                                  const ObString &part_name,
-                                  ObNewRow &part_val);
+                                   const ObString &part_name,
+                                   ObNewRow &part_val,
+                                   ObString &partition_location);
+
+  int update_partition_info_to_table_schema(ObExecContext &exec_ctx,
+                                            const ObTableSchema &table_schema,
+                                            const ObString &location,
+                                            ObIArray<ObExternalFileInfoTmp> &file_infos,
+                                            ObIArray<int64_t> &part_ids,
+                                            bool &has_partition_changed);
+
+  int delete_old_schema_partition(const ObTableSchema &table_schema,
+                                  ObIArray<ObPartition *> &partitions_to_del);
+
+  int add_partition_to_table_schema(ObExecContext &exec_ctx,
+                                    const ObTableSchema &table_schema,
+                                    const ObDatabaseSchema *database_schema,
+                                    ObIArray<ObNewRow> &partitions_to_add);
+
+  int delete_partition_to_table_schema(ObExecContext &exec_ctx,
+                                       const ObTableSchema &table_schema,
+                                       const ObDatabaseSchema *database_schema,
+                                       ObIArray<ObPartition *> &partitions_to_del);
 
   int collect_file_list_by_expr_parallel(ObSQLSessionInfo &session,
                                          uint64_t tenant_id,
@@ -541,12 +615,14 @@ private:
   int get_one_location_from_cache(const common::ObString &location,
                                   const uint64_t tenant_id,
                                   const int64_t &modify_ts,
+                                  const common::ObString &pattern,
                                   ObIAllocator &allocator,
                                   ObIArray<ObExternalTableFiles *> &external_table_files,
                                   int64_t refresh_interval_ms);
 
   int insert_one_location_to_cache(int64_t tenant_id,
                                    ObString location,
+                                   const common::ObString &pattern,
                                    ObExternalTableFiles &file_list);
 
 private:
