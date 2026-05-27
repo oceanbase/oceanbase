@@ -317,6 +317,7 @@ int ObPrefixSortVecImpl<Compare, Store_Row, has_addon>::fetch_rows_batch()
       }
       selector_size_ = 0;
       int64_t new_prefix = -1;
+      int64_t first_prefix = -1;
       for (int64_t i = 0; OB_SUCC(ret) && i < brs_->size_; i++) {
         if (brs_->skip_->at(i)) {
           continue;
@@ -327,7 +328,12 @@ int ObPrefixSortVecImpl<Compare, Store_Row, has_addon>::fetch_rows_batch()
           if (nullptr != prev_row_
               && OB_FAIL(is_same_prefix(prev_row_, *sk_row_meta_, *sk_exprs_, i, is_same))) {
             SQL_ENG_LOG(WARN, "check same prefix failed", K(ret));
-          } else if (nullptr == prev_row_ && OB_FAIL(is_same_prefix(*sk_exprs_, 0, i, is_same))) {
+          } else if (nullptr == prev_row_ && first_prefix < 0) {
+            first_prefix = i;
+            is_same = true;
+            selector_[selector_size_++] = i;
+          } else if (nullptr == prev_row_
+                     && OB_FAIL(is_same_prefix(*sk_exprs_, first_prefix, i, is_same))) {
             SQL_ENG_LOG(WARN, "check same prefix failed", K(ret));
           } else if (is_same) {
             selector_[selector_size_++] = i;

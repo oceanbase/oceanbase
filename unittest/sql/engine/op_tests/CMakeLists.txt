@@ -37,6 +37,13 @@ sql_unittest(test_limit_op
   ob_op_test_data_source.cpp
 )
 
+# Phase 2: Sort operator tests
+sql_unittest(test_sort_op
+  test_sort_op.cpp
+  ob_op_test_engine.cpp
+  ob_op_test_data_source.cpp
+)
+
 # Phase 2: Scalar Aggregate operator tests
 sql_unittest(test_scalar_agg_op
   test_scalar_agg_op.cpp

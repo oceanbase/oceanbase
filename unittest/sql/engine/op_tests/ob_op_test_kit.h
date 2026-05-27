@@ -20,6 +20,7 @@
 #include "unittest/sql/engine/op_tests/ob_op_test_nested_loop_join.h"
 #include "unittest/sql/engine/op_tests/ob_op_test_hash_distinct.h"
 #include "unittest/sql/engine/op_tests/ob_op_test_merge_distinct.h"
+#include "unittest/sql/engine/op_tests/ob_op_test_sort.h"
 #include "unittest/sql/engine/op_tests/ob_op_test_base.h"
 
 namespace oceanbase
@@ -71,6 +72,7 @@ protected:
   NestedLoopJoinTestSpec nested_loop_join_test() { return NestedLoopJoinTestSpec(); }
   HashDistinctTestSpec hash_distinct_test() { return HashDistinctTestSpec(); }
   MergeDistinctTestSpec merge_distinct_test() { return MergeDistinctTestSpec(); }
+  SortTestSpec sort_test() { return SortTestSpec(); }
 
 protected:
   OpTestEngine engine_;
