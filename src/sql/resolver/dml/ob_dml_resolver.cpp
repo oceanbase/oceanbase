@@ -11004,11 +11004,11 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
   }
 
   ObArray<ObRawExpr*> udf_construct_exprs;
+  ObArray<ObRawExpr*> real_exprs;
   ColumnItem *basic_column_item = NULL;
   for (int64_t i = 0; OB_SUCC(ret) && i < columns.count(); ++i) {
     ColumnItem *col_item = NULL;
     ObRawExpr *real_ref_expr = NULL;
-    ObArray<ObRawExpr*> real_exprs;
     if (!used_for_generated_column && !(columns.at(i).is_sys_func() || columns.at(i).is_pl_udf())) {
       ret = OB_ERR_UNEXPECTED;
       ret = update_errno_if_sequence_object(columns.at(i), ret);
@@ -11093,7 +11093,7 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
     }
 
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(real_exprs.push_back(ref_expr))) {
+      if (OB_FAIL(real_exprs.push_back(real_ref_expr))) {
         LOG_WARN("push back error", K(ret));
       } else if (OB_FAIL(ObRawExprUtils::replace_ref_column(ref_expr, columns.at(i).ref_expr_, real_ref_expr))) {
         LOG_WARN("replace column reference expr failed", K(ret));

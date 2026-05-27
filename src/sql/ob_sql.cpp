@@ -851,6 +851,8 @@ int ObSql::fill_select_result_set(ObResultSet &result_set, ObSqlCtx *context, co
             } else if (udt_id != udt_meta.udt_id_) {
               ret = OB_ERR_UNEXPECTED;
               LOG_WARN("udt id mismarch", K(ret), K(udt_id), K(udt_meta.udt_id_));
+            } else {
+              field.accuracy_.set_accuracy(udt_meta.udt_id_);
             }
             field.type_.set_subschema_id(tmp_subschema_id);
             field.charsetnr_ = CS_TYPE_BINARY;
