@@ -3564,8 +3564,12 @@ int ObSPIService::spi_cursor_init(ObPLExecCtx *ctx, int64_t cursor_index)
       LOG_USER_ERROR(OB_ER_SP_CURSOR_ALREADY_OPEN);
       LOG_WARN("Cursor is already open", K(ret), K(package_id), K(routine_id));
     } else if (obj.is_ref_cursor_type()) {
-      obj.set_extend(static_cast<int64_t>(0), PL_REF_CURSOR_TYPE);
-      obj.set_param_meta();
+      if (OB_ISNULL(cursor_info)) {
+        obj.set_extend(static_cast<int64_t>(0), PL_REF_CURSOR_TYPE);
+        obj.set_param_meta();
+      } else {
+        OX (cursor_info->set_ref_count(1));  //resue cursorInfo, set ref_count to 1
+      }
     } else {
       if (obj.is_null()) {
         OZ (spi_cursor_alloc(*ctx->get_top_expr_allocator(), obj));
