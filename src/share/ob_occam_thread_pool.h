@@ -212,6 +212,14 @@ inline void CallWithTupleUnpack(seq<S...>,
 class ObOccamThreadPool
 {
 public:
+  // For test only: when set to N (1-based, > 0), force the N-th thread init
+  // inside init() to fail in order to exercise the case-4 rollback path.
+  // Default 0 means disabled; production code pays a single zero compare.
+  static int64_t &fail_init_at_thread_idx_for_test()
+  {
+    static int64_t value = 0;
+    return value;
+  }
   ObOccamThreadPool() :
     thread_num_(0),
     queue_size_(0),
@@ -257,6 +265,12 @@ public:
             new(&threads_[thread_init_idx]) occam::ObOccamThread();
             uint64_t thread_id = threads_[thread_init_idx].get_id();
             ret = threads_[thread_init_idx].init_and_start([this, thread_id]() { this->keep_fetching_task_until_stop_(thread_id); });
+            const int64_t fail_at_idx = fail_init_at_thread_idx_for_test();
+            if (OB_UNLIKELY(OB_SUCC(ret) && fail_at_idx > 0 && (thread_init_idx + 1) >= fail_at_idx)) {
+              ret = OB_ERR_UNEXPECTED;
+              OCCAM_LOG(WARN, "force-fail thread init for unittest",
+                        K(thread_init_idx), K(fail_at_idx), K(ret));
+            }
           }
           if (OB_SUCC(ret)) {
             step = 0; // step done
@@ -270,6 +284,21 @@ public:
       if (OB_FAIL(ret)) {
         switch (step) {// error handle
         case 4:
+          // Wake up workers that may already be blocked in pool's cv_.wait()
+          // before joining them below. Without this, ObOccamThread::destroy()
+          // -> share::ObThreadPool::wait() (pthread_join) hangs forever because
+          // the worker loop in keep_fetching_task_until_stop_() only observes
+          // this pool's is_stopped_ and only wakes up on this pool's cv_.
+          {
+            ObThreadCondGuard guard(cv_);
+            is_stopped_ = true;
+          }
+          {
+            int tmp_ret = OB_SUCCESS;
+            if (OB_TMP_FAIL(cv_.broadcast())) {
+              OCCAM_LOG(ERROR, "cv broadcast failed during init rollback", K(tmp_ret));
+            }
+          }
           for (; thread_init_idx > 0; --thread_init_idx) {
             threads_[thread_init_idx - 1].destroy();
           }

@@ -14,6 +14,8 @@
 
 #include "share/ob_occam_thread_pool.h"
 #include <gtest/gtest.h>
+#include <atomic>
+#include <chrono>
 #include <thread>
 
 namespace oceanbase {
@@ -258,6 +260,47 @@ int test_f(int a, int b) {
 
 TEST_F(TestObOccamThreadPool, test_) {
   thread_pool->commit_task_ignore_ret(test_f, 1, 1);
+}
+
+// Reproduce: ObOccamThreadPool::init() must not hang in its case-4 rollback
+// when one of the worker thread inits fails. The rollback path destroys the
+// already-started ObOccamThread instances. Each ObOccamThread::destroy()
+// pthread_join()s its OS thread, but the worker is blocked in pool->cv_.wait()
+// and pool->is_stopped_ is never set / pool->cv_ is never broadcast'ed by the
+// rollback path -> join hangs forever.
+TEST(TestObOccamThreadPoolRollback, init_rollback_should_not_hang) {
+  // Force the 2nd thread init to fail; the first one will be left running in
+  // cv_.wait() and the rollback must wake it up before joining.
+  occam::ObOccamThreadPool::fail_init_at_thread_idx_for_test() = 2;
+
+  std::atomic<bool> done{false};
+  std::atomic<int> init_ret{OB_SUCCESS};
+  std::thread t([&]{
+    occam::ObOccamThreadPool pool;
+    init_ret.store(pool.init(4, 1));
+    done.store(true);
+  });
+
+  // Wait up to 10s for init() to return.
+  for (int i = 0; i < 100 && !done.load(); ++i) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+
+  // Reset injection regardless of outcome so it does not affect later tests.
+  occam::ObOccamThreadPool::fail_init_at_thread_idx_for_test() = 0;
+
+  if (!done.load()) {
+    // The init() call is hung in the rollback path. We MUST detach this thread,
+    // otherwise std::thread::~thread() will std::terminate() on a joinable
+    // thread, masking the test failure with a process abort.
+    t.detach();
+    FAIL() << "ObOccamThreadPool::init() hung in its case-4 rollback path "
+              "(Occam worker stuck in cv_.wait, never broadcast)";
+  } else {
+    t.join();
+    // Injected failure must be propagated to the caller.
+    ASSERT_NE(init_ret.load(), OB_SUCCESS);
+  }
 }
 
 }
