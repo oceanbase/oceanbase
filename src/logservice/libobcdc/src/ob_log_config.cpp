@@ -363,7 +363,7 @@ int ObLogConfig::load_from_buffer_(char *config_str,
     LOG_ERROR("invalid argument", K(config_str), K(config_str_len));
     ret = OB_INVALID_ARGUMENT;
   } else {
-    token = strtok_r(config_str, ",\n", &saveptr);
+    token = strtok_r(config_str, "\n", &saveptr);
     while (NULL != token && OB_SUCCESS == ret) {
       char *saveptr_one = NULL;
       const char *name = NULL;
@@ -432,7 +432,7 @@ int ObLogConfig::load_from_buffer_(char *config_str,
       }
 
       if (OB_SUCCESS == ret) {
-        token = strtok_r(NULL, ",\n", &saveptr);
+        token = strtok_r(NULL, "\n", &saveptr);
       }
     }
   }

@@ -31,8 +31,6 @@ ObLogAllSvrCache::ObLogAllSvrCache() :
     systable_queryer_(NULL),
     all_server_cache_update_interval_(0),
     all_zone_cache_update_interval_(0),
-    assign_region_(""),
-    region_lock_(common::ObLatchIds::OB_LOG_ALL_SVR_CACHE_LOCK),
     cur_version_(0),
     cur_zone_version_(0),
     zone_need_update_(false),
@@ -51,19 +49,19 @@ ObLogAllSvrCache::~ObLogAllSvrCache()
 bool ObLogAllSvrCache::is_svr_avail(const common::ObAddr &svr)
 {
   bool bool_ret = false;
-  RegionPriority region_priority = REGION_PRIORITY_UNKNOWN;
-  bool_ret = is_svr_avail(svr, region_priority);
+  FetchPriority fetch_priority = REGION_PRIORITY_UNKNOWN;
+  bool_ret = is_svr_avail(svr, fetch_priority);
 
   return bool_ret;
 }
 
 bool ObLogAllSvrCache::is_svr_avail(
     const common::ObAddr &svr,
-    RegionPriority &region_priority)
+    FetchPriority &fetch_priority)
 {
   int ret = OB_SUCCESS;
   bool bool_ret = false;
-  region_priority = REGION_PRIORITY_UNKNOWN;
+  fetch_priority = REGION_PRIORITY_UNKNOWN;
 
   if (!svr.is_valid()) {
     LOG_WARN("svr is not valid!", K(svr));
@@ -80,12 +78,16 @@ bool ObLogAllSvrCache::is_svr_avail(
       bool_ret = false;
     } else if (is_svr_serve_(svr_item, zone_item)) {
       bool_ret = true;
-      // get region priority of server if server is available
-      region_priority = svr_item.region_priority_;
-      LOG_DEBUG("is svr avail", K(svr), K(region_priority), K(zone_item));
+      if (OB_FAIL(fetch_priority_.get_priority(svr_item.zone_, zone_item.region_, fetch_priority))) {
+        fetch_priority = REGION_PRIORITY_UNKNOWN;
+        bool_ret = false;
+        LOG_WARN("fetch_priority_.get_priority fail", KR(ret), K(svr), K(svr_item.zone_));
+      } else {
+        LOG_DEBUG("is svr avail", K(svr), K(fetch_priority), K(zone_item));
+      }
     } else {
       bool_ret = false;
-      region_priority = REGION_PRIORITY_UNKNOWN;
+      fetch_priority = REGION_PRIORITY_UNKNOWN;
       LOG_DEBUG("svr not avail", K(svr), K(zone_item), K(svr_item));
     }
   } else {
@@ -100,9 +102,12 @@ bool ObLogAllSvrCache::is_svr_avail(
       }
     } else if (is_svr_serve_(units_record_item)) {
       bool_ret = true;
-      // get the region priority of the server if server is available
-      region_priority = units_record_item.region_priority_;
-      LOG_TRACE("is svr avail", K(svr), K(region_priority), K(units_record_item));
+      if (fetch_priority_.is_configured()) {
+        fetch_priority = fetch_priority_.get_zone_priority(units_record_item.zone_);
+      } else {
+        fetch_priority = units_record_item.fetch_priority_;
+      }
+      LOG_TRACE("is svr avail", K(svr), K(fetch_priority), K(units_record_item));
     } else {}
   }
 
@@ -111,26 +116,18 @@ bool ObLogAllSvrCache::is_svr_avail(
 
 int ObLogAllSvrCache::update_assign_region(const common::ObRegion &prefer_region)
 {
-  int ret = OB_SUCCESS;
-  ObByteLockGuard guard(region_lock_);
-
-  if (OB_FAIL(assign_region_.assign(prefer_region))) {
-    LOG_ERROR("assign_region assign fail", KR(ret), K(assign_region_), K(prefer_region));
-  }
-
-  return ret;
+  return fetch_priority_.set_assign_region(prefer_region);
 }
 
 int ObLogAllSvrCache::get_assign_region(common::ObRegion &prefer_region)
 {
-  int ret = OB_SUCCESS;
-  ObByteLockGuard guard(region_lock_);
+  return fetch_priority_.get_assign_region(prefer_region);
+}
 
-  if (OB_FAIL(prefer_region.assign(assign_region_))) {
-    LOG_ERROR("prefer_region assign fail", KR(ret), K(assign_region_), K(prefer_region));
-  }
-
-  return ret;
+int ObLogAllSvrCache::update_zone_priority(const char *zone_priority_str)
+{
+  const char *str = OB_ISNULL(zone_priority_str) ? "" : zone_priority_str;
+  return fetch_priority_.init_zone_priority(str);
 }
 
 int ObLogAllSvrCache::update_cache_update_interval(const int64_t all_server_cache_update_interval_sec,
@@ -179,13 +176,13 @@ int ObLogAllSvrCache::get_svr_item_(const common::ObAddr &svr, SvrItem &item)
         "status", OB_SUCCESS == ret ? print_svr_status_(item.status_) : "NOT_EXIST",
         "svr_ver", item.version_, K(cur_ver),
         "zone", item.zone_,
-        "region_priority", item.region_priority_);
+        "fetch_priority", item.fetch_priority_);
   } else {
     LOG_INFO("[STAT] [ALL_SVR_CACHE] [GET_SVR_ITEM]", KR(ret), K(svr),
         "status", OB_SUCCESS == ret ? print_svr_status_(item.status_) : "NOT_EXIST",
         "svr_ver", item.version_, K(cur_ver),
         "zone", item.zone_,
-        "region_priority", item.region_priority_);
+        "fetch_priority", item.fetch_priority_);
   }
 
   return ret;
@@ -202,23 +199,6 @@ const char *ObLogAllSvrCache::print_svr_status_(StatusType status)
 
   return str;
 }
-
-int ObLogAllSvrCache::get_region_priority_(const common::ObRegion &region,
-    RegionPriority &priority)
-{
-  int ret = OB_SUCCESS;
-
-  if (is_assign_region_(region)) {
-    // specified region
-    priority = REGION_PRIORITY_HIGH;
-  } else {
-    // other region or empty region
-    priority = REGION_PRIORITY_LOW;
-  }
-  LOG_DEBUG("get region priority", K(region), K(assign_region_));
-
-  return ret;
-};
 
 bool ObLogAllSvrCache::is_svr_serve_(const SvrItem &svr_item, const ZoneItem &zone_item) const
 {
@@ -239,28 +219,17 @@ bool ObLogAllSvrCache::is_svr_serve_(const UnitsRecordItem &units_record_item) c
   return bool_ret;
 }
 
-bool ObLogAllSvrCache::is_assign_region_(const common::ObRegion &region)
-{
-  bool bool_ret = false;
-  ObByteLockGuard guard(region_lock_);
-
-  // ignore case
-  bool_ret = (0 == strncasecmp(assign_region_.ptr(),
-                               region.ptr(),
-                               assign_region_.size()));
-
-  return bool_ret;
-}
-
 int ObLogAllSvrCache::init(
     ObLogSysTableQueryer &systable_queryer,
     const bool is_tenant_mode,
     const uint64_t tenant_id,
     const common::ObRegion &prefer_region,
     const int64_t all_server_cache_update_interval_sec,
-    const int64_t all_zone_cache_update_interval_sec)
+    const int64_t all_zone_cache_update_interval_sec,
+    const char *zone_priority_str)
 {
   int ret = OB_SUCCESS;
+  const char *zp = OB_ISNULL(zone_priority_str) ? "" : zone_priority_str;
 
   if (! is_tenant_mode) {
     if (OB_FAIL(svr_map_.init(ObModIds::OB_LOG_ALL_SERVER_CACHE))) {
@@ -275,8 +244,10 @@ int ObLogAllSvrCache::init(
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(assign_region_.assign(prefer_region))) {
-    LOG_ERROR("assign_region assign fail", KR(ret), K(assign_region_), K(prefer_region));
+  } else if (OB_FAIL(fetch_priority_.set_assign_region(prefer_region))) {
+    LOG_ERROR("fetch_priority_ set_assign_region fail", KR(ret), K(prefer_region));
+  } else if (OB_FAIL(fetch_priority_.init_zone_priority(zp))) {
+    LOG_WARN("fetch_priority_ init_zone_priority fail", KR(ret), K(zp));
   } else {
     is_tenant_mode_ = is_tenant_mode;
     tenant_id_ = tenant_id;
@@ -289,7 +260,7 @@ int ObLogAllSvrCache::init(
     zone_need_update_ = false;
     zone_last_update_tstamp_ = OB_INVALID_TIMESTAMP;
 
-    LOG_INFO("ObLogAllSvrCache init succ", K(prefer_region), K(is_tenant_mode));
+    LOG_INFO("ObLogAllSvrCache init succ", K(prefer_region), K(is_tenant_mode), K(zp));
   }
 
   return ret;
@@ -298,6 +269,7 @@ int ObLogAllSvrCache::init(
 void ObLogAllSvrCache::destroy()
 {
   LOG_INFO("destroy all svr cache begin");
+  fetch_priority_.destroy();
   is_stopped_ = true;
   systable_queryer_ = NULL;
   all_server_cache_update_interval_ = 0;
@@ -528,17 +500,17 @@ int ObLogAllSvrCache::update_server_cache_()
       }
 
       ZoneItem zone_item;
-      RegionPriority region_priority = REGION_PRIORITY_UNKNOWN;
+      FetchPriority fetch_priority = REGION_PRIORITY_UNKNOWN;
 
       if (OB_FAIL(get_zone_item_(record.zone_, zone_item))) {
         LOG_ERROR("get_zone_item_ fail", KR(ret), "zone", record.zone_, K(zone_item));
-      } else if (OB_FAIL(get_region_priority_(zone_item.region_, region_priority))) {
-        LOG_ERROR("get priority based region fail", KR(ret), K(svr),
+      } else if (OB_FAIL(fetch_priority_.get_priority(record.zone_, zone_item.region_, fetch_priority))) {
+        LOG_ERROR("get priority based zone/region fail", KR(ret), K(svr),
                   "region", zone_item.region_,
-                  "region_priority", print_region_priority(region_priority));
+                  "priority", fetch_priority);
       } else {
         SvrItem item;
-        item.reset(record.svr_id_, record.status_, next_version, record.zone_, region_priority);
+        item.reset(record.svr_id_, record.status_, next_version, record.zone_, fetch_priority);
         LOG_DEBUG("update cache item", K(item));
 
         if (OB_FAIL(svr_map_.insert_or_update(svr, item))) {
@@ -548,10 +520,10 @@ int ObLogAllSvrCache::update_server_cache_()
 
       ObCStringHelper helper;
       _LOG_INFO("[STAT] [ALL_SERVER_LIST] INDEX=%ld/%ld SERVER_ID=%lu SERVER=%s STATUS=%d(%s) "
-          "ZONE=%s REGION=%s(%s) VERSION=%lu",
+          "ZONE=%s REGION=%s PRIORITY=%d VERSION=%lu",
           idx, count, record.svr_id_, helper.convert(svr), record.status_, status_str,
           helper.convert(record.zone_), helper.convert(zone_item.region_),
-          print_region_priority(region_priority), next_version);
+          fetch_priority, next_version);
     }
 
     ATOMIC_INC(&cur_version_);
@@ -592,15 +564,15 @@ int ObLogAllSvrCache::update_unit_info_cache_()
     ARRAY_FOREACH_N(units_record_array, idx, count) {
       ObUnitsRecord &record = units_record_array.at(idx);
       ObAddr &svr = record.server_;
-      RegionPriority region_priority = REGION_PRIORITY_UNKNOWN;
+      FetchPriority fetch_priority = REGION_PRIORITY_UNKNOWN;
 
-      if (OB_FAIL(get_region_priority_(record.region_, region_priority))) {
-        LOG_ERROR("get priority based region fail", KR(ret), K(svr),
+      if (OB_FAIL(fetch_priority_.get_priority(record.zone_, record.region_, fetch_priority))) {
+        LOG_ERROR("get priority based zone/region fail", KR(ret), K(svr),
                   "region", record.region_,
-                  "region_priority", print_region_priority(region_priority));
+                  "priority", fetch_priority);
       } else {
         UnitsRecordItem units_record_item;
-        units_record_item.reset(next_version, record.zone_, record.zone_type_, region_priority);
+        units_record_item.reset(next_version, record.zone_, record.zone_type_, fetch_priority);
 
         if (OB_FAIL(units_map_.insert_or_update(svr, units_record_item))) {
           LOG_ERROR("units_map_ insert_or_update fail", KR(ret), K(svr), K(units_record_item));
@@ -608,10 +580,10 @@ int ObLogAllSvrCache::update_unit_info_cache_()
 
         ObCStringHelper helper;
         _LOG_INFO("[STAT] [ALL_SERVER_LIST] INDEX=%ld/%ld SERVER=%s "
-            "ZONE=%s REGION=%s(%s) VERSION=%lu",
+            "ZONE=%s REGION=%s PRIORITY=%d VERSION=%lu",
             idx, count, helper.convert(svr),
             helper.convert(record.zone_), helper.convert(record.region_),
-            print_region_priority(region_priority), next_version);
+            fetch_priority, next_version);
       }
     }
 

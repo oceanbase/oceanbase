@@ -115,7 +115,6 @@ ob_set_subtarget(obcdc_object_list common
   ob_log_schema_cache_info.cpp
   ob_log_schema_getter.cpp
   ob_log_sequencer1.cpp
-  ob_log_server_priority.cpp
   ob_log_sql_server_provider.cpp
   ob_cdc_tenant_sql_server_provider.cpp
   ob_log_start_lsn_locator.cpp

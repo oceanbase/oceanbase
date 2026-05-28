@@ -130,6 +130,7 @@ int ObLogFetcher::init(
         cfg.log_router_background_refresh_interval_sec,
         cfg.all_server_cache_update_interval_sec,
         cfg.all_zone_cache_update_interval_sec,
+        cfg.fetch_log_zone_priority.str(),
         cfg.blacklist_survival_time_sec,
         cfg.blacklist_survival_time_upper_limit_min,
         cfg.blacklist_survival_time_penalty_period_min,
@@ -740,6 +741,8 @@ void ObLogFetcher::configure(const ObLogFetcherConfig &cfg)
         K(blacklist_history_clear_interval_min));
     } else if (OB_FAIL(log_route_service_.update_preferred_upstream_log_region(cfg.region.str()))) {
       LOG_ERROR("update_preferred_upstream_log_region failed", KR(ret), "region", cfg.region);
+    } else if (OB_FAIL(log_route_service_.update_zone_priority(cfg.fetch_log_zone_priority.str()))) {
+      LOG_ERROR("update_zone_priority failed", KR(ret), "fetch_log_zone_priority", cfg.fetch_log_zone_priority);
     } else if (OB_FAIL(log_route_service_.update_cache_update_interval(
         all_server_cache_update_interval_sec,
         all_zone_cache_update_interval_sec))) {

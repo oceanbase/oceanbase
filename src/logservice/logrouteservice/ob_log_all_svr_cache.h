@@ -14,8 +14,7 @@
 #define OCEANBASE_LOG_ALL_SVR_CACHE_H_
 
 #include "lib/hash/ob_linear_hash_map.h"    // ObLinearHashMap
-#include "lib/lock/ob_small_spin_lock.h"    // ObByteLock
-#include "ob_server_priority.h"             // RegionPriority
+#include "ob_server_priority.h"             // FetchPriority, REGION_PRIORITY_*, ObCdcLogFetchPriority
 #include "ob_log_systable_queryer.h"        // ObLogSysTableQueryer
 
 namespace oceanbase
@@ -36,7 +35,8 @@ public:
   bool is_svr_avail(const common::ObAddr &svr);
 
   // 1. check server is available or not
-  // 2. if svr is available, return region priority of region, otherwise return REGION_PRIORITY_UNKNOWN
+  // 2. if svr is available, return unified fetch priority for LSSvrList ordering (int tier / region HIGH/LOW),
+  //    otherwise REGION_PRIORITY_UNKNOWN
   //
   // used for ObLogSvrFinder, check svr from inner table is available for PartSvrList
   //
@@ -44,17 +44,20 @@ public:
   // 1. server status is ACTIVE or DELETING
   // 2. server not in ENCRYPTION zone
   //
-  // @param [in]  svr_with_seq        server addr(with seq info)
-  // @param [out] region_priority     region priority
+  // @param [in]  svr                 server addr
+  // @param [out] fetch_priority      unified fetch priority for LSSvrList ordering
   //
   // @retval true  server is available
   // @retval false server is not available
   bool is_svr_avail(
       const common::ObAddr &svr,
-      RegionPriority &region_priority);
+      FetchPriority &fetch_priority);
 
   int update_assign_region(const common::ObRegion &prefer_region);
   int get_assign_region(common::ObRegion &prefer_region);
+
+  // Re-parse primary_zone-like zone_priority string; effective immediately for is_svr_avail ordering.
+  int update_zone_priority(const char *zone_priority_str);
 
   int update_cache_update_interval(const int64_t all_server_cache_update_interval_sec,
       const int64_t all_zone_cache_update_interval_sec);
@@ -67,7 +70,8 @@ public:
       const uint64_t tenant_id,
       const common::ObRegion &prefer_region,
       const int64_t all_server_cache_update_interval_sec,
-      const int64_t all_zone_cache_update_interval_sec);
+      const int64_t all_zone_cache_update_interval_sec,
+      const char *zone_priority_str = "");
   void destroy();
   void start() { ATOMIC_SET(&is_stopped_, false); }
   void stop() { ATOMIC_SET(&is_stopped_, true); }
@@ -81,12 +85,6 @@ private:
   // 2. refresh cache of __all_zone and retry query if query return ret == OB_ENTRY_NOT_EXIST
   struct ZoneItem;
   int get_zone_item_(const common::ObZone &zone, ZoneItem &zone_item);
-  // two priroity of region, named from high to low:
-  // 1. region_priority = REGION_PRIORITY_HIGH if current region = specified region(g_assign_zone)
-  // 2. other region or empty region(no retion info for lower version of observer)
-  //    region_priority = REGION_PRIORITY_LOW
-  int get_region_priority_(const common::ObRegion &region, RegionPriority &priority);
-  bool is_assign_region_(const common::ObRegion &region);
 
   struct UnitsRecordItem;
   int get_units_record_item_(const common::ObAddr &svr, UnitsRecordItem &item);
@@ -118,23 +116,23 @@ private:
     StatusType       status_;
     uint64_t         version_;
     common::ObZone   zone_;
-    RegionPriority   region_priority_;
+    FetchPriority    fetch_priority_;
 
     void reset(const uint64_t svr_id,
         const StatusType status,
         const uint64_t version,
         const common::ObZone &zone,
-        const RegionPriority region_priority)
+        const FetchPriority fetch_priority)
     {
       svr_id_ = svr_id;
       status_ = status;
       version_ = version;
       zone_ = zone;
-      region_priority_ = region_priority;
+      fetch_priority_ = fetch_priority;
     }
 
     TO_STRING_KV(K_(svr_id), K_(status), K_(version), K_(zone),
-                 "region_priority", print_region_priority(region_priority_));
+                 "fetch_priority", fetch_priority_);
   };
   typedef common::ObLinearHashMap<common::ObAddr, SvrItem> SvrMap;
 
@@ -206,30 +204,30 @@ private:
     uint64_t version_;
     common::ObZone zone_;
     common::ObZoneType zone_type_;
-    RegionPriority region_priority_;
+    FetchPriority fetch_priority_;
 
     void reset()
     {
       version_ = -1;
       zone_.reset();
       zone_type_ = common::ZONE_TYPE_INVALID;
-      region_priority_ = REGION_PRIORITY_UNKNOWN;
+      fetch_priority_ = REGION_PRIORITY_UNKNOWN;
     }
 
     void reset(
         const uint64_t version,
         const common::ObZone &zone,
         const common::ObZoneType &zone_type,
-        const RegionPriority region_priority)
+        const FetchPriority fetch_priority)
     {
       version_ = version;
       zone_ = zone;
       zone_type_ = zone_type;
-      region_priority_ = region_priority;
+      fetch_priority_ = fetch_priority;
     }
     const common::ObZoneType& get_zone_type() const { return zone_type_; }
 
-    TO_STRING_KV(K_(zone), K_(zone_type), K_(region_priority));
+    TO_STRING_KV(K_(zone), K_(zone_type), K_(fetch_priority));
   };
   typedef common::ObLinearHashMap<common::ObAddr, UnitsRecordItem> UnitsMap;
 
@@ -243,8 +241,6 @@ private:
   ObLogSysTableQueryer  *systable_queryer_;
   int64_t               all_server_cache_update_interval_;
   int64_t               all_zone_cache_update_interval_;
-  common::ObRegion      assign_region_;
-  common::ObByteLock    region_lock_;
 
   uint64_t              cur_version_ CACHE_ALIGNED;
   uint64_t              cur_zone_version_ CACHE_ALIGNED;
@@ -255,6 +251,8 @@ private:
   SvrMap                svr_map_;
   ZoneMap               zone_map_;
   UnitsMap              units_map_;
+
+  ObCdcLogFetchPriority fetch_priority_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObLogAllSvrCache);

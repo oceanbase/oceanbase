@@ -309,6 +309,8 @@ public:
   T_DEF_BOOL(enable_compatible_charset, OB_CLUSTER_PARAMETER, 0,  "0:disabled, 1:enabled");
   // region
   DEF_STR(region, OB_CLUSTER_PARAMETER, "default_region", "OB region");
+  // zone priority for CDC replica selection, primary_zone-like syntax: zone1,zone2;zone3,zone4
+  DEF_STR(fetch_log_zone_priority, OB_CLUSTER_PARAMETER, "default_zone", "zone priority for cdc replica selection, default_zone-like syntax");
 
   // Number of globally cached RPC results
   T_DEF_INT_INFT(rpc_result_cached_count, OB_CLUSTER_PARAMETER, 16, 1, "cached rpc result object count");

@@ -13,23 +13,24 @@
 #ifndef OCEANBASE_LOGSERVICE_SERVER_PRIORITY_H_
 #define OCEANBASE_LOGSERVICE_SERVER_PRIORITY_H_
 
-#include "share/ob_define.h" // ObReplicaType
+#include "common/ob_region.h"               // ObRegion
+#include "common/ob_zone.h"                 // ObZone
+#include "lib/hash/ob_linear_hash_map.h"    // ObLinearHashMap
+#include "lib/lock/ob_small_spin_lock.h"    // ObByteLock
+#include "lib/ob_define.h"                  // MAX_ZONE_LENGTH
+#include "share/ob_define.h"                // ObReplicaType
 #include "share/ob_errno.h"
 
 namespace oceanbase
 {
 namespace logservice
 {
-// region priority
-// The smaller the value, the higher the priority
-enum RegionPriority
-{
-  REGION_PRIORITY_UNKNOWN = -1,
-  REGION_PRIORITY_HIGH = 0,
-  REGION_PRIORITY_LOW = 1,
-  REGION_PRIORITY_MAX
-};
-const char *print_region_priority(RegionPriority type);
+// Unified fetch priority for server ordering (region / zone_priority tier; int).
+// The smaller the value, the higher the priority.
+static constexpr int REGION_PRIORITY_UNKNOWN = 99999;
+
+// Log-route / CDC server ordering priority (smaller = higher). Same representation as int.
+using FetchPriority = int;
 
 // Replica type priority
 // The smaller the value, the higher the priority
@@ -51,6 +52,43 @@ const char *print_replica_priority(ReplicaPriority type);
 // Get replica priority based on replica type
 int get_replica_priority(const common::ObReplicaType type,
     ReplicaPriority &priority);
+
+// Unified CDC log fetch priority for server ordering:
+// primary_zone-like zone_priority string when configured, else preferred region HIGH/LOW.
+class ObCdcLogFetchPriority
+{
+public:
+  ObCdcLogFetchPriority();
+  ~ObCdcLogFetchPriority();
+  void destroy();
+  // Empty or whitespace-only str => not configured (OB_SUCCESS).
+  int init_zone_priority(const char *zone_priority_str);
+  bool is_configured() const { return configured_; }
+  int64_t get_default_priority_level() const { return default_priority_level_; }
+  // Smaller value = higher fetch priority (same as existing region HIGH/LOW ordering).
+  FetchPriority get_zone_priority(const common::ObZone &zone) const;
+  int set_assign_region(const common::ObRegion &prefer_region);
+  int get_assign_region(common::ObRegion &prefer_region);
+  // zone_priority tiers when configured, else region HIGH/LOW vs assign region (ignore case).
+  int get_priority(const common::ObZone &zone, const common::ObRegion &region,
+      FetchPriority &priority);
+
+private:
+  static bool is_space_(const char c);
+  static const char *ltrim_(const char *p, const char *end);
+  static const char *rtrim_(const char *p, const char *end);
+  int add_zone_token_(const char *tok_start, const char *tok_end, const int64_t tier_idx);
+  bool is_assign_region_(const common::ObRegion &region);
+  bool is_default_zone_(const common::ObZone &zone);
+
+private:
+  bool configured_;
+  int64_t default_priority_level_;
+  bool map_inited_;
+  common::ObLinearHashMap<common::ObZone, int64_t> zone_tier_map_;
+  common::ObRegion assign_region_;
+  common::ObByteLock assign_lock_;
+};
 
 } // namespace logservice
 } // namespace oceanbase

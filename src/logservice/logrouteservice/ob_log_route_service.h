@@ -60,6 +60,7 @@ public:
   // @param [in] background_refresh_time_sec  Background periodic refresh time, in second
   // @param [in] all_server_cache_update_interval_sec AllServer periodic refresh time, in second
   // @param [in] all_zone_cache_update_interval_sec AllZone periodic refresh time, in second
+  // @param [in] zone_priority  primary_zone-like string for preferred fetch zones (empty = use region only)
   // @param [in] blacklist_survival_time_sec  The survival time of the Server in the blacklist, in seconds
   // @param [in] blacklist_survival_time_upper_limit_min  Upper threshold of the Server blacklist duration (in minute)
   // @param [in] blacklist_survival_time_penalty_period_min
@@ -80,6 +81,7 @@ public:
       const int64_t background_refresh_time_sec = 1200,
       const int64_t all_server_cache_update_interval_sec = 5,
       const int64_t all_zone_cache_update_interval_sec = 5,
+      const char *zone_priority = "",
       const int64_t blacklist_survival_time_sec = 30,
       const int64_t blacklist_survival_time_upper_limit_min = 4,
       const int64_t blacklist_survival_time_penalty_period_min = 1,
@@ -105,6 +107,8 @@ public:
   // Region
   int update_preferred_upstream_log_region(const common::ObRegion &prefer_region);
   int get_preferred_upstream_log_region(common::ObRegion &prefer_region);
+
+  int update_zone_priority(const char *zone_priority_str);
 
   // Cache interval
   int update_cache_update_interval(const int64_t all_server_cache_update_interval_sec,

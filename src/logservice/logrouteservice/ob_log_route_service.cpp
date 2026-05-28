@@ -74,6 +74,7 @@ int ObLogRouteService::init(ObISQLClient *proxy,
     const int64_t background_refresh_time_sec,
     const int64_t all_server_cache_update_interval_sec,
     const int64_t all_zone_cache_update_interval_sec,
+    const char *zone_priority,
     const int64_t blacklist_survival_time_sec,
     const int64_t blacklist_survival_time_upper_limit_min,
     const int64_t blacklist_survival_time_penalty_period_min,
@@ -112,9 +113,9 @@ int ObLogRouteService::init(ObISQLClient *proxy,
           err_handler, OB_LOG_ROUTE_SERVICE_SQL_QUERY_TIMEOUT_US))) {
     LOG_WARN("systable_queryer_ init failed", KR(ret), K(cluster_id), K(is_across_cluster));
   } else if (OB_FAIL(all_svr_cache_.init(systable_queryer_, is_tenant_mode, source_tenant_id, prefer_region,
-          all_server_cache_update_interval_sec, all_zone_cache_update_interval_sec))) {
+          all_server_cache_update_interval_sec, all_zone_cache_update_interval_sec, zone_priority))) {
     LOG_WARN("all_svr_cache_ init failed", KR(ret), K(is_tenant_mode), K(prefer_region),
-        K(all_server_cache_update_interval_sec), K(all_zone_cache_update_interval_sec));
+        K(all_server_cache_update_interval_sec), K(all_zone_cache_update_interval_sec), K(zone_priority));
 #ifdef ERRSIM
   } else if (OB_FAIL(LOG_ROUTE_TIMER_INIT_FAIL)) {
     LOG_ERROR("ERRSIM: LOG_ROUTE_TIMER_INIT_FAIL");
@@ -397,6 +398,21 @@ int ObLogRouteService::get_preferred_upstream_log_region(common::ObRegion &prefe
   return ret;
 }
 
+int ObLogRouteService::update_zone_priority(const char *zone_priority_str)
+{
+  int ret = OB_SUCCESS;
+
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_ERROR("ObLogRouteService has not been inited", KR(ret));
+  } else if (OB_FAIL(all_svr_cache_.update_zone_priority(zone_priority_str))) {
+    LOG_WARN("ObLogAllSvrCache update_zone_priority failed", KR(ret));
+  }
+  LOG_INFO("update_zone_priority succ", KR(ret), K(zone_priority_str));
+
+  return ret;
+}
+
 int ObLogRouteService::update_cache_update_interval(const int64_t all_server_cache_update_interval_sec,
     const int64_t all_zone_cache_update_interval_sec)
 {
@@ -607,7 +623,7 @@ int ObLogRouteService::next_server(
           LOG_WARN("ObLSRouterValue next_server failed", KR(ret), K(router_key), K(next_lsn), K(svr));
         }
       } else {
-        LOG_INFO("LSSvrList next_server succ", KR(ret), K(router_key), K(next_lsn), K(svr));
+        LOG_INFO("LSSvrList next_server succ", KR(ret), K(router_key), K(svr),K(next_lsn));
       }
     }
   }
@@ -858,7 +874,7 @@ int ObLogRouteService::get_ls_svr_list_(const ObLSRouterKey &router_key,
   }
 
   if (OB_SUCC(ret)) {
-    // Sort by Fetch log priority when add_server_or_update completed
+    // Sort by fetch queue policy (meta_table > fetch_prio > replica > follower) after list built
     svr_list.sort_by_priority();
   }
 
@@ -905,11 +921,11 @@ int ObLogRouteService::query_ls_log_info_and_update_(const ObLSRouterKey &router
       int tmp_ret = OB_SUCCESS;
       const LogStatRecord &rec = log_stat_records.at(idx);
       const ObAddr& svr = rec.server_;
-      RegionPriority region_priority = RegionPriority::REGION_PRIORITY_UNKNOWN;
-      if (! all_svr_cache_.is_svr_avail(svr, region_priority)) {
+      FetchPriority fetch_priority = REGION_PRIORITY_UNKNOWN;
+      if (! all_svr_cache_.is_svr_avail(svr, fetch_priority)) {
         // ignore
       } else if (OB_TMP_FAIL(svr_list.add_server_or_update(rec.server_, rec.begin_lsn_, rec.end_lsn_,
-          region_priority, ObRole::LEADER == rec.role_))) {
+          fetch_priority, ObRole::LEADER == rec.role_))) {
         LOG_WARN_RET(tmp_ret, "failed to add_server_or_update after get_ls_log_info", K(router_key), K(rec));
       }
     }
@@ -934,8 +950,9 @@ int ObLogRouteService::query_units_info_and_update_(const ObLSRouterKey &router_
     ARRAY_FOREACH_NORET(units_record_array, idx) {
       int tmp_ret = OB_SUCCESS;
       const ObUnitsRecord &record = units_record_array.at(idx);
+      const FetchPriority fetch_priority = REGION_PRIORITY_UNKNOWN;
       if (OB_TMP_FAIL(svr_list.add_server_or_update(record.server_, palf::LSN(palf::PALF_INITIAL_LSN_VAL),
-          palf::LSN(palf::LOG_MAX_LSN_VAL), RegionPriority::REGION_PRIORITY_UNKNOWN, false))) {
+          palf::LSN(palf::LOG_MAX_LSN_VAL), fetch_priority, false))) {
         LOG_WARN_RET(tmp_ret, "failed to add_server_or_update after get_all_units_info", K(record), K(router_key));
       }
     }
@@ -1216,10 +1233,10 @@ int ObLogRouteService::query_units_info_and_update_(
       ARRAY_FOREACH_N(units_record_array, idx, count) {
         ObUnitsRecord &record = units_record_array.at(idx);
         ObAddr &server = record.server_;
-        RegionPriority region_priority = REGION_PRIORITY_UNKNOWN;
+        FetchPriority fetch_priority = REGION_PRIORITY_UNKNOWN;
 
         if (OB_FAIL(ls_svr_list.add_server_or_update(server,
-                palf::LSN(0), palf::LSN(palf::LOG_MAX_LSN_VAL), region_priority, false/*is_leader*/))) {
+                palf::LSN(0), palf::LSN(palf::LOG_MAX_LSN_VAL), fetch_priority, false/*is_leader*/))) {
           LOG_WARN("ObLogRouteService add_server_or_update failed", KR(ret), K(router_key),
               K(router_value));
         }
