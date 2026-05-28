@@ -29,7 +29,7 @@ using namespace transaction;
  */
 
 ObDirectLoadOriginTableCreateParam::ObDirectLoadOriginTableCreateParam()
-  : table_id_(OB_INVALID_ID), snapshot_version_(0)
+  : table_id_(OB_INVALID_ID)
 {
 }
 
@@ -39,8 +39,7 @@ ObDirectLoadOriginTableCreateParam::~ObDirectLoadOriginTableCreateParam()
 
 bool ObDirectLoadOriginTableCreateParam::is_valid() const
 {
-  return OB_INVALID_ID != table_id_ && tablet_id_.is_valid() && ls_id_.is_valid() &&
-         snapshot_version_ > 0;
+  return OB_INVALID_ID != table_id_ && tablet_id_.is_valid() && ls_id_.is_valid();
 }
 
 /**
@@ -48,7 +47,7 @@ bool ObDirectLoadOriginTableCreateParam::is_valid() const
  */
 
 ObDirectLoadOriginTableMeta::ObDirectLoadOriginTableMeta()
-  : table_id_(OB_INVALID_ID), snapshot_version_(0)
+  : table_id_(OB_INVALID_ID)
 {
 }
 
@@ -63,7 +62,6 @@ void ObDirectLoadOriginTableMeta::reset()
   ls_id_.reset();
   tx_id_.reset();
   tx_seq_.reset();
-  snapshot_version_ = 0;
 }
 
 /**
@@ -123,7 +121,6 @@ int ObDirectLoadOriginTable::init(const ObDirectLoadOriginTableCreateParam &para
       meta_.tablet_id_ = param.tablet_id_;
       meta_.tx_id_ = param.tx_id_;
       meta_.tx_seq_ = param.tx_seq_;
-      meta_.snapshot_version_ = param.snapshot_version_;
       is_inited_ = true;
     }
   }
@@ -356,7 +353,7 @@ int ObDirectLoadOriginTableAccessor::init_table_access_ctx(bool skip_read_lob)
   const ObTabletID &tablet_id = origin_table_->get_meta().tablet_id_;
   const ObTransID &tx_id = origin_table_->get_meta().tx_id_;
   const ObTxSEQ &tx_seq = origin_table_->get_meta().tx_seq_;
-  const int64_t snapshot_version = origin_table_->get_meta().snapshot_version_;
+  const int64_t snapshot_version = ObTimeUtil::current_time_ns();
   ObQueryFlag query_flag(ObQueryFlag::Forward,
                          false /*daily_merge*/,
                          true /*optimize*/,
