@@ -579,7 +579,7 @@ int ObPLCodeGenerateVisitor::visit(const ObPLAssignStmt &s)
                 int64_t idx = const_expr->get_value().get_unknown();
                 const ObPLDataType &into_type = var->get_type();
                 if (OB_SUCC(ret)
-                    && ((ObObjAccessIdx::IS_INVALID != alloc_scop && OB_INVALID_INDEX == result_idx)
+                    && ((ObObjAccessIdx::IS_INVALID != alloc_scop && (OB_INVALID_INDEX == result_idx || lib::is_mysql_mode()))
                         || into_type.is_collection_type()
                         || into_type.is_record_type()
                         || into_type.is_ref_cursor_type())) {
