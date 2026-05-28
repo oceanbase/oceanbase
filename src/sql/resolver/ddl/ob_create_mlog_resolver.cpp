@@ -85,7 +85,15 @@ int ObCreateMLogResolver::resolve(const ParseNode &parse_tree)
 
   if (OB_SUCC(ret)) {
     if (1 == parse_node.reserved_) {
-      if((compat_version < MOCK_DATA_VERSION_4_3_5_3 || (compat_version >= DATA_VERSION_4_4_0_0 && compat_version < DATA_VERSION_4_4_2_0))) {
+      bool disable_replace_mlog = false;
+      if (OB_FAIL(session_info_->check_feature_enable(
+              share::ObCompatFeatureType::DISABLE_CREATE_OR_REPLACE_MLOG, disable_replace_mlog))) {
+        LOG_WARN("failed to check feature enable", KR(ret));
+      } else if (disable_replace_mlog) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("create or replace materialized view log is not supported", KR(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create or replace materialized view log is");
+      } else if((compat_version < MOCK_DATA_VERSION_4_3_5_3 || (compat_version >= DATA_VERSION_4_4_0_0 && compat_version < DATA_VERSION_4_4_2_0))) {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("replacing materialized view log before version 4.3.5.3 or between 4.4.0.0 and 4.4.2.0 is not supported", KR(ret),
                  K(compat_version));
