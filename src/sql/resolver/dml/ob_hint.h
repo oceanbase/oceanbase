@@ -224,6 +224,7 @@ struct ObOptParamHint
     DEF(ENABLE_MERGE_INTO,)                         \
     DEF(ENABLE_FAST_REFRESH_WITH_CUR_TIME,)         \
     DEF(DISABLE_SHARED_EXPR_EXTRACTION,)            \
+    DEF(ENABLE_PLAN_EXPIRATION_BY_EXEC_FEEDBACK,)   \
     
 
 

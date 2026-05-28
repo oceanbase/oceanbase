@@ -538,6 +538,12 @@ DEF_TIME(writing_throttling_maximum_duration, OB_TENANT_PARAMETER, "2h", "[1s, 3
 DEF_TIME(plan_cache_evict_interval, OB_CLUSTER_PARAMETER, "5s", "[0s,)",
          "time interval for periodic plan cache eviction. Range: [0s, +∞)",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_plan_expiration_by_exec_feedback, OB_TENANT_PARAMETER, "True",
+         "enable plan expiration triggered by execution feedback such as unstable execution "
+         "time, execution error or table access row count. When False, plans will not "
+         "be marked as expired via these execution-feedback paths and will continue being reused. "
+         "Default: True",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_INT(default_progressive_merge_num, OB_TENANT_PARAMETER, "0", "[0,)",
          "default progressive_merge_num when tenant create table"
          "Range:[0,)",
