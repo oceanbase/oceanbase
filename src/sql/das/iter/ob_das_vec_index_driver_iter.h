@@ -226,6 +226,7 @@ public:
   }
 
   ObDASVecIndexScanIter *get_vec_index_scan_iter() const { return vec_index_scan_iter_; }
+  const ObDASVecIndexDriverCtDef *get_driver_ctdef() const { return vec_index_driver_ctdef_; }
 
   static const uint64_t VSAG_MAX_EF_SEARCH = 160000;
   static constexpr double FIXED_MAGNIFICATION_RATIO = 2.0;
