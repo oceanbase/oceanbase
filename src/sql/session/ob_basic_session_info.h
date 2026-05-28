@@ -601,6 +601,7 @@ public:
   bool get_local_ob_enable_parameter_anonymous_block() const;
   bool get_local_ob_enable_ps_parameter_anonymous_block() const;
   bool get_local_cursor_sharing_mode() const;
+  bool get_local_json_float_full_precision() const;
   ObLengthSemantics get_local_nls_length_semantics() const;
   ObLengthSemantics get_actual_nls_length_semantics() const;
   int64_t get_local_ob_org_cluster_id() const;
@@ -2032,7 +2033,8 @@ public:
         security_version_(0),
         ob_enable_ps_parameter_anonymous_block_(false),
         plsql_can_transform_sql_to_assign_(false),
-        ob_enable_pl_async_commit_(false)
+        ob_enable_pl_async_commit_(false),
+        json_float_full_precision_(false)
     {
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         MEMSET(nls_formats_buf_[i], 0, MAX_NLS_FORMAT_STR_LEN);
@@ -2108,6 +2110,7 @@ public:
       collation_database_ = CS_TYPE_INVALID;
       plsql_optimize_level_ = 0;
       ob_enable_pl_async_commit_ = false;
+      json_float_full_precision_ = false;
     }
 
     inline bool operator==(const SysVarsCacheData &other) const {
@@ -2167,7 +2170,8 @@ public:
             character_set_client_ == other.character_set_client_ &&
             collation_database_ == other.collation_database_ &&
             plsql_optimize_level_ == other.plsql_optimize_level_ &&
-            ob_enable_pl_async_commit_ == other.ob_enable_pl_async_commit_;
+            ob_enable_pl_async_commit_ == other.ob_enable_pl_async_commit_ &&
+            json_float_full_precision_ == other.json_float_full_precision_;
       bool equal2 = true;
       for (int64_t i = 0; i < ObNLSFormatEnum::NLS_MAX; ++i) {
         if (nls_formats_[i] != other.nls_formats_[i]) {
@@ -2361,6 +2365,7 @@ public:
     bool ob_enable_ps_parameter_anonymous_block_;
     bool plsql_can_transform_sql_to_assign_;
     bool ob_enable_pl_async_commit_;
+    bool json_float_full_precision_;
   private:
     char nls_formats_buf_[ObNLSFormatEnum::NLS_MAX][MAX_NLS_FORMAT_STR_LEN];
   };
@@ -2591,6 +2596,7 @@ private:
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, character_set_client);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, collation_database);
     DEF_SYS_VAR_CACHE_FUNCS(int64_t, plsql_optimize_level);
+    DEF_SYS_VAR_CACHE_FUNCS(bool, json_float_full_precision);
     void set_autocommit_info(bool inc_value)
     {
       inc_data_.autocommit_ = inc_value;
@@ -3069,6 +3075,11 @@ inline bool ObBasicSessionInfo::get_local_ob_enable_parameter_anonymous_block() 
 inline bool ObBasicSessionInfo::get_local_ob_enable_ps_parameter_anonymous_block() const
 {
   return sys_vars_cache_.get_ob_enable_ps_parameter_anonymous_block();
+}
+
+inline bool ObBasicSessionInfo::get_local_json_float_full_precision() const
+{
+  return sys_vars_cache_.get_json_float_full_precision();
 }
 
 inline ObLengthSemantics ObBasicSessionInfo::get_local_nls_length_semantics() const

@@ -908,6 +908,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "internal_tmp_disk_storage_engine",
   "is_result_accurate",
   "join_buffer_size",
+  "json_float_full_precision",
   "keep_files_on_create",
   "key_buffer_size",
   "key_cache_age_threshold",
@@ -1761,6 +1762,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR_INTERNAL_TMP_DISK_STORAGE_ENGINE,
   SYS_VAR_IS_RESULT_ACCURATE,
   SYS_VAR_JOIN_BUFFER_SIZE,
+  SYS_VAR_JSON_FLOAT_FULL_PRECISION,
   SYS_VAR_KEEP_FILES_ON_CREATE,
   SYS_VAR_KEY_BUFFER_SIZE,
   SYS_VAR_KEY_CACHE_AGE_THRESHOLD,
@@ -3119,6 +3121,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "_optimizer_max_permutations",
   "_idp_step_reduction_threshold",
   "ob_enable_pl_async_commit",
+  "json_float_full_precision",
   "caching_sha2_password_digest_rounds",
   "ap_query_route_policy",
   "ap_query_cost_threshold",
@@ -4173,6 +4176,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarOptimizerMaxPermutations)
         + sizeof(ObSysVarIdpStepReductionThreshold)
         + sizeof(ObSysVarObEnablePlAsyncCommit)
+        + sizeof(ObSysVarJsonFloatFullPrecision)
         + sizeof(ObSysVarCachingSha2PasswordDigestRounds)
         + sizeof(ObSysVarApQueryRoutePolicy)
         + sizeof(ObSysVarApQueryCostThreshold)
@@ -11781,6 +11785,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarObEnablePlAsyncCommit));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarJsonFloatFullPrecision())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarJsonFloatFullPrecision", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_JSON_FLOAT_FULL_PRECISION))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarJsonFloatFullPrecision));
       }
     }
     if (OB_SUCC(ret)) {
@@ -21128,6 +21141,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarObEnablePlAsyncCommit())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarObEnablePlAsyncCommit", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR_JSON_FLOAT_FULL_PRECISION: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarJsonFloatFullPrecision)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarJsonFloatFullPrecision)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarJsonFloatFullPrecision())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarJsonFloatFullPrecision", K(ret));
       }
       break;
     }

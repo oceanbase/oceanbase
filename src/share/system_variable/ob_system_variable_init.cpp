@@ -11634,89 +11634,102 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[844].default_value_ = "5000" ;
-      ObSysVars[844].info_ = "Number of SHA256 iterations for password hash stored to disk" ;
-      ObSysVars[844].name_ = "caching_sha2_password_digest_rounds" ;
+      ObSysVars[844].default_value_ = "0" ;
+      ObSysVars[844].info_ = "Parse number in JSON with full precision (but slower)" ;
+      ObSysVars[844].name_ = "json_float_full_precision" ;
       ObSysVars[844].data_type_ = ObIntType ;
-      ObSysVars[844].min_val_ = "5000" ;
-      ObSysVars[844].max_val_ = "4095000" ;
-      ObSysVars[844].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
-      ObSysVars[844].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_caching_sha2_password_digest_rounds" ;
-      ObSysVars[844].id_ = SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS] = 844 ;
-      ObSysVars[844].base_value_ = "5000" ;
-    ObSysVars[844].alias_ = "OB_SV_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS" ;
+      ObSysVars[844].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[844].id_ = SYS_VAR_JSON_FLOAT_FULL_PRECISION ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_JSON_FLOAT_FULL_PRECISION)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_JSON_FLOAT_FULL_PRECISION] = 844 ;
+      ObSysVars[844].base_value_ = "0" ;
+    ObSysVars[844].alias_ = "OB_SV_JSON_FLOAT_FULL_PRECISION" ;
     }();
 
     [&] (){
-      ObSysVars[845].default_value_ = "1" ;
-      ObSysVars[845].info_ = "Controls adaptive route policy for ap query. OFF: disabled, AUTO: automatically choose column replica based on query characteristics and cost analysis, FORCE: force to choose column replica." ;
-      ObSysVars[845].name_ = "ap_query_route_policy" ;
+      ObSysVars[845].default_value_ = "5000" ;
+      ObSysVars[845].info_ = "Number of SHA256 iterations for password hash stored to disk" ;
+      ObSysVars[845].name_ = "caching_sha2_password_digest_rounds" ;
       ObSysVars[845].data_type_ = ObIntType ;
-      ObSysVars[845].enum_names_ = "[u'OFF', u'AUTO', u'FORCE']" ;
-      ObSysVars[845].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN ;
-      ObSysVars[845].id_ = SYS_VAR_AP_QUERY_ROUTE_POLICY ;
+      ObSysVars[845].min_val_ = "5000" ;
+      ObSysVars[845].max_val_ = "4095000" ;
+      ObSysVars[845].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[845].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_caching_sha2_password_digest_rounds" ;
+      ObSysVars[845].id_ = SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS] = 845 ;
+      ObSysVars[845].base_value_ = "5000" ;
+    ObSysVars[845].alias_ = "OB_SV_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS" ;
+    }();
+
+    [&] (){
+      ObSysVars[846].default_value_ = "1" ;
+      ObSysVars[846].info_ = "Controls adaptive route policy for ap query. OFF: disabled, AUTO: automatically choose column replica based on query characteristics and cost analysis, FORCE: force to choose column replica." ;
+      ObSysVars[846].name_ = "ap_query_route_policy" ;
+      ObSysVars[846].data_type_ = ObIntType ;
+      ObSysVars[846].enum_names_ = "[u'OFF', u'AUTO', u'FORCE']" ;
+      ObSysVars[846].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[846].id_ = SYS_VAR_AP_QUERY_ROUTE_POLICY ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_AP_QUERY_ROUTE_POLICY)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_AP_QUERY_ROUTE_POLICY] = 845 ;
-      ObSysVars[845].base_value_ = "1" ;
-    ObSysVars[845].alias_ = "OB_SV_AP_QUERY_ROUTE_POLICY" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_AP_QUERY_ROUTE_POLICY] = 846 ;
+      ObSysVars[846].base_value_ = "1" ;
+    ObSysVars[846].alias_ = "OB_SV_AP_QUERY_ROUTE_POLICY" ;
     }();
 
     [&] (){
-      ObSysVars[846].default_value_ = "200000" ;
-      ObSysVars[846].info_ = "Cost threshold for selecting column store replica." ;
-      ObSysVars[846].name_ = "ap_query_cost_threshold" ;
-      ObSysVars[846].data_type_ = ObUInt64Type ;
-      ObSysVars[846].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
-      ObSysVars[846].id_ = SYS_VAR_AP_QUERY_COST_THRESHOLD ;
+      ObSysVars[847].default_value_ = "200000" ;
+      ObSysVars[847].info_ = "Cost threshold for selecting column store replica." ;
+      ObSysVars[847].name_ = "ap_query_cost_threshold" ;
+      ObSysVars[847].data_type_ = ObUInt64Type ;
+      ObSysVars[847].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE ;
+      ObSysVars[847].id_ = SYS_VAR_AP_QUERY_COST_THRESHOLD ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_AP_QUERY_COST_THRESHOLD)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_AP_QUERY_COST_THRESHOLD] = 846 ;
-      ObSysVars[846].base_value_ = "200000" ;
-    ObSysVars[846].alias_ = "OB_SV_AP_QUERY_COST_THRESHOLD" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_AP_QUERY_COST_THRESHOLD] = 847 ;
+      ObSysVars[847].base_value_ = "200000" ;
+    ObSysVars[847].alias_ = "OB_SV_AP_QUERY_COST_THRESHOLD" ;
     }();
 
     [&] (){
-      ObSysVars[847].default_value_ = "1" ;
-      ObSysVars[847].info_ = "When ap_query_route_policy is AUTO or FORCE, controls whether query will fallback to non-column replica when there is no available column replica" ;
-      ObSysVars[847].name_ = "ap_query_replica_fallback" ;
-      ObSysVars[847].data_type_ = ObIntType ;
-      ObSysVars[847].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[847].id_ = SYS_VAR_AP_QUERY_REPLICA_FALLBACK ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_AP_QUERY_REPLICA_FALLBACK)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_AP_QUERY_REPLICA_FALLBACK] = 847 ;
-      ObSysVars[847].base_value_ = "1" ;
-    ObSysVars[847].alias_ = "OB_SV_AP_QUERY_REPLICA_FALLBACK" ;
-    }();
-
-    [&] (){
-      ObSysVars[848].default_value_ = "100" ;
-      ObSysVars[848].info_ = "Set cost factor for UDF filter predicate (default: 100)" ;
-      ObSysVars[848].name_ = "ob_udf_cost_factor" ;
+      ObSysVars[848].default_value_ = "1" ;
+      ObSysVars[848].info_ = "When ap_query_route_policy is AUTO or FORCE, controls whether query will fallback to non-column replica when there is no available column replica" ;
+      ObSysVars[848].name_ = "ap_query_replica_fallback" ;
       ObSysVars[848].data_type_ = ObIntType ;
-      ObSysVars[848].min_val_ = "1" ;
-      ObSysVars[848].max_val_ = "10000000" ;
-      ObSysVars[848].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN ;
-      ObSysVars[848].id_ = SYS_VAR_OB_UDF_COST_FACTOR ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_UDF_COST_FACTOR)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_UDF_COST_FACTOR] = 848 ;
-      ObSysVars[848].base_value_ = "100" ;
-    ObSysVars[848].alias_ = "OB_SV_UDF_COST_FACTOR" ;
+      ObSysVars[848].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[848].id_ = SYS_VAR_AP_QUERY_REPLICA_FALLBACK ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_AP_QUERY_REPLICA_FALLBACK)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_AP_QUERY_REPLICA_FALLBACK] = 848 ;
+      ObSysVars[848].base_value_ = "1" ;
+    ObSysVars[848].alias_ = "OB_SV_AP_QUERY_REPLICA_FALLBACK" ;
     }();
 
     [&] (){
-      ObSysVars[849].default_value_ = "0.005" ;
-      ObSysVars[849].info_ = "Set default selectivity for UDF equality predicate (default: 0.005)" ;
-      ObSysVars[849].name_ = "ob_udf_selectivity" ;
-      ObSysVars[849].data_type_ = ObNumberType ;
-      ObSysVars[849].min_val_ = "0.0" ;
-      ObSysVars[849].max_val_ = "1.0" ;
+      ObSysVars[849].default_value_ = "100" ;
+      ObSysVars[849].info_ = "Set cost factor for UDF filter predicate (default: 100)" ;
+      ObSysVars[849].name_ = "ob_udf_cost_factor" ;
+      ObSysVars[849].data_type_ = ObIntType ;
+      ObSysVars[849].min_val_ = "1" ;
+      ObSysVars[849].max_val_ = "10000000" ;
       ObSysVars[849].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN ;
-      ObSysVars[849].id_ = SYS_VAR_OB_UDF_SELECTIVITY ;
+      ObSysVars[849].id_ = SYS_VAR_OB_UDF_COST_FACTOR ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_UDF_COST_FACTOR)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_UDF_COST_FACTOR] = 849 ;
+      ObSysVars[849].base_value_ = "100" ;
+    ObSysVars[849].alias_ = "OB_SV_UDF_COST_FACTOR" ;
+    }();
+
+    [&] (){
+      ObSysVars[850].default_value_ = "0.005" ;
+      ObSysVars[850].info_ = "Set default selectivity for UDF equality predicate (default: 0.005)" ;
+      ObSysVars[850].name_ = "ob_udf_selectivity" ;
+      ObSysVars[850].data_type_ = ObNumberType ;
+      ObSysVars[850].min_val_ = "0.0" ;
+      ObSysVars[850].max_val_ = "1.0" ;
+      ObSysVars[850].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[850].id_ = SYS_VAR_OB_UDF_SELECTIVITY ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_UDF_SELECTIVITY)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_UDF_SELECTIVITY] = 849 ;
-      ObSysVars[849].base_value_ = "0.005" ;
-    ObSysVars[849].alias_ = "OB_SV_UDF_SELECTIVITY" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_UDF_SELECTIVITY] = 850 ;
+      ObSysVars[850].base_value_ = "0.005" ;
+    ObSysVars[850].alias_ = "OB_SV_UDF_SELECTIVITY" ;
     }();
 
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
@@ -11725,7 +11738,7 @@ static struct VarsInit{
   }
 }vars_init;
 
-static int64_t var_amount = 850;
+static int64_t var_amount = 851;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

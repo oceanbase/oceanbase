@@ -853,6 +853,7 @@ namespace share
   static const char* const OB_SV__OPTIMIZER_MAX_PERMUTATIONS = "_optimizer_max_permutations";
   static const char* const OB_SV__IDP_STEP_REDUCTION_THRESHOLD = "_idp_step_reduction_threshold";
   static const char* const OB_SV_ENABLE_PL_ASYNC_COMMIT = "ob_enable_pl_async_commit";
+  static const char* const OB_SV_JSON_FLOAT_FULL_PRECISION = "json_float_full_precision";
   static const char* const OB_SV_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS = "caching_sha2_password_digest_rounds";
   static const char* const OB_SV_AP_QUERY_ROUTE_POLICY = "ap_query_route_policy";
   static const char* const OB_SV_AP_QUERY_COST_THRESHOLD = "ap_query_cost_threshold";
