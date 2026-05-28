@@ -1848,7 +1848,10 @@ bool ObSQLUtils::is_readonly_stmt(ParseResult &result)
                || T_XA_ROLLBACK == type
                || T_XA_RECOVER == type
                || (T_SET_ROLE == type && lib::is_mysql_mode())
-               || T_SET_CATALOG == type) {
+               || T_SET_CATALOG == type
+               || T_CREATE_SAVEPOINT == type
+               || T_ROLLBACK_SAVEPOINT == type
+               || T_RELEASE_SAVEPOINT == type) {
       ret = true;
     }
   }
