@@ -8574,24 +8574,23 @@ int ObSelectResolver::check_audit_log_stmt(ObSelectStmt *select_stmt)
   if (OB_ISNULL(select_stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret));
-  } else if (lib::is_mysql_mode()) {
-    for (int64_t i = 0; OB_SUCC(ret) && !is_contain && i < select_stmt->get_select_item_size(); i++) {
-      ObRawExpr *expr = select_stmt->get_select_item(i).expr_;
-      if (OB_ISNULL(expr)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("get unexpected null", K(ret));
-      } else if (ObRawExprUtils::is_audit_log_expr(expr)) {
-        is_contain = true;
-      }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !is_contain && i < select_stmt->get_select_item_size(); i++) {
+    ObRawExpr *expr = select_stmt->get_select_item(i).expr_;
+    if (OB_ISNULL(expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get unexpected null", K(ret));
+    } else if (ObRawExprUtils::is_audit_log_expr(expr)) {
+      is_contain = true;
     }
-    if (OB_SUCC(ret) && is_contain) {
-      if (current_level_ > 0 || is_substmt() || select_stmt->get_table_size() > 0 ||
-          select_stmt->get_condition_size() > 0 || select_stmt->has_group_by() ||
-          select_stmt->has_having() || select_stmt->get_select_item_size() > 1 ||
-          select_stmt->has_order_by() || select_stmt->has_limit()) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "use audit log function in complex query");
-      }
+  }
+  if (OB_SUCC(ret) && is_contain) {
+    if (current_level_ > 0 || is_substmt() || select_stmt->get_table_size() > 0 ||
+        select_stmt->get_condition_size() > 0 || select_stmt->has_group_by() ||
+        select_stmt->has_having() || select_stmt->get_select_item_size() > 1 ||
+        select_stmt->has_order_by() || select_stmt->has_limit()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "use audit log function in complex query");
     }
   }
   return ret;

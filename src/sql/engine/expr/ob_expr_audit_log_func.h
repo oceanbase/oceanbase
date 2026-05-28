@@ -39,6 +39,12 @@ protected:
   static int check_privilege(ObEvalCtx &ctx,
                              bool &is_valid,
                              common::ObString &error_info);
+  static int check_mysql_privilege(ObEvalCtx &ctx,
+                                   bool &is_valid,
+                                   common::ObString &error_info);
+  static int check_oracle_privilege(ObEvalCtx &ctx,
+                                    bool &is_valid,
+                                    common::ObString &error_info);
   static int parse_user_name(const common::ObString &str,
                              common::ObString &user_name,
                              common::ObString &host,

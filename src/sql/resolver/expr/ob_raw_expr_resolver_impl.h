@@ -50,7 +50,7 @@ public:
                           ObSchemaChecker *schema_checker,
                           pl::ObPLBlockNS *secondary_namespace,
                           pl::ObProcType &proc_type);
-  int resolve_func_node_of_obj_access_idents(const ParseNode &func_node, ObQualifiedName &q_name);
+  int resolve_func_node_of_obj_access_idents(const ParseNode &func_node, ObQualifiedName &q_name, bool is_root_expr);
   int check_name_type(ObQualifiedName &q_name, ObStmtScope scope, AccessNameType &type);
   // types and constants
   int recursive_resolve(const ParseNode *node, ObRawExpr *&expr, bool is_root_expr = false);
@@ -174,8 +174,8 @@ private:
   int process_multiset_node(const ParseNode *node, ObRawExpr *&expr);
   int process_cursor_attr_node(const ParseNode &node, ObRawExpr *&expr);
   int get_current_of_base_table_id(ObDMLStmt *stmt, uint64_t &base_table_id);
-  int process_obj_access_node(const ParseNode &node, ObRawExpr *&expr);
-  int resolve_obj_access_idents(const ParseNode &node, ObQualifiedName &q_name);
+  int process_obj_access_node(const ParseNode &node, ObRawExpr *&expr, bool is_root_expr);
+  int resolve_obj_access_idents(const ParseNode &node, ObQualifiedName &q_name, bool is_root_expr);
   int check_pl_variable(ObQualifiedName &q_name, bool &is_pl_var);
   int is_explict_func_expr(const ParseNode &node, bool &is_func);
   int check_pseudo_column_exist(ObItemType type, ObPseudoColumnRawExpr *&expr);
@@ -243,7 +243,7 @@ private:
   inline void set_udf_param_syntax_err(const bool val) { is_udf_param_syntax_err_ = val; }
   inline bool get_udf_param_syntax_err() { return is_udf_param_syntax_err_; }
 
-  int resolve_left_node_of_obj_access_idents(const ParseNode &node, ObQualifiedName &q_name);
+  int resolve_left_node_of_obj_access_idents(const ParseNode &node, ObQualifiedName &q_name, bool is_root_expr);
   int resolve_right_node_of_obj_access_idents(const ParseNode &node, ObQualifiedName &q_name);
   int resolve_right_branch_of_in_op(const ParseNode *node,
                                     const ObItemType op_type,

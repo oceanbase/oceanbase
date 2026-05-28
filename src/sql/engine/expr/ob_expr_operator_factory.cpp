@@ -1698,6 +1698,8 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprCheckLocationAccess, EAGER_EVALUATION);
   REG_OP_ORCL(ObExprCollectFileList, SHORT_CIRCUIT_EVALUATION);
   REG_OP_ORCL(ObExprEnhancedAesEncrypt, SHORT_CIRCUIT_EVALUATION);
+  REG_OP_ORCL(ObExprAuditLogPasswordGet, EAGER_EVALUATION);
+  REG_OP_ORCL(ObExprAuditLogPasswordSet, EAGER_EVALUATION);
   REG_OP_ORCL(ObExprDocID, EAGER_EVALUATION);
   REG_OP_ORCL(ObExprDocLength, EAGER_EVALUATION);
   REG_OP_ORCL(ObExprWordSegment, EAGER_EVALUATION);

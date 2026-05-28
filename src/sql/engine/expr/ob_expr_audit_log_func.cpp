@@ -19,6 +19,7 @@
 #endif
 #include "sql/engine/ob_exec_context.h"
 #include "sql/privilege_check/ob_privilege_check.h"
+#include "sql/privilege_check/ob_ora_priv_check.h"
 
 namespace oceanbase
 {
@@ -114,6 +115,23 @@ int ObExprAuditLogFunc::check_privilege(ObEvalCtx &ctx,
                                         ObString &error_info)
 {
   int ret = OB_SUCCESS;
+  if (lib::is_oracle_mode()) {
+    if (OB_FAIL(check_oracle_privilege(ctx, is_valid, error_info))) {
+      LOG_WARN("failed to check oracle privilege", K(ret));
+    }
+  } else {
+    if (OB_FAIL(check_mysql_privilege(ctx, is_valid, error_info))) {
+      LOG_WARN("failed to check mysql privilege", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObExprAuditLogFunc::check_mysql_privilege(ObEvalCtx &ctx,
+                                              bool &is_valid,
+                                              ObString &error_info)
+{
+  int ret = OB_SUCCESS;
   ObSqlCtx *sql_ctx = ctx.exec_ctx_.get_sql_ctx();
   ObArenaAllocator alloc;
   ObStmtNeedPrivs stmt_need_privs(alloc);
@@ -132,6 +150,33 @@ int ObExprAuditLogFunc::check_privilege(ObEvalCtx &ctx,
       error_info = "Request ignored. SUPER needed to perform operation";
     } else {
       LOG_WARN("failed to check privilege", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObExprAuditLogFunc::check_oracle_privilege(ObEvalCtx &ctx,
+                                               bool &is_valid,
+                                               ObString &error_info)
+{
+  int ret = OB_SUCCESS;
+  ObSqlCtx *sql_ctx = ctx.exec_ctx_.get_sql_ctx();
+  ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  if (OB_ISNULL(sql_ctx) || OB_ISNULL(sql_ctx->schema_guard_) || OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), KP(sql_ctx), KP(session));
+  } else if (OB_FAIL(ObOraSysChecker::check_ora_user_sys_priv(*sql_ctx->schema_guard_,
+                                                              session->get_effective_tenant_id(),
+                                                              session->get_priv_user_id(),
+                                                              session->get_database_name(),
+                                                              PRIV_ID_ALTER_SYSTEM,
+                                                              session->get_enable_role_array()))) {
+    if (OB_ERR_NO_PRIVILEGE == ret || OB_ERR_NO_SYS_PRIVILEGE == ret) {
+      ret = OB_SUCCESS;
+      is_valid = false;
+      error_info = "Request ignored. ALTER SYSTEM needed to perform operation";
+    } else {
+      LOG_WARN("failed to check ora user sys priv", K(ret));
     }
   }
   return ret;
@@ -560,7 +605,7 @@ ObExprAuditLogPasswordSet::ObExprAuditLogPasswordSet(ObIAllocator &alloc)
 }
 
 int ObExprAuditLogPasswordSet::calc_result_type0(ObExprResType &type,
-                                                           ObExprTypeCtx &type_ctx) const
+                                                 ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_data_version(type_ctx))) {
@@ -575,8 +620,8 @@ int ObExprAuditLogPasswordSet::calc_result_type0(ObExprResType &type,
 }
 
 int ObExprAuditLogPasswordSet::cg_expr(ObExprCGCtx &op_cg_ctx,
-                                                 const ObRawExpr &raw_expr,
-                                                 ObExpr &expr) const
+                                       const ObRawExpr &raw_expr,
+                                       ObExpr &expr) const
 {
   int ret = OB_SUCCESS;
   UNUSED(op_cg_ctx);
@@ -629,9 +674,9 @@ int ObExprAuditLogPasswordSet::eval_set_encryption_password(const ObExpr &expr, 
 }
 
 ObExprAuditLogPassword::ObExprAuditLogPassword(ObIAllocator &alloc,
-                                                   ObExprOperatorType type,
-                                                   const char *name,
-                                                   int32_t param_num)
+                                               ObExprOperatorType type,
+                                               const char *name,
+                                               int32_t param_num)
   : ObExprAuditLogFunc(alloc, type, name, param_num)
 {
 }
@@ -659,9 +704,9 @@ ObExprAuditLogPasswordGet::ObExprAuditLogPasswordGet(ObIAllocator &alloc)
 }
 
 int ObExprAuditLogPasswordGet::calc_result_typeN(ObExprResType &type,
-                                                      ObExprResType *types_array,
-                                                      int64_t param_num,
-                                                      ObExprTypeCtx &type_ctx) const
+                                                 ObExprResType *types_array,
+                                                 int64_t param_num,
+                                                 ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_data_version(type_ctx))) {
@@ -675,7 +720,11 @@ int ObExprAuditLogPasswordGet::calc_result_typeN(ObExprResType &type,
     type.set_collation_level(common::CS_LEVEL_COERCIBLE);
     type.set_length(OB_MAX_MYSQL_VARCHAR_LENGTH);
     if (1 == param_num && OB_NOT_NULL(types_array)) {
-      types_array[0].set_calc_type(ObUInt64Type);
+      if (lib::is_oracle_mode()) {
+        types_array[0].set_calc_type(ObNumberType);
+      } else {
+        types_array[0].set_calc_type(ObUInt64Type);
+      }
     }
   }
   return ret;
@@ -719,7 +768,19 @@ int ObExprAuditLogPasswordGet::eval_get_encryption_password(const ObExpr &expr, 
       int64_t pwd_id = 0;
       int64_t cur_pwd_id = 0;
       if (OB_NOT_NULL(arg0)) {
-        pwd_id = arg0->get_uint64();
+        if (lib::is_oracle_mode()) {
+          const number::ObNumber pwd_id_nmb(arg0->get_number());
+          if (OB_UNLIKELY(!pwd_id_nmb.is_integer())) {
+            is_valid = false;
+            error_info = "Invalid argument for audit encryption password";
+          } else {
+            if (OB_FAIL(ObExprUtil::trunc_num2int64(pwd_id_nmb, pwd_id))) {
+              LOG_WARN("failed to trunc num to int64", K(ret));
+            }
+          }
+        } else {
+          pwd_id = arg0->get_uint64();
+        }
       }
       if (OB_FAIL(trans.start(ctx.exec_ctx_.get_sql_proxy(), tenant_id))) {
         LOG_WARN("fail to start transaction", K(ret));
