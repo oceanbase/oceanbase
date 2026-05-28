@@ -2088,6 +2088,7 @@ constexpr int OB_KAFKA_NEED_RETRY = -11130;
 constexpr int OB_ERR_INVALID_USERENV_PARAMETER = -11131;
 constexpr int OB_SRF_NOT_ALLOWED = -11132;
 constexpr int OB_AI_REMOTE_SERVICE_ERROR = -11133;
+constexpr int OB_NOT_SUPPORTED_FOR_PARALLEL_DDL = -11134;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR = -20000;
 constexpr int OB_SP_RAISE_APPLICATION_ERROR_NUM = -21000;
 constexpr int OB_CLOB_ONLY_SUPPORT_WITH_MULTIBYTE_FUN = -22998;
@@ -4628,6 +4629,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_USERENV_PARAMETER__USER_ERROR_MSG "invalid USERENV parameter"
 #define OB_SRF_NOT_ALLOWED__USER_ERROR_MSG "set-returning functions '%.*s' usage are not allowed"
 #define OB_AI_REMOTE_SERVICE_ERROR__USER_ERROR_MSG "AI REMOTE SERVICE ERROR: %.*s"
+#define OB_NOT_SUPPORTED_FOR_PARALLEL_DDL__USER_ERROR_MSG "Operation not supported in parallel DDL path"
 #define OB_CDC_STREAM_ALREADY_EXISTS__USER_ERROR_MSG "CDC stream '%.*s' already exists"
 #define OB_CDC_STREAM_NOT_FOUND__USER_ERROR_MSG "CDC stream '%.*s' not found"
 #define OB_CDC_STREAM_STATE_NOT_MATCH__USER_ERROR_MSG "CDC stream '%.*s' state not match"
@@ -9708,6 +9710,8 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_SRF_NOT_ALLOWED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11132, set-returning functions '%.*s' usage are not allowed"
 #define OB_AI_REMOTE_SERVICE_ERROR__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11133, AI REMOTE SERVICE ERROR: %.*s"
 #define OB_AI_REMOTE_SERVICE_ERROR__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11133, AI REMOTE SERVICE ERROR: %.*s"
+#define OB_NOT_SUPPORTED_FOR_PARALLEL_DDL__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -11134, Operation not supported in parallel DDL path"
+#define OB_NOT_SUPPORTED_FOR_PARALLEL_DDL__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -11134, Operation not supported in parallel DDL path"
 #define OB_CDC_STREAM_ALREADY_EXISTS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12000, CDC stream '%.*s' already exists"
 #define OB_CDC_STREAM_ALREADY_EXISTS__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -12000, CDC stream '%.*s' already exists"
 #define OB_CDC_STREAM_NOT_FOUND__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -12001, CDC stream '%.*s' not found"
@@ -9749,7 +9753,7 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
-extern int g_all_ob_errnos[2547];
+extern int g_all_ob_errnos[2548];
 
   const char *ob_error_name(const int oberr);
   const char* ob_error_cause(const int oberr);
