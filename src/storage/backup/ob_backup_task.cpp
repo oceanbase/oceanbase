@@ -46,6 +46,9 @@ ERRSIM_POINT_DEF(EN_LS_BACKUP_FAILED);
 ERRSIM_POINT_DEF(EN_BACKUP_DATA_TASK_FAILED);
 ERRSIM_POINT_DEF(EN_CREATE_FIRST_TASK_FAILED);
 ERRSIM_POINT_DEF(EN_PUSH_CHILD_DAG_FAILED);
+ERRSIM_POINT_DEF(EN_ADD_BACKUP_META_PREPARE_DAG_FAILED);
+ERRSIM_POINT_DEF(EN_ADD_BACKUP_META_FINISH_DAG_FAILED);
+ERRSIM_POINT_DEF(EN_ADD_BACKUP_DATA_INIT_DAG_FAILED);
 static int get_ls_handle(const uint64_t tenant_id, const share::ObLSID &ls_id, storage::ObLSHandle &ls_handle)
 {
   int ret = OB_SUCCESS;
@@ -320,6 +323,10 @@ ObLSBackupMetaDagNet::ObLSBackupMetaDagNet()
 ObLSBackupMetaDagNet::~ObLSBackupMetaDagNet()
 {}
 
+// Only constructs and schedules backup_meta_dag here. inner_init_before_run_() and
+// prepare/finish dag construction are deferred to ObLSBackupMetaTask::process(), so
+// the heavy backup-media I/O does NOT run under ObDagNetScheduler::dag_net_map_rwlock_
+// (held during loop_blocking_dag_net_list -> start_running).
 int ObLSBackupMetaDagNet::start_running()
 {
   int ret = OB_SUCCESS;
@@ -327,8 +334,6 @@ int ObLSBackupMetaDagNet::start_running()
   MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
   ObLSBackupDagInitParam init_param;
   ObLSBackupMetaDag *backup_meta_dag = NULL;
-  ObLSBackupPrepareDag *prepare_dag = NULL;
-  ObLSBackupFinishDag *finish_dag = NULL;
   ObTenantDagScheduler *dag_scheduler = NULL;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
@@ -341,8 +346,6 @@ int ObLSBackupMetaDagNet::start_running()
   } else if (OB_FAIL(param_.convert_to(init_param))) {
     LOG_WARN("failed to convert to init param", K(ret));
   } else if (OB_FALSE_IT(init_param.backup_stage_ = start_stage_)) {
-  } else if (OB_FAIL(inner_init_before_run_())) {
-    LOG_WARN("failed to inner init before run", K(ret));
   } else if (OB_FAIL(dag_scheduler->alloc_dag(backup_meta_dag, true/*is_ha_dag*/))) {
     LOG_WARN("failed to alloc backup meta dag", K(ret));
   } else if (OB_FAIL(backup_meta_dag->init(param_.start_scn_, init_param, report_ctx_, ls_backup_ctx_))) {
@@ -351,28 +354,6 @@ int ObLSBackupMetaDagNet::start_running()
     LOG_WARN("failed to create first task for child dag", K(ret), KPC(backup_meta_dag));
   } else if (OB_FAIL(add_dag_into_dag_net(*backup_meta_dag))) {
     LOG_WARN("failed to add dag into dag net", K(ret), KPC(backup_meta_dag));
-  } else if (OB_FAIL(dag_scheduler->alloc_dag(prepare_dag, true/*is_ha_dag*/))) {
-    LOG_WARN("failed to alloc dag", K(ret));
-  } else if (OB_FAIL(prepare_dag->init(init_param,
-                                       backup_data_type_,
-                                       report_ctx_,
-                                       ls_backup_ctx_,
-                                       *provider_,
-                                       task_mgr_,
-                                       *index_kv_cache_))) {
-    LOG_WARN("failed to init backup dag", K(ret), K(init_param));
-  } else if (OB_FAIL(prepare_dag->create_first_task())) {
-    LOG_WARN("failed to create first task", K(ret));
-  } else if (OB_FAIL(backup_meta_dag->add_child(*prepare_dag))) {
-    LOG_WARN("failed to add dag into dag_net", K(ret), KPC(prepare_dag));
-  } else if (OB_FAIL(dag_scheduler->alloc_dag(finish_dag, true/*is_ha_dag*/))) {
-    LOG_WARN("failed to create dag", K(ret));
-  } else if (OB_FAIL(finish_dag->init(init_param, report_ctx_, ls_backup_ctx_, *index_kv_cache_))) {
-    LOG_WARN("failed to init finish dag", K(ret), K(init_param));
-  } else if (OB_FAIL(finish_dag->create_first_task())) {
-    LOG_WARN("failed to create first task", K(ret));
-  } else if (OB_FAIL(prepare_dag->add_child(*finish_dag))) {
-    LOG_WARN("failed to add child", K(ret), KPC(prepare_dag), KPC(finish_dag));
   } else {
 #ifdef ERRSIM
     ret = OB_E(EventTable::EN_ADD_BACKUP_META_DAG_FAILED) OB_SUCCESS;
@@ -380,37 +361,14 @@ int ObLSBackupMetaDagNet::start_running()
       SERVER_EVENT_SYNC_ADD("backup_errsim", "add_backup_meta_dag_failed");
     }
 #endif
-    if (FAILEDx(dag_scheduler->add_dag(finish_dag))) {
-      LOG_WARN("failed to add dag", K(ret), KP(finish_dag));
-    } else if (OB_FAIL(dag_scheduler->add_dag(prepare_dag))) {
-      LOG_WARN("failed to add dag", K(ret), KP(prepare_dag));
-      if (OB_TMP_FAIL(dag_scheduler->cancel_dag(finish_dag))) {
-        LOG_ERROR("failed to cancel backup dag", K(tmp_ret), KP(dag_scheduler), KP(finish_dag));
-      } else {
-        finish_dag = nullptr;
-      }
-    } else if (OB_FAIL(dag_scheduler->add_dag(backup_meta_dag))) {
-      LOG_WARN("failed to add dag", K(ret), KP(prepare_dag));
-      if (OB_TMP_FAIL(dag_scheduler->cancel_dag(finish_dag))) {
-        LOG_ERROR("failed to cancel backup dag", K(tmp_ret), KP(dag_scheduler), KP(finish_dag));
-      } else {
-        finish_dag = nullptr;
-      }
-      if (OB_TMP_FAIL(dag_scheduler->cancel_dag(prepare_dag))) {
-        LOG_ERROR("failed to cancel backup dag", K(tmp_ret), KP(dag_scheduler), KP(prepare_dag));
-      } else {
-        prepare_dag = nullptr;
-      }
+    if (FAILEDx(dag_scheduler->add_dag(backup_meta_dag))) {
+      LOG_WARN("failed to add dag", K(ret), KP(backup_meta_dag));
+    } else {
+      backup_meta_dag = nullptr;
     }
   }
   if (OB_FAIL(ret) && OB_NOT_NULL(dag_scheduler) && OB_NOT_NULL(backup_meta_dag)) {
     dag_scheduler->free_dag(*backup_meta_dag);
-  }
-  if (OB_FAIL(ret) && OB_NOT_NULL(dag_scheduler) && OB_NOT_NULL(prepare_dag)) {
-    dag_scheduler->free_dag(*prepare_dag);
-  }
-  if (OB_FAIL(ret) && OB_NOT_NULL(dag_scheduler) && OB_NOT_NULL(finish_dag)) {
-    dag_scheduler->free_dag(*finish_dag);
   }
 
   if (OB_FAIL(ret)) {
@@ -554,100 +512,196 @@ int ObLSBackupDataDagNet::inner_init_before_run_()
   return ret;
 }
 
+// Only constructs and schedules a lightweight ObLSBackupDataInitDag here.
+// inner_init_before_run_() and prepare/finish dag construction are deferred to
+// ObLSBackupDataInitTask::process(), so the heavy backup-media I/O does NOT run under
+// ObDagNetScheduler::dag_net_map_rwlock_ (held during loop_blocking_dag_net_list ->
+// start_running).
 int ObLSBackupDataDagNet::start_running()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
   ObLSBackupDagInitParam init_param;
-  ObLSBackupPrepareDag *prepare_dag = NULL;
-  ObLSBackupFinishDag *finish_dag = NULL;
-  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler *);
-  // create dag and connections
+  ObLSBackupDataInitDag *init_dag = NULL;
+  ObTenantDagScheduler *scheduler = NULL;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("dag net do not init", K(ret));
-  } else if (OB_ISNULL(scheduler)) {
+  } else if (OB_FAIL(guard.switch_to(param_.tenant_id_))) {
+    LOG_WARN("failed to switch to tenant", K(ret), K_(param));
+  } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler *))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null MTL scheduler", K(ret), KP(scheduler));
-  } else if (OB_FAIL(inner_init_before_run_())) {
-    LOG_WARN("failed to inner init before run", K(ret));
   } else if (OB_FAIL(param_.convert_to(init_param))) {
     LOG_WARN("failed to convert to param", K(ret), K_(param));
   } else if (FALSE_IT(init_param.backup_stage_ = start_stage_)) {
-  } else if (OB_FAIL(scheduler->alloc_dag(prepare_dag, true/*is_ha_dag*/))) {
-    LOG_WARN("failed to alloc dag", K(ret));
-  } else if (OB_FAIL(prepare_dag->init(init_param,
-                 backup_data_type_,
-                 report_ctx_,
-                 ls_backup_ctx_,
-                 *provider_,
-                 task_mgr_,
-                 *index_kv_cache_))) {
-    LOG_WARN("failed to init backup dag", K(ret), K(init_param));
-  } else if (OB_FAIL(prepare_dag->create_first_task())) {
+  } else if (OB_FAIL(scheduler->alloc_dag(init_dag, true/*is_ha_dag*/))) {
+    LOG_WARN("failed to alloc init dag", K(ret));
+  } else if (OB_FAIL(init_dag->init(init_param, report_ctx_))) {
+    LOG_WARN("failed to init backup data init dag", K(ret), K(init_param));
+  } else if (OB_FAIL(init_dag->create_first_task())) {
     LOG_WARN("failed to create first task", K(ret));
-  } else if (OB_FAIL(add_dag_into_dag_net(*prepare_dag))) {
-    LOG_WARN("failed to add dag into dag_net", K(ret), KPC(prepare_dag));
-  } else if (OB_FAIL(scheduler->alloc_dag(finish_dag, true/*is_ha_dag*/))) {
-    LOG_WARN("failed to create dag", K(ret));
-  } else if (OB_FAIL(finish_dag->init(init_param, report_ctx_, ls_backup_ctx_, *index_kv_cache_))) {
-    LOG_WARN("failed to init finish dag", K(ret), K(init_param));
-  } else if (OB_FAIL(finish_dag->create_first_task())) {
-    LOG_WARN("failed to create first task", K(ret));
-  } else if (OB_FAIL(prepare_dag->add_child(*finish_dag))) {
-    LOG_WARN("failed to add child", K(ret), KPC(prepare_dag), KPC(finish_dag));
+  } else if (OB_FAIL(add_dag_into_dag_net(*init_dag))) {
+    LOG_WARN("failed to add dag into dag_net", K(ret), KPC(init_dag));
   } else {
-    bool add_finish_dag_success = false;
-    bool add_prepare_dag_success = false;
 #ifdef ERRSIM
-    if (OB_SUCC(ret)) {
-      ret = OB_E(EventTable::EN_ADD_BACKUP_FINISH_DAG_FAILED) OB_SUCCESS;
-      if (OB_FAIL(ret)) {
-        SERVER_EVENT_SYNC_ADD("backup_errsim", "add_backup_finish_dag_failed");
-      }
+    ret = EN_ADD_BACKUP_DATA_INIT_DAG_FAILED ? : OB_SUCCESS;
+    if (OB_FAIL(ret)) {
+      SERVER_EVENT_SYNC_ADD("backup_errsim", "add_backup_data_init_dag_failed");
     }
 #endif
-    if (FAILEDx(scheduler->add_dag(finish_dag))) {
-      LOG_WARN("failed to add dag into dag_scheduler", K(ret), KP(finish_dag));
+    if (FAILEDx(scheduler->add_dag(init_dag))) {
+      LOG_WARN("failed to add dag into dag_scheduler", K(ret), KP(init_dag));
     } else {
-      add_finish_dag_success = true;
-      LOG_INFO("success to add finish dag into dag_net", K(ret), K(init_param), KP(finish_dag));
-    }
-#ifdef ERRSIM
-    if (OB_SUCC(ret)) {
-      ret = OB_E(EventTable::EN_ADD_BACKUP_PREPARE_DAG_FAILED) OB_SUCCESS;
-      if (OB_FAIL(ret)) {
-        SERVER_EVENT_SYNC_ADD("backup_errsim", "add_backup_prepare_dag_failed");
-      }
-    }
-#endif
-    if (FAILEDx(scheduler->add_dag(prepare_dag))) {
-      LOG_WARN("failed to add dag into dag_scheduler", K(ret), KP(prepare_dag));
-    } else {
-      add_prepare_dag_success = true;
-      LOG_INFO("success to add prepare dag into dag_net", K(ret), K(init_param), KP(prepare_dag));
-    }
-    if (OB_FAIL(ret) && OB_NOT_NULL(scheduler) && OB_NOT_NULL(finish_dag)) {
-      // add finish dag success and add prepare dag failed, need cancel finish dag
-      if (add_finish_dag_success && !add_prepare_dag_success) {
-        if (OB_TMP_FAIL(scheduler->cancel_dag(finish_dag))) {
-          LOG_ERROR("failed to cancel backup dag", K(tmp_ret), KP(scheduler), KP(finish_dag));
-        } else {
-          finish_dag = NULL;
-        }
-      }
+      init_dag = NULL;
     }
   }
 
-  if (OB_FAIL(ret) && OB_NOT_NULL(scheduler) && OB_NOT_NULL(prepare_dag)) {
-    scheduler->free_dag(*prepare_dag);
-  }
-  if (OB_FAIL(ret) && OB_NOT_NULL(scheduler) && OB_NOT_NULL(finish_dag)) {
-    scheduler->free_dag(*finish_dag);
+  if (OB_FAIL(ret) && OB_NOT_NULL(scheduler) && OB_NOT_NULL(init_dag)) {
+    scheduler->free_dag(*init_dag);
   }
 
   if (OB_FAIL(ret)) {
     REPORT_TASK_RESULT(this->get_dag_id(), ret);
+  }
+  return ret;
+}
+
+int ObLSBackupDataDagNet::inner_init_before_run()
+{
+  int ret = OB_SUCCESS;
+  if (ls_backup_ctx_.is_inited_) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("inner_init_before_run called twice", K(ret), K_(param));
+  } else if (OB_FAIL(inner_init_before_run_())) {
+    LOG_WARN("failed to inner init before run", K(ret));
+  }
+  return ret;
+}
+
+int ObLSBackupDataDagNet::generate_prepare_dag(share::ObIDag *parent, ObLSBackupPrepareDag *&out_prepare_dag)
+{
+  int ret = OB_SUCCESS;
+  ObLSBackupDagInitParam init_param;
+  out_prepare_dag = NULL;
+  if (OB_ISNULL(provider_) || OB_ISNULL(index_kv_cache_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("provider or index_kv_cache not initialized", K(ret), KP_(provider), KP_(index_kv_cache));
+  } else if (OB_FAIL(param_.convert_to(init_param))) {
+    LOG_WARN("failed to convert to param", K(ret), K_(param));
+  } else {
+    init_param.backup_stage_ = start_stage_;
+    if (OB_FAIL(generate_downstream_dag_(parent, out_prepare_dag,
+            init_param, backup_data_type_, report_ctx_,
+            ls_backup_ctx_, *provider_, task_mgr_, *index_kv_cache_))) {
+      LOG_WARN("failed to generate prepare dag", K(ret), K(init_param));
+    }
+  }
+  return ret;
+}
+
+int ObLSBackupDataDagNet::generate_finish_dag(share::ObIDag *parent, ObLSBackupFinishDag *&out_finish_dag)
+{
+  int ret = OB_SUCCESS;
+  ObLSBackupDagInitParam init_param;
+  out_finish_dag = NULL;
+  if (OB_ISNULL(index_kv_cache_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("index_kv_cache not initialized", K(ret));
+  } else if (OB_FAIL(param_.convert_to(init_param))) {
+    LOG_WARN("failed to convert to param", K(ret), K_(param));
+  } else {
+    init_param.backup_stage_ = start_stage_;
+    if (OB_FAIL(generate_downstream_dag_(parent, out_finish_dag,
+            init_param, report_ctx_, ls_backup_ctx_, *index_kv_cache_))) {
+      LOG_WARN("failed to generate finish dag", K(ret), K(init_param));
+    }
+  }
+  return ret;
+}
+
+int ObLSBackupDataDagNet::schedule_prepare_finish_chain(
+    share::ObIDag *parent, ObBackupAddDagErrsimKind errsim_kind)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler *);
+  ObLSBackupPrepareDag *prepare_dag = NULL;
+  ObLSBackupFinishDag *finish_dag = NULL;
+  bool add_finish_dag_success = false;
+  bool add_prepare_dag_success = false;
+  UNUSED(errsim_kind); // referenced only under #ifdef ERRSIM
+  if (OB_ISNULL(parent)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("parent dag is null", K(ret));
+  } else if (OB_ISNULL(scheduler)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null MTL scheduler", K(ret));
+  } else if (OB_FAIL(inner_init_before_run())) {
+    LOG_WARN("failed to inner init before run", K(ret));
+  } else if (OB_FAIL(generate_prepare_dag(parent, prepare_dag))) {
+    LOG_WARN("failed to generate prepare dag", K(ret));
+  } else if (OB_FAIL(generate_finish_dag(prepare_dag, finish_dag))) {
+    LOG_WARN("failed to generate finish dag", K(ret));
+  } else {
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      if (ADD_DAG_ERRSIM_META == errsim_kind) {
+        ret = EN_ADD_BACKUP_META_FINISH_DAG_FAILED ? : OB_SUCCESS;
+        if (OB_FAIL(ret)) {
+          SERVER_EVENT_SYNC_ADD("backup_errsim", "add_backup_meta_finish_dag_failed");
+        }
+      } else {
+        ret = OB_E(EventTable::EN_ADD_BACKUP_FINISH_DAG_FAILED) OB_SUCCESS;
+        if (OB_FAIL(ret)) {
+          SERVER_EVENT_SYNC_ADD("backup_errsim", "add_backup_finish_dag_failed");
+        }
+      }
+    }
+#endif
+    if (FAILEDx(scheduler->add_dag(finish_dag))) {
+      LOG_WARN("failed to add finish dag into dag scheduler", K(ret), KP(finish_dag));
+    } else {
+      add_finish_dag_success = true;
+      LOG_INFO("success to add finish dag", K(ret), KPC(finish_dag));
+    }
+#ifdef ERRSIM
+    if (OB_SUCC(ret)) {
+      if (ADD_DAG_ERRSIM_META == errsim_kind) {
+        ret = EN_ADD_BACKUP_META_PREPARE_DAG_FAILED ? : OB_SUCCESS;
+        if (OB_FAIL(ret)) {
+          SERVER_EVENT_SYNC_ADD("backup_errsim", "add_backup_meta_prepare_dag_failed");
+        }
+      } else {
+        ret = OB_E(EventTable::EN_ADD_BACKUP_PREPARE_DAG_FAILED) OB_SUCCESS;
+        if (OB_FAIL(ret)) {
+          SERVER_EVENT_SYNC_ADD("backup_errsim", "add_backup_prepare_dag_failed");
+        }
+      }
+    }
+#endif
+    if (FAILEDx(scheduler->add_dag(prepare_dag))) {
+      LOG_WARN("failed to add prepare dag into dag scheduler", K(ret), KP(prepare_dag));
+    } else {
+      add_prepare_dag_success = true;
+      LOG_INFO("success to add prepare dag", K(ret), KPC(prepare_dag));
+    }
+    if (OB_FAIL(ret) && add_finish_dag_success && !add_prepare_dag_success && OB_NOT_NULL(finish_dag)) {
+      if (OB_TMP_FAIL(scheduler->cancel_dag(finish_dag))) {
+        LOG_ERROR("failed to cancel finish dag", K(tmp_ret), KP(scheduler), KP(finish_dag));
+      } else {
+        finish_dag = NULL;
+      }
+    }
+  }
+  if (OB_FAIL(ret) && OB_NOT_NULL(scheduler)) {
+    if (!add_prepare_dag_success && OB_NOT_NULL(prepare_dag)) {
+      scheduler->free_dag(*prepare_dag);
+    }
+    if (!add_finish_dag_success && OB_NOT_NULL(finish_dag)) {
+      scheduler->free_dag(*finish_dag);
+    }
   }
   return ret;
 }
@@ -1291,6 +1345,177 @@ uint64_t ObLSBackupFinishDag::hash() const
 bool ObLSBackupFinishDag::check_can_schedule()
 {
   return ls_backup_ctx_->is_finished();
+}
+
+/* ObLSBackupDataInitDag */
+
+ObLSBackupDataInitDag::ObLSBackupDataInitDag()
+    : share::ObIDag(ObDagType::DAG_TYPE_BACKUP_DATA_INIT),
+      is_inited_(false),
+      param_(),
+      report_ctx_(),
+      compat_mode_(lib::Worker::CompatMode::INVALID)
+{}
+
+ObLSBackupDataInitDag::~ObLSBackupDataInitDag()
+{}
+
+int ObLSBackupDataInitDag::init(const ObLSBackupDagInitParam &param, const ObBackupReportCtx &report_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("backup data init dag init twice", K(ret));
+  } else if (!param.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(param));
+  } else if (OB_FAIL(param_.assign(param))) {
+    LOG_WARN("failed to assign param", K(ret), K(param));
+  } else if (OB_FAIL(ObCompatModeGetter::get_tenant_mode(param.tenant_id_, compat_mode_))) {
+    LOG_WARN("failed to get_compat_mode", K(ret), K(param));
+  } else {
+    report_ctx_ = report_ctx;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+int ObLSBackupDataInitDag::create_first_task()
+{
+  int ret = OB_SUCCESS;
+  ObLSBackupDataInitTask *task = NULL;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data init dag do not init", K(ret));
+  } else if (OB_FAIL(alloc_task(task))) {
+    LOG_WARN("failed to alloc task", K(ret));
+  } else if (OB_FAIL(task->init(param_, report_ctx_))) {
+    LOG_WARN("failed to init task", K(ret), K_(param));
+  } else if (OB_FAIL(add_task(*task))) {
+    LOG_WARN("failed to add task", K(ret));
+  } else {
+    LOG_INFO("success to add backup data init task", K(ret), KPC(this), KPC(task));
+  }
+  return ret;
+}
+
+bool ObLSBackupDataInitDag::operator==(const ObIDag &other) const
+{
+  bool bret = false;
+  if (this == &other) {
+    bret = true;
+  } else if (get_type() != other.get_type()) {
+    bret = false;
+  } else {
+    const ObLSBackupDataInitDag &other_dag = static_cast<const ObLSBackupDataInitDag &>(other);
+    bret = param_ == other_dag.param_;
+  }
+  return bret;
+}
+
+int ObLSBackupDataInitDag::fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const
+{
+  int ret = OB_SUCCESS;
+  if (!is_inited_) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data init dag do not init", K(ret));
+  } else if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
+                                  static_cast<int64_t>(param_.tenant_id_),
+                                  param_.backup_set_desc_.backup_set_id_,
+                                  param_.ls_id_.id(),
+                                  param_.turn_id_))) {
+    LOG_WARN("failed to add dag warning info param", K(ret));
+  }
+  return ret;
+}
+
+int ObLSBackupDataInitDag::fill_dag_key(char *buf, const int64_t buf_len) const
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  if (OB_FAIL(databuff_printf(buf, buf_len, pos,
+          "tenant_id=%lu, backup_set_id=%ld, ls_id=",
+          param_.tenant_id_,
+          param_.backup_set_desc_.backup_set_id_))) {
+    LOG_WARN("failed to fill dag key", K(ret), K_(param));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, param_.ls_id_))) {
+    LOG_WARN("failed to fill dag key ls_id", K(ret), K_(param));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, ", turn_id=%ld", param_.turn_id_))) {
+    LOG_WARN("failed to fill dag key turn_id", K(ret), K_(param));
+  }
+  return ret;
+}
+
+uint64_t ObLSBackupDataInitDag::hash() const
+{
+  uint64_t hash_value = 0;
+  const int64_t type = get_type();
+  hash_value = common::murmurhash(&type, sizeof(type), hash_value);
+  hash_value = common::murmurhash(&param_, sizeof(param_), hash_value);
+  return hash_value;
+}
+
+/* ObLSBackupDataInitTask */
+
+ObLSBackupDataInitTask::ObLSBackupDataInitTask()
+    : ObITask(ObITaskType::TASK_TYPE_MIGRATE_COPY_PHYSICAL),
+      is_inited_(false),
+      param_(),
+      report_ctx_()
+{}
+
+ObLSBackupDataInitTask::~ObLSBackupDataInitTask()
+{}
+
+int ObLSBackupDataInitTask::init(const ObLSBackupDagInitParam &param, const ObBackupReportCtx &report_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (IS_INIT) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("backup data init task init twice", K(ret));
+  } else if (!param.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("get invalid args", K(ret), K(param));
+  } else if (OB_FAIL(param_.assign(param))) {
+    LOG_WARN("failed to assign param", K(ret), K(param));
+  } else {
+    report_ctx_ = report_ctx;
+    is_inited_ = true;
+  }
+  return ret;
+}
+
+// Runs in the dag worker thread — NOT under dag_net_map_rwlock_. Delegates to the
+// dag net's helper, which performs the heavy backup-media I/O that used to live in
+// ObLSBackupDataDagNet::start_running() and then schedules the prepare/finish chain.
+int ObLSBackupDataInitTask::process()
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
+  ObIDagNet *base_net = NULL;
+  ObLSBackupDataDagNet *data_dag_net = NULL;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("backup data init task do not init", K(ret));
+  } else if (OB_FAIL(guard.switch_to(param_.tenant_id_))) {
+    LOG_WARN("failed to switch tenant", K(ret), K_(param));
+  } else if (OB_ISNULL(this->get_dag())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag is null", K(ret));
+  } else if (OB_ISNULL(base_net = this->get_dag()->get_dag_net())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag net is null", K(ret));
+  } else if (FALSE_IT(data_dag_net = static_cast<ObLSBackupDataDagNet *>(base_net))) {
+  } else if (OB_FAIL(data_dag_net->schedule_prepare_finish_chain(this->get_dag(), ADD_DAG_ERRSIM_DATA_INIT))) {
+    LOG_WARN("failed to schedule prepare/finish chain", K(ret));
+  }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(this->get_dag())) {
+    // Surface failure so the init dag fails — the dag net then moves to finished list.
+    REPORT_TASK_RESULT(this->get_dag()->get_dag_id(), ret);
+  }
+  return ret;
 }
 
 /* ObLSBackupDataDag */
@@ -4322,8 +4547,25 @@ int ObLSBackupMetaTask::process()
     LOG_WARN("backup meta task do not init", K(ret));
   } else {
     MTL_SWITCH(tenant_id) {
+      ObIDagNet *base_net = NULL;
+      ObLSBackupDataDagNet *meta_dag_net = NULL;
       if (OB_FAIL(guard.switch_to(tenant_id))) {
         LOG_WARN("failed to switch tenant", K(ret), K(tenant_id));
+      } else if (OB_ISNULL(this->get_dag())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("dag is null", K(ret));
+      } else if (OB_ISNULL(base_net = this->get_dag()->get_dag_net())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("dag net is null", K(ret));
+      } else if (FALSE_IT(meta_dag_net = static_cast<ObLSBackupDataDagNet *>(base_net))) {
+        // ObLSBackupMetaDagNet inherits ObLSBackupDataDagNet — downcast to the base
+        // that owns schedule_prepare_finish_chain.
+      } else if (OB_FAIL(meta_dag_net->schedule_prepare_finish_chain(this->get_dag(), ADD_DAG_ERRSIM_META))) {
+        // Drives the deferred inner_init_before_run() (heavy backup-media I/O) and
+        // dynamically schedules the prepare/finish dag chain. Moved out of
+        // ObLSBackupMetaDagNet::start_running() so the I/O does not run under
+        // dag_net_map_rwlock_.
+        LOG_WARN("failed to schedule prepare/finish chain", K(ret), K(tenant_id), K(ls_id));
       } else if (OB_FAIL(ObBackupUtils::check_ls_validity(tenant_id, ls_id))) {
         LOG_WARN("failed to check ls validity", K(ret), K(tenant_id), K(ls_id));
       } else if (OB_FAIL(advance_checkpoint_by_flush_(tenant_id, ls_id, start_scn))) {
