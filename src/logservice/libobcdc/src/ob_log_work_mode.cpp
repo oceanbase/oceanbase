@@ -57,7 +57,8 @@ WorkingMode get_working_mode(const char *working_mode_str)
       ret_mode = MEMORY_MODE;
     } else if (0 == strcmp("storage", working_mode_str)) {
       ret_mode = STORAGER_MODE;
-    } else {
+    } else if (0 == strcmp("auto", working_mode_str)) {
+      ret_mode = AUTO_MODE;
     }
   }
 

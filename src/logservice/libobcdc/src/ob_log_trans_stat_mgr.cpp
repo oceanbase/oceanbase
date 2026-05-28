@@ -99,6 +99,29 @@ void DispatcherStatInfo::calc_and_print_stat(int64_t delta_time)
   }
 }
 
+void AutoModeDispatchStatInfo::calc_and_print_stat(int64_t delta_time)
+{
+  int64_t reader_count = 0;
+  int64_t parser_count = 0;
+  int64_t reader_bytes = 0;
+  int64_t parser_bytes = 0;
+
+  get_and_reset_auto_mode_dispatch_stat(reader_count, parser_count, reader_bytes, parser_bytes);
+
+  if (delta_time > 0 && (reader_count > 0 || parser_count > 0)) {
+    const int64_t total_count = reader_count + parser_count;
+    const double reader_ratio = (double)reader_count * 100.0 / (double)total_count;
+    const double parser_ratio = (double)parser_count * 100.0 / (double)total_count;
+    const double reader_tps = (double)reader_count * 1000000.0 / (double)delta_time;
+    const double parser_tps = (double)parser_count * 1000000.0 / (double)delta_time;
+    _ISTAT("[AUTO_MODE][DISPATCH] READER_CNT=%ld PARSER_CNT=%ld READER_RATIO=%.2lf%% "
+        "PARSER_RATIO=%.2lf%% READER_TPS=%.3lf PARSER_TPS=%.3lf "
+        "READER_BYTES=%s PARSER_BYTES=%s",
+        reader_count, parser_count, reader_ratio, parser_ratio,
+        reader_tps, parser_tps, SIZE_TO_STR(reader_bytes), SIZE_TO_STR(parser_bytes));
+  }
+}
+
 void SorterStatInfo::calc_and_print_stat(int64_t delta_time)
 {
   int64_t sorted_trans_count = 0;
@@ -192,6 +215,7 @@ ObLogTransStatMgr::ObLogTransStatMgr() :
     next_record_stat_(),
     release_record_stat_(),
     dispatcher_stat_(),
+    auto_mode_dispatch_stat_(),
     sorter_stat_(),
     update_split_merge_stat_(),
     last_stat_time_(0)
@@ -222,6 +246,7 @@ int ObLogTransStatMgr::init()
     next_record_stat_.reset();
     release_record_stat_.reset();
     dispatcher_stat_.reset();
+    auto_mode_dispatch_stat_.reset();
     sorter_stat_.reset();
     update_split_merge_stat_.reset();
     last_stat_time_ = 0;
@@ -244,6 +269,7 @@ void ObLogTransStatMgr::destroy()
     next_record_stat_.reset();
     release_record_stat_.reset();
     dispatcher_stat_.reset();
+    auto_mode_dispatch_stat_.reset();
     sorter_stat_.reset();
     update_split_merge_stat_.reset();
     last_stat_time_ = 0;
@@ -296,6 +322,16 @@ void ObLogTransStatMgr::do_dispatch_redo_stat()
   dispatcher_stat_.inc_dispatched_redo_count();
 }
 
+void ObLogTransStatMgr::do_auto_mode_dispatch_to_reader_stat(const int64_t redo_bytes)
+{
+  auto_mode_dispatch_stat_.inc_dispatch_to_reader(redo_bytes);
+}
+
+void ObLogTransStatMgr::do_auto_mode_dispatch_to_parser_stat(const int64_t redo_bytes)
+{
+  auto_mode_dispatch_stat_.inc_dispatch_to_parser(redo_bytes);
+}
+
 void ObLogTransStatMgr::do_sort_trans_stat()
 {
   sorter_stat_.inc_sorted_trans_count();
@@ -316,6 +352,7 @@ void ObLogTransStatMgr::print_stat_info()
 
   // calc and print stat info of dispatcher and sorter
   dispatcher_stat_.calc_and_print_stat(delta_time);
+  auto_mode_dispatch_stat_.calc_and_print_stat(delta_time);
   sorter_stat_.calc_and_print_stat(delta_time);
   update_split_merge_stat_.calc_and_print_stat(delta_time);
 

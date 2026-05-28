@@ -159,6 +159,11 @@ public:
   DEF_INT(part_trans_task_dynamic_alloc, OB_CLUSTER_PARAMETER, "1", "[0,1]", "part trans task dynamic alloc");
   DEF_INT(part_trans_task_prealloc_page_count, OB_CLUSTER_PARAMETER, "20000", "[1,]",
       "part trans task prealloc page count");
+  // Max accumulated redo log size limit per PartTransTask before persisting to IO; 0 disables.
+  T_DEF_INT_INFT(part_trans_task_redo_size_in_memory_threshold, OB_CLUSTER_PARAMETER, 0, 0,
+      "max accumulated redo log size limit per PartTransTask before persisting to IO; 0 disables");
+  // After any redo of a PartTransTask is persisted to IO, persist subsequent redos of the same task to IO.
+  T_DEF_BOOL(enable_part_trans_task_redo_storage_follow, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
   // Log_level=INFO in the startup scenario, and then optimize the schema to WARN afterwards
   DEF_STR(init_log_level, OB_CLUSTER_PARAMETER, "ALL.*:INFO;PALF.*:WARN;SHARE.SCHEMA:INFO", "log level: DEBUG, TRACE, INFO, WARN, USER_ERR, ERROR");
   DEF_STR(log_level, OB_CLUSTER_PARAMETER, "ALL.*:INFO;PALF.*:WARN;SHARE.SCHEMA:WARN;CLOG.*:WARN;STORAGE.*:WARN;ARCHIVE.*:WARN", "log level: DEBUG, TRACE, INFO, WARN, USER_ERR, ERROR");

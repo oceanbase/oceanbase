@@ -30,6 +30,7 @@
 #include "ob_log_utils.h"                           // obj2str
 #include "ob_log_common.h"                          // ALL_DDL_OPERATION_TABLE_DDL_STMT_STR_COLUMN_ID
 #include "ob_log_instance.h"                        // TCTX
+#include "ob_log_trans_redo_dispatcher.h"           // IObLogTransRedoDispatcher
 #include "ob_log_part_trans_dispatcher.h"           // PartTransDispatcher
 #include "storage/tx/ob_clog_encrypt_info.h"
 #include "ob_log_config.h"
@@ -2623,7 +2624,13 @@ PartTransTask::PartTransTask() :
     wait_data_ready_cond_(ObCond::SPIN_WAIT_NUM, common::ObWaitEventIds::CDC_COMMON_COND_WAIT),
     wait_formatted_cond_(NULL),
     output_br_count_by_turn_(0),
-    tic_update_infos_()
+    tic_update_infos_(),
+    total_pushed_redo_log_size_(0),
+    has_redo_persisted_to_storage_(false),
+    working_mode_(WorkingMode::UNKNOWN_MODE),
+    global_memory_threshold_(0),
+    redo_log_size_threshold_(0),
+    enable_redo_store_storage_follow_(false)
 {
 }
 
@@ -2712,6 +2719,7 @@ void PartTransTask::set_task_info(const logservice::TenantLSID &tls_id, const ch
 {
   tls_id_ = tls_id;
   tls_str_ = info;
+  set_redo_store_policy_();
 }
 
 void PartTransTask::reset()
@@ -2759,8 +2767,25 @@ void PartTransTask::reset()
   wait_formatted_cond_ = NULL;
   output_br_count_by_turn_ = 0;
   tic_update_infos_.reset();
+  total_pushed_redo_log_size_ = 0;
+  has_redo_persisted_to_storage_ = false;
+  working_mode_ = WorkingMode::UNKNOWN_MODE;
+  global_memory_threshold_ = 0;
+  redo_log_size_threshold_ = 0;
+  enable_redo_store_storage_follow_ = false;
   // reuse memory
   allocator_.reset();
+}
+
+void PartTransTask::set_redo_store_policy_()
+{
+  const int64_t percentage = TCONF.memory_usage_warn_threshold;
+  const int64_t memory_limit = CDC_CFG_MGR.get_memory_limit();
+  working_mode_ = TCTX.working_mode_;
+  redo_log_size_threshold_ = TCONF.part_trans_task_redo_size_in_memory_threshold;
+  enable_redo_store_storage_follow_ = (0 != TCONF.enable_part_trans_task_redo_storage_follow);
+  global_memory_threshold_ =
+      memory_limit > 0 ? memory_limit * percentage / 100 : 0;
 }
 
 int PartTransTask::init_log_entry_task_allocator()
@@ -2780,7 +2805,7 @@ int PartTransTask::push_redo_log(
   int ret = OB_SUCCESS;
   ObMemtableMutatorMeta meta;
   int64_t pos = 0;
-  const bool need_store_data = need_store_data_();
+  const bool need_store_data = need_store_data_(buf_len);
 
   if (OB_UNLIKELY(!log_lsn.is_valid())
       || OB_ISNULL(buf)
@@ -2819,6 +2844,10 @@ int PartTransTask::push_redo_log(
       LOG_ERROR("currently not support big row", KR(ret), K(meta));
     }
 
+    if (OB_SUCC(ret)) {
+      total_pushed_redo_log_size_ += buf_len;
+    }
+
     // TODO AUTO mode
     if (OB_SUCC(ret)) {
       palf::LSN store_log_lsn;
@@ -2843,6 +2872,8 @@ int PartTransTask::push_redo_log(
             if (OB_IN_STOP_STATE != ret) {
               LOG_ERROR("get_and_submit_store_task_ fail", KR(ret), K_(tls_id), K(row_flags));
             }
+          } else {
+            has_redo_persisted_to_storage_ = true;
           }
         } // need_store_data
       }
@@ -2850,7 +2881,7 @@ int PartTransTask::push_redo_log(
   }
 
   LOG_DEBUG("push redo log", KR(ret), K_(tls_id), K(log_lsn), K(tstamp), K(buf_len), K(meta),
-      K(trans_id), K_(sorted_redo_list));
+      K(trans_id), K_(sorted_redo_list), K_(has_redo_persisted_to_storage));
 
   return ret;
 }
@@ -2863,7 +2894,7 @@ int PartTransTask::push_direct_load_inc_log(
     const int64_t buf_len)
 {
   int ret = OB_SUCCESS;
-  const bool need_store_data = need_store_data_();
+  const bool need_store_data = need_store_data_(buf_len);
   const uint8_t row_flags = ObTransRowFlag::NORMAL_ROW;
 
   if (OB_UNLIKELY(!log_lsn.is_valid())
@@ -2879,14 +2910,20 @@ int PartTransTask::push_direct_load_inc_log(
       LOG_ERROR("push_direct_load_inc_log_on_row_start_ fail", KR(ret), K(trans_id), K(log_lsn),
           KP(buf), K(buf_len));
     }
-  } else if (need_store_data && OB_FAIL(get_and_submit_store_task_(tls_id_.get_tenant_id(),
-      row_flags, log_lsn, buf, buf_len))) {
-    if (OB_IN_STOP_STATE != ret) {
-      LOG_ERROR("get_and_submit_store_task_ fail", KR(ret), K_(tls_id), K(row_flags), K(log_lsn));
-    }
   } else {
-    LOG_DEBUG("push direct load inc log", KR(ret), K_(tls_id), K(log_lsn), K(tstamp), K(buf_len),
-        K(trans_id), K_(sorted_redo_list));
+    total_pushed_redo_log_size_ += buf_len;
+    if (need_store_data && OB_FAIL(get_and_submit_store_task_(tls_id_.get_tenant_id(),
+        row_flags, log_lsn, buf, buf_len))) {
+      if (OB_IN_STOP_STATE != ret) {
+        LOG_ERROR("get_and_submit_store_task_ fail", KR(ret), K_(tls_id), K(row_flags), K(log_lsn));
+      }
+    } else if (OB_SUCC(ret)) {
+      if (need_store_data) {
+        has_redo_persisted_to_storage_ = true;
+      }
+      LOG_DEBUG("push direct load inc log", KR(ret), K_(tls_id), K(log_lsn), K(tstamp), K(buf_len),
+          K(trans_id), K_(sorted_redo_list));
+    }
   }
 
   return ret;
@@ -3295,17 +3332,34 @@ int PartTransTask::alloc_log_entry_node_(const palf::LSN &lsn, LogEntryNode *&lo
   return ret;
 }
 
-bool PartTransTask::need_store_data_() const
+bool PartTransTask::need_store_data_(const int64_t buf_size) const
 {
   bool bool_ret = false;
-  const WorkingMode working_mode = TCTX.working_mode_;
+  const WorkingMode working_mode = working_mode_;
 
   if (is_memory_working_mode(working_mode)) {
     bool_ret = false;
   } else if (is_storage_working_mode(working_mode)) {
     bool_ret = true;
+  } else if (is_auto_working_mode(working_mode)) {
+    const bool redo_storage_follow = (enable_redo_store_storage_follow_ && has_redo_persisted_to_storage_);
+    const bool exceed_task_accumulated_redo_size =
+      (redo_log_size_threshold_ > 0 && total_pushed_redo_log_size_ + buf_size > redo_log_size_threshold_);
+    if (redo_storage_follow || exceed_task_accumulated_redo_size) {
+      bool_ret = true;
+    } else {
+      const int64_t memory_hold = lib::get_memory_hold();
+      const bool touch_global_memory_limit =
+          (global_memory_threshold_ > 0 && memory_hold + buf_size > global_memory_threshold_);
+      const bool touch_redo_dispatch_limit =
+          (OB_NOT_NULL(TCTX.trans_redo_dispatcher_)
+              && TCTX.trans_redo_dispatcher_->is_dispatched_memory_over_limit());
+      bool_ret =
+          (touch_global_memory_limit || touch_redo_dispatch_limit);
+    }
   } else {
-    // TODO AUTO MODE
+    // UNKNOWN_MODE: keep conservative default (prefer memory path like former TODO branch)
+    bool_ret = false;
   }
 
   return bool_ret;

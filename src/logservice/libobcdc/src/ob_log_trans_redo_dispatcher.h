@@ -50,6 +50,7 @@ public:
   virtual int dispatch_trans_redo(TransCtx &trans) = 0;
   virtual int dec_dispatched_redo_memory(const int64_t &log_size) = 0;
   virtual int64_t get_dispatched_memory_size() const = 0;
+  virtual bool is_dispatched_memory_over_limit() const = 0;
   virtual int64_t get_queue_capacity() const = 0;
   // Get task statistics: task_count (queued + processing) and queue_size (queued only)
   // The difference (task_count - queue_size) represents the number of tasks currently being processed
@@ -84,6 +85,7 @@ public:
   int dispatch_trans_redo(TransCtx &trans);
   int dec_dispatched_redo_memory(const int64_t &log_size);
   int64_t get_dispatched_memory_size() const { return ATOMIC_LOAD(&cur_dispatched_redo_memory_); }
+  bool is_dispatched_memory_over_limit() const;
   int64_t get_queue_capacity() const override { return task_queue_.capacity(); }
   void get_task_stat(int64_t &task_count, int64_t &queue_size) const override;
   void configure(const ObLogConfig &config);

@@ -26,7 +26,9 @@
 #include "storage/memtable/ob_memtable_mutator.h"   // ObMemtableMutatorRow, ObMemtableMutatorMeta
 #include "storage/blocksstable/ob_datum_row.h"      // ObRowDml
 #include "logservice/data_dictionary/ob_data_dict_storager.h"  // ObDataDictStorage
-
+#include "ob_cdc_auto_config_mgr.h"                 // CDC_CFG_MGR
+#include "lib/allocator/ob_malloc.h"                // lib::get_memory_hold
+#include "ob_log_work_mode.h"                       // is_auto_working_mode
 #include "ob_log_trans_log.h"                       // SortedRedoLogList
 #include "ob_cdc_multi_data_source_info.h"          // MultiDataSourceNode, MultiDataSourceInfo
 #include "ob_log_rollback_section.h"                // RollbackList
@@ -1316,6 +1318,7 @@ public:
       K_(is_data_ready),
       KP_(wait_formatted_cond),
       K_(output_br_count_by_turn),
+      K_(total_pushed_redo_log_size),
       KP_(next_task));
 
 private:
@@ -1327,12 +1330,13 @@ private:
       const palf::LSN &commit_log_lsn);
   void destroy_participant_array_();
   bool is_base_trans_info_valid_() const;
+  void set_redo_store_policy_();
   // alloc LogEntryNode with specifed LSN, free while PartTransTask destroy.
   int alloc_log_entry_node_(const palf::LSN &lsn, LogEntryNode *&log_entry_node);
-  // 1. memory mode: all data is in memory,
-  // 2. storage mode: all data need be stored
-  // 3. auto mode:
-  bool need_store_data_() const;
+  // 1. memory / storage / auto working mode
+  // 2. accumulated redo size vs part_trans_task_redo_log_size_threshold (TCONF, 0 disables)
+  // 3. enable_part_trans_task_redo_storage_follow: once any redo persisted to storage, keep persisting
+  bool need_store_data_(int64_t buf_size) const;
   // Handling of row start
   int push_redo_on_row_start_(
       const bool need_store_data,
@@ -1468,6 +1472,18 @@ private:
   int64_t                 output_br_count_by_turn_; // sorted br count in each statistic round
 
   ObArray<TICUpdateInfo>  tic_update_infos_; // table id cache update info
+
+  /// Sum of buf_len of each successful push_redo_log / push_direct_load_inc_log (excluding duplicate redo).
+  int64_t                 total_pushed_redo_log_size_;
+  /// True if any redo of this task has been submitted to storager (batch buffer IO path).
+  bool                    has_redo_persisted_to_storage_;
+  /// Redo store policy snapshot captured when this task is allocated for a transaction.
+  WorkingMode             working_mode_;
+  int64_t                 global_memory_threshold_;
+  int64_t                 redo_log_size_threshold_;
+
+  // Whether to follow the redo storage path after any redo is persisted to storage
+  bool                    enable_redo_store_storage_follow_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(PartTransTask);

@@ -136,6 +136,53 @@ struct DispatcherStatInfo
   void calc_and_print_stat(int64_t delta_time);
 };
 
+// Auto mode: redo dispatch to reader (storage/IO) vs parser (memory)
+struct AutoModeDispatchStatInfo
+{
+  int64_t dispatch_to_reader_count_;
+  int64_t dispatch_to_parser_count_;
+  int64_t dispatch_to_reader_bytes_;
+  int64_t dispatch_to_parser_bytes_;
+
+  void reset()
+  {
+    ATOMIC_SET(&dispatch_to_reader_count_, 0);
+    ATOMIC_SET(&dispatch_to_parser_count_, 0);
+    ATOMIC_SET(&dispatch_to_reader_bytes_, 0);
+    ATOMIC_SET(&dispatch_to_parser_bytes_, 0);
+  }
+
+  void inc_dispatch_to_reader(const int64_t redo_bytes)
+  {
+    ATOMIC_INC(&dispatch_to_reader_count_);
+    if (redo_bytes > 0) {
+      ATOMIC_AAF(&dispatch_to_reader_bytes_, redo_bytes);
+    }
+  }
+
+  void inc_dispatch_to_parser(const int64_t redo_bytes)
+  {
+    ATOMIC_INC(&dispatch_to_parser_count_);
+    if (redo_bytes > 0) {
+      ATOMIC_AAF(&dispatch_to_parser_bytes_, redo_bytes);
+    }
+  }
+
+  void get_and_reset_auto_mode_dispatch_stat(
+      int64_t &reader_count,
+      int64_t &parser_count,
+      int64_t &reader_bytes,
+      int64_t &parser_bytes)
+  {
+    reader_count = ATOMIC_TAS(&dispatch_to_reader_count_, 0);
+    parser_count = ATOMIC_TAS(&dispatch_to_parser_count_, 0);
+    reader_bytes = ATOMIC_TAS(&dispatch_to_reader_bytes_, 0);
+    parser_bytes = ATOMIC_TAS(&dispatch_to_parser_bytes_, 0);
+  }
+
+  void calc_and_print_stat(int64_t delta_time);
+};
+
 struct SorterStatInfo
 {
   int64_t sorted_trans_count_;
@@ -290,6 +337,9 @@ public:
   // dispatch_redo
   virtual void do_dispatch_trans_stat() = 0;
   virtual void do_dispatch_redo_stat() = 0;
+  // auto mode dispatch route (reader=storage/IO, parser=memory)
+  virtual void do_auto_mode_dispatch_to_reader_stat(const int64_t redo_bytes) = 0;
+  virtual void do_auto_mode_dispatch_to_parser_stat(const int64_t redo_bytes) = 0;
   // sorter
   virtual void do_sort_trans_stat() = 0;
   virtual void do_sort_br_stat() = 0;
@@ -330,6 +380,8 @@ public:
   void do_drc_release_rps_stat();
   void do_dispatch_trans_stat();
   void do_dispatch_redo_stat();
+  void do_auto_mode_dispatch_to_reader_stat(const int64_t redo_bytes);
+  void do_auto_mode_dispatch_to_parser_stat(const int64_t redo_bytes);
   void do_sort_trans_stat();
   void do_sort_br_stat();
 
@@ -478,6 +530,7 @@ private:
   TransTpsRpsStatInfo   next_record_stat_ CACHE_ALIGNED;     // Statistics next_record: tps and rps information
   TransTpsRpsStatInfo   release_record_stat_ CACHE_ALIGNED;  // Statistics release_record: tps and rps information
   DispatcherStatInfo    dispatcher_stat_ CACHE_ALIGNED;
+  AutoModeDispatchStatInfo auto_mode_dispatch_stat_ CACHE_ALIGNED;
   SorterStatInfo        sorter_stat_ CACHE_ALIGNED;
   UpdateSplitMergeStatInfo update_split_merge_stat_ CACHE_ALIGNED;
 

@@ -20,6 +20,7 @@
 #include "ob_log_trans_redo_dispatcher.h"
 #include "ob_cdc_auto_config_mgr.h"
 #include "ob_log_trace_id.h"            // ObLogTraceIdGuard
+#include "ob_log_work_mode.h"           // is_auto_working_mode
 
 namespace oceanbase
 {
@@ -197,6 +198,12 @@ int ObLogTransRedoDispatcher::dec_dispatched_redo_memory(const int64_t &log_size
   } else { /* succ */ }
 
   return ret;
+}
+
+bool ObLogTransRedoDispatcher::is_dispatched_memory_over_limit() const
+{
+  return ATOMIC_LOAD(&redo_memory_limit_) > 0
+      && ATOMIC_LOAD(&cur_dispatched_redo_memory_) > ATOMIC_LOAD(&redo_memory_limit_);
 }
 
 // dispatch redo_read_task by partition order if enable_output_trans_order_by_sql_operation = 0;
@@ -494,6 +501,14 @@ int ObLogTransRedoDispatcher::dispatch_redo_(PartTransTask &part_trans, DmlRedoL
 
   if (OB_SUCC(ret)) {
     trans_stat_mgr_->do_dispatch_redo_stat();
+    if (is_auto_working_mode(TCTX.working_mode_)) {
+      const int64_t redo_bytes = redo_node.get_data_len();
+      if (is_redo_in_storage) {
+        trans_stat_mgr_->do_auto_mode_dispatch_to_reader_stat(redo_bytes);
+      } else {
+        trans_stat_mgr_->do_auto_mode_dispatch_to_parser_stat(redo_bytes);
+      }
+    }
   }
 
   return ret;
