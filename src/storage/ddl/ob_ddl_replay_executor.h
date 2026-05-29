@@ -136,6 +136,15 @@ private:
       const ObDDLMacroBlockRedoInfo &redo_info,
       const ObTabletHandle &tablet_handle,
       bool &can_skip);
+  // Pre-check the downstream container capacity (ddl kv slot for inc major, memtable
+  // slot for inc minor) before writing a macro block on disk during replay. If the
+  // downstream is full, fail fast with OB_EAGAIN so the macro block is not allocated.
+  // Otherwise each replay retry would write a macro block that the downstream cannot
+  // accept, exhausting datafile until the 30s background block GC catches up.
+  // See workitem 2026033000115020192.
+  int precheck_inc_ddl_capacity_(
+      ObTabletHandle &tablet_handle,
+      const ObDirectLoadType direct_load_type);
 private:
   const ObDDLRedoLog *log_;
 };
