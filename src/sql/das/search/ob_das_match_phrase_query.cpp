@@ -108,7 +108,6 @@ int ObDASMatchPhraseRtDef::generate_op(
     LOG_WARN("unexpected non-positive boost", K(ret), K_(param.boost));
   } else {
     param.set_is_scoring(ctdef->is_scoring());
-    param.allocator_ = &allocator_;
     param.ir_ctdef_ = ctdef->get_ir_ctdef();
     param.ir_rtdef_ = get_ir_rtdef();
     param.block_max_param_ = &block_max_param_;

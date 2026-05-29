@@ -19,7 +19,7 @@ namespace sql
 
 ObDASMatchPhraseOp::ObDASMatchPhraseOp(ObDASSearchCtx &search_ctx)
   : ObIDASSearchOp(search_ctx),
-    allocator_(nullptr),
+    allocator_(common::ObMemAttr(MTL_ID(), "DASMatchPhrase")),
     ir_ctdef_(nullptr),
     ir_rtdef_(nullptr),
     token_ids_(),
@@ -47,16 +47,15 @@ int ObDASMatchPhraseOp::do_init(const ObIDASSearchOpParam &op_param)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid param", K(ret));
   } else {
-    allocator_ = param.allocator_;
     ir_ctdef_ = param.ir_ctdef_;
     ir_rtdef_ = param.ir_rtdef_;
     counter_ = param.counter_;
     boost_ = param.boost_;
     use_rich_format_ = param.use_rich_format_;
-    token_ids_.set_allocator(allocator_);
-    token_helpers_.set_allocator(allocator_);
-    token_iters_.set_allocator(allocator_);
-    if (OB_ISNULL(decoder_ = OB_NEWx(ObFTSPositionListStore, allocator_))) {
+    token_ids_.set_allocator(&allocator_);
+    token_helpers_.set_allocator(&allocator_);
+    token_iters_.set_allocator(&allocator_);
+    if (OB_ISNULL(decoder_ = OB_NEWx(ObFTSPositionListStore, &allocator_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to create pos list store", K(ret));
     } else if (OB_FAIL(token_ids_.assign(param.token_ids_))) {
@@ -78,7 +77,7 @@ int ObDASMatchPhraseOp::do_init(const ObIDASSearchOpParam &op_param)
       token_param.use_rich_format_ = use_rich_format_;
       for (int64_t i = 0; OB_SUCC(ret) && i < param.query_tokens_.count(); ++i) {
         token_param.query_token_ = param.query_tokens_.at(i);
-        if (OB_ISNULL(token_helpers_[i] = OB_NEWx(ObDASTokenOpHelper, allocator_, search_ctx_))) {
+        if (OB_ISNULL(token_helpers_[i] = OB_NEWx(ObDASTokenOpHelper, &allocator_, search_ctx_))) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           LOG_WARN("failed to create token helper", K(ret));
         } else if (OB_FAIL(token_helpers_[i]->init(token_param))) {
@@ -104,7 +103,7 @@ int ObDASMatchPhraseOp::do_open()
     LOG_WARN("not initialized", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < token_helpers_.count(); ++i) {
-    if (OB_ISNULL(token_iters_[i] = OB_NEWx(ObTextRetrievalBlockMaxIter, allocator_))) {
+    if (OB_ISNULL(token_iters_[i] = OB_NEWx(ObTextRetrievalBlockMaxIter, &allocator_))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to create token iter", K(ret));
     } else if (OB_FAIL(token_helpers_[i]->init_text_retrieval_iter(*token_iters_[i]))) {
@@ -160,10 +159,7 @@ int ObDASMatchPhraseOp::do_close()
     counter_->reset();
     counter_ = nullptr;
   }
-  if (OB_NOT_NULL(allocator_)) {
-    allocator_->reset();
-    allocator_ = nullptr;
-  }
+  allocator_.reset();
   is_inited_ = false;
   return ret;
 }
@@ -207,7 +203,7 @@ int ObDASMatchPhraseOp::find_intersection(ObDASRowID &rowid, double &score)
       }
     }
   }
-  if (FAILEDx(write_datum_to_rowid(*curr_id, curr_id_, *allocator_))) {
+  if (FAILEDx(write_datum_to_rowid(*curr_id, curr_id_, allocator_))) {
     LOG_WARN("failed to write curr id to rowid", K(ret));
   } else {
     rowid = curr_id_;
