@@ -1375,6 +1375,9 @@ protected:
   uint64_t dblink_id_;
   uint64_t link_table_id_;
   int64_t link_schema_version_;
+
+  // in Oracle mode, empty link_database_name_ means unspecified, which will be sent to remote as is.
+  // e.g. SELECT * FROM somthing@dblink; somthing may be a public synonym and must be resovled in remote.
   common::ObString link_database_name_;
   // TODO(jiuren): need link_table_name_?
   int64_t max_dependency_version_;

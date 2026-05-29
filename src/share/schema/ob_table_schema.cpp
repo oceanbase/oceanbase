@@ -713,7 +713,7 @@ bool ObSimpleTableSchemaV2::is_link_valid() const
 {
   return (OB_INVALID_ID != dblink_id_ &&
           OB_INVALID_ID != link_table_id_ &&
-          !link_database_name_.empty() &&
+          (lib::is_oracle_mode() ? true : !link_database_name_.empty()) &&  // in Oracle mode, link_database_name_ can be empty, see mysqltest dblink.dblink_bug_2026040800115247498_oracle
           !table_name_.empty());
 }
 
