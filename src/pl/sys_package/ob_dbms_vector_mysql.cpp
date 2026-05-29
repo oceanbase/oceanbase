@@ -1128,6 +1128,7 @@ int ObDBMSVectorMySql::get_estimate_memory_str(ObVectorIndexParam index_param,
 {
   int ret = OB_SUCCESS;
   const static double VEC_MEMORY_HOLD_FACTOR = 1.2;
+  const static double SPARSE_MEMORY_HOLD_FACTOR = 1.5;
   switch(index_param.type_) {
     case ObVectorIndexAlgorithmType::VIAT_HNSW:
     case ObVectorIndexAlgorithmType::VIAT_HNSW_SQ:
@@ -1199,7 +1200,7 @@ int ObDBMSVectorMySql::get_estimate_memory_str(ObVectorIndexParam index_param,
                      tablet_max_num_vectors, index_param, max_tablet_estimate_mem, avg_sparse_length))) {
         LOG_WARN("failed to estimate sparse vector index memory", K(tablet_max_num_vectors), K(index_param), K(avg_sparse_length));
       } else if (OB_FALSE_IT(estimate_mem = ceil(
-                                 (estimate_mem + max_tablet_estimate_mem) * VEC_MEMORY_HOLD_FACTOR))) {  // multiple 1.2
+                                 (estimate_mem + max_tablet_estimate_mem) * SPARSE_MEMORY_HOLD_FACTOR))) {  // multiple 1.5
       } else if (OB_FAIL(res_buf.append(ObString("Suggested minimum vector memory is "), estimate_mem))) {
         LOG_WARN("failed to append to buffer", K(ret));
       } else if (OB_FAIL(print_mem_size(estimate_mem, res_buf))) {
@@ -1282,7 +1283,7 @@ int ObDBMSVectorMySql::sample_sparse_vectors_and_calc_avg_length(
 
       // Use SAMPLE syntax with fixed seed for consistent results
       if (OB_FAIL(query_string.assign_fmt(
-              "SELECT `%.*s` FROM `%.*s`.`%.*s` SAMPLE(%.2f) SEED(%lu) "
+              "SELECT `%.*s` FROM `%.*s`.`%.*s` SAMPLE(%.6f) SEED(%lu) "
               "WHERE `%.*s` IS NOT NULL "
               "LIMIT %lu",
               column_name.length(), column_name.ptr(),
