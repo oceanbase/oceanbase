@@ -710,6 +710,11 @@ int construct_vsag_create_param(
                                      ",\"build_thread_count\":%d",
                                      0))) {
     LOG_WARN("failed to fill result_param_str", K(ret));
+  } else if (is_hgraph_type &&
+    OB_FAIL(databuff_printf(result_param_str, buf_len, pos,
+                            ",\"label_remap_type\":\"%s\"",
+                            "robin"))) {
+    LOG_WARN("failed to fill result_param_str", K(ret));
   } else if (create_type == HNSW_BQ_TYPE &&
              OB_FAIL(databuff_printf(
                  result_param_str, buf_len, pos,

@@ -232,6 +232,135 @@ TEST_F(TestVsagAdaptor, test_hnsw)
   ASSERT_EQ(0, default_allocator.total_);
 }
 
+// Expected JSON follows ob_vsag_adaptor.cpp construct_vsag_create_param / create_index call convention:
+// store_raw_vector defaults false from create_index; use_reorder is true (last argument).
+TEST_F(TestVsagAdaptor, test_construct_vsag_create_param_hnsw_family)
+{
+  const char *dtype = "float32";
+  const char *metric = "l2";
+  const int dim = 128;
+  const int max_degree = 32;
+  const int ef_construction = 100;
+  const int ef_search = 200;
+  char buf[1024];
+
+  memset(buf, 0, sizeof(buf));
+  ASSERT_EQ(
+      0,
+      obvsag::construct_vsag_create_param(static_cast<uint8_t>(obvsag::HNSW_TYPE),
+          dtype,
+          metric,
+          dim,
+          max_degree,
+          ef_construction,
+          ef_search,
+          nullptr,
+          0,
+          static_cast<int16_t>(0),
+          static_cast<int16_t>(32),
+          false,
+          false,
+          buf));
+  EXPECT_STREQ(
+      "{\"dim\":128,\"dtype\":\"float32\",\"metric_type\":\"l2\",\"use_old_serial_format\":true,"
+      "\"hnsw\":{\"ef_construction\":100,\"ef_search\":200,\"max_degree\":32}}",
+      buf);
+
+  memset(buf, 0, sizeof(buf));
+  ASSERT_EQ(
+      0,
+      obvsag::construct_vsag_create_param(static_cast<uint8_t>(obvsag::HGRAPH_TYPE),
+          dtype,
+          metric,
+          dim,
+          max_degree,
+          ef_construction,
+          ef_search,
+          nullptr,
+          0,
+          static_cast<int16_t>(0),
+          static_cast<int16_t>(32),
+          false,
+          false,
+          buf));
+  EXPECT_STREQ(
+      "{\"dim\":128,\"dtype\":\"float32\",\"metric_type\":\"l2\",\"use_old_serial_format\":true,"
+      "\"index_param\":{\"ef_construction\":100,\"max_degree\":32,"
+      "\"base_quantization_type\":\"fp32\",\"build_thread_count\":0,\"label_remap_type\":\"robin\"}}",
+      buf);
+
+  memset(buf, 0, sizeof(buf));
+  ASSERT_EQ(
+      0,
+      obvsag::construct_vsag_create_param(static_cast<uint8_t>(obvsag::HNSW_SQ_TYPE),
+          dtype,
+          metric,
+          dim,
+          max_degree,
+          ef_construction,
+          ef_search,
+          nullptr,
+          0,
+          static_cast<int16_t>(0),
+          static_cast<int16_t>(32),
+          false,
+          false,
+          buf));
+  EXPECT_STREQ(
+      "{\"dim\":128,\"dtype\":\"float32\",\"metric_type\":\"l2\",\"use_old_serial_format\":true,"
+      "\"index_param\":{\"ef_construction\":100,\"max_degree\":32,\"base_quantization_type\":\"sq8\","
+      "\"build_thread_count\":0,\"label_remap_type\":\"robin\"}}",
+      buf);
+
+  memset(buf, 0, sizeof(buf));
+  ASSERT_EQ(
+      0,
+      obvsag::construct_vsag_create_param(static_cast<uint8_t>(obvsag::HNSW_BQ_TYPE),
+          dtype,
+          metric,
+          dim,
+          max_degree,
+          ef_construction,
+          ef_search,
+          nullptr,
+          0,
+          static_cast<int16_t>(0),
+          static_cast<int16_t>(32),
+          true,
+          false,
+          buf));
+  EXPECT_STREQ(
+      "{\"dim\":128,\"dtype\":\"float32\",\"metric_type\":\"l2\",\"use_old_serial_format\":true,"
+      "\"index_param\":{\"ef_construction\":100,\"max_degree\":32,\"base_quantization_type\":\"rabitq\","
+      "\"build_thread_count\":0,\"label_remap_type\":\"robin\",\"use_reorder\":true,\"ignore_reorder\":true,"
+      "\"precise_quantization_type\":\"fp32\",\"precise_io_type\":\"block_memory_io\","
+      "\"rabitq_bits_per_dim_query\":32,\"rabitq_use_fht\":true}}",
+      buf);
+      ASSERT_EQ(
+        0,
+        obvsag::construct_vsag_create_param(static_cast<uint8_t>(obvsag::HNSW_BQ_TYPE),
+            dtype,
+            metric,
+            dim,
+            max_degree,
+            ef_construction,
+            ef_search,
+            nullptr,
+            0,
+            static_cast<int16_t>(0),
+            static_cast<int16_t>(32),
+            false,
+            false,
+            buf));
+    EXPECT_STREQ(
+        "{\"dim\":128,\"dtype\":\"float32\",\"metric_type\":\"l2\",\"use_old_serial_format\":true,"
+        "\"index_param\":{\"ef_construction\":100,\"max_degree\":32,\"base_quantization_type\":\"rabitq\","
+        "\"build_thread_count\":0,\"label_remap_type\":\"robin\",\"use_reorder\":true,\"ignore_reorder\":true,"
+        "\"precise_quantization_type\":\"fp32\",\"precise_io_type\":\"block_memory_io\","
+        "\"rabitq_bits_per_dim_query\":32,\"rabitq_use_fht\":false}}",
+        buf);
+}
+
 TEST_F(TestVsagAdaptor, test_hnswsq)
 {
   ASSERT_TRUE(obvsag::is_init());
