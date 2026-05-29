@@ -150,6 +150,7 @@ protected:
   int compare_two_column_group_schema_(const ObTableSchema &base_table_schema, const ObTableSchema &inc_table_schema, const ObColumnGroupSchema &base_cg_schema, const ObColumnGroupSchema &inc_cg_schema, const bool is_oracle_mode, bool &is_equal);
   // verify if the check constraints of two tables meet the requirements
   int check_table_constraints_(const ObTableSchema &base_table_schema, const ObTableSchema &inc_table_schema, const bool is_oracle_mode);
+  int check_table_progressive_merge_round_(const ObTableSchema &base_table_schema, const ObTableSchema &inc_table_schema);
   int check_table_all_column_conditions_(const ObTableSchema &base_table_schema, const ObTableSchema &inc_table_schema, const bool is_oracle_mode);
   int check_column_level_conditions_(const ObColumnSchemaV2 *base_table_col_schema, const ObColumnSchemaV2 *inc_table_col_schema, const bool is_aux_table_column, const bool is_oracle_mode);
   int check_column_conditions_in_common_(const ObColumnSchemaV2 *base_table_col_schema, const ObColumnSchemaV2 *inc_table_col_schema, const bool is_oracle_mode);
@@ -236,18 +237,32 @@ protected:
                                         const ObTableSchema &inc_data_table_schema,
                                         const bool is_oracle_mode,
                                         ObSchemaGetterGuard &schema_guard);
-  int generate_local_storage_index_and_lob_table_mapping_(const ObTableSchema &base_table_schema,
+  int generate_local_storage_index_and_lob_table_mapping_(const ObTableSchema &base_data_table_schema,
+                                                          const ObTableSchema &inc_data_table_schema,
+                                                          const ObTableSchema &base_table_schema,
                                                           ObIArray<const ObTableSchema*> &inc_table_schemas,
                                                           const bool is_oracle_mode,
                                                           ObIArray<bool> &used_nt_schema_flag);
-  int generate_local_storage_index_table_mapping_in_mysql_mode_(const ObTableSchema &base_table_schema,
+  int generate_local_storage_index_table_mapping_in_mysql_mode_(const ObTableSchema &base_data_table_schema,
+                                                                const ObTableSchema &inc_data_table_schema,
+                                                                const ObTableSchema &base_table_schema,
                                                                 ObIArray<const ObTableSchema*> &inc_table_schemas,
                                                                 ObIArray<bool> &used_nt_schema_flag,
                                                                 bool &find_related_nt_schema);
-  int generate_local_storage_index_table_mapping_in_oracle_mode_(const ObTableSchema &base_table_schema,
+  int generate_local_storage_index_table_mapping_in_oracle_mode_(const ObTableSchema &base_data_table_schema,
+                                                                 const ObTableSchema &inc_data_table_schema,
+                                                                 const ObTableSchema &base_table_schema,
                                                                  ObIArray<const ObTableSchema*> &inc_table_schemas,
                                                                  ObIArray<bool> &used_nt_schema_flag,
                                                                  bool &find_related_nt_schema);
+  int check_index_column_data_table_mapping_(const ObTableSchema &base_data_table_schema,
+                                             const ObTableSchema &inc_data_table_schema,
+                                             const ObTableSchema &base_index_schema,
+                                             const ObTableSchema &inc_index_schema,
+                                             const bool is_oracle_mode);
+  int get_column_position_in_table_(const ObTableSchema &table_schema,
+                                    const ObColumnSchemaV2 *column_schema,
+                                    int64_t &position);
   int generate_lob_table_mapping_(const ObTableSchema &base_table_schema,
                                   ObIArray<const ObTableSchema*> &inc_table_schemas,
                                   const bool is_oracle_mode,
