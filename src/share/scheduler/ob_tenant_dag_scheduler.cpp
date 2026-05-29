@@ -3667,6 +3667,13 @@ int64_t ObDagPrioScheduler::get_limit()
   return limits_;
 }
 
+int64_t ObDagPrioScheduler::get_dag_list_size_without_lock() const
+{
+  return dag_list_[RANK_DAG_LIST].get_size()
+       + dag_list_[READY_DAG_LIST].get_size()
+       + dag_list_[WAITING_DAG_LIST].get_size();
+}
+
 int64_t ObDagPrioScheduler::get_adaptive_limit()
 {
   return adaptive_task_limit_;
@@ -5302,6 +5309,17 @@ int64_t ObTenantDagScheduler::get_dag_count(const ObDagType::ObDagTypeEnum type)
     count = get_type_dag_cnt(type);
   } else {
     COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "invalid type", K(type));
+  }
+  return count;
+}
+
+int64_t ObTenantDagScheduler::get_prio_dag_count_without_lock(const ObDagPrio::ObDagPrioEnum prio)
+{
+  int64_t count = 0;
+  if (OB_LIKELY(prio >= 0 && prio < ObDagPrio::DAG_PRIO_MAX)) {
+    count = prio_sche_[prio].get_dag_list_size_without_lock();
+  } else {
+    COMMON_LOG_RET(ERROR, OB_ERR_UNEXPECTED, "invalid prio", K(prio));
   }
   return count;
 }

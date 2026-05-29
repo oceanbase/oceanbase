@@ -1810,7 +1810,7 @@ bool ObAdaptiveMergePolicy::take_extrem_policy(const share::schema::ObTableModeF
   return share::schema::ObTableModeFlag::TABLE_MODE_QUEUING_EXTREME == mode;
 }
 
-bool ObAdaptiveMergePolicy::need_schedule_meta(const AdaptiveCompactionEvent& event)
+bool ObAdaptiveMergePolicy::is_valid_compaction_event(const AdaptiveCompactionEvent& event)
 {
   return AdaptiveCompactionEvent::SCHEDULE_META == event
       || AdaptiveCompactionEvent::SCHEDULE_AFTER_MINI == event;
@@ -1819,6 +1819,11 @@ bool ObAdaptiveMergePolicy::need_schedule_meta(const AdaptiveCompactionEvent& ev
 bool ObAdaptiveMergePolicy::need_schedule_medium(const AdaptiveCompactionEvent& event)
 {
   return AdaptiveCompactionEvent::SCHEDULE_AFTER_MINI == event;
+}
+
+bool ObAdaptiveMergePolicy::need_and_only_schedule_medium(const share::schema::ObTableModeFlag &mode, const AdaptiveCompactionEvent& event)
+{
+  return need_schedule_medium(event) && take_normal_policy(mode);
 }
 
 int ObAdaptiveMergePolicy::get_meta_merge_tables(
@@ -2271,6 +2276,7 @@ int ObAdaptiveMergePolicy::check_adaptive_merge_reason_for_event(
     const AdaptiveCompactionEvent &event,
     const int64_t update_row_cnt,
     const int64_t delete_row_cnt,
+    bool &medium_is_cooling_down,
     ObTableModeFlag &mode,
     AdaptiveMergeReason &reason)
 {
@@ -2281,8 +2287,10 @@ int ObAdaptiveMergePolicy::check_adaptive_merge_reason_for_event(
   mode = ObTableModeFlag::TABLE_MODE_NORMAL;
   reason = AdaptiveMergeReason::NONE;
   ObTabletStatAnalyzer tablet_analyzer;
+  medium_is_cooling_down = GCTX.is_shared_storage_mode()
+                        || (tablet.get_last_major_snapshot_version() + ObAdaptiveMergePolicy::MEDIUM_COOLING_TIME_THRESHOLD_NS > ObTimeUtility::current_time_ns());
 
-  if (OB_UNLIKELY(!need_schedule_meta(event))) {
+  if (OB_UNLIKELY(!is_valid_compaction_event(event))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid compaction event", K(ret), K(event));
   } else if (tablet_id.is_special_merge_tablet()) {
@@ -2298,6 +2306,8 @@ int ObAdaptiveMergePolicy::check_adaptive_merge_reason_for_event(
   } else if (FALSE_IT(mode = tablet_analyzer.mode_)) {
   } else if (SCHEDULE_META == event && mode != TABLE_MODE_QUEUING_EXTREME) {
     // backgroud meta only scheduled for extreme table
+  } else if (ObAdaptiveMergePolicy::need_and_only_schedule_medium(mode, event) && medium_is_cooling_down) {
+    // medium is cooling down, don't need to check adaptive merge reason
   } else {
     const ObTableQueuingModeCfg &queuing_cfg = ObTableQueuingModeCfg::get_basic_config(mode);
     const int64_t adaptive_threshold = TOMBSTONE_ROW_COUNT_THRESHOLD * queuing_cfg.queuing_factor_;
@@ -3363,6 +3373,85 @@ int ObPartitionMergePolicy::set_filled_tx_scn_for_minor_merge(const ObTablet &ta
       LOG_TRACE("use max_filled_tx_scn as new filled_tx_scn for minor merge", K(max_filled_tx_scn), K(result));
     }
     result.fill_tx_info_.set_special_fill_tx_type(ObFillTxType::FILL_TX_TYPE_DATA_MINOR, max_filled_tx_scn);
+  }
+  return ret;
+}
+
+// ----------------------------------ObAfterMiniMinorHelper----------------------------------
+void ObAfterMiniMinorHelper::DecisionContext::init_table_count(const storage::ObTablet &tablet)
+{
+  minor_cnt_ = tablet.get_minor_table_count();
+  total_table_cnt_ = tablet.get_major_table_count() + minor_cnt_;
+}
+
+void ObAfterMiniMinorHelper::DecisionContext::init_compact_trigger()
+{
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  if (tenant_config.is_valid()) {
+    minor_compact_trigger_ = tenant_config->minor_compact_trigger;
+  }
+}
+
+void ObAfterMiniMinorHelper::DecisionContext::init_dag_cnt(ObTenantDagScheduler *dag_scheduler)
+{
+  compaction_dag_limit_ = dag_scheduler->get_dag_limit(ObDagPrio::DAG_PRIO_COMPACTION_MID); // default 50000, range in [10000, 50000]
+  minor_dag_cnt_ = dag_scheduler->get_prio_dag_count_without_lock(ObDagPrio::DAG_PRIO_COMPACTION_MID);
+  mini_dag_cnt_ = dag_scheduler->get_prio_dag_count_without_lock(ObDagPrio::DAG_PRIO_COMPACTION_HIGH);
+  compaction_dag_cnt_ = minor_dag_cnt_ + mini_dag_cnt_
+                      + dag_scheduler->get_prio_dag_count_without_lock(ObDagPrio::DAG_PRIO_COMPACTION_LOW);
+}
+
+void ObAfterMiniMinorHelper::DecisionContext::adjust_trigger_by_soft_pressure()
+{
+  // Reached here only when the hard watermark (SKIP_TENANT_PRESSURE) is not hit.
+  // Only tablets with more accumulated minor sstables get scheduled after mini.
+  const int64_t mini_soft_watermark = compaction_dag_limit_ * AFTER_MINI_MINI_DAG_SOFT_RATIO / 100;
+  const int64_t minor_soft_watermark = compaction_dag_limit_ * AFTER_MINI_MINOR_DAG_SOFT_RATIO / 100;
+  if (mini_dag_cnt_ >= mini_soft_watermark || minor_dag_cnt_ >= minor_soft_watermark) {
+    minor_compact_trigger_ *= AFTER_MINI_SOFT_TRIGGER_SCALE;
+    trigger_raised_by_soft_pressure_ = true;
+  }
+}
+
+int ObAfterMiniMinorHelper::decide_need_minor_after_mini(
+    storage::ObTabletHandle &tablet_handle,
+    const share::ObLSID &ls_id,
+    bool &need_minor)
+{
+  int ret = OB_SUCCESS;
+  Action action = Action::NORMAL;
+  DecisionContext ctx;
+  const storage::ObTablet *tablet = nullptr;
+  ObTenantDagScheduler *dag_scheduler = nullptr;
+  need_minor = false;
+  if (OB_UNLIKELY(!tablet_handle.is_valid() || !ls_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(tablet_handle), K(ls_id));
+  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tablet is null", K(ret), K(tablet_handle));
+  } else if (FALSE_IT(ctx.init_table_count(*tablet))) {
+  } else if (ctx.total_table_cnt_ >= ObPartitionMergePolicy::OB_UNSAFE_TABLE_CNT) {
+    action = Action::FORCE_SCHEDULE;
+  } else if (OB_ISNULL(dag_scheduler = MTL(ObTenantDagScheduler *))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag scheduler is null", K(ret));
+  } else if (FALSE_IT(ctx.init_compact_trigger())) {
+  } else if (FALSE_IT(ctx.init_dag_cnt(dag_scheduler))) {
+  } else if (ctx.compaction_dag_cnt_ >= ctx.compaction_dag_limit_ * AFTER_MINI_TOTAL_DAG_RATIO / 100
+          || ctx.minor_dag_cnt_ >= ctx.compaction_dag_limit_ * AFTER_MINI_MINOR_DAG_RATIO / 100) {
+    action = Action::SKIP_TENANT_PRESSURE;
+  } else if (FALSE_IT(ctx.adjust_trigger_by_soft_pressure())) {
+  } else if (ctx.minor_cnt_ < ctx.minor_compact_trigger_) {
+    action = Action::SKIP_TRIGGER_NOT_MET;
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (need_schedule_minor_after_mini(action)) {
+    need_minor = true;
+    LOG_TRACE("schedule minor after mini", K(ret), K(action), K(ctx));
+  } else {
+    LOG_DEBUG("skip schedule minor after mini", K(ret), K(action), K(ctx));
   }
   return ret;
 }

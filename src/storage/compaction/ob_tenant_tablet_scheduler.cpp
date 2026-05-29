@@ -309,7 +309,7 @@ ObTenantTabletScheduler::ObTenantTabletScheduler()
    batch_size_mgr_(),
    mview_validation_()
 {
-  STATIC_ASSERT(static_cast<int64_t>(NO_MAJOR_MERGE_TYPE_CNT) == ARRAYSIZEOF(MERGE_TYPES), "merge type array len is mismatch");
+  STATIC_ASSERT(ARRAYSIZEOF(MERGE_TYPES) == 3, "merge type array len is mismatch");
 }
 
 ObTenantTabletScheduler::~ObTenantTabletScheduler()
@@ -1281,8 +1281,7 @@ int ObTenantTabletScheduler::schedule_tablet_minor_merge(
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = ls_handle.get_ls()->get_ls_id();
   const ObTabletID &tablet_id = tablet_handle.get_obj()->get_tablet_meta().tablet_id_;
-  const int64_t schedule_type_cnt = tablet_id.is_special_merge_tablet() ? INNER_TABLET_NO_MAJOR_MERGE_TYPE_CNT : NO_MAJOR_MERGE_TYPE_CNT;
-  for (int i = 0; OB_SUCC(ret) && i < schedule_type_cnt; ++i) {
+  for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(MERGE_TYPES); ++i) {
     if (OB_FAIL(schedule_tablet_minor_merge<T>(MERGE_TYPES[i], ls_handle, tablet_handle))) {
       if (OB_NO_NEED_MERGE != ret) {
         LOG_WARN("fail to schdule minor merge", K(ret), "merge_type", merge_type_to_str(MERGE_TYPES[i]), K(ls_id), K(tablet_id));
@@ -1525,7 +1524,9 @@ int ObTenantTabletScheduler::schedule_tablet_minor(
     LOG_INFO("disable local minor in shared storage", K(ret), K(ls_id), K(tablet));
 #endif
   } else if (schedule_minor_flag
-      && OB_TMP_FAIL(schedule_tablet_minor_merge<ObTabletMergeExecuteDag>(ls_handle, tablet_handle))) {
+      && OB_TMP_FAIL(tablet_id.is_special_merge_tablet()
+          ? schedule_tablet_minor_merge<ObTabletMergeExecuteDag>(MINOR_MERGE, ls_handle, tablet_handle)
+          : schedule_tablet_minor_merge<ObTabletMergeExecuteDag>(ls_handle, tablet_handle))) {
     if (OB_SIZE_OVERFLOW == tmp_ret) {
       schedule_minor_flag = false;
     } else if (OB_EAGAIN != tmp_ret) {
@@ -1734,7 +1735,7 @@ int ObTenantTabletScheduler::try_schedule_adaptive_merge(
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   create_dag = false;
-  if (OB_UNLIKELY(!ls_handle.is_valid() || !tablet_handle.is_valid() || !ObAdaptiveMergePolicy::need_schedule_meta(event))) {
+  if (OB_UNLIKELY(!ls_handle.is_valid() || !tablet_handle.is_valid() || !ObAdaptiveMergePolicy::is_valid_compaction_event(event))) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(ls_handle), K(tablet_handle), K(event));
   } else {
@@ -1743,13 +1744,14 @@ int ObTenantTabletScheduler::try_schedule_adaptive_merge(
     const ObTablet *tablet = tablet_handle.get_obj();
     const ObLSID &ls_id = tablet->get_ls_id();
     const ObTabletID &tablet_id = tablet->get_tablet_id();
-    bool medium_is_cooling_down = GCTX.is_shared_storage_mode() || tablet->get_last_major_snapshot_version() + ObAdaptiveMergePolicy::MEDIUM_COOLING_TIME_THRESHOLD_NS > ObTimeUtility::current_time_ns();
+    bool medium_is_cooling_down = false;
     if (OB_FAIL(ObAdaptiveMergePolicy::check_adaptive_merge_reason_for_event(
         *ls_handle.get_ls(),
         *tablet,
         event,
         update_row_cnt,
         delete_row_cnt,
+        medium_is_cooling_down,
         mode,
         reason))) {
       LOG_WARN("failed to check adaptive merge reason", K(ret), K(ls_handle), K(tablet_handle));

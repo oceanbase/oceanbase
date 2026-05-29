@@ -315,8 +315,9 @@ public:
   static bool take_normal_policy(const share::schema::ObTableModeFlag &mode);
   static bool take_advanced_policy(const share::schema::ObTableModeFlag &mode);
   static bool take_extrem_policy(const share::schema::ObTableModeFlag &mode);
-  static bool need_schedule_meta(const AdaptiveCompactionEvent& event);
+  static bool is_valid_compaction_event(const AdaptiveCompactionEvent& event);
   static bool need_schedule_medium(const AdaptiveCompactionEvent& event);
+  static bool need_and_only_schedule_medium(const share::schema::ObTableModeFlag &mode, const AdaptiveCompactionEvent& event);
 
   static int get_meta_merge_tables(
       const storage::ObGetMergeTablesParam &param,
@@ -337,6 +338,7 @@ public:
       const AdaptiveCompactionEvent &event,
       const int64_t update_row_cnt,
       const int64_t delete_row_cnt,
+      bool &medium_is_cooling_down,
       ObTableModeFlag &mode,
       AdaptiveMergeReason &reason);
   static int check_tombstone_reason(
@@ -546,6 +548,69 @@ private:
       const ObMergeType merge_type,
       const ObIArray<ObITable *> &sstables,
       const ObMediumCompactionInfo &medium_info);
+};
+
+class ObAfterMiniMinorHelper
+{
+public:
+  enum Action : uint8_t
+  {
+    NORMAL                = 0, // Try schedule minor normally.
+    SKIP_TENANT_PRESSURE  = 1, // Tenant minor dag count has reached dag limit threshold.
+    SKIP_TRIGGER_NOT_MET  = 2, // Minor table count does not cross its trigger.
+    FORCE_SCHEDULE        = 3, // SSTable-count pressure: schedule minor unconditionally.
+    INVALID_ACTION        = 4,
+  };
+public:
+  static int decide_need_minor_after_mini(
+      storage::ObTabletHandle &tablet_handle,
+      const share::ObLSID &ls_id,
+      bool &need_minor);
+public:
+  static constexpr int64_t AFTER_MINI_TOTAL_DAG_RATIO = 80;
+  static constexpr int64_t AFTER_MINI_MINOR_DAG_RATIO = 30;
+  static constexpr int64_t AFTER_MINI_MINI_DAG_SOFT_RATIO = 40;
+  static constexpr int64_t AFTER_MINI_MINOR_DAG_SOFT_RATIO = 20;
+  static constexpr int64_t AFTER_MINI_SOFT_TRIGGER_SCALE = 2;
+private:
+  struct DecisionContext
+  {
+  public:
+    DecisionContext()
+      : minor_cnt_(0),
+        total_table_cnt_(0),
+        compaction_dag_cnt_(0),
+        minor_dag_cnt_(0),
+        mini_dag_cnt_(0),
+        compaction_dag_limit_(0),
+        minor_compact_trigger_(ObPartitionMergePolicy::DEFAULT_MINOR_COMPACT_TRIGGER),
+        trigger_raised_by_soft_pressure_(false)
+    {}
+    void init_table_count(const storage::ObTablet &tablet);
+    void init_compact_trigger();
+    void init_dag_cnt(share::ObTenantDagScheduler *dag_scheduler);
+    void adjust_trigger_by_soft_pressure();
+
+    TO_STRING_KV(K_(minor_cnt), K_(total_table_cnt),
+        K_(compaction_dag_cnt), K_(minor_dag_cnt), K_(mini_dag_cnt),
+        K_(compaction_dag_limit), K_(minor_compact_trigger),
+        K_(trigger_raised_by_soft_pressure));
+  public:
+    int64_t minor_cnt_;
+    int64_t total_table_cnt_;           // major + minor + mds_minor
+    int64_t compaction_dag_cnt_;
+    int64_t minor_dag_cnt_;
+    int64_t mini_dag_cnt_;              // DAG_PRIO_COMPACTION_HIGH: mini + tx_table_merge
+    int64_t compaction_dag_limit_;
+    int64_t minor_compact_trigger_;
+    bool    trigger_raised_by_soft_pressure_;
+  };
+
+  static bool need_schedule_minor_after_mini(const Action action)
+  {
+    return Action::NORMAL == action
+        || Action::FORCE_SCHEDULE == action;
+  }
 };
 
 } /* namespace compaction */
