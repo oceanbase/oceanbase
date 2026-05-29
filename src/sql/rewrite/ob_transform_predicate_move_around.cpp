@@ -353,7 +353,7 @@ int ObTransformPredicateMoveAround::pullup_predicates_from_set_stmt(ObDMLStmt *s
   } else if (OB_ISNULL(input_pullup_preds)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to acquire transform params", K(ret));
-  } else if (OB_FAIL(append(*input_pullup_preds, pullup_preds))) {
+  } else if (OB_FAIL(ObOptimizerUtil::append_exprs_no_dup(*input_pullup_preds, pullup_preds))) {
     LOG_WARN("assign pullup preds failed", K(ret));
   } else {/*do nothing*/}
   return ret;
@@ -366,6 +366,7 @@ int ObTransformPredicateMoveAround::pullup_predicates(ObDMLStmt *stmt,
 {
   int ret = OB_SUCCESS;
   bool is_overflow = false;
+  int64_t stmt_idx = -1;
   ObIArray<ObRawExpr *> *input_pullup_preds = NULL;
   OPT_TRACE_BEGIN_SECTION;
   OPT_TRACE("try to pullup predicates");
@@ -383,28 +384,60 @@ int ObTransformPredicateMoveAround::pullup_predicates(ObDMLStmt *stmt,
   } else if (is_overflow) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("too deep recursive", K(ret), K(is_overflow));
-  } else if (OB_FAIL(acquire_transform_params(stmt, input_pullup_preds))) {
+  } else if (OB_FAIL(THIS_WORKER.check_status())) {
+    LOG_WARN("check status fail", K(ret));
+  } else if (OB_FAIL(acquire_transform_params(stmt, input_pullup_preds, &stmt_idx))) {
     LOG_WARN("failed to acquire pullup preds", K(ret));
-  } else if (OB_ISNULL(input_pullup_preds)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to acquire transform params", K(ret));
-  } else if (stmt->is_set_stmt()) {
-    if (OB_FAIL(pullup_predicates_from_set_stmt(stmt, sel_ids, output_pullup_preds))) {
-      LOG_WARN("process set stmt failed", K(ret));
+  } else {
+    // incr_sel_ids only record sel_ids not yet collected for this stmt
+    ObSqlBitSet<> incr_sel_ids_set;
+    ObSEArray<int64_t, 4> incr_sel_ids;
+    for (int64_t i = 0; OB_SUCC(ret) && i < sel_ids.count(); ++i) {
+      if (stmt_pulled_up_sel_ids_.at(stmt_idx).has_member(sel_ids.at(i))) {
+        // already pulled up preds against this sel_id, skip
+      } else if (OB_FAIL(incr_sel_ids_set.add_member(sel_ids.at(i)))) {
+        LOG_WARN("failed to add select id", K(ret));
+      }
     }
-  // } else if (OB_FAIL(generate_basic_table_pullup_preds(stmt, *input_pullup_preds))) {
-  //   LOG_WARN("add stmt check constraints", K(ret));
-  } else if (OB_FAIL(pullup_predicates_from_view(*stmt, sel_ids, *input_pullup_preds))) {
-    LOG_WARN("failed to pullup predicates from view", K(ret));
-  } else if (OB_FAIL(generate_pullup_predicates_for_subquery(*stmt, *input_pullup_preds))) {
-    LOG_WARN("failed to pullup predicates from subquery", K(ret));
-  } else if (!(stmt->is_select_stmt() || stmt->is_merge_stmt()) || sel_ids.empty()) {
-    // do nothing
-  } else if (OB_FAIL(generate_pullup_predicates(static_cast<ObSelectStmt &>(*stmt),
-                                                sel_ids,
-                                                *input_pullup_preds,
-                                                output_pullup_preds))) {
-    LOG_WARN("failed to generate pullup predicates", K(ret));
+    if (OB_FAIL(ret)) {
+    } else if (stmt->is_set_stmt()) {
+      if (!stmt_preds_pulled_up_.at(stmt_idx)) {
+        if (OB_FAIL(pullup_predicates_from_set_stmt(stmt, sel_ids, output_pullup_preds))) {
+          LOG_WARN("process set stmt failed", K(ret));
+        } else {
+          stmt_preds_pulled_up_.at(stmt_idx) = true;
+        }
+      } else if (OB_FAIL(generate_set_pullup_predicates(static_cast<ObSelectStmt &>(*stmt),
+                                                        sel_ids,
+                                                        *input_pullup_preds,
+                                                        output_pullup_preds))) {
+        LOG_WARN("generate set pullup preds failed", K(ret));
+      }
+    } else if (stmt_preds_pulled_up_.at(stmt_idx) && incr_sel_ids_set.is_empty()) {
+      OPT_TRACE("reuse collected pullup predicates");
+    } else {
+      if (OB_FAIL(incr_sel_ids_set.to_array(incr_sel_ids))) {
+        LOG_WARN("failed to convert incremental sel ids to array", K(ret));
+      } else if (OB_FAIL(pullup_predicates_from_view(*stmt, incr_sel_ids, *input_pullup_preds))) {
+        LOG_WARN("failed to pullup predicates from view", K(ret));
+      } else if (OB_FAIL(generate_pullup_predicates_for_subquery(*stmt, *input_pullup_preds))) {
+        LOG_WARN("failed to pullup predicates from subquery", K(ret));
+      } else if (OB_FAIL(stmt_pulled_up_sel_ids_.at(stmt_idx).add_members(incr_sel_ids_set))) {
+        LOG_WARN("failed to record pullup select ids", K(ret));
+      } else {
+        stmt_preds_pulled_up_.at(stmt_idx) = true;
+      }
+    }
+    if (OB_FAIL(ret)) {
+    } else if (stmt->is_set_stmt()  // set stmt is processed above
+               || !(stmt->is_select_stmt() || stmt->is_merge_stmt()) || sel_ids.empty()) {
+      // do nothing
+    } else if (OB_FAIL(generate_pullup_predicates(static_cast<ObSelectStmt &>(*stmt),
+                                                  sel_ids,
+                                                  *input_pullup_preds,
+                                                  output_pullup_preds))) {
+      LOG_WARN("failed to generate pullup predicates", K(ret));
+    }
   }
   OPT_TRACE("pullup predicates:", output_pullup_preds);
   OPT_TRACE_END_SECTION;
@@ -452,7 +485,7 @@ int ObTransformPredicateMoveAround::pullup_predicates_from_view(
     } else if (OB_FAIL(rename_pullup_predicates(
                          stmt, *table_item, view_sel_list, view_preds))) {
       LOG_WARN("failed to rename pullup predicates", K(ret));
-    } else if (OB_FAIL(append(input_pullup_preds, view_preds))) {
+    } else if (OB_FAIL(ObOptimizerUtil::append_exprs_no_dup(input_pullup_preds, view_preds))) {
       LOG_WARN("failed to append expr", K(ret));
     } else if (!table_item->ref_query_->is_set_stmt()) {
       // TODO: temp code for enable predicate dedue with `select const as c1 from table/dual`.
@@ -463,7 +496,7 @@ int ObTransformPredicateMoveAround::pullup_predicates_from_view(
                                                            view_sel_list,
                                                            view_preds))) {
         LOG_WARN("failed to generate pullup predicates for dual stmt", K(ret));
-      } else if (OB_FAIL(append(input_pullup_preds, view_preds))) {
+      } else if (OB_FAIL(ObOptimizerUtil::append_exprs_no_dup(input_pullup_preds, view_preds))) {
         LOG_WARN("failed to append expr", K(ret));
       }
     }
@@ -1093,6 +1126,9 @@ int ObTransformPredicateMoveAround::pushdown_predicates(
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret), K(stmt));
+  } else if (OB_FAIL(THIS_WORKER.check_status())) {
+    // Make the recursive pushdown pipeline interruptible by ob_query_timeout / kill.
+    LOG_WARN("check status fail", K(ret));
   } else if (OB_FAIL(acquire_transform_params(stmt, pullup_preds))) {
     LOG_WARN("failed to acquire pull up preds", K(ret));
   } else if (OB_FAIL(check_enable_no_pred_deduce(*stmt, enable_no_pred_deduce))) {
@@ -1869,7 +1905,9 @@ int ObTransformPredicateMoveAround::rename_set_op_predicates(ObSelectStmt &child
     for (int64_t i = 0; OB_SUCC(ret) && i < preds.count(); ++i) {
       ObRawExpr *new_pred = NULL;
       ObRawExpr *pred = preds.at(i);
-      if (OB_FAIL(copier.copy_on_replace(pred, new_pred))) {
+      if ((i & 63) == 0 && OB_FAIL(THIS_WORKER.check_status())) {
+        LOG_WARN("check status fail", K(ret));
+      } else if (OB_FAIL(copier.copy_on_replace(pred, new_pred))) {
         LOG_WARN("failed to copy on replace expr", K(ret));
       } else if (OB_FAIL(new_pred->formalize(ctx_->session_info_))) {
         LOG_WARN("failed to formalize expr", K(ret));
@@ -3760,7 +3798,8 @@ int ObTransformPredicateMoveAround::extract_generalized_column(ObRawExpr *expr,
 }
 
 int ObTransformPredicateMoveAround::acquire_transform_params(ObDMLStmt *stmt,
-                                                             ObIArray<ObRawExpr *> *&preds)
+                                                             ObIArray<ObRawExpr *> *&preds,
+                                                             int64_t *stmt_idx)
 {
   int ret = OB_SUCCESS;
   int64_t index = -1;
@@ -3770,7 +3809,10 @@ int ObTransformPredicateMoveAround::acquire_transform_params(ObDMLStmt *stmt,
     if (OB_HASH_NOT_EXIST == ret) {
       ret = OB_SUCCESS;
     }
-  } else if (OB_UNLIKELY(index >= stmt_pullup_preds_.count() || index < 0)) {
+  } else if (OB_UNLIKELY(index >= stmt_pullup_preds_.count() ||
+                         index >= stmt_pulled_up_sel_ids_.count() ||
+                         index >= stmt_preds_pulled_up_.count() ||
+                         index < 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("does not find pullup predicates", K(ret), K(index));
   } else {
@@ -3778,6 +3820,7 @@ int ObTransformPredicateMoveAround::acquire_transform_params(ObDMLStmt *stmt,
   }
   if (OB_SUCC(ret) && NULL == preds) {
     PullupPreds *new_preds = NULL;
+    ObSqlBitSet<> sel_ids;
     index = stmt_pullup_preds_.count();
     if (OB_ISNULL(new_preds = (PullupPreds *) allocator_.alloc(sizeof(PullupPreds)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -3786,12 +3829,19 @@ int ObTransformPredicateMoveAround::acquire_transform_params(ObDMLStmt *stmt,
       new_preds = new (new_preds) PullupPreds();
       if (OB_FAIL(stmt_pullup_preds_.push_back(new_preds))) {
         LOG_WARN("failed to push back predicates", K(ret));
+      } else if (OB_FAIL(stmt_pulled_up_sel_ids_.push_back(sel_ids))) {
+        LOG_WARN("failed to push back select ids", K(ret));
+      } else if (OB_FAIL(stmt_preds_pulled_up_.push_back(false))) {
+        LOG_WARN("failed to push back collected flag", K(ret));
       } else if (OB_FAIL(stmt_map_.set_refactored(key, index))) {
         LOG_WARN("failed to add entry info hash map", K(ret));
       } else {
         preds = new_preds;
       }
     }
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(stmt_idx)) {
+    *stmt_idx = index;
   }
   return ret;
 }
@@ -4555,5 +4605,7 @@ void ObTransformPredicateMoveAround::reset()
   null_constraints_.reset();
   not_null_constraints_.reset();
   equal_param_constraints_.reset();
+  stmt_pulled_up_sel_ids_.reset();
+  stmt_preds_pulled_up_.reset();
   real_happened_ = false;
 }

@@ -622,8 +622,11 @@ int ObPredicateDeduce::convert_pred(const ObRawExpr *pred,
 int ObPredicateDeduce::deduce(ObIArray<uint8_t> &graph)
 {
   int ret = OB_SUCCESS;
-  for (int64_t hub = 0; hub < N; ++hub) {
-    for (int64_t left = 0; left < N; ++left) {
+  for (int64_t hub = 0; OB_SUCC(ret) && hub < N; ++hub) {
+    if (OB_FAIL(THIS_WORKER.check_status())) {
+      LOG_WARN("check status fail", K(ret));
+    }
+    for (int64_t left = 0; OB_SUCC(ret) && left < N; ++left) {
       for (int64_t right = 0; right < N; ++right) {
         connect(graph.at(left * N + right),
                 graph.at(left * N + hub),
