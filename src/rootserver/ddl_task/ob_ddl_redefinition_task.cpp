@@ -1762,9 +1762,10 @@ bool ObDDLRedefinitionTask::check_need_sync_stats_history() {
 bool ObDDLRedefinitionTask::check_need_sync_stats() {
   // bugfix:
   // shouldn't sync stats if the ddl task is from load data's direct_load
-  return ObDDLType::DDL_DIRECT_LOAD != task_type_
-      && ObDDLType::DDL_DIRECT_LOAD_INSERT != task_type_
-      && ObDDLType::DDL_MVIEW_COMPLETE_REFRESH != task_type_;
+  return (ObDDLType::DDL_DIRECT_LOAD != task_type_ &&
+          ObDDLType::DDL_DIRECT_LOAD_INSERT != task_type_ &&
+          ObDDLType::DDL_MVIEW_COMPLETE_REFRESH != task_type_) ||
+         direct_load_need_sync_stats_info_;
 }
 
 int ObDDLRedefinitionTask::sync_stats_info()

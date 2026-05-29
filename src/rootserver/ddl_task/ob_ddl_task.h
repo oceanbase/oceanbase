@@ -261,7 +261,8 @@ public:
                        const obrpc::ObDDLArg *ddl_arg = nullptr,
                        const int64_t parent_task_id = 0,
                        const int64_t task_id = 0,
-                       const bool ddl_need_retry_at_executor = false);
+                       const bool ddl_need_retry_at_executor = false,
+                       const bool direct_load_need_sync_stats_info = false);
   ~ObCreateDDLTaskParam() = default;
   bool is_valid() const { return OB_INVALID_ID != tenant_id_ && type_ > share::DDL_INVALID
                                  && type_ < share::DDL_MAX && nullptr != allocator_; }
@@ -270,7 +271,7 @@ public:
                K_(sub_task_trace_id), KPC_(aux_rowkey_doc_schema), KPC_(aux_doc_rowkey_schema), KPC_(fts_index_aux_schema), KPC_(aux_doc_word_schema),
                K_(vec_rowkey_vid_schema), K_(vec_vid_rowkey_schema), K_(vec_domain_index_schema), K_(vec_index_id_schema), K_(vec_snapshot_data_schema),
                K_(vec_centroid_schema), K_(vec_cid_vector_schema), K_(vec_rowkey_cid_schema), K_(vec_sq_meta_schema), K_(vec_pq_centroid_schema), K_(vec_pq_code_schema),
-               K_(ddl_need_retry_at_executor), K_(is_pre_split), K_(new_snapshot_version), K_(hybrid_vec_embedded_schema));
+               K_(ddl_need_retry_at_executor), K_(is_pre_split), K_(new_snapshot_version), K_(hybrid_vec_embedded_schema), K_(direct_load_need_sync_stats_info));
 public:
   int32_t sub_task_trace_id_;
   uint64_t tenant_id_;
@@ -309,6 +310,7 @@ public:
   bool ddl_need_retry_at_executor_;
   bool is_pre_split_;
   int64_t new_snapshot_version_;  // fts rowkey doc or vec rowkey vid index build snapshot version
+  bool direct_load_need_sync_stats_info_;
 };
 
 class ObDDLTaskRecordOperator final

@@ -525,6 +525,7 @@ int ObTableLoadInstance::start_redef_table(
   start_arg.parallelism_ = param.parallel_;
   start_arg.is_load_data_ = !param.px_mode_;
   start_arg.is_insert_overwrite_ = ObDirectLoadMode::is_insert_overwrite(param.load_mode_);
+  start_arg.need_sync_stats_info_ = !param.online_opt_stat_gather_;
   if ((ObDirectLoadLevel::PARTITION == param.load_level_)
       && OB_FAIL(start_arg.tablet_ids_.assign(tablet_ids))) {
     LOG_WARN("failed to assign tablet ids", KR(ret), K(param.load_level_), K(tablet_ids));
