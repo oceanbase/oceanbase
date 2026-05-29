@@ -23,6 +23,7 @@ ObExprObjAccess::ExtraInfo::ExtraInfo(common::ObIAllocator &alloc, ObExprOperato
     property_type_(pl::ObCollectionType::INVALID_PROPERTY),
     coll_idx_(OB_INVALID_INDEX),
     extend_size_(0),
+    sql_udt_access_(false),
     access_idxs_(alloc)
 {
 }
@@ -34,7 +35,8 @@ OB_SERIALIZE_MEMBER(ObExprObjAccess::ExtraInfo,
                     for_write_,
                     property_type_,
                     coll_idx_,
-                    extend_size_);
+                    extend_size_,
+                    sql_udt_access_);
 
 OB_SERIALIZE_MEMBER((ObExprObjAccess, ObExprOperator),
                     info_.get_attr_func_,
@@ -42,7 +44,8 @@ OB_SERIALIZE_MEMBER((ObExprObjAccess, ObExprOperator),
                     info_.access_idx_cnt_,
                     info_.for_write_,
                     info_.property_type_,
-                    info_.coll_idx_);
+                    info_.coll_idx_,
+                    info_.sql_udt_access_);
                     // extend_size_ is not needed here, we got extend size from result_type_
 
 ObExprObjAccess::ObExprObjAccess(ObIAllocator &alloc)
@@ -65,6 +68,7 @@ void ObExprObjAccess::ExtraInfo::reset()
   property_type_  = pl::ObCollectionType::INVALID_PROPERTY;
   coll_idx_ = OB_INVALID_INDEX;
   extend_size_ = 0;
+  sql_udt_access_ = false;
   access_idxs_.reset();
 }
 
@@ -96,6 +100,7 @@ int ObExprObjAccess::ExtraInfo::assign(const ObExprObjAccess::ExtraInfo &other)
   property_type_ = other.property_type_;
   coll_idx_ = other.coll_idx_;
   extend_size_ = other.extend_size_;
+  sql_udt_access_ = other.sql_udt_access_;
   OZ(param_idxs_.assign(other.param_idxs_));
   OZ(access_idxs_.assign(other.access_idxs_));
   return ret;

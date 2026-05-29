@@ -115,6 +115,7 @@ public:
     int64_t coll_idx_; // index of Collection in ParamArray
     // extend size only used in static engine, the old expr get extend size from ObExprResType
     int32_t extend_size_;
+    bool sql_udt_access_;
     common::ObFixedArray<pl::ObObjAccessIdx, common::ObIAllocator> access_idxs_;
   };
 private:
