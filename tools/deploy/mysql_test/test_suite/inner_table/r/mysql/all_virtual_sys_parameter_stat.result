@@ -234,6 +234,7 @@ min_observer_version
 mlog_trim_interval
 model_max_retries
 model_request_timeout
+mv_refresh_concurrency
 mysql_port
 net_thread_count
 obconfig_url
@@ -484,8 +485,8 @@ _enable_memtable_hash_index
 _enable_mock_stmt_flush_table
 _enable_more_aggressive_dynamic_worker
 _enable_multiple_semantic_indexes_on_column
-_enable_mview_refresh_queuing
 _enable_mv_adaptive_refresh_step
+_enable_mv_refresh_queuing
 _enable_mysql_compatible_dates
 _enable_nested_sql_local_optimize
 _enable_newsort
@@ -619,7 +620,6 @@ _min_const_integer_precision
 _min_malloc_sample_interval
 _multimodel_memory_trace_level
 _mvcc_gc_using_min_txn_snapshot
-_mview_refresh_concurrency
 _mv_adaptive_complete_refresh_threshold
 _ndv_runtime_bloom_filter_size
 _nested_loop_join_enabled
