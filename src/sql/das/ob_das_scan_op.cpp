@@ -688,15 +688,42 @@ int ObDASScanOp::set_hybrid_search_tablet_ids(ObDASIter *result)
       case DAS_ITER_VEC_INDEX_DRIVER: {
         ObDASVecIndexDriverIter *vec_index_driver_iter = static_cast<ObDASVecIndexDriverIter *>(result);
         ObDASVecIndexScanIter *vec_index_scan_iter = vec_index_driver_iter->get_vec_index_scan_iter();
+        const ObDASVecIndexDriverCtDef *driver_ctdef = vec_index_driver_iter->get_driver_ctdef();
         ObDASRelatedTabletID related_tablet_ids(op_alloc_);
-        if (OB_ISNULL(vec_index_scan_iter)) {
+        if (OB_ISNULL(vec_index_scan_iter) || OB_ISNULL(driver_ctdef)
+            || driver_ctdef->children_cnt_ < 1 || OB_ISNULL(driver_ctdef->children_)) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("unexpected nullptr vec index scan iter", K(ret));
-        } else if (OB_FAIL(get_vec_ir_tablet_ids(related_tablet_ids))) {
-          LOG_WARN("failed to get vec index related tablet id", K(ret));
+          LOG_WARN("unexpected nullptr in vec index driver iter", K(ret), KP(vec_index_scan_iter), KP(driver_ctdef));
+        } else if (OB_UNLIKELY(driver_ctdef->children_[0]->op_type_ != DAS_OP_VEC_INDEX_HNSW_SCAN)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected child op type in vec index driver", K(ret),
+                   K(driver_ctdef->children_[0]->op_type_));
         } else {
-          vec_index_driver_iter->set_related_tablet_ids(related_tablet_ids);
-          vec_index_scan_iter->set_related_tablet_ids(related_tablet_ids);
+          const ObDASVecIndexHNSWScanCtDef *scan_ctdef =
+              static_cast<const ObDASVecIndexHNSWScanCtDef *>(driver_ctdef->children_[0]);
+          if (OB_ISNULL(scan_ctdef)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected nullptr hnsw scan ctdef", K(ret));
+          } else if (OB_NOT_NULL(scan_ctdef->get_delta_buf_table_ctdef()) &&
+                     OB_FAIL(get_related_tablet_id(scan_ctdef->get_delta_buf_table_ctdef(),
+                                                   related_tablet_ids.delta_buf_tablet_id_))) {
+            LOG_WARN("failed to get delta buf tablet id", K(ret));
+          } else if (OB_NOT_NULL(scan_ctdef->get_index_id_table_ctdef()) &&
+                     OB_FAIL(get_related_tablet_id(scan_ctdef->get_index_id_table_ctdef(),
+                                                   related_tablet_ids.index_id_tablet_id_))) {
+            LOG_WARN("failed to get index id tablet id", K(ret));
+          } else if (OB_NOT_NULL(scan_ctdef->get_snapshot_table_ctdef()) &&
+                     OB_FAIL(get_related_tablet_id(scan_ctdef->get_snapshot_table_ctdef(),
+                                                   related_tablet_ids.snapshot_tablet_id_))) {
+            LOG_WARN("failed to get snapshot tablet id", K(ret));
+          } else if (OB_NOT_NULL(scan_ctdef->get_com_aux_vec_table_ctdef()) &&
+                     OB_FAIL(get_related_tablet_id(scan_ctdef->get_com_aux_vec_table_ctdef(),
+                                                   related_tablet_ids.lookup_tablet_id_))) {
+            LOG_WARN("failed to get com aux vec tablet id", K(ret));
+          } else {
+            vec_index_driver_iter->set_related_tablet_ids(related_tablet_ids);
+            vec_index_scan_iter->set_related_tablet_ids(related_tablet_ids);
+          }
         }
         break;
       }
