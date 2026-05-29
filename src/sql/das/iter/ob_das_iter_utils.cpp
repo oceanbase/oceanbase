@@ -4433,14 +4433,16 @@ int ObDASIterUtils::create_vec_search_iter(
       LOG_WARN("unexpected nullptr vec_index_scan_iter", K(ret));
     } else if (!cost.is_valid()) {
       vec_index_type = ObVecIndexType::VEC_INDEX_POST_WITHOUT_FILTER;
-    } else if (static_cast<double>(cost.cost()) / vec_index_driver_ctdef->row_count_ > 0.3) {
-      vec_index_type = ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER;
-    } else if (cost.cost() <= ObDASVecIndexHNSWScanIter::MAX_HNSW_BRUTE_FORCE_SIZE) {
+    } else if (cost.cost() <= ObVecIdxExtraInfo::MAX_HNSW_BRUTE_FORCE_SIZE) {
       vec_index_type = ObVecIndexType::VEC_INDEX_PRE;
       go_brute_force = true;
-    } else {
+    } else if (vec_index_driver_ctdef->row_count_ > 0 &&
+               static_cast<double>(cost.cost()) / vec_index_driver_ctdef->row_count_
+               <= ObVecIdxExtraInfo::DEFAULT_PRE_RATE_FILTER_WITH_IDX) {
+      // Keep selectivity ratio consistent with ObVectorIndexUtil::set_adaptive_try_path
       vec_index_type = ObVecIndexType::VEC_INDEX_PRE;
-      go_brute_force = false;
+    } else {
+      vec_index_type = ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER;
     }
 
     if (OB_SUCC(ret) && cost.is_valid()) {
