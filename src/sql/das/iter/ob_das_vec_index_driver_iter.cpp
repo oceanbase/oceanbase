@@ -44,8 +44,10 @@ int ObDASVecIndexDriverIter::do_table_scan()
     SET_METRIC_VAL(common::ObMetricId::HS_VEC_FILTER_MODE, static_cast<uint64_t>(filter_mode_));
     if (OB_FAIL(vec_index_scan_iter_->do_table_scan())) {
       LOG_WARN("failed to do table scan", K(ret));
-    } else if (OB_NOT_NULL(filter_iter_) && OB_FAIL(filter_iter_->do_table_scan())) {
-      LOG_WARN("failed to do table scan", K(ret));
+    } else if (OB_NOT_NULL(pre_filter_iter_) && OB_FAIL(pre_filter_iter_->do_table_scan())) {
+      LOG_WARN("failed to do table scan on pre filter iter", K(ret));
+    } else if (OB_NOT_NULL(post_filter_iter_) && OB_FAIL(post_filter_iter_->do_table_scan())) {
+      LOG_WARN("failed to do table scan on post filter iter", K(ret));
     }
   }
 
@@ -70,6 +72,8 @@ int ObDASVecIndexDriverIter::rescan()
     SET_METRIC_VAL(common::ObMetricId::HS_VEC_FILTER_MODE, static_cast<uint64_t>(filter_mode_));
     if (OB_FAIL(vec_index_scan_iter_->rescan())) {
       LOG_WARN("failed to rescan vec index scan iter", K(ret));
+    } else if (OB_FAIL(evaluate_partition_path())) {
+      LOG_WARN("failed to evaluate partition path for next partition", K(ret));
     } else if (OB_NOT_NULL(filter_iter_) && OB_FAIL(filter_iter_->rescan())) {
       LOG_WARN("failed to rescan filter iter", K(ret));
     }
@@ -102,6 +106,8 @@ int ObDASVecIndexDriverIter::inner_init(ObDASIterParam &param)
     snapshot_ = vec_index_driver_param.snapshot_;
     vec_index_scan_iter_ = vec_index_driver_param.vec_index_scan_iter_;
     filter_iter_ = vec_index_driver_param.filter_iter_;
+    pre_filter_iter_ = vec_index_driver_param.pre_filter_iter_;
+    post_filter_iter_ = vec_index_driver_param.post_filter_iter_;
     vec_index_driver_ctdef_ = vec_index_driver_param.vec_index_driver_ctdef_;
     vec_index_driver_rtdef_ = vec_index_driver_param.vec_index_driver_rtdef_;
     vec_index_type_ = vec_index_driver_param.vec_index_type_;
@@ -115,6 +121,8 @@ int ObDASVecIndexDriverIter::inner_init(ObDASIterParam &param)
     filter_mode_ = vec_index_driver_param.filter_mode_;
     scalar_scan_ctdef_ = vec_index_driver_param.scalar_scan_ctdef_;
     scalar_scan_rtdef_ = vec_index_driver_param.scalar_scan_rtdef_;
+    filter_rtdef_for_reeval_ = vec_index_driver_param.filter_rtdef_for_reeval_;
+    go_brute_force_ = vec_index_driver_param.go_brute_force_;
 
     if (OB_ISNULL(mem_context_)) {
       lib::ContextParam param;
@@ -138,6 +146,9 @@ int ObDASVecIndexDriverIter::inner_init(ObDASIterParam &param)
       if (OB_FAIL(ObDasVecScanUtils::get_distance_threshold_hnsw(*sort_expr_, search_param_.similarity_threshold_, distance_threshold_))) {
         LOG_WARN("get distance threshold fail", K(ret));
       }
+    }
+    if (OB_SUCC(ret) && OB_FAIL(evaluate_partition_path())) {
+      LOG_WARN("failed to evaluate partition path for first partition", K(ret));
     }
   }
 
@@ -217,8 +228,13 @@ int ObDASVecIndexDriverIter::inner_reuse()
     tmp_ret = ret;
     ret = OB_SUCCESS;
   }
-  if (OB_NOT_NULL(filter_iter_) && OB_FAIL(filter_iter_->reuse())) {
-    LOG_WARN("failed to reuse filter iter", K(ret));
+  if (OB_NOT_NULL(pre_filter_iter_) && OB_FAIL(pre_filter_iter_->reuse())) {
+    LOG_WARN("failed to reuse pre filter iter", K(ret));
+    tmp_ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
+    ret = OB_SUCCESS;
+  }
+  if (OB_NOT_NULL(post_filter_iter_) && OB_FAIL(post_filter_iter_->reuse())) {
+    LOG_WARN("failed to reuse post filter iter", K(ret));
     tmp_ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
     ret = OB_SUCCESS;
   }
@@ -270,8 +286,13 @@ int ObDASVecIndexDriverIter::inner_release()
     tmp_ret = ret;
     ret = OB_SUCCESS;
   }
-  if (OB_NOT_NULL(filter_iter_) && OB_FAIL(filter_iter_->release())) {
-    LOG_WARN("failed to release filter iter", K(ret));
+  if (OB_NOT_NULL(pre_filter_iter_) && OB_FAIL(pre_filter_iter_->release())) {
+    LOG_WARN("failed to release pre filter iter", K(ret));
+    tmp_ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
+    ret = OB_SUCCESS;
+  }
+  if (OB_NOT_NULL(post_filter_iter_) && OB_FAIL(post_filter_iter_->release())) {
+    LOG_WARN("failed to release post filter iter", K(ret));
     tmp_ret = tmp_ret == OB_SUCCESS ? ret : tmp_ret;
     ret = OB_SUCCESS;
   }
@@ -282,6 +303,8 @@ int ObDASVecIndexDriverIter::inner_release()
 
   vec_index_scan_iter_ = nullptr;
   filter_iter_ = nullptr;
+  pre_filter_iter_ = nullptr;
+  post_filter_iter_ = nullptr;
 
   // memory reset
   if (vid_to_distance_.created()) {
@@ -310,6 +333,86 @@ int ObDASVecIndexDriverIter::inner_get_next_row()
 {
   return OB_NOT_IMPLEMENT;
 }
+
+void ObDASVecIndexDriverIter::switch_to_pre_filter()
+{
+  vec_index_type_ = ObVecIndexType::VEC_INDEX_PRE;
+  filter_iter_ = pre_filter_iter_;
+  filter_mode_ = ObVecFilterMode::VEC_FILTER_MODE_PRE_FILTER;
+}
+
+void ObDASVecIndexDriverIter::switch_to_post_filter()
+{
+  vec_index_type_ = ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER;
+  filter_iter_ = post_filter_iter_;
+  filter_mode_ = OB_NOT_NULL(scalar_scan_rtdef_)
+                     ? ObVecFilterMode::VEC_FILTER_MODE_EXPR_FILTER
+                     : ObVecFilterMode::VEC_FILTER_MODE_SEARCH_DRIVER_FILTER;
+}
+
+int ObDASVecIndexDriverIter::evaluate_partition_path()
+{
+  int ret = OB_SUCCESS;
+
+  ObDASSearchCost p_cost;
+  if (OB_ISNULL(filter_rtdef_for_reeval_)) {
+    // No filter: only one path exists, nothing to evaluate.
+  } else if (OB_ISNULL(search_ctx_) || OB_ISNULL(vec_index_driver_ctdef_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null in evaluate_partition_path", K(ret),
+             KP(search_ctx_), KP(vec_index_driver_ctdef_));
+  } else if (ObVecIndexType::VEC_INDEX_INVALID != vec_index_driver_ctdef_->vec_type_
+             && ObKnnFilterMode::PRE_ADAPTIVE != vec_index_driver_ctdef_->filter_mode_) {
+    // User forced a specific sub-path (pre-knn/pre-brute); skip per-partition evaluation.
+  } else if (OB_FALSE_IT(filter_rtdef_for_reeval_->reset_cost_recursive())) {
+  } else if (OB_FAIL(search_ctx_->refresh_table_row_count())) {
+    LOG_WARN("failed to refresh partition row count", K(ret));
+  } else if (OB_FAIL(filter_rtdef_for_reeval_->get_cost(*search_ctx_, p_cost))) {
+    LOG_WARN("failed to get filter cost for current partition", K(ret));
+  } else if (!p_cost.is_valid() || !search_ctx_->get_row_count().is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid filter cost or partition row count", K(ret), K(p_cost), K(search_ctx_->get_row_count()));
+  } else {
+    int64_t partition_row_count = search_ctx_->get_row_count().cost();
+    const bool is_pre_adaptive = (ObKnnFilterMode::PRE_ADAPTIVE == vec_index_driver_ctdef_->filter_mode_);
+    ObVecIndexType new_type = is_pre_adaptive
+        ? ObVecIndexType::VEC_INDEX_PRE
+        : ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER;
+    bool new_bf = false;
+    if (p_cost.cost() <= static_cast<int64_t>(ObVecIdxExtraInfo::MAX_HNSW_BRUTE_FORCE_SIZE)) {
+      new_type = ObVecIndexType::VEC_INDEX_PRE;
+      new_bf = true;
+    } else if (partition_row_count > 0
+               && static_cast<double>(p_cost.cost()) / static_cast<double>(partition_row_count)
+                      <= ObVecIdxExtraInfo::DEFAULT_PRE_RATE_FILTER_WITH_IDX) {
+      new_type = ObVecIndexType::VEC_INDEX_PRE;
+    }
+
+    const bool choose_pre = (ObVecIndexType::VEC_INDEX_PRE == new_type);
+    if (choose_pre && OB_ISNULL(pre_filter_iter_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("PRE path chosen but pre_filter_iter_ is null", K(ret));
+    } else if (!choose_pre && OB_ISNULL(post_filter_iter_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("POST path chosen but post_filter_iter_ is null", K(ret));
+    } else {
+      const ObVecIndexType old_type = vec_index_type_;
+      const bool old_bf = go_brute_force_;
+      if (choose_pre && vec_index_type_ != ObVecIndexType::VEC_INDEX_PRE) {
+        switch_to_pre_filter();
+      } else if (!choose_pre && vec_index_type_ != ObVecIndexType::VEC_INDEX_POST_ITERATIVE_FILTER) {
+        switch_to_post_filter();
+      }
+      go_brute_force_ = new_bf;
+      vec_index_scan_iter_->set_vec_index_type(vec_index_type_, vec_idx_try_path_, go_brute_force_);
+      LOG_TRACE("vec index type and partition path result",
+                K(old_type), K(vec_index_type_), K(old_bf), K(new_bf), K(p_cost.cost()), K(partition_row_count));
+    }
+  }
+
+  return ret;
+}
+
 
 int ObDASVecIndexDriverIter::set_vector_query_condition(ObVectorQueryConditions &query_cond)
 {

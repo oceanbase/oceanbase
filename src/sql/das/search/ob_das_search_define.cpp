@@ -35,6 +35,17 @@ int ObIDASSearchRtDef::get_cost(ObDASSearchCtx &search_ctx, ObDASSearchCost &cos
   return ret;
 }
 
+void ObIDASSearchRtDef::reset_cost_recursive()
+{
+  cost_.reset();
+  for (uint32_t i = 0; i < children_cnt_; ++i) {
+    ObDASBaseRtDef *child = children_[i];
+    if (nullptr != child && nullptr != child->ctdef_ && child->ctdef_->is_search_ctdef()) {
+      static_cast<ObIDASSearchRtDef *>(child)->reset_cost_recursive();
+    }
+  }
+}
+
 int ObIDASSearchRtDef::can_pushdown_filter_to_bmm(bool &can_pushdown)
 {
   can_pushdown = false;

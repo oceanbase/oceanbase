@@ -60,7 +60,8 @@ public:
       bm25_param_cache_(),
       use_dynamic_pruning_(true),
       rowid_type_(DAS_ROWID_TYPE_UINT64),
-      table_row_count_()
+      table_row_count_(),
+      is_vec_index_search_(false)
   { }
 
   ~ObDASSearchCtx() { reset(); }
@@ -95,6 +96,9 @@ public:
 
   OB_INLINE ObDASRowIDType get_rowid_type() const { return rowid_type_; }
   OB_INLINE const ObDASSearchCost &get_row_count() const { return table_row_count_; }
+  int refresh_table_row_count();
+  OB_INLINE void set_is_vec_index_search(bool is_vec_index_search) { is_vec_index_search_ = is_vec_index_search; }
+  OB_INLINE bool is_vec_index_search() { return is_vec_index_search_; }
   int lower_bound_in_frame(const ObDASRowID &target, const ObIArray<ObExpr *> *rowid_exprs,
                            const int64_t count, int64_t &idx);
   int estimate_row_count(const ObDASScalarScanCtDef *ctdef, const ObDASScalarScanRtDef *rtdef, int64_t &row_count);
@@ -173,6 +177,7 @@ private:
   bool use_dynamic_pruning_;
   ObDASRowIDType rowid_type_;
   ObDASSearchCost table_row_count_;
+  bool is_vec_index_search_;
 
 private:
   static int compare_uint64_rowid(const ObDASRowID &rowid1, const ObDASRowID &rowid2,
