@@ -255,7 +255,9 @@ int ObDASScalarScanRtDef::generate_op(ObDASSearchCost lead_cost, ObDASSearchCtx 
 {
   int ret = OB_SUCCESS;
   // is_rowkey_order_scan_
-  // ├── YES: ROR (Primary/Index ROR)
+  // ├── YES: need_rowkey_order_
+  // |       ├── NO:  Scan Op
+  // |       └── YES: ROR (Primary/Index ROR)
   // └── NO:  need_rowkey_order_
   //          ├── NO:  Scan Op
   //          └── YES: Scan Op + Bitmap/Sort Op
@@ -265,7 +267,19 @@ int ObDASScalarScanRtDef::generate_op(ObDASSearchCost lead_cost, ObDASSearchCtx 
     LOG_WARN("scalar ctdef is null", K(ret));
   } else if (ctdef->is_rowkey_order_scan_) {
     // ROR scan
-    if (ctdef->is_primary_table_scan_) {
+    if (!really_need_rowkey_order_ && !ctdef->is_search_index_) {
+      ObDASScalarScanOpParam op_param(ctdef, this);
+      ObDASScalarScanOp *non_ror_scan_op = nullptr;
+      op_param.set_is_scoring(ctdef->is_scoring());
+      if (OB_FAIL(search_ctx.create_op(op_param, non_ror_scan_op))) {
+        LOG_WARN("failed to create scan op", K(ret));
+      } else if (OB_ISNULL(non_ror_scan_op)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected nullptr", K(ret));
+      } else {
+        op = static_cast<ObIDASSearchOp *>(non_ror_scan_op);
+      }
+    } else if (ctdef->is_primary_table_scan_) {
       ObDASScalarPrimaryROROpParam op_param(ctdef, this);
       ObDASScalarPrimaryROROp *primary_ror_op = nullptr;
       op_param.set_is_scoring(ctdef->is_scoring());
