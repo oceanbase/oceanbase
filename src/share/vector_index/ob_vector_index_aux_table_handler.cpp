@@ -67,12 +67,12 @@ int ObVectorIndexDeltaTableHandler::init(
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, inc_index_table_id, delta_table_schema))) {
     LOG_WARN("failed to get simple schema", KR(ret), K(tenant_id_), K(inc_index_table_id));
   } else if (OB_ISNULL(delta_table_schema) || delta_table_schema->is_in_recyclebin()) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("vector index table not exist", K(ret), K(tenant_id_), K(inc_index_table_id));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, vbitmap_table_id, index_table_schema))) {
     LOG_WARN("failed to get simple schema", KR(ret), K(tenant_id_), K(vbitmap_table_id));
   } else if (OB_ISNULL(index_table_schema) || index_table_schema->is_in_recyclebin()) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("vector index table not exist", K(ret), K(tenant_id_), K(vbitmap_table_id));
   } else if (OB_FAIL(ObPluginVectorIndexUtils::read_local_tablet(ls_id_,
                                 adaptor,
@@ -105,6 +105,42 @@ int ObVectorIndexDeltaTableHandler::init(
   } else {
     inc_table_schema_version_ = delta_table_schema->get_schema_version();
     vbitmap_table_schema_version_ = index_table_schema->get_schema_version();
+  }
+  return ret;
+}
+
+int ObVectorIndexDeltaTableHandler::check_delta_table_empty(bool &is_empty)
+{
+  int ret = OB_SUCCESS;
+  is_empty = false;
+  if (OB_ISNULL(delta_table_iter_) || OB_ISNULL(index_table_iter_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("delta table handler not inited for empty check", K(ret), KP_(delta_table_iter), KP_(index_table_iter));
+  } else {
+    ObTableScanIterator *delta_scan_iter = static_cast<ObTableScanIterator *>(delta_table_iter_);
+    ObTableScanIterator *index_scan_iter = static_cast<ObTableScanIterator *>(index_table_iter_);
+    blocksstable::ObDatumRow *datum_row = nullptr;
+    if (OB_FAIL(delta_scan_iter->get_next_row(datum_row))) {
+      if (OB_ITER_END == ret) {
+        ret = OB_SUCCESS;
+        if (OB_FAIL(index_scan_iter->get_next_row(datum_row))) {
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+            is_empty = true;
+            LOG_INFO("[VECTOR INDEX MERGE] delta and index-id tables empty at init read scn",
+                K(is_empty), K_(ls_id), K_(tenant_id), K_(inc_index_tablet_id), K_(vbitmap_tablet_id));
+          } else {
+            LOG_WARN("get_next_row from index-id table failed", K(ret));
+          }
+        } else {
+          LOG_INFO("[VECTOR INDEX MERGE] index-id table has rows, not empty", K_(ls_id), K_(tenant_id));
+        }
+      } else {
+        LOG_WARN("get_next_row from delta table failed", K(ret));
+      }
+    } else {
+      LOG_INFO("[VECTOR INDEX MERGE] delta table has rows, not empty", K_(ls_id), K_(tenant_id));
+    }
   }
   return ret;
 }
@@ -294,7 +330,7 @@ int ObVectorIndexSnapTableHandler::init(
     LOG_WARN("failed to get simple schema", KR(ret), K(tenant_id_), K(data_table_id));
   } else if (OB_ISNULL(data_table_schema) || data_table_schema->is_in_recyclebin()
           || OB_ISNULL(snapshot_table_schema) || snapshot_table_schema->is_in_recyclebin()) {
-    ret = OB_ERR_UNEXPECTED;
+    ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("table schema not exist", K(ret), K(data_table_id), K(snapshot_table_id),
       KPC(snapshot_table_schema), KPC(data_table_schema));
   } else if (OB_FAIL(prepare_snapshot_table_column_info(*data_table_schema, *snapshot_table_schema,

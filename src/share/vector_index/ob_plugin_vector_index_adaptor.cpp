@@ -1543,7 +1543,7 @@ int ObPluginVectorIndexAdaptor::handle_insert_incr_table_rows(blocksstable::ObDa
       ObVectorIndexSegmentHandle &segment_handle = write_guard.handle();
       TCWLockGuard lock_guard(segment_handle->ibitmap_->rwlock_);
       for (int64_t i = 0; OB_SUCC(ret) && i < del_vid_count; i++) {
-        ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_remove(incr_data_->segment_handle_->ibitmap_->insert_bitmap_, del_vids[i]));
+        ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_remove(segment_handle->ibitmap_->insert_bitmap_, del_vids[i]));
       }
     }
   }
@@ -1669,10 +1669,10 @@ int ObPluginVectorIndexAdaptor::handle_insert_embedded_table_rows(blocksstable::
       TCWLockGuard lock_guard(segment_handle->ibitmap_->rwlock_);
       segment_handle->set_read_vid_bound(vid_bound);
       for (int64_t i = 0; OB_SUCC(ret) && i < incr_vid_count; i++) {
-        ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(incr_data_->segment_handle_->ibitmap_->insert_bitmap_, incr_vids[i]));
+        ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(segment_handle->ibitmap_->insert_bitmap_, incr_vids[i]));
       }
       for (int64_t i = 0; OB_SUCC(ret) && i < null_vid_count; i++) {
-        ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(incr_data_->segment_handle_->ibitmap_->insert_bitmap_, null_vids[i]));
+        ROARING_TRY_CATCH(roaring::api::roaring64_bitmap_add(segment_handle->ibitmap_->insert_bitmap_, null_vids[i]));
       }
     }
 
@@ -2292,6 +2292,7 @@ int ObPluginVectorIndexAdaptor::check_if_need_optimize()
     if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
       LOG_WARN("failed to get tenant data version", K(ret), K(tenant_id_));
     } else if (tenant_config.is_valid() && (tenant_data_version >= DATA_VERSION_4_5_1_0) &&
+      ! is_hybrid_index() && ! is_sparse_vector_index_type() &&
       OB_FALSE_IT(use_new_check = ObPluginVectorIndexHelper::enable_persist_vector_index_incremental(tenant_id_))) {
       // do nothing
     } else if (use_new_check) {
@@ -5806,7 +5807,7 @@ int ObPluginVectorIndexAdaptor::init_snap_data_for_build(const bool is_init_bitm
   ObVectorIndexParam *param = nullptr;
   if (OB_FAIL(get_hnsw_param(param))) {
     LOG_WARN("get hnsw param failed.", K(ret));
-  } else if (OB_FAIL(init_snap_data_for_build(param, VIAT_HNSW_SQ == param->type_ || VIAT_HNSW_BQ == param->type_))) {
+  } else if (OB_FAIL(init_snap_data_for_build(param, VIAT_HNSW_SQ == param->type_ || VIAT_HNSW_BQ == param->type_ || VIAT_IPIVF_SQ == param->type_))) {
     LOG_WARN("init snap data fail", K(ret));
   } else if (is_init_bitmap && OB_ISNULL(snap_data_->builder_->ibitmap_ = OB_NEWx(ObVectorIndexRoaringBitMap, get_allocator(), get_allocator(), tenant_id_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
@@ -6042,9 +6043,6 @@ int ObPluginVectorIndexAdaptor::check_need_merge(const int64_t merge_base_percen
   } else if (snap_data_->meta_.incrs_.count() < 2
       && ! snap_data_->check_incr_mem_over_percentage(merge_base_percentage)) {
     LOG_TRACE("[VECTOR INDEX MERGE] incrs is too small, so no need merge", K(ret), KPC(this));
-  } else if (snap_data_->meta_.incrs_.count() < 2
-      && ! snap_data_->check_incr_can_merge_base()) {
-    LOG_INFO("[VECTOR INDEX MERGE] incr bitmap is not complete, so no need merge", K(ret), KPC(this));
   } else if (is_in_opt_task()) {
     LOG_TRACE("[VECTOR INDEX MERGE] rebuild task is doing, so no need merge", K(ret), KPC(this));
   } else {

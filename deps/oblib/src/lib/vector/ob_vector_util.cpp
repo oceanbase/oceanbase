@@ -246,6 +246,16 @@ int get_vid_bound(obvsag::VectorIndexPtr index_handler, int64_t &min_vid, int64_
 #endif
 }
 
+int check_id_exist(obvsag::VectorIndexPtr index_handler, int64_t id, bool &exist)
+{
+  INIT_SUCC(ret);
+#ifdef OB_BUILD_CDC_DISABLE_VSAG
+  return ret;
+#else
+  return obvsag::check_id_exist(index_handler, id, exist);
+#endif
+}
+
 int get_extra_info_by_ids(obvsag::VectorIndexPtr& index_handler,
                           const int64_t* ids,
                           int64_t count,

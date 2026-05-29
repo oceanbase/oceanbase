@@ -632,6 +632,19 @@ void ObVectorIndexSegment::reset()
   is_inited_ = false;
 }
 
+int ObVectorIndexSegment::check_id_exist(const int64_t vid, bool &exist) const
+{
+  int ret = OB_SUCCESS;
+  exist = false;
+  if (! is_inited() || OB_ISNULL(index_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("segment is not inited or index is null", K(ret), K(vid), KP(this));
+  } else if (OB_FAIL(obvectorutil::check_id_exist(index_, vid, exist))) {
+    LOG_WARN("check_id_exist failed", K(ret), K(vid), KP(this));
+  }
+  return ret;
+}
+
 int64_t ObVectorIndexSegment::get_serialize_meta_size() const
 {
   int ret = OB_SUCCESS;
@@ -1029,6 +1042,10 @@ void ObVectorIndexSegmentBuilder::free(ObIAllocator &allocator)
   need_vid_check_ = false;
   build_finished_ = false;
   is_inited_ = false;
+  for (int64_t i = 0; i < merge_source_seg_handles_.count(); ++i) {
+    merge_source_seg_handles_.at(i).reset();
+  }
+  merge_source_seg_handles_.reset();
 }
 
 ObVectorIndexSegmentBuilder::~ObVectorIndexSegmentBuilder()
@@ -1473,7 +1490,37 @@ int ObVectorIndexSegmentBuilder::check_vid_range(const int64_t vid, bool &has_sk
       has_skip_vid = true;
       ++skip_cnt_;
     } else {
-      ++add_cnt_;
+      if (merge_source_seg_handles_.count() > 0) {
+        bool any_exist = false;
+        for (int64_t i = 0; OB_SUCC(ret) && !any_exist && i < merge_source_seg_handles_.count(); ++i) {
+          const ObVectorIndexSegmentHandle &handle = merge_source_seg_handles_.at(i);
+          int64_t seg_min_vid = INT64_MAX;
+          int64_t seg_max_vid = 0;
+          bool exist = false;
+          if (! handle.is_valid() || ! handle->is_inited()) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("merge source seg handle is invalid", K(ret), K(i), K(handle));
+          } else if (OB_FAIL(handle->get_vid_bound(seg_min_vid, seg_max_vid))) {
+            LOG_WARN("merge source get_vid_bound failed", K(ret), K(vid), K(i), K(handle));
+          } else if (vid < seg_min_vid || vid > seg_max_vid) {
+            // vid is out of this segment's index range, try next source segment
+          } else if (OB_FAIL(handle->check_id_exist(vid, exist))) {
+            LOG_WARN("merge source check_id_exist failed", K(ret), K(vid), K(i), K(handle));
+          } else if (exist) {
+            any_exist = true;
+          }
+        }
+        if (OB_SUCC(ret)) {
+          if (! any_exist) {
+            has_skip_vid = true;
+            ++skip_cnt_;
+          } else {
+            ++add_cnt_;
+          }
+        }
+      } else {
+        ++add_cnt_;
+      }
     }
   }
   return ret;

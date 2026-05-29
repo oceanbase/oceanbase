@@ -134,6 +134,7 @@ int get_extra_info_by_ids(VectorIndexPtr& index_handler,
                           int64_t count,
                           char *extra_infos);
 int immutable_optimize(VectorIndexPtr& index_handler);
+int check_id_exist(VectorIndexPtr &index_handler, int64_t id, bool &exist);
 
 } // namesapce obvsag
 } // namespace common

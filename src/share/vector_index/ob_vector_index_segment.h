@@ -6,6 +6,7 @@
 #define OCEANBASE_SHARE_VECTOR_INDEX_SEGMENT_H_
 
 #include "roaring/roaring64.h"
+#include "lib/container/ob_se_array.h"
 #include "lib/vector/ob_vector_util.h"
 #include "lib/stat/ob_latch_define.h"
 #include "share/vector_index/ob_vector_index_common_define.h"
@@ -413,6 +414,8 @@ public:
     return obvectorutil::cal_distance_by_id(index_, len, dims, vals, ids, count, distances);
   }
 
+  int check_id_exist(const int64_t vid, bool &exist) const;
+
   bool is_base() const { return is_base_; }
   void set_is_base() { is_base_ = true; }
 
@@ -685,6 +688,7 @@ public:
     vid_bound_(),
     ibitmap_(nullptr),
     vbitmap_(nullptr),
+    merge_source_seg_handles_(),
     total_cnt_(0),
     add_cnt_(0),
     skip_cnt_(0)
@@ -765,6 +769,7 @@ public:
   ObVidBound vid_bound_;
   ObVectorIndexRoaringBitMap *ibitmap_;
   ObVectorIndexRoaringBitMap *vbitmap_;
+  ObSEArray<ObVectorIndexSegmentHandle, OB_VECTOR_INDEX_MAX_SEGMENT_CNT> merge_source_seg_handles_;
   int64_t total_cnt_;
   int64_t add_cnt_;
   int64_t skip_cnt_;

@@ -52,6 +52,7 @@ public:
   int delete_incr_table_data(transaction::ObTxReadSnapshot &snapshot,
       transaction::ObTxDesc *tx_desc, const int64_t timeout,
       const share::SCN& frozen_scn, const ObVectorIndexRoaringBitMap *bitmap);
+  int check_delta_table_empty(bool &is_empty);
 
 private:
   int prepare_dml_param(

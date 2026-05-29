@@ -7,6 +7,7 @@
 
 #include "ob_vsag_adaptor.h"
 #include <map>
+#include <stdexcept>
 #include "vsag/vsag.h"
 #include "vsag/errors.h"
 #include "vsag/dataset.h"
@@ -194,6 +195,7 @@ public:
                             char *extra_infos);
   int get_raw_vector_by_ids(const int64_t *ids, int64_t count, float *&vectors, void *allocator = nullptr, int64_t dim = 0);
   int get_vid_bound(int64_t &min_vid, int64_t &max_vid);
+  int check_id_exist(int64_t id, bool &exist);
   uint64_t estimate_memory(const uint64_t row_count, const bool is_build);
   int knn_search(const vsag::DatasetPtr &query, int64_t topk,
                  const std::string &parameters, const float *&dist,
@@ -395,6 +397,24 @@ int HnswIndexHandler::get_vid_bound(int64_t &min_vid, int64_t &max_vid)
     } else {
       ret = vsag_errcode2ob(result.error().type);
     }
+  }
+  return ret;
+}
+
+int HnswIndexHandler::check_id_exist(int64_t id, bool &exist)
+{
+  int ret = OB_SUCCESS;
+  try {
+    exist = index_->CheckIdExist(id);
+  } catch (const std::runtime_error &e) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("[OBVSAG] CheckIdExist not supported or runtime error", K(ret), K(id), K(e.what()));
+  } catch (const std::exception &e) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("[OBVSAG] CheckIdExist unexpected exception", K(ret), K(id), K(e.what()));
+  } catch (...) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("[OBVSAG] CheckIdExist unknown exception", K(ret), K(id));
   }
   return ret;
 }
@@ -1498,6 +1518,21 @@ uint64_t estimate_memory(VectorIndexPtr &index_handler, const uint64_t row_count
     estimate_memory_size = hnsw->estimate_memory(row_count, is_build);
   }
   return estimate_memory_size;
+}
+
+int check_id_exist(VectorIndexPtr &index_handler, int64_t id, bool &exist)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(index_handler)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("[OBVSAG] null pointer addr", K(ret), KP(index_handler));
+  } else {
+    HnswIndexHandler *hnsw = static_cast<HnswIndexHandler *>(index_handler);
+    if (OB_FAIL(hnsw->check_id_exist(id, exist))) {
+      LOG_WARN("[OBVSAG] check_id_exist error happend", K(ret), K(id));
+    }
+  }
+  return ret;
 }
 
 int immutable_optimize(VectorIndexPtr& index_handler)

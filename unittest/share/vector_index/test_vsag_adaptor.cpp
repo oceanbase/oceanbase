@@ -899,6 +899,123 @@ TEST_F(TestVsagAdaptor, test_tune_null_handler)
   ASSERT_NE(0, ret);
 }
 
+TEST_F(TestVsagAdaptor, test_check_id_exist)
+{
+  ASSERT_TRUE(obvsag::is_init());
+  obvsag::VectorIndexPtr null_handler = nullptr;
+  bool exist = true;
+  ASSERT_NE(0, obvsag::check_id_exist(null_handler, 0, exist));
+
+  DefaultVsagAllocator default_allocator;
+  void *test_ptr = default_allocator.Allocate(10);
+  obvsag::VectorIndexPtr index_handler = nullptr;
+  const char *const DATATYPE_FLOAT32 = "float32";
+  const char *const METRIC_L2 = "l2";
+  const int dim = 64;
+  const int max_degree = 16;
+  const int ef_search = 200;
+  const int ef_construction = 100;
+  ASSERT_EQ(0, obvsag::create_index(index_handler,
+      obvsag::HGRAPH_TYPE,
+      DATATYPE_FLOAT32,
+      METRIC_L2,
+      dim,
+      max_degree,
+      ef_construction,
+      ef_search,
+      &default_allocator));
+
+  const int num_vectors = 100;
+  auto ids = new int64_t[num_vectors];
+  auto vectors = new float[dim * num_vectors];
+  std::mt19937 rng(47);
+  std::uniform_real_distribution<> distrib_real;
+  for (int i = 0; i < num_vectors; ++i) {
+    ids[i] = i;
+  }
+  for (int i = 0; i < dim * num_vectors; ++i) {
+    vectors[i] = distrib_real(rng);
+  }
+  ASSERT_EQ(0, obvsag::build_index(index_handler, vectors, ids, dim, num_vectors));
+
+  int ret = obvsag::check_id_exist(index_handler, 0, exist);
+  ASSERT_EQ(0, ret);
+  EXPECT_TRUE(exist);
+  ret = obvsag::check_id_exist(index_handler, static_cast<int64_t>(num_vectors), exist);
+  ASSERT_EQ(0, ret);
+  EXPECT_FALSE(exist);
+
+  ret = obvectorutil::check_id_exist(index_handler, 0, exist);
+  ASSERT_EQ(0, ret);
+  EXPECT_TRUE(exist);
+  ret = obvectorutil::check_id_exist(index_handler, static_cast<int64_t>(num_vectors), exist);
+  ASSERT_EQ(0, ret);
+  EXPECT_FALSE(exist);
+
+  obvsag::delete_index(index_handler);
+  delete[] ids;
+  delete[] vectors;
+  default_allocator.Deallocate(test_ptr);
+  ASSERT_EQ(0, default_allocator.total_);
+}
+
+TEST_F(TestVsagAdaptor, test_check_id_exist_hnsw)
+{
+  ASSERT_TRUE(obvsag::is_init());
+  DefaultVsagAllocator default_allocator;
+  void *test_ptr = default_allocator.Allocate(10);
+  obvsag::VectorIndexPtr index_handler = nullptr;
+  const char *const DATATYPE_FLOAT32 = "float32";
+  const char *const METRIC_L2 = "l2";
+  const int dim = 64;
+  const int max_degree = 16;
+  const int ef_search = 200;
+  const int ef_construction = 100;
+  ASSERT_EQ(0, obvsag::create_index(index_handler,
+      obvsag::HNSW_TYPE,
+      DATATYPE_FLOAT32,
+      METRIC_L2,
+      dim,
+      max_degree,
+      ef_construction,
+      ef_search,
+      &default_allocator));
+
+  const int num_vectors = 100;
+  auto ids = new int64_t[num_vectors];
+  auto vectors = new float[dim * num_vectors];
+  std::mt19937 rng(47);
+  std::uniform_real_distribution<> distrib_real;
+  for (int i = 0; i < num_vectors; ++i) {
+    ids[i] = i;
+  }
+  for (int i = 0; i < dim * num_vectors; ++i) {
+    vectors[i] = distrib_real(rng);
+  }
+  ASSERT_EQ(0, obvsag::build_index(index_handler, vectors, ids, dim, num_vectors));
+
+  bool exist = false;
+  int ret = obvsag::check_id_exist(index_handler, 0, exist);
+  ASSERT_EQ(0, ret);
+  EXPECT_TRUE(exist);
+  ret = obvsag::check_id_exist(index_handler, static_cast<int64_t>(num_vectors), exist);
+  ASSERT_EQ(0, ret);
+  EXPECT_FALSE(exist);
+
+  ret = obvectorutil::check_id_exist(index_handler, 0, exist);
+  ASSERT_EQ(0, ret);
+  EXPECT_TRUE(exist);
+  ret = obvectorutil::check_id_exist(index_handler, static_cast<int64_t>(num_vectors), exist);
+  ASSERT_EQ(0, ret);
+  EXPECT_FALSE(exist);
+
+  obvsag::delete_index(index_handler);
+  delete[] ids;
+  delete[] vectors;
+  default_allocator.Deallocate(test_ptr);
+  ASSERT_EQ(0, default_allocator.total_);
+}
+
 // Tune interface: HNSW_SQ index after build, tune should succeed
 TEST_F(TestVsagAdaptor, test_tune_hnsw_sq)
 {

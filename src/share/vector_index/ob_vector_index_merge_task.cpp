@@ -9,6 +9,7 @@
 #include "share/vector_index/ob_vector_index_async_task_util.h"
 #include "share/vector_index/ob_vector_index_aux_table_handler.h"
 #include "share/vector_index/ob_plugin_vector_index_utils.h"
+#include "share/vector_index/ob_vector_index_aux_table_handler.h"
 #include "share/allocator/ob_shared_memory_allocator_mgr.h"
 #include "share/allocator/ob_tenant_vector_allocator.h"
 #include "share/ob_ddl_common.h"
@@ -276,29 +277,25 @@ int ObVecIdxMergeTask::prepare_merge_segment(const ObVecIdxSnapshotDataHandle& o
   } else if (incr_count <= 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("not incr segment", K(ret), K(old_snap_data), K(incr_count));
-  } else if (1 == incr_count) {
-    // merge base + incr when only one incr segment
-    const ObVectorIndexSegmentMeta &seg_meta = old_snap_data->meta_.incrs_.at(0);
-    const ObVectorIndexSegmentHandle &handle = seg_meta.segment_handle_;
-    if (! handle.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("segment handle is invalid", K(ret), K(seg_meta));
-    } else if (old_snap_data->check_incr_can_merge_base()) {
-      merge_from_base_ = true;
-      LOG_INFO("incr bitmap is complete, merge from base", K(ret), K(old_snap_data));
-    } else {
+  } else if (1 == incr_count ||  (can_merge_from_base_ && 0 == base_count)) {
+    if (! can_merge_from_base_) {
       ret = OB_EAGAIN;
       LOG_WARN("incr bitmap is not complete, need to wait", K(ret), K(old_snap_data));
+    } else {
+      if (incr_count > 1) {
+        lib::ob_sort(items.begin(), items.end(), ObVIMergeSortItemCompartor());
+        LOG_INFO("sort items for merge from base without in-memory base", K(items.count()), K(incr_count));
+      }
+      if (OB_SUCC(ret)) {
+        merge_start_idx = 0;
+        merge_end_idx = incr_count;
+        merge_seg_cnt = base_count + incr_count;
+        merge_vec_cnt = total_base_vec_cnt + total_incr_vec_cnt;
+        merge_mem = total_base_mem + total_incr_mem;
+        start_from_base = true;
+      }
     }
-    if (OB_SUCC(ret)) {
-      merge_start_idx = 0;
-      merge_end_idx = 1;
-      merge_seg_cnt = base_count + 1;
-      merge_vec_cnt = total_base_vec_cnt + total_incr_vec_cnt;
-      merge_mem = total_base_mem + total_incr_mem;
-      start_from_base = true;
-    }
-    LOG_INFO("merge one incr segment", K(ret), K(incr_count), K(base_count), K(merge_seg_cnt),
+    LOG_INFO("merge from base", K(ret), K(incr_count), K(base_count), K(merge_seg_cnt),
         K(merge_vec_cnt), K(total_base_vec_cnt), K(total_incr_vec_cnt),
         K(merge_mem), K(total_base_mem), K(total_incr_mem),
         K(start_from_base), K(merge_start_idx), K(merge_end_idx));
@@ -311,7 +308,7 @@ int ObVecIdxMergeTask::prepare_merge_segment(const ObVecIdxSnapshotDataHandle& o
     merge_seg_cnt = incr_count;
     merge_vec_cnt = total_incr_vec_cnt;
     merge_mem = total_incr_mem;
-    LOG_INFO("merge one incr segment", K(incr_count), K(base_count), K(merge_seg_cnt),
+    LOG_INFO("merge incr segments", K(incr_count), K(base_count), K(merge_seg_cnt),
         K(merge_vec_cnt), K(total_base_vec_cnt), K(total_incr_vec_cnt),
         K(merge_mem), K(total_base_mem), K(total_incr_mem),
         K(start_from_base), K(merge_start_idx), K(merge_end_idx));
@@ -408,7 +405,7 @@ int ObVecIdxMergeTask::prepare_merge_segment(const ObVecIdxSnapshotDataHandle& o
       }
     }
   }
-  LOG_INFO("merge segments prepared", K(ret), K(avail_merge_mem), K(merge_from_base_), K(merge_segments_.count()), K(merge_segments_));
+  LOG_INFO("merge segments prepared", K(ret), K(avail_merge_mem), K(can_merge_from_base_), K(merge_from_base_), K(merge_segments_.count()), K(merge_segments_));
   return ret;
 }
 
@@ -542,6 +539,19 @@ int ObVecIdxMergeTask::merge_bitmap(ObPluginVectorIndexAdaptor *adaptor)
     LOG_WARN("vid bound is invalid", K(ret), K(min_vid_), K(max_vid_));
   } else if (OB_FALSE_IT(segment_builder->vid_bound_.set_vid_bound(max_vid_, min_vid_))) {
   } else if (OB_FALSE_IT(segment_builder->need_vid_check_ = true)) {
+  } else {
+    segment_builder->merge_source_seg_handles_.reuse();
+    for (int64_t i = 0; OB_SUCC(ret) && i < merge_segments_.count(); ++i) {
+      const ObVectorIndexSegmentMeta *seg_meta = merge_segments_.at(i);
+      if (OB_ISNULL(seg_meta)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("merge source seg meta is null", K(ret), K(i));
+      } else if (OB_FAIL(segment_builder->merge_source_seg_handles_.push_back(seg_meta->segment_handle_))) {
+        LOG_WARN("push merge source seg handle fail", K(ret), K(i));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (merge_from_base_) {
     LOG_INFO("is merge from base, so no need to merge bitmap", KPC(segment_builder));
   } else if (OB_FALSE_IT(segment_builder->seg_type_ = ObVectorIndexSegmentType::INCR_MERGE)) {
@@ -631,6 +641,31 @@ int ObVecIdxMergeTask::process_merge()
   return ret;
 }
 
+int ObVecIdxMergeTask::check_delta_table_empty(
+    ObPluginVectorIndexAdaptor *adapter,
+    const share::SCN &check_scn,
+    bool &is_empty)
+{
+  int ret = OB_SUCCESS;
+  is_empty = false;
+  if (OB_ISNULL(adapter)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("adapter is null", K(ret));
+  } else if (!adapter->is_inc_tablet_valid() || !adapter->is_vbitmap_tablet_valid()) {
+    LOG_TRACE("[VECTOR INDEX MERGE] skip delta table empty check, tablet invalid", KPC(adapter));
+  } else {
+    ObVectorIndexDeltaTableHandler delta_handler(adapter->get_tenant_id());
+    if (OB_FAIL(delta_handler.init(adapter, ls_id_, adapter->get_data_table_id(),
+            adapter->get_inc_table_id(), adapter->get_vbitmap_table_id(),
+            adapter->get_inc_tablet_id(), adapter->get_vbitmap_tablet_id(), check_scn))) {
+      LOG_WARN("init delta table handler for merge check failed", K(ret), KPC(adapter));
+    } else if (OB_FAIL(delta_handler.check_delta_table_empty(is_empty))) {
+      LOG_WARN("check_delta_table_empty failed", K(ret), KPC(adapter));
+    }
+  }
+  return ret;
+}
+
 int ObVecIdxMergeTask::check_and_merge(ObPluginVectorIndexAdapterGuard &adpt_guard)
 {
   int ret = OB_SUCCESS;
@@ -652,7 +687,30 @@ int ObVecIdxMergeTask::check_and_merge(ObPluginVectorIndexAdapterGuard &adpt_gua
     LOG_WARN("fail to check and wait write", KR(ret));
   } else if (OB_FAIL(adpt_guard.get_adatper()->check_need_merge(1/*merge_base_percentage*/, need_merge))) {
     LOG_WARN("check need merge", K(ret), KPC(adpt_guard.get_adatper()));
-  } else if (! need_merge) {
+  } else if (need_merge) {
+    ObPluginVectorIndexAdaptor *adapter = adpt_guard.get_adatper();
+    const ObVecIdxSnapshotDataHandle &snap_data = adapter->get_snap_data();
+    bool delta_table_empty = false;
+    if (snap_data.is_valid() && snap_data->is_inited()) {
+      if (snap_data->check_incr_can_merge_base()) {
+        can_merge_from_base_ = true;
+      } else if (snap_data->meta_.incrs_.count() != 1 && snap_data->meta_.bases_.count() > 0) {
+      } else if (! ctx_->task_status_.target_scn_.is_valid()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("target scn is not valid", K(ret), K(ctx_->task_status_.target_scn_), KPC(adapter));
+      } else if (OB_FAIL(check_delta_table_empty(adapter, ctx_->task_status_.target_scn_, delta_table_empty))) {
+        LOG_WARN("check delta table empty failed", K(ret), K(ctx_->task_status_.target_scn_), KPC(adapter));
+      } else if (delta_table_empty) {
+        can_merge_from_base_ = true;
+        LOG_INFO("[VECTOR INDEX MERGE] incr bitmap incomplete but delta table empty, can merge from base", KPC(adapter));
+      } else if (snap_data->meta_.incrs_.count() <= 1) {
+        need_merge = false;
+        LOG_INFO("[VECTOR INDEX MERGE] incr bitmap incomplete but delta table not empty, need to wait", KPC(adapter));
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (!need_merge) {
     ret = OB_EAGAIN;
     LOG_WARN("snapshot data actually is not need to merge in task execution, so retry", K(ret), KPC(adpt_guard.get_adatper()));
   } else if (OB_FAIL(execute_merge())) {
