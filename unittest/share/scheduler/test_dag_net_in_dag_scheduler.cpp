@@ -107,7 +107,8 @@ public:
     ASSERT_EQ(OB_SUCCESS, ma->set_tenant_limit(tenant_id_, 1LL << 30));
 
     ASSERT_EQ(OB_SUCCESS, t3m->init());
-    ASSERT_EQ(OB_SUCCESS, scheduler_->init(tenant_id_, time_slice, check_waiting_list_period, MAX_DAG_CNT));
+    ASSERT_EQ(OB_SUCCESS, scheduler_->init(tenant_id_, time_slice, check_waiting_list_period,
+        MAX_DAG_CNT));
     ObAddr addr(1683068975,9999);
     if (OB_SUCCESS != (ObSysTaskStatMgr::get_instance().set_self_addr(addr))) {
       COMMON_LOG_RET(WARN, OB_ERROR, "failed to add sys task", K(addr));
@@ -126,8 +127,13 @@ public:
     tenant_base_.destroy();
     ObTenantEnv::set_tenant(nullptr);
   }
-private:
+public:
   const static int64_t MAX_DAG_CNT = 64;
+  // CO_MAJOR sub-cap is derived from dag_limit (= MAX_DAG_CNT here), so shrinking MAX_DAG_CNT
+  // is enough to drive the cap small enough for a UT-sized end-to-end test.
+  const static int64_t TEST_MAX_CO_MAJOR_RUNNING_CNT =
+      MAX(1L, MAX_DAG_CNT * ObDagNetScheduler::CO_MAJOR_RATIO_PERCENT / 100);
+private:
   const uint64_t tenant_id_;
   compaction::ObTenantTabletScheduler *tablet_scheduler_;
   ObTenantDagScheduler *scheduler_;
@@ -1927,6 +1933,258 @@ TEST_F(TestDagScheduler, loop_dag_net)
   ASSERT_TRUE(nullptr != scheduler);
   EXPECT_EQ(OB_SUCCESS, scheduler->create_and_add_dag_net<ObLoopDagNet>(nullptr));
 
+  wait_scheduler();
+}
+
+struct ObHoldingDagNetInitParam : public ObIDagInitParam
+{
+  ObHoldingDagNetInitParam() : exit_flag_(nullptr) {}
+  virtual bool is_valid() const override { return true; }
+  bool *exit_flag_; // loop until this flag is set
+};
+
+class ObHoldingTask : public ObITask
+{
+public:
+  ObHoldingTask() : ObITask(ObITaskType::TASK_TYPE_UT), exit_flag_(nullptr) {}
+  virtual ~ObHoldingTask() {}
+  int init(bool *flag)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(flag)) {
+      ret = OB_INVALID_ARGUMENT;
+      COMMON_LOG(WARN, "Invalid argument", K(ret));
+    } else {
+      exit_flag_ = flag;
+    }
+    return ret;
+  }
+  virtual int process() override
+  {
+    while (OB_NOT_NULL(exit_flag_) && !ATOMIC_LOAD(exit_flag_)) {
+      usleep(10 * 1000);  // 10ms
+    }
+    return OB_SUCCESS;
+  }
+private:
+  bool *exit_flag_;
+};
+
+class ObHoldingDag : public ObBasicDag
+{
+public:
+  ObHoldingDag() : ObBasicDag(), exit_flag_(nullptr) {}
+  int set_exit_flag(bool *flag)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(flag)) {
+      ret = OB_INVALID_ARGUMENT;
+      COMMON_LOG(WARN, "Invalid argument", K(ret));
+    } else {
+      exit_flag_ = flag;
+    }
+    return ret;
+  }
+  virtual int create_first_task() override
+  {
+    int ret = OB_SUCCESS;
+    ObHoldingTask *task = nullptr;
+    if (OB_FAIL(alloc_task(task))) {
+      COMMON_LOG(WARN, "Fail to alloc task", K(ret));
+    } else if (OB_FAIL(task->init(exit_flag_))) {
+      COMMON_LOG(WARN, "Fail to init task", K(ret));
+    } else if (OB_FAIL(add_task(*task))) {
+      COMMON_LOG(WARN, "Fail to add task", K(ret));
+    }
+    return ret;
+  }
+private:
+  bool *exit_flag_;
+};
+
+class ObHoldingDagNetBase : public ObIDagNet
+{
+public:
+  explicit ObHoldingDagNetBase(ObDagNetType::ObDagNetTypeEnum type) :
+    ObIDagNet(type),
+    id_(ObTimeUtility::current_time() + random()),
+    exit_flag_(nullptr)
+  {}
+  bool is_valid() const { return true; }
+  virtual int init_by_param(const ObIDagInitParam *param) override
+  {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(param)) {
+      ret = OB_INVALID_ARGUMENT;
+      COMMON_LOG(WARN, "ObHoldingDagNet requires ObHoldingDagNetInitParam", K(ret));
+    } else {
+      exit_flag_ = static_cast<const ObHoldingDagNetInitParam*>(param)->exit_flag_;
+    }
+    return ret;
+  }
+  virtual int start_running() override
+  {
+    int ret = OB_SUCCESS;
+    ObHoldingDag *dag = nullptr;
+    if (OB_FAIL(MTL(ObTenantDagScheduler*)->alloc_dag(dag))) {
+      COMMON_LOG(WARN, "Fail to alloc dag", K(ret));
+    } else if (OB_FAIL(dag->set_exit_flag(exit_flag_))) {
+      COMMON_LOG(WARN, "Fail to set exit flag", K(ret));
+    } else if (OB_FAIL(dag->create_first_task())) {
+      COMMON_LOG(WARN, "Fail to create first task", K(ret));
+    } else if (OB_FAIL(add_dag_into_dag_net(*dag))) {
+      COMMON_LOG(WARN, "Fail to add dag into dag_net", K(ret));
+    } else if (OB_FAIL(MTL(ObTenantDagScheduler*)->add_dag(dag))) {
+      COMMON_LOG(WARN, "Fail to add dag into dag_scheduler", K(ret));
+    }
+    return ret;
+  }
+  virtual uint64_t hash() const override { return murmurhash(&id_, sizeof(id_), 0); }
+  virtual bool operator == (const ObIDagNet &other) const override
+  {
+    bool bret = false;
+    if (get_type() == other.get_type()) {
+      const ObHoldingDagNetBase &rhs = static_cast<const ObHoldingDagNetBase &>(other);
+      bret = rhs.id_ == id_;
+    }
+    return bret;
+  }
+  virtual int fill_comment(char *buf, const int64_t buf_len) const override
+  { UNUSEDx(buf, buf_len); return OB_SUCCESS; }
+  virtual int fill_dag_net_key(char *buf, const int64_t buf_len) const override
+  { UNUSEDx(buf, buf_len); return OB_SUCCESS; }
+  virtual bool is_ha_dag_net() const override { return false; }
+  virtual int clear_dag_net_ctx() override { return OB_SUCCESS; }
+  INHERIT_TO_STRING_KV("ObHoldingDagNetBase", ObIDagNet, K_(type), K_(id));
+protected:
+  int64_t id_;
+  bool *exit_flag_;
+};
+
+// Thin sub-class per type - only difference is the ObDagNetTypeEnum value.
+class ObHoldingCOMajorDagNet : public ObHoldingDagNetBase
+{
+public:
+  ObHoldingCOMajorDagNet() : ObHoldingDagNetBase(ObDagNetType::DAG_NET_TYPE_CO_MAJOR) {}
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObHoldingCOMajorDagNet);
+};
+
+class ObHoldingMigrationDagNet : public ObHoldingDagNetBase
+{
+public:
+  ObHoldingMigrationDagNet() : ObHoldingDagNetBase(ObDagNetType::DAG_NET_TYPE_MIGRATION) {}
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObHoldingMigrationDagNet);
+};
+
+static int64_t count_running_dag_net(ObTenantDagScheduler &scheduler,
+                                     const ObDagNetType::ObDagNetTypeEnum type)
+{
+  int64_t count = 0;
+  ObDagNetScheduler &dag_net_sche = scheduler.dag_net_sche_;
+  ObMutexGuard guard(dag_net_sche.dag_net_map_lock_);
+  ObIDagNet *head = dag_net_sche.dag_net_list_[RUNNING_DAG_NET_LIST].get_header();
+  for (ObIDagNet *cur = head->get_next(); NULL != cur && head != cur; cur = cur->get_next()) {
+    if (cur->get_type() == type) {
+      ++count;
+    }
+  }
+  return count;
+}
+
+// ---------------------------------------------------------------------------
+// Case 1: CO_MAJOR per-type RUNNING cap; submissions are not rejected.
+//
+//   (a) create_and_add_dag_net still returns OB_SUCCESS beyond the cap; dag_nets
+//       enter dag_net_map + BLOCKING as usual.
+//   (b) RUNNING CO_MAJOR count is capped at max_co_major_running_dag_net_cnt_;
+//       excess wait on BLOCKING.
+//
+// CO_MAJOR cap = dag_limit (MAX_DAG_CNT = 64 in UT) * 90 / 100 = 57.
+// Submit cap + 3 -> expect RUNNING(CO_MAJOR) == cap, dag_net_map(CO_MAJOR) == cap + 3.
+// ---------------------------------------------------------------------------
+TEST_F(TestDagScheduler, test_co_major_cap_limits_running_count)
+{
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
+  ASSERT_TRUE(nullptr != scheduler);
+
+  bool exit_flag = false;  // task loops until this flag is set
+  ObHoldingDagNetInitParam param;
+  param.exit_flag_ = &exit_flag;
+
+  const int64_t cap = TestDagScheduler::TEST_MAX_CO_MAJOR_RUNNING_CNT;
+  const int64_t submit = cap + 3;
+
+  // (a) All submits succeed; nothing is rejected for exceeding the cap
+  for (int64_t i = 0; i < submit; ++i) {
+    EXPECT_EQ(OB_SUCCESS, scheduler->create_and_add_dag_net<ObHoldingCOMajorDagNet>(&param));
+  }
+
+  // (b) Wait until RUNNING CO_MAJOR count stabilizes at cap
+  const int64_t deadline = ObTimeUtility::current_time() + 5 * 1000 * 1000;  // 5s
+  while (ObTimeUtility::current_time() < deadline) {
+    if (count_running_dag_net(*scheduler, ObDagNetType::DAG_NET_TYPE_CO_MAJOR) == cap) {
+      break;
+    }
+    usleep(10 * 1000);
+  }
+  EXPECT_EQ(cap, count_running_dag_net(*scheduler, ObDagNetType::DAG_NET_TYPE_CO_MAJOR));
+  // dag_net_map holds all `submit`; the extra three remain on BLOCKING
+  EXPECT_EQ(submit, scheduler->get_dag_net_count(ObDagNetType::DAG_NET_TYPE_CO_MAJOR));
+
+  // Release and drain
+  ATOMIC_STORE(&exit_flag, true);
+  wait_scheduler();
+}
+
+// ---------------------------------------------------------------------------
+// Case 2: Production bug repro - when CO_MAJOR hits its per-type cap, MIGRATION
+// and other types can still enter RUNNING (no starvation).
+//
+// Previously CO_MAJOR could consume the entire global cap so HA types could not
+// enter RUNNING. After the fix, CO_MAJOR has its own cap; others keep the global path.
+// ---------------------------------------------------------------------------
+TEST_F(TestDagScheduler, test_co_major_flood_does_not_block_other_types)
+{
+  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler*);
+  ASSERT_TRUE(nullptr != scheduler);
+
+  bool exit_flag = false;
+  ObHoldingDagNetInitParam param;
+  param.exit_flag_ = &exit_flag;
+
+  const int64_t co_major_cap = TestDagScheduler::TEST_MAX_CO_MAJOR_RUNNING_CNT;
+  const int64_t flood = co_major_cap + 3;
+
+  for (int64_t i = 0; i < flood; ++i) {
+    EXPECT_EQ(OB_SUCCESS, scheduler->create_and_add_dag_net<ObHoldingCOMajorDagNet>(&param));
+  }
+
+  // Wait until CO_MAJOR fills its cap
+  const int64_t flood_deadline = ObTimeUtility::current_time() + 10 * 1000 * 1000;  // 10s
+  while (ObTimeUtility::current_time() < flood_deadline) {
+    if (count_running_dag_net(*scheduler, ObDagNetType::DAG_NET_TYPE_CO_MAJOR) >= co_major_cap) {
+      break;
+    }
+    usleep(50 * 1000);  // 50ms
+  }
+  ASSERT_EQ(co_major_cap, count_running_dag_net(*scheduler, ObDagNetType::DAG_NET_TYPE_CO_MAJOR));
+
+  // Key: CO_MAJOR no longer consumes admission slots when capped; MIGRATION can enter RUNNING.
+  EXPECT_EQ(OB_SUCCESS, scheduler->create_and_add_dag_net<ObHoldingMigrationDagNet>(&param));
+
+  const int64_t mig_deadline = ObTimeUtility::current_time() + 5 * 1000 * 1000;  // 5s
+  while (ObTimeUtility::current_time() < mig_deadline) {
+    if (count_running_dag_net(*scheduler, ObDagNetType::DAG_NET_TYPE_MIGRATION) == 1) {
+      break;
+    }
+    usleep(50 * 1000);
+  }
+  EXPECT_EQ(1, count_running_dag_net(*scheduler, ObDagNetType::DAG_NET_TYPE_MIGRATION));
+
+  // Release and drain
+  ATOMIC_STORE(&exit_flag, true);
   wait_scheduler();
 }
 
