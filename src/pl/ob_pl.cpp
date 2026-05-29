@@ -42,7 +42,7 @@ namespace sql
 {
 extern int sys_pkg_need_priv_check(uint64_t pkg_id, ObSchemaGetterGuard *schema_guard,
                                    bool &need_check, uint64_t &pkg_spec_id,
-                                   bool &need_only_obj_check);
+                                   bool &need_only_obj_check, ObSQLSessionInfo *session_info);
 }
 namespace pl
 {
@@ -5223,7 +5223,8 @@ int ObPL::check_exec_priv(
       bool need_check = false;
       bool need_only_obj_check = false;
       uint64_t spec_id = OB_INVALID_ID;
-      OZ (sys_pkg_need_priv_check(pkg_id, guard, need_check, spec_id, need_only_obj_check),
+      OZ (sys_pkg_need_priv_check(pkg_id, guard, need_check, spec_id, need_only_obj_check,
+                                  exec_ctx.get_my_session()),
                                   pkg_id, spec_id);
       if (need_check) {
         OZ (ObOraSysChecker::check_ora_obj_priv(*guard,
