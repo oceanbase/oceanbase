@@ -45,12 +45,10 @@ int ObTTLFilterInfoHelper::generate_ttl_filter_info(
     ttl_filter_info.ttl_filter_col_type_ = ObTTLFilterInfo::ObTTLFilterColType::ROWSCN;
     ttl_filter_info.ttl_filter_value_ = ttl_filter_us * 1000L; // us to ns
 
-#ifdef ERRSIM
     if (EN_COMPACTION_TTL_SERVICE_TTL_TIME) { // s -> ns
       ttl_filter_info.ttl_filter_value_ = -EN_COMPACTION_TTL_SERVICE_TTL_TIME * 1000L * 1000L * 1000L;
       LOG_INFO("ERRSIM POINT EN_COMPACTION_TTL_SERVICE_TTL_TIME", KR(ret), K(ttl_filter_info));
     }
-#endif
 
   }
   return ret;

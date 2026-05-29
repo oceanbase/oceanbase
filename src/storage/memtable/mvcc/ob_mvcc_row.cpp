@@ -233,6 +233,8 @@ int ObMvccRowFilter::read_row_and_check(
     if (OB_UNLIKELY(!mds_filter_.is_valid())) {
       ret = OB_INVALID_ARGUMENT;
       TRANS_LOG(WARN, "invalid argument", KR(ret), K_(mds_filter));
+    } else if (node.get_dml_flag() == blocksstable::ObDmlFlag::DF_LOCK) {
+      complete = false;
     } else if (OB_FAIL(read_row_(node, final_result))) {
       TRANS_LOG(WARN, "failed to read datum row", K(ret), K(node), K_(mds_filter));
     } else if (final_result) {
