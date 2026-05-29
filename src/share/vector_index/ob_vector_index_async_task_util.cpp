@@ -3374,9 +3374,9 @@ bool ObVecIndexAsyncTask::check_task_satisfied_memory_limited(ObPluginVectorInde
     }
 
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(adaptor.get_inc_index_row_cnt(current_incr_count))) {
+    } else if (OB_FAIL(adaptor.get_inc_index_row_cnt_safe(current_incr_count))) {
       LOG_WARN("fail to get incr index number", K(ret));
-    } else if (OB_FAIL(adaptor.get_snap_index_row_cnt(current_snapshot_count))) {
+    } else if (OB_FAIL(adaptor.get_snap_index_row_cnt_safe(current_snapshot_count))) {
       LOG_WARN("fail to get snap index number", K(ret));
     } else if (OB_FALSE_IT(estimate_row_count = current_incr_count + current_snapshot_count)) {
     } else if (OB_FAIL(ObMultiVersionSchemaService::get_instance().get_tenant_schema_guard(tenant_id_, schema_guard))) {
