@@ -33,6 +33,14 @@ public:
                                  ObDMLStmt *&stmt,
                                  bool &trans_happened) override;
   inline void set_transform_for_write(bool transform_for_write) { transform_for_write_ = transform_for_write; }
+
+  static int check_is_link_table(TableItem *table,
+                                 uint64_t &dblink_id,
+                                 bool &is_link_table,
+                                 bool &is_reverse_link);
+
+  static int check_link_expr_valid(ObRawExpr *expr, bool &is_valid);
+
 private:
   struct LinkTableHelper {
     LinkTableHelper()
@@ -106,11 +114,6 @@ private:
                                ObIArray<LinkTableHelper> &helpers,
                                bool &all_table_from_one_dblink);
 
-  int check_is_link_table(TableItem *table,
-                          uint64_t &dblink_id,
-                          bool &is_link_table,
-                          bool &is_reverse_link);
-
   int check_is_link_semi_info(ObDMLStmt &stmt,
                               SemiInfo &semi_info,
                               uint64_t &dblink_id,
@@ -160,13 +163,13 @@ private:
                                         ObIArray<std::pair<JoinedTable*, ObRawExpr*>> &parent_conditions,
                                         ObIArray<LinkTableHelper> &helpers);
 
-  int has_none_pushdown_expr(ObIArray<ObRawExpr*> &exprs,
-                             uint64_t dblink_id,
-                             bool &has);
+  static int has_none_pushdown_expr(ObIArray<ObRawExpr*> &exprs,
+                                    uint64_t dblink_id,
+                                    bool &has);
 
-  int has_none_pushdown_expr(ObRawExpr* expr,
-                             uint64_t dblink_id,
-                             bool &has);
+  static int has_none_pushdown_expr(ObRawExpr* expr,
+                                    uint64_t dblink_id,
+                                    bool &has);
 
   int inner_pack_link_table(ObDMLStmt *stmt, LinkTableHelper &helper);
 
@@ -193,12 +196,9 @@ private:
 
   int has_invalid_link_expr(ObIArray<ObRawExpr *> &exprs, bool &has_invalid_expr);
 
-  static int check_link_expr_valid(ObRawExpr *expr, bool &is_valid);
+  bool transform_for_write_;
 
   DISALLOW_COPY_AND_ASSIGN(ObTransformDBlink);
-
-private:
-  bool transform_for_write_;
 };
 
 }

@@ -1078,7 +1078,8 @@ int ObTransformDBlink::add_link_semi_info(SemiInfo *semi_info,
   for (int64_t i = 0; OB_INVALID_ID != dblink_id && NULL == helper && i < helpers.count(); ++i) {
     if ((dblink_id == helpers.at(i).dblink_id_ ||
         (is_reverse_link && helpers.at(i).is_reverse_link_)) &&
-        helpers.at(i).parent_table_ == NULL) {
+        helpers.at(i).parent_table_ == NULL &&
+        helpers.at(i).parent_semi_info_ == NULL) {
       helper = &helpers.at(i);
     }
   }
@@ -1908,6 +1909,5 @@ int ObTransformDBlink::add_flashback_query_for_dblink(ObDMLStmt *stmt)
   }
   return ret;
 }
-
 }
 }

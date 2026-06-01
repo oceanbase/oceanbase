@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_REWRITE
 #include "sql/rewrite/ob_transform_predicate_move_around.h"
 #include "sql/optimizer/ob_optimizer_util.h"
+#include "sql/rewrite/ob_transform_dblink.h"
 #include "sql/rewrite/ob_predicate_deduce.h"
 #include "sql/resolver/expr/ob_shared_expr_resolver.h"
 
@@ -1270,11 +1271,16 @@ int ObTransformPredicateMoveAround::pushdown_predicates(
   ObIArray<ObRawExpr *> *pullup_preds = NULL;
   ObSelectStmt *sel_stmt = static_cast<ObSelectStmt *>(stmt);
   bool enable_no_pred_deduce = false;
+  bool can_pushdown = true;
   OPT_TRACE_BEGIN_SECTION;
   OPT_TRACE("try pushdown predicates:", pushdown_preds);
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret), K(stmt));
+  } else if (OB_FAIL(check_dblink_pushdown_preds_safe(stmt, pushdown_preds, can_pushdown))) {
+    LOG_WARN("failed to check dblink pushdown predicates safe", K(ret));
+  } else if (!can_pushdown) {
+    OPT_TRACE("dblink stmt has unsafe pushdown predicates, skip pushdown");
   } else if (OB_FAIL(acquire_transform_params(stmt, pullup_preds))) {
     LOG_WARN("failed to acquire pull up preds", K(ret));
   } else if (OB_FAIL(check_enable_no_pred_deduce(*stmt, enable_no_pred_deduce))) {
@@ -4776,4 +4782,102 @@ void ObTransformPredicateMoveAround::reset()
   not_null_constraints_.reset();
   equal_param_constraints_.reset();
   real_happened_ = false;
+}
+
+int ObTransformPredicateMoveAround::check_stmt_has_dblink(ObDMLStmt *stmt, bool &has_dblink)
+{
+  int ret = OB_SUCCESS;
+  has_dblink = false;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  } else if (stmt->is_dblink_stmt()) {
+    has_dblink = true;
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && !has_dblink && i < stmt->get_table_items().count(); ++i) {
+      uint64_t dblink_id = OB_INVALID_ID;
+      bool is_link = false;
+      bool is_reverse_link = false;
+      if (OB_FAIL(ObTransformDBlink::check_is_link_table(stmt->get_table_item(i),
+                                                         dblink_id,
+                                                         is_link,
+                                                         is_reverse_link))) {
+        LOG_WARN("failed to check is link table", K(ret));
+      } else if (is_link) {
+        has_dblink = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformPredicateMoveAround::check_dblink_pushdown_preds_safe(ObDMLStmt *stmt,
+                                                                     ObIArray<ObRawExpr *> &preds,
+                                                                     bool &can_pushdown)
+{
+  int ret = OB_SUCCESS;
+  bool has_dblink = false;
+  bool has_unsafe_cast = false;
+  bool is_valid = false;
+  const ObSelectStmt *sel_stmt = NULL;
+  can_pushdown = true;
+  if (OB_ISNULL(stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null stmt", K(ret));
+  } else if (preds.empty()) {
+    // do nothing
+  } else if (stmt->is_select_stmt()
+             && OB_FALSE_IT(sel_stmt = static_cast<const ObSelectStmt *>(stmt))
+             && sel_stmt->is_set_stmt()) {
+    // PMA renames set op exprs to branch columns in pushdown_into_set_stmt.
+  } else if (OB_FAIL(check_stmt_has_dblink(stmt, has_dblink))) {
+    LOG_WARN("failed to check stmt has dblink", K(ret));
+  } else if (!has_dblink) {
+    // do nothing
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && can_pushdown && i < preds.count(); ++i) {
+      ObRawExpr *expr = preds.at(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpect null pred", K(ret));
+      } else if (OB_FAIL(ObTransformDBlink::check_link_expr_valid(expr, is_valid))) {
+        LOG_WARN("failed to check link expr valid", K(ret));
+      } else if (!is_valid || !expr->is_deterministic()) {
+        can_pushdown = false;
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && can_pushdown && i < preds.count(); ++i) {
+      if (OB_FAIL(has_unsafe_implicit_cast(preds.at(i), has_unsafe_cast))) {
+        LOG_WARN("failed to check has unsafe implicit cast", K(ret));
+      } else if (has_unsafe_cast) {
+        can_pushdown = false;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObTransformPredicateMoveAround::has_unsafe_implicit_cast(ObRawExpr *expr, bool &has_unsafe)
+{
+  int ret = OB_SUCCESS;
+  bool is_lossless = false;
+  bool is_implicit_cast = false;
+  has_unsafe = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpect null expr", K(ret));
+  } else if (OB_FALSE_IT(is_implicit_cast = T_FUN_SYS_CAST == expr->get_expr_type()
+                                            && CM_IS_IMPLICIT_CAST(expr->get_cast_mode()))) {
+  } else if (is_implicit_cast
+             && OB_FAIL(ObOptimizerUtil::is_lossless_column_cast(expr, is_lossless))) {
+    LOG_WARN("failed to check lossless column cast", K(ret));
+  } else if (is_implicit_cast && !is_lossless) {
+    has_unsafe = true;
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !has_unsafe && i < expr->get_param_count(); ++i) {
+    if (OB_FAIL(SMART_CALL(has_unsafe_implicit_cast(expr->get_param_expr(i), has_unsafe)))) {
+      LOG_WARN("failed to recurse has unsafe implicit cast", K(ret));
+    }
+  }
+  return ret;
 }
