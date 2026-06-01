@@ -8185,21 +8185,29 @@ public:
   common::ObString db_name_;
 };
 
+enum ObOutlineScope
+{
+  OUTLINE_SCOPE_UNSPECIFIED = -1,
+  OUTLINE_SCOPE_DATABASE = 0,
+  OUTLINE_SCOPE_TENANT = 1,
+};
+
 struct ObDropOutlineArg : public ObDDLArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObDropOutlineArg(): ObDDLArg(), tenant_id_(common::OB_INVALID_ID), db_name_(), outline_name_(), is_format_(false) {}
+  ObDropOutlineArg(): ObDDLArg(), tenant_id_(common::OB_INVALID_ID), db_name_(), outline_name_(), is_format_(false), scope_(OUTLINE_SCOPE_UNSPECIFIED) {}
   virtual ~ObDropOutlineArg() {}
   bool is_valid() const;
   virtual bool is_allow_when_upgrade() const { return true; }
   int assign(const ObDropOutlineArg &other);
-  TO_STRING_KV(K_(tenant_id), K_(db_name), K_(outline_name), K_(is_format));
+  TO_STRING_KV(K_(tenant_id), K_(db_name), K_(outline_name), K_(is_format), K_(scope));
 
   uint64_t tenant_id_;
   common::ObString db_name_;
   common::ObString outline_name_;
   bool is_format_;
+  int64_t scope_;
 };
 
 struct ObCreateDbLinkArg : public ObDDLArg

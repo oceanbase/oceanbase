@@ -6743,7 +6743,8 @@ OB_SERIALIZE_MEMBER((ObDropOutlineArg, ObDDLArg),
                     tenant_id_,
                     db_name_,
                     outline_name_,
-                    is_format_);
+                    is_format_,
+                    scope_);
 
 int ObDropOutlineArg::assign(const ObDropOutlineArg &other)
 {
@@ -6756,6 +6757,7 @@ int ObDropOutlineArg::assign(const ObDropOutlineArg &other)
     db_name_ = other.db_name_;
     outline_name_ = other.outline_name_;
     is_format_ = other.is_format_;
+    scope_ = other.scope_;
   }
 
   return ret;
