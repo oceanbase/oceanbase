@@ -877,10 +877,11 @@ int ObExternalTableUtils::assign_odps_file_to_sqcs(
       } else {
         ObSqlString part_spec_str;
         int64_t part_count = files.count();
+        int64_t dummy_part_count = 0;
         for (int64_t i = 0; OB_SUCC(ret) && i < part_count; ++i) {
           const ObExternalFileInfo &external_info = files.at(i);
           if (0 == external_info.file_url_.compare(ObExternalTableUtils::dummy_file_name())) {
-            // do nothing
+            ++dummy_part_count;
           } else if (OB_FAIL(part_spec_str.append(external_info.file_url_))){
             LOG_WARN("failed to append file url", K(ret), K(external_info.file_url_));
           } else if (i < part_count - 1 && OB_FAIL(part_spec_str.append("#"))) {
@@ -891,9 +892,11 @@ int ObExternalTableUtils::assign_odps_file_to_sqcs(
         } else if (OB_FAIL(ob_write_string(dfo.get_allocator(), part_spec_str.string(), part_str, true))) {
           LOG_WARN("failed to write string", K(ret), K(part_spec_str));
         }
-
         const ExprFixedArray& exprs = scan_ops.at(0)->tsc_ctdef_.scan_ctdef_.pd_expr_spec_.ext_file_column_exprs_;
+        LOG_TRACE("odps need partitions", K(part_str));
         if (OB_FAIL(ret)) {
+        } else if (dummy_part_count == part_count) {
+          // do nothing
         } else if(odps_api_mode == sql::ObODPSGeneralFormat::ApiMode::BYTE) {
           if (OB_FAIL(ObOdpsPartitionJNIDownloaderMgr::fetch_storage_api_split_by_byte(
             exec_ctx,
