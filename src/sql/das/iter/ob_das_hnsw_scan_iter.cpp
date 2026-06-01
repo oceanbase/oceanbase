@@ -3715,7 +3715,16 @@ int ObDASHNSWScanIter::do_table_post_filter(bool is_vectorized)
     int64_t batch_cnt = 0;
     const int64_t batch_start = processed;
 
-    for (int64_t i = processed; OB_SUCC(ret) && i < unfiltered_cnt && batch_cnt < batch_row_count && !adaptor_vid_iter_->get_enough(); ++i) {
+    const int64_t needed = adaptor_vid_iter_->get_alloc_size() - adaptor_vid_iter_->get_total();
+    int64_t effective_batch = batch_row_count;
+    if (needed > 0) {
+      effective_batch = ObDasVecScanUtils::calc_effective_batch(needed, vec_aux_ctdef_->selectivity_, batch_row_count);
+    }
+
+    for (int64_t i = processed;
+         OB_SUCC(ret) && i < unfiltered_cnt && batch_cnt < effective_batch
+         && !adaptor_vid_iter_->get_enough();
+         ++i) {
       ObNewRow *row = nullptr;
       if (OB_FAIL(tmp_adaptor_vid_iter_->get_next_row(row, vec_aux_ctdef_->result_output_, true))) {
         if (OB_ITER_END != ret) {

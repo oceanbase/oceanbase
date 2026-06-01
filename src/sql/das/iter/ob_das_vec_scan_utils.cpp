@@ -602,5 +602,22 @@ int ObDasVecScanUtils::get_main_rowkey(const ObDASScanCtDef *ctdef, ObEvalCtx *e
   return ret;
 }
 
+int64_t ObDasVecScanUtils::calc_effective_batch(int64_t needed, double selectivity, int64_t max_batch)
+{
+  int64_t effective_batch = max_batch;
+  if (OB_UNLIKELY(needed <= 0 || max_batch <= 0)) {
+    effective_batch = std::max(max_batch, static_cast<int64_t>(1));
+  } else if (selectivity > 0 && selectivity < 1.0) {
+    double raw = std::ceil(needed / selectivity);
+    effective_batch = (raw > static_cast<double>(max_batch))
+        ? max_batch
+        : static_cast<int64_t>(raw);
+  } else {
+    effective_batch = std::min(needed, max_batch / 2) * 2;
+  }
+  effective_batch = std::max(std::min(effective_batch, max_batch), static_cast<int64_t>(1));
+  return effective_batch;
+}
+
 }  // namespace sql
 }  // namespace oceanbase
