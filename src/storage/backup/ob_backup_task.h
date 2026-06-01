@@ -99,6 +99,14 @@ enum ObBackupDagNetSubType : int64_t {
   LOG_STREAM_BACKUP_COMPLEMENT_LOG_DAG_NET = 3,
 };
 
+// Selects which ERRSIM injection points schedule_prepare_finish_chain uses.
+// META path uses EN_ADD_BACKUP_META_{PREPARE,FINISH}_DAG_FAILED;
+// DATA_INIT path uses EN_ADD_BACKUP_{PREPARE,FINISH}_DAG_FAILED.
+enum ObBackupAddDagErrsimKind : int64_t {
+  ADD_DAG_ERRSIM_META = 0,
+  ADD_DAG_ERRSIM_DATA_INIT = 1,
+};
+
 class ObBackupDagNet : public share::ObIDagNet
 {
 public:
@@ -110,6 +118,9 @@ protected:
   ObBackupDagNetSubType sub_type_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupDagNet);
 };
+
+class ObLSBackupPrepareDag;
+class ObLSBackupFinishDag;
 
 class ObLSBackupDataDagNet : public ObBackupDagNet {
 public:
@@ -130,6 +141,20 @@ public:
   {
     backup_data_type_ = type;
   }
+  // Called from the first task's process() — outside of dag_net_map_rwlock_ — to drive
+  // the deferred heavy init (ls_backup_ctx_.open() etc). Must be called exactly once per
+  // dag-net lifetime; a second call returns OB_ERR_UNEXPECTED to surface logic bugs.
+  int inner_init_before_run();
+  // Helpers used by the first task to construct the rest of the dag chain after
+  // inner_init_before_run() has succeeded.
+  int generate_prepare_dag(share::ObIDag *parent, ObLSBackupPrepareDag *&out_prepare_dag);
+  int generate_finish_dag(share::ObIDag *parent, ObLSBackupFinishDag *&out_finish_dag);
+  // Drives the deferred heavy init and dynamically builds + schedules the
+  // prepare/finish dag chain off `parent`. Called from the first task of META
+  // and DATA paths — both share this logic since ObLSBackupMetaDagNet inherits
+  // from ObLSBackupDataDagNet. `errsim_kind` selects which ERRSIM tracepoint
+  // names are used for the two add_dag steps.
+  int schedule_prepare_finish_chain(share::ObIDag *parent, ObBackupAddDagErrsimKind errsim_kind);
   INHERIT_TO_STRING_KV("ObIDagNet", share::ObIDagNet, K_(param));
 
 protected:
@@ -138,6 +163,13 @@ protected:
   int prepare_backup_tablet_provider_(const ObLSBackupParam &param, const share::ObBackupDataType &backup_data_type,
       ObLSBackupCtx &ls_backup_ctx, ObBackupIndexKVCache &index_kv_cache, common::ObMySQLProxy &sql_proxy,
       const int64_t batch_size, ObIBackupTabletProvider *&provider);
+  // Allocates a child dag of `DagT`, forwards `init_args` to dag->init(), then wires
+  // the dag into this dag_net and attaches it as a child of `parent`. The DagT type
+  // and init signature are the only differences between generate_prepare_dag and
+  // generate_finish_dag, so they reuse this template. `out_dag` is set on success
+  // and released on failure.
+  template <typename DagT, typename... InitArgs>
+  int generate_downstream_dag_(share::ObIDag *parent, DagT *&out_dag, InitArgs &&...init_args);
 
 protected:
   bool is_inited_;
@@ -151,6 +183,40 @@ protected:
   ObBackupReportCtx report_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupDataDagNet);
 };
+
+template <typename DagT, typename... InitArgs>
+int ObLSBackupDataDagNet::generate_downstream_dag_(
+    share::ObIDag *parent, DagT *&out_dag, InitArgs &&...init_args)
+{
+  int ret = OB_SUCCESS;
+  DagT *dag = NULL;
+  share::ObTenantDagScheduler *scheduler = MTL(share::ObTenantDagScheduler *);
+  out_dag = NULL;
+  if (OB_ISNULL(parent)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN( "parent dag is null", K(ret));
+  } else if (OB_ISNULL(scheduler)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN( "unexpected null MTL scheduler", K(ret));
+  } else if (OB_FAIL(scheduler->alloc_dag(dag, true/*is_ha_dag*/))) {
+    LOG_WARN( "failed to alloc dag", K(ret));
+  } else if (OB_FAIL(dag->init(std::forward<InitArgs>(init_args)...))) {
+    LOG_WARN( "failed to init dag", K(ret));
+  } else if (OB_FAIL(dag->create_first_task())) {
+    LOG_WARN( "failed to create first task", K(ret));
+  } else if (OB_FAIL(add_dag_into_dag_net(*dag))) {
+    LOG_WARN( "failed to add dag into dag_net", K(ret), KPC(dag));
+  } else if (OB_FAIL(parent->add_child_without_inheritance(*dag))) {
+    LOG_WARN( "failed to add dag as child", K(ret), KPC(parent), KPC(dag));
+  } else {
+    out_dag = dag;
+    dag = NULL;
+  }
+  if (OB_FAIL(ret) && OB_NOT_NULL(dag) && OB_NOT_NULL(scheduler)) {
+    scheduler->free_dag(*dag);
+  }
+  return ret;
+}
 
 class ObLSBackupMetaDagNet : public ObLSBackupDataDagNet {
 public:
@@ -269,6 +335,47 @@ private:
   ObBackupIndexKVCache *index_kv_cache_;
   lib::Worker::CompatMode compat_mode_;
   DISALLOW_COPY_AND_ASSIGN(ObLSBackupFinishDag);
+};
+
+// Lightweight root dag for ObLSBackupDataDagNet. Its only purpose is to provide a
+// task body in which ls_backup_ctx_.open() and downstream prepare/finish dag
+// construction happens — without holding the dag_net_map_rwlock_ that
+// start_running() runs under.
+class ObLSBackupDataInitDag : public share::ObIDag {
+public:
+  ObLSBackupDataInitDag();
+  virtual ~ObLSBackupDataInitDag();
+  int init(const ObLSBackupDagInitParam &param, const ObBackupReportCtx &report_ctx);
+  virtual int create_first_task() override;
+  virtual bool operator==(const ObIDag &other) const override;
+  virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
+  virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
+  virtual uint64_t hash() const override;
+  virtual lib::Worker::CompatMode get_compat_mode() const override { return compat_mode_; }
+  virtual uint64_t get_consumer_group_id() const override { return consumer_group_id_; }
+  virtual bool is_ha_dag() const override { return true; }
+  INHERIT_TO_STRING_KV("ObLSBackupDataInitDag", ObIDag, K_(is_inited), K_(param));
+
+private:
+  bool is_inited_;
+  ObLSBackupDagInitParam param_;
+  ObBackupReportCtx report_ctx_;
+  lib::Worker::CompatMode compat_mode_;
+  DISALLOW_COPY_AND_ASSIGN(ObLSBackupDataInitDag);
+};
+
+class ObLSBackupDataInitTask : public share::ObITask {
+public:
+  ObLSBackupDataInitTask();
+  virtual ~ObLSBackupDataInitTask();
+  int init(const ObLSBackupDagInitParam &param, const ObBackupReportCtx &report_ctx);
+  virtual int process() override;
+
+private:
+  bool is_inited_;
+  ObLSBackupDagInitParam param_;
+  ObBackupReportCtx report_ctx_;
+  DISALLOW_COPY_AND_ASSIGN(ObLSBackupDataInitTask);
 };
 
 class ObLSBackupDataDag : public share::ObIDag {
