@@ -255,7 +255,7 @@ function do_start_observer {
     pid=$(cat $prefix/run/observer.pid)
     if [ ! -d "/proc/$pid" ]; then
         echo "Observer process with PID $pid has exited."
-        break
+        exit 1
     fi
 
     # check observer state
