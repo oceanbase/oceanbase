@@ -130,6 +130,7 @@ struct ObOptParamHint
     DEF(PRESERVE_ORDER_FOR_GROUPBY,)             \
     DEF(DISABLE_SHARED_EXPR_EXTRACTION,)         \
     DEF(CACHE_AWARE_ROW_NUM,)             \
+    DEF(ENABLE_PLAN_EXPIRATION_BY_EXEC_FEEDBACK,)   \
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);
 
