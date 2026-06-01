@@ -999,7 +999,8 @@ LATCH_DEF(OB_PLUGIN_VECTOR_INDEX_TASK_CTX_MAP_LOCK, 967, "ob plugin vector index
 LATCH_DEF(VECTOR_LS_MGR_MAP_LOCK, 968, "vector ls mgr map lock", LATCH_READ_PREFER, 2000, 0, true)
 LATCH_DEF(MVIEW_TASK_QUEUE_LOCK, 969, "mview task queue lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(MVIEW_PENDING_TASK_INSPECTION_LOCK, 970, "mview pending task inspection lock", LATCH_FIFO, 2000, 0, true)
-LATCH_DEF(LATCH_END, 971, "latch end", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(OB_ARB_MONITOR_LOCK, 971, "ob arb monitor lock", LATCH_READ_PREFER, 2000, 0, true)
+LATCH_DEF(LATCH_END, 972, "latch end", LATCH_FIFO, 2000, 0, true)
 
 #endif
 
