@@ -493,6 +493,12 @@ int ObTenantRoleTransitionService::try_change_protection_mode_(
   return ret;
 }
 ERRSIM_POINT_DEF(ERRSIM_TENANT_ROLE_TRANS_WAIT_SYNC_ERROR);
+// Fires inside check_sync_to_latest_do_while_ for the switch-to-primary
+// wait path (only_check_sys_ls=false, is_failover=false), so it is NOT
+// intercepted by check_sync_readiness_ which calls check_sync_to_latest_
+// directly without going through the do-while wrapper. Used by obtest to
+// cover the WAIT_LOG_SYNC event payload on a do-while early-fail.
+ERRSIM_POINT_DEF(ERRSIM_WAIT_SYNC_TO_LATEST_FATAL_FAIL);
 int ObTenantRoleTransitionService::do_failover_to_primary_(const share::ObAllTenantInfo &tenant_info)
 {
   int ret = OB_SUCCESS;
@@ -1731,6 +1737,7 @@ int ObTenantRoleTransitionService::wait_tenant_sync_to_latest_until_timeout_(
   int ret = OB_SUCCESS;
   bool only_check_sys_ls = false;
   int64_t begin_time = ObTimeUtility::current_time();
+  ObTenantRoleTransSyncResult last_result;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("inner stat error", KR(ret));
   } else if (obrpc::ObSwitchTenantArg::OpType::SWITCH_TO_PRIMARY != switch_optype_) {
@@ -1743,13 +1750,26 @@ int ObTenantRoleTransitionService::wait_tenant_sync_to_latest_until_timeout_(
     LOG_WARN("fail to check restore source", KR(ret), K_(tenant_id));
   } else if (!has_restore_source_) {
     LOG_INFO("no restore source", K(tenant_id), K(tenant_info));
-  } else if (OB_FAIL(check_sync_to_latest_do_while_(tenant_info, only_check_sys_ls, false/*is_failover*/))) {
+  } else if (OB_FAIL(check_sync_to_latest_do_while_(tenant_info, only_check_sys_ls, false/*is_failover*/,
+      &last_result))) {
     LOG_WARN("fail to check whether all ls are synced", KR(ret), K(tenant_id), K(tenant_info));
   }
   int64_t wait_log_sync = ObTimeUtility::current_time() - begin_time;
-  LOG_INFO("wait tenant sync to latest", KR(ret), K(has_restore_source_), K(wait_log_sync));
+  LOG_INFO("wait tenant sync to latest", KR(ret), K(has_restore_source_), K(wait_log_sync), K(last_result));
   if (OB_LIKELY(NULL != cost_detail_)) {
     (void) cost_detail_->add_cost(ObTenantRoleTransCostDetail::WAIT_LOG_SYNC, wait_log_sync);
+  }
+  if (has_restore_source_) {
+    if (last_result.is_valid()) {
+      TENANT_EVENT(tenant_id, TENANT_ROLE_CHANGE, WAIT_LOG_SYNC, begin_time,
+          ret, wait_log_sync, last_result.is_sys_ls_synced() ? "YES" : "NO",
+          last_result.is_all_ls_synced() ? "YES" : "NO", last_result.get_non_sync_info());
+    } else {
+      // Inner check_sync_to_latest_ never succeeded (e.g. first iter fatal-fail).
+      // Avoid writing NO/NO + empty NonSyncInfo which would be self-contradictory.
+      TENANT_EVENT(tenant_id, TENANT_ROLE_CHANGE, WAIT_LOG_SYNC, begin_time,
+          ret, wait_log_sync, "UNKNOWN", "UNKNOWN", "NO_VALID_OBSERVATION");
+    }
   }
   CLUSTER_EVENT_ADD_LOG(ret, "wait sync to latest end",
       "tenant id", tenant_id,
@@ -1827,18 +1847,31 @@ int ObTenantRoleTransitionService::check_restore_source_for_switchover_to_primar
 int ObTenantRoleTransitionService::check_sync_to_latest_do_while_(
     const ObAllTenantInfo &tenant_info,
     const bool only_check_sys_ls,
-    const bool is_failover)
+    const bool is_failover,
+    ObTenantRoleTransSyncResult *last_result_out)
 {
   int ret = OB_SUCCESS;
   bool is_synced = false;
+  ObTenantRoleTransSyncResult last_result;
   const uint64_t tenant_id = tenant_info.get_tenant_id();
   while (!THIS_WORKER.is_timeout() && !logservice::ObLogRestoreHandler::need_fail_when_switch_to_primary(ret)) {
     bool is_all_ls_synced = false;
     bool is_sys_ls_synced = false;
+    ObTenantRoleTransNonSyncInfo iter_non_sync_info;
     ret = OB_SUCCESS;
-    if (OB_FAIL(check_sync_to_latest_(tenant_id, only_check_sys_ls, is_failover, tenant_info, is_sys_ls_synced, is_all_ls_synced))) {
+    if (!only_check_sys_ls && !is_failover && OB_FAIL(ERRSIM_WAIT_SYNC_TO_LATEST_FATAL_FAIL)) {
+      // Inject before the first inner observation so last_result stays
+      // invalid; outer must emit UNKNOWN payload. Test should configure
+      // error_code=9088 (OB_SOURCE_TENANT_STATE_NOT_MATCH) so the loop
+      // exits via need_fail_when_switch_to_primary on the first iter.
+      LOG_WARN("ERRSIM_WAIT_SYNC_TO_LATEST_FATAL_FAIL", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(check_sync_to_latest_(tenant_id, only_check_sys_ls, is_failover, tenant_info,
+        is_sys_ls_synced, is_all_ls_synced, &iter_non_sync_info))) {
       LOG_WARN("fail to execute check_sync_to_latest_", KR(ret), K(tenant_id), K(only_check_sys_ls), K(tenant_info));
     } else {
+      // Update all three result fields together so the outer event payload
+      // is always self-consistent (flags + non_sync_info from the same iter).
+      last_result.set(is_sys_ls_synced, is_all_ls_synced, iter_non_sync_info);
       is_synced = only_check_sys_ls ? is_sys_ls_synced : is_all_ls_synced;
       if (is_synced) {
         LOG_INFO("sync to latest", K(tenant_id), K(only_check_sys_ls), K(is_synced),
@@ -1869,6 +1902,9 @@ int ObTenantRoleTransitionService::check_sync_to_latest_do_while_(
   }
   if (OB_SUCC(ret)) {
     LOG_INFO("finish check sync to latest", K(only_check_sys_ls), K(is_synced));
+  }
+  if (nullptr != last_result_out) {
+    *last_result_out = last_result;
   }
   return ret;
 }
@@ -1950,19 +1986,11 @@ int ObTenantRoleTransitionService::check_sync_to_latest_(
   int64_t cost = ObTimeUtility::current_time() - begin_ts;
   LOG_INFO("check sync to latest", KR(ret), K(is_verify_), K(tenant_id), K(cost), K(only_check_sys_ls),
       K(is_sys_ls_synced), K(is_all_ls_synced), K(non_sync_info));
-  if (is_verify_ || only_check_sys_ls) {
-  } else if (REACH_TIME_INTERVAL(PRINT_INTERVAL) || is_all_ls_synced) {
-    TENANT_EVENT(tenant_id, TENANT_ROLE_CHANGE, WAIT_LOG_SYNC, begin_ts,
-        ret, cost, is_sys_ls_synced ? "YES" : "NO",
-        is_all_ls_synced ? "YES" : "NO", non_sync_info);
-    CLUSTER_EVENT_ADD_LOG(ret, "wait tenant sync from latest",
-        "tenant id", tenant_id,
-        "is sync", is_all_ls_synced ? "yes" : "no",
-        "switchover#", tenant_info.get_switchover_epoch(),
-        "finished", OB_SUCC(ret) ? "yes" : "no",
-        "checkpoint", switchover_checkpoints,
-        "cost sec", cost / SEC_UNIT);
-  }
+  // Both TENANT_EVENT(WAIT_LOG_SYNC) and CLUSTER_EVENT("wait sync to latest end")
+  // are written once by the outer waiter (wait_tenant_sync_to_latest_until_timeout_)
+  // to avoid flooding __all_tenant_event_history / __all_cluster_event_history
+  // with per-iteration rows. The failover/verify callers (only_check_sys_ls or
+  // is_verify_) intentionally skip these events here as before.
   return ret;
 }
 

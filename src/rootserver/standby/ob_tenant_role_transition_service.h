@@ -116,6 +116,7 @@ public:
   ObTenantRoleTransNonSyncInfo() : is_sync_(true), not_sync_checkpoints_() {}
   ~ObTenantRoleTransNonSyncInfo() {}
   int init(const ObArray<obrpc::ObCheckpoint> &switchover_checkpoints);
+  void reset() { is_sync_ = true; not_sync_checkpoints_.reset(); }
   int64_t to_string (char *buf, const int64_t buf_len) const;
   bool is_sync() const { return is_sync_; }
   int64_t get_not_sync_count() const { return not_sync_checkpoints_.count(); }
@@ -124,6 +125,44 @@ private:
   static constexpr int64_t MAX_PRINT_LS_NUM = 5;
   bool is_sync_;
   ObArray<obrpc::ObCheckpoint> not_sync_checkpoints_;
+};
+
+// Aggregated result of a single check_sync_to_latest_ observation.
+// is_valid_ tells the caller whether the other fields reflect a real
+// observation or are just default-constructed (when no inner iter ever
+// succeeded), so the outer event payload won't be self-contradictory.
+struct ObTenantRoleTransSyncResult
+{
+public:
+  ObTenantRoleTransSyncResult()
+    : is_sys_ls_synced_(false), is_all_ls_synced_(false),
+      non_sync_info_(), is_valid_(false) {}
+  ~ObTenantRoleTransSyncResult() {}
+  void reset()
+  {
+    is_sys_ls_synced_ = false;
+    is_all_ls_synced_ = false;
+    non_sync_info_.reset();
+    is_valid_ = false;
+  }
+  void set(const bool is_sys_ls_synced, const bool is_all_ls_synced,
+           const ObTenantRoleTransNonSyncInfo &non_sync_info)
+  {
+    is_sys_ls_synced_ = is_sys_ls_synced;
+    is_all_ls_synced_ = is_all_ls_synced;
+    non_sync_info_ = non_sync_info;
+    is_valid_ = true;
+  }
+  bool is_valid() const { return is_valid_; }
+  bool is_sys_ls_synced() const { return is_sys_ls_synced_; }
+  bool is_all_ls_synced() const { return is_all_ls_synced_; }
+  const ObTenantRoleTransNonSyncInfo &get_non_sync_info() const { return non_sync_info_; }
+  TO_STRING_KV(K_(is_valid), K_(is_sys_ls_synced), K_(is_all_ls_synced), K_(non_sync_info));
+private:
+  bool is_sys_ls_synced_;
+  bool is_all_ls_synced_;
+  ObTenantRoleTransNonSyncInfo non_sync_info_;
+  bool is_valid_;
 };
 
 /*description:
@@ -268,7 +307,8 @@ private:
   int check_sync_to_latest_do_while_(
     const ObAllTenantInfo &tenant_info,
     const bool only_check_sys_ls,
-    const bool is_failover);
+    const bool is_failover,
+    ObTenantRoleTransSyncResult *last_result_out = nullptr);
 
   /**
    * @description:
@@ -319,7 +359,6 @@ private:
 
 private:
   const static int64_t SEC_UNIT = 1000L * 1000L;
-  const static int64_t PRINT_INTERVAL = 1000L * 1000L;
 
 private:
   uint64_t tenant_id_;
