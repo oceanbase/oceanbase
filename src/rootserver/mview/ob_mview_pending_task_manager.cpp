@@ -753,6 +753,15 @@ int ObMViewPendingTaskManager::mark_task_success(uint64_t tenant_id,
   return ret;
 }
 
+bool ObMViewPendingTaskManager::need_delay_before_retry(int task_ret)
+{
+  bool bret = false;
+  if (is_master_changed_error(task_ret)) {
+    bret = true;
+  }
+  return bret;
+}
+
 int ObMViewPendingTaskManager::mark_task_retry_wait(uint64_t tenant_id,
                                                     int64_t refresh_id,
                                                     uint64_t mview_id,
@@ -763,6 +772,7 @@ int ObMViewPendingTaskManager::mark_task_retry_wait(uint64_t tenant_id,
   bool refresh_finished = false;
   int64_t retry_count = 0;
   int64_t next_retry_ts = 0;
+  bool refresh_cancelled = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("pending task manager not init", KR(ret));
@@ -772,15 +782,28 @@ int ObMViewPendingTaskManager::mark_task_retry_wait(uint64_t tenant_id,
                                                   mview_id, retry_count))) {
     LOG_WARN("get task retry count failed", KR(ret),
              K(tenant_id), K(refresh_id), K(mview_id));
-  } else if (retry_count >= MAX_RETRY_COUNT) {
+  } else if (OB_FAIL(queue_.is_refresh_cancelled(tenant_id, refresh_id, refresh_cancelled))) {
+    LOG_WARN("check refresh cancelled failed", KR(ret),
+             K(tenant_id), K(refresh_id), K(mview_id));
+  } else if (retry_count >= MAX_RETRY_COUNT || refresh_cancelled) {
     LOG_INFO("task retry count exhausted, marking failed directly",
-             K(tenant_id), K(refresh_id), K(mview_id), K(retry_count), K(task_ret));
+             K(tenant_id), K(refresh_id), K(mview_id), K(retry_count), K(task_ret), K(refresh_cancelled));
     if (OB_FAIL(finalize_task(tenant_id, refresh_id, mview_id, task_ret, err_msg))) {
       LOG_WARN("finalize task after retry exhaustion failed", KR(ret),
                K(tenant_id), K(refresh_id), K(mview_id), K(task_ret));
     }
+  } else if (!need_delay_before_retry(task_ret)) {
+    if (OB_FAIL(table_operator_.update_task_running_to_pending(tenant_id, refresh_id,
+                                                               mview_id))) {
+      LOG_WARN("update task running to pending failed", KR(ret),
+               K(tenant_id), K(refresh_id), K(mview_id));
+    } else if (OB_FAIL(queue_.set_task_running_to_pending(tenant_id, refresh_id, mview_id,
+                                                          refresh_finished))) {
+      LOG_WARN("set task running to pending failed", KR(ret),
+               K(tenant_id), K(refresh_id), K(mview_id));
+    }
   } else {
-    next_retry_ts = ObTimeUtility::current_time() + 10_s;
+    next_retry_ts = ObTimeUtility::current_time() + 1_s;
     if (OB_FAIL(table_operator_.update_task_to_retry_wait(tenant_id, refresh_id,
                                                            mview_id, next_retry_ts))) {
       LOG_WARN("update task to retry wait failed", KR(ret), K(tenant_id), K(refresh_id),
@@ -789,13 +812,9 @@ int ObMViewPendingTaskManager::mark_task_retry_wait(uint64_t tenant_id,
                                                   refresh_finished))) {
       LOG_WARN("set task retry wait failed", KR(ret),
                K(tenant_id), K(refresh_id), K(mview_id));
-    } else {
-      int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(inspection_task_.register_for_retry(
-                         tenant_id, refresh_id, mview_id, next_retry_ts))) {
-        LOG_WARN("fail to register for retry, task may be delayed until next reload",
-                 KR(tmp_ret), K(tenant_id), K(refresh_id), K(mview_id), K(next_retry_ts));
-      }
+    } else if (OB_FAIL(inspection_task_.register_for_retry(tenant_id, refresh_id, mview_id, next_retry_ts))) {
+      LOG_WARN("fail to register for retry, task may be delayed until next reload",
+               KR(ret), K(tenant_id), K(refresh_id), K(mview_id), K(next_retry_ts));
     }
   }
   return ret;
@@ -871,14 +890,35 @@ int ObMViewPendingTaskManager::finalize_task(uint64_t tenant_id,
   return ret;
 }
 
+// resync_task_from_disk treats disk as the authority and aligns memory to it.
+//
+// Two phases:
+//   1. Snapshot disk state (row presence + status + retry/recovery hints).
+//   2. Align in-memory state via queue_.align_task_to_status, which handles
+//      every (memory_state, disk_state) combination uniformly. The caller
+//      only owns the disk-state-specific side effects:
+//        - ROW_GONE:    align mem to CANCELLED, cancel deps, recycle if finished.
+//        - PENDING:     align (no side effect); scheduler will pick it up.
+//        - RUNNING:     align + register_for_recovery.
+//        - RETRY_WAIT:  align + register_for_retry.
+//        - SUCCESS:     align + recycle if finished.
+//        - FAILED:      align + cancel deps + recycle if finished.
+//        - CANCELLED:   align + cancel deps + recycle if finished.
+//
+// Memory anomalies (task absent, memory advanced past disk into terminal)
+// are logged as WARN inside align_task_to_status and surfaced to the caller
+// via memory_absent; this function does not try to recreate missing tasks
+// or revive terminal memory.
 int ObMViewPendingTaskManager::resync_task_from_disk(uint64_t tenant_id,
                                                      int64_t refresh_id,
-                                                     uint64_t mview_id,
-                                                     uint64_t target_data_sync_scn)
+                                                     uint64_t mview_id)
 {
   int ret = OB_SUCCESS;
   ObMViewTaskStatus disk_status = MV_TASK_PENDING;
   int64_t disk_next_retry_ts = 0;
+  uint64_t target_data_sync_scn = 0;
+  bool row_gone = false;
+  bool memory_absent = false;
   bool refresh_finished = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
@@ -886,109 +926,81 @@ int ObMViewPendingTaskManager::resync_task_from_disk(uint64_t tenant_id,
   } else if (OB_FAIL(wait_reload_ready(RELOAD_WAIT_TIMEOUT_MS))) {
     LOG_WARN("wait reload ready failed", KR(ret));
   } else if (OB_FAIL(table_operator_.get_task_sync_info(tenant_id, refresh_id, mview_id,
-                                                         disk_status, disk_next_retry_ts))) {
+                                                         disk_status, disk_next_retry_ts,
+                                                         target_data_sync_scn))) {
     if (OB_ENTRY_NOT_EXIST == ret) {
-      // Row already deleted (e.g. another flow ran recycle_refresh). Drop from memory queue.
       ret = OB_SUCCESS;
-      if (OB_FAIL(queue_.set_task_cancelled(tenant_id, refresh_id, mview_id, refresh_finished))) {
-        LOG_WARN("set task cancelled failed for missing disk row",
-                 KR(ret), K(tenant_id), K(refresh_id), K(mview_id));
-      } else if (!refresh_finished
-                 && OB_FAIL(queue_.cancel_all_pending_tasks(tenant_id, refresh_id, refresh_finished))) {
-        LOG_WARN("cancel all pending tasks after resync missing row failed", KR(ret), K(tenant_id), K(refresh_id));
-      } else if (refresh_finished && OB_FAIL(inner_recycle_refresh(tenant_id, refresh_id))) {
-        LOG_WARN("recycle refresh failed", KR(ret), K(tenant_id), K(refresh_id), K(mview_id));
-      }
+      row_gone = true;
     } else {
       LOG_WARN("get task sync info failed", KR(ret), K(tenant_id), K(refresh_id), K(mview_id));
     }
+  }
+  if (OB_FAIL(ret)) {
+    // disk read failed, nothing to do
   } else {
+    // Phase 1: align memory to disk under queue lock.
+    const int64_t target_status = row_gone ? static_cast<int64_t>(MV_TASK_CANCELLED)
+                                           : static_cast<int64_t>(disk_status);
     LOG_INFO("resync task memory from disk", K(tenant_id), K(refresh_id), K(mview_id),
-             K(disk_status), K(disk_next_retry_ts));
-    switch (disk_status) {
-      case MV_TASK_PENDING: {
-        // Unexpected: the table CAS PENDING→RUNNING should have succeeded. Log and no-op;
-        // a subsequent scheduler tick will retry mark_task_running.
-        LOG_WARN("disk status still PENDING after mark_task_running EAGAIN",
-                 K(tenant_id), K(refresh_id), K(mview_id));
-        break;
-      }
-      case MV_TASK_RUNNING: {
-        if (OB_FAIL(queue_.set_task_running(tenant_id, refresh_id, mview_id))) {
-          LOG_WARN("memory set_task_running failed", KR(ret),
-                   K(tenant_id), K(refresh_id), K(mview_id));
-        } else if (OB_FAIL(inspection_task_.register_for_recovery(
-                       tenant_id, refresh_id, mview_id, target_data_sync_scn))) {
-          LOG_WARN("register for recovery failed", KR(ret),
-                   K(tenant_id), K(refresh_id), K(mview_id));
+             K(row_gone), K(disk_status), K(disk_next_retry_ts));
+    if (OB_FAIL(queue_.align_task_to_status(tenant_id, refresh_id, mview_id,
+                                            target_status, memory_absent, refresh_finished))) {
+      LOG_WARN("align task to disk status failed", KR(ret),
+               K(tenant_id), K(refresh_id), K(mview_id), K(target_status));
+    } else if (memory_absent) {
+      LOG_WARN("resync task: memory entry absent, will be picked up by next reload",
+               K(tenant_id), K(refresh_id), K(mview_id), K(target_status));
+    } else {
+      // Phase 2: disk-state-specific side effects.
+      const ObMViewTaskStatus effective_status = row_gone ? MV_TASK_CANCELLED : disk_status;
+      switch (effective_status) {
+        case MV_TASK_PENDING: {
+          // No-op. Scheduler will retry mark_task_running on the next tick.
+          break;
         }
-        break;
-      }
-      case MV_TASK_RETRY_WAIT: {
-        if (OB_FAIL(queue_.set_task_running(tenant_id, refresh_id, mview_id))) {
-          LOG_WARN("memory PENDING→RUNNING failed for retry_wait resync", KR(ret),
-                   K(tenant_id), K(refresh_id), K(mview_id));
-        } else if (OB_FAIL(queue_.set_task_retry_wait(tenant_id, refresh_id, mview_id,
-                                                       refresh_finished))) {
-          LOG_WARN("memory RUNNING→RETRY_WAIT failed", KR(ret),
-                   K(tenant_id), K(refresh_id), K(mview_id));
-        } else if (OB_FAIL(inspection_task_.register_for_retry(
-                       tenant_id, refresh_id, mview_id, disk_next_retry_ts))) {
-          LOG_WARN("register for retry failed", KR(ret),
-                   K(tenant_id), K(refresh_id), K(mview_id), K(disk_next_retry_ts));
+        case MV_TASK_RUNNING: {
+          if (OB_FAIL(inspection_task_.register_for_recovery(
+                  tenant_id, refresh_id, mview_id, target_data_sync_scn))) {
+            LOG_WARN("register for recovery failed after resync", KR(ret),
+                     K(tenant_id), K(refresh_id), K(mview_id));
+          }
+          break;
         }
-        break;
-      }
-      case MV_TASK_SUCCESS: {
-        if (OB_FAIL(queue_.set_task_running(tenant_id, refresh_id, mview_id))) {
-          LOG_WARN("memory PENDING→RUNNING failed for success resync", KR(ret),
-                   K(tenant_id), K(refresh_id), K(mview_id));
-        } else if (OB_FAIL(queue_.set_task_success(tenant_id, refresh_id, mview_id,
-                                                    refresh_finished))) {
-          LOG_WARN("memory RUNNING→SUCCESS failed", KR(ret),
-                   K(tenant_id), K(refresh_id), K(mview_id));
-        } else if (refresh_finished
-                   && OB_FAIL(inner_recycle_refresh(tenant_id, refresh_id))) {
-          LOG_WARN("recycle refresh failed", KR(ret), K(tenant_id), K(refresh_id), K(mview_id));
+        case MV_TASK_RETRY_WAIT: {
+          if (OB_FAIL(inspection_task_.register_for_retry(
+                  tenant_id, refresh_id, mview_id, disk_next_retry_ts))) {
+            LOG_WARN("register for retry failed after resync", KR(ret),
+                     K(tenant_id), K(refresh_id), K(mview_id), K(disk_next_retry_ts));
+          }
+          break;
         }
-        break;
-      }
-      case MV_TASK_FAILED: {
-        if (OB_FAIL(queue_.set_task_running(tenant_id, refresh_id, mview_id))) {
-          LOG_WARN("memory PENDING→RUNNING failed for failed resync", KR(ret),
-                   K(tenant_id), K(refresh_id), K(mview_id));
-        } else if (OB_FAIL(queue_.set_task_failed(tenant_id, refresh_id, mview_id,
-                                                   OB_SUCCESS, refresh_finished))) {
-          LOG_WARN("memory RUNNING→FAILED failed", KR(ret),
-                   K(tenant_id), K(refresh_id), K(mview_id));
-        } else if (!refresh_finished
-                   && OB_FAIL(queue_.cancel_all_pending_tasks(tenant_id, refresh_id, refresh_finished))) {
-          LOG_WARN("cancel all pending tasks after resync failed failed", KR(ret), K(tenant_id), K(refresh_id));
-        } else if (refresh_finished
-                   && OB_FAIL(inner_recycle_refresh(tenant_id, refresh_id))) {
-          LOG_WARN("recycle refresh failed", KR(ret), K(tenant_id), K(refresh_id), K(mview_id));
+        case MV_TASK_SUCCESS: {
+          if (refresh_finished
+              && OB_FAIL(inner_recycle_refresh(tenant_id, refresh_id))) {
+            LOG_WARN("recycle refresh failed after success resync", KR(ret),
+                     K(tenant_id), K(refresh_id), K(mview_id));
+          }
+          break;
         }
-        break;
-      }
-      case MV_TASK_CANCELLED: {
-        if (OB_FAIL(queue_.set_task_cancelled(tenant_id, refresh_id, mview_id,
-                                               refresh_finished))) {
-          LOG_WARN("memory set_task_cancelled failed", KR(ret),
-                   K(tenant_id), K(refresh_id), K(mview_id));
-        } else if (!refresh_finished
-                   && OB_FAIL(queue_.cancel_all_pending_tasks(tenant_id, refresh_id, refresh_finished))) {
-          LOG_WARN("cancel all pending tasks after resync cancelled failed", KR(ret), K(tenant_id), K(refresh_id));
-        } else if (refresh_finished
-                   && OB_FAIL(inner_recycle_refresh(tenant_id, refresh_id))) {
-          LOG_WARN("recycle refresh failed", KR(ret), K(tenant_id), K(refresh_id), K(mview_id));
+        case MV_TASK_FAILED:
+        case MV_TASK_CANCELLED: {
+          if (!refresh_finished
+              && OB_FAIL(queue_.cancel_all_pending_tasks(tenant_id, refresh_id, refresh_finished))) {
+            LOG_WARN("cancel all pending tasks after terminal resync failed", KR(ret),
+                     K(tenant_id), K(refresh_id), K(mview_id), K(effective_status));
+          } else if (refresh_finished
+                     && OB_FAIL(inner_recycle_refresh(tenant_id, refresh_id))) {
+            LOG_WARN("recycle refresh failed after terminal resync", KR(ret),
+                     K(tenant_id), K(refresh_id), K(mview_id), K(effective_status));
+          }
+          break;
         }
-        break;
-      }
-      default: {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unknown disk status", KR(ret), K(tenant_id), K(refresh_id), K(mview_id),
-                 K(disk_status));
-        break;
+        default: {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unknown effective status after resync", KR(ret),
+                   K(tenant_id), K(refresh_id), K(mview_id), K(effective_status));
+          break;
+        }
       }
     }
   }
@@ -1385,6 +1397,17 @@ int ObMViewPendingTaskManager::process_single_task_result(const TaskResultEntry 
       LOG_WARN("mark task retry wait failed", KR(ret),
                K(entry.tenant_id_), K(entry.refresh_id_), K(entry.mview_id_),
                K(entry.task_ret_));
+    }
+    if (OB_FAIL(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      ObString err_msg;
+      if (OB_TMP_FAIL(finalize_task(entry.tenant_id_,
+                                    entry.refresh_id_,
+                                    entry.mview_id_,
+                                    entry.task_ret_,
+                                    err_msg))) {
+        LOG_WARN("finalize task failed", KR(tmp_ret), K(entry));
+      }
     }
   } else {
     if (OB_FAIL(finalize_task(entry.tenant_id_,

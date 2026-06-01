@@ -114,8 +114,7 @@ public:
   // side effect (register for recovery / retry / recycle).
   int resync_task_from_disk(uint64_t tenant_id,
                             int64_t refresh_id,
-                            uint64_t mview_id,
-                            uint64_t target_data_sync_scn);
+                            uint64_t mview_id);
   int recycle_refresh(uint64_t tenant_id,
                       int64_t refresh_id);
   int on_schedule_task_failed(const common::ObIArray<ObMViewPendingTask *> &group);
@@ -165,6 +164,16 @@ public:
                  KR(ret), K(infos.at(i)));
         }
       }
+    }
+    return ret;
+  }
+  int get_task_status(uint64_t tenant_id, int64_t refresh_id, uint64_t mview_id, ObMViewTaskStatus &status)
+  {
+    int ret = OB_SUCCESS;
+    int64_t status_val = 0;
+    if (OB_FAIL(queue_.get_task_status(tenant_id, refresh_id, mview_id, status_val))) {
+    } else {
+      status = static_cast<ObMViewTaskStatus>(status_val);
     }
     return ret;
   }
@@ -232,6 +241,7 @@ private:
   // elapsed without transition. Protected entries should bail out on non-success.
   int wait_reload_ready(int64_t timeout_ms);
   int publish_reload_state(const ReloadState new_state);
+  static bool need_delay_before_retry(int task_ret);
   // recycle_refresh body assuming the caller already waited for READY. All
   // in-manager chains (mark_task_success/failed/cancelled, resync_task_from_disk)
   // use this to avoid re-entering reload_cond_'s mutex.

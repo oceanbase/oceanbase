@@ -78,8 +78,34 @@ public:
   int set_task_pending(uint64_t tenant_id,
                        int64_t refresh_id,
                        uint64_t mview_id);
+  int set_task_running_to_pending(uint64_t tenant_id,
+                                  int64_t refresh_id,
+                                  uint64_t mview_id,
+                                  bool &refresh_finished);
+  // Force-align the in-memory task state to `target_status` regardless of the
+  // current in-memory state. Intended for the disk→memory resync path only:
+  // disk is treated as the authority. The function handles the full
+  // (memory_state, target_state) matrix:
+  //   * memory absent (task or ctx) => `memory_absent = true`, no mutation.
+  //   * memory == target           => no-op (but svr_addr is still patched
+  //                                   when target is RUNNING).
+  //   * memory is terminal && target != memory => no mutation, WARN; the
+  //     caller is expected to surface this as an anomaly. Terminal memory is
+  //     never "revived" since terminal transitions are written DB-first then
+  //     memory, so reaching here implies an upstream bug.
+  //   * memory is non-terminal => apply counter/flag deltas and switch state.
+  // `refresh_finished` is set to true only when this call mutated state and
+  // the refresh has now reached terminal completion.
+  int align_task_to_status(uint64_t tenant_id,
+                           int64_t refresh_id,
+                           uint64_t mview_id,
+                           int64_t target_status,
+                           bool &memory_absent,
+                           bool &refresh_finished,
+                           const common::ObAddr *svr_addr = nullptr);
   int get_task_status(uint64_t tenant_id, int64_t refresh_id,
                       uint64_t mview_id, int64_t &status) const;
+  int is_refresh_cancelled(uint64_t tenant_id, int64_t refresh_id, bool &cancelled) const;
   int get_task_retry_count(uint64_t tenant_id, int64_t refresh_id,
                             uint64_t mview_id, int64_t &retry_count) const;
   int get_refresh_trace_id(uint64_t tenant_id,
@@ -145,7 +171,6 @@ private:
                                 bool &satisfied) const;
   int check_prev_task_satisfied(const ObMViewPendingTask &task,
                                 bool &satisfied) const;
-
 private:
   PendingTaskMap pending_map_;
   RefreshCtxMap refresh_map_;

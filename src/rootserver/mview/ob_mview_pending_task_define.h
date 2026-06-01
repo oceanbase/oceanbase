@@ -192,6 +192,7 @@ public:
                K_(running_task_cnt),
                K_(has_terminal_failure),
                K_(root_task_succeeded),
+               K_(cancelled),
                K_(trace_id));
   bool is_task_finished() const { return root_mview_id_ != OB_INVALID_ID && unfinished_task_cnt_ <= 0; }
 
@@ -203,6 +204,7 @@ public:
   int64_t running_task_cnt_;
   bool has_terminal_failure_;
   bool root_task_succeeded_;
+  bool cancelled_;
   common::ObCurTraceId::TraceId trace_id_;
 };
 

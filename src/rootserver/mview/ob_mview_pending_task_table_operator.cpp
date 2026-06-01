@@ -168,7 +168,8 @@ int ObMViewPendingTaskTableOperator::update_task_status(uint64_t tenant_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(refresh_id), K(mview_id));
   } else if (OB_FAIL(sql.assign_fmt(
-                 "UPDATE `%s`.`%s` SET status = %ld WHERE tenant_id = 0 AND refresh_id = %ld "
+                 "UPDATE `%s`.`%s` SET status = %ld, gmt_modified = now(6)"
+                 " WHERE tenant_id = 0 AND refresh_id = %ld "
                  "AND mview_id = %lu AND status = %ld",
                  OB_SYS_DATABASE_NAME,
                  OB_ALL_MVIEW_REFRESH_PENDING_TASK_TNAME,
@@ -208,7 +209,8 @@ int ObMViewPendingTaskTableOperator::update_task_to_running(uint64_t tenant_id,
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to format svr ip", KR(ret), K(svr_addr));
   } else if (OB_FAIL(sql.assign_fmt(
-                 "UPDATE `%s`.`%s` SET status = %ld, svr_ip = '%s', svr_port = %d"
+                 "UPDATE `%s`.`%s` SET status = %ld, svr_ip = '%s', svr_port = %d,"
+                 " gmt_modified = now(6)"
                  " WHERE tenant_id = 0 AND refresh_id = %ld"
                  " AND mview_id = %lu AND status = %ld",
                  OB_SYS_DATABASE_NAME,
@@ -249,7 +251,7 @@ int ObMViewPendingTaskTableOperator::update_task_session_id(common::ObISQLClient
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(refresh_id), K(mview_id));
   } else if (OB_FAIL(sql.assign_fmt(
-                 "UPDATE `%s`.`%s` SET session_id = %u"
+                 "UPDATE `%s`.`%s` SET session_id = %u, gmt_modified = now(6)"
                  " WHERE tenant_id = 0 AND refresh_id = %ld AND mview_id = %lu",
                  OB_SYS_DATABASE_NAME,
                  OB_ALL_MVIEW_REFRESH_PENDING_TASK_TNAME,
@@ -482,7 +484,7 @@ int ObMViewPendingTaskTableOperator::update_task_to_retry_wait(uint64_t tenant_i
              K(tenant_id), K(refresh_id), K(mview_id), K(next_retry_ts));
   } else if (OB_FAIL(sql.assign_fmt(
                  "UPDATE `%s`.`%s` SET status = %ld, retry_count = retry_count + 1,"
-                 " next_retry_time = usec_to_time(%ld)"
+                 " next_retry_time = usec_to_time(%ld), gmt_modified = now(6)"
                  " WHERE tenant_id = 0 AND refresh_id = %ld"
                  " AND mview_id = %lu AND status = %ld",
                  OB_SYS_DATABASE_NAME,
@@ -516,16 +518,55 @@ int ObMViewPendingTaskTableOperator::update_task_to_pending(uint64_t tenant_id,
   return ret;
 }
 
+int ObMViewPendingTaskTableOperator::update_task_running_to_pending(uint64_t tenant_id,
+                                                                     int64_t refresh_id,
+                                                                     uint64_t mview_id)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("table operator not init", KR(ret));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || refresh_id <= 0
+                          || OB_INVALID_ID == mview_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(refresh_id), K(mview_id));
+  } else if (OB_FAIL(sql.assign_fmt(
+                 "UPDATE `%s`.`%s` SET status = %ld, retry_count = retry_count + 1,"
+                 " gmt_modified = now(6)"
+                 " WHERE tenant_id = 0 AND refresh_id = %ld"
+                 " AND mview_id = %lu AND status = %ld",
+                 OB_SYS_DATABASE_NAME,
+                 OB_ALL_MVIEW_REFRESH_PENDING_TASK_TNAME,
+                 static_cast<int64_t>(MV_TASK_PENDING),
+                 refresh_id,
+                 mview_id,
+                 static_cast<int64_t>(MV_TASK_RUNNING)))) {
+    LOG_WARN("fail to assign sql", KR(ret));
+  } else if (OB_FAIL(execute_trans_write(sql_proxy_, tenant_id, sql, affected_rows))) {
+    LOG_WARN("fail to update task running to pending", KR(ret),
+             K(tenant_id), K(refresh_id), K(mview_id));
+  } else if (OB_UNLIKELY(0 == affected_rows)) {
+    ret = OB_EAGAIN;
+    LOG_WARN("update_task_running_to_pending CAS failed, status mismatch",
+             KR(ret), K(tenant_id), K(refresh_id), K(mview_id));
+  }
+  return ret;
+}
+
 int ObMViewPendingTaskTableOperator::get_task_sync_info(uint64_t tenant_id,
                                                          int64_t refresh_id,
                                                          uint64_t mview_id,
                                                          ObMViewTaskStatus &status,
-                                                         int64_t &next_retry_ts)
+                                                         int64_t &next_retry_ts,
+                                                         uint64_t &target_data_sync_scn)
 {
   int ret = OB_SUCCESS;
   ObSqlString sql;
   status = MV_TASK_PENDING;
   next_retry_ts = 0;
+  target_data_sync_scn = 0;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("table operator not init", KR(ret));
@@ -533,7 +574,8 @@ int ObMViewPendingTaskTableOperator::get_task_sync_info(uint64_t tenant_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(refresh_id), K(mview_id));
   } else if (OB_FAIL(sql.assign_fmt(
-                 "SELECT status, time_to_usec(next_retry_time) AS next_retry_ts "
+                 "SELECT status, time_to_usec(next_retry_time) AS next_retry_ts, "
+                 "target_data_sync_scn "
                  "FROM `%s`.`%s` "
                  "WHERE tenant_id = 0 AND refresh_id = %ld AND mview_id = %lu",
                  OB_SYS_DATABASE_NAME,
@@ -560,6 +602,7 @@ int ObMViewPendingTaskTableOperator::get_task_sync_info(uint64_t tenant_id,
         int64_t status_int = 0;
         EXTRACT_INT_FIELD_MYSQL(*result, "status", status_int, int64_t);
         EXTRACT_INT_FIELD_MYSQL_SKIP_RET(*result, "next_retry_ts", next_retry_ts, int64_t);
+        EXTRACT_UINT_FIELD_MYSQL(*result, "target_data_sync_scn", target_data_sync_scn, uint64_t);
         if (OB_SUCC(ret)) {
           status = static_cast<ObMViewTaskStatus>(status_int);
         }
@@ -584,21 +627,20 @@ int ObMViewPendingTaskTableOperator::update_task_to_failed(uint64_t tenant_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(refresh_id), K(failed_mview_id));
   } else if (OB_FAIL(sql.assign_fmt(
-                 "UPDATE `%s`.`%s` SET status = %ld WHERE tenant_id = 0 AND refresh_id = %ld "
-                 "AND mview_id = %lu AND status = %ld",
+                 "UPDATE `%s`.`%s` SET status = %ld, gmt_modified = now(6)"
+                 " WHERE tenant_id = 0 AND refresh_id = %ld "
+                 "AND mview_id = %lu AND status NOT IN (%ld, %ld, %ld)",
                  OB_SYS_DATABASE_NAME,
                  OB_ALL_MVIEW_REFRESH_PENDING_TASK_TNAME,
                  static_cast<int64_t>(MV_TASK_FAILED),
                  refresh_id,
                  failed_mview_id,
-                 static_cast<int64_t>(MV_TASK_RUNNING)))) {
+                 static_cast<int64_t>(MV_TASK_SUCCESS),
+                 static_cast<int64_t>(MV_TASK_FAILED),
+                 static_cast<int64_t>(MV_TASK_CANCELLED)))) {
     LOG_WARN("fail to assign sql", KR(ret));
   } else if (OB_FAIL(execute_trans_write(sql_proxy_, tenant_id, sql, affected_rows))) {
     LOG_WARN("fail to update task to failed", KR(ret), K(tenant_id), K(refresh_id), K(failed_mview_id));
-  } else if (OB_UNLIKELY(0 == affected_rows)) {
-    ret = OB_EAGAIN;
-    LOG_WARN("task status CAS failed for update_task_to_failed", KR(ret),
-             K(tenant_id), K(refresh_id), K(failed_mview_id));
   }
   return ret;
 }
@@ -614,7 +656,8 @@ int ObMViewPendingTaskTableOperator::batch_cancel_pending_tasks(uint64_t tenant_
   } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || refresh_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(refresh_id));
-  } else if (OB_FAIL(sql.assign_fmt("UPDATE `%s`.`%s` SET status = %ld WHERE tenant_id = 0 AND refresh_id = %ld "
+  } else if (OB_FAIL(sql.assign_fmt("UPDATE `%s`.`%s` SET status = %ld, gmt_modified = now(6)"
+                                    " WHERE tenant_id = 0 AND refresh_id = %ld "
                                     "AND status IN (%ld, %ld)",
                                     OB_SYS_DATABASE_NAME,
                                     OB_ALL_MVIEW_REFRESH_PENDING_TASK_TNAME,

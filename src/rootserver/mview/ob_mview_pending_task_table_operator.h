@@ -54,13 +54,17 @@ public:
   int update_task_to_pending(uint64_t tenant_id,
                              int64_t refresh_id,
                              uint64_t mview_id);
+  int update_task_running_to_pending(uint64_t tenant_id,
+                                     int64_t refresh_id,
+                                     uint64_t mview_id);
   // Fetch single-row status + next_retry_ts. Returns OB_ENTRY_NOT_EXIST when the row is absent
   // (e.g. recycle_refresh already deleted the refresh group).
   int get_task_sync_info(uint64_t tenant_id,
                          int64_t refresh_id,
                          uint64_t mview_id,
                          ObMViewTaskStatus &status,
-                         int64_t &next_retry_ts);
+                         int64_t &next_retry_ts,
+                         uint64_t &target_data_sync_scn);
   int update_task_to_failed(uint64_t tenant_id, int64_t refresh_id, uint64_t failed_mview_id);
   // Batch cancel all PENDING/RETRY_WAIT tasks for a refresh. Idempotent.
   int batch_cancel_pending_tasks(uint64_t tenant_id, int64_t refresh_id);

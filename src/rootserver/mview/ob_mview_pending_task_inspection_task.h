@@ -74,12 +74,14 @@ private:
   int restore_retry_list(const common::ObIArray<RetryEntry> &remaining);
 
 private:
-  static const int64_t INSPECTION_INTERVAL = 10LL * 1000 * 1000; // 10s
+  static const int64_t INSPECTION_INTERVAL = 1LL * 1000 * 1000; // 1s
+  static const int64_t RECOVERY_TICK_RATIO = 10; // process_recovery_list runs every 10 ticks (~10s)
 
   ObMViewPendingTaskManager *manager_;
   bool is_inited_;
   bool in_sched_;
   bool is_stop_;
+  int64_t tick_count_;
 
   // Protects both recovery_list_ and retry_list_.
   common::ObSpinLock list_lock_;

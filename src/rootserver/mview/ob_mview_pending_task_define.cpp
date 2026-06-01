@@ -265,6 +265,7 @@ ObMViewPendingRefreshCtx::ObMViewPendingRefreshCtx()
     running_task_cnt_(0),
     has_terminal_failure_(false),
     root_task_succeeded_(false),
+    cancelled_(false),
     trace_id_()
 {
 }

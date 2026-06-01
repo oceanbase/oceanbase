@@ -394,21 +394,36 @@ int ObMViewPendingTaskQueue::inner_set_task_status(ObMViewPendingRefreshCtx &ctx
         task->svr_addr_ = *svr_addr;
       }
     } else if (MV_TASK_SUCCESS == to_status) {
-      --ctx.running_task_cnt_;
+      // running counter delta depends on the actual leaving state. normal
+      // success path is RUNNING -> SUCCESS; align path may enter from
+      // PENDING / RETRY_WAIT and must not touch running counters.
+      if (MV_TASK_RUNNING == old_status) {
+        --ctx.running_task_cnt_;
+        --total_running_cnt_;
+      }
       --ctx.unfinished_task_cnt_;
-      --total_running_cnt_;
       if (task->mview_id_ == ctx.root_mview_id_) {
         ctx.root_task_succeeded_ = true;
       }
     } else if (MV_TASK_RETRY_WAIT == to_status) {
-      --ctx.running_task_cnt_;
-      --total_running_cnt_;
+      if (MV_TASK_RUNNING == old_status) {
+        --ctx.running_task_cnt_;
+        --total_running_cnt_;
+      }
       ++task->retry_count_;
     } else if (MV_TASK_FAILED == to_status) {
-      --ctx.running_task_cnt_;
+      if (MV_TASK_RUNNING == old_status) {
+        --ctx.running_task_cnt_;
+        --total_running_cnt_;
+      }
       --ctx.unfinished_task_cnt_;
-      --total_running_cnt_;
       ctx.has_terminal_failure_ = true;
+    } else if (MV_TASK_PENDING == to_status) {
+      if (MV_TASK_RUNNING == old_status) {
+        --ctx.running_task_cnt_;
+        --total_running_cnt_;
+        ++task->retry_count_;
+      }
     } else if (MV_TASK_CANCELLED == to_status) {
       if (MV_TASK_RUNNING == old_status) {
         --ctx.running_task_cnt_;
@@ -434,15 +449,16 @@ int ObMViewPendingTaskQueue::inner_recursive_cancel_dept_tasks(
   } else if (OB_ISNULL(task)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("task is null", KR(ret), K(task_key));
-  } else if (OB_UNLIKELY(MV_TASK_FAILED == task->status_ ||
-                         MV_TASK_CANCELLED == task->status_ ||
-                         MV_TASK_SUCCESS == task->status_ ||
-                         MV_TASK_RUNNING == task->status_)) {
-    // do nothing
   } else {
-    task->status_ = MV_TASK_CANCELLED;
-    task->gmt_modified_ = ObTimeUtility::current_time();
-    --ctx.unfinished_task_cnt_;
+    const int64_t old_status = task->status_;
+    if (MV_TASK_PENDING == old_status || MV_TASK_RETRY_WAIT == old_status) {
+      task->status_ = MV_TASK_CANCELLED;
+      task->gmt_modified_ = ObTimeUtility::current_time();
+      --ctx.unfinished_task_cnt_;
+      LOG_INFO("cancel pending mview task", K(tenant_id), K(refresh_id), K(mview_id), K(old_status));
+    }
+    // always iterate dependent tasks so that pending/retry_wait deps can still be cancelled
+    // even when the current task is already in a terminal or running state
     for (int64_t i = 0; OB_SUCC(ret) && i < task->dep_mview_id_cnt_; ++i) {
       if (OB_FAIL(SMART_CALL(inner_recursive_cancel_dept_tasks(ctx,
                                                                tenant_id,
@@ -525,7 +541,8 @@ int ObMViewPendingTaskQueue::set_task_failed(uint64_t tenant_id,
                                MV_TASK_RUNNING,
                                MV_TASK_FAILED,
                                error_ret,
-                               refresh_finished))) {
+                               refresh_finished,
+                               true /*ignore_status_check*/))) {
     LOG_WARN("set task failed failed", KR(ret), K(tenant_id), K(refresh_id), K(mview_id));
   }
   return ret;
@@ -568,6 +585,26 @@ int ObMViewPendingTaskQueue::set_task_pending(uint64_t tenant_id,
   return ret;
 }
 
+int ObMViewPendingTaskQueue::set_task_running_to_pending(uint64_t tenant_id,
+                                                          int64_t refresh_id,
+                                                          uint64_t mview_id,
+                                                          bool &refresh_finished)
+{
+  int ret = OB_SUCCESS;
+  refresh_finished = false;
+  if (OB_FAIL(set_task_status(tenant_id,
+                              refresh_id,
+                              mview_id,
+                              MV_TASK_RUNNING,
+                              MV_TASK_PENDING,
+                              OB_SUCCESS,
+                              refresh_finished))) {
+    LOG_WARN("set task running to pending failed", KR(ret),
+             K(tenant_id), K(refresh_id), K(mview_id));
+  }
+  return ret;
+}
+
 int ObMViewPendingTaskQueue::cancel_all_pending_tasks(uint64_t tenant_id, int64_t refresh_id, bool &refresh_finished)
 {
   int ret = OB_SUCCESS;
@@ -589,6 +626,7 @@ int ObMViewPendingTaskQueue::cancel_all_pending_tasks(uint64_t tenant_id, int64_
     } else if (OB_ISNULL(ctx)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("refresh ctx is null", KR(ret), K(refresh_key));
+    } else if (OB_FALSE_IT(ctx->cancelled_ = true)) {
     } else if (OB_FAIL(inner_recursive_cancel_dept_tasks(*ctx,
                                                          tenant_id,
                                                          refresh_id,
@@ -617,6 +655,26 @@ int ObMViewPendingTaskQueue::get_task_status(uint64_t tenant_id,
     LOG_WARN("task is null", KR(ret), K(task_key));
   } else {
     status = task->status_;
+  }
+  return ret;
+}
+
+int ObMViewPendingTaskQueue::is_refresh_cancelled(uint64_t tenant_id,
+                                                   int64_t refresh_id,
+                                                   bool &cancelled) const
+{
+  int ret = OB_SUCCESS;
+  cancelled = false;
+  ObMViewRefreshKey refresh_key(tenant_id, refresh_id);
+  ObMViewPendingRefreshCtx *ctx = NULL;
+  ObLatchRGuard guard(rw_lock_, ObLatchIds::MVIEW_TASK_QUEUE_LOCK);
+  if (OB_FAIL(refresh_map_.get_refactored(refresh_key, ctx))) {
+    LOG_WARN("get refresh ctx failed", KR(ret), K(refresh_key));
+  } else if (OB_ISNULL(ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("refresh ctx is null", KR(ret), K(refresh_key));
+  } else {
+    cancelled = ctx->cancelled_;
   }
   return ret;
 }
@@ -824,7 +882,9 @@ int ObMViewPendingTaskQueue::check_prev_task_satisfied(const ObMViewPendingTask 
     if (OB_ISNULL(cur)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("cur is null", KR(ret), K(task));
-    } else if (task.mview_id_ == cur->mview_id_) {
+    } else if (task.mview_id_ == cur->mview_id_ &&
+               (MV_TASK_CANCELLED != cur->status_ ||
+                (MV_TASK_CANCELLED == cur->status_ && cur->retry_count_ > 0))) {
       prev_task = cur;
     }
   }
@@ -983,6 +1043,93 @@ int ObMViewPendingTaskQueue::patch_session_ids_for_running_tasks(
   }
   return ret;
 }
+
+// Align in-memory state to disk state. Disk is the authority; memory is
+// rewritten to match it. Reuses inner_set_task_status with ignore_status_check
+// for the actual transition + counter bookkeeping; only adds:
+//   * memory absent surface-up                (task or ctx not in memory)
+//   * same-state shortcut                     (mem == target; only refresh svr_addr on RUNNING)
+//   * terminal-mem-vs-different-disk          (LOG_WARN, do not touch memory)
+int ObMViewPendingTaskQueue::align_task_to_status(uint64_t tenant_id,
+                                                  int64_t refresh_id,
+                                                  uint64_t mview_id,
+                                                  int64_t target_status,
+                                                  bool &memory_absent,
+                                                  bool &refresh_finished,
+                                                  const ObAddr *svr_addr)
+{
+  int ret = OB_SUCCESS;
+  memory_absent = false;
+  refresh_finished = false;
+  ObMViewRefreshKey refresh_key(tenant_id, refresh_id);
+  ObMViewPendingTaskKey task_key(tenant_id, refresh_id, mview_id);
+  ObMViewPendingRefreshCtx *ctx = NULL;
+  ObMViewPendingTask *task = NULL;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("queue not init", KR(ret));
+  } else {
+    ObLatchWGuard guard(rw_lock_, ObLatchIds::MVIEW_TASK_QUEUE_LOCK);
+    if (OB_FAIL(refresh_map_.get_refactored(refresh_key, ctx))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        memory_absent = true;
+      } else {
+        LOG_WARN("get refresh ctx failed", KR(ret), K(refresh_key));
+      }
+    } else if (OB_ISNULL(ctx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("refresh ctx is null", KR(ret), K(refresh_key));
+    } else if (OB_FAIL(pending_map_.get_refactored(task_key, task))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        memory_absent = true;
+      } else {
+        LOG_WARN("get task failed", KR(ret), K(task_key));
+      }
+    } else if (OB_ISNULL(task)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("task is null", KR(ret), K(task_key));
+    } else {
+      const int64_t mem_status = task->status_;
+      const bool mem_is_terminal = (MV_TASK_SUCCESS == mem_status ||
+                                    MV_TASK_FAILED == mem_status ||
+                                    MV_TASK_CANCELLED == mem_status);
+      if (mem_status == target_status) {
+        // memory already matches disk. only refresh svr_addr on RUNNING.
+        if (MV_TASK_RUNNING == target_status
+            && NULL != svr_addr && svr_addr->is_valid()) {
+          task->svr_addr_ = *svr_addr;
+        }
+      } else if (mem_is_terminal) {
+        // memory is already terminal but disk reports a different state.
+        // memory terminals are reached only after the DB row was updated first,
+        // so this should not happen in practice. surface as anomaly without
+        // touching memory.
+        LOG_WARN("align task: memory terminal differs from disk, skip",
+                 K(tenant_id), K(refresh_id), K(mview_id),
+                 K(mem_status), K(target_status));
+      } else if (OB_FAIL(inner_set_task_status(*ctx, tenant_id, refresh_id, mview_id,
+                                               mem_status, target_status,
+                                               true /*ignore_status_check*/,
+                                               svr_addr))) {
+        LOG_WARN("align task: inner set task status failed", KR(ret),
+                 K(tenant_id), K(refresh_id), K(mview_id),
+                 K(mem_status), K(target_status));
+      } else {
+        LOG_INFO("align task: realigned memory to disk",
+                 K(tenant_id), K(refresh_id), K(mview_id),
+                 K(mem_status), K(target_status));
+      }
+      if (OB_SUCC(ret) && OB_FAIL(refresh_finished_after_status_change(*ctx, refresh_finished))) {
+        LOG_WARN("check refresh finished after align failed", KR(ret), KPC(ctx));
+      }
+    }
+  }
+  return ret;
+}
+
+
 
 } // namespace rootserver
 } // namespace oceanbase

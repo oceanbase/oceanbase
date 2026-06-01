@@ -529,6 +529,20 @@ TEST(ObMViewPendingRefreshCtxTest, IsTaskFinished)
 }
 
 // ---------------------------------------------------------------------------
+// ObMViewPendingRefreshCtx::cancelled_ default value
+//
+// Added by the retry_wait sync fix: cancelled_ records whether
+// cancel_all_pending_tasks has been invoked on the refresh and must default
+// to false.
+// ---------------------------------------------------------------------------
+
+TEST(ObMViewPendingRefreshCtxTest, CancelledDefaultsFalse)
+{
+  ObMViewPendingRefreshCtx ctx;
+  EXPECT_FALSE(ctx.cancelled_);
+}
+
+// ---------------------------------------------------------------------------
 // 12. Concurrent push from multiple threads (different refresh_ids)
 //
 // Each thread pushes tasks for a different refresh_id.
@@ -1085,6 +1099,371 @@ TEST_F(ObMViewPendingTaskQueueTest, PushTaskWithInvalidStatusFails)
   ObMViewPendingTask root = make_task(ROOT_MV, ObMViewPendingTask::ROOT_TASK_FLAG);
   root.status_ = 99; // not a valid ObMViewTaskStatus value
   EXPECT_NE(OB_SUCCESS, push_one(queue_, root));
+}
+
+// ---------------------------------------------------------------------------
+// 32. set_task_running_to_pending: RUNNING -> PENDING bumps retry_count
+//     and drops running counters; task is dispatchable again via peek.
+//
+// Covers the new no-delay retry path (mark_task_retry_wait fast-track) added
+// by the retry_wait sync fix.
+// ---------------------------------------------------------------------------
+
+TEST_F(ObMViewPendingTaskQueueTest, SetTaskRunningToPendingResetsForRetry)
+{
+  ASSERT_EQ(OB_SUCCESS, push_and_run(LEAF_MV, ObMViewPendingTask::ROOT_TASK_FLAG));
+  EXPECT_EQ(1, queue_.get_total_running_cnt());
+
+  bool finished = false;
+  ASSERT_EQ(OB_SUCCESS,
+            queue_.set_task_running_to_pending(TENANT_ID, REFRESH_ID, LEAF_MV, finished));
+  EXPECT_FALSE(finished);
+
+  // running counters decrement, unfinished still includes the task
+  EXPECT_EQ(0, queue_.get_total_running_cnt());
+  ObMViewPendingRefreshCtx ctx = get_ctx();
+  EXPECT_EQ(0, ctx.running_task_cnt_);
+  EXPECT_EQ(1, ctx.unfinished_task_cnt_);
+
+  // status is back to PENDING and the task is peekable again
+  int64_t status = -1;
+  ASSERT_EQ(OB_SUCCESS, queue_.get_task_status(TENANT_ID, REFRESH_ID, LEAF_MV, status));
+  EXPECT_EQ(MV_TASK_PENDING, status);
+
+  int64_t retry_count = -1;
+  ASSERT_EQ(OB_SUCCESS, queue_.get_task_retry_count(TENANT_ID, REFRESH_ID, LEAF_MV, retry_count));
+  EXPECT_EQ(1, retry_count);
+
+  ObMViewPendingTask out;
+  ASSERT_EQ(OB_SUCCESS, queue_.peek_task(out));
+  EXPECT_EQ(LEAF_MV, out.mview_id_);
+}
+
+// set_task_running_to_pending from a non-RUNNING state must fail (status CAS)
+TEST_F(ObMViewPendingTaskQueueTest, SetTaskRunningToPendingFromPendingFails)
+{
+  ObMViewPendingTask t = make_task(LEAF_MV, ObMViewPendingTask::ROOT_TASK_FLAG);
+  ASSERT_EQ(OB_SUCCESS, push_one(queue_, t));
+
+  bool finished = false;
+  EXPECT_EQ(OB_EAGAIN,
+            queue_.set_task_running_to_pending(TENANT_ID, REFRESH_ID, LEAF_MV, finished));
+}
+
+// ---------------------------------------------------------------------------
+// 33. is_refresh_cancelled returns false by default and true after
+//     cancel_all_pending_tasks marks the refresh.
+// ---------------------------------------------------------------------------
+
+TEST_F(ObMViewPendingTaskQueueTest, IsRefreshCancelledTrueAfterCancelAll)
+{
+  ASSERT_EQ(OB_SUCCESS, push_and_run(LEAF_MV, ObMViewPendingTask::ROOT_TASK_FLAG));
+
+  bool cancelled = true;
+  ASSERT_EQ(OB_SUCCESS, queue_.is_refresh_cancelled(TENANT_ID, REFRESH_ID, cancelled));
+  EXPECT_FALSE(cancelled);
+
+  bool finished = false;
+  ASSERT_EQ(OB_SUCCESS,
+            queue_.cancel_all_pending_tasks(TENANT_ID, REFRESH_ID, finished));
+
+  ASSERT_EQ(OB_SUCCESS, queue_.is_refresh_cancelled(TENANT_ID, REFRESH_ID, cancelled));
+  EXPECT_TRUE(cancelled);
+}
+
+TEST_F(ObMViewPendingTaskQueueTest, IsRefreshCancelledMissingRefreshFails)
+{
+  bool cancelled = false;
+  EXPECT_NE(OB_SUCCESS, queue_.is_refresh_cancelled(TENANT_ID, 9999L, cancelled));
+}
+
+// ---------------------------------------------------------------------------
+// 34. cancel_all_pending_tasks now recurses into deps even when the current
+//     task is RUNNING (previously it bailed out on any non-PENDING root).
+//
+// Topology: LEAF -> MID -> ROOT(root_task).
+// LEAF is RUNNING; cancel_all_pending_tasks must still cancel MID and ROOT.
+// ---------------------------------------------------------------------------
+
+TEST_F(ObMViewPendingTaskQueueTest, CancelAllRecursesPastRunningRoot)
+{
+  uint64_t mid_deps[]  = { LEAF_MV };
+  uint64_t root_deps[] = { MID_MV  };
+
+  ObMViewPendingTask leaf = make_task(LEAF_MV);
+  ObMViewPendingTask mid  = make_task(MID_MV,  0, mid_deps, 1);
+  ObMViewPendingTask root = make_task(ROOT_MV, ObMViewPendingTask::ROOT_TASK_FLAG,
+                                      root_deps, 1);
+  ASSERT_EQ(OB_SUCCESS, push_many(queue_, leaf, mid, root));
+
+  ASSERT_EQ(OB_SUCCESS, queue_.set_task_running(TENANT_ID, REFRESH_ID, LEAF_MV));
+
+  // ROOT is the only task with the root flag, so cancel_all_pending_tasks
+  // walks from ROOT downward. The new code keeps recursing through RUNNING
+  // LEAF's dep chain even though LEAF itself stays RUNNING.
+  bool finished = false;
+  ASSERT_EQ(OB_SUCCESS,
+            queue_.cancel_all_pending_tasks(TENANT_ID, REFRESH_ID, finished));
+  EXPECT_FALSE(finished); // LEAF still RUNNING; refresh not yet done
+
+  int64_t status = -1;
+  ASSERT_EQ(OB_SUCCESS, queue_.get_task_status(TENANT_ID, REFRESH_ID, ROOT_MV, status));
+  EXPECT_EQ(MV_TASK_CANCELLED, status);
+  ASSERT_EQ(OB_SUCCESS, queue_.get_task_status(TENANT_ID, REFRESH_ID, MID_MV, status));
+  EXPECT_EQ(MV_TASK_CANCELLED, status);
+  // LEAF is still RUNNING — recursion does not mutate non-PENDING/non-RETRY_WAIT
+  ASSERT_EQ(OB_SUCCESS, queue_.get_task_status(TENANT_ID, REFRESH_ID, LEAF_MV, status));
+  EXPECT_EQ(MV_TASK_RUNNING, status);
+
+  // cancelled_ flag is set on the ctx
+  bool cancelled = false;
+  ASSERT_EQ(OB_SUCCESS, queue_.is_refresh_cancelled(TENANT_ID, REFRESH_ID, cancelled));
+  EXPECT_TRUE(cancelled);
+}
+
+// ---------------------------------------------------------------------------
+// 35. set_task_failed now uses ignore_status_check=true: a task may be FAILED
+//     directly from PENDING (without an intervening RUNNING transition).
+//
+// This is the path mark_task_retry_wait takes when refresh_cancelled is true
+// or retry_count is exhausted.
+// ---------------------------------------------------------------------------
+
+TEST_F(ObMViewPendingTaskQueueTest, SetTaskFailedFromPendingIgnoresStatusCheck)
+{
+  ObMViewPendingTask t = make_task(LEAF_MV, ObMViewPendingTask::ROOT_TASK_FLAG);
+  ASSERT_EQ(OB_SUCCESS, push_one(queue_, t));
+
+  bool finished = false;
+  ASSERT_EQ(OB_SUCCESS,
+            queue_.set_task_failed(TENANT_ID, REFRESH_ID, LEAF_MV, OB_TIMEOUT, finished));
+  EXPECT_TRUE(finished);
+
+  int64_t status = -1;
+  ASSERT_EQ(OB_SUCCESS, queue_.get_task_status(TENANT_ID, REFRESH_ID, LEAF_MV, status));
+  EXPECT_EQ(MV_TASK_FAILED, status);
+
+  // Running counters untouched since old status was PENDING, not RUNNING
+  EXPECT_EQ(0, queue_.get_total_running_cnt());
+}
+
+TEST_F(ObMViewPendingTaskQueueTest, SetTaskFailedFromRetryWaitIgnoresStatusCheck)
+{
+  ASSERT_EQ(OB_SUCCESS, push_and_run(LEAF_MV, ObMViewPendingTask::ROOT_TASK_FLAG));
+  bool finished = false;
+  ASSERT_EQ(OB_SUCCESS,
+            queue_.set_task_retry_wait(TENANT_ID, REFRESH_ID, LEAF_MV, finished));
+  EXPECT_FALSE(finished);
+  EXPECT_EQ(0, queue_.get_total_running_cnt());
+
+  ASSERT_EQ(OB_SUCCESS,
+            queue_.set_task_failed(TENANT_ID, REFRESH_ID, LEAF_MV, OB_TIMEOUT, finished));
+  EXPECT_TRUE(finished);
+
+  int64_t status = -1;
+  ASSERT_EQ(OB_SUCCESS, queue_.get_task_status(TENANT_ID, REFRESH_ID, LEAF_MV, status));
+  EXPECT_EQ(MV_TASK_FAILED, status);
+  // No double-decrement of total_running_cnt_ when transitioning from RETRY_WAIT
+  EXPECT_EQ(0, queue_.get_total_running_cnt());
+}
+
+// ---------------------------------------------------------------------------
+// 36. align_task_to_status: full disk->memory matrix coverage
+// ---------------------------------------------------------------------------
+
+// memory_absent when refresh ctx does not exist
+TEST_F(ObMViewPendingTaskQueueTest, AlignMissingRefreshReportsAbsent)
+{
+  bool memory_absent = false;
+  bool finished = false;
+  ASSERT_EQ(OB_SUCCESS,
+            queue_.align_task_to_status(TENANT_ID, 9999L, LEAF_MV,
+                                        MV_TASK_RUNNING, memory_absent, finished));
+  EXPECT_TRUE(memory_absent);
+  EXPECT_FALSE(finished);
+}
+
+// memory_absent when refresh ctx exists but task is missing
+TEST_F(ObMViewPendingTaskQueueTest, AlignMissingTaskReportsAbsent)
+{
+  ObMViewPendingTask t = make_task(LEAF_MV, ObMViewPendingTask::ROOT_TASK_FLAG);
+  ASSERT_EQ(OB_SUCCESS, push_one(queue_, t));
+
+  bool memory_absent = false;
+  bool finished = false;
+  ASSERT_EQ(OB_SUCCESS,
+            queue_.align_task_to_status(TENANT_ID, REFRESH_ID, 9999UL /*unknown mview*/,
+                                        MV_TASK_RUNNING, memory_absent, finished));
+  EXPECT_TRUE(memory_absent);
+  EXPECT_FALSE(finished);
+}
+
+// Same-state no-op: target == memory; nothing changes
+TEST_F(ObMViewPendingTaskQueueTest, AlignSameStateIsNoop)
+{
+  ASSERT_EQ(OB_SUCCESS, push_and_run(LEAF_MV, ObMViewPendingTask::ROOT_TASK_FLAG));
+  int64_t prev_running = queue_.get_total_running_cnt();
+
+  bool memory_absent = false;
+  bool finished = false;
+  ASSERT_EQ(OB_SUCCESS,
+            queue_.align_task_to_status(TENANT_ID, REFRESH_ID, LEAF_MV,
+                                        MV_TASK_RUNNING, memory_absent, finished));
+  EXPECT_FALSE(memory_absent);
+  EXPECT_FALSE(finished);
+  EXPECT_EQ(prev_running, queue_.get_total_running_cnt());
+
+  int64_t status = -1;
+  ASSERT_EQ(OB_SUCCESS, queue_.get_task_status(TENANT_ID, REFRESH_ID, LEAF_MV, status));
+  EXPECT_EQ(MV_TASK_RUNNING, status);
+}
+
+// Same-state RUNNING: svr_addr is still patched
+TEST_F(ObMViewPendingTaskQueueTest, AlignSameStateRunningPatchesSvrAddr)
+{
+  ASSERT_EQ(OB_SUCCESS, push_and_run(LEAF_MV, ObMViewPendingTask::ROOT_TASK_FLAG));
+
+  ObAddr svr;
+  ASSERT_TRUE(svr.set_ip_addr("10.0.0.5", 2881));
+  bool memory_absent = false;
+  bool finished = false;
+  ASSERT_EQ(OB_SUCCESS,
+            queue_.align_task_to_status(TENANT_ID, REFRESH_ID, LEAF_MV,
+                                        MV_TASK_RUNNING, memory_absent, finished, &svr));
+  EXPECT_FALSE(memory_absent);
+  EXPECT_FALSE(finished);
+  // ctx for_test does not expose the per-task svr_addr; just verify call succeeded.
+}
+
+// Memory PENDING, disk RUNNING -> align mutates state and bumps running counters
+TEST_F(ObMViewPendingTaskQueueTest, AlignPendingToRunningUpdatesCounters)
+{
+  ObMViewPendingTask t = make_task(LEAF_MV, ObMViewPendingTask::ROOT_TASK_FLAG);
+  ASSERT_EQ(OB_SUCCESS, push_one(queue_, t));
+
+  ObAddr svr;
+  ASSERT_TRUE(svr.set_ip_addr("10.0.0.6", 2882));
+  bool memory_absent = false;
+  bool finished = false;
+  ASSERT_EQ(OB_SUCCESS,
+            queue_.align_task_to_status(TENANT_ID, REFRESH_ID, LEAF_MV,
+                                        MV_TASK_RUNNING, memory_absent, finished, &svr));
+  EXPECT_FALSE(memory_absent);
+  EXPECT_FALSE(finished);
+
+  int64_t status = -1;
+  ASSERT_EQ(OB_SUCCESS, queue_.get_task_status(TENANT_ID, REFRESH_ID, LEAF_MV, status));
+  EXPECT_EQ(MV_TASK_RUNNING, status);
+  EXPECT_EQ(1, queue_.get_total_running_cnt());
+}
+
+// Memory RUNNING, disk SUCCESS -> finishes refresh
+TEST_F(ObMViewPendingTaskQueueTest, AlignRunningToSuccessFinishesRefresh)
+{
+  ASSERT_EQ(OB_SUCCESS, push_and_run(LEAF_MV, ObMViewPendingTask::ROOT_TASK_FLAG));
+
+  bool memory_absent = false;
+  bool finished = false;
+  ASSERT_EQ(OB_SUCCESS,
+            queue_.align_task_to_status(TENANT_ID, REFRESH_ID, LEAF_MV,
+                                        MV_TASK_SUCCESS, memory_absent, finished));
+  EXPECT_FALSE(memory_absent);
+  EXPECT_TRUE(finished);
+
+  EXPECT_EQ(0, queue_.get_total_running_cnt());
+  ObMViewTaskStatus refresh_status;
+  ASSERT_EQ(OB_SUCCESS, queue_.get_refresh_status(TENANT_ID, REFRESH_ID, refresh_status));
+  EXPECT_EQ(MV_TASK_SUCCESS, refresh_status);
+}
+
+// Memory PENDING, disk SUCCESS -> ok via align (counters do not underflow)
+// This is the documented align path: SUCCESS reached without going RUNNING.
+TEST_F(ObMViewPendingTaskQueueTest, AlignPendingToSuccessSkipsRunningCounters)
+{
+  ObMViewPendingTask t = make_task(LEAF_MV, ObMViewPendingTask::ROOT_TASK_FLAG);
+  ASSERT_EQ(OB_SUCCESS, push_one(queue_, t));
+  EXPECT_EQ(0, queue_.get_total_running_cnt());
+
+  bool memory_absent = false;
+  bool finished = false;
+  ASSERT_EQ(OB_SUCCESS,
+            queue_.align_task_to_status(TENANT_ID, REFRESH_ID, LEAF_MV,
+                                        MV_TASK_SUCCESS, memory_absent, finished));
+  EXPECT_FALSE(memory_absent);
+  EXPECT_TRUE(finished);
+  EXPECT_EQ(0, queue_.get_total_running_cnt()); // no underflow
+}
+
+// Memory RETRY_WAIT, disk PENDING -> counters untouched (no running delta)
+TEST_F(ObMViewPendingTaskQueueTest, AlignRetryWaitToPendingNoRunningDelta)
+{
+  ASSERT_EQ(OB_SUCCESS, push_and_run(LEAF_MV, ObMViewPendingTask::ROOT_TASK_FLAG));
+  bool finished = false;
+  ASSERT_EQ(OB_SUCCESS,
+            queue_.set_task_retry_wait(TENANT_ID, REFRESH_ID, LEAF_MV, finished));
+  EXPECT_EQ(0, queue_.get_total_running_cnt());
+
+  bool memory_absent = false;
+  ASSERT_EQ(OB_SUCCESS,
+            queue_.align_task_to_status(TENANT_ID, REFRESH_ID, LEAF_MV,
+                                        MV_TASK_PENDING, memory_absent, finished));
+  EXPECT_FALSE(memory_absent);
+  EXPECT_FALSE(finished);
+  EXPECT_EQ(0, queue_.get_total_running_cnt());
+
+  int64_t status = -1;
+  ASSERT_EQ(OB_SUCCESS, queue_.get_task_status(TENANT_ID, REFRESH_ID, LEAF_MV, status));
+  EXPECT_EQ(MV_TASK_PENDING, status);
+}
+
+// Memory terminal, disk reports a different state -> WARN, no mutation
+TEST_F(ObMViewPendingTaskQueueTest, AlignTerminalMemoryNotRevived)
+{
+  ASSERT_EQ(OB_SUCCESS, push_and_run(LEAF_MV, ObMViewPendingTask::ROOT_TASK_FLAG));
+  bool finished = false;
+  ASSERT_EQ(OB_SUCCESS,
+            queue_.set_task_success(TENANT_ID, REFRESH_ID, LEAF_MV, finished));
+  EXPECT_TRUE(finished);
+
+  // Try to align SUCCESS->RUNNING; align must refuse to revive terminal memory.
+  bool memory_absent = false;
+  ASSERT_EQ(OB_SUCCESS,
+            queue_.align_task_to_status(TENANT_ID, REFRESH_ID, LEAF_MV,
+                                        MV_TASK_RUNNING, memory_absent, finished));
+  EXPECT_FALSE(memory_absent);
+  // refresh was already finished before the call; the helper still reports it
+  // as finished because nothing about ctx changed.
+  EXPECT_TRUE(finished);
+
+  int64_t status = -1;
+  ASSERT_EQ(OB_SUCCESS, queue_.get_task_status(TENANT_ID, REFRESH_ID, LEAF_MV, status));
+  EXPECT_EQ(MV_TASK_SUCCESS, status); // untouched
+  EXPECT_EQ(0, queue_.get_total_running_cnt());
+}
+
+// ---------------------------------------------------------------------------
+// 37. check_prev_task_satisfied: a CANCELLED previous version with
+//     retry_count > 0 still blocks dispatch.
+//
+// The queue stores tasks under task_list_ in submission order. When a task is
+// CANCELLED with retry_count == 0, peek treats it as non-existent (a fresh
+// task may run). When CANCELLED but retry_count > 0, peek treats it as a
+// real ancestor of the same mview_id whose run finished, so a subsequent
+// duplicate push for the same mview_id should NOT be peekable.
+//
+// Direct unit-testing of this edge is awkward because push_tasks rejects
+// duplicate keys; instead we verify the supporting helper indirectly through
+// is_task_status_non_terminal and document the contract here.
+// ---------------------------------------------------------------------------
+
+TEST(ObMViewPendingTaskQueueStaticTest, IsTaskStatusNonTerminal)
+{
+  EXPECT_TRUE(ObMViewPendingTaskQueue::is_task_status_non_terminal(MV_TASK_PENDING));
+  EXPECT_TRUE(ObMViewPendingTaskQueue::is_task_status_non_terminal(MV_TASK_RUNNING));
+  EXPECT_TRUE(ObMViewPendingTaskQueue::is_task_status_non_terminal(MV_TASK_RETRY_WAIT));
+  EXPECT_FALSE(ObMViewPendingTaskQueue::is_task_status_non_terminal(MV_TASK_SUCCESS));
+  EXPECT_FALSE(ObMViewPendingTaskQueue::is_task_status_non_terminal(MV_TASK_FAILED));
+  EXPECT_FALSE(ObMViewPendingTaskQueue::is_task_status_non_terminal(MV_TASK_CANCELLED));
 }
 
 int main(int argc, char **argv)

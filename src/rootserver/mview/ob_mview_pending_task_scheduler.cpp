@@ -187,8 +187,7 @@ int ObMviewPendingTaskScheduler::process_one_task()
       LOG_WARN("mark task running cas failed, resync memory from disk", K(task));
       if (OB_TMP_FAIL(manager_->resync_task_from_disk(task.tenant_id_,
                                                       task.refresh_id_,
-                                                      task.mview_id_,
-                                                      task.target_data_sync_scn_))) {
+                                                      task.mview_id_))) {
         LOG_WARN("fail to resync task from disk", KR(tmp_ret), K(task));
       }
     } else {

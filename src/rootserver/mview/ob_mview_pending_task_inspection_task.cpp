@@ -36,6 +36,7 @@ ObMViewPendingTaskInspectionTask::ObMViewPendingTaskInspectionTask()
     is_inited_(false),
     in_sched_(false),
     is_stop_(true),
+    tick_count_(0),
     list_lock_(common::ObLatchIds::MVIEW_PENDING_TASK_INSPECTION_LOCK),
     recovery_list_(),
     retry_list_()
@@ -173,9 +174,12 @@ void ObMViewPendingTaskInspectionTask::runTimerTask()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("manager is null", KR(ret), KP(this));
   } else {
-    if (OB_FAIL(process_recovery_list())) {
-      LOG_WARN("process recovery list failed", KR(ret));
-      ret = OB_SUCCESS;
+    const int64_t tick = ++tick_count_;
+    if (tick % RECOVERY_TICK_RATIO == 0) {
+      if (OB_FAIL(process_recovery_list())) {
+        LOG_WARN("process recovery list failed", KR(ret));
+        ret = OB_SUCCESS;
+      }
     }
     if (OB_FAIL(process_retry_list())) {
       LOG_WARN("process retry list failed", KR(ret));
@@ -363,6 +367,30 @@ int ObMViewPendingTaskInspectionTask::process_single_retry_entry(
       need_wakeup = true;
       LOG_INFO("advanced RETRY_WAIT task to PENDING",
                K(entry.refresh_id_), K(entry.mview_id_));
+    }
+
+    if (OB_UNLIKELY(ret == OB_EAGAIN)) {
+      ObMViewTaskStatus status = MV_TASK_PENDING;
+      if (OB_FAIL(manager_->resync_task_from_disk(entry.tenant_id_, entry.refresh_id_, entry.mview_id_))) {
+        LOG_WARN("resync task from disk failed", KR(ret), K(entry.tenant_id_), K(entry.refresh_id_), K(entry.mview_id_));
+      } else if (OB_FAIL(manager_->get_task_status(entry.tenant_id_, entry.refresh_id_, entry.mview_id_, status))) {
+        LOG_WARN("get task status failed", KR(ret), K(entry.tenant_id_), K(entry.refresh_id_), K(entry.mview_id_));
+      } else if (status == MV_TASK_PENDING) {
+        // do nothing
+      } else if (OB_UNLIKELY(status != MV_TASK_CANCELLED)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("task status is not CANCELLED", KR(ret), K(entry.tenant_id_), K(entry.refresh_id_), K(entry.mview_id_), K(status));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(manager_->finalize_task(entry.tenant_id_, entry.refresh_id_, entry.mview_id_, ret))) {
+        LOG_WARN("fail to finalize task as failed after retry error", KR(tmp_ret),
+                 K(entry.refresh_id_), K(entry.mview_id_));
+      } else {
+        need_wakeup = true;
+      }
     }
   }
   return ret;
