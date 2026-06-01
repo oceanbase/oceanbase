@@ -11282,23 +11282,31 @@ int ObDDLResolver::resolve_partition_element_subpartitions(
 {
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(element_node->children_[ELEMENT_SUBPARTITION_NODE])) {
-    // resolve individual subpartitions (including mixed with template case)
-    ObPartition *cur_partition = table_schema.get_part_array()[part_index];
-    if (OB_ISNULL(cur_partition)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", KR(ret));
-    } else if (stmt->use_def_sub_part()) {
-      // Mixed template + individual subpartitions only allowed in [4.4.2.2, 4.5.0.0).
-      // During rolling upgrade, old observers don't recognize the new flag encoding
-      // (EXIST-only without VALID bit), which causes template info loss in
-      // SHOW CREATE TABLE and OB_ERR_UNEXPECTED in try_generate_subpart_by_template.
-      uint64_t tenant_data_version = 0;
-      if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema.get_tenant_id(), tenant_data_version))) {
-        LOG_WARN("fail to get tenant data version", KR(ret));
-      } else if (tenant_data_version < DATA_VERSION_4_4_2_2
-                 || tenant_data_version >= DATA_VERSION_4_5_0_0) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "mixed template and non-template subpartitions in current version");
+    if (PARTITION_LEVEL_TWO != table_schema.get_part_level()) {
+      ret = OB_ERR_PARSE_SQL;
+      SQL_RESV_LOG(WARN, "element subpartition spec without table-level subpartition declaration",
+                   KR(ret), K(table_schema.get_part_level()));
+    } else {
+      ObPartition *cur_partition = table_schema.get_part_array()[part_index];
+      if (OB_ISNULL(cur_partition)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", KR(ret));
+      } else if (stmt->use_def_sub_part()) {
+        uint64_t tenant_data_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(table_schema.get_tenant_id(), tenant_data_version))) {
+          LOG_WARN("fail to get tenant data version", KR(ret));
+        } else if (tenant_data_version < DATA_VERSION_4_4_2_2
+                   || tenant_data_version >= DATA_VERSION_4_5_0_0) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "mixed template and non-template subpartitions in current version");
+        } else if (OB_FAIL(resolve_subpartition_elements(
+            stmt,
+            element_node->children_[ELEMENT_SUBPARTITION_NODE],
+            table_schema,
+            cur_partition,
+            false))) {
+          LOG_WARN("failed to resolve subpartition elements", KR(ret));
+        }
       } else if (OB_FAIL(resolve_subpartition_elements(
           stmt,
           element_node->children_[ELEMENT_SUBPARTITION_NODE],
@@ -11307,13 +11315,6 @@ int ObDDLResolver::resolve_partition_element_subpartitions(
           false))) {
         LOG_WARN("failed to resolve subpartition elements", KR(ret));
       }
-    } else if (OB_FAIL(resolve_subpartition_elements(
-        stmt,
-        element_node->children_[ELEMENT_SUBPARTITION_NODE],
-        table_schema,
-        cur_partition,
-        false))) {
-      LOG_WARN("failed to resolve subpartition elements", KR(ret));
     }
   } else if (!stmt->use_def_sub_part()) {
     // no template and no individual subpartitions specified, resolve defaults
