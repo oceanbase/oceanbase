@@ -90,7 +90,6 @@ private:
                  K_(data_mem_usage_limit),
                  K_(need_sort),
                  K_(online_opt_stat_gather),
-                 K_(is_backup),
                  K_(max_error_rows),
                  K_(ignore_row_num),
                  K_(dup_action),
@@ -101,7 +100,8 @@ private:
                  K_(column_ids),
                  K_(compressor_type),
                  K_(online_sample_percent),
-                 K_(tablet_ids));
+                 K_(tablet_ids),
+                 K_(is_backup));
   public:
     uint64_t tenant_id_;
     uint64_t database_id_;
@@ -115,7 +115,6 @@ private:
     int64_t data_mem_usage_limit_; // limit = data_mem_usage_limit * MAX_BUFFER_SIZE
     bool need_sort_;
     bool online_opt_stat_gather_;
-    bool is_backup_;
     int64_t max_error_rows_; // max allowed error rows
     int64_t ignore_row_num_; // number of rows to ignore per file
     sql::ObLoadDupActionType dup_action_;
@@ -127,6 +126,7 @@ private:
     ObCompressorType compressor_type_;
     double online_sample_percent_;
     ObArray<ObTabletID> tablet_ids_;
+    bool is_backup_;
   };
 
   struct LoadExecuteContext

@@ -82,7 +82,6 @@ ObLoadDataDirectImpl::LoadExecuteParam::LoadExecuteParam()
     data_mem_usage_limit_(0),
     need_sort_(false),
     online_opt_stat_gather_(false),
-    is_backup_(false),
     max_error_rows_(-1),
     ignore_row_num_(-1),
     dup_action_(ObLoadDupActionType::LOAD_INVALID_MODE),
@@ -90,7 +89,8 @@ ObLoadDataDirectImpl::LoadExecuteParam::LoadExecuteParam()
     insert_mode_(ObDirectLoadInsertMode::INVALID_INSERT_MODE),
     load_level_(ObDirectLoadLevel::INVALID_LEVEL),
     compressor_type_(ObCompressorType::INVALID_COMPRESSOR),
-    online_sample_percent_(100.)
+    online_sample_percent_(100.),
+    is_backup_(false)
 {
   column_ids_.set_tenant_id(MTL_ID());
 }
@@ -2364,7 +2364,6 @@ int ObLoadDataDirectImpl::init_execute_param()
   execute_param_.combined_name_ = load_args.combined_name_;
   execute_param_.ignore_row_num_ = load_args.ignore_rows_;
   execute_param_.dup_action_ = load_args.dupl_action_;
-  execute_param_.is_backup_ = ObLoadDataFormat::is_backup(load_args.access_info_.get_load_data_format());
   if (OB_FAIL(ObTableLoadSchema::get_table_schema(*schema_guard,
                                                   execute_param_.tenant_id_,
                                                   execute_param_.table_id_,
@@ -2382,6 +2381,10 @@ int ObLoadDataDirectImpl::init_execute_param()
       execute_param_.method_ = optimizer_ctx->load_method_;
       execute_param_.insert_mode_ = optimizer_ctx->insert_mode_;
       execute_param_.load_level_ = optimizer_ctx->load_level_;
+      execute_param_.is_backup_ = optimizer_ctx->is_backup();
+      if (OB_FAIL(execute_param_.column_ids_.assign(optimizer_ctx->get_column_ids()))) {
+        LOG_WARN("fail to assign columns ids", KR(ret));
+      }
     }
   }
   // parallel_
@@ -2438,53 +2441,6 @@ int ObLoadDataDirectImpl::init_execute_param()
     }
     data_access_param.compression_format_ = load_args.compression_format_;
   }
-  // column_ids_
-  if (OB_SUCC(ret)) {
-    execute_param_.column_ids_.reset();
-    if (execute_param_.is_backup_) { // 备份数据导入
-      if (OB_FAIL(ObTableLoadSchema::get_column_ids(table_schema, execute_param_.column_ids_))) {
-        LOG_WARN("fail to get column ids for backup", KR(ret));
-      }
-    } else if (load_stmt_->get_default_table_columns()) { // 默认列导入
-      if (OB_FAIL(ObTableLoadSchema::get_user_column_ids(table_schema, execute_param_.column_ids_))) {
-        LOG_WARN("fail to get user column ids", KR(ret));
-      }
-    } else { // 指定列导入
-      const static uint64_t INVALID_COLUMN_ID = UINT64_MAX;
-      ObArray<uint64_t> user_column_ids;
-      ObArray<ObString> user_column_names;
-      user_column_ids.set_tenant_id(MTL_ID());
-      user_column_names.set_tenant_id(MTL_ID());
-      if (OB_FAIL(ObTableLoadSchema::get_user_column_id_and_names(table_schema, user_column_ids, user_column_names))) {
-        LOG_WARN("fail to get user column ids and names", KR(ret));
-      }
-      for (int64_t i = 0; OB_SUCC(ret) && i < field_or_var_list.count(); ++i) {
-        const ObLoadDataStmt::FieldOrVarStruct &field_or_var_struct = field_or_var_list.at(i);
-        if (OB_UNLIKELY(!field_or_var_struct.is_table_column_)) {
-          ret = OB_NOT_SUPPORTED;
-          LOG_WARN("var is not supported", KR(ret), K(field_or_var_struct), K(i),
-                   K(field_or_var_list));
-        } else {
-          const uint64_t column_id = field_or_var_struct.column_id_;
-          int64_t found_column_idx = -1;
-          for (int64_t j = 0; found_column_idx == -1 && j < user_column_ids.count(); ++j) {
-            const uint64_t user_column_id = user_column_ids.at(j);
-            if (column_id == user_column_id) {
-              found_column_idx = j;
-            }
-          }
-          if (OB_UNLIKELY(found_column_idx == -1)) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("unknow column", KR(ret), K(user_column_ids), K(field_or_var_struct));
-          } else if (OB_FAIL(execute_param_.column_ids_.push_back(column_id))) {
-            LOG_WARN("fail to push back column id", KR(ret));
-          } else {
-            user_column_ids.at(found_column_idx) = INVALID_COLUMN_ID;
-          }
-        }
-      }
-    }
-  }
   // compressor_type_
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ObDDLUtil::get_temp_store_compress_type(
@@ -2525,7 +2481,7 @@ int ObLoadDataDirectImpl::init_execute_context()
   load_param.batch_size_ = execute_param_.batch_row_count_;
   load_param.max_error_row_count_ = execute_param_.max_error_rows_;
   load_param.column_count_ = execute_param_.column_ids_.count();
-  load_param.need_sort_ = execute_param_.is_backup_ ? false : execute_param_.need_sort_;
+  load_param.need_sort_ = execute_param_.need_sort_;
   load_param.px_mode_ = false;
   load_param.online_opt_stat_gather_ = execute_param_.online_opt_stat_gather_;
   load_param.dup_action_ = execute_param_.dup_action_;
