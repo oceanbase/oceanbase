@@ -34,7 +34,7 @@ private:
 public:
   ObOpBatchRowWrapper(ObOperator &op, const int64_t max_batch_size, ObEvalCtx &eval_ctx) :
     op_(op), row_store_(), eval_ctx_(eval_ctx), max_batch_size_(max_batch_size), brs_(),
-    skip_buf_(nullptr), need_init_vector_(false)
+    skip_buf_(nullptr), need_init_vector_(false), brs_holder_()
   {}
 
   void destroy();
@@ -54,6 +54,7 @@ private:
   ObBatchRows brs_;
   void *skip_buf_;
   bool need_init_vector_;
+  ObVectorsResultHolder brs_holder_;
 };
 
 OB_SERIALIZE_MEMBER(ObDynamicParamSetter, param_idx_, src_, dst_);
@@ -2446,6 +2447,9 @@ int ObOpBatchRowWrapper::init(ObIAllocator &allocator)
           break;
         }
       }
+      if (OB_FAIL(brs_holder_.init_for_actual_rows(output, max_batch_size_, eval_ctx_))) {
+        LOG_WARN("init vectors result holder failed", K(ret));
+      }
     }
   }
   return ret;
@@ -2461,6 +2465,7 @@ void ObOpBatchRowWrapper::destroy()
     }
     skip_buf_ = nullptr;
   }
+  brs_holder_.destroy();
   row_store_.destroy();
 }
 
@@ -2486,6 +2491,9 @@ int ObOpBatchRowWrapper::get_next_batch(const int64_t max_row_cnt, const ObBatch
   brs_.all_rows_active_ = false;
   brs_.size_ = 0;
   row_store_.reuse();
+  if (OB_SUCC(ret) && OB_FAIL(brs_holder_.restore())) {
+    LOG_WARN("restore output datum failed", K(ret));
+  }
   ObCompactRow *stored_row = nullptr;
   while (OB_SUCC(ret) && brs_.size_ < batch_size && !brs_.end_) {
     op_.clear_evaluated_flag();
@@ -2535,6 +2543,9 @@ int ObOpBatchRowWrapper::get_next_batch(const int64_t max_row_cnt, const ObBatch
             "requested_batch_size", batch_size,
             "accumulated_rows", brs_.size_,
             "is_end", brs_.end_);
+  if (OB_SUCC(ret) && brs_.size_ > 0 && OB_FAIL(brs_holder_.save(brs_.size_))) {
+    LOG_WARN("save output datum failed", K(ret));
+  }
   int64_t read_rows = 0;
   ObTempRowStore::Iterator store_it;
   if (OB_FAIL(ret)) {
@@ -2565,6 +2576,7 @@ int ObOpBatchRowWrapper::get_next_batch(const int64_t max_row_cnt, const ObBatch
 void ObOpBatchRowWrapper::rescan()
 {
   row_store_.reuse();
+  brs_holder_.reset();
 }
 
 } // end namespace sql
