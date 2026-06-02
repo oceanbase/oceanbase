@@ -25,10 +25,9 @@ public:
   ~ObTableLoadPXBatchRows();
   void reset();
   void reuse();
-  int init(const common::ObIArray<share::schema::ObColDesc> &px_col_descs,
-           const common::ObIArray<int64_t> &px_column_project_idxs, // px列对应哪个store列
-           const common::ObIArray<share::schema::ObColDesc> &col_descs,
-           const sql::ObBitVector *col_nullables, const ObDirectLoadRowFlag &row_flag,
+  int init(const common::ObIArray<share::schema::ObColDesc> &col_descs,
+           const sql::ObBitVector *col_nullables,
+           const ObDirectLoadRowFlag &row_flag,
            const int64_t max_batch_size);
 
   // 深拷贝
@@ -44,10 +43,9 @@ public:
   int shallow_copy(const IVectorPtrs &vectors, const int64_t batch_size);
   int shallow_copy(const ObIArray<ObDatumVector> &datum_vectors, const int64_t batch_size);
 
-  const ObIArray<storage::ObDirectLoadVector *> &get_vectors() const { return vectors_; }
   storage::ObDirectLoadBatchRows &get_batch_rows() { return batch_rows_; }
 
-  inline int64_t get_column_count() const { return vectors_.count(); }
+  inline int64_t get_column_count() const { return batch_rows_.get_vectors().count(); }
   inline int64_t size() const { return batch_rows_.size(); }
   inline int64_t remain_size() const { return batch_rows_.remain_size(); }
   inline bool empty() const { return batch_rows_.empty(); }
@@ -58,10 +56,10 @@ public:
   // Rows bytes usage
   inline int64_t bytes_usage() const { return batch_rows_.bytes_usage(); }
 
-  TO_STRING_KV(K_(vectors), K_(batch_rows), K_(is_inited));
+  TO_STRING_KV(K_(batch_rows), K_(is_inited));
 
 private:
-  ObArray<storage::ObDirectLoadVector *> vectors_;
+  ObArray<ObColDesc> col_descs_;
   storage::ObDirectLoadBatchRows batch_rows_;
   bool is_inited_;
 };
