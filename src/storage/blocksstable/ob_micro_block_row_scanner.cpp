@@ -2002,8 +2002,21 @@ int ObMultiVersionMicroBlockRowScanner::check_foreign_key(
   memtable::ObMvccAccessCtx &acc_ctx = context_->store_ctx_->mvcc_acc_ctx_;
   bool is_plain_insert_gts_opt = context_->query_flag_.is_plain_insert_gts_opt();
   bool is_for_fk_check = context_->query_flag_.is_for_foreign_key_check();
-  if ((is_plain_insert_gts_opt || is_for_fk_check) &&
-      OB_FAIL(ObRowConflictHandler::check_foreign_key_constraint_for_sstable(
+  const bool fk_skip_pure_lock = context_->query_flag_.is_fk_skip_parent_pure_lock();
+  // Seed lock_state.lock_dml_flag_ from this sstable row's flag.
+  // dml_flag is row-level data carried in ObRowHeader; the tx_table is
+  // indexed per tx_id and only knows tx-level state (commit/abort, undo
+  // status), so neither tx_table_guards.check_row_locked() nor the
+  // committed-row branch inside check_row_conflict_for_sstable can populate
+  // lock_state.lock_dml_flag_. Only this caller (which is iterating sstable
+  // rows and holds row_header) has the information, and
+  // post_handle_lock_check needs it to decide the pure-lock skip.
+  if (OB_ISNULL(row_header)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("row header is null", K(ret));
+  } else if (FALSE_IT(lock_state.lock_dml_flag_ = row_header->get_row_flag().get_dml_flag())) {
+  } else if ((is_plain_insert_gts_opt || is_for_fk_check) &&
+      OB_FAIL(ObRowConflictHandler::check_row_conflict_for_sstable(
               acc_ctx.get_tx_table_guards(),
               acc_ctx.get_tx_id(),
               transaction::ObTransID(row_header->get_trans_id()),
@@ -2011,7 +2024,8 @@ int ObMultiVersionMicroBlockRowScanner::check_foreign_key(
               trans_version,
               snapshot_version,
               sstable_->get_end_scn(),
-              lock_state))) {
+              lock_state,
+              fk_skip_pure_lock))) {
     if (OB_TRY_LOCK_ROW_CONFLICT == ret) {
       int tmp_ret = OB_SUCCESS;
       ObStoreRowkey store_rowkey;

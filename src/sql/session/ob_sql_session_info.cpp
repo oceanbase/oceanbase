@@ -3567,6 +3567,7 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       ATOMIC_STORE(&range_optimizer_max_mem_size_, tenant_config->range_optimizer_max_mem_size);
       ATOMIC_STORE(&_query_record_size_limit_, tenant_config->_query_record_size_limit);
       ATOMIC_STORE(&_ob_sqlstat_enable_, tenant_config->_ob_sqlstat_enable);
+      ATOMIC_STORE(&enable_fk_skip_parent_pure_lock_, tenant_config->_enable_fk_skip_parent_pure_lock);
       // 5.allow security audit
       if (OB_SUCCESS != (tmp_ret = ObSecurityAuditUtils::check_allow_audit(*session_, at_type_))) {
         LOG_WARN_RET(tmp_ret, "fail get tenant_config", "ret", tmp_ret,

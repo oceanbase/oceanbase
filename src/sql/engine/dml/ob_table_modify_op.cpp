@@ -58,8 +58,16 @@ int ForeignKeyHandle::do_handle(ObTableModifyOp &op,
           if (is_foreign_key_cascade && !in_ignore_cascading) {
             // nested update can not check parent row.
             LOG_DEBUG("skip foreign_key_check_exist in nested session");
-          } else if (OB_FAIL(check_exist(op, fk_arg, new_row, fk_checker, false, fk_arg.use_das_scan_))) {
-            LOG_WARN("failed to check exist", K(ret), K(fk_arg), K(new_row));
+          } else {
+            // Mark this nested SQL scope as a child->parent existence check so
+            // init_das_dml_rtdef can scope the pure-lock skip to this direction
+            // only (parent->child RESTRICT/CASCADE/SET_NULL must not skip).
+            const bool save_is_fk_check_parent = op.get_exec_ctx().get_das_ctx().is_fk_check_parent_;
+            op.get_exec_ctx().get_das_ctx().is_fk_check_parent_ = true;
+            if (OB_FAIL(check_exist(op, fk_arg, new_row, fk_checker, false, fk_arg.use_das_scan_))) {
+              LOG_WARN("failed to check exist", K(ret), K(fk_arg), K(new_row));
+            }
+            op.get_exec_ctx().get_das_ctx().is_fk_check_parent_ = save_is_fk_check_parent;
           }
         }
       }

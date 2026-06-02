@@ -3308,6 +3308,13 @@ DEF_TIME(_vector_pre_filtering_timeout, OB_TENANT_PARAMETER, "50ms", "[10ms,)",
         "Control the period of pre-filtering stage in vector index search. Range: [10ms, )",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_BOOL(_enable_fk_skip_parent_pure_lock, OB_TENANT_PARAMETER, "False",
+        "In Oracle mode, lets FK existence check on the child side skip parent "
+        "rows held only by a pure DF_LOCK node (e.g. SELECT FOR UPDATE). "
+        "Relaxes lock-wait semantics; enable only when this lock-wait causes "
+        "deadlocks or unacceptable latency.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 DEF_TIME_WITH_CHECKER(schema_history_archive_expire_time, OB_TENANT_PARAMETER, "0",
                       common::ObConfigSchemaHistoryArchiveExpireTimeChecker,
                       "[0, 365d]",

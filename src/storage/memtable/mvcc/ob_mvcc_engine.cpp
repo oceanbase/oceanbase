@@ -130,7 +130,8 @@ int ObMvccEngine::get(ObMvccAccessCtx &ctx,
       TRANS_LOG(WARN, "fail to try to compact row", K(tmp_ret));
     }
   } else if (query_flag.is_for_foreign_key_check() || query_flag.is_plain_insert_gts_opt()) {
-    ret = ObRowConflictHandler::check_foreign_key_constraint_for_memtable(ctx, value, lock_state);
+    ret = ObRowConflictHandler::check_row_conflict_for_memtable(ctx, value, lock_state,
+                                                                query_flag.is_fk_skip_parent_pure_lock());
   } else {
     // do nothing
   }

@@ -1757,6 +1757,11 @@ void ObDMLService::init_dml_write_flag(const ObDASDMLBaseCtDef &base_ctdef,
   }
   if (base_rtdef.is_for_foreign_key_check_) {
     write_flag.set_check_row_locked();
+    // FK existence check on the child side should skip a parent row whose only
+    // conflicting node is a pure lock (DF_LOCK)
+    if (base_rtdef.is_fk_skip_parent_pure_lock_) {
+      write_flag.set_fk_skip_parent_pure_lock();
+    }
   }
   if (base_ctdef.is_update_uk_) {
     write_flag.set_update_uk();
@@ -1805,6 +1810,13 @@ int ObDMLService::init_das_dml_rtdef(ObDMLRtCtx &dml_rtctx,
   }
   if (ObSQLUtils::is_fk_nested_sql(&dml_rtctx.get_exec_ctx())) {
     das_rtdef.is_for_foreign_key_check_ = true;
+    // Pure-lock skip must only apply to the child->parent existence-check
+    // direction. Parent->child enforcement (RESTRICT / NO_ACTION / CASCADE /
+    // SET_NULL) inner SQL also runs as fk-nested sql, but it must keep the
+    // standard lock-wait semantics.
+    das_rtdef.is_fk_skip_parent_pure_lock_ = lib::is_oracle_mode() &&
+                                             ObSQLUtils::is_fk_check_parent_nested_sql(&dml_rtctx.get_exec_ctx()) &&
+                                             my_session->enable_fk_skip_parent_pure_lock();
   }
   return ret;
 }

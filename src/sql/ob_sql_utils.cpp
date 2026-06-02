@@ -5617,6 +5617,23 @@ bool ObSQLUtils::is_fk_nested_sql(ObExecContext *cur_ctx)
   return bret;
 }
 
+//this sql is the child->parent existence-check inner SQL of a foreign key,
+//signaled by parent ctx's is_fk_check_parent_ bit (set in
+//ForeignKeyHandle::do_handle around the ACTION_CHECK_EXIST branch only).
+//Used to scope direction-sensitive optimizations (e.g. pure-lock skip) to
+//child->parent and keep parent->child enforcement (RESTRICT/NO_ACTION/
+//CASCADE/SET_NULL) on the standard path.
+bool ObSQLUtils::is_fk_check_parent_nested_sql(ObExecContext *cur_ctx)
+{
+  bool bret = false;
+  if (cur_ctx != nullptr &&
+      cur_ctx->get_parent_ctx() != nullptr &&
+      cur_ctx->get_parent_ctx()->get_das_ctx().is_fk_check_parent_) {
+    bret = true;
+  }
+  return bret;
+}
+
 //this sql is triggered by online stat gathering
 bool ObSQLUtils::is_online_stat_gathering_nested_sql(ObExecContext *cur_ctx)
 {

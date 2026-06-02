@@ -693,6 +693,7 @@ public:
   static bool is_support_batch_exec(ObItemType type);
   static bool is_pl_nested_sql(ObExecContext *cur_ctx);
   static bool is_fk_nested_sql(ObExecContext *cur_ctx);
+  static bool is_fk_check_parent_nested_sql(ObExecContext *cur_ctx);
   static bool is_online_stat_gathering_nested_sql(ObExecContext *cur_ctx);
   static bool is_iter_uncommitted_row(ObExecContext *cur_ctx);
   static bool is_nested_sql(ObExecContext *cur_ctx);

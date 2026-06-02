@@ -322,6 +322,9 @@ int ObForeignKeyChecker::init_das_scan_rtdef()
                          lib::is_mysql_mode() ? ObQueryFlag::MysqlMode : ObQueryFlag::AnsiMode, // sql_mode
                          true // read_latest
                         );
+  if (lib::is_oracle_mode() && my_session->enable_fk_skip_parent_pure_lock()) {
+    query_flag.set_fk_skip_parent_pure_lock();
+  }
   das_scan_rtdef_.scan_flag_.flag_ = query_flag.flag_;
   int64_t schema_version = task_exec_ctx.get_query_tenant_begin_schema_version();
   das_scan_rtdef_.tenant_schema_version_ = schema_version;

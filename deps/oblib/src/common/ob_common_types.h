@@ -23,43 +23,44 @@ namespace common
 {
 struct ObQueryFlag
 {
-#define OBSF_BIT_SCAN_ORDER           2
-#define OBSF_BIT_DAILY_MERGE          1
-#define OBSF_BIT_RMMB_OPTIMIZE        1
-#define OBSF_BIT_WHOLE_MACRO_SCAN     2
-#define OBSF_BIT_FULL_ROW             1
-#define OBSF_BIT_INDEX_BACK           1
-#define OBSF_BIT_QUERY_STAT           1
-#define OBSF_BIT_SQL_MODE             2
-#define OBSF_BIT_READ_LATEST          1
-#define OBSF_BIT_PREWARM              1
-#define OBSF_BIT_INDEX_INVALID        1
-#define OBSF_BIT_ROW_CACHE            1
-#define OBSF_BIT_JOIN_TYPE            4
-#define OBSF_BIT_BLOCK_INDEX_CACHE    1
-#define OBSF_BIT_BLOCK_CACHE          1
-#define OBSF_BIT_BLOOMFILTER_CACHE    1
-#define OBSF_BIT_MULTI_VERSION_MERGE  1
-#define OBSF_BIT_NEED_FEEDBACK        1
-#define OBSF_BIT_FUSE_ROW_CACHE       1
-#define OBSF_BIT_FAST_AGG             1
-#define OBSF_BIT_ITER_UNCOMMITTED_ROW 1
-#define OBSF_BIT_IGNORE_TRANS_STAT    1
-#define OBSF_BIT_IS_LARGE_QUERY       1
-#define OBSF_BIT_IS_SSTABLE_CUT       1
-#define OBSF_BIT_IS_SHOW_SEED         1
-#define OBSF_BIT_SKIP_READ_LOB        1
-#define OBSF_BIT_IS_LOOKUP_FOR_4377   1
-#define OBSF_BIT_FOREIGN_KEY_CHECK    1
-#define OBSF_BIT_IS_NEW_QUERY_RANGE   1
-#define OBSF_BIT_ENABLE_RICH_FORMAT   1
-#define OBSF_BIT_IS_MDS_QUERY         1
-#define OBSF_BIT_IS_SELECT_FOLLOWER   1
-#define OBSF_BIT_ENABLE_LOB_PREFETCH  1
-#define OBSF_BIT_IS_BARE_ROW_SCAN     1
-#define OBSF_BIT_MR_MV_SCAN           2
-#define OBSF_BIT_IS_PLAIN_INSERT      1
-#define OBSF_BIT_RESERVED             21
+#define OBSF_BIT_SCAN_ORDER                2
+#define OBSF_BIT_DAILY_MERGE               1
+#define OBSF_BIT_RMMB_OPTIMIZE             1
+#define OBSF_BIT_WHOLE_MACRO_SCAN          2
+#define OBSF_BIT_FULL_ROW                  1
+#define OBSF_BIT_INDEX_BACK                1
+#define OBSF_BIT_QUERY_STAT                1
+#define OBSF_BIT_SQL_MODE                  2
+#define OBSF_BIT_READ_LATEST               1
+#define OBSF_BIT_PREWARM                   1
+#define OBSF_BIT_INDEX_INVALID             1
+#define OBSF_BIT_ROW_CACHE                 1
+#define OBSF_BIT_JOIN_TYPE                 4
+#define OBSF_BIT_BLOCK_INDEX_CACHE         1
+#define OBSF_BIT_BLOCK_CACHE               1
+#define OBSF_BIT_BLOOMFILTER_CACHE         1
+#define OBSF_BIT_MULTI_VERSION_MERGE       1
+#define OBSF_BIT_NEED_FEEDBACK             1
+#define OBSF_BIT_FUSE_ROW_CACHE            1
+#define OBSF_BIT_FAST_AGG                  1
+#define OBSF_BIT_ITER_UNCOMMITTED_ROW      1
+#define OBSF_BIT_IGNORE_TRANS_STAT         1
+#define OBSF_BIT_IS_LARGE_QUERY            1
+#define OBSF_BIT_IS_SSTABLE_CUT            1
+#define OBSF_BIT_IS_SHOW_SEED              1
+#define OBSF_BIT_SKIP_READ_LOB             1
+#define OBSF_BIT_IS_LOOKUP_FOR_4377        1
+#define OBSF_BIT_FOREIGN_KEY_CHECK         1
+#define OBSF_BIT_IS_NEW_QUERY_RANGE        1
+#define OBSF_BIT_ENABLE_RICH_FORMAT        1
+#define OBSF_BIT_IS_MDS_QUERY              1
+#define OBSF_BIT_IS_SELECT_FOLLOWER        1
+#define OBSF_BIT_ENABLE_LOB_PREFETCH       1
+#define OBSF_BIT_IS_BARE_ROW_SCAN          1
+#define OBSF_BIT_MR_MV_SCAN                2
+#define OBSF_BIT_IS_PLAIN_INSERT           1
+#define OBSF_BIT_FK_SKIP_PARENT_PURE_LOCK  1
+#define OBSF_BIT_RESERVED                  20
 
   static const uint64_t OBSF_MASK_SCAN_ORDER = (0x1UL << OBSF_BIT_SCAN_ORDER) - 1;
   static const uint64_t OBSF_MASK_DAILY_MERGE =  (0x1UL << OBSF_BIT_DAILY_MERGE) - 1;
@@ -167,6 +168,7 @@ struct ObQueryFlag
       uint64_t is_bare_row_scan_ : OBSF_BIT_IS_BARE_ROW_SCAN; // 1: to scan mult version row directly without compact.
       uint64_t mr_mv_scan_ : OBSF_BIT_MR_MV_SCAN; // 0: normal table scan. 1. major refresh mview base table scan in refresh 2. major refresh rt-mview base table scan
       uint64_t is_plain_insert_gts_opt_ : OBSF_BIT_IS_PLAIN_INSERT;
+      uint64_t fk_skip_parent_pure_lock_ : OBSF_BIT_FK_SKIP_PARENT_PURE_LOCK;
       uint64_t reserved_       : OBSF_BIT_RESERVED;
     };
   };
@@ -263,6 +265,8 @@ struct ObQueryFlag
   inline bool enable_lob_prefetch() const { return enable_lob_prefetch_; }
   inline void set_plain_insert_gts_opt() { is_plain_insert_gts_opt_ = true; }
   inline bool is_plain_insert_gts_opt() const { return is_plain_insert_gts_opt_; }
+  inline void set_fk_skip_parent_pure_lock() { fk_skip_parent_pure_lock_ = true; }
+  inline bool is_fk_skip_parent_pure_lock() const { return fk_skip_parent_pure_lock_; }
   inline void disable_cache()
   {
     set_not_use_row_cache();
@@ -309,6 +313,7 @@ struct ObQueryFlag
                "is_bare_row_scan", is_bare_row_scan_,
                "mr_mv_scan", mr_mv_scan_,
                "is_plain_insert_gts_opt", is_plain_insert_gts_opt_,
+               "fk_skip_parent_pure_lock", fk_skip_parent_pure_lock_,
                "reserved", reserved_);
   OB_UNIS_VERSION(1);
 };

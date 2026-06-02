@@ -23,6 +23,46 @@ using namespace memtable;
 using namespace transaction;
 using namespace lockwaitmgr;
 namespace storage {
+
+bool ObRowConflictHandler::can_skip_fk_pure_lock_conflict(const ObStoreRowLockState &lock_state,
+                                                          const bool fk_skip_parent_pure_lock)
+{
+  return fk_skip_parent_pure_lock &&
+         lock_state.is_locked_ &&
+         lock_state.lock_dml_flag_ == blocksstable::ObDmlFlag::DF_LOCK;
+}
+
+int ObRowConflictHandler::resolve_row_conflict(const ObStoreRowLockState &lock_state,
+                                                 const ObTransID &reader_tx_id,
+                                                 const int64_t snapshot_version,
+                                                 const bool fk_skip_parent_pure_lock)
+{
+  int ret = OB_SUCCESS;
+  if (lock_state.is_locked_ && reader_tx_id != lock_state.lock_trans_id_) {
+    ret = OB_TRY_LOCK_ROW_CONFLICT;
+    if (can_skip_fk_pure_lock_conflict(lock_state, fk_skip_parent_pure_lock)) {
+      if (REACH_TIME_INTERVAL(1000 * 1000)) {
+        TRANS_LOG(INFO, "fk check skips parent pure lock conflict", K(ret), K(lock_state));
+      }
+      ret = OB_SUCCESS;
+    } else if (REACH_TIME_INTERVAL(1000 * 1000)) {
+      TRANS_LOG(WARN, "meet lock conflict on row", K(ret),
+                                                   K(fk_skip_parent_pure_lock),
+                                                   K(lock_state.lock_trans_id_),
+                                                   K(reader_tx_id));
+    }
+  } else if (!lock_state.is_locked_ && lock_state.trans_version_.get_val_for_tx() > snapshot_version) {
+    ret = OB_TRANSACTION_SET_VIOLATION;
+    if (REACH_TIME_INTERVAL(1000 * 1000)) {
+      TRANS_LOG(WARN, "meet transaction set violation on row", K(ret),
+                                                               K(fk_skip_parent_pure_lock),
+                                                               K(lock_state.trans_version_),
+                                                               K(snapshot_version));
+    }
+  }
+  return ret;
+}
+
 int ObRowConflictHandler::check_row_locked(const storage::ObTableIterParam &param,
                                            storage::ObTableAccessContext &context,
                                            const blocksstable::ObDatumRowkey &rowkey,
@@ -35,27 +75,37 @@ int ObRowConflictHandler::check_row_locked(const storage::ObTableIterParam &para
   share::SCN max_trans_version = share::SCN::min_scn();
   const ObTransID my_tx_id = acc_ctx.get_tx_id();
   const share::SCN snapshot_version = acc_ctx.get_snapshot_version();
+  const bool fk_skip_pure_lock = acc_ctx.write_flag_.is_fk_skip_parent_pure_lock();
 
   if (OB_FAIL(check_row_locked(param, context, rowkey, lock_state, max_trans_version))) {
     LOG_WARN("check row locked failed", K(ret), K(context), K(rowkey));
   } else {
     if (lock_state.is_locked_) {
-      if ((by_myself && lock_state.lock_trans_id_ == my_tx_id)
-          || (!by_myself && lock_state.lock_trans_id_ != my_tx_id)) {
+      if ((by_myself && lock_state.lock_trans_id_ == my_tx_id) ||
+          (!by_myself && lock_state.lock_trans_id_ != my_tx_id)) {
         ret = OB_TRY_LOCK_ROW_CONFLICT;
-        if (post_lock) {
-          post_row_read_conflict(acc_ctx,
-                                 rowkey.get_store_rowkey(),
-                                 lock_state,
-                                 context.tablet_id_,
-                                 context.ls_id_,
-                                 0,
-                                 0, /* these two params get from mvcc_row, and for statistics, so we ignore them */
-                                 lock_state.trans_scn_);
-        }
       }
     } else if (max_trans_version > snapshot_version) {
       ret = OB_TRANSACTION_SET_VIOLATION;
+    }
+
+    if (OB_TRY_LOCK_ROW_CONFLICT == ret &&
+        can_skip_fk_pure_lock_conflict(lock_state, fk_skip_pure_lock)) {
+      if (REACH_TIME_INTERVAL(1000 * 1000)) {
+        TRANS_LOG(INFO, "fk check skips parent pure lock conflict (inner sql)",
+                  K(ret), K(lock_state));
+      }
+      ret = OB_SUCCESS;
+    }
+    if (OB_TRY_LOCK_ROW_CONFLICT == ret && post_lock) {
+      post_row_read_conflict(acc_ctx,
+                             rowkey.get_store_rowkey(),
+                             lock_state,
+                             context.tablet_id_,
+                             context.ls_id_,
+                             0,
+                             0, /* these two params get from mvcc_row, and for statistics, so we ignore them */
+                             lock_state.trans_scn_);
     }
   }
   return ret;
@@ -184,9 +234,10 @@ int ObRowConflictHandler::check_foreign_key_constraint(const storage::ObTableIte
   return ret;
 }
 
-int ObRowConflictHandler::check_foreign_key_constraint_for_memtable(ObMvccAccessCtx &ctx,
-                                                                    ObMvccRow *value,
-                                                                    ObStoreRowLockState &lock_state)
+int ObRowConflictHandler::check_row_conflict_for_memtable(ObMvccAccessCtx &ctx,
+                                                          ObMvccRow *value,
+                                                          ObStoreRowLockState &lock_state,
+                                                          const bool fk_skip_parent_pure_lock)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(value)) {
@@ -195,31 +246,24 @@ int ObRowConflictHandler::check_foreign_key_constraint_for_memtable(ObMvccAccess
   } else if (OB_FAIL(value->check_row_locked(ctx, lock_state))) {
     TRANS_LOG(WARN, "check row locked fail", K(ret), K(lock_state));
   } else {
-    const ObTransID my_tx_id = ctx.get_tx_id();
-    const share::SCN snapshot_version = ctx.get_snapshot_version();
-    if (lock_state.is_locked_ && my_tx_id != lock_state.lock_trans_id_) {
-      ret = OB_TRY_LOCK_ROW_CONFLICT;
-      if (REACH_TIME_INTERVAL(1000 * 1000)) {
-        TRANS_LOG(WARN, "meet lock conflict on memtable", K(ret), K(lock_state.lock_trans_id_), K(my_tx_id));
-      }
-    } else if (!lock_state.is_locked_ && lock_state.trans_version_ > snapshot_version) {
-      ret = OB_TRANSACTION_SET_VIOLATION;
-      if (REACH_TIME_INTERVAL(1000 * 1000)) {
-        TRANS_LOG(WARN, "meet tsc on memtable", K(ret), K(lock_state.trans_version_), K(snapshot_version));
-      }
-    }
+    ret = resolve_row_conflict(lock_state,
+                                 ctx.get_tx_id(),
+                                 ctx.get_snapshot_version().get_val_for_tx(),
+                                 fk_skip_parent_pure_lock);
   }
   return ret;
 }
 
-int ObRowConflictHandler::check_foreign_key_constraint_for_sstable(ObTxTableGuards &tx_table_guards,
-                                                                   const ObTransID &read_trans_id,
-                                                                   const ObTransID &data_trans_id,
-                                                                   const ObTxSEQ &sql_sequence,
-                                                                   const int64_t trans_version,
-                                                                   const int64_t snapshot_version,
-                                                                   const share::SCN &end_scn,
-                                                                   ObStoreRowLockState &lock_state) {
+int ObRowConflictHandler::check_row_conflict_for_sstable(ObTxTableGuards &tx_table_guards,
+                                                         const ObTransID &read_trans_id,
+                                                         const ObTransID &data_trans_id,
+                                                         const ObTxSEQ &sql_sequence,
+                                                         const int64_t trans_version,
+                                                         const int64_t snapshot_version,
+                                                         const share::SCN &end_scn,
+                                                         ObStoreRowLockState &lock_state,
+                                                         const bool fk_skip_parent_pure_lock)
+{
   int ret = OB_SUCCESS;
   // If a transaction is committed, the trans_id of it is 0, which is invalid.
   // So we can not use check_row_locked interface to get the trans_version.
@@ -228,26 +272,13 @@ int ObRowConflictHandler::check_foreign_key_constraint_for_sstable(ObTxTableGuar
       ret = OB_TRANSACTION_SET_VIOLATION;
       TRANS_LOG(WARN, "meet tsc on sstable", K(ret), K(trans_version), K(snapshot_version));
     }
+  } else if (!tx_table_guards.is_valid()) {
+    ret = OB_ERR_UNEXPECTED;
+    TRANS_LOG(ERROR, "tx table guard is invalid", KR(ret));
+  } else if (OB_FAIL(tx_table_guards.check_row_locked(read_trans_id, data_trans_id, sql_sequence, end_scn, lock_state))) {
+    TRANS_LOG(WARN, "check row locked fail", K(ret), K(read_trans_id), K(data_trans_id), K(sql_sequence), K(lock_state));
   } else {
-    ObTxTable *tx_table = nullptr;
-    if (!tx_table_guards.is_valid()) {
-      ret = OB_ERR_UNEXPECTED;
-      TRANS_LOG(ERROR, "tx table guard is invalid", KR(ret));
-    } else if (OB_FAIL(tx_table_guards.check_row_locked(
-        read_trans_id, data_trans_id, sql_sequence, end_scn,lock_state))){
-      TRANS_LOG(WARN, "check row locked fail", K(ret), K(read_trans_id), K(data_trans_id), K(sql_sequence), K(lock_state));
-    }
-    if (lock_state.is_locked_ && read_trans_id != lock_state.lock_trans_id_) {
-      ret = OB_TRY_LOCK_ROW_CONFLICT;
-      if (REACH_TIME_INTERVAL(1000 * 1000)) {
-        TRANS_LOG(WARN, "meet lock conflict on sstable", K(ret), K(lock_state.lock_trans_id_), K(read_trans_id));
-      }
-    } else if (!lock_state.is_locked_ && lock_state.trans_version_.get_val_for_tx() > snapshot_version) {
-      ret = OB_TRANSACTION_SET_VIOLATION;
-      if (REACH_TIME_INTERVAL(1000 * 1000)) {
-        TRANS_LOG(WARN, "meet tsc on sstable", K(ret), K(lock_state.trans_version_), K(snapshot_version));
-      }
-    }
+    ret = resolve_row_conflict(lock_state, read_trans_id, snapshot_version, fk_skip_parent_pure_lock);
   }
   return ret;
 }

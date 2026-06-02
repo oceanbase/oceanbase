@@ -71,17 +71,27 @@ public:
   static int check_foreign_key_constraint(const storage::ObTableIterParam &param,
                                           storage::ObTableAccessContext &context,
                                           const common::ObStoreRowkey &rowkey);
-  static int check_foreign_key_constraint_for_memtable(memtable::ObMvccAccessCtx &acc_ctx,
-                                                       memtable::ObMvccRow *value,
-                                                       storage::ObStoreRowLockState &lock_state);
-  static int check_foreign_key_constraint_for_sstable(storage::ObTxTableGuards &tx_table_guards,
-                                                      const transaction::ObTransID &read_trans_id,
-                                                      const transaction::ObTransID &data_trans_id,
-                                                      const transaction::ObTxSEQ &sql_sequence,
-                                                      const int64_t trans_version,
-                                                      const int64_t snapshot_version,
-                                                      const share::SCN &end_scn,
-                                                      storage::ObStoreRowLockState &lock_state);
+  // Per-storage row-conflict checks.
+  // Reached from BOTH the FK existence-check chain and the plain INSERT
+  // GTS-opt branch (query_flag.is_for_foreign_key_check() ||
+  // query_flag.is_plain_insert_gts_opt()) -- see ObMvccEngine::get,
+  // ObMvccIterator::try_cleanout_row_, ObMultiVersionMicroBlockRowScanner::
+  // check_foreign_key. Returns OB_TRY_LOCK_ROW_CONFLICT on lock conflict and
+  // OB_TRANSACTION_SET_VIOLATION on tsc, optionally swallowing pure-DF_LOCK
+  // conflicts when fk_skip_parent_pure_lock is set.
+  static int check_row_conflict_for_memtable(memtable::ObMvccAccessCtx &acc_ctx,
+                                             memtable::ObMvccRow *value,
+                                             storage::ObStoreRowLockState &lock_state,
+                                             const bool fk_skip_parent_pure_lock);
+  static int check_row_conflict_for_sstable(storage::ObTxTableGuards &tx_table_guards,
+                                            const transaction::ObTransID &read_trans_id,
+                                            const transaction::ObTransID &data_trans_id,
+                                            const transaction::ObTxSEQ &sql_sequence,
+                                            const int64_t trans_version,
+                                            const int64_t snapshot_version,
+                                            const share::SCN &end_scn,
+                                            storage::ObStoreRowLockState &lock_state,
+                                            const bool fk_skip_parent_pure_lock);
   // TODO(yichang): This function is refered to ObMemtable::post_row_write_conflict_,
   // but remove the mem_ctx and tx_ctx in the implement. I think ObMemtable can call
   // this function, too. But it seems there's still a need to use mem_ctx to record
@@ -94,6 +104,22 @@ public:
                                     const int64_t last_compact_cnt,
                                     const int64_t total_trans_node_cnt,
                                     const share::SCN &trans_scn);
+  // Returns true when the FK skip knob is on AND the conflict is a pure
+  // DF_LOCK -- the conflicting txn only LOCKed the parent row and did not
+  // modify any column, so the child existence check is still valid.
+  // Caller is responsible for rewriting ret to OB_SUCCESS.
+  static bool can_skip_fk_pure_lock_conflict(const storage::ObStoreRowLockState &lock_state,
+                                             const bool fk_skip_parent_pure_lock);
+  // Classifies a freshly-populated lock_state into the corresponding ret:
+  //   - OB_TRY_LOCK_ROW_CONFLICT when locked by another tx (auto-rewritten
+  //     to OB_SUCCESS if can_skip_fk_pure_lock_conflict applies);
+  //   - OB_TRANSACTION_SET_VIOLATION when committed trans_version exceeds
+  //     snapshot;
+  //   - OB_SUCCESS otherwise.
+  static int resolve_row_conflict(const storage::ObStoreRowLockState &lock_state,
+                                    const transaction::ObTransID &reader_tx_id,
+                                    const int64_t snapshot_version,
+                                    const bool fk_skip_parent_pure_lock);
 };
 }  // namespace storage
 }  // namespace oceanbase
