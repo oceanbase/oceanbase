@@ -3611,6 +3611,7 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       ATOMIC_STORE(&force_unstreaming_cursor_, tenant_config->_force_unstreaming_cursor);
       ATOMIC_STORE(&enable_pl_null_literal_parameterization_, tenant_config->_enable_pl_null_literal_parameterization);
       enable_das_batch_rpc_ = tenant_config->_enable_das_batch_rpc;
+      ATOMIC_STORE(&enable_foreign_key_gts_opt_, tenant_config->_enable_foreign_key_gts_opt);
       extend_sql_plan_monitor_metrics_ = tenant_config->_extend_sql_plan_monitor_metrics;
       // 14. JSON and multi-mode related config cache
       int32_t json_max_depth = tenant_config->json_document_max_depth;
