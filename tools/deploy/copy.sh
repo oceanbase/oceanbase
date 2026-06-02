@@ -110,7 +110,7 @@ function do_install_java_extensions {
   mkdir -p "$jni_packages_dir"
   cp -rf ./__PREFIX_REQUIRED__/oceanbase/jni_packages/* "$jni_packages_dir"/
   # 创建 current 软链接指向版本目录
-  local version_dir=$(ls -d "$jni_packages_dir"/*/ 2>/dev/null | head -1)
+  local version_dir=$(find "$jni_packages_dir" -maxdepth 1 -mindepth 1 -type d | sort | head -1)
   if [[ -n "$version_dir" ]]; then
     version_dir=${version_dir%/}  # 去掉末尾斜杠
     local version_name=$(basename "$version_dir")
