@@ -403,6 +403,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"high_priority", HIGH_PRIORITY},
   {"histogram", HISTOGRAM},
   {"hms_catalog_name", HMS_CATALOG_NAME},
+  {"hms_principal", HMS_PRINCIPAL},
   {"host", HOST},
   {"hosts", HOSTS},
   {"hot_retention", HOT_RETENTION},

@@ -12,6 +12,7 @@
 #include "lib/lock/ob_spin_lock.h"
 #include "lib/alloc/alloc_assist.h"
 #include "lib/allocator/ob_mod_define.h"
+#include "lib/allocator/ob_sql_mem_leak_checker.h"
 #include "lib/oblog/ob_log_module.h"
 #include "lib/rc/ob_rc.h"
 #include "lib/rc/context.h"
@@ -331,6 +332,7 @@ private:
   int create_client(ClientInstance *&obj)
   {
     int ret = OB_SUCCESS;
+    DISABLE_SQL_MEMLEAK_GUARD;
     obj = nullptr;
     if (OB_ISNULL(allocator_)) {
       ret = OB_NOT_INIT;
@@ -695,6 +697,7 @@ private:
                   const ObString &properties, ObCatalogClientPool<ClientInstance> *&pool)
   {
     int ret = OB_SUCCESS;
+    DISABLE_SQL_MEMLEAK_GUARD;
     pool = nullptr;
     if (OB_ISNULL(allocator_)) {
       ret = OB_NOT_INIT;

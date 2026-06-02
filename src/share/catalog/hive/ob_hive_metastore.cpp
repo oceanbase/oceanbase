@@ -321,7 +321,7 @@ void GetPartitionsByNamesOperation::execute_impl(ThriftHiveMetastoreClient *clie
 ObHiveMetastoreClient::ObHiveMetastoreClient(ObIAllocator *allocator)
     : allocator_(allocator), socket_(), transport_(), protocol_(), hive_metastore_client_(),
       hms_keytab_(), hms_principal_(), hms_krb5conf_(), hms_default_catalog_(),
-      service_(), server_FQDN_(), state_lock_(ObLatchIds::OBJECT_DEVICE_LOCK),
+      hms_service_principal_(), service_(), server_FQDN_(), state_lock_(ObLatchIds::OBJECT_DEVICE_LOCK),
       conn_lock_(ObLatchIds::OBJECT_DEVICE_LOCK), kerberos_lock_(ObLatchIds::OBJECT_DEVICE_LOCK),
       is_inited_(false), is_opened_(false), last_kinit_ts_(0), client_id_(0), client_pool_(nullptr),
       is_in_use_(false), socket_timeout_(-1), uri_list_(), current_uri_idx_(0),
@@ -370,6 +370,12 @@ int ObHiveMetastoreClient::init(const ObHMSCatalogProperties &properties)
                                       hms_krb5conf_,
                                       true))) {
       LOG_WARN("failed to write krb5conf", K(ret));
+    } else if (!properties.service_principal_.empty()
+              && OB_FAIL(ob_write_string(*allocator_,
+                                        properties.service_principal_,
+                                        hms_service_principal_,
+                                        true))) {
+      LOG_WARN("failed to write service_principal", K(ret));
     } else if (OB_ISNULL(properties.hms_catalog_name_)
               || properties.hms_catalog_name_.empty()) {
       // do nothing
@@ -385,30 +391,39 @@ int ObHiveMetastoreClient::init(const ObHMSCatalogProperties &properties)
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("uri list is empty after parse", K(ret));
     } else if (!hms_keytab_.empty() && !hms_principal_.empty()) {
-      // Extract service and server_FQDN from principal (only once during setup).
-      ObString temp_princ;
       ObArenaAllocator temp_allocator;
-      if (OB_FAIL(ob_write_string(temp_allocator, hms_principal_, temp_princ, true))) {
-        LOG_WARN("failed to copy the hms principal", K(ret), K_(hms_principal));
-      } else {
-        // service and server_FQDN can seperate by principal.
-        // Because the GSSAPI would assembly by service and server_FQDN to be the principal.
-        // Such as service "hive" and server_FQDN "hadoop" -> "hive/hadoop@EXAMPLE.COM".
-        // TODO(bitao): this principal may be not same as "hive/hadoop@EXAMPLE.COM" in the
-        // kerberos config.
-        ObString tmp_service = temp_princ.split_on('/').trim_space_only();
-        ObString tmp_server_FQDN = temp_princ.split_on('@').trim_space_only();
-        if (OB_FAIL(ob_write_string(*allocator_, tmp_service, service_, true))) {
-          LOG_WARN("failed to write service value", K(ret), K(tmp_service));
-        } else if (OB_FAIL(ob_write_string(*allocator_, tmp_server_FQDN, server_FQDN_, true))) {
-          LOG_WARN("failed to write service_FQDN value", K(ret), K(tmp_server_FQDN));
-        } else if (OB_UNLIKELY(service_.empty())) {
-          ret = OB_INVALID_HMS_SERVICE;
-          LOG_WARN("service should not be empty", K(ret), K(temp_princ), K_(hms_principal), K_(service));
-        } else if (OB_UNLIKELY(server_FQDN_.empty())) {
-          ret = OB_INVALID_HMS_SERVICE_FQDN;
-          LOG_WARN("service_FQDN should not be empty", K(ret), K_(hms_principal), K_(server_FQDN));
+      ObString tmp_service;
+      if (!hms_service_principal_.empty()) {
+        // SERVICE_PRINCIPAL is set: extract service from it.
+        // "hadoop/_HOST@XTT.COM"         -> service = "hadoop"
+        // "hadoop/obrde.dev-xw2@XTT.COM" -> service = "hadoop"
+        ObString temp_sp;
+        if (OB_FAIL(ob_write_string(temp_allocator, hms_service_principal_, temp_sp, true))) {
+          LOG_WARN("failed to copy the hms service_principal", K(ret), K_(hms_service_principal));
+        } else if (OB_NOT_NULL(temp_sp.find('/'))) {
+          tmp_service = temp_sp.split_on('/').trim_space_only();
+        } else {
+          tmp_service = temp_sp.split_on('@').trim_space_only();
         }
+      } else {
+        // Fallback: extract service from PRINCIPAL (old behavior).
+        // "hive/hadoop@EXAMPLE.COM" -> service = "hive"
+        // "xxx@EXAMPLE.COM"         -> service = "xxx"
+        ObString temp_princ;
+        if (OB_FAIL(ob_write_string(temp_allocator, hms_principal_, temp_princ, true))) {
+          LOG_WARN("failed to copy the hms principal", K(ret), K_(hms_principal));
+        } else if (OB_NOT_NULL(temp_princ.find('/'))) {
+          tmp_service = temp_princ.split_on('/').trim_space_only();
+        } else {
+          tmp_service = temp_princ.split_on('@').trim_space_only();
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(ob_write_string(*allocator_, tmp_service, service_, true))) {
+        LOG_WARN("failed to write service value", K(ret), K(tmp_service));
+      } else if (OB_UNLIKELY(service_.empty())) {
+        ret = OB_INVALID_HMS_SERVICE;
+        LOG_WARN("service should not be empty", K(ret), K_(hms_service_principal), K_(hms_principal), K_(service));
       }
     }
 
@@ -539,6 +554,9 @@ ObHiveMetastoreClient::~ObHiveMetastoreClient()
     }
     if (!hms_default_catalog_.empty()) {
       allocator_->free(hms_default_catalog_.ptr());
+    }
+    if (!hms_service_principal_.empty()) {
+      allocator_->free(hms_service_principal_.ptr());
     }
     if (!service_.empty()) {
       allocator_->free(service_.ptr());
@@ -983,8 +1001,54 @@ int ObHiveMetastoreClient::setup_connection_for_uri(const int64_t uri_idx)
         ObString cache_name;
         if (OB_FAIL(init_kerberos(hms_keytab_, hms_principal_, hms_krb5conf_, cache_name))) {
           LOG_WARN("failed to init kerberos", K(ret));
-        } else if (!service_.empty() && !server_FQDN_.empty()) {
-          transport_ = TSaslClientTransport::wrap_client_transports(service_, server_FQDN_, transport_);
+        } else if (!service_.empty()) {
+          // Determine serverFQDN for SASL target.
+          // If SERVICE_PRINCIPAL is set and has instance part, use it
+          // (replacing _HOST with actual URI host). Otherwise use URI host directly.
+          ObString resolved_fqdn;
+          ObArenaAllocator temp_allocator;
+          if (!hms_service_principal_.empty()) {
+            ObString temp_sp;
+            if (OB_FAIL(ob_write_string(temp_allocator, hms_service_principal_, temp_sp, true))) {
+              LOG_WARN("failed to copy service_principal", K(ret));
+            } else if (OB_NOT_NULL(temp_sp.find('/'))) {
+              // Has instance part: "hadoop/_HOST@XTT.COM" or "hadoop/obrde.dev-xw2@XTT.COM"
+              temp_sp.split_on('/'); // skip service, temp_sp now = "_HOST@XTT.COM" or "host@REALM"
+              ObString instance = temp_sp.split_on('@'); // instance = "_HOST" or "obrde.dev-xw2"
+              if (instance.prefix_match("_HOST")) {
+                resolved_fqdn = ObString(host);
+              } else {
+                resolved_fqdn = instance;
+              }
+            } else {
+              // No instance part (e.g. "hadoop@XTT.COM"), use URI host
+              resolved_fqdn = ObString(host);
+            }
+          } else {
+            // No HMS_PRINCIPAL set: fall back to PRINCIPAL.
+            // If PRINCIPAL has instance part (e.g. "hdfs/obrde.host@REALM"),
+            // use that instance as serverFQDN. Otherwise use URI host.
+            ObString temp_princ;
+            if (OB_FAIL(ob_write_string(temp_allocator, hms_principal_, temp_princ, true))) {
+              LOG_WARN("failed to copy principal for fqdn", K(ret));
+            } else if (OB_NOT_NULL(temp_princ.find('/'))) {
+              temp_princ.split_on('/'); // skip service part
+              ObString instance = temp_princ.split_on('@');
+              if (instance.empty()) {
+                resolved_fqdn = ObString(host);
+              } else {
+                resolved_fqdn = instance;
+              }
+            } else {
+              resolved_fqdn = ObString(host);
+            }
+          }
+          if (OB_FAIL(ret)) {
+          } else if (OB_FAIL(ob_write_string(*allocator_, resolved_fqdn, server_FQDN_, true))) {
+            LOG_WARN("failed to write server_FQDN", K(ret), K(resolved_fqdn));
+          } else {
+            transport_ = TSaslClientTransport::wrap_client_transports(service_, server_FQDN_, transport_);
+          }
         }
       }
 

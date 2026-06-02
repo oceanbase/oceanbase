@@ -736,6 +736,10 @@ int ObHMSCatalogProperties::to_json_kv_string(char *buf, const int64_t buf_len, 
   OZ(hex_print(krb5conf_.ptr(), krb5conf_.length(), buf, buf_len, pos));
   OZ(databuff_printf(buf, buf_len, pos, R"(")"));
   OZ(J_COMMA());
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s":")", OPTION_NAMES[SERVICE_PRINCIPAL]));
+  OZ(hex_print(service_principal_.ptr(), service_principal_.length(), buf, buf_len, pos));
+  OZ(databuff_printf(buf, buf_len, pos, R"(")"));
+  OZ(J_COMMA());
   OZ(databuff_printf(buf,
                      buf_len,
                      pos,
@@ -819,6 +823,15 @@ int ObHMSCatalogProperties::load_from_string(const ObString &str, ObIAllocator &
       }
       node = node->get_next();
     }
+    if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[SERVICE_PRINCIPAL])
+        && json::JT_STRING == node->value_->get_type()) {
+      ObObj obj;
+      OZ(ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));
+      if (OB_SUCC(ret) && !obj.is_null()) {
+        service_principal_ = obj.get_string();
+      }
+      node = node->get_next();
+    }
     if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[MAX_CLIENT_POOL_SIZE])
         && json::JT_NUMBER == node->value_->get_type()) {
       max_client_pool_size_ = node->value_->get_number();
@@ -882,6 +895,10 @@ int ObHMSCatalogProperties::resolve_catalog_properties(const ParseNode &node)
         }
         case T_KRB5CONF: {
           krb5conf_ = ObString(child_value->str_len_, child_value->str_value_).trim_space_only();
+          break;
+        }
+        case T_HMS_PRINCIPAL: {
+          service_principal_ = ObString(child_value->str_len_, child_value->str_value_).trim_space_only();
           break;
         }
         case T_MAX_CLIENT_POOL_SIZE: {

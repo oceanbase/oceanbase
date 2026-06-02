@@ -659,6 +659,7 @@ private:
   ObString hms_principal_;
   ObString hms_krb5conf_;
   ObString hms_default_catalog_;
+  ObString hms_service_principal_;
   ObString service_;
   ObString server_FQDN_;
 

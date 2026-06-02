@@ -3089,6 +3089,9 @@ typedef enum ObItemType
   T_EXTERNAL_FILE_GLOB_PATTERN = 4990,
   T_EXPORT_CSV_HEADER = 4991,
 
+  // HMS SERVICE PRINCIPAL
+  T_HMS_PRINCIPAL = 4992,
+
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 
