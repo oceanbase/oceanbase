@@ -37,6 +37,7 @@ ERRSIM_POINT_DEF(EN_TABLET_GROUP_GENERATE_TASK_PROCESS_FAILED);
 ERRSIM_POINT_DEF(EN_GENERATE_TABLET_GROUP_DAG_FAILED);
 ERRSIM_POINT_DEF(EN_TABLET_GROUP_GENERATE_TASK_GEN_SELF_FAILED);
 ERRSIM_POINT_DEF(EN_TABLET_GROUP_GENERATE_TASK_INFINITE_LOOP);
+ERRSIM_POINT_DEF(EN_MIGRATION_TABLET_STOPPED);
 /******************ObMigrationCtx*********************/
 ObMigrationCtx::ObMigrationCtx()
   : ObIHADagNetCtx(),
@@ -2739,6 +2740,19 @@ int ObTabletMigrationTask::init(ObCopyTabletCtx &copy_tablet_ctx)
     is_inited_ = true;
     LOG_INFO("succeed init tablet migration task", "ls id", ctx_->arg_.ls_id_, "tablet_id", copy_tablet_ctx.tablet_id_,
         "dag_id", *ObCurTraceId::get_trace_id(), "dag_net_id", ctx_->task_id_);
+
+#ifdef ERRSIM
+    SERVER_EVENT_ADD("storage_ha", "before_init_migration_task",
+      "tenant_id", ctx_->tenant_id_,
+      "ls_id", ctx_->arg_.ls_id_.id(),
+      "tablet_id", copy_tablet_ctx.tablet_id_.id());
+    int64_t tablet_id = -EN_MIGRATION_TABLET_STOPPED;
+    if (tablet_id == copy_tablet_ctx.tablet_id_.id()) {
+      FLOG_INFO("wait for tablet migration task to be stopped", K(copy_tablet_ctx.tablet_id_));
+      DEBUG_SYNC(BEFORE_INIT_MIGRATION_TASK);
+    }
+#endif
+
   }
   return ret;
 }

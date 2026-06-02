@@ -19,6 +19,8 @@ namespace storage
 namespace checkpoint
 {
 
+ERRSIM_POINT_DEF(EN_UPDATE_CLOG_CHECKPOINT_SKIP);
+
 ObCheckpointExecutor::ObCheckpointExecutor()
     : ls_(nullptr),
       loghandler_(nullptr),
@@ -166,6 +168,12 @@ int ObCheckpointExecutor::update_clog_checkpoint()
   int ret = OB_SUCCESS;
   WLockGuard guard_for_update_clog_checkpoint(rwlock_for_update_clog_checkpoint_);
   RLockGuard guard(rwlock_);
+#ifdef ERRSIM
+  if (EN_UPDATE_CLOG_CHECKPOINT_SKIP) {
+    // skip update clog checkpoint
+    LOG_INFO("EN_UPDATE_CLOG_CHECKPOINT_SKIP, skip update clog checkpoint", K(ls_->get_ls_id()));
+  } else
+#endif
   if (update_checkpoint_enabled_) {
     ObFreezer *freezer = ls_->get_freezer();
     const share::ObLSID ls_id = ls_->get_ls_id();
@@ -181,13 +189,6 @@ int ObCheckpointExecutor::update_clog_checkpoint()
         SCN checkpoint_scn = max_decided_scn;
         get_min_rec_scn(min_rec_scn_service_type_index, checkpoint_scn);
         get_min_rec_scn_service_type_by_index_(min_rec_scn_service_type_index, service_type, buf_len);
-
-#ifdef OB_BUILD_SHARED_STORAGE
-        if (GCTX.is_shared_storage_mode()) {
-          // here we can check if checkpoint is quickly changed because ss mode do advance_checkpoint each 10 minutes
-          (void)ObCkptUtil::check_ckpt_changed(false /*is_ss_ckpt*/, ls_id, checkpoint_scn, ckpt_change_record_);
-        }
-#endif
 
         const SCN checkpoint_scn_in_ls_meta = ls_->get_clog_checkpoint_scn();
         LSN clog_checkpoint_lsn;
