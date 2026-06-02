@@ -152,7 +152,7 @@ int ObSimpleClusterTestBase::start()
   OB_LOGGER.set_enable_log_limit(false);
   oceanbase::palf::election::GLOBAL_INIT_ELECTION_MODULE();
   oceanbase::palf::election::INIT_TS = 1;
-  oceanbase::palf::election::MAX_TST = 100 * 1000;
+  oceanbase::palf::election::MAX_TST = 1000 * 1000; // 1s, align with production default
   GCONF.enable_perf_event = false;
   GCONF.enable_sql_audit = true;
   GCONF.enable_record_trace_log = false;
