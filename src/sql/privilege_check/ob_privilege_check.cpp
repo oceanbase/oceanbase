@@ -4333,13 +4333,19 @@ int get_grant_ora_need_privs(
 
 int sys_pkg_need_priv_check(uint64_t pkg_id, ObSchemaGetterGuard *schema_guard,
                             bool &need_check, uint64_t &pkg_spec_id,
-                            bool &need_only_obj_check)
+                            bool &need_only_obj_check, ObSQLSessionInfo *session_info)
 {
   static const char *pkg_name_need_priv[] = {
     /* add package's name here, who need to be check priv, for example */
     "dbms_plan_cache",
     "dbms_resource_manager",
     "utl_recomp",
+  };
+  /* network packages: gated by ORACLE_UTL_NETWORK_PKG_PRIV_CHECK (ob_compatibility_version) */
+  static const char *pkg_name_utl_network_need_priv[] = {
+    "utl_tcp",
+    "utl_http",
+    "utl_smtp",
   };
   static const char *pkg_name_only_need_obj_priv[] = {
     /* add package's name here, who need to be check priv, for example */
@@ -4364,16 +4370,29 @@ int sys_pkg_need_priv_check(uint64_t pkg_id, ObSchemaGetterGuard *schema_guard,
       for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(pkg_name_need_priv); ++i) {
         if (0 == pkg_schema->get_package_name().case_compare(pkg_name_need_priv[i])) {
           need_check = true;
-          for (int64_t j = 0; OB_SUCC(ret) && j < ARRAYSIZEOF(pkg_name_only_need_obj_priv); ++j) {
-            if (0 == pkg_schema->get_package_name().case_compare(pkg_name_only_need_obj_priv[j])) {
-              need_only_obj_check = true;
-              break;
-            }
+        }
+      }
+      if (OB_SUCC(ret) && !need_check) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < ARRAYSIZEOF(pkg_name_utl_network_need_priv); ++i) {
+          if (0 == pkg_schema->get_package_name().case_compare(pkg_name_utl_network_need_priv[i])) {
+            bool utl_network_pkg_priv_check_enable = false;
+            uint64_t compat_version = 0;
+            OZ (session_info->get_compatibility_version(compat_version));
+            OZ (ObCompatControl::check_feature_enable(compat_version,
+                                                   ObCompatFeatureType::ORACLE_UTL_NETWORK_PKG_PRIV_CHECK,
+                                                   utl_network_pkg_priv_check_enable));
+            need_check = utl_network_pkg_priv_check_enable;
+            break;
           }
-          break;
         }
       }
       if (OB_SUCC(ret) && need_check) {
+        for (int64_t j = 0; OB_SUCC(ret) && j < ARRAYSIZEOF(pkg_name_only_need_obj_priv); ++j) {
+          if (0 == pkg_schema->get_package_name().case_compare(pkg_name_only_need_obj_priv[j])) {
+            need_only_obj_check = true;
+            break;
+          }
+        }
         OZ (schema_guard->get_package_id(pkg_schema->get_tenant_id(),
                                          pkg_schema->get_database_id(),
                                          pkg_schema->get_package_name(),
@@ -4410,7 +4429,7 @@ int get_call_ora_need_privs(
       CK (OB_NOT_NULL(session_info));
       uint64_t spec_id = OB_INVALID_ID;
       OZ (sys_pkg_need_priv_check(pkg_id, ctx.schema_guard_, need_check_priv, spec_id,
-                                  need_only_obj_check));
+                                  need_only_obj_check, session_info));
       LOG_DEBUG("check sys package priv", K(pkg_id), K(need_check_priv), K(ret));
       if (need_check_priv) {
         OX (need_priv.grantee_id_ = user_id);
