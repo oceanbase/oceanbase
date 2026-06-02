@@ -174,6 +174,24 @@ int ObStaticEngineCG::generate(const ObLogPlan &log_plan, ObPhysicalPlan &phy_pl
     phy_plan.set_next_phy_operator_id(log_plan.get_max_op_id());
   }
 
+  if (OB_UNLIKELY(0 < log_plan.get_optimizer_context().get_global_hint().dblink_hints_.tx_id_)) {
+    ObPhysicalPlanCtx *plan_ctx = nullptr;
+    ObQueryCtx *query_ctx = log_plan.get_optimizer_context().get_query_ctx();
+    const ObDBLinkHit &dblink_hints = log_plan.get_optimizer_context().get_global_hint().dblink_hints_;
+
+    if (OB_NOT_NULL(log_plan.get_optimizer_context().get_exec_ctx())
+          && OB_NOT_NULL(plan_ctx = log_plan.get_optimizer_context().get_exec_ctx()->get_physical_plan_ctx())) {
+      plan_ctx->set_tx_id(dblink_hints.tx_id_);
+      plan_ctx->set_tm_sessid(dblink_hints.tm_sessid_);
+    }
+
+    if (OB_NOT_NULL(query_ctx)) {
+      query_ctx->set_has_dblink(true);
+    }
+
+    LOG_TRACE("setting tx id and tm sessid to plan_ctx", K(dblink_hints), KPC(plan_ctx), KPC(query_ctx));
+  }
+
   bool need_check_output_datum = false;
   ret = OB_E(EventTable::EN_ENABLE_OP_OUTPUT_DATUM_CHECK) ret;
   if (OB_FAIL(ret)) {
