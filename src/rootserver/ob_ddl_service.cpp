@@ -28667,7 +28667,7 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
         } else if (is_drop_index_or_mlog && OB_ISNULL(data_table_schema)) {
           ret = OB_TABLE_NOT_EXIST;
           LOG_WARN("data table not found", K(ret), K(tmp_table_schema.get_data_table_id()));
-        } else if (is_drop_index_or_mlog && ObTableSchema::is_mlog_table(drop_table_arg.table_type_)
+        } else if (is_drop_index_or_mlog && table_schema->is_available_mlog()
                    && data_table_schema->table_referenced_by_mv()) {
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("drop materialized view log on table required by materialized view is not supported", KR(ret));

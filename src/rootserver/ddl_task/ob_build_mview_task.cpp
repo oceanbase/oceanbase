@@ -252,6 +252,7 @@ int ObBuildMViewTask::clean_on_fail()
     drop_table_arg.table_type_ = MATERIALIZED_VIEW;
     drop_table_arg.session_id_ = 100;
     drop_table_arg.exec_tenant_id_ = tenant_id_;
+    drop_table_arg.force_drop_ = database_schema->is_in_recyclebin();
     table_item.database_name_ = database_schema->get_database_name();
     table_item.table_name_ = mview_schema->get_table_name();
     if (OB_FAIL(drop_table_arg.tables_.push_back(table_item))) {
@@ -397,6 +398,7 @@ int ObBuildMViewTask::build_mlog_impl(const obrpc::ObMVRequiredColumnsInfo &requ
                K(mlog_schema->get_table_id()));
     } else if (has_mlog_task) {
       ret = OB_EAGAIN;
+      LOG_INFO("base table has mlog task, skip build mlog", KR(ret), KPC(mlog_schema));
     }
   }
   if (OB_SUCC(ret)) {
