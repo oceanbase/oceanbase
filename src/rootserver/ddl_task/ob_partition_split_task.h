@@ -153,7 +153,10 @@ private:
                      const uint64_t table_id,
                      const uint64_t src_part_id,
                      const uint64_t dest_part_id);
-
+  int copy_histogram_stat_info(common::ObMySQLTransaction &trans,
+                               const uint64_t table_id,
+                               const uint64_t src_part_id,
+                               const uint64_t dest_part_id);
   int copy_src_part_stat_info_to_dest(common::ObMySQLTransaction &trans,
                                       const uint64_t table_id,
                                       const int64_t src_part_id,

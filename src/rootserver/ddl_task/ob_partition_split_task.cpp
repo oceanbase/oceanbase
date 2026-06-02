@@ -1733,6 +1733,74 @@ int ObPartitionSplitTask::copy_stat_info(common::ObMySQLTransaction &trans,
   return ret;
 }
 
+int ObPartitionSplitTask::copy_histogram_stat_info(
+    common::ObMySQLTransaction &trans,
+    const uint64_t table_id,
+    const uint64_t src_part_id,
+    const uint64_t dest_part_id)
+{
+  int ret = OB_SUCCESS;
+  if (!trans.is_started() || OB_INVALID_ID == table_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(table_id), K(src_part_id), K(dest_part_id), K(trans.is_started()));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(GCTX.sql_proxy_));
+  } else {
+    ObArray<int64_t> column_ids;
+    {
+      ObSqlString query_sql;
+      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+        sqlclient::ObMySQLResult *result = nullptr;
+        if (OB_FAIL(query_sql.assign_fmt(
+                "SELECT DISTINCT column_id FROM %s "
+                "WHERE tenant_id = %ld AND table_id = %ld AND partition_id = %ld",
+                OB_ALL_HISTOGRAM_STAT_TNAME, 0L, table_id, src_part_id))) {
+          LOG_WARN("fail to assign query sql", K(ret), K(table_id), K(src_part_id));
+        } else if (OB_FAIL(trans.read(res, tenant_id_, query_sql.ptr()))) {
+          LOG_WARN("fail to read column_ids", K(ret), K(query_sql));
+        } else if (OB_ISNULL(result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("result is null", K(ret));
+        } else {
+          while (OB_SUCC(ret) && OB_SUCC(result->next())) {
+            int64_t column_id = OB_INVALID_ID;
+            EXTRACT_INT_FIELD_MYSQL(*result, "column_id", column_id, int64_t);
+            if (OB_FAIL(ret)) {
+            } else if (OB_FAIL(column_ids.push_back(column_id))) {
+              LOG_WARN("fail to push_back column_id", K(ret), K(column_id));
+            }
+          }
+          if (OB_ITER_END == ret) {
+            ret = OB_SUCCESS;
+          }
+        }
+      }
+    }
+    for (int64_t i = 0; OB_SUCC(ret) && i < column_ids.count(); i++) {
+      int64_t column_id = column_ids.at(i);
+      int64_t affected_rows = 0;
+      ObSqlString copy_sql;
+      if (OB_FAIL(copy_sql.assign_fmt(
+              "REPLACE INTO %s (partition_id, %s) "
+              "SELECT %ld, %s FROM %s "
+              "WHERE tenant_id = %ld AND table_id = %ld AND partition_id = %ld AND column_id = %ld",
+              OB_ALL_HISTOGRAM_STAT_TNAME, get_table_schema(OB_ALL_HISTOGRAM_STAT_TNAME),
+              dest_part_id, get_table_schema(OB_ALL_HISTOGRAM_STAT_TNAME), OB_ALL_HISTOGRAM_STAT_TNAME,
+              0L, table_id, src_part_id, column_id))) {
+        LOG_WARN("fail to assign copy sql", K(ret));
+      } else if (OB_FAIL(trans.write(tenant_id_, copy_sql.ptr(), affected_rows))) {
+        LOG_WARN("fail to copy histogram stat for column",
+                 K(ret), K(table_id), K(src_part_id), K(dest_part_id), K(column_id));
+      } else if (OB_UNLIKELY(affected_rows < 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected affected_rows", K(ret), K(affected_rows));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObPartitionSplitTask::copy_src_part_stat_info_to_dest(common::ObMySQLTransaction &trans,
                                                           const uint64_t table_id,
                                                           const int64_t src_part_id,
@@ -1759,13 +1827,13 @@ int ObPartitionSplitTask::copy_src_part_stat_info_to_dest(common::ObMySQLTransac
           LOG_WARN("failed to copy the data of source partition from ", K(ret), K(OB_ALL_TABLE_STAT_TNAME));
         } else if (OB_FAIL(copy_stat_info(trans, OB_ALL_COLUMN_STAT_TNAME, table_id, table_id, dest_part_id))) {
           LOG_WARN("failed to copy the data of source partition from ", K(ret), K(OB_ALL_COLUMN_STAT_TNAME));
-        } else if (OB_FAIL(copy_stat_info(trans, OB_ALL_HISTOGRAM_STAT_TNAME, table_id, table_id, dest_part_id))) {
+        } else if (OB_FAIL(copy_histogram_stat_info(trans, table_id, table_id, dest_part_id))) {
           LOG_WARN("failed to copy the data of source partition from ", K(ret), K(OB_ALL_HISTOGRAM_STAT_TNAME));
         } else if (OB_FAIL(copy_stat_info(trans, OB_ALL_TABLE_STAT_TNAME, table_id, src_part_id, dest_part_id))) {
           LOG_WARN("failed to copy the data of source partition from ", K(ret), K(OB_ALL_TABLE_STAT_TNAME));
         } else if (OB_FAIL(copy_stat_info(trans, OB_ALL_COLUMN_STAT_TNAME, table_id, src_part_id, dest_part_id))) {
           LOG_WARN("failed to copy the data of source partition from ", K(ret), K(OB_ALL_COLUMN_STAT_TNAME));
-        } else if (OB_FAIL(copy_stat_info(trans, OB_ALL_HISTOGRAM_STAT_TNAME, table_id, src_part_id, dest_part_id))) {
+        } else if (OB_FAIL(copy_histogram_stat_info(trans, table_id, src_part_id, dest_part_id))) {
           LOG_WARN("failed to copy the data of source partition from ", K(ret), K(OB_ALL_HISTOGRAM_STAT_TNAME));
         } else {
           ObSArray<int64_t> dest_local_index_part_id = dest_local_index_part_ids.at(i);
