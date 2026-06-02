@@ -436,7 +436,7 @@ int ObLogTransportTaskQueue::success(const ObLogTransportTaskHandle &handle)
     ATOMIC_AAF(&total_success_bytes_, handle.task()->log_size_);
     // OB_ENTRY_NOT_EXIST or OB_NOT_INIT. both two error code are ok.
     if (OB_TMP_FAIL(task_map_.erase(LSNWarp(handle.task()->start_lsn_)))) {
-      CLOG_LOG(ERROR, "erase submitted task failed", KR(tmp_ret), K(handle));
+      CLOG_LOG(WARN, "erase submitted task failed", KR(tmp_ret), K(handle));
     }
   }
   ATOMIC_AAF(&total_processed_cnt_, 1);
@@ -505,7 +505,7 @@ void ObLogTransportTaskQueue::sub_container_cached_bytes_(
     const int64_t cached_bytes = ATOMIC_SAF(container_cached_bytes, bytes);
     if (OB_UNLIKELY(cached_bytes < 0)) {
       ret = OB_ERR_UNEXPECTED;
-      CLOG_LOG(ERROR, "transport task queue cached bytes is negative", K(cached_bytes), K(bytes));
+      CLOG_LOG(WARN, "transport task queue cached bytes is negative", K(cached_bytes), K(bytes));
     }
   }
 }
