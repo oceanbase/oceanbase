@@ -790,6 +790,9 @@ public:
   static ObCollationType ora_charset_type_to_coll_type(ObNlsCharsetId charset_id);
   static ObCollationType get_coll_type_by_nlssort_param(ObCharsetType charset_type,
                                                         const ObString &nlssort_param);
+  static bool is_unsupported_ora_charset_id(ObNlsCharsetId charset_id) {
+    return charset_id == CHARSET_ZHS32GB18030_2022_ID;
+  }
 private:
   static int init_charset_and_arr();
   static int init_charset_info_coll_info(ObCharsetInfo *cs, ObCharsetLoader& loader);

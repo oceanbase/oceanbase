@@ -118,7 +118,11 @@ int ObDblinkService::init_dblink_param_ctx(common::sqlclient::dblink_param_ctx &
     LOG_WARN("failed to get local session vars", K(ret), K(dblink_id));
   } else if (OB_FAIL(get_charset_id(session_info, charset_id, ncharset_id))) {
     LOG_WARN("failed to get session charset id", K(ret), K(dblink_id));
-  } else {
+  } else if (common::sqlclient::DBLINK_DRV_OCI == link_type) {
+    charset_id = get_oci_env_charset_id(charset_id);;
+    ncharset_id = get_oci_env_charset_id(ncharset_id);
+  }
+  if (OB_SUCC(ret)) {
     param_ctx.charset_id_ = charset_id;
     param_ctx.ncharset_id_ = ncharset_id;
     param_ctx.pool_type_ = pool_type;
@@ -302,12 +306,37 @@ int ObDblinkService::get_local_session_vars(sql::ObSQLSessionInfo *session_info,
   return ret;
 }
 
-int ObDblinkService::get_spell_collation_type(ObSQLSessionInfo *session, ObCollationType &spell_coll)
+uint16_t ObDblinkService::get_oci_env_charset_id(uint16_t charset_id)
+{
+  uint16_t res = charset_id;
+  if (ObCharset::is_unsupported_ora_charset_id(static_cast<ObNlsCharsetId>(charset_id))) {
+    res = static_cast<uint16_t>(common::ObNlsCharsetId::CHARSET_AL32UTF8_ID);
+  }
+  return res;
+}
+
+int ObDblinkService::get_spell_collation_type(ObSQLSessionInfo *session,
+                                              common::sqlclient::DblinkDriverProto link_type,
+                                              ObCollationType &spell_coll)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(session)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null ptr", K(ret));
+  } else if (lib::is_oracle_mode() && common::sqlclient::DBLINK_DRV_OCI == link_type) {
+    uint16_t charset_id = 0;
+    uint16_t ncharset_id = 0;
+    uint16_t env_charset_id = 0;
+    if (OB_FAIL(get_charset_id(session, charset_id, ncharset_id))) {
+      LOG_WARN("failed to get session charset id", K(ret));
+    } else {
+      env_charset_id = get_oci_env_charset_id(charset_id);
+      spell_coll = ObCharset::ora_charset_type_to_coll_type(static_cast<ObNlsCharsetId>(env_charset_id));
+      if (OB_UNLIKELY(CS_TYPE_INVALID == spell_coll)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected invalid oci env charset", K(ret), K(env_charset_id));
+      }
+    }
   } else if (lib::is_oracle_mode()) {
     spell_coll = session->get_nls_collation();
   } else {

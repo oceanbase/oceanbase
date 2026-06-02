@@ -209,7 +209,8 @@ int ObLinkOp::combine_link_stmt(const ObString &link_stmt_fmt,
     }
   }
   link_stmt_pos += reserve_proxy_route_space;
-  if (OB_SUCC(ret) && param_infos.count() && OB_FAIL(ObDblinkService::get_spell_collation_type(ctx_.get_my_session(), spell_coll))) {
+  if (OB_SUCC(ret) && param_infos.count() &&
+      OB_FAIL(ObDblinkService::get_spell_collation_type(ctx_.get_my_session(), link_type_, spell_coll))) {
     LOG_WARN("failed to get spell collation type", K(ret));
   }
   while (OB_SUCC(ret) && stmt_fmt_pos <  link_stmt_fmt.length()) {
