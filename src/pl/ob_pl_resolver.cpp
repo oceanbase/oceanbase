@@ -10544,11 +10544,29 @@ int ObPLResolver::check_static_bool_expr(const ObRawExpr *expr, bool &static_boo
 
 // ----------------- check boolean static expr end -------------
 
+static int check_question_mark_node(const ParseNode *node)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(node)) {
+  } else if (T_QUESTIONMARK == node->type_) {
+    ret = OB_ERR_STATIC_BOOL_EXPR;
+    LOG_WARN("bind variable is not allowed in conditional compilation directive", K(ret));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < node->num_child_; ++i) {
+      OZ (SMART_CALL(check_question_mark_node(node->children_[i])));
+    }
+  }
+  return ret;
+}
+
 int ObPLResolver::resolve_and_calc_static_expr(
   ObPLFunctionAST &unit_ast, const ParseNode &node, ObObjType expect_type, ObObj &result_obj)
 {
   int ret = OB_SUCCESS;
   ObRawExpr *expr = NULL;
+  if (OB_SUCC(ret) && ObTinyIntType == expect_type) {
+    OZ (check_question_mark_node(&node));
+  }
   OZ (resolve_expr(&node, unit_ast, expr));
   CK (OB_NOT_NULL(expr));
   if (OB_FAIL(ret)) {
