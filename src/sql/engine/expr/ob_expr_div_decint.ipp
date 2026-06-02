@@ -108,7 +108,13 @@ static int inner_decint_div_mysql_vec_fn(VECTOR_EVAL_FUNC_ARG_DECL)
   bool is_err_div_by_zero = expr.is_error_div_by_zero_;
   ObDecintMySQLDivVecFunc<ltype, rtype> div_fn;
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
-  if (OB_FAIL(ctx.exec_ctx_.get_my_session()->get_div_precision_increment(div_inc))) {
+  ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
+  ObSessionSysVar *local_var = NULL;
+  if (OB_FAIL(helper.get_local_var(SYS_VAR_DIV_PRECISION_INCREMENT, local_var))) {
+    LOG_WARN("get_div_precision_increment failed", K(ret));
+  } else if (OB_NOT_NULL(local_var) && FALSE_IT(div_inc = local_var->val_.get_int())) {
+    LOG_WARN("failed to set div_pi", K(ret));
+  } else if (OB_ISNULL(local_var) && OB_FAIL(ctx.exec_ctx_.get_my_session()->get_div_precision_increment(div_inc))) {
     LOG_WARN("get_div_precision_increment failed", K(ret));
   } else {
     ObScale round_up_scale = ObExprDiv::decint_res_round_up_scale(expr, div_inc);
@@ -137,7 +143,13 @@ int ObExprDiv::decint_div_mysql_fn(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &
 {
   int ret = OB_SUCCESS;
   int64_t div_inc = 0;
-  if (OB_FAIL(ctx.exec_ctx_.get_my_session()->get_div_precision_increment(div_inc))) {
+  ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
+  ObSessionSysVar *local_var = NULL;
+  if (OB_FAIL(helper.get_local_var(SYS_VAR_DIV_PRECISION_INCREMENT, local_var))) {
+    LOG_WARN("get_div_precision_increment failed", K(ret));
+  } else if (OB_NOT_NULL(local_var) && FALSE_IT(div_inc = local_var->val_.get_int())) {
+    LOG_WARN("failed to set div_pi", K(ret));
+  } else if (OB_ISNULL(local_var) && OB_FAIL(ctx.exec_ctx_.get_my_session()->get_div_precision_increment(div_inc))) {
     LOG_WARN("get_div_precision_increment failed", K(ret));
   } else {
     ObScale round_up_scale = decint_res_round_up_scale(expr, div_inc);
@@ -152,9 +164,15 @@ int ObExprDiv::decint_div_mysql_batch_fn(BATCH_EVAL_FUNC_ARG_DECL)
 {
   int ret = OB_SUCCESS;
   int64_t div_inc = 0;
+  ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
+  ObSessionSysVar *local_var = NULL;
   if (OB_FAIL(binary_operand_batch_eval(expr, ctx, skip, size, false))) { // mysql mode
     LOG_WARN("eval operands failed", K(ret));
-  } else if (OB_FAIL(ctx.exec_ctx_.get_my_session()->get_div_precision_increment(div_inc))) {
+  } else if (OB_FAIL(helper.get_local_var(SYS_VAR_DIV_PRECISION_INCREMENT, local_var))) {
+    LOG_WARN("get_div_precision_increment failed", K(ret));
+  } else if (OB_NOT_NULL(local_var) && FALSE_IT(div_inc = local_var->val_.get_int())) {
+    LOG_WARN("failed to set div_pi", K(ret));
+  } else if (OB_ISNULL(local_var) && OB_FAIL(ctx.exec_ctx_.get_my_session()->get_div_precision_increment(div_inc))) {
     LOG_WARN("get_div_precision_increment failed", K(ret));
   } else {
     ObDatumVector l_vec = expr.args_[0]->locate_expr_datumvector(ctx);

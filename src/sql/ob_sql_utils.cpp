@@ -3792,6 +3792,15 @@ int ObSQLUtils::merge_solidified_vars_into_type_ctx(ObExprTypeCtx &type_ctx,
       type_ctx.set_compat_version(compat_version);
     }
   }
+  // merge div_precision_increment
+  if (OB_SUCC(ret)) {
+    ObSessionSysVar *local_var = NULL;
+    if (OB_FAIL(session_vars_snapshot.get_local_var(SYS_VAR_DIV_PRECISION_INCREMENT, local_var))) {
+      LOG_WARN("get local var failed", K(ret));
+    } else if (OB_NOT_NULL(local_var)) {
+      type_ctx.set_div_precision_increment(local_var->val_.get_int());
+    }
+  }
   return ret;
 }
 

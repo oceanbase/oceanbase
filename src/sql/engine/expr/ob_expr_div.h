@@ -130,6 +130,7 @@ public:
   template<typename ltype, typename rtype>
   static int decint_div_mysql_vec_fn(VECTOR_EVAL_FUNC_ARG_DECL);
 
+  DECLARE_SET_LOCAL_SESSION_VARS;
   DISALLOW_COPY_AND_ASSIGN(ObExprDiv);
   static ObScale decint_res_round_up_scale(const ObExpr &, int64_t div_inc);
 private:

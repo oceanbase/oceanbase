@@ -784,7 +784,13 @@ struct ObNumberDivFunc
           res.set_number(result_num);
         } else {
           int64_t div_pi = 0;
-          if (OB_FAIL(ctx.exec_ctx_.get_my_session()->get_div_precision_increment(div_pi))) {
+          ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
+          ObSessionSysVar *local_var = NULL;
+          if (OB_FAIL(helper.get_local_var(SYS_VAR_DIV_PRECISION_INCREMENT, local_var))) {
+            LOG_WARN("get_div_precision_increment failed", K(ret));
+          } else if (OB_NOT_NULL(local_var) && FALSE_IT(div_pi = local_var->val_.get_int())) {
+            LOG_WARN("failed to set div_pi", K(ret));
+          } else if (OB_ISNULL(local_var) && OB_FAIL(ctx.exec_ctx_.get_my_session()->get_div_precision_increment(div_pi))) {
             LOG_WARN("get_div_precision_increment failed", K(ret));
           } else {
             //          const int64_t scale1 = lnum.get_scale();
@@ -842,7 +848,13 @@ struct ObNumberVectorDivFunc
           res_vec.set_number(idx, result_num);
         } else {
           int64_t div_pi = 0;
-          if (OB_FAIL(ctx.exec_ctx_.get_my_session()->get_div_precision_increment(div_pi))) {
+          ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
+          ObSessionSysVar *local_var = NULL;
+          if (OB_FAIL(helper.get_local_var(SYS_VAR_DIV_PRECISION_INCREMENT, local_var))) {
+            LOG_WARN("get_div_precision_increment failed", K(ret));
+          } else if (OB_NOT_NULL(local_var) && FALSE_IT(div_pi = local_var->val_.get_int())) {
+            LOG_WARN("failed to set div_pi", K(ret));
+          } else if (OB_ISNULL(local_var) && OB_FAIL(ctx.exec_ctx_.get_my_session()->get_div_precision_increment(div_pi))) {
             LOG_WARN("get_div_precision_increment failed", K(ret));
           } else {
             const int64_t calc_scale = expr.div_calc_scale_;
@@ -1390,6 +1402,15 @@ int ObExprDiv::cg_expr(ObExprCGCtx &op_cg_ctx,
 
   return ret;
 #undef SET_DIV_FUNC_PTR
+}
+
+DEF_SET_LOCAL_SESSION_VARS(ObExprDiv, raw_expr) {
+  int ret = OB_SUCCESS;
+  if (is_mysql_mode()) {
+    SET_LOCAL_SYSVAR_CAPACITY(1);
+    EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_DIV_PRECISION_INCREMENT);
+  }
+  return ret;
 }
 
 }
