@@ -398,6 +398,10 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
         LOG_WARN("fail to process datatype or questionmark", K(ret), K(node));
       }
     } else {
+      // 10 + 20, 10 & 20 will be parsed as decimal_int
+      // power(10, 20), 10 & 20 will be parsed as number
+      // thus reset false here.
+      ctx_.formalize_const_int_prec_ = false;
       switch (node->type_) {
       case T_DEFAULT: {
         ObConstRawExpr *c_expr = NULL;
