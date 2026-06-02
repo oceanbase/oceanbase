@@ -414,6 +414,10 @@ public:
                               bool &has_questionmark_in_sql,
                               bool need_format);
   static int md5(const common::ObString &stmt, char *sql_id, int32_t len);
+  static int gen_sql_id_from_sql_string(ObSQLSessionInfo &session,
+                                        const common::ObString &raw_sql,
+                                        char *sql_id_buf,
+                                        int64_t buf_len);
   static int filter_hint_in_query_sql(common::ObIAllocator &allocator,
                                       const ObSQLSessionInfo &session,
                                       const common::ObString &sql,

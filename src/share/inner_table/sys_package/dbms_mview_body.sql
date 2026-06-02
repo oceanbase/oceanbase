@@ -135,5 +135,13 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
     parameter_value   IN  VARCHAR2);
   PRAGMA INTERFACE(C, DBMS_MVIEW_SET_REFRESH_PARAMS);
 
+  FUNCTION explain_refresh(
+    mv_name                IN     VARCHAR2,
+    method                 IN     VARCHAR2       := NULL,
+    nested                 IN     BOOLEAN        := false,
+    tenant_id              IN     BINARY_INTEGER := 0
+  ) RETURN CLOB;
+  PRAGMA INTERFACE(C, DBMS_MVIEW_EXPLAIN_REFRESH);
+
 END dbms_mview;
 //
