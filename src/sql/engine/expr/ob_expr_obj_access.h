@@ -99,13 +99,34 @@ public:
              int64_t param_num,
              ObEvalCtx *ctx) const;
 
+    struct SqlUdtAccessIdx
+    {
+      OB_UNIS_VERSION(1);
+    public:
+      SqlUdtAccessIdx()
+        : var_index_(common::OB_INVALID_INDEX),
+          elem_user_type_id_(common::OB_INVALID_ID),
+          var_pl_type_(static_cast<int32_t>(pl::PL_INVALID_TYPE)),
+          is_const_(false) {}
+
+      int64_t var_index_;
+      uint64_t elem_user_type_id_;
+      int32_t var_pl_type_;
+      bool is_const_;
+
+      TO_STRING_KV(K_(var_index), K_(elem_user_type_id),
+                  K_(var_pl_type), K_(is_const));
+    };
+
     TO_STRING_KV(K_(get_attr_func),
                  K_(param_idxs),
                  K_(access_idx_cnt),
                  K_(for_write),
                  K_(property_type),
                  K_(coll_idx),
-                 K_(extend_size));
+                 K_(extend_size),
+                 K_(sql_udt_access),
+                 K_(sql_udt_access_idxs));
 
     uint64_t get_attr_func_;
     common::ObFixedArray<int64_t, common::ObIAllocator> param_idxs_;
@@ -117,6 +138,7 @@ public:
     int32_t extend_size_;
     bool sql_udt_access_;
     common::ObFixedArray<pl::ObObjAccessIdx, common::ObIAllocator> access_idxs_;
+    common::ObFixedArray<SqlUdtAccessIdx, common::ObIAllocator> sql_udt_access_idxs_; // Only populated when sql_udt_access_ is true.
   };
 private:
   ExtraInfo info_;
