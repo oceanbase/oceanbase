@@ -184,12 +184,17 @@ bool ObLogHandler::is_valid() const
 int ObLogHandler::stop()
 {
   int ret = OB_SUCCESS;
-  ObTimeGuard tg("ObLogHandler::stop", 5 * 1000000);
+  is_in_stop_state_ = true;
+  ObTimeGuard tg("ObLogHandler::stop", 5_s);
+  // LOCK ORDER: deps_lock_ MUST be taken before lock_, never the reverse.
+  // This path is driven by LS replica GC; acquiring lock_ first would form an
+  // AB-BA deadlock with the config-change callback path, which holds deps_lock_
+  // and then takes lock_ via ObLogHandler::stat(). See deps_lock_ declaration
+  // in ob_log_handler.h for the full invariant.
+  common::TCWLockGuard deps_guard(deps_lock_);
   WLockGuard guard(lock_);
   tg.click("wrlock succ");
   if (IS_INIT) {
-    is_in_stop_state_ = true;
-    common::TCWLockGuard deps_guard(deps_lock_);
     //unregister_file_size_cb不能在apply status锁内, 可能会导致死锁
     apply_status_->unregister_file_size_cb();
     tg.click("unreg cb end");
@@ -239,14 +244,17 @@ int ObLogHandler::safe_to_destroy(bool &is_safe_destroy)
 
 void ObLogHandler::destroy()
 {
-  WLockGuard guard(lock_);
   is_inited_ = false;
   is_offline_ = false;
   is_in_stop_state_ = true;
-  // 清理PRE_ASYNC阻塞状态，唤醒所有等待的线程
+  // LOCK ORDER: deps_lock_ before lock_, same as ObLogHandler::stop().
+  // See deps_lock_ declaration in ob_log_handler.h for why reversing deadlocks.
+  common::TCWLockGuard deps_guard(deps_lock_);
+  WLockGuard guard(lock_);
+  // 清理 PRE_ASYNC 阻塞状态，让重试中的 append 线程下次检查通过。
+  // wait_pre_async_unblocked_() 和 change_sync_mode() 分别会持 lock_ 读锁访问和更新这两个标记。
   clear_pre_async_blocked();
   clear_sync_mode_degrading_mark();
-  common::TCWLockGuard deps_guard(deps_lock_);
   if (NULL != apply_service_ && NULL != apply_status_) {
     apply_service_->revert_apply_status(apply_status_);
   }
@@ -1754,6 +1762,10 @@ int ObLogHandler::handle_config_change_cmd_rpc(
   int ret = OB_SUCCESS;
   const int64_t timeout_us = req.timeout_us_;
   const int64_t abs_timeout_us = common::ObTimeUtility::current_time() + timeout_us;
+  // LOCK ORDER: this callback holds deps_lock_ and later acquires lock_ deep in
+  // the config-change chain (... -> ObLogHandler::stat()). It is the "deps_lock_
+  // first" end of the invariant; stop()/destroy() must match this order or they
+  // deadlock. See deps_lock_ declaration in ob_log_handler.h.
   WLockGuardWithTimeout deps_guard(deps_lock_, abs_timeout_us, ret);
 
   if (IS_NOT_INIT) {
@@ -2454,7 +2466,10 @@ int ObLogHandler::is_replay_fatal_error(bool &has_fatal_error)
   } else {
     RLockGuard guard(lock_);
     ObLSID ls_id(id_);
-    if (OB_FAIL(replay_service_->has_fatal_error(ls_id, has_fatal_error))) {
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+      CLOG_LOG(WARN, "ObLogHandler not init", KR(ret));
+    } else if (OB_FAIL(replay_service_->has_fatal_error(ls_id, has_fatal_error))) {
       CLOG_LOG(WARN, "has_fatal_error failed", KR(ret), K(ls_id));
     }
   }

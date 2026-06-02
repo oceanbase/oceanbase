@@ -1008,6 +1008,18 @@ private:
   ObLogTransportService *transport_service_;
   ObRoleChangeService *rc_service_;
   // Note: using TCRWLock for using WLockGuardWithTimeout
+  //
+  // LOCK ORDER INVARIANT: deps_lock_ MUST be acquired BEFORE lock_ (the base
+  // class RWLock). Never take lock_ first and then deps_lock_. This is the
+  // opposite of the usual intuition (deps_lock_ looks like an auxiliary lock
+  // guarding a few state bits, while lock_ is the "main" lock), so it is easy
+  // to get wrong.
+  // Reason: the config-change RPC callback path holds deps_lock_ first
+  // (handle_config_change_cmd_rpc), then re-enters and acquires lock_ deep in
+  // the callback chain (PalfHandleImpl::one_stage_config_change_ ->
+  // ObReconfigCheckerAdapter -> ObLogHandler::stat). If any other path (e.g.
+  // stop()/destroy(), driven by LS replica GC) takes lock_ before deps_lock_,
+  // the two form an AB-BA deadlock.
   common::TCRWLock deps_lock_;
   mutable palf::PalfLocationCacheCb *lc_cb_;
   mutable obrpc::ObLogServiceRpcProxy *rpc_proxy_;
