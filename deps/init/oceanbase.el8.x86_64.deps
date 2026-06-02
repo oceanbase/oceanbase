@@ -23,7 +23,7 @@ devdeps-libxml2-2.13.6-22025032016.el8.x86_64.rpm
 devdeps-mxml-3.3.1-22025092517.el8.x86_64.rpm
 devdeps-apr-1.6.5-32022090616.el8.x86_64.rpm
 devdeps-xz-5.2.2-42022090615.el8.x86_64.rpm
-devdeps-lua-5.4.6-22023082916.el8.x86_64.rpm
+devdeps-lua-5.4.8-22026060110.el8.x86_64.rpm
 devdeps-oss-c-sdk-3.11.2-142025100915.el8.x86_64.rpm
 devdeps-zlib-static-1.2.13-82024102414.el8.x86_64.rpm
 devdeps-ncurses-static-6.5-62025040314.el8.x86_64.rpm
