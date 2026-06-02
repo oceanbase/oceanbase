@@ -160,7 +160,7 @@ int ObRowkey::equal(const ObRowkey &rhs, bool &is_equal) const
             ObString str;
             ObString rhs_str;
             if (OB_UNLIKELY(obj.is_outrow_lob() || rhs_obj.is_outrow_lob())) {
-              ret = OB_ERR_UNEXPECTED;
+              ret = OB_NOT_SUPPORTED;
               COMMON_LOG(WARN, "not supported outrow lob", K(ret), K(obj), K(rhs_obj));
             } else if (OB_FAIL(obj.get_string(str))) {
               COMMON_LOG(WARN, "Lob: get inrow string failed", K(ret), K(obj));
