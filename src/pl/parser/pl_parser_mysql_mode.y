@@ -3328,7 +3328,8 @@ ParseNode *obpl_mysql_read_sql_construct(ObParseCtx *parse_ctx, const char *pref
     //do nothing
   } else if (0 != parse_sql_stmt(&parse_result)) {
     if (parse_result.extra_errno_ != OB_PARSER_SUCCESS) {
-      obpl_mysql_parse_fatal_error(parse_result.extra_errno_, YYLEX_PARAM, parse_result.error_msg_);
+      // error_msg_ is already formatted by SQL parser; must not use it as format string, or may cause core due to illegal write of %n
+      obpl_mysql_parse_fatal_error(parse_result.extra_errno_, YYLEX_PARAM, "%s", parse_result.error_msg_);
     } else {
       YYLTYPE sql_yylloc;
       memset(&sql_yylloc, 0, sizeof(YYLTYPE));
