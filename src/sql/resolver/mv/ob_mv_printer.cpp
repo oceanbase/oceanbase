@@ -1354,27 +1354,6 @@ int ObMVPrinter::add_mv_rowkey_into_select(ObSelectStmt *stmt,
   return ret;
 }
 
-int ObMVPrinter::add_semi_to_inner_hint(ObDMLStmt *stmt)
-{
-  int ret = OB_SUCCESS;
-  ObSemiToInnerHint *semi_to_inner_hint = NULL;
-  ObSEArray<ObItemType, 1> conflict_hints;
-  if (OB_ISNULL(stmt)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get unexpected null", K(ret), K(stmt));
-  } else if (OB_FAIL(ObQueryHint::create_hint(&ctx_.alloc_, T_SEMI_TO_INNER, semi_to_inner_hint))) {
-    LOG_WARN("failed to create semi to inner hint", K(ret));
-  } else if (OB_ISNULL(semi_to_inner_hint)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("semi to inner hint is null", K(ret), K(semi_to_inner_hint));
-  } else if (OB_FAIL(stmt->get_stmt_hint().merge_hint(*semi_to_inner_hint,
-                                                      ObHintMergePolicy::HINT_DOMINATED_EQUAL,
-                                                      conflict_hints))) {
-    LOG_WARN("failed to merge hint", K(ret));
-  }
-  return ret;
-}
-
 int ObMVPrinter::add_dynamic_sampling_hint(ObDMLStmt *stmt,
                                            const TableItem *table)
 {

@@ -10943,8 +10943,7 @@ int ObLogPlan::compute_rescan_plan_relationship(const ObLogicalOperator &first_p
     bool need_compare = false;
     ObSQLSessionInfo *session_info = get_optimizer_context().get_session_info();
     const bool is_fast_refreshing_mview = OB_NOT_NULL(session_info)
-        && session_info->get_ddl_info().is_refreshing_mview()
-        && !session_info->get_ddl_info().is_mview_complete_refresh();
+        && session_info->get_ddl_info().is_mview_fast_refresh();
     if (OB_FAIL(ObLogSubPlanFilter::need_compare_batch_rescan(*first_spf, *second_spf, need_compare))) {
       LOG_WARN("failed to check need compare batch rescan", K(ret));
     } else if (!need_compare) {
