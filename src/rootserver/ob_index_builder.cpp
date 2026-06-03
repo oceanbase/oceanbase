@@ -1956,23 +1956,27 @@ int ObIndexBuilder::generate_schema(
   if (OB_SUCC(ret)) {
     //do some check
     if (OB_SUCC(ret)) {
-      if (!GCONF.enable_sys_table_ddl) {
-        if (!data_schema.is_user_table() && !data_schema.is_tmp_table()) {
-          ret = OB_ERR_WRONG_OBJECT;
-          ObCStringHelper helper;
-          LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, helper.convert(arg.database_name_),
-                         helper.convert(arg.table_name_), "BASE_TABLE");
-          ObTableType table_type = data_schema.get_table_type();
-          LOG_WARN("Not support to create index on non-normal table", K(table_type), K(arg), K(ret));
-        } else if (OB_INVALID_ID != arg.index_table_id_ || OB_INVALID_ID != arg.data_table_id_) {
-          char err_msg[number::ObNumber::MAX_PRINTABLE_SIZE];
-          MEMSET(err_msg, 0, sizeof(err_msg));
-          // create index specifying index_id can only be used when the configuration is on
-          ret = OB_OP_NOT_ALLOW;
-          (void)snprintf(err_msg, sizeof(err_msg),
-                   "%s", "create index with index_table_id/data_table_id");
-          LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
-        }
+      // enable_sys_table_ddl only opens DDL on system tables; views/virtual tables are
+      // never legal index targets, so the base-table check must run regardless of the config.
+      const bool is_allowed_base_table = data_schema.is_user_table()
+          || data_schema.is_tmp_table()
+          || (GCONF.enable_sys_table_ddl && data_schema.is_sys_table());
+      if (!is_allowed_base_table) {
+        ret = OB_ERR_WRONG_OBJECT;
+        ObCStringHelper helper;
+        LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, helper.convert(arg.database_name_),
+                       helper.convert(arg.table_name_), "BASE_TABLE");
+        ObTableType table_type = data_schema.get_table_type();
+        LOG_WARN("Not support to create index on non-normal table", K(table_type), K(arg), K(ret));
+      } else if (!GCONF.enable_sys_table_ddl
+                 && (OB_INVALID_ID != arg.index_table_id_ || OB_INVALID_ID != arg.data_table_id_)) {
+        char err_msg[number::ObNumber::MAX_PRINTABLE_SIZE];
+        MEMSET(err_msg, 0, sizeof(err_msg));
+        // create index specifying index_id can only be used when the configuration is on
+        ret = OB_OP_NOT_ALLOW;
+        (void)snprintf(err_msg, sizeof(err_msg),
+                 "%s", "create index with index_table_id/data_table_id");
+        LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
       }
 
       if (OB_FAIL(ret)) {

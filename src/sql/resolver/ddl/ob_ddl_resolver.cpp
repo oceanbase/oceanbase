@@ -9332,7 +9332,14 @@ int ObDDLResolver::generate_global_index_schema(
     LOG_WARN("table not exist", K(ret),
              "database_name", crt_idx_stmt->get_create_index_arg().database_name_,
              "table_name", crt_idx_stmt->get_create_index_arg().table_name_);
-  } else if (!GCONF.enable_sys_table_ddl && !table_schema->is_user_table() && !table_schema->is_tmp_table()) {
+  } else if (!(table_schema->is_user_table()
+               || table_schema->is_tmp_table()
+               || (GCONF.enable_sys_table_ddl && table_schema->is_sys_table()))) {
+    // enable_sys_table_ddl only opens DDL on system tables; views/virtual tables
+    // are never legal index targets, so the base-table check must run regardless
+    // of the config. Without this, oracle CREATE UNIQUE INDEX on a view falls
+    // through here and later hits OB_ERR_UNEXPECTED (4016) in
+    // set_index_table_columns.
     ret = OB_ERR_WRONG_OBJECT;
     ObCStringHelper helper;
     LOG_USER_ERROR(OB_ERR_WRONG_OBJECT, helper.convert(crt_idx_stmt->get_create_index_arg().database_name_),
