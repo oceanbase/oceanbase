@@ -7347,6 +7347,7 @@ int ObSPIService::store_params_string(
     // try store params string in local buffer first
     if (OB_FAIL(store_params_string(*ctx->exec_ctx_->get_my_session(), exec_params, tmp_ptr, tmp_len))) {
       ret = OB_SUCCESS;
+      tmp_ptr = NULL;
       OZ (ObMPStmtExecute::store_params_value_to_str(spi_result.get_memory_ctx()->get_arena_allocator(),
                                                      *ctx->exec_ctx_->get_my_session(),
                                                      exec_params,
