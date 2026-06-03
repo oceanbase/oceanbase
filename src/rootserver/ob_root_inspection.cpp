@@ -781,6 +781,17 @@ void ObUpgradeInspection::mark_checking_(ObInspectionItem &item)
   item.any_checking_ = true;
 }
 
+void ObUpgradeInspection::mark_all_checking_(ObInspectionItem &sys_stat,
+                                             ObInspectionItem &sys_param,
+                                             ObInspectionItem &sys_table_schema,
+                                             ObInspectionItem &data_version)
+{
+  mark_checking_(sys_stat);
+  mark_checking_(sys_param);
+  mark_checking_(sys_table_schema);
+  mark_checking_(data_version);
+}
+
 const char *ObUpgradeInspection::get_status_(const ObInspectionItem &item)
 {
   return item.any_failed_ ? "failed" : (item.any_checking_ ? "checking" : "succeed");
@@ -955,45 +966,26 @@ int ObUpgradeInspection::inner_get_next_row_on_tenants_(common::ObNewRow *&row)
       if (OB_FAIL(schema_guard.get_tenant_ids(tenant_ids))) {
         LOG_WARN("get tenant ids failed", KR(ret));
       } else {
+        // Fan out get_inspection_status to all tenant leaders in parallel;
+        // serial sending could time out the post checker on many-tenant clusters.
+        ObAsyncGetInspectionStatusProxy proxy(*GCTX.srv_rpc_proxy_,
+            &ObSrvRpcProxy::async_get_inspection_status);
         for (int64_t i = 0; OB_SUCC(ret) && i < tenant_ids.count(); i++) {
-          ObTimeoutCtx ctx;
           const uint64_t tenant_id = tenant_ids.at(i);
-          ObAddr tenant_leader;
-          obrpc::ObGetInspectionStatusArg arg;
-          obrpc::ObGetInspectionStatusResult result;
-          if (OB_FAIL(GCTX.location_service_->get_leader_with_retry_until_timeout(
-                      GCONF.cluster_id, tenant_id, SYS_LS, tenant_leader))) {
-            LOG_WARN("get leader failed", KR(ret), K(tenant_id));
-          } else if (OB_UNLIKELY(!tenant_leader.is_valid())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("tenant leader invalid", KR(ret), K(tenant_id), K(tenant_leader));
-          } else if (OB_FAIL(arg.init(tenant_id))) {
-            LOG_WARN("init arg failed", KR(ret), K(tenant_id));
-          } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF._ob_ddl_timeout))) {
-            LOG_WARN("set timeout failed", KR(ret), K(tenant_id));
-          } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(tenant_leader)
-                                                   .by(tenant_id)
-                                                   .timeout(ctx.get_timeout())
-                                                   .get_inspection_status(arg, result))) {
-            LOG_WARN("get inspection status failed", KR(ret), K(tenant_id), K(tenant_leader));
-            // tenant rpc failed, ignore error and mark as checking
-            ret = OB_SUCCESS;
-            mark_checking_(sys_stat);
-            mark_checking_(sys_param);
-            mark_checking_(sys_table_schema);
-            mark_checking_(data_version);
-          } else {
-            if (result.all_checked_) {
-              merge_check_result_(sys_stat, result.sys_stat_passed_);
-              merge_check_result_(sys_param, result.sys_param_passed_);
-              merge_check_result_(sys_table_schema, result.sys_table_schema_passed_);
-              merge_check_result_(data_version, result.data_version_passed_);
-            } else {
-              mark_checking_(sys_stat);
-              mark_checking_(sys_param);
-              mark_checking_(sys_table_schema);
-              mark_checking_(data_version);
-            }
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(async_get_inspection_status_(tenant_id, proxy))) {
+            // one tenant's dispatch failure should not block the others
+            LOG_WARN("dispatch async_get_inspection_status failed", KR(tmp_ret), K(tenant_id));
+            mark_all_checking_(sys_stat, sys_param, sys_table_schema, data_version);
+          }
+        }
+        if (OB_SUCC(ret)) {
+          // soft errors are absorbed via mark_all_checking_; only log here so the
+          // __all_virtual_upgrade_inspection query still succeeds
+          int tmp_ret = OB_SUCCESS;
+          if (OB_TMP_FAIL(wait_and_check_async_get_inspection_status_response_(
+              proxy, sys_stat, sys_param, sys_table_schema, data_version))) {
+            LOG_WARN("wait and check async get_inspection_status response failed", KR(tmp_ret));
           }
         }
       }
@@ -1030,6 +1022,78 @@ int ObUpgradeInspection::inner_get_next_row_on_tenants_(common::ObNewRow *&row)
       }
     } else {
       row = &cur_row_;
+    }
+  }
+  return ret;
+}
+
+int ObUpgradeInspection::async_get_inspection_status_(const uint64_t tenant_id,
+    ObAsyncGetInspectionStatusProxy &proxy)
+{
+  int ret = OB_SUCCESS;
+  ObAddr tenant_leader;
+  obrpc::ObGetInspectionStatusArg arg;
+  if (OB_ISNULL(GCTX.srv_rpc_proxy_) || OB_ISNULL(GCTX.location_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("pointer is null", KR(ret), KP(GCTX.srv_rpc_proxy_), KP(GCTX.location_service_));
+  } else if (OB_FAIL(GCTX.location_service_->get_leader_with_retry_until_timeout(
+              GCONF.cluster_id, tenant_id, SYS_LS, tenant_leader))) {
+    LOG_WARN("get leader failed", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(!tenant_leader.is_valid())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant leader invalid", KR(ret), K(tenant_id), K(tenant_leader));
+  } else if (OB_FAIL(arg.init(tenant_id))) {
+    LOG_WARN("init arg failed", KR(ret), K(tenant_id));
+  } else {
+    ObTimeoutCtx ctx;
+    if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF._ob_ddl_timeout))) {
+      LOG_WARN("set timeout failed", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(proxy.call(tenant_leader, ctx.get_timeout(), tenant_id, arg))) {
+      LOG_WARN("call async_get_inspection_status failed", KR(ret),
+          K(tenant_id), K(tenant_leader), K(ctx));
+    }
+  }
+  return ret;
+}
+
+int ObUpgradeInspection::wait_and_check_async_get_inspection_status_response_(
+    ObAsyncGetInspectionStatusProxy &proxy,
+    ObInspectionItem &sys_stat,
+    ObInspectionItem &sys_param,
+    ObInspectionItem &sys_table_schema,
+    ObInspectionItem &data_version)
+{
+  int ret = OB_SUCCESS;
+  ObArray<int> return_code;
+  const ObIArray<obrpc::ObGetInspectionStatusArg> &rpc_args = proxy.get_args();
+  if (OB_FAIL(proxy.wait_all(return_code))) {
+    LOG_WARN("wait_all failed", KR(ret));
+    // mark all as checking when wait failed
+    mark_all_checking_(sys_stat, sys_param, sys_table_schema, data_version);
+  } else if (OB_FAIL(proxy.check_return_cnt(return_code.count()))) {
+    // dispatch failure may desync results_ from args_; treat as soft error
+    LOG_WARN("check_return_cnt failed", KR(ret), "return_cnt", return_code.count());
+    mark_all_checking_(sys_stat, sys_param, sys_table_schema, data_version);
+  } else {
+    const ObIArray<const obrpc::ObGetInspectionStatusResult *> &results = proxy.get_results();
+    for (int64_t i = 0; i < return_code.count(); i++) {
+      const uint64_t tenant_id = rpc_args.at(i).get_tenant_id();
+      if (OB_SUCCESS != return_code.at(i) || OB_ISNULL(results.at(i))) {
+        LOG_WARN("get inspection status failed for tenant",
+            "ret", return_code.at(i), K(tenant_id));
+        // tenant rpc failed, ignore error and mark as checking
+        mark_all_checking_(sys_stat, sys_param, sys_table_schema, data_version);
+      } else {
+        const obrpc::ObGetInspectionStatusResult &result = *results.at(i);
+        if (result.all_checked_) {
+          merge_check_result_(sys_stat, result.sys_stat_passed_);
+          merge_check_result_(sys_param, result.sys_param_passed_);
+          merge_check_result_(sys_table_schema, result.sys_table_schema_passed_);
+          merge_check_result_(data_version, result.data_version_passed_);
+        } else {
+          mark_all_checking_(sys_stat, sys_param, sys_table_schema, data_version);
+        }
+      }
     }
   }
   return ret;

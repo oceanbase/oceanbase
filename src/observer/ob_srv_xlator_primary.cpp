@@ -134,6 +134,7 @@ void oceanbase::observer::init_srv_xlator_for_sys(ObSrvRpcXlator *xlator) {
   RPC_PROCESSOR(ObRunInspectionP, gctx_);
   RPC_PROCESSOR(ObAsyncRunInspectionP, gctx_);
   RPC_PROCESSOR(ObGetInspectionStatusP, gctx_);
+  RPC_PROCESSOR(ObAsyncGetInspectionStatusP, gctx_);
 }
 
 void oceanbase::observer::init_srv_xlator_for_schema_test(ObSrvRpcXlator *xlator) {

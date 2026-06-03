@@ -53,19 +53,19 @@ def get_tenant_ids(cur):
 
 def run_root_inspection(cur, timeout):
   sql = "select count(*) from oceanbase.__all_virtual_upgrade_inspection where info != 'succeed'"
-  results = query(cur, sql)
-  if len(results) != 1 or len(results[0]) != 1:
-    warn_text = 'result not match, sql:"{}", results:{}'.format(sql, results)
-    logging.warn(warn_text)
-    raise MyError(warn_text)
-  elif results[0][0] != 0:
-    query_timeout = actions.set_default_timeout_by_tenant(cur, timeout, 100, 600)
-    with SetSessionTimeout(cur, query_timeout):
+  query_timeout = actions.set_default_timeout_by_tenant(cur, timeout, 100, 600)
+  with SetSessionTimeout(cur, query_timeout):
+    results = query(cur, sql)
+    if len(results) != 1 or len(results[0]) != 1:
+      warn_text = 'result not match, sql:"{}", results:{}'.format(sql, results)
+      logging.warn(warn_text)
+      raise MyError(warn_text)
+    elif results[0][0] != 0:
       sql = "alter system run job 'root_inspection'"
       logging.info(sql)
       cur.execute(sql)
-  else:
-    logging.info("skip run 'root_inspection', results:{}".format(results))
+    else:
+      logging.info("skip run 'root_inspection', results:{}".format(results))
 
 def upgrade_across_version(cur):
   current_data_version = actions.get_current_data_version()

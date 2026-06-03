@@ -5152,46 +5152,53 @@ RUN_INSPECTION_PROCESS_IMPL(ObRunInspectionP);
 RUN_INSPECTION_PROCESS_IMPL(ObAsyncRunInspectionP);
 #undef RUN_INSPECTION_PROCESS_IMPL
 
-int ObGetInspectionStatusP::process()
-{
-  int ret = OB_SUCCESS;
-  const uint64_t tenant_id = arg_.get_tenant_id();
-  if (!arg_.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K_(arg));
-  } else {
-    MTL_SWITCH(tenant_id) {
-      share::ObInspectionService *inspection_service = MTL(share::ObInspectionService *);
-      if (OB_ISNULL(inspection_service)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("inspection service is null", KR(ret), K(tenant_id));
-      } else {
-        // If inspection hasn't been done on this server (e.g., after leader switch),
-        // run it now before returning status to avoid stale "checking" state.
-        if (!inspection_service->is_all_checked()) {
-          int tmp_ret = OB_SUCCESS;
-          LOG_INFO("[ROOT_INSPECTION] auto trigger run_inspection on get_inspection_status", K(tenant_id));
-          if (OB_TMP_FAIL(inspection_service->run_inspection())) {
-            LOG_WARN("auto run_inspection on get_inspection_status failed", KR(tmp_ret), K(tenant_id));
-          }
-        }
-        result_.tenant_id_ = tenant_id;
-        result_.sys_stat_passed_ = inspection_service->is_sys_stat_passed();
-        result_.sys_param_passed_ = inspection_service->is_sys_param_passed();
-        result_.sys_table_schema_passed_ = inspection_service->is_sys_table_schema_passed();
-        result_.data_version_passed_ = inspection_service->is_data_version_passed();
-        result_.all_checked_ = inspection_service->is_all_checked();
-        LOG_INFO("[ROOT_INSPECTION] get_inspection_status finish", K(tenant_id),
-                 K(result_.all_checked_), K(result_.sys_stat_passed_),
-                 K(result_.sys_param_passed_), K(result_.sys_table_schema_passed_),
-                 K(result_.data_version_passed_));
-      }
-    } else {
-      LOG_WARN("switch tenant failed", KR(ret), K(tenant_id));
-    }
-  }
-  return ret;
+#define GET_INSPECTION_STATUS_PROCESS_IMPL(PROCESSOR)                                            \
+int PROCESSOR::process()                                                                         \
+{                                                                                                \
+  int ret = OB_SUCCESS;                                                                          \
+  const uint64_t tenant_id = arg_.get_tenant_id();                                               \
+  if (!arg_.is_valid()) {                                                                        \
+    ret = OB_INVALID_ARGUMENT;                                                                   \
+    LOG_WARN("invalid argument", KR(ret), K_(arg));                                              \
+  } else {                                                                                       \
+    MTL_SWITCH(tenant_id) {                                                                      \
+      share::ObInspectionService *inspection_service = MTL(share::ObInspectionService *);        \
+      if (OB_ISNULL(inspection_service)) {                                                       \
+        ret = OB_ERR_UNEXPECTED;                                                                 \
+        LOG_WARN("inspection service is null", KR(ret), K(tenant_id));                           \
+      } else {                                                                                   \
+        /* If inspection hasn't been done on this server (e.g., after leader switch), */         \
+        /* run it now before returning status to avoid stale "checking" state. */                \
+        if (!inspection_service->is_all_checked()) {                                             \
+          int tmp_ret = OB_SUCCESS;                                                              \
+          LOG_INFO("[ROOT_INSPECTION] auto trigger run_inspection on get_inspection_status",     \
+                   K(tenant_id));                                                                \
+          if (OB_TMP_FAIL(inspection_service->run_inspection())) {                               \
+            LOG_WARN("auto run_inspection on get_inspection_status failed",                      \
+                     KR(tmp_ret), K(tenant_id));                                                 \
+          }                                                                                      \
+        }                                                                                        \
+        result_.tenant_id_ = tenant_id;                                                          \
+        result_.sys_stat_passed_ = inspection_service->is_sys_stat_passed();                     \
+        result_.sys_param_passed_ = inspection_service->is_sys_param_passed();                   \
+        result_.sys_table_schema_passed_ = inspection_service->is_sys_table_schema_passed();     \
+        result_.data_version_passed_ = inspection_service->is_data_version_passed();             \
+        result_.all_checked_ = inspection_service->is_all_checked();                             \
+        LOG_INFO("[ROOT_INSPECTION] get_inspection_status finish", K(tenant_id),                 \
+                 K(result_.all_checked_), K(result_.sys_stat_passed_),                           \
+                 K(result_.sys_param_passed_), K(result_.sys_table_schema_passed_),              \
+                 K(result_.data_version_passed_));                                               \
+      }                                                                                          \
+    } else {                                                                                     \
+      LOG_WARN("switch tenant failed", KR(ret), K(tenant_id));                                   \
+    }                                                                                            \
+  }                                                                                              \
+  return ret;                                                                                    \
 }
+
+GET_INSPECTION_STATUS_PROCESS_IMPL(ObGetInspectionStatusP);
+GET_INSPECTION_STATUS_PROCESS_IMPL(ObAsyncGetInspectionStatusP);
+#undef GET_INSPECTION_STATUS_PROCESS_IMPL
 
 } // end of namespace observer
 } // end of namespace oceanbase

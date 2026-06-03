@@ -147,12 +147,24 @@ private:
   };
   static void merge_check_result_(ObInspectionItem &item, const bool passed);
   static void mark_checking_(ObInspectionItem &item);
+  static void mark_all_checking_(ObInspectionItem &sys_stat,
+                                 ObInspectionItem &sys_param,
+                                 ObInspectionItem &sys_table_schema,
+                                 ObInspectionItem &data_version);
   static const char *get_status_(const ObInspectionItem &item);
   int get_full_row(const share::schema::ObTableSchema *table,
                    const char *name, const char *info,
                    common::ObIArray<Column> &columns);
   int inner_get_next_row_on_rs_(common::ObNewRow *&row);
   int inner_get_next_row_on_tenants_(common::ObNewRow *&row);
+  int async_get_inspection_status_(const uint64_t tenant_id,
+                                   rootserver::ObAsyncGetInspectionStatusProxy &proxy);
+  int wait_and_check_async_get_inspection_status_response_(
+      rootserver::ObAsyncGetInspectionStatusProxy &proxy,
+      ObInspectionItem &sys_stat,
+      ObInspectionItem &sys_param,
+      ObInspectionItem &sys_table_schema,
+      ObInspectionItem &data_version);
 private:
   bool inited_;
   share::schema::ObMultiVersionSchemaService *schema_service_;
