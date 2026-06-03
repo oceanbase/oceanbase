@@ -441,8 +441,8 @@ namespace sql
       // init trace enable
       con.print_sample_pct_ = ((double)(sess.get_tenant_print_sample_ppm()))/1000000;
       ObRandom r;
-      double rand_num = 1.0 * (r.rand(0, RAND_MAX)/RAND_MAX);
-      if (rand_num < con.sample_pct_) {
+      double rand_num = (1.0 * r.rand(0, RAND_MAX)/RAND_MAX);
+      if (sess.is_use_trace_log() || rand_num < con.sample_pct_) {
         sess.set_trace_enable(true);
       } else {
         sess.set_trace_enable(false);
