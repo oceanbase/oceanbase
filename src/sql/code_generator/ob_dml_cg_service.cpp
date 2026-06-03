@@ -440,12 +440,15 @@ int ObDmlCgService::generate_update_ctdef(ObLogDelUpd &op,
   bool is_update_uk = false;
   const ObAssignments &assigns = index_dml_info.assignments_;
   bool gen_expand_ctdef = false;
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
+  bool enable_update_split_with_unique_id = false;
+  ObSQLSessionInfo *session = nullptr;
   LOG_TRACE("begin to generate update ctdef", K(index_dml_info));
 
-  if (!tenant_config.is_valid()) {
+  if (OB_ISNULL(cg_.opt_ctx_) ||
+      OB_ISNULL(session = cg_.opt_ctx_->get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tenant_config is not valid", K(ret), K(MTL_ID()));
+    LOG_WARN("unexpected null", K(ret), K(cg_.opt_ctx_));
+  } else if (FALSE_IT(enable_update_split_with_unique_id = session->is_enable_update_split_with_unique_id())) {
   } else if (OB_FAIL(old_row.assign(index_dml_info.column_old_values_exprs_))) {
     LOG_WARN("fail to assign update old row", K(ret));
   } else if (OB_FAIL(new_row.assign(old_row))) {
@@ -503,7 +506,7 @@ int ObDmlCgService::generate_update_ctdef(ObLogDelUpd &op,
                                               index_dml_info,
                                               upd_ctdef.assign_columns_))) {
     LOG_WARN("convert upd assign infos failed", K(ret), K(index_dml_info));
-  } else if (FALSE_IT(upd_ctdef.enable_update_split_trace_id_ = tenant_config->_enable_update_split_with_unique_id &&
+  } else if (FALSE_IT(upd_ctdef.enable_update_split_trace_id_ = enable_update_split_with_unique_id &&
                                                                 index_dml_info.is_primary_index_)) {
   } else if (FALSE_IT(upd_ctdef.dupd_ctdef_.enable_update_split_trace_id_ = upd_ctdef.enable_update_split_trace_id_)) {
   } else if (upd_ctdef.enable_update_split_trace_id_ &&

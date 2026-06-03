@@ -836,6 +836,7 @@ public:
                                  _query_record_size_limit_(65536),
                                  enable_column_store_(false),
                                  enable_decimal_int_type_(false),
+                                 enable_update_split_with_unique_id_(false),
                                  enable_mysql_compatible_dates_(false),
                                  print_sample_ppm_(0),
                                  last_check_ec_ts_(0),
@@ -888,6 +889,7 @@ public:
     int64_t get_query_record_size_limit() const { return _query_record_size_limit_; }
     bool get_enable_column_store() const { return enable_column_store_; }
     bool get_enable_decimal_int_type() const { return enable_decimal_int_type_; }
+    bool get_enable_update_split_with_unique_id() const { return enable_update_split_with_unique_id_; }
     int64_t get_sql_plan_management_mode() const { return sql_plan_management_mode_; }
     bool enable_enhanced_cursor_validation() const { return enable_enhanced_cursor_validation_; }
     bool get_enable_mysql_compatible_dates() const { return enable_mysql_compatible_dates_; }
@@ -956,6 +958,7 @@ public:
     int64_t _query_record_size_limit_;
     bool enable_column_store_;
     bool enable_decimal_int_type_;
+    bool enable_update_split_with_unique_id_;
     bool enable_mysql_compatible_dates_;
     // for record sys config print_sample_ppm
     int64_t print_sample_ppm_;
@@ -1862,6 +1865,12 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.enable_fast_json_path_lookup();
+  }
+
+  bool is_enable_update_split_with_unique_id()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_enable_update_split_with_unique_id();
   }
 
   int get_tmp_table_size(uint64_t &size);

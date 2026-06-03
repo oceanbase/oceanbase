@@ -1167,6 +1167,7 @@ public:
     enable_px_task_rebalance_(false),
     enable_nested_sql_local_optimize_(false),
     enable_vec_batch_accum_(false),
+    enable_update_split_with_unique_id_(false),
     cluster_config_version_(-1),
     tenant_config_version_(-1),
     tenant_id_(0)
@@ -1231,6 +1232,7 @@ public:
   bool enable_px_task_rebalance_;
   bool enable_nested_sql_local_optimize_;
   bool enable_vec_batch_accum_;
+  bool enable_update_split_with_unique_id_;
 private:
   // current cluster config version_
   int64_t cluster_config_version_;
