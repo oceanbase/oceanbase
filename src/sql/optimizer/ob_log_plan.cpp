@@ -11377,6 +11377,8 @@ int ObLogPlan::check_enable_plan_expiration(bool &enable) const
   if (OB_ISNULL(get_stmt()) || OB_ISNULL(query_ctx) || OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret), K(get_stmt()), K(query_ctx), K(session_info));
+  } else if (!session_info->is_user_session()) {
+    // only enable plan expiration for user session queries
   } else if (!get_stmt()->is_select_stmt()) {
     // do nothing
   } else if (opt_ctx.get_phy_plan_type() != OB_PHY_PLAN_LOCAL &&
