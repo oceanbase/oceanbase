@@ -18858,7 +18858,10 @@ int ObDMLResolver::resolve_error_log_table(const ParseNode *table_node, TableIte
   }
 
   if (OB_SUCC(ret)) {
-    if (table_location.ptr()[table_location.length() - 1] != '/') {
+    if (OB_UNLIKELY(table_location.empty())) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("table location is empty", K(ret));
+    } else if (table_location.ptr()[table_location.length() - 1] != '/') {
       ObString path_without_suffix = table_location.split_on(table_location.reverse_find('/'));
       if (OB_FAIL(table_schema.set_external_file_pattern(table_location))) {
         LOG_WARN("failed to set external file pattern", K(ret), K(table_location));
