@@ -1880,6 +1880,9 @@ int ObLogPlan::inner_generate_join_levels_with_IDP(common::ObIArray<JoinOrderArr
     } else {
       uint32_t curr_idp_step = initial_idp_step;
       uint32_t curr_level = 1;
+      if (get_optimizer_context().get_idp_reduction_threshold() <= 0) {
+        curr_idp_step = 2;
+      }
       for (uint32_t i = 1; OB_SUCC(ret) && i < join_level &&
           ObIDPAbortType::IDP_NO_ABORT == abort_type; i += curr_level) {
         if (curr_idp_step > join_level - i + 1) {
@@ -1967,6 +1970,7 @@ int ObLogPlan::do_one_round_idp(common::ObIArray<JoinOrderArray> &temp_join_rels
                                                             right_level,
                                                             base_level,
                                                             ignore_hint,
+                                                            curr_idp_step,
                                                             abort_type))) {
         LOG_WARN("failed to generate join order with dynamic program", K(ret));
       }
@@ -1993,6 +1997,7 @@ int ObLogPlan::do_one_round_idp(common::ObIArray<JoinOrderArray> &temp_join_rels
     if (OB_SUCC(ret)) {
       real_base_level = base_level;
       if (abort_type == ObIDPAbortType::IDP_NO_ABORT &&
+          curr_idp_step > 2 &&
           OB_FAIL(check_and_abort_curr_round_idp(temp_join_rels,
                                                  base_level,
                                                  abort_type))) {
@@ -2019,7 +2024,7 @@ int ObLogPlan::check_and_abort_curr_level_dp(common::ObIArray<JoinOrderArray> &i
       total_path_num += idp_join_rels.at(curr_level).at(i)->get_total_path_num();
     }
     if (OB_SUCC(ret)) {
-      uint64_t stop_down_abort_limit = 2 * IDP_PATHNUM_THRESHOLD;
+      uint64_t stop_down_abort_limit = 2 * get_optimizer_context().get_idp_reduction_threshold();
       if (total_path_num >= stop_down_abort_limit) {
         abort_type = ObIDPAbortType::IDP_STOPENUM_EXPDOWN_ABORT;
         OPT_TRACE("there is too much path, we will stop current level idp ",
@@ -2048,7 +2053,7 @@ int ObLogPlan::check_and_abort_curr_round_idp(common::ObIArray<JoinOrderArray> &
       total_path_num += idp_join_rels.at(curr_level).at(i)->get_total_path_num();
     }
     if (OB_SUCC(ret)) {
-      uint64_t stop_abort_limit = IDP_PATHNUM_THRESHOLD;
+      uint64_t stop_abort_limit = get_optimizer_context().get_idp_reduction_threshold();
       if (total_path_num >= stop_abort_limit) {
         abort_type = ObIDPAbortType::IDP_STOPENUM_LINEARDOWN_ABORT;
         OPT_TRACE("there is too much path, we will stop current round idp ",
@@ -2071,23 +2076,24 @@ int ObLogPlan::prepare_next_round_idp(common::ObIArray<JoinOrderArray> &idp_join
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid best order", K(best_order), K(ret));
   } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < idp_join_rels.at(0).count(); ++i) {
-      if (!idp_join_rels.at(0).at(i)->get_tables().overlap2(best_order->get_tables())) {
-        if (OB_FAIL(remained_rels.push_back(idp_join_rels.at(0).at(i)))) {
-          LOG_WARN("failed to add level 0 rels", K(ret));
+    for (int64_t i = 0; OB_SUCC(ret) && i < initial_idp_step; ++i) {
+      remained_rels.reuse();
+      for(int64_t j = 0; OB_SUCC(ret) && j < idp_join_rels.at(i).count(); ++j) {
+        if (!idp_join_rels.at(i).at(j)->get_tables().overlap(best_order->get_tables())) {
+          if (OB_FAIL(remained_rels.push_back(idp_join_rels.at(i).at(j)))) {
+            LOG_WARN("failed to add level 0 rels", K(ret));
+          }
+        }
+      }
+      if (OB_SUCC(ret)) {
+        if (OB_FAIL(idp_join_rels.at(i).assign(remained_rels))) {
+          LOG_WARN("failed to add remained rels", K(ret));
         }
       }
     }
     if (OB_SUCC(ret)) {
-      for (int64_t j = 0; OB_SUCC(ret) && j < initial_idp_step; ++j) {
-        idp_join_rels.at(j).reuse();
-      }
-      if (OB_SUCC(ret)) {
-        if (OB_FAIL(idp_join_rels.at(0).assign(remained_rels))) {
-          LOG_WARN("failed to add remained rels", K(ret));
-        } else if (OB_FAIL(idp_join_rels.at(0).push_back(best_order))) {
-          LOG_WARN("failed to add selected tree rels", K(ret));
-        }
+      if (OB_FAIL(idp_join_rels.at(0).push_back(best_order))) {
+        LOG_WARN("failed to add selected tree rels", K(ret));
       }
     }
   }
@@ -2131,6 +2137,7 @@ int ObLogPlan::greedy_idp_best_order(uint32_t current_level,
         }
       }
     }
+    OPT_TRACE("succeed to find best join order:", best_order, " best cost :", min_cost_path->cost_);
   }
   return ret;
 }
@@ -2230,6 +2237,7 @@ int ObLogPlan::generate_single_join_level_with_DP(ObIArray<JoinOrderArray> &join
                                                   uint32_t right_level,
                                                   uint32_t level,
                                                   bool ignore_hint,
+                                                  uint32_t curr_idp_step,
                                                   ObIDPAbortType &abort_type)
 {
   int ret = OB_SUCCESS;
@@ -2293,7 +2301,8 @@ int ObLogPlan::generate_single_join_level_with_DP(ObIArray<JoinOrderArray> &join
                      !is_valid_join) {
             abort_type = ObIDPAbortType::IDP_INVALID_HINT_ABORT;
             OPT_TRACE("leading hint is invalid, stop idp ", left_tree, right_tree);
-          } else if (OB_FAIL(check_and_abort_curr_level_dp(join_rels,
+          } else if (curr_idp_step > 2 &&
+                     OB_FAIL(check_and_abort_curr_level_dp(join_rels,
                                                            level,
                                                            abort_type))) {
             LOG_WARN("failed to check abort current dp", K(level), K(abort_type));

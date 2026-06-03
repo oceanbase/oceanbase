@@ -11845,6 +11845,19 @@
     "background_cn": "",
     "ref_url": ""
   },
+  "_idp_step_reduction_threshold" : {
+    "id": 10758,
+    "name": "_idp_step_reduction_threshold",
+    "default_value": 5000,
+    "base_value": 5000,
+    "data_type": "uint",
+    "info": "When the total number of enumerated join paths exceeds this threshold, the IDP algorithm will automatically reduce its step size to limit the enumeration space and improve optimization efficiency.",
+    "flags": "SESSION | GLOBAL",
+    "publish_version": "4.4.2.2",
+    "info_cn": "",
+    "background_cn": "",
+    "ref_url": ""
+  },
   "ob_enable_pl_async_commit": {
     "id": 10759,
     "name": "ob_enable_pl_async_commit",

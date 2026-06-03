@@ -583,6 +583,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_NAME[] = {
   "_force_parallel_dml_dop",
   "_force_parallel_query_dop",
   "_groupby_nopushdown_cut_ratio",
+  "_idp_step_reduction_threshold",
   "_nlj_batching_enabled",
   "_ob_enable_role_ids",
   "_ob_ols_policy_session_labels",
@@ -1431,6 +1432,7 @@ const ObSysVarClassType ObSysVarFactory::SYS_VAR_IDS_SORTED_BY_NAME[] = {
   SYS_VAR__FORCE_PARALLEL_DML_DOP,
   SYS_VAR__FORCE_PARALLEL_QUERY_DOP,
   SYS_VAR__GROUPBY_NOPUSHDOWN_CUT_RATIO,
+  SYS_VAR__IDP_STEP_REDUCTION_THRESHOLD,
   SYS_VAR__NLJ_BATCHING_ENABLED,
   SYS_VAR__OB_ENABLE_ROLE_IDS,
   SYS_VAR__OB_OLS_POLICY_SESSION_LABELS,
@@ -3101,6 +3103,7 @@ const char *ObSysVarFactory::SYS_VAR_NAMES_SORTED_BY_ID[] = {
   "ob_sparse_drop_ratio_search",
   "sql_transpiler",
   "plsql_can_transform_sql_to_assign",
+  "_idp_step_reduction_threshold",
   "ob_enable_pl_async_commit",
   "json_float_full_precision",
   "caching_sha2_password_digest_rounds",
@@ -4150,6 +4153,7 @@ int ObSysVarFactory::create_all_sys_vars()
         + sizeof(ObSysVarObSparseDropRatioSearch)
         + sizeof(ObSysVarSqlTranspiler)
         + sizeof(ObSysVarPlsqlCanTransformSqlToAssign)
+        + sizeof(ObSysVarIdpStepReductionThreshold)
         + sizeof(ObSysVarObEnablePlAsyncCommit)
         + sizeof(ObSysVarJsonFloatFullPrecision)
         + sizeof(ObSysVarCachingSha2PasswordDigestRounds)
@@ -11721,6 +11725,15 @@ int ObSysVarFactory::create_all_sys_vars()
       } else {
         store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR_PLSQL_CAN_TRANSFORM_SQL_TO_ASSIGN))] = sys_var_ptr;
         ptr = (void *)((char *)ptr + sizeof(ObSysVarPlsqlCanTransformSqlToAssign));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarIdpStepReductionThreshold())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarIdpStepReductionThreshold", K(ret));
+      } else {
+        store_buf_[ObSysVarsToIdxMap::get_store_idx(static_cast<int64_t>(SYS_VAR__IDP_STEP_REDUCTION_THRESHOLD))] = sys_var_ptr;
+        ptr = (void *)((char *)ptr + sizeof(ObSysVarIdpStepReductionThreshold));
       }
     }
     if (OB_SUCC(ret)) {
@@ -21015,6 +21028,17 @@ int ObSysVarFactory::create_sys_var(ObIAllocator &allocator_, ObSysVarClassType 
       } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarPlsqlCanTransformSqlToAssign())) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_ERROR("fail to new ObSysVarPlsqlCanTransformSqlToAssign", K(ret));
+      }
+      break;
+    }
+    case SYS_VAR__IDP_STEP_REDUCTION_THRESHOLD: {
+      void *ptr = NULL;
+      if (OB_ISNULL(ptr = allocator_.alloc(sizeof(ObSysVarIdpStepReductionThreshold)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to alloc memory", K(ret), K(sizeof(ObSysVarIdpStepReductionThreshold)));
+      } else if (OB_ISNULL(sys_var_ptr = new (ptr)ObSysVarIdpStepReductionThreshold())) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_ERROR("fail to new ObSysVarIdpStepReductionThreshold", K(ret));
       }
       break;
     }

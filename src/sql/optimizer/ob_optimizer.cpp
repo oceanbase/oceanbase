@@ -765,6 +765,7 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
   int ret = OB_SUCCESS;
   ObSQLSessionInfo *session_info = NULL;
   int64_t rowgoal_type = -1;
+  uint64_t idp_reduction_threshold = 5000;
   const ObOptParamHint &opt_params = ctx_.get_global_hint().opt_params_;
   if (OB_ISNULL(session_info = ctx_.get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
@@ -803,7 +804,14 @@ int ObOptimizer::init_env_info(ObDMLStmt &stmt)
     LOG_WARN("failed to check extend sql plan monitor metrics");
   } else if (OB_FAIL(check_enable_delete_insert_scan())) {
     LOG_WARN("failed to check enable delete insert scan");
-  } else { /*do nothing*/ }
+  } else if (OB_FAIL(opt_params.get_sys_var(ObOptParamHint::IDP_STEP_REDUCTION_THRESHOLD,
+                                            session_info,
+                                            share::SYS_VAR__IDP_STEP_REDUCTION_THRESHOLD,
+                                            idp_reduction_threshold))) {
+    LOG_WARN("failed to get hint param", K(ret));
+  } else {
+    ctx_.set_idp_reduction_threshold(idp_reduction_threshold);
+  }
   return ret;
 }
 

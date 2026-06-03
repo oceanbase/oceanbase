@@ -11513,75 +11513,88 @@ static struct VarsInit{
     }();
 
     [&] (){
-      ObSysVars[840].default_value_ = "0" ;
-      ObSysVars[840].info_ = "Whether the PL/SQL async response is used" ;
-      ObSysVars[840].name_ = "ob_enable_pl_async_commit" ;
-      ObSysVars[840].data_type_ = ObIntType ;
-      ObSysVars[840].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[840].id_ = SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT] = 840 ;
-      ObSysVars[840].base_value_ = "0" ;
-    ObSysVars[840].alias_ = "OB_SV_ENABLE_PL_ASYNC_COMMIT" ;
+      ObSysVars[840].default_value_ = "5000" ;
+      ObSysVars[840].info_ = "When the total number of enumerated join paths exceeds this threshold, the IDP algorithm will automatically reduce its step size to limit the enumeration space and improve optimization efficiency." ;
+      ObSysVars[840].name_ = "_idp_step_reduction_threshold" ;
+      ObSysVars[840].data_type_ = ObUInt64Type ;
+      ObSysVars[840].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[840].id_ = SYS_VAR__IDP_STEP_REDUCTION_THRESHOLD ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR__IDP_STEP_REDUCTION_THRESHOLD)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR__IDP_STEP_REDUCTION_THRESHOLD] = 840 ;
+      ObSysVars[840].base_value_ = "5000" ;
+    ObSysVars[840].alias_ = "OB_SV__IDP_STEP_REDUCTION_THRESHOLD" ;
     }();
 
     [&] (){
       ObSysVars[841].default_value_ = "0" ;
-      ObSysVars[841].info_ = "Parse number in JSON with full precision (but slower)" ;
-      ObSysVars[841].name_ = "json_float_full_precision" ;
+      ObSysVars[841].info_ = "Whether the PL/SQL async response is used" ;
+      ObSysVars[841].name_ = "ob_enable_pl_async_commit" ;
       ObSysVars[841].data_type_ = ObIntType ;
       ObSysVars[841].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
-      ObSysVars[841].id_ = SYS_VAR_JSON_FLOAT_FULL_PRECISION ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_JSON_FLOAT_FULL_PRECISION)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_JSON_FLOAT_FULL_PRECISION] = 841 ;
+      ObSysVars[841].id_ = SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_ENABLE_PL_ASYNC_COMMIT] = 841 ;
       ObSysVars[841].base_value_ = "0" ;
-    ObSysVars[841].alias_ = "OB_SV_JSON_FLOAT_FULL_PRECISION" ;
+    ObSysVars[841].alias_ = "OB_SV_ENABLE_PL_ASYNC_COMMIT" ;
     }();
 
     [&] (){
-      ObSysVars[842].default_value_ = "5000" ;
-      ObSysVars[842].info_ = "Number of SHA256 iterations for password hash stored to disk" ;
-      ObSysVars[842].name_ = "caching_sha2_password_digest_rounds" ;
+      ObSysVars[842].default_value_ = "0" ;
+      ObSysVars[842].info_ = "Parse number in JSON with full precision (but slower)" ;
+      ObSysVars[842].name_ = "json_float_full_precision" ;
       ObSysVars[842].data_type_ = ObIntType ;
-      ObSysVars[842].min_val_ = "5000" ;
-      ObSysVars[842].max_val_ = "4095000" ;
-      ObSysVars[842].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
-      ObSysVars[842].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_caching_sha2_password_digest_rounds" ;
-      ObSysVars[842].id_ = SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS] = 842 ;
-      ObSysVars[842].base_value_ = "5000" ;
-    ObSysVars[842].alias_ = "OB_SV_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS" ;
+      ObSysVars[842].flags_ = ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[842].id_ = SYS_VAR_JSON_FLOAT_FULL_PRECISION ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_JSON_FLOAT_FULL_PRECISION)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_JSON_FLOAT_FULL_PRECISION] = 842 ;
+      ObSysVars[842].base_value_ = "0" ;
+    ObSysVars[842].alias_ = "OB_SV_JSON_FLOAT_FULL_PRECISION" ;
     }();
 
     [&] (){
-      ObSysVars[843].default_value_ = "100" ;
-      ObSysVars[843].info_ = "Set cost factor for UDF filter predicate (default: 100)" ;
-      ObSysVars[843].name_ = "ob_udf_cost_factor" ;
+      ObSysVars[843].default_value_ = "5000" ;
+      ObSysVars[843].info_ = "Number of SHA256 iterations for password hash stored to disk" ;
+      ObSysVars[843].name_ = "caching_sha2_password_digest_rounds" ;
       ObSysVars[843].data_type_ = ObIntType ;
-      ObSysVars[843].min_val_ = "1" ;
-      ObSysVars[843].max_val_ = "10000000" ;
-      ObSysVars[843].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN ;
-      ObSysVars[843].id_ = SYS_VAR_OB_UDF_COST_FACTOR ;
-      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_UDF_COST_FACTOR)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_UDF_COST_FACTOR] = 843 ;
-      ObSysVars[843].base_value_ = "100" ;
-    ObSysVars[843].alias_ = "OB_SV_UDF_COST_FACTOR" ;
+      ObSysVars[843].min_val_ = "5000" ;
+      ObSysVars[843].max_val_ = "4095000" ;
+      ObSysVars[843].flags_ = ObSysVarFlag::GLOBAL_SCOPE ;
+      ObSysVars[843].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_caching_sha2_password_digest_rounds" ;
+      ObSysVars[843].id_ = SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS] = 843 ;
+      ObSysVars[843].base_value_ = "5000" ;
+    ObSysVars[843].alias_ = "OB_SV_CACHING_SHA2_PASSWORD_DIGEST_ROUNDS" ;
     }();
 
     [&] (){
-      ObSysVars[844].default_value_ = "0.005" ;
-      ObSysVars[844].info_ = "Set default selectivity for UDF equality predicate (default: 0.005)" ;
-      ObSysVars[844].name_ = "ob_udf_selectivity" ;
-      ObSysVars[844].data_type_ = ObNumberType ;
-      ObSysVars[844].min_val_ = "0.0" ;
-      ObSysVars[844].max_val_ = "1.0" ;
+      ObSysVars[844].default_value_ = "100" ;
+      ObSysVars[844].info_ = "Set cost factor for UDF filter predicate (default: 100)" ;
+      ObSysVars[844].name_ = "ob_udf_cost_factor" ;
+      ObSysVars[844].data_type_ = ObIntType ;
+      ObSysVars[844].min_val_ = "1" ;
+      ObSysVars[844].max_val_ = "10000000" ;
       ObSysVars[844].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN ;
-      ObSysVars[844].id_ = SYS_VAR_OB_UDF_SELECTIVITY ;
+      ObSysVars[844].id_ = SYS_VAR_OB_UDF_COST_FACTOR ;
+      cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_UDF_COST_FACTOR)) ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_UDF_COST_FACTOR] = 844 ;
+      ObSysVars[844].base_value_ = "100" ;
+    ObSysVars[844].alias_ = "OB_SV_UDF_COST_FACTOR" ;
+    }();
+
+    [&] (){
+      ObSysVars[845].default_value_ = "0.005" ;
+      ObSysVars[845].info_ = "Set default selectivity for UDF equality predicate (default: 0.005)" ;
+      ObSysVars[845].name_ = "ob_udf_selectivity" ;
+      ObSysVars[845].data_type_ = ObNumberType ;
+      ObSysVars[845].min_val_ = "0.0" ;
+      ObSysVars[845].max_val_ = "1.0" ;
+      ObSysVars[845].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::INFLUENCE_PLAN ;
+      ObSysVars[845].id_ = SYS_VAR_OB_UDF_SELECTIVITY ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_OB_UDF_SELECTIVITY)) ;
-      ObSysVarsIdToArrayIdx[SYS_VAR_OB_UDF_SELECTIVITY] = 844 ;
-      ObSysVars[844].base_value_ = "0.005" ;
-    ObSysVars[844].alias_ = "OB_SV_UDF_SELECTIVITY" ;
+      ObSysVarsIdToArrayIdx[SYS_VAR_OB_UDF_SELECTIVITY] = 845 ;
+      ObSysVars[845].base_value_ = "0.005" ;
+    ObSysVars[845].alias_ = "OB_SV_UDF_SELECTIVITY" ;
     }();
 
     if (cur_max_var_id >= ObSysVarFactory::OB_MAX_SYS_VAR_ID) { 
@@ -11590,7 +11603,7 @@ static struct VarsInit{
   }
 }vars_init;
 
-static int64_t var_amount = 845;
+static int64_t var_amount = 846;
 
 int64_t ObSysVariables::get_all_sys_var_count(){ return ObSysVarFactory::ALL_SYS_VARS_COUNT;}
 ObSysVarClassType ObSysVariables::get_sys_var_id(int64_t i){ return ObSysVars[i].id_;}

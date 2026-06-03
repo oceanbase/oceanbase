@@ -987,6 +987,10 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
       is_valid = val.is_int() && (0 < val.get_int());
       break;
     }
+    case IDP_STEP_REDUCTION_THRESHOLD: {
+      is_valid = val.is_int() && (0 <= val.get_int());
+      break;
+    }
     case WORKAREA_SIZE_POLICY: {
       is_valid = val.is_varchar() && (0 == val.get_varchar().case_compare("MANULE"));
       break;
@@ -1254,6 +1258,15 @@ int ObOptParamHint::get_integer_opt_param(const OptParamType param_type, int64_t
   return get_integer_opt_param(param_type, val, is_exists);
 }
 
+int ObOptParamHint::get_integer_opt_param(const OptParamType param_type, uint64_t &val) const
+{
+  bool is_exists = false;
+  int64_t int_val = 0;
+  int ret = get_integer_opt_param(param_type, int_val, is_exists);
+  val = static_cast<uint64_t>(int_val);
+  return ret;
+}
+
 int ObOptParamHint::get_double_opt_param(const OptParamType param_type, double &val) const
 {
   int ret = OB_SUCCESS;
@@ -1406,6 +1419,15 @@ int ObOptParamHint::get_sys_var(const OptParamType param_type,
                                 int64_t &val) const
 {
   return inner_get_sys_var<int64_t, &ObOptParamHint::get_integer_opt_param>
+            (param_type, session, sys_var_id, val);
+}
+
+int ObOptParamHint::get_sys_var(const OptParamType param_type,
+                                const ObSQLSessionInfo *session,
+                                const share::ObSysVarClassType sys_var_id,
+                                uint64_t &val) const
+{
+  return inner_get_sys_var<uint64_t, &ObOptParamHint::get_integer_opt_param>
             (param_type, session, sys_var_id, val);
 }
 

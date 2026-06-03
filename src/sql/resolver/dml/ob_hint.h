@@ -229,6 +229,7 @@ struct ObOptParamHint
     DEF(ENABLE_CONSTANT_TYPE_DEMOTION,)             \
     DEF(NON_STANDARD_COMPARISON_LEVEL,)             \
     DEF(ENABLE_TOPN_RUNTIME_FILTER, )               \
+    DEF(IDP_STEP_REDUCTION_THRESHOLD,)              \
     DEF(PRESERVE_ORDER_FOR_GROUPBY,)                \
     DEF(ENABLE_PDML_INSERT_UP,)                     \
     DEF(ENABLE_PARTIAL_LIMIT_PUSHDOWN,)             \
@@ -275,6 +276,7 @@ struct ObOptParamHint
   int get_bool_opt_param(const OptParamType param_type, bool &val) const;
   int get_integer_opt_param(const OptParamType param_type, int64_t &val, bool &is_exists) const;
   int get_integer_opt_param(const OptParamType param_type, int64_t &val) const;
+  int get_integer_opt_param(const OptParamType param_type, uint64_t &val) const;
   int get_opt_param_runtime_filter_type(int64_t &rf_type) const;
   int get_double_opt_param(const OptParamType param_type, double &val) const;
   int get_hash_rollup_param(ObObj &val, bool &has_opt_param) const;
@@ -293,6 +295,10 @@ struct ObOptParamHint
                   const ObSQLSessionInfo *session,
                   const share::ObSysVarClassType sys_var_id,
                   int64_t &val) const;
+  int get_sys_var(const OptParamType param_type,
+                  const ObSQLSessionInfo *session,
+                  const share::ObSysVarClassType sys_var_id,
+                  uint64_t &val) const;
   int get_sys_var(const OptParamType param_type,
                   const ObSQLSessionInfo *session,
                   const share::ObSysVarClassType sys_var_id,

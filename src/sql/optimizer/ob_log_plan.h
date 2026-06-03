@@ -1987,6 +1987,7 @@ protected:
                                          uint32_t right_level,
                                          uint32_t level,
                                          bool ignore_hint,
+                                         uint32_t curr_idp_step,
                                          ObIDPAbortType &abort_type);
 
   int inner_generate_join_order(ObIArray<JoinOrderArray> &join_rels,
