@@ -2721,6 +2721,15 @@ int ObLSQuickRestoreState::check_clog_replay_finish_(bool &is_finish)
   return ret;
 }
 
+bool ObLSQuickRestoreState::is_tablet_clog_checkpoint_acceptable_for_restore(
+    const ObTabletID &tablet_id,
+    const SCN &clog_checkpoint_scn,
+    const SCN &restore_scn)
+{
+  return clog_checkpoint_scn <= restore_scn
+      || tablet_id.is_ls_tx_ctx_tablet();
+}
+
 int ObLSQuickRestoreState::check_tablet_checkpoint_()
 {
   int ret = OB_SUCCESS;
@@ -2754,22 +2763,37 @@ int ObLSQuickRestoreState::check_tablet_checkpoint_()
         if (!tablet_meta.is_valid()) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("invalid tablet meta", K(ret), K(tablet_meta));
-        } else if (tablet_meta.clog_checkpoint_scn_ > ls_restore_arg_->get_restore_scn()) {
+        } else if (!is_tablet_clog_checkpoint_acceptable_for_restore(
+                       tablet->get_tablet_id(),
+                       tablet_meta.clog_checkpoint_scn_,
+                       ls_restore_arg_->get_restore_scn())) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("tablet clog checkpoint ts should less than restore end ts", K(ret), K(tablet_meta),
               "ls restore end ts", ls_restore_arg_->get_restore_scn());
-        } else if (tablet->is_empty_shell()) {
-        } else if (!ls_restore_arg_->get_progress_display_mode().is_bytes()) {
-        } else if (ls_->is_sys_ls() && tablet->get_tablet_meta().ha_status_.is_restore_status_full()) {
-          // sys ls's tablets have all been fully restore, take occupy size as total bytes
-          if (OB_FAIL(ObStorageHAUtils::get_tablet_occupy_size_in_bytes(
-                  ls_->get_ls_id(), tablet->get_tablet_id(), tablet_size))) {
-            LOG_WARN("fail to get tablet size", K(ret), KPC(tablet));
+        } else {
+          if (tablet_meta.clog_checkpoint_scn_ > ls_restore_arg_->get_restore_scn()) {
+            // Only reached when LS_TX_CTX_TABLET's sstable carries the +1
+            // bookkeeping offset from ObTxCtxMemtable::flush(). Log for
+            // observability and continue with the rest of the per-tablet work.
+            LOG_INFO("tx ctx tablet clog_checkpoint_scn exceeds restore_scn, exempted",
+                "ls_id", ls_->get_ls_id(),
+                "tablet_id", tablet->get_tablet_id(),
+                "clog_checkpoint_scn", tablet_meta.clog_checkpoint_scn_,
+                "restore_scn", ls_restore_arg_->get_restore_scn());
           }
-        } else if (!ls_->is_sys_ls() && tablet->get_tablet_meta().ha_status_.is_restore_status_remote()) {
-          if (OB_FAIL(ObStorageHAUtils::get_tablet_backup_size_in_bytes(
-                  ls_->get_ls_id(), tablet->get_tablet_id(), tablet_size))) {
-            LOG_WARN("fail to get tablet size", K(ret), KPC(tablet));
+          if (tablet->is_empty_shell()) {
+          } else if (!ls_restore_arg_->get_progress_display_mode().is_bytes()) {
+          } else if (ls_->is_sys_ls() && tablet->get_tablet_meta().ha_status_.is_restore_status_full()) {
+            // sys ls's tablets have all been fully restore, take occupy size as total bytes
+            if (OB_FAIL(ObStorageHAUtils::get_tablet_occupy_size_in_bytes(
+                    ls_->get_ls_id(), tablet->get_tablet_id(), tablet_size))) {
+              LOG_WARN("fail to get tablet size", K(ret), KPC(tablet));
+            }
+          } else if (!ls_->is_sys_ls() && tablet->get_tablet_meta().ha_status_.is_restore_status_remote()) {
+            if (OB_FAIL(ObStorageHAUtils::get_tablet_backup_size_in_bytes(
+                    ls_->get_ls_id(), tablet->get_tablet_id(), tablet_size))) {
+              LOG_WARN("fail to get tablet size", K(ret), KPC(tablet));
+            }
           }
         }
       }
