@@ -64,7 +64,8 @@ public:
 
 typedef enum {
   ICEBERG,
-  HIVE
+  HIVE,
+  PAIMON
 } PrunnerType;
 
 class ObILakeTableFilePruner

@@ -1326,6 +1326,7 @@ struct ObExternalFileFormat
     ORC_FORMAT,
     PLUGIN_FORMAT,
     KAFKA_FORMAT,
+    PAIMON_FORMAT,
     MAX_FORMAT
   };
 

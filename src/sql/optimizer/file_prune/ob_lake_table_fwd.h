@@ -66,7 +66,8 @@ public:
 enum class LakeFileType{
     INVALID = 0,
     ICEBERG = 1,
-    HIVE = 2
+    HIVE = 2,
+    PAIMON = 3
   };
 
 enum class CsvTaskType{
