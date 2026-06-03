@@ -26677,7 +26677,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaochu.yh',
+  owner = 'chenxiansen.cxs',
   table_name      = 'GV$OB_PROCESSLIST',
   table_id        = '21221',
   table_type      = 'SYSTEM_VIEW',
@@ -26734,7 +26734,7 @@ FROM oceanbase.__all_virtual_processlist
 )
 
 def_table_schema(
-  owner = 'xiaochu.yh',
+  owner = 'chenxiansen.cxs',
   table_name      = 'V$OB_PROCESSLIST',
   table_id        = '21222',
   table_type      = 'SYSTEM_VIEW',
@@ -30364,7 +30364,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner           = 'xiaochu.yh',
+  owner           = 'dingjincheng.djc',
   table_name      = 'CDB_OB_SYS_VARIABLES',
   table_id        = '21299',
   table_type      = 'SYSTEM_VIEW',
@@ -69770,7 +69770,7 @@ def_table_schema(
 )
 
 def_table_schema(
-  owner = 'xiaochu.yh',
+  owner = 'chenxiansen.cxs',
   table_name      = 'GV$OB_PROCESSLIST',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
@@ -69829,7 +69829,7 @@ FROM SYS.ALL_VIRTUAL_PROCESSLIST
 )
 
 def_table_schema(
-  owner = 'xiaochu.yh',
+  owner = 'chenxiansen.cxs',
   table_name      = 'V$OB_PROCESSLIST',
   name_postfix    = '_ORA',
   database_id     = 'OB_ORA_SYS_DATABASE_ID',
