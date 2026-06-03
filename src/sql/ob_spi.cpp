@@ -3323,9 +3323,21 @@ int ObSPIService::spi_cursor_init(ObPLExecCtx *ctx, int64_t cursor_index)
     // ref cursor is pointer to cursor, we don't have to alloc here
     // we should alloc it in open stmt
     ObPLCursorInfo *cursor_info = NULL;
-    if (obj.is_ref_cursor_type()) {
-      obj.set_extend(static_cast<int64_t>(0), PL_REF_CURSOR_TYPE);
-      obj.set_param_meta();
+    if (obj.is_pl_extend() && obj.get_ext() != 0 
+        && OB_NOT_NULL(cursor_info = reinterpret_cast<ObPLCursorInfo *>(obj.get_ext())) && cursor_info->isopen()) {
+      //cursor not close before reopen, raise error, eg exception skip close
+      const uint64_t package_id = OB_ISNULL(ctx->func_) ? OB_INVALID_ID : ctx->func_->get_package_id();
+      const uint64_t routine_id = OB_ISNULL(ctx->func_) ? OB_INVALID_ID : ctx->func_->get_routine_id();
+      ret = OB_ER_SP_CURSOR_ALREADY_OPEN;
+      LOG_USER_ERROR(OB_ER_SP_CURSOR_ALREADY_OPEN);
+      LOG_WARN("Cursor is already open", K(ret), K(package_id), K(routine_id));
+    } else if (obj.is_ref_cursor_type()) {
+      if (OB_ISNULL(cursor_info)) {
+        obj.set_extend(static_cast<int64_t>(0), PL_REF_CURSOR_TYPE);
+        obj.set_param_meta();
+      } else {
+        OX (cursor_info->set_ref_count(1));  //resue cursorInfo, set ref_count to 1
+      }
     } else {
       if (obj.is_null()) {
         OZ (spi_cursor_alloc(ctx->expr_alloc_, obj));
@@ -3335,7 +3347,6 @@ int ObSPIService::spi_cursor_init(ObPLExecCtx *ctx, int64_t cursor_index)
         if (OB_SUCC(ret)
             && obj.get_ext() != 0
             && OB_NOT_NULL(cursor_info = reinterpret_cast<ObPLCursorInfo *>(obj.get_ext()))) {
-          OX (cursor_info->reset());
           OX (cursor_info->set_ref_count(1));  //resue cursorInfo, set ref_count to 1
         }
       }
