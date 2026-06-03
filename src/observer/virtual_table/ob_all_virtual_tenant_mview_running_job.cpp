@@ -151,6 +151,10 @@ int ObAllVirtualTenantMviewRunningJob::FillScanner::operator()(
                                                 get_val_for_inner_table_field());
           break;
         }
+        case REFRESH_ID: {
+          cur_row_->cells_[cell_idx].set_uint64(mview_op.refresh_id_);
+          break;
+        }
         default: {
           ret = OB_ERR_UNEXPECTED;
           SERVER_LOG(WARN, "invalid column id", K(ret), K(cell_idx), K(output_column_ids_), K(col_id));
