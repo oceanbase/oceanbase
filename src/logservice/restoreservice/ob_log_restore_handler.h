@@ -48,6 +48,7 @@ class ObString;
 namespace share
 {
 class ObBackupDest;
+class ObLogRestoreProxyUtil;
 }
 
 namespace palf
@@ -386,6 +387,9 @@ private:
   int check_replay_done_(const share::SCN &scn, bool &done);
   int check_replica_replay_done_(const share::SCN &scn, common::ObMemberList &member_list, bool &done);
   int check_member_list_change_(common::ObMemberList &member_list, bool &member_list_change);
+  int get_source_max_log_info_(share::ObLogRestoreProxyUtil &proxy_util,
+      const share::ObRestoreSourceServiceAttr &service_attr,
+      palf::AccessMode &access_mode, share::SCN &archive_scn);
   int check_restore_to_newest_from_service_(const share::ObRestoreSourceServiceAttr &attr,
       const share::SCN &end_scn, share::SCN &archive_scn);
   int check_restore_to_newest_from_archive_(ObRemoteLocationParent &location_parent,

@@ -23,6 +23,9 @@
 #include "share/ob_share_util.h"
 #include "share/ob_srv_rpc_proxy.h"
 #include "share/location_cache/ob_location_struct.h"
+#include "logservice/logrpc/ob_log_rpc_proxy.h"
+#include "logservice/logrpc/ob_log_rpc_req.h"
+#include "logservice/palf/palf_handle_impl.h"
 namespace oceanbase
 {
 namespace share
@@ -1011,6 +1014,71 @@ int ObLogRestoreProxyUtil::get_primary_ls_leader_addr_by_rpc(const ObRestoreSour
     }
   }
 
+  return ret;
+}
+
+int ObLogRestoreProxyUtil::get_source_ls_leader_palf_stat_by_rpc_(const ObRestoreSourceServiceAttr &service_attr,
+    obrpc::ObSrvRpcProxy *srv_rpc_proxy,
+    obrpc::ObLogServiceRpcProxy *log_rpc_proxy,
+    const uint64_t tenant_id,
+    const ObLSID &ls_id,
+    palf::PalfStat &palf_stat)
+{
+  int ret = OB_SUCCESS;
+  common::ObAddr leader_addr;
+  const int64_t timeout_us = GCONF.rpc_timeout;
+  const int64_t cluster_id = service_attr.user_.cluster_id_;
+  logservice::LogGetPalfStatReq req(GCTX.self_addr(), ls_id.id(), true /*is_to_leader*/);
+  logservice::LogGetPalfStatResp resp;
+
+  if (OB_ISNULL(srv_rpc_proxy) || OB_ISNULL(log_rpc_proxy)
+      || OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || !ls_id.is_valid())
+      || OB_UNLIKELY(!service_attr.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), KP(srv_rpc_proxy), KP(log_rpc_proxy),
+        K(tenant_id), K(ls_id), K(service_attr));
+  } else if (OB_FAIL(get_primary_ls_leader_addr_by_rpc(service_attr, srv_rpc_proxy, ls_id, leader_addr))) {
+    LOG_WARN("get_primary_ls_leader_addr_by_rpc failed", KR(ret), K(service_attr), K(ls_id));
+  } else if (OB_FAIL(log_rpc_proxy->to(leader_addr)
+                                   .dst_cluster_id(cluster_id)
+                                   .by(tenant_id)
+                                   .timeout(timeout_us)
+                                   .max_process_handler_time(timeout_us)
+                                   .group_id(share::OBCG_DBA_COMMAND)
+                                   .get_palf_stat(req, resp))) {
+    LOG_WARN("rpc get_palf_stat failed", KR(ret), K(leader_addr), K(cluster_id),
+        K(tenant_id), K(ls_id), K(req));
+  } else if (OB_UNLIKELY(!resp.is_valid())) {
+    ret = OB_RPC_PACKET_INVALID;
+    LOG_WARN("get_palf_stat resp is invalid", KR(ret), K(leader_addr), K(tenant_id), K(ls_id), K(resp));
+  } else if (!is_strong_leader(resp.palf_stat_.role_)) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("restore source palf role is not leader", KR(ret), K(leader_addr), K(resp));
+  } else {
+    palf_stat = resp.palf_stat_;
+  }
+  return ret;
+}
+
+int ObLogRestoreProxyUtil::get_max_log_info_by_rpc(const ObRestoreSourceServiceAttr &service_attr,
+    obrpc::ObSrvRpcProxy *srv_rpc_proxy,
+    obrpc::ObLogServiceRpcProxy *log_rpc_proxy,
+    const ObLSID &id,
+    palf::AccessMode &mode,
+    SCN &scn)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = service_attr.user_.tenant_id_;
+  palf::PalfStat palf_stat;
+
+  if (OB_FAIL(get_source_ls_leader_palf_stat_by_rpc_(service_attr, srv_rpc_proxy, log_rpc_proxy,
+          tenant_id, id, palf_stat))) {
+    LOG_WARN("get standby palf stat by rpc failed", KR(ret), K(service_attr), K(id));
+  } else {
+    mode = palf_stat.access_mode_;
+    scn = palf_stat.max_scn_;
+    LOG_INFO("get max log info by rpc success", K(id), K(mode), K(scn));
+  }
   return ret;
 }
 

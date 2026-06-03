@@ -28,6 +28,8 @@
 #include "share/rc/ob_tenant_base.h"         // MTL_ID, mtl_malloc, mtl_free
 #include "rootserver/ob_tenant_info_loader.h" // ObTenantInfoLoader
 #include "share/config/ob_server_config.h"   // GCONF
+#include "share/ob_cluster_version.h"        // GET_MIN_DATA_VERSION, DATA_VERSION_4_4_2_2
+#include "share/ob_server_struct.h"          // GCTX
 
 namespace oceanbase
 {
@@ -1522,6 +1524,60 @@ int ObLogRestoreHandler::process_transport_tasks()
   return ret;
 }
 
+// fetch source LS access_mode/max_scn. Prefer rpc (OB_LOG_GET_PALF_STAT) to bypass
+// source-side SQL/transaction/GTS which may block when the source is transitioning to
+// standby; gate on DATA_VERSION_4_4_2_2 and rpc proxy availability. Only fall back to SQL
+// when the source does not support rpc or is unreachable (OB_NOT_SUPPORTED / OB_TIMEOUT /
+// OB_RPC_PACKET_INVALID); for "source not ready" codes (e.g. OB_NOT_MASTER) pass the error
+// up for retry instead of falling back to the blockable SQL path.
+int ObLogRestoreHandler::get_source_max_log_info_(
+    share::ObLogRestoreProxyUtil &proxy_util,
+    const share::ObRestoreSourceServiceAttr &service_attr,
+    palf::AccessMode &access_mode,
+    share::SCN &archive_scn)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  const share::ObLSID ls_id(id_);
+  uint64_t data_version = 0;
+  bool need_sql = true;
+  logservice::ObLogService *log_service = MTL(logservice::ObLogService*);
+  obrpc::ObLogServiceRpcProxy *log_rpc_proxy = OB_NOT_NULL(log_service) ? log_service->get_rpc_proxy() : NULL;
+  if (OB_SUCCESS == GET_MIN_DATA_VERSION(MTL_ID(), data_version)
+      && data_version >= DATA_VERSION_4_4_2_2
+      && OB_NOT_NULL(GCTX.srv_rpc_proxy_) && OB_NOT_NULL(log_rpc_proxy)) {
+    if (OB_TMP_FAIL(proxy_util.get_max_log_info_by_rpc(service_attr, GCTX.srv_rpc_proxy_, log_rpc_proxy,
+            ls_id, access_mode, archive_scn))) {
+      if (OB_NOT_SUPPORTED == tmp_ret || OB_TIMEOUT == tmp_ret || OB_RPC_PACKET_INVALID == tmp_ret) {
+        // source observer too old / temporarily unreachable, fall back to SQL
+        CLOG_LOG(INFO, "rpc get_max_log_info failed, fallback to sql", KR(tmp_ret), K(id_), K(service_attr));
+      } else {
+        // rpc reached source but it is not ready (e.g. leader drifting during primary->standby
+        // switch). pass the error up for retry rather than falling back to the SQL path, which
+        // would block on the source's unavailable GTS. normalize OB_NOT_MASTER to
+        // OB_ENTRY_NOT_EXIST to reuse the existing upper-layer ls-gc branch.
+        ret = (OB_NOT_MASTER == tmp_ret) ? OB_ENTRY_NOT_EXIST : tmp_ret;
+        need_sql = false;
+        if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+          CLOG_LOG(INFO, "rpc get_max_log_info source not ready, retry without sql fallback",
+              KR(tmp_ret), KR(ret), K(id_), K(service_attr));
+        }
+      }
+    } else {
+      need_sql = false;
+      // success log so cases can verify the rpc path is actually taken
+      CLOG_LOG(INFO, "get_max_log_info by rpc succ", K(id_), K(access_mode), K(archive_scn), K(service_attr));
+    }
+  }
+  if (need_sql && OB_FAIL(proxy_util.get_max_log_info(ls_id, access_mode, archive_scn))) {
+    // OB_ENTRY_NOT_EXIST is expected and high-frequency (ls has no leader / gc), throttle it
+    if (OB_ENTRY_NOT_EXIST != ret || REACH_TIME_INTERVAL(1 * 1000 * 1000)) {
+      CLOG_LOG(WARN, "get_max_log_info by sql failed", KR(ret), K(id_), K(service_attr));
+    }
+  }
+  return ret;
+}
+
 ERRSIM_POINT_DEF(ERRSIM_LS_STATE_NOT_MATCH);
 int ObLogRestoreHandler::check_restore_to_newest_from_service_(
     const share::ObRestoreSourceServiceAttr &service_attr,
@@ -1534,8 +1590,8 @@ int ObLogRestoreHandler::check_restore_to_newest_from_service_(
   SMART_VAR(share::ObLogRestoreProxyUtil, proxy_util) {
     if (OB_FAIL(proxy_util.init_with_service_attr(MTL_ID(), &service_attr))) {
       CLOG_LOG(WARN, "proxy_util init failed", K(id_), K(service_attr));
-    } else if (OB_FAIL(proxy_util.get_max_log_info(share::ObLSID(id_), access_mode, archive_scn))) {
-      // OB_ENTRY_NOT_EXIST, ls not exist in gv$ob_log_stat, a) ls has no leader; b) access virtual table failed; c) ls gc
+    } else if (OB_FAIL(get_source_max_log_info_(proxy_util, service_attr, access_mode, archive_scn))) {
+      // OB_ENTRY_NOT_EXIST, ls not exist in gv$ob_log_stat / role != leader, a) ls has no leader; b) access virtual table failed; c) ls gc
       if (OB_ENTRY_NOT_EXIST == ret) {
         // get ls from dba_ob_ls
         // 1. OB_LS_NOT_EXIST, ls gc in log restore source tenant, check if offline_log already transported successfully

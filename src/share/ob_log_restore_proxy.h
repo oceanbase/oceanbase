@@ -36,6 +36,11 @@ namespace oceanbase
 namespace obrpc
 {
 class ObSrvRpcProxy;
+class ObLogServiceRpcProxy;
+}
+namespace palf
+{
+struct PalfStat;
 }
 namespace share
 {
@@ -166,6 +171,21 @@ public:
   int get_log_restore_source(bool &is_empty, ObRestoreSourceServiceAttr &restore_source_service_attr);
   // get the access_mode and max_scn of the specific LS in log restore source tenant
   int get_max_log_info(const ObLSID &id, palf::AccessMode &mode, SCN &scn);
+  // RPC-based variant of get_max_log_info, bypassing SQL/transaction/GTS on the source side.
+  // Use this on switchover paths to avoid getting blocked by source-side GTS unavailability
+  // during the source tenant's primary->standby transition.
+  // @param[in] service_attr, primary service attributes (for cluster id / tenant id / svr list)
+  // @param[in] srv_rpc_proxy, ObSrvRpcProxy for primary leader address lookup
+  // @param[in] log_rpc_proxy, ObLogServiceRpcProxy for OB_LOG_GET_PALF_STAT
+  // @param[in] id, log stream id
+  // @param[out] mode, access mode of the LS leader on the source tenant
+  // @param[out] scn, max scn of the LS leader on the source tenant
+  int get_max_log_info_by_rpc(const ObRestoreSourceServiceAttr &service_attr,
+                              obrpc::ObSrvRpcProxy *srv_rpc_proxy,
+                              obrpc::ObLogServiceRpcProxy *log_rpc_proxy,
+                              const ObLSID &id,
+                              palf::AccessMode &mode,
+                              SCN &scn);
   // get ls from dba_ob_ls
   int is_ls_existing(const ObLSID &id);
   // query primary ls leader address by rpc
@@ -184,6 +204,23 @@ public:
                                 palf::LSN &standby_committed_end_lsn,
                                 share::SCN &standby_committed_end_scn);
 private:
+  // get palf stat of the restore source LS leader by rpc, used by get_max_log_info_by_rpc.
+  // It locates the LS leader via srv_rpc_proxy and fetches palf stat via log_rpc_proxy
+  // (OB_LOG_GET_PALF_STAT), bypassing source-side SQL/transaction/GTS which may block when
+  // the source tenant is transitioning primary->standby on switchover.
+  // Callers extract the fields they need from the returned palf stat.
+  // @param[in] service_attr, restore source service attributes
+  // @param[in] srv_rpc_proxy, ObSrvRpcProxy to locate the LS leader address
+  // @param[in] log_rpc_proxy, ObLogServiceRpcProxy for OB_LOG_GET_PALF_STAT
+  // @param[in] tenant_id, restore source tenant id used as the rpc's tenant
+  // @param[in] ls_id, log stream id
+  // @param[out] palf_stat, palf stat of the LS leader on the restore source tenant
+  int get_source_ls_leader_palf_stat_by_rpc_(const ObRestoreSourceServiceAttr &service_attr,
+                                    obrpc::ObSrvRpcProxy *srv_rpc_proxy,
+                                    obrpc::ObLogServiceRpcProxy *log_rpc_proxy,
+                                    const uint64_t tenant_id,
+                                    const ObLSID &ls_id,
+                                    palf::PalfStat &palf_stat);
   // check if user or password changed
   bool is_user_changed_(const char *user_name, const char *user_password);
   void destroy_tg_();
