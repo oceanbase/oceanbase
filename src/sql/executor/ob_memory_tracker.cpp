@@ -21,6 +21,17 @@ using namespace oceanbase::lib;
 
 thread_local ObMemTracker ObMemTrackerGuard::mem_tracker_;
 
+int64_t ObMemTracker::get_tenant_id()
+{
+  if (OB_LIKELY(tenant_id_ != OB_INVALID_TENANT_ID)) {
+  } else if (MTL_ID() != OB_INVALID_TENANT_ID) {
+    tenant_id_ = MTL_ID();
+  } else {
+    tenant_id_ = OB_SERVER_TENANT_ID;
+  }
+  return tenant_id_;
+}
+
 ObMemTrackerGuard::ObMemTrackerGuard(lib::MemoryContext &mem_context)
 {
   mem_tracker_.reset();
@@ -35,7 +46,7 @@ void ObMemTrackerGuard::reset_try_check_tick()
 
 void ObMemTrackerGuard::dump_mem_tracker_info()
 {
-  int64_t tenant_mem_limit = lib::get_tenant_memory_limit(mem_tracker_.tenant_id_);
+  int64_t tenant_mem_limit = lib::get_tenant_memory_limit(mem_tracker_.get_tenant_id());
   int64_t mem_quota_pct = 100;
   int64_t tree_mem_hold = 0;
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(mem_tracker_.tenant_id_));
@@ -53,7 +64,7 @@ void ObMemTrackerGuard::dump_mem_tracker_info()
 void ObMemTrackerGuard::update_config()
 {
   int ret = common::OB_SUCCESS;
-  int64_t tenant_mem_limit = lib::get_tenant_memory_limit(mem_tracker_.tenant_id_);
+  int64_t tenant_mem_limit = lib::get_tenant_memory_limit(mem_tracker_.get_tenant_id());
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(mem_tracker_.tenant_id_));
   if (OB_UNLIKELY(tenant_config.is_valid())) {
     mem_tracker_.mem_quota_pct_ = tenant_config->query_memory_limit_percentage;
