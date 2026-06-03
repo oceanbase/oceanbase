@@ -7243,6 +7243,13 @@ int ObOptimizerUtil::try_add_cast_to_select_list(ObIAllocator *allocator,
         LOG_WARN("empty select exprs", K(ret), K(i));
       } else {
         result_type = expr->get_result_type();
+        if (is_oracle_mode && expr->is_const_raw_expr()) {
+          const ObItemType expr_type = expr->get_expr_type();
+          const ObObj &value = static_cast<const ObConstRawExpr *>(expr)->get_value();
+          if (value.is_null() && (T_CHAR == expr_type || T_NCHAR == expr_type)) {
+            result_type.set_meta(static_cast<const ObConstRawExpr *>(expr)->get_expr_obj_meta());
+          }
+        }
       }
       for (int64_t j = 1; OB_SUCC(ret) && j < row_cnt; j++) {
         ObRawExprResType left_type = result_type;
@@ -7251,7 +7258,14 @@ int ObOptimizerUtil::try_add_cast_to_select_list(ObIAllocator *allocator,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("empty select exprs", K(ret), K(i), K(j));
         } else {
-          const ObRawExprResType &right_type = expr->get_result_type();
+          ObRawExprResType right_type = expr->get_result_type();
+          if (is_oracle_mode && expr->is_const_raw_expr()) {
+            const ObItemType expr_type = expr->get_expr_type();
+            const ObObj &value = static_cast<const ObConstRawExpr *>(expr)->get_value();
+            if (value.is_null() && (T_CHAR == expr_type || T_NCHAR == expr_type)) {
+              right_type.set_meta(static_cast<const ObConstRawExpr *>(expr)->get_expr_obj_meta());
+            }
+          }
           if (left_type != right_type || ob_is_enumset_tc(right_type.get_type())) {
             ObSEArray<ObExprResType, 2> types;
             ObExprVersion dummy_op(*allocator);
