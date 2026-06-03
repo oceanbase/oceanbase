@@ -306,7 +306,9 @@ int ObDeadLockDetectorMgr::register_key(const KeyType &key,
         ret = common::OB_EAGAIN;// telling user there is a concurrent problem, need retry
       }
       DETECT_LOG(WARN, "start timer task failed", PRINT_WRAPPER, KP(p_detector));
-      (void)detector_map_.del(binary_key);
+      if (common::OB_ENTRY_EXIST != ret) {
+        (void)detector_map_.del(binary_key);
+      }
       detector_map_.revert(p_detector);
     } else {
       MTL(ObDeadLockDetectorMgr*)->set_timeout(key, 10_min);
