@@ -1035,7 +1035,14 @@ TEST_F(TestDagScheduler, test_generage_task_failed)
   }
 
   wait_scheduler();
-  ASSERT_EQ(1, MTL(ObDagWarningHistoryManager *)->size());
+  int warning_info_size = MTL(ObDagWarningHistoryManager *)->size();
+  int max_wait_times = 20; // 2s
+  while (0 == warning_info_size && max_wait_times > 0) {
+    usleep(100000);
+    warning_info_size = MTL(ObDagWarningHistoryManager *)->size();
+    max_wait_times--;
+  }
+  ASSERT_EQ(1, warning_info_size);
 }
 
 //generate next dag
@@ -2220,6 +2227,6 @@ int main(int argc, char **argv)
   OB_LOGGER.set_log_level("DEBUG");
   OB_LOGGER.set_max_file_size(256*1024*1024);
   system("rm -f test_dag_net_in_dag_scheduler.log*");
-  OB_LOGGER.set_file_name("test_dag_net_in_dag_scheduler.log", true);
+  OB_LOGGER.set_file_name("test_dag_net_in_dag_scheduler.log");
   return RUN_ALL_TESTS();
 }

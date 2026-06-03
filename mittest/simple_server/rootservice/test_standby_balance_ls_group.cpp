@@ -31,7 +31,7 @@ using namespace common;
 class TestStandbyBalance : public unittest::ObSimpleClusterTestBase
 {
 public:
-  TestStandbyBalance() : unittest::ObSimpleClusterTestBase("test_balance_operator") {}
+  TestStandbyBalance() : unittest::ObSimpleClusterTestBase("test_standby_balance_ls_group") {}
 protected:
 
   uint64_t tenant_id_;

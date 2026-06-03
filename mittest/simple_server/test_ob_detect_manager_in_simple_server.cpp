@@ -130,8 +130,8 @@ TestRunCtx RunCtx;
 class ObSimpleClusterExampleTest : public ObSimpleClusterTestBase
 {
 public:
-  // 指定case运行目录前缀 test_ob_simple_cluster_
-  ObSimpleClusterExampleTest() : ObSimpleClusterTestBase("test_ob_simple_cluster_") {}
+  // 指定case运行目录前缀 test_ob_detect_manager_in_simple_server_
+  ObSimpleClusterExampleTest() : ObSimpleClusterTestBase("test_ob_detect_manager_in_simple_server_") {}
 };
 
 TEST_F(ObSimpleClusterExampleTest, observer_start)

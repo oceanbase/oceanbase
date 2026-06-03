@@ -27,7 +27,7 @@ using namespace common;
 class TestAddRemoveReplaceArbitrationService : public unittest::ObSimpleClusterTestBase
 {
 public:
-  TestAddRemoveReplaceArbitrationService() : unittest::ObSimpleClusterTestBase("test_add_remove_replace_arbitration_service") {}
+  TestAddRemoveReplaceArbitrationService() : unittest::ObSimpleClusterTestBase("test_create_tenant_with_arbitration_service") {}
 protected:
   ObArbitrationServiceTableOperator arb_service_table_operator_;
 };
