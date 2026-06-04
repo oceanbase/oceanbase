@@ -638,6 +638,8 @@ int ObMViewRefresher::complete_refresh()
     arg.exec_tenant_id_ = tenant_id;
     uint64_t data_version = 0;
     ObSchemaGetterGuard schema_guard;
+    const ObTableSchema *mview_table_schema = NULL;
+    ObString select_sql;
     if (OB_FAIL(arg.last_refresh_scn_.convert_for_inner_table_field(mview_info_.get_last_refresh_scn()))) {
       LOG_WARN("fail to convert for inner table field", KR(ret), K(mview_info_));
     } else if (OB_FAIL(arg.tz_info_wrap_.deep_copy(session_info->get_tz_info_wrap()))) {
@@ -653,6 +655,20 @@ int ObMViewRefresher::complete_refresh()
                                                         arg.based_schema_object_infos_,
                                                         arg.direct_dep_cnt_))) {
       LOG_WARN("fail to collect based schema object infos", KR(ret), K(tenant_id), K_(dependency_infos));
+    } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, mview_id, mview_table_schema))) {
+      LOG_WARN("fail to get mview table schema", KR(ret), K(tenant_id), K(mview_id));
+    } else if (OB_ISNULL(mview_table_schema)) {
+      ret = OB_ERR_MVIEW_NOT_EXIST;
+      LOG_WARN("mview not exist", KR(ret), K(tenant_id), K(mview_id));
+    } else if (OB_FAIL(sql::ObMVProvider::get_complete_refresh_mview_str(*mview_table_schema,
+                                                                         schema_guard,
+                                                                         &mview_refresh_scn_range_.end_scn_,
+                                                                         &base_table_scn_range_.end_scn_,
+                                                                         arg.allocator_,
+                                                                         select_sql))) {
+      LOG_WARN("fail to generate mview select sql", KR(ret));
+    } else {
+      arg.select_sql_ = select_sql;
     }
   }
   // do mview complete refresh rpc

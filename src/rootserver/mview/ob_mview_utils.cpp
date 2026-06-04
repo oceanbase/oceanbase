@@ -309,8 +309,7 @@ int ObMViewUtils::generate_mview_complete_refresh_sql(
                   const int64_t mview_table_id,
                   const int64_t container_table_id,
                   ObSchemaGetterGuard &schema_guard,
-                  const share::SCN &refresh_scn,
-                  const share::SCN &target_data_scn,
+                  const ObString &select_sql,
                   const int64_t execution_id,
                   const int64_t task_id,
                   const int64_t parallelism,
@@ -324,22 +323,21 @@ int ObMViewUtils::generate_mview_complete_refresh_sql(
   const ObTableSchema *container_table_schema = nullptr;
   const ObDatabaseSchema *database_schema = nullptr;
   ObSqlString src_table_schema_version_hint;
-  src_table_schema_version_hint.reset();
   ObSqlString insert_hint_str;
   insert_hint_str.reset();
   ObArenaAllocator allocator("ObDDLMviewTmp");
   ObString database_name;
   ObString container_table_name;
-  ObString mview_select_sql;
+  ObString mview_select_sql = select_sql;
   bool is_oracle_mode = false;
   ObSqlString insert_columns;
   const int64_t real_parallelism = ObDDLUtil::get_real_parallelism(parallelism, true/*is mv refresh*/);
   if (OB_UNLIKELY(OB_INVALID_ID == tenant_id || OB_INVALID_ID == mview_table_id ||
-                  OB_INVALID_ID == container_table_id || !refresh_scn.is_valid() ||
+                  OB_INVALID_ID == container_table_id ||
                   execution_id < 0 || task_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arguments", KR(ret), K(tenant_id), K(mview_table_id), K(container_table_id),
-             K(refresh_scn), K(execution_id), K(task_id), K(based_schema_object_infos));
+             K(execution_id), K(task_id), K(based_schema_object_infos));
   } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id, mview_table_id, mview_table_schema))) {
     LOG_WARN("fail to get table schema", KR(ret), K(tenant_id), K(mview_table_id));
   } else if (OB_ISNULL(mview_table_schema)) {
@@ -376,20 +374,18 @@ int ObMViewUtils::generate_mview_complete_refresh_sql(
                       tenant_id, mview_table_id, schema_guard, based_schema_object_infos,
                       is_oracle_mode, src_table_schema_version_hint))) {
     LOG_WARN("failed to generated mview ddl schema hint", KR(ret));
-  } else {
-    // ObSqlSchemaGuard with two parameters obtains table schema by using MTL_ID().
-    // On RS, the MV definition should be parsed only after the session's tenant is switched to the correct one.
-    lib::CompatModeGuard compat_mode_guard(is_oracle_mode ? lib::Worker::CompatMode::ORACLE : lib::Worker::CompatMode::MYSQL);
-    share::ObTenantSwitchGuard mtl_guard = share::_make_tenant_switch_guard();
-    if (OB_FAIL(mtl_guard.switch_to(tenant_id))) {
-      LOG_WARN("failed to switch mtl for mv complete refresh", KR(ret), K(tenant_id));
-    } else if (OB_FAIL(sql::ObMVProvider::get_complete_refresh_mview_str(*mview_table_schema,
-                                                                         schema_guard,
-                                                                         &refresh_scn, // mv refresh scn
-                                                                         target_data_scn.is_valid() ? &target_data_scn : &refresh_scn, // table refresh scn
-                                                                         allocator,
-                                                                         mview_select_sql))) {
-      LOG_WARN("fail to generate mview select sql", K(ret), K(refresh_scn), K(target_data_scn));
+  }
+  // When mview_select_sql is passed in (from storage-side RPC), use it directly.
+  // Otherwise fall back to reading the view definition from schema cache (for
+  // the CREATE MVIEW initial refresh path, which runs entirely on RS where
+  // MTL switch to user tenant is not available).
+  if (OB_FAIL(ret)) {
+  } else if (mview_select_sql.empty()) {
+    const ObString view_def = mview_table_schema->get_view_schema().get_expand_view_definition_for_mv_str().empty()
+                              ? mview_table_schema->get_view_schema().get_view_definition_str()
+                              : mview_table_schema->get_view_schema().get_expand_view_definition_for_mv_str();
+    if (OB_FAIL(ob_write_string(allocator, view_def, mview_select_sql))) {
+      LOG_WARN("fail to copy view definition", KR(ret), K(tenant_id), K(mview_table_id));
     }
   }
   // generate mview complete refresh sql

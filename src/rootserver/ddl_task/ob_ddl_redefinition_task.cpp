@@ -285,7 +285,6 @@ int ObDDLRedefinitionSSTableBuildTask::procress_mview_complete_refresh_(
   ObSchemaGetterGuard schema_guard;
   const ObTableSchema *mview_table_schema = nullptr;
   ObSqlString sql_string;
-  SCN snapshot_scn;
   ObCurTraceId::set(trace_id_); // reset trace id again to avoid trace id use 0x10 prefix
   const uint64_t mview_table_id = mview_refresh_info_.mview_table_id_;
   if (OB_UNLIKELY(!is_inited_ || OB_ISNULL(GCTX.sql_proxy_))) {
@@ -300,14 +299,11 @@ int ObDDLRedefinitionSSTableBuildTask::procress_mview_complete_refresh_(
   } else if (OB_ISNULL(mview_table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("mview table not exist", K(ret), K(tenant_id_), K(mview_refresh_info_));
-  } else if (OB_FAIL(snapshot_scn.convert_for_tx(snapshot_version_))) {
-    LOG_WARN("fail to convert snapshot_version to scn", KR(ret), K(snapshot_version_));
   } else if (OB_FAIL(ObMViewUtils::generate_mview_complete_refresh_sql(tenant_id_,
                                                                        mview_table_id,
                                                                        data_table_id_,
                                                                        schema_guard,
-                                                                       snapshot_scn,
-                                                                       mview_refresh_info_.mview_target_data_sync_scn_,
+                                                                       mview_refresh_info_.select_sql_,
                                                                        execution_id_,
                                                                        task_id_,
                                                                        parallelism_,
