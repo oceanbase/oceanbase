@@ -2215,7 +2215,7 @@ int ObDSLResolver::resolve_default_params(ObIJsonBase &req_node)
     LOG_WARN("fail to resolve rank", K(ret));
   }
 
-  bool has_rank_window_size = false;
+  bool has_rank_window_size = dsl_query_info_->rank_info_.window_size_ != nullptr;
   // 1) Set size and rank_window_size (defaults where not provided).
   if (OB_SUCC(ret)) {
     if (OB_ISNULL(dsl_query_info_->size_) && OB_ISNULL(dsl_query_info_->rank_info_.window_size_)) {
@@ -2228,7 +2228,6 @@ int ObDSLResolver::resolve_default_params(ObIJsonBase &req_node)
       }
     } else if (OB_ISNULL(dsl_query_info_->size_) && OB_NOT_NULL(dsl_query_info_->rank_info_.window_size_)) {
       dsl_query_info_->size_ = dsl_query_info_->rank_info_.window_size_;
-      has_rank_window_size = true;
     } else if (OB_NOT_NULL(dsl_query_info_->size_) && OB_ISNULL(dsl_query_info_->rank_info_.window_size_)) {
       if (OB_FAIL(set_default_rank_window_size())) {
         LOG_WARN("fail to set default rank_window_size", K(ret));
@@ -3369,6 +3368,7 @@ int ObDSLResolver::resolve_rrf(ObIJsonBase &req_node)
         LOG_WARN("fail to get rank constant value", K(ret), K(i));
       } else if (value < 1) {
         ret = OB_INVALID_ARGUMENT;
+        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "rank_constant, rank_constant value should be greater than 0");
         LOG_WARN("invalid rank constant value", K(ret), K(value));
       } else {
         dsl_query_info_->rank_info_.rank_const_ = const_expr;
