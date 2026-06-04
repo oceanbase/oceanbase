@@ -3026,10 +3026,6 @@ int ObFastParserMysql::parse_next_token()
               left_parenthesis_count_++;
             } else if (is_right_parenthesis(ch)) {
               left_parenthesis_count_--;
-              if (left_parenthesis_count_ < 0) {
-                ret = OB_ERR_PARSER_SYNTAX;
-                LOG_WARN("parser syntax error", K(ret), K(raw_sql_.to_string()), K_(raw_sql_.cur_pos));
-              }
             }
           }
           raw_sql_.scan();
