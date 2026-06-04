@@ -375,7 +375,9 @@ private:
   int extract_generalized_column(ObRawExpr *expr,
                                  ObIArray<ObRawExpr *> &output);
 
-  int acquire_transform_params(ObDMLStmt *stmt, ObIArray<ObRawExpr *> *&preds);
+  int acquire_transform_params(ObDMLStmt *stmt,
+                               ObIArray<ObRawExpr *> *&preds,
+                               int64_t *stmt_idx = NULL);
 
   int get_columns_in_filters(ObDMLStmt &stmt,
                              ObIArray<int64_t> &sel_items,
@@ -446,6 +448,19 @@ private:
   ObSEArray<ObRawExpr *, 4> null_constraints_;
   ObSEArray<ObRawExpr *, 4> not_null_constraints_;
   ObSEArray<ObPCParamEqualInfo, 4> equal_param_constraints_;
+  /*
+   * the following two arrays are used to record the predicates pullup status of each stmt
+   * to skip re-pullup predicates for one stmt in pullup_predicates_for_view/set_stmt().
+   * for set stmt:
+   *   skip pullup predicates if stmt_preds_pulled_up_[stmt_idx] is true
+   * for non-set stmt:
+   *   skip pullup predicates if stmt_preds_pulled_up_[stmt_idx] is true
+   *   and sel_ids requested to pullup predicates is a subset of stmt_pulled_up_sel_ids_[stmt_idx]
+   */
+  // stmt_preds_pulled_up_[stmt_idx] will be set to true after predicates are pulled-up
+  ObSEArray<bool, 8> stmt_preds_pulled_up_;
+  // for non-set stmt, stmt_pulled_up_sel_ids_[stmt_idx] will union sel_ids after predicates are pulled-up
+  ObSEArray<ObSqlBitSet<>, 8> stmt_pulled_up_sel_ids_;
   bool real_happened_;
 };
 

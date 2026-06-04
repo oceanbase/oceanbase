@@ -944,44 +944,82 @@ int ObTransformerImpl::check_stmt_functions(const ObDMLStmt *stmt, StmtFunc &fun
 int ObTransformerImpl::finalize_exec_params(ObDMLStmt *stmt)
 {
   int ret = OB_SUCCESS;
+  common::hash::ObHashSet<uint64_t> visited;
+  if (OB_FAIL(visited.create(64))) {
+    LOG_WARN("failed to create visited set", K(ret));
+  } else if (OB_FAIL(finalize_exec_params_recursive(stmt, visited))) {
+    LOG_WARN("failed to finalize exec params recursively", K(ret));
+  }
+  if (visited.created()) {
+
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(visited.destroy())) {
+      LOG_WARN("failed to destroy visited set", K(tmp_ret));
+      ret = COVER_SUCC(tmp_ret);
+    }
+  }
+  return ret;
+}
+
+int ObTransformerImpl::finalize_exec_params_recursive(
+    ObDMLStmt *stmt, common::hash::ObHashSet<uint64_t> &visited)
+{
+  int ret = OB_SUCCESS;
+  bool is_visited = false;
   ObSEArray<ObSelectStmt *, 4> child_stmts;
   if (OB_ISNULL(stmt)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("stmt is null", K(ret));
+  } else {
+    const uint64_t key = reinterpret_cast<uint64_t>(stmt);
+    int hash_ret = visited.set_refactored(key);
+    if (OB_HASH_EXIST == hash_ret) {
+      is_visited = true;
+    } else if (OB_SUCCESS != hash_ret) {
+      ret = hash_ret;
+      LOG_WARN("failed to record visited stmt", K(ret));
+    }
+  }
+  if (OB_FAIL(ret) || is_visited) {
   } else if (OB_FAIL(stmt->get_child_stmts(child_stmts))) {
     LOG_WARN("failed to get child stmts", K(ret));
   } else {
-    ObArray<ObDMLStmt::TempTableInfo> temp_table_infos;
-    if (OB_FAIL(stmt->collect_temp_table_infos(temp_table_infos))) {
-      LOG_WARN("failed to collect temp table infos", K(ret));
-    }
-    for (int64_t i = 0; OB_SUCC(ret) && i < temp_table_infos.count(); ++i) {
-      if (OB_FAIL(child_stmts.push_back(temp_table_infos.at(i).temp_table_query_))) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_table_size(); ++i) {
+      TableItem *table_item = stmt->get_table_item(i);
+      if (OB_ISNULL(table_item)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (!table_item->is_temp_table()) {
+        // do nothing
+      } else if (OB_ISNULL(table_item->ref_query_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("temp table ref query is null", K(ret));
+      } else if (OB_FAIL(child_stmts.push_back(table_item->ref_query_))) {
         LOG_WARN("failed to push back temp table query", K(ret));
       }
     }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_table_items().count(); ++i) {
-    TableItem *table_item = NULL;
-    if (OB_ISNULL(table_item = stmt->get_table_items().at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get unexpected null", K(ret));
-    } else if (OB_FAIL(finalize_exec_params(stmt, table_item->exec_params_))) {
-      LOG_WARN("failed to finalize exec params", K(ret));
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_table_items().count(); ++i) {
+      TableItem *table_item = NULL;
+      if (OB_ISNULL(table_item = stmt->get_table_items().at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_FAIL(finalize_exec_params(stmt, table_item->exec_params_))) {
+        LOG_WARN("failed to finalize exec params", K(ret));
+      }
     }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_subquery_expr_size(); ++i) {
-    ObQueryRefRawExpr *query_ref = NULL;
-    if (OB_ISNULL(query_ref = stmt->get_subquery_exprs().at(i))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("query ref expr is null", K(ret));
-    } else if (OB_FAIL(finalize_exec_params(stmt, query_ref->get_exec_params()))) {
-      LOG_WARN("failed to finalize exec params", K(ret));
+    for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_subquery_expr_size(); ++i) {
+      ObQueryRefRawExpr *query_ref = NULL;
+      if (OB_ISNULL(query_ref = stmt->get_subquery_exprs().at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("query ref expr is null", K(ret));
+      } else if (OB_FAIL(finalize_exec_params(stmt, query_ref->get_exec_params()))) {
+        LOG_WARN("failed to finalize exec params", K(ret));
+      }
     }
-  }
-  for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
-    if (OB_FAIL(SMART_CALL(finalize_exec_params(child_stmts.at(i))))) {
-      LOG_WARN("failed to finalize exec params", K(ret));
+    for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+      if (OB_FAIL(SMART_CALL(finalize_exec_params_recursive(child_stmts.at(i), visited)))) {
+        LOG_WARN("failed to finalize exec params", K(ret));
+      }
     }
   }
   return ret;

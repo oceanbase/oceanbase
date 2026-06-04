@@ -2876,24 +2876,28 @@ bool ObOpRawExpr::inner_same_as(
     need_cmp = false;
   }
   if (need_cmp) {
+    const ObIArray<ObRawExpr *> &lhs_params = this->get_param_exprs();
+    const ObIArray<ObRawExpr *> &rhs_params = static_cast<const ObOpRawExpr &>(expr).get_param_exprs();
+    const int64_t lhs_cnt = lhs_params.count();
+    const int64_t rhs_cnt = rhs_params.count();
     if (BOTH_CMP == cmp_type || REGULAR_CMP == cmp_type) {
-      if (this->get_param_count() == expr.get_param_count()) {
+      if (lhs_cnt == rhs_cnt) {
         bool_ret = true;
-        for (int64_t i = 0; bool_ret && i < expr.get_param_count(); ++i) {
-          if (NULL == this->get_param_expr(i) || NULL == expr.get_param_expr(i)
-              || !(this->get_param_expr(i)->same_as(*expr.get_param_expr(i), check_context))) {
+        for (int64_t i = 0; bool_ret && i < rhs_cnt; ++i) {
+          if (NULL == lhs_params.at(i) || NULL == rhs_params.at(i)
+              || !(lhs_params.at(i)->same_as(*rhs_params.at(i), check_context))) {
             bool_ret = false;
           }
         }
       }
     }
     if (!bool_ret && (BOTH_CMP == cmp_type || REVERSE_CMP == cmp_type)) {
-      if (NULL == this->get_param_expr(0) || NULL == expr.get_param_expr(0)
-          || NULL == this->get_param_expr(1) || NULL == expr.get_param_expr(1)) {
+      if (NULL == lhs_params.at(0) || NULL == rhs_params.at(0)
+          || NULL == lhs_params.at(1) || NULL == rhs_params.at(1)) {
         /* bool_ret = false; */
       } else {
-        bool_ret = this->get_param_expr(0)->same_as(*expr.get_param_expr(1), check_context)
-            && this->get_param_expr(1)->same_as(*expr.get_param_expr(0), check_context);
+        bool_ret = lhs_params.at(0)->same_as(*rhs_params.at(1), check_context)
+                    && lhs_params.at(1)->same_as(*rhs_params.at(0), check_context);
       }
     }
   }
