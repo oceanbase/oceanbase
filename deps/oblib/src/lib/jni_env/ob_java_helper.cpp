@@ -522,15 +522,16 @@ int JVMFunctionHelper::init_jni_env() {
   } else if (nullptr == jni_env_) {
     if (OB_ISNULL(getJNIEnv)) {
       ret = OB_JNI_ENV_ERROR;
-      LOG_WARN("getJNIEnv is null", K(ret));
+      LOG_WARN("getJNIEnv func is null", K(ret));
     } else {
       jni_env_ = getJNIEnv();
       if (nullptr == jni_env_) {
         ret = OB_JNI_ENV_ERROR;
         if (nullptr == error_msg_) {
-          error_msg_ = "could not get a JNIEnv please check jvm opts";
+          error_msg_ = "jni_env null";
         }
-        LOG_WARN("could not get a JNIEnv please check jvm opts", K(ret), K(lbt()));
+        LOG_WARN("could not get a JNIEnv please check jvm opts and ob stack size", K(ret), K(error_msg_));
+        LOG_USER_WARN(OB_JNI_ENV_SETUP_ERROR, "could not get a JNIEnv please check jvm opts and ob stack size", K(ret), K(error_msg_));
       }
     }
   }
