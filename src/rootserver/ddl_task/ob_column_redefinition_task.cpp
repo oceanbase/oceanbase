@@ -284,7 +284,7 @@ int ObColumnRedefinitionTask::copy_table_indexes()
               ObDDLType ddl_type = get_create_index_type(data_format_version_, *index_schema);
               create_index_arg.index_type_ = index_schema->get_index_type();
               if ((index_schema->is_vec_index() || index_schema->is_fts_index() || index_schema->is_multivalue_index())
-                  && OB_FAIL(ObDDLUtil::construct_domain_index_arg(table_schema, index_schema, *this, create_index_arg, ddl_type))) {
+                  && OB_FAIL(ObDDLUtil::construct_domain_index_arg(new_schema_guard, table_schema, index_schema, *this, create_index_arg, ddl_type))) {
                 LOG_WARN("failed to construct domain index arg", K(ret));
               } else {
                 ObCreateDDLTaskParam param(tenant_id_,

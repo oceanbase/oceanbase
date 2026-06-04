@@ -1588,7 +1588,9 @@ public:
       const int64_t trans_end_snapshot = 0,
       const int64_t index_snapshot_version_diff = 0);
   static int check_is_table_restore_task(const uint64_t tenant_id, const int64_t task_id, bool &is_table_restore_task);
-  static int construct_domain_index_arg(const ObTableSchema *table_schema,
+  static int construct_domain_index_arg(
+    ObSchemaGetterGuard &schema_guard,
+    const ObTableSchema *table_schema,
     const ObTableSchema *&index_schema,
     rootserver::ObDDLTask &task,
     obrpc::ObCreateIndexArg &create_index_arg,

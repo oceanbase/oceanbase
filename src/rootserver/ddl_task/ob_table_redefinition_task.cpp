@@ -588,7 +588,7 @@ int ObTableRedefinitionTask::copy_table_indexes()
               create_index_arg.index_type_ = index_schema->get_index_type();
               if (index_schema->is_vec_index() || index_schema->is_fts_index() || index_schema->is_multivalue_index() || index_schema->is_search_index()) {
                 has_rebuild_domain_indexes_ = true;
-                if (OB_FAIL(ObDDLUtil::construct_domain_index_arg(table_schema, index_schema, *this, create_index_arg, ddl_type))) {
+                if (OB_FAIL(ObDDLUtil::construct_domain_index_arg(new_schema_guard, table_schema, index_schema, *this, create_index_arg, ddl_type))) {
                   LOG_WARN("failed to construct domain index arg", K(ret));
                 }
               }
