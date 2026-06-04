@@ -234,6 +234,7 @@ private:
                       sql::ObDASScanRtDef *rtdef,
                       ObTableScanParam &scan_param) const;
   int prepare_scan_ranges(ObTableScanParam &scan_param, const ObDASScanRtDef *rtdef) const;
+  int transform_physical_rowid_ranges(ObTableScanParam &scan_param, const ObDASScanRtDef *rtdef) const;
   int check_disable_bitmap();
   int check_rowkey_is_uint64();
 
