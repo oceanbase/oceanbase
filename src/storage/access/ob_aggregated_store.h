@@ -36,6 +36,7 @@ public:
   }
   virtual ~ObCGAggCells() { reset(); }
   void reset();
+  void reuse();
   bool check_finished() const;
   int can_use_index_info(const blocksstable::ObMicroIndexInfo &index_info, const int32_t col_index, bool &can_agg) override;
   int add_agg_cell(ObAggCell *cell);
