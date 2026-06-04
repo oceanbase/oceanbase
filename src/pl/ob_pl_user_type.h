@@ -887,6 +887,8 @@ struct ObPlCompiteWrite
   int64_t value_addr_;
 };
 
+#define OB_PL_COMPOSITE_SERIALIZE_VERSION_V1 1
+
 class ObPLComposite
 {
 public:
@@ -934,6 +936,46 @@ public:
   int deserialize(const char* buf, const int64_t len, int64_t &pos);
   void print() const;
   static bool obj_is_null(ObObj* obj);
+  static int64_t get_obj_serialize_size_for_offset(const ObObj &obj,
+                                                   bool *has_serialized_complex_null = nullptr);
+  static int calc_obj_offset_array_len(const ObObj *data,
+                                       const int64_t count,
+                                       int64_t &offset_array_len,
+                                       int64_t *data_serialize_size = nullptr,
+                                       bool *has_serialized_complex_null = nullptr);
+  static inline int64_t member_null_bitmap_bytes(const int64_t elem_cnt)
+  {
+    return (elem_cnt <= 0) ? 0 : ((elem_cnt + 7) / 8);
+  }
+  static inline void member_null_bitmap_zero(char *buf, const int64_t bytes)
+  {
+    if (OB_NOT_NULL(buf) && bytes > 0) {
+      MEMSET(buf, 0, static_cast<size_t>(bytes));
+    }
+  }
+  static inline void member_null_bitmap_mark_null(char *buf, const int64_t bytes, const int64_t member_idx)
+  {
+    if (member_idx >= 0 && OB_NOT_NULL(buf) && bytes > 0) {
+      const int64_t by = member_idx >> 3;
+      const int64_t bi = member_idx & 7;
+      if (by < bytes) {
+        buf[by] = static_cast<char>(static_cast<uint8_t>(buf[by])
+                                    | (static_cast<uint8_t>(1) << bi));
+      }
+    }
+  }
+  static inline bool member_null_bitmap_at(const char *buf, const int64_t bytes, const int64_t member_idx)
+  {
+    bool is_null = false;
+    if (member_idx >= 0 && OB_NOT_NULL(buf) && bytes > 0) {
+      const int64_t by = member_idx >> 3;
+      const int64_t bi = member_idx & 7;
+      if (by < bytes) {
+        is_null = (0 != (static_cast<uint8_t>(buf[by]) & (static_cast<uint8_t>(1) << bi)));
+      }
+    }
+    return is_null;
+  }
   static uint32_t allocator_offset_bits() { return offsetof(ObPLComposite, allocator_) * 8; }
 
   TO_STRING_KV(K_(type), K_(id), K_(is_null));

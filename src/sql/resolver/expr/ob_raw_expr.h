@@ -4939,6 +4939,7 @@ public:
   const common::ObIArray<pl::ObObjAccessIdx> &get_orig_access_idxs() const { return orig_access_indexs_; }
   void set_extend_size(int32_t size) { extend_size_ = size; }
   int32_t get_extend_size() const { return extend_size_; }
+  bool is_sql_udt_access() const;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObObjAccessRawExpr);
   uint64_t get_attr_func_; //获取用户自定义类型数据的函数指针

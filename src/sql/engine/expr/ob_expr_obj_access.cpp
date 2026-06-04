@@ -21,6 +21,563 @@ using namespace common;
 namespace sql
 {
 
+namespace
+{
+inline bool is_pl_type_collection(int32_t t)
+{
+  return t == static_cast<int32_t>(pl::PL_NESTED_TABLE_TYPE)
+      || t == static_cast<int32_t>(pl::PL_ASSOCIATIVE_ARRAY_TYPE)
+      || t == static_cast<int32_t>(pl::PL_VARRAY_TYPE);
+}
+inline bool is_pl_type_composite(int32_t t)
+{
+  return is_pl_type_collection(t)
+      || t == static_cast<int32_t>(pl::PL_RECORD_TYPE)
+      || t == static_cast<int32_t>(pl::PL_OPAQUE_TYPE);
+}
+} // namespace
+
+OB_SERIALIZE_MEMBER(ObExprObjAccess::ExtraInfo::SqlUdtAccessIdx,
+                    var_index_,
+                    elem_user_type_id_,
+                    var_pl_type_,
+                    is_const_);
+
+int ObExprObjAccess::ExtraInfo::get_obj_access_param(const ParamStore &param_store,
+                                                     const ObObj *params,
+                                                     const int64_t param_num,
+                                                     const int64_t param_idx,
+                                                     const ObObj *&obj) const
+{
+  int ret = OB_SUCCESS;
+  obj = NULL;
+  if (param_idx < 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid object access param index", K(ret), K(param_idx));
+  } else if (param_idx < param_idxs_.count()) {
+    int64_t store_idx = param_idxs_.at(param_idx);
+    if (OB_UNLIKELY(store_idx < 0 || store_idx >= param_store.count())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid param store index", K(ret), K(param_idx), K(store_idx), K(param_store.count()));
+    } else {
+      obj = &param_store.at(store_idx);
+    }
+  } else {
+    int64_t stack_idx = param_idx - param_idxs_.count();
+    if (OB_UNLIKELY(stack_idx < 0 || stack_idx >= param_num)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid expression param index", K(ret), K(param_idx), K(stack_idx), K(param_num));
+    } else {
+      obj = &params[stack_idx];
+    }
+  }
+  return ret;
+}
+
+int ObExprObjAccess::ExtraInfo::get_int64_from_obj(const ObObj &obj, int64_t &val, bool skip_null_check)
+{
+  int ret = OB_SUCCESS;
+  val = 0;
+  if (obj.is_integer_type() || obj.is_ext()) {
+    val = obj.get_int();
+  } else if (obj.is_number()) {
+    number::ObNumber number = obj.get_number();
+    if (!number.is_valid_int64(val)) {
+      if (OB_FAIL(number.round(0))) {
+        LOG_WARN("failed to round number", K(ret), K(number));
+      } else if (!number.is_valid_int64(val)) {
+        ret = OB_ARRAY_OUT_OF_RANGE;
+        LOG_WARN("array index is out of range", K(ret), K(number));
+      }
+    }
+  } else if (obj.is_decimal_int()) {
+    number::ObNumber numb;
+    ObNumStackOnceAlloc tmp_alloc;
+    if (OB_FAIL(wide::to_number(obj.get_decimal_int(), obj.get_int_bytes(),
+                                obj.get_scale(), tmp_alloc, numb))) {
+      LOG_WARN("fail to cast decimal int to number", K(ret));
+    } else if (!numb.is_valid_int64(val)) {
+      if (OB_FAIL(numb.round(0))) {
+        LOG_WARN("failed to round number", K(ret), K(numb));
+      } else if (!numb.is_valid_int64(val)) {
+        ret = OB_ARRAY_OUT_OF_RANGE;
+        LOG_WARN("array index is out of range", K(ret), K(numb));
+      }
+    }
+  } else if (obj.is_null()) {
+    if (skip_null_check) {
+      val = OB_INVALID_INDEX;
+    } else {
+      ret = OB_ERR_NUMERIC_OR_VALUE_ERROR;
+      LOG_WARN("OBE-06502: PL/SQL: numeric or value error: NULL index table key value",
+               K(ret), K(obj));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("obj param is invalid type", K(ret), K(obj));
+  }
+  return ret;
+}
+
+int ObExprObjAccess::ExtraInfo::get_obj_access_int_param(const ParamStore &param_store,
+                                                         const ObObj *params,
+                                                         const int64_t param_num,
+                                                         const int64_t param_idx,
+                                                         int64_t &val) const
+{
+  int ret = OB_SUCCESS;
+  const ObObj *obj = NULL;
+  if (OB_FAIL(get_obj_access_param(param_store, params, param_num, param_idx, obj))) {
+    LOG_WARN("failed to get object access param", K(ret), K(param_idx));
+  } else if (OB_ISNULL(obj)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("object access param is null", K(ret), K(param_idx));
+  } else if (OB_FAIL(get_int64_from_obj(*obj, val))) {
+    LOG_WARN("failed to get int param", K(ret), KPC(obj), K(param_idx));
+  }
+  return ret;
+}
+
+int ObExprObjAccess::ExtraInfo::parse_serialized_pl_header(const SerializedPLObjSlice &slice,
+                                                           int64_t &pos,
+                                                           pl::ObPLType &pl_type,
+                                                           uint64_t &id,
+                                                           bool &is_null)
+{
+  int ret = OB_SUCCESS;
+  int64_t version = OB_INVALID_VERSION;
+  pos = 0;
+  pl_type = pl::PL_INVALID_TYPE;
+  id = OB_INVALID_ID;
+  is_null = false;
+  if (OB_ISNULL(slice.data_) || slice.len_ <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid serialized pl object slice", K(ret), KP(slice.data_), K(slice.len_));
+  } else if (OB_FAIL(serialization::decode(slice.data_, slice.len_, pos, version))) {
+    LOG_WARN("failed to decode serialized pl version", K(ret), K(slice.len_));
+  } else if (OB_FAIL(serialization::decode(slice.data_, slice.len_, pos, pl_type))) {
+    LOG_WARN("failed to decode serialized pl type", K(ret), K(slice.len_), K(pos));
+  } else if (pl_type != pl::PL_RECORD_TYPE
+             && pl_type != pl::PL_VARRAY_TYPE) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("unsupported serialized pl type for direct access", K(ret), K(pl_type));
+  } else if (OB_FAIL(serialization::decode(slice.data_, slice.len_, pos, id))) {
+    LOG_WARN("failed to decode serialized pl id", K(ret), K(pl_type), K(pos));
+  } else if (OB_FAIL(serialization::decode(slice.data_, slice.len_, pos, is_null))) {
+    LOG_WARN("failed to decode serialized pl null flag", K(ret), K(pl_type), K(pos));
+  }
+  return ret;
+}
+
+int ObExprObjAccess::ExtraInfo::get_serialized_obj_payload(const SerializedPLObjSlice &obj_slice,
+                                                           SerializedPLObjSlice &payload_slice)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  ObObj obj;
+  payload_slice = SerializedPLObjSlice();
+  if (OB_FAIL(obj.meta_.deserialize(obj_slice.data_, obj_slice.len_, pos))) {
+    LOG_WARN("failed to deserialize object meta", K(ret), K(obj_slice.len_));
+  } else if (OB_UNLIKELY(obj.is_invalid_type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid serialized object type", K(ret), K(obj));
+  } else if (obj.is_ext()) {
+    int64_t ext_val = 0;
+    if (OB_FAIL(serialization::decode(obj_slice.data_, obj_slice.len_, pos, ext_val))) {
+      LOG_WARN("failed to decode ext value", K(ret), K(pos), K(obj_slice.len_));
+    } else if (0 == ext_val) {
+      payload_slice.is_null_ = true;
+    } else if (!ObObj::is_ext_val(ext_val)) {
+      int64_t composite_len = 0;
+      if (OB_FAIL(serialization::decode(obj_slice.data_, obj_slice.len_, pos, composite_len))) {
+        LOG_WARN("failed to decode composite length", K(ret), K(pos), K(obj_slice.len_));
+      } else if (OB_UNLIKELY(composite_len < 0 || pos + composite_len > obj_slice.len_)) {
+        ret = OB_DESERIALIZE_ERROR;
+        LOG_WARN("invalid composite length", K(ret), K(pos), K(composite_len), K(obj_slice.len_));
+      } else {
+        payload_slice.data_ = obj_slice.data_ + pos;
+        payload_slice.len_ = composite_len;
+      }
+    } else {
+      ret = OB_READ_NOTHING;
+      LOG_WARN("accessing deleted element, no data found", K(ret));
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("serialized object is not composite", K(ret), K(obj));
+  }
+  return ret;
+}
+
+int ObExprObjAccess::ExtraInfo::deserialize_obj_value(ObIAllocator &calc_alloc,
+                                                                 const SerializedPLObjSlice &obj_slice,
+                                                                 ObObj &result,
+                                                                 uint16_t subschema_id)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  ObObj src_obj;
+  result.reset();
+  if (obj_slice.is_null_) {
+    result.set_null();
+  } else if (OB_FAIL(src_obj.meta_.deserialize(obj_slice.data_, obj_slice.len_, pos))) {
+    LOG_WARN("failed to deserialize object meta", K(ret), K(obj_slice.len_));
+  } else if (OB_UNLIKELY(src_obj.is_invalid_type())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid serialized object type", K(ret), K(src_obj));
+  } else if (src_obj.is_ext()) {
+    int64_t ext_val = 0;
+    if (OB_FAIL(serialization::decode(obj_slice.data_, obj_slice.len_, pos, ext_val))) {
+      LOG_WARN("failed to decode ext value for serialized composite field", K(ret), K(pos), K(obj_slice.len_));
+    } else if (0 == ext_val) {
+      result.set_ext(ext_val);
+    } else if (ObObj::is_ext_val(ext_val)) {
+      ret = OB_READ_NOTHING;
+      LOG_WARN("accessing deleted composite field, no data found", K(ret));
+    } else {
+      int64_t composite_len = 0;
+      if (OB_FAIL(serialization::decode(obj_slice.data_, obj_slice.len_, pos, composite_len))) {
+        LOG_WARN("failed to decode composite length for serialized field", K(ret), K(pos), K(obj_slice.len_));
+      } else if (OB_UNLIKELY(composite_len < 0 || pos + composite_len > obj_slice.len_)) {
+        ret = OB_DESERIALIZE_ERROR;
+        LOG_WARN("invalid composite length for serialized field", K(ret), K(pos), K(composite_len), K(obj_slice.len_));
+      } else if (pl::PL_OPAQUE_TYPE == src_obj.get_meta().get_extend_type()) {
+        if (OB_FAIL(convert_pl_opaque_to_sql_udt(calc_alloc,
+                                                 obj_slice.data_ + pos,
+                                                 composite_len,
+                                                 subschema_id,
+                                                 result))) {
+          LOG_WARN("failed to convert pl opaque to sql udt", K(ret), K(composite_len), K(subschema_id));
+        } else {
+          pos += composite_len;
+        }
+      } else {
+        ObTextStringResult blob_res(ObLongTextType, true, &calc_alloc);
+        char *buf = NULL;
+        int64_t buf_len = 0;
+        int64_t buf_pos = 0;
+        if (OB_FAIL(blob_res.init(composite_len))) {
+          LOG_WARN("failed to init temp lob for sql udt composite field", K(ret), K(composite_len));
+        } else if (OB_FAIL(blob_res.get_reserved_buffer(buf, buf_len))) {
+          LOG_WARN("failed to reserve temp lob buffer for sql udt composite field", K(ret), K(composite_len));
+        } else if (composite_len != buf_len) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("get reserve len is invalid for sql udt composite field", K(ret), K(composite_len), K(buf_len));
+        } else {
+          const int64_t payload_start = pos;
+          MEMCPY(buf, obj_slice.data_ + payload_start, composite_len);
+          buf_pos = composite_len;
+          if (OB_FAIL(blob_res.lseek(buf_pos, 0))) {
+            LOG_WARN("temp lob lseek failed for sql udt composite field", K(ret), K(buf_pos));
+          } else {
+            ObString tmp;
+            blob_res.get_result_buffer(tmp);
+            result.reset();
+            result.set_sql_udt(tmp.ptr(), static_cast<int32_t>(tmp.length()), subschema_id);
+            if (tmp.length() > 0) {
+              result.set_has_lob_header();
+            }
+            pos = payload_start + composite_len;
+          }
+        }
+      }
+    }
+  } else if (OB_FAIL(ObObjUDTUtil::ob_udt_obj_value_deserialize(src_obj, obj_slice.data_, obj_slice.len_, pos))) {
+    LOG_WARN("failed to deserialize object value", K(ret), K(src_obj), K(pos), K(obj_slice.len_));
+  } else {
+    result = src_obj;
+  }
+  return ret;
+}
+
+int ObExprObjAccess::ExtraInfo::convert_pl_opaque_to_sql_udt(ObIAllocator &calc_alloc,
+                                                             const char *buf,
+                                                             int64_t buf_len,
+                                                             uint16_t subschema_id,
+                                                             ObObj &result)
+{
+  int ret = OB_SUCCESS;
+#ifndef OB_BUILD_ORACLE_PL
+  UNUSED(calc_alloc);
+  UNUSED(buf);
+  UNUSED(buf_len);
+  UNUSED(subschema_id);
+  UNUSED(result);
+  ret = OB_NOT_SUPPORTED;
+#else
+  ObObj pl_obj;
+  int64_t pos = 0;
+  if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid buffer for pl opaque deserialization", K(ret), KP(buf), K(buf_len));
+  } else if (OB_FAIL(pl::ObUserDefinedType::do_deserialize_obj(calc_alloc, pl_obj,
+                                                               buf, buf_len, pos, true))) {
+    LOG_WARN("failed to deserialize pl opaque obj", K(ret), K(buf_len));
+  } else {
+    pl::ObPLOpaque *opaque = reinterpret_cast<pl::ObPLOpaque*>(pl_obj.get_ext());
+    if (OB_ISNULL(opaque) || pl::ObPLOpaqueType::PL_INVALID == opaque->get_type()) {
+      result.set_null();
+    } else if (pl::ObPLOpaqueType::PL_XML_TYPE == opaque->get_type()) {
+      pl::ObPLXmlType *xmltype = static_cast<pl::ObPLXmlType*>(opaque);
+      ObObj *blob_obj = xmltype->get_data();
+      if (OB_ISNULL(blob_obj) || blob_obj->is_null()) {
+        result.set_sql_udt("", 0, subschema_id);
+      } else {
+        ObString xml_bin = blob_obj->get_string();
+        char *xml_bin_buf = static_cast<char *>(calc_alloc.alloc(xml_bin.length()));
+        if (OB_ISNULL(xml_bin_buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate memory for xml binary", K(ret), K(xml_bin.length()));
+        } else {
+          MEMCPY(xml_bin_buf, xml_bin.ptr(), xml_bin.length());
+          result.set_sql_udt(xml_bin_buf, static_cast<int32_t>(xml_bin.length()), subschema_id);
+          if (xml_bin.length() > 0) {
+            result.set_has_lob_header();
+          }
+        }
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("unsupported opaque type for sql udt access", K(ret), K(opaque->get_type()));
+    }
+    int tmp_ret = pl::ObUserDefinedType::destruct_obj(pl_obj, nullptr);
+    if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
+      LOG_WARN("failed to destruct pl opaque obj on cleanup", K(tmp_ret));
+    }
+  }
+#endif
+  return ret;
+}
+
+int ObExprObjAccess::ExtraInfo::locate_record_attr_slice(const SerializedPLObjSlice &record_slice,
+                                                              const SqlUdtAccessIdx &current_access,
+                                                              SerializedPLObjSlice &attr_slice)
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  pl::ObPLType pl_type = pl::PL_INVALID_TYPE;
+  uint64_t id = OB_INVALID_ID;
+  bool is_null = false;
+  int32_t count = OB_INVALID_COUNT;
+  int64_t metadata_len = 0;
+  int64_t data_start = 0;
+  int64_t begin_offset = 0;
+  int64_t end_offset = 0;
+  attr_slice = SerializedPLObjSlice();
+  if (OB_FAIL(parse_serialized_pl_header(record_slice, pos, pl_type, id, is_null))) {
+    LOG_WARN("failed to parse serialized record header", K(ret));
+  } else if (pl_type != pl::PL_RECORD_TYPE) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("serialized pl object is not record", K(ret), K(pl_type));
+  } else if (is_null) {
+    attr_slice.is_null_ = true;
+  } else if (OB_FAIL(serialization::decode(record_slice.data_, record_slice.len_, pos, count))) {
+    LOG_WARN("failed to decode record count", K(ret), K(pos));
+  } else if (OB_UNLIKELY(count < 0 || current_access.var_index_ < 0 || current_access.var_index_ >= count)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid record attr index", K(ret), K(count), K(current_access.var_index_));
+  } else if (OB_FAIL(serialization::decode(record_slice.data_, record_slice.len_, pos, metadata_len))) {
+    LOG_WARN("failed to decode record metadata length", K(ret), K(pos));
+  } else if (OB_UNLIKELY(metadata_len < 0 || metadata_len > record_slice.len_ - pos)) {
+    ret = OB_DESERIALIZE_ERROR;
+    LOG_WARN("invalid record metadata range", K(ret), K(pos), K(metadata_len), K(record_slice.len_));
+  } else {
+    pos += metadata_len;
+    const int64_t bm_bytes = pl::ObPLComposite::member_null_bitmap_bytes(count);
+    if (pl::ObPLComposite::member_null_bitmap_at(record_slice.data_ + pos, bm_bytes,
+                                                       current_access.var_index_)) {
+      attr_slice.is_null_ = true;
+    } else {
+      pos += bm_bytes;
+      int64_t offset_array_len = 0;
+      if (OB_FAIL(serialization::decode(record_slice.data_, record_slice.len_, pos, offset_array_len))) {
+        LOG_WARN("failed to decode record offset array length", K(ret), K(pos));
+      } else {
+        data_start = pos + offset_array_len;
+        OX (begin_offset = 0);
+        for (int64_t i = 0; OB_SUCC(ret) && i <= current_access.var_index_; ++i) {
+          int64_t offset = 0;
+          if (OB_FAIL(serialization::decode(record_slice.data_, record_slice.len_, pos, offset))) {
+            LOG_WARN("failed to decode record data offset", K(ret), K(i), K(pos));
+          } else if (i == current_access.var_index_ - 1) {
+            begin_offset = offset;
+          } else if (i == current_access.var_index_) {
+            end_offset = offset;
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !attr_slice.is_null_) {
+    if (OB_UNLIKELY(end_offset < begin_offset || data_start + end_offset > record_slice.len_)) {
+      ret = OB_DESERIALIZE_ERROR;
+      LOG_WARN("invalid record attr data range", K(ret), K(data_start), K(begin_offset), K(end_offset), K(record_slice.len_));
+    } else {
+      attr_slice.data_ = record_slice.data_ + data_start + begin_offset;
+      attr_slice.len_ = end_offset - begin_offset;
+    }
+  }
+  return ret;
+}
+
+int ObExprObjAccess::ExtraInfo::locate_collection_elem_slice(const ParamStore &param_store,
+                                                                  const ObObj *params,
+                                                                  const int64_t param_num,
+                                                                  const SerializedPLObjSlice &coll_slice,
+                                                                  const SqlUdtAccessIdx &current_access,
+                                                                  SerializedPLObjSlice &elem_slice) const
+{
+  int ret = OB_SUCCESS;
+  int64_t pos = 0;
+  pl::ObPLType pl_type = pl::PL_INVALID_TYPE;
+  uint64_t id = OB_INVALID_ID;
+  bool is_null = false;
+  int64_t capacity = 0;
+  int64_t count = 0;
+  int64_t metadata_len = 0;
+  int64_t element_idx = 0;
+  int64_t begin_offset = 0;
+  int64_t end_offset = 0;
+  int64_t data_start = 0;
+  elem_slice = SerializedPLObjSlice();
+  if (OB_FAIL(parse_serialized_pl_header(coll_slice, pos, pl_type, id, is_null))) {
+    LOG_WARN("failed to parse serialized collection header", K(ret));
+  } else if (pl_type != pl::PL_VARRAY_TYPE) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("unsupported serialized collection type for direct access", K(ret), K(pl_type));
+  } else if (is_null) {
+    elem_slice.is_null_ = true;
+  } else if (pl_type == pl::PL_VARRAY_TYPE
+             && OB_FAIL(serialization::decode(coll_slice.data_, coll_slice.len_, pos, capacity))) {
+    LOG_WARN("failed to decode varray capacity", K(ret), K(pos));
+  } else if (OB_FAIL(serialization::decode(coll_slice.data_, coll_slice.len_, pos, count))) {
+    LOG_WARN("failed to decode collection count", K(ret), K(pos));
+  } else if (OB_INVALID_COUNT == count) {
+    ret = OB_ERR_COLLECION_NULL;
+    LOG_WARN("Reference to uninitialized collection", K(ret), K(id));
+  } else if (OB_FAIL(serialization::decode(coll_slice.data_, coll_slice.len_, pos, metadata_len))) {
+    LOG_WARN("failed to decode collection metadata length", K(ret), K(pos));
+  } else if (OB_UNLIKELY(metadata_len < 0 || metadata_len > coll_slice.len_ - pos)) {
+    ret = OB_DESERIALIZE_ERROR;
+    LOG_WARN("invalid collection metadata range", K(ret), K(pos), K(metadata_len), K(coll_slice.len_));
+  } else {
+    pos += metadata_len;
+    if (current_access.is_const_) {
+      element_idx = current_access.var_index_ - 1;
+    } else if (OB_FAIL(get_obj_access_int_param(param_store, params, param_num, current_access.var_index_, element_idx))) {
+      LOG_WARN("failed to get collection index", K(ret), K(current_access));
+    } else {
+      element_idx -= 1;
+    }
+    if (OB_SUCC(ret)) {
+      if (element_idx < 0 || element_idx >= count) {
+        ret = OB_ERR_SUBSCRIPT_OUTSIDE_LIMIT;
+        LOG_WARN("collection index out of range", K(ret), K(element_idx), K(count), K(capacity));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      const int64_t bm_bytes = pl::ObPLComposite::member_null_bitmap_bytes(count);
+      if (OB_UNLIKELY(pos + bm_bytes > coll_slice.len_)) {
+        ret = OB_DESERIALIZE_ERROR;
+        LOG_WARN("invalid collection member null bitmap range", K(ret), K(pos), K(bm_bytes), K(coll_slice.len_));
+      } else if (pl::ObPLComposite::member_null_bitmap_at(coll_slice.data_ + pos, bm_bytes, element_idx)) {
+        elem_slice.is_null_ = true;
+      } else {
+        pos += bm_bytes;
+        int64_t offset_array_len = 0;
+        if (OB_FAIL(serialization::decode(coll_slice.data_, coll_slice.len_, pos, offset_array_len))) {
+          LOG_WARN("failed to decode collection offset array length", K(ret), K(pos));
+        } else {
+          data_start = pos + offset_array_len;
+          OX (begin_offset = 0);
+          for (int64_t i = 0; OB_SUCC(ret) && i <= element_idx; ++i) {
+            int64_t offset = 0;
+            if (OB_FAIL(serialization::decode(coll_slice.data_, coll_slice.len_, pos, offset))) {
+              LOG_WARN("failed to decode collection data offset", K(ret), K(i), K(pos));
+            } else if (OB_UNLIKELY(offset < 0 || data_start + offset > coll_slice.len_)) {
+              ret = OB_DESERIALIZE_ERROR;
+              LOG_WARN("invalid collection data offset", K(ret), K(i), K(offset), K(data_start), K(pos));
+            } else if (i == element_idx - 1) {
+              begin_offset = offset;
+            } else if (i == element_idx) {
+              end_offset = offset;
+            }
+          }
+        }
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !elem_slice.is_null_) {
+    if (OB_UNLIKELY(end_offset < begin_offset || data_start + end_offset > coll_slice.len_)) {
+      ret = OB_DESERIALIZE_ERROR;
+      LOG_WARN("invalid collection elem data range", K(ret), K(data_start), K(begin_offset), K(end_offset), K(coll_slice.len_));
+    } else {
+      elem_slice.data_ = coll_slice.data_ + data_start + begin_offset;
+      elem_slice.len_ = end_offset - begin_offset;
+    }
+  }
+  return ret;
+}
+
+int ObExprObjAccess::ExtraInfo::access_serialized_obj_by_idxs(ObEvalCtx &ctx,
+                                                              ObIAllocator &calc_alloc,
+                                                              const ParamStore &param_store,
+                                                              const ObObj *params,
+                                                              const int64_t param_num,
+                                                              const ObString &udt_data,
+                                                              ObObj &result) const
+{
+  int ret = OB_SUCCESS;
+  SerializedPLObjSlice current(udt_data.ptr(), udt_data.length());
+  SerializedPLObjSlice value_slice;
+  result.reset();
+  if (OB_UNLIKELY(sql_udt_access_idxs_.count() <= 1)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("invalid direct object access path", K(ret), K(sql_udt_access_idxs_.count()));
+  }
+  for (int64_t i = 1; OB_SUCC(ret) && i < sql_udt_access_idxs_.count(); ++i) {
+    const SqlUdtAccessIdx &parent_access = sql_udt_access_idxs_.at(i - 1);
+    const SqlUdtAccessIdx &current_access = sql_udt_access_idxs_.at(i);
+    value_slice = SerializedPLObjSlice();
+    if (is_pl_type_collection(parent_access.var_pl_type_)) {
+      if (OB_FAIL(locate_collection_elem_slice(param_store, params, param_num,
+                                                    current, current_access, value_slice))) {
+        LOG_WARN("failed to locate serialized collection element", K(ret), K(i), K(current_access));
+      }
+    } else if (OB_FAIL(locate_record_attr_slice(current, current_access, value_slice))) {
+      LOG_WARN("failed to locate serialized record attr", K(ret), K(i), K(current_access));
+    }
+    if (OB_FAIL(ret)) {
+    } else if (value_slice.is_null_) {
+      result.set_null();
+      break;
+    } else if (i == sql_udt_access_idxs_.count() - 1) {
+      uint16_t subschema_id = ObInvalidSqlType;
+      if (is_pl_type_composite(current_access.var_pl_type_)) {
+        const uint64_t udt_id = current_access.elem_user_type_id_;
+        if (OB_FAIL(ctx.exec_ctx_.get_subschema_id_by_udt_id(udt_id, subschema_id))) {
+          LOG_WARN("failed to get subschema id for sql udt composite field", K(ret), K(udt_id));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(deserialize_obj_value(calc_alloc, value_slice, result, subschema_id))) {
+        LOG_WARN("failed to deserialize final composite access result", K(ret), K(i), K(current_access));
+      }
+    } else if (is_pl_type_composite(current_access.var_pl_type_)) {
+      if (OB_FAIL(get_serialized_obj_payload(value_slice, current))) {
+        LOG_WARN("failed to get serialized composite payload", K(ret), K(i), K(current_access));
+      } else if (current.is_null_) {
+        result.set_null();
+        break;
+      }
+    } else {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("non-composite intermediate object access", K(ret), K(i), K(current_access));
+    }
+  }
+  return ret;
+}
+
 ObExprObjAccess::ExtraInfo::ExtraInfo(common::ObIAllocator &alloc, ObExprOperatorType type)
     : ObIExprExtraInfo(alloc, type),
     get_attr_func_(0),
@@ -30,7 +587,9 @@ ObExprObjAccess::ExtraInfo::ExtraInfo(common::ObIAllocator &alloc, ObExprOperato
     property_type_(pl::ObCollectionType::INVALID_PROPERTY),
     coll_idx_(OB_INVALID_INDEX),
     extend_size_(0),
-    access_idxs_(alloc)
+    sql_udt_access_(false),
+    access_idxs_(alloc),
+    sql_udt_access_idxs_(alloc)
 {
 }
 
@@ -41,7 +600,9 @@ OB_SERIALIZE_MEMBER(ObExprObjAccess::ExtraInfo,
                     for_write_,
                     property_type_,
                     coll_idx_,
-                    extend_size_);
+                    extend_size_,
+                    sql_udt_access_,
+                    sql_udt_access_idxs_);
 
 OB_SERIALIZE_MEMBER((ObExprObjAccess, ObExprOperator),
                     info_.get_attr_func_,
@@ -49,7 +610,9 @@ OB_SERIALIZE_MEMBER((ObExprObjAccess, ObExprOperator),
                     info_.access_idx_cnt_,
                     info_.for_write_,
                     info_.property_type_,
-                    info_.coll_idx_);
+                    info_.coll_idx_,
+                    info_.sql_udt_access_,
+                    info_.sql_udt_access_idxs_);
                     // extend_size_ is not needed here, we got extend size from result_type_
 
 ObExprObjAccess::ObExprObjAccess(ObIAllocator &alloc)
@@ -76,7 +639,9 @@ void ObExprObjAccess::ExtraInfo::reset()
   property_type_  = pl::ObCollectionType::INVALID_PROPERTY;
   coll_idx_ = OB_INVALID_INDEX;
   extend_size_ = 0;
+  sql_udt_access_ = false;
   access_idxs_.reset();
+  sql_udt_access_idxs_.reset();
 }
 
 void ObExprObjAccess::reset()
@@ -107,8 +672,10 @@ int ObExprObjAccess::ExtraInfo::assign(const ObExprObjAccess::ExtraInfo &other)
   property_type_ = other.property_type_;
   coll_idx_ = other.coll_idx_;
   extend_size_ = other.extend_size_;
+  sql_udt_access_ = other.sql_udt_access_;
   OZ(param_idxs_.assign(other.param_idxs_));
   OZ(access_idxs_.assign(other.access_idxs_));
+  OZ(sql_udt_access_idxs_.assign(other.sql_udt_access_idxs_));
   return ret;
 }
 
@@ -127,48 +694,13 @@ int ObExprObjAccess::assign(const ObExprOperator &other)
   return ret;
 }
 
-#define GET_VALID_INT64_PARAM_FROM_NUMBER(obj) \
-  if (!obj.get_number().is_valid_int64(param_value)) { \
-    number::ObNumber number = obj.get_number(); \
-    if (OB_FAIL(number.round(0))) { \
-      LOG_WARN("failed to round number", K(ret), K(number)); \
-    } else if (!number.is_valid_int64(param_value)) { \
-      ret = OB_ARRAY_OUT_OF_RANGE; \
-      LOG_WARN("array index is out of range", K(ret), K(number)); \
-    } \
-  }
-
 #define GET_VALID_INT64_PARAM(obj, skip_check_error) \
   do { \
     if (OB_SUCC(ret)) { \
       int64_t param_value = 0; \
-      if (obj.is_integer_type() || obj.is_ext()) { \
-        param_value = obj.get_int(); \
-      } else if (obj.is_number()) { \
-        GET_VALID_INT64_PARAM_FROM_NUMBER(obj) \
-      } else if (obj.is_decimal_int()) { \
-        number::ObNumber numb; \
-        ObNumStackOnceAlloc alloc; \
-        ObObj tmp_obj; \
-        if (OB_FAIL(wide::to_number(obj.get_decimal_int(), obj.get_int_bytes(), obj.get_scale(), alloc, numb))) { \
-          LOG_WARN("fail to cast decimal int to number", K(ret)); \
-        } else { \
-          tmp_obj.set_number(numb); \
-          GET_VALID_INT64_PARAM_FROM_NUMBER(tmp_obj); \
-        } \
-      } else if (obj.is_null()) { \
-        if (!skip_check_error) {  \
-          ret = OB_ERR_NUMERIC_OR_VALUE_ERROR; \
-          LOG_WARN("OBE-06502: PL/SQL: numeric or value error: NULL index table key value",\
-                 K(ret), K(obj), K(i)); \
-        } else {  \
-          param_value = OB_INVALID_INDEX; \
-        }  \
-      } else { \
-        ret = OB_ERR_UNEXPECTED; \
-        LOG_WARN("obj param is invalid type", K(obj), K(i)); \
-      } \
-      if (OB_SUCC(ret) && OB_FAIL(param_array.push_back(param_value))) { \
+      if (OB_FAIL(get_int64_from_obj(obj, param_value, skip_check_error))) { \
+        LOG_WARN("failed to get int64 from obj", K(ret), K(obj), K(i)); \
+      } else if (OB_FAIL(param_array.push_back(param_value))) { \
         LOG_WARN("store param array failed", K(ret), K(i)); \
       } \
     } \
@@ -440,21 +972,65 @@ int ObExprObjAccess::ExtraInfo::get_attr_func(int64_t param_cnt,
   return ret;
 }
 
-int ObExprObjAccess::ExtraInfo::calc(ObObj &result,
-                                     ObIAllocator &alloc,
-                                     const ObObjMeta &res_type,
-                                     const int32_t extend_size,
-                                     const ParamStore &param_store,
-                                     const common::ObObj *params,
-                                     int64_t param_num,
-                                     ObEvalCtx *ctx,
-                                     ObjAccessExprAllocatorCtx *access_obj_ctx) const
+int ObExprObjAccess::ExtraInfo::calc_sql_udt_access(ObObj &result,
+                                                           ObIAllocator &alloc,
+                                                           const ParamStore &param_store,
+                                                           const common::ObObj *params,
+                                                           int64_t param_num,
+                                                           ObEvalCtx &ctx) const
+{
+  int ret = OB_SUCCESS;
+  const ObObj *root_obj = NULL;
+  if (OB_UNLIKELY(sql_udt_access_idxs_.count() < 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql_udt_access_idxs_ is empty in sql udt access path",
+             K(ret), K(sql_udt_access_idxs_.count()),
+             K(access_idxs_.count()), K(sql_udt_access_));
+  } else if (OB_FAIL(get_obj_access_param(param_store, params, param_num,
+                                   sql_udt_access_idxs_.at(0).var_index_, root_obj))) {
+    LOG_WARN("failed to get object access root param", K(ret), K(sql_udt_access_idxs_));
+  } else if (OB_ISNULL(root_obj)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("root object is null", K(ret));
+  } else if (root_obj->is_null()) {
+    result.set_null();
+  } else if (!root_obj->is_user_defined_sql_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("non-sql udt is not supported for sql udt access", K(ret), KPC(root_obj));
+  } else {
+    ObString udt_data = root_obj->get_string();
+    if (OB_FAIL(ObTextStringHelper::read_real_string_data(&alloc,
+                                                          ObLongTextType,
+                                                          CS_TYPE_BINARY,
+                                                          true,
+                                                          udt_data))) {
+      LOG_WARN("failed to read sql udt data", K(ret), KPC(root_obj));
+    } else if (udt_data.empty()) {
+      result.set_null();
+    } else if (OB_FAIL(access_serialized_obj_by_idxs(ctx, alloc, param_store,
+                                                     params, param_num,
+                                                     udt_data, result))) {
+      LOG_WARN("failed to access serialized sql udt", K(ret), K(sql_udt_access_idxs_));
+    }
+  }
+  return ret;
+}
+
+int ObExprObjAccess::ExtraInfo::calc_pl_extend_access(ObObj &result,
+                                                      ObIAllocator &alloc,
+                                                      const ObObjMeta &res_type,
+                                                      const int32_t extend_size,
+                                                      const ParamStore &param_store,
+                                                      const common::ObObj *params,
+                                                      int64_t param_num,
+                                                      ObEvalCtx &ctx,
+                                                      ObjAccessExprAllocatorCtx *access_obj_ctx) const
 {
   int ret = OB_SUCCESS;
   typedef int32_t (*GetAttr)(int64_t, int64_t [], int64_t *, int64_t *);
   GetAttr get_attr = reinterpret_cast<GetAttr>(get_attr_func_);
   ParamArray param_array(&alloc);
-  CK (OB_NOT_NULL(ctx));
+
   OZ (init_param_array(param_store, params, param_num, param_array));
 
   if (OB_SUCC(ret)) {
@@ -464,7 +1040,8 @@ int ObExprObjAccess::ExtraInfo::calc(ObObj &result,
     if (!for_write_ && OB_NOT_NULL(get_attr)) {
       OZ (get_attr(param_array.count(), param_ptr, &attr_addr, &allocator_addr));
     } else {
-      OZ (get_attr_func(param_array.count(), param_ptr, &attr_addr, *ctx, &allocator_addr, ctx->exec_ctx_.get_my_session()));
+      OZ (get_attr_func(param_array.count(), param_ptr, &attr_addr, ctx,
+                        &allocator_addr, ctx.exec_ctx_.get_my_session()));
     }
     if (OB_FAIL(ret)) {
       if (OB_ERR_COLLECION_NULL == ret && pl::ObCollectionType::EXISTS_PROPERTY == property_type_) {
@@ -611,6 +1188,29 @@ int ObExprObjAccess::ExtraInfo::calc(ObObj &result,
   return ret;
 }
 
+int ObExprObjAccess::ExtraInfo::calc(ObObj &result,
+                                     ObIAllocator &alloc,
+                                     const ObObjMeta &res_type,
+                                     const int32_t extend_size,
+                                     const ParamStore &param_store,
+                                     const common::ObObj *params,
+                                     int64_t param_num,
+                                     ObEvalCtx *ctx,
+                                     ObjAccessExprAllocatorCtx *access_obj_ctx) const
+{
+  int ret = OB_SUCCESS;
+  CK (OB_NOT_NULL(ctx));
+
+  if (OB_FAIL(ret)) {
+  } else if (!sql_udt_access_) {
+    OZ (calc_pl_extend_access(result, alloc, res_type, extend_size, param_store,
+      params, param_num, *ctx, access_obj_ctx));
+  } else {
+    OZ (calc_sql_udt_access(result, alloc, param_store, params, param_num, *ctx));
+  }
+  return ret;
+}
+
 int ObExprObjAccess::ExtraInfo::from_raw_expr(const ObObjAccessRawExpr &raw_access)
 {
   int ret = 0;
@@ -620,6 +1220,7 @@ int ObExprObjAccess::ExtraInfo::from_raw_expr(const ObObjAccessRawExpr &raw_acce
     for_write_ = raw_access.for_write();
     property_type_ = raw_access.get_property();
     access_idx_cnt_ = raw_access.get_access_idxs().count();
+    sql_udt_access_ = raw_access.is_sql_udt_access();
     coll_idx_ = OB_INVALID_INDEX;
     if (raw_access.get_access_idxs().at(0).elem_type_.is_collection_type()) {
       coll_idx_ = raw_access.get_access_idxs().at(0).var_index_;
@@ -628,6 +1229,19 @@ int ObExprObjAccess::ExtraInfo::from_raw_expr(const ObObjAccessRawExpr &raw_acce
     OZ(param_idxs_.assign(raw_access.get_var_indexs()));
     OZ(access_idxs_.init(raw_access.get_access_idxs().count()));
     OZ(access_idxs_.assign(raw_access.get_access_idxs()));
+    if (OB_SUCC(ret) && sql_udt_access_) {
+      const ObIArray<pl::ObObjAccessIdx> &raw_idxs = raw_access.get_access_idxs();
+      OZ(sql_udt_access_idxs_.init(raw_idxs.count()));
+      for (int64_t i = 0; OB_SUCC(ret) && i < raw_idxs.count(); ++i) {
+        const pl::ObObjAccessIdx &src = raw_idxs.at(i);
+        SqlUdtAccessIdx idx;
+        idx.var_index_ = src.var_index_;
+        idx.elem_user_type_id_ = src.elem_type_.get_user_type_id();
+        idx.var_pl_type_ = static_cast<int32_t>(src.var_type_.get_type());
+        idx.is_const_ = src.is_const();
+        OZ(sql_udt_access_idxs_.push_back(idx));
+      }
+    }
   }
   return ret;
 }
@@ -649,6 +1263,7 @@ int ObExprObjAccess::cg_expr(ObExprCGCtx &op_cg_ctx,
       info->for_write_ = raw_access.for_write();
       info->property_type_ = raw_access.get_property();
       info->access_idx_cnt_ = raw_access.get_access_idxs().count();
+      info->sql_udt_access_ = raw_access.is_sql_udt_access();
       int64_t coll_idx = OB_INVALID_INDEX;
       if (raw_access.get_access_idxs().at(0).elem_type_.is_collection_type()) {
         coll_idx = raw_access.get_access_idxs().at(0).var_index_;
@@ -658,6 +1273,19 @@ int ObExprObjAccess::cg_expr(ObExprCGCtx &op_cg_ctx,
       OZ(info->param_idxs_.assign(raw_access.get_var_indexs()));
       OZ(info->access_idxs_.init(raw_access.get_access_idxs().count()));
       OZ(info->access_idxs_.assign(raw_access.get_access_idxs()));
+      if (OB_SUCC(ret) && info->sql_udt_access_) {
+        const ObIArray<pl::ObObjAccessIdx> &raw_idxs = raw_access.get_access_idxs();
+        OZ(info->sql_udt_access_idxs_.init(raw_idxs.count()));
+        for (int64_t i = 0; OB_SUCC(ret) && i < raw_idxs.count(); ++i) {
+          const pl::ObObjAccessIdx &src = raw_idxs.at(i);
+          ExtraInfo::SqlUdtAccessIdx idx;
+          idx.var_index_ = src.var_index_;
+          idx.elem_user_type_id_ = src.elem_type_.get_user_type_id();
+          idx.var_pl_type_ = static_cast<int32_t>(src.var_type_.get_type());
+          idx.is_const_ = src.is_const();
+          OZ(info->sql_udt_access_idxs_.push_back(idx));
+        }
+      }
     }
     if (OB_SUCC(ret)) {
       rt_expr.extra_info_ = info;
@@ -761,6 +1389,9 @@ int ObExprObjAccess::eval_obj_access(const ObExpr &expr,
   OZ(expr_datum.from_obj(result, expr.obj_datum_map_));
   if (OB_SUCC(ret) && is_lob_storage(result.get_type())) {
     OZ (ob_adjust_lob_datum(result, expr.obj_meta_, ctx.exec_ctx_.get_allocator(), expr_datum));
+  }
+  if (OB_SUCC(ret) && info->sql_udt_access_) {
+    OZ(expr.deep_copy_datum(ctx, expr_datum));
   }
   return ret;
 }

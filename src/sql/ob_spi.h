@@ -930,7 +930,8 @@ public:
                                     const pl::ObPLINS *ns,
                                     ObIAllocator &allocator,
                                     pl::ObPLAssocArray &assoc_array,
-                                    int64_t n);
+                                    int64_t n,
+                                    bool extend_mode = true);
 #endif
   static int spi_get_package_allocator(pl::ObPLExecCtx *ctx, uint64_t package_id, ObIAllocator *&allocator);
 

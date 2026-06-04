@@ -41,11 +41,18 @@ int ObExprObjectConstruct::calc_result_typeN(ObExprResType &type,
   UNUSED (type_ctx);
   CK (param_num == elem_types_.count());
   for (int64_t i = 0; OB_SUCC(ret) && i < param_num; i++) {
+    // Treat a user-defined sql_udt input (including xml) as compatible with an EXT formal
+    // when their udt_id matches. The framework will add an implicit UDT->EXT cast below.
+    const bool sql_udt_matches_ext_elem =
+        ObExtendType == elem_types_.at(i).get_type()
+        && types[i].is_user_defined_sql_type()
+        && elem_types_.at(i).get_udt_id() == types[i].get_udt_id();
     if ((ObExtendType == elem_types_.at(i).get_type()
           && types[i].get_type() != ObExtendType
           && types[i].get_type() != ObNullType
-          && !types[i].is_xml_sql_type())
-        ||((ObExtendType == types[i].get_type() || types[i].is_xml_sql_type()) && elem_types_.at(i).get_type() != ObExtendType)) {
+          && !sql_udt_matches_ext_elem)
+        ||((ObExtendType == types[i].get_type() || types[i].is_user_defined_sql_type())
+           && elem_types_.at(i).get_type() != ObExtendType)) {
       ObSchemaGetterGuard schema_guard;
       int64_t tenant_id = type_ctx.get_session()->get_effective_tenant_id();
       const ObUDTTypeInfo *udt_info = NULL;

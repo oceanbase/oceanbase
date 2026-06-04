@@ -6550,12 +6550,13 @@ int ObSPIService::spi_extend_assoc_array(int64_t tenant_id,
                                          const ObPLINS *ns,
                                          ObIAllocator &allocator,
                                          ObPLAssocArray &assoc_array,
-                                         int64_t n)
+                                         int64_t n,
+                                         bool extend_mode)
 {
   int ret = OB_SUCCESS;
   int64_t old_capacity = assoc_array.get_inner_capacity();
   assoc_array.is_inited() ? (void)NULL : assoc_array.set_inited();
-  if (OB_FAIL(spi_set_collection(tenant_id, ns, assoc_array, n, true))) {
+  if (OB_FAIL(spi_set_collection(tenant_id, ns, assoc_array, n, extend_mode))) {
     LOG_WARN("failed to spi_reset_composite", K(assoc_array), K(ret));
   } else if (OB_ISNULL(assoc_array.get_allocator())) {
     ret = OB_ERR_UNEXPECTED;

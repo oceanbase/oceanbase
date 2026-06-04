@@ -63,9 +63,19 @@ int ObExprCollectionConstruct::calc_result_typeN(ObExprResType &type,
           = static_cast<const ObCollectionConstructRawExpr*>(type_ctx.get_raw_expr());
   CK(OB_NOT_NULL(pl_expr));
   for (int64_t i = 0; OB_SUCC(ret) && i < param_num; i++) {
+    const bool is_assoc_array_index_param =
+        (0 == i % 2 && pl_expr->is_associative_array_with_param_assign_op_);
+    const bool sql_udt_matches_ext_elem =
+        !is_assoc_array_index_param
+        && ObExtendType == elem_type_.get_obj_type()
+        && types[i].is_user_defined_sql_type()
+        && elem_type_.get_udt_id() == types[i].get_udt_id();
     if ((ObExtendType == elem_type_.get_obj_type()
-          && types[i].get_type() != ObExtendType && types[i].get_type() != ObNullType && !(0 == i % 2 && pl_expr->is_associative_array_with_param_assign_op_))
-        ||(ObExtendType == types[i].get_type() && elem_type_.get_obj_type() != ObExtendType)) {
+          && types[i].get_type() != ObExtendType && types[i].get_type() != ObNullType
+          && !is_assoc_array_index_param
+          && !sql_udt_matches_ext_elem)
+        ||((ObExtendType == types[i].get_type() || types[i].is_user_defined_sql_type())
+           && elem_type_.get_obj_type() != ObExtendType)) {
       ObSchemaGetterGuard schema_guard;
       int64_t tenant_id = type_ctx.get_session()->get_effective_tenant_id();
       const ObUDTTypeInfo *udt_info = NULL;
@@ -127,6 +137,7 @@ int ObExprCollectionConstruct::cg_expr(ObExprCGCtx &op_cg_ctx,
         OX(info->elem_type_ = *pl_expr.get_elem_type().get_data_type());
       } else {
         info->elem_type_.set_obj_type(ObExtendType);
+        info->elem_type_.set_udt_id(pl_expr.get_elem_type().get_user_type_id());
       }
 
       if (OB_SUCC(ret)) {

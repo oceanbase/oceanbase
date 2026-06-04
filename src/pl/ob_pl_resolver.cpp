@@ -13418,7 +13418,8 @@ int ObPLResolver::resolve_collection_construct(const ObQualifiedName &q_name,
         bool is_legal = true;
         uint64_t actual_udt_id = OB_INVALID_ID;
         if (val_expr->get_result_type().is_null()) {
-        } else if (val_expr->get_result_type().is_ext()) {
+        } else if (val_expr->get_result_type().is_ext()
+                   || val_expr->get_result_type().is_user_defined_sql_type()) {
           if (val_expr->is_obj_access_expr()) {
             ObPLDataType actually_type;
             const ObObjAccessRawExpr *obj_access = NULL;
@@ -13486,7 +13487,8 @@ int ObPLResolver::resolve_collection_construct(const ObQualifiedName &q_name,
         bool is_legal = true;
         uint64_t actual_udt_id = OB_INVALID_ID;
         if (child->get_result_type().is_null()) {
-        } else if (child->get_result_type().is_ext()) {
+        } else if (child->get_result_type().is_ext()
+                   || child->get_result_type().is_user_defined_sql_type()) {
           if (child->is_obj_access_expr()) {
             ObPLDataType actually_type;
             const ObObjAccessRawExpr *obj_access = NULL;

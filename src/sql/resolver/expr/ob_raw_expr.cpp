@@ -3676,6 +3676,22 @@ int ObObjAccessRawExpr::add_access_indexs(const ObIArray<pl::ObObjAccessIdx> &ac
     }
   }
 
+  if (OB_SUCC(ret)
+      && pl::ObCollectionType::INVALID_PROPERTY != property_type_
+      && access_indexs_.count() > 0
+      && access_indexs_.at(0).is_udf_type()) {
+    const int64_t stack_idx = access_indexs_.at(0).var_index_ - var_indexs_.count();
+    if (stack_idx >= 0 && stack_idx < get_param_count()) {
+      const ObRawExpr *root_expr = get_param_expr(stack_idx);
+      if (OB_NOT_NULL(root_expr)
+          && root_expr->get_result_type().is_user_defined_sql_type()) {
+        ret = OB_ERR_BAD_FIELD_ERROR;
+        LOG_WARN("collection property method on sql udt column is not supported",
+                 K(ret), K(property_type_), KPC(root_expr));
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -3689,6 +3705,21 @@ int ObObjAccessRawExpr::get_final_type(pl::ObPLDataType &type) const
     type = access_indexs_.at(access_indexs_.count() - 1).elem_type_;
   }
   return ret;
+}
+
+bool ObObjAccessRawExpr::is_sql_udt_access() const
+{
+  bool bret = false;
+  if (!for_write() //sql udt access only has read access
+      && access_indexs_.count() > 1
+      && access_indexs_.at(0).is_udf_type()) { //first access index must be a udf
+    const int64_t stack_idx = access_indexs_.at(0).var_index_ - var_indexs_.count();
+    if (stack_idx >= 0 && stack_idx < get_param_count()) {
+      const ObRawExpr *root_expr = get_param_expr(stack_idx);
+      bret = OB_NOT_NULL(root_expr) && root_expr->get_result_type().is_user_defined_sql_type();
+    }
+  }
+  return bret;
 }
 
 ////////////////////////////////////////////////////////////////
@@ -5494,6 +5525,7 @@ ObExprOperator *ObCollectionConstructRawExpr::get_op()
       } else {
         ObDataType data_type;
         data_type.set_obj_type(ObExtendType);
+        data_type.set_udt_id(elem_type_.get_user_type_id());
         OX (coll_op->set_elem_type(data_type));
       }
     }

@@ -855,6 +855,22 @@ int ObRawExprDeduceType::visit(ObOpRawExpr &expr)
     pl::ObPLDataType final_type;
     if (OB_FAIL(obj_access_expr.get_final_type(final_type))) {
       LOG_WARN("failed to get final type", K(obj_access_expr), K(ret));
+    } else if (obj_access_expr.is_sql_udt_access() && final_type.is_user_type()) {
+      ObExecContext *exec_ctx = const_cast<ObSQLSessionInfo *>(my_session_)->get_cur_exec_ctx();
+      const uint64_t udt_id = final_type.get_user_type_id();
+      uint16_t subschema_id = ObMaxSystemUDTSqlType;
+      if (OB_ISNULL(exec_ctx)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("need exec ctx for sql udt column obj access type deduce", K(ret));
+      } else if (OB_FAIL(exec_ctx->get_subschema_id_by_udt_id(udt_id, subschema_id))) {
+        LOG_WARN("failed to get subschema id for sql udt obj access", K(ret), K(udt_id));
+      } else if (subschema_id == ObMaxSystemUDTSqlType) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid udt id for sql udt obj access", K(ret), K(udt_id));
+      } else {
+        result_type.set_sql_udt(subschema_id);
+        result_type.set_udt_id(udt_id);
+      }
     } else if (final_type.is_user_type()) {
       result_type.set_ext();
       result_type.set_extend_type(final_type.get_type());

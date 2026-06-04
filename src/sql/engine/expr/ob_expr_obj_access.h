@@ -122,13 +122,35 @@ public:
              ObEvalCtx *ctx,
              ObjAccessExprAllocatorCtx *obj_access_ctx = NULL) const;
 
+    // Minimal, serializable per-step descriptor for the sql-udt access path.
+    struct SqlUdtAccessIdx
+    {
+      OB_UNIS_VERSION(1);
+    public:
+      SqlUdtAccessIdx()
+        : var_index_(common::OB_INVALID_INDEX),
+          elem_user_type_id_(common::OB_INVALID_ID),
+          var_pl_type_(static_cast<int32_t>(pl::PL_INVALID_TYPE)),
+          is_const_(false) {}
+
+      int64_t var_index_;
+      uint64_t elem_user_type_id_;
+      int32_t var_pl_type_;
+      bool is_const_;
+
+      TO_STRING_KV(K_(var_index), K_(elem_user_type_id),
+                   K_(var_pl_type), K_(is_const));
+    };
+
     TO_STRING_KV(K_(get_attr_func),
                  K_(param_idxs),
                  K_(access_idx_cnt),
                  K_(for_write),
                  K_(property_type),
                  K_(coll_idx),
-                 K_(extend_size));
+                 K_(extend_size),
+                 K_(sql_udt_access),
+                 K_(sql_udt_access_idxs));
 
     uint64_t get_attr_func_;
     common::ObFixedArray<int64_t, common::ObIAllocator> param_idxs_;
@@ -138,7 +160,82 @@ public:
     int64_t coll_idx_; // index of Collection in ParamArray
     // extend size only used in static engine, the old expr get extend size from ObExprResType
     int32_t extend_size_;
+    bool sql_udt_access_;
     common::ObFixedArray<pl::ObObjAccessIdx, common::ObIAllocator> access_idxs_;
+
+    common::ObFixedArray<SqlUdtAccessIdx, common::ObIAllocator> sql_udt_access_idxs_; // Only populated when sql_udt_access_ is true.
+
+  private:
+    // helpers for object access evaluation.
+    struct SerializedPLObjSlice
+    {
+      SerializedPLObjSlice() : data_(NULL), len_(0), is_null_(false) {}
+      SerializedPLObjSlice(const char *data, int64_t len)
+        : data_(data), len_(len), is_null_(false) {}
+      const char *data_;
+      int64_t len_;
+      bool is_null_;
+    };
+
+    int get_obj_access_param(const ParamStore &param_store,
+                             const common::ObObj *params,
+                             const int64_t param_num,
+                             const int64_t param_idx,
+                             const common::ObObj *&obj) const;
+    int get_obj_access_int_param(const ParamStore &param_store,
+                                 const common::ObObj *params,
+                                 const int64_t param_num,
+                                 const int64_t param_idx,
+                                 int64_t &val) const;
+    int locate_collection_elem_slice(const ParamStore &param_store,
+                                          const common::ObObj *params,
+                                          const int64_t param_num,
+                                          const SerializedPLObjSlice &coll_slice,
+                                          const SqlUdtAccessIdx &current_access,
+                                          SerializedPLObjSlice &elem_slice) const;
+    int access_serialized_obj_by_idxs(ObEvalCtx &ctx,
+                                      common::ObIAllocator &calc_alloc,
+                                      const ParamStore &param_store,
+                                      const common::ObObj *params,
+                                      const int64_t param_num,
+                                      const common::ObString &udt_data,
+                                      common::ObObj &result) const;
+    int calc_sql_udt_access(common::ObObj &result,
+                                   common::ObIAllocator &alloc,
+                                   const ParamStore &param_store,
+                                   const common::ObObj *params,
+                                   int64_t param_num,
+                                   ObEvalCtx &ctx) const;
+    int calc_pl_extend_access(common::ObObj &result,
+                              common::ObIAllocator &alloc,
+                              const ObObjMeta &res_type,
+                              const int32_t extend_size,
+                              const ParamStore &param_store,
+                              const common::ObObj *params,
+                              int64_t param_num,
+                              ObEvalCtx &ctx,
+                              ObjAccessExprAllocatorCtx *access_obj_ctx) const;
+
+    static int get_int64_from_obj(const common::ObObj &obj, int64_t &val, bool skip_null_check = false);
+    static int parse_serialized_pl_header(const SerializedPLObjSlice &slice,
+                                          int64_t &pos,
+                                          pl::ObPLType &pl_type,
+                                          uint64_t &id,
+                                          bool &is_null);
+    static int get_serialized_obj_payload(const SerializedPLObjSlice &obj_slice,
+                                          SerializedPLObjSlice &payload_slice);
+    static int deserialize_obj_value(common::ObIAllocator &calc_alloc,
+                                                const SerializedPLObjSlice &obj_slice,
+                                                common::ObObj &result,
+                                                uint16_t subschema_id);
+    static int convert_pl_opaque_to_sql_udt(common::ObIAllocator &calc_alloc,
+                                            const char *buf,
+                                            int64_t buf_len,
+                                            uint16_t subschema_id,
+                                            common::ObObj &result);
+    static int locate_record_attr_slice(const SerializedPLObjSlice &record_slice,
+                                             const SqlUdtAccessIdx &current_access,
+                                             SerializedPLObjSlice &attr_slice);
   };
 private:
   static int build_obj_access_ctx(const ObExpr &expr,
