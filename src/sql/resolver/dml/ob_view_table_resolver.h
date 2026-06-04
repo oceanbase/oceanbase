@@ -31,7 +31,7 @@ struct ObViewStateGuard
 
 struct ViewItem
 {
-  ViewItem() {}
+  ViewItem() : ref_id_(common::OB_INVALID_ID) {}
   ~ViewItem() {}
 
   TO_STRING_KV(K_(table_name), K_(database_name), K_(ref_id));
