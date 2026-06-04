@@ -394,7 +394,7 @@ int ObHiveMetastoreClient::init(const ObHMSCatalogProperties &properties)
       ObArenaAllocator temp_allocator;
       ObString tmp_service;
       if (!hms_service_principal_.empty()) {
-        // SERVICE_PRINCIPAL is set: extract service from it.
+        // HMS_PRINCIPAL is set: extract service from it.
         // "hadoop/_HOST@XTT.COM"         -> service = "hadoop"
         // "hadoop/obrde.dev-xw2@XTT.COM" -> service = "hadoop"
         ObString temp_sp;
@@ -1003,7 +1003,7 @@ int ObHiveMetastoreClient::setup_connection_for_uri(const int64_t uri_idx)
           LOG_WARN("failed to init kerberos", K(ret));
         } else if (!service_.empty()) {
           // Determine serverFQDN for SASL target.
-          // If SERVICE_PRINCIPAL is set and has instance part, use it
+          // If HMS_PRINCIPAL is set and has instance part, use it
           // (replacing _HOST with actual URI host). Otherwise use URI host directly.
           ObString resolved_fqdn;
           ObArenaAllocator temp_allocator;

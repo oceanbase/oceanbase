@@ -736,7 +736,7 @@ int ObHMSCatalogProperties::to_json_kv_string(char *buf, const int64_t buf_len, 
   OZ(hex_print(krb5conf_.ptr(), krb5conf_.length(), buf, buf_len, pos));
   OZ(databuff_printf(buf, buf_len, pos, R"(")"));
   OZ(J_COMMA());
-  OZ(databuff_printf(buf, buf_len, pos, R"("%s":")", OPTION_NAMES[SERVICE_PRINCIPAL]));
+  OZ(databuff_printf(buf, buf_len, pos, R"("%s":")", OPTION_NAMES[HMS_PRINCIPAL]));
   OZ(hex_print(service_principal_.ptr(), service_principal_.length(), buf, buf_len, pos));
   OZ(databuff_printf(buf, buf_len, pos, R"(")"));
   OZ(J_COMMA());
@@ -823,7 +823,7 @@ int ObHMSCatalogProperties::load_from_string(const ObString &str, ObIAllocator &
       }
       node = node->get_next();
     }
-    if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[SERVICE_PRINCIPAL])
+    if (OB_NOT_NULL(node) && 0 == node->name_.case_compare(OPTION_NAMES[HMS_PRINCIPAL])
         && json::JT_STRING == node->value_->get_type()) {
       ObObj obj;
       OZ(ObHexUtilsBase::unhex(node->value_->get_string(), allocator, obj));

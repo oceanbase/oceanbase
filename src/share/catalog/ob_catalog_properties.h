@@ -160,7 +160,7 @@ public:
     SOCKET_TIMEOUT,
     CACHE_REFRESH_INTERVAL_SEC,
     HMS_CATALOG_NAME, // FARM COMPAT WHITELIST
-    SERVICE_PRINCIPAL,
+    HMS_PRINCIPAL,
     MAX_OPTIONS
   };
   ObHMSCatalogProperties() :
@@ -189,7 +189,7 @@ public:
     "SOCKET_TIMEOUT",
     "CACHE_REFRESH_INTERVAL_SEC",
     "HMS_CATALOG_NAME",
-    "SERVICE_PRINCIPAL",
+    "HMS_PRINCIPAL",
   };
   common::ObString uri_;
   common::ObString principal_;
