@@ -1,4 +1,4 @@
-// owner: muwei.ym
+// owner: lixia.yq
 // owner group: storage_ha
 
 /**
@@ -38,18 +38,18 @@ static ObTransferPartList g_part_list;
 static ObTransferPartList g_batch_part_list;
 
 static const char *TEST_FILE_NAME = "test_transfer_doing_stage_restart_without_mds_flush";
-static const char *BORN_CASE_NAME = "TestTransferHandler";
-static const char *RESTART_CASE_NAME = "TestTransferRestart";
+static const char *BORN_CASE_NAME = "TestTransferHandlerDoingWoFlush";
+static const char *RESTART_CASE_NAME = "TestTransferRestartDoingWoFlush";
 
-class TestTransferHandler : public unittest::ObSimpleClusterTestBase
+class TestTransferHandlerDoingWoFlush : public unittest::ObSimpleClusterTestBase
 {
 public:
-  TestTransferHandler() : unittest::ObSimpleClusterTestBase(TEST_FILE_NAME) {}
+  TestTransferHandlerDoingWoFlush() : unittest::ObSimpleClusterTestBase(TEST_FILE_NAME) {}
   int read_sql(ObMySQLProxy &sql_proxy, const ObSqlString &sql, ObTransferPartList &part_list);
   int gen_mock_data(const ObTransferTaskID task_id, const ObTransferStatus &status, ObTransferTask &task);
 };
 
-int TestTransferHandler::read_sql(
+int TestTransferHandlerDoingWoFlush::read_sql(
     ObMySQLProxy &sql_proxy,
     const ObSqlString &sql,
     ObTransferPartList &part_list)
@@ -87,7 +87,7 @@ int TestTransferHandler::read_sql(
   return ret;
 }
 
-int TestTransferHandler::gen_mock_data(const ObTransferTaskID task_id, const ObTransferStatus &status, ObTransferTask &task)
+int TestTransferHandlerDoingWoFlush::gen_mock_data(const ObTransferTaskID task_id, const ObTransferStatus &status, ObTransferTask &task)
 {
   int ret = OB_SUCCESS;
   ObLSID src_ls(1001);
@@ -107,14 +107,14 @@ int TestTransferHandler::gen_mock_data(const ObTransferTaskID task_id, const ObT
   return ret;
 }
 
-class TestTransferRestart : public ObSimpleClusterTestBase
+class TestTransferRestartDoingWoFlush : public ObSimpleClusterTestBase
 {
 public:
-  TestTransferRestart() : ObSimpleClusterTestBase(TEST_FILE_NAME) {}
+  TestTransferRestartDoingWoFlush() : ObSimpleClusterTestBase(TEST_FILE_NAME) {}
   void select_existed_data();
 };
 
-void TestTransferRestart::select_existed_data()
+void TestTransferRestartDoingWoFlush::select_existed_data()
 {
   sleep(10);
   common::ObMySQLProxy &sql_proxy = get_curr_simple_server().get_sql_proxy2();
@@ -156,7 +156,7 @@ void TestTransferRestart::select_existed_data()
   ASSERT_EQ(select_succ, true);
 }
 
-TEST_F(TestTransferHandler, prepare_valid_data)
+TEST_F(TestTransferHandlerDoingWoFlush, prepare_valid_data)
 {
   g_tenant_id = OB_INVALID_TENANT_ID;
 
@@ -226,7 +226,7 @@ TEST_F(TestTransferHandler, prepare_valid_data)
 
 }
 
-TEST_F(TestTransferHandler, test_transfer_1001_to_1002_with_transfer_doing_without_mds_flush)
+TEST_F(TestTransferHandlerDoingWoFlush, test_transfer_1001_to_1002_with_transfer_doing_without_mds_flush)
 {
   int ret = OB_SUCCESS;
   ObMySQLProxy &inner_sql_proxy = get_curr_observer().get_mysql_proxy();
@@ -277,7 +277,7 @@ TEST_F(TestTransferHandler, test_transfer_1001_to_1002_with_transfer_doing_witho
   LOG_INFO("generate transfer task", K(task));
 }
 
-TEST_F(TestTransferRestart, observer_restart_when_transfer_doing_without_flush)
+TEST_F(TestTransferRestartDoingWoFlush, observer_restart_when_transfer_doing_without_flush)
 {
   // init sql proxy2 to use tenant tt1
   g_tenant_id = 1002;

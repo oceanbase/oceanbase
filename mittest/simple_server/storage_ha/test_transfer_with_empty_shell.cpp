@@ -1,4 +1,4 @@
-// owner: muwei.ym
+// owner: lixia.yq
 // owner group: storage_ha
 
 /**
@@ -42,7 +42,7 @@ static ObTransferPartList g_batch_part_list;
 class TestTransferHandler : public unittest::ObSimpleClusterTestBase
 {
 public:
-  TestTransferHandler() : unittest::ObSimpleClusterTestBase("test_transfer_handler") {}
+  TestTransferHandler() : unittest::ObSimpleClusterTestBase("test_transfer_with_empty_shell") {}
   int read_sql(ObMySQLProxy &sql_proxy, const ObSqlString &sql, ObTransferPartList &part_list);
   int gen_mock_data(const ObTransferTaskID task_id, const ObTransferStatus &status, ObTransferTask &task);
   int wait_transfer_task(

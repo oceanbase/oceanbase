@@ -85,7 +85,7 @@ static void assert_merge_transfer_same_primary_zone(
 class TestBalanceOperator : public unittest::ObSimpleClusterTestBase
 {
 public:
-  TestBalanceOperator() : unittest::ObSimpleClusterTestBase("test_balance_operator") {}
+  TestBalanceOperator() : unittest::ObSimpleClusterTestBase("test_tenant_balance_operator") {}
 protected:
   uint64_t tenant_id_;
   int construct_unit_array(const ObZoneUnitCntList &unit_list,
