@@ -216,15 +216,20 @@ int ObLogLink::set_link_stmt(const ObDMLStmt* stmt)
       OB_ISNULL(opt_ctx->get_schema_guard())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", KP(opt_ctx), KP(stmt), KP(session), KP(plan), K(ret));
-  } else if (OB_FAIL(opt_ctx->get_schema_guard()->get_dblink_schema(session->get_effective_tenant_id(),
-                                                                    get_dblink_id(),
-                                                                    dblink_schema))) {
-    LOG_WARN("failed to get dblink schema", K(ret), K(get_dblink_id()));
-  } else if (OB_ISNULL(dblink_schema)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dblink schema is null", K(ret), K(get_dblink_id()));
-  } else if (FALSE_IT(link_type = static_cast<common::sqlclient::DblinkDriverProto>(
-                        dblink_schema->get_driver_proto()))) {
+  } else if (get_dblink_id() > 0) {
+    if (OB_FAIL(opt_ctx->get_schema_guard()->get_dblink_schema(session->get_effective_tenant_id(),
+                                                                      get_dblink_id(),
+                                                                      dblink_schema))) {
+      LOG_WARN("failed to get dblink schema", K(ret), K(get_dblink_id()));
+    } else if (OB_ISNULL(dblink_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("dblink schema is null", K(ret), K(get_dblink_id()), K(is_reverse_link_));
+    } else {
+      link_type = static_cast<common::sqlclient::DblinkDriverProto>(
+                          dblink_schema->get_driver_proto());
+    }
+  }
+  if (OB_FAIL(ret)) {
   } else if (OB_FAIL(ObDblinkService::get_spell_collation_type(session, link_type, spell_coll))) {
     LOG_WARN("failed to get spell collation type", K(ret));
   } else if (FALSE_IT(print_param.cs_type_ = spell_coll)) {
