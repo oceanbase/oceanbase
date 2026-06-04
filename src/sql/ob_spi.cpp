@@ -1741,6 +1741,7 @@ int ObSPIService::spi_end_trans(ObPLExecCtx *ctx, const char *sql, bool is_rollb
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("session ptr is null", K(ret));
     } else {
+      ObPLSubPLSqlTimeGuard guard(ctx);
       my_session->set_stmt_type(stmt::T_END_TRANS);
       ObAuditRecordData &audit_record = my_session->get_raw_audit_record();
       const bool enable_perf_event = lib::is_diagnose_info_enabled();
@@ -1856,6 +1857,7 @@ int ObSPIService::spi_end_trans(ObPLExecCtx *ctx, const char *sql, bool is_rollb
       audit_record.sql_ = const_cast<char *>(sqlstr.ptr());
       audit_record.sql_len_ = min(sqlstr.length(), my_session->get_tenant_query_record_size_limit());
       audit_record.pl_trace_id_ = *ObCurTraceId::get_trace_id();
+      my_session->update_pure_sql_exec_time(audit_record.exec_timestamp_.elapsed_t_);
       ObSQLUtils::handle_audit_record(false, EXECUTE_PL_EXECUTE,
                                   *my_session, ctx->exec_ctx_->get_sql_ctx()->is_sensitive_);
       // restore query_start_time
