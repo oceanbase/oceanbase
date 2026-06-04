@@ -370,6 +370,11 @@ int ObPLPackage::execute_init_routine(ObIAllocator &allocator, ObExecContext &ex
       int status;
       ObSEArray<int64_t, 2> subp_path;
       pl::ObPLExecuteArg pl_execute_arg;
+      bool need_end_stmt = false;
+      if (!exec_ctx.get_my_session()->has_start_stmt()) {
+        need_end_stmt = true;
+        exec_ctx.get_my_session()->set_start_stmt();
+      }
       OZ (pl_execute_arg.obtain_routine(exec_ctx,
                                         init_routine->get_package_id(),
                                         init_routine->get_routine_id(),
@@ -386,6 +391,9 @@ int ObPLPackage::execute_init_routine(ObIAllocator &allocator, ObExecContext &ex
                              &status,
                              false,
                              init_routine->is_function()));
+      if (need_end_stmt) {
+        exec_ctx.get_my_session()->set_end_stmt();
+      }
     }
   } else {
     LOG_DEBUG("package init routine function is null",
