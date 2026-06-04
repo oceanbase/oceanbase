@@ -3135,6 +3135,11 @@ DEF_TIME(_session_temp_table_clean_interval, OB_TENANT_PARAMETER, "10m", "[0s,)"
          "schedule interval for session temporary table clean task. "
          "Range: [0s, +∞). Default: 10m",
          ObParameterAttr(Section::ROOT_SERVICE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_gtt_non_forced_routing, OB_TENANT_PARAMETER, "True",
+         "Enable removing the strong routing constraint on temporary tables via the 2.0 protocol. "
+         "When enabled (default), the strong routing constraint on temporary tables is removed; "
+         "when disabled, temporary tables keep the strong routing behavior.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_TIME(_ss_storage_stat_report_interval, OB_TENANT_PARAMETER, "10m", "[30s,24d]",
          "Control the reporting period of __all_tenant_ss_storage_stat"
          "Range: [10s, 24d]",

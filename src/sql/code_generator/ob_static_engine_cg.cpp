@@ -9930,6 +9930,10 @@ int ObStaticEngineCG::set_properties_post(const ObLogPlan &log_plan, ObPhysicalP
       ObArray<uint64_t> gtt_trans_scope_ids;
       ObArray<uint64_t> gtt_session_scope_ids;
       ObArray<uint64_t> immediate_refresh_external_table_ids;
+      omt::ObTenantConfigGuard temp_table_tenant_config(TENANT_CONF(my_session->get_effective_tenant_id()));
+      const bool enable_temp_table_no_strong_routing = temp_table_tenant_config.is_valid()
+          ? temp_table_tenant_config->_enable_gtt_non_forced_routing
+          : false;
       for (int64_t i = 0; OB_SUCC(ret) && i < dependency_table->count(); i++) {
         if (DEPENDENCY_TABLE == dependency_table->at(i).object_type_) {
           const ObTableSchema *table_schema = NULL;
@@ -9943,7 +9947,7 @@ int ObStaticEngineCG::set_properties_post(const ObLogPlan &log_plan, ObPhysicalP
             if (table_schema->is_oracle_trx_tmp_table() || table_schema->is_oracle_trx_tmp_table_v2()) {
               if (OB_FAIL(gtt_trans_scope_ids.push_back(object_id))) {
                 LOG_WARN("fail to push back", K(ret));
-              } else if (table_schema->is_oracle_trx_tmp_table()) {
+              } else if (table_schema->is_oracle_trx_tmp_table() || !enable_temp_table_no_strong_routing) {
                 phy_plan.set_need_strong_routing(true);
               } else {
                 phy_plan.set_need_strong_routing(false);
@@ -9951,7 +9955,7 @@ int ObStaticEngineCG::set_properties_post(const ObLogPlan &log_plan, ObPhysicalP
             } else if (table_schema->is_oracle_sess_tmp_table() || table_schema->is_oracle_sess_tmp_table_v2()) {
               if (OB_FAIL(gtt_session_scope_ids.push_back(object_id))) {
                 LOG_WARN("fail to push back", K(ret));
-              } else if (table_schema->is_oracle_sess_tmp_table()) {
+              } else if (table_schema->is_oracle_sess_tmp_table() || !enable_temp_table_no_strong_routing) {
                 phy_plan.set_need_strong_routing(true);
               } else {
                 phy_plan.set_need_strong_routing(false);
