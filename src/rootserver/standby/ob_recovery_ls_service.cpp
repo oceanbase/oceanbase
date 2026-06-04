@@ -36,6 +36,9 @@
 #include "share/ob_sync_standby_dest_parser.h"
 #include "share/restore/ob_log_restore_source_mgr.h"
 #include "rootserver/standby/ob_standby_transfer_task_util.h"
+#include "share/ob_rpc_struct.h"
+#include "share/schema/ob_schema_struct.h"
+#include "rootserver/ob_rs_async_rpc_proxy.h"
 
 namespace oceanbase
 {
@@ -1003,6 +1006,9 @@ void ObRecoveryLSService::try_tenant_upgrade_end_()
       LOG_WARN("data_version not match, run upgrade end later",
                KR(ret), K_(tenant_id), K(target_data_version), K(current_data_version),
                K(DATA_CURRENT_VERSION), K(min_data_version));
+    } else if (OB_FAIL(check_sys_table_schema_refreshed_())) {
+      LOG_WARN("sys table schema not refreshed on all servers, retry later",
+               KR(ret), K_(tenant_id));
     } else {
       HEAP_VAR(obrpc::ObAdminSetConfigItem, item) {
       ObSchemaGetterGuard guard;
@@ -1039,6 +1045,170 @@ void ObRecoveryLSService::try_tenant_upgrade_end_()
       } // end HEAP_VAR
     }
   }
+}
+
+int ObRecoveryLSService::get_max_system_table_schema_version_(int64_t &target_schema_version)
+{
+  int ret = OB_SUCCESS;
+  target_schema_version = OB_INVALID_VERSION;
+  ObSqlString sql;
+  if (OB_UNLIKELY(!inited_) || OB_ISNULL(proxy_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K(inited_), KP(proxy_));
+  } else if (OB_UNLIKELY(!is_user_tenant(tenant_id_))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(sql.append_fmt("SELECT MAX(schema_version) as max_ver FROM %s"
+                             " WHERE tenant_id = %lu AND table_id < %lu",
+                             OB_ALL_TABLE_TNAME, OB_INVALID_TENANT_ID, OB_MAX_INNER_TABLE_ID))) {
+    LOG_WARN("fail to append sql", KR(ret));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      common::sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(proxy_->read(res, tenant_id_, sql.ptr()))) {
+        LOG_WARN("fail to execute sql", KR(ret), K_(tenant_id), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get result", KR(ret));
+      } else if (OB_FAIL(result->next())) {
+        LOG_WARN("fail to get next", KR(ret));
+      } else {
+        EXTRACT_INT_FIELD_MYSQL(*result, "max_ver", target_schema_version, int64_t);
+        if (OB_FAIL(ret)) {
+          LOG_WARN("fail to extract max_ver", KR(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::get_behind_schema_servers_(const int64_t target_schema_version,
+                                                    ObIArray<ObAddr> &behind_servers)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  behind_servers.reset();
+  if (OB_UNLIKELY(!inited_) || OB_ISNULL(proxy_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K(inited_), KP(proxy_));
+  } else if (OB_UNLIKELY(!is_user_tenant(tenant_id_))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(sql.append_fmt("SELECT svr_ip, svr_port, refreshed_schema_version FROM %s"
+                              " WHERE tenant_id = %lu",
+                              OB_ALL_VIRTUAL_SERVER_SCHEMA_INFO_TNAME,
+                              tenant_id_))) {
+    LOG_WARN("fail to append sql", KR(ret));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      common::sqlclient::ObMySQLResult *result = NULL;
+      if (OB_FAIL(proxy_->read(res, tenant_id_, sql.ptr()))) {
+        LOG_WARN("fail to execute sql", KR(ret), K_(tenant_id), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get result", KR(ret));
+      } else {
+        while (OB_SUCC(ret) && OB_SUCC(result->next())) {
+          int64_t refreshed_ver = OB_INVALID_VERSION;
+          ObString svr_ip_str;
+          int64_t svr_port = 0;
+          EXTRACT_INT_FIELD_MYSQL(*result, "refreshed_schema_version", refreshed_ver, int64_t);
+          EXTRACT_VARCHAR_FIELD_MYSQL(*result, "svr_ip", svr_ip_str);
+          EXTRACT_INT_FIELD_MYSQL(*result, "svr_port", svr_port, int64_t);
+          if (OB_FAIL(ret)) {
+            LOG_WARN("fail to extract fields", KR(ret));
+          } else if (refreshed_ver < target_schema_version
+                     || !share::schema::ObSchemaService::is_formal_version(refreshed_ver)) {
+            ObAddr server;
+            if (!server.set_ip_addr(svr_ip_str, static_cast<int32_t>(svr_port))) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("fail to set ip addr", KR(ret), K(svr_ip_str), K(svr_port));
+            } else if (OB_FAIL(behind_servers.push_back(server))) {
+              LOG_WARN("fail to push back server", KR(ret), K(server));
+            }
+          }
+        }
+        ret = (OB_ITER_END == ret) ? OB_SUCCESS : ret;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::send_async_switch_schema_(const int64_t target_schema_version,
+                                                   const ObIArray<ObAddr> &behind_servers)
+{
+  int ret = OB_SUCCESS;
+  obrpc::ObSrvRpcProxy *srv_rpc_proxy = GCTX.srv_rpc_proxy_;
+  if (OB_UNLIKELY(!inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K(inited_));
+  } else if (OB_UNLIKELY(!is_user_tenant(tenant_id_))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K_(tenant_id));
+  } else if (OB_ISNULL(srv_rpc_proxy)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("srv_rpc_proxy is null", KR(ret));
+  } else {
+    ObSwitchSchemaProxy proxy(*srv_rpc_proxy, &obrpc::ObSrvRpcProxy::switch_schema);
+    obrpc::ObSwitchSchemaArg arg;
+    arg.schema_info_.set_tenant_id(tenant_id_);
+    arg.schema_info_.set_schema_version(target_schema_version);
+    arg.is_async_ = true;
+    int64_t rpc_timeout = GCONF.rpc_timeout;
+    for (int64_t i = 0; OB_SUCC(ret) && i < behind_servers.count(); i++) {
+      if (OB_FAIL(proxy.call(behind_servers.at(i), rpc_timeout, arg))) {
+        LOG_WARN("send async switch schema failed", KR(ret),
+                 "server", behind_servers.at(i), K(arg));
+      }
+    }
+    int tmp_ret = OB_SUCCESS;
+    ObArray<int> return_code_array;
+    if (OB_TMP_FAIL(proxy.wait_all(return_code_array))) {
+      LOG_WARN("wait switch schema result failed", KR(tmp_ret));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    } else {
+      for (int64_t i = 0; i < return_code_array.count(); i++) {
+        const int rpc_ret = return_code_array.at(i);
+        if (OB_SUCCESS != rpc_ret) {
+          LOG_WARN("switch_schema rpc failed on server", K(rpc_ret),
+                   "server", behind_servers.at(i), K(target_schema_version));
+          if (OB_SUCC(ret)) {
+            ret = rpc_ret;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObRecoveryLSService::check_sys_table_schema_refreshed_()
+{
+  int ret = OB_SUCCESS;
+  int64_t target_schema_version = OB_INVALID_VERSION;
+  if (OB_FAIL(get_max_system_table_schema_version_(target_schema_version))) {
+    LOG_WARN("fail to get max system table schema version", KR(ret));
+  } else if (target_schema_version <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("no valid schema version from __all_table", KR(ret),
+             K_(tenant_id), K(target_schema_version));
+  } else {
+    ObSEArray<ObAddr, 16> behind_servers;
+    if (OB_FAIL(get_behind_schema_servers_(target_schema_version, behind_servers))) {
+      LOG_WARN("fail to get behind schema servers", KR(ret));
+    } else if (behind_servers.count() > 0) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(send_async_switch_schema_(target_schema_version, behind_servers))) {
+        LOG_WARN("fail to send async switch schema", KR(tmp_ret));
+      }
+      ret = OB_EAGAIN;
+      LOG_INFO("schema not refreshed on some servers, retry next cycle",
+               KR(ret), K_(tenant_id), K(target_schema_version), K(behind_servers));
+    }
+  }
+  return ret;
 }
 
 int ObRecoveryLSService::construct_sys_ls_recovery_stat_based_on_sync_scn_(

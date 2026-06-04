@@ -142,6 +142,12 @@ private:
  //readable scn need report
  void try_tenant_upgrade_end_();
  int get_min_data_version_(uint64_t &compatible);
+ int check_sys_table_schema_refreshed_();
+ int get_max_system_table_schema_version_(int64_t &target_schema_version);
+ int get_behind_schema_servers_(const int64_t target_schema_version,
+                                common::ObIArray<common::ObAddr> &behind_servers);
+ int send_async_switch_schema_(const int64_t target_schema_version,
+                               const common::ObIArray<common::ObAddr> &behind_servers);
  int process_ls_operator_in_trans_(const share::ObLSAttr &ls_attr,
      const share::SCN &sync_scn, common::ObMySQLTransaction &trans);
  int porcess_alter_ls_group_(const share::ObLSAttr &ls_attr,

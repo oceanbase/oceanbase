@@ -1475,6 +1475,8 @@ int ObService::batch_switch_rs_leader(const ObAddr &arg)
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_SWITCH_SCHEMA);
+
 int ObService::switch_schema(
     const obrpc::ObSwitchSchemaArg &arg,
     obrpc::ObSwitchSchemaResult &result)
@@ -1484,7 +1486,9 @@ int ObService::switch_schema(
   const ObRefreshSchemaInfo &schema_info = arg.schema_info_;
   const int64_t schema_version = schema_info.get_schema_version();
   const uint64_t tenant_id = schema_info.get_tenant_id();
-  if (OB_UNLIKELY(!inited_)) {
+  if (OB_FAIL(ERRSIM_SWITCH_SCHEMA)) {
+    LOG_WARN("ERRSIM_SWITCH_SCHEMA", KR(ret));
+  } else if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", KR(ret));
   } else if (OB_UNLIKELY(schema_version <= 0)) {
