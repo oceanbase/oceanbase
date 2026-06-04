@@ -2852,17 +2852,26 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
         }
         break;
       }
-      case T_EXTERNAL_FILE_PATTERN: {
+      case T_EXTERNAL_FILE_PATTERN:
+      case T_EXTERNAL_FILE_GLOB_PATTERN: {
         if (stmt::T_CREATE_TABLE != stmt_->get_stmt_type()) {
           ret = OB_ERR_UNEXPECTED; //TODO-EXTERNAL-TABLE add new error code
           LOG_WARN("invalid file format option", K(ret));
         } else {
           ObCreateTableArg &arg = static_cast<ObCreateTableStmt*>(stmt_)->get_create_table_arg();
           ObString pattern;
-          if (OB_FAIL(resolve_external_file_pattern(option_node, arg.schema_.is_external_table(), *allocator_, session_info_, pattern))) {
+          share::schema::ObExternalFilePatternType pattern_type = share::schema::REGEXP_EXTERNAL_FILE_PATTERN;
+          if (OB_FAIL(resolve_external_file_pattern(option_node,
+                                                    arg.schema_.is_external_table(),
+                                                    *allocator_,
+                                                    session_info_,
+                                                    pattern,
+                                                    pattern_type))) {
             LOG_WARN("failed to resolve external file pattern", K(ret));
           } else if (OB_FAIL(arg.schema_.set_external_file_pattern(pattern))) {
             LOG_WARN("failed to set external file pattern", K(ret), K(pattern));
+          } else {
+            arg.schema_.set_external_file_pattern_type(pattern_type);
           }
         }
         break;

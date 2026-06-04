@@ -44,7 +44,8 @@ int ObExprCollectFileList::calc_result_typeN(ObExprResType &type,
                                              common::ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  if (param_num == 3) {
+  UNUSED(type_ctx);
+  if (param_num == 3 || param_num == 4) {
     type.set_varchar();
     type.set_default_collation_type();
     types_array[0].set_calc_type(ObVarcharType);
@@ -53,6 +54,9 @@ int ObExprCollectFileList::calc_result_typeN(ObExprResType &type,
     types_array[1].set_default_collation_type();
     types_array[2].set_calc_type(ObVarcharType);
     types_array[2].set_default_collation_type();
+    if (param_num == 4) {
+      types_array[3].set_calc_type(ObIntType);
+    }
   } else {
     ret = OB_ERR_UNEXPECTED;
   }
@@ -66,11 +70,11 @@ int ObExprCollectFileList::cg_expr(ObExprCGCtx &expr_cg_ctx,
   int ret = OB_SUCCESS;
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
-  if (rt_expr.arg_cnt_ != 3) {
+  if (rt_expr.arg_cnt_ != 3 && rt_expr.arg_cnt_ != 4) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("collect_file_list expr should have one param", K(ret), K(rt_expr.arg_cnt_));
+    LOG_WARN("collect_file_list expr should have three or four params", K(ret), K(rt_expr.arg_cnt_));
   } else if (OB_ISNULL(rt_expr.args_) || OB_ISNULL(rt_expr.args_[0]) || OB_ISNULL(rt_expr.args_[1])
-             || OB_ISNULL(rt_expr.args_[2])) {
+             || OB_ISNULL(rt_expr.args_[2]) || (rt_expr.arg_cnt_ == 4 && OB_ISNULL(rt_expr.args_[3]))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("children of collect_file_list expr is null", K(ret), K(rt_expr.args_));
   } else {
@@ -84,9 +88,11 @@ int ObExprCollectFileList::collect_file_list(const ObExpr &expr, ObEvalCtx &ctx,
   int ret = OB_SUCCESS;
   ObDatum *datum_path = NULL;
   ObDatum *datum_patten = NULL;
+  ObDatum *datum_pattern_type = NULL;
   ObDatum *datum_access_info = NULL;
   const ObSQLSessionInfo *session = NULL;
   ObExprRegexpSessionVariables regexp_vars;
+  share::schema::ObExternalFilePatternType pattern_type = share::schema::REGEXP_EXTERNAL_FILE_PATTERN;
   ObSEArray<ObString, 4> tmp_file_urls;
   ObSEArray<int64_t, 4> tmp_file_sizes;
   ObSEArray<int64_t, 4> tmp_last_modify_times;
@@ -101,13 +107,18 @@ int ObExprCollectFileList::collect_file_list(const ObExpr &expr, ObEvalCtx &ctx,
     LOG_WARN("session is null", K(ret));
   } else if (OB_FAIL(session->get_regexp_session_vars(regexp_vars))) {
     LOG_WARN("failed to get regexp_vars.", K(ret));
-  } else if (OB_FAIL(expr.eval_param_value(ctx, datum_path, datum_patten, datum_access_info))) {
+  } else if ((expr.arg_cnt_ == 3 && OB_FAIL(expr.eval_param_value(ctx, datum_path, datum_patten, datum_access_info)))
+             || (expr.arg_cnt_ == 4 && OB_FAIL(expr.eval_param_value(ctx, datum_path, datum_patten, datum_access_info, datum_pattern_type)))) {
     LOG_WARN("eval param value failed");
   } else if (OB_UNLIKELY(datum_path->is_null())) {
     res_datum.set_null();
+  } else if (expr.arg_cnt_ == 4
+             && OB_FALSE_IT(pattern_type =
+                 static_cast<share::schema::ObExternalFilePatternType>(datum_pattern_type->get_int()))) {
   } else if (OB_FAIL(ObExternalTableFileManager::get_external_file_list_on_device(
                  datum_path->get_string(),
                  datum_patten->get_string(),
+                 pattern_type,
                  regexp_vars,
                  tmp_file_urls,
                  tmp_file_sizes,

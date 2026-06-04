@@ -3388,6 +3388,8 @@ int ObTableSqlService::gen_table_dml_without_check(
           && OB_FAIL(dml.add_column("micro_block_format_version", table.get_micro_block_format_version())))
       || (((data_version >= MOCK_DATA_VERSION_4_3_5_5 && data_version < DATA_VERSION_4_4_0_0) || (data_version >= DATA_VERSION_4_4_2_0))
           && OB_FAIL(dml.add_column("mview_expand_definition", ObHexEscapeSqlStr(table.get_view_schema().get_expand_view_definition_for_mv()))))
+      || (data_version >= DATA_VERSION_4_4_2_2
+          && OB_FAIL(dml.add_column("external_file_pattern_type", table.get_external_file_pattern_type())))
         ) {
         LOG_WARN("add column failed", K(ret));
       }
@@ -3521,6 +3523,10 @@ int ObTableSqlService::gen_table_dml(
   } else if (!ObMicroBlockFormatVersionHelper::check_version_valid(table.get_micro_block_format_version(), data_version)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("can't set micro block format version in current version", KR(ret), K(table));
+  } else if (data_version < DATA_VERSION_4_4_2_2
+    && OB_UNLIKELY(table.get_external_file_pattern_type() != REGEXP_EXTERNAL_FILE_PATTERN)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("glob pattern is not support before 4.4.2", K(ret), K(table));
   } else if (OB_FAIL(gen_table_dml_without_check(exec_tenant_id, table,
           update_object_status_ignore_version, data_version, dml))) {
     LOG_WARN("failed to gen_table_dml_with_data_version", KR(ret), KDV(data_version));

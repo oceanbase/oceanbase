@@ -10845,6 +10845,18 @@ int ObResolverUtils::resolve_file_format(const ParseNode *node, ObExternalFileFo
         }
         break;
       }
+      case T_EXPORT_CSV_HEADER: {
+        uint64_t data_version = 0;
+        if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+          LOG_WARN("failed to get data version", K(ret));
+        } else if (data_version < DATA_VERSION_4_4_2_2) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "data version is less than 4.4.2.2, export_csv_header");
+        } else {
+          format.csv_format_.export_header_ = node->children_[0]->value_;
+        }
+        break;
+      }
       default: {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid file format option", K(ret), K(node->type_));

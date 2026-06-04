@@ -85,11 +85,26 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
       SHARE_SCHEMA_LOG(WARN, "fail to print LOCATION", K(ret));
     }
   }
+
+  uint64_t tenant_id = table_schema.get_tenant_id();
+  uint64_t data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
+    LOG_WARN("failed to get data version", K(ret), K(tenant_id));
+  } else if (!use_properties && !pattern.empty()) {
+    const char *pattern_fmt = nullptr;
+    if (table_schema.get_external_file_pattern_type() == GLOB_EXTERNAL_FILE_PATTERN) {
+      pattern_fmt = "\nGLOB_PATTERN='%.*s'";
+    } else if (data_version < DATA_VERSION_4_4_2_2) {
+      pattern_fmt = "\nPATTERN='%.*s'";
+    } else {
+      pattern_fmt = "\nREGEXP_PATTERN='%.*s'";
+    }
+    if (OB_FAIL(databuff_printf(buf, buf_len, pos, pattern_fmt, pattern.length(), pattern.ptr()))) {
+      SHARE_SCHEMA_LOG(WARN, "fail to print PATTERN", K(ret));
+    }
+  }
+
   if (OB_FAIL(ret)) {
-    // do nothing
-  } else if (!use_properties && !pattern.empty() &&
-      OB_FAIL(databuff_printf(buf, buf_len, pos, "\nPATTERN='%.*s'", pattern.length(), pattern.ptr()))) {
-    SHARE_SCHEMA_LOG(WARN, "fail to print PATTERN", K(ret));
   } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\nAUTO_REFRESH = %s", table_schema.get_external_table_auto_refresh() == 0 ? "OFF" :
                                                                                 table_schema.get_external_table_auto_refresh() == 1 ? "IMMEDIATE" : "INTERVAL"))) {
     SHARE_SCHEMA_LOG(WARN, "fail to print AUTO REFRESH", K(ret));
@@ -98,13 +113,7 @@ int ObSchemaPrinter::print_external_table_file_info(const ObTableSchema &table_s
       SHARE_SCHEMA_LOG(WARN, "fail to print PATTERN", K(ret));
     }
   }
-  uint64_t tenant_id = table_schema.get_tenant_id();
-  uint64_t data_version = 0;
-  if (table_schema.is_sys_table() || table_schema.is_vir_table()) {
-    // skip for sys/vir table
-  } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, data_version))) {
-    LOG_WARN("failed to get data version", K(ret), K(tenant_id));
-  }
+
    // 2. print file format
   if (OB_SUCC(ret)) {
     ObExternalFileFormat format;

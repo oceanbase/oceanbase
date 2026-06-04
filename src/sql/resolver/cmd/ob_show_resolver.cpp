@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/cmd/ob_show_resolver.h"
 #include "sql/resolver/dcl/ob_grant_resolver.h"
+#include "sql/resolver/ddl/ob_ddl_resolver.h"
 #include "observer/virtual_table/ob_tenant_all_tables.h"
 #include "storage/tx/ob_xa_define.h"
 #include "share/schema/ob_schema_printer.h"
@@ -2042,9 +2043,13 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
       case T_LOCATION_UTILS_LIST: {
         uint64_t min_version = OB_INVALID_VERSION;
         uint64_t location_id = OB_INVALID_ID;
+        uint64_t list_file_tid = OB_INVALID_ID;
         ObString sub_path;
         ObString pattern;
+        share::schema::ObExternalFilePatternType pattern_type = share::schema::REGEXP_EXTERNAL_FILE_PATTERN;
         ObString location_name;
+        const ObTableSchema *list_file_schema = NULL;
+        bool support_pattern_type = false;
         if (OB_FAIL(GET_MIN_DATA_VERSION(real_tenant_id, min_version))) {
             LOG_WARN("get min data_version failed", K(ret), K(real_tenant_id));
         } else if (min_version < DATA_VERSION_4_4_0_0) {
@@ -2056,12 +2061,18 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
           LOG_WARN("parse tree is wrong", K(ret), K(parse_tree.num_child_));
         } else {
           show_resv_ctx.stmt_type_ = stmt::T_LOCATION_UTILS_LIST;
+          list_file_tid = is_oracle_mode ? OB_TENANT_VIRTUAL_LIST_FILE_ORA_TID : OB_TENANT_VIRTUAL_LIST_FILE_TID;
           ParseNode *child_node = parse_tree.children_[0];
           location_name.assign_ptr(child_node->str_value_, static_cast<int32_t>(child_node->str_len_));
           ObSchemaGetterGuard *schema_guard = NULL;
           if(OB_ISNULL(schema_checker_)) {
             ret = OB_ERR_UNEXPECTED;
             LOG_WARN("got null ptr", K(ret));
+          } else if (OB_FAIL(schema_checker_->get_table_schema(real_tenant_id, list_file_tid, list_file_schema))) {
+            LOG_WARN("failed to get list file schema", K(ret), K(real_tenant_id), K(list_file_tid));
+          } else if (OB_ISNULL(list_file_schema)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("list file schema is null", K(ret), K(real_tenant_id), K(list_file_tid));
           } else if (OB_FAIL(schema_checker_->get_location_id_name(real_tenant_id, location_name, location_id))) {
             LOG_WARN("get location id failed", K(ret), K(real_tenant_id), K(location_name));
           } else if(OB_ISNULL(schema_guard = schema_checker_->get_schema_guard())) {
@@ -2069,6 +2080,8 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
             LOG_WARN("got null ptr", K(ret));
           } else if (OB_FAIL(schema_guard->check_location_access(session_priv, enable_role_id_array, location_name))) {
             LOG_WARN("failed to check location access", K(ret), K(session_priv), K(enable_role_id_array), K(location_name));
+          } else {
+            support_pattern_type = list_file_schema->get_rowkey_column_num() >= 4;
           }
           if (OB_SUCC(ret) && OB_NOT_NULL(parse_tree.children_[1])) {
             ParseNode *child_node = parse_tree.children_[1];
@@ -2076,27 +2089,22 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
           }
           if (OB_SUCC(ret) && OB_NOT_NULL(parse_tree.children_[2])) {
             ParseNode *child_node = parse_tree.children_[2];
-            if (T_EXTERNAL_FILE_PATTERN != child_node->type_) {
-              ret = OB_ERR_UNEXPECTED;
-              SQL_RESV_LOG(WARN, "invalid file format option", K(ret));
-            } else if (child_node->num_child_ != 1 || OB_ISNULL(child_node->children_[0])) {
-              ret = OB_ERR_UNEXPECTED;
-              SQL_RESV_LOG(WARN, "unexpected child num", K(child_node->num_child_));
-            } else if (0 == child_node->children_[0]->str_len_) {
-              ObSqlString err_msg;
-              err_msg.append_fmt("empty regular expression");
-              ret = OB_ERR_REGEXP_ERROR;
-              LOG_USER_ERROR(OB_ERR_REGEXP_ERROR, err_msg.ptr());
-              SQL_RESV_LOG(WARN, "empty regular expression", K(ret));
-            } else {
-              pattern = ObString(child_node->children_[0]->str_len_,
-                                child_node->children_[0]->str_value_);
-              if (OB_FAIL(ObSQLUtils::convert_sql_text_to_schema_for_storing(*allocator_,
-                                                                              session_info_->get_dtc_params(),
-                                                                              pattern))) {
-                SQL_RESV_LOG(WARN, "failed to convert pattern to utf8", K(ret));
-              }
+            if (OB_FAIL(ObDDLResolver::resolve_external_file_pattern(child_node,
+                                                                     true /* is_external_table */,
+                                                                     *allocator_,
+                                                                     session_info_,
+                                                                     pattern,
+                                                                     pattern_type))) {
+              SQL_RESV_LOG(WARN, "failed to resolve external file pattern", K(ret));
             }
+          }
+          if (OB_SUCC(ret)
+              && !support_pattern_type
+              && pattern_type != share::schema::REGEXP_EXTERNAL_FILE_PATTERN) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "glob pattern is not supported before 4.4.2.2");
+            LOG_WARN("glob pattern is not supported when list file schema does not contain pattern_type",
+                     K(ret), K(real_tenant_id), K(support_pattern_type), K(pattern_type));
           }
         }
         if (OB_SUCC(ret)) {
@@ -2110,13 +2118,24 @@ int ObShowResolver::resolve(const ParseNode &parse_tree)
             tmp_pattern.append("*");
             pattern = tmp_pattern.string();
           }
-          GEN_SQL_STEP_1(ObShowSqlSet::LOCATION_UTILS_LIST);
-          GEN_SQL_STEP_2(ObShowSqlSet::LOCATION_UTILS_LIST,
-                        REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME),
-                        REAL_NAME(OB_TENANT_VIRTUAL_LIST_FILE_TNAME, OB_TENANT_VIRTUAL_LIST_FILE_ORA_TNAME),
-                        location_id,
-                        sub_path.length(), sub_path.ptr(),
-                        pattern.length(), pattern.ptr());
+          if (!support_pattern_type) {
+            GEN_SQL_STEP_1(ObShowSqlSet::LOCATION_UTILS_LIST);
+            GEN_SQL_STEP_2(ObShowSqlSet::LOCATION_UTILS_LIST,
+                          REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME),
+                          REAL_NAME(OB_TENANT_VIRTUAL_LIST_FILE_TNAME, OB_TENANT_VIRTUAL_LIST_FILE_ORA_TNAME),
+                          location_id,
+                          sub_path.length(), sub_path.ptr(),
+                          pattern.length(), pattern.ptr());
+          } else {
+            GEN_SQL_STEP_1(ObShowSqlSet::LOCATION_UTILS_LIST_V2);
+            GEN_SQL_STEP_2(ObShowSqlSet::LOCATION_UTILS_LIST_V2,
+                          REAL_NAME(OB_SYS_DATABASE_NAME, OB_ORA_SYS_SCHEMA_NAME),
+                          REAL_NAME(OB_TENANT_VIRTUAL_LIST_FILE_TNAME, OB_TENANT_VIRTUAL_LIST_FILE_ORA_TNAME),
+                          location_id,
+                          sub_path.length(), sub_path.ptr(),
+                          pattern.length(), pattern.ptr(),
+                          static_cast<int64_t>(pattern_type));
+          }
         }
         break;
       }
@@ -4323,11 +4342,18 @@ DEFINE_SHOW_CLAUSE_SET(SHOW_CREATE_LOCATION,
                         "SELECT `location_name` AS `Location`, `create_location` AS `Create Location` FROM %s.%s  WHERE location_id = %ld",
                         NULL,
                         NULL);
+
 DEFINE_SHOW_CLAUSE_SET(LOCATION_UTILS_LIST,
                        NULL,
                        "SELECT `file_name` AS `File`, `file_size` AS `Size` FROM %s.%s WHERE location_id = %ld and location_sub_path = '%.*s' and pattern = '%.*s'",
                        R"(SELECT file_name AS "File", file_size AS "Size" FROM %s.%s WHERE location_id = %ld and location_sub_path = '%.*s' and pattern = '%.*s')",
                        NULL);
+
+DEFINE_SHOW_CLAUSE_SET(LOCATION_UTILS_LIST_V2,
+                        NULL,
+                        "SELECT `file_name` AS `File`, `file_size` AS `Size` FROM %s.%s WHERE location_id = %ld and location_sub_path = '%.*s' and pattern = '%.*s' and pattern_type = %ld",
+                        R"(SELECT file_name AS "File", file_size AS "Size" FROM %s.%s WHERE location_id = %ld and location_sub_path = '%.*s' and pattern = '%.*s' and pattern_type = %ld)",
+                        NULL);
 
 #define SHOW_SENSITIVE_RULES_SQL_MYSQL(WHERE_CLAUSE) \
   "SELECT rule_name, protection_policy, method, enabled, group_concat(cols order by database_id, table_id separator ', ') AS `protected_columns` FROM (        \

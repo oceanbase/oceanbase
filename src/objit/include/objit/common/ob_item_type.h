@@ -2971,6 +2971,8 @@ typedef enum ObItemType
   T_MAX_EXECUTION_TIME = 4969,    // for max_execution_time hint
   T_EXTERNAL_LANGUAGE = 4978,
   T_VERIFY_NOWAIT = 4989,
+  T_EXTERNAL_FILE_GLOB_PATTERN = 4990,
+  T_EXPORT_CSV_HEADER = 4991,
   T_MAX //Attention: add a new type before T_MAX
 } ObItemType;
 

@@ -71,6 +71,13 @@ enum class ObMergeEngineType : uint8_t
   OB_MERGE_ENGINE_MAX = 255
 };
 
+enum ObSkipIndexLevel : uint8_t
+{
+  OB_SKIP_INDEX_LEVEL_BASE_ONLY = 0,
+  OB_SKIP_INDEX_LEVEL_BASE_AND_DELTA_SSTABLE = 1,
+  OB_SKIP_INDEX_LEVEL_MAX
+};
+
 struct ObStoreFormatItem
 {
   const char* format_name_;
@@ -85,6 +92,7 @@ public:
   static const ObStoreFormatType STORE_FORMAT_MYSQL_DEFAULT = OB_STORE_FORMAT_DYNAMIC_MYSQL;
   static const ObStoreFormatType STORE_FORMAT_ORACLE_START = OB_STORE_FORMAT_NOCOMPRESS_ORACLE;
   static const ObStoreFormatType STORE_FORMAT_ORACLE_DEFAULT = OB_STORE_FORMAT_ARCHIVE_ORACLE;
+  static const ObRowStoreType DEFAULT_MINOR_ROW_STORE_TYPE = FLAT_ROW_STORE;
 private:
   ObStoreFormat() {};
   virtual ~ObStoreFormat() {};

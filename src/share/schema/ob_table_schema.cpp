@@ -317,6 +317,7 @@ int ObSimpleTableSchemaV2::assign(const ObSimpleTableSchemaV2 &other)
       truncate_version_ = other.truncate_version_;
       storage_cache_policy_type_ = other.storage_cache_policy_type_;
       with_dynamic_partition_policy_ = other.with_dynamic_partition_policy_;
+      minor_row_store_type_ = other.minor_row_store_type_;
       if (OB_FAIL(table_mode_.assign(other.table_mode_))) {
         LOG_WARN("Fail to assign table mode", K(ret), K(other.table_mode_));
       } else if (OB_FAIL(deep_copy_str(other.table_name_, table_name_))) {
@@ -458,6 +459,7 @@ void ObSimpleTableSchemaV2::reset()
   with_dynamic_partition_policy_ = false;
   ObPartitionSchema::reset();
   storage_cache_policy_type_ = ObStorageCachePolicyType::MAX_POLICY;
+  minor_row_store_type_ = ObStoreFormat::DEFAULT_MINOR_ROW_STORE_TYPE;
 }
 
 bool ObSimpleTableSchemaV2::has_tablet() const
@@ -1923,7 +1925,8 @@ ObTableSchema::ObTableSchema(ObIAllocator *allocator)
     storage_cache_policy_(),
     semistruct_encoding_type_(),
     dynamic_partition_policy_(),
-    semistruct_properties_()
+    semistruct_properties_(),
+    ttl_flag_()
 {
   reset();
 }
@@ -2010,6 +2013,9 @@ int ObTableSchema::assign(const ObTableSchema &src_schema)
       merge_engine_type_ = src_schema.merge_engine_type_;
       external_location_id_ = src_schema.external_location_id_;
       tmp_mlog_tid_ = src_schema.tmp_mlog_tid_;
+      skip_index_level_ = src_schema.skip_index_level_;
+      ttl_flag_ = src_schema.ttl_flag_;
+      external_file_pattern_type_ = src_schema.external_file_pattern_type_;
       if (OB_FAIL(deep_copy_str(src_schema.tablegroup_name_, tablegroup_name_))) {
         LOG_WARN("Fail to deep copy tablegroup_name", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.comment_, comment_))) {
@@ -4044,6 +4050,7 @@ int64_t ObTableSchema::get_convert_size() const
   convert_size += external_file_location_.length() + 1;
   convert_size += external_file_location_access_info_.length() + 1;
   convert_size += external_file_pattern_.length() + 1;
+  convert_size += sizeof(external_file_pattern_type_);
   convert_size += ttl_definition_.length() + 1;
   convert_size += kv_attributes_.length() + 1;
   convert_size += index_params_.length() + 1;
@@ -4095,7 +4102,9 @@ void ObTableSchema::reset()
   aux_lob_piece_tid_ = OB_INVALID_ID;
   compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE;
+  skip_index_level_ = ObSkipIndexLevel::OB_SKIP_INDEX_LEVEL_BASE_ONLY;
   reset_progressive_merge();
+  ttl_flag_.reset();
   reset_string(tablegroup_name_);
   reset_string(comment_);
   reset_string(pk_comment_);
@@ -4175,6 +4184,7 @@ void ObTableSchema::reset()
   external_sub_path_.reset();
   semistruct_properties_.reset();
   ObSimpleTableSchemaV2::reset();
+  external_file_pattern_type_ = static_cast<int64_t>(REGEXP_EXTERNAL_FILE_PATTERN);
 }
 
 int ObTableSchema::get_all_tablet_and_object_ids(ObIArray<ObTabletID> &tablet_ids,
@@ -7895,6 +7905,10 @@ OB_DEF_SERIALIZE(ObTableSchema)
   OB_UNIS_ENCODE(micro_block_format_version_);
   OB_UNIS_ENCODE(tmp_mlog_tid_);
   OB_UNIS_ENCODE(semistruct_properties_);
+  OB_UNIS_ENCODE(ttl_flag_);
+  OB_UNIS_ENCODE(minor_row_store_type_);
+  OB_UNIS_ENCODE(skip_index_level_);
+  OB_UNIS_ENCODE(external_file_pattern_type_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -8146,6 +8160,10 @@ OB_DEF_DESERIALIZE(ObTableSchema)
   OB_UNIS_DECODE(micro_block_format_version_);
   OB_UNIS_DECODE(tmp_mlog_tid_);
   OB_UNIS_DECODE_AND_FUNC(semistruct_properties_, deep_copy_str);
+  OB_UNIS_DECODE(ttl_flag_);
+  OB_UNIS_DECODE(minor_row_store_type_);
+  OB_UNIS_DECODE(skip_index_level_);
+  OB_UNIS_DECODE(external_file_pattern_type_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员
@@ -8297,6 +8315,10 @@ OB_DEF_SERIALIZE_SIZE(ObTableSchema)
   OB_UNIS_ADD_LEN(micro_block_format_version_);
   OB_UNIS_ADD_LEN(tmp_mlog_tid_);
   OB_UNIS_ADD_LEN(semistruct_properties_);
+  OB_UNIS_ADD_LEN(ttl_flag_);
+  OB_UNIS_ADD_LEN(minor_row_store_type_);
+  OB_UNIS_ADD_LEN(skip_index_level_);
+  OB_UNIS_ADD_LEN(external_file_pattern_type_);
   // !!! end static check
   /*
    * 在此end static check注释前新增反序列化的成员

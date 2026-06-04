@@ -5271,6 +5271,7 @@ int ObDMLResolver::set_partition_info_for_odps(ObTableSchema &table_schema,
               table_schema.get_external_file_location(),
               table_schema.get_external_file_location_access_info(),
               table_schema.get_external_file_pattern(),
+              table_schema.get_external_file_pattern_type(),
               table_schema.get_external_properties(),
               table_schema.is_partitioned_table(),
               regexp_vars, allocator,
@@ -5366,6 +5367,7 @@ int ObDMLResolver::sample_external_file_name(common::ObIAllocator &allocator,
               file_location,
               access_info,
               table_schema.get_external_file_pattern(),
+              table_schema.get_external_file_pattern_type(),
               table_schema.get_external_properties(),
               table_schema.is_partitioned_table(),
               regexp_vars, allocator,
@@ -5378,6 +5380,8 @@ int ObDMLResolver::sample_external_file_name(common::ObIAllocator &allocator,
   if (OB_SUCC(ret)) {
     if (basic_file_infos.empty()) {
       ret = OB_FILE_NOT_EXIST;
+      FORWARD_USER_ERROR_MSG(ret,
+                             "File not exist, please check the location or confirm whether the pattern is a glob or a regexp");
       LOG_WARN("missing file", K(ret));
     } else {
       bool has_valid_file = false;
@@ -5833,14 +5837,18 @@ int ObDMLResolver::build_mocked_external_table_schema(const ParseNode *location_
   if (OB_SUCC(ret)) {
     if (pattern_node != NULL) {
       ObString pattern;
+      share::schema::ObExternalFilePatternType pattern_type = share::schema::REGEXP_EXTERNAL_FILE_PATTERN;
       if (OB_FAIL(ObDDLResolver::resolve_external_file_pattern(pattern_node,
                                                               table_schema.is_external_table(),
                                                               allocator,
                                                               session_info_,
-                                                              pattern))) {
+                                                              pattern,
+                                                              pattern_type))) {
         LOG_WARN("failed to resolve external file pattern", K(ret));
       } else if (OB_FAIL(table_schema.set_external_file_pattern(pattern))) {
         LOG_WARN("failed to set external file pattern", K(ret), K(pattern));
+      } else {
+        table_schema.set_external_file_pattern_type(pattern_type);
       }
     }
   }

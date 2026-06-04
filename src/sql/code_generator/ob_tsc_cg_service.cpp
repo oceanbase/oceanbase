@@ -208,6 +208,8 @@ int ObTscCgService::generate_tsc_ctdef(ObLogTableScan &op, ObTableScanCtDef &tsc
           LOG_WARN("fail to set access info", K(ret));
         } else if (OB_FAIL(scan_ctdef.external_file_pattern_.store_str(table_schema->get_external_file_pattern()))) {
           LOG_WARN("fail to set pattern", K(ret));
+        } else if (OB_FALSE_IT(scan_ctdef.external_file_pattern_type_ =
+                                 static_cast<int64_t>(table_schema->get_external_file_pattern_type()))) {
         }
       }
     }

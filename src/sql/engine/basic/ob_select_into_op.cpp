@@ -216,7 +216,56 @@ void ObSelectIntoOp::set_csv_format_options()
       has_escape_ = true;
       char_escape_ = external_properties_.csv_format_.field_escaped_char_;
     }
+    export_csv_header_ = external_properties_.csv_format_.export_header_;
   }
+}
+
+int ObSelectIntoOp::init_csv_writer(ObCsvFileWriter &data_writer)
+{
+  int ret = OB_SUCCESS;
+  if (MY_SPEC.buffer_size_ > 0
+      && OB_ISNULL(data_writer.get_buf())
+      && OB_FAIL(data_writer.alloc_buf(ctx_.get_allocator(), MY_SPEC.buffer_size_))) {
+    LOG_WARN("failed to alloc buffer", K(ret));
+  } else if (has_compress_
+             && OB_ISNULL(data_writer.get_compress_stream_writer())
+             && OB_FAIL(data_writer.init_compress_writer(ctx_.get_allocator(),
+                                                         external_properties_.csv_format_.compression_algorithm_,
+                                                         MY_SPEC.buffer_size_))) {
+    LOG_WARN("failed to init compress stream writer", K(ret));
+  }
+  return ret;
+}
+
+int ObSelectIntoOp::export_csv_header(ObCsvFileWriter &data_writer)
+{
+  int ret = OB_SUCCESS;
+  ObObj header_field;
+  if (!export_csv_header_) {
+    // do nothing
+  } else if (OB_UNLIKELY(MY_SPEC.alias_names_.strs_.count() != MY_SPEC.select_exprs_.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected header column count",
+             K(ret),
+             K(MY_SPEC.alias_names_.strs_.count()),
+             K(MY_SPEC.select_exprs_.count()));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < MY_SPEC.alias_names_.strs_.count(); ++i) {
+      header_field.set_varchar(MY_SPEC.alias_names_.strs_.at(i));
+      header_field.set_collation_type(cs_type_);
+      OZ(print_field(header_field, data_writer));
+      if (OB_SUCC(ret) && i != MY_SPEC.alias_names_.strs_.count() - 1) {
+        OZ(write_obj_to_file(field_str_, data_writer));
+      }
+    }
+    OZ(write_obj_to_file(line_str_, data_writer));
+    if (OB_SUCC(ret)) {
+      data_writer.update_last_line_pos();
+    }
+    OZ(data_writer.flush_shared_buf(shared_buf_));
+    OZ(data_writer.flush_buf());
+  }
+  return ret;
 }
 
 #ifdef OB_BUILD_CPP_ODPS
@@ -1000,25 +1049,67 @@ int ObSelectIntoOp::calc_file_path_with_partition(ObString partition, ObExternal
 int ObSelectIntoOp::split_file(ObExternalFileWriter &data_writer)
 {
   int ret = OB_SUCCESS;
+  ObCsvFileWriter *csv_data_writer = NULL;
+  char *carry_over_line = NULL;
+  int64_t carry_over_line_len = 0;
   if (ObExternalFileFormat::FormatType::CSV_FORMAT == format_type_) {
-    ObCsvFileWriter *csv_data_writer = static_cast<ObCsvFileWriter*>(&data_writer);
+    csv_data_writer = static_cast<ObCsvFileWriter*>(&data_writer);
     if (OB_ISNULL(csv_data_writer)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null data writer", K(ret));
     } else if (!use_shared_buf_ && OB_FAIL(csv_data_writer->flush_buf())) {
       LOG_WARN("failed to flush buffer", K(ret));
+    } else if (export_csv_header_ && !use_shared_buf_ && csv_data_writer->get_curr_pos() > 0) {
+      carry_over_line_len = csv_data_writer->get_curr_pos();
+      if (OB_ISNULL(csv_data_writer->get_buf())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("csv writer buffer is null", K(ret));
+      } else if (OB_ISNULL(carry_over_line = static_cast<char *>(ctx_.get_allocator().alloc(carry_over_line_len)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate carry over line", K(ret), K(carry_over_line_len));
+      } else {
+        MEMCPY(carry_over_line, csv_data_writer->get_buf(), carry_over_line_len);
+        csv_data_writer->set_curr_pos(0);
+        csv_data_writer->update_last_line_pos();
+      }
     } else if (has_lob_ && use_shared_buf_ && OB_FAIL(csv_data_writer->flush_shared_buf(shared_buf_))) {
       // 要保证文件中每一行的完整性, 有lob的时候shared buffer里不一定是完整的一行
       // 因此剩下的shared buffer里的内容也要刷到当前文件里, 这种情况下无法严格满足max_file_size的限制
       LOG_WARN("failed to flush shared buffer", K(ret));
     }
   }
+
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(data_writer.close_file())) {
     LOG_WARN("failed to close file", K(ret));
   } else if (OB_FAIL(calc_next_file_path(data_writer))) {
     LOG_WARN("failed to calculate new file path", K(ret));
+  } else {
+    if (has_compress_ && OB_NOT_NULL(csv_data_writer)
+        && OB_NOT_NULL(csv_data_writer->get_compress_stream_writer())) {
+      csv_data_writer->get_compress_stream_writer()->reuse();
+    }
+
+    if (export_csv_header_
+        && ObExternalFileFormat::FormatType::CSV_FORMAT == format_type_
+        && OB_FAIL(export_csv_header(*csv_data_writer))) {
+      LOG_WARN("failed to export csv header", K(ret));
+    } else if (OB_NOT_NULL(carry_over_line)) {
+      if (OB_ISNULL(csv_data_writer->get_buf())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("csv writer buffer is null", K(ret));
+      } else {
+        MEMCPY(csv_data_writer->get_buf(), carry_over_line, carry_over_line_len);
+        csv_data_writer->set_curr_pos(carry_over_line_len);
+      }
+    }
   }
+
+  if (OB_NOT_NULL(carry_over_line)) {
+    ctx_.get_allocator().free(carry_over_line);
+    carry_over_line = NULL;
+  }
+
   return ret;
 }
 
@@ -1051,9 +1142,6 @@ int ObSelectIntoOp::check_csv_file_size(ObCsvFileWriter &data_writer)
       if (!has_compress_) {
         data_writer.set_write_bytes(has_split ? curr_line_len : curr_bytes);
       }
-    }
-    if (has_compress_ && has_split) {
-      data_writer.get_compress_stream_writer()->reuse();
     }
     data_writer.update_last_line_pos();
   }
@@ -5192,10 +5280,10 @@ int ObSelectIntoOp::get_data_writer_for_partition(const ObString &partition_str,
     } else if (OB_ISNULL(data_writer)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("get unexpected null", K(ret));
-    } else if (ObExternalFileFormat::FormatType::CSV_FORMAT == format_type_ && MY_SPEC.buffer_size_ > 0) {
+    } else if (ObExternalFileFormat::FormatType::CSV_FORMAT == format_type_) {
       csv_data_writer = static_cast<ObCsvFileWriter*>(data_writer);
-      if (OB_FAIL(csv_data_writer->alloc_buf(ctx_.get_allocator(), MY_SPEC.buffer_size_))) {
-        LOG_WARN("failed to alloc buffer", K(ret));
+      if (OB_FAIL(init_csv_writer(*csv_data_writer))) {
+        LOG_WARN("failed to init csv writer", K(ret));
       }
     }
     //add to hashmap
@@ -5216,6 +5304,10 @@ int ObSelectIntoOp::get_data_writer_for_partition(const ObString &partition_str,
     //calc file path
     if (OB_SUCC(ret) && OB_FAIL(calc_file_path_with_partition(partition, *data_writer))) {
       LOG_WARN("failed to calc file path with partition", K(ret));
+    } else if (OB_SUCC(ret) && export_csv_header_
+               && ObExternalFileFormat::FormatType::CSV_FORMAT == format_type_
+               && OB_FAIL(export_csv_header(*csv_data_writer))) {
+      LOG_WARN("failed to export csv header", K(ret));
     }
   }
   return ret;
@@ -5238,10 +5330,12 @@ int ObSelectIntoOp::create_the_only_data_writer(ObExternalFileWriter *&data_writ
   } else if (T_INTO_OUTFILE == MY_SPEC.into_type_ && MY_SPEC.is_single_
              && OB_FAIL(data_writer->open_file())) {
     LOG_WARN("failed to open file", K(ret));
-  } else if (ObExternalFileFormat::FormatType::CSV_FORMAT == format_type_ && MY_SPEC.buffer_size_ > 0) {
+  } else if (ObExternalFileFormat::FormatType::CSV_FORMAT == format_type_) {
     csv_data_writer = static_cast<ObCsvFileWriter*>(data_writer);
-    if (OB_FAIL(csv_data_writer->alloc_buf(ctx_.get_allocator(), MY_SPEC.buffer_size_))) {
-      LOG_WARN("failed to alloc buffer", K(ret));
+    if (OB_FAIL(init_csv_writer(*csv_data_writer))) {
+      LOG_WARN("failed to init csv writer", K(ret));
+    } else if (OB_FAIL(export_csv_header(*csv_data_writer))) {
+      LOG_WARN("failed to export csv header", K(ret));
     }
   }
   return ret;

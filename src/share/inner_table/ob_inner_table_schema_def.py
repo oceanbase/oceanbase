@@ -331,6 +331,10 @@ all_table_def = dict(
       ('micro_block_format_version', 'int', 'false', 'ObMicroBlockFormatVersionHelper::DEFAULT_VERSION'), # patch from master 4.5
       ('semistruct_properties', 'longtext', 'false', ''), # patch from master 4.5
       ('mview_expand_definition', 'longtext', 'false', ''),
+      ('ttl_flag', 'varbinary:OB_MAX_VARCHAR_LENGTH', 'false', '\\x01'), # patch from master 4.6
+      ('delta_format', 'varchar:OB_MAX_VARCHAR_LENGTH', 'false', 'flat'), # patch from master 4.6
+      ('skip_index_level', 'int', 'false', '0'), # patch from master 4.6
+      ('external_file_pattern_type', 'int', 'false', '0'),
     ],
 )
 
@@ -17630,6 +17634,7 @@ def_table_schema(
   ('location_id', 'int'),
   ('location_sub_path', 'varchar:OB_MAX_LOCATION_NAME_LENGTH'),
   ('pattern', 'varchar:OB_MAX_LOCATION_NAME_LENGTH'),
+  ('pattern_type', 'int'),
   ],
   in_tenant_space = True,
 

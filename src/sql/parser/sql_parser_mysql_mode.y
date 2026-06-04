@@ -301,9 +301,9 @@ END_P SET_VAR DELIMITER
         FIELD_OPTIONALLY_ENCLOSED_BY FIELD_DELIMITER FIELD_ENCLOSED_BY FILE_EXTENSION
 
         GENERAL GEOMETRY GEOMCOLLECTION GEOMETRYCOLLECTION GET_FORMAT GLOBAL GRANTS GRANULARITY GROUP_CONCAT GROUPING GROUPING_ID GTS
-        GLOBAL_NAME GLOBAL_ALIAS
+        GLOBAL_NAME GLOBAL_ALIAS GLOB_PATTERN
 
-        HANDLER HASH HEAP HELP HISTOGRAM HOST HOSTS HOT_RETENTION HOUR HIDDEN HYBRID HYBRID_HIST HYBRID_SEARCH HMS_CATALOG_NAME
+        HANDLER HASH HEADER HEAP HELP HISTOGRAM HOST HOSTS HOT_RETENTION HOUR HIDDEN HYBRID HYBRID_HIST HYBRID_SEARCH HMS_CATALOG_NAME
 
         ID IDC IDENTIFIED IGNORE_SERVER_IDS IK_MODE ILOG IMMEDIATE IMPORT INCLUDING INCR INDEXES INDEX_TABLE_ID INFO INITIAL_SIZE
         INNODB INSERT_METHOD INSTALL INSTANCE INVOKER IO IOPS_WEIGHT IO_THREAD IPC ISOLATE ISOLATION ISSUER
@@ -344,7 +344,7 @@ END_P SET_VAR DELIMITER
 
         QUANTIFIER_TABLE QUARTER QUERY QUERY_RESPONSE_TIME QUEUE_TIME QUICK QUOTA_NAME
 
-        RANGE RB_AND_AGG RB_AND_CARDINALITY_AGG RB_BUILD_AGG RB_ITERATE RB_OR_AGG RB_OR_CARDINALITY_AGG REBUILD RECOMPILE RECOVER RECOVERY_WINDOW RECYCLE REDO_BUFFER_SIZE REDOFILE REDUNDANCY REDUNDANT REFRESH REGION RELAY RELAYLOG
+        RANGE RB_AND_AGG RB_AND_CARDINALITY_AGG RB_BUILD_AGG RB_ITERATE RB_OR_AGG RB_OR_CARDINALITY_AGG REBUILD RECOMPILE RECOVER RECOVERY_WINDOW RECYCLE REDO_BUFFER_SIZE REDOFILE REDUNDANCY REDUNDANT REFRESH REGEXP_PATTERN REGION RELAY RELAYLOG
         RELAY_LOG_FILE RELAY_LOG_POS RELAY_THREAD RELOAD REMAP REMOVE REORGANIZE REPAIR REPEATABLE REPLICA
         REPLICA_NUM REPLICA_TYPE REPLICATION REPORT RESET RESOURCE RESOURCE_POOL RESOURCE_POOL_LIST RESPECT RESTART
         RESTORE RESUME RETAIN RETURNED_SQLSTATE RETURNS RETURNING REVERSE REWRITE ROLLBACK ROLLUP ROOT
@@ -5046,7 +5046,7 @@ set_catalog_stmt:
 SET CATALOG relation_name
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_SET_CATALOG, 1, $3);
-}
+};
 
 /*****************************************************************************
  *
@@ -8457,9 +8457,11 @@ STRING_VALUE
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_LOCATION_OBJECT, 2, $1, $2);
   $$->stmt_loc_.first_column_ = @1.first_column - 1;
-  $$->stmt_loc_.last_column_ = @1.last_column - 1;
-  $$->str_len_ = $1->str_len_;
-  $$->str_value_ = $1->str_value_;
+  $$->stmt_loc_.last_column_ = (NULL != $2 ? @2.last_column : @1.last_column) - 1;
+  check_ret(setup_token_pos_info_and_dup_string($$, result,
+                                                @1.first_column,
+                                                NULL != $2 ? @2.last_column : @1.last_column),
+            &@1, result);
 }
 ;
 
@@ -9886,6 +9888,10 @@ TYPE COMP_EQ STRING_VALUE
 | MAX_ROW_LENGTH COMP_EQ file_size_const
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_MAX_ROW_LENGTH, 1, $3);
+}
+| HEADER COMP_EQ BOOL_VALUE
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_EXPORT_CSV_HEADER, 1, $3);
 }
 ;
 
@@ -15214,7 +15220,18 @@ PATTERN opt_equal_mark STRING_VALUE
 {
   (void)($2) ; /* make bison mute */
   malloc_non_terminal_node($$, result->malloc_pool_, T_EXTERNAL_FILE_PATTERN, 1, $3);
-};
+}
+| REGEXP_PATTERN opt_equal_mark STRING_VALUE
+{
+  (void)($2) ; /* make bison mute */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_EXTERNAL_FILE_PATTERN, 1, $3);
+}
+| GLOB_PATTERN opt_equal_mark STRING_VALUE
+{
+  (void)($2) ; /* make bison mute */
+  malloc_non_terminal_node($$, result->malloc_pool_, T_EXTERNAL_FILE_GLOB_PATTERN, 1, $3);
+}
+;
 
 format_expr:
 FORMAT opt_equal_mark '(' external_file_format_list ')'
@@ -25601,6 +25618,10 @@ STATISTICS
 {
   make_name_node($$, result->malloc_pool_, "model");
 }
+| CATALOG
+{
+  make_name_node($$, result->malloc_pool_, "catalog");
+}
 ;
 
 column_label:
@@ -27323,8 +27344,10 @@ ACCESS_INFO
 |       GROUPING_ID
 |       GROUP_CONCAT
 |       GTS
+|       GLOB_PATTERN
 |       HANDLER
 |       HASH
+|       HEADER
 |       HEAP
 |       HELP
 |       HISTOGRAM
@@ -27639,6 +27662,7 @@ ACCESS_INFO
 |       REDUNDANCY
 |       REDUNDANT
 |       REFRESH
+|       REGEXP_PATTERN
 |       REGION
 |       REJECT
 |       RELAY
