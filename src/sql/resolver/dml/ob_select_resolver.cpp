@@ -6365,7 +6365,9 @@ int ObSelectResolver::resolve_alias_column_ref(
       // first loop, find the matched alias column with expr
       for (int32_t i = 0; OB_SUCC(ret) && i < select_stmt->get_select_item_size(); ++i) {
         cur_item = &select_stmt->get_select_item(i);
-        if (ObCharset::case_insensitive_equal(q_name.col_name_, cur_item->alias_name_)) {
+        bool match = (is_oracle_mode() && q_name.col_name_ == cur_item->alias_name_) ||
+          (!is_oracle_mode() && ObCharset::case_insensitive_equal(q_name.col_name_, cur_item->alias_name_));
+        if (match) {
           /*
            * for oracle mode, column uniqueness is checked among all tables
            * for mysql mode, column uniqueness is only checked among select items

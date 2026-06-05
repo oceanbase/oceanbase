@@ -1997,8 +1997,11 @@ int ObDMLResolver::resolve_columns_field_list_first(ObRawExpr *&expr, ObArray<Ob
           LOG_WARN("select item expr is null", K(ret));
         } else if (select_item_expr->is_column_ref_expr()) {
           ObColumnRefRawExpr *column_ref_expr = static_cast<ObColumnRefRawExpr *>(select_item_expr);
-          if (ObCharset::case_insensitive_equal(sel_stmt->get_select_item(j).is_real_alias_ ? sel_stmt->get_select_item(j).alias_name_
-                                              : column_ref_expr->get_column_name(), columns.at(i).col_name_)) {
+          const SelectItem &select_item = sel_stmt->get_select_item(j);
+          const ObString select_item_name = select_item.is_real_alias_ ? select_item.alias_name_ : column_ref_expr->get_column_name();
+          bool match = is_oracle_mode() ? (select_item_name == columns.at(i).col_name_) :
+                        ObCharset::case_insensitive_equal(select_item_name, columns.at(i).col_name_);
+          if (match) {
             if (found) {
               ObString scope_name = ObString::make_string(get_scope_name(current_scope_));
               ret = OB_NON_UNIQ_ERROR;
@@ -2018,8 +2021,8 @@ int ObDMLResolver::resolve_columns_field_list_first(ObRawExpr *&expr, ObArray<Ob
           }
         } else if (is_oracle_mode()) {
           const SelectItem &select_item = sel_stmt->get_select_item(j);
-          if (ObCharset::case_insensitive_equal(select_item.is_real_alias_ ? select_item.alias_name_
-                                              : select_item.expr_name_, columns.at(i).col_name_)) {
+          if ((select_item.is_real_alias_ ? select_item.alias_name_ : select_item.expr_name_)
+              == columns.at(i).col_name_) {
             if (found) {
               ObString scope_name = ObString::make_string(get_scope_name(T_FIELD_LIST_SCOPE));
               ret = OB_NON_UNIQ_ERROR;
