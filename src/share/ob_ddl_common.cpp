@@ -3723,6 +3723,22 @@ int ObDDLUtil::check_tablet_checksum_error(
   return ret;
 }
 
+int ObDDLUtil::get_current_snapshot_version(
+    const uint64_t tenant_id,
+    const int64_t timeout_us,
+    int64_t &snapshot_version)
+{
+  int ret = OB_SUCCESS;
+  SCN snapshot_scn;
+  snapshot_version = 0;
+  if (OB_FAIL(OB_TS_MGR.get_ts_sync(tenant_id, timeout_us, snapshot_scn))) {
+    LOG_WARN("fail to get gts sync", K(ret), K(tenant_id), K(timeout_us));
+  } else {
+    snapshot_version = snapshot_scn.get_val_for_tx();
+  }
+  return ret;
+}
+
 int ObDDLUtil::check_table_empty(
     const share::schema::ObSysVariableSchema &sys_var_schema,
     const ObString &database_name,
@@ -3764,14 +3780,16 @@ int ObDDLUtil::check_table_empty(
     ObSingleConnectionProxy single_conn_proxy;
     sqlclient::ObISQLConnection *connection = nullptr;
     const ObSysVarSchema *var_schema = nullptr;
-
-    if (is_oracle_mode) {
-      format_str = "SELECT /*+ %.*s */ 1 FROM \"%.*s\".\"%.*s\" WHERE NOT 1 != 1 AND ROWNUM = 1";
+    int64_t snapshot_version = 0;
+    if (OB_FAIL(ObDDLUtil::get_current_snapshot_version(tenant_id, ObDDLUtil::get_default_ddl_rpc_timeout(), snapshot_version))) {
+      LOG_WARN("fail to get current snapshot version", K(ret), K(tenant_id));
+    } else if (is_oracle_mode) {
+      format_str = "SELECT /*+ %.*s */ 1 FROM \"%.*s\".\"%.*s\" AS OF SCN %ld WHERE NOT 1 != 1 AND ROWNUM = 1";
       if (OB_FAIL(single_conn_proxy.connect(tenant_id, 0/*group_id*/, &oracle_sql_proxy))) {
         LOG_WARN("failed to get mysql connect", KR(ret), K(tenant_id));
       }
     } else {
-      format_str = "SELECT /*+ %.*s */ 1 FROM `%.*s`.`%.*s` WHERE NOT 1 != 1 LIMIT 1";
+      format_str = "SELECT /*+ %.*s */ 1 FROM `%.*s`.`%.*s` AS OF SNAPSHOT %ld WHERE NOT 1 != 1 LIMIT 1";
       if (OB_FAIL(single_conn_proxy.connect(tenant_id, 0/*group_id*/, GCTX.sql_proxy_))) {
         LOG_WARN("failed to get mysql connect", KR(ret), K(tenant_id));
       }
@@ -3822,7 +3840,8 @@ int ObDDLUtil::check_table_empty(
                          format_str,
                          static_cast<int>(ddl_schema_hint_str.length()), ddl_schema_hint_str.ptr(),
                          static_cast<int>(new_database_name.length()), new_database_name.ptr(),
-                         static_cast<int>(new_table_name.length()), new_table_name.ptr()))) {
+                         static_cast<int>(new_table_name.length()), new_table_name.ptr(),
+                         snapshot_version))) {
         LOG_WARN("fail to assign format", K(ret));
       } else if (OB_FAIL(single_conn_proxy.read(res, tenant_id, sql_string.ptr()))) {
         LOG_WARN("execute sql failed", K(ret), K(sql_string.ptr()));

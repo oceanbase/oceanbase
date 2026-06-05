@@ -1394,6 +1394,10 @@ public:
       const bool calc_sstable,
       const bool calc_memtable,
       int64_t &physical_row_count /*OUT*/);
+  static int get_current_snapshot_version(
+      const uint64_t tenant_id,
+      const int64_t timeout_us,
+      int64_t &snapshot_version);
   static int check_table_empty(
       const share::schema::ObSysVariableSchema &sys_var_schema,
       const ObString &database_name,
