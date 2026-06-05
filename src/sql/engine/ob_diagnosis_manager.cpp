@@ -404,22 +404,25 @@ int ObDiagnosisManager::handle_warning(int64_t err_ret, int64_t idx, ObString co
   return ret;
 }
 
-void ObDiagnosisManager::reuse()
+void ObDiagnosisManager::reuse(bool defer_reuse)
 {
   idxs_.reset();
   rets_.reset();
   col_names_.reset();
-  data_.reset();
   missing_col_idxs_.reset();
 
-  allocator_.reuse();
+  if (!defer_reuse) {
+    data_.reset();
+    allocator_.reuse();
+  }
 }
 
 int ObDiagnosisManager::do_diagnosis(ObBitVector &skip,
                                     const ObDiagnosisInfo& diagnosis_info,
                                     int64_t sqc_id,
                                     int64_t task_id,
-                                    common::ObIAllocator &allocator) {
+                                    common::ObIAllocator &allocator,
+                                    bool defer_reuse) {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   if (idxs_.count() != rets_.count() || idxs_.count() != col_names_.count()) {
@@ -458,6 +461,7 @@ int ObDiagnosisManager::do_diagnosis(ObBitVector &skip,
           // bad file
           if (OB_SUCC(ret) && !diagnosis_info.bad_file_.empty()) {
             if (idx >= data_.count()) {
+              ret = OB_SIZE_OVERFLOW;
               LOG_WARN("data index overflow in do_diagnosis", K(ret), K(idx), K(data_.count()));
             } else if (OB_FAIL(bad_file_writer_->data_writer_->flush_data(data_.at(idx).ptr(),
                                                                   data_.at(idx).length()))) {
@@ -489,11 +493,11 @@ int ObDiagnosisManager::do_diagnosis(ObBitVector &skip,
           }
         }
 
-        reuse();
+        reuse(defer_reuse);
       }
     }
   } else {
-    reuse();
+    reuse(defer_reuse);
   }
 
   return ret;

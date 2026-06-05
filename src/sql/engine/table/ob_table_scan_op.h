@@ -572,7 +572,7 @@ public:
         );
   }
 
-  int do_diagnosis(ObExecContext &exec_ctx, ObBitVector &skip) override;
+  int do_diagnosis(ObExecContext &exec_ctx, ObBitVector &skip, bool defer_reuse) override;
 
 protected:
   // Get GI task then update location_idx and $cur_access_tablet_
