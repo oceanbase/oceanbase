@@ -3498,11 +3498,6 @@ int ObTableSqlService::gen_table_dml(
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("CS_ENCODING_ROW_STORE and OB_STORE_FORMAT_ARCHIVE_HIGH_ORACLE not support before 4.3", K(ret), K(table));
 
-  } else if (data_version < DATA_VERSION_4_3_0_0
-             && (table.get_compressor_type() == ObCompressorType::ZLIB_LITE_COMPRESSOR
-                 || 0 == strcasecmp(table.get_compress_func_name(), all_compressor_name[ObCompressorType::ZLIB_LITE_COMPRESSOR]))) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("zlib_lite_1.0 not support before 4.3", K(ret), K(table));
   } else if ((data_version < MOCK_DATA_VERSION_4_2_3_0 ||
                 (data_version >= DATA_VERSION_4_3_0_0 && data_version < DATA_VERSION_4_3_2_0))
              && OB_UNLIKELY(0 != table.get_auto_increment_cache_size())) {
@@ -6082,11 +6077,7 @@ int ObTableSqlService::append_column_group_dml_for_create_table(const ObTableSch
       if (OB_ISNULL(column_group)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("column_group schema should not be null", KR(ret), K(table));
-      } else if (data_version < DATA_VERSION_4_3_0_0
-                 && column_group->get_compressor_type() == ObCompressorType::ZLIB_LITE_COMPRESSOR) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("zlib_lite_1.0 not support before 4.3", KR(ret), K(table), KPC(column_group));
-      } else if (OB_FAIL(gen_column_group_dml(table, *column_group, false /*not history*/,
+      }  else if (OB_FAIL(gen_column_group_dml(table, *column_group, false /*not history*/,
                                               false /*not deleted*/, schema_version, cg_dml))) {
         LOG_WARN("fail to gen column_group_dml", KR(ret), K(table), KPC(column_group));
       } else if (OB_FAIL(gen_column_group_dml(table, *column_group, true /*history*/,
@@ -6231,10 +6222,6 @@ int ObTableSqlService::exec_insert_column_group(
       if (OB_ISNULL(column_group)) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("column_group schema should not be null", KR(ret));
-      } else if (data_version < DATA_VERSION_4_3_0_0
-                 && column_group->get_compressor_type() == ObCompressorType::ZLIB_LITE_COMPRESSOR) {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("zlib_lite_1.0 not support before 4.3", K(ret), K(table));
       } else if (OB_FAIL(gen_column_group_dml(table, *column_group, is_history,
                                               false /*not deleted*/, schema_version, dml))){
         LOG_WARN("fail to gen column_group_dml", K(ret));

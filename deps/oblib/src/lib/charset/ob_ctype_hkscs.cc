@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #include "lib/charset/ob_ctype.h"
-#include "lib/charset/ob_ctype_hkscs_tab.h"
-#include "lib/charset/ob_ctype_hkscs31_tab.h"
-#include "lib/charset/ob_template_helper.h"
+#include "obcharset/ob_ctype_hkscs_tab.h"
+#include "obcharset/ob_ctype_hkscs31_tab.h"
+#include "obcharset/ob_template_helper.h"
 
 extern "C" {
 static unsigned int ismbchar_hkscs(const ObCharsetInfo *cs [[maybe_unused]],

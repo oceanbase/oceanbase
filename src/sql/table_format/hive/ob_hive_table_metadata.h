@@ -9,7 +9,7 @@
 #include "lib/allocator/ob_allocator.h"
 #include "lib/container/ob_array_wrap.h"
 #include "lib/string/ob_string.h"
-#include "share/catalog/hive/thrift/gen_cpp/hive_metastore_types.h"
+#include <hive_metastore_types.h>
 #include "share/catalog/ob_external_catalog.h"
 #include "share/ob_define.h"
 #include "sql/engine/cmd/ob_load_data_parser.h"

@@ -4,7 +4,7 @@
  */
 
 #include "lib/charset/ob_ctype.h"
-#include "lib/charset/ob_ctype_ascii_tab.h"
+#include "obcharset/ob_ctype_ascii_tab.h"
 
 static ObCharsetHandler ob_charset_ascii_handler = {
     ob_cset_init_8bit,

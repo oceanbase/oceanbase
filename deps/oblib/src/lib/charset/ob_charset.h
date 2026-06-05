@@ -10,7 +10,7 @@
 #include "lib/string/ob_string.h"
 #include "lib/utility/ob_print_utils.h"
 #include "lib/charset/ob_ctype.h"
-#include "lib/charset/ob_template_helper.h"
+#include "obcharset/ob_template_helper.h"
 
 namespace oceanbase
 {

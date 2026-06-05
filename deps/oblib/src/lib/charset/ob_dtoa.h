@@ -6,7 +6,7 @@
 #ifndef OCEANBASE_LIB_OBMYSQL_OB_DTOA_
 #define OCEANBASE_LIB_OBMYSQL_OB_DTOA_
 
-#include "lib/charset/ob_mysql_global.h"
+#include "obcharset/ob_mysql_global.h"
 
 #ifdef	__cplusplus
 extern "C" {

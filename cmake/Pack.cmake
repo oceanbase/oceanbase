@@ -277,9 +277,10 @@ if (NOT OB_BUILD_OPENSOURCE)
     deps/oblib/src/lib/atomic/ob_atomic.h
     deps/oblib/src/lib/atomic/ob_atomic_reference.h
     deps/oblib/src/lib/charset/ob_charset.h
-    deps/oblib/src/lib/charset/ob_config.h
     deps/oblib/src/lib/charset/ob_ctype.h
-    deps/oblib/src/lib/charset/ob_mysql_global.h
+    deps/3rd/usr/local/oceanbase/deps/devel/include/obcharset/ob_config.h
+    deps/3rd/usr/local/oceanbase/deps/devel/include/obcharset/ob_ctype_tab.h
+    deps/3rd/usr/local/oceanbase/deps/devel/include/obcharset/ob_mysql_global.h
     deps/oblib/src/lib/checksum/ob_crc64.h
     deps/oblib/src/lib/container/ob_array.h
     deps/oblib/src/lib/container/ob_array_helper.h

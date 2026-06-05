@@ -43,6 +43,14 @@ devdeps-apache-thrift-0.16.0-132025070909.al8.aarch64.rpm
 devdeps-mit-krb5-1.21.3-212025063015.al8.aarch64.rpm
 devdeps-cyrus-sasl-2.1.28-102025070115.al8.aarch64.rpm
 devdeps-python3-3.13.3-132025070111.al8.aarch64.rpm
+devdeps-lz4-1.7.1-62026052518.al8.aarch64.rpm
+devdeps-lz4-1.9.1-52026052518.al8.aarch64.rpm
+devdeps-snappy-1.0.3-22025110616.al8.aarch64.rpm
+devdeps-zstd-1.1.1-52026052517.al8.aarch64.rpm
+devdeps-zstd-1.3.8-52026052517.al8.aarch64.rpm
+devdeps-zstd-1.5.7-52026052517.al8.aarch64.rpm
+devdeps-obcharset-1.0.0-32025111215.al8.aarch64.rpm
+devdeps-hms-client-1.0.0-22025112014.al8.aarch64.rpm
 devdeps-kafka-2.12.1-52026012814.al8.aarch64.rpm
 
 [tools]

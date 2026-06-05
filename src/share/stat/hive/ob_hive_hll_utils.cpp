@@ -7,7 +7,7 @@
 #include "lib/container/ob_se_array.h"
 #include "lib/oblog/ob_log.h"
 #include "lib/utility/ob_sort.h"
-#include "share/stat/hive/ob_hive_hll_constants.h"
+#include <ob_hive_hll_constants.h>
 
 #define USING_LOG_PREFIX SQL_ENG
 

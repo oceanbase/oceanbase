@@ -7,7 +7,6 @@
 #include <string.h>
 #include "lib/compress/snappy_1_2_2/ob_snappy_compressor_1_2_2.h"
 #include "lib/allocator/ob_malloc.h"
-#include "lib/compress/snappy/snappy_src/snappy.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::common::snappy_1_2_2;
@@ -85,16 +84,30 @@ TEST_F(TestSnappy1_2_2Compressor, test_normal_decompress)
 {
   const char *src_data = "This is a test string for snappy normal decompression. ";
   int64_t src_data_size = strlen(src_data);
-  int64_t max_overflow_size = snappy::MaxCompressedLength(src_data_size);
-  char *compress_buffer = (char*)allocator_.alloc(max_overflow_size);
+
+  int64_t max_overflow_size = 0;
+  ASSERT_EQ(OB_SUCCESS, compressor_->get_max_overflow_size(src_data_size, max_overflow_size));
+  int64_t compress_buffer_size = src_data_size + max_overflow_size;
+
+  char *compress_buffer = (char *)allocator_.alloc(compress_buffer_size);
   ASSERT_NE(nullptr, compress_buffer);
-  size_t compressed_size = 0;
-  snappy::RawCompress(src_data, src_data_size, compress_buffer, &compressed_size);
-  char *decompress_buffer = (char*)allocator_.alloc(src_data_size);
+
+  int64_t compressed_size = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            compressor_->compress(src_data, src_data_size,
+                                  compress_buffer, compress_buffer_size,
+                                  compressed_size));
+  ASSERT_GT(compressed_size, 0);
+
+  char *decompress_buffer = (char *)allocator_.alloc(src_data_size);
   ASSERT_NE(nullptr, decompress_buffer);
 
-  bool tmp_ret = snappy::RawUncompress(compress_buffer, compressed_size, decompress_buffer);
-  ASSERT_EQ(true, tmp_ret);
+  int64_t decompressed_size = 0;
+  ASSERT_EQ(OB_SUCCESS,
+            compressor_->decompress(compress_buffer, compressed_size,
+                                    decompress_buffer, src_data_size,
+                                    decompressed_size));
+  ASSERT_EQ(decompressed_size, src_data_size);
   ASSERT_EQ(0, memcmp(src_data, decompress_buffer, src_data_size));
 
   allocator_.free(compress_buffer);

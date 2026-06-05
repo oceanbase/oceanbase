@@ -1,15 +1,11 @@
-oblib_add_library(snappy
-  snappy_src/config.h
-  snappy_src/snappy-c.cpp
-  snappy_src/snappy-c.h
-  snappy_src/snappy.cpp
-  snappy_src/snappy.h
-  snappy_src/snappy-internal.h
-  snappy_src/snappy-sinksource.cpp
-  snappy_src/snappy-sinksource.h
-  snappy_src/snappy-stubs-internal.cpp
-  snappy_src/snappy-stubs-internal.h
-  snappy_src/snappy-stubs-public.h)
+# ============================================================
+# SNAPPY 1.0.3 版本支持（使用预编译的 .a 库）
+# ============================================================
 
-target_link_libraries(snappy PUBLIC oblib_base)
+set(SNAPPY_LIB "${DEP_DIR}/lib/snappy/libsnappy.a")
+
+oblib_add_library(snappy
+  ob_snappy_compressor.cpp
+)
+target_link_libraries(snappy PUBLIC oblib_base ${SNAPPY_LIB})
 

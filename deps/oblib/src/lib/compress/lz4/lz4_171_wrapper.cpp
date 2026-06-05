@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "lz4_src/lz4_171.h"
+#include "lz4_171/lz4.h"
 #include "lz4_wrapper.h"
 
 namespace oceanbase {

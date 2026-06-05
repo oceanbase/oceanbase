@@ -11,7 +11,7 @@
 #include "share/schema/ob_table_schema.h"
 
 #include <optional>
-#include <share/catalog/hive/thrift/gen_cpp/ThriftHiveMetastore.h>
+#include <ThriftHiveMetastore.h>
 
 namespace oceanbase
 {

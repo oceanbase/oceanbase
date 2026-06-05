@@ -4,7 +4,7 @@
  */
 
 #include "lib/charset/ob_ctype.h"
-#include "lib/charset/ob_ctype_latin1_tab.h"
+#include "obcharset/ob_ctype_latin1_tab.h"
 
 static int ob_mb_wc_latin1(const ObCharsetInfo *cs __attribute__((unused)),
                            ob_wc_t *pwc, const unsigned char *str,

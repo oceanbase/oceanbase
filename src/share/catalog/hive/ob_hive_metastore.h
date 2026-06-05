@@ -10,7 +10,7 @@
 #include "lib/string/ob_string.h"
 #include "share/catalog/ob_catalog_properties.h"
 #include "share/schema/ob_schema_struct.h"
-#include "share/catalog/hive/thrift/gen_cpp/ThriftHiveMetastore.h"
+#include <ThriftHiveMetastore.h>
 
 #include <memory>
 #include <thrift/protocol/TBinaryProtocol.h>

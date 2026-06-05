@@ -2,9 +2,9 @@
  * Copyright (c) 2021 OceanBase
  * SPDX-License-Identifier: Apache-2.0
  */
-#include "lib/charset/ob_mysql_global.h"
+#include "obcharset/ob_mysql_global.h"
 #include "lib/charset/ob_ctype.h"
-#include "lib/charset/ob_ctype_cp932_tab.h"
+#include "obcharset/ob_ctype_cp932_tab.h"
 
 
 

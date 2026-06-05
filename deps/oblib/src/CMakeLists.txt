@@ -290,6 +290,7 @@ target_link_libraries(oblib_base_without_pass
   ${DEP_DIR}/lib/libisal.a
   ${DEP_DIR}/lib/libavrocpp_s.a
   ${DEP_DIR}/lib64/libfmt.a # used by avro
+  ${DEP_DIR}/lib/obcharset/libcharset_tables.a
  )
 else()
 set(ignoreMe OB_STATIC_LINK_LGPL_DEPS)
@@ -337,6 +338,7 @@ target_link_libraries(oblib_base_without_pass
   ${DEP_DIR}/lib/libpalf.a
   ${DEP_DIR}/lib/libavrocpp_s.a
   ${DEP_DIR}/lib64/libfmt.a # used by avro
+  ${DEP_DIR}/lib/obcharset/libcharset_tables.a
  )
 endif()
 target_link_libraries(oblib_base INTERFACE oblib_base_without_pass oblib_pass)

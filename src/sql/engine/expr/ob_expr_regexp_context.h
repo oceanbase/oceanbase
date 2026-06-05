@@ -7,7 +7,7 @@
 #define  OCEANBASE_SQL_ENGINE_REGEX_OB_POSIX_REGEX_
 #include "easy_define.h"  // for conflict of macro likely
 #include "lib/utility/ob_print_utils.h"
-#include "lib/charset/ob_mysql_global.h"
+#include "obcharset/ob_mysql_global.h"
 #include "lib/charset/ob_ctype.h"
 #include <sys/types.h>
 #include <assert.h>

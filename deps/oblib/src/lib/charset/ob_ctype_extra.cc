@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
  #include "lib/charset/ob_ctype.h"
- #include "lib/charset/ob_ctype_dec8_tab.h"
- #include "lib/charset/ob_ctype_cp850_tab.h"
- #include "lib/charset/ob_ctype_hp8_tab.h"
- #include "lib/charset/ob_ctype_macroman_tab.h"
- #include "lib/charset/ob_ctype_swe7_tab.h"
+ #include "obcharset/ob_ctype_dec8_tab.h"
+ #include "obcharset/ob_ctype_cp850_tab.h"
+ #include "obcharset/ob_ctype_hp8_tab.h"
+ #include "obcharset/ob_ctype_macroman_tab.h"
+ #include "obcharset/ob_ctype_swe7_tab.h"
 
 
 static ObCharsetHandler ob_charset_8bit_handler = {

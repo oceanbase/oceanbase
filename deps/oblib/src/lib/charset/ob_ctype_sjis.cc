@@ -4,8 +4,8 @@
  */
 
 #include "lib/charset/ob_ctype.h"
-#include "lib/charset/ob_ctype_sjis_tab.h"
-#include "lib/charset/ob_template_helper.h"
+#include "obcharset/ob_ctype_sjis_tab.h"
+#include "obcharset/ob_template_helper.h"
 
 
 

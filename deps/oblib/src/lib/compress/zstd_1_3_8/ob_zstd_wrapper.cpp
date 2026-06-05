@@ -6,7 +6,7 @@
 #include "ob_zstd_wrapper.h"
 
 #define ZSTD_STATIC_LINKING_ONLY
-#include "zstd_src/zstd.h"
+#include "zstd_138/zstd.h"
 
 using namespace oceanbase;
 using namespace common;

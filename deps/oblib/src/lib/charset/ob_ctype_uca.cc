@@ -7,10 +7,10 @@
 #include <bitset>
 #include <map>
 #include "lib/charset/mb_wc.h"
-#include "lib/charset/uca900_data.h"
-#include "lib/charset/uca900_zh_data.h"
-#include "lib/charset/uca900_ja_data.h"
-#include "lib/charset/ob_ctype_uca_tab.h"
+#include "obcharset/uca900_data.h"
+#include "obcharset/uca900_zh_data.h"
+#include "obcharset/uca900_ja_data.h"
+#include "obcharset/ob_ctype_uca_tab.h"
 #include "lib/charset/ob_byteorder.h"
 #include "deps/oblib/src/lib/charset/mb_wc.h"
 #define OB_UCA_NPAGES 256

@@ -5,7 +5,7 @@
 
 #include "share/stat/hive/ob_hive_hll.h"
 #include "lib/oblog/ob_log.h"
-#include "share/stat/hive/ob_hive_hll_constants.h"
+#include <ob_hive_hll_constants.h>
 #include <algorithm>
 #include <cmath>
 #include <map>
