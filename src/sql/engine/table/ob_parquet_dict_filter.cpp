@@ -1014,7 +1014,7 @@ int ObParquetDictFilterPushdown::eval_black_filter_on_dict_values(
           common::StrDiscVec *dict_values = dict_data->dict_values_;
           char **dict_ptrs = dict_values->get_ptrs();
           int32_t *dict_lens = dict_values->get_lens();
-          const bool is_large_text = ob_is_large_text(col_expr->datum_meta_.type_);
+          const bool is_large_text = is_lob_storage(col_expr->datum_meta_.type_);
 
           for (int64_t i = 0; i < batch_count && OB_SUCC(ret); ++i) {
             int32_t dict_idx = static_cast<int32_t>(batch_start + i);
@@ -1252,7 +1252,7 @@ int ObParquetDictFilterPushdown::decode_dict_column_to_expr(
             int32_t *lens = dict_values->get_lens();
 
             const bool is_oracle_mode = lib::is_oracle_mode();
-            const bool is_large_text = ob_is_large_text(file_col_expr->datum_meta_.type_);
+            const bool is_large_text = is_lob_storage(file_col_expr->datum_meta_.type_);
             const bool is_fast_path = !is_oracle_mode && !dict_data->has_null_ && !is_large_text;
 
             if (OB_LIKELY(is_fast_path)) {
@@ -1485,7 +1485,7 @@ int ObParquetDictFilterPushdown::filter_batch_by_format(common::ObIVector *col_v
     LOG_WARN("expect single column filter", K(ret), K(column_exprs.count()));
   } else {
     ObExpr *col_expr = column_exprs.at(0);
-    need_lob_convert = ob_is_large_text(col_expr->datum_meta_.type_);
+    need_lob_convert = is_lob_storage(col_expr->datum_meta_.type_);
     if (need_lob_convert) {
       lob_type = col_expr->datum_meta_.type_;
       has_lob_header = col_expr->obj_meta_.has_lob_header();
