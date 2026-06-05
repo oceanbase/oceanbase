@@ -4365,7 +4365,15 @@ int ObLogPlan::choose_distinct_expansion_mode(ObGroupingSetInfo *gs_info, ObLogi
   static const uint64_t MIN_CUT_RATIO = 3;
   int ret = OB_SUCCESS;
   uint64_t nopushdown_cut_ratio = 3;
-  if (!helper.use_expand_distinct_mode_with_cost_ || helper.enable_expansion_ordered_output_) {
+  const int64_t effective_dop = (helper.grouping_dop_ > ObGlobalHint::UNSET_PARALLEL)
+                                ? helper.grouping_dop_
+                                : top->get_parallel();
+  if (effective_dop <= 1) {// if dop = 1, px ms recv op will fallback to vec1.0, which does not support ordered mode
+    helper.enable_expansion_ordered_output_ = false;
+    LOG_TRACE("disable ordered mode because dop = 1", K(effective_dop), K(helper.grouping_dop_),
+              K(helper.enable_expansion_ordered_output_));
+    OPT_TRACE("disable ordered mode because dop = 1", K(effective_dop), K(helper.enable_expansion_ordered_output_));
+  } else if (!helper.use_expand_distinct_mode_with_cost_ || helper.enable_expansion_ordered_output_) {
     LOG_TRACE("using specified distinct expansion plan mode",
               K(helper.use_expand_distinct_mode_with_cost_),
               K(helper.enable_expansion_ordered_output_));
