@@ -12685,7 +12685,8 @@ def_table_schema(**gen_iterate_virtual_table_def(
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12070',
   table_name = '__all_virtual_tablegroup',
-  keywords = all_def_keywords['__all_tablegroup']))
+  keywords = all_def_keywords['__all_tablegroup'],
+  in_tenant_space = True))
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12071',
@@ -23562,6 +23563,10 @@ SELECT A.TENANT_ID,
        A.gmt_modified AS MODIFY_TIME,
        PRIMARY_ZONE,
        LOCALITY,
+       (SELECT TG.TABLEGROUP_NAME
+          FROM OCEANBASE.__ALL_VIRTUAL_TABLEGROUP TG
+         WHERE TG.TENANT_ID = A.TENANT_ID
+           AND TG.TABLEGROUP_ID = A.DEFAULT_TABLEGROUP_ID) AS TABLEGROUP_NAME,
        CASE previous_locality
           WHEN "" THEN NULL
           ELSE previous_locality
@@ -65957,6 +65962,10 @@ SELECT A.TENANT_ID,
        A.gmt_modified AS MODIFY_TIME,
        PRIMARY_ZONE,
        LOCALITY,
+       (SELECT TG.TABLEGROUP_NAME
+          FROM SYS.ALL_VIRTUAL_TABLEGROUP_REAL_AGENT TG
+         WHERE TG.TENANT_ID = A.TENANT_ID
+           AND TG.TABLEGROUP_ID = A.DEFAULT_TABLEGROUP_ID) AS TABLEGROUP_NAME,
        CASE previous_locality
           WHEN '' THEN NULL
           ELSE previous_locality

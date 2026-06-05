@@ -1906,6 +1906,30 @@ IF(count(*) >= 0, 1, 0)
 "oceanbase.__all_virtual_px_worker_stat runs in single server"
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_tablegroup;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+tablegroup_id	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+tablegroup_name	varchar(128)	NO		NULL	
+comment	varchar(4096)	NO		NULL	
+part_level	bigint(20)	NO		0	
+part_func_type	bigint(20)	NO		0	
+part_func_expr_num	bigint(20)	NO		0	
+part_num	bigint(20)	NO		0	
+sub_part_func_type	bigint(20)	NO		0	
+sub_part_func_expr_num	bigint(20)	NO		0	
+sub_part_num	bigint(20)	NO		0	
+schema_version	bigint(20)	NO		NULL	
+partition_status	bigint(20)	YES		0	
+partition_schema_version	bigint(20)	YES		0	
+sub_part_template_flags	bigint(20)	NO		0	
+sharding	varchar(20)	NO		ADAPTIVE	
+scope	varchar(20)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_tablegroup;
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_table;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	

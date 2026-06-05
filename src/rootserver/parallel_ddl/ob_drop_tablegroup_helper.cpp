@@ -78,7 +78,7 @@ int ObDropTablegroupHelper::lock_tablegroup_by_obj_id_()
     LOG_WARN("fail to get database schema", KR(ret), K_(tenant_id), K(tablegroup_name));
   } else if (tablegroup_id_ == OB_INVALID_ID) {
     ret = OB_TABLEGROUP_NOT_EXIST;
-    LOG_INFO("tablegroup not exists", KR(ret), K(tablegroup_name));
+    LOG_INFO("tablegroup not exist", KR(ret), K(tablegroup_name));
   } else if (OB_FAIL(add_lock_object_by_id_(tablegroup_id_, share::schema::TABLEGROUP_SCHEMA,
                      transaction::tablelock::EXCLUSIVE))) {
     LOG_WARN("failed to add lock object by tablegroup id", KR(ret), K_(tablegroup_id));
@@ -104,12 +104,14 @@ int ObDropTablegroupHelper::generate_schemas_()
   } else if (tables.count() > 0) {
     ret = OB_TABLEGROUP_NOT_EMPTY;
     LOG_WARN("tables in tablegroup when drop tablegroup", KR(ret), K_(tablegroup_id), K(tables.count()));
+    FORWARD_USER_ERROR_MSG(OB_TABLEGROUP_NOT_EMPTY,
+          "tablegroup '%.*s' still contains tables",
+          arg_.tablegroup_name_.length(), arg_.tablegroup_name_.ptr());
   }
 
   // check databases' default_tablegroup_id
   if (OB_SUCC(ret)) {
     bool exists = false;
-    uint64_t database_id = OB_INVALID_ID;
     if (OB_FAIL(schema_guard_wrapper_.check_database_exists_in_tablegroup(
                 tablegroup_id_, exists))) {
       LOG_WARN("failed to check whether database exists in table group",
@@ -117,6 +119,9 @@ int ObDropTablegroupHelper::generate_schemas_()
     } else if (exists) {
       ret = OB_TABLEGROUP_NOT_EMPTY;
       LOG_WARN("tablegroup is database's default_tablegroup_id when drop tablegroup", KR(ret), K_(tablegroup_id));
+      FORWARD_USER_ERROR_MSG(OB_TABLEGROUP_NOT_EMPTY,
+          "tablegroup '%.*s' is the default tablegroup of one or more databases, check DBA_OB_DATABASES for details",
+          arg_.tablegroup_name_.length(), arg_.tablegroup_name_.ptr());
     }
   }
 
@@ -130,7 +135,10 @@ int ObDropTablegroupHelper::generate_schemas_()
       LOG_WARN("tenant schema is null", KR(ret), K_(tenant_id));
     } else if (tablegroup_id_ == tenant_schema->get_default_tablegroup_id()) {
       ret = OB_TABLEGROUP_NOT_EMPTY;
-      LOG_WARN("tablegroup is database's default_tablegroup_id when drop tablegroup", KR(ret), K_(tablegroup_id), K_(tenant_id));
+      LOG_WARN("tablegroup is tenant's default_tablegroup_id when drop tablegroup", KR(ret), K_(tablegroup_id), K_(tenant_id));
+      FORWARD_USER_ERROR_MSG(OB_TABLEGROUP_NOT_EMPTY,
+          "tablegroup '%.*s' is the default tablegroup of this tenant, check DBA_OB_TENANTS for details",
+          arg_.tablegroup_name_.length(), arg_.tablegroup_name_.ptr());
     }
 
   }
@@ -140,7 +148,7 @@ int ObDropTablegroupHelper::generate_schemas_()
     LOG_WARN("failed to get tablegroup schema by tenant id", KR(ret), K_(tablegroup_id));
     } else if (tablegroup_schema_ == NULL) {
       ret = OB_TABLEGROUP_NOT_EXIST;
-      LOG_INFO("tablegroup not exists", KR(ret), K_(tablegroup_id));
+      LOG_INFO("tablegroup not exist", KR(ret), K_(tablegroup_id));
     }
   }
 
@@ -212,9 +220,8 @@ int ObDropTablegroupHelper::construct_and_adjust_result_(int &return_ret)
       LOG_USER_ERROR(OB_TABLEGROUP_NOT_EXIST);
     }
   } else if (OB_TABLEGROUP_NOT_EMPTY == ret) {
-    LOG_WARN("tablegroup not empty, can't delete it", KR(ret), K_(tenant_id),
-              "tablegroup_name", arg_.tablegroup_name_);
-    LOG_USER_ERROR(OB_TABLEGROUP_NOT_EMPTY);
+    // OB_TABLEGROUP_NOT_EMPTY already handled in generate_schemas_()
+    // with specific FORWARD_USER_ERROR_MSG and LOG_WARN
   }
   return ret;
 }

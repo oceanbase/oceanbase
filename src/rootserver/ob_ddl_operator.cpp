@@ -1393,6 +1393,8 @@ int ObDDLOperator::drop_tablegroup(const ObTablegroupSchema &tablegroup_schema,
   ObSchemaService *schema_service_impl = schema_service_.get_schema_service();
   const uint64_t tenant_id = tablegroup_schema.get_tenant_id();
   const uint64_t tablegroup_id = tablegroup_schema.get_tablegroup_id();
+  const ObString &tg_name = tablegroup_schema.get_tablegroup_name();
+
   if (OB_FAIL(schema_service_.get_tenant_schema_guard(tenant_id, schema_guard))) {
     LOG_WARN("failed to get schema guard", K(ret));
   } else if (OB_ISNULL(schema_service_impl)) {
@@ -1401,7 +1403,6 @@ int ObDDLOperator::drop_tablegroup(const ObTablegroupSchema &tablegroup_schema,
               "schema_service_impl", OB_P(schema_service_impl), K(ret));
   } else {
     // check whether tablegroup is empty, if not empty, return OB_TABLEGROUP_NOT_EMPTY
-    bool not_empty = false;
     ObArray<const ObSimpleTableSchemaV2 *> tables;
     if (OB_FAIL(schema_guard.get_table_schemas_in_tablegroup(
         tenant_id, tablegroup_id, tables))) {
@@ -1411,18 +1412,29 @@ int ObDDLOperator::drop_tablegroup(const ObTablegroupSchema &tablegroup_schema,
       // schema when getting derived relation property by table. As locality and primary_zone is add in tablegroup
       // after 2.0
       //
-      not_empty = true;
+      ret = OB_TABLEGROUP_NOT_EMPTY;
+      FORWARD_USER_ERROR_MSG(OB_TABLEGROUP_NOT_EMPTY,
+        "tablegroup '%.*s' still contains tables",
+        tg_name.length(), tg_name.ptr());
+      LOG_WARN("tablegroup still contains tables", KR(ret), K(tg_name));
     }
     // check databases' default_tablegroup_id
-    if (OB_SUCC(ret) && !not_empty) {
+    if (OB_SUCC(ret)) {
+      bool is_database_default = false;
       if (OB_FAIL(schema_guard.check_database_exists_in_tablegroup(
-          tenant_id, tablegroup_id, not_empty))) {
+          tenant_id, tablegroup_id, is_database_default))) {
         LOG_WARN("failed to check whether database exists in table group",
                  K(tenant_id), KT(tablegroup_id), K(ret));
+      } else if (is_database_default) {
+        ret = OB_TABLEGROUP_NOT_EMPTY;
+        FORWARD_USER_ERROR_MSG(OB_TABLEGROUP_NOT_EMPTY,
+          "tablegroup '%.*s' is the default tablegroup of one or more databases, check DBA_OB_DATABASES for details",
+          tg_name.length(), tg_name.ptr());
+        LOG_WARN("tablegroup is the default tablegroup of one or more databases", KR(ret), K(is_database_default), K(tablegroup_id));
       }
     }
     // check tenants' default_tablegroup_id
-    if (OB_SUCC(ret) && !not_empty) {
+    if (OB_SUCC(ret)) {
       const ObTenantSchema *tenant_schema = NULL;
       if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
         LOG_WARN("fail to get tenant info", K(ret), KT(tenant_id));
@@ -1430,13 +1442,12 @@ int ObDDLOperator::drop_tablegroup(const ObTablegroupSchema &tablegroup_schema,
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("tenant schema is null", K(ret), KT(tenant_id));
       } else if (tablegroup_id == tenant_schema->get_default_tablegroup_id()) {
-        not_empty = true;
+        ret = OB_TABLEGROUP_NOT_EMPTY;
+        FORWARD_USER_ERROR_MSG(OB_TABLEGROUP_NOT_EMPTY,
+          "tablegroup '%.*s' is the default tablegroup of this tenant, check DBA_OB_TENANTS for details",
+          tg_name.length(), tg_name.ptr());
+        LOG_WARN("tablegroup is the default tablegroup of this tenant", KR(ret), K(tenant_id), K(tablegroup_id));
       }
-    }
-    if (OB_SUCC(ret) && not_empty) {
-      ret = OB_TABLEGROUP_NOT_EMPTY;
-      LOG_WARN("tablegroup still has tables or is some databases' default tablegroup or is tenant default tablegroup, can't delete it",
-          KT(tablegroup_id), K(ret));
     }
   }
 
