@@ -140,7 +140,10 @@ int ObCodeGenerator::detect_batch_size(
                                                      log_plan.get_plan_root(),
                                                      true));
     }
-    if (OB_SUCC(ret)) {
+    const bool use_batch_row_wrapper =
+        log_plan.get_optimizer_context().get_enable_vec_batch_accum()
+        && !force_disable_batch_row_wrapper;
+    if (OB_SUCC(ret) && (vectorize || use_batch_row_wrapper)) {
       ObArenaAllocator alloc;
       ObRawExprUniqueSet flattened_exprs(true);
       OZ(flattened_exprs.flatten_and_add_raw_exprs(log_plan.get_optimizer_context()
@@ -181,8 +184,7 @@ int ObCodeGenerator::detect_batch_size(
       // However, there are still cases where batch_row_wrapper cannot be used, requiring batch_size to be explicitly set to 1.
       // For example, this applies when user variables are involved. We use `force_disable_batch_row_wrapper` to flag such scenarios.
       if (rowsets_enabled && has_registered_vec_op) {
-        if (log_plan.get_optimizer_context().get_enable_vec_batch_accum()
-            && !force_disable_batch_row_wrapper) {
+        if (use_batch_row_wrapper) {
           batch_size = MAX(1, batch_size);
         } else {
           batch_size = 1;
