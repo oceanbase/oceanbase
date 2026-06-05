@@ -3722,23 +3722,36 @@ void ObParquetTableRowIterator::increase_read_rows(const int64_t rows,
                                                    int64_t &eager_row_pos)
 {
   if (rows > 0) {
-    int64_t eager_column_id = 0;
+    int64_t eager_idx = 0;
     for (int64_t i = 0; i < state_.read_row_counts_.count(); ++i) {
       cur_col_id_ = i;
+      const bool is_eager_col = has_eager_columns()
+                                && eager_idx < get_eager_count()
+                                && eager_columns_.at(eager_idx) == i;
       if (!only_eager) {
-        SkipRowsInColumn(i, rows, state_.logical_read_row_count_, true, state_.read_row_counts_[i],
-                  column_readers_.at(i).get(), record_readers_.at(i).get(),
-                  ob_is_collection_sql_type(file_column_exprs_.at(i)->datum_meta_.type_));
+        if (!is_eager_col) {
+          SkipRowsInColumn(i,
+                           rows,
+                           state_.logical_read_row_count_,
+                           true,
+                           state_.read_row_counts_[i],
+                           column_readers_.at(i).get(),
+                           record_readers_.at(i).get(),
+                           ob_is_collection_sql_type(file_column_exprs_.at(i)->datum_meta_.type_));
+        } else {
+          const int64_t need_skip_cnt
+              = get_real_skip_count(state_.logical_read_row_count_, rows, i);
+          state_.read_row_counts_[i] += need_skip_cnt;
+        }
       }
-      if (has_eager_columns() && eager_column_id < get_eager_count()
-                              && eager_columns_.at(eager_column_id) == i) {
-        cur_eager_id_ = eager_column_id;
+      if (is_eager_col) {
+        cur_eager_id_ = eager_idx;
         SkipRowsInColumn(i, rows, eager_row_pos, false,
-                  state_.eager_read_row_counts_[eager_column_id],
-                  eager_column_readers_.at(eager_column_id).get(),
-                  eager_record_readers_.at(eager_column_id).get(),
-                  ob_is_collection_sql_type(file_column_exprs_.at(eager_column_id)->datum_meta_.type_));
-        ++eager_column_id;
+                  state_.eager_read_row_counts_[eager_idx],
+                  eager_column_readers_.at(eager_idx).get(),
+                  eager_record_readers_.at(eager_idx).get(),
+                  ob_is_collection_sql_type(file_column_exprs_.at(i)->datum_meta_.type_));
+        ++eager_idx;
       }
     }
     eager_row_pos += rows;
