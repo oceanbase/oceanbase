@@ -163,18 +163,18 @@ Query Plan
 ===================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([aa.a2], [bb.b3]), filter(nil), rowset=16
+  0 - output([aa.a2], [bb.b3]), filter(nil), rowset=256
       equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
       merge_directions([ASC], [ASC])
-  1 - output([bb.b3], [bb.b2]), filter(nil), rowset=16
+  1 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
       sort_keys([bb.b2, ASC], [bb.b3, ASC])
-  2 - output([bb.b2], [bb.b3]), filter(nil), rowset=16
+  2 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
       access([bb.b2], [bb.b3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([bb.b1]), range(MIN ; MAX)always true
-  3 - output([aa.a2], [aa.a3]), filter(nil), rowset=16
+  3 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
       sort_keys([aa.a2, ASC], [aa.a3, ASC])
-  4 - output([aa.a2], [aa.a3]), filter(nil), rowset=16
+  4 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
       access([aa.a2], [aa.a3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([aa.a1]), range(MIN ; MAX)always true
@@ -196,18 +196,18 @@ Query Plan
 ===================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([aa.a2], [bb.b3]), filter(nil), rowset=16
+  0 - output([aa.a2], [bb.b3]), filter(nil), rowset=256
       equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
       merge_directions([ASC], [DESC])
-  1 - output([bb.b3], [bb.b2]), filter(nil), rowset=16
+  1 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
       sort_keys([bb.b2, ASC], [bb.b3, DESC])
-  2 - output([bb.b2], [bb.b3]), filter(nil), rowset=16
+  2 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
       access([bb.b2], [bb.b3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([bb.b1]), range(MIN ; MAX)always true
-  3 - output([aa.a2], [aa.a3]), filter(nil), rowset=16
+  3 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
       sort_keys([aa.a2, ASC], [aa.a3, DESC])
-  4 - output([aa.a2], [aa.a3]), filter(nil), rowset=16
+  4 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
       access([aa.a2], [aa.a3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([aa.a1]), range(MIN ; MAX)always true
@@ -229,18 +229,18 @@ Query Plan
 ===================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([aa.a2], [bb.b3]), filter(nil), rowset=16
+  0 - output([aa.a2], [bb.b3]), filter(nil), rowset=256
       equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
       merge_directions([DESC], [ASC])
-  1 - output([bb.b3], [bb.b2]), filter(nil), rowset=16
+  1 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
       sort_keys([bb.b2, DESC], [bb.b3, ASC])
-  2 - output([bb.b2], [bb.b3]), filter(nil), rowset=16
+  2 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
       access([bb.b2], [bb.b3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([bb.b1]), range(MIN ; MAX)always true
-  3 - output([aa.a2], [aa.a3]), filter(nil), rowset=16
+  3 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
       sort_keys([aa.a2, DESC], [aa.a3, ASC])
-  4 - output([aa.a2], [aa.a3]), filter(nil), rowset=16
+  4 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
       access([aa.a2], [aa.a3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([aa.a1]), range(MIN ; MAX)always true
@@ -262,18 +262,18 @@ Query Plan
 ===================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([aa.a2], [bb.b3]), filter(nil), rowset=16
+  0 - output([aa.a2], [bb.b3]), filter(nil), rowset=256
       equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
       merge_directions([DESC], [DESC])
-  1 - output([bb.b3], [bb.b2]), filter(nil), rowset=16
+  1 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
       sort_keys([bb.b2, DESC], [bb.b3, DESC])
-  2 - output([bb.b2], [bb.b3]), filter(nil), rowset=16
+  2 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
       access([bb.b2], [bb.b3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([bb.b1]), range(MIN ; MAX)always true
-  3 - output([aa.a2], [aa.a3]), filter(nil), rowset=16
+  3 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
       sort_keys([aa.a2, DESC], [aa.a3, DESC])
-  4 - output([aa.a2], [aa.a3]), filter(nil), rowset=16
+  4 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
       access([aa.a2], [aa.a3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([aa.a1]), range(MIN ; MAX)always true
@@ -299,27 +299,27 @@ Query Plan
 =====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cc.c2], [aa.a3]), filter(nil), rowset=16
+  0 - output([cc.c2], [aa.a3]), filter(nil), rowset=256
       equal_conds([aa.a2 = cc.c2], [aa.a3 = cc.c3]), other_conds(nil)
       merge_directions([ASC], [DESC])
-  1 - output([aa.a3], [aa.a2]), filter(nil), rowset=16
+  1 - output([aa.a3], [aa.a2]), filter(nil), rowset=256
       equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
       merge_directions([ASC], [DESC])
-  2 - output([aa.a3], [aa.a2]), filter(nil), rowset=16
+  2 - output([aa.a3], [aa.a2]), filter(nil), rowset=256
       sort_keys([aa.a2, ASC], [aa.a3, DESC])
-  3 - output([aa.a2], [aa.a3]), filter(nil), rowset=16
+  3 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
       access([aa.a2], [aa.a3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([aa.a1]), range(MIN ; MAX)always true
-  4 - output([bb.b2], [bb.b3]), filter(nil), rowset=16
+  4 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
       sort_keys([bb.b2, ASC], [bb.b3, DESC])
-  5 - output([bb.b2], [bb.b3]), filter(nil), rowset=16
+  5 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
       access([bb.b2], [bb.b3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([bb.b1]), range(MIN ; MAX)always true
-  6 - output([cc.c2], [cc.c3]), filter(nil), rowset=16
+  6 - output([cc.c2], [cc.c3]), filter(nil), rowset=256
       sort_keys([cc.c2, ASC], [cc.c3, DESC])
-  7 - output([cc.c2], [cc.c3]), filter(nil), rowset=16
+  7 - output([cc.c2], [cc.c3]), filter(nil), rowset=256
       access([cc.c2], [cc.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([cc.c1]), range(MIN ; MAX)always true
@@ -343,27 +343,27 @@ Query Plan
 =====================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([cc.c2], [aa.a3]), filter(nil), rowset=16
+  0 - output([cc.c2], [aa.a3]), filter(nil), rowset=256
       equal_conds([aa.a2 = cc.c2], [bb.b3 = cc.c3]), other_conds(nil)
       merge_directions([ASC], [DESC])
-  1 - output([aa.a3], [aa.a2], [bb.b3]), filter(nil), rowset=16
+  1 - output([aa.a3], [aa.a2], [bb.b3]), filter(nil), rowset=256
       equal_conds([aa.a2 = bb.b2], [aa.a3 = bb.b3]), other_conds(nil)
       merge_directions([ASC], [DESC])
-  2 - output([aa.a3], [aa.a2]), filter(nil), rowset=16
+  2 - output([aa.a3], [aa.a2]), filter(nil), rowset=256
       sort_keys([aa.a2, ASC], [aa.a3, DESC])
-  3 - output([aa.a2], [aa.a3]), filter(nil), rowset=16
+  3 - output([aa.a2], [aa.a3]), filter(nil), rowset=256
       access([aa.a2], [aa.a3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([aa.a1]), range(MIN ; MAX)always true
-  4 - output([bb.b3], [bb.b2]), filter(nil), rowset=16
+  4 - output([bb.b3], [bb.b2]), filter(nil), rowset=256
       sort_keys([bb.b2, ASC], [bb.b3, DESC])
-  5 - output([bb.b2], [bb.b3]), filter(nil), rowset=16
+  5 - output([bb.b2], [bb.b3]), filter(nil), rowset=256
       access([bb.b2], [bb.b3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([bb.b1]), range(MIN ; MAX)always true
-  6 - output([cc.c2], [cc.c3]), filter(nil), rowset=16
+  6 - output([cc.c2], [cc.c3]), filter(nil), rowset=256
       sort_keys([cc.c2, ASC], [cc.c3, DESC])
-  7 - output([cc.c2], [cc.c3]), filter(nil), rowset=16
+  7 - output([cc.c2], [cc.c3]), filter(nil), rowset=256
       access([cc.c2], [cc.c3]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([cc.c1]), range(MIN ; MAX)always true

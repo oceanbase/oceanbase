@@ -2945,15 +2945,15 @@ Query Plan
 ========================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
+  0 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=256
       limit(3), offset(nil)
-  1 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
+  1 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=256
       equal_conds([xy_t2.c1 = xy_t1.c1]), other_conds(nil)
-  2 - output([xy_t2.c1]), filter(nil), rowset=16
+  2 - output([xy_t2.c1]), filter(nil), rowset=256
       access([xy_t2.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
+  3 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true
@@ -3255,15 +3255,15 @@ Query Plan
 ========================================================
 Outputs & filters:
 -------------------------------------
-  0 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
+  0 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=256
       limit(3), offset(nil)
-  1 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
+  1 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=256
       equal_conds([xy_t2.c1 = xy_t1.c1]), other_conds(nil)
-  2 - output([xy_t2.c1]), filter(nil), rowset=16
+  2 - output([xy_t2.c1]), filter(nil), rowset=256
       access([xy_t2.c1]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([xy_t2.__pk_increment]), range(MIN ; MAX)always true
-  3 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=16
+  3 - output([xy_t1.c1], [xy_t1.c2]), filter(nil), rowset=256
       access([xy_t1.c1], [xy_t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([xy_t1.__pk_increment]), range(MIN ; MAX)always true

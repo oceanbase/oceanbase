@@ -314,6 +314,7 @@ ob_set_subtarget(ob_sql engine_basic
 
 ob_set_subtarget(ob_sql engine_cmd
   engine/cmd/ob_alter_system_executor.cpp
+  engine/cmd/ob_alter_view_executor.cpp
   engine/cmd/ob_analyze_executor.cpp
   engine/cmd/ob_database_executor.cpp
   engine/cmd/ob_dblink_executor.cpp
@@ -1511,6 +1512,7 @@ ob_set_subtarget(ob_sql resolver_ddl
   resolver/ddl/ob_alter_sequence_resolver.cpp
   resolver/ddl/ob_alter_table_resolver.cpp
   resolver/ddl/ob_alter_table_stmt.cpp
+  resolver/ddl/ob_alter_view_resolver.cpp
   resolver/ddl/ob_alter_tablegroup_resolver.cpp
   resolver/ddl/ob_alter_tablegroup_stmt.cpp
   resolver/ddl/ob_analyze_stmt.cpp

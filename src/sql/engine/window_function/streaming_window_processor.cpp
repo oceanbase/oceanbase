@@ -188,7 +188,7 @@ int StreamingWindowProcessor::compute_all_wf_values(
                  K(start_idx), K(end_idx));
       } else if (OB_FAIL(it->wf_expr_->collect_part_results(
                      ctx.win_col_, start_idx, end_idx, *child_brs.skip_,
-                     false))) {
+                     child_brs.all_rows_active_, false))) {
         LOG_WARN("collect part results failed", K(ret));
       }
     }

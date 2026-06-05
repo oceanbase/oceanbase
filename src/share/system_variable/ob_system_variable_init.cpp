@@ -1049,10 +1049,11 @@ static struct VarsInit{
 
     [&] (){
       ObSysVars[63].default_value_ = "0" ;
-      ObSysVars[63].info_ = "" ;
+      ObSysVars[63].info_ = "The execution timeout for SELECT statements in milliseconds(ms)" ;
       ObSysVars[63].name_ = "max_execution_time" ;
       ObSysVars[63].data_type_ = ObIntType ;
-      ObSysVars[63].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY ;
+      ObSysVars[63].flags_ = ObSysVarFlag::GLOBAL_SCOPE | ObSysVarFlag::SESSION_SCOPE | ObSysVarFlag::MYSQL_ONLY | ObSysVarFlag::NEED_SERIALIZE ;
+      ObSysVars[63].on_check_and_convert_func_ = "ObSysVarOnCheckFuncs::check_and_convert_max_execution_time" ;
       ObSysVars[63].id_ = SYS_VAR_MAX_EXECUTION_TIME ;
       cur_max_var_id = MAX(cur_max_var_id, static_cast<int64_t>(SYS_VAR_MAX_EXECUTION_TIME)) ;
       ObSysVarsIdToArrayIdx[SYS_VAR_MAX_EXECUTION_TIME] = 63 ;

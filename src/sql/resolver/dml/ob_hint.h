@@ -520,6 +520,7 @@ struct ObGlobalHint {
   static constexpr int64_t SET_ENABLE_MANUAL_DOP = -2;
   static constexpr int64_t UNSET_DYNAMIC_SAMPLING = -1;
   static constexpr int64_t UNSET_PX_NODE_COUNT = -1;
+  static constexpr int64_t UNSET_MAX_EXECUTION_TIME = -1;
 
   int merge_global_hint(const ObGlobalHint &other);
   int merge_dop_hint(uint64_t dfo, uint64_t dop);
@@ -527,6 +528,8 @@ struct ObGlobalHint {
   int merge_alloc_op_hints(const ObIArray<ObAllocOpHint> &alloc_op_hints);
   void merge_query_timeout_hint(int64_t hint_time);
   void reset_query_timeout_hint() { query_timeout_ = -1; }
+  void merge_max_execution_time_hint(int64_t hint_time);
+  void reset_max_execution_time_hint() { max_execution_time_ = UNSET_MAX_EXECUTION_TIME; }
   void merge_tm_sessid_tx_id(int64_t tx_id, uint32_t tm_sessid);
   void merge_dblink_info_tx_id(int64_t tx_id);
   void merge_dblink_info_tm_sessid(uint32_t tm_sessid);
@@ -642,7 +645,8 @@ struct ObGlobalHint {
                K_(dblink_hints),
                K_(px_node_hint),
                K_(disable_op_rich_format_hint),
-               K_(trigger_hint));
+               K_(trigger_hint),
+               K_(max_execution_time));
 
   int64_t frozen_version_;
   int64_t topk_precision_;
@@ -679,6 +683,7 @@ struct ObGlobalHint {
   ObPxNodeHint px_node_hint_;
   DisableOpRichFormatHint disable_op_rich_format_hint_;
   TriggerHint trigger_hint_;
+  int64_t max_execution_time_;
 private:
   bool has_hint_exclude_concurrent_;  // not hint, used to mark weather exists hint exclude max_concurrent
 };
@@ -698,6 +703,7 @@ public:
         parallel_(-1),
         monitor_(false),
         table_lock_mode_(0),
+        max_execution_time_(ObGlobalHint::UNSET_MAX_EXECUTION_TIME),
         lookup_batch_rpc_flag_(LOOKUP_BATCH_RPC_FLAG_DEFAULT)
   {}
 
@@ -710,6 +716,7 @@ public:
         parallel_(global_hint.parallel_),
         monitor_(global_hint.monitor_),
         table_lock_mode_(global_hint.table_lock_mode_),
+        max_execution_time_(global_hint.max_execution_time_),
         lookup_batch_rpc_flag_(LOOKUP_BATCH_RPC_FLAG_DEFAULT)
   {}
 
@@ -725,6 +732,7 @@ public:
                K_(parallel),
                K_(monitor),
                K_(table_lock_mode),
+               K_(max_execution_time),
                K_(lookup_batch_rpc_flag));
 
   common::ObConsistencyLevel read_consistency_;

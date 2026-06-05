@@ -253,6 +253,11 @@ class ObPLBlockNS;
 class ObPLPackageGuard;
 }
 
+namespace obrpc
+{
+struct ObDependencyObjDDLArg;
+}
+
 namespace sql
 {
 class ObSQLSessionInfo;
@@ -381,7 +386,8 @@ struct ObResolverParams
        is_in_view_(false),
        is_htable_(false),
        disable_shared_expr_(false),
-       is_from_pl_(false)
+       is_from_pl_(false),
+       alter_view_compile_args_(NULL)
   {}
   int assign(const ObResolverParams &other);
   bool is_force_trace_log() { return force_trace_log_; }
@@ -461,6 +467,7 @@ public:
   bool is_htable_;
   bool disable_shared_expr_;
   bool is_from_pl_;
+  common::ObIArray<obrpc::ObDependencyObjDDLArg> *alter_view_compile_args_;
 };
 struct FunctionInfo {
   char name_[OB_MAX_FUNC_EXPR_LENGTH];

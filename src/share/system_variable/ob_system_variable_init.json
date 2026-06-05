@@ -950,9 +950,10 @@
     "default_value": "0",
     "base_value": "0",
     "data_type": "int",
-    "info": "",
-    "flags": "GLOBAL | SESSION | MYSQL_ONLY",
-    "publish_version": "",
+    "info": "The execution timeout for SELECT statements in milliseconds(ms)",
+    "flags": "GLOBAL | SESSION | MYSQL_ONLY | NEED_SERIALIZE",
+    "on_check_and_convert_func": "ObSysVarOnCheckFuncs::check_and_convert_max_execution_time",
+    "publish_version": "4.4.2.1",
     "info_cn": "",
     "background_cn": "",
     "ref_url": ""

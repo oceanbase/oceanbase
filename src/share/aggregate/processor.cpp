@@ -807,14 +807,14 @@ int Processor::single_row_agg_batch(AggrRowPtr *agg_rows, const int64_t batch_si
   return ret;
 }
 
-int Processor::eval_aggr_param_batch(const ObBatchRows &brs)
+int Processor::eval_aggr_param_batch(const ObBatchRows &brs, const uint16_t start_idx, const uint16_t end_idx, bool all_rows_active)
 {
   int ret = OB_SUCCESS;
-  bool need_calc_param = (brs.size_ != 0);
+  bool need_calc_param = end_idx > start_idx;
   for (int i = 0; OB_SUCC(ret) && need_calc_param && i < agg_ctx_.aggr_infos_.count(); i++) {
     ObAggrInfo &aggr_info = agg_ctx_.aggr_infos_.at(i);
     for (int j = 0; OB_SUCC(ret) && j < aggr_info.param_exprs_.count(); j++) {
-      if (OB_FAIL(aggr_info.param_exprs_.at(j)->eval_vector(agg_ctx_.eval_ctx_, brs))) {
+      if (OB_FAIL(aggr_info.param_exprs_.at(j)->eval_vector(agg_ctx_.eval_ctx_, *brs.skip_, sql::EvalBound(brs.size_, start_idx, end_idx, all_rows_active)))) {
         SQL_LOG(WARN, "eval params batch failed", K(ret));
       }
     }

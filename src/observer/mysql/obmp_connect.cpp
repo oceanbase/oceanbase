@@ -1966,6 +1966,12 @@ int ObMPConnect::check_update_proxy_capability(ObSMConnection &conn) const
     } else {
       server_proxy_cap_flag.cap_flags_.OB_CAP_CHANGE_USER_CONN_ATTRS = 0;
     }
+    if ((GET_MIN_CLUSTER_VERSION() >= MOCK_CLUSTER_VERSION_4_4_2_1 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_0_0) ||
+        GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_6_1_0) {
+      server_proxy_cap_flag.cap_flags_.OB_CAP_MAX_EXECUTION_TIME = 1;
+    } else {
+      server_proxy_cap_flag.cap_flags_.OB_CAP_MAX_EXECUTION_TIME = 0;
+    }
     server_proxy_cap_flag.cap_flags_.OB_CAP_OB_PROTOCOL_V2_COMPRESS = 1;
     conn.proxy_cap_flags_.capability_ = (server_proxy_cap_flag.capability_ & client_proxy_cap);  // if old java client, set it 0
 

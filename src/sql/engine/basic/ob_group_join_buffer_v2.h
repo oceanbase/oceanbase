@@ -93,7 +93,7 @@ class ObDriverRowIterator
 public:
   ObDriverRowIterator();
   ~ObDriverRowIterator() { }
-  int get_next_left_row();
+  int get_next_left_row(bool &new_batch);
   int rescan_left();
   void bind_group_params_to_das_ctx(GroupParamBackupGuard &guard);
   int fill_cur_row_group_param();
@@ -108,6 +108,7 @@ public:
   int extend_left_next_batch_rows(int64_t &expect_rows_cnt, int64_t times);
   int restore_drive_row(int from_idx, int to_idx);
   int64_t get_left_batch_idx() { return l_idx_; }
+  void reset_left_expr_extend_size() { left_expr_extend_size_ = 0; }
   int64_t get_left_valid_rows_cnt()
   {
     return left_brs_ == nullptr

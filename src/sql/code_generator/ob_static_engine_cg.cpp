@@ -723,8 +723,9 @@ int ObStaticEngineCG::check_vectorize_supported(bool &support,
       ret = check_op_vectorization(op, schema_guard, session->use_rich_format(), disable_vectorize);
       if (OB_FAIL(ret)) {
       } else if (log_op_def::LOG_TABLE_SCAN == op->get_type()) {
-         LOG_DEBUG("TableScan base table rows ", K(op->get_card()));
-         scan_cardinality = common::max(scan_cardinality, op->get_card());
+        double range_row_count = static_cast<ObLogTableScan *>(op)->get_phy_query_range_row_count();
+        LOG_DEBUG("TableScan base table rows ", K(range_row_count));
+        scan_cardinality = common::max(scan_cardinality, range_row_count);
       }
       if (OB_SUCC(ret) && !disable_vectorize) {
         const ObDMLStmt *stmt = NULL;

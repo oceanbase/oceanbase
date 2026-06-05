@@ -53,6 +53,9 @@ public:
   int save_pby_row_for_wf(WinFuncColExpr* start, WinFuncColExpr *end_wf,
                                     const int64_t batch_idx);
   int64_t get_max_pby_col_cnt() const { return max_pby_col_cnt_; }
+  int32_t *get_pby_row_mapped_idx_arr() { return pby_row_mapped_idx_arr_; }
+  int32_t *get_last_row_idx_arr() { return last_row_idx_arr_; }
+  const ObSEArray<ObExpr *, 8> &get_all_part_exprs() const { return all_part_exprs_; }
 
 private:
   struct cell_info {

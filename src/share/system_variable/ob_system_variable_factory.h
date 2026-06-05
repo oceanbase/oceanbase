@@ -464,7 +464,7 @@ public:
 class ObSysVarMaxExecutionTime : public ObIntSysVar
 {
 public:
-  ObSysVarMaxExecutionTime() : ObIntSysVar(NULL, NULL, NULL, NULL, NULL) {}
+  ObSysVarMaxExecutionTime() : ObIntSysVar(ObSysVarOnCheckFuncs::check_and_convert_max_execution_time, NULL, NULL, NULL, NULL) {}
   inline virtual ObSysVarClassType get_type() const { return SYS_VAR_MAX_EXECUTION_TIME; }
   inline virtual const common::ObObj &get_global_default_value() const { return ObSysVariables::get_default_value(63); }
 };
