@@ -348,6 +348,13 @@ int ObAllocExprContext::add_flattern_expr(const ObRawExpr* expr)
     LOG_WARN("failed to add entry into hash map", K(ret));
   }
 
+  if (OB_SUCC(ret) && expr->has_flag(CNT_SUB_QUERY) && ObOptimizerUtil::is_branch_expr(expr)) {
+    if (OB_FAIL(add_var_to_array_no_dup(branch_subquery_exprs_,
+                                        const_cast<ObRawExpr *>(expr)))) {
+      LOG_WARN("failed to add branch subquery expr", K(ret));
+    }
+  }
+
   for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
     ret = SMART_CALL(add_flattern_expr(expr->get_param_expr(i)));
   }
@@ -2142,6 +2149,34 @@ int ObLogicalOperator::add_expr_to_ctx(ObAllocExprContext &ctx,
       } else {
         LOG_TRACE("succeed to add input expr", KP(expr), K(producer_id), K(consumer_id),
                                                K(expr_producer), K(get_name()));
+      }
+    }
+  }
+  // add branch sub-exprs (CASE/IF/NVL/...) containing subqueries as separate producers,
+  // so downstream SPF post-stage can claim them
+  if (OB_SUCC(ret) && OB_NOT_NULL(expr) && expr->has_flag(CNT_SUB_QUERY) && OB_NOT_NULL(get_plan())
+      && OB_NOT_NULL(get_plan()->get_optimizer_context().get_query_ctx())
+      && get_plan()->get_optimizer_context().get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_2_BP1)) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < ctx.branch_subquery_exprs_.count(); ++i) {
+      if (OB_ISNULL(raw_expr = ctx.branch_subquery_exprs_.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (!ObOptimizerUtil::is_point_based_sub_expr(raw_expr, expr)) {
+      } else if (ObOptimizerUtil::find_item(ctx.inseparable_exprs_, expr)) {
+        // parent expr is inseparable (e.g. dblink select expr)
+      } else if (OB_FAIL(ctx.find(raw_expr, raw_producer))) {
+        LOG_WARN("failed to find expr in ctx", K(ret));
+      } else if (NULL != raw_producer) {
+        // already registered as a shared expr or from another root expr
+      } else {
+        uint64_t consumer_id = id_;
+        ExprProducer expr_producer(raw_expr, consumer_id, producer_id);
+        if (OB_FAIL(ctx.add(expr_producer))) {
+          LOG_WARN("failed to add branch subquery expr producer", K(ret));
+        } else {
+          LOG_TRACE("succeed to add branch subquery sub-expr", KP(raw_expr),
+                    K(producer_id), K(consumer_id), K(expr_producer), K(get_name()));
+        }
       }
     }
   }

@@ -15,8 +15,136 @@
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "sql/optimizer/ob_log_granule_iterator.h"
 #include "sql/rewrite/ob_transform_utils.h"
+#include "sql/resolver/dml/ob_hint.h"
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
+
+
+int ObLogSubPlanFilter::expr_contains_my_subquery(const ObRawExpr *expr, bool &result) const
+{
+  int ret = OB_SUCCESS;
+  result = false;
+  bool has_mine = false;
+  bool all_mine = true;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (expr->has_flag(CNT_SUB_QUERY)) {
+    if (OB_FAIL(check_subquery_ownership(expr, has_mine, all_mine))) {
+      LOG_WARN("failed to check subquery ownership", K(ret));
+    } else {
+      result = has_mine && all_mine;
+    }
+  }
+  return ret;
+}
+
+int ObLogSubPlanFilter::check_subquery_ownership(const ObRawExpr *expr,
+                                                 bool &has_mine,
+                                                 bool &all_mine) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (!expr->has_flag(CNT_SUB_QUERY) || !all_mine) {
+    // no subquery below or already found a foreign one
+  } else if (expr->is_query_ref_expr()) {
+    if (ObOptimizerUtil::find_item(subquery_exprs_, expr)) {
+      has_mine = true;
+    } else {
+      all_mine = false;
+    }
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && all_mine && i < expr->get_param_count(); ++i) {
+      if (OB_FAIL(SMART_CALL(check_subquery_ownership(expr->get_param_expr(i), has_mine, all_mine)))) {
+        LOG_WARN("failed to check subquery ownership", K(ret), K(i));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogSubPlanFilter::contains_unproduced_generalized_column(const ObRawExpr *expr,
+                                                               ObAllocExprContext &ctx,
+                                                               bool &contains)
+{
+  int ret = OB_SUCCESS;
+  contains = false;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  } else if (expr->is_generalized_column()) {
+    bool has_been_produced = false;
+    if (OB_FAIL(expr_has_been_produced(expr, ctx, has_been_produced))) {
+      LOG_WARN("failed to check whether expr has been produced", K(ret));
+    } else if (!has_been_produced) {
+      contains = true;
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && !contains && i < expr->get_param_count(); ++i) {
+    if (OB_FAIL(SMART_CALL(contains_unproduced_generalized_column(expr->get_param_expr(i), ctx, contains)))) {
+      LOG_WARN("failed to check unproduced generalized column", K(ret));
+    }
+  }
+  return ret;
+}
+
+// Claim root-level branch expressions (CASE/IF/NVL/...) that wrap this SPF's
+// subqueries, so they are produced here instead of at a parent operator.
+int ObLogSubPlanFilter::allocate_expr_post(ObAllocExprContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObLogicalOperator::allocate_expr_post(ctx))) {
+    LOG_WARN("failed to allocate expr post", K(ret));
+  } else if (OB_ISNULL(get_plan()) || OB_ISNULL(get_plan()->get_optimizer_context().get_query_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret));
+  } else if (!get_plan()->get_optimizer_context().get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_4_2_BP1)) {
+    // skip for older optimizer version
+  } else {
+    ObIArray<ExprProducer> &producers = ctx.expr_producers_;
+    for (int64_t i = 0; OB_SUCC(ret) && i < producers.count(); ++i) {
+      ExprProducer &producer = producers.at(i);
+      ObRawExpr *expr = producer.expr_;
+      bool can_be_produced = false;
+      bool contains_my_subquery = false;
+      bool has_unproduced_gen_col = false;
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (producer.producer_id_ <= id_
+                 || OB_INVALID_ID != producer.producer_branch_
+                 || !expr->has_flag(CNT_SUB_QUERY)
+                 || !ObOptimizerUtil::is_branch_expr(expr)) {
+        // skip
+      } else if (OB_FAIL(expr_contains_my_subquery(expr, contains_my_subquery))) {
+        LOG_WARN("failed to check expr contains my subquery", K(ret));
+      } else if (!contains_my_subquery) {
+      } else if (OB_FAIL(expr_can_be_produced(expr, ctx, can_be_produced))) {
+        LOG_WARN("failed to check expr can be produced", K(ret));
+      } else if (!can_be_produced) {
+        LOG_TRACE("branch expr cannot be produced at SPF, skip", KPC(expr), K(id_));
+      } else if (OB_FAIL(contains_unproduced_generalized_column(expr, ctx, has_unproduced_gen_col))) {
+        LOG_WARN("failed to check unproduced generalized column", K(ret));
+      } else if (has_unproduced_gen_col) {
+        LOG_TRACE("branch expr contains unproduced generalized column, skip", KPC(expr), K(id_));
+      } else {
+        producer.producer_id_ = id_;
+        producer.producer_branch_ = branch_id_;
+        if (producer.consumer_id_ > id_ && !is_plan_root()) {
+          if (OB_FAIL(add_var_to_array_no_dup(output_exprs_, expr))) {
+            LOG_WARN("failed to add expr to output", K(ret));
+          } else if (OB_FAIL(add_shared_sub_exprs(expr, ctx))) {
+            LOG_WARN("failed to add shared sub exprs to output", K(ret));
+          }
+        }
+        LOG_TRACE("claimed branch expr at subplan filter", KPC(expr), K(id_), K(producer.consumer_id_));
+      }
+    }
+  }
+  return ret;
+}
 
 int ObLogSubPlanFilter::get_op_exprs(ObIArray<ObRawExpr*> &all_exprs)
 {
@@ -1235,4 +1363,35 @@ bool ObLogSubPlanFilter::is_px_batch_rescan_enabled()
     }
   }
   return enable_px_batch_rescan;
+}
+
+int ObLogSubPlanFilter::add_shared_sub_exprs(ObRawExpr *expr,
+                                             ObAllocExprContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+    ObRawExpr *param_expr = expr->get_param_expr(i);
+    ExprProducer *param_producer = NULL;
+    if (OB_ISNULL(param_expr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null param expr", K(ret));
+    } else if (OB_FAIL(ctx.find(param_expr, param_producer))) {
+      LOG_WARN("failed to find expr in ctx", K(ret));
+    } else if (OB_NOT_NULL(param_producer)
+               && param_producer->consumer_id_ > id_) {
+      if (OB_FAIL(add_var_to_array_no_dup(output_exprs_, param_expr))) {
+        LOG_WARN("failed to add shared sub expr to output", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && param_expr->get_param_count() > 0) {
+      if (OB_FAIL(SMART_CALL(add_shared_sub_exprs(param_expr, ctx)))) {
+        LOG_WARN("failed to recurse into sub expr", K(ret));
+      }
+    }
+  }
+  return ret;
 }

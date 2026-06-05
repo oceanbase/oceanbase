@@ -83,6 +83,8 @@ public:
 
   inline int add_initplan_idxs(const common::ObBitSet<> &init_plan_idxs) { return init_plan_idxs_.add_members(init_plan_idxs); }
 
+  virtual int allocate_expr_post(ObAllocExprContext &ctx) override;
+
   virtual int get_op_exprs(ObIArray<ObRawExpr*> &all_exprs) override;
 
   virtual int is_my_fixed_expr(const ObRawExpr *expr, bool &is_fixed) override;
@@ -151,11 +153,15 @@ public:
   int pre_check_spf_can_px_batch_rescan(bool &can_px_batch_rescan, bool &rescan_contain_match_all) const;
   bool is_px_batch_rescan_enabled();
 private:
+  int expr_contains_my_subquery(const ObRawExpr *expr, bool &result) const;
+  int contains_unproduced_generalized_column(const ObRawExpr *expr, ObAllocExprContext &ctx, bool &contains);
+  int check_subquery_ownership(const ObRawExpr *expr, bool &has_mine, bool &all_mine) const;
   int extract_exist_style_subquery_exprs(ObRawExpr *expr,
                                          ObIArray<ObRawExpr*> &exist_style_exprs);
   int check_expr_contain_row_subquery(const ObRawExpr *expr,
                                          bool &contains);
   int get_sub_qb_names(ObIArray<ObString>& sub_qb_names);
+  int add_shared_sub_exprs(ObRawExpr *expr, ObAllocExprContext &ctx);
   int print_push_subq_outline(PlanText &plan_text);
   int print_push_subq_used_hint(PlanText &plan_text);
 

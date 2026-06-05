@@ -1721,6 +1721,8 @@ public:
 
   static int check_contains_assignment(const ObDMLStmt* stmt,
                                        bool &contains_assignment);
+
+  static bool is_branch_expr(const ObRawExpr *expr);
 private:
   //disallow construct
   ObOptimizerUtil();

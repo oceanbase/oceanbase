@@ -11440,3 +11440,20 @@ int ObOptimizerUtil::eliminate_implicit_cast_for_range(ObRawExpr *&left,
   }
   return ret;
 }
+
+
+bool ObOptimizerUtil::is_branch_expr(const ObRawExpr *expr)
+{
+  bool bret = false;
+  if (OB_NOT_NULL(expr)) {
+    bret = expr->is_case_op_expr()
+           || T_FUN_SYS_IF == expr->get_expr_type()
+           || T_FUN_SYS_NVL == expr->get_expr_type()
+           || T_FUN_NVL2 == expr->get_expr_type()
+           || T_FUN_SYS_IFNULL == expr->get_expr_type()
+           || T_FUN_SYS_NULLIF == expr->get_expr_type()
+           || T_FUN_SYS_COALESCE == expr->get_expr_type()
+           || T_FUN_SYS_ORA_DECODE == expr->get_expr_type();
+  }
+  return bret;
+}
