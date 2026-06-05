@@ -505,6 +505,7 @@ public:
   };
 
   inline bool is_const_expr() const { return is_static_const_ || is_dynamic_const_; }
+  inline bool is_static_const_expr() const { return is_static_const_; }
 
   // Evaluate all parameters, assign the first sizeof...(args) parameters to %args.
   //

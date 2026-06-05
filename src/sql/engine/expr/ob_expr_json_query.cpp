@@ -299,7 +299,7 @@ int ObExprJsonQuery::init_ctx_var(ObJsonParamCacheCtx*& param_ctx, const ObExpr 
 {
   INIT_SUCC(ret);
   // init json path flag
-  param_ctx->is_json_path_const_ = expr.args_[JSN_QUE_PATH]->is_const_expr();
+  param_ctx->is_json_path_const_ = expr.args_[JSN_QUE_PATH]->is_static_const_expr();
   const ObExprJsonQueryParamInfo *info
                   = static_cast<ObExprJsonQueryParamInfo *>(expr.extra_info_);
   if (OB_NOT_NULL(info)
