@@ -109,7 +109,7 @@ int ObExprJsonArrayAppend::eval_json_array_append(const ObExpr &expr, ObEvalCtx 
 
   for (int32 i = 1; OB_SUCC(ret) && i < expr.arg_cnt_ && !is_null; i += 2) {
     ObExpr *arg = expr.args_[i];
-    bool is_const = arg->is_const_expr();
+    bool is_const = arg->is_static_const_expr();
     ObDatum *json_datum = NULL;
     hit.reset();
     if (OB_FAIL(temp_allocator.eval_arg(expr.args_[i], ctx, json_datum))) {

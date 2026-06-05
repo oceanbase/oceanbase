@@ -142,7 +142,7 @@ int ObExprJsonLength::eval_json_length(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   } else {
     if (expr.arg_cnt_ > 1) { // json path
       ObExpr *arg1 = expr.args_[1];
-      is_const = arg1->is_const_expr();
+      is_const = arg1->is_static_const_expr();
       meta1 = arg1->datum_meta_;
       has_lob_header1 = arg1->obj_meta_.has_lob_header();
       if (OB_FAIL(tmp_allocator.eval_arg(arg1, ctx, datum1))) {

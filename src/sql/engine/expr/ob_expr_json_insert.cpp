@@ -99,7 +99,7 @@ int ObExprJsonInsert::eval_json_insert(const ObExpr &expr, ObEvalCtx &ctx, ObDat
   
   for (int32 i = 1; OB_SUCC(ret) && i < expr.arg_cnt_ && !is_null; i += 2) {
     ObExpr *arg = expr.args_[i];
-    bool is_const = arg->is_const_expr();
+    bool is_const = arg->is_static_const_expr();
     json_datum = NULL;
     if (OB_FAIL(temp_allocator.eval_arg(expr.args_[i], ctx, json_datum))) {
       LOG_WARN("failed: eval json path datum.", K(ret));
