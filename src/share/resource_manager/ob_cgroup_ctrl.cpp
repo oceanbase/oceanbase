@@ -10,6 +10,11 @@
 #include "share/io/ob_io_manager.h"
 #include "share/resource_manager/ob_resource_manager.h"
 #include "observer/omt/ob_tenant.h"
+#include <sys/vfs.h>
+
+#ifndef CGROUP2_SUPER_MAGIC
+#define CGROUP2_SUPER_MAGIC 0x63677270
+#endif
 
 
 using namespace oceanbase::common;
@@ -61,13 +66,15 @@ ObCgSet ObCgSet::instance_;
 
 // cpu shares base value
 static const int32_t DEFAULT_CPU_SHARES = 1024;
+// cgroup v2: cpu.weight range is [1, 10000], default 100
+static const int32_t DEFAULT_CPU_WEIGHT_V2 = 100;
 
 // cgroup directory
 static constexpr const char *const SYS_CGROUP_DIR = "/sys/fs/cgroup";
 static constexpr const char *const OBSERVER_ROOT_CGROUP_DIR = "cgroup";
 static constexpr const char *const OTHER_CGROUP_DIR = "cgroup/other";
 
-// cgroup config name
+// cgroup v1 config name
 static constexpr const char *const CPU_SHARES_FILE = "cpu.shares";
 static constexpr const char *const TASKS_FILE = "tasks";
 static constexpr const char *const CPU_CFS_QUOTA_FILE = "cpu.cfs_quota_us";
@@ -76,6 +83,15 @@ static constexpr const char *const CPUACCT_USAGE_FILE = "cpuacct.usage";
 static constexpr const char *const CPU_STAT_FILE = "cpu.stat";
 static constexpr const char *const CGROUP_PROCS_FILE = "cgroup.procs";
 static constexpr const char *const CGROUP_CLONE_CHILDREN_FILE = "cgroup.clone_children";
+
+// cgroup v2 config name
+static constexpr const char *const CPU_WEIGHT_FILE_V2 = "cpu.weight";
+static constexpr const char *const CPU_MAX_FILE_V2 = "cpu.max";
+static constexpr const char *const CPU_STAT_FILE_V2 = "cpu.stat";
+static constexpr const char *const CGROUP_PROCS_FILE_V2 = "cgroup.procs";
+static constexpr const char *const CGROUP_THREADS_FILE_V2 = "cgroup.threads";
+static constexpr const char *const CGROUP_SUBTREE_CONTROL_FILE_V2 = "cgroup.subtree_control";
+static constexpr const char *const CGROUP_TYPE_FILE_V2 = "cgroup.type";
 
 //集成IO参数
 int ObGroupIOInfo::init(const char *name, const int64_t min_percent, const int64_t max_percent, const int64_t weight_percent,
@@ -131,22 +147,49 @@ bool ObCgroupCtrl::is_valid_group_name(ObString &group_name)
   return bool_ret;
 }
 
+ObCgroupVersion ObCgroupCtrl::detect_cgroup_version_()
+{
+  ObCgroupVersion version = ObCgroupVersion::UNKNOWN;
+  struct statfs fs;
+  if (0 != statfs(SYS_CGROUP_DIR, &fs)) {
+    LOG_WARN_RET(OB_ERR_SYS, "statfs on cgroup mountpoint failed", K(SYS_CGROUP_DIR), K(errno));
+  } else if (fs.f_type == CGROUP2_SUPER_MAGIC) {
+    version = ObCgroupVersion::V2;
+  } else {
+    version = ObCgroupVersion::V1;
+  }
+  LOG_INFO("detect cgroup version via statfs", K(SYS_CGROUP_DIR),
+           "fs_type", static_cast<long>(fs.f_type),
+           "version", static_cast<int32_t>(version));
+  return version;
+}
+
 // init cgroup
 int ObCgroupCtrl::init()
 {
   int ret = OB_SUCCESS;
+  cgroup_version_ = detect_cgroup_version_();
+  LOG_INFO("cgroup version detected", "version", static_cast<int32_t>(cgroup_version_));
   (void)check_cgroup_status();
   return ret;
 }
 
-// regist observer pid to cgroup.procs
 int ObCgroupCtrl::regist_observer_to_cgroup(const char *cgroup_dir)
 {
   int ret = OB_SUCCESS;
   char pid_value[VALUE_BUFSIZE];
   snprintf(pid_value, VALUE_BUFSIZE, "%d", getpid());
-  if (OB_FAIL(set_cgroup_config_(cgroup_dir, CGROUP_PROCS_FILE, pid_value))) {
-    LOG_WARN("add tid to cgroup failed", K(ret), K(cgroup_dir), K(pid_value));
+  if (is_cgroup_v2()) {
+    // cgroup v2 threaded mode: writing PID to root cgroup.procs moves the entire
+    // process (all threads) into the root of the threaded subtree. Individual threads
+    // are then placed into child cgroups (e.g. other/) by add_thread_to_cgroup_.
+    if (OB_FAIL(set_cgroup_config_(OBSERVER_ROOT_CGROUP_DIR, CGROUP_PROCS_FILE_V2, pid_value))) {
+      LOG_WARN("regist observer pid to root cgroup.procs failed", K(ret), K(pid_value));
+    }
+  } else {
+    if (OB_FAIL(set_cgroup_config_(cgroup_dir, CGROUP_PROCS_FILE, pid_value))) {
+      LOG_WARN("regist observer to cgroup failed", K(ret), K(cgroup_dir), K(pid_value));
+    }
   }
   return ret;
 }
@@ -160,6 +203,9 @@ bool ObCgroupCtrl::check_cgroup_status()
     // clean remain cgroup dir
     if (OB_TMP_FAIL(check_cgroup_root_dir())) {
       LOG_WARN_RET(tmp_ret, "check cgroup root dir failed", K(tmp_ret));
+    } else if (is_cgroup_v2() && OB_TMP_FAIL(regist_observer_to_cgroup(OBSERVER_ROOT_CGROUP_DIR))) {
+      // cgroup v2: must migrate all threads back to root before rmdir can succeed
+      LOG_WARN_RET(tmp_ret, "migrate threads to root cgroup.procs failed", K(tmp_ret));
     } else if (OB_TMP_FAIL(recursion_remove_group_(OBSERVER_ROOT_CGROUP_DIR, false /* if_remove_top */))) {
       LOG_WARN_RET(tmp_ret, "clean observer root cgroup failed", K(ret));
     }
@@ -191,6 +237,10 @@ bool ObCgroupCtrl::check_cgroup_status()
     } else if (OB_TMP_FAIL(init_dir_(OBSERVER_ROOT_CGROUP_DIR))) {
       if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
         LOG_WARN_RET(tmp_ret, "init cgroup dir failed", K(tmp_ret));
+      }
+    } else if (OB_TMP_FAIL(init_dir_(OTHER_CGROUP_DIR))) {
+      if (REACH_TIME_INTERVAL(10 * 1000 * 1000L)) {
+        LOG_WARN_RET(tmp_ret, "init other cgroup dir failed", K(tmp_ret));
       }
     } else if (OB_TMP_FAIL(regist_observer_to_cgroup(OTHER_CGROUP_DIR))) {
       LOG_WARN_RET(tmp_ret, "regist observer thread to cgroup failed", K(tmp_ret), K(OTHER_CGROUP_DIR));
@@ -233,15 +283,28 @@ int ObCgroupCtrl::check_pid_in_procs()
   int64_t pid = getpid();
   int64_t pid_value = 0;
   char pid_value_str[VALUE_BUFSIZE + 1];
-
-  if (OB_FAIL(get_cgroup_config_(OTHER_CGROUP_DIR, CGROUP_PROCS_FILE, pid_value_str))) {
-    LOG_WARN("get pid from procs failed", K(ret), K(OTHER_CGROUP_DIR));
+  if (is_cgroup_v2()) {
+    // cgroup v2: check PID in root cgroup.procs
+    if (OB_FAIL(get_cgroup_config_(OBSERVER_ROOT_CGROUP_DIR, CGROUP_PROCS_FILE_V2, pid_value_str))) {
+      LOG_WARN("get pid from root cgroup.procs failed", K(ret));
+    } else {
+      pid_value_str[VALUE_BUFSIZE] = '\0';
+      pid_value = atoi(pid_value_str);
+      if (pid_value != pid) {
+        ret = OB_ERR_SYS;
+        LOG_WARN("pid not in root cgroup.procs", K(pid), K(pid_value), K(ret));
+      }
+    }
   } else {
-    pid_value_str[VALUE_BUFSIZE] = '\0';
-    pid_value = atoi(pid_value_str);
-    if (pid_value != pid) {
-      ret = OB_ERR_SYS;
-      LOG_WARN("pid not exist in other/procs", K(pid), K(pid_value), K(ret));
+    if (OB_FAIL(get_cgroup_config_(OTHER_CGROUP_DIR, CGROUP_PROCS_FILE, pid_value_str))) {
+      LOG_WARN("get pid from other/cgroup.procs failed", K(ret));
+    } else {
+      pid_value_str[VALUE_BUFSIZE] = '\0';
+      pid_value = atoi(pid_value_str);
+      if (pid_value != pid) {
+        ret = OB_ERR_SYS;
+        LOG_WARN("pid not exist in other cgroup", K(pid), K(pid_value), K(ret));
+      }
     }
   }
   return ret;
@@ -321,12 +384,17 @@ int ObCgroupCtrl::remove_dir_(const char *curr_dir)
       int tmp_ret = OB_SUCCESS;
       char task_file_path[PATH_BUFSIZE];
       char task_buf[TASKS_BUFSIZE + 1];
+      // Try tasks (v1) first, then cgroup.threads (v2 threaded mode)
       snprintf(task_file_path, PATH_BUFSIZE, "%s/%s", curr_dir, TASKS_FILE);
       if (OB_TMP_FAIL(get_string_from_file_(task_file_path, task_buf))) {
-        LOG_WARN("dump cgroup task file failed", K(tmp_ret), K(task_file_path));
-      } else {
+        snprintf(task_file_path, PATH_BUFSIZE, "%s/%s", curr_dir, CGROUP_THREADS_FILE_V2);
+        tmp_ret = get_string_from_file_(task_file_path, task_buf);
+      }
+      if (OB_SUCCESS == tmp_ret) {
         task_buf[TASKS_BUFSIZE] = '\0';
         LOG_WARN("cgroup task file content", K(curr_dir), K(task_file_path), K(task_buf));
+      } else {
+        LOG_WARN("dump cgroup task file failed", K(tmp_ret), K(task_file_path));
       }
     }
   } else {
@@ -555,10 +623,15 @@ int ObCgroupCtrl::add_thread_to_cgroup_(
             group_id,
             is_background && GCONF.enable_global_background_resource_isolation))) {
       LOG_WARN("fail get group path", K(tenant_id), K(ret));
-    } else if (OB_FAIL(set_cgroup_config_(group_path, TASKS_FILE, tid_value))) {
-      LOG_WARN("add tid to cgroup failed", K(ret), K(group_path), K(tid_value), K(tenant_id));
     } else {
-      LOG_INFO("add tid to cgroup success", K(group_path), K(tid_value), K(tenant_id), K(group_id));
+      // cgroup v2 threaded mode: write TID to cgroup.threads
+      // cgroup v1: write TID to tasks
+      const char *target_file = is_cgroup_v2() ? CGROUP_THREADS_FILE_V2 : TASKS_FILE;
+      if (OB_FAIL(set_cgroup_config_(group_path, target_file, tid_value))) {
+        LOG_WARN("add tid to cgroup failed", K(ret), K(group_path), K(tid_value), K(tenant_id));
+      } else {
+        LOG_INFO("add tid to cgroup success", K(group_path), K(tid_value), K(tenant_id), K(group_id));
+      }
     }
   }
   return ret;
@@ -626,20 +699,43 @@ int ObCgroupCtrl::set_cpu_shares_(
 {
   int ret = OB_SUCCESS;
   char group_path[PATH_BUFSIZE];
-  char cpu_shares_value[VALUE_BUFSIZE + 1];
+  char cpu_value_str[VALUE_BUFSIZE + 1];
 
-  int32_t cpu_shares = static_cast<int32_t>(cpu * DEFAULT_CPU_SHARES);
-  snprintf(cpu_shares_value, VALUE_BUFSIZE, "%d", cpu_shares);
-  if (OB_FAIL(get_group_path(group_path, PATH_BUFSIZE, tenant_id, group_id, is_background))) {
-    LOG_WARN("fail get group path", K(tenant_id), K(ret));
-  } else if (OB_FAIL(set_cgroup_config_(group_path, CPU_SHARES_FILE, cpu_shares_value))) {
-    LOG_WARN("set cpu shares failed", K(ret), K(group_path), K(tenant_id));
+  if (is_cgroup_v2()) {
+    // cgroup v2: cpu.weight, range [1, 10000], default 100
+    int32_t cpu_weight = static_cast<int32_t>(cpu * DEFAULT_CPU_WEIGHT_V2);
+    if (cpu_weight < 1) {
+      cpu_weight = 1;
+    } else if (cpu_weight > 10000) {
+      cpu_weight = 10000;
+    }
+    snprintf(cpu_value_str, VALUE_BUFSIZE, "%d", cpu_weight);
+    if (OB_FAIL(get_group_path(group_path, PATH_BUFSIZE, tenant_id, group_id, is_background))) {
+      LOG_WARN("fail get group path", K(tenant_id), K(ret));
+    } else if (OB_FAIL(set_cgroup_config_(group_path, CPU_WEIGHT_FILE_V2, cpu_value_str))) {
+      LOG_WARN("set cpu weight failed", K(ret), K(group_path), K(tenant_id));
+    } else {
+      _LOG_INFO("set cpu weight(v2) success, "
+                "group_path=%s, cpu=%.2f, "
+                "cpu_weight_value=%s, tenant_id=%lu",
+                group_path, cpu,
+                cpu_value_str, tenant_id);
+    }
   } else {
-    _LOG_INFO("set cpu shares success, "
-              "group_path=%s, cpu=%.2f, "
-              "cpu_shares_value=%s, tenant_id=%lu",
-              group_path, cpu,
-              cpu_shares_value, tenant_id);
+    // cgroup v1: cpu.shares, default 1024
+    int32_t cpu_shares = static_cast<int32_t>(cpu * DEFAULT_CPU_SHARES);
+    snprintf(cpu_value_str, VALUE_BUFSIZE, "%d", cpu_shares);
+    if (OB_FAIL(get_group_path(group_path, PATH_BUFSIZE, tenant_id, group_id, is_background))) {
+      LOG_WARN("fail get group path", K(tenant_id), K(ret));
+    } else if (OB_FAIL(set_cgroup_config_(group_path, CPU_SHARES_FILE, cpu_value_str))) {
+      LOG_WARN("set cpu shares failed", K(ret), K(group_path), K(tenant_id));
+    } else {
+      _LOG_INFO("set cpu shares(v1) success, "
+                "group_path=%s, cpu=%.2f, "
+                "cpu_shares_value=%s, tenant_id=%lu",
+                group_path, cpu,
+                cpu_value_str, tenant_id);
+    }
   }
   return ret;
 }
@@ -667,7 +763,7 @@ int ObCgroupCtrl::get_cpu_shares(
   int ret = OB_SUCCESS;
   cpu = 0;
   char group_path[PATH_BUFSIZE];
-  char cpu_shares_value[VALUE_BUFSIZE + 1];
+  char cpu_value_str[VALUE_BUFSIZE + 1];
 
   if (OB_FAIL(get_group_path(group_path,
           PATH_BUFSIZE,
@@ -675,11 +771,20 @@ int ObCgroupCtrl::get_cpu_shares(
           group_id,
           is_background && GCONF.enable_global_background_resource_isolation))) {
     LOG_WARN("fail get group path", K(tenant_id), K(ret));
-  } else if (OB_FAIL(get_cgroup_config_(group_path, CPU_SHARES_FILE, cpu_shares_value))) {
-    LOG_WARN("get cpu shares failed", K(ret), K(group_path), K(tenant_id));
+  } else if (is_cgroup_v2()) {
+    if (OB_FAIL(get_cgroup_config_(group_path, CPU_WEIGHT_FILE_V2, cpu_value_str))) {
+      LOG_WARN("get cpu weight failed", K(ret), K(group_path), K(tenant_id));
+    } else {
+      cpu_value_str[VALUE_BUFSIZE] = '\0';
+      cpu = 1.0 * atoi(cpu_value_str) / DEFAULT_CPU_WEIGHT_V2;
+    }
   } else {
-    cpu_shares_value[VALUE_BUFSIZE] = '\0';
-    cpu = 1.0 * atoi(cpu_shares_value) / DEFAULT_CPU_SHARES;
+    if (OB_FAIL(get_cgroup_config_(group_path, CPU_SHARES_FILE, cpu_value_str))) {
+      LOG_WARN("get cpu shares failed", K(ret), K(group_path), K(tenant_id));
+    } else {
+      cpu_value_str[VALUE_BUFSIZE] = '\0';
+      cpu = 1.0 * atoi(cpu_value_str) / DEFAULT_CPU_SHARES;
+    }
   }
   return ret;
 }
@@ -778,83 +883,114 @@ int ObCgroupCtrl::recursion_dec_cpu_cfs_quota_(const char *group_path, const dou
   class DecQuotaProcessor : public ObCgroupCtrl::DirProcessor
   {
   public:
-    DecQuotaProcessor(const double cpu) : cpu_(cpu)
+    DecQuotaProcessor(ObCgroupCtrl *ctrl, const double cpu) : ctrl_(ctrl), cpu_(cpu)
     {}
     int handle_dir(const char *curr_path, bool is_top_dir)
     {
       int ret = OB_SUCCESS;
       double current_cpu = -1;
       int compare_ret = 0;
-      if (OB_FAIL(ObCgroupCtrl::get_cpu_cfs_quota_by_path_(curr_path, current_cpu))) {
+      if (OB_FAIL(ctrl_->get_cpu_cfs_quota_by_path_(curr_path, current_cpu))) {
         LOG_WARN("get cpu cfs quota failed", K(ret), K(curr_path));
       } else if ((!is_top_dir && -1 == current_cpu) ||
                 (OB_SUCC(ObCgroupCtrl::compare_cpu(cpu_, current_cpu, compare_ret)) && compare_ret > 0)) {
         // do nothing
-      } else if (OB_FAIL(ObCgroupCtrl::set_cpu_cfs_quota_by_path_(curr_path, cpu_))) {
+      } else if (OB_FAIL(ctrl_->set_cpu_cfs_quota_by_path_(curr_path, cpu_))) {
         LOG_WARN("set cpu cfs quota failed", K(curr_path), K(cpu_));
       }
       return ret;
     }
 
   private:
+    ObCgroupCtrl *ctrl_;
     const double cpu_;
   };
-  DecQuotaProcessor dec_quota_process(cpu);
+  DecQuotaProcessor dec_quota_process(this, cpu);
   return recursion_process_group_(group_path, &dec_quota_process, true /* is_top_dir */);
 }
 
 int ObCgroupCtrl::set_cpu_cfs_quota_by_path_(const char *group_path, const double cpu)
 {
   int ret = OB_SUCCESS;
-  char cfs_period_value[VALUE_BUFSIZE + 1];
-  char cfs_quota_value[VALUE_BUFSIZE + 1];
-  if (OB_FAIL(get_cgroup_config_(group_path, CPU_CFS_PERIOD_FILE, cfs_period_value))) {
-    LOG_WARN("get cpu cfs period failed", K(ret), K(group_path));
-  } else {
-    cfs_period_value[VALUE_BUFSIZE] = '\0';
-    int32_t cfs_period_us_new = atoi(cfs_period_value);
-
-    int32_t cfs_period_us = 0;
-    int32_t cfs_quota_us = 0;
-    uint32_t loop_times = 0;
-    // to avoid kernel scaling cfs_period_us after get cpu_cfs_period,
-    // we should check whether cfs_period_us has been changed after set cpu_cfs_quota.
-    while (OB_SUCC(ret) && cfs_period_us_new != cfs_period_us) {
-      if (loop_times > 3) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_ERROR("cpu_cfs_period has been always changing, thread may be hung",
-            K(ret),
-            K(group_path),
-            K(cfs_period_us),
-            K(cfs_period_us_new));
-      } else {
-        cfs_period_us = cfs_period_us_new;
-        if (cfs_period_us <= 0) {
-          cfs_quota_us = -1;
-          LOG_WARN("get wrong cfs_period_us, use no limit", K(cfs_quota_us), K(cfs_period_us), K(group_path));
-        } else if (-1 == cpu || cpu >= INT32_MAX / cfs_period_us) {
-          cfs_quota_us = -1;
-        } else {
-          cfs_quota_us = static_cast<int32_t>(cfs_period_us * cpu);
-        }
-        snprintf(cfs_quota_value, VALUE_BUFSIZE, "%d", cfs_quota_us);
-        if (OB_FAIL(set_cgroup_config_(group_path, CPU_CFS_QUOTA_FILE, cfs_quota_value))) {
-          LOG_WARN("set cpu cfs quota failed", K(group_path), K(cfs_quota_us));
-        } else if (OB_FAIL(get_cgroup_config_(group_path, CPU_CFS_PERIOD_FILE, cfs_period_value))) {
-          LOG_ERROR("fail get cpu cfs period us", K(group_path));
-        } else {
-          cfs_period_value[VALUE_BUFSIZE] = '\0';
-          cfs_period_us_new = atoi(cfs_period_value);
+  if (is_cgroup_v2()) {
+    // cgroup v2: cpu.max format is "$MAX $PERIOD" or "max $PERIOD"
+    // First read current cpu.max to get the period
+    char cpu_max_value[VALUE_BUFSIZE + 1];
+    int32_t period_us = 100000; // default 100ms
+    if (OB_SUCC(get_cgroup_config_(group_path, CPU_MAX_FILE_V2, cpu_max_value))) {
+      cpu_max_value[VALUE_BUFSIZE] = '\0';
+      // parse period from "max period" or "quota period"
+      const char *space = strchr(cpu_max_value, ' ');
+      if (OB_NOT_NULL(space)) {
+        period_us = atoi(space + 1);
+        if (period_us <= 0) {
+          period_us = 100000;
         }
       }
-      loop_times++;
     }
-    if (OB_SUCC(ret)) {
-      _LOG_INFO("set cpu quota success, "
-                "group_path=%s, cpu=%.2f, "
-                "cfs_quota_us=%d, cfs_period_us=%d",
-                group_path, cpu,
-                cfs_quota_us, cfs_period_us);
+    char new_cpu_max[VALUE_BUFSIZE + 1];
+    if (-1 == cpu || cpu >= INT32_MAX / period_us) {
+      snprintf(new_cpu_max, VALUE_BUFSIZE, "max %d", period_us);
+    } else {
+      int32_t quota_us = static_cast<int32_t>(period_us * cpu);
+      snprintf(new_cpu_max, VALUE_BUFSIZE, "%d %d", quota_us, period_us);
+    }
+    if (OB_FAIL(set_cgroup_config_(group_path, CPU_MAX_FILE_V2, new_cpu_max))) {
+      LOG_WARN("set cpu.max(v2) failed", K(group_path), K(new_cpu_max));
+    } else {
+      _LOG_INFO("set cpu.max(v2) success, group_path=%s, cpu=%.2f, cpu_max=%s",
+                group_path, cpu, new_cpu_max);
+    }
+  } else {
+    // cgroup v1
+    char cfs_period_value[VALUE_BUFSIZE + 1];
+    char cfs_quota_value[VALUE_BUFSIZE + 1];
+    if (OB_FAIL(get_cgroup_config_(group_path, CPU_CFS_PERIOD_FILE, cfs_period_value))) {
+      LOG_WARN("get cpu cfs period failed", K(ret), K(group_path));
+    } else {
+      cfs_period_value[VALUE_BUFSIZE] = '\0';
+      int32_t cfs_period_us_new = atoi(cfs_period_value);
+
+      int32_t cfs_period_us = 0;
+      int32_t cfs_quota_us = 0;
+      uint32_t loop_times = 0;
+      while (OB_SUCC(ret) && cfs_period_us_new != cfs_period_us) {
+        if (loop_times > 3) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("cpu_cfs_period has been always changing, thread may be hung",
+              K(ret),
+              K(group_path),
+              K(cfs_period_us),
+              K(cfs_period_us_new));
+        } else {
+          cfs_period_us = cfs_period_us_new;
+          if (cfs_period_us <= 0) {
+            cfs_quota_us = -1;
+            LOG_WARN("get wrong cfs_period_us, use no limit", K(cfs_quota_us), K(cfs_period_us), K(group_path));
+          } else if (-1 == cpu || cpu >= INT32_MAX / cfs_period_us) {
+            cfs_quota_us = -1;
+          } else {
+            cfs_quota_us = static_cast<int32_t>(cfs_period_us * cpu);
+          }
+          snprintf(cfs_quota_value, VALUE_BUFSIZE, "%d", cfs_quota_us);
+          if (OB_FAIL(set_cgroup_config_(group_path, CPU_CFS_QUOTA_FILE, cfs_quota_value))) {
+            LOG_WARN("set cpu cfs quota failed", K(group_path), K(cfs_quota_us));
+          } else if (OB_FAIL(get_cgroup_config_(group_path, CPU_CFS_PERIOD_FILE, cfs_period_value))) {
+            LOG_ERROR("fail get cpu cfs period us", K(group_path));
+          } else {
+            cfs_period_value[VALUE_BUFSIZE] = '\0';
+            cfs_period_us_new = atoi(cfs_period_value);
+          }
+        }
+        loop_times++;
+      }
+      if (OB_SUCC(ret)) {
+        _LOG_INFO("set cpu quota(v1) success, "
+                  "group_path=%s, cpu=%.2f, "
+                  "cfs_quota_us=%d, cfs_period_us=%d",
+                  group_path, cpu,
+                  cfs_quota_us, cfs_period_us);
+      }
     }
   }
   return ret;
@@ -863,26 +999,49 @@ int ObCgroupCtrl::set_cpu_cfs_quota_by_path_(const char *group_path, const doubl
 int ObCgroupCtrl::get_cpu_cfs_quota_by_path_(const char *group_path, double &cpu)
 {
   int ret = OB_SUCCESS;
-  char cfs_period_value[VALUE_BUFSIZE + 1];
-  char cfs_quota_value[VALUE_BUFSIZE + 1];
-  int32_t cfs_quota_us = 0;
-  if (OB_FAIL(get_cgroup_config_(group_path, CPU_CFS_QUOTA_FILE, cfs_quota_value))) {
-    LOG_WARN("get cpu cfs quota failed", K(ret), K(group_path));
-  } else {
-    cfs_quota_value[VALUE_BUFSIZE] = '\0';
-    cfs_quota_us = atoi(cfs_quota_value);
-    if (-1 == cfs_quota_us) {
-      cpu = -1;
-    } else if (OB_FAIL(get_cgroup_config_(group_path, CPU_CFS_PERIOD_FILE, cfs_period_value))) {
-      LOG_WARN("get cpu cfs period failed", K(ret), K(group_path));
+  if (is_cgroup_v2()) {
+    // cgroup v2: cpu.max format is "$MAX $PERIOD" or "max $PERIOD"
+    char cpu_max_value[VALUE_BUFSIZE + 1];
+    if (OB_FAIL(get_cgroup_config_(group_path, CPU_MAX_FILE_V2, cpu_max_value))) {
+      LOG_WARN("get cpu.max(v2) failed", K(ret), K(group_path));
     } else {
-      cfs_period_value[VALUE_BUFSIZE] = '\0';
-      int32_t cfs_period_us = atoi(cfs_period_value);
-      if (cfs_period_us > 0) {
-        cpu = 1.0 * cfs_quota_us / cfs_period_us;
-      } else {
+      cpu_max_value[VALUE_BUFSIZE] = '\0';
+      if (0 == strncmp(cpu_max_value, "max", 3)) {
         cpu = -1;
-        LOG_WARN("get wrong cfs_period_us, use no limit", K(cpu), K(cfs_period_us), K(group_path));
+      } else {
+        int32_t quota_us = 0;
+        int32_t period_us = 0;
+        if (2 == sscanf(cpu_max_value, "%d %d", &quota_us, &period_us) && period_us > 0) {
+          cpu = 1.0 * quota_us / period_us;
+        } else {
+          cpu = -1;
+          LOG_WARN("parse cpu.max(v2) failed, use no limit", K(cpu), K(cpu_max_value), K(group_path));
+        }
+      }
+    }
+  } else {
+    // cgroup v1
+    char cfs_period_value[VALUE_BUFSIZE + 1];
+    char cfs_quota_value[VALUE_BUFSIZE + 1];
+    int32_t cfs_quota_us = 0;
+    if (OB_FAIL(get_cgroup_config_(group_path, CPU_CFS_QUOTA_FILE, cfs_quota_value))) {
+      LOG_WARN("get cpu cfs quota failed", K(ret), K(group_path));
+    } else {
+      cfs_quota_value[VALUE_BUFSIZE] = '\0';
+      cfs_quota_us = atoi(cfs_quota_value);
+      if (-1 == cfs_quota_us) {
+        cpu = -1;
+      } else if (OB_FAIL(get_cgroup_config_(group_path, CPU_CFS_PERIOD_FILE, cfs_period_value))) {
+        LOG_WARN("get cpu cfs period failed", K(ret), K(group_path));
+      } else {
+        cfs_period_value[VALUE_BUFSIZE] = '\0';
+        int32_t cfs_period_us = atoi(cfs_period_value);
+        if (cfs_period_us > 0) {
+          cpu = 1.0 * cfs_quota_us / cfs_period_us;
+        } else {
+          cpu = -1;
+          LOG_WARN("get wrong cfs_period_us, use no limit", K(cpu), K(cfs_period_us), K(group_path));
+        }
       }
     }
   }
@@ -930,7 +1089,6 @@ int ObCgroupCtrl::get_cpu_time_(
   int ret = OB_SUCCESS;
   cpu_time = 0;
   char group_path[PATH_BUFSIZE];
-  char cpuacct_usage_value[VALUE_BUFSIZE + 1];
 
   if (OB_FAIL(get_group_path(group_path,
           PATH_BUFSIZE,
@@ -938,11 +1096,33 @@ int ObCgroupCtrl::get_cpu_time_(
           group_id,
           is_background && GCONF.enable_global_background_resource_isolation))) {
     LOG_WARN("fail get group path", K(tenant_id), K(ret));
-  } else if (OB_FAIL(get_cgroup_config_(group_path, CPUACCT_USAGE_FILE, cpuacct_usage_value))) {
-    LOG_WARN("get cpuacct.usage failed", K(ret), K(group_path), K(tenant_id));
+  } else if (is_cgroup_v2()) {
+    // cgroup v2: read usage_usec from cpu.stat
+    char cpu_stat_value[VALUE_BUFSIZE + 1];
+    if (OB_FAIL(get_cgroup_config_(group_path, CPU_STAT_FILE_V2, cpu_stat_value))) {
+      LOG_WARN("get cpu.stat(v2) failed", K(ret), K(group_path), K(tenant_id));
+    } else {
+      cpu_stat_value[VALUE_BUFSIZE] = '\0';
+      const char *LABEL_STR = "usage_usec ";
+      char *found_ptr = strstr(cpu_stat_value, LABEL_STR);
+      if (OB_ISNULL(found_ptr)) {
+        ret = OB_IO_ERROR;
+        LOG_WARN("get usage_usec from cpu.stat(v2) failed", K(ret), K(group_path), K(cpu_stat_value));
+      } else {
+        found_ptr += strlen(LABEL_STR);
+        // usage_usec is in microseconds, return in microseconds (same as v1's nanoseconds / 1000)
+        cpu_time = strtoull(found_ptr, NULL, 10);
+      }
+    }
   } else {
-    cpuacct_usage_value[VALUE_BUFSIZE] = '\0';
-    cpu_time = strtoull(cpuacct_usage_value, NULL, 10) / 1000;
+    // cgroup v1: read cpuacct.usage (in nanoseconds)
+    char cpuacct_usage_value[VALUE_BUFSIZE + 1];
+    if (OB_FAIL(get_cgroup_config_(group_path, CPUACCT_USAGE_FILE, cpuacct_usage_value))) {
+      LOG_WARN("get cpuacct.usage failed", K(ret), K(group_path), K(tenant_id));
+    } else {
+      cpuacct_usage_value[VALUE_BUFSIZE] = '\0';
+      cpu_time = strtoull(cpuacct_usage_value, NULL, 10) / 1000;
+    }
   }
   return ret;
 }
@@ -977,18 +1157,38 @@ int ObCgroupCtrl::get_throttled_time_(
           group_id,
           is_background && GCONF.enable_global_background_resource_isolation))) {
     LOG_WARN("fail get group path", K(tenant_id), K(ret));
-  } else if (OB_FAIL(get_cgroup_config_(group_path, CPU_STAT_FILE, cpu_stat_value))) {
-    LOG_WARN("get cpu.stat failed", K(ret), K(group_path), K(tenant_id));
-  } else {
-    cpu_stat_value[VALUE_BUFSIZE] = '\0';
-    const char *LABEL_STR = "throttled_time ";
-    char *found_ptr = strstr(cpu_stat_value, LABEL_STR);
-    if (OB_ISNULL(found_ptr)) {
-      ret = OB_IO_ERROR;
-      LOG_WARN("get throttled_time failed", K(ret), K(group_path), K(tenant_id), K(group_id), K(cpu_stat_value));
+  } else if (is_cgroup_v2()) {
+    // cgroup v2: cpu.stat has "throttled_usec" field (in microseconds)
+    if (OB_FAIL(get_cgroup_config_(group_path, CPU_STAT_FILE_V2, cpu_stat_value))) {
+      LOG_WARN("get cpu.stat(v2) failed", K(ret), K(group_path), K(tenant_id));
     } else {
-      found_ptr += strlen(LABEL_STR);
-      throttled_time = strtoull(found_ptr, NULL, 10) / 1000;
+      cpu_stat_value[VALUE_BUFSIZE] = '\0';
+      const char *LABEL_STR = "throttled_usec ";
+      char *found_ptr = strstr(cpu_stat_value, LABEL_STR);
+      if (OB_ISNULL(found_ptr)) {
+        ret = OB_IO_ERROR;
+        LOG_WARN("get throttled_usec from cpu.stat(v2) failed", K(ret), K(group_path), K(tenant_id), K(group_id), K(cpu_stat_value));
+      } else {
+        found_ptr += strlen(LABEL_STR);
+        // throttled_usec is already in microseconds
+        throttled_time = strtoull(found_ptr, NULL, 10);
+      }
+    }
+  } else {
+    // cgroup v1: cpu.stat has "throttled_time" field (in nanoseconds)
+    if (OB_FAIL(get_cgroup_config_(group_path, CPU_STAT_FILE, cpu_stat_value))) {
+      LOG_WARN("get cpu.stat failed", K(ret), K(group_path), K(tenant_id));
+    } else {
+      cpu_stat_value[VALUE_BUFSIZE] = '\0';
+      const char *LABEL_STR = "throttled_time ";
+      char *found_ptr = strstr(cpu_stat_value, LABEL_STR);
+      if (OB_ISNULL(found_ptr)) {
+        ret = OB_IO_ERROR;
+        LOG_WARN("get throttled_time failed", K(ret), K(group_path), K(tenant_id), K(group_id), K(cpu_stat_value));
+      } else {
+        found_ptr += strlen(LABEL_STR);
+        throttled_time = strtoull(found_ptr, NULL, 10) / 1000;
+      }
     }
   }
   return ret;
@@ -1029,10 +1229,50 @@ int ObCgroupCtrl::init_dir_(const char *curr_path)
     LOG_WARN("create tenant cgroup dir failed", K(ret), K(curr_path));
   }
   if (OB_SUCC(ret)) {
-    char cgroup_clone_children_value[VALUE_BUFSIZE + 1];
-    snprintf(cgroup_clone_children_value, VALUE_BUFSIZE, "1");
-    if (OB_FAIL(set_cgroup_config_(curr_path, CGROUP_CLONE_CHILDREN_FILE, cgroup_clone_children_value))) {
-      LOG_WARN("set cgroup_clone_children failed", K(ret), K(curr_path));
+    if (is_cgroup_v2()) {
+      // cgroup v2 threaded mode:
+      // The root cgroup (OBSERVER_ROOT_CGROUP_DIR) must stay as "domain" type.
+      // Only child cgroups should be set to "threaded" type.
+      // When a child is set to "threaded", the parent auto-becomes "domain threaded".
+      bool is_root_cgroup = (0 == strcmp(OBSERVER_ROOT_CGROUP_DIR, curr_path));
+      if (is_root_cgroup) {
+        // Root cgroup: only enable cpu controller in subtree_control for children
+        char subtree_ctl_value[VALUE_BUFSIZE + 1];
+        int tmp_ret = OB_SUCCESS;
+        snprintf(subtree_ctl_value, VALUE_BUFSIZE, "+cpu");
+        if (OB_TMP_FAIL(set_cgroup_config_(curr_path, CGROUP_SUBTREE_CONTROL_FILE_V2, subtree_ctl_value))) {
+          LOG_WARN("set cgroup.subtree_control +cpu on root failed", K(tmp_ret), K(curr_path));
+        }
+      } else {
+        // Child cgroup: set to "threaded" type first, then enable cpu in parent
+        char type_value[VALUE_BUFSIZE + 1];
+        snprintf(type_value, VALUE_BUFSIZE, "threaded");
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(set_cgroup_config_(curr_path, CGROUP_TYPE_FILE_V2, type_value))) {
+          LOG_WARN("set cgroup.type=threaded failed", K(tmp_ret), K(curr_path));
+        }
+
+        char parent_path[PATH_BUFSIZE];
+        strncpy(parent_path, curr_path, PATH_BUFSIZE - 1);
+        parent_path[PATH_BUFSIZE - 1] = '\0';
+        char *last_slash = strrchr(parent_path, '/');
+        if (OB_NOT_NULL(last_slash) && last_slash != parent_path) {
+          *last_slash = '\0';
+          char subtree_ctl_value[VALUE_BUFSIZE + 1];
+          tmp_ret = OB_SUCCESS;
+          snprintf(subtree_ctl_value, VALUE_BUFSIZE, "+cpu");
+          if (OB_TMP_FAIL(set_cgroup_config_(parent_path, CGROUP_SUBTREE_CONTROL_FILE_V2, subtree_ctl_value))) {
+            LOG_WARN("set cgroup.subtree_control +cpu failed", K(tmp_ret), K(parent_path));
+          }
+        }
+      }
+    } else {
+      // cgroup v1: set cgroup.clone_children
+      char cgroup_clone_children_value[VALUE_BUFSIZE + 1];
+      snprintf(cgroup_clone_children_value, VALUE_BUFSIZE, "1");
+      if (OB_FAIL(set_cgroup_config_(curr_path, CGROUP_CLONE_CHILDREN_FILE, cgroup_clone_children_value))) {
+        LOG_WARN("set cgroup_clone_children failed", K(ret), K(curr_path));
+      }
     }
   }
   return ret;
@@ -1040,7 +1280,6 @@ int ObCgroupCtrl::init_dir_(const char *curr_path)
 
 int ObCgroupCtrl::init_full_dir_(const char *curr_path)
 {
-
   int ret = OB_SUCCESS;
   int64_t len = 0;
   if (OB_ISNULL(curr_path) || 0 == (len = strlen(curr_path))) {

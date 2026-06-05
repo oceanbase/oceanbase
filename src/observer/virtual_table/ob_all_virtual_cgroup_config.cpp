@@ -5,6 +5,7 @@
 
 #include "lib/file/file_directory_utils.h"
 #include "ob_all_virtual_cgroup_config.h"
+#include "share/ob_server_struct.h"
 #include <fts.h>
 namespace oceanbase
 {
@@ -109,9 +110,18 @@ int ObAllVirtualCgroupConfig::read_cgroup_path_dir_(const char *cgroup_path)
   return ret;
 }
 
+share::ObCgroupVersion ObAllVirtualCgroupConfig::get_cgroup_version_() const
+{
+  if (OB_NOT_NULL(GCTX.cgroup_ctrl_)) {
+    return GCTX.cgroup_ctrl_->get_cgroup_version();
+  }
+  return share::ObCgroupVersion::V1;
+}
+
 int ObAllVirtualCgroupConfig::add_cgroup_config_info_(const char *cgroup_path)
 {
   int ret = OB_SUCCESS;
+  const bool is_v2 = (get_cgroup_version_() == share::ObCgroupVersion::V2);
   const int64_t col_count = output_column_ids_.count();
   for (int64_t i = 0; i < col_count && OB_SUCC(ret); ++i) {
     const uint64_t col_id = output_column_ids_.at(i);
@@ -128,62 +138,132 @@ int ObAllVirtualCgroupConfig::add_cgroup_config_info_(const char *cgroup_path)
         break;
       }
       case CFS_QUOTA_US: {
-        char path[PATH_BUFSIZE];
-        snprintf(path, PATH_BUFSIZE, "%s/%s", cgroup_path, "cpu.cfs_quota_us");
-        FILE *file = fopen(path, "r");
-        if (NULL == file) {
-          cells[i].set_int(0);
+        if (is_v2) {
+          // cgroup v2: parse quota from cpu.max ("$QUOTA $PERIOD" or "max $PERIOD")
+          char path[PATH_BUFSIZE];
+          snprintf(path, PATH_BUFSIZE, "%s/%s", cgroup_path, "cpu.max");
+          FILE *file = fopen(path, "r");
+          if (NULL == file) {
+            cells[i].set_int(0);
+          } else {
+            char buf[VALUE_BUFSIZE];
+            if (NULL != fgets(buf, VALUE_BUFSIZE, file)) {
+              if (0 == strncmp(buf, "max", 3)) {
+                cells[i].set_int(-1);
+              } else {
+                int quota = atoi(buf);
+                cells[i].set_int(quota);
+              }
+            } else {
+              cells[i].set_int(0);
+            }
+          }
+          if (NULL != file) {
+            fclose(file);
+          }
         } else {
-          char buf[VALUE_BUFSIZE];
-          fscanf(file, "%s", buf);
-          int cfs_quota_us = atoi(buf);
-          cells[i].set_int(cfs_quota_us);
-        }
-        if (NULL != file) {
-          fclose(file);
+          char path[PATH_BUFSIZE];
+          snprintf(path, PATH_BUFSIZE, "%s/%s", cgroup_path, "cpu.cfs_quota_us");
+          FILE *file = fopen(path, "r");
+          if (NULL == file) {
+            cells[i].set_int(0);
+          } else {
+            char buf[VALUE_BUFSIZE];
+            fscanf(file, "%s", buf);
+            int cfs_quota_us = atoi(buf);
+            cells[i].set_int(cfs_quota_us);
+          }
+          if (NULL != file) {
+            fclose(file);
+          }
         }
         break;
       }
       case CFS_PERIOD_US: {
-        char path[PATH_BUFSIZE];
-        snprintf(path, PATH_BUFSIZE, "%s/%s", cgroup_path, "cpu.cfs_period_us");
-        FILE *file = fopen(path, "r");
-        if (NULL == file) {
-          cells[i].set_int(0);
+        if (is_v2) {
+          // cgroup v2: parse period from cpu.max
+          char path[PATH_BUFSIZE];
+          snprintf(path, PATH_BUFSIZE, "%s/%s", cgroup_path, "cpu.max");
+          FILE *file = fopen(path, "r");
+          if (NULL == file) {
+            cells[i].set_int(0);
+          } else {
+            char buf[VALUE_BUFSIZE];
+            if (NULL != fgets(buf, VALUE_BUFSIZE, file)) {
+              const char *space = strchr(buf, ' ');
+              if (NULL != space) {
+                int period = atoi(space + 1);
+                cells[i].set_int(period);
+              } else {
+                cells[i].set_int(100000); // default
+              }
+            } else {
+              cells[i].set_int(0);
+            }
+          }
+          if (NULL != file) {
+            fclose(file);
+          }
         } else {
-          char buf[VALUE_BUFSIZE];
-          fscanf(file, "%s", buf);
-          int cfs_period_us = atoi(buf);
-          cells[i].set_int(cfs_period_us);
-        }
-        if (NULL != file) {
-          fclose(file);
+          char path[PATH_BUFSIZE];
+          snprintf(path, PATH_BUFSIZE, "%s/%s", cgroup_path, "cpu.cfs_period_us");
+          FILE *file = fopen(path, "r");
+          if (NULL == file) {
+            cells[i].set_int(0);
+          } else {
+            char buf[VALUE_BUFSIZE];
+            fscanf(file, "%s", buf);
+            int cfs_period_us = atoi(buf);
+            cells[i].set_int(cfs_period_us);
+          }
+          if (NULL != file) {
+            fclose(file);
+          }
         }
         break;
       }
       case SHARES: {
-        char path[PATH_BUFSIZE];
-        snprintf(path, PATH_BUFSIZE, "%s/%s", cgroup_path, "cpu.shares");
-        FILE *file = fopen(path, "r");
-        if (NULL == file) {
-          cells[i].set_int(0);
+        if (is_v2) {
+          // cgroup v2: cpu.weight
+          char path[PATH_BUFSIZE];
+          snprintf(path, PATH_BUFSIZE, "%s/%s", cgroup_path, "cpu.weight");
+          FILE *file = fopen(path, "r");
+          if (NULL == file) {
+            cells[i].set_int(0);
+          } else {
+            char buf[VALUE_BUFSIZE];
+            fscanf(file, "%s", buf);
+            int weight = atoi(buf);
+            cells[i].set_int(weight);
+          }
+          if (NULL != file) {
+            fclose(file);
+          }
         } else {
-          char buf[VALUE_BUFSIZE];
-          fscanf(file, "%s", buf);
-          int shares = atoi(buf);
-          cells[i].set_int(shares);
-        }
-        if (NULL != file) {
-          fclose(file);
+          char path[PATH_BUFSIZE];
+          snprintf(path, PATH_BUFSIZE, "%s/%s", cgroup_path, "cpu.shares");
+          FILE *file = fopen(path, "r");
+          if (NULL == file) {
+            cells[i].set_int(0);
+          } else {
+            char buf[VALUE_BUFSIZE];
+            fscanf(file, "%s", buf);
+            int shares = atoi(buf);
+            cells[i].set_int(shares);
+          }
+          if (NULL != file) {
+            fclose(file);
+          }
         }
         break;
       }
       case CGROUP_PATH: {
-        int path_len = strlen(cgroup_path) - strlen(root_cgroup_path);
+        const char *base_path = is_v2 ? root_cgroup_path_v2 : root_cgroup_path;
+        int path_len = strlen(cgroup_path) - strlen(base_path);
         if (path_len <= 0) {
           cells[i].set_varchar("");
         } else {
-          strncpy(cgroup_path_buf_, cgroup_path + strlen(root_cgroup_path), path_len);
+          strncpy(cgroup_path_buf_, cgroup_path + strlen(base_path), path_len);
           cgroup_path_buf_[path_len] = '\0';
           cells[i].set_varchar(cgroup_path_buf_);
         }
@@ -199,7 +279,6 @@ int ObAllVirtualCgroupConfig::add_cgroup_config_info_(const char *cgroup_path)
     }
   }
   if (OB_SUCC(ret)) {
-    // scanner最大支持64M，因此暂不考虑溢出的情况
     if (OB_FAIL(scanner_.add_row(cur_row_))) {
       SERVER_LOG(WARN, "fail to add row", K(ret), K(cur_row_));
       if (OB_SIZE_OVERFLOW == ret) {

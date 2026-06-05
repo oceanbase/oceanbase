@@ -25,6 +25,13 @@ class ObGroupName;
 class ObTenantBase;
 class ObResourcePlanManager;
 
+enum class ObCgroupVersion : int32_t
+{
+  UNKNOWN = 0,
+  V1 = 1,
+  V2 = 2
+};
+
 typedef enum  : uint64_t {
   DEFAULT = 0,
   CRITICAL = 1 << 0,
@@ -167,16 +174,19 @@ public:
   ObCgroupCtrl()
       : valid_(false),
         last_cpu_usage_(0),
-        last_usage_check_time_(0)
+        last_usage_check_time_(0),
+        cgroup_version_(ObCgroupVersion::UNKNOWN)
   {}
   ~ObCgroupCtrl() {}
   int init();
   int regist_observer_to_cgroup(const char * cgroup_dir);
   bool check_cgroup_status();
   static int check_cgroup_root_dir();
-  static int check_pid_in_procs();
+  int check_pid_in_procs();
   void destroy();
   bool is_valid() { return valid_; }
+  ObCgroupVersion get_cgroup_version() const { return cgroup_version_; }
+  bool is_cgroup_v2() const { return cgroup_version_ == ObCgroupVersion::V2; }
 
   bool is_valid_group_name(common::ObString &group_name);
   static int compare_cpu(const double cpu1, const double cpu2, int &compare_ret);
@@ -221,6 +231,7 @@ private:
   bool valid_;
   int64_t last_cpu_usage_;
   int64_t last_usage_check_time_;
+  ObCgroupVersion cgroup_version_;
 
 private:
   friend class oceanbase::omt::ObTenant;
@@ -229,8 +240,9 @@ private:
   friend int oceanbase::lib::SET_GROUP_ID(uint64_t group_id, bool is_background);
   int add_self_to_cgroup_(const uint64_t tenant_id, const uint64_t group_id = OBCG_DEFAULT, const bool is_background = false);
   int add_thread_to_cgroup_(const int64_t tid,const uint64_t tenant_id, const uint64_t group_id = OBCG_DEFAULT, const bool is_background = false);
-  static int init_dir_(const char *curr_dir);
-  static int init_full_dir_(const char *curr_path);
+  static ObCgroupVersion detect_cgroup_version_();
+  int init_dir_(const char *curr_dir);
+  int init_full_dir_(const char *curr_path);
   static int write_string_to_file_(const char *filename, const char *content);
   static int get_string_from_file_(const char *filename, char content[VALUE_BUFSIZE]);
   enum { NOT_DIR = 0, LEAF_DIR, REGULAR_DIR };
@@ -239,13 +251,12 @@ private:
   int recursion_process_group_(const char *curr_path, DirProcessor *processor_ptr, bool is_top_dir = false);
   int remove_cgroup_(const uint64_t tenant_id, const uint64_t group_id = OB_INVALID_GROUP_ID, const bool is_background = false);
   static int remove_dir_(const char *curr_dir);
-  static int get_cgroup_config_(const char *group_path, const char *config_name, char *config_value);
-  static int set_cgroup_config_(const char *group_path, const char *config_name, char *config_value);
+  int get_cgroup_config_(const char *group_path, const char *config_name, char *config_value);
+  int set_cgroup_config_(const char *group_path, const char *config_name, char *config_value);
   int set_cpu_shares_(const uint64_t tenant_id, const double cpu, const uint64_t group_id = OB_INVALID_GROUP_ID, const bool is_background = false);
   int set_cpu_cfs_quota_(const uint64_t tenant_id, const double cpu, const uint64_t group_id = OB_INVALID_GROUP_ID, const bool is_background = false);
-  static int set_cpu_cfs_quota_by_path_(const char *group_path, const double cpu);
-  static int get_cpu_cfs_quota_by_path_(const char *group_path, double &cpu);
-  static int dec_cpu_cfs_quota_(const char *curr_path, const double cpu);
+  int set_cpu_cfs_quota_by_path_(const char *group_path, const double cpu);
+  int get_cpu_cfs_quota_by_path_(const char *group_path, double &cpu);
   int recursion_dec_cpu_cfs_quota_(const char *curr_path, const double cpu);
   int get_cpu_time_(const uint64_t tenant_id, int64_t &cpu_time, const uint64_t group_id = OB_INVALID_GROUP_ID, const bool is_background = false);
   int get_throttled_time_(const uint64_t tenant_id, int64_t &throttled_time, const uint64_t group_id = OB_INVALID_GROUP_ID, const bool is_background = false);

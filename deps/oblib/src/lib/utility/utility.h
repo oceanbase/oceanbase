@@ -558,10 +558,23 @@ int get_ethernet_speed(const ObString &devname, int64_t &speed);
 inline int64_t get_cgroup_memory_limit()
 {
   int64_t cgroup_memory_limit = INT64_MAX;
-  FILE *file = fopen("/sys/fs/cgroup/memory/memory.limit_in_bytes", "r");
+  // cgroup v2: read from observer's own cgroup dir (symlink "cgroup" -> /sys/fs/cgroup/<obs_path>).
+  // Root /sys/fs/cgroup/memory.max does not exist on cgroup v2 by design.
+  FILE *file = fopen("cgroup/memory.max", "r");
   if (NULL != file) {
-    fscanf(file, "%ld", &cgroup_memory_limit);
+    char buf[64];
+    if (NULL != fgets(buf, sizeof(buf), file)) {
+      if (0 != strncmp(buf, "max", 3)) {
+        cgroup_memory_limit = strtoll(buf, NULL, 10);
+      }
+    }
     fclose(file);
+  } else {
+    file = fopen("/sys/fs/cgroup/memory/memory.limit_in_bytes", "r");
+    if (NULL != file) {
+      fscanf(file, "%ld", &cgroup_memory_limit);
+      fclose(file);
+    }
   }
   return cgroup_memory_limit;
 }
