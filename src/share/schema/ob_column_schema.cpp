@@ -592,7 +592,10 @@ int ObColumnSchemaV2::alloc_column_ref_set()
 int ObColumnSchemaV2::add_cascaded_column_id(uint64_t column_id)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(column_ref_idxs_)) {
+  if (OB_UNLIKELY(column_id < OB_APP_MIN_COLUMN_ID || OB_INVALID_ID == column_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid column id", K(ret), K(column_id));
+  } else if (OB_ISNULL(column_ref_idxs_)) {
     if (OB_FAIL(alloc_column_ref_set())) {
       LOG_WARN("alloc column ref set failed", K(ret));
     }

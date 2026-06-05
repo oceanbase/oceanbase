@@ -5988,7 +5988,13 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "generated column refer to auto-increment column");
         } else if (OB_FAIL(ObRawExprUtils::init_column_expr(*col_schema, session_info, *q_name.ref_expr_))) {
           LOG_WARN("init column expr failed", K(ret));
-        } else if (OB_FAIL(generated_column.add_cascaded_column_id(col_schema->get_column_id()))) {
+        } else if (OB_INVALID_ID != col_schema->get_column_id()
+                   && OB_FAIL(generated_column.add_cascaded_column_id(col_schema->get_column_id()))) {
+          // column_id may be OB_INVALID_ID when col_schema is one of the columns
+          // being added in the same ALTER TABLE batch (resolved_cols has not been
+          // assigned final column_ids yet). The cascaded set is rebuilt in RS
+          // (ObDDLService::*) after column_ids are assigned, so it is safe to
+          // skip the write here for invalid ids.
           LOG_WARN("add cascaded column id to generated column failed", K(ret));
         } else {
           if (col_schema->get_udt_set_id() > 0) {
@@ -5998,7 +6004,9 @@ int ObResolverUtils::resolve_generated_column_expr(ObResolverParams &params,
             } else {
               for (int i = 0; i < hidden_cols.count() && OB_SUCC(ret); i++) {
                 uint64_t cascaded_column_id = hidden_cols.at(i)->get_column_id();
-                if (OB_FAIL(generated_column.add_cascaded_column_id(cascaded_column_id))) {
+                if (OB_INVALID_ID == cascaded_column_id) {
+                  // same reasoning as above: defer to RS rebuild
+                } else if (OB_FAIL(generated_column.add_cascaded_column_id(cascaded_column_id))) {
                   LOG_WARN("add cascaded column id to generated column failed", K(ret), K(cascaded_column_id));
                 }
               }
