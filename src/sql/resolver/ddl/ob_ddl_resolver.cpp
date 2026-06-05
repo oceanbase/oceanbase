@@ -2674,10 +2674,11 @@ int ObDDLResolver::resolve_table_option(const ParseNode *option_node, const bool
           SQL_RESV_LOG(WARN, "option_node child is null", K(option_node->children_[0]), K(ret));
         } else {
           const int64_t table_dop = option_node->children_[0]->value_;
-          if (table_dop <= 0) {
-            ret = OB_ERR_UNEXPECTED;
+          if (OB_UNLIKELY(table_dop <= 0)) {
+            ret = OB_NOT_SUPPORTED;
             SQL_RESV_LOG(WARN, "invalid table dop", K(table_dop),
                 K(ret));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "value for PARALLEL or DEGREE must be greater than 0!");
           } else {
             table_dop_ = table_dop;
           }
