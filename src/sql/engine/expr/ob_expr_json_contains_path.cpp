@@ -249,7 +249,7 @@ int ObExprJsonContainsPath::eval_json_contains_path_general_path(const ObExpr &e
         } else {
           ObString path_val = path_data->get_string();
           ObJsonPath *json_path = nullptr;
-          bool is_const = expr.args_[i]->is_const_expr();
+          bool is_const = expr.args_[i]->is_static_const_expr();
           if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(expr.args_[i], ctx, temp_allocator, path_val, is_null_result))) {
             LOG_WARN("fail to get real data.", K(ret), K(path_val));
           } else if (OB_FAIL(ObJsonExprHelper::find_and_add_cache(temp_allocator, path_cache, json_path, path_val, i, true, is_const))) {
