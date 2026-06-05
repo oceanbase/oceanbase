@@ -36,19 +36,37 @@ int ObDicLock::lock_dic_tables_out_trans(
     LOG_WARN("sql proxy is null", K(ret));
   } else if (OB_FAIL(trans.start(GCTX.sql_proxy_, tenant_id))) {
      LOG_WARN("failed to start trans", K(ret), K(tenant_id));
-  } else {
-    for (int64_t i = 0; OB_SUCC(ret) && i < dic_tables_info.count(); ++i) {
-      const uint64_t table_id = dic_tables_info.at(i).table_id_;
-      if (OB_FAIL(do_table_lock(tenant_id, table_id, lock_mode, lock_owner, DEFAULT_TIMEOUT, true/*is_lock*/, trans))) {
-          LOG_WARN("fail to do lock table", K(ret), K(tenant_id));
-      }
-    }
+  } else if (OB_FAIL(lock_dic_tables_out_trans(tenant_id, dic_loader, lock_mode, lock_owner, trans))) {
+    LOG_WARN("fail to lock dic tables", K(ret), K(tenant_id));
   }
   if (trans.is_started()) {
     int tmp_ret = OB_SUCCESS;
     if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
       LOG_WARN("failed to commit trans", K(ret), K(tmp_ret));
       ret = OB_SUCC(ret) ? tmp_ret : ret;
+    }
+  }
+  return ret;
+}
+
+int ObDicLock::lock_dic_tables_out_trans(
+    const uint64_t tenant_id,
+    const ObTenantDicLoader &dic_loader,
+    const transaction::tablelock::ObTableLockMode lock_mode,
+    const transaction::tablelock::ObTableLockOwnerID &lock_owner,
+    ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  const ObArray<ObTenantDicLoader::ObDicTableInfo> &dic_tables_info = dic_loader.get_dic_tables_info();
+  if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || dic_tables_info.count() <= 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("the tenant id or dic loader is invalid", K(ret), K(tenant_id), K(dic_tables_info));
+  } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < dic_tables_info.count(); ++i) {
+      const uint64_t table_id = dic_tables_info.at(i).table_id_;
+      if (OB_FAIL(do_table_lock(tenant_id, table_id, lock_mode, lock_owner, DEFAULT_TIMEOUT, true/*is_lock*/, trans))) {
+          LOG_WARN("fail to do lock table", K(ret), K(tenant_id));
+      }
     }
   }
   return ret;
