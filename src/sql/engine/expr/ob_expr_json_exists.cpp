@@ -150,7 +150,7 @@ int ObExprJsonExists::get_path(const ObExpr &expr, ObEvalCtx &ctx,
   } else {
     ObString j_path_text;
     bool is_null = false;
-    bool is_const = json_arg->is_const_expr();
+    bool is_const = json_arg->is_static_const_expr();
     if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(json_arg, ctx, allocator, j_path_text, is_null))) {
       LOG_WARN("fail to get real data.", K(ret), K(j_path_text));
     } else if (is_null || j_path_text.length() == 0) {

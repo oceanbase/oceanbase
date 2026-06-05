@@ -545,11 +545,11 @@ int ObExprJsonValue::init_ctx_var(const ObExpr &expr, ObJsonParamCacheCtx* param
 {
   INIT_SUCC(ret);
   // init json path flag
-  param_ctx->is_json_path_const_ = expr.args_[JSN_VAL_PATH]->is_const_expr();
+  param_ctx->is_json_path_const_ = expr.args_[JSN_VAL_PATH]->is_static_const_expr();
   // init empty default value flag
-  param_ctx->json_param_.is_empty_default_const_ = expr.args_[JSN_VAL_EMPTY_DEF]->is_const_expr();
+  param_ctx->json_param_.is_empty_default_const_ = expr.args_[JSN_VAL_EMPTY_DEF]->is_static_const_expr();
   // init error default value flag
-  param_ctx->json_param_.is_error_default_const_ = expr.args_[JSN_VAL_ERROR_DEF]->is_const_expr();
+  param_ctx->json_param_.is_error_default_const_ = expr.args_[JSN_VAL_ERROR_DEF]->is_static_const_expr();
   // extract value from paln cache
   const ObExprJsonQueryParamInfo *info
                   = static_cast<ObExprJsonQueryParamInfo *>(expr.extra_info_);

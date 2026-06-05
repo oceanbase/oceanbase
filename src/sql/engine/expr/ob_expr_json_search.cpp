@@ -376,7 +376,7 @@ int ObExprJsonSearch::eval_json_search(const ObExpr &expr, ObEvalCtx &ctx, ObDat
 
       for (uint64_t i = 4; OB_SUCC(ret) && !is_null && i < expr.arg_cnt_; i++) {        
         json_arg = expr.args_[i];
-        bool is_const = json_arg->is_const_expr();
+        bool is_const = json_arg->is_static_const_expr();
         val_type = json_arg->datum_meta_.type_;
         if (OB_FAIL(temp_allocator.eval_arg(json_arg, ctx, json_datum))) {
           LOG_WARN("eval json arg failed", K(ret));
