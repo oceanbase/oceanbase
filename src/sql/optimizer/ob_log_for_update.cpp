@@ -95,9 +95,9 @@ int ObLogForUpdate::get_plan_item_info(PlanText &plan_text,
           } else {
             table = base_table;
           }
-        } else {
+        } else if (OB_ISNULL(table = table->ref_query_->get_table_item_by_id(index_dml_info_.at(i)->loc_table_id_))) {
           ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("not a hierarchical query", K(ret), KPC(stmt));
+          LOG_WARN("table item is NULL", K(ret));
         }
       }
       if (OB_SUCC(ret) && OB_FAIL(BUF_PRINTF("%c%.*s%c",

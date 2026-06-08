@@ -145,7 +145,8 @@ ObLogPlan::ObLogPlan(ObOptimizerContext &ctx, const ObDMLStmt *stmt)
     new_or_quals_(allocator_),
     nonrecursive_plan_for_fake_cte_(NULL),
     has_allocated_range_shuffle_(false),
-    need_accurate_cardinality_(false)
+    need_accurate_cardinality_(false),
+    for_update_view_ctx_(allocator_)
 {
 }
 
@@ -16803,7 +16804,7 @@ int ObLogPlan::candi_allocate_for_update()
     }
   }
 
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && !is_for_update_suppressed()) {
     ObSEArray<uint64_t, 4> sfu_table_list;
     for (int64_t i = 0; OB_SUCC(ret) && i < stmt->get_table_size(); ++i) {
       const TableItem *table = NULL;
@@ -16943,15 +16944,17 @@ int ObLogPlan::is_hierarchical_for_update(bool &is_hierarchical)
     LOG_WARN("table item is NULL", K(ret));
   } else if (!table->for_update_ || !table->is_generated_table()) {
     is_hierarchical = false;
-  } else if (OB_UNLIKELY(static_cast<const ObSelectStmt*>(get_stmt())->get_for_update_dml_infos().count() == 0)) {
-    // For "select * from (select c1 from t1 connect by xxx) view1 where xxx for update;"
-    ret = OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT;
-    LOG_WARN("for update dml info is null", K(ret), KPC(static_cast<const ObSelectStmt*>(get_stmt())));
   } else if (OB_ISNULL(ref_view = table->ref_query_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ref query is NULL", K(ret));
   } else if (ref_view->is_hierarchical_query()) {
-    is_hierarchical = true;
+    if (OB_UNLIKELY(static_cast<const ObSelectStmt*>(get_stmt())->get_for_update_dml_infos().count() == 0)) {
+      // For "select * from (select c1 from t1 connect by xxx) view1 where xxx for update;"
+      ret = OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT;
+      LOG_WARN("for update dml info is null", K(ret), KPC(static_cast<const ObSelectStmt*>(get_stmt())));
+    } else {
+      is_hierarchical = true;
+    }
   }
   return ret;
 }
@@ -17033,10 +17036,13 @@ int ObLogPlan::get_table_for_update_info(const uint64_t table_id,
   } else {
     bool is_nullable = false;
     ObSEArray<ObRawExpr*, 4> temp_rowkeys;
-    if (OB_UNLIKELY(!table->is_basic_table()) || OB_UNLIKELY(is_virtual_table(table->ref_id_))) {
-      // invalid usage
-      // bad case: select * from (select /*+no_merge*/ * from t1) for update
+    if (OB_UNLIKELY(table->is_generated_table())) {
+      if (OB_FAIL(get_table_for_update_info_from_view(table, index_dml_info))) {
+        LOG_WARN("failed to get for update info from view", K(ret), KPC(table));
+      }
+    } else if (OB_UNLIKELY(!table->is_basic_table()) || OB_UNLIKELY(is_virtual_table(table->ref_id_))) {
       ret = OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT;
+      LOG_WARN("for update locked table is not a basic table", K(ret), KPC(table));
       LOG_USER_ERROR(OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT);
     } else if (OB_FAIL(get_rowkey_exprs(table->table_id_, table->ref_id_, temp_rowkeys))) {
       LOG_WARN("failed to generate rowkey exprs", K(ret));
@@ -17087,15 +17093,288 @@ int ObLogPlan::get_table_for_update_info(const uint64_t table_id,
           tmp_partkey_exprs.at(i)->set_explicited_reference();
         }
       }
-      if (OB_SUCC(ret)) {
-        wait_ts = table->for_update_wait_us_;
-        skip_locked = table->skip_locked_;
-        LOG_TRACE("Succeed to get table for update info", K(table_id), K(*index_dml_info),
-                                                          K(wait_ts), K(skip_locked));
+    }
+    if (OB_SUCC(ret)) {
+      wait_ts = table->for_update_wait_us_;
+      skip_locked = table->skip_locked_;
+      LOG_TRACE("Succeed to get table for update info", K(table_id), K(*index_dml_info),
+                                                        K(wait_ts), K(skip_locked));
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::get_table_for_update_info_from_view(const TableItem *view_table,
+                                                   IndexDMLInfo *&index_dml_info)
+{
+  int ret = OB_SUCCESS;
+  const ObSelectStmt *select_stmt = NULL;
+  const ObSelectStmt *view_stmt = NULL;
+  const TableItem *lock_table = NULL;
+  const ObTableSchema *table_schema = NULL;
+  ObSqlSchemaGuard *schema_guard = NULL;
+  ObSQLSessionInfo *session_info = NULL;
+  bool is_nullable = false;
+  bool outer_nullable = false;
+  index_dml_info = NULL;
+  if (OB_ISNULL(get_stmt())
+      || OB_ISNULL(view_table)
+      || OB_ISNULL(view_stmt = view_table->ref_query_)
+      || OB_UNLIKELY(!get_stmt()->is_select_stmt())
+      || OB_UNLIKELY(!view_table->is_generated_table())
+      || OB_ISNULL(schema_guard = get_optimizer_context().get_sql_schema_guard())
+      || OB_ISNULL(session_info = get_optimizer_context().get_session_info())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected parameters",
+             K(ret), K(get_stmt()), KPC(view_table), K(schema_guard), K(session_info));
+  } else if (view_stmt->has_distinct() || view_stmt->has_group_by() || view_stmt->is_set_stmt()) {
+    ret = OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT;
+    LOG_WARN("for update can not select from view with distinct/group by/set",
+             K(ret), K(view_stmt->has_distinct()),
+             K(view_stmt->has_group_by()), K(view_stmt->is_set_stmt()));
+    LOG_USER_ERROR(OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT);
+  } else if (FALSE_IT(select_stmt = static_cast<const ObSelectStmt *>(get_stmt()))) {
+  } else if (OB_FAIL(ForUpdateViewCtx::find_lock_target(view_stmt, lock_table))) {
+    LOG_WARN("failed to find lock target inside view", K(ret), KPC(view_stmt));
+  } else if (OB_FAIL(schema_guard->get_table_schema(session_info->get_effective_tenant_id(),
+                                                    lock_table->ref_id_,
+                                                    table_schema,
+                                                    lock_table->is_link_table()))) {
+    LOG_WARN("failed to get table schema", K(ret), KPC(lock_table));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("table schema is null", K(ret), KPC(lock_table));
+  } else if (OB_FAIL(ObOptimizerUtil::is_table_on_null_side(view_stmt, lock_table->table_id_, is_nullable))) {
+    LOG_WARN("failed to check inner table null side", K(ret));
+  } else if (OB_FAIL(ObOptimizerUtil::is_table_on_null_side(select_stmt, view_table->table_id_, outer_nullable))) {
+    LOG_WARN("failed to check outer view null side", K(ret));
+  } else if (OB_ISNULL(index_dml_info = OB_NEWx(IndexDMLInfo, &get_allocator(), get_allocator()))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to allocate memory for index dml info", K(ret));
+  } else {
+    index_dml_info->table_id_ = view_table->table_id_;
+    index_dml_info->loc_table_id_ = lock_table->table_id_;
+    index_dml_info->ref_table_id_ = lock_table->ref_id_;
+    index_dml_info->distinct_algo_ = T_DISTINCT_NONE;
+    index_dml_info->rowkey_cnt_ = table_schema->get_rowkey_info().get_size();
+    index_dml_info->need_filter_null_ = is_nullable || outer_nullable;
+    index_dml_info->is_primary_index_ = true;
+    if (OB_FAIL(for_update_view_ctx_.build_rowkey_index_columns(select_stmt,
+                                                                view_table,
+                                                                lock_table,
+                                                                *table_schema,
+                                                                index_dml_info))) {
+      LOG_WARN("failed to build rowkey index columns from view", K(ret));
+    } else if (share::schema::PARTITION_LEVEL_ZERO == table_schema->get_part_level()) {
+      // do nothing
+    } else if (OB_FAIL(for_update_view_ctx_.build_pulled_part_expr(
+                                            get_optimizer_context().get_expr_factory(),
+                                            select_stmt, view_stmt, view_table,
+                                            lock_table, *table_schema, index_dml_info))) {
+      LOG_WARN("failed to build pulled-up part expr for view for update", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::ForUpdateViewCtx::find_lock_target(const ObSelectStmt *view_stmt,
+                                                  const TableItem *&lock_table)
+{
+  int ret = OB_SUCCESS;
+  lock_table = NULL;
+  if (OB_ISNULL(view_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("view stmt is null", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < view_stmt->get_table_size(); ++i) {
+    const TableItem *table = NULL;
+    if (OB_ISNULL(table = view_stmt->get_table_item(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("table item is null", K(ret), K(i), KPC(view_stmt));
+    } else if (!table->for_update_) {
+      // do nothing
+    } else if (!table->is_basic_table() || is_virtual_table(table->ref_id_)) {
+      ret = OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT;
+      LOG_WARN("for update locked table is not a basic table", K(ret), KPC(table));
+      LOG_USER_ERROR(OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT);
+    } else if (OB_NOT_NULL(lock_table)) {
+      ret = OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT;
+      LOG_WARN("for update view must have exactly one lock target",
+               K(ret), KPC(lock_table), KPC(table));
+      LOG_USER_ERROR(OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT);
+    } else {
+      lock_table = table;
+    }
+  }
+  if (OB_SUCC(ret) && OB_ISNULL(lock_table)) {
+    ret = OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT;
+    LOG_WARN("for update view has no lock target", K(ret), KPC(view_stmt));
+    LOG_USER_ERROR(OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT);
+  }
+  return ret;
+}
+
+int ObLogPlan::ForUpdateViewCtx::get_view_column_for_base(const ObSelectStmt *select_stmt,
+                                                          const TableItem *view_table,
+                                                          const TableItem *lock_table,
+                                                          uint64_t column_id,
+                                                          ObColumnRefRawExpr *&column_expr)
+{
+  int ret = OB_SUCCESS;
+  column_expr = NULL;
+  if (OB_ISNULL(select_stmt) || OB_ISNULL(view_table) || OB_ISNULL(lock_table)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(select_stmt), K(view_table), K(lock_table));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && NULL == column_expr && i < select_stmt->get_column_size(); ++i) {
+    const ColumnItem &column_item = select_stmt->get_column_items().at(i);
+    if (OB_ISNULL(column_item.expr_) || OB_UNLIKELY(!column_item.expr_->is_column_ref_expr())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid view column expr", K(ret), K(column_item));
+    } else if (column_item.table_id_ == view_table->table_id_
+               && column_item.base_tid_ == lock_table->ref_id_
+               && column_item.base_cid_ == column_id) {
+      column_expr = static_cast<ObColumnRefRawExpr *>(column_item.expr_);
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::ForUpdateViewCtx::build_rowkey_index_columns(const ObSelectStmt *select_stmt,
+                                                            const TableItem *view_table,
+                                                            const TableItem *lock_table,
+                                                            const share::schema::ObTableSchema &table_schema,
+                                                            IndexDMLInfo *index_dml_info)
+{
+  int ret = OB_SUCCESS;
+  const ObRowkeyInfo &rowkey_info = table_schema.get_rowkey_info();
+  if (OB_ISNULL(index_dml_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("index dml info is null", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < rowkey_info.get_size(); ++i) {
+    uint64_t column_id = OB_INVALID_ID;
+    ObColumnRefRawExpr *column_expr = NULL;
+    if (OB_FAIL(rowkey_info.get_column_id(i, column_id))) {
+      LOG_WARN("failed to get rowkey column id", K(ret), K(i));
+    } else if (OB_FAIL(get_view_column_for_base(select_stmt, view_table, lock_table,
+                                                column_id, column_expr))) {
+      LOG_WARN("failed to get column expr from view", K(ret), K(column_id));
+    } else if (OB_ISNULL(column_expr)) {
+      ret = OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT;
+      LOG_WARN("rowkey column not exposed by view for for update",
+               K(ret), K(column_id), KPC(lock_table));
+      LOG_USER_ERROR(OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT);
+    } else if (OB_FAIL(index_dml_info->column_exprs_.push_back(column_expr))) {
+      LOG_WARN("failed to push back column expr", K(ret));
+    } else {
+      column_expr->set_explicited_reference();
+    }
+  }
+  return ret;
+}
+
+int ObLogPlan::ForUpdateViewCtx::build_pulled_part_expr(ObRawExprFactory &expr_factory,
+                                                        const ObSelectStmt *select_stmt,
+                                                        const ObSelectStmt *view_stmt,
+                                                        const TableItem *view_table,
+                                                        const TableItem *lock_table,
+                                                        const share::schema::ObTableSchema &table_schema,
+                                                        IndexDMLInfo *index_dml_info)
+{
+  int ret = OB_SUCCESS;
+  // Pull view_stmt's partition expression up with inner base columns rewritten to outer view columns,
+  // then register it as a plan-local override so gen_calc_part_id_expr can find it via loc_table_id_.
+  // We avoid mutating the outer stmt because the (loc_table_id_, ref_table_id_)
+  // key refers to a TableItem that lives only inside view_stmt;
+  // injecting it into the outer stmt would create a phantom TableItem not existing in the outer stmt.
+  ObRawExpr *part_expr = NULL;
+  ObRawExpr *subpart_expr = NULL;
+  ObSEArray<ObRawExpr*, 4> base_partkeys;
+  ObSEArray<ObRawExpr*, 4> view_partkeys;
+  if (OB_ISNULL(view_stmt) || OB_ISNULL(lock_table) || OB_ISNULL(index_dml_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid arguments", K(ret), K(view_stmt), K(lock_table), K(index_dml_info));
+  } else if (OB_ISNULL(part_expr = view_stmt->get_part_expr(lock_table->table_id_, lock_table->ref_id_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("partition expr is null", K(ret), KPC(lock_table));
+  } else if (share::schema::PARTITION_LEVEL_TWO == table_schema.get_part_level() &&
+             OB_ISNULL(subpart_expr = view_stmt->get_subpart_expr(lock_table->table_id_, lock_table->ref_id_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sub partition expr is null", K(ret), KPC(lock_table));
+  } else if (OB_FAIL(ObRawExprUtils::extract_column_exprs(part_expr, base_partkeys))) {
+    LOG_WARN("failed to extract partition key exprs", K(ret));
+  } else if (NULL != subpart_expr && OB_FAIL(ObRawExprUtils::extract_column_exprs(subpart_expr, base_partkeys))) {
+    LOG_WARN("failed to extract subpartition key exprs", K(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < base_partkeys.count(); ++i) {
+    const ObColumnRefRawExpr *base_partkey = NULL;
+    ObColumnRefRawExpr *view_column = NULL;
+    if (OB_ISNULL(base_partkeys.at(i)) || OB_UNLIKELY(!base_partkeys.at(i)->is_column_ref_expr())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid partition key expr", K(ret), K(i), K(base_partkeys.at(i)));
+    } else if (FALSE_IT(base_partkey = static_cast<const ObColumnRefRawExpr *>(base_partkeys.at(i)))) {
+    } else if (OB_FAIL(get_view_column_for_base(select_stmt,
+                                                view_table,
+                                                lock_table,
+                                                base_partkey->get_column_id(),
+                                                view_column))) {
+      LOG_WARN("failed to get partition key expr from view", K(ret), KPC(base_partkey));
+    } else if (OB_ISNULL(view_column)) {
+      ret = OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT;
+      LOG_WARN("partition key column not exposed by view for for update",
+               K(ret), KPC(base_partkey), KPC(lock_table));
+      LOG_USER_ERROR(OB_ERR_FOR_UPDATE_SELECT_VIEW_CANNOT);
+    } else if (OB_FAIL(view_partkeys.push_back(view_column))) {
+      LOG_WARN("failed to push back view partition key", K(ret));
+    } else if (OB_FAIL(add_var_to_array_no_dup(index_dml_info->column_exprs_, view_column))) {
+      LOG_WARN("failed to push back partition key expr", K(ret));
+    } else {
+      view_column->set_explicited_reference();
+    }
+  }
+  if (OB_SUCC(ret)) {
+    ObRawExprCopier copier(expr_factory);
+    ObRawExpr *new_part_expr = NULL;
+    ObRawExpr *new_subpart_expr = NULL;
+    if (OB_FAIL(copier.add_replaced_expr(base_partkeys, view_partkeys))) {
+      LOG_WARN("failed to add partition key replace exprs", K(ret));
+    } else if (OB_FAIL(copier.copy_on_replace(part_expr, new_part_expr))) {
+      LOG_WARN("failed to copy partition expr", K(ret));
+    } else if (NULL != subpart_expr && OB_FAIL(copier.copy_on_replace(subpart_expr, new_subpart_expr))) {
+      LOG_WARN("failed to copy subpartition expr", K(ret));
+    } else {
+      PulledPartExpr item;
+      item.table_id_ = lock_table->table_id_;
+      item.ref_table_id_ = lock_table->ref_id_;
+      item.part_level_ = table_schema.get_part_level();
+      item.part_expr_ = new_part_expr;
+      item.subpart_expr_ = new_subpart_expr;
+      if (OB_FAIL(pulled_part_exprs_.push_back(item))) {
+        LOG_WARN("failed to push back pulled part expr", K(ret), K(item));
       }
     }
   }
   return ret;
+}
+
+bool ObLogPlan::ForUpdateViewCtx::find_pulled_part_expr(int64_t table_id,
+                                                        int64_t ref_table_id,
+                                                        share::schema::ObPartitionLevel &level,
+                                                        ObRawExpr *&part_expr,
+                                                        ObRawExpr *&subpart_expr) const
+{
+  bool found = false;
+  for (int64_t i = 0; !found && i < pulled_part_exprs_.count(); ++i) {
+    const PulledPartExpr &item = pulled_part_exprs_.at(i);
+    if (item.table_id_ == table_id && item.ref_table_id_ == ref_table_id) {
+      level = item.part_level_;
+      part_expr = item.part_expr_;
+      subpart_expr = item.subpart_expr_;
+      found = true;
+    }
+  }
+  return found;
 }
 
 int ObLogPlan::get_table_for_update_info_for_hierarchical(const uint64_t table_id,
@@ -17349,7 +17628,6 @@ int ObLogPlan::get_part_exprs(uint64_t table_id,
   part_expr = NULL;
   subpart_expr = NULL;
   const ObDMLStmt *stmt = NULL;
-  const share::schema::ObTableSchema *table_schema = NULL;
   ObSqlSchemaGuard *sql_schema_guard = NULL;
   ObSQLSessionInfo *session = NULL;
   if (OB_ISNULL(stmt = get_stmt())
@@ -17360,29 +17638,35 @@ int ObLogPlan::get_part_exprs(uint64_t table_id,
              OB_ISNULL(session = get_optimizer_context().get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("NULL ptr", K(ret));
-  } else if (OB_FAIL(sql_schema_guard->get_table_schema(session->get_effective_tenant_id(),
-                                                        ref_table_id,
-                                                        table_schema))) {
-    LOG_WARN("failed to get table schema", K(ret), K(ref_table_id));
-  }
-
-  if (OB_SUCC(ret)) {
-    if (OB_ISNULL(table_schema)) {
+  } else if (OB_UNLIKELY(for_update_view_ctx_.find_pulled_part_expr(table_id,
+                                                                    ref_table_id,
+                                                                    part_level,
+                                                                    part_expr,
+                                                                    subpart_expr))) {
+    // FOR UPDATE on an unmergeable view. part exprs are already processed in for_update_view_ctx_.
+  } else {
+    const share::schema::ObTableSchema *table_schema = NULL;
+    if (OB_FAIL(sql_schema_guard->get_table_schema(session->get_effective_tenant_id(),
+                                                   ref_table_id,
+                                                   table_schema))) {
+      LOG_WARN("failed to get table schema", K(ret), K(ref_table_id));
+    } else if (OB_ISNULL(table_schema)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("table schema is null", K(ret), K(table_schema));
     } else {
       part_level = table_schema->get_part_level();
       part_expr = stmt->get_part_expr(table_id, ref_table_id);
       subpart_expr = stmt->get_subpart_expr(table_id, ref_table_id);
-      if (NULL != part_expr) {
-        part_expr->set_part_key_reference();
-      }
-      if (NULL != subpart_expr) {
-        subpart_expr->set_part_key_reference();
-      }
     }
   }
-
+  if (OB_SUCC(ret)) {
+    if (NULL != part_expr) {
+      part_expr->set_part_key_reference();
+    }
+    if (NULL != subpart_expr) {
+      subpart_expr->set_part_key_reference();
+    }
+  }
   return ret;
 }
 
