@@ -1484,6 +1484,7 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
   ObString trace_info;
   ObString unique_id ;
   const ObTransID trans_id = trans_ctx.get_trans_id();
+  const TransCtx *trans_ctx_ptr = &trans_ctx;
   const ObString &trans_id_str = trans_ctx.get_trans_id_str();
 
   if (OB_UNLIKELY(! inited_)) {
@@ -1553,6 +1554,8 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
         if (OB_IN_STOP_STATE != ret) {
           LOG_ERROR("push_br_queue_ fail", KR(ret), K(begin_br));
         }
+      } else {
+        begin_br = NULL;
       }
 
       // push data
@@ -1591,15 +1594,19 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
 
       // push commit br to commit
       if (OB_SUCC(ret)) {
-        if (OB_FAIL(push_br_queue_(commit_br))) {
+        const int64_t total_br_count = trans_ctx.get_total_br_count();
+        const int64_t committed_br_count = trans_ctx.get_committed_br_count();
+
+        if (OB_UNLIKELY(total_br_count != committed_br_count)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_ERROR("expected all br commit but not", KR(ret), K_(stop_flag), K(total_br_count),
+              K(committed_br_count), K(trans_ctx));
+        } else if (OB_FAIL(push_br_queue_(commit_br))) {
           if (OB_IN_STOP_STATE != ret) {
             LOG_ERROR("push_br_queue_ fail", KR(ret), K(commit_br));
           }
-        } else if (OB_UNLIKELY(! trans_ctx.is_all_br_committed())) {
-          ret = OB_ERR_UNEXPECTED;
-          const int64_t total_br_count = trans_ctx.get_total_br_count();
-          const int64_t committed_br_count = trans_ctx.get_committed_br_count();
-          LOG_ERROR("expected all br commit but not", KR(ret), K_(stop_flag), K(total_br_count), K(committed_br_count), K(trans_ctx));
+        } else {
+          commit_br = NULL;
         }
       }
     }
@@ -1616,9 +1623,9 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
       }
     }
 
-    LOG_DEBUG("commit_binlog_record_list", KR(ret), K(trans_id), K(trans_id_str), K(trans_commit_version), K(cluster_id),
+    LOG_DEBUG("commit_binlog_record_list", KR(ret), K(trans_id), K(trans_commit_version), K(cluster_id),
         K(tenant_id), K(ddl_schema_version), K(trace_id), K(unique_id),
-        K(row_index), K(part_trans_task_count), K(trans_ctx));
+        K(row_index), K(part_trans_task_count), KP(trans_ctx_ptr));
   }
 
   return ret;

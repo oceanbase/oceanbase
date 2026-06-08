@@ -857,7 +857,7 @@ int ObLogResourceCollector::handle_part_trans_task_(PartTransTask *task, const i
           // Check if TransCtx can be recycled (only if all BEGIN/COMMIT BR are also released)
           if (OB_SUCC(ret) && can_recycle_trans_ctx) {
             if (OB_FAIL(trans_ctx_mgr_->remove_trans_ctx(tenant_id, trans_id))) {
-              LOG_ERROR("remove_trans_ctx fail", KR(ret), K(tenant_id), K(trans_id), K(trans_ctx));
+              LOG_ERROR("remove_trans_ctx fail", KR(ret), K(tenant_id), K(trans_id), KP(trans_ctx));
             }
           }
         } else {

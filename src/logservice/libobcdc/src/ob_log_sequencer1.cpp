@@ -469,7 +469,9 @@ int ObLogSequencer::handle_sequenced_trans_(
       }
     }
 
-    LOG_TRACE("handle_sequenced_trans_ end", KR(ret), K(trans_id), KPC(trans_ctx));
+    LOG_TRACE("handle_sequenced_trans_ end", KR(ret), K(tenant_id), K(trans_id), K(new_seq),
+        K(new_schema_version), K(participant_count), K(is_dml_trans), K(is_ddl_trans), K(is_ls_op_trans),
+        KP(trans_ctx));
   }
 
   return ret;

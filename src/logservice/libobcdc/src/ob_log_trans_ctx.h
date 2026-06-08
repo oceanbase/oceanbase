@@ -48,7 +48,7 @@ struct TransPartInfo
     return tls_id_ < other.tls_id_;
   }
 
-  TO_STRING_KV(KPC_(obj), K_(tls_id));
+  TO_STRING_KV(KP_(obj), K_(tls_id));
 };
 
 struct TransPartInfoCompare
