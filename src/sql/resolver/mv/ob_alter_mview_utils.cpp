@@ -339,6 +339,7 @@ int ObAlterMviewUtils::check_action_node_for_mv_base_table(const ObTableSchema &
         || T_ALTER_INDEX_OPTION == type
         || T_ALTER_MLOG_OPTIONS == type
         || T_MV_OPTIONS == type
+        || T_ALTER_REFRESH_EXTERNAL_TABLE == type
         || T_ALTER_PARTITION_OPTION == type) {
     } else {
       ret = OB_NOT_SUPPORTED;

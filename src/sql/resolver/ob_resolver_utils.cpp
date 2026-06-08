@@ -11587,6 +11587,8 @@ int ObResolverUtils::check_allowed_alter_operations_for_mlog(
         || (ObAlterTableArg::DROP_CONSTRAINT == arg.alter_constraint_type_)
         || (ObAlterTableArg::ALTER_CONSTRAINT_STATE == arg.alter_constraint_type_))) {
       // add/drop constraint is supported
+    } else if (arg.alter_table_schema_.is_external_table()) {
+      // refresh external table is supported
     } else {
       // unsupported operations
       ret = OB_NOT_SUPPORTED;
