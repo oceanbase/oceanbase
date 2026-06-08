@@ -563,6 +563,11 @@ int ObLogExpand::create_aggr_with_dup_params(ObRawExprFactory &factory, ObAggFun
       if (real_param_exprs.at(i)->is_const_expr() && !dup_const) {
         continue;
       }
+      if (real_param_exprs.at(i)->get_expr_type() == T_PSEUDO_WINDOW_FUNNEL_TIME ||
+          real_param_exprs.at(i)->get_expr_type() == T_PSEUDO_WINDOW_FUNNEL_EVENT_IDX) {
+        // Skip window_funnel pseudo columns
+        continue;
+      }
       if (OB_FAIL(build_dup_expr(factory, sess, use_exist_dup, real_param_exprs.at(i), dup_expr_pairs, dup_expr))) {
         LOG_WARN("build dup expr failed", K(ret));
       } else if (OB_ISNULL(dup_expr)) {

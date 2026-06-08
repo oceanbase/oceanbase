@@ -15,7 +15,7 @@ template <typename Store_Row, bool has_addon>
 struct ObSortVecOpChunk : public common::ObDLinkBase<ObSortVecOpChunk<Store_Row, has_addon>>
 {
   explicit ObSortVecOpChunk(const int64_t level, common::ObIAllocator &allocator) :
-    level_(level), sort_row_store_mgr_(allocator), sk_row_iter_(), addon_row_iter_(), sk_row_(nullptr), addon_row_(nullptr),
+    level_(level), chunk_idx_(0), sort_row_store_mgr_(allocator), sk_row_iter_(), addon_row_iter_(), sk_row_(nullptr), addon_row_(nullptr),
     use_inmem_data_(false), inmem_rows_(), row_idx_(0), slice_id_(0)
   {}
   void reset_row_iter()
@@ -78,6 +78,7 @@ struct ObSortVecOpChunk : public common::ObDLinkBase<ObSortVecOpChunk<Store_Row,
 
 public:
   int64_t level_;
+  int64_t chunk_idx_;
   ObSortRowStoreMgr<Store_Row, has_addon> sort_row_store_mgr_;
   ObTempRowStore::Iterator sk_row_iter_;
   ObTempRowStore::Iterator addon_row_iter_;

@@ -390,7 +390,7 @@ END_P SET_VAR DELIMITER
         VALID VALUE VARIANCE VARIABLES VENDED_CREDENTAIL_ENABLED VERBOSE VERIFY VERSION VIEW VISIBLE VIRTUAL_COLUMN_ID VALIDATE VAR_POP
         VAR_SAMP VARSAMP VALIDATION VECTOR VECTOR_DISTANCE MICRO_INDEX_CLUSTERED VECTOR_SIMILARITY
 
-        WAIT WAREHOUSE WARM WARNINGS WASH WEEK WEIGHT_STRING WHENEVER WORK WRAPPER WINDOW WEAK WITH_COLUMN_GROUP WITHOUT
+        WAIT WAREHOUSE WARM WARNINGS WASH WEEK WEIGHT_STRING WHENEVER WORK WRAPPER WINDOW WINDOW_FUNNEL WEAK WITH_COLUMN_GROUP WITHOUT
 
         X509 XA XID XML
 
@@ -2438,6 +2438,11 @@ COUNT '(' opt_all '*' ')' OVER new_generalized_window_clause
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $1, $3);
 }
+| WINDOW_FUNNEL '(' INTNUM ',' STRING_VALUE ',' expr_list ')' OVER new_generalized_window_clause
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_WINDOW_FUNNEL, 3, $3, $5, $7);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $10);
+}
 | LISTAGG '(' opt_distinct expr_list opt_order_by opt_separator ')' OVER new_generalized_window_clause
 {
   ParseNode *group_concat_exprs = $4;
@@ -3007,6 +3012,10 @@ MOD '(' expr ',' expr ')'
 | groupconcat_agg_func %prec LOWER_OVER
 {
   $$ = $1;
+}
+| WINDOW_FUNNEL '(' INTNUM ',' STRING_VALUE ',' expr_list ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_WINDOW_FUNNEL, 3, $3, $5, $7);
 }
 | TOP_K_FRE_HIST '(' DECIMAL_VAL ',' bit_expr  ','  INTNUM ','  expr_const ')'
 {
@@ -29132,6 +29141,7 @@ ACCESS_INFO
 |       WEIGHT_STRING
 |       WHENEVER
 |       WINDOW
+|       WINDOW_FUNNEL
 |       WITHOUT
 |       WORK
 |       WRAPPER

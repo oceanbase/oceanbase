@@ -1505,7 +1505,8 @@ int ObAggregateProcessor::init()
                T_FUN_ARG_MAX == aggr_info.get_expr_type() ||
                T_FUN_ANY     == aggr_info.get_expr_type() ||
                T_FUN_ARBITRARY == aggr_info.get_expr_type() ||
-               T_FUN_CK_GROUPCONCAT == aggr_info.get_expr_type()) {
+               T_FUN_CK_GROUPCONCAT == aggr_info.get_expr_type() ||
+               T_FUN_WINDOW_FUNNEL == aggr_info.get_expr_type()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("this agg func not supported vec1.0", K(aggr_info.get_expr_type()));
     } else {

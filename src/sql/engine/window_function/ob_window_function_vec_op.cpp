@@ -782,7 +782,8 @@ int ObWindowFunctionVecOp::init()
         case T_FUN_ARG_MAX:
         case T_FUN_ARG_MIN:
         case T_FUN_ANY:
-        case T_FUN_ARBITRARY: {
+        case T_FUN_ARBITRARY:
+        case T_FUN_WINDOW_FUNNEL: {
           aggregate::IAggregate *agg_func = nullptr;
           winfunc::AggrExpr *aggr_expr = nullptr;
           if (OB_FAIL(alloc_expr<winfunc::AggrExpr>(*local_allocator_, aggr_expr))) {

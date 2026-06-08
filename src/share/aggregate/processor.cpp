@@ -547,10 +547,30 @@ int Processor::init_aggr_row_extra_info(RuntimeContext &agg_ctx, char *extra_arr
     ObAggrInfo &aggr_info = agg_ctx.locate_aggr_info(i);
     bool extra_store_inited = false;
     switch (aggr_info.get_expr_type()) {
+    case T_FUN_WINDOW_FUNNEL: {
+      agg_ctx.need_advance_collect_ = true;
+      ExtraStores *&extra = get_extra_stores(i, agg_ctx, extra_array_buf);
+      if (OB_FAIL(alloc_extra_stores(agg_ctx, extra))) {
+        SQL_LOG(WARN, "alloc extra struct failed", K(ret));
+      } else {
+        WindowFunnelVecExtraResult *&window_funnel_store = extra->window_funnel_store_;
+        if (nullptr == window_funnel_store) {
+          void *tmp_buf = NULL;
+          if (OB_ISNULL(tmp_buf = agg_ctx.allocator_.alloc(sizeof(WindowFunnelVecExtraResult)))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("allocate memory failed", K(ret));
+          } else if (OB_FALSE_IT(window_funnel_store = new (tmp_buf) WindowFunnelVecExtraResult(
+                                  extra_allocator, *agg_ctx.op_monitor_info_))) {
+            // do nothing
+          }
+        }
+      }
+      break;
+    }
     case T_FUN_WM_CONCAT:
     case T_FUN_KEEP_WM_CONCAT:
-    case T_FUN_GROUP_CONCAT:
-    case T_FUN_CK_GROUPCONCAT: {
+    case T_FUN_CK_GROUPCONCAT:
+    case T_FUN_GROUP_CONCAT: {
       if (aggr_info.has_order_by_) {
         agg_ctx.need_advance_collect_ = true;
         ExtraStores *&extra = get_extra_stores(i, agg_ctx, extra_array_buf);

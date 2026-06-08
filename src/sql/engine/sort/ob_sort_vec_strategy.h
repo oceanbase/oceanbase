@@ -16,6 +16,7 @@
 #include "sql/engine/sort/ob_i_sort_vec_op_impl.h"
 #include "sql/engine/sort/ob_sort_adaptive_qs_vec_op.h"
 #include "sql/engine/sort/ob_sort_compare_vec_op.h"
+#include <boost/sort/sort.hpp>
 #include "sql/engine/sort/ob_sort_key_vec_op.h"
 #include "sql/engine/sort/ob_sort_key_fetcher_vec_op.h"
 #include "sql/engine/sort/ob_sort_vec_op_eager_filter.h"
@@ -129,7 +130,7 @@ int ObFullSortStrategy<Compare, Store_Row, has_addon>::do_fixed_key_sort(int64_t
   if (OB_SUCC(ret) && !can_encode) {
     enable_encode_sortkey_ = false;
     comp_.fallback_to_disable_encode_sortkey();
-    lib::ob_sort(&rows->at(begin), &rows->at(0) + rows->count(), CopyableComparer(comp_));
+    boost::sort::spinsort(&rows->at(begin), &rows->at(0) + rows->count(), CopyableComparer(comp_));
   }
   return ret;
 }
@@ -158,12 +159,12 @@ int ObFullSortStrategy<Compare, Store_Row, has_addon>::sort_inmem_data(const int
       } else {
         enable_encode_sortkey_ = false;
         comp_.fallback_to_disable_encode_sortkey();
-        lib::ob_sort(&rows->at(begin), &rows->at(0) + rows->count(),
+        boost::sort::spinsort(&rows->at(begin), &rows->at(0) + rows->count(),
                      CopyableComparer(comp_));
       }
     }
   } else {
-    lib::ob_sort(&rows->at(begin), &rows->at(0) + rows->count(),
+    boost::sort::spinsort(&rows->at(begin), &rows->at(0) + rows->count(),
                  CopyableComparer(comp_));
   }
   return ret;
@@ -432,7 +433,7 @@ int ObPartitionSortStrategy<Compare, Store_Row, has_addon>::sort_inmem_data(cons
       bucket_part_cnt++;
     }
     comp_.set_cmp_range(0, part_cnt_ + hash_expr_cnt);
-    lib::ob_sort(&bucket_nodes.at(0), &bucket_nodes.at(0) + bucket_part_cnt, HashNodeComparer(comp_));
+    boost::sort::spinsort(&bucket_nodes.at(0), &bucket_nodes.at(0) + bucket_part_cnt, HashNodeComparer(comp_));
     comp_.set_cmp_range(part_cnt_ + hash_expr_cnt, comp_.get_cnt());
     for (int64_t i = 0; OB_SUCC(ret) && i < bucket_part_cnt; ++i) {
       int64_t rows_last = rows_idx;
@@ -452,10 +453,10 @@ int ObPartitionSortStrategy<Compare, Store_Row, has_addon>::sort_inmem_data(cons
           } else {
             enable_encode_sortkey_ = false;
             comp_.fallback_to_disable_encode_sortkey();
-            lib::ob_sort(&rows->at(0) + rows_last, &rows->at(0) + rows_idx, CopyableComparer(comp_));
+            boost::sort::spinsort(&rows->at(0) + rows_last, &rows->at(0) + rows_idx, CopyableComparer(comp_));
           }
         } else {
-          lib::ob_sort(&rows->at(0) + rows_last, &rows->at(0) + rows_idx, CopyableComparer(comp_));
+          boost::sort::spinsort(&rows->at(0) + rows_last, &rows->at(0) + rows_idx, CopyableComparer(comp_));
         }
       }
     }

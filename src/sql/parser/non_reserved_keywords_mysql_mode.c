@@ -1211,6 +1211,7 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"whenever", WHENEVER},
   {"while", WHILE},
   {"window", WINDOW},
+  {"window_funnel", WINDOW_FUNNEL},
   {"with", WITH},
   {"work", WORK},
   {"write", WRITE},

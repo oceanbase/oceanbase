@@ -3486,7 +3486,8 @@ int WinExprWrapper<Derived>::process_partition(WinExprEvalCtx &ctx, const int64_
         int prev_calc_idx = -1;
 
         // Only Group Concat without distinct and order by can avoid use the whole frame
-        bool group_concat_whole_frame = ctx.win_col_.group_concat_whole_frame();
+        bool need_whole_frame = ctx.win_col_.group_concat_whole_frame()
+                            || ctx.win_col_.agg_ctx_->aggr_infos_.at(0).get_expr_type() == T_FUN_WINDOW_FUNNEL;
         for (int64_t row_idx = row_start; OB_SUCC(ret) && row_idx < row_end; row_idx++) {
           int64_t batch_idx = row_idx - row_start;
           if (!all_active && skip.at(batch_idx)) {
@@ -3510,7 +3511,7 @@ int WinExprWrapper<Derived>::process_partition(WinExprEvalCtx &ctx, const int64_
             if (OB_FAIL(AggrExpr::copy_aggr_row(ctx, copied_row, agg_row))) {
               LOG_WARN("copy aggr row failed", K(ret));
             }
-          } else if (whole_frame || group_concat_whole_frame) {
+          } else if (whole_frame || need_whole_frame) {
             ctx.win_col_.agg_ctx_->removal_info_.reset_for_new_frame();
             if (OB_FAIL(static_cast<Derived *>(this)->process_window(ctx, cur_frame, row_idx, agg_row, is_null))) {
               LOG_WARN("eval aggregate function failed", K(ret));
