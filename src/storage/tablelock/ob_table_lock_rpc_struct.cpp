@@ -34,7 +34,8 @@ OB_SERIALIZE_MEMBER(ObLockParam,
                     schema_version_,
                     is_for_replace_,
                     lock_priority_,
-                    is_two_phase_lock_);
+                    is_two_phase_lock_,
+                    need_holder_info_);
 
 OB_SERIALIZE_MEMBER_INHERIT(ObReplaceLockParam, ObLockParam,
                             new_lock_mode_,
@@ -86,7 +87,8 @@ OB_SERIALIZE_MEMBER(ObTableLockTaskResult,
                     tx_result_ret_code_,
                     tx_result_,
                     can_retry_,
-                    success_pos_);
+                    success_pos_,
+                    holder_info_);
 
 OB_DEF_SERIALIZE_SIZE(ObTableLockTaskRequest)
 {
@@ -322,6 +324,7 @@ void ObLockParam::reset()
   is_for_replace_ = false;
   lock_priority_ = ObTableLockPriority::NORMAL;
   is_two_phase_lock_ = false;
+  need_holder_info_ = false;
 }
 
 int ObLockParam::set(
