@@ -133,7 +133,7 @@ void ObCDCAutoConfigMgr::refresh_dynamic_config_(const ObLogConfig &config)
   const int64_t extra_redo_dispatch_memory_size = 1 * _K_ + (1 << (factor_ - 9)) * (factor_ - 11)  * _M_;
   const int64_t redo_dispatch_exceed_ratio = factor_ <= 12 ? 1 : (1 << (factor_ - 13));
   const int64_t direct_load_inc_thread_num = factor_ <= 12 ? 1 : (factor_ - 12);
-  const int64_t direct_load_inc_queue_backlog_lowest_tolerance = 1 << (factor_ + 1);
+  const int64_t parser_flow_control_queue_backlog_threshold = 1 << factor_;
   const int64_t max_chunk_cache_size =  factor_ <= 12 ? (1 << (factor_ - 11)) * 512 * _M_ : 4096 * _M_;
   const int64_t task_pool_allocator_total_limit = memory_limit_;
 
@@ -150,7 +150,7 @@ void ObCDCAutoConfigMgr::refresh_dynamic_config_(const ObLogConfig &config)
   REFRESH_NUM_FIELD_WITH_CONFIG(storager_mem_percentage, DEFAULT_STORAGER_MEM_PERCENT, config.storager_mem_percentage.get());
   REFRESH_NUM_FIELD_WITH_CONFIG(max_chunk_cache_size, max_chunk_cache_size, config.max_chunk_cache_size.get());
   REFRESH_NUM_FIELD_WITH_CONFIG(direct_load_inc_thread_num, direct_load_inc_thread_num, config.direct_load_inc_thread_num.get());
-  REFRESH_NUM_FIELD_WITH_CONFIG(direct_load_inc_queue_backlog_lowest_tolerance, direct_load_inc_queue_backlog_lowest_tolerance, config.direct_load_inc_queue_backlog_lowest_tolerance.get());
+  REFRESH_NUM_FIELD_WITH_CONFIG(parser_flow_control_queue_backlog_threshold, parser_flow_control_queue_backlog_threshold, config.parser_flow_control_queue_backlog_threshold.get());
   _LOG_INFO("[AUTO_CONFIG][MAX_CHUNK_CACHE_SIZE: %s(%ld)}]", SIZE_TO_STR(max_chunk_cache_size_), max_chunk_cache_size_);
   REFRESH_NUM_FIELD_WITH_CONFIG(task_pool_allocator_total_limit, task_pool_allocator_total_limit, config.task_pool_allocator_total_limit.get());
   _LOG_INFO("[AUTO_CONFIG][TASK_POOL_ALLOCATOR_TOTAL_LIMIT: %s(%ld)]",

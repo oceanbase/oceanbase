@@ -460,9 +460,8 @@ public:
       "redo_dispatcher_memory_limit ratio for output by sql operation order");
   DEF_CAP(extra_redo_dispatch_memory_size, OB_CLUSTER_PARAMETER, "0KB", "[0, 512M]", "extra redo dispatcher memory for data skew participant");
   T_DEF_INT(pause_redo_dispatch_task_count_threshold, OB_CLUSTER_PARAMETER, 80, 0, 100, "task cound percent threshold for pause redo dispatch");
-  T_DEF_INT(memory_usage_warn_threshold, OB_CLUSTER_PARAMETER, 85, 10, 100, "memory usage wan threshold, may pause fetch while reach the threshold");
+  T_DEF_INT(memory_usage_warn_threshold, OB_CLUSTER_PARAMETER, 80, 10, 100, "memory usage wan threshold, may pause fetch while reach the threshold");
   T_DEF_INT_INFT(queue_backlog_lowest_tolerance, OB_CLUSTER_PARAMETER, 100, 0, "lowest threshold of queue_backlog that will touch flow controll");
-  T_DEF_BOOL(enable_parser_flow_control, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
   // sorter thread num
   T_DEF_INT(msg_sorter_thread_num, OB_CLUSTER_PARAMETER, 1, 1, 32, "trans msg sorter thread num");
   // sorter thread
@@ -691,7 +690,7 @@ public:
   T_DEF_BOOL(enable_direct_load_inc, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
   T_DEF_BOOL(enable_filte_mow_lob_col, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
   T_DEF_INT_INFT(direct_load_inc_thread_num, OB_CLUSTER_PARAMETER, 0, 0, "thread num of reading and parsing direct load inc log");
-  T_DEF_INT_INFT(direct_load_inc_queue_backlog_lowest_tolerance, OB_CLUSTER_PARAMETER, 0, 0, "lowest threshold of queue_backlog that will touch parser flow control in direct load inc case");
+  T_DEF_INT_INFT(parser_flow_control_queue_backlog_threshold, OB_CLUSTER_PARAMETER, 0, 0, "queue backlog threshold for parser flow control");
   T_DEF_INT_INFT(sorted_list_auto_treeify_threshold, OB_CLUSTER_PARAMETER, 32, 0, "treeify list auto-treeify mode treeify threshold");
   T_DEF_INT_INFT(sorted_list_auto_untreeify_threshold, OB_CLUSTER_PARAMETER, 30, 0, "treeify list auto-treeify mode treeify threshold");
   DEF_CAP(meta_data_inc_trans_size_upper_limit, OB_CLUSTER_PARAMETER, "4G", "[0M,]", "meta data increment part_trans_task size upper limit");

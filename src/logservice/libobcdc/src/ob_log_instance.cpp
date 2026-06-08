@@ -159,6 +159,7 @@ ObLogInstance::ObLogInstance() :
     log_clean_cycle_time_us_(0),
     output_dml_br_count_(0),
     output_ddl_br_count_(0),
+    redo_dispatch_pause_stat_(),
     stop_flag_(true),
     last_heartbeat_timestamp_micro_sec_(0),
     is_assign_log_dir_valid_(false),
@@ -668,6 +669,7 @@ int ObLogInstance::init_common_(uint64_t start_tstamp_ns, ERROR_CALLBACK err_cb)
       flow_control_tid_ = 0;
       output_dml_br_count_ = 0;
       output_ddl_br_count_ = 0;
+      redo_dispatch_pause_stat_.reset();
       last_heartbeat_timestamp_micro_sec_ = start_tstamp_ns / NS_CONVERSION - 1;
       log_clean_cycle_time_us_ = TCONF.log_clean_cycle_time_in_hours * _HOUR_;
       part_trans_task_count_ = 0;
@@ -1543,6 +1545,7 @@ void ObLogInstance::do_destroy_(const bool force_destroy)
 
     output_dml_br_count_ = 0;
     output_ddl_br_count_ = 0;
+    redo_dispatch_pause_stat_.reset();
 
     ObCDCTimeZoneInfoGetter::get_instance().destroy();
     timezone_info_getter_ = nullptr;
@@ -3535,7 +3538,6 @@ int ObLogInstance::get_tenant_compat_mode(const uint64_t tenant_id,
 bool ObLogInstance::need_pause_redo_dispatch() const
 {
   bool current_need_pause = true;
-  static bool last_need_paused = false;
   if (inited_) {
     double memory_usage_warn_percent = TCONF.memory_usage_warn_threshold / 100.0;
     int64_t memory_limit = CDC_CFG_MGR.get_memory_limit();
@@ -3543,6 +3545,10 @@ bool ObLogInstance::need_pause_redo_dispatch() const
     int64_t memory_hold = get_memory_hold_();
     int64_t redo_dispatch_exceed_ratio = CDC_CFG_MGR.get_redo_dispatched_memory_limit_exceed_ratio();
     const int64_t redo_memory_limit = CDC_CFG_MGR.get_redo_dispatcher_memory_limit();
+    int64_t reader_task_count = 0;
+    if (OB_NOT_NULL(TCTX.reader_)) {
+      TCTX.reader_->get_task_count(reader_task_count);
+    }
     int64_t dml_parser_log_entry_count = 0;
     TCTX.dml_parser_->get_log_entry_task_count(dml_parser_log_entry_count);
     int64_t formatter_br_count = 0;
@@ -3551,7 +3557,7 @@ bool ObLogInstance::need_pause_redo_dispatch() const
     TCTX.formatter_->get_task_count(formatter_br_count, formatter_log_entry_count, formatter_stmt_in_lob_merger_count);
     // Formatter log entry count includes in-flight LOB tasks that may need later redo fragments.
     // Use formatter queue depth to avoid pausing redo dispatch while LOB merger is waiting for redo.
-    const int64_t task_count_handling = dml_parser_log_entry_count + formatter_br_count;
+    const int64_t task_count_handling = reader_task_count + dml_parser_log_entry_count + formatter_br_count;
     const int64_t rc_br_thread_count = TCONF.resource_collector_thread_num_for_br;
     const int64_t rc_thread_queue_len = CDC_CFG_MGR.get_resource_collector_queue_length();
     int64_t resource_collector_part_trans_task_count = 0;
@@ -3617,24 +3623,30 @@ bool ObLogInstance::need_pause_redo_dispatch() const
     } else {
       current_need_pause = false;
     }
-    bool is_state_change = (last_need_paused != current_need_pause);
-    bool need_print_state = is_state_change || REACH_TIME_INTERVAL(PRINT_GLOBAL_FLOW_CONTROL_INTERVAL);
+    redo_dispatch_pause_stat_.record(current_need_pause);
+    bool need_print_state = REACH_TIME_INTERVAL(PRINT_GLOBAL_FLOW_CONTROL_INTERVAL);
     if (need_print_state) {
+      const int64_t pause_count = redo_dispatch_pause_stat_.get_and_reset_pause_count();
+      const int64_t state_change_count = redo_dispatch_pause_stat_.get_and_reset_state_change_count();
       _LOG_INFO("[NEED_PAUSE_REDO_DISPATCH=%d]"
           "[REASON:%s]"
+          "[PAUSE_COUNT_IN_INTERVAL:%ld]"
+          "[STATE_CHANGE_COUNT_IN_INTERVAL:%ld]"
           "[REDO_DISPATCH:%s/%s]"
           "[THRESHOLD:%.2f]"
-          "[TASK_COUNT_HANDLING:%ld (DML_PARSER_LOG=%ld, FORMATTER_BR=%ld, FORMATTER_LOG=%ld, LOB_STMT=%ld)]"
+          "[TASK_COUNT_HANDLING:%ld (READER=%ld, DML_PARSER_LOG=%ld, FORMATTER_BR=%ld, FORMATTER_LOG=%ld, LOB_STMT=%ld)]"
           "[QUEUE_DML_BR:%ld]"
           "[RESOURCE_COLLECTOR(BR=%ld, LOG_ENTRY=%ld, PART_TRANS=%ld, QUEUE=%ld, STORE_DELETE=%ld)]"
           "[OUT_TRANS:%ld]"
-          "[OUT_DML_BR:%ld]"
-          "[STATE_CHANGED:%d]",
+          "[OUT_DML_BR:%ld]",
           current_need_pause,
           reason,
+          pause_count,
+          state_change_count,
           SIZE_TO_STR(dispatched_redo_memory), SIZE_TO_STR(redo_memory_limit),
           pause_dispatch_percent,
           task_count_handling,
+          reader_task_count,
           dml_parser_log_entry_count,
           formatter_br_count,
           formatter_log_entry_count,
@@ -3646,11 +3658,7 @@ bool ObLogInstance::need_pause_redo_dispatch() const
           resource_collector_queue_task_count,
           resource_collector_store_delete_task_count,
           out_part_trans_count,
-          out_dml_br_count,
-          is_state_change);
-    }
-    if (is_state_change) {
-      last_need_paused = current_need_pause;
+          out_dml_br_count);
     }
   }
   return current_need_pause;

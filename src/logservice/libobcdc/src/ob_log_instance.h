@@ -17,6 +17,7 @@
 
 #include "libobcdc.h"
 
+#include "lib/atomic/ob_atomic.h"                         // ATOMIC_*
 #include "lib/allocator/ob_concurrent_fifo_allocator.h"   // ObConcurrentFIFOAllocator
 #include "lib/allocator/ob_lf_fifo_allocator.h"          // ObLfFIFOAllocator
 #include "lib/alloc/memory_dump.h"                        // memory_meta_dump
@@ -311,6 +312,50 @@ private:
   void dump_malloc_sample_();
 
 private:
+  struct RedoDispatchPauseStat
+  {
+    RedoDispatchPauseStat() :
+        last_need_pause_(0),
+        pause_count_(0),
+        state_change_count_(0)
+    {}
+
+    void reset()
+    {
+      ATOMIC_STORE(&last_need_pause_, 0);
+      ATOMIC_STORE(&pause_count_, 0);
+      ATOMIC_STORE(&state_change_count_, 0);
+    }
+
+    void record(const bool need_pause)
+    {
+      const int64_t need_pause_value = need_pause ? 1 : 0;
+      const int64_t last_need_pause = ATOMIC_LOAD(&last_need_pause_);
+      if (need_pause) {
+        (void)ATOMIC_AAF(&pause_count_, 1);
+      }
+      if (last_need_pause != need_pause_value
+          && ATOMIC_BCAS(&last_need_pause_, last_need_pause, need_pause_value)) {
+        (void)ATOMIC_AAF(&state_change_count_, 1);
+      }
+    }
+
+    int64_t get_and_reset_pause_count()
+    {
+      return ATOMIC_TAS(&pause_count_, 0);
+    }
+
+    int64_t get_and_reset_state_change_count()
+    {
+      return ATOMIC_TAS(&state_change_count_, 0);
+    }
+
+    int64_t last_need_pause_ CACHE_ALIGNED;
+    int64_t pause_count_ CACHE_ALIGNED;
+    int64_t state_change_count_ CACHE_ALIGNED;
+  };
+
+private:
   static ObLogInstance *instance_;
   // Threads that runs with instance
   // thread count = 1, start from idx 0;
@@ -334,6 +379,7 @@ private:
 
   int64_t output_dml_br_count_ CACHE_ALIGNED;
   int64_t output_ddl_br_count_ CACHE_ALIGNED;
+  mutable RedoDispatchPauseStat redo_dispatch_pause_stat_;
 
   volatile bool           stop_flag_ CACHE_ALIGNED;
   // Record microsecond timestamps

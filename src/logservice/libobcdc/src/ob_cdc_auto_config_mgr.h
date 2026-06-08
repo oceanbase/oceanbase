@@ -61,7 +61,7 @@ private:
 // | redo_dispatch_exceed_ratio                    | 1     | 1     | 1     | 2     | 4     | 16    |
 // | max_chunk_cache_size                          | 512M  | 1G    | 4G    | 4G    | 4G    | 4G    |
 // | direct_load_inc_thread_num                    | 1     | 1     | 1     | 2     | 3     | 5     |
-// | direct_load_inc_queue_backlog_lowest_tolerance| 4096  | 8192  | 16384 | 32768 | 65536 | 131072|
+// | parser_flow_control_queue_backlog_threshold    | 2048  | 4096  | 8192  | 16384 | 32768 | 131072|
   int64_t factor_;
 DEFINE_FIELD_WITH_GETTER(int64_t, br_queue_length);
 
@@ -98,8 +98,9 @@ DEFINE_FIELD_WITH_GETTER(int64_t, max_chunk_cache_size);
 DEFINE_FIELD_WITH_GETTER(int64_t, task_pool_allocator_total_limit);
 
 // flow control for direct load inc
+// direct load inc and parser flow control
 DEFINE_FIELD_WITH_GETTER(int64_t, direct_load_inc_thread_num);
-DEFINE_FIELD_WITH_GETTER(int64_t, direct_load_inc_queue_backlog_lowest_tolerance);
+DEFINE_FIELD_WITH_GETTER(int64_t, parser_flow_control_queue_backlog_threshold);
 // FIELD DEFINE END //
 
 DISABLE_COPY_ASSIGN(ObCDCAutoConfigMgr);

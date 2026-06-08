@@ -17,6 +17,7 @@
 #include "ob_log_dml_parser.h"
 
 #include "ob_log_formatter.h"           // IObLogFormatter
+#include "ob_cdc_lob_data_merger.h"     // IObCDCLobDataMerger
 #include "ob_log_instance.h"            // IObLogErrHandler
 #include "ob_log_part_trans_parser.h"   // IObLogPartTransParser
 #include "ob_log_resource_collector.h"  // IObLogResourceCollector
@@ -196,8 +197,7 @@ int ObLogDmlParser::handle(void *data,
   } else if (OB_ISNULL(redo_log_node = task->get_redo_log_node())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("redo_log_node is NULL", K(redo_log_node), KPC(task));
-  } else if ((TCONF.enable_parser_flow_control == 1 || redo_log_node->is_direct_load_inc_log())
-      && OB_FAIL(wait_until_parser_pause_down_(thread_index, stop_flag))) {
+  } else if (OB_FAIL(wait_until_parser_pause_down_(thread_index, stop_flag))) {
     if (OB_IN_STOP_STATE != ret) {
       LOG_ERROR("wait until parser pause down failed", KR(ret), KP(task), KPC(task));
     }
@@ -315,33 +315,58 @@ int ObLogDmlParser::wait_until_parser_pause_down_(const int64_t thread_index, vo
     LOG_ERROR("formatter is null", KR(ret));
   } else {
     while (OB_SUCC(ret) && !stop_flag) {
-      const int64_t queue_backlog_lowest_tolerance = CDC_CFG_MGR.get_direct_load_inc_queue_backlog_lowest_tolerance();
       bool touch_memory_warn_limit = false;
       bool memory_overused = false;
       TCTX.get_memory_usage_status(touch_memory_warn_limit, memory_overused);
-      int64_t formatter_br_count = 0;
-      int64_t formatter_log_entry_count = 0;
-      int64_t formatter_stmt_in_lob_merger_count = 0;
 
-      if (OB_FAIL(TCTX.formatter_->get_task_count(formatter_br_count, formatter_log_entry_count,
-          formatter_stmt_in_lob_merger_count))) {
-        LOG_ERROR("formatter get_task_count failed", KR(ret));
-      } else if (touch_memory_warn_limit && formatter_br_count > queue_backlog_lowest_tolerance ) {
-        const static int64_t PRINT_WAIT_PARSER_PAUSE_DOWN_TIMEOUT = 10 * _SEC_;
-        if (TC_REACH_TIME_INTERVAL(PRINT_WAIT_PARSER_PAUSE_DOWN_TIMEOUT)) {
-          _LOG_INFO("[STAT] [FLOW_CONTROL] PARSER_NEED_SLOW_DOWN=1 THREAD_INDEX=%ld "
-              "FORMATTER=[BR:%ld, LOGENTRY:%ld, STMT_IN_LOG_MERGER: %ld] ",
-              thread_index, formatter_br_count, formatter_log_entry_count, formatter_stmt_in_lob_merger_count);
-        } else {
-          _LOG_DEBUG("[STAT] [FLOW_CONTROL] PARSER_NEED_SLOW_DOWN=1 THREAD_INDEX=%ld "
-              "FORMATTER=[BR:%ld, LOGENTRY:%ld, STMT_IN_LOG_MERGER: %ld] ",
-              thread_index, formatter_br_count, formatter_log_entry_count, formatter_stmt_in_lob_merger_count);
-        }
-        // sleep 1ms and retry
-        const static int64_t WAIT_PARSER_PAUSE_DOWN_TIME = 1 * 1000;
-        ob_usleep(WAIT_PARSER_PAUSE_DOWN_TIME);
-      } else {
+      if (!touch_memory_warn_limit) {
         break;
+      } else {
+        const int64_t normal_backlog_threshold =
+            CDC_CFG_MGR.get_parser_flow_control_queue_backlog_threshold();
+        const int64_t low_backlog_threshold = TCONF.queue_backlog_lowest_tolerance;
+        const int64_t parser_flow_control_queue_backlog_threshold =
+            memory_overused && low_backlog_threshold < normal_backlog_threshold
+                ? low_backlog_threshold
+                : normal_backlog_threshold;
+        int64_t formatter_br_count = 0;
+        int64_t formatter_log_entry_count = 0;
+        int64_t formatter_stmt_in_lob_merger_count = 0;
+        int64_t lob_data_merger_task_count = 0;
+        bool need_wait = false;
+        const char *reason = "";
+
+        if (OB_NOT_NULL(TCTX.lob_data_merger_)) {
+          TCTX.lob_data_merger_->get_task_count(lob_data_merger_task_count);
+        }
+
+        if (OB_FAIL(TCTX.formatter_->get_task_count(formatter_br_count, formatter_log_entry_count,
+            formatter_stmt_in_lob_merger_count))) {
+          LOG_ERROR("formatter get_task_count failed", KR(ret));
+        } else if (formatter_br_count > parser_flow_control_queue_backlog_threshold) {
+          need_wait = true;
+          reason = memory_overused ? "MEMORY_OVERUSED_FORMATTER_BACKLOG" : "MEMORY_WARN_FORMATTER_BACKLOG";
+        }
+
+        if (OB_SUCC(ret) && need_wait) {
+          const static int64_t PRINT_INTERVAL = 10 * _SEC_;
+          if (TC_REACH_TIME_INTERVAL(PRINT_INTERVAL)) {
+            _LOG_INFO("[STAT] [FLOW_CONTROL] PARSER_NEED_SLOW_DOWN=%d THREAD_INDEX=%ld REASON=%s "
+                "MEMORY=[WARN:%d, OVERUSED:%d] THRESHOLD=%ld "
+                "FORMATTER=[BR:%ld, LOGENTRY:%ld, STMT_IN_LOG_MERGER:%ld] LOB_MERGER=[TASK:%ld]",
+                need_wait, thread_index, reason, touch_memory_warn_limit, memory_overused,
+                parser_flow_control_queue_backlog_threshold,
+                formatter_br_count, formatter_log_entry_count, formatter_stmt_in_lob_merger_count,
+                lob_data_merger_task_count);
+          }
+          // Memory-overused state uses longer sleep (5ms vs 1ms) to reduce CPU spinning
+          // and give memory more time to recover under severe pressure.
+          const int64_t wait_time = memory_overused ? WAIT_PARSER_MEMORY_OVERUSED_BACKOFF_TIME
+                                                    : WAIT_PARSER_PAUSE_DOWN_TIME;
+          ob_usleep(wait_time);
+        } else {
+          break;
+        }
       }
     } // end while
   }

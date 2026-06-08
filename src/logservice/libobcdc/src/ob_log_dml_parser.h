@@ -55,6 +55,8 @@ class ObLogDmlParser : public IObLogDmlParser, public DmlParserThread
   enum
   {
     DATA_OP_TIMEOUT = 1 * 1000 * 1000,
+    WAIT_PARSER_PAUSE_DOWN_TIME = 1 * 1000,              // memory-warn backoff (1ms)
+    WAIT_PARSER_MEMORY_OVERUSED_BACKOFF_TIME = 5 * 1000, // memory-overused backoff (5ms), longer to reduce CPU spin
   };
 
 public:
