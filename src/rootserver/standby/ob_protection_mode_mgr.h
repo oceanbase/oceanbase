@@ -115,6 +115,7 @@ private:
     const palf::SyncMode &target_sync_mode,
     const ObTimeoutCtx &ctx,
     const share::SCN &ref_scn,
+    const share::SCN &sys_ls_pre_async_log_scn,
     ObIArray<obrpc::ObChangeLSSyncModeRes> &change_ls_sync_mode_res_array) const;
   int check_all_ls_set_sync_mode_(
     const ObIArray<obrpc::ObChangeLSSyncModeRes> &change_ls_sync_mode_res_array,
@@ -122,6 +123,9 @@ private:
     bool &all_ls_set_sync_mode) const;
   int get_access_info_from_result_(const palf::SyncMode target_sync_mode, const ObIArray<obrpc::ObChangeLSSyncModeRes> &results,
       ObIArray<obrpc::ObLSAccessModeInfo> &access_info) const;
+  int extract_sys_ls_pre_async_log_scn_(
+    const ObIArray<obrpc::ObChangeLSSyncModeRes> &change_ls_sync_mode_res_array,
+    share::SCN &sys_ls_pre_async_log_scn) const;
   int check_self_leader_() const;
   int check_status_not_changed_() const;
   int check_inner_stat_() const;
@@ -131,9 +135,11 @@ private:
      ObIArray<obrpc::ObLSAccessModeInfo> &ls_access_info) const;
   int set_sync_mode_(const ObIArray<obrpc::ObLSAccessModeInfo> &ls_access_info,
     const palf::SyncMode &sync_mode, const share::SCN &ref_scn,
+    const share::SCN &sys_ls_pre_async_log_scn,
     ObIArray<obrpc::ObChangeLSSyncModeRes> &change_ls_sync_mode_res_array) const;
   int set_sync_mode_until_suceess_(const ObIArray<obrpc::ObLSAccessModeInfo> &ls_access_info,
-    const palf::SyncMode &sync_mode, const share::SCN &ref_scn, const int64_t timeout,
+    const palf::SyncMode &sync_mode, const share::SCN &ref_scn,
+    const share::SCN &sys_ls_pre_async_log_scn, const int64_t timeout,
     ObIArray<obrpc::ObChangeLSSyncModeRes> &change_ls_sync_mode_res_array) const;
   bool check_mode_version_not_change_(const ObIArray<obrpc::ObLSAccessModeInfo> &origin_ls_access_infos,
     const ObIArray<obrpc::ObLSAccessModeInfo> &current_ls_access_infos) const;

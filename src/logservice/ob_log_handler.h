@@ -368,10 +368,13 @@ public:
   void clear_sync_mode_degrading_mark();
   bool has_degrading_sync_mode() const;
 
+  // sys_ls_pre_async_log_scn: sys ls pre_async log scn, only consumed by the async path;
+  // callers pass min scn for sync/pre_async or when tenant data version < DATA_VERSION_4_4_2_2.
   int process_change_sync_mode(const int64_t mode_version,
                                 const palf::SyncMode &sync_mode,
                                 const share::SCN &ref_scn,
                                 const share::ObSyncStandbyStatusAttr &protection_info,
+                                const share::SCN &sys_ls_pre_async_log_scn,
                                 share::SCN &end_scn,
                                 int64_t &new_mode_version,
                                 const int64_t abs_timeout_us = 0);

@@ -1413,8 +1413,21 @@ int ObTenantRoleTransitionService::do_switch_access_mode_to_raw_rw(
   } else if (OB_FAIL(get_target_sync_mode_(tenant_info, target_sync_mode))) {
     LOG_WARN("failed to get target sync mode", KR(ret), K(tenant_info));
   } else {
+    // sys_ls_pre_async_log_scn = SCN::min_scn() is safe here:
+    // 1) This step only changes SYS_LS itself, so by definition there is no separate
+    //    "SYS_LS pre-async log scn" the receiving side needs to validate against.
+    // 2) switchover_to_standby is only allowed when protection_stat is steady (see
+    //    ObStandbyService::switch_to_standby), so target_sync_mode follows the steady
+    //    protection_level: SYNC for MPT/MA, ASYNC for MPF/RE. PRE_ASYNC is not reachable
+    //    from a steady state.
+    // 3) Even if target_sync_mode is ASYNC (MPF/MPF or MA/RE), every LS already sits in
+    //    ASYNC sync_mode in steady state. With force_check_result=false in
+    //    change_ls_mode_until_success, no RPC is dispatched when current==target, so the
+    //    placeholder min_scn is never observed by the observer.
     ObLSLogModeModifier ls_access_mode_modifier(tenant_id_, switchover_epoch_, SCN::base_scn(),
-        share::SCN::min_scn(), target_access_mode, target_sync_mode, &sys_info_array, sql_proxy_, rpc_proxy_);
+        share::SCN::min_scn(), target_access_mode, target_sync_mode,
+        share::SCN::min_scn()/*sys_ls_pre_async_log_scn*/,
+        &sys_info_array, sql_proxy_, rpc_proxy_);
     if (OB_FAIL(ls_access_mode_modifier.change_ls_access_mode())) {
       // step 1: change sys ls access mode
       LOG_WARN("fail to change sys ls access mode", KR(ret));
@@ -1472,8 +1485,22 @@ int ObTenantRoleTransitionService::get_all_ls_status_and_change_access_mode_(
   } else if (OB_FAIL(get_target_sync_mode_(tenant_info, target_sync_mode))) {
     LOG_WARN("failed to get target sync mode", KR(ret), K(tenant_info));
   } else {
+    // sys_ls_pre_async_log_scn = SCN::min_scn() is safe here for both callers:
+    // a) switchover_to_standby step 2 (user LS): same steady-state argument as step 1 -
+    //    target_sync_mode is derived from a steady protection_level, and every user LS
+    //    already matches it, so the RPC short-circuits via force_check_result=false when
+    //    current==target.
+    // b) switchover_to_primary / failover_to_primary (do_switch_access_mode_to_append):
+    //    do_flashback_ has already invoked try_change_protection_mode_, which forces
+    //    protection_level to either a sync_level (-> SYNC) or PRE_MAXIMUM_PERFORMANCE
+    //    (-> PRE_ASYNC) before reaching this point. ASYNC is not produced once the 4421
+    //    protection_mode feature is enabled. For data version < 4421 the parameter
+    //    itself is gated off (see ObProtectionModeUtils::need_pass_sys_ls_pre_async_log_scn),
+    //    so the placeholder is harmless.
     ObLSLogModeModifier ls_access_mode_modifier(tenant_id_, switchover_epoch_, ref_scn,
-        sys_ls_sync_scn, target_access_mode, target_sync_mode, &status_info_array, sql_proxy_, rpc_proxy_);
+        sys_ls_sync_scn, target_access_mode, target_sync_mode,
+        share::SCN::min_scn()/*sys_ls_pre_async_log_scn*/,
+        &status_info_array, sql_proxy_, rpc_proxy_);
     if (OB_FAIL(ls_access_mode_modifier.change_ls_access_mode())) {
       // ref_scn and target_access_mode will be checked in this func
       LOG_WARN("fail to change sys ls access mode", KR(ret));

@@ -37,7 +37,7 @@ enum class AccessMode {
   PREPARE_FLASHBACK = 4,
 };
 
-enum class SyncMode
+enum class SyncMode : int32_t
 {
   INVALID_SYNC_MODE = 0,
   SYNC = 1,

@@ -34,6 +34,30 @@ namespace rootserver
 
 using namespace standby;
 
+// Internal helper to plumb (protection_log, sys_ls_pre_async_log_scn) through the templated
+// change_ls_mode_until_success() loop without changing the template signature. The template
+// already has a `typename Arg` slot which is `ObSyncStandbyStatusAttr` for the sync mode flow
+// and `SCN` for the access mode flow; for sync mode we substitute it with this small wrapper.
+struct ChangeLSSyncModeExtraArg
+{
+  ChangeLSSyncModeExtraArg()
+    : protection_log(),
+      sys_ls_pre_async_log_scn(share::SCN::min_scn())
+  {}
+  int init(const share::ObSyncStandbyStatusAttr &protection_log,
+           const share::SCN &sys_ls_pre_async_log_scn)
+  {
+    this->protection_log = protection_log;
+    this->sys_ls_pre_async_log_scn = sys_ls_pre_async_log_scn;
+    return OB_SUCCESS;
+  }
+  const share::ObSyncStandbyStatusAttr &get_protection_log() const { return protection_log; }
+  const share::SCN &get_sys_ls_pre_async_log_scn() const { return sys_ls_pre_async_log_scn; }
+  share::ObSyncStandbyStatusAttr protection_log;
+  share::SCN sys_ls_pre_async_log_scn;
+  TO_STRING_KV(K(protection_log), K(sys_ls_pre_async_log_scn));
+};
+
 template <typename T>
 ObLSID get_ls_id(const T &t)
 {
@@ -99,7 +123,8 @@ int ObLSLogModeModifier::change_ls_access_mode()
         protection_log))) {
         LOG_WARN("failed to get sync standby status attr", KR(ret), K(tenant_id_), K(switchover_epoch_));
       } else if (OB_FAIL(change_ls_sync_mode_until_success(tenant_id_, ls_ids, target_sync_mode_,
-          ref_scn_, protection_log, switchover_epoch_, change_ls_sync_mode_res_array,
+          ref_scn_, protection_log, sys_ls_pre_async_log_scn_,
+          switchover_epoch_, change_ls_sync_mode_res_array,
           false/*force_check_result*/))) {
         LOG_WARN("failed to change ls sync mode until success", KR(ret), K(tenant_id_), K(ls_ids),
             K(target_sync_mode_), K(ref_scn_), K(protection_log), K(switchover_epoch_));
@@ -217,12 +242,25 @@ int ObLSLogModeModifier::change_ls_mode_until_success(const uint64_t tenant_id,
 
 int ObLSLogModeModifier::change_ls_sync_mode_until_success(const uint64_t tenant_id,
   const ObIArray<share::ObLSID> &ls_ids, const palf::SyncMode &target_sync_mode, const SCN &ref_scn,
-  const share::ObSyncStandbyStatusAttr &protection_log, const int64_t switchover_epoch,
+  const share::ObSyncStandbyStatusAttr &protection_log,
+  const SCN &sys_ls_pre_async_log_scn, const int64_t switchover_epoch,
   ObIArray<obrpc::ObChangeLSSyncModeRes> &results, const bool force_check_result)
 {
-  return change_ls_mode_until_success<palf::SyncMode, share::ObSyncStandbyStatusAttr, obrpc::ObChangeLSSyncModeRes>(
-    tenant_id, ls_ids, target_sync_mode, ref_scn, protection_log, switchover_epoch,
-    force_check_result, results);
+  ChangeLSSyncModeExtraArg extra;
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(extra.init(protection_log, sys_ls_pre_async_log_scn))) {
+    LOG_WARN("failed to init change ls sync mode extra arg", KR(ret), K(protection_log), K(sys_ls_pre_async_log_scn));
+  } else {
+    ret = change_ls_mode_until_success<palf::SyncMode,
+        ChangeLSSyncModeExtraArg, obrpc::ObChangeLSSyncModeRes>(
+        tenant_id, ls_ids, target_sync_mode, ref_scn, extra, switchover_epoch,
+        force_check_result, results);
+    if (OB_FAIL(ret)) {
+      LOG_WARN("failed to change ls sync mode until success", KR(ret), K(tenant_id),
+          K(ls_ids), K(target_sync_mode), K(ref_scn), K(extra), K(switchover_epoch));
+    }
+  }
+  return ret;
 }
 int ObLSLogModeModifier::change_ls_access_mode_until_success(const uint64_t tenant_id,
   const ObIArray<share::ObLSID> &ls_ids, const palf::AccessMode &target_access_mode, const SCN &ref_scn,
@@ -235,11 +273,11 @@ int ObLSLogModeModifier::change_ls_access_mode_until_success(const uint64_t tena
 int ObLSLogModeModifier::change_ls_mode(const uint64_t tenant_id,
   const ObIArray<obrpc::ObLSAccessModeInfo> &ls_access_info,
   const palf::SyncMode target_sync_mode, const SCN &ref_scn,
-  const share::ObSyncStandbyStatusAttr &protection_log,
+  const ChangeLSSyncModeExtraArg &extra,
   ObIArray<obrpc::ObChangeLSSyncModeRes> &change_ls_sync_mode_res_array)
 {
-  return change_ls_sync_mode(tenant_id, ls_access_info, target_sync_mode, ref_scn, protection_log,
-     change_ls_sync_mode_res_array);
+  return change_ls_sync_mode(tenant_id, ls_access_info, target_sync_mode, ref_scn,
+     extra.get_protection_log(), extra.get_sys_ls_pre_async_log_scn(), change_ls_sync_mode_res_array);
 }
 
 int ObLSLogModeModifier::change_ls_mode(const uint64_t tenant_id,
@@ -335,12 +373,13 @@ int ObLSLogModeModifier::change_ls_sync_mode_and_check_result(
   const ObIArray<obrpc::ObLSAccessModeInfo> &ls_access_info,
   const palf::SyncMode target_sync_mode,
   const share::ObSyncStandbyStatusAttr &protection_log,
-  const SCN &ref_scn)
+  const SCN &ref_scn,
+  const SCN &sys_ls_pre_async_log_scn)
 {
   int ret = OB_SUCCESS;
   ObArray<obrpc::ObChangeLSSyncModeRes> change_ls_sync_mode_res_array;
   if (OB_FAIL(change_ls_sync_mode(tenant_id, ls_access_info, target_sync_mode, ref_scn,
-      protection_log, change_ls_sync_mode_res_array))) {
+      protection_log, sys_ls_pre_async_log_scn, change_ls_sync_mode_res_array))) {
     LOG_WARN("failed to change ls sync mode", KR(ret), K(tenant_id), K(ls_access_info));
   } else if (change_ls_sync_mode_res_array.count() != ls_access_info.count()) {
     ret = OB_STATE_NOT_MATCH;
@@ -509,6 +548,7 @@ int ObLSLogModeModifier::change_ls_sync_mode(
   const palf::SyncMode target_sync_mode,
   const SCN &ref_scn,
   const share::ObSyncStandbyStatusAttr &protection_log,
+  const SCN &sys_ls_pre_async_log_scn,
   ObIArray<obrpc::ObChangeLSSyncModeRes> &change_ls_sync_mode_res_array)
 {
   int ret = OB_SUCCESS;
@@ -536,8 +576,9 @@ int ObLSLogModeModifier::change_ls_sync_mode(
       obrpc::ObChangeLSSyncModeArg arg;
       const obrpc::ObLSAccessModeInfo &info = ls_access_info.at(i);
       if (OB_FAIL(arg.init(tenant_id, info.get_ls_id(), info.get_mode_version(),
-              ref_scn, target_sync_mode, protection_log))) {
-        LOG_WARN("failed to init arg", KR(ret), K(info), K(ref_scn), K(target_sync_mode), K(protection_log));
+              ref_scn, target_sync_mode, protection_log, sys_ls_pre_async_log_scn))) {
+        LOG_WARN("failed to init arg", KR(ret), K(info), K(ref_scn), K(target_sync_mode),
+            K(protection_log), K(sys_ls_pre_async_log_scn));
       } else if (OB_FAIL(sync_mode_arg_array.push_back(arg))) {
         LOG_WARN("failed to push back arg", KR(ret), K(arg));
       }

@@ -2625,7 +2625,6 @@ int PalfHandleImpl::get_sync_mode_version(int64_t &mode_version) const
 int PalfHandleImpl::get_sync_mode(SyncMode &sync_mode) const
 {
   int ret = OB_SUCCESS;
-  RLockGuard guard(lock_);
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "PalfHandleImpl is not inited", K(ret), KPC(this));

@@ -407,21 +407,27 @@ private:
   int check_offline_log_(bool &done);
   bool is_sync_mode_log_(const ObLogBaseType log_type,
                          const ObSyncModeLogType sync_mode_log_type);
+  // sys_ls_pre_async_log_scn: when sync_mode_log_type is ASYNC, it is extracted from
+  // the SYS_LS pre_async log SCN injected by RS in the ObSyncModeLog payload.
+  // For other types or v1 logs, it is set to SCN::min_scn().
   int parse_log_type_(const char *buf,
                                   const int64_t buf_size,
                                   ObLogBaseType &log_type,
                                   ObSyncModeLogType &sync_mode_log_type,
                                   ObLogBaseHeader &log_base_header,
-                                  bool &is_standby_dest) const;
+                                  bool &is_standby_dest,
+                                  share::SCN &sys_ls_pre_async_log_scn) const;
   int handle_sync_mode_log_(const int64_t proposal_id,
                             const palf::LSN &lsn,
                             const share::SCN &scn,
                             ObSyncModeLogType sync_mode_log_type,
                             const bool is_standby_dest,
                             int64_t &new_proposal_id);
-  // 检查 ASYNC 日志是否可以接受
-  // ASYNC 日志必须等到租户的 sync_scn > pre_async_scn_ 后才可以接受
-  int check_async_log_acceptable_(const share::SCN &async_log_scn) const;
+  // Checks whether an ASYNC log is acceptable. It is accepted only when
+  // tenant sync_scn >= sys_ls_pre_async_log_scn.
+  // min_scn/invalid sentinels are accepted for compatibility with older
+  // primary clusters and v1 legacy logs.
+  int check_async_log_acceptable_(const share::SCN &sys_ls_pre_async_log_scn) const;
   int wait_proposal_id_consistent_(const int64_t new_proposal_id) const;
   int change_sync_mode(const int64_t proposal_id,
                        const int64_t mode_version,
@@ -448,9 +454,6 @@ private:
   ObRemoteFetchStat cur_stat_info_;
   ObRemoteFetchStat last_stat_info_;
   // Transport task 队列：每个日志流维护自己的 transport task 队列
-  // 记录最近收到的 PRE_ASYNC 日志的 SCN，用于判断 ASYNC 日志是否可以接受
-  // ASYNC 日志必须等到租户的 sync_scn > pre_async_scn_ 后才可以接受
-  share::SCN pre_async_scn_;
   ObLogTransportTaskQueue transport_task_queue_;
   int64_t queue_stats_print_time_us_;
 #ifdef OB_LOG_RESTORE_QUEUE_TEST_INFRA

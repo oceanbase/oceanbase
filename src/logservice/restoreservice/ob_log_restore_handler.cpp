@@ -110,7 +110,6 @@ ObLogRestoreHandler::ObLogRestoreHandler() :
   last_delay_count_(0),
   cur_stat_info_(),
   last_stat_info_(),
-  pre_async_scn_(),
   transport_task_queue_(),
   queue_stats_print_time_us_(0)
 {
@@ -167,6 +166,7 @@ int ObLogRestoreHandler::stop()
     is_in_stop_state_ = true;
     if (OB_NOT_NULL(palf_handle_) && palf_handle_->is_valid()) {
       palf_env_->close(palf_handle_);
+      palf_handle_ = NULL;
     }
   }
   CLOG_LOG(INFO, "ObLogRestoreHandler stop", K(ret), KPC(this));
@@ -185,6 +185,7 @@ void ObLogRestoreHandler::destroy()
     is_inited_ = false;
     if (OB_NOT_NULL(palf_env_) && OB_NOT_NULL(palf_handle_) && palf_handle_->is_valid()) {
       palf_env_->close(palf_handle_);
+      palf_handle_ = NULL;
     }
     palf_env_ = NULL;
     id_ = -1;
@@ -196,7 +197,6 @@ void ObLogRestoreHandler::destroy()
     last_stat_info_.reset();
     role_ = ObRole::INVALID_ROLE;
     context_.reset();
-    pre_async_scn_.reset();
     queue_stats_print_time_us_ = 0;
   }
   if (NULL != parent_) {
@@ -430,6 +430,7 @@ int ObLogRestoreHandler::clean_source()
 }
 
 ERRSIM_POINT_DEF(ERRSIM_SUBMIT_LOG_ERROR);
+ERRSIM_POINT_DEF(ERRSIM_STANDBY_ASYNC_LOG_SYNC_SCN_BEHIND);
 
 bool ObLogRestoreHandler::is_sync_mode_log_(const ObLogBaseType log_type,
                                             const ObSyncModeLogType sync_mode_log_type)
@@ -445,12 +446,14 @@ int ObLogRestoreHandler::parse_log_type_(const char *buf,
                                          ObLogBaseType &log_type,
                                          ObSyncModeLogType &sync_mode_log_type,
                                          ObLogBaseHeader &log_base_header,
-                                         bool &is_standby_dest) const
+                                         bool &is_standby_dest,
+                                         share::SCN &sys_ls_pre_async_log_scn) const
 {
   int ret = OB_SUCCESS;
   log_type = ObLogBaseType::INVALID_LOG_BASE_TYPE;
   sync_mode_log_type = ObSyncModeLogType::SYNC_MODE_UNKNOWN_TYPE;
   is_standby_dest = true;
+  sys_ls_pre_async_log_scn.set_min();
 
   if (OB_ISNULL(buf) || buf_size <= 0) {
     ret = OB_INVALID_ARGUMENT;
@@ -502,15 +505,19 @@ int ObLogRestoreHandler::parse_log_type_(const char *buf,
                     log_type = entry_log_type;
                     log_base_header = entry_log_base_header;
                     found_sync_mode_log = true;
+                    // 仅 ASYNC 日志携带 RS 注入的 SYS_LS pre_async 日志 SCN；其它类型保持 min
+                    if (ObSyncModeLogType::ASYNC == sync_mode_log_type) {
+                      sys_ls_pre_async_log_scn = sync_mode_log.get_sys_ls_pre_async_log_scn();
+                    }
                     // 检查当前备库是否为强同步下游
                     share::ObSyncStandbyStatusAttr protection_info = sync_mode_log.get_protection_info();
-                    CLOG_LOG(INFO, "parsed sync mode log protection info", K(sync_mode_log));
                     if (protection_info.get_cluster_id() != GCONF.cluster_id || protection_info.get_tenant_id() != MTL_ID()) {
                       is_standby_dest = false;
                     }
 
-                    CLOG_LOG(INFO, "parsed sync mode log type", K(sync_mode_log_type), K(id_),
-                             K(log_entry_idx), K(log_entry.get_scn()), K(log_entry_data_len));
+                    CLOG_LOG(INFO, "parsed sync mode log", K(sync_mode_log_type), K(id_),
+                             K(log_entry_idx), K(log_entry.get_scn()), K(log_entry_data_len),
+                             K(protection_info), K(sys_ls_pre_async_log_scn));
                   } else {
                     CLOG_LOG(WARN, "deserialize ObSyncModeLog failed", K(ret), K(id_),
                              K(log_entry_idx), K(log_entry_data_len), K(entry_header_pos));
@@ -531,8 +538,13 @@ int ObLogRestoreHandler::parse_log_type_(const char *buf,
         if (OB_ITER_END == ret) {
           ret = OB_SUCCESS;  // 正常结束
         }
-        CLOG_LOG(INFO, "parsed log type from restore handler", K(log_type), K(sync_mode_log_type),
-                 K(id_), K(log_base_header), K(payload_size), K(log_entry_idx), K(found_sync_mode_log));
+        if (found_sync_mode_log) {
+          CLOG_LOG(INFO, "parsed log type from restore handler", K(log_type), K(sync_mode_log_type),
+                   K(id_), K(log_base_header), K(payload_size), K(log_entry_idx), K(found_sync_mode_log));
+        } else {
+          CLOG_LOG(TRACE, "parsed log type from restore handler", K(log_type), K(sync_mode_log_type),
+                   K(id_), K(log_base_header), K(payload_size), K(log_entry_idx), K(found_sync_mode_log));
+        }
       }
     }
   }
@@ -553,7 +565,6 @@ int ObLogRestoreHandler::handle_sync_mode_log_(const int64_t proposal_id,
   int64_t mode_version = INVALID_PROPOSAL_ID;
   palf::SyncMode curr_sync_mode = palf::SyncMode::INVALID_SYNC_MODE;
   palf::SyncMode target_sync_mode = palf::SyncMode::INVALID_SYNC_MODE;
-  palf::AccessMode curr_access_mode = palf::AccessMode::INVALID_ACCESS_MODE;
 
   if (OB_ISNULL(log_service)) {
     ret = OB_ERR_UNEXPECTED;
@@ -563,39 +574,51 @@ int ObLogRestoreHandler::handle_sync_mode_log_(const int64_t proposal_id,
   } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "ls is null", K(ret), K(id_));
-  } else if (OB_FAIL(palf_handle_->get_sync_mode(mode_version, curr_sync_mode))) {
-    CLOG_LOG(WARN, "get_sync_mode failed", K(ret), K(id_));
-  } else if (OB_FAIL(palf_handle_->get_access_mode(curr_access_mode))) {
-    CLOG_LOG(WARN, "get_access_mode failed", K(ret), K(id_));
   } else {
+    // 读 palf 状态须在读锁保护下，且校验 palf_handle_，避免与 stop()/destroy() 并发导致悬挂指针解引用
+    RLockGuard guard(lock_);
+    if (IS_NOT_INIT) {
+      ret = OB_NOT_INIT;
+      CLOG_LOG(WARN, "ObLogRestoreHandler not init", KR(ret), K(id_));
+    } else if (is_in_stop_state_) {
+      ret = OB_IN_STOP_STATE;
+      CLOG_LOG(WARN, "ObLogRestoreHandler is stopping", KR(ret), K(id_));
+    } else if (OB_ISNULL(palf_handle_) || !palf_handle_->is_valid()) {
+      ret = OB_STATE_NOT_MATCH;
+      CLOG_LOG(WARN, "invalid palf_handle_", KR(ret), K(id_), KP_(palf_handle));
+    } else if (OB_FAIL(palf_handle_->get_sync_mode(mode_version, curr_sync_mode))) {
+      CLOG_LOG(WARN, "get_sync_mode failed", K(ret), K(id_));
+    }
+    // RLock 在此作用域结束自动释放，change_sync_mode / wait_proposal_id_consistent_ 各自再取读锁
+  }
+
+  if (OB_SUCC(ret)) {
     // 根据日志类型确定target_sync_mode
-    // 收到SYNC日志，并且强同步下游是自己，修改为SYNC
-    if (is_standby_dest && ObSyncModeLogType::SYNC == sync_mode_log_type
-        && curr_access_mode == palf::AccessMode::RAW_WRITE) {
-      target_sync_mode = palf::SyncMode::SYNC;
-      // 收到 SYNC 日志时，清空 pre_async_scn_，因为已经重新进入强同步模式
-      pre_async_scn_.reset();
-    // 收到PRE_ASYNC日志，不区分强同步备库还是第三方备库，直接修改为PRE_ASYNC
-    } else if (ObSyncModeLogType::PRE_ASYNC == sync_mode_log_type
-        && curr_access_mode == palf::AccessMode::RAW_WRITE) {
-      target_sync_mode = palf::SyncMode::PRE_ASYNC;
-      // 记录 PRE_ASYNC 日志的 SCN，用于后续判断 ASYNC 日志是否可以接受
-      pre_async_scn_ = scn;
-      CLOG_LOG(INFO, "recorded pre_async_scn for ASYNC log acceptance check",
-               K(id_), K(scn), K(pre_async_scn_));
-    // 第三方备库收到SYNC日志，修改为PRE_ASYNC
-    } else if (!is_standby_dest && ObSyncModeLogType::SYNC == sync_mode_log_type
-        && curr_access_mode == palf::AccessMode::RAW_WRITE) {
-      target_sync_mode = palf::SyncMode::PRE_ASYNC;
-    // 处理 ASYNC 日志：修改为 ASYNC
-    } else if (ObSyncModeLogType::ASYNC == sync_mode_log_type
-        && curr_access_mode == palf::AccessMode::RAW_WRITE) {
-      target_sync_mode = palf::SyncMode::ASYNC;
-      // ASYNC 日志处理完成后，清空 pre_async_scn_
-      pre_async_scn_.reset();
-      CLOG_LOG(INFO, "ASYNC log processed, cleared pre_async_scn", K(id_), K(scn));
-    } else {
-      CLOG_LOG(WARN, "invalid sync mode log type", K(sync_mode_log_type), K(curr_access_mode));
+    switch (sync_mode_log_type) {
+      // 收到SYNC日志，并且强同步下游是自己，修改为SYNC
+      case ObSyncModeLogType::SYNC: {
+        if (is_standby_dest) {
+          target_sync_mode = palf::SyncMode::SYNC;
+        } else {
+          CLOG_LOG(WARN, "no need process sync mode log for non-standby dest", K(id_), K(lsn), K(scn), K(sync_mode_log_type),
+            K(is_standby_dest));
+        }
+        break;
+      }
+      case ObSyncModeLogType::PRE_ASYNC: {
+        target_sync_mode = palf::SyncMode::PRE_ASYNC;
+        CLOG_LOG(INFO, "received pre_async log", K(id_), K(lsn), K(scn), K(sync_mode_log_type), K(is_standby_dest));
+        break;
+      }
+      case ObSyncModeLogType::ASYNC: {
+        target_sync_mode = palf::SyncMode::ASYNC;
+        CLOG_LOG(INFO, "received async log", K(id_), K(lsn), K(scn));
+        break;
+      }
+      default: {
+        CLOG_LOG(WARN, "invalid sync mode log type", K(sync_mode_log_type));
+        break;
+      }
     }
 
     // 如果目标sync_mode与当前不同，则修改
@@ -606,76 +629,54 @@ int ObLogRestoreHandler::handle_sync_mode_log_(const int64_t proposal_id,
                                    new_mode_version, new_proposal_id))) {
         CLOG_LOG(WARN, "change_sync_mode failed", K(ret), K(id_), K(mode_version),
                  K(curr_sync_mode), K(target_sync_mode), K(scn), K(lsn));
+      } else if (OB_FAIL(wait_proposal_id_consistent_(new_proposal_id))) {
+        CLOG_LOG(WARN, "wait proposal_id consistent failed", K(ret), K(id_), K(new_proposal_id));
       } else {
         CLOG_LOG(INFO, "change_sync_mode success for sync mode log",
                  K(id_), K(curr_sync_mode), K(target_sync_mode),
                  K(mode_version), K(new_mode_version), K(new_proposal_id), K(scn));
-
-        // 等待备库上 palf proposal_id 和 restore_handler 的 proposal_id 一致（阻塞等待）
-        // wait_proposal_id_consistent_() 内部会尝试获取读锁，所以必须在释放写锁后调用
-        int wait_ret = wait_proposal_id_consistent_(new_proposal_id);
-        if (OB_FAIL(wait_ret)) {
-          CLOG_LOG(WARN, "wait proposal_id consistent failed", K(id_), K(wait_ret));
-        }
-
-        // 通知 ack service 更新 sync_mode 缓存
-        ObLogStandbyAckService *ack_service = log_service->get_log_standby_ack_service();
-        if (OB_ISNULL(ack_service)) {
-          ret = OB_ERR_UNEXPECTED;
-          CLOG_LOG(WARN, "ack_service is null", KR(ret), K(id_));
-        } else {
-          bool is_sync_mode = (target_sync_mode == palf::SyncMode::SYNC);
-          int tmp_ret = ack_service->update_sync_mode_cache(share::ObLSID(id_),
-                                                             new_mode_version,
-                                                             target_sync_mode,
-                                                             is_sync_mode);
-          if (OB_SUCCESS != tmp_ret) {
-            CLOG_LOG(WARN, "update_sync_mode_cache failed", K(tmp_ret),
-                     K(id_), K(target_sync_mode), K(is_sync_mode));
-          } else {
-            CLOG_LOG(INFO, "update_sync_mode_cache success",
-                     K(id_), K(target_sync_mode), K(is_sync_mode), K(new_mode_version));
-          }
-        }
       }
     } else {
-      CLOG_LOG(TRACE, "no need to change sync mode",
-               K(id_), K(curr_sync_mode), K(target_sync_mode));
+      CLOG_LOG(TRACE, "no need to change sync mode", K(id_), K(curr_sync_mode), K(target_sync_mode));
     }
   }
 
   return ret;
 }
 
-int ObLogRestoreHandler::check_async_log_acceptable_(const share::SCN &async_log_scn) const
+int ObLogRestoreHandler::check_async_log_acceptable_(const share::SCN &sys_ls_pre_async_log_scn) const
 {
   int ret = OB_SUCCESS;
   share::SCN tenant_sync_scn;
   rootserver::ObTenantInfoLoader *tenant_info_loader = MTL(rootserver::ObTenantInfoLoader*);
 
-  if (OB_ISNULL(tenant_info_loader)) {
+  // 兼容路径：低版本主库（DATA_VERSION < 4.4.2.2）/ v1 ObSyncModeLog 不携带该字段
+  if (!sys_ls_pre_async_log_scn.is_valid() || sys_ls_pre_async_log_scn.is_min()) {
+    CLOG_LOG(INFO, "sys_ls_pre_async_log_scn is invalid/min, accept async log directly",
+             K(id_), K(sys_ls_pre_async_log_scn));
+  } else if (OB_ISNULL(tenant_info_loader)) {
     ret = OB_ERR_UNEXPECTED;
     CLOG_LOG(WARN, "ObTenantInfoLoader is null", KR(ret), K(id_));
   } else if (OB_FAIL(tenant_info_loader->get_sync_scn(tenant_sync_scn))) {
     CLOG_LOG(WARN, "get_sync_scn failed", KR(ret), K(id_));
-  } else if (!pre_async_scn_.is_valid()) {
-    // 如果没有记录 pre_async_scn_，可能是：
-    // 1. 重启后丢失
-    // 2. 从未收到过 PRE_ASYNC 日志
-    // 这种情况下，直接接受 ASYNC 日志
-    CLOG_LOG(INFO, "pre_async_scn_ is invalid, accept ASYNC log directly",
-             K(id_), K(async_log_scn), K(tenant_sync_scn));
-  } else if (tenant_sync_scn < pre_async_scn_) {
-    // 条件不满足：租户的 sync_scn 还没有超过 pre_async_scn_
-    ret = OB_EAGAIN;
-    if (REACH_TIME_INTERVAL(1 * 1000 * 1000)) {  // 每秒打印一次日志
-      CLOG_LOG(INFO, "ASYNC log cannot be accepted, tenant sync_scn not exceed pre_async_scn",
-               K(id_), K(tenant_sync_scn), K(pre_async_scn_), K(async_log_scn));
-    }
   } else {
-    // 条件满足：租户的 sync_scn 已经超过 pre_async_scn_
-    CLOG_LOG(INFO, "ASYNC log can be accepted, tenant sync_scn exceed pre_async_scn",
-             K(id_), K(tenant_sync_scn), K(pre_async_scn_), K(async_log_scn));
+    if (OB_UNLIKELY(ERRSIM_STANDBY_ASYNC_LOG_SYNC_SCN_BEHIND)) {
+      tenant_sync_scn.set_min();
+      CLOG_LOG(INFO, "ERRSIM force standby tenant sync_scn behind sys_ls_pre_async_log_scn",
+               K(id_), K(tenant_sync_scn), K(sys_ls_pre_async_log_scn));
+    }
+    if (tenant_sync_scn < sys_ls_pre_async_log_scn) {
+      // 租户 sync_scn 尚未推过 sys_ls 的 pre_async 日志 scn，拒收 async
+      ret = OB_EAGAIN;
+      if (REACH_TIME_INTERVAL_THREAD_LOCAL(1 * 1000 * 1000)) {
+        CLOG_LOG(INFO, "async log cannot be accepted, tenant sync_scn not exceed sys_ls_pre_async_log_scn",
+                 K(id_), K(tenant_sync_scn), K(sys_ls_pre_async_log_scn));
+      }
+    } else {
+      // 租户 sync_scn 已追上 sys_ls 的 pre_async 日志 scn，放行 async
+      CLOG_LOG(INFO, "async log can be accepted, tenant sync_scn exceed sys_ls_pre_async_log_scn",
+               K(id_), K(tenant_sync_scn), K(sys_ls_pre_async_log_scn));
+    }
   }
 
   return ret;
@@ -877,15 +878,16 @@ int ObLogRestoreHandler::try_handle_sync_mode_log(const int64_t proposal_id,
   ObLogBaseType log_type = ObLogBaseType::INVALID_LOG_BASE_TYPE;
   ObSyncModeLogType sync_mode_log_type = ObSyncModeLogType::SYNC_MODE_UNKNOWN_TYPE;
   bool is_standby_dest = false;
+  share::SCN sys_ls_pre_async_log_scn;
 
   if (OB_FAIL(parse_log_type_(buf, buf_size, log_type, sync_mode_log_type,
-                              log_base_header, is_standby_dest))) {
+                              log_base_header, is_standby_dest, sys_ls_pre_async_log_scn))) {
     CLOG_LOG(WARN, "parse log type from buffer failed", KR(ret), K(id_), K(lsn), K(buf_size));
-  } else if (ObSyncModeLogType::ASYNC == sync_mode_log_type && OB_FAIL(check_async_log_acceptable_(scn))) {
+  } else if (ObSyncModeLogType::ASYNC == sync_mode_log_type
+             && OB_FAIL(check_async_log_acceptable_(sys_ls_pre_async_log_scn))) {
     if (OB_EAGAIN == ret) {
-      CLOG_LOG(INFO, "ASYNC log not acceptable yet, will retry", K(id_), K(lsn), K(scn));
-    } else {
-      CLOG_LOG(WARN, "check_async_log_acceptable_ failed", KR(ret), K(id_), K(lsn), K(scn));
+      CLOG_LOG(WARN, "async log not acceptable yet, will retry",
+               KR(ret), K(id_), K(lsn), K(scn), K(sys_ls_pre_async_log_scn));
     }
   } else if (!is_sync_mode_log_(log_type, sync_mode_log_type)) {
     // ignore

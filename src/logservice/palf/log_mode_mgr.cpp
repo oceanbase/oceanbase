@@ -169,7 +169,8 @@ int LogModeMgr::get_sync_mode(SyncMode &sync_mode) const
     ret = OB_NOT_INIT;
     PALF_LOG(WARN, "LogModeMgr has inited", K(ret));
   } else {
-    sync_mode = applied_mode_meta_.sync_mode_;
+    sync_mode = static_cast<SyncMode>(
+        ATOMIC_LOAD(reinterpret_cast<const int32_t *>(&applied_mode_meta_.sync_mode_)));
   }
   return ret;
 }

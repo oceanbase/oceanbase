@@ -2045,6 +2045,7 @@ int ObRpcChangeLSSyncModeP::process()
           arg_.get_sync_mode(),
           arg_.get_ref_scn(),
           arg_.get_protection_log(),
+          arg_.get_sys_ls_pre_async_log_scn(),
           end_scn,
           new_mode_version,
           abs_timeout_us))) {

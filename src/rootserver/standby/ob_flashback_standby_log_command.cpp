@@ -473,8 +473,16 @@ int ObFlashbackStandbyLogCommand::change_ls_access_mode_back_to_raw_rw_(const ui
   } else if (OB_FAIL(ObTenantRoleTransitionService::get_target_sync_mode_(tenant_info, target_sync_mode))) {
     LOG_WARN("failed to get target sync mode", KR(ret), K(tenant_info));
   } else {
+    // sys_ls_pre_async_log_scn = SCN::min_scn() is safe here:
+    // FLASHBACK STANDBY LOG runs while the standby tenant stays in standby role and
+    // does not modify protection_mode/level. target_sync_mode is therefore the standby's
+    // current steady sync_mode. In steady state every LS already matches it, and
+    // change_ls_mode_until_success uses force_check_result=false so no RPC is issued
+    // when current==target. The placeholder is therefore never observed by observer.
     ObLSLogModeModifier ls_access_mode_modifier(tenant_id, switchover_epoch, SCN::base_scn(),
-        share::SCN::min_scn(), target_access_mode, target_sync_mode, &status_info_array, GCTX.sql_proxy_, GCTX.srv_rpc_proxy_);
+        share::SCN::min_scn(), target_access_mode, target_sync_mode,
+        share::SCN::min_scn()/*sys_ls_pre_async_log_scn*/,
+        &status_info_array, GCTX.sql_proxy_, GCTX.srv_rpc_proxy_);
     if (OB_FAIL(ls_access_mode_modifier.change_ls_access_mode())) {
       LOG_WARN("fail to change ls access mode", KR(ret), K(tenant_id));
     }

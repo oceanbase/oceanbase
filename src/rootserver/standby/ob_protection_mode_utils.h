@@ -60,6 +60,11 @@ public:
       const int64_t switchover_epoch, share::ObSyncStandbyStatusAttr &sync_standby_status_attr);
   static int64_t get_protection_mode_data_version() { return DATA_VERSION_4_4_2_1; }
   static int64_t get_protection_mode_cluster_version() { return CLUSTER_VERSION_4_4_2_1; }
+  // The change_ls_sync_mode RPC carries a sys_ls_pre_async_log_scn argument starting at
+  // DATA_VERSION_4_4_2_2. Caller should populate this argument only when the tenant's min data
+  // version is at least this version; otherwise the field is left as a default invalid SCN and
+  // ignored by the receiving observer.
+  static int need_pass_sys_ls_pre_async_log_scn(const uint64_t tenant_id, bool &need_pass);
   bool check_user_is_self(const share::ObRestoreSourceServiceAttr &restore_source_service_attr) const;
   int init(const uint64_t user_tenant_id);
   int get_log_restore_source(bool &is_empty, share::ObRestoreSourceServiceAttr &restore_source_service_attr);

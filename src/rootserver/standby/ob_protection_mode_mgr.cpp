@@ -673,7 +673,9 @@ int ObProtectionModeChangeHelper::get_sync_mode_(const ObIArray<ObLSID> &ls_ids,
 
 int ObProtectionModeChangeHelper::set_sync_mode_(
   const ObIArray<obrpc::ObLSAccessModeInfo> &ls_access_info, const palf::SyncMode &sync_mode,
-  const share::SCN &ref_scn, ObIArray<obrpc::ObChangeLSSyncModeRes> &change_ls_sync_mode_res_array) const
+  const share::SCN &ref_scn,
+  const share::SCN &sys_ls_pre_async_log_scn,
+  ObIArray<obrpc::ObChangeLSSyncModeRes> &change_ls_sync_mode_res_array) const
 {
   int ret = OB_SUCCESS;
   ObSyncStandbyStatusAttr protection_log;
@@ -689,7 +691,7 @@ int ObProtectionModeChangeHelper::set_sync_mode_(
     LOG_WARN("failed to get sync standby status attr", KR(ret), K(user_tenant_id_), K(meta_protection_stat_));
   } else if (OB_FAIL(rootserver::ObLSLogModeModifier::change_ls_sync_mode(
       user_tenant_id_, ls_access_info, sync_mode, ref_scn,
-      protection_log, change_ls_sync_mode_res_array))) {
+      protection_log, sys_ls_pre_async_log_scn, change_ls_sync_mode_res_array))) {
     LOG_WARN("failed to set sync mode", KR(ret), K(user_tenant_id_), K(ls_access_info));
   }
   return ret;
@@ -759,6 +761,7 @@ int ObProtectionModeChangeHelper::set_sync_mode_until_suceess_(
   const ObIArray<obrpc::ObLSAccessModeInfo> &ls_access_info,
   const palf::SyncMode &sync_mode,
   const share::SCN &ref_scn,
+  const share::SCN &sys_ls_pre_async_log_scn,
   const int64_t timeout,
   ObIArray<obrpc::ObChangeLSSyncModeRes> &change_ls_sync_mode_res_array) const
 {
@@ -782,10 +785,11 @@ int ObProtectionModeChangeHelper::set_sync_mode_until_suceess_(
       }
     }
     if (FAILEDx(rootserver::ObLSLogModeModifier::change_ls_sync_mode_until_success(user_tenant_id_,
-        ls_ids, sync_mode, ref_scn, protection_log, meta_protection_stat_.get_switchover_epoch(),
+        ls_ids, sync_mode, ref_scn, protection_log, sys_ls_pre_async_log_scn,
+        meta_protection_stat_.get_switchover_epoch(),
         change_ls_sync_mode_res_array))) {
       LOG_WARN("failed to change ls sync mode until success", KR(ret), K(user_tenant_id_), K(ls_ids),
-          K(sync_mode), K(ref_scn));
+          K(sync_mode), K(ref_scn), K(sys_ls_pre_async_log_scn));
     }
   }
   return ret;
@@ -796,6 +800,7 @@ int ObProtectionModeChangeHelper::downgrade_protection_mode_set_sync_mode_(
   const palf::SyncMode &target_sync_mode,
   const ObTimeoutCtx &ctx,
   const share::SCN &ref_scn,
+  const share::SCN &sys_ls_pre_async_log_scn,
   ObIArray<obrpc::ObChangeLSSyncModeRes> &change_ls_sync_mode_res_array) const
 {
   int ret = OB_SUCCESS;
@@ -819,7 +824,8 @@ int ObProtectionModeChangeHelper::downgrade_protection_mode_set_sync_mode_(
   } else if (OB_FAIL(splite_sys_ls_from_all_ls_(ls_access_info, sys_ls_access_info, user_ls_access_info))) {
     LOG_WARN("failed to splite sys ls from all ls", KR(ret));
   } else if (OB_FAIL(set_sync_mode_until_suceess_(first_ls_access_info, target_sync_mode,
-        ref_scn, ctx.get_abs_timeout() - ObTimeUtility::current_time(), change_first_ls_sync_mode_res_array))) {
+        ref_scn, sys_ls_pre_async_log_scn,
+        ctx.get_abs_timeout() - ObTimeUtility::current_time(), change_first_ls_sync_mode_res_array))) {
     LOG_WARN("failed to set sync mode", KR(ret), K(first_ls_access_info), K(ref_scn));
   } else {
     share::SCN max_scn = SCN::min_scn();
@@ -836,7 +842,8 @@ int ObProtectionModeChangeHelper::downgrade_protection_mode_set_sync_mode_(
     } else if (OB_FAIL(check_status_not_changed_())) {
       LOG_WARN("failed to check self leader", KR(ret));
     } else if (OB_FAIL(set_sync_mode_until_suceess_(second_ls_access_info, target_sync_mode,
-        max_scn, ctx.get_abs_timeout() - ObTimeUtility::current_time(), change_second_ls_sync_mode_res_array))) {
+        max_scn, sys_ls_pre_async_log_scn,
+        ctx.get_abs_timeout() - ObTimeUtility::current_time(), change_second_ls_sync_mode_res_array))) {
       LOG_WARN("failed to set sync mode", KR(ret), K(second_ls_access_info));
     } else if (OB_FAIL(change_ls_sync_mode_res_array.assign(change_first_ls_sync_mode_res_array))) {
       LOG_WARN("failed to assign change ls sync mode res array", KR(ret), K(change_first_ls_sync_mode_res_array));
@@ -871,6 +878,8 @@ int ObProtectionModeChangeHelper::downgrade_protection_mode(int64_t &new_switcho
   ObArray<obrpc::ObLSAccessModeInfo> all_ls_access_info;
   ObArray<obrpc::ObChangeLSSyncModeRes> change_ls_sync_mode_res_array;
   share::SCN largest_end_scn;
+  bool need_pass_sys_ls_pre_async_log_scn = false;
+  share::SCN sys_ls_pre_async_log_scn = SCN::min_scn();
   // 1. update switchover epoch to avoid other thread update it
   // 1. set SYS_LS to pre_async
   // 3. set other LS to pre_async
@@ -891,6 +900,9 @@ int ObProtectionModeChangeHelper::downgrade_protection_mode(int64_t &new_switcho
     LOG_WARN("failed to set default timeout", KR(ret));
   } else if (OB_FAIL(get_sync_mode_(ls_ids, all_ls_access_info))) {
     LOG_WARN("failed to get ls access mode", KR(ret));
+  } else if (OB_FAIL(ObProtectionModeUtils::need_pass_sys_ls_pre_async_log_scn(
+      user_tenant_id_, need_pass_sys_ls_pre_async_log_scn))) {
+    LOG_WARN("failed to check whether need pass sys_ls_pre_async_log_scn", KR(ret), K_(user_tenant_id));
   } else if (OB_FAIL(share::ObAllTenantInfoProxy::update_tenant_protection_mode_and_level(
     user_tenant_id_, ObTenantRole(ObTenantRole::PRIMARY_TENANT), GCTX.sql_proxy_,
     meta_protection_stat_.get_switchover_epoch(), meta_protection_stat_.get_protection_mode(),
@@ -904,19 +916,52 @@ int ObProtectionModeChangeHelper::downgrade_protection_mode(int64_t &new_switcho
   } else if (OB_FAIL(ObProtectionModeUtils::get_all_ls_largest_end_scn(user_tenant_id_, largest_end_scn))) {
     LOG_WARN("failed to get all ls largest end scn", KR(ret));
   } else if (OB_FAIL(downgrade_protection_mode_set_sync_mode_(all_ls_access_info, palf::SyncMode::PRE_ASYNC,
-      ctx, largest_end_scn, change_ls_sync_mode_res_array))) {
+      ctx, largest_end_scn, SCN::min_scn()/*sys_ls_pre_async_log_scn unused for PRE_ASYNC target*/,
+      change_ls_sync_mode_res_array))) {
     LOG_WARN("failed to set sync mode", KR(ret), K(all_ls_access_info), K(largest_end_scn));
   } else if (OB_FAIL(get_access_info_from_result_(palf::SyncMode::PRE_ASYNC,
       change_ls_sync_mode_res_array, all_ls_access_info))) {
     LOG_WARN("failed to get access info from result", KR(ret), K(all_ls_access_info), K(change_ls_sync_mode_res_array));
+  } else if (need_pass_sys_ls_pre_async_log_scn
+      && OB_FAIL(extract_sys_ls_pre_async_log_scn_(change_ls_sync_mode_res_array,
+          sys_ls_pre_async_log_scn))) {
+    // After SYS_LS has been set to PRE_ASYNC, extract its special_log_scn (= sys_ls's pre_async log scn)
+    // from the result array; this scn is then carried in the change_ls_sync_mode RPC of the next
+    // (target ASYNC) phase so that the receiving observer can use it. Only populated when target
+    // tenant's data version >= DATA_VERSION_4_4_2_2; otherwise leave as default min SCN.
+    LOG_WARN("failed to extract sys_ls_pre_async_log_scn for downgrade", KR(ret),
+        K_(user_tenant_id), K(change_ls_sync_mode_res_array));
   } else if (OB_FAIL(downgrade_protection_mode_set_sync_mode_(all_ls_access_info, palf::SyncMode::ASYNC,
-      ctx, largest_end_scn, change_ls_sync_mode_res_array))) {
-    LOG_WARN("failed to set sync mode", KR(ret), K(all_ls_access_info), K(largest_end_scn));
+      ctx, largest_end_scn, sys_ls_pre_async_log_scn, change_ls_sync_mode_res_array))) {
+    LOG_WARN("failed to set sync mode", KR(ret), K(all_ls_access_info), K(largest_end_scn),
+        K(sys_ls_pre_async_log_scn));
   } else if (OB_FAIL(check_status_not_changed_())) {
     LOG_WARN("failed to check self leader", KR(ret));
   } else if (OB_FAIL(ObProtectionModeMgr::advance_meta_tenant_protection_stat(
       gen_meta_tenant_id(user_tenant_id_), meta_protection_stat_, GCTX.sql_proxy_))) {
     LOG_WARN("failed to advance meta tenant protection stat", KR(ret), K(user_tenant_id_), K(meta_protection_stat_));
+  }
+  return ret;
+}
+
+int ObProtectionModeChangeHelper::extract_sys_ls_pre_async_log_scn_(
+    const ObIArray<obrpc::ObChangeLSSyncModeRes> &change_ls_sync_mode_res_array,
+    share::SCN &sys_ls_pre_async_log_scn) const
+{
+  int ret = OB_SUCCESS;
+  bool found = false;
+  sys_ls_pre_async_log_scn = SCN::min_scn();
+  for (int64_t i = 0; !found && i < change_ls_sync_mode_res_array.count(); ++i) {
+    const obrpc::ObChangeLSSyncModeRes &res = change_ls_sync_mode_res_array.at(i);
+    if (res.get_ls_id().is_sys_ls() && OB_SUCCESS == res.get_result()) {
+      sys_ls_pre_async_log_scn = res.get_special_log_scn();
+      found = true;
+    }
+  }
+  if (!found) {
+    ret = OB_ENTRY_NOT_EXIST;
+    LOG_WARN("no successful SYS_LS entry in change_ls_sync_mode result array", KR(ret),
+        K(change_ls_sync_mode_res_array));
   }
   return ret;
 }
@@ -981,7 +1026,8 @@ int ObProtectionModeChangeHelper::upgrade_protection_mode() const
     } else if (OB_FAIL(get_sync_mode_(ls_ids, ls_access_infos))) {
       LOG_WARN("failed to get sync mode", KR(ret));
     } else if (OB_FAIL(set_sync_mode_until_suceess_(ls_access_infos, palf::SyncMode::SYNC,
-            SCN::min_scn(), GCONF.internal_sql_execute_timeout, change_ls_sync_mode_res_array))) {
+            SCN::min_scn(), SCN::min_scn()/*sys_ls_pre_async_log_scn unused for SYNC target*/,
+            GCONF.internal_sql_execute_timeout, change_ls_sync_mode_res_array))) {
       LOG_WARN("failed to set sync mode", KR(ret), K(ls_access_infos));
     } else if (OB_FAIL(check_gts_advanced_(ctx))) {
       LOG_WARN("gts not advanced", KR(ret), K(user_tenant_id_), K(ls_ids));

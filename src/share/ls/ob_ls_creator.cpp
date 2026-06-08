@@ -459,8 +459,10 @@ int ObLSCreator::set_ls_sync_mode_(int64_t &switchover_epoch)
   } else if (protection_stat.is_async_to_sync()
     || (protection_stat.is_steady() && protection_stat.get_protection_level().is_sync_level())) {
     // set to SYNC
+    // create-ls path: sys_ls_pre_async_log_scn is not required, pass default invalid SCN.
     if (OB_FAIL(rootserver::ObLSLogModeModifier::change_ls_sync_mode_and_check_result(
-      tenant_id_, ls_access_infos, palf::SyncMode::SYNC, protection_log, SCN::min_scn()))) {
+      tenant_id_, ls_access_infos, palf::SyncMode::SYNC, protection_log, SCN::min_scn(),
+      SCN::min_scn()/*sys_ls_pre_async_log_scn*/))) {
       LOG_WARN("failed to change ls access mode", KR(ret), K(tenant_id_), K(ls_access_infos));
     }
   } else {
@@ -472,10 +474,12 @@ int ObLSCreator::set_ls_sync_mode_(int64_t &switchover_epoch)
         && info.get_mode_version() != PALF_INITIAL_PROPOSAL_ID) {
       LOG_INFO("sync_mode is async and mode_version is not 0, no need to change sync_mode", KR(ret), K(info));
     } else if (OB_FAIL(rootserver::ObLSLogModeModifier::change_ls_sync_mode_and_check_result(
-      tenant_id_, ls_access_infos, palf::SyncMode::PRE_ASYNC, protection_log, SCN::min_scn()))) {
+      tenant_id_, ls_access_infos, palf::SyncMode::PRE_ASYNC, protection_log, SCN::min_scn(),
+      SCN::min_scn()/*sys_ls_pre_async_log_scn*/))) {
       LOG_WARN("failed to change ls access mode", KR(ret), K(tenant_id_), K(ls_access_infos));
     } else if (OB_FAIL(rootserver::ObLSLogModeModifier::change_ls_sync_mode_and_check_result(
-      tenant_id_, ls_access_infos, palf::SyncMode::ASYNC, protection_log, SCN::min_scn()))) {
+      tenant_id_, ls_access_infos, palf::SyncMode::ASYNC, protection_log, SCN::min_scn(),
+      SCN::min_scn()/*sys_ls_pre_async_log_scn*/))) {
       LOG_WARN("failed to change ls access mode", KR(ret), K(tenant_id_), K(ls_access_infos));
     } else {
       DEBUG_SYNC(AFTER_CREATE_LS_SET_SYNC_MODE);

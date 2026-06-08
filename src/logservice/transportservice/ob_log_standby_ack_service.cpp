@@ -39,28 +39,6 @@ ERRSIM_POINT_DEF(ERRSIM_STANDBY_ACK_SERVICE_INIT_FAIL);
 
 namespace logservice
 {
-
-// 备库 ACK 回调，用于发送 ACK 后不需要处理响应
-class StandbyAckCallback : public obrpc::ObLogTransportRpcProxy::AsyncCB<obrpc::OB_LOG_SYNC_STANDBY_INFO>
-{
-public:
-  void set_args(const typename obrpc::ObLogTransportRpcProxy::AsyncCB<obrpc::OB_LOG_SYNC_STANDBY_INFO>::Request &args) {
-    UNUSED(args);
-  }
-
-  rpc::frame::ObReqTransport::AsyncCB *clone(const rpc::frame::SPAlloc &alloc) const {
-    void *buf = alloc(sizeof(*this));
-    StandbyAckCallback *newcb = NULL;
-    if (NULL != buf) {
-      newcb = new (buf) StandbyAckCallback();
-    }
-    return newcb;
-  }
-
-  int process() override { return OB_SUCCESS; }
-  void on_timeout() override {}
-};
-
 //---------------ObStandbyFsCb---------------//
 ObStandbyFsCb::ObStandbyFsCb()
   : is_inited_(false),
@@ -111,7 +89,8 @@ int ObStandbyFsCb::update_end_lsn(int64_t id,
 {
   UNUSED(id);
   UNUSED(proposal_id);
-  palf::AccessMode access_mode;
+  palf::AccessMode access_mode = palf::AccessMode::INVALID_ACCESS_MODE;
+  palf::SyncMode sync_mode = palf::SyncMode::INVALID_SYNC_MODE;
 
   int ret = OB_SUCCESS;
   if (!is_inited_) {
@@ -124,33 +103,16 @@ int ObStandbyFsCb::update_end_lsn(int64_t id,
     CLOG_LOG(WARN, "get_access_mode failed", K(ret), K(ls_id_));
   } else if (access_mode == palf::AccessMode::APPEND) {
     CLOG_LOG(TRACE, "access mode is not raw write, skip sending ack", K(ls_id_), K(end_lsn), K(end_scn));
-    return OB_SUCCESS;
-  } else {
-    bool is_sync_mode = false;
-    if (OB_FAIL(ack_service_->get_sync_mode_from_cache(ls_id_, is_sync_mode))) {
-      // 如果缓存不存在，默认提交任务，让独立线程去检查
-      CLOG_LOG(TRACE, "get_sync_mode_from_cache_ failed, will check in ack thread", K(ret), K(ls_id_));
-      is_sync_mode = true;
-    }
-
-    if (is_sync_mode) {
-      // 创建任务并提交到独立线程处理
-      StandbyAckTask task(ls_id_);
-      if (OB_FAIL(ack_status_->update_current_end_lsn_scn(end_lsn, end_scn))) {
-        CLOG_LOG(WARN, "update_current_end_lsn_scn failed", K(ret), K(ls_id_), K(end_lsn), K(end_scn));
-      } else if (OB_FAIL(ack_status_->get_access_mode(access_mode))) {
-        CLOG_LOG(WARN, "get_access_mode failed after update lsn", K(ret), K(ls_id_));
-      } else if (palf::AccessMode::APPEND == access_mode) {
-        CLOG_LOG(INFO, "access mode changed to APPEND after update lsn, skip sending ack",
-                 K(ls_id_), K(end_lsn), K(end_scn));
-      } else if (OB_FAIL(ack_service_->push_ack_task(task))) {
-        CLOG_LOG(WARN, "push_ack_task failed", K(ret), K(ls_id_));
-      } else {
-        CLOG_LOG(TRACE, "ObStandbyFsCb push ack task success", K(ls_id_));
-      }
+  } else if (OB_FAIL(ack_status_->get_sync_mode(sync_mode))) {
+    CLOG_LOG(WARN, "get_sync_mode failed", K(ret), K(ls_id_));
+  } else if (palf::SyncMode::SYNC == sync_mode) {
+    StandbyAckTask task(ls_id_);
+    if (OB_FAIL(ack_status_->update_current_end_lsn_scn(end_lsn, end_scn))) {
+      CLOG_LOG(WARN, "update_current_end_lsn_scn failed", K(ret), K(ls_id_), K(end_lsn), K(end_scn));
+    } else if (OB_FAIL(ack_service_->push_ack_task(task))) {
+      CLOG_LOG(WARN, "push_ack_task failed", K(ret), K(ls_id_));
     } else {
-      // 非强同步模式，不需要发送
-      CLOG_LOG(TRACE, "not in sync mode, skip sending ack", K(ls_id_), K(end_lsn), K(end_scn));
+      CLOG_LOG(TRACE, "ObStandbyFsCb push ack task success", K(ls_id_));
     }
   }
   return ret;
@@ -193,14 +155,9 @@ int StandbyAckStatus::init(const share::ObLSID &ls_id,
     ack_service_ = ack_service;
     committed_end_lsn_.reset();
     committed_end_scn_.reset();
-    // 初始化 sync_mode 缓存
-    if (OB_FAIL(ack_service_->init_sync_mode_cache(ls_id))) {
-      CLOG_LOG(WARN, "init_sync_mode_cache_ failed", K(ret), K(ls_id));
-      // 初始化缓存失败不影响主流程，继续执行
-    }
 
     // 注册 file_size_cb
-    if (OB_SUCC(ret) && OB_FAIL(register_file_size_cb())) {
+    if (OB_FAIL(register_file_size_cb())) {
       CLOG_LOG(WARN, "register_file_size_cb failed", K(ret), K(ls_id));
     }
 
@@ -307,8 +264,7 @@ ObLogStandbyAckService::ObLogStandbyAckService()
     rpc_proxy_(nullptr),
     periodic_ack_task_(),
     cache_lock_(common::ObLatchIds::TRANSPORT_SERVICE_TASK_LOCK),
-    primary_info_map_(),
-    sync_mode_map_()
+    primary_info_map_()
 {
   periodic_ack_task_.set_ack_service(this);
 }
@@ -342,8 +298,6 @@ int ObLogStandbyAckService::init(ipalf::IPalfEnv *palf_env, rpc::frame::ObReqTra
     CLOG_LOG(WARN, "ack_status_map_ init error", K(ret));
   } else if (OB_FAIL(primary_info_map_.init("SYNC_PRI_INFO", MAP_TENANT_ID))) {
     CLOG_LOG(WARN, "primary_info_map_ init error", K(ret));
-  } else if (OB_FAIL(sync_mode_map_.init("SYNC_MODE_MAP", MAP_TENANT_ID))) {
-    CLOG_LOG(WARN, "sync_mode_map_ init error", K(ret));
   } else {
     // 初始化RPC代理
     rpc_proxy_ = OB_NEW(obrpc::ObLogTransportRpcProxy, "SyncAckRpcProxy");
@@ -418,7 +372,6 @@ void ObLogStandbyAckService::destroy()
   palf_env_ = nullptr;
   ack_status_map_.destroy();
   primary_info_map_.destroy();
-  sync_mode_map_.destroy();
   if (nullptr != rpc_proxy_) {
     rpc_proxy_->destroy();
     OB_DELETE(ObLogTransportRpcProxy, "StandbyAckRpcProxy", rpc_proxy_);
@@ -491,12 +444,6 @@ int ObLogStandbyAckService::remove_ls(const share::ObLSID &id)
   } else if (OB_FAIL(ack_status_map_.erase_if(id, functor))) {
     CLOG_LOG(WARN, "ack_status_map_ erase failed", K(ret), K(id));
   } else {
-    // 清理 sync_mode 缓存
-    {
-      common::ObSpinLockGuard guard(cache_lock_);
-      (void)sync_mode_map_.erase(id);
-    }
-
     CLOG_LOG(INFO, "remove_ls success", K(id));
   }
 
@@ -698,18 +645,14 @@ int ObLogStandbyAckService::batch_process_tasks(const common::ObIArray<StandbyAc
       CLOG_LOG(WARN, "get access_mode from ack_status_map failed before send", K(ret), K(ls_id));
     } else if (palf::AccessMode::APPEND == access_mode) {
       CLOG_LOG(TRACE, "access mode changed to APPEND after get lsn, skip sending ack", K(ls_id), K(access_mode));
-    } else {
-      // 发送 ACK
-      if (OB_FAIL(send_ack_to_primary_(ls_id, end_lsn, end_scn))) {
-        CLOG_LOG(WARN, "send_ack_to_primary_ failed", K(ret), K(ls_id), K(end_lsn), K(end_scn));
-        StandbyAckTask ack_task(ls_id);
-        int tmp_ret = OB_SUCCESS;
-        if (OB_TMP_FAIL(push_ack_task(ack_task))) {
-          LOG_WARN("failed to push ack task", KR(ret), K(tmp_ret), K(ls_id));
-        }
-      } else {
-        CLOG_LOG(INFO, "send_ack_to_primary_ success", K(ls_id), K(end_lsn), K(end_scn));
+    } else if (OB_FAIL(send_ack_to_primary_(ls_id))) {
+      CLOG_LOG(WARN, "send_ack_to_primary_ failed", K(ret), K(ls_id), K(end_lsn), K(end_scn));
+      StandbyAckTask ack_task(ls_id);
+      if (OB_FAIL(push_ack_task(ack_task))) {
+        LOG_WARN("failed to push ack task", KR(ret), K(ls_id), K(ack_task));
       }
+    } else {
+      CLOG_LOG(INFO, "send ack to primary success", K(ls_id), K(end_lsn), K(end_scn));
     }
   }
   return ret;
@@ -824,167 +767,6 @@ int ObLogStandbyAckService::check_and_compare_leader_status(ipalf::IPalfHandle *
   return ret;
 }
 
-int ObLogStandbyAckService::check_sync_mode_(const share::ObLSID &ls_id, bool &is_sync_mode)
-{
-  int ret = OB_SUCCESS;
-  is_sync_mode = false;
-  const int64_t now = ObTimeUtility::current_time();
-  bool need_update = false;
-  SyncModeInfo cached_info;
-
-  // 检查缓存是否过期
-  {
-    common::ObSpinLockGuard guard(cache_lock_);
-    if (OB_FAIL(sync_mode_map_.get(ls_id, cached_info))) {
-      need_update = true;
-    } else if ((now - cached_info.cached_ts_) > SYNC_MODE_CACHE_EXPIRE_US) {
-      need_update = true;
-    } else {
-      // 从缓存中获取
-      is_sync_mode = cached_info.is_sync_mode_;
-      CLOG_LOG(TRACE, "get sync_mode from cache", K(ls_id), K(is_sync_mode),
-                K(cached_info.sync_mode_), K(cached_info.mode_version_));
-    }
-  }
-
-  // 缓存未命中或过期，需要重新查询
-  if (need_update) {
-    ObLogService *log_service = MTL(ObLogService*);
-    storage::ObLS *ls = nullptr;
-    ObLSHandle ls_handle;
-    ObLogHandler *log_handler = nullptr;
-
-    if (OB_ISNULL(log_service)) {
-      ret = OB_ERR_UNEXPECTED;
-      CLOG_LOG(WARN, "ObLogService is null", K(ret));
-    } else if (OB_FAIL(MTL(storage::ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::LOG_MOD))) {
-      CLOG_LOG(WARN, "get ls failed", K(ret), K(ls_id));
-    } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-      ret = OB_ERR_UNEXPECTED;
-      CLOG_LOG(WARN, "ls is null", K(ret));
-    } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
-      ret = OB_ERR_UNEXPECTED;
-      CLOG_LOG(WARN, "log_handler is null", K(ret));
-    } else {
-      int64_t mode_version = 0;
-      ipalf::SyncMode sync_mode = ipalf::SyncMode::INVALID_SYNC_MODE;
-      if (OB_FAIL(log_handler->get_sync_mode(mode_version, sync_mode))) {
-        CLOG_LOG(WARN, "get_sync_mode failed", K(ret), K(ls_id));
-      } else {
-        is_sync_mode = (sync_mode == ipalf::SyncMode::SYNC);
-
-        // 更新缓存
-        SyncModeInfo new_info;
-        new_info.mode_version_ = mode_version;
-        new_info.sync_mode_ = sync_mode;
-        new_info.is_sync_mode_ = is_sync_mode;
-        new_info.cached_ts_ = now;
-
-        {
-          common::ObSpinLockGuard guard(cache_lock_);
-          if (OB_FAIL(sync_mode_map_.insert_or_update(ls_id, new_info))) {
-            CLOG_LOG(WARN, "update sync_mode cache failed", K(ret), K(ls_id));
-          } else {
-            CLOG_LOG(TRACE, "update sync_mode cache success", K(ls_id), K(sync_mode),
-                    K(is_sync_mode), K(mode_version));
-          }
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObLogStandbyAckService::init_sync_mode_cache(const share::ObLSID &ls_id)
-{
-  int ret = OB_SUCCESS;
-  ObLogService *log_service = MTL(ObLogService*);
-  storage::ObLS *ls = nullptr;
-  ObLSHandle ls_handle;
-  ObLogHandler *log_handler = nullptr;
-
-  if (OB_ISNULL(log_service)) {
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(WARN, "ObLogService is null", K(ret));
-  } else if (OB_FAIL(MTL(storage::ObLSService*)->get_ls(ls_id, ls_handle, ObLSGetMod::LOG_MOD))) {
-    CLOG_LOG(WARN, "get ls failed", K(ret), K(ls_id));
-  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(WARN, "ls is null", K(ret));
-  } else if (OB_ISNULL(log_handler = ls->get_log_handler())) {
-    ret = OB_ERR_UNEXPECTED;
-    CLOG_LOG(WARN, "log_handler is null", K(ret));
-  } else {
-    int64_t mode_version = 0;
-    ipalf::SyncMode sync_mode = ipalf::SyncMode::INVALID_SYNC_MODE;
-    if (OB_FAIL(log_handler->get_sync_mode(mode_version, sync_mode))) {
-      CLOG_LOG(WARN, "get_sync_mode failed", K(ret), K(ls_id));
-    } else {
-      const int64_t now = ObTimeUtility::current_time();
-      bool is_sync_mode = (sync_mode == ipalf::SyncMode::SYNC);
-
-      SyncModeInfo new_info;
-      new_info.mode_version_ = mode_version;
-      new_info.sync_mode_ = sync_mode;
-      new_info.is_sync_mode_ = is_sync_mode;
-      new_info.cached_ts_ = now;
-
-      common::ObSpinLockGuard guard(cache_lock_);
-      if (OB_FAIL(sync_mode_map_.insert_or_update(ls_id, new_info))) {
-        CLOG_LOG(WARN, "init sync_mode cache failed", K(ret), K(ls_id), K(sync_mode), K(is_sync_mode));
-      } else {
-        CLOG_LOG(INFO, "init sync_mode cache success", K(ls_id), K(sync_mode),
-                 K(is_sync_mode), K(mode_version));
-      }
-    }
-  }
-
-  return ret;
-}
-
-int ObLogStandbyAckService::get_sync_mode_from_cache(const share::ObLSID &ls_id, bool &is_sync_mode)
-{
-  int ret = OB_SUCCESS;
-  is_sync_mode = false;
-  SyncModeInfo cached_info;
-
-  if (OB_FAIL(sync_mode_map_.get(ls_id, cached_info))) {
-    ret = OB_ENTRY_NOT_EXIST;
-    CLOG_LOG(TRACE, "sync_mode cache not found", K(ls_id));
-  } else {
-    is_sync_mode = cached_info.is_sync_mode_;
-    CLOG_LOG(TRACE, "get sync_mode from cache", K(ls_id), K(is_sync_mode),
-             K(cached_info.sync_mode_), K(cached_info.mode_version_));
-  }
-
-  return ret;
-}
-
-int ObLogStandbyAckService::update_sync_mode_cache(const share::ObLSID &ls_id,
-                                                     int64_t mode_version,
-                                                     ipalf::SyncMode sync_mode,
-                                                     bool is_sync_mode)
-{
-  int ret = OB_SUCCESS;
-  const int64_t now = ObTimeUtility::current_time();
-
-  SyncModeInfo new_info;
-  new_info.mode_version_ = mode_version;
-  new_info.sync_mode_ = sync_mode;
-  new_info.is_sync_mode_ = is_sync_mode;
-  new_info.cached_ts_ = now;
-
-  common::ObSpinLockGuard guard(cache_lock_);
-  if (OB_FAIL(sync_mode_map_.insert_or_update(ls_id, new_info))) {
-    CLOG_LOG(WARN, "update sync_mode cache failed", K(ret), K(ls_id), K(sync_mode), K(is_sync_mode));
-  } else {
-    CLOG_LOG(TRACE, "update sync_mode cache success", K(ls_id), K(sync_mode),
-             K(is_sync_mode), K(mode_version));
-  }
-
-  return ret;
-}
-
 int ObLogStandbyAckService::get_primary_info_(const share::ObLSID &ls_id,
                                                 common::ObAddr &primary_addr,
                                                 int64_t &primary_cluster_id,
@@ -1077,8 +859,7 @@ int ObLogStandbyAckService::get_primary_info_(const share::ObLSID &ls_id,
   return ret;
 }
 
-int ObLogStandbyAckService::send_ack_to_primary_(const share::ObLSID &ls_id,
-   const palf::LSN &committed_end_lsn, const share::SCN &committed_end_scn)
+int ObLogStandbyAckService::send_ack_to_primary_(const share::ObLSID &ls_id)
 {
   int ret = OB_SUCCESS;
   common::ObAddr primary_addr;
@@ -1099,8 +880,7 @@ int ObLogStandbyAckService::send_ack_to_primary_(const share::ObLSID &ls_id,
     CLOG_LOG(WARN, "first check leader and access mode failed", K(ret), K(ls_id));
   } else if (!is_valid) {
     // 不是 leader 或不是 RAW_WRITE 模式，跳过发送
-    CLOG_LOG(INFO, "first check failed, skip sending ack to primary",
-             K(ls_id), K(first_proposal_id), K(committed_end_lsn), K(committed_end_scn));
+    CLOG_LOG(INFO, "first check failed, skip sending ack to primary", K(ls_id), K(first_proposal_id));
   } else if (OB_FAIL(check_restore_source_valid(ls_id, is_valid))) {
     CLOG_LOG(WARN, "check restore source valid failed", K(ret), K(ls_id));
   } else if (!is_valid) {
@@ -1144,15 +924,12 @@ int ObLogStandbyAckService::send_ack_to_primary_(const share::ObLSID &ls_id,
         resp.standby_committed_end_scn_ = current_end_scn;
 
         const int64_t timeout_us = 3 * 1000 * 1000; // 3秒超时
-
         // 使用 post_log_transport_resp 发送响应给主库
-        // 这是一个异步 RPC，但备库发送 ACK 不需要等待响应，所以使用空回调
-        static StandbyAckCallback cb;
         if (OB_FAIL(rpc_proxy_->to(primary_addr)
                           .dst_cluster_id(primary_cluster_id)
                           .by(primary_tenant_id)
                           .timeout(timeout_us)
-                          .post_log_transport_resp(resp, &cb))) {
+                          .post_log_transport_resp(resp, NULL))) {
           CLOG_LOG(WARN, "post_log_transport_resp failed", K(ret), K(primary_addr), K(resp));
         } else {
           if (REACH_TIME_INTERVAL_THREAD_LOCAL(1_s)) {
@@ -1198,6 +975,21 @@ int StandbyAckStatus::get_access_mode(palf::AccessMode &access_mode)
     CLOG_LOG(WARN, "palf_handle_ is null", KR(ret), K(ls_id_));
   } else if (OB_FAIL(palf_handle_->get_access_mode(access_mode))) {
     CLOG_LOG(WARN, "get_access_mode failed", KR(ret), K(ls_id_));
+  }
+  return ret;
+}
+
+int StandbyAckStatus::get_sync_mode(palf::SyncMode &sync_mode)
+{
+  int ret = OB_SUCCESS;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    CLOG_LOG(WARN, "StandbyAckStatus is not inited", KR(ret), K(is_inited_));
+  } else if (OB_ISNULL(palf_handle_)) {
+    ret = OB_ERR_UNEXPECTED;
+    CLOG_LOG(WARN, "palf_handle_ is null", KR(ret), K(ls_id_));
+  } else if (OB_FAIL(palf_handle_->get_sync_mode(sync_mode))) {
+    CLOG_LOG(WARN, "get_sync_mode failed", KR(ret), K(ls_id_));
   }
   return ret;
 }
@@ -1256,87 +1048,72 @@ void StandbyPeriodicAckTask::runTimerTask()
 int ObLogStandbyAckService::periodic_send_ack_()
 {
   int ret = OB_SUCCESS;
-  bool is_standby = false;
-  const uint64_t tenant_id = MTL_ID();
 
-  // 检查当前租户是否是 standby 租户
-  if (OB_FAIL(ObShareUtil::mtl_check_if_tenant_role_is_standby(tenant_id, is_standby))) {
-    CLOG_LOG(WARN, "check if tenant role is standby failed", K(ret), K(tenant_id));
-  } else if (!is_standby) {
-    // 只有 standby 才需要发送 ack
-    CLOG_LOG(TRACE, "current tenant is not standby, skip periodic ack", K(tenant_id));
-  } else {
-    // 遍历所有 LS，获取当前的 committed_end_lsn/scn 并发送 ACK
-    class PeriodicAckFunctor
+  // 遍历所有 LS，获取当前的 committed_end_lsn/scn 并发送 ACK
+  class PeriodicAckFunctor
+  {
+  public:
+    PeriodicAckFunctor(ObLogStandbyAckService *ack_service)
+      : ack_service_(ack_service), ret_(OB_SUCCESS) {}
+    bool operator()(const share::ObLSID &ls_id, StandbyAckStatus *ack_status)
     {
-    public:
-      PeriodicAckFunctor(ObLogStandbyAckService *ack_service)
-        : ack_service_(ack_service), ret_(OB_SUCCESS) {}
-      bool operator()(const share::ObLSID &ls_id, StandbyAckStatus *ack_status)
-      {
-        int ret = OB_SUCCESS;
-        palf::AccessMode access_mode;
-        palf::LSN end_lsn;
-        share::SCN end_scn;
-        if (OB_ISNULL(ack_service_) || OB_ISNULL(ack_status)) {
-          ret = OB_ERR_UNEXPECTED;
-          CLOG_LOG(WARN, "ack_service_ or ack_status is null", K(ret), KP(ack_service_), KP(ack_status));
+      int ret = OB_SUCCESS;
+      palf::AccessMode access_mode;
+      palf::LSN end_lsn;
+      share::SCN end_scn;
+      if (OB_ISNULL(ack_service_) || OB_ISNULL(ack_status)) {
+        ret = OB_ERR_UNEXPECTED;
+        CLOG_LOG(WARN, "ack_service_ or ack_status is null", K(ret), KP(ack_service_), KP(ack_status));
+      } else if (OB_FAIL(ack_status->get_access_mode(access_mode))) {
+        CLOG_LOG(WARN, "get_access_mode failed", K(ret), K(ls_id));
+      } else if (palf::AccessMode::APPEND == access_mode) {
+        CLOG_LOG(TRACE, "access mode is append, skip send ack", K(ls_id), K(access_mode));
+      } else {
+        if (OB_FAIL(ack_status->get_current_end_lsn_scn_from_palf(end_lsn, end_scn))) {
+          CLOG_LOG(TRACE, "get_current_end_lsn_scn failed", K(ret), K(ls_id));
+          ret = OB_SUCCESS;  // 忽略错误，继续处理下一个 LS
+        } else if (!end_lsn.is_valid() || !end_scn.is_valid()) {
+          CLOG_LOG(TRACE, "end_lsn or end_scn is invalid, skip this ls", K(ls_id), K(end_lsn), K(end_scn));
         } else if (OB_FAIL(ack_status->get_access_mode(access_mode))) {
-          CLOG_LOG(WARN, "get_access_mode failed", K(ret), K(ls_id));
+          CLOG_LOG(WARN, "get_access_mode failed after get lsn", K(ret), K(ls_id));
         } else if (palf::AccessMode::APPEND == access_mode) {
-          CLOG_LOG(TRACE, "access mode is append, skip send ack", K(ls_id), K(access_mode));
+          CLOG_LOG(TRACE, "access mode changed to APPEND after get lsn, skip send ack", K(ls_id), K(access_mode));
         } else {
-          // 获取当前的 committed_end_lsn 和 committed_end_scn
-          // 重启或切主场景下，可能没有新日志导致回调函数一直没有回调过，因此缓存中的lsn和scn是非法的
-          // 这里直接从palf中获取作为一个兜底手段
-          if (OB_FAIL(ack_status->get_current_end_lsn_scn_from_palf(end_lsn, end_scn))) {
-            CLOG_LOG(TRACE, "get_current_end_lsn_scn failed", K(ret), K(ls_id));
-            ret = OB_SUCCESS;  // 忽略错误，继续处理下一个 LS
-          } else if (!end_lsn.is_valid() || !end_scn.is_valid()) {
-            CLOG_LOG(TRACE, "end_lsn or end_scn is invalid, skip this ls", K(ls_id), K(end_lsn), K(end_scn));
-          } else if (OB_FAIL(ack_status->get_access_mode(access_mode))) {
-            CLOG_LOG(WARN, "get_access_mode failed after get lsn", K(ret), K(ls_id));
-          } else if (palf::AccessMode::APPEND == access_mode) {
-            CLOG_LOG(TRACE, "access mode changed to APPEND after get lsn, skip send ack", K(ls_id), K(access_mode));
+          // 检查是否处于强同步模式
+          palf::SyncMode sync_mode = palf::SyncMode::INVALID_SYNC_MODE;
+          if (OB_FAIL(ack_status->get_sync_mode(sync_mode))) {
+            ret = OB_SUCCESS;
+            CLOG_LOG(TRACE, "get_sync_mode failed", K(ret), K(ls_id));
+          // } else if (palf::SyncMode::SYNC != sync_mode) {
+          //   CLOG_LOG(TRACE, "not in sync mode, skip periodic ack", K(ls_id), K(end_lsn), K(end_scn));
           } else {
-            // 检查是否处于强同步模式
-            bool is_sync_mode = true; //TODO by ziqi: 临时修改，后续删除
-            if (OB_FAIL(ack_service_->check_sync_mode_(ls_id, is_sync_mode))) {
-              CLOG_LOG(TRACE, "check_sync_mode_ failed", K(ret), K(ls_id));
+            if (OB_FAIL(ack_service_->send_ack_to_primary_(ls_id))) {
+              CLOG_LOG(TRACE, "send_ack_to_primary_ failed", K(ret), K(ls_id), K(end_lsn), K(end_scn));
               ret = OB_SUCCESS;
-            // } else if (!is_sync_mode) {
-            //   // 非强同步模式，不需要发送
-            //   CLOG_LOG(TRACE, "not in sync mode, skip periodic ack", K(ls_id), K(end_lsn), K(end_scn));
-            } else {
-              // 强同步模式，发送 ACK
-              if (OB_FAIL(ack_service_->send_ack_to_primary_(ls_id, end_lsn, end_scn))) {
-                CLOG_LOG(TRACE, "send_ack_to_primary_ failed", K(ret), K(ls_id), K(end_lsn), K(end_scn));
-                ret = OB_SUCCESS;
-              }
-              CLOG_LOG(INFO, "periodic send_ack_to_primary_", K(ret), K(ls_id), K(end_scn), K(end_lsn));
             }
+            CLOG_LOG(INFO, "periodic send_ack_to_primary_", K(ret), K(ls_id), K(end_scn), K(end_lsn));
           }
         }
-
-        if (OB_FAIL(ret)) {
-          ret_ = ret;
-        }
-        return true;
       }
 
-      int get_ret() const { return ret_; }
-
-    private:
-      ObLogStandbyAckService *ack_service_;
-      int ret_;
-    };
-
-    PeriodicAckFunctor functor(this);
-    if (OB_FAIL(ack_status_map_.for_each(functor))) {
-      CLOG_LOG(WARN, "for_each ack_status_map_ failed", K(ret));
-    } else {
-      ret = functor.get_ret();
+      if (OB_FAIL(ret)) {
+        ret_ = ret;
+      }
+      return true;
     }
+
+    int get_ret() const { return ret_; }
+
+  private:
+    ObLogStandbyAckService *ack_service_;
+    int ret_;
+  };
+
+  PeriodicAckFunctor functor(this);
+  if (OB_FAIL(ack_status_map_.for_each(functor))) {
+    CLOG_LOG(WARN, "for_each ack_status_map_ failed", K(ret));
+  } else {
+    ret = functor.get_ret();
   }
 
   return ret;

@@ -10589,7 +10589,8 @@ bool ObChangeLSSyncModeArg::is_valid() const
 }
 int ObChangeLSSyncModeArg::init(const uint64_t tenant_id, const share::ObLSID &ls_id,
     const int64_t mode_version, const share::SCN &ref_scn, const palf::SyncMode &sync_mode,
-    const ObSyncStandbyStatusAttr &protection_log)
+    const ObSyncStandbyStatusAttr &protection_log,
+    const share::SCN &sys_ls_pre_async_log_scn)
 {
   int ret = OB_SUCCESS;
   if (!is_valid_tenant_id(tenant_id) || !is_user_tenant(tenant_id) || !ls_id.is_valid()
@@ -10605,6 +10606,7 @@ int ObChangeLSSyncModeArg::init(const uint64_t tenant_id, const share::ObLSID &l
     ref_scn_ = ref_scn;
     sync_mode_ = sync_mode;
     protection_log_ = protection_log;
+    sys_ls_pre_async_log_scn_ = sys_ls_pre_async_log_scn;
   }
   return ret;
 }
@@ -10619,10 +10621,12 @@ int ObChangeLSSyncModeArg::assign(const ObChangeLSSyncModeArg &other)
     ref_scn_ = other.ref_scn_;
     sync_mode_ = other.sync_mode_;
     protection_log_ = other.protection_log_;
+    sys_ls_pre_async_log_scn_ = other.sys_ls_pre_async_log_scn_;
   }
   return ret;
 }
-OB_SERIALIZE_MEMBER(ObChangeLSSyncModeArg, tenant_id_, ls_id_, mode_version_, ref_scn_, sync_mode_, protection_log_);
+OB_SERIALIZE_MEMBER(ObChangeLSSyncModeArg, tenant_id_, ls_id_, mode_version_, ref_scn_, sync_mode_,
+    protection_log_, sys_ls_pre_async_log_scn_);
 
 bool ObChangeLSSyncModeRes::is_valid() const
 {

@@ -1237,8 +1237,11 @@ DEFINE_DESERIALIZE(LogModeMeta)
   } else {
     // V2 appends sync_mode_ after ref_scn_; V1 has no sync_mode_ field
     if (LOG_MODE_META_VERSION_V2 == version_) {
-      if (OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, reinterpret_cast<int64_t *>(&sync_mode_)))) {
+      int64_t sync_mode = 0;
+      if (OB_FAIL(serialization::decode_i64(buf, data_len, new_pos, &sync_mode))) {
         PALF_LOG(ERROR, "LogModeMeta deserialize sync_mode_ failed", K(ret), K(new_pos));
+      } else {
+        sync_mode_ = static_cast<SyncMode>(sync_mode);
       }
     } else {
       sync_mode_ = SyncMode::ASYNC;

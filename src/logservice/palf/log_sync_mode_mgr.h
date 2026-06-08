@@ -56,14 +56,27 @@ public:
   int16_t get_log_type() const;
   void set_protection_info(const share::ObSyncStandbyStatusAttr &protection_info);
   const share::ObSyncStandbyStatusAttr &get_protection_info() const { return protection_info_; }
+  void set_sys_ls_pre_async_log_scn(const share::SCN &scn) { sys_ls_pre_async_log_scn_ = scn; }
+  const share::SCN &get_sys_ls_pre_async_log_scn() const { return sys_ls_pre_async_log_scn_; }
   NEED_SERIALIZE_AND_DESERIALIZE;
-  TO_STRING_KV(K(header_), K(version_), K(log_type_), K(protection_info_));
+  TO_STRING_KV(K(header_), K(version_), K(log_type_), K(protection_info_), K(sys_ls_pre_async_log_scn_));
 private:
-  static const int16_t SYNC_MODE_LOG_VERSION = 1;
+  // Selects the wire version for new logs. Deserialization uses the version from buffer.
+  // Falls back to V1 if data_version cannot be fetched.
+  static int16_t get_version_for_current_tenant_();
+  // ObSyncModeLog wire layout 版本化协议:
+  // Versioned format. New fields must be appended at tail and decoded by version_.
+  // Upgrade order is standby before primary, so readers must keep old-version compatibility.
+  // When adding a field, add a new VERSION_VN and matching
+  // serialize/deserialize/get_serialize_size branches. Do not reuse old branches.
+  static const int16_t SYNC_MODE_LOG_VERSION_V1 = 1;
+  static const int16_t SYNC_MODE_LOG_VERSION_V2 = 2;
   ObLogBaseHeader header_;
   int16_t version_;
   int16_t log_type_;
   share::ObSyncStandbyStatusAttr protection_info_;
+  // Only meaningful when log_type_ == ASYNC. v1 logs and other types use SCN::min_scn() sentinel.
+  share::SCN sys_ls_pre_async_log_scn_;
 };
 
 // SyncModeLogCb: Callback for sync mode log with reference counting mechanism.
@@ -254,9 +267,11 @@ public:
   void reset();
 
   // Write sync mode log synchronously
+  // sys_ls_pre_async_log_scn is only consumed when log_type == ASYNC; callers pass SCN::min_scn() otherwise.
   int write_sync_mode_log(const ObSyncModeLogType log_type,
                           const share::SCN &ref_scn,
                           const share::ObSyncStandbyStatusAttr &protection_info,
+                          const share::SCN &sys_ls_pre_async_log_scn,
                           palf::LSN &lsn,
                           share::SCN &scn,
                           const int64_t expected_proposal_id,
@@ -282,20 +297,23 @@ public:
                                  int64_t &new_mode_version,
                                  const int64_t abs_timeout_us = 0);
   // Handle sync mode after downgrade (PRE_ASYNC -> ASYNC)
+  // sys_ls_pre_async_log_scn: sys ls pre_async log scn, embedded into the async log.
   int handle_sync_mode_downgrade_finish(const int64_t mode_version,
                                         const bool need_write_log,
                                         const share::ObLSID &ls_id,
                                         const share::SCN &ref_scn,
                                         const share::ObSyncStandbyStatusAttr &protection_info,
+                                        const share::SCN &sys_ls_pre_async_log_scn,
                                         share::SCN &end_scn,
                                         int64_t &new_mode_version,
                                         const int64_t abs_timeout_us = 0);
-
   // Change sync mode with transport service and write special log
+  // sys_ls_pre_async_log_scn: only consumed by async path; upstream may pass SCN::min_scn() for other modes.
   int process_upgrade_and_downgrade(const int64_t mode_version,
                                       const palf::SyncMode &sync_mode,
                                       const share::SCN &ref_scn,
                                       const share::ObSyncStandbyStatusAttr &protection_info,
+                                      const share::SCN &sys_ls_pre_async_log_scn,
                                       share::SCN &end_scn,
                                       int64_t &new_mode_version,
                                       const int64_t abs_timeout_us = 0);

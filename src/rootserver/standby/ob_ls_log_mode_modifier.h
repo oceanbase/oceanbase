@@ -38,31 +38,46 @@ namespace rootserver
 {
 using namespace share;
 
+// Internal helper used by ObLSLogModeModifier sync_mode flow to plumb
+// (protection_log, sys_ls_pre_async_log_scn) through the templated until-success loop
+// without changing the template signature. Defined in ob_ls_log_mode_modifier.cpp.
+struct ChangeLSSyncModeExtraArg;
+
 class ObLSLogModeModifier {
 public:
+  // sys_ls_pre_async_log_scn is forwarded to the change_ls_sync_mode RPC and is only
+  // semantically meaningful when target_sync_mode_ is ASYNC and the tenant data version
+  // is at least DATA_VERSION_4_4_2_2. Callers that cannot trigger a real non-ASYNC -> ASYNC
+  // transition through this modifier may pass SCN::min_scn() as a benign placeholder.
   ObLSLogModeModifier(const uint64_t tenant_id, const uint64_t switchover_epoch, const SCN &ref_scn,
     const SCN &sys_ls_sync_scn, const palf::AccessMode target_access_mode, const palf::SyncMode target_sync_mode,
+    const SCN &sys_ls_pre_async_log_scn,
     const share::ObLSStatusInfoArray *status_info_array,
     common::ObMySQLProxy *sql_proxy, obrpc::ObSrvRpcProxy *rpc_proxy)
     : tenant_id_(tenant_id), switchover_epoch_(switchover_epoch), ls_wait_sync_scn_max_(0),
       ref_scn_(ref_scn), sys_ls_sync_scn_(sys_ls_sync_scn), target_access_mode_(target_access_mode),
-      target_sync_mode_(target_sync_mode), status_info_array_(status_info_array),
+      target_sync_mode_(target_sync_mode), sys_ls_pre_async_log_scn_(sys_ls_pre_async_log_scn),
+      status_info_array_(status_info_array),
       sql_proxy_(sql_proxy), rpc_proxy_(rpc_proxy) {}
   ~ObLSLogModeModifier() {}
   // if current access mode is flashback, it'll change sync mode, then change access mode to append
   int change_ls_access_mode();
 
+  // sys_ls_pre_async_log_scn is only meaningful when target_sync_mode is ASYNC and target tenant
+  // data version >= DATA_VERSION_4_4_2_2; in other cases caller may pass a default (invalid) SCN.
   static int change_ls_sync_mode(const uint64_t tenant_id,
     const ObIArray<obrpc::ObLSAccessModeInfo> &ls_access_info,
     const palf::SyncMode target_sync_mode,
     const SCN &ref_scn,
     const share::ObSyncStandbyStatusAttr &protection_log,
+    const SCN &sys_ls_pre_async_log_scn,
     ObIArray<obrpc::ObChangeLSSyncModeRes> &change_ls_sync_mode_res_array);
   static int change_ls_sync_mode_and_check_result(const uint64_t tenant_id,
     const ObIArray<obrpc::ObLSAccessModeInfo> &ls_access_info,
     const palf::SyncMode target_sync_mode,
     const share::ObSyncStandbyStatusAttr &protection_log,
-    const SCN &ref_scn);
+    const SCN &ref_scn,
+    const SCN &sys_ls_pre_async_log_scn);
   static int change_ls_access_mode(const uint64_t tenant_id,
     const ObIArray<obrpc::ObLSAccessModeInfo> &ls_access_info,
     const palf::AccessMode target_access_mode,
@@ -75,7 +90,8 @@ public:
   int get_ls_access_mode(ObIArray<obrpc::ObLSAccessModeInfo> &ls_access_info);
   static int change_ls_sync_mode_until_success(const uint64_t tenant_id,
     const ObIArray<share::ObLSID> &ls_ids, const palf::SyncMode &target_sync_mode, const SCN &ref_scn,
-    const share::ObSyncStandbyStatusAttr &protection_log, const int64_t switchover_epoch,
+    const share::ObSyncStandbyStatusAttr &protection_log,
+    const SCN &sys_ls_pre_async_log_scn, const int64_t switchover_epoch,
     ObIArray<obrpc::ObChangeLSSyncModeRes> &results, const bool force_check_result = true);
   static int change_ls_access_mode_until_success(const uint64_t tenant_id,
     const ObIArray<share::ObLSID> &ls_ids, const palf::AccessMode &target_access_mode, const SCN &ref_scn,
@@ -91,7 +107,7 @@ private:
     const ObIArray<obrpc::ObLSAccessModeInfo> &ls_access_info,
     const palf::SyncMode target_sync_mode,
     const SCN &ref_scn,
-    const share::ObSyncStandbyStatusAttr &protection_log,
+    const ChangeLSSyncModeExtraArg &extra,
     ObIArray<obrpc::ObChangeLSSyncModeRes> &change_ls_sync_mode_res_array);
   static int change_ls_mode(const uint64_t tenant_id,
     const ObIArray<obrpc::ObLSAccessModeInfo> &ls_access_info,
@@ -118,6 +134,9 @@ private:
   SCN sys_ls_sync_scn_;
   palf::AccessMode target_access_mode_;
   palf::SyncMode target_sync_mode_;
+  // Forwarded to change_ls_sync_mode RPC; only meaningful when target_sync_mode_ is ASYNC
+  // and tenant data version >= DATA_VERSION_4_4_2_2. See constructor comment.
+  SCN sys_ls_pre_async_log_scn_;
   const share::ObLSStatusInfoArray *status_info_array_;
   common::ObMySQLProxy *sql_proxy_;
   obrpc::ObSrvRpcProxy *rpc_proxy_;

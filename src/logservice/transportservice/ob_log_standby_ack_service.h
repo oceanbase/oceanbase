@@ -82,33 +82,6 @@ struct PrimaryInfo
   TO_STRING_KV(K(primary_addr_), K(primary_cluster_id_), K(primary_tenant_id_), K(cached_ts_));
 };
 
-// SyncMode 缓存信息结构体
-struct SyncModeInfo
-{
-  SyncModeInfo()
-    : mode_version_(0),
-      sync_mode_(ipalf::SyncMode::INVALID_SYNC_MODE),
-      is_sync_mode_(false),
-      cached_ts_(0) {}
-
-  ~SyncModeInfo() {}
-
-  void reset()
-  {
-    mode_version_ = 0;
-    sync_mode_ = ipalf::SyncMode::INVALID_SYNC_MODE;
-    is_sync_mode_ = false;
-    cached_ts_ = 0;
-  }
-
-  int64_t mode_version_;
-  ipalf::SyncMode sync_mode_;
-  bool is_sync_mode_;  // 是否为 SYNC 模式
-  int64_t cached_ts_;  // 缓存时间戳
-
-  TO_STRING_KV(K(mode_version_), K(sync_mode_), K(is_sync_mode_), K(cached_ts_));
-};
-
 // ACK 发送任务
 // 同一个日志流在队列里通过ls_id去重，每次处理时取最大的lsn和scn。无需在task中存储lsn和scn。
 struct StandbyAckTask : public observer::ObIUniqTaskQueueTask<StandbyAckTask>
@@ -188,16 +161,6 @@ public:
   // 提交 ACK 发送任务
   int push_ack_task(const StandbyAckTask &task);
 
-  // 更新 sync_mode 缓存（用于快速检查后更新缓存，避免独立线程重复加锁）
-  int update_sync_mode_cache(const share::ObLSID &ls_id,
-                              int64_t mode_version,
-                              ipalf::SyncMode sync_mode,
-                              bool is_sync_mode);
-
-  // 从缓存读取 sync_mode（无锁，快速检查，供 ObStandbyFsCb 使用）
-  int get_sync_mode_from_cache(const share::ObLSID &ls_id, bool &is_sync_mode);
-  int init_sync_mode_cache(const share::ObLSID &ls_id);
-
   // 定时发送 ACK（遍历所有 LS 并发送，供 StandbyPeriodicAckTask 调用）
   int periodic_send_ack_();
 
@@ -229,14 +192,8 @@ private:
                         common::ObAddr &primary_addr,
                         int64_t &primary_cluster_id,
                         uint64_t &primary_tenant_id);
-
-  // 检查是否处于强同步模式
-  int check_sync_mode_(const share::ObLSID &ls_id, bool &is_sync_mode);
-
   // 发送 RPC 给主库
-  int send_ack_to_primary_(const share::ObLSID &ls_id,
-                           const palf::LSN &committed_end_lsn,
-                           const share::SCN &committed_end_scn);
+  int send_ack_to_primary_(const share::ObLSID &ls_id);
 
   int revert_ack_status_(class StandbyAckStatus *ack_status);
   int register_file_size_cb_(const share::ObLSID &id);
@@ -271,9 +228,6 @@ private:
   common::ObSpinLock cache_lock_;
   common::ObLinearHashMap<share::ObLSID, PrimaryInfo> primary_info_map_;
   static const int64_t PRIMARY_INFO_CACHE_EXPIRE_US = 10 * 1000 * 1000; // 10秒
-  // SyncMode 缓存（按 LS 缓存）
-  common::ObLinearHashMap<share::ObLSID, SyncModeInfo> sync_mode_map_;
-  static const int64_t SYNC_MODE_CACHE_EXPIRE_US = 5 * 1000 * 1000; // 5秒
   // 定时发送 ACK 间隔（1秒）
   static const int64_t PERIODIC_ACK_INTERVAL_US = 1 * 1000 * 1000; // 1秒
 
@@ -303,6 +257,7 @@ public:
   int get_current_end_lsn_scn_from_palf(palf::LSN &end_lsn, share::SCN &end_scn);
   int update_current_end_lsn_scn(const palf::LSN &end_lsn, const share::SCN &end_scn);
   int get_access_mode(palf::AccessMode &access_mode);
+  int get_sync_mode(palf::SyncMode &sync_mode);
   inline void inc_ref() { ATOMIC_INC(&ref_cnt_); }
   inline int64_t dec_ref() { return ATOMIC_SAF(&ref_cnt_, 1); }
   TO_STRING_KV(K(ls_id_), K(ref_cnt_));

@@ -4402,21 +4402,26 @@ struct ObChangeLSSyncModeArg
 {
   OB_UNIS_VERSION(1);
 public:
-  ObChangeLSSyncModeArg() : tenant_id_(OB_INVALID_TENANT_ID), ls_id_(), mode_version_(0), ref_scn_(), sync_mode_(), protection_log_() {}
+  ObChangeLSSyncModeArg() : tenant_id_(OB_INVALID_TENANT_ID), ls_id_(), mode_version_(0), ref_scn_(),
+      sync_mode_(), protection_log_(), sys_ls_pre_async_log_scn_() {}
   ~ObChangeLSSyncModeArg() {}
   bool is_valid() const;
+  // sys_ls_pre_async_log_scn is only meaningful when sync_mode is ASYNC; in other cases,
+  // caller may pass a default (invalid) SCN. It is not checked by is_valid().
   int init(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t mode_version,
       const share::SCN &ref_scn, const palf::SyncMode &sync_mode,
-      const share::ObSyncStandbyStatusAttr &protection_log);
+      const share::ObSyncStandbyStatusAttr &protection_log,
+      const share::SCN &sys_ls_pre_async_log_scn);
   int assign(const ObChangeLSSyncModeArg &other);
   TO_STRING_KV("arg_type", "ObChangeLSSyncModeArg", K_(tenant_id), K_(ls_id), K_(mode_version),
-      K_(ref_scn), K_(sync_mode), K_(protection_log));
+      K_(ref_scn), K_(sync_mode), K_(protection_log), K_(sys_ls_pre_async_log_scn));
   uint64_t get_tenant_id() const { return tenant_id_; }
   share::ObLSID get_ls_id() const { return ls_id_; }
   int64_t get_mode_version() const { return mode_version_; }
   const share::SCN& get_ref_scn() const { return ref_scn_; }
   palf::SyncMode get_sync_mode() const { return sync_mode_; }
   const share::ObSyncStandbyStatusAttr &get_protection_log() const { return protection_log_; }
+  const share::SCN &get_sys_ls_pre_async_log_scn() const { return sys_ls_pre_async_log_scn_; }
 private:
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -4424,6 +4429,9 @@ private:
   share::SCN ref_scn_;
   palf::SyncMode sync_mode_;
   share::ObSyncStandbyStatusAttr protection_log_;
+  // sys log stream's pre_async log scn; only meaningful when this RPC sets sync_mode to ASYNC,
+  // populated by caller when tenant data version >= DATA_VERSION_4_4_2_2 and not in create-ls path.
+  share::SCN sys_ls_pre_async_log_scn_;
 };
 
 

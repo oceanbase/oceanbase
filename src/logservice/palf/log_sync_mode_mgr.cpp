@@ -26,6 +26,7 @@
 #include "lib/wait_event/ob_wait_event.h"
 #include "share/ob_sync_standby_dest_parser.h"
 #include "share/ob_share_util.h"
+#include "share/ob_cluster_version.h"  // GET_MIN_DATA_VERSION, DATA_VERSION_4_4_2_2
 
 namespace oceanbase
 {
@@ -33,19 +34,35 @@ namespace logservice
 {
  // ==================== ObSyncModeLog 实现 ====================
 
+int16_t ObSyncModeLog::get_version_for_current_tenant_()
+{
+  int ret = OB_SUCCESS;
+  int16_t version = SYNC_MODE_LOG_VERSION_V1;
+  uint64_t min_data_version = 0;
+  if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), min_data_version))) {
+    CLOG_LOG(WARN, "GET_MIN_DATA_VERSION failed, fall back to V1 layout",
+             KR(ret), "tenant_id", MTL_ID());
+  } else if (min_data_version >= DATA_VERSION_4_4_2_2) {
+    version = SYNC_MODE_LOG_VERSION_V2;
+  }
+  return version;
+}
+
 ObSyncModeLog::ObSyncModeLog()
   : header_(),
-    version_(SYNC_MODE_LOG_VERSION),
+    version_(SYNC_MODE_LOG_VERSION_V2),
     log_type_(0),
-    protection_info_()
+    protection_info_(),
+    sys_ls_pre_async_log_scn_(share::SCN::min_scn())
 {
 }
 
 ObSyncModeLog::ObSyncModeLog(const int16_t log_type)
   : header_(ObLogBaseType::SYNC_MODE_LOG_BASE_TYPE, STRICT_BARRIER),
-    version_(SYNC_MODE_LOG_VERSION),
+    version_(get_version_for_current_tenant_()),
     log_type_(log_type),
-    protection_info_()
+    protection_info_(),
+    sys_ls_pre_async_log_scn_(share::SCN::min_scn())
 {
 }
 
@@ -57,9 +74,10 @@ ObSyncModeLog::~ObSyncModeLog()
 void ObSyncModeLog::reset()
 {
   header_.reset();
-  version_ = SYNC_MODE_LOG_VERSION;
+  version_ = SYNC_MODE_LOG_VERSION_V2;
   log_type_ = 0;
   protection_info_.reset();
+  sys_ls_pre_async_log_scn_.set_min();
 }
 
 int16_t ObSyncModeLog::get_log_type() const
@@ -86,6 +104,9 @@ DEFINE_SERIALIZE(ObSyncModeLog)
     CLOG_LOG(WARN, "serialize log_type_ failed", K(ret), KP(buf), K(buf_len), K(pos));
   } else if (OB_FAIL(protection_info_.serialize(buf, buf_len, pos))) {
     CLOG_LOG(WARN, "serialize protection_info_ failed", K(ret), KP(buf), K(buf_len), K(pos));
+  } else if (version_ >= SYNC_MODE_LOG_VERSION_V2
+      && OB_FAIL(sys_ls_pre_async_log_scn_.serialize(buf, buf_len, pos))) {
+    CLOG_LOG(WARN, "serialize sys_ls_pre_async_log_scn_ failed", K(ret), KP(buf), K(buf_len), K(pos));
   }
   return ret;
 }
@@ -100,10 +121,23 @@ DEFINE_DESERIALIZE(ObSyncModeLog)
     CLOG_LOG(WARN, "deserialize header_ failed", K(ret), KP(buf), K(data_len), K(pos));
   } else if (OB_FAIL(serialization::decode_i16(buf, data_len, pos, &version_))) {
     CLOG_LOG(WARN, "deserialize version_ failed", K(ret), KP(buf), K(data_len), K(pos));
+  } else if (OB_UNLIKELY(version_ > SYNC_MODE_LOG_VERSION_V2)) {
+    // Refuse newer log versions because this binary cannot parse unknown tail fields.
+    // This avoids silently dropping critical fields during mixed-version scenarios.
+    ret = OB_NOT_SUPPORTED;
+    CLOG_LOG(WARN, "ObSyncModeLog version newer than current binary, refuse to parse",
+             K(ret), K(version_));
   } else if (OB_FAIL(serialization::decode_i16(buf, data_len, pos, &log_type_))) {
     CLOG_LOG(WARN, "deserialize log_type_ failed", K(ret), KP(buf), K(data_len), K(pos));
   } else if (OB_FAIL(protection_info_.deserialize(buf, data_len, pos))) {
     CLOG_LOG(WARN, "deserialize protection_info_ failed", K(ret), KP(buf), K(data_len), K(pos));
+  } else if (version_ >= SYNC_MODE_LOG_VERSION_V2) {
+    if (OB_FAIL(sys_ls_pre_async_log_scn_.deserialize(buf, data_len, pos))) {
+      CLOG_LOG(WARN, "deserialize sys_ls_pre_async_log_scn_ failed", K(ret), KP(buf), K(data_len), K(pos));
+    }
+  } else {
+    // v1 legacy log: field absent, use min as sentinel so downstream checks fall through.
+    sys_ls_pre_async_log_scn_.set_min();
   }
   return ret;
 }
@@ -115,6 +149,9 @@ DEFINE_GET_SERIALIZE_SIZE(ObSyncModeLog)
   size += serialization::encoded_length_i16(version_);
   size += serialization::encoded_length_i16(log_type_);
   size += protection_info_.get_serialize_size();
+  if (version_ >= SYNC_MODE_LOG_VERSION_V2) {
+    size += sys_ls_pre_async_log_scn_.get_serialize_size();
+  }
   return size;
 }
 
@@ -252,6 +289,7 @@ int ObSyncModeManager::init(ObLogHandler *log_handler)
 int ObSyncModeManager::write_sync_mode_log(const ObSyncModeLogType log_type,
                                            const share::SCN &ref_scn,
                                            const share::ObSyncStandbyStatusAttr &protection_info,
+                                           const share::SCN &sys_ls_pre_async_log_scn,
                                            palf::LSN &lsn,
                                            share::SCN &scn,
                                            const int64_t expected_proposal_id,
@@ -275,6 +313,10 @@ int ObSyncModeManager::write_sync_mode_log(const ObSyncModeLogType log_type,
     bool need_push_cb = true;
     ObSyncModeLog sync_mode_log(log_type);
     sync_mode_log.set_protection_info(protection_info);
+    // sys_ls_pre_async_log_scn is only meaningful for ASYNC; other log types keep the invalid sentinel.
+    if (ObSyncModeLogType::ASYNC == log_type) {
+      sync_mode_log.set_sys_ls_pre_async_log_scn(sys_ls_pre_async_log_scn);
+    }
     const int64_t log_size = sync_mode_log.get_serialize_size();
     char *buffer = static_cast<char*>(ob_malloc(log_size, "SyncModeLog")); //TODO by ziqi: 内存申请优化
 
@@ -425,8 +467,10 @@ int ObSyncModeManager::handle_sync_mode_upgrade(const int64_t mode_version,
     // 3. 写 SYNC 特殊日志
     else {
       palf::LSN lsn;
-      if (OB_FAIL(write_sync_mode_log(ObSyncModeLogType::SYNC, ref_scn, protection_info, lsn, end_scn, new_proposal_id,
-                                      abs_timeout_us))) {
+      // sys_ls_pre_async_log_scn is unused for SYNC; pass min as benign placeholder.
+      if (OB_FAIL(write_sync_mode_log(ObSyncModeLogType::SYNC, ref_scn, protection_info,
+                                      share::SCN::min_scn(),
+                                      lsn, end_scn, new_proposal_id, abs_timeout_us))) {
         CLOG_LOG(WARN, "write SYNC mode log failed", K(ret), K(ls_id));
       } else {
         CLOG_LOG(INFO, "write SYNC mode log success, unblocking append", K(ls_id), K(lsn), K(end_scn));
@@ -454,8 +498,8 @@ int ObSyncModeManager::handle_sync_mode_downgrade(const int64_t mode_version,
   } else if (OB_FAIL(log_handler_->change_sync_mode(mode_version, palf::SyncMode::PRE_ASYNC, new_mode_version, new_proposal_id))) {
     CLOG_LOG(WARN, "change_sync_mode to PRE_ASYNC failed", K(ret), K(ls_id), K(mode_version), K(new_mode_version));
     // for primary, write PRE_ASYNC log after change_sync_mode to PRE_ASYNC
-  } else if (need_write_log && OB_FAIL(write_sync_mode_log(ObSyncModeLogType::PRE_ASYNC, ref_scn, protection_info, lsn, end_scn,
-    new_proposal_id, abs_timeout_us))) {
+  } else if (need_write_log && OB_FAIL(write_sync_mode_log(ObSyncModeLogType::PRE_ASYNC, ref_scn, protection_info,
+      share::SCN::min_scn()/*sys_ls_pre_async_log_scn*/, lsn, end_scn, new_proposal_id, abs_timeout_us))) {
     CLOG_LOG(WARN, "write PRE_ASYNC mode log failed", K(ret), K(ls_id));
   } else {
     CLOG_LOG(INFO, "write PRE_ASYNC mode log success", K(ls_id), K(lsn), K(end_scn));
@@ -468,6 +512,7 @@ int ObSyncModeManager::handle_sync_mode_downgrade_finish(const int64_t mode_vers
                                                            const share::ObLSID &ls_id,
                                                            const share::SCN &ref_scn,
                                                            const share::ObSyncStandbyStatusAttr &protection_info,
+                                                           const share::SCN &sys_ls_pre_async_log_scn,
                                                            share::SCN &end_scn,
                                                            int64_t &new_mode_version,
                                                            const int64_t abs_timeout_us)
@@ -495,15 +540,17 @@ int ObSyncModeManager::handle_sync_mode_downgrade_finish(const int64_t mode_vers
     } else if (LEADER != palf_role) {
       ret = OB_NOT_MASTER;
       CLOG_LOG(WARN, "not leader or pending state", K(ret), K(ls_id), K(palf_role), K(palf_proposal_id));
-    } else if (OB_FAIL(write_sync_mode_log(ObSyncModeLogType::ASYNC, ref_scn, protection_info, lsn, end_scn,
-                                           palf_proposal_id, abs_timeout_us))) {
-      CLOG_LOG(WARN, "write ASYNC mode log failed", K(ret), K(ls_id));
+    } else if (OB_FAIL(write_sync_mode_log(ObSyncModeLogType::ASYNC, ref_scn, protection_info,
+                                           sys_ls_pre_async_log_scn,
+                                           lsn, end_scn, palf_proposal_id, abs_timeout_us))) {
+      CLOG_LOG(WARN, "write ASYNC mode log failed", K(ret), K(ls_id), K(sys_ls_pre_async_log_scn));
     } else if (OB_FAIL(log_handler_->change_sync_mode(mode_version, palf::SyncMode::ASYNC, new_mode_version,
                        new_proposal_id))) {
       CLOG_LOG(WARN, "change_sync_mode to ASYNC failed", K(ret), K(ls_id), K(mode_version));
     } else {
       // 收到ASYNC日志对log handler解锁
-      CLOG_LOG(INFO, "write ASYNC mode log success, unblocking append", K(ls_id), K(lsn), K(end_scn));
+      CLOG_LOG(INFO, "write ASYNC mode log success, unblocking append",
+               K(ls_id), K(lsn), K(end_scn), K(sys_ls_pre_async_log_scn));
     }
 
   }
@@ -514,6 +561,7 @@ int ObSyncModeManager::process_upgrade_and_downgrade(const int64_t mode_version,
                                                        const palf::SyncMode &sync_mode,
                                                        const share::SCN &ref_scn,
                                                        const share::ObSyncStandbyStatusAttr &protection_info,
+                                                       const share::SCN &sys_ls_pre_async_log_scn,
                                                        share::SCN &end_scn,
                                                        int64_t &new_mode_version,
                                                        const int64_t abs_timeout_us)
@@ -536,7 +584,9 @@ int ObSyncModeManager::process_upgrade_and_downgrade(const int64_t mode_version,
     } else if (palf::SyncMode::PRE_ASYNC == sync_mode) {
       ret = handle_sync_mode_downgrade(mode_version, need_write_log, ls_id, ref_scn, protection_info, end_scn, new_mode_version, abs_timeout_us);
     } else if (palf::SyncMode::ASYNC == sync_mode) {
-      ret = handle_sync_mode_downgrade_finish(mode_version, need_write_log, ls_id, ref_scn, protection_info, end_scn, new_mode_version, abs_timeout_us);
+      ret = handle_sync_mode_downgrade_finish(mode_version, need_write_log, ls_id, ref_scn, protection_info,
+                                              sys_ls_pre_async_log_scn,
+                                              end_scn, new_mode_version, abs_timeout_us);
     } else {
       ret = OB_INVALID_ARGUMENT;
       CLOG_LOG(WARN, "invalid sync_mode", K(ret), K(log_handler_->id_), K(sync_mode));

@@ -2697,6 +2697,7 @@ int ObLogHandler::process_change_sync_mode(const int64_t mode_version,
                                            const palf::SyncMode &sync_mode,
                                            const share::SCN &ref_scn,
                                            const share::ObSyncStandbyStatusAttr &protection_info,
+                                           const share::SCN &sys_ls_pre_async_log_scn,
                                            share::SCN &end_scn,
                                            int64_t &new_mode_version,
                                            const int64_t abs_timeout_us)
@@ -2709,8 +2710,9 @@ int ObLogHandler::process_change_sync_mode(const int64_t mode_version,
     ret = OB_NOT_RUNNING;
     CLOG_LOG(WARN, "ObLogHandler is in stop state", K(ret), K_(id));
   } else {
-    ret = sync_mode_manager_.process_upgrade_and_downgrade(mode_version, sync_mode, ref_scn, protection_info, end_scn,
-                                                           new_mode_version, abs_timeout_us);
+    ret = sync_mode_manager_.process_upgrade_and_downgrade(mode_version, sync_mode, ref_scn, protection_info,
+                                                           sys_ls_pre_async_log_scn,
+                                                           end_scn, new_mode_version, abs_timeout_us);
   }
   return ret;
 }
