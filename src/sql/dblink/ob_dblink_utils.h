@@ -58,7 +58,10 @@ public:
   static int get_ob_query_timeout_value(sql::ObSQLSessionInfo *session_info, int64_t &timeout);
   static int get_set_transaction_isolation_cstr(sql::ObSQLSessionInfo *session_info,
                                                 const char *&set_isolation_level);
-  static int get_spell_collation_type(ObSQLSessionInfo *session, ObCollationType &spell_coll);
+  static uint16_t get_oci_env_charset_id(uint16_t charset_id);
+  static int get_spell_collation_type(ObSQLSessionInfo *session,
+                                      common::sqlclient::DblinkDriverProto link_type,
+                                      ObCollationType &spell_coll);
 public:
   static const char *SET_ISOLATION_LEVEL_READ_COMMITTED;
   static const char *SET_ISOLATION_LEVEL_REPEATABLE_READ;
