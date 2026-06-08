@@ -16,6 +16,7 @@
 #include "lib/allocator/ob_fifo_allocator.h"
 #include "lib/container/ob_iarray.h"
 #include "lib/container/ob_se_array.h"
+#include "lib/hash/ob_hashmap.h"
 #include "lib/lock/ob_thread_cond.h"
 #include "lib/net/ob_addr.h"
 #include "lib/queue/ob_link_queue.h"
@@ -30,14 +31,20 @@ namespace obrpc
 {
 struct ObScheduleMViewRefreshArg;
 struct ObScheduleMViewRefreshResult;
+struct ObKillMViewRefreshArg;
 }
 namespace share
 {
 class SCN;
+namespace schema
+{
+class ObSchemaGetterGuard;
+}
 }
 namespace rootserver
 {
 
+typedef common::hash::ObHashMap<uint64_t, ObMViewContext *, common::hash::SpinReadWriteDefendMode> MViewContextMap;
 class ObMViewPendingTaskManager
 {
 public:
@@ -60,6 +67,8 @@ public:
     RS_READY,
   };
 
+
+
 public:
   ObMViewPendingTaskManager();
   ~ObMViewPendingTaskManager();
@@ -75,7 +84,8 @@ public:
 
   int peek_task(ObMViewPendingTask &task);
   int schedule_task(const obrpc::ObScheduleMViewRefreshArg &arg,
-                    int64_t &refresh_id);
+                    int64_t &refresh_id,
+                    bool is_force_owner = false);
   int schedule_mview_refresh(const obrpc::ObScheduleMViewRefreshArg &arg,
                              obrpc::ObScheduleMViewRefreshResult &result);
   int schedule_mview_refresh_local(const obrpc::ObScheduleMViewRefreshArg &arg,
@@ -129,6 +139,7 @@ public:
                const int64_t refresh_parallel,
                const int64_t retry_count,
                const bool is_consistent_refresh,
+               const int64_t expire_ts,
                const common::ObAddr &leader_addr);
   int push_task_result(uint64_t tenant_id,
                        int64_t refresh_id,
@@ -200,10 +211,39 @@ public:
   // Max time a write-side entry blocks waiting for RELOADING → READY before
   // returning OB_TIMEOUT. Bounded so a stuck reload cannot hang RPC threads.
   static const int64_t RELOAD_WAIT_TIMEOUT_MS = 10 * 1000;
+  // A forced schedule may only hold the FORCE block while no other DROP/FORCE
+  // marker exists, so concurrent forced refreshes on the same mview serialize:
+  // a contender spins on acquire_mview_block until the current owner releases
+  // (release_mview_block) or the wait deadline elapses. Poll interval is
+  // small so the hand-off is prompt; the overall wait is bounded by the worker
+  // timeout (and ACQUIRE_FORCE_WAIT_TIMEOUT_US as a fallback when the worker has
+  // no valid timeout_ts) so a wedged owner cannot pin the RPC thread forever.
+  static const int64_t ACQUIRE_FORCE_RETRY_INTERVAL_US = 10 * 1000;
+  static const int64_t ACQUIRE_FORCE_WAIT_TIMEOUT_US = 5 * 1000 * 1000;
 
-  int kill_refresh(uint64_t tenant_id, int64_t refresh_id, bool force_rpc = false);
+  // Routes to SYS_LS leader: if local leader (and !force_rpc) dispatches to the
+  // matching _local handler based on arg.is_kill_by_mview_id_; otherwise sends
+  // one RPC to the leader. Retries OB_NOT_MASTER up to RETRY_CNT_LIMIT.
+  //
+  // arg.is_kill_by_mview_id_ = false: kill the single refresh identified by
+  //   arg.refresh_id_.
+  // arg.is_kill_by_mview_id_ = true: best-effort kill of every active refresh
+  //   targeting arg.mview_id_. Used by DDL (drop materialized view / drop
+  //   database) so that any in-flight refresh transaction (which holds the
+  //   OBJ_TYPE_MATERIALIZED_VIEW EXCLUSIVE in-trans lock) is killed and rolled
+  //   back before DDL tries to take that lock. Returns OB_SUCCESS when no
+  //   active refresh exists.
+  int kill_refresh(const obrpc::ObKillMViewRefreshArg &arg, bool force_rpc = false);
+  // Acquire a per-mview block marker (DROP/FORCE). Public so the kill RPC
+  // processor can plant the DROP block on the drop path before enumerating.
+  int acquire_mview_block(uint64_t mview_id, int64_t flag);
   int kill_refresh_local(uint64_t tenant_id, int64_t refresh_id);
+  // Pure enumerate-and-kill. Assumes any required block (DROP or FORCE) has
+  // already been acquired by the caller: kill_refresh takes the DROP block on the
+  // drop path, while the FORCE schedule path already holds its own FORCE marker.
+  int kill_refreshes_by_mview_local(uint64_t tenant_id, uint64_t mview_id);
   int mark_all_tasks_canceled(uint64_t tenant_id, int64_t refresh_id);
+  int cleanup_stale_drop_blocks();
 
 private:
   int generate_refresh_id(int64_t &refresh_id);
@@ -211,6 +251,29 @@ private:
                       const int64_t refresh_id,
                       const int64_t start_time,
                       const share::SCN &target_data_sync_scn);
+  int check_mview_schedule_block(uint64_t mview_id, bool is_force_owner);
+  // Check the schedule block for every mview in pending_tasks (root + all nested
+  // dependencies), so a concurrent drop/force on any dependency rejects the whole
+  // schedule. Only root_mview_id may be the force owner; dependencies are checked
+  // as non-owners.
+  int check_pending_tasks_schedule_block(
+      const common::ObIArray<ObMViewPendingTask *> &pending_tasks,
+      const uint64_t root_mview_id,
+      const bool is_force_owner);
+  int release_mview_block(uint64_t mview_id, int64_t flag);
+  int try_clear_drop_block_by_lock(uint64_t tenant_id, uint64_t mview_id,
+                                   share::schema::ObSchemaGetterGuard &schema_guard,
+                                   bool &lock_succ);
+  // Insert a fresh ObMViewContext for mview_id if absent (insert-once). A losing
+  // racer that already allocated frees its object and reuses the existing node;
+  // the pointer in the map is never replaced.
+  int ensure_mview_ctx(uint64_t mview_id);
+  // Erase the context node for mview_id under the bucket write lock, then free
+  // the popped pointer. Used by drop cleanup and the full reset path.
+  int erase_and_free_ctx(uint64_t mview_id);
+  // Drop every context (follower transition / destroy): the leader-only block
+  // markers are meaningless on a follower, and the queue is being cleared.
+  int reset_mview_contexts();
   int build_pending_tasks(common::ObIAllocator &alloc,
                           const obrpc::ObScheduleMViewRefreshArg &arg,
                           const int64_t refresh_id,
@@ -258,6 +321,7 @@ private:
   // unchanged on failure; the caller handles best-effort degradation.
   int load_missing_session_ids_for_running(
       common::ObIArray<ObMViewPendingRunningJobInfo> &infos);
+  static int get_rpc_timeout_us(int64_t expire_ts, int64_t &rpc_timeout_us);
 
 private:
   ObMViewPendingTaskQueue queue_;
@@ -274,6 +338,15 @@ private:
   // ATOMIC_STORE under reload_cond_'s mutex + broadcast; all reads use
   // ATOMIC_LOAD (cond-mutex not required for the fast-path check).
   int64_t reload_state_;
+  // Per-mview context map (mview_id -> ObMViewContext*). Currently carries the
+  // schedule block markers; designed to hold further per-mview state later.
+  // Best-effort guard for the kill-enumerate vs schedule-insert race:
+  // schedule_task checks the block flags before inserting, kill / force set them.
+  // Thread-safe via the hashmap's own bucket defend mode plus atomic field access;
+  // no extra lock is taken and it is never held across SQL.
+  MViewContextMap mview_context_map_;
+  // Backs the ObMViewContext nodes; internally thread-safe (own spinlock).
+  common::ObFIFOAllocator mview_ctx_alloc_;
   bool is_inited_;
 };
 

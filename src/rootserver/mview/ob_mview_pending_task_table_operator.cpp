@@ -130,6 +130,9 @@ int ObMViewPendingTaskTableOperator::insert_tasks(const ObIArray<ObMViewPendingT
                  OB_FAIL(dml.add_column("refresh_method", static_cast<int64_t>(task->refresh_method_))) ||
                  OB_FAIL(dml.add_column("refresh_parallel", task->refresh_parallel_)) ||
                  OB_FAIL(dml.add_column("seq", task->seq_)) ||
+                 (task->expire_ts_ > 0
+                      ? OB_FAIL(dml.add_time_column("expire_time", task->expire_ts_))
+                      : OB_FAIL(dml.add_column(true, "expire_time"))) ||
                  OB_FAIL(dml.finish_row())) {
         LOG_WARN("splice row failed", KR(ret), K(i), KPC(task));
       }
@@ -696,6 +699,67 @@ int ObMViewPendingTaskTableOperator::delete_tasks_by_refresh_id(uint64_t tenant_
   return ret;
 }
 
+int ObMViewPendingTaskTableOperator::get_active_refresh_ids_by_mview(
+    uint64_t tenant_id,
+    uint64_t mview_id,
+    ObIArray<int64_t> &refresh_ids) const
+{
+  int ret = OB_SUCCESS;
+  refresh_ids.reset();
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("table operator not init", KR(ret));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || OB_INVALID_ID == mview_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(mview_id));
+  } else if (OB_ISNULL(sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", KR(ret));
+  } else {
+    ObSqlString sql;
+    if (OB_FAIL(sql.assign_fmt(
+                   "SELECT DISTINCT refresh_id FROM `%s`.`%s` "
+                   "WHERE tenant_id = 0 AND mview_id = %lu "
+                   "AND status IN (%ld, %ld, %ld) order by target_data_sync_scn desc",
+                   OB_SYS_DATABASE_NAME,
+                   OB_ALL_MVIEW_REFRESH_PENDING_TASK_TNAME,
+                   mview_id,
+                   static_cast<int64_t>(MV_TASK_PENDING),
+                   static_cast<int64_t>(MV_TASK_RUNNING),
+                   static_cast<int64_t>(MV_TASK_RETRY_WAIT)))) {
+      LOG_WARN("fail to assign sql", KR(ret), K(tenant_id), K(mview_id));
+    } else {
+      SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+        sqlclient::ObMySQLResult *result = NULL;
+        if (OB_FAIL(sql_proxy_->read(res, tenant_id, sql.ptr()))) {
+          LOG_WARN("read pending task table failed", KR(ret), K(tenant_id), K(mview_id));
+        } else if (OB_ISNULL(result = res.get_result())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("result is null", KR(ret));
+        } else {
+          while (OB_SUCC(ret)) {
+            if (OB_FAIL(result->next())) {
+              if (OB_ITER_END == ret) {
+                ret = OB_SUCCESS;
+                break;
+              } else {
+                LOG_WARN("result next failed", KR(ret));
+              }
+            } else {
+              int64_t refresh_id = 0;
+              EXTRACT_INT_FIELD_MYSQL(*result, "refresh_id", refresh_id, int64_t);
+              if (OB_SUCC(ret) && OB_FAIL(refresh_ids.push_back(refresh_id))) {
+                LOG_WARN("push back refresh_id failed", KR(ret), K(refresh_id));
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObMViewPendingTaskTableOperator::delete_terminal_tasks(uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
@@ -752,7 +816,7 @@ int ObMViewPendingTaskTableOperator::extract_task_from_result(common::sqlclient:
   EXTRACT_INT_FIELD_MYSQL(result, "gmt_modified_ts", task.gmt_modified_, int64_t);
   EXTRACT_VARCHAR_FIELD_MYSQL_SKIP_RET(result, "svr_ip", svr_ip);
   EXTRACT_INT_FIELD_MYSQL_SKIP_RET(result, "svr_port", svr_port, int64_t);
-
+  EXTRACT_INT_FIELD_MYSQL_SKIP_RET(result, "expire_ts", task.expire_ts_, int64_t);
 
   if (OB_SUCC(ret)) {
     task.tenant_id_ = actual_tenant_id;
@@ -796,7 +860,7 @@ int ObMViewPendingTaskTableOperator::build_load_tasks_sql(
                  "t.status, t.flags, t.skip_cnt, t.retry_count, "
                  "t.next_retry_ts, t.refresh_method, t.refresh_parallel, "
                  "t.gmt_create_ts, t.gmt_modified_ts, "
-                 "t.svr_ip, t.svr_port, "
+                 "t.svr_ip, t.svr_port, t.expire_ts, "
                  "d.p_obj AS dep_mview_id "
                  "FROM ("
                  "SELECT r.refresh_id, r.mview_id, r.seq, r.target_data_sync_scn, "
@@ -805,7 +869,8 @@ int ObMViewPendingTaskTableOperator::build_load_tasks_sql(
                  "r.refresh_method, r.refresh_parallel, "
                  "time_to_usec(r.gmt_create) AS gmt_create_ts, "
                  "time_to_usec(r.gmt_modified) AS gmt_modified_ts, "
-                 "r.svr_ip, r.svr_port "
+                 "r.svr_ip, r.svr_port, "
+                 "time_to_usec(r.expire_time) AS expire_ts "
                  "FROM `%s`.`%s` r "
                  "INNER JOIN (%s) g "
                  "ON r.tenant_id = 0 "

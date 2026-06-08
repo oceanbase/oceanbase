@@ -15001,7 +15001,8 @@ public:
       refresh_method_(share::schema::ObMVRefreshMethod::MAX),
       refresh_parallel_(0),
       retry_count_(0),
-      is_consistent_refresh_(false)
+      is_consistent_refresh_(false),
+      expire_ts_(0)
   {}
   ObRunMViewPendingTaskArg(uint64_t tenant_id,
                           int64_t refresh_id,
@@ -15010,7 +15011,8 @@ public:
                           const share::schema::ObMVRefreshMethod refresh_method,
                           const int64_t refresh_parallel,
                           const int64_t retry_count,
-                          const bool is_consistent_refresh)
+                          const bool is_consistent_refresh,
+                          const int64_t expire_ts)
     : tenant_id_(tenant_id),
       refresh_id_(refresh_id),
       mview_id_(mview_id),
@@ -15018,7 +15020,8 @@ public:
       refresh_method_(refresh_method),
       refresh_parallel_(refresh_parallel),
       retry_count_(retry_count),
-      is_consistent_refresh_(is_consistent_refresh)
+      is_consistent_refresh_(is_consistent_refresh),
+      expire_ts_(expire_ts)
   {}
   inline bool is_valid() const
   {
@@ -15028,7 +15031,7 @@ public:
   }
   TO_STRING_KV(K_(tenant_id), K_(refresh_id), K_(mview_id), K_(target_data_sync_scn),
                K_(refresh_method), K_(refresh_parallel), K_(retry_count),
-               K_(is_consistent_refresh));
+               K_(is_consistent_refresh), K_(expire_ts));
   uint64_t tenant_id_;
   int64_t refresh_id_;
   uint64_t mview_id_;
@@ -15037,6 +15040,7 @@ public:
   int64_t refresh_parallel_;
   int64_t retry_count_;
   bool is_consistent_refresh_;
+  int64_t expire_ts_;
 };
 
 struct ObRunMViewPendingTaskResult
@@ -15059,20 +15063,25 @@ public:
       mview_id_(common::OB_INVALID_ID),
       is_nested_(false),
       refresh_method_(share::schema::ObMVRefreshMethod::MAX),
-      refresh_parallel_(0)
+      refresh_parallel_(0),
+      expire_ts_(0),
+      force_(false)
   {}
   inline bool is_valid() const
   {
     return common::is_valid_tenant_id(tenant_id_) && mview_id_ != common::OB_INVALID_ID;
   }
 
-  TO_STRING_KV(K_(tenant_id), K_(run_user_id), K_(mview_id), K_(is_nested), K_(refresh_method), K_(refresh_parallel));
+  TO_STRING_KV(K_(tenant_id), K_(run_user_id), K_(mview_id), K_(is_nested), K_(refresh_method),
+               K_(refresh_parallel), K_(expire_ts), K_(force));
   uint64_t tenant_id_;
   uint64_t run_user_id_;
   uint64_t mview_id_;
   bool is_nested_;
   share::schema::ObMVRefreshMethod refresh_method_;
   int64_t refresh_parallel_;
+  int64_t expire_ts_;
+  bool force_;
 };
 
 struct ObScheduleMViewRefreshResult
@@ -15094,15 +15103,26 @@ struct ObKillMViewRefreshArg
 public:
   ObKillMViewRefreshArg()
     : tenant_id_(common::OB_INVALID_ID),
-      refresh_id_(common::OB_INVALID_ID)
+      refresh_id_(common::OB_INVALID_ID),
+      mview_id_(common::OB_INVALID_ID),
+      is_kill_by_mview_id_(false),
+      is_drop_(false)
   {}
   inline bool is_valid() const
   {
-    return common::is_valid_tenant_id(tenant_id_) && refresh_id_ > 0;
+    if (!common::is_valid_tenant_id(tenant_id_)) {
+      return false;
+    }
+    return is_kill_by_mview_id_
+        ? (common::OB_INVALID_ID != mview_id_)
+        : (refresh_id_ > 0);
   }
-  TO_STRING_KV(K_(tenant_id), K_(refresh_id));
+  TO_STRING_KV(K_(tenant_id), K_(refresh_id), K_(mview_id), K_(is_kill_by_mview_id), K_(is_drop));
   uint64_t tenant_id_;
   int64_t refresh_id_;
+  uint64_t mview_id_;
+  bool is_kill_by_mview_id_;
+  bool is_drop_;
 };
 
 struct ObKillMViewRefreshResult

@@ -15,6 +15,8 @@
 #include "storage/mview/ob_mview_sched_job_utils.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_executor.h"
+#include "rootserver/mview/ob_mview_maintenance_service.h"
+#include "rootserver/mview/ob_mview_pending_task_manager.h"
 #include "share/ob_global_stat_proxy.h"
 #include "share/backup/ob_backup_data_table_operator.h"
 #include "share/schema/ob_mview_info.h"
@@ -845,6 +847,34 @@ int ObMViewSchedJobUtils::disable_and_stop_job(
       }
     }
     LOG_INFO("disable and stop job when drop mview", K(ret), K(job_info));
+  }
+  return ret;
+}
+
+int ObMViewSchedJobUtils::kill_mview_refreshes(
+                          const uint64_t tenant_id,
+                          const uint64_t mview_id,
+                          const bool is_drop)
+{
+  int ret = OB_SUCCESS;
+  MTL_SWITCH(tenant_id) {
+    rootserver::ObMViewMaintenanceService *svc =
+        MTL(rootserver::ObMViewMaintenanceService *);
+    if (OB_ISNULL(svc) || OB_ISNULL(svc->get_pending_task_manager())) {
+      LOG_INFO("mview maintenance service or pending task manager not ready, "
+               "skip new-framework kill",
+               K(tenant_id), K(mview_id));
+    } else {
+      obrpc::ObKillMViewRefreshArg arg;
+      arg.tenant_id_ = tenant_id;
+      arg.mview_id_ = mview_id;
+      arg.is_kill_by_mview_id_ = true;
+      arg.is_drop_ = is_drop;
+      if (OB_FAIL(svc->get_pending_task_manager()->kill_refresh(arg))) {
+        LOG_WARN("kill refreshes by mview failed",
+                 KR(ret), K(tenant_id), K(mview_id));
+      }
+    }
   }
   return ret;
 }

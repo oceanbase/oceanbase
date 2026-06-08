@@ -201,6 +201,7 @@ int ObMviewPendingTaskScheduler::process_one_task()
                                         task.refresh_parallel_,
                                         task.retry_count_,
                                         task.is_nested_refresh(),
+                                        task.expire_ts_,
                                         leader_addr))) {
     task_ret = ret;
     ret = OB_SUCCESS;

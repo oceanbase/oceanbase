@@ -12,7 +12,10 @@ CREATE OR REPLACE PACKAGE dbms_mview AUTHID CURRENT_USER
     IN     nested_refresh_mode    VARCHAR(65535) DEFAULT NULL,
     -- TEMPORARY v2 (task 0036): async=FALSE blocks until the batch completes.
     -- TRUE returns immediately after enqueue (prior 4.6.0 async behaviour).
-    IN     async                  BOOLEAN        DEFAULT FALSE);
+    IN     async                  BOOLEAN        DEFAULT FALSE,
+    -- force=TRUE kills any in-flight refresh targeting the same mview before
+    -- scheduling the new one, so callers can pre-empt stuck refreshes.
+    IN     force                  BOOLEAN        DEFAULT FALSE);
 
   FUNCTION refresh_report(
     IN     refresh_id             INT            DEFAULT NULL,

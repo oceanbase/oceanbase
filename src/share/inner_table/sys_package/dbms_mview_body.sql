@@ -58,7 +58,8 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
     refresh_parallel       IN     BINARY_INTEGER := 0,
     nested_refresh_mode    IN     VARCHAR2       := NULL,
     -- TEMPORARY v2 (task 0036): async param, see dbms_mview.sql
-    async                  IN     BOOLEAN        := FALSE);
+    async                  IN     BOOLEAN        := FALSE,
+    force                  IN     BOOLEAN        := FALSE);
   PRAGMA INTERFACE(C, DBMS_MVIEW_REFRESH);
 
   PROCEDURE refresh(
@@ -77,7 +78,8 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
     refresh_parallel       IN     BINARY_INTEGER := 0,
     nested_refresh_mode    IN     VARCHAR2       := NULL,
     -- TEMPORARY v2 (task 0036): async param, see dbms_mview.sql
-    async                  IN     BOOLEAN        := FALSE)
+    async                  IN     BOOLEAN        := FALSE,
+    force                  IN     BOOLEAN        := FALSE)
   IS
   BEGIN
     COMMIT;
@@ -95,7 +97,8 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
                skip_ext_data,
                refresh_parallel,
                nested_refresh_mode,
-               async);
+               async,
+               force);
   END;
 
   PROCEDURE refresh(
@@ -114,7 +117,8 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
     refresh_parallel       IN     BINARY_INTEGER := 0,
     nested_refresh_mode    IN     VARCHAR2       := NULL,
     -- TEMPORARY v2 (task 0036): async param, see dbms_mview.sql
-    async                  IN     BOOLEAN        := FALSE)
+    async                  IN     BOOLEAN        := FALSE,
+    force                  IN     BOOLEAN        := FALSE)
   IS
   list                VARCHAR2(4000);
   BEGIN
@@ -134,7 +138,8 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview IS
                skip_ext_data,
                refresh_parallel,
                nested_refresh_mode,
-               async);
+               async,
+               force);
   END;
 
   FUNCTION refresh_report(

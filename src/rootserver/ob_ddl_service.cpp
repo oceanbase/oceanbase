@@ -6845,6 +6845,9 @@ int ObDDLService::lock_tables_of_database_for_drop(
         if (OB_FAIL(ObMViewSchedJobUtils::disable_and_stop_job(
                     tenant_id, table_schema->get_table_id()))) {
             LOG_WARN("fail to disable and stop job", K(ret));
+        } else if (OB_FAIL(ObMViewSchedJobUtils::kill_mview_refreshes(
+                    tenant_id, table_schema->get_table_id(), true))) {
+          LOG_WARN("fail to kill mview refreshes", K(ret));
         } else if (OB_FAIL(lock_mview(trans, *table_schema))) {
           LOG_WARN("fail to lock mview", KR(ret), KPC(table_schema));
         }
@@ -28596,6 +28599,9 @@ int ObDDLService::drop_table(const ObDropTableArg &drop_table_arg, const obrpc::
           if (OB_FAIL(ObMViewSchedJobUtils::disable_and_stop_job(
                       tenant_id, table_schema->get_table_id()))) {
             LOG_WARN("fail to disable and stop job", K(ret));
+          } else if (OB_FAIL(ObMViewSchedJobUtils::kill_mview_refreshes(
+                      tenant_id, table_schema->get_table_id(), true))) {
+            LOG_WARN("fail to kill mview refreshes", K(ret));
           } else if (OB_FAIL(schema_guard.get_table_schema(
                              tenant_id, container_table_id, container_table_schema))) {
             LOG_WARN("failed to get table schema", KR(ret), K(tenant_id), K(container_table_id));

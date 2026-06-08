@@ -151,7 +151,8 @@ public:
                K_(gmt_create),
                K_(gmt_modified),
                K_(svr_addr),
-               K_(session_id));
+               K_(session_id),
+               K_(expire_ts));
 
 public:
   uint64_t tenant_id_;
@@ -176,6 +177,9 @@ public:
   // on every transition into MV_TASK_RUNNING so stale values from a previous
   // run don't leak after retry.
   uint32_t session_id_;
+  // Absolute deadline (us) from caller THIS_WORKER (PL/SQL block or SQL query timeout).
+  // 0 means no caller deadline and the executor falls back to its default 24h budget.
+  int64_t expire_ts_;
 };
 
 class ObMViewPendingRefreshCtx
@@ -206,6 +210,29 @@ public:
   bool root_task_succeeded_;
   bool cancelled_;
   common::ObCurTraceId::TraceId trace_id_;
+};
+
+// Per-mview context, stored as a heap-allocated pointer in mview_context_map_.
+// The pointer is inserted exactly once (on first touch) and never replaced;
+// every later access mutates this object's fields in place. Because the map
+// value is a shared pointer accessed concurrently under the hashmap's bucket
+// read lock, all field reads/writes go through ATOMIC_* primitives. The node
+// is freed only when erased (drop cleanup / follower transition), under the
+// bucket write lock, so no concurrent reader can be dereferencing it.
+
+struct ObMViewContext
+{
+  // Per-mview schedule block flags stored as the map value (bit set), so future
+  // block reasons can be OR'd in.
+  static const int64_t BLOCK_FLAG_DROP  = 1LL << 0;
+  static const int64_t BLOCK_FLAG_FORCE = 1LL << 1;
+
+  // BLOCK_FLAG_DROP | BLOCK_FLAG_FORCE bit set (atomic access).
+  int64_t block_flags_;
+  // Reserved for a future task: per-mview in-queue task count, used to cap a
+  // single mview from flooding the pending queue.
+  ObMViewContext() : block_flags_(0) {}
+  TO_STRING_KV(K_(block_flags));
 };
 
 } // namespace rootserver

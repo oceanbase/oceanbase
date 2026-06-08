@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX PL
 
 #include "pl/sys_package/ob_dbms_mview_mysql.h"
+#include "lib/worker.h"
 #include "lib/mysqlclient/ob_mysql_result.h"
 #include "observer/omt/ob_tenant_config_mgr.h"
 #include "rootserver/mview/ob_mview_maintenance_service.h"
@@ -79,6 +80,7 @@ int ObDBMSMViewMysql::refresh(ObExecContext &ctx, ParamStore &params, ObObj &res
   uint64_t tenant_id = OB_INVALID_TENANT_ID;
   uint64_t data_version = 0;
   bool async = false;
+  bool force = false;
   if (OB_ISNULL(ctx.get_my_session()) || OB_ISNULL(ctx.get_sql_ctx())
       || OB_ISNULL(ctx.get_sql_ctx()->schema_guard_)) {
     ret = OB_ERR_UNEXPECTED;
@@ -101,17 +103,25 @@ int ObDBMSMViewMysql::refresh(ObExecContext &ctx, ParamStore &params, ObObj &res
       } else {
         LOG_WARN("use lowere version of admin pkg", K(p_count));
       }
-    } else if (p_count == OLD_MAX_PARAM || p_count == ObDBMSMViewRefreshParam::MAX_PARAM) {
+    } else if (p_count >= OLD_MAX_PARAM && p_count <= ObDBMSMViewRefreshParam::MAX_PARAM) {
       if (OB_UNLIKELY(!params.at(ObDBMSMViewRefreshParam::NESTED).is_tinyint())) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid argument for materialized view refresh", K(ret));
       }
-      if (OB_SUCC(ret) && p_count == ObDBMSMViewRefreshParam::MAX_PARAM) {
+      if (OB_SUCC(ret) && p_count > ObDBMSMViewRefreshParam::ASYNC) {
         if (!params.at(ObDBMSMViewRefreshParam::ASYNC).is_tinyint()) {
           ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid async param type", K(ret));
         } else {
           async = params.at(ObDBMSMViewRefreshParam::ASYNC).get_bool();
+        }
+      }
+      if (OB_SUCC(ret) && p_count > ObDBMSMViewRefreshParam::FORCE) {
+        if (!params.at(ObDBMSMViewRefreshParam::FORCE).is_tinyint()) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("invalid force param type", K(ret));
+        } else {
+          force = params.at(ObDBMSMViewRefreshParam::FORCE).get_bool();
         }
       }
     } else {
@@ -147,7 +157,9 @@ int ObDBMSMViewMysql::refresh(ObExecContext &ctx, ParamStore &params, ObObj &res
     schedule_arg.is_nested_ = params.count() > ObDBMSMViewRefreshParam::NESTED
                               && params.at(ObDBMSMViewRefreshParam::NESTED).get_bool();
     schedule_arg.refresh_parallel_ = params.at(ObDBMSMViewRefreshParam::REFRESH_PARALLEL).get_int();
-      if (OB_ISNULL(mview_maintenance_service) ||
+    schedule_arg.force_ = force;
+    schedule_arg.expire_ts_ = THIS_WORKER.get_timeout_ts();
+    if (OB_ISNULL(mview_maintenance_service) ||
           OB_ISNULL(mview_maintenance_service->get_pending_task_manager())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("mview maintenance service is null", KR(ret));
@@ -337,8 +349,13 @@ int ObDBMSMViewMysql::kill(ObExecContext &ctx, ParamStore &params, ObObj &result
     if (OB_ISNULL(service) || OB_ISNULL(service->get_pending_task_manager())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("mview maintenance service or pending task manager is null", KR(ret));
-    } else if (OB_FAIL(service->get_pending_task_manager()->kill_refresh(tenant_id, refresh_id))) {
-      LOG_WARN("fail to kill mview refresh", KR(ret), K(tenant_id), K(refresh_id));
+    } else {
+      obrpc::ObKillMViewRefreshArg arg;
+      arg.tenant_id_ = tenant_id;
+      arg.refresh_id_ = refresh_id;
+      if (OB_FAIL(service->get_pending_task_manager()->kill_refresh(arg))) {
+        LOG_WARN("fail to kill mview refresh", KR(ret), K(tenant_id), K(refresh_id));
+      }
     }
   }
   return ret;

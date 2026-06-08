@@ -13,6 +13,7 @@
 #define USING_LOG_PREFIX RS
 
 #include "rootserver/mview/ob_mview_pending_task_rpc_processor.h"
+#include "rootserver/mview/ob_mview_pending_task_define.h"
 #include "rootserver/mview/ob_mview_pending_task_executor.h"
 #include "rootserver/mview/ob_mview_maintenance_service.h"
 #include "lib/oblog/ob_warning_buffer.h"
@@ -188,8 +189,21 @@ int ObRpcKillMViewRefreshP::process()
       if (OB_ISNULL(service)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("mview maintenance service is null", KR(ret), K(arg));
-      } else if (OB_FAIL(service->get_pending_task_manager()->kill_refresh_local(arg.tenant_id_, arg.refresh_id_))) {
-        LOG_WARN("kill refresh local failed", KR(ret), K(arg));
+      } else {
+        rootserver::ObMViewPendingTaskManager *manager = service->get_pending_task_manager();
+        if (arg.is_kill_by_mview_id_) {
+          if (arg.is_drop_ &&
+              OB_FAIL(manager->acquire_mview_block(arg.mview_id_,
+                                                   ObMViewContext::BLOCK_FLAG_DROP))) {
+            LOG_WARN("acquire drop block failed", KR(ret), K(arg));
+          } else if (OB_FAIL(manager->kill_refreshes_by_mview_local(arg.tenant_id_, arg.mview_id_))) {
+            LOG_WARN("kill refreshes by mview local failed", KR(ret), K(arg));
+          }
+        } else {
+          if (OB_FAIL(manager->kill_refresh_local(arg.tenant_id_, arg.refresh_id_))) {
+            LOG_WARN("kill refresh local failed", KR(ret), K(arg));
+          }
+        }
       }
     }
   }

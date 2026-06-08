@@ -185,6 +185,12 @@ void ObMViewPendingTaskInspectionTask::runTimerTask()
       LOG_WARN("process retry list failed", KR(ret));
       ret = OB_SUCCESS;
     }
+    if (tick % CLEANUP_DROP_BLOCK_RATIO == 0) {
+      if (OB_FAIL(manager_->cleanup_stale_drop_blocks())) {
+        LOG_WARN("cleanup stale drop blocks failed", KR(ret));
+        ret = OB_SUCCESS;
+      }
+    }
   }
 }
 

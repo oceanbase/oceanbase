@@ -820,6 +820,143 @@ int ObInnerTableSchema::all_virtual_mview_refresh_pending_task_schema(ObTableSch
   }
 
   if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("svr_ip", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObVarcharType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      MAX_IP_ADDR_LENGTH, //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("svr_port", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA("session_id", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false); //is_autoincrement
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj seq_default;
+    seq_default.set_int(0);
+    ADD_COLUMN_SCHEMA_T("seq", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      seq_default,
+      seq_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj refresh_method_default;
+    refresh_method_default.set_int(0);
+    ADD_COLUMN_SCHEMA_T("refresh_method", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      refresh_method_default,
+      refresh_method_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj refresh_parallel_default;
+    refresh_parallel_default.set_int(0);
+    ADD_COLUMN_SCHEMA_T("refresh_parallel", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObIntType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(int64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      refresh_parallel_default,
+      refresh_parallel_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ObObj target_data_sync_scn_default;
+    target_data_sync_scn_default.set_uint64(0);
+    ADD_COLUMN_SCHEMA_T("target_data_sync_scn", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObUInt64Type, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(uint64_t), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      false, //is_nullable
+      false, //is_autoincrement
+      target_data_sync_scn_default,
+      target_data_sync_scn_default); //default_value
+  }
+
+  if (OB_SUCC(ret)) {
+    ADD_COLUMN_SCHEMA_TS("expire_time", //column_name
+      ++column_id, //column_id
+      0, //rowkey_id
+      0, //index_id
+      0, //part_key_pos
+      ObTimestampType, //column_type
+      CS_TYPE_INVALID, //column_collation_type
+      sizeof(ObPreciseDateTime), //column_length
+      -1, //column_precision
+      -1, //column_scale
+      true, //is_nullable
+      false, //is_autoincrement
+      false); //is_on_update_for_timestamp
+  }
+
+  if (OB_SUCC(ret)) {
     ObObj status_default;
     status_default.set_int(0);
     ADD_COLUMN_SCHEMA_T("status", //column_name
@@ -877,25 +1014,6 @@ int ObInnerTableSchema::all_virtual_mview_refresh_pending_task_schema(ObTableSch
   }
 
   if (OB_SUCC(ret)) {
-    ObObj target_data_sync_scn_default;
-    target_data_sync_scn_default.set_uint64(0);
-    ADD_COLUMN_SCHEMA_T("target_data_sync_scn", //column_name
-      ++column_id, //column_id
-      0, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObUInt64Type, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      sizeof(uint64_t), //column_length
-      -1, //column_precision
-      -1, //column_scale
-      false, //is_nullable
-      false, //is_autoincrement
-      target_data_sync_scn_default,
-      target_data_sync_scn_default); //default_value
-  }
-
-  if (OB_SUCC(ret)) {
     ObObj retry_count_default;
     retry_count_default.set_int(0);
     ADD_COLUMN_SCHEMA_T("retry_count", //column_name
@@ -928,108 +1046,6 @@ int ObInnerTableSchema::all_virtual_mview_refresh_pending_task_schema(ObTableSch
       true, //is_nullable
       false, //is_autoincrement
       false); //is_on_update_for_timestamp
-  }
-
-  if (OB_SUCC(ret)) {
-    ObObj refresh_method_default;
-    refresh_method_default.set_int(0);
-    ADD_COLUMN_SCHEMA_T("refresh_method", //column_name
-      ++column_id, //column_id
-      0, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObIntType, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      sizeof(int64_t), //column_length
-      -1, //column_precision
-      -1, //column_scale
-      false, //is_nullable
-      false, //is_autoincrement
-      refresh_method_default,
-      refresh_method_default); //default_value
-  }
-
-  if (OB_SUCC(ret)) {
-    ObObj refresh_parallel_default;
-    refresh_parallel_default.set_int(0);
-    ADD_COLUMN_SCHEMA_T("refresh_parallel", //column_name
-      ++column_id, //column_id
-      0, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObIntType, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      sizeof(int64_t), //column_length
-      -1, //column_precision
-      -1, //column_scale
-      false, //is_nullable
-      false, //is_autoincrement
-      refresh_parallel_default,
-      refresh_parallel_default); //default_value
-  }
-
-  if (OB_SUCC(ret)) {
-    ObObj seq_default;
-    seq_default.set_int(0);
-    ADD_COLUMN_SCHEMA_T("seq", //column_name
-      ++column_id, //column_id
-      0, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObIntType, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      sizeof(int64_t), //column_length
-      -1, //column_precision
-      -1, //column_scale
-      false, //is_nullable
-      false, //is_autoincrement
-      seq_default,
-      seq_default); //default_value
-  }
-
-  if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("session_id", //column_name
-      ++column_id, //column_id
-      0, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObIntType, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      sizeof(int64_t), //column_length
-      -1, //column_precision
-      -1, //column_scale
-      true, //is_nullable
-      false); //is_autoincrement
-  }
-
-  if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("svr_ip", //column_name
-      ++column_id, //column_id
-      0, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObVarcharType, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      MAX_IP_ADDR_LENGTH, //column_length
-      -1, //column_precision
-      -1, //column_scale
-      true, //is_nullable
-      false); //is_autoincrement
-  }
-
-  if (OB_SUCC(ret)) {
-    ADD_COLUMN_SCHEMA("svr_port", //column_name
-      ++column_id, //column_id
-      0, //rowkey_id
-      0, //index_id
-      0, //part_key_pos
-      ObIntType, //column_type
-      CS_TYPE_INVALID, //column_collation_type
-      sizeof(int64_t), //column_length
-      -1, //column_precision
-      -1, //column_scale
-      true, //is_nullable
-      false); //is_autoincrement
   }
   table_schema.set_index_using_type(USING_BTREE);
   table_schema.set_row_store_type(ENCODING_ROW_STORE);

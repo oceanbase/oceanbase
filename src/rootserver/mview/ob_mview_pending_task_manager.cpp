@@ -13,6 +13,9 @@
 #define USING_LOG_PREFIX RS
 
 #include "rootserver/mview/ob_mview_pending_task_manager.h"
+#include "rootserver/mview/ob_mview_utils.h"
+#include "storage/mview/ob_mview_transaction.h"
+#include "lib/worker.h"
 #include "lib/alloc/ob_malloc_allocator.h"
 #include "lib/container/ob_bit_set.h"
 #include "lib/mysqlclient/ob_mysql_proxy.h"
@@ -67,6 +70,8 @@ ObMViewPendingTaskManager::ObMViewPendingTaskManager()
     result_alloc_(),
     reload_cond_(),
     reload_state_(RS_NOT_READY),
+    mview_context_map_(),
+    mview_ctx_alloc_(),
     is_inited_(false)
 {
 }
@@ -96,6 +101,12 @@ int ObMViewPendingTaskManager::init()
     LOG_WARN("fail to init inspection task", KR(ret), K(tenant_id));
   } else if (OB_FAIL(reload_cond_.init(ObWaitEventIds::THREAD_IDLING_COND_WAIT))) {
     LOG_WARN("fail to init reload cond", KR(ret));
+  } else if (OB_FAIL(mview_context_map_.create(10000, "MVCtxMap", "MVCtxMap", tenant_id))) {
+    LOG_WARN("fail to create mview context map", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(mview_ctx_alloc_.init(lib::ObMallocAllocator::get_instance(),
+                                           OB_MALLOC_NORMAL_BLOCK_SIZE,
+                                           ObMemAttr(tenant_id, "MVCtx")))) {
+    LOG_WARN("fail to init mview context allocator", KR(ret), K(tenant_id));
   } else {
     is_inited_ = true;
   }
@@ -141,6 +152,12 @@ int ObMViewPendingTaskManager::drain_result_queue_and_clear_pending_queue()
   }
   if (OB_SUCC(ret) && OB_FAIL(queue_.clear())) {
     LOG_WARN("fail to clear pending task queue", KR(ret));
+  }
+  if (OB_SUCC(ret) && OB_FAIL(reset_mview_contexts())) {
+    // The queue (source of in-memory task state) was just cleared and the
+    // leader-only block markers no longer apply; drop all contexts so a later
+    // reload rebuilds them from scratch.
+    LOG_WARN("fail to reset mview contexts", KR(ret));
   }
   return ret;
 }
@@ -245,6 +262,12 @@ void ObMViewPendingTaskManager::destroy()
     scheduler_.destroy();
     table_operator_.destroy();
     queue_.destroy();
+    // Free any remaining context nodes before tearing down the map / allocator.
+    if (OB_TMP_FAIL(reset_mview_contexts())) {
+      LOG_WARN_RET(tmp_ret, "fail to reset mview contexts during destroy");
+    }
+    mview_context_map_.destroy();
+    mview_ctx_alloc_.reset();
     result_alloc_.reset();
     reload_cond_.destroy();
     is_inited_ = false;
@@ -264,9 +287,24 @@ int ObMViewPendingTaskManager::enqueue_reload_task(const ObIArray<ObMViewPending
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   bool is_valid = false;
+  bool group_expired = false;
   if (OB_UNLIKELY(group.empty()) || OB_ISNULL(group.at(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("empty reload group or null head task", KR(ret), K(group));
+  } else if (FALSE_IT(group_expired = (group.at(0)->expire_ts_ > 0
+                                       && group.at(0)->expire_ts_ <= ObTimeUtility::current_time()))) {
+  } else if (group_expired) {
+    // Deadline already crossed before this leader could re-pick up the group.
+    // Drop the persisted rows so subsequent reload scans don't keep replaying
+    // a refresh whose original caller has long since timed out.
+    LOG_WARN("reload group already expired, discard",
+             K(group.count()),
+             "tenant_id", group.at(0)->tenant_id_,
+             "refresh_id", group.at(0)->refresh_id_,
+             "expire_ts", group.at(0)->expire_ts_);
+    if (OB_TMP_FAIL(on_schedule_task_failed(group))) {
+      LOG_WARN("fail to handle expired reload group", KR(tmp_ret));
+    }
   } else if (OB_FAIL(check_reload_tasks_reachable(group, is_valid))) {
     LOG_WARN("validate reload group failed", KR(ret), K(group.count()));
   } else if (OB_UNLIKELY(!is_valid)) {
@@ -551,6 +589,7 @@ int ObMViewPendingTaskManager::build_pending_tasks(ObIAllocator &alloc,
   task.status_ = MV_TASK_PENDING;
   task.gmt_create_ = start_time;
   task.gmt_modified_ = task.gmt_create_;
+  task.expire_ts_ = arg.expire_ts_;
   ObSEArray<uint64_t, 4> topo_ordered_mview_ids;
   ObSEArray<ObSEArray<uint64_t, 4>, 4> topo_ordered_dep_mview_ids;
   if (OB_ISNULL(GCTX.sql_proxy_)) {
@@ -617,8 +656,301 @@ int ObMViewPendingTaskManager::write_run_start(const obrpc::ObScheduleMViewRefre
   return ret;
 }
 
+// Re-check the schedule block for *every* mview that will actually get a task,
+// not just the root arg.mview_id_. For a nested refresh the dependency mviews
+// resolved by build_pending_tasks are the ones that get inserted/pushed, so a
+// concurrent drop/force on any of them must reject this schedule too -- otherwise
+// a task for a being-dropped mview would slip past the kill enumeration. Only the
+// root (root_mview_id) can be the force owner; every dependency is checked as a
+// non-owner so another session's FORCE/DROP marker still blocks it.
+int ObMViewPendingTaskManager::check_pending_tasks_schedule_block(
+    const ObIArray<ObMViewPendingTask *> &pending_tasks,
+    const uint64_t root_mview_id,
+    const bool is_force_owner)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < pending_tasks.count(); ++i) {
+    if (OB_ISNULL(pending_tasks.at(i))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null pending task", KR(ret), K(i));
+    } else {
+      const uint64_t cur_mview_id = pending_tasks.at(i)->mview_id_;
+      const bool cur_is_force_owner = (cur_mview_id == root_mview_id) && is_force_owner;
+      if (OB_FAIL(check_mview_schedule_block(cur_mview_id, cur_is_force_owner))) {
+        LOG_WARN("mview schedule blocked by concurrent drop/force", KR(ret),
+                 K(cur_mview_id), K(root_mview_id), K(cur_is_force_owner));
+      }
+    }
+  }
+  return ret;
+}
+
+// All callbacks below run inside the hashmap bucket read lock (read_atomic).
+// The read lock is shared, so concurrent callbacks may touch the same node;
+// every field access therefore uses ATOMIC_* primitives. The node itself is
+// only freed under the bucket write lock (erase_refactored), so it stays valid
+// for the whole callback.
+// Read block_flags_ atomically and decide whether the schedule is blocked.
+struct CheckBlockFn
+{
+  CheckBlockFn(bool is_force_owner, bool &blocked)
+    : is_force_owner_(is_force_owner), blocked_(blocked) {}
+  void operator()(common::hash::HashMapPair<uint64_t, ObMViewContext *> &kv)
+  {
+    const int64_t flags = ATOMIC_LOAD(&kv.second->block_flags_);
+    blocked_ = (0 != (flags & ObMViewContext::BLOCK_FLAG_DROP)) ||
+               (0 != (flags & ObMViewContext::BLOCK_FLAG_FORCE) && !is_force_owner_);
+  }
+  bool is_force_owner_;
+  bool &blocked_;
+};
+
+// OR a flag bit into block_flags_. For FORCE, the set must be atomic with a
+// "no existing DROP/FORCE" check, otherwise two forced schedules could both
+// observe an empty flag and both proceed. DROP just ORs in unconditionally.
+struct AcquireBlockFn
+{
+  AcquireBlockFn(int64_t flag, int &ret) : flag_(flag), ret_(ret) {}
+  void operator()(common::hash::HashMapPair<uint64_t, ObMViewContext *> &kv)
+  {
+    const bool need_conflict_check = (0 != (flag_ & ObMViewContext::BLOCK_FLAG_FORCE));
+    bool done = false;
+    while (!done) {
+      const int64_t old_flags = ATOMIC_LOAD(&kv.second->block_flags_);
+      if (need_conflict_check &&
+          0 != (old_flags & (ObMViewContext::BLOCK_FLAG_DROP |
+                             ObMViewContext::BLOCK_FLAG_FORCE))) {
+        // Another DROP/FORCE marker already present: FORCE must stay exclusive.
+        ret_ = OB_EAGAIN;
+        done = true;
+      } else {
+        const int64_t new_flags = old_flags | flag_;
+        if (old_flags == new_flags) {
+          done = true; // already set, nothing to do
+        } else if (ATOMIC_BCAS(&kv.second->block_flags_, old_flags, new_flags)) {
+          done = true;
+        }
+        // else: CAS lost the race, retry with the fresh value.
+      }
+    }
+  }
+  int64_t flag_;
+  int &ret_;
+};
+
+// Clear the specified flag bit(s) from block_flags_ (BCAS loop AND with ~flag).
+struct ClearBlockFlagFn
+{
+  explicit ClearBlockFlagFn(int64_t flag) : flag_(flag) {}
+  void operator()(common::hash::HashMapPair<uint64_t, ObMViewContext *> &kv)
+  {
+    bool done = false;
+    while (!done) {
+      const int64_t old_flags = ATOMIC_LOAD(&kv.second->block_flags_);
+      const int64_t new_flags = old_flags & ~flag_;
+      if (old_flags == new_flags) {
+        done = true;
+      } else if (ATOMIC_BCAS(&kv.second->block_flags_, old_flags, new_flags)) {
+        done = true;
+      }
+    }
+  }
+  int64_t flag_;
+};
+
+// Insert a fresh ObMViewContext for mview_id. Only called on the miss path of
+// acquire_mview_block (the node is absent), so it does not pre-check existence;
+// set_refactored(flag=0) still guards the race where a concurrent inserter wins.
+int ObMViewPendingTaskManager::ensure_mview_ctx(const uint64_t mview_id)
+{
+  int ret = OB_SUCCESS;
+  void *buf = nullptr;
+  ObMViewContext *ctx = nullptr;
+  if (OB_ISNULL(buf = mview_ctx_alloc_.alloc(sizeof(ObMViewContext)))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("alloc mview context failed", KR(ret), K(mview_id));
+  } else {
+    ctx = new (buf) ObMViewContext();
+    // flag=0 => do not overwrite an existing node; a loser gets OB_HASH_EXIST.
+    if (OB_FAIL(mview_context_map_.set_refactored(mview_id, ctx, 0))) {
+      if (OB_HASH_EXIST == ret) {
+        // Lost the insert race: the first object stays in the map, free ours.
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("set mview context failed", KR(ret), K(mview_id));
+      }
+      ctx->~ObMViewContext();
+      mview_ctx_alloc_.free(ctx);
+      ctx = nullptr;
+    }
+  }
+  return ret;
+}
+
+struct CollectAllFn
+{
+  explicit CollectAllFn(ObIArray<uint64_t> &ids) : mview_ids_(ids), ret_(OB_SUCCESS) {}
+  int operator()(common::hash::HashMapPair<uint64_t, ObMViewContext *> &kv)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_FAIL(mview_ids_.push_back(kv.first))) {
+      RS_LOG(WARN, "push back mview id failed", KR(ret), "mview_id", kv.first);
+      ret_ = ret;
+    }
+    return ret;
+  }
+  ObIArray<uint64_t> &mview_ids_;
+  int ret_;
+};
+
+int ObMViewPendingTaskManager::check_mview_schedule_block(const uint64_t mview_id,
+                                                          const bool is_force_owner)
+{
+  int ret = OB_SUCCESS;
+  bool blocked = false;
+  CheckBlockFn fn(is_force_owner, blocked);
+  if (OB_FAIL(mview_context_map_.read_atomic(mview_id, fn))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_SUCCESS; // no context => no block
+    } else {
+      LOG_WARN("read mview context failed", KR(ret), K(mview_id));
+    }
+  } else if (blocked) {
+    ret = OB_EAGAIN;
+    LOG_WARN("mview schedule blocked by concurrent drop/force", KR(ret),
+              K(mview_id), K(is_force_owner));
+  }
+  return ret;
+}
+
+// Acquire a block marker for mview_id. DROP just ORs its bit in unconditionally
+// (it never conflicts). FORCE must be exclusive: AcquireBlockFn returns OB_EAGAIN
+// when another DROP/FORCE marker is already present, so only one forced refresh
+// can own the marker at a time. Rather than bouncing OB_EAGAIN back to the user,
+// a contender *waits* here until the current owner releases the marker
+// (release_mview_block) and then takes it.
+//
+// The wait loop lives in acquire_mview_block (not in AcquireBlockFn) on purpose:
+// AcquireBlockFn runs under the hashmap bucket read lock, and the release path
+// (ClearForceFn) needs the same bucket lock to clear the FORCE bit -- sleeping
+// inside the callback would hold the bucket lock and could starve the very
+// release we are waiting for. AcquireBlockFn returns OB_EAGAIN with no side
+// effect, so re-invoking read_atomic each iteration is safe.
+//
+// The wait is bounded so a wedged owner cannot pin the RPC worker forever:
+//   - by THIS_WORKER's timeout_ts when valid (respects query_timeout / the RPC
+//     deadline, and lets the worker bail promptly if the request is killed);
+//   - otherwise by an ACQUIRE_FORCE_WAIT_TIMEOUT_US fallback.
+// Exceeding either bound (or a worker that is already timed out) returns
+// OB_TIMEOUT.
+int ObMViewPendingTaskManager::acquire_mview_block(const uint64_t mview_id, const int64_t flag)
+{
+  int ret = OB_SUCCESS;
+  const int64_t start_ts = ObTimeUtility::current_time();
+  const int64_t deadline = start_ts + ACQUIRE_FORCE_WAIT_TIMEOUT_US;
+  bool acquired = false;
+  while (OB_SUCC(ret) && !acquired) {
+    int cb_ret = OB_SUCCESS;
+    AcquireBlockFn fn(flag, cb_ret);
+    // Try to set the flag first. read_atomic only fires the callback when the
+    // node exists, so the steady state (node already present, insert-once) costs
+    // a single hash lookup with no allocation. Only on a miss do we create the
+    // node and retry -- this is the first acquire for an mview, or a recreate
+    // after a committed drop's cleanup erased it.
+    bool node_missing = false;
+    if (OB_FAIL(mview_context_map_.read_atomic(mview_id, fn))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+        node_missing = true;
+        if (OB_FAIL(ensure_mview_ctx(mview_id))) {
+          LOG_WARN("ensure mview context failed", KR(ret), K(mview_id), K(flag));
+        }
+      } else {
+        LOG_WARN("read mview context failed", KR(ret), K(mview_id), K(flag));
+      }
+    } else if (OB_SUCC(cb_ret)) {
+      acquired = true;
+    } else if (OB_EAGAIN != cb_ret) {
+      // Either a non-retryable error, or the non-waiting (DROP) path: report it.
+      ret = cb_ret;
+      LOG_WARN("mview schedule blocked by concurrent drop/force", KR(ret), K(mview_id), K(flag));
+    }
+    if (OB_SUCC(ret) && !acquired) {
+      // Bound every retry (miss-then-create or FORCE contention) by the worker
+      // status and the wait deadline so a wedged owner -- or a pathological
+      // create/erase race -- cannot pin the RPC worker forever.
+      const int64_t now = ObTimeUtility::current_time();
+      if (THIS_WORKER.is_timeout() || now >= deadline) {
+        ret = OB_TIMEOUT;
+        LOG_WARN("timeout waiting for mview force block to be released", KR(ret),
+                 K(mview_id), K(flag), K(now), K(deadline), K(start_ts));
+      } else if (!node_missing) {
+        // FORCE contender: another DROP/FORCE marker is present. Back off before
+        // retrying. A miss-then-create retries immediately, no need to sleep.
+        ob_usleep(ACQUIRE_FORCE_RETRY_INTERVAL_US);
+      }
+    }
+  }
+  return ret;
+}
+
+int ObMViewPendingTaskManager::release_mview_block(const uint64_t mview_id, const int64_t flag)
+{
+  int ret = OB_SUCCESS;
+  ClearBlockFlagFn fn(flag);
+  if (OB_FAIL(mview_context_map_.read_atomic(mview_id, fn))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_SUCCESS; // node already gone (e.g. cleared by drop cleanup)
+    } else {
+      LOG_WARN("clear block flag failed", KR(ret), K(mview_id), K(flag));
+    }
+  }
+  return ret;
+}
+
+int ObMViewPendingTaskManager::erase_and_free_ctx(const uint64_t mview_id)
+{
+  int ret = OB_SUCCESS;
+  ObMViewContext *ctx = nullptr;
+  // erase_refactored摘除节点在bucket写锁内完成，与所有read_atomic回调互斥，
+  // 故返回后free该指针不会与正在deref的回调发生UAF。
+  if (OB_FAIL(mview_context_map_.erase_refactored(mview_id, &ctx))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("erase mview context failed", KR(ret), K(mview_id));
+    }
+  } else if (OB_NOT_NULL(ctx)) {
+    ctx->~ObMViewContext();
+    mview_ctx_alloc_.free(ctx);
+  }
+  return ret;
+}
+
+// Collect all mview_ids under the bucket read lock (no free inside the
+// iteration), then erase+free each one under the bucket write lock. Freeing
+// inside foreach_refactored would race a concurrent read_atomic reader.
+int ObMViewPendingTaskManager::reset_mview_contexts()
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<uint64_t, 16> mview_ids;
+  CollectAllFn collect_fn(mview_ids);
+  if (OB_FAIL(mview_context_map_.foreach_refactored(collect_fn))) {
+    LOG_WARN("foreach mview context map failed", KR(ret));
+  } else if (OB_FAIL(collect_fn.ret_)) {
+    LOG_WARN("collect mview ids failed", KR(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < mview_ids.count(); ++i) {
+    if (OB_FAIL(erase_and_free_ctx(mview_ids.at(i)))) {
+      LOG_WARN("erase and free mview context failed", KR(ret), "mview_id", mview_ids.at(i));
+    }
+  }
+  return ret;
+}
+
 int ObMViewPendingTaskManager::schedule_task(const obrpc::ObScheduleMViewRefreshArg &arg,
-                                             int64_t &refresh_id)
+                                             int64_t &refresh_id,
+                                             bool is_force_owner)
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
@@ -643,6 +975,8 @@ int ObMViewPendingTaskManager::schedule_task(const obrpc::ObScheduleMViewRefresh
     LOG_WARN("fail to write_run_start", KR(ret), K(arg), K(refresh_id));
   } else if (OB_FAIL(build_pending_tasks(allocator, arg, refresh_id, start_time, target_data_sync_scn, pending_tasks))) {
     LOG_WARN("build pending tasks failed", KR(ret), K(arg));
+  } else if (OB_FAIL(check_pending_tasks_schedule_block(pending_tasks, arg.mview_id_, is_force_owner))) {
+    LOG_WARN("pending tasks blocked by concurrent drop/force", KR(ret), K(arg.mview_id_));
   } else if (OB_FAIL(table_operator_.insert_tasks(pending_tasks))) {
     LOG_WARN("insert pending tasks failed", KR(ret), K(pending_tasks.count()));
   } else if (OB_FAIL(queue_.push_tasks(pending_tasks, common::ObCurTraceId::get_trace_id()))) {
@@ -1042,14 +1376,27 @@ int ObMViewPendingTaskManager::schedule_mview_refresh_local(
     obrpc::ObScheduleMViewRefreshResult &result)
 {
   int ret = OB_SUCCESS;
+  bool need_release_force_block = false;
   result.refresh_id_ = OB_INVALID_ID;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("pending task manager not init", KR(ret));
-  } else if (OB_FAIL(schedule_task(arg, result.refresh_id_))) {
+  } else if (arg.force_ && OB_FAIL(acquire_mview_block(arg.mview_id_, ObMViewContext::BLOCK_FLAG_FORCE))) {
+    LOG_WARN("fail to acquire mview force block", KR(ret), K(arg.tenant_id_), K(arg.mview_id_));
+  } else if (OB_FALSE_IT(need_release_force_block = arg.force_)) {
+  } else if (arg.force_ && OB_FAIL(kill_refreshes_by_mview_local(arg.tenant_id_, arg.mview_id_))) {
+    LOG_WARN("fail to kill existing refreshes before forced schedule",
+             KR(ret), K(arg.tenant_id_), K(arg.mview_id_));
+  } else if (OB_FAIL(schedule_task(arg, result.refresh_id_, arg.force_))) {
     LOG_WARN("fail to schedule mview refresh task", KR(ret), K(arg));
   } else {
     wakeup();
+  }
+  if (need_release_force_block) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(release_mview_block(arg.mview_id_, ObMViewContext::BLOCK_FLAG_FORCE))) {
+      LOG_WARN("release force block failed", KR(tmp_ret), K(arg.tenant_id_), K(arg.mview_id_));
+    }
   }
   return ret;
 }
@@ -1225,6 +1572,26 @@ int ObMViewPendingTaskManager::server_random_pick_for_tenant(uint64_t tenant_id,
   return ret;
 }
 
+int ObMViewPendingTaskManager::get_rpc_timeout_us(int64_t expire_ts, int64_t &rpc_timeout_us)
+{
+  int ret = OB_SUCCESS;
+  const int64_t DEFAULT_RPC_TIMEOUT_US = 24LL * 60 * 60 * 1000 * 1000;
+  const int64_t MIN_RPC_TIMEOUT_US = 1LL * 1000 * 1000;
+  rpc_timeout_us = DEFAULT_RPC_TIMEOUT_US;
+  if (expire_ts > 0) {
+    const int64_t now = ObTimeUtility::current_time();
+    const int64_t remaining = expire_ts - now;
+    if (remaining < MIN_RPC_TIMEOUT_US) {
+      rpc_timeout_us = MIN_RPC_TIMEOUT_US;
+    } else if (remaining > DEFAULT_RPC_TIMEOUT_US) {
+      rpc_timeout_us = DEFAULT_RPC_TIMEOUT_US;
+    } else {
+      rpc_timeout_us = remaining;
+    }
+  }
+  return ret;
+}
+
 int ObMViewPendingTaskManager::run_task(uint64_t tenant_id,
                                         int64_t refresh_id,
                                         uint64_t mview_id,
@@ -1233,6 +1600,7 @@ int ObMViewPendingTaskManager::run_task(uint64_t tenant_id,
                                         const int64_t refresh_parallel,
                                         const int64_t retry_count,
                                         const bool is_consistent_refresh,
+                                        const int64_t expire_ts,
                                         const ObAddr &leader_addr)
 {
   int ret = OB_SUCCESS;
@@ -1247,6 +1615,15 @@ int ObMViewPendingTaskManager::run_task(uint64_t tenant_id,
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid leader addr", KR(ret), K(tenant_id), K(refresh_id), K(mview_id),
              K(leader_addr));
+  } else if (expire_ts > 0 && expire_ts <= ObTimeUtility::current_time()) {
+    // The deadline has already been crossed between peek_task and here (concurrent
+    // limit wait / get_mview_leader_addr / mark_task_running all take time). Skip the
+    // RPC entirely and let the caller finalize the task as failed, instead of dispatching
+    // a refresh that the leader would only discard once it re-checks expire_ts.
+    ret = OB_TIMEOUT;
+    LOG_WARN("mview pending task already expired before dispatch, skip rpc",
+             KR(ret), K(tenant_id), K(refresh_id), K(mview_id),
+             K(expire_ts), "now", ObTimeUtility::current_time());
   } else if (OB_FAIL(queue_.get_refresh_trace_id(tenant_id, refresh_id, task_trace_id))) {
     LOG_WARN("get refresh trace id failed, generate new one", KR(ret), K(tenant_id), K(refresh_id));
   } else {
@@ -1258,19 +1635,23 @@ int ObMViewPendingTaskManager::run_task(uint64_t tenant_id,
                                         refresh_method,
                                         refresh_parallel,
                                         retry_count,
-                                        is_consistent_refresh);
+                                        is_consistent_refresh,
+                                        expire_ts);
     obrpc::ObRpcRunMViewPendingTaskCB cb;
-    const int64_t TASK_RPC_TIMEOUT_US = 60LL * 60 * 1000 * 1000;
-    if (OB_FAIL(GCTX.srv_rpc_proxy_->to(leader_addr).by(tenant_id)
+    int64_t rpc_timeout_us = 0;
+    if (OB_FAIL(get_rpc_timeout_us(expire_ts, rpc_timeout_us))) {
+      LOG_WARN("get rpc timeout us failed", KR(ret), K(tenant_id), K(refresh_id),
+               K(mview_id), K(expire_ts));
+    } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(leader_addr).by(tenant_id)
                                     .group_id(share::OBCG_OLAP_ASYNC_JOB)
-                                    .timeout(TASK_RPC_TIMEOUT_US)
+                                    .timeout(rpc_timeout_us)
                                     .run_mview_pending_task(arg, &cb))) {
       LOG_WARN("run mview pending task rpc failed", KR(ret), K(tenant_id), K(refresh_id),
-               K(mview_id), K(leader_addr));
+               K(mview_id), K(leader_addr), K(expire_ts), K(rpc_timeout_us));
     }
     // TODO: remove this log
     LOG_INFO("run mview pending task rpc done", KR(ret), K(tenant_id), K(refresh_id),
-             K(mview_id), K(leader_addr));
+             K(mview_id), K(leader_addr), K(expire_ts), K(rpc_timeout_us));
   }
   return ret;
 }
@@ -1613,12 +1994,16 @@ int ObMViewPendingTaskManager::mark_all_tasks_canceled(uint64_t tenant_id, int64
   return ret;
 }
 
-int ObMViewPendingTaskManager::kill_refresh(uint64_t tenant_id, int64_t refresh_id, bool force_rpc)
+int ObMViewPendingTaskManager::kill_refresh(const obrpc::ObKillMViewRefreshArg &arg, bool force_rpc)
 {
   int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg.tenant_id_;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("pending task manager not init", KR(ret));
+  } else if (OB_UNLIKELY(!arg.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(arg));
   } else if (OB_ISNULL(GCTX.location_service_) || OB_ISNULL(GCTX.srv_rpc_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("location_service or srv_rpc_proxy is null", KR(ret),
@@ -1638,24 +2023,189 @@ int ObMViewPendingTaskManager::kill_refresh(uint64_t tenant_id, int64_t refresh_
                                                                               leader_addr))) {
         LOG_WARN("fail to get sys ls leader addr", KR(ret), K(tenant_id));
       } else if (!force_rpc && leader_addr == GCONF.self_addr_) {
-        if (OB_FAIL(kill_refresh_local(tenant_id, refresh_id))) {
-          LOG_WARN("kill refresh local failed", KR(ret), K(tenant_id), K(refresh_id));
+        if (arg.is_kill_by_mview_id_) {
+          if (arg.is_drop_ && OB_FAIL(acquire_mview_block(arg.mview_id_, ObMViewContext::BLOCK_FLAG_DROP))) {
+            LOG_WARN("acquire drop block failed", KR(ret), K(arg));
+          } else if (OB_FAIL(kill_refreshes_by_mview_local(tenant_id, arg.mview_id_))) {
+            LOG_WARN("kill refreshes by mview local failed", KR(ret), K(arg));
+          }
+        } else {
+          if (OB_FAIL(kill_refresh_local(tenant_id, arg.refresh_id_))) {
+            LOG_WARN("kill refresh local failed", KR(ret), K(arg));
+          }
         }
       } else {
-        obrpc::ObKillMViewRefreshArg arg;
         obrpc::ObKillMViewRefreshResult result;
-        arg.tenant_id_ = tenant_id;
-        arg.refresh_id_ = refresh_id;
         if (OB_FAIL(GCTX.srv_rpc_proxy_->to(leader_addr)
                     .by(tenant_id)
                     .timeout(GCONF.rpc_timeout)
                     .kill_mview_refresh(arg, result))) {
-          LOG_WARN("kill mview refresh rpc failed", KR(ret), K(tenant_id), K(refresh_id), K(leader_addr));
+          LOG_WARN("kill mview refresh rpc failed", KR(ret), K(arg), K(leader_addr));
         } else if (OB_FAIL(result.ret_)) {
-          LOG_WARN("kill mview refresh on leader failed", KR(ret), K(tenant_id), K(refresh_id), K(leader_addr));
+          LOG_WARN("kill mview refresh on leader failed", KR(ret), K(arg), K(leader_addr));
         }
       }
     } while (OB_NOT_MASTER == ret && ++retry_cnt <= RETRY_CNT_LIMIT);
+  }
+  return ret;
+}
+
+int ObMViewPendingTaskManager::kill_refreshes_by_mview_local(uint64_t tenant_id, uint64_t mview_id)
+{
+  int ret = OB_SUCCESS;
+  ObSEArray<int64_t, 4> refresh_ids;
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("pending task manager not init", KR(ret));
+  } else if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || OB_INVALID_ID == mview_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(mview_id));
+  } else if (OB_FAIL(table_operator_.get_active_refresh_ids_by_mview(tenant_id, mview_id, refresh_ids))) {
+    LOG_WARN("get active refresh ids by mview failed", KR(ret), K(tenant_id), K(mview_id));
+  } else {
+    // Best-effort: keep going across refresh_ids so one transient failure
+    // doesn't leave other refreshes alive holding the mview lock.
+    int first_err = OB_SUCCESS;
+    for (int64_t i = 0; i < refresh_ids.count(); ++i) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_TMP_FAIL(kill_refresh_local(tenant_id, refresh_ids.at(i)))) {
+        LOG_WARN("kill refresh local failed", KR(tmp_ret), K(tenant_id),
+                 "refresh_id", refresh_ids.at(i), K(mview_id));
+        if (OB_SUCCESS == first_err) {
+          first_err = tmp_ret;
+        }
+      }
+    }
+    if (OB_SUCC(ret) && OB_SUCCESS != first_err) {
+      ret = first_err;
+    }
+    LOG_INFO("kill refreshes by mview local done", KR(ret), K(tenant_id), K(mview_id),
+             "kill_count", refresh_ids.count());
+  }
+  return ret;
+}
+
+// Snapshot every DROP block marker's mview_id under the hashmap bucket lock,
+// doing no schema lookup inside the callback. The actual schema check and erase
+// happen afterwards in cleanup_stale_drop_blocks, outside the iteration.
+struct CollectDropBlockFunctor
+{
+  explicit CollectDropBlockFunctor(common::ObIArray<uint64_t> &mview_ids)
+    : mview_ids_(mview_ids), ret_(common::OB_SUCCESS) {}
+  int operator()(common::hash::HashMapPair<uint64_t, ObMViewContext *> &kv)
+  {
+    int ret = common::OB_SUCCESS;
+    if (OB_NOT_NULL(kv.second) &&
+        0 != (ATOMIC_LOAD(&kv.second->block_flags_) & ObMViewContext::BLOCK_FLAG_DROP)) {
+      if (OB_FAIL(mview_ids_.push_back(kv.first))) {
+        RS_LOG(WARN, "push back drop block mview id failed", KR(ret), "mview_id", kv.first);
+        ret_ = ret;
+      }
+    }
+    return ret;
+  }
+  common::ObIArray<uint64_t> &mview_ids_;
+  int ret_;
+};
+
+int ObMViewPendingTaskManager::try_clear_drop_block_by_lock(
+    const uint64_t tenant_id,
+    const uint64_t mview_id,
+    share::schema::ObSchemaGetterGuard &schema_guard,
+    bool &lock_succ)
+{
+  int ret = OB_SUCCESS;
+  lock_succ = false;
+  sql::ObFreeSessionCtx free_session_ctx;
+  sql::ObSQLSessionInfo *session_info = nullptr;
+  ObMViewTransaction trans;
+  if (OB_FAIL(ObMViewUtils::create_inner_session(
+                  tenant_id, schema_guard, free_session_ctx, session_info))) {
+    LOG_WARN("create inner session failed", KR(ret), K(tenant_id), K(mview_id));
+  } else if (OB_FAIL(trans.start(session_info, GCTX.sql_proxy_,
+                                  session_info->get_database_id(),
+                                  session_info->get_database_name()))) {
+    LOG_WARN("start trans failed", KR(ret), K(tenant_id), K(mview_id));
+  } else if (OB_FAIL(ObMViewRefreshHelper::lock_mview(
+                  trans, tenant_id, mview_id, true /*try_lock*/))) {
+    if (OB_TRY_LOCK_ROW_CONFLICT == ret || OB_EAGAIN == ret) {
+      // DROP DDL transaction is still active; keep the block flag in place.
+      LOG_INFO("mview drop DDL still in progress, skip stale block cleanup",
+               K(tenant_id), K(mview_id));
+      ret = OB_SUCCESS;
+    } else {
+      LOG_WARN("lock mview failed during drop block cleanup",
+               KR(ret), K(tenant_id), K(mview_id));
+    }
+  } else {
+    // Lock acquired: no DDL transaction holds it → DROP must have rolled back.
+    lock_succ = true;
+  }
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    // Always rollback to release the IN_TRANS lock we may have acquired.
+    if (OB_TMP_FAIL(trans.end(false /*commit*/))) {
+      LOG_WARN("end trans failed", KR(tmp_ret), K(tenant_id), K(mview_id));
+    }
+  }
+  ObMViewUtils::release_inner_session(free_session_ctx, session_info);
+  return ret;
+}
+
+int ObMViewPendingTaskManager::cleanup_stale_drop_blocks()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = MTL_ID();
+  ObSEArray<uint64_t, 16> mview_ids;
+  share::schema::ObSchemaGetterGuard schema_guard;
+  CollectDropBlockFunctor collect_fn(mview_ids);
+  if (OB_UNLIKELY(!is_inited_)) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("pending task manager not init", KR(ret));
+  } else if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema_service is null", KR(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("get tenant schema guard failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(mview_context_map_.foreach_refactored(collect_fn))) {
+    LOG_WARN("foreach mview context map failed", KR(ret));
+  } else if (OB_FAIL(collect_fn.ret_)) {
+    LOG_WARN("collect drop block mview ids failed", KR(ret));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < mview_ids.count(); ++i) {
+    const uint64_t mview_id = mview_ids.at(i);
+    bool should_clear = false;
+    const share::schema::ObTableSchema *table_schema = nullptr;
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(schema_guard.get_table_schema(tenant_id, mview_id, table_schema))) {
+      LOG_WARN("get table schema failed, skip this mview",
+               KR(tmp_ret), K(tenant_id), K(mview_id));
+    } else if (OB_ISNULL(table_schema)) {
+      // schema gone: the drop committed, safe to erase the whole context.
+      should_clear = true;
+    } else {
+      bool lock_succ = false;
+      if (OB_TMP_FAIL(try_clear_drop_block_by_lock(
+                          tenant_id, mview_id, schema_guard, lock_succ))) {
+        LOG_WARN("try clear drop block by lock failed",
+                 KR(tmp_ret), K(tenant_id), K(mview_id));
+      } else if (lock_succ) {
+        if (OB_TMP_FAIL(release_mview_block(mview_id, ObMViewContext::BLOCK_FLAG_DROP))) {
+          LOG_WARN("release drop block failed", KR(tmp_ret), K(tenant_id), K(mview_id));
+        } else {
+          LOG_INFO("cleared stale mview drop block (drop rolled back)",
+                   K(tenant_id), K(mview_id));
+        }
+      }
+    }
+    if (OB_SUCC(ret) && should_clear) {
+      if (OB_TMP_FAIL(erase_and_free_ctx(mview_id))) {
+        LOG_WARN("erase stale drop block failed", KR(tmp_ret), K(tenant_id), K(mview_id));
+      } else {
+        LOG_INFO("cleared stale mview drop block (drop committed)",
+                 K(tenant_id), K(mview_id));
+      }
+    }
   }
   return ret;
 }

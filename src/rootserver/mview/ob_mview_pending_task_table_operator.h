@@ -88,6 +88,12 @@ public:
                                 common::ObIArray<uint32_t> &out_session_ids,
                                 common::ObIArray<common::ObAddr> &out_addrs,
                                 bool &need_retry) const;
+  // Fetch active (PENDING / RUNNING / RETRY_WAIT) refresh_ids for a given mview.
+  // Used by DDL (drop materialized view / drop database) to enumerate refreshes
+  // it must kill before taking the OBJ_TYPE_MATERIALIZED_VIEW lock.
+  int get_active_refresh_ids_by_mview(uint64_t tenant_id,
+                                      uint64_t mview_id,
+                                      common::ObIArray<int64_t> &refresh_ids) const;
 
 private:
   int update_task_status(uint64_t tenant_id,

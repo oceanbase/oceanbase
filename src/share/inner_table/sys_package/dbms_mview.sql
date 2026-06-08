@@ -23,7 +23,10 @@ CREATE OR REPLACE PACKAGE dbms_mview AUTHID CURRENT_USER IS
     nested_refresh_mode    IN     VARCHAR2       := NULL,
     -- TEMPORARY v2 (task 0036): async=FALSE blocks until the batch completes;
     -- TRUE returns immediately after enqueue (prior 4.6.0 async behaviour).
-    async                  IN     BOOLEAN        := FALSE);
+    async                  IN     BOOLEAN        := FALSE,
+    -- force=TRUE kills any in-flight refresh targeting the same mview before
+    -- scheduling the new one, so callers can pre-empt stuck refreshes.
+    force                  IN     BOOLEAN        := FALSE);
 
   PROCEDURE refresh(
     tab                    IN     DBMS_UTILITY.UNCL_ARRAY,
@@ -42,7 +45,10 @@ CREATE OR REPLACE PACKAGE dbms_mview AUTHID CURRENT_USER IS
     nested_refresh_mode    IN     VARCHAR2       := NULL,
     -- TEMPORARY v2 (task 0036): async=FALSE blocks until the batch completes;
     -- TRUE returns immediately after enqueue (prior 4.6.0 async behaviour).
-    async                  IN     BOOLEAN        := FALSE);
+    async                  IN     BOOLEAN        := FALSE,
+    -- force=TRUE kills any in-flight refresh targeting the same mview before
+    -- scheduling the new one, so callers can pre-empt stuck refreshes.
+    force                  IN     BOOLEAN        := FALSE);
 
   FUNCTION refresh_report(
     refresh_id          IN     NUMBER        DEFAULT NULL,

@@ -165,7 +165,8 @@ ObMViewPendingTask::ObMViewPendingTask()
     gmt_create_(0),
     gmt_modified_(0),
     svr_addr_(),
-    session_id_(0)
+    session_id_(0),
+    expire_ts_(0)
 {
 }
 
@@ -207,6 +208,7 @@ int ObMViewPendingTask::assign(const ObMViewPendingTask &other)
   gmt_modified_ = other.gmt_modified_;
   svr_addr_ = other.svr_addr_;
   session_id_ = other.session_id_;
+  expire_ts_ = other.expire_ts_;
   // do not copy dep_mview_ids_
   dep_mview_id_cnt_ = 0;
   dep_mview_ids_ = NULL;

@@ -62,8 +62,10 @@ private:
   int init_env(uint64_t tenant_id,
                uint64_t mview_id,
                bool is_oracle_mode,
+               int64_t expire_ts,
                share::schema::ObSchemaGetterGuard &schema_guard,
                sql::ObSQLSessionInfo &session);
+  static int get_session_timeout_us(int64_t expire_ts, int64_t &timeout_us);
 
 private:
   bool is_inited_;

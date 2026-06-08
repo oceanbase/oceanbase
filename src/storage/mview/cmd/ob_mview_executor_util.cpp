@@ -412,12 +412,16 @@ int ObMViewExecutorUtil::wait_mview_refresh(sql::ObExecContext &ctx,
     // force_rpc=true: the current session is interrupted (kill query), its
     // interrupted state would cause inner-SQL inside kill_refresh_local to
     // fail with OB_ERR_QUERY_INTERRUPTED; sending RPC runs on a clean thread.
-    } else if (OB_TMP_FAIL(service->get_pending_task_manager()->kill_refresh(
-                   tenant_id, refresh_id, true /*force_rpc*/))) {
-      LOG_WARN("kill mview refresh failed after abnormal sync wait exit", K(tmp_ret), K(tenant_id), K(refresh_id));
     } else {
-      LOG_INFO("kill mview refresh issued after abnormal sync wait exit",
-                K(tenant_id), K(refresh_id), K(ret));
+      obrpc::ObKillMViewRefreshArg arg;
+      arg.tenant_id_ = tenant_id;
+      arg.refresh_id_ = refresh_id;
+      if (OB_TMP_FAIL(service->get_pending_task_manager()->kill_refresh(arg, true /*force_rpc*/))) {
+        LOG_WARN("kill mview refresh failed after abnormal sync wait exit", K(tmp_ret), K(tenant_id), K(refresh_id));
+      } else {
+        LOG_INFO("kill mview refresh issued after abnormal sync wait exit",
+                  K(tenant_id), K(refresh_id), K(ret));
+      }
     }
   }
   if (OB_SUCC(ret)) {

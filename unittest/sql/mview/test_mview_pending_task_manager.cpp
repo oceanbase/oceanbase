@@ -124,6 +124,7 @@ TEST_F(ObMViewPendingTaskManagerTest, AllOpsBeforeInitReturnNotInit)
                               0,
                               0,
                               false,
+                              0,
                               common::ObAddr()));
   obrpc::ObScheduleMViewRefreshArg arg;
   arg.tenant_id_ = MGR_TENANT_ID;
@@ -140,7 +141,11 @@ TEST_F(ObMViewPendingTaskManagerTest, AllOpsBeforeInitReturnNotInit)
 
 TEST_F(ObMViewPendingTaskManagerTest, KillMethodsBeforeInitReturnNotInit)
 {
-  EXPECT_EQ(OB_NOT_INIT, manager_.kill_refresh(MGR_TENANT_ID, MGR_REFRESH_ID));
+  obrpc::ObKillMViewRefreshArg kill_arg;
+  kill_arg.tenant_id_ = MGR_TENANT_ID;
+  kill_arg.refresh_id_ = MGR_REFRESH_ID;
+  kill_arg.is_kill_by_mview_id_ = false;
+  EXPECT_EQ(OB_NOT_INIT, manager_.kill_refresh(kill_arg));
   EXPECT_EQ(OB_NOT_INIT, manager_.kill_refresh_local(MGR_TENANT_ID, MGR_REFRESH_ID));
   EXPECT_EQ(OB_NOT_INIT, manager_.mark_all_tasks_canceled(MGR_TENANT_ID, MGR_REFRESH_ID));
 }

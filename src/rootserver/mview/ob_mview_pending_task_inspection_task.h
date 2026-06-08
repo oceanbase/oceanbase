@@ -76,7 +76,7 @@ private:
 private:
   static const int64_t INSPECTION_INTERVAL = 1LL * 1000 * 1000; // 1s
   static const int64_t RECOVERY_TICK_RATIO = 10; // process_recovery_list runs every 10 ticks (~10s)
-
+  static const int64_t CLEANUP_DROP_BLOCK_RATIO = 60; // 60s
   ObMViewPendingTaskManager *manager_;
   bool is_inited_;
   bool in_sched_;

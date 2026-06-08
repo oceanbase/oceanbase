@@ -152,9 +152,31 @@ int ObMViewPendingTaskExecutor::get_exec_user_info(uint64_t tenant_id,
   return ret;
 }
 
+int ObMViewPendingTaskExecutor::get_session_timeout_us(int64_t expire_ts,
+                                                        int64_t &timeout_us)
+{
+  int ret = OB_SUCCESS;
+  const int64_t DEFAULT_TIMEOUT_US = 24LL * 60 * 60 * 1000 * 1000;
+  const int64_t MIN_TIMEOUT_US = 1LL * 1000 * 1000;
+  timeout_us = DEFAULT_TIMEOUT_US;
+  if (expire_ts > 0) {
+    const int64_t now = ObTimeUtility::current_time();
+    const int64_t remaining = expire_ts - now;
+    if (remaining <= 0) {
+      ret = OB_TIMEOUT;
+      LOG_WARN("mview refresh deadline already crossed when entering executor",
+               KR(ret), K(expire_ts), K(now));
+    } else {
+      timeout_us = MAX(remaining, MIN_TIMEOUT_US);
+    }
+  }
+  return ret;
+}
+
 int ObMViewPendingTaskExecutor::init_env(uint64_t tenant_id,
                                          uint64_t mview_id,
                                          bool is_oracle_mode,
+                                         int64_t expire_ts,
                                          ObSchemaGetterGuard &schema_guard,
                                          ObSQLSessionInfo &session)
 {
@@ -169,8 +191,7 @@ int ObMViewPendingTaskExecutor::init_env(uint64_t tenant_id,
   ObObj sql_mode;
   ObObj query_timeout_obj;
   ObObj trx_timeout_obj;
-  const int64_t QUERY_TIMEOUT_US = 24LL * 60 * 60 * 1000 * 1000;
-  const int64_t TRX_TIMEOUT_US = 24LL * 60 * 60 * 1000 * 1000;
+  int64_t timeout_us = 0;
   if (is_oracle_mode) {
     compatibility_mode.set_int(1);
     sql_mode.set_uint(ObUInt64Type, DEFAULT_ORACLE_MODE);
@@ -178,7 +199,9 @@ int ObMViewPendingTaskExecutor::init_env(uint64_t tenant_id,
     compatibility_mode.set_int(0);
     sql_mode.set_uint(ObUInt64Type, DEFAULT_MYSQL_MODE);
   }
-  if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_info))) {
+  if (OB_FAIL(get_session_timeout_us(expire_ts, timeout_us))) {
+    LOG_WARN("calc session timeout us failed", KR(ret), K(tenant_id), K(mview_id), K(expire_ts));
+  } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_info))) {
     LOG_WARN("get tenant info failed", KR(ret), K(tenant_id));
   } else if (OB_ISNULL(tenant_info)) {
     ret = OB_ERR_UNEXPECTED;
@@ -255,14 +278,15 @@ int ObMViewPendingTaskExecutor::init_env(uint64_t tenant_id,
         session.gen_gtt_session_scope_unique_id();
         session.gen_gtt_trans_scope_unique_id();
         session.set_client_sessid(session.get_sid());
-        query_timeout_obj.set_int(QUERY_TIMEOUT_US);
-        trx_timeout_obj.set_int(TRX_TIMEOUT_US);
+        query_timeout_obj.set_int(timeout_us);
+        trx_timeout_obj.set_int(timeout_us);
         if (OB_FAIL(session.update_sys_variable(share::SYS_VAR_OB_QUERY_TIMEOUT, query_timeout_obj))) {
           LOG_WARN("update query timeout failed", KR(ret), K(tenant_id));
         } else if (OB_FAIL(session.update_sys_variable(share::SYS_VAR_OB_TRX_TIMEOUT, trx_timeout_obj))) {
           LOG_WARN("update trx timeout failed", KR(ret), K(tenant_id));
         } else {
           session.set_query_start_time(ObTimeUtility::current_time());
+          session.set_current_trace_id(ObCurTraceId::get_trace_id());
         }
       }
     }
@@ -278,10 +302,17 @@ int ObMViewPendingTaskExecutor::run_pending_task(const obrpc::ObRunMViewPendingT
   const uint64_t mview_id = arg.mview_id_;
   const share::schema::ObMVRefreshMethod refresh_method = arg.refresh_method_;
   const int64_t refresh_parallel = arg.refresh_parallel_;
+  const int64_t expire_ts = arg.expire_ts_;
   bool is_oracle_mode = false;
   lib::Worker::CompatMode saved_mode = THIS_WORKER.get_compatibility_mode();
   const int64_t saved_timeout_ts = THIS_WORKER.get_timeout_ts();
-  THIS_WORKER.set_timeout_ts(INT64_MAX);
+  // Default worker deadline if no caller deadline was forwarded. Aligned with
+  // the executor session's DEFAULT_TIMEOUT_US so SQL-layer timeout and worker
+  // timeout converge on the same wall-clock point.
+  const int64_t DEFAULT_WORKER_BUDGET_US = 24LL * 60 * 60 * 1000 * 1000;
+  const int64_t now = ObTimeUtility::current_time();
+  const int64_t worker_deadline = (expire_ts > 0) ? expire_ts : (now + DEFAULT_WORKER_BUDGET_US);
+  THIS_WORKER.set_timeout_ts(worker_deadline);
   lib::Worker::CompatMode target_mode = saved_mode;
   bool need_restore_mode = false;
   ObArenaAllocator allocator("MVPendingExec");
@@ -314,7 +345,7 @@ int ObMViewPendingTaskExecutor::run_pending_task(const obrpc::ObRunMViewPendingT
       LOG_WARN("update task session id failed",
                KR(ret), K(tenant_id), K(refresh_id), K(mview_id),
                K(free_session_ctx.sessid_));
-    } else if (OB_FAIL(init_env(tenant_id, mview_id, is_oracle_mode, schema_guard, *session))) {
+    } else if (OB_FAIL(init_env(tenant_id, mview_id, is_oracle_mode, expire_ts, schema_guard, *session))) {
       LOG_WARN("init env failed", KR(ret), K(tenant_id), K(mview_id));
     } else {
       session->set_session_sleep();                    // SESSION_INIT → SESSION_SLEEP
