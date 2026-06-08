@@ -872,6 +872,7 @@ int ObExecContext::init_physical_plan_ctx(const ObPhysicalPlan &plan)
           max_execution_time <= MAX_EXECUTION_TIME_MIN ||
           max_execution_time > MAX_EXECUTION_TIME_MAX ||
           stmt::T_SELECT != plan.get_stmt_type() ||
+          ObStmt::is_show_stmt(plan.get_literal_stmt_type()) ||
           (sql_ctx_->multi_stmt_item_.is_part_of_multi_stmt() && query_timeout_timestamp <= max_exec_timeout_timestamp) ||
           !has_max_exec_time_cap) {
         timeout_timestamp = query_timeout_timestamp;
