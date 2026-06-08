@@ -308,7 +308,7 @@ int ObArrayUtil::append(ObIArrayType &array, const ObObjType elem_type, const Ob
                            has_lob_header);
         if (OB_FAIL(loc.get_inrow_data(payload))) {
           LOG_WARN("get inrow lob payload failed", K(ret), K(lob_data.length()));
-        } else if (static_cast<ObLength>(payload.length()) > ObAccuracy::MAX_ACCURACY[elem_type].get_length()) {
+        } else if (static_cast<ObLength>(payload.length()) >= ObAccuracy::MAX_ACCURACY[elem_type].get_length()) {
           ret = OB_ERR_DATA_TOO_LONG;
           LOG_WARN("data too long for array element", K(ret), K(payload.length()), K(elem_type));
         } else if (OB_FAIL(binary_array->push_back(payload, false))) {

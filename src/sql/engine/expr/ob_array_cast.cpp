@@ -315,7 +315,7 @@ int ObArrayCastUtils::cast_add_element(common::ObIAllocator &alloc, ObObj &src_e
         // Get the default max length for this TEXT type
         const ObAccuracy &type_accuracy = ObAccuracy::DDL_DEFAULT_ACCURACY[dst_obj_type];
         int64_t max_length = type_accuracy.get_length();
-        if (OB_SUCC(ret) && lob_data.length() > max_length) {
+        if (OB_SUCC(ret) && lob_data.length() >= max_length) {
           ret = OB_ERR_DATA_TOO_LONG;
           LOG_WARN("text type length exceeds max length", K(ret),
                    K(lob_data.length()), K(max_length), K(dst_obj_type));

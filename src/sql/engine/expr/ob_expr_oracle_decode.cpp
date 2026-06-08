@@ -52,8 +52,9 @@ int ObExprOracleDecode::calc_result_typeN(ObExprResType &type,
     LOG_WARN("invalid params", K(param_num), K(RESULT_TYPE_INDEX), K(LEAST_PARAM_NUMS), K(CALC_TYPE_INDEX));
     ret = OB_INVALID_ARGUMENT;
   } else {
-    //除了返回值， 其他参数不能为lob或roaringbitmap类型
-    if (types_stack[0].is_lob() || types_stack[0].is_roaringbitmap()) {
+    //除了返回值， 其他参数不能为lob或roaringbitmap或collection类型
+    if (types_stack[0].is_lob() || types_stack[0].is_roaringbitmap()
+        || ob_is_collection_sql_type(types_stack[0].get_type())) {
       ret = OB_ERR_INVALID_TYPE_FOR_OP;
       LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "-",
                   ob_obj_type_str(types_stack[0].get_type()));
@@ -74,7 +75,8 @@ int ObExprOracleDecode::calc_result_typeN(ObExprResType &type,
     for (int64_t i = 1; OB_SUCC(ret) && i < param_num; i += 2) {
       if (has_default && i == param_num - 1) {
         // ignore default expr when calc calc_type
-      } else if (types_stack[i].is_lob() || types_stack[i].is_roaringbitmap()) {
+      } else if (types_stack[i].is_lob() || types_stack[i].is_roaringbitmap()
+                 || ob_is_collection_sql_type(types_stack[i].get_type())) {
         ret = OB_ERR_INVALID_TYPE_FOR_OP;
         LOG_USER_ERROR(OB_ERR_INVALID_TYPE_FOR_OP, "-",
                     ob_obj_type_str(types_stack[i].get_type()));
