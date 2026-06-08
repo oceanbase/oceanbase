@@ -72,6 +72,7 @@ public:
 
 public:
   common::ObTabletID tablet_id_;
+  common::ObArenaAllocator tablet_allocator_;
   ObTabletHandle tablet_handle_;
   obrpc::ObCopyTabletSSTableInfo sstable_info_;
   obrpc::ObCopyTabletSSTableHeader copy_header_;

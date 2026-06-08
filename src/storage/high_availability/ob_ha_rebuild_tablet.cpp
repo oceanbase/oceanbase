@@ -92,12 +92,15 @@ void ObRebuildTabletCtx::reuse()
 /******************ObRebuildTabletCopyCtx*********************/
 ObRebuildTabletCopyCtx::ObRebuildTabletCopyCtx()
   : tablet_id_(),
+    tablet_allocator_(),
     tablet_handle_(),
     sstable_info_(),
     copy_header_(),
     lock_(common::ObLatchIds::MIGRATE_LOCK),
     status_(ObCopyTabletStatus::MAX_STATUS)
 {
+  ObMemAttr attr(MTL_ID(), "HaTabletHdl");
+  tablet_allocator_.set_attr(attr);
 }
 
 ObRebuildTabletCopyCtx::~ObRebuildTabletCopyCtx()
@@ -116,6 +119,7 @@ void ObRebuildTabletCopyCtx::reset()
 {
   tablet_id_.reset();
   tablet_handle_.reset();
+  tablet_allocator_.reset();
   sstable_info_.reset();
   copy_header_.reset();
   status_ = ObCopyTabletStatus::MAX_STATUS;
@@ -151,6 +155,7 @@ int ObRebuildTabletCopyCtx::get_copy_tablet_status(ObCopyTabletStatus::STATUS &s
 void ObRebuildTabletCopyCtx::reuse()
 {
   tablet_handle_.reset();
+  tablet_allocator_.reset();
   sstable_info_.reset();
   copy_header_.reset();
 }
@@ -1137,7 +1142,6 @@ int ObTabletRebuildMajorDag::init(
   ObLS *ls = nullptr;
   ObCopyTabletStatus::STATUS status = ObCopyTabletStatus::MAX_STATUS;
   ObRebuildTabletCtx *ctx = nullptr;
-  ObTabletHandle tablet_handle;
   DEBUG_SYNC(BEFORE_REBUILD_TABLET_INIT_DAG);
 
   if (is_inited_) {
@@ -1156,18 +1160,22 @@ int ObTabletRebuildMajorDag::init(
   } else if (OB_ISNULL(ls = ls_handle_.get_ls())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls should not be NULL", K(ret), K(tablet_id));
-  } else if (OB_FAIL(ls->ha_get_tablet(tablet_id, tablet_handle))) {
-    if (OB_TABLET_NOT_EXIST == ret) {
-      status = ObCopyTabletStatus::TABLET_NOT_EXIST;
-      ret = OB_SUCCESS;
-    } else {
-      LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
-    }
-  } else if (OB_FAIL(copy_tablet_ctx_.tablet_handle_.assign(tablet_handle))) {
-    LOG_WARN("failed to assign tablet_handle", K(ret), K(tablet_handle));
   } else {
-    status = ObCopyTabletStatus::TABLET_EXIST;
-    compat_mode_ = tablet_handle.get_obj()->get_tablet_meta().compat_mode_;
+    // Rebuild dag pins this handle for its full lifetime while the dest tablet keeps serving
+    // writes; without this, dumped memtables cannot be freed.
+    const ObTabletMapKey map_key(ctx->arg_.ls_id_, tablet_id);
+    if (OB_FAIL(ls->ha_get_tablet_without_memtables(WashTabletPriority::WTP_LOW,
+        map_key, copy_tablet_ctx_.tablet_allocator_, copy_tablet_ctx_.tablet_handle_))) {
+      if (OB_TABLET_NOT_EXIST == ret) {
+        status = ObCopyTabletStatus::TABLET_NOT_EXIST;
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to get tablet without memtables", K(ret), K(map_key));
+      }
+    } else {
+      status = ObCopyTabletStatus::TABLET_EXIST;
+      compat_mode_ = copy_tablet_ctx_.tablet_handle_.get_obj()->get_tablet_meta().compat_mode_;
+    }
   }
 
   if (OB_FAIL(ret)) {
@@ -1354,10 +1362,12 @@ int ObTabletRebuildMajorDag::inner_reset_status_for_retry()
         "ls_id", ctx->arg_.ls_id_.id(),
         "tablet_id", copy_tablet_ctx_.tablet_id_,
         "result", result, "retry_count", retry_count);
+    const ObTabletMapKey map_key(ctx->arg_.ls_id_, copy_tablet_ctx_.tablet_id_);
     if (OB_ISNULL(ls = ls_handle_.get_ls())) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls should not be NULL", K(ret), K(copy_tablet_ctx_));
-    } else if (OB_FAIL(ls->ha_get_tablet(copy_tablet_ctx_.tablet_id_, copy_tablet_ctx_.tablet_handle_))) {
+    } else if (OB_FAIL(ls->ha_get_tablet_without_memtables(WashTabletPriority::WTP_LOW,
+        map_key, copy_tablet_ctx_.tablet_allocator_, copy_tablet_ctx_.tablet_handle_))) {
       if (OB_TABLET_NOT_EXIST == ret) {
         ret = OB_SUCCESS;
         const ObCopyTabletStatus::STATUS status = ObCopyTabletStatus::TABLET_NOT_EXIST;
@@ -1367,7 +1377,7 @@ int ObTabletRebuildMajorDag::inner_reset_status_for_retry()
           FLOG_INFO("tablet in dest is deleted, set copy status not exist", K(copy_tablet_ctx_));
         }
       } else {
-        LOG_WARN("failed to get tablet", K(ret), K(copy_tablet_ctx_));
+        LOG_WARN("failed to get tablet without memtables", K(ret), K(copy_tablet_ctx_));
       }
     }
 

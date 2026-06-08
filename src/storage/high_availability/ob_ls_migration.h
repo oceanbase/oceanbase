@@ -92,6 +92,7 @@ public:
 
 public:
   common::ObTabletID tablet_id_;
+  common::ObArenaAllocator tablet_allocator_;
   ObTabletHandle tablet_handle_;
   ObCopyTabletRecordExtraInfo extra_info_; // extra info of server event
 private:
