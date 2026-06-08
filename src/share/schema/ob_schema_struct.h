@@ -1618,6 +1618,8 @@ enum class ObObjectType {
   LOCATION        = 18,
   AI_MODEL        = 19,
   SENSITIVE_RULE  = 20,
+  AI_PROVIDER     = 21,
+  AI_GATEWAY      = 22,
   MAX_TYPE,
 };
 struct ObSchemaObjVersion

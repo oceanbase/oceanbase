@@ -14005,7 +14005,9 @@ const char *OB_OBJECT_TYPE_STR[] =
   "CATALOG",
   "LOCATION",
   "AI_MODEL",
-  "SENSITIVE_RULE"
+  "SENSITIVE_RULE",
+  "AI_PROVIDER",
+  "AI_GATEWAY"
 };
 static_assert(ARRAYSIZEOF(OB_OBJECT_TYPE_STR) == static_cast<int64_t>(ObObjectType::MAX_TYPE),
               "array size mismatch");
