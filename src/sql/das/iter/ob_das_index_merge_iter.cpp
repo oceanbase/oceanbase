@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX SQL_DAS
 #include "sql/das/iter/ob_das_index_merge_iter.h"
 #include "src/sql/das/ob_das_attach_define.h"
+#include "sql/engine/table/ob_table_scan_op.h"
 namespace oceanbase
 {
 using namespace common;
@@ -459,9 +460,51 @@ int ObDASIndexMergeIter::prepare_scan_ranges(ObTableScanParam &scan_param, const
     LOG_WARN("failed to assign ss key ranges", K(ret));
   } else if (OB_FAIL(scan_param.mbr_filters_.assign(rtdef->mbr_filters_))) {
     LOG_WARN("failed to assign mbr filters", K(ret));
+  } else if (OB_FAIL(transform_physical_rowid_ranges(scan_param, rtdef))) {
+    LOG_WARN("failed to transform physical rowid ranges", K(ret));
   }
 
   LOG_TRACE("index merge iter prepare scan ranges", K(scan_param), KPC(rtdef), K(ret));
+  return ret;
+}
+
+int ObDASIndexMergeIter::transform_physical_rowid_ranges(ObTableScanParam &scan_param,
+                                                         const ObDASScanRtDef *rtdef) const
+{
+  int ret = OB_SUCCESS;
+
+  const ObDASScanCtDef *scan_ctdef = nullptr;
+
+  if (OB_ISNULL(rtdef) || OB_ISNULL(scan_ctdef = static_cast<const ObDASScanCtDef*>(rtdef->ctdef_))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr scan ctdef", K(ret), KPC(rtdef));
+  } else if (OB_ISNULL(mem_ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected nullptr mem ctx", K(ret));
+  } else {
+    const storage::ObTableReadInfo &read_info = scan_ctdef->table_param_.get_read_info();
+    common::ObIAllocator &range_allocator = mem_ctx_->get_arena_allocator();
+    for (int64_t i = 0; OB_SUCC(ret) && i < scan_param.key_ranges_.count(); ++i) {
+      ObNewRange &scan_range = scan_param.key_ranges_.at(i);
+      if (!scan_range.is_physical_rowid_range_) {
+        // do nothing
+      } else if (OB_UNLIKELY(read_info.get_columns_desc().count() < 1)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected empty columns desc", K(ret), K(read_info));
+      } else {
+        ObArrayWrap<ObColDesc> rowkey_descs(read_info.get_columns_desc().get_data(),
+                                            read_info.get_schema_rowkey_count());
+        if (OB_FAIL(ObTableScanOp::transform_physical_rowid(range_allocator,
+                                                            scan_param.tablet_id_,
+                                                            rowkey_descs,
+                                                            scan_range))) {
+          LOG_WARN("transform physical rowid for range failed",
+                   K(ret), K(scan_range), K(scan_param.tablet_id_));
+        }
+      }
+    }
+  }
+
   return ret;
 }
 

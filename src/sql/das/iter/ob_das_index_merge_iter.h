@@ -241,6 +241,7 @@ protected:
                       ObTableScanParam &scan_param) const;
 private:
   int prepare_scan_ranges(ObTableScanParam &scan_param, const ObDASScanRtDef *rtdef) const;
+  int transform_physical_rowid_ranges(ObTableScanParam &scan_param, const ObDASScanRtDef *rtdef) const;
   int check_disable_bitmap();
   int check_rowkey_is_uint64();
   int init_mock_skip(common::ObIAllocator &alloc, int64_t max_size);
