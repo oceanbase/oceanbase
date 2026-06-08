@@ -22,6 +22,7 @@
 #include "sql/dblink/ob_tm_service.h"
 #include "storage/lock_wait_mgr/ob_lock_wait_mgr.h"
 #include "sql/engine/dml/ob_table_modify_op.h"
+#include "observer/mysql/obmp_utils.h"
 
 #ifdef CHECK_SESSION
 #error "redefine macro CHECK_SESSION"
@@ -653,7 +654,11 @@ int ObSqlTransControl::do_end_trans_(ObSQLSessionInfo *session,
     } else if (is_rollback) {
       ret = txs->rollback_tx(*tx_ptr);
     } else if (callback) {
-      if (OB_FAIL(inc_session_ref(session))) {
+      // if dml run async commit, try to serialize package var first which may cause package compile action, compile action will generate inner sql traction
+      if (OB_NOT_NULL(session->get_cur_exec_ctx()) &&
+          OB_FAIL(observer::ObMPUtils::try_add_changed_package_info(*session, *session->get_cur_exec_ctx()))) {
+        LOG_WARN("failed to add changed package info", K(ret));
+      } else if (OB_FAIL(inc_session_ref(session))) {
         LOG_WARN("fail to inc session ref", K(ret));
       } else {
         callback->handout();
