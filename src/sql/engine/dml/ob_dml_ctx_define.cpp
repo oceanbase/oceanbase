@@ -287,7 +287,8 @@ OB_SERIALIZE_MEMBER(ObDMLBaseCtDef,
                     has_instead_of_trigger_,
                     trans_info_expr_,
                     is_table_with_clustering_key_,
-                    is_vec_hnsw_index_vid_opt_);
+                    is_vec_hnsw_index_vid_opt_,
+                    is_compaction_ttl_table_);
 
 OB_SERIALIZE_MEMBER(ObMultiInsCtDef,
                     calc_part_id_expr_,

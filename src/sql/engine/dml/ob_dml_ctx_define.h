@@ -540,7 +540,8 @@ public:
                        K_(has_instead_of_trigger),
                        KPC_(trans_info_expr),
                        K_(is_vec_hnsw_index_vid_opt),
-                       K_(is_table_with_clustering_key));
+                       K_(is_table_with_clustering_key),
+                       K_(is_compaction_ttl_table));
 
   ObDMLOpType dml_type_;
   ExprFixedArray check_cst_exprs_;
@@ -566,6 +567,7 @@ public:
   ObExpr *trans_info_expr_;
   bool is_table_with_clustering_key_;
   bool is_vec_hnsw_index_vid_opt_;
+  bool is_compaction_ttl_table_;
 protected:
   ObDMLBaseCtDef(common::ObIAllocator &alloc,
                  ObDASDMLBaseCtDef &das_base_ctdef,
@@ -586,7 +588,8 @@ protected:
       has_instead_of_trigger_(false),
       trans_info_expr_(nullptr),
       is_table_with_clustering_key_(false),
-      is_vec_hnsw_index_vid_opt_(false)
+      is_vec_hnsw_index_vid_opt_(false),
+      is_compaction_ttl_table_(false)
   { }
 };
 
