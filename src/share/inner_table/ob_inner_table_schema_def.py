@@ -6406,26 +6406,26 @@ def_table_schema(
   in_tenant_space = True,
   normal_columns = [
     ('run_user_id', 'int'),
-    ('num_mvs_total', 'int'),
-    ('num_mvs_current', 'int'),
-    ('mviews', 'varchar:4000'),
-    ('base_tables', 'varchar:4000', 'true'),
+    ('num_mvs_total', 'int', 'true'), # Deprecated, no longer maintained
+    ('num_mvs_current', 'int'), # Deprecated, no longer maintained
+    ('mviews', 'varchar:4000', 'true'), # Deprecated, no longer maintained
+    ('base_tables', 'varchar:4000', 'true'), # Deprecated, no longer maintained
     ('method', 'varchar:4000', 'true'),
-    ('rollback_seg', 'varchar:4000', 'true'),
-    ('push_deferred_rpc', 'bool'),
-    ('refresh_after_errors', 'bool'),
-    ('purge_option', 'int'),
+    ('rollback_seg', 'varchar:4000', 'true'), # Unused, written as default placeholder
+    ('push_deferred_rpc', 'bool', 'true'), # Unused, written as default placeholder
+    ('refresh_after_errors', 'bool', 'true'), # Unused, written as default placeholder
+    ('purge_option', 'int', 'true'), # Unused, written as default placeholder
     ('parallelism', 'int'),
-    ('heap_size', 'int'),
-    ('atomic_refresh', 'bool'),
+    ('heap_size', 'int', 'true'), # Unused, written as default placeholder
+    ('atomic_refresh', 'bool', 'true'), # Unused, written as default placeholder
     ('nested', 'bool'),
-    ('out_of_place', 'bool'),
+    ('out_of_place', 'bool', 'true'), # Unused, written as default placeholder
     ('number_of_failures', 'int'),
     ('start_time', 'timestamp'),
     ('end_time', 'timestamp'),
     ('elapsed_time', 'int'),
-    ('log_purge_time', 'int'),
-    ('complete_stats_avaliable', 'bool'),
+    ('log_purge_time', 'int', 'true'), # Deprecated, no longer maintained
+    ('complete_stats_avaliable', 'bool', 'true'), # Unused, written as default placeholder
     ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true'),
     ('mview_id', 'int', 'true'),
     ('data_target_scn', 'uint', 'true'),
@@ -6452,7 +6452,7 @@ def_table_schema(
     ('start_time', 'timestamp'),
     ('end_time', 'timestamp'),
     ('elapsed_time', 'int'),
-    ('log_purge_time', 'int'),
+    ('log_purge_time', 'int', 'true'), # Deprecated, no longer maintained
     ('initial_num_rows', 'int'),
     ('final_num_rows', 'int'),
     ('num_steps', 'int'),

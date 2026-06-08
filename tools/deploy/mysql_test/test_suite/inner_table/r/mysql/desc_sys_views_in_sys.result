@@ -12959,16 +12959,16 @@ Field	Type	Null	Key	Default	Extra
 TENANT_ID	bigint(20)	NO		NULL	
 RUN_OWNER	varchar(128)	NO		NULL	
 REFRESH_ID	bigint(20)	NO		NULL	
-NUM_MVS	bigint(20)	NO		NULL	
-MVIEWS	text	NO		NULL	
+NUM_MVS	bigint(20)	YES		NULL	
+MVIEWS	text	YES		NULL	
 BASE_TABLES	text	YES		NULL	
 METHOD	text	YES		NULL	
 ROLLBACK_SEG	text	YES		NULL	
 PUSH_DEFERRED_RPC	varchar(1)	NO			
 REFRESH_AFTER_ERRORS	varchar(1)	NO			
-PURGE_OPTION	bigint(20)	NO		NULL	
+PURGE_OPTION	bigint(20)	YES		NULL	
 PARALLELISM	bigint(20)	NO		NULL	
-HEAP_SIZE	bigint(20)	NO		NULL	
+HEAP_SIZE	bigint(20)	YES		NULL	
 ATOMIC_REFRESH	varchar(1)	NO			
 NESTED	varchar(1)	NO			
 OUT_OF_PLACE	varchar(1)	NO			
@@ -12977,7 +12977,7 @@ START_TIME	datetime	NO		NULL
 END_TIME	datetime	NO		NULL	
 ELAPSED_TIME	bigint(20)	NO		NULL	
 LOG_SETUP_TIME	bigint(1)	NO			
-LOG_PURGE_TIME	bigint(20)	NO		NULL	
+LOG_PURGE_TIME	bigint(20)	YES		NULL	
 COMPLETE_STATS_AVAILABLE	varchar(1)	NO			
 set @query_type = (select 
 case 
@@ -12993,16 +12993,16 @@ desc oceanbase.DBA_MVREF_RUN_STATS;
 Field	Type	Null	Key	Default	Extra
 RUN_OWNER	varchar(128)	NO		NULL	
 REFRESH_ID	bigint(20)	NO		NULL	
-NUM_MVS	bigint(20)	NO		NULL	
-MVIEWS	text	NO		NULL	
+NUM_MVS	bigint(20)	YES		NULL	
+MVIEWS	text	YES		NULL	
 BASE_TABLES	text	YES		NULL	
 METHOD	text	YES		NULL	
 ROLLBACK_SEG	text	YES		NULL	
 PUSH_DEFERRED_RPC	varchar(1)	NO			
 REFRESH_AFTER_ERRORS	varchar(1)	NO			
-PURGE_OPTION	bigint(20)	NO		NULL	
+PURGE_OPTION	bigint(20)	YES		NULL	
 PARALLELISM	bigint(20)	NO		NULL	
-HEAP_SIZE	bigint(20)	NO		NULL	
+HEAP_SIZE	bigint(20)	YES		NULL	
 ATOMIC_REFRESH	varchar(1)	NO			
 NESTED	varchar(1)	NO			
 OUT_OF_PLACE	varchar(1)	NO			
@@ -13011,7 +13011,7 @@ START_TIME	datetime	NO		NULL
 END_TIME	datetime	NO		NULL	
 ELAPSED_TIME	bigint(20)	NO		NULL	
 LOG_SETUP_TIME	bigint(1)	NO			
-LOG_PURGE_TIME	bigint(20)	NO		NULL	
+LOG_PURGE_TIME	bigint(20)	YES		NULL	
 COMPLETE_STATS_AVAILABLE	varchar(1)	NO			
 set @query_type = (select 
 case 
@@ -13036,7 +13036,7 @@ START_TIME	datetime	NO		NULL
 END_TIME	datetime	NO		NULL	
 ELAPSED_TIME	bigint(20)	NO		NULL	
 LOG_SETUP_TIME	bigint(1)	NO			
-LOG_PURGE_TIME	bigint(20)	NO		NULL	
+LOG_PURGE_TIME	bigint(20)	YES		NULL	
 INITIAL_NUM_ROWS	bigint(20)	NO		NULL	
 FINAL_NUM_ROWS	bigint(20)	NO		NULL	
 RESULT	bigint(20)	NO		NULL	
@@ -13062,7 +13062,7 @@ START_TIME	datetime	NO		NULL
 END_TIME	datetime	NO		NULL	
 ELAPSED_TIME	bigint(20)	NO		NULL	
 LOG_SETUP_TIME	bigint(1)	NO			
-LOG_PURGE_TIME	bigint(20)	NO		NULL	
+LOG_PURGE_TIME	bigint(20)	YES		NULL	
 INITIAL_NUM_ROWS	bigint(20)	NO		NULL	
 FINAL_NUM_ROWS	bigint(20)	NO		NULL	
 RESULT	bigint(20)	NO		NULL	
