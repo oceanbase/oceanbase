@@ -2659,6 +2659,7 @@ int ObTableParallelHint::print_hint_desc(PlanText &plan_text) const
 }
 
 const ObString ObIndexHint::PRIMARY_KEY = "primary";
+const ObString ObIndexHint::KEY = "key";
 
 int ObIndexHint::assign(const ObIndexHint &other)
 {

@@ -1254,6 +1254,7 @@ public:
   virtual ~ObIndexHint() {}
 
   static const ObString PRIMARY_KEY;
+  static const ObString KEY;  // INDEX(table key) on heap table: main table with range
 
   virtual int get_all_table_in_hint(ObIArray<ObTableInHint*> &all_tables) override { return all_tables.push_back(&table_); }
   virtual int print_hint_desc(PlanText &plan_text) const override;
@@ -1281,6 +1282,21 @@ public:
   {
     return T_INDEX_DESC_HINT == get_hint_type() ||
            T_INDEX_SS_DESC_HINT == get_hint_type();
+  }
+  // On a heap-organized table, INDEX(table key) and INDEX(table primary) both
+  // select the main table. The hint name "key" is resolved identically to "primary"
+  // for heap-organized tables, but the two names carry different semantics:
+  //  - "primary": scan through the hidden primary key index (same as IOT)
+  //  - "key":     scan the main table directly using its clustering key order
+  // This method checks whether the hint's index_name_ matches the "key" literal.
+  bool is_heap_org_key_hint() const
+  {
+    return (T_INDEX_HINT == get_hint_type() ||
+            T_INDEX_DESC_HINT == get_hint_type() ||
+            T_INDEX_SS_HINT == get_hint_type() ||
+            T_INDEX_SS_DESC_HINT == get_hint_type() ||
+            T_NO_INDEX_HINT == get_hint_type()) &&
+           0 == index_name_.case_compare(KEY);
   }
   bool is_unordered_hint() const
   {

@@ -1066,14 +1066,33 @@ int ObTransformLateMaterialization::generate_late_materialization_hint(
         }
       }
     }
-    // index back full hint
+    // index back hint
     if (OB_SUCC(ret)) {
       ObTableInHint table_in_hint(table_item.qb_name_,
                                   table_item.database_name_,
                                   table_item.get_object_name());
       ObIndexHint *index_hint = NULL;
-      if (OB_FAIL(ObQueryHint::create_hint(ctx_->allocator_, T_FULL_HINT, index_hint))) {
+      bool use_index_primary = select_stmt.get_query_ctx()->check_opt_compat_version(
+                                   COMPAT_VERSION_4_3_5_BP6, COMPAT_VERSION_4_4_0,
+                                   COMPAT_VERSION_4_4_2_BP2, COMPAT_VERSION_4_5_0,
+                                   COMPAT_VERSION_4_6_1);
+      if (OB_FAIL(ObQueryHint::create_hint(ctx_->allocator_,
+                                           use_index_primary ? T_INDEX_HINT : T_FULL_HINT,
+                                           index_hint))) {
         LOG_WARN("failed to create hint", K(ret));
+      } else if (use_index_primary) {
+        const ObTableSchema *table_schema = NULL;
+        bool is_heap_table = false;
+        if (OB_ISNULL(schema_guard)) {
+          // do nothing
+        } else if (OB_SUCCESS != schema_guard->get_table_schema(table_item.ref_id_, table_schema)) {
+          // do nothing, leave is_heap_table as false
+        } else if (OB_NOT_NULL(table_schema) && table_schema->is_heap_organized_table()) {
+          is_heap_table = true;
+        }
+        index_hint->get_index_name() = is_heap_table ? ObIndexHint::KEY : ObIndexHint::PRIMARY_KEY;
+      }
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(index_hint->get_table().assign(table_in_hint))) {
         LOG_WARN("assign table in hint failed", K(ret));
       } else {

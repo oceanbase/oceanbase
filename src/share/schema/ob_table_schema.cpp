@@ -3544,6 +3544,20 @@ int ObTableSchema::get_simple_index_infos(
   return ret;
 }
 
+// On a heap-organized table, returns the table_id of the hidden primary key
+// auxiliary index; returns OB_INVALID_ID if none exists.
+uint64_t ObTableSchema::get_heap_org_hidden_pk_id() const
+{
+  uint64_t pk_id = common::OB_INVALID_ID;
+  for (int64_t j = 0; OB_INVALID_ID == pk_id && j < simple_index_infos_.count(); ++j) {
+    if (ObIndexType::INDEX_TYPE_HEAP_ORGANIZED_TABLE_PRIMARY
+        == simple_index_infos_.at(j).index_type_) {
+      pk_id = simple_index_infos_.at(j).table_id_;
+    }
+  }
+  return pk_id;
+}
+
 int ObTableSchema::get_aux_vp_tid_array(ObIArray<uint64_t> &aux_vp_tid_array) const
 {
   int ret = OB_SUCCESS;

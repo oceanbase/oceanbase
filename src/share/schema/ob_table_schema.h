@@ -2090,6 +2090,9 @@ public:
   }
   int get_simple_index_infos(
       common::ObIArray<ObAuxTableMetaInfo> &simple_index_infos_array) const;
+  // On a heap-organized table, return the table_id of the hidden primary key
+  // auxiliary index; return OB_INVALID_ID if none exists.
+  uint64_t get_heap_org_hidden_pk_id() const;
 
   // Foreign key
   inline const common::ObIArray<ObForeignKeyInfo> &get_foreign_key_infos() const

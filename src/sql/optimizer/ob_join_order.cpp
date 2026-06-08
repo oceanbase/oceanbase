@@ -7229,7 +7229,43 @@ int ObJoinOrder::extract_preliminary_query_range(const ObIArray<ColumnItem> &ran
         LOG_WARN("failed to preliminary extract query range", K(ret));
       } else if (FALSE_IT(log_table_hint = get_plan()->get_log_plan_hint().get_index_hint(table_id))) {
       } else if (NULL != log_table_hint && log_table_hint->is_use_index_hint()) {
-        // do nothing
+        bool is_full_hint = false;
+        if (opt_ctx->get_query_ctx()->check_opt_compat_version(
+                COMPAT_VERSION_4_3_5_BP6, COMPAT_VERSION_4_4_0,
+                COMPAT_VERSION_4_4_2_BP2, COMPAT_VERSION_4_5_0,
+                COMPAT_VERSION_4_6_1)) {
+          for (int64_t i = 0; !is_full_hint && i < log_table_hint->index_list_.count(); ++i) {
+            const ObIndexHint *index_hint = log_table_hint->index_hints_.at(i);
+            if (log_table_hint->index_list_.at(i) == index_id
+                && nullptr != index_hint
+                && T_FULL_HINT == index_hint->get_hint_type()) {
+              is_full_hint = true;
+            }
+          }
+        }
+        if (is_full_hint) {
+          ObSEArray<ObExprConstraint, 4> saved_constraints;
+          if (OB_FAIL(append(saved_constraints, expr_constraints))) {
+            LOG_WARN("failed to save expr constraints", K(ret));
+          } else {
+            range_predicates.reset();
+            pre_range_graph->reset();
+            if (OB_FAIL(pre_range_graph->preliminary_extract_query_range(range_columns,
+                                                                          range_predicates,
+                                                                          opt_ctx->get_exec_ctx(),
+                                                                          &expr_constraints,
+                                                                          params, false, true,
+                                                                          out_index_prefix,
+                                                                          index_schema))) {
+              LOG_WARN("failed to preliminary extract query range for full hint", K(ret));
+            } else {
+              expr_constraints.reuse();
+              if (OB_FAIL(append(expr_constraints, saved_constraints))) {
+                LOG_WARN("failed to restore expr constraints", K(ret));
+              }
+            }
+          }
+        }
       } else if (!enable_index_prefix_cost) {
         // do nothing
       } else if (OB_FAIL(pre_range_graph->get_total_range_sizes(total_range_counts))) {

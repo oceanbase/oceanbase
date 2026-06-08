@@ -3066,6 +3066,10 @@ int ObLogTableScan::print_outline_data(PlanText &plan_text)
   const ObDMLStmt *stmt = NULL;
   bool use_desc_hint = get_scan_direction() == default_desc_direction();
   const ObVecIndexInfo *vc_info = get_vector_index_info();
+  bool is_heap_org_table = false;
+  bool is_heap_org_hidden_pk_index = false;
+  ObSqlSchemaGuard *schema_guard = NULL;
+  const ObTableSchema *table_schema = NULL;
   if (OB_ISNULL(get_plan()) || OB_ISNULL(stmt = get_plan()->get_stmt()) ||
       OB_ISNULL(stmt->get_query_ctx())) {
     ret = OB_ERR_UNEXPECTED;
@@ -3075,7 +3079,13 @@ int ObLogTableScan::print_outline_data(PlanText &plan_text)
   } else if (OB_ISNULL(table_item = stmt->get_table_item_by_id(table_id_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("fail to get table item", K(ret), "table_id", table_id_);
-  } else if (get_parallel() > ObGlobalHint::DEFAULT_PARALLEL) { // parallel hint
+  } else if (OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NULL schema guard", K(ret));
+  } else if (OB_FAIL(schema_guard->get_table_schema(ref_table_id_, table_schema))) {
+    LOG_WARN("fail to get table schema", K(ret), K(ref_table_id_));
+  }
+  if (OB_SUCC(ret) && get_parallel() > ObGlobalHint::DEFAULT_PARALLEL) { // parallel hint
     ObTableParallelHint temp_hint;
     temp_hint.set_parallel(get_parallel());
     temp_hint.set_qb_name(qb_name);
@@ -3087,24 +3097,34 @@ int ObLogTableScan::print_outline_data(PlanText &plan_text)
   if (OB_SUCC(ret)) {
     use_desc_hint &= stmt->get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5);
   }
+  if (OB_SUCC(ret) && !use_index_merge() && OB_NOT_NULL(table_schema) &&
+      table_schema->is_heap_organized_table() &&
+      stmt->get_query_ctx()->check_opt_compat_version(
+          COMPAT_VERSION_4_3_5_BP6, COMPAT_VERSION_4_4_0,
+          COMPAT_VERSION_4_4_2_BP2, COMPAT_VERSION_4_5_0,
+          COMPAT_VERSION_4_6_1)) {
+    is_heap_org_table = true;
+  }
+  // Secondary index on a heap-organized table may be backed by the hidden PK;
+  // when it is, the hint index name should be PRIMARY_KEY instead of the alias.
+  if (OB_SUCC(ret) && is_heap_org_table && ref_table_id_ != index_table_id_) {
+    is_heap_org_hidden_pk_index =
+        (index_table_id_ == table_schema->get_heap_org_hidden_pk_id());
+  }
   if (OB_FAIL(ret) || use_index_merge()) {
   } else if (is_skip_scan()) {
     index_type = use_desc_hint ? T_INDEX_SS_DESC_HINT : T_INDEX_SS_HINT;
-    if (ref_table_id_ == index_table_id_) {
-      index_name = &ObIndexHint::PRIMARY_KEY;
-    } else {
-      index_name = &get_index_name();
-    }
+    index_name = (ref_table_id_ == index_table_id_)
+                     ? (is_heap_org_table ? &ObIndexHint::KEY : &ObIndexHint::PRIMARY_KEY)
+                     : (is_heap_org_hidden_pk_index ? &ObIndexHint::PRIMARY_KEY : &get_index_name());
   } else if (ref_table_id_ == index_table_id_ && !use_query_range() && index_prefix < 0 && !use_desc_hint) {
     index_type = T_FULL_HINT;
     index_name = &ObIndexHint::PRIMARY_KEY;
   } else {
     index_type = use_desc_hint ? T_INDEX_DESC_HINT : T_INDEX_HINT;
-    if (ref_table_id_ == index_table_id_) {
-      index_name = &ObIndexHint::PRIMARY_KEY;
-    } else {
-      index_name = &get_index_name();
-    }
+    index_name = (ref_table_id_ == index_table_id_)
+                     ? (is_heap_org_table ? &ObIndexHint::KEY : &ObIndexHint::PRIMARY_KEY)
+                     : (is_heap_org_hidden_pk_index ? &ObIndexHint::PRIMARY_KEY : &get_index_name());
   }
 
   if (OB_FAIL(ret)) {

@@ -3061,7 +3061,7 @@ int ObSplitSampler::build_sample_sql_(const ObString &db_name, const ObString &t
     LOG_WARN("failed to generate new name with escape character", K(ret), K(db_name));
   } else if (OB_FAIL(ObAutoSplitArgBuilder::print_identifier(tmp_allocator, is_oracle_mode, table_name, table_name_quoted))) {
     LOG_WARN("failed to generate new name with escape character", K(ret), K(table_name));
-  } else if (!query_index && OB_FAIL(query_index_hint.assign_fmt("/*+ index(%.*s primary) */", table_name.length(), table_name.ptr()))) {
+  } else if (!query_index && OB_FAIL(query_index_hint.assign_fmt("/*+ full(%.*s) */", table_name.length(), table_name.ptr()))) {
     LOG_WARN("failed to assign query index hint", K(ret), K(table_name));
   } else if (OB_FAIL(sql.assign_fmt(
       "SELECT %.*s FROM "

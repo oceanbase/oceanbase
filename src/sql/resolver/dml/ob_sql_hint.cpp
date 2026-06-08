@@ -2912,6 +2912,10 @@ int LogTableHint::init_index_hints(const ObDMLStmt &stmt, ObSqlSchemaGuard &sche
             LOG_WARN("unexpected null index hint", K(ret), K(index_hint));
           } else if (is_primary_key && T_FULL_HINT == index_hint->get_hint_type()) {
             index_hint_pos = hint_i;
+          } else if (is_primary_key
+                     && data_table_schema->is_heap_organized_table()
+                     && index_hint->is_heap_org_key_hint()) {
+            index_hint_pos = hint_i;
           } else if (0 != index_hint->get_index_name().case_compare(index_name)) {
             /* do nothing */
           } else if (T_VECTOR_INDEX_HINT == index_hint->get_hint_type()) {
@@ -2954,6 +2958,27 @@ int LogTableHint::init_index_hints(const ObDMLStmt &stmt, ObSqlSchemaGuard &sche
             index_ss_hint_pos = index_ss_asc_hint_pos;
           } else if (OB_INVALID_INDEX != index_ss_desc_hint_pos) {
             index_ss_hint_pos = index_ss_desc_hint_pos;
+          }
+          if (is_primary_key
+              && data_table_schema->is_heap_organized_table()
+              && stmt.get_query_ctx()->check_opt_compat_version(
+                     COMPAT_VERSION_4_3_5_BP6, COMPAT_VERSION_4_4_0,
+                     COMPAT_VERSION_4_4_2_BP2, COMPAT_VERSION_4_5_0,
+                     COMPAT_VERSION_4_6_1)) {
+            uint64_t heap_pk_id = data_table_schema->get_heap_org_hidden_pk_id();
+            if (OB_INVALID_ID != heap_pk_id) {
+              const ObIndexHint *hint = (OB_INVALID_INDEX != index_hint_pos
+                                         && nullptr != index_hints_.at(index_hint_pos))
+                                        ? index_hints_.at(index_hint_pos) : nullptr;
+              // "key" hint targets the main table directly, so index_id stays unchanged
+              if (OB_NOT_NULL(hint) && hint->is_heap_org_key_hint()) {
+              } else if (OB_INVALID_INDEX != no_index_hint_pos
+                         || OB_INVALID_INDEX != index_ss_hint_pos
+                         || (OB_NOT_NULL(hint)
+                             && T_FULL_HINT != hint->get_hint_type())) {
+                index_id = heap_pk_id;
+              }
+            }
           }
         }
         if (OB_FAIL(ret)) {
