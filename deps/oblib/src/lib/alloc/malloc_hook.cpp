@@ -424,6 +424,7 @@ public:
 
   ABlock *alloc_block(const uint64_t size)
   {
+    ObDisableDiagnoseGuard disable_diagnose_guard;
     const ObMemAttr attr(OB_SERVER_TENANT_ID, "glibc_malloc_v3", ObCtxIds::GLIBC);
     if (OB_UNLIKELY(NULL == mgr_)) {
       ta_ = ObMallocAllocator::get_instance()->get_tenant_ctx_allocator(OB_SERVER_TENANT_ID, ObCtxIds::GLIBC);
@@ -444,6 +445,7 @@ public:
 
   void free_block(ABlock *block)
   {
+    ObDisableDiagnoseGuard disable_diagnose_guard;
     mgr_->free_block(block);
   }
 public:
