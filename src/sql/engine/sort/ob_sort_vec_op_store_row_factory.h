@@ -43,99 +43,98 @@ public:
     }
   }
 
-  int copy_row(const RowMeta *sk_row_meta, const Store_Row *src_row, bool is_sort_key, Store_Row *&reuse_row)
+  // Copy src data into the dst slot. Reuses dst's buffer if large enough,
+  // otherwise allocates a new buffer and returns the old one via evicted.
+  // On success: dst holds new data; evicted points to the replaced old row (caller must free it),
+  //             or nullptr if the buffer was reused in-place.
+  // On failure: dst is unchanged; evicted = nullptr. Only internally-allocated memory is freed.
+  int assign_row(const RowMeta *row_meta, const Store_Row *src,
+                 Store_Row *&dst, Store_Row *&evicted)
   {
     int ret = OB_SUCCESS;
-    int64_t buffer_len = 0;
-    int64_t row_size = src_row->get_row_size();
-    Store_Row *dst_row = nullptr;
-    Store_Row *reclaim_row = nullptr;
-    // check to see whether this old row's space is adequate for new one
-    if (nullptr != reuse_row && reuse_row->get_max_size(*sk_row_meta) >= row_size) {
-      dst_row = reuse_row;
-      buffer_len = reuse_row->get_max_size(*sk_row_meta);
+    int64_t buf_len = 0;
+    int64_t row_size = src->get_row_size();
+    Store_Row *saved_dst = dst;
+    evicted = nullptr;
+    if (nullptr != dst && dst->get_max_size(*row_meta) >= row_size) {
+      buf_len = dst->get_max_size(*row_meta);
     } else {
-      reclaim_row = reuse_row;
+      evicted = dst;
       char *buf = nullptr;
       if (topn_cnt_ < 256) {
-        buffer_len = row_size > 256 ? row_size * 4 : 1024;
+        buf_len = row_size > 256 ? row_size * 4 : 1024;
       } else {
-        buffer_len = row_size * 2;
+        buf_len = row_size * 2;
       }
-      if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator_.alloc(buffer_len)))) {
+      if (OB_ISNULL(buf = reinterpret_cast<char *>(allocator_.alloc(buf_len)))) {
         ret = OB_ERR_UNEXPECTED;
         SQL_ENG_LOG(ERROR, "alloc buf failed", K(ret));
       } else {
-        // generate new row
-        sql_mem_processor_.alloc(buffer_len);
-        dst_row = new (buf) Store_Row();
-        inmem_row_size_ += buffer_len;
-        reuse_row = dst_row;
+        sql_mem_processor_.alloc(buf_len);
+        dst = new (buf) Store_Row();
+        inmem_row_size_ += buf_len;
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(reuse_row->assign(
-            *reinterpret_cast<const ObCompactRow *>(src_row)))) {
+    } else if (OB_FAIL(dst->assign(
+            *reinterpret_cast<const ObCompactRow *>(src)))) {
       SQL_ENG_LOG(WARN, "stored row assign failed", K(ret));
     } else {
-      if (has_addon && is_sort_key) {
-        reuse_row->set_addon_ptr(nullptr, *sk_row_meta);
-      }
-      reuse_row->set_max_size(buffer_len, *sk_row_meta);
-    }
-    if (OB_NOT_NULL(reclaim_row)) {
-      sql_mem_processor_.alloc(-1 * (reclaim_row->get_max_size(*sk_row_meta)));
-      inmem_row_size_ -= reclaim_row->get_max_size(*sk_row_meta);
-      free_row_store(*sk_row_meta, reclaim_row);
-      reclaim_row = nullptr;
+      dst->set_max_size(buf_len, *row_meta);
     }
     if (OB_FAIL(ret)) {
-      reuse_row = nullptr;
+      if (dst != saved_dst) {
+        sql_mem_processor_.alloc(-1 * buf_len);
+        inmem_row_size_ -= buf_len;
+        allocator_.free(dst);
+      }
+      dst = saved_dst;
+      evicted = nullptr;
     }
     return ret;
   }
-  // copy row to row.
-  // if row space is enough reuse the space, else use the alloc get new space.
-  int copy_to_row(const Store_Row *src_row, Store_Row *&reuse_row)
+
+  // Copy a complete sort row (sort-key + optional addon) from src into dst.
+  // Handles buffer reuse/allocation for both sk and addon parts.
+  // On success: dst holds new data with addon_ptr set; old buffers are freed internally.
+  // On failure: dst is unchanged; no externally-visible side effects.
+  int copy_sort_row(const Store_Row *src, Store_Row *&dst)
   {
     int ret = OB_SUCCESS;
-    Store_Row *reuse_addon_row = nullptr;
-    Store_Row *ori_addon_row = nullptr;
-    Store_Row *reclaim_addon_row = nullptr;
-    Store_Row *reclaim_reuse_row = reuse_row;
+    Store_Row *saved_dst = dst;
+    Store_Row *evicted_sk = nullptr;
+    Store_Row *evicted_addon = nullptr;
+    Store_Row *addon_dst = nullptr;
+    Store_Row *src_addon = nullptr;
+    if (has_addon && OB_NOT_NULL(dst)) {
+      addon_dst = dst->get_addon_ptr(*sk_row_meta_);
+    }
     if (has_addon) {
-      if (OB_NOT_NULL(reuse_row)) {
-        reuse_addon_row = reuse_row->get_addon_ptr(*sk_row_meta_);
-        reclaim_addon_row = reuse_row->get_addon_ptr(*sk_row_meta_);
-      }
-      ori_addon_row = const_cast<Store_Row *>(src_row)->get_addon_ptr(*sk_row_meta_);
+      src_addon = const_cast<Store_Row *>(src)->get_addon_ptr(*sk_row_meta_);
     }
 
-    if (OB_FAIL(copy_row(sk_row_meta_, src_row, true, reuse_row))) {
-      SQL_ENG_LOG(WARN, "failed to copy sort key row", K(ret));
+    if (OB_FAIL(assign_row(sk_row_meta_, src, dst, evicted_sk))) {
+      SQL_ENG_LOG(WARN, "failed to assign sort key row", K(ret));
     } else if (has_addon) {
-      if (OB_FAIL(copy_row(addon_row_meta_, ori_addon_row, false, reuse_addon_row))) {
-        SQL_ENG_LOG(WARN, "failed to copy addon row", K(ret));
+      if (OB_FAIL(assign_row(addon_row_meta_, src_addon, addon_dst, evicted_addon))) {
+        SQL_ENG_LOG(WARN, "failed to assign addon row", K(ret));
+        if (dst != saved_dst) {
+          sql_mem_processor_.alloc(-1 * dst->get_max_size(*sk_row_meta_));
+          inmem_row_size_ -= dst->get_max_size(*sk_row_meta_);
+          allocator_.free(dst);
+          dst = saved_dst;
+        }
+        evicted_sk = nullptr;
       } else {
-        reuse_row->set_addon_ptr(reuse_addon_row, *sk_row_meta_);
+        dst->set_addon_ptr(addon_dst, *sk_row_meta_);
       }
     }
-    if (OB_FAIL(ret)) {
-      if (reuse_row == reclaim_reuse_row) {
-        free_row_store(*sk_row_meta_, reuse_row);
-        reuse_row = nullptr;
+    if (OB_SUCC(ret)) {
+      if (OB_NOT_NULL(evicted_sk)) {
+        free_row_store(*sk_row_meta_, evicted_sk);
       }
-      if (has_addon && reuse_addon_row == reclaim_addon_row) {
-        free_row_store(*addon_row_meta_, reuse_addon_row);
-        reuse_addon_row = nullptr;
-      }
-      if (reuse_row != nullptr) {
-        free_row_store(*sk_row_meta_, reuse_row);
-        reuse_row = nullptr;
-      }
-      if (has_addon && reuse_addon_row != nullptr) {
-        free_row_store(*addon_row_meta_, reuse_addon_row);
-        reuse_addon_row = nullptr;
+      if (has_addon && OB_NOT_NULL(evicted_addon)) {
+        free_row_store(*addon_row_meta_, evicted_addon);
       }
     }
     return ret;
