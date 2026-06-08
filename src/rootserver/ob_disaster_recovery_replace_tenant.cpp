@@ -230,7 +230,7 @@ int ObDRReplaceTenant::basic_check_for_replace_tenant_()
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "Current logservice is not enabled, replace tenant is");
     LOG_WARN("logservice is not enabled", KR(ret));
-  } else if (OB_FAIL(GCTX.ob_service_->check_server_empty(server_empty))) {
+  } else if (OB_FAIL(observer::ObServerEmptyChecker::check_server_empty(server_empty))) {
     LOG_WARN("fail to check server empty", KR(ret));
   } else if (!server_empty) {
     ret = OB_OP_NOT_ALLOW;
