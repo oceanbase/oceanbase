@@ -287,7 +287,14 @@ int ObCreateTableResolver::set_temp_table_info(ObTableSchema &table_schema, Pars
 {
   int ret = OB_SUCCESS;
   uint64_t data_version = 0;
-  bool need_strong_routing = !(is_oracle_mode() && !is_old_oracle_temp_table_);
+  bool enable_no_strong_routing = false;
+  if (OB_NOT_NULL(session_info_)) {
+    ObTenantConfigGuard tenant_config(TENANT_CONF(session_info_->get_effective_tenant_id()));
+    enable_no_strong_routing = tenant_config.is_valid()
+                               ? tenant_config->_enable_gtt_non_forced_routing
+                               : false;
+  }
+  bool need_strong_routing = !(is_oracle_mode() && !is_old_oracle_temp_table_ && enable_no_strong_routing);
   if (OB_ISNULL(session_info_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("session info is null", KR(ret));
