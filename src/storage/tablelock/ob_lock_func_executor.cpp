@@ -309,15 +309,29 @@ int ObReleaseAllLockExecutor::execute(ObExecContext &ctx,
 int ObISFreeLockExecutor::execute(ObExecContext &ctx,
                                   const ObString &lock_name)
 {
-  UNUSED(ctx);
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   uint64_t lock_id = 0;
-  ObSQLSessionInfo *sess = ctx.get_my_session();
   bool exist = false;
-  OZ (query_lock_id_(lock_name, lock_id));
-  OZ (ObTableLockDetector::check_lock_id_exist_in_inner_table(
-      sess, lock_id, ObLockOBJType::OBJ_TYPE_MYSQL_LOCK_FUNC, exist));
 
+  OZ (ObLockContext::valid_execute_context(ctx));
+  if (OB_SUCC(ret)) {
+    SMART_VAR(sql::ObSQLSessionInfo::StmtSavedValue, session_value) {
+      ObSQLSessionInfo *sess = ctx.get_my_session();
+      int64_t saved_nc = sess->get_nested_count();
+      OZ (sess->save_session(session_value));
+      if (OB_SUCC(ret)) {
+        OZ (query_lock_id_(lock_name, lock_id));
+        OZ (ObTableLockDetector::check_lock_id_exist_in_inner_table(
+            sess, lock_id, ObLockOBJType::OBJ_TYPE_MYSQL_LOCK_FUNC, exist));
+      }
+      if (OB_SUCCESS != (tmp_ret = sess->restore_session(session_value))) {
+        LOG_WARN("failed to restore session", K(tmp_ret));
+        ret = COVER_SUCC(tmp_ret);
+      }
+      sess->set_nested_count(saved_nc);
+    }
+  }
   if (OB_SUCC(ret) && !exist) {
     ret = OB_EMPTY_RESULT;
   }
@@ -328,14 +342,29 @@ int ObISUsedLockExecutor::execute(ObExecContext &ctx,
                                   const ObString &lock_name,
                                   uint32_t &sess_id)
 {
-  UNUSED(ctx);
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   uint64_t lock_id = 0;
   ObTableLockOwnerID lock_owner;
 
-  OZ (query_lock_id_(lock_name, lock_id));
-  OZ (ObTableLockDetector::get_lock_owner_by_lock_id(lock_id, lock_owner));
-  OZ (lock_owner.convert_to_sessid(sess_id));
+  OZ (ObLockContext::valid_execute_context(ctx));
+  if (OB_SUCC(ret)) {
+    SMART_VAR(sql::ObSQLSessionInfo::StmtSavedValue, session_value) {
+      ObSQLSessionInfo *sess = ctx.get_my_session();
+      int64_t saved_nc = sess->get_nested_count();
+      OZ (sess->save_session(session_value));
+      if (OB_SUCC(ret)) {
+        OZ (query_lock_id_(lock_name, lock_id));
+        OZ (ObTableLockDetector::get_lock_owner_by_lock_id(lock_id, lock_owner));
+        OZ (lock_owner.convert_to_sessid(sess_id));
+      }
+      if (OB_SUCCESS != (tmp_ret = sess->restore_session(session_value))) {
+        LOG_WARN("failed to restore session", K(tmp_ret));
+        ret = COVER_SUCC(tmp_ret);
+      }
+      sess->set_nested_count(saved_nc);
+    }
+  }
   return ret;
 }
 
