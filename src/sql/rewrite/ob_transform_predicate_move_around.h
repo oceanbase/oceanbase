@@ -159,6 +159,14 @@ private:
   int pushdown_predicates(ObDMLStmt *stmt,
                           ObIArray<ObRawExpr *> &predicates);
 
+  static int check_dblink_pushdown_preds_safe(ObDMLStmt *stmt,
+                                              ObIArray<ObRawExpr *> &preds,
+                                              bool &can_pushdown);
+
+  static int check_stmt_has_dblink(ObDMLStmt *stmt, bool &has_dblink);
+
+  static int has_unsafe_implicit_cast(ObRawExpr *expr, bool &has_unsafe);
+
   int pushdown_into_tables_skip_current_level_stmt(ObDMLStmt &stmt);
   int pushdown_into_joined_table_skip_current_level_stmt(TableItem *table_item);
 
