@@ -6833,7 +6833,8 @@ int ObResolverUtils::check_column_name(const ObSQLSessionInfo *session_info,
     }
   }
   if (OB_SUCC(ret) && is_hit) {
-    is_hit = ObCharset::case_insensitive_equal(q_name.col_name_, col_ref.get_column_name());
+    is_hit = is_oracle_mode() ? (q_name.col_name_ == col_ref.get_column_name()) :
+            ObCharset::case_insensitive_equal(q_name.col_name_, col_ref.get_column_name());
   }
   return ret;
 }
