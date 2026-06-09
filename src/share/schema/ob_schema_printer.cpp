@@ -2761,6 +2761,13 @@ int ObSchemaPrinter::print_index_definition_columns(
       } else if (NULL == (col = index_schema.get_column_schema(rowkey_column->column_id_))) {
         ret = OB_SCHEMA_ERROR;
         SHARE_SCHEMA_LOG(WARN, "fail to get column schema", K(ret));
+      } else if (!col->is_shadow_column()
+                 && OB_NOT_NULL(data_schema.get_column_schema(col->get_column_id()))
+                 && data_schema.get_column_schema(col->get_column_id())->is_spatial_generated_column()
+                 && !data_schema.get_column_schema(col->get_column_id())->is_spatial_cellid_column()) {
+        // 空间索引会在几何列上生成 cellid 和 mbr 两个隐藏生成列，
+        // SHOW CREATE/DBMS_METADATA 只需展示原始几何列一次（在 cellid 列处打印），
+        // 这里跳过 mbr 列，避免后面把它当作前缀索引解析表达式而报 -4016。
       } else if (!col->is_shadow_column()) {
         if (!is_first) {
           if (OB_FAIL(databuff_printf(buf, buf_len, pos, ",\n"))) {
@@ -2783,6 +2790,23 @@ int ObSchemaPrinter::print_index_definition_columns(
                             data_schema, data_col->get_column_name(), full_text_columns,
                             buf, buf_len, pos, is_first, is_agent_mode))) {
                 OB_LOG(WARN, "failed to print full text columns", K(ret));
+              }
+            } else if (data_col->is_spatial_cellid_column()) {
+              // 空间索引：索引列是建立在几何列上的隐藏生成列(cellid/mbr)，
+              // mbr 列已在外层跳过，这里只打印原始几何列名。
+              const uint64_t geo_col_id = data_col->get_geo_col_id();
+              const ObColumnSchemaV2 *geo_col = data_schema.get_column_schema(geo_col_id);
+              virtual_column_id = data_col->get_column_id();
+              if (OB_ISNULL(geo_col)) {
+                ret = OB_ERR_UNEXPECTED;
+                OB_LOG(WARN, "geo column schema is null", K(ret), K(geo_col_id));
+              } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, " "))) {
+                OB_LOG(WARN, "fail to print space", K(ret));
+              } else if (OB_FAIL(print_identifier(buf, buf_len, pos, geo_col->get_column_name(), is_oracle_mode))) {
+                OB_LOG(WARN, "fail to print geo column name", K(ret), KPC(geo_col));
+              } else if (is_agent_mode
+                         && OB_FAIL(databuff_printf(buf, buf_len, pos, " id %lu", data_col->get_column_id()))) {
+                OB_LOG(WARN, "fail to print column id", K(ret), KPC(data_col));
               }
             } else if (data_col->is_func_idx_column()) {
               const ObString &expr_str = data_col->get_cur_default_value().is_null() ?
@@ -3091,11 +3115,18 @@ int ObSchemaPrinter::print_index_table_definition(
   if (OB_SUCC(ret)) {
     ObSEArray<ObString, 4> full_text_columns;
     uint64_t virtual_column_id = OB_INVALID_ID;
-    if (OB_FAIL(print_index_definition_columns(
+    bool is_oracle_mode = false;
+    if (OB_FAIL(index_table_schema->check_if_oracle_compat_mode(is_oracle_mode))) {
+      LOG_WARN("fail to check oracle mode", KR(ret), KPC(index_table_schema));
+    } else if (OB_FAIL(print_index_definition_columns(
                   *table_schema, *index_table_schema, full_text_columns, virtual_column_id, buf, buf_len, pos, is_agent_mode))) {
       OB_LOG(WARN, "fail to print columns", K(ret), K(*index_table_schema));
     } else if (OB_FAIL(databuff_printf(buf, buf_len, pos, "\n) "))) {
       OB_LOG(WARN, "fail to print )", K(ret));
+    } else if (is_oracle_mode && index_table_schema->is_spatial_index()
+               && OB_FAIL(databuff_printf(buf, buf_len, pos, "INDEXTYPE IS MDSYS.SPATIAL_INDEX "))) {
+      // 空间索引在 Oracle 下需要带上 INDEXTYPE IS MDSYS.SPATIAL_INDEX 子句
+      OB_LOG(WARN, "fail to print spatial index type", K(ret));
     } else if (OB_FAIL(print_table_definition_table_options(
                        *index_table_schema, full_text_columns, virtual_column_id, buf, buf_len, pos, false, NULL, is_agent_mode))) {
       OB_LOG(WARN, "fail to print table options", K(ret), K(*index_table_schema));
