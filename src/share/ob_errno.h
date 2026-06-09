@@ -2096,8 +2096,8 @@ constexpr int OB_ERR_UPDATE_TWICE = -30926;
 constexpr int OB_ERR_FLASHBACK_QUERY_WITH_UPDATE = -32491;
 constexpr int OB_ERR_UPDATE_ON_EXPR = -38104;
 constexpr int OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS = -38105;
-constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
+constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 
 
 #define OB_SUCCESS__USER_ERROR_MSG "Success"
@@ -2472,7 +2472,7 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_INVALID_ZERO_DATE__USER_ERROR_MSG "invalid zero date in no_zero_date mode"
 #define OB_LS_NOT_IN_LEARNER_LIST__USER_ERROR_MSG "ls not in learner list"
 #define OB_MEMORY_LEAK__USER_ERROR_MSG "observer has memory leak"
-#define OB_OUT_OF_MAX_EXECUTION_TIME__USER_ERROR_MSG "Query execution was interrupted, maximum statement execution time exceeded. maybe you can adjust the session variable max_execution_time or max_execution_time hint, and try again"
+#define OB_OUT_OF_MAX_EXECUTION_TIME__USER_ERROR_MSG "Query execution was interrupted, maximum statement execution time exceeded, maybe you can adjust the session variable max_execution_time or max_execution_time hint, and try again"
 #define OB_ERR_MAX_EXECUTION_TIME_TRUNCATED__USER_ERROR_MSG "Max execution time is truncated to the range [0, 4294967295]"
 #define OB_NON_RO_SELECT_DISABLE_TIMER__USER_ERROR_MSG "Select is not a read only statement, disabling timer"
 #define OB_IMPORT_NOT_IN_SERVER__USER_ERROR_MSG "Import not in service"
@@ -4648,8 +4648,8 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_FLASHBACK_QUERY_WITH_UPDATE__USER_ERROR_MSG "snapshot expression not allowed here"
 #define OB_ERR_UPDATE_ON_EXPR__USER_ERROR_MSG "Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__USER_ERROR_MSG "specified row no longer exists"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__USER_ERROR_MSG "Data too long for column '%.*s' at row %ld"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__USER_ERROR_MSG "Incorrect datetime value for column '%.*s' at row %ld"
 
 
 #define OB_SUCCESS__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: 0, Success"
@@ -5396,8 +5396,8 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_LS_NOT_IN_LEARNER_LIST__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4410, ls not in learner list"
 #define OB_MEMORY_LEAK__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4411, observer has memory leak"
 #define OB_MEMORY_LEAK__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4411, observer has memory leak"
-#define OB_OUT_OF_MAX_EXECUTION_TIME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4412, Query execution was interrupted, maximum statement execution time exceeded. maybe you can adjust the session variable max_execution_time or max_execution_time hint, and try again"
-#define OB_OUT_OF_MAX_EXECUTION_TIME__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4412, Query execution was interrupted, maximum statement execution time exceeded. maybe you can adjust the session variable max_execution_time or max_execution_time hint, and try again"
+#define OB_OUT_OF_MAX_EXECUTION_TIME__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4412, Query execution was interrupted, maximum statement execution time exceeded, maybe you can adjust the session variable max_execution_time or max_execution_time hint, and try again"
+#define OB_OUT_OF_MAX_EXECUTION_TIME__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4412, Query execution was interrupted, maximum statement execution time exceeded, maybe you can adjust the session variable max_execution_time or max_execution_time hint, and try again"
 #define OB_ERR_MAX_EXECUTION_TIME_TRUNCATED__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4413, Max execution time is truncated to the range [0, 4294967295]"
 #define OB_ERR_MAX_EXECUTION_TIME_TRUNCATED__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -4413, Max execution time is truncated to the range [0, 4294967295]"
 #define OB_NON_RO_SELECT_DISABLE_TIMER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -4414, Select is not a read only statement, disabling timer"
@@ -9748,10 +9748,10 @@ constexpr int OB_ERR_DATA_TOO_LONG_MSG_FMT_V2 = -5167;
 #define OB_ERR_UPDATE_ON_EXPR__OBE_USER_ERROR_MSG "OBE-38104: Columns referenced in the ON Clause cannot be updated:'%.*s'.'%.*s'"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__ORA_USER_ERROR_MSG "ORA-08006: specified row no longer exists"
 #define OB_ERR_SPECIFIED_ROW_NO_LONGER_EXISTS__OBE_USER_ERROR_MSG "OBE-08006: specified row no longer exists"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
-#define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
 #define OB_ERR_DATA_TOO_LONG_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-12899: value too large for column %.*s (actual: %ld, maximum: %ld)"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__ORA_USER_ERROR_MSG "ORA-01861: Incorrect datetime value for column '%.*s' at row %ld"
+#define OB_ERR_INVALID_DATE_MSG_FMT_V2__OBE_USER_ERROR_MSG "OBE-01861: Incorrect datetime value for column '%.*s' at row %ld"
 
 extern int g_all_ob_errnos[2548];
 
