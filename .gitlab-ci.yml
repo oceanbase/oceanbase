@@ -1,0 +1,80 @@
+# GitLab CI driver entrypoint for OceanBase templates.
+# 仅负责按 FARM2_TEMPLATE_NAME 选择模板并触发对应子流水线；业务模板位于 test/ci/templates/
+
+variables:
+  FARM2_TEMPLATE_NAME: "farm"
+  TEMPLATE_ENTRY_FILE: "template_entry.yml"
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "trigger"
+    - if: $CI_PIPELINE_SOURCE == "api"
+    - when: never
+
+.gitlab_ci_anchor_k8s_prepare_driver:
+  stage: prepare
+  script: [":"]
+  variables: &driver_k8s_resources
+    KUBERNETES_CPU_REQUEST: "1"
+    KUBERNETES_CPU_LIMIT: "2"
+    KUBERNETES_MEMORY_REQUEST: "1Gi"
+    KUBERNETES_MEMORY_LIMIT: "4Gi"
+    KUBERNETES_POD_ANNOTATIONS_1: "request_disk_size=300"
+    KUBERNETES_POD_ANNOTATIONS_2: "carina.storage.io/blkio.throttle.read_iops_device=5000"
+    KUBERNETES_POD_ANNOTATIONS_3: "carina.storage.io/blkio.throttle.write_iops_device=5000"
+
+default:
+  tags:
+    - farm-use
+
+stages:
+  - prepare
+
+render_template_entry:
+  stage: prepare
+  image: harbor.oceanbase-dev.com/ob-task-platform/farm2-standard-worker:1.1.2
+  variables:
+    <<: *driver_k8s_resources
+    KUBERNETES_STORAGE_SIZE: "20Gi"
+  script:
+    - |
+      set -e
+      [[ "${FARM2_TEMPLATE_NAME:-}" =~ ^[A-Za-z0-9._-]+$ ]] || {
+        echo "[ERROR] invalid FARM2_TEMPLATE_NAME=${FARM2_TEMPLATE_NAME:-unset}" >&2
+        exit 1
+      }
+      _template_path="test/ci/templates/${FARM2_TEMPLATE_NAME}.yml"
+      [[ -f "${_template_path}" ]] || {
+        echo "[ERROR] template not found: ${_template_path}" >&2
+        exit 1
+      }
+      printf 'include:\n  - local: %s\n' "${_template_path}" > "${TEMPLATE_ENTRY_FILE}"
+      echo "[driver] selected template=${FARM2_TEMPLATE_NAME} path=${_template_path}"
+      sed -n '1,20p' "${TEMPLATE_ENTRY_FILE}"
+  artifacts:
+    paths:
+      - template_entry.yml
+    expire_in: 1 day
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "trigger"
+    - if: $CI_PIPELINE_SOURCE == "api"
+
+trigger_template_pipeline:
+  stage: prepare
+  needs:
+    - job: render_template_entry
+      artifacts: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "trigger"
+    - if: $CI_PIPELINE_SOURCE == "api"
+  trigger:
+    strategy: depend
+    forward:
+      yaml_variables: true
+      pipeline_variables: true
+    include:
+      - artifact: template_entry.yml
+        job: render_template_entry
