@@ -14,6 +14,7 @@
 #include "rootserver/ddl_task/ob_ddl_scheduler.h"
 #include "rootserver/ob_unit_manager.h"
 #include "rootserver/ob_rs_async_rpc_proxy.h"
+#include "share/ls/ob_ls_status_operator.h"
 
 namespace oceanbase
 {
@@ -194,9 +195,9 @@ int ObRootRebuildTablet::check_rebuild_ls_exist_(
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObRootRebuildTablet do not init", K(ret));
-  } else if (OB_UNLIKELY(OB_ISNULL(GCTX.location_service_))) {
+  } else if (OB_UNLIKELY(OB_ISNULL(GCTX.location_service_) || OB_ISNULL(GCTX.sql_proxy_))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("location service ptr is null", KR(ret));
+    LOG_WARN("location service or sql proxy is null", KR(ret), KP(GCTX.location_service_), KP(GCTX.sql_proxy_));
   } else if (OB_FAIL(arg.src_.get_location_addr(src))) {
     LOG_WARN("failed to get src location addr", K(ret), K(arg));
   } else if (OB_FAIL(arg.dest_.get_location_addr(dest))) {
@@ -213,8 +214,25 @@ int ObRootRebuildTablet::check_rebuild_ls_exist_(
       } else if (OB_FAIL(GCTX.location_service_->get(arg.tenant_id_, tablet_id, expire_renew_time, is_cache_hit, ls_id))) {
         LOG_WARN("fail to get ls id according to tablet_id", K(ret), K(arg), K(tablet_id));
       } else if (ls_id != arg.ls_id_) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ls not equal to rebuild tablet dest ls", K(ret), K(arg), K(tablet_id));
+        ObLSStatusOperator status_op;
+        ObLSStatusInfo status_info;
+        int tmp_ret = status_op.get_ls_status_info(arg.tenant_id_, arg.ls_id_, status_info, *GCTX.sql_proxy_);
+        if (OB_ENTRY_NOT_EXIST == tmp_ret
+            || (OB_SUCCESS == tmp_ret
+                && (status_info.ls_is_dropping()
+                    || status_info.ls_is_tenant_dropping()
+                    || status_info.ls_is_pre_tenant_dropping()
+                    || ls_is_dropped_status(status_info.get_status())
+                    || status_info.ls_is_create_abort()))) {
+          ret = OB_LS_NOT_EXIST;
+          LOG_WARN("rebuild tablet ls is not exist", K(ret), K(tmp_ret), K(arg), K(tablet_id), K(ls_id), K(status_info));
+        } else if (OB_SUCCESS != tmp_ret) {
+          ret = tmp_ret;
+          LOG_WARN("failed to get rebuild ls status", K(ret), K(arg), K(tablet_id), K(ls_id));
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("ls not equal to rebuild tablet dest ls", K(ret), K(arg), K(tablet_id), K(ls_id), K(status_info));
+        }
       }
     }
 
