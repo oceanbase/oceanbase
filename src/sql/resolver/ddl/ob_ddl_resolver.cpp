@@ -11293,7 +11293,7 @@ int ObDDLResolver::resolve_partition_element_subpartitions(
   int ret = OB_SUCCESS;
   if (OB_NOT_NULL(element_node->children_[ELEMENT_SUBPARTITION_NODE])) {
     if (PARTITION_LEVEL_TWO != table_schema.get_part_level()) {
-      ret = OB_ERR_PARSE_SQL;
+      ret = OB_INVALID_SUB_PARTITION_TYPE;
       SQL_RESV_LOG(WARN, "element subpartition spec without table-level subpartition declaration",
                    KR(ret), K(table_schema.get_part_level()));
     } else {
