@@ -258,6 +258,7 @@ enum EMySQLFieldType
   MYSQL_TYPE_OB_ARRAY = 217, // used in cdc/oms not used in client
   MYSQL_TYPE_OB_MAP = 218, // used in cdc/oms not used in client
   MYSQL_TYPE_OB_SPARSE_VECTOR = 219, // used in cdc/oms not used in client
+  MYSQL_TYPE_OB_SQL_UDT = 220, // used in cdc/oms not used in client
   MYSQL_TYPE_JSON = 245,
   MYSQL_TYPE_NEWDECIMAL = 246,
   MYSQL_TYPE_ENUM = 247,
