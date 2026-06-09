@@ -218,6 +218,7 @@ void ObMViewRefreshInfo::reset()
   select_sql_.reset();
   use_direct_load_for_complete_refresh_ = true;
   direct_dep_cnt_ = 0;
+  need_gather_stats_info_ = false;
 }
 
 int ObMViewRefreshInfo::assign(const ObMViewRefreshInfo &other)
@@ -233,6 +234,7 @@ int ObMViewRefreshInfo::assign(const ObMViewRefreshInfo &other)
     select_sql_ = other.select_sql_;
     use_direct_load_for_complete_refresh_ = other.use_direct_load_for_complete_refresh_;
     direct_dep_cnt_ = other.direct_dep_cnt_;
+    need_gather_stats_info_ = other.need_gather_stats_info_;
   }
   return ret;
 }
@@ -246,7 +248,8 @@ OB_SERIALIZE_MEMBER(ObMViewRefreshInfo,
                     mview_target_data_sync_scn_,
                     select_sql_,
                     use_direct_load_for_complete_refresh_,
-                    direct_dep_cnt_);
+                    direct_dep_cnt_,
+                    need_gather_stats_info_);
 
 OB_SERIALIZE_MEMBER(ObMVRefreshInfo,
     refresh_method_,

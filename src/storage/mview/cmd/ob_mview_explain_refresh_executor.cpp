@@ -354,6 +354,8 @@ int ObMViewExplainRefreshExecutor::explain_single_mview(const uint64_t mview_id,
       int64_t parallelism = 1;
       ObSEArray<ObBasedSchemaObjectInfo, 4> based_schema_object_infos;
       uint64_t direct_dep_cnt = 0;
+      bool need_gather_stats_info = false;
+      bool need_sync_stats_info = false;
       ObSqlString complete_sql;
       if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, data_version))) {
         LOG_WARN("fail to get data version", KR(ret), K(tenant_id_));
@@ -364,6 +366,12 @@ int ObMViewExplainRefreshExecutor::explain_single_mview(const uint64_t mview_id,
       } else if (OB_FAIL(ObMViewRefresher::calc_mv_refresh_parallelism(
                      mview_info.get_refresh_dop(), session_info_, parallelism))) {
         LOG_WARN("fail to calc mv refresh parallelism", KR(ret));
+      } else if (OB_FAIL(rootserver::ObMViewUtils::check_mview_complete_refresh_need_gather_stats(tenant_id_,
+                                                                                                  data_version,
+                                                                                                  schema_guard,
+                                                                                                  need_gather_stats_info,
+                                                                                                  need_sync_stats_info))) {
+        LOG_WARN("fail to check mview complete refresh need gather stats", KR(ret));
       } else if (OB_FAIL(rootserver::ObMViewUtils::generate_mview_complete_refresh_sql(
                      tenant_id_,
                      mview_id,
@@ -375,6 +383,7 @@ int ObMViewExplainRefreshExecutor::explain_single_mview(const uint64_t mview_id,
                      1 /*task_id*/,
                      parallelism,
                      data_version >= DATA_VERSION_4_3_5_1,
+                     need_gather_stats_info,
                      based_schema_object_infos,
                      ObString(),
                      complete_sql))) {

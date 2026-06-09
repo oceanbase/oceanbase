@@ -17698,6 +17698,8 @@ int ObDDLService::mview_complete_refresh_in_trans(
   const ObTableSchema *container_table_schema = nullptr;
   int64_t refreshed_schema_version = 0;
   int64_t task_id = 0;
+  bool need_gather_stats_info = false;
+  bool need_sync_stats_info = false;
   if (OB_UNLIKELY(!arg.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", KR(ret), K(arg));
@@ -17726,6 +17728,12 @@ int ObDDLService::mview_complete_refresh_in_trans(
   } else if (OB_ISNULL(container_table_schema)) {
     ret = OB_TABLE_NOT_EXIST;
     LOG_WARN("container table schema is nullptr", KR(ret), K(tenant_id), "container_table_id", mview_table_schema->get_data_table_id());
+  } else if (OB_FAIL(ObMViewUtils::check_mview_complete_refresh_need_gather_stats(tenant_id,
+                                                                                  tenant_data_version,
+                                                                                  schema_guard,
+                                                                                  need_gather_stats_info,
+                                                                                  need_sync_stats_info))) {
+    LOG_WARN("failed to check mview complete refresh need gather stats", KR(ret), K(tenant_id), K(tenant_data_version));
   } else {
     HEAP_VAR(ObTableSchema, new_container_table_schema) {
       if (OB_FAIL(new_container_table_schema.assign(*container_table_schema))) {
@@ -17794,6 +17802,7 @@ int ObDDLService::mview_complete_refresh_in_trans(
             alter_table_arg.mview_refresh_info_.mview_target_data_sync_scn_ = arg.target_data_sync_scn_;
             alter_table_arg.mview_refresh_info_.select_sql_ = arg.select_sql_;
             alter_table_arg.mview_refresh_info_.direct_dep_cnt_ = arg.direct_dep_cnt_;
+            alter_table_arg.mview_refresh_info_.need_gather_stats_info_ = need_gather_stats_info;
             LOG_DEBUG("alter table arg preparation complete!", K(alter_table_arg));
             ObCreateDDLTaskParam param(tenant_id,
                                         DDL_MVIEW_COMPLETE_REFRESH,
@@ -17806,7 +17815,9 @@ int ObDDLService::mview_complete_refresh_in_trans(
                                         &allocator,
                                         &alter_table_arg,
                                         arg.parent_task_id_,
-                                        task_id);
+                                        task_id,
+                                        false /*ddl_need_retry_at_executor*/,
+                                        need_sync_stats_info);
             param.tenant_data_version_ = tenant_data_version;
             if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {
               LOG_WARN("submit ddl task failed", KR(ret));
