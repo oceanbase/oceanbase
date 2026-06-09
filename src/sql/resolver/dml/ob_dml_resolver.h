@@ -1131,6 +1131,9 @@ private:
                                   ObIArray<ObMatchFunRawExpr*> &match_exprs,
                                   const ObStmtScope scope);
   int resolve_match_against_expr_with_match_phrase_mode(ObRawExpr *&expr, ObMatchFunRawExpr *&cur_match_expr, const ObStmtScope scope);
+  int get_phrase_like_aux_const_collation(ObMatchFunRawExpr &match_expr,
+                                          const ObRawExpr *search_key_expr,
+                                          ObCollationType &aux_const_cs);
   int resolve_match_index(const ColumnReferenceSet &match_column_set,
                           const ObTableSchema &table_schema,
                           ObMatchFunRawExpr &match_against);

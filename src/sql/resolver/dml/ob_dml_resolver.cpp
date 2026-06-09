@@ -46,6 +46,7 @@
 #include "share/schema/ob_external_table_column_schema_helper.h"
 #include "src/share/hybrid_search/ob_hybrid_search_executor.h"
 #include "sql/hybrid_search/ob_hybrid_search_dsl_resolver.h"
+#include "lib/charset/ob_charset.h"
 
 namespace oceanbase
 {
@@ -21655,6 +21656,38 @@ int ObDMLResolver::resolve_match_against_exprs(ObRawExpr *&expr,
   return ret;
 }
 
+int ObDMLResolver::get_phrase_like_aux_const_collation(ObMatchFunRawExpr &match_expr,
+                                                     const ObRawExpr *search_key_expr,
+                                                     ObCollationType &aux_const_cs)
+{
+  int ret = OB_SUCCESS;
+  ObCollationType column_cs = CS_TYPE_INVALID;
+  if (OB_NOT_NULL(search_key_expr)) {
+    column_cs = search_key_expr->get_result_type().get_collation_type();
+  }
+  if (!ObCharset::is_valid_collation(column_cs)) {
+    ObRawExprResType col_result_type;
+    if (OB_FAIL(match_expr.get_match_column_type(col_result_type))) {
+      LOG_WARN("failed to get match column type for phrase LIKE aux literal", K(ret));
+    } else {
+      column_cs = col_result_type.get_collation_type();
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (!ObCharset::is_valid_collation(column_cs)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid collation for phrase LIKE aux literal", K(ret), K(column_cs));
+  } else {
+    // MATCH PHRASE is lowered to LIKE '%keyword%' ESCAPE '\'.
+    // search_key follows match column charset; '%' and '\' use an ASCII charset
+    // when column charset is non-ASCII (e.g. utf16).
+    aux_const_cs = ObCharset::is_cs_nonascii(column_cs)
+        ? ObCharset::get_default_collation(CHARSET_UTF8MB4)
+        : column_cs;
+  }
+  return ret;
+}
+
 int ObDMLResolver::resolve_match_against_expr_with_match_phrase_mode(ObRawExpr *&expr, ObMatchFunRawExpr *&cur_match_expr, const ObStmtScope scope)
 {
   int ret = OB_SUCCESS;
@@ -21685,56 +21718,60 @@ int ObDMLResolver::resolve_match_against_expr_with_match_phrase_mode(ObRawExpr *
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null search key in match phrase mode", K(ret));
   } else {
-    const ObCollationType search_key_cs = search_key_expr->get_result_type().get_collation_type();
-    const ObString const_str_value = ObCharsetUtils::get_const_str(search_key_cs, '%');
-    const ObString like_escape = ObCharsetUtils::get_const_str(search_key_cs, '\\');
-    if (OB_UNLIKELY(const_str_value.empty() || like_escape.empty())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("get_const_str failed for phrase LIKE aux literal", K(ret), K(search_key_cs));
-  } else if (OB_FAIL(ObRawExprUtils::build_const_string_expr(*params_.expr_factory_,
-                                                      ObVarcharType,
-                                                      const_str_value,
-                                                      search_key_cs,
-                                                      const_str_expr))) {
-    LOG_WARN("fail to build type expr", K(ret));
-  } else if (OB_FAIL(substr_param_exprs.push_back(const_str_expr))) {
-    LOG_WARN("fail to push back expr", K(ret));
-  } else if (OB_FAIL(substr_param_exprs.push_back(search_key_expr))) {
-    LOG_WARN("fail to push back expr", K(ret));
-  } else if (OB_FAIL(substr_param_exprs.push_back(const_str_expr))) {
-    LOG_WARN("fail to push back expr", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::create_concat_expr(*params_.expr_factory_,
-                                                        params_.session_info_,
-                                                        substr_param_exprs,
-                                                        concat_text_expr))) {
-    LOG_WARN("fail to build type expr", K(ret));
-  } else if (OB_FAIL(ObRawExprUtils::build_const_string_expr(*params_.expr_factory_,
-                                                              ObVarcharType,
-                                                              like_escape,
-                                                              search_key_cs,
-                                                              like_es_expr))) {
-    LOG_WARN("fail to create string raw expr", K(ret), K(like_escape));
-  } else {
-    ObIArray<ObRawExpr*> &column_list = cur_match_expr->get_match_columns();
-    for (int64_t j = 0; OB_SUCC(ret) && j < column_list.count(); ++j) {
-      ObColumnRefRawExpr *col_ref = nullptr;
-      ObOpRawExpr *like_op = nullptr;
-      if (OB_UNLIKELY(OB_ISNULL(column_list.at(j)) || !column_list.at(j)->is_column_ref_expr())) {
-        ret = OB_INVALID_ARGUMENT;
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT, "match against column");
-      } else if (FALSE_IT(col_ref = static_cast<ObColumnRefRawExpr*>(column_list.at(j)))) {
-      } else if (OB_FAIL(ObRawExprUtils::build_like_expr(*params_.expr_factory_,
-                                                         params_.session_info_,
-                                                         col_ref,
-                                                         concat_text_expr,
-                                                         like_es_expr,
-                                                         like_op))) {
-        LOG_WARN("build like expr failed", K(ret));
-      } else if (OB_FAIL(or_like_param_exprs.push_back(like_op))) {
+    ObCollationType phrase_aux_const_cs = CS_TYPE_INVALID;
+    if (OB_FAIL(get_phrase_like_aux_const_collation(*cur_match_expr, search_key_expr, phrase_aux_const_cs))) {
+      LOG_WARN("failed to resolve phrase LIKE aux literal collation", K(ret));
+    } else {
+      const ObString const_str_value = ObCharsetUtils::get_const_str(phrase_aux_const_cs, '%');
+      const ObString like_escape = ObCharsetUtils::get_const_str(phrase_aux_const_cs, '\\');
+      if (OB_UNLIKELY(const_str_value.empty() || like_escape.empty())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get_const_str failed for phrase LIKE aux literal", K(ret), K(phrase_aux_const_cs));
+      } else if (OB_FAIL(ObRawExprUtils::build_const_string_expr(*params_.expr_factory_,
+                                                          ObVarcharType,
+                                                          const_str_value,
+                                                          phrase_aux_const_cs,
+                                                          const_str_expr))) {
+        LOG_WARN("fail to build type expr", K(ret));
+      } else if (OB_FAIL(substr_param_exprs.push_back(const_str_expr))) {
         LOG_WARN("fail to push back expr", K(ret));
+      } else if (OB_FAIL(substr_param_exprs.push_back(search_key_expr))) {
+        LOG_WARN("fail to push back expr", K(ret));
+      } else if (OB_FAIL(substr_param_exprs.push_back(const_str_expr))) {
+        LOG_WARN("fail to push back expr", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::create_concat_expr(*params_.expr_factory_,
+                                                            params_.session_info_,
+                                                            substr_param_exprs,
+                                                            concat_text_expr))) {
+        LOG_WARN("fail to build type expr", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::build_const_string_expr(*params_.expr_factory_,
+                                                                  ObVarcharType,
+                                                                  like_escape,
+                                                                  phrase_aux_const_cs,
+                                                                  like_es_expr))) {
+        LOG_WARN("fail to create string raw expr", K(ret), K(like_escape));
+      } else {
+        ObIArray<ObRawExpr*> &column_list = cur_match_expr->get_match_columns();
+        for (int64_t j = 0; OB_SUCC(ret) && j < column_list.count(); ++j) {
+          ObColumnRefRawExpr *col_ref = nullptr;
+          ObOpRawExpr *like_op = nullptr;
+          if (OB_UNLIKELY(OB_ISNULL(column_list.at(j)) || !column_list.at(j)->is_column_ref_expr())) {
+            ret = OB_INVALID_ARGUMENT;
+            LOG_USER_ERROR(OB_INVALID_ARGUMENT, "match against column");
+          } else if (FALSE_IT(col_ref = static_cast<ObColumnRefRawExpr*>(column_list.at(j)))) {
+          } else if (OB_FAIL(ObRawExprUtils::build_like_expr(*params_.expr_factory_,
+                                                             params_.session_info_,
+                                                             col_ref,
+                                                             concat_text_expr,
+                                                             like_es_expr,
+                                                             like_op))) {
+            LOG_WARN("build like expr failed", K(ret));
+          } else if (OB_FAIL(or_like_param_exprs.push_back(like_op))) {
+            LOG_WARN("fail to push back expr", K(ret));
+          }
+        }
       }
     }
-  }
   }
   if (OB_FAIL(ret)) {
   } else if (or_like_param_exprs.count() == 0) {
