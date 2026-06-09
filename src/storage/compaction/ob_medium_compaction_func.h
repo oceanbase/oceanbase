@@ -79,6 +79,7 @@ public:
     const int64_t schema_version,
     const int64_t data_version,
     uint64_t &table_id,
+    ObSchemaGetterGuard &schema_guard,
     const ObTableSchema*& table_schema,
     bool retry_get_schema_guard = true);
   static int batch_check_medium_finish(

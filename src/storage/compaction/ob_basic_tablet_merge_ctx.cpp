@@ -1593,6 +1593,7 @@ int ObBasicTabletMergeCtx::try_update_storage_schema(ObStorageSchema &new_schema
             schema_version,
             static_param_.data_version_,
             table_id,
+            schema_guard,
             table_schema,
             /* retry_get_schema_guard */ false))) {
     // cannot get table schema

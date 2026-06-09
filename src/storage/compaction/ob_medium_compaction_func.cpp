@@ -1136,7 +1136,7 @@ int ObMediumCompactionScheduleFunc::get_table_schema_to_merge(
   schema::ObSchemaGetterGuard schema_guard;
   const ObTableSchema *table_schema = nullptr;
 
-  if (OB_FAIL(get_table_schema(schema_service, tablet_id, schema_version, data_version, table_id, table_schema))) {
+  if (OB_FAIL(get_table_schema(schema_service, tablet_id, schema_version, data_version, table_id, schema_guard, table_schema))) {
     LOG_WARN("Failed to get table schema", K(ret), K(tablet_id), K(table_id), K(schema_version), K(data_version));
   }
 #ifdef ERRSIM
@@ -1175,13 +1175,13 @@ int ObMediumCompactionScheduleFunc::get_table_schema(
     const int64_t schema_version,
     const int64_t data_version,
     uint64_t &table_id,
+    ObSchemaGetterGuard &schema_guard,
     const ObTableSchema*& table_schema,
     bool retry_get_schema_guard)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = MTL_ID();
   table_id = OB_INVALID_ID;
-  schema::ObSchemaGetterGuard schema_guard;
   table_schema = nullptr;
   int64_t save_schema_version = schema_version;
 
