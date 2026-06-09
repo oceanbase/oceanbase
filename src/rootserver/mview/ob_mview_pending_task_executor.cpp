@@ -315,13 +315,10 @@ int ObMViewPendingTaskExecutor::run_pending_task(const obrpc::ObRunMViewPendingT
   THIS_WORKER.set_timeout_ts(worker_deadline);
   lib::Worker::CompatMode target_mode = saved_mode;
   bool need_restore_mode = false;
-  ObArenaAllocator allocator("MVPendingExec");
+  ObArenaAllocator allocator("MVPendingExec", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id);
   ObSchemaGetterGuard schema_guard;
   ObFreeSessionCtx free_session_ctx;
   ObSQLSessionInfo *session = NULL;
-  ObExecContext exec_ctx(allocator);
-  ObPhysicalPlanCtx phy_plan_ctx(allocator);
-  ObSqlCtx sql_ctx;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("pending task executor not init", KR(ret));
@@ -348,6 +345,9 @@ int ObMViewPendingTaskExecutor::run_pending_task(const obrpc::ObRunMViewPendingT
     } else if (OB_FAIL(init_env(tenant_id, mview_id, is_oracle_mode, expire_ts, schema_guard, *session))) {
       LOG_WARN("init env failed", KR(ret), K(tenant_id), K(mview_id));
     } else {
+      ObExecContext exec_ctx(allocator);
+      ObPhysicalPlanCtx phy_plan_ctx(allocator);
+      ObSqlCtx sql_ctx;
       session->set_session_sleep();                    // SESSION_INIT → SESSION_SLEEP
       session->set_thread_id(GETTID());                // bind executing thread
       exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
@@ -373,6 +373,9 @@ int ObMViewPendingTaskExecutor::run_pending_task(const obrpc::ObRunMViewPendingT
       } else if (OB_FAIL(refresher.refresh())) {
         LOG_WARN("fail to do refresh", KR(ret), K(tenant_id), K(mview_id), K(refresh_id));
       }
+      session->set_cur_exec_ctx(NULL);
+      exec_ctx.set_physical_plan_ctx(NULL);
+      exec_ctx.set_sql_ctx(NULL);
     }
   }
   if (OB_LIKELY(NULL != session)) {
