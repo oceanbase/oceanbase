@@ -156,7 +156,8 @@ public:
                            const int64_t end_time,
                            const int64_t log_purge_time,
                            const int result,
-                           const common::ObString &error_message);
+                           const common::ObString &error_message,
+                           const int64_t num_failures);
 
   static int purge_refresh_stats(common::ObMySQLProxy *sql_proxy,
                                  uint64_t tenant_id,

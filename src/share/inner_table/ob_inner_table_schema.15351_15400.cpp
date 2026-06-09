@@ -4000,7 +4000,7 @@ int ObInnerTableSchema::all_virtual_mview_refresh_run_stats_real_agent_ora_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -4030,7 +4030,7 @@ int ObInnerTableSchema::all_virtual_mview_refresh_run_stats_real_agent_ora_schem
       4000, //column_length
       2, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -4090,7 +4090,7 @@ int ObInnerTableSchema::all_virtual_mview_refresh_run_stats_real_agent_ora_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -4105,7 +4105,7 @@ int ObInnerTableSchema::all_virtual_mview_refresh_run_stats_real_agent_ora_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -4120,7 +4120,7 @@ int ObInnerTableSchema::all_virtual_mview_refresh_run_stats_real_agent_ora_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -4150,7 +4150,7 @@ int ObInnerTableSchema::all_virtual_mview_refresh_run_stats_real_agent_ora_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -4165,7 +4165,7 @@ int ObInnerTableSchema::all_virtual_mview_refresh_run_stats_real_agent_ora_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -4195,7 +4195,7 @@ int ObInnerTableSchema::all_virtual_mview_refresh_run_stats_real_agent_ora_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -4270,7 +4270,7 @@ int ObInnerTableSchema::all_virtual_mview_refresh_run_stats_real_agent_ora_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -4285,7 +4285,7 @@ int ObInnerTableSchema::all_virtual_mview_refresh_run_stats_real_agent_ora_schem
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -4570,7 +4570,7 @@ int ObInnerTableSchema::all_virtual_mview_refresh_stats_real_agent_ora_schema(Ob
       38, //column_length
       38, //column_precision
       0, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 

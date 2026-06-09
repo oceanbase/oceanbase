@@ -1202,23 +1202,33 @@ int ObMViewPendingTaskManager::finalize_task(uint64_t tenant_id,
                                              const common::ObString &err_msg)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObMViewRefreshStatsUtils::write_run_end(GCTX.sql_proxy_,
-                                                      tenant_id,
-                                                      refresh_id,
-                                                      ObTimeUtility::current_time(),
-                                                      0,
-                                                      task_ret,
-                                                      err_msg))) {
-    LOG_WARN("write run end failed", KR(ret), K(tenant_id), K(refresh_id), K(mview_id));
-  } else if (OB_SUCCESS == task_ret) {
-    if (OB_FAIL(mark_task_success(tenant_id, refresh_id, mview_id))) {
-      LOG_WARN("mark task success failed", KR(ret), K(tenant_id), K(refresh_id), K(mview_id));
-    }
+  int64_t retry_count = 0;
+  if (OB_FAIL(queue_.get_task_retry_count(tenant_id, refresh_id, mview_id, retry_count))) {
+    LOG_WARN("get task retry count failed", KR(ret), K(tenant_id), K(refresh_id), K(mview_id));
   } else {
-    if (OB_FAIL(mark_task_failed(tenant_id, refresh_id, mview_id, task_ret))) {
-      LOG_WARN("mark task failed failed", KR(ret), K(tenant_id), K(refresh_id), K(mview_id));
-    } else if (OB_FAIL(mark_all_tasks_canceled(tenant_id, refresh_id))) {
-      LOG_WARN("mark all tasks canceled failed", KR(ret), K(tenant_id), K(refresh_id));
+    int64_t per_mv_failures = retry_count + (OB_SUCCESS == task_ret ? 0 : 1);
+    if (OB_FAIL(ObMViewRefreshStatsUtils::write_run_end(GCTX.sql_proxy_,
+                                                        tenant_id,
+                                                        refresh_id,
+                                                        ObTimeUtility::current_time(),
+                                                        0,
+                                                        task_ret,
+                                                        err_msg,
+                                                        per_mv_failures))) {
+      LOG_WARN("write run end failed", KR(ret), K(tenant_id), K(refresh_id), K(mview_id));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_SUCCESS == task_ret) {
+      if (OB_FAIL(mark_task_success(tenant_id, refresh_id, mview_id))) {
+        LOG_WARN("mark task success failed", KR(ret), K(tenant_id), K(refresh_id), K(mview_id));
+      }
+    } else {
+      if (OB_FAIL(mark_task_failed(tenant_id, refresh_id, mview_id, task_ret))) {
+        LOG_WARN("mark task failed failed", KR(ret), K(tenant_id), K(refresh_id), K(mview_id));
+      } else if (OB_FAIL(mark_all_tasks_canceled(tenant_id, refresh_id))) {
+        LOG_WARN("mark all tasks canceled failed", KR(ret), K(tenant_id), K(refresh_id));
+      }
     }
   }
   return ret;
@@ -1986,7 +1996,8 @@ int ObMViewPendingTaskManager::mark_all_tasks_canceled(uint64_t tenant_id, int64
                                                                 ObTimeUtility::current_time(),
                                                                 0 /*log_purge_time*/,
                                                                 OB_CANCELED,
-                                                                ObString::make_string("mview refresh was canceled")))) {
+                                                                ObString::make_string("mview refresh was canceled"),
+                                                                0 /*num_failures*/))) {
     LOG_WARN("write run end before recycle failed", KR(ret), K(tenant_id), K(refresh_id));
   } else if (refresh_finished && OB_FAIL(inner_recycle_refresh(tenant_id, refresh_id))) {
     LOG_WARN("recycle refresh after mark_all_tasks_canceled failed", KR(ret), K(tenant_id), K(refresh_id));

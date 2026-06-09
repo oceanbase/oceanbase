@@ -2355,7 +2355,7 @@ int ObInnerTableSchema::all_virtual_mview_refresh_run_stats_schema(ObTableSchema
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -2385,7 +2385,7 @@ int ObInnerTableSchema::all_virtual_mview_refresh_run_stats_schema(ObTableSchema
       4000, //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -2445,7 +2445,7 @@ int ObInnerTableSchema::all_virtual_mview_refresh_run_stats_schema(ObTableSchema
       1, //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -2460,7 +2460,7 @@ int ObInnerTableSchema::all_virtual_mview_refresh_run_stats_schema(ObTableSchema
       1, //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -2475,7 +2475,7 @@ int ObInnerTableSchema::all_virtual_mview_refresh_run_stats_schema(ObTableSchema
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -2505,7 +2505,7 @@ int ObInnerTableSchema::all_virtual_mview_refresh_run_stats_schema(ObTableSchema
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -2520,7 +2520,7 @@ int ObInnerTableSchema::all_virtual_mview_refresh_run_stats_schema(ObTableSchema
       1, //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -2550,7 +2550,7 @@ int ObInnerTableSchema::all_virtual_mview_refresh_run_stats_schema(ObTableSchema
       1, //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -2627,7 +2627,7 @@ int ObInnerTableSchema::all_virtual_mview_refresh_run_stats_schema(ObTableSchema
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -2642,7 +2642,7 @@ int ObInnerTableSchema::all_virtual_mview_refresh_run_stats_schema(ObTableSchema
       1, //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 
@@ -2931,7 +2931,7 @@ int ObInnerTableSchema::all_virtual_mview_refresh_stats_schema(ObTableSchema &ta
       sizeof(int64_t), //column_length
       -1, //column_precision
       -1, //column_scale
-      false, //is_nullable
+      true, //is_nullable
       false); //is_autoincrement
   }
 

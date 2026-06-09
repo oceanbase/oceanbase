@@ -6395,26 +6395,26 @@ def_table_schema(
   in_tenant_space = True,
   normal_columns = [
     ('run_user_id', 'int'),
-    ('num_mvs_total', 'int'), # Deprecated, no longer maintained
+    ('num_mvs_total', 'int', 'true'), # Deprecated, no longer maintained
     ('num_mvs_current', 'int'), # Deprecated, no longer maintained
-    ('mviews', 'varchar:4000'), # Deprecated, no longer maintained
+    ('mviews', 'varchar:4000', 'true'), # Deprecated, no longer maintained
     ('base_tables', 'varchar:4000', 'true'), # Deprecated, no longer maintained
     ('method', 'varchar:4000', 'true'),
     ('rollback_seg', 'varchar:4000', 'true'), # Unused, written as default placeholder
-    ('push_deferred_rpc', 'bool'), # Unused, written as default placeholder
-    ('refresh_after_errors', 'bool'), # Unused, written as default placeholder
-    ('purge_option', 'int'), # Unused, written as default placeholder
+    ('push_deferred_rpc', 'bool', 'true'), # Unused, written as default placeholder
+    ('refresh_after_errors', 'bool', 'true'), # Unused, written as default placeholder
+    ('purge_option', 'int', 'true'), # Unused, written as default placeholder
     ('parallelism', 'int'),
-    ('heap_size', 'int'), # Unused, written as default placeholder
-    ('atomic_refresh', 'bool'), # Unused, written as default placeholder
+    ('heap_size', 'int', 'true'), # Unused, written as default placeholder
+    ('atomic_refresh', 'bool', 'true'), # Unused, written as default placeholder
     ('nested', 'bool'),
-    ('out_of_place', 'bool'), # Unused, written as default placeholder
+    ('out_of_place', 'bool', 'true'), # Unused, written as default placeholder
     ('number_of_failures', 'int'),
     ('start_time', 'timestamp'),
     ('end_time', 'timestamp'),
     ('elapsed_time', 'int'),
-    ('log_purge_time', 'int'),
-    ('complete_stats_avaliable', 'bool'), # Unused, written as default placeholder
+    ('log_purge_time', 'int', 'true'), # Deprecated, no longer maintained
+    ('complete_stats_avaliable', 'bool', 'true'), # Unused, written as default placeholder
     ('trace_id', 'varchar:OB_MAX_TRACE_ID_BUFFER_SIZE', 'true'),
     ('mview_id', 'int', 'true'),
     ('data_target_scn', 'uint', 'true'),
@@ -6441,7 +6441,7 @@ def_table_schema(
     ('start_time', 'timestamp'),
     ('end_time', 'timestamp'),
     ('elapsed_time', 'int'),
-    ('log_purge_time', 'int'),
+    ('log_purge_time', 'int', 'true'), # Deprecated, no longer maintained
     ('initial_num_rows', 'int'),
     ('final_num_rows', 'int'),
     ('num_steps', 'int'),
@@ -40789,6 +40789,7 @@ def_table_schema(
       CAST(IF(B.NESTED = 1, 'Y', 'N') AS CHAR(1)) AS NESTED,
       CAST(IF(B.OUT_OF_PLACE = 1, 'Y', 'N') AS CHAR(1)) AS OUT_OF_PLACE,
       B.NUMBER_OF_FAILURES AS NUMBER_OF_FAILURES,
+      B.RESULT AS RESULT,
       CAST(B.START_TIME AS DATETIME) AS START_TIME,
       CAST(B.END_TIME AS DATETIME) AS END_TIME,
       B.ELAPSED_TIME AS ELAPSED_TIME,
@@ -40802,7 +40803,7 @@ def_table_schema(
     FROM
       oceanbase.__all_virtual_user A,
       oceanbase.__all_virtual_mview_refresh_run_stats B
-      JOIN (
+      LEFT JOIN (
         SELECT
           C1.TENANT_ID AS TENANT_ID,
           C1.REFRESH_ID AS REFRESH_ID,
@@ -40815,7 +40816,7 @@ def_table_schema(
           AND C1.MVIEW_ID = C2.TABLE_ID
         GROUP BY TENANT_ID, REFRESH_ID
       ) C ON B.TENANT_ID = C.TENANT_ID AND B.REFRESH_ID = C.REFRESH_ID
-      JOIN (
+      LEFT JOIN (
         SELECT
           D1.TENANT_ID AS TENANT_ID,
           D1.REFRESH_ID AS REFRESH_ID,
@@ -40866,6 +40867,7 @@ def_table_schema(
       CAST(IF(B.NESTED = 1, 'Y', 'N') AS CHAR(1)) AS NESTED,
       CAST(IF(B.OUT_OF_PLACE = 1, 'Y', 'N') AS CHAR(1)) AS OUT_OF_PLACE,
       B.NUMBER_OF_FAILURES AS NUMBER_OF_FAILURES,
+      B.RESULT AS RESULT,
       CAST(B.START_TIME AS DATETIME) AS START_TIME,
       CAST(B.END_TIME AS DATETIME) AS END_TIME,
       B.ELAPSED_TIME AS ELAPSED_TIME,
@@ -40879,7 +40881,7 @@ def_table_schema(
     FROM
       oceanbase.__all_user A,
       oceanbase.__all_mview_refresh_run_stats B
-      JOIN (
+      LEFT JOIN (
         SELECT
           C1.TENANT_ID AS TENANT_ID,
           C1.REFRESH_ID AS REFRESH_ID,
@@ -40892,7 +40894,7 @@ def_table_schema(
           AND C1.MVIEW_ID = C2.TABLE_ID
         GROUP BY TENANT_ID, REFRESH_ID
       ) C ON B.TENANT_ID = C.TENANT_ID AND B.REFRESH_ID = C.REFRESH_ID
-      JOIN (
+      LEFT JOIN (
         SELECT
           D1.TENANT_ID AS TENANT_ID,
           D1.REFRESH_ID AS REFRESH_ID,
@@ -68388,6 +68390,7 @@ def_table_schema(
       CAST(DECODE(B.NESTED, 1, 'Y', 'N') AS CHAR(1)) AS NESTED,
       CAST(DECODE(B.OUT_OF_PLACE, 1, 'Y', 'N') AS CHAR(1)) AS OUT_OF_PLACE,
       CAST(B.NUMBER_OF_FAILURES AS NUMBER) AS NUMBER_OF_FAILURES,
+      CAST(B.RESULT AS NUMBER) AS RESULT,
       CAST(B.START_TIME AS TIMESTAMP(6)) AS START_TIME,
       CAST(B.END_TIME AS TIMESTAMP(6)) AS END_TIME,
       CAST(B.ELAPSED_TIME AS NUMBER) AS ELAPSED_TIME,
@@ -68441,15 +68444,15 @@ def_table_schema(
       ) D,
       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT MT
     WHERE A.USER_ID = B.RUN_USER_ID
-      AND B.REFRESH_ID = C.REFRESH_ID
-      AND B.REFRESH_ID = D.REFRESH_ID
+      AND B.REFRESH_ID = C.REFRESH_ID (+)
+      AND B.REFRESH_ID = D.REFRESH_ID (+)
       AND B.TENANT_ID = MT.TENANT_ID
       AND B.MVIEW_ID = MT.TABLE_ID
       AND MT.TABLE_TYPE = 7
       AND A.TENANT_ID = EFFECTIVE_TENANT_ID()
       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()
-      AND C.TENANT_ID = EFFECTIVE_TENANT_ID()
-      AND D.TENANT_ID = EFFECTIVE_TENANT_ID()
+      AND C.TENANT_ID (+) = EFFECTIVE_TENANT_ID()
+      AND D.TENANT_ID (+) = EFFECTIVE_TENANT_ID()
       AND MT.TENANT_ID = EFFECTIVE_TENANT_ID()
 """.replace("\n", " ")
 )
@@ -68482,6 +68485,7 @@ def_table_schema(
       CAST(DECODE(B.NESTED, 1, 'Y', 'N') AS CHAR(1)) AS NESTED,
       CAST(DECODE(B.OUT_OF_PLACE, 1, 'Y', 'N') AS CHAR(1)) AS OUT_OF_PLACE,
       CAST(B.NUMBER_OF_FAILURES AS NUMBER) AS NUMBER_OF_FAILURES,
+      CAST(B.RESULT AS NUMBER) AS RESULT,
       CAST(B.START_TIME AS TIMESTAMP(6)) AS START_TIME,
       CAST(B.END_TIME AS TIMESTAMP(6)) AS END_TIME,
       CAST(B.ELAPSED_TIME AS NUMBER) AS ELAPSED_TIME,
@@ -68535,15 +68539,15 @@ def_table_schema(
       ) D,
       SYS.ALL_VIRTUAL_TABLE_REAL_AGENT MT
     WHERE A.USER_ID = B.RUN_USER_ID
-      AND B.REFRESH_ID = C.REFRESH_ID
-      AND B.REFRESH_ID = D.REFRESH_ID
+      AND B.REFRESH_ID = C.REFRESH_ID (+)
+      AND B.REFRESH_ID = D.REFRESH_ID (+)
       AND B.TENANT_ID = MT.TENANT_ID
       AND B.MVIEW_ID = MT.TABLE_ID
       AND MT.TABLE_TYPE = 7
       AND A.TENANT_ID = EFFECTIVE_TENANT_ID()
       AND B.TENANT_ID = EFFECTIVE_TENANT_ID()
-      AND C.TENANT_ID = EFFECTIVE_TENANT_ID()
-      AND D.TENANT_ID = EFFECTIVE_TENANT_ID()
+      AND C.TENANT_ID (+) = EFFECTIVE_TENANT_ID()
+      AND D.TENANT_ID (+) = EFFECTIVE_TENANT_ID()
       AND MT.TENANT_ID = EFFECTIVE_TENANT_ID()
       AND A.USER_NAME = SYS_CONTEXT('USERENV','CURRENT_USER')
 """.replace("\n", " ")
