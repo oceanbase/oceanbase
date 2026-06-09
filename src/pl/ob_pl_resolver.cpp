@@ -6635,6 +6635,9 @@ int ObPLResolver::transform_value_expr(ObRawExpr *&value_expr, ObPLDataType &int
   if (OB_SUCC(ret) && resolve_ctx_.session_info_.get_local_plsql_can_transform_sql_to_assign()) {
     OZ (add_implicit_cast_for_in_param(value_expr));
   }
+  bool transformed = false;
+  OZ (ObTransformPreProcess::transform_expr(expr_factory_,
+                                            resolve_ctx_.session_info_, value_expr, transformed));
   OZ (formalize_expr(*value_expr));
   if (OB_SUCC(ret) && OB_NOT_NULL(value_expr) && into_expr_type.is_obj_type()) {
     // The basic type need check whether to add a column convert expr
