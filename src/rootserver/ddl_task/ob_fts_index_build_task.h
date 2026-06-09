@@ -66,16 +66,32 @@ public:
            : true;
   }
   virtual bool is_ddl_retryable() const override { return is_retryable_ddl_; }
-  TO_STRING_KV(K(index_table_id_), K(rowkey_doc_aux_table_id_),
-      K(doc_rowkey_aux_table_id_), K(domain_index_aux_table_id_),
-      K(fts_doc_word_aux_table_id_), K(rowkey_doc_task_submitted_),
-      K(doc_rowkey_task_submitted_), K(domain_index_aux_task_submitted_),
-      K(fts_doc_word_task_submitted_), K(rowkey_doc_task_id_),
-      K(doc_rowkey_task_id_), K(domain_index_aux_task_id_),
-      K(fts_doc_word_task_id_), K(drop_index_task_id_),
-      K(drop_index_task_submitted_), K(schema_version_), K(execution_id_),
-      K(consumer_group_id_), K(trace_id_), K(parallelism_), K(create_index_arg_),
-      K(is_retryable_ddl_), K(rowkey_doc_schema_version_));
+  TO_STRING_KV(
+      K(index_table_id_),
+      K(rowkey_doc_aux_table_id_),
+      K(doc_rowkey_aux_table_id_),
+      K(domain_index_aux_table_id_),
+      K(fts_doc_word_aux_table_id_),
+      K(rowkey_doc_task_submitted_),
+      K(doc_rowkey_task_submitted_),
+      K(domain_index_aux_task_submitted_),
+      K(fts_doc_word_task_submitted_),
+      K(rowkey_doc_task_id_),
+      K(doc_rowkey_task_id_),
+      K(domain_index_aux_task_id_),
+      K(fts_doc_word_task_id_),
+      K(drop_index_task_id_),
+      K(drop_index_task_submitted_),
+      K(schema_version_),
+      K(execution_id_),
+      K(consumer_group_id_),
+      K(trace_id_),
+      K(parallelism_),
+      K(create_index_arg_),
+      K(is_retryable_ddl_),
+      K(rowkey_doc_schema_version_),
+      K(charset_type_),
+      K(is_dic_locked_));
 
 public:
   void set_rowkey_doc_aux_table_id(const uint64_t id) { rowkey_doc_aux_table_id_ = id; }
@@ -124,6 +140,7 @@ private:
       uint64_t &index_table_id);
   int prepare();
   int load_dictionary();
+  int try_lock_dictionary_tables_out_trans();
   int get_charset_type(ObCharsetType &charset_type);
   int wait_aux_table_complement();
   int submit_build_aux_index_task(
@@ -213,6 +230,14 @@ private:
   common::hash::ObHashMap<uint64_t, share::ObDomainDependTaskStatus> dependent_task_result_map_;
   bool is_retryable_ddl_;
   int64_t rowkey_doc_schema_version_;
+  ObCharsetType charset_type_;
+  // Tracks whether the dictionary tables lock has been acquired via
+  // try_lock_dictionary_tables_out_trans. Persisted in the same transaction as
+  // the lock acquisition so the cleanup path can reliably release the lock.
+  // For task messages serialized by old versions that did not carry this
+  // field, deserialization defaults this to true so any lock the old version
+  // may have acquired still gets released during cleanup.
+  bool is_dic_locked_;
 };
 
 } // end namespace rootserver
