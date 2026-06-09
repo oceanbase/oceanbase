@@ -1643,7 +1643,7 @@ int ObService::bootstrap(const obrpc::ObBootstrapArg &arg)
                                  *gctx_.rs_rpc_proxy_);
     ObAddr master_rs;
     bool server_empty = false;
-    if (OB_FAIL(check_server_empty(server_empty))) {
+    if (OB_FAIL(ObServerEmptyChecker::check_server_empty(server_empty))) {
       BOOTSTRAP_LOG(WARN, "check_server_empty failed", K(ret));
     } else if (!server_empty) {
       ret = OB_ERR_SYS;
@@ -1761,7 +1761,7 @@ int ObService::check_server_empty_with_result(const obrpc::ObCheckServerEmptyArg
   } else {
     bool server_empty = false;
     ObZone zone;
-    if (OB_FAIL(check_server_empty(server_empty))) {
+    if (OB_FAIL(ObServerEmptyChecker::check_server_empty(server_empty))) {
       LOG_WARN("check_server_empty failed", K(ret));
     } else if (OB_FAIL(zone.assign(GCONF.zone.str()))) {
       LOG_WARN("assign zone failed", KR(ret), K(GCONF.zone));
@@ -1866,7 +1866,7 @@ int ObService::prepare_server_for_adding_server(
     } else {
       // If adding server after cluster completely bootstrap,
       // need to check whether server is empty (server_id, log_dir, rootkey).
-      if (OB_FAIL(check_server_empty(server_empty))) {
+      if (OB_FAIL(ObServerEmptyChecker::check_server_empty(server_empty))) {
         LOG_WARN("check_server_empty failed", KR(ret));
       } else if (server_empty) {
         if (OB_FAIL(set_server_id_(server_id))) {
@@ -2341,45 +2341,6 @@ int ObService::wait_master_key_in_sync(
 }
 #endif
 
-int ObService::check_server_empty(bool &is_empty)
-{
-  int ret = OB_SUCCESS;
-  is_empty = true;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else {
-    uint64_t server_id_in_GCONF = GCONF.observer_id;
-    if (is_empty) {
-      if (is_valid_server_id(GCTX.get_server_id()) || is_valid_server_id(server_id_in_GCONF)) {
-        is_empty = false;
-        FLOG_WARN("[CHECK_SERVER_EMPTY] server_id exists", K(GCTX.get_server_id()), K(server_id_in_GCONF));
-      }
-    }
-    if (is_empty) {
-      if (!OBSERVER.is_log_dir_empty()) {
-        FLOG_WARN("[CHECK_SERVER_EMPTY] log dir is not empty");
-        is_empty = false;
-      }
-    }
-#ifdef OB_BUILD_TDE_SECURITY
-    if (is_empty) {
-      if (ObMasterKeyGetter::instance().is_wallet_exist()) {
-        FLOG_WARN("[CHECK_SERVER_EMPTY] master_key file exists");
-        is_empty = false;
-      }
-    }
-#endif
-    if (is_empty) {
-      if (ODV_MGR.get_file_exists_when_loading()) {
-        // ignore ret
-        FLOG_WARN("[CHECK_SERVER_EMPTY] data_version file exists");
-        is_empty = false;
-      }
-    }
-  }
-  return ret;
-}
 
 int ObService::report_replica()
 {

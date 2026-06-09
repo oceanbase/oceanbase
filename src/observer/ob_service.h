@@ -20,6 +20,7 @@
 #include "observer/ob_heartbeat.h"
 #include "observer/ob_server_schema_updater.h"
 #include "observer/ob_rpc_processor_simple.h"
+#include "observer/ob_server_empty_checker.h"
 #include "observer/ob_uniq_task_queue.h"
 #include "observer/report/ob_i_meta_report.h"
 #include "observer/report/ob_ls_table_updater.h"
@@ -315,7 +316,6 @@ public:
       obrpc::ObCheckStorageOperationStatusResult &result);
   int ob_admin_unlock_member_list(
       const obrpc::ObAdminUnlockMemberListOpArg &arg);
-  int check_server_empty(bool &server_empty);
   int change_external_storage_dest(obrpc::ObAdminSetConfigArg &arg);
 
 // injected from ob_srv_mem_info.h
