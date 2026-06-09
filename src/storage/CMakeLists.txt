@@ -1063,6 +1063,7 @@ ob_set_subtarget(ob_storage mview
   mview/cmd/ob_mview_refresh_report_executor.cpp
   mview/cmd/ob_mview_refresh_report_fetcher.cpp
   mview/cmd/ob_mview_refresh_report_formatter.cpp
+  mview/cmd/ob_mview_explain_refresh_executor.cpp
   mview/cmd/ob_mview_stats_purge_refresh_stats_executor.cpp
   mview/cmd/ob_mview_stats_set_mvref_stats_params_executor.cpp
   mview/cmd/ob_mview_stats_set_system_default_executor.cpp

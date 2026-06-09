@@ -33,4 +33,11 @@ CREATE OR REPLACE PACKAGE dbms_mview AUTHID CURRENT_USER
     IN     parameter_value        VARCHAR(65535)
   );
 
+  FUNCTION explain_refresh(
+    IN     mv_name                VARCHAR(65535),
+    IN     method                 VARCHAR(65535) DEFAULT NULL,
+    IN     nested                 BOOLEAN        DEFAULT FALSE,
+    IN     tenant_id              INT            DEFAULT 0
+  ) RETURN LONGTEXT;
+
 END dbms_mview;

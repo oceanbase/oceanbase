@@ -70,4 +70,12 @@ CREATE OR REPLACE PACKAGE BODY dbms_mview
     IN     parameter_value        VARCHAR(65535));
   PRAGMA INTERFACE(C, DBMS_MVIEW_MYSQL_SET_REFRESH_PARAMS);
 
+  FUNCTION explain_refresh(
+    IN     mv_name                VARCHAR(65535),
+    IN     method                 VARCHAR(65535) DEFAULT NULL,
+    IN     nested                 BOOLEAN        DEFAULT FALSE,
+    IN     tenant_id              INT            DEFAULT 0
+  ) RETURN LONGTEXT;
+  PRAGMA INTERFACE(C, DBMS_MVIEW_MYSQL_EXPLAIN_REFRESH);
+
 END dbms_mview;

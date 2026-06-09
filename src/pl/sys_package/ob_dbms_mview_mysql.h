@@ -14,6 +14,7 @@
 
 #include "sql/engine/ob_exec_context.h"
 #include "lib/mysqlclient/ob_isql_client.h"
+#include "pl/ob_pl.h"
 
 namespace oceanbase
 {
@@ -58,6 +59,8 @@ public:
   DECLARE_FUNC(set_refresh_params);
 
 #undef DECLARE_FUNC
+
+  static int explain_refresh(ObPLExecCtx &ctx, sql::ParamStore &params, common::ObObj &result);
 
 };
 
