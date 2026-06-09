@@ -871,6 +871,8 @@ int ObExecContext::init_physical_plan_ctx(const ObPhysicalPlan &plan)
           (GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_5_0_0 && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_6_1_0) ||
           max_execution_time <= MAX_EXECUTION_TIME_MIN ||
           max_execution_time > MAX_EXECUTION_TIME_MAX ||
+          my_session_->is_inner() ||
+          sql_ctx_->is_from_pl_ ||
           stmt::T_SELECT != plan.get_stmt_type() ||
           ObStmt::is_show_stmt(plan.get_literal_stmt_type()) ||
           (sql_ctx_->multi_stmt_item_.is_part_of_multi_stmt() && query_timeout_timestamp <= max_exec_timeout_timestamp) ||
