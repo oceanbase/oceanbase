@@ -2499,8 +2499,8 @@ int ObRawExprDeduceType::check_group_aggr_param(ObAggFunRawExpr &expr)
                 && T_FUN_GROUP_PERCENTILE_CONT != expr.get_expr_type()
                 && T_FUN_GROUP_PERCENTILE_DISC != expr.get_expr_type()
                 && T_FUN_SUM_OPNSIZE != expr.get_expr_type()
+                && T_FUN_PL_AGG_UDF != expr.get_expr_type()
                 && !expr.is_need_deserialize_row()
-                && !(T_FUN_PL_AGG_UDF == expr.get_expr_type() && !expr.is_param_distinct())
                 && !(T_FUN_WM_CONCAT == expr.get_expr_type() && !expr.is_param_distinct()))) {
       if (ob_is_json(param_expr->get_data_type())
           && !(expr.get_expr_type() == T_FUN_SUM

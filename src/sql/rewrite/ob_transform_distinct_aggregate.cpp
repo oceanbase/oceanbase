@@ -106,6 +106,12 @@ int ObTransformDistinctAggregate::check_transform_validity(const ObDMLStmt *stmt
       } else if (!aggr_expr->get_order_items().empty() || aggr_expr->contain_nested_aggr()) {
         is_valid = false;
         OPT_TRACE("can not do transform, stmt has distinct aggregate functions with order item or has nested aggregate");
+      } else if (T_FUN_PL_AGG_UDF == aggr_expr->get_expr_type()
+                   && OB_NOT_NULL(aggr_expr->get_real_param_exprs().at(0))
+                   && (ob_is_lob_tc(aggr_expr->get_real_param_exprs().at(0)->get_result_type().get_type())
+                       || ob_is_text_tc(aggr_expr->get_real_param_exprs().at(0)->get_result_type().get_type()))) {
+        is_valid = false;
+        OPT_TRACE("can not do transform, stmt has T_FUN_PL_AGG_UDF with clob/blob param");
       } else if (distinct_exprs.empty()) {
         if (OB_FAIL(ObOptimizerUtil::append_exprs_no_dup(distinct_exprs,
                                                          aggr_expr->get_real_param_exprs()))) {
