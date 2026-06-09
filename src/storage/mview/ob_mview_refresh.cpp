@@ -39,6 +39,7 @@ using namespace share;
 using namespace rootserver;
 using namespace share::schema;
 using namespace sql;
+using namespace transaction::tablelock;
 
 /**
  * ObMViewRefresher
@@ -100,14 +101,20 @@ int ObMViewRefresher::refresh()
     LOG_WARN("fail to lock mview for refresh", KR(ret));
   } else if (OB_FAIL(prepare_for_refresh(allocator, refresh_type, fast_refresh_sqls))) {
     LOG_WARN("fail to prepare for refresh", KR(ret));
-  } else if (OB_FAIL(ObMViewRefreshStatsUtils::write_mv_start(ctx_,
-                                                              trans_,
-                                                              param_,
-                                                              collection_level_,
-                                                              refresh_type,
-                                                              start_time,
-                                                              fast_refresh_sqls.count()))) {
-    LOG_WARN("fail to write_mv_start", KR(ret));
+  }
+
+  int tmp_ret = OB_SUCCESS;
+  if (OB_TMP_FAIL(ObMViewRefreshStatsUtils::write_mv_start(ctx_,
+                                                           trans_,
+                                                           param_,
+                                                           collection_level_,
+                                                           refresh_type,
+                                                           start_time,
+                                                           fast_refresh_sqls.count()))) {
+    LOG_WARN("fail to write_mv_start", KR(tmp_ret));
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_UNLIKELY(ObMVRefreshType::FAST != refresh_type && ObMVRefreshType::COMPLETE != refresh_type)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected refresh type", KR(ret), K(refresh_type));
@@ -125,7 +132,7 @@ int ObMViewRefresher::refresh()
 
   const int64_t end_time = ObTimeUtil::current_time();
   const int64_t elapsed_time = end_time - start_time;
-  int tmp_ret = OB_SUCCESS;
+  tmp_ret = OB_SUCCESS;
   // write_mv_end must be called before trans_.end() because it queries final_num_rows
   // via trans.read(); after trans_.end() the connection is closed.
   if (OB_TMP_FAIL(ObMViewRefreshStatsUtils::write_mv_end(ctx_,
@@ -223,27 +230,45 @@ int ObMViewRefresher::lock_mview_for_refresh(ObMViewTransaction &trans) const
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = param_.tenant_id_;
   const uint64_t mview_id = param_.mview_id_;
-  int64_t retries = 0;
-  while (OB_SUCC(ret) && OB_SUCC(ctx_.check_status())) {
-    if (OB_FAIL(ObMViewRefreshHelper::lock_mview(trans, param_.tenant_id_,
-                                                 param_.mview_id_,
-                                                 true /*try_lock*/))) {
-      if (OB_UNLIKELY(OB_TRY_LOCK_ROW_CONFLICT != ret)) {
-        LOG_WARN("fail to lock mview for refresh", KR(ret), K(tenant_id), K(mview_id));
-      } else {
-        ret = OB_SUCCESS;
-        ++retries;
-        if (retries % 10 == 0) {
-          LOG_WARN("retry too many times", K(retries), K(tenant_id), K(mview_id));
-        }
-        ob_usleep(100LL * 1000);
+  ObSEArray<ObTableLockHolderInfo, 4> holder_info;
+  if (OB_FAIL(ctx_.check_status())) {
+  } else if (OB_FAIL(ObMViewRefreshHelper::lock_mview(trans, tenant_id, mview_id,
+                                                       true /*try_lock*/, &holder_info))) {
+    if (OB_TRY_LOCK_ROW_CONFLICT == ret || OB_EAGAIN == ret || OB_ERR_EXCLUSIVE_LOCK_CONFLICT == ret) {
+      LOG_WARN("mview lock conflict", KR(ret), K(tenant_id), K(mview_id),
+               "holder_count", holder_info.count(), K(holder_info));
+      // If holder_info contains a valid exclusive holder (non-default owner_id), it means a
+      // concurrent refresh task is running on this mview. Concurrent refresh will be fast-failed
+      // with NOT_SUPPORTED so the upper-layer callers know this is not retryable.
+      if (has_valid_exclusive_holder_(holder_info)) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("concurrent refresh detected, fast fail", KR(ret), K(tenant_id), K(mview_id));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "concurrent refresh on mview");
       }
     } else {
-      break;
+      LOG_WARN("fail to lock mview for refresh", KR(ret), K(tenant_id), K(mview_id));
     }
   }
-  DEBUG_SYNC(AFTER_LOCK_MVIEW_IN_REFRESH);
+  if (OB_SUCC(ret)) {
+    // Only hold the sync point after the lock is acquired. Triggering it on the
+    // failure path would trap a refresh that already lost the lock race, waiting
+    // for a signal that the test only sends after this call returns.
+    DEBUG_SYNC(AFTER_LOCK_MVIEW_IN_REFRESH);
+  }
   return ret;
+}
+
+bool ObMViewRefresher::has_valid_exclusive_holder_(
+    const ObIArray<transaction::tablelock::ObTableLockHolderInfo> &holder_info)
+{
+  bool found = false;
+  for (int64_t i = 0; !found && i < holder_info.count(); ++i) {
+    const ObTableLockHolderInfo &info = holder_info.at(i);
+    if (EXCLUSIVE == info.lock_mode_ && !info.owner_id_.is_default()) {
+      found = true;
+    }
+  }
+  return found;
 }
 
 int ObMViewRefresher::prepare_for_refresh(ObIAllocator &allocator,

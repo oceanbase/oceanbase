@@ -184,7 +184,8 @@ ERRSIM_POINT_DEF(EN_OB_NOT_MASTER_IN_TABLELOCK)
 int ObAccessService::lock_obj(
     const share::ObLSID &ls_id,
     transaction::ObTxDesc &tx_desc,
-    const transaction::tablelock::ObLockParam &param)
+    const transaction::tablelock::ObLockParam &param,
+    ObIArray<transaction::tablelock::ObTableLockHolderInfo> *holder_info)
 {
   int ret = OB_SUCCESS;
   ObStoreCtxGuard ctx_guard;
@@ -216,7 +217,7 @@ int ObAccessService::lock_obj(
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ls should not be null", K(ret), KP(ls));
   } else {
-    ret = ls->lock(ctx_guard.get_store_ctx(), param);
+    ret = ls->lock(ctx_guard.get_store_ctx(), param, holder_info);
   }
   return ret;
 }

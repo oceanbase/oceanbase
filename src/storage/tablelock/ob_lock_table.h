@@ -109,7 +109,8 @@ public:
   // @param[in] ctx, store ctx for trans.
   // @param[in] param, contain the lock id, lock type and so on.
   int lock(storage::ObStoreCtx &ctx,
-           const ObLockParam &param);
+           const ObLockParam &param,
+           ObIArray<ObTableLockHolderInfo> *holder_info = nullptr);
   // unlock an object
   // @param[in] ctx, store ctx for trans.
   // @param[in] param, contain the lock id, lock type and so on.

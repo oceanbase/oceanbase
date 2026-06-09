@@ -88,7 +88,8 @@ public:
   int lock_obj(
       const share::ObLSID &ls_id,
       transaction::ObTxDesc &tx_desc,
-      const transaction::tablelock::ObLockParam &param);
+      const transaction::tablelock::ObLockParam &param,
+      ObIArray<transaction::tablelock::ObTableLockHolderInfo> *holder_info = nullptr);
   // unlock obj
   // @param [in] ls_id, this unlock op will be processed at which logstream.
   // @param [in] tx_desc, the trans context.

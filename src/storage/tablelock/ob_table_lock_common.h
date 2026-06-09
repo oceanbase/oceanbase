@@ -709,6 +709,71 @@ public:
 };
 
 typedef common::ObSEArray<ObTableLockOp, 10, TransModulePageAllocator> ObTableLockOpArray;
+
+// Best-effort diagnostic holder info extracted from the lock conflict path.
+// Extraction failures must NOT overwrite the primary lock error code.
+struct ObTableLockHolderInfo
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObTableLockHolderInfo()
+    : owner_id_(),
+      create_trans_id_(),
+      lock_mode_(NO_LOCK),
+      op_type_(UNKNOWN_TYPE),
+      op_status_(UNKNOWN_STATUS),
+      create_timestamp_(0)
+  {}
+  void reset()
+  {
+    owner_id_.reset();
+    create_trans_id_.reset();
+    lock_mode_ = NO_LOCK;
+    op_type_ = UNKNOWN_TYPE;
+    op_status_ = UNKNOWN_STATUS;
+    create_timestamp_ = 0;
+  }
+  bool is_valid() const
+  {
+    return owner_id_.is_valid()
+           && create_trans_id_.is_valid()
+           && is_lock_mode_valid(lock_mode_)
+           && is_op_type_valid(op_type_)
+           && is_op_status_valid(op_status_);
+  }
+  int assign_from_lock_op(const ObTableLockOp &lock_op)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_UNLIKELY(!lock_op.is_valid())) {
+      ret = OB_INVALID_ARGUMENT;
+    } else {
+      owner_id_ = lock_op.owner_id_;
+      create_trans_id_ = lock_op.create_trans_id_;
+      lock_mode_ = lock_op.lock_mode_;
+      op_type_ = lock_op.op_type_;
+      op_status_ = lock_op.lock_op_status_;
+      create_timestamp_ = lock_op.create_timestamp_;
+    }
+    return ret;
+  }
+  TO_STRING_KV(K_(owner_id), K_(create_trans_id), K_(lock_mode),
+               "lock_mode_name", get_name(lock_mode_, true),
+               K_(op_type),
+               "op_type_name", get_name(op_type_),
+               K_(op_status),
+               "op_status_name", get_name(op_status_),
+               K_(create_timestamp));
+public:
+  ObTableLockOwnerID owner_id_;
+  ObTransID create_trans_id_;
+  ObTableLockMode lock_mode_;
+  ObTableLockOpType op_type_;
+  ObTableLockOpStatus op_status_;
+  int64_t create_timestamp_;
+};
+
+static const int64_t MAX_HOLDER_INFO_COUNT = 8; // magic number, used to limit the number of lock holder info in the lock conflict path.
+
 struct ObTableLockInfo
 {
   OB_UNIS_VERSION(1);

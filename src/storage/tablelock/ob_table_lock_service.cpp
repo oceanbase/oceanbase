@@ -55,7 +55,8 @@ ObTableLockService::ObTableLockCtx::ObTableLockCtx() :
   ret_code_before_end_stmt_or_tx_(OB_SUCCESS),
   lock_priority_(ObTableLockPriority::NORMAL),
   stmt_savepoint_(),
-  is_for_replace_(false)
+  is_for_replace_(false),
+  holder_info_(nullptr)
 {
   is_enable_lock_priority_ = false;
   uint64_t tenant_id = MTL_ID();
@@ -807,7 +808,8 @@ int ObTableLockService::lock(ObTxDesc &tx_desc,
                              const ObTxParam &tx_param,
                              const ObLockRequest &arg,
                              const bool is_for_replace,
-                             const bool force_use_priority)
+                             const bool force_use_priority,
+                             ObIArray<ObTableLockHolderInfo> *holder_info)
 {
   int ret = OB_SUCCESS;
 
@@ -831,6 +833,7 @@ int ObTableLockService::lock(ObTxDesc &tx_desc,
       ctx.is_in_trans_ = true;
       ctx.tx_desc_ = &tx_desc;
       ctx.tx_param_ = tx_param;
+      ctx.holder_info_ = holder_info;
       if (OB_FAIL(process_lock_task_(ctx))) {
         LOG_WARN("process lock task failed", K(ret), K(ctx), K(arg));
         ret = rewrite_return_code_(ret, ctx.ret_code_before_end_stmt_or_tx_, ctx.is_from_sql_);
@@ -1246,6 +1249,18 @@ int ObTableLockService::handle_parallel_rpc_response_(RpcProxy &proxy_batch,
           LOG_WARN("failed to add exec result", K(tmp_ret), K(ctx), K(result->tx_result_));
         }
 
+        // best-effort: collect holder info from RPC result for diagnosis
+        if (OB_NOT_NULL(ctx.holder_info_)
+            && OB_NOT_NULL(result)
+            && result->holder_info_.count() > 0) {
+          for (int64_t j = 0; j < result->holder_info_.count(); ++j) {
+            int push_ret = OB_SUCCESS;
+            if (OB_SUCCESS != (push_ret = ctx.holder_info_->push_back(result->holder_info_.at(j)))) {
+              LOG_WARN("failed to append holder info from rpc result", K(push_ret), K(j));
+            }
+          }
+        }
+
         // rpc failed or we get tx exec result failed,
         // we need add the ls into touched to make rollback.
         if (OB_TMP_FAIL(tmp_ret)) {
@@ -1581,6 +1596,7 @@ int ObTableLockService::pack_batch_request_(ObTableLockCtx &ctx,
   } else {
     for (int i = 0; i < lock_ids.count() && OB_SUCC(ret); ++i) {
       lock_param.reset();
+      lock_param.need_holder_info_ = OB_NOT_NULL(ctx.holder_info_);
       if (ctx.is_enable_lock_priority_) {
         lock_param.is_two_phase_lock_ = true;
         lock_param.lock_priority_ = ctx.lock_priority_;
@@ -1639,6 +1655,7 @@ int ObTableLockService::pack_request_(ObTableLockCtx &ctx,
 {
   int ret = OB_SUCCESS;
   ObLockParam lock_param;
+  lock_param.need_holder_info_ = OB_NOT_NULL(ctx.holder_info_);
   if (OB_FAIL(lock_param.set(lock_id,
                              ctx.lock_mode_,
                              ctx.lock_owner_,

@@ -203,7 +203,8 @@ public:
       const ObTableLockOp &lock_op,
       const uint64_t lock_mode_cnt_in_same_trans[],
       ObMalloc &allocator,
-      ObTxIDSet &conflict_tx_set);
+      ObTxIDSet &conflict_tx_set,
+      ObIArray<ObTableLockHolderInfo> *holder_info = nullptr);
   int unlock(
       const ObTableLockOp &unlock_op,
       const bool is_try_lock,
@@ -230,7 +231,8 @@ public:
       const int64_t expired_time,
       ObMalloc &allocator,
       const bool include_finish_tx = true,
-      const bool only_check_dml_lock = false);
+      const bool only_check_dml_lock = false,
+      ObIArray<ObTableLockHolderInfo> *holder_info = nullptr);
   share::SCN get_min_ddl_lock_committed_scn(const share::SCN &flushed_scn) const;
   int get_table_lock_store_info(
       ObIArray<ObTableLockOp> &store_arr,
@@ -295,7 +297,8 @@ private:
       bool &conflict_with_dml_lock,
       const bool include_finish_tx = true,
       const bool only_check_dml_lock = false,
-      const bool check_for_replace = false);
+      const bool check_for_replace = false,
+      ObIArray<ObTableLockHolderInfo> *holder_info = nullptr);
   int update_lock_status_(
       const ObTableLockOp &lock_op,
       const share::SCN &commit_version,
@@ -311,17 +314,20 @@ private:
       const ObTableLockOp &lock_op,
       const uint64_t lock_mode_cnt_in_same_trans[],
       ObMalloc &allocator,
-      ObTxIDSet &conflict_tx_set);
+      ObTxIDSet &conflict_tx_set,
+      ObIArray<ObTableLockHolderInfo> *holder_info = nullptr);
   int slow_lock(
       const ObLockParam &param,
       const ObTableLockOp &lock_op,
       const uint64_t lock_mode_cnt_in_same_trans[],
       ObMalloc &allocator,
-      ObTxIDSet &conflict_tx_set);
+      ObTxIDSet &conflict_tx_set,
+      ObIArray<ObTableLockHolderInfo> *holder_info = nullptr);
   int try_fast_lock_(
       const ObTableLockOp &lock_op,
       const uint64_t lock_mode_cnt_in_same_trans[],
-      ObTxIDSet &conflict_tx_set);
+      ObTxIDSet &conflict_tx_set,
+      ObIArray<ObTableLockHolderInfo> *holder_info = nullptr);
   int unlock_(
       const ObTableLockOp &unlock_op,
       ObMalloc &allocator);
@@ -510,7 +516,8 @@ public:
       storage::ObStoreCtx &ctx,
       const ObTableLockOp &lock_op,
       const uint64_t lock_mode_cnt_in_same_trans[],
-      ObTxIDSet &conflict_tx_set);
+      ObTxIDSet &conflict_tx_set,
+      ObIArray<ObTableLockHolderInfo> *holder_info = nullptr);
   int unlock(
       const ObTableLockOp &lock_op,
       const bool is_try_lock,
@@ -531,7 +538,8 @@ public:
       ObTxIDSet &conflict_tx_set,
       const int64_t expired_time,
       const bool include_finish_tx = true,
-      const bool only_check_dml_lock = false);
+      const bool only_check_dml_lock = false,
+      ObIArray<ObTableLockHolderInfo> *holder_info = nullptr);
   void print();
   share::SCN get_min_ddl_committed_scn(share::SCN &flushed_scn);
   int get_table_lock_store_info(ObIArray<ObTableLockOp> &store_arr, share::SCN freeze_scn);

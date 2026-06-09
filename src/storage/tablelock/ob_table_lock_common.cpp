@@ -599,6 +599,14 @@ OB_SERIALIZE_MEMBER(ObTableLockPrioOp,
 OB_SERIALIZE_MEMBER(ObTableLockPrioArg,
                     priority_);
 
+OB_SERIALIZE_MEMBER(ObTableLockHolderInfo,
+                    owner_id_,
+                    create_trans_id_,
+                    lock_mode_,
+                    op_type_,
+                    op_status_,
+                    create_timestamp_);
+
 } // tablelock
 } // transaction
 } // oceanbase
