@@ -561,6 +561,8 @@ int ObDataBackupDestConfigParser::update_data_backup_dest_config_(common::ObISQL
   } else if (!config_items_.at(0).value_.empty()) {
     if (OB_FAIL(dest.set(config_items_.at(0).value_.ptr()))) {
       LOG_WARN("fail to set backup dest", K(ret), K_(tenant_id), K_(config_items));
+    } else if (OB_FAIL(ObIBackupConfigItemParser::set_default_checksum_type(dest))) {
+      LOG_WARN("fail to set default checksum type", K(ret), K(dest));
     } else if (OB_FAIL(dest.get_backup_dest_str(backup_dest_str, sizeof(backup_dest_str)))) {
       LOG_WARN("fail to get_backup_dest_str", K(ret), K(dest));
     }
