@@ -17,18 +17,14 @@ namespace
 {
 int normalize_position_to_include_index(const int64_t column_pos,
                                         const orc::Type &root_type,
-                                        const bool is_hive_lake_table,
                                         int64_t &orc_col_id)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(column_pos <= 0 || root_type.getKind() != orc::TypeKind::STRUCT)) {
     ret = OB_ERR_INVALID_COLUMN_ID;
     LOG_WARN("column position is invalid", K(ret), K(column_pos), K(root_type.getSubtypeCount()));
-  } else if (is_hive_lake_table && column_pos > static_cast<int64_t>(root_type.getSubtypeCount())) {
+  } else if (column_pos > static_cast<int64_t>(root_type.getSubtypeCount())) {
     orc_col_id = -1;
-  } else if (OB_UNLIKELY(column_pos > static_cast<int64_t>(root_type.getSubtypeCount()))) {
-    ret = OB_ERR_INVALID_COLUMN_ID;
-    LOG_WARN("column position is invalid", K(ret), K(column_pos), K(root_type.getSubtypeCount()));
   } else {
     orc_col_id = static_cast<int64_t>(
         root_type.getSubtype(static_cast<uint64_t>(column_pos - 1))->getColumnId());
@@ -132,9 +128,21 @@ int ObOrcTableRowIterator::compute_column_id_by_index_type(int64_t index, int64_
       if (!is_col_name_case_sensitive_) {
         ObString capitalize_str;
         OZ (ob_simple_low_to_up(allocator_, col_name, capitalize_str));
-        OZ (name_to_id_.get_refactored(capitalize_str, orc_col_id));
+        int tmp_ret = name_to_id_.get_refactored(capitalize_str, orc_col_id);
+        if (OB_HASH_NOT_EXIST == tmp_ret) {
+          orc_col_id = -1;
+        } else if (OB_SUCCESS != tmp_ret) {
+          ret = tmp_ret;
+          LOG_WARN("fail to get name to id", K(ret), K(capitalize_str));
+        }
       } else {
-        OZ (name_to_id_.get_refactored(col_name, orc_col_id));
+        int tmp_ret = name_to_id_.get_refactored(col_name, orc_col_id);
+        if (OB_HASH_NOT_EXIST == tmp_ret) {
+          orc_col_id = -1;
+        } else if (OB_SUCCESS != tmp_ret) {
+          ret = tmp_ret;
+          LOG_WARN("fail to get name to id", K(ret), K(col_name));
+        }
       }
       break;
     }
@@ -143,7 +151,6 @@ int ObOrcTableRowIterator::compute_column_id_by_index_type(int64_t index, int64_
       const orc::Type &root_type = reader_->getType();
       if (OB_FAIL(normalize_position_to_include_index(column_pos,
                                                       root_type,
-                                                      is_hive_lake_table(),
                                                       orc_col_id))) {
       }
       break;
@@ -195,15 +202,14 @@ int ObOrcTableRowIterator::prepare_read_orc_file(ObEvalCtx &eval_ctx)
     OZ (compute_column_id_by_index_type(i, orc_col_id));
     orc::ColumnVectorBatch *batch = nullptr;
     const orc::Type *type = nullptr;
-    ObColumnDefaultValue *default_value = is_lake_table() ?
-                                          &colid_default_value_arr_.at(i) : nullptr;
+    ObColumnDefaultValue *default_value = &colid_default_value_arr_.at(i);
 
     if (OB_SUCC(ret)) {
       int tmp_ret = column_index_type_ == sql::ColumnIndexType::ID
                         ? iceberg_id_to_type_.get_refactored(orc_col_id, type)
                         : id_to_type_.get_refactored(orc_col_id, type);
 
-      if (OB_HASH_NOT_EXIST == tmp_ret && is_lake_table()) {
+      if (OB_HASH_NOT_EXIST == tmp_ret) {
         type = nullptr;
         ret = OB_SUCCESS;
       } else if (OB_SUCCESS != tmp_ret) {
@@ -314,8 +320,8 @@ int ObOrcTableRowIterator::init_data_loader(int64_t i, int64_t orc_col_id, const
   int ret = OB_SUCCESS;
   orc::ColumnVectorBatch *batch = nullptr;
   ObExpr* column_expr = get_column_expr_by_id(i);
-  if (type == nullptr && is_lake_table()) {
-    // init data loader for iceberg table with default value
+  if (type == nullptr) {
+    // Init data loader for a column absent from the current file.
     if (OB_FAIL(reader.data_loaders_.at(i)
                     .init(column_expr, default_value, eval_ctx, is_hive_lake_table()))) {
       LOG_WARN("fail to init data loader", K(ret), K(i));
@@ -398,9 +404,7 @@ int ObOrcTableRowIterator::init(const storage::ObTableScanParam *scan_param)
       }
     }
 
-    if (is_lake_table()) {
-      OZ(ObExternalTableRowIterator::init_default_batch(file_column_exprs_));
-    }
+    OZ(ObExternalTableRowIterator::init_default_batch(file_column_exprs_));
     if (is_iceberg_lake_table()) {
       OZ(ObExternalTableRowIterator::init_for_iceberg(&options_));
     }
@@ -1091,18 +1095,21 @@ int ObOrcTableRowIterator::create_row_readers()
 
           uint64_t orc_col_id = 0;
           ObArray<ObString> col_names;
-          OZ(find_column_type_id_by_name(&all_row_reader_->getSelectedType(),
-                                         data_access_info->data_access_path_,
-                                         col_names,
-                                         orc_col_id));
-          if (OB_FAIL(ret)) {
-          } else if (orc_col_id == 0) {
+          if (data_access_info->data_access_path_.empty()) {
             ret = OB_INVALID_EXTERNAL_FILE_COLUMN_PATH;
             LOG_USER_ERROR(OB_INVALID_EXTERNAL_FILE_COLUMN_PATH,
                            data_access_info->data_access_path_.length(),
                            data_access_info->data_access_path_.ptr());
+          } else {
+            OZ(find_column_type_id_by_name(&all_row_reader_->getSelectedType(),
+                                           data_access_info->data_access_path_,
+                                           col_names,
+                                           orc_col_id));
           }
-          if (OB_SUCC(ret)) {
+          if (OB_FAIL(ret)) {
+          } else if (orc_col_id == 0) {
+            // column absent from this file (schema evolution)
+          } else {
             bool is_project_column = true;
             if (is_eager_column_.count() > 0 && is_eager_column_.at(i)) {
               eager_column_ids.push_back(orc_col_id);
@@ -1123,11 +1130,10 @@ int ObOrcTableRowIterator::create_row_readers()
           int64_t pos_orc_col_id = 0;
           if (OB_FAIL(normalize_position_to_include_index(file_column_exprs_.at(i)->extra_,
                                                           reader_->getType(),
-                                                          is_hive_lake_table(),
                                                           pos_orc_col_id))) {
             LOG_WARN("invalid orc column position", K(ret), K(file_column_exprs_.at(i)->extra_));
           } else if (pos_orc_col_id < 0) {
-            // column absent from this file (Hive schema evolution)
+            // column absent from this file (schema evolution)
           } else {
             const uint64_t type_id = static_cast<uint64_t>(pos_orc_col_id);
             if (is_eager_column_.count() > 0 && is_eager_column_.at(i)) {
@@ -1196,6 +1202,8 @@ int ObOrcTableRowIterator::create_row_readers()
           project_reader_.init(capacity, rowReaderOptions, reader_.get());
         }
       } else {
+        project_reader_.row_reader_.reset();
+        project_reader_.orc_batch_.reset();
         project_reader_.row_id_ = 0;
       }
       if (sector_reader_ != nullptr) {
@@ -1209,7 +1217,10 @@ int ObOrcTableRowIterator::create_row_readers()
             sector_reader_->get_eager_reader().init(capacity, rowReaderOptions, reader_.get());
           }
         } else {
-          sector_reader_->get_eager_reader().row_id_ = 0;
+          OrcRowReader &eager_reader = sector_reader_->get_eager_reader();
+          eager_reader.row_reader_.reset();
+          eager_reader.orc_batch_.reset();
+          eager_reader.row_id_ = 0;
         }
       }
       if (OB_FAIL(init_selected_columns())) {

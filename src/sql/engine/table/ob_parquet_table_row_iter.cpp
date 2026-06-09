@@ -222,9 +222,7 @@ int ObParquetTableRowIterator::init(const storage::ObTableScanParam *scan_param)
     LOG_DEBUG("check exprs", K(file_column_exprs_), K(file_meta_column_exprs_), KPC(scan_param->ext_file_column_exprs_));
   }
 
-  if (is_lake_table()) {
-    OZ(ObExternalTableRowIterator::init_default_batch(file_column_exprs_));
-  }
+  OZ(ObExternalTableRowIterator::init_default_batch(file_column_exprs_));
   if (is_iceberg_lake_table()) {
     OZ(ObExternalTableRowIterator::init_for_iceberg(&options_));
   }
@@ -325,7 +323,13 @@ int ObParquetTableRowIterator::compute_column_id_by_index_type(int index, int &f
     case sql::ColumnIndexType::NAME: {
       ObDataAccessPathExtraInfo *data_access_info =
         static_cast<ObDataAccessPathExtraInfo *>(file_column_exprs_.at(index)->extra_info_);
-      for (int i = 0; i < file_meta_->schema()->num_columns(); i++) {
+      if (data_access_info->data_access_path_.empty()) {
+        ret = OB_INVALID_EXTERNAL_FILE_COLUMN_PATH;
+        LOG_USER_ERROR(OB_INVALID_EXTERNAL_FILE_COLUMN_PATH,
+                       data_access_info->data_access_path_.length(),
+                       data_access_info->data_access_path_.ptr());
+      }
+      for (int i = 0; OB_SUCC(ret) && i < file_meta_->schema()->num_columns(); i++) {
         const std::string &field_path = file_meta_->schema()->GetColumnRoot(i)->name();
         ObString field_path_obstr(field_path.length(), field_path.c_str());
         if (!is_col_name_case_sensitive_
@@ -572,21 +576,8 @@ int ObParquetTableRowIterator::next_file()
         if (OB_SUCC(ret)) {
           const parquet::ColumnDescriptor *col_desc = NULL;
           if (column_index < 0 || column_index >= file_meta_->schema()->num_columns()) {
-            if (!is_lake_table()) {
-              if (column_index_type_ == sql::ColumnIndexType::POSITION) {
-                ret = OB_ERR_INVALID_COLUMN_ID;
-                LOG_WARN("invalid column index", K(ret), K(column_index),
-                        K(file_meta_->schema()->num_columns()));
-              } else {
-                ret = OB_INVALID_EXTERNAL_FILE_COLUMN_PATH;
-                LOG_USER_ERROR(OB_INVALID_EXTERNAL_FILE_COLUMN_PATH,
-                            data_access_info->data_access_path_.length(),
-                            data_access_info->data_access_path_.ptr());
-              }
-            } else {
-              load_funcs_.at(i) = &DataLoader::load_default;
-              column_indexs_.at(i) = -1;
-            }
+            load_funcs_.at(i) = &DataLoader::load_default;
+            column_indexs_.at(i) = -1;
           } else {
             ObDatumMeta &meta = file_column_exprs_.at(i)->datum_meta_;
             const ObSqlCollectionInfo *coll_info = NULL;
@@ -3787,8 +3778,7 @@ int ObParquetTableRowIterator::project_eager_columns(int64_t &count,
         cur_eager_id_ = i;
         // start writing at output_row_offset within the vector
         int64_t load_row_count = output_row_offset;
-        ObColumnDefaultValue default_value = is_lake_table() ?
-                                  colid_default_value_arr_.at(cur_col_id_) : ObColumnDefaultValue();
+        ObColumnDefaultValue default_value = colid_default_value_arr_.at(cur_col_id_);
         ObExpr* column_expr = get_column_expr_by_id(cur_col_id_);
         // only initialize vector when writing from offset 0 (first segment)
         if (0 == output_row_offset) {
@@ -4087,8 +4077,7 @@ int ObParquetTableRowIterator::project_lazy_columns(int64_t &read_count, int64_t
       cur_col_id_ = get_lazy_column_id(i);
       int64_t load_row_count = 0;
       int64_t tmp_logical_read = 0;
-      ObColumnDefaultValue default_value = is_lake_table() ?
-                                  colid_default_value_arr_.at(cur_col_id_) : ObColumnDefaultValue();
+      ObColumnDefaultValue default_value = colid_default_value_arr_.at(cur_col_id_);
       ObExpr* column_expr = get_column_expr_by_id(cur_col_id_);
       OZ (column_expr->init_vector_for_write(
               eval_ctx, column_expr->get_default_res_format(), eval_ctx.max_batch_size_));
