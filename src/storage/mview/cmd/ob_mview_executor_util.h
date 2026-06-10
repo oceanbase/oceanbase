@@ -65,6 +65,8 @@ public:
                                 uint64_t tenant_id,
                                 int64_t refresh_id,
                                 uint64_t mview_id);
+
+  static int check_kill_refresh_privilege(sql::ObExecContext &ctx);
 };
 
 } // namespace storage

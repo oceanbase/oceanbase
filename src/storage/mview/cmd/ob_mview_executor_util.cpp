@@ -473,5 +473,43 @@ int ObMViewExecutorUtil::wait_mview_refresh(sql::ObExecContext &ctx,
   return ret;
 }
 
+int ObMViewExecutorUtil::check_kill_refresh_privilege(sql::ObExecContext &ctx)
+{
+  int ret = OB_SUCCESS;
+  ObSchemaChecker schema_checker;
+  if (OB_ISNULL(ctx.get_my_session()) || OB_ISNULL(ctx.get_sql_ctx()) || OB_ISNULL(ctx.get_sql_ctx()->schema_guard_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), K(ctx.get_my_session()), K(ctx.get_sql_ctx()));
+  } else if (OB_FAIL(schema_checker.init(*(ctx.get_sql_ctx()->schema_guard_)))) {
+    LOG_WARN("fail to init schema checker", KR(ret));
+  } else if (ObSchemaChecker::is_ora_priv_check()) {
+    if (OB_FAIL(schema_checker.check_ora_ddl_priv(ctx.get_my_session()->get_effective_tenant_id(),
+                                                  ctx.get_my_session()->get_priv_user_id(),
+                                                  ObString(""),
+                                                  stmt::T_ALTER_SYSTEM_SET_PARAMETER,
+                                                  ctx.get_my_session()->get_enable_role_array()))) {
+      LOG_WARN("fail to check ora ddl priv", KR(ret));
+    }
+  } else {
+    ObNeedPriv need_priv;
+    ObStmtNeedPrivs stmt_need_privs;
+    ObSessionPrivInfo session_priv;
+    const common::ObIArray<uint64_t> &enable_role_id_array = ctx.get_my_session()->get_enable_role_array();
+    stmt_need_privs.need_privs_.set_allocator(&ctx.get_allocator());
+    need_priv.priv_set_ = OB_PRIV_ALTER_SYSTEM;
+    need_priv.priv_level_ = OB_PRIV_USER_LEVEL;
+    if (OB_FAIL(ctx.get_my_session()->get_session_priv_info(session_priv))) {
+      LOG_WARN("fail to get session priv info", KR(ret));
+    } else if (OB_FAIL(stmt_need_privs.need_privs_.init(1))) {
+      LOG_WARN("fail to init need privs", KR(ret));
+    } else if (OB_FAIL(stmt_need_privs.need_privs_.push_back(need_priv))) {
+      LOG_WARN("fail to push back need priv", KR(ret));
+    } else if (OB_FAIL(schema_checker.check_priv(session_priv, enable_role_id_array, stmt_need_privs))) {
+      LOG_WARN("fail to check priv", KR(ret));
+    }
+  }
+  return ret;
+}
+
 } // namespace storage
 } // namespace oceanbase

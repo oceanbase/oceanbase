@@ -344,6 +344,8 @@ int ObDBMSMViewMysql::kill(ObExecContext &ctx, ParamStore &params, ObObj &result
   } else if (1 != params.count() || !params.at(0).is_int()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument for kill", KR(ret), K(params.count()));
+  } else if (OB_FAIL(storage::ObMViewExecutorUtil::check_kill_refresh_privilege(ctx))) {
+    LOG_WARN("fail to check kill privilege", KR(ret));
   } else {
     const int64_t refresh_id = params.at(0).get_int();
     rootserver::ObMViewMaintenanceService *service =
