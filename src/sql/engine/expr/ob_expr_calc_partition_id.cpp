@@ -176,6 +176,11 @@ int ObExprCalcPartitionBase::cg_expr(ObExprCGCtx &expr_cg_ctx,
         }
         if (OB_FAIL(ret)) {
         } else if (fallback) {
+        } else if (table_schema->is_interval_part() &&
+                   MayAddIntervalPart::NO != calc_part_info->may_add_interval_part_) {
+          // Interval DML may need to add a partition or report partition movement.
+          // Keep it on the general path so missing partitions are not hidden as tablet id 0.
+          fallback = true;
         } else if (table_schema->is_hash_part()) {
           // The execution period involves inner_functions;
           // disable this path during the upgrade.
