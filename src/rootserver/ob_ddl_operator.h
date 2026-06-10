@@ -470,6 +470,9 @@ public:
                                        common::ObMySQLTransaction &trans,
                                        const common::ObString *ddl_stmt_str,/*= NULL*/
                                        const bool is_truncate_table = false);
+  int drop_mview_dep_info(const share::schema::ObTableSchema &table_schema,
+                          common::ObMySQLTransaction &trans,
+                          share::schema::ObSchemaGetterGuard &schema_guard);
   virtual int flashback_table_from_recyclebin(const share::schema::ObTableSchema &table_schema,
                                               share::schema::ObTableSchema &new_table_schema,
                                               common::ObMySQLTransaction &trans,

@@ -100,6 +100,11 @@ public:
                                             const uint64_t base_table_id,
                                             ObIArray<uint64_t> &mview_ids,
                                             bool &exists_nested_mv);
+  static int check_database_referenced_by_mv_from_other_database(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const uint64_t database_id,
+      bool &exists);
   static int get_mview_ids_in_topo_refresh_order(
       common::ObISQLClient &sql_client,
       const uint64_t tenant_id,

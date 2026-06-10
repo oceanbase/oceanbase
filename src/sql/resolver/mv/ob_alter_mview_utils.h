@@ -43,6 +43,10 @@ public:
                                                  const ObItemType type);
   static int check_partition_option_for_mv_base_table(const ObTableSchema &table_schema,
                                                       const ObItemType type);
+  static int check_database_referenced_by_mv_from_other_database(
+      common::ObISQLClient &sql_client,
+      const uint64_t tenant_id,
+      const uint64_t database_id);
 };
 
 } // namespace sql

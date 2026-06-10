@@ -76,6 +76,7 @@
 #include "rootserver/truncate_info/ob_truncate_info_service.h"
 #include "share/truncate_info/ob_truncate_info_util.h"
 #include "share/schema/ob_mview_info.h"
+#include "sql/resolver/mv/ob_alter_mview_utils.h"
 #include "sql/resolver/mv/ob_mv_provider.h"
 #include "sql/resolver/mv/ob_mv_dep_utils.h"
 #include "rootserver/mview/ob_mview_alter_service.h"
@@ -30609,6 +30610,10 @@ int ObDDLService::drop_database(const ObDropDatabaseArg &arg,
                K(database_id), K(ret));
     } else if (FALSE_IT(table_count = table_ids.count())) {
       //nothing to do
+    } else if (OB_FAIL(sql::ObAlterMviewUtils::check_database_referenced_by_mv_from_other_database(
+                   *sql_proxy_, tenant_id, database_id))) {
+      LOG_WARN("failed to check database materialized view reference",
+               KR(ret), K(tenant_id), K(database_id), K(database_name));
     } else if (OB_FAIL(schema_guard.get_schema_version(tenant_id, refreshed_schema_version))) {
       LOG_WARN("failed to get tenant schema version", KR(ret), K(tenant_id));
     } else if (OB_ISNULL(ora_user_trans)

@@ -12,6 +12,7 @@
 
 #define USING_LOG_PREFIX SQL_RESV
 #include "sql/resolver/mv/ob_alter_mview_utils.h"
+#include "sql/resolver/mv/ob_mv_dep_utils.h"
 #include "sql/resolver/mv/ob_mv_provider.h"
 #include "sql/resolver/ddl/ob_mview_resolver_helper.h"
 #include "storage/mview/ob_mview_sched_job_utils.h"
@@ -369,6 +370,26 @@ int ObAlterMviewUtils::check_partition_option_for_mv_base_table(const ObTableSch
                K(table_schema.get_table_name()));
     }
     SQL_RESV_LOG(INFO, "resolve the master of mlog for alter table", K(ret), K(type), K(table_schema));
+  }
+  return ret;
+}
+
+int ObAlterMviewUtils::check_database_referenced_by_mv_from_other_database(
+    common::ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    const uint64_t database_id)
+{
+  int ret = OB_SUCCESS;
+  bool referenced_by_other_database_mv = false;
+  if (OB_FAIL(ObMVDepUtils::check_database_referenced_by_mv_from_other_database(
+                 sql_client, tenant_id, database_id, referenced_by_other_database_mv))) {
+    LOG_WARN("failed to check materialized view reference", KR(ret), K(tenant_id), K(database_id));
+  } else if (OB_UNLIKELY(referenced_by_other_database_mv)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("drop database with table required by mview from other database is not supported",
+             KR(ret), K(tenant_id), K(database_id));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                   "drop database with table required by materialized view in other database is");
   }
   return ret;
 }

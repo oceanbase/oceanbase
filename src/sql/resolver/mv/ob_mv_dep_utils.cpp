@@ -361,6 +361,63 @@ int ObMVDepUtils::get_referring_mv_of_base_table(ObISQLClient &sql_client, const
   return ret;
 }
 
+int ObMVDepUtils::check_database_referenced_by_mv_from_other_database(
+    ObISQLClient &sql_client,
+    const uint64_t tenant_id,
+    const uint64_t database_id,
+    bool &exists)
+{
+  int ret = OB_SUCCESS;
+  exists = false;
+  if (OB_INVALID_TENANT_ID == tenant_id || OB_INVALID_ID == database_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id or database_id", KR(ret), K(tenant_id), K(database_id));
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      ObSqlString sql;
+      ObMySQLResult *result = nullptr;
+      const uint64_t exec_tenant_id = ObSchemaUtils::get_exec_tenant_id(tenant_id);
+      const uint64_t extract_tenant_id = ObSchemaUtils::get_extract_tenant_id(exec_tenant_id, tenant_id);
+      if (OB_FAIL(sql.assign_fmt(
+              "SELECT t.table_id AS table_id, mv.table_id AS mview_id, mv.database_id AS mview_database_id "
+              "FROM %s.%s dep, %s.%s t, %s.%s mv "
+              "WHERE t.tenant_id = %lu AND t.database_id = %lu "
+              "AND dep.tenant_id = %lu AND dep.mview_id = mv.table_id AND dep.p_obj = t.table_id "
+              "AND mv.tenant_id = %lu AND mv.database_id != %lu LIMIT 1",
+              OB_SYS_DATABASE_NAME, OB_ALL_MVIEW_DEP_TNAME,
+              OB_SYS_DATABASE_NAME, OB_ALL_TABLE_TNAME,
+              OB_SYS_DATABASE_NAME, OB_ALL_TABLE_TNAME,
+              extract_tenant_id, database_id, extract_tenant_id, extract_tenant_id, database_id))) {
+        LOG_WARN("failed to assign sql", KR(ret));
+      } else if (OB_FAIL(sql_client.read(res, tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", KR(ret), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("result is null", KR(ret));
+      } else if (OB_FAIL(result->next())) {
+        if (OB_UNLIKELY(OB_ITER_END != ret)) {
+          LOG_WARN("failed to get next", KR(ret));
+        } else {
+          ret = OB_SUCCESS;
+        }
+      } else {
+        uint64_t table_id = OB_INVALID_ID;
+        uint64_t mview_id = OB_INVALID_ID;
+        uint64_t mview_database_id = OB_INVALID_ID;
+        EXTRACT_INT_FIELD_MYSQL(*result, "table_id", table_id, uint64_t);
+        EXTRACT_INT_FIELD_MYSQL(*result, "mview_id", mview_id, uint64_t);
+        EXTRACT_INT_FIELD_MYSQL(*result, "mview_database_id", mview_database_id, uint64_t);
+        if (OB_SUCC(ret)) {
+          exists = true;
+          LOG_INFO("database has table referenced by materialized view from other database",
+                   K(tenant_id), K(database_id), K(table_id), K(mview_id), K(mview_database_id));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObMVDepUtils::fetch_mview_ids_by_sql(
     ObISQLClient &sql_client,
     const uint64_t tenant_id,
