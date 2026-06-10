@@ -34,7 +34,7 @@ public:
   static int put_buffer(const int64_t &fd, const char *buffer, const int64_t size,
                         const int64_t max_line_size, int64_t &write_size);
   static int fflush(const int64_t &fd);
-  static int put_raw(const int64_t &fd, const char *buffer, int64_t size, bool autoflush = false);
+  static int put_raw(const int64_t &fd, const char *buffer, int64_t size, bool autoflush);
   static int fseek(const int64_t &fd, const int64_t *abs_offset, const int64_t *rel_offset);
   static int fremove(const char *dir, const char *filename);
   static int fcopy(const char *src_dir, const char *src_filename,
@@ -54,7 +54,7 @@ private:
   static int convert_open_mode(const char *open_mode, int &flags);
   static int format_full_path(char *full_path, size_t len, const char *dir, const char *filename);
   static int put_impl(const int64_t &fd, const char *buffer, const int64_t size,
-                      int64_t &write_size, bool autoflush = false);
+                      const bool autoflush, int64_t &write_size);
   static int read_impl(const int64_t &fd, char *buffer, const int64_t len, int64_t &read_size);
   static int find_single_line(const char *buffer, const int64_t len, int64_t &pos, bool &found);
   static int find_and_copy_lines(const char *buffer, const int64_t len,

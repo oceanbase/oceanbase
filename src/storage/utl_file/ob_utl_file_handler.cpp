@@ -95,7 +95,7 @@ int ObUtlFileHandler::fclose(const int64_t &fd)
   if (OB_UNLIKELY(!io_fd.is_normal_file())) {
     ret = OB_UTL_FILE_INVALID_FILEHANDLE;
     LOG_WARN("invalid handle", K(ret), K(io_fd));
-  }  else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.fsync(io_fd))) {
+  } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.fsync(io_fd))) {
     LOG_WARN("failed to fsync", K(ret), K(io_fd));
   } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.close(io_fd))) {
     LOG_WARN("failed to close fd", K(ret), K(io_fd));
@@ -176,6 +176,7 @@ int ObUtlFileHandler::put_buffer(const int64_t &fd, const char *buffer, const in
   int ret = OB_SUCCESS;
   int64_t last_valid_pos = -1;
   int64_t valid_buffer_size = 0;
+  write_size = 0;
   if (OB_ISNULL(buffer) || OB_UNLIKELY(size < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(buffer), K(size));
@@ -188,7 +189,7 @@ int ObUtlFileHandler::put_buffer(const int64_t &fd, const char *buffer, const in
   if (OB_SUCCESS == ret || OB_UTL_FILE_WRITE_ERROR == ret) {
     valid_buffer_size = last_valid_pos + 1;
     if (valid_buffer_size > 0) {
-      int tmp_ret = put_impl(fd, buffer, valid_buffer_size, write_size, false/*autoflush*/);
+      int tmp_ret = put_impl(fd, buffer, valid_buffer_size, false, write_size);
       if (OB_UNLIKELY(OB_SUCCESS != tmp_ret)) {
         LOG_WARN("failed to put buffer", K(tmp_ret), K(fd), K(buffer), K(valid_buffer_size));
         if (OB_SUCCESS == ret) {
@@ -219,7 +220,7 @@ int ObUtlFileHandler::fflush(const int64_t &fd)
 int ObUtlFileHandler::put_raw(const int64_t &fd, const char *buffer, const int64_t size, bool autoflush)
 {
   int64_t write_size = 0;
-  return put_impl(fd, buffer, size, write_size, autoflush);
+  return put_impl(fd, buffer, size, autoflush, write_size);
 }
 
 int ObUtlFileHandler::fseek(const int64_t &fd, const int64_t *abs_offset, const int64_t *rel_offset)
@@ -541,20 +542,42 @@ int ObUtlFileHandler::format_full_path(char *full_path, size_t len,
 }
 
 int ObUtlFileHandler::put_impl(const int64_t &fd, const char *buffer, const int64_t size,
-                               int64_t &write_size, bool autoflush)
+                               const bool autoflush, int64_t &write_size)
 {
   int ret = OB_SUCCESS;
   ObIOFd io_fd(&LOCAL_DEVICE_INSTANCE, ObIOFd::NORMAL_FILE_ID, fd);
+  write_size = 0;
   if (OB_UNLIKELY(!io_fd.is_normal_file())) {
     ret = OB_UTL_FILE_INVALID_FILEHANDLE;
     LOG_WARN("invalid handle", K(ret), K(io_fd));
   } else if (OB_ISNULL(buffer) || OB_UNLIKELY(size < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid args", K(ret), K(buffer), K(size));
-  } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.write(io_fd, buffer, size, write_size))) {
-    LOG_WARN("fail to write", K(ret), K(size));
-  } else if (autoflush && OB_FAIL(LOCAL_DEVICE_INSTANCE.fsync(io_fd))) {
-    LOG_WARN("fail to flush", K(ret), K(io_fd));
+  } else {
+    int64_t left = size;
+    const char *wb = buffer;
+    int retry_cnt = 0;
+    while (OB_SUCC(ret) && left > 0 && retry_cnt < ObUtlFileConstants::DEFAULT_IO_RETRY_CNT) {
+      // Do not enforce fixed 32KB chunking here. Try to write all remaining bytes,
+      // and rely on kernel return size to continue until completion.
+      int64_t to_write = left;
+      int64_t sz = 0;
+      if (OB_FAIL(LOCAL_DEVICE_INSTANCE.write(io_fd, wb, to_write, sz))) {
+        LOG_WARN("fail to write", K(ret), K(left));
+        break;
+      }
+      write_size += sz;
+      left -= sz;
+      wb += sz;
+      retry_cnt = (sz > 0 ? 0 : retry_cnt + 1);
+    }
+    if (OB_SUCC(ret) && left > 0) {
+      ret = OB_IO_ERROR;
+      LOG_WARN("write incomplete", K(ret), K(size), K(write_size), K(left));
+    }
+    if (OB_SUCC(ret) && autoflush && OB_FAIL(LOCAL_DEVICE_INSTANCE.fsync(io_fd))) {
+      LOG_WARN("fail to flush", K(ret), K(io_fd));
+    }
   }
   return ret;
 }
@@ -588,7 +611,7 @@ int ObUtlFileHandler::find_single_line(const char *buffer, const int64_t len, in
   if (OB_ISNULL(buffer) || OB_UNLIKELY(len < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid line", K(buffer), K(len));
-  } else if (NULL == (p = STRSTR(buffer, ObUtlFileHandler::LINE_TERMINATOR))) {
+  } else if (NULL == (p = static_cast<const char*>(MEMMEM(buffer, len, ObUtlFileHandler::LINE_TERMINATOR, LINE_TERMINATOR_LEN)))) {
     // cannot find line terminator in buffer, so whole buffer is regarded as a single line
     pos = len;
     LOG_INFO("fail to find occurence of line terminator in buffer", K(ret), K(buffer), K(len),
