@@ -64,7 +64,7 @@ public:
     package_guard_(package_guard),
     sql_proxy_(sql_proxy) {}
 
-  static ObMutex package_dep_info_lock_;
+  static ObMutex pl_dep_info_lock_;
   virtual ~ObPLCompiler() {}
 
   int compile(const ObStmtNodeTree *block,

@@ -21,7 +21,7 @@ using namespace schema;
 using namespace sql;
 namespace pl {
 
-ObMutex ObPLCompiler::package_dep_info_lock_(common::ObLatchIds::OB_PL_COMPILER_MUTEX);
+ObMutex ObPLCompiler::pl_dep_info_lock_(common::ObLatchIds::OB_PL_COMPILER_MUTEX);
 
 int ObPLCompiler::check_dep_schema(ObSchemaGetterGuard &schema_guard,
                                    const DependenyTableStore &dep_schema_objs)
@@ -543,6 +543,8 @@ int ObPLCompiler::compile(
   int64_t resolve_end = ObTimeUtility::current_time();
   LOG_INFO(">>>>>>>>Resolve Time: ", K(routine.get_routine_id()), K(routine.get_routine_name()), K(resolve_end - parse_end));
   FLT_SET_TAG(pl_compile_resolve_time, resolve_end - parse_end);
+
+  bool is_from_disk = true;
   //Step 4: Code Generator
   if (OB_SUCC(ret)) {
     if (func_ast.is_external_routine()) {
@@ -581,6 +583,7 @@ int ObPLCompiler::compile(
         OZ (read_dll_from_disk(enable_persistent, routine_storage, func_ast, cg, routine, func, op)); // has lock, try read dll again
         if (OB_SUCC(ret) && 0 == func.get_action()) { // nobody code gen yet! do real code generate
           OZ (cg.generate(func));
+          OX (is_from_disk = false);
           if (enable_persistent) {
             OZ (routine_storage.process_storage_dll(allocator_, schema_guard_, func, op));
           }
@@ -595,6 +598,16 @@ int ObPLCompiler::compile(
       }
       OZ (check_dep_schema(schema_guard_, func.get_dependency_table()));
     } // end heap var
+  }
+
+  if (OB_SUCC(ret) && !is_from_disk) {
+    ObMutexGuard guard(pl_dep_info_lock_);
+    OZ (update_schema_object_dep_info(func.get_dependency_table(),
+                                      func.get_tenant_id(),
+                                      func.get_owner(),
+                                      routine.get_routine_id(),
+                                      routine.get_schema_version(),
+                                      routine.get_object_type()));
   }
 
   int64_t cg_end = ObTimeUtility::current_time();
@@ -1040,7 +1053,7 @@ int ObPLCompiler::compile_package(const ObPackageInfo &package_info,
   OZ (check_dep_schema(schema_guard_, package.get_dependency_table()));
 
   if (OB_SUCC(ret) && !is_from_disk) {
-    ObMutexGuard guard(package_dep_info_lock_);
+    ObMutexGuard guard(pl_dep_info_lock_);
     if (session_info_.get_effective_tenant_id() == package_info.get_tenant_id()) {
       OZ (update_schema_object_dep_info(package_ast.get_dependency_table(),
                                         package_info.get_tenant_id(),
