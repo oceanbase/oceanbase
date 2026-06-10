@@ -1460,6 +1460,7 @@ int ObDDLScheduler::create_ddl_task(const ObCreateDDLTaskParam &param,
                                                    static_cast<const obrpc::ObAlterTableArg *>(param.ddl_arg_),
                                                    param.tenant_data_version_,
                                                    param.ddl_need_retry_at_executor_,
+                                                   param.direct_load_need_sync_stats_info_,
                                                    *param.allocator_,
                                                    task_record))) {
           LOG_WARN("fail to create table redefinition task", K(ret));
@@ -2796,6 +2797,7 @@ int ObDDLScheduler::create_table_redefinition_task(
     const obrpc::ObAlterTableArg *alter_table_arg,
     const uint64_t tenant_data_version,
     const bool ddl_need_retry_at_executor,
+    const bool direct_load_need_sync_stats_info,
     ObIAllocator &allocator,
     ObDDLTaskRecord &task_record)
 {
@@ -2820,7 +2822,8 @@ int ObDDLScheduler::create_table_redefinition_task(
                                               sub_task_trace_id,
                                               *alter_table_arg,
                                               tenant_data_version,
-                                              ddl_need_retry_at_executor))) {
+                                              ddl_need_retry_at_executor,
+                                              direct_load_need_sync_stats_info))) {
       LOG_WARN("fail to init redefinition task", K(ret));
     } else if (OB_FAIL(redefinition_task.set_trace_id(*ObCurTraceId::get_trace_id()))) {
       LOG_WARN("set trace id failed", K(ret));

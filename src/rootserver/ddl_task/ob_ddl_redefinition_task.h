@@ -134,7 +134,7 @@ public:
     has_synced_stats_info_(false), update_autoinc_job_ret_code_(INT64_MAX), update_autoinc_job_time_(0),
     check_table_empty_job_ret_code_(INT64_MAX), check_table_empty_job_time_(0),
     is_sstable_complete_task_submitted_(false), sstable_complete_request_time_(0), replica_builder_(),
-    check_dag_exit_tablets_map_(), check_dag_exit_retry_cnt_(0)
+    check_dag_exit_tablets_map_(), check_dag_exit_retry_cnt_(0), direct_load_need_sync_stats_info_(false)
      {}
   virtual ~ObDDLRedefinitionTask() {}
   virtual int process() = 0;
@@ -310,6 +310,8 @@ protected:
   ObDDLReplicaBuildExecutor replica_builder_;
   common::hash::ObHashMap<common::ObTabletID, common::ObTabletID> check_dag_exit_tablets_map_; // for dag complement data ddl only.
   int64_t check_dag_exit_retry_cnt_;
+  // True when gather stats is disabled in direct load
+  bool direct_load_need_sync_stats_info_;
 };
 
 }  // end namespace rootserver

@@ -494,6 +494,7 @@ private:
       const obrpc::ObAlterTableArg *alter_table_arg,
       const uint64_t tenant_data_version,
       const bool ddl_need_retry_at_executor,
+      const bool direct_load_need_sync_stats_info,
       ObIAllocator &allocator,
       ObDDLTaskRecord &task_record);
 

@@ -17377,8 +17377,10 @@ int ObDDLService::create_hidden_table(
                                         create_hidden_table_arg.get_consumer_group_id(),
                                         &allocator_for_redef,
                                         &alter_table_arg,
-                                        0,
-                                        task_id);
+                                        0 /*parent_task_id*/,
+                                        task_id,
+                                        false /*ddl_need_retry_at_executor*/,
+                                        create_hidden_table_arg.get_need_sync_stats_info());
               param.tenant_data_version_ = tenant_data_version;
               if (OB_FAIL(ObSysDDLSchedulerUtil::create_ddl_task(param, trans, task_record))) {
                 LOG_WARN("submit ddl task failed", K(ret));

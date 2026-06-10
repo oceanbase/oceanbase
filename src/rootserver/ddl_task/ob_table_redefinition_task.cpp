@@ -50,6 +50,7 @@ int ObTableRedefinitionTask::init(const ObTableSchema* src_table_schema,
                                   const ObAlterTableArg &alter_table_arg,
                                   const uint64_t tenant_data_version,
                                   const bool ddl_need_retry_at_executor,
+                                  const bool direct_load_need_sync_stats_info,
                                   const int64_t task_status,
                                   const int64_t snapshot_version)
 {
@@ -112,6 +113,7 @@ int ObTableRedefinitionTask::init(const ObTableSchema* src_table_schema,
     } else if (OB_FAIL(ObDDLUtil::get_no_logging_param(tenant_id_, is_no_logging_))) {
       LOG_WARN("fail to get no logging param", K(ret), K(tenant_id_));
     } else {
+      direct_load_need_sync_stats_info_ = direct_load_need_sync_stats_info;
       is_inited_ = true;
       ObDDLTask::target_cg_cnt_ = target_cg_cnt_; // only use for 4.3.x recover table
       ddl_tracing_.open();
@@ -1148,7 +1150,8 @@ int64_t ObTableRedefinitionTask::get_serialize_param_size() const
          + serialization::encoded_length_i64(complete_sstable_job_ret_code_)
          + serialization::encoded_length_i8(use_heap_table_ddl_plan_)
          + serialization::encoded_length_i8(is_ddl_retryable_)
-         + serialization::encoded_length_i8(has_rebuild_domain_indexes_);
+         + serialization::encoded_length_i8(has_rebuild_domain_indexes_)
+         + serialization::encoded_length_i8(direct_load_need_sync_stats_info_);
 }
 
 int ObTableRedefinitionTask::serialize_params_to_message(char *buf, const int64_t buf_len, int64_t &pos) const
@@ -1189,6 +1192,8 @@ int ObTableRedefinitionTask::serialize_params_to_message(char *buf, const int64_
     LOG_WARN("fail to serialize ddl can retry", K(ret));
   } else if (OB_FAIL(serialization::encode_i8(buf, buf_len, pos, has_rebuild_domain_indexes_))) {
     LOG_WARN("fail to serialize has rebuild domain indexes", K(ret));
+  } else if (OB_FAIL(serialization::encode_i8(buf, buf_len, pos, direct_load_need_sync_stats_info_))) {
+    LOG_WARN("fail to serialize need sync stats info", K(ret));
   }
   FLOG_INFO("serialize message for table redefinition", K(ret),
       K(copy_indexes), K(copy_triggers), K(copy_constraints), K(copy_foreign_keys), K(ignore_errors), K(do_finish), K(*this));
@@ -1267,6 +1272,14 @@ int ObTableRedefinitionTask::deserialize_params_from_message(const uint64_t tena
         LOG_WARN("fail to deserialize has rebuild domain indexes", K(ret));
       } else {
         has_rebuild_domain_indexes_ = has_rebuild_domain_indexes;
+      }
+    }
+    if (OB_SUCC(ret) && pos < data_len) {
+      int8_t direct_load_need_sync_stats_info = false;
+      if (OB_FAIL(serialization::decode_i8(buf, data_len, pos, &direct_load_need_sync_stats_info))) {
+        LOG_WARN("fail to deserialize need sync stats info", K(ret));
+      } else {
+        direct_load_need_sync_stats_info_ = direct_load_need_sync_stats_info;
       }
     }
   }
