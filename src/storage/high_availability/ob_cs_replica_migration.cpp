@@ -449,7 +449,7 @@ int ObDataTabletsCheckCOConvertDag::inner_check_can_schedule(
     const int64_t tablet_group_cnt = migration_ctx.tablet_group_mgr_.get_tablet_group_ctx_count();
     if (OB_FAIL(migration_ctx.tablet_dep_mgr_.check_is_done(dep_mgr_done))) {
       LOG_WARN("failed to check tablet dep mgr is done", K(ret));
-    } else if (0 == tablet_group_cnt || !dep_mgr_done) {
+    } else if (!dep_mgr_done) {
       all_state_deterministic = false;
     }
     ObHATabletGroupCtx *ctx = nullptr;
@@ -670,7 +670,7 @@ int ObDataTabletsCheckConvertTask::process()
     const int64_t count = ctx_->tablet_group_mgr_.get_tablet_group_ctx_count();
     if (OB_FAIL(ctx_->tablet_dep_mgr_.check_is_done(dep_mgr_done))) {
       LOG_WARN("failed to check tablet dep mgr is done", K(ret));
-    } else if (0 == count || !dep_mgr_done) {
+    } else if (!dep_mgr_done) {
       all_state_deterministic = false;
     }
     ObHATabletGroupCtx *group_ctx = nullptr;

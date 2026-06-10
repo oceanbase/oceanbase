@@ -4015,6 +4015,7 @@ int ObDataTabletsMigrationTask::process()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   int32_t result = OB_SUCCESS;
+  bool is_tablet_copy_done = false;
   LOG_INFO("start do data tablets migration task", K(ret), KPC(ctx_));
 #ifdef ERRSIM
   SERVER_EVENT_SYNC_ADD("storage_ha", "before_data_tablets_migration_task",
@@ -4069,7 +4070,11 @@ int ObDataTabletsMigrationTask::process()
     }
 #endif
 
-    if (FAILEDx(generate_tablet_group_generate_dag_())) {
+    if (FAILEDx(ctx_->tablet_dep_mgr_.check_is_done(is_tablet_copy_done))) {
+      LOG_WARN("failed to check tablet copy dependency mgr is done", K(ret), KPC(ctx_));
+    } else if (is_tablet_copy_done) {
+      // skip data tablet group and check convert dags since no data tablet group needs migration
+    } else if (FAILEDx(generate_tablet_group_generate_dag_())) {
       LOG_WARN("failed to generate tablet group dag", K(ret), KPC(ctx_));
     } else if (OB_FAIL(generate_check_co_convert_dag_if_needed())) {
       LOG_WARN("failed to generate check convert dag", K(ret), KPC(ctx_));
