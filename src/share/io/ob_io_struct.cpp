@@ -3326,7 +3326,6 @@ void ObIOCallbackManager::try_release_thread()
         if (cur_runner->is_stop_accept() && cur_runner->get_queue_count() == 0) {
           LOG_INFO("release io callback thread success", KP(cur_runner));
           runners_.pop_back();
-          cur_runner->~ObIORunner();
           io_allocator_->free(cur_runner);
         } else {
           break;
@@ -3368,7 +3367,7 @@ int ObIOCallbackManager::update_thread_count(const int64_t thread_count)
           } else {
             runner = nullptr;
           }
-          if (OB_UNLIKELY(nullptr == runner)) {
+          if (OB_UNLIKELY(nullptr != runner)) {
             io_allocator_->free(runner);
           }
         }
