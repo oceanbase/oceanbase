@@ -1281,7 +1281,10 @@ OpTestResult OpTestEngine::collect_batch_results(ObOperator *op, const ExprFixed
       if (!op->get_spec().use_rich_format_) {
         for (int64_t col = 0; col < result_exprs->count() && OB_SUCC(ret); ++col) {
           ObExpr *expr = result_exprs->at(col);
-          if (OB_NOT_NULL(expr)) {
+          // Skip exprs on a true 1.0 frame (vector_header_off_ == UINT32_MAX): they have no
+          // vector header, so init_vector would dereference it. Their values are read directly
+          // from datums in the flat branch below.
+          if (OB_NOT_NULL(expr) && expr->vector_header_off_ != UINT32_MAX) {
             VectorFormat fmt = expr->is_batch_result() ? VEC_UNIFORM : VEC_UNIFORM_CONST;
             if (OB_FAIL(expr->init_vector(eval_ctx, fmt, batch_rows->size_))) {
               LOG_WARN("init vector failed", K(ret), K(col));
@@ -1307,20 +1310,34 @@ OpTestResult OpTestEngine::collect_batch_results(ObOperator *op, const ExprFixed
           // Note: expr->get_format() may return VEC_INVALID in some cases,
           // but expr->get_vector()->get_format() returns the actual vector format.
           // We need to use the vector's format for correct data access.
-          ObIVector *vec = expr->get_vector(eval_ctx);
+          // True vectorization 1.0 frame has no vector header: get_vector() is invalid there, so
+          // read straight from datums via the flat branch below. Only consult get_vector()/
+          // EXPECT_NE when a header exists.
+          const bool expr_has_vec_header = (expr->vector_header_off_ != UINT32_MAX);
+          ObIVector *vec = expr_has_vec_header ? expr->get_vector(eval_ctx) : nullptr;
           VectorFormat fmt = vec ? vec->get_format() : VEC_INVALID;
-          EXPECT_NE(fmt, VEC_INVALID);
+          if (expr_has_vec_header) {
+            EXPECT_NE(fmt, VEC_INVALID);
 
-          // Check NULL using vector's is_null() method which correctly checks the null bitmap
-          if (vec && vec->is_null(row)) {
-            row_values.push_back("NULL");
-            continue;
-          }
+            // Check NULL using vector's is_null() method which correctly checks the null bitmap
+            if (vec && vec->is_null(row)) {
+              row_values.push_back("NULL");
+              continue;
+            }
 
-          // If format is still invalid, skip
-          if (fmt == VEC_INVALID) {
-            row_values.push_back("");
-            continue;
+            // If format is still invalid, skip
+            if (fmt == VEC_INVALID) {
+              row_values.push_back("");
+              continue;
+            }
+          } else {
+            // No header: null lives in datum->null_; fmt stays VEC_INVALID so the value read
+            // below falls through to the flat ObDatum branch (locate_batch_datums).
+            ObDatum *datums = expr->locate_batch_datums(eval_ctx);
+            if (datums[row].is_null()) {
+              row_values.push_back("NULL");
+              continue;
+            }
           }
 
           // Get value as string using direct buffer access

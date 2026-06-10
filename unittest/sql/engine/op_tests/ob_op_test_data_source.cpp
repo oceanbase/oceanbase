@@ -5,6 +5,11 @@
 
 #define USING_LOG_PREFIX SQL
 
+// Allow direct access to ObEvalCtx::frames_ / ObExpr::reset_datums_ptr for the true 1.0
+// (no-vector-header) datum-fill path, matching the same pattern used in ob_op_test_material.h.
+#define private public
+#define protected public
+
 #include "unittest/sql/engine/op_tests/ob_op_test_data_source.h"
 #include "sql/engine/ob_exec_context.h"
 #include "sql/engine/expr/ob_expr.h"
@@ -172,12 +177,26 @@ int MockDataSourceOp::inner_get_next_batch(const int64_t max_row_cnt)
     } else {
       fmt = VEC_DISCRETE;
     }
-    expr->init_vector(eval_ctx_, fmt, fill_cnt, true);
+    // True vectorization 1.0 frame has no vector header (vector_header_off_ == UINT32_MAX).
+    // In that case skip init_vector (which would dereference the absent header): fmt is already
+    // VEC_UNIFORM, and fill_value_directly's VEC_UNIFORM branch writes datums directly via
+    // locate_batch_datums, which downstream 1.0 evaluation reads back without any vector cast.
+    const bool expr_has_vec_header = (expr->vector_header_off_ != UINT32_MAX);
+    if (expr_has_vec_header) {
+      expr->init_vector(eval_ctx_, fmt, fill_cnt, true);
 
-    // For VEC_CONTINUOUS, initialize offsets[0] = 0 before filling data
-    if (fmt == VEC_CONTINUOUS) {
-      uint32_t *offsets = expr->get_continuous_vector_offsets(eval_ctx_);
-      offsets[0] = 0;
+      // For VEC_CONTINUOUS, initialize offsets[0] = 0 before filling data
+      if (fmt == VEC_CONTINUOUS) {
+        uint32_t *offsets = expr->get_continuous_vector_offsets(eval_ctx_);
+        offsets[0] = 0;
+      }
+    } else {
+      // True 1.0 frame (vector_header_off_ == UINT32_MAX): init_vector would dereference the
+      // absent vector header, so we skip it. But the datum ptr_ fields must still be initialized
+      // (they point into the expression's res_buf), otherwise set_int/set_string/etc. write
+      // through garbage pointers. reset_datums_ptr does exactly the non-header parts of
+      // init_vector(VEC_UNIFORM, use_reserve_buf=true), which is safe here.
+      expr->reset_datums_ptr(eval_ctx_.frames_[expr->frame_idx_], fill_cnt);
     }
 
     for (int64_t row = 0; row < fill_cnt && OB_SUCC(ret); ++row) {
@@ -193,7 +212,10 @@ int MockDataSourceOp::inner_get_next_batch(const int64_t max_row_cnt)
 
     // Mark the expression as evaluated and projected
     if (OB_SUCC(ret)) {
-      sql::ObBitVector &nulls = expr->get_nulls(eval_ctx_);
+      // get_nulls() reads the vector header's null bitmap, which does not exist on a true 1.0
+      // frame. Only fetch it when a header exists; for VEC_UNIFORM (always the case in true 1.0)
+      // null comes from datum->null_, so the bitmap pointer is never dereferenced there.
+      sql::ObBitVector *nulls = expr_has_vec_header ? &expr->get_nulls(eval_ctx_) : nullptr;
       ObDatum *datums = expr->locate_batch_datums(eval_ctx_);
       int64_t row_count = (brs_.size_ > 0) ? brs_.size_ : fill_cnt;
       for (int64_t row = 0; row < row_count; ++row) {
@@ -203,7 +225,7 @@ int MockDataSourceOp::inner_get_next_batch(const int64_t max_row_cnt)
         // clear the null flag. Use datum->is_null() directly for VEC_UNIFORM.
         bool is_null = (fmt == VEC_UNIFORM || fmt == VEC_UNIFORM_CONST)
                        ? datums[row].is_null()
-                       : nulls.at(row);
+                       : nulls->at(row);
         if (is_null) {
           datums[row].set_null();
         } else {
@@ -246,10 +268,13 @@ int MockDataSourceOp::inner_get_next_batch(const int64_t max_row_cnt)
 
   // In 1.0 mode (no rich format), cast each output expr vector to VEC_UNIFORM
   // so downstream 1.0 operators can access data via datum ptr/len/null correctly.
+  // A true 1.0 frame (vector_header_off_ == UINT32_MAX) has no vector header to cast from and
+  // already holds the data as plain datums, so skip cast_to_uniform there (it would dereference
+  // the absent header). This only fires for the legacy "pseudo 1.0" path (header present).
   if (OB_SUCC(ret) && !spec_.use_rich_format_) {
     for (int64_t col = 0; col < col_count && OB_SUCC(ret); ++col) {
       ObExpr *expr = output_exprs.at(col);
-      if (OB_NOT_NULL(expr)) {
+      if (OB_NOT_NULL(expr) && expr->vector_header_off_ != UINT32_MAX) {
         if (OB_FAIL(expr->cast_to_uniform(brs_.size_, eval_ctx_))) {
           LOG_WARN("cast to uniform failed", K(ret), K(col));
         }
@@ -466,21 +491,28 @@ int MockDataSourceOp::fill_value_directly(ObExpr *expr, int64_t row_idx,
     return ret;
   }
 
-  // Get vector object to properly set null with has_null_ flag
-  common::ObIVector *vec = expr->get_vector(eval_ctx_);
+  // A true vectorization 1.0 frame has no vector header (vector_header_off_ == UINT32_MAX), so
+  // get_vector() would be invalid there. In that case manage NULL directly on the datum; the
+  // non-null value write below (VEC_UNIFORM branch) clears null_ via set_int/set_string/etc.
+  const bool expr_has_vec_header = (expr->vector_header_off_ != UINT32_MAX);
+  common::ObIVector *vec = expr_has_vec_header ? expr->get_vector(eval_ctx_) : nullptr;
 
   // Handle NULL value
   if (value.is_null()) {
-    // Use vector's set_null() to set both bitmap AND has_null_ flag
-    vec->set_null(row_idx);
-    // For VEC_CONTINUOUS, must update offsets even for NULL values
-    // so that next row's offset is correct
-    if (fmt == VEC_CONTINUOUS) {
-      uint32_t *offsets = expr->get_continuous_vector_offsets(eval_ctx_);
-      offsets[row_idx + 1] = offsets[row_idx];  // NULL has zero length
+    if (expr_has_vec_header) {
+      // Use vector's set_null() to set both bitmap AND has_null_ flag
+      vec->set_null(row_idx);
+      // For VEC_CONTINUOUS, must update offsets even for NULL values
+      // so that next row's offset is correct
+      if (fmt == VEC_CONTINUOUS) {
+        uint32_t *offsets = expr->get_continuous_vector_offsets(eval_ctx_);
+        offsets[row_idx + 1] = offsets[row_idx];  // NULL has zero length
+      }
+    } else {
+      expr->locate_batch_datums(eval_ctx_)[row_idx].set_null();
     }
     return OB_SUCCESS;
-  } else {
+  } else if (expr_has_vec_header) {
     // Use vector's unset_null() to clear null flag
     vec->unset_null(row_idx);
   }
@@ -1436,3 +1468,6 @@ int MockDataSourceOp::sort_data_by_exprs()
 
 }  // namespace sql
 }  // namespace oceanbase
+
+#undef private
+#undef protected

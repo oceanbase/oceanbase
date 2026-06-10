@@ -130,6 +130,13 @@ sql_unittest(test_case_expr
   ob_op_test_engine.cpp
   ob_op_test_data_source.cpp
 )
+
+# Expression vectorization 1.0 / 2.0 dual-format tests
+sql_unittest(test_expr_dual_format
+  test_expr_dual_format.cpp
+  ob_op_test_engine.cpp
+  ob_op_test_data_source.cpp
+)
 # Phase 10: Hash Distinct operator tests
 sql_unittest(test_hash_distinct_op
   test_hash_distinct_op.cpp

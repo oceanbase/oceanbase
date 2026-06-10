@@ -1291,12 +1291,13 @@ public:
   // ===== Execution =====
 
   /**
-   * @brief Prepare (steps 0-6): engine config, SQL registration, resolve, CG, collect exprs.
-   * Always runs with FORCE_ON (set by engine.init()). Must be called before build_and_execute().
+   * @brief Resolve stage (steps 0-3.5): engine config, SQL registration, resolve, post-resolve hook.
+   * Stashes the resolved statement in prepared_dml_stmt_ so prepare_cg() can be re-invoked
+   * (re-CG the same statement under a different format). Does NOT run expression CG.
    * @param engine The OpTestEngine instance
    * @return OB_SUCCESS on success, error code otherwise
    */
-  int prepare(OpTestEngine &engine)
+  int prepare_resolve(OpTestEngine &engine)
   {
     int ret = OB_SUCCESS;
     FatalErrorChecker error_checker(ret);
@@ -1354,7 +1355,36 @@ public:
       }
     }
 
-    // Step 4: Generate expressions via CG (always runs in FORCE_ON mode set by init())
+    // Stash resolved statement for prepare_cg() (enables re-CG under different formats).
+    prepared_dml_stmt_ = stmt;
+    return ret;
+  }
+
+  /**
+   * @brief CG stage (steps 4-6): generate expressions and collect col/out/filter/limit exprs.
+   * Re-invokable: each call re-runs generate_exprs() under the current expr_cg_rich_format_
+   * (applied via engine.enable_rich_format()), refreshing all prepared_*_vec_ rt-expr pointers.
+   * generate_exprs() reuse()s the expr frame internally, so a true 1.0 frame (FORCE_OFF) has
+   * vector_header_off_ == UINT32_MAX while a 2.0 frame (FORCE_ON) allocates the vector header.
+   * @param engine The OpTestEngine instance
+   * @return OB_SUCCESS on success, error code otherwise
+   */
+  int prepare_cg(OpTestEngine &engine)
+  {
+    int ret = OB_SUCCESS;
+    FatalErrorChecker error_checker(ret);
+
+    ObDMLStmt *stmt = prepared_dml_stmt_;
+    if (OB_ISNULL(stmt)) {
+      LOG_WARN("prepare_cg called before prepare_resolve (stmt is null)");
+      return OB_ERR_UNEXPECTED;
+    }
+
+    // Step 3.9: Select CG frame format. ObStaticEngineExprCG::use_rich_format() reads the session
+    // flag at generate time, so this decides whether the frame allocates a vector header.
+    engine.enable_rich_format(expr_cg_rich_format_);
+
+    // Step 4: Generate expressions via CG (frame layout follows expr_cg_rich_format_)
     ret = engine.generate_exprs(*stmt);
     if (OB_FAIL(ret)) {
       LOG_WARN("generate exprs failed", K(ret));
@@ -1549,6 +1579,44 @@ public:
       }
     }
 
+    // If CG ran under non-rich (truth 1.0), force-clear vector_header_off_ on every collected
+    // expr and their sub-expressions. generate_exprs()'s internal frame reuse() may retain the
+    // old offset from a previous rich-format CG; the second pass does not explicitly zero it when
+    // use_rich_format() returns false. A stale non-UINT32_MAX vector_header_off_ causes
+    // fill_value_directly / the engine collect path to dereference an absent vector header.
+    if (!expr_cg_rich_format_) {
+      std::set<ObExpr *> visited;
+      std::function<void(ObExpr*)> clear_vec_header = [&](ObExpr *e) {
+        if (OB_NOT_NULL(e) && visited.insert(e).second) {
+          e->vector_header_off_ = UINT32_MAX;
+          for (uint32_t i = 0; i < e->arg_cnt_; ++i) {
+            clear_vec_header(e->args_[i]);
+          }
+        }
+      };
+      for (auto *e : prepared_col_exprs_vec_) { clear_vec_header(e); }
+      for (auto *e : prepared_out_exprs_vec_) { clear_vec_header(e); }
+      for (auto *e : prepared_flt_exprs_vec_) { clear_vec_header(e); }
+      clear_vec_header(prepared_limit_expr_);
+      clear_vec_header(prepared_offset_expr_);
+    }
+
+    return ret;
+  }
+
+  /**
+   * @brief Prepare (steps 0-6): resolve + CG in one shot. Back-compat wrapper used by every
+   * existing single-run / operator-level dual-run path. CG runs under expr_cg_rich_format_
+   * (default true => 2.0 rich format, identical to the previous FORCE_ON behavior).
+   * @param engine The OpTestEngine instance
+   * @return OB_SUCCESS on success, error code otherwise
+   */
+  int prepare(OpTestEngine &engine)
+  {
+    int ret = prepare_resolve(engine);
+    if (OB_SUCC(ret)) {
+      ret = prepare_cg(engine);
+    }
     return ret;
   }
 
@@ -1854,6 +1922,63 @@ public:
     std::unique_ptr<TestTracepointGuard> tp_guard;
     if (!tracepoints_.empty()) {
       tp_guard.reset(new TestTracepointGuard(tracepoints_));
+    }
+
+    // Expression-level dual-format check (takes priority over operator-level dual_format_check_):
+    // resolve once, then CG + execute the SAME statement separately as true 1.0 and 2.0, and
+    // compare. Unlike operator-level dual check, the expression is re-CG'd per format, so the 1.0
+    // run uses a real datum frame (vector_header_off_ == UINT32_MAX) and hits eval_batch_func_/
+    // eval_func_, while the 2.0 run hits eval_vector_func_.
+    if (dual_format_expr_check_) {
+      ret = prepare_resolve(engine);
+      if (OB_FAIL(ret)) {
+        LOG_WARN("prepare_resolve failed", K(ret));
+        return result;
+      }
+
+      // 2.0: CG in rich format, execute in rich format
+      expr_cg_rich_format_ = true;
+      ret = prepare_cg(engine);  // applies enable_rich_format(true) before generate_exprs
+      if (OB_FAIL(ret)) {
+        LOG_WARN("prepare_cg (2.0) failed", K(ret));
+        return result;
+      }
+      {
+        Derived *derived = static_cast<Derived *>(this);
+        derived->adjust_output_exprs();
+      }
+      engine.enable_rich_format(true);
+      OpTestResult res_2_0 = build_and_execute(engine, true);
+
+      // 1.0: CG in non-rich (true 1.0 datum frame), execute in non-rich
+      expr_cg_rich_format_ = false;
+      ret = prepare_cg(engine);  // applies enable_rich_format(false) before generate_exprs
+      if (OB_FAIL(ret)) {
+        LOG_WARN("prepare_cg (1.0) failed", K(ret));
+        return result;
+      }
+      {
+        Derived *derived = static_cast<Derived *>(this);
+        derived->adjust_output_exprs();
+      }
+      engine.enable_rich_format(false);
+      OpTestResult res_1_0 = build_and_execute(engine, false);
+
+      // Restore defaults for subsequent tests on the shared engine
+      engine.enable_rich_format(true);
+      expr_cg_rich_format_ = true;
+
+      // Compare results (bypass material preserves input order, so compare positionally)
+      EXPECT_EQ(res_2_0.row_count(), res_1_0.row_count())
+          << "dual_format_expr_check: row count mismatch: 2.0=" << res_2_0.row_count()
+          << " vs 1.0=" << res_1_0.row_count();
+      if (res_2_0.row_count() == res_1_0.row_count()) {
+        for (int64_t i = 0; i < res_2_0.row_count(); ++i) {
+          EXPECT_EQ(res_2_0.get_row(i), res_1_0.get_row(i))
+              << "dual_format_expr_check: row " << i << " mismatch between 2.0 and 1.0";
+        }
+      }
+      return res_2_0;
     }
 
     // Prepare: SQL registration, resolve, CG, collect exprs (always in FORCE_ON mode)
@@ -2256,6 +2381,21 @@ protected:
   bool dual_format_check_ = false;       // Default: single-run mode
   bool dual_format_unordered_ = false;   // When true, sort rows before comparing 1.0 vs 2.0
 
+  // ===== Expression-level vectorization 1.0/2.0 CG configuration (expr-test only) =====
+  // Mechanism lives in the base so prepare()/run() can read it; there is NO public setter
+  // here. Public setters are exposed only by ExprTestSpec (ob_op_test_material.h), so only
+  // expression unit tests can enable these. Defaults keep every existing test unaffected.
+  //
+  // expr_cg_rich_format_ selects the CG frame layout: true -> rich format (2.0, allocates
+  // vector_header_off_); false -> true vectorization 1.0 datum frame (vector_header_off_ ==
+  // UINT32_MAX, datums filled directly). It is applied via engine.enable_rich_format() right
+  // before generate_exprs(), because ObStaticEngineExprCG::use_rich_format() reads the session
+  // flag at CG time.
+  bool expr_cg_rich_format_ = true;      // Default: 2.0 rich-format CG (zero regression)
+  // dual_format_expr_check_ runs a true expression-level dual check: resolve once, then CG +
+  // execute the SAME statement once per format (2.0 and true 1.0) and compare results.
+  bool dual_format_expr_check_ = false;  // Default: off
+
   // Per-column vector format override
   std::vector<VectorFormat> col_formats_;  // Empty = use vector_format_ fallback
 
@@ -2275,6 +2415,9 @@ protected:
   bool perf_record_ = false;
 
   // Intermediate state for dual-run mode (set by prepare(), used by build_and_execute())
+  // prepared_dml_stmt_ is the resolved statement, stashed by prepare_resolve() so that
+  // prepare_cg() can be re-invoked (re-CG) on the same statement under a different format.
+  ObDMLStmt *prepared_dml_stmt_ = nullptr;
   std::vector<ObExpr *> prepared_col_exprs_vec_;
   std::vector<ObExpr *> prepared_out_exprs_vec_;
   std::vector<ObExpr *> prepared_flt_exprs_vec_;

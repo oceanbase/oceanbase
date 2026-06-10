@@ -201,6 +201,45 @@ public:
    {
      return static_cast<ExprTestSpec &>(select(expr_str));
    }
+
+   /**
+    * @brief Code-generate (and execute) the expression as true vectorization 1.0.
+    * The expression frame is built without a vector header (vector_header_off_ == UINT32_MAX),
+    * MockDataSource fills datums directly, and evaluation hits eval_batch_func_/eval_func_
+    * (1.0 path) rather than eval_vector_func_ (2.0 path). Both CG and execution run in non-rich
+    * format for a coherent single 1.0 run.
+    */
+   ExprTestSpec& cg_as_vector_1_0()
+   {
+     expr_cg_rich_format_ = false;  // CG frame: true 1.0 datum frame
+     rich_format_ = false;          // execution format: 1.0
+     return *this;
+   }
+
+   /**
+    * @brief Code-generate (and execute) the expression as vectorization 2.0 (rich format).
+    * This is the default; provided so tests can state the intent explicitly.
+    */
+   ExprTestSpec& cg_as_vector_2_0()
+   {
+     expr_cg_rich_format_ = true;
+     rich_format_ = true;
+     return *this;
+   }
+
+   /**
+    * @brief Enable expression-level dual-format check.
+    * run() resolves the SQL once, then CG + executes the SAME expression once as true 1.0 and
+    * once as 2.0, and compares row count + per-row results. This is a real per-expression check
+    * (each format is independently code-generated), unlike the operator-level
+    * enable_dual_format_check() which code-generates only once.
+    * @param enable True to enable (default: true)
+    */
+   ExprTestSpec& enable_dual_format_expr_check(bool enable = true)
+   {
+     dual_format_expr_check_ = enable;
+     return *this;
+   }
  };
 
 }  // namespace sql
