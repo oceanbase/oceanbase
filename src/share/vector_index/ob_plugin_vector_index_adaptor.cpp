@@ -1179,8 +1179,8 @@ bool ObPluginVectorIndexAdaptor::is_pruned_read_index_id()
 
 void ObPluginVectorIndexAdaptor::update_can_skip(ObCanSkip3rdAnd4thVecIndex can_skip)
 {
-  if (OB_ISNULL(this->get_incr_data()) || !this->get_incr_data()->is_inited()) {
-    LOG_INFO("incr data index is empty or not init, won't update can_skip", K(this), K(inc_tablet_id_), KPC(incr_data_), K(can_skip));
+  if (OB_ISNULL(this->get_incr_data())) {
+    LOG_INFO("incr data index is empty, won't update can_skip", K(this), K(inc_tablet_id_), KPC(incr_data_), K(can_skip));
   } else {
     ObVectorIndexMemData *incr_memdata = this->get_incr_data();
     incr_memdata->can_skip_ = can_skip;
