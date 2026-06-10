@@ -4884,6 +4884,11 @@ int ObDDLUtil::replace_user_tenant_id(
     if (is_user_tenant(alter_table_arg.sequence_ddl_arg_.seq_schema_.get_tenant_id())) {
       alter_table_arg.sequence_ddl_arg_.seq_schema_.set_tenant_id(tenant_id);
     }
+    if (need_replace_schema_info) {
+      for (int64_t i = 0; i < alter_table_arg.based_schema_object_infos_.count(); ++i) {
+        try_replace_user_tenant_id(tenant_id, alter_table_arg.based_schema_object_infos_.at(i).schema_tenant_id_);
+      }
+    }
   }
   return ret;
 }
