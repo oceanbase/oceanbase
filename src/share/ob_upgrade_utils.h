@@ -194,9 +194,18 @@ private:
 class ObUpgradeVersions
 {
 public:
-  ObUpgradeVersions(const uint64_t *upgrade_path, const uint64_t next_upgrade_version,
-      const int64_t upgrade_path_num);
+  // direct_upgrade_path contains versions that can be used as an upgrade source.
+  // non_direct_upgrade_path contains versions that only provide processors for
+  // cross-version upgrade paths.
+  ObUpgradeVersions(const uint64_t *direct_upgrade_path,
+      const int64_t direct_upgrade_path_num,
+      const uint64_t *non_direct_upgrade_path,
+      const int64_t non_direct_upgrade_path_num,
+      const uint64_t next_upgrade_version);
+  // Check whether the version can be used as an upgrade source.
   bool check_version_exist(const uint64_t version) const;
+  // Check whether the version has an upgrade processor.
+  bool check_processor_version_exist(const uint64_t version) const;
   int add_upgrade_versions(
       const uint64_t current_version,
       const bool force_update_current_version,
@@ -204,9 +213,20 @@ public:
       ObUpgradePath &path) const;
   uint64_t get_next_upgrade_version() const { return next_upgrade_version_; }
 private:
-  const uint64_t *upgrade_path_;
+  bool check_version_exist_(const uint64_t *upgrade_path,
+      const int64_t upgrade_path_num,
+      const uint64_t version) const;
+  int add_upgrade_versions_(const uint64_t *upgrade_path,
+      const int64_t upgrade_path_num,
+      const uint64_t current_version,
+      const bool force_update_current_version,
+      const uint64_t next_upgrade_version,
+      ObUpgradePath &path) const;
+  const uint64_t *direct_upgrade_path_;
+  int64_t direct_upgrade_path_num_;
+  const uint64_t *non_direct_upgrade_path_;
+  int64_t non_direct_upgrade_path_num_;
   const uint64_t next_upgrade_version_;
-  int64_t upgrade_path_num_;
 };
 
 /*
@@ -219,7 +239,10 @@ private:
 class ObUpgradeChecker
 {
 public:
+  // Check whether a data version can be used as an upgrade source.
   static bool check_data_version_exist(const uint64_t version);
+  // Check whether a processor exists for explicit UPGRADE_POST_ACTION.
+  static bool check_upgrade_processor_version_exist(const uint64_t version);
   static bool check_data_version_valid_for_backup(const uint64_t data_version);
   static bool check_cluster_version_exist(const uint64_t version);
   static int get_data_version_by_cluster_version(
@@ -232,6 +255,7 @@ private:
   static const ObUpgradeVersions upgrade_versions[];
   static const uint64_t UPGRADE_PATH_42x[];
   static const uint64_t UPGRADE_PATH_43x[];
+  static const uint64_t UPGRADE_PATH_43x_NO_DIRECT_UPGRADE[];
   static const uint64_t UPGRADE_PATH_CURRENT[];
 };
 

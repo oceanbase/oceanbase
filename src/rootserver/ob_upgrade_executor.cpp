@@ -515,7 +515,7 @@ int ObUpgradeExecutor::execute(
   } else if (JOB_TYPE_INVALID == job_type) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid job type", KR(ret), K(arg));
-  } else if (version > 0 && !ObUpgradeChecker::check_data_version_exist(version)) {
+  } else if (version > 0 && !ObUpgradeChecker::check_upgrade_processor_version_exist(version)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("unsupported version to run upgrade job", KR(ret), K(arg));
   } else if (OB_FAIL(construct_tenant_ids_(arg.tenant_ids_, tenant_ids))) {
@@ -734,7 +734,7 @@ int ObUpgradeExecutor::run_upgrade_post_job_(
     LOG_WARN("fail to check inner stat", KR(ret));
   } else if (OB_FAIL(check_stop())) {
     LOG_WARN("executor should stopped", KR(ret));
-  } else if (!ObUpgradeChecker::check_data_version_exist(version)) {
+  } else if (!ObUpgradeChecker::check_upgrade_processor_version_exist(version)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("unsupported version to run upgrade job", KR(ret), KDV(version));
   } else {

@@ -8827,7 +8827,7 @@ int ObRootService::run_upgrade_job(const obrpc::ObUpgradeJobArg &arg)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(arg), KR(ret));
   } else if (ObUpgradeJobArg::UPGRADE_POST_ACTION == arg.action_
-             && !ObUpgradeChecker::check_data_version_exist(version)) {
+             && !ObUpgradeChecker::check_upgrade_processor_version_exist(version)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("unsupported version to run upgrade job", KR(ret), K(version));
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "run upgrade job with such version is");

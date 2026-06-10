@@ -113,8 +113,29 @@ const uint64_t ObUpgradeChecker::UPGRADE_PATH_42x[] = {
   CALC_VERSION(4UL, 2UL, 5UL, 7UL),  // 4.2.5.7
   // !!! add new 42x versions here
 };
+// These 43x versions are kept only for 42x -> 44x processor replay.
+// They cannot be used as direct upgrade source versions in this branch.
+const uint64_t ObUpgradeChecker::UPGRADE_PATH_43x_NO_DIRECT_UPGRADE[] = {
+  CALC_VERSION(4UL, 3UL, 0UL, 0UL),  // 4.3.0.0
+  CALC_VERSION(4UL, 3UL, 0UL, 1UL),  // 4.3.0.1
+  CALC_VERSION(4UL, 3UL, 1UL, 0UL),  // 4.3.1.0
+  CALC_VERSION(4UL, 3UL, 2UL, 0UL),  // 4.3.2.0
+  CALC_VERSION(4UL, 3UL, 2UL, 1UL),  // 4.3.2.1
+  CALC_VERSION(4UL, 3UL, 3UL, 0UL),  // 4.3.3.0
+  CALC_VERSION(4UL, 3UL, 3UL, 1UL),  // 4.3.3.1
+  CALC_VERSION(4UL, 3UL, 4UL, 0UL),  // 4.3.4.0
+  CALC_VERSION(4UL, 3UL, 4UL, 1UL),  // 4.3.4.1
+  CALC_VERSION(4UL, 3UL, 5UL, 0UL),  // 4.3.5.0
+  CALC_VERSION(4UL, 3UL, 5UL, 1UL),  // 4.3.5.1
+  CALC_VERSION(4UL, 3UL, 5UL, 2UL),  // 4.3.5.2
+  CALC_VERSION(4UL, 3UL, 5UL, 3UL),  // 4.3.5.3
+  CALC_VERSION(4UL, 3UL, 5UL, 4UL),  // 4.3.5.4
+  CALC_VERSION(4UL, 3UL, 5UL, 5UL),  // 4.3.5.5
+  // !!! add new 43x no direct upgrade versions here
+};
+// 4.3.5.6 is allowed to upgrade directly.
 const uint64_t ObUpgradeChecker::UPGRADE_PATH_43x[] = {
-  CALC_VERSION(4UL, 3UL, 5UL, 6UL),// 4.3.5.6
+  CALC_VERSION(4UL, 3UL, 5UL, 6UL),  // 4.3.5.6
   // !!! add new 43x versions here
 };
 const uint64_t ObUpgradeChecker::UPGRADE_PATH_CURRENT[] = {
@@ -129,21 +150,53 @@ const uint64_t ObUpgradeChecker::UPGRADE_PATH_CURRENT[] = {
 
 const ObUpgradeVersions ObUpgradeChecker::upgrade_versions[] = {
   // 需要修改42x能升级到的第一个44x版本时修改这里
-  ObUpgradeVersions(ObUpgradeChecker::UPGRADE_PATH_42x, CALC_VERSION(4UL, 4UL, 2UL, 0UL), ARRAYSIZEOF(ObUpgradeChecker::UPGRADE_PATH_42x)),
+  ObUpgradeVersions(ObUpgradeChecker::UPGRADE_PATH_42x,
+      ARRAYSIZEOF(ObUpgradeChecker::UPGRADE_PATH_42x),
+      NULL,
+      0,
+      CALC_VERSION(4UL, 4UL, 2UL, 0UL)),
   // 需要修改43x能升级到的第一个44x版本时修改这里
-  ObUpgradeVersions(ObUpgradeChecker::UPGRADE_PATH_43x, CALC_VERSION(4UL, 4UL, 2UL, 1UL), ARRAYSIZEOF(ObUpgradeChecker::UPGRADE_PATH_43x)),
-  ObUpgradeVersions(ObUpgradeChecker::UPGRADE_PATH_CURRENT, DATA_CURRENT_VERSION, ARRAYSIZEOF(ObUpgradeChecker::UPGRADE_PATH_CURRENT)),
+  ObUpgradeVersions(ObUpgradeChecker::UPGRADE_PATH_43x,
+      ARRAYSIZEOF(ObUpgradeChecker::UPGRADE_PATH_43x),
+      ObUpgradeChecker::UPGRADE_PATH_43x_NO_DIRECT_UPGRADE,
+      ARRAYSIZEOF(ObUpgradeChecker::UPGRADE_PATH_43x_NO_DIRECT_UPGRADE),
+      CALC_VERSION(4UL, 4UL, 2UL, 1UL)),
+  ObUpgradeVersions(ObUpgradeChecker::UPGRADE_PATH_CURRENT,
+      ARRAYSIZEOF(ObUpgradeChecker::UPGRADE_PATH_CURRENT),
+      NULL,
+      0,
+      DATA_CURRENT_VERSION),
 };
-ObUpgradeVersions::ObUpgradeVersions(const uint64_t *upgrade_path,
-    const uint64_t next_upgrade_version, const int64_t upgrade_path_num)
-  : upgrade_path_(upgrade_path), next_upgrade_version_(next_upgrade_version),
-    upgrade_path_num_(upgrade_path_num) {}
+ObUpgradeVersions::ObUpgradeVersions(const uint64_t *direct_upgrade_path,
+    const int64_t direct_upgrade_path_num,
+    const uint64_t *non_direct_upgrade_path,
+    const int64_t non_direct_upgrade_path_num,
+    const uint64_t next_upgrade_version)
+  : direct_upgrade_path_(direct_upgrade_path),
+    direct_upgrade_path_num_(direct_upgrade_path_num),
+    non_direct_upgrade_path_(non_direct_upgrade_path),
+    non_direct_upgrade_path_num_(non_direct_upgrade_path_num),
+    next_upgrade_version_(next_upgrade_version) {}
 
 bool ObUpgradeVersions::check_version_exist(const uint64_t version) const
 {
+  return check_version_exist_(direct_upgrade_path_, direct_upgrade_path_num_, version);
+}
+
+bool ObUpgradeVersions::check_processor_version_exist(const uint64_t version) const
+{
+  // Processor existence includes both direct and non-direct paths.
+  return check_version_exist(version)
+      || check_version_exist_(non_direct_upgrade_path_, non_direct_upgrade_path_num_, version);
+}
+
+bool ObUpgradeVersions::check_version_exist_(const uint64_t *upgrade_path,
+    const int64_t upgrade_path_num,
+    const uint64_t version) const
+{
   bool bret = false;
-  for (int64_t i = 0; !bret && i < upgrade_path_num_; i++) {
-    bret = (version == upgrade_path_[i]);
+  for (int64_t i = 0; !bret && OB_NOT_NULL(upgrade_path) && i < upgrade_path_num; i++) {
+    bret = (version == upgrade_path[i]);
   }
   return bret;
 }
@@ -155,12 +208,38 @@ int ObUpgradeVersions::add_upgrade_versions(
     ObUpgradePath &path) const
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(upgrade_path_) || upgrade_path_num_ == 0) {
+  if ((direct_upgrade_path_num_ > 0 && OB_ISNULL(direct_upgrade_path_))
+      || (non_direct_upgrade_path_num_ > 0 && OB_ISNULL(non_direct_upgrade_path_))
+      || (direct_upgrade_path_num_ <= 0 && non_direct_upgrade_path_num_ <= 0)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), KP(upgrade_path_), K(upgrade_path_num_));
+    LOG_WARN("invalid argument", KR(ret), KP(direct_upgrade_path_), K(direct_upgrade_path_num_),
+        KP(non_direct_upgrade_path_), K(non_direct_upgrade_path_num_));
+  } else if (OB_FAIL(add_upgrade_versions_(non_direct_upgrade_path_,
+      non_direct_upgrade_path_num_, current_version, force_update_current_version,
+      next_upgrade_version, path))) {
+    LOG_WARN("failed to add non direct upgrade versions", KR(ret), KDV(current_version));
+  } else if (OB_FAIL(add_upgrade_versions_(direct_upgrade_path_,
+      direct_upgrade_path_num_, current_version, force_update_current_version,
+      next_upgrade_version, path))) {
+    LOG_WARN("failed to add direct upgrade versions", KR(ret), KDV(current_version));
   }
-  for (int64_t i = 0; OB_SUCC(ret) && i < upgrade_path_num_; i++) {
-    const uint64_t data_version = upgrade_path_[i];
+  return ret;
+}
+
+int ObUpgradeVersions::add_upgrade_versions_(const uint64_t *upgrade_path,
+    const int64_t upgrade_path_num,
+    const uint64_t current_version,
+    const bool force_update_current_version,
+    const uint64_t next_upgrade_version,
+    ObUpgradePath &path) const
+{
+  int ret = OB_SUCCESS;
+  if (upgrade_path_num > 0 && OB_ISNULL(upgrade_path)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid upgrade path", KR(ret), KP(upgrade_path), K(upgrade_path_num));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < upgrade_path_num; i++) {
+    const uint64_t data_version = upgrade_path[i];
     if (data_version > current_version) {
       bool update = (force_update_current_version || data_version >= next_upgrade_version);
       if (OB_FAIL(path.add_version(data_version, update))) {
@@ -240,7 +319,21 @@ bool ObUpgradeChecker::check_data_version_exist(
 {
   bool bret = false;
   for (int64_t i = 0; !bret && i < ARRAYSIZEOF(upgrade_versions); i++) {
+    // Keep this direct-only: tablet meta and restore use it for compatibility checks.
     if (upgrade_versions[i].check_version_exist(version)) {
+      bret = true;
+    }
+  }
+  return bret;
+}
+
+bool ObUpgradeChecker::check_upgrade_processor_version_exist(
+     const uint64_t version)
+{
+  bool bret = false;
+  for (int64_t i = 0; !bret && i < ARRAYSIZEOF(upgrade_versions); i++) {
+    // Explicit UPGRADE_POST_ACTION can run processors from non-direct paths too.
+    if (upgrade_versions[i].check_processor_version_exist(version)) {
       bret = true;
     }
   }
@@ -268,6 +361,11 @@ int ObUpgradeChecker::get_upgrade_path_(const uint64_t version,
           next_upgrade_version, path))) {
         LOG_WARN("failed to add upgrade versions", KR(ret), KDV(version));
       }
+    } else if (upgrade_version.check_processor_version_exist(version)) {
+      // The version only provides processors for cross-version upgrade replay.
+      // It cannot be used as the source version of a direct upgrade.
+      ret = OB_OP_NOT_ALLOW;
+      LOG_WARN("data version does not support direct upgrade", KR(ret), KDV(version));
     } else if (has_version) {
       if (OB_FAIL(upgrade_version.add_upgrade_versions(version, false/*force_update_current_version*/,
             next_upgrade_version, path))) {
@@ -275,7 +373,7 @@ int ObUpgradeChecker::get_upgrade_path_(const uint64_t version,
       }
     }
   }
-  if (!has_version) {
+  if (OB_SUCC(ret) && !has_version) {
     ret = OB_OP_NOT_ALLOW;
     LOG_WARN("data version not exists in upgrade path", KR(ret), KDV(version));
   }
@@ -1394,8 +1492,9 @@ int ObUpgradeFor4320Processor::post_upgrade()
   int ret = OB_SUCCESS;
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("fail to check inner stat", KR(ret));
-  } else if (OB_FAIL(post_upgrade_for_reset_compat_version())) {
-    LOG_WARN("fail to reset compat version", KR(ret));
+  // 42x upgrade to 44x no need to execute this
+  // } else if (OB_FAIL(post_upgrade_for_reset_compat_version())) {
+  //   LOG_WARN("fail to reset compat version", KR(ret));
   } else if (OB_FAIL(post_upgrade_for_spm())) {
     LOG_WARN("failed to post upgrade for spm", KR(ret));
   } else if (OB_FAIL(post_upgrade_for_online_estimate_percent())) {

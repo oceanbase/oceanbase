@@ -1445,13 +1445,46 @@
 ##因为基准版本更新的时候会调用reset_upgrade_scripts.py来清空actions begin和actions end
 ##这两行之间的这些代码，如果不写在这两行之间的话会导致清空不掉相应的代码。
 #  across_version = upgrade_across_version(cur)
+#  if check_need_run_43x_processor(cur):
+#    run_upgrade_job(conn, cur, "UPGRADE_POST_ACTION", "4.3.0.0", timeout)
+#    run_upgrade_job(conn, cur, "UPGRADE_POST_ACTION", "4.3.0.1", timeout)
+#    run_upgrade_job(conn, cur, "UPGRADE_POST_ACTION", "4.3.1.0", timeout)
+#    run_upgrade_job(conn, cur, "UPGRADE_POST_ACTION", "4.3.2.0", timeout)
+#    run_upgrade_job(conn, cur, "UPGRADE_POST_ACTION", "4.3.2.1", timeout)
+#    run_upgrade_job(conn, cur, "UPGRADE_POST_ACTION", "4.3.3.0", timeout)
+#    run_upgrade_job(conn, cur, "UPGRADE_POST_ACTION", "4.3.3.1", timeout)
+#    run_upgrade_job(conn, cur, "UPGRADE_POST_ACTION", "4.3.4.0", timeout)
+#    run_upgrade_job(conn, cur, "UPGRADE_POST_ACTION", "4.3.4.1", timeout)
+#    run_upgrade_job(conn, cur, "UPGRADE_POST_ACTION", "4.3.5.0", timeout)
+#    run_upgrade_job(conn, cur, "UPGRADE_POST_ACTION", "4.3.5.1", timeout)
+#    run_upgrade_job(conn, cur, "UPGRADE_POST_ACTION", "4.3.5.2", timeout)
+#    run_upgrade_job(conn, cur, "UPGRADE_POST_ACTION", "4.3.5.3", timeout)
+#    run_upgrade_job(conn, cur, "UPGRADE_POST_ACTION", "4.3.5.4", timeout)
+#    run_upgrade_job(conn, cur, "UPGRADE_POST_ACTION", "4.3.5.5", timeout)
+#    run_upgrade_job(conn, cur, "UPGRADE_POST_ACTION", "4.3.5.6", timeout)
 #  if across_version:
-#    run_upgrade_job(conn, cur, "UPGRADE_ALL", timeout)
+#    run_upgrade_job(conn, cur, "UPGRADE_ALL", "UPGRADE_ALL", timeout)
 #
 #  run_root_inspection(cur, timeout)
 #####========******####======== actions begin ========####******========####
 #  upgrade_syslog_level(conn, cur)
 #  return
+#
+#def check_need_run_43x_processor(cur):
+#  need_run = True
+#  sql = "select distinct value from oceanbase.__all_virtual_tenant_parameter_info where name = 'compatible'"
+#  results = query(cur, sql)
+#  if len(results) < 1 or len(results[0]) < 1:
+#    logging.warn("row/column cnt not match")
+#    raise MyError("row/column cnt not match")
+#  elif len(results) != 1:
+#    logging.info("some tenants has been upgraded, no need to run")
+#    need_run = False
+#  elif results[0][0] != '4.4.2.1':
+#    logging.info("upgrade pre version is not 4421, no need to run")
+#    need_run = False
+#  return need_run
+#
 #
 #def upgrade_syslog_level(conn, cur):
 #  try:
@@ -1664,11 +1697,11 @@
 #    logging.warn("failed to check upgrade job result")
 #    raise
 #
-#def run_upgrade_job(conn, cur, job_name, timeout):
+#def run_upgrade_job(conn, cur, job_name_in_inner_table, job_name_in_sql, timeout):
 #  try:
-#    logging.info("start to run upgrade job, job_name:{0}".format(job_name))
+#    logging.info("start to run upgrade job, job_name:{0}".format(job_name_in_sql))
 #    # pre check
-#    if check_can_run_upgrade_job(cur, job_name):
+#    if check_can_run_upgrade_job(cur, job_name_in_inner_table):
 #      conn.autocommit = True
 #      # disable enable_ddl
 #      ori_enable_ddl = actions.get_ori_enable_ddl(cur, timeout)
@@ -1677,18 +1710,18 @@
 #      # get max_used_job_id
 #      max_used_job_id = get_max_used_job_id(cur)
 #      # run upgrade job
-#      sql = """alter system run upgrade job '{0}'""".format(job_name)
+#      sql = """alter system run upgrade job '{0}'""".format(job_name_in_sql)
 #      logging.info(sql)
 #      cur.execute(sql)
 #      # check upgrade job result
-#      check_upgrade_job_result(cur, job_name, timeout, max_used_job_id)
+#      check_upgrade_job_result(cur, job_name_in_inner_table, timeout, max_used_job_id)
 #      # reset enable_ddl
 #      if ori_enable_ddl == 0:
 #        actions.set_parameter(cur, 'enable_ddl', 'False', timeout)
 #  except Exception as e:
-#    logging.warn("run upgrade job failed, :{0}".format(job_name))
+#    logging.warn("run upgrade job failed, :{0}".format(job_name_in_inner_table))
 #    raise
-#  logging.info("run upgrade job success, job_name:{0}".format(job_name))
+#  logging.info("run upgrade job success, job_name:{0}".format(job_name_in_sql))
 ####====XXXX======######==== I am a splitter ====######======XXXX====####
 #filename:upgrade_checker.py
 ##!/usr/bin/env python

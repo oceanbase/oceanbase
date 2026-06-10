@@ -44,6 +44,21 @@ TEST_F(TestUpgradePath, 42x) // 42x
   versions.insert(MOCK_DATA_VERSION_4_2_5_7);
   ASSERT_EQ(ObUpgradeChecker::get_upgrade_path(MOCK_DATA_VERSION_4_2_5_7, path), OB_SUCCESS);
   check_upgrade_path(path, {
+    {DATA_VERSION_4_3_0_0, false},
+    {DATA_VERSION_4_3_0_1, false},
+    {DATA_VERSION_4_3_1_0, false},
+    {DATA_VERSION_4_3_2_0, false},
+    {DATA_VERSION_4_3_2_1, false},
+    {DATA_VERSION_4_3_3_0, false},
+    {DATA_VERSION_4_3_3_1, false},
+    {DATA_VERSION_4_3_4_0, false},
+    {DATA_VERSION_4_3_4_1, false},
+    {DATA_VERSION_4_3_5_0, false},
+    {DATA_VERSION_4_3_5_1, false},
+    {DATA_VERSION_4_3_5_2, false},
+    {MOCK_DATA_VERSION_4_3_5_3, false},
+    {MOCK_DATA_VERSION_4_3_5_4, false},
+    {MOCK_DATA_VERSION_4_3_5_5, false},
     {MOCK_DATA_VERSION_4_3_5_6, false},
     {DATA_VERSION_4_4_0_0, false},
     {MOCK_DATA_VERSION_4_4_0_1, false},
@@ -52,7 +67,7 @@ TEST_F(TestUpgradePath, 42x) // 42x
     {DATA_VERSION_4_4_2_1, true},
     {DATA_VERSION_4_4_2_2, true},
   });
-  ASSERT_EQ(versions.size(), ObUpgradeChecker::upgrade_versions[0].upgrade_path_num_);
+  ASSERT_EQ(versions.size(), ObUpgradeChecker::upgrade_versions[0].direct_upgrade_path_num_);
 }
 
 TEST_F(TestUpgradePath, 43x) // 43x
@@ -60,8 +75,33 @@ TEST_F(TestUpgradePath, 43x) // 43x
   int ret = OB_SUCCESS;
   ObUpgradePath path;
   std::set<uint64_t> versions;
-  // 435 6
+  versions.insert(DATA_VERSION_4_3_0_0);
+  versions.insert(DATA_VERSION_4_3_0_1);
+  versions.insert(DATA_VERSION_4_3_1_0);
+  versions.insert(DATA_VERSION_4_3_2_0);
+  versions.insert(DATA_VERSION_4_3_2_1);
+  versions.insert(DATA_VERSION_4_3_3_0);
+  versions.insert(DATA_VERSION_4_3_3_1);
+  versions.insert(DATA_VERSION_4_3_4_0);
+  versions.insert(DATA_VERSION_4_3_4_1);
+  versions.insert(DATA_VERSION_4_3_5_0);
+  versions.insert(DATA_VERSION_4_3_5_1);
+  versions.insert(DATA_VERSION_4_3_5_2);
+  versions.insert(MOCK_DATA_VERSION_4_3_5_3);
+  versions.insert(MOCK_DATA_VERSION_4_3_5_4);
+  versions.insert(MOCK_DATA_VERSION_4_3_5_5);
   versions.insert(MOCK_DATA_VERSION_4_3_5_6);
+  ASSERT_FALSE(ObUpgradeChecker::check_data_version_exist(DATA_VERSION_4_3_0_0));
+  ASSERT_TRUE(ObUpgradeChecker::check_upgrade_processor_version_exist(DATA_VERSION_4_3_0_0));
+  ASSERT_TRUE(ObUpgradeChecker::check_data_version_exist(MOCK_DATA_VERSION_4_3_5_6));
+  ASSERT_TRUE(ObUpgradeChecker::check_upgrade_processor_version_exist(MOCK_DATA_VERSION_4_3_5_6));
+  const ObUpgradeVersions &upgrade_versions = ObUpgradeChecker::upgrade_versions[1];
+  for (int64_t i = 0; i < upgrade_versions.non_direct_upgrade_path_num_; i++) {
+    const uint64_t version = upgrade_versions.non_direct_upgrade_path_[i];
+    ASSERT_FALSE(ObUpgradeChecker::check_data_version_exist(version));
+    ASSERT_TRUE(ObUpgradeChecker::check_upgrade_processor_version_exist(version));
+    ASSERT_EQ(ObUpgradeChecker::get_upgrade_path(version, path), OB_OP_NOT_ALLOW);
+  }
   ASSERT_EQ(ObUpgradeChecker::get_upgrade_path(MOCK_DATA_VERSION_4_3_5_6, path), OB_SUCCESS);
   check_upgrade_path(path, {
     {DATA_VERSION_4_4_0_0, false},
@@ -71,7 +111,8 @@ TEST_F(TestUpgradePath, 43x) // 43x
     {DATA_VERSION_4_4_2_1, true},
     {DATA_VERSION_4_4_2_2, true},
   });
-  ASSERT_EQ(versions.size(), ObUpgradeChecker::upgrade_versions[1].upgrade_path_num_);
+  ASSERT_EQ(versions.size(), ObUpgradeChecker::upgrade_versions[1].direct_upgrade_path_num_
+      + ObUpgradeChecker::upgrade_versions[1].non_direct_upgrade_path_num_);
 }
 
 TEST_F(TestUpgradePath, 44x) // 44x
@@ -119,7 +160,7 @@ TEST_F(TestUpgradePath, 44x) // 44x
   ASSERT_EQ(ObUpgradeChecker::get_upgrade_path(DATA_VERSION_4_4_2_2, path), OB_SUCCESS);
   check_upgrade_path(path, {
   });
-  ASSERT_EQ(versions.size(), ObUpgradeChecker::upgrade_versions[2].upgrade_path_num_);
+  ASSERT_EQ(versions.size(), ObUpgradeChecker::upgrade_versions[2].direct_upgrade_path_num_);
 }
 
 int main(int argc, char **argv)
