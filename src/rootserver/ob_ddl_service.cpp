@@ -8648,6 +8648,7 @@ int ObDDLService::check_new_column_for_index(
           copy_index_column_schema.set_rowkey_position(origin_idx_column_schema->get_rowkey_position());
           copy_index_column_schema.set_index_position(origin_idx_column_schema->get_index_position());
           copy_index_column_schema.set_tbl_part_key_pos(origin_idx_column_schema->get_tbl_part_key_pos());
+          copy_index_column_schema.set_autoincrement(false); //index column are not auto increment
           if (OB_FAIL(index_table_schema->alter_column(copy_index_column_schema,
                       ObTableSchema::CHECK_MODE_ONLINE,
                       for_view))) {
