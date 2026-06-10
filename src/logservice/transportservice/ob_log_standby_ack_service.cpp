@@ -25,6 +25,7 @@
 #include "share/rc/ob_tenant_base.h"  // MTL_GET_TENANT_ROLE_CACHE
 #include "share/ob_tenant_role.h"     // ObTenantRole
 #include "share/ob_share_util.h"      // ObShareUtil
+#include "share/resource_manager/ob_cgroup_ctrl.h" // OBCG_CLOG
 #include "logservice/restoreservice/ob_log_restore_handler.h"
 #include "logservice/restoreservice/ob_remote_log_source.h"
 
@@ -928,6 +929,7 @@ int ObLogStandbyAckService::send_ack_to_primary_(const share::ObLSID &ls_id)
         if (OB_FAIL(rpc_proxy_->to(primary_addr)
                           .dst_cluster_id(primary_cluster_id)
                           .by(primary_tenant_id)
+                          .group_id(share::OBCG_CLOG)
                           .timeout(timeout_us)
                           .post_log_transport_resp(resp, NULL))) {
           CLOG_LOG(WARN, "post_log_transport_resp failed", K(ret), K(primary_addr), K(resp));
