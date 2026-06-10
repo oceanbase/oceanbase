@@ -245,6 +245,17 @@ int ObDmlCgService::generate_merge_ctdef(ObLogMerge &op,
     }
   }
 
+  // Align the NOT MATCHED insert's update_split_trace_id flag with the update's,
+  // so the plain INSERT (WHEN NOT MATCHED) and the update-split dins (self-assigned
+  // primary key -> DELETE+INSERT) share the same row_extend_size and therefore the
+  // same DAS write buffer layout when they land on the same (tablet, op_type).
+  if (OB_SUCC(ret) &&
+      OB_NOT_NULL(merge_ctdef->ins_ctdef_) &&
+      OB_NOT_NULL(merge_ctdef->upd_ctdef_)) {
+    merge_ctdef->ins_ctdef_->das_base_ctdef_.enable_update_split_trace_id_ =
+        merge_ctdef->upd_ctdef_->enable_update_split_trace_id_;
+  }
+
   LOG_TRACE("finish generate merge ctdef", K(ret), KPC(merge_ctdef));
   return ret;
 }

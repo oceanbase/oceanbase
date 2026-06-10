@@ -2431,8 +2431,10 @@ int ObDMLService::write_row_to_das_op(const ObDASDMLBaseCtDef &ctdef,
   } else if (FALSE_IT(dml_rtctx.add_das_task_memory_size(stored_row->row_size_))) {
     // do nothing
   } else if (ctdef.enable_update_split_trace_id_ &&
-             OB_FAIL(ObDASWriteBuffer::set_update_split_trace_id(*stored_row, extend_size, dml_rtctx.get_update_split_trace_id()))) {
-    LOG_WARN("set update_split_trace_id failed", K(ret), K(extend_size));
+             OB_FAIL(ObDASWriteBuffer::set_update_split_trace_id(*stored_row,
+                                                                 dml_op->get_row_extend_size(),
+                                                                 dml_rtctx.get_update_split_trace_id()))) {
+    LOG_WARN("set update_split_trace_id failed", K(ret), K(extend_size), "buffer_row_extend_size", dml_op->get_row_extend_size());
   } else if (OB_NOT_NULL(trans_info_expr) &&
       OB_FAIL(ObDMLService::add_trans_info_datum(trans_info_expr, dml_rtctx.get_eval_ctx(), stored_row))) {
     LOG_WARN("fail to add trans info datum", K(ret));

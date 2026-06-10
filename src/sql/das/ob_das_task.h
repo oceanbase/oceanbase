@@ -300,6 +300,12 @@ public:
   ObDASGTSOptInfo &get_das_gts_opt_info() { return das_gts_opt_info_; }
   int init_das_gts_opt_info(transaction::ObTxIsolationLevel isolation_level);
   virtual int64_t get_write_buffer_mem_used() const { return 0; }
+  // The real row_extend_size_ fixed when the DAS write buffer was first created.
+  // Used to locate the trailing update_split_trace_id slot from the buffer's own
+  // reservation instead of a per-row recomputed extend_size, guaranteeing the
+  // write offset never exceeds what was allocated. Non-DML tasks have no write
+  // buffer and return 0.
+  virtual uint32_t get_row_extend_size() const { return 0; }
 
 protected:
   int start_das_task();

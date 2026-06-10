@@ -46,6 +46,7 @@ public:
   virtual int dump_data() const override
   { return write_buffer_.dump_data(*upd_ctdef_); }
   virtual int64_t get_write_buffer_mem_used() const override { return write_buffer_.get_mem_used(); }
+  virtual uint32_t get_row_extend_size() const override { return write_buffer_.get_row_extend_size(); }
   int64_t get_affected_rows() { return affected_rows_; }
 
   INHERIT_TO_STRING_KV("parent", ObIDASTaskOp,

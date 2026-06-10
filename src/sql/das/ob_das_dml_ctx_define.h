@@ -444,7 +444,7 @@ public:
   int begin(NewRowIterator &it, const common::ObIArray<common::ObObjMeta> &col_types);
 
   int dump_data(const ObDASDMLBaseCtDef &das_base_ctdef) const;
-  uint32_t get_row_extend_size() { return row_extend_size_; }
+  uint32_t get_row_extend_size() const { return row_extend_size_; }
 
   TO_STRING_KV(K_(mem_attr),
                "buffer_memory", buffer_list_.mem_used_,

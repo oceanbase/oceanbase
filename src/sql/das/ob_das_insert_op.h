@@ -78,6 +78,7 @@ public:
     return insert_buffer_.dump_data(*ins_ctdef_);
   }
   virtual int64_t get_write_buffer_mem_used() const override { return insert_buffer_.get_mem_used(); }
+  virtual uint32_t get_row_extend_size() const override { return insert_buffer_.get_row_extend_size(); }
 
   blocksstable::ObDatumRowIterator *get_duplicated_result()
   { return result_; }
