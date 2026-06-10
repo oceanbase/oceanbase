@@ -146,7 +146,8 @@ ObPhysicalPlan::ObPhysicalPlan(MemoryContext &mem_context /* = CURRENT_CONTEXT *
     create_reason_(),
     cache_node_id_(common::OB_INVALID_ID),
     pcv_id_(common::OB_INVALID_ID),
-    plan_set_id_(common::OB_INVALID_ID)
+    plan_set_id_(common::OB_INVALID_ID),
+    try_ls_snapshot_first_(false)
 {
 }
 
@@ -271,6 +272,7 @@ void ObPhysicalPlan::reset()
   optimizer_features_enable_version_ = 0;
   enable_vec_batch_accum_ = false;
   route_to_column_replica_ = false;
+  try_ls_snapshot_first_ = false;
 }
 void ObPhysicalPlan::destroy()
 {
@@ -934,7 +936,8 @@ OB_SERIALIZE_MEMBER(ObPhysicalPlan,
                     enable_inc_major_,
                     need_strong_routing_,
                     enable_vec_batch_accum_,
-                    phy_hint_.lookup_batch_rpc_flag_);
+                    phy_hint_.lookup_batch_rpc_flag_,
+                    try_ls_snapshot_first_);
 
 int ObPhysicalPlan::set_table_locations(const ObTablePartitionInfoArray &infos,
                                         ObSchemaGetterGuard &schema_guard)

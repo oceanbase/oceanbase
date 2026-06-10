@@ -842,6 +842,7 @@ public:
   uint64_t cache_node_id_; // indicate this plan belong to which Cache Node
   uint64_t pcv_id_; // indicate this plan belong to which Plan Cache Value
   uint64_t plan_set_id_; // indicate this plan belong to which Plan Set
+  bool try_ls_snapshot_first_;
 };
 
 inline void ObPhysicalPlan::set_affected_last_insert_id(bool affected_last_insert_id)
