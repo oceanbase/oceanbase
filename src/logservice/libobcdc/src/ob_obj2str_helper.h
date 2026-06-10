@@ -60,7 +60,8 @@ public:
        const common::ObSqlCollectionInfo *collection_info,
        const common::ObAccuracy &accuracy,
        const common::ObCollationType &collation_type,
-       const ObTimeZoneInfoWrap *tz_info_wrap) const;
+       const ObTimeZoneInfoWrap *tz_info_wrap,
+       const uint64_t udt_id = common::OB_INVALID_ID) const;
 
 public:
   int init(IObCDCTimeZoneInfoGetter &timezone_info_getter,
@@ -125,6 +126,14 @@ private:
       const common::ObObj &obj,
       common::ObString &str,
       common::ObIAllocator &allocator) const;
+
+  int convert_sql_udt_to_text_(
+      const uint64_t tenant_id,
+      const uint64_t udt_id,
+      const common::ObObj &obj,
+      const ObTimeZoneInfoWrap *tz_info_wrap,
+      common::ObIAllocator &allocator,
+      common::ObString &str) const;
 
   int convert_collection_to_text_(
     const common::ObObj &obj,

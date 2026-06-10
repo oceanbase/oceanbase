@@ -1081,7 +1081,8 @@ int ObPLDataType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
                             char *&src,
                             char *dst,
                             const int64_t dst_len,
-                            int64_t &dst_pos) const
+                            int64_t &dst_pos,
+                            const bool full_format) const
 {
   int ret = OB_SUCCESS;
   if (is_obj_type()) {
@@ -1136,7 +1137,10 @@ int ObPLDataType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
     const ObUserDefinedType *user_type = NULL;
     const ObUDTTypeInfo *udt_info = NULL;
     ObArenaAllocator local_allocator;
-    const uint64_t tenant_id = get_tenant_id_by_object_id(get_user_type_id());
+    // CDC can't use MTL_ID() to get tenant_id, so use session.get_effective_tenant_id() instead.
+    const uint64_t tenant_id = is_inner_pl_object_id(get_user_type_id())
+                               ? OB_SYS_TENANT_ID
+                               : session.get_effective_tenant_id();
     if (!is_udt_type()) {
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("not support other type except udt type", K(ret), K(get_type_from()));
@@ -1151,7 +1155,7 @@ int ObPLDataType::serialize(share::schema::ObSchemaGetterGuard &schema_guard,
     } else if (OB_ISNULL(user_type)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("user type is null", K(ret), K(user_type));
-    } else if (OB_FAIL(user_type->serialize(schema_guard, session, tz_info, type, src, dst, dst_len, dst_pos))) {
+    } else if (OB_FAIL(user_type->serialize(schema_guard, session, tz_info, type, src, dst, dst_len, dst_pos, full_format))) {
       LOG_WARN("failed to deserialize user type", K(ret));
     }
   }

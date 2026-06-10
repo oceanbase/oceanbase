@@ -488,7 +488,9 @@ int MutatorRow::add_column_(
         collection_info,
         accuracy,
         collation_type,
-        tz_info_wrap))) {
+        tz_info_wrap,
+        (NULL != column_schema_info) ? column_schema_info->get_sub_data_type()
+                                     : common::OB_INVALID_ID))) {
       LOG_ERROR("obj2str fail", KR(ret),
           "obj", *value, K(obj2str_helper), K(accuracy), K(collation_type), K(column_id), K(column_schema_info));
     } else if (OB_FAIL(cols.add(cv_node))) {
@@ -1542,7 +1544,8 @@ int DmlStmtTask::parse_col(
       collection_info,
       accuracy,
       collation_type,
-      tz_info_wrap))) {
+      tz_info_wrap,
+      column_schema_info.get_sub_data_type()))) {
     LOG_ERROR("obj2str fail", KR(ret), K(tenant_id), K(table_id_), K(column_id), K(column_schema_info),
         "obj", cv_node, K(accuracy), K(collation_type));
   }

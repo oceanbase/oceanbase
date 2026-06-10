@@ -109,6 +109,7 @@ public:
   // get/set functions
 public:
   uint64_t get_tenant_id() const { return tenant_id_; }
+  const char *get_tenant_name() const { return tenant_name_; }
   lib::Worker::CompatMode get_compat_mode() const { return compat_mode_; }
   int64_t get_start_schema_version() const { return start_schema_version_; }
   int64_t get_schema_version() const { return part_mgr_.get_schema_version(); }

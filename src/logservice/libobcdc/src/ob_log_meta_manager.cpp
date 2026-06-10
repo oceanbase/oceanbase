@@ -1189,6 +1189,8 @@ int ObLogMetaManager::set_column_meta_(
         col_meta->setPrecision(column_schema.get_data_precision());
       } else if (column_schema.is_xmltype()) {
         mysql_type = obmysql::MYSQL_TYPE_ORA_XML;
+      } else if (column_schema.is_common_user_defined_sql_type()) {
+        mysql_type = obmysql::MYSQL_TYPE_OB_SQL_UDT;
       } else if (ObRoaringBitmapType == col_type) {
         mysql_type = obmysql::MYSQL_TYPE_ROARINGBITMAP;
       } else if (ObCollectionSQLType == col_type) {
@@ -1222,7 +1224,7 @@ int ObLogMetaManager::set_column_meta_(
       set_column_type_(*col_meta, mysql_type);
       set_column_encoding_(col_type, column_schema.get_charset_type(), col_meta);
 
-      if (column_schema.is_xmltype()) {
+      if (column_schema.is_xmltype() || column_schema.is_common_user_defined_sql_type()) {
         SET_ENCODING(col_meta, CS_TYPE_UTF8MB4_GENERAL_CI);
       }
 

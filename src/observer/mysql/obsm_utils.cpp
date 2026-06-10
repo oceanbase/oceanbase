@@ -353,7 +353,7 @@ int ObSMUtils::cell_str(
               }
               if (OB_FAIL(ret)){
               } else if (OB_FAIL(nested_type->serialize(
-                                  *schema_guard, session, dtc_params.tz_info_, type, src, buf, len, pos))) {
+                                  *schema_guard, session, dtc_params.tz_info_, type, src, buf, len, pos, false))) {
                 OB_LOG(WARN, "failed to serialize anonymous collection", K(ret));
               } else {
                 OB_LOG(DEBUG, "success to serialize anonymous collection", K(ret));

@@ -574,7 +574,8 @@ public:
   int get_field_count(const ObPLINS& ns, int64_t &count) const;
 
   int serialize(share::schema::ObSchemaGetterGuard &schema_guard, const sql::ObSQLSessionInfo &session, const common::ObTimeZoneInfo *tz_info,
-                obmysql::MYSQL_PROTOCOL_TYPE type, char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
+                obmysql::MYSQL_PROTOCOL_TYPE type, char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos,
+                const bool full_format = false) const;
   int deserialize(share::schema::ObSchemaGetterGuard &schema_guard, common::ObIAllocator &allocator, sql::ObSQLSessionInfo *session,
                   const common::ObCharsetType charset, const common::ObCollationType cs_type,
                   const common::ObCollationType ncs_type, const common::ObTimeZoneInfo *tz_info,

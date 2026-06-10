@@ -533,6 +533,7 @@ public:
   }
   OB_INLINE bool is_user_defined_sql_type() const { return ObUserDefinedSQLType == type_; }
   OB_INLINE bool is_xml_sql_type() const { return (ObUserDefinedSQLType == type_ && get_subschema_id() == ObXMLSqlType); }
+  OB_INLINE bool is_common_user_defined_sql_type() const { return is_user_defined_sql_type() && get_subschema_id() != ObXMLSqlType; }
   OB_INLINE bool is_calc_end_space() const {
     return ((type_ == ObNVarchar2Type)
              || (type_ == ObVarcharType && cs_type_ != CS_TYPE_BINARY))
@@ -2051,6 +2052,7 @@ public:
   OB_INLINE bool is_xml_sql_type() const {
     return meta_.is_user_defined_sql_type() && meta_.get_subschema_id() == ObXMLSqlType;
   }
+  OB_INLINE bool is_common_user_defined_sql_type() const { return is_user_defined_sql_type() && meta_.get_subschema_id() != ObXMLSqlType; }
   OB_INLINE bool is_collection_sql_type() const { return meta_.is_collection_sql_type(); }
 
   OB_INLINE bool is_timestamp_tz() const { return meta_.is_timestamp_tz(); }

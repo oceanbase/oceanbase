@@ -1423,7 +1423,8 @@ int ObLogFormatter::fill_normal_cols_(
                   ret = OB_ERR_UNEXPECTED;
                   LOG_ERROR("not support ext info log type", KR(ret), K(is_new_value), KPC(lob_data_get_ctx), KPC(cv));
                 }
-              } else if (cv->is_json() || cv->is_geometry() || cv->is_roaringbitmap() || cv->is_collection()) {
+              } else if (cv->is_json() || cv->is_geometry() || cv->is_roaringbitmap() || cv->is_collection()
+                         || cv->is_common_user_defined_sql_type()) {
                 const common::ObObjType obj_type = cv->get_obj_type();
                 cv->value_.set_string(obj_type, *new_col_str);
 
@@ -1487,7 +1488,8 @@ int ObLogFormatter::fill_normal_cols_(
             }
 
             if (OB_SUCC(ret)) {
-              if (cv->is_json() || cv->is_geometry() || cv->is_roaringbitmap() || cv->is_collection()) {
+              if (cv->is_json() || cv->is_geometry() || cv->is_roaringbitmap() || cv->is_collection()
+                  || cv->is_common_user_defined_sql_type()) {
                 const ObLobDataOutRowCtx *lob_data_outrow_ctx = nullptr;
                 if (OB_FAIL(lob_data_get_ctx->get_lob_out_row_ctx(false/*is_newl_col*/, lob_data_outrow_ctx))) {
                   LOG_ERROR("get_lob_out_row_ctx failed", KR(ret), KPC(cv), K(lob_data_get_ctx));
@@ -1826,7 +1828,8 @@ int ObLogFormatter::cal_virtual_generated_column_value_(
                                                       column_schema_info->get_collection_info(),
                                                       column_schema->get_accuracy(),
                                                       column_schema->get_collation_type(),
-                                                      tz_info_wrap))) {
+                                                      tz_info_wrap,
+                                                      column_schema->get_sub_data_type()))) {
             LOG_ERROR("obj2str_helper obj2str fail", KR(ret),
                 "tenant_id", full_table_schema->get_tenant_id(),
                 "table_id", full_table_schema->get_table_id(),

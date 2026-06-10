@@ -136,7 +136,8 @@ public:
   virtual int serialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        const sql::ObSQLSessionInfo &session,
                        const common::ObTimeZoneInfo *tz_info, obmysql::MYSQL_PROTOCOL_TYPE type,
-                       char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
+                       char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos,
+                       const bool full_format = false) const;
   virtual int deserialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        common::ObIAllocator &allocator,
                        sql::ObSQLSessionInfo *session,
@@ -178,10 +179,12 @@ public:
                                         const pl::ObPLStmt *stmt);
 
   int text_protocol_prefix_info_for_each_item(share::schema::ObSchemaGetterGuard &schema_guard,
+                                              const uint64_t tenant_id,
                                               const ObPLDataType &type,
                                               char *buf,
                                               const int64_t len,
-                                              int64_t &pos) const;
+                                              int64_t &pos,
+                                              const bool full_format = false) const;
   int text_protocol_suffix_info_for_each_item(const ObPLDataType &type,
                                               char *buf,
                                               const int64_t len,
@@ -252,7 +255,8 @@ public:
   virtual int serialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        const sql::ObSQLSessionInfo &session,
                        const common::ObTimeZoneInfo *tz_info, obmysql::MYSQL_PROTOCOL_TYPE type,
-                       char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
+                       char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos,
+                       const bool full_format = false) const;
   virtual int deserialize(share::schema::ObSchemaGetterGuard &schema_guard,
                           common::ObIAllocator &allocator,
                           sql::ObSQLSessionInfo *session,
@@ -525,7 +529,8 @@ public:
   virtual int serialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        const sql::ObSQLSessionInfo &session,
                        const common::ObTimeZoneInfo *tz_info, obmysql::MYSQL_PROTOCOL_TYPE type,
-                       char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
+                       char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos,
+                       const bool full_format = false) const;
   virtual int deserialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        common::ObIAllocator &allocator,
                        sql::ObSQLSessionInfo *session,
@@ -687,7 +692,8 @@ public:
   virtual int serialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        const sql::ObSQLSessionInfo &session,
                        const common::ObTimeZoneInfo *tz_info, obmysql::MYSQL_PROTOCOL_TYPE type,
-                       char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
+                       char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos,
+                       const bool full_format = false) const;
   virtual int deserialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        common::ObIAllocator &allocator,
                        sql::ObSQLSessionInfo *session,
@@ -761,7 +767,8 @@ public:
   virtual int serialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        const sql::ObSQLSessionInfo &session,
                        const common::ObTimeZoneInfo *tz_info, obmysql::MYSQL_PROTOCOL_TYPE type,
-                       char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos) const;
+                       char *&src, char *dst, const int64_t dst_len, int64_t &dst_pos,
+                       const bool full_format = false) const;
   virtual int deserialize(share::schema::ObSchemaGetterGuard &schema_guard,
                        common::ObIAllocator &allocator,
                        sql::ObSQLSessionInfo *session,

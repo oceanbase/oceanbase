@@ -504,6 +504,10 @@ const char *get_ctype_string(int ctype)
       sc_type = "MYSQL_TYPE_OB_SPARSE_VECTOR";
       break;
 
+    case oceanbase::obmysql::MYSQL_TYPE_OB_SQL_UDT:
+      sc_type = "MYSQL_TYPE_OB_SQL_UDT";
+      break;
+
     case oceanbase::obmysql::MYSQL_TYPE_NEWDECIMAL:
       sc_type = "MYSQL_TYPE_NEWDECIMAL";
       break;

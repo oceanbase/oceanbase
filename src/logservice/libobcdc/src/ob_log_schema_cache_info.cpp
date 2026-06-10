@@ -190,7 +190,8 @@ int ColumnSchemaInfo::get_column_ori_default_value_(
             collection_info_,
             column_table_schema.get_accuracy(),
             column_table_schema.get_collation_type(),
-            tz_info_wrap))) {
+            tz_info_wrap,
+            column_table_schema.get_sub_data_type()))) {
       LOG_ERROR("obj2str cast orig_default_value fail", KR(ret), K(orig_default_obj), K(*str),
           "tenant_id", table_schema.get_tenant_id(),
           "table_id", table_schema.get_table_id(),

@@ -327,6 +327,8 @@ public:
         && (((meta_type_.is_ext() || meta_type_.is_user_defined_sql_type()) && sub_type_ == T_OBJ_XML)
             || meta_type_.is_xml_sql_type());
   }
+  OB_INLINE bool is_user_defined_sql_type() const { return meta_type_.is_user_defined_sql_type(); }
+  OB_INLINE bool is_common_user_defined_sql_type() const { return is_user_defined_sql_type() && sub_type_ != T_OBJ_XML; }
 
   OB_INLINE bool is_collection() const { return meta_type_.is_collection_sql_type(); }
 

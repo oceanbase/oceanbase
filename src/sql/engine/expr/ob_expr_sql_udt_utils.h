@@ -17,6 +17,7 @@
 #include "share/ob_lob_access_utils.h"
 #include "sql/engine/expr/ob_expr_util.h"
 #include "sql/session/ob_sql_session_info.h"
+#include "share/schema/ob_udt_info.h"
 
 namespace oceanbase
 {
@@ -205,6 +206,32 @@ public:
                                               ObObj &result,
                                               const ObObj &udt_obj,
                                               ObSqlUDTMeta &udt_meta);
+
+  static int convert_sql_udt_to_string(
+      common::ObIAllocator &res_allocator,
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const sql::ObSQLSessionInfo &session,
+      const common::ObTimeZoneInfo *tz_info,
+      const uint64_t udt_id,
+      const common::ObObj &sql_udt_obj,
+      common::ObString &res_str,
+      const bool has_lob_header = true);
+
+  static int build_qualified_udt_name(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const share::schema::ObUDTTypeInfo &udt_info,
+      common::ObIAllocator &allocator,
+      common::ObString &qualified_name);
+
+  static int serialize_pl_extend_to_string(
+      share::schema::ObSchemaGetterGuard &schema_guard,
+      const sql::ObSQLSessionInfo &session,
+      const common::ObTimeZoneInfo *tz_info,
+      const pl::ObUserDefinedType *user_type,
+      const common::ObString &root_qualified_name,
+      common::ObObj &pl_obj,
+      common::ObIAllocator &res_allocator,
+      common::ObString &res_str);
 };
 
 class ObSqlUdtMetaUtils final
