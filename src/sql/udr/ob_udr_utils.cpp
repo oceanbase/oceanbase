@@ -135,7 +135,7 @@ int ObUDRUtils::cons_udr_param_store(const DynamicParamInfoArray& dynamic_param_
     if (OB_ISNULL(pc_ctx.sql_ctx_.session_info_)) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid argument", K(ret), K(pc_ctx.sql_ctx_.session_info_));
-    } else if (PC_PS_MODE == pc_ctx.mode_) {
+    } else if (PC_PS_MODE == pc_ctx.mode_ || pc_ctx.sql_ctx_.is_ps_cursor_) {
       ObSQLMode sql_mode = pc_ctx.sql_ctx_.session_info_->get_sql_mode();
       ObCharsets4Parser charsets4parser = pc_ctx.sql_ctx_.session_info_->get_charsets4parser();
       FPContext fp_ctx(charsets4parser);
@@ -208,7 +208,8 @@ int ObUDRUtils::clac_dynamic_param_store(const DynamicParamInfoArray& dynamic_pa
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("node is null", K(ret));
       } else if (T_QUESTIONMARK == raw_param->type_) {
-        if (pc_ctx.mode_ != PC_PS_MODE || raw_param->value_ >= pc_ctx.fp_result_.parameterized_params_.count()) {
+        if ((pc_ctx.mode_ != PC_PS_MODE && !pc_ctx.sql_ctx_.is_ps_cursor_)
+            || raw_param->value_ >= pc_ctx.fp_result_.parameterized_params_.count()) {
           ret = OB_ERR_PARSER_SYNTAX;
           LOG_WARN("invalid argument", K(ret), K(raw_param->value_), K(dynamic_param_info.raw_param_idx_),
           K(pc_ctx.mode_), K(pc_ctx.fp_result_.parameterized_params_.count()));
@@ -267,7 +268,9 @@ int ObUDRUtils::match_udr_and_refill_ctx(const ObString &pattern,
   ObSQLSessionInfo &session = result.get_session();
   ObExecContext &ectx = result.get_exec_context();
   if (session.enable_udr()
-      && !(pc_ctx.is_arraybinding_ || pc_ctx.is_inner_sql() || PC_PL_MODE == pc_ctx.mode_)) {
+      && !pc_ctx.is_arraybinding_
+      && (pc_ctx.sql_ctx_.is_ps_cursor_
+          || (!pc_ctx.is_inner_sql() && PC_PL_MODE != pc_ctx.mode_))) {
     ObIAllocator &allocator = result.get_mem_pool();
     PatternConstConsList cst_cons_list;
     if (OB_FAIL(match_udr_item(pattern, session, ectx, allocator, item_guard, &cst_cons_list))) {

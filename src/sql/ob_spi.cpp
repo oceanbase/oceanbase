@@ -4155,6 +4155,8 @@ int ObSPIService::streaming_cursor_open(ObPLExecCtx *ctx,
   CK (OB_NOT_NULL(spi_result->get_memory_ctx()));
   if (!cursor.is_ps_cursor()) {
     OZ (spi_result->start_cursor_stmt(ctx, static_cast<stmt::StmtType>(type), for_update));
+  } else {
+    OX (spi_result->get_sql_ctx().is_ps_cursor_ = true);
   }
   OX (spi_result->set_flags(false, false, is_dbms_cursor || cursor.is_ps_cursor(), true));
 
@@ -10480,7 +10482,7 @@ int ObSPIService::ps_cursor_open(ObPLExecCtx *ctx,
     LOG_WARN("spi_result is NULL", K(ret), K(spi_result));
   } else {
     ObPLSubPLSqlTimeGuard guard(ctx);
-    ObPLSqlAuditRecord audit_record(sql::PLSql);
+    ObPLSqlAuditRecord audit_record(sql::PSCursor);
     ObQueryRetryCtrl retry_ctrl;
     ObPLSPITraceIdGuard trace_id_guard(sql_str, ps_cursor.get_ps_sql(), *session, ret);
 
