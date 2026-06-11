@@ -304,6 +304,37 @@ int ObMViewUtils::add_missing_columns_to_mlog(const uint64_t tenant_id,
   return ret;
 }
 
+int ObMViewUtils::check_mview_complete_refresh_need_gather_stats(
+  const uint64_t tenant_id,
+  const uint64_t tenant_data_version,
+  ObSchemaGetterGuard &schema_guard,
+  bool &need_gather_stats_info,
+  bool &need_sync_stats_info)
+{
+  int ret = OB_SUCCESS;
+  need_gather_stats_info = false;
+  need_sync_stats_info = false;
+  if (CHECK_DATA_VERSION_SUPPORT_MVIEW_REFRESH_GATHER_STATS(tenant_data_version)) {
+    const ObSysVarSchema *gather_stats_sys_var = nullptr;
+    ObArenaAllocator tmp_allocator("MVRefGatherSV");
+    ObObj gather_stats_val;
+    if (OB_FAIL(schema_guard.get_tenant_system_variable(tenant_id,
+                                                        share::SYS_VAR__OPTIMIZER_GATHER_STATS_ON_LOAD,
+                                                        gather_stats_sys_var))) {
+      LOG_WARN("fail to get tenant system variable", KR(ret), K(tenant_id));
+    } else if (OB_ISNULL(gather_stats_sys_var)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("gather stats sys var is nullptr", KR(ret), K(tenant_id));
+    } else if (OB_FAIL(gather_stats_sys_var->get_value(&tmp_allocator, NULL, gather_stats_val))) {
+      LOG_WARN("fail to get sys var value", KR(ret), K(tenant_id));
+    } else {
+      need_gather_stats_info = gather_stats_val.get_bool();
+      need_sync_stats_info = !need_gather_stats_info;
+    }
+  }
+  return ret;
+}
+
 int ObMViewUtils::generate_mview_complete_refresh_sql(
                   const uint64_t tenant_id,
                   const int64_t mview_table_id,
@@ -314,6 +345,7 @@ int ObMViewUtils::generate_mview_complete_refresh_sql(
                   const int64_t task_id,
                   const int64_t parallelism,
                   const bool use_schema_version_hint_for_src_table,
+                  const bool need_gather_stats,
                   const ObIArray<ObBasedSchemaObjectInfo> &based_schema_object_infos,
                   ObSqlString &sql_string)
 {
@@ -392,7 +424,7 @@ int ObMViewUtils::generate_mview_complete_refresh_sql(
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(generate_mview_insert_hint(
                      insert_hint_str, real_parallelism, execution_id, task_id,
-                     true/*load_data_hint*/, true/*use_pdml_hint*/))) {
+                     true/*load_data_hint*/, true/*use_pdml_hint*/, need_gather_stats))) {
     LOG_WARN("failed to generate mview insert hint", KR(ret));
   } else if (OB_FAIL(extract_columns_from_schema(*container_table_schema, is_oracle_mode, insert_columns, allocator))) {
     LOG_WARN("failed to extract columns from container table schema", KR(ret));
@@ -676,7 +708,8 @@ int ObMViewUtils::generate_mview_insert_hint(
                   const int64_t execution_id,
                   const int64_t task_id,
                   const bool load_data_hint,
-                  const bool use_pdml_hint)
+                  const bool use_pdml_hint,
+                  const bool need_gather_stats)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(sql_string.assign_fmt("/*+ monitor "))) {
@@ -692,6 +725,10 @@ int ObMViewUtils::generate_mview_insert_hint(
                      " opt_param('ddl_task_id', %ld) ",
                      execution_id, task_id))) {
     LOG_WARN("failed to append ddl opt param hint", KR(ret));
+  } else if (OB_FAIL(sql_string.append_fmt(need_gather_stats ?
+                     " gather_optimizer_statistics " :
+                     " no_gather_optimizer_statistics "))) {
+    LOG_WARN("failed to append gather stats hint", KR(ret), K(need_gather_stats));
   } else if (OB_FAIL(sql_string.append_fmt(" */"))) {
     LOG_WARN("failed to append sql string", KR(ret));
   }

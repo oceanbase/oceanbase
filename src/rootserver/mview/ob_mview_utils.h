@@ -25,6 +25,10 @@ class SCN;
 }
 namespace rootserver
 {
+
+#define CHECK_DATA_VERSION_SUPPORT_MVIEW_REFRESH_GATHER_STATS(data_version) \
+  data_version >= DATA_VERSION_4_4_2_2
+
 class ObMViewUtils
 {
 public:
@@ -45,6 +49,12 @@ public:
                                          share::schema::ObSchemaGetterGuard &schema_guard,
                                          const share::schema::ObTableSchema *base_table_schema);
 
+  static int check_mview_complete_refresh_need_gather_stats(const uint64_t tenant_id,
+                                                            const uint64_t tenant_data_version,
+                                                            ObSchemaGetterGuard &schema_guard,
+                                                            bool &need_gather_stats_info,
+                                                            bool &need_sync_stats_info);
+
   static int generate_mview_complete_refresh_sql(const uint64_t tenant_id,
                                                  const int64_t mview_table_id,
                                                  const int64_t container_table_id,
@@ -54,6 +64,7 @@ public:
                                                  const int64_t task_id,
                                                  const int64_t parallelism,
                                                  const bool use_schema_version_hint_for_src_table,
+                                                 const bool need_gather_stats,
                                                  const ObIArray<ObBasedSchemaObjectInfo> &based_schema_object_infos,
                                                  ObSqlString &sql_string);
 
@@ -68,7 +79,8 @@ public:
                                         const int64_t execution_id,
                                         const int64_t task_id,
                                         const bool load_data_hint = true,
-                                        const bool use_pdml_hint = true);
+                                        const bool use_pdml_hint = true,
+                                        const bool need_gather_stats = false);
   static int get_base_table_name_for_print(const uint64_t tenant_id,
                                       const share::schema::ObTableSchema *base_table_schema,
                                       share::schema::ObSchemaGetterGuard &schema_guard,

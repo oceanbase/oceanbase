@@ -340,6 +340,8 @@ int ObMViewExplainRefreshExecutor::explain_single_mview(const uint64_t mview_id,
       uint64_t session_var_refresh_dop = 0;
       ObSEArray<ObBasedSchemaObjectInfo, 4> based_schema_object_infos;
       uint64_t direct_dep_cnt = 0;
+      bool need_gather_stats_info = false;
+      bool need_sync_stats_info = false;
       ObSqlString complete_sql;
       ObString select_sql;
       // calc refresh parallelism, mirror ObMViewRefresher::calc_mv_refresh_parallelism
@@ -365,6 +367,12 @@ int ObMViewExplainRefreshExecutor::explain_single_mview(const uint64_t mview_id,
                      str_alloc,
                      select_sql))) {
         LOG_WARN("fail to generate mview select sql", KR(ret));
+      } else if (OB_FAIL(rootserver::ObMViewUtils::check_mview_complete_refresh_need_gather_stats(tenant_id_,
+                                                                                                  data_version,
+                                                                                                  schema_guard,
+                                                                                                  need_gather_stats_info,
+                                                                                                  need_sync_stats_info))) {
+        LOG_WARN("fail to check mview complete refresh need gather stats", KR(ret));
       } else if (OB_FAIL(rootserver::ObMViewUtils::generate_mview_complete_refresh_sql(
                      tenant_id_,
                      mview_id,
@@ -375,6 +383,7 @@ int ObMViewExplainRefreshExecutor::explain_single_mview(const uint64_t mview_id,
                      1 /*task_id*/,
                      parallelism,
                      data_version >= DATA_VERSION_4_3_5_1,
+                     need_gather_stats_info,
                      based_schema_object_infos,
                      complete_sql))) {
         LOG_WARN("fail to generate mview complete refresh sql", KR(ret));

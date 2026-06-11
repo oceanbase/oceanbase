@@ -308,6 +308,7 @@ int ObDDLRedefinitionSSTableBuildTask::procress_mview_complete_refresh_(
                                                                        task_id_,
                                                                        parallelism_,
                                                                        true /*use_schema_version_hint_for_src_table*/,
+                                                                       mview_refresh_info_.need_gather_stats_info_,
                                                                        based_schema_object_infos_,
                                                                        sql_string))) {
     LOG_WARN("fail to generate build mview replica sql", K(ret), K(mview_refresh_info_));

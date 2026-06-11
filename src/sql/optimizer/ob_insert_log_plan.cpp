@@ -20,6 +20,7 @@
 #include "sql/resolver/dml/ob_del_upd_resolver.h"
 #include "sql/rewrite/ob_transform_utils.h"
 #include "share/stat/ob_dbms_stats_utils.h"
+#include "rootserver/mview/ob_mview_utils.h"
 using namespace oceanbase;
 using namespace sql;
 using namespace oceanbase::common;
@@ -410,6 +411,13 @@ int ObInsertLogPlan::check_need_online_stats_gather(bool &need_osg)
       OB_ISNULL(ins_table = insert_stmt->get_table_item_by_id(insert_stmt->get_insert_table_info().table_id_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null pointer", K(ret), K(insert_stmt->get_insert_table_info()));
+  } else if (get_optimizer_context().get_session_info()->get_ddl_info().is_mview_complete_refresh()) {
+    uint64_t data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(MTL_ID(), data_version))) {
+      LOG_WARN("fail to get min data version", K(ret));
+    } else {
+      need_gathering = CHECK_DATA_VERSION_SUPPORT_MVIEW_REFRESH_GATHER_STATS(data_version);
+    }
   } else if (OB_UNLIKELY(ins_table->is_system_table_ || ins_table->is_index_table_)
              || insert_stmt->is_insert_up()
              || !insert_stmt->value_from_select()
