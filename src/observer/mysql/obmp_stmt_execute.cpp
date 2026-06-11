@@ -1802,7 +1802,7 @@ int ObMPStmtExecute::do_process(ObSQLSessionInfo &session,
     }
 
     // reset thread waring buffer in sync mode
-    if (!async_resp_used) {
+    if (!async_resp_used && !is_arraybinding_) {
       clear_wb_content(session);
     }
 
@@ -2226,12 +2226,12 @@ int ObMPStmtExecute::process_execute_stmt(const ObMultiStmtItem &multi_stmt_item
     }
   }
 
-  //对于tracelog的处理, 不影响正常逻辑, 错误码无须赋值给ret, 清空WARNING BUFFER
-  do_after_process(session, async_resp_used);
-
   if (OB_FAIL(ret) && need_response_error && is_conn_valid()) {
     send_error_packet(ret, NULL, (void *)(ctx_.get_reroute_info()));
   }
+
+  //对于tracelog的处理, 不影响正常逻辑, 错误码无须赋值给ret, 清空WARNING BUFFER
+  do_after_process(session, async_resp_used);
 
   return ret;
 }

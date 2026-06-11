@@ -211,12 +211,6 @@ int ObMPStmtPrexecute::before_process()
       session->set_last_trace_id(ObCurTraceId::get_trace_id());
     }
     //对于tracelog的处理，不影响正常逻辑，错误码无须赋值给ret
-    if (OB_FAIL(ret) && OB_NOT_NULL(session)) {
-      int tmp_ret = OB_SUCCESS;
-      //清空WARNING BUFFER
-      tmp_ret = do_after_process(*session, false/*no asyn response*/);
-      UNUSED(tmp_ret);
-    }
   }
 
   if (OB_FAIL(ret)) {
@@ -226,6 +220,12 @@ int ObMPStmtPrexecute::before_process()
       LOG_WARN("prepare stmt checksum error, disconnect connection");
     }
     OZ (flush_buffer(true));
+  }
+
+  if (OB_FAIL(ret) && OB_NOT_NULL(session)) {
+    int tmp_ret = OB_SUCCESS;
+    tmp_ret = do_after_process(*session, false/*no asyn response*/);
+    UNUSED(tmp_ret);
   }
 
   if (OB_NOT_NULL(session)) {
@@ -1139,7 +1139,17 @@ int ObMPStmtPrexecute::response_fail_result(sql::ObSQLSessionInfo &session, int 
   for (int64_t i = 2; i < (arraybinding_row_->get_count() - 1); i++) {
     arraybinding_row_->get_cell(i).set_null();
   }
-  arraybinding_row_->get_cell(arraybinding_row_->get_count() - 1).set_varchar(ob_oracle_strerror(err_ret));
+  const char *err_msg = NULL;
+  const ObWarningBuffer *wb = common::ob_get_tsi_warning_buffer();
+  if (OB_LIKELY(NULL != wb) && wb->get_err_code() == err_ret) {
+    err_msg = wb->get_err_msg();
+  } else {
+    err_msg = ob_errpkt_strerror(err_ret, true);
+    if (NULL == err_msg) {
+      err_msg = ob_oracle_strerror(err_ret);
+    }
+  }
+  arraybinding_row_->get_cell(arraybinding_row_->get_count() - 1).set_varchar(err_msg);
   if (OB_FAIL(response_row(session, *arraybinding_row_, arraybinding_columns_, false))) {
     LOG_WARN("fail to response fail row to client", K(ret));
   }
@@ -1188,7 +1198,17 @@ int ObMPStmtPrexecute::response_returning_rows(ObSQLSessionInfo &session,
       for (int i = 0; i < result_row->get_count(); i++) {
         arraybinding_row_->get_cell(i+2).set_null();
       }
-      arraybinding_row_->get_cell(arraybinding_row_->get_count() - 1).set_varchar(ob_oracle_strerror(ret));
+      const char *err_msg = NULL;
+      const ObWarningBuffer *wb = common::ob_get_tsi_warning_buffer();
+      if (OB_LIKELY(NULL != wb) && wb->get_err_code() == ret) {
+        err_msg = wb->get_err_msg();
+      } else {
+        err_msg = ob_errpkt_strerror(ret, true);
+        if (NULL == err_msg) {
+          err_msg = ob_oracle_strerror(ret);
+        }
+      }
+      arraybinding_row_->get_cell(arraybinding_row_->get_count() - 1).set_varchar(err_msg);
       LOG_DEBUG("error occured before send arraybinding_row_", KPC(arraybinding_row_));
       if (OB_SUCCESS != (response_ret = response_row(session, *arraybinding_row_, arraybinding_columns_, false, &result.get_exec_context()))) {
         LOG_WARN("fail to response row to client", K(response_ret));
