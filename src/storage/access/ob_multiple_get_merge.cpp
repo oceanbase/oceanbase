@@ -230,8 +230,13 @@ int ObMultipleGetMerge::inner_get_next_row(ObDatumRow &row)
         } else {
           // When the index lookups the rowkeys from the main table, it should exists
           // and if we find that it does not exist, there must be an anomaly
-          if (GCONF.enable_defensive_check()
-              && access_ctx_->query_flag_.is_lookup_for_4377()) {
+          // Skip 4377 check for foreign key check scenarios:
+          // 1. is_lookup_for_4377() already excludes "child-to-parent" check (via for_foreign_key_check_ flag)
+          // 2. is_check_row_locked() excludes "parent-to-child" check
+          if (GCONF.enable_defensive_check() &&
+              access_ctx_->query_flag_.is_lookup_for_4377() &&
+              (nullptr == access_ctx_->store_ctx_ ||
+              !access_ctx_->store_ctx_->mvcc_acc_ctx_.write_flag_.is_check_row_locked())) {
             if (OB_FAIL(access_ctx_->store_ctx_->mvcc_acc_ctx_.check_txn_status_if_read_uncommitted())) {
               STORAGE_LOG(WARN, "rowkey does not exist because transaction has already been killed", KP(this), K(ret));
             } else {
