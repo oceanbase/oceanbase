@@ -654,6 +654,7 @@ int ObExprUDF::eval_external_udf_vector(const ObExpr &expr,
         continue;
       }
 
+      row.reset();
       if (OB_FAIL(vec_indices.push_back(idx))) {
         LOG_WARN("failed to push_back idx", K(ret), K(vec_indices), K(idx));
       } else if (OB_FAIL(transfer_vec_to_obj(row, arg_vec, expr, idx))) {
