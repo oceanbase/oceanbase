@@ -425,6 +425,26 @@ int ObMViewExecutorUtil::wait_mview_refresh(sql::ObExecContext &ctx,
     }
   }
   if (OB_SUCC(ret)) {
+    if (OB_FAIL(load_refresh_run_stats_error_message(ctx, tenant_id, refresh_id))) {
+      LOG_WARN("fail to read mview refresh run stats", KR(ret), K(refresh_id));
+    }
+  }
+  return ret;
+}
+
+int ObMViewExecutorUtil::load_refresh_run_stats_error_message(sql::ObExecContext &ctx,
+                                                              uint64_t tenant_id,
+                                                              int64_t refresh_id)
+{
+  int ret = OB_SUCCESS;
+  ObMySQLProxy *sql_proxy = nullptr;
+  if (OB_ISNULL(sql_proxy = ctx.get_sql_proxy())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sql proxy is null", KR(ret));
+  } else if (OB_UNLIKELY(OB_INVALID_ID == refresh_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid refresh id", KR(ret), K(refresh_id));
+  } else {
     ObSqlString sql;
     if (OB_FAIL(sql.assign_fmt("SELECT result, error_message FROM %s"
                                " WHERE tenant_id = 0 AND refresh_id = %ld",
@@ -456,7 +476,6 @@ int ObMViewExecutorUtil::wait_mview_refresh(sql::ObExecContext &ctx,
           if (OB_SUCC(ret) && db_result != 0) {
             ret = static_cast<int>(db_result);
             if (!err_msg.empty()) {
-              // ObString from result set is not NULL-terminated; copy to a local buffer.
               char err_buf[common::OB_MAX_ERROR_MSG_LEN] = {0};
               const int64_t copy_len = MIN(static_cast<int64_t>(err_msg.length()),
                                            static_cast<int64_t>(sizeof(err_buf) - 1));

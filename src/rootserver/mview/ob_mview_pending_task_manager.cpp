@@ -288,10 +288,18 @@ int ObMViewPendingTaskManager::enqueue_reload_task(const ObIArray<ObMViewPending
   int tmp_ret = OB_SUCCESS;
   bool is_valid = false;
   bool group_expired = false;
+  int64_t inc_count = 0;
+  bool need_end = false;
+  int task_ret = OB_SUCCESS;
+  ObString err_msg;
+  uint64_t tenant_id = OB_INVALID_ID;
+  int64_t refresh_id = OB_INVALID_ID;
   if (OB_UNLIKELY(group.empty()) || OB_ISNULL(group.at(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("empty reload group or null head task", KR(ret), K(group));
-  } else if (FALSE_IT(group_expired = (group.at(0)->expire_ts_ > 0
+  } else if (OB_FALSE_IT(tenant_id = group.at(0)->tenant_id_)) {
+  } else if (OB_FALSE_IT(refresh_id = group.at(0)->refresh_id_)) {
+  } else if (OB_FALSE_IT(group_expired = (group.at(0)->expire_ts_ > 0
                                        && group.at(0)->expire_ts_ <= ObTimeUtility::current_time()))) {
   } else if (group_expired) {
     // Deadline already crossed before this leader could re-pick up the group.
@@ -302,9 +310,9 @@ int ObMViewPendingTaskManager::enqueue_reload_task(const ObIArray<ObMViewPending
              "tenant_id", group.at(0)->tenant_id_,
              "refresh_id", group.at(0)->refresh_id_,
              "expire_ts", group.at(0)->expire_ts_);
-    if (OB_TMP_FAIL(on_schedule_task_failed(group))) {
-      LOG_WARN("fail to handle expired reload group", KR(tmp_ret));
-    }
+    need_end = true;
+    task_ret = OB_TIMEOUT;
+    err_msg = "reload group already expired, discard";
   } else if (OB_FAIL(check_reload_tasks_reachable(group, is_valid))) {
     LOG_WARN("validate reload group failed", KR(ret), K(group.count()));
   } else if (OB_UNLIKELY(!is_valid)) {
@@ -312,30 +320,38 @@ int ObMViewPendingTaskManager::enqueue_reload_task(const ObIArray<ObMViewPending
       KR(ret), K(group.count()),
       "tenant_id", group.at(0)->tenant_id_,
       "refresh_id", group.at(0)->refresh_id_);
-    if (OB_TMP_FAIL(on_schedule_task_failed(group))) {
-      LOG_WARN("fail to handle overflowed group", KR(ret));
+    need_end = true;
+    task_ret = OB_ERR_UNEXPECTED;
+    err_msg = "this mview has unreachable tasks, maybe deleted";
+  } else if (OB_FAIL(check_pending_tasks_schedule_block(group,
+                                                        group.at(0)->mview_id_,
+                                                        false,
+                                                        false,
+                                                        inc_count))) {
+    LOG_WARN("pending tasks blocked by concurrent drop/force", KR(ret),
+             "tenant_id", group.at(0)->tenant_id_,
+             "refresh_id", group.at(0)->refresh_id_);
+    need_end = true;
+    task_ret = ret;
+    if (OB_EAGAIN == ret) {
+      ret = OB_SUCCESS;
+      err_msg = "pending tasks blocked by concurrent drop/force";
     }
   } else if (OB_FAIL(queue_.push_tasks(group))) {
+    need_end = true;
+    task_ret = ret;
     if (OB_ALLOCATE_MEMORY_FAILED == ret || OB_SIZE_OVERFLOW == ret) {
-      ret = OB_SUCCESS;
       queue_full = true;
-      // reload_tasks() runs exactly once per leader term and then breaks out of
-      // the outer loop in run1(); we cannot leave these persisted rows around
-      // waiting for a "next reload" that will never come. Drop the group and
-      // remove the rows from __all_mview_refresh_task. The caller
-      // (reload_tasks) will set has_more=false so subsequent batches are
-      // skipped too — the remainder of the pending-task table is handled by
-      // the next leader.
-      // TODO: once on_schedule_task_failed writes history, forward push_ret
-      // (OB_ALLOCATE_MEMORY_FAILED / OB_SIZE_OVERFLOW) so DBAs can tell why
-      // the refresh was dropped from __all_mview_refresh_stats.result.
       LOG_WARN("reload queue full, discard remaining tasks in this batch",
                KR(ret), K(group.count()),
                "tenant_id", group.at(0)->tenant_id_,
                "refresh_id", group.at(0)->refresh_id_);
-      if (OB_TMP_FAIL(on_schedule_task_failed(group))) {
-        LOG_WARN("fail to handle overflowed group", KR(ret));
+      if (OB_ALLOCATE_MEMORY_FAILED == ret) {
+        err_msg = "pending refresh failed with memory allocation error";
+      } else if (OB_SIZE_OVERFLOW == ret) {
+        err_msg = "pending refresh failed with global task queue limit exceeded";
       }
+      ret = OB_SUCCESS;
     } else {
       LOG_WARN("fail to push tasks", KR(ret), K(group.count()));
     }
@@ -358,6 +374,17 @@ int ObMViewPendingTaskManager::enqueue_reload_task(const ObIArray<ObMViewPending
           LOG_WARN("fail to register for retry", KR(tmp_ret), KPC(task));
         }
       }
+    }
+  }
+  if (need_end) {
+    if (OB_TMP_FAIL(on_schedule_task_failed(tenant_id, refresh_id, true, task_ret, err_msg))) {
+      LOG_WARN("fail to schedule task failed", KR(ret));
+    }
+  }
+  if (OB_FAIL(ret) && inc_count > 0) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(dec_tasks_queue_cnt(group, inc_count))) {
+      LOG_WARN("dec mview queue cnt failed", KR(tmp_ret), K(inc_count));
     }
   }
   return ret;
@@ -666,9 +693,12 @@ int ObMViewPendingTaskManager::write_run_start(const obrpc::ObScheduleMViewRefre
 int ObMViewPendingTaskManager::check_pending_tasks_schedule_block(
     const ObIArray<ObMViewPendingTask *> &pending_tasks,
     const uint64_t root_mview_id,
-    const bool is_force_owner)
+    const bool is_force_owner,
+    const bool is_check_limit,
+    int64_t &inc_count)
 {
   int ret = OB_SUCCESS;
+  inc_count = 0;
   for (int64_t i = 0; OB_SUCC(ret) && i < pending_tasks.count(); ++i) {
     if (OB_ISNULL(pending_tasks.at(i))) {
       ret = OB_ERR_UNEXPECTED;
@@ -676,9 +706,14 @@ int ObMViewPendingTaskManager::check_pending_tasks_schedule_block(
     } else {
       const uint64_t cur_mview_id = pending_tasks.at(i)->mview_id_;
       const bool cur_is_force_owner = (cur_mview_id == root_mview_id) && is_force_owner;
-      if (OB_FAIL(check_mview_schedule_block(cur_mview_id, cur_is_force_owner))) {
+      if (OB_FAIL(check_mview_schedule_block(cur_mview_id,
+                                             cur_is_force_owner,
+                                             is_check_limit,
+                                             MAX_PENDING_REFRESH_CNT_PER_MVIEW))) {
         LOG_WARN("mview schedule blocked by concurrent drop/force", KR(ret),
                  K(cur_mview_id), K(root_mview_id), K(cur_is_force_owner));
+      } else {
+        ++inc_count;
       }
     }
   }
@@ -693,16 +728,35 @@ int ObMViewPendingTaskManager::check_pending_tasks_schedule_block(
 // Read block_flags_ atomically and decide whether the schedule is blocked.
 struct CheckBlockFn
 {
-  CheckBlockFn(bool is_force_owner, bool &blocked)
-    : is_force_owner_(is_force_owner), blocked_(blocked) {}
+  CheckBlockFn(bool is_force_owner, bool check_limit,
+               int64_t limit, int &ret)
+    : is_force_owner_(is_force_owner), limit_(limit),
+      check_limit_(check_limit), ret_(ret) {}
   void operator()(common::hash::HashMapPair<uint64_t, ObMViewContext *> &kv)
   {
     const int64_t flags = ATOMIC_LOAD(&kv.second->block_flags_);
-    blocked_ = (0 != (flags & ObMViewContext::BLOCK_FLAG_DROP)) ||
-               (0 != (flags & ObMViewContext::BLOCK_FLAG_FORCE) && !is_force_owner_);
+    bool blocked = (0 != (flags & ObMViewContext::BLOCK_FLAG_DROP)) ||
+                   (0 != (flags & ObMViewContext::BLOCK_FLAG_FORCE) && !is_force_owner_);
+    if (OB_LIKELY(!blocked)) {
+      bool done = false;
+      while (!done) {
+        const int64_t old_cnt = ATOMIC_LOAD(&kv.second->queue_refresh_cnt_);
+        if (check_limit_ && old_cnt >= limit_) {
+          ret_ = OB_SIZE_OVERFLOW;
+          done = true;
+        } else if (ATOMIC_BCAS(&kv.second->queue_refresh_cnt_, old_cnt, old_cnt + 1)) {
+          done = true;
+        }
+        // else: CAS lost the race, retry with the fresh value.
+      }
+    } else {
+      ret_ = OB_EAGAIN;
+    }
   }
   bool is_force_owner_;
-  bool &blocked_;
+  int64_t limit_;
+  bool check_limit_;
+  int &ret_;
 };
 
 // OR a flag bit into block_flags_. For FORCE, the set must be atomic with a
@@ -758,6 +812,25 @@ struct ClearBlockFlagFn
   int64_t flag_;
 };
 
+
+struct DecQueueCntFn
+{
+  DecQueueCntFn() {}
+  void operator()(common::hash::HashMapPair<uint64_t, ObMViewContext *> &kv)
+  {
+    bool done = false;
+    while (!done) {
+      const int64_t old_cnt = ATOMIC_LOAD(&kv.second->queue_refresh_cnt_);
+      if (old_cnt <= 0) {
+        done = true; // already at floor, nothing to release
+      } else if (ATOMIC_BCAS(&kv.second->queue_refresh_cnt_, old_cnt, old_cnt - 1)) {
+        done = true;
+      }
+      // else: CAS lost the race, retry with the fresh value.
+    }
+  }
+};
+
 // Insert a fresh ObMViewContext for mview_id. Only called on the miss path of
 // acquire_mview_block (the node is absent), so it does not pre-check existence;
 // set_refactored(flag=0) still guards the race where a concurrent inserter wins.
@@ -803,22 +876,73 @@ struct CollectAllFn
   int ret_;
 };
 
-int ObMViewPendingTaskManager::check_mview_schedule_block(const uint64_t mview_id,
-                                                          const bool is_force_owner)
+struct DecMViewQueueCntCb {
+  explicit DecMViewQueueCntCb(MViewContextMap &mview_context_map)
+    : mview_context_map_(mview_context_map) {}
+
+  int operator()(const ObMViewPendingTask *task) {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(task)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("task is null", KR(ret));
+    } else if (OB_FAIL(mview_context_map_.read_atomic(task->mview_id_, fn_))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("dec mview queue cnt failed", KR(ret), KPC(task));
+      }
+    }
+    return ret;
+  }
+  MViewContextMap &mview_context_map_;
+  DecQueueCntFn fn_;
+};
+
+int ObMViewPendingTaskManager::dec_tasks_queue_cnt(
+    const common::ObIArray<ObMViewPendingTask *> &tasks,
+    const int64_t dec_count)
 {
   int ret = OB_SUCCESS;
-  bool blocked = false;
-  CheckBlockFn fn(is_force_owner, blocked);
+  int tmp_ret = OB_SUCCESS;
+  const int64_t cnt = MIN(dec_count, tasks.count());
+  DecMViewQueueCntCb dec_fn(mview_context_map_);
+  for (int64_t i = 0; OB_SUCC(ret) && i < cnt; ++i) {
+    if (OB_TMP_FAIL(dec_fn(tasks.at(i)))) {
+      LOG_WARN("dec mview queue cnt failed", KR(tmp_ret), KPC(tasks.at(i)));
+    }
+  }
+  return ret;
+}
+
+int ObMViewPendingTaskManager::check_mview_schedule_block(const uint64_t mview_id,
+                                                          const bool is_force_owner,
+                                                          const bool check_limit,
+                                                          const int64_t limit)
+{
+  int ret = OB_SUCCESS;
+  int cb_ret = OB_SUCCESS;
+  CheckBlockFn fn(is_force_owner, check_limit, limit, cb_ret);
   if (OB_FAIL(mview_context_map_.read_atomic(mview_id, fn))) {
     if (OB_HASH_NOT_EXIST == ret) {
-      ret = OB_SUCCESS; // no context => no block
+      if (OB_FAIL(ensure_mview_ctx(mview_id))) {
+        LOG_WARN("ensure mview context failed", KR(ret), K(mview_id));
+      } else if (OB_FAIL(mview_context_map_.read_atomic(mview_id, fn))) {
+        LOG_WARN("read mview context failed", KR(ret), K(mview_id));
+      }
     } else {
       LOG_WARN("read mview context failed", KR(ret), K(mview_id));
     }
-  } else if (blocked) {
-    ret = OB_EAGAIN;
-    LOG_WARN("mview schedule blocked by concurrent drop/force", KR(ret),
-              K(mview_id), K(is_force_owner));
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_EAGAIN == cb_ret) {
+      ret = OB_EAGAIN;
+      LOG_WARN("mview schedule blocked by concurrent drop/force", KR(ret),
+                K(mview_id), K(is_force_owner));
+    } else if (OB_SIZE_OVERFLOW == cb_ret) {
+      ret = OB_SIZE_OVERFLOW;
+      LOG_USER_ERROR(OB_SIZE_OVERFLOW, "mview pending refresh count limit exceeded", K(mview_id));
+    }
   }
   return ret;
 }
@@ -957,8 +1081,12 @@ int ObMViewPendingTaskManager::schedule_task(const obrpc::ObScheduleMViewRefresh
   refresh_id = OB_INVALID_ID;
   ObArenaAllocator allocator("MVPendTaskMgr", OB_MALLOC_NORMAL_BLOCK_SIZE, arg.tenant_id_);
   ObSEArray<ObMViewPendingTask*, 4> pending_tasks;
+  int64_t inc_count = 0;
   const int64_t start_time = ObTimeUtility::current_time();
   SCN target_data_sync_scn;
+  ObString err_msg = "pending refresh failed with unknown error";
+  bool need_write_run_end = false;
+  bool need_rollback = false;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("pending task manager not init", KR(ret));
@@ -973,17 +1101,36 @@ int ObMViewPendingTaskManager::schedule_task(const obrpc::ObScheduleMViewRefresh
     LOG_WARN("fail to get current scn", K(ret));
   } else if (OB_FAIL(write_run_start(arg, refresh_id, start_time, target_data_sync_scn))) {
     LOG_WARN("fail to write_run_start", KR(ret), K(arg), K(refresh_id));
+  } else if (OB_FALSE_IT(need_write_run_end = true)) {
   } else if (OB_FAIL(build_pending_tasks(allocator, arg, refresh_id, start_time, target_data_sync_scn, pending_tasks))) {
     LOG_WARN("build pending tasks failed", KR(ret), K(arg));
-  } else if (OB_FAIL(check_pending_tasks_schedule_block(pending_tasks, arg.mview_id_, is_force_owner))) {
+  } else if (OB_FAIL(check_pending_tasks_schedule_block(pending_tasks, arg.mview_id_, is_force_owner, true, inc_count))) {
     LOG_WARN("pending tasks blocked by concurrent drop/force", KR(ret), K(arg.mview_id_));
+    if (ret == OB_SIZE_OVERFLOW) {
+      err_msg = "per-mview pending refresh task count limit exceeded";
+    } else if (ret == OB_EAGAIN) {
+      err_msg = "pending refresh blocked by concurrent drop or force refresh";
+    }
   } else if (OB_FAIL(table_operator_.insert_tasks(pending_tasks))) {
     LOG_WARN("insert pending tasks failed", KR(ret), K(pending_tasks.count()));
+  } else if (OB_FALSE_IT(need_rollback = true)) {
   } else if (OB_FAIL(queue_.push_tasks(pending_tasks, common::ObCurTraceId::get_trace_id()))) {
     LOG_WARN("push pending tasks failed", KR(ret), K(pending_tasks.count()));
-    if (OB_TMP_FAIL(on_schedule_task_failed(pending_tasks))) {
+    if (ret == OB_SIZE_OVERFLOW) {
+      err_msg = "pending refresh global task queue limit exceeded";
+    }
+  }
+  if (OB_FAIL(ret) && need_write_run_end) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(on_schedule_task_failed(arg.tenant_id_, refresh_id, need_rollback, ret, err_msg))) {
       LOG_WARN("fail to rollback after push failed", KR(tmp_ret),
                K(arg.tenant_id_), K(refresh_id));
+    }
+  }
+  if (OB_FAIL(ret) && inc_count > 0) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_TMP_FAIL(dec_tasks_queue_cnt(pending_tasks, inc_count))) {
+      LOG_WARN("dec mview queue cnt failed", KR(tmp_ret), K(inc_count));
     }
   }
   return ret;
@@ -1007,19 +1154,27 @@ int ObMViewPendingTaskManager::schedule_task(const obrpc::ObScheduleMViewRefresh
 // per (refresh_id, mview_id, retry_id) here before the delete, so DBAs can see
 // why the refresh was dropped. For now we only remove the rows from
 // __all_mview_refresh_task; the caller already logged the reason at WARN.
-int ObMViewPendingTaskManager::on_schedule_task_failed(const ObIArray<ObMViewPendingTask *> &group)
+int ObMViewPendingTaskManager::on_schedule_task_failed(uint64_t tenant_id,
+                                                       int64_t refresh_id,
+                                                       const bool need_rollback,
+                                                       const int task_ret,
+                                                       const common::ObString &err_msg)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(group.empty()) || OB_ISNULL(group.at(0))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("empty group or null head task", KR(ret), K(group.count()));
-  } else {
-    const uint64_t tenant_id = group.at(0)->tenant_id_;
-    const int64_t refresh_id = group.at(0)->refresh_id_;
-    if (OB_FAIL(table_operator_.delete_tasks_by_refresh_id(tenant_id, refresh_id))) {
-      LOG_WARN("fail to delete aborted tasks by refresh id",
-               KR(ret), K(tenant_id), K(refresh_id));
-    }
+  int tmp_ret = OB_SUCCESS;
+  if (need_rollback && OB_FAIL(table_operator_.delete_tasks_by_refresh_id(tenant_id, refresh_id))) {
+    LOG_WARN("fail to delete aborted tasks by refresh id",
+              KR(ret), K(tenant_id), K(refresh_id));
+  }
+  if (OB_TMP_FAIL(ObMViewRefreshStatsUtils::write_run_end(GCTX.sql_proxy_,
+                                                          tenant_id,
+                                                          refresh_id,
+                                                          ObTimeUtility::current_time(),
+                                                          0,
+                                                          task_ret,
+                                                          err_msg,
+                                                          1))) {
+    LOG_WARN("fail to write run end", KR(ret), K(tenant_id), K(refresh_id), K(task_ret), K(err_msg));
   }
   return ret;
 }
@@ -1370,12 +1525,14 @@ int ObMViewPendingTaskManager::inner_recycle_refresh(uint64_t tenant_id,
                                                      int64_t refresh_id)
 {
   int ret = OB_SUCCESS;
+  DecMViewQueueCntCb cb(mview_context_map_);
+  ObMViewPendingTaskQueue::RecycleCb release_cb(cb);
   if (OB_UNLIKELY(!is_valid_tenant_id(tenant_id) || refresh_id <= 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(refresh_id));
   } else if (OB_FAIL(table_operator_.delete_tasks_by_refresh_id(tenant_id, refresh_id))) {
     LOG_WARN("delete tasks by refresh id failed", KR(ret), K(tenant_id), K(refresh_id));
-  } else if (OB_FAIL(queue_.recycle_refresh(tenant_id, refresh_id))) {
+  } else if (OB_FAIL(queue_.recycle_refresh(tenant_id, refresh_id, release_cb))) {
     LOG_WARN("queue recycle refresh failed", KR(ret), K(tenant_id), K(refresh_id));
   }
   return ret;

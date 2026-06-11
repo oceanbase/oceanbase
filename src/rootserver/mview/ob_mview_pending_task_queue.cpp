@@ -700,7 +700,8 @@ int ObMViewPendingTaskQueue::get_task_retry_count(uint64_t tenant_id,
 }
 
 int ObMViewPendingTaskQueue::recycle_refresh(uint64_t tenant_id,
-                                             int64_t refresh_id)
+                                             int64_t refresh_id,
+                                             const RecycleCb &recycle_cb)
 {
   int ret = OB_SUCCESS;
   ObMViewRefreshKey refresh_key(tenant_id, refresh_id);
@@ -730,8 +731,14 @@ int ObMViewPendingTaskQueue::recycle_refresh(uint64_t tenant_id,
   {
     int tmp_ret = OB_SUCCESS;
     for (int64_t i = 0; i < erased_tasks.count(); ++i) {
-      LOG_TRACE("free task", KR(ret), KPC(erased_tasks.at(i)));
-      if (OB_TMP_FAIL(free_task(erased_tasks.at(i)))) {
+      ObMViewPendingTask *erased_task = erased_tasks.at(i);
+      LOG_TRACE("free task", KR(ret), KPC(erased_task));
+      if (recycle_cb.is_valid()) {
+        if (OB_TMP_FAIL(recycle_cb(erased_task))) {
+          LOG_WARN("recycle callback failed", KR(tmp_ret), KPC(erased_task));
+        }
+      }
+      if (OB_TMP_FAIL(free_task(erased_task))) {
         LOG_WARN("free task failed", KR(tmp_ret));
       }
     }

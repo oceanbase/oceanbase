@@ -177,7 +177,13 @@ int ObDBMSMViewMysql::refresh(ObExecContext &ctx, ParamStore &params, ObObj &res
         // empty list: do nothing, return success
       } else if (OB_FAIL(mview_maintenance_service->get_pending_task_manager()->schedule_mview_refresh(
                             schedule_arg, schedule_result))) {
+        int tmp_ret = OB_SUCCESS;
         LOG_WARN("fail to schedule mview refresh", KR(ret), K(schedule_arg));
+        if (OB_TMP_FAIL(ObMViewExecutorUtil::load_refresh_run_stats_error_message(ctx,
+                                                                                  tenant_id,
+                                                                                  schedule_result.refresh_id_))) {
+          LOG_WARN("fail to read mview refresh run stats", KR(tmp_ret), K(schedule_result.refresh_id_));
+        }
       } else if (!async
                  && OB_FAIL(ObMViewExecutorUtil::wait_mview_refresh(ctx, tenant_id, schedule_result.refresh_id_, schedule_arg.mview_id_))) {
         LOG_WARN("fail to wait mview refresh", KR(ret), K(schedule_result.refresh_id_), K(schedule_arg.mview_id_));

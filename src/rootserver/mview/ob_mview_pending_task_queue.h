@@ -13,6 +13,7 @@
 
 #include "lib/container/ob_iarray.h"
 #include "lib/allocator/ob_fifo_allocator.h"
+#include "lib/function/ob_function.h"
 #include "lib/hash/ob_hashmap.h"
 #include "lib/list/ob_dlist.h"
 #include "lib/lock/ob_latch.h"
@@ -32,6 +33,7 @@ public:
   typedef common::hash::ObHashMap<ObMViewRefreshKey,
                                   ObMViewPendingRefreshCtx *,
                                   common::hash::NoPthreadDefendMode> RefreshCtxMap;
+  typedef common::ObFunction<int(const ObMViewPendingTask *)> RecycleCb;
 
 public:
   ObMViewPendingTaskQueue();
@@ -67,7 +69,8 @@ public:
                          uint64_t mview_id,
                          bool &refresh_finished);
   int recycle_refresh(uint64_t tenant_id,
-                      int64_t refresh_id);
+                      int64_t refresh_id,
+                      const RecycleCb &recycle_cb = RecycleCb());
   int cancel_all_pending_tasks(uint64_t tenant_id,
                                int64_t refresh_id,
                                bool &refresh_finished);

@@ -229,10 +229,9 @@ struct ObMViewContext
 
   // BLOCK_FLAG_DROP | BLOCK_FLAG_FORCE bit set (atomic access).
   int64_t block_flags_;
-  // Reserved for a future task: per-mview in-queue task count, used to cap a
-  // single mview from flooding the pending queue.
-  ObMViewContext() : block_flags_(0) {}
-  TO_STRING_KV(K_(block_flags));
+  int64_t queue_refresh_cnt_;
+  ObMViewContext() : block_flags_(0), queue_refresh_cnt_(0) {}
+  TO_STRING_KV(K_(block_flags), K_(queue_refresh_cnt));
 };
 
 } // namespace rootserver

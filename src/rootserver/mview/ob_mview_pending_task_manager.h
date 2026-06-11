@@ -127,7 +127,11 @@ public:
                             uint64_t mview_id);
   int recycle_refresh(uint64_t tenant_id,
                       int64_t refresh_id);
-  int on_schedule_task_failed(const common::ObIArray<ObMViewPendingTask *> &group);
+  int on_schedule_task_failed(uint64_t tenant_id,
+                              int64_t refresh_id,
+                              bool need_rollback,
+                              const int task_ret,
+                              const common::ObString &err_msg);
   // Called by ObMviewPendingTaskScheduler::run1 when reload_tasks succeeds.
   // Flips reload_state_ from RELOADING to READY and broadcasts reload_cond_.
   void on_reload_done();
@@ -208,6 +212,14 @@ public:
    * through another RETRY_WAIT -> PENDING cycle.
    */
   static const int64_t MAX_RETRY_COUNT = 3;
+  // Upper bound on how many refreshes a single mview (as the ROOT mview) may
+  // have queued in the shared pending queue at once. A schedule reserves one
+  // slot before enqueueing; once a mview holds this many queued refreshes, a
+  // further (non-force) schedule for it is rejected with OB_SIZE_OVERFLOW so a
+  // mview repeatedly scheduling in a hot loop cannot flood the shared queue
+  // (MAX_PENDING_TASK_CNT) and starve other mviews. This caps the number of
+  // *refreshes*, not the underlying per-refresh task count.
+  static const int64_t MAX_PENDING_REFRESH_CNT_PER_MVIEW = 100;
   // Max time a write-side entry blocks waiting for RELOADING → READY before
   // returning OB_TIMEOUT. Bounded so a stuck reload cannot hang RPC threads.
   static const int64_t RELOAD_WAIT_TIMEOUT_MS = 10 * 1000;
@@ -251,7 +263,10 @@ private:
                       const int64_t refresh_id,
                       const int64_t start_time,
                       const share::SCN &target_data_sync_scn);
-  int check_mview_schedule_block(uint64_t mview_id, bool is_force_owner);
+  int check_mview_schedule_block(const uint64_t mview_id,
+                                 const bool is_force_owner,
+                                 const bool check_limit,
+                                 const int64_t limit);
   // Check the schedule block for every mview in pending_tasks (root + all nested
   // dependencies), so a concurrent drop/force on any dependency rejects the whole
   // schedule. Only root_mview_id may be the force owner; dependencies are checked
@@ -259,7 +274,9 @@ private:
   int check_pending_tasks_schedule_block(
       const common::ObIArray<ObMViewPendingTask *> &pending_tasks,
       const uint64_t root_mview_id,
-      const bool is_force_owner);
+      const bool is_force_owner,
+      const bool is_check_limit,
+      int64_t &inc_count);
   int release_mview_block(uint64_t mview_id, int64_t flag);
   int try_clear_drop_block_by_lock(uint64_t tenant_id, uint64_t mview_id,
                                    share::schema::ObSchemaGetterGuard &schema_guard,
@@ -274,6 +291,7 @@ private:
   // Drop every context (follower transition / destroy): the leader-only block
   // markers are meaningless on a follower, and the queue is being cleared.
   int reset_mview_contexts();
+
   int build_pending_tasks(common::ObIAllocator &alloc,
                           const obrpc::ObScheduleMViewRefreshArg &arg,
                           const int64_t refresh_id,
@@ -309,6 +327,8 @@ private:
   // in-manager chains (mark_task_success/failed/cancelled, resync_task_from_disk)
   // use this to avoid re-entering reload_cond_'s mutex.
   int inner_recycle_refresh(uint64_t tenant_id, int64_t refresh_id);
+  int dec_tasks_queue_cnt(const common::ObIArray<ObMViewPendingTask *> &tasks,
+                          const int64_t dec_count);
 
   int query_running_session_infos(uint64_t tenant_id,
                                   int64_t refresh_id,
