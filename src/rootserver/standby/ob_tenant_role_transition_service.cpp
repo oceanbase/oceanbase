@@ -601,10 +601,12 @@ int ObTenantRoleTransitionService::do_prepare_flashback_(share::ObAllTenantInfo 
 }
 int ObTenantRoleTransitionService::check_sync_readiness_(
     const share::ObAllTenantInfo &tenant_info,
-    bool &is_ready)
+    bool &is_ready,
+    bool &need_retry)
 {
   int ret = OB_SUCCESS;
   is_ready = true;
+  need_retry = true;
   // The all-LS verify check only applies to SWITCHOVER TO PRIMARY.
   // FAILOVER (ACTIVATE STANDBY) VERIFY only checks sys LS sync (done above),
   // because failover scenarios may have lost restore source connectivity.
@@ -615,6 +617,8 @@ int ObTenantRoleTransitionService::check_sync_readiness_(
     // 1. check restore source
     if (OB_FAIL(check_restore_source_for_switchover_to_primary_(tenant_id_))) {
       LOG_WARN("fail to check restore source", KR(ret), K_(tenant_id));
+      SOURCE_TENANT_CHECK_USER_ERROR_FOR_SWITCHOVER_TO_PRIMARY;
+      need_retry = false;
     } else if (!has_restore_source_) {
       LOG_INFO("no restore source, skip sync check", K(tenant_id_));
     // 2. check sys LS sync
@@ -667,10 +671,12 @@ int ObTenantRoleTransitionService::check_sync_readiness_(
 
 int ObTenantRoleTransitionService::check_replay_readiness_(
     const share::ObAllTenantInfo &tenant_info,
-    bool &is_ready)
+    bool &is_ready,
+    bool &need_retry)
 {
   int ret = OB_SUCCESS;
   is_ready = true;
+  need_retry = true;
   ObTransferTickResult result;
   share::ObAllTenantInfo cur_tenant_info;
   if (OB_FAIL(share::ObAllTenantInfoProxy::load_tenant_info(
@@ -679,7 +685,8 @@ int ObTenantRoleTransitionService::check_replay_readiness_(
   } else if (cur_tenant_info.get_switchover_epoch() != tenant_info.get_switchover_epoch()
              || cur_tenant_info.get_switchover_status() != tenant_info.get_switchover_status()) {
     ret = OB_OP_NOT_ALLOW;
-    LOG_WARN("epoch/status changed during readiness check, retry",
+    need_retry = false;
+    LOG_WARN("epoch/status changed during readiness check",
              KR(ret), K(tenant_info), K(cur_tenant_info));
   } else if (OB_FAIL(ObStandbyTransferTaskUtil::run_transfer_tick(
           *sql_proxy_, cur_tenant_info,
@@ -696,19 +703,21 @@ int ObTenantRoleTransitionService::check_replay_readiness_(
 
 int ObTenantRoleTransitionService::check_failover_to_primary_readiness_(
     const share::ObAllTenantInfo &tenant_info,
-    bool &is_ready)
+    bool &is_ready,
+    bool &need_retry)
 {
   int ret = OB_SUCCESS;
   is_ready = true;
+  need_retry = true;
   // SWITCH_TO_PRIMARY: check restore source + sync + balance task replay (both tables)
   // FAILOVER_TO_PRIMARY: check balance task replay (both tables) only, no sync check needed
   if (OB_FAIL(check_inner_stat())) {
     LOG_WARN("error unexpected", KR(ret), K(tenant_id_), KP(sql_proxy_), KP(rpc_proxy_));
-  } else if (OB_FAIL(check_sync_readiness_(tenant_info, is_ready))) {
+  } else if (OB_FAIL(check_sync_readiness_(tenant_info, is_ready, need_retry))) {
     LOG_WARN("fail to check sync readiness", KR(ret), K(tenant_id_));
   } else if (!is_ready) {
     // sync check not ready, skip replay check
-  } else if (OB_FAIL(check_replay_readiness_(tenant_info, is_ready))) {
+  } else if (OB_FAIL(check_replay_readiness_(tenant_info, is_ready, need_retry))) {
     LOG_WARN("fail to check replay readiness", KR(ret), K(tenant_id_));
   }
   return ret;
@@ -720,6 +729,7 @@ int ObTenantRoleTransitionService::do_readiness_check_(share::ObAllTenantInfo &t
   uint64_t compat_version = 0;
   bool is_ready = false;
   bool need_continue = false;
+  bool need_retry = true;
   if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, compat_version))) {
     LOG_WARN("fail to get min data version", KR(ret), K(tenant_id_));
   } else if (compat_version < DATA_VERSION_4_4_2_2) {
@@ -743,12 +753,13 @@ int ObTenantRoleTransitionService::do_readiness_check_(share::ObAllTenantInfo &t
       tenant_sync_scn + 3s as a reference point, which is a stronger guarantee.
     **/
     do {
-      if (OB_FAIL(check_failover_to_primary_readiness_(tenant_info, is_ready))) {
+      if (OB_FAIL(check_failover_to_primary_readiness_(tenant_info, is_ready, need_retry))) {
         LOG_WARN("readiness check failed", KR(ret), K(tenant_id_));
         // Transient errors like OB_EAGAIN should be retried for VERIFY (wait mode),
         // consistent with check_sync_to_latest_do_while_() which also retries on
-        // non-fatal errors. Only fail immediately on fatal errors.
+        // non-fatal errors. Deterministic failures should fail immediately.
         if (!logservice::ObLogRestoreHandler::need_fail_when_switch_to_primary(ret)
+            && need_retry
             && !is_verify_nowait_) {
           ret = OB_SUCCESS;  // clear error to continue retry loop
           is_ready = false;  // not ready yet, keep checking

@@ -327,9 +327,9 @@ private:
       bool &is_all_ls_synced,
       ObTenantRoleTransNonSyncInfo *non_sync_info_out = nullptr);
 
-  int check_sync_readiness_(const share::ObAllTenantInfo &tenant_info, bool &is_ready);
-  int check_replay_readiness_(const share::ObAllTenantInfo &tenant_info, bool &is_ready);
-  int check_failover_to_primary_readiness_(const share::ObAllTenantInfo &tenant_info, bool &is_ready);
+  int check_sync_readiness_(const share::ObAllTenantInfo &tenant_info, bool &is_ready, bool &need_retry);
+  int check_replay_readiness_(const share::ObAllTenantInfo &tenant_info, bool &is_ready, bool &need_retry);
+  int check_failover_to_primary_readiness_(const share::ObAllTenantInfo &tenant_info, bool &is_ready, bool &need_retry);
   int do_readiness_check_(share::ObAllTenantInfo &tenant_info);
   int do_prepare_flashback_for_switch_to_primary_(share::ObAllTenantInfo &tenant_info);
   int do_prepare_flashback_for_failover_to_primary_(share::ObAllTenantInfo &tenant_info);
