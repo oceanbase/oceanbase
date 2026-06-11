@@ -491,6 +491,11 @@ int ObMViewRefresher::collect_and_check_detail_table_changes(ObMViewTransaction 
   } else if (collection_level_ >= ObMVRefreshStatsCollectionLevel::TYPICAL
              || enable_adaptive_refresh || enable_adaptive_refresh_step_) {
     common::hash::ObHashMap<uint64_t, uint64_t> ct_to_mv;
+    sql::ObSQLSessionInfo *exec_session = trans.get_session_info();
+    if (OB_NOT_NULL(exec_session)) {
+      // set mlog expected output rows for optimizer
+      exec_session->reset_mlog_expected_rows();
+    }
     if (OB_FAIL(ct_to_mv.create(dependency_infos_.count(), "CtToMv"))) {
       LOG_WARN("fail to create ct_to_mv map", KR(ret));
     }
@@ -561,7 +566,18 @@ int ObMViewRefresher::collect_and_check_detail_table_changes(ObMViewTransaction 
           LOG_WARN("fail to push change stats", KR(ret), K(dep.get_ref_obj_id()));
         } else {
           reached_complete_refresh_threshold |= reached_detail_complete_refresh_threshold(detail_change);
-          if (cur_table_need_mlog && enable_adaptive_refresh_step_) {
+          if (cur_table_need_mlog && OB_NOT_NULL(exec_session)) {
+            const uint64_t mlog_id = dep_schema->get_mlog_tid();
+            int64_t expected_rows = detail_change.num_rows_ins_
+                                    + detail_change.num_rows_upd_ * 2
+                                    + detail_change.num_rows_del_;
+            expected_rows = (expected_rows > 0) ? expected_rows : 1;
+            if (OB_INVALID_ID != mlog_id
+                && OB_FAIL(exec_session->set_mlog_expected_rows(mlog_id, expected_rows))) {
+              LOG_WARN("fail to set mlog expected rows", KR(ret), K(mlog_id), K(expected_rows));
+            }
+          }
+          if (OB_SUCC(ret) && cur_table_need_mlog && enable_adaptive_refresh_step_) {
             if (detail_change.num_rows_del_ + detail_change.num_rows_upd_ == 0 &&
                 OB_FAIL(tables_without_delete.push_back(dep.get_ref_obj_id()))) {
               LOG_WARN("fail to push back table without delete", KR(ret), K(dep.get_ref_obj_id()));
