@@ -5230,6 +5230,7 @@ int ObJoinOrder::prune_one_index_merge_node(const uint64_t table_id,
       sum_child_sel = candi_node->ap_->est_cost_info_.prefix_filter_sel_;
       force_preserve = INDEX_MERGE_FTS_INDEX == candi_node->node_type_ || INDEX_MERGE_MULTIVALUE_INDEX == candi_node->node_type_;
       prune_happened |= !candi_node->ap_->is_new_query_range_with_precise_expr();
+      prune_happened |= !candi_node->ap_->est_cost_info_.postfix_filters_.empty();
     }
   } else { // is merge node
     bool is_child_valid = false;
