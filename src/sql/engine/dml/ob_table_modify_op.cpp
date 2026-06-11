@@ -1161,7 +1161,7 @@ int ObTableModifyOp::check_stack()
   if (OB_ISNULL(session)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("sql session is NULL", K(ret));
-  } else if (session->get_nested_count() > max_stack_deep) {
+  } else if (lib::is_mysql_mode() && session->get_nested_count() > max_stack_deep) {
     ret = OB_SIZE_OVERFLOW;
     LOG_WARN("too deep recursive", K(ret), K(max_stack_deep), K(session->get_nested_count()));
   } else if (OB_FAIL(check_stack_overflow(is_stack_overflow))) {
