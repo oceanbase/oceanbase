@@ -3593,13 +3593,14 @@ int ObJsonBinFastLocator::get_value_offset_len(size_t idx, char *&res_ptr, int64
 {
   int ret = OB_SUCCESS;
   uint64_t res_offset = value_offset_start_ + idx * (entry_size_ + OB_JSON_BIN_VALUE_TYPE_LEN);
+  bool is_inlined = false;
   if (OB_UNLIKELY(res_offset + entry_size_ + OB_JSON_BIN_VALUE_TYPE_LEN > total_len_)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not supported offset", K(ret), K(res_offset), K(total_len_), K(idx));
   } else {
     res_ptr = data_ptr_ + res_offset;
     res_type = *reinterpret_cast<uint8_t *>(res_ptr + entry_size_);
-    bool is_inlined = OB_JSON_TYPE_INLINE_MASK & res_type;
+    is_inlined = OB_JSON_TYPE_INLINE_MASK & res_type;
     res_type = OB_JSON_TYPE_GET_INLINE(res_type);
     if (is_inlined) {
       MEMSET(inline_buf_, 0, sizeof(inline_buf_));
@@ -3734,7 +3735,7 @@ int ObJsonBinFastLocator::get_value_offset_len(size_t idx, char *&res_ptr, int64
       }
     }
   }
-  if (OB_SUCC(ret)) {
+  if (OB_SUCC(ret) && !is_inlined) {
     res_len = MIN(res_len, total_len_ - res_offset);
     if (OB_UNLIKELY(res_len < 0)) {
       ret = OB_NOT_SUPPORTED;
