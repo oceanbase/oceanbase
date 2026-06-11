@@ -74,7 +74,8 @@ public:
                                                      const storage::ObDirectLoadMode::Type load_mode);
   static int check_support_direct_load_for_append_only(ObSchemaGetterGuard &schema_guard,
                                                        const ObTableSchema &table_schema,
-                                                       const sql::ObLoadDupActionType dup_action);
+                                                       const sql::ObLoadDupActionType dup_action,
+                                                       const ObDirectLoadInsertMode::Type insert_mode);
 
   static int alloc_ctx(ObTableLoadTableCtx *&table_ctx);
   static void free_ctx(ObTableLoadTableCtx *table_ctx);

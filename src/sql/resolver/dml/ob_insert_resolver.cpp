@@ -106,8 +106,8 @@ int ObInsertResolver::resolve(const ParseNode &parse_tree)
     } else { /*do nothing*/ }
   }
 
-  // Check if replace into is used on append_only table
-  if (OB_SUCC(ret) && insert_stmt->is_replace()) {
+  // Check if replace into/insert overwrite is used on append_only table
+  if (OB_SUCC(ret) && (insert_stmt->is_replace() || insert_stmt->is_overwrite())) {
     TableItem *table_item = insert_stmt->get_table_item_by_id(
         insert_stmt->get_insert_table_info().table_id_);
     if (OB_NOT_NULL(table_item)) {
@@ -119,7 +119,11 @@ int ObInsertResolver::resolve(const ParseNode &parse_tree)
         LOG_WARN("fail to get table schema", K(ret));
       } else if (OB_NOT_NULL(table_schema) && table_schema->is_append_only_merge_engine()) {
         ret = OB_NOT_SUPPORTED;
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "replace into append_only table is");
+        if (insert_stmt->is_replace()) {
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "replace into append_only table is");
+        } else {
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "insert overwrite append_only table is");
+        }
       }
     }
   }

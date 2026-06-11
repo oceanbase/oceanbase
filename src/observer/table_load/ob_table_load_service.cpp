@@ -550,7 +550,7 @@ int ObTableLoadService::check_support_direct_load(ObSchemaGetterGuard &schema_gu
       LOG_WARN("fail to check support direct load for default value", KR(ret), K(column_ids));
     }
     // check for append_only merge engine
-    else if (OB_FAIL(check_support_direct_load_for_append_only(schema_guard, *table_schema, dup_action))) {
+    else if (OB_FAIL(check_support_direct_load_for_append_only(schema_guard, *table_schema, dup_action, insert_mode))) {
       LOG_WARN("fail to check support direct load for append_only merge engine", KR(ret));
     }
     // check for partition level
@@ -824,7 +824,8 @@ int ObTableLoadService::check_support_direct_load_for_fts_index(
 
 int ObTableLoadService::check_support_direct_load_for_append_only(ObSchemaGetterGuard &schema_guard,
                                                                   const ObTableSchema &table_schema,
-                                                                  const sql::ObLoadDupActionType dup_action)
+                                                                  const sql::ObLoadDupActionType dup_action,
+                                                                  const ObDirectLoadInsertMode::Type insert_mode)
 {
   int ret = OB_SUCCESS;
   bool has_unique_index = false;
@@ -843,6 +844,10 @@ int ObTableLoadService::check_support_direct_load_for_append_only(ObSchemaGetter
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("direct-load does not support append_only merge engine with ignore dup action", KR(ret), K(dup_action), K(table_schema));
     FORWARD_USER_ERROR_MSG(ret, "direct-load does not support append_only merge engine with ignore dup action");
+  } else if (ObDirectLoadInsertMode::OVERWRITE == insert_mode) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("direct-load does not support append_only merge engine with overwrite insert mode", KR(ret), K(insert_mode), K(table_schema));
+    FORWARD_USER_ERROR_MSG(ret, "direct-load does not support append_only merge engine with overwrite insert mode");
   }
   return ret;
 }
