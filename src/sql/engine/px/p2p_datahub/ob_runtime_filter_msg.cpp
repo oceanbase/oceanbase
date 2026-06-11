@@ -1967,7 +1967,9 @@ int ObRFInFilterMsg::ObRFInFilterNode::hash(uint64_t &hash_ret) const
   } else {
     hash_ret = ObExprJoinFilter::JOIN_FILTER_SEED;
     for (int i = 0; i < row_->count() && OB_SUCC(ret); ++i) {
-      if (OB_FAIL(hash_funcs_->at(i).hash_func_(row_->at(i), hash_ret, hash_ret))) {
+      if (row_->at(i).is_null()) {
+        // Keep NULL hash consistent with operator==, which treats NULL = NULL.
+      } else if (OB_FAIL(hash_funcs_->at(i).hash_func_(row_->at(i), hash_ret, hash_ret))) {
         LOG_WARN("fail to calc hash value", K(ret), K(hash_ret));
       }
     }

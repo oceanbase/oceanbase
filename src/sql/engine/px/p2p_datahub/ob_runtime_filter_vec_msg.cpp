@@ -2023,8 +2023,10 @@ int ObRFInFilterVecMsg::process_query_ranges_with_deduplicate()
       for (int64_t j = 0; j < prefix_col_idxs.count() && OB_SUCC(ret); ++j) {
         int64_t col_idx = prefix_col_idxs.at(j);
         tmp_row.at(j) = row_store_.get_row(row_idx)->get_datum(build_row_meta_, col_idx);
-        if (OB_FAIL(hash_funcs_for_insert_.at(col_idx).hash_func_(tmp_row.at(j), hash_value,
-                                                                  hash_value))) {
+        if (tmp_row.at(j).is_null()) {
+          // Keep NULL hash consistent with TempHashNode equality, which treats NULL = NULL.
+        } else if (OB_FAIL(hash_funcs_for_insert_.at(col_idx).hash_func_(tmp_row.at(j), hash_value,
+                                                                         hash_value))) {
           LOG_WARN("fail to calc hash value", K(ret), K(hash_value));
         }
       }
