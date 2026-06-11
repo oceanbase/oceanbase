@@ -85,6 +85,13 @@ public:
                                                const ObIArray<share::schema::ObDependencyInfo> &dependency_infos,
                                                ObIArray<share::schema::ObBasedSchemaObjectInfo> &based_schema_object_infos,
                                                uint64_t &direct_dep_cnt);
+  // calc parallelism for initial complete refresh issued by CREATE MV,
+  // priority: ddl_parallel_hint > refresh_dop > global mview_refresh_dop > 1
+  static int calc_create_mv_refresh_parallelism(share::schema::ObSchemaGetterGuard &schema_guard,
+                                                const uint64_t tenant_id,
+                                                const int64_t ddl_parallel_hint,
+                                                const int64_t refresh_dop,
+                                                int64_t &refresh_parallelism);
 
   TO_STRING_KV(K_(param));
 

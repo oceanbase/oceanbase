@@ -311,7 +311,7 @@ int ObSimpleMAVPrinter::gen_select_items_for_mav(const TableItem &table,
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected select item", K(ret), K(i), K(orig_select_items));
     } else if (!(ObOptimizerUtil::find_item(orig_group_by_exprs, orig_expr)
-                 || (!orig_expr->has_flag(CNT_AGG) && orig_expr->has_flag(CNT_COLUMN))
+                 || (lib::is_mysql_mode() && !orig_expr->has_flag(CNT_AGG) && orig_expr->has_flag(CNT_COLUMN))
                  || T_FUN_COUNT == orig_expr->get_expr_type())) {
       select_item.expr_ = NULL;
     } else if (copier.is_existed(orig_expr)) {
@@ -772,7 +772,8 @@ int ObSimpleMAVPrinter::gen_simple_mav_delta_mv_select_list(ObRawExprCopier &cop
       } else {
         sel_item.expr_ = group_by_exprs.at(group_by_idx);
       }
-    } else if (!ori_select_item.expr_->has_flag(CNT_AGG) && ori_select_item.expr_->has_flag(CNT_COLUMN)) {
+    } else if (!ori_select_item.expr_->has_flag(CNT_AGG) && ori_select_item.expr_->has_flag(CNT_COLUMN)
+               && lib::is_mysql_mode()) {
       ObRawExpr *tmp_expr = NULL;
       if (OB_FAIL(copier.copy_on_replace(ori_select_item.expr_, tmp_expr))) {
         LOG_WARN("failed to generate no aggr exprs", K(ret));
@@ -827,6 +828,21 @@ int ObSimpleMAVPrinter::gen_simple_join_mav_basic_select_list(const TableItem &t
       } else if (OB_FAIL(select_items.push_back(sel_item))) {
         LOG_WARN("failed to pushback", K(ret));
       } else if (stmt_need_aggr && OB_FAIL(group_by_exprs->push_back(sel_item.expr_))) {
+        LOG_WARN("failed to pushback", K(ret));
+      }
+    } else if (!orig_select_items.at(i).expr_->has_flag(CNT_AGG) && orig_select_items.at(i).expr_->has_flag(CNT_COLUMN)
+               && lib::is_mysql_mode()) {
+      if (OB_FAIL(create_simple_column_expr(table.get_table_name(),
+                                            sel_item.alias_name_,
+                                            table.table_id_,
+                                            col_expr))) {
+        LOG_WARN("failed to create simple column exprs", K(ret));
+      } else if (!stmt_need_aggr) {
+        sel_item.expr_ = col_expr;
+      } else if (OB_FAIL(add_any_value_above_expr(col_expr, sel_item.expr_))) {
+        LOG_WARN("failed to add any value above expr", K(ret));
+      }
+      if (OB_SUCC(ret) && OB_FAIL(select_items.push_back(sel_item))) {
         LOG_WARN("failed to pushback", K(ret));
       }
     } else if (ObMVChecker::is_basic_aggr(orig_select_items.at(i).expr_->get_expr_type())) {

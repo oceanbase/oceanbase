@@ -444,7 +444,7 @@ int ObMVProvider::check_fast_refresh_dep_consistency(const uint64_t tenant_id,
                                                        tenant_id,
                                                        mview_id,
                                                        previous_mv_dep_infos,
-                                                       true /* ignore_udt_udf */))) {
+                                                       false /* ignore_udt_udf */))) {
     LOG_WARN("fail to parse mview ref infos", KR(ret), K(tenant_id), K(mview_id));
   } else if (previous_mv_dep_infos.count() > dependency_infos.count()) {
     can_fast_refresh = false;
@@ -813,6 +813,11 @@ int ObMVProvider::get_complete_refresh_mview_str(const ObTableSchema &mv_schema,
       ObQueryCtx *query_ctx = NULL;
       SMART_VARS_2((ObExecContext, exec_ctx, alloc), (ObPhysicalPlanCtx, phy_plan_ctx, alloc)) {
         LinkExecCtxGuard link_guard(mock_session, exec_ctx);
+        // add empty sql ctx so that resolve_external_symbol can fetch the package guard
+        // from the exec context when resolving schema-qualified UDFs in the reparsed view def
+        ObSqlCtx empty_ctx;
+        empty_ctx.schema_guard_ = &schema_guard;
+        exec_ctx.set_sql_ctx(&empty_ctx);
         exec_ctx.set_my_session(&mock_session);
         exec_ctx.set_physical_plan_ctx(&phy_plan_ctx);
         if (OB_ISNULL(query_ctx = stmt_factory.get_query_ctx())) {
