@@ -1345,6 +1345,28 @@ private:
       const uint64_t tenant_id,
       const uint64_t table_id,
       const int64_t schema_version);
+  int construct_table_schema_version_history_(
+      const ObRefreshSchemaStatus &schema_status,
+      common::ObISQLClient &sql_client,
+      const int64_t snapshot_version,
+      const uint64_t tenant_id,
+      const uint64_t schema_id,
+      VersionHisVal &version_his_val);
+  int construct_table_schema_version_history_from_table_(
+      const ObRefreshSchemaStatus &schema_status,
+      common::ObISQLClient &sql_client,
+      const int64_t snapshot_version,
+      const uint64_t tenant_id,
+      const uint64_t schema_id,
+      const char *table_name,
+      VersionHisVal &version_his_val);
+  int fallback_table_schema_version_history_to_archive_(
+      const ObRefreshSchemaStatus &schema_status,
+      common::ObISQLClient &sql_client,
+      const int64_t snapshot_version,
+      const uint64_t tenant_id,
+      const uint64_t schema_id,
+      VersionHisVal &version_his_val);
   int fetch_table_schema_from_history_table_(
       const ObRefreshSchemaStatus &schema_status,
       const uint64_t tenant_id,

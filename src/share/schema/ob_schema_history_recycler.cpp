@@ -1136,7 +1136,8 @@ int ObRecycleSchemaExecutor::gen_fill_schema_history_sql(
                                     "where tenant_id = 0 "
                                     "and `%s` >= %ld " // sys obj ddl frequency is low, so for safety, do not recycle sys obj
                                     "and schema_version <= %ld ",
-                                    schema_key_name_, table_name_,
+                                    schema_key_name_,
+                                    table_name_,
                                     schema_key_name_, OB_MIN_USER_OBJECT_ID,
                                     schema_version_))) {
     LOG_WARN("fail to assign sql", KR(ret), K_(tenant_id), K_(schema_version));
@@ -1617,6 +1618,73 @@ int ObRecycleSchemaExecutor::gen_batch_archive_schema_history_sql(
 
 #undef SQL_APPEND_SCHEMA_ID_AND_VERSION
 
+int ObRecycleSchemaExecutor::check_aux_version_exceeds_data_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_stop())) {
+    LOG_WARN("schema history recycler is stopped", KR(ret));
+  } else if (0 != strcmp(table_name_, OB_ALL_TABLE_HISTORY_TNAME)) {
+    // Only __all_table_history has data_table_id-based auxiliary table invariants.
+  } else {
+    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+      common::sqlclient::ObMySQLResult *result = NULL;
+      ObSqlString sql;
+      // Find any (aux, data) table pair whose latest aux schema_version exceeds
+      // the latest data table schema_version — indicates a DDL write-order violation.
+      // Limit to user objects: sys inner tables (e.g. LOB aux meta of __all_table)
+      // can have aux schema_version naturally greater than data after tenant init
+      // and are not the recycle target.
+      if (OB_FAIL(sql.assign_fmt(
+          "SELECT a.table_id AS aux_table_id, a.data_table_id, "
+          "MAX(a.schema_version) AS aux_schema_version, "
+          "MAX(d.schema_version) AS data_schema_version "
+          "FROM %s a JOIN %s d "
+          "ON a.tenant_id = 0 AND d.tenant_id = 0 AND d.table_id = a.data_table_id "
+          "WHERE a.data_table_id >= %ld "
+          "GROUP BY a.table_id, a.data_table_id "
+          "HAVING MAX(a.schema_version) > MAX(d.schema_version) "
+          "LIMIT 1",
+          table_name_, table_name_, OB_MIN_USER_OBJECT_ID))) {
+        LOG_WARN("fail to build V_aux > V_data check sql",
+                 KR(ret), K_(tenant_id));
+      } else if (OB_FAIL(sql_proxy_->read(res, tenant_id_, sql.ptr()))) {
+        LOG_WARN("execute sql failed", KR(ret), K_(tenant_id), K(sql));
+      } else if (OB_ISNULL(result = res.get_result())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get sql result", KR(ret));
+      } else if (OB_FAIL(result->next())) {
+        if (OB_ITER_END == ret) {
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("fail to iterate V_aux > V_data check result", KR(ret));
+        }
+      } else {
+        uint64_t aux_table_id = OB_INVALID_ID;
+        uint64_t data_table_id = OB_INVALID_ID;
+        int64_t aux_schema_version = OB_INVALID_VERSION;
+        int64_t data_schema_version = OB_INVALID_VERSION;
+        EXTRACT_INT_FIELD_MYSQL(*result, "aux_table_id", aux_table_id, uint64_t);
+        EXTRACT_INT_FIELD_MYSQL(*result, "data_table_id", data_table_id, uint64_t);
+        EXTRACT_INT_FIELD_MYSQL(*result, "aux_schema_version", aux_schema_version, int64_t);
+        EXTRACT_INT_FIELD_MYSQL(*result, "data_schema_version", data_schema_version, int64_t);
+        if (OB_SUCC(ret)) {
+          // V_aux > V_data: archiving is skipped to avoid losing the aux table schema.
+          // To recover, run a corrective DDL on this data table (e.g. ADD/DROP/TRUNCATE
+          // PARTITION) so the aux table is updated before the data table again (restoring
+          // V_data > V_aux); the next recycle round will then resume archiving for this table.
+          ret = OB_SCHEMA_ERROR;
+          LOG_ERROR("skip table schema history archive because V_aux > V_data, "
+                    "run a corrective DDL on data_table_id to restore V_data > V_aux, "
+                    "then archive resumes on the next round",
+                    KR(ret), K_(tenant_id), K_(schema_version), K(data_table_id),
+                    K(data_schema_version), K(aux_table_id), K(aux_schema_version));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 #define DEFINE_COMPRESS_SCHEMA_HISTORY(EXECUTOR, KEY, INFO) \
 int EXECUTOR::compress_schema_history() \
 { \
@@ -1699,6 +1767,18 @@ int EXECUTOR::archive_schema_history() \
     ObArray<KEY> dropped_schema_keys; \
     int64_t archive_record_cnt = 0; \
     int64_t recycle_record_cnt = 0; \
+    bool skip_archive_history = false; \
+    int tmp_ret = OB_SUCCESS; \
+    if (OB_TMP_FAIL(check_aux_version_exceeds_data_())) { \
+      if (OB_SCHEMA_ERROR == tmp_ret) { \
+        skip_archive_history = true; \
+        LOG_INFO("[SCHEMA_RECYCLE] skip table schema history archive this round " \
+                 "because V_aux > V_data", KR(tmp_ret), \
+                 K_(tenant_id), K_(schema_version), "table_name", table_name_); \
+      } else { \
+        LOG_WARN("fail to check whether V_aux > V_data", KR(tmp_ret), K_(tenant_id), K_(schema_version)); \
+      } \
+    } \
     FOREACH_X(it, schema_history_map_, OB_SUCC(ret)) { \
       KEY key = (*it).first; \
       ObRecycleSchemaValue value = (*it).second; \
@@ -1728,6 +1808,8 @@ int EXECUTOR::archive_schema_history() \
             recycle_record_cnt = 0; \
           } \
         } \
+      } else if (skip_archive_history) { \
+        /* aggregated log already emitted before the loop */ \
       } else { \
         /* move to archive history if obj is not deleted */ \
         if (value.max_schema_version_ > schema_version_) { \

@@ -10463,6 +10463,7 @@ bool is_index_table(const ObTableType table_type)
   return ObTableType::USER_INDEX == table_type;
 }
 
+
 bool is_aux_lob_meta_table(const ObTableType table_type)
 {
   return ObTableType::AUX_LOB_META == table_type;
@@ -10482,6 +10483,7 @@ bool is_mlog_table(const ObTableType table_type)
 {
   return (ObTableType::MATERIALIZED_VIEW_LOG == table_type);
 }
+
 
 bool is_support_split_index_type(const ObIndexType index_type)
 {

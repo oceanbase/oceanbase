@@ -335,6 +335,7 @@ private:
     const char *table_name,
     const common::ObIArray<ObFirstSchemaKey> &dropped_schema_keys,
     common::ObSqlString &sql);
+  int check_aux_version_exceeds_data_();
   virtual int batch_recycle_schema_history(
       const common::ObIArray<ObFirstSchemaKey> &dropped_schema_keys);
   int batch_recycle_archive_schema_history(
