@@ -532,7 +532,7 @@ int ObColDataStoreDesc::generate_skip_index_meta(
     for (int64_t i = 0; OB_SUCC(ret) && i < full_stored_col_cnt_; ++i) {
       if (!skip_idx_attrs.at(i).has_skip_index()) {
       } else if (OB_FAIL(blocksstable::ObSkipIndexColMeta::append_skip_index_meta(
-                  enable_precise_agg, skip_idx_attrs.at(i), i, agg_meta_array_))) {
+                  enable_precise_agg, is_major, skip_idx_attrs.at(i), i, agg_meta_array_))) {
         STORAGE_LOG(WARN, "failed to append skip index meta array", K(ret), KPC(cg_schema), K(i));
       }
     }
@@ -551,7 +551,7 @@ int ObColDataStoreDesc::generate_skip_index_meta(
       const uint16_t column_idx = cg_schema->get_column_idx(i);
       if (!skip_idx_attrs.at(column_idx).has_skip_index()) {
       } else if (OB_FAIL(blocksstable::ObSkipIndexColMeta::append_skip_index_meta(
-                  enable_precise_agg, skip_idx_attrs.at(column_idx), i, agg_meta_array_))) {
+                  enable_precise_agg, is_major, skip_idx_attrs.at(column_idx), i, agg_meta_array_))) {
         STORAGE_LOG(WARN, "failed to append skip index meta array", K(ret), KPC(cg_schema), K(i), K(column_idx));
       }
     }
@@ -581,7 +581,7 @@ int ObColDataStoreDesc::generate_single_cg_skip_index_meta(
       single_cg_skip_idx_attr.set_sum();
     }
     if (OB_FAIL(blocksstable::ObSkipIndexColMeta::append_skip_index_meta(
-                true, single_cg_skip_idx_attr, 0, agg_meta_array_))) {
+                true, true/*is_major*/, single_cg_skip_idx_attr, 0, agg_meta_array_))) {
       STORAGE_LOG(WARN, "failed to append skip index meta array", K(ret), K(column_idx), K(cg_schema));
     }
 

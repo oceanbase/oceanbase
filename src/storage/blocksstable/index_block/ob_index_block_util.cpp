@@ -22,6 +22,7 @@ namespace blocksstable
 
 int ObSkipIndexColMeta::append_skip_index_meta(
     const bool enable_precise_agg,
+    const bool is_major,
     const share::schema::ObSkipIndexColumnAttr &skip_idx_attr,
     const int64_t col_idx,
     common::ObIArray<ObSkipIndexColMeta> &skip_idx_metas)
@@ -55,7 +56,7 @@ int ObSkipIndexColMeta::append_skip_index_meta(
     }
   }
 
-  if (OB_SUCC(ret) && skip_idx_attr.has_sum() && enable_precise_agg) {
+  if (OB_SUCC(ret) && skip_idx_attr.has_sum() && enable_precise_agg && is_major) {
     if (!has_null_count_column
         && OB_FAIL(skip_idx_metas.push_back(ObSkipIndexColMeta(col_idx, ObSkipIndexColType::SK_IDX_NULL_COUNT)))) {
       STORAGE_LOG(WARN, "failed to push null count skip index meta", K(ret));
