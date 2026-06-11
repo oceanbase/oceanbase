@@ -7104,45 +7104,51 @@ int ObRawExprResolverImpl::process_lnnvl_node(const ParseNode *node, ObRawExpr *
 {
   int ret = OB_SUCCESS;
   CK(T_FUN_SYS_LNNVL == node->type_);
-  CK(1 == node->num_child_);
-  CK(OB_NOT_NULL(node->children_));
-  CK(OB_NOT_NULL(node->children_[0]));
-  ObItemType param_type = node->children_[0]->type_;
-  switch (param_type) {
-    case T_FUN_SYS_LNNVL:
-    case T_FUN_SYS_REGEXP_LIKE:
-    case T_OP_EXISTS:
-    case T_OP_IS:
-    case T_OP_IS_NOT:
-    case T_OP_LIKE:
-    case T_OP_NOT_LIKE:
-    case T_OP_IN:
-    case T_OP_NOT_IN:
-    case T_OP_LE:
-    case T_OP_LT:
-    case T_OP_EQ:
-    case T_OP_GE:
-    case T_OP_GT:
-    case T_OP_NE: {
-      break;
+  if (OB_FAIL(ret)) {
+    // nop
+  } else if ((0 == node->num_child_ || OB_ISNULL(node->children_) || OB_ISNULL(node->children_[0]))) {
+    ret = OB_ERR_MISSING_EXPRESSION;
+    LOG_USER_ERROR(OB_ERR_MISSING_EXPRESSION);
+  } else if (node->num_child_ > 1 || T_LINK_NODE == node->children_[0]->type_) {
+    ret = OB_ERR_MISSING_RIGHT_PARENTHESIS;
+    LOG_USER_ERROR(OB_ERR_MISSING_RIGHT_PARENTHESIS);
+  } else {
+    ObItemType param_type = node->children_[0]->type_;
+    switch (param_type) {
+      case T_FUN_SYS_LNNVL:
+      case T_FUN_SYS_REGEXP_LIKE:
+      case T_OP_EXISTS:
+      case T_OP_IS:
+      case T_OP_IS_NOT:
+      case T_OP_LIKE:
+      case T_OP_NOT_LIKE:
+      case T_OP_IN:
+      case T_OP_NOT_IN:
+      case T_OP_LE:
+      case T_OP_LT:
+      case T_OP_EQ:
+      case T_OP_GE:
+      case T_OP_GT:
+      case T_OP_NE: {
+        break;
+      }
+      default: {
+        ret = OB_ERR_INVALID_RELATIONAL_OPERATOR;
+        LOG_USER_ERROR(OB_ERR_INVALID_RELATIONAL_OPERATOR);
+        break;
+      }
     }
-    default: {
-      ret = OB_INCORRECT_USE_OF_OPERATOR;
-      ObString tmp_msg("LNNVL");
-      LOG_USER_ERROR(OB_INCORRECT_USE_OF_OPERATOR, tmp_msg.length(), tmp_msg.ptr());
-      break;
+    if (OB_SUCC(ret)) {
+      ObSysFunRawExpr *func_expr = NULL;
+      ObRawExpr *param_expr = NULL;
+      OZ(SMART_CALL(recursive_resolve(node->children_[0], param_expr)));
+      CK(OB_NOT_NULL(param_expr));
+      OZ(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_LNNVL, func_expr));
+      CK(OB_NOT_NULL(func_expr));
+      OZ(func_expr->set_param_expr(param_expr));
+      OX(func_expr->set_func_name(ObString::make_string(N_LNNVL)));
+      OX(expr = func_expr);
     }
-  }
-  if (OB_SUCC(ret)) {
-    ObSysFunRawExpr *func_expr = NULL;
-    ObRawExpr *param_expr = NULL;
-    OZ(SMART_CALL(recursive_resolve(node->children_[0], param_expr)));
-    CK(OB_NOT_NULL(param_expr));
-    OZ(ctx_.expr_factory_.create_raw_expr(T_FUN_SYS_LNNVL, func_expr));
-    CK(OB_NOT_NULL(func_expr));
-    OZ(func_expr->set_param_expr(param_expr));
-    OX(func_expr->set_func_name(ObString::make_string(N_LNNVL)));
-    OX(expr = func_expr);
   }
   return ret;
 }
@@ -8763,6 +8769,41 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node,
           }
         } //end for
 
+        if (OB_SUCC(ret) && lib::is_oracle_mode()
+            && 0 == func_name.case_compare(N_LNNVL)) {
+          int32_t cnt = func_expr->get_param_count();
+          if (cnt > 1) {
+            ret = OB_ERR_MISSING_RIGHT_PARENTHESIS;
+            LOG_USER_ERROR(OB_ERR_MISSING_RIGHT_PARENTHESIS);
+          } else {
+            ObRawExpr *param = func_expr->get_param_expr(0);
+            if (OB_NOT_NULL(param)) {
+              switch (param->get_expr_type()) {
+                case T_FUN_SYS_LNNVL:
+                case T_FUN_SYS_REGEXP_LIKE:
+                case T_OP_EXISTS:
+                case T_OP_IS:
+                case T_OP_IS_NOT:
+                case T_OP_LIKE:
+                case T_OP_NOT_LIKE:
+                case T_OP_IN:
+                case T_OP_NOT_IN:
+                case T_OP_LE:
+                case T_OP_LT:
+                case T_OP_EQ:
+                case T_OP_GE:
+                case T_OP_GT:
+                case T_OP_NE:
+                  break;
+                default:
+                  ret = OB_ERR_INVALID_RELATIONAL_OPERATOR;
+                  LOG_USER_ERROR(OB_ERR_INVALID_RELATIONAL_OPERATOR);
+              }
+            }
+          }
+        }
+
+
         //
         // check param count
         if (ret != OB_SUCCESS) {
@@ -8777,8 +8818,13 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node,
           if (ret == OB_SUCCESS) {
             ret = temp_ret;
           }
+          if (lib::is_oracle_mode()
+              && 0 == func_name.case_compare(N_LNNVL)
+              && func_expr->get_param_count() > 1) {
+            ret = OB_ERR_MISSING_RIGHT_PARENTHESIS;
+            LOG_USER_ERROR(OB_ERR_MISSING_RIGHT_PARENTHESIS);
+          }
         }
-
         if (OB_SUCC(ret)) {
           if (OB_FAIL(process_sys_func_params(*func_expr, current_columns_count))) {
             LOG_WARN("fail process sys func params", K(ret));
@@ -8789,7 +8835,12 @@ int ObRawExprResolverImpl::process_fun_sys_node(const ParseNode *node,
   }
 
   if (OB_SUCC(ret)) {
-    if (OB_FAIL(ObRawExprUtils::function_alias(ctx_.expr_factory_, func_expr))) {
+    if (lib::is_oracle_mode()
+        && 0 == func_name.case_compare(N_LNNVL)
+        && 1 == node->num_child_) {
+      ret = OB_ERR_MISSING_EXPRESSION;
+      LOG_USER_ERROR(OB_ERR_MISSING_EXPRESSION);
+    } else if (OB_FAIL(ObRawExprUtils::function_alias(ctx_.expr_factory_, func_expr))) {
       LOG_WARN("failed to do function alias", K(ret), K(func_expr));
     } else if (OB_FAIL(func_expr->check_param_num())) {
       if (OB_ERR_FUNCTION_UNKNOWN != ret) {

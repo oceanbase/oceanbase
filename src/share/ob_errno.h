@@ -1315,6 +1315,9 @@ constexpr int OB_ERR_EXCLUSIVE_LOCK_CONFLICT = -6003;
 constexpr int OB_ERR_SHARED_LOCK_CONFLICT = -6004;
 constexpr int OB_TRY_LOCK_ROW_CONFLICT = -6005;
 constexpr int OB_ERR_EXCLUSIVE_LOCK_CONFLICT_NOWAIT = -6006;
+constexpr int OB_ERR_MISSING_EXPRESSION = -6007;
+constexpr int OB_ERR_MISSING_RIGHT_PARENTHESIS = -6008;
+constexpr int OB_ERR_INVALID_RELATIONAL_OPERATOR = -6009;
 constexpr int OB_CLOCK_OUT_OF_ORDER = -6201;
 constexpr int OB_TRANS_HAS_DECIDED = -6204;
 constexpr int OB_TRANS_INVALID_STATE = -6205;
@@ -3641,6 +3644,9 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_ERR_SHARED_LOCK_CONFLICT__USER_ERROR_MSG "Statement is timeout"
 #define OB_TRY_LOCK_ROW_CONFLICT__USER_ERROR_MSG "Try lock row conflict"
 #define OB_ERR_EXCLUSIVE_LOCK_CONFLICT_NOWAIT__USER_ERROR_MSG "Lock wait timeout exceeded; try restarting transaction"
+#define OB_ERR_MISSING_EXPRESSION__USER_ERROR_MSG "missing expression"
+#define OB_ERR_MISSING_RIGHT_PARENTHESIS__USER_ERROR_MSG "missing right parenthesis"
+#define OB_ERR_INVALID_RELATIONAL_OPERATOR__USER_ERROR_MSG "invalid relational operator"
 #define OB_CLOCK_OUT_OF_ORDER__USER_ERROR_MSG "Clock out of order"
 #define OB_SWITCHING_TO_FOLLOWER_GRACEFULLY__USER_ERROR_MSG "%s"
 #define OB_MASK_SET_NO_NODE__USER_ERROR_MSG "Mask set has no node"
@@ -7734,6 +7740,12 @@ constexpr int OB_ERR_INVALID_DATE_MSG_FMT_V2 = -4219;
 #define OB_TRY_LOCK_ROW_CONFLICT__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -6005, Try lock row conflict"
 #define OB_ERR_EXCLUSIVE_LOCK_CONFLICT_NOWAIT__ORA_USER_ERROR_MSG "ORA-00054: resource busy and acquire with NOWAIT specified or timeout expired"
 #define OB_ERR_EXCLUSIVE_LOCK_CONFLICT_NOWAIT__OBE_USER_ERROR_MSG "OBE-00054: resource busy and acquire with NOWAIT specified or timeout expired"
+#define OB_ERR_MISSING_EXPRESSION__ORA_USER_ERROR_MSG "ORA-00936: missing expression"
+#define OB_ERR_MISSING_EXPRESSION__OBE_USER_ERROR_MSG "OBE-00936: missing expression"
+#define OB_ERR_MISSING_RIGHT_PARENTHESIS__ORA_USER_ERROR_MSG "ORA-00907: missing right parenthesis"
+#define OB_ERR_MISSING_RIGHT_PARENTHESIS__OBE_USER_ERROR_MSG "OBE-00907: missing right parenthesis"
+#define OB_ERR_INVALID_RELATIONAL_OPERATOR__ORA_USER_ERROR_MSG "ORA-00920: invalid relational operator"
+#define OB_ERR_INVALID_RELATIONAL_OPERATOR__OBE_USER_ERROR_MSG "OBE-00920: invalid relational operator"
 #define OB_CLOCK_OUT_OF_ORDER__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6201, Clock out of order"
 #define OB_CLOCK_OUT_OF_ORDER__OBE_USER_ERROR_MSG "OBE-00600: internal error code, arguments: -6201, Clock out of order"
 #define OB_SWITCHING_TO_FOLLOWER_GRACEFULLY__ORA_USER_ERROR_MSG "ORA-00600: internal error code, arguments: -6202, %s"
