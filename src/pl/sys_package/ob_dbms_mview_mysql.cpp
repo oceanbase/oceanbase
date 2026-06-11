@@ -15,7 +15,9 @@
 #include "pl/sys_package/ob_dbms_mview_mysql.h"
 #include "storage/mview/cmd/ob_mview_purge_log_executor.h"
 #include "storage/mview/cmd/ob_mview_refresh_executor.h"
+#include "storage/mview/cmd/ob_mview_explain_refresh_executor.h"
 #include "storage/mview/cmd/ob_mview_executor_util.h"
+#include "share/ob_lob_access_utils.h"
 #include "storage/mview/ob_mview_sched_job_utils.h"
 #include "sql/resolver/ob_schema_checker.h"
 
@@ -222,5 +224,65 @@ int ObDBMSMViewMysql::set_refresh_params(ObExecContext &ctx, ParamStore &params,
   }
   return ret;
 }
+/*
+FUNCTION explain_refresh(
+    IN     mv_name                VARCHAR(65535),
+    IN     method                 VARCHAR(65535) DEFAULT NULL,
+    IN     nested                 BOOLEAN        DEFAULT FALSE,
+    IN     tenant_id              INT            DEFAULT 0
+) RETURN TEXT;
+*/
+int ObDBMSMViewMysql::explain_refresh(ObPLExecCtx &ctx, ParamStore &params, ObObj &result)
+{
+  int ret = OB_SUCCESS;
+  ObExecContext *exec_ctx = ctx.get_exec_ctx();
+  if (OB_ISNULL(exec_ctx) || OB_ISNULL(ctx.allocator_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("exec ctx or allocator is null", KR(ret));
+  } else if (OB_UNLIKELY(4 != params.count())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid params count for explain_refresh", KR(ret), K(params.count()));
+  } else if (!params.at(0).is_varchar()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid mv_name param", KR(ret));
+  } else if (!params.at(1).is_null() && !params.at(1).is_varchar()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid method param", KR(ret));
+  } else if (!params.at(2).is_tinyint()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid nested param", KR(ret));
+  } else if (!params.at(3).is_int32() && !params.at(3).is_int()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id param", KR(ret));
+  } else if (OB_UNLIKELY(params.at(3).get_int() < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id param", KR(ret), K(params.at(3).get_int()));
+  } else {
+    ObMViewExplainRefreshArg explain_arg;
+    ObMViewExplainRefreshExecutor executor;
+    ObString result_str;
+    explain_arg.list_ = params.at(0).get_varchar();
+    explain_arg.method_ = params.at(1).is_varchar() ? params.at(1).get_varchar() : ObString();
+    explain_arg.nested_ = params.at(2).get_bool();
+    explain_arg.tenant_id_ = static_cast<uint64_t>(params.at(3).get_int());
+    ObIAllocator &alloc = *ctx.allocator_;
+    ObString lob_str;
+    ObTextStringResult text_res(ObLongTextType, true, &alloc);
+    if (OB_FAIL(executor.execute(*exec_ctx, explain_arg, alloc, result_str))) {
+      LOG_WARN("fail to execute explain_refresh", KR(ret), K(explain_arg));
+    } else if (OB_FAIL(text_res.init(result_str.length()))) {
+      LOG_WARN("fail to init text result", KR(ret));
+    } else if (OB_FAIL(text_res.append(result_str.ptr(), result_str.length()))) {
+      LOG_WARN("fail to append text result", KR(ret));
+    } else {
+      text_res.get_result_buffer(lob_str);
+      result.set_lob_value(ObLongTextType, lob_str.ptr(), lob_str.length());
+      result.set_collation_type(CS_TYPE_UTF8MB4_GENERAL_CI);
+      result.set_has_lob_header();
+    }
+  }
+  return ret;
+}
+
 } // namespace pl
 } // namespace oceanbase
