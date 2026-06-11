@@ -3356,3 +3356,10 @@ DEF_BOOL(_record_ps_execute_params, OB_TENANT_PARAMETER, "True",
 DEF_BOOL(_enable_pl_sql_parameterize, OB_TENANT_PARAMETER, "False",
       "enable/disable pl sql parameterize optimization",
       ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_trigger_dml_snapshot_opt, OB_TENANT_PARAMETER, "False",
+         "enable snapshot optimization for DML with row-level triggers."
+         " When true, INSERT skips unnecessary snapshot acquisition,"
+         " UPDATE/DELETE try local LS read snapshot instead of remote GTS,"
+         " reducing RPC count on data-local execution.",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

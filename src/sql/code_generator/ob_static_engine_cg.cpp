@@ -10151,10 +10151,25 @@ int ObStaticEngineCG::set_properties_post(const ObLogPlan &log_plan, ObPhysicalP
           log_plan.get_stmt()->is_update_stmt() ||
           log_plan.get_stmt()->is_delete_stmt() ||
           log_plan.get_stmt()->is_merge_stmt()) {
-        //为了支持触发器/UDF支持异常捕获，要求含有pl udf的涉及修改表数据的dml串行执行
         phy_plan_->set_need_serial_exec(true);
       }
       phy_plan_->set_has_nested_sql(true);
+    } else if (log_plan.get_stmt()->get_query_ctx()->has_dml_trigger_) {
+      phy_plan_->set_has_nested_sql(true);
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(my_session->get_effective_tenant_id()));
+      if (tenant_config.is_valid() && tenant_config->_enable_trigger_dml_snapshot_opt) {
+        if (log_plan.get_stmt()->is_update_stmt() ||
+            log_plan.get_stmt()->is_delete_stmt()) {
+          phy_plan_->set_try_ls_snapshot_first(true);
+        }
+      } else {
+        if (log_plan.get_stmt()->is_insert_stmt() ||
+            log_plan.get_stmt()->is_update_stmt() ||
+            log_plan.get_stmt()->is_delete_stmt() ||
+            log_plan.get_stmt()->is_merge_stmt()) {
+          phy_plan_->set_need_serial_exec(true);
+        }
+      }
     } else {/*do nothing*/}
     if (OB_SUCC(ret)) {
       if (!phy_plan_->contain_pl_udf_or_trigger()) {

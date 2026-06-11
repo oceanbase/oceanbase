@@ -2588,7 +2588,7 @@ int ObDelUpdResolver::check_need_fired_trigger(const TableItem* table_item)
           }
         }
       }
-      OX (stmt_->get_query_ctx()->disable_udf_parallel_ |= has);
+      OX (stmt_->get_query_ctx()->has_dml_trigger_ |= has);
       if (OB_SUCC(ret) && has && table_schema->is_user_view()) {
         if (!stmt_->is_support_instead_of_trigger_stmt()) {
           ret = OB_NOT_SUPPORTED;

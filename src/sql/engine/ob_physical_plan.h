@@ -550,6 +550,8 @@ public:
   bool is_packed() const { return is_packed_; }
   void set_has_instead_of_trigger(bool v) { has_instead_of_trigger_ = v;}
   bool has_instead_of_trigger() const { return has_instead_of_trigger_; }
+  void set_try_ls_snapshot_first(bool v) { try_ls_snapshot_first_ = v; }
+  bool try_ls_snapshot_first() const { return try_ls_snapshot_first_; }
   virtual int update_cache_obj_stat(ObILibCacheCtx &ctx);
   void calc_whether_need_trans();
   inline uint64_t get_min_cluster_version() const { return min_cluster_version_; }
@@ -832,6 +834,7 @@ public:
   uint64_t cache_node_id_; // indicate this plan belong to which Cache Node
   uint64_t pcv_id_; // indicate this plan belong to which Plan Cache Value
   uint64_t plan_set_id_; // indicate this plan belong to which Plan Set
+  bool try_ls_snapshot_first_;
 };
 
 struct ObPhyPlanClusterVersion

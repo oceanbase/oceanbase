@@ -1289,7 +1289,8 @@ int ObOptimizer::check_whether_contain_nested_sql(const ObDMLStmt &stmt)
     stmt.get_query_ctx()->disable_udf_parallel_ |= ((stmt.is_select_stmt() && stmt.has_for_update())
                                                    || (stmt.is_dml_write_stmt()));
   }
-  if (stmt.get_query_ctx()->disable_udf_parallel_) {
+  if (stmt.get_query_ctx()->disable_udf_parallel_
+      || stmt.get_query_ctx()->has_dml_trigger_) {
     ctx_.set_has_pl_udf(true);
   }
   if (ObSQLUtils::is_nested_sql(ctx_.get_exec_ctx())) {
