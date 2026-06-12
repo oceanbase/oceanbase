@@ -374,9 +374,15 @@ int ObTabletAutoincSeqRpcHandler::replay_update_tablet_autoinc_seq(
     LOG_WARN("invalid argument", K(ret), K(tablet_id), K(autoinc_seq), K(replay_scn));
   } else {
     ObTabletHandle tablet_handle;
-    ObBucketHashWLockGuard guard(bucket_lock_, tablet_id.hash());
     ObSyncTabletSeqReplayExecutor replay_executor;
-    if (OB_FAIL(replay_executor.init(autoinc_seq, is_tablet_creating, replay_scn))) {
+    const int64_t bucket_idx = tablet_id.hash() % BUCKET_LOCK_BUCKET_CNT;
+    const int64_t abs_timeout_us = ObTimeUtility::current_time() + 1000000; // 1s
+    bool locked = false;
+    if (OB_FAIL(bucket_lock_.wrlock(bucket_idx, abs_timeout_us))) {
+      ret = OB_EAGAIN;
+      LOG_WARN("failed to wlock", K(ret));
+    } else if (OB_FALSE_IT(locked = true)) {
+    } else if (OB_FAIL(replay_executor.init(autoinc_seq, is_tablet_creating, replay_scn))) {
       LOG_WARN("failed to init tablet auto inc sequence replay executor", K(ret), K(autoinc_seq), K(is_tablet_creating), K(replay_scn));
     } else if (OB_FAIL(replay_executor.execute(replay_scn, ls->get_ls_id(), tablet_id))) {
       if (OB_TABLET_NOT_EXIST == ret) {
@@ -391,6 +397,9 @@ int ObTabletAutoincSeqRpcHandler::replay_update_tablet_autoinc_seq(
         LOG_WARN("fail to replay get tablet, retry again", K(ret), K(tablet_id), K(replay_scn));
         ret = OB_EAGAIN;
       }
+    }
+    if (locked) {
+      bucket_lock_.unlock(bucket_idx);
     }
   }
   return ret;
