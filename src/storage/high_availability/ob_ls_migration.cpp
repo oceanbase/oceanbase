@@ -4070,12 +4070,12 @@ int ObDataTabletsMigrationTask::process()
     }
 #endif
 
-    if (FAILEDx(ctx_->tablet_dep_mgr_.check_is_done(is_tablet_copy_done))) {
+    if (FAILEDx(generate_tablet_group_generate_dag_())) {
+      LOG_WARN("failed to generate tablet group dag", K(ret), KPC(ctx_));
+    } else if (FAILEDx(ctx_->tablet_dep_mgr_.check_is_done(is_tablet_copy_done))) {
       LOG_WARN("failed to check tablet copy dependency mgr is done", K(ret), KPC(ctx_));
     } else if (is_tablet_copy_done) {
-      // skip data tablet group and check convert dags since no data tablet group needs migration
-    } else if (FAILEDx(generate_tablet_group_generate_dag_())) {
-      LOG_WARN("failed to generate tablet group dag", K(ret), KPC(ctx_));
+      // skip check convert dags since no data tablet group needs migration
     } else if (OB_FAIL(generate_check_co_convert_dag_if_needed())) {
       LOG_WARN("failed to generate check convert dag", K(ret), KPC(ctx_));
     }
