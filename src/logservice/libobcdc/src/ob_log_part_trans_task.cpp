@@ -3314,6 +3314,19 @@ int PartTransTask::push_tic_update_info(const TICUpdateInfo &tic_update_info)
   return ret;
 }
 
+int PartTransTask::reserve_tic_update_info(const int64_t count)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(count < 0)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_ERROR("invalid tic_update_info reserve count", KR(ret), K(count));
+  } else if (OB_FAIL(tic_update_infos_.reserve(tic_update_infos_.count() + count))) {
+    LOG_ERROR("reserve tic_update_info failed", KR(ret), K(count),
+        "current_count", tic_update_infos_.count());
+  }
+  return ret;
+}
+
 int PartTransTask::alloc_log_entry_node_(const palf::LSN &lsn, LogEntryNode *&log_entry_node)
 {
   int ret = OB_SUCCESS;

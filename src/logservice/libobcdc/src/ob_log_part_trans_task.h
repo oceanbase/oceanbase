@@ -1274,6 +1274,7 @@ public:
   int check_for_ddl_trans(
       bool &is_not_barrier,
       ObSchemaOperationType &op_type) const;
+  int reserve_tic_update_info(const int64_t count);
   int push_tic_update_info(const TICUpdateInfo &tic_update_info);
   void get_tic_update_info(ObArray<TICUpdateInfo> &tic_update_infos) const
   {

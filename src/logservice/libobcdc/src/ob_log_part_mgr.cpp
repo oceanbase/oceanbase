@@ -16,6 +16,7 @@
 
 
 #include "ob_log_part_mgr.h"
+#include "lib/container/ob_se_array.h"                 // ObSEArray
 #include "share/schema/ob_schema_struct.h"            // USER_TABLE
 #include "share/inner_table/ob_inner_table_schema.h"  // OB_ALL_DDL_OPERATION_TID
 
@@ -818,25 +819,14 @@ int ObLogPartMgr::alter_table(const uint64_t table_id,
       table_name, is_user_table, chosen, database_id, timeout))) {
     LOG_ERROR("table_match_ failed", KR(ret), K(new_schema_version), K(table_id));
   } else if (!is_user_table) {
-  } else if (!chosen) {
-    TICUpdateInfo tic_update_info(TICUpdateInfo::TICUpdateReason::RENAME_TABLE_REMOVE, database_id, table_id);
-    PartTransTask &part_trans_task = ddl_stmt.get_host();
-    if (OB_FAIL(part_trans_task.push_tic_update_info(tic_update_info))) {
-      LOG_ERROR("push tic update info failed", KR(ret), K(new_schema_version), K(tic_update_info),
-          K(tenant_name), K(database_name), K(table_name));
-    } else {
-      ISTAT("set tic update info success", K(new_schema_version), K(tic_update_info),
-          K(tenant_name), K(database_name), K(table_name));
-    }
   } else {
-    TICUpdateInfo tic_update_info(TICUpdateInfo::TICUpdateReason::RENAME_TABLE_ADD, database_id, table_id);
-    PartTransTask &part_trans_task = ddl_stmt.get_host();
-    if (OB_FAIL(part_trans_task.push_tic_update_info(tic_update_info))) {
-      LOG_ERROR("push tic update info failed", KR(ret), K(new_schema_version), K(tic_update_info),
-          K(tenant_name), K(database_name), K(table_name));
-    } else {
-      ISTAT("set tic update info success", K(new_schema_version), K(tic_update_info),
-          K(tenant_name), K(database_name), K(table_name));
+    const TICUpdateInfo::TICUpdateReason update_reason = chosen
+        ? TICUpdateInfo::TICUpdateReason::RENAME_TABLE_ADD
+        : TICUpdateInfo::TICUpdateReason::RENAME_TABLE_REMOVE;
+    if (OB_FAIL(push_table_and_lob_aux_tic_update_info_(ddl_stmt, update_reason,
+        database_id, table_id, new_schema_version, timeout, tenant_name, database_name, table_name))) {
+      LOG_ERROR("push alter table tic update info failed", KR(ret), K(new_schema_version),
+          K(table_id), K(update_reason), K(tenant_name), K(database_name), K(table_name));
     }
   }
   return ret;
@@ -946,27 +936,152 @@ int ObLogPartMgr::rename_table(const uint64_t table_id,
       table_name, is_user_table, chosen, database_id, timeout))) {
     LOG_ERROR("table_match_ failed", KR(ret), K(new_schema_version), K(table_id));
   } else if (!is_user_table) {
-  } else if (!chosen) {
-    TICUpdateInfo tic_update_info(TICUpdateInfo::TICUpdateReason::RENAME_TABLE_REMOVE,
-        database_id, table_id);
-    PartTransTask &part_trans_task = ddl_stmt.get_host();
-    if (OB_FAIL(part_trans_task.push_tic_update_info(tic_update_info))) {
-      LOG_ERROR("push tic update info failed", KR(ret), K(new_schema_version), K(tic_update_info),
-          K(tenant_name), K(database_name), K(table_name));
+  } else {
+    const TICUpdateInfo::TICUpdateReason update_reason = chosen
+        ? TICUpdateInfo::TICUpdateReason::RENAME_TABLE_ADD
+        : TICUpdateInfo::TICUpdateReason::RENAME_TABLE_REMOVE;
+    if (OB_FAIL(push_table_and_lob_aux_tic_update_info_(ddl_stmt, update_reason,
+        database_id, table_id, new_schema_version, timeout, tenant_name, database_name, table_name))) {
+      LOG_ERROR("push rename table tic update info failed", KR(ret), K(new_schema_version),
+          K(table_id), K(update_reason), K(tenant_name), K(database_name), K(table_name));
+    }
+  }
+  return ret;
+}
+
+int ObLogPartMgr::push_tic_update_info_(DdlStmtTask &ddl_stmt,
+    const TICUpdateInfo::TICUpdateReason update_reason,
+    const uint64_t database_id,
+    const uint64_t table_id,
+    const int64_t schema_version,
+    const char *tenant_name,
+    const char *database_name,
+    const char *table_name)
+{
+  int ret = OB_SUCCESS;
+  TICUpdateInfo tic_update_info(update_reason, database_id, table_id);
+  PartTransTask &part_trans_task = ddl_stmt.get_host();
+  if (OB_FAIL(part_trans_task.push_tic_update_info(tic_update_info))) {
+    LOG_ERROR("push tic update info failed", KR(ret), K(schema_version), K(tic_update_info),
+        K(tenant_name), K(database_name), K(table_name));
+  } else {
+    ISTAT("set tic update info success", K(schema_version), K(tic_update_info),
+        K(tenant_name), K(database_name), K(table_name));
+  }
+  return ret;
+}
+
+int ObLogPartMgr::push_table_and_lob_aux_tic_update_info_(DdlStmtTask &ddl_stmt,
+    const TICUpdateInfo::TICUpdateReason update_reason,
+    const uint64_t database_id,
+    const uint64_t table_id,
+    const int64_t schema_version,
+    const int64_t timeout,
+    const char *tenant_name,
+    const char *database_name,
+    const char *table_name)
+{
+  int ret = OB_SUCCESS;
+  common::ObSEArray<uint64_t, 2> aux_lob_table_ids;
+  if (OB_FAIL(collect_lob_aux_tic_table_ids_(table_id, schema_version,
+      timeout, aux_lob_table_ids))) {
+    LOG_ERROR("collect lob aux tic table ids failed", KR(ret), K(schema_version),
+        K(table_id), K(update_reason), K(tenant_name), K(database_name), K(table_name));
+  } else if (OB_FAIL(ddl_stmt.get_host().reserve_tic_update_info(1 + aux_lob_table_ids.count()))) {
+    LOG_ERROR("reserve tic update info failed", KR(ret), K(schema_version),
+        K(table_id), K(update_reason), "tic_update_info_count", 1 + aux_lob_table_ids.count(),
+        K(tenant_name), K(database_name), K(table_name));
+  } else if (OB_FAIL(push_tic_update_info_(ddl_stmt, update_reason, database_id, table_id,
+      schema_version, tenant_name, database_name, table_name))) {
+    LOG_ERROR("push base table tic update info failed", KR(ret), K(schema_version),
+        K(table_id), K(update_reason), K(tenant_name), K(database_name), K(table_name));
+  } else {
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < aux_lob_table_ids.count(); ++idx) {
+      const uint64_t aux_lob_table_id = aux_lob_table_ids.at(idx);
+      if (OB_FAIL(push_tic_update_info_(ddl_stmt, update_reason, database_id,
+          aux_lob_table_id, schema_version, tenant_name, database_name, table_name))) {
+        LOG_ERROR("push lob aux table tic update info failed", KR(ret), K(schema_version),
+            K(table_id), K(aux_lob_table_id), K(update_reason), K(tenant_name),
+            K(database_name), K(table_name));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObLogPartMgr::collect_lob_aux_tic_table_ids_(const uint64_t table_id,
+    const int64_t new_schema_version,
+    const int64_t timeout,
+    common::ObIArray<uint64_t> &aux_lob_table_ids)
+{
+  int ret = OB_SUCCESS;
+  uint64_t aux_lob_meta_tid = OB_INVALID_ID;
+  uint64_t aux_lob_piece_tid = OB_INVALID_ID;
+  aux_lob_table_ids.reset();
+
+  if (is_online_refresh_mode(TCTX.refresh_mode_)) {
+    IObLogSchemaGetter *schema_getter = TCTX.schema_getter_;
+    ObLogSchemaGuard schema_guard;
+    const ObTableSchema *table_schema = nullptr;
+    if (OB_ISNULL(schema_getter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("schema_getter is null when updating lob aux tic", KR(ret),
+          K(table_id), K(new_schema_version));
+    } else if (OB_FAIL(schema_getter->get_schema_guard_and_full_table_schema(
+        tenant_id_, table_id, new_schema_version, timeout, schema_guard, table_schema))) {
+      if (OB_TIMEOUT != ret) {
+        LOG_ERROR("get renamed full table schema failed when updating lob aux tic", KR(ret),
+            K(table_id), K(new_schema_version));
+      }
+    } else if (OB_ISNULL(table_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("renamed table schema is null when updating lob aux tic", KR(ret),
+          K(table_id), K(new_schema_version));
     } else {
-      ISTAT("set tic update info success", K(new_schema_version), K(tic_update_info),
-          K(tenant_name), K(database_name), K(table_name));
+      aux_lob_meta_tid = table_schema->get_aux_lob_meta_tid();
+      aux_lob_piece_tid = table_schema->get_aux_lob_piece_tid();
     }
   } else {
-    TICUpdateInfo tic_update_info(TICUpdateInfo::TICUpdateReason::RENAME_TABLE_ADD,
-        database_id, table_id);
-    PartTransTask &part_trans_task = ddl_stmt.get_host();
-    if (OB_FAIL(part_trans_task.push_tic_update_info(tic_update_info))) {
-      LOG_ERROR("push tic update info failed", KR(ret), K(new_schema_version), K(tic_update_info),
-          K(tenant_name), K(database_name), K(table_name));
+    ObDictTenantInfoGuard dict_tenant_info_guard;
+    ObDictTenantInfo *tenant_info = nullptr;
+    datadict::ObDictTableMeta *table_meta = nullptr;
+    if (OB_FAIL(GLOGMETADATASERVICE.get_tenant_info_guard(tenant_id_, dict_tenant_info_guard))) {
+      LOG_ERROR("get tenant_info_guard failed when updating lob aux tic", KR(ret),
+          K_(tenant_id), K(table_id), K(new_schema_version));
+    } else if (OB_ISNULL(tenant_info = dict_tenant_info_guard.get_tenant_info())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("tenant_info is nullptr when updating lob aux tic", KR(ret),
+          K_(tenant_id), K(table_id), K(new_schema_version));
+    } else if (OB_FAIL(tenant_info->get_table_meta(table_id, table_meta))) {
+      LOG_ERROR("get renamed table meta failed when updating lob aux tic", KR(ret),
+          K_(tenant_id), K(table_id), K(new_schema_version));
+    } else if (OB_ISNULL(table_meta)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("renamed table meta is null when updating lob aux tic", KR(ret),
+          K_(tenant_id), K(table_id), K(new_schema_version));
     } else {
-      ISTAT("set tic update info success", K(new_schema_version), K(tic_update_info),
-          K(tenant_name), K(database_name), K(table_name));
+      aux_lob_meta_tid = table_meta->get_aux_lob_meta_tid();
+      aux_lob_piece_tid = table_meta->get_aux_lob_piece_tid();
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_INVALID_ID != aux_lob_meta_tid
+        && OB_FAIL(aux_lob_table_ids.push_back(aux_lob_meta_tid))) {
+      LOG_ERROR("push aux lob meta table id failed", KR(ret), K(table_id), K(new_schema_version),
+          K(aux_lob_meta_tid));
+    } else if (OB_INVALID_ID != aux_lob_piece_tid
+        && aux_lob_piece_tid != aux_lob_meta_tid
+        && OB_FAIL(aux_lob_table_ids.push_back(aux_lob_piece_tid))) {
+      LOG_ERROR("push aux lob piece table id failed", KR(ret), K(table_id), K(new_schema_version),
+          K(aux_lob_piece_tid));
+    } else {
+      if ((OB_INVALID_ID == aux_lob_meta_tid) != (OB_INVALID_ID == aux_lob_piece_tid)) {
+        LOG_WARN("lob aux table id is partially invalid when collecting rename tic",
+            K(table_id), K(new_schema_version), K(aux_lob_meta_tid), K(aux_lob_piece_tid));
+      }
+      LOG_INFO("collect lob aux rename tic table ids success",
+          K(table_id), K(new_schema_version), K(aux_lob_meta_tid), K(aux_lob_piece_tid));
     }
   }
   return ret;
@@ -2598,12 +2713,12 @@ int ObLogPartMgr::get_table_info_of_table_schema_(ObLogSchemaGuard &schema_guard
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("the origin table of user hidden table can't be another user hidden table",
           KR(ret), KPC(origin_table_schema));
-    } else if (origin_table_schema->is_aux_lob_meta_table()) {
+    } else if (origin_table_schema->is_aux_lob_table()) {
       const ObSimpleTableSchemaV2 *primary_table_schema = nullptr;
       if (OB_FAIL(try_get_lob_aux_primary_table_schema_(*origin_table_schema, schema_guard,
           timeout, primary_table_schema))) {
         if (OB_TIMEOUT != ret) {
-          LOG_ERROR("get primary_table_schema of lob_aux_meta table failed", KR(ret),
+          LOG_ERROR("get primary_table_schema of lob_aux table failed", KR(ret),
               "table_id", origin_table_schema->get_table_id(), "table_name",
               origin_table_schema->get_table_name());
         }
@@ -2613,12 +2728,12 @@ int ObLogPartMgr::get_table_info_of_table_schema_(ObLogSchemaGuard &schema_guard
     } else {
       final_table_schema = origin_table_schema;
     }
-  } else if (table_schema->is_aux_lob_meta_table()) {
+  } else if (table_schema->is_aux_lob_table()) {
     const ObSimpleTableSchemaV2 *primary_table_schema = nullptr;
     if (OB_FAIL(try_get_lob_aux_primary_table_schema_(*table_schema, schema_guard,
         timeout, primary_table_schema))) {
       if (OB_TIMEOUT != ret) {
-        LOG_ERROR("get primary_table_schema of lob_aux_meta table failed", KR(ret),
+        LOG_ERROR("get primary_table_schema of lob_aux table failed", KR(ret),
             K(table_id), KPC(table_schema));
       }
     } else if (OB_ISNULL(primary_table_schema)) {
@@ -2627,9 +2742,9 @@ int ObLogPartMgr::get_table_info_of_table_schema_(ObLogSchemaGuard &schema_guard
     } else if (primary_table_schema->is_ddl_table_ignored_to_sync_cdc()) {
       is_ddl_ignored_table = true;
       LOG_INFO("table is ddl ignored table, ignore it", KPC(table_schema));
-    } else if (primary_table_schema->is_aux_lob_meta_table()) {
+    } else if (primary_table_schema->is_aux_lob_table()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("the primary table of lob_aux_meta table can't be another lob_aux_meta table",
+      LOG_ERROR("the primary table of lob_aux table can't be another lob_aux table",
           KR(ret), KPC(primary_table_schema));
     } else if (primary_table_schema->is_user_hidden_table()) {
       const ObSimpleTableSchemaV2 *origin_table_schema = nullptr;
@@ -2713,11 +2828,11 @@ int ObLogPartMgr::get_table_info_of_table_meta_(ObDictTenantInfo *tenant_info,
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("the origin table of user hidden table can't be another user hidden table",
           KR(ret), K(origin_table_meta));
-    } else if (origin_table_meta->is_aux_lob_meta_table()) {
+    } else if (origin_table_meta->is_aux_lob_table()) {
       datadict::ObDictTableMeta *primary_table_meta = nullptr;
       if (OB_FAIL(try_get_lob_aux_primary_table_meta_(*origin_table_meta, tenant_info,
           primary_table_meta))) {
-        LOG_ERROR("get primary table of lob_aux_meta table failed", KR(ret),
+        LOG_ERROR("get primary table of lob_aux table failed", KR(ret),
             KPC(origin_table_meta));
       } else {
         final_table_meta = primary_table_meta;
@@ -2725,11 +2840,11 @@ int ObLogPartMgr::get_table_info_of_table_meta_(ObDictTenantInfo *tenant_info,
     } else {
       final_table_meta = origin_table_meta;
     }
-  } else if (table_meta->is_aux_lob_meta_table()) {
+  } else if (table_meta->is_aux_lob_table()) {
     datadict::ObDictTableMeta *primary_table_meta = nullptr;
     if (OB_FAIL(try_get_lob_aux_primary_table_meta_(*table_meta, tenant_info,
         primary_table_meta))) {
-      LOG_ERROR("get primary_table_meta of lob_aux_meta table failed", KR(ret),
+      LOG_ERROR("get primary_table_meta of lob_aux table failed", KR(ret),
           K(table_id), KPC(table_meta));
     } else if (OB_ISNULL(primary_table_meta)) {
       ret = OB_ERR_UNEXPECTED;
@@ -2737,9 +2852,9 @@ int ObLogPartMgr::get_table_info_of_table_meta_(ObDictTenantInfo *tenant_info,
     } else if (primary_table_meta->is_ddl_table_ignored_to_sync_cdc()) {
       is_ddl_ignored_table = true;
       LOG_INFO("table is ddl ignored table, ignore it", KPC(primary_table_meta));
-    } else if (primary_table_meta->is_aux_lob_meta_table()) {
+    } else if (primary_table_meta->is_aux_lob_table()) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("the primary table of lob_aux_meta table can't be another lob_aux_meta table",
+      LOG_ERROR("the primary table of lob_aux table can't be another lob_aux table",
           KR(ret), KPC(primary_table_meta));
     } else if (primary_table_meta->is_user_hidden_table()) {
       datadict::ObDictTableMeta *origin_table_meta = nullptr;

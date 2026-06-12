@@ -23,6 +23,7 @@
 #include "ob_log_utils.h"                       // _SEC_
 #include "ob_log_part_trans_task.h"             // PartTransTask
 #include "ob_log_meta_data_struct.h"            // ObDictTenantInfo
+#include "ob_log_tic_update_info.h"             // TICUpdateInfo
 
 namespace oceanbase
 {
@@ -432,6 +433,27 @@ private:
   int try_get_lob_aux_primary_table_meta_(const datadict::ObDictTableMeta &table_meta,
       ObDictTenantInfo *tenant_info,
       datadict::ObDictTableMeta *&primary_table_meta);
+  int push_tic_update_info_(DdlStmtTask &ddl_stmt,
+      const TICUpdateInfo::TICUpdateReason update_reason,
+      const uint64_t database_id,
+      const uint64_t table_id,
+      const int64_t schema_version,
+      const char *tenant_name,
+      const char *database_name,
+      const char *table_name);
+  int push_table_and_lob_aux_tic_update_info_(DdlStmtTask &ddl_stmt,
+      const TICUpdateInfo::TICUpdateReason update_reason,
+      const uint64_t database_id,
+      const uint64_t table_id,
+      const int64_t schema_version,
+      const int64_t timeout,
+      const char *tenant_name,
+      const char *database_name,
+      const char *table_name);
+  int collect_lob_aux_tic_table_ids_(const uint64_t table_id,
+      const int64_t new_schema_version,
+      const int64_t timeout,
+      common::ObIArray<uint64_t> &aux_lob_table_ids);
   /// Add a table
   /// When manipulating a global index table, primary_table_schema represents its primary table schema, add_index_table()/do_add_all_tables_()
   /// When handle OFFLINE_DDL scenario, if it is a hidden table, primary_table_schema is the table schema of the origin associated table, add_table()/do_add_all_tables()
