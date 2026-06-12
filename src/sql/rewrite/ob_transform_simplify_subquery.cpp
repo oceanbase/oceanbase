@@ -1570,7 +1570,6 @@ int ObTransformSimplifySubquery::simplify_select_items(ObDMLStmt *stmt,
                                                       bool &trans_happened)
 {
   int ret = OB_SUCCESS;
-  bool has_limit = false;
   ObRawExprFactory *expr_factory = NULL;
   bool can_be_simplified = false;
   if (OB_ISNULL(subquery) || OB_ISNULL(stmt) || OB_ISNULL(ctx_) ||
@@ -1584,14 +1583,24 @@ int ObTransformSimplifySubquery::simplify_select_items(ObDMLStmt *stmt,
   } else if (!can_be_simplified) {
     //do nothing
   } else if (ObSelectStmt::UNION == subquery->get_set_op() && !subquery->is_recursive_union()) {
-    const ObIArray<ObSelectStmt*> &child_stmts = subquery->get_set_query();
+    ObIArray<ObSelectStmt*> &child_stmts = subquery->get_set_query();
+    ObSEArray<bool, 4> child_happened;
     for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
       ObSelectStmt *child = child_stmts.at(i);
-      if (OB_FAIL(SMART_CALL(simplify_select_items(stmt, op_type, child, true, trans_happened)))) {
+      bool is_happened = false;
+      if (OB_FAIL(SMART_CALL(simplify_select_items(stmt, op_type, child, true, is_happened)))) {
         LOG_WARN("Simplify select list in EXISTS fails", K(ret));
+      } else if (OB_FAIL(child_happened.push_back(is_happened))) {
+        LOG_WARN("failed to push back", K(ret));
+      } else {
+        trans_happened |= is_happened;
       }
     }
-    if (OB_SUCC(ret) && trans_happened) {
+    if (OB_FAIL(ret) || !trans_happened) {
+      // do nothing
+    } else if (OB_FAIL(wrap_const_view_for_set_child_if_needed(child_stmts, child_happened))) {
+      LOG_WARN("failed to wrap const view for set child if needed", K(ret));
+    } else {
       ObRawExprResType res_type;
       res_type.set_type(ObIntType);
       for(int64_t i = 0; OB_SUCC(ret) && i < subquery->get_select_item_size(); i++) {
@@ -1671,6 +1680,74 @@ int ObTransformSimplifySubquery::simplify_select_items(ObDMLStmt *stmt,
   }
   return ret;
 }
+
+// Branches that can not be simplified (e.g. MINUS/INTERSECT) keep their original select items.
+// Wrap them into a const view `select 1, ... from (branch)` so that
+// all select items of all set branches will be const int 1.
+int ObTransformSimplifySubquery::wrap_const_view_for_set_child_if_needed(ObIArray<ObSelectStmt*> &child_stmts,
+                                                                         const ObIArray<bool> &child_happened)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected NULL", K(ret));
+  } else if (OB_UNLIKELY(child_stmts.count() != child_happened.count())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("array size mismatch", K(ret), K(child_stmts.count()), K(child_happened.count()));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < child_stmts.count(); ++i) {
+    ObSelectStmt *child_stmt = child_stmts.at(i);
+    ObSelectStmt *view_stmt = NULL;
+    bool need_wrap = false;
+    int64_t select_item_size = 0;
+    if (OB_ISNULL(child_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("child stmt is null", K(ret));
+    } else if (child_happened.at(i)) {
+      // child stmt already rewritten do not need to be wrapped
+    } else {
+      // only wrap children whose select item types are not all INT type
+      select_item_size = child_stmt->get_select_item_size();
+      for (int64_t j = 0; OB_SUCC(ret) && !need_wrap && j < select_item_size; ++j) {
+        const ObRawExpr *expr = child_stmt->get_select_item(j).expr_;
+        if (OB_ISNULL(expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("select expr is null", K(ret));
+        } else if (ObIntType != expr->get_result_type().get_type()) {
+          need_wrap = true;
+        }
+      }
+    }
+    if (OB_FAIL(ret) || !need_wrap) {
+      // do nothing
+    } else if (OB_FAIL(ObTransformUtils::create_stmt_with_generated_table(ctx_,
+                                                                          child_stmt,
+                                                                          view_stmt))) {
+      LOG_WARN("failed to create stmt with generated table", K(ret));
+    } else if (OB_ISNULL(view_stmt)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("view stmt is null", K(ret));
+    } else {
+      // the view's output is only used for set type deduction, replace it with const int 1
+      // so that this branch matches the simplified branches without adding any cast
+      view_stmt->clear_select_item();
+      view_stmt->clear_column_items();
+      for (int64_t j = 0; OB_SUCC(ret) && j < select_item_size; ++j) {
+        if (OB_FAIL(ObTransformUtils::create_dummy_select_item(*view_stmt, ctx_))) {
+          LOG_WARN("failed to create dummy select item", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(view_stmt->formalize_stmt(ctx_->session_info_))) {
+        LOG_WARN("failed to formalize stmt", K(ret));
+      } else {
+        child_stmts.at(i) = view_stmt;
+      }
+    }
+  }
+  return ret;
+}
+
 int ObTransformSimplifySubquery::eliminate_groupby_in_exists(ObDMLStmt *stmt,
                                                        const ObItemType op_type,
                                                        ObSelectStmt *&subquery,

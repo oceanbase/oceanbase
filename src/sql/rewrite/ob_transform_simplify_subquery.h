@@ -180,6 +180,8 @@ private:
                             ObSelectStmt *subquery,
                             bool parent_is_set_query,
                             bool &trans_happened);
+  int wrap_const_view_for_set_child_if_needed(ObIArray<ObSelectStmt *> &child_stmts,
+                                              const ObIArray<bool> &child_happened);
   int eliminate_groupby_in_exists(ObDMLStmt *stmt,
                                   const ObItemType op_type,
                                   ObSelectStmt *&subquery,
