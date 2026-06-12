@@ -610,6 +610,21 @@ int ObTransformLeftJoinToAnti::check_can_be_trans(ObDMLStmt *stmt,
       is_table_valid = false;
     }
   }
+  // rowid from right table cannot be detached due to calc_tablet_id ref_table_id
+  if (OB_SUCC(ret) && is_table_valid) {
+    const ObIArray<ObRawExpr *> &pseudo_cols = stmt->get_pseudo_column_like_exprs();
+    int32_t bit_idx = stmt->get_table_bit_index(right_table->table_id_);
+    for (int64_t i = 0; OB_SUCC(ret) && is_table_valid && i < pseudo_cols.count(); i++) {
+      ObRawExpr *expr = pseudo_cols.at(i);
+      if (OB_ISNULL(expr)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected null", K(ret));
+      } else if (OB_INVALID_INDEX != bit_idx && expr->get_relation_ids().has_member(bit_idx)) {
+        is_table_valid = false;
+        OPT_TRACE("right table has rowid column, disable left to anti");
+      }
+    }
+  }
   for (int64_t i = 0; OB_SUCC(ret) && is_table_valid &&
                       i < cond_exprs.count(); ++i) {
     bool tmp_cond_valid = false;
