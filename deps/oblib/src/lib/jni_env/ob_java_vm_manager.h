@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef OBDEV_SRC_SQL_ENGINE_CONNECTOR_OB_JAVA_HELPER_H_
-#define OBDEV_SRC_SQL_ENGINE_CONNECTOR_OB_JAVA_HELPER_H_
+#ifndef OBDEV_SRC_SQL_ENGINE_CONNECTOR_OB_JAVA_VM_MANAGER_H_
+#define OBDEV_SRC_SQL_ENGINE_CONNECTOR_OB_JAVA_VM_MANAGER_H_
 
 #include <utility>
 #include <string>
@@ -153,159 +153,62 @@ class JVMClass;
 
 typedef lib::ObLockGuard<lib::ObMutex> LockGuard;
 
-struct ObHdfsEnvContext {
-public:
-  bool hdfs_loaded_; /* Hdfs correctly loaded ? */
-  uint64_t mem_bytes_hdfs_; /* allocated bytes by OCILIB */
-  uint64_t hdfs_alloc_times_;
-  uint64_t hdfs_realloc_times_;
-  uint64_t hdfs_free_times_;
-  int64_t hdfs_created_time_; /* get from current_time() of hdfs */
-  int64_t referece_times_; /* check refrence times of jni env */
-
-public:
-  void reset() {
-    hdfs_loaded_ = false;
-    mem_bytes_hdfs_ = 0;
-    hdfs_alloc_times_ = 0;
-    hdfs_realloc_times_ = 0;
-    hdfs_free_times_ = 0;
-    hdfs_created_time_ = 0;
-    referece_times_ = 0;
-  }
-
-  ObHdfsEnvContext() {
-    reset();
-  }
-
-  bool is_valid() {
-    return hdfs_loaded_;
-  }
-
-  TO_STRING_KV(
-    K(hdfs_loaded_),
-    K(mem_bytes_hdfs_),
-    K(hdfs_alloc_times_),
-    K(hdfs_realloc_times_),
-    K(hdfs_free_times_),
-    K(hdfs_created_time_),
-    K(referece_times_)
-  );
-};
-
-struct ObJavaEnvContext {
-public:
-  bool jvm_loaded_;  /* Java correctly loaded ? */
-  uint64_t mem_bytes_jvm_;  /* allocated bytes by OCI client */
-  uint64_t jvm_alloc_times_;
-  uint64_t jvm_realloc_times_;
-  uint64_t jvm_free_times_;
-  int64_t jvm_created_time_;  /* get from current_time() of jvm */
-  int64_t referece_times_; /* check refrence times of jni env */
-
-public:
-  void reset() {
-    jvm_loaded_ = false;
-    mem_bytes_jvm_ = 0;
-    jvm_alloc_times_ = 0;
-    jvm_realloc_times_ = 0;
-    jvm_free_times_ = 0;
-    jvm_created_time_ = 0;
-    referece_times_ = 0;
-  }
-
-  ObJavaEnvContext() {
-    reset();
-  }
-
-  bool is_valid() {
-    return jvm_loaded_;
-  }
-
-  TO_STRING_KV(
-    K(jvm_loaded_),
-    K(mem_bytes_jvm_),
-    K(jvm_alloc_times_),
-    K(jvm_realloc_times_),
-    K(jvm_free_times_),
-    K(jvm_created_time_),
-    K(referece_times_)
-  );
-};
 
 // Restrictions on use:
 // can only be used in pthread, not in bthread
-// thread local helper
-class JVMFunctionHelper {
-public:
-  static JVMFunctionHelper &getInstance();
-  JVMFunctionHelper(const JVMFunctionHelper &) = delete;
-  JVMFunctionHelper& operator=(const JVMFunctionHelper&) = delete;
 
-  // Sometimes observer don't need the jni env, so will use a mock jvm symbol
-  // for compiling. But may execute jni methods, so we need to check and stop it
-  // before really executing.
-  int check_valid_env();
-  // Set a api to init or reinit jni env
-  int init_jni_env();
+// Two strategies for obtaining JNIEnv:
+//   - ObHdfsJniEnvProvider:    libhdfs.so present, delegates to getJNIEnv()
+//   - ObDirectJvmEnvProvider:  no libhdfs.so, manages JVM via JNI_CreateJavaVM
+class ObJniEnvProvider {
+public:
+  virtual ~ObJniEnvProvider() = default;
+  virtual int get_env(JNIEnv *&env) = 0;
+};
+
+// thread local helper
+class ObJavaVmManager {
+public:
+  static ObJavaVmManager &getInstance();
+  ObJavaVmManager(const ObJavaVmManager &) = delete;
+  ObJavaVmManager& operator=(const ObJavaVmManager&) = delete;
 
   int get_env(JNIEnv *&env);
 
-  int init_result() { return init_result_; }
   const char* get_error_msg() { return error_msg_; }
 
 private:
-  JVMFunctionHelper();
+  ObJavaVmManager();
 
-  int init_classes();
   int do_init_();
+  int init_jni_env();
+  int check_valid_env();
+  int init_classes();
   int jni_find_class(const char *clazz, jclass *gen_clazz);
-  void *ob_alloc_jni(void* ctxp, int64_t size);
-  void *ob_alloc_hdfs(void* ctxp, int64_t size);
+  int open_lib_(const char *lib_name, const ObSqlString &search_paths, void *&lib_handle);
 
-  int search_dir_file(const char *path, const char *file_name, bool &found);
-  int get_lib_path(char *path, uint64_t length, const char* lib_name);
+  static bool search_dir_file(const char *dir, const char *file_name);
+  static int build_lib_search_paths_(ObSqlString &paths);
+  int get_lib_path(const char *lib_name, const ObSqlString &search_paths, ObSqlString &path);
 
-  void ob_java_free(void *ctxp, void *ptr);
-  void ob_hdfs_free(void *ctxp, void *ptr);
+  int open_java_lib();
+  int open_hdfs_lib();
 
-  int open_java_lib(ObJavaEnvContext &java_env_ctx);
-  int open_hdfs_lib(ObHdfsEnvContext &java_env_ctx);
-
-  int load_lib(ObJavaEnvContext &java_env_ctx, ObHdfsEnvContext &hdfs_env_ctx);
-
-  // Check whether java runtime can work
-  int detect_java_runtime_variables();
+  int create_jvm_(JavaVM *&jvm, JavaVMInitArgs &jvm_args);
 private:
-  int init_result_ = OB_NOT_INIT;
   static thread_local JNIEnv *jni_env_;
-
-  // Env contexts
-  ObJavaEnvContext java_env_ctx_;
-  ObHdfsEnvContext hdfs_env_ctx_;
 
   // Handle the runtime shared library
   void* jvm_lib_handle_ = nullptr;
   void* hdfs_lib_handle_ = nullptr;
 
+  // Determined once during init_jni_env(), used for all subsequent get_env() calls
+  ObJniEnvProvider *env_provider_ = nullptr;
+
 private:
-  lib::ObMutex lock_;
-  obsys::ObRWLock<> load_lib_lock_;
+  lib::ObMutex init_jni_env_lock_;
   const char* error_msg_ = nullptr;
 };
-
-// local object reference guard.
-// The objects inside are automatically call DeleteLocalRef in the life object.
-#define LOCAL_REF_GUARD(lref)                                                  \
-  if (lref) {                                                                  \
-    JNIEnv *env;                                                               \
-    if (OB_FAIL(JVMFunctionHelper::getInstance().get_env(env))) {               \
-      LOG_WARN("failed to get jni env", K(ret));                               \
-    } else {                                                                   \
-      env->DeleteLocalRef(lref);                                               \
-    }                                                                          \
-    lref = nullptr;                                                            \
-  }
 
 #define LOCAL_REF_GUARD_ENV(lref, env)                                         \
   DEFER(                                                                       \
@@ -386,7 +289,9 @@ public:
 
 
 
+int check_jvm_stack_size();
+
 } // namespace sql
 } // namespace oceanbase
 
-#endif /* OBDEV_SRC_SQL_ENGINE_CONNECTOR_OB_JAVA_HELPER_H_ */
+#endif /* OBDEV_SRC_SQL_ENGINE_CONNECTOR_OB_JAVA_VM_MANAGER_H_ */

@@ -6,7 +6,7 @@
 #pragma once
 
 #include "lib/string/ob_string.h"
-#include "lib/jni_env/ob_java_helper.h"
+#include "lib/jni_env/ob_java_vm_manager.h"
 
 namespace oceanbase {
 namespace plugin {
@@ -129,17 +129,10 @@ public:
   static ObJniTool &instance();
   static int init_global_instance();
   static void destroy_global_instance();
-  /**
-    * check if the environment of external table plugin is ready
-    * @details check if the configuration of java is right and if the external plugin jar package is in the right path.
-   */
-  static int is_env_ready(bool &is_ready);
 
-  int init();
   void destroy(JNIEnv *jni_env = nullptr);
 
   int get_jni_env(JNIEnv *&jni_env);
-  JavaVM *get_jvm() const { return jvm_; }
 
   void check_exception(JNIEnv *env, int &ret, ObJniExceptionResult &result);
 
@@ -182,13 +175,7 @@ public:
   jmethodID jni_utils_import_record_batch_method() const { return jni_utils_import_record_batch_method_; }
 
 private:
-  /**
-   * @brief init java env.
-   * @details try best to make sure we can get JNIEnv.
-   * We can get JNIEnv by ObJniConnector::get_jni_env, if failed, we can get
-   * it by `getJNIEnv`(from HDFS library), or else we create Java VM.
-   */
-  int init_jni();
+  int init_java_class_refs_(JNIEnv *jni_env);
 
   // bootstrap
   int init_exceptions(JNIEnv *jni_env);
@@ -199,9 +186,6 @@ private:
 
   int init_log_level(JNIEnv *jni_env);
 
-  int get_jni_env_local(JNIEnv *&jni_env);
-  int get_jni_env_hdfs(JNIEnv *&jni_env);
-  int get_jni_env_connector(JNIEnv *&jni_env);
 private:
   struct JniException
   {
@@ -211,25 +195,8 @@ private:
   };
 
 private:
-  struct JniEnvThreadVar final
-  {
-    JNIEnv *jni_env = nullptr;
-    JavaVM *jvm     = nullptr;
-
-    ~JniEnvThreadVar();
-  };
-
-private:
-  // JNIEnv can be created by ObJniHelper/ObJniConnector, if so, we doesn't need
-  // to hold the jvm_ pointer.
-  // ObJniConnector depends on HDFS environment and other Java packages but we don't.
-  static thread_local JniEnvThreadVar tls_env_;
-  JavaVM *jvm_ = nullptr;
-
   bool inited_ = false;
-
-  using JNIEnvGetter = int (ObJniTool::*)(JNIEnv *&);
-  JNIEnvGetter jni_env_getter_ = nullptr;
+  lib::ObMutex init_lock_{common::ObLatchIds::JNI_ENV_INIT_LOCK};
 
   JniException *        exceptions_         = nullptr;
   int64_t               num_exceptions_     = 0;

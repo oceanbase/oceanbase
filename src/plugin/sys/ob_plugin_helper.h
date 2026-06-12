@@ -89,6 +89,10 @@ public:
                                    ObIPluginDescriptor *descriptor,
                                    const char *description);
 
+  // Trigger one-time lazy discovery of external data-source sub-plugins through the generic
+  // "java" descriptor. Called when an external table lookup misses or when listing all plugins.
+  static int discover_external_sub_plugins();
+
 private:
   static int find_ftparser_entry(const ObString &parser_name, ObPluginEntryHandle *&entry_handle);
   static int find_plugin_entry(const ObString &name,

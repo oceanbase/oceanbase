@@ -7,6 +7,7 @@
 
 #include "lib/hash/ob_hashmap.h"
 #include "lib/container/ob_vector.h"
+#include "lib/lock/ob_spin_rwlock.h"
 #include "plugin/sys/ob_plugin_utils.h"
 #include "plugin/sys/ob_plugin_helper.h"
 
@@ -128,6 +129,8 @@ private:
 
 private:
   bool inited_ = false;
+
+  common::SpinRWLock entry_rwlock_{common::ObLatchIds::JAVA_PLUGIN_DISCOVER_LOCK};
 
   PluginEntryHandleMap entry_handle_maps_[OBP_PLUGIN_TYPE_MAX];
   PluginHandleMap      plugin_handle_map_;

@@ -14,6 +14,8 @@
 #include "plugin/sys/ob_plugin_mgr.h"
 #include "plugin/sys/ob_plugin_entry_handle.h"
 #include "plugin/sys/ob_plugin_handle.h"
+#include "plugin/interface/ob_plugin_external_intf.h"
+#include "plugin/external_table/ob_external_java_plugin.h"
 
 namespace oceanbase {
 
@@ -141,14 +143,53 @@ int ObPluginHelper::find_external_table(const common::ObString &name,
 {
   int ret = OB_SUCCESS;
   ObPluginEntryHandle *entry_handle = nullptr;
-  if (OB_FAIL(find_plugin_entry(name, OBP_PLUGIN_TYPE_EXTERNAL, OBP_EXTERNAL_INTERFACE_VERSION_CURRENT, entry_handle))) {
-    LOG_DEBUG("failed to find external table plugin entry", K(name));
+  ret = find_plugin_entry(name, OBP_PLUGIN_TYPE_EXTERNAL, OBP_EXTERNAL_INTERFACE_VERSION_CURRENT, entry_handle);
+  if (OB_FUNCTION_NOT_DEFINED == ret) {
+    // Data-source sub-plugins (odps, jdbc, ...) are discovered & registered lazily on first
+    // use, since enumerating them requires starting the JVM. Trigger that discovery now and
+    // retry once before giving up.
+    const int not_found_ret = ret;
+    if (OB_SUCCESS != discover_external_sub_plugins()) {
+      ret = not_found_ret;
+      LOG_DEBUG("failed to find external table plugin entry", K(name), K(ret));
+    } else if (OB_FAIL(find_plugin_entry(name, OBP_PLUGIN_TYPE_EXTERNAL,
+                                         OBP_EXTERNAL_INTERFACE_VERSION_CURRENT, entry_handle))) {
+      LOG_DEBUG("external table plugin entry still not found after discovery", K(name), K(ret));
+    }
+  } else if (OB_FAIL(ret)) {
+    LOG_DEBUG("failed to find external table plugin entry", K(name), K(ret));
+  }
+
+  if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(entry_handle->entry().plugin_handle)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("find a plugin entry without plugin handle", K(ret), KPC(entry_handle));
   } else {
     external_desc = reinterpret_cast<ObIExternalDescriptor *>(entry_handle->entry().descriptor);
     LOG_DEBUG("find external table plugin entry successfully", K(name), KP(external_desc));
+  }
+  return ret;
+}
+
+int ObPluginHelper::discover_external_sub_plugins()
+{
+  int ret = OB_SUCCESS;
+  ObPluginEntryHandle *java_handle = nullptr;
+  // The generic "java" external plugin is always registered at observer startup. It owns the
+  // discovery logic (starting the JVM and listing data sources) behind a one-time guard.
+  if (OB_FAIL(find_plugin_entry(ObString(ObJavaExternalPlugin::PLUGIN_NAME), OBP_PLUGIN_TYPE_EXTERNAL,
+                                OBP_EXTERNAL_INTERFACE_VERSION_CURRENT, java_handle))) {
+    LOG_DEBUG("generic java external plugin not registered, skip discovery", K(ret));
+  } else if (OB_ISNULL(java_handle->entry().plugin_handle)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("java external plugin entry has no plugin handle", K(ret), KPC(java_handle));
+  } else {
+    ObIExternalDescriptor *java_desc =
+        reinterpret_cast<ObIExternalDescriptor *>(java_handle->entry().descriptor);
+    ObPluginParam *param = &java_handle->entry().plugin_handle->plugin_param();
+    if (OB_FAIL(java_desc->discover_sub_plugins(param))) {
+      LOG_WARN("failed to discover external data source sub-plugins", K(ret));
+    }
   }
   return ret;
 }

@@ -16,6 +16,7 @@
 
 using namespace oceanbase;
 using namespace oceanbase::lib;
+using namespace oceanbase::common;
 
 namespace oceanbase {
 namespace plugin {
@@ -136,19 +137,23 @@ int ObPluginMgr::find_plugin(ObPluginType plugin_type, const ObString &plugin_na
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("plugin mgr is not inited", K(ret));
-  } else if (OB_FAIL(find_plugin_entry_list(plugin_type, plugin_name, plugin_entry_list))) {
-  } else if (OB_ISNULL(plugin_entry_list) || plugin_entry_list->count() == 0) {
-    ret = OB_FUNCTION_NOT_DEFINED;
-  } else if (FALSE_IT(entry_handle = plugin_entry_list->at(0))) {
-  } else if (OB_ISNULL(entry_handle)) {
-    ret = OB_FUNCTION_NOT_DEFINED;
-    LOG_WARN("got a null entry handle", KP(entry_handle), K(plugin_entry_list->count()), K(ret));
-  } else if (!entry_handle->ready()) {
-    entry_handle = nullptr;
-    ret = OB_FUNCTION_NOT_DEFINED;
-    LOG_WARN("find the plugin but it's not ready", K(plugin_name), K(ret));
   } else {
-    LOG_DEBUG("find a plugin", K(plugin_type), K(plugin_name));
+    SpinRLockGuard guard(entry_rwlock_);
+
+    if (OB_FAIL(find_plugin_entry_list(plugin_type, plugin_name, plugin_entry_list))) {
+    } else if (OB_ISNULL(plugin_entry_list) || plugin_entry_list->count() == 0) {
+      ret = OB_FUNCTION_NOT_DEFINED;
+    } else if (FALSE_IT(entry_handle = plugin_entry_list->at(0))) {
+    } else if (OB_ISNULL(entry_handle)) {
+      ret = OB_FUNCTION_NOT_DEFINED;
+      LOG_WARN("got a null entry handle", KP(entry_handle), K(plugin_entry_list->count()), K(ret));
+    } else if (!entry_handle->ready()) {
+      entry_handle = nullptr;
+      ret = OB_FUNCTION_NOT_DEFINED;
+      LOG_WARN("find the plugin but it's not ready", K(plugin_name), K(ret));
+    } else {
+      LOG_DEBUG("find a plugin", K(plugin_type), K(plugin_name));
+    }
   }
   return ret;
 }
@@ -217,25 +222,29 @@ int ObPluginMgr::find_plugin(ObPluginType type,
   if (!inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("plugin mgr is not inited", K(ret));
-  } else if (OB_FAIL(find_plugin_entry_list(type, name, plugin_entry_list))) {
-  } else if (OB_ISNULL(plugin_entry_list) || plugin_entry_list->count() == 0) {
-    ret = OB_FUNCTION_NOT_DEFINED;
-  } else if (OB_FAIL(plugin_entry_list->find(version, entry_iterator, comparator, equaler))) {
-    if (OB_ENTRY_NOT_EXIST == ret) {
-      ret = OB_FUNCTION_NOT_DEFINED;
-    }
-    LOG_DEBUG("failed to find plugin entry", K(ret));
-  } else if (entry_iterator == plugin_entry_list->end()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("find plugin entry but got an end iterator", K(plugin_entry_list->count()));
-  } else if (OB_ISNULL(entry_handle = *entry_iterator)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("find a plugin entry but is null", K(plugin_entry_list->count()), K(ret));
-  } else if (!entry_handle->ready()) {
-    ret = OB_FUNCTION_NOT_DEFINED;
-    LOG_WARN("plugin is not ready", K(ret), KPC(entry_handle));
   } else {
-    LOG_DEBUG("got a plugin entry", KPC(entry_handle));
+    SpinRLockGuard guard(entry_rwlock_);
+
+    if (OB_FAIL(find_plugin_entry_list(type, name, plugin_entry_list))) {
+    } else if (OB_ISNULL(plugin_entry_list) || plugin_entry_list->count() == 0) {
+      ret = OB_FUNCTION_NOT_DEFINED;
+    } else if (OB_FAIL(plugin_entry_list->find(version, entry_iterator, comparator, equaler))) {
+      if (OB_ENTRY_NOT_EXIST == ret) {
+        ret = OB_FUNCTION_NOT_DEFINED;
+      }
+      LOG_DEBUG("failed to find plugin entry", K(ret));
+    } else if (entry_iterator == plugin_entry_list->end()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("find plugin entry but got an end iterator", K(plugin_entry_list->count()));
+    } else if (OB_ISNULL(entry_handle = *entry_iterator)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("find a plugin entry but is null", K(plugin_entry_list->count()), K(ret));
+    } else if (!entry_handle->ready()) {
+      ret = OB_FUNCTION_NOT_DEFINED;
+      LOG_WARN("plugin is not ready", K(ret), KPC(entry_handle));
+    } else {
+      LOG_DEBUG("got a plugin entry", KPC(entry_handle));
+    }
   }
   return ret;
 }
@@ -278,43 +287,51 @@ int ObPluginMgr::register_plugin(const ObPluginEntry &plugin_entry)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("plugin entry is invalid: plugin_handle is null or no plugin pointer",
              K(ret), KPC(plugin_entry.plugin_handle));
-  } else if (OB_FUNCTION_NOT_DEFINED == find_plugin_entry_list(plugin_entry.interface_type,
-                                                          plugin_entry.name,
-                                                          plugin_entry_list)) {
-    if (OB_ISNULL(plugin_entry_list = OB_NEW(PluginEntryList, OB_PLUGIN_MEMORY_LABEL))) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate plugin entry list", K(ret));
-    } else if (OB_FAIL(entry_handle_maps_[plugin_entry.interface_type]
-                         .set_refactored(plugin_entry.name, plugin_entry_list))) {
-      LOG_WARN("failed to insert plugin entry list into plugin entry handle map", K(ret));
-    }
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_ENTRY_NOT_EXIST != (ret = plugin_entry_list->find(plugin_entry.plugin_handle->plugin()->version,
-                                                            entry_iterator,
-                                                            ObPluginEntryVersionComparator(),
-                                                            ObPluginEntryVersionEqualer()))) {
-    if (OB_SUCC(ret)) {
-      ret = OB_ENTRY_EXIST;
-    }
-    LOG_WARN("plugin with the same version already exists", K(plugin_entry), K(ret));
-  } else if (OB_ISNULL(entry_handle = OB_NEW(ObPluginEntryHandle, OB_PLUGIN_MEMORY_LABEL))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to allocate plugin handle", K(ret));
-  } else if (OB_FAIL(entry_handle->init(plugin_entry))) {
-    LOG_WARN("failed to init plugin entry handle", K(ret));
-  } else if (OB_FAIL(entry_handle->init_plugin())) {
-    LOG_WARN("failed to init plugin", K(ret), KPC(entry_handle));
-  } else if (OB_FAIL(plugin_entry_list->insert(entry_handle, entry_iterator, ObPluginEntry2EntryComparator()))) {
-    LOG_WARN("failed to insert plugin entry into list", K(ret), K(plugin_entry));
   } else {
-    LOG_INFO("register plugin success",
-             KPC(entry_handle), K(ObPluginAdaptor(plugin_entry.plugin_handle->plugin())), K(ret), KCSTRING(lbt()));
-  }
+    SpinWLockGuard guard(entry_rwlock_);
 
-  if (OB_FAIL(ret) && OB_NOT_NULL(entry_handle)) {
-    OB_DELETE(ObPluginEntryHandle, OB_PLUGIN_MEMORY_LABEL, entry_handle);
+    bool need_insert_map = false;
+    if (OB_FUNCTION_NOT_DEFINED == find_plugin_entry_list(plugin_entry.interface_type,
+                                                          plugin_entry.name,
+                                                          plugin_entry_list)) {
+      if (OB_ISNULL(plugin_entry_list = OB_NEW(PluginEntryList, OB_PLUGIN_MEMORY_LABEL))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate plugin entry list", K(ret));
+      } else if (OB_FAIL(entry_handle_maps_[plugin_entry.interface_type]
+                           .set_refactored(plugin_entry.name, plugin_entry_list))) {
+        LOG_WARN("failed to insert plugin entry list into plugin entry handle map", K(ret));
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_ENTRY_NOT_EXIST != (ret = plugin_entry_list->find(plugin_entry.plugin_handle->plugin()->version,
+                                                              entry_iterator,
+                                                              ObPluginEntryVersionComparator(),
+                                                              ObPluginEntryVersionEqualer()))) {
+      if (OB_SUCC(ret)) {
+        ret = OB_ENTRY_EXIST;
+      }
+      LOG_WARN("plugin with the same version already exists", K(plugin_entry), K(ret));
+    } else if (OB_ISNULL(entry_handle = OB_NEW(ObPluginEntryHandle, OB_PLUGIN_MEMORY_LABEL))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate plugin handle", K(ret));
+    } else if (OB_FAIL(entry_handle->init(plugin_entry))) {
+      LOG_WARN("failed to init plugin entry handle", K(ret));
+    } else if (OB_FAIL(entry_handle->init_plugin())) {
+      LOG_WARN("failed to init plugin", K(ret), KPC(entry_handle));
+    } else if (OB_FAIL(plugin_entry_list->insert(entry_handle, entry_iterator, ObPluginEntry2EntryComparator()))) {
+      LOG_WARN("failed to insert plugin entry into list", K(ret), K(plugin_entry));
+    } else {
+      LOG_INFO("register plugin success",
+               KPC(entry_handle), K(ObPluginAdaptor(plugin_entry.plugin_handle->plugin())), K(ret), KCSTRING(lbt()));
+    }
+
+    if (OB_FAIL(ret) && OB_NOT_NULL(entry_handle)) {
+      OB_DELETE(ObPluginEntryHandle, OB_PLUGIN_MEMORY_LABEL, entry_handle);
+    }
   }
 
   return ret;
@@ -565,6 +582,8 @@ int ObPluginMgr::list_all_plugin_entries(ObIArray<ObPluginEntryHandle *> &plugin
     ret = OB_NOT_INIT;
     LOG_WARN("plugin mgr is not inited", K(ret));
   } else {
+    SpinRLockGuard guard(entry_rwlock_);
+
     for (int64_t i = 0; i < OBP_PLUGIN_TYPE_MAX && OB_SUCC(ret); i++) {
       if (OB_FAIL(entry_handle_maps_[i].foreach_refactored(collector))) {
         LOG_WARN("failed to iterate plugin entry map", K(ret), K(i));

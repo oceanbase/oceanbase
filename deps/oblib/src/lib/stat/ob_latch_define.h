@@ -395,7 +395,7 @@ LATCH_DEF(TABLE_LOAD_STORE_RW_LOCK, 366, "table load read write lock", LATCH_FIF
 LATCH_DEF(TABLE_LOAD_TRANS_LOCK, 367, "table load trans lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(TABLE_LOAD_RESOURCE_SERVICE_LOCK, 368, "table load resource service lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(JAVA_ENV_LOCK, 369, "java env lock", LATCH_FIFO, 2000, 0, true)
-LATCH_DEF(JAVA_HELPER_LOCK, 370, "java helper lock", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(JNI_ENV_INIT_LOCK, 370, "jni env init lock", LATCH_FIFO, 2000, 0, true) // FARM COMPAT WHITELIST
 LATCH_DEF(MERGE_FROZEN_LOCK, 371, "merge frozen lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(TENANT_TABLET_SCHEDUAL_LOCK, 372, "tenant tablet schedual lock", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(TABLET_EMPTY_SHELL_HANDLER_LOCK, 373, "tablet empty shell handler lock", LATCH_FIFO, 2000, 0, true)
@@ -432,7 +432,7 @@ LATCH_DEF(GI_GLOBAL_TASK_COLLECT_LOCK, 400, "gi global task collect lock", LATCH
 LATCH_DEF(OB_VECTOR_INDEX_DUMP_INFO_LOCK, 401, "ob vector index dump info lock", LATCH_FIFO, 200, 0, true)
 LATCH_DEF(OB_VECTOR_ASSIGNMENT_LOCK, 402, "ob vector assignment lock", LATCH_FIFO, 200, 0, true)
 LATCH_DEF(OB_TENANT_CONFIG_CACHE_LOCK, 403, "ob tenant config cache lock", LATCH_FIFO, 200, 0, true)
-LATCH_DEF(JVM_FUNCTION_HELPER_MUTEX, 407, "jvm function helper mutex", LATCH_FIFO, 2000, 0, true)
+LATCH_DEF(JAVA_PLUGIN_DISCOVER_LOCK, 407, "java plugin discover lock", LATCH_FIFO, 2000, 0, true)  // FARM COMPAT WHITELIST
 LATCH_DEF(OB_DEDUP_QUEUE_MUTEX, 408, "ob dedup queue mutex", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(OB_TIMER_SERVICE_MUTEX, 409, "ob timer service mutex", LATCH_FIFO, 2000, 0, true)
 LATCH_DEF(PALF_DISK_HANG_DETECTOR_SPIN_LOCK, 410, "palf disk hang detector spin lock", LATCH_FIFO, 2000, 0, true)

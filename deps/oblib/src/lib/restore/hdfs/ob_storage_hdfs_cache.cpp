@@ -5,7 +5,7 @@
 
 #include "ob_storage_hdfs_cache.h"
 #include "lib/jni_env/ob_java_env.h"
-#include "lib/jni_env/ob_java_helper.h"
+#include "lib/jni_env/ob_java_vm_manager.h"
 #include "lib/jni_env/ob_jni_connector.h"
 #include "share/external_table/ob_hdfs_storage_info.h"
 

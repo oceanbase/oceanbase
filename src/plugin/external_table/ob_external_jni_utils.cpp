@@ -5,19 +5,15 @@
 
 #define USING_LOG_PREFIX SHARE
 
-#include <sys/types.h>
-#include <dirent.h>
-
 #include "plugin/external_table/ob_external_jni_utils.h"
 #include "plugin/share/ob_properties.h"
 #include "lib/string/ob_sql_string.h"
-#include "lib/file/file_directory_utils.h"
 #include "share/config/ob_server_config.h"
-#include "lib/jni_env/ob_java_env.h"
-#include "lib/jni_env/ob_jni_connector.h"
+#include "lib/jni_env/ob_java_vm_manager.h"
 
 namespace oceanbase {
 using namespace sql;
+using namespace common;
 
 namespace plugin {
 
@@ -43,84 +39,6 @@ namespace plugin {
       }                                                                                             \
     }                                                                                               \
   } while (0)
-
-int __find_file(const ObString &directory, const ObString &filename,
-                const int max_recursive_level, const int recursive_level,
-                ObSqlString &filepath)
-{
-  int ret = OB_SUCCESS;
-  DIR *dir = nullptr;
-  int sys_ret = 0;
-  ObString directory_str;
-  ObArenaAllocator arena_allocator(ob_plugin_mem_attr());
-  ObArray<ObString> sub_directories;
-  if (OB_FAIL(ob_write_string(arena_allocator, directory, directory_str, true/*c_style*/))) {
-    LOG_WARN("failed to create c style string", K(directory), K(ret));
-  } else if (OB_ISNULL(dir = opendir(directory_str.ptr()))) {
-    ret = OB_ENTRY_NOT_EXIST;
-    LOG_WARN("failed to open directory", K(directory_str), K(strerror(errno)));
-  } else {
-    struct dirent *entry = nullptr;
-    while (OB_SUCC(ret) && OB_NOT_NULL(entry = readdir(dir))) {
-      if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
-      } else if (entry->d_type == DT_DIR) {
-        if (recursive_level >= max_recursive_level) {
-          LOG_WARN("recursive_level reach max_recursive_level, ignore the sub directory",
-                   K(recursive_level), K(max_recursive_level), K(entry->d_name));
-        } else {
-          ObString sub_directory;
-          ObString strs[] = {directory, ObString("/"), ObString(entry->d_name)};
-          if (OB_FAIL(ob_concat_string(arena_allocator, sub_directory, 3, strs, true/*c_style*/))) {
-            LOG_WARN("failed to create sub directory", K(ret), K(directory), KCSTRING(entry->d_name));
-          } else if (OB_FAIL(sub_directories.push_back(sub_directory))) {
-            LOG_WARN("failed to append subdirectory", K(sub_directory), K(ret));
-          }
-        }
-      } else if (0 == filename.compare(ObString(entry->d_name))) {
-        LOG_TRACE("got the file", K(directory));
-        if (OB_FAIL(filepath.assign(directory))) {
-          LOG_WARN("failed to assign string to sql string", K(ret), K(directory));
-        } else if (OB_FAIL(filepath.append_fmt("/%s", entry->d_name))) {
-          LOG_WARN("failed to append filename to filepath", K(filepath), KCSTRING(entry->d_name), K(ret));
-        }
-      }
-    }
-    if (OB_NOT_NULL(dir)) {
-      closedir(dir);
-      dir = nullptr;
-    }
-  }
-
-  if (OB_SUCC(ret) && filepath.empty()) {
-    for (int64_t i = 0; OB_SUCC(ret) && filepath.empty() && i < sub_directories.count(); i++) {
-      if (OB_FAIL(__find_file(sub_directories.at(i), filename, max_recursive_level, recursive_level + 1, filepath))) {
-        LOG_WARN("find file from sub directory failed", K(ret), K(sub_directories[i]), K(filename));
-      }
-    }
-  }
-  return ret;
-}
-
-/**
- * Find file under `directory`
- * @param[in] directory The directory to find.
- * @param[in] filename The file to find
- * @param[in] max_recursive_level max recursive to prevent cyclical calling. Also the max sub directory level to find.
- * @param[in] recursive_level current recursive level.
- * @param[out] filepath The path of file to find.
- * @return ret
- *   - OB_SUCCESS no error occures.
- *   - OB_FILE_NOT_EXIST Not found.
- */
-int find_file(const ObString &directory, const ObString &filename, const int max_recursive_level, ObSqlString &filepath)
-{
-  int ret = OB_SUCCESS;
-  ret = __find_file(directory, filename, max_recursive_level, 1, filepath);
-  if (OB_SUCC(ret) && filepath.empty()) {
-    ret = OB_FILE_NOT_EXIST;
-  }
-  return ret;
-}
 
 ////////////////////////////////////////////////////////////////////////////////
 // ObJavaGlobalRef
@@ -268,70 +186,8 @@ int ObJniExceptionPrinter::throwable_to_string(JNIEnv *jni_env, jthrowable throw
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// JvmFunctions
-struct JvmFunctions
-{
-  using JNI_CreateJavaVM_f = jint (*)(JavaVM **pvm, void **penv, void *args);
-  using JNI_GetCreatedJavaVMs_f = jint (*)(JavaVM **, jsize, jsize *);
-
-  JNI_CreateJavaVM_f      JNI_CreateJavaVM;
-  JNI_GetCreatedJavaVMs_f JNI_GetCreatedJavaVMs;
-
-  int init();
-
-  static int find_libjvm(ObSqlString &libjvm_path);
-};
-
-int JvmFunctions::init()
-{
-  int ret = OB_SUCCESS;
-  ObSqlString libjvm_path;
-  void *jvm_handle = nullptr;
-  if (OB_FAIL(find_libjvm(libjvm_path))) {
-    LOG_WARN("failed to find libjvm", K(ret));
-  } else if (OB_ISNULL(jvm_handle = dlopen(libjvm_path.ptr(), RTLD_NOW | RTLD_GLOBAL))) {
-    ret = OB_JNI_ERROR;
-    LOG_WARN("failed to open jvm lib", K(libjvm_path), KCSTRING(dlerror()));
-  } else if (OB_ISNULL(JNI_CreateJavaVM = (JNI_CreateJavaVM_f)dlsym(jvm_handle, "JNI_CreateJavaVM"))) {
-    ret = OB_JNI_ERROR;
-    LOG_WARN("failed to get jvm function", KCSTRING("JNI_CreateJavaVM"), KCSTRING(dlerror()));
-  } else if (OB_ISNULL(JNI_GetCreatedJavaVMs = (JNI_GetCreatedJavaVMs_f)dlsym(jvm_handle, "JNI_GetCreatedJavaVMs"))) {
-    ret = OB_JNI_ERROR;
-    LOG_WARN("failed to get jvm function", KCSTRING("JNI_GetCreatedJavaVMs"), KCSTRING(dlerror()));
-  }
-  LOG_TRACE("init jvm functions done", K(ret));
-  return ret;
-}
-
-int JvmFunctions::find_libjvm(ObSqlString &libjvm_path)
-{
-  int ret = OB_SUCCESS;
-  ObString java_home_config(GCONF.ob_java_home.get_value_string());
-  if (!java_home_config.empty()) {
-    LOG_DEBUG("java home from oceanbase config", K(java_home_config));
-  } else if (FALSE_IT(java_home_config = ObString(getenv("JAVA_HOME")))) {
-    LOG_DEBUG("java home from env", K(java_home_config));
-  }
-
-  const ObString jvm_lib_name("libjvm.so");
-  if (java_home_config.empty()) {
-    ret = OB_JNI_JAVA_HOME_NOT_FOUND_ERROR;
-    LOG_WARN("java env not configured: failed to get from GCONF.ob_java_home and env JAVA_HOME");
-  } else if (OB_FAIL(find_file(java_home_config, jvm_lib_name, 5/*max_recursive_level*/, libjvm_path))) {
-    LOG_WARN("failed to find libjvm_path", K(ret));
-  } else if (-1 == access(libjvm_path.ptr(), F_OK)) {
-    ret = OB_JNI_ERROR;
-    LOG_WARN("libjvm is not exists in ob_java_home", K(java_home_config), K(libjvm_path), K(strerror(errno)));
-  }
-
-  LOG_INFO("got libjvm_path", K(ret), K(libjvm_path));
-  return ret;
-}
-
-////////////////////////////////////////////////////////////////////////////////
 // ObJniTool
 static ObJniTool *jni_tool_global_instance = nullptr;
-thread_local ObJniTool::JniEnvThreadVar ObJniTool::tls_env_;
 
 ObJniTool::ObJniTool()
 {}
@@ -341,37 +197,37 @@ ObJniTool::~ObJniTool()
   destroy();
 }
 
-int ObJniTool::init()
+int ObJniTool::init_java_class_refs_(JNIEnv *jni_env)
 {
   int ret = OB_SUCCESS;
-  mem_attr_.label_ = OB_PLUGIN_MEMORY_LABEL;
-  if (MTL_ID() == OB_INVALID_TENANT_ID) {
-    mem_attr_.tenant_id_ = OB_SERVER_TENANT_ID;
-  } else {
-    mem_attr_.tenant_id_ = MTL_ID();
-  }
-
-  JNIEnv *jni_env = nullptr;
-
+  lib::ObLockGuard<lib::ObMutex> guard(init_lock_);
   if (inited_) {
-    ret = OB_INIT_TWICE;
-  } else if (OB_FAIL(init_jni())) {
-    LOG_WARN("failed to create jvm", K(ret));
-  } else if (OB_FAIL(get_jni_env(jni_env))) {
-    LOG_WARN("failed to get jni env", K(ret));
-  } else if (OB_FAIL(init_exceptions(jni_env))) {
-    LOG_WARN("failed to init exceptions", K(ret));
-  } else if (OB_FAIL(init_global_class_references(jni_env))) {
-    LOG_WARN("failed to init jni tool global classes", K(ret));
-  } else if (OB_FAIL(init_log_level(jni_env))) {
-    LOG_WARN("failed to init java log level", K(ret));
-  }
+  } else {
+    mem_attr_.label_ = OB_PLUGIN_MEMORY_LABEL;
+    if (MTL_ID() == OB_INVALID_TENANT_ID) {
+      mem_attr_.tenant_id_ = OB_SERVER_TENANT_ID;
+    } else {
+      mem_attr_.tenant_id_ = MTL_ID();
+    }
 
-  if (OB_FAIL(ret)) {
-    destroy(jni_env);
+    if (OB_ISNULL(jni_env)) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("jni env is null", K(ret));
+    } else if (OB_FAIL(init_exceptions(jni_env))) {
+      LOG_WARN("failed to init exceptions", K(ret));
+    } else if (OB_FAIL(init_global_class_references(jni_env))) {
+      LOG_WARN("failed to init jni tool global classes", K(ret));
+    } else if (OB_FAIL(init_log_level(jni_env))) {
+      LOG_WARN("failed to init java log level", K(ret));
+    }
+
+    if (OB_FAIL(ret)) {
+      destroy(jni_env);
+    } else {
+      ATOMIC_STORE(&inited_, true);
+    }
+    LOG_INFO("init java class refs done", K(ret));
   }
-  LOG_INFO("init jni tool done", K(ret));
-  inited_ = true;
   return ret;
 }
 
@@ -434,336 +290,21 @@ void ObJniTool::check_exception(JNIEnv *env, int &retcode, ObJniExceptionResult 
   }
 }
 
-/**
- * @brief get jni_env
- * @details We'll try to get JNIEnv from ObJniConnector/ObJniHelper first, and then
- * we'll create it by ourself if failed.
- * ObJniConnector depends on HDFS environment and other Java jar packages that
- * we don't.
- * And if we just want to use external table plugins, we only need to deploy
- * external table jar packages, which can simplify the deployment.
- */
 int ObJniTool::get_jni_env(JNIEnv *&jni_env)
 {
   int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(tls_env_.jni_env)) {
-    jni_env = tls_env_.jni_env;
-    LOG_DEBUG("get jni env from thread cache", KP(jni_env), KP(tls_env_.jvm));
-  } else if (OB_ISNULL(jni_env_getter_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init. jni_env_getter_ is null");
-  } else if (OB_FAIL((this->*jni_env_getter_)(jni_env))) {
-    LOG_WARN("failed to get jni_env");
-  }
-
-  if (OB_NOT_NULL(jni_env)) {
-  } else {
+  if (OB_FAIL(ObJavaVmManager::getInstance().get_env(jni_env))) {
     LOG_WARN("failed to get jni env", K(ret));
+  } else if (!ATOMIC_LOAD(&inited_) && OB_FAIL(init_java_class_refs_(jni_env))) {
+    LOG_WARN("failed to init java class refs", K(ret));
   }
-  return ret;
-}
-
-int ObJniTool::get_jni_env_local(JNIEnv *&jni_env)
-{
-  int ret = OB_SUCCESS;
-  jint jni_ret = JNI_OK;
-  if (OB_NOT_NULL(jvm_)) {
-    if (JNI_OK != (jni_ret = jvm_->GetEnv((void **)&jni_env, JNI_VERSION_1_8))) {
-      if (jni_ret == JNI_EDETACHED) {
-        LOG_DEBUG("java env detached, reattach");
-        jni_ret = jvm_->AttachCurrentThread((void **)&jni_env, nullptr);
-      }
-
-      if (jni_ret != JNI_OK || OB_ISNULL(jni_env)) {
-        ret = OB_JNI_ERROR;
-        LOG_WARN("failed to get jni env from jvm", K(ret), K(jni_ret), KP(jni_env));
-      }
-    }
-    if (JNI_OK == jni_env && OB_NOT_NULL(jni_env))  {
-      tls_env_.jni_env = jni_env;
-      tls_env_.jvm = jvm_;
-      LOG_DEBUG("get jnienv from jvm", KP(jni_env), KP(jvm_));
-    }
-  }
-  return ret;
-}
-int ObJniTool::get_jni_env_hdfs(JNIEnv *&jni_env)
-{
-  int ret = OB_SUCCESS;
-  if (OB_NOT_NULL(getJNIEnv) && OB_NOT_NULL(jni_env = getJNIEnv())) {
-    tls_env_.jni_env = jni_env;
-    LOG_DEBUG("get jnienv from hdfs", KP(jni_env));
-  } else {
-    ret = OB_JNI_ERROR;
-    LOG_WARN("failed to get jnienv from hdfs", K(ret));
-  }
-  return ret;
-}
-int ObJniTool::get_jni_env_connector(JNIEnv *&jni_env)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObJniConnector::get_jni_env(jni_env))) {
-    LOG_WARN("failed to get jnienv from ObJniConnector", K(ret));
-  } else {
-    tls_env_.jni_env = jni_env;
-    LOG_DEBUG("get jni env from jni connector", KP(jni_env));
-  }
-  return ret;
-}
-
-struct JavaVMOptionWrapper
-{
-  JavaVMOption option;
-
-  JavaVMOptionWrapper()
-  {
-    option.optionString = nullptr;
-  }
-  JavaVMOptionWrapper(const JavaVMOption &vm_option) : option(vm_option)
-  {}
-
-  TO_STRING_KV(KCSTRING(option.optionString));
-};
-
-int expand_directory(const ObString &single_classpath, ObSqlString &expanded_classpath)
-{
-  int ret = OB_SUCCESS;
-  DIR *dir = nullptr;
-  int sys_ret = 0;
-  ObSqlString single_classpath_str;
-  if (OB_FAIL(single_classpath_str.assign(single_classpath))) {
-    LOG_WARN("failed to assign classpath to sql string", K(single_classpath), K(ret));
-  } else if (OB_ISNULL(dir = opendir(single_classpath_str.ptr()))) {
-    // ignore error
-    LOG_WARN("failed to open directory", K(single_classpath), K(strerror(errno)));
-  } else {
-    struct dirent *entry = nullptr;
-    while (OB_SUCC(ret) && OB_NOT_NULL(entry = readdir(dir))) {
-      ObString filename(entry->d_name);
-      if (filename.suffix_match_ci(".jar")) {
-        LOG_DEBUG("got a jar package", K(filename));
-        const char *append_format = "%.*s/%s";
-        if (!expanded_classpath.empty()) {
-          append_format = ":%.*s/%s";
-        }
-        if (OB_FAIL(expanded_classpath.append_fmt(append_format,
-                                                 single_classpath.length(), single_classpath.ptr(),
-                                                 entry->d_name))) {
-          LOG_WARN("failed to append classpath to expanded_classpath",
-                   K(ret), K(single_classpath), KCSTRING(entry->d_name), K(expanded_classpath));
-        }
-      }
-    }
-    if (errno != 0) {
-      LOG_WARN("[ignored] failed to expand directory", KCSTRING(strerror(errno)), K(single_classpath));
-    }
-  }
-
-  if (OB_NOT_NULL(dir) && 0 != (sys_ret = closedir(dir))) {
-    LOG_WARN("[ignored] failed to closedir", KCSTRING(strerror(errno)));
-  }
-  return ret;
-}
-int expand_classpath(ObArenaAllocator &allocator, const ObString &src_classpath, ObString &expanded_classpath)
-{
-  int ret = OB_SUCCESS;
-  ObString classpath = src_classpath;
-  ObSqlString expanded_sql_classpath;
-  const char delimiter = ':';
-  while (OB_SUCC(ret) && !classpath.empty()) {
-    ObString item_classpath = classpath.split_on(delimiter);
-    LOG_DEBUG("got a class path", K(item_classpath));
-    if (item_classpath.empty() && nullptr == classpath.find(delimiter)) {
-      item_classpath = classpath;
-      classpath.reset();
-    }
-    if (!item_classpath.empty()) {
-      bool is_directory;
-      if (item_classpath.suffix_match("/*")) {
-        item_classpath = ObString(item_classpath.length() - 2, item_classpath.ptr());
-      }
-      ObSqlString path_tmp;
-      if (OB_FAIL(path_tmp.assign(item_classpath))) {
-        LOG_WARN("failed to copy string to sql string", K(ret), K(item_classpath));
-      } else if (OB_FAIL(FileDirectoryUtils::is_directory(path_tmp.ptr(), is_directory))) {
-        LOG_WARN("failed to detect directory and ignore the error", K(item_classpath), K(ret));
-        ret = OB_SUCCESS;
-      } else if (is_directory) {
-        if (OB_FAIL(expand_directory(item_classpath, expanded_sql_classpath))) {
-          LOG_WARN("failed to expand classpath directory", K(ret));
-        }
-      }
-      if (OB_SUCC(ret)) {
-        // append this file or directory
-        const char *append_format = "%.*s";
-        if (!expanded_sql_classpath.empty()) {
-          append_format = ":%.*s";
-        }
-        if (OB_FAIL(expanded_sql_classpath.append_fmt(append_format, item_classpath.length(), item_classpath.ptr()))) {
-          LOG_WARN("failed to append classpath to expaned_sql_classpath",
-                   K(ret), K(item_classpath), K(expanded_sql_classpath));
-        }
-      }
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (!expanded_sql_classpath.empty()) {
-    if (OB_FAIL(ob_write_string(allocator, expanded_sql_classpath.string(), expanded_classpath))) {
-      LOG_WARN("failed to copy sql string to string", K(expanded_sql_classpath), K(ret));
-    }
-  }
-  return ret;
-}
-int init_jvm_options(ObArenaAllocator &allocator, ObIArray<JavaVMOptionWrapper> &options)
-{
-  int ret = OB_SUCCESS;
-  const char *classpath_option_name = "-Djava.class.path=";
-  ObString connector_path_config;
-  ObString java_opts = GCONF.ob_java_opts.get_value_string();
-  LOG_INFO("got connector path and java option from config", K(connector_path_config), K(java_opts));
-  const char opt_delimiter = ' ';
-
-  if (OB_FAIL(expand_classpath(allocator, GCONF.ob_java_connector_path.get_value_string(), connector_path_config))) {
-    LOG_WARN("failed to expand classpath", K(ret), K(GCONF.ob_java_connector_path.get_value_string()));
-  }
-
-  while (OB_SUCC(ret) && !java_opts.empty()) {
-    ObString option = java_opts.split_on(opt_delimiter);
-    LOG_INFO("got a java option", K(option));
-    if (option.empty() && nullptr == java_opts.find(opt_delimiter)) {
-      option = java_opts;
-      java_opts.reset();
-    }
-    if (!option.empty()) {
-      ObString option_copy;
-      JavaVMOptionWrapper vm_option;
-      if (!connector_path_config.empty() && option.prefix_match(classpath_option_name)) {
-        int64_t len = option.length() + connector_path_config.length() + 1;
-        char *buf = (char *)allocator.alloc(len);
-        if (OB_ISNULL(buf)) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("failed to allocate memory to store class.path option", K(ret), K(len));
-        } else {
-          MEMCPY(buf, option.ptr(), option.length());
-          buf[option.length()] = ':';
-          MEMCPY(buf + option.length() + 1, connector_path_config.ptr(), connector_path_config.length());
-          option.assign_ptr(buf, len);
-
-          // make sure connector path wouldn't be set twice
-          connector_path_config.reset();
-        }
-      }
-      if (OB_FAIL(ret)) {
-      } else if (OB_FAIL(ob_write_string(allocator, option, option_copy, true/*c_style*/))) {
-        LOG_WARN("failed to copy vm option", K(ret));
-      } else if (FALSE_IT(vm_option.option.optionString = option_copy.ptr())) {
-      } else if (OB_FAIL(options.push_back(vm_option))) {
-        LOG_WARN("failed to push vm option into options", K(ret));
-      }
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (!connector_path_config.empty()) {
-    int64_t len = STRLEN(classpath_option_name) + connector_path_config.length() + 1;
-    char *buf = (char *)allocator.alloc(len);
-    if (OB_ISNULL(buf)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory for class.path", K(ret), K(len));
-    } else {
-      MEMCPY(buf, classpath_option_name, STRLEN(classpath_option_name));
-      MEMCPY(buf + STRLEN(classpath_option_name), connector_path_config.ptr(), connector_path_config.length());
-      buf[len - 1] = 0;
-
-      JavaVMOptionWrapper vm_option;
-      vm_option.option.optionString = buf;
-      LOG_DEBUG("class path option", KCSTRING(buf));
-      if (OB_FAIL(options.push_back(vm_option))) {
-        LOG_WARN("failed to push vm option into options", K(ret));
-      }
-    }
-  }
-
-  LOG_INFO("construct java options done", K(ret), K(options));
-  return ret;
-}
-
-int ObJniTool::init_jni()
-{
-  int ret = OB_SUCCESS;
-  JNIEnv *jni_env = nullptr;
-  int num_jvms = 0;
-  jint jni_ret = JNI_OK;
-  JvmFunctions jvm_functions;
-  ObArenaAllocator allocator;
-  const int64_t tenant_id = MTL_ID() == OB_INVALID_TENANT_ID ? OB_SERVER_TENANT_ID : MTL_ID();
-  allocator.set_tenant_id(tenant_id);
-  if (!ObJavaEnv::getInstance().is_env_inited() && OB_FAIL(ObJavaEnv::getInstance().setup_java_env())) {
-    LOG_WARN("failed to setup java env", K(ret));
-  } else {
-    ret = ObJavaEnv::getInstance().setup_java_env_classpath_and_ldlib_path();
-    // 优先尝试从ObJniConnector获取jni env
-    // 如果失败，尝试从hdfs获取jni env
-    if (OB_SUCC(ret)) {
-      if (OB_SUCC(ObJniConnector::get_jni_env(jni_env))) {
-        // hdfs正确, hdfs classpath正确, ob jar正确
-        jni_env_getter_ = &ObJniTool::get_jni_env_connector;
-        LOG_INFO("get jni env from ObJniConnector successfully");
-      } else {
-        // hdfs正确, ob jar不正确
-        if (OB_NOT_NULL(getJNIEnv)) {
-          jni_env_getter_ = &ObJniTool::get_jni_env_hdfs;
-          LOG_INFO("we can get jni env by hdfs");
-        } else {
-          // libhdfs.so完全没有的时候
-        }
-      }
-    }
-
-    // 如果hdfs获取失败，尝试创建java vm
-    if (OB_ISNULL(jni_env_getter_)) {
-      // 补救机会
-      JavaVM *jvm = nullptr;
-      ret = OB_SUCCESS;
-      if (OB_FAIL(jvm_functions.init())) {
-          LOG_WARN("failed to init jvm functions", K(ret));
-      } else if (JNI_OK != (jni_ret = jvm_functions.JNI_GetCreatedJavaVMs(&jvm, 1, &num_jvms))) {
-        ret = OB_JNI_ERROR;
-        LOG_WARN("failed to get created java vm", K(jni_ret), K(ret));
-      } else if (0 == num_jvms) {
-        ObArray<JavaVMOptionWrapper> options;
-        if (OB_FAIL(init_jvm_options(allocator, options))) {
-          LOG_WARN("failed to init jvm options to create jvm", K(ret));
-        } else {
-          JavaVMInitArgs jvm_args;
-          jvm_args.version = JNI_VERSION_1_8;
-          jvm_args.nOptions = options.count();
-          jvm_args.options = (JavaVMOption *)(&options.at(0));
-          jvm_args.ignoreUnrecognized = JNI_TRUE;
-          jni_ret = jvm_functions.JNI_CreateJavaVM(&jvm, (void **)&jni_env, &jvm_args);
-          if (jni_ret != JNI_OK) {
-            ret = OB_JNI_ERROR;
-            LOG_WARN("failed to create java vm", K(jni_ret), K(ret));
-          }
-        }
-      }
-      if (OB_SUCC(ret)) {
-        jni_env_getter_ = &ObJniTool::get_jni_env_local; // 补救机会成功，设置jni env getter
-      }
-      jvm_ = jvm;
-    } else {
-      jvm_ = nullptr;
-      LOG_INFO("get jni env from external source successfully , jvm is not needed", K(ret));
-    }
-  }
-
-  LOG_TRACE("create jvm done", KP(jvm_));
   return ret;
 }
 
 ObJniTool &ObJniTool::instance()
 {
+  // init_global_instance() is called from plugin_init (single-threaded at startup).
+  // No lazy init or locking needed here.
   return *jni_tool_global_instance;
 }
 
@@ -777,9 +318,6 @@ int ObJniTool::init_global_instance()
   } else if (OB_ISNULL(instance = OB_NEW(ObJniTool, mem_attr))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate memory", K(sizeof(ObJniTool)));
-  } else if (OB_FAIL(instance->init())) {
-    LOG_WARN("init jni tool failed", K(ret));
-    OB_DELETE(ObJniTool, mem_attr, instance);
   } else {
     jni_tool_global_instance = instance;
   }
@@ -1266,75 +804,6 @@ int ObJniTool::init_log_level(JNIEnv *jni_env)
   OBJNI_RUN(jni_env->CallStaticVoidMethod((jclass)jni_utils_class_.handle(), set_log_level_method, jlevel));
   LOG_INFO("set java log level", K(ret), KCSTRING(oblog_level));
   return ret;
-}
-
-static bool is_external_plugin_jar(const ObString &path)
-{
-  bool exists = false;
-  const char *jar_prefix = "oceanbase-external-plugin-";
-  const char *jar_suffix = ".jar";
-  if (!path.suffix_match_ci(jar_suffix)) {
-  } else {
-    // Extract the filename from the path (after last '/'), and check if it starts with jar_prefix and ends with jar_suffix
-    const char *last_slash = path.reverse_find('/');
-    ObString filename;
-    if (OB_NOT_NULL(last_slash)) {
-      filename.assign_ptr(const_cast<char *>(last_slash + 1), path.ptr() + path.length() - (last_slash + 1));
-    } else {
-      filename = path;
-    }
-    if (filename.prefix_match_ci(jar_prefix)) {
-      exists = true;
-    }
-  }
-  return exists;
-}
-
-int ObJniTool::is_env_ready(bool &is_ready)
-{
-  int ret = OB_SUCCESS;
-  is_ready = false;
-  if (!GCONF.ob_enable_java_env ||
-      OB_ISNULL(GCONF.ob_java_opts) ||
-      OB_ISNULL(GCONF.ob_java_connector_path) ||
-      OB_ISNULL(GCONF.ob_java_home)) {
-  } else {
-    // check if the external plugin jar package is in the right path.
-    ObArenaAllocator allocator(ob_plugin_mem_attr());
-    ObString connector_path_config;
-    if (OB_FAIL(expand_classpath(allocator, GCONF.ob_java_connector_path.get_value_string(), connector_path_config))) {
-      LOG_WARN("failed to expand classpath", K(ret), K(GCONF.ob_java_connector_path.get_value_string()));
-    } else {
-      // Iterate through items in connector_path_config (':' separated), check for '.jar' suffix
-      is_ready = false;
-      const char delimiter = ':';
-      ObString classpath = connector_path_config;
-      while (!classpath.empty() && !is_ready) {
-        ObString item = classpath.split_on(delimiter);
-        if (item.empty()) {
-          item = classpath;
-          classpath.reset();
-        }
-        if (is_external_plugin_jar(item)) {
-          is_ready = true;
-        }
-      }
-      LOG_INFO("check if the external plugin jar package is in the right path", K(ret), K(is_ready), K(connector_path_config));
-    }
-  }
-  LOG_INFO("check if java env is ready", K(ret), K(is_ready));
-  return ret;
-}
-////////////////////////////////////////////////////////////////////////////////
-ObJniTool::JniEnvThreadVar::~JniEnvThreadVar()
-{
-  // if JVM was created by JniHelper then we won't detach current thread.
-  if (OB_NOT_NULL(jni_env) && OB_NOT_NULL(jvm)) {
-    jint jni_ret = jvm->DetachCurrentThread();
-    LOG_INFO("[JNI] detach current thread", K(jni_ret), KP(jni_env), KP(jvm));
-    jni_env = nullptr;
-    jvm = nullptr;
-  }
 }
 
 } // namespace plugin

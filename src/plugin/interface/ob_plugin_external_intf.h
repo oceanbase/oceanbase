@@ -53,6 +53,19 @@ public:
                                  const ObString &parameters,
                                  const ObString &plugin_name,
                                  ObExternalDataEngine *&data_engine) = 0;
+
+  /**
+   * Lazily discover and register data-source sub-plugins (e.g. odps, jdbc) on first use.
+   * @details For plugins backed by an external runtime (such as the JVM), enumerating the
+   * available data sources is expensive and may require starting that runtime. So it is
+   * deferred until the first external table lookup misses, rather than done at startup.
+   * Default no-op for plugins that have no sub-plugins. Implementations must be thread-safe
+   * and run the actual discovery at most once.
+   */
+  virtual int discover_sub_plugins(ObPluginParam *param)
+  {
+    return OB_SUCCESS;
+  }
 };
 
 class ObExternalDataEngine

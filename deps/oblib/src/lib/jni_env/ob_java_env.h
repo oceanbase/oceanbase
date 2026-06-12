@@ -26,7 +26,7 @@ public:
     VALID = 1,
     NOT_VALID = 2,
   };
-  ObJavaEnv() : is_inited_(false), version_valid_(NOT_INITED), setup_env_lock_(common::ObLatchIds::JAVA_ENV_LOCK) {
+  ObJavaEnv() : is_inited_(false), version_valid_(NOT_INITED) {
     arena_alloc_.set_attr(SET_IGNORE_MEM_VERSION(lib::ObMemAttr(OB_SYS_TENANT_ID, "JavaHomeEnv")));
   }
 
@@ -52,6 +52,7 @@ public:
   const char *cp_ = nullptr;
   const char *ld_ = nullptr;
 
+  int detect_java_runtime_variables();
 private:
   int setup_extra_runtime_lib_path();
   int find_jni_packages_in_ld_library_path(ObString &out_path);
@@ -70,9 +71,6 @@ private:
   bool is_inited_hdfs_opts_ = false;
   bool is_inited_cls_path_ = false;
   bool is_inited_conn_path_ = false;
-
-private:
-  obsys::ObRWLock<> setup_env_lock_;
 
 private:
   const char *JAVA_HOME = "JAVA_HOME";

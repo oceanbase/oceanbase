@@ -411,7 +411,6 @@ int ObJavaEnv::setup_extra_runtime_lib_path()
 int ObJavaEnv::setup_java_env()
 {
   int ret = OB_SUCCESS;
-  obsys::ObWLockGuard<> wg(setup_env_lock_);
   if (!GCONF.ob_enable_java_env) {
     ret = OB_JNI_NOT_ENABLE_JAVA_ENV_ERROR;
     LOG_WARN("observer is not enable java env", K(ret));
@@ -433,7 +432,6 @@ int ObJavaEnv::setup_java_env()
 int ObJavaEnv::setup_java_env_classpath_and_ldlib_path()
 {
   int ret = OB_SUCCESS;
-  obsys::ObWLockGuard<> wg(setup_env_lock_);
   if (!GCONF.ob_enable_java_env) {
     ret = OB_JNI_NOT_ENABLE_JAVA_ENV_ERROR;
     LOG_WARN("observer is not enable java env", K(ret));
@@ -474,6 +472,73 @@ int ObJavaEnv::set_version_valid(VersionValid valid)
 {
   int ret = OB_SUCCESS;
   version_valid_ = valid;
+  return ret;
+}
+
+int ObJavaEnv::detect_java_runtime_variables() {
+  int ret = OB_SUCCESS;
+
+  const char *java_home = std::getenv("JAVA_HOME");
+  LOG_TRACE("get current java home", K(ret), K(java_home));
+  if (nullptr == java_home) {
+    ret = OB_JNI_JAVA_HOME_NOT_FOUND_ERROR;
+    LOG_WARN("env 'JAVA_HOME' is not set", K(ret), K(java_home));
+  }
+
+  if (OB_SUCC(ret)) {
+    const char *connector_path = std::getenv("CONNECTOR_PATH");
+    if (nullptr == connector_path) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("env 'CONNECTOR_PATH' is not set", K(ret), K(connector_path));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    const char *java_opts = std::getenv("JAVA_OPTS");
+    if (nullptr == java_opts) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("env 'JAVA_OPTS' is not set", K(ret), K(java_opts));
+    } else if (OB_ISNULL(STRSTR(java_opts, "-XX:-CriticalJNINatives"))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN(
+          "env 'JAVA_OPTS' without critical config `-XX:-CriticalJNINatives`",
+          K(ret), K(java_opts));
+      LOG_USER_WARN(
+          OB_INVALID_ARGUMENT,
+          "run jvm without critical config `-XX:-CriticalJNINatives`");
+    } else if (OB_ISNULL(STRSTR(java_opts, "-Djdk.lang.processReaperUseDefaultStackSize=true"))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN(
+          "env 'JAVA_OPTS' without critical config `-Djdk.lang.processReaperUseDefaultStackSize=true`",
+          K(ret), K(java_opts));
+      LOG_USER_WARN(
+          OB_INVALID_ARGUMENT,
+          "run jvm without critical config `-Djdk.lang.processReaperUseDefaultStackSize=true`");
+    } else if (OB_ISNULL(STRSTR(java_opts, "-Xrs"))) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("env 'JAVA_OPTS' without critical config `-Xrs`", K(ret), K(java_opts));
+      LOG_USER_WARN(OB_INVALID_ARGUMENT, "run jvm without critical config `-Xrs`");
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    const char *libhdfs_opts = std::getenv("LIBHDFS_OPTS");
+    if (nullptr == libhdfs_opts) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("env 'LIBHDFS_OPTS' is not set", K(ret), K(libhdfs_opts));
+      LOG_USER_WARN(OB_INVALID_ARGUMENT, "run jvm without critical config `LIBHDFS_OPTS`");
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    const char *classpath = std::getenv("CLASSPATH");
+    if (nullptr == classpath) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("env 'CLASSPATH' is not set", K(ret), K(classpath));
+      LOG_USER_WARN(OB_INVALID_ARGUMENT, "run jvm without critical config `CLASSPATH`");
+    }
+  }
+
   return ret;
 }
 

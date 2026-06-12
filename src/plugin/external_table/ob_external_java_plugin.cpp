@@ -13,7 +13,9 @@
 
 #include "lib/oblog/ob_log_module.h"
 #include "lib/string/ob_string.h"
+#include "lib/allocator/ob_malloc.h"
 #include "lib/jni_env/ob_jni_connector.h"
+#include "plugin/sys/ob_plugin_helper.h"
 #include "plugin/external_table/ob_external_jni_utils.h"
 #include "plugin/external_table/ob_external_filter.h"
 #include "plugin/external_table/ob_external_arrow_object.h"
@@ -58,28 +60,36 @@ ObJavaLogLabelSetter::~ObJavaLogLabelSetter()
 int ObJavaDataSourceFactoryHelper::init()
 {
   int ret = OB_SUCCESS;
-  JNIEnv *jni_env = nullptr;
-  jclass data_source_factory_class = nullptr;
-  LOCAL_REF_GUARD_ENV(data_source_factory_class, jni_env);
-  if (OB_NOT_NULL(data_source_factory_class_.handle())) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("java data source factory helper init twice");
-  } else if (OB_FAIL(ObJniTool::instance().get_jni_env(jni_env))) {
-    LOG_WARN("failed to get jni env", K(ret));
-  } else if (OB_ISNULL(jni_env)) {
-    ret = OB_JNI_ENV_ERROR;
-    LOG_WARN("get jni env success but got null", K(ret));
+  if (ATOMIC_LOAD(&init_done_)) {
+    // already inited; idempotent fast path without taking the lock
+  } else {
+    lib::ObLockGuard<lib::ObMutex> guard(init_mutex_);
+    if (ATOMIC_LOAD(&init_done_)) {
+      // another thread finished init while we waited for the lock
+    } else {
+      JNIEnv *jni_env = nullptr;
+      jclass data_source_factory_class = nullptr;
+      LOCAL_REF_GUARD_ENV(data_source_factory_class, jni_env);
+      if (OB_FAIL(ObJniTool::instance().get_jni_env(jni_env))) {
+        LOG_WARN("failed to get jni env", K(ret));
+      } else if (OB_ISNULL(jni_env)) {
+        ret = OB_JNI_ENV_ERROR;
+        LOG_WARN("get jni env success but got null", K(ret));
+      }
+      OBJNI_RUN(data_source_factory_class = jni_env->FindClass(DATA_SOURCE_FACTORY_CLASS_NAME));
+      CK (OB_NOT_NULL(data_source_factory_class));
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(data_source_factory_class_.from_local_ref(data_source_factory_class, jni_env))) {
+        LOG_WARN("failed to create global ref of data source factory class", K(ret));
+      }
+      OBJNI_RUN(create_data_source_method_ = jni_env->GetStaticMethodID(
+          data_source_factory_class, "create", "(Ljava/util/Map;)Lcom/oceanbase/external/api/DataSource;"));
+      CK(OB_NOT_NULL(create_data_source_method_));
+      if (OB_SUCC(ret)) {
+        ATOMIC_STORE(&init_done_, true);
+      }
+    }
   }
-  OBJNI_RUN(data_source_factory_class = jni_env->FindClass(DATA_SOURCE_FACTORY_CLASS_NAME));
-  CK (OB_NOT_NULL(data_source_factory_class));
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(data_source_factory_class_.from_local_ref(data_source_factory_class, jni_env))) {
-    LOG_WARN("failed to create global ref of data source factory class", K(ret));
-  }
-  OBJNI_RUN(create_data_source_method_ = jni_env->GetStaticMethodID(
-      data_source_factory_class, "create", "(Ljava/util/Map;)Lcom/oceanbase/external/api/DataSource;"));
-  CK(OB_NOT_NULL(create_data_source_method_));
-
   return ret;
 }
 
@@ -188,21 +198,62 @@ int ObJavaDataSourceFactoryHelper::import_record_batch(
 }
 ////////////////////////////////////////////////////////////////////////////////
 // ObJavaExternalPlugin
+bool         ObJavaExternalPlugin::sub_plugins_discovered_ = false;
+lib::ObMutex ObJavaExternalPlugin::sub_plugins_discover_mutex_(common::ObLatchIds::JAVA_PLUGIN_DISCOVER_LOCK);
+
 ObJavaExternalPlugin::~ObJavaExternalPlugin()
 {}
 
 int ObJavaExternalPlugin::init(ObPluginParam *param)
 {
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(data_source_factory_.init())) {
-    LOG_WARN("failed to init java data source factory helper", K(ret));
-  }
-  return ret;
+  // No JVM startup here. Registering the plugin descriptor must stay cheap and must not
+  // touch the JVM: plugin_init runs on the observer's inner_main thread whose stack is
+  // relocated by CALL_WITH_NEW_STACK, which breaks the JVM's pthread_attr_getstack probe.
+  // The JVM is started lazily on the first query, on a real worker thread (see
+  // discover_sub_plugins / create_data_engine).
+  return OB_SUCCESS;
 }
 
 int ObJavaExternalPlugin::deinit(ObPluginParam *param)
 {
   int ret = OB_SUCCESS;
+  return ret;
+}
+
+int ObJavaExternalPlugin::discover_sub_plugins(ObPluginParam *param)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(param)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), KP(param));
+  } else if (!ATOMIC_LOAD(&sub_plugins_discovered_)) {
+    lib::ObLockGuard<lib::ObMutex> guard(sub_plugins_discover_mutex_);
+    if (!ATOMIC_LOAD(&sub_plugins_discovered_)) {
+      // The plugin manager keeps the name pointer without copying it, so the buffer must
+      // outlive registration. Allocate from a heap allocator and intentionally never free.
+      ObMalloc allocator(OB_PLUGIN_MEMORY_LABEL);
+      ObArray<ObString> data_source_names;
+      if (OB_FAIL(data_source_factory_.init())) { // starts the JVM on first call
+        LOG_WARN("failed to init java data source factory", K(ret));
+      } else if (OB_FAIL(data_source_factory_.list_plugins(allocator, data_source_names))) {
+        LOG_WARN("failed to list java data source plugins", K(ret));
+      } else {
+        for (int64_t i = 0; OB_SUCC(ret) && i < data_source_names.count(); i++) {
+          const ObString &name = data_source_names.at(i);
+          int tmp_ret = ObPluginHelper::register_builtin_external<ObJavaExternalPlugin>(
+              param, name.ptr(), "This is a java external table data source plugin.");
+          if (OB_SUCCESS != tmp_ret && OB_ENTRY_EXIST != tmp_ret) {
+            ret = tmp_ret;
+            LOG_WARN("failed to register java data source plugin", K(name), K(ret));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          ATOMIC_STORE(&sub_plugins_discovered_, true);
+          LOG_INFO("discovered java external data source plugins", K(data_source_names));
+        }
+      }
+    }
+  }
   return ret;
 }
 
@@ -217,7 +268,9 @@ int ObJavaExternalPlugin::validate_properties(ObIAllocator &allocator,
   ObArenaAllocator arena_allocator;
   ObString plugin_name_value;
   ObJavaLogGuard java_log_guard;
-  if (OB_FAIL(ob_alloc_shared(java_log_guard, allocator))) {
+  if (OB_FAIL(data_source_factory_.init())) { // lazily starts the JVM on first use
+    LOG_WARN("failed to init java data source factory", K(ret));
+  } else if (OB_FAIL(ob_alloc_shared(java_log_guard, allocator))) {
     LOG_WARN("failed to create java log guard", K(ret));
   } else if (OB_FAIL(data_source_factory_.create_data_source(parameters, plugin_name, create_data_source_object))) {
     LOG_WARN("failed to create data source object", K(ret));
@@ -250,7 +303,9 @@ int ObJavaExternalPlugin::create_data_engine(ObIAllocator &allocator,
   engine = nullptr;
   ObJavaGlobalRef create_data_source_object;
   ObJavaLogGuard java_log_guard;
-  if (OB_FAIL(ob_alloc_shared(java_log_guard, allocator))) {
+  if (OB_FAIL(data_source_factory_.init())) { // lazily starts the JVM on first use
+    LOG_WARN("failed to init java data source factory", K(ret));
+  } else if (OB_FAIL(ob_alloc_shared(java_log_guard, allocator))) {
     LOG_WARN("failed to create java log guard", K(ret));
   } else if (OB_FAIL(data_source_factory_.create_data_source(parameters, plugin_name, create_data_source_object))) {
     LOG_WARN("failed to create data source object", K(ret));
