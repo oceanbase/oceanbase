@@ -198,7 +198,7 @@ int ObDDLErrorMessageTableOperator::load_ddl_user_error(const uint64_t tenant_id
             LOG_WARN("print to buffer failed", K(ret), K(str_user_message));
           } else if (OB_FAIL(databuff_printf(error_message.dba_message_, OB_MAX_ERROR_MSG_LEN, "%.*s", str_dba_message.length(), str_dba_message.ptr()))) {
             LOG_WARN("print to buffer failed", K(ret), K(str_dba_message));
-          } else if (OB_SUCCESS != error_message.ret_code_ && !str_user_message.empty() && NULL == str_user_message.find('%')) {
+          } else if (OB_SUCCESS != error_message.ret_code_ && !str_user_message.empty()) {
             LOG_INFO("load ddl user error success", K(error_message));
             break;
           }
