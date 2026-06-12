@@ -696,17 +696,14 @@ int ObDDLIncRedoLogWriter::local_write_inc_commit_log(
   } else if (OB_FAIL(trans_ctx->submit_direct_load_inc_commit_log(log, cb, scn, false /*need_free_extra_cb*/, true/*is_inc_major_log*/))) {
     LOG_WARN("fail to submit ddl inc commit log", K(ret), K(log));
   } else {
+    handle.cb_ = cb;
+    cb = nullptr;
     if (OB_FAIL(ObDDLRedoLogWriter::wait_gts_elapse_with_timeout(MTL_ID(), scn, ObDDLIncLogHandle::DDL_INC_LOG_TIMEOUT))) {
       LOG_WARN("fail to wait gts elapse", K(ret), K(log));
-    }
-    {
+    } else {
       common::ObTimeGuard timeguard("write_inc_commit_log wait", 5 * 1000 * 1000); // 5s
-      if (OB_SUCC(ret)) {
-        handle.cb_ = cb;
-        cb = nullptr;
-        if (OB_FAIL(handle.wait())) {
-          LOG_WARN("wait inc commit log finish failed", K(ret), K(tablet_id_));
-        }
+      if (OB_FAIL(handle.wait())) {
+        LOG_WARN("wait inc commit log finish failed", K(ret), K(tablet_id_));
       }
     }
   }
