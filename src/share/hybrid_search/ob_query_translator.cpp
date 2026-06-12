@@ -128,10 +128,10 @@ int ObQueryTranslator::translate_select()
                  query_req->score_alias_.empty()) {
         // do nothing
       } else if (query_req->score_alias_.empty()) {
-        DATA_PRINTF(" as _score");
+        DATA_PRINTF(" as `_score`");
       } else {
         DATA_PRINTF(" as ");
-        PRINT_IDENT(query_req->score_alias_);
+        PRINT_IDENT_WITH_QUOT(query_req->score_alias_);
       }
     }
   }
@@ -146,7 +146,7 @@ int ObQueryTranslator::translate_order(const OrderInfo *order_info)
       LOG_WARN("fail to translate expr", K(ret));
     }
   } else {
-    PRINT_IDENT(order_info->order_item->alias_name);
+    PRINT_IDENT_WITH_QUOT(order_info->order_item->alias_name);
   }
   if (OB_FAIL(ret)) {
   } else if (order_info->ascent == false) {
@@ -195,10 +195,10 @@ int ObRequestTranslator::translate_table(const ObReqTable *table)
   int ret = OB_SUCCESS;
   if (table->table_type_ == ReqTableType::BASE_TABLE) {
     if (!table->database_name_.empty()) {
-      PRINT_IDENT(table->database_name_);
+      PRINT_IDENT_WITH_QUOT(table->database_name_);
       DATA_PRINTF(".");
     }
-    PRINT_IDENT(table->table_name_);
+    PRINT_IDENT_WITH_QUOT(table->table_name_);
   } else if (table->table_type_ == ReqTableType::SUB_QUERY) {
     ObQueryReqFromJson *ref_query = static_cast<ObQueryReqFromJson *>(table->ref_query_);
     int64_t res_len = 0;
@@ -207,8 +207,11 @@ int ObRequestTranslator::translate_table(const ObReqTable *table)
       LOG_WARN("failed to translate ref query", K(ret), K(*pos_), K(buf_len_));
     } else {
       (*pos_) += res_len;
-      DATA_PRINTF(") ");
-      PRINT_IDENT(table->alias_name_);
+      DATA_PRINTF(")");
+      if (!table->alias_name_.empty()) {
+        DATA_PRINTF(" ");
+        PRINT_IDENT_WITH_QUOT(table->alias_name_);
+      }
     }
   } else if (table->table_type_ == ReqTableType::MULTI_SET) {
     const ObMultiSetTable *mul_tab = static_cast<const ObMultiSetTable *>(table);

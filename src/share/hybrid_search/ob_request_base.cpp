@@ -285,7 +285,7 @@ int ObReqExpr::translate_alias(ObObjPrintParams &print_params_, char *buf_, int6
   int ret = OB_SUCCESS;
   if (!alias_name.empty()) {
     DATA_PRINTF(" as ");
-    PRINT_IDENT(alias_name);
+    PRINT_IDENT_WITH_QUOT(alias_name);
   }
   return ret;
 }
@@ -318,10 +318,14 @@ int ObReqColumnExpr::translate_expr(ObObjPrintParams &print_params_, char *buf_,
 {
   int ret = OB_SUCCESS;
   if (!table_name.empty()) {
-    PRINT_IDENT(table_name);
+    PRINT_IDENT_WITH_QUOT(table_name);
     DATA_PRINTF(".");
   }
-  PRINT_IDENT(expr_name);
+  PRINT_IDENT_WITH_QUOT(expr_name);
+  // For ES mode MATCH field, output weight in format: `column`^weight
+  if (OB_SUCC(ret) && print_weight_ && weight_ >= 0) {
+    DATA_PRINTF("^%.15g", weight_);
+  }
   if (OB_SUCC(ret) && need_alias && translate_alias(print_params_, buf_, buf_len_, pos_)) {
     LOG_WARN("fail to translate expr alias", K(ret));
   }
@@ -439,7 +443,7 @@ int OrderInfo::translate(ObObjPrintParams &print_params_, char *buf_, int64_t bu
       LOG_WARN("fail to translate expr", K(ret));
     }
   } else {
-    PRINT_IDENT(order_item->alias_name);
+    PRINT_IDENT_WITH_QUOT(order_item->alias_name);
   }
   if (OB_FAIL(ret)) {
   } else if (ascent == false) {
@@ -727,20 +731,20 @@ int ObReqExpr::construct_expr(ObReqExpr *&expr, ObIAllocator &alloc, const ObStr
   return ret;
 }
 
-int ObReqColumnExpr::construct_column_expr(ObReqColumnExpr *&expr, ObIAllocator &alloc, const ObString &expr_name, double weight)
+int ObReqColumnExpr::construct_column_expr(ObReqColumnExpr *&expr, ObIAllocator &alloc, const ObString &expr_name, double weight, bool print_weight)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr = OB_NEWx(ObReqColumnExpr, &alloc, expr_name, ObString(), weight))) {
+  if (OB_ISNULL(expr = OB_NEWx(ObReqColumnExpr, &alloc, expr_name, ObString(), weight, print_weight))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to create column expr", K(ret));
   }
   return ret;
 }
 
-int ObReqColumnExpr::construct_column_expr(ObReqColumnExpr *&expr, ObIAllocator &alloc, const ObString &expr_name, const ObString &table_name, double weight)
+int ObReqColumnExpr::construct_column_expr(ObReqColumnExpr *&expr, ObIAllocator &alloc, const ObString &expr_name, const ObString &table_name, double weight, bool print_weight)
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(expr = OB_NEWx(ObReqColumnExpr, &alloc, expr_name, table_name, weight))) {
+  if (OB_ISNULL(expr = OB_NEWx(ObReqColumnExpr, &alloc, expr_name, table_name, weight, print_weight))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("fail to create column expr", K(ret));
   }

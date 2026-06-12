@@ -151,16 +151,17 @@ class ObReqColumnExpr : public ObReqExpr
 {
 public:
   ObReqColumnExpr() = delete;
-  static int construct_column_expr(ObReqColumnExpr *&expr, ObIAllocator &alloc, const ObString &expr_name = ObString(), double weight = -1.0);
-  static int construct_column_expr(ObReqColumnExpr *&expr, ObIAllocator &alloc, const ObString &expr_name, const ObString &table_name, double weight = -1.0);
+  static int construct_column_expr(ObReqColumnExpr *&expr, ObIAllocator &alloc, const ObString &expr_name = ObString(), double weight = -1.0, bool print_weight = false);
+  static int construct_column_expr(ObReqColumnExpr *&expr, ObIAllocator &alloc, const ObString &expr_name, const ObString &table_name, double weight = -1.0, bool print_weight = false);
   virtual ~ObReqColumnExpr() {}
   virtual int translate_expr(ObObjPrintParams &print_params_, char *buf_, int64_t buf_len_, int64_t *pos_, ObReqScope scope = FIELD_LIST_SCOPE, bool need_alias = true);
   virtual int get_expr_type() { return ObReqExprType::COLUMN_EXPR; }
   common::ObString table_name;
   double weight_;
+  bool print_weight_;
 private:
-  ObReqColumnExpr(const ObString &expr_name, const ObString &table_name = ObString(), double weight = -1.0)
-    : ObReqExpr(expr_name), table_name(table_name), weight_(weight) {}
+  ObReqColumnExpr(const ObString &expr_name, const ObString &table_name = ObString(), double weight = -1.0, bool print_weight = false)
+    : ObReqExpr(expr_name), table_name(table_name), weight_(weight), print_weight_(print_weight) {}
 };
 
 class ObReqConstExpr : public ObReqExpr
