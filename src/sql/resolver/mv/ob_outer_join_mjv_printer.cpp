@@ -160,8 +160,6 @@ int ObOuterJoinMJVPrinter::gen_delete_for_inner_join(const TableItem *delta_tabl
     LOG_WARN("failed to create simple column exprs", K(ret));
   } else if (OB_FAIL(del_stmt->add_condition_expr(semi_filter))) {
     LOG_WARN("failed to push back semi filter", K(ret));
-  } else if (OB_FAIL(add_semi_to_inner_hint(del_stmt))) {
-    LOG_WARN("failed to add semi to inner hint", K(ret));
   } else if (OB_FAIL(add_union_all_child_refresh_filter_if_needed(del_stmt, mv_table))) {
     LOG_WARN("failed to add union all child refresh filter", K(ret));
   } else if (OB_FAIL(dml_stmts.push_back(del_stmt))) {
@@ -337,8 +335,6 @@ int ObOuterJoinMJVPrinter::gen_delete_for_left_join(const TableItem *delta_table
     LOG_WARN("failed to build exists equal expr", K(ret));
   } else if (OB_FAIL(del_stmt->add_condition_expr(semi_filter))) {
     LOG_WARN("failed to push back semi filter", K(ret));
-  } else if (OB_FAIL(add_semi_to_inner_hint(del_stmt))) {
-    LOG_WARN("failed to add semi to inner hint", K(ret));
   } else if (OB_FAIL(dml_stmts.push_back(del_stmt))) {
     LOG_WARN("failed to push back delete stmt", K(ret));
   }
@@ -447,8 +443,6 @@ int ObOuterJoinMJVPrinter::gen_select_for_left_join_first_delete(const TableItem
     LOG_WARN("failed to generate exists cond for mv_stat cond", K(ret));
   } else if (OB_FAIL(in_sel_stmt->add_condition_expr(in_sel_cond_expr))) {
     LOG_WARN("failed to push back semi filter", K(ret));
-  } else if (OB_FAIL(add_semi_to_inner_hint(in_sel_stmt))) {
-    LOG_WARN("failed to add semi to inner hint", K(ret));
   } else if (OB_FAIL(copy_and_replace_column_exprs(other_join_table_rowkeys,
                                                    in_sel_mv_table->get_table_name(),
                                                    in_sel_mv_table->table_id_,
@@ -460,8 +454,6 @@ int ObOuterJoinMJVPrinter::gen_select_for_left_join_first_delete(const TableItem
     LOG_WARN("failed to build exists equal expr", K(ret));
   } else if (OB_FAIL(mv_stat_stmt->add_condition_expr(mv_stat_cond_expr))) {
     LOG_WARN("failed to push back semi filter", K(ret));
-  } else if (OB_FAIL(add_semi_to_inner_hint(mv_stat_stmt))) {
-    LOG_WARN("failed to add semi to inner hint", K(ret));
   } else if (OB_FAIL(add_union_all_child_refresh_filter_if_needed(mv_stat_stmt, mv_table))) {
     LOG_WARN("failed to add union all child refresh filter", K(ret));
   }
@@ -665,8 +657,6 @@ int ObOuterJoinMJVPrinter::gen_update_for_left_join(const TableItem *delta_table
     LOG_WARN("failed to gen exists semi filter", K(ret));
   } else if (OB_FAIL(upd_stmt->add_condition_expr(semi_filter))) {
     LOG_WARN("failed to push back semi filter", K(ret));
-  } else if (OB_FAIL(add_semi_to_inner_hint(upd_stmt))) {
-    LOG_WARN("failed to add semi to inner hint", K(ret));
   } else if (OB_FAIL(add_union_all_child_refresh_filter_if_needed(upd_stmt, mv_table))) {
     LOG_WARN("failed to add union all child refresh filter", K(ret));
   } else if (OB_ISNULL((ptr = ctx_.alloc_.alloc(sizeof(ObUpdateTableInfo))))) {
@@ -863,14 +853,10 @@ int ObOuterJoinMJVPrinter::gen_select_for_left_join_second_delete(const TableIte
   } else if (OB_FAIL(in_sel_stmt_copier.copy_on_replace(upper_table->get_join_conditions(),
                                                         in_sel_stmt->get_condition_exprs()))) {
     LOG_WARN("failed to copy condition exprs", K(ret));
-  } else if (OB_FAIL(add_semi_to_inner_hint(in_sel_stmt))) {
-    LOG_WARN("failed to add semi to inner hint", K(ret));
   } else if (OB_FAIL(build_exists_equal_expr(in_sel_stmt, other_join_table_rowkeys, mv_stat_cond_expr))) {
     LOG_WARN("failed to build exists equal expr", K(ret));
   } else if (OB_FAIL(mv_stat_stmt->add_condition_expr(mv_stat_cond_expr))) {
     LOG_WARN("failed to push back where condition", K(ret));
-  } else if (OB_FAIL(add_semi_to_inner_hint(mv_stat_stmt))) {
-    LOG_WARN("failed to add semi to inner hint", K(ret));
   } else if (OB_FAIL(add_union_all_child_refresh_filter_if_needed(mv_stat_stmt, mv_table))) {
     LOG_WARN("failed to add union all child refresh filter", K(ret));
   }

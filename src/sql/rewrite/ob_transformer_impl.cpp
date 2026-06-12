@@ -156,6 +156,12 @@ int ObTransformerImpl::set_transformation_parameters(ObQueryCtx *query_ctx)
       ctx_->complex_cbqt_table_num_ = tenant_config->_complex_cbqt_table_num;
       ctx_->force_subquery_unnest_ = tenant_config->_force_subquery_unnest;
       ctx_->force_equal_semi_to_inner_ = tenant_config->_force_equal_semi_to_inner;
+      if (!ctx_->force_equal_semi_to_inner_ && session_info->get_ddl_info().is_mview_fast_refresh()) {
+        // mview fast refresh disables cost-based transforms but still needs semi to inner.
+        // Previously done via embedded hints, which break when outline is bound.
+        // Force semi to inner for fast refresh here instead.
+        ctx_->force_equal_semi_to_inner_ = true;
+      }
       ctx_->nested_loop_join_enabled_ = tenant_config->_nested_loop_join_enabled;
       if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_bool_opt_param(ObOptParamHint::NESTED_LOOP_JOIN_ENABLED,
                                                                               ctx_->nested_loop_join_enabled_))) {

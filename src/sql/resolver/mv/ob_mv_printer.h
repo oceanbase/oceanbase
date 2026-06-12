@@ -330,7 +330,6 @@ protected:
   int get_mv_rowkey_exprs(const TableItem *mv_table, ObIArray<ObRawExpr*> &mv_rowkey_exprs);
   int add_col_exprs_into_select(ObIArray<SelectItem> &select_items, const ObIArray<ObRawExpr*> &col_exprs);
   int add_mv_rowkey_into_select(ObSelectStmt *stmt, const TableItem *mv_table);
-  int add_semi_to_inner_hint(ObDMLStmt *stmt);
   int add_dynamic_sampling_hint(ObDMLStmt *stmt, const TableItem *table);
   // is_table_skip_refresh
   // we do not add (table_without_delete && table_without_insert)

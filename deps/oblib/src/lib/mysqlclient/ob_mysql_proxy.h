@@ -57,6 +57,7 @@ public:
   bool is_mview_complete_refresh() const { return is_mview_complete_refresh_; }
   void set_refreshing_mview(const bool flag) { is_refreshing_mview_ = flag; }
   bool is_refreshing_mview() const { return is_refreshing_mview_; }
+  bool is_mview_fast_refresh() const { return is_refreshing_mview_ && !is_mview_complete_refresh_; }
   void set_retryable_ddl(const bool flag) { is_retryable_ddl_ = flag; }
   bool is_retryable_ddl() const { return is_retryable_ddl_; }
   void set_is_dummy_ddl_for_inner_visibility(const bool flag) { is_dummy_ddl_for_inner_visibility_ = flag; }
@@ -123,6 +124,7 @@ public:
   bool is_ddl_check_default_value() const { return ddl_info_.is_ddl_check_default_value(); }
   bool is_mview_complete_refresh() const { return ddl_info_.is_mview_complete_refresh(); }
   bool is_refreshing_mview() const { return ddl_info_.is_refreshing_mview(); }
+  bool is_mview_fast_refresh() const { return ddl_info_.is_mview_fast_refresh(); }
   bool is_retryable_ddl() const { return ddl_info_.is_retryable_ddl(); }
   bool is_dummy_ddl_for_inner_visibility() const { return ddl_info_.is_dummy_ddl_for_inner_visibility(); }
   bool is_major_refreshing_mview() const { return ddl_info_.is_major_refreshing_mview(); }
