@@ -211,6 +211,8 @@ int ObVectorQueryAdaptorResultContext::init_bitmaps()
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to create vbitmap msg", K(ret));
     } else {
+      bitmaps->insert_bitmap_ = nullptr;
+      bitmaps->delete_bitmap_ = nullptr;
       lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIBitmapADPC"));
       ROARING_TRY_CATCH(bitmaps->insert_bitmap_ = roaring::api::roaring64_bitmap_create());
       if (OB_SUCC(ret) && OB_ISNULL(bitmaps->insert_bitmap_)) {
@@ -882,6 +884,8 @@ int ObPluginVectorIndexAdaptor::init_mem_data(ObVectorIndexRecordType type, ObVe
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to create delta_bitmap", K(ret));
       } else {
+        incr_data_->bitmap_->insert_bitmap_ = nullptr;
+        incr_data_->bitmap_->delete_bitmap_ = nullptr;
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIBitmapADPF"));
         ROARING_TRY_CATCH(incr_data_->bitmap_->insert_bitmap_ = roaring::api::roaring64_bitmap_create());
         if (OB_FAIL(ret)) {
@@ -910,6 +914,8 @@ int ObPluginVectorIndexAdaptor::init_mem_data(ObVectorIndexRecordType type, ObVe
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to create snapshot_bitmap", K(ret));
       } else {
+        vbitmap_data_->bitmap_->insert_bitmap_ = nullptr;
+        vbitmap_data_->bitmap_->delete_bitmap_ = nullptr;
         lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id_, "VIBitmapADPG"));
         ROARING_TRY_CATCH(vbitmap_data_->bitmap_->insert_bitmap_ = roaring::api::roaring64_bitmap_create());
         if (OB_FAIL(ret)) {
