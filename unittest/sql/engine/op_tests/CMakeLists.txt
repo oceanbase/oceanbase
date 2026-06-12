@@ -137,6 +137,13 @@ sql_unittest(test_expr_dual_format
   ob_op_test_engine.cpp
   ob_op_test_data_source.cpp
 )
+
+# date_format() buffer overflow regression tests
+sql_unittest(test_date_format_expr
+  test_date_format_expr.cpp
+  ob_op_test_engine.cpp
+  ob_op_test_data_source.cpp
+)
 # Phase 10: Hash Distinct operator tests
 sql_unittest(test_hash_distinct_op
   test_hash_distinct_op.cpp

@@ -19,7 +19,7 @@
   YearType year, MonthType month, DateType dt_yday, DateType dt_mday, DateType dt_wday,            \
     int32_t hour, int32_t minute, int32_t sec, int32_t fsec, WeekType &week_sunday,                \
     WeekType &week_monday, int8_t &delta_sunday, int8_t &delta_monday, char *res_buf,              \
-    int16_t &len, bool &res_null, bool no_null, const char *const *day_name,                       \
+    int32_t &len, bool &res_null, bool no_null, const char *const *day_name,                       \
     const char *const *ab_day_name, const char *const *month_name,                                 \
     const char *const *ab_month_name
 

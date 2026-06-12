@@ -575,9 +575,10 @@ int ObExprDateFormat::vector_date_format(const ObExpr &expr,
         int8_t week_monday[batch_size];
         int8_t delta_sunday[batch_size];
         int8_t delta_monday[batch_size];
-        int16_t len[batch_size];
+        int32_t len[batch_size];
         char *buf[batch_size];
-        int buf_len = format_string.length() * 5; // september / 2 <= 5
+        // '%r' => len + 11 <= buf_len => 2*6
+        int64_t buf_len = (int64_t)format_string.length() * 6;
         bool res_null[batch_size];
         bool no_null = true;
         memset(len, 0, sizeof(len));
