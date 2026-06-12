@@ -9258,7 +9258,8 @@ int ObDDLService::resolve_orig_default_value(ObColumnSchemaV2 &alter_column_sche
                                                     nls_formats,
                                                     allocator))) {
         LOG_WARN("fail to calc default now expr", K(ret));
-      } else if (!alter_column_schema.is_nullable() && orig_default_value.is_null()) {
+      } else if (!alter_column_schema.is_nullable() && orig_default_value.is_null()
+                 && !alter_column_schema.is_default_expr_v2_column()) {
         ObObj default_value;
         default_value.set_type(alter_column_schema.get_data_type());
         bool is_collection_vector_type = false;
