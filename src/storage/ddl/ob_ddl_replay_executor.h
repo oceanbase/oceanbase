@@ -276,13 +276,6 @@ protected:
   virtual int do_replay_(ObTabletHandle &handle) override;
 
 private:
-  int check_need_wait_split_finished(
-      const share::ObLSID &ls_id,
-      const ObTabletHandle &handle,
-      const ObIArray<ObTabletID> &dest_tablets_id,
-      bool &need_wait_split_finished);
-
-private:
   const ObTabletSplitStartLog *log_;
 };
 
@@ -309,7 +302,6 @@ private:
       const ObIArray<ObTabletID> &dest_tablet_ids,
       const ObTabletHandle &src_tablet_handle,
       ObLS* ls);
-private:
   const ObTabletSplitFinishLog *log_;
 };
 
