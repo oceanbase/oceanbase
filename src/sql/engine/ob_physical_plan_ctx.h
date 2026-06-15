@@ -70,7 +70,8 @@ struct ObRemoteSqlInfo
     ps_param_cnt_(0),
     remote_sql_(),
     ps_params_(nullptr),
-    sql_from_pl_(false)
+    sql_from_pl_(false),
+    is_ps_cursor_(false)
   {
   }
 
@@ -83,6 +84,10 @@ struct ObRemoteSqlInfo
   common::ObString remote_sql_;
   ParamStore *ps_params_;
   bool sql_from_pl_;
+  // TRUE if the remote sql originates from a PS cursor open. The original node
+  // bypasses the PC_PL_MODE restriction for UDR via is_ps_cursor_; this flag
+  // carries that intent across the RPC so the remote node re-applies UDR too.
+  bool is_ps_cursor_;
 };
 
 // How timeout is chosen for this statement: query_timeout, max_exec_timeout, or fallback to query_timeout (need warn).

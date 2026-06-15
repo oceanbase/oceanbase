@@ -339,6 +339,7 @@ OB_DEF_SERIALIZE(ObRemoteTask)
   OB_UNIS_ENCODE(remote_sql_info_->sql_from_pl_);
   OB_UNIS_ENCODE(ls_list_);
   OB_UNIS_ENCODE(detectable_id_);
+  OB_UNIS_ENCODE(remote_sql_info_->is_ps_cursor_);
   return ret;
 }
 
@@ -385,6 +386,7 @@ OB_DEF_SERIALIZE_SIZE(ObRemoteTask)
     OB_UNIS_ADD_LEN(remote_sql_info_->sql_from_pl_);
     OB_UNIS_ADD_LEN(ls_list_);
     OB_UNIS_ADD_LEN(detectable_id_);
+    OB_UNIS_ADD_LEN(remote_sql_info_->is_ps_cursor_);
   }
   return len;
 }
@@ -471,6 +473,7 @@ OB_DEF_DESERIALIZE(ObRemoteTask)
       OB_UNIS_DECODE(remote_sql_info_->sql_from_pl_);
       OB_UNIS_DECODE(ls_list_);
       OB_UNIS_DECODE(detectable_id_);
+      OB_UNIS_DECODE(remote_sql_info_->is_ps_cursor_);
     }
   }
   return ret;

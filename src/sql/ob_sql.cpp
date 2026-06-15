@@ -2798,6 +2798,7 @@ int ObSql::handle_remote_query(const ObRemoteSqlInfo &remote_sql_info,
     PlanCacheMode mode = remote_sql_info.use_ps_ ? PC_PS_MODE : PC_TEXT_MODE;
     mode = remote_sql_info.sql_from_pl_ ? PC_PL_MODE : mode;
     context.cur_sql_ = trimed_stmt;
+    context.is_ps_cursor_ = remote_sql_info.is_ps_cursor_;
     pc_ctx = new (pc_ctx) ObPlanCacheCtx(trimed_stmt,
                                          mode,
                                          allocator,
@@ -5239,6 +5240,7 @@ int ObSql::after_get_plan(ObPlanCacheCtx &pc_ctx,
           && !phy_plan->contains_temp_table()
           && !enable_send_plan) {
         pctx->get_remote_sql_info().sql_from_pl_ = PC_PL_MODE == pc_ctx.mode_;
+        pctx->get_remote_sql_info().is_ps_cursor_ = pc_ctx.sql_ctx_.is_ps_cursor_;
         //处理远程plan转发SQL的情况
         ParamStore &param_store = pctx->get_param_store_for_update();
         if (OB_NOT_NULL(ps_params)) {
