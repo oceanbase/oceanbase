@@ -13,6 +13,7 @@ ob_unittest(test_ob_siliconflow_utils)
 ob_unittest(ob_expr_ai_func_utils_test)
 ob_unittest(ob_expr_ai_prompt_test)
 sql_unittest(test_expr_serialize_compat)
+sql_unittest(ob_expr_extract_fast_path_test)
 
 # engine_expr_test_lrpad_SOURCES=engine/expr/ob_expr_lrpad_test.cpp
 #ob_postfix_expression_test_SOURCES = ob_postfix_expression_test.cpp

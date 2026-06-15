@@ -13,6 +13,7 @@
 #include "sql/engine/expr/ob_expr_util.h"
 #include "sql/engine/expr/ob_datum_cast.h"
 #include "sql/engine/ob_exec_context.h"
+#include "observer/omt/ob_tenant_config_mgr.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -26,6 +27,18 @@ namespace oceanbase
 {
 namespace sql
 {
+
+// Returns true if function_round_dialect = 'ORACLE' for the given tenant.
+// When true, ROUND(date, fmt) in MySQL mode uses Oracle-style date rounding.
+static bool is_round_oracle_date_dialect(uint64_t tenant_id)
+{
+  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+  if (!tenant_config.is_valid()) {
+    return false;
+  }
+  const char *dialect = tenant_config->function_round_dialect;
+  return (0 == STRCASECMP(dialect, "ORACLE"));
+}
 
 ObExprFuncRound::ObExprFuncRound(ObIAllocator &alloc)
   : ObFuncExprOperator(alloc, T_FUN_SYS_ROUND, N_ROUND, ONE_OR_TWO, VALID_FOR_GENERATED_COL, NOT_ROW_DIMENSION)
@@ -59,7 +72,9 @@ int ObExprFuncRound::se_deduce_type(ObExprResType &type,
 {
   int ret = OB_SUCCESS;
   ObObjType res_type = ObMaxType;
-  if (OB_FAIL(set_res_and_calc_type(params, param_num, res_type))) {
+  const bool use_oracle_date_dialect = !lib::is_oracle_mode()
+      && is_round_oracle_date_dialect(type_ctx.get_session()->get_effective_tenant_id());
+  if (OB_FAIL(set_res_and_calc_type(params, param_num, res_type, use_oracle_date_dialect))) {
     LOG_WARN("set_calc_type for round expr failed", K(ret), K(res_type), K(param_num));
   } else if (OB_FAIL(set_res_scale_prec(type_ctx, params, param_num, res_type, type))) {
     LOG_WARN("set_res_scale_prec round expr failed", K(ret), K(res_type), K(param_num));
@@ -71,12 +86,19 @@ int ObExprFuncRound::se_deduce_type(ObExprResType &type,
 }
 
 int ObExprFuncRound::set_res_and_calc_type(ObExprResType *params, int64_t param_num,
-                                       ObObjType &res_type)
+                                       ObObjType &res_type, bool use_oracle_date_dialect)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObExprResultTypeUtil::get_round_result_type(res_type, params[0].get_type()))) {
-    LOG_WARN("fail to get_round_result_type", K(ret), K(params[0].get_type()));
+  const ObObjType input_type = params[0].get_type();
+  const bool input_is_date = ob_is_datetime_or_mysql_datetime(input_type)
+                             || ob_is_date_or_mysql_date(input_type);
+  if (OB_FAIL(ObExprResultTypeUtil::get_round_result_type(res_type, input_type))) {
+    LOG_WARN("fail to get_round_result_type", K(ret), K(input_type));
   } else if (1 == param_num) {
+    // ROUND(date): ORACLE dialect keeps the date type; MYSQL dialect uses double (map default).
+    if (use_oracle_date_dialect && input_is_date) {
+      res_type = input_type;
+    }
     params[0].set_calc_type(res_type);
   } else if (2 == param_num) {
     if (lib::is_oracle_mode()) {
@@ -90,8 +112,16 @@ int ObExprFuncRound::set_res_and_calc_type(ObExprResType *params, int64_t param_
         params[1].set_calc_type(res_type);
       }
     } else {
-      params[0].set_calc_type(res_type);
-      params[1].set_calc_type(ObIntType);
+      // MySQL mode: ORACLE dialect enables date-style rounding with format string.
+      if (use_oracle_date_dialect && input_is_date) {
+        res_type = input_type;
+        params[0].set_calc_type(res_type);
+        params[1].set_calc_type(ObVarcharType);
+      } else {
+        // MYSQL dialect (default): date treated as double, second param is integer scale.
+        params[0].set_calc_type(res_type);
+        params[1].set_calc_type(ObIntType);
+      }
     }
   } else {
     ret = OB_ERR_UNEXPECTED;
@@ -109,6 +139,11 @@ int ObExprFuncRound::set_res_scale_prec(ObExprTypeCtx &type_ctx, ObExprResType *
   ObObjTypeClass res_tc = ob_obj_type_class(res_type);
   const bool is_oracle = lib::is_oracle_mode();
   const bool is_oracle_date = is_oracle && (ObDateTimeTC == res_tc || ObOTimestampTC == res_tc);
+  // is_mysql_date: res_type is a date type only when Oracle date dialect is active.
+  // In MYSQL dialect the map returns ObDoubleType for date inputs, so no special handling needed.
+  const bool is_mysql_date = !is_oracle
+                             && (ob_is_datetime_or_mysql_datetime(res_type)
+                                 || ob_is_date_or_mysql_date(res_type));
   ObPrecision res_prec = PRECISION_UNKNOWN_YET;
   ObScale res_scale = is_oracle ? ORA_NUMBER_SCALE_UNKNOWN_YET : SCALE_UNKNOWN_YET;
 
@@ -116,11 +151,11 @@ int ObExprFuncRound::set_res_scale_prec(ObExprTypeCtx &type_ctx, ObExprResType *
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected param_num", K(ret), K(param_num));
   } else {
-    if (1 == param_num && lib::is_mysql_mode()) {
+    if (1 == param_num && lib::is_mysql_mode() && !is_mysql_date) {
       res_scale = DEFAULT_SCALE_FOR_INTEGER;
     } else if (2 == param_num && params[1].is_null()) {
       res_scale = DEFAULT_SCALE_FOR_INTEGER; // compatible with mysql
-    } else if (is_oracle_date) {
+    } else if (is_oracle_date || is_mysql_date) {
       res_scale = DEFAULT_SCALE_FOR_DATE;
     } else if (lib::is_mysql_mode() && 2 == param_num && params[1].is_literal()
                && !params[0].is_integer_type()) {
@@ -1314,21 +1349,61 @@ int ObExprFuncRound::inner_calc_round_expr_numeric2_vector(const ObExpr &expr,
 }
 
 int calc_round_expr_datetime_inner(const ObDatum &x_datum, const ObString &fmt_str,
-                                   ObEvalCtx &ctx, int64_t &dt,
+                                   ObEvalCtx &ctx, ObDatum &res_datum,
                                    const sql::ObExpr &expr)
 {
   int ret = OB_SUCCESS;
   ObTime ob_time;
+  const ObObjType in_type = expr.args_[0]->datum_meta_.type_;
+  const ObObjType res_type = expr.datum_meta_.type_;
   ObSolidifiedVarsGetter helper(expr, ctx, ctx.exec_ctx_.get_my_session());
   const common::ObTimeZoneInfo *tz_info = NULL;
+  // Parse input datum to ob_time based on input type
   if (OB_FAIL(helper.get_time_zone_info(tz_info))) {
     LOG_WARN("get tz info failed", K(ret));
-  } else if (OB_FAIL(ob_datum_to_ob_time_with_date(x_datum, ObDateTimeType, NUMBER_SCALE_UNKNOWN_YET,
-                              tz_info, ob_time,
-                              get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), 0, false))) {
-    LOG_WARN("ob_datum_to_ob_time_with_date failed", K(ret));
   } else {
-    ObTimeConvertCtx cvrt_ctx(TZ_INFO(ctx.exec_ctx_.get_my_session()), false);
+    switch (in_type) {
+      case ObDateTimeType: {
+        // ObDateTimeType stores local time directly (not UTC).  Passing tz_info here would
+        // shift the value by the session timezone offset without a corresponding reverse shift
+        // in ob_time_to_datetime (which skips the sub-offset for non-timestamp types), causing
+        // a double timezone conversion and an incorrect +offset result.  Pass NULL to match
+        // the behaviour of ob_datum_to_ob_time_with_date for ObDateTimeTC.
+        if (OB_FAIL(ObTimeConverter::datetime_to_ob_time(x_datum.get_datetime(), NULL, ob_time))) {
+          LOG_WARN("fail to convert datetime to ob_time", K(ret));
+        }
+        break;
+      }
+      case ObMySQLDateTimeType: {
+        if (OB_FAIL(ObTimeConverter::mdatetime_to_ob_time<true>(x_datum.get_mysql_datetime(), ob_time))) {
+          LOG_WARN("fail to convert mysql datetime to ob_time", K(ret));
+        }
+        break;
+      }
+      case ObDateType: {
+        if (OB_FAIL(ObTimeConverter::date_to_ob_time(x_datum.get_date(), ob_time))) {
+          LOG_WARN("fail to convert date to ob_time", K(ret));
+        }
+        break;
+      }
+      case ObMySQLDateType: {
+        if (OB_FAIL(ObTimeConverter::mdate_to_ob_time<true>(x_datum.get_mysql_date(), ob_time))) {
+          LOG_WARN("fail to convert mysql date to ob_time", K(ret));
+        }
+        break;
+      }
+      default: {
+        // Fallback for Oracle mode: use ob_datum_to_ob_time_with_date
+        if (OB_FAIL(ob_datum_to_ob_time_with_date(x_datum, ObDateTimeType, NUMBER_SCALE_UNKNOWN_YET,
+                                tz_info, ob_time,
+                                get_cur_time(ctx.exec_ctx_.get_physical_plan_ctx()), 0, false))) {
+          LOG_WARN("ob_datum_to_ob_time_with_date failed", K(ret));
+        }
+        break;
+      }
+    }
+  }
+  if (OB_SUCC(ret)) {
     if (expr.arg_cnt_ > 1 && !!(expr.args_[1]->is_static_const_)) {
       auto rt_ctx_id = static_cast<uint64_t>(expr.expr_ctx_id_);
       ObExprSingleFormatCtx *single_fmt_ctx = NULL;
@@ -1345,9 +1420,57 @@ int calc_round_expr_datetime_inner(const ObDatum &x_datum, const ObString &fmt_s
     } else {
       OZ (ObExprTRDateFormat::round_new_obtime(ob_time, fmt_str));
     }
-    if (OB_SUCC(ret)) {
-      if (OB_FAIL(ObTimeConverter::ob_time_to_datetime(ob_time, cvrt_ctx, dt))) {
-        LOG_WARN("fail to cast ob_time to datetime", K(ret), K(fmt_str));
+  }
+  // Write result back based on result type.
+  // round_new_obtime_by_fmt_id directly updates DT_DATE (not DT_YEAR/DT_MON/DT_MDAY).
+  // ob_time_to_datetime relies on DT_DATE, so the result is already correct.
+  // For date output types, read DT_DATE directly; for MySQL types reconstruct from DT_DATE.
+  if (OB_SUCC(ret)) {
+    ObTimeConvertCtx cvrt_ctx(TZ_INFO(ctx.exec_ctx_.get_my_session()), false);
+    switch (res_type) {
+      case ObDateTimeType: {
+        int64_t dt = 0;
+        if (OB_FAIL(ObTimeConverter::ob_time_to_datetime(ob_time, cvrt_ctx, dt))) {
+          LOG_WARN("fail to cast ob_time to datetime", K(ret));
+        } else {
+          res_datum.set_datetime(dt);
+        }
+        break;
+      }
+      case ObMySQLDateTimeType: {
+        // ob_time_to_mdatetime reads DT_YEAR/MON/MDAY; sync them from DT_DATE first.
+        ObMySQLDateTime mdt;
+        if (OB_FAIL(ObTimeConverter::date_to_ob_time(ob_time.parts_[DT_DATE], ob_time))) {
+          LOG_WARN("fail to sync date parts from DT_DATE", K(ret));
+        } else if (OB_FAIL(ObTimeConverter::ob_time_to_mdatetime(ob_time, mdt))) {
+          LOG_WARN("fail to cast ob_time to mysql datetime", K(ret));
+        } else {
+          res_datum.set_mysql_datetime(mdt);
+        }
+        break;
+      }
+      case ObDateType: {
+        res_datum.set_date(ob_time.parts_[DT_DATE]);
+        break;
+      }
+      case ObMySQLDateType: {
+        // ob_time_to_mdate reads DT_YEAR/MON/MDAY; sync them from DT_DATE first.
+        if (OB_FAIL(ObTimeConverter::date_to_ob_time(ob_time.parts_[DT_DATE], ob_time))) {
+          LOG_WARN("fail to sync date parts from DT_DATE", K(ret));
+        } else {
+          res_datum.set_mysql_date(ObTimeConverter::ob_time_to_mdate(ob_time));
+        }
+        break;
+      }
+      default: {
+        // Oracle fallback: output as datetime
+        int64_t dt = 0;
+        if (OB_FAIL(ObTimeConverter::ob_time_to_datetime(ob_time, cvrt_ctx, dt))) {
+          LOG_WARN("fail to cast ob_time to datetime", K(ret));
+        } else {
+          res_datum.set_datetime(dt);
+        }
+        break;
       }
     }
   }
@@ -1358,17 +1481,14 @@ int calc_round_expr_datetime1(const sql::ObExpr &expr, sql::ObEvalCtx &ctx,
                               sql::ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
-  int64_t dt = 0;
   ObDatum *x_datum = NULL;
   ObString fmt_str("DD");
   if (OB_FAIL(expr.args_[0]->eval(ctx, x_datum))) {
     LOG_WARN("eval arg failed", K(ret), K(expr));
   } else if (x_datum->is_null()) {
     res_datum.set_null();
-  } else if (OB_FAIL(calc_round_expr_datetime_inner(*x_datum, fmt_str, ctx, dt, expr))) {
+  } else if (OB_FAIL(calc_round_expr_datetime_inner(*x_datum, fmt_str, ctx, res_datum, expr))) {
     LOG_WARN("calc_round_expr_datetime_inner failed", K(ret));
-  } else {
-    res_datum.set_datetime(dt);
   }
   return ret;
 }
@@ -1389,14 +1509,11 @@ int ObExprFuncRound::calc_round_expr_datetime1_batch(const ObExpr &expr,
       if (skip.at(i) || eval_flags.at(i)) {
         continue;
       }
-      int64_t dt = 0;
       ObDatum &x_datum = expr.args_[0]->locate_expr_datum(ctx, i);
       if (x_datum.is_null()) {
         results[i].set_null();
-      } else if (OB_FAIL(calc_round_expr_datetime_inner(x_datum, fmt_str, ctx, dt, expr))) {
+      } else if (OB_FAIL(calc_round_expr_datetime_inner(x_datum, fmt_str, ctx, results[i], expr))) {
         LOG_WARN("calc_round_expr_datetime_inner failed", K(ret));
-      } else {
-        results[i].set_datetime(dt);
       }
     }
   }
@@ -1430,19 +1547,22 @@ int ObExprFuncRound::inner_calc_round_expr_datetime1_vector(const ObExpr &expr,
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
   ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
   LeftVec *left_vec = static_cast<LeftVec *>(expr.args_[0]->get_vector(ctx));
+  const ObObjType res_type = expr.datum_meta_.type_;
   for (int64_t j = bound.start(); OB_SUCC(ret) && j < bound.end(); ++j) {
     if (skip.at(j) || eval_flags.at(j)) {
       continue;
     }
-    int64_t dt = 0;
     if (left_vec->is_null(j)) {
       res_vec->set_null(j);
     } else {
       ObDatum left_datum(left_vec->get_payload(j), left_vec->get_length(j), false);
-      if (OB_FAIL(calc_round_expr_datetime_inner(left_datum, fmt_str, ctx, dt, expr))) {
+      ObDatum res_datum;
+      char res_buf[sizeof(ObMySQLDateTime)];
+      res_datum.ptr_ = res_buf;
+      if (OB_FAIL(calc_round_expr_datetime_inner(left_datum, fmt_str, ctx, res_datum, expr))) {
         LOG_WARN("calc_round_expr_datetime_inner failed", K(ret));
       } else {
-        res_vec->set_datetime(j, dt);
+        res_vec->set_payload(j, res_datum.ptr_, res_datum.len_);
       }
     }
   }
@@ -1453,7 +1573,6 @@ int calc_round_expr_datetime2(const sql::ObExpr &expr, sql::ObEvalCtx &ctx,
                               sql::ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
-  int64_t dt = 0;
   ObDatum *x_datum = NULL;
   ObDatum *fmt_datum = NULL;
   if (OB_FAIL(expr.args_[0]->eval(ctx, x_datum)) ||
@@ -1462,10 +1581,8 @@ int calc_round_expr_datetime2(const sql::ObExpr &expr, sql::ObEvalCtx &ctx,
   } else if (x_datum->is_null() || fmt_datum->is_null()) {
     res_datum.set_null();
   } else if (OB_FAIL(calc_round_expr_datetime_inner(*x_datum, fmt_datum->get_string(),
-                                                    ctx, dt, expr))) {
+                                                    ctx, res_datum, expr))) {
     LOG_WARN("calc_round_expr_datetime_inner failed", K(ret));
-  } else {
-    res_datum.set_datetime(dt);
   }
   return ret;
 }
@@ -1488,15 +1605,12 @@ int ObExprFuncRound::calc_round_expr_datetime2_batch(const ObExpr &expr,
       if (skip.at(i) || eval_flags.at(i)) {
         continue;
       }
-      int64_t dt = 0;
       ObDatum &x_datum = x_datums[i];
       if (x_datum.is_null() || fmt_datum->is_null()) {
         results[i].set_null();
-      } else if (OB_FAIL(calc_round_expr_datetime_inner(x_datum, fmt_datum->get_string(), ctx, dt,
-                                                        expr))) {
+      } else if (OB_FAIL(calc_round_expr_datetime_inner(x_datum, fmt_datum->get_string(), ctx,
+                                                        results[i], expr))) {
         LOG_WARN("calc_round_expr_datetime_inner failed", K(ret));
-      } else {
-        results[i].set_datetime(dt);
       }
     }
   }
@@ -1537,16 +1651,18 @@ int ObExprFuncRound::inner_calc_round_expr_datetime2_vector(const ObExpr &expr,
       if (skip.at(j) || eval_flags.at(j)) {
         continue;
       }
-      int64_t dt = 0;
       if (left_vec->is_null(j) || fmt_datum->is_null()) {
         res_vec->set_null(j);
       } else {
         ObDatum left_datum(left_vec->get_payload(j), left_vec->get_length(j), false);
+        ObDatum res_datum;
+        char res_buf[sizeof(ObMySQLDateTime)];
+        res_datum.ptr_ = res_buf;
         if (OB_FAIL(calc_round_expr_datetime_inner(left_datum, fmt_datum->get_string(),
-                                                  ctx, dt, expr))) {
+                                                  ctx, res_datum, expr))) {
           LOG_WARN("calc_round_expr_datetime_inner failed", K(ret));
         } else {
-          res_vec->set_datetime(j, dt);
+          res_vec->set_payload(j, res_datum.ptr_, res_datum.len_);
         }
       }
     }
@@ -1589,15 +1705,26 @@ int ObExprFuncRound::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr
           }
         }
       } else {
-        rt_expr.eval_func_ = calc_round_expr_numeric2;
-        // Only implement vectorization when parameter 0 is batch and parameter 1 is constant
-        if (rt_expr.args_[0]->is_batch_result() && !(rt_expr.args_[1]->is_batch_result())) {
-          rt_expr.eval_batch_func_ = calc_round_expr_numeric2_batch;
-          rt_expr.eval_vector_func_ = calc_round_expr_numeric2_vector;
+        // MySQL mode
+        if ((ob_is_datetime_or_mysql_datetime(x_type) || ob_is_date_or_mysql_date(x_type))
+            && ObVarcharType == fmt_type) {
+          rt_expr.eval_func_ = calc_round_expr_datetime2;
+          // Only implement vectorization when parameter 0 is batch and parameter 1 is constant
+          if (rt_expr.args_[0]->is_batch_result() && !(rt_expr.args_[1]->is_batch_result())) {
+            rt_expr.eval_batch_func_ = calc_round_expr_datetime2_batch;
+            rt_expr.eval_vector_func_ = calc_round_expr_datetime2_vector;
+          }
+        } else {
+          rt_expr.eval_func_ = calc_round_expr_numeric2;
+          // Only implement vectorization when parameter 0 is batch and parameter 1 is constant
+          if (rt_expr.args_[0]->is_batch_result() && !(rt_expr.args_[1]->is_batch_result())) {
+            rt_expr.eval_batch_func_ = calc_round_expr_numeric2_batch;
+            rt_expr.eval_vector_func_ = calc_round_expr_numeric2_vector;
+          }
         }
       }
     } else {
-      if (ObDateTimeType == x_type) {
+      if (ob_is_datetime_or_mysql_datetime(x_type) || ob_is_date_or_mysql_date(x_type)) {
         rt_expr.eval_func_ = calc_round_expr_datetime1;
         rt_expr.eval_batch_func_ = calc_round_expr_datetime1_batch;
         rt_expr.eval_vector_func_ = calc_round_expr_datetime1_vector;

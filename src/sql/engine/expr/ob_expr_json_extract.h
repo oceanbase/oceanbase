@@ -30,8 +30,14 @@ public:
                       const ObRawExpr &raw_expr,
                       ObExpr &rt_expr) const override;
   virtual bool need_rt_ctx() const override { return true; }
-  private:
-    DISALLOW_COPY_AND_ASSIGN(ObExprJsonExtract);
+private:
+  // Fast path for simple key lookup
+  static int eval_json_extract_fast_path(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
+
+  // General path processing
+  static int eval_json_extract_general_path(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res);
+
+  DISALLOW_COPY_AND_ASSIGN(ObExprJsonExtract);
 };
 
 } // sql

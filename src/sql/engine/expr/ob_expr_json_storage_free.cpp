@@ -48,7 +48,6 @@ int ObExprJsonStorageFree::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta
   INIT_SUCC(ret);
   ObObjType type = meta.type_;
   ObCollationType cs_type = meta.cs_type_;
-
   if (type == ObNullType || data.is_null()) {
     res.set_null();
   } else if (type != ObJsonType && !ob_is_string_type(type)) { // invalid type
@@ -69,7 +68,7 @@ int ObExprJsonStorageFree::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta
     } else if (OB_FALSE_IT(allocator->add_baseline_size(j_str.length()))) {
     } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, j_in_type,
                                                         j_in_type, j_base, 0,
-                                                        ObJsonExprHelper::get_json_max_depth_config()))) {
+                                                        ObJsonExprHelper::get_json_max_depth_config(ctx)))) {
       if (ret == OB_ERR_INVALID_JSON_TEXT) {
         LOG_USER_ERROR(OB_ERR_INVALID_JSON_TEXT);
       }

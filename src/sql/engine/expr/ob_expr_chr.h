@@ -17,18 +17,31 @@ class ObExprChr : public ObStringExprOperator
 public:
   explicit ObExprChr(common::ObIAllocator &alloc);
   virtual ~ObExprChr();
-  virtual int calc_result_type1(ObExprResType &type,
-                                ObExprResType &text,
+  virtual int calc_result_typeN(ObExprResType &type,
+                                ObExprResType *texts,
+                                int64_t param_num,
                                 common::ObExprTypeCtx &type_ctx) const;
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                           ObExpr &rt_expr) const;
-  static int number2varchar(common::ObString &str_result,
-                            const double text,
-                            common::ObIAllocator &alloc,
-                            bool is_single_byte);
   static int calc_chr_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprChr);
+};
+
+class ObExprNchr : public ObStringExprOperator
+{
+public:
+  explicit ObExprNchr(common::ObIAllocator &alloc);
+  virtual ~ObExprNchr();
+  virtual int calc_result_typeN(ObExprResType &type,
+                                ObExprResType *texts,
+                                int64_t param_num,
+                                common::ObExprTypeCtx &type_ctx) const;
+  virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
+                          ObExpr &rt_expr) const;
+  static int calc_nchr_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObExprNchr);
 };
 
 } //end namespace sql

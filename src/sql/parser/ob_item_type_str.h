@@ -48,6 +48,9 @@ inline const char *ob_aggr_func_str(ObItemType aggr_func)
     case T_FUN_CK_GROUPCONCAT:
       ret = "GROUPCONCAT";
       break;
+    case T_FUN_STRING_AGG:
+      ret = "STRING_AGG";
+      break;
     case T_FUN_APPROX_COUNT_DISTINCT:
       ret = "APPROX_COUNT_DISTINCT";
       break;
@@ -90,6 +93,8 @@ inline const char *ob_aggr_func_str(ObItemType aggr_func)
     case T_FUN_SYS_COUNT_INROW:
       ret = "SYS_COUNT_INROW";
       break;
+    case T_FUN_AVG_WEIGHTED:
+      ret = "AVGWEIGHTED";
     case T_FUN_WINDOW_FUNNEL:
       ret = "WINDOW_FUNNEL";
       break;

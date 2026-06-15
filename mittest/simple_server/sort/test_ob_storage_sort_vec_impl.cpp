@@ -477,6 +477,35 @@ public:
   {
     return OB_SUCCESS;
   }
+  virtual int from_vector_fixed(const ObFixedLengthBase * /*src_fixed*/,
+                                const sql::ObBitVector * /*skip*/,
+                                const int64_t /*start*/,
+                                const int64_t /*end*/) override
+  {
+    return OB_SUCCESS;
+  }
+  virtual int from_vector_uniform(const ObUniformBase * /*src_uniform*/,
+                                  VectorFormat /*src_format*/,
+                                  const sql::ObBitVector * /*skip*/,
+                                  const int64_t /*start*/,
+                                  const int64_t /*end*/) override
+  {
+    return OB_SUCCESS;
+  }
+  virtual int from_vector_discrete(const ObDiscreteBase * /*src_discrete*/,
+                                   const sql::ObBitVector * /*skip*/,
+                                   const int64_t /*start*/,
+                                   const int64_t /*end*/) override
+  {
+    return OB_SUCCESS;
+  }
+  virtual int from_vector_continuous(const ObContinuousBase * /*src_continuous*/,
+                                     const sql::ObBitVector * /*skip*/,
+                                     const int64_t /*start*/,
+                                     const int64_t /*end*/) override
+  {
+    return OB_SUCCESS;
+  }
 
 private:
   const int64_t *values_;

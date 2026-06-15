@@ -193,6 +193,7 @@
 #include "sql/engine/expr/ob_expr_left.h"
 #include "sql/engine/expr/ob_expr_space.h"
 #include "sql/engine/expr/ob_expr_rand.h"
+#include "sql/engine/expr/ob_expr_rand_canonical.h"
 #include "sql/engine/expr/ob_expr_randstr.h"
 #include "sql/engine/expr/ob_expr_random.h"
 #include "sql/engine/expr/ob_expr_generator_func.h"
@@ -237,6 +238,7 @@
 #include "sql/engine/expr/ob_expr_sys_extract_utc.h"
 #include "sql/engine/expr/ob_expr_tz_offset.h"
 #include "sql/engine/expr/ob_expr_from_tz.h"
+#include "sql/engine/expr/ob_expr_new_time.h"
 #include "sql/engine/expr/ob_expr_collection_construct.h"
 #include "sql/engine/expr/ob_expr_to_interval.h"
 #include "sql/engine/expr/ob_expr_nvl2_oracle.h"
@@ -294,6 +296,7 @@
 #include "sql/engine/expr/ob_expr_encode_sortkey.h"
 #include "sql/engine/expr/ob_expr_hash.h"
 #include "sql/engine/expr/ob_expr_nlssort.h"
+#include "sql/engine/expr/ob_expr_nls_charset_id.h"
 #include "sql/engine/expr/ob_expr_json_object.h"
 #include "sql/engine/expr/ob_expr_json_extract.h"
 #include "sql/engine/expr/ob_expr_json_schema_valid.h"
@@ -526,6 +529,7 @@
 #include "sql/engine/expr/ob_expr_ai/ob_expr_ai_prompt.h"
 #include "sql/engine/expr/ob_expr_vector_similarity.h"
 #include "sql/engine/expr/ob_expr_edit_distance.h"
+#include "sql/engine/expr/ob_expr_parse_date_time.h"
 #include "sql/engine/expr/ob_expr_md5_concat_ws.h"
 #include "sql/engine/expr/ob_expr_collect_file_list.h"
 #include "sql/engine/expr/ob_expr_pos_list.h"
@@ -881,6 +885,7 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprUnixTimestamp, EAGER_EVALUATION);
     REG_OP(ObExprMakeTime, EAGER_EVALUATION);
     REG_OP(ObExprMakedate, EAGER_EVALUATION);
+    REG_OP(ObExprNewTime, EAGER_EVALUATION);
     REG_OP(ObExprExtract, EAGER_EVALUATION);
     REG_OP(ObExprToDays, EAGER_EVALUATION);
     REG_OP(ObExprPosition, EAGER_EVALUATION);
@@ -1365,10 +1370,12 @@ void ObExprOperatorFactory::register_expr_operators()
     REG_OP(ObExprToDate, SHORT_CIRCUIT_EVALUATION);
     REG_SAME_OP(T_FUN_SYS_DATE_FORMAT, T_FUN_SYS_FORMAT_DATE_TIME, N_FORMAT_DATE_TIME, i, true);
     REG_SAME_OP(T_FUN_SYS_UNIX_TIMESTAMP, T_FUN_SYS_TO_UNIX_TIMESTAMP, N_TO_UNIX_TIMESTAMP, i, true);
+    REG_OP(ObExprParseDateTime, SHORT_CIRCUIT_EVALUATION);
     REG_OP(ObExprIsNan, SHORT_CIRCUIT_EVALUATION);
     REG_OP(ObExprCollectFileList, EAGER_EVALUATION);
     REG_OP(ObExprVoid, EAGER_EVALUATION);
     REG_OP(ObExprLoadFile, SHORT_CIRCUIT_EVALUATION);
+    REG_OP(ObExprRandCanonical, EAGER_EVALUATION);
     REG_OP(ObExprSearchIndexInnerPath, SHORT_CIRCUIT_EVALUATION);
     REG_OP(ObExprSearchIndexInnerValue, SHORT_CIRCUIT_EVALUATION);
   }();
@@ -1433,6 +1440,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprSetCollation, EAGER_EVALUATION);
   REG_OP_ORCL(ObExprWidthBucket, EAGER_EVALUATION);
   REG_OP_ORCL(ObExprChr, EAGER_EVALUATION);
+  REG_OP_ORCL(ObExprNchr, EAGER_EVALUATION);
   REG_OP_ORCL(ObExprExtract, EAGER_EVALUATION);
   REG_OP_ORCL(ObExprSqrt, EAGER_EVALUATION);
   REG_OP_ORCL(ObExprNlsLower, EAGER_EVALUATION);
@@ -1555,6 +1563,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprSysExtractUtc, SHORT_CIRCUIT_EVALUATION);
   REG_OP_ORCL(ObExprTzOffset, EAGER_EVALUATION);
   REG_OP_ORCL(ObExprFromTz, EAGER_EVALUATION);
+  REG_OP_ORCL(ObExprNewTime, EAGER_EVALUATION);
   REG_OP_ORCL(ObExprSpatialCellid, SHORT_CIRCUIT_EVALUATION);
   REG_OP_ORCL(ObExprSpatialMbr, SHORT_CIRCUIT_EVALUATION);
   REG_OP_ORCL(ObExprToPinyin, SHORT_CIRCUIT_EVALUATION);
@@ -1650,6 +1659,7 @@ void ObExprOperatorFactory::register_expr_operators()
   REG_OP_ORCL(ObExprEncodeSortkey, EAGER_EVALUATION);
   REG_OP_ORCL(ObExprHash, EAGER_EVALUATION);
   REG_OP_ORCL(ObExprNLSSort, SHORT_CIRCUIT_EVALUATION);
+  REG_OP_ORCL(ObExprNLSCharsetId, EAGER_EVALUATION);
   REG_OP_ORCL(ObExprObVersion, EAGER_EVALUATION);
 #if  defined(ENABLE_DEBUG_LOG) || !defined(NDEBUG)
   REG_OP_ORCL(ObExprErrno, EAGER_EVALUATION);

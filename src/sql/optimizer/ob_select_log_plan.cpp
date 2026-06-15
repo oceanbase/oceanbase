@@ -606,19 +606,32 @@ int ObSelectLogPlan::candi_allocate_rollup_group_by(const ObIArray<ObRawExpr*> &
   bool enable_merge_rollup = true;
   if (OB_SUCC(ret)
       && get_stmt()->has_rollup()
-      && lib::is_oracle_mode()
       && optimizer_context_.get_rowsets_enabled()) {
     for (int64_t i = 0; OB_SUCC(ret) && i < aggr_items.count() && enable_merge_rollup; i++) {
       ObAggFunRawExpr *aggr_expr = get_stmt()->get_aggr_items().at(i);
-      if (OB_NOT_NULL(aggr_expr)
-          && aggr_expr->get_expr_type() == T_FUN_GROUP_CONCAT
-          && aggr_expr->get_real_param_count() > 1) {
-        if (OB_FAIL(check_expr_contains_rollup_expr(
-              aggr_expr->get_real_param_exprs().at(aggr_expr->get_real_param_count() - 1),
-              rollup_exprs,
-              enable_merge_rollup))) {
-          LOG_WARN("failed to check separator expr contains rollup expr", K(ret));
-        }
+      ObRawExpr *separator_expr = NULL;
+      // LISTAGG is a special T_FUN_GROUP_CONCAT with last non-const separator in real_param_exprs_ in oracle.
+      const bool is_listagg = OB_NOT_NULL(aggr_expr)
+          && T_FUN_GROUP_CONCAT == aggr_expr->get_expr_type()
+          && lib::is_oracle_mode()
+          && aggr_expr->get_real_param_count() > 1;
+      // STRING_AGG is a special T_FUN_GROUP_CONCAT with non-const separator in separator_param_expr_ in mysql.
+      const bool is_string_agg = OB_NOT_NULL(aggr_expr)
+          && T_FUN_GROUP_CONCAT == aggr_expr->get_expr_type()
+          && lib::is_mysql_mode()
+          && OB_NOT_NULL(aggr_expr->get_separator_param_expr())
+          && !aggr_expr->get_separator_param_expr()->is_const_expr();
+      if (is_listagg) {
+        separator_expr = aggr_expr->get_real_param_exprs().at(aggr_expr->get_real_param_count() - 1);
+      } else if (is_string_agg) {
+        separator_expr = aggr_expr->get_separator_param_expr();
+      }
+      if (OB_NOT_NULL(separator_expr)
+          && OB_FAIL(check_expr_contains_rollup_expr(
+                separator_expr,
+                rollup_exprs,
+                enable_merge_rollup))) {
+        LOG_WARN("failed to check separator expr contains rollup expr", K(ret));
       }
     }
   }

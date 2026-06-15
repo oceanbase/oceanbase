@@ -475,11 +475,13 @@ struct FunctionInfo {
 };
 
 static FunctionInfo CLICKHOUSE_EXPR_LIST[] = {
+  {"parseDateTime", T_FUN_SYS_PARSE_DATE_TIME},
   {"editDistance", T_FUN_SYS_EDIT_DISTANCE},
   {"editDistanceUTF8", T_FUN_SYS_EDIT_DISTANCE_UTF8},
   {"formatDateTime", T_FUN_SYS_FORMAT_DATE_TIME},
   {"toUnixTimestamp", T_FUN_SYS_TO_UNIX_TIMESTAMP},
   {"isNaN", T_FUN_CK_SYS_IS_NAN},
+  {"randCanonical", T_FUN_CK_RAND_CANONICAL},
 };
 
 static FunctionInfo CLICKHOUSE_AGGR_LIST[] =
@@ -490,6 +492,7 @@ static FunctionInfo CLICKHOUSE_AGGR_LIST[] =
   {"leadInFrame", T_WIN_FUN_LEAD_IN_FRAME},
   {"lagInFrame", T_WIN_FUN_LAG_IN_FRAME},
   {"ANY", T_FUN_ANY},
+  {"avgWeighted", T_FUN_AVG_WEIGHTED},
   {"VARSAMP", T_FUN_CK_VARSAMP},
   {"STDDEVSAMP", T_FUN_CK_STDDEVSAMP},
 };

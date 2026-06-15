@@ -7,6 +7,7 @@
 #include "ob_expr_json_extract.h"
 #include "ob_expr_json_func_helper.h"
 #include "lib/xml/ob_binary_aggregate.h"
+#include "lib/container/ob_array_helper.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -85,13 +86,89 @@ int ObExprJsonExtract::eval_json_extract_null(const ObExpr &expr, ObEvalCtx &ctx
   return OB_SUCCESS;
 }
 
-int ObExprJsonExtract::eval_json_extract(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
+int ObExprJsonExtract::eval_json_extract_fast_path(const ObExpr &expr,
+                                                    ObEvalCtx &ctx,
+                                                    ObDatum &res)
+{
+  int ret = OB_SUCCESS;
+  ObDatum *json_datum = NULL;
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  ObArenaAllocator &tmp_allocator = tmp_alloc_g.get_allocator();
+
+  if (OB_FAIL(expr.args_[0]->eval(ctx, json_datum))) {
+    LOG_WARN("fail to get real data.", K(ret));
+  } else if (json_datum->is_null()) {
+    res.set_null();
+  } else {
+    const ObLobCommon& lob = json_datum->get_lob_data();
+    ObString path_str;
+    ObItemType pick_type = static_cast<ObItemType>(expr.extra_);
+    bool is_null_path = false;
+    common::ObJsonPathCache *path_cache =
+      ObJsonExprHelper::get_path_cache_ctx(expr.expr_ctx_id_, &ctx.exec_ctx_);
+
+    if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(expr.args_[1], ctx, tmp_allocator, path_str, is_null_path))) {
+      LOG_WARN("fail to get path string", K(ret));
+    } else if (is_null_path) {
+      res.set_null();
+    } else if (!(json_datum->len_ != 0 && !lob.is_mem_loc_ && lob.in_row_) || OB_ISNULL(path_cache)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported fast path", K(ret));
+    } else if (path_cache->is_fast_path_unchecked()
+        && OB_FAIL(ObJsonExprHelper::validate_and_cache_simple_path(path_cache, path_str, tmp_allocator, 1))) {
+      LOG_WARN("fail to validate and cache simple path", K(ret));
+    } else if (path_cache->is_fast_path_unsupported()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported fast path because path cache is not inited", K(ret));
+    } else {
+      ObJsonBinFastLocator fast_locator;
+      ObString json_data;
+      char *res_ptr = nullptr;
+      int64_t res_len = 0;
+      uint8_t res_type = 0;
+      json_data.assign_ptr(lob.get_inrow_data_ptr(),
+                            static_cast<int32_t>(lob.get_byte_size(json_datum->len_)));
+
+      const ObSEArray<ObJsonPathCache::ObMultiPathEntry, 4> &path_keys_arr = path_cache->get_multi_path_keys();
+      if (path_keys_arr.empty()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("path keys not found", K(ret));
+      } else if (OB_FAIL(fast_locator.init(json_data.ptr(), json_data.length()))) {
+        LOG_WARN("fail to init fast path", K(ret));
+      } else {
+        const ObJsonPathCache::ObMultiPathEntry &entry = path_keys_arr.at(0);
+        ObArrayHelper<ObString> path_keys(entry.key_cnt, entry.keys, entry.key_cnt);
+        if (OB_FAIL(fast_locator.seek(path_keys, res_ptr, res_len, res_type))) {
+          if (ret == OB_SEARCH_NOT_FOUND) {
+            res.set_null();
+            ret = OB_SUCCESS;
+          } else {
+            LOG_WARN("fail to lookup", K(ret));
+          }
+        } else if (pick_type != T_NULL
+                   && !ObJsonExprHelper::check_pick_type_match(
+                     ObJsonVerType::get_json_type(
+                       static_cast<ObJBVerType>(OB_JSON_TYPE_GET_INLINE(res_type))),
+                     pick_type)) {
+          res.set_null();
+        } else if (OB_FAIL(
+                     fast_locator.pack_json_str_res(expr, ctx, res, res_ptr, res_len, res_type))) {
+          LOG_WARN("fail to pack json str res", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExprJsonExtract::eval_json_extract_general_path(const ObExpr &expr,
+                                                       ObEvalCtx &ctx,
+                                                       ObDatum &res)
 {
   int ret = OB_SUCCESS;
   ObDatum *json_datum = NULL;
   ObExpr *json_arg = expr.args_[0];
   ObObjType val_type = json_arg->datum_meta_.type_;
-  ObCollationType cs_type = json_arg->datum_meta_.cs_type_;
   ObIJsonBase *j_base = NULL;
   bool is_null_result = false;
   bool may_match_many = (expr.arg_cnt_ > 2);
@@ -99,7 +176,7 @@ int ObExprJsonExtract::eval_json_extract(const ObExpr &expr, ObEvalCtx &ctx, ObD
   ObItemType pick_type = static_cast<ObItemType>(expr.extra_);
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
-  MultimodeAlloctor allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+  MultimodeAlloctor allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret, ctx, "json_extract");
   if (expr.datum_meta_.cs_type_ != CS_TYPE_UTF8MB4_BIN) {
     ret = OB_ERR_INVALID_JSON_CHARSET;
     LOG_WARN("invalid out put charset", K(ret), K(expr.datum_meta_.cs_type_));
@@ -107,11 +184,6 @@ int ObExprJsonExtract::eval_json_extract(const ObExpr &expr, ObEvalCtx &ctx, ObD
     LOG_WARN("eval json arg failed", K(ret));
   } else if (json_datum->is_null()) {
     is_null_result = true; // mysql return NULL result
-  } else if (val_type != ObJsonType && ob_is_string_type(val_type) == false) {
-    ret = OB_ERR_INVALID_TYPE_FOR_JSON;
-    LOG_WARN("input type error", K(val_type));
-  } else if (OB_FAIL(ObJsonExprHelper::ensure_collation(val_type, cs_type))) {
-    LOG_WARN("fail to ensure collation", K(ret), K(val_type), K(cs_type));
   } else {
     uint32_t parse_flag = 0;
     ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
@@ -124,7 +196,9 @@ int ObExprJsonExtract::eval_json_extract(const ObExpr &expr, ObEvalCtx &ctx, ObD
     if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(json_arg, ctx, allocator, j_str, is_null_result))) {
       LOG_WARN("fail to get real data.", K(ret), K(j_str));
     } else if (OB_FALSE_IT(allocator.set_baseline_size(j_str.length()))) {
-    } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, j_str, j_in_type, j_in_type, j_base, parse_flag, ObJsonExprHelper::get_json_max_depth_config()))) {
+    } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(&allocator, j_str, j_in_type, j_in_type, j_base,
+                                                        parse_flag,
+                                                        ObJsonExprHelper::get_json_max_depth_config(ctx)))) {
       LOG_WARN("fail to get json base", K(ret), K(j_in_type));
       ret = OB_ERR_INVALID_JSON_TEXT;
     }
@@ -232,17 +306,61 @@ int ObExprJsonExtract::eval_json_extract(const ObExpr &expr, ObEvalCtx &ctx, ObD
   return ret;
 }
 
+int ObExprJsonExtract::eval_json_extract(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
+{
+  INIT_SUCC(ret);
+  ObObjType val_type = expr.args_[0]->datum_meta_.type_;
+  bool may_match_many = (expr.arg_cnt_ > 2);
+  bool is_static_const = expr.args_[1]->is_static_const_expr();
+  bool enable_fast_path = false;
+
+  ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  if (OB_NOT_NULL(session)) {
+    enable_fast_path = session->is_enable_fast_json_path_lookup() && !may_match_many
+                       && is_static_const && (val_type == ObJsonType);
+  }
+  if (enable_fast_path) {
+    common::ObJsonPathCache *path_cache =
+        ObJsonExprHelper::get_path_cache_ctx(expr.expr_ctx_id_, &ctx.exec_ctx_);
+    if (OB_NOT_NULL(path_cache) && path_cache->is_fast_path_unsupported()) {
+      enable_fast_path = false;
+    }
+  }
+
+  // Try fast path first
+  if (enable_fast_path && OB_FAIL(ObExprJsonExtract::eval_json_extract_fast_path(expr, ctx, res))) {
+    LOG_WARN("fail to eval json extract fast path", K(ret));
+  }
+
+  if (!enable_fast_path || OB_FAIL(ret)) {
+    ret = OB_SUCCESS; // Reset ret for general path
+    if (OB_FAIL(ObExprJsonExtract::eval_json_extract_general_path(expr, ctx, res))) {
+      LOG_WARN("fail to eval json extract general path", K(ret));
+    }
+  }
+
+  return ret;
+}
+
 int ObExprJsonExtract::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
                                ObExpr &rt_expr) const
 {
   UNUSED(expr_cg_ctx);
+  int ret = OB_SUCCESS;
   rt_expr.extra_ = static_cast<uint64_t>(raw_expr.get_pick());
-  if (rt_expr.datum_meta_.type_ == ObNullType) {
-      rt_expr.eval_func_ = eval_json_extract_null;
+  ObObjType val_type = rt_expr.args_[0]->datum_meta_.type_;
+  ObCollationType cs_type = rt_expr.args_[0]->datum_meta_.cs_type_;
+  if (val_type != ObJsonType && val_type != ObNullType && ob_is_string_type(val_type) == false) {
+    ret = OB_ERR_INVALID_TYPE_FOR_JSON;
+    LOG_WARN("input type error", K(val_type));
+  } else if (OB_FAIL(ObJsonExprHelper::ensure_collation(val_type, cs_type))) {
+    LOG_WARN("fail to ensure collation", K(ret), K(val_type), K(cs_type));
+  } else if (rt_expr.datum_meta_.type_ == ObNullType) {
+    rt_expr.eval_func_ = eval_json_extract_null;
   } else {
-      rt_expr.eval_func_ = eval_json_extract;
+    rt_expr.eval_func_ = eval_json_extract;
   }
-  return OB_SUCCESS;
+  return ret;
 }
 
 }

@@ -115,7 +115,8 @@ private:
                                 int64_t param_num, const common::ObObjType &res_type,
                                 ObExprResType &type);
   static int set_res_and_calc_type(ObExprResType *params, int64_t param_num,
-                                   common::ObObjType &res_type);
+                                   common::ObObjType &res_type,
+                                   bool use_oracle_date_dialect = false);
   // disallow copy
   DISALLOW_COPY_AND_ASSIGN(ObExprFuncRound);
 };

@@ -27,6 +27,16 @@ namespace oceanbase
 {
 namespace sql
 {
+
+// Fast format pattern enum for common date formats
+enum class DateFormatPattern : int8_t {
+  UNKNOWN = 0,
+  Y_m_d,      // %Y-%m-%d (10 chars)
+  Y_m_01,     // %Y-%m-01 (10 chars, same as DATE_TRUNC('month'))
+  Y_m,        // %Y-%m (7 chars)
+  Ymd,        // %Y%m%d (8 chars)
+};
+
 class ObExprDateFormat : public ObStringExprOperator
 {
 public:
@@ -101,6 +111,21 @@ private:
   static int calc_year_week(COMMON_PART_FORMAT_FUNC_ARG_DECL);
   template <typename ArgVec, typename IN_TYPE>
   static int calc_year_month_week(COMMON_PART_FORMAT_FUNC_ARG_DECL);
+
+  // Fast format path functions
+  static DateFormatPattern recognize_format_pattern(const ObString &format);
+  template <typename ArgVec, typename ResVec, typename IN_TYPE>
+  static int format_y_m_01_vector(const ObExpr &expr, ObEvalCtx &ctx,
+                                   const ObBitVector &skip, const EvalBound &bound);
+  template <typename ArgVec, typename ResVec, typename IN_TYPE>
+  static int format_y_m_d_vector(const ObExpr &expr, ObEvalCtx &ctx,
+                                  const ObBitVector &skip, const EvalBound &bound);
+  template <typename ArgVec, typename ResVec, typename IN_TYPE>
+  static int format_y_m_vector(const ObExpr &expr, ObEvalCtx &ctx,
+                                const ObBitVector &skip, const EvalBound &bound);
+  template <typename ArgVec, typename ResVec, typename IN_TYPE>
+  static int format_ymd_vector(const ObExpr &expr, ObEvalCtx &ctx,
+                                const ObBitVector &skip, const EvalBound &bound);
 };
 
 inline int ObExprDateFormat::calc_result_type2(ObExprResType &type,

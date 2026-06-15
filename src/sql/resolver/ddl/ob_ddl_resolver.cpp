@@ -794,7 +794,8 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
       case T_FUN_SUM:
       case T_FUN_MAX:
       case T_FUN_MIN:
-      case T_FUN_AVG: {
+      case T_FUN_AVG:
+      case T_FUN_AVG_WEIGHTED: {
         resolve_res.is_literal_ = false;
         ObObjParam arg;
         ObDefaultValueRes arg_res(arg);

@@ -7,8 +7,12 @@
 #define OCEANBASE_SHARE_VECTOR_OB_UNIFORM_FORMAT_H_
 
 #include "share/vector/ob_uniform_base.h"
+#include "share/vector/ob_fixed_length_base.h"
+#include "share/vector/ob_discrete_base.h"
+#include "share/vector/ob_continuous_base.h"
 #include "sql/engine/expr/ob_expr.h"
 #include "sql/engine/basic/ob_compact_row.h"
+#include "lib/ob_abort.h"
 
 namespace oceanbase
 {
@@ -107,6 +111,31 @@ public:
 
   DEF_VEC_READ_INTERFACES(ObUniformFormat<IS_CONST>);
   DEF_VEC_WRITE_INTERFACES(ObUniformFormat<IS_CONST>);
+
+protected:
+  // Implement four pure virtual functions of ObIVector (protected, only called by from_vector_ivector)
+  // New naming: from_vector_xxx
+  int from_vector_fixed(const ObFixedLengthBase *src_fixed,
+                             const sql::ObBitVector *skip,
+                             const int64_t start,
+                             const int64_t end) override;
+
+  int from_vector_uniform(const ObUniformBase *src_uniform,
+                                VectorFormat src_format,
+                                const sql::ObBitVector *skip,
+                                const int64_t start,
+                                const int64_t end) override;
+
+  int from_vector_discrete(const ObDiscreteBase *src_discrete,
+                                 const sql::ObBitVector *skip,
+                                 const int64_t start,
+                                 const int64_t end) override;
+
+  int from_vector_continuous(const ObContinuousBase *src_continuous,
+                                   const sql::ObBitVector *skip,
+                                   const int64_t start,
+                                   const int64_t end) override;
+
 private:
   void set_collection_payload_shallow(const int64_t idx, const void *payload,
                                       const ObLength length);
@@ -257,8 +286,194 @@ OB_INLINE int ObUniformFormat<IS_CONST>::to_row(const sql::RowMeta &row_meta,
     }
   }
   return ret;
-}                                                                                              \
 }
+
+
+template <bool IS_CONST>
+int ObUniformFormat<IS_CONST>::from_vector_fixed(const ObFixedLengthBase *src_fixed,
+                                                       const sql::ObBitVector *skip,
+                                                       const int64_t start,
+                                                       const int64_t end)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(src_fixed)) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(from_vector_base(src_fixed))) {
+    SQL_ENG_LOG(WARN, "failed to copy base", K(ret));
+  } else {
+    const sql::ObBitVector *src_nulls = src_fixed->get_nulls();
+    const char *src_data = src_fixed->get_data();
+    const ObLength src_len = src_fixed->get_length();
+    if constexpr (IS_CONST) {
+      for (int64_t i = start; i < end; ++i) {
+        if (skip != nullptr && skip->at(i)) {
+          continue;
+        }
+        if (src_nulls != nullptr && src_nulls->at(i)) {
+          set_null(i);
+        } else {
+          ObDatum &datum = get_datums()[0];
+          datum.ptr_ = src_data + i * src_len;
+          datum.pack_ = src_len;
+        }
+        break;
+      }
+    } else {
+      for (int64_t i = start; i < end; ++i) {
+        if (skip != nullptr && skip->at(i)) {
+          continue;
+        }
+        if (src_nulls != nullptr && src_nulls->at(i)) {
+          set_null(i);
+        } else {
+          ObDatum &datum = get_datum(i);
+          datum.ptr_ = src_data + i * src_len;
+          datum.pack_ = src_len;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+template <bool IS_CONST>
+int ObUniformFormat<IS_CONST>::from_vector_uniform(const ObUniformBase *src_uniform,
+                                                          VectorFormat src_format,
+                                                          const sql::ObBitVector *skip,
+                                                          const int64_t start,
+                                                          const int64_t end)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(src_uniform)) {
+    ret = OB_INVALID_ARGUMENT;
+    SQL_ENG_LOG(WARN, "src_uniform is null", K(ret));
+  } else if (OB_FAIL(from_vector_base(src_uniform))) {
+    SQL_ENG_LOG(WARN, "failed to copy base", K(ret));
+  } else {
+    const ObDatum *src_datums = src_uniform->get_datums();
+    const bool src_is_const = (src_format == VEC_UNIFORM_CONST);
+    ObDatum *dst_datums = get_datums();
+    if constexpr (IS_CONST) {
+      // Respect skip: only copy when row 0 is not skipped (e.g. IFNULL: do not overwrite with arg1 when arg0 is not null)
+      if (skip == nullptr || !skip->at(0)) {
+        get_datum(0) = src_datums[0];
+      }
+    } else {
+      // dst is non-const (ObUniformFormat<false>): multi-row copy path
+      if (src_is_const) {
+        // src const -> dst non-const: broadcast src_datums[0] to all (non-skipped) rows
+        if (skip == nullptr) {
+          for (int64_t i = start; i < end; ++i) {
+            dst_datums[i] = src_datums[0];
+          }
+        } else {
+          for (int64_t i = start; i < end; ++i) {
+            if (skip->at(i)) {
+              continue;
+            }
+            get_datum(i) = src_datums[0];
+          }
+        }
+      } else {
+        // src non-const -> dst non-const
+        if (skip == nullptr) {
+          if (dst_datums != src_datums) {
+            MEMCPY(dst_datums + start, src_datums + start, (end - start) * sizeof(ObDatum));
+          }
+        } else {
+          for (int64_t i = start; i < end; ++i) {
+            if (skip->at(i)) {
+              continue;
+            }
+            get_datum(i) = src_datums[i];
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+template <bool IS_CONST>
+int ObUniformFormat<IS_CONST>::from_vector_discrete(const ObDiscreteBase *src_discrete,
+                                                           const sql::ObBitVector *skip,
+                                                           const int64_t start,
+                                                           const int64_t end)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(src_discrete)) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(from_vector_base(src_discrete))) {
+    SQL_ENG_LOG(WARN, "failed to copy base", K(ret));
+  } else {
+    const sql::ObBitVector *src_nulls = src_discrete->get_nulls();
+    char **src_ptrs = src_discrete->get_ptrs();
+    const ObLength *src_lens = src_discrete->get_lens();
+    if constexpr (IS_CONST) {
+      if (src_nulls != nullptr && src_nulls->at(start)) {
+        set_null(start);
+      } else {
+        ObDatum &datum = get_datums()[0];
+        datum.ptr_ = src_ptrs[start];
+        datum.pack_ = src_lens[start];
+      }
+    } else {
+      for (int64_t i = start; i < end; ++i) {
+        if (skip != nullptr && skip->at(i)) {
+          continue;
+        }
+        if (src_nulls != nullptr && src_nulls->at(i)) {
+          set_null(i);
+        } else {
+          ObDatum &datum = get_datum(i);
+          datum.ptr_ = src_ptrs[i];
+          datum.pack_ = src_lens[i];
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+template <bool IS_CONST>
+int ObUniformFormat<IS_CONST>::from_vector_continuous(const ObContinuousBase *src_continuous,
+                                                             const sql::ObBitVector *skip,
+                                                             const int64_t start,
+                                                             const int64_t end)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(src_continuous)) {
+    ret = OB_INVALID_ARGUMENT;
+  } else if (OB_FAIL(from_vector_base(src_continuous))) {
+    SQL_ENG_LOG(WARN, "failed to copy base", K(ret));
+  } else {
+    const sql::ObBitVector *src_nulls = src_continuous->get_nulls();
+    const char *src_data = src_continuous->get_data();
+    const uint32_t *src_offsets = src_continuous->get_offsets();
+    if constexpr (IS_CONST) {
+      if (src_nulls != nullptr && src_nulls->at(start)) {
+        set_null(start);
+      } else {
+        ObDatum &datum = get_datums()[0];
+        datum.ptr_ = src_data + src_offsets[start];
+        datum.pack_ = src_offsets[start + 1] - src_offsets[start];
+      }
+    } else {
+      for (int64_t i = start; i < end; ++i) {
+        if (skip != nullptr && skip->at(i)) {
+          continue;
+        }
+        if (src_nulls != nullptr && src_nulls->at(i)) {
+          set_null(i);
+        } else {
+          ObDatum &datum = get_datum(i);
+          datum.ptr_ = src_data + src_offsets[i];
+          datum.pack_ = src_offsets[i + 1] - src_offsets[i];
+        }
+      }
+    }
+  }
+  return ret;
 }
 
 #define DEF_SET_COLLECTION_PAYLOAD(is_const)                                                       \
@@ -271,5 +486,8 @@ OB_INLINE int ObUniformFormat<IS_CONST>::to_row(const sql::RowMeta &row_meta,
     } else {                                                                                       \
     }                                                                                              \
   }
+
+} // namespace common
+} // namespace oceanbase
 
 #endif // OCEANBASE_SHARE_VECTOR_OB_UNIFORM_FORMAT_H_

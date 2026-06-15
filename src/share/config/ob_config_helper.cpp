@@ -1739,6 +1739,7 @@ bool ObConfigNonStdCmpLevelChecker::check(const ObConfigItem &t) const
   return bret;
 }
 
+
 bool ObConfigJavaParamsChecker::check(const ObConfigItem &t) const
 {
   bool bret = false;

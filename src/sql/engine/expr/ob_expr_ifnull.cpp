@@ -7,11 +7,11 @@
 
 #include "sql/engine/expr/ob_expr_ifnull.h"
 
-
+#include "share/vector/ob_bitmap_null_vector_base.h"
+#include "share/vector/ob_uniform_base.h"
 #include "sql/engine/expr/ob_expr_promotion_util.h"
-#include "sql/session/ob_sql_session_info.h"
 #include "sql/engine/expr/ob_expr_result_type_util.h"
-
+#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {
@@ -154,7 +154,71 @@ int ObExprIfNull::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
   UNUSED(expr_cg_ctx);
   UNUSED(raw_expr);
   rt_expr.eval_func_ = calc_ifnull_expr;
+  rt_expr.eval_vector_func_ = eval_ifnull_vector;
   return ret;
 }
+
+OB_INLINE void ObExprIfNull::build_arg0_skip(const ObIVector *arg0_vec,
+                                            VectorFormat fmt,
+                                            const ObBitVector &skip,
+                                            ObBitVector &skip_bmp,
+                                            const EvalBound &bound)
+{
+  skip_bmp.deep_copy(skip, bound.start(), bound.end());
+  if (fmt == VEC_UNIFORM || fmt == VEC_UNIFORM_CONST) {
+    for (int64_t i = bound.start(); i < bound.end(); ++i) {
+      if (!skip.at(i) && arg0_vec->is_null(i)) {
+        skip_bmp.set(i);
+      }
+    }
+  } else {
+    const ObBitVector *nulls = nullptr;
+    if (OB_NOT_NULL(nulls = static_cast<const ObBitmapNullVectorBase *>(arg0_vec)->get_nulls())) {
+      skip_bmp.bit_or(*nulls, bound);
+    }
+  }
+}
+
+OB_INLINE void ObExprIfNull::build_arg1_skip(const ObBitVector &skip,
+                                            ObBitVector &skip_bmp,
+                                            const EvalBound &bound)
+{
+  // Transform skip_bmp: ~(skip_bmp ^ skip) for arg1 evaluation
+  skip_bmp.bit_calculate(skip_bmp, skip, bound, BitXnorOp());
+}
+
+int ObExprIfNull::eval_ifnull_vector(VECTOR_EVAL_FUNC_ARG_DECL)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("eval arg0 failed", K(ret));
+  } else {
+    ObIVector *res_vec = expr.get_vector(ctx);
+    const ObIVector *arg0_vec = expr.args_[0]->get_vector(ctx);
+    const VectorFormat arg0_format = arg0_vec->get_format();
+    ObBitVector &skip_bmp = expr.get_pvt_skip(ctx);
+    // Step 1: Build skip bitmap for arg0 (rows where arg0 is null)
+    build_arg0_skip(arg0_vec, arg0_format, skip, skip_bmp, bound);
+    if (OB_FAIL(res_vec->from_vector_shallow(arg0_vec, &skip_bmp, bound.start(), bound.end()))) {
+      LOG_WARN("copy arg0 failed", K(ret));
+    } else {
+      // Step 2: Transform skip_bmp for arg1 evaluation (rows where arg0 is null)
+      build_arg1_skip(skip, skip_bmp, bound);
+      EvalBound arg1_bound = skip_bmp.accumulate_bit_cnt(bound) > 0
+                           ? EvalBound(bound.batch_size(), bound.start(), bound.end(), false)
+                           : bound;
+      if (OB_FAIL(expr.args_[1]->eval_vector(ctx, skip_bmp, arg1_bound))) {
+        LOG_WARN("eval arg1 failed", K(ret));
+      } else {
+        const ObIVector *arg1_vec = expr.args_[1]->get_vector(ctx);
+        if (OB_FAIL(res_vec->from_vector_shallow(arg1_vec, &skip_bmp, bound.start(), bound.end()))) {
+          LOG_WARN("copy arg1 failed", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 } // namespace sql
 } // namespace oceanbase

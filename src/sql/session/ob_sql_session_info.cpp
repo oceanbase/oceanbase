@@ -3567,6 +3567,7 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       enable_mysql_compatible_dates_ = tenant_config->_enable_mysql_compatible_dates;
       enable_enum_set_subschema_ = tenant_config->_enable_enum_set_subschema;
       enable_seq_wrap_around_flush_cache_ = tenant_config->_enable_seq_wrap_around_flush_cache;
+      enable_fast_json_path_lookup_ = tenant_config->_enable_fast_json_path_lookup;
       // 7. print_sample_ppm_ for flt
       ATOMIC_STORE(&print_sample_ppm_, tenant_config->_print_sample_ppm);
       // 8. _enable_enhanced_cursor_validation
@@ -3584,6 +3585,14 @@ void ObSQLSessionInfo::ObCachedTenantConfigInfo::refresh()
       ATOMIC_STORE(&force_unstreaming_cursor_, tenant_config->_force_unstreaming_cursor);
       ATOMIC_STORE(&enable_pl_null_literal_parameterization_, tenant_config->_enable_pl_null_literal_parameterization);
       extend_sql_plan_monitor_metrics_ = tenant_config->_extend_sql_plan_monitor_metrics;
+      // 14. JSON and multi-mode related config cache
+      int32_t json_max_depth = tenant_config->json_document_max_depth;
+      if (json_max_depth < JSON_DOCUMENT_MAX_DEPTH || json_max_depth > 1024) {
+        json_max_depth = JSON_DOCUMENT_MAX_DEPTH;
+      }
+      ATOMIC_STORE(&json_document_max_depth_, json_max_depth);
+      ATOMIC_STORE(&multimodel_memory_trace_level_,
+                   tenant_config->_multimodel_memory_trace_level > 2 ? 0 : tenant_config->_multimodel_memory_trace_level);
       ATOMIC_STORE(&enable_pl_sql_parameterize_, tenant_config->_enable_pl_sql_parameterize);
     }
     conf_enable_sql_audit_ = GCONF.enable_sql_audit;

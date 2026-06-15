@@ -79,10 +79,8 @@ int ObExprReplace::calc_result_typeN(ObExprResType &type,
                              common::ObExprTypeCtx &type_ctx) const
 {
   int ret = OB_SUCCESS;
-  if (3 != param_num && !lib::is_oracle_mode()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Replace() should have three arguments in MySql Mode", K(ret), K(param_num), K(lib::is_oracle_mode()));
-  } else if (2 != param_num && 3 != param_num) {
+  // ADB compatibility: REPLACE(str, search) with 2 params is equivalent to REPLACE(str, search, '')
+  if (2 != param_num && 3 != param_num) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Replace() should have three arguments in Oracle Mode", K(ret), K(param_num), K(lib::is_oracle_mode()));
   } else if (OB_ISNULL(types_array) || OB_ISNULL(type_ctx.get_session())) {

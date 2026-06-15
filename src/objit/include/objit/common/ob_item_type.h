@@ -986,7 +986,7 @@ typedef enum ObItemType
   T_FUN_CK_RAND_CANONICAL = 1940,
   T_FUN_SYS_LOAD_FILE = 1941,
   T_FUN_SYS_AI_PARSE_DOCUMENT = 1942,
-  T_FUN_SYS_SEARCH_INDEX_INNER_PATH = 1943,
+T_FUN_SYS_SEARCH_INDEX_INNER_PATH = 1943,
   T_FUN_SYS_SEARCH_INDEX_INNER_VALUE = 1944,
   T_FUN_CK_TO_TYPE_NAME = 1945,
   T_FUN_SYS_TO_FLOAT64_OR_NULL = 1946,
@@ -3269,7 +3269,9 @@ extern const char *get_type_name(int type);
                          ((op) >= T_FUN_ARG_MIN && (op) <= T_FUN_ARG_MAX) || \
                          (op) == T_FUN_ANY || \
                          (op) == T_FUN_ARBITRARY || \
+                         (op) == T_FUN_AVG_WEIGHTED || \
                          (op) == T_FUN_SYS_COUNT_INROW || \
+                         (op) == T_FUN_STRING_AGG || \
                          ((op) >= T_FUN_CK_GROUPCONCAT && (op) <= T_FUN_CK_UNIQ) || \
                          (op) == T_FUN_WINDOW_FUNNEL || \
                          (op) == T_FUN_SYS_EXT_MIN || \

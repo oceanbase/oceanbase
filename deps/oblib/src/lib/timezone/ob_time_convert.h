@@ -715,6 +715,7 @@ public:
                               bool &datetime_valid,
                               bool &string_match_format,
                               int64_t &last_first_8digits);
+  template<bool is_clickhouse_style = false>
   static int str_to_ob_time_format(const ObString &str, const ObString &fmt, ObTime &ob_time,
                                    int16_t *scale, const ObDateSqlMode date_sql_mode);
   // parameter is_oracle_mode is true by default.

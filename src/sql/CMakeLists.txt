@@ -461,6 +461,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_conv.cpp
   engine/expr/ob_expr_convert.cpp
   engine/expr/ob_expr_convert_tz.cpp
+  engine/expr/ob_expr_new_time.cpp
   engine/expr/ob_expr_cos.cpp
   engine/expr/ob_expr_cosh.cpp
   engine/expr/ob_expr_cot.cpp
@@ -922,6 +923,7 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_name_const.cpp
   engine/expr/ob_expr_neg.cpp
   engine/expr/ob_expr_nlssort.cpp
+  engine/expr/ob_expr_nls_charset_id.cpp
   engine/expr/ob_expr_align_date4cmp.cpp
   engine/expr/ob_expr_not.cpp
   engine/expr/ob_expr_not_between.cpp
@@ -986,11 +988,13 @@ ob_set_subtarget(ob_sql engine_expr
   engine/expr/ob_expr_max_pt.cpp
   engine/expr/ob_expr_string_searcher.cpp
   engine/expr/ob_expr_date_trunc.cpp
+  engine/expr/ob_expr_parse_date_time.cpp
   engine/expr/ob_expr_is_nan.cpp
   engine/expr/ob_expr_collect_file_list.cpp
   engine/expr/ob_expr_search_index_inner.cpp
   engine/expr/ob_expr_image_type.cpp
   engine/expr/ob_expr_ai/ob_expr_load_file.cpp
+  engine/expr/ob_expr_rand_canonical.cpp
 )
 
 ob_set_subtarget(ob_sql_extra ALONE

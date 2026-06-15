@@ -110,6 +110,8 @@ int ObExprSpace::cg_expr(ObExprCGCtx &, const ObRawExpr &, ObExpr &rt_expr) cons
   int ret = OB_SUCCESS;
   CK(1 == rt_expr.arg_cnt_);
   rt_expr.eval_func_ = eval_space;
+  rt_expr.eval_vector_func_ = eval_space_vector;
+
   return ret;
 }
 
@@ -156,6 +158,148 @@ int ObExprSpace::eval_space(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_da
       } else {
         expr_datum.set_string(output);
       }
+    }
+  }
+  return ret;
+}
+
+template <typename ArgVec, typename ResVec>
+int ObExprSpace::space_vector(VECTOR_EVAL_FUNC_ARG_DECL)
+{
+  int ret = OB_SUCCESS;
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+
+  int64_t max_size = 0; // used for limit size of result
+  ObString space(1, " ");
+
+  if (OB_FAIL(ctx.exec_ctx_.get_my_session()->get_max_allowed_packet(max_size))) {
+    LOG_WARN("get max size failed", K(ret));
+  } else {
+    const ArgVec *arg_vec = static_cast<const ArgVec *>(expr.args_[0]->get_vector(ctx));
+
+    // Fast path: no skip, no null, no eval_flags
+    bool no_skip_no_null = bound.get_all_rows_active() && !arg_vec->has_null();
+
+    if (no_skip_no_null) {
+      ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
+      batch_info_guard.set_batch_size(bound.batch_size());
+
+      for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+        batch_info_guard.set_batch_idx(idx);
+        int64_t count = arg_vec->get_int(idx);
+        if (count > max_size || count > INT_MAX) {
+          LOG_WARN("Result of space was larger than max_allow_packet_size",
+                   K(count), K(max_size));
+          LOG_USER_WARN(OB_ERR_FUNC_RESULT_TOO_LARGE, "space", static_cast<int>(max_size));
+          res_vec->set_null(idx);
+        } else {
+          ObString output;
+          if (!ob_is_text_tc(expr.datum_meta_.type_)) {
+            if (count <= 0 || max_size <= 0) {
+              output.assign_ptr(NULL, 0);
+            } else {
+              ObExprStrResAlloc calc_alloc(expr, ctx);
+              // avoid realloc
+              if (1 == count) {
+                output = space;
+              } else {
+                char *buf = static_cast<char *>(calc_alloc.alloc(count));
+                if (OB_ISNULL(buf)) {
+                  ret = OB_ALLOCATE_MEMORY_FAILED;
+                  LOG_ERROR("alloc memory failed", K(ret), K(count));
+                } else {
+                  MEMSET(buf, ' ', count);
+                  output.assign_ptr(buf, static_cast<int32_t>(count));
+                }
+              }
+            }
+          } else {
+            bool is_null = false;
+            ObString output;
+            ObExprStrResAlloc calc_alloc(expr, ctx);
+            ret = ObExprRepeat::repeat_text(expr.datum_meta_.type_,
+                                            expr.obj_meta_.has_lob_header(), output, is_null,
+                                            space, count, calc_alloc, max_size);
+            if (OB_FAIL(ret)) {
+              LOG_WARN("do space in vector failed", K(ret));
+            } else {
+              res_vec->set_string(idx, output);
+            }
+          }
+        }
+      }
+    } else {
+      // Slow path: handle skip and eval_flags
+      ObEvalCtx::BatchInfoScopeGuard batch_info_guard(ctx);
+      batch_info_guard.set_batch_size(bound.batch_size());
+      for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+        if (skip.at(idx) || eval_flags.at(idx)) {
+          continue;
+        }
+
+        batch_info_guard.set_batch_idx(idx);
+        if (arg_vec->is_null(idx)) {
+          res_vec->set_null(idx);
+        } else {
+          int64_t count = arg_vec->get_int(idx);
+          if (count > max_size) {
+            LOG_WARN("Result of space was larger than max_allow_packet_size",
+                     K(count), K(max_size));
+            LOG_USER_WARN(OB_ERR_FUNC_RESULT_TOO_LARGE, "space", static_cast<int>(max_size));
+            res_vec->set_null(idx);
+          } else {
+            bool is_null = false;
+            ObString output;
+            ObExprStrResAlloc calc_alloc(expr, ctx);
+
+            if (!ob_is_text_tc(expr.datum_meta_.type_)) {
+              ret = ObExprRepeat::repeat(output, is_null, space, count, calc_alloc, max_size);
+            } else {
+              ret = ObExprRepeat::repeat_text(expr.datum_meta_.type_,
+                                              expr.obj_meta_.has_lob_header(), output, is_null,
+                                              space, count, calc_alloc, max_size);
+            }
+            if (OB_FAIL(ret)) {
+              LOG_WARN("do space in vector failed", K(ret));
+            } else {
+              if (is_null) {
+                res_vec->set_null(idx);
+              } else {
+                res_vec->set_string(idx, output);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExprSpace::eval_space_vector(VECTOR_EVAL_FUNC_ARG_DECL)
+{
+  int ret = OB_SUCCESS;
+  // make sure that `space` operand should have 1 param.
+  if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("failed to evaluate `space` parameters", K(ret));
+  } else {
+    VectorFormat arg_format = expr.args_[0]->get_format(ctx);
+    VectorFormat res_format = expr.get_format(ctx);
+    if (VEC_DISCRETE == arg_format && VEC_DISCRETE == res_format) {
+      ret = space_vector<IntegerFixedVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+    } else if (VEC_UNIFORM_CONST == arg_format && VEC_DISCRETE == res_format) {
+      ret = space_vector<IntegerUniCVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+    } else if (VEC_UNIFORM == arg_format && VEC_DISCRETE == res_format) {
+      ret = space_vector<IntegerUniVec, StrDiscVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+    } else if (VEC_DISCRETE == arg_format && VEC_UNIFORM == res_format) {
+      ret = space_vector<IntegerFixedVec, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+    } else if (VEC_UNIFORM_CONST == arg_format && VEC_UNIFORM == res_format) {
+      ret = space_vector<IntegerUniCVec, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+    } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) {
+      ret = space_vector<IntegerUniVec, StrUniVec>(VECTOR_EVAL_FUNC_ARG_LIST);
+    } else {
+      ret = space_vector<ObVectorBase, ObVectorBase>(VECTOR_EVAL_FUNC_ARG_LIST);
     }
   }
   return ret;

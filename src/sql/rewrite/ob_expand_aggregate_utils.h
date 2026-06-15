@@ -143,12 +143,17 @@ private:
            aggr_type == T_FUN_STDDEV_SAMP ||
            aggr_type == T_FUN_APPROX_COUNT_DISTINCT ||
            aggr_type == T_FUN_SYS_RB_AND_CARDINALITY_AGG ||
-           aggr_type == T_FUN_SYS_RB_OR_CARDINALITY_AGG;
+           aggr_type == T_FUN_SYS_RB_OR_CARDINALITY_AGG ||
+           aggr_type == T_FUN_AVG_WEIGHTED;
   }
 
   int expand_avg_expr(ObAggFunRawExpr *aggr_expr,
                       ObRawExpr *&replace_expr,
                       ObIArray<ObAggFunRawExpr*> &new_aggr_items);
+
+  int expand_avg_weighted_expr(ObAggFunRawExpr *aggr_expr,
+                               ObRawExpr *&replace_expr,
+                               ObIArray<ObAggFunRawExpr*> &new_aggr_items);
 
   int expand_oracle_variance_expr(ObAggFunRawExpr *aggr_expr,
                                   ObRawExpr *&replace_expr,

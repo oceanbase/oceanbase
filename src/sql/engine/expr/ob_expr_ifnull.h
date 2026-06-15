@@ -22,10 +22,13 @@ public:
                                 ObExprResType &type2,
                                 common::ObExprTypeCtx &type_ctx) const;
   virtual int cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr,
-                       ObExpr &rt_expr) const;
+                      ObExpr &rt_expr) const;
   static int calc_ifnull_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum);
+  static int eval_ifnull_vector(VECTOR_EVAL_FUNC_ARG_DECL);
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExprIfNull);
+  static OB_INLINE void build_arg0_skip(const ObIVector *arg0_vec, VectorFormat fmt, const ObBitVector &skip, ObBitVector &skip_bmp, const EvalBound &bound);
+  static OB_INLINE void build_arg1_skip(const ObBitVector &skip, ObBitVector &skip_bmp, const EvalBound &bound);
 private:
   // data members
 };

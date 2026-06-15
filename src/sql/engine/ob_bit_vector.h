@@ -211,6 +211,16 @@ struct BitOrNotOp
   }
 };
 
+// Functor for bit operation: ~(l ^ r)
+// Used as replacement for lambda in bit_calculate calls
+struct BitXnorOp
+{
+  OB_INLINE uint64_t operator()(const uint64_t l, const uint64_t r) const
+  {
+    return ~(l ^ r);
+  }
+};
+
 inline ObBitVector *to_bit_vector(void *mem)
 {
   return static_cast<ObBitVector *>(mem);

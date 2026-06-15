@@ -278,7 +278,7 @@ END_P SET_VAR DELIMITER
         ACCESS ACCESS_INFO ACCESSID ACCESSKEY ACCESSTYPE ACCOUNT ACTION ACTIVE ADDDATE AFTER AGAINST AGGREGATE AI AI_SPLIT_DOCUMENT ALGORITHM ALL_META ALL_USER ALWAYS ALLOW ANALYSE ANY
         APPEND_ONLY APPID APPROX_COUNT_DISTINCT APPROX_COUNT_DISTINCT_SYNOPSIS APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE
         ARBITRARY ARBITRATION ARG_MAX ARG_MIN ARRAY ASCII ASIS AT ATTRIBUTE AUTHORS AUTH_TYPE AUTO AUTOEXTEND_SIZE AUTO_INCREMENT AUTO_INCREMENT_MODE AUTO_INCREMENT_CACHE_SIZE
-        AVG AVG_ROW_LENGTH ACTIVATE AVAILABILITY ARCHIVELOG ARCHIVELOG_PIECE ASYNCHRONOUS AUDIT ADMIN AUTO_REFRESH API_MODE APPROX APPROXIMATE ARRAY_AGG ARRAY_FILTER ARRAY_FIRST ARRAY_MAP ARRAY_SORTBY
+        AVG AVG_ROW_LENGTH AVGWEIGHTED ACTIVATE AVAILABILITY ARCHIVELOG ARCHIVELOG_PIECE ASYNCHRONOUS AUDIT ADMIN AUTO_REFRESH API_MODE APPROX APPROXIMATE ARRAY_AGG ARRAY_FILTER ARRAY_FIRST ARRAY_MAP ARRAY_SORTBY
 
         BACKUP BACKUP_COPIES BALANCE BANDWIDTH BASE BASELINE BASELINE_ID BASIC BEGI BINDING SHARDING BINARY_FORMAT BINLOG BIT BIT_AND
         BIT_OR BIT_XOR BLOCK BLOCK_INDEX BLOCK_SIZE BLOOM_FILTER BOOL BOOLEAN BOOTSTRAP BTREE BYTE
@@ -370,7 +370,7 @@ END_P SET_VAR DELIMITER
         SS MI HH DD WK WW MM QQ YY MS NS S N H D M Q
         SRID STANDBY _ST_ASMVT STAT START STARTS STATS_AUTO_RECALC
         STATS_PERSISTENT STATS_SAMPLE_PAGES STATUS STATEMENTS STATISTICS STD STDDEV STDDEV_POP STDDEV_SAMP STDDEVSAMP STOPWORD_TABLE STORAGE_CACHE_POLICY STORAGE_CACHE_POLICY_EXECUTOR STRONG STSTOKEN
-        SYNCHRONIZATION SYNCHRONOUS STOP STORAGE STORAGE_FORMAT_VERSION STORE STORING STREAM STRING STRIPE_SIZE
+        SYNCHRONIZATION SYNCHRONOUS STOP STORAGE STORAGE_FORMAT_VERSION STORE STORING STREAM STRING STRING_AGG STRIPE_SIZE
         SUBCLASS_ORIGIN SUBDATE SUBJECT SUBPARTITION SUBPARTITIONS SUBSTR SUBSTRING SUCCESSFUL SUM
         SUPER SUSPEND SWAPS SWITCH SWITCHES SWITCHOVER SYSTEM SYSTEM_USER SYSDATE SYS_COUNT_INROW SESSION_ALIAS
         SIZE SKEWONLY SEQUENCE SLOG STATEMENT_ID SKIP_HEADER PARSE_HEADER IGNORE_LAST_EMPTY_COLUMN
@@ -612,6 +612,7 @@ END_P SET_VAR DELIMITER
 %type <node> algorithm_opt lock_opt
 %type <node> vector_similarity_expr vector_similarity_metric
 %type <node> groupconcat_agg_func
+%type <node> string_agg_agg_func
 %type <node> create_sensitive_rule_stmt drop_sensitive_rule_stmt alter_sensitive_rule_stmt alter_sensitive_rule_action sensitive_rule_name sensitive_field_list sensitive_field sensitivity_protection_spec sensitivity_encryption_spec
 %type <node> table_name_or_tablet_id opt_with_index
 %type <node> create_routine_load_stmt load_properties load_property_list load_property opt_load_where_clause job_properties_expr job_property_list job_property
@@ -2373,6 +2374,11 @@ COUNT '(' opt_all '*' ')' OVER new_generalized_window_clause
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_AVG, 2, $3, $4);
   malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $7);
 }
+| AVGWEIGHTED '(' opt_distinct_or_all expr ',' expr ')' OVER new_generalized_window_clause
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_AVG_WEIGHTED, 3, $3, $4, $6);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $9);
+}
 | JSON_ARRAYAGG '(' opt_distinct_or_all expr ')' OVER new_generalized_window_clause
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_JSON_ARRAYAGG, 2, $3, $4);
@@ -2435,6 +2441,10 @@ COUNT '(' opt_all '*' ')' OVER new_generalized_window_clause
   malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $$, $9);
 }
 | groupconcat_agg_func OVER new_generalized_window_clause
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $1, $3);
+}
+| string_agg_agg_func OVER new_generalized_window_clause
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_WINDOW_FUNCTION, 2, $1, $3);
 }
@@ -2931,6 +2941,10 @@ MOD '(' expr ',' expr ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_AVG, 2, $3, $4);
 }
+| AVGWEIGHTED '(' opt_distinct_or_all expr ',' expr ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_AVG_WEIGHTED, 3, $3, $4, $6);
+}
 | ARBITRARY '(' expr ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_ARBITRARY, 1, $3);
@@ -3013,6 +3027,10 @@ MOD '(' expr ',' expr ')'
 {
   $$ = $1;
 }
+| string_agg_agg_func %prec LOWER_OVER
+{
+  $$ = $1;
+}
 | WINDOW_FUNNEL '(' INTNUM ',' STRING_VALUE ',' expr_list ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_WINDOW_FUNNEL, 3, $3, $5, $7);
@@ -3024,6 +3042,14 @@ MOD '(' expr ',' expr ')'
 | HYBRID_HIST '(' bit_expr ',' INTNUM ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_HYBRID_HIST, 2, $3, $5);
+}
+| IF '(' expr ',' expr ')'
+{
+  /* ADB compatibility: IF(cond, value) with 2 params, resolver will treat as IF(cond, value, null) */
+  ParseNode *params = NULL;
+  malloc_non_terminal_node(params, result->malloc_pool_, T_EXPR_LIST, 2, $3, $5);
+  make_name_node($$, result->malloc_pool_, "if");
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_SYS_IF, 2, $$, params);
 }
 | IF '(' expr ',' expr ',' expr ')'
 {
@@ -3950,6 +3976,13 @@ GROUPCONCAT '(' expr ')'
 | GROUPCONCAT '(' expr ',' INTNUM ')' '(' opt_distinct_or_all expr ')'
 {
   malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_CK_GROUPCONCAT, 4, $3, $5, $8, $9);
+}
+;
+
+string_agg_agg_func:
+STRING_AGG '(' opt_distinct_or_all expr ',' expr opt_order_by ')'
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FUN_STRING_AGG, 4, $3, $4, $6, $7);
 }
 ;
 
@@ -28238,6 +28271,7 @@ ACCESS_INFO
 |       AUTO_REFRESH
 |       AVG
 |       AVG_ROW_LENGTH
+|       AVGWEIGHTED
 |       ARRAY_AGG
 |       ARRAY_FIRST
 |       ARRAY_MAP
@@ -28496,6 +28530,7 @@ ACCESS_INFO
 |       GROUPING_ID
 |       GROUP_CONCAT
 |       GROUPCONCAT
+|       STRING_AGG
 |       GTS
 |       GLOB_PATTERN
 |       HANDLER

@@ -673,6 +673,391 @@ int sql::ObExprExtract::calc_extract_oracle_vector(const ObExpr &expr, ObEvalCtx
   return ret;
 }
 
+// Fast path for DATETIME (int64_t usec since epoch).
+// Avoids constructing full ObTime for simple field extractions.
+//
+// Two sub-paths depending on need_tz (ObTimestampType with tz_info):
+//   need_tz=false (ObDateTimeType, the common TPC-H path):
+//     time fields  → pure usec arithmetic, no ob_time construction at all.
+//     date fields  → date_to_ob_time(days) only, skipping time_to_ob_time.
+//   need_tz=true (ObTimestampType):
+//     datetime_to_ob_time(usec, tz_info, ob_time) handles tz internally (public API),
+//     then read the needed part.  Still avoids the extra ob_time_to_date() call from calc().
+//
+// Caller must check can_fast_extract() before calling; unsupported fields reach
+// default → OB_ERR_UNEXPECTED.
+
+// Inner loop body for date fields when need_tz=false:
+// only calls date_to_ob_time, skips time_to_ob_time.
+#define DATETIME_DATE_FIELD_LOOP_NOTZ(PART_IDX)                                 \
+  for (int64_t i = bound.start(); OB_SUCC(ret) && i < bound.end(); ++i) {      \
+    if (skip.at(i) || eval_flags.at(i)) { continue; }                          \
+    if (arg_date_vec.is_null(i)) { res_vec.set_null(i); continue; }             \
+    int64_t usec = arg_date_vec.get_int(i);                                     \
+    if (OB_UNLIKELY(usec == ObTimeConverter::ZERO_DATETIME)) {                  \
+      res_vec.set_int(i, 0); continue;                                          \
+    }                                                                           \
+    int32_t days = static_cast<int32_t>(usec / USECS_PER_DAY);                 \
+    if (OB_UNLIKELY(usec < 0 && usec % USECS_PER_DAY != 0)) { --days; }        \
+    ObTime ob_time;                                                             \
+    memset(&ob_time, 0, sizeof(ob_time));                                       \
+    if (OB_FAIL(ObTimeConverter::date_to_ob_time(days, ob_time))) {             \
+      LOG_WARN("failed to convert date to ob_time", K(ret)); break;             \
+    }                                                                           \
+    res_vec.set_int(i, ob_time.parts_[PART_IDX]);                               \
+  }
+
+// Inner loop body for any field when need_tz=true:
+// datetime_to_ob_time handles tz offset internally (public API), then read PART_IDX.
+#define DATETIME_FIELD_LOOP_TZ(PART_IDX)                                        \
+  for (int64_t i = bound.start(); OB_SUCC(ret) && i < bound.end(); ++i) {      \
+    if (skip.at(i) || eval_flags.at(i)) { continue; }                          \
+    if (arg_date_vec.is_null(i)) { res_vec.set_null(i); continue; }             \
+    int64_t usec = arg_date_vec.get_int(i);                                     \
+    if (OB_UNLIKELY(usec == ObTimeConverter::ZERO_DATETIME)) {                  \
+      res_vec.set_int(i, 0); continue;                                          \
+    }                                                                           \
+    ObTime ob_time;                                                             \
+    memset(&ob_time, 0, sizeof(ob_time));                                       \
+    if (OB_FAIL(ObTimeConverter::datetime_to_ob_time(usec, tz_info, ob_time))) {\
+      LOG_WARN("failed to convert datetime to ob_time", K(ret)); break;         \
+    }                                                                           \
+    res_vec.set_int(i, ob_time.parts_[PART_IDX]);                               \
+  }
+
+template <typename T_RES_VEC>
+static int process_vector_mysql_datetime_fast(
+    const ObFixedLengthFormat<RTCType<VEC_TC_DATETIME>> &arg_date_vec,
+    ObObjType date_type,
+    const EvalBound &bound, const ObBitVector &skip, ObBitVector &eval_flags,
+    const ObTimeZoneInfo *tz_info,
+    ObDateUnitType extract_field, T_RES_VEC &res_vec)
+{
+  int ret = OB_SUCCESS;
+  // For ObTimestampType, datetime is UTC and needs tz adjustment via datetime_to_ob_time.
+  const bool need_tz = (ObTimestampType == date_type && tz_info != NULL);
+  if (!need_tz) {
+    switch (extract_field) {
+      // ---- time-of-day fields: pure usec arithmetic ----
+      case DATE_UNIT_MICROSECOND:
+        for (int64_t i = bound.start(); i < bound.end(); ++i) {
+          if (skip.at(i) || eval_flags.at(i)) { continue; }
+          if (arg_date_vec.is_null(i)) { res_vec.set_null(i); continue; }
+          int64_t usec = arg_date_vec.get_int(i);
+          if (OB_UNLIKELY(usec == ObTimeConverter::ZERO_DATETIME)) { res_vec.set_int(i, 0); continue; }
+          int64_t day_usec = usec % USECS_PER_DAY;
+          if (OB_UNLIKELY(day_usec < 0)) { day_usec += USECS_PER_DAY; }
+          res_vec.set_int(i, day_usec % USECS_PER_SEC);
+        }
+        break;
+      case DATE_UNIT_SECOND:
+        for (int64_t i = bound.start(); i < bound.end(); ++i) {
+          if (skip.at(i) || eval_flags.at(i)) { continue; }
+          if (arg_date_vec.is_null(i)) { res_vec.set_null(i); continue; }
+          int64_t usec = arg_date_vec.get_int(i);
+          if (OB_UNLIKELY(usec == ObTimeConverter::ZERO_DATETIME)) { res_vec.set_int(i, 0); continue; }
+          int64_t day_usec = usec % USECS_PER_DAY;
+          if (OB_UNLIKELY(day_usec < 0)) { day_usec += USECS_PER_DAY; }
+          res_vec.set_int(i, (day_usec / USECS_PER_SEC) % SECS_PER_MIN);
+        }
+        break;
+      case DATE_UNIT_MINUTE:
+        for (int64_t i = bound.start(); i < bound.end(); ++i) {
+          if (skip.at(i) || eval_flags.at(i)) { continue; }
+          if (arg_date_vec.is_null(i)) { res_vec.set_null(i); continue; }
+          int64_t usec = arg_date_vec.get_int(i);
+          if (OB_UNLIKELY(usec == ObTimeConverter::ZERO_DATETIME)) { res_vec.set_int(i, 0); continue; }
+          int64_t day_usec = usec % USECS_PER_DAY;
+          if (OB_UNLIKELY(day_usec < 0)) { day_usec += USECS_PER_DAY; }
+          res_vec.set_int(i, (day_usec / USECS_PER_SEC / SECS_PER_MIN) % MINS_PER_HOUR);
+        }
+        break;
+      case DATE_UNIT_HOUR:
+        for (int64_t i = bound.start(); i < bound.end(); ++i) {
+          if (skip.at(i) || eval_flags.at(i)) { continue; }
+          if (arg_date_vec.is_null(i)) { res_vec.set_null(i); continue; }
+          int64_t usec = arg_date_vec.get_int(i);
+          if (OB_UNLIKELY(usec == ObTimeConverter::ZERO_DATETIME)) { res_vec.set_int(i, 0); continue; }
+          int64_t day_usec = usec % USECS_PER_DAY;
+          if (OB_UNLIKELY(day_usec < 0)) { day_usec += USECS_PER_DAY; }
+          res_vec.set_int(i, day_usec / USECS_PER_SEC / SECS_PER_MIN / MINS_PER_HOUR);
+        }
+        break;
+      // ---- date fields: date_to_ob_time only, skip time_to_ob_time ----
+      case DATE_UNIT_YEAR:
+        DATETIME_DATE_FIELD_LOOP_NOTZ(DT_YEAR)
+        break;
+      case DATE_UNIT_MONTH:
+        DATETIME_DATE_FIELD_LOOP_NOTZ(DT_MON)
+        break;
+      case DATE_UNIT_DAY:
+        DATETIME_DATE_FIELD_LOOP_NOTZ(DT_MDAY)
+        break;
+      case DATE_UNIT_QUARTER:
+        for (int64_t i = bound.start(); OB_SUCC(ret) && i < bound.end(); ++i) {
+          if (skip.at(i) || eval_flags.at(i)) { continue; }
+          if (arg_date_vec.is_null(i)) { res_vec.set_null(i); continue; }
+          int64_t usec = arg_date_vec.get_int(i);
+          if (OB_UNLIKELY(usec == ObTimeConverter::ZERO_DATETIME)) { res_vec.set_int(i, 0); continue; }
+          int32_t days = static_cast<int32_t>(usec / USECS_PER_DAY);
+          if (OB_UNLIKELY(usec < 0 && usec % USECS_PER_DAY != 0)) { --days; }
+          ObTime ob_time;
+          memset(&ob_time, 0, sizeof(ob_time));
+          if (OB_FAIL(ObTimeConverter::date_to_ob_time(days, ob_time))) {
+            LOG_WARN("failed to convert date to ob_time", K(ret)); break;
+          }
+          res_vec.set_int(i, (ob_time.parts_[DT_MON] + 2) / 3);
+        }
+        break;
+      default:
+        ret = OB_ERR_UNEXPECTED;
+    }
+  } else {
+    // need_tz: use datetime_to_ob_time (public API) which handles tz offset internally.
+    switch (extract_field) {
+      case DATE_UNIT_MICROSECOND: DATETIME_FIELD_LOOP_TZ(DT_USEC)  break;
+      case DATE_UNIT_SECOND:      DATETIME_FIELD_LOOP_TZ(DT_SEC)   break;
+      case DATE_UNIT_MINUTE:      DATETIME_FIELD_LOOP_TZ(DT_MIN)   break;
+      case DATE_UNIT_HOUR:        DATETIME_FIELD_LOOP_TZ(DT_HOUR)  break;
+      case DATE_UNIT_DAY:         DATETIME_FIELD_LOOP_TZ(DT_MDAY)  break;
+      case DATE_UNIT_MONTH:       DATETIME_FIELD_LOOP_TZ(DT_MON)   break;
+      case DATE_UNIT_YEAR:        DATETIME_FIELD_LOOP_TZ(DT_YEAR)  break;
+      case DATE_UNIT_QUARTER:
+        for (int64_t i = bound.start(); OB_SUCC(ret) && i < bound.end(); ++i) {
+          if (skip.at(i) || eval_flags.at(i)) { continue; }
+          if (arg_date_vec.is_null(i)) { res_vec.set_null(i); continue; }
+          int64_t usec = arg_date_vec.get_int(i);
+          if (OB_UNLIKELY(usec == ObTimeConverter::ZERO_DATETIME)) { res_vec.set_int(i, 0); continue; }
+          ObTime ob_time;
+          memset(&ob_time, 0, sizeof(ob_time));
+          if (OB_FAIL(ObTimeConverter::datetime_to_ob_time(usec, tz_info, ob_time))) {
+            LOG_WARN("failed to convert datetime to ob_time", K(ret)); break;
+          }
+          res_vec.set_int(i, (ob_time.parts_[DT_MON] + 2) / 3);
+        }
+        break;
+      default:
+        ret = OB_ERR_UNEXPECTED;
+    }
+  }
+  return ret;
+}
+
+#undef DATETIME_DATE_FIELD_LOOP_NOTZ
+#undef DATETIME_FIELD_LOOP_TZ
+
+// Fast path for DATE (int32_t days).
+// DATE only has year/month/day; caller must check can_fast_extract_date() before calling.
+template <typename T_RES_VEC>
+static int process_vector_mysql_date_fast(
+    const ObFixedLengthFormat<RTCType<VEC_TC_DATE>> &arg_date_vec,
+    const EvalBound &bound, const ObBitVector &skip, ObBitVector &eval_flags,
+    ObDateUnitType extract_field, T_RES_VEC &res_vec)
+{
+  int ret = OB_SUCCESS;
+// Helper: inner loop body for DATE cases that need date_to_ob_time.
+#define DATE_FIELD_LOOP(PART_IDX)                                               \
+  for (int64_t i = bound.start(); OB_SUCC(ret) && i < bound.end(); ++i) {      \
+    if (skip.at(i) || eval_flags.at(i)) { continue; }                          \
+    if (arg_date_vec.is_null(i)) { res_vec.set_null(i); continue; }             \
+    int32_t days = arg_date_vec.get_int(i);                                     \
+    if (OB_UNLIKELY(days == ObTimeConverter::ZERO_DATE)) {                      \
+      res_vec.set_int(i, 0); continue;                                          \
+    }                                                                           \
+    ObTime ob_time;                                                             \
+    memset(&ob_time, 0, sizeof(ob_time));                                       \
+    if (OB_FAIL(ObTimeConverter::date_to_ob_time(days, ob_time))) {             \
+      LOG_WARN("failed to convert date to ob_time", K(ret)); break;             \
+    }                                                                           \
+    res_vec.set_int(i, ob_time.parts_[PART_IDX]);                               \
+  }
+  switch (extract_field) {
+    case DATE_UNIT_YEAR:
+      DATE_FIELD_LOOP(DT_YEAR)
+      break;
+    case DATE_UNIT_MONTH:
+      DATE_FIELD_LOOP(DT_MON)
+      break;
+    case DATE_UNIT_DAY:
+      DATE_FIELD_LOOP(DT_MDAY)
+      break;
+    case DATE_UNIT_QUARTER:
+      for (int64_t i = bound.start(); OB_SUCC(ret) && i < bound.end(); ++i) {
+        if (skip.at(i) || eval_flags.at(i)) { continue; }
+        if (arg_date_vec.is_null(i)) { res_vec.set_null(i); continue; }
+        int32_t days = arg_date_vec.get_int(i);
+        if (OB_UNLIKELY(days == ObTimeConverter::ZERO_DATE)) { res_vec.set_int(i, 0); continue; }
+        ObTime ob_time;
+        memset(&ob_time, 0, sizeof(ob_time));
+        if (OB_FAIL(ObTimeConverter::date_to_ob_time(days, ob_time))) {
+          LOG_WARN("failed to convert date to ob_time", K(ret)); break;
+        }
+        res_vec.set_int(i, (ob_time.parts_[DT_MON] + 2) / 3);
+      }
+      break;
+    default:
+      ret = OB_ERR_UNEXPECTED;
+  }
+#undef DATE_FIELD_LOOP
+  return ret;
+}
+
+// Fast path for MYSQL_DATETIME (bit-packed int64_t).
+// Fields are stored directly in the struct; no conversion needed.
+// Caller must check can_fast_extract() before calling.
+template <typename T_RES_VEC>
+static int process_vector_mysql_mysqldatetime_fast(
+    const ObFixedLengthFormat<RTCType<VEC_TC_MYSQL_DATETIME>> &arg_date_vec,
+    const EvalBound &bound, const ObBitVector &skip, ObBitVector &eval_flags,
+    ObDateUnitType extract_field, T_RES_VEC &res_vec)
+{
+  int ret = OB_SUCCESS;
+// Helper: inner loop body for MYSQL_DATETIME reading a member field directly.
+#define MDT_FIELD_LOOP(MEMBER)                                                  \
+  for (int64_t i = bound.start(); i < bound.end(); ++i) {                      \
+    if (skip.at(i) || eval_flags.at(i)) { continue; }                          \
+    if (arg_date_vec.is_null(i)) { res_vec.set_null(i); continue; }             \
+    const ObMySQLDateTime &mdt =                                                \
+        *reinterpret_cast<const ObMySQLDateTime *>(arg_date_vec.get_payload(i));\
+    if (OB_UNLIKELY(mdt.datetime_ == ObTimeConverter::MYSQL_ZERO_DATETIME)) {   \
+      res_vec.set_int(i, 0); continue;                                          \
+    }                                                                           \
+    res_vec.set_int(i, mdt.MEMBER);                                             \
+  }
+  switch (extract_field) {
+    case DATE_UNIT_YEAR:
+      for (int64_t i = bound.start(); i < bound.end(); ++i) {
+        if (skip.at(i) || eval_flags.at(i)) { continue; }
+        if (arg_date_vec.is_null(i)) { res_vec.set_null(i); continue; }
+        const ObMySQLDateTime &mdt =
+            *reinterpret_cast<const ObMySQLDateTime *>(arg_date_vec.get_payload(i));
+        if (OB_UNLIKELY(mdt.datetime_ == ObTimeConverter::MYSQL_ZERO_DATETIME)) {
+          res_vec.set_int(i, 0); continue;
+        }
+        res_vec.set_int(i, mdt.year());
+      }
+      break;
+    case DATE_UNIT_MONTH:
+      for (int64_t i = bound.start(); i < bound.end(); ++i) {
+        if (skip.at(i) || eval_flags.at(i)) { continue; }
+        if (arg_date_vec.is_null(i)) { res_vec.set_null(i); continue; }
+        const ObMySQLDateTime &mdt =
+            *reinterpret_cast<const ObMySQLDateTime *>(arg_date_vec.get_payload(i));
+        if (OB_UNLIKELY(mdt.datetime_ == ObTimeConverter::MYSQL_ZERO_DATETIME)) {
+          res_vec.set_int(i, 0); continue;
+        }
+        res_vec.set_int(i, mdt.month());
+      }
+      break;
+    case DATE_UNIT_QUARTER:
+      for (int64_t i = bound.start(); i < bound.end(); ++i) {
+        if (skip.at(i) || eval_flags.at(i)) { continue; }
+        if (arg_date_vec.is_null(i)) { res_vec.set_null(i); continue; }
+        const ObMySQLDateTime &mdt =
+            *reinterpret_cast<const ObMySQLDateTime *>(arg_date_vec.get_payload(i));
+        if (OB_UNLIKELY(mdt.datetime_ == ObTimeConverter::MYSQL_ZERO_DATETIME)) {
+          res_vec.set_int(i, 0); continue;
+        }
+        res_vec.set_int(i, (mdt.month() + 2) / 3);
+      }
+      break;
+    case DATE_UNIT_DAY:       MDT_FIELD_LOOP(day_)          break;
+    case DATE_UNIT_HOUR:      MDT_FIELD_LOOP(hour_)         break;
+    case DATE_UNIT_MINUTE:    MDT_FIELD_LOOP(minute_)       break;
+    case DATE_UNIT_SECOND:    MDT_FIELD_LOOP(second_)       break;
+    case DATE_UNIT_MICROSECOND: MDT_FIELD_LOOP(microseconds_) break;
+    default:
+      ret = OB_ERR_UNEXPECTED;
+  }
+#undef MDT_FIELD_LOOP
+  return ret;
+}
+
+// Fast path for MYSQL_DATE (bit-packed int32_t).
+// Caller must check can_fast_extract_date() before calling.
+template <typename T_RES_VEC>
+static int process_vector_mysql_mysqldate_fast(
+    const ObFixedLengthFormat<RTCType<VEC_TC_MYSQL_DATE>> &arg_date_vec,
+    const EvalBound &bound, const ObBitVector &skip, ObBitVector &eval_flags,
+    ObDateUnitType extract_field, T_RES_VEC &res_vec)
+{
+  int ret = OB_SUCCESS;
+// Helper: inner loop body for MYSQL_DATE reading a member field directly.
+#define MD_FIELD_LOOP(MEMBER)                                                   \
+  for (int64_t i = bound.start(); i < bound.end(); ++i) {                      \
+    if (skip.at(i) || eval_flags.at(i)) { continue; }                          \
+    if (arg_date_vec.is_null(i)) { res_vec.set_null(i); continue; }             \
+    const ObMySQLDate &md =                                                     \
+        *reinterpret_cast<const ObMySQLDate *>(arg_date_vec.get_payload(i));    \
+    if (OB_UNLIKELY(md.date_ == ObTimeConverter::MYSQL_ZERO_DATE)) {            \
+      res_vec.set_int(i, 0); continue;                                          \
+    }                                                                           \
+    res_vec.set_int(i, md.MEMBER);                                              \
+  }
+  switch (extract_field) {
+    case DATE_UNIT_YEAR:  MD_FIELD_LOOP(year_)  break;
+    case DATE_UNIT_MONTH: MD_FIELD_LOOP(month_) break;
+    case DATE_UNIT_DAY:   MD_FIELD_LOOP(day_)   break;
+    case DATE_UNIT_QUARTER:
+      for (int64_t i = bound.start(); i < bound.end(); ++i) {
+        if (skip.at(i) || eval_flags.at(i)) { continue; }
+        if (arg_date_vec.is_null(i)) { res_vec.set_null(i); continue; }
+        const ObMySQLDate &md =
+            *reinterpret_cast<const ObMySQLDate *>(arg_date_vec.get_payload(i));
+        if (OB_UNLIKELY(md.date_ == ObTimeConverter::MYSQL_ZERO_DATE)) {
+          res_vec.set_int(i, 0); continue;
+        }
+        res_vec.set_int(i, (md.month_ + 2) / 3);
+      }
+      break;
+    default:
+      ret = OB_ERR_UNEXPECTED;
+  }
+#undef MD_FIELD_LOOP
+  return ret;
+}
+
+// Check whether the extract field is supported by the fast path (datetime types).
+// Covers all simple fields: YEAR/MONTH/DAY/QUARTER/HOUR/MINUTE/SECOND/MICROSECOND.
+// Compound fields (e.g. DAY_HOUR, MINUTE_SECOND, WEEK) are not supported.
+static inline bool can_fast_extract(ObDateUnitType field)
+{
+  bool ret = false;
+  switch (field) {
+    case DATE_UNIT_MICROSECOND:
+    case DATE_UNIT_SECOND:
+    case DATE_UNIT_MINUTE:
+    case DATE_UNIT_HOUR:
+    case DATE_UNIT_DAY:
+    case DATE_UNIT_MONTH:
+    case DATE_UNIT_YEAR:
+    case DATE_UNIT_QUARTER:
+      ret = true;
+      break;
+    default:
+      ret = false;
+  }
+  return ret;
+}
+
+// Check whether the extract field is supported by the fast path for date-only types
+// (VEC_TC_DATE / VEC_TC_MYSQL_DATE). Only date components, no time fields.
+static inline bool can_fast_extract_date(ObDateUnitType field)
+{
+  bool ret = false;
+  switch (field) {
+    case DATE_UNIT_YEAR:
+    case DATE_UNIT_MONTH:
+    case DATE_UNIT_DAY:
+    case DATE_UNIT_QUARTER:
+      ret = true;
+      break;
+    default:
+      ret = false;
+  }
+  return ret;
+}
+
 template <typename T_ARG_VEC, typename T_RES_VEC>
 int process_vector_mysql(const ObExpr &expr, const T_ARG_VEC &arg_date_vec, ObObjType date_type,
                     const EvalBound &bound, const ObBitVector &skip, ObBitVector &eval_flags,
@@ -754,104 +1139,128 @@ int sql::ObExprExtract::calc_extract_mysql_vector(const ObExpr &expr, ObEvalCtx 
             skip, eval_flags, session, ctx, extract_field,
             static_cast<ObVectorBase &>(*res_vec));
       } else {
+        using IntVec = ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>;
+        IntVec &res_int_vec = static_cast<IntVec &>(*res_vec);
         switch (date_vec_tc) {
-        case (VEC_TC_DATETIME):
-          ret = process_vector_mysql<
-              ObFixedLengthFormat<RTCType<VEC_TC_DATETIME>>,
-              ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>>(
-              expr,
-              static_cast<ObFixedLengthFormat<RTCType<VEC_TC_DATETIME>> &>(
-                  *arg_date_vec),
-              date_type, bound, skip, eval_flags, session, ctx, extract_field,
-              static_cast<ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>> &>(
-                  *res_vec));
+        case (VEC_TC_DATETIME): {
+          using ArgVec = ObFixedLengthFormat<RTCType<VEC_TC_DATETIME>>;
+          ArgVec &arg_vec = static_cast<ArgVec &>(*arg_date_vec);
+          if (can_fast_extract(extract_field)) {
+            ret = process_vector_mysql_datetime_fast(
+                arg_vec, date_type, bound, skip, eval_flags,
+                get_timezone_info(session), extract_field, res_int_vec);
+          } else {
+            ret = process_vector_mysql<ArgVec, IntVec>(
+                expr, arg_vec, date_type, bound, skip, eval_flags, session, ctx,
+                extract_field, res_int_vec);
+          }
           break;
-        case (VEC_TC_DATE):
-          ret = process_vector_mysql<
-              ObFixedLengthFormat<RTCType<VEC_TC_DATE>>,
-              ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>>(
-              expr,
-              static_cast<ObFixedLengthFormat<RTCType<VEC_TC_DATE>> &>(
-                  *arg_date_vec),
-              date_type, bound, skip, eval_flags, session, ctx, extract_field,
-              static_cast<ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>> &>(
-                  *res_vec));
+        }
+        case (VEC_TC_DATE): {
+          using ArgVec = ObFixedLengthFormat<RTCType<VEC_TC_DATE>>;
+          ArgVec &arg_vec = static_cast<ArgVec &>(*arg_date_vec);
+          if (can_fast_extract_date(extract_field)) {
+            ret = process_vector_mysql_date_fast(
+                arg_vec, bound, skip, eval_flags, extract_field, res_int_vec);
+          } else {
+            ret = process_vector_mysql<ArgVec, IntVec>(
+                expr, arg_vec, date_type, bound, skip, eval_flags, session, ctx,
+                extract_field, res_int_vec);
+          }
           break;
-
+        }
+        case (VEC_TC_MYSQL_DATETIME): {
+          using ArgVec = ObFixedLengthFormat<RTCType<VEC_TC_MYSQL_DATETIME>>;
+          ArgVec &arg_vec = static_cast<ArgVec &>(*arg_date_vec);
+          if (can_fast_extract(extract_field)) {
+            ret = process_vector_mysql_mysqldatetime_fast(
+                arg_vec, bound, skip, eval_flags, extract_field, res_int_vec);
+          } else {
+            ret = process_vector_mysql<ArgVec, IntVec>(
+                expr, arg_vec, date_type, bound, skip, eval_flags, session, ctx,
+                extract_field, res_int_vec);
+          }
+          break;
+        }
+        case (VEC_TC_MYSQL_DATE): {
+          using ArgVec = ObFixedLengthFormat<RTCType<VEC_TC_MYSQL_DATE>>;
+          ArgVec &arg_vec = static_cast<ArgVec &>(*arg_date_vec);
+          if (can_fast_extract_date(extract_field)) {
+            ret = process_vector_mysql_mysqldate_fast(
+                arg_vec, bound, skip, eval_flags, extract_field, res_int_vec);
+          } else {
+            ret = process_vector_mysql<ArgVec, IntVec>(
+                expr, arg_vec, date_type, bound, skip, eval_flags, session, ctx,
+                extract_field, res_int_vec);
+          }
+          break;
+        }
         case (VEC_TC_TIME):
           ret = process_vector_mysql<
               ObFixedLengthFormat<RTCType<VEC_TC_TIME>>,
-              ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>>(
+              IntVec>(
               expr,
               static_cast<ObFixedLengthFormat<RTCType<VEC_TC_TIME>> &>(
                   *arg_date_vec),
               date_type, bound, skip, eval_flags, session, ctx, extract_field,
-              static_cast<ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>> &>(
-                  *res_vec));
+              res_int_vec);
           break;
         case (VEC_TC_YEAR):
           ret = process_vector_mysql<
               ObFixedLengthFormat<RTCType<VEC_TC_YEAR>>,
-              ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>>(
+              IntVec>(
               expr,
               static_cast<ObFixedLengthFormat<RTCType<VEC_TC_YEAR>> &>(
                   *arg_date_vec),
               date_type, bound, skip, eval_flags, session, ctx, extract_field,
-              static_cast<ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>> &>(
-                  *res_vec));
+              res_int_vec);
           break;
-
         case (VEC_TC_TIMESTAMP_TZ):
           ret = process_vector_mysql<
               ObFixedLengthFormat<RTCType<VEC_TC_TIMESTAMP_TZ>>,
-              ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>>(
+              IntVec>(
               expr,
               static_cast<ObFixedLengthFormat<RTCType<VEC_TC_TIMESTAMP_TZ>> &>(
                   *arg_date_vec),
               date_type, bound, skip, eval_flags, session, ctx, extract_field,
-              static_cast<ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>> &>(
-                  *res_vec));
+              res_int_vec);
           break;
         case (VEC_TC_TIMESTAMP_TINY):
           ret = process_vector_mysql<
               ObFixedLengthFormat<RTCType<VEC_TC_TIMESTAMP_TINY>>,
-              ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>>(
+              IntVec>(
               expr,
               static_cast<ObFixedLengthFormat<RTCType<VEC_TC_TIMESTAMP_TINY>>
                               &>(*arg_date_vec),
               date_type, bound, skip, eval_flags, session, ctx, extract_field,
-              static_cast<ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>> &>(
-                  *res_vec));
+              res_int_vec);
           break;
         case (VEC_TC_INTERVAL_YM):
           ret = process_vector_mysql<
               ObFixedLengthFormat<RTCType<VEC_TC_INTERVAL_YM>>,
-              ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>>(
+              IntVec>(
               expr,
               static_cast<ObFixedLengthFormat<RTCType<VEC_TC_INTERVAL_YM>> &>(
                   *arg_date_vec),
               date_type, bound, skip, eval_flags, session, ctx, extract_field,
-              static_cast<ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>> &>(
-                  *res_vec));
+              res_int_vec);
           break;
         case (VEC_TC_INTERVAL_DS):
           ret = process_vector_mysql<
               ObFixedLengthFormat<RTCType<VEC_TC_INTERVAL_DS>>,
-              ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>>(
+              IntVec>(
               expr,
               static_cast<ObFixedLengthFormat<RTCType<VEC_TC_INTERVAL_DS>> &>(
                   *arg_date_vec),
               date_type, bound, skip, eval_flags, session, ctx, extract_field,
-              static_cast<ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>> &>(
-                  *res_vec));
+              res_int_vec);
           break;
         default:
           ret = process_vector_mysql<
-              ObVectorBase, ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>>(
+              ObVectorBase, IntVec>(
               expr, static_cast<ObVectorBase &>(*arg_date_vec), date_type,
               bound, skip, eval_flags, session, ctx, extract_field,
-              static_cast<ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>> &>(
-                  *res_vec));
+              res_int_vec);
         }
       }
     } else {

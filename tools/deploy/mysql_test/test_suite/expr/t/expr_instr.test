@@ -70,12 +70,845 @@ select instr(null, c1) from test;
 select instr() from dual;
 --error 1582
 select instr('abcda') from dual;
---error 1582
-select instr('abcda', 'a', 1) from dual;
---error 1582
-select instr('abcda', 'a', 1, 1) from dual;
+
+# 测试第三个参数 position
+select instr('Hologres', 'o', 1) from dual;
+select instr('Hologres', 'o', 3) from dual;
+select instr('Hologres', 'o', 5) from dual;
+select instr('foobarbar', 'bar', 4) from dual;
+select instr('abcabcabc', 'abc', 4) from dual;
+
+# 测试第四个参数 occurrence
+select instr('Hologres', 'o', 1, 1) from dual;
+select instr('Hologres', 'o', 1, 2) from dual;
+select instr('Hologres', 'o', 1, 3) from dual;
+select instr('foobarbar', 'bar', 1, 2) from dual;
+select instr('abcabcabc', 'abc', 1, 2) from dual;
+select instr('abcabcabc', 'abc', 1, 3) from dual;
+
+# 测试负数位置（反向搜索）
+select instr('abcdef', 'c', -1, 1) from dual;
+select instr('abcdef', 'c', -3, 1) from dual;
+select instr('abcabc', 'a', -1, 1) from dual;
+select instr('abcabc', 'a', -1, 2) from dual;
+select instr('abcabc', 'b', -2, 1) from dual;
+
+# 边界测试
+select instr('abc', '', 1, 1) from dual;
+select instr('abc', 'b', 0, 1) from dual;
+select instr('abc', 'b', 1, 0) from dual;
+select instr('abc', 'b', 10, 1) from dual;
+select instr('abc', 'd', 1, 1) from dual;
+
+# null 参数测试
+select instr('abc', 'b', null) from dual;
+select instr('abc', 'b', 1, null) from dual;
+select instr('abc', null, 1, 1) from dual;
+select instr(null, 'b', 1, 1) from dual;
 
 --disable_warnings
 drop table test;
+--enable_warnings
+
+--echo ================ complex test cases for instr with position and occurrence ================
+
+# 创建测试表
+--disable_warnings
+drop table if exists t_instr_test;
+--enable_warnings
+create table t_instr_test (
+  id int primary key,
+  str_col varchar(100),
+  pattern_col varchar(50),
+  pos_col int,
+  occ_col int
+);
+
+# 插入测试数据
+insert into t_instr_test values
+(1, 'foobarbar', 'bar', 1, 1),
+(2, 'foobarbar', 'bar', 4, 1),
+(3, 'foobarbar', 'bar', 1, 2),
+(4, 'abcabcabc', 'abc', 1, 1),
+(5, 'abcabcabc', 'abc', 1, 2),
+(6, 'abcabcabc', 'abc', 1, 3),
+(7, 'abcabcabc', 'abc', 4, 1),
+(8, '阿里巴巴巴巴', '巴巴', 1, 1),
+(9, '阿里巴巴巴巴', '巴巴', 1, 2),
+(10, 'abcdef', 'c', -1, 1);
+
+# 测试表列作为参数
+select id, instr(str_col, pattern_col) as result from t_instr_test order by id;
+select id, instr(str_col, pattern_col, pos_col) as result from t_instr_test where pos_col > 0 order by id;
+select id, instr(str_col, pattern_col, pos_col, occ_col) as result from t_instr_test order by id;
+
+# 测试表达式作为参数
+select instr(concat('foo', 'barbar'), 'bar', 1 + 2, 2 - 1) as expr_test1;
+select instr(repeat('ab', 5), 'ab', 3, 2) as expr_test2;
+select instr(upper('foobarbar'), 'BAR', 1, 1) as expr_test3;
+select instr(lower('FOOBARBAR'), 'bar', 1, 2) as expr_test4;
+select instr(lpad('abc', 10, 'x'), 'abc', 1, 1) as expr_test5;
+select instr(rpad('abc', 10, 'x'), 'xxx', 1, 1) as expr_test6;
+
+# 测试函数嵌套
+select instr(substr('foobarbar', 1, 6), 'bar', 1, 1) as nested_test1;
+select instr(replace('fooXXXbar', 'XXX', 'bar'), 'bar', 1, 2) as nested_test2;
+select substr('foobarbar', instr('foobarbar', 'bar', 1, 1), 3) as nested_test3;
+select substr('foobarbar', instr('foobarbar', 'bar', 1, 2), 3) as nested_test4;
+
+# 测试 CASE WHEN 表达式
+select instr('foobarbar', 'bar',
+  case when 1=1 then 1 else 4 end,
+  case when 2=2 then 2 else 1 end) as case_test1;
+select instr('abcabc', 'a',
+  case when id > 5 then -1 else 1 end, 1) as case_test2
+from t_instr_test where id = 10;
+
+# 测试聚合函数结合
+select max(instr(str_col, pattern_col, 1, 1)) as max_result from t_instr_test;
+select min(instr(str_col, pattern_col, 1, 1)) as min_result from t_instr_test;
+select sum(instr(str_col, pattern_col, 1, 1)) as sum_result from t_instr_test where instr(str_col, pattern_col, 1, 1) > 0;
+select avg(instr(str_col, pattern_col, 1, 1)) as avg_result from t_instr_test;
+
+# 测试 GROUP BY
+select pos_col, count(*) as cnt, sum(instr(str_col, pattern_col, pos_col, occ_col)) as sum_instr
+from t_instr_test where pos_col > 0 group by pos_col order by pos_col;
+
+# 测试 HAVING
+select pos_col, count(*) as cnt
+from t_instr_test
+group by pos_col
+having sum(instr(str_col, pattern_col, pos_col, occ_col)) > 3
+order by pos_col;
+
+# 测试 WHERE 子句中使用 instr
+select id, str_col from t_instr_test where instr(str_col, pattern_col, 1, 1) > 0 order by id;
+select id, str_col from t_instr_test where instr(str_col, pattern_col, 1, 2) > 0 order by id;
+select id, str_col from t_instr_test where instr(str_col, 'abc', 1, 1) = 1 order by id;
+
+# 测试 ORDER BY 中使用 instr
+select id, str_col, instr(str_col, pattern_col, 1, 1) as pos
+from t_instr_test order by instr(str_col, pattern_col, 1, 1) desc;
+
+# 测试子查询
+select id, str_col,
+  (select instr(t1.str_col, t1.pattern_col, t1.pos_col, t1.occ_col) from dual) as subquery_result
+from t_instr_test t1 where id <= 3 order by id;
+
+# 测试 JOIN 中使用 instr
+select t1.id, t1.str_col, t2.str_col as str_col2,
+  instr(t1.str_col, t2.pattern_col, 1, 1) as join_instr
+from t_instr_test t1
+join t_instr_test t2 on t1.id = t2.id - 1
+where instr(t1.str_col, t2.pattern_col, 1, 1) > 0
+order by t1.id;
+
+# 测试不同数据类型转换
+select instr(cast('12345' as char), cast(34 as char), 2, 1) as cast_test1;
+select instr(cast(12345.67 as char), '.', 1, 1) as cast_test2;
+select instr(cast('2023-01-15' as date), '2023', 1, 1) as cast_test3;
+
+# 测试 NULL 值处理
+insert into t_instr_test values (11, 'abcabc', NULL, 1, 1);
+insert into t_instr_test values (12, NULL, 'abc', 1, 1);
+insert into t_instr_test values (13, 'abcabc', 'abc', NULL, 1);
+insert into t_instr_test values (14, 'abcabc', 'abc', 1, NULL);
+
+select id, instr(str_col, pattern_col, pos_col, occ_col) as result from t_instr_test where id > 10 order by id;
+select id, coalesce(instr(str_col, pattern_col, pos_col, occ_col), -1) as result from t_instr_test where id > 10 order by id;
+
+# 测试边界值
+select instr('a', 'a', 1, 1) as boundary_test1;
+select instr('a', 'a', -1, 1) as boundary_test2;
+select instr('aaaaaaaaaa', 'a', 1, 10) as boundary_test3;
+select instr('aaaaaaaaaa', 'a', 1, 11) as boundary_test4;
+select instr('aaaaaaaaaa', 'a', 10, 1) as boundary_test5;
+select instr('aaaaaaaaaa', 'a', 11, 1) as boundary_test6;
+select instr('aaaaaaaaaa', 'a', -10, 1) as boundary_test7;
+select instr('aaaaaaaaaa', 'a', -11, 1) as boundary_test8;
+
+# 测试负数 position 和 occurrence 组合
+select instr('abcabcabc', 'abc', -1, 1) as neg_pos_test1;
+select instr('abcabcabc', 'abc', -1, 2) as neg_pos_test2;
+select instr('abcabcabc', 'abc', -1, 3) as neg_pos_test3;
+select instr('abcabcabc', 'abc', -5, 1) as neg_pos_test4;
+select instr('abcabcabc', 'abc', -5, 2) as neg_pos_test5;
+
+# 测试特殊字符
+select instr('foo-bar-baz', '-', 1, 1) as special_char_test1;
+select instr('foo-bar-baz', '-', 1, 2) as special_char_test2;
+select instr('foo-bar-baz', '-', -1, 1) as special_char_test3;
+select instr('foo bar baz', ' ', 1, 2) as special_char_test4;
+select instr('foo	bar	baz', '	', 1, 2) as special_char_test5;
+
+# 测试 Unicode 字符
+select instr('你好世界你好', '你好', 1, 1) as unicode_test1;
+select instr('你好世界你好', '你好', 1, 2) as unicode_test2;
+select instr('你好世界你好', '你好', -1, 1) as unicode_test3;
+select instr('🎉🎊🎉🎈🎉', '🎉', 1, 1) as emoji_test1;
+select instr('🎉🎊🎉🎈🎉', '🎉', 1, 2) as emoji_test2;
+select instr('🎉🎊🎉🎈🎉', '🎉', 1, 3) as emoji_test3;
+
+--echo ================ design supplement: arity / boundaries =========
+
+# 5 参应报错（design G）
+--error 1582
+select instr('a', 'b', 1, 1, 1) from dual;
+
+# 2 参回归 vs 4 参默认等价（design A / 3.1）
+select instr('foobarbar', 'bar') from dual;
+select instr('foobarbar', 'bar', 1, 1) from dual;
+select instr('Hologres', 'o') from dual;
+select instr('Hologres', 'o', 1, 1) from dual;
+
+# occurrence 未找满次数返回 0（向量化与标量一致）
+select instr('aaa', 'a', 1, 3) from dual;
+select instr('aaa', 'a', 1, 4) from dual;
+select instr('foobarbar', 'bar', 1, 3) from dual;
+select instr('abcabcabc', 'abc', 1, 4) from dual;
+
+# occurrence <= 0、position 边界补充
+select instr('abc', 'b', 1, -1) from dual;
+select instr('abc', 'b', 1, -2) from dual;
+select instr('abc', 'b', -100, 1) from dual;
+select instr('abc', 'b', 1, 1) from dual;
+select instr('x', 'x', 2, 1) from dual;
+select instr('x', 'x', -2, 1) from dual;
+
+# 反向 position 设计样例（design B）
+select instr('abcdef', 'c', -1, 1) from dual;
+select instr('abcabc', 'a', -1, 2) from dual;
+select instr('阿里巴巴巴巴', '巴巴', 1, 1) from dual;
+select instr('阿里巴巴巴巴', '巴巴', 1, 2) from dual;
+
+# 特殊值：二进制、转义、整串、重复分隔
+select instr(x'414243', x'42', 1, 1) from dual;
+select instr('line1\nline2', '\n', 1, 1) from dual;
+select instr('line1\nline2', '\n', 1, 2) from dual;
+select instr('only', 'only', 1, 1) from dual;
+select instr('only', 'only', 2, 1) from dual;
+select instr('a|b|c|d', '|', 1, 3) from dual;
+select instr('a|b|c|d', '|', -1, 1) from dual;
+select instr('....', '.', 1, 2) from dual;
+select instr('....', '.', 1, 5) from dual;
+
+# 类型：position/occurrence 表达式与隐式转换
+select instr('abcabc', 'bc', cast(2 as signed), cast(1 as signed)) from dual;
+select instr('abcabc', 'bc', 1.9, 1.0) from dual;
+select instr('abc', 'b', '1', '1') from dual;
+
+--echo ================ orthogonal: other functions ================
+
+# 与 SUBSTR / LEFT / RIGHT / TRIM 组合（design H）
+select substr('foobarbar', instr('foobarbar', 'bar', 1, 1), instr('bar', 'r', 1, 1)) from dual;
+select left('foobarbar', instr('foobarbar', 'bar', 1, 1) + 2) from dual;
+select right('foobarbar', length('foobarbar') - instr('foobarbar', 'bar', 1, 2) + 1) from dual;
+select trim(substr('  foobarbar  ', instr('foobarbar', 'bar', 1, 1), 3)) from dual;
+
+# 与 LOCATE 对照（2 参 INSTR 与 LOCATE 语义一致）
+select instr('foobarbar', 'bar') = locate('bar', 'foobarbar') from dual;
+select instr('abcabc', 'a', 1, 2) = locate('a', 'abcabc', 2) from dual;
+
+# 条件 / NULL 函数
+select ifnull(instr('abc', 'x', 1, 1), -1) from dual;
+select nullif(instr('abc', 'b', 1, 1), 0) from dual;
+select coalesce(instr(null, 'a', 1, 1), instr('abc', 'b', 1, 1), 0) from dual;
+select case when instr('abcabc', 'bc', 1, 1) > 0 then instr('abcabc', 'bc', 1, 2) else 0 end from dual;
+
+# 字符串函数嵌套
+select instr(concat('foo', 'bar', 'bar'), concat('b', 'ar'), 1, 2) from dual;
+select instr(trim('  foobar  '), 'foo', 1, 1) from dual;
+select instr(replace('a-b-c', '-', ''), 'bc', 1, 1) from dual;
+select instr(reverse('rabraboof'), reverse('bar'), 1, 1) from dual;
+select instr(lpad('xy', 6, 'ab'), 'abx', 1, 1) from dual;
+select instr(concat_ws('-', 'foo', 'bar', 'baz'), 'bar', 1, 1) from dual;
+
+# 数值 / 比较
+select greatest(instr('abc', 'a', 1, 1), instr('abc', 'c', 1, 1)) from dual;
+select least(instr('abcabc', 'a', 1, 1), instr('abcabc', 'a', 1, 2)) from dual;
+select sign(instr('abc', 'd', 1, 1)) from dual;
+select abs(instr('abc', 'b', 1, 1) - 2) from dual;
+
+# 表驱动：WHERE / HAVING / ORDER BY 与函数嵌套
+select id, instr(str_col, pattern_col, pos_col, occ_col) as r
+from t_instr_test
+where instr(str_col, pattern_col, 1, 1) <= instr(str_col, pattern_col, 1, 2)
+  and id between 1 and 6
+order by id;
+
+select pos_col, sum(instr(str_col, pattern_col, pos_col, occ_col)) as s
+from t_instr_test
+where pos_col > 0
+group by pos_col
+having max(instr(str_col, pattern_col, pos_col, 1)) >= 0
+order by pos_col;
+
+# CTE
+with w as (
+  select id, instr(str_col, pattern_col, pos_col, occ_col) as r
+  from t_instr_test where id <= 6
+)
+select id, r, instr(str_col, pattern_col, 1, 1) as r_first
+from t_instr_test t join w using (id)
+order by id;
+
+--echo ================ vector path: rowsets off on column args =====
+select id, instr(str_col, pattern_col, pos_col, occ_col) as r
+from t_instr_test
+where id in (1, 4, 7, 8)
+order by id;
+
+select /*+ opt_param('rowsets_enabled', 'false') */ id,
+  instr(str_col, pattern_col, pos_col, occ_col) as r
+from t_instr_test
+where id in (1, 4, 7, 8)
+order by id;
+
+select /*+ opt_param('rowsets_enabled', 'false') */ id,
+  instr(str_col, pattern_col) as r2,
+  instr(str_col, pattern_col, pos_col) as r3
+from t_instr_test
+where pos_col <> 0
+order by id;
+
+# 多类型列（char / varchar / text）
+--disable_warnings
+drop table if exists t_instr_types;
+--enable_warnings
+create table t_instr_types (
+  id int primary key,
+  c_char char(32),
+  c_varchar varchar(100),
+  c_text text,
+  pat varchar(20),
+  pos int,
+  occ int
+);
+insert into t_instr_types values
+(1, 'foobarbar', 'foobarbar', 'foobarbar', 'bar', 1, 2),
+(2, '阿里巴巴巴巴', '阿里巴巴巴巴', '阿里巴巴巴巴', '巴巴', 1, 2),
+(3, 'abcabcabc', 'abcabcabc', 'abcabcabc', 'abc', -1, 1);
+
+select id,
+  instr(c_char, pat, pos, occ),
+  instr(c_varchar, pat, pos, occ),
+  instr(c_text, pat, pos, occ)
+from t_instr_types order by id;
+
+select /*+ opt_param('rowsets_enabled', 'false') */ id,
+  instr(c_char, pat, pos, occ),
+  instr(c_varchar, pat, pos, occ),
+  instr(c_text, pat, pos, occ)
+from t_instr_types order by id;
+
+--disable_warnings
+drop table t_instr_types;
+--enable_warnings
+
+# 测试 UPDATE 中使用 instr
+update t_instr_test set str_col = concat(str_col, '_modified') where instr(str_col, 'abc', 1, 1) > 0;
+select id, str_col from t_instr_test where str_col like '%modified%' order by id;
+
+--echo ============================================================
+--echo === design supplement: prepared statement =================
+--echo ============================================================
+--echo # 2-arg prepared
+prepare stmt_instr2 from 'select instr(?, ?) as r from dual';
+set @s1 = 'foobarbar';
+set @s2 = 'bar';
+execute stmt_instr2 using @s1, @s2;
+set @s1 = '阿里巴巴';
+set @s2 = '巴巴';
+execute stmt_instr2 using @s1, @s2;
+set @s1 = NULL;
+set @s2 = 'bar';
+execute stmt_instr2 using @s1, @s2;
+deallocate prepare stmt_instr2;
+
+--echo # 3-arg prepared
+prepare stmt_instr3 from 'select instr(?, ?, ?) as r from dual';
+set @s1 = 'Hologres';
+set @s2 = 'o';
+set @n3 = 3;
+execute stmt_instr3 using @s1, @s2, @n3;
+set @n3 = -1;
+execute stmt_instr3 using @s1, @s2, @n3;
+set @n3 = NULL;
+execute stmt_instr3 using @s1, @s2, @n3;
+deallocate prepare stmt_instr3;
+
+--echo # 4-arg prepared
+prepare stmt_instr4 from 'select instr(?, ?, ?, ?) as r from dual';
+set @s1 = 'foobarbar';
+set @s2 = 'bar';
+set @n3 = 1;
+set @n4 = 2;
+execute stmt_instr4 using @s1, @s2, @n3, @n4;
+set @n3 = -1;
+set @n4 = 1;
+execute stmt_instr4 using @s1, @s2, @n3, @n4;
+set @n4 = NULL;
+execute stmt_instr4 using @s1, @s2, @n3, @n4;
+deallocate prepare stmt_instr4;
+
+--echo ============================================================
+--echo === design supplement: PL/SQL stored routine ==============
+--echo ============================================================
+delimiter //;
+create procedure proc_instr2(in haystack varchar(100), in needle varchar(100), out r int)
+begin
+  set r = instr(haystack, needle);
+end //
+create procedure proc_instr4(in haystack varchar(100), in needle varchar(100),
+                             in pos int, in occ int, out r int)
+begin
+  set r = instr(haystack, needle, pos, occ);
+end //
+delimiter ;//
+
+--echo # 2-arg procedure
+call proc_instr2('foobarbar', 'bar', @instr_out);
+select count(*) from dual where @instr_out = 4;
+call proc_instr2(NULL, 'bar', @instr_out);
+select count(*) from dual where @instr_out is null;
+
+--echo # 4-arg procedure
+call proc_instr4('foobarbar', 'bar', 1, 2, @instr_out);
+select count(*) from dual where @instr_out = 7;
+call proc_instr4('abcdef', 'c', -1, 1, @instr_out);
+select count(*) from dual where @instr_out = 3;
+call proc_instr4('abc', 'b', 1, NULL, @instr_out);
+select count(*) from dual where @instr_out is null;
+
+drop procedure proc_instr2;
+drop procedure proc_instr4;
+
+delimiter //;
+create function fn_instr2(haystack varchar(100), needle varchar(100)) returns int
+  deterministic
+begin
+  return instr(haystack, needle);
+end //
+create function fn_instr4(haystack varchar(100), needle varchar(100), pos int, occ int) returns int
+  deterministic
+begin
+  return instr(haystack, needle, pos, occ);
+end //
+delimiter ;//
+
+select count(*) from dual where fn_instr2('foobarbar', 'bar') = 4;
+select count(*) from dual where fn_instr2('阿里巴巴', '巴巴') = 3;
+select count(*) from dual where fn_instr4('foobarbar', 'bar', 1, 2) = 7;
+select count(*) from dual where fn_instr4('abcdef', 'c', -1, 1) = 3;
+
+drop function fn_instr2;
+drop function fn_instr4;
+
+--echo ============================================================
+--echo === design supplement: VIEW using instr ====================
+--echo ============================================================
+drop view if exists v_instr;
+create view v_instr as select instr(str_col, pattern_col, pos_col, occ_col) as r from t_instr_test;
+select count(*) from v_instr where r > 0;
+select count(*) from v_instr where r = 0;
+drop view v_instr;
+
+--echo ============================================================
+--echo === design supplement: CTAS ================================
+--echo ============================================================
+drop table if exists t_instr_ctas;
+create table t_instr_ctas as select instr('foobarbar', 'bar', 1, 1) as r;
+select count(*) from t_instr_ctas where r = 4;
+drop table t_instr_ctas;
+
+--echo ============================================================
+--echo === design supplement: INSERT ... SELECT ===================
+--echo ============================================================
+drop table if exists t_instr_ins;
+create table t_instr_ins (id int primary key, r int);
+insert into t_instr_ins select id, instr(str_col, pattern_col, pos_col, occ_col) from t_instr_test limit 6;
+select count(*) from t_instr_ins where r > 0;
+select count(*) from t_instr_ins where r is not null;
+drop table t_instr_ins;
+
+--echo ============================================================
+--echo === design supplement: transaction context ================
+--echo ============================================================
+set autocommit = 0;
+select count(*) from dual where instr('foobarbar', 'bar', 1, 2) = 7;
+commit;
+set autocommit = 1;
+
+--echo ============================================================
+--echo === design supplement: SQL contexts (CTE / UNION / derived / IN / EXISTS) ===
+--echo ============================================================
+--echo # CTE with instr
+select count(*) from (
+  with w_instr as (
+    select instr(str_col, pattern_col, pos_col, occ_col) as r from t_instr_test
+  )
+  select r from w_instr where r is not null
+) v;
+
+--echo # Derived table
+select count(*) from (
+  select r from (select instr(str_col, pattern_col, 1, 1) as r from t_instr_test) t
+) v where r is not null;
+
+--echo # UNION / UNION ALL
+select count(*) from (
+  select instr('foobarbar', 'bar', 1, 1) as r from dual
+  union all
+  select instr('abcabcabc', 'abc', 1, 3) as r from dual
+) v where r > 0;
+
+select count(*) from (
+  select instr('foobarbar', 'bar', 1, 1) as r from dual
+  union
+  select instr('foobarbar', 'bar', 1, 1) as r from dual
+) v where r = 4;
+
+--echo # JOIN with instr result
+select count(*) from (
+  select t1.r as r1, t2.r as r2
+  from (select instr('foobarbar', 'bar', 1, 1) as r from dual) t1
+  cross join (select instr('abcabcabc', 'abc', 1, 3) as r from dual) t2
+) v where r1 > 0 and r2 > 0;
+
+--echo # IN subquery
+select count(*) from t_instr_test
+  where instr(str_col, pattern_col, 1, 1) in (
+    select instr('foobarbar', 'bar', 1, 1) from dual
+  );
+
+--echo # EXISTS subquery
+select count(*) from dual where exists (
+  select 1 from t_instr_test
+  where instr(str_col, pattern_col, 1, 1) > 0
+);
+
+--echo # Scalar subquery
+select count(*) from (
+  select (select instr(str_col, pattern_col, 1, 1) from t_instr_test where id = 1) as r from dual
+) v where r = 4;
+
+--echo ============================================================
+--echo === design supplement: window functions ====================
+--echo ============================================================
+select count(*) from (
+  select id, instr(str_col, pattern_col, 1, 1) as r,
+    row_number() over (order by instr(str_col, pattern_col, 1, 1)) as rn
+  from t_instr_test
+) v where rn between 1 and 14;
+
+select count(*) from (
+  select id, instr(str_col, pattern_col, 1, 1) as r,
+    rank() over (order by instr(str_col, pattern_col, 1, 1) desc) as rk
+  from t_instr_test
+) v where rk >= 1;
+
+select count(*) from (
+  select id, instr(str_col, pattern_col, 1, 1) as r,
+    dense_rank() over (order by instr(str_col, pattern_col, 1, 1)) as dr
+  from t_instr_test
+) v where dr >= 1;
+
+select count(*) from (
+  select id, instr(str_col, pattern_col, 1, 1) as r,
+    lag(instr(str_col, pattern_col, 1, 1), 1, 0) over (order by id) as prev
+  from t_instr_test
+) v where r is not null;
+
+--echo ============================================================
+--echo === design supplement: DISTINCT / LIMIT ====================
+--echo ============================================================
+select count(*) from (
+  select distinct instr(str_col, pattern_col, 1, 1) as r from t_instr_test
+) v where r is not null;
+
+select count(*) from (
+  select instr(str_col, pattern_col, 1, 1) as r from t_instr_test limit 5
+) v where r is not null;
+
+--echo ============================================================
+--echo === design supplement: pos=0 / pos<-len / empty haystack ===
+--echo ============================================================
+--echo # pos=0 with 3-arg (design doc §1.2: position=0 → return 0)
+select instr('abc', 'b', 0) as pos0_3arg from dual;
+select instr('abc', 'b', 0, 1) as pos0_4arg from dual;
+select instr('abc', 'b', 0, 2) as pos0_occ2 from dual;
+
+--echo # pos > len(haystack) exact boundary
+select instr('abc', 'b', 3, 1) as pos_at_len from dual;
+select instr('abc', 'b', 4, 1) as pos_len_plus_1 from dual;
+select instr('abc', 'b', 999999, 1) as pos_huge from dual;
+
+--echo # pos < -len extremes
+select instr('abc', 'a', -3, 1) as neg_len from dual;
+select instr('abc', 'a', -4, 1) as neg_beyond_len from dual;
+select instr('abc', 'a', -10, 1) as neg_way_beyond from dual;
+select instr('abc', 'a', -999999, 1) as neg_huge from dual;
+
+--echo # Empty haystack with various positions
+select instr('', 'aa', 1, 1) as empty_str_pos1 from dual;
+select instr('', 'aa', -1, 1) as empty_str_neg1 from dual;
+select instr('', '', 1, 1) as both_empty from dual;
+select instr('', '', -1, 1) as both_empty_neg from dual;
+
+--echo # occurrence much larger than actual matches
+select instr('foobarbar', 'bar', 1, 99) as occ_99 from dual;
+select instr('foobarbar', 'bar', 1, 5) as occ_5 from dual;
+select instr('abcabcabc', 'abc', 1, 10) as occ_10 from dual;
+
+--echo ============================================================
+--echo === design supplement: negative pos — boundary extremes ====
+--echo ============================================================
+--echo # pos = -1 (last char) with single-char needle
+select instr('abcdef', 'f', -1, 1) as neg1_last from dual;
+select instr('abcdef', 'a', -1, 1) as neg1_first_rev from dual;
+select instr('abcdef', 'd', -1, 1) as neg1_mid_rev from dual;
+--echo # pos = -1 occ = 2
+select instr('abcabc', 'a', -1, 2) as neg1_occ2 from dual;
+select instr('abcabcabc', 'abc', -1, 3) as neg1_occ3 from dual;
+
+--echo # pos = -2
+select instr('abcdef', 'e', -2, 1) as neg2_mid from dual;
+select instr('abcabc', 'b', -2, 1) as neg2 from dual;
+
+--echo # Negative pos with multi-byte chars
+select instr('你好世界你好', '你好', -1, 1) as cn_neg1_occ1 from dual;
+select instr('你好世界你好', '你好', -1, 2) as cn_neg1_occ2 from dual;
+select instr('🐱🐶🐱🐰🐱', '🐱', -1, 2) as emoji_neg1_occ2 from dual;
+
+--echo ============================================================
+--echo === design supplement: type conversion edge cases ==========
+--echo ============================================================
+--echo # DECIMAL implicit conversion with pos/occ
+select instr(123.456, '3.', 1, 1) from dual;
+select instr(123.456, 123.4, 1, 1) from dual;
+select instr(1.999999999, 9999, 1, 1) from dual;
+
+--echo # DATE type with 4-arg
+select instr(cast('2023-01-15' as date), '2023', 1, 1) from dual;
+
+--echo # BINARY / hex
+select instr(0x414243, 0x42, 1, 1) from dual;
+select instr(cast('abc' as binary), cast('b' as binary), 1, 1) from dual;
+
+--echo # Number implicit with negative pos
+select instr(12345, '23', -1, 1) from dual;
+select instr(12345, 23, -1, 1) from dual;
+
+--echo ============================================================
+--echo === design supplement: CAST return value ===================
+--echo ============================================================
+select cast(instr('foobarbar', 'bar', 1, 2) as signed) from dual;
+select cast(instr('foobarbar', 'bar', 1, 2) as char) from dual;
+select cast(instr('foobarbar', 'bar', 1, 2) as decimal(10,2)) from dual;
+
+--echo ============================================================
+--echo === design supplement: correlation functions ==============
+--echo ============================================================
+select instr(user(), 't') from dual;
+select instr(version(), '.', 1, 2) from dual;
+select instr(user(), user(), 1, 1) from dual;
+
+--echo ============================================================
+--echo === design supplement: DECODE-style / IF extended =========
+--echo ============================================================
+select if(instr('abcabc', 'bc', 1, 1) > 0, 'found_first', 'missing') from dual;
+select if(instr('abcabc', 'bc', 1, 2) > 0, 'found_second', 'missing') from dual;
+select if(instr('abcabc', 'bc', 1, 3) > 0, 'found_third', 'missing') from dual;
+
+select count(*) from (
+  select case
+    when instr(str_col, pattern_col, 1, 1) = 0 then 'zero'
+    when instr(str_col, pattern_col, 1, 2) = 0 then 'one'
+    else 'multiple'
+  end as flag
+  from t_instr_test where id <= 6
+) v where flag in ('zero', 'one', 'multiple');
+
+--echo ============================================================
+--echo === design supplement: multiple instr calls in one row =====
+--echo ============================================================
+select instr('foobarbar', 'bar', 1, 1) as r1,
+       instr('foobarbar', 'bar', 1, 2) as r2,
+       instr('foobarbar', 'bar', 4, 1) as r3
+from dual;
+
+select count(*) from t_instr_test
+  where instr(str_col, pattern_col, 1, 1) <
+        instr(str_col, pattern_col, 1, 2);
+
+select count(*) from t_instr_test
+  where instr(str_col, pattern_col, 1, 1) > 0
+    and instr(str_col, pattern_col, pos_col, occ_col) > 0;
+
+--echo ============================================================
+--echo === design supplement: special character patterns ==========
+--echo ============================================================
+--echo # Percent and underscore (non-wildcard in INSTR)
+select instr('abc%def', '%', 1, 1) from dual;
+select instr('abc_def', '_', 1, 1) from dual;
+--echo # Backslash
+select instr('a\\b\\c', '\\\\', 1, 2) from dual;
+--echo # Quotes
+select instr('it''s a test', '''', 1, 1) from dual;
+--echo # Double quotes
+select instr('say "hello"', '"', 1, 2) from dual;
+# 清理测试表
+--disable_warnings
+
+--echo ============================================================
+--echo === implementation analysis: occ <= 0 returns 0 (not error)=
+--echo ============================================================
+
+--echo # MySQL mode: occ <= 0 returns 0 instead of error
+SELECT INSTR('abc', 'a', 1, 0);
+SELECT INSTR('abc', 'a', 1, -1);
+SELECT INSTR('abc', 'a', 1, -999);
+SELECT INSTR('abcdef', 'a', -1, 0);
+SELECT INSTR('abcdef', 'a', -1, -5);
+
+--echo ============================================================
+--echo === implementation analysis: pos == 0 returns 0 ============
+--echo ============================================================
+
+--echo # MySQL mode: pos = 0 returns 0
+SELECT INSTR('abc', 'a', 0);
+SELECT INSTR('abc', 'a', 0, 1);
+SELECT INSTR('abc', 'a', 0, 2);
+
+--echo ============================================================
+--echo === implementation analysis: empty needle ==================
+--echo ============================================================
+
+--echo # Empty needle in MySQL mode
+SELECT INSTR('abc', '');
+SELECT INSTR('abc', '', 1);
+SELECT INSTR('abc', '', 1, 1);
+SELECT INSTR('abc', '', -1);
+SELECT INSTR('', '');
+SELECT INSTR(NULL, '');
+
+--echo ============================================================
+--echo === implementation analysis: negative pos from end =========
+--echo ============================================================
+
+--echo # Negative pos exactly at string boundaries
+SELECT INSTR('abcdef', 'def', -1);
+SELECT INSTR('abcdef', 'def', -2);
+SELECT INSTR('abcdef', 'def', -3);
+SELECT INSTR('abcdef', 'def', -4);
+--echo # Negative pos with occurrence
+SELECT INSTR('abcabcabc', 'abc', -1);
+SELECT INSTR('abcabcabc', 'abc', -1, 2);
+SELECT INSTR('abcabcabc', 'abc', -1, 3);
+SELECT INSTR('abcabcabc', 'abc', -3, 2);
+--echo # Single char
+SELECT INSTR('a', 'a', -1);
+SELECT INSTR('abc', 'c', -1);
+SELECT INSTR('abc', 'c', -1, 2);
+
+--echo ============================================================
+--echo === implementation analysis: multi-byte negative pos =======
+--echo ============================================================
+
+--echo # CJK with negative position
+SELECT INSTR('你好世界', '世界', -1);
+SELECT INSTR('你好世界', '世界', -2);
+SELECT INSTR('你好世界你好', '你好', -1);
+SELECT INSTR('你好世界你好', '你好', -2);
+SELECT INSTR('你好世界你好', '你好', -3);
+SELECT INSTR('你好世界你好', '你好', -1, 2);
+--echo # Emoji with negative position
+SELECT INSTR('ab🎉cd🎉ef', '🎉', -1);
+SELECT INSTR('ab🎉cd🎉ef', '🎉', -1, 2);
+SELECT INSTR('🎉🎊🎉🎊', '🎊', -1);
+SELECT INSTR('🎉🎊🎉🎊', '🎊', -1, 2);
+
+--echo ============================================================
+--echo === implementation analysis: byte/char alignment risk ======
+--echo ============================================================
+
+--echo # Needle found at byte offset that is not char-aligned
+SELECT INSTR('a中b国c', '中', 1);
+SELECT INSTR('a中b国c', '中', 2);
+SELECT INSTR('a中b国c', '国', -1);
+SELECT INSTR('中a国b', 'a', 1);
+SELECT INSTR('中a国b', 'b', -1);
+--echo # ASCII needle in multi-byte haystack with negative pos
+SELECT INSTR('a中b国c', 'b', -1);
+SELECT INSTR('a中b国c中d', '中', -1);
+SELECT INSTR('a中b国c中d', '中', -1, 2);
+
+--echo ============================================================
+--echo === implementation analysis: very large position values ====
+--echo ============================================================
+
+--echo # Position far beyond haystack length
+SELECT INSTR('abc', 'a', 99999999);
+SELECT INSTR('abc', 'a', 99999999, 1);
+SELECT INSTR('abc', 'a', -99999999);
+SELECT INSTR('abc', 'a', -99999999, 1);
+--echo # Occurrence far beyond actual count
+SELECT INSTR('abcabc', 'a', 1, 999);
+SELECT INSTR('abcabc', 'a', -1, 999);
+
+--echo ============================================================
+--echo === implementation analysis: BINARY / NUL byte search ======
+--echo ============================================================
+
+--echo # Search for NUL byte
+SELECT INSTR(CONCAT('a', CHAR(0), 'b'), CHAR(0));
+SELECT INSTR(CONCAT('a', CHAR(0), 'b', CHAR(0), 'c'), CHAR(0), 1, 2);
+SELECT INSTR(CONCAT('a', CHAR(0 USING ASCII), 'b'), CHAR(0 USING ASCII));
+--echo # BINARY collation
+SELECT INSTR(CAST('abc' AS BINARY), 'B');
+SELECT INSTR(BINARY 'ABCabc', 'a');
+
+--echo ============================================================
+--echo === implementation analysis: TEXT/BLOB search ==============
+--echo ============================================================
+
+--disable_warnings
+DROP TABLE IF EXISTS t_instr_text;
+--enable_warnings
+CREATE TABLE t_instr_text (id INT, content LONGTEXT);
+INSERT INTO t_instr_text VALUES (1, CONCAT(REPEAT('x', 3000), 'TARGET', REPEAT('y', 3000)));
+INSERT INTO t_instr_text VALUES (2, CONCAT(REPEAT('a', 2000), 'NEEDLE', REPEAT('b', 2000), 'NEEDLE'));
+INSERT INTO t_instr_text VALUES (3, '');
+
+--echo # TEXT search across chunk boundary
+SELECT id, INSTR(content, 'TARGET') FROM t_instr_text ORDER BY id;
+SELECT id, INSTR(content, 'NEEDLE', 1, 2) FROM t_instr_text ORDER BY id;
+SELECT id, INSTR(content, 'NEEDLE', -1) FROM t_instr_text WHERE id = 2;
+SELECT id, INSTR(content, 'NEEDLE', -1, 2) FROM t_instr_text WHERE id = 2;
+--echo # Empty TEXT
+SELECT INSTR(content, 'x') FROM t_instr_text WHERE id = 3;
+
+DROP TABLE t_instr_text;
+
+--echo ============================================================
+--echo === implementation analysis: edge case combinations ========
+--echo ============================================================
+
+--echo # Overlapping needle matches
+SELECT INSTR('aaaa', 'aa', 1, 1);
+SELECT INSTR('aaaa', 'aa', 1, 2);
+SELECT INSTR('aaaa', 'aa', 1, 3);
+SELECT INSTR('aaaa', 'aa', -1, 1);
+SELECT INSTR('aaaa', 'aa', -1, 2);
+--echo # Haystack = needle
+SELECT INSTR('abc', 'abc', 1);
+SELECT INSTR('abc', 'abc', 2);
+SELECT INSTR('abc', 'abc', -1);
+--echo # Needle appears at position 1
+SELECT INSTR('abcabc', 'abc', 1, 1);
+SELECT INSTR('abcabc', 'abc', 1, 2);
+
+
+drop table t_instr_test;
 --enable_warnings
 

@@ -7,6 +7,7 @@
 #define OCEANBASE_SHARE_VECTOR_OB_BITMAP_NULL_VECTOR_BASE_H_
 
 #include "share/vector/ob_vector_base.h"
+#include "share/vector/ob_uniform_base.h"
 #include "sql/engine/ob_bit_vector.h"
 
 namespace oceanbase
@@ -57,6 +58,86 @@ public:
     flag_ = flag;
   }
 
+  OB_INLINE int from_vector_bitmap_null(const ObIVector *src_vec, const sql::ObBitVector *skip, const int64_t start, const int64_t end) {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(src_vec)) {
+      ret = OB_INVALID_ARGUMENT;
+    } else if (OB_FAIL(from_vector_base(src_vec))) {
+      SQL_ENG_LOG(WARN, "failed to copy base", K(ret));
+    } else {
+      const VectorFormat src_format = src_vec->get_format();
+
+      if (src_format == VEC_UNIFORM || src_format == VEC_UNIFORM_CONST) {
+        ret = copy_null_from_uniform(static_cast<const ObUniformBase *>(src_vec), src_format, skip, start, end);
+      } else if (src_format == VEC_FIXED || src_format == VEC_DISCRETE || src_format == VEC_CONTINUOUS) {
+        ret = copy_null_from_bitmap(static_cast<const ObBitmapNullVectorBase *>(src_vec), skip, start, end);
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_ENG_LOG(WARN, "unknown vector format", K(src_format));
+      }
+    }
+    return ret;
+  }
+
+private:
+  OB_INLINE int copy_null_from_bitmap(const ObBitmapNullVectorBase *src, const sql::ObBitVector *skip, int64_t start, int64_t end) {
+    int ret = OB_SUCCESS;
+    sql::ObBitVector *dst_nulls = get_nulls();
+    const sql::ObBitVector *src_nulls = src->get_nulls();
+    if (skip == nullptr) {
+      dst_nulls->deep_copy(*src_nulls, start, end);
+      if (start == 0 && end == get_max_row_cnt()) {
+        src->has_null() ? set_has_null() : reset_has_null();
+        is_batch_ascii_ = src->is_batch_ascii_;
+      } else {
+        set_has_null();
+        if (src->is_batch_ascii_ == NON_ASCII) {
+          is_batch_ascii_ = NON_ASCII;
+        }
+      }
+    } else {
+      for (int64_t i = start; i < end; ++i) {
+        if (!skip->at(i)) {
+          src_nulls->at(i) ? dst_nulls->set(i) : dst_nulls->unset(i);
+        }
+      }
+      if (src->has_null()) {
+        set_has_null();
+      }
+      if (src->is_batch_ascii_ == NON_ASCII) {
+        is_batch_ascii_ = NON_ASCII;
+      }
+    }
+    return ret;
+  }
+
+  OB_INLINE int copy_null_from_uniform(const ObUniformBase *src, VectorFormat fmt, const sql::ObBitVector *skip, int64_t start, int64_t end) {
+    int ret = OB_SUCCESS;
+    const ObDatum *datums = src->get_datums();
+    sql::ObBitVector *nulls = get_nulls();
+    const bool is_const = (fmt == VEC_UNIFORM_CONST);
+    bool has_null = false;
+    for (int64_t i = start; i < end; ++i) {
+      if (skip && skip->at(i)) {
+        continue;
+      }
+      if (datums[is_const ? 0 : i].is_null()) {
+        nulls->set(i);
+        has_null = true;
+      } else {
+        nulls->unset(i);
+      }
+    }
+    if (start == 0 && end == get_max_row_cnt()) {
+      has_null ? set_has_null() : reset_has_null();
+    } else if (has_null) {
+      set_has_null();
+    }
+    return ret;
+  }
+
+public:
+
   OB_INLINE void repeat_nulls_in_append_rows(const sql::ObBitVector *src_nulls,
                                           const int64_t src_start_idx,
                                           const int64_t src_end_idx,
@@ -75,7 +156,6 @@ public:
       }
     }
   }
-
 
   // Note: if need to add new flag or change the default value of an existing flag,
   // please make sure to synchronize this function accordingly.

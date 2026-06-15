@@ -14,7 +14,17 @@ select replace('abcdbf', 'b', 'cc');
 | acccdccf                     |
 +------------------------------+
 select replace('abcdbf', 'b');
-ERROR 42000: Incorrect parameter count in the call to native function 'replace'
++------------------------+
+| replace('abcdbf', 'b') |
++------------------------+
+| acdf                   |
++------------------------+
+select replace('aabbcc', 'b');
++------------------------+
+| replace('aabbcc', 'b') |
++------------------------+
+| aacc                   |
++------------------------+
 select replace('abcdbf', 'b', '');
 +----------------------------+
 | replace('abcdbf', 'b', '') |

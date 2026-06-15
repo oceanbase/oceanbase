@@ -63,7 +63,6 @@ int ObExprJsonValid::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta meta,
   bool is_null = false;
   bool is_empty_text = false;
   bool is_invalid = false;
-
   if (!ObJsonExprHelper::is_convertible_to_json(type)) {
     is_invalid = true;
   } else if (type == ObNullType || data.is_null()) {
@@ -85,11 +84,11 @@ int ObExprJsonValid::calc(ObEvalCtx &ctx, const ObDatum &data, ObDatumMeta meta,
       ObIJsonBase *j_bin = NULL;
       if (OB_FAIL(ObJsonBaseFactory::get_json_base(allocator, j_str, ObJsonInType::JSON_BIN,
                                                    ObJsonInType::JSON_BIN, j_bin, 0,
-                                                   ObJsonExprHelper::get_json_max_depth_config()))) {
+                                                   ObJsonExprHelper::get_json_max_depth_config(ctx)))) {
         LOG_WARN("fail to get json base", K(ret), K(type), K(j_str));
       }
     } else { // json tree
-      if (OB_FAIL(ObJsonParser::check_json_syntax(j_str, allocator, 0, ObJsonExprHelper::get_json_max_depth_config()))) {
+      if (OB_FAIL(ObJsonParser::check_json_syntax(j_str, allocator, 0, ObJsonExprHelper::get_json_max_depth_config(ctx)))) {
         LOG_WARN("fail to check json syntax", K(ret), K(type), K(j_str));
       }
     }

@@ -502,6 +502,10 @@ DEF_BOOL(_force_const_udf_query_range_extraction, OB_TENANT_PARAMETER, "True",
          "Specifies whether to force UDF with const params (regardless of deterministic or not) to extract query range under ORACLE mode",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
+DEF_BOOL(_enable_fast_json_path_lookup, OB_TENANT_PARAMETER, "True",
+        "Controls whether to enable JSON fast lookup paths. Fast paths optimize performance by directly parsing binary data",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 // tenant memtable consumption related
 DEF_INT(memstore_limit_percentage, OB_CLUSTER_PARAMETER, "0", "[0, 100)",
         "used in calculating the value of MEMSTORE_LIMIT parameter: "

@@ -371,7 +371,9 @@ bool need_reject_geometry_type(ObItemType item_type)
       || item_type == T_FUN_SYS_RADIANS
       || item_type == T_FUN_SYS_FORMAT
       || item_type == T_FUN_SYS_COT
-      || item_type == T_OP_CONV) {
+      || item_type == T_OP_CONV
+      || item_type == T_FUN_CK_RAND_CANONICAL
+      || item_type == T_FUN_AVG_WEIGHTED) {
     bool_ret = true;
   }
   return bool_ret;
@@ -1747,6 +1749,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
       case T_FUN_VAR_POP:
       case T_FUN_VAR_SAMP:
       case T_FUN_AVG:
+      case T_FUN_AVG_WEIGHTED:
       case T_FUN_SUM:
       case T_FUN_KEEP_AVG:
       case T_FUN_KEEP_SUM:
@@ -1791,7 +1794,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
             result_type.set_calc_accuracy(result_type.get_accuracy());
             expr.set_result_type(result_type);
           }
-          if (T_FUN_SUM == expr.get_expr_type() || T_FUN_AVG == expr.get_expr_type()) {
+          if (T_FUN_SUM == expr.get_expr_type() || T_FUN_AVG == expr.get_expr_type() || T_FUN_AVG_WEIGHTED == expr.get_expr_type()) {
             const int16_t MAX_PRECISION_NO_NEED_CAST = 34;
             if (ObDecimalIntType == from_type &&
                 child_expr->get_result_type().get_precision() <= MAX_PRECISION_NO_NEED_CAST) {
@@ -1838,7 +1841,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
           ObObjType obj_type = result_type.get_type();
           ObScale scale_increment = 0;
           ObScale calc_scale = child_expr->get_extra_calc_scale();
-          if (T_FUN_AVG == expr.get_expr_type()) {
+          if (T_FUN_AVG == expr.get_expr_type() || T_FUN_AVG_WEIGHTED == expr.get_expr_type()) {
             int64_t increment = 0;
             if (OB_ISNULL(my_session_)) {
               ret = OB_INVALID_ARGUMENT;
@@ -1892,7 +1895,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
               scale_increment_recover = result_type.get_scale();
               precision_increment_recover = result_type.get_precision();
               result_type.set_scale(static_cast<ObScale>(result_type.get_scale() + scale_increment));
-              if (T_FUN_AVG == expr.get_expr_type()) {
+              if (T_FUN_AVG == expr.get_expr_type() || T_FUN_AVG_WEIGHTED == expr.get_expr_type()) {
                 result_type.set_precision(
                   static_cast<ObPrecision>(result_type.get_precision() + scale_increment));
               } else {
@@ -1913,7 +1916,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
             result_type.set_scale(SCALE_UNKNOWN_YET);
             result_type.set_precision(PRECISION_UNKNOWN_YET);
           } else if (ob_is_collection_sql_type(obj_type)) {
-            if (T_FUN_SUM == expr.get_expr_type() || T_FUN_AVG == expr.get_expr_type()) {
+            if (T_FUN_SUM == expr.get_expr_type() || T_FUN_AVG == expr.get_expr_type() || T_FUN_AVG_WEIGHTED == expr.get_expr_type()) {
               ObSQLSessionInfo *session = const_cast<ObSQLSessionInfo *>(my_session_);
               ObExecContext *exec_ctx = OB_ISNULL(session) ? NULL : session->get_cur_exec_ctx();
               uint16_t subschema_id = result_type.get_subschema_id();
@@ -1949,7 +1952,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
             } else {
               result_type.set_number();
             }
-            if (T_FUN_AVG == expr.get_expr_type()) {
+            if (T_FUN_AVG == expr.get_expr_type() || T_FUN_AVG_WEIGHTED == expr.get_expr_type()) {
               // FIXME: @zuojiao.hzj : remove this after we can keep high division calc scale
               // using decimal int
               result_type.set_number();
@@ -2315,7 +2318,7 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
         result_type.set_calc_accuracy(result_type.get_accuracy());
         result_type.set_calc_meta(result_type.get_obj_meta());
       }
-      if (T_FUN_AVG == expr.get_expr_type() && -2 != scale_increment_recover) {
+      if ((T_FUN_AVG == expr.get_expr_type() || T_FUN_AVG_WEIGHTED == expr.get_expr_type()) && -2 != scale_increment_recover) {
         result_type.set_calc_scale(scale_increment_recover);
         result_type.set_calc_precision(precision_increment_recover);
       }
@@ -2504,7 +2507,8 @@ int ObRawExprDeduceType::check_group_aggr_param(ObAggFunRawExpr &expr)
                 && !(T_FUN_WM_CONCAT == expr.get_expr_type() && !expr.is_param_distinct()))) {
       if (ob_is_json(param_expr->get_data_type())
           && !(expr.get_expr_type() == T_FUN_SUM
-               || expr.get_expr_type() == T_FUN_AVG)) {
+               || expr.get_expr_type() == T_FUN_AVG
+               || expr.get_expr_type() == T_FUN_AVG_WEIGHTED)) {
           ret = OB_ERR_INVALID_CMP_OP;
           LOG_WARN("lob or json type parameter not expected", K(ret));
       } else if ((ob_is_user_defined_sql_type(param_expr->get_data_type())
@@ -2523,6 +2527,7 @@ int ObRawExprDeduceType::check_group_aggr_param(ObAggFunRawExpr &expr)
     } else if (ob_is_collection_sql_type(param_expr->get_data_type())
                && (T_FUN_SUM == expr.get_expr_type()
                    || T_FUN_AVG == expr.get_expr_type()
+                   || T_FUN_AVG_WEIGHTED == expr.get_expr_type()
                    || T_FUN_COUNT == expr.get_expr_type())
                && expr.is_param_distinct()) {
         ret = OB_NOT_SUPPORTED;
@@ -4256,6 +4261,7 @@ int ObRawExprDeduceType::add_implicit_cast(ObAggFunRawExpr &parent,
                parent.get_expr_type() == T_FUN_SYS_ST_ASMVT ||
                ((parent.get_expr_type() == T_FUN_SUM ||
                  parent.get_expr_type() == T_FUN_AVG ||
+                 parent.get_expr_type() == T_FUN_AVG_WEIGHTED ||
                  parent.get_expr_type() == T_FUN_COUNT) &&
                  child_ptr->get_expr_type() == T_FUN_SYS_OP_OPNSIZE) ||
                 (lib::is_mysql_mode() &&

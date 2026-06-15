@@ -953,7 +953,8 @@ bool ObRawExpr::need_extra_calc_type(const bool is_mysql_number) const
           T_OP_ADD == type_ ||
           T_OP_MINUS == type_ ||
           T_OP_MUL == type_ ||
-          T_FUN_AVG == type_
+          T_FUN_AVG == type_ ||
+          T_FUN_AVG_WEIGHTED == type_
          ));
 }
 
@@ -1113,7 +1114,8 @@ int ObRawExpr::is_const_inherit_expr(bool &is_const_inherit,
       || T_FUN_SYS_IS_USED_LOCK == type_
       || T_FUN_SYS_RELEASE_LOCK == type_
       || T_FUN_SYS_RELEASE_ALL_LOCKS == type_
-      || T_FUN_ES_MATCH == type_) {
+      || T_FUN_ES_MATCH == type_
+      || T_FUN_CK_RAND_CANONICAL == type_) {
      is_const_inherit = false;
   }
   if (is_const_inherit && T_OP_GET_USER_VAR == type_) {
@@ -1239,7 +1241,8 @@ int ObRawExpr::is_non_pure_sys_func_expr(bool &is_non_pure) const
           || T_FUN_SYS_RELEASE_LOCK == type_
           || T_FUN_SYS_RELEASE_ALL_LOCKS == type_
           || T_FUN_SYS_CURRENT_ROLE == type_
-          || T_FUN_SYS_IS_ENABLED_ROLE == type_) {
+          || T_FUN_SYS_IS_ENABLED_ROLE == type_
+          || T_FUN_CK_RAND_CANONICAL == type_) {
       is_non_pure = true;
     }
   }
@@ -4710,6 +4713,7 @@ bool ObSysFunRawExpr::inner_same_as(
              T_FUN_SYS_GUID == get_expr_type() ||
              T_OP_GET_USER_VAR == get_expr_type() ||
              T_OP_GET_SYS_VAR == get_expr_type() ||
+             T_FUN_CK_RAND_CANONICAL == get_expr_type() ||
              has_flag(IS_STATE_FUNC)) && (NULL == check_context ||
                           (NULL != check_context && check_context->need_check_deterministic_))) {
   } else if (T_FUN_SYS_LAST_REFRESH_SCN == get_expr_type()) {
@@ -4910,10 +4914,8 @@ int ObSysFunRawExpr::check_param_num_internal(int32_t param_num, int32_t param_c
           ret = OB_ERR_PARAM_SIZE;
           LOG_WARN("Param num of function should be 2 or 3", K(func_name_), K(ret), K(param_count));
         }
-      } else if (!lib::is_oracle_mode() && T_FUN_SYS_REPLACE == type && param_count != 3) {
-        ret = OB_ERR_PARAM_SIZE;
-        LOG_WARN("Param num of function should be 3", K(func_name_), K(ret), K(lib::is_oracle_mode()));
       }
+      // ADB compatibility: REPLACE(str, search) with 2 params is equivalent to REPLACE(str, search, '')
       break;
     }
     case ObExprOperator::OCCUR_AS_PAIR: {

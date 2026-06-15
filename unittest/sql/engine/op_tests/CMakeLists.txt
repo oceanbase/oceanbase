@@ -107,6 +107,13 @@ sql_unittest(test_nested_loop_join_op
   ob_op_test_data_source.cpp
 )
 
+# avgWeighted 表达式单测
+sql_unittest(test_avg_weighted_op
+  test_avg_weighted_op.cpp
+  ob_op_test_engine.cpp
+  ob_op_test_data_source.cpp
+)
+
 # Phase 8: Window Function datahub tests
 # NOTE: Disabled due to `#define private public` macro conflict in ob_op_test_datahub.h
 # which pollutes the namespace when included alongside other OceanBase headers.
@@ -117,6 +124,13 @@ sql_unittest(test_nested_loop_join_op
 #   ob_op_test_data_source.cpp
 # )
 
+
+# STRING_AGG aggregate function tests
+sql_unittest(test_string_agg_op
+  test_string_agg_op.cpp
+  ob_op_test_engine.cpp
+  ob_op_test_data_source.cpp
+)
 # Phase 3: Partition Sort operator tests
 sql_unittest(test_partition_sort_op
   test_partition_sort_op.cpp
@@ -172,7 +186,14 @@ sql_unittest(test_merge_distinct_op
   ob_op_test_data_source.cpp
 )
 
-# DecimalInt CAST to integer aliasing bug regression test
+# DATE_FORMAT fast path optimization tests
+sql_unittest(test_date_format_fast_path
+  test_date_format_fast_path.cpp
+  ob_op_test_engine.cpp
+  ob_op_test_data_source.cpp
+)
+
+# Decimal int cast to int tests
 sql_unittest(test_decimalint_cast_to_int
   test_decimalint_cast_to_int.cpp
   ob_op_test_engine.cpp

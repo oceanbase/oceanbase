@@ -2813,6 +2813,7 @@ int ObTimeConverter::str_to_ob_time_without_date(const ObString &str, ObTime &ob
     }     \
   }
 
+template<bool is_clickhouse_style>
 int ObTimeConverter::str_to_ob_time_format(const ObString &str, const ObString &fmt,
   ObTime &ob_time, int16_t *scale, const ObDateSqlMode date_sql_mode)
 {
@@ -2839,12 +2840,15 @@ int ObTimeConverter::str_to_ob_time_format(const ObString &str, const ObString &
     ObTimeDelims delims;
     // https://dev.mysql.com/doc/refman/8.0/en/date-and-time-functions.html#function_date-format
     ObYearWeekWdayElems week_day_elements;
+    bool has_numeric_tz_offset = false;
     if (NULL != scale) {
       *scale = 0;
     }
     while (OB_SUCC(ret) && fmt_pos < fmt_end) {
-      for (; fmt_pos < fmt_end && isspace(*fmt_pos); ++fmt_pos);
-      for (; str_pos < str_end && isspace(*str_pos); ++str_pos);
+      if constexpr (!is_clickhouse_style) {
+        for (; fmt_pos < fmt_end && isspace(*fmt_pos); ++fmt_pos);
+        for (; str_pos < str_end && isspace(*str_pos); ++str_pos);
+      }
       if (fmt_pos == fmt_end || str_pos == str_end) {
         break;
       }
@@ -2872,6 +2876,18 @@ int ObTimeConverter::str_to_ob_time_format(const ObString &str, const ObString &
             }
             break;
           }
+          case 'C': {
+            if constexpr (is_clickhouse_style) {
+              if (OB_SUCC(get_datetime_digits(str_pos, str_end, 2, digits))) {
+                const int32_t cur_y = ob_time.parts_[DT_YEAR];
+                const int32_t cc = static_cast<int32_t>(digits.value_);
+                ob_time.parts_[DT_YEAR] = (cur_y % 100) + cc * 100;
+              }
+            } else {
+              ret = OB_NOT_SUPPORTED;
+            }
+            break;
+          }
           case 'c':
           case 'm': {
             if (OB_SUCC(get_datetime_digits(str_pos, str_end, 2, digits))) {
@@ -2886,8 +2902,17 @@ int ObTimeConverter::str_to_ob_time_format(const ObString &str, const ObString &
             }
             break;
           }
-          case 'd':
+          case 'd': {
+            if (OB_SUCC(get_datetime_digits(str_pos, str_end, 2, digits))) {
+              ob_time.parts_[DT_MDAY] = digits.value_;
+            }
+            break;
+          }
           case 'e': {
+            if constexpr (is_clickhouse_style) {
+              // skip spaces
+              for (; str_pos < str_end && ' ' == *str_pos; ++str_pos) {/* do nothing */}
+            }
             if (OB_SUCC(get_datetime_digits(str_pos, str_end, 2, digits))) {
               ob_time.parts_[DT_MDAY] = digits.value_;
             }
@@ -2907,10 +2932,30 @@ int ObTimeConverter::str_to_ob_time_format(const ObString &str, const ObString &
             }
             break;
           }
+          case 'F': {
+            if constexpr (is_clickhouse_style) {
+              if (OB_FAIL(get_datetime_digits(str_pos, str_end, 4, digits))) {
+              } else if (FALSE_IT(ob_time.parts_[DT_YEAR] = digits.value_)) {
+              } else if (str_pos >= str_end || *str_pos != '-') {
+                ret = OB_INVALID_DATE_VALUE;
+              } else if (FALSE_IT(str_pos++)) {
+              } else if (OB_FAIL(get_datetime_digits(str_pos, str_end, 2, digits))) {
+              } else if (FALSE_IT(ob_time.parts_[DT_MON] = digits.value_)) {
+              } else if (str_pos >= str_end || *str_pos != '-') {
+                ret = OB_INVALID_DATE_VALUE;
+              } else if (FALSE_IT(str_pos++)) {
+              } else if (OB_FAIL(get_datetime_digits(str_pos, str_end, 2, digits))) {
+              } else if (FALSE_IT(ob_time.parts_[DT_MDAY] = digits.value_)) {
+              }
+            } else {
+              ret = OB_NOT_SUPPORTED;
+            }
+            break;
+          }
           case 'H':
-          case 'k':
           case 'h':
           case 'I':
+          case 'k':
           case 'l': {
             if (OB_SUCC(get_datetime_digits(str_pos, str_end, 2, digits))) {
               ob_time.parts_[DT_HOUR] = digits.value_;
@@ -2929,6 +2974,33 @@ int ObTimeConverter::str_to_ob_time_format(const ObString &str, const ObString &
             }
             break;
           }
+          case 'g': {
+            if constexpr (is_clickhouse_style) {
+              // Same merge rule as %%y: patch lower two digits onto current year century (from %%Y/%%C/%%G etc.).
+              if (OB_SUCC(get_datetime_digits(str_pos, str_end, 2, digits))) {
+                const int32_t cur_y = ob_time.parts_[DT_YEAR];
+                const int32_t yy = static_cast<int32_t>(digits.value_) % 100;
+                int32_t merged_y = (cur_y / 100) * 100 + yy;
+                if (merged_y < 100) {
+                  apply_date_year2_rule(merged_y);
+                }
+                ob_time.parts_[DT_YEAR] = merged_y;
+              }
+            } else {
+              ret = OB_NOT_SUPPORTED;
+            }
+            break;
+          }
+          case 'G': {
+            if constexpr (is_clickhouse_style) {
+              if (OB_SUCC(get_datetime_digits(str_pos, str_end, 4, digits))) {
+                ob_time.parts_[DT_YEAR] = digits.value_;
+              }
+            } else {
+              ret = OB_NOT_SUPPORTED;
+            }
+            break;
+          }
           case 'M': {
             name.assign_ptr(const_cast<char *>(str_pos), static_cast<int32_t>(str_end - str_pos));
             if (OB_SUCC(get_str_array_idx(name, MON_NAMES, static_cast<int32_t>(MONS_PER_YEAR), ob_time.parts_[DT_MON]))) {
@@ -2936,7 +3008,82 @@ int ObTimeConverter::str_to_ob_time_format(const ObString &str, const ObString &
             }
             break;
           }
-          case 'r':
+          case 'R': {
+            if constexpr (is_clickhouse_style) {
+              if (OB_SUCC(get_datetime_digits_delims(str_pos, str_end, 2, digits, delims))) {
+                if (!is_single_colon(delims)) {
+                  ret = OB_INVALID_DATE_VALUE;
+                } else {
+                  ob_time.parts_[DT_HOUR] = digits.value_;
+                }
+              }
+              if (OB_SUCC(ret)) {
+                if (OB_SUCC(get_datetime_digits(str_pos, str_end, 2, digits))) {
+                  ob_time.parts_[DT_MIN] = digits.value_;
+                }
+              }
+            } else {
+              ret = OB_NOT_SUPPORTED;
+            }
+            break;
+          }
+          case 'r': {
+            if constexpr (is_clickhouse_style) {
+              if (OB_SUCC(get_datetime_digits_delims(str_pos, str_end, 2, digits, delims))) {
+                if (!is_single_colon(delims)) {
+                  ret = OB_INVALID_DATE_VALUE;
+                } else {
+                  ob_time.parts_[DT_HOUR] = digits.value_;
+                }
+              }
+              if (OB_SUCC(ret)) {
+                if (OB_SUCC(get_datetime_digits(str_pos, str_end, 2, digits))) {
+                  ob_time.parts_[DT_MIN] = digits.value_;
+                }
+              }
+            } else {
+              for (int i = DT_HOUR; OB_SUCC(ret) && i <= DT_MIN; ++i) {
+                if (OB_SUCC(get_datetime_digits_delims(str_pos, str_end, 2, digits, delims))) {
+                  if (!is_single_colon(delims)) {
+                    ret = OB_INVALID_DATE_VALUE;
+                  } else {
+                    ob_time.parts_[i] = digits.value_;
+                  }
+                }
+              }
+              if (OB_SUCC(ret)) {
+                if (OB_FAIL(get_datetime_digits(str_pos, str_end, 2, digits))) {
+                  LOG_WARN("failed to get digits from datetime string");
+                } else {
+                  ob_time.parts_[DT_SEC] = digits.value_;
+                }
+              }
+            }
+            if (OB_SUCC(ret)) {
+              while (str_pos < str_end && ' ' == *str_pos) {
+                ++str_pos;
+              }
+              // parse AM/PM
+              // MySQL compatibility: if hour > 12, still consume the AM/PM token but treat
+              // the value as-is (24-hour), matching MySQL STR_TO_DATE('%r') behaviour.
+              if (HOUR_UNUSE != hour_flag) {
+                ret = OB_INVALID_DATE_VALUE;
+              } else if (str_pos + 2 <= str_end && 0 == strncasecmp(str_pos, "AM", strlen("AM"))) {
+                if (ob_time.parts_[DT_HOUR] <= 12) {
+                  hour_flag = HOUR_AM;
+                }
+                str_pos += strlen("AM");
+              } else if (str_pos + 2 <= str_end && 0 == strncasecmp(str_pos, "PM", strlen("PM"))) {
+                if (ob_time.parts_[DT_HOUR] <= 12) {
+                  hour_flag = HOUR_PM;
+                }
+                str_pos += strlen("PM");
+              } else {
+                ret = OB_INVALID_DATE_VALUE;
+              }
+            }
+            break;
+          }
           case 'T': {
             // HOUR, MINUTE
             for (int i = DT_HOUR; OB_SUCC(ret) && i <= DT_MIN; ++i) {
@@ -2979,23 +3126,55 @@ int ObTimeConverter::str_to_ob_time_format(const ObString &str, const ObString &
             break;
           }
           case 'U': {
-            GET_YEAR_WEEK_WDAY(2, week_day_elements, UPPER_SET, week, 53, 0);
-            week_day_elements.week_u_set_ = true;
+            if constexpr (is_clickhouse_style) {
+              ret = OB_NOT_SUPPORTED;
+            } else {
+              GET_YEAR_WEEK_WDAY(2, week_day_elements, UPPER_SET, week, 53, 0);
+              week_day_elements.week_u_set_ = true;
+            }
             break;
           }
           case 'u': {
-            GET_YEAR_WEEK_WDAY(2, week_day_elements, LOWER_SET, week, 53, 0);
-            week_day_elements.week_u_set_ = true;
+            // ClickHouse: %u accepts 1 digit only = ISO weekday (1=Mon..7=Sun).
+            // MySQL: 2 digits = ISO week number (1-53).
+            if constexpr (is_clickhouse_style) {
+              if (OB_SUCC(get_datetime_digits(str_pos, str_end, 1, digits))) {
+                if (week_day_elements.is_week_v_set()) {
+                  week_day_elements.weekday_set_ = true;
+                  week_day_elements.weekday_value_ = static_cast<int32_t>(digits.value_);
+                } else {
+                  week_day_elements.week_set_state_ = ObYearWeekWdayElems::LOWER_SET;
+                  week_day_elements.week_u_set_ = true;
+                  week_day_elements.week_value_ = 1;
+                  week_day_elements.weekday_set_ = true;
+                  week_day_elements.weekday_value_ = static_cast<int32_t>(digits.value_);
+                }
+              }
+            } else {
+              GET_YEAR_WEEK_WDAY(2, week_day_elements, LOWER_SET, week, 53, 0);
+            }
+            if (!is_clickhouse_style || (week_day_elements.week_value_ != INT32_MAX
+                && !week_day_elements.is_week_v_set())) {
+              week_day_elements.week_u_set_ = true;
+            }
             break;
           }
           case 'V': {
-            GET_YEAR_WEEK_WDAY(2, week_day_elements, UPPER_SET, week, 53, 1);
+            if constexpr (is_clickhouse_style) {
+              GET_YEAR_WEEK_WDAY(2, week_day_elements, LOWER_SET, week, 53, 1);
+            } else {
+              GET_YEAR_WEEK_WDAY(2, week_day_elements, UPPER_SET, week, 53, 1);
+            }
             week_day_elements.week_u_set_ = false;
             break;
           }
           case 'v': {
-            GET_YEAR_WEEK_WDAY(2, week_day_elements, LOWER_SET, week, 53, 1);
-            week_day_elements.week_u_set_ = false;
+            if constexpr (is_clickhouse_style) {
+              ret = OB_NOT_SUPPORTED;
+            } else {
+              GET_YEAR_WEEK_WDAY(2, week_day_elements, LOWER_SET, week, 53, 1);
+              week_day_elements.week_u_set_ = false;
+            }
             break;
           }
           case 'W': {
@@ -3021,11 +3200,19 @@ int ObTimeConverter::str_to_ob_time_format(const ObString &str, const ObString &
             break;
           }
           case 'X': {
-            GET_YEAR_WEEK_WDAY(4, week_day_elements, UPPER_SET, year, 9999, 0);
+            if constexpr (is_clickhouse_style) {
+              ret = OB_NOT_SUPPORTED;
+            } else {
+              GET_YEAR_WEEK_WDAY(4, week_day_elements, UPPER_SET, year, 9999, 0);
+            }
             break;
           }
           case 'x': {
-            GET_YEAR_WEEK_WDAY(4, week_day_elements, LOWER_SET, year, 9999, 0);
+            if constexpr (is_clickhouse_style) {
+              ret = OB_NOT_SUPPORTED;
+            } else {
+              GET_YEAR_WEEK_WDAY(4, week_day_elements, LOWER_SET, year, 9999, 0);
+            }
             break;
           }
           case 'Y': {
@@ -3040,12 +3227,82 @@ int ObTimeConverter::str_to_ob_time_format(const ObString &str, const ObString &
           }
           case 'y': {
             if (OB_SUCC(get_datetime_digits(str_pos, str_end, 2, digits))) {
-              apply_date_year2_rule(digits);
-              ob_time.parts_[DT_YEAR] = digits.value_;
+              if constexpr (is_clickhouse_style) {
+                const int32_t cur_y = ob_time.parts_[DT_YEAR];
+                const int32_t yy = static_cast<int32_t>(digits.value_) % 100;
+                int32_t merged_y = (cur_y / 100) * 100 + yy;
+                if (merged_y < 100) {
+                  apply_date_year2_rule(merged_y);
+                }
+                ob_time.parts_[DT_YEAR] = merged_y;
+              } else {
+                apply_date_year2_rule(digits);
+                ob_time.parts_[DT_YEAR] = digits.value_;
+              }
             }
             break;
           }
-          case '%':
+          case 'z': {
+            if constexpr (is_clickhouse_style) {
+              if (OB_UNLIKELY(str_pos >= str_end) || ('+' != *str_pos && '-' != *str_pos)) {
+                ret = OB_INVALID_DATE_VALUE;
+                LOG_WARN("timezone offset sign expected for %%z", K(ret));
+              } else {
+                const int32_t factor = ('-' == *str_pos) ? -1 : 1;
+                str_pos++;
+                if (OB_SUCC(get_datetime_digits(str_pos, str_end, 4, digits))) {
+                  const int32_t tz_hour = static_cast<int32_t>(digits.value_ / 100);
+                  const int32_t tz_min = static_cast<int32_t>(digits.value_ % 100);
+                  const int32_t tz_offset = factor * (tz_hour * MINS_PER_HOUR + tz_min);
+                  if (tz_hour > 14 || tz_min >= MINS_PER_HOUR
+                      || OB_UNLIKELY(!ObOTimestampData::is_valid_offset_min(tz_offset))) {
+                    ret = OB_INVALID_DATE_VALUE;
+                    LOG_WARN("invalid timezone offset value for %%z", K(ret), K(tz_hour), K(tz_min));
+                  } else {
+                    ob_time.parts_[DT_OFFSET_MIN] = tz_offset;
+                    has_numeric_tz_offset = true;
+                  }
+                }
+              }
+            } else {
+              ret = OB_NOT_SUPPORTED;
+            }
+            break;
+          }
+          case 'n': {
+            if constexpr (is_clickhouse_style) {
+              if (str_pos < str_end && '\n' == *str_pos) {
+                str_pos++;
+              } else {
+                ret = OB_INVALID_DATE_VALUE;
+                LOG_WARN("newline expected for %%n", K(ret));
+              }
+            } else {
+              ret = OB_NOT_SUPPORTED;
+            }
+            break;
+          }
+          case 't': {
+            if constexpr (is_clickhouse_style) {
+              if (str_pos < str_end && '\t' == *str_pos) {
+                str_pos++;
+              } else {
+                ret = OB_INVALID_DATE_VALUE;
+                LOG_WARN("tab expected for %%t", K(ret));
+              }
+            } else {
+              ret = OB_NOT_SUPPORTED;
+            }
+            break;
+          }
+          case '%': {
+            if (str_pos < str_end && '%' == *str_pos) {
+              str_pos++;
+            } else {
+              ret = OB_NOT_SUPPORTED;
+            }
+            break;
+          }
           default:
             ret = OB_NOT_SUPPORTED;
             break;
@@ -3058,6 +3315,20 @@ int ObTimeConverter::str_to_ob_time_format(const ObString &str, const ObString &
         break;
       }
     }
+
+    if (OB_SUCC(ret) && 0 != ob_time.parts_[DT_YEAR] && 0 != ob_time.parts_[DT_YDAY]
+        && 0 == ob_time.parts_[DT_MON] && 0 == ob_time.parts_[DT_MDAY]) {
+      int32_t mon = 0;
+      int32_t mday = 0;
+      if (OB_FAIL(get_day_and_month_from_year_day(ob_time.parts_[DT_YDAY],
+                                                  ob_time.parts_[DT_YEAR], mon, mday))) {
+        LOG_WARN("invalid day-of-year for year", K(ret), K(ob_time.parts_[DT_YDAY]),
+                 K(ob_time.parts_[DT_YEAR]));
+      } else {
+        ob_time.parts_[DT_MON] = mon;
+        ob_time.parts_[DT_MDAY] = mday;
+      }
+    }
     if (OB_SUCC(ret) && only_white_space) {
       ret = OB_INVALID_ARGUMENT;
       LOG_WARN("only white space in format argument", K(ret));
@@ -3068,7 +3339,20 @@ int ObTimeConverter::str_to_ob_time_format(const ObString &str, const ObString &
       } else if (HOUR_PM == hour_flag && ob_time.parts_[DT_HOUR] > 0 && ob_time.parts_[DT_HOUR] < 12) {
         ob_time.parts_[DT_HOUR] += 12;
       }
-      if (OB_FAIL(handle_year_week_wday(week_day_elements, ob_time))) {
+      if constexpr (is_clickhouse_style) {
+        const bool has_week = (week_day_elements.is_week_v_set() || week_day_elements.is_week_u_set());
+        if (OB_SUCC(ret) && has_week && ob_time.parts_[DT_YEAR] != 0
+            && !week_day_elements.weekday_set_) {
+          week_day_elements.weekday_set_ = true;
+          week_day_elements.weekday_value_ = 1;
+        }
+        if (OB_SUCC(ret) && has_week && ob_time.parts_[DT_YEAR] != 0
+            && !week_day_elements.is_year_set()) {
+          week_day_elements.year_set_state_ = week_day_elements.week_set_state_;
+          week_day_elements.year_value_ = ob_time.parts_[DT_YEAR];
+        }
+      }
+      if (OB_SUCC(ret) && OB_FAIL(handle_year_week_wday(week_day_elements, ob_time))) {
         LOG_WARN("handle %u %x %v and %w value failed", K(ret));
       } else if (0 == ob_time.parts_[DT_MON] && 0 == ob_time.parts_[DT_MDAY]
                  && 0 == ob_time.parts_[DT_YEAR]) {
@@ -3090,12 +3374,27 @@ int ObTimeConverter::str_to_ob_time_format(const ObString &str, const ObString &
             ob_time.parts_[DT_MON] = 12;
           }
           ob_time.parts_[DT_DATE] = ob_time_to_date(ob_time);
+          if constexpr (is_clickhouse_style) {
+            if (OB_SUCC(ret) && has_numeric_tz_offset) {
+              // For ClickHouse %z, convert parsed local time into normalized output time.
+              int64_t usec = ob_time.parts_[DT_DATE] * USECS_PER_DAY + ob_time_to_time(ob_time);
+              usec -= MIN_TO_USEC(ob_time.parts_[DT_OFFSET_MIN]);
+              if (OB_FAIL(datetime_to_ob_time(usec, NULL, ob_time))) {
+                LOG_WARN("failed to apply timezone offset for %%z", K(ret), K(usec));
+              }
+            }
+          }
         }
       }
     }
   }
   return ret;
 }
+
+template int ObTimeConverter::str_to_ob_time_format<false>(const ObString &str, const ObString &fmt,
+    ObTime &ob_time, int16_t *scale, const ObDateSqlMode date_sql_mode);
+template int ObTimeConverter::str_to_ob_time_format<true>(const ObString &str, const ObString &fmt,
+    ObTime &ob_time, int16_t *scale, const ObDateSqlMode date_sql_mode);
 
 int ObTimeConverter::calc_date_with_year_week_wday(const ObYearWeekWdayElems &elements, ObTime &ot)
 {

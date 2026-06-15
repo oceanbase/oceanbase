@@ -7,7 +7,11 @@
 
 #include "share/vector/ob_fixed_length_base.h"
 #include "share/vector/ob_uniform_format.h"
+#include "share/vector/ob_discrete_base.h"
+#include "share/vector/ob_continuous_base.h"
 #include "sql/engine/basic/ob_compact_row.h"
+#include "lib/number/ob_number_v2.h"
+#include "lib/oblog/ob_log_module.h"
 
 namespace oceanbase
 {
@@ -95,6 +99,30 @@ public:
   OB_INLINE int32_t type_size() const { return sizeof(ValueType); }
   DEF_VEC_READ_INTERFACES(ObFixedLengthFormat<ValueType>);
   DEF_VEC_WRITE_INTERFACES(ObFixedLengthFormat<ValueType>);
+
+protected:
+  // Implement four pure virtual functions of ObIVector (protected, only called by from_vector_ivector)
+  // New naming: from_vector_xxx
+  int from_vector_fixed(const ObFixedLengthBase *src_fixed,
+                             const sql::ObBitVector *skip,
+                             const int64_t start,
+                             const int64_t end) override;
+
+  int from_vector_uniform(const ObUniformBase *src_uniform,
+                                VectorFormat src_format,
+                                const sql::ObBitVector *skip,
+                                const int64_t start,
+                                const int64_t end) override;
+
+  int from_vector_discrete(const ObDiscreteBase *src_discrete,
+                                 const sql::ObBitVector *skip,
+                                 const int64_t start,
+                                 const int64_t end) override;
+
+  int from_vector_continuous(const ObContinuousBase *src_continuous,
+                                   const sql::ObBitVector *skip,
+                                   const int64_t start,
+                                   const int64_t end) override;
 };
 
 template<typename ValueType>
@@ -300,6 +328,111 @@ int ObFixedLengthFormat<ValueType>::to_row(const sql::RowMeta &row_meta,
       stored_row->set_cell_payload(row_meta, col_idx, payload, len);
     }
   }
+  return ret;
+}
+
+
+template <typename ValueType>
+int ObFixedLengthFormat<ValueType>::from_vector_fixed(const ObFixedLengthBase *src_fixed,
+                                                            const sql::ObBitVector *skip,
+                                                            const int64_t start,
+                                                            const int64_t end)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(src_fixed)) {
+    ret = OB_INVALID_ARGUMENT;
+    SQL_ENG_LOG(WARN, "src_fixed is null", K(ret));
+  } else if (OB_FAIL(from_vector_bitmap_null(src_fixed, skip, start, end))) {
+    SQL_ENG_LOG(WARN, "failed to copy null", K(ret));
+  } else if (src_fixed->get_length() != len_) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_ENG_LOG(WARN, "fixed vector length mismatch, type conversion should be done before evaluation",
+             K(ret), K(src_fixed->get_length()), K(len_), K(sizeof(ValueType)));
+  } else if (sizeof(ValueType) != static_cast<int64_t>(len_)) {
+    ret = OB_ERR_UNEXPECTED;
+    SQL_ENG_LOG(WARN, "type_size mismatch with len_", K(ret), K(sizeof(ValueType)), K(len_));
+  } else {
+    const char *src_data = src_fixed->get_data();
+    const int64_t type_size = sizeof(ValueType);
+    if (skip == nullptr) {
+      const int64_t copy_bytes = (end - start) * type_size;
+      MEMCPY(data_ + start * type_size, src_data + start * type_size, copy_bytes);
+    } else {
+      for (int64_t i = start; i < end; ++i) {
+        if (!skip->at(i)) {
+          MEMCPY(data_ + i * type_size, src_data + i * type_size, type_size);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+template <typename ValueType>
+int ObFixedLengthFormat<ValueType>::from_vector_uniform(const ObUniformBase *src_uniform,
+                                                              VectorFormat src_format,
+                                                              const sql::ObBitVector *skip,
+                                                              const int64_t start,
+                                                              const int64_t end)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(src_uniform)) {
+    ret = OB_INVALID_ARGUMENT;
+    SQL_ENG_LOG(WARN, "src_uniform is null", K(ret));
+  } else if (OB_FAIL(from_vector_bitmap_null(src_uniform, skip, start, end))) {
+    SQL_ENG_LOG(WARN, "failed to copy null", K(ret));
+  } else {
+    const ObLength expected_len = sizeof(ValueType);
+    const ObDatum *src_datums = src_uniform->get_datums();
+    const bool is_const = (src_format == VEC_UNIFORM_CONST);
+    for (int64_t i = start; i < end; ++i) {
+      if (skip != nullptr && skip->at(i)) {
+        continue;
+      }
+      const int64_t src_idx = is_const ? 0 : i;
+      if (!src_datums[src_idx].is_null()) {
+        if (src_datums[src_idx].len_ == expected_len) {
+          MEMCPY(data_ + i * expected_len, src_datums[src_idx].ptr_, expected_len);
+        } else {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_ENG_LOG(WARN, "uniform vector datum length mismatch", K(ret), K(i), K(src_datums[src_idx].len_), K(expected_len));
+          break;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+template <typename ValueType>
+int ObFixedLengthFormat<ValueType>::from_vector_discrete(const ObDiscreteBase *src_discrete,
+                                                               const sql::ObBitVector *skip,
+                                                               const int64_t start,
+                                                               const int64_t end)
+{
+  UNUSED(src_discrete);
+  UNUSED(skip);
+  UNUSED(start);
+  UNUSED(end);
+  // FIXED format cannot copy from DISCRETE
+  int ret = OB_NOT_SUPPORTED;
+  SQL_ENG_LOG(WARN, "fixed format cannot copy from discrete format", K(ret));
+  return ret;
+}
+
+template <typename ValueType>
+int ObFixedLengthFormat<ValueType>::from_vector_continuous(const ObContinuousBase *src_continuous,
+                                                                  const sql::ObBitVector *skip,
+                                                                  const int64_t start,
+                                                                  const int64_t end)
+{
+  UNUSED(src_continuous);
+  UNUSED(skip);
+  UNUSED(start);
+  UNUSED(end);
+  // FIXED format cannot copy from CONTINUOUS
+  int ret = OB_NOT_SUPPORTED;
+  SQL_ENG_LOG(WARN, "fixed format cannot copy from continuous format", K(ret));
   return ret;
 }
 

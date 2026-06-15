@@ -42,6 +42,7 @@
 #include "storage/tablet/ob_session_tablet_info_map.h"
 #include "share/ob_service_name_proxy.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h"
+#include "lib/json_type/ob_json_parse.h"
 #include "sql/plan_cache/ob_plan_cache_util.h"
 
 namespace oceanbase
@@ -845,7 +846,10 @@ public:
                                  force_unstreaming_cursor_(false),
                                  conf_enable_sql_audit_(false),
                                  extend_sql_plan_monitor_metrics_(false),
+                                 json_document_max_depth_(100),
+                                 multimodel_memory_trace_level_(0),
                                  enable_pl_sql_parameterize_(false),
+                                 enable_fast_json_path_lookup_(false),
                                  enable_pl_null_literal_parameterization_(false),
                                  session_(session)
     {
@@ -905,7 +909,11 @@ public:
     bool force_unstreaming_cursor() const { return force_unstreaming_cursor_; }
     bool conf_enable_sql_audit() const { return conf_enable_sql_audit_; }
     bool extend_sql_plan_monitor_metrics() const { return extend_sql_plan_monitor_metrics_; }
+
+    int64_t get_json_document_max_depth() const { return ATOMIC_LOAD(&json_document_max_depth_); }
+    int64_t get_multimodel_memory_trace_level() const { return ATOMIC_LOAD(&multimodel_memory_trace_level_); }
     bool enable_pl_sql_parameterize() const { return enable_pl_sql_parameterize_; }
+    bool enable_fast_json_path_lookup() const { return enable_fast_json_path_lookup_; }
     bool enable_pl_null_literal_parameterization() const { return enable_pl_null_literal_parameterization_; }
   private:
     //租户级别配置项缓存session 上，避免每次获取都需要刷新
@@ -949,7 +957,11 @@ public:
     bool force_unstreaming_cursor_;
     bool conf_enable_sql_audit_;
     bool extend_sql_plan_monitor_metrics_;
+    // JSON and multi-mode related config cache
+    int64_t json_document_max_depth_;
+    int64_t multimodel_memory_trace_level_;
     bool enable_pl_sql_parameterize_;
+    bool enable_fast_json_path_lookup_;
     bool enable_pl_null_literal_parameterization_;
     ObSQLSessionInfo *session_;
   };
@@ -1784,6 +1796,25 @@ public:
     return get_local_ob_enable_sql_audit() &&
            cached_tenant_config_info_.conf_enable_sql_audit() &&
            cached_tenant_config_info_.extend_sql_plan_monitor_metrics();
+  }
+
+  // JSON and multi-mode related config access methods
+  int64_t get_cached_json_document_max_depth()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_json_document_max_depth();
+  }
+
+  int64_t get_cached_multimodel_memory_trace_level()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.get_multimodel_memory_trace_level();
+  }
+
+  bool is_enable_fast_json_path_lookup()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.enable_fast_json_path_lookup();
   }
 
   int get_tmp_table_size(uint64_t &size);

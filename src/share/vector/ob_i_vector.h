@@ -24,6 +24,11 @@ namespace sql {
 
 namespace common
 {
+// 前向声明
+class ObFixedLengthBase;
+class ObDiscreteBase;
+class ObContinuousBase;
+class ObUniformBase;
 
 #define BATCH_EVAL_HASH_ARGS      const sql::ObExpr &expr,      \
                                   uint64_t *hash_values,        \
@@ -597,6 +602,69 @@ public:
   }
   DEF_VEC_READ_INTERFACES(ObIVector);
   DEF_VEC_WRITE_INTERFACES(ObIVector);
+
+public:
+  // Batch copy interface: shallow copy data from source vector to current vector
+  // src_vec: source vector
+  // skip: rows to skip (can be nullptr, means no rows to skip)
+  // start: start position of copy
+  // end: end position of copy (exclusive)
+  // Design: use from_vector_ivector as entry point, distinguish by function name to avoid virtual function issues
+  OB_INLINE int from_vector_shallow(const ObIVector *src_vec,
+                                     const sql::ObBitVector *skip,
+                                     const int64_t start,
+                                     const int64_t end)
+  {
+    int ret = OB_SUCCESS;
+    if (OB_ISNULL(src_vec)) {
+      ret = OB_INVALID_ARGUMENT;
+    } else {
+      const VectorFormat src_format = src_vec->get_format();
+      switch (src_format) {
+        case VEC_FIXED:
+          ret = from_vector_fixed(reinterpret_cast<const ObFixedLengthBase *>(src_vec), skip, start, end);
+          break;
+        case VEC_UNIFORM:
+        case VEC_UNIFORM_CONST:
+          ret = from_vector_uniform(reinterpret_cast<const ObUniformBase *>(src_vec), src_format, skip, start, end);
+          break;
+        case VEC_DISCRETE:
+          ret = from_vector_discrete(reinterpret_cast<const ObDiscreteBase *>(src_vec), skip, start, end);
+          break;
+        case VEC_CONTINUOUS:
+          ret = from_vector_continuous(reinterpret_cast<const ObContinuousBase *>(src_vec), skip, start, end);
+          break;
+        default:
+          ret = OB_ERR_UNEXPECTED;
+          break;
+      }
+    }
+    return ret;
+  }
+
+protected:
+  // Four pure virtual functions: copy from different formats, implemented by each format
+  // New naming: from_vector_xxx, avoid confusion with from_vector_shallow
+  virtual int from_vector_fixed(const ObFixedLengthBase *src_fixed,
+                                 const sql::ObBitVector *skip,
+                                 const int64_t start,
+                                 const int64_t end) = 0;
+
+  virtual int from_vector_uniform(const ObUniformBase *src_uniform,
+                                  VectorFormat src_format,
+                                  const sql::ObBitVector *skip,
+                                  const int64_t start,
+                                  const int64_t end) = 0;
+
+  virtual int from_vector_discrete(const ObDiscreteBase *src_discrete,
+                                   const sql::ObBitVector *skip,
+                                   const int64_t start,
+                                   const int64_t end) = 0;
+
+  virtual int from_vector_continuous(const ObContinuousBase *src_continuous,
+                                      const sql::ObBitVector *skip,
+                                      const int64_t start,
+                                      const int64_t end) = 0;
 };
 
 using IVectorPtrs = common::ObIArray<ObIVector *>;

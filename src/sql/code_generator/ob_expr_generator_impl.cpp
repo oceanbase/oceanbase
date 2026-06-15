@@ -15,6 +15,7 @@
 #include "sql/engine/expr/ob_expr_oracle_decode.h"
 #include "sql/engine/expr/ob_expr_to_type.h"
 #include "sql/engine/expr/ob_expr_rand.h"
+#include "sql/engine/expr/ob_expr_rand_canonical.h"
 #include "sql/engine/expr/ob_expr_random.h"
 #include "sql/engine/expr/ob_expr_obj_access.h"
 #include "sql/engine/expr/ob_expr_type_to_str.h"

@@ -540,7 +540,8 @@ int ObRawExprInfoExtractor::visit(ObSysFunRawExpr &expr)
       if (OB_FAIL(expr.add_flag(IS_VALUES))) {
         LOG_WARN("failed to add flag IS_VALUES", K(ret));
       }
-    } else if ((T_FUN_SYS_RAND == expr.get_expr_type() || T_FUN_SYS_RANDOM == expr.get_expr_type()) &&
+    } else if ((T_FUN_SYS_RAND == expr.get_expr_type() || T_FUN_SYS_RANDOM == expr.get_expr_type()
+              || T_FUN_CK_RAND_CANONICAL == expr.get_expr_type()) &&
                !expr.has_flag(CNT_COLUMN)) {
       if (OB_FAIL(expr.add_flag(IS_RAND_FUNC))) {
         LOG_WARN("failed to add flag IS_RAND_FUNC", K(ret));

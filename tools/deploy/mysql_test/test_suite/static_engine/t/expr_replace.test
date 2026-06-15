@@ -22,7 +22,9 @@ connection default;
 set @@ob_enable_plan_cache = 0;
 
 select replace('abcdbf', 'b', 'cc');
+# ADB compatibility: REPLACE(str, search) with 2 params, same as REPLACE(str, search, '')
 select replace('abcdbf', 'b');
+select replace('aabbcc', 'b');
 select replace('abcdbf', 'b', '');
 select replace('abcdbf', '', 'cc');
 select replace('', 'b', 'cc');

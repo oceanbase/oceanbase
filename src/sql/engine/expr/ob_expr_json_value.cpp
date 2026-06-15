@@ -199,39 +199,154 @@ int ObExprJsonValue::check_default_value(ObExprResType* types_stack, int8_t pos,
   return ret;
 }
 
-int ObExprJsonValue::eval_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
+int ObExprJsonValue::ensure_param_ctx_initialized(const ObExpr &expr,
+                                                   ObEvalCtx &ctx,
+                                                   ObJsonParamCacheCtx* param_ctx,
+                                                   bool &is_cover_by_error)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(param_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("param_ctx is null", K(ret));
+  } else if (param_ctx->is_first_exec_) {
+    if (OB_FAIL(init_ctx_var(expr, param_ctx))) {
+      is_cover_by_error = false;
+      LOG_WARN("fail to init param ctx", K(ret));
+    } else if (OB_FAIL(get_clause_param_value(expr, ctx, &param_ctx->json_param_, is_cover_by_error))) {
+      LOG_WARN("fail to get param value", K(ret));
+    }
+    if (OB_SUCC(ret)) {
+      param_ctx->is_first_exec_ = false;
+    }
+  }
+  return ret;
+}
+
+int ObExprJsonValue::normalize_single_result(ObJsonExprParam *json_param,
+                                             ObIJsonBase *j_base,
+                                             bool &is_null_result)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(json_param) || OB_ISNULL(j_base)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("json value result is invalid", K(ret), KP(json_param), KP(j_base));
+  } else if (j_base->json_type() == ObJsonNodeType::J_NULL) {
+    is_null_result = true;
+  } else if (json_param->pick_ != T_NULL
+             && !ObJsonExprHelper::check_pick_type_match(j_base->json_type(), json_param->pick_)) {
+    is_null_result = true;
+  }
+  return ret;
+}
+
+int ObExprJsonValue::eval_json_value_fast_path(const ObExpr &expr,
+                                    ObEvalCtx &ctx,
+                                    MultimodeAlloctor &temp_allocator,
+                                    ObDatum &res,
+                                    ObJsonParamCacheCtx* param_ctx,
+                                    bool is_cover_by_error)
 {
   INIT_SUCC(ret);
-  bool is_cover_by_error = true;
+  bool is_null_result = false;
+
+  // Check if fast path is enabled
+  ObExpr *json_arg = expr.args_[JSN_VAL_DOC];
+  ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  ObDatum *json_datum = NULL;
+  int64_t cached_json_max_depth = session->get_cached_json_document_max_depth();
+  if (OB_FAIL(json_arg->eval(ctx, json_datum))) {
+    LOG_WARN("fail to get real data.", K(ret));
+  } else if (json_datum->is_null()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("not supported fast path because json is null", K(ret));
+  } else {
+    const ObLobCommon& lob = json_datum->get_lob_data();
+    ObString path_str;
+    bool is_null_path = false;
+    common::ObJsonPathCache *path_cache = param_ctx->get_path_cache();
+
+    if (OB_FAIL(ObJsonExprHelper::get_json_or_str_data(expr.args_[JSN_VAL_PATH], ctx,
+                                                       temp_allocator, path_str, is_null_path))) {
+      LOG_WARN("fail to get path string", K(ret));
+    } else if (is_null_path) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported fast path because path is null", K(ret));
+    } else if (!(json_datum->len_ != 0 && !lob.is_mem_loc_ && lob.in_row_) || OB_ISNULL(path_cache)) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported fast path", K(ret));
+    } else if (OB_FAIL(ObJsonExprHelper::convert_string_collation_type(
+                  expr.args_[JSN_VAL_PATH]->datum_meta_.cs_type_, CS_TYPE_UTF8MB4_BIN,
+                  &temp_allocator, path_str, path_str))) {
+      LOG_WARN("fail to convert string collation type", K(ret));
+    } else if (path_cache->is_fast_path_unchecked() &&
+          OB_FAIL(ObJsonExprHelper::validate_and_cache_simple_path(path_cache, path_str, temp_allocator, JSN_VAL_PATH))) {
+        LOG_WARN("fail to validate and cache simple path", K(ret));
+    } else if (path_cache->is_fast_path_unsupported()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("not supported fast path because path cache is not inited", K(ret));
+    } else {
+      ObJsonBinFastLocator fast_locator;
+      ObString json_data;
+      ObString res_bin_str;
+      char *res_ptr = nullptr;
+      int64_t res_len = 0;
+      ObIJsonBase *j_base_found = NULL;
+      uint8_t res_type = 0;
+      json_data.assign_ptr(lob.get_inrow_data_ptr(),
+                            static_cast<int32_t>(lob.get_byte_size(json_datum->len_)));
+
+      const ObSEArray<ObJsonPathCache::ObMultiPathEntry, 4> &path_keys_arr = path_cache->get_multi_path_keys();
+      if (path_keys_arr.empty()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("path keys not found", K(ret));
+      } else if (OB_FAIL(fast_locator.init(json_data.ptr(), json_data.length()))) {
+        LOG_WARN("fail to init fast locator", K(ret));
+      } else {
+        const ObJsonPathCache::ObMultiPathEntry &entry = path_keys_arr.at(0);
+        ObArrayHelper<ObString> path_keys(entry.key_cnt, entry.keys, entry.key_cnt);
+        if (OB_FAIL(fast_locator.seek(path_keys, res_ptr, res_len, res_type))) {
+          LOG_WARN("fail to seek in fast path", K(ret));
+        } else if (OB_FAIL(fast_locator.get_raw_binary(res_bin_str, res_type, res_ptr, res_len, &temp_allocator))) {
+          LOG_WARN("fail to get raw binary in fast path", K(ret));
+        } else if (OB_FAIL(ObJsonBaseFactory::get_json_base(
+                      &temp_allocator, res_bin_str, ObJsonInType::JSON_BIN, ObJsonInType::JSON_BIN,
+                      j_base_found, 0, cached_json_max_depth))) {
+          LOG_WARN("fail to get json base from binary data", K(ret));
+        } else if (OB_FAIL(normalize_single_result(&param_ctx->json_param_,
+                                                    j_base_found,
+                                                    is_null_result))) {
+          LOG_WARN("fail to normalize fast path result", K(ret));
+        } else {
+          ObDatum *return_val = NULL;
+          uint8_t is_type_mismatch = 0;
+          ret = set_result(expr, &param_ctx->json_param_, ctx, is_null_result, is_cover_by_error,
+                          is_type_mismatch, res, return_val, &temp_allocator, j_base_found);
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExprJsonValue::eval_json_value_general_path(const ObExpr &expr,
+                                     ObEvalCtx &ctx,
+                                     MultimodeAlloctor &temp_allocator,
+                                     ObDatum &res,
+                                     ObJsonParamCacheCtx* param_ctx,
+                                     bool is_cover_by_error)
+{
+  INIT_SUCC(ret);
   bool is_null_result = false;
   uint8_t is_type_mismatch = 0;
   ObDatum *return_val = NULL;
   ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
   uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
-  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
   ObJsonBin st_json(&temp_allocator);
   ObIJsonBase *j_base = &st_json;
   ObJsonSeekResult hits;
   ObJsonBin res_json(&temp_allocator);
   hits.res_point_ = &res_json;
-  ObJsonParamCacheCtx ctx_cache(&temp_allocator);
-  ObJsonParamCacheCtx* param_ctx = NULL;
-  /**
-  * get content point，
-  */
-  param_ctx = ObJsonExprHelper::get_param_cache_ctx(expr.expr_ctx_id_, &ctx.exec_ctx_);
-  if (OB_ISNULL(param_ctx)) {
-    param_ctx = &ctx_cache;
-  }
-  // init flag
-  if (param_ctx->is_first_exec_ && OB_FAIL(init_ctx_var(expr, param_ctx))) {
-    is_cover_by_error = false;
-    LOG_WARN("fail to init param ctx", K(ret));
-  } else if (param_ctx->is_first_exec_
-              && OB_FAIL(ObExprJsonValue::get_clause_param_value(expr, ctx, &param_ctx->json_param_,
-                                          is_cover_by_error))) { // get param value & check param valid
-    LOG_WARN("fail to get param value", K(ret));
-  } else if (OB_FAIL(ObJsonUtil::get_json_doc(expr.args_[JSN_VAL_DOC], ctx,
+  if (OB_FAIL(ObJsonUtil::get_json_doc(expr.args_[JSN_VAL_DOC], ctx,
                     temp_allocator, j_base, is_null_result,
                     is_cover_by_error))) { // parse json doc
     LOG_WARN("fail to parse json doc", K(ret));
@@ -263,12 +378,63 @@ int ObExprJsonValue::eval_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObDatum
     }
     LOG_WARN("json_values failed", K(ret));
   } else {
+    ObIJsonBase *result_j_base = hits.size() > 0 ? hits[0] : NULL;
     ret = set_result(expr, &param_ctx->json_param_, ctx, is_null_result, is_cover_by_error, is_type_mismatch,
-                    res, return_val, &temp_allocator, hits);
+                    res, return_val, &temp_allocator, result_j_base);
   }
-  if (OB_SUCC(ret)) {
-    param_ctx->is_first_exec_ = false;
+  return ret;
+}
+
+int ObExprJsonValue::eval_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res)
+{
+  int ret = OB_SUCCESS;
+
+  // Initialize allocator and param context
+  ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
+  uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
+  MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret, ctx);
+
+  // Check if fast path is enabled
+  ObExpr *json_arg = expr.args_[JSN_VAL_DOC];
+  ObObjType val_type = json_arg->datum_meta_.type_;
+  bool is_static_const = expr.args_[JSN_VAL_PATH]->is_static_const_expr();
+  ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  bool enable_fast_path = false;
+  bool is_cover_by_error = true;
+  ObJsonParamCacheCtx ctx_cache(&temp_allocator);
+  ObJsonParamCacheCtx* param_ctx = NULL;
+  param_ctx = ObJsonExprHelper::get_param_cache_ctx(expr.expr_ctx_id_, &ctx.exec_ctx_);
+  if (OB_ISNULL(param_ctx)) {
+    param_ctx = &ctx_cache;
   }
+  if (OB_FAIL(ensure_param_ctx_initialized(expr, ctx, param_ctx, is_cover_by_error))) {
+    LOG_WARN("fail to init param ctx and get param value", K(ret));
+  } else{
+    if (OB_NOT_NULL(session)) {
+      enable_fast_path = session->is_enable_fast_json_path_lookup() && is_static_const
+                          && (val_type == ObJsonType) && lib::is_mysql_mode();
+    }
+
+    if (enable_fast_path) {
+      common::ObJsonPathCache *path_cache = param_ctx->get_path_cache();
+      if (OB_NOT_NULL(path_cache) && path_cache->is_fast_path_unsupported()) {
+        enable_fast_path = false;
+      } else if (OB_FAIL(ObExprJsonValue::eval_json_value_fast_path(
+                   expr, ctx, temp_allocator, res, param_ctx, is_cover_by_error))) {
+        LOG_WARN("fail to eval json value fast path", K(ret));
+      }
+    }
+
+    // If fast path didn't succeed, fall back to general path
+    if (!enable_fast_path || OB_FAIL(ret)) {
+      ret = OB_SUCCESS; // Reset ret for general path
+      if (OB_FAIL(ObExprJsonValue::eval_json_value_general_path(expr, ctx, temp_allocator, res,
+                                                                param_ctx, is_cover_by_error))) {
+        LOG_WARN("fail to eval json value general path", K(ret));
+      }
+    }
+  }
+
   return ret;
 }
 
@@ -353,8 +519,9 @@ int ObExprJsonValue::eval_ora_json_value(const ObExpr &expr, ObEvalCtx &ctx, ObD
     }
     LOG_WARN("json_values failed", K(ret));
   } else {
+    ObIJsonBase *result_j_base = hits.size() > 0 ? hits[0] : NULL;
     ret = set_result(expr, &param_ctx->json_param_, ctx, is_null_result, is_cover_by_error, is_type_mismatch,
-                    res, return_val, &temp_allocator, hits);
+                    res, return_val, &temp_allocator, result_j_base);
   }
   if (OB_SUCC(ret)) {
     param_ctx->is_first_exec_ = false;
@@ -485,7 +652,7 @@ int ObExprJsonValue::set_result(const ObExpr &expr,
                                 ObDatum &res,
                                 ObDatum *return_val,
                                 ObIAllocator *allocator,
-                                ObJsonSeekResult &hits)
+                                ObIJsonBase *j_base)
 {
   INIT_SUCC(ret);
   if (is_null_result) {
@@ -498,7 +665,7 @@ int ObExprJsonValue::set_result(const ObExpr &expr,
       ObCollationType dst_coll_type = expr.datum_meta_.cs_type_;
       ObJsonCastParam cast_param(json_param->dst_type_, in_coll_type, dst_coll_type, json_param->ascii_type_);
       cast_param.rt_expr_ = &expr;
-      ret = ObJsonUtil::cast_to_res(allocator, ctx, hits[0],
+      ret = ObJsonUtil::cast_to_res(allocator, ctx, j_base,
           json_param->accuracy_, cast_param, res, is_type_mismatch);
       if (OB_FAIL(ret)) {
         try_set_error_val(expr, ctx, res, ret, json_param, is_type_mismatch);
@@ -752,12 +919,8 @@ int ObExprJsonValue::doc_do_seek(ObJsonSeekResult &hits, bool &is_null_result, O
       ret = OB_ERR_MULTIPLE_JSON_VALUES;
       LOG_USER_ERROR(OB_ERR_MULTIPLE_JSON_VALUES, "json_value");
       LOG_WARN("json value seek result more than one.", K(hits.size()));
-    } else if (hits[0]->json_type() == ObJsonNodeType::J_NULL) {
-      is_null_result = true;
-    } else if (json_param->pick_ != T_NULL) {
-      if (!ObJsonExprHelper::check_pick_type_match(hits[0]->json_type(), json_param->pick_)) {
-        is_null_result = true;
-      }
+    } else if (OB_FAIL(normalize_single_result(json_param, hits[0], is_null_result))) {
+      LOG_WARN("fail to normalize json value result", K(ret));
     }
   }
   return ret;

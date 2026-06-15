@@ -479,6 +479,27 @@ int ObExprDateFormat::analyze_format(
   return ret;
 }
 
+// Recognize common format patterns for fast path optimization
+DateFormatPattern ObExprDateFormat::recognize_format_pattern(const ObString &format)
+{
+  static const struct {
+    const char *pattern;
+    DateFormatPattern type;
+  } known_patterns[] = {
+    {"%Y-%m-%d", DateFormatPattern::Y_m_d},
+    {"%Y-%m-01", DateFormatPattern::Y_m_01},
+    {"%Y-%m", DateFormatPattern::Y_m},
+    {"%Y%m%d", DateFormatPattern::Ymd},
+  };
+
+  for (int64_t i = 0; i < ARRAYSIZEOF(known_patterns); ++i) {
+    if (format.case_compare_equal(known_patterns[i].pattern)) {
+      return known_patterns[i].type;
+    }
+  }
+  return DateFormatPattern::UNKNOWN;
+}
+
 int ObExprDateFormat::get_day_month_names(ObString locale_name,
                                           const char *const *&day_name,
                                           const char *const *&ab_day_name,
@@ -749,14 +770,105 @@ int ObExprDateFormat::calc_date_format_vector(const ObExpr &expr,
     VectorFormat arg_format = expr.args_[0]->get_format(ctx);
     VectorFormat res_format = expr.get_format(ctx);
     ObObjTypeClass arg_tc = ob_obj_type_class(expr.args_[0]->datum_meta_.type_);
-    if (ObMySQLDateTC == arg_tc) {
-      DISPATCH_DATE_FORMAT_VECTOR_FUNC(vector_date_format, MySQLDate);
-    } else if (ObMySQLDateTimeTC == arg_tc) {
-      DISPATCH_DATE_FORMAT_VECTOR_FUNC(vector_date_format, MySQLDateTime);
-    } else if (ObDateTC == arg_tc) {
-      DISPATCH_DATE_FORMAT_VECTOR_FUNC(vector_date_format, Date);
-    } else if (ObDateTimeTC == arg_tc) {
-      DISPATCH_DATE_FORMAT_VECTOR_FUNC(vector_date_format, DateTime);
+
+    // Fast path: check if format is a known pattern
+    bool use_fast_path = false;
+    DateFormatPattern pattern = DateFormatPattern::UNKNOWN;
+    if (expr.args_[1]->is_const_expr()) {
+      if (OB_FAIL(expr.args_[1]->eval_vector(ctx, skip, bound))) {
+        LOG_WARN("fail to eval format param", K(ret));
+      } else {
+        ObString format_str = expr.args_[1]->get_vector(ctx)->get_string(0);
+        pattern = recognize_format_pattern(format_str);
+        use_fast_path = (pattern != DateFormatPattern::UNKNOWN)
+                        && (ObTimestampType != expr.args_[0]->datum_meta_.type_);
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+      // error already logged
+    } else if (use_fast_path) {
+      // Use fast path for known patterns
+      #define DISPATCH_FAST_FORMAT(FUNC, TYPE) \
+        if (VEC_FIXED == arg_format && VEC_DISCRETE == res_format) { \
+          ret = FUNC<TYPE##FixedVec, StrDiscVec, TYPE##Type>(expr, ctx, skip, bound); \
+        } else if (VEC_FIXED == arg_format && VEC_UNIFORM == res_format) { \
+          ret = FUNC<TYPE##FixedVec, StrUniVec, TYPE##Type>(expr, ctx, skip, bound); \
+        } else if (VEC_FIXED == arg_format && VEC_CONTINUOUS == res_format) { \
+          ret = FUNC<TYPE##FixedVec, StrContVec, TYPE##Type>(expr, ctx, skip, bound); \
+        } else if (VEC_UNIFORM == arg_format && VEC_DISCRETE == res_format) { \
+          ret = FUNC<TYPE##UniVec, StrDiscVec, TYPE##Type>(expr, ctx, skip, bound); \
+        } else if (VEC_UNIFORM == arg_format && VEC_UNIFORM == res_format) { \
+          ret = FUNC<TYPE##UniVec, StrUniVec, TYPE##Type>(expr, ctx, skip, bound); \
+        } else if (VEC_UNIFORM == arg_format && VEC_CONTINUOUS == res_format) { \
+          ret = FUNC<TYPE##UniVec, StrContVec, TYPE##Type>(expr, ctx, skip, bound); \
+        } else if (VEC_UNIFORM_CONST == arg_format && VEC_DISCRETE == res_format) { \
+          ret = FUNC<TYPE##UniCVec, StrDiscVec, TYPE##Type>(expr, ctx, skip, bound); \
+        } else if (VEC_UNIFORM_CONST == arg_format && VEC_UNIFORM == res_format) { \
+          ret = FUNC<TYPE##UniCVec, StrUniVec, TYPE##Type>(expr, ctx, skip, bound); \
+        } else if (VEC_UNIFORM_CONST == arg_format && VEC_CONTINUOUS == res_format) { \
+          ret = FUNC<TYPE##UniCVec, StrContVec, TYPE##Type>(expr, ctx, skip, bound); \
+        } else { \
+          ret = FUNC<ObVectorBase, ObVectorBase, TYPE##Type>(expr, ctx, skip, bound); \
+        }
+
+      if (ObMySQLDateTC == arg_tc) {
+        if (pattern == DateFormatPattern::Y_m_01) {
+          DISPATCH_FAST_FORMAT(format_y_m_01_vector, MySQLDate);
+        } else if (pattern == DateFormatPattern::Y_m_d) {
+          DISPATCH_FAST_FORMAT(format_y_m_d_vector, MySQLDate);
+        } else if (pattern == DateFormatPattern::Y_m) {
+          DISPATCH_FAST_FORMAT(format_y_m_vector, MySQLDate);
+        } else if (pattern == DateFormatPattern::Ymd) {
+          DISPATCH_FAST_FORMAT(format_ymd_vector, MySQLDate);
+        }
+      } else if (ObMySQLDateTimeTC == arg_tc) {
+        if (pattern == DateFormatPattern::Y_m_01) {
+          DISPATCH_FAST_FORMAT(format_y_m_01_vector, MySQLDateTime);
+        } else if (pattern == DateFormatPattern::Y_m_d) {
+          DISPATCH_FAST_FORMAT(format_y_m_d_vector, MySQLDateTime);
+        } else if (pattern == DateFormatPattern::Y_m) {
+          DISPATCH_FAST_FORMAT(format_y_m_vector, MySQLDateTime);
+        } else if (pattern == DateFormatPattern::Ymd) {
+          DISPATCH_FAST_FORMAT(format_ymd_vector, MySQLDateTime);
+        }
+      } else if (ObDateTC == arg_tc) {
+        // Fast path for DateType (int32_t days since epoch)
+        if (pattern == DateFormatPattern::Y_m_01) {
+          DISPATCH_FAST_FORMAT(format_y_m_01_vector, Date);
+        } else if (pattern == DateFormatPattern::Y_m_d) {
+          DISPATCH_FAST_FORMAT(format_y_m_d_vector, Date);
+        } else if (pattern == DateFormatPattern::Y_m) {
+          DISPATCH_FAST_FORMAT(format_y_m_vector, Date);
+        } else if (pattern == DateFormatPattern::Ymd) {
+          DISPATCH_FAST_FORMAT(format_ymd_vector, Date);
+        }
+      } else if (ObDateTimeTC == arg_tc && ObTimestampType != expr.args_[0]->datum_meta_.type_) {
+        // Fast path for DateTimeType (int64_t microseconds since epoch)
+        // Note: Only available for datetime type, not timestamp type.
+        // Timestamp type requires tz_offset conversion which is not handled in fast path.
+        if (pattern == DateFormatPattern::Y_m_01) {
+          DISPATCH_FAST_FORMAT(format_y_m_01_vector, DateTime);
+        } else if (pattern == DateFormatPattern::Y_m_d) {
+          DISPATCH_FAST_FORMAT(format_y_m_d_vector, DateTime);
+        } else if (pattern == DateFormatPattern::Y_m) {
+          DISPATCH_FAST_FORMAT(format_y_m_vector, DateTime);
+        } else if (pattern == DateFormatPattern::Ymd) {
+          DISPATCH_FAST_FORMAT(format_ymd_vector, DateTime);
+        }
+      }
+      #undef DISPATCH_FAST_FORMAT
+    } else {
+      // Use original path
+      if (ObMySQLDateTC == arg_tc) {
+        DISPATCH_DATE_FORMAT_VECTOR_FUNC(vector_date_format, MySQLDate);
+      } else if (ObMySQLDateTimeTC == arg_tc) {
+        DISPATCH_DATE_FORMAT_VECTOR_FUNC(vector_date_format, MySQLDateTime);
+      } else if (ObDateTC == arg_tc) {
+        DISPATCH_DATE_FORMAT_VECTOR_FUNC(vector_date_format, Date);
+      } else if (ObDateTimeTC == arg_tc) {
+        DISPATCH_DATE_FORMAT_VECTOR_FUNC(vector_date_format, DateTime);
+      }
     }
 
     if (OB_FAIL(ret)) {
@@ -1271,6 +1383,372 @@ OB_INLINE int ObExprDateFormat::get_from_format_T(FORMAT_FUNC_ARG_DECL)
   memcpy(res_buf + 6, &ObFastFormatInt::DIGITS[sec * 2], 2);
   len += 8;
   return ret;
+}
+
+//=============================================================================
+// Fast Path Inline Formatting Functions
+//=============================================================================
+
+// Format year (4 digits) into buffer, returns pointer after year
+OB_INLINE static char* format_year(char *p, int32_t year)
+{
+  p[0] = ObFastFormatInt::DIGITS[(year / 100) << 1];
+  p[1] = ObFastFormatInt::DIGITS[(year / 100) << 1 | 1];
+  p[2] = ObFastFormatInt::DIGITS[(year % 100) << 1];
+  p[3] = ObFastFormatInt::DIGITS[(year % 100) << 1 | 1];
+  return p + 4;
+}
+
+// Format month (2 digits) into buffer
+OB_INLINE static char* format_month(char *p, int32_t month)
+{
+  p[0] = ObFastFormatInt::DIGITS[month << 1];
+  p[1] = ObFastFormatInt::DIGITS[month << 1 | 1];
+  return p + 2;
+}
+
+// Format day (2 digits) into buffer
+OB_INLINE static char* format_day(char *p, int32_t day)
+{
+  p[0] = ObFastFormatInt::DIGITS[day << 1];
+  p[1] = ObFastFormatInt::DIGITS[day << 1 | 1];
+  return p + 2;
+}
+
+// Format: YYYY-MM-DD (10 chars)
+OB_INLINE static void format_y_m_d(char *p, int32_t year, int32_t month, int32_t day)
+{
+  p = format_year(p, year);
+  *p++ = '-';
+  p = format_month(p, month);
+  *p++ = '-';
+  format_day(p, day);
+}
+
+// Format: YYYY-MM-01 (10 chars, same as DATE_TRUNC('month'))
+OB_INLINE static void format_y_m_01(char *p, int32_t year, int32_t month)
+{
+  p = format_year(p, year);
+  *p++ = '-';
+  p = format_month(p, month);
+  p[0] = '-';
+  p[1] = '0';
+  p[2] = '1';
+}
+
+// Format: YYYY-MM (7 chars)
+OB_INLINE static void format_y_m(char *p, int32_t year, int32_t month)
+{
+  p = format_year(p, year);
+  *p++ = '-';
+  format_month(p, month);
+}
+
+// Format: YYYYMMDD (8 chars, compact format)
+OB_INLINE static void format_ymd(char *p, int32_t year, int32_t month, int32_t day)
+{
+  p = format_year(p, year);
+  p = format_month(p, month);
+  format_day(p, day);
+}
+
+//=============================================================================
+// Date Field Extraction Helpers
+//=============================================================================
+
+// Helper struct to extract date fields from different types
+template <typename IN_TYPE>
+struct DateFieldExtractor;
+
+template <>
+struct DateFieldExtractor<ObMySQLDateTime> {
+  static int32_t get_year(const ObMySQLDateTime &dt) { return dt.year(); }
+  static int32_t get_month(const ObMySQLDateTime &dt) { return dt.month(); }
+  static int32_t get_day(const ObMySQLDateTime &dt) { return dt.day_; }
+  static bool is_zero_datetime(const ObMySQLDateTime &dt) {
+    return dt.datetime_ == ObTimeConverter::MYSQL_ZERO_DATETIME;
+  }
+};
+
+template <>
+struct DateFieldExtractor<ObMySQLDate> {
+  static int32_t get_year(const ObMySQLDate &dt) { return dt.year_; }
+  static int32_t get_month(const ObMySQLDate &dt) { return dt.month_; }
+  static int32_t get_day(const ObMySQLDate &dt) { return dt.day_; }
+  static bool is_zero_datetime(const ObMySQLDate &) { return false; }
+};
+
+// DateTimeType is int64_t (microseconds since epoch)
+// DateType is int32_t (days since epoch)
+// These types need conversion via ObTimeConverter
+// NOTE: This extractor assumes tz_offset = 0 and is only valid for datetime type,
+// NOT for timestamp type. Timestamp columns should fall back to the slow path
+// which correctly applies session timezone offset.
+template <>
+struct DateFieldExtractor<DateTimeType> {
+  // Helper function to convert DateTimeType to date (days since epoch)
+  static int32_t datetime_to_date(DateTimeType usec) {
+    // tz_offset is 0 for datetime type
+    int32_t date = static_cast<int32_t>(usec / USECS_PER_DAY);
+    int64_t remainder = usec % USECS_PER_DAY;
+    // Handle negative values (same as parse_date_usec)
+    if (remainder < 0) {
+      --date;
+    }
+    return date;
+  }
+
+  static int32_t get_year(const DateTimeType &dt) {
+    if (OB_UNLIKELY(dt == ObTimeConverter::ZERO_DATETIME)) {
+      return 0;
+    }
+    int32_t date = datetime_to_date(dt);
+    int32_t year;
+    ObTimeConverter::days_to_year(date, year);
+    return year;
+  }
+  static int32_t get_month(const DateTimeType &dt) {
+    if (OB_UNLIKELY(dt == ObTimeConverter::ZERO_DATETIME)) {
+      return 0;
+    }
+    int32_t date = datetime_to_date(dt);
+    YearType year;
+    DateType yday, mday;
+    MonthType month;
+    ObTimeConverter::days_to_year_ydays(date, year, yday);
+    ObTimeConverter::ydays_to_month_mdays(year, yday, month, mday);
+    return month;
+  }
+  static int32_t get_day(const DateTimeType &dt) {
+    if (OB_UNLIKELY(dt == ObTimeConverter::ZERO_DATETIME)) {
+      return 0;
+    }
+    int32_t date = datetime_to_date(dt);
+    YearType year;
+    DateType yday, mday;
+    MonthType month;
+    ObTimeConverter::days_to_year_ydays(date, year, yday);
+    ObTimeConverter::ydays_to_month_mdays(year, yday, month, mday);
+    return mday;
+  }
+  static bool is_zero_datetime(const DateTimeType &dt) {
+    return dt == ObTimeConverter::ZERO_DATETIME;
+  }
+};
+
+template <>
+struct DateFieldExtractor<DateType> {
+  static int32_t get_year(const DateType &dt) {
+    YearType year;
+    ObTimeConverter::days_to_year(dt, year);
+    return year;
+  }
+  static int32_t get_month(const DateType &dt) {
+    YearType year;
+    DateType yday, mday;
+    MonthType month;
+    ObTimeConverter::days_to_year_ydays(dt, year, yday);
+    ObTimeConverter::ydays_to_month_mdays(year, yday, month, mday);
+    return month;
+  }
+  static int32_t get_day(const DateType &dt) {
+    YearType year;
+    DateType yday, mday;
+    MonthType month;
+    ObTimeConverter::days_to_year_ydays(dt, year, yday);
+    ObTimeConverter::ydays_to_month_mdays(year, yday, month, mday);
+    return mday;
+  }
+  static bool is_zero_datetime(const DateType &dt) {
+    return dt == ObTimeConverter::ZERO_DATE;
+  }
+};
+
+//=============================================================================
+// Unified Fast Path Template
+//=============================================================================
+
+// Format policy classes for different output formats
+struct FormatPolicyY_m_d {
+  static constexpr int OUTPUT_LEN = 10;
+  static constexpr DateFormatPattern PATTERN = DateFormatPattern::Y_m_d;
+
+  template <typename IN_TYPE>
+  static void format(char *p, const IN_TYPE &dt) {
+    format_y_m_d(p,
+                 DateFieldExtractor<IN_TYPE>::get_year(dt),
+                 DateFieldExtractor<IN_TYPE>::get_month(dt),
+                 DateFieldExtractor<IN_TYPE>::get_day(dt));
+  }
+
+  template <typename IN_TYPE>
+  static bool should_set_null(const IN_TYPE &dt) {
+    UNUSED(dt);
+    return false;  // zero datetime produces formatted zero-string, matching native MySQL
+  }
+};
+
+struct FormatPolicyY_m_01 {
+  static constexpr int OUTPUT_LEN = 10;
+  static constexpr DateFormatPattern PATTERN = DateFormatPattern::Y_m_01;
+
+  template <typename IN_TYPE>
+  static void format(char *p, const IN_TYPE &dt) {
+    format_y_m_01(p,
+                  DateFieldExtractor<IN_TYPE>::get_year(dt),
+                  DateFieldExtractor<IN_TYPE>::get_month(dt));
+  }
+
+  template <typename IN_TYPE>
+  static bool should_set_null(const IN_TYPE &dt) {
+    UNUSED(dt);
+    return false;  // zero datetime produces formatted zero-string, matching native MySQL
+  }
+};
+
+struct FormatPolicyY_m {
+  static constexpr int OUTPUT_LEN = 7;
+  static constexpr DateFormatPattern PATTERN = DateFormatPattern::Y_m;
+
+  template <typename IN_TYPE>
+  static void format(char *p, const IN_TYPE &dt) {
+    format_y_m(p,
+               DateFieldExtractor<IN_TYPE>::get_year(dt),
+               DateFieldExtractor<IN_TYPE>::get_month(dt));
+  }
+
+  template <typename IN_TYPE>
+  static bool should_set_null(const IN_TYPE &dt) {
+    UNUSED(dt);
+    return false;  // zero datetime produces formatted zero-string, matching native MySQL
+  }
+};
+
+struct FormatPolicyYmd {
+  static constexpr int OUTPUT_LEN = 8;
+  static constexpr DateFormatPattern PATTERN = DateFormatPattern::Ymd;
+
+  template <typename IN_TYPE>
+  static void format(char *p, const IN_TYPE &dt) {
+    format_ymd(p,
+               DateFieldExtractor<IN_TYPE>::get_year(dt),
+               DateFieldExtractor<IN_TYPE>::get_month(dt),
+               DateFieldExtractor<IN_TYPE>::get_day(dt));
+  }
+
+  template <typename IN_TYPE>
+  static bool should_set_null(const IN_TYPE &dt) {
+    UNUSED(dt);
+    return false;  // zero datetime produces formatted zero-string, matching native MySQL
+  }
+};
+
+template <typename IN_TYPE, typename ArgVec>
+OB_INLINE static IN_TYPE get_date_value(ArgVec *arg_vec, int64_t idx)
+{
+  if constexpr (std::is_same<IN_TYPE, ObMySQLDateTime>::value) {
+    return arg_vec->get_mysql_datetime(idx);
+  } else if constexpr (std::is_same<IN_TYPE, ObMySQLDate>::value) {
+    return arg_vec->get_mysql_date(idx);
+  } else {
+    return *reinterpret_cast<const IN_TYPE*>(arg_vec->get_payload(idx));
+  }
+}
+
+// Unified fast path implementation
+template <typename FormatPolicy, typename ArgVec, typename ResVec, typename IN_TYPE>
+static int format_fast_path(const ObExpr &expr, ObEvalCtx &ctx,
+                            const ObBitVector &skip, const EvalBound &bound)
+{
+  int ret = OB_SUCCESS;
+  ArgVec *arg_vec = static_cast<ArgVec *>(expr.args_[0]->get_vector(ctx));
+  ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
+  ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
+  bool no_skip_no_null = bound.get_all_rows_active() && !arg_vec->has_null()
+                         && eval_flags.accumulate_bit_cnt(bound) == 0;
+
+  constexpr int OUTPUT_LEN = FormatPolicy::OUTPUT_LEN;
+
+  // Pre-allocate output buffers
+  char *buf[bound.end()];
+  for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
+    if (skip.at(idx) || eval_flags.at(idx) || arg_vec->is_null(idx)) {
+      continue;
+    } else if (OB_ISNULL(buf[idx] = expr.get_str_res_mem(ctx, OUTPUT_LEN, idx))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_ERROR("no more memory to alloc for buf");
+    }
+  }
+
+  if (OB_FAIL(ret)) {
+    // error already logged
+  } else if (no_skip_no_null) {
+    // Fast path: no skip, no null
+    for (int64_t idx = bound.start(); idx < bound.end(); ++idx) {
+      IN_TYPE dt = get_date_value<IN_TYPE>(arg_vec, idx);
+
+      if (OB_UNLIKELY(FormatPolicy::should_set_null(dt))) {
+        res_vec->set_null(idx);
+        continue;
+      }
+
+      FormatPolicy::format(buf[idx], dt);
+      res_vec->set_payload_shallow(idx, buf[idx], OUTPUT_LEN);
+    }
+  } else {
+    // Normal path with skip/null checks
+    for (int64_t idx = bound.start(); idx < bound.end(); ++idx) {
+      if (skip.at(idx) || eval_flags.at(idx)) { continue; }
+      if (arg_vec->is_null(idx)) {
+        res_vec->set_null(idx);
+        continue;
+      }
+
+      IN_TYPE dt = get_date_value<IN_TYPE>(arg_vec, idx);
+
+      if (OB_UNLIKELY(FormatPolicy::should_set_null(dt))) {
+        res_vec->set_null(idx);
+        continue;
+      }
+
+      FormatPolicy::format(buf[idx], dt);
+      res_vec->set_payload_shallow(idx, buf[idx], OUTPUT_LEN);
+    }
+  }
+
+  return ret;
+}
+
+//=============================================================================
+// Fast Path Entry Functions
+//=============================================================================
+
+template <typename ArgVec, typename ResVec, typename IN_TYPE>
+int ObExprDateFormat::format_y_m_01_vector(const ObExpr &expr, ObEvalCtx &ctx,
+                                            const ObBitVector &skip, const EvalBound &bound)
+{
+  return format_fast_path<FormatPolicyY_m_01, ArgVec, ResVec, IN_TYPE>(expr, ctx, skip, bound);
+}
+
+template <typename ArgVec, typename ResVec, typename IN_TYPE>
+int ObExprDateFormat::format_y_m_d_vector(const ObExpr &expr, ObEvalCtx &ctx,
+                                           const ObBitVector &skip, const EvalBound &bound)
+{
+  return format_fast_path<FormatPolicyY_m_d, ArgVec, ResVec, IN_TYPE>(expr, ctx, skip, bound);
+}
+
+template <typename ArgVec, typename ResVec, typename IN_TYPE>
+int ObExprDateFormat::format_y_m_vector(const ObExpr &expr, ObEvalCtx &ctx,
+                                         const ObBitVector &skip, const EvalBound &bound)
+{
+  return format_fast_path<FormatPolicyY_m, ArgVec, ResVec, IN_TYPE>(expr, ctx, skip, bound);
+}
+
+template <typename ArgVec, typename ResVec, typename IN_TYPE>
+int ObExprDateFormat::format_ymd_vector(const ObExpr &expr, ObEvalCtx &ctx,
+                                         const ObBitVector &skip, const EvalBound &bound)
+{
+  return format_fast_path<FormatPolicyYmd, ArgVec, ResVec, IN_TYPE>(expr, ctx, skip, bound);
 }
 
 #undef CHECK_SKIP_NULL

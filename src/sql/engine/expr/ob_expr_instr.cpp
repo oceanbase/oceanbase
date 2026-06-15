@@ -17,23 +17,153 @@ namespace sql
 {
 
 ObExprInstr::ObExprInstr(ObIAllocator &alloc)
-    : ObLocationExprOperator(alloc, T_FUN_SYS_INSTR, N_INSTR, 2, NOT_ROW_DIMENSION)
+    : ObLocationExprOperator(alloc, T_FUN_SYS_INSTR, N_INSTR, MORE_THAN_ONE, NOT_ROW_DIMENSION)
 {
   need_charset_convert_ = false;
 }
 
 ObExprInstr::~ObExprInstr() {}
 
+int ObExprInstr::calc_result_typeN(ObExprResType &type,
+                                   ObExprResType *type_array,
+                                   int64_t param_num,
+                                   ObExprTypeCtx &type_ctx) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(param_num < 2 || param_num > 4)) {
+    ret = OB_ERR_PARAM_SIZE;
+    LOG_WARN("param num is invalid", K(ret), K(param_num));
+  } else if (OB_ISNULL(type_array)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("type array is null", K(ret), K(type_array));
+  } else if (OB_FAIL(ObLocationExprOperator::calc_result_type2(type, type_array[0],
+                                                                type_array[1], type_ctx))) {
+    LOG_WARN("fail calc result type", K(param_num), K(ret));
+  } else {
+    // position 和 occurrence 参数类型为 Int
+    if (3 == param_num) {
+      type_array[2].set_calc_type(ObIntType);
+    } else if (4 == param_num) {
+      type_array[2].set_calc_type(ObIntType);
+      type_array[3].set_calc_type(ObIntType);
+    }
+  }
+  return ret;
+}
+
+int ObExprInstr::calc_mysql_instr_arg(const ObExpr &expr, ObEvalCtx &ctx,
+                                      bool &is_null,
+                                      ObDatum *&haystack, ObDatum *&needle,
+                                      int64_t &pos_int, int64_t &occ_int,
+                                      ObCollationType &calc_cs_type)
+{
+  int ret = OB_SUCCESS;
+  is_null = false;
+  pos_int = 1;   // 默认从位置 1 开始
+  occ_int = 1;   // 默认第 1 次出现
+
+  // 评估 haystack 和 needle
+  if (OB_FAIL(expr.args_[0]->eval(ctx, haystack))) {
+    LOG_WARN("eval arg 0 failed", K(ret));
+  } else if (haystack->is_null()) {
+    is_null = true;
+  } else if (OB_FAIL(expr.args_[1]->eval(ctx, needle))) {
+    LOG_WARN("eval arg 1 failed", K(ret));
+  } else if (needle->is_null()) {
+    is_null = true;
+  }
+
+  // 评估 position 参数
+  if (OB_SUCC(ret) && !is_null && expr.arg_cnt_ >= 3) {
+    ObDatum *pos = NULL;
+    if (OB_FAIL(expr.args_[2]->eval(ctx, pos))) {
+      LOG_WARN("eval pos arg failed", K(ret));
+    } else if (pos->is_null()) {
+      is_null = true;
+    } else {
+      pos_int = pos->get_int();
+    }
+  }
+
+  // 评估 occurrence 参数
+  if (OB_SUCC(ret) && !is_null && expr.arg_cnt_ >= 4) {
+    ObDatum *occ = NULL;
+    if (OB_FAIL(expr.args_[3]->eval(ctx, occ))) {
+      LOG_WARN("eval occ arg failed", K(ret));
+    } else if (occ->is_null()) {
+      is_null = true;
+    } else {
+      occ_int = occ->get_int();
+    }
+  }
+
+  // 获取字符集类型
+  if (OB_SUCC(ret) && !is_null) {
+    if (OB_FAIL(ObLocationExprOperator::get_calc_cs_type(expr, calc_cs_type))) {
+      LOG_WARN("get_calc_cs_type failed", K(ret));
+    }
+  }
+  return ret;
+}
+
 int ObExprInstr::calc_mysql_instr_expr(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res_datum)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(2 != expr.arg_cnt_) || OB_ISNULL(expr.args_) ||
-      OB_ISNULL(expr.args_[0]) || OB_ISNULL(expr.args_[1])) {
+  if (OB_UNLIKELY(expr.arg_cnt_ < 2 || expr.arg_cnt_ > 4) ||
+      OB_ISNULL(expr.args_) || OB_ISNULL(expr.args_[0]) || OB_ISNULL(expr.args_[1])) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid expr", K(ret), K(expr));
-  } else if (OB_FAIL(ObLocationExprOperator::calc_(expr, *expr.args_[1], *expr.args_[0],
-                                                   ctx, res_datum))) {
-    LOG_WARN("ObLocationExprOperator::calc_ faied", K(ret));
+  } else {
+    ObDatum *haystack = NULL;
+    ObDatum *needle = NULL;
+    bool is_null = false;
+    int64_t pos_int = 1;
+    int64_t occ_int = 1;
+    ObCollationType calc_cs_type = CS_TYPE_INVALID;
+
+    if (OB_FAIL(calc_mysql_instr_arg(expr, ctx, is_null, haystack, needle,
+                                     pos_int, occ_int, calc_cs_type))) {
+      LOG_WARN("calc_mysql_instr_arg failed", K(ret));
+    } else if (is_null) {
+      res_datum.set_null();
+    } else if (OB_UNLIKELY(occ_int <= 0)) {
+      // MySQL 模式下 occurrence <= 0 返回 0
+      res_datum.set_int(0);
+    } else if (OB_UNLIKELY(pos_int == 0)) {
+      // pos = 0 返回 0
+      res_datum.set_int(0);
+    } else {
+      const ObString &haystack_str = haystack->get_string();
+      const ObString &needle_str = needle->get_string();
+      uint32_t idx = 0;
+
+      if (pos_int > 0) {
+        // 正向搜索，循环查找第 occ_int 次出现
+        for (int64_t i = 0; i < occ_int && OB_SUCC(ret); ++i) {
+          idx = ObCharset::locate(calc_cs_type,
+                                  haystack_str.ptr(), haystack_str.length(),
+                                  needle_str.ptr(), needle_str.length(),
+                                  pos_int);
+          if (idx == 0) {
+            break;  // 未找到
+          }
+          pos_int = idx + 1;  // 从下一个位置继续搜索
+        }
+      } else {
+        // 负数位置：从后向前搜索
+        // 复用 Oracle 模式的 slow_reverse_search
+        ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+        ObIAllocator &tmp_alloc = alloc_guard.get_allocator();
+        if (OB_FAIL(ObExprOracleInstr::slow_reverse_search(tmp_alloc, calc_cs_type,
+                                                           haystack_str, needle_str,
+                                                           pos_int, occ_int, idx))) {
+          LOG_WARN("slow_reverse_search failed", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        res_datum.set_int(static_cast<int64_t>(idx));
+      }
+    }
   }
   return ret;
 }
@@ -47,6 +177,8 @@ int ObExprInstr::vector_mysql_instr(const ObExpr &expr,
   int ret = OB_SUCCESS;
   const haystackVec *haystack_vec = static_cast<const haystackVec *>(expr.args_[0]->get_vector(ctx));
   const needleVec *needle_vec = static_cast<const needleVec *>(expr.args_[1]->get_vector(ctx));
+  const ObIVector *pos_vec = expr.arg_cnt_ > 2 ? static_cast<const ObIVector *>(expr.args_[2]->get_vector(ctx)) : NULL;
+  const ObIVector *occ_vec = expr.arg_cnt_ > 3 ? static_cast<const ObIVector *>(expr.args_[3]->get_vector(ctx)) : NULL;
   bool search_in_binary = false;
   ResVec *res_vec = static_cast<ResVec *>(expr.get_vector(ctx));
   ObBitVector &eval_flags = expr.get_evaluated_flags(ctx);
@@ -59,21 +191,81 @@ int ObExprInstr::vector_mysql_instr(const ObExpr &expr,
   for (int64_t idx = bound.start(); OB_SUCC(ret) && idx < bound.end(); ++idx) {
     if (skip.at(idx) || eval_flags.at(idx)) {
       continue;
-    } else if (haystack_vec->is_null(idx) ||  needle_vec->is_null(idx)) {
+    } else if (haystack_vec->is_null(idx) || needle_vec->is_null(idx)) {
+      res_vec->set_null(idx);
+      continue;
+    }
+    bool is_null = false;
+    int64_t pos_int = 1;
+    int64_t occ_int = 1;
+    // 获取 position 参数
+    if (NULL != pos_vec) {
+      if (pos_vec->is_null(idx)) {
+        is_null = true;
+      } else {
+        pos_int = pos_vec->get_int(idx);
+      }
+    }
+    // 获取 occurrence 参数
+    if (!is_null && NULL != occ_vec) {
+      if (occ_vec->is_null(idx)) {
+        is_null = true;
+      } else {
+        occ_int = occ_vec->get_int(idx);
+      }
+    }
+    if (is_null) {
       res_vec->set_null(idx);
       continue;
     }
     ObString haystack_str = haystack_vec->get_string(idx);
     ObString current_needle = needle_vec->get_string(idx);
     int64_t result = 0;
-    if (search_in_binary) {
-      ret = ObLocationExprOperator::calc_vector<true>(ctx, calc_cs_type, *expr.args_[1], *expr.args_[0], current_needle, haystack_str, 1, result);
+    if (OB_UNLIKELY(occ_int <= 0)) {
+      // occurrence <= 0 返回 0
+      result = 0;
+    } else if (OB_UNLIKELY(pos_int == 0)) {
+      // pos = 0 返回 0
+      result = 0;
+    } else if (pos_int > 0) {
+      // 正向搜索，循环查找第 occ_int 次出现
+      uint32_t tmp_idx = 0;
+      int64_t i = 0;
+      for (; i < occ_int && OB_SUCC(ret); ++i) {
+        if (search_in_binary) {
+          tmp_idx = ObCharsetStringHelper::locate_optimized(calc_cs_type,
+                                                            haystack_str.ptr(), haystack_str.length(),
+                                                            current_needle.ptr(), current_needle.length(),
+                                                            pos_int);
+        } else {
+          tmp_idx = ObCharset::locate(calc_cs_type,
+                                      haystack_str.ptr(), haystack_str.length(),
+                                      current_needle.ptr(), current_needle.length(),
+                                      pos_int);
+        }
+        if (tmp_idx == 0) {
+          break;  // 未找到
+        }
+        pos_int = tmp_idx + 1;  // 从下一个位置继续搜索
+      }
+      // 只有找满 occ_int 次才返回位置，否则返回 0
+      if (OB_SUCC(ret) && i == occ_int && tmp_idx != 0) {
+        result = static_cast<int64_t>(tmp_idx);
+      }
     } else {
-      ret = ObLocationExprOperator::calc_vector<false>(ctx, calc_cs_type, *expr.args_[1], *expr.args_[0], current_needle, haystack_str, 1, result);
+      // 负数位置：从后向前搜索
+      ObEvalCtx::TempAllocGuard alloc_guard(ctx);
+      ObIAllocator &tmp_alloc = alloc_guard.get_allocator();
+      uint32_t tmp_idx = 0;
+      if (OB_FAIL(ObExprOracleInstr::slow_reverse_search(tmp_alloc, calc_cs_type,
+                                                         haystack_str, current_needle,
+                                                         pos_int, occ_int, tmp_idx))) {
+        LOG_WARN("slow_reverse_search failed", K(ret));
+      } else {
+        result = static_cast<int64_t>(tmp_idx);
+      }
     }
-    if (OB_FAIL(ret)) {
-      LOG_WARN("calc_vector failed", K(ret));
-    } else {
+    if (OB_SUCC(ret)) {
       res_vec->set_int(idx, result);
     }
   }
@@ -83,14 +275,20 @@ int ObExprInstr::vector_mysql_instr(const ObExpr &expr,
 int ObExprInstr::calc_mysql_instr_expr_vector(VECTOR_EVAL_FUNC_ARG_DECL)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(2 != expr.arg_cnt_) || OB_ISNULL(expr.args_) ||
-      OB_ISNULL(expr.args_[0]) || OB_ISNULL(expr.args_[1])) {
+  if (OB_UNLIKELY(expr.arg_cnt_ < 2 || expr.arg_cnt_ > 4) || OB_ISNULL(expr.args_) ||
+      OB_ISNULL(expr.args_[0]) || OB_ISNULL(expr.args_[1]) ||
+      (expr.arg_cnt_ > 2 && OB_ISNULL(expr.args_[2])) ||
+      (expr.arg_cnt_ > 3 && OB_ISNULL(expr.args_[3]))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid expr", K(ret), K(expr));
   } else if (OB_FAIL(expr.args_[0]->eval_vector(ctx, skip, bound))) {
     LOG_WARN("failed to eval haystack vector", K(ret));
   } else if (OB_FAIL(expr.args_[1]->eval_vector(ctx, skip, bound))) {
     LOG_WARN("failed to eval needle vector", K(ret));
+  } else if (expr.arg_cnt_ > 2 && OB_FAIL(expr.args_[2]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("failed to eval pos vector", K(ret));
+  } else if (expr.arg_cnt_ > 3 && OB_FAIL(expr.args_[3]->eval_vector(ctx, skip, bound))) {
+    LOG_WARN("failed to eval occ vector", K(ret));
   } else {
     VectorFormat haystack_format = expr.args_[0]->get_format(ctx);
     VectorFormat needle_format = expr.args_[1]->get_format(ctx);

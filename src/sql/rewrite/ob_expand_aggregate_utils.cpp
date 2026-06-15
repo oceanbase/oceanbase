@@ -1343,7 +1343,8 @@ bool ObExpandAggregateUtils::is_valid_aggr_type(ObDMLStmt *stmt, const ObItemTyp
             aggr_type == T_FUN_STDDEV_POP ||
             aggr_type == T_FUN_APPROX_COUNT_DISTINCT ||
             aggr_type == T_FUN_SYS_RB_AND_CARDINALITY_AGG ||
-            aggr_type == T_FUN_SYS_RB_OR_CARDINALITY_AGG);
+            aggr_type == T_FUN_SYS_RB_OR_CARDINALITY_AGG ||
+            aggr_type == T_FUN_AVG_WEIGHTED);
   }
   return ret;
 }
@@ -1717,6 +1718,12 @@ int ObExpandAggregateUtils::expand_common_aggr_expr(ObAggFunRawExpr *aggr_expr,
                                            new_aggr_items))) {
       LOG_WARN("failed to expand rb cardinality expr", K(ret));
     }
+  } else if (aggr_expr->get_expr_type() == T_FUN_AVG_WEIGHTED) {
+    if (OB_FAIL(expand_avg_weighted_expr(aggr_expr,
+                                        replace_expr,
+                                        new_aggr_items))) {
+      LOG_WARN("failed to expand avg_weighted expr", K(ret));
+    }
   } else {/*do nothing*/}
   return ret;
 }
@@ -1763,6 +1770,80 @@ int ObExpandAggregateUtils::expand_avg_expr(ObAggFunRawExpr *aggr_expr,
                                                                       expand_for_mv_ ? T_OP_DIV : T_OP_AGG_DIV,
                                                                       sum_expr,
                                                                       count_expr,
+                                                                      div_expr))) {
+          LOG_WARN("failed to build common binary op expr", K(ret));
+        } else {
+          replace_expr = div_expr;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+/*avg_weighted(expr, weights) <==> sum(expr * weights) / sum(weights)
+前提: expr和weights都不为NULL
+ */
+int ObExpandAggregateUtils::expand_avg_weighted_expr(ObAggFunRawExpr *aggr_expr,
+                                                     ObRawExpr *&replace_expr,
+                                                     ObIArray<ObAggFunRawExpr*> &new_aggr_items)
+{
+  int ret = OB_SUCCESS;
+  ObRawExpr *parma_expr = NULL;
+  ObRawExpr *weights_expr = NULL;
+  if (OB_ISNULL(aggr_expr) ||
+      OB_UNLIKELY(aggr_expr->get_expr_type() != T_FUN_AVG_WEIGHTED ||
+                  aggr_expr->get_real_param_exprs().count() != 2) ||
+      OB_ISNULL(parma_expr = aggr_expr->get_real_param_exprs().at(0)) ||
+      OB_ISNULL(weights_expr = aggr_expr->get_real_param_exprs().at(1))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("get unexpected null", K(ret), K(aggr_expr));
+  } else {
+    ObRawExpr *multi_expr = NULL;
+    ObRawExpr *case_when_multi_expr = NULL;
+    ObRawExpr *case_when_weights_expr = NULL;
+    ObAggFunRawExpr *sum_expr = NULL;
+    ObAggFunRawExpr *sum_weights_expr = NULL;
+    ObRawExpr *div_expr = NULL;
+
+
+    if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(expr_factory_,
+                                                           T_OP_MUL,
+                                                           parma_expr,
+                                                           weights_expr,
+                                                           multi_expr))) {
+      LOG_WARN("failed to build common binary op expr", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::build_common_aggr_expr(expr_factory_,
+                                                              session_info_,
+                                                              T_FUN_SUM,
+                                                              multi_expr,
+                                                              sum_expr))) {
+      LOG_WARN("failed to build common aggr expr", K(ret));
+    } else {
+      sum_expr->set_param_distinct(false);
+      if (OB_FAIL(add_aggr_item(new_aggr_items, sum_expr))) {
+        LOG_WARN("failed to push back aggr item");
+      } else if (OB_FAIL(build_special_case_when_expr(expr_factory_,
+                                                        session_info_,
+                                                        parma_expr,
+                                                        weights_expr,
+                                                        weights_expr,
+                                                        case_when_weights_expr))) {
+        LOG_WARN("failed to build special case when expr for weights", K(ret));
+      } else if (OB_FAIL(ObRawExprUtils::build_common_aggr_expr(expr_factory_,
+                                                                session_info_,
+                                                                T_FUN_SUM,
+                                                                case_when_weights_expr,
+                                                                sum_weights_expr))) {
+        LOG_WARN("failed to build common aggr expr", K(ret));
+      } else {
+        sum_weights_expr->set_param_distinct(false);
+        if (OB_FAIL(add_aggr_item(new_aggr_items, sum_weights_expr))) {
+          LOG_WARN("failed to push back aggr item");
+        } else if (OB_FAIL(ObRawExprUtils::build_common_binary_op_expr(expr_factory_,
+                                                                      expand_for_mv_ ? T_OP_DIV : T_OP_AGG_DIV,
+                                                                      sum_expr,
+                                                                      sum_weights_expr,
                                                                       div_expr))) {
           LOG_WARN("failed to build common binary op expr", K(ret));
         } else {

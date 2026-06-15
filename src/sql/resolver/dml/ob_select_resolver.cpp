@@ -7680,7 +7680,8 @@ int ObSelectResolver::check_ntile_validity(const ObRawExpr *expr,
              expr->is_aggr_expr() ||
              expr->is_win_func_expr() ||
              expr->get_expr_type() == T_FUN_SYS_RANDOM ||
-             expr->get_expr_type() == T_FUN_SYS_RAND) {
+             expr->get_expr_type() == T_FUN_SYS_RAND ||
+             expr->get_expr_type() == T_FUN_CK_RAND_CANONICAL) {
     is_valid = false;
   } else if (expr->is_exec_param_expr()) {
     if (OB_FAIL(SMART_CALL(check_ntile_validity(static_cast<const ObExecParamRawExpr *>(expr)->get_ref_expr(),

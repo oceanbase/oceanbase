@@ -249,3 +249,12 @@ select d2, c5, nullif(d2, c5), nullif(c5, d2) from t1, t2 order by d2, c1;
 select d2, c6, nullif(d2, c6), nullif(c6, d2) from t1, t2 order by d2, c1;
 select d2, c7, nullif(d2, c7), nullif(c7, d2) from t1, t2 order by d2, c1;
 select d2, c8, nullif(d2, c8), nullif(c8, d2) from t1, t2 order by d2, c1;
+
+# ADB compatibility: IF(cond, value) with 2 params, same as IF(cond, value, null)
+--echo // IF with 2 params: condition true -> return value; condition false -> return NULL
+select IF(1, 'a');
+select IF(0, 'a');
+select IF(1, 100);
+select IF(0, 100);
+select IF(NULL, 'x');
+select IF(1, NULL);

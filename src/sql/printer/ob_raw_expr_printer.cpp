@@ -1261,6 +1261,8 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
       SET_SYMBOL_IF_EMPTY("any");
     case T_FUN_ARBITRARY:
       SET_SYMBOL_IF_EMPTY("arbitrary");
+    case T_FUN_AVG_WEIGHTED:
+      SET_SYMBOL_IF_EMPTY("avgWeighted");
     case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS:
       SET_SYMBOL_IF_EMPTY("approx_count_distinct_synopsis");
     case T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE:
@@ -4120,6 +4122,8 @@ int ObRawExprPrinter::print(ObWinFunRawExpr *expr)
         SET_SYMBOL_IF_EMPTY("arg_max");
       case T_FUN_ARG_MIN:
         SET_SYMBOL_IF_EMPTY("arg_min");
+      case T_FUN_AVG_WEIGHTED:
+        SET_SYMBOL_IF_EMPTY("avgWeighted");
       case T_FUN_PL_AGG_UDF: {
         ObString database;
         if (OB_ISNULL(expr->get_agg_expr())) {

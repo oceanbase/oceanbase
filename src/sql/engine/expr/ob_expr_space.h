@@ -28,9 +28,13 @@ public:
                       ObExpr &rt_expr) const override;
 
   static int eval_space(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum);
+  static int eval_space_vector(VECTOR_EVAL_FUNC_ARG_DECL);
   DECLARE_SET_LOCAL_SESSION_VARS;
 private:
   int calc_result_type(ObExprTypeCtx &type_ctx, const ObObj &obj, ObObjType &res_type) const;
+
+  template <typename ArgVec, typename ResVec>
+  static int space_vector(VECTOR_EVAL_FUNC_ARG_DECL);
 
   DISALLOW_COPY_AND_ASSIGN(ObExprSpace);
 };

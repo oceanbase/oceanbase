@@ -36,6 +36,42 @@ namespace sql
 {
 const static int32_t OB_LITERAL_MAX_INT_LEN = 21;
 
+class ObJsonMemCtx : public ObExprOperatorCtx
+{
+public:
+  ObJsonMemCtx()
+  : ObExprOperatorCtx(), ctx_arena_("JsonMemCtx", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+    scratch_arena_("JsonMemScratch", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()), allocator_(nullptr),
+    json_max_depth_config_(100), path_cache_(nullptr)
+  {}
+  virtual ~ObJsonMemCtx() {}
+
+  int init(uint64_t expr_type, uint64_t tenant_id, bool need_path_cache = false);
+  void reuse()
+  {
+    if (allocator_ != nullptr) {
+      allocator_->reuse();
+    }
+  }
+
+  MultimodeAlloctor *get_allocator() { return allocator_; }
+  int32_t get_json_max_depth_config() const { return json_max_depth_config_; }
+  void set_json_max_depth_config(int32_t config) { json_max_depth_config_ = config; }
+  ObJsonPathCache *get_path_cache() { return path_cache_; }
+  common::ObIAllocator &get_ctx_allocator() { return ctx_arena_; }
+
+private:
+  // Persistent data throughout the expression lifetime, e.g. MultimodeAlloctor, ObJsonPathCache
+  common::ObArenaAllocator ctx_arena_;
+  // Temporary data within a single row / batch, e.g. json string contents
+  common::ObArenaAllocator scratch_arena_;
+  // Safely manages per-row memory; the object itself is allocated on ctx_arena_,
+  // while the memory it manages belongs to scratch_arena_
+  MultimodeAlloctor *allocator_;
+  int32_t json_max_depth_config_;
+  ObJsonPathCache *path_cache_;
+};
+
 struct ObJsonExprParam {
 public:
   ObJsonExprParam()
@@ -314,6 +350,16 @@ public:
   static int find_and_add_schema_cache(ObJsonSchemaCache* schema_cache, ObIJsonBase*& j_schema,
                                       ObString& schema_str, int arg_idx, const ObJsonInType& in_type);
 
+  // Validate and cache simple path for fast path optimization
+  static int validate_and_cache_simple_path(ObJsonPathCache* path_cache,
+                                             ObString& path_str,
+                                             ObIAllocator &allocator,
+                                             int arg_idx);
+  static int parse_and_cache_path_keys(ObJsonPathCache *path_cache,
+                                        ObString &path_str,
+                                        ObIAllocator &allocator,
+                                        int arg_idx);
+
   static ObJsonPathCache* get_path_cache_ctx(const uint64_t& id, ObExecContext *exec_ctx);
   static ObJsonSchemaCache* get_schema_cache_ctx(const uint64_t& id, ObExecContext *exec_ctx);
 
@@ -484,7 +530,8 @@ public:
     return depth > JSON_DOCUMENT_MAX_DEPTH && depth > get_json_max_depth_config();
   }
   static int32_t get_json_max_depth_config();
-
+  static int32_t get_json_max_depth_config(ObSQLSessionInfo *session);
+  static int32_t get_json_max_depth_config(ObEvalCtx &ctx);
   static int is_allow_partial_update(const ObExpr &expr, ObEvalCtx &ctx, const ObString &locator_str, bool &allow_partial_update);
   static bool is_json_partial_update_mode(const ObExpr &expr);
   static bool is_json_partial_update_mode(const uint64_t flag) { return (flag & OB_JSON_PARTIAL_UPDATE_ALLOW) != 0; }
@@ -522,6 +569,69 @@ public:
 private:
   const static uint32_t RESERVE_MIN_BUFF_SIZE = 32;
   DISALLOW_COPY_AND_ASSIGN(ObJsonExprHelper);
+};
+
+/**
+ * Fast path utility class for JSON bin format extraction
+ * This class provides optimized methods to directly access JSON binary format
+ * without full parsing, improving performance for simple key lookups
+ *
+ * Performance optimization: meta is stored as member variable to avoid parameter passing overhead
+ * in hot path (especially in binary search loop)
+ */
+class ObJsonBinFastLocator final
+{
+public:
+  // Metadata structure for JSON bin object
+
+  ObJsonBinFastLocator() :
+    type_(0), entry_type_(0), entry_size_(0), element_count_(0),
+    key_offset_start_(0), value_offset_start_(0),
+    data_ptr_(nullptr), total_len_(0), use_lexicographical_order_(false), extend_seg_offset_(0),
+    inline_buf_{0}, root_data_ptr_(nullptr), root_total_len_(0)
+  {}
+  ~ObJsonBinFastLocator() {}
+
+  int init(const char *data, int64_t length);
+  int reset_to_root();
+  int seek(const ObIArray<ObString> &keys, char *&res_ptr, int64_t &res_len, uint8_t &res_type);
+  int get_raw_binary(ObString &buf, uint8_t type, char *res_ptr, int64_t res_len,
+                     ObIAllocator *allocator) const;
+  int pack_json_str_res(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &res, char *res_ptr,
+                        int64_t res_len, uint8_t &res_type);
+
+private:
+  int seek(const ObString &key, char *&res_ptr, int64_t &res_len, uint8_t &res_type);
+  int parse_json_bin_header(const char *ptr, int64_t len);
+  int get_key_in_object(size_t i, ObString &key);
+  int lookup_index(const ObString &key, size_t *idx);
+  int get_value_offset_len(size_t idx, char *&res_ptr, int64_t &res_len, uint8_t &res_type);
+
+  template <typename DecodeFunc, typename ValType>
+  static int decode_impl(ObString &json_str, int64_t &offset, ValType *val, DecodeFunc decode_func,
+                         int64_t max_len);
+  static int decode_vi64(ObString &json_str, int64_t &offset, int64_t *val);
+  static uint64_t get_var_local(const char *ptr, uint8_t type);
+
+  static constexpr int64_t DOC_HEADER_SIZE = sizeof(ObJsonBinDocHeader);
+  static constexpr int64_t BIN_HEADER_SIZE = sizeof(ObJsonBinHeader);
+
+private:
+  uint8_t type_;              // node type for current node
+  uint8_t entry_type_;        // the size describe var size of key_entry, val_entry
+  uint8_t entry_size_;        // cached ObJsonVar::get_var_size(entry_type_) to avoid repeated calls in hot path
+  uint64_t element_count_;
+  uint64_t key_offset_start_;
+  uint64_t value_offset_start_;
+  char *data_ptr_;               // Cached json_str_.ptr() to avoid repeated function calls
+  int64_t total_len_;           // Cached json_str_.length() to avoid repeated function calls
+  bool use_lexicographical_order_;
+  uint64_t extend_seg_offset_;
+  // vi64 encoding needs up to 10 bytes (64-bit value / 7 bits per byte, rounded up)
+  static constexpr int64_t INLINE_BUF_SIZE = 10;
+  char inline_buf_[INLINE_BUF_SIZE];  // Buffer for inlined values, avoids dangling pointer to stack
+  char *root_data_ptr_;         // root object start saved by init(), used by reset_to_root()
+  int64_t root_total_len_;
 };
 
 class ObJsonDeltaLob : public ObDeltaLob {
