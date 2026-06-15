@@ -9241,6 +9241,7 @@ refresh_dop	bigint(20)	NO		0
 data_sync_scn	bigint(20) unsigned	NO		0	
 is_synced	tinyint(4)	NO		0	
 nested_refresh_mode	bigint(20)	NO		0	
+compat_version	bigint(20) unsigned	NO		0	
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_mview;
 IF(count(*) >= 0, 1, 0)
 1
