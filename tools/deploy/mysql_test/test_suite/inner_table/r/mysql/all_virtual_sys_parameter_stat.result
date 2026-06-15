@@ -305,6 +305,7 @@ rpc_memory_limit_percentage
 rpc_port
 rpc_server_authentication_method
 rpc_timeout
+schema_history_archive_expire_time
 schema_history_expire_time
 schema_history_recycle_interval
 server_balance_cpu_mem_tolerance_percent
@@ -532,6 +533,7 @@ _enable_resource_limit_spec
 _enable_routine_call_param_defend
 _enable_runtime_filter_adaptive_apply
 _enable_schedule_tablet_split
+_enable_schema_history_archive
 _enable_semantic_index
 _enable_seq_wrap_around_flush_cache
 _enable_skip_index

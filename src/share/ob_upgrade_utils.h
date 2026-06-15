@@ -447,7 +447,18 @@ DEF_SIMPLE_UPGRARD_PROCESSER(4, 6, 0, 0)
 
 DEF_SIMPLE_UPGRARD_PROCESSER(4, 6, 0, 1)
 
-DEF_SIMPLE_UPGRARD_PROCESSER(4, 6, 1, 0)
+class ObUpgradeFor4610Processor : public ObBaseUpgradeProcessor
+{
+public:
+  ObUpgradeFor4610Processor() : ObBaseUpgradeProcessor() {}
+  virtual ~ObUpgradeFor4610Processor() {}
+  virtual int pre_upgrade() override { return common::OB_SUCCESS; }
+  virtual int post_upgrade() override;
+  virtual int finish_upgrade() override { return common::OB_SUCCESS; }
+private:
+  int post_upgrade_for_schema_history_recycle_();
+  int post_upgrade_for_inspection_jobs_();
+};
 
 /* =========== special upgrade processor end   ============= */
 

@@ -133,6 +133,14 @@ int ObDBMSSchedJobExecutor::init_session(
       trx_timeout_obj.set_int(TRX_TIMEOUT_US);
       OZ (session.update_sys_variable(SYS_VAR_OB_QUERY_TIMEOUT, query_timeout_obj));
       OZ (session.update_sys_variable(SYS_VAR_OB_TRX_TIMEOUT, trx_timeout_obj));
+    } else if (job_info.is_purge_recyclebin_job()) {
+      const int64_t TIMEOUT_US = job_info.get_max_run_duration() * 1000000L;
+      ObObj query_timeout_obj;
+      ObObj trx_timeout_obj;
+      query_timeout_obj.set_int(TIMEOUT_US);
+      trx_timeout_obj.set_int(TIMEOUT_US);
+      OZ (session.update_sys_variable(SYS_VAR_OB_QUERY_TIMEOUT, query_timeout_obj));
+      OZ (session.update_sys_variable(SYS_VAR_OB_TRX_TIMEOUT, trx_timeout_obj));
     }
   }
 
@@ -284,6 +292,9 @@ int ObDBMSSchedJobExecutor::run_dbms_sched_job(
       } else if (job_info.is_mysql_event_job()) { //mysql event
         OZ (what.append_fmt("%.*s",
               job_info.get_what().length(), job_info.get_what().ptr()));
+      } else if (job_info.is_purge_recyclebin_job()) { //purge recyclebin is raw DDL
+        OZ (what.append_fmt("%.*s",
+            job_info.get_what().length(), job_info.get_what().ptr()));
       } else {
         //mysql mode not support anonymous block
         OZ (what.append_fmt("CALL %.*s;",

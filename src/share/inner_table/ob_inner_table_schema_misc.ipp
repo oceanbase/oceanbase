@@ -8816,6 +8816,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_LOB_CHECK_EXCEPTION_RESULT_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_LOB_CHECK_EXCEPTION_RESULT_SCHEMA_VERSION); break;
     case OB_ALL_ROUTINE_LOAD_JOB_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_ROUTINE_LOAD_JOB_SCHEMA_VERSION); break;
     case OB_ALL_SS_GC_RESERVED_SNAPSHOT_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_SS_GC_RESERVED_SNAPSHOT_SCHEMA_VERSION); break;
+    case OB_ALL_TABLE_ARCHIVE_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_TABLE_ARCHIVE_HISTORY_SCHEMA_VERSION); break;
     case OB_ALL_JAVA_POLICY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_JAVA_POLICY_SCHEMA_VERSION); break;
     case OB_ALL_JAVA_POLICY_HISTORY_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_JAVA_POLICY_HISTORY_SCHEMA_VERSION); break;
     case OB_ALL_TABLE_OPT_STAT_INVALIDATE_PLAN_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_TABLE_OPT_STAT_INVALIDATE_PLAN_SCHEMA_VERSION); break;
@@ -11521,6 +11522,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_LOB_CHECK_EXCEPTION_RESULT_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_LOB_CHECK_EXCEPTION_RESULT_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_ROUTINE_LOAD_JOB_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_ROUTINE_LOAD_JOB_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_SS_GC_RESERVED_SNAPSHOT_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_SS_GC_RESERVED_SNAPSHOT_AUX_LOB_META_SCHEMA_VERSION); break;
+    case OB_ALL_TABLE_ARCHIVE_HISTORY_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_TABLE_ARCHIVE_HISTORY_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_JAVA_POLICY_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_JAVA_POLICY_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_JAVA_POLICY_HISTORY_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_JAVA_POLICY_HISTORY_AUX_LOB_META_SCHEMA_VERSION); break;
     case OB_ALL_TABLE_OPT_STAT_INVALIDATE_PLAN_AUX_LOB_META_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_TABLE_OPT_STAT_INVALIDATE_PLAN_AUX_LOB_META_SCHEMA_VERSION); break;
@@ -11893,6 +11895,7 @@ case OB_ALL_USER_PROXY_ROLE_INFO_HISTORY_TID: {
     case OB_ALL_LOB_CHECK_EXCEPTION_RESULT_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_LOB_CHECK_EXCEPTION_RESULT_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_ROUTINE_LOAD_JOB_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_ROUTINE_LOAD_JOB_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_SS_GC_RESERVED_SNAPSHOT_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_SS_GC_RESERVED_SNAPSHOT_AUX_LOB_PIECE_SCHEMA_VERSION); break;
+    case OB_ALL_TABLE_ARCHIVE_HISTORY_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_TABLE_ARCHIVE_HISTORY_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_JAVA_POLICY_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_JAVA_POLICY_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_JAVA_POLICY_HISTORY_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_JAVA_POLICY_HISTORY_AUX_LOB_PIECE_SCHEMA_VERSION); break;
     case OB_ALL_TABLE_OPT_STAT_INVALIDATE_PLAN_AUX_LOB_PIECE_TID : schema_version = static_cast<int64_t>(ObHardCodeInnerTableSchemaVersion::OB_ALL_TABLE_OPT_STAT_INVALIDATE_PLAN_AUX_LOB_PIECE_SCHEMA_VERSION); break;

@@ -320,6 +320,9 @@ ob_set_subtarget(ob_share common
   ob_perf_stat.cpp
   ob_flashback_standby_log_struct.cpp
   ob_flashback_log_scn_table_operator.cpp
+  ob_scheduled_recycle_schema_history.cpp
+  ob_scheduled_inspection.cpp
+  ob_inspection_service.cpp
 )
 
 ob_set_subtarget(ob_share common_mixed
@@ -655,12 +658,14 @@ ob_set_subtarget(ob_share schema
   schema/ob_ccl_rule_mgr.cpp
   schema/ob_ccl_rule_sql_service.cpp
   schema/ob_schema_guard_wrapper.cpp
-
   schema/ob_sensitive_rule_mgr.cpp
   schema/ob_sensitive_rule_schema_struct.cpp
   schema/ob_sensitive_rule_sql_service.cpp
   schema/ob_java_policy_mgr.cpp
   schema/ob_java_policy_sql_service.cpp
+  schema/ob_schema_history_recycler.cpp
+  schema/ob_objpriv_mysql_schema_history_recycler.cpp
+  schema/ob_schema_history_recycle_service.cpp
 )
 
 ob_set_subtarget(ob_share stat

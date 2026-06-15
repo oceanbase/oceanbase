@@ -1,0 +1,66 @@
+/**
+ * Copyright (c) 2025 OceanBase
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#ifndef OCEANBASE_SHARE_OB_SCHEDULED_INSPECTION_H_
+#define OCEANBASE_SHARE_OB_SCHEDULED_INSPECTION_H_
+
+#include "sql/engine/ob_exec_context.h"
+#include "sql/session/ob_sql_session_info.h"
+#include "observer/dbms_scheduler/ob_dbms_sched_job_utils.h" // ObDBMSSchedJobInfo
+
+namespace oceanbase
+{
+namespace share
+{
+
+static const char *SCHEDULED_RUN_INSPECTION_JOB_NAME = "SCHEDULED_RUN_INSPECTION";
+static const char *SCHEDULED_PURGE_RECYCLEBIN_JOB_NAME = "SCHEDULED_PURGE_RECYCLEBIN";
+
+class ObScheduledInspection
+{
+public:
+  // Create run_inspection and purge_recyclebin jobs for a tenant
+  static int create_jobs(
+    const schema::ObSysVariableSchema &sys_variable,
+    const uint64_t tenant_id,
+    ObMySQLTransaction &trans);
+
+  // Create run_inspection and purge_recyclebin jobs for a tenant during upgrade
+  // If job already exists, skip.
+  static int create_jobs_for_upgrade(
+    common::ObMySQLProxy *sql_proxy,
+    const schema::ObSysVariableSchema &sys_variable,
+    const uint64_t tenant_id,
+    ObMySQLTransaction &trans);
+
+  // Set attribute for scheduled inspection jobs (SCHEDULED_RUN_INSPECTION, SCHEDULED_PURGE_RECYCLEBIN).
+  // SCHEDULED_RUN_INSPECTION: only repeat_interval is supported.
+  // SCHEDULED_PURGE_RECYCLEBIN: repeat_interval, start_date, max_run_duration are supported.
+  static int set_attribute(
+    common::ObISQLClient &sql_client,
+    sql::ObSQLSessionInfo *session,
+    const common::ObString &attr_name,
+    const common::ObString &attr_val,
+    const dbms_scheduler::ObDBMSSchedJobInfo &job_info,
+    bool &is_valid);
+
+private:
+  static common::ObString get_purge_recyclebin_job_action_(const bool is_oracle_mode);
+
+  static int create_job_(
+    const schema::ObSysVariableSchema &sys_variable,
+    const uint64_t tenant_id,
+    const common::ObString &job_name,
+    const common::ObString &job_action,
+    const common::ObString &repeat_interval,
+    const common::ObString &job_type,
+    const dbms_scheduler::ObDBMSSchedFuncType func_type,
+    ObMySQLTransaction &trans);
+};
+
+} // end namespace share
+} // end namespace oceanbase
+
+#endif // OCEANBASE_SHARE_OB_SCHEDULED_INSPECTION_H_

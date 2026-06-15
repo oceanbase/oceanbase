@@ -89,6 +89,7 @@
 #include "close_modules/shared_storage/storage/high_availability/ob_ss_ha_macro_copy_dag_net.h"
 #include "close_modules/shared_storage/storage/high_availability/ob_ss_ha_macro_delete_dag_net.h"
 #endif
+#include "share/ob_inspection_service.h"
 
 namespace oceanbase
 {
@@ -5396,7 +5397,7 @@ int ObCheckSysTableSchemaP::process()
   if (!arg_.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K_(arg));
-  } else if (OB_FAIL(rootserver::ObSysTableInspection::check_sys_table_schema(arg_, result_))) {
+  } else if (OB_FAIL(rootserver::ObRootInspection::check_sys_table_schema(arg_, result_))) {
     LOG_WARN("failed to check_sys_table_schema", KR(ret), K_(arg), K_(result));
   }
   return ret;
@@ -5482,6 +5483,92 @@ int ObAdminClearTransferMetaInfoP::process()
     COMMON_LOG(WARN, "ob_service is null", KR(ret));
   } else if (OB_FAIL(gctx_.ob_service_->ob_admin_clear_transfer_meta_info(arg_))) {
     COMMON_LOG(WARN, "failed to unlock member list", KR(ret), K(arg_));
+  }
+  return ret;
+}
+
+#define RUN_INSPECTION_PROCESS_IMPL(PROCESSOR)                                                   \
+int PROCESSOR::process()                                                                         \
+{                                                                                                \
+  int ret = OB_SUCCESS;                                                                          \
+  const uint64_t tenant_id = arg_.get_tenant_id();                                               \
+  bool is_leader = false;                                                                        \
+  if (!arg_.is_valid()) {                                                                        \
+    ret = OB_INVALID_ARGUMENT;                                                                   \
+    LOG_WARN("invalid argument", KR(ret), K_(arg));                                              \
+  } else {                                                                                       \
+    MTL_SWITCH(tenant_id) {                                                                      \
+      share::ObInspectionService *inspection_service = MTL(share::ObInspectionService *);        \
+      ObAddr leader_addr;                                                                        \
+      if (OB_ISNULL(inspection_service)) {                                                       \
+        ret = OB_ERR_UNEXPECTED;                                                                 \
+        LOG_WARN("inspection service is null", KR(ret), K(tenant_id));                           \
+      } else if (OB_ISNULL(GCTX.location_service_)) {                                            \
+        ret = OB_ERR_UNEXPECTED;                                                                 \
+        LOG_WARN("location service is null", KR(ret), K(tenant_id));                             \
+      } else if (OB_FAIL(GCTX.location_service_->get_leader(                                     \
+                         GCONF.cluster_id,                                                       \
+                         tenant_id,                                                              \
+                         SYS_LS,                                                                 \
+                         false/*force_renew*/,                                                   \
+                         leader_addr))) {                                                        \
+        LOG_WARN("failed to get sys ls leader", KR(ret), "cluster_id", GCONF.cluster_id.get_value(), K(tenant_id)); \
+      } else if (FALSE_IT(is_leader = (GCONF.self_addr_ == leader_addr))) {                      \
+      } else if (!is_leader) {                                                                   \
+        ret = OB_NOT_MASTER;                                                                     \
+        LOG_WARN("is not sys ls leader, need retry", KR(ret), K(tenant_id),                      \
+            K(is_leader), K(leader_addr), "self", GCONF.self_addr_);                             \
+      } else if (OB_FAIL(inspection_service->run_inspection())) {                                \
+        LOG_WARN("run inspection failed", KR(ret), K(tenant_id));                                \
+      }                                                                                          \
+    } else {                                                                                     \
+      LOG_WARN("switch tenant failed", KR(ret), K(tenant_id));                                   \
+    }                                                                                            \
+  }                                                                                              \
+  return ret;                                                                                    \
+}
+
+RUN_INSPECTION_PROCESS_IMPL(ObRunInspectionP);
+RUN_INSPECTION_PROCESS_IMPL(ObAsyncRunInspectionP);
+#undef RUN_INSPECTION_PROCESS_IMPL
+
+int ObGetInspectionStatusP::process()
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = arg_.get_tenant_id();
+  if (!arg_.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K_(arg));
+  } else {
+    MTL_SWITCH(tenant_id) {
+      share::ObInspectionService *inspection_service = MTL(share::ObInspectionService *);
+      if (OB_ISNULL(inspection_service)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("inspection service is null", KR(ret), K(tenant_id));
+      } else {
+        // If inspection hasn't been done on this server (e.g., after leader switch),
+        // run it now before returning status to avoid stale "checking" state.
+        if (!inspection_service->is_all_checked()) {
+          int tmp_ret = OB_SUCCESS;
+          LOG_INFO("[ROOT_INSPECTION] auto trigger run_inspection on get_inspection_status", K(tenant_id));
+          if (OB_TMP_FAIL(inspection_service->run_inspection())) {
+            LOG_WARN("auto run_inspection on get_inspection_status failed", KR(tmp_ret), K(tenant_id));
+          }
+        }
+        result_.tenant_id_ = tenant_id;
+        result_.sys_stat_passed_ = inspection_service->is_sys_stat_passed();
+        result_.sys_param_passed_ = inspection_service->is_sys_param_passed();
+        result_.sys_table_schema_passed_ = inspection_service->is_sys_table_schema_passed();
+        result_.data_version_passed_ = inspection_service->is_data_version_passed();
+        result_.all_checked_ = inspection_service->is_all_checked();
+        LOG_INFO("[ROOT_INSPECTION] get_inspection_status finish", K(tenant_id),
+                 K(result_.all_checked_), K(result_.sys_stat_passed_),
+                 K(result_.sys_param_passed_), K(result_.sys_table_schema_passed_),
+                 K(result_.data_version_passed_));
+      }
+    } else {
+      LOG_WARN("switch tenant failed", KR(ret), K(tenant_id));
+    }
   }
   return ret;
 }

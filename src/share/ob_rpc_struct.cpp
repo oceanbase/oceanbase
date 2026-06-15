@@ -15443,5 +15443,113 @@ int ObAdminClearTransferMetaInfoOpArg::set(
 }
 OB_SERIALIZE_MEMBER(ObAdminClearTransferMetaInfoOpArg, tenant_id_, ls_id_);
 
+OB_SERIALIZE_MEMBER(ObRunInspectionArg, tenant_id_);
+
+ObRunInspectionArg::ObRunInspectionArg()
+  : tenant_id_(OB_INVALID_TENANT_ID)
+{
+}
+
+int ObRunInspectionArg::init(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid_tenant_id(tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else {
+    tenant_id_ = tenant_id;
+  }
+  return ret;
+}
+
+int ObRunInspectionArg::assign(const ObRunInspectionArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    tenant_id_ = other.tenant_id_;
+  }
+  return ret;
+}
+
+bool ObRunInspectionArg::is_valid() const
+{
+  return is_valid_tenant_id(tenant_id_);
+}
+
+OB_SERIALIZE_MEMBER(ObGetInspectionStatusArg, tenant_id_);
+
+ObGetInspectionStatusArg::ObGetInspectionStatusArg()
+  : tenant_id_(OB_INVALID_TENANT_ID)
+{
+}
+
+int ObGetInspectionStatusArg::init(const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  if (!is_valid_tenant_id(tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant_id", KR(ret), K(tenant_id));
+  } else {
+    tenant_id_ = tenant_id;
+  }
+  return ret;
+}
+
+int ObGetInspectionStatusArg::assign(const ObGetInspectionStatusArg &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    tenant_id_ = other.tenant_id_;
+  }
+  return ret;
+}
+
+bool ObGetInspectionStatusArg::is_valid() const
+{
+  return is_valid_tenant_id(tenant_id_);
+}
+
+OB_SERIALIZE_MEMBER(ObGetInspectionStatusResult,
+                    tenant_id_,
+                    sys_stat_passed_,
+                    sys_param_passed_,
+                    sys_table_schema_passed_,
+                    data_version_passed_,
+                    all_checked_);
+
+ObGetInspectionStatusResult::ObGetInspectionStatusResult()
+  : tenant_id_(OB_INVALID_TENANT_ID),
+    sys_stat_passed_(false),
+    sys_param_passed_(false),
+    sys_table_schema_passed_(false),
+    data_version_passed_(false),
+    all_checked_(false)
+{
+}
+
+int ObGetInspectionStatusResult::assign(const ObGetInspectionStatusResult &other)
+{
+  int ret = OB_SUCCESS;
+  if (this != &other) {
+    tenant_id_ = other.tenant_id_;
+    sys_stat_passed_ = other.sys_stat_passed_;
+    sys_param_passed_ = other.sys_param_passed_;
+    sys_table_schema_passed_ = other.sys_table_schema_passed_;
+    data_version_passed_ = other.data_version_passed_;
+    all_checked_ = other.all_checked_;
+  }
+  return ret;
+}
+
+void ObGetInspectionStatusResult::reset()
+{
+  tenant_id_ = OB_INVALID_TENANT_ID;
+  sys_stat_passed_ = false;
+  sys_param_passed_ = false;
+  sys_table_schema_passed_ = false;
+  data_version_passed_ = false;
+  all_checked_ = false;
+}
+
 }//end namespace obrpc
 }//end namespace oceanbase

@@ -371,6 +371,9 @@ OB_DEFINE_PROCESSOR_S(Srv, OB_VALIDATE_BACKUP_LS_TASK_RES, ObRpcBackupValidateLS
 
 OB_DEFINE_PROCESSOR_S(Srv, OB_HA_CLEAR_TRANSFER_META_INFO, ObAdminClearTransferMetaInfoP);
 OB_DEFINE_PROCESSOR_S(Srv, OB_GET_TENANT_MEMORY_INFO, ObRpcGetTenantMemoryInfoP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_RUN_INSPECTION, ObRunInspectionP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_ASYNC_RUN_INSPECTION, ObAsyncRunInspectionP);
+OB_DEFINE_PROCESSOR_S(Srv, OB_GET_INSPECTION_STATUS, ObGetInspectionStatusP);
 } // end of namespace observer
 } // end of namespace oceanbase
 

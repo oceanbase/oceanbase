@@ -291,10 +291,12 @@ template<typename T> class ObCatalogClientPoolMgr;
 class ObTabletSplitTaskCache;
 #endif
 class ObBackupDestIOPermissionMgr;
+class ObInspectionService;
 namespace schema
 {
   class ObTenantSchemaService;
   class ObAddIntervalPartitionController;
+  class ObSchemaHistoryRecycleService;
 }
 namespace detector
 {
@@ -551,7 +553,9 @@ using ObHMSClientUnifyPoolMgr = share::ObCatalogClientPoolMgr<oceanbase::share::
       observer::ObTenantTabletCleanupService*,        \
       storage::ObTenantStartupStatus*,                \
       observer::ObTabletReplicaInfoCacheMgr*  ,       \
-      ObCurlRestClientPoolMgr*                       \
+      ObCurlRestClientPoolMgr*,                      \
+      share::schema::ObSchemaHistoryRecycleService*, \
+      share::ObInspectionService*                    \
   )
 
 

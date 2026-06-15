@@ -368,6 +368,7 @@ bool ObSchemaGetterController::is_object_level_parallelism_(
   return is_object_level_parallelism;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_FORCE_LAZY_SCHEMA_GUARD);
 int ObSchemaGetterController::construct_schema_(
   const ObSchemaMgr *mgr,
   const ObRefreshSchemaStatus &schema_status,
@@ -378,7 +379,13 @@ int ObSchemaGetterController::construct_schema_(
   const ObSchema *&schema)
 {
   int ret = OB_SUCCESS;
-  const bool is_lazy = (NULL == mgr);
+  bool is_lazy = (NULL == mgr);
+  if (OB_UNLIKELY(ERRSIM_FORCE_LAZY_SCHEMA_GUARD)) {
+    is_lazy = true;
+    LOG_INFO("[ERRSIM] force lazy schema guard",
+             "tenant_id", schema_status.tenant_id_,
+             K(schema_type), K(schema_id), K(schema_version));
+  }
   const uint64_t tenant_id = schema_status.tenant_id_;
   bool update_history_cache = false;
   schema = NULL;

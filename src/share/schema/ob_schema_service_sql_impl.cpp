@@ -11,6 +11,7 @@
 #include "src/rootserver/ob_ddl_service_launcher.h" // for ObDDLServiceLauncher
 #include "src/rootserver/ob_root_service.h" // for ObRootService
 #include "observer/ob_sql_client_decorator.h"
+#include "observer/ob_server_event_history_table_operator.h" // for SERVER_EVENT_ADD
 #include "share/inner_table/ob_sslog_table_schema.h"
 #include "share/inner_table/ob_tiered_metadata_store_schema.h"
 #include "sql/engine/expr/ob_expr_like.h"
@@ -279,6 +280,62 @@ bool ObSchemaServiceSQLImpl::check_inner_stat()
   if (IS_NOT_INIT) {
     LOG_ERROR("not init");
     ret = false;
+  }
+  return ret;
+}
+
+void ObSchemaServiceSQLImpl::record_fallback_to_archive_history_event_(
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    const int64_t schema_version)
+{
+  char trace_id_buf[OB_MAX_TRACE_ID_BUFFER_SIZE] = {0};
+  ObCurTraceId::TraceId *trace_id = ObCurTraceId::get_trace_id();
+  if (OB_NOT_NULL(trace_id)) {
+    (void)trace_id->to_string(trace_id_buf, sizeof(trace_id_buf));
+  }
+  SERVER_EVENT_ADD("schema", "fallback_to_archive_history",
+                   "tenant_id", tenant_id,
+                   "table_id", table_id,
+                   "schema_version", schema_version,
+                   "trace_id", trace_id_buf);
+}
+
+int ObSchemaServiceSQLImpl::fetch_table_schema_from_history_table_(
+    const ObRefreshSchemaStatus &schema_status,
+    const uint64_t tenant_id,
+    const uint64_t table_id,
+    const int64_t schema_version,
+    const char *table_name,
+    common::ObISQLClient &sql_client,
+    common::ObIAllocator &allocator,
+    ObTableSchema *&table_schema)
+{
+  int ret = OB_SUCCESS;
+  ObSqlString sql;
+  const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
+  const bool check_deleted = true;
+  table_schema = NULL;
+
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObMySQLResult *result = NULL;
+    if (OB_FAIL(sql.append_fmt(FETCH_ALL_TABLE_HISTORY_SQL,
+                               table_name,
+                               fill_extract_tenant_id(schema_status, tenant_id)))) {
+      LOG_WARN("append sql failed", KR(ret));
+    } else if (OB_FAIL(sql.append_fmt(" AND table_id = %lu and schema_version <= %ld order by schema_version desc limit 1",
+                                      fill_extract_schema_id(schema_status, table_id),
+                                      schema_version))) {
+      LOG_WARN("append table_id and schema_version failed", KR(ret), K(table_id), K(schema_version));
+    } else if (OB_FAIL(sql_client.read(res, exec_tenant_id, sql.ptr()))) {
+      LOG_WARN("execute sql failed", KR(ret), K(sql));
+    } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get result. ", KR(ret));
+    } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_table_schema(
+                       tenant_id, check_deleted, *result, allocator, table_schema))) {
+      LOG_WARN("failed to retrieve table schema", KR(ret), K(check_deleted));
+    }
   }
   return ret;
 }
@@ -6839,6 +6896,7 @@ int ObSchemaServiceSQLImpl::get_not_core_table_schema(
 }
 
 
+ERRSIM_POINT_DEF(ERRSIM_FORCE_FETCH_TABLE_INFO_FALLBACK);
 int ObSchemaServiceSQLImpl::fetch_table_info(
     const ObRefreshSchemaStatus &schema_status,
     const uint64_t tenant_id,
@@ -6849,40 +6907,50 @@ int ObSchemaServiceSQLImpl::fetch_table_info(
     ObTableSchema *&table_schema)
 {
   int ret = OB_SUCCESS;
-  ObSqlString sql;
-  const int64_t snapshot_timestamp = schema_status.snapshot_timestamp_;
-  const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
-  const char *table_name = NULL;
   if (!check_inner_stat()) {
     ret = OB_NOT_INIT;
     LOG_WARN("check inner stat fail", K(ret));
-  } else if (OB_FAIL(ObSchemaUtils::get_all_table_history_name(exec_tenant_id,
-                                                               table_name,
-                                                               schema_service_))) {
-    LOG_WARN("fail to get all table name", K(ret), K(exec_tenant_id));
-  } else if (OB_FAIL(sql.append_fmt(FETCH_ALL_TABLE_HISTORY_SQL,
-                                    table_name,
-                                    fill_extract_tenant_id(schema_status, tenant_id)))) {
-    LOG_WARN("append sql failed", K(ret));
-  } else if (OB_FAIL(sql.append_fmt(" AND table_id = %lu and schema_version <= %ld order by schema_version desc limit 1",
-                                    fill_extract_schema_id(schema_status, table_id),
-                                    schema_version))) {
-    LOG_WARN("append table_id and schema_version failed", K(ret), K(table_id),
-             K(schema_version));
-  } else {
-    const bool check_deleted = true;
-    SMART_VAR(ObMySQLProxy::MySQLResult, res) {
-      ObMySQLResult *result = NULL;
-      DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
-      if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
-        LOG_WARN("execute sql failed", K(sql), K(ret));
-      } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fail to get result. ", K(ret));
-      } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_table_schema(
-                 tenant_id, check_deleted, *result, allocator, table_schema))) {
-        LOG_WARN("failed to retrieve all table schema:", K(check_deleted), K(ret));
+  } else if (OB_FAIL(fetch_table_schema_from_history_table_(
+                     schema_status,
+                     tenant_id,
+                     table_id,
+                     schema_version,
+                     OB_ALL_TABLE_HISTORY_TNAME,
+                     sql_client,
+                     allocator,
+                     table_schema))) {
+  } else if (OB_UNLIKELY(OB_E(ERRSIM_FORCE_FETCH_TABLE_INFO_FALLBACK, table_id) OB_SUCCESS)) {
+    // Errsim forced fallback: discard the schema fetched from history and pretend history was empty,
+    // so the fallback path to __all_table_archive_history is exercised.
+    table_schema = NULL;
+    ret = OB_ERR_SCHEMA_HISTORY_EMPTY;
+    LOG_INFO("[ERRSIM] force fetch_table_info fallback to archive history",
+             K(tenant_id), K(table_id), K(schema_version));
+  }
+  if (OB_FAIL(ret)) {
+    const uint64_t cluster_version = GET_MIN_CLUSTER_VERSION();
+    if (OB_ERR_SCHEMA_HISTORY_EMPTY == ret
+        && ((cluster_version >= MOCK_CLUSTER_VERSION_4_4_2_1 && cluster_version < CLUSTER_VERSION_4_5_0_0)
+            || cluster_version >= CLUSTER_VERSION_4_6_1_0)) {
+      // schema history may be recycled, retry with archive history table.
+      LOG_ERROR("Table schema history fell back to archive, "
+                "schema_version invariant likely violated, please investigate",
+                KR(ret), K(tenant_id), K(table_id), K(schema_version));
+      record_fallback_to_archive_history_event_(tenant_id, table_id, schema_version);
+      // overwrite ret
+      if (OB_FAIL(fetch_table_schema_from_history_table_(
+                  schema_status,
+                  tenant_id,
+                  table_id,
+                  schema_version,
+                  OB_ALL_TABLE_ARCHIVE_HISTORY_TNAME,
+                  sql_client,
+                  allocator,
+                  table_schema))) {
+        LOG_WARN("failed to fetch table schema from archive history table", KR(ret));
       }
+    } else {
+      LOG_WARN("failed to fetch table schema from history table", KR(ret), K(tenant_id), K(table_id), K(schema_version));
     }
   }
 
@@ -9300,6 +9368,129 @@ int ObSchemaServiceSQLImpl::fetch_all_ccl_rule_info(
 
 #define CONSTRUCT_TENANT_SCHEMA_VERSION_HISTORY_SQL2 "select * from (select schema_version, is_deleted from %s where tenant_id = %lu and schema_version <= %ld order by schema_version desc limit %d) as a, "\
                                                      "(select min(schema_version) as min_version from %s where tenant_id = %lu and schema_version <= %ld) as b"
+int ObSchemaServiceSQLImpl::construct_table_schema_version_history_from_table_(
+    const ObRefreshSchemaStatus &schema_status,
+    ObISQLClient &sql_client,
+    const int64_t snapshot_version,
+    const uint64_t tenant_id,
+    const uint64_t schema_id,
+    const char *table_name,
+    VersionHisVal &version_his_val)
+{
+  int ret = OB_SUCCESS;
+  version_his_val.reset();
+  SMART_VAR(ObMySQLProxy::MySQLResult, res) {
+    ObMySQLResult *result = NULL;
+    ObSqlString sql;
+    const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
+    const int64_t snapshot_timestamp = schema_status.snapshot_timestamp_;
+    if (!g_liboblog_mode_) {
+      if (OB_FAIL(sql.append_fmt(CONSTRUCT_TABLE_SCHEMA_VERSION_HISTORY_SQL1,
+                                 table_name,
+                                 fill_extract_tenant_id(schema_status, tenant_id),
+                                 fill_extract_schema_id(schema_status, schema_id),
+                                 snapshot_version, MAX_CACHED_VERSION_CNT))) {
+        LOG_WARN("append failed", KR(ret), K(schema_id), K(snapshot_version));
+      } else { } // do-nothing
+    } else {
+      if (OB_FAIL(sql.append_fmt(CONSTRUCT_TABLE_SCHEMA_VERSION_HISTORY_SQL2,
+                                 table_name,
+                                 fill_extract_tenant_id(schema_status, tenant_id),
+                                 fill_extract_schema_id(schema_status, schema_id),
+                                 snapshot_version, MAX_CACHED_VERSION_CNT,
+                                 table_name,
+                                 fill_extract_tenant_id(schema_status, tenant_id),
+                                 fill_extract_schema_id(schema_status, schema_id),
+                                 snapshot_version))) {
+        LOG_WARN("append failed", KR(ret), K(schema_id), K(snapshot_version));
+      } else { } // do-nothing
+    }
+    if (OB_SUCC(ret)) {
+      DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
+      if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
+        LOG_WARN("execute sql failed", KR(ret), K(sql));
+      } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("fail to get result. ", KR(ret));
+      } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_schema_version(*result, version_his_val))) {
+        LOG_WARN("failed to retrieve schema version", KR(ret));
+      } else {
+        version_his_val.snapshot_version_ = snapshot_version;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSchemaServiceSQLImpl::fallback_table_schema_version_history_to_archive_(
+    const ObRefreshSchemaStatus &schema_status,
+    ObISQLClient &sql_client,
+    const int64_t snapshot_version,
+    const uint64_t tenant_id,
+    const uint64_t schema_id,
+    VersionHisVal &version_his_val)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t cluster_version = GET_MIN_CLUSTER_VERSION();
+  if ((cluster_version >= MOCK_CLUSTER_VERSION_4_4_2_1 && cluster_version < CLUSTER_VERSION_4_5_0_0)
+      || cluster_version >= CLUSTER_VERSION_4_6_1_0) {
+    VersionHisVal archive_version_his_val;
+    if (OB_FAIL(construct_table_schema_version_history_from_table_(
+                schema_status, sql_client, snapshot_version, tenant_id,
+                schema_id, OB_ALL_TABLE_ARCHIVE_HISTORY_TNAME, archive_version_his_val))) {
+      LOG_WARN("construct table schema version history from archive table failed",
+               KR(ret), K(tenant_id), K(schema_id), K(snapshot_version));
+    } else if (archive_version_his_val.valid_cnt_ > 0) {
+      LOG_ERROR("Table schema version history fell back to archive, "
+                "schema_version invariant likely violated, please investigate",
+                K(tenant_id), K(schema_id), K(snapshot_version));
+      record_fallback_to_archive_history_event_(tenant_id, schema_id, snapshot_version);
+      version_his_val = archive_version_his_val;
+    } else {
+      LOG_WARN("table schema version history not found in history or archive, "
+               "table may not exist at this snapshot version",
+               K(tenant_id), K(schema_id), K(snapshot_version));
+    }
+  }
+  return ret;
+}
+
+int ObSchemaServiceSQLImpl::construct_table_schema_version_history_(
+    const ObRefreshSchemaStatus &schema_status,
+    ObISQLClient &sql_client,
+    const int64_t snapshot_version,
+    const uint64_t tenant_id,
+    const uint64_t schema_id,
+    VersionHisVal &version_his_val)
+{
+  int ret = OB_SUCCESS;
+  const char *table_name = NULL;
+  const uint64_t exec_tenant_id = fill_exec_tenant_id(schema_status);
+  if (!check_inner_stat()) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("check inner stat fail", K(ret));
+  } else if (OB_FAIL(ObSchemaUtils::get_all_table_history_name(exec_tenant_id,
+                                                               table_name,
+                                                               schema_service_))) {
+    LOG_WARN("fail to get all table name", K(ret), K(exec_tenant_id));
+  } else if (OB_FAIL(construct_table_schema_version_history_from_table_(
+                     schema_status, sql_client, snapshot_version, tenant_id,
+                     schema_id, table_name, version_his_val))) {
+    LOG_WARN("construct table schema version history from history table failed",
+             KR(ret), K(tenant_id), K(schema_id), K(snapshot_version));
+  } else if (0 == version_his_val.valid_cnt_) {
+    // table schema history may have been compressed incorrectly, try archive history as fallback
+    if (OB_FAIL(fallback_table_schema_version_history_to_archive_(
+                schema_status, sql_client, snapshot_version, tenant_id,
+                schema_id, version_his_val))) {
+      LOG_WARN("fallback table schema version history to archive failed",
+               KR(ret), K(tenant_id), K(schema_id), K(snapshot_version));
+    }
+  }
+  return ret;
+}
+
+
 int ObSchemaServiceSQLImpl::construct_schema_version_history(
     const ObRefreshSchemaStatus &schema_status,
     ObISQLClient &sql_client,
@@ -9316,121 +9507,98 @@ int ObSchemaServiceSQLImpl::construct_schema_version_history(
     const uint64_t tenant_id = TENANT_SCHEMA == schema_type ? schema_id : schema_status.tenant_id_;
     const uint64_t exec_tenant_id = TENANT_SCHEMA == schema_type ? OB_SYS_TENANT_ID : fill_exec_tenant_id(schema_status);
     const int64_t snapshot_timestamp = schema_status.snapshot_timestamp_;
-    switch (schema_type) {
-      case TABLE_SCHEMA: {
-        const char *table_name = NULL;
-        if (!check_inner_stat()) {
-          ret = OB_NOT_INIT;
-          LOG_WARN("check inner stat fail", K(ret));
-        } else if (OB_FAIL(ObSchemaUtils::get_all_table_history_name(exec_tenant_id,
-                                                                     table_name,
-                                                                     schema_service_))) {
-          LOG_WARN("fail to get all table name", K(ret), K(exec_tenant_id));
-        } else if (!g_liboblog_mode_) {
-          if (OB_FAIL(sql.append_fmt(CONSTRUCT_TABLE_SCHEMA_VERSION_HISTORY_SQL1,
-                                     table_name,
-                                     fill_extract_tenant_id(schema_status, tenant_id),
-                                     fill_extract_schema_id(schema_status, schema_id),
-                                     snapshot_version, MAX_CACHED_VERSION_CNT))) {
-            LOG_WARN("append failed", K(ret), K(schema_id), K(snapshot_version));
-          } else { } // do-nothing
-        } else {
-          if (OB_FAIL(sql.append_fmt(CONSTRUCT_TABLE_SCHEMA_VERSION_HISTORY_SQL2,
-                                     table_name,
-                                     fill_extract_tenant_id(schema_status, tenant_id),
-                                     fill_extract_schema_id(schema_status, schema_id),
-                                     snapshot_version, MAX_CACHED_VERSION_CNT,
-                                     table_name,
-                                     fill_extract_tenant_id(schema_status, tenant_id),
-                                     fill_extract_schema_id(schema_status, schema_id),
-                                     snapshot_version))) {
-            LOG_WARN("append failed", K(ret), K(schema_id), K(snapshot_version));
-          } else { } // do-nothing
+    if (TABLE_SCHEMA == schema_type) {
+      if (OB_FAIL(construct_table_schema_version_history_(
+                  schema_status, sql_client, snapshot_version, tenant_id,
+                  schema_id, version_his_val))) {
+        LOG_WARN("construct table schema version history failed",
+                 KR(ret), K(tenant_id), K(schema_id), K(snapshot_version));
+      }
+    } else {
+      switch (schema_type) {
+        case TABLEGROUP_SCHEMA: {
+          if (!g_liboblog_mode_) {
+            if (OB_FAIL(sql.append_fmt(CONSTRUCT_TABLEGROUP_SCHEMA_VERSION_HISTORY_SQL1,
+                                       OB_ALL_TABLEGROUP_HISTORY_TNAME,
+                                       fill_extract_tenant_id(schema_status, tenant_id),
+                                       fill_extract_schema_id(schema_status, schema_id),
+                                       snapshot_version, MAX_CACHED_VERSION_CNT))) {
+              LOG_WARN("append failed", KR(ret), K(schema_id), K(snapshot_version));
+            }
+          } else {
+            if (OB_FAIL(sql.append_fmt(CONSTRUCT_TABLEGROUP_SCHEMA_VERSION_HISTORY_SQL2,
+                                       OB_ALL_TABLEGROUP_HISTORY_TNAME,
+                                       fill_extract_tenant_id(schema_status, tenant_id),
+                                       fill_extract_schema_id(schema_status, schema_id),
+                                       snapshot_version, MAX_CACHED_VERSION_CNT,
+                                       OB_ALL_TABLEGROUP_HISTORY_TNAME,
+                                       fill_extract_tenant_id(schema_status, tenant_id),
+                                       fill_extract_schema_id(schema_status, schema_id),
+                                       snapshot_version))) {
+              LOG_WARN("append failed", KR(ret), K(schema_id), K(snapshot_version));
+            }
+          }
+          break;
         }
-        break;
-      }
-      case TABLEGROUP_SCHEMA: {
-        if (!g_liboblog_mode_) {
-          if (OB_FAIL(sql.append_fmt(CONSTRUCT_TABLEGROUP_SCHEMA_VERSION_HISTORY_SQL1,
-                                     OB_ALL_TABLEGROUP_HISTORY_TNAME,
-                                     fill_extract_tenant_id(schema_status, tenant_id),
-                                     fill_extract_schema_id(schema_status, schema_id),
-                                     snapshot_version, MAX_CACHED_VERSION_CNT))) {
-            LOG_WARN("append failed", K(ret), K(schema_id), K(snapshot_version));
-          } else { } // do-nothing
-        } else {
-          if (OB_FAIL(sql.append_fmt(CONSTRUCT_TABLEGROUP_SCHEMA_VERSION_HISTORY_SQL2,
-                                     OB_ALL_TABLEGROUP_HISTORY_TNAME,
-                                     fill_extract_tenant_id(schema_status, tenant_id),
-                                     fill_extract_schema_id(schema_status, schema_id),
-                                     snapshot_version, MAX_CACHED_VERSION_CNT,
-                                     OB_ALL_TABLEGROUP_HISTORY_TNAME,
-                                     fill_extract_tenant_id(schema_status, tenant_id),
-                                     fill_extract_schema_id(schema_status, schema_id),
-                                     snapshot_version))) {
-            LOG_WARN("append failed", K(ret), K(schema_id), K(snapshot_version));
-          } else { } // do-nothing
+        case DATABASE_SCHEMA: {
+          if (!g_liboblog_mode_) {
+            if (OB_FAIL(sql.append_fmt(CONSTRUCT_DATABASE_SCHEMA_VERSION_HISTORY_SQL1,
+                                       OB_ALL_DATABASE_HISTORY_TNAME,
+                                       fill_extract_tenant_id(schema_status, tenant_id),
+                                       fill_extract_schema_id(schema_status, schema_id),
+                                       snapshot_version, MAX_CACHED_VERSION_CNT))) {
+              LOG_WARN("append failed", KR(ret), K(schema_id), K(snapshot_version));
+            }
+          } else {
+            if (OB_FAIL(sql.append_fmt(CONSTRUCT_DATABASE_SCHEMA_VERSION_HISTORY_SQL2,
+                                       OB_ALL_DATABASE_HISTORY_TNAME,
+                                       fill_extract_tenant_id(schema_status, tenant_id),
+                                       fill_extract_schema_id(schema_status, schema_id),
+                                       snapshot_version, MAX_CACHED_VERSION_CNT,
+                                       OB_ALL_DATABASE_HISTORY_TNAME,
+                                       fill_extract_tenant_id(schema_status, tenant_id),
+                                       fill_extract_schema_id(schema_status, schema_id),
+                                       snapshot_version))) {
+              LOG_WARN("append failed", KR(ret), K(schema_id), K(snapshot_version));
+            }
+          }
+          break;
         }
-        break;
-      }
-      case DATABASE_SCHEMA: {
-        if (!g_liboblog_mode_) {
-          if (OB_FAIL(sql.append_fmt(CONSTRUCT_DATABASE_SCHEMA_VERSION_HISTORY_SQL1,
-                                     OB_ALL_DATABASE_HISTORY_TNAME,
-                                     fill_extract_tenant_id(schema_status, tenant_id),
-                                     fill_extract_schema_id(schema_status, schema_id),
-                                     snapshot_version, MAX_CACHED_VERSION_CNT))) {
-            LOG_WARN("append failed", K(ret), K(schema_id), K(snapshot_version));
-          } else { } // do-nothing
-        } else {
-          if (OB_FAIL(sql.append_fmt(CONSTRUCT_DATABASE_SCHEMA_VERSION_HISTORY_SQL2,
-                                     OB_ALL_DATABASE_HISTORY_TNAME,
-                                     fill_extract_tenant_id(schema_status, tenant_id),
-                                     fill_extract_schema_id(schema_status, schema_id),
-                                     snapshot_version, MAX_CACHED_VERSION_CNT,
-                                     OB_ALL_DATABASE_HISTORY_TNAME,
-                                     fill_extract_tenant_id(schema_status, tenant_id),
-                                     fill_extract_schema_id(schema_status, schema_id),
-                                     snapshot_version))) {
-            LOG_WARN("append failed", K(ret), K(schema_id), K(snapshot_version));
-          } else { } // do-nothing
+        case TENANT_SCHEMA: {
+          if (!g_liboblog_mode_) {
+            if (OB_FAIL(sql.append_fmt(CONSTRUCT_TENANT_SCHEMA_VERSION_HISTORY_SQL1,
+                                       OB_ALL_TENANT_HISTORY_TNAME, schema_id,
+                                       snapshot_version, MAX_CACHED_VERSION_CNT))) {
+              LOG_WARN("append failed", KR(ret), K(schema_id), K(snapshot_version));
+            }
+          } else {
+            if (OB_FAIL(sql.append_fmt(CONSTRUCT_TENANT_SCHEMA_VERSION_HISTORY_SQL2,
+                                       OB_ALL_TENANT_HISTORY_TNAME, schema_id,
+                                       snapshot_version, MAX_CACHED_VERSION_CNT,
+                                       OB_ALL_TENANT_HISTORY_TNAME,
+                                       schema_id, snapshot_version))) {
+              LOG_WARN("append failed", KR(ret), K(schema_id), K(snapshot_version));
+            }
+          }
+          break;
         }
-        break;
-      }
-      case TENANT_SCHEMA: {
-        if (!g_liboblog_mode_) {
-          if (OB_FAIL(sql.append_fmt(CONSTRUCT_TENANT_SCHEMA_VERSION_HISTORY_SQL1,
-                                     OB_ALL_TENANT_HISTORY_TNAME, schema_id,
-                                     snapshot_version, MAX_CACHED_VERSION_CNT))) {
-            LOG_WARN("append failed", K(ret), K(schema_id), K(snapshot_version));
-          } else { } // do-nothing
-        } else {
-          if (OB_FAIL(sql.append_fmt(CONSTRUCT_TENANT_SCHEMA_VERSION_HISTORY_SQL2,
-                                     OB_ALL_TENANT_HISTORY_TNAME, schema_id,
-                                     snapshot_version, MAX_CACHED_VERSION_CNT,
-                                     OB_ALL_TENANT_HISTORY_TNAME,
-                                     schema_id, snapshot_version))) {
-            LOG_WARN("append failed", K(ret), K(schema_id), K(snapshot_version));
-          } else { } // do-nothing
+        default: {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("unexpected schema type", K(schema_type), K(ret));
         }
-        break;
       }
-      default: {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("unexpected schema type", K(schema_type), K(ret));
-      }
-    }
-    if (OB_SUCC(ret)) {
-      DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
-      if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
-        LOG_WARN("execute sql failed", K(sql), K(ret));
-      } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("fail to get result. ", K(ret));
-      } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_schema_version(*result, version_his_val))) {
-        LOG_WARN("failed to retrieve schema version", K(ret));
-      } else {
-        version_his_val.snapshot_version_ = snapshot_version;
+      if (OB_SUCC(ret)) {
+        DEFINE_SQL_CLIENT_RETRY_WEAK_WITH_SNAPSHOT(sql_client, snapshot_timestamp);
+        if (OB_FAIL(sql_client_retry_weak.read(res, exec_tenant_id, sql.ptr()))) {
+          LOG_WARN("execute sql failed", K(sql), K(ret));
+        } else if (OB_UNLIKELY(NULL == (result = res.get_result()))) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("fail to get result. ", K(ret));
+        } else if (OB_FAIL(ObSchemaRetrieveUtils::retrieve_schema_version(*result, version_his_val))) {
+          LOG_WARN("failed to retrieve schema version", K(ret));
+        } else {
+          version_his_val.snapshot_version_ = snapshot_version;
+        }
       }
     }
   }

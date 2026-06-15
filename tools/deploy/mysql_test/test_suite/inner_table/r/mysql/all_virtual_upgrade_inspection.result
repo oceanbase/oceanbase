@@ -4,7 +4,6 @@ name	varchar(128)	NO		NULL
 info	varchar(4096)	NO		NULL	
 select name, case when info in ('succeed', 'checking') then 'succeed' else info end as info from oceanbase.__all_virtual_upgrade_inspection;
 name	info
-zone_check	succeed
 sys_stat_check	succeed
 sys_param_check	succeed
 sys_table_schema_check	succeed

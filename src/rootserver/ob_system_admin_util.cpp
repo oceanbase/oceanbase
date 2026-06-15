@@ -12,6 +12,7 @@
 #include "logservice/leader_coordinator/table_accessor.h"
 #include "rootserver/freeze/ob_major_freeze_helper.h"
 #include "share/ob_cluster_event_history_table_operator.h"//CLUSTER_EVENT_INSTANCE
+#include "share/ob_inspection_service.h"
 namespace oceanbase
 {
 using namespace common;
@@ -1658,7 +1659,7 @@ int ObAdminUpgradeVirtualSchema::batch_upgrade_(const uint64_t tenant_id,
     int64_t refreshed_schema_version = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < hard_code_tables.count(); i++) {
       const share::schema::ObTableSchema &hard_code_table = hard_code_tables.at(i);
-      if (OB_FAIL(ObSysTableInspection::check_table_schema(tenant_id, hard_code_table))) {
+      if (OB_FAIL(ObInspector::check_table_schema(tenant_id, hard_code_table))) {
         if (OB_SCHEMA_ERROR != ret) {
           LOG_WARN("check table schema failed", KR(ret), K(tenant_id), K(hard_code_table));
         } else {
@@ -2290,6 +2291,7 @@ int ObAdminRootInspection::execute(const obrpc::ObRunJobArg &arg)
         "rs", rs_addr, KR(ret));
   } else if (OB_FAIL(ctx_.root_inspection_->check_all())) {
     LOG_WARN("root_inspection check_all failed", KR(ret));
+    LOG_USER_ERROR(OB_ERR_ROOT_INSPECTION);
   }
 
   return ret;

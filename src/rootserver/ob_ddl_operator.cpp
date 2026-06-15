@@ -31,6 +31,8 @@
 #include "pl/pl_cache/ob_pl_cache_mgr.h"
 #include "pl/pl_recompile/ob_pl_recompile_task_helper.h"
 #include "share/ob_scheduled_manage_dynamic_partition.h"
+#include "share/ob_scheduled_recycle_schema_history.h"
+#include "share/ob_scheduled_inspection.h"
 #include "share/schema/ob_ccl_rule_sql_service.h"
 #include "logservice/data_dictionary/ob_data_dict_scheduler.h"    // ObDataDictScheduler
 #include "share/search_index/ob_search_index_builder_util.h"
@@ -6523,6 +6525,8 @@ int ObDDLOperator::init_tenant_schemas(
     LOG_WARN("failed to init tenant optimizer stats info", K(tenant_id), K(ret));
   } else if (OB_FAIL(init_tenant_scheduled_job(sys_variable, tenant_id, trans))) {
     LOG_WARN("init tenant scheduled job failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(init_tenant_inspection_job(sys_variable, tenant_id, trans))) {
+    LOG_WARN("init tenant inspection job failed", KR(ret), K(tenant_id));
   } else if (OB_FAIL(init_tenant_spm_configure(tenant_id, trans))) {
     LOG_WARN("failed to init tenant spm configure", K(tenant_id), K(ret));
   } else if (OB_FAIL(init_tenant_profile(tenant_id, sys_variable, trans))) {
@@ -12129,6 +12133,11 @@ int ObDDLOperator::init_tenant_scheduled_job(
                      tenant_id,
                      trans))) {
     LOG_WARN("create scheduled manage dynamic partition job failed", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObScheduledRecycleSchemaHistory::create_job(
+                     sys_variable,
+                     tenant_id,
+                     trans))) {
+    LOG_WARN("create scheduled schema history recycle job failed", KR(ret), K(tenant_id));
   } else if (OB_FAIL(ObScheduledTriggerPartitionBalance::create_scheduled_trigger_partition_balance_job(
     sys_variable,
     tenant_id,
@@ -12149,6 +12158,21 @@ int ObDDLOperator::init_tenant_scheduled_job(
                      tenant_id,
                      trans))) {
     LOG_WARN("create scheduled daily maintenance window job failed", KR(ret), K(tenant_id));
+  }
+  return ret;
+}
+
+int ObDDLOperator::init_tenant_inspection_job(
+  const share::schema::ObSysVariableSchema &sys_variable,
+  const uint64_t tenant_id,
+  ObMySQLTransaction &trans)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObScheduledInspection::create_jobs(
+              sys_variable,
+              tenant_id,
+              trans))) {
+    LOG_WARN("create scheduled inspection jobs failed", KR(ret), K(tenant_id));
   }
   return ret;
 }

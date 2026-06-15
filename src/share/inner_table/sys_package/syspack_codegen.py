@@ -271,6 +271,7 @@ syspack_config = [
     SysPackConfig(SysPackGroup.ORACLE, "dbms_lob_manager", "dbms_lob_manager.sql", "dbms_lob_manager_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     SysPackConfig(SysPackGroup.ORACLE, "dbms_daily_maintenance", "dbms_daily_maintenance.sql", "dbms_daily_maintenance_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     SysPackConfig(SysPackGroup.ORACLE, "dbms_java", "dbms_java.sql", "dbms_java_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
+    SysPackConfig(SysPackGroup.ORACLE, "dbms_schema", "dbms_schema.sql", "dbms_schema_body.sql", wrap=WrapType.BODY_ONLY, orc_build_req=True),
     # MySQL
     SysPackConfig(SysPackGroup.MYSQL, "dbms_stats", "dbms_stats_mysql.sql", "dbms_stats_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_scheduler", "dbms_scheduler_mysql.sql", "dbms_scheduler_mysql_body.sql"),
@@ -301,6 +302,7 @@ syspack_config = [
     SysPackConfig(SysPackGroup.MYSQL, "dbms_routine_load", "dbms_routine_load_mysql.sql", "dbms_routine_load_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_lob_manager", "dbms_lob_manager_mysql.sql", "dbms_lob_manager_body_mysql.sql"),
     SysPackConfig(SysPackGroup.MYSQL, "dbms_daily_maintenance", "dbms_daily_maintenance_mysql.sql", "dbms_daily_maintenance_body_mysql.sql"),
+    SysPackConfig(SysPackGroup.MYSQL, "dbms_schema", "dbms_schema_mysql.sql", "dbms_schema_body_mysql.sql"),
     # Oracle Special
     SysPackConfig(SysPackGroup.ORACLE_SPECIAL, "__dbms_upgrade", "__dbms_upgrade.sql", "__dbms_upgrade_body.sql", orc_build_req=True),
     # MySQL Special

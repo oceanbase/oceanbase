@@ -90,7 +90,9 @@
               } \
               LOG_INFO(#func " query tenant status for schema_getter retry", KR(ret), KR(old_err), K(tenant_id), K(tenant_status)); \
             } \
-            if (OB_NOT_SUPPORTED == ret || OB_TENANT_HAS_BEEN_DROPPED == ret) { \
+            if (OB_NOT_SUPPORTED == ret \
+                || OB_TENANT_HAS_BEEN_DROPPED == ret \
+                || OB_ERR_SCHEMA_HISTORY_EMPTY == ret) { \
               /* retrun if errno needn't retry */ \
               break; \
             } \

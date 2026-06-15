@@ -88,6 +88,7 @@
 #include "pl/sys_package/ob_dbms_routine_load_mysql.h"
 #include "pl/sys_package/ob_dbms_lob_manager.h"
 #include "pl/sys_package/ob_dbms_daily_maintenance.h"
+#include "pl/sys_package/ob_dbms_schema.h"
 
 #ifdef INTERFACE_DEF
   INTERFACE_DEF(INTERFACE_START, "TEST", (ObPLInterfaceImpl::call))
@@ -1007,6 +1008,11 @@ DEFINE_DBMS_HYBRID_VECTOR_MYSQL_INTERFACE(DBMS_HYBRID_VECTOR_MYSQL_GET_SQL, ObDB
   INTERFACE_DEF(INTERFACE_DBMS_DAILY_MAINTENANCE_SET_THREAD_CNT, "DBMS_DAILY_MAINTENANCE_SET_THREAD_COUNT", (ObDBMSDailyMaintenance::set_thread_count))
   INTERFACE_DEF(INTERFACE_DBMS_DAILY_MAINTENANCE_ALTER_REPEAT_INTERVAL, "DBMS_DAILY_MAINTENANCE_ALTER_REPEAT_INTERVAL", (ObDBMSDailyMaintenance::alter_repeat_interval_proc))
   // end of dbms_daily_maintenance
+
+  //start of dbms_schema
+  INTERFACE_DEF(INTERFACE_DBMS_SCHEMA_RECYCLE_SCHEMA_HISTORY, "DBMS_SCHEMA_RECYCLE_SCHEMA_HISTORY", (ObDBMSSchema::recycle_schema_history))
+  INTERFACE_DEF(INTERFACE_DBMS_SCHEMA_RUN_INSPECTION, "DBMS_SCHEMA_RUN_INSPECTION", (ObDBMSSchema::run_inspection))
+  //end of dbms_schema
 
   INTERFACE_DEF(INTERFACE_END, "INVALID", (nullptr))
 #endif

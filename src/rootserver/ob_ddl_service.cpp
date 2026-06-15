@@ -15032,6 +15032,7 @@ int ObDDLService::alter_table_sess_active_time_in_trans(obrpc::ObAlterTableArg &
   return ret;
 }
 
+ERRSIM_POINT_DEF(ERRSIM_REVERSE_UPDATE_TABLES_ATTR_ORDER);
 int ObDDLService::update_tables_attribute(ObIArray<ObTableSchema*> &new_table_schemas,
                                           ObDDLOperator &ddl_operator,
                                           common::ObMySQLTransaction &trans,
@@ -15039,20 +15040,77 @@ int ObDDLService::update_tables_attribute(ObIArray<ObTableSchema*> &new_table_sc
                                           const ObString &ddl_stmt_str)
 {
   int ret = OB_SUCCESS;
-  int64_t schema_count = new_table_schemas.count();
+  const int64_t schema_count = new_table_schemas.count();
   if (schema_count < 1) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("local index should exist", K(new_table_schemas), KR(ret));
+  } else if (OB_ISNULL(new_table_schemas.at(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("data table schema ptr is NULL", KR(ret));
+  } else if (OB_UNLIKELY(new_table_schemas.at(0)->is_aux_table())) {
+    // Invariant: [0] = data table, [1..n) = aux tables. We must update aux tables
+    // first and the data table last so that V_data > V_aux holds. If [0] were an
+    // aux table, updating it as the data table would leave V_aux > V_data, so a
+    // reader that fetches schema by the data table schema version would miss the
+    // latest aux table changes. If this fires, check how the caller ordered the array.
+    ret = OB_ERR_UNEXPECTED;
+    LOG_ERROR("first schema must be data table, got aux table, check array order",
+              KR(ret), KPC(new_table_schemas.at(0)));
+  } else if (OB_UNLIKELY(ERRSIM_REVERSE_UPDATE_TABLES_ATTR_ORDER)) {
+    if (OB_FAIL(errsim_update_tables_attribute(
+            new_table_schemas, ddl_operator, trans, operation_type, ddl_stmt_str))) {
+      LOG_WARN("errsim legacy-order update failed", KR(ret));
+    }
+  } else {
+    // update aux tables first, then data table, to keep V_main > V_aux
+    for (int64_t i = 1; OB_SUCC(ret) && i < schema_count; ++i) {
+      if (OB_ISNULL(new_table_schemas.at(i))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema ptr is NULL", KR(ret), K(i));
+      } else if (OB_FAIL(ddl_operator.update_table_attribute(*new_table_schemas.at(i),
+                                                      trans,
+                                                      operation_type,
+                                                      NULL))) {
+        LOG_WARN("failed to update aux table schema version and max used column is!",
+                 KR(ret), K(i), KPC(new_table_schemas.at(i)));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_ISNULL(new_table_schemas.at(0))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("data table schema ptr is NULL", KR(ret));
+      } else if (OB_FAIL(ddl_operator.update_table_attribute(*new_table_schemas.at(0),
+                                                      trans,
+                                                      operation_type,
+                                                      &ddl_stmt_str))) {
+        LOG_WARN("failed to update data table schema version and max used column is!",
+                 KR(ret), KPC(new_table_schemas.at(0)));
+      }
+    }
   }
+  return ret;
+}
+
+int ObDDLService::errsim_update_tables_attribute(
+    ObIArray<ObTableSchema*> &new_table_schemas,
+    ObDDLOperator &ddl_operator,
+    common::ObMySQLTransaction &trans,
+    const ObSchemaOperationType operation_type,
+    const ObString &ddl_stmt_str)
+{
+  int ret = OB_SUCCESS;
+  LOG_INFO("[ERRSIM] update_tables_attribute in legacy order to reproduce V_idx > V_main");
+  const int64_t schema_count = new_table_schemas.count();
   for (int64_t i = 0; OB_SUCC(ret) && i < schema_count; ++i) {
     if (OB_ISNULL(new_table_schemas.at(i))) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("schema ptr is NULL", KR(ret));
+      LOG_WARN("schema ptr is NULL", KR(ret), K(i));
     } else if (OB_FAIL(ddl_operator.update_table_attribute(*new_table_schemas.at(i),
                                                     trans,
                                                     operation_type,
                                                     0 == i ? &ddl_stmt_str : NULL))) {
-      LOG_WARN("failed to update data table schema version and max used column is!", KR(ret), KPC(new_table_schemas.at(i)));
+      LOG_WARN("failed to update table schema version and max used column is!",
+               KR(ret), K(i), KPC(new_table_schemas.at(i)));
     }
   }
   return ret;
@@ -30415,7 +30473,7 @@ int ObDDLService::get_alter_system_table_schema_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("orig_schema and hard_code_schema table_id not match", KR(ret), K(orig_schema),
         K(hard_code_schema));
-  } else if (OB_FAIL(ObSysTableInspection::check_and_get_system_table_column_diff(orig_schema,
+  } else if (OB_FAIL(ObRootInspection::check_and_get_system_table_column_diff(orig_schema,
           hard_code_schema, add_column_ids, alter_column_ids))) {
     LOG_WARN("fail to check system table's column schemas", KR(ret), K(tenant_id), K(table_id));
   } else if (OB_FAIL(new_schema.assign(orig_schema))) {

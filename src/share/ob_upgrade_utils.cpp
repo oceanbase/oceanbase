@@ -30,6 +30,8 @@
 #include "share/inner_table/ob_tiered_metadata_store_schema.h"
 #include "share/ls/ob_ls_status_operator.h"
 #include "share/ls/ob_ls_life_manager.h"
+#include "share/ob_scheduled_recycle_schema_history.h"
+#include "share/ob_scheduled_inspection.h"
 #include "share/balance/ob_scheduled_trigger_partition_balance.h" // ObScheduledTriggerPartitionBalance
 #include "logservice/data_dictionary/ob_data_dict_scheduler.h"    // ObDataDictScheduler
 #include "share/ob_unit_table_operator.h"                         // ObUnitTableOperator
@@ -2331,6 +2333,7 @@ int ObUpgradeFor4420Processor::post_upgrade()
   }
   return ret;
 }
+
 int ObUpgradeFor4420Processor::finish_upgrade()
 {
   int ret = OB_SUCCESS;
@@ -2889,6 +2892,95 @@ int ObUpgradeFor4510Processor::grant_priv(const ObPrivSet user_priv_set,
 }
 
 /* =========== 4510 upgrade processor end ============= */
+
+/* =========== 4610 upgrade processor start ============= */
+int ObUpgradeFor4610Processor::post_upgrade()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_schema_history_recycle_())) {
+    LOG_WARN("fail to post upgrade for schema history recycle job", KR(ret));
+  } else if (OB_FAIL(post_upgrade_for_inspection_jobs_())) {
+    LOG_WARN("fail to post upgrade for inspection jobs", KR(ret));
+  }
+  return ret;
+}
+
+int ObUpgradeFor4610Processor::post_upgrade_for_schema_history_recycle_()
+{
+  int ret = OB_SUCCESS;
+  bool is_primary_tenant = false;
+  ObSchemaGetterGuard schema_guard;
+  const ObSysVariableSchema *sys_variable_schema = NULL;
+
+  if (OB_ISNULL(sql_proxy_) || OB_ISNULL(schema_service_) || !is_valid_tenant_id(tenant_id_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", KR(ret), KP(sql_proxy_), KP(schema_service_), K_(tenant_id));
+  } else if (!is_user_tenant(tenant_id_)) {
+    LOG_INFO("not user tenant, ignore", K_(tenant_id));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::is_primary_tenant(sql_proxy_, tenant_id_, is_primary_tenant))) {
+    LOG_WARN("check is standby tenant failed", KR(ret), K_(tenant_id));
+  } else if (!is_primary_tenant) {
+    LOG_INFO("not primary tenant, ignore", K_(tenant_id));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    LOG_WARN("failed to get tenant schema guard", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_sys_variable_schema(tenant_id_, sys_variable_schema))) {
+    LOG_WARN("get sys variable schema failed", KR(ret), K_(tenant_id));
+  } else if (OB_ISNULL(sys_variable_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sys variable schema is null", KR(ret));
+  } else {
+    START_TRANSACTION(sql_proxy_, tenant_id_);
+    if (FAILEDx(ObScheduledRecycleSchemaHistory::create_job_for_upgrade(
+        sql_proxy_,
+        *sys_variable_schema,
+        tenant_id_,
+        trans))) {
+      LOG_WARN("create scheduled schema history recycle job failed", KR(ret), K_(tenant_id));
+    }
+    END_TRANSACTION(trans);
+    LOG_INFO("post upgrade for schema history recycle job finished", KR(ret), K_(tenant_id));
+  }
+  return ret;
+}
+
+int ObUpgradeFor4610Processor::post_upgrade_for_inspection_jobs_()
+{
+  int ret = OB_SUCCESS;
+  bool is_primary_tenant = false;
+  ObSchemaGetterGuard schema_guard;
+  const ObSysVariableSchema *sys_variable_schema = NULL;
+
+  if (OB_ISNULL(sql_proxy_) || OB_ISNULL(schema_service_) || !is_valid_tenant_id(tenant_id_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected error", KR(ret), KP(sql_proxy_), KP(schema_service_), K_(tenant_id));
+  } else if (OB_FAIL(ObAllTenantInfoProxy::is_primary_tenant(sql_proxy_, tenant_id_, is_primary_tenant))) {
+    LOG_WARN("check is standby tenant failed", KR(ret), K_(tenant_id));
+  } else if (!is_primary_tenant) {
+    LOG_INFO("not primary tenant, ignore", K_(tenant_id));
+  } else if (OB_FAIL(schema_service_->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+    LOG_WARN("failed to get tenant schema guard", KR(ret), K_(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_sys_variable_schema(tenant_id_, sys_variable_schema))) {
+    LOG_WARN("get sys variable schema failed", KR(ret), K_(tenant_id));
+  } else if (OB_ISNULL(sys_variable_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("sys variable schema is null", KR(ret));
+  } else {
+    START_TRANSACTION(sql_proxy_, tenant_id_);
+    if (FAILEDx(ObScheduledInspection::create_jobs_for_upgrade(
+        sql_proxy_,
+        *sys_variable_schema,
+        tenant_id_,
+        trans))) {
+      LOG_WARN("create scheduled inspection jobs failed", KR(ret), K_(tenant_id));
+    }
+    END_TRANSACTION(trans);
+    LOG_INFO("post upgrade for inspection jobs finished", KR(ret), K_(tenant_id));
+  }
+  return ret;
+}
+/* =========== 4610 upgrade processor end ============= */
 
 } // end share
 } // end oceanbase

@@ -873,17 +873,17 @@ int ObPurgeRecycleBinExecutor::execute(ObExecContext &ctx, ObPurgeRecycleBinStmt
   ObTaskExecutorCtx *task_exec_ctx = NULL;
   obrpc::ObCommonRpcProxy *common_rpc_proxy = NULL;
   const obrpc::ObPurgeRecycleBinArg &purge_recyclebin_arg = stmt.get_purge_recyclebin_arg();
-
-//  int64_t current_time = ObTimeUtility::current_time();
-//  obrpc::Int64 expire_time = current_time - GCONF.schema_history_expire_time;
+  ObSQLSessionInfo *session = ctx.get_my_session();
   obrpc::Int64 affected_rows = 0;
   ObString first_stmt;
-  if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
-    LOG_WARN("fail to get first stmt" , K(ret));
-  } else {
-    const_cast<obrpc::ObPurgeRecycleBinArg&>(purge_recyclebin_arg).ddl_stmt_str_ = first_stmt;
-  }
-  if (OB_FAIL(ret)) {
+  obrpc::ObPurgeRecycleBinArg arg = purge_recyclebin_arg;
+  int64_t recyclebin_object_expire_time = GCONF.recyclebin_object_expire_time;
+  if (OB_ISNULL(session)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is null", KR(ret));
+  } else if (session->is_inner() && recyclebin_object_expire_time <= 0) {
+    // background scheduled purge recyclebin task is not enabled
+    LOG_INFO("recyclebin object expire time is 0, no need to purge", KR(ret));
   } else if (OB_ISNULL(task_exec_ctx = GET_TASK_EXECUTOR_CTX(ctx))) {
     ret = OB_NOT_INIT;
     LOG_WARN("get task executor context failed");
@@ -893,29 +893,62 @@ int ObPurgeRecycleBinExecutor::execute(ObExecContext &ctx, ObPurgeRecycleBinStmt
   } else {
     bool is_tenant_finish = false;
     int64_t total_purge_count = 0;
-    uint64_t tenant_id = purge_recyclebin_arg.tenant_id_;
+    uint64_t tenant_id = arg.tenant_id_;
+    int64_t purge_sum = 1000; // same with background task total limit
+    const int64_t SLEEP_INTERVAL = 100 * 1000; // 100ms
+    if (session->is_inner()) {
+      // for background scheduled purge recyclebin task
+      const int64_t current_time = ObTimeUtility::current_time();
+      const int64_t expire_timeval = GCONF.recyclebin_object_expire_time;
+      arg.expire_time_ = current_time - expire_timeval;
+      arg.auto_purge_ = true;
+      arg.exec_tenant_id_ = tenant_id;
+      arg.ddl_stmt_str_.reset();
+    } else {
+      if (OB_FAIL(stmt.get_first_stmt(first_stmt))) {
+        LOG_WARN("fail to get first stmt" , K(ret));
+      } else {
+        arg.ddl_stmt_str_ = first_stmt;
+      }
+    }
     while (OB_SUCC(ret) && !is_tenant_finish) {
+      // For scheduled purge recyclebin job, check worker timeout between batches
+      // so that the job can be interrupted when max_run_duration is exceeded.
+      if (session->is_inner() && THIS_WORKER.is_timeout()) {
+        ret = OB_TIMEOUT;
+        break;
+      }
       //一个租户只purge 10个回收站的对象，防止卡住RS的ddl线程
       //每次返回purge的行数，只有purge数目少于affected_rows
       int64_t cal_timeout = 0;
       int64_t start_time = ObTimeUtility::current_time();
-      if (OB_FAIL(GSCHEMASERVICE.cal_purge_need_timeout(purge_recyclebin_arg, cal_timeout))) {
+      if (OB_FAIL(GSCHEMASERVICE.cal_purge_need_timeout(arg, cal_timeout))) {
         LOG_WARN("fail to cal purge time out", KR(ret), K(tenant_id));
       } else if (0 == cal_timeout) {
         is_tenant_finish = true;
-      } else if (OB_FAIL(common_rpc_proxy->timeout(cal_timeout).purge_expire_recycle_objects(purge_recyclebin_arg, affected_rows))) {
-        LOG_WARN("purge reyclebin objects failed", K(ret), K(affected_rows), K(purge_recyclebin_arg));
+      } else if (OB_FAIL(common_rpc_proxy->timeout(cal_timeout).purge_expire_recycle_objects(arg, affected_rows))) {
+        LOG_WARN("purge reyclebin objects failed", K(ret), K(affected_rows), K(arg));
         //如果失败情况下，不需要继续
         is_tenant_finish = false;
       } else {
-        is_tenant_finish = obrpc::ObPurgeRecycleBinArg::DEFAULT_PURGE_EACH_TIME == affected_rows ? false : true;
+        if (session->is_inner()) {
+          purge_sum -= affected_rows;
+          if (arg.purge_num_ != affected_rows || purge_sum <= 0) {
+            is_tenant_finish = true;
+          }
+          if (!is_tenant_finish) {
+            ob_usleep(SLEEP_INTERVAL);
+          }
+        } else {
+          is_tenant_finish = obrpc::ObPurgeRecycleBinArg::DEFAULT_PURGE_EACH_TIME == affected_rows ? false : true;
+        }
         total_purge_count += affected_rows;
       }
       int64_t cost_time = ObTimeUtility::current_time() - start_time;
       LOG_INFO("purge recycle objects", KR(ret), K(cost_time), K(cal_timeout),
-               K(total_purge_count), K(purge_recyclebin_arg), K(affected_rows), K(is_tenant_finish));
+               K(total_purge_count), K(arg), K(affected_rows), K(is_tenant_finish));
     }
-    LOG_INFO("purge recyclebin success", KR(ret), K(purge_recyclebin_arg), K(total_purge_count));
+    LOG_INFO("purge recyclebin finished", KR(ret), K(arg), K(total_purge_count));
   }
   return ret;
 }

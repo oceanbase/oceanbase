@@ -137,7 +137,7 @@ DEF_BOOL(enable_upgrade_mode, OB_CLUSTER_PARAMETER, "False",
          "Value: True: turned on; False: turned off;",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
-DEF_TIME(schema_history_expire_time, OB_CLUSTER_PARAMETER, "7d", "[1m, 30d]",
+DEF_TIME(schema_history_expire_time, OB_TENANT_PARAMETER, "7d", "[1m, 30d]",
          "the expire time for schema history, from 1min to 30days, "
          "with default 7days. Range: [1m, 30d]",
          ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1662,6 +1662,7 @@ DEF_STR(tde_method, OB_TENANT_PARAMETER, "none",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
         "none, bkmi, bkmi_sm, ceair, aliyun, aliyun_aes256, internal");
 
+// deprecated
 DEF_TIME(schema_history_recycle_interval, OB_CLUSTER_PARAMETER, "10m", "[0s,]",
          "the time interval between the schedules of schema history recyle task. "
          "Range: [0s, +∞)",
@@ -3522,3 +3523,17 @@ DEF_INT(mv_refresh_concurrency, OB_TENANT_PARAMETER, "10", "[1,]",
 DEF_BOOL(_enable_mv_adaptive_refresh_step, OB_TENANT_PARAMETER, "True",
         "Enable the dynamic generation of the MV refresh SQL based on the delta data",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_TIME_WITH_CHECKER(schema_history_archive_expire_time, OB_TENANT_PARAMETER, "0",
+                      common::ObConfigSchemaHistoryArchiveExpireTimeChecker,
+                      "[0, 365d]",
+                      "the expire time for schema history archived into __all_xxx_archived_history, "
+                      "0 means disable GC, otherwise keep at least 30 days and at most 365 days. "
+                      "Default 0. Range: {0} & [30d, 365d]",
+                      ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
+DEF_BOOL(_enable_schema_history_archive, OB_TENANT_PARAMETER, "False",
+         "specifies whether to enable schema history archiving into __all_xxx_archive_history "
+         "during schema history recycling. If disabled, schema history will be recycled directly "
+         "without archiving. Default: False.",
+         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));

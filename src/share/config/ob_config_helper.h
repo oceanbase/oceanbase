@@ -1335,6 +1335,16 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigCommaSeparatedStringChecker);
 };
 
+class ObConfigSchemaHistoryArchiveExpireTimeChecker
+  : public ObConfigChecker
+{
+public:
+  ObConfigSchemaHistoryArchiveExpireTimeChecker() {}
+  virtual ~ObConfigSchemaHistoryArchiveExpireTimeChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigSchemaHistoryArchiveExpireTimeChecker);
+};
 } // namespace common
 } // namespace oceanbase
 

@@ -722,6 +722,7 @@ public:
   static int all_lob_check_exception_result_schema(share::schema::ObTableSchema &table_schema);
   static int all_routine_load_job_schema(share::schema::ObTableSchema &table_schema);
   static int all_ss_gc_reserved_snapshot_schema(share::schema::ObTableSchema &table_schema);
+  static int all_table_archive_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_java_policy_schema(share::schema::ObTableSchema &table_schema);
   static int all_java_policy_history_schema(share::schema::ObTableSchema &table_schema);
   static int all_table_opt_stat_invalidate_plan_schema(share::schema::ObTableSchema &table_schema);
@@ -3187,6 +3188,7 @@ public:
   static int all_lob_check_exception_result_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_routine_load_job_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_ss_gc_reserved_snapshot_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
+  static int all_table_archive_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_java_policy_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_java_policy_history_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
   static int all_table_opt_stat_invalidate_plan_aux_lob_meta_schema(share::schema::ObTableSchema &table_schema);
@@ -3559,6 +3561,7 @@ public:
   static int all_lob_check_exception_result_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_routine_load_job_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_ss_gc_reserved_snapshot_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
+  static int all_table_archive_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_java_policy_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_java_policy_history_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
   static int all_table_opt_stat_invalidate_plan_aux_lob_piece_schema(share::schema::ObTableSchema &table_schema);
@@ -4186,6 +4189,7 @@ const schema_create_func sys_table_schema_creators [] = {
   ObInnerTableSchema::all_lob_check_exception_result_schema,
   ObInnerTableSchema::all_routine_load_job_schema,
   ObInnerTableSchema::all_ss_gc_reserved_snapshot_schema,
+  ObInnerTableSchema::all_table_archive_history_schema,
   ObInnerTableSchema::all_java_policy_schema,
   ObInnerTableSchema::all_java_policy_history_schema,
   ObInnerTableSchema::all_table_opt_stat_invalidate_plan_schema,
@@ -6889,6 +6893,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_LOB_CHECK_EXCEPTION_RESULT_TID,
   OB_ALL_ROUTINE_LOAD_JOB_TID,
   OB_ALL_SS_GC_RESERVED_SNAPSHOT_TID,
+  OB_ALL_TABLE_ARCHIVE_HISTORY_TID,
   OB_ALL_JAVA_POLICY_TID,
   OB_ALL_JAVA_POLICY_HISTORY_TID,
   OB_ALL_TABLE_OPT_STAT_INVALIDATE_PLAN_TID,
@@ -9124,6 +9129,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_LOB_CHECK_EXCEPTION_RESULT_AUX_LOB_META_TID,
   OB_ALL_ROUTINE_LOAD_JOB_AUX_LOB_META_TID,
   OB_ALL_SS_GC_RESERVED_SNAPSHOT_AUX_LOB_META_TID,
+  OB_ALL_TABLE_ARCHIVE_HISTORY_AUX_LOB_META_TID,
   OB_ALL_JAVA_POLICY_AUX_LOB_META_TID,
   OB_ALL_JAVA_POLICY_HISTORY_AUX_LOB_META_TID,
   OB_ALL_TABLE_OPT_STAT_INVALIDATE_PLAN_AUX_LOB_META_TID,
@@ -9469,6 +9475,7 @@ const uint64_t tenant_space_tables [] = {
   OB_ALL_LOB_CHECK_EXCEPTION_RESULT_AUX_LOB_PIECE_TID,
   OB_ALL_ROUTINE_LOAD_JOB_AUX_LOB_PIECE_TID,
   OB_ALL_SS_GC_RESERVED_SNAPSHOT_AUX_LOB_PIECE_TID,
+  OB_ALL_TABLE_ARCHIVE_HISTORY_AUX_LOB_PIECE_TID,
   OB_ALL_JAVA_POLICY_AUX_LOB_PIECE_TID,
   OB_ALL_JAVA_POLICY_HISTORY_AUX_LOB_PIECE_TID,
   OB_ALL_TABLE_OPT_STAT_INVALIDATE_PLAN_AUX_LOB_PIECE_TID,  };
@@ -10240,6 +10247,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_LOB_CHECK_EXCEPTION_RESULT_TNAME,
   OB_ALL_ROUTINE_LOAD_JOB_TNAME,
   OB_ALL_SS_GC_RESERVED_SNAPSHOT_TNAME,
+  OB_ALL_TABLE_ARCHIVE_HISTORY_TNAME,
   OB_ALL_JAVA_POLICY_TNAME,
   OB_ALL_JAVA_POLICY_HISTORY_TNAME,
   OB_ALL_TABLE_OPT_STAT_INVALIDATE_PLAN_TNAME,
@@ -12475,6 +12483,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_LOB_CHECK_EXCEPTION_RESULT_AUX_LOB_META_TNAME,
   OB_ALL_ROUTINE_LOAD_JOB_AUX_LOB_META_TNAME,
   OB_ALL_SS_GC_RESERVED_SNAPSHOT_AUX_LOB_META_TNAME,
+  OB_ALL_TABLE_ARCHIVE_HISTORY_AUX_LOB_META_TNAME,
   OB_ALL_JAVA_POLICY_AUX_LOB_META_TNAME,
   OB_ALL_JAVA_POLICY_HISTORY_AUX_LOB_META_TNAME,
   OB_ALL_TABLE_OPT_STAT_INVALIDATE_PLAN_AUX_LOB_META_TNAME,
@@ -12820,6 +12829,7 @@ const char* const tenant_space_table_names [] = {
   OB_ALL_LOB_CHECK_EXCEPTION_RESULT_AUX_LOB_PIECE_TNAME,
   OB_ALL_ROUTINE_LOAD_JOB_AUX_LOB_PIECE_TNAME,
   OB_ALL_SS_GC_RESERVED_SNAPSHOT_AUX_LOB_PIECE_TNAME,
+  OB_ALL_TABLE_ARCHIVE_HISTORY_AUX_LOB_PIECE_TNAME,
   OB_ALL_JAVA_POLICY_AUX_LOB_PIECE_TNAME,
   OB_ALL_JAVA_POLICY_HISTORY_AUX_LOB_PIECE_TNAME,
   OB_ALL_TABLE_OPT_STAT_INVALIDATE_PLAN_AUX_LOB_PIECE_TNAME,  };
@@ -16381,6 +16391,14 @@ LOBMapping const lob_aux_table_mappings [] = {
     OB_ALL_SS_GC_RESERVED_SNAPSHOT_AUX_LOB_PIECE_TID,
     ObInnerTableSchema::all_ss_gc_reserved_snapshot_aux_lob_meta_schema,
     ObInnerTableSchema::all_ss_gc_reserved_snapshot_aux_lob_piece_schema
+  },
+
+  {
+    OB_ALL_TABLE_ARCHIVE_HISTORY_TID,
+    OB_ALL_TABLE_ARCHIVE_HISTORY_AUX_LOB_META_TID,
+    OB_ALL_TABLE_ARCHIVE_HISTORY_AUX_LOB_PIECE_TID,
+    ObInnerTableSchema::all_table_archive_history_aux_lob_meta_schema,
+    ObInnerTableSchema::all_table_archive_history_aux_lob_piece_schema
   },
 
   {

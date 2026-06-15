@@ -610,19 +610,15 @@ ObRootService::ObRootService()
     upgrade_storage_format_executor_(), create_inner_schema_executor_(),
     bootstrap_lock_(), broadcast_rs_list_lock_(common::ObLatchIds::OB_ROOT_SERVICE_BROADCAST_RS_LIST_LOCK),
     task_queue_(),
-    inspect_task_queue_(),
     restart_task_(*this),
     refresh_server_task_(*this),
     check_server_task_(task_queue_, server_checker_),
-    self_check_task_(*this),
     refresh_io_calibration_task_(*this),
     zone_storage_operation_task_(*this),
     event_table_clear_task_(ROOTSERVICE_EVENT_INSTANCE,
                             SERVER_EVENT_INSTANCE,
                             DEALOCK_EVENT_INSTANCE,
                             task_queue_),
-    inspector_task_(*this),
-    purge_recyclebin_task_(*this),
     snapshot_manager_(),
     core_meta_table_version_(0),
 #ifndef OB_ENABLE_STANDALONE_LAUNCH
@@ -633,7 +629,6 @@ ObRootService::ObRootService()
     start_service_time_(0),
     rs_status_(),
     fail_count_(0),
-    schema_history_recycler_(),
 #ifdef OB_BUILD_TDE_SECURITY
     master_key_mgr_(),
 #endif
@@ -796,12 +791,6 @@ int ObRootService::init(ObServerConfig &config,
     FLOG_WARN("init inner queue failed",
              "thread_count", static_cast<int64_t>(config_->rootservice_async_task_thread_count),
              "queue_size", static_cast<int64_t>(config_->rootservice_async_task_queue_size), KR(ret));
-  } else if (OB_FAIL(inspect_task_queue_.init(1/*only for the inspection of RS*/,
-                                              config_->rootservice_async_task_queue_size,
-                                              "RSInspectTask"))) {
-    FLOG_WARN("init inner queue failed",
-              "thread_count", 1,
-              "queue_size", static_cast<int64_t>(config_->rootservice_async_task_queue_size), KR(ret));
   } else if (OB_FAIL(zone_manager_.init(sql_proxy_))) {
     // init zone manager
     FLOG_WARN("init zone manager failed", KR(ret));
@@ -874,10 +863,6 @@ int ObRootService::init(ObServerConfig &config,
     FLOG_WARN("init THE_RS_JOB_TABLE failed", KR(ret));
   } else if (OB_FAIL(ObRsAutoSplitScheduler::get_instance().init())) {
     FLOG_WARN("init auto split task scheduler failed", K(ret));
-  } else if (OB_FAIL(schema_history_recycler_.init(*schema_service_,
-                                                   zone_manager_,
-                                                   sql_proxy_))) {
-    FLOG_WARN("fail to init schema history recycler failed", KR(ret));
   } else if (OB_FAIL(dbms_job::ObDBMSJobMaster::get_instance().init(&sql_proxy_,
                                                                     schema_service_))) {
     FLOG_WARN("init ObDBMSJobMaster failed", KR(ret));
@@ -943,17 +928,9 @@ void ObRootService::destroy()
   } else {
     FLOG_INFO("rs_monitor_check : thread checker destroy");
   }
-  if (OB_FAIL(schema_history_recycler_.destroy())) {
-    FLOG_WARN("schema history recycler destroy failed", KR(ret));
-    fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
-  } else {
-    FLOG_INFO("schema history recycler destroy");
-  }
 
   task_queue_.destroy();
   FLOG_INFO("inner queue destroy");
-  inspect_task_queue_.destroy();
-  FLOG_INFO("inspect queue destroy");
   if (OB_FAIL(hb_checker_.destroy())) {
     FLOG_WARN("heartbeat checker destroy failed", KR(ret));
     fail_ret = OB_SUCCESS == fail_ret ? ret : fail_ret;
@@ -1045,8 +1022,6 @@ int ObRootService::start_service()
       FLOG_WARN("hb checker start failed", KR(ret));
     } else if (OB_FAIL(task_queue_.start())) {
       FLOG_WARN("inner queue start failed", KR(ret));
-    } else if (OB_FAIL(inspect_task_queue_.start())) {
-      FLOG_WARN("inspect queue start failed", KR(ret));
     } else if (OB_FAIL(TG_START(lib::TGDefIDs::GlobalCtxTimer))) {
       FLOG_WARN("init global ctx timer fail", KR(ret));
     } else if (OB_FAIL(global_ctx_task_.schedule(lib::TGDefIDs::GlobalCtxTimer))) {
@@ -1194,8 +1169,6 @@ int ObRootService::stop()
     if (OB_SUCC(ret)) {
       task_queue_.stop();
       FLOG_INFO("task_queue stop");
-      inspect_task_queue_.stop();
-      FLOG_INFO("inspect queue stop");
       root_balancer_.stop();
       FLOG_INFO("root_balancer stop");
       empty_server_checker_.stop();
@@ -1204,8 +1177,6 @@ int ObRootService::stop()
       FLOG_INFO("lost_replica_checker stop");
       thread_checker_.stop();
       FLOG_INFO("rs_monitor_check : thread_checker stop");
-      schema_history_recycler_.stop();
-      FLOG_INFO("schema_history_recycler stop");
       hb_checker_.stop();
       FLOG_INFO("hb_checker stop");
       dbms_job::ObDBMSJobMaster::get_instance().stop();
@@ -1242,14 +1213,10 @@ void ObRootService::wait()
   FLOG_INFO("lost replica checker exit success");
   thread_checker_.wait();
   FLOG_INFO("rs_monitor_check : thread checker exit success");
-  schema_history_recycler_.wait();
-  FLOG_INFO("schema_history_recycler exit success");
   hb_checker_.wait();
   FLOG_INFO("hb checker exit success");
   task_queue_.wait();
   FLOG_INFO("task queue exit success");
-  inspect_task_queue_.wait();
-  FLOG_INFO("inspect queue exit success");
 #ifdef OB_BUILD_TDE_SECURITY
   master_key_mgr_.wait();
   FLOG_INFO("master key mgr exit success");
@@ -1468,68 +1435,6 @@ int ObRootService::schedule_check_server_timer_task()
     }
   } else {
     LOG_TRACE("no need to schedule ObCheckServerTask in version >= 4.2");
-  }
-  return ret;
-}
-
-int ObRootService::schedule_recyclebin_task(int64_t delay)
-{
-  int ret = OB_SUCCESS;
-  const bool did_repeat = false;
-
-  if (OB_FAIL(get_inspect_task_queue().add_timer_task(
-              purge_recyclebin_task_, delay, did_repeat))) {
-    if (OB_CANCELED != ret) {
-      LOG_ERROR("schedule purge recyclebin task failed", KR(ret), K(delay), K(did_repeat));
-    } else {
-      LOG_WARN("schedule purge recyclebin task failed", KR(ret), K(delay), K(did_repeat));
-    }
-  }
-
-  return ret;
-}
-
-int ObRootService::schedule_inspector_task()
-{
-  int ret = OB_SUCCESS;
-  int64_t inspect_interval = ObInspector::INSPECT_INTERVAL;
-  int64_t delay = 1 * 60 * 1000 * 1000;
-  int64_t purge_interval = GCONF._recyclebin_object_purge_frequency;
-  int64_t expire_time = GCONF.recyclebin_object_expire_time;
-  if (purge_interval > 0 && expire_time > 0) {
-    delay = purge_interval;
-  }
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", KR(ret));
-  } else if (!inspect_task_queue_.exist_timer_task(inspector_task_)
-             && OB_FAIL(inspect_task_queue_.add_timer_task(inspector_task_, inspect_interval, true))) {
-    LOG_WARN("failed to add inspect task", KR(ret));
-  } else if (!inspect_task_queue_.exist_timer_task(purge_recyclebin_task_)
-             && OB_FAIL(inspect_task_queue_.add_timer_task(purge_recyclebin_task_,
-                                                           delay, false))) {
-    LOG_WARN("failed to add purge recyclebin task", KR(ret));
-  } else {
-    LOG_INFO("schedule inspector task", K(inspect_interval), K(purge_interval));
-  }
-  return ret;
-}
-
-int ObRootService::schedule_self_check_task()
-{
-  int ret = OB_SUCCESS;
-  const bool did_repeat = false;
-  const int64_t delay = 5L * 1000L * 1000L; //5s
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (task_queue_.exist_timer_task(self_check_task_)) {
-    // ignore error
-    LOG_WARN("already have one self_check_task, ignore this");
-  } else if (OB_FAIL(task_queue_.add_timer_task(self_check_task_, delay, did_repeat))) {
-    LOG_WARN("fail to add timer task", K(ret));
-  } else {
-    LOG_INFO("add self_check task success");
   }
   return ret;
 }
@@ -1852,27 +1757,6 @@ int ObRootService::request_heartbeats()
   return ret;
 }
 
-int ObRootService::self_check()
-{
-  int ret = OB_SUCCESS;
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (!in_service()) {
-    // nothing todo
-  } else if (GCONF.in_upgrade_mode()) {
-    // nothing todo
-  } else if (OB_FAIL(root_inspection_.check_all())) {  //ignore failed
-    LOG_WARN("root_inspection check_all failed", K(ret));
-    if (OB_FAIL(schedule_self_check_task())) {
-      if (OB_CANCELED != ret) {
-        LOG_ERROR("fail to schedule self check task", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
 int ObRootService::after_restart()
 {
   ObCurTraceId::init(GCONF.self_addr_);
@@ -1950,13 +1834,6 @@ int ObRootService::do_after_full_service() {
   ObGlobalStatProxy global_proxy(sql_proxy_, OB_SYS_TENANT_ID);
   if (OB_FAIL(global_proxy.get_baseline_schema_version(baseline_schema_version_))) {
     LOG_WARN("fail to get baseline schema version", KR(ret));
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(schedule_self_check_task())) {
-    LOG_WARN("fail to schedule self check task", K(ret));
-  } else {
-    LOG_INFO("schedule self check to root_inspection success");
   }
 
   // force broadcast rs list again to make sure rootserver list be updated
@@ -5460,12 +5337,6 @@ int ObRootService::do_restart()
   }
   */
 
-  if (FAILEDx(schema_history_recycler_.start())) {
-    FLOG_WARN("schema_history_recycler start failed", KR(ret));
-  } else {
-    FLOG_INFO("success to start schema_history_recycler");
-  }
-
   if (FAILEDx(root_balancer_.start())) {
     FLOG_WARN("root balancer start failed", KR(ret));
   } else {
@@ -5749,14 +5620,6 @@ int ObRootService::start_timer_tasks()
     }
   }
 
-  if (OB_SUCC(ret)) {
-    if (OB_FAIL(schedule_inspector_task())) {
-      LOG_WARN("start inspector fail", K(ret));
-    } else {
-      LOG_INFO("start inspector success");
-    }
-  }
-
   if (OB_SUCC(ret) && !task_queue_.exist_timer_task(check_server_task_)) {
     if (OB_FAIL(schedule_check_server_timer_task())) {
       LOG_WARN("start all server checker fail", K(ret));
@@ -5799,7 +5662,6 @@ int ObRootService::stop_timer_tasks()
     task_queue_.cancel_timer_task(restart_task_);
     task_queue_.cancel_timer_task(check_server_task_);
     task_queue_.cancel_timer_task(event_table_clear_task_);
-    task_queue_.cancel_timer_task(self_check_task_);
 #ifndef OB_ENABLE_STANDALONE_LAUNCH
     task_queue_.cancel_timer_task(update_rs_list_timer_task_);
 #endif
@@ -5808,8 +5670,6 @@ int ObRootService::stop_timer_tasks()
     if (GCTX.is_shared_storage_mode()) {
       task_queue_.cancel_timer_task(zone_storage_operation_task_);
     }
-    inspect_task_queue_.cancel_timer_task(inspector_task_);
-    inspect_task_queue_.cancel_timer_task(purge_recyclebin_task_);
   }
 
   //stop other timer tasks here
@@ -9540,37 +9400,6 @@ ObAsyncTask *ObRootService::ObZoneStorageOperationTask::deep_copy(char *buf, con
   return task;
 }
 
-////////////////////
-ObRootService::ObSelfCheckTask::ObSelfCheckTask(ObRootService &root_service)
-:ObAsyncTimerTask(root_service.task_queue_),
-    root_service_(root_service)
-{
-  set_retry_times(0);  // don't retry when failed
-}
-
-int ObRootService::ObSelfCheckTask::process()
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(root_service_.self_check())) {
-    LOG_WARN("fail to do root inspection check, please check it", K(ret));
-  } else {
-    LOG_INFO("self check success!");
-  }
-  return ret;
-}
-
-ObAsyncTask *ObRootService::ObSelfCheckTask::deep_copy(char *buf, const int64_t buf_size) const
-{
-  ObSelfCheckTask *task = NULL;
-  if (NULL == buf || buf_size < static_cast<int64_t>(sizeof(*this))) {
-    LOG_WARN_RET(OB_BUF_NOT_ENOUGH, "buffer not large enough", K(buf_size));
-  } else {
-    task = new(buf) ObSelfCheckTask(root_service_);
-  }
-  return task;
-}
-
-/////////////////////////
 ObRootService::ObUpdateAllServerConfigTask::ObUpdateAllServerConfigTask(ObRootService &root_service)
 : ObAsyncTimerTask(root_service.task_queue_),
     root_service_(root_service)
@@ -10191,10 +10020,6 @@ int ObRootService::set_config_post_hook(const obrpc::ObAdminSetConfigArg &arg)
       }
       LOG_INFO("obconfig_url parameters updated, force submit update rslist task", KR(tmp_ret),
           KPC(item));
-    } else if (0 == STRCMP(item->name_.ptr(), SCHEMA_HISTORY_RECYCLE_INTERVAL)) {
-      schema_history_recycler_.wakeup();
-      LOG_INFO("schema_history_recycle_interval parameters updated, wakeup schema_history_recycler",
-               KPC(item));
     }
   }
   return ret;
@@ -10460,27 +10285,14 @@ int ObRootService::get_tenant_schema_versions(
   return ret;
 }
 
+// deprecated
 int ObRootService::get_recycle_schema_versions(
     const obrpc::ObGetRecycleSchemaVersionsArg &arg,
     obrpc::ObGetRecycleSchemaVersionsResult &result)
 {
-  int ret = OB_SUCCESS;
-  LOG_INFO("receive get recycle schema versions request", K(arg));
-  bool in_service = is_full_service();
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (!arg.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("arg is invalid", K(ret), K(arg));
-  } else if (!in_service) {
-    ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("should be rs in service",
-             KR(ret), K(in_service));
-  } else if (OB_FAIL(schema_history_recycler_.get_recycle_schema_versions(arg, result))) {
-    LOG_WARN("fail to get recycle schema versions", KR(ret), K(arg));
-  }
-  LOG_INFO("get recycle schema versions", KR(ret), K(arg), K(result));
+  UNUSED(arg);
+  UNUSED(result);
+  int ret = OB_NOT_SUPPORTED;
   return ret;
 }
 int ObRootService::do_profile_ddl(const obrpc::ObProfileDDLArg &arg)

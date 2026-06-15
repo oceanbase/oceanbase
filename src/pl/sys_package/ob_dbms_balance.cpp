@@ -83,7 +83,7 @@ int ObDBMSBalance::trigger_partition_balance(
             K(tenant_id), K(leader));
       } else if (OB_FAIL(GCTX.srv_rpc_proxy_->to(leader)
                                               .by(tenant_id)
-                                              .timeout(timeout_ctx.get_abs_timeout())
+                                              .timeout(timeout_ctx.get_timeout())
                                               .trigger_partition_balance(arg))) {
         LOG_WARN("trigger partition balance failed", KR(ret), K(arg));
       }

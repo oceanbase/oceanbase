@@ -252,6 +252,9 @@ public:
   bool is_trigger_part_balance_job() const { return ObDBMSSchedFuncType::NODE_BALANCE_JOB == get_func_type(); }
   bool is_dynamic_partition_job() const {return ObDBMSSchedFuncType::DYNAMIC_PARTITION_MANAGE_JOB == get_func_type(); }
   bool is_daily_maintenance_job() const {return ObDBMSSchedFuncType::DAILY_MAINTENANCE_JOB == get_func_type(); }
+  bool is_recycle_schema_history_job() const { return ObDBMSSchedFuncType::SCHEMA_HISTORY_RECYCLE_JOB == get_func_type(); }
+  bool is_inspection_job() const { return ObDBMSSchedFuncType::RUN_INSPECTION_JOB == get_func_type(); }
+  bool is_purge_recyclebin_job() const { return ObDBMSSchedFuncType::PURGE_RECYCLEBIN_JOB == get_func_type(); }
   bool is_user_job() const { return ObDBMSSchedFuncType::USER_JOB == get_func_type(); }
   bool is_shadow() const { return ObDBMSSchedFuncSet::instance_.is_shadow(get_func_type()); }
   bool is_once_job() const { return (interval_ts_ == 0 && (repeat_interval_.empty() || 0 == repeat_interval_.case_compare("null"))); }

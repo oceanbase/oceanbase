@@ -9105,6 +9105,9 @@ def_table_schema(
 )
 # 585: __all_table_archive_history
 
+# __all_table_archive_history
+def_table_schema(**gen_archive_history_table_def(585, all_table_def))
+
 all_java_policy = dict(
   owner = 'xumengqiang.xmq',
   table_name = '__all_java_policy',

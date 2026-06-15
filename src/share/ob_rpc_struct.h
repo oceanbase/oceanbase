@@ -15585,6 +15585,55 @@ public:
   share::ObLSID ls_id_;
 };
 
+struct ObRunInspectionArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObRunInspectionArg();
+  ~ObRunInspectionArg() {}
+  int init(const uint64_t tenant_id);
+  int assign(const ObRunInspectionArg &other);
+  bool is_valid() const;
+  TO_STRING_KV(K_(tenant_id));
+  uint64_t get_tenant_id() const { return tenant_id_; }
+private:
+  uint64_t tenant_id_;
+};
+
+struct ObGetInspectionStatusArg
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObGetInspectionStatusArg();
+  ~ObGetInspectionStatusArg() {}
+  int init(const uint64_t tenant_id);
+  int assign(const ObGetInspectionStatusArg &other);
+  bool is_valid() const;
+  TO_STRING_KV(K_(tenant_id));
+  uint64_t get_tenant_id() const { return tenant_id_; }
+private:
+  uint64_t tenant_id_;
+};
+
+struct ObGetInspectionStatusResult
+{
+  OB_UNIS_VERSION(1);
+public:
+  ObGetInspectionStatusResult();
+  ~ObGetInspectionStatusResult() {}
+  int assign(const ObGetInspectionStatusResult &other);
+  void reset();
+  TO_STRING_KV(K_(tenant_id), K_(sys_stat_passed), K_(sys_param_passed),
+               K_(sys_table_schema_passed), K_(data_version_passed),
+               K_(all_checked));
+  uint64_t tenant_id_;
+  bool sys_stat_passed_;
+  bool sys_param_passed_;
+  bool sys_table_schema_passed_;
+  bool data_version_passed_;
+  bool all_checked_;
+};
+
 }//end namespace obrpc
 }//end namespace oceanbase
 #endif

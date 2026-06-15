@@ -1969,5 +1969,25 @@ bool ObConfigCommaSeparatedStringChecker::check(const ObConfigItem &t) const
   return bret;
 }
 
+bool ObConfigSchemaHistoryArchiveExpireTimeChecker::check(const ObConfigItem &t) const
+{
+  bool is_valid = false;
+  const int64_t val_us = ObConfigTimeParser::get(t.str(), is_valid);
+  if (is_valid) {
+    const int64_t MIN_KEEP_US = 30L * 24 * 60 * 60 * 1000 * 1000;   // 30 days
+    const int64_t MAX_KEEP_US = 365L * 24 * 60 * 60 * 1000 * 1000;  // 365 days
+    if (0 == val_us) {
+      is_valid = true; // disable GC
+    } else {
+      is_valid = (val_us >= MIN_KEEP_US && val_us <= MAX_KEEP_US);
+      if (!is_valid) {
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                       "schema_history_archive_expire_time out of range, valid: 0 or [30d, 365d]");
+      }
+    }
+  }
+  return is_valid;
+}
+
 } // end of namepace common
 } // end of namespace oceanbase
