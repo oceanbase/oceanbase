@@ -2776,13 +2776,19 @@ void ObLogInstance::global_flow_control_()
       int64_t committer_post_commit_queue_count = committer_->get_post_commit_queue_count();
 
       int64_t memory_hold = get_memory_hold_();
+      int64_t memory_used = lib::get_memory_used();
+      int64_t chunk_cache_overhead = memory_hold - memory_used;
       int64_t system_memory_avail = get_memory_avail_();
       int64_t system_memory_limit = get_memory_limit_();
       int64_t system_memory_avail_lower_bound =
         static_cast<int64_t>(static_cast<double>(system_memory_limit) * system_memory_avail_percentage_lower_bound);
       bool need_slow_down_fetcher = false;
       const bool need_pause_dispatch = need_pause_redo_dispatch();
-      const bool touch_memory_warn_limit = (memory_hold > memory_warn_usage);
+      // Use memory_used (excludes chunk_cache) for soft flow control decisions.
+      // memory_hold includes recyclable chunk_cache, which can cause false positives
+      // when traffic drops but cache hasn't been reclaimed yet.
+      // The allocator still guards the hard limit on memory_hold, so OOM is not a risk.
+      const bool touch_memory_warn_limit = (memory_used > memory_warn_usage);
       const bool is_storage_work_mode = is_storage_working_mode(working_mode_);
       const int64_t queue_backlog_lowest_tolerance = TCONF.queue_backlog_lowest_tolerance;
       const char *reason = "";
@@ -2816,7 +2822,7 @@ void ObLogInstance::global_flow_control_()
           || (system_memory_avail < system_memory_avail_lower_bound);
         bool condition2 = (reusable_part_trans_task_count >= part_trans_task_reusable_count_upper_bound)
           || (ready_to_seq_task_count > ready_to_seq_task_upper_bound);
-        bool condition3 = (storager_task_count > storager_task_count_upper_bound) && (memory_hold >= storager_mem_percentage * memory_limit);
+        bool condition3 = (storager_task_count > storager_task_count_upper_bound) && (memory_used >= storager_mem_percentage * memory_limit);
 
         need_slow_down_fetcher = (condition1 && (condition2 || need_pause_dispatch || exist_trans_sequenced_not_handled || exist_ddl_processing_or_in_queue)) || condition3;
 
@@ -2849,7 +2855,7 @@ void ObLogInstance::global_flow_control_()
 
         if (need_print_state || REACH_TIME_INTERVAL(PRINT_GLOBAL_FLOW_CONTROL_INTERVAL)) {
           _LOG_INFO("[STAT] [FLOW_CONTROL] NEED_SLOW_DOWN=%d "
-              "PAUSED=%d MEM=%s/%s "
+              "PAUSED=%d MEM=%s/%s CHUNK_CACHE_OVERHEAD=%s "
               "AVAIL_MEM=%s/%s "
               "READY_TO_SEQ=%ld/%ld "
               "PART_TRANS(TOTAL=%ld, ACTIVE=%ld/%ld, REUSABLE=%ld/%ld) "
@@ -2861,6 +2867,7 @@ void ObLogInstance::global_flow_control_()
               "NEED_PAUSE_DISPATCH=%d REASON=%s",
               need_slow_down_fetcher, current_fetcher_is_paused,
               SIZE_TO_STR(memory_hold), SIZE_TO_STR(memory_limit),
+              SIZE_TO_STR(chunk_cache_overhead),
               SIZE_TO_STR(system_memory_avail), SIZE_TO_STR(system_memory_avail_lower_bound),
               ready_to_seq_task_count, ready_to_seq_task_upper_bound,
               total_part_trans_task_count,
@@ -3543,6 +3550,7 @@ bool ObLogInstance::need_pause_redo_dispatch() const
     int64_t memory_limit = CDC_CFG_MGR.get_memory_limit();
     int64_t memory_warn_usage = memory_limit * memory_usage_warn_percent;
     int64_t memory_hold = get_memory_hold_();
+    int64_t memory_used = lib::get_memory_used();
     int64_t redo_dispatch_exceed_ratio = CDC_CFG_MGR.get_redo_dispatched_memory_limit_exceed_ratio();
     const int64_t redo_memory_limit = CDC_CFG_MGR.get_redo_dispatcher_memory_limit();
     int64_t reader_task_count = 0;
@@ -3571,7 +3579,9 @@ bool ObLogInstance::need_pause_redo_dispatch() const
     const int64_t user_queue_br_count = br_queue_.get_dml_br_count() + br_queue_.get_ddl_br_count();
     const bool force_pause_dispatch = (0 != TCONF.pause_dispatch_redo);
     const int64_t pause_dispatch_threshold = TCONF.pause_redo_dispatch_task_count_threshold;
-    const bool touch_memory_warn_limit = (memory_hold > memory_warn_usage);
+    // Soft limit for flow control: use memory_used to avoid cache-induced false positives.
+    // Hard limit (touch_memory_limit): keep memory_hold as the absolute guardrail.
+    const bool touch_memory_warn_limit = (memory_used > memory_warn_usage);
     const bool touch_memory_limit = (memory_hold > memory_limit);
     const int64_t out_part_trans_count = get_out_part_trans_task_count_();
     const int64_t out_dml_br_count = ATOMIC_LOAD(&output_dml_br_count_);
@@ -3666,10 +3676,14 @@ bool ObLogInstance::need_pause_redo_dispatch() const
 
 void ObLogInstance::get_memory_usage_status(bool &touch_memory_warn_limit, bool &memory_overused) const
 {
+  int64_t memory_used = lib::get_memory_used();
   int64_t memory_hold = get_memory_hold_();
   int64_t memory_limit = CDC_CFG_MGR.get_memory_limit();
   int64_t memory_warn_usage = memory_limit * TCONF.memory_usage_warn_threshold / 100.0;
-  touch_memory_warn_limit = (memory_hold > memory_warn_usage);
+  // Soft limit: use memory_used to avoid cache-induced false positives.
+  touch_memory_warn_limit = (memory_used > memory_warn_usage);
+  // Hard limit: keep memory_hold as the absolute guardrail, since hold includes
+  // chunk_cache and the allocator will enforce the real limit on it.
   memory_overused = (memory_hold > memory_limit);
 }
 

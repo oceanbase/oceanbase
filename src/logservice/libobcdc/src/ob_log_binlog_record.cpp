@@ -38,6 +38,7 @@ ObLogBR::ObLogBR() : ObLogResourceRecycleTask(ObLogResourceRecycleTask::BINLOG_R
                      commit_version_(0),
                      row_index_(0),
                      part_trans_task_count_(0),
+                     record_type_(EUNKNOWN),
                      merged_delete_stmt_(nullptr)
 {
 }
@@ -98,6 +99,7 @@ void ObLogBR::reset()
   schema_version_ = OB_INVALID_VERSION;
   commit_version_ = 0;
   part_trans_task_count_ = 0;
+  record_type_ = EUNKNOWN;
   merged_delete_stmt_ = nullptr;
 }
 
@@ -171,6 +173,7 @@ int ObLogBR::init_data(const RecordType type,
     uint64_t checkpoint_sec = 0;
     uint64_t checkpoint_usec = 0;
 
+    record_type_ = type;
     data_->setRecordType(type);
     data_->setSrcCategory(src_category);
     data_->setCheckpoint(checkpoint_sec, checkpoint_usec);
@@ -280,7 +283,7 @@ int ObLogBR::get_record_type(int &record_type)
     LOG_ERROR("data_ is null", K(data_));
     ret = OB_ERR_UNEXPECTED;
   } else {
-    record_type = data_->recordType();
+    record_type = record_type_;
   }
 
   return ret;
@@ -296,6 +299,7 @@ int ObLogBR::setInsertRecordTypeForHBasePut(const RecordType type)
   } else if (OB_UNLIKELY(EINSERT != type)) {
     LOG_ERROR("invalid argument", "type", print_record_type(type));
   } else {
+    record_type_ = type;
     data_->setRecordType(type);
   }
 

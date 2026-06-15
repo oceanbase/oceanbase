@@ -144,6 +144,8 @@ private:
   // 2. DML begin/commit binglog record will carry this info
   int64_t       part_trans_task_count_;
 
+  RecordType    record_type_;        ///< cached record type, avoid repeated access to data_->recordType()
+
   void          *merged_delete_stmt_; // DmlStmtTask* of merged DELETE, nullptr when unused
 
 protected:

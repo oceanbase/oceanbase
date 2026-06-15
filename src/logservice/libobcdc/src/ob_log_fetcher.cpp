@@ -829,12 +829,13 @@ void ObLogFetcher::heartbeat_dispatch_routine()
     ret = OB_IN_STOP_STATE;
   }
 
+  LOG_INFO("fetcher heartbeat dispatch thread stop", KR(ret), K(stop_flag_));
+
   if (OB_SUCCESS != ret && OB_IN_STOP_STATE != ret && NULL != err_handler_) {
     err_handler_->handle_error(ret, "Fetcher HEARTBEAT thread exits, err=%d", ret);
     stop_flag_ = true;
   }
 
-  LOG_INFO("fetcher heartbeat dispatch thread stop", KR(ret), K(stop_flag_));
 }
 
 void ObLogFetcher::print_fetcher_stat_()

@@ -3364,9 +3364,9 @@ bool PartTransTask::need_store_data_(const int64_t buf_size) const
     if (redo_storage_follow || exceed_task_accumulated_redo_size) {
       bool_ret = true;
     } else {
-      const int64_t memory_hold = lib::get_memory_hold();
+      const int64_t memory_used = lib::get_memory_used();
       const bool touch_global_memory_limit =
-          (global_memory_threshold_ > 0 && memory_hold + buf_size > global_memory_threshold_);
+          (global_memory_threshold_ > 0 && memory_used + buf_size > global_memory_threshold_);
       const bool touch_redo_dispatch_limit =
           (OB_NOT_NULL(TCTX.trans_redo_dispatcher_)
               && TCTX.trans_redo_dispatcher_->is_dispatched_memory_over_limit());
