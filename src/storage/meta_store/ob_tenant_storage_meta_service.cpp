@@ -19,6 +19,24 @@ namespace oceanbase
 using namespace compaction;
 namespace storage
 {
+ObUpdateTabletSlogParam::ObUpdateTabletSlogParam(
+    /*ref*/ObUpdateTabletPointerParam &update_param,
+    /*ref*/ObTablet &tablet)
+    : tablet_id_(tablet.get_tablet_id()),
+      update_param_(&update_param),
+      tablet_(&tablet)
+{
+}
+
+bool ObUpdateTabletSlogParam::is_valid() const
+{
+  return tablet_id_.is_valid()
+         && nullptr != update_param_
+         && (update_param_->is_empty_shell()
+            || update_param_->is_valid())
+         && nullptr != tablet_
+         && tablet_->is_valid();
+}
 
 bool ObTenantStorageMetaService::TabletInfo::is_valid() const
 {
@@ -403,6 +421,122 @@ int ObTenantStorageMetaService::batch_update_tablet(const ObIArray<ObUpdateTable
     }
   }
 
+  return ret;
+}
+
+int ObTenantStorageMetaService::batch_write_tablet_slog(
+    const uint64_t data_version,
+    const ObLSID &ls_id,
+    const int64_t ls_epoch,
+    const common::ObIArray<ObUpdateTabletSlogParam> &params)
+{
+  int ret = OB_SUCCESS;
+  const int64_t total_cnt = params.count();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(!ls_id.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ls id", K(ret), K(ls_id));
+  } else if (OB_UNLIKELY(params.empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("slog params is empty", K(ret), K(params));
+  } else if (OB_UNLIKELY(INT16_MAX < total_cnt)) {
+    // batch header count is int16_t type, we should not write too much logs in one batch.
+    ret = OB_SIZE_OVERFLOW;
+    LOG_WARN("batch size too large", K(ret), K(total_cnt));
+  } else if (OB_FAIL(LOCAL_DEVICE_INSTANCE.fsync_block())) { // make sure that all data or meta written on the macro block is flushed
+    LOG_WARN("fail to fsync_block", K(ret));
+  } else {
+    const lib::ObMemAttr mem_attr(MTL_ID(), "BatchWriteSlog");
+    ObArenaAllocator allocator(mem_attr);
+    ObSArray<ObStorageLogParam> slog_params;
+    slog_params.set_attr(mem_attr);
+    // prepare slog params(tablet + empty shell)
+    for (int64_t i = 0; OB_SUCC(ret) && i < total_cnt; ++i) {
+      const ObUpdateTabletSlogParam &param = params.at(i);
+      ObStorageLogParam slog_param;
+      ObIBaseStorageLogEntry *log_entry = nullptr;
+      if (OB_UNLIKELY(!param.is_valid())) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid update tablet slog param", K(ret), K(param));
+      } else if (param.tablet_->is_empty_shell()) {
+        slog_param.cmd_ = ObIRedoModule::gen_cmd(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE,
+          ObRedoLogSubType::OB_REDO_LOG_EMPTY_SHELL_TABLET);
+        if (OB_ISNULL(log_entry = OB_NEWx(ObEmptyShellTabletLog,
+                                          &allocator,
+                                          data_version,
+                                          ls_id,
+                                          param.tablet_id_,
+                                          ls_epoch,
+                                          param.tablet_))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocate log entry's memory", K(ret));
+        }
+      } else {
+        slog_param.cmd_ = ObIRedoModule::gen_cmd(ObRedoLogMainType::OB_REDO_LOG_TENANT_STORAGE,
+          ObRedoLogSubType::OB_REDO_LOG_UPDATE_TABLET);
+        if (OB_ISNULL(log_entry = OB_NEWx(ObUpdateTabletLog,
+                                          &allocator,
+                                          ls_id,
+                                          param.tablet_id_,
+                                          *param.update_param_,
+                                          ls_epoch))) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("fail to allocate log entry's memory", K(ret));
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (FALSE_IT(slog_param.data_ = log_entry)) {
+      } else if (OB_FAIL(slog_params.push_back(slog_param))) {
+        if (OB_NOT_NULL(log_entry)) {
+          log_entry->~ObIBaseStorageLogEntry();
+          log_entry = nullptr;
+        }
+        LOG_WARN("fail to push back slog param", K(ret));
+      }
+    }
+    // batch write slogs(ObEmptyShellTabletLog + ObUpdateTabletLog)
+    if (FAILEDx(slogger_.write_log(slog_params))) {
+      LOG_WARN("fail to batch write slogs", K(ret), K(slog_params.count()));
+    } else {
+      OB_ASSERT(total_cnt == slog_params.count());
+      // set empty shell tablet addr
+      for (int64_t i = 0; OB_SUCC(ret) && i < total_cnt; ++i) {
+        const ObUpdateTabletSlogParam &param = params.at(i);
+        OB_ASSERT(nullptr != param.tablet_);
+        const ObStorageLogParam &slog_param = slog_params.at(i);
+        const ObMetaDiskAddr &disk_addr = slog_param.disk_addr_;
+        if (!param.tablet_->is_empty_shell()) {
+          // tablet should be persisted before write slog if tablet is not
+          // an empty shell.
+          if (OB_UNLIKELY(!param.tablet_->get_tablet_addr().is_disked())) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected unpersist tablet", K(ret), K(param));
+          }
+        } else if (OB_UNLIKELY(!disk_addr.is_valid())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected invalid slog disk addr", K(ret), K(slog_param));
+        } else {
+          param.tablet_->set_tablet_addr(disk_addr);
+          param.update_param_->resident_info_.addr_ = disk_addr;
+        }
+      }
+      // failure is NOT allowed after slogs have been written
+      if (OB_FAIL(ret)) {
+        ob_usleep(1_s);
+        ob_abort();
+      }
+    }
+    // call destructors
+    for (int64_t i = 0; i < slog_params.count(); ++i) {
+      ObStorageLogParam &slog_param = slog_params.at(i);
+      if (OB_NOT_NULL(slog_param.data_)) {
+        slog_param.data_->~ObIBaseStorageLogEntry();
+        slog_param.data_ = nullptr;
+      }
+    }
+  }
   return ret;
 }
 

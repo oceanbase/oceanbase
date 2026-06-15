@@ -705,8 +705,6 @@ TEST_F(TestTenantMetaMemMgr, test_wash_tablet)
   ObLSTabletService ls_tablet_svr;
   MockObLogHandler log_handler;
   ObFreezer freezer;
-  ObTabletSpaceUsage space_usage;
-  ObTabletMacroInfo tablet_macro_info;
   ObLinkedMacroBlockItemWriter linked_writer;
   ObArenaAllocator schema_allocator;
   ObCreateTabletSchema create_tablet_schema;
@@ -729,14 +727,17 @@ TEST_F(TestTenantMetaMemMgr, test_wash_tablet)
   const uint64_t data_version = DATA_CURRENT_VERSION;
   const int64_t tablet_meta_version = 0;
   const ObTabletPersisterParam persist_param(data_version, ls_id_, ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq(), tablet_meta_version);
-  ObTabletPersister persister(persist_param, ObCtxIds::DEFAULT_CTX_ID);
-  ObSArray<MacroBlockId> shared_meta_id_arr;
+  ObTabletPersister persister(0, ObCtxIds::DEFAULT_CTX_ID);
 
   ObTabletHandle new_handle;
+  ObTabletPersister::FullTabletPersistCtx *ctx = nullptr;
+  ASSERT_NE(nullptr, ctx = OB_NEWx(ObTabletPersister::FullTabletPersistCtx, &allocator_, persist_param, *tablet, new_handle));
+  ASSERT_EQ(common::OB_SUCCESS, ctx->init());
   ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
-  ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(
-      *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info, shared_meta_id_arr));
-  ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(tablet_macro_info, new_handle, space_usage));
+  ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(*ctx, nullptr, linked_writer));
+  ObTabletSpaceUsage &space_usage = ctx->new_space_usage_;
+  ObTabletMacroInfo &tablet_macro_info = ctx->new_tablet_macro_info_;
+  ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(persist_param, tablet_macro_info, new_handle, space_usage));
 
   ObMetaDiskAddr addr = new_handle.get_obj()->get_tablet_addr();
   ObUpdateTabletPointerParam param;
@@ -772,6 +773,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_tablet)
 
   gc_all_tablets();
   ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
+  ctx->~FullTabletPersistCtx();
 }
 
 TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
@@ -809,8 +811,6 @@ TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
   ObLSTabletService ls_tablet_svr;
   MockObLogHandler log_handler;
   ObFreezer freezer;
-  ObTabletSpaceUsage space_usage;
-  ObTabletMacroInfo tablet_macro_info;
   ObLinkedMacroBlockItemWriter linked_writer;
   ObArenaAllocator schema_allocator;
   ObCreateTabletSchema create_tablet_schema;
@@ -836,13 +836,16 @@ TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
   const int64_t tablet_meta_version = 0;
   ObTabletHandle new_handle;
   const ObTabletPersisterParam persist_param(data_version, ls_id_, ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq(), tablet_meta_version);
-  ObTabletPersister persister(persist_param, ObCtxIds::DEFAULT_CTX_ID);
+  ObTabletPersister persister(0, ObCtxIds::DEFAULT_CTX_ID);
 
-  ObSArray<MacroBlockId> shared_meta_id_arr;
   ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
-  ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(
-      *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info, shared_meta_id_arr));
-  ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(tablet_macro_info, new_handle, space_usage));
+  ObTabletPersister::FullTabletPersistCtx *ctx = nullptr;
+  ASSERT_NE(nullptr, ctx = OB_NEWx(ObTabletPersister::FullTabletPersistCtx, &allocator_, persist_param, *tablet, new_handle));
+  ASSERT_EQ(common::OB_SUCCESS, ctx->init());
+  ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(*ctx, nullptr, linked_writer));
+  ObTabletSpaceUsage &space_usage = ctx->new_space_usage_;
+  ObTabletMacroInfo &tablet_macro_info = ctx->new_tablet_macro_info_;
+  ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(persist_param, tablet_macro_info, new_handle, space_usage));
 
   ObMetaDiskAddr addr = new_handle.get_obj()->get_tablet_addr();
 
@@ -889,6 +892,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_inner_tablet)
 
   gc_all_tablets();
   ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
+  ctx->~FullTabletPersistCtx();
 }
 
 TEST_F(TestTenantMetaMemMgr, test_wash_no_sstable_tablet)
@@ -925,8 +929,6 @@ TEST_F(TestTenantMetaMemMgr, test_wash_no_sstable_tablet)
   ObLSTabletService ls_tablet_svr;
   MockObLogHandler log_handler;
   ObFreezer freezer;
-  ObTabletSpaceUsage space_usage;
-  ObTabletMacroInfo tablet_macro_info;
   ObLinkedMacroBlockItemWriter linked_writer;
   ObArenaAllocator schema_allocator;
   ObCreateTabletSchema create_tablet_schema;
@@ -952,12 +954,15 @@ TEST_F(TestTenantMetaMemMgr, test_wash_no_sstable_tablet)
   const uint64_t data_version = DATA_CURRENT_VERSION;
   const int64_t tablet_meta_version = 0;
   const ObTabletPersisterParam persist_param(data_version, ls_id_, ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq(), tablet_meta_version);
-  ObTabletPersister persister(persist_param, ObCtxIds::DEFAULT_CTX_ID);
-  ObSArray<MacroBlockId> shared_meta_id_arr;
+  ObTabletPersister persister(0, ObCtxIds::DEFAULT_CTX_ID);
   ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
-  ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(
-      *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info, shared_meta_id_arr));
-  ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(tablet_macro_info, new_handle, space_usage));
+  ObTabletPersister::FullTabletPersistCtx *ctx = nullptr;
+  ASSERT_NE(nullptr, ctx = OB_NEWx(ObTabletPersister::FullTabletPersistCtx, &allocator_, persist_param, *tablet, new_handle));
+  ASSERT_EQ(common::OB_SUCCESS, ctx->init());
+  ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(*ctx, nullptr, linked_writer));
+  ObTabletSpaceUsage &space_usage = ctx->new_space_usage_;
+  ObTabletMacroInfo &tablet_macro_info = ctx->new_tablet_macro_info_;
+  ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(persist_param, tablet_macro_info, new_handle, space_usage));
 
   ObUpdateTabletPointerParam param;
   ret = new_handle.get_obj()->get_updating_tablet_pointer_param(param);
@@ -984,6 +989,7 @@ TEST_F(TestTenantMetaMemMgr, test_wash_no_sstable_tablet)
 
   gc_all_tablets();
   ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
+  ctx->~FullTabletPersistCtx();
 }
 
 TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
@@ -1021,8 +1027,6 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
   ObLSTabletService ls_tablet_svr;
   MockObLogHandler log_handler;
   ObFreezer freezer;
-  ObTabletSpaceUsage space_usage;
-  ObTabletMacroInfo tablet_macro_info;
   ObLinkedMacroBlockItemWriter linked_writer;
   ObArenaAllocator schema_allocator;
   ObCreateTabletSchema create_tablet_schema;
@@ -1055,12 +1059,15 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
   const uint64_t data_version = DATA_CURRENT_VERSION;
   const int64_t tablet_meta_version = 0;
   const ObTabletPersisterParam persist_param(data_version, ls_id_, ls_handle.get_ls()->get_ls_epoch(), tablet_id, tablet->get_transfer_seq(), tablet_meta_version);
-  ObTabletPersister persister(persist_param, ObCtxIds::DEFAULT_CTX_ID);
-  ObSArray<MacroBlockId> shared_meta_id_arr;
+  ObTabletPersister persister(0, ObCtxIds::DEFAULT_CTX_ID);
+  ObTabletPersister::FullTabletPersistCtx *ctx = nullptr;
   ASSERT_EQ(common::OB_SUCCESS, t3m_.acquire_tablet_from_pool(ObTabletPoolType::TP_NORMAL, WashTabletPriority::WTP_HIGH, key, new_handle));
-  ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(
-      *tablet, linked_writer, total_write_ctxs, new_handle, space_usage, tablet_macro_info, shared_meta_id_arr));
-  ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(tablet_macro_info, new_handle, space_usage));
+  ASSERT_NE(nullptr, ctx = OB_NEWx(ObTabletPersister::FullTabletPersistCtx, &allocator_, persist_param, *tablet, new_handle));
+  ASSERT_EQ(common::OB_SUCCESS, ctx->init());
+  ASSERT_EQ(common::OB_SUCCESS, persister.persist_and_fill_tablet(*ctx, nullptr, linked_writer));
+  ObTabletSpaceUsage &space_usage = ctx->new_space_usage_;
+  ObTabletMacroInfo &tablet_macro_info = ctx->new_tablet_macro_info_;
+  ASSERT_EQ(common::OB_SUCCESS, persister.persist_aggregated_meta(persist_param, tablet_macro_info, new_handle, space_usage));
 
   ObUpdateTabletPointerParam update_pointer_param;
   ret = new_handle.get_obj()->get_updating_tablet_pointer_param(update_pointer_param);
@@ -1092,6 +1099,7 @@ TEST_F(TestTenantMetaMemMgr, test_get_tablet_with_allocator)
 
   gc_all_tablets();
   ASSERT_EQ(0, t3m_.tablet_buffer_pool_.inner_used_num_);
+  ctx->~FullTabletPersistCtx();
 }
 
 TEST_F(TestTenantMetaMemMgr, test_wash_mem_tablet)
@@ -1804,7 +1812,7 @@ TEST_F(TestTenantMetaMemMgr, test_normal_tablet_buffer_fragment)
 int main(int argc, char **argv)
 {
   system("rm -f test_tenant_meta_mem_mgr.log*");
-  OB_LOGGER.set_file_name("test_tenant_meta_mem_mgr.log");
+  OB_LOGGER.set_file_name("test_tenant_meta_mem_mgr.log", true);
   OB_LOGGER.set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

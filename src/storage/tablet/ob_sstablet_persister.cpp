@@ -1253,7 +1253,7 @@ int ObSSTabletPersister::fetch_table_store_and_write_info_(
     STORAGE_LOG(WARN, "failed to register sstable write op", K(ret), K(sst_write_op), K(sst_persist_helper));
   } else if (OB_FAIL(sst_persist_helper.do_persist_all_sstables(*old_table_store,
                                                                 allocator_,
-                                                                multi_stats_,
+                                                                &multi_stats_,
                                                                 new_table_store,
                                                                 sstable_meta_size_aligned))) {
     STORAGE_LOG(WARN, "failed to persist all sstable from table store", K(ret), KPC(old_table_store),

@@ -910,6 +910,7 @@ int ObTenantSlogCheckpointWorkflow::SlogCheckpointHelper::record_single_ls_meta_
   ObTimeGuard time_guard("record_single_ls_meta", 5_s);
 
   ObLSCkptMember ls_ckpt_member;
+  ObMigrationStatus mig_status = ObMigrationStatus::OB_MIGRATION_STATUS_NONE;
   {
     ObLSLockGuard lock_ls(&ls);
     time_guard.click("LsLock");
@@ -927,6 +928,13 @@ int ObTenantSlogCheckpointWorkflow::SlogCheckpointHelper::record_single_ls_meta_
     ls_ckpt_member.tablet_meta_entry_ = ObServerSuperBlock::EMPTY_LIST_ENTRY_BLOCK;
   } else if (OB_FAIL(record_ls_tablets_(ls, ls_ckpt_member.tablet_meta_entry_/*out*/, fd_dispenser))) {
     STORAGE_LOG(WARN, "failed to write checkpoint for this ls", K(ret), K(ls));
+  } else if (OB_FAIL(ls_ckpt_member.ls_meta_.get_migration_status(mig_status))) {
+    STORAGE_LOG(WARN, "failed to get ls migration status", K(ret), K(ls_ckpt_member));
+  } else if (IS_EMPTY_BLOCK_LIST(ls_ckpt_member.tablet_meta_entry_)
+             && ObMigrationStatus::OB_MIGRATION_STATUS_NONE == mig_status) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "tablet meta entry should not be EMPTY_BLOCK_LIST if ls migrations status is NONE", K(ret),
+      K(ls_ckpt_member));
   } else {
     time_guard.click("RecordTablets");
   }

@@ -388,7 +388,7 @@ public:
   int do_persist_all_sstables(
       const ObTabletTableStore &old_table_store,
       common::ObArenaAllocator &new_table_store_allocator,
-      /*out*/ ObMultiTimeStats &multi_stats,
+      /*out*/ ObMultiTimeStats *multi_stats,
       /*out*/ ObTabletTableStore &new_table_store,
       /*out*/ int64_t &sst_meta_size_aligned);
   /// @brief: only be called by fully direct load
@@ -683,6 +683,101 @@ int ObTabletPersistCommon::fill_write_info(
     } else {
       write_info.write_callback_ = persister_param.ddl_redo_callback_;
     }
+  }
+  return ret;
+}
+
+template<typename T>
+class ObUncopyableItemArray final
+{
+public:
+  ObUncopyableItemArray(
+    common::ObIAllocator &allocator,
+    const int64_t capacity)
+    : allocator_(allocator),
+      capacity_(capacity),
+      size_(0),
+      data_(nullptr)
+  {
+  }
+  ~ObUncopyableItemArray() { reset(); }
+  void reset();
+  template<typename ...Args>
+  int emplace_back(Args &&...args);
+  int64_t count() const { return size_; }
+  int64_t capacity() const { return capacity_; }
+  T &at(const int64_t idx)
+  {
+    OB_ASSERT(idx >= 0 && idx < size_);
+    return static_cast<T *>(data_)[idx];
+  }
+  const T &at(const int64_t idx) const
+  {
+    OB_ASSERT(idx >= 0 && idx < size_);
+    return static_cast<T *>(data_)[idx];
+  }
+  TO_STRING_KV(K_(allocator),
+               K_(capacity),
+               K_(size),
+               K_(data));
+
+private:
+  int reserve_();
+  DISALLOW_COPY_AND_ASSIGN(ObUncopyableItemArray);
+
+private:
+  common::ObIAllocator &allocator_;
+  const int64_t capacity_;
+  int64_t size_;
+  void *data_;
+};
+
+template<typename T>
+void ObUncopyableItemArray<T>::reset()
+{
+  if (OB_NOT_NULL(data_)) {
+    T *ptr = static_cast<T *>(data_);
+    for (int64_t i = 0; i < size_; ++i) {
+      ptr[i].~T();
+    }
+    allocator_.free(data_);
+    data_ = nullptr;
+  }
+  size_ = 0;
+}
+
+template<typename T>
+template<typename ...Args>
+int ObUncopyableItemArray<T>::emplace_back(Args &&...args)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_ISNULL(data_) && OB_FAIL(reserve_())) {
+    STORAGE_LOG(WARN, "failed to do reserve", K(ret));
+  } else if (OB_UNLIKELY(size_ >= capacity_)) {
+    ret = OB_SIZE_OVERFLOW;
+    STORAGE_LOG(WARN, "array size overflow", K(ret), K_(size), K_(capacity));
+  } else {
+    new (static_cast<T *>(data_) + size_) T(std::forward<Args>(args)...);
+    ++size_;
+  }
+  return ret;
+}
+
+template<typename T>
+int ObUncopyableItemArray<T>::reserve_()
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_NOT_NULL(data_)) {
+    ret = OB_INIT_TWICE;
+    STORAGE_LOG(WARN, "init twice", K(ret), KP_(data));
+  } else if (OB_UNLIKELY(capacity_ <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected invalid capacity", K(ret), K_(capacity));
+  } else if (OB_ISNULL(data_ = allocator_.alloc(sizeof(T) * capacity_))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    STORAGE_LOG(WARN, "failed to allocate memory", K(ret), K(capacity_));
   }
   return ret;
 }

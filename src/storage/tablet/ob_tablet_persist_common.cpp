@@ -665,7 +665,7 @@ ObMultiTimeStats::~ObMultiTimeStats()
 int ObMultiTimeStats::acquire_stats(const char *owner, ObMultiTimeStats::TimeStats *&stats)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(stats_count_ > MAX_STATS_CNT)) {
+  if (OB_UNLIKELY(stats_count_ >= MAX_STATS_CNT)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("too many time stats", K(ret), K(stats_count_));
   } else if (OB_ISNULL(stats_) &&
@@ -757,7 +757,7 @@ int ObSSTableMetaPersistHelper::register_write_op(ObSSTableMetaPersistHelper::IW
 int ObSSTableMetaPersistHelper::do_persist_all_sstables(
     const ObTabletTableStore &old_table_store,
     common::ObArenaAllocator &new_table_store_allocator,
-    /*out*/ ObMultiTimeStats &multi_stats,
+    /*out*/ ObMultiTimeStats *multi_stats,
     /*out*/ ObTabletTableStore &new_table_store,
     /*out*/ int64_t &sst_meta_size_aligned)
 {
@@ -784,11 +784,11 @@ int ObSSTableMetaPersistHelper::do_persist_all_sstables(
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "helper is not ready for persist", K(ret), KPC(this));
   } else if (FALSE_IT(sst_write_op_->reset())) {
-  } else if (OB_FAIL(multi_stats.acquire_stats("fetch_and_persist_sstable", time_stats))) {
+  } else if (OB_NOT_NULL(multi_stats) && OB_FAIL(multi_stats->acquire_stats("fetch_and_persist_sstable", time_stats))) {
     STORAGE_LOG(WARN, "failed to acquire stats", K(ret));
   } else if (OB_FAIL(old_table_store.get_all_sstable(sstable_iter))) {
     STORAGE_LOG(WARN, "failed to get all sstable iterator", K(ret), K(old_table_store));
-  } else if (FALSE_IT(time_stats->click("get_all_sst_iter"))) {
+  } else if (OB_NOT_NULL(time_stats) && FALSE_IT(time_stats->click("get_all_sst_iter"))) {
   }
 
   if (OB_SUCC(ret)) {
@@ -813,14 +813,15 @@ int ObSSTableMetaPersistHelper::do_persist_all_sstables(
       ret = OB_SUCCESS;
     }
   }
-
-  if (FAILEDx(time_stats->set_extra_info("%s:%ld,%s:%ld,%s:%ld,%s:%ld",
-      "large_co_sst_cnt", ctx_.large_co_sstable_cnt_,
-      "small_co_sst_cnt", ctx_.small_co_sstable_cnt_,
-      "cg_sst_cnt", ctx_.cg_sstable_cnt_,
-      "normal_sst_cnt", ctx_.normal_sstable_cnt_))) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_NOT_NULL(time_stats)
+             && OB_FAIL(time_stats->set_extra_info("%s:%ld,%s:%ld,%s:%ld,%s:%ld",
+             "large_co_sst_cnt", ctx_.large_co_sstable_cnt_,
+             "small_co_sst_cnt", ctx_.small_co_sstable_cnt_,
+             "cg_sst_cnt", ctx_.cg_sstable_cnt_,
+             "normal_sst_cnt", ctx_.normal_sstable_cnt_))) {
     LOG_WARN("fail to set time stats extra info", K(ret));
-  } else if (FALSE_IT(time_stats->click("fill_all_sstable_write_info"))) {
+  } else if (OB_NOT_NULL(time_stats) && FALSE_IT(time_stats->click("fill_all_sstable_write_info"))) {
   }
   // update block info set
   else if (OB_FAIL(ObTabletBlockInfoSetBuilder::convert_macro_info_map(ctx_.shared_macro_map_, block_info_set.clustered_data_block_info_map_))) {
@@ -833,17 +834,18 @@ int ObSSTableMetaPersistHelper::do_persist_all_sstables(
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "write result mismatch with write requests", K(ret), K(ctx_.write_infos_.count()),
       K(sst_write_op_->get_written_addrs().count()));
-  } else if (FALSE_IT(time_stats->click("batch_write_sst_write_infos"))) {
+  } else if (OB_NOT_NULL(time_stats) && FALSE_IT(time_stats->click("batch_write_sst_write_infos"))) {
   }
   // init new table store
   else if (OB_FAIL(new_table_store.init(new_table_store_allocator,
-                                          ctx_.tables_,
-                                          sst_write_op_->get_written_addrs(),
-                                          major_ckm_info))) {
+                                        ctx_.tables_,
+                                        sst_write_op_->get_written_addrs(),
+                                        major_ckm_info))) {
     STORAGE_LOG(WARN, "failed to init new table store", K(ret), K(ctx_.tables_), K(sst_write_op_->get_written_addrs()));
   } else {
-    // calculate written bytes(aligned by 4K)
-    time_stats->click("init_new_table_store");
+    if (OB_NOT_NULL(time_stats)) {
+      time_stats->click("init_new_table_store");
+    }
     const common::ObIArray<ObMetaDiskAddr> &addrs = sst_write_op_->get_written_addrs();
     for (int64_t i = 0; OB_SUCC(ret) && i < addrs.count(); i++) {
       int64_t size = 0;

@@ -76,6 +76,8 @@ class ObTabletCopyDependencyMgr;
 class ObStorageHATabletsBuilder
 {
 public:
+  static const int64_t MAX_TABLET_BATCH_CNT = 256;
+public:
   typedef hash::ObHashMap<common::ObTabletID, ObCopyTabletSimpleInfo> CopyTabletSimpleInfoMap;
   ObStorageHATabletsBuilder();
   virtual ~ObStorageHATabletsBuilder();
@@ -106,6 +108,10 @@ private:
   void free_tablet_info_reader_(ObICopyTabletInfoReader *&reader);
   int create_or_update_tablet_(
       const obrpc::ObCopyTabletInfo &tablet_info,
+      const bool need_check_tablet_limit,
+      ObLS *ls);
+  int batch_create_or_update_tablets_(
+      const common::ObIArray<obrpc::ObCopyTabletInfo> &tablet_infos,
       const bool need_check_tablet_limit,
       ObLS *ls);
   int get_tablets_sstable_reader_(
@@ -170,6 +176,29 @@ private:
   {
     bool operator()(const ObSSTableWrapper &lhs, const ObSSTableWrapper &rhs) const;
   };
+
+  struct CreateTabletParam final
+  {
+  public:
+    CreateTabletParam(const bool has_merged_with_mds_info)
+      : local_tablet_hdl_(),
+        storage_schema_(),
+        major_tables_(),
+        major_sstables_param_(/*ref*/storage_schema_, has_merged_with_mds_info)
+    {
+    }
+    ~CreateTabletParam();
+    TO_STRING_KV(K_(major_tables), K_(major_sstables_param));
+  private:
+    DISALLOW_COPY_AND_ASSIGN(CreateTabletParam);
+  public:
+    ObTabletHandle local_tablet_hdl_;
+    ObStorageSchema storage_schema_;
+    ObTablesHandleArray major_tables_;
+    ObBuildMajorSSTablesParam major_sstables_param_;
+  };
+
+private:
 
   bool is_inited_;
   ObStorageHATabletsBuilderParam param_;

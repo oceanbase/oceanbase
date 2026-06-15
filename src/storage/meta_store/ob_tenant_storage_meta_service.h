@@ -10,6 +10,7 @@
 #include "storage/meta_store/ob_tenant_seq_generator.h"
 #include "storage/slog_ckpt/ob_tenant_checkpoint_slog_handler.h"
 #include "storage/slog/ob_storage_logger.h"
+#include "storage/meta_mem/ob_update_tablet_pointer_param.h"
 
 namespace oceanbase
 {
@@ -17,6 +18,27 @@ namespace storage
 {
 struct ObGCTabletMetaInfoList;
 struct ObUpdateTabletPointerParam;
+struct ObUpdateTabletSlogParam final
+{
+public:
+  ObUpdateTabletSlogParam()
+    : tablet_id_(),
+      update_param_(nullptr),
+      tablet_(nullptr)
+  {
+  }
+  ObUpdateTabletSlogParam(
+    /*ref*/ObUpdateTabletPointerParam &update_param,
+    /*ref*/ObTablet &tablet);
+  ~ObUpdateTabletSlogParam() = default;
+  bool is_valid() const;
+  TO_STRING_KV(K_(tablet_id), KPC_(update_param), KPC_(tablet));
+
+public:
+  ObTabletID tablet_id_;
+  ObUpdateTabletPointerParam *update_param_;
+  ObTablet *tablet_;
+};
 class ObTenantStorageMetaService final
 {
 public:
@@ -52,6 +74,21 @@ public:
 
   // for tablet operation
   int batch_update_tablet(const ObIArray<ObUpdateTabletLog> &slog_arr);
+  /// @brief Batch-write tablet SLogs for shared-nothing (SN) mode.
+  ///
+  /// For each element of @p params, persists either an @c ObUpdateTabletLog for a
+  /// normal tablet or an @c ObEmptyShellTabletLog for an empty-shell tablet. After
+  /// the SLogs are successfully written and flushed, empty-shell entries only:
+  /// the disk address from the written SLog is applied to the in-memory
+  /// @c ObTablet (via @c set_tablet_addr) and synchronized into
+  /// @c ObUpdateTabletSlogParam::update_param_ so resident pointer metadata matches
+  /// the on-disk location.
+  /// NOTICE: Make sure that the count of @c params should not exceed INT16_MAX
+  int batch_write_tablet_slog(
+      const uint64_t data_version,
+      const ObLSID &ls_id,
+      const int64_t ls_epoch,
+      const common::ObIArray<ObUpdateTabletSlogParam> &params);
   int update_tablet(
       const share::ObLSID &ls_id,
       const int64_t ls_epoch,

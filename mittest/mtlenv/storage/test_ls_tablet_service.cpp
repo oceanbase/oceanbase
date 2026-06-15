@@ -17,6 +17,7 @@
 #include "storage/test_dml_common.h"
 #include "storage/test_tablet_helper.h"
 #include "unittest/storage/slog/simple_ob_storage_redo_module.h"
+#include "mtlenv/storage/medium_info_helper.h"
 
 namespace oceanbase
 {
@@ -1275,13 +1276,111 @@ TEST_F(TestLSTabletService, test_tablet_table_store_cache)
   valid_tablet_num(inner_tablet_count);
 }
 
+static void mock_tablet_mds_data(ObArenaAllocator &allocator, ObTablet &tablet)
+{
+  {
+    ObTabletCreateDeleteMdsUserData user_data;
+    user_data.tablet_status_ = ObTabletStatus::TRANSFER_OUT;
+    user_data.data_type_ = ObTabletMdsUserDataType::START_TRANSFER_OUT;
+    user_data.transfer_scn_ = share::SCN::plus(share::SCN::min_scn(), 60);
+    share::SCN transfer_commit_scn;
+    transfer_commit_scn = share::SCN::plus(share::SCN::min_scn(), 70);
+
+    mds::MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(123)));
+    ASSERT_EQ(OB_SUCCESS, tablet.set_tablet_status(user_data, ctx));
+
+    share::SCN redo_scn = user_data.transfer_scn_;
+    ctx.on_redo(redo_scn);
+    ctx.on_commit(transfer_commit_scn, transfer_commit_scn);
+  }
+  {
+    compaction::ObMediumCompactionInfoKey key(100);
+    compaction::ObMediumCompactionInfo info;
+    ASSERT_EQ(OB_SUCCESS, MediumInfoHelper::build_medium_compaction_info(allocator, info, 100));
+
+    mds::MdsCtx ctx(mds::MdsWriter(transaction::ObTransID(777)));
+    ASSERT_EQ(OB_SUCCESS, tablet.set(key, info, ctx, 1_s/*lock_timeout_us*/));
+
+    share::SCN redo_scn = share::SCN::plus(share::SCN::min_scn(), 110);
+    ctx.on_redo(redo_scn);
+    share::SCN commit_scn = share::SCN::plus(share::SCN::min_scn(), 120);
+    ctx.on_commit(commit_scn, commit_scn);
+  }
+}
+
+TEST_F(TestLSTabletService, test_batch_create_or_update_mig_tablets)
+{
+  const uint64_t data_version = DATA_CURRENT_VERSION;
+
+  const int64_t TOTAL_TABLET_CNT = 256;
+  const int64_t UPDATE_TABLET_CNT = TOTAL_TABLET_CNT / 2;
+  const int64_t EMPTY_SHELL_CNT = UPDATE_TABLET_CNT / 2;
+  auto is_empty_shell_idx = [&](const int64_t idx)->bool
+    {
+      return idx < EMPTY_SHELL_CNT || (idx >= UPDATE_TABLET_CNT && idx < UPDATE_TABLET_CNT + EMPTY_SHELL_CNT);
+    };
+  int64_t cur_tablet_id = 10010010;
+  ObLSService *ls_svr = MTL(ObLSService *);
+  ASSERT_NE(nullptr ,ls_svr);
+
+  ObLSHandle src_ls_handle;
+  ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ObLSID(TEST_LS_ID), src_ls_handle, ObLSGetMod::STORAGE_MOD));
+  ASSERT_NE(nullptr, src_ls_handle.get_ls());
+
+  share::schema::ObTableSchema schema;
+  TestSchemaUtils::prepare_data_schema(schema);
+
+  std::vector<ObTabletID> tablet_ids;
+  for (int64_t i = 0; i < TOTAL_TABLET_CNT; ++i) {
+    const ObTabletID tablet_id(cur_tablet_id++);
+    tablet_ids.push_back(tablet_id);
+    ObTabletStatus::Status status = ObTabletStatus::Status::NORMAL;
+    if (is_empty_shell_idx(i)) {
+      status = ObTabletStatus::Status::DELETED;
+    }
+    ASSERT_EQ(OB_SUCCESS, TestTabletHelper::create_tablet(src_ls_handle, tablet_id, schema, allocator_, status));
+    if (is_empty_shell_idx(i)) {
+      ASSERT_EQ(OB_SUCCESS, src_ls_handle.get_ls()->get_tablet_svr()->update_tablet_to_empty_shell(data_version, tablet_id));
+    }
+  }
+  const lib::ObMemAttr mem_attr(MTL_ID(), "Mittest");
+  ObSArray<ObMigrationTabletParam> mig_params;
+  mig_params.set_attr(mem_attr);
+  for (int64_t i = 0; i < TOTAL_TABLET_CNT; ++i) {
+    ObTabletHandle tmp_hdl;
+    ObMigrationTabletParam mig_param;
+    ASSERT_EQ(OB_SUCCESS, src_ls_handle.get_ls()->get_tablet(tablet_ids[i], tmp_hdl, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US, ObMDSGetTabletMode::READ_WITHOUT_CHECK));
+    mock_tablet_mds_data(allocator_, *tmp_hdl.get_obj());
+    ASSERT_EQ(OB_SUCCESS, tmp_hdl.get_obj()->build_migration_tablet_param(mig_param));
+    ASSERT_EQ(OB_SUCCESS, mig_params.push_back(mig_param));
+  }
+
+  for (int64_t i = UPDATE_TABLET_CNT; i < TOTAL_TABLET_CNT; ++i) {
+    ASSERT_EQ(OB_SUCCESS, ls_tablet_service_->do_remove_tablet(ls_id_, tablet_ids[i]));
+  }
+
+  int64_t timestamp = ObTimeUtility::current_time_us();
+  ASSERT_EQ(OB_SUCCESS, ls_tablet_service_->batch_create_or_update_migration_tablets(mig_params));
+  fprintf(stdout, "batch create or update migration tablets cost %ldus\n", ObTimeUtility::current_time_us() - timestamp);
+  // check result
+  for (int64_t i = 0; i < TOTAL_TABLET_CNT; ++i) {
+    ObTabletHandle tmp_hdl;
+    const ObMigrationTabletParam &mig_param = mig_params.at(i);
+    ASSERT_EQ(OB_SUCCESS, src_ls_handle.get_ls()->get_tablet(tablet_ids[i], tmp_hdl, ObTabletCommon::DEFAULT_GET_TABLET_DURATION_US, ObMDSGetTabletMode::READ_WITHOUT_CHECK));
+    ASSERT_NE(nullptr, tmp_hdl.get_obj());
+    ASSERT_TRUE(tmp_hdl.get_obj()->get_tablet_addr().is_disked());
+    ASSERT_EQ(tmp_hdl.get_obj()->get_tablet_id(), mig_param.tablet_id_);
+    ASSERT_EQ(tmp_hdl.get_obj()->get_transfer_seq(), mig_param.transfer_info_.transfer_seq_);
+    ASSERT_EQ(tmp_hdl.get_obj()->is_empty_shell(), is_empty_shell_idx(i));
+  }
+}
 } // end storage
 } // end oceanbase
 
 int main(int argc, char **argv)
 {
   system("rm -f test_ls_tablet_service.log*");
-  OB_LOGGER.set_file_name("test_ls_tablet_service.log");
+  OB_LOGGER.set_file_name("test_ls_tablet_service.log", true);
   OB_LOGGER.set_log_level("INFO");
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

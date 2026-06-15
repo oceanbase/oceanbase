@@ -513,6 +513,16 @@ public:
   int create_or_update_migration_tablet(
       const ObMigrationTabletParam &mig_tablet_param,
       const bool is_transfer);
+  /// @brief Batch create or update migration tablets.
+  ///        All tablets are locked together before any write operation to ensure atomicity.
+  /// @param mig_tablet_params Array of migration tablet parameters to be created or updated.
+  ///        Must be non-empty and must not exceed ObStorageHATabletsBuilder::MAX_TABLET_BATCH_CNT (256) elements.
+  /// @return OB_SUCCESS on success.
+  ///         OB_NOT_INIT if the service has not been initialized.
+  ///         OB_NOT_RUNNING if the tablet service has been stopped.
+  ///         OB_INVALID_ARGUMENT if mig_tablet_params is empty or exceeds the maximum batch size.
+  int batch_create_or_update_migration_tablets(
+      const common::ObIArray<ObMigrationTabletParam> &mig_tablet_params);
   int build_tablet_with_batch_tables(
       const ObTabletID &tablet_id,
       const ObBatchUpdateTableStoreParam &param);
@@ -696,6 +706,44 @@ private:
     ObRelativeTable dst_relative_table_;
     DISALLOW_COPY_AND_ASSIGN(ObDmlSplitCtx);
   };
+  struct MigTabletCASParam final
+  {
+  public:
+    MigTabletCASParam()
+      : tablet_id_(),
+        is_update_(false),
+        old_tablet_handle_()
+    {
+    }
+    ~MigTabletCASParam() { reset(); }
+    void reset()
+    {
+      tablet_id_.reset();
+      is_update_ = false;
+      old_tablet_handle_.reset();
+    }
+    bool is_valid() const
+    {
+      bool is_bret = tablet_id_.is_valid();
+      if (is_bret && is_update_) {
+        is_bret &= old_tablet_handle_.is_valid();
+      }
+      return is_bret;
+    }
+    // need call rollback_remove_tablet if is_update_ is false(which means tablet was just created)
+    bool need_rollback_if_failed() const { return !is_update_; }
+    int assign(const MigTabletCASParam &other);
+    TO_STRING_KV(K_(tablet_id), K_(is_update));
+
+  private:
+    DISALLOW_COPY_AND_ASSIGN(MigTabletCASParam);
+  public:
+    ObTabletID tablet_id_;
+    bool is_update_;
+    ObTabletHandle old_tablet_handle_; // invalid if is_update is false
+  };
+  typedef ObFixedArray<MigTabletCASParam, ObArenaAllocator> MigTabletCASParamArray;
+
 private:
   static int refresh_memtable_for_ckpt(
       const ObMetaDiskAddr &old_addr,
@@ -726,6 +774,27 @@ private:
       const ObLSID &ls_id,
       const ObTabletID &tablet_id,
       ObTabletHandle &tablet_handle,
+      ObTimeGuard &time_guard);
+  /**
+   * @brief Batch write tablet slog and do CAS.
+   *
+   * @param[in]  cas_params         Array of CAS parameters, each containing the expected
+   *                                new version and new tablet meta for one tablet.
+   * @param[in]  total_tablet_cnt   Number of tablets to process.
+   * @param[out] new_tablet_handles Output array of ObTabletHandle that receives the handle
+   *                                of each successfully processed tablet. tablet addr will be
+   *                                set here if tablet is empty shell.
+   *                                NOTE: This is a raw ObTabletHandle array. The caller must
+   *                                ensure the array capacity is >= total_tablet_cnt to avoid
+   *                                out-of-bounds access.
+   * @param[in]  time_guard         Time guard for recording per-stage elapsed time.
+   * @return OB_SUCCESS on full success; other error codes indicate failure.
+   */
+  int safe_create_or_update_cas_mig_tablets(
+      const uint64_t data_version,
+      const MigTabletCASParamArray &cas_params,
+      const int64_t total_tablet_cnt,
+      ObTabletHandle *new_tablet_handles,
       ObTimeGuard &time_guard);
   void report_tablet_to_rs(const common::ObTabletID &tablet_id);
   void report_tablet_to_rs(const common::ObIArray<common::ObTabletID> &tablet_id_array);
@@ -799,6 +868,16 @@ private:
       const uint64_t data_version,
       const ObMigrationTabletParam &mig_tablet_param,
       ObTabletHandle &handle);
+  int inner_batch_create_or_update_migration_tablets_without_lock_(
+      const common::ObIArray<ObMigrationTabletParam> &mig_tablet_params,
+      ObTimeGuard &time_guard);
+  int acquire_or_create_migration_tablet(
+      const uint64_t data_version,
+      const ObMigrationTabletParam &mig_param,
+      const MigTabletCASParam &cas_param,
+      ObArenaAllocator &allocator,
+      ObTabletHandle &tablet_hdl,
+      ObUncopyableItemArray<ObTabletPersisterParam> &persist_params);
   // Create tablet with shared tablet.
   int update_with_ss_tablet(
       const uint64_t data_version,
