@@ -3576,12 +3576,17 @@ int ObFastParserOracle::parse_next_token()
         break;
       }
       default : {
+        int64_t saved_pos = raw_sql_.cur_pos_;
         int64_t next_idf_pos = is_first_identifier_flags(raw_sql_.cur_pos_);
         if (-1 != next_idf_pos) {
           raw_sql_.cur_pos_ = next_idf_pos;
           if (OB_LIKELY(process_idf_func_ != nullptr)) {
             OZ ((this->*process_idf_func_)(false));
           }
+        } else if (raw_sql_.cur_pos_ != saved_pos) {
+          // Multi-byte special character (e.g. fullwidth comma/space/parenthesis)
+          // was consumed by is_first_identifier_flags via scan(), treat as normal token
+          cur_token_type_ = NORMAL_TOKEN;
         } else if (is_normal_char(ch)) {
           cur_token_type_ = NORMAL_TOKEN;
           raw_sql_.scan();
