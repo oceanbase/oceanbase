@@ -989,7 +989,6 @@ void ObPluginVectorIndexService::destroy()
     }
     index_ls_mgr_map_.destroy();
     allocator_.reset();
-    alloc_.reset();
 
     is_inited_ = false;
     has_start_ = false;
@@ -1020,8 +1019,7 @@ int ObPluginVectorIndexService::init(const uint64_t tenant_id,
                                               "VecIdxLSMgr",
                                               tenant_id))) {
     LOG_WARN("create ls mgr ", KR(ret), K(tenant_id));
-  } else if (FALSE_IT(alloc_.set_tenant_id(tenant_id))) {
-  } else if (OB_FAIL(allocator_.init(&alloc_, OB_MALLOC_MIDDLE_BLOCK_SIZE, mem_attr))) {
+  } else if (OB_FAIL(allocator_.init(nullptr, OB_MALLOC_MIDDLE_BLOCK_SIZE, mem_attr))) {
     LOG_WARN("ObTenantSrs allocator init failed.", K(ret));
   } else {
     ObSharedMemAllocMgr *shared_mem_mgr = MTL(ObSharedMemAllocMgr*);
