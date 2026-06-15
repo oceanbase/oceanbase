@@ -444,13 +444,24 @@ int ObHybridSearchGenerator::generate_node(const ObDSLQuery *query,
 int ObHybridSearchGenerator::generate_knn_node(const ObDSLKnnQuery *knn_query, ObVecSearchNode *&knn_node)
 {
   int ret = OB_SUCCESS;
-  bool has_index = false;
   uint64_t index_id = OB_INVALID_ID;
-  if (OB_ISNULL(knn_node = OB_NEWx(ObVecSearchNode, allocator_, *allocator_))) {
+  if (OB_ISNULL(knn_query)
+      || OB_ISNULL(knn_query->field_)
+      || OB_ISNULL(knn_query->distance_)
+      || OB_ISNULL(schema_guard_)
+      || OB_ISNULL(schema_guard_->get_schema_guard())
+      || OB_ISNULL(table_schema_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), KP(knn_query), KP(schema_guard_), KP(table_schema_));
+  } else if (OB_ISNULL(knn_node = OB_NEWx(ObVecSearchNode, allocator_, *allocator_))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to allocate hybrid search node", K(ret));
-  } else if (OB_FAIL(get_vector_index_tid_from_expr(knn_query->field_, index_id))) {
-    LOG_WARN("failed to allocate hybrid search node", K(ret));
+  } else if (OB_FAIL(ObVectorIndexUtil::get_matched_vector_index_tid(*(schema_guard_->get_schema_guard()),
+                                                                      *table_schema_,
+                                                                      knn_query->field_->get_column_id(),
+                                                                      knn_query->distance_->get_expr_type(),
+                                                                      index_id))) {
+    LOG_WARN("failed to get matched vector index tid", K(ret), K(knn_query->field_->get_column_id()));
   } else if (index_id == OB_INVALID_ID) {
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED, "knn search without vector index");
@@ -545,30 +556,6 @@ int ObHybridSearchGenerator::generate_knn_node(const ObDSLKnnQuery *knn_query, O
     }
   }
 
-  return ret;
-}
-
-int ObHybridSearchGenerator::get_vector_index_tid_from_expr(ObColumnRefRawExpr *field, uint64_t& vec_index_tid)
-{
-  int ret = OB_SUCCESS;
-  bool vector_index_match = false;
-  ObIndexType index_type;
-  if (OB_FAIL(ObVectorIndexUtil::check_column_has_vector_index(*table_schema_,
-                                                                *(schema_guard_->get_schema_guard()),
-                                                                field->get_column_id(),
-                                                                vector_index_match,
-                                                                index_type))) {
-    LOG_WARN("failed to check column has vector index", K(ret), K(field->get_column_id()), K(vector_index_match));
-  } else if (vector_index_match) {
-    if (OB_FAIL(ObVectorIndexUtil::get_vector_index_tid(schema_guard_->get_schema_guard(),
-                                                        *table_schema_,
-                                                        index_type,
-                                                        field->get_column_id(),
-                                                        true,
-                                                        vec_index_tid))) {
-      LOG_WARN("fail to get spec vector delta buffer table id", K(ret), K(field->get_column_id()), KPC(table_schema_));
-    }
-  }
   return ret;
 }
 

@@ -245,6 +245,7 @@ private:
                                         uint8_t &cons_encode_type);
   int init_fusion_node(const ObDSLQueryInfo *query_info, ObFusionNode *fusion_node);
   int get_vector_index_tid_from_expr(ObColumnRefRawExpr *field, uint64_t& vec_index_tid);
+  int init_fusion_iter_exec_mode(const ObDSLQueryInfo *query_info, ObFusionNode *fusion_node);
   bool is_search_subquery(ObIndexMergeNode *node) const;
   bool is_knn_subquery(ObIndexMergeNode *node) const;
   int collect_child_boost_and_update_flags(const ObDSLQueryInfo *dsl_info,
