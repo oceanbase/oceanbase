@@ -1161,11 +1161,18 @@ public:
                                                      ObRawExpr *&target_expr,
                                                      bool &is_match,
                                                      ObExprEqualCheckContext *equal_ctx,
-                                                     const bool skip_extract_real_dep_expr);
+                                                     const bool skip_extract_real_dep_expr,
+                                                     const bool need_diag = false);
   static int check_match_to_type(ObRawExpr *to_type_expr,
                                  ObRawExpr *candi_expr,
                                  bool &is_same,
                                  ObExprEqualCheckContext *equal_ctx);
+  static int check_gen_col_similar(const ObRawExpr *depend_expr,
+                                     const ObRawExpr *target_expr,
+                                     bool &is_similar);
+  static int try_log_func_index_gen_col_similar(ObRawExpr *depend_expr,
+                                                  ObRawExpr *target_expr,
+                                                  const bool need_diag = false);
 
   /**
    * This interface is specifically designed for query range, used to retrieve the column c1 that can extract the range from nvl(c1, 1) = 1.

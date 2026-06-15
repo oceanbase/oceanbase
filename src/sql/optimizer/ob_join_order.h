@@ -3387,7 +3387,10 @@ struct MergeKeyInfoHelper
                                       ObIArray<ObPCConstParamInfo> &param_infos,
                                       ObRawExpr *&matched_expr,
                                       bool &is_match,
-                                      bool &is_precise_deduced);
+                                      bool &is_precise_deduced,
+                                      const bool need_diag);
+    int is_index_hint_covering_gen_col(const ObColumnRefRawExpr &gen_col_expr,
+                                       bool &need_diag) const;
 
     int check_simple_prefix_cmp_expr(ObRawExpr *expr,
                                       ObColumnRefRawExpr *&column_expr,

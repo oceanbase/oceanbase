@@ -6886,13 +6886,132 @@ int ObOptimizerUtil::extract_real_dep_expr(ObRawExpr *ori_depend_expr,
   return ret;
 }
 
+// Gather expr type signature from an expression tree for func index
+// gen col similar matching.  System-injected nodes (CAST, INNER_TRIM,
+// PAD) and const leaves are skipped so that depend- and query-side trees
+// are comparable even when the stored gen-col expression carries extra
+// padding/trim wrappers.
+static int gather_func_index_expr_types(const ObRawExpr *expr, ObIArray<ObItemType> &types)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null expr in gather_func_index_expr_types", K(ret));
+  } else if (expr->is_const_raw_expr()) {
+    // skip const leaves
+  } else if (T_FUN_SYS_CAST == expr->get_expr_type() || T_FUN_INNER_TRIM == expr->get_expr_type()
+             || T_FUN_PAD == expr->get_expr_type()) {
+    // skip system-injected padding / cast wrappers
+  } else if (OB_FAIL(add_var_to_array_no_dup(types, expr->get_expr_type()))) {
+    LOG_WARN("failed to push back expr type", K(ret), K(expr->get_expr_type()));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < expr->get_param_count(); ++i) {
+    if (OB_FAIL(gather_func_index_expr_types(expr->get_param_expr(i), types))) {
+      LOG_WARN("failed to collect expr types", K(ret));
+    }
+  }
+  return ret;
+}
+
+// Similarity check for gen column expression matching.
+// Returns true when depend_expr and target_expr have identical relation_ids,
+// identical column id sets, and their expr type signatures are similar
+// (one is subset of the other with at most 1 additional node on the larger side).
+int ObOptimizerUtil::check_gen_col_similar(const ObRawExpr *depend_expr,
+                                           const ObRawExpr *target_expr,
+                                           bool &is_similar)
+{
+  int ret = OB_SUCCESS;
+  is_similar = false;
+  ObSEArray<ObItemType, 8> depend_types;
+  ObSEArray<ObItemType, 8> target_types;
+  ObSEArray<uint64_t, 8> depend_col_ids;
+  ObSEArray<uint64_t, 8> target_col_ids;
+  if (OB_ISNULL(depend_expr) || OB_ISNULL(target_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), KP(depend_expr), KP(target_expr));
+  } else if (!(depend_expr->get_relation_ids() == target_expr->get_relation_ids())) {
+    // relation id sets differ, not similar
+  } else if (OB_FAIL(ObRawExprUtils::extract_column_ids(depend_expr, depend_col_ids))) {
+    LOG_WARN("failed to extract depend expr column ids", K(ret));
+  } else if (OB_FAIL(ObRawExprUtils::extract_column_ids(target_expr, target_col_ids))) {
+    LOG_WARN("failed to extract target expr column ids", K(ret));
+  } else if (!(depend_col_ids.count() == target_col_ids.count()
+               && ObOptimizerUtil::is_subset(depend_col_ids, target_col_ids)
+               && ObOptimizerUtil::is_subset(target_col_ids, depend_col_ids))) {
+    // column id sets differ, not similar
+  } else if (target_expr->get_param_count() == 0) {
+    // target expr is terminal expr, not similar
+  } else if (OB_FAIL(gather_func_index_expr_types(depend_expr, depend_types))) {
+    LOG_WARN("failed to collect depend expr types", K(ret));
+  } else if (OB_FAIL(gather_func_index_expr_types(target_expr, target_types))) {
+    LOG_WARN("failed to collect target expr types", K(ret));
+  } else {
+    int64_t count_diff = std::abs(depend_types.count() - target_types.count());
+    // allow at most 1 extra node on either side (e.g. length/int const
+    // that survived the skip filters above)
+    is_similar = (depend_types.count() > 0 && target_types.count() > 0) && count_diff <= 1
+                   && (ObOptimizerUtil::is_subset(depend_types, target_types)
+                       || ObOptimizerUtil::is_subset(target_types, depend_types));
+  }
+  return ret;
+}
+
+int ObOptimizerUtil::try_log_func_index_gen_col_similar(ObRawExpr *depend_expr,
+                                                          ObRawExpr *target_expr,
+                                                          const bool need_diag)
+{
+  int ret = OB_SUCCESS;
+  bool is_similar = false;
+  if (OB_ISNULL(depend_expr) || OB_ISNULL(target_expr)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null", K(ret), KP(depend_expr), KP(target_expr));
+  } else if (!need_diag) {
+    // do nothing
+  } else if (OB_FAIL(check_gen_col_similar(depend_expr, target_expr, is_similar))) {
+    LOG_WARN("failed to check gen col similar", K(ret));
+  } else if (!is_similar) {
+  } else {
+    HEAP_VAR(char[OB_MAX_DEFAULT_VALUE_LENGTH], expr_buf)
+    {
+      int64_t pos = 0;
+      int64_t gen_col_len = 0;
+      ObString gen_col_str;
+      ObString query_str;
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS
+          != (tmp_ret = depend_expr->get_name(expr_buf, OB_MAX_DEFAULT_VALUE_LENGTH, pos, EXPLAIN_EXTENDED_NOADDR))) {
+        LOG_WARN("failed to print gen col define expr", K(tmp_ret));
+      } else {
+        gen_col_str.assign_ptr(expr_buf, static_cast<int32_t>(pos));
+        gen_col_len = pos;
+      }
+      if (OB_SUCCESS
+          != (tmp_ret = target_expr->get_name(expr_buf, OB_MAX_DEFAULT_VALUE_LENGTH, pos, EXPLAIN_EXTENDED_NOADDR))) {
+        LOG_WARN("failed to print query expr", K(tmp_ret));
+      } else {
+        query_str.assign_ptr(expr_buf + gen_col_len, static_cast<int32_t>(pos - gen_col_len));
+      }
+      LOG_INFO("[FBI_DIAG] func index mismatch, same_as failed",
+               "gen_col_define",
+               gen_col_str,
+               "query_expr",
+               query_str);
+      LOG_TRACE("[FBI_DIAG] func index mismatch, same_as failed, detail exprs:", KPC(depend_expr), KPC(target_expr));
+    }
+  }
+  return ret;
+}
+
 int ObOptimizerUtil::check_and_extract_matched_gen_col_exprs(ObRawExpr *&depend_expr,
                                                              ObRawExpr *&target_expr,
                                                              bool &is_match,
                                                              ObExprEqualCheckContext *equal_ctx,
-                                                             const bool skip_extract_real_dep_expr)
+                                                             const bool skip_extract_real_dep_expr,
+                                                             const bool need_diag)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
   is_match = false;
   if (NULL != equal_ctx) {
     equal_ctx->reset();
@@ -6920,6 +7039,8 @@ int ObOptimizerUtil::check_and_extract_matched_gen_col_exprs(ObRawExpr *&depend_
     }
     if (OB_FAIL(check_match_to_type(depend_expr, target_expr, is_match, equal_ctx))) {
       LOG_WARN("fail to check if to_<type> expr can be extracted", K(ret));
+    } else if (!is_match && OB_TMP_FAIL(try_log_func_index_gen_col_similar(depend_expr, target_expr, need_diag))) {
+      LOG_WARN("failed to log func index gen col similar", K(tmp_ret));
     }
   }
   return ret;

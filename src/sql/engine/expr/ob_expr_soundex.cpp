@@ -418,8 +418,10 @@ int ObExprSoundex::eval_soundex(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &exp
 
 DEF_SET_LOCAL_SESSION_VARS(ObExprSoundex, raw_expr) {
   int ret = OB_SUCCESS;
-  SET_LOCAL_SYSVAR_CAPACITY(1);
-  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
+  if (is_mysql_mode()) {
+    SET_LOCAL_SYSVAR_CAPACITY(1);
+    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
+  }
   return ret;
 }
 

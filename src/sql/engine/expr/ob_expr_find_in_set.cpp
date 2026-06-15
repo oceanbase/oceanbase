@@ -500,8 +500,10 @@ int ObExprFindInSet::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr
 
 DEF_SET_LOCAL_SESSION_VARS(ObExprFindInSet, raw_expr) {
   int ret = OB_SUCCESS;
-  SET_LOCAL_SYSVAR_CAPACITY(1);
-  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
+  if (is_mysql_mode()) {
+    SET_LOCAL_SYSVAR_CAPACITY(1);
+    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
+  }
   return ret;
 }
 

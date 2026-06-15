@@ -24253,6 +24253,7 @@ int ObJoinOrder::check_simple_expr_match_gen_col_index(ObRawExpr *expr,
     LOG_WARN("failed to get column exprs", K(ret));
   } else {
     bool is_precise_deduced = true;
+    bool need_diag = false;
     for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs.count(); i++) {
       ObColumnRefRawExpr *gen_col_expr = column_exprs.at(i);
       ObRawExpr* depend_expr = NULL;
@@ -24263,7 +24264,15 @@ int ObJoinOrder::check_simple_expr_match_gen_col_index(ObRawExpr *expr,
         LOG_WARN("col is null", K(ret));
       } else if (!gen_col_expr->is_generated_column()) {
         //do nothing
-      } else if (OB_FAIL(check_simple_gen_col_cmp_expr(expr, gen_col_expr, dummy, from_expr, cur_match, is_precise_deduced))) {
+      } else if (OB_FAIL(is_index_hint_covering_gen_col(*gen_col_expr, need_diag))) {
+        LOG_WARN("failed to check index hint covering gen col", K(ret));
+      } else if (OB_FAIL(check_simple_gen_col_cmp_expr(expr,
+                                                       gen_col_expr,
+                                                       dummy,
+                                                       from_expr,
+                                                       cur_match,
+                                                       is_precise_deduced,
+                                                       need_diag))) {
         LOG_WARN("failed to check simple gen col cmp expr", K(ret));
       } else if (!cur_match) {
         // do nothing
@@ -24277,18 +24286,53 @@ int ObJoinOrder::check_simple_expr_match_gen_col_index(ObRawExpr *expr,
   return ret;
 }
 
+// Check whether the user has specified an INDEX hint for this table and the
+// hinted index's rowkey contains the given generated column.
+int ObJoinOrder::is_index_hint_covering_gen_col(const ObColumnRefRawExpr &gen_col_expr,
+                                                bool &need_diag) const
+{
+  int ret = OB_SUCCESS;
+  need_diag = false;
+  const LogTableHint *log_table_hint = NULL;
+  ObSqlSchemaGuard *schema_guard = NULL;
+  if (OB_ISNULL(get_plan())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("plan is null", K(ret));
+  } else if (OB_ISNULL(log_table_hint = get_plan()->get_log_plan_hint().get_index_hint(gen_col_expr.get_table_id()))) {
+    // no index hint on this table
+  } else if (OB_ISNULL(schema_guard = get_plan()->get_optimizer_context().get_sql_schema_guard())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema guard is null", K(ret));
+  } else {
+    const uint64_t gen_col_id = gen_col_expr.get_column_id();
+    for (int64_t i = 0; OB_SUCC(ret) && !need_diag && i < log_table_hint->index_list_.count(); ++i) {
+      const uint64_t index_tid = log_table_hint->index_list_.at(i);
+      const ObTableSchema *index_schema = NULL;
+      if (OB_FAIL(schema_guard->get_table_schema(index_tid, index_schema))) {
+        LOG_WARN("failed to get table schema", K(ret), K(index_tid));
+      } else if (OB_ISNULL(index_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("index schema is null", K(ret), K(index_tid));
+      } else if (OB_FAIL(index_schema->get_rowkey_info().is_rowkey_column(gen_col_id, need_diag))) {
+        LOG_WARN("failed to check if generated column is rowkey", K(ret), K(index_tid), K(gen_col_id));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObJoinOrder::check_simple_gen_col_cmp_expr(ObRawExpr *expr,
                                                ObColumnRefRawExpr *gen_col_expr,
                                                ObIArray<ObPCConstParamInfo> &param_infos,
                                                ObRawExpr *&matched_expr,
                                                bool &is_match,
-                                               bool &is_precise_deduced)
+                                               bool &is_precise_deduced,
+                                               const bool need_diag)
 {
   int ret = OB_SUCCESS;
   matched_expr = NULL;
   is_match = false;
   ObRawExpr* depend_expr = NULL;
-  bool is_lossless = false;
   ObPhysicalPlanCtx *phy_plan_ctx = NULL;
   const bool skip_extract_real_dep_expr = true;
   if (OB_ISNULL(expr) || OB_ISNULL(gen_col_expr) || OB_ISNULL(OPT_CTX.get_exec_ctx()) ||
@@ -24311,7 +24355,8 @@ int ObJoinOrder::check_simple_gen_col_cmp_expr(ObRawExpr *expr,
                                                                          param_expr,
                                                                          is_match,
                                                                          &equal_ctx,
-                                                                         skip_extract_real_dep_expr))) {
+                                                                         skip_extract_real_dep_expr,
+                                                                         need_diag))) {
       LOG_WARN("fail to check and extract matched gen col exprs", K(ret));
     } else if (!is_match) {
       /* do nothing */
@@ -24352,9 +24397,12 @@ int ObJoinOrder::deduce_common_gen_col_index_expr(ObRawExpr *pred,
   ObSEArray<ObRawExpr*, 4> to_exprs;
   ObSEArray<ObPCConstParamInfo, 4> const_param_infos;
   bool is_precise_deduced = true;
+  bool need_diag = false;
   if (OB_ISNULL(pred) || OB_ISNULL(table_item) || OB_ISNULL(gen_col) || OB_ISNULL(get_plan())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", K(ret), K(pred), K(table_item), K(gen_col));
+  } else if (OB_FAIL(is_index_hint_covering_gen_col(*gen_col, need_diag))) {
+    LOG_WARN("failed to check index hint covering gen col", K(ret));
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < simple_gen_col_preds.count(); i++) {
       ObRawExpr *simple_pred = simple_gen_col_preds.at(i);
@@ -24368,7 +24416,8 @@ int ObJoinOrder::deduce_common_gen_col_index_expr(ObRawExpr *pred,
                                                        const_param_infos,
                                                        from_expr,
                                                        is_match,
-                                                       is_precise_deduced))) {
+                                                       is_precise_deduced,
+                                                       need_diag))) {
         LOG_WARN("failed to check simple gen col cmp expr", K(ret));
       } else if (!is_match) {
         ret = OB_ERR_UNEXPECTED;
