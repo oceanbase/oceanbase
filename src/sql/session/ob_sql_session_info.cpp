@@ -2160,6 +2160,68 @@ int ObSQLSessionInfo::serialize_(char *buf, int64_t buf_len, int64_t &pos) const
       gtt_tablet_info_map_,
       trans_gtt_v2_sequence_,
       min_data_version_of_init_sess_);
+  OZ (const_cast<ObSQLSessionInfo *>(this)->serialize_remote_extra_sess_state_(buf, buf_len, pos));
+  return ret;
+}
+
+void ObSQLSessionInfo::recalc_curr_session_context_size_()
+{
+  int64_t ctx_size = 0;
+  for (ObContextsMap::iterator it = contexts_map_.begin(); it != contexts_map_.end(); ++it) {
+    if (OB_NOT_NULL(it->second) && OB_NOT_NULL(it->second->context_map_)) {
+      ctx_size += it->second->context_map_->size();
+    }
+  }
+  curr_session_context_size_ = ctx_size;
+}
+
+int ObSQLSessionInfo::serialize_remote_extra_sess_state_(char *buf,
+                                                         int64_t buf_len,
+                                                         int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  OZ (app_info_encoder_.serialize(*this, buf, buf_len, pos));
+  OZ (client_id_info_encoder_.serialize(*this, buf, buf_len, pos));
+  OZ (app_ctx_info_encoder_.serialize(*this, buf, buf_len, pos));
+  OZ (sequence_currval_encoder_.serialize(*this, buf, buf_len, pos));
+  OZ (control_info_encoder_.serialize(*this, buf, buf_len, pos));
+  return ret;
+}
+
+int ObSQLSessionInfo::deserialize_remote_extra_sess_state_(const char *buf,
+                                                            int64_t data_len,
+                                                            int64_t &pos)
+{
+  int ret = OB_SUCCESS;
+  DISABLE_SQL_MEMLEAK_GUARD;
+  OZ (app_info_encoder_.deserialize(*this, buf, data_len, pos));
+  OZ (client_id_info_encoder_.deserialize(*this, buf, data_len, pos));
+  OZ (app_ctx_info_encoder_.deserialize(*this, buf, data_len, pos));
+  OX (recalc_curr_session_context_size_());
+  OZ (sequence_currval_encoder_.deserialize(*this, buf, data_len, pos));
+  OZ (control_info_encoder_.deserialize(*this, buf, data_len, pos));
+  return ret;
+}
+
+int ObSQLSessionInfo::calc_remote_extra_sess_state_serialize_size_(int64_t &len)
+{
+  int ret = OB_SUCCESS;
+  int64_t part_len = 0;
+  len = 0;
+  OZ (app_info_encoder_.get_serialize_size(*this, part_len));
+  len += part_len;
+  part_len = 0;
+  OZ (client_id_info_encoder_.get_serialize_size(*this, part_len));
+  len += part_len;
+  part_len = 0;
+  OZ (app_ctx_info_encoder_.get_serialize_size(*this, part_len));
+  len += part_len;
+  part_len = 0;
+  OZ (sequence_currval_encoder_.get_serialize_size(*this, part_len));
+  len += part_len;
+  part_len = 0;
+  OZ (control_info_encoder_.get_serialize_size(*this, part_len));
+  len += part_len;
   return ret;
 }
 
@@ -2222,6 +2284,9 @@ int ObSQLSessionInfo::deserialize(const char *buf, const int64_t data_len, int64
     OB_UNIS_DECODE(gtt_tablet_info_map_);
     OB_UNIS_DECODE(trans_gtt_v2_sequence_);
     OB_UNIS_DECODE(min_data_version_of_init_sess_);
+    if (OB_SUCC(ret) && pos < len) {
+      OZ (deserialize_remote_extra_sess_state_(buf, data_len, pos));
+    }
     (void)ObSQLUtils::adjust_time_by_ntp_offset(thread_data_.cur_query_start_time_);
 
     pos = pos_orig + len;
@@ -2263,6 +2328,11 @@ OB_DEF_SERIALIZE_SIZE(ObSQLSessionInfo)
       gtt_tablet_info_map_,
       trans_gtt_v2_sequence_,
       min_data_version_of_init_sess_);
+  {
+    int64_t extra_len = 0;
+    (void)const_cast<ObSQLSessionInfo *>(this)->calc_remote_extra_sess_state_serialize_size_(extra_len);
+    len += extra_len;
+  }
   return len;
 }
 

@@ -597,7 +597,7 @@ typedef common::LinkHashNode<SessionInfoKey> SessionInfoHashNode;
 typedef common::LinkHashValue<SessionInfoKey> SessionInfoHashValue;
 // ObBasicSessionInfo存储系统变量及其相关变量，并存储远程执行SQL task时，需要序列化到远端的状态
 // ObPsInfoMgr存储prepared statement相关信息
-// ObSQLSessionInfo存储其他执行时状态信息，远程执行SQL执行计划时，**不需要**序列化到远端
+// ObSQLSessionInfo存储其他执行时状态信息；远程执行时同步 application context 等状态
 class ObSQLSessionInfo: public common::ObVersionProvider, public ObBasicSessionInfo, public SessionInfoHashValue
 {
   // master version is 3, 42x version is 2.
@@ -1916,6 +1916,10 @@ private:
   void destroy_contexts_map(ObContextsMap &map, common::ObIAllocator &alloc);
   inline int init_mem_context(uint64_t tenant_id);
   inline int64_t get_truncated_sql_len(const ObString &stmt) override;
+  int serialize_remote_extra_sess_state_(char *buf, int64_t buf_len, int64_t &pos);
+  int deserialize_remote_extra_sess_state_(const char *buf, int64_t data_len, int64_t &pos);
+  int calc_remote_extra_sess_state_serialize_size_(int64_t &len);
+  void recalc_curr_session_context_size_();
 
   static const int64_t MAX_STORED_PLANS_COUNT = 10240;
   static const int64_t MAX_IPADDR_LENGTH = 64;
