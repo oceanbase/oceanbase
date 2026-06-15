@@ -365,6 +365,44 @@ int ObDBMSSchedTableOperator::update_for_zone_not_exist(ObDBMSSchedJobInfo &job_
   return ret;
 }
 
+int ObDBMSSchedTableOperator::update_for_server_fallback(
+    ObDBMSSchedJobInfo &job_info, const common::ObAddr &fallback_addr)
+{
+  int ret = OB_SUCCESS;
+  ObMySQLTransaction trans;
+  ObSqlString sql;
+  int64_t affected_rows = 0;
+  const int64_t now = ObTimeUtility::current_time();
+  bool need_record = true;
+  int64_t tenant_id = job_info.tenant_id_;
+  CK (OB_NOT_NULL(sql_proxy_));
+  CK (OB_LIKELY(tenant_id != OB_INVALID_ID));
+  CK (OB_LIKELY(job_info.job_ != OB_INVALID_ID));
+  OZ (_check_need_record(job_info, need_record));
+
+  if (OB_SUCC(ret) && need_record) {
+    char fb_buf[common::MAX_IP_PORT_LENGTH] = {0};
+    char msg_buf[common::MAX_IP_PORT_LENGTH + 64] = {0};
+    if (fallback_addr.is_valid()) {
+      (void)fallback_addr.ip_port_to_string(fb_buf, static_cast<int32_t>(sizeof(fb_buf)));
+    }
+    int n = snprintf(msg_buf, sizeof(msg_buf),
+                     "specified server unavailable, fallback to %s", fb_buf);
+    ObString errmsg(n > 0 ? n : 0, msg_buf);
+    OZ (_build_job_log_dml(now, job_info, 0, errmsg, sql));
+    OZ (trans.start(sql_proxy_, tenant_id, true));
+    OZ (trans.write(tenant_id, sql.ptr(), affected_rows));
+  }
+  if (trans.is_started()) {
+    int tmp_ret = OB_SUCCESS;
+    if (OB_SUCCESS != (tmp_ret = trans.end(OB_SUCC(ret)))) {
+      LOG_WARN("failed to commit trans", KR(ret), KR(tmp_ret));
+      ret = OB_SUCC(ret) ? tmp_ret : ret;
+    }
+  }
+  return ret;
+}
+
 int ObDBMSSchedTableOperator::update_for_rollback(ObDBMSSchedJobInfo &job_info)
 {
   int ret = OB_SUCCESS;

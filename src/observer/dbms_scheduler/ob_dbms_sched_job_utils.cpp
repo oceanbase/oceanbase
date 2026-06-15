@@ -21,6 +21,7 @@
 #include "observer/dbms_scheduler/ob_dbms_sched_job_rpc_proxy.h"
 #include "storage/mview/ob_mview_sched_job_utils.h"
 #include "observer/dbms_scheduler/ob_dbms_sched_time_utils.h"
+#include "share/ob_unit_table_operator.h"
 
 namespace oceanbase
 {
@@ -182,6 +183,72 @@ int ObDBMSSchedJobUtils::zone_check_impl(int64_t tenant_id, const ObString &zone
     ret = OB_NOT_SUPPORTED;
     LOG_USER_ERROR(OB_NOT_SUPPORTED,
                    "OBE-23428: The job-specified zone does not exist.");
+  }
+  return ret;
+}
+
+bool ObDBMSSchedJobUtils::is_server_addr_form(const ObString &str)
+{
+  // Zone names cannot contain ':' (see ob_zone.cpp / naming rules), so the colon is a
+  // sufficient discriminator. We still rely on ObAddr::parse_from_string at use sites for
+  // full validation.
+  return !str.empty() && (NULL != str.find(':'));
+}
+
+int ObDBMSSchedJobUtils::server_check_impl(int64_t tenant_id, const ObString &server_str)
+{
+  int ret = OB_SUCCESS;
+  ObAddr addr;
+  if (OB_INVALID_ID == tenant_id) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid tenant id", K(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("GCTX.sql_proxy_ is null", KR(ret));
+  } else if (OB_FAIL(addr.parse_from_string(server_str))) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("failed to parse server address", KR(ret), K(server_str));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                   "OBE-23428: The job-specified server address is invalid.");
+  } else if (!addr.is_valid()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("invalid server address", KR(ret), K(server_str));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                   "OBE-23428: The job-specified server address is invalid.");
+  } else {
+    share::ObUnitTableOperator unit_operator;
+    common::ObArray<share::ObUnit> units;
+    bool found = false;
+    if (OB_FAIL(unit_operator.init(*GCTX.sql_proxy_))) {
+      LOG_WARN("failed to init unit operator", KR(ret));
+    } else if (OB_FAIL(unit_operator.get_units_by_tenant(gen_user_tenant_id(tenant_id), units))) {
+      LOG_WARN("failed to get tenant units", KR(ret), K(tenant_id));
+    } else {
+      for (int64_t i = 0; !found && i < units.count(); ++i) {
+        if (units.at(i).server_ == addr) {
+          found = true;
+        }
+      }
+      if (!found) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("specified server not in tenant", KR(ret), K(tenant_id), K(addr));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED,
+                       "OBE-23428: The job-specified server is not in tenant's server list.");
+      }
+    }
+  }
+  return ret;
+}
+
+int ObDBMSSchedJobUtils::instance_target_check_impl(int64_t tenant_id, const ObString &target)
+{
+  int ret = OB_SUCCESS;
+  if (target.empty() || 0 == target.case_compare("RANDOM")) {
+    // empty / RANDOM: accept without validation
+  } else if (is_server_addr_form(target)) {
+    ret = server_check_impl(tenant_id, target);
+  } else {
+    ret = zone_check_impl(tenant_id, target);
   }
   return ret;
 }
@@ -735,10 +802,10 @@ int ObDBMSSchedJobUtils::update_dbms_sched_job_info(common::ObISQLClient &sql_cl
       LOG_WARN("add column failed", KR(ret), K(job_attribute_value.get_string()));
     }
   } else if (0 ==  job_attribute_name.case_compare("instance_id")) {
-    if (0 != job_attribute_value.get_string().compare("RANDOM") && OB_FAIL(zone_check_impl(tenant_id, job_attribute_value.get_string()))) {
-        LOG_WARN("failed to check zone", K(ret), K(job_info), K(job_attribute_value.get_string()));
+    if (OB_FAIL(instance_target_check_impl(tenant_id, job_attribute_value.get_string()))) {
+      LOG_WARN("failed to check instance_id target", K(ret), K(job_info), K(job_attribute_value.get_string()));
     } else if (OB_FAIL(dml.add_column("field1", job_attribute_value.get_string()))) {
-      LOG_WARN("failed to set zone", K(ret), K(job_info), K(job_attribute_value.get_string()));
+      LOG_WARN("failed to set instance_id", K(ret), K(job_info), K(job_attribute_value.get_string()));
     }
   } else if (0 ==  job_attribute_name.case_compare("job_class")) {
     if (0 != job_attribute_value.get_string().case_compare("DEFAULT_JOB_CLASS") && OB_FAIL(job_class_check_impl(tenant_id, job_attribute_value.get_string()))) {

@@ -530,6 +530,16 @@ public:
    */
   static int calc_dbms_sched_repeat_expr(const ObDBMSSchedJobInfo &job_info, int64_t &next_run_time, bool is_first_time = false);
   static int zone_check_impl(int64_t tenant_id, const ObString &zone);
+  // Returns true if the string looks like a server address (ip:port). It only does a
+  // cheap textual check (presence of ':') so that "zone" with letters/digits/dashes only is
+  // never misread as an address. Used to decide whether field1 should be parsed as ObAddr.
+  static bool is_server_addr_form(const ObString &str);
+  // Validate ip:port: address parseable and the server belongs to tenant's unit list.
+  // Does NOT require the server to be active / in_service — runtime fallback handles outages.
+  static int server_check_impl(int64_t tenant_id, const ObString &server_str);
+  // Unified entry replacing zone_check_impl at the SET_ATTRIBUTE / RUN_JOB sites. Dispatches
+  // to server_check_impl or zone_check_impl based on is_server_addr_form().
+  static int instance_target_check_impl(int64_t tenant_id, const ObString &target);
   static int job_class_check_impl(int64_t tenant_id, const ObString &job_class_name);
   static int get_max_failures_value(int64_t tenant_id, const ObString &src_str, int64_t &value);
   static int reserve_user_with_minimun_id(ObIArray<const share::schema::ObUserInfo *> &user_infos); //TO DO 连雨 delete

@@ -340,7 +340,7 @@ int ObDBMSScheduler::run_job(
     if (!job_info.is_running() || force) {
       ObDBMSSchedJobExecutor executor;
       if (!force && !job_info.get_zone().empty() && !(0 == job_info.get_zone().compare("RANDOM"))) {
-        OZ (ObDBMSSchedJobUtils::zone_check_impl(job_info.get_tenant_id(), job_info.get_zone()));
+        OZ (ObDBMSSchedJobUtils::instance_target_check_impl(job_info.get_tenant_id(), job_info.get_zone()));
       }
       OZ (executor.init(ctx.get_sql_proxy(),
           &share::schema::ObMultiVersionSchemaService::get_instance()));

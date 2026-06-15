@@ -410,6 +410,54 @@ int ObDBMSSchedJobMaster::get_execute_addr(ObDBMSSchedJobInfo &job_info, ObAddr 
         LOG_WARN("get execute addr from random failed",
             KR(ret), K(tenant_id), K(execute_addr));
       }
+    } else if (ObDBMSSchedJobUtils::is_server_addr_form(job_info.get_zone())) {
+      // instance_id specified as ip:port — try to dispatch to that exact server. If it is
+      // no longer schedulable (parse fail, dropped from tenant, or not active/in_service),
+      // fall back to the same strategy as the default (empty field1):
+      //   primary zone random → if that fails, full-tenant random.
+      ObAddr target;
+      bool usable = false;
+      if (OB_SUCCESS == target.parse_from_string(job_info.get_zone()) && target.is_valid()) {
+        if (0 == tenant_server_cache_.count()) {
+          int tmp_ret = update_tenant_server_cache();
+          if (OB_SUCCESS != tmp_ret) {
+            LOG_WARN("update tenant server cache failed in server-addr branch",
+                     KR(tmp_ret), K(tenant_id));
+          }
+        }
+        for (int64_t i = 0; !usable && i < tenant_server_cache_.count(); ++i) {
+          if (tenant_server_cache_.at(i) == target) {
+            usable = true;
+          }
+        }
+      }
+      if (usable) {
+        execute_addr = target;
+      } else {
+        LOG_INFO("specified server unavailable, fallback to primary zone then random",
+                 K(tenant_id), K(job_info.get_zone()));
+        ObSEArray<ObZone, DEFAULT_ZONE_SIZE> primary_zone_list;
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(ObPrimaryZoneUtil::get_tenant_primary_zone_array(*tenant_info, primary_zone_list))) {
+          LOG_WARN("failed to get tenant primary zone array in server fallback", KR(tmp_ret));
+        } else if (OB_TMP_FAIL(server_random_pick_from_zone_list(tenant_id, primary_zone_list, execute_addr))) {
+          LOG_WARN("fallback to primary zone failed",
+              KR(tmp_ret), K(tenant_id), K(primary_zone_list));
+        }
+        if (tmp_ret != OB_SUCCESS) {
+          if (OB_FAIL(server_random_pick_from_zone_list(tenant_id, all_zone_list, execute_addr))) {
+            LOG_WARN("fallback to full-tenant random failed",
+                KR(ret), K(tenant_id), K(job_info.get_zone()), K(execute_addr));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          int tmp = table_operator_.update_for_server_fallback(job_info, execute_addr);
+          if (OB_SUCCESS != tmp) {
+            LOG_WARN("write server fallback run_detail failed",
+                     KR(tmp), K(tenant_id), K(execute_addr));
+          }
+        }
+      }
     } else {
       common::ObSEArray<common::ObZone, FILTER_ZONE_SIZE> filter_zone_list;
       for (int64_t i = 0; OB_SUCC(ret) && i < all_zone_list.count(); ++i) {

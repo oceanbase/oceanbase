@@ -62,6 +62,7 @@ public:
 
   int update_for_missed(ObDBMSSchedJobInfo &job_info);
   int update_for_zone_not_exist(ObDBMSSchedJobInfo &job_info);
+  int update_for_server_fallback(ObDBMSSchedJobInfo &job_info, const common::ObAddr &fallback_addr);
   int update_for_enddate(ObDBMSSchedJobInfo &job_info);
   int update_for_rollback(ObDBMSSchedJobInfo &job_info);
   int update_for_timeout(ObDBMSSchedJobInfo &job_info);
