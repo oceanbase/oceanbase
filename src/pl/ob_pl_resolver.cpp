@@ -2510,7 +2510,7 @@ int ObPLResolver::fill_record_type(
     } else if (expr->get_result_type().is_ext() || expr->get_result_type().is_user_defined_sql_type()) {
       const ObUDTTypeInfo *udt_info = NULL;
       const ObUserDefinedType *user_type = NULL;
-      ObArenaAllocator allocator;
+      ObArenaAllocator allocator("FillRecordType", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
       uint64_t udt_id = expr->get_result_type().get_expr_udt_id();
       uint64_t tenant_id = get_tenant_id_by_object_id(udt_id);
       OZ (schema_guard.get_udt_info(tenant_id, udt_id, udt_info));
@@ -2530,7 +2530,7 @@ int ObPLResolver::fill_record_type(
 #define RESOLVE_SELECT_VIEW_STMT \
     ObSelectStmt *select_stmt = NULL;  \
     ObSelectStmt *real_stmt = NULL;    \
-    ObArenaAllocator alloc;            \
+    ObArenaAllocator alloc("BuildRecord", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());            \
     ObStmtFactory stmt_factory(alloc);    \
     ObRawExprFactory expr_factory(alloc);    \
     const ObDatabaseSchema *db_schema = NULL;   \
@@ -2613,7 +2613,7 @@ int ObPLResolver::build_record_type_by_table_schema(ObSchemaGetterGuard &schema_
           uint64_t udt_id = column_schema.get_meta_type().is_geometry() ? ObUDTType::T_OBJ_SDO_GEOMETRY : column_schema.get_sub_data_type();
           const ObUDTTypeInfo *udt_info = NULL;
           const ObUserDefinedType *user_type = NULL;
-          ObArenaAllocator allocator;
+          ObArenaAllocator allocator(ObModIds::OB_PL_TEMP, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
           uint64_t tenant_id = get_tenant_id_by_object_id(udt_id);
           OZ (schema_guard.get_udt_info(tenant_id, udt_id, udt_info));
           CK (OB_NOT_NULL(udt_info));
@@ -8151,7 +8151,7 @@ int ObPLResolver::check_in_param_type_legal(const ObIRoutineParam *param_info,
 
   if (OB_SUCC(ret)) {
     // Step: get real parameter type
-    ObArenaAllocator tmp_alloc;
+    ObArenaAllocator tmp_alloc(ObModIds::OB_PL_TEMP, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     ObPLDataType expected_type, actually_type;
     pl::ObPLEnumSetCtx enum_set_ctx(tmp_alloc);
     bool is_anonymous_array_type = false;
@@ -8481,7 +8481,7 @@ int ObPLResolver::resolve_cparams(ObIArray<ObRawExpr*> &exprs,
           OZ (resolve_inout_param(params.at(i), param_mode, out_idx), K(i), K(params), K(exprs));
           if (OB_SUCC(ret) && is_question_mark_value(params.at(i), &(current_block_->get_namespace()))) {
             ObPLDataType data_type;
-            ObArenaAllocator tmp_alloc;
+            ObArenaAllocator tmp_alloc(ObModIds::OB_PL_TEMP, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
             pl::ObPLEnumSetCtx enum_set_ctx(tmp_alloc);
             if (param_info->is_schema_routine_param()) {
               const ObRoutineParam* iparam = static_cast<const ObRoutineParam*>(param_info);
@@ -8800,7 +8800,7 @@ int ObPLResolver::resolve_cursor_def(const ObString &cursor_name,
       cursor_type.set_user_type_id(record_type->get_type(), record_type->get_user_type_id());
       cursor_type.set_type_from(record_type->get_type_from());
     } else {
-      ObArenaAllocator allocator;
+      ObArenaAllocator allocator(ObModIds::OB_PL_TEMP, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
       has_return_type = true;
       const ObUserDefinedType *cursor_user_type = NULL;
       if (OB_FAIL(current_block_->get_namespace().get_user_type(cursor_type.get_user_type_id(),
@@ -9256,7 +9256,7 @@ int ObPLResolver::resolve_declare_ref_cursor(
     }
 
     if (OB_SUCC(ret)) {
-      ObArenaAllocator allocator;
+      ObArenaAllocator allocator(ObModIds::OB_PL_TEMP, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
       const ObUserDefinedType *cursor_type = NULL;
       const ObUserDefinedType *return_type = NULL;
       int64_t index = OB_INVALID_INDEX;
@@ -9527,7 +9527,7 @@ int ObPLResolver::resolve_open_for(
       LOG_WARN("for clause is NULL", K(parse_tree->num_child_), K(ret));
     } else {
       if (T_SQL_STMT == for_node->type_) {
-        ObArenaAllocator allocator;
+        ObArenaAllocator allocator(ObModIds::OB_PL_TEMP, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
         ObPLInto dummy_into(allocator);
         if (OB_FAIL(resolve_static_sql(for_node, stmt->get_static_sql(), dummy_into, true/*is cursor*/, func))) {
           LOG_WARN("failed to resolve static sql",  K(ret));
@@ -10917,7 +10917,7 @@ int ObPLResolver::check_composite_compatible(const ObPLINS &ns,
   int ret = OB_SUCCESS;
   const ObUserDefinedType *actual_param_type = nullptr;
   const ObUserDefinedType *formal_param_type = nullptr;
-  ObArenaAllocator allocator;
+  ObArenaAllocator allocator(ObModIds::OB_PL_TEMP, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   is_compatible = false;
   // NOTICE: do not call this function when left_type_id equal to right_type_id
   CK (actual_param_type_id != formal_param_type_id);
@@ -14726,7 +14726,7 @@ int ObPLResolver::check_package_accessible(
   AccessorItem &caller, const ObString &package_body)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator;
+  ObArenaAllocator allocator(ObModIds::OB_PL_TEMP, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObSEArray<AccessorItem, 4> accessors;
   OZ (resolve_package_accessible_by(package_body, allocator, accessors));
   OZ (check_common_accessible(caller, accessors));
@@ -14737,7 +14737,7 @@ int ObPLResolver::check_routine_accessible(
   AccessorItem &caller, const ObString &routine_body)
 {
   int ret = OB_SUCCESS;
-  ObArenaAllocator allocator;
+  ObArenaAllocator allocator(ObModIds::OB_PL_TEMP, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   ObSEArray<AccessorItem, 4> accessors;
   OZ (resolve_routine_accessible_by(routine_body, allocator, accessors));
   OZ (check_common_accessible(caller, accessors));
@@ -18851,7 +18851,7 @@ int ObPLResolver::check_params_legal_in_body_routine(ObPLFunctionAST &routine_as
     const common::ObIArray<ObPLRoutineParam *> &parent_params = parent_routine_info->get_params();
     const common::ObIArray<ObPLRoutineParam *> &body_params = body_routine_info->get_params();
     CK (OB_LIKELY(parent_params.count() == body_params.count()));
-    ObArenaAllocator allocator;
+    ObArenaAllocator allocator(ObModIds::OB_PL_TEMP, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
     SMART_VAR(ObPLFunctionAST, parent_ast, allocator) {
       for (int64_t i = 0; OB_SUCC(ret) && i < parent_params.count(); ++i) {
         ObPLRoutineParam* parent_param = parent_params.at(i);
@@ -20363,7 +20363,7 @@ int ObPLResolver::try_sql_transpiler(ObObjAccessIdx &access_idx,
   } else if (0 == sql_transpiler.get_int()) {
     // SQL Transpiler is OFF, do nothing
   } else {
-    ObArenaAllocator alloc;
+    ObArenaAllocator alloc(ObModIds::OB_PL_TEMP, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
 
     // nested routines are not eligible for sql transpiler, so routine_info must be of ObRoutineInfo type
     const ObRoutineInfo &routine_info = *static_cast<const ObRoutineInfo *>(access_idx.routine_info_);

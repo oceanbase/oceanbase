@@ -2479,7 +2479,7 @@ int ObRecordType::deserialize(ObSchemaGetterGuard &schema_guard,
         if (!type->is_obj_type()) {
           const ObUserDefinedType *user_type = NULL;
           ObPLUDTNS ns(schema_guard);
-          ObArenaAllocator local_allocator;
+          ObArenaAllocator local_allocator("DeserRecordType", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
           int64_t ptr = 0;
           ObPLComposite *composite = NULL;
           if (OB_FAIL(ns.get_user_type(type->get_user_type_id(), user_type, &local_allocator))) {

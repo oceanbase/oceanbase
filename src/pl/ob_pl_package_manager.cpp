@@ -1169,7 +1169,7 @@ int ObPLPackageManager::load_package_spec(const ObPLResolveCtx &resolve_ctx,
   int ret = OB_SUCCESS;
   DISABLE_SQL_MEMLEAK_GUARD;
   package_spec = NULL;
-  ObArenaAllocator tmp_alloc;
+  ObArenaAllocator tmp_alloc("LoadPkgSpec", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   const uint64_t tenant_id = package_spec_info.get_tenant_id();
   uint64_t db_id = package_spec_info.get_database_id();
   uint64_t package_id = package_spec_info.get_package_id();
@@ -1237,7 +1237,7 @@ int ObPLPackageManager::load_package_body(const ObPLResolveCtx &resolve_ctx,
 {
   int ret = OB_SUCCESS;
   DISABLE_SQL_MEMLEAK_GUARD;
-  ObArenaAllocator tmp_alloc;
+  ObArenaAllocator tmp_alloc("LoadPkgBody", OB_MALLOC_BIG_BLOCK_SIZE, MTL_ID());
   package_body = NULL;
   ObPLCompiler compiler(tmp_alloc,
                         resolve_ctx.session_info_,
@@ -1657,7 +1657,7 @@ int ObPLPackageManager::get_package_item_state(const ObPLResolveCtx &resolve_ctx
         ObPLPackageState(package_id, state_version, package.get_serially_reusable());
       ExecCtxBak exec_ctx_bak;
       sql::ObExecEnv exec_env_bak;
-      ObArenaAllocator tmp_allocator;
+      ObArenaAllocator tmp_allocator("GetPkgItemState", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
       bool need_destruct_package_state = false;
       int64_t new_schema_version = OB_INVALID_VERSION;
       OZ (package_state->init());
@@ -1945,7 +1945,7 @@ int ObPLPackageManager::notify_package_variable_deserialize(ObBasicSessionInfo *
 #ifdef OB_BUILD_ORACLE_PL
 
   ObPackageVarSetName pkg_var_info;
-  ObArenaAllocator allocator;
+  ObArenaAllocator allocator("NotifyPkgVar", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   bool is_new_encode_method = false;
 
   CK (OB_NOT_NULL(session));
