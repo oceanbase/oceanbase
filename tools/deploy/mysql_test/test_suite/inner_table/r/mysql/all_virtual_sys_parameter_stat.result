@@ -463,6 +463,8 @@ _enable_filesystem_catalog
 _enable_filter_reordering
 _enable_grouping_sets_expansion
 _enable_gtt_non_forced_routing
+_enable_hash_distinct_llc_ndv_adaptive
+_enable_hash_distinct_skew_detection
 _enable_hash_gby_limit_pushdown
 _enable_hash_join_hasher
 _enable_hash_join_processor
@@ -790,6 +792,7 @@ _use_distinct_with_expansion
 _use_hash_rollup
 _use_odps_jni_connector
 _vector_pre_filtering_timeout
+_vec_hash_algo
 _wait_interval_after_parallel_ddl
 _with_subquery
 _write_throttle_by_pending_log_size_limit

@@ -246,6 +246,8 @@ int get_cmp_ret(const int ret)
     const char *l_payload = nullptr, *r_payload = nullptr;                                         \
     ObLength l_len = 0, r_len = 0;                                                                 \
     int cmp_ret = 0;                                                                               \
+    const bool end_with_space =                                                                    \
+      VecTCCmpCalc<l_tc, r_tc>::calc_end_with_space(left.obj_meta_, right.obj_meta_);             \
     if (!l_vector->has_null() && !r_vector->has_null()) {                                          \
       if (OB_LIKELY(bound.get_all_rows_active() && bound.is_full_size()                            \
                     && eval_flags.accumulate_bit_cnt(bound.batch_size()) == 0)) {                  \
@@ -255,9 +257,10 @@ int get_cmp_ret(const int ret)
           } else {                                                                                 \
             l_vector->get_payload(i, l_payload, l_len);                                            \
             r_vector->get_payload(i, r_payload, r_len);                                            \
-            ret = VecTCCmpCalc<l_tc, r_tc>::cmp(left.obj_meta_, right.obj_meta_,                   \
-                                                (const void *)l_payload, l_len,                    \
-                                                (const void *)r_payload, r_len, cmp_ret);          \
+            ret = VecTCCmpCalc<l_tc, r_tc>::cmp_ws(left.obj_meta_, right.obj_meta_,               \
+                                                   (const void *)l_payload, l_len,                \
+                                                   (const void *)r_payload, r_len, cmp_ret,       \
+                                                   end_with_space);                               \
           }                                                                                        \
           if (OB_FAIL(ret)) {                                                                      \
           } else {                                                                                 \
@@ -270,11 +273,12 @@ int get_cmp_ret(const int ret)
           if (is_nested) {                                                                         \
             ret = ObNestedVectorCmpFunc::cmp(l_vector, r_vector, i, expr, ctx, cmp_ret);           \
           } else {                                                                                 \
-            l_vector->get_payload(i, l_payload, l_len);                                              \
-            r_vector->get_payload(i, r_payload, r_len);                                              \
-            ret = VecTCCmpCalc<l_tc, r_tc>::cmp(left.obj_meta_, right.obj_meta_,                     \
-                                                (const void *)l_payload, l_len,                      \
-                                                (const void *)r_payload, r_len, cmp_ret);            \
+            l_vector->get_payload(i, l_payload, l_len);                                            \
+            r_vector->get_payload(i, r_payload, r_len);                                            \
+            ret = VecTCCmpCalc<l_tc, r_tc>::cmp_ws(left.obj_meta_, right.obj_meta_,               \
+                                                   (const void *)l_payload, l_len,                \
+                                                   (const void *)r_payload, r_len, cmp_ret,       \
+                                                   end_with_space);                               \
           }                                                                                        \
           if (OB_FAIL(ret)) {                                                                      \
           } else {                                                                                 \
@@ -293,9 +297,10 @@ int get_cmp_ret(const int ret)
           } else {                                                                                 \
             l_vector->get_payload(i, l_payload, l_len);                                            \
             r_vector->get_payload(i, r_payload, r_len);                                            \
-            ret = VecTCCmpCalc<l_tc, r_tc>::cmp(left.obj_meta_, right.obj_meta_,                   \
-                                                (const void *)l_payload, l_len,                    \
-                                                (const void *)r_payload, r_len, cmp_ret);          \
+            ret = VecTCCmpCalc<l_tc, r_tc>::cmp_ws(left.obj_meta_, right.obj_meta_,               \
+                                                   (const void *)l_payload, l_len,                \
+                                                   (const void *)r_payload, r_len, cmp_ret,       \
+                                                   end_with_space);                               \
           }                                                                                        \
           if (OB_FAIL(ret)) {                                                                      \
           } else {                                                                                 \

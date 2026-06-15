@@ -593,7 +593,7 @@ int ObRFBloomFilterMsg::might_contain(const ObExpr &expr,
           LOG_WARN("failed to eval_vector", K(ret));
         } else {
           ObIVector *arg_vec = expr.args_[i]->get_vector(ctx);
-          if (OB_FAIL(arg_vec->murmur_hash_v3_for_one_row(*expr.args_[i], hash_val, batch_idx,
+          if (OB_FAIL(arg_vec->hash_for_one_row(*expr.args_[i], hash_val, batch_idx,
                                                           batch_size, hash_val))) {
             LOG_WARN("failed to cal hash");
           }
@@ -867,7 +867,7 @@ int ObRFBloomFilterMsg::do_might_contain_vector(
     } else {
       const bool is_batch_seed = (i > 0);
       ObIVector *arg_vec = e->get_vector(ctx);
-      if (OB_FAIL(arg_vec->murmur_hash_v3(*e, hash_values, skip,
+      if (OB_FAIL(arg_vec->hash(*e, hash_values, skip,
           bound, is_batch_seed ? hash_values : &seed, is_batch_seed))) {
         LOG_WARN("failed to cal hash");
       }
@@ -1000,12 +1000,15 @@ int ObRFBloomFilterMsg::insert_by_row_vector(
         LOG_WARN("failed to eval vector", K(ret));
       } else {
         VectorFormat arg_format = calc_tablet_id_expr->get_format(eval_ctx);
+        // partition-aware bloom filter: probe side (ObGranuleIteratorOp::do_join_filter_partition_pruning)
+        // uses MY_SPEC.hash_func_.hash_func_ which is bound to murmur at codegen time
+        // (set_murmur_hash_func in ob_static_engine_cg.cpp). Build side must match -> force murmur.
         if (VEC_UNIFORM == arg_format) {
           IntegerUniVec *arg_vec =
               static_cast<IntegerUniVec *>(calc_tablet_id_expr->get_vector(eval_ctx));
           if (OB_FAIL(arg_vec->murmur_hash_v3(*calc_tablet_id_expr, batch_hash_values,
                                               *(child_brs->skip_), bound, &seed, false))) {
-            LOG_WARN("failed to cal murmur_hash_v2");
+            LOG_WARN("failed to cal murmur_hash_v3");
           } else if (OB_FAIL(insert_partition_bloom_filter(arg_vec,
                                                            child_brs, batch_hash_values))) {
              LOG_WARN("failed to cal insert_partition_bloom_filter");
@@ -1015,7 +1018,7 @@ int ObRFBloomFilterMsg::insert_by_row_vector(
               static_cast<IntegerUniCVec *>(calc_tablet_id_expr->get_vector(eval_ctx));
           if (OB_FAIL(arg_vec->murmur_hash_v3(*calc_tablet_id_expr, batch_hash_values,
                                               *(child_brs->skip_), bound, &seed, false))) {
-            LOG_WARN("failed to cal murmur_hash_v2");
+            LOG_WARN("failed to cal murmur_hash_v3");
           } else if (OB_FAIL(insert_partition_bloom_filter(arg_vec,
                                                            child_brs, batch_hash_values))) {
              LOG_WARN("failed to cal insert_partition_bloom_filter");
@@ -1025,7 +1028,7 @@ int ObRFBloomFilterMsg::insert_by_row_vector(
               static_cast<IntegerFixedVec *>(calc_tablet_id_expr->get_vector(eval_ctx));
           if (OB_FAIL(arg_vec->murmur_hash_v3(*calc_tablet_id_expr, batch_hash_values,
                                               *(child_brs->skip_), bound, &seed, false))) {
-            LOG_WARN("failed to cal murmur_hash_v2");
+            LOG_WARN("failed to cal murmur_hash_v3");
           } else if (OB_FAIL(insert_partition_bloom_filter(arg_vec,
                                                            child_brs, batch_hash_values))) {
              LOG_WARN("failed to cal insert_partition_bloom_filter");
@@ -1043,7 +1046,7 @@ int ObRFBloomFilterMsg::insert_by_row_vector(
         } else {
           const bool is_batch_seed = (i > 0);
           ObIVector *arg_vec = expr->get_vector(eval_ctx);
-          arg_vec->murmur_hash_v3(*expr, batch_hash_values, *(child_brs->skip_), bound, is_batch_seed ? batch_hash_values : &seed, is_batch_seed);
+          arg_vec->hash(*expr, batch_hash_values, *(child_brs->skip_), bound, is_batch_seed ? batch_hash_values : &seed, is_batch_seed);
         }
       }
       if (OB_FAIL(ret)) {

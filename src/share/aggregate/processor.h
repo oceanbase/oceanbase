@@ -32,7 +32,8 @@ public:
     fast_single_row_aggregates_(allocator_, aggr_infos.count()), extra_rt_info_buf_(nullptr),
     cur_extra_rt_info_idx_(0), add_one_row_fns_(allocator_, aggr_infos.count()),
     cur_batch_group_idx_(0), cur_batch_group_buf_(nullptr),
-    reuse_aggrow_mgr_(allocator_, aggr_infos.count())
+    reuse_aggrow_mgr_(allocator_, aggr_infos.count()),
+    default_selector_(nullptr), default_selector_capacity_(0)
   {
     agg_ctx_.op_monitor_info_ = &monitor_info;
   }
@@ -101,7 +102,8 @@ public:
 
   int collect_empty_set(bool collect_for_third_stage) const;
   int single_row_agg_batch(AggrRowPtr *agg_rows, const int64_t batch_size,
-                           ObEvalCtx &eval_ctx, const ObBitVector &skip);
+                           ObEvalCtx &eval_ctx, const ObBitVector &skip,
+                           const bool all_rows_active);
 
   // TODO: remove aggr_cell_len for add_batch_rows
   // TODO: add eval_param_batch
@@ -264,10 +266,17 @@ public:
                                                    RuntimeContext &agg_ctx, char *extra_array_buf);
   static int setup_rt_info(AggrRowPtr data, RuntimeContext &agg_ctx,
                            ObIAllocator *extra_allocator = nullptr, const int64_t group_id = 0);
+  static int batch_setup_rt_info(AggrRowPtr *rows, const int32_t batch_size,
+                                 RuntimeContext &agg_ctx,
+                                 const ObBitVector &skip,
+                                 const bool all_rows_active,
+                                 ObIAllocator *extra_allocator = nullptr,
+                                 const int64_t group_id = 0);
 
   ObIArray<IAggregate *> &get_aggregates() { return aggregates_; }
 
 private:
+  static int init_aggr_cell_for_col(AggrRowPtr row, RuntimeContext &agg_ctx, const int32_t col_id);
   static int init_aggr_row_extra_info(RuntimeContext &agg_ctx, char *extra_array_buf,
                                       ObIAllocator &extra_allocator, const int64_t group_id = 0);
   int setup_bypass_rt_infos(const int64_t batch_size);
@@ -301,6 +310,9 @@ private:
   int64_t cur_batch_group_idx_;
   char *cur_batch_group_buf_;
   ReuseAggCellMgr reuse_aggrow_mgr_;
+  // Pre-allocated [0,1,...,n-1] for all_rows_active to avoid repeated init
+  uint16_t *default_selector_;
+  int32_t default_selector_capacity_;
   // ObFixedArray<typename T>
 };
 } // end aggregate

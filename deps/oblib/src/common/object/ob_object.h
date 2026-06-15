@@ -2371,6 +2371,14 @@ struct ObXxHash : public ObjHashBase
   }
 };
 
+struct ObCrcHash : public ObjHashBase
+{
+  OB_INLINE static uint64_t hash(const void *data, uint64_t len, uint64_t seed)
+  {
+    return crc_hash_64(data, static_cast<int32_t>(len), seed);
+  }
+};
+
 struct ObMurmurHash3_x86_32 : public ObjHashBase
 {
   OB_INLINE static uint64_t hash(const void *data, uint64_t len, uint64_t seed)

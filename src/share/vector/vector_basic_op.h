@@ -13,6 +13,7 @@
 #include "lib/json_type/ob_json_bin.h"
 #include "common/object/ob_obj_compare.h"
 #include "share/vector/type_traits.h"
+#include <cstring>
 
 namespace oceanbase
 {
@@ -474,6 +475,83 @@ struct VecTCHashCalc<VEC_TC_UDT, HashMethod, hash_v2> {
 
 //***************** VecTCHashCalc def end *******************
 
+template<VecValueTypeClass vec_tc, typename HashMethod, bool hash_v2>
+struct VecTCBatchHash
+{
+  template <bool all_row_active, typename VectorType, typename SeedVec, typename HashResIter>
+  OB_INLINE static int batch_hash(HashResIter &hash_values, const ObObjMeta &meta,
+                                  const VectorType &vec, const int64_t start,
+                                  const int64_t end, SeedVec seed_vec,
+                                  const sql::ObBitVector &skip)
+  {
+    int ret = OB_SUCCESS;
+    for (int64_t i = start; OB_SUCC(ret) && i < end; i++) {
+      if (!all_row_active && skip.at(i)) { continue; }
+      ret = VecTCHashCalc<vec_tc, HashMethod, hash_v2>::hash(meta, vec.get_payload(i),
+                                                             vec.get_length(i), seed_vec[i],
+                                                             hash_values[i]);
+    }
+    return ret;
+  }
+};
+
+template<typename HashMethod, bool hash_v2>
+struct VecTCBatchHash<VEC_TC_STRING, HashMethod, hash_v2>
+{
+  template <bool all_row_active, typename VectorType, typename SeedVec, typename HashResIter>
+  OB_INLINE static int batch_hash(HashResIter &hash_values, const ObObjMeta &meta,
+                                  const VectorType &vec, const int64_t start,
+                                  const int64_t end, SeedVec seed_vec,
+                                  const sql::ObBitVector &skip)
+  {
+    int ret = OB_SUCCESS;
+    const bool calc_end_space = meta.is_calc_end_space();
+    const ObCollationType cs_type = meta.get_collation_type();
+    if (hash_v2 && (CS_TYPE_UTF8MB4_BIN == cs_type || CS_TYPE_UTF8MB4_0900_BIN == cs_type)) {
+      bool has_trailing_space = false;
+      if (CS_TYPE_UTF8MB4_BIN == cs_type && !calc_end_space) {
+        for (int64_t i = start; i < end; i++) {
+          if (!all_row_active && skip.at(i)) { continue; }
+          const int32_t len = vec.get_length(i);
+          if (len > 0 && reinterpret_cast<const uchar *>(vec.get_payload(i))[len - 1] == ' ') {
+            has_trailing_space = true;
+            break;
+          }
+        }
+      }
+      if (!has_trailing_space) {
+        for (int64_t i = start; i < end; i++) {
+          if (!all_row_active && skip.at(i)) { continue; }
+          hash_values[i] = HashMethod::hash(vec.get_payload(i), vec.get_length(i), seed_vec[i]);
+        }
+      } else {
+        for (int64_t i = start; i < end; i++) {
+          if (!all_row_active && skip.at(i)) { continue; }
+          const uchar *key = reinterpret_cast<const uchar *>(vec.get_payload(i));
+          const uchar *pos = key;
+          const int32_t len = vec.get_length(i);
+          key = skip_trailing_space(&ob_charset_utf8mb4_bin, key, len);
+          hash_values[i] = HashMethod::hash(reinterpret_cast<const void *>(pos),
+                                            static_cast<int32_t>(key - pos), seed_vec[i]);
+        }
+      }
+    } else {
+      for (int64_t i = start; i < end; i++) {
+        if (!all_row_active && skip.at(i)) { continue; }
+        hash_values[i] = ObCharset::hash(cs_type, static_cast<const char *>(vec.get_payload(i)),
+                                         vec.get_length(i), seed_vec[i], calc_end_space,
+                                         HashMethod::is_varchar_hash ? HashMethod::hash : NULL);
+      }
+    }
+    return ret;
+  }
+};
+
+template <typename HashMethod, bool hash_v2>
+struct VecTCBatchHash<VEC_TC_RAW, HashMethod, hash_v2>
+  : public VecTCBatchHash<VEC_TC_STRING, HashMethod, hash_v2>
+{};
+
 
 //***************** VecTCCmpCalc begin *******************
 #define CMP_ARG_LIST const ObObjMeta &l_meta,               \
@@ -482,8 +560,14 @@ struct VecTCHashCalc<VEC_TC_UDT, HashMethod, hash_v2> {
                      const void *r_v, const ObLength r_len, \
                      int &cmp_ret                           \
 
+// Base mixin providing default no-op calc_end_with_space and cmp_ws for all CmpCalc specializations.
+// Specializations that care about end_space (e.g. VEC_TC_STRING) override both methods.
+struct VecCmpCalcBase {
+  OB_INLINE static bool calc_end_with_space(const ObObjMeta &, const ObObjMeta &) { return false; }
+};
+
 template<VecValueTypeClass l_tc, VecValueTypeClass r_tc>
-struct VecTCCmpCalc {
+struct VecTCCmpCalc : public VecCmpCalcBase {
   static const constexpr bool defined_ = false;
   OB_INLINE static int cmp(CMP_ARG_LIST)
   {
@@ -491,10 +575,14 @@ struct VecTCCmpCalc {
     OB_ASSERT_MSG(false, "not implemented cmp func");
     return ret;
   }
+  OB_INLINE static int cmp_ws(CMP_ARG_LIST, bool /*end_with_space*/)
+  {
+    return cmp(l_meta, r_meta, l_v, l_len, r_v, r_len, cmp_ret);
+  }
 };
 
 template<VecValueTypeClass l_tc, VecValueTypeClass r_tc>
-struct BasicCmpCalc {
+struct BasicCmpCalc : public VecCmpCalcBase {
   static const constexpr bool defined_ = true;
   OB_INLINE static int cmp(CMP_ARG_LIST) {
     UNUSEDx(l_meta, r_meta);
@@ -504,6 +592,10 @@ struct BasicCmpCalc {
         ? 0
         : (*(reinterpret_cast<const LType*>(l_v)) < *(reinterpret_cast<const RType*>(r_v)) ? -1 : 1);
     return OB_SUCCESS;
+  }
+  OB_INLINE static int cmp_ws(CMP_ARG_LIST, bool /*end_with_space*/)
+  {
+    return cmp(l_meta, r_meta, l_v, l_len, r_v, r_len, cmp_ret);
   }
 };
 
@@ -571,9 +663,11 @@ template<>
 struct VecTCCmpCalc<VEC_TC_DEC_INT512, VEC_TC_DEC_INT512>
   : public BasicCmpCalc<VEC_TC_DEC_INT512, VEC_TC_DEC_INT512> {};
 template<>
-struct VecTCCmpCalc<VEC_TC_TIMESTAMP_TINY, VEC_TC_TIMESTAMP_TINY>
+struct VecTCCmpCalc<VEC_TC_TIMESTAMP_TINY, VEC_TC_TIMESTAMP_TINY> : public VecCmpCalcBase
 {
   static const constexpr bool defined_ = true;
+  OB_INLINE static int cmp_ws(CMP_ARG_LIST, bool /*end_with_space*/)
+  { return cmp(l_meta, r_meta, l_v, l_len, r_v, r_len, cmp_ret); }
   OB_INLINE static int cmp(CMP_ARG_LIST) {
     const ObOTimestampTinyData *l_tiny_data = reinterpret_cast<const ObOTimestampTinyData *>(l_v);
     const ObOTimestampTinyData *r_tiny_data = reinterpret_cast<const ObOTimestampTinyData *>(r_v);
@@ -592,9 +686,11 @@ struct VecTCCmpCalc<VEC_TC_TIMESTAMP_TINY, VEC_TC_TIMESTAMP_TINY>
 };
 
 template<>
-struct VecTCCmpCalc<VEC_TC_TIMESTAMP_TZ, VEC_TC_TIMESTAMP_TZ>
+struct VecTCCmpCalc<VEC_TC_TIMESTAMP_TZ, VEC_TC_TIMESTAMP_TZ> : public VecCmpCalcBase
 {
   static const constexpr bool defined_ = true;
+  OB_INLINE static int cmp_ws(CMP_ARG_LIST, bool /*end_with_space*/)
+  { return cmp(l_meta, r_meta, l_v, l_len, r_v, r_len, cmp_ret); }
   OB_INLINE static int cmp(CMP_ARG_LIST)
   {
     const ObOTimestampData *l_data = reinterpret_cast<const ObOTimestampData *>(l_v);
@@ -605,9 +701,11 @@ struct VecTCCmpCalc<VEC_TC_TIMESTAMP_TZ, VEC_TC_TIMESTAMP_TZ>
 };
 
 template<>
-struct VecTCCmpCalc<VEC_TC_INTERVAL_DS, VEC_TC_INTERVAL_DS>
+struct VecTCCmpCalc<VEC_TC_INTERVAL_DS, VEC_TC_INTERVAL_DS> : public VecCmpCalcBase
 {
   static const constexpr bool defined_ = true;
+  OB_INLINE static int cmp_ws(CMP_ARG_LIST, bool /*end_with_space*/)
+  { return cmp(l_meta, r_meta, l_v, l_len, r_v, r_len, cmp_ret); }
   OB_INLINE static int cmp(CMP_ARG_LIST)
   {
     const ObIntervalDSValue *l_data = reinterpret_cast<const ObIntervalDSValue *>(l_v);
@@ -619,9 +717,11 @@ struct VecTCCmpCalc<VEC_TC_INTERVAL_DS, VEC_TC_INTERVAL_DS>
 
 
 template<>
-struct VecTCCmpCalc<VEC_TC_NUMBER, VEC_TC_NUMBER>
+struct VecTCCmpCalc<VEC_TC_NUMBER, VEC_TC_NUMBER> : public VecCmpCalcBase
 {
   static const constexpr bool defined_ = true;
+  OB_INLINE static int cmp_ws(CMP_ARG_LIST, bool /*end_with_space*/)
+  { return cmp(l_meta, r_meta, l_v, l_len, r_v, r_len, cmp_ret); }
   OB_INLINE static int cmp(CMP_ARG_LIST)
   {
     const number::ObCompactNumber *l_data = reinterpret_cast<const number::ObCompactNumber *>(l_v);
@@ -633,9 +733,11 @@ struct VecTCCmpCalc<VEC_TC_NUMBER, VEC_TC_NUMBER>
 };
 
 template <>
-struct VecTCCmpCalc<VEC_TC_FLOAT, VEC_TC_FLOAT>
+struct VecTCCmpCalc<VEC_TC_FLOAT, VEC_TC_FLOAT> : public VecCmpCalcBase
 {
   static const constexpr bool defined_ = true;
+  OB_INLINE static int cmp_ws(CMP_ARG_LIST, bool /*end_with_space*/)
+  { return cmp(l_meta, r_meta, l_v, l_len, r_v, r_len, cmp_ret); }
   template<typename T>
   // copy from ObDatumTCCmp<ObFloatTC, ObFloatTC>
   OB_INLINE static int real_value_cmp(T l, T r, int &cmp_ret)
@@ -667,9 +769,11 @@ struct VecTCCmpCalc<VEC_TC_FLOAT, VEC_TC_FLOAT>
 };
 
 template<>
-struct VecTCCmpCalc<VEC_TC_DOUBLE, VEC_TC_DOUBLE>
+struct VecTCCmpCalc<VEC_TC_DOUBLE, VEC_TC_DOUBLE> : public VecCmpCalcBase
 {
   static const constexpr bool defined_ = true;
+  OB_INLINE static int cmp_ws(CMP_ARG_LIST, bool /*end_with_space*/)
+  { return cmp(l_meta, r_meta, l_v, l_len, r_v, r_len, cmp_ret); }
   OB_INLINE static int cmp(CMP_ARG_LIST)
   {
     return VecTCCmpCalc<VEC_TC_FLOAT, VEC_TC_FLOAT>::real_value_cmp(
@@ -678,9 +782,11 @@ struct VecTCCmpCalc<VEC_TC_DOUBLE, VEC_TC_DOUBLE>
 };
 
 template<>
-struct VecTCCmpCalc<VEC_TC_FIXED_DOUBLE, VEC_TC_FIXED_DOUBLE>
+struct VecTCCmpCalc<VEC_TC_FIXED_DOUBLE, VEC_TC_FIXED_DOUBLE> : public VecCmpCalcBase
 {
   static const constexpr bool defined_ = true;
+  OB_INLINE static int cmp_ws(CMP_ARG_LIST, bool /*end_with_space*/)
+  { return cmp(l_meta, r_meta, l_v, l_len, r_v, r_len, cmp_ret); }
   // copy from ob_datum_func_func_def.h
   constexpr static double LOG_10[] =
   {
@@ -717,9 +823,11 @@ struct VecTCCmpCalc<VEC_TC_FIXED_DOUBLE, VEC_TC_FIXED_DOUBLE>
 };
 
 template<>
-struct VecTCCmpCalc<VEC_TC_ROWID, VEC_TC_ROWID>
+struct VecTCCmpCalc<VEC_TC_ROWID, VEC_TC_ROWID> : public VecCmpCalcBase
 {
   static const constexpr bool defined_ = true;
+  OB_INLINE static int cmp_ws(CMP_ARG_LIST, bool /*end_with_space*/)
+  { return cmp(l_meta, r_meta, l_v, l_len, r_v, r_len, cmp_ret); }
   OB_INLINE static int cmp(CMP_ARG_LIST)
   {
     const ObURowIDData l_data(l_len, reinterpret_cast<const uint8_t *>(l_v));
@@ -730,9 +838,11 @@ struct VecTCCmpCalc<VEC_TC_ROWID, VEC_TC_ROWID>
 };
 
 template<>
-struct VecTCCmpCalc<VEC_TC_JSON, VEC_TC_JSON>
+struct VecTCCmpCalc<VEC_TC_JSON, VEC_TC_JSON> : public VecCmpCalcBase
 {
   static const constexpr bool defined_ = true;
+  OB_INLINE static int cmp_ws(CMP_ARG_LIST, bool /*end_with_space*/)
+  { return cmp(l_meta, r_meta, l_v, l_len, r_v, r_len, cmp_ret); }
   OB_INLINE static int cmp(CMP_ARG_LIST)
   {
     OB_ASSERT(l_meta.get_collation_type() == r_meta.get_collation_type());
@@ -777,9 +887,11 @@ struct VecTCCmpCalc<VEC_TC_JSON, VEC_TC_JSON>
 };
 
 template<>
-struct VecTCCmpCalc<VEC_TC_GEO, VEC_TC_GEO>
+struct VecTCCmpCalc<VEC_TC_GEO, VEC_TC_GEO> : public VecCmpCalcBase
 {
   static const constexpr bool defined_ = true;
+  OB_INLINE static int cmp_ws(CMP_ARG_LIST, bool /*end_with_space*/)
+  { return cmp(l_meta, r_meta, l_v, l_len, r_v, r_len, cmp_ret); }
   OB_INLINE static int cmp(CMP_ARG_LIST)
   {
     int ret = OB_SUCCESS;
@@ -811,9 +923,11 @@ struct VecTCCmpCalc<VEC_TC_GEO, VEC_TC_GEO>
 };
 
 template<>
-struct VecTCCmpCalc<VEC_TC_COLLECTION, VEC_TC_COLLECTION>
+struct VecTCCmpCalc<VEC_TC_COLLECTION, VEC_TC_COLLECTION> : public VecCmpCalcBase
 {
   static const constexpr bool defined_ = true;
+  OB_INLINE static int cmp_ws(CMP_ARG_LIST, bool /*end_with_space*/)
+  { return cmp(l_meta, r_meta, l_v, l_len, r_v, r_len, cmp_ret); }
   OB_INLINE static int cmp(CMP_ARG_LIST)
   {
     int ret = OB_SUCCESS;
@@ -825,9 +939,11 @@ struct VecTCCmpCalc<VEC_TC_COLLECTION, VEC_TC_COLLECTION>
 };
 
 template<>
-struct VecTCCmpCalc<VEC_TC_EXTEND, VEC_TC_EXTEND>
+struct VecTCCmpCalc<VEC_TC_EXTEND, VEC_TC_EXTEND> : public VecCmpCalcBase
 {
   static const constexpr bool defined_ = true;
+  OB_INLINE static int cmp_ws(CMP_ARG_LIST, bool /*end_with_space*/)
+  { return cmp(l_meta, r_meta, l_v, l_len, r_v, r_len, cmp_ret); }
   OB_INLINE static int cmp(CMP_ARG_LIST)
   {
     int64_t lv = *reinterpret_cast<const int64_t *>(l_v);
@@ -841,9 +957,11 @@ struct VecTCCmpCalc<VEC_TC_EXTEND, VEC_TC_EXTEND>
 };
 
 template<>
-struct VecTCCmpCalc<VEC_TC_UDT, VEC_TC_UDT>
+struct VecTCCmpCalc<VEC_TC_UDT, VEC_TC_UDT> : public VecCmpCalcBase
 {
   static const constexpr bool defined_ = true;
+  OB_INLINE static int cmp_ws(CMP_ARG_LIST, bool /*end_with_space*/)
+  { return cmp(l_meta, r_meta, l_v, l_len, r_v, r_len, cmp_ret); }
   OB_INLINE static int cmp(CMP_ARG_LIST)
   {
     cmp_ret = 0;
@@ -865,9 +983,11 @@ struct VecTCCmpCalc<VEC_TC_UDT, VEC_TC_UDT>
 };
 
 template<>
-struct VecTCCmpCalc<VEC_TC_ROARINGBITMAP, VEC_TC_ROARINGBITMAP>
+struct VecTCCmpCalc<VEC_TC_ROARINGBITMAP, VEC_TC_ROARINGBITMAP> : public VecCmpCalcBase
 {
   static const constexpr bool defined_ = true;
+  OB_INLINE static int cmp_ws(CMP_ARG_LIST, bool /*end_with_space*/)
+  { return cmp(l_meta, r_meta, l_v, l_len, r_v, r_len, cmp_ret); }
   inline static int cmp(CMP_ARG_LIST)
   {
     int ret = OB_SUCCESS;
@@ -878,7 +998,7 @@ struct VecTCCmpCalc<VEC_TC_ROARINGBITMAP, VEC_TC_ROARINGBITMAP>
 
 // null type comparison
 
-struct VecDummyCmpCalc
+struct VecDummyCmpCalc : public VecCmpCalcBase
 {
   static const constexpr bool defined_ = true;
   OB_INLINE static int cmp(CMP_ARG_LIST)
@@ -886,6 +1006,10 @@ struct VecDummyCmpCalc
     UNUSEDx(l_meta, r_meta, l_v, r_v, l_len, r_len);
     cmp_ret = 0;
     return OB_SUCCESS;
+  }
+  OB_INLINE static int cmp_ws(CMP_ARG_LIST, bool /*end_with_space*/)
+  {
+    return cmp(l_meta, r_meta, l_v, l_len, r_v, r_len, cmp_ret);
   }
 };
 
@@ -906,9 +1030,11 @@ struct VecTCCmpCalc<VEC_TC_NULL, VEC_TC_NULL>: public VecDummyCmpCalc {};
 
 // different tc compare
 template<>
-struct VecTCCmpCalc<VEC_TC_INTEGER, VEC_TC_UINTEGER>
+struct VecTCCmpCalc<VEC_TC_INTEGER, VEC_TC_UINTEGER> : public VecCmpCalcBase
 {
   static const constexpr bool defined_ = true;
+  OB_INLINE static int cmp_ws(CMP_ARG_LIST, bool /*end_with_space*/)
+  { return cmp(l_meta, r_meta, l_v, l_len, r_v, r_len, cmp_ret); }
   OB_INLINE static int cmp(CMP_ARG_LIST)
   {
     int64_t lv = *reinterpret_cast<const int64_t *>(l_v);
@@ -919,9 +1045,11 @@ struct VecTCCmpCalc<VEC_TC_INTEGER, VEC_TC_UINTEGER>
 };
 
 template<>
-struct VecTCCmpCalc<VEC_TC_UINTEGER, VEC_TC_INTEGER>
+struct VecTCCmpCalc<VEC_TC_UINTEGER, VEC_TC_INTEGER> : public VecCmpCalcBase
 {
   static const constexpr bool defined_ = true;
+  OB_INLINE static int cmp_ws(CMP_ARG_LIST, bool /*end_with_space*/)
+  { return cmp(l_meta, r_meta, l_v, l_len, r_v, r_len, cmp_ret); }
   OB_INLINE static int cmp(CMP_ARG_LIST)
   {
     int ret = VecTCCmpCalc<VEC_TC_INTEGER, VEC_TC_UINTEGER>::cmp(r_meta, l_meta, r_v, r_len, l_v,
@@ -954,7 +1082,7 @@ struct VecTCCmpCalc<VEC_TC_UINTEGER, VEC_TC_ENUM_SET>
 {};
 
 template<VecValueTypeClass r_tc>
-struct VecTCCmpCalc<VEC_TC_EXTEND, r_tc>
+struct VecTCCmpCalc<VEC_TC_EXTEND, r_tc> : public VecCmpCalcBase
 {
   static const constexpr bool defined_ = true;
   OB_INLINE static int cmp(CMP_ARG_LIST)
@@ -962,16 +1090,24 @@ struct VecTCCmpCalc<VEC_TC_EXTEND, r_tc>
     cmp_ret = (ObObj::MIN_OBJECT_VALUE == *reinterpret_cast<const int64_t *>(l_v)) ? -1 : 1;
     return OB_SUCCESS;
   }
+  OB_INLINE static int cmp_ws(CMP_ARG_LIST, bool /*end_with_space*/)
+  {
+    return cmp(l_meta, r_meta, l_v, l_len, r_v, r_len, cmp_ret);
+  }
 };
 
 template<VecValueTypeClass l_tc>
-struct VecTCCmpCalc<l_tc, VEC_TC_EXTEND>
+struct VecTCCmpCalc<l_tc, VEC_TC_EXTEND> : public VecCmpCalcBase
 {
   static const constexpr bool defined_ = true;
   OB_INLINE static int cmp(CMP_ARG_LIST)
   {
     cmp_ret = (ObObj::MIN_OBJECT_VALUE == *reinterpret_cast<const int64_t *>(r_v)) ? -1 : 1;
     return OB_SUCCESS;
+  }
+  OB_INLINE static int cmp_ws(CMP_ARG_LIST, bool /*end_with_space*/)
+  {
+    return cmp(l_meta, r_meta, l_v, l_len, r_v, r_len, cmp_ret);
   }
 };
 
@@ -980,12 +1116,16 @@ template<>
 struct VecTCCmpCalc<VEC_TC_STRING, VEC_TC_STRING>
 {
   static const constexpr bool defined_ = true;
+  OB_INLINE static bool calc_end_with_space(const ObObjMeta &l_meta, const ObObjMeta &r_meta)
+  {
+    return is_calc_with_end_space(l_meta.get_type(), r_meta.get_type(), lib::is_oracle_mode(),
+                                  l_meta.get_collation_type(), r_meta.get_collation_type());
+  }
   OB_INLINE static int cmp(CMP_ARG_LIST)
   {
     OB_ASSERT(l_meta.get_collation_type() == r_meta.get_collation_type());
     bool end_with_space =
-      is_calc_with_end_space(l_meta.get_type(), r_meta.get_type(), lib::is_oracle_mode(),
-                            l_meta.get_collation_type(), r_meta.get_collation_type());
+      calc_end_with_space(l_meta, r_meta);
     if (end_with_space
         && (l_meta.get_collation_type() == CS_TYPE_UTF8MB4_BIN
             || l_meta.get_collation_type() == CS_TYPE_UTF8MB4_0900_BIN)) {
@@ -1003,6 +1143,25 @@ struct VecTCCmpCalc<VEC_TC_STRING, VEC_TC_STRING>
     }
     return OB_SUCCESS;
   }
+  OB_INLINE static int cmp_ws(CMP_ARG_LIST, bool end_with_space)
+  {
+    OB_ASSERT(l_meta.get_collation_type() == r_meta.get_collation_type());
+    if (end_with_space && l_meta.get_collation_type() == CS_TYPE_UTF8MB4_BIN) {
+      // utf8mb4_bin with end-space semantics: both sides are variable-length without
+      // trailing space padding, so a plain binary comparison (memcmp + length) is
+      // equivalent to strcmpsp. This avoids the charset API overhead.
+      const int min_len = std::min(l_len, r_len);
+      const int res = min_len > 0 ? memcmp(l_v, r_v, min_len) : 0;
+      cmp_ret = res != 0 ? (res > 0 ? 1 : -1)
+                         : (l_len < r_len ? -1 : (l_len > r_len ? 1 : 0));
+    } else {
+      cmp_ret =
+        ObCharset::strcmpsp(l_meta.get_collation_type(), reinterpret_cast<const char *>(l_v), l_len,
+                            reinterpret_cast<const char *>(r_v), r_len, end_with_space);
+      cmp_ret = (cmp_ret > 0 ? 1 : (cmp_ret < 0 ? -1 : 0));
+    }
+    return OB_SUCCESS;
+  }
 };
 
 template<>
@@ -1012,13 +1171,18 @@ template<>
 struct VecTCCmpCalc<VEC_TC_LOB, VEC_TC_LOB>
 {
   static const constexpr bool defined_ = true;
+  OB_INLINE static bool calc_end_with_space(const ObObjMeta &l_meta, const ObObjMeta &r_meta)
+  {
+    return is_calc_with_end_space(l_meta.get_type(), r_meta.get_type(), lib::is_oracle_mode(),
+                                  l_meta.get_collation_type(), r_meta.get_collation_type());
+  }
+  OB_INLINE static int cmp_ws(CMP_ARG_LIST, bool /*end_with_space*/)
+  { return cmp(l_meta, r_meta, l_v, l_len, r_v, r_len, cmp_ret); }
   OB_INLINE static int cmp(CMP_ARG_LIST)
   {
     OB_ASSERT(l_meta.get_collation_type() == r_meta.get_collation_type());
     int ret = OB_SUCCESS;
-    bool end_with_space =
-      is_calc_with_end_space(l_meta.get_type(), r_meta.get_type(), lib::is_oracle_mode(),
-                             l_meta.get_collation_type(), r_meta.get_collation_type());
+    bool end_with_space = calc_end_with_space(l_meta, r_meta);
     bool has_lob_header = (l_meta.has_lob_header() || r_meta.has_lob_header());
 
     if (has_lob_header) {
@@ -1069,14 +1233,19 @@ template<>
 struct VecTCCmpCalc<VEC_TC_STRING, VEC_TC_LOB>
 {
   static const constexpr bool defined_ = true;
+  OB_INLINE static bool calc_end_with_space(const ObObjMeta &l_meta, const ObObjMeta &r_meta)
+  {
+    return is_calc_with_end_space(l_meta.get_type(), r_meta.get_type(), lib::is_oracle_mode(),
+                                  l_meta.get_collation_type(), r_meta.get_collation_type());
+  }
+  OB_INLINE static int cmp_ws(CMP_ARG_LIST, bool /*end_with_space*/)
+  { return cmp(l_meta, r_meta, l_v, l_len, r_v, r_len, cmp_ret); }
   OB_INLINE static int cmp(CMP_ARG_LIST)
   {
     OB_ASSERT(l_meta.get_collation_type() == r_meta.get_collation_type());
     int ret = OB_SUCCESS;
     ObString r_data;
-    bool end_with_space =
-      is_calc_with_end_space(l_meta.get_type(), r_meta.get_type(), lib::is_oracle_mode(),
-                             l_meta.get_collation_type(), r_meta.get_collation_type());
+    bool end_with_space = calc_end_with_space(l_meta, r_meta);
     bool has_lob_header = (l_meta.has_lob_header() || r_meta.has_lob_header());
     if (has_lob_header) {
       common::ObArenaAllocator allocator(ObModIds::OB_LOB_READER, OB_MALLOC_NORMAL_BLOCK_SIZE,
@@ -1106,6 +1275,10 @@ template<>
 struct VecTCCmpCalc<VEC_TC_LOB, VEC_TC_STRING>
 {
   static const constexpr bool defined_ = true;
+  OB_INLINE static bool calc_end_with_space(const ObObjMeta &l_meta, const ObObjMeta &r_meta)
+  {
+    return VecTCCmpCalc<VEC_TC_STRING, VEC_TC_LOB>::calc_end_with_space(r_meta, l_meta);
+  }
   OB_INLINE static int cmp(CMP_ARG_LIST)
   {
     OB_ASSERT(l_meta.get_collation_type() == r_meta.get_collation_type());
@@ -1114,6 +1287,8 @@ struct VecTCCmpCalc<VEC_TC_LOB, VEC_TC_STRING>
     cmp_ret = -cmp_ret;
     return ret;
   }
+  OB_INLINE static int cmp_ws(CMP_ARG_LIST, bool /*end_with_space*/)
+  { return cmp(l_meta, r_meta, l_v, l_len, r_v, r_len, cmp_ret); }
 };
 
 #undef HASH_ARG_LIST
@@ -1138,6 +1313,17 @@ struct VecTCCmpCalc<VEC_TC_LOB, VEC_TC_STRING>
                          uint64_t &res)
   {
     return VecTCHashCalc<vec_tc, HashMethod, hash_v2>::hash(meta, data, len, seed, res);
+  }
+
+  template <typename HashMethod, bool hash_v2, bool all_row_active, typename VectorType,
+            typename SeedVec, typename HashResIter>
+  OB_INLINE static int batch_hash(HashResIter &hash_values, const ObObjMeta &meta,
+                                  const VectorType &vec, const int64_t start,
+                                  const int64_t end, SeedVec seed_vec,
+                                  const sql::ObBitVector &skip)
+  {
+    return VecTCBatchHash<vec_tc, HashMethod, hash_v2>::template batch_hash<all_row_active>(
+        hash_values, meta, vec, start, end, seed_vec, skip);
   }
 
   OB_INLINE static int cmp(const ObObjMeta &meta, const void *l_v,

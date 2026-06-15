@@ -12815,10 +12815,34 @@ def_table_schema(**gen_iterate_virtual_table_def(
   table_name = '__all_virtual_sys_variable',
   keywords = all_def_keywords['__all_sys_variable']))
 
-def_table_schema(**gen_iterate_virtual_table_def(
-  table_id = '12096',
+def_table_schema(
+  owner = 'zhangrenzhong.zrz',
   table_name = '__all_virtual_sys_variable_history',
-  keywords = all_def_keywords['__all_sys_variable_history']))
+  table_id = '12096',
+  table_type = 'VIRTUAL_TABLE',
+  index_using_type = 'USING_BTREE',
+  gm_columns = [],
+  in_tenant_space = True,
+  partition_columns = [],
+  partition_expr = [],
+  rowkey_columns = [
+    ('tenant_id', 'int'),
+    ('zone', 'varchar:MAX_ZONE_LENGTH'),
+    ('name', 'varchar:OB_MAX_CONFIG_NAME_LEN', 'false', ''),
+    ('schema_version', 'int')
+  ],
+  normal_columns = [
+    ('gmt_create', 'timestamp'),
+    ('gmt_modified', 'timestamp'),
+    ('is_deleted', 'int', 'false'),
+    ('data_type', 'int'),
+    ('value', 'varchar:OB_MAX_CONFIG_VALUE_LEN', 'true'),
+    ('info', 'varchar:OB_MAX_CONFIG_INFO_LEN'),
+    ('flags', 'int'),
+    ('min_val', 'varchar:OB_MAX_CONFIG_VALUE_LEN', 'false', ''),
+    ('max_val', 'varchar:OB_MAX_CONFIG_VALUE_LEN', 'false', ''),
+  ],
+)
 
 def_table_schema(**gen_iterate_virtual_table_def(
   table_id = '12097',
@@ -19008,9 +19032,7 @@ def_table_schema(**gen_oracle_mapping_virtual_table_def('15552', all_def_keyword
 # 15554: ALL_VIRTUAL_LOG_TRANSPORT_STAT
 
 def_table_schema(**gen_oracle_mapping_real_virtual_table_def('15555', all_def_keywords['__all_table_opt_stat_invalidate_plan']))
-
-
-# 15556: ALL_VIRTUAL_SYS_VARIABLE_HISTORY
+def_table_schema(**gen_oracle_mapping_virtual_table_def('15556', all_def_keywords['__all_virtual_sys_variable_history']))
 
 # 15557: __all_mview_refresh_pending_task
 
@@ -47562,8 +47584,47 @@ FROM
 # 21742: DBA_OB_AI_BATCH_TASK_HISTORY
 # 21743: CDB_OB_AI_BATCH_TASK_HISTORY
 
-# 21744: DBA_OB_SYS_VARIABLE_HISTORY
-# 21745: CDB_OB_SYS_VARIABLE_HISTORY
+
+def_table_schema(
+  owner           = 'zhangrenzhong.zrz',
+  table_name      = 'DBA_OB_SYS_VARIABLE_HISTORY',
+  table_id        = '21744',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+    NAME,
+    VALUE,
+    GMT_MODIFIED AS MODIFY_TIME
+  FROM oceanbase.__all_virtual_sys_variable_history
+  WHERE tenant_id = effective_tenant_id()
+  ORDER BY NAME, MODIFY_TIME
+  """.replace("\n", " "),
+)
+
+def_table_schema(
+  owner           = 'zhangrenzhong.zrz',
+  table_name      = 'CDB_OB_SYS_VARIABLE_HISTORY',
+  table_id        = '21745',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  view_definition =
+  """
+  SELECT
+    TENANT_ID,
+    NAME,
+    VALUE,
+    GMT_MODIFIED AS MODIFY_TIME
+  FROM oceanbase.__all_virtual_sys_variable_history
+  ORDER BY TENANT_ID, NAME, MODIFY_TIME
+  """.replace("\n", " "),
+)
 
 # 21746: CDB_MVIEW_DEPS
 
@@ -82883,9 +82944,27 @@ FROM
 # 28298: V$OB_LS_LOG_REPLAY_STAT
 # 28299: GV$OB_LS_LOG_TRANSPORT_STAT
 # 28300: V$OB_LS_LOG_TRANSPORT_STAT
-
-# 28301: DBA_OB_SYS_VARIABLE_HISTORY
-
+def_table_schema(
+  owner           = 'zhangrenzhong.zrz',
+  table_name      = 'DBA_OB_SYS_VARIABLE_HISTORY',
+  name_postfix    = '_ORA',
+  database_id     = 'OB_ORA_SYS_DATABASE_ID',
+  table_id        = '28301',
+  table_type      = 'SYSTEM_VIEW',
+  gm_columns      = [],
+  rowkey_columns  = [],
+  normal_columns  = [],
+  in_tenant_space = True,
+  view_definition =
+  """
+  SELECT
+    NAME,
+    VALUE,
+    GMT_MODIFIED AS MODIFY_TIME
+  FROM SYS.ALL_VIRTUAL_SYS_VARIABLE_HISTORY
+  ORDER BY NAME, MODIFY_TIME
+  """.replace("\n", " "),
+)
 # 余留位置（此行之前占位）
 # 本区域占位建议：采用真实视图名进行占位
 ################################################################################

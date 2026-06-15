@@ -673,137 +673,6 @@ int ObPxTransmitOp::set_rollup_hybrid_keys(ObSliceIdxCalc &slice_calc)
   return ret;
 }
 
-void ObPxTransmitOp::fill_batch_ptrs(const int64_t *indexes)
-{
-  for (int64_t i = 0; i < brs_.size_; ++i) {
-    if (brs_.skip_->at(i)) {
-      continue;
-    }
-    if (ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW == indexes[i]) {
-      op_monitor_info_.otherstat_1_value_++;
-      op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::EXCHANGE_DROP_ROW_COUNT;
-    } else {
-      int64_t slice_idx = indexes[i];
-      const int64_t row_size = params_.row_size_array_[i];
-      const int64_t head_pos = params_.heads_[slice_idx];
-      ObTempRowStore::DtlRowBlock *block = params_.blocks_[slice_idx];
-      if (nullptr == block
-          || !params_.channel_unobstructeds_[slice_idx]
-          || row_size > params_.tails_[slice_idx] - head_pos) {
-        params_.fallback_array_[params_.fallback_cnt_++] = i;
-        params_.channel_unobstructeds_[slice_idx] = false;
-      } else {
-        ObCompactRow *ptr = reinterpret_cast<ObCompactRow *> (reinterpret_cast<char *> (block) + head_pos);
-        params_.return_rows_[params_.selector_cnt_] = ptr;
-        params_.heads_[slice_idx] += row_size;
-        const static int64_t MEMSET_SIZE = 128;
-        while (params_.heads_[slice_idx] > params_.init_pos_[slice_idx]) {
-          if (params_.init_pos_[slice_idx] + MEMSET_SIZE < params_.tails_[slice_idx]) {
-            memset(reinterpret_cast<char *> (block) + params_.init_pos_[slice_idx], 0, MEMSET_SIZE);
-            params_.init_pos_[slice_idx] += MEMSET_SIZE;
-          } else {
-            memset(ptr, 0, row_size);
-            params_.init_pos_[slice_idx] = params_.heads_[slice_idx];
-          }
-        }
-        block->cnt_ += 1;
-        params_.selector_array_[params_.selector_cnt_++] = i;
-      }
-    }
-  }
-}
-
-void ObPxTransmitOp::fill_batch_ptrs_fixed(const int64_t *indexes)
-{
-  for (int64_t i = 0; i < brs_.size_; ++i) {
-    if (brs_.skip_->at(i)) {
-      continue;
-    }
-    if (ObSliceIdxCalc::DEFAULT_CHANNEL_IDX_TO_DROP_ROW == indexes[i]) {
-      op_monitor_info_.otherstat_1_value_++;
-      op_monitor_info_.otherstat_1_id_ = ObSqlMonitorStatIds::EXCHANGE_DROP_ROW_COUNT;
-    } else {
-      int64_t slice_idx = indexes[i];
-      char *header = params_.fixed_payload_headers_[slice_idx];
-      if (nullptr == header
-          || params_.row_cnts_[slice_idx] >= params_.row_limit_) {
-        params_.fallback_array_[params_.fallback_cnt_++] = i;
-      } else {
-        params_.fixed_rows_[params_.selector_cnt_] = header;
-        params_.row_idx_[params_.selector_cnt_] = params_.row_cnts_[slice_idx];
-        params_.row_cnts_[slice_idx] += 1;
-        params_.selector_array_[params_.selector_cnt_++] = i;
-      }
-    }
-  }
-  const ObPxTransmitSpec &spec = static_cast<const ObPxTransmitSpec &>(get_spec());
-  const ObIArray<ObExpr *> &trans_exprs = spec.real_trans_exprs_.count() > 0 ? spec.real_trans_exprs_ : spec.output_;
-  for (int64_t col_idx = 0; col_idx < trans_exprs.count(); ++col_idx) {
-    int64_t fixed_len = params_.column_lens_[col_idx];
-    switch (params_.vectors_.at(col_idx)->get_format()) {
-      case VEC_FIXED : {
-        const char *payload = (static_cast<ObFixedLengthBase *> (params_.vectors_.at(col_idx)))->get_data();
-        ObBitVector *nulls = (static_cast<ObFixedLengthBase *> (params_.vectors_.at(col_idx)))->get_nulls();
-        if (!params_.vectors_.at(col_idx)->has_null()) {
-          if (8 == fixed_len) {
-            for (int64_t i = 0; i < params_.selector_cnt_; ++i) {
-              memcpy(params_.fixed_rows_[i] + params_.column_offsets_[col_idx] + params_.row_idx_[i] * 8,
-                    payload + fixed_len * params_.selector_array_[i], 8);
-            }
-          } else {
-            for (int64_t i = 0; i < params_.selector_cnt_; ++i) {
-              memcpy(params_.fixed_rows_[i] + params_.column_offsets_[col_idx] + params_.row_idx_[i] * fixed_len,
-                    payload + fixed_len * params_.selector_array_[i], fixed_len);
-            }
-          }
-        } else {
-          ObBitVector *nulls = (static_cast<ObFixedLengthBase *> (params_.vectors_.at(col_idx)))->get_nulls();
-          for (int64_t i = 0; i < params_.selector_cnt_; ++i) {
-            if (nulls->at(params_.selector_array_[i])) {
-              ObDtlBasicChannel *channel =
-                        static_cast<ObDtlBasicChannel *> (task_channels_.at(indexes[params_.selector_array_[i]]));
-              ObDtlVectorFixedMsgWriter &row_writer = channel->get_vector_fixed_msg_writer();
-              row_writer.set_null(col_idx, params_.row_idx_[i]);
-            } else {
-              memcpy(params_.fixed_rows_[i] + params_.column_offsets_[col_idx] + params_.row_idx_[i] * fixed_len,
-                  payload + fixed_len * params_.selector_array_[i], fixed_len);
-            }
-          }
-        }
-        break;
-      }
-      case VEC_UNIFORM : {
-        ObDatum *datums = (static_cast<ObUniformBase *> (params_.vectors_.at(col_idx)))->get_datums();
-        for (int64_t i = 0; i < params_.selector_cnt_; ++i) {
-          if (datums[params_.selector_array_[i]].is_null()) {
-            ObDtlBasicChannel *channel =
-                      static_cast<ObDtlBasicChannel *> (task_channels_.at(indexes[params_.selector_array_[i]]));
-            ObDtlVectorFixedMsgWriter &row_writer = channel->get_vector_fixed_msg_writer();
-            row_writer.set_null(col_idx, params_.row_idx_[i]);
-          } else {
-            memcpy(params_.fixed_rows_[i] + params_.column_offsets_[col_idx] + params_.row_idx_[i] * fixed_len,
-                datums[params_.selector_array_[i]].ptr_, fixed_len);
-          }
-        }
-        break;
-      }
-      default : {
-        for (int64_t i = 0; i < params_.selector_cnt_; ++i) {
-          if (params_.vectors_.at(col_idx)->is_null(params_.selector_array_[i])) {
-            ObDtlBasicChannel *channel =
-                      static_cast<ObDtlBasicChannel *> (task_channels_.at(indexes[params_.selector_array_[i]]));
-            ObDtlVectorFixedMsgWriter &row_writer = channel->get_vector_fixed_msg_writer();
-            row_writer.set_null(col_idx, params_.row_idx_[i]);
-          } else {
-            memcpy(params_.fixed_rows_[i] + params_.column_offsets_[col_idx] + params_.row_idx_[i] * params_.column_lens_[col_idx],
-                  params_.vectors_.at(col_idx)->get_payload(params_.selector_array_[i]), params_.column_lens_[col_idx]);
-          }
-        }
-      }
-    }
-  }
-}
-
 void ObPxTransmitOp::fill_batch_ptrs_fixed(ObSliceIdxCalc::SliceIdxFlattenArray &slice_idx_flatten_array,
                              ObSliceIdxCalc::EndIdxArray &end_idx_array)
 {
@@ -846,17 +715,7 @@ void ObPxTransmitOp::fill_batch_ptrs_fixed(ObSliceIdxCalc::SliceIdxFlattenArray 
         const char *payload = (static_cast<ObFixedLengthBase *> (params_.vectors_.at(col_idx)))->get_data();
         ObBitVector *nulls = (static_cast<ObFixedLengthBase *> (params_.vectors_.at(col_idx)))->get_nulls();
         if (!params_.vectors_.at(col_idx)->has_null()) {
-          if (8 == fixed_len) {
-            for (int64_t i = 0; i < params_.selector_cnt_; ++i) {
-              memcpy(params_.fixed_rows_[i] + params_.column_offsets_[col_idx] + params_.row_idx_[i] * 8,
-                    payload + fixed_len * params_.selector_array_[i], 8);
-            }
-          } else {
-            for (int64_t i = 0; i < params_.selector_cnt_; ++i) {
-              memcpy(params_.fixed_rows_[i] + params_.column_offsets_[col_idx] + params_.row_idx_[i] * fixed_len,
-                    payload + fixed_len * params_.selector_array_[i], fixed_len);
-            }
-          }
+          dispatch_copy_fixed_column_lenN(payload, col_idx, fixed_len);
         } else {
           ObBitVector *nulls = (static_cast<ObFixedLengthBase *> (params_.vectors_.at(col_idx)))->get_nulls();
           for (int64_t i = 0; i < params_.selector_cnt_; ++i) {
@@ -931,17 +790,7 @@ void ObPxTransmitOp::fill_broad_cast_ptrs_fixed(int64_t slice_idx)
         const char *payload = (static_cast<ObFixedLengthBase *> (params_.vectors_.at(col_idx)))->get_data();
         ObBitVector *nulls = (static_cast<ObFixedLengthBase *> (params_.vectors_.at(col_idx)))->get_nulls();
         if (!params_.vectors_.at(col_idx)->has_null()) {
-          if (8 == fixed_len) {
-            for (int64_t i = 0; i < params_.selector_cnt_; ++i) {
-              memcpy(params_.fixed_rows_[i] + params_.column_offsets_[col_idx] + params_.row_idx_[i] * 8,
-                    payload + fixed_len * params_.selector_array_[i], 8);
-            }
-          } else {
-            for (int64_t i = 0; i < params_.selector_cnt_; ++i) {
-              memcpy(params_.fixed_rows_[i] + params_.column_offsets_[col_idx] + params_.row_idx_[i] * fixed_len,
-                    payload + fixed_len * params_.selector_array_[i], fixed_len);
-            }
-          }
+          dispatch_copy_fixed_column_lenN(payload, col_idx, fixed_len);
         } else {
           ObBitVector *nulls = (static_cast<ObFixedLengthBase *> (params_.vectors_.at(col_idx)))->get_nulls();
           for (int64_t i = 0; i < params_.selector_cnt_; ++i) {
@@ -1950,6 +1799,21 @@ int ObPxTransmitOp::update_tabletid_batch(const ObExpr *expr,ObRepartSliceIdxCal
     }
   }
   return ret;
+}
+
+void ObPxTransmitOp::dispatch_copy_fixed_column_lenN(const char *payload, int64_t col_idx, int64_t fixed_len)
+{
+  if (4 == fixed_len) {
+    copy_fixed_column_lenN<4>(payload, col_idx);
+  } else if (8 == fixed_len) {
+    copy_fixed_column_lenN<8>(payload, col_idx);
+  } else if (16 == fixed_len) {
+    copy_fixed_column_lenN<16>(payload, col_idx);
+  } else if (32 == fixed_len) {
+    copy_fixed_column_lenN<32>(payload, col_idx);
+  } else {
+    copy_fixed_column_lenN(payload, col_idx, fixed_len);
+  }
 }
 
 } // end namespace sql

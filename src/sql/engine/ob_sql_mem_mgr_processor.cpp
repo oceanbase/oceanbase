@@ -243,6 +243,7 @@ int ObSqlMemMgrProcessor::extend_max_memory_size(
       LOG_WARN("failed to get max available memory size", K(ret));
     }
     int64_t times = 0;
+    const int64_t init_cache_size = profile_.get_cache_size();
     while ((need_dump = dump_fun(profile_.get_expect_size())) && OB_SUCC(ret)) {
       int64_t pre_cache_size = profile_.get_cache_size();
       int64_t pre_expect_size = profile_.get_expect_size();
@@ -283,7 +284,28 @@ int ObSqlMemMgrProcessor::extend_max_memory_size(
         break;
       }
     }
-    LOG_TRACE("extend memory size", K(profile_.get_expect_size()), K(profile_.get_cache_size()));
+    const int64_t cur_cache_size = profile_.get_cache_size();
+    const int64_t growth = cur_cache_size - init_cache_size;
+    if (growth > 0) {
+      LOG_TRACE("cache_size status in extend_max_memory_size",
+          K(init_cache_size), K(cur_cache_size), K(growth),
+          K(times), K(profile_.get_expect_size()), K(mem_used), K(need_dump),
+          "op_id", profile_.get_operator_id(),
+          "op_type", profile_.get_operator_type());
+      const int64_t surge_threshold_pct = std::abs(EVENT_CALL(EventTable::EN_SQL_MEM_CACHESIZE_GROWTH_LIMIT));
+      if (OB_SUCC(ret) && surge_threshold_pct > 0 && init_cache_size > 0) {
+        const int64_t growth_pct = growth * 100 / init_cache_size;
+        if (growth_pct > surge_threshold_pct) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("cache_size surge detected in extend_max_memory_size", K(ret),
+              K(init_cache_size), K(cur_cache_size), K(growth), K(growth_pct),
+              K(surge_threshold_pct), K(times),
+              K(profile_.get_expect_size()), K(mem_used), K(need_dump),
+              "op_id", profile_.get_operator_id(),
+              "op_type", profile_.get_operator_type());
+        }
+      }
+    }
   }
   return ret;
 }

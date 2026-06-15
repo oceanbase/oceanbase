@@ -13,6 +13,57 @@
 namespace oceanbase {
 namespace sql {
 
+class ObHashMemSmoothUtil final
+{
+public:
+  static inline double calc_bucket_ratio(const int64_t item_cnt, const int64_t bucket_cnt)
+  {
+    return bucket_cnt > 0 ? static_cast<double>(item_cnt) / bucket_cnt : 0;
+  }
+
+  // Estimate extra hash table memory needed based on current fill ratio.
+  //
+  // Parameters:
+  //   expand_trigger_ratio (R): when item_cnt / bucket_cnt >= R, the hash table
+  //                             triggers an expansion (default 0.5)
+  //   expand_factor        (F): new_bucket_cnt = F * old_bucket_cnt on each
+  //                             expansion (default 2.0, i.e. double the buckets)
+  //
+  // After expansion the fill ratio drops to p = R/F.
+  static inline int64_t calc_extra_hashtable_size(const int64_t item_cnt,
+                                                  const int64_t bucket_cnt,
+                                                  const int64_t hash_mem_used,
+                                                  double expand_trigger_ratio = 0.5,
+                                                  double expand_factor = 2.0)
+  {
+    static constexpr double DEFAULT_EXPAND_TRIGGER_RATIO = 0.5;
+    static constexpr double DEFAULT_EXPAND_FACTOR = 2.0;
+    int64_t extra_hashtable_size = 0;
+    if (OB_UNLIKELY(expand_factor <= 1.0 || expand_trigger_ratio <= 0.0
+                    || expand_trigger_ratio > 1.0)) {
+      SQL_ENG_LOG_RET(ERROR, common::OB_ERR_UNEXPECTED, "invalid expand parameters, fallback to defaults",
+                  "expand_trigger_ratio", expand_trigger_ratio,
+                  "expand_factor", expand_factor);
+      expand_trigger_ratio = DEFAULT_EXPAND_TRIGGER_RATIO;
+      expand_factor = DEFAULT_EXPAND_FACTOR;
+    }
+    const double ratio = calc_bucket_ratio(item_cnt, bucket_cnt);
+    const double R = expand_trigger_ratio;
+    const double F = expand_factor;
+    const double post_expand_ratio = R / F;
+    if (ratio < post_expand_ratio) {
+      extra_hashtable_size = static_cast<int64_t>(F * hash_mem_used * ratio);
+    } else if (ratio <= R) {
+      const double k = F * (F - R) / (R * (F - 1.0));
+      const double b = F * (R - 1.0) / (F - 1.0);
+      extra_hashtable_size = static_cast<int64_t>(hash_mem_used * (k * ratio + b));
+    } else {
+      extra_hashtable_size = static_cast<int64_t>(F * hash_mem_used);
+    }
+    return extra_hashtable_size;
+  }
+};
+
 class ObSqlMemMgrProcessor : public ObSqlMemoryCallback
 {
 public:

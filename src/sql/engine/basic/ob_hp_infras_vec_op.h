@@ -82,6 +82,9 @@ public:
 
   bool is_match(const RowMeta &row_meta) const { return get_extra_info(row_meta).is_match_; }
   void set_is_match(const RowMeta &row_meta, bool is_match) { get_extra_info(row_meta).is_match_ = is_match; }
+  void inc_hit_cnt() { header_.cnt_++; }
+  void init_hit_cnt(uint32_t cnt) { header_.cnt_ = cnt; }
+  uint32_t get_hit_cnt() const { return header_.cnt_; }
 };
 
 template<typename CompactRowItem>
@@ -255,6 +258,15 @@ public:
                               int64_t max_bucket = MAX_BUCKET_NUM) = 0;
   virtual int exists_batch(const common::ObIArray<ObExpr*> &exprs, const ObBatchRows &brs, ObBitVector *skip,
               uint64_t *hash_values_for_batch) = 0;
+  virtual int process_popular_value_batch_distinct(
+      ObBatchRows *result_brs,
+      const common::ObIArray<ObExpr *> &exprs,
+      uint64_t *hash_vals,
+      uint64_t &by_pass_rows,
+      const uint64_t check_valid_threshold,
+      int64_t dop,
+      common::hash::ObHashMap<uint64_t, uint64_t,
+      hash::NoPthreadDefendMode> *popular_map) = 0;
   int init(uint64_t tenant_id, bool enable_sql_dumped, bool unique, bool need_pre_part,
     int64_t ways, int64_t max_batch_size, const common::ObIArray<ObExpr*> &exprs,
     ObSqlMemMgrProcessor *sql_mem_processor, const common::ObCompressorType compressor_type,
@@ -333,7 +345,8 @@ public:
                                                      bool can_insert,
                                                      int64_t &exists,
                                                      bool &full_by_pass,
-                                                     ObBitVector *&output_vec);
+                                                     ObBitVector *&output_vec,
+                                                     common::ObArray<std::pair<uint64_t, int32_t>> *popular_array_temp = nullptr);
   int finish_insert_row();
   int start_round();
   int end_round();
@@ -428,11 +441,14 @@ public:
   }
   int64_t get_total_mem_used()
   {
-    int ret = OB_SUCCESS;
     if (INT64_MAX == est_part_cnt_) {
       est_partition_count();
     }
-    return est_part_cnt_ * BLOCK_SIZE + get_mem_used();
+    return est_part_cnt_ * BLOCK_SIZE
+           + get_mem_used()
+           + ObHashMemSmoothUtil::calc_extra_hashtable_size(get_hash_table_size(),
+                                                            get_bucket_num(),
+                                                            get_hash_table_mem_used());
   }
   void set_hp_infras_group_func(HpGroupAggrFunc total_mem_used_func,
                                 HpGroupAggrFunc slice_cnt_func)
@@ -452,7 +468,8 @@ protected:
                                   uint64_t *hash_values_for_batch,
                                   const int64_t batch_size,
                                   const ObBitVector *skip,
-                                  ObBitVector &my_skip) = 0;
+                                  ObBitVector &my_skip,
+                                  common::ObArray<std::pair<uint64_t, int32_t>> *popular_array_temp = nullptr) = 0;
   virtual int probe_batch(uint64_t *hash_values_for_batch,
                           const int64_t batch_size,
                           const ObBitVector *skip,
@@ -517,7 +534,11 @@ protected:
     avg_mem_bound = avg_mem_bound > MIN_MEM_BOUND ? avg_mem_bound : MIN_MEM_BOUND;
     SQL_ENG_LOG(TRACE, "check need dump", K(period_row_cnt_), K(est_part_cnt_), K(slice_cnt),
       K(avg_mem_bound), K(sql_mem_processor_->get_mem_bound()), K(get_hash_table_mem_used()));
-    return (avg_mem_bound <= est_part_cnt_ * BLOCK_SIZE + get_mem_used() + 2 * get_hash_table_mem_used())
+    const int64_t smooth_extra_hashtable_size =
+        ObHashMemSmoothUtil::calc_extra_hashtable_size(get_hash_table_size(),
+                                                       get_bucket_num(),
+                                                       get_hash_table_mem_used());
+    return (avg_mem_bound <= est_part_cnt_ * BLOCK_SIZE + get_mem_used() + smooth_extra_hashtable_size)
             && (period_row_cnt_ > MIN_PERIOD_ROW_CNT);
   }
 
@@ -640,6 +661,22 @@ public:
   int exists_batch(const common::ObIArray<ObExpr*> &exprs,
                   const ObBatchRows &brs, ObBitVector *skip,
                 uint64_t *hash_values_for_batch) override;
+  int process_popular_value_batch_distinct(
+      ObBatchRows *result_brs,
+      const common::ObIArray<ObExpr *> &exprs,
+      uint64_t *hash_vals,
+      uint64_t &by_pass_rows,
+      const uint64_t check_valid_threshold,
+      int64_t dop,
+      common::hash::ObHashMap<uint64_t, uint64_t,
+      hash::NoPthreadDefendMode> *popular_map) override
+  {
+    StoreRowFunctor sf(preprocess_part_.store_);
+    return hash_table_.process_popular_value_batch_distinct(
+        preprocess_part_.store_.get_row_meta(),
+        exprs, result_brs, hash_vals, by_pass_rows,
+        check_valid_threshold, dop, popular_map, sf);
+  }
   static const int64_t INIT_BKT_SIZE_FOR_ADAPTIVE_DISTINCT = 256;
 private:
   virtual int dump_preprocess_part() override;
@@ -647,7 +684,8 @@ private:
                          uint64_t *hash_values_for_batch,
                          const int64_t batch_size,
                          const ObBitVector *skip,
-                         ObBitVector &my_skip) override;
+                         ObBitVector &my_skip,
+                         common::ObArray<std::pair<uint64_t, int32_t>> *popular_array_temp = nullptr) override;
   int probe_batch(uint64_t *hash_values_for_batch,
                   const int64_t batch_size,
                   const ObBitVector *skip,
@@ -662,14 +700,29 @@ private:
   {
     int ret = common::OB_SUCCESS;
     int64_t num_cnt = hash_table_.get_bucket_num() - 1;
-    const auto *buckets = hash_table_.get_buckets();
-    for (int i = 0; i < batch_size; ++i) {
-      if (OB_NOT_NULL(skip) && skip->at(i)) {
-        continue;
+    const ObGroupByBucketArray<HashBucket> *buckets = hash_table_.get_buckets();
+    if (OB_ISNULL(buckets)) {
+      ret = common::OB_ERR_UNEXPECTED;
+    } else if (buckets->is_contiguous()) {
+      const typename ObGroupByBucketArray<HashBucket>::ContiguousArrayType *arr = buckets->get_contiguous_array();
+      for (int i = 0; i < batch_size; ++i) {
+        if (OB_NOT_NULL(skip) && skip->at(i)) {
+          continue;
+        }
+        int64_t bkt_idx = (hash_values_for_batch[i] & num_cnt);
+        const HashBucket &curr_bkt = arr->at(bkt_idx);
+        __builtin_prefetch(&curr_bkt, 0/* read */, 2 /*high temp locality*/);
       }
-      int64_t bkt_idx = (hash_values_for_batch[i] & num_cnt);
-      const auto &curr_bkt = buckets->at(bkt_idx);
-      __builtin_prefetch(&curr_bkt, 0/* read */, 2 /*high temp locality*/);
+    } else {
+      const typename ObGroupByBucketArray<HashBucket>::SegmentedArrayType *arr = buckets->get_segmented_array();
+      for (int i = 0; i < batch_size; ++i) {
+        if (OB_NOT_NULL(skip) && skip->at(i)) {
+          continue;
+        }
+        int64_t bkt_idx = (hash_values_for_batch[i] & num_cnt);
+        const HashBucket &curr_bkt = arr->at(bkt_idx);
+        __builtin_prefetch(&curr_bkt, 0/* read */, 2 /*high temp locality*/);
+      }
     }
     return ret;
   }
@@ -681,14 +734,29 @@ private:
   {
     int ret = common::OB_SUCCESS;
     int64_t num_cnt = hash_table_.get_bucket_num() - 1;
-    const auto *buckets = hash_table_.get_buckets();
-    for (int i = 0; i < batch_size; ++i) {
-      if (OB_NOT_NULL(skip) && skip->at(i)) {
-        continue;
+    const ObGroupByBucketArray<HashBucket> *buckets = hash_table_.get_buckets();
+    if (OB_ISNULL(buckets)) {
+      ret = common::OB_ERR_UNEXPECTED;
+    } else if (buckets->is_contiguous()) {
+      const typename ObGroupByBucketArray<HashBucket>::ContiguousArrayType *arr = buckets->get_contiguous_array();
+      for (int i = 0; i < batch_size; ++i) {
+        if (OB_NOT_NULL(skip) && skip->at(i)) {
+          continue;
+        }
+        int64_t bkt_idx = (hash_values_for_batch[i] & num_cnt);
+        const HashBucket &curr_bkt = arr->at(bkt_idx);
+        __builtin_prefetch(&curr_bkt, 0/* read */, 2 /*high temp locality*/);
       }
-      int64_t bkt_idx = (hash_values_for_batch[i] & num_cnt);
-      const auto &curr_bkt = buckets->at(bkt_idx);
-      __builtin_prefetch(&curr_bkt, 0/* read */, 2 /*high temp locality*/);
+    } else {
+      const typename ObGroupByBucketArray<HashBucket>::SegmentedArrayType *arr = buckets->get_segmented_array();
+      for (int i = 0; i < batch_size; ++i) {
+        if (OB_NOT_NULL(skip) && skip->at(i)) {
+          continue;
+        }
+        int64_t bkt_idx = (hash_values_for_batch[i] & num_cnt);
+        const HashBucket &curr_bkt = arr->at(bkt_idx);
+        __builtin_prefetch(&curr_bkt, 0/* read */, 2 /*high temp locality*/);
+      }
     }
     return ret;
   }
@@ -814,7 +882,8 @@ public:
                                                      bool can_insert,
                                                      int64_t &exists,
                                                      bool &full_by_pass,
-                                                     ObBitVector *&output_vec);
+                                                     ObBitVector *&output_vec,
+                                                     common::ObArray<std::pair<uint64_t, int32_t>> *popular_array_temp = nullptr);
   int open_hash_table_part();
   int64_t get_hash_bucket_num();
   int64_t get_bucket_num() const;
@@ -830,6 +899,16 @@ public:
   void set_hp_infras_group_func(HpGroupAggrFunc total_mem_used_func,
                                 HpGroupAggrFunc slice_cnt_func);
   int set_need_rewind(bool need_rewind);
+
+  int process_popular_value_batch_distinct(
+      ObBatchRows *result_brs,
+      const common::ObIArray<ObExpr *> &exprs,
+      uint64_t *hash_vals,
+      uint64_t &by_pass_rows,
+      const uint64_t check_valid_threshold,
+      int64_t dop,
+      common::hash::ObHashMap<uint64_t, uint64_t,
+      hash::NoPthreadDefendMode> *popular_map);
 
   int64_t get_actual_mem_used() const;
 private:
@@ -983,7 +1062,8 @@ set_distinct_batch(const common::ObIArray<ObExpr *> &exprs,
                    uint64_t *hash_values_for_batch,
                    const int64_t batch_size,
                    const ObBitVector *skip,
-                   ObBitVector &my_skip)
+                   ObBitVector &my_skip,
+                   common::ObArray<std::pair<uint64_t, int32_t>> *popular_array_temp)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(eval_ctx_)) {
@@ -997,7 +1077,8 @@ set_distinct_batch(const common::ObIArray<ObExpr *> &exprs,
     SQL_ENG_LOG(WARN, "failed to prefetch", K(ret));
   } else if (OB_FAIL(hash_table_.set_distinct_batch(
                preprocess_part_.store_.get_row_meta(), batch_size, skip, my_skip,
-               hash_values_for_batch, StoreRowFunctor(preprocess_part_.store_)))) {
+               hash_values_for_batch, StoreRowFunctor(preprocess_part_.store_),
+               popular_array_temp))) {
     LOG_WARN("failed to set batch", K(ret));
   }
   return ret;

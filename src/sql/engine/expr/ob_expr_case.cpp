@@ -480,12 +480,14 @@ static int check_then_expr_same_type(const ObExpr &expr, ObEvalCtx &ctx,
                                       const bool has_else, const int64_t loop,
                                       bool &then_expr_same_type,
                                       VectorFormat &then_format,
-                                      VecValueTypeClass &then_vec_tc)
+                                      VecValueTypeClass &then_vec_tc,
+                                      bool &else_is_uniform_const)
 {
   int ret = OB_SUCCESS;
   then_expr_same_type = true;
   then_format = VEC_INVALID;
   then_vec_tc = VEC_TC_UNKNOWN;
+  else_is_uniform_const = false;
 
   // Check all then expressions
   for (int64_t expr_idx = 1; OB_SUCC(ret) && then_expr_same_type && expr_idx < loop; expr_idx += 2) {
@@ -506,15 +508,22 @@ static int check_then_expr_same_type(const ObExpr &expr, ObEvalCtx &ctx,
   }
 
   // Check else expression if exists
-  if (OB_SUCC(ret) && then_expr_same_type && has_else) {
-    if (then_format == VEC_INVALID) {
-      then_format = expr.args_[expr.arg_cnt_ - 1]->get_format(ctx);
-      if (then_format == VEC_FIXED) {
-        then_vec_tc = expr.args_[expr.arg_cnt_ - 1]->get_vec_value_tc();
-      }
-    } else {
-      VectorFormat curr_format = expr.args_[expr.arg_cnt_ - 1]->get_format(ctx);
-      if (then_format != curr_format) {
+  if (OB_SUCC(ret) && has_else) {
+    const VectorFormat else_format = expr.args_[expr.arg_cnt_ - 1]->get_format(ctx);
+    if (then_expr_same_type) {
+      if (then_format == VEC_INVALID) {
+        // No then expressions: treat else as the common format
+        then_format = else_format;
+        if (then_format == VEC_FIXED) {
+          then_vec_tc = expr.args_[expr.arg_cnt_ - 1]->get_vec_value_tc();
+        }
+      } else if (else_format == VEC_UNIFORM_CONST &&
+                 (then_format == VEC_FIXED || then_format == VEC_DISCRETE)) {
+        // Special pattern: all then exprs share one format, else is a UNIFORM_CONST literal
+        // (e.g. CASE WHEN ... THEN col ELSE NULL END). Track this separately so the caller
+        // can dispatch a specialised, virtual-call-free path.
+        else_is_uniform_const = true;
+      } else if (then_format != else_format) {
         then_expr_same_type = false;
       } else if (then_format == VEC_FIXED &&
                  then_vec_tc != expr.args_[expr.arg_cnt_ - 1]->get_vec_value_tc()) {
@@ -530,18 +539,79 @@ template<typename ResVec>
 static int dispatch_set_res_vec(const ObExpr &expr, ObEvalCtx &ctx,
                                 const ObBitVector &skip, const bool is_same_type,
                                 const VectorFormat then_format, const VecValueTypeClass vec_tc,
-                                int64_t *match_then_expr_idx, const EvalBound &bound)
+                                int64_t *match_then_expr_idx, const EvalBound &bound,
+                                const bool else_is_uniform_const)
 {
   int ret = OB_SUCCESS;
-  if (is_same_type) {
-#define SET_RES_VEC_BODY(vec_fmt)                                                 \
+  // else_is_uniform_const: all then exprs share one concrete format (FIXED/DISCRETE),
+  // and the else expr is VEC_UNIFORM_CONST (see check_then_expr_same_type). Else path
+  // always uses ObUniformFormat<true>.
+  // NOTE: when else_is_uniform_const is true, then_expr_same_type (is_same_type) is ALSO
+  // true, so we MUST check else_is_uniform_const first.
+  if (else_is_uniform_const) {
+    // The else expr index is expr.arg_cnt_ - 1. Rows that matched no WHEN branch
+    // have match_then_expr_idx == expr.arg_cnt_ - 1.
+    const int64_t else_expr_idx = expr.arg_cnt_ - 1;
+#define SET_RES_VEC_ELSE_UC_BODY(then_vec_fmt)                                     \
     for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); ++i) {           \
-      if (skip.at(i)) {                                                           \
-        continue;                                                                 \
-      }                                                                           \
+      if (skip.at(i)) { continue; }                                               \
       int64_t then_expr_idx = match_then_expr_idx[i - bound.start()];             \
-      set_res_vec<vec_fmt, ResVec>(expr, ctx, i, then_expr_idx);                  \
+      if (then_expr_idx == else_expr_idx || then_expr_idx == -1) {                \
+        set_res_vec<ObUniformFormat<true>, ResVec>(expr, ctx, i, else_expr_idx);  \
+      } else {                                                                    \
+        set_res_vec<then_vec_fmt, ResVec>(expr, ctx, i, then_expr_idx);           \
+      }                                                                           \
     }                                                                             \
+    break;
+    switch (then_format) {
+      case VEC_FIXED: {
+        switch (vec_tc) {
+          case VEC_TC_INTEGER: {
+            SET_RES_VEC_ELSE_UC_BODY(ObFixedLengthFormat<RTCType<VEC_TC_INTEGER>>);
+          }
+          case VEC_TC_DEC_INT32: {
+            SET_RES_VEC_ELSE_UC_BODY(ObFixedLengthFormat<RTCType<VEC_TC_DEC_INT32>>);
+          }
+          case VEC_TC_DEC_INT64: {
+            SET_RES_VEC_ELSE_UC_BODY(ObFixedLengthFormat<RTCType<VEC_TC_DEC_INT64>>);
+          }
+          case VEC_TC_DEC_INT128: {
+            SET_RES_VEC_ELSE_UC_BODY(ObFixedLengthFormat<RTCType<VEC_TC_DEC_INT128>>);
+          }
+          case VEC_TC_DEC_INT256: {
+            SET_RES_VEC_ELSE_UC_BODY(ObFixedLengthFormat<RTCType<VEC_TC_DEC_INT256>>);
+          }
+          case VEC_TC_DEC_INT512: {
+            SET_RES_VEC_ELSE_UC_BODY(ObFixedLengthFormat<RTCType<VEC_TC_DEC_INT512>>);
+          }
+          default: {
+            SET_RES_VEC_ELSE_UC_BODY(ObFixedLengthBase);
+          }
+        }
+        break;
+      }
+      case VEC_DISCRETE: {
+        SET_RES_VEC_ELSE_UC_BODY(ObDiscreteFormat);
+      }
+      default: {
+        for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); ++i) {
+          if (skip.at(i)) { continue; }
+          int64_t then_expr_idx = match_then_expr_idx[i - bound.start()];
+          set_res_vec<ObVectorBase, ResVec>(expr, ctx, i, then_expr_idx);
+        }
+        break;
+      }
+    }
+#undef SET_RES_VEC_ELSE_UC_BODY
+  } else if (is_same_type) {
+#define SET_RES_VEC_BODY(vec_fmt)                                                  \
+    for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); ++i) {            \
+      if (skip.at(i)) {                                                            \
+        continue;                                                                  \
+      }                                                                            \
+      int64_t then_expr_idx = match_then_expr_idx[i - bound.start()];              \
+      set_res_vec<vec_fmt, ResVec>(expr, ctx, i, then_expr_idx);                   \
+    }                                                                              \
     break;
     switch (then_format) {
       case VEC_FIXED: {
@@ -586,6 +656,7 @@ static int dispatch_set_res_vec(const ObExpr &expr, ObEvalCtx &ctx,
         SET_RES_VEC_BODY(ObVectorBase);
       }
     }
+#undef SET_RES_VEC_BODY
   } else {
     for (int i = bound.start(); OB_SUCC(ret) && i < bound.end(); ++i) {
       if (skip.at(i)) {
@@ -630,6 +701,7 @@ static int inner_eval_case_vector(const ObExpr &expr,
     ObEvalCtx::TempAllocGuard alloc_guard(ctx);
     int64_t *match_then_expr_idx = nullptr;
     bool then_expr_same_type = false;
+    bool else_is_uniform_const = false;
     VectorFormat then_format = VEC_INVALID;
     VecValueTypeClass then_vec_tc = VEC_TC_UNKNOWN;
     // For single-line scenarios,
@@ -733,12 +805,13 @@ static int inner_eval_case_vector(const ObExpr &expr,
     // Check if all then expressions and else expression have the same type
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(check_then_expr_same_type(expr, ctx, has_else, loop,
-                                                   then_expr_same_type, then_format, then_vec_tc))) {
+                                                   then_expr_same_type, then_format, then_vec_tc,
+                                                   else_is_uniform_const))) {
       LOG_WARN("failed to check then expr same type", K(ret));
     } else if (OB_FAIL(dispatch_set_res_vec<ResVec>(expr, ctx, *need_eval_mask,
                                              then_expr_same_type, then_format,
                                              then_vec_tc, match_then_expr_idx,
-                                             my_bound))) {
+                                             my_bound, else_is_uniform_const))) {
       LOG_WARN("failed to set result vector", K(ret));
     }
   }

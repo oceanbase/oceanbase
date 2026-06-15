@@ -116,6 +116,11 @@ int ObExprTimeDiff::cg_expr(ObExprCGCtx &op_cg_ctx,
     LOG_WARN("children of timediff expr is null", K(ret), K(rt_expr.args_));
   } else {
     rt_expr.eval_func_ = ObExprTimeDiff::calc_timediff;
+    // The vectorization of other types for the expression not completed yet.
+    if (ob_is_string_tc(rt_expr.args_[0]->datum_meta_.type_)
+        && ob_is_string_tc(rt_expr.args_[1]->datum_meta_.type_)) {
+      rt_expr.eval_vector_func_ = ObExprTimeDiff::calc_timediff_vector;
+    }
   }
   return ret;
 }
@@ -243,8 +248,8 @@ int ObExprTimeDiff::calc_timediff_for_string_vector(const ObExpr &expr, ObEvalCt
     bool is_time_type2 = N_FALSE;
     bool use_quick_parser = true;
     int quick_parser_failed_count = 0;
-    ObTime ob_time1;
-    ObTime ob_time2;
+    ObTime ob_time1(DT_TYPE_TIME);
+    ObTime ob_time2(DT_TYPE_TIME);
     ObScale res_scale1 = -1;
     ObScale res_scale2 = -1;
     ObTimeZoneInfoPos literal_tz_info;

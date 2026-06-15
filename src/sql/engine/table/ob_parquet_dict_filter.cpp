@@ -1107,7 +1107,7 @@ int ObParquetDictFilterPushdown::filter_by_dict_codes(const common::ObBitmap &va
       }
     } else {
       uint8_t *result_data = result_bitmap.get_data();
-      uint8_t *valid_dict_codes_data = valid_dict_codes.get_data();
+      const uint8_t *valid_dict_codes_data = valid_dict_codes.get_data();
       int32_t *indices_data = indices.get_data();
       for (int64_t row = 0; row < indices_count; ++row) {
         result_data[row] = valid_dict_codes_data[indices_data[row]];

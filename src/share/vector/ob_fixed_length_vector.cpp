@@ -47,6 +47,25 @@ int ObFixedLengthVector<ValueType, BasicOp>::murmur_hash_v3_for_one_row(EVAL_HAS
 }
 
 template<typename ValueType, typename BasicOp>
+OB_INLINE int ObFixedLengthVector<ValueType, BasicOp>::crc_hash_v3(BATCH_EVAL_HASH_ARGS) const
+{
+  BatchHashResIter hash_iter(hash_values);
+  return VecOpUtil::template hash_dispatch<ObCrcHash, true, BatchHashResIter>(
+    hash_iter, expr.obj_meta_, *this, skip, bound, seeds, is_batch_seed);
+}
+
+template<typename ValueType, typename BasicOp>
+int ObFixedLengthVector<ValueType, BasicOp>::crc_hash_v3_for_one_row(EVAL_HASH_ARGS_FOR_ROW) const
+{
+  RowHashResIter hash_iter(&hash_value);
+  sql::EvalBound bound(batch_size, batch_idx, batch_idx + 1, true);
+  int64_t mock_skip_data = 0;
+  sql::ObBitVector &skip = *sql::to_bit_vector(&mock_skip_data);
+  return VecOpUtil::template hash_dispatch<ObCrcHash, true, RowHashResIter>(
+    hash_iter, expr.obj_meta_, *this, skip, bound, &seed, false);
+}
+
+template<typename ValueType, typename BasicOp>
 int ObFixedLengthVector<ValueType, BasicOp>::null_first_cmp(VECTOR_ONE_COMPARE_ARGS) const
 {
   return VecOpUtil::template ns_cmp<true>(expr.obj_meta_, *this, row_idx, r_null, r_v, r_len, cmp_ret);

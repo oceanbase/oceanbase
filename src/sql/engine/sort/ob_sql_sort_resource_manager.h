@@ -23,11 +23,18 @@ public:
       ObSqlWorkAreaType profile_type,
       ObSortRowStoreMgr<Store_Row, has_addon> &store_mgr)
   :  ObSortResourceManager<Compare, Store_Row, has_addon>(op_monitor_info, mem_context, profile_type),
+     part_cnt_(0),
+     use_partition_topn_sort_(false),
+     is_topn_filter_enabled_(false),
+     is_topn_sort_(false),
+     part_topn_sort_strategy_(nullptr),
+     part_sort_strategy_(nullptr),
      store_mgr_(store_mgr)
   {}
   virtual ~ObSQLSortResourceManager() {}
   int init(int64_t part_cnt, bool use_partition_topn_sort, bool is_topn_filter_enabled, bool is_topn_sort,
       ObPartitionTopNSortStrategy<Compare, Store_Row, has_addon> *part_topn_sort_strategy,
+      ObPartitionSortStrategy<Compare, Store_Row, has_addon> *part_sort_strategy,
       const uint64_t tenant_id, const int64_t cache_size, ObExecContext *exec_ctx)
   {
     int ret = OB_SUCCESS;
@@ -36,6 +43,7 @@ public:
     is_topn_filter_enabled_ = is_topn_filter_enabled;
     is_topn_sort_ = is_topn_sort;
     part_topn_sort_strategy_ = part_topn_sort_strategy;
+    part_sort_strategy_ = part_sort_strategy;
     if (OB_FAIL(this->sql_mem_processor_.init(&this->mem_context_->ref_context()->get_malloc_allocator(),
         tenant_id, cache_size,
         this->op_monitor_info_.op_type_,
@@ -97,18 +105,18 @@ private:
   }
 
   int64_t get_partition_sort_ht_bucket_size() const {
-    int64_t row_cnt = store_mgr_.get_row_cnt();
-    return ((part_cnt_ == 0) ? 0 :
-          (row_cnt * ObPartitionSortStrategy<Compare, Store_Row, has_addon>::FIXED_PART_NODE_SIZE * 2) +                          // size of(part_hash_nodes_)
-          (next_pow2(std::max(16L, row_cnt)) * ObPartitionSortStrategy<Compare, Store_Row, has_addon>::FIXED_PART_BKT_SIZE * 2)); // size of(buckets_)
+    OB_ASSERT(nullptr != part_sort_strategy_);
+    return part_sort_strategy_->get_need_extra_mem_size(store_mgr_.get_row_cnt());
   }
 
   int64_t get_need_extra_mem_size() const {
     int64_t ret = 0;
     if (use_partition_topn_sort_) {
       ret = part_topn_sort_strategy_->get_need_extra_mem_size();
-    } else {
+    } else if (part_cnt_ > 0) {
       ret = get_partition_sort_ht_bucket_size();
+    } else {
+      ret = 0;
     }
     return ret;
   }
@@ -139,6 +147,7 @@ private:
   bool is_topn_filter_enabled_;
   bool is_topn_sort_;
   ObPartitionTopNSortStrategy<Compare, Store_Row, has_addon> *part_topn_sort_strategy_;
+  ObPartitionSortStrategy<Compare, Store_Row, has_addon> *part_sort_strategy_;
   ObSortRowStoreMgr<Store_Row, has_addon> &store_mgr_;
 };
 

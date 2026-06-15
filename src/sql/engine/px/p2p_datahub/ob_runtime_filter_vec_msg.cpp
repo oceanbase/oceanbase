@@ -1195,7 +1195,7 @@ int ObRFInFilterVecMsg::do_insert_by_row_vector(const ObBatchRows *child_brs,
         } else {
           const bool is_batch_seed = (i > 0);
           ObIVector *arg_vec = expr->get_vector(eval_ctx);
-          arg_vec->murmur_hash_v3(*expr, batch_hash_values, *(child_brs->skip_), bound,
+          ret = arg_vec->hash(*expr, batch_hash_values, *(child_brs->skip_), bound,
                                   is_batch_seed ? batch_hash_values : &seed, is_batch_seed);
         }
       }
@@ -1551,7 +1551,7 @@ int ObRFInFilterVecMsg::might_contain(const ObExpr &expr,
         datum.len_ = arg_vec->get_length(batch_idx);
         datum.null_ = arg_vec->is_null(batch_idx) ? 1 : 0;
         cur_row.row_.at(i) = datum;
-        if (OB_FAIL(arg_vec->murmur_hash_v3_for_one_row(*expr.args_[i], hash_val, batch_idx,
+        if (OB_FAIL(arg_vec->hash_for_one_row(*expr.args_[i], hash_val, batch_idx,
             batch_size, hash_val))) {
           LOG_WARN("failed to cal hash");
         }
@@ -1726,7 +1726,7 @@ int ObRFInFilterVecMsg::do_might_contain_vector_impl(
     } else {
       const bool is_batch_seed = (i > 0);
       ObIVector *arg_vec = e->get_vector(ctx);
-      if (OB_FAIL(arg_vec->murmur_hash_v3(*e, right_hash_vals, skip,
+      if (OB_FAIL(arg_vec->hash(*e, right_hash_vals, skip,
           bound, is_batch_seed ? right_hash_vals : &seed, is_batch_seed))) {
         LOG_WARN("failed to cal hash");
       }

@@ -115,7 +115,11 @@ public:
   {
     return is_inited_;
   }
-  OB_INLINE uint8_t *get_data() const
+  OB_INLINE uint8_t *get_data()
+  {
+    return data_;
+  }
+  OB_INLINE const uint8_t *get_data() const
   {
     return data_;
   }

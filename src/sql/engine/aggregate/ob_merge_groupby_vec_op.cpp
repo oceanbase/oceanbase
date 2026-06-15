@@ -784,10 +784,10 @@ int ObMergeGroupByVecOp::batch_collect_local_ndvs(const ObBatchRows *child_brs)
     } else {
       bool is_batch_seed = (0 != i);
       ObIVector *vec = expr->get_vector(eval_ctx_);
-      if (OB_FAIL(vec->murmur_hash_v3(*expr, rollup_hash_vals_, *child_brs->skip_,
-                                      EvalBound(child_brs->size_, child_brs->all_rows_active_),
-                                      is_batch_seed ? rollup_hash_vals_ : &hash_value_seed,
-                                      is_batch_seed))) {
+      if (OB_FAIL(vec->hash(*expr, rollup_hash_vals_, *child_brs->skip_,
+                               EvalBound(child_brs->size_, child_brs->all_rows_active_),
+                               is_batch_seed ? rollup_hash_vals_ : &hash_value_seed,
+                               is_batch_seed))) {
         SQL_ENG_LOG(WARN, "failed to calc hash value", K(ret));
       }
       if (OB_FAIL(ret)) {

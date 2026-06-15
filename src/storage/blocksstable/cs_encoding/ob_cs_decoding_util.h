@@ -128,6 +128,24 @@ typedef int (*cs_dict_tranverse_ref) (
             const sql::ObPushdownFilterExecutor *parent,
             common::ObBitmap &result_bitmap);
 
+typedef int (*cs_dict_set_bitmap_with_bitset) (
+            const char *ref_buf,
+            sql::ObBitVector *ref_bitset,
+            const int64_t ref_bitset_size,
+            const int64_t row_start,
+            const int64_t row_cnt,
+            ObBitmap &result_bitmap);
+
+typedef int (*cs_dict_set_bitmap_with_bitset_const) (
+            const char *exception_row_id_buf,
+            const char *exception_ref_buf,
+            const int64_t exception_cnt,
+            sql::ObBitVector *ref_bitset,
+            const int64_t ref_bitset_size,
+            const int64_t row_start,
+            const int64_t row_cnt,
+            ObBitmap &result_bitmap);
+
 template <typename DataType>
 struct CSEqualsOp
 {
@@ -815,6 +833,123 @@ struct ObCSDictFilterFuncProducer
   }
 };
 
+// =================== set_bitmap_with_bitset ===================
+template <int32_t REF_WIDTH_TAG, bool IS_CONVERSELY>
+struct ObCSDictSetBitmapOpFunc
+{
+  typedef typename ObCSEncodingStoreTypeInference<REF_WIDTH_TAG>::Type RefIntType;
+
+  static int set_bitmap_with_bitset(
+    const char *ref_buf,
+    sql::ObBitVector *ref_bitset,
+    const int64_t ref_bitset_size,
+    const int64_t row_start,
+    const int64_t row_cnt,
+    ObBitmap &result_bitmap)
+  {
+    const RefIntType *__restrict__ ref_arr = reinterpret_cast<const RefIntType *>(ref_buf) + row_start;
+    uint8_t *__restrict__ result_data = result_bitmap.get_data();
+    if constexpr (sizeof(RefIntType) == 1) { // tiny dict
+      if (ref_bitset_size <= 64) {
+        const uint64_t ref_word = IS_CONVERSELY ? ~(*ref_bitset->align_at(0)) : *ref_bitset->align_at(0);
+        for (int i = 0; i < row_cnt; ++i) {
+          result_data[i] = ((ref_word >> ref_arr[i]) & 1);
+        }
+      } else if (ref_bitset_size <= 128) {
+        const uint64_t *ref_words = ref_bitset->reinterpret_data<uint64_t>();
+        const uint64_t w0 = IS_CONVERSELY ? ~ref_words[0] : ref_words[0];
+        const uint64_t w1 = IS_CONVERSELY ? ~ref_words[1] : ref_words[1];
+        for (int i = 0; i < row_cnt; ++i) {
+          const RefIntType ref = ref_arr[i];
+          const uint64_t word = (ref < 64) ? w0 : w1;
+          result_data[i] = ((word >> (ref & 63)) & 1);
+        }
+      } else {
+        alignas(64) uint8_t lut[256];
+        ref_bitset->unpack_to_byte_bitmap<IS_CONVERSELY>(lut, ref_bitset_size);
+        for (int i = 0; i < row_cnt; ++i) {
+          result_data[i] = lut[ref_arr[i]];
+        }
+      }
+    } else if constexpr (sizeof(RefIntType) == 2) {
+      if (ref_bitset_size <= 4096) {
+        alignas(64) uint8_t lut[4096];
+        ref_bitset->unpack_to_byte_bitmap<IS_CONVERSELY>(lut, ref_bitset_size);
+        for (int i = 0; i < row_cnt; ++i) {
+          result_data[i] = lut[ref_arr[i]];
+        }
+      } else {
+        for (int i = 0; i < row_cnt; ++i) {
+          ref_bitset->get_bit_as_u8<IS_CONVERSELY>(ref_arr[i], result_data[i]);
+        }
+      }
+    } else {
+      for (int i = 0; i < row_cnt; ++i) {
+        ref_bitset->get_bit_as_u8<IS_CONVERSELY>(ref_arr[i], result_data[i]);
+      }
+    }
+    return common::OB_SUCCESS;
+  }
+
+  static int set_bitmap_with_bitset_const(
+    const char *exception_row_id_buf,
+    const char *exception_ref_buf,
+    const int64_t exception_cnt,
+    sql::ObBitVector *ref_bitset,
+    const int64_t ref_bitset_size,
+    const int64_t row_start,
+    const int64_t row_cnt,
+    ObBitmap &result_bitmap)
+  {
+    // MAX_EXCEPTION_COUNT = 64, ref_bitset_size include const ref and NULL max is 66
+    OB_ASSERT(ref_bitset_size <= 66);
+    const RefIntType *__restrict__ exception_row_ids = reinterpret_cast<const RefIntType *>(exception_row_id_buf);
+    const RefIntType *__restrict__ exception_refs = reinterpret_cast<const RefIntType *>(exception_ref_buf);
+    uint8_t *__restrict__ result_data = result_bitmap.get_data();
+    const RefIntType *lo = std::lower_bound(exception_row_ids, exception_row_ids + exception_cnt,
+                                            static_cast<uint64_t>(row_start));
+    const RefIntType *hi = std::lower_bound(lo, exception_row_ids + exception_cnt,
+                                            static_cast<uint64_t>(row_start + row_cnt));
+    const int begin_idx = lo - exception_row_ids;
+    const int end_idx = hi - exception_row_ids;
+    if (begin_idx == end_idx) {
+    } else if (OB_LIKELY(ref_bitset_size <= 64)) {
+      const uint64_t ref_word =
+        IS_CONVERSELY ? ~(*ref_bitset->align_at(0)) : *ref_bitset->align_at(0);
+      for (int i = begin_idx; i < end_idx; ++i) {
+        result_data[exception_row_ids[i] - row_start] = ((ref_word >> exception_refs[i]) & 1);
+      }
+    } else {
+      const uint64_t *ref_words = ref_bitset->reinterpret_data<uint64_t>();
+      const uint64_t w0 = IS_CONVERSELY ? ~(ref_words[0]) : ref_words[0];
+      const uint64_t w1 = IS_CONVERSELY ? ~(ref_words[1]) : ref_words[1];
+      for (int i = begin_idx; i < end_idx; ++i) {
+        const RefIntType ref = exception_refs[i];
+        const uint64_t word = (ref < 64) ? w0 : w1;
+        result_data[exception_row_ids[i] - row_start] = ((word >> (ref & 63)) & 1);
+      }
+    }
+    return common::OB_SUCCESS;
+  }
+};
+
+// FLAG semantics:
+//   FLAG == 1 (true)  -> NOT conversely (set rows whose ref is in @ref_bitset)
+//   FLAG == 0 (false) -> conversely     (set rows whose ref is NOT in @ref_bitset)
+template <int32_t REF_WIDTH_TAG, int32_t FLAG>
+struct ObCSDictSetBitmapFuncProducer
+{
+  OB_INLINE static cs_dict_set_bitmap_with_bitset produce_set_bitmap_with_bitset()
+  {
+    return ObCSDictSetBitmapOpFunc<REF_WIDTH_TAG, !static_cast<bool>(FLAG)>::set_bitmap_with_bitset;
+  }
+
+  OB_INLINE static cs_dict_set_bitmap_with_bitset_const produce_set_bitmap_with_bitset_const()
+  {
+    return ObCSDictSetBitmapOpFunc<REF_WIDTH_TAG, !static_cast<bool>(FLAG)>::set_bitmap_with_bitset_const;
+  }
+};
+
 class ObCSFilterFunctionFactory {
 public:
   static ObCSFilterFunctionFactory &instance();
@@ -924,6 +1059,28 @@ public:
     return func(dict_ref_buf, row_start, row_count, ref_bitmap, parent, result_bitmap);
   }
 
+  // if the row's ref is set in @ref_bitset, set it as @flag in @result_bitmap, otherwise set it conversely.
+  OB_INLINE int dict_set_bitmap_with_bitset(const uint8_t ref_width_tag, const char *ref_buf,
+    sql::ObBitVector *ref_bitset, const int64_t ref_bitset_size,
+    const int64_t row_start, const int64_t row_cnt,
+    ObBitmap &result_bitmap, const bool flag)
+  {
+    cs_dict_set_bitmap_with_bitset func = dict_set_bitmap_with_bitset_funcs_[ref_width_tag][flag];
+    return func(ref_buf, ref_bitset, ref_bitset_size,
+                row_start, row_cnt, result_bitmap);
+  }
+  OB_INLINE int dict_set_bitmap_with_bitset_const(const uint32_t ref_width_size,
+    const char *exception_row_id_buf, const char *exception_ref_buf, const int64_t exception_cnt,
+    sql::ObBitVector *ref_bitset, const int64_t ref_bitset_size,
+    const int64_t row_start, const int64_t row_cnt,
+    ObBitmap &result_bitmap, const bool flag)
+  {
+    const int32_t ref_width_tag = get_value_len_tag_map()[ref_width_size];
+    cs_dict_set_bitmap_with_bitset_const func = dict_set_bitmap_with_bitset_const_funcs_[ref_width_tag][flag];
+    return func(exception_row_id_buf, exception_ref_buf, exception_cnt,
+                ref_bitset, ref_bitset_size, row_start, row_cnt, result_bitmap);
+  }
+
 private:
   ObCSFilterFunctionFactory();
   ~ObCSFilterFunctionFactory() = default;
@@ -940,6 +1097,9 @@ private:
   ObMultiDimArray_T<cs_dict_ref_sort_bt_tranverse, 2/*exist_parent*/, 4/*val_tag*/> dict_ref_sort_bt_funcs_;
   ObMultiDimArray_T<cs_dict_val_in_tranverse, 4/*val_tag*/> dict_val_in_funcs_;
   ObMultiDimArray_T<cs_dict_tranverse_ref, 2/*exist_parent*/, 4/*val_tag*/> dict_scan_ref_funcs_;
+
+  ObMultiDimArray_T<cs_dict_set_bitmap_with_bitset, 4/*ref_width_tag*/, 2 /*flag*/> dict_set_bitmap_with_bitset_funcs_;
+  ObMultiDimArray_T<cs_dict_set_bitmap_with_bitset_const, 4/*ref_width_tag*/, 2 /*flag*/> dict_set_bitmap_with_bitset_const_funcs_;
 };
 
 class ObCSDecodingUtil

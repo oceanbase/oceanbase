@@ -4,6 +4,7 @@
  */
 #include "sql/engine/expr/vector_cast/vector_cast.h"
 #include "sql/engine/expr/ob_datum_cast.h"
+#include "sql/engine/expr/ob_expr_util.h"
 #include "share/object/ob_obj_cast_util.h"
 #include "share/object/ob_obj_cast.h"
 

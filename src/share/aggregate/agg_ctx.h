@@ -75,6 +75,13 @@ struct AggrRowMeta
   {
     return static_cast<const char *>(locate_cell_payload(col_id, const_cast<char *>(agg_row)));
   }
+  inline int32_t get_fixed_cell_len(const int32_t col_id) const
+  {
+    OB_ASSERT(col_id < col_cnt_);
+    OB_ASSERT(col_offsets_ != nullptr);
+    OB_ASSERT(tmp_res_sizes_ != nullptr);
+    return col_offsets_[col_id + 1] - col_offsets_[col_id] - tmp_res_sizes_[col_id];
+  }
   inline int32_t get_cell_len(const int32_t col_id, const char *row) const
   {
     OB_ASSERT(col_id < col_cnt_);
@@ -83,7 +90,7 @@ struct AggrRowMeta
     if (use_var_len_ != nullptr && use_var_len_->at(col_id)) {
       return *reinterpret_cast<const int32_t *>(row + col_offsets_[col_id] + sizeof(char *));
     } else {
-      return col_offsets_[col_id + 1] - col_offsets_[col_id] - tmp_res_sizes_[col_id];
+      return get_fixed_cell_len(col_id);
     }
   }
 

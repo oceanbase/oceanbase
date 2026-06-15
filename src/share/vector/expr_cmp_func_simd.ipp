@@ -63,10 +63,10 @@ struct FixedVectorCmp
                              && static_cast<ObFixedLengthBase *>(expr.get_vector(ctx))->get_length() == sizeof(int64_t)
                              && sizeof(RTCType<l_tc>) <= sizeof(int64_t)
                              && cmp_op != CO_CMP && !left.get_vector(ctx)->has_null()
-                             && !right.get_vector(ctx)->has_null() & bound.get_all_rows_active())
+                             && !right.get_vector(ctx)->has_null())
                              && simd_supported(l_tc);
             LOG_DEBUG("simd used", K(l_tc), K(r_tc), K(cmp_op), K(left.get_vector(ctx)->has_null()),
-                      K(right.get_vector(ctx)->has_null()), K(bound.get_all_rows_active()), K(use_simd));
+                      K(right.get_vector(ctx)->has_null()), K(use_simd));
 #if OB_USE_MULTITARGET_CODE
             if (use_simd && common::is_arch_supported(ObTargetArch::AVX512)) {
               ret = common::specific::avx512::simd_eval_vector<l_tc, sizeof(RTCType<l_tc>), cmp_op, false, false>(

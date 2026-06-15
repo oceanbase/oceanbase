@@ -944,6 +944,7 @@ bool ObOptParamHint::is_param_val_valid(const OptParamType param_type, const ObO
     case HIDDEN_COLUMN_VISIBLE:
     case ROWSETS_ENABLED:
     case ENABLE_NEWSORT:
+    case ENABLE_PARTITION_SORT:
     case USE_PART_SORT_MGB:
     case USE_DEFAULT_OPT_STAT:
     case ENABLE_IN_RANGE_OPTIMIZATION:

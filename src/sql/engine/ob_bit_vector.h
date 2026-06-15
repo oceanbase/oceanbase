@@ -56,6 +56,8 @@ public:
   inline bool at(const int64_t idx) const;
   bool contain(const int64_t idx) const { return at(idx); }
   bool exist(const int64_t idx) const { return at(idx); }
+  template <bool IS_FLIP = false>
+  inline void get_bit_as_u8(const int64_t idx, uint8_t &res) const;
   void deep_copy(const ObBitVectorImpl<WordType> &src, const int64_t size)
   {
     MEMCPY(data_, src.data_, BYTES_PER_WORD * (size / WORD_BITS));
@@ -75,6 +77,9 @@ public:
   }
     // at(i) |= v;
   inline void bit_or_assign(const int64_t idx, const bool v);
+
+  template <bool IS_FLIP = false>
+  inline void unpack_to_byte_bitmap(uint8_t *bitmap, const int64_t size) const;
 
   // bit vector is superset of %other
   inline bool is_superset_of(const ObBitVectorImpl<WordType> &other, const int64_t size) const;
@@ -244,10 +249,44 @@ inline bool ObBitVectorImpl<WordType>::at(const int64_t idx) const
 }
 
 template<typename WordType>
+template<bool IS_FLIP>
+inline void ObBitVectorImpl<WordType>::get_bit_as_u8(const int64_t idx, uint8_t &res) const
+{
+  OB_ASSERT(idx >= 0);
+  if (IS_FLIP) {
+    res = static_cast<uint8_t>(((data_[idx / WORD_BITS] >> (idx % WORD_BITS)) & 1ULL) ^ 1ULL);
+  } else {
+    res = static_cast<uint8_t>((data_[idx / WORD_BITS] >> (idx % WORD_BITS)) & 1ULL);
+  }
+}
+
+template<typename WordType>
 inline void ObBitVectorImpl<WordType>::bit_or_assign(const int64_t idx, const bool v)
 {
   OB_ASSERT(idx >= 0);
   data_[idx / WORD_BITS] |= static_cast<WordType>(v) << (idx % WORD_BITS);
+}
+
+template<typename WordType>
+template<bool IS_FLIP>
+inline void ObBitVectorImpl<WordType>::unpack_to_byte_bitmap(uint8_t *bitmap, const int64_t size) const
+{
+  // TODO: use SIMD
+  const int64_t full_words = size / WORD_BITS;
+  const int64_t tail_bits = size % WORD_BITS;
+  for (int64_t i = 0; i < full_words; ++i) {
+    const WordType word = IS_FLIP ? ~data_[i] : data_[i];
+    for (int b = 0; b < WORD_BITS; ++b) {
+      bitmap[b] = static_cast<uint8_t>((word >> b) & 1);
+    }
+    bitmap += WORD_BITS;
+  }
+  if (tail_bits > 0) {
+    const WordType word = IS_FLIP ? ~data_[full_words] : data_[full_words];
+    for (int b = 0; b < tail_bits; ++b) {
+      bitmap[b] = static_cast<uint8_t>((word >> b) & 1);
+    }
+  }
 }
 
 template<typename WordType>

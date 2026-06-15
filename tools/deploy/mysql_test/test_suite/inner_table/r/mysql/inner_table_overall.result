@@ -1557,6 +1557,8 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21721	CDB_SCHEDULER_RUNNING_JOBS	1	201001	1
 21722	CDB_SCHEDULER_JOBS	1	201001	1
 21723	GV$OB_TENANT_WORKER_GROUPS	1	201001	1
+21744	DBA_OB_SYS_VARIABLE_HISTORY	1	201001	1
+21745	CDB_OB_SYS_VARIABLE_HISTORY	1	201001	1
 check sys table count and table_id range success
 check count and table_id range for virtual table success
 select * from  information_schema.CHARACTER_SETS limit 1;

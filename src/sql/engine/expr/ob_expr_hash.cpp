@@ -128,7 +128,8 @@ int ObExprHash::calc_hash_value_expr_vector(VECTOR_EVAL_FUNC_ARG_DECL)
   } else {
     for (int64_t i = 0; OB_SUCC(ret) && i < expr.arg_cnt_; i++) {
       ObIVector *vec = expr.args_[i]->get_vector(ctx);
-      ret = vec->murmur_hash_v3(*expr.args_[i], hash_vals, my_skip, bound, i > 0 ? hash_vals : &hash_seed, i > 0);
+      ret = vec->hash(*expr.args_[i], hash_vals, my_skip, bound,
+                         i > 0 ? hash_vals : &hash_seed, i > 0);
     }
     if (OB_SUCC(ret)) {
       VectorFormat res_format = expr.get_format(ctx);

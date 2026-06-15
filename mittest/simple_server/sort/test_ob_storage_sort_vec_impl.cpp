@@ -387,6 +387,12 @@ public:
     return OB_SUCCESS;
   }
 
+  virtual int crc_hash_v3(BATCH_EVAL_HASH_ARGS) const override { return OB_SUCCESS; }
+  virtual int crc_hash_v3_for_one_row(EVAL_HASH_ARGS_FOR_ROW) const override
+  {
+    return OB_SUCCESS;
+  }
+
   virtual int null_first_cmp(VECTOR_ONE_COMPARE_ARGS) const override { return OB_SUCCESS; }
   virtual int null_last_cmp(VECTOR_ONE_COMPARE_ARGS) const override { return OB_SUCCESS; }
   virtual int no_null_cmp(VECTOR_NOT_NULL_COMPARE_ARGS) const override { return OB_SUCCESS; }

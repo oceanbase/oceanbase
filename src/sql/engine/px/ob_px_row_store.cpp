@@ -287,6 +287,23 @@ int ObReceiveRowReader::check_and_switch_buffer(dtl::ObDtlLinkedBuffer *&curr)
           curr_vector_.set_buf(curr->buf(), curr->size());
           if (OB_FAIL(curr_vector_.decode())) {
             LOG_WARN("failed to decode vector", K(ret), K(curr->msg_type()));
+          } else {
+            const int32_t col_cnt = curr_vector_.get_col_cnt();
+            if (col_cnt > 0) {
+              if (nullptr == col_has_null_cache_) {
+                col_has_null_cache_ = static_cast<bool *>(arena_allocator_.alloc(col_cnt * sizeof(bool)));
+                if (OB_ISNULL(col_has_null_cache_)) {
+                  ret = OB_ALLOCATE_MEMORY_FAILED;
+                  LOG_WARN("failed to alloc col_has_null_cache_", K(ret), K(col_cnt));
+                }
+              }
+              if (OB_SUCC(ret) && OB_NOT_NULL(col_has_null_cache_)) {
+                const int32_t row_cnt = curr_vector_.get_row_cnt();
+                for (int32_t c = 0; c < col_cnt; c++) {
+                  col_has_null_cache_[c] = !curr_vector_.get_nulls(c)->is_all_false(row_cnt);
+                }
+              }
+            }
           }
         }
         if (OB_SUCC(ret)) {
@@ -317,6 +334,23 @@ int ObReceiveRowReader::check_and_switch_buffer(dtl::ObDtlLinkedBuffer *&curr)
           curr_vector_.set_buf(recv_head_->buf(), recv_head_->size());
           if (OB_FAIL(curr_vector_.decode())) {
             LOG_WARN("failed to decode vecotr", K(ret));
+          } else {
+            const int32_t col_cnt = curr_vector_.get_col_cnt();
+            if (col_cnt > 0) {
+              if (nullptr == col_has_null_cache_) {
+                col_has_null_cache_ = static_cast<bool *>(arena_allocator_.alloc(col_cnt * sizeof(bool)));
+                if (OB_ISNULL(col_has_null_cache_)) {
+                  ret = OB_ALLOCATE_MEMORY_FAILED;
+                  LOG_WARN("failed to alloc col_has_null_cache_", K(ret), K(col_cnt));
+                }
+              }
+              if (OB_SUCC(ret) && OB_NOT_NULL(col_has_null_cache_)) {
+                const int32_t row_cnt = curr_vector_.get_row_cnt();
+                for (int32_t c = 0; c < col_cnt; c++) {
+                  col_has_null_cache_[c] = !curr_vector_.get_nulls(c)->is_all_false(row_cnt);
+                }
+              }
+            }
           }
         }
       } else {
@@ -574,7 +608,7 @@ int ObReceiveRowReader::attach_vectors(const common::ObIArray<ObExpr*> &exprs,
           }
         }
       } else {
-        bool has_null = true;
+        bool has_null = col_has_null_cache_[col_idx];
         if (e->is_fixed_length_data_) {
           const dtl::VectorInfo &col_info = data_buffer.get_info(col_idx);
           if (OB_UNLIKELY(col_info.format_ != e->get_vector_header(eval_ctx).format_)) {
@@ -808,6 +842,8 @@ int ObReceiveRowReader::get_next_batch_vec(const ObIArray<ObExpr*> &exprs,
 void ObReceiveRowReader::reset()
 {
   curr_vector_.reset();
+  col_has_null_cache_ = nullptr;
+  arena_allocator_.reset();
   free_buffer_list(recv_head_);
   recv_head_ = NULL;
   recv_tail_ = NULL;

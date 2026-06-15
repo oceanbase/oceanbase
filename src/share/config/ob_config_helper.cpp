@@ -1692,6 +1692,16 @@ bool ObConfigEnableHashRollupChecker::check(const ObConfigItem &t) const
   return bret;
 }
 
+bool ObConfigVecHashAlgoChecker::check(const ObConfigItem &t) const
+{
+  int bret = false;
+  common::ObString tmp_str(t.str());
+  bret = (0 == tmp_str.case_compare("auto")
+          || 0 == tmp_str.case_compare("murmur2")
+          || 0 == tmp_str.case_compare("crc32"));
+  return bret;
+}
+
 bool ObConfigPxNodePolicyChecker::check(const ObConfigItem &t) const
 {
   int bret = false;

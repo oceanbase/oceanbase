@@ -1027,6 +1027,17 @@ int OpTestEngine::generate_exprs(ObDMLStmt &stmt)
   // This is required for init_skip_vector() to be called during operator open()
   phy_plan_.set_batch_size(batch_size_);
 
+  // CRITICAL: Set the physical plan on ObPhysicalPlanCtx
+  // ObSortVecOpImpl::init() calls plan_ctx->get_phy_plan() to access the physical plan.
+  // Without this, get_phy_plan() returns NULL and causes OB_ALLOCATE_MEMORY_FAILED error.
+  ObPhysicalPlanCtx *plan_ctx = exec_ctx_.get_physical_plan_ctx();
+  if (OB_ISNULL(plan_ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("physical plan ctx is null", K(ret));
+    return ret;
+  }
+  plan_ctx->set_phy_plan(&phy_plan_);
+
   // Generate expressions
   ret = expr_cg.generate(raw_exprs, phy_plan_.get_expr_frame_info());
   if (OB_FAIL(ret)) {
@@ -1340,7 +1351,9 @@ OpTestResult OpTestEngine::collect_batch_results(ObOperator *op, const ExprFixed
             }
           }
 
-          // Get value as string using direct buffer access
+          // For VEC_FIXED, use direct buffer access (most efficient)
+          // For VEC_UNIFORM, use datum access
+          // For VEC_DISCRETE/VEC_CONTINUOUS, use string access
           const char *payload = nullptr;
           ObLength length = 0;
           char tmp_buf[64];
@@ -1579,6 +1592,11 @@ OpTestResult OpTestEngine::collect_batch_results(ObOperator *op, const ExprFixed
           } else if (fmt == VEC_UNIFORM) {
             // For uniform format, use ObDatum
             ObDatum *datums = expr->locate_batch_datums(eval_ctx);
+            if (OB_ISNULL(datums)) {
+              // datums not initialized, skip this column
+              row_values.push_back("");
+              continue;
+            }
             const ObObjType obj_type = expr->datum_meta_.get_type();
             const VecValueTypeClass vec_tc = get_vec_value_tc(obj_type,
                 expr->datum_meta_.scale_, expr->datum_meta_.precision_);

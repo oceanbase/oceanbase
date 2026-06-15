@@ -39,13 +39,16 @@ public:
                          const int64_t fixed_len, const int64_t start_idx,
                          const int64_t read_rows, char *data)
   {
-    UNUSED(has_null);
-    has_null_ = false;
-    nulls_->reset(read_rows);
-    for (int64_t i = 0; i < read_rows; ++i) {
-      if (nulls.at(start_idx + i)) {
-        nulls_->set(i);
-        has_null_ = true;
+    if (has_null_) {
+      has_null_ = false;
+      nulls_->reset(read_rows);
+    }
+    if (has_null) {
+      for (int64_t i = 0; i < read_rows; ++i) {
+        if (nulls.at(start_idx + i)) {
+          nulls_->set(i);
+          has_null_ = true;
+        }
       }
     }
     len_ = static_cast<int32_t> (fixed_len);

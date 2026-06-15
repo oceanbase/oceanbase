@@ -15,7 +15,6 @@
 #include "sql/engine/basic/ob_vector_result_holder.h"
 #include "sql/engine/aggregate/ob_groupby_vec_op.h"
 #include "sql/engine/basic/ob_hp_infras_vec_op.h"
-#include "src/sql/engine/expr/ob_expr_estimate_ndv.h"
 #include "sql/engine/basic/ob_temp_row_store.h"
 
 namespace oceanbase
@@ -25,23 +24,6 @@ namespace sql
 
 class ObHashPartInfrasVecMgr;
 class ObHashPartInfrastructureVecImpl;
-struct LlcEstimate
-{
-public:
-  LlcEstimate()
-    : avg_group_mem_(0), llc_map_(), est_cnt_(0), last_est_cnt_(0), enabled_(false)
-  {}
-  int init_llc_map(common::ObArenaAllocator &allocator);
-  int reset();
-  double avg_group_mem_;
-  ObString llc_map_;
-  uint64_t est_cnt_;
-  uint64_t last_est_cnt_;
-  bool enabled_;
-  static constexpr const int64_t ESTIMATE_MOD_NUM_ = 4096;
-  static constexpr const double LLC_NDV_RATIO_ = 0.3;
-  static constexpr const double GLOBAL_BOUND_RATIO_ = 0.8;
-};
 
 struct ObGroupByDupColumnPairVec
 {
@@ -194,7 +176,6 @@ public:
       aggr_vectors_(nullptr),
       reorder_aggr_rows_(false),
       batch_aggr_rows_table_(),
-      llc_est_(),
       dump_vectors_(nullptr),
       dump_rows_(nullptr),
       need_reinit_vectors_(true),
@@ -235,13 +216,6 @@ public:
   // for batch
   virtual int inner_get_next_batch(const int64_t max_row_cnt) override;
   void calc_avg_group_mem();
-  OB_INLINE void llc_add_value(int64_t hash_value)
-  {
-    ObAggregateProcessor::llc_add_value(hash_value, llc_est_.llc_map_);
-    ++llc_est_.est_cnt_;
-  }
-  int bypass_add_llc_map_batch(bool ready_to_check_ndv);
-  int check_llc_ndv();
   OB_INLINE int64_t get_hash_groupby_row_count() const
   {
     return local_group_rows_.size();
@@ -263,8 +237,10 @@ public:
   { return get_aggr_used_size() + sql_mem_processor_.get_data_size(); }
   OB_INLINE int64_t get_mem_used_size() const
   {
-    // Hash table used is 3 times counted here to reserve memory for hash table extension
-    return get_aggr_used_size() + get_extra_size() + 2 * get_hash_table_used_size();
+    return get_aggr_used_size() + get_extra_size()
+           + ObHashMemSmoothUtil::calc_extra_hashtable_size(local_group_rows_.size(),
+                                                            local_group_rows_.get_bucket_num(),
+                                                            get_hash_table_used_size());
   }
   OB_INLINE int64_t get_actual_mem_used_size() const
   {
@@ -494,7 +470,6 @@ private:
   ObIVector **aggr_vectors_;
   bool reorder_aggr_rows_;
   BatchAggrRowsTable batch_aggr_rows_table_;
-  LlcEstimate llc_est_;
   common::ObFixedArray<ObIVector *, common::ObIAllocator> dump_vectors_;
   ObCompactRow **dump_rows_;
   bool need_reinit_vectors_;

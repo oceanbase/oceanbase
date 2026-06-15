@@ -170,6 +170,29 @@ int ObFullSortStrategy<Compare, Store_Row, has_addon>::sort_inmem_data(const int
   return ret;
 }
 
+/*
+ * Partition sort keeps the partition hash/key columns at the front of the sort-key layout,
+ * and the per-partition order-by suffix starts after them.
+ *
+ * When encode sortkey is enabled, `sk_exprs_[0]` is the encoded order-by key, so the logical
+ * partition-sort layout becomes:
+ *
+ *   no addon:
+ *     sk_exprs        = [encode_sortkey, hash(partition key), partition key..., sort key..., ...]
+ *     sk_collations   = [field_idx -> hash(partition key), partition key..., sort key...]
+ *     addon_collations= []
+ *
+ *   with addon:
+ *     sk_exprs        = [encode_sortkey, hash(partition key), partition key...]
+ *     sk_collations   = [field_idx -> hash(partition key), partition key...]
+ *     addon columns   hold the real per-partition order-by suffix
+ *     addon_collations describe that suffix
+ *
+ * Runtime compare ranges are split accordingly:
+ *   1. [0, part_cnt_ + 1)   : hash(partition key) + partition key columns, used by partitioning
+ *   2. [part_cnt_ + 1, end) : rows inside the same partition, sorted by the remaining suffix
+ *
+ */
 template<typename Compare, typename Store_Row, bool has_addon>
 class ObPartitionSortStrategy : public ObISortStrategy<Compare, Store_Row, has_addon>
 {
@@ -181,6 +204,7 @@ public:
     ~PartHashNode()
     {}
   public:
+    uint64_t hash_value_;
     PartHashNode *hash_node_next_;
     PartHashNode *part_row_next_;
     Store_Row *store_row_;
@@ -195,30 +219,69 @@ public:
   static const int64_t FIXED_PART_NODE_SIZE = sizeof(PartHashNode);
   static const int64_t FIXED_PART_BKT_SIZE = sizeof(PartHashNode *);
   static const int64_t MAX_ROW_CNT = 268435456; // (2G / 8)
+  static const int64_t SMALL_PART_ROW_COUNT_THRESHOLD = 32;
   ObPartitionSortStrategy(
     Compare &comp,
     const RowMeta &row_meta,
     int64_t part_cnt,
     const common::ObIArray<ObExpr *> *sk_exprs,
     const ObIArray<ObSortFieldCollation> *sk_collations,
-    ObIAllocator &allocator)
+    const ObIArray<ObSortFieldCollation> *addon_collations,
+    ObIAllocator &allocator,
+    bool enable_encode_sortkey,
+    bool is_fixed_key_sort_enabled,
+    int64_t fixed_key_len)
   :
     comp_(comp),
     row_meta_(row_meta),
     part_cnt_(part_cnt),
     buckets_(nullptr),
     part_hash_nodes_(nullptr),
-    max_bucket_cnt_(0),
-    max_node_cnt_(0),
-    enable_encode_sortkey_(false),
     sk_exprs_(sk_exprs),
     sk_collations_(sk_collations),
+    addon_collations_(addon_collations),
     allocator_(allocator),
-    page_allocator_("PartSortBucket", MTL_ID(), ObCtxIds::WORK_AREA)
+    page_allocator_("PartSortBucket", MTL_ID(), ObCtxIds::WORK_AREA),
+    enable_encode_sortkey_(enable_encode_sortkey),
+    is_fixed_key_sort_enabled_(is_fixed_key_sort_enabled),
+    fixed_key_len_(fixed_key_len)
+
   {
   }
   virtual ~ObPartitionSortStrategy()
   {
+    reset();
+  }
+  int64_t get_need_extra_mem_size(const int64_t row_count) const
+  {
+    int64_t extra_mem_size = 0;
+    if (row_count > 0) {
+      const int64_t bucket_cnt = next_pow2(std::max(16L, row_count));
+      const int64_t hash_table_size = bucket_cnt * static_cast<int64_t>(sizeof(PartHashNode *));
+      extra_mem_size = ObHashMemSmoothUtil::calc_extra_hashtable_size(
+                           row_count, bucket_cnt, hash_table_size, 1.0)
+                       + row_count * static_cast<int64_t>(sizeof(PartHashNode));
+      if (enable_encode_sortkey_) {
+        if (is_fixed_key_sort_enabled_) {
+          const int64_t fixed_item_size = fixed_key_len_ + static_cast<int64_t>(sizeof(Store_Row *));
+          extra_mem_size += row_count * fixed_item_size * 2
+                            + 257 * static_cast<int64_t>(sizeof(int64_t)) * fixed_key_len_;
+        } else {
+          extra_mem_size += row_count * static_cast<int64_t>(sizeof(typename ObAdaptiveQS<Store_Row>::AQSItem));
+        }
+      }
+    }
+    return extra_mem_size;
+  }
+  void reuse() {
+    if (nullptr != buckets_) {
+      buckets_->reuse();
+    }
+    if (nullptr != part_hash_nodes_) {
+      part_hash_nodes_->reuse();
+    }
+  }
+  void reset() {
     if (nullptr != buckets_) {
       buckets_->~BucketArray();
       allocator_.free(buckets_);
@@ -233,15 +296,60 @@ public:
   virtual int sort_inmem_data(const int64_t rows_begin, const int64_t rows_end, common::ObIArray<Store_Row *> *rows) override;
   void resue();
 private:
+  // Compare PartHashNode by [hash, partition key]. Do NOT delegate to compare_.
+  // e.g. PARTITION BY a,b with encode_sortkey && has_addon: sk_row_meta_ is
+  // [encode, hash, a, b] but compare_ holds addon collations [c, d]. Using addon
+  // field_idx_ on sk_row_meta_ reads wrong offsets
   class HashNodeComparer
   {
   public:
-    explicit HashNodeComparer(Compare &compare) : compare_(compare) {}
+    HashNodeComparer(Compare &compare,
+                     const common::ObIArray<ObExpr *> *sk_exprs,
+                     const ObIArray<ObSortFieldCollation> *sk_collations,
+                     int64_t part_cnt,
+                     const RowMeta &row_meta)
+      : compare_(compare), sk_exprs_(sk_exprs), sk_collations_(sk_collations),
+        part_cnt_(part_cnt), row_meta_(row_meta) {}
     bool operator()(const PartHashNode *l, const PartHashNode *r)
     {
-      return compare_(l->store_row_, r->store_row_);
+      bool less = false;
+      if (l->hash_value_ != r->hash_value_) {
+        less = l->hash_value_ < r->hash_value_;
+      } else {
+        int cmp = 0;
+        int ret = OB_SUCCESS;
+        ObLength l_len = 0;
+        ObLength r_len = 0;
+        bool l_null = false;
+        bool r_null = false;
+        const char *l_data = nullptr;
+        const char *r_data = nullptr;
+        for (int64_t i = 1; 0 == cmp && OB_SUCC(ret) && i <= part_cnt_; ++i) {
+          const int64_t idx = sk_collations_->at(i).field_idx_;
+          const ObExpr *e = sk_exprs_->at(idx);
+          auto &sort_cmp_fun = NULL_FIRST == sk_collations_->at(i).null_pos_ ?
+                                  e->basic_funcs_->row_null_first_cmp_ :
+                                  e->basic_funcs_->row_null_last_cmp_;
+          l_null = l->store_row_->is_null(idx);
+          r_null = r->store_row_->is_null(idx);
+          l->store_row_->get_cell_payload(row_meta_, idx, l_data, l_len);
+          r->store_row_->get_cell_payload(row_meta_, idx, r_data, r_len);
+          if (OB_FAIL(sort_cmp_fun(e->obj_meta_, e->obj_meta_, l_data, l_len, l_null,
+                                    r_data, r_len, r_null, cmp))) {
+            SQL_ENG_LOG(WARN, "failed to compare partition keys", K(ret));
+          } else {
+            cmp = sk_collations_->at(i).is_ascending_ ? cmp : -cmp;
+          }
+        }
+        less = cmp < 0;
+      }
+      return less;
     }
     Compare &compare_;
+    const common::ObIArray<ObExpr *> *sk_exprs_;
+    const ObIArray<ObSortFieldCollation> *sk_collations_;
+    int64_t part_cnt_;
+    const RowMeta &row_meta_;
   };
   class CopyableComparer
   {
@@ -259,63 +367,50 @@ private:
   int64_t part_cnt_;
   BucketArray *buckets_;
   BucketNodeArray *part_hash_nodes_;
-  int64_t max_bucket_cnt_;
-  int64_t max_node_cnt_;
-  bool enable_encode_sortkey_;
   const common::ObIArray<ObExpr *> *sk_exprs_;
   const ObIArray<ObSortFieldCollation> *sk_collations_;
+  const ObIArray<ObSortFieldCollation> *addon_collations_;
   ObIAllocator &allocator_;
   common::ModulePageAllocator page_allocator_;
+  bool enable_encode_sortkey_;
+  bool is_fixed_key_sort_enabled_;
+  int64_t fixed_key_len_;
 private:
+  int do_fixed_key_sort(int64_t begin, int64_t row_count, common::ObIArray<Store_Row *> *rows);
   // Compare part key equality using comp_. Equal iff l !< r and r !< l within partition key range.
   int is_equal_part(const Store_Row *l, const Store_Row *r, const RowMeta &row_meta, bool &is_equal)
   {
     int ret = OB_SUCCESS;
     is_equal = true;
-    if (OB_ISNULL(l) && OB_ISNULL(r)) {
-      // do nothing
-    } else if (OB_ISNULL(l) || OB_ISNULL(r)) {
-      is_equal = false;
-    } else {
-      int64_t hash_idx = sk_collations_->at(0).field_idx_;
-      const uint64_t l_hash_value =
-        *(reinterpret_cast<const uint64_t *>(l->get_cell_payload(row_meta, hash_idx)));
-      const uint64_t r_hash_value =
-        *(reinterpret_cast<const uint64_t *>(r->get_cell_payload(row_meta, hash_idx)));
-      if (l_hash_value != r_hash_value) {
+    int cmp_ret = 0;
+    ObLength l_len = 0;
+    ObLength r_len = 0;
+    bool l_null = false;
+    bool r_null = false;
+    const char *l_data = nullptr;
+    const char *r_data = nullptr;
+    for (int64_t i = 1; is_equal && i <= part_cnt_; ++i) {
+      const int64_t idx = sk_collations_->at(i).field_idx_;
+      const ObExpr *e = sk_exprs_->at(idx);
+      auto &sort_cmp_fun = NULL_FIRST == sk_collations_->at(i).null_pos_ ?
+                              e->basic_funcs_->row_null_first_cmp_ :
+                              e->basic_funcs_->row_null_last_cmp_;
+      l_null = l->is_null(idx);
+      r_null = r->is_null(idx);
+      if (l_null != r_null) {
         is_equal = false;
+      } else if (l_null && r_null) {
+        is_equal = true;
       } else {
-        int cmp_ret = 0;
-        ObLength l_len = 0;
-        ObLength r_len = 0;
-        bool l_null = false;
-        bool r_null = false;
-        const char *l_data = nullptr;
-        const char *r_data = nullptr;
-        for (int64_t i = 1; is_equal && i <= part_cnt_; ++i) {
-          const int64_t idx = sk_collations_->at(i).field_idx_;
-          const ObExpr *e = sk_exprs_->at(idx);
-          auto &sort_cmp_fun = NULL_FIRST == sk_collations_->at(i).null_pos_ ?
-                                 e->basic_funcs_->row_null_first_cmp_ :
-                                 e->basic_funcs_->row_null_last_cmp_;
-          l_null = l->is_null(idx);
-          r_null = r->is_null(idx);
-          if (l_null != r_null) {
-            is_equal = false;
-          } else if (l_null && r_null) {
-            is_equal = true;
-          } else {
-            l->get_cell_payload(row_meta, idx, l_data, l_len);
-            r->get_cell_payload(row_meta, idx, r_data, r_len);
-            if (l_len == r_len && (0 == memcmp(l_data, r_data, l_len))) {
-              is_equal = true;
-            } else if (OB_FAIL(sort_cmp_fun(e->obj_meta_, e->obj_meta_, l_data, l_len, l_null, r_data,
-                                            r_len, r_null, cmp_ret))) {
-              SQL_ENG_LOG(WARN, "failed to compare", K(ret));
-            } else {
-              is_equal = (0 == cmp_ret);
-            }
-          }
+        l->get_cell_payload(row_meta, idx, l_data, l_len);
+        r->get_cell_payload(row_meta, idx, r_data, r_len);
+        if (l_len == r_len && (0 == memcmp(l_data, r_data, l_len))) {
+          is_equal = true;
+        } else if (OB_FAIL(sort_cmp_fun(e->obj_meta_, e->obj_meta_, l_data, l_len, l_null, r_data,
+                                        r_len, r_null, cmp_ret))) {
+          SQL_ENG_LOG(WARN, "failed to compare", K(ret));
+        } else {
+          is_equal = (0 == cmp_ret);
         }
       }
     }
@@ -346,8 +441,9 @@ private:
 };
 
 template<typename Compare, typename Store_Row, bool has_addon>
-int ObPartitionSortStrategy<Compare, Store_Row, has_addon>::sort_inmem_data(const int64_t rows_begin, const int64_t rows_end,
-   common::ObIArray<Store_Row *> *rows)
+int ObPartitionSortStrategy<Compare, Store_Row, has_addon>::sort_inmem_data(const int64_t rows_begin,
+                                                                            const int64_t rows_end,
+                                                                            common::ObIArray<Store_Row *> *rows)
 {
   int ret = OB_SUCCESS;
   CK(part_cnt_ > 0);
@@ -368,8 +464,6 @@ int ObPartitionSortStrategy<Compare, Store_Row, has_addon>::sort_inmem_data(cons
       LOG_WARN("failed to create bucket node array", K(ret));
     } else {
       buckets_->set_all(nullptr);
-      max_bucket_cnt_ = bucket_cnt;
-      max_node_cnt_ = node_cnt;
     }
   }
 
@@ -385,10 +479,12 @@ int ObPartitionSortStrategy<Compare, Store_Row, has_addon>::sort_inmem_data(cons
       PartHashNode &insert_node = part_hash_nodes_->at(i - rows_begin);
       PartHashNode *&bucket = buckets_->at(pos);
       insert_node.store_row_ = rows->at(i);
+      insert_node.hash_value_ = hash_value;
       PartHashNode *exist = bucket;
       bool equal = false;
       while (nullptr != exist && OB_SUCC(ret)) {
-        if (OB_FAIL(is_equal_part(exist->store_row_, rows->at(i), row_meta_, equal))) {
+        if (exist->hash_value_ == hash_value
+            && OB_FAIL(is_equal_part(exist->store_row_, rows->at(i), row_meta_, equal))) {
           SQL_ENG_LOG(WARN, "failed to check equal", K(ret));
         } else if (equal) {
           break;
@@ -407,7 +503,6 @@ int ObPartitionSortStrategy<Compare, Store_Row, has_addon>::sort_inmem_data(cons
       }
     }
   }
-
   int64_t rows_idx = rows_begin;
   ObArray<PartHashNode *> bucket_nodes;
   if (OB_SUCC(ret)) {
@@ -433,8 +528,10 @@ int ObPartitionSortStrategy<Compare, Store_Row, has_addon>::sort_inmem_data(cons
       bucket_part_cnt++;
     }
     comp_.set_cmp_range(0, part_cnt_ + hash_expr_cnt);
-    boost::sort::spinsort(&bucket_nodes.at(0), &bucket_nodes.at(0) + bucket_part_cnt, HashNodeComparer(comp_));
+    boost::sort::spinsort(&bucket_nodes.at(0), &bucket_nodes.at(0) + bucket_part_cnt,
+                 HashNodeComparer(comp_, sk_exprs_, sk_collations_, part_cnt_, row_meta_));
     comp_.set_cmp_range(part_cnt_ + hash_expr_cnt, comp_.get_cnt());
+    bool has_order_by = comp_.cmp_start_ != comp_.cmp_end_;
     for (int64_t i = 0; OB_SUCC(ret) && i < bucket_part_cnt; ++i) {
       int64_t rows_last = rows_idx;
       PartHashNode *part_node = bucket_nodes.at(i);
@@ -442,7 +539,8 @@ int ObPartitionSortStrategy<Compare, Store_Row, has_addon>::sort_inmem_data(cons
         rows->at(rows_idx++) = part_node->store_row_;
         part_node = part_node->part_row_next_;
       }
-      if (comp_.cmp_start_ != comp_.cmp_end_) {
+      if (has_order_by && rows_idx - rows_last > 1) {
+        comp_.set_cmp_range(part_cnt_ + hash_expr_cnt, comp_.get_cnt());
         if (enable_encode_sortkey_) {
           bool can_encode = true;
           ObAdaptiveQS<Store_Row> aqs(*rows, row_meta_, allocator_);
@@ -465,6 +563,60 @@ int ObPartitionSortStrategy<Compare, Store_Row, has_addon>::sort_inmem_data(cons
   return ret;
 }
 
+template <typename Compare, typename Store_Row, bool has_addon>
+int ObPartitionSortStrategy<Compare, Store_Row, has_addon>::do_fixed_key_sort(int64_t begin,
+                                                                              int64_t row_count,
+                                                                              common::ObIArray<Store_Row *> *rows)
+{
+  #define FIXED_KEY_SORT(sort_key_len)                                                             \
+    case (sort_key_len): {                                                                         \
+      FixedKeySort<Store_Row, sort_key_len> fixed_key_sort(*rows, row_meta_, allocator_);          \
+      if (OB_FAIL(fixed_key_sort.init(*rows, allocator_, begin, begin + row_count, can_encode))) { \
+        SQL_ENG_LOG(WARN, "failed to init fixed_key_sort", K(ret));                                \
+      } else if (can_encode) {                                                                     \
+        fixed_key_sort.sort(begin, begin + row_count);                                             \
+      }                                                                                            \
+      break;                                                                                       \
+    }
+  int ret = OB_SUCCESS;
+  bool can_encode = true;
+  switch (fixed_key_len_) {
+    FIXED_KEY_SORT(2)
+    FIXED_KEY_SORT(3)
+    FIXED_KEY_SORT(4)
+    FIXED_KEY_SORT(5)
+    FIXED_KEY_SORT(6)
+    FIXED_KEY_SORT(7)
+    FIXED_KEY_SORT(8)
+    FIXED_KEY_SORT(9)
+    FIXED_KEY_SORT(10)
+    FIXED_KEY_SORT(11)
+    FIXED_KEY_SORT(12)
+    FIXED_KEY_SORT(13)
+    FIXED_KEY_SORT(14)
+    FIXED_KEY_SORT(15)
+    FIXED_KEY_SORT(16)
+    FIXED_KEY_SORT(17)
+    FIXED_KEY_SORT(18)
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected encode sort key len", K(ret), K(fixed_key_len_));
+    }
+  }
+  if (OB_SUCC(ret) && !can_encode) {
+    comp_.fallback_to_disable_encode_sortkey();
+    if (has_addon) {
+      if (OB_ISNULL(addon_collations_)) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_ENG_LOG(WARN, "addon_collations_ is null", K(ret));
+      } else {
+        comp_.set_cmp_range(0, addon_collations_->count());
+      }
+    }
+    lib::ob_sort(&rows->at(begin), &rows->at(0) + begin + row_count, CopyableComparer(comp_));
+  }
+  return ret;
+}
 template<typename Compare, typename Store_Row, bool has_addon>
 class ObPartitionTopNSortStrategy : public ObISortStrategy<Compare, Store_Row, has_addon>
 {

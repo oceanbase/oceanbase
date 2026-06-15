@@ -12,6 +12,7 @@
 #include "lib/ob_define.h"
 #include "sql/engine/basic/ob_chunk_row_store.h"
 #include "lib/container/ob_2d_array.h"
+#include "lib/container/ob_array.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
 #include "sql/engine/ob_sql_mem_mgr_processor.h"
 #include "sql/engine/aggregate/ob_aggregate_processor.h"
@@ -50,6 +51,8 @@ class ObRowStore;
 namespace sql
 {
 
+// Sample every 64 hits (hit_cnt & MASK == 0) to update the top-N heap
+const int64_t SKEW_DETECTION_SAMPLE_MASK = 0x3F;
 class ObGbyBloomFilterVec;
 struct BatchAggrRowsTable
 {
@@ -188,6 +191,149 @@ struct ObGroupRowBucket : public ObGroupRowBucketBase
   // keep trivial constructor make ObSegmentArray use memset to construct arrays.
   TO_STRING_KV(K(info_));
   CompactRowItem *item_;
+};
+
+
+template <typename GroupRowBucket>
+class ObGroupByBucketArray
+{
+public:
+  const int64_t BUCKET_ARRAY_CONTIGUOUS_THRESHOLD = get_level3_cache_size() / sizeof(GroupRowBucket);
+
+  using ContiguousArrayType = common::ObArray<GroupRowBucket,
+                                              common::ModulePageAllocator,
+                                              false>;
+  using SegmentedArrayType = common::ObSegmentArray<GroupRowBucket,
+                                                   OB_MALLOC_MIDDLE_BLOCK_SIZE,
+                                                   common::ModulePageAllocator,
+                                                   false,
+                                                   common::ObSEArray<GroupRowBucket *, 64,
+                                                   common::ModulePageAllocator, false>,
+                                                   true>;
+
+  explicit ObGroupByBucketArray(common::ModulePageAllocator &alloc)
+    : use_contiguous_(true),
+      allocator_(alloc),
+      contiguous_array_(OB_MALLOC_NORMAL_BLOCK_SIZE, alloc),
+      segmented_array_(nullptr)
+  {}
+
+  ~ObGroupByBucketArray() { destroy(); }
+
+  int init(int64_t capacity)
+  {
+    int ret = common::OB_SUCCESS;
+    if (capacity <= 0) {
+      ret = common::OB_INVALID_ARGUMENT;
+      SQL_ENG_LOG(WARN, "invalid capacity", K(ret), K(capacity));
+    } else {
+      use_contiguous_ = (capacity <= BUCKET_ARRAY_CONTIGUOUS_THRESHOLD);
+      if (use_contiguous_) {
+        contiguous_array_.reset();
+        if (OB_FAIL(contiguous_array_.prepare_allocate(capacity))) {
+          SQL_ENG_LOG(WARN, "failed to prepare_allocate contiguous array", K(ret), K(capacity));
+        }
+        segmented_array_ = nullptr;
+      } else {
+        contiguous_array_.reset();
+        if (nullptr == segmented_array_) {
+          void *buf = allocator_.alloc(sizeof(SegmentedArrayType));
+          if (OB_ISNULL(buf)) {
+            ret = common::OB_ALLOCATE_MEMORY_FAILED;
+            SQL_ENG_LOG(WARN, "failed to alloc SegmentedArrayType", K(ret));
+          } else {
+            segmented_array_ = new(buf) SegmentedArrayType(allocator_);
+          }
+        }
+        if (OB_SUCC(ret)) {
+          segmented_array_->reuse();
+          if (OB_FAIL(segmented_array_->init(capacity))) {
+            SQL_ENG_LOG(WARN, "failed to init segmented array", K(ret), K(capacity));
+            segmented_array_->~SegmentedArrayType();
+            allocator_.free(segmented_array_);
+            segmented_array_ = nullptr;
+          }
+        }
+      }
+    }
+    return ret;
+  }
+
+  void destroy()
+  {
+    if (use_contiguous_) {
+      contiguous_array_.destroy();
+    } else if (nullptr != segmented_array_) {
+      segmented_array_->destroy();
+      segmented_array_->~SegmentedArrayType();
+      allocator_.free(segmented_array_);
+      segmented_array_ = nullptr;
+    }
+    use_contiguous_ = false;
+  }
+
+  void set_tenant_id(int64_t tenant_id)
+  {
+    if (use_contiguous_) {
+      contiguous_array_.set_tenant_id(tenant_id);
+    } else if (nullptr != segmented_array_) {
+      segmented_array_->set_tenant_id(tenant_id);
+    }
+  }
+
+  int64_t count() const
+  {
+    return use_contiguous_ ? contiguous_array_.count() : segmented_array_->count();
+  }
+
+  void reuse()
+  {
+    if (use_contiguous_) {
+      contiguous_array_.reuse();
+    } else if (nullptr != segmented_array_) {
+      segmented_array_->reuse();
+    }
+  }
+
+  int64_t mem_used() const
+  {
+    int64_t used = 0;
+    if (use_contiguous_) {
+      used = contiguous_array_.get_data_size();
+    } else if (nullptr != segmented_array_) {
+      used = segmented_array_->mem_used();
+    }
+    return used;
+  }
+
+  bool is_contiguous() const { return use_contiguous_; }
+
+  ContiguousArrayType *get_contiguous_array()
+  {
+    return use_contiguous_ ? &contiguous_array_ : nullptr;
+  }
+
+  const ContiguousArrayType *get_contiguous_array() const
+  {
+    return use_contiguous_ ? &contiguous_array_ : nullptr;
+  }
+
+  SegmentedArrayType *get_segmented_array()
+  {
+    return use_contiguous_ ? nullptr : segmented_array_;
+  }
+
+  const SegmentedArrayType *get_segmented_array() const
+  {
+    return use_contiguous_ ? nullptr : segmented_array_;
+  }
+
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObGroupByBucketArray);
+  bool use_contiguous_;
+  common::ModulePageAllocator &allocator_;
+  ContiguousArrayType contiguous_array_;
+  SegmentedArrayType *segmented_array_;
 };
 
 class ShortStringAggregator
@@ -546,12 +692,7 @@ public:
   const static int64_t SKEW_ITEM_CNT_TOLERANCE = 64;
   constexpr static const float SKEW_POPULAR_MIN_RATIO = 0.01;
 
-  using BucketArray = common::ObSegmentArray<GroupRowBucket,
-                                             OB_MALLOC_MIDDLE_BLOCK_SIZE,
-                                             common::ModulePageAllocator,
-                                             false,
-                                             ObSEArray<GroupRowBucket *, 64, common::ModulePageAllocator, false>,
-                                             true>;
+  using BucketArray = ObGroupByBucketArray<GroupRowBucket>;
 
   ObExtendHashTableVec(int64_t tenant_id)
     : is_inited_vec_(false),
@@ -602,7 +743,9 @@ public:
       iter_end_ = false;
       store_iter_.reset();
     }
-    int get_next_batch_from_table(const ObCompactRow **rows, const int64_t max_rows, int64_t &read_rows)
+    template <typename BucketArrayType>
+    int get_next_batch_from_table_impl(BucketArrayType *arr, const ObCompactRow **rows,
+                                      const int64_t max_rows, int64_t &read_rows)
     {
       int ret = OB_SUCCESS;
       read_rows = 0;
@@ -615,12 +758,12 @@ public:
         inited_ = true;
         curr_bkt_idx_ = 0;
         scan_cnt_ = 0;
-        while (curr_bkt_idx_ < hash_set_.buckets_->count() && !hash_set_.buckets_->at(curr_bkt_idx_).is_valid()) {
+        while (curr_bkt_idx_ < arr->count() && !arr->at(curr_bkt_idx_).is_valid()) {
           ++curr_bkt_idx_;
         }
-        if (curr_bkt_idx_ < hash_set_.buckets_->count()) {
-          rows[read_idx] = &hash_set_.buckets_->at(curr_bkt_idx_).get_item();
-          curr_item_ = const_cast<ObGroupRowItemVec *> (static_cast<const ObGroupRowItemVec *> (rows[read_idx]));
+        if (curr_bkt_idx_ < arr->count()) {
+          rows[read_idx] = &arr->at(curr_bkt_idx_).get_item();
+          curr_item_ = const_cast<ObGroupRowItemVec *>(static_cast<const ObGroupRowItemVec *>(rows[read_idx]));
           ++scan_cnt_;
           ++read_rows;
           ++read_idx;
@@ -632,13 +775,13 @@ public:
         for (int64_t i = read_idx; !iter_end_ && i < max_rows; ++i) {
           do {
             ++curr_bkt_idx_;
-            if (curr_bkt_idx_ >= hash_set_.buckets_->count()) {
+            if (curr_bkt_idx_ >= arr->count()) {
               iter_end_ = true;
             }
-          } while(!iter_end_ && !hash_set_.buckets_->at(curr_bkt_idx_).is_valid());
+          } while (!iter_end_ && !arr->at(curr_bkt_idx_).is_valid());
           if (!iter_end_) {
-            rows[i] = &hash_set_.buckets_->at(curr_bkt_idx_).get_item();
-            curr_item_ = const_cast<ObGroupRowItemVec *> (static_cast<const ObGroupRowItemVec *> (rows[i]));
+            rows[i] = &arr->at(curr_bkt_idx_).get_item();
+            curr_item_ = const_cast<ObGroupRowItemVec *>(static_cast<const ObGroupRowItemVec *>(rows[i]));
             ++scan_cnt_;
             ++read_rows;
           }
@@ -646,12 +789,23 @@ public:
         if (iter_end_ && scan_cnt_ != hash_set_.size()) {
           ret = OB_ERR_UNEXPECTED;
           SQL_ENG_LOG(WARN, "scan cnt is not match", K(ret), K(read_rows), K(scan_cnt_),
-                                                     K(hash_set_.size()), K(curr_bkt_idx_),
-                                                     K(hash_set_.get_bucket_num()));
+                      K(hash_set_.size()), K(curr_bkt_idx_), K(hash_set_.get_bucket_num()));
         } else if (!iter_end_ && read_rows != max_rows) {
           ret = OB_ERR_UNEXPECTED;
           SQL_ENG_LOG(WARN, "read rows is not match", K(ret), K(read_rows), K(max_rows));
         }
+      }
+      return ret;
+    }
+    int get_next_batch_from_table(const ObCompactRow **rows, const int64_t max_rows, int64_t &read_rows)
+    {
+      int ret = OB_SUCCESS;
+      if (OB_ISNULL(hash_set_.buckets_)) {
+        ret = OB_ERR_UNEXPECTED;
+      } else if (hash_set_.buckets_->is_contiguous()) {
+        ret = get_next_batch_from_table_impl(hash_set_.buckets_->get_contiguous_array(), rows, max_rows, read_rows);
+      } else {
+        ret = get_next_batch_from_table_impl(hash_set_.buckets_->get_segmented_array(), rows, max_rows, read_rows);
       }
       return ret;
     }
@@ -761,6 +915,7 @@ public:
           bool use_sstr_aggr,
           int64_t aggr_row_size,
           int64_t initial_size);
+  template <bool ENABLE_SKEW_DETECTION>
   int append_batch(const common::ObIArray<ObExpr *> &gby_exprs,
                    const ObBatchRows &child_brs,
                    const bool *is_dumped,
@@ -789,8 +944,9 @@ public:
                     uint16_t *new_row_pos,
                     uint16_t *old_row_pos,
                     int64_t &new_row_cnt,
-                    int64_t &old_row_cnt);
-  template <bool ALL_ROWS_ACTIVE>
+                    int64_t &old_row_cnt,
+                    bool enable_skew_detection = true);
+  template <bool ALL_ROWS_ACTIVE, bool ENABLE_SKEW_DETECTION>
   int inner_process_batch(const common::ObIArray<ObExpr *> &gby_exprs,
                           const ObBatchRows &child_brs,
                           const bool *is_dumped,
@@ -811,6 +967,7 @@ public:
                           uint16_t *old_row_pos,
                           int64_t &new_row_cnt,
                           int64_t &old_row_cnt);
+  template <bool ENABLE_SKEW_DETECTION>
   int inner_process_batch(const RowMeta &row_meta,
                           const int64_t batch_size,
                           const ObBitVector *child_skip,
@@ -819,7 +976,8 @@ public:
                           StoreRowFunc sf,
                           const bool probe_by_col,
                           const int64_t start_idx,
-                          int64_t &processed_idx);
+                          int64_t &processed_idx,
+                          common::ObArray<std::pair<uint64_t, int32_t>> *popular_array_temp = nullptr);
   int inner_process_column(const common::ObIArray<ObExpr *> &gby_exprs,
                            const RowMeta &row_meta,
                            const int64_t col_idx,
@@ -831,6 +989,32 @@ public:
 
   static bool group_row_items_greater(const std::pair<const ObCompactRow*, int32_t> &a,
                                       const std::pair<const ObCompactRow*, int32_t> &b);
+  // Deduplicated flat array: each hash_val occupies at most 1 slot.
+  // Linear scan for dedup + track min_idx for eviction.
+  OB_NOINLINE static int try_update_top_n_heap(
+      common::ObArray<std::pair<uint64_t, int32_t>> &arr,
+      uint64_t hash_val, int32_t cnt)
+  {
+    int ret = OB_SUCCESS;
+    int64_t min_idx = 0;
+    bool found = false;
+    for (int64_t i = 0; i < arr.count() && !found; i++) {
+      if (arr.at(i).first == hash_val) {
+        arr.at(i).second = cnt;
+        found = true;
+      } else if (arr.at(i).second < arr.at(min_idx).second) {
+        min_idx = i;
+      }
+    }
+    if (found) {
+      // already updated in-place
+    } else if (arr.count() < SKEW_HEAP_SIZE && OB_FAIL(arr.push_back(std::make_pair(hash_val, cnt)))) {
+      LOG_WARN("failed to push_back into top-n heap", K(ret));
+    } else if (cnt > arr.at(min_idx).second) {
+      arr.at(min_idx) = std::make_pair(hash_val, cnt);
+    }
+    return ret;
+  }
 
   int process_popular_value_batch(ObBatchRows *result_brs,
                                   const common::ObIArray<ObExpr *> &exprs,
@@ -846,11 +1030,36 @@ public:
                                   common::hash::ObHashMap<uint64_t, uint64_t,
                                   hash::NoPthreadDefendMode> *popular_map);
 
+  int process_popular_value_batch_distinct(
+      const RowMeta &row_meta,
+      const common::ObIArray<ObExpr *> &exprs,
+      ObBatchRows *result_brs,
+      uint64_t *hash_vals,
+      uint64_t &by_pass_rows,
+      const uint64_t check_valid_threshold,
+      int64_t dop,
+      common::hash::ObHashMap<uint64_t, uint64_t,
+      hash::NoPthreadDefendMode> *popular_map,
+      StoreRowFunc store_func);
+
   int check_popular_values_validity(uint64_t &by_pass_rows,
                                     const uint64_t check_valid_threshold,
                                     int64_t dop,
                                     common::hash::ObHashMap<uint64_t, uint64_t,
                                     hash::NoPthreadDefendMode> *popular_map);
+  // Extend buckets to fit the upcoming batch (size_ + batch_size rows),
+  // looping until the load factor stays below SIZE_BUCKET_SCALE.
+  int extend_buckets_for_batch(const int64_t batch_size);
+  // Shared per-row prologue for process_popular_value_batch{,_distinct}:
+  // checks popular_map membership, then locates the bucket if applicable.
+  int probe_popular_bucket(const RowMeta &row_meta,
+                            const int64_t batch_idx,
+                            const uint64_t hash_val,
+                            common::hash::ObHashMap<uint64_t, uint64_t,
+                            hash::NoPthreadDefendMode> *popular_map,
+                            GroupRowBucket *&now_bucket,
+                            RowItemType *&exist_item,
+                            bool &can_add_row);
   void prefetch(const ObBatchRows &brs, uint64_t *hash_vals) const;
   // Link item to hash table, extend buckets if needed.
   // (Do not check item is exist or not)
@@ -896,9 +1105,22 @@ public:
     int ret = common::OB_SUCCESS;
     if (nullptr != buckets_) {
       int64_t bucket_num = get_bucket_num();
-      buckets_->reuse();
-      if (OB_FAIL(buckets_->init(bucket_num))) {
-        SQL_ENG_LOG(ERROR, "resize bucket array failed", K(size_), K(bucket_num), K(get_bucket_num()));
+      if (buckets_->is_contiguous()) {
+        typename BucketArray::ContiguousArrayType *arr = buckets_->get_contiguous_array();
+        if (OB_ISNULL(arr)) {
+          ret = common::OB_ERR_UNEXPECTED;
+          SQL_ENG_LOG(ERROR, "unexpected null contiguous bucket array", K(ret), K(size_), K(bucket_num));
+        } else if (OB_UNLIKELY(bucket_num != arr->count() || bucket_num == 0)) {
+          ret = common::OB_ERR_UNEXPECTED;
+          SQL_ENG_LOG(ERROR, "unexpected bucket num", K(ret), K(bucket_num), K(arr->count()));
+        } else {
+          MEMSET(&arr->at(0), 0, sizeof(GroupRowBucket) * bucket_num);
+        }
+      } else {
+        buckets_->reuse();
+        if (OB_FAIL(buckets_->init(bucket_num))) {
+          SQL_ENG_LOG(ERROR, "resize bucket array failed", K(size_), K(bucket_num), K(get_bucket_num()));
+        }
       }
     }
     if (col_has_null_.count() > 0) {
@@ -971,9 +1193,19 @@ public:
       ret = OB_INVALID_ARGUMENT;
       SQL_ENG_LOG(WARN, "invalid null buckets", K(ret), K(buckets_));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < get_bucket_num(); i++) {
-      if (buckets_->at(i).is_valid() && OB_FAIL(cb(buckets_->at(i).get_hash()))) {
-        SQL_ENG_LOG(WARN, "call back failed", K(ret));
+    if (buckets_->is_contiguous()) {
+      typename BucketArray::ContiguousArrayType *arr = buckets_->get_contiguous_array();
+      for (int64_t i = 0; OB_SUCC(ret) && i < get_bucket_num(); i++) {
+        if (arr->at(i).is_valid() && OB_FAIL(cb(arr->at(i).get_hash()))) {
+          SQL_ENG_LOG(WARN, "call back failed", K(ret));
+        }
+      }
+    } else {
+      typename BucketArray::SegmentedArrayType *arr = buckets_->get_segmented_array();
+      for (int64_t i = 0; OB_SUCC(ret) && i < get_bucket_num(); i++) {
+        if (arr->at(i).is_valid() && OB_FAIL(cb(arr->at(i).get_hash()))) {
+          SQL_ENG_LOG(WARN, "call back failed", K(ret));
+        }
       }
     }
     return ret;
@@ -986,9 +1218,19 @@ public:
       ret = OB_INVALID_ARGUMENT;
       SQL_ENG_LOG(WARN, "invalid null buckets", K(ret), K(buckets_));
     }
-    for (int64_t i = 0; OB_SUCC(ret) && i < get_bucket_num(); i++) {
-      if (OB_FAIL(cb(buckets_->at(i)))) {
-        SQL_ENG_LOG(WARN, "call back failed", K(ret));
+    if (buckets_->is_contiguous()) {
+      typename BucketArray::ContiguousArrayType *arr = buckets_->get_contiguous_array();
+      for (int64_t i = 0; OB_SUCC(ret) && i < get_bucket_num(); i++) {
+        if (OB_FAIL(cb(arr->at(i)))) {
+          SQL_ENG_LOG(WARN, "call back failed", K(ret));
+        }
+      }
+    } else {
+      typename BucketArray::SegmentedArrayType *arr = buckets_->get_segmented_array();
+      for (int64_t i = 0; OB_SUCC(ret) && i < get_bucket_num(); i++) {
+        if (OB_FAIL(cb(arr->at(i)))) {
+          SQL_ENG_LOG(WARN, "call back failed", K(ret));
+        }
       }
     }
     return ret;
@@ -998,13 +1240,8 @@ public:
                          const ObBitVector *child_skip,
                          ObBitVector &my_skip,
                          uint64_t *hash_values,
-                         StoreRowFunc sf);
-  int inner_process_batch(const RowMeta &row_meta,
-                          const int64_t batch_size,
-                          const ObBitVector *child_skip,
-                          ObBitVector &my_skip,
-                          uint64_t *hash_values,
-                          StoreRowFunc sf);
+                         StoreRowFunc sf,
+                         common::ObArray<std::pair<uint64_t, int32_t>> *popular_array_temp);
   int get(const RowMeta &row_meta,
           const int64_t batch_idx,
           uint64_t hash_val,
@@ -1019,7 +1256,8 @@ public:
 protected:
   // Locate the bucket with the same hash value, or empty bucket if not found.
   // The returned empty bucket is the insert position for the %hash_val
-  OB_INLINE const GroupRowBucket &locate_next_bucket(const BucketArray &buckets,
+  template <typename BucketArrayType>
+  OB_INLINE const GroupRowBucket &locate_next_bucket(const BucketArrayType &buckets,
                                                      const uint64_t hash_val,
                                                      int64_t &curr_pos) const
   {
@@ -1027,7 +1265,6 @@ protected:
     const int64_t cnt = buckets.count();
     uint64_t mask_hash = (hash_val & ObGroupRowBucketBase::HASH_VAL_MASK);
     if (OB_LIKELY(curr_pos < 0)) {
-      // relocate bkt
       curr_pos = mask_hash & (cnt - 1);
       bucket = &buckets.at(curr_pos);
     } else {
@@ -1038,37 +1275,42 @@ protected:
     }
     return *bucket;
   }
-  OB_NOINLINE void locate_batch_buckets(const BucketArray &buckets,
+  template <typename BucketArrayType>
+  OB_NOINLINE void locate_batch_buckets(const BucketArrayType &buckets,
                                         const uint64_t *hash_values,
                                         const int64_t batch_size)
   {
     const int64_t cnt = buckets.count();
+    const int64_t cnt_mask = cnt - 1;
     for (int64_t i = 0; i < batch_size; ++i) {
       if (i < batch_size - 8) {
-        __builtin_prefetch((&buckets_->at((ObGroupRowBucketBase::HASH_VAL_MASK & hash_values[i + 8]) & (cnt - 1))),
+        __builtin_prefetch((&buckets.at((ObGroupRowBucketBase::HASH_VAL_MASK & hash_values[i + 8]) & cnt_mask)),
                           0/* read */, 2 /*high temp locality*/);
       }
-      int64_t curr_pos = (hash_values[i] & ObGroupRowBucketBase::HASH_VAL_MASK & (cnt - 1));
-      locate_buckets_[i] = const_cast <GroupRowBucket *> (&buckets.at(curr_pos));
+      int64_t curr_pos = (hash_values[i] & ObGroupRowBucketBase::HASH_VAL_MASK) & cnt_mask;
+      locate_buckets_[i] = const_cast<GroupRowBucket *>(&buckets.at(curr_pos));
       while (!locate_buckets_[i]->check_hash(hash_values[i] & ObGroupRowBucketBase::HASH_VAL_MASK)
               && locate_buckets_[i]->is_valid()) {
-        locate_buckets_[i] = const_cast <GroupRowBucket *> (&buckets.at((++curr_pos) & (cnt - 1)));
+        curr_pos = (curr_pos + 1) & cnt_mask;
+        locate_buckets_[i] = const_cast<GroupRowBucket *>(&buckets.at(curr_pos));
       }
     }
   }
-  // used for extend
-  OB_INLINE const GroupRowBucket &locate_empty_bucket(const BucketArray &buckets,
+  template <typename BucketArrayType>
+  OB_INLINE const GroupRowBucket &locate_empty_bucket(const BucketArrayType &buckets,
                                                       const uint64_t hash_val) const
   {
     const int64_t cnt = buckets.count();
     uint64_t mask_hash = (hash_val & ObGroupRowBucketBase::HASH_VAL_MASK);
     int64_t curr_pos = mask_hash & (cnt - 1);
-    const GroupRowBucket * bucket = &buckets.at(curr_pos);
+    const GroupRowBucket *bucket = &buckets.at(curr_pos);
     while (bucket->is_valid()) {
       bucket = &buckets.at((++curr_pos) & (cnt - 1));
     }
     return *bucket;
   }
+  template <typename OldArrType, typename NewArrType>
+  int extend_copy_buckets(OldArrType *old_arr, NewArrType *new_arr, const int64_t size);
 
 protected:
   DISALLOW_COPY_AND_ASSIGN(ObExtendHashTableVec);
@@ -1147,6 +1389,23 @@ int ObExtendHashTableVec<GroupRowBucket>::resize(ObIAllocator *allocator, int64_
 }
 
 template <typename GroupRowBucket>
+template <typename OldArrType, typename NewArrType>
+int ObExtendHashTableVec<GroupRowBucket>::extend_copy_buckets(OldArrType *old_arr, NewArrType *new_arr, const int64_t size)
+{
+  int ret = common::OB_SUCCESS;
+  for (int64_t i = 0; i < size; i++) {
+    const GroupRowBucket &old = old_arr->at(i);
+    if (old.is_valid()) {
+      const_cast<GroupRowBucket &>(locate_empty_bucket(*new_arr, old.get_hash())) = old;
+    } else if (old.is_occupyed()) {
+      ret = OB_ERR_UNEXPECTED;
+      SQL_ENG_LOG(WARN, "extend is prepare allocated", K(old.get_hash()));
+    }
+  }
+  return ret;
+}
+
+template <typename GroupRowBucket>
 int ObExtendHashTableVec<GroupRowBucket>::extend(const int64_t new_bucket_num)
 {
   int ret = common::OB_SUCCESS;
@@ -1172,13 +1431,17 @@ int ObExtendHashTableVec<GroupRowBucket>::extend(const int64_t new_bucket_num)
       SQL_ENG_LOG(WARN, "resize bucket array failed", K(ret), K(new_bucket_num));
     } else {
       const int64_t size = get_bucket_num();
-      for (int64_t i = 0; i < size; i++) {
-        const GroupRowBucket &old = buckets_->at(i);
-        if (old.is_valid()) {
-          const_cast<GroupRowBucket &>(locate_empty_bucket(*new_buckets, old.get_hash())) = old;
-        } else if (old.is_occupyed()) {
-          ret = OB_ERR_UNEXPECTED;
-          SQL_ENG_LOG(WARN, "extend is prepare allocated", K(old.get_hash()));
+      if (buckets_->is_contiguous()) {
+        if (new_buckets->is_contiguous()) {
+          ret = extend_copy_buckets(buckets_->get_contiguous_array(), new_buckets->get_contiguous_array(), size);
+        } else {
+          ret = extend_copy_buckets(buckets_->get_contiguous_array(), new_buckets->get_segmented_array(), size);
+        }
+      } else {
+        if (new_buckets->is_contiguous()) {
+          ret = extend_copy_buckets(buckets_->get_segmented_array(), new_buckets->get_contiguous_array(), size);
+        } else {
+          ret = extend_copy_buckets(buckets_->get_segmented_array(), new_buckets->get_segmented_array(), size);
         }
       }
       buckets_->destroy();
@@ -1231,17 +1494,36 @@ int ObExtendHashTableVec<GroupRowBucket>::get(const RowMeta &row_meta,
   } else {
     int64_t curr_pos = -1;
     bool find_bkt = false;
-    while (OB_SUCC(ret) && !find_bkt) {
-      bucket = const_cast<GroupRowBucket *> (&locate_next_bucket(*buckets_, hash_val, curr_pos));
-      if (!bucket->is_valid()) {
-        find_bkt = true;
-      } else {
-        RowItemType *it = &(bucket->get_item());
-        if (OB_FAIL(likely_equal_nullable(row_meta, static_cast<ObCompactRow&>(*it), batch_idx, result))) {
-          SQL_ENG_LOG(WARN, "failed to cmp", K(ret));
-        } else if (result) {
-          item = it;
+    if (buckets_->is_contiguous()) {
+      typename BucketArray::ContiguousArrayType *arr = buckets_->get_contiguous_array();
+      while (OB_SUCC(ret) && !find_bkt) {
+        bucket = const_cast<GroupRowBucket *>(&locate_next_bucket(*arr, hash_val, curr_pos));
+        if (!bucket->is_valid()) {
           find_bkt = true;
+        } else {
+          RowItemType *it = &(bucket->get_item());
+          if (OB_FAIL(likely_equal_nullable(row_meta, static_cast<ObCompactRow&>(*it), batch_idx, result))) {
+            SQL_ENG_LOG(WARN, "failed to cmp", K(ret));
+          } else if (result) {
+            item = it;
+            find_bkt = true;
+          }
+        }
+      }
+    } else {
+      typename BucketArray::SegmentedArrayType *arr = buckets_->get_segmented_array();
+      while (OB_SUCC(ret) && !find_bkt) {
+        bucket = const_cast<GroupRowBucket *>(&locate_next_bucket(*arr, hash_val, curr_pos));
+        if (!bucket->is_valid()) {
+          find_bkt = true;
+        } else {
+          RowItemType *it = &(bucket->get_item());
+          if (OB_FAIL(likely_equal_nullable(row_meta, static_cast<ObCompactRow&>(*it), batch_idx, result))) {
+            SQL_ENG_LOG(WARN, "failed to cmp", K(ret));
+          } else if (result) {
+            item = it;
+            find_bkt = true;
+          }
         }
       }
     }
@@ -1351,22 +1633,20 @@ int ObExtendHashTableVec<GroupRowBucket>::set_unique_batch(const common::ObIArra
                                                            char **batch_new_rows)
 {
   int ret = OB_SUCCESS;
-  while (OB_SUCC(ret) && OB_UNLIKELY((size_ + child_brs.size_)
-                                                      * SIZE_BUCKET_SCALE >= get_bucket_num())) {
-    int64_t pre_bkt_num = get_bucket_num();
-    if (OB_FAIL(extend())) {
-      SQL_ENG_LOG(WARN, "extend failed", K(ret));
-    } else if (get_bucket_num() <= pre_bkt_num) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to extend table", K(ret), K(pre_bkt_num), K(get_bucket_num()));
-    }
+  if (OB_FAIL(extend_buckets_for_batch(child_brs.size_))) {
+    LOG_WARN("extend buckets for batch failed", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < child_brs.size_; ++i) {
     if (nullptr == batch_new_rows[i]) {
       continue;
     }
     ObCompactRow &srow = call_processor_get_groupby_stored_row_to_avoid_cycle_include(group_store_.get_row_meta(), batch_new_rows[i]);
-    GroupRowBucket *bucket = const_cast<GroupRowBucket *> (&locate_empty_bucket(*buckets_, hash_values[i]));
+    GroupRowBucket *bucket = nullptr;
+    if (buckets_->is_contiguous()) {
+      bucket = const_cast<GroupRowBucket *>(&locate_empty_bucket(*buckets_->get_contiguous_array(), hash_values[i]));
+    } else {
+      bucket = const_cast<GroupRowBucket *>(&locate_empty_bucket(*buckets_->get_segmented_array(), hash_values[i]));
+    }
     bucket->set_hash(hash_values[i]);
     bucket->set_valid();
     bucket->set_bkt_seq(size_);
@@ -1377,6 +1657,7 @@ int ObExtendHashTableVec<GroupRowBucket>::set_unique_batch(const common::ObIArra
 }
 
 template <typename GroupRowBucket>
+template <bool ENABLE_SKEW_DETECTION>
 int ObExtendHashTableVec<GroupRowBucket>::append_batch(const common::ObIArray<ObExpr *> &gby_exprs,
                                                        const ObBatchRows &child_brs,
                                                        const bool *is_dumped,
@@ -1418,7 +1699,9 @@ int ObExtendHashTableVec<GroupRowBucket>::append_batch(const common::ObIArray<Ob
         curr_bkt->set_valid();
         curr_bkt->set_bkt_seq(size_ + i);
         curr_bkt->set_item(static_cast<ObGroupRowItemVec &> (*curr_row));
-        curr_bkt->get_item().init_hit_cnt(1);
+        if (ENABLE_SKEW_DETECTION) {
+          curr_bkt->get_item().init_hit_cnt(1);
+        }
         get_row = curr_bkt->get_item().get_aggr_row(group_store_.get_row_meta());
         CK (OB_NOT_NULL(get_row));
       }
@@ -1448,7 +1731,8 @@ int ObExtendHashTableVec<GroupRowBucket>::process_batch(const common::ObIArray<O
                                                         uint16_t *new_row_pos,
                                                         uint16_t *old_row_pos,
                                                         int64_t &new_row_cnt,
-                                                        int64_t &old_row_cnt)
+                                                        int64_t &old_row_cnt,
+                                                        bool enable_skew_detection)
 {
   int ret = OB_SUCCESS;
   new_row_cnt = 0;
@@ -1459,16 +1743,8 @@ int ObExtendHashTableVec<GroupRowBucket>::process_batch(const common::ObIArray<O
     LOG_WARN("failed to check batch length", K(ret));
   } else if (!sstr_aggr_.is_valid()) {
     new_row_selector_cnt_ = 0;
-    // extend bucket to hold whole batch
-    while (OB_SUCC(ret) && OB_UNLIKELY((size_ + child_brs.size_)
-                                                        * SIZE_BUCKET_SCALE >= get_bucket_num())) {
-      int64_t pre_bkt_num = get_bucket_num();
-      if (OB_FAIL(extend())) {
-        SQL_ENG_LOG(WARN, "extend failed", K(ret));
-      } else if (get_bucket_num() <= pre_bkt_num) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("failed to extend table", K(ret), K(pre_bkt_num), K(get_bucket_num()));
-      }
+    if (OB_FAIL(extend_buckets_for_batch(child_brs.size_))) {
+      LOG_WARN("extend buckets for batch failed", K(ret));
     }
     if (OB_SUCC(ret) && OB_ISNULL(locate_buckets_)) {
       if (OB_ISNULL(locate_buckets_ = static_cast<GroupRowBucket **> (allocator_.alloc(sizeof(GroupRowBucket *) * max_batch_size_)))) {
@@ -1494,28 +1770,34 @@ int ObExtendHashTableVec<GroupRowBucket>::process_batch(const common::ObIArray<O
         return ret;
       }
       #endif
-      if (all_rows_active ? OB_FAIL(inner_process_batch<true>(gby_exprs, child_brs, is_dumped,
-                                      hash_values, lengths, can_append_batch,
-                                      bloom_filter, batch_old_rows, batch_new_rows,
-                                      agg_row_cnt, agg_group_cnt, batch_aggr_rows,
-                                      need_reinit_vectors, true, start_idx, processed_idx,
-                                      new_row_pos, old_row_pos, new_row_cnt, old_row_cnt))
-                          : OB_FAIL(inner_process_batch<false>(gby_exprs, child_brs, is_dumped,
-                                      hash_values, lengths, can_append_batch,
-                                      bloom_filter, batch_old_rows, batch_new_rows,
-                                      agg_row_cnt, agg_group_cnt, batch_aggr_rows,
-                                      need_reinit_vectors, true, start_idx, processed_idx,
-                                      new_row_pos, old_row_pos, new_row_cnt, old_row_cnt))) {
-        LOG_WARN("failed to process batch", K(ret));
-      } else if (processed_idx < child_brs.size_
-                 && OB_FAIL(inner_process_batch<false>(gby_exprs, child_brs, is_dumped,
-                                                hash_values, lengths, can_append_batch,
-                                                bloom_filter, batch_old_rows, batch_new_rows,
-                                                agg_row_cnt, agg_group_cnt, batch_aggr_rows,
-                                                need_reinit_vectors, false, processed_idx, processed_idx,
-                                                new_row_pos, old_row_pos, new_row_cnt, old_row_cnt))) {
-        LOG_WARN("failed to process batch fallback", K(ret));
+#define DISPATCH_INNER_PROCESS_BATCH(ALL_ACTIVE, SKEW, PROBE_BY_COL, START)        \
+        inner_process_batch<ALL_ACTIVE, SKEW>(gby_exprs, child_brs, is_dumped,    \
+                                              hash_values, lengths, can_append_batch, \
+                                              bloom_filter, batch_old_rows, batch_new_rows, \
+                                              agg_row_cnt, agg_group_cnt, batch_aggr_rows, \
+                                              need_reinit_vectors, PROBE_BY_COL, START, processed_idx, \
+                                              new_row_pos, old_row_pos, new_row_cnt, old_row_cnt)
+      if (all_rows_active) {
+        if (enable_skew_detection
+            ? OB_FAIL(DISPATCH_INNER_PROCESS_BATCH(true, true, true, start_idx))
+            : OB_FAIL(DISPATCH_INNER_PROCESS_BATCH(true, false, true, start_idx))) {
+          LOG_WARN("failed to process batch", K(ret));
+        }
+      } else {
+        if (enable_skew_detection
+            ? OB_FAIL(DISPATCH_INNER_PROCESS_BATCH(false, true, true, start_idx))
+            : OB_FAIL(DISPATCH_INNER_PROCESS_BATCH(false, false, true, start_idx))) {
+          LOG_WARN("failed to process batch", K(ret));
+        }
       }
+      if (OB_SUCC(ret) && processed_idx < child_brs.size_) {
+        if (enable_skew_detection
+            ? OB_FAIL(DISPATCH_INNER_PROCESS_BATCH(false, true, false, processed_idx))
+            : OB_FAIL(DISPATCH_INNER_PROCESS_BATCH(false, false, false, processed_idx))) {
+          LOG_WARN("failed to process batch fallback", K(ret));
+        }
+      }
+#undef DISPATCH_INNER_PROCESS_BATCH
     }
   } else {
     bool has_new_row = false;
@@ -1546,6 +1828,77 @@ bool ObExtendHashTableVec<GroupRowBucket>::group_row_items_greater(
 }
 
 template <typename GroupRowBucket>
+int ObExtendHashTableVec<GroupRowBucket>::extend_buckets_for_batch(const int64_t batch_size)
+{
+  int ret = OB_SUCCESS;
+  while (OB_SUCC(ret) && OB_UNLIKELY((size_ + batch_size)
+                                                      * SIZE_BUCKET_SCALE >= get_bucket_num())) {
+    int64_t pre_bkt_num = get_bucket_num();
+    if (OB_FAIL(extend())) {
+      SQL_ENG_LOG(WARN, "extend failed", K(ret));
+    } else if (get_bucket_num() <= pre_bkt_num) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("failed to extend table", K(ret), K(pre_bkt_num), K(get_bucket_num()));
+    }
+  }
+  return ret;
+}
+
+template <typename GroupRowBucket>
+int ObExtendHashTableVec<GroupRowBucket>::probe_popular_bucket(
+    const RowMeta &row_meta,
+    const int64_t batch_idx,
+    const uint64_t hash_val,
+    common::hash::ObHashMap<uint64_t, uint64_t,
+    hash::NoPthreadDefendMode> *popular_map,
+    GroupRowBucket *&now_bucket,
+    RowItemType *&exist_item,
+    bool &can_add_row)
+{
+  int ret = OB_SUCCESS;
+  uint64_t cnt_value = 0;
+  uint64_t mask_hash = (hash_val & ObGroupRowBucketBase::HASH_VAL_MASK);
+  now_bucket = nullptr;
+  exist_item = nullptr;
+  can_add_row = false;
+  if (popular_map->size() == 0) {
+    // not popular - nothing to do
+  } else if (popular_map->get_refactored(mask_hash, cnt_value) == OB_HASH_NOT_EXIST) {
+    // not popular - nothing to do
+  } else if (OB_UNLIKELY(NULL == buckets_)) {
+    // do nothing
+  } else {
+    bool find_bkt = false;
+    bool result = false;
+    int64_t curr_pos = -1;
+    while (OB_SUCC(ret) && !find_bkt) {
+      if (buckets_->is_contiguous()) {
+        now_bucket = const_cast<GroupRowBucket *>(&locate_next_bucket(*buckets_->get_contiguous_array(), hash_val, curr_pos));
+      } else {
+        now_bucket = const_cast<GroupRowBucket *>(&locate_next_bucket(*buckets_->get_segmented_array(), hash_val, curr_pos));
+      }
+      if (OB_UNLIKELY(now_bucket->is_occupyed())) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("wrong bucket state, is occupyed", K(ret));
+      } else if (now_bucket->is_empty()) {
+        find_bkt = true;
+        can_add_row = true;
+      } else {
+        RowItemType *it = &(now_bucket->get_item());
+        if (OB_FAIL(likely_equal_nullable(row_meta,
+                                static_cast<ObCompactRow&>(*it), batch_idx, result))) {
+          LOG_WARN("failed to cmp", K(ret));
+        } else if (result) {
+          exist_item = it;
+          find_bkt = true;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+template <typename GroupRowBucket>
 int ObExtendHashTableVec<GroupRowBucket>::process_popular_value_batch(ObBatchRows *result_brs,
                                       const common::ObIArray<ObExpr *> &exprs,
                                       const common::ObIArray<int64_t> &lengths,
@@ -1561,27 +1914,14 @@ int ObExtendHashTableVec<GroupRowBucket>::process_popular_value_batch(ObBatchRow
                                       hash::NoPthreadDefendMode> *popular_map)
 {
   int ret = OB_SUCCESS;
-  uint64_t cnt_value;
-  uint64_t mask_hash;
-  bool result = false;
-  bool find_bkt = false;
   bool can_add_row = false;
   GroupRowBucket *now_bucket = nullptr;
   ObGroupRowItemVec *exist_curr_gr_item = NULL;
   if (check_valid_threshold <= 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected check_valid_threshold value", K(check_valid_threshold));
-  }
-  // extend bucket to hold whole batch
-  while (OB_SUCC(ret) && OB_UNLIKELY((size_ + result_brs->size_)
-                                                      * SIZE_BUCKET_SCALE >= get_bucket_num())) {
-    int64_t pre_bkt_num = get_bucket_num();
-    if (OB_FAIL(extend())) {
-      SQL_ENG_LOG(WARN, "extend failed", K(ret));
-    } else if (get_bucket_num() <= pre_bkt_num) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to extend table", K(ret), K(pre_bkt_num), K(get_bucket_num()));
-    }
+  } else if (OB_FAIL(extend_buckets_for_batch(result_brs->size_))) {
+    LOG_WARN("extend buckets for popular batch failed", K(ret));
   }
   for (int64_t i = 0; i < exprs.count(); ++i) {
     if (nullptr == exprs.at(i)) {
@@ -1596,68 +1936,36 @@ int ObExtendHashTableVec<GroupRowBucket>::process_popular_value_batch(ObBatchRow
       continue;
     }
     by_pass_rows++;
-    mask_hash = (hash_vals[i] & ObGroupRowBucketBase::HASH_VAL_MASK);
-    if (popular_map->size() == 0) {
-    } else if (popular_map->get_refactored(mask_hash, cnt_value) != OB_HASH_NOT_EXIST) {
-      result = false;
-      exist_curr_gr_item = nullptr;
-      now_bucket = nullptr;
-      can_add_row = false;
-      if (OB_UNLIKELY(NULL == buckets_)) {
-        // do nothing
-      } else {
-        int64_t curr_pos = -1;
-        find_bkt = false;
-        while (OB_SUCC(ret) && !find_bkt) {
-          now_bucket = const_cast<GroupRowBucket *> (&locate_next_bucket(*buckets_,
-                                                      hash_vals[i], curr_pos));
-          if (OB_UNLIKELY(now_bucket->is_occupyed())) {
-            ret = OB_ERR_UNEXPECTED;
-            LOG_WARN("wrong bucket state, is occupyed", K(ret));
-          } else if (now_bucket->is_empty()) {
-            find_bkt = true;
-            can_add_row = true;
-          } else {
-            RowItemType *it = &(now_bucket->get_item());
-            if (OB_FAIL(likely_equal_nullable(group_store_.get_row_meta(),
-                                    static_cast<ObCompactRow&>(*it), i, result))) {
-              LOG_WARN("failed to cmp", K(ret));
-            } else if (result) {
-              exist_curr_gr_item = it;
-              find_bkt = true;
-            }
-          }
-        }
-        if (OB_FAIL(ret)) {
-          LOG_WARN("locate curr item fail", K(ret), K(i));
-        } else if (exist_curr_gr_item != NULL) {
-          // old row
-          ++probe_cnt_;
-          ++agg_row_cnt;
-          exist_curr_gr_item->inc_hit_cnt();
-          batch_old_rows[i] = exist_curr_gr_item->get_aggr_row(group_store_.get_row_meta());
-          CK(OB_NOT_NULL(batch_old_rows[i]));
-        } else if (can_add_row) {
-          // new row, add item
-          size_++;
-          ++probe_cnt_;
-          ++agg_row_cnt;
-          new_row_selector_cnt_ = 0;
-          new_row_selector_.at(new_row_selector_cnt_++) = i;
-          if (OB_FAIL(group_store_.add_batch(vector_ptrs_, &new_row_selector_.at(0),
-                     new_row_selector_cnt_, srows_, &lengths))) {
-            LOG_WARN("failed to add row", K(ret));
-          }
-          ++agg_group_cnt;
-          now_bucket->set_hash(hash_vals[i]);
-          now_bucket->set_valid();
-          now_bucket->set_item(static_cast<ObGroupRowItemVec &> (*(srows_[0])));
-          now_bucket->get_item().init_hit_cnt(1);
-          batch_old_rows[i] = now_bucket->get_item().get_aggr_row(group_store_.get_row_meta());
-          CK(OB_NOT_NULL(batch_old_rows[i]));
-        } else {
-        }
+    if (OB_FAIL(probe_popular_bucket(group_store_.get_row_meta(), i, hash_vals[i],
+                                      popular_map, now_bucket, exist_curr_gr_item, can_add_row))) {
+      LOG_WARN("locate curr item fail", K(ret), K(i));
+    } else if (now_bucket == nullptr) {
+      // not a popular value or no buckets - skip
+    } else if (exist_curr_gr_item != NULL) {
+      // old row
+      ++probe_cnt_;
+      ++agg_row_cnt;
+      exist_curr_gr_item->inc_hit_cnt();
+      batch_old_rows[i] = exist_curr_gr_item->get_aggr_row(group_store_.get_row_meta());
+      CK(OB_NOT_NULL(batch_old_rows[i]));
+    } else if (can_add_row) {
+      // new row, add item
+      size_++;
+      ++probe_cnt_;
+      ++agg_row_cnt;
+      new_row_selector_cnt_ = 0;
+      new_row_selector_.at(new_row_selector_cnt_++) = i;
+      if (OB_FAIL(group_store_.add_batch(vector_ptrs_, &new_row_selector_.at(0),
+                 new_row_selector_cnt_, srows_, &lengths))) {
+        LOG_WARN("failed to add row", K(ret));
       }
+      ++agg_group_cnt;
+      now_bucket->set_hash(hash_vals[i]);
+      now_bucket->set_valid();
+      now_bucket->set_item(static_cast<ObGroupRowItemVec &> (*(srows_[0])));
+      now_bucket->get_item().init_hit_cnt(1);
+      batch_old_rows[i] = now_bucket->get_item().get_aggr_row(group_store_.get_row_meta());
+      CK(OB_NOT_NULL(batch_old_rows[i]));
     } else {
     }
 
@@ -1683,28 +1991,112 @@ int ObExtendHashTableVec<GroupRowBucket>::check_popular_values_validity(uint64_t
   bool has_valid_popular_value = false;
   int size = size_;
 
-  for (int64_t i = 0; OB_SUCC(ret) && i < get_bucket_num(); i++) {
-    if (buckets_->at(i).is_valid()) {
-      ObGroupRowItemVec &item = (buckets_->at(i).get_item());
-      if ((check_valid_threshold != item.get_hit_cnt())
-          && (((item.get_hit_cnt() * dop * 1.0) / (check_valid_threshold - item.get_hit_cnt()))
-              > SKEW_POPULAR_MIN_RATIO)) {
-        has_valid_popular_value = true;
+  if (buckets_->is_contiguous()) {
+    typename BucketArray::ContiguousArrayType *arr = buckets_->get_contiguous_array();
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_bucket_num(); i++) {
+      if (arr->at(i).is_valid()) {
+        RowItemType &item = (arr->at(i).get_item());
+        if ((check_valid_threshold != item.get_hit_cnt())
+            && (((item.get_hit_cnt() * dop * 1.0) / (check_valid_threshold - item.get_hit_cnt()))
+                > SKEW_POPULAR_MIN_RATIO)) {
+          has_valid_popular_value = true;
+        }
+        item.init_hit_cnt(0);
       }
-      item.init_hit_cnt(0);
+    }
+  } else {
+    typename BucketArray::SegmentedArrayType *arr = buckets_->get_segmented_array();
+    for (int64_t i = 0; OB_SUCC(ret) && i < get_bucket_num(); i++) {
+      if (arr->at(i).is_valid()) {
+        RowItemType &item = (arr->at(i).get_item());
+        if ((check_valid_threshold != item.get_hit_cnt())
+            && (((item.get_hit_cnt() * dop * 1.0) / (check_valid_threshold - item.get_hit_cnt()))
+                > SKEW_POPULAR_MIN_RATIO)) {
+          has_valid_popular_value = true;
+        }
+        item.init_hit_cnt(0);
+      }
     }
   }
 
   if (OB_FAIL(ret)) {
   } else if (!has_valid_popular_value) {
     popular_map->reuse();
-    LOG_DEBUG("no has_valid_popular_value, reuse popular_map!", K(has_valid_popular_value), K(popular_map->size()));
+    LOG_TRACE("no has_valid_popular_value, reuse popular_map!", K(has_valid_popular_value), K(popular_map->size()));
   }
   return ret;
 }
 
 template <typename GroupRowBucket>
-template <bool ALL_ROWS_ACTIVE>
+int ObExtendHashTableVec<GroupRowBucket>::process_popular_value_batch_distinct(
+    const RowMeta &row_meta,
+    const common::ObIArray<ObExpr *> &exprs,
+    ObBatchRows *result_brs,
+    uint64_t *hash_vals,
+    uint64_t &by_pass_rows,
+    const uint64_t check_valid_threshold,
+    int64_t dop,
+    common::hash::ObHashMap<uint64_t, uint64_t,
+    hash::NoPthreadDefendMode> *popular_map,
+    StoreRowFunc store_func)
+{
+  int ret = OB_SUCCESS;
+  bool can_add_row = false;
+  GroupRowBucket *now_bucket = nullptr;
+  RowItemType *exist_item = nullptr;
+  if (check_valid_threshold <= 0) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected check_valid_threshold value", K(check_valid_threshold));
+  } else if (OB_FAIL(extend_buckets_for_batch(result_brs->size_))) {
+    LOG_WARN("extend buckets for popular batch failed", K(ret));
+  }
+
+  for (int64_t i = 0; OB_SUCC(ret) && i < result_brs->size_; i++) {
+    if (result_brs->skip_->at(i)) {
+      continue;
+    }
+    by_pass_rows++;
+    if (OB_FAIL(probe_popular_bucket(row_meta, i, hash_vals[i],
+                                      popular_map, now_bucket, exist_item, can_add_row))) {
+      LOG_WARN("locate curr item fail", K(ret), K(i));
+    } else if (now_bucket == nullptr) {
+      // not a popular hash value
+    } else if (exist_item != NULL) {
+      // duplicate found - skip output
+      result_brs->skip_->set(i);
+      exist_item->inc_hit_cnt();
+      ++probe_cnt_;
+    } else if (can_add_row) {
+      // new row - insert into small hash table, first occurrence outputs
+      size_++;
+      ++probe_cnt_;
+      new_row_selector_cnt_ = 0;
+      new_row_selector_.at(new_row_selector_cnt_++) = i;
+      if (OB_FAIL(store_func(vector_ptrs_, &new_row_selector_.at(0),
+                 new_row_selector_cnt_, srows_))) {
+        LOG_WARN("failed to add row", K(ret));
+      } else {
+        now_bucket->set_hash(hash_vals[i]);
+        now_bucket->set_valid();
+        now_bucket->set_item(static_cast<RowItemType &>(*(srows_[0])));
+        now_bucket->get_item().init_hit_cnt(1);
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (0 != (by_pass_rows % check_valid_threshold)) {
+    } else if (popular_map->size() > 0 &&
+      OB_FAIL(check_popular_values_validity(by_pass_rows,
+      check_valid_threshold, dop, popular_map))) {
+      LOG_WARN("check popular values validity failed", K(ret), K(by_pass_rows),
+        K(check_valid_threshold), K(dop));
+    }
+  }
+  return ret;
+}
+
+template <typename GroupRowBucket>
+template <bool ALL_ROWS_ACTIVE, bool ENABLE_SKEW_DETECTION>
 int ObExtendHashTableVec<GroupRowBucket>::inner_process_batch(const common::ObIArray<ObExpr *> &gby_exprs,
                                                               const ObBatchRows &child_brs,
                                                               const bool *is_dumped,
@@ -1731,7 +2123,11 @@ int ObExtendHashTableVec<GroupRowBucket>::inner_process_batch(const common::ObIA
   bool need_fallback = false;
   const int64_t cnt = buckets_->count();
   if (ALL_ROWS_ACTIVE) {
-    locate_batch_buckets(*buckets_, hash_values, child_brs.size_);
+    if (buckets_->is_contiguous()) {
+      locate_batch_buckets(*buckets_->get_contiguous_array(), hash_values, child_brs.size_);
+    } else {
+      locate_batch_buckets(*buckets_->get_segmented_array(), hash_values, child_brs.size_);
+    }
   }
   while (OB_SUCC(ret) && !need_fallback && curr_idx < child_brs.size_) {
     bool batch_duplicate = false;
@@ -1749,11 +2145,21 @@ int ObExtendHashTableVec<GroupRowBucket>::inner_process_batch(const common::ObIA
       bool find_bkt = false;
       while (OB_SUCC(ret) && !find_bkt) {
         if (!ALL_ROWS_ACTIVE) {
-          if (curr_idx + 8 < child_brs.size_) {
-            __builtin_prefetch((&buckets_->at((ObGroupRowBucketBase::HASH_VAL_MASK & hash_values[curr_idx + 8]) & (cnt - 1))),
-                          0/* read */, 2 /*high temp locality*/);
+          if (buckets_->is_contiguous()) {
+            typename BucketArray::ContiguousArrayType *arr = buckets_->get_contiguous_array();
+            if (curr_idx + 8 < child_brs.size_) {
+              __builtin_prefetch((&arr->at((ObGroupRowBucketBase::HASH_VAL_MASK & hash_values[curr_idx + 8]) & (cnt - 1))),
+                                0/* read */, 2 /*high temp locality*/);
+            }
+            locate_buckets_[curr_idx] = const_cast<GroupRowBucket *>(&locate_next_bucket(*arr, hash_values[curr_idx], curr_pos));
+          } else {
+            typename BucketArray::SegmentedArrayType *arr = buckets_->get_segmented_array();
+            if (curr_idx + 8 < child_brs.size_) {
+              __builtin_prefetch((&arr->at((ObGroupRowBucketBase::HASH_VAL_MASK & hash_values[curr_idx + 8]) & (cnt - 1))),
+                                0/* read */, 2 /*high temp locality*/);
+            }
+            locate_buckets_[curr_idx] = const_cast<GroupRowBucket *>(&locate_next_bucket(*arr, hash_values[curr_idx], curr_pos));
           }
-          locate_buckets_[curr_idx] = const_cast<GroupRowBucket *> (&locate_next_bucket(*buckets_, hash_values[curr_idx], curr_pos));
         }
         if (locate_buckets_[curr_idx]->is_valid()) {
           if (ALL_ROWS_ACTIVE || probe_by_col) {
@@ -1797,7 +2203,9 @@ int ObExtendHashTableVec<GroupRowBucket>::inner_process_batch(const common::ObIA
             if (OB_SUCC(ret) && result) {
               ++probe_cnt_;
               ++agg_row_cnt;
-              it->inc_hit_cnt();
+              if (ENABLE_SKEW_DETECTION) {
+                it->inc_hit_cnt();
+              }
               batch_old_rows[curr_idx] = it->get_aggr_row(group_store_.get_row_meta());
               old_row_pos[old_row_cnt++] = curr_idx;
               if (batch_aggr_rows && batch_aggr_rows->is_valid()) {
@@ -1857,7 +2265,9 @@ int ObExtendHashTableVec<GroupRowBucket>::inner_process_batch(const common::ObIA
               const int64_t idx = old_row_selector_.at(i);
               batch_old_rows[idx] = (static_cast<GroupRowBucket *> (locate_buckets_[idx]))->get_item().get_aggr_row(group_store_.get_row_meta());
               old_row_pos[old_row_cnt++] = idx;
-              (static_cast<GroupRowBucket *> (locate_buckets_[idx]))->get_item().inc_hit_cnt();
+              if (ENABLE_SKEW_DETECTION) {
+                (static_cast<GroupRowBucket *> (locate_buckets_[idx]))->get_item().inc_hit_cnt();
+              }
               int64_t ser_num = locate_buckets_[idx]->get_bkt_seq();
               batch_aggr_rows->aggr_rows_[ser_num] = batch_old_rows[idx];
               batch_aggr_rows->selectors_[ser_num][batch_aggr_rows->selectors_item_cnt_[ser_num]++] = idx;
@@ -1865,7 +2275,9 @@ int ObExtendHashTableVec<GroupRowBucket>::inner_process_batch(const common::ObIA
           } else {
             for (int64_t i = 0; i < old_row_selector_cnt_; ++i) {
               const int64_t idx = old_row_selector_.at(i);
-              (static_cast<GroupRowBucket *> (locate_buckets_[idx]))->get_item().inc_hit_cnt();
+              if (ENABLE_SKEW_DETECTION) {
+                (static_cast<GroupRowBucket *> (locate_buckets_[idx]))->get_item().inc_hit_cnt();
+              }
               batch_old_rows[idx] = (static_cast<GroupRowBucket *> (locate_buckets_[idx]))->get_item().get_aggr_row(group_store_.get_row_meta());
               old_row_pos[old_row_cnt++] = idx;
             }
@@ -1884,8 +2296,8 @@ int ObExtendHashTableVec<GroupRowBucket>::inner_process_batch(const common::ObIA
     if (OB_SUCC(ret)) {
       if ((ALL_ROWS_ACTIVE || can_append_batch)
           && new_row_selector_cnt_ > 0
-          && OB_FAIL(append_batch(gby_exprs, child_brs, is_dumped, hash_values,
-                              lengths, batch_new_rows, agg_group_cnt,
+          && OB_FAIL(append_batch<ENABLE_SKEW_DETECTION>(gby_exprs, child_brs, is_dumped,
+                              hash_values, lengths, batch_new_rows, agg_group_cnt,
                               need_reinit_vectors))) {
         LOG_WARN("failed to append batch", K(ret));
       } else {
@@ -2207,7 +2619,8 @@ int ObExtendHashTableVec<GroupRowBucket>::set_distinct_batch(const RowMeta &row_
                                                              const ObBitVector *child_skip,
                                                              ObBitVector &my_skip,
                                                              uint64_t *hash_values,
-                                                             StoreRowFunc sf)
+                                                             StoreRowFunc sf,
+                                                             common::ObArray<std::pair<uint64_t, int32_t>> *popular_array_temp)
 {
   int ret = OB_SUCCESS;
   new_row_selector_cnt_ = 0;
@@ -2245,14 +2658,27 @@ int ObExtendHashTableVec<GroupRowBucket>::set_distinct_batch(const RowMeta &row_
   if (OB_SUCC(ret)) {
     const int64_t start_idx = 0;
     int64_t processed_idx = 0;
-    if (OB_FAIL(inner_process_batch(row_meta, batch_size, child_skip,
-                                    my_skip, hash_values, sf,
-                                    true, start_idx, processed_idx))) {
+    const bool enable_skew_detection = (popular_array_temp != nullptr);
+    if (enable_skew_detection
+        ? OB_FAIL(inner_process_batch<true>(row_meta, batch_size, child_skip,
+                                            my_skip, hash_values, sf,
+                                            true, start_idx, processed_idx,
+                                            popular_array_temp))
+        : OB_FAIL(inner_process_batch<false>(row_meta, batch_size, child_skip,
+                                             my_skip, hash_values, sf,
+                                             true, start_idx, processed_idx,
+                                             popular_array_temp))) {
       LOG_WARN("failed to process batch", K(ret));
     } else if (processed_idx < batch_size
-                && OB_FAIL(inner_process_batch(row_meta, batch_size, child_skip,
-                                               my_skip, hash_values, sf,
-                                               false, processed_idx, processed_idx))) {
+               && (enable_skew_detection
+                   ? OB_FAIL(inner_process_batch<true>(row_meta, batch_size, child_skip,
+                                                       my_skip, hash_values, sf,
+                                                       false, processed_idx, processed_idx,
+                                                       popular_array_temp))
+                   : OB_FAIL(inner_process_batch<false>(row_meta, batch_size, child_skip,
+                                                        my_skip, hash_values, sf,
+                                                        false, processed_idx, processed_idx,
+                                                        popular_array_temp)))) {
       LOG_WARN("failed to process batch fallback", K(ret));
     }
   }
@@ -2260,6 +2686,7 @@ int ObExtendHashTableVec<GroupRowBucket>::set_distinct_batch(const RowMeta &row_
 }
 
 template <typename GroupRowBucket>
+template <bool ENABLE_SKEW_DETECTION>
 int ObExtendHashTableVec<GroupRowBucket>::inner_process_batch(const RowMeta &row_meta,
                                                               const int64_t batch_size,
                                                               const ObBitVector *child_skip,
@@ -2268,7 +2695,8 @@ int ObExtendHashTableVec<GroupRowBucket>::inner_process_batch(const RowMeta &row
                                                               StoreRowFunc sf,
                                                               const bool probe_by_col,
                                                               const int64_t start_idx,
-                                                              int64_t &processed_idx)
+                                                              int64_t &processed_idx,
+                                                              common::ObArray<std::pair<uint64_t, int32_t>> *popular_array_temp)
 {
   int ret = OB_SUCCESS;
   int64_t curr_idx = start_idx;
@@ -2285,7 +2713,11 @@ int ObExtendHashTableVec<GroupRowBucket>::inner_process_batch(const RowMeta &row
       int64_t curr_pos = -1;
       bool find_bkt = false;
       while (OB_SUCC(ret) && !find_bkt) {
-        locate_buckets_[curr_idx] = const_cast<GroupRowBucket *> (&locate_next_bucket(*buckets_, hash_values[curr_idx], curr_pos));
+        if (buckets_->is_contiguous()) {
+          locate_buckets_[curr_idx] = const_cast<GroupRowBucket *>(&locate_next_bucket(*buckets_->get_contiguous_array(), hash_values[curr_idx], curr_pos));
+        } else {
+          locate_buckets_[curr_idx] = const_cast<GroupRowBucket *>(&locate_next_bucket(*buckets_->get_segmented_array(), hash_values[curr_idx], curr_pos));
+        }
         if (locate_buckets_[curr_idx]->is_valid()) {
           if (probe_by_col) {
             old_row_selector_.at(old_row_selector_cnt_++) = curr_idx;
@@ -2324,6 +2756,18 @@ int ObExtendHashTableVec<GroupRowBucket>::inner_process_batch(const RowMeta &row
             }
             if (OB_SUCC(ret) && result) {
               my_skip.set(curr_idx);
+              if (ENABLE_SKEW_DETECTION) {
+                auto &hit_item = (static_cast<GroupRowBucket *>(locate_buckets_[curr_idx]))->get_item();
+                hit_item.inc_hit_cnt();
+                if (OB_UNLIKELY(popular_array_temp != nullptr
+                    && (hit_item.get_hit_cnt() & SKEW_DETECTION_SAMPLE_MASK) == 0)) {
+                  if (OB_FAIL(try_update_top_n_heap(*popular_array_temp,
+                                                    locate_buckets_[curr_idx]->get_hash(),
+                                                    hit_item.get_hit_cnt()))) {
+                    LOG_WARN("failed to update top-n heap", K(ret));
+                  }
+                }
+              }
               find_bkt = true;
             }
           }
@@ -2355,9 +2799,21 @@ int ObExtendHashTableVec<GroupRowBucket>::inner_process_batch(const RowMeta &row
     }
     if (OB_SUCC(ret)) {
       if (!need_fallback) {
-        for (int64_t i = 0; i < old_row_selector_cnt_; ++i) {
+        for (int64_t i = 0; OB_SUCC(ret) && i < old_row_selector_cnt_; ++i) {
           const int64_t idx = old_row_selector_.at(i);
           my_skip.set(idx);
+          if (ENABLE_SKEW_DETECTION) {
+            auto &hit_item = (static_cast<GroupRowBucket *>(locate_buckets_[idx]))->get_item();
+            hit_item.inc_hit_cnt();
+            if (OB_UNLIKELY(popular_array_temp != nullptr
+                && (hit_item.get_hit_cnt() & SKEW_DETECTION_SAMPLE_MASK) == 0)) {
+              if (OB_FAIL(try_update_top_n_heap(*popular_array_temp,
+                                                locate_buckets_[idx]->get_hash(),
+                                                hit_item.get_hit_cnt()))) {
+                LOG_WARN("failed to update top-n heap", K(ret));
+              }
+            }
+          }
         }
       } else {
         //reset occupyed bkt and stat
@@ -2379,6 +2835,9 @@ int ObExtendHashTableVec<GroupRowBucket>::inner_process_batch(const RowMeta &row
         locate_buckets_[idx]->set_hash(hash_values[idx]);
         locate_buckets_[idx]->set_valid();
         locate_buckets_[idx]->set_item(static_cast<RowItemType&> (*srows_[i]));
+        if (ENABLE_SKEW_DETECTION) {
+          locate_buckets_[idx]->get_item().init_hit_cnt(1);
+        }
         ++size_;
       }
       new_row_selector_cnt_ = 0;
@@ -2436,14 +2895,26 @@ int ObExtendHashTableVec<GroupRowBucket>::likely_equal_nullable(const RowMeta &r
 template <typename GroupRowBucket>
 void ObExtendHashTableVec<GroupRowBucket>::prefetch(const ObBatchRows &brs, uint64_t *hash_vals) const
 {
-  if (!sstr_aggr_.is_valid()) {
+  if (!sstr_aggr_.is_valid() && nullptr != buckets_) {
     int64_t mask = get_bucket_num() - 1;
-    for(int64_t i = 0; i < brs.size_; i++) {
-      if (brs.skip_->at(i)) {
-        continue;
+    if (buckets_->is_contiguous()) {
+      typename BucketArray::ContiguousArrayType *arr = buckets_->get_contiguous_array();
+      for (int64_t i = 0; i < brs.size_; i++) {
+        if (brs.skip_->at(i)) {
+          continue;
+        }
+        __builtin_prefetch((&arr->at((ObGroupRowBucketBase::HASH_VAL_MASK & hash_vals[i]) & mask)),
+                           0/* read */, 2 /*high temp locality*/);
       }
-      __builtin_prefetch((&buckets_->at((ObGroupRowBucketBase::HASH_VAL_MASK & hash_vals[i]) & mask)),
-                          0/* read */, 2 /*high temp locality*/);
+    } else {
+      typename BucketArray::SegmentedArrayType *arr = buckets_->get_segmented_array();
+      for (int64_t i = 0; i < brs.size_; i++) {
+        if (brs.skip_->at(i)) {
+          continue;
+        }
+        __builtin_prefetch((&arr->at((ObGroupRowBucketBase::HASH_VAL_MASK & hash_vals[i]) & mask)),
+                           0/* read */, 2 /*high temp locality*/);
+      }
     }
   }
 }

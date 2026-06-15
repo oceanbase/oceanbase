@@ -454,6 +454,12 @@ DEF_INT(_min_const_integer_precision, OB_TENANT_PARAMETER, "1", "[1, 20]",
 DEF_INT(_lob_rowsets_max_rows, OB_TENANT_PARAMETER, "65535", "[1, 65535]",
         "max batch size of physical plan with lob data",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_STR_WITH_CHECKER(_vec_hash_algo, OB_TENANT_PARAMETER, "AUTO",
+        common::ObConfigVecHashAlgoChecker,
+        "hash algorithm for vectorized 2.0 execution engine. "
+        "Valid values: AUTO, MURMUR2, CRC32.",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE),
+        "AUTO, MURMUR2, CRC32");
 
 DEF_CAP(document_ai_file_max_size, OB_TENANT_PARAMETER, "100MB", "[0MB, 500MB]",
         "max size of document ai processing file.",
@@ -3484,6 +3490,13 @@ DEF_BOOL(_enable_pl_null_literal_parameterization, OB_TENANT_PARAMETER, "False",
 DEF_BOOL(_enable_nested_sql_local_optimize, OB_TENANT_PARAMETER, "False",
          "enable or disable nested sql use local plan first",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_hash_distinct_llc_ndv_adaptive, OB_TENANT_PARAMETER, "True",
+         "specifies whether hash distinct llc ndv adaptive is enabled",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_hash_distinct_skew_detection, OB_TENANT_PARAMETER, "True",
+         "specifies whether hash distinct skew detection is enabled",
+         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+
 
 DEF_STR_WITH_CHECKER(function_round_dialect, OB_TENANT_PARAMETER, "MYSQL",
                      common::ObConfigFunctionRoundDialectChecker,

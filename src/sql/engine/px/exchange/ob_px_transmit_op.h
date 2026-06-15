@@ -437,7 +437,6 @@ private:
                                                                     && !proxy.get_transmit_use_interm_result(); }
   int try_wait_channel();
   int init_data_msg_type(const common::ObIArray<ObExpr *> &output);
-  void fill_batch_ptrs(const int64_t *indexes);
   void fill_batch_ptrs_fixed(const int64_t *indexes);
   void fill_batch_ptrs(ObSliceIdxCalc::SliceIdxFlattenArray &slice_idx_flatten_array,
                        ObSliceIdxCalc::EndIdxArray &end_idx_array);
@@ -445,6 +444,10 @@ private:
                              ObSliceIdxCalc::EndIdxArray &end_idx_array);
   void fill_broad_cast_ptrs(int64_t slice_idx);
   void fill_broad_cast_ptrs_fixed(int64_t slice_idx);
+  template<int64_t LEN>
+  OB_INLINE void copy_fixed_column_lenN(const char *payload, int64_t col_idx);
+  OB_INLINE void copy_fixed_column_lenN(const char *payload, int64_t col_idx, int64_t fixed_len);
+  void dispatch_copy_fixed_column_lenN(const char *payload, int64_t col_idx, int64_t fixed_len);
   dtl::ObDtlMsgType get_data_msg_type() const { return data_msg_type_; }
   void set_wf_hybrid_exprs(ObSliceIdxCalc &slice_calc);
 protected:
@@ -547,6 +550,23 @@ protected:
   };
   VectorSendParams params_;
 };
+
+template<int64_t LEN>
+OB_INLINE void ObPxTransmitOp::copy_fixed_column_lenN(const char *payload, int64_t col_idx)
+{
+  for (int64_t i = 0; i < params_.selector_cnt_; ++i) {
+    memcpy(params_.fixed_rows_[i] + params_.column_offsets_[col_idx] + params_.row_idx_[i] * LEN,
+          payload + LEN * params_.selector_array_[i], LEN);
+  }
+}
+
+OB_INLINE void ObPxTransmitOp::copy_fixed_column_lenN(const char *payload, int64_t col_idx, int64_t fixed_len)
+{
+  for (int64_t i = 0; i < params_.selector_cnt_; ++i) {
+    memcpy(params_.fixed_rows_[i] + params_.column_offsets_[col_idx] + params_.row_idx_[i] * fixed_len,
+          payload + fixed_len * params_.selector_array_[i], fixed_len);
+  }
+}
 
 inline void ObPxTransmitOp::update_row(const ObExpr *expr, int64_t tablet_id)
 {

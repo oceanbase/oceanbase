@@ -6,6 +6,7 @@
 #ifndef SRC_SQL_ENGINE_JOIN_HASH_JOIN_HASH_TABLE_H_
 #define SRC_SQL_ENGINE_JOIN_HASH_JOIN_HASH_TABLE_H_
 
+#include "sql/engine/expr/ob_expr.h"
 #include "sql/engine/join/hash_join/ob_hash_join_struct.h"
 #include "lib/atomic/ob_atomic.h"
 
@@ -298,6 +299,84 @@ struct NormalizedRobinProber final : public ProberBase<NormalizedRobinBucket<T>>
 
 template <typename Bucket>
 struct GenericProber final : public ProberBase<Bucket> {
+  template <int LEN>
+  OB_INLINE static bool fixed_len_not_equal(const char *l_data, const char *r_data) {
+    if constexpr (LEN == 1) {
+      return *reinterpret_cast<const uint8_t*>(l_data) != *reinterpret_cast<const uint8_t*>(r_data);
+    } else if constexpr (LEN == 2) {
+      return *reinterpret_cast<const uint16_t*>(l_data) != *reinterpret_cast<const uint16_t*>(r_data);
+    } else if constexpr (LEN == 4) {
+      return *reinterpret_cast<const uint32_t*>(l_data) != *reinterpret_cast<const uint32_t*>(r_data);
+    } else {
+      return *reinterpret_cast<const uint64_t*>(l_data) != *reinterpret_cast<const uint64_t*>(r_data);
+    }
+  }
+
+  template <int LEN, bool HAS_NULL, bool NULL_SAFE>
+  OB_INLINE static bool compare_fixed_batch_impl(
+      const uint16_t *sel,
+      const uint16_t sel_cnt,
+      ObCompactRow **unmatched_rows,
+      const int64_t build_col_idx,
+      const int64_t offset,
+      const RowMeta &build_row_meta,
+      ObFixedLengthBase *r_vec,
+      const int64_t r_len,
+      int *cmp_ret) {
+    const char *r_data = r_vec->get_data();
+    bool need_fallback = false;
+    for (int64_t i = 0; !need_fallback && i < sel_cnt; ++i) {
+      const int64_t curr_idx = sel[i];
+      ObCompactRow *it = unmatched_rows[i];
+
+      if constexpr (HAS_NULL) {
+        const bool l_isnull = it->is_null(build_col_idx);
+        const bool r_isnull = r_vec->get_nulls()->at(curr_idx);
+        if (l_isnull != r_isnull) {
+          cmp_ret[i] |= 1;
+          continue;
+        } else if (l_isnull && r_isnull) {
+          cmp_ret[i] |= (NULL_SAFE ? 0 : 1);
+          continue;
+        }
+      }
+
+      const char *l_cell = (offset >= 0) ? it->get_fixed_cell_payload(offset)
+                                          : it->get_cell_payload(build_row_meta, build_col_idx);
+      if (OB_UNLIKELY(LEN == 0)) {
+        need_fallback = (0 != memcmp(l_cell, r_data + r_len * curr_idx, r_len));
+      } else {
+        need_fallback = fixed_len_not_equal<LEN>(l_cell, r_data + r_len * curr_idx);
+      }
+    }
+    return need_fallback;
+  }
+
+  template <bool HAS_NULL, bool NULL_SAFE>
+  OB_INLINE static bool compare_fixed_batch(
+      const uint16_t *sel,
+      const uint16_t sel_cnt,
+      ObCompactRow **unmatched_rows,
+      const int64_t build_col_idx,
+      const int64_t offset,
+      const RowMeta &build_row_meta,
+      ObFixedLengthBase *r_vec,
+      const int64_t r_len,
+      int *cmp_ret) {
+    switch (r_len) {
+      case 1: return compare_fixed_batch_impl<1, HAS_NULL, NULL_SAFE>(
+                  sel, sel_cnt, unmatched_rows, build_col_idx, offset, build_row_meta, r_vec, r_len, cmp_ret);
+      case 2: return compare_fixed_batch_impl<2, HAS_NULL, NULL_SAFE>(
+                  sel, sel_cnt, unmatched_rows, build_col_idx, offset, build_row_meta, r_vec, r_len, cmp_ret);
+      case 4: return compare_fixed_batch_impl<4, HAS_NULL, NULL_SAFE>(
+                  sel, sel_cnt, unmatched_rows, build_col_idx, offset, build_row_meta, r_vec, r_len, cmp_ret);
+      case 8: return compare_fixed_batch_impl<8, HAS_NULL, NULL_SAFE>(
+                  sel, sel_cnt, unmatched_rows, build_col_idx, offset, build_row_meta, r_vec, r_len, cmp_ret);
+      default: return compare_fixed_batch_impl<0, HAS_NULL, NULL_SAFE>(
+                  sel, sel_cnt, unmatched_rows, build_col_idx, offset, build_row_meta, r_vec, r_len, cmp_ret);
+    }
+  }
+
   static int64_t get_normalized_key_size()
   {
     return 0;
@@ -334,105 +413,255 @@ struct GenericProber final : public ProberBase<Bucket> {
     for (int64_t i = 0; OB_SUCC(ret) && i < ctx.build_key_proj_->count(); i++) {
       int64_t build_col_idx = ctx.build_key_proj_->at(i);
       ObExpr *probe_key = ctx.probe_keys_->at(i);
+      bool need_fallback = false;
       ObIVector *vec = probe_key->get_vector(*ctx.eval_ctx_);
       ObExpr *build_key = ctx.build_keys_->at(i);
+      NullSafeRowCmpFunc cmp_func = nullptr;
       // join key type on build and probe may be different
       if (ctx.probe_cmp_funcs_.at(i) != nullptr) {
-        NullSafeRowCmpFunc cmp_func = ctx.probe_cmp_funcs_.at(i);
-        for (int64_t row_idx = 0; OB_SUCC(ret) && row_idx < sel_cnt; row_idx++) {
-          int64_t batch_idx = sel[row_idx];
-          const char *l_v = NULL;
-          const char *r_v = NULL;
-          ObLength l_len = 0;
-          ObLength r_len = 0;
-          bool l_is_null = ctx.unmatched_rows_[row_idx]->is_null(build_col_idx);
-          bool r_is_null = false;
-          ctx.unmatched_rows_[row_idx]->get_cell_payload(
-              ctx.build_row_meta_, build_col_idx, l_v, l_len);
-          vec->get_payload(batch_idx, r_is_null, r_v, r_len);
-          int cmp_ret = 0;
-          if (!ctx.is_ns_equal_cond_->at(i) && (l_is_null || r_is_null)) {
-            cmp_ret = 1;
-          } else if (OB_FAIL(cmp_func(build_key->obj_meta_,
-                  probe_key->obj_meta_,
-                  l_v,
-                  l_len,
-                  l_is_null,
-                  r_v,
-                  r_len,
-                  r_is_null,
-                  cmp_ret))) {
-            LOG_WARN("failed to compare with cmp func", K(ret));
-          }
-          ctx.cmp_ret_map_[row_idx] |= (cmp_ret != 0);
-        }
+        cmp_func = ctx.probe_cmp_funcs_.at(i);
       } else {
-        if (ctx.is_ns_equal_cond_->at(i)) {
-          if (OB_FAIL(vec->null_first_cmp_batch_rows(*probe_key,
-                  sel,
-                  sel_cnt,
-                  reinterpret_cast<ObCompactRow **>(ctx.unmatched_rows_),
-                  build_col_idx,
-                  ctx.build_row_meta_,
-                  ctx.cmp_ret_for_one_col_))) {
-            LOG_WARN("failed to compare with ns equal cond", K(ret));
-          }
-        } else if (is_opt &&
-                  (!ctx.build_cols_have_null_->at(i) && !ctx.probe_cols_have_null_->at(i))) {
-          if (OB_FAIL(vec->no_null_cmp_batch_rows(*probe_key,
-                  sel,
-                  sel_cnt,
-                  reinterpret_cast<ObCompactRow **>(ctx.unmatched_rows_),
-                  build_col_idx,
-                  ctx.build_row_meta_,
-                  ctx.cmp_ret_for_one_col_))) {
-            LOG_WARN("failed to compare with no null", K(ret));
-          }
-        } else {
-          if (OB_FAIL(vec->null_first_cmp_batch_rows(*probe_key,
-                  sel,
-                  sel_cnt,
-                  reinterpret_cast<ObCompactRow **>(ctx.unmatched_rows_),
-                  build_col_idx,
-                  ctx.build_row_meta_,
-                  ctx.cmp_ret_for_one_col_))) {
-            LOG_WARN("failed to compare with have null", K(ret));
-          }
-          // have null and not ns equal, need to check null is not match null
-          if (ctx.build_cols_have_null_->at(i)) {
-            for (int64_t row_idx = 0; row_idx < sel_cnt; row_idx++) {
-              ObHJStoredRow *row_ptr = ctx.unmatched_rows_[row_idx];
-              if (row_ptr->is_null(build_col_idx)) {
-                ctx.cmp_ret_for_one_col_[row_idx] = 1;
-              }
-            }
-          }
-          if (ctx.probe_cols_have_null_->at(i)) {
-            VectorFormat format = vec->get_format();
-            if (is_uniform_format(format)) {
-              const uint64_t idx_mask = VEC_UNIFORM_CONST == format ? 0 : UINT64_MAX;
-              const ObDatum *datums = static_cast<ObUniformBase *>(vec)->get_datums();
-              for (int64_t row_idx = 0; row_idx < sel_cnt; row_idx++) {
-                int64_t batch_idx = sel[row_idx];
-                if (datums[batch_idx & idx_mask].is_null()) {
-                  ctx.cmp_ret_for_one_col_[row_idx] = 1;
-                }
-              }
-            } else {
-              ObBitVector *nulls = static_cast<ObBitmapNullVectorBase *>(vec)->get_nulls();
-              for (int64_t row_idx = 0; row_idx < sel_cnt; row_idx++) {
-                int64_t batch_idx = sel[row_idx];
-                if (nulls->at(batch_idx)) {
-                  ctx.cmp_ret_for_one_col_[row_idx] = 1;
-                }
-              }
-            }
-          }
-        }
-        for (int64_t row_idx = 0; row_idx < sel_cnt; row_idx++) {
-          ctx.cmp_ret_map_[row_idx] |= ctx.cmp_ret_for_one_col_[row_idx];
-        }
+        cmp_func = ctx.build_cmp_funcs_.at(i);
       }
+
+      bool not_null_cmp = (!ctx.build_cols_have_null_->at(i) && !ctx.probe_cols_have_null_->at(i));
+
+      if (not_null_cmp && OB_FAIL(inner_process_column_not_null(probe_key, *ctx.eval_ctx_, sel, sel_cnt,
+                                                  reinterpret_cast<ObCompactRow **>(ctx.unmatched_rows_),
+                                                  build_col_idx, ctx.build_row_meta_,
+                                                  cmp_func, build_key->obj_meta_, probe_key->obj_meta_,
+                                                  ctx.cmp_ret_map_))) {
+        LOG_WARN("failed to compare with no null", K(ret));
+      } else if (!not_null_cmp) {
+        ret = ctx.is_ns_equal_cond_->at(i) ?
+                inner_process_column<true>(probe_key, *ctx.eval_ctx_,
+                                           sel, sel_cnt,
+                                           reinterpret_cast<ObCompactRow **>(ctx.unmatched_rows_),
+                                           build_col_idx, ctx.build_row_meta_,
+                                           cmp_func, build_key->obj_meta_, probe_key->obj_meta_,
+                                           ctx.cmp_ret_map_) :
+                inner_process_column<false>(probe_key, *ctx.eval_ctx_,
+                                            sel, sel_cnt,
+                                            reinterpret_cast<ObCompactRow **>(ctx.unmatched_rows_),
+                                            build_col_idx, ctx.build_row_meta_,
+                                            cmp_func, build_key->obj_meta_, probe_key->obj_meta_,
+                                            ctx.cmp_ret_map_);
+      }
+    }
+    return ret;
+  }
+
+  int inner_process_column_not_null(const ObExpr *probe_key,
+                                    ObEvalCtx &eval_ctx,
+                                    const uint16_t *sel,
+                                    const uint16_t sel_cnt,
+                                    ObCompactRow **unmatched_rows,
+                                    const int64_t build_col_idx,
+                                    const RowMeta &build_row_meta,
+                                    NullSafeRowCmpFunc cmp_func,
+                                    const ObObjMeta &build_obj_meta,
+                                    const ObObjMeta &probe_obj_meta,
+                                    int *cmp_ret) {
+    int ret = OB_SUCCESS;
+    switch (probe_key->get_format(eval_ctx)) {
+      case VEC_FIXED : {
+        ObFixedLengthBase *r_vec = static_cast<ObFixedLengthBase *> (probe_key->get_vector(eval_ctx));
+        int64_t r_len = r_vec->get_length();
+        const int64_t offset = build_row_meta.fixed_expr_reordered()
+                                ? build_row_meta.get_fixed_cell_offset(build_col_idx) : -1;
+        bool need_fallback = compare_fixed_batch<false, false>(
+            sel, sel_cnt, unmatched_rows, build_col_idx, offset, build_row_meta, r_vec, r_len, cmp_ret);
+        if (OB_UNLIKELY(need_fallback)) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < sel_cnt; ++i) {
+            const int64_t curr_idx = sel[i];
+            ObCompactRow *it = unmatched_rows[i];
+            int tmp_cmp_ret = 0;
+            if (OB_FAIL(cmp_func(build_obj_meta, probe_obj_meta,
+                                     it->get_cell_payload(build_row_meta, build_col_idx), r_len, false,
+                                     r_vec->get_data() + r_len * curr_idx, r_len, false,
+                                     tmp_cmp_ret))) {
+              LOG_WARN("failed to compare with cmp func", K(ret));
+            } else {
+              cmp_ret[i] |= (tmp_cmp_ret != 0);
+            }
+          }
+        }
+        break;
+      }
+      case VEC_DISCRETE : {
+        ObDiscreteBase *r_vec = static_cast<ObDiscreteBase *> (probe_key->get_vector(eval_ctx));
+        const int64_t real_col_idx = build_row_meta.fixed_expr_reordered()
+                                    ? (build_row_meta.project_idx(build_col_idx) - build_row_meta.fixed_cnt_)
+                                      : build_col_idx;
+        const int64_t len_off = build_row_meta.var_offsets_off_ + sizeof(int32_t) * real_col_idx;
+        const int64_t var_off = build_row_meta.var_data_off_;
+        for (int64_t i = 0; OB_SUCC(ret) && i < sel_cnt; ++i) {
+          const int64_t curr_idx = sel[i];
+          ObCompactRow *it = unmatched_rows[i];
+          const int64_t r_len = r_vec->get_lens()[curr_idx];
+          const int32_t off1 = *reinterpret_cast<int32_t *>(it->payload() + len_off + sizeof(int32_t));
+          const int32_t off2 = *reinterpret_cast<int32_t *>(it->payload() + len_off);
+          int32_t l_len = off1 - off2;
+          const char *var_data = it->payload() + var_off;
+          int tmp_cmp_ret = 0;
+          if (l_len == r_len && 0 == memcmp(var_data + off2, r_vec->get_ptrs()[curr_idx], r_len)) {
+          } else if (OB_FAIL(cmp_func(build_obj_meta, probe_obj_meta,
+                                      var_data + off2, l_len, false,
+                                      r_vec->get_ptrs()[curr_idx], r_len, false,
+                                      tmp_cmp_ret))) {
+            LOG_WARN("failed to compare with cmp func", K(ret));
+          } else {
+            cmp_ret[i] |= (tmp_cmp_ret != 0);
+          }
+        }
+        break;
+      }
+      case VEC_CONTINUOUS :
+      case VEC_UNIFORM :
+      case VEC_UNIFORM_CONST : {
+        ObIVector *r_vec = probe_key->get_vector(eval_ctx);
+        for (int64_t i = 0; OB_SUCC(ret) && i < sel_cnt; ++i) {
+          const int64_t curr_idx = sel[i];
+          ObCompactRow *it = unmatched_rows[i];
+          const int64_t l_len = it->get_length(build_row_meta, build_col_idx);
+          const int64_t r_len = r_vec->get_length(curr_idx);
+          int tmp_cmp_ret = 0;
+          if (l_len == r_len && 0 == memcmp(it->get_cell_payload(build_row_meta, build_col_idx),
+                                            r_vec->get_payload(curr_idx),
+                                            r_len)) {
+          } else if (OB_FAIL(cmp_func(build_obj_meta, probe_obj_meta,
+                                it->get_cell_payload(build_row_meta, build_col_idx), l_len, false,
+                                r_vec->get_payload(curr_idx), r_len, false,
+                                tmp_cmp_ret))) {
+            LOG_WARN("failed to compare with cmp func", K(ret));
+          } else {
+            cmp_ret[i] |= (tmp_cmp_ret != 0);
+          }
+        }
+        break;
+      }
+      default :
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid data format", K(ret), K(probe_key->get_format(eval_ctx)));
+    }
+    return ret;
+  }
+
+  template <bool NULL_SAFE>
+  int inner_process_column(const ObExpr *probe_key,
+                           ObEvalCtx &eval_ctx,
+                           const uint16_t *sel,
+                           const uint16_t sel_cnt,
+                           ObCompactRow **unmatched_rows,
+                           const int64_t build_col_idx,
+                           const RowMeta &build_row_meta,
+                           NullSafeRowCmpFunc cmp_func,
+                           const ObObjMeta &build_obj_meta,
+                           const ObObjMeta &probe_obj_meta,
+                           int *cmp_ret) {
+    int ret = OB_SUCCESS;
+    switch (probe_key->get_format(eval_ctx)) {
+      case VEC_FIXED : {
+        ObFixedLengthBase *r_vec = static_cast<ObFixedLengthBase *> (probe_key->get_vector(eval_ctx));
+        int64_t r_len = r_vec->get_length();
+        const int64_t offset = build_row_meta.fixed_expr_reordered()
+                                ? build_row_meta.get_fixed_cell_offset(build_col_idx) : -1;
+        bool need_fallback = compare_fixed_batch<true, NULL_SAFE>(
+            sel, sel_cnt, unmatched_rows, build_col_idx, offset, build_row_meta, r_vec, r_len, cmp_ret);
+        if (OB_UNLIKELY(need_fallback)) {
+          for (int64_t i = 0; OB_SUCC(ret) && i < sel_cnt; ++i) {
+            const int64_t curr_idx = sel[i];
+            ObCompactRow *it = unmatched_rows[i];
+            int tmp_cmp_ret = 0;
+            const bool l_isnull = it->is_null(build_col_idx);
+            const bool r_isnull = r_vec->get_nulls()->at(curr_idx);
+            if (l_isnull != r_isnull) {
+              cmp_ret[i] |= 1;
+            } else if (l_isnull && r_isnull) {
+              cmp_ret[i] |= (NULL_SAFE ? 0 : 1);
+            } else if (OB_FAIL(cmp_func(build_obj_meta, probe_obj_meta,
+                                     it->get_cell_payload(build_row_meta, build_col_idx), r_len, false,
+                                     r_vec->get_data() + r_len * curr_idx, r_len, false,
+                                     tmp_cmp_ret))) {
+              LOG_WARN("failed to compare with cmp func", K(ret));
+            } else {
+              cmp_ret[i] |= (tmp_cmp_ret != 0);
+            }
+          }
+        }
+        break;
+      }
+      case VEC_DISCRETE : {
+        ObDiscreteBase *r_vec = static_cast<ObDiscreteBase *> (probe_key->get_vector(eval_ctx));
+        for (int64_t i = 0; OB_SUCC(ret) && i < sel_cnt; ++i) {
+          const int64_t curr_idx = sel[i];
+          ObCompactRow *it = unmatched_rows[i];
+          const bool l_isnull = it->is_null(build_col_idx);
+          const bool r_isnull = r_vec->get_nulls()->at(curr_idx);
+          if (l_isnull != r_isnull) {
+            cmp_ret[i] |= 1;
+          } else if (l_isnull && r_isnull) {
+            cmp_ret[i] |= (NULL_SAFE ? 0 : 1);
+          } else {
+            const int64_t r_len = r_vec->get_lens()[curr_idx];
+            const int64_t l_len = it->get_length(build_row_meta, build_col_idx);
+            if (r_len == l_len
+                && 0 == memcmp(it->get_cell_payload(build_row_meta, build_col_idx),
+                               r_vec->get_ptrs()[curr_idx],
+                               r_len)) {
+            } else {
+              int tmp_cmp_ret = 0;
+              if (OB_FAIL(cmp_func(build_obj_meta, probe_obj_meta,
+                                   it->get_cell_payload(build_row_meta, build_col_idx), l_len, false,
+                                   r_vec->get_ptrs()[curr_idx], r_len, false,
+                                   tmp_cmp_ret))) {
+                LOG_WARN("failed to compare with cmp func", K(ret));
+              } else {
+                cmp_ret[i] |= (tmp_cmp_ret != 0);
+              }
+            }
+          }
+        }
+        break;
+      }
+      case VEC_CONTINUOUS :
+      case VEC_UNIFORM :
+      case VEC_UNIFORM_CONST : {
+        ObIVector *r_vec = probe_key->get_vector(eval_ctx);
+        for (int64_t i = 0; OB_SUCC(ret) && i < sel_cnt; ++i) {
+          const int64_t curr_idx = sel[i];
+          ObCompactRow *it = unmatched_rows[i];
+          const bool l_isnull = it->is_null(build_col_idx);
+          const bool r_isnull = r_vec->is_null(curr_idx);
+          if (l_isnull != r_isnull) {
+            cmp_ret[i] |= 1;
+          } else if (l_isnull && r_isnull) {
+            cmp_ret[i] |= (NULL_SAFE ? 0 : 1);
+          } else {
+            const int64_t l_len = it->get_length(build_row_meta, build_col_idx);
+            const int64_t r_len = r_vec->get_length(curr_idx);
+            if (l_len == r_len
+                && 0 == memcmp(it->get_cell_payload(build_row_meta, build_col_idx),
+                               r_vec->get_payload(curr_idx),
+                               r_len)) {
+            } else {
+              int tmp_cmp_ret = 0;
+              if (OB_FAIL(cmp_func(build_obj_meta, probe_obj_meta,
+                                   it->get_cell_payload(build_row_meta, build_col_idx), l_len, false,
+                                   r_vec->get_payload(curr_idx), r_len, false,
+                                   tmp_cmp_ret))) {
+                LOG_WARN("failed to compare with cmp func", K(ret));
+              } else {
+                cmp_ret[i] |= (tmp_cmp_ret != 0);
+              }
+            }
+          }
+        }
+        break;
+      }
+      default :
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid data format", K(ret), K(probe_key->get_format(eval_ctx)));
     }
     return ret;
   }

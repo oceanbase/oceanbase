@@ -646,6 +646,7 @@ int ObDictColumnDecoder::eq_ne_operator(
     const sql::ObWhiteFilterOperatorType op_type = filter.get_op_type();
     const ObDatum &filter_datum = filter.get_datums().at(0);
     const bool has_null = ctx.dict_meta_->has_null();
+    const int64_t ref_bitset_size = has_null ? dict_val_cnt + 1 : dict_val_cnt;
     sql::ObBitVector *ref_bitset = nullptr;
     BUILD_REF_BITSET(ctx, (dict_val_cnt + 1), ref_bitset);
     if (OB_SUCC(ret)) {
@@ -704,17 +705,23 @@ int ObDictColumnDecoder::eq_ne_operator(
             LOG_WARN("fail to exexute fast eq_ne operator", KR(ret), K(matched_ref_val), K(has_null), K(ctx));
           }
         } else {
-          const uint32_t ref_width_size = ctx.ref_ctx_->meta_.get_uint_width_size();
+          const uint8_t ref_width_tag = ctx.ref_ctx_->meta_.get_width_tag();
           if (sql::WHITE_OP_EQ == op_type) {
-            if ((matched_ref_cnt > 0) && OB_FAIL(set_bitmap_with_bitset(ref_width_size, ctx.ref_data_,
-                ref_bitset, pd_filter_info.start_, pd_filter_info.count_, false, 0, parent, result_bitmap))) {
-              LOG_WARN("fail to set result bitmap", KR(ret), K(ref_width_size), K(matched_ref_cnt), K(pd_filter_info));
+            if ((matched_ref_cnt > 0) &&
+                OB_FAIL(ObCSFilterFunctionFactory::instance().dict_set_bitmap_with_bitset(
+                  ref_width_tag, ctx.ref_data_, ref_bitset, ref_bitset_size, pd_filter_info.start_,
+                  pd_filter_info.count_, result_bitmap, true /*flag*/))) {
+              LOG_WARN("fail to set result bitmap", KR(ret), K(ref_width_tag), K(matched_ref_cnt), K(pd_filter_info));
             }
           } else {
             // if exists null, we need to filter the null row
-            if (OB_FAIL(set_bitmap_with_bitset_conversely(ref_width_size, ctx.ref_data_, ref_bitset,
-                pd_filter_info.start_, pd_filter_info.count_, has_null, dict_val_cnt, parent, result_bitmap))) {
-              LOG_WARN("fail to set result bitmap conversely", KR(ret), K(ref_width_size),
+            if (has_null) {
+              ref_bitset->set(dict_val_cnt);
+            }
+            if (OB_FAIL(ObCSFilterFunctionFactory::instance().dict_set_bitmap_with_bitset(
+              ref_width_tag, ctx.ref_data_, ref_bitset, ref_bitset_size, pd_filter_info.start_,
+              pd_filter_info.count_, result_bitmap, false /*flag*/))) {
+              LOG_WARN("fail to set result bitmap conversely", KR(ret), K(ref_width_tag),
                   K(matched_ref_cnt), K(has_null), K(dict_val_cnt), K(pd_filter_info));
             }
           }
@@ -880,6 +887,7 @@ int ObDictColumnDecoder::comparison_operator(
     if (0 == dict_val_cnt) {
       // all datum is null
     } else {
+      const int64_t ref_bitset_size = ctx.dict_meta_->has_null() ? dict_val_cnt + 1 : dict_val_cnt;
       sql::ObBitVector *ref_bitset = nullptr;
       int64_t matched_ref_cnt = 0;
       BUILD_REF_BITSET(ctx, (dict_val_cnt + 1), ref_bitset);
@@ -927,10 +935,11 @@ int ObDictColumnDecoder::comparison_operator(
       }
 
       if (OB_SUCC(ret) && (matched_ref_cnt > 0)) {
-        const uint32_t ref_width_size = ctx.ref_ctx_->meta_.get_uint_width_size();
-        if (OB_FAIL(set_bitmap_with_bitset(ref_width_size, ctx.ref_data_, ref_bitset, pd_filter_info.start_,
-            pd_filter_info.count_, false/*has_null*/, 0, parent, result_bitmap))) {
-          LOG_WARN("fail to set result bitmap", KR(ret), K(ref_width_size), K(pd_filter_info));
+        const uint8_t ref_width_tag = ctx.ref_ctx_->meta_.get_width_tag();
+        if (OB_FAIL(ObCSFilterFunctionFactory::instance().dict_set_bitmap_with_bitset(
+              ref_width_tag, ctx.ref_data_, ref_bitset, ref_bitset_size, pd_filter_info.start_,
+              pd_filter_info.count_, result_bitmap, true /*flag*/))) {
+          LOG_WARN("fail to set result bitmap", KR(ret), K(ref_width_tag), K(pd_filter_info));
         }
       }
     }
@@ -1119,6 +1128,7 @@ int ObDictColumnDecoder::in_operator(
     // all datum is null
   } else {
     const sql::ObWhiteFilterOperatorType op_type = filter.get_op_type();
+    const int64_t ref_bitset_size = ctx.dict_meta_->has_null() ? dict_val_cnt + 1 : dict_val_cnt;
     sql::ObBitVector *ref_bitset = nullptr;
     bool matched_ref_exist = false;
     BUILD_REF_BITSET(ctx, (dict_val_cnt + 1), ref_bitset);
@@ -1127,10 +1137,11 @@ int ObDictColumnDecoder::in_operator(
     } else if (OB_FAIL(datum_dict_val_in_op(ctx, filter, is_sorted_dict, ref_bitset, matched_ref_exist))) {
       LOG_WARN("Failed to exe datum_dict_val_in_op", KR(ret), K(dict_val_cnt));
     } else if (matched_ref_exist) {
-      const uint32_t ref_width_size = ctx.ref_ctx_->meta_.get_uint_width_size();
-      if (OB_FAIL(set_bitmap_with_bitset(ref_width_size, ctx.ref_data_, ref_bitset,
-          pd_filter_info.start_, pd_filter_info.count_, false/*has_null*/, 0, parent, result_bitmap))) {
-        LOG_WARN("fail to set result bitmap", KR(ret), K(ref_width_size), K(pd_filter_info));
+      const uint8_t ref_width_tag = ctx.ref_ctx_->meta_.get_width_tag();
+      if (OB_FAIL(ObCSFilterFunctionFactory::instance().dict_set_bitmap_with_bitset(
+            ref_width_tag, ctx.ref_data_, ref_bitset, ref_bitset_size, pd_filter_info.start_,
+            pd_filter_info.count_, result_bitmap, true /*flag*/))) {
+        LOG_WARN("fail to set result bitmap", KR(ret), K(ref_width_tag), K(pd_filter_info));
       }
     }
   }
@@ -1392,6 +1403,7 @@ int ObDictColumnDecoder::bt_operator(
     const ObDatum &left_ref_datum = filter.get_datums().at(0);
     const ObDatum &right_ref_datum = filter.get_datums().at(1);
 
+    const int64_t ref_bitset_size = has_null ? dict_val_cnt + 1 : dict_val_cnt;
     sql::ObBitVector *ref_bitset = nullptr;
     BUILD_REF_BITSET(ctx, (dict_val_cnt + 1), ref_bitset);
 
@@ -1427,10 +1439,11 @@ int ObDictColumnDecoder::bt_operator(
     }
 
     if(OB_SUCC(ret) && (matched_ref_cnt > 0)) {
-      const uint32_t ref_width_size = ctx.ref_ctx_->meta_.get_uint_width_size();
-      if (OB_FAIL(set_bitmap_with_bitset(ref_width_size, ctx.ref_data_, ref_bitset, pd_filter_info.start_,
-          pd_filter_info.count_, false, 0, parent, result_bitmap))) {
-        LOG_WARN("fail to set result bitmap", KR(ret), K(ref_width_size), K(pd_filter_info));
+      const uint8_t ref_width_tag = ctx.ref_ctx_->meta_.get_width_tag();
+      if (OB_FAIL(ObCSFilterFunctionFactory::instance().dict_set_bitmap_with_bitset(
+            ref_width_tag, ctx.ref_data_, ref_bitset, ref_bitset_size, pd_filter_info.start_,
+            pd_filter_info.count_, result_bitmap, true /*flag*/))) {
+        LOG_WARN("fail to set result bitmap", KR(ret), K(ref_width_tag), K(pd_filter_info));
       }
     }
   }
@@ -1779,7 +1792,7 @@ int ObDictColumnDecoder::comparison_const_operator(
   }
 
   if (OB_SUCC(ret)) {
-    const int64_t ref_bitset_size = dict_val_cnt + 1;
+    const int64_t ref_bitset_size = has_null ? dict_val_cnt + 1 : dict_val_cnt;
     sql::ObBitVector *ref_bitset = nullptr;
     BUILD_REF_BITSET(ctx, (dict_val_cnt + 1), ref_bitset);
 
@@ -1806,10 +1819,13 @@ int ObDictColumnDecoder::comparison_const_operator(
 
     const bool need_filter_null = is_const_result_set && has_null;
     if (OB_FAIL(ret)) {
-    } else if ((exist_matched_ref || need_filter_null) && OB_FAIL(set_bitmap_with_bitset_const(
-      const_ref_desc.width_size_, const_ref_desc.exception_row_id_buf_, const_ref_desc.exception_ref_buf_,
-      ref_bitset, const_ref_desc.exception_cnt_, pd_filter_info.start_, pd_filter_info.count_,
-      need_filter_null, dict_val_cnt, result_bitmap, !is_const_result_set))) {
+    } else if (need_filter_null && FALSE_IT(ref_bitset->set(dict_val_cnt))) {
+    } else if ((exist_matched_ref || need_filter_null) &&
+               OB_FAIL(ObCSFilterFunctionFactory::instance().dict_set_bitmap_with_bitset_const(
+                 const_ref_desc.width_size_, const_ref_desc.exception_row_id_buf_,
+                 const_ref_desc.exception_ref_buf_, const_ref_desc.exception_cnt_, ref_bitset,
+                 ref_bitset_size, pd_filter_info.start_, pd_filter_info.count_, result_bitmap,
+                 !is_const_result_set))) {
       LOG_WARN("fail to set bitmap with bitset", KR(ret), K(const_ref_desc), K(exist_matched_ref), K(need_filter_null),
         K(dict_val_cnt), K(pd_filter_info));
     }
@@ -1858,6 +1874,7 @@ int ObDictColumnDecoder::bt_const_operator(
   }
 
   if (OB_SUCC(ret)) {
+    const int64_t ref_bitset_size = has_null ? dict_val_cnt + 1 : dict_val_cnt;
     sql::ObBitVector *ref_bitset = nullptr;
     BUILD_REF_BITSET(ctx, (dict_val_cnt + 1), ref_bitset);
 
@@ -1883,10 +1900,13 @@ int ObDictColumnDecoder::bt_const_operator(
 
     const bool need_filter_null = is_const_result_set && has_null;
     if (OB_FAIL(ret)) {
-    } else if ((exist_matched_ref || need_filter_null) && OB_FAIL(set_bitmap_with_bitset_const(
-      const_ref_desc.width_size_, const_ref_desc.exception_row_id_buf_, const_ref_desc.exception_ref_buf_,
-      ref_bitset, const_ref_desc.exception_cnt_, pd_filter_info.start_, pd_filter_info.count_,
-      need_filter_null, dict_val_cnt, result_bitmap, !is_const_result_set))) {
+    } else if (need_filter_null && FALSE_IT(ref_bitset->set(dict_val_cnt))) {
+    } else if ((exist_matched_ref || need_filter_null) &&
+               OB_FAIL(ObCSFilterFunctionFactory::instance().dict_set_bitmap_with_bitset_const(
+                 const_ref_desc.width_size_, const_ref_desc.exception_row_id_buf_,
+                 const_ref_desc.exception_ref_buf_, const_ref_desc.exception_cnt_, ref_bitset,
+                 ref_bitset_size, pd_filter_info.start_, pd_filter_info.count_, result_bitmap,
+                 !is_const_result_set))) {
       LOG_WARN("fail to set bitmap with bitset", KR(ret), K(const_ref_desc), K(exist_matched_ref), K(need_filter_null),
         K(dict_val_cnt), K(pd_filter_info));
     }
@@ -1926,15 +1946,19 @@ int ObDictColumnDecoder::in_const_operator(
   const bool need_filter_null = is_const_result_set && has_null;
   bool matched_ref_exist = false;
   if (OB_SUCC(ret)) {
+    const int64_t ref_bitset_size = has_null ? dict_val_cnt + 1 : dict_val_cnt;
     sql::ObBitVector *ref_bitset = nullptr;
     BUILD_REF_BITSET(ctx, (dict_val_cnt + 1), ref_bitset);
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(datum_dict_val_in_op(ctx, filter, is_sorted_dict, ref_bitset, matched_ref_exist, is_const_result_set))) {
       LOG_WARN("Failed to to exe datum_dict_val_in_op", KR(ret));
-    } else if ((matched_ref_exist || need_filter_null) && OB_FAIL(set_bitmap_with_bitset_const(
-      const_ref_desc.width_size_, const_ref_desc.exception_row_id_buf_, const_ref_desc.exception_ref_buf_,
-      ref_bitset, const_ref_desc.exception_cnt_, pd_filter_info.start_, pd_filter_info.count_,
-      need_filter_null, dict_val_cnt, result_bitmap, !is_const_result_set))) {
+    } else if (need_filter_null && FALSE_IT(ref_bitset->set(dict_val_cnt))) {
+    } else if ((matched_ref_exist || need_filter_null) &&
+               OB_FAIL(ObCSFilterFunctionFactory::instance().dict_set_bitmap_with_bitset_const(
+                 const_ref_desc.width_size_, const_ref_desc.exception_row_id_buf_,
+                 const_ref_desc.exception_ref_buf_, const_ref_desc.exception_cnt_, ref_bitset,
+                 ref_bitset_size, pd_filter_info.start_, pd_filter_info.count_, result_bitmap,
+                 !is_const_result_set))) {
       LOG_WARN("fail to set bitmap with bitset", KR(ret), K(const_ref_desc), K(matched_ref_exist),
           K(need_filter_null), K(dict_val_cnt), K(pd_filter_info));
     }
@@ -2050,110 +2074,6 @@ int ObDictColumnDecoder::cmp_ref_and_set_result(
             LOG_WARN("fail to set bitmap", KR(ret), K(i), K(row_id));
           }
         }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDictColumnDecoder::set_bitmap_with_bitset(
-    const uint32_t ref_width_size,
-    const char *ref_buf,
-    sql::ObBitVector *ref_bitset,
-    const int64_t row_start,
-    const int64_t row_cnt,
-    const bool has_null,
-    const uint64_t null_replaced_val,
-    const sql::ObPushdownFilterExecutor *parent,
-    ObBitmap &result_bitmap,
-    const bool flag)
-{
-  int ret = OB_SUCCESS;
-  // NOTICE: for performance, not check param
-  uint64_t cur_ref = 0;
-  for (int64_t i = 0; OB_SUCC(ret) && (i < row_cnt); ++i) {
-    const int64_t row_id = i + row_start;
-    if ((nullptr != parent) && parent->can_skip_filter(i)) {
-      // skip
-    } else {
-      ENCODING_ADAPT_MEMCPY(&cur_ref, ref_buf + row_id * ref_width_size, ref_width_size);
-      if (has_null && (cur_ref == null_replaced_val)) {
-        if (OB_FAIL(result_bitmap.set(i, false))) {
-          LOG_WARN("fail to set bitmap", KR(ret), K(i), K(row_id));
-        }
-      } else if (ref_bitset->exist(cur_ref)) {
-        if (OB_FAIL(result_bitmap.set(i, flag))) {
-          LOG_WARN("fail to set bitmap", KR(ret), K(i), K(row_id), K(flag));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDictColumnDecoder::set_bitmap_with_bitset_const(
-    const uint32_t ref_width_size,
-    const char *exception_row_id_buf,
-    const char *exception_ref_buf,
-    sql::ObBitVector *ref_bitset,
-    const int64_t exception_cnt,
-    const int64_t row_start,
-    const int64_t row_cnt,
-    const bool has_null,
-    const uint64_t null_replaced_val,
-    ObBitmap &result_bitmap,
-    const bool flag)
-{
-  int ret = OB_SUCCESS;
-  // NOTICE: for performance, not check param
-  uint64_t cur_row_id = 0;
-  uint64_t cur_ref = 0;
-  const ObIntArrayFuncTable &const_exception_buf = ObIntArrayFuncTable::instance(ref_width_size);
-  const int64_t row_end = row_start + row_cnt;
-  for (int64_t i = 0; OB_SUCC(ret) && (i < exception_cnt); ++i) {
-    cur_row_id = const_exception_buf.at_(exception_row_id_buf, i);
-    if ((cur_row_id >= row_start) && (cur_row_id < row_end)) {
-      cur_ref = const_exception_buf.at_(exception_ref_buf, i);
-      if (has_null && (cur_ref == null_replaced_val)) {
-        if (OB_FAIL(result_bitmap.set(cur_row_id - row_start, false))) {
-          LOG_WARN("fail to set bitmap", KR(ret), K(row_start), K(cur_row_id));
-        }
-      } else if (ref_bitset->exist(cur_ref)) {
-        if (OB_FAIL(result_bitmap.set(cur_row_id - row_start, flag))) {
-          LOG_WARN("fail to set bitmap", KR(ret), K(row_start), K(cur_row_id), K(flag));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDictColumnDecoder::set_bitmap_with_bitset_conversely(
-    const uint32_t ref_width_size,
-    const char *ref_buf,
-    sql::ObBitVector *ref_bitset,
-    const int64_t row_start,
-    const int64_t row_cnt,
-    const bool has_null,
-    const uint64_t null_replaced_val,
-    const sql::ObPushdownFilterExecutor *parent,
-    ObBitmap &result_bitmap)
-{
-  int ret = OB_SUCCESS;
-  // NOTICE: for performance, not check param
-  for (int64_t i = 0; OB_SUCC(ret) && (i < row_cnt); ++i) {
-    const int64_t row_id = i + row_start;
-    if ((nullptr != parent) && parent->can_skip_filter(i)) {
-      // skip
-    } else {
-      uint64_t cur_val = 0;
-      ENCODING_ADAPT_MEMCPY(&cur_val, ref_buf + row_id * ref_width_size, ref_width_size);
-      bool need_set = !ref_bitset->exist(cur_val);
-      if (has_null && need_set) {
-        need_set = (cur_val != null_replaced_val);
-      }
-      if (need_set && OB_FAIL(result_bitmap.set(i))) {
-        LOG_WARN("fail to set bitmap", KR(ret), K(i), K(row_id));
       }
     }
   }

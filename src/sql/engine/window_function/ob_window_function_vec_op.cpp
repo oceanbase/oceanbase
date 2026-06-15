@@ -2194,12 +2194,13 @@ int ObWindowFunctionVecOp::calc_bypass_pushdown_rows_of_wf(WinFuncColExpr &wf,
 {
   int ret = OB_SUCCESS;
   winfunc::AggrExpr *agg_expr = static_cast<winfunc::AggrExpr *>(wf.wf_expr_);
-  if (pushdown_skip.accumulate_bit_cnt(batch_size) == batch_size) {
+  int64_t skip_cnt = pushdown_skip.accumulate_bit_cnt(batch_size);
+  if (skip_cnt == batch_size) {
     // do nothing
   } else if (OB_FAIL(agg_expr->aggr_processor_->init_fast_single_row_aggs())) {
     LOG_WARN("init fast single row aggregate failed", K(ret));
   } else if (OB_FAIL(agg_expr->aggr_processor_->single_row_agg_batch(wf.aggr_rows_, batch_size,
-                                                                     eval_ctx_, pushdown_skip))) {
+                                                                     eval_ctx_, pushdown_skip, 0 == skip_cnt))) {
     LOG_WARN("bypass calculation failed", K(ret));
   }
   return ret;
@@ -2587,8 +2588,8 @@ int ObWindowFunctionVecOp::rwf_calc_pby_row_hash(const ObBatchRows &child_brs,
       LOG_WARN("eval vector failed", K(ret));
     } else {
       ObIVector *data = pby_exprs.at(i)->get_vector(eval_ctx_);
-      if (OB_FAIL(data->murmur_hash_v3_for_one_row(*pby_exprs.at(i), hash_value, batch_idx,
-                                                   eval_ctx_.get_batch_size(), hash_value))) {
+      if (OB_FAIL(data->hash_for_one_row(*pby_exprs.at(i), hash_value, batch_idx,
+                                            eval_ctx_.get_batch_size(), hash_value))) {
         LOG_WARN("murmur hash failed", K(ret));
       }
     }

@@ -189,7 +189,8 @@ void *ObStaticEngineExprCG::get_left_value_rt_expr(const ObRawExpr &raw_expr)
 
 int ObStaticEngineExprCG::generate_rt_expr(const ObRawExpr &raw_expr,
                                            ObIArray<ObRawExpr *> &exprs,
-                                           ObExpr *&rt_expr)
+                                           ObExpr *&rt_expr,
+                                           common::ObVecHashAlgo vec_hash_algo)
 {
   int ret = OB_SUCCESS;
   rt_expr = get_rt_expr(raw_expr);
@@ -198,6 +199,8 @@ int ObStaticEngineExprCG::generate_rt_expr(const ObRawExpr &raw_expr,
     LOG_WARN("rt expr is null", K(ret), K(raw_expr));
   } else if (OB_FAIL(exprs.push_back(const_cast<ObRawExpr *>(&raw_expr)))) {
     LOG_WARN("fail to push rt expr", K(ret));
+  } else {
+    rt_expr->set_vec_hash_algo(vec_hash_algo);
   }
 
   return ret;
@@ -2255,6 +2258,7 @@ bool ObStaticEngineExprCG::is_dynamic_eval_qm(const ObRawExpr &raw_expr) const
          && static_cast<const ObConstRawExpr &>(raw_expr).is_dynamic_eval_questionmark()
          && param_cnt_ > 0;
 }
+
 
 } // end namespace sql
 } // end namespace oceanbase

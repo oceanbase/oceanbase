@@ -355,7 +355,11 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::init(ObSortVecOpContext &ctx
         op_monitor_info_.otherstat_5_value_ = phy_plan->get_ddl_task_id();
       }
     }
-    if (OB_SUCC(ret)) {
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(init_fixed_key_sort())) {
+      SQL_ENG_LOG(WARN, "failed to init fixed key sort", K(ret));
+    } else {
       inited_ = true;
       is_topn_filter_enabled_ = EVENT_CALL(EventTable::EN_SORT_IMPL_TOPN_EAGER_FILTER) == OB_SUCCESS;
 
@@ -371,7 +375,7 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::init(ObSortVecOpContext &ctx
         using FullStrategyT = ObFullSortStrategy<Compare, Store_Row, has_addon>;
         full_sort_strategy_ = OB_NEWx(FullStrategyT,
                                       (&mem_context_->get_malloc_allocator()),
-                                      comp_, sk_row_meta_, &mem_context_, false/*enable_encode_sortkey*/);
+                                      comp_, sk_row_meta_, &mem_context_, enable_encode_sortkey_);
         if (nullptr == full_sort_strategy_) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           SQL_ENG_LOG(WARN, "failed to create full sort strategy", K(ret));
@@ -385,8 +389,9 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::init(ObSortVecOpContext &ctx
       if (OB_SUCC(ret) && part_cnt_ > 0 && !use_partition_topn_sort_ && nullptr == part_sort_strategy_) {
         using PartSortStrategyT = ObPartitionSortStrategy<Compare, Store_Row, has_addon>;
         part_sort_strategy_ = OB_NEWx(PartSortStrategyT,
-                                      (&mem_context_->get_malloc_allocator()),
-                                      comp_, *sk_row_meta_, part_cnt_, sk_exprs_, sk_collations_, allocator_);
+                                      (&mem_context_->get_malloc_allocator()), comp_, *sk_row_meta_,
+                                      part_cnt_, sk_exprs_, sk_collations_, addon_collations_, allocator_,
+                                      enable_encode_sortkey_, is_fixed_key_sort_enabled_, fixed_sort_key_len_);
         if (nullptr == part_sort_strategy_) {
           ret = OB_ALLOCATE_MEMORY_FAILED;
           SQL_ENG_LOG(WARN, "failed to create partition sort strategy", K(ret));
@@ -407,7 +412,8 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::init(ObSortVecOpContext &ctx
         int64_t size = OB_INVALID_ID == input_rows_ ? 0 : input_rows_ * input_width_ * (use_heap_sort_ ? 2 : 1);
         if (OB_FAIL(sort_resource_mgr_.init(part_cnt_, use_partition_topn_sort_,
                                             is_topn_filter_enabled_, is_topn_sort(),
-                                            part_topn_sort_strategy_, tenant_id_, size, exec_ctx_))) {
+                                            part_topn_sort_strategy_, part_sort_strategy_,
+                                            tenant_id_, size, exec_ctx_))) {
           SQL_ENG_LOG(WARN, "failed to init sql mem processor", K(ret));
         } else {
           store_mgr_.set_dir_id(sort_resource_mgr_.get_dir_id());
@@ -436,6 +442,10 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::init_fixed_key_sort()
       is_fixed_key_sort_enabled_ = true;
       fixed_sort_key_len_ = 0;
       for (int64_t i = 0; i < sk_collations_->count(); ++i) {
+        // for partition sort, skip the partition column and hash column
+        if (part_cnt_ > 0 && i < part_cnt_ + 1) {
+          continue;
+        }
         ObExpr *expr = sk_exprs_->at(sk_collations_->at(i).field_idx_);
         int64_t encoding_len = get_type_encoding_sortkey_size_map()[expr->datum_meta_.type_];
         if (encoding_len != -1) {
@@ -1590,6 +1600,11 @@ int ObSortVecOpImpl<Compare, Store_Row, has_addon>::do_dump()
     if (OB_SUCC(ret) && use_partition_topn_sort_) {
       part_topn_sort_strategy_->reuse();
       rows_ = &quick_sort_array_;
+    }
+
+    if (OB_SUCC(ret) && part_cnt_ > 0 && !use_partition_topn_sort_ &&
+        part_sort_strategy_ != nullptr) {
+      part_sort_strategy_->reuse();
     }
 
     if (OB_SUCC(ret)) {

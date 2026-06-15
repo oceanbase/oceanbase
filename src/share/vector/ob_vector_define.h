@@ -12,6 +12,14 @@ namespace oceanbase
 namespace common
 {
 
+// Hash algorithm selector used by vec2.0 rich-format hash dispatcher.
+enum ObVecHashAlgo : uint8_t {
+  VEC_HASH_ALGO_MURMUR  = 0,  // zero-init
+  VEC_HASH_ALGO_CRC     = 1,
+  VEC_HASH_ALGO_DEFAULT = 2,
+  VEC_HASH_ALGO_MAX     = 3,
+};
+
 using ConstUniformFormat = ObUniformFormat<true>;
 using UniformFormat = ObUniformFormat<false>;
 #define DEFINE_FIXED_VECTOR(vector_name, vec_tc) \

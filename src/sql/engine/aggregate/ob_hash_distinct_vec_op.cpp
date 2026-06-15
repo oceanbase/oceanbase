@@ -66,7 +66,11 @@ ObHashDistinctVecOp::ObHashDistinctVecOp(ObExecContext &exec_ctx, const ObOpSpec
     group_distinct_state_(GroupDistinctState::ITER_END),
     non_distinct_aggr_params_store_(nullptr),
     non_distinct_aggr_params_iter_(nullptr),
-    group_distinct_bucket_cnt_(0)
+    group_distinct_bucket_cnt_(0),
+    skew_detection_enabled_(false),
+    by_pass_rows_(0),
+    total_load_rows_(0),
+    popular_array_temp_()
 {
   enable_sql_dumped_ = GCONF.is_sql_operator_dump_enabled();
 }
@@ -103,13 +107,30 @@ int ObHashDistinctVecOp::inner_open()
     if (MY_SPEC.by_pass_enabled_) {
       CK (!MY_SPEC.is_block_mode_);
       // to avoid performance decrease, at least deduplicate 2/3
+      bypass_ctrl_.open_by_pass_ctrl();
       bypass_ctrl_.cut_ratio_ = (bypass_ctrl_.cut_ratio_ <= ObAdaptiveByPassCtrl::INIT_CUT_RATIO
                                   ? ObAdaptiveByPassCtrl::INIT_CUT_RATIO : bypass_ctrl_.cut_ratio_);
       build_distinct_data_batch_func_ = &ObHashDistinctVecOp::build_distinct_data_for_batch_by_pass;
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(bypass_ctrl_.llc_est_.init(
+              mem_context_->get_arena_allocator(), MY_SPEC.llc_ndv_est_enabled_))) {
+        LOG_WARN("failed to init llc map", K(ret));
+      }
+      if (OB_SUCC(ret) && MY_SPEC.skew_detection_enabled_) {
+        skew_detection_enabled_ = true;
+        op_monitor_info_.otherstat_5_value_ = 0;
+        op_monitor_info_.otherstat_5_id_ = ObSqlMonitorStatIds::HASH_POPULAR_MAP_SIZE;
+        if (OB_FAIL(popular_map_.create(SKEW_HEAP_SIZE * 2,
+            "DistPopMap", "DistPopMap", tenant_id_))) {
+          LOG_WARN("failed to create popular map", K(ret));
+        }
+      }
     }
-    LOG_TRACE("trace block mode", K(MY_SPEC.is_block_mode_),
-                                  K(spec_.id_), K(MY_SPEC.is_push_down_), K(MY_SPEC.group_distinct_exprs_),
-                                  K(MY_SPEC.distinct_exprs_), K(MY_SPEC.has_non_distinct_aggr_params_));
+    LOG_TRACE("hash distinct vec open", K(ret), K(MY_SPEC.by_pass_enabled_),
+             K(MY_SPEC.llc_ndv_est_enabled_), K(spec_.id_),
+             K(MY_SPEC.is_block_mode_), K(MY_SPEC.is_push_down_),
+             K(MY_SPEC.skew_detection_enabled_), K(MY_SPEC.group_distinct_exprs_),
+             K(MY_SPEC.distinct_exprs_), K(MY_SPEC.has_non_distinct_aggr_params_));
   }
   return ret;
 }
@@ -155,6 +176,10 @@ void ObHashDistinctVecOp::reset()
   group_iter_idx_ = -1;
   min_stored_group_idx_ = INT64_MAX;
   group_distinct_state_ = GroupDistinctState::ITER_END;
+  by_pass_rows_ = 0;
+  total_load_rows_ = 0;
+  popular_map_.reuse();
+  popular_array_temp_.reuse();
   LOG_TRACE("trace block mode", K(MY_SPEC.is_block_mode_), K(spec_.id_), K(MY_SPEC.group_distinct_exprs_.count()));
 }
 
@@ -166,6 +191,8 @@ int ObHashDistinctVecOp::inner_rescan()
   } else {
     reset();
     iter_end_ = false;
+    bypass_ctrl_.llc_est_.enabled_ = MY_SPEC.by_pass_enabled_
+                                     && MY_SPEC.llc_ndv_est_enabled_;
   }
   return ret;
 }
@@ -194,6 +221,8 @@ void ObHashDistinctVecOp::destroy()
     non_distinct_aggr_params_store_ = nullptr;
   }
   group_selector_arr_.reset();
+  popular_map_.destroy();
+  popular_array_temp_.destroy();
   group_iter_idx_ = -1;
   min_stored_group_idx_ = INT64_MAX;
   group_distinct_state_ = GroupDistinctState::ITER_END;
@@ -376,18 +405,83 @@ int ObHashDistinctVecOp::build_distinct_data_for_batch_by_pass(const int64_t bat
   bool can_insert = true;
   int64_t exists_count = 0;
   while(OB_SUCC(ret) && !got_batch) {
-    if (!bypass_ctrl_.by_pass_ && bypass_ctrl_.rebuild_times_ >= MAX_REBUILD_TIMES) {
-      bypass_ctrl_.by_pass_ = true;
+    bypass_ctrl_.process_state(bypass_ctrl_.probe_cnt_,
+                                   hp_infras_.get_hash_table_size(),
+                                   hp_infras_.get_actual_mem_used());
+    if (MY_SPEC.is_push_down_
+        && bypass_ctrl_.state_ == ObAdaptiveByPassCtrl::STATE_L3_INSERT
+        && hp_infras_.get_hash_bucket_num() >= extend_bkt_num_push_down_) {
+      bypass_ctrl_.state_ = ObAdaptiveByPassCtrl::STATE_PROCESS_HT;
+    } else if (bypass_ctrl_.state_ == ObAdaptiveByPassCtrl::STATE_L3_INSERT) {
+      // L3_INSERT: no extend_hash_table_l3() — rely on auto-extend from L2 cache in
+      // set_distinct_batch(). Just clear the flag.
+      bypass_ctrl_.need_resize_hash_table_ = false;
+    }
+    if (OB_FAIL(ret)) {
+    } else if (bypass_ctrl_.processing_ht() && !bypass_ctrl_.by_passing()) {
+      if (bypass_ctrl_.rebuild_times_exceeded()) {
+        if (skew_detection_enabled_) {
+          int64_t dynamic_threshold = max(
+              static_cast<int64_t>(SKEW_ITEM_CNT_TOLERANCE),
+              static_cast<int64_t>(bypass_ctrl_.probe_cnt_ * 0.01 + 1));
+          if (OB_FAIL(export_heap_to_popular_map(dynamic_threshold))) {
+            LOG_WARN("failed to export heap to popular map", K(ret));
+          } else if (OB_FAIL(init_popular_values())) {
+            LOG_WARN("failed to init popular values", K(ret));
+          }
+        }
+        if (OB_SUCC(ret)) {
+          bypass_ctrl_.llc_est_.set_avg_group_mem(hp_infras_.get_hash_table_size(),
+                                                   hp_infras_.get_actual_mem_used());
+          // Reset last_est_cnt_ so bypass phase starts fresh for LLC check interval
+          bypass_ctrl_.llc_est_.last_est_cnt_ = bypass_ctrl_.llc_est_.est_cnt_;
+          bypass_ctrl_.start_by_pass();
+          hp_infras_.reset_hash_table_for_by_pass();
+          popular_array_temp_.reuse();
+          if (skew_detection_enabled_ && popular_map_.size() > 0) {
+            if (OB_FAIL(hp_infras_.resize(INIT_BUCKET_COUNT_FOR_POPULAR))) {
+              LOG_WARN("failed to resize for popular", K(ret));
+            }
+          }
+          LOG_TRACE("start by pass here for distinct", K(ret), K(skew_detection_enabled_), K(popular_map_.size()));
+        }
+      } else {
+        // Rebuild: resize bucket array back to initial size when
+        // need_resize_hash_table_ is set,same as HashGroupByOp.
+        if (bypass_ctrl_.need_resize_hash_table_ && OB_FAIL(hp_infras_.resize(256))) {
+          LOG_WARN("failed to resize hash table", K(ret));
+        } else {
+          if (skew_detection_enabled_) {
+            int64_t dynamic_threshold = max(
+                static_cast<int64_t>(SKEW_ITEM_CNT_TOLERANCE),
+                static_cast<int64_t>(bypass_ctrl_.probe_cnt_ * 0.01 + 1));
+            if (OB_FAIL(export_heap_to_popular_map(dynamic_threshold))) {
+              LOG_WARN("failed to export heap to popular map", K(ret));
+            }
+            LOG_TRACE("distinct skew: rebuild incremental top_n",
+              K(total_load_rows_), K(popular_array_temp_.count()),
+              K(bypass_ctrl_.probe_cnt_), K(hp_infras_.get_hash_table_size()),
+              K(bypass_ctrl_.rebuild_times_), K(dynamic_threshold), K(MY_SPEC.id_));
+          }
+          if (OB_SUCC(ret)) {
+            hp_infras_.reset_hash_table_for_by_pass();
+            popular_array_temp_.reuse();
+            bypass_ctrl_.probe_cnt_ = 0;
+            bypass_ctrl_.reset_state();
+            bypass_ctrl_.need_resize_hash_table_ = false;
+            bypass_ctrl_.inc_rebuild_times();
+          }
+        }
+      }
     }
     const ObBatchRows *child_brs = nullptr;
     clear_evaluated_flag();
-    if (bypass_ctrl_.by_pass_) {
+    if (OB_FAIL(ret)) {
+    } else if (bypass_ctrl_.by_pass_) {
       if (OB_FAIL(by_pass_get_next_batch(batch_size))) {
         LOG_WARN("failed to get next batch", K(ret));
       }
       break;
-    }
-    if (OB_FAIL(ret)) {
     } else if (child_op_is_end_) {
       finish_turn = true;
     } else if (OB_FAIL(child_->get_next_batch(batch_size, child_brs))) {
@@ -399,36 +493,51 @@ int ObHashDistinctVecOp::build_distinct_data_for_batch_by_pass(const int64_t bat
     } else {
       int64_t add_cnt = (child_brs->size_
                             - (child_brs->skip_->accumulate_bit_cnt(child_brs->size_)));
-      bypass_ctrl_.processed_cnt_ += add_cnt;
       //child_op_is_end_ means last batch data is return, finish_turn means no data to process
       child_op_is_end_ = child_brs->end_ && (child_brs->size_ != 0);
       finish_turn = child_brs->end_ && (0 == child_brs->size_);
       read_rows = child_brs->size_;
-      if (OB_FAIL(process_state(add_cnt, extend_bkt_num_push_down_, bypass_ctrl_, hp_infras_, can_insert))) {
-        LOG_WARN("failed to process state ", K(ret));
-      }
+      bypass_ctrl_.probe_cnt_ += add_cnt;
     }
     if (OB_FAIL(ret)) {
     } else if (finish_turn) {
       ret = OB_ITER_END;
     } else if (OB_FAIL(try_check_status())) {
       LOG_WARN("failed to check status", K(ret));
-    } else if (OB_FAIL(hp_infras_.
-                         do_insert_batch_with_unique_hash_table_by_pass(MY_SPEC.distinct_exprs_,
-                                                                        hash_values_for_batch_,
-                                                                        read_rows,
-                                                                        child_brs->skip_,
-                                                                        is_block,
-                                                                        can_insert,
-                                                                        exists_count,
-                                                                        bypass_ctrl_.by_pass_,
-                                                                        output_vec))) {
-      LOG_WARN("failed to insert batch rows, no dump", K(ret));
-    } else if (OB_ISNULL(output_vec)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("failed to get output vector", K(ret));
     } else {
-      bypass_ctrl_.exists_cnt_ += exists_count;
+      bool dumped_by_pass = false;
+      if (skew_detection_enabled_) {
+        total_load_rows_ += read_rows;
+      }
+      if (OB_FAIL(hp_infras_.
+                           do_insert_batch_with_unique_hash_table_by_pass(MY_SPEC.distinct_exprs_,
+                                                                          hash_values_for_batch_,
+                                                                          read_rows,
+                                                                          child_brs->skip_,
+                                                                          is_block,
+                                                                          can_insert,
+                                                                          exists_count,
+                                                                          dumped_by_pass,
+                                                                          output_vec,
+                                                                          skew_detection_enabled_ ? &popular_array_temp_ : nullptr))) {
+        LOG_WARN("failed to insert batch rows, no dump", K(ret));
+      } else if (OB_ISNULL(output_vec)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to get output vector", K(ret));
+      } else if (dumped_by_pass) {
+        // Bridge dump event to state machine
+        bypass_ctrl_.start_process_ht();
+        bypass_ctrl_.set_max_rebuild_times();
+      }
+    }
+    if (OB_SUCC(ret) && OB_NOT_NULL(output_vec)) {
+      if (bypass_ctrl_.llc_est_.enabled_) {
+        for (int64_t i = 0; i < read_rows; i++) {
+          if (!output_vec->exist(i)) {
+            bypass_ctrl_.llc_est_.add_value(hash_values_for_batch_[i]);
+          }
+        }
+      }
       brs_.size_ = read_rows;
       brs_.skip_->deep_copy(*output_vec, read_rows);
       int64_t got_rows = read_rows - output_vec->accumulate_bit_cnt(read_rows);
@@ -573,76 +682,112 @@ int ObHashDistinctVecOp::by_pass_get_next_batch(const int64_t batch_size)
   int ret = OB_SUCCESS;
   const ObBatchRows *child_brs = nullptr;
   if (OB_FAIL(child_->get_next_batch(batch_size, child_brs))) {
-    LOG_WARN("failed to get next batcn", K(ret));
+    LOG_WARN("failed to get next batch", K(ret));
   } else {
-    brs_.size_ = child_brs->size_;
-    group_cnt_ += (child_brs->size_ - child_brs->skip_->accumulate_bit_cnt(batch_size));
-    brs_.skip_->deep_copy(*(child_brs->skip_), brs_.size_);
-    if (child_brs->end_ && (0 == child_brs->size_)) {
-      brs_.end_ = true;
-      brs_.size_ = 0;
-      iter_end_ = true;
+    if (op_monitor_info_.otherstat_5_value_ > 0) {
+      if (popular_map_.size() == 0) {
+        op_monitor_info_.otherstat_5_value_ = -op_monitor_info_.otherstat_5_value_;
+      }
+      op_monitor_info_.otherstat_6_value_ = by_pass_rows_;
+      op_monitor_info_.otherstat_6_id_ = ObSqlMonitorStatIds::HASH_BY_PASS_AGG_CNT;
+    }
+    bool need_llc_sample = child_brs->size_ > 0 && bypass_ctrl_.llc_est_.should_sample();
+    bool need_hash = need_llc_sample
+                     || (skew_detection_enabled_ && popular_map_.size() > 0);
+    if (OB_SUCC(ret) && child_brs->size_ > 0 && need_hash) {
+      if (OB_FAIL(hp_infras_.calc_hash_value_for_batch(
+              MY_SPEC.distinct_exprs_, *child_brs->skip_, child_brs->size_,
+              child_brs->all_rows_active_, hash_values_for_batch_))) {
+        LOG_WARN("failed to calc hash", K(ret));
+      }
+    }
+    if (OB_SUCC(ret) && need_llc_sample) {
+      if (OB_FAIL(bypass_ctrl_.llc_add_batch_and_check(
+              hash_values_for_batch_, child_brs->skip_, child_brs->size_, true))) {
+        LOG_WARN("failed to add llc batch", K(ret));
+      }
+    }
+    if (OB_SUCC(ret)) {
+      brs_.size_ = child_brs->size_;
+      brs_.skip_->deep_copy(*(child_brs->skip_), brs_.size_);
+      // Skew detection: filter popular values through hash table
+      if (skew_detection_enabled_ && popular_map_.size() > 0 && brs_.size_ > 0) {
+        int64_t dop = GET_PHY_PLAN_CTX(ctx_)->get_phy_plan()->get_px_dop();
+        uint64_t check_threshold = MAX(MIN_CHECK_POPULAR_VALID_ROWS,
+                                       SKEW_TEST_STEP_SIZE * hp_infras_.get_hash_table_size());
+        if (OB_FAIL(hp_infras_.process_popular_value_batch_distinct(
+                &brs_, MY_SPEC.distinct_exprs_, hash_values_for_batch_,
+                by_pass_rows_, check_threshold, dop, &popular_map_))) {
+          LOG_WARN("failed to process popular batch", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        group_cnt_ += (brs_.size_ - brs_.skip_->accumulate_bit_cnt(brs_.size_));
+        if (child_brs->end_ && (0 == child_brs->size_)) {
+          brs_.end_ = true;
+          brs_.size_ = 0;
+          iter_end_ = true;
+        }
+      }
     }
   }
   return ret;
 }
 
-int ObHashDistinctVecOp::process_state(const int64_t probe_cnt,
-                                       const int64_t extend_bkt_num_push_down,
-                                       ObAdaptiveByPassCtrl &bypass_ctrl,
-                                       ObHashPartInfrastructureVecImpl &hp_infras, bool &can_insert)
+int ObHashDistinctVecOp::export_heap_to_popular_map(int64_t dynamic_threshold)
 {
-  int64_t min_period_cnt = ObAdaptiveByPassCtrl::MIN_PERIOD_CNT;
-  can_insert = true;
   int ret = OB_SUCCESS;
-  if (ObAdaptiveByPassCtrl::STATE_L2_INSERT == bypass_ctrl.state_) {
-    can_insert = true;
-    if (hp_infras.get_actual_mem_used() > INIT_L2_CACHE_SIZE) {
-      bypass_ctrl.period_cnt_ = std::max(hp_infras.get_hash_table_size(), min_period_cnt);
-      bypass_ctrl.probe_cnt_ += probe_cnt;
-      bypass_ctrl.state_ = ObAdaptiveByPassCtrl::STATE_ANALYZE;
+  for (int64_t i = 0; OB_SUCC(ret) && i < popular_array_temp_.count(); i++) {
+    uint64_t hash_val = popular_array_temp_.at(i).first;
+    int32_t cnt = popular_array_temp_.at(i).second;
+    if (cnt <= dynamic_threshold) {
+      continue;
     }
-  } else if (ObAdaptiveByPassCtrl::STATE_L3_INSERT == bypass_ctrl.state_) {
-    can_insert = true;
-    if (hp_infras.get_actual_mem_used() > INIT_L3_CACHE_SIZE) {
-      bypass_ctrl.period_cnt_ = std::max(hp_infras.get_hash_table_size(), min_period_cnt);
-      bypass_ctrl.probe_cnt_ += probe_cnt;
-      bypass_ctrl.state_ = ObAdaptiveByPassCtrl::STATE_ANALYZE;
-    }
-  } else if (ObAdaptiveByPassCtrl::STATE_PROBE == bypass_ctrl.state_) {
-    can_insert = false;
-    bypass_ctrl.probe_cnt_ += probe_cnt;
-    if (bypass_ctrl.probe_cnt_ >= bypass_ctrl.period_cnt_) {
-      bypass_ctrl.state_ = ObAdaptiveByPassCtrl::STATE_ANALYZE;
-    }
-  } else if (ObAdaptiveByPassCtrl::STATE_ANALYZE == bypass_ctrl.state_) {
-    can_insert = false;
-    double ratio = MIN_RATIO_FOR_L3;
-    if (!(hp_infras.get_hash_bucket_num() >= extend_bkt_num_push_down)
-        && static_cast<double> (bypass_ctrl.exists_cnt_) / bypass_ctrl.probe_cnt_ >=
-                       std::max(ratio, 1 - (1 / static_cast<double> (bypass_ctrl.cut_ratio_)))) {
-      bypass_ctrl.rebuild_times_ = 0;
-      if (hp_infras.hash_table_full()) {
-        bypass_ctrl.state_ = ObAdaptiveByPassCtrl::STATE_L3_INSERT;
-        if (OB_FAIL(hp_infras.extend_hash_table_l3())) {
-          LOG_WARN("failed to extend hash table", K(ret));
-        }
-      } else {
-        bypass_ctrl.state_ = ObAdaptiveByPassCtrl::STATE_PROBE;
+    uint64_t mask_hash = hash_val & ObGroupRowBucketBase::HASH_VAL_MASK;
+    uint64_t existing_cnt = 0;
+    LOG_TRACE("distinct skew: export candidate", K(i), K(hash_val),
+             K(cnt), K(mask_hash), K(MY_SPEC.id_));
+    int get_ret = popular_map_.get_refactored(mask_hash, existing_cnt);
+    if (get_ret == OB_HASH_NOT_EXIST) {
+      if (OB_FAIL(popular_map_.set_refactored(mask_hash, cnt))) {
+        LOG_WARN("failed to set popular map", K(ret));
       }
-    } else if (static_cast<double> (bypass_ctrl.exists_cnt_) / bypass_ctrl.probe_cnt_ >=
-                                           1 - (1 / static_cast<double> (bypass_ctrl.cut_ratio_))) {
-      bypass_ctrl.state_ = ObAdaptiveByPassCtrl::STATE_PROBE;
-      bypass_ctrl.rebuild_times_ = 0;
-    } else {
-      LOG_TRACE("get new state", K(bypass_ctrl.state_), K(bypass_ctrl.processed_cnt_), K(hp_infras.get_hash_bucket_num()),
-                              K(hp_infras.get_hash_table_size()), K(bypass_ctrl.exists_cnt_), K(bypass_ctrl.probe_cnt_));
-      hp_infras.reset_hash_table_for_by_pass();
-      bypass_ctrl.state_ = ObAdaptiveByPassCtrl::STATE_L2_INSERT;
-      ++bypass_ctrl.rebuild_times_;
+    } else if (get_ret == OB_SUCCESS) {
+      if (OB_FAIL(popular_map_.set_refactored(mask_hash, existing_cnt + cnt,
+                                              1/*overwrite*/))) {
+        LOG_WARN("failed to update popular map", K(ret));
+      }
     }
-    bypass_ctrl.probe_cnt_ = 0;
-    bypass_ctrl.exists_cnt_ = 0;
+  }
+  return ret;
+}
+
+int ObHashDistinctVecOp::init_popular_values()
+{
+  int ret = OB_SUCCESS;
+  int64_t dop = GET_PHY_PLAN_CTX(ctx_)->get_phy_plan()->get_px_dop();
+  PopularMapType::iterator iter = popular_map_.begin();
+  for (; OB_SUCC(ret) && iter != popular_map_.end();) {
+    double ratio = (total_load_rows_ == iter->second) ? 999.0
+                   : ((iter->second * dop * 1.0) / (total_load_rows_ - iter->second));
+    if ((total_load_rows_ != iter->second)
+        && (ratio < SKEW_POPULAR_MAX_RATIO)) {
+      PopularMapType::iterator iter_tmp = iter;
+      iter_tmp++;
+      popular_map_.erase_refactored(iter->first);
+      iter = iter_tmp;
+    } else {
+      LOG_TRACE("distinct skew: got a topk popular value", K(ret), K(iter->first),
+               K(iter->second), K(dop), K(total_load_rows_), K(MY_SPEC.id_),
+               K(popular_map_.size()));
+      iter->second = 0;
+      iter++;
+    }
+  }
+  if (popular_map_.size() == 0) {
+    LOG_TRACE("distinct skew: no popular values", K(ret), K(dop), K(total_load_rows_));
+  } else {
+    op_monitor_info_.otherstat_5_value_ = popular_map_.size();
   }
   return ret;
 }

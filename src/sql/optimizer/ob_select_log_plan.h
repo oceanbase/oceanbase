@@ -175,7 +175,9 @@ private:
                           bool &use_merge_valid,
                           bool &part_sort_valid,
                           bool &normal_sort_valid);
-  int update_part_sort_method(bool &part_sort_valid, bool &normal_sort_valid);
+  int update_part_sort_method(bool &part_sort_valid,
+                              bool &normal_sort_valid,
+                              const bool is_win_func = false);
   int candi_allocate_normal_group_by(const bool ignore_transform_distinct_agg,
                                      const ObIArray<ObRawExpr*> &reduce_exprs,
                                      const ObIArray<ObRawExpr*> &group_by_exprs,

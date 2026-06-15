@@ -820,6 +820,18 @@ public:
     return nullptr;
   }
 
+  int prepare_raw_exprs(ObDMLStmt *stmt, OpTestEngine &engine)
+  {
+    UNUSEDx(stmt, engine);
+    return OB_SUCCESS;
+  }
+
+  int finalize_spec_from_stmt(ObDMLStmt *stmt, OpTestEngine &engine, ObOpSpec *root_spec)
+  {
+    UNUSEDx(stmt, engine, root_spec);
+    return OB_SUCCESS;
+  }
+
   // ===== SQL Description Interface =====
 
   /**
@@ -1355,6 +1367,15 @@ public:
       }
     }
 
+    // Step 3.6: Optional pre-CG raw expr preparation.
+    {
+      Derived *derived = static_cast<Derived *>(this);
+      if (OB_FAIL(derived->prepare_raw_exprs(stmt, engine))) {
+        LOG_WARN("prepare raw exprs failed", K(ret));
+        return ret;
+      }
+    }
+
     // Stash resolved statement for prepare_cg() (enables re-CG under different formats).
     prepared_dml_stmt_ = stmt;
     return ret;
@@ -1800,6 +1821,11 @@ public:
     ObOpSpec *root_spec = derived->create_spec(engine.get_allocator(), mock_spec,
                                                output_exprs, prepared_limit_expr_,
                                                prepared_offset_expr_, use_rich_format);
+
+    if (OB_SUCC(ret) && OB_FAIL(derived->finalize_spec_from_stmt(resolved_stmt_, engine, root_spec))) {
+      LOG_WARN("finalize spec from stmt failed", K(ret));
+      return result;
+    }
 
     // Step 6.7: Set filter expressions on the tested operator's spec (root_spec) if exists,
     // otherwise on mock_spec. This ensures filter_rows() is called on the operator under test.

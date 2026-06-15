@@ -10,6 +10,7 @@ ob_set_subtarget(ob_share_extra ALONE
   vector/ob_discrete_base.cpp
   vector/ob_continuous_base.cpp
   vector/ob_uniform_const_vector.cpp
+  vector/ob_i_vector.cpp
 
   aggregate/approx_count_distinct.cpp
   aggregate/count.cpp

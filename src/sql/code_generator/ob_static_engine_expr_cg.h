@@ -127,7 +127,8 @@ public:
 
   static int generate_rt_expr(const ObRawExpr &src,
                               common::ObIArray<ObRawExpr *> &exprs,
-                              ObExpr *&dst);
+                              ObExpr *&dst,
+                              common::ObVecHashAlgo vec_hash_algo = common::VEC_HASH_ALGO_MURMUR);
 
 
   // Attention : Please think over before you have to use this function.

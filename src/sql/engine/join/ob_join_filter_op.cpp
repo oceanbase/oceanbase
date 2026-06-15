@@ -1634,9 +1634,9 @@ int ObJoinFilterOp::calc_join_filter_hash_values(const ObBatchRows &brs)
         const bool is_batch_seed = (idx > 0);
         ObIVector *vector = expr->get_vector(eval_ctx_);
         ret =
-            vector->murmur_hash_v3(*expr, join_filter_hash_values_, *brs.skip_,
-                                   EvalBound(brs.size_, brs.all_rows_active_),
-                                   is_batch_seed ? join_filter_hash_values_ : &seed, is_batch_seed);
+            vector->hash(*expr, join_filter_hash_values_, *brs.skip_,
+                            EvalBound(brs.size_, brs.all_rows_active_),
+                            is_batch_seed ? join_filter_hash_values_ : &seed, is_batch_seed);
       }
     }
     if (OB_SUCC(ret)) {

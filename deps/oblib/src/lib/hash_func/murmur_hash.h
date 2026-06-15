@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <string>
+#include "lib/hash_func/crc_hash.h"
 
 namespace oceanbase
 {

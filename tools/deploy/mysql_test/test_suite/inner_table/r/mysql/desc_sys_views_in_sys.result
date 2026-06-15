@@ -17266,6 +17266,37 @@ end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_TENANT_WORKER_GROUPS limit 1);
 cnt
 1
+desc oceanbase.DBA_OB_SYS_VARIABLE_HISTORY;
+Field	Type	Null	Key	Default	Extra
+NAME	varchar(128)	NO			
+VALUE	varchar(65536)	YES		NULL	
+MODIFY_TIME	timestamp(6)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|DBA_OB_SYS_VARIABLE_HISTORY|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|DBA_OB_SYS_VARIABLE_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_SYS_VARIABLE_HISTORY|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_SYS_VARIABLE_HISTORY limit 1);
+cnt
+1
+desc oceanbase.CDB_OB_SYS_VARIABLE_HISTORY;
+Field	Type	Null	Key	Default	Extra
+TENANT_ID	bigint(20)	NO		NULL	
+NAME	varchar(128)	NO			
+VALUE	varchar(65536)	YES		NULL	
+MODIFY_TIME	timestamp(6)	NO		NULL	
+set @query_type = (select 
+case 
+when ('|CDB_IND_COLUMNS|CDB_PART_KEY_COLUMNS|CDB_SUBPART_KEY_COLUMNS|CDB_TAB_COL_STATISTICS|CDB_TAB_COLS|CDB_TAB_COLS_V$|KEY_COLUMN_USAGE|DBA_TAB_COL_STATISTICS|' like '%|CDB_OB_SYS_VARIABLE_HISTORY|%') then 2
+when ('|CDB_OB_SERVER_SPACE_USAGE|' like '%|CDB_OB_SYS_VARIABLE_HISTORY|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|CDB_OB_SYS_VARIABLE_HISTORY|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.CDB_OB_SYS_VARIABLE_HISTORY limit 1);
+cnt
+1
 select case cnt when 0 then NULL else 'UNEXPECTED ERROR: It is expected to be an empty set, which means that all GV$ and V$ view column names are defined consistently' end ERROR_INFO from (select /*+no_rewrite*/ count(*) cnt from
 (SELECT t.table_name,
 group_concat(c.column_name) as column_name_list

@@ -18,6 +18,7 @@
 #include "sql/engine/basic/ob_compact_row.h"
 #include "sql/engine/basic/ob_temp_row_store.h"
 #include "sql/dtl/ob_dtl_vectors_buffer.h"
+#include "lib/allocator/page_arena.h"
 
 namespace oceanbase
 {
@@ -45,8 +46,11 @@ public:
       reorder_fixed_expr_(reorder_fixed_expr),
       child_exprs_(child_exprs),
       allocator_(allocator),
-      recv_op_(recv_op)
+      recv_op_(recv_op),
+      arena_allocator_(),
+      col_has_null_cache_(nullptr)
   {
+    arena_allocator_.set_attr(ObMemAttr(MTL_ID(), "PxRowStore"));
   }
   ~ObReceiveRowReader()
   {
@@ -175,6 +179,8 @@ private:
   common::ObIAllocator *allocator_ = NULL;
   bool row_meta_init_ = false;
   ObPxReceiveOp *recv_op_;
+  common::ObArenaAllocator arena_allocator_;
+  bool *col_has_null_cache_;
 };
 
 class ObPxNewRow

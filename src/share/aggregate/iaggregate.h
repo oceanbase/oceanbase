@@ -608,21 +608,34 @@ protected:
     ObExpr *agg_expr = agg_ctx.aggr_infos_.at(agg_col_id).expr_;
     ObAggrInfo &aggr_info = agg_ctx.aggr_infos_.at(agg_col_id);
     ObEvalCtx::BatchInfoScopeGuard guard(agg_ctx.eval_ctx_);
-
+    bool all_rows_active = (skip == nullptr || skip->accumulate_bit_cnt(batch_size) == 0);
     const char *agg_cell = nullptr;
     int32_t agg_cell_len = 0;
-    for (int i = 0; OB_SUCC(ret) && i < batch_size; i++) {
-      if (skip != nullptr && skip->at(start_output_idx + i)) { continue; }
-      guard.set_batch_idx(start_output_idx + i);
-      agg_cell = nullptr;
-      agg_cell_len = 0;
-      const char* agg_row = agg_ctx.agg_rows_.at(start_gid + i);
-      agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_id, agg_row);
-      if (OB_FAIL(ret)) {
-      } else if (FALSE_IT(agg_cell_len = agg_ctx.row_meta().get_cell_len(agg_col_id, agg_row))) {
-      } else if (OB_FAIL(static_cast<Derived *>(this)->template collect_group_result<ResultFmt>(
-                   agg_ctx, *agg_expr, agg_col_id, agg_cell, agg_cell_len))) {
-        SQL_LOG(WARN, "collect group result failed", K(ret));
+    bool use_var_len = agg_ctx.row_meta().use_var_len_ != nullptr && agg_ctx.row_meta().use_var_len_->at(agg_col_id);
+    if (all_rows_active && !use_var_len) {
+      agg_cell_len = agg_ctx.row_meta().get_fixed_cell_len(agg_col_id);
+      const int32_t cell_offset = agg_ctx.row_meta().col_offsets_[agg_col_id];
+      for (int i = 0; OB_SUCC(ret) && i < batch_size; i++) {
+        guard.set_batch_idx(start_output_idx + i);
+        agg_cell = agg_ctx.agg_rows_.at(start_gid + i) + cell_offset;
+        if (OB_FAIL(static_cast<Derived *>(this)->template collect_group_result<ResultFmt>(
+                      agg_ctx, *agg_expr, agg_col_id, agg_cell, agg_cell_len))) {
+          SQL_LOG(WARN, "collect group result failed", K(ret));
+        }
+      }
+    } else {
+      for (int i = 0; OB_SUCC(ret) && i < batch_size; i++) {
+        if (skip != nullptr && skip->at(start_output_idx + i)) { continue; }
+        guard.set_batch_idx(start_output_idx + i);
+        agg_cell = nullptr;
+        agg_cell_len = 0;
+        const char* agg_row = agg_ctx.agg_rows_.at(start_gid + i);
+        agg_cell = agg_ctx.row_meta().locate_cell_payload(agg_col_id, agg_row);
+        agg_cell_len = agg_ctx.row_meta().get_cell_len(agg_col_id, agg_row);
+        if (OB_FAIL(static_cast<Derived *>(this)->template collect_group_result<ResultFmt>(
+                     agg_ctx, *agg_expr, agg_col_id, agg_cell, agg_cell_len))) {
+          SQL_LOG(WARN, "collect group result failed", K(ret));
+        }
       }
     }
     return ret;

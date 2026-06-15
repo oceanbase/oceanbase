@@ -406,6 +406,7 @@ option(OB_ENABLE_AVX2 "enable AVX2 and related instruction set support for x86_6
 include(CMakeFindBinUtils)
 EXECUTE_PROCESS(COMMAND uname -m COMMAND tr -d '\n' OUTPUT_VARIABLE ARCHITECTURE )
 if( ${ARCHITECTURE} STREQUAL "x86_64" )
+    set(MARCH_CFLAGS "-march=nehalem")
     set(MTUNE_CFLAGS -mtune=core2)
     set(ARCH_LDFLAGS "")
     set(OCI_DEVEL_INC "${DEP_3RD_DIR}/usr/include/oracle/12.2/client64")

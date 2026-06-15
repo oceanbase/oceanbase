@@ -1187,7 +1187,8 @@ int ObSelectLogPlan::get_valid_aggr_algo(const ObIArray<ObRawExpr*> &group_by_ex
     /* if normal_sort_valid set as false by hint, will retry by ignore hint */
   }
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(update_part_sort_method(part_sort_valid, normal_sort_valid))) {
+  } else if (!groupby_helper.ignore_hint_ &&
+             OB_FAIL(update_part_sort_method(part_sort_valid, normal_sort_valid))) {
     LOG_WARN("fail to update part sort method", K(ret));
   }
   LOG_TRACE("group by alogrithm", K(groupby_helper), K(use_hash_valid), K(use_merge_valid), K(part_sort_valid), K(normal_sort_valid));
@@ -1196,7 +1197,8 @@ int ObSelectLogPlan::get_valid_aggr_algo(const ObIArray<ObRawExpr*> &group_by_ex
 
 //  update partition sort method with opt_param hint
 int ObSelectLogPlan::update_part_sort_method(bool &part_sort_valid,
-                                             bool &normal_sort_valid)
+                                             bool &normal_sort_valid,
+                                             const bool is_win_func)
 {
   int ret = OB_SUCCESS;
   if (!part_sort_valid || !normal_sort_valid) {
@@ -1204,9 +1206,18 @@ int ObSelectLogPlan::update_part_sort_method(bool &part_sort_valid,
   } else {
     bool use_part_sort = false;
     bool is_exists_opt = false;
-    if (OB_FAIL(optimizer_context_.get_query_ctx()->get_global_hint()
-                        .opt_params_.get_bool_opt_param(
-                        ObOptParamHint::USE_PART_SORT_MGB, use_part_sort, is_exists_opt))) {
+    ObQueryCtx *query_ctx = optimizer_context_.get_query_ctx();
+    if (OB_ISNULL(query_ctx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null query ctx", K(ret));
+    } else if (OB_FAIL(query_ctx->get_global_hint().opt_params_.get_bool_opt_param(
+                       ObOptParamHint::ENABLE_PARTITION_SORT, use_part_sort, is_exists_opt))) {
+      LOG_WARN("fail to check partition sort enabled", K(ret));
+    } else if (is_exists_opt) {
+      part_sort_valid = use_part_sort;
+      normal_sort_valid = !use_part_sort;
+    } else if (!is_win_func && OB_FAIL(query_ctx->get_global_hint().opt_params_.get_bool_opt_param(
+                                       ObOptParamHint::USE_PART_SORT_MGB, use_part_sort, is_exists_opt))) {
       LOG_WARN("fail to check partition sort merge group by enabled", K(ret));
     } else if (!is_exists_opt) {
       /* has no opt_param hint */
@@ -6860,18 +6871,22 @@ int ObSelectLogPlan::create_one_window_function(CandidatePlan &candidate_plan,
     const int64_t part_cnt = win_func_helper.part_cnt_;
     bool need_normal_sort = !win_func_helper.force_hash_sort_;
     bool need_hash_sort = need_sort && part_cnt > 0 && prefix_pos <= 0 && !win_func_helper.force_normal_sort_;
-    bool use_topn = need_normal_sort &&
-                    win_func_helper.enable_topn_ &&
-                    win_func_helper.partition_exprs_.empty() &&
-                    NULL != win_func_helper.topn_const_;
-    bool use_part_topn = need_hash_sort &&
-                         win_func_helper.enable_topn_ &&
-                         prefix_pos == 0 &&
-                         NULL != win_func_helper.topn_const_;
-    plan_count = all_plans.count();
-    win_func_helper.set_plan_options(need_normal_sort, use_topn, need_hash_sort, use_part_topn);
-    LOG_TRACE("begin to create dist window plan", K(need_normal_sort), K(need_hash_sort), K(use_topn), K(use_part_topn),
-              K(win_func_helper.force_hash_sort_), K(win_func_helper.force_normal_sort_));
+    if (OB_FAIL(update_part_sort_method(need_hash_sort, need_normal_sort, true))) {
+      LOG_WARN("failed to update window partition sort method", K(ret));
+    } else {
+      bool use_topn = need_normal_sort &&
+                      win_func_helper.enable_topn_ &&
+                      win_func_helper.partition_exprs_.empty() &&
+                      NULL != win_func_helper.topn_const_;
+      bool use_part_topn = need_hash_sort &&
+                           win_func_helper.enable_topn_ &&
+                           prefix_pos == 0 &&
+                           NULL != win_func_helper.topn_const_;
+      plan_count = all_plans.count();
+      win_func_helper.set_plan_options(need_normal_sort, use_topn, need_hash_sort, use_part_topn);
+      LOG_TRACE("begin to create dist window plan", K(need_normal_sort), K(need_hash_sort), K(use_topn), K(use_part_topn),
+                K(win_func_helper.force_hash_sort_), K(win_func_helper.force_normal_sort_));
+    }
   }
   for (uint64_t i = WinDistAlgo::WIN_DIST_NONE; OB_SUCC(ret) && i <= WinDistAlgo::WIN_DIST_LIST; i = (i << 1)) {
     if (win_dist_methods & i) {

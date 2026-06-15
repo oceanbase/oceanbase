@@ -261,6 +261,7 @@ struct ObOptParamHint
     DEF(UDF_COST_FACTOR,)                      \
     DEF(UDF_SELECTIVITY,)                           \
     DEF(ENABLE_PLAN_EXPIRATION_BY_EXEC_FEEDBACK,)                    \
+    DEF(ENABLE_PARTITION_SORT,)                   \
 
 
   DECLARE_ENUM(OptParamType, opt_param, OPT_PARAM_TYPE_DEF, static);

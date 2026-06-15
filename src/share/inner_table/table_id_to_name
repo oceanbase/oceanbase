@@ -651,7 +651,6 @@
 # 12095: __all_virtual_sys_variable
 # 12095: __all_sys_variable  # BASE_TABLE_NAME
 # 12096: __all_virtual_sys_variable_history
-# 12096: __all_sys_variable_history  # BASE_TABLE_NAME
 # 12097: __all_virtual_func
 # 12097: __all_func  # BASE_TABLE_NAME
 # 12098: __all_virtual_func_history
@@ -2199,6 +2198,8 @@
 # 15552: __all_virtual_tenant_worker_group  # BASE_TABLE_NAME
 # 15555: ALL_VIRTUAL_TABLE_OPT_STAT_INVALIDATE_PLAN_REAL_AGENT
 # 15555: __all_table_opt_stat_invalidate_plan  # BASE_TABLE_NAME
+# 15556: ALL_VIRTUAL_SYS_VARIABLE_HISTORY
+# 15556: __all_virtual_sys_variable_history  # BASE_TABLE_NAME
 # 20001: GV$OB_PLAN_CACHE_STAT
 # 20002: GV$OB_PLAN_CACHE_PLAN_STAT
 # 20003: SCHEMATA
@@ -2809,6 +2810,8 @@
 # 21721: CDB_SCHEDULER_RUNNING_JOBS
 # 21722: CDB_SCHEDULER_JOBS
 # 21723: GV$OB_TENANT_WORKER_GROUPS
+# 21744: DBA_OB_SYS_VARIABLE_HISTORY
+# 21745: CDB_OB_SYS_VARIABLE_HISTORY
 # 25001: DBA_SYNONYMS
 # 25002: DBA_OBJECTS
 # 25003: ALL_OBJECTS
@@ -3359,6 +3362,7 @@
 # 28293: DBA_OB_TTL_TASK_HISTORY
 # 28295: DBA_OB_ROUTINE_LOAD_JOBS
 # 28296: GV$OB_TENANT_WORKER_GROUPS
+# 28301: DBA_OB_SYS_VARIABLE_HISTORY
 # 14999: __idx_11003_all_virtual_plan_cache_stat_i1
 # 14999: all_virtual_plan_cache_stat_i1  # INDEX_NAME
 # 14999: __all_virtual_plan_cache_stat  # DATA_BASE_TABLE_NAME

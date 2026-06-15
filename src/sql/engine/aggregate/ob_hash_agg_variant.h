@@ -267,39 +267,6 @@ struct ProcessPopularValueBatchVisitor : public boost::static_visitor<int>
   common::hash::ObHashMap<uint64_t, uint64_t, hash::NoPthreadDefendMode> *popular_map_;
 };
 
-struct AppendBatchVisitor : public boost::static_visitor<int>
-{
-  AppendBatchVisitor(const common::ObIArray<ObExpr *> &gby_exprs,
-                     const ObBatchRows &child_brs,
-                     const bool *is_dumped,
-                     const uint64_t *hash_values,
-                     const common::ObIArray<int64_t> &lengths,
-                     char **batch_new_rows,
-                     int64_t &agg_group_cnt,
-                     bool need_reinit_vectors) : gby_exprs_(gby_exprs),
-                                                 child_brs_(child_brs),
-                                                 is_dumped_(is_dumped),
-                                                 hash_values_(hash_values),
-                                                 lengths_(lengths),
-                                                 batch_new_rows_(batch_new_rows),
-                                                 agg_group_cnt_(agg_group_cnt),
-                                                 need_reinit_vectors_(need_reinit_vectors) {}
-  template <typename T>
-  int operator() (T &t)
-  {
-    return t->append_batch(gby_exprs_, child_brs_, is_dumped_, hash_values_, lengths_,
-                           batch_new_rows_, agg_group_cnt_, need_reinit_vectors_);
-  }
-  const common::ObIArray<ObExpr *> &gby_exprs_;
-  const ObBatchRows &child_brs_;
-  const bool *is_dumped_;
-  const uint64_t *hash_values_;
-  const common::ObIArray<int64_t> &lengths_;
-  char **batch_new_rows_;
-  int64_t &agg_group_cnt_;
-  bool need_reinit_vectors_;
-};
-
 struct ProcessBatchVisitor : public boost::static_visitor<int>
 {
   ProcessBatchVisitor(const common::ObIArray<ObExpr *> &gby_exprs,
@@ -318,7 +285,8 @@ struct ProcessBatchVisitor : public boost::static_visitor<int>
                       uint16_t *new_row_pos,
                       uint16_t *old_row_pos,
                       int64_t &new_row_cnt,
-                      int64_t &old_row_cnt) : gby_exprs_(gby_exprs),
+                      int64_t &old_row_cnt,
+                      bool enable_skew_detection) : gby_exprs_(gby_exprs),
                                               child_brs_(child_brs),
                                               is_dumped_(is_dumped),
                                               hash_values_(hash_values),
@@ -334,7 +302,8 @@ struct ProcessBatchVisitor : public boost::static_visitor<int>
                                               new_row_pos_(new_row_pos),
                                               old_row_pos_(old_row_pos),
                                               new_row_cnt_(new_row_cnt),
-                                              old_row_cnt_(old_row_cnt) {}
+                                              old_row_cnt_(old_row_cnt),
+                                              enable_skew_detection_(enable_skew_detection) {}
   template <typename T>
   int operator() (T &t)
   {
@@ -343,7 +312,7 @@ struct ProcessBatchVisitor : public boost::static_visitor<int>
                             bloom_filter_, batch_old_rows_, batch_new_rows_,
                             agg_row_cnt_, agg_group_cnt_, batch_aggr_rows_,
                             need_reinit_vectors_, new_row_pos_, old_row_pos_,
-                            new_row_cnt_, old_row_cnt_);
+                            new_row_cnt_, old_row_cnt_, enable_skew_detection_);
   }
   const common::ObIArray<ObExpr *> &gby_exprs_;
   const ObBatchRows &child_brs_;
@@ -362,6 +331,7 @@ struct ProcessBatchVisitor : public boost::static_visitor<int>
   uint16_t *old_row_pos_;
   int64_t &new_row_cnt_;
   int64_t &old_row_cnt_;
+  bool enable_skew_detection_;
 };
 
 struct GetProbeCntVisitor : public boost::static_visitor<int64_t>
@@ -508,19 +478,6 @@ public:
     return boost::apply_visitor(visitor, hash_table_ptr_);
   }
 
-  int append_batch(const common::ObIArray<ObExpr *> &gby_exprs,
-                   const ObBatchRows &child_brs,
-                   const bool *is_dumped,
-                   const uint64_t *hash_values,
-                   const common::ObIArray<int64_t> &lengths,
-                   char **batch_new_rows,
-                   int64_t &agg_group_cnt,
-                   bool need_reinit_vectors = false)
-  {
-    AppendBatchVisitor visitor(gby_exprs, child_brs, is_dumped, hash_values, lengths,
-                               batch_new_rows, agg_group_cnt, need_reinit_vectors);
-    return boost::apply_visitor(visitor, hash_table_ptr_);
-  }
   int process_batch(const common::ObIArray<ObExpr *> &gby_exprs,
                     const ObBatchRows &child_brs,
                     const bool *is_dumped,
@@ -537,14 +494,15 @@ public:
                     uint16_t *new_row_pos,
                     uint16_t *old_row_pos,
                     int64_t &new_row_cnt,
-                    int64_t &old_row_cnt)
+                    int64_t &old_row_cnt,
+                    bool enable_skew_detection = true)
   {
     ProcessBatchVisitor visitor(gby_exprs, child_brs, is_dumped,
                                 hash_values, lengths, can_append_batch,
                                 bloom_filter, batch_old_rows, batch_new_rows,
                                 agg_row_cnt, agg_group_cnt, batch_aggr_rows,
                                 need_reinit_vectors, new_row_pos, old_row_pos,
-                                new_row_cnt, old_row_cnt);
+                                new_row_cnt, old_row_cnt, enable_skew_detection);
     return boost::apply_visitor(visitor, hash_table_ptr_);
   }
   void prefetch(const ObBatchRows &brs, uint64_t *hash_vals) const

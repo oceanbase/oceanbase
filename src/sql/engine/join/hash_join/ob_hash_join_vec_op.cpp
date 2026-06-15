@@ -1842,20 +1842,38 @@ int ObHashJoinVecOp::sync_wait_init_build_hash(const uint64_t build_ht_thread_pt
   return ret;
 }
 
+struct SyncSetMaxPred
+{
+  SyncSetMaxPred(ObHashJoinVecInput *input, int64_t ret)
+    : input_(input), ret_(ret) {}
+  void operator()(int64_t n_times) const
+  {
+    input_->sync_set_max(n_times, ret_);
+  }
+  ObHashJoinVecInput *input_;
+  int64_t ret_;
+};
+
 int ObHashJoinVecOp::sync_wait_finish_build_hash()
 {
   int ret = OB_SUCCESS;
   ObHashJoinVecInput *hj_input = static_cast<ObHashJoinVecInput*>(input_);
+  const int64_t key_count = MY_SPEC.join_conds_.count();
   if (OB_ISNULL(hj_input)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected status: shared hash join info is null", K(ret));
-  } else if (OB_FAIL(hj_input->sync_wait(
-      ctx_, hj_input->get_process_cnt(),
-      [&](int64_t n_times) {
-        UNUSED(n_times);
-      }))) {
-    LOG_WARN("failed to sync wait finish build hash table", K(ret));
   } else {
+    for (int64_t i = 0; OB_SUCC(ret) && i < key_count; ++i) {
+      const int64_t has_null = jt_ctx_.build_cols_have_null_->at(i) ? 1 : 0;
+      if (OB_FAIL(hj_input->sync_wait(
+          ctx_, hj_input->get_process_cnt(), SyncSetMaxPred(hj_input, has_null)))) {
+        LOG_WARN("failed to sync wait finish build hash table", K(ret), K(i), K(key_count));
+      } else if (hj_input->get_sync_val() > 0) {
+        jt_ctx_.build_cols_have_null_->set(i);
+      } else {
+        jt_ctx_.build_cols_have_null_->unset(i);
+      }
+    }
     LOG_TRACE("debug sync finish build hash", K(cur_join_table_), K(spec_.id_));
   }
   return ret;
@@ -1950,8 +1968,6 @@ int ObHashJoinVecOp::fill_partition_batch(int64_t &num_left_rows)
   bool is_left = true;
   if (is_top_level_process_with_join_filter()) {
     ret = fill_partition_from_join_filter(num_left_rows);
-    // use join filter, default have null.
-    jt_ctx_.build_cols_have_null_->set_all(MY_SPEC.join_conds_.count());
   } else {
     if (!stores_mgr_.inited()) {
       if (OB_FAIL(stores_mgr_.init(MY_SPEC.max_batch_size_,
@@ -2493,16 +2509,16 @@ int ObHashJoinVecOp::calc_hash_value_and_skip_null(const ObIArray<ObExpr*> &join
           const_cast<ObBatchRows *>(brs)->all_rows_active_ = null_skip_bitmap_
                                                              ->is_all_false(brs->size_);
         }
-        if (is_left && (!enable_skip_null && vector->has_null())) {
+        if (is_left && ((!enable_skip_null || MY_SPEC.is_ns_equal_cond_.at(idx)) && vector->has_null())) {
           jt_ctx_.build_cols_have_null_->set(idx);
         }
-        if (!is_left && (!enable_skip_null && vector->has_null())) {
+        if (!is_left && ((!enable_skip_null || MY_SPEC.is_ns_equal_cond_.at(idx)) && vector->has_null())) {
           jt_ctx_.probe_cols_have_null_->set(idx);
         }
-        ret = vector->murmur_hash_v3(*expr, hash_vals, *brs->skip_,
-                                     EvalBound(brs->size_, brs->all_rows_active_),
-                                     is_batch_seed ? hash_vals : &seed,
-                                     is_batch_seed);
+        ret = vector->hash(*expr, hash_vals, *brs->skip_,
+                              EvalBound(brs->size_, brs->all_rows_active_),
+                              is_batch_seed ? hash_vals : &seed,
+                              is_batch_seed);
       }
     }
     if (OB_SUCC(ret)) {
@@ -3043,6 +3059,14 @@ int ObHashJoinVecOp::fill_partition_from_join_filter(int64_t &num_left_rows)
       // no partition has been dumped, do not modify cur_dumped_partition_
     } else {
       cur_dumped_partition_ = join_filter_partition_splitter_->get_first_dumped_part_idx() - 1;
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    // 从join filter获取build_cols_have_null标记
+    ObBitVector *jf_build_cols_have_null = join_filter_partition_splitter_->get_build_cols_have_null();
+    if (OB_NOT_NULL(jf_build_cols_have_null)) {
+      jt_ctx_.build_cols_have_null_->deep_copy(*jf_build_cols_have_null, MY_SPEC.join_conds_.count());
     }
   }
 

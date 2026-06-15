@@ -19,6 +19,12 @@ namespace sql
 {
 class ObExecContext;
 class ObBasicSessionInfo;
+class ObSQLSessionInfo;
+}
+
+namespace observer
+{
+class ObAllVirtualSysVariableHistory;
 }
 
 namespace share
@@ -140,6 +146,7 @@ private:
 class ObBasicSysVar
 {
   OB_UNIS_VERSION_V(1);
+  friend class ::oceanbase::observer::ObAllVirtualSysVariableHistory;
 public:
   static const char * EMPTY_STRING;
   typedef int (*OnCheckAndConvertFunc)(sql::ObExecContext &ctx,

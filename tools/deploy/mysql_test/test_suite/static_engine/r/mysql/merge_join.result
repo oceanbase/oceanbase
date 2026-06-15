@@ -909,12 +909,12 @@ select /*+use_merge(t1 t2) leading(t1 t2)*/ * from t1 right join t2 on t2.c1 = t
 |    3 |    3 |    3 |    3 |
 |    3 |    3 |    3 |    3 |
 | NULL | NULL | NULL |    3 |
-| NULL | NULL |   10 |   10 |
-| NULL | NULL |    1 |    1 |
-| NULL | NULL |    1 |    1 |
 | NULL | NULL |    6 |    6 |
 | NULL | NULL |    6 |    6 |
+| NULL | NULL |    1 |    1 |
+| NULL | NULL |    1 |    1 |
 | NULL | NULL |    9 |    9 |
+| NULL | NULL |   10 |   10 |
 +------+------+------+------+
 
 EXPLAIN select /*+use_merge(t1 t2) leading(t1 t2)*/ * from t1 full join t2 on t2.c1 = t1.c1 and t1.c2 * t2.c2 < 10;

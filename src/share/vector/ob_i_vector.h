@@ -7,7 +7,7 @@
 #define OCEANBASE_SHARE_VECTOR_OB_I_VECTOR_H_
 
 #include "share/datum/ob_datum.h"
-#include "share/vector/type_traits.h"
+#include "share/vector/ob_vector_define.h"
 #include "share/vector/static_check_utils.h"
 #include "lib/rowid/ob_urowid.h"
 #include "common/object/ob_object.h"
@@ -516,6 +516,17 @@ public:
 
   virtual int default_hash(BATCH_EVAL_HASH_ARGS) const = 0;
   virtual int murmur_hash(BATCH_EVAL_HASH_ARGS) const = 0;
+  // The current hash algorithms implemented are
+  // - 'default hash'
+  // - 'murmur hash'
+  // - 'murmur_hash_v3'
+  // - 'crc_hash_v3'
+
+  // When calling hash_v3 or hash_v3_for_one_row, the corresponding hash algorithm is selected based on the plan.
+  // NOTE: where compatibility needs to be maintained, it is recommended to call the specific hash algorithm interface.
+  int hash(BATCH_EVAL_HASH_ARGS) const;
+  int hash_for_one_row(EVAL_HASH_ARGS_FOR_ROW) const;
+
   // In vectorization 1.0, hash value (calculated by murmur_hash_v2) of null is inconsistent for different types.
   // For example, null hash value of ObFixedDouble is equal to `seed`, null hash vlaue of int to equal to `murmur_hash_v2(nullptr, 0, seed)`
   // In vectorization 2.0, null hash value (calculated by `murmur_hash_v3`)to equal to `seed` for all types (including null type)
@@ -523,6 +534,9 @@ public:
   virtual int murmur_hash_v3(BATCH_EVAL_HASH_ARGS) const = 0;
   // used for one row calculation
   virtual int murmur_hash_v3_for_one_row(EVAL_HASH_ARGS_FOR_ROW) const = 0;
+  // crc hash v3 uses crc_hash_64 for better performance on modern CPUs with CRC instructions
+  virtual int crc_hash_v3(BATCH_EVAL_HASH_ARGS) const = 0;
+  virtual int crc_hash_v3_for_one_row(EVAL_HASH_ARGS_FOR_ROW) const = 0;
   // compare n-th value in vector with other value,
   // the type of other value must be same as this vector
   virtual int null_first_cmp(VECTOR_ONE_COMPARE_ARGS) const = 0;

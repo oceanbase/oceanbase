@@ -2093,6 +2093,24 @@ old_password_start_time	bigint(20)	NO		-1
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_user;
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_sys_variable_history;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+zone	varchar(128)	NO	PRI	NULL	
+name	varchar(128)	NO	PRI		
+schema_version	bigint(20)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+is_deleted	bigint(20)	NO		NULL	
+data_type	bigint(20)	NO		NULL	
+value	varchar(65536)	YES		NULL	
+info	varchar(4096)	NO		NULL	
+flags	bigint(20)	NO		NULL	
+min_val	varchar(65536)	NO			
+max_val	varchar(65536)	NO			
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_sys_variable_history;
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_tenant_tablespace;
 Field	Type	Null	Key	Default	Extra
 tenant_id	bigint(20)	NO	PRI	NULL	

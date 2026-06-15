@@ -161,6 +161,33 @@ struct ObFilterTSC
   }
 };
 
+int ObStaticEngineCG::resolve_vec_hash_algo(const ObSQLSessionInfo *session,
+                                             uint64_t min_cluster_ver,
+                                             common::ObVecHashAlgo &algo)
+{
+  int ret = OB_SUCCESS;
+  algo = common::VEC_HASH_ALGO_MURMUR;
+  if (OB_NOT_NULL(session)) {
+    uint64_t tenant_id = session->get_effective_tenant_id();
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (OB_LIKELY(tenant_config.is_valid())) {
+      ObString cfg(tenant_config->_vec_hash_algo.str());
+      if (cfg.case_compare("auto") == 0) {
+        algo = (min_cluster_ver >= CLUSTER_VERSION_4_6_1_0)
+               ? common::VEC_HASH_ALGO_CRC : common::VEC_HASH_ALGO_MURMUR;
+      } else if (cfg.case_compare("murmur2") == 0) {
+        algo = common::VEC_HASH_ALGO_MURMUR;
+      } else if (cfg.case_compare("crc32") == 0) {
+        algo = common::VEC_HASH_ALGO_CRC;
+      } else {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("invalid _vec_hash_algo value", K(ret), K(cfg));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObStaticEngineCG::generate(const ObLogPlan &log_plan, ObPhysicalPlan &phy_plan)
 {
   int ret = OB_SUCCESS;
@@ -206,6 +233,10 @@ int ObStaticEngineCG::generate(const ObLogPlan &log_plan, ObPhysicalPlan &phy_pl
   int64_t disable_op_rich_format_flags = 0;
   if (OB_FAIL(generate_disable_rich_format_flags(disable_op_rich_format_flags))) {
     LOG_WARN("generate global hint flags failed", K(ret));
+  } else if (OB_FAIL(resolve_vec_hash_algo(opt_ctx_->get_session_info(),
+                                           phy_plan_->get_min_cluster_version(),
+                                           vec_hash_algo_))) {
+    LOG_WARN("fail to resolve vec hash algo", K(ret));
   }
   EnableOpRichFormat enable_rich_format(disable_op_rich_format_flags,
                                         phy_plan_->is_vectorized() && phy_plan_->get_use_rich_format());
@@ -783,7 +814,7 @@ int ObStaticEngineCG::check_vectorize_supported(bool &support,
 int ObStaticEngineCG::generate_rt_expr(const ObRawExpr &src, ObExpr *&dst)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(ObStaticEngineExprCG::generate_rt_expr(src, cur_op_exprs_, dst))) {
+  if (OB_FAIL(ObStaticEngineExprCG::generate_rt_expr(src, cur_op_exprs_, dst, vec_hash_algo_))) {
     LOG_WARN("fail to push cur op expr", K(ret), K(cur_op_exprs_));
   }
   return ret;
@@ -1428,6 +1459,16 @@ int ObStaticEngineCG::generate_spec(ObLogDistinct &op, ObHashDistinctVecSpec &sp
   spec.is_push_down_ = op.is_push_down();
   int64_t init_count = op.get_distinct_exprs().count();
   spec.by_pass_enabled_ = (op.is_push_down() && !op.force_push_down());
+  spec.llc_ndv_est_enabled_ = false;
+  spec.skew_detection_enabled_ = false;
+  if (spec.by_pass_enabled_) {
+    int64_t tenant_id = op.get_plan()->get_optimizer_context().get_session_info()->get_effective_tenant_id();
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    if (tenant_config.is_valid()) {
+      spec.llc_ndv_est_enabled_ = tenant_config->_enable_hash_distinct_llc_ndv_adaptive;
+      spec.skew_detection_enabled_ = tenant_config->_enable_hash_distinct_skew_detection;
+    }
+  }
   if (1 != op.get_num_of_child()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected child count of hash distinct", K(ret), K(op.get_num_of_child()));
@@ -2878,8 +2919,8 @@ int ObStaticEngineCG::generate_spec(ObLogSort &op, ObSortVecSpec &spec, const bo
       ObSEArray<OrderItem, 1> sk_keys;
       ObSEArray<OrderItem, 1> addon_keys;
       bool enable_encode_sortkey_opt = op.enable_encode_sortkey_opt();
-      if (op.get_part_cnt() > 0 || nullptr != op.get_topn_expr()
-          || nullptr != op.get_topk_limit_expr()) {
+      if ((GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_6_1_0 && op.get_part_cnt() > 0)
+          || nullptr != op.get_topn_expr() || nullptr != op.get_topk_limit_expr()) {
         enable_encode_sortkey_opt = false;
       }
       if (OB_ISNULL(spec.get_child())) {

@@ -996,7 +996,7 @@ int ObExpandVecOp::calc_group_hash_vals()
         ObExpr *expr = MY_SPEC.gby_exprs_.at(i);
         if (OB_FAIL(expr->eval_vector(eval_ctx_, tmp_brs))) {
           LOG_WARN("failed to eval vector", K(ret));
-        } else if (OB_FAIL(expr->get_vector(eval_ctx_)->murmur_hash_v3(
+        } else if (OB_FAIL(expr->get_vector(eval_ctx_)->hash(
                      *expr, base_hash_vals_, *child_input_skip_,
                      EvalBound(child_input_size_, child_all_rows_active_),
                      is_batch_seed ? base_hash_vals_ : &seed, is_batch_seed))) {
@@ -1007,7 +1007,7 @@ int ObExpandVecOp::calc_group_hash_vals()
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(MY_SPEC.grouping_id_expr_->get_vector(eval_ctx_)->murmur_hash_v3(
+    } else if (OB_FAIL(MY_SPEC.grouping_id_expr_->get_vector(eval_ctx_)->hash(
                  *MY_SPEC.grouping_id_expr_, calc_hash_vals_, *child_input_skip_,
                  EvalBound(child_input_size_, child_all_rows_active_),
                  is_batch_seed ? base_hash_vals_ : &seed, is_batch_seed))) {
@@ -1018,7 +1018,7 @@ int ObExpandVecOp::calc_group_hash_vals()
     const ObIArray<ObExpr *> &dup_exprs = MY_SPEC.group_set_exprs_.at(dup_iter_idx_);
     for (int i = 0; OB_SUCC(ret) && i < dup_exprs.count(); i++) {
       ObExpr *expr = dup_exprs.at(i);
-      if (OB_FAIL(expr->get_vector(eval_ctx_)->murmur_hash_v3(
+      if (OB_FAIL(expr->get_vector(eval_ctx_)->hash(
             *expr, calc_hash_vals_, *child_input_skip_,
             EvalBound(child_input_size_, child_all_rows_active_),
             is_batch_seed ? calc_hash_vals_ : &seed, is_batch_seed))) {

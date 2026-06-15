@@ -261,6 +261,19 @@ public:
       }
     }
   }
+  void clear_batch_eval_flag() {
+    FOREACH_CNT(e, *calc_exprs_) {
+      if ((*e)->is_batch_result()) {
+        const int64_t batch_size = probe_batch_rows_->brs_.size_;
+        (*e)->get_evaluated_flags(*eval_ctx_).reset(batch_size);
+        if (!is_uniform_format((*e)->get_format(*eval_ctx_))) {
+          (*e)->get_nulls(*eval_ctx_).reset(batch_size);
+        }
+      } else {
+        (*e)->get_eval_info(*eval_ctx_).clear_evaluated_flag();
+      }
+    }
+  }
   int prepare_part_rows_array(uint64_t row_num, ObIAllocator *allocator);
   int insert_left_part_rows(uint64_t row_num);
   int get_unmatched_rows(OutputInfo &output_info);

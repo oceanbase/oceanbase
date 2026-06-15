@@ -258,6 +258,7 @@ int ObExprTimestamp::cg_expr(ObExprCGCtx &expr_cg_ctx, const ObRawExpr &raw_expr
     CK(ObNullType == type || ObDateTimeType == type || ObMySQLDateTimeType == type);
     if (OB_SUCC(ret)) {
       rt_expr.eval_func_ = ObExprTimestamp::calc_timestamp1;
+      rt_expr.eval_vector_func_ = ObExprTimestamp::calc_timestamp1_vector;
     }
   } else if (2 == rt_expr.arg_cnt_) {
     ObObjType type1 = rt_expr.args_[0]->datum_meta_.type_;

@@ -202,22 +202,16 @@ int ProberBase<Bucket>::calc_other_join_conditions_batch(
   int ret = OB_SUCCESS;
   int64_t batch_idx;
   bool all_rows_active = (sel_cnt == ctx.probe_batch_rows_->brs_.size_);
+  MEMSET(ctx.join_cond_matched_, 1, sizeof(bool) * sel_cnt);
   if (all_rows_active) {
     ctx.eval_skip_->reset(ctx.probe_batch_rows_->brs_.size_);
-    for (uint16_t i = 0; i < sel_cnt; ++i) {
-      batch_idx = sel[i];
-      ctx.clear_one_row_eval_flag(batch_idx);
-      ctx.join_cond_matched_[i] = true;
-    }
   } else {
     ctx.eval_skip_->set_all(ctx.probe_batch_rows_->brs_.size_);
     for (uint16_t i = 0; i < sel_cnt; ++i) {
-      batch_idx = sel[i];
-      ctx.clear_one_row_eval_flag(batch_idx);
-      ctx.eval_skip_->unset(batch_idx);
-      ctx.join_cond_matched_[i] = true;
+      ctx.eval_skip_->unset(sel[i]);
     }
   }
+  ctx.clear_batch_eval_flag();
 
   if (OB_FAIL(ObHJStoredRow::convert_rows_to_exprs(
           *ctx.build_output_, *ctx.eval_ctx_, ctx.build_row_meta_, rows, sel, sel_cnt))) {

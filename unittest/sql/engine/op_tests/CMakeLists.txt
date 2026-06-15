@@ -117,6 +117,13 @@ sql_unittest(test_nested_loop_join_op
 #   ob_op_test_data_source.cpp
 # )
 
+# Phase 3: Partition Sort operator tests
+sql_unittest(test_partition_sort_op
+  test_partition_sort_op.cpp
+  ob_op_test_engine.cpp
+  ob_op_test_data_source.cpp
+)
+
 # Phase 9: Framework extensions tests
 sql_unittest(test_framework_extensions
   test_framework_extensions.cpp
@@ -168,6 +175,13 @@ sql_unittest(test_merge_distinct_op
 # DecimalInt CAST to integer aliasing bug regression test
 sql_unittest(test_decimalint_cast_to_int
   test_decimalint_cast_to_int.cpp
+  ob_op_test_engine.cpp
+  ob_op_test_data_source.cpp
+)
+
+# CASE expr: else_is_uniform_const dispatch + cmp_ws fast string comparison
+sql_unittest(test_case_expr_op
+  test_case_expr_op.cpp
   ob_op_test_engine.cpp
   ob_op_test_data_source.cpp
 )

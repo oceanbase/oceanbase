@@ -609,6 +609,12 @@ public:
   OB_INLINE uint32_t get_fixed_length() const {
     return len_;
   }
+  OB_INLINE void set_vec_hash_algo(common::ObVecHashAlgo algo) {
+    vec_hash_algo_ = static_cast<uint8_t>(algo);
+  }
+  OB_INLINE common::ObVecHashAlgo get_vec_hash_algo() const {
+    return static_cast<common::ObVecHashAlgo>(vec_hash_algo_);
+  }
   void reset() { new (this) ObExpr(); }
   ObDatum &locate_expr_datum(ObEvalCtx &ctx) const
   {
@@ -974,7 +980,7 @@ public:
   // used to convert ObDatum to ObObj and vice versa.
   common::ObObjDatumMapType obj_datum_map_;
 
-  union {
+  union { //FARM COMPAT WHITELIST
     struct {
       uint64_t batch_result_:1;
       uint64_t is_called_in_sql_:1;
@@ -986,6 +992,7 @@ public:
       uint64_t nullable_:1;
       uint64_t is_hidden_clustering_key_column_:1;
       uint64_t eager_evaluation_:1;
+      uint64_t vec_hash_algo_: 3;  //FARM COMPAT WHITELIST
     };
     uint64_t flag_;
   };

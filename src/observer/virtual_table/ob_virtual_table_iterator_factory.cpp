@@ -107,6 +107,7 @@
 #include "observer/virtual_table/ob_all_virtual_bad_block_table.h"
 #include "observer/virtual_table/ob_agent_virtual_table.h"
 #include "observer/virtual_table/ob_iterate_virtual_table.h"
+#include "observer/virtual_table/ob_all_virtual_sys_variable_history.h"
 #include "observer/virtual_table/ob_all_virtual_id_service.h"
 #include "observer/virtual_table/ob_all_virtual_timestamp_service.h"
 #include "rootserver/ob_root_service.h"
@@ -739,6 +740,20 @@ int ObVTIterCreator::create_vt_iter(ObVTableScanParam &params,
             if (OB_SUCC(NEW_VIRTUAL_TABLE(ObAllVirtualSysParameterStat,
                                           all_virtual_sys_parameter_stat))) {
               vt_iter = static_cast<ObAllVirtualSysParameterStat *>(all_virtual_sys_parameter_stat);
+            }
+            break;
+          }
+          case OB_ALL_VIRTUAL_SYS_VARIABLE_HISTORY_TID: {
+            ObAllVirtualSysVariableHistory *sys_var_history_iter = NULL;
+            if (OB_FAIL(NEW_VIRTUAL_TABLE(ObAllVirtualSysVariableHistory, sys_var_history_iter))) {
+              SERVER_LOG(WARN, "create virtual table iterator failed", K(ret));
+            } else if (OB_FAIL(sys_var_history_iter->init(GCTX.sql_proxy_))) {
+              SERVER_LOG(WARN, "virtual table iter init failed", K(ret));
+              sys_var_history_iter->~ObAllVirtualSysVariableHistory();
+              allocator.free(sys_var_history_iter);
+              sys_var_history_iter = NULL;
+            } else {
+              vt_iter = sys_var_history_iter;
             }
             break;
           }

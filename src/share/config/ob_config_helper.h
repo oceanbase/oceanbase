@@ -1106,6 +1106,16 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObConfigEnableHashRollupChecker);
 };
 
+class ObConfigVecHashAlgoChecker: public ObConfigChecker
+{
+public:
+  ObConfigVecHashAlgoChecker() {}
+  virtual ~ObConfigVecHashAlgoChecker() {}
+  bool check(const ObConfigItem &t) const;
+private:
+  DISALLOW_COPY_AND_ASSIGN(ObConfigVecHashAlgoChecker);
+};
+
 class ObConfigPxNodePolicyChecker: public ObConfigChecker
 {
 public:
