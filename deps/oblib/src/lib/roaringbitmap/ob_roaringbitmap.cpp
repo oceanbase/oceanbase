@@ -543,7 +543,7 @@ int ObRoaringBitmap::deserialize(const ObString &rb_bin, bool need_validate)
 {
   int ret = OB_SUCCESS;
   if (rb_bin.empty()) {
-    ret = OB_INVALID_DATA;
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("rb_bin is empty", K(ret));
   } else {
     uint32_t offset = RB_VERSION_SIZE + RB_BIN_TYPE_SIZE;
@@ -569,7 +569,7 @@ int ObRoaringBitmap::deserialize(const ObString &rb_bin, bool need_validate)
         uint8_t value_count = static_cast<uint8_t>(*(rb_bin.ptr() + offset));
         offset += RB_VALUE_COUNT_SIZE;
         if (value_count < 2 || value_count > MAX_BITMAP_SET_VALUES) {
-          ret = OB_INVALID_DATA;
+          ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid roaringbitmap value_count", K(ret), K(bin_type), K(value_count));
         } else if (OB_FAIL(set_.create(MAX_BITMAP_SET_VALUES))) {
           LOG_WARN("failed to create set", K(ret));
@@ -579,7 +579,7 @@ int ObRoaringBitmap::deserialize(const ObString &rb_bin, bool need_validate)
             value_32 = *reinterpret_cast<const uint32_t*>(rb_bin.ptr() + offset);
             offset += sizeof(uint32_t);
             if (need_validate && set_.exist_refactored(value_32) == OB_HASH_EXIST) {
-              ret = OB_INVALID_DATA;
+              ret = OB_INVALID_ARGUMENT;
               LOG_WARN("invalid roaringbitmap set binary", K(ret), K(i), K(value_32));
             } else if (OB_FAIL(set_.set_refactored(static_cast<uint64_t>(value_32)))) {
               LOG_WARN("failed to set value to the set", K(ret), K(value_32));
@@ -593,7 +593,7 @@ int ObRoaringBitmap::deserialize(const ObString &rb_bin, bool need_validate)
         uint8_t value_count = static_cast<uint8_t>(*(rb_bin.ptr() + offset));
         offset += RB_VALUE_COUNT_SIZE;
         if (value_count < 2 || value_count > MAX_BITMAP_SET_VALUES) {
-          ret = OB_INVALID_DATA;
+          ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid roaringbitmap value_count", K(ret), K(bin_type), K(value_count));
         } else if (OB_FAIL(set_.create(MAX_BITMAP_SET_VALUES))) {
           LOG_WARN("failed to create set", K(ret));
@@ -603,7 +603,7 @@ int ObRoaringBitmap::deserialize(const ObString &rb_bin, bool need_validate)
             value_64 = *reinterpret_cast<const uint64_t*>(rb_bin.ptr() + offset);
             offset += sizeof(uint64_t);
             if (need_validate && set_.exist_refactored(value_64) == OB_HASH_EXIST) {
-              ret = OB_INVALID_DATA;
+              ret = OB_INVALID_ARGUMENT;
               LOG_WARN("invalid roaringbitmap set binary", K(ret), K(i), K(value_64));
             } else if (OB_FAIL(set_.set_refactored(value_64))) {
               LOG_WARN("failed to set value to the set", K(ret), K(value_64));
@@ -631,7 +631,7 @@ int ObRoaringBitmap::deserialize(const ObString &rb_bin, bool need_validate)
           ret = OB_DESERIALIZE_ERROR;
           LOG_WARN("failed to deserialize the bitmap", K(ret));
         } else if (need_validate && !roaring::api::roaring64_bitmap_internal_validate(bitmap_, NULL)) {
-          ret = OB_INVALID_DATA;
+          ret = OB_INVALID_ARGUMENT;
           LOG_WARN("bitmap internal consistency checks failed", K(ret));
         } else {
           type_ = ObRbType::BITMAP;
@@ -645,7 +645,7 @@ int ObRoaringBitmap::deserialize(const ObString &rb_bin, bool need_validate)
           ret = OB_DESERIALIZE_ERROR;
           LOG_WARN("failed to deserialize the bitmap", K(ret));
         } else if (need_validate && !roaring::api::roaring64_bitmap_internal_validate(bitmap_, NULL)) {
-          ret = OB_INVALID_DATA;
+          ret = OB_INVALID_ARGUMENT;
           LOG_WARN("bitmap internal consistency checks failed", K(ret));
         } else {
           type_ = ObRbType::BITMAP;

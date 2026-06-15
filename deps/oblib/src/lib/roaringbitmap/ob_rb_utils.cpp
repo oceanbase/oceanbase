@@ -27,16 +27,66 @@ int ObRbUtils::get_bin_type(const ObString &rb_bin, ObRbBinType &bin_type)
 {
   int ret = OB_SUCCESS;
   // get_bin_type
-  if (rb_bin == nullptr || rb_bin.empty()) {
-    ret = OB_INVALID_DATA;
+  if (rb_bin.empty()) {
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("roaringbitmap binary is empty", K(ret), K(rb_bin));
   } else if (rb_bin.length() < RB_VERSION_SIZE + RB_TYPE_SIZE) {
-    ret = OB_INVALID_DATA;
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid roaringbitmap binary length", K(ret), K(rb_bin.length()));
   } else {
     bin_type = static_cast<ObRbBinType>(*(rb_bin.ptr() + RB_VERSION_SIZE));
   }
   return  ret;
+}
+
+// Validate the container offset array embedded in a single roaring32 portable buffer.
+// CRoaring _safe APIs trust offsets[] without bounds-checking each element; a crafted
+// binary can pass the total-size check yet still carry an out-of-bounds offset[i],
+// causing SIGSEGV when CRoaring jumps to raw+offset[i] to read container data.
+int ObRbUtils::check_roaring32_offsets_(const char *raw, size_t raw_len)
+{
+  int ret = OB_SUCCESS;
+  // n_containers == 0 means "no offset array to validate" (either buffer too short,
+  // or SERIAL_COOKIE with n < NO_OFFSET_THRESHOLD which has no offset array).
+  int32_t n_containers = 0;
+  size_t offset_array_pos = 0;
+  if (raw_len < sizeof(int32_t)) {
+    // too short to hold a cookie; caller's _size check handles this
+  } else {
+    int32_t cookie_val = *reinterpret_cast<const int32_t *>(raw);
+    if ((cookie_val & 0xFFFF) == roaring::internal::SERIAL_COOKIE) {
+      // Cookie 3B30: low-16 = SERIAL_COOKIE, high-16 = n-1
+      // Layout: 4B cookie | ceil(n/8)B run_bitmap | n*4B keyscards | [n*4B offsets if n>=4]
+      int32_t n = (cookie_val >> 16) + 1;
+      if (n >= roaring::internal::NO_OFFSET_THRESHOLD) {
+        size_t run_bitmap_bytes = (static_cast<size_t>(n) + 7) / 8;
+        offset_array_pos = sizeof(int32_t) + run_bitmap_bytes + static_cast<size_t>(n) * 2 * sizeof(uint16_t);
+        n_containers = n;
+      }
+    } else if (raw_len >= 2 * sizeof(int32_t) &&
+               cookie_val == roaring::internal::SERIAL_COOKIE_NO_RUNCONTAINER) {
+      // Cookie 3A30: SERIAL_COOKIE_NO_RUNCONTAINER — n is the next 4-byte field
+      // Layout: 4B cookie | 4B n | n*4B keyscards | n*4B offsets (always present)
+      n_containers = *reinterpret_cast<const int32_t *>(raw + sizeof(int32_t));
+      offset_array_pos = 2 * sizeof(int32_t) + static_cast<size_t>(n_containers) * 2 * sizeof(uint16_t);
+    }
+  }
+  if (n_containers > 0) {
+    size_t offset_array_bytes = static_cast<size_t>(n_containers) * sizeof(uint32_t);
+    if (offset_array_pos + offset_array_bytes > raw_len) {
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("roaring32 offset array exceeds buffer", K(ret), K(offset_array_pos), K(offset_array_bytes), K(raw_len));
+    } else {
+      const uint32_t *offsets = reinterpret_cast<const uint32_t *>(raw + offset_array_pos);
+      for (int32_t i = 0; OB_SUCC(ret) && i < n_containers; i++) {
+        if (static_cast<size_t>(offsets[i]) > raw_len) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("roaring32 container offset out of bounds", K(ret), K(i), K(offsets[i]), K(raw_len));
+        }
+      }
+    }
+  }
+  return ret;
 }
 
 int ObRbUtils::check_binary(const ObString &rb_bin)
@@ -45,18 +95,18 @@ int ObRbUtils::check_binary(const ObString &rb_bin)
   ObRbBinType bin_type;
   uint32_t offset = RB_VERSION_SIZE + RB_TYPE_SIZE;
   // get_bin_type
-  if (rb_bin == nullptr || rb_bin.empty()) {
-    ret = OB_INVALID_DATA;
+  if (rb_bin.empty()) {
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("roaringbitmap binary is empty", K(ret), K(rb_bin));
   } else if (rb_bin.length() < RB_VERSION_SIZE + RB_TYPE_SIZE) {
-    ret = OB_INVALID_DATA;
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid roaringbitmap binary length", K(ret), K(rb_bin.length()));
   } else if (!IS_VALID_RB_VERSION(static_cast<uint8_t>(*(rb_bin.ptr())))) {
-    ret = OB_INVALID_DATA;
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid version from roaringbitmap binary", K(ret), K(*(rb_bin.ptr())));
   } else if (*(rb_bin.ptr() + RB_VERSION_SIZE) >= static_cast<uint8_t>(ObRbBinType::MAX_TYPE)
              || *(rb_bin.ptr() + RB_VERSION_SIZE) < 0) {
-    ret = OB_INVALID_DATA;
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid binary type from roaringbitmap binary", K(ret), K(*(rb_bin.ptr() + RB_VERSION_SIZE)));
   } else {
     bin_type = static_cast<ObRbBinType>(*(rb_bin.ptr() + RB_VERSION_SIZE));
@@ -64,21 +114,21 @@ int ObRbUtils::check_binary(const ObString &rb_bin)
     switch (bin_type) {
       case ObRbBinType::EMPTY: {
         if (rb_bin.length() != offset) {
-          ret = OB_INVALID_DATA;
+          ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid roaringbitmap binary length", K(ret), K(bin_type), K(rb_bin.length()));
         }
         break;
       }
       case ObRbBinType::SINGLE_32: {
         if (rb_bin.length() != offset + sizeof(uint32_t)) {
-          ret = OB_INVALID_DATA;
+          ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid roaringbitmap binary length", K(ret), K(bin_type), K(rb_bin.length()));
         }
         break;
       }
       case ObRbBinType::SINGLE_64: {
         if (rb_bin.length() != offset + sizeof(uint64_t)) {
-          ret = OB_INVALID_DATA;
+          ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid roaringbitmap binary length", K(ret), K(bin_type), K(rb_bin.length()));
         }
         break;
@@ -86,15 +136,15 @@ int ObRbUtils::check_binary(const ObString &rb_bin)
       case ObRbBinType::SET_32: {
         uint8_t value_count = 0;
         if (rb_bin.length() < offset + RB_VALUE_COUNT_SIZE) {
-          ret = OB_INVALID_DATA;
+          ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid roaringbitmap binary length", K(ret), K(rb_bin.length()), K(bin_type));
         } else if (OB_FALSE_IT(value_count = *(rb_bin.ptr() + offset))) {
         } else if (OB_FALSE_IT(offset += RB_VALUE_COUNT_SIZE)) {
         } else if (value_count < 2 || value_count > MAX_BITMAP_SET_VALUES) {
-          ret = OB_INVALID_DATA;
+          ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid roaringbitmap value_count", K(ret), K(bin_type), K(value_count));
         } else if (rb_bin.length() != offset + value_count * sizeof(uint32_t)) {
-          ret = OB_INVALID_DATA;
+          ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid roaringbitmap binary length", K(ret), K(bin_type), K(value_count), K(rb_bin.length()));
         }
         break;
@@ -102,32 +152,58 @@ int ObRbUtils::check_binary(const ObString &rb_bin)
       case ObRbBinType::SET_64: {
         uint8_t value_count = 0;
         if (rb_bin.length() < offset + RB_VALUE_COUNT_SIZE) {
-          ret = OB_INVALID_DATA;
+          ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid roaringbitmap binary length", K(ret), K(rb_bin.length()), K(bin_type));
         } else if (OB_FALSE_IT(value_count = *(rb_bin.ptr() + offset))) {
         } else if (OB_FALSE_IT(offset += RB_VALUE_COUNT_SIZE)) {
         } else if (value_count < 2 || value_count > MAX_BITMAP_SET_VALUES) {
-          ret = OB_INVALID_DATA;
+          ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid roaringbitmap value_count", K(ret), K(bin_type), K(value_count));
         } else if (rb_bin.length() != offset + value_count * sizeof(uint64_t)) {
-          ret = OB_INVALID_DATA;
+          ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid roaringbitmap binary length", K(ret), K(bin_type), K(value_count), K(rb_bin.length()));
         }
         break;
       }
       case ObRbBinType::BITMAP_32: {
-        size_t deserialize_size = roaring::api::roaring_bitmap_portable_deserialize_size(rb_bin.ptr() + offset, rb_bin.length() - offset);
-        if (deserialize_size == 0 || deserialize_size != rb_bin.length() - offset) {
-          ret = OB_INVALID_DATA;
+        const char *raw = rb_bin.ptr() + offset;
+        const size_t raw_len = rb_bin.length() - offset;
+        size_t deserialize_size = roaring::api::roaring_bitmap_portable_deserialize_size(raw, raw_len);
+        if (deserialize_size == 0 || deserialize_size != raw_len) {
+          ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid roaringbitmap binary length", K(ret), K(bin_type), K(deserialize_size), K(rb_bin.length()));
+        } else if (OB_FAIL(check_roaring32_offsets_(raw, raw_len))) {
+          LOG_WARN("invalid BITMAP_32 container offsets", K(ret));
         }
         break;
       }
       case ObRbBinType::BITMAP_64: {
-        size_t deserialize_size = roaring::api::roaring64_bitmap_portable_deserialize_size(rb_bin.ptr() + offset, rb_bin.length() - offset);
-        if (deserialize_size == 0 || deserialize_size != rb_bin.length() - offset) {
-          ret = OB_INVALID_DATA;
+        const char *raw = rb_bin.ptr() + offset;
+        const size_t raw_len = rb_bin.length() - offset;
+        size_t deserialize_size = roaring::api::roaring64_bitmap_portable_deserialize_size(raw, raw_len);
+        if (deserialize_size == 0 || deserialize_size != raw_len) {
+          ret = OB_INVALID_ARGUMENT;
           LOG_WARN("invalid roaringbitmap binary length", K(ret), K(bin_type), K(deserialize_size), K(rb_bin.length()));
+        } else if (raw_len >= sizeof(uint64_t)) {
+          // roaring64 portable format: [8B n_entries] then n*(4B key + roaring32 portable data)
+          // Reject out-of-bounds container offsets; stop if a sub-bitmap cannot be sized.
+          uint64_t n_entries = *reinterpret_cast<const uint64_t *>(raw);
+          size_t pos = sizeof(uint64_t);
+          for (uint64_t i = 0; OB_SUCC(ret) && i < n_entries; i++) {
+            if (pos + sizeof(uint32_t) > raw_len) {
+              break;
+            }
+            pos += sizeof(uint32_t); // skip 4B key
+            const size_t remaining = raw_len - pos;
+            size_t sub_size = roaring::api::roaring_bitmap_portable_deserialize_size(raw + pos, remaining);
+            if (OB_FAIL(check_roaring32_offsets_(raw + pos, remaining))) {
+              LOG_WARN("BITMAP_64 sub-bitmap container offsets invalid", K(ret), K(i));
+            } else if (sub_size > 0 && sub_size <= remaining) {
+              pos += sub_size;
+            } else {
+              break;
+            }
+          }
         }
         break;
       }
@@ -399,7 +475,7 @@ int ObRbUtils::binary_calc(ObIAllocator &allocator, const ObString &rb1_bin, con
   ObRbBinType rb1_bin_type = ObRbBinType::EMPTY;
   ObRbBinType rb2_bin_type = ObRbBinType::EMPTY;
   if (rb1_bin.empty() || rb2_bin.empty()) {
-    ret = OB_INVALID_DATA;
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("roaringbitmap binary is empty", K(ret), K(rb1_bin), K(rb2_bin));
   } else if (OB_FAIL(get_bin_type(rb1_bin, rb1_bin_type))) {
     LOG_WARN("failed to get binary type", K(ret));
@@ -616,7 +692,7 @@ int ObRbUtils::binary_format_convert(ObIAllocator &allocator, const ObString &rb
     uint64_t buckets = 0;
     uint32_t high32 = 0;
     if (bitmap_bin.length() < offset + sizeof(uint64_t)) {
-      ret = OB_INVALID_DATA;
+      ret = OB_INVALID_ARGUMENT;
       LOG_WARN("ran out of bytes while reading buckets", K(ret), K(bitmap_bin.length()));
     } else {
       buckets = *reinterpret_cast<uint64_t*>(bitmap_bin.ptr() + offset);
@@ -642,7 +718,7 @@ int ObRbUtils::binary_format_convert(ObIAllocator &allocator, const ObString &rb
       } else if (buckets == 1) {
         // read high32 and check if high32 == 0
         if (bitmap_bin.length() < offset + sizeof(uint32_t)) {
-          ret = OB_INVALID_DATA;
+          ret = OB_INVALID_ARGUMENT;
           LOG_WARN("ran out of bytes while reading the first high32", K(ret), K(bitmap_bin.length()));
         } else {
           high32 = *reinterpret_cast<uint32_t*>(bitmap_bin.ptr() + offset);
@@ -697,18 +773,18 @@ int ObRbUtils::rb_from_string(ObIAllocator &allocator, const ObString &rb_str, O
         str++;
         str_skip_space_(str, str_end);
       } else {
-        ret = OB_INVALID_DATA;
+        ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid roaringbitmap string", K(ret), K(*str));
       }
       // pares uint64 value
       if (OB_FAIL(ret)) {
       } else if (str == str_end) {
-        ret = OB_INVALID_DATA;
+        ret = OB_INVALID_ARGUMENT;
         LOG_WARN("no value string after the comma", K(ret));
       } else if (OB_FAIL(str_read_value_(str, str_end - str, value_end, value))) {
         LOG_WARN("failed to transfer value string", K(ret), K(str));
       } else if (str == value_end) {
-        ret = OB_INVALID_DATA;
+        ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid roaringbitmap string", K(ret), K(*str));
       } else if (OB_FAIL(rb->value_add(value))) {
         LOG_WARN("failed to add value to roaringbtimap", K(ret), K(value));
@@ -921,7 +997,7 @@ int ObRbUtils::str_read_value_(const char *str, size_t len,  char *&value_end, u
       ret = OB_SIZE_OVERFLOW;
       LOG_WARN("int64 value out of range", K(ret), K(str));
     } else {
-      ret = OB_INVALID_DATA;
+      ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid int64 value", K(ret), K(str));
     }
   } else {
@@ -932,7 +1008,7 @@ int ObRbUtils::str_read_value_(const char *str, size_t len,  char *&value_end, u
       ret = OB_SIZE_OVERFLOW;
       LOG_WARN("uint64 value out of range", K(ret), K(str));
     } else {
-      ret = OB_INVALID_DATA;
+      ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid uint64 value", K(ret), K(str));
     }
   }

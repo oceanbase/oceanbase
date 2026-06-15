@@ -68,6 +68,7 @@ private:
     }
     return;
   }
+  static int check_roaring32_offsets_(const char *raw, size_t raw_len);
   static int str_read_value_(const char *str, size_t len, char *&value_end, uint64_t &value);
 
 };

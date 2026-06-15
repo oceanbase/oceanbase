@@ -27,8 +27,8 @@ int ObRoaringBin::init()
   if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator is null", K(ret));
-  } else if (roaring_bin_ == nullptr || roaring_bin_.empty()) {
-    ret = OB_INVALID_DATA;
+  } else if (roaring_bin_.empty()) {
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("roaringbitmap binary is empty", K(ret));
   }
 
@@ -68,21 +68,21 @@ int ObRoaringBin::init()
   if (OB_FAIL(ret)) {
   } else if (OB_FALSE_IT(read_bytes += sizeof(int32_t))) {
   } else if (read_bytes > roaring_bin_.length()) {
-    ret = OB_INVALID_DATA;
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ran out of bytes while reading cookies", K(ret), K(read_bytes), K(roaring_bin_.length()));
   } else {
     cookie = *reinterpret_cast<const int32_t*>(buf);
     buf +=  sizeof(int32_t);
     if ((cookie & 0xFFFF) != roaring::internal::SERIAL_COOKIE
          && cookie != roaring::internal::SERIAL_COOKIE_NO_RUNCONTAINER) {
-      ret = OB_INVALID_DATA;
+      ret = OB_INVALID_ARGUMENT;
       LOG_WARN("invalid cookie from roaring binary", K(ret), K(cookie));
     } else if ((cookie & 0xFFFF) == roaring::internal::SERIAL_COOKIE) {
       size_ = (cookie >> 16) + 1;
       hasrun_ = true;
     } else if (OB_FALSE_IT(read_bytes += sizeof(int32_t))){
     } else if (read_bytes > roaring_bin_.length()) {
-      ret = OB_INVALID_DATA;
+      ret = OB_INVALID_ARGUMENT;
       LOG_WARN("ran out of bytes while reading second part of the cookie", K(ret), K(read_bytes), K(roaring_bin_.length()));
     } else {
       size_ = *reinterpret_cast<const int32_t*>(buf);
@@ -92,7 +92,7 @@ int ObRoaringBin::init()
   // check size (contaniner count)
   if (OB_FAIL(ret)) {
   } else if (size_ < 0 || size_ > UINT16_MAX + 1) {
-    ret = OB_INVALID_DATA;
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid size get from roaring binary", K(ret), K(size_));
   }
   // get run container bitmap
@@ -101,7 +101,7 @@ int ObRoaringBin::init()
     int32_t run_bitmap_size = (size_ + 7) / 8;
     read_bytes += run_bitmap_size;
     if (read_bytes > roaring_bin_.length()) {
-      ret = OB_INVALID_DATA;
+      ret = OB_INVALID_ARGUMENT;
       LOG_WARN("ran out of bytes while reading run bitmap", K(ret), K(read_bytes), K(roaring_bin_.length()));
     } else {
       run_bitmap_ = buf;
@@ -112,7 +112,7 @@ int ObRoaringBin::init()
   if (OB_FAIL(ret) || size_ == 0) {
   } else if (OB_FALSE_IT(read_bytes += size_ * 2 * sizeof(uint16_t))) {
   } else if (read_bytes > roaring_bin_.length()) {
-    ret = OB_INVALID_DATA;
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("ran out of bytes while reading keycards", K(ret), K(read_bytes), K(roaring_bin_.length()));
   } else {
     keyscards_ = (uint16_t *)buf;
@@ -134,7 +134,7 @@ int ObRoaringBin::init()
     // has offsets
     read_bytes += size_ * sizeof(uint32_t);
     if (read_bytes > roaring_bin_.length()) {
-      ret = OB_INVALID_DATA;
+      ret = OB_INVALID_ARGUMENT;
       LOG_WARN("ran out of bytes while reading offsets", K(ret), K(read_bytes), K(roaring_bin_.length()));
     } else {
       offsets_ = (uint32_t *)buf;
@@ -159,7 +159,7 @@ int ObRoaringBin::init()
       if (OB_FAIL(get_container_size_at_index(size_ - 1, container_size))) {
         LOG_WARN("failed to get container size", K(ret), K(size_));
       } else if (offset + container_size > roaring_bin_.length()) {
-        ret = OB_INVALID_DATA;
+        ret = OB_INVALID_ARGUMENT;
         LOG_WARN("ran out of bytes while checking the last container", K(ret), K(size_), K(offset), K(container_size), K(roaring_bin_.length()));
       } else {
         bin_length_ = offset + container_size;
@@ -181,7 +181,7 @@ int ObRoaringBin::init()
     }
     if (OB_FAIL(ret)) {
     } else if (read_bytes > roaring_bin_.length()) {
-      ret = OB_INVALID_DATA;
+      ret = OB_INVALID_ARGUMENT;
       LOG_WARN("ran out of bytes while filling offsets", K(ret), K(read_bytes), K(roaring_bin_.length()));
     } else {
       // set the bin_length
@@ -534,7 +534,7 @@ int ObRoaringBin::get_container_size_at_index(uint16_t idx, size_t &container_si
     } else if (is_run) {
       // run container
       if (offset + sizeof(uint16_t) > roaring_bin_.length()) {
-        ret = OB_INVALID_DATA;
+        ret = OB_INVALID_ARGUMENT;
         LOG_WARN("ran out of bytes while reading a run container (header)", K(ret), K(offset), K(idx), K(roaring_bin_.length()));
       } else {
         uint16_t n_runs = *reinterpret_cast<const uint16_t*>(roaring_bin_.ptr() + offset);
@@ -572,7 +572,7 @@ int ObRoaringBin::get_container_at_index(uint16_t idx, uint8_t &container_type, 
       size_t container_size = roaring::internal::BITSET_CONTAINER_SIZE_IN_WORDS * sizeof(uint64_t);
       read_bytes += container_size;
       if (read_bytes > roaring_bin_.length()) {
-        ret = OB_INVALID_DATA;
+        ret = OB_INVALID_ARGUMENT;
         LOG_WARN("ran out of bytes while reading a bitmap container", K(ret), K(read_bytes), K(idx), K(container_size), K(offsets_[idx]), K(roaring_bin_.length()));
       } else {
         roaring::internal::bitset_container_t * container_ptr = nullptr;
@@ -591,14 +591,14 @@ int ObRoaringBin::get_container_at_index(uint16_t idx, uint8_t &container_type, 
       // run container
       read_bytes += sizeof(uint16_t);
       if(read_bytes > roaring_bin_.length()) {
-        ret = OB_INVALID_DATA;
+        ret = OB_INVALID_ARGUMENT;
         LOG_WARN("ran out of bytes while reading a run container (header)", K(ret), K(read_bytes), K(idx), K(roaring_bin_.length()));
       } else {
         uint16_t n_runs = *reinterpret_cast<const uint16_t*>(buf);
         size_t container_size = n_runs * sizeof(roaring::internal::rle16_t);
 		    read_bytes += container_size;
         if (read_bytes > roaring_bin_.length()) {
-          ret = OB_INVALID_DATA;
+          ret = OB_INVALID_ARGUMENT;
           LOG_WARN("ran out of bytes while reading a run container", K(ret), K(read_bytes), K(idx), K(container_size), K(offsets_[idx]), K(roaring_bin_.length()));
         } else {
           roaring::internal::run_container_t * container_ptr = nullptr;
@@ -619,7 +619,7 @@ int ObRoaringBin::get_container_at_index(uint16_t idx, uint8_t &container_type, 
       size_t container_size = container_card * sizeof(uint16_t);
       read_bytes += container_size;
       if (read_bytes > roaring_bin_.length()) {
-        ret = OB_INVALID_DATA;
+        ret = OB_INVALID_ARGUMENT;
         LOG_WARN("ran out of bytes while reading an array container", K(ret), K(read_bytes), K(idx), K(roaring_bin_.length()));
       } else {
         roaring::internal::array_container_t * container_ptr = nullptr;
@@ -684,8 +684,8 @@ int ObRoaring64Bin::init()
   if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator is null", K(ret));
-  } else if (roaring_bin_ == nullptr || roaring_bin_.empty()) {
-    ret = OB_INVALID_DATA;
+  } else if (roaring_bin_.empty()) {
+    ret = OB_INVALID_ARGUMENT;
     LOG_WARN("roaringbitmap binary is empty", K(ret));
   }
 
@@ -704,13 +704,13 @@ int ObRoaring64Bin::init()
   } else {
     read_bytes += sizeof(buckets_);
     if (read_bytes > roaring_bin_.length()) {
-      ret = OB_INVALID_DATA;
+      ret = OB_INVALID_ARGUMENT;
       LOG_WARN("ran out of bytes while reading buckets", K(ret), K(read_bytes), K(roaring_bin_.length()));
     } else {
       buckets_ = *reinterpret_cast<uint64_t*>(buf);
       buf += sizeof(buckets_);
       if (buckets_ > UINT32_MAX) {
-        ret = OB_INVALID_DATA;
+        ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid buckets get from roaring binary", K(ret), K(buckets_));
       }
     }
@@ -729,7 +729,7 @@ int ObRoaring64Bin::init()
       // get high32
       read_bytes += sizeof(uint32_t);
       if (read_bytes > roaring_bin_.length()) {
-        ret = OB_INVALID_DATA;
+        ret = OB_INVALID_ARGUMENT;
         LOG_WARN("ran out of bytes while reading high32", K(ret), K(read_bytes), K(bucket), K(roaring_bin_.length()));
       } else {
         high32_[bucket] = *reinterpret_cast<uint32_t*>(buf);
