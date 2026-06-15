@@ -269,20 +269,20 @@ int ObLobMetaManager::getlength_remote(ObLobAccessParam &param, uint64_t &char_l
   return ret;
 }
 
-int ObLobMetaManager::get_table_param(const ObTableParam *&table_param)
+int ObLobMetaManager::get_table_param(ObTTLFilterColType ttl_type, const ObTableParam *&table_param)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(persistent_lob_adapter_.get_meta_table_param(table_param))) {
-    LOG_WARN("get table param fail", K(ret));
+  if (OB_FAIL(persistent_lob_adapter_.get_meta_table_param(ttl_type, table_param))) {
+    LOG_WARN("get table param fail", K(ret), K(ttl_type));
   }
   return ret;
 }
 
-int ObLobMetaManager::get_table_dml_param(const ObTableDMLParam *&table_dml_param)
+int ObLobMetaManager::get_table_dml_param(ObTTLFilterColType ttl_type, const ObTableDMLParam *&table_dml_param)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(persistent_lob_adapter_.get_meta_table_dml_param(table_dml_param))) {
-    LOG_WARN("get table dml param fail", K(ret));
+  if (OB_FAIL(persistent_lob_adapter_.get_meta_table_dml_param(ttl_type, table_dml_param))) {
+    LOG_WARN("get table dml param fail", K(ret), K(ttl_type));
   }
   return ret;
 }

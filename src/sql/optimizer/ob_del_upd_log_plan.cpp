@@ -2143,8 +2143,8 @@ int ObDelUpdLogPlan::collect_related_local_index_ids(IndexDMLInfo &primary_dml_i
         } else if (OB_FAIL(primary_dml_info.related_index_ids_.push_back(tid))) {
           LOG_WARN("add related index ids failed", K(ret));
         }
-      } else if (index_schema->is_compaction_rowscn_ttl_di_table()) {
-        // if index schema is TTL table & delete insert merge engine, need to add all the related index ids
+      } else if (index_schema->is_compaction_ttl_table()) {
+        // if index schema is TTL table, need to add all the related index ids
         // because there is an rowscn-column-update
         if (OB_FAIL(primary_dml_info.related_index_ids_.push_back(index_schema->get_table_id()))) {
           LOG_WARN("add related index ids failed", K(ret));
@@ -2236,7 +2236,7 @@ int ObDelUpdLogPlan::prepare_table_dml_info_basic(const ObDmlTableInfo& table_in
     } else {
       table_dml_info->rowkey_cnt_ = index_schema->get_rowkey_column_num();
       table_dml_info->is_primary_index_ = true;
-      table_dml_info->is_compaction_scn_ttl_di_table_ = index_schema->is_compaction_rowscn_ttl_di_table();
+      table_dml_info->is_compaction_ttl_table_ = index_schema->is_compaction_ttl_table();
       ObExecContext *exec_ctx = get_optimizer_context().get_exec_ctx();
       if (OB_ISNULL(exec_ctx)) {
         ret = OB_ERR_UNEXPECTED;
@@ -2303,7 +2303,7 @@ int ObDelUpdLogPlan::prepare_table_dml_info_basic(const ObDmlTableInfo& table_in
           index_dml_info->spk_cnt_ = index_schema->get_shadow_rowkey_column_num();
           // Trans_info_expr_ on the main table is recorded in all index_dml_info
           index_dml_info->trans_info_expr_ = table_dml_info->trans_info_expr_;
-          index_dml_info->is_compaction_scn_ttl_di_table_ = index_schema->is_compaction_rowscn_ttl_di_table();
+          index_dml_info->is_compaction_ttl_table_ = index_schema->is_compaction_ttl_table();
           ObSchemaObjVersion table_version;
           table_version.object_id_ = index_tid[i];
           table_version.object_type_ = DEPENDENCY_TABLE;

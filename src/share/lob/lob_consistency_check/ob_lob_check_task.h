@@ -14,6 +14,7 @@
 #include "share/scheduler/ob_tenant_dag_scheduler.h"
 #include "storage/access/ob_table_scan_iterator.h"
 #include "storage/ob_value_row_iterator.h"
+#include "storage/compaction_ttl/ob_ttl_filter_info.h"
 #include "share/lob/lob_consistency_check/ob_lob_task_info.h"
 
 namespace oceanbase {
@@ -163,6 +164,8 @@ private:
   common::ObArenaAllocator aux_allocator_;
   common::ObArenaAllocator allocator_;
   bool is_repair_task_;
+  bool is_lob_meta_has_ttl_column_;
+  storage::ObTTLFilterColType lob_meta_ttl_column_type_;
 
   // 扫描相关
   storage::ObTableScanIterator *main_table_iter_;

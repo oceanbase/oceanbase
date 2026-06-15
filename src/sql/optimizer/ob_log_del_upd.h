@@ -45,7 +45,7 @@ public:
     related_index_ids_(allocator),
     fk_lookup_part_id_expr_(allocator),
     is_vec_hnsw_index_vid_opt_(false),
-    is_compaction_scn_ttl_di_table_(false)
+    is_compaction_ttl_table_(false)
   {
   }
   inline void reset()
@@ -78,7 +78,7 @@ public:
     related_index_ids_.reset();
     fk_lookup_part_id_expr_.reset();
     is_vec_hnsw_index_vid_opt_ = false;
-    is_compaction_scn_ttl_di_table_ = false;
+    is_compaction_ttl_table_ = false;
   }
   int64_t to_explain_string(char *buf, int64_t buf_len, ExplainType type) const;
   int init_assignment_info(const ObAssignments &assignments,
@@ -181,7 +181,7 @@ public:
   ObSqlArray<ObRawExpr*> fk_lookup_part_id_expr_;
 
   bool is_vec_hnsw_index_vid_opt_;
-  bool is_compaction_scn_ttl_di_table_;
+  bool is_compaction_ttl_table_;
 
   TO_STRING_KV(K_(table_id),
                K_(ref_table_id),
@@ -203,7 +203,7 @@ public:
                K_(distinct_algo),
                K_(related_index_ids),
                K_(is_vec_hnsw_index_vid_opt),
-               K_(is_compaction_scn_ttl_di_table));
+               K_(is_compaction_ttl_table));
 };
 
 class ObDelUpdLogPlan;

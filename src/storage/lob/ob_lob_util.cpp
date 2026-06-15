@@ -218,6 +218,8 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
                                                const int64_t timeout_ts,
                                                const bool has_lob_header,
                                                const uint64_t src_tenant_id,
+                                               const blocksstable::ObStorageDatum *ttl_datum,
+                                               const ObTTLFilterColType ttl_col_type,
                                                ObLobMetaWriteIter &iter)
 {
   int ret = OB_SUCCESS;
@@ -283,6 +285,9 @@ int ObInsertLobColumnHelper::insert_lob_column(ObIAllocator &allocator,
       lob_param.main_table_rowkey_col_ = !lob_storage_param.is_index_table_ && lob_storage_param.is_rowkey_col_;
       lob_param.src_tenant_id_ = src_tenant_id;
       lob_param.set_tmp_allocator(&lob_allocator);
+      if (ttl_datum != nullptr) {
+        lob_param.lob_ttl_column_info_.init_by_local_datum(*ttl_datum, ttl_col_type);
+      }
       if (!src.is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("invalid src lob locator.", K(ret));

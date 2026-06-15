@@ -1079,13 +1079,13 @@ protected:
                                     ObPartitionNameSet &partition_name_set);
   int deep_copy_string_in_part_expr(ObPartitionedStmt* stmt);
   int deep_copy_column_expr_name(common::ObIAllocator &allocator, ObIArray<ObRawExpr*> &exprs);
-  int check_ttl_definition(
-    const ParseNode *node,
-    const uint64_t tenant_data_version);
-  int check_ttl_expr(const ParseNode *ttl_expr_node,
-                     const share::schema::ObTableSchema *tbl_schema,
-                     const uint64_t tenant_data_version,
-                     const share::ObTTLDefinition::ObTTLType &ttl_type);
+  int check_ttl_definition(const ParseNode *node, const uint64_t tenant_data_version);
+  int check_deleting_ttl_expr(const ParseNode *ttl_expr_node,
+                              const ObTableSchema *tbl_schema,
+                              const uint64_t tenant_data_version);
+  int check_compaction_ttl_expr(const ParseNode *ttl_expr_node,
+                                const ObTableSchema *tbl_schema,
+                                const uint64_t tenant_data_version);
   int resolve_kv_attributes_option(uint64_t tenant_id, const ParseNode *option_node, bool is_index_option);
   int check_column_is_first_part_key(const ObPartitionKeyInfo &part_key_info, const uint64_t column_id);
 

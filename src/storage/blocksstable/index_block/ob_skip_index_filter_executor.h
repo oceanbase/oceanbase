@@ -75,12 +75,34 @@ public:
   bool is_certain_;
 };
 
+/**
+ * @brief This struct is used for mock min and max value for ora_rowscn column.
+ *        And supply extra param used for skip index filter.
+ */
+struct ObSkipIndexExtraParam
+{
+  ObSkipIndexExtraParam() : min_scn_(-1), max_scn_(-1), row_count_(-1) {}
+
+  ObSkipIndexExtraParam(const int64_t min_scn, const int64_t max_scn, const int64_t row_count)
+      : min_scn_(min_scn), max_scn_(max_scn), row_count_(row_count)
+  {
+  }
+
+  OB_INLINE uint64_t get_mock_row_count() const { return row_count_ < 0 ? UINT64_MAX : static_cast<uint64_t>(row_count_); }
+
+  TO_STRING_KV(K_(min_scn), K_(max_scn), K_(row_count));
+
+  int64_t min_scn_;   // negative value means not set
+  int64_t max_scn_;   // negative value means not set
+  int64_t row_count_; // negative value means not set
+};
+
 class ObAggRowReader;
 class ObSkipIndexFilterExecutor final
 {
 public:
   ObSkipIndexFilterExecutor()
-      : agg_row_reader_(), meta_(), skip_bit_(nullptr), allocator_(nullptr), is_inited_(false) {}
+      : agg_row_reader_(), skip_bit_(nullptr), allocator_(nullptr), is_inited_(false) {}
   ~ObSkipIndexFilterExecutor() { reset(); }
   void reset()
   {
@@ -111,112 +133,124 @@ public:
                                   sql::ObPushdownFilterExecutor &filter,
                                   const bool use_vectorize);
 
-private:
-  OB_INLINE int fix_and_mock_trans_version_datum(const int64_t col_idx,
-                                                 const ObITableReadInfo *read_info,
-                                                 const ObMicroIndexInfo &index_info,
-                                                 ObMinMaxFilterParam &param);
+  static int apply_filter_on_min_max(const ObMinMaxFilterParam &param,
+                                     const sql::ObWhiteFilterExecutor &filter,
+                                     sql::ObBoolMask &fal_desc,
+                                     const uint64_t row_count = UINT64_MAX);
 
-  int filter_on_min_max(const uint32_t col_idx,
-                        const uint64_t row_count,
+  template <typename AggRowReader>
+  static int read_aggregate_data(AggRowReader &agg_row_reader,
+                                 const uint32_t col_idx,
+                                 const ObObjMeta &obj_meta,
+                                 const bool is_padding_mode,
+                                 ObMinMaxFilterParam &param,
+                                 const ObColumnParam *col_param = nullptr,
+                                 ObIAllocator *allocator = nullptr,
+                                 const bool is_scn_column = false,
+                                 const ObSkipIndexExtraParam &extra_param = ObSkipIndexExtraParam());
+
+private:
+  static void fix_and_mock_trans_version_datum(ObMinMaxFilterParam &param,
+                                               const ObSkipIndexExtraParam &extra_param);
+
+  int filter_on_min_max(const uint64_t row_count,
                         const ObMinMaxFilterParam &param,
-                        sql::ObWhiteFilterExecutor &filter,
-                        const ObMicroIndexInfo *index_info = nullptr);
+                        sql::ObWhiteFilterExecutor &filter);
 
   int read_aggregate_data(const uint32_t col_idx,
-                   common::ObIAllocator &allocator,
-                   const share::schema::ObColumnParam *col_param,
-                   const ObObjMeta &obj_meta,
-                   const bool is_padding_mode,
-                   ObMinMaxFilterParam &param,
-                   const ObMicroIndexInfo &index_info,
-                   const ObITableReadInfo *read_info = nullptr);
+                          common::ObIAllocator &allocator,
+                          const share::schema::ObColumnParam *col_param,
+                          const ObObjMeta &obj_meta,
+                          const bool is_padding_mode,
+                          ObMinMaxFilterParam &param,
+                          const ObMicroIndexInfo &index_info,
+                          const ObITableReadInfo *read_info = nullptr);
 
-  int compare_with_prefix(const sql::ObWhiteFilterExecutor &filter,
-                          const common::ObDatum &datum,
-                          const common::ObDatum &filter_datum,
-                          ObSkipIndexCmpRes &res);
+  static int compare_with_prefix(const sql::ObWhiteFilterExecutor &filter,
+                                 const common::ObDatum &datum,
+                                 const common::ObDatum &filter_datum,
+                                 ObSkipIndexCmpRes &res);
 
-  int compare_for_pad_charset(const sql::ObWhiteFilterExecutor &filter,
-                              const common::ObDatum &skip_datum,
-                              const bool is_prefix,
-                              const common::ObDatum &filter_datum,
-                              ObSkipIndexCmpRes &res);
+  static int compare_for_pad_charset(const sql::ObWhiteFilterExecutor &filter,
+                                     const common::ObDatum &skip_datum,
+                                     const bool is_prefix,
+                                     const common::ObDatum &filter_datum,
+                                     ObSkipIndexCmpRes &res);
 
-  int compare_for_non_pad_charset(const sql::ObWhiteFilterExecutor &filter,
-                                  const common::ObDatum &skip_datum,
-                                  const bool is_prefix,
-                                  const common::ObDatum &filter_datum,
-                                  ObSkipIndexCmpRes &res);
+  static int compare_for_non_pad_charset(const sql::ObWhiteFilterExecutor &filter,
+                                         const common::ObDatum &skip_datum,
+                                         const bool is_prefix,
+                                         const common::ObDatum &filter_datum,
+                                         ObSkipIndexCmpRes &res);
 
-  int compare(const sql::ObWhiteFilterExecutor &filter,
-              const common::ObDatum &skip_datum,
-              const bool is_prefix,
-              const bool compare_min_value,
-              const common::ObDatum &filter_datum,
-              ObSkipIndexCmpRes &res);
+  static int compare(const sql::ObWhiteFilterExecutor &filter,
+                     const common::ObDatum &skip_datum,
+                     const bool is_prefix,
+                     const bool compare_min_value,
+                     const common::ObDatum &filter_datum,
+                     ObSkipIndexCmpRes &res);
 
-  int pad_column(const ObObjMeta &obj_meta,
-                 const share::schema::ObColumnParam *col_param,
-                 const bool is_padding_mode,
-                 common::ObIAllocator &padding_alloc,
-                 blocksstable::ObStorageDatum &datum);
+  static int pad_column(const ObObjMeta &obj_meta,
+                        const ObColumnParam *col_param,
+                        const bool is_padding_mode,
+                        ObIAllocator *padding_alloc,
+                        ObStorageDatum &datum);
 
-  // *_operator args are the same
-  int eq_operator(const sql::ObWhiteFilterExecutor &filter,
-                  const common::ObDatum &min_datum,
-                  const bool &is_min_prefix,
-                  const common::ObDatum &max_datum,
-                  const bool &is_max_prefix,
-                  sql::ObBoolMask &fal_desc);
+  static int eq_operator(const sql::ObWhiteFilterExecutor &filter,
+                         const common::ObDatum &min_datum,
+                         const bool &is_min_prefix,
+                         const common::ObDatum &max_datum,
+                         const bool &is_max_prefix,
+                         sql::ObBoolMask &fal_desc);
 
-  int ne_operator(const sql::ObWhiteFilterExecutor &filter,
-                  const common::ObDatum &min_datum,
-                  const bool &is_min_prefix,
-                  const common::ObDatum &max_datum,
-                  const bool &is_max_prefix,
-                  sql::ObBoolMask &fal_desc);
-  int gt_operator(const sql::ObWhiteFilterExecutor &filter,
-                  const common::ObDatum &min_datum,
-                  const bool &is_min_prefix,
-                  const common::ObDatum &max_datum,
-                  const bool &is_max_prefix,
-                  sql::ObBoolMask &fal_desc);
+  static int ne_operator(const sql::ObWhiteFilterExecutor &filter,
+                         const common::ObDatum &min_datum,
+                         const bool &is_min_prefix,
+                         const common::ObDatum &max_datum,
+                         const bool &is_max_prefix,
+                         sql::ObBoolMask &fal_desc);
 
-  int ge_operator(const sql::ObWhiteFilterExecutor &filter,
-                  const common::ObDatum &min_datum,
-                  const bool &is_min_prefix,
-                  const common::ObDatum &max_datum,
-                  const bool &is_max_prefix,
-                  sql::ObBoolMask &fal_desc);
+  static int gt_operator(const sql::ObWhiteFilterExecutor &filter,
+                         const common::ObDatum &min_datum,
+                         const bool &is_min_prefix,
+                         const common::ObDatum &max_datum,
+                         const bool &is_max_prefix,
+                         sql::ObBoolMask &fal_desc);
 
-  int lt_operator(const sql::ObWhiteFilterExecutor &filter,
-                  const common::ObDatum &min_datum,
-                  const bool &is_min_prefix,
-                  const common::ObDatum &max_datum,
-                  const bool &is_max_prefix,
-                  sql::ObBoolMask &fal_desc);
+  static int ge_operator(const sql::ObWhiteFilterExecutor &filter,
+                         const common::ObDatum &min_datum,
+                         const bool &is_min_prefix,
+                         const common::ObDatum &max_datum,
+                         const bool &is_max_prefix,
+                         sql::ObBoolMask &fal_desc);
 
-  int le_operator(const sql::ObWhiteFilterExecutor &filter,
-                  const common::ObDatum &min_datum,
-                  const bool &is_min_prefix,
-                  const common::ObDatum &max_datum,
-                  const bool &is_max_prefix,
-                  sql::ObBoolMask &fal_desc);
+  static int lt_operator(const sql::ObWhiteFilterExecutor &filter,
+                         const common::ObDatum &min_datum,
+                         const bool &is_min_prefix,
+                         const common::ObDatum &max_datum,
+                         const bool &is_max_prefix,
+                         sql::ObBoolMask &fal_desc);
 
-  int bt_operator(const sql::ObWhiteFilterExecutor &filter,
-                  const common::ObDatum &min_datum,
-                  const bool &is_min_prefix,
-                  const common::ObDatum &max_datum,
-                  const bool &is_max_prefix,
-                  sql::ObBoolMask &fal_desc);
+  static int le_operator(const sql::ObWhiteFilterExecutor &filter,
+                         const common::ObDatum &min_datum,
+                         const bool &is_min_prefix,
+                         const common::ObDatum &max_datum,
+                         const bool &is_max_prefix,
+                         sql::ObBoolMask &fal_desc);
 
-  int in_operator(const sql::ObWhiteFilterExecutor &filter,
-                  const common::ObDatum &min_datum,
-                  const bool &is_min_prefix,
-                  const common::ObDatum &max_datum,
-                  const bool &is_max_prefix,
-                  sql::ObBoolMask &fal_desc);
+  static int bt_operator(const sql::ObWhiteFilterExecutor &filter,
+                         const common::ObDatum &min_datum,
+                         const bool &is_min_prefix,
+                         const common::ObDatum &max_datum,
+                         const bool &is_max_prefix,
+                         sql::ObBoolMask &fal_desc);
+
+  static int in_operator(const sql::ObWhiteFilterExecutor &filter,
+                         const common::ObDatum &min_datum,
+                         const bool &is_min_prefix,
+                         const common::ObDatum &max_datum,
+                         const bool &is_max_prefix,
+                         sql::ObBoolMask &fal_desc);
 
   int black_filter_on_min_max(const uint32_t col_idx,
                               const uint64_t row_count,
@@ -226,7 +260,6 @@ private:
                               const ObCollationType &cs_type);
 private:
   ObAggRowReader agg_row_reader_;
-  ObSkipIndexColMeta meta_;
   sql::ObBitVector *skip_bit_;      // to be compatible with the black filter filter() method
   common::ObIAllocator *allocator_;
   bool is_inited_;

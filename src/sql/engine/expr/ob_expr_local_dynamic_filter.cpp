@@ -124,7 +124,7 @@ int ObExprLocalDynamicFilter::prepare_storage_white_filter_data(const ObExpr &ex
   int ret = OB_SUCCESS;
   params.reuse();
   is_data_prepared = false;
-  const LocalDynamicFilterParams *filter_params = dynamic_filter.get_op().get_local_dynamic_filter_params();
+  const LocalDynamicFilterParams *filter_params = dynamic_filter.get_op()->get_local_dynamic_filter_params();
   ObExprLocalDynamicFilterContext *local_dynamic_filter_ctx = nullptr;
 
   if (OB_ISNULL(local_dynamic_filter_ctx = static_cast<ObExprLocalDynamicFilterContext *>(
@@ -157,7 +157,7 @@ int ObExprLocalDynamicFilter::update_storage_white_filter_data(const ObExpr &exp
   int ret = OB_SUCCESS;
   params.reuse();
   is_update = false;
-  const common::ObIArray<common::ObDatum> *filter_params = dynamic_filter.get_op().get_local_dynamic_filter_params();
+  const common::ObIArray<common::ObDatum> *filter_params = dynamic_filter.get_op()->get_local_dynamic_filter_params();
   if (OB_NOT_NULL(filter_params) && !filter_params->empty()) {
     if (OB_FAIL(params.assign(*filter_params))) {
       LOG_WARN("failed to assign local dynamic filter params", K(ret));

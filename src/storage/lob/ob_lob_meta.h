@@ -23,7 +23,9 @@ class ObLobMetaIterator;
 
 class ObLobMetaUtil {
 public:
-  static const uint64_t LOB_META_COLUMN_CNT = 6;
+  static const uint64_t LOB_META_WITHOUT_TTL_COLUMN_CNT = 6;
+  static const uint64_t LOB_META_WITH_TTL_COLUMN_CNT = 7;
+  static const uint64_t MAX_LOB_META_COLUMN_CNT = 7;
   static const uint64_t LOB_META_SCHEMA_ROWKEY_COL_CNT = 2;
   static const uint64_t LOB_ID_COL_ID = 0;
   static const uint64_t SEQ_ID_COL_ID = 1;
@@ -31,13 +33,20 @@ public:
   static const uint64_t CHAR_LEN_COL_ID = 3;
   static const uint64_t PIECE_ID_COL_ID = 4;
   static const uint64_t LOB_DATA_COL_ID = 5;
+  static const uint64_t HIDDEN_TTL_COLUMN_COL_ID = 6;
   static const uint64_t LOB_META_INLINE_PIECE_ID = UINT64_MAX - 1;
   static const uint64_t LOB_OPER_PIECE_DATA_SIZE = 256 * 1024; // 256K
   static const uint64_t SKIP_INVALID_COLUMN = 2;
 public:
+  OB_INLINE static constexpr uint64_t get_lob_meta_column_cnt(const bool with_ttl)
+  {
+    return with_ttl ? LOB_META_WITH_TTL_COLUMN_CNT : LOB_META_WITHOUT_TTL_COLUMN_CNT;
+  }
+
   static int transform_from_info_to_row(ObLobMetaInfo &info, blocksstable::ObDatumRow *row, bool with_extra_rowkey);
-  static int transform_from_row_to_info(const blocksstable::ObDatumRow *row, ObLobMetaInfo &info, bool with_extra_rowkey);
+  static int transform_from_row_to_info(const blocksstable::ObDatumRow *row, ObLobMetaInfo &info, bool with_extra_rowkey, bool has_ttl_column);
   static int build_rowkey_from_info(ObLobMetaInfo &info, blocksstable::ObDatumRow *row);
+  static int init_meta_column_ids(ObSEArray<uint64_t, 7> &meta_column_ids, const bool with_ttl);
   static int construct(
       ObLobAccessParam &param,
       const ObLobId &lob_id,
@@ -65,6 +74,7 @@ private:
   static int transform_char_len(const blocksstable::ObDatumRow *row, ObLobMetaInfo &info, bool with_extra_rowkey);
   static int transform_piece_id(const blocksstable::ObDatumRow *row, ObLobMetaInfo &info, bool with_extra_rowkey);
   static int transform_lob_data(const blocksstable::ObDatumRow *row, ObLobMetaInfo &info, bool with_extra_rowkey);
+  static int transform_hidden_ttl_column(const blocksstable::ObDatumRow *row, ObLobMetaInfo &info, bool with_extra_rowkey);
 
   // from_info_to_row.
   static int transform_lob_id(ObLobMetaInfo &info, blocksstable::ObDatumRow *row);
@@ -73,6 +83,7 @@ private:
   static int transform_char_len(ObLobMetaInfo &info, blocksstable::ObDatumRow *row, bool with_extra_rowkey);
   static int transform_piece_id(ObLobMetaInfo &info, blocksstable::ObDatumRow *row, bool with_extra_rowkey);
   static int transform_lob_data(ObLobMetaInfo &info, blocksstable::ObDatumRow *row, bool with_extra_rowkey);
+  static int transform_hidden_ttl_column(ObLobMetaInfo &info, blocksstable::ObDatumRow *row, bool with_extra_rowkey);
 };
 
 struct ObLobMetaScanResult {
@@ -197,7 +208,7 @@ public:
   int check_write_length();
 
   TO_STRING_KV(K_(seq_id), K_(offset), K_(lob_id), K_(piece_id), K_(coll_type), K_(piece_block_size),
-               K_(scan_iter), K_(padding_size), K_(seq_id_end), K_(last_info), K_(is_store_char_len));
+               K_(scan_iter), K_(padding_size), K_(seq_id_end), K_(last_info), K_(is_store_char_len), K_(lob_ttl_column_info));
 private:
   int try_fill_data(
       ObLobWriteBuffer& write_buffer,
@@ -232,6 +243,7 @@ private:
   uint64_t iter_fill_size_;
   ObLobAccessParam *read_param_;
   ObLobCommon* lob_common_;
+  ObLobTTLColumnInfo lob_ttl_column_info_;
   bool is_end_;
   bool is_store_char_len_;
 };
@@ -279,7 +291,7 @@ private:
   ObLobAccessParam *param_;
   ObLobMetaWriteIter *meta_iter_;
   ObNewRow new_row_;
-  ObObj row_cell_[ObLobMetaUtil::LOB_META_COLUMN_CNT];
+  ObObj row_cell_[ObLobMetaUtil::MAX_LOB_META_COLUMN_CNT];
   ObLobMetaWriteResult result_;
 };
 

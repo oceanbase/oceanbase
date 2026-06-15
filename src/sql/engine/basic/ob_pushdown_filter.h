@@ -72,6 +72,7 @@ enum PushdownFilterType //FARM COMPAT WHITELIST
   BASE_VERSION_FILTER,
   TTL_WHITE_FILTER,
   TTL_AND_FILTER,
+  TTL_OR_FILTER,
   MAX_FILTER_TYPE
 };
 
@@ -92,10 +93,11 @@ enum PushdownExecutorType //FARM COMPAT WHITELIST
   BASE_VERSION_FILTER_EXECUTOR,
   TTL_WHITE_FILTER_EXECUTOR,
   TTL_AND_FILTER_EXECUTOR,
+  TTL_OR_FILTER_EXECUTOR,
   MAX_EXECUTOR_TYPE
 };
 
-enum ObBoolMaskType
+enum ObBoolMaskType : uint8_t
 {
   PROBABILISTIC = 0,
   ALWAYS_TRUE,
@@ -553,11 +555,13 @@ public:
       : alloc_(alloc)
   {}
   int alloc(PushdownFilterType type, uint32_t n_child, ObPushdownFilterNode *&pd_filter);
+
+  template<bool need_check_op = true>
   int alloc(PushdownExecutorType type,
             uint32_t n_child,
             ObPushdownFilterNode &filter_node,
             ObPushdownFilterExecutor *&filter_executor,
-            ObPushdownOperator &op);
+            ObPushdownOperator *op = nullptr);
 
 private:
   // pushdown filter
@@ -567,16 +571,17 @@ private:
   static PDFilterAllocFunc PD_FILTER_ALLOC[PushdownFilterType::MAX_FILTER_TYPE];
 
   // filter executor
-  typedef int (*FilterExecutorAllocFunc) (common::ObIAllocator &alloc, uint32_t n_child,
-                                          ObPushdownFilterNode &filter_node,
-                                          ObPushdownFilterExecutor *&filter_executor,
-                                          ObPushdownOperator &op);
+  typedef int (*FilterExecutorAllocFunc)(common::ObIAllocator &alloc,
+                                         uint32_t n_child,
+                                         ObPushdownFilterNode &filter_node,
+                                         ObPushdownFilterExecutor *&filter_executor,
+                                         ObPushdownOperator *op);
   template <typename ClassT, typename FilterNodeT, PushdownExecutorType type>
-      static int alloc(common::ObIAllocator &alloc,
-                       uint32_t n_child,
-                       ObPushdownFilterNode &filter_node,
-                       ObPushdownFilterExecutor *&filter_executor,
-                       ObPushdownOperator &op);
+  static int alloc(common::ObIAllocator &alloc,
+                   uint32_t n_child,
+                   ObPushdownFilterNode &filter_node,
+                   ObPushdownFilterExecutor *&filter_executor,
+                   ObPushdownOperator *op);
   static FilterExecutorAllocFunc FILTER_EXECUTOR_ALLOC[PushdownExecutorType::MAX_EXECUTOR_TYPE];
 private:
   common::ObIAllocator *alloc_;
@@ -710,43 +715,139 @@ private:
   };
 public:
   static const int64_t INVALID_CG_ITER_IDX = -1;
+
+  /**
+   * @brief SQL Filter executor type
+   */
+  constexpr static OB_INLINE bool is_filter_black_node(const PushdownExecutorType type)
+  {
+    return type == BLACK_FILTER_EXECUTOR || type == TRUNCATE_BLACK_FILTER_EXECUTOR;
+  }
+  constexpr static OB_INLINE bool is_filter_white_node(const PushdownExecutorType type)
+  {
+    return type == WHITE_FILTER_EXECUTOR || type == DYNAMIC_FILTER_EXECUTOR || type == TRUNCATE_WHITE_FILTER_EXECUTOR || type == SEMISTRUCT_FILTER_EXECUTOR || type == TTL_WHITE_FILTER_EXECUTOR || type == BASE_VERSION_FILTER_EXECUTOR;
+  }
+  constexpr static OB_INLINE bool is_sample_node(const PushdownExecutorType type)
+  {
+    return type == HYBRID_SAMPLE_FILTER_EXECUTOR || type == TRIVAL_SAMPLE_FILTER_EXECUTOR;
+  }
+  constexpr static OB_INLINE bool is_semistruct_filter_node(const PushdownExecutorType type)
+  {
+    return type == SEMISTRUCT_FILTER_EXECUTOR;
+  }
+  constexpr static OB_INLINE bool is_filter_dynamic_node(const PushdownExecutorType type)
+  {
+    return type == DYNAMIC_FILTER_EXECUTOR;
+  }
+  constexpr static OB_INLINE bool is_filter_node(const PushdownExecutorType type)
+  {
+    return is_filter_black_node(type) || is_filter_white_node(type) || is_sample_node(type);
+  }
+  constexpr static OB_INLINE bool is_logic_and_node(const PushdownExecutorType type)
+  {
+    return type == AND_FILTER_EXECUTOR || type == TRUNCATE_AND_FILTER_EXECUTOR || type == TTL_AND_FILTER_EXECUTOR;
+  }
+  constexpr static OB_INLINE bool is_logic_or_node(const PushdownExecutorType type)
+  {
+    return type == OR_FILTER_EXECUTOR || type == TRUNCATE_OR_FILTER_EXECUTOR || type == TTL_OR_FILTER_EXECUTOR;
+  }
+  constexpr static OB_INLINE bool is_logic_op_node(const PushdownExecutorType type)
+  {
+    return is_logic_and_node(type) || is_logic_or_node(type) || is_truncate_logic_op_node(type) || is_ttl_logic_node(type);
+  }
+
+  /**
+   * @brief Contain all MDS filter executor type
+   */
+  constexpr static OB_INLINE bool is_truncate_node(const PushdownExecutorType type)
+  {
+    return type >= TRUNCATE_WHITE_FILTER_EXECUTOR && type <= TRUNCATE_AND_FILTER_EXECUTOR;
+  }
+  constexpr static OB_INLINE bool is_ttl_node(const PushdownExecutorType type)
+  {
+    return type >= TTL_WHITE_FILTER_EXECUTOR && type <= TTL_OR_FILTER_EXECUTOR;
+  }
+  constexpr static OB_INLINE bool is_base_version_node(const PushdownExecutorType type)
+  {
+    return type == BASE_VERSION_FILTER_EXECUTOR;
+  }
+  constexpr static OB_INLINE bool is_mds_node(const PushdownExecutorType type)
+  {
+    return is_truncate_node(type) || is_ttl_node(type) || is_base_version_node(type);
+  }
+
+  /**
+   * @brief MDS filter executor except logic op filter
+   */
+  constexpr static OB_INLINE bool is_truncate_filter_node(const PushdownExecutorType type)
+  {
+    return type == TRUNCATE_BLACK_FILTER_EXECUTOR || type == TRUNCATE_WHITE_FILTER_EXECUTOR;
+  }
+  constexpr static OB_INLINE bool is_ttl_filter_node(const PushdownExecutorType type)
+  {
+    return type == TTL_WHITE_FILTER_EXECUTOR;
+  }
+
+  /**
+   * @brief MDS Logic op filter executor
+   */
+  constexpr static OB_INLINE bool is_truncate_logic_or_node(const PushdownExecutorType type)
+  {
+    return type == TRUNCATE_OR_FILTER_EXECUTOR;
+  }
+  constexpr static OB_INLINE bool is_truncate_logic_and_node(const PushdownExecutorType type)
+  {
+    return type == TRUNCATE_AND_FILTER_EXECUTOR;
+  }
+  constexpr static OB_INLINE bool is_truncate_logic_op_node(const PushdownExecutorType type)
+  {
+    return is_truncate_logic_or_node(type) || is_truncate_logic_and_node(type);
+  }
+  constexpr static OB_INLINE bool is_ttl_logic_and_node(const PushdownExecutorType type)
+  {
+    return type == TTL_AND_FILTER_EXECUTOR;
+  }
+  constexpr static OB_INLINE bool is_ttl_logic_or_node(const PushdownExecutorType type)
+  {
+    return type == TTL_OR_FILTER_EXECUTOR;
+  }
+  constexpr static OB_INLINE bool is_ttl_logic_node(const PushdownExecutorType type)
+  {
+    return is_ttl_logic_and_node(type) || is_ttl_logic_or_node(type);
+  }
 public:
   ObPushdownFilterExecutor(common::ObIAllocator &alloc,
-                           ObPushdownOperator &op,
+                           ObPushdownOperator *op,
                            PushdownExecutorType type = PushdownExecutorType::MAX_EXECUTOR_TYPE);
   virtual ~ObPushdownFilterExecutor();
 
-  // interface for storage
-  virtual OB_INLINE bool is_filter_black_node() const
-  {
-    return type_ == BLACK_FILTER_EXECUTOR || type_ == TRUNCATE_BLACK_FILTER_EXECUTOR;
-  }
-  virtual OB_INLINE bool is_filter_white_node() const
-  {
-    return type_ == WHITE_FILTER_EXECUTOR || type_ == DYNAMIC_FILTER_EXECUTOR || type_ == TRUNCATE_WHITE_FILTER_EXECUTOR || type_ == SEMISTRUCT_FILTER_EXECUTOR || type_ == TTL_WHITE_FILTER_EXECUTOR || type_ == BASE_VERSION_FILTER_EXECUTOR;
-  }
-  virtual OB_INLINE bool is_mds_node() const
-  {
-    return is_truncate_node() || is_ttl_node() || is_base_version_node();
-  }
-  virtual OB_INLINE bool is_truncate_node() const { return type_ >= TRUNCATE_WHITE_FILTER_EXECUTOR && type_ <= TRUNCATE_AND_FILTER_EXECUTOR; }
-  virtual OB_INLINE bool is_ttl_node() const { return type_ >= TTL_WHITE_FILTER_EXECUTOR && type_ <= TTL_AND_FILTER_EXECUTOR; }
-  virtual OB_INLINE bool is_sample_node() const { return type_ == HYBRID_SAMPLE_FILTER_EXECUTOR || type_ == TRIVAL_SAMPLE_FILTER_EXECUTOR; }
-  virtual OB_INLINE bool is_semistruct_filter_node() const { return type_ == SEMISTRUCT_FILTER_EXECUTOR; }
-  virtual OB_INLINE bool is_filter_node() const { return is_filter_black_node() || is_filter_white_node() || is_sample_node(); }
-  virtual OB_INLINE bool is_logic_and_node() const { return type_ == AND_FILTER_EXECUTOR || type_ == TRUNCATE_AND_FILTER_EXECUTOR || type_ == TTL_AND_FILTER_EXECUTOR; }
-  virtual OB_INLINE bool is_logic_or_node() const { return type_ == OR_FILTER_EXECUTOR || type_ == TRUNCATE_OR_FILTER_EXECUTOR; }
-  virtual OB_INLINE bool is_logic_op_node() const { return is_logic_and_node() || is_logic_or_node() || is_truncate_logic_op_node() || is_ttl_logic_and_node(); }
-  OB_INLINE bool is_filter_dynamic_node() const { return type_ == DYNAMIC_FILTER_EXECUTOR; }
-  virtual OB_INLINE bool filter_can_continuous_filter() const { return true; }
-  OB_INLINE bool is_truncate_logic_op_node() const { return is_truncate_logic_or_node() || is_truncate_logic_and_node(); }
-  OB_INLINE bool is_truncate_logic_or_node() const { return type_ == TRUNCATE_OR_FILTER_EXECUTOR; }
-  OB_INLINE bool is_truncate_logic_and_node() const { return type_ == TRUNCATE_AND_FILTER_EXECUTOR; }
-  OB_INLINE bool is_ttl_logic_and_node() const { return type_ == TTL_AND_FILTER_EXECUTOR; }
-  OB_INLINE bool is_truncate_filter_node() const { return type_ == TRUNCATE_BLACK_FILTER_EXECUTOR || type_ == TRUNCATE_WHITE_FILTER_EXECUTOR; }
-  OB_INLINE bool is_ttl_filter_node() const { return type_ == TTL_WHITE_FILTER_EXECUTOR; }
-  OB_INLINE bool is_base_version_node() const { return type_ == BASE_VERSION_FILTER_EXECUTOR; }
+  OB_INLINE bool is_filter_black_node() const { return is_filter_black_node(type_); }
+  OB_INLINE bool is_filter_white_node() const { return is_filter_white_node(type_); }
+  OB_INLINE bool is_mds_node() const { return is_mds_node(type_); }
+  OB_INLINE bool is_truncate_node() const { return is_truncate_node(type_); }
+  OB_INLINE bool is_ttl_node() const { return is_ttl_node(type_); }
+  OB_INLINE bool is_sample_node() const { return is_sample_node(type_); }
+  OB_INLINE bool is_semistruct_filter_node() const { return is_semistruct_filter_node(type_); }
+  OB_INLINE bool is_filter_node() const { return is_filter_node(type_); }
+  OB_INLINE bool is_logic_and_node() const { return is_logic_and_node(type_); }
+  OB_INLINE bool is_logic_or_node() const { return is_logic_or_node(type_); }
+  OB_INLINE bool is_logic_op_node() const { return is_logic_op_node(type_); }
+  OB_INLINE bool is_filter_dynamic_node() const { return is_filter_dynamic_node(type_); }
+  OB_INLINE bool is_truncate_logic_op_node() const { return is_truncate_logic_op_node(type_); }
+  OB_INLINE bool is_truncate_logic_or_node() const { return is_truncate_logic_or_node(type_); }
+  OB_INLINE bool is_truncate_logic_and_node() const { return is_truncate_logic_and_node(type_); }
+  OB_INLINE bool is_ttl_logic_node() const { return is_ttl_logic_node(type_); }
+  OB_INLINE bool is_ttl_logic_and_node() const { return is_ttl_logic_and_node(type_); }
+  OB_INLINE bool is_ttl_logic_or_node() const { return is_ttl_logic_or_node(type_); }
+  OB_INLINE bool is_truncate_filter_node() const { return is_truncate_filter_node(type_); }
+  OB_INLINE bool is_ttl_filter_node() const { return is_ttl_filter_node(type_); }
+  OB_INLINE bool is_base_version_node() const { return is_base_version_node(type_); }
+
+  virtual bool filter_can_continuous_filter() const { return true; }
+
   int prepare_skip_filter(bool disable_bypass);
+
+  // TODO(menglan): check whether need to support mds filter
   OB_INLINE bool can_skip_filter(int64_t row) const
   {
     bool fast_skip = false;
@@ -779,7 +880,7 @@ public:
   OB_INLINE ObCommonFilterTreeStatus get_status() const { return filter_tree_status_; }
   virtual common::ObIArray<uint64_t> &get_col_ids() = 0;
   OB_INLINE int64_t get_col_count() const { return n_cols_; }
-  OB_INLINE virtual ObPushdownOperator & get_op() { return op_; }
+  OB_INLINE ObPushdownOperator *get_op() { return op_; }
   OB_INLINE const common::ObIArray<int32_t> &get_col_offsets(const bool is_cg = false) const
   {
     return is_cg ? cg_col_offsets_ : col_offsets_;
@@ -836,18 +937,19 @@ public:
     }
     return ret;
   }
-  void set_child(uint32_t i, ObPushdownFilterExecutor *child)
+  OB_INLINE void set_child(uint32_t i, ObPushdownFilterExecutor *child)
   {
     childs_[i] = child;
   }
-  void set_childs(uint32_t n_child, ObPushdownFilterExecutor **childs)
+  OB_INLINE void set_childs(uint32_t n_child, ObPushdownFilterExecutor **childs)
   {
     n_child_ = n_child;
     childs_ = childs;
   }
-  ObPushdownFilterExecutor **get_childs() const { return childs_; }
-  const common::ObBitmap *get_result() const { return filter_bitmap_; }
-  common::ObBitmap *get_result() { return filter_bitmap_; }
+  OB_INLINE void set_child_count(uint32_t n_child) { n_child_ = n_child; }
+  OB_INLINE ObPushdownFilterExecutor **get_childs() const { return childs_; }
+  OB_INLINE const common::ObBitmap *get_result() const { return filter_bitmap_; }
+  OB_INLINE common::ObBitmap *get_result() { return filter_bitmap_; }
   int init_bitmap(const int64_t row_count, common::ObBitmap *&bitmap);
   int init_filter_param(
       const common::ObIArray<share::schema::ObColumnParam *> &col_params,
@@ -872,10 +974,10 @@ public:
 
   int execute_skipping_filter(ObBoolMask &bm);
   virtual void clear(); // release array and set memory used by WHITE_OP_IN filter.
-  void inc_ref() { ++ref_cnt_; }
-  void dec_ref() { --ref_cnt_; }
-  int64_t get_ref() { return ref_cnt_; }
-  bool is_padding_mode() const { return is_padding_mode_; }
+  OB_INLINE void inc_ref() { ++ref_cnt_; }
+  OB_INLINE void dec_ref() { --ref_cnt_; }
+  OB_INLINE int64_t get_ref() { return ref_cnt_; }
+  OB_INLINE bool is_padding_mode() const { return is_padding_mode_; }
   OB_INLINE bool can_vectorized();
   virtual int get_datums_from_column(common::ObIArray<blocksstable::ObSqlDatumInfo> &datum_infos) { return common::OB_NOT_SUPPORTED; }
   DECLARE_VIRTUAL_TO_STRING;
@@ -901,36 +1003,36 @@ private:
     common::ObBitmap &result_bitmap);
 protected:
   PushdownExecutorType type_;
-  bool need_check_row_filter_;
-  ObCommonFilterTreeStatus filter_tree_status_;
-  int64_t n_cols_;
   uint32_t n_child_;
-  int64_t cg_iter_idx_;
-  mutable int64_t skipped_rows_;
   ObPushdownFilterExecutor **childs_;
+  ObPushdownOperator *op_;
+  ObBoolMask filter_bool_mask_;
+  ObCommonFilterTreeStatus filter_tree_status_;
+  bool need_check_row_filter_;
+  bool is_padding_mode_;
+  bool is_rewrited_;
+  bool enable_reorder_;
+  /** add bool at this to fill padding(2 byte) */
+  int64_t n_cols_;
+  int64_t cg_iter_idx_;
   common::ObBitmap *filter_bitmap_;
+  ObIAllocator &allocator_;
+  int64_t ref_cnt_;
+  mutable int64_t skipped_rows_;
+  FilterRealTimeStatistics filter_realtime_statistics_;
   ColumnParamFixedArray col_params_;
   common::ObFixedArray<int32_t, common::ObIAllocator> col_offsets_;
   common::ObFixedArray<int32_t, common::ObIAllocator> cg_col_offsets_;
   common::ObFixedArray<blocksstable::ObStorageDatum, common::ObIAllocator> default_datums_;
   common::ObFixedArray<uint32_t, common::ObIAllocator> cg_idxs_;
   common::ObFixedArray<ObExpr *, common::ObIAllocator> cg_col_exprs_;
-  common::ObIAllocator &allocator_;
-  ObPushdownOperator &op_;
-  bool is_padding_mode_;
-private:
-  bool is_rewrited_;
-  ObBoolMask filter_bool_mask_;
-  bool enable_reorder_;
-  int64_t ref_cnt_;
-  FilterRealTimeStatistics filter_realtime_statistics_;
 };
 
 class ObPhysicalFilterExecutor : public ObPushdownFilterExecutor
 {
 public:
   ObPhysicalFilterExecutor(common::ObIAllocator &alloc,
-                           ObPushdownOperator &op,
+                           ObPushdownOperator *op,
                            PushdownExecutorType type)
       : ObPushdownFilterExecutor(alloc, op, type),
         n_eval_infos_(0),
@@ -975,7 +1077,7 @@ class ObBlackFilterExecutor : public ObPhysicalFilterExecutor
 public:
   ObBlackFilterExecutor(common::ObIAllocator &alloc,
                         ObPushdownBlackFilterNode &filter,
-                        ObPushdownOperator &op)
+                        ObPushdownOperator *op)
       : ObPhysicalFilterExecutor(alloc, op, PushdownExecutorType::BLACK_FILTER_EXECUTOR),
         filter_(filter)
   {}
@@ -1170,7 +1272,7 @@ class ObWhiteFilterExecutor : public ObPhysicalFilterExecutor
 public:
   ObWhiteFilterExecutor(common::ObIAllocator &alloc,
                         ObPushdownWhiteFilterNode &filter,
-                        ObPushdownOperator &op)
+                        ObPushdownOperator *op)
       : ObPhysicalFilterExecutor(alloc, op, PushdownExecutorType::WHITE_FILTER_EXECUTOR),
         cmp_func_(nullptr), null_param_contained_(false), is_reversed_(false), datum_params_(alloc), filter_(filter),
         param_obj_meta_(), col_obj_meta_()
@@ -1256,7 +1358,7 @@ class ObSemiStructWhiteFilterExecutor : public ObWhiteFilterExecutor
 public:
   ObSemiStructWhiteFilterExecutor(common::ObIAllocator &alloc,
                         ObSemiStructWhiteFilterNode &filter,
-                        ObPushdownOperator &op)
+                        ObPushdownOperator *op)
       : ObWhiteFilterExecutor(alloc, filter, op)
       {}
   virtual ~ObSemiStructWhiteFilterExecutor()
@@ -1270,7 +1372,7 @@ class ObAndFilterExecutor : public ObPushdownFilterExecutor
 public:
   ObAndFilterExecutor(common::ObIAllocator &alloc,
                       ObPushdownAndFilterNode &filter,
-                      ObPushdownOperator &op)
+                      ObPushdownOperator *op)
       : ObPushdownFilterExecutor(alloc, op, PushdownExecutorType::AND_FILTER_EXECUTOR),
       filter_(filter) {}
   OB_INLINE ObPushdownAndFilterNode &get_filter_node() { return filter_; }
@@ -1287,7 +1389,7 @@ class ObOrFilterExecutor : public ObPushdownFilterExecutor
 public:
   ObOrFilterExecutor(common::ObIAllocator &alloc,
                      ObPushdownOrFilterNode &filter,
-                     ObPushdownOperator &op)
+                     ObPushdownOperator *op)
       : ObPushdownFilterExecutor(alloc, op, PushdownExecutorType::OR_FILTER_EXECUTOR),
       filter_(filter) {}
 
@@ -1306,7 +1408,7 @@ public:
   static const uint32_t DEFAULT_CHECK_INTERVAL = 16;
   ObDynamicFilterExecutor(common::ObIAllocator &alloc,
                           ObPushdownDynamicFilterNode &filter,
-                          ObPushdownOperator &op)
+                          ObPushdownOperator *op)
       : ObWhiteFilterExecutor(alloc, filter, op),
         is_data_prepared_(false),
         batch_cnt_(0),
@@ -1414,13 +1516,13 @@ public:
   ObFilterExecutorConstructor(common::ObIAllocator *alloc)
       : factory_(alloc)
   {}
-  int apply(ObPushdownFilterNode *filter_tree, ObPushdownFilterExecutor *&filter_executor, ObPushdownOperator &op);
+  int apply(ObPushdownFilterNode *filter_tree, ObPushdownFilterExecutor *&filter_executor, ObPushdownOperator *op);
 
 private:
   template<typename CLASST, PushdownExecutorType type>
       int create_filter_executor(ObPushdownFilterNode *filter_tree,
                                  ObPushdownFilterExecutor *&filter_executor,
-                                 ObPushdownOperator &op);
+                                 ObPushdownOperator *op);
 private:
   ObPushdownFilterFactory factory_;
 };
@@ -1533,8 +1635,7 @@ OB_INLINE int ObPushdownOperator::filter_row_outside(const ObExprPtrIArray &expr
   return ret;
 }
 
-OB_INLINE bool ObPushdownFilterExecutor::can_vectorized()
-{ return op_.is_vectorized(); }
+OB_INLINE bool ObPushdownFilterExecutor::can_vectorized() { return op_->is_vectorized(); }
 
 OB_INLINE bool is_row_filtered(const common::ObDatum &d)
 {

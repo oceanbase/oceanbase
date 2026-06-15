@@ -36,7 +36,7 @@ enum class ObTruncateFilterType : uint8_t // FARM COMPAT WHITELIST
 
 class ObTruncatePartitionFilter {
 public:
-  ObTruncatePartitionFilter(ObMDSFilterMgr &mds_filter_mgr);
+  ObTruncatePartitionFilter(ObArenaAllocator &filter_allocator);
   ~ObTruncatePartitionFilter();
   // for query and dml
   int init(
@@ -64,7 +64,6 @@ public:
   // this interface is thread safe
   int filter(const blocksstable::ObDatumRow &row, bool &filtered) const;
   int check_filter_row_complete(const blocksstable::ObDatumRow &row, bool &complete) const;
-  OB_INLINE ObMDSFilterMgr &get_mds_filter_mgr() const { return mds_filter_mgr_; }
   OB_INLINE bool is_valid_filter() const
   {
     return is_normal_filter();
@@ -103,7 +102,7 @@ private:
   int do_normal_filter(const blocksstable::ObDatumRow &row, bool &filtered) const;
   static const int64_t COLUMN_IDX_CNT = 4;
 
-  ObMDSFilterMgr &mds_filter_mgr_;
+  ObArenaAllocator &filter_allocator_;
   bool is_inited_;
   ObTruncateFilterType filter_type_;
   int64_t schema_rowkey_cnt_;
@@ -127,9 +126,8 @@ struct ObTruncatePartitionFilterFactory
       const common::ObIArray<share::schema::ObColDesc> &cols_desc,
       const common::ObIArray<share::schema::ObColumnParam *> *cols_param,
       const common::ObVersionRange &read_version_range,
-      ObMDSFilterMgr &mds_filter_mgr,
+      ObArenaAllocator &filter_allocator,
       ObTruncatePartitionFilter *&truncate_part_filter);
-  static void destroy_truncate_partition_filter(ObTruncatePartitionFilter *&truncate_part_filter);
 };
 
 }

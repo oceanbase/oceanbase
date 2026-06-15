@@ -7,6 +7,7 @@
 
 #include "storage/ob_dml_running_ctx.h"
 #include "share/schema/ob_table_dml_param.h"
+#include "storage/compaction_ttl/ob_ttl_filter_info.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/memtable/ob_memtable_context.h"
 
@@ -38,6 +39,7 @@ ObDMLRunningCtx::ObDMLRunningCtx(
     has_lob_rowkey_(false),
     lob_dml_ctx_(),
     main_table_rowkey_col_flag_(allocator),
+    lob_ttl_column_info_(),
     schema_guard_(share::schema::ObSchemaMgrItem::MOD_RELATIVE_TABLE),
     is_inited_(false)
 {
@@ -91,6 +93,8 @@ int ObDMLRunningCtx::init(
     LOG_WARN("fail to get flag of checking old row legitimacy", K(ret));
   } else if (is_need_check_old_row_ && OB_FAIL(init_cmp_funcs())) {
     LOG_WARN("fail to init compare functions", K(ret));
+  } else if (OB_FAIL(init_lob_ttl_column_info())) {
+    LOG_WARN("failed to init lob ttl column info", K(ret));
   } else {
     store_ctx_.mvcc_acc_ctx_.mem_ctx_->set_table_version(dml_param_.schema_version_);
     store_ctx_.table_version_ = dml_param_.schema_version_;
@@ -361,5 +365,42 @@ int ObDMLRunningCtx::check_tenant_schema_version(
   }
   return ret;
 }
+
+int ObDMLRunningCtx::init_lob_ttl_column_info()
+{
+  int ret = OB_SUCCESS;
+
+  const share::schema::ObTableSchemaParam &data_table = dml_param_.table_param_->get_data_table();
+  const uint64_t user_ttl_column_id = data_table.get_user_ttl_column_id();
+
+  if (data_table.is_rowscn_ttl_table()) {
+    lob_ttl_column_info_.init_by_column_idx(-1, ObTTLFilterColType::ROWSCN);
+  } else if (user_ttl_column_id != OB_INVALID_ID && user_ttl_column_id > 0 && col_descs_ != nullptr) {
+    ObTTLFilterColType ttl_col_type = ObTTLFilterColType::INVALID;
+    int64_t user_ttl_column_idx = -1;
+    for (int64_t i = 0; OB_SUCC(ret) && i < col_descs_->count(); i++) {
+      if (col_descs_->at(i).col_id_ == user_ttl_column_id) {
+        user_ttl_column_idx = i;
+        if (OB_FAIL(ObTTLFilterColTypeUtil::to_filter_col_type(col_descs_->at(i).col_type_.get_type(), ttl_col_type))) {
+          LOG_WARN("failed to convert ttl column type", KR(ret), K(user_ttl_column_id));
+        }
+        break;
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (OB_UNLIKELY(user_ttl_column_idx == -1)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("user ttl column id is valid in data table, but not found in column descs", KR(ret), K(user_ttl_column_id), K(data_table));
+    } else {
+      lob_ttl_column_info_.init_by_column_idx(user_ttl_column_idx, ttl_col_type);
+    }
+  } else {
+    lob_ttl_column_info_.reset();
+  }
+
+  return ret;
+}
+
 } // namespace storage
 } // namespace oceanbase

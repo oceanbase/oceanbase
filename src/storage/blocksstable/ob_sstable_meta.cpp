@@ -6,9 +6,11 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_sstable_meta.h"
+#include "storage/blocksstable/ob_sstable_skip_index.h"
 #include "storage/blocksstable/index_block/ob_index_block_builder.h"
 #include "storage/tablet/ob_tablet_create_sstable_param.h"
 #include "share/ob_io_device_helper.h"
+#include "src/share/compaction_ttl/ob_compaction_ttl_util.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::storage;
@@ -610,6 +612,7 @@ ObSSTableMeta::ObSSTableMeta()
     column_ckm_struct_(),
     tx_ctx_(),
     uncommit_tx_info_(),
+    skip_index_(),
     is_inited_(false)
 {
 }
@@ -644,6 +647,7 @@ void ObSSTableMeta::reset()
   cg_sstables_.reset();
   tx_ctx_.reset();
   uncommit_tx_info_.reset();
+  skip_index_.reset();
   is_inited_ = false;
 }
 
@@ -767,6 +771,11 @@ int ObSSTableMeta::init(
     LOG_WARN("invalid arguments", K(ret), K(param));
   } else if (OB_FAIL(init_base_meta(param, allocator))) {
     LOG_WARN("fail to init basic meta", K(ret), K(param));
+  } else if (OB_FAIL(skip_index_.init(
+      param.sstable_skip_index_.get_buf(),
+      param.sstable_skip_index_.get_size(),
+      allocator))) {
+    LOG_WARN("fail to init sstable skip index info", K(ret), K(param));
   } else if (OB_FAIL(init_data_index_tree_info(param, allocator))) {
     LOG_WARN("fail to init data index tree info", K(ret), K(param));
   } else if (OB_UNLIKELY(SSTABLE_WRITE_BUILDING != basic_meta_.status_)) {
@@ -837,7 +846,7 @@ int ObSSTableMeta::fill_cg_sstables(
   return ret;
 }
 
-int ObSSTableMeta::serialize(const uint64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const
+int ObSSTableMeta::serialize(const uint64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const // FARM COMPAT WHITELIST
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(buf) || OB_UNLIKELY(buf_len <= 0)) {
@@ -861,7 +870,7 @@ int ObSSTableMeta::serialize(const uint64_t data_version, char *buf, const int64
   return ret;
 }
 
-int ObSSTableMeta::serialize_(const uint64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const
+int ObSSTableMeta::serialize_(const uint64_t data_version, char *buf, const int64_t buf_len, int64_t &pos) const // FARM COMPAT WHITELIST
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(basic_meta_.serialize(buf, buf_len, pos))) {
@@ -878,6 +887,8 @@ int ObSSTableMeta::serialize_(const uint64_t data_version, char *buf, const int6
     LOG_WARN("fail to serialize tx ids", K(ret), K(buf_len), K(pos), K(tx_ctx_));
   } else if (OB_FAIL(uncommit_tx_info_.serialize(buf, buf_len, pos))) {
     LOG_WARN("fail to serialize uncommit tx info", K(ret), K(buf_len), K(pos), K(uncommit_tx_info_));
+  } else if (OB_FAIL(skip_index_.serialize(data_version, buf, buf_len, pos))) {
+    LOG_WARN("fail to serialize sstable skip index", K(ret), K(buf_len), K(pos), K_(skip_index));
   }
   return ret;
 }
@@ -951,6 +962,8 @@ int ObSSTableMeta::deserialize_(
       LOG_WARN("fail to deserialize tx ids", K(ret), K(data_len), K(pos));
     } else if (pos < data_len && OB_FAIL(uncommit_tx_info_.deserialize(allocator, buf, data_len, pos))) {
       LOG_WARN("fail to deserialize uncommit tx infos", K(ret), K(data_len), K(pos));
+    } else if (pos < data_len && OB_FAIL(skip_index_.deserialize(allocator, buf, data_len, pos))) {
+      LOG_WARN("fail to deserialize sstable skip index info", K(ret), K(data_len), K(pos), K_(skip_index));
     }
   }
   return ret;
@@ -976,6 +989,7 @@ int64_t ObSSTableMeta::get_serialize_size_(const uint64_t data_version) const
   len += cg_sstables_.get_serialize_size(data_version);
   len += tx_ctx_.get_serialize_size();
   len += uncommit_tx_info_.get_serialize_size();
+  len += skip_index_.get_serialize_size(data_version);
   return len;
 }
 
@@ -986,7 +1000,8 @@ int64_t ObSSTableMeta::get_variable_size() const
        + macro_info_.get_variable_size()
        + cg_sstables_.get_deep_copy_size()
        + tx_ctx_.get_variable_size()
-       + uncommit_tx_info_.get_deep_copy_size();
+       + uncommit_tx_info_.get_deep_copy_size()
+       + skip_index_.get_variable_size();
 }
 
 int ObSSTableMeta::deep_copy(
@@ -1018,6 +1033,8 @@ int ObSSTableMeta::deep_copy(
       LOG_WARN("fail to deep copy tx context", K(ret), K(tx_ctx_));
     } else if (OB_FAIL(uncommit_tx_info_.deep_copy(buf, buf_len, pos, dest->uncommit_tx_info_))) {
       LOG_WARN("fail to deep copy uncommit tx info", K(ret), K(uncommit_tx_info_));
+    } else if (OB_FAIL(skip_index_.deep_copy(buf, buf_len, pos, dest->skip_index_))) {
+      LOG_WARN("fail to deep copy sstable skip index info", K(ret), KP(buf), K(buf_len), K(pos), K(dest));
     // TODO (jiahua.cjh): add defend code back
     // } else if (deep_size != pos - tmp_pos) {
     //  ret = OB_ERR_UNEXPECTED;
@@ -1052,7 +1069,10 @@ int64_t ObSSTableMeta::to_string(char *buf, const int64_t buf_len) const
   if (OB_ISNULL(buf) || buf_len <= 0) {
   } else {
     J_OBJ_START();
-    J_KV(K_(basic_meta), K_(column_ckm_struct), K_(data_root_info), K_(macro_info), K_(uncommit_tx_info), K_(is_inited));
+    J_KV(K_(basic_meta), K_(column_ckm_struct), K_(data_root_info), K_(macro_info), K_(uncommit_tx_info),
+         "sstable_skip_index_buf", static_cast<const void *>(skip_index_.get_buf()),
+         "sstable_skip_index_size", skip_index_.get_size(),
+         K_(is_inited));
     if (cg_sstables_.count() > 0) {
       J_COMMA();
       J_KV("cg_sstables", cg_sstables_);

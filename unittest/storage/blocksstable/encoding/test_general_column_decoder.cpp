@@ -96,7 +96,7 @@ public:
       sql::ObPushdownOperator &op,
       ObStorageDatum *datums,
       const ObObjMeta &obj_meta)
-    : sql::ObBlackFilterExecutor(allocator, filter_node, op),
+    : sql::ObBlackFilterExecutor(allocator, filter_node, &op),
       datums_(datums),
       get_datums_call_count_(0),
       filter_batch_call_count_(0)

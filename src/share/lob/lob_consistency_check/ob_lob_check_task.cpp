@@ -73,7 +73,9 @@ ObLobCheckTask::ObLobCheckTask()
     : ObITask(ObITask::TASK_TYPE_LOB_CHECK_TASK), is_inited_(false), tenant_id_(OB_INVALID_TENANT_ID), table_id_(0),
       meta_table_id_(OB_INVALID_ID), tablet_id_(), ls_id_(), ls_(nullptr),
       main_allocator_(ObMemAttr(MTL_ID(), "LobCkMaTask")), aux_allocator_(ObMemAttr(MTL_ID(), "LobCkAuxTask")),
-      allocator_(ObMemAttr(MTL_ID(), "LobChecAlloc")), main_table_iter_(), aux_table_iter_(nullptr), lob_column_idxs_(),
+      allocator_(ObMemAttr(MTL_ID(), "LobChecAlloc")), is_lob_meta_has_ttl_column_(false),
+      lob_meta_ttl_column_type_(storage::ObTTLFilterColType::INVALID),
+      main_table_iter_(), aux_table_iter_(nullptr), lob_column_idxs_(),
       tablet_ttl_scheduler_(nullptr), param_(), info_(), lob_id_map_(), tablet_table_pairs_(), scan_tablet_idx_(0),
       need_next_tablet_(false)
 {
@@ -1013,7 +1015,7 @@ int ObLobCheckTask::delete_orphan_auxiliary_data(transaction::ObTxDesc *tx_desc,
   ObDMLBaseParam dml_param;
   if (OB_FAIL(batch_meta_del_iter.init(dml_param))) {
     LOG_WARN("fail to init delete row iterator", K(ret));
-  } else if (OB_FAIL(del_row.init(allocator_, ObLobMetaUtil::LOB_META_COLUMN_CNT))) {
+  } else if (OB_FAIL(del_row.init(allocator_, ObLobMetaUtil::get_lob_meta_column_cnt(is_lob_meta_has_ttl_column_)))) {
     LOG_WARN("fail to init row", K(ret));
   }
   // 1. 收集所有孤立的 lob_id（主表不存在的）
@@ -1030,6 +1032,9 @@ int ObLobCheckTask::delete_orphan_auxiliary_data(transaction::ObTxDesc *tx_desc,
           del_row.storage_datums_[3].set_nop();
           del_row.storage_datums_[4].set_nop();
           del_row.storage_datums_[5].set_nop();
+          if (is_lob_meta_has_ttl_column_) {
+            del_row.storage_datums_[6].set_nop();
+          }
           if (OB_FAIL(batch_meta_del_iter.add_row(del_row))) {
             LOG_WARN("fail to add seq id", K(ret), K(meta_seq_info_array_.at(i).seq_ids_.at(j)));
           }
@@ -1065,7 +1070,7 @@ int ObLobCheckTask::delete_orphan_auxiliary_data(transaction::ObTxDesc *tx_desc,
     // 每删除一行需要一个序列号，预估需要 orphan_lob_ids 数量的序列号
     transaction::ObTxSEQ seq_no_st;
     if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(MTL(ObLobManager *)->get_table_dml_param(dml_param.table_param_))) {
+    } else if (OB_FAIL(MTL(ObLobManager *)->get_table_dml_param(lob_meta_ttl_column_type_, dml_param.table_param_))) {
       LOG_WARN("failed to get table param", K(ret));
     } else if (OB_FAIL(oas->get_write_store_ctx_guard(ls_id_, timeout_ts, *tx_desc, snapshot, 0, dml_param.write_flag_,
                                                       store_ctx_guard))) {
@@ -1304,7 +1309,7 @@ int ObLobCheckTask::init_meta_iter(transaction::ObTxReadSnapshot &snapshot)
   } else if (OB_FAIL(build_table_scan_param(aux_allocator_, snapshot, false, ddl_data.lob_meta_tablet_id_,
                                             aux_table_iter_->get_scan_param()))) {
     LOG_WARN("fail to build table scan param", K(ret), K(ddl_data));
-  } else if (OB_FAIL(aux_table_iter_->open(tablet_id_, ddl_data.lob_piece_tablet_id_))) {
+  } else if (OB_FAIL(aux_table_iter_->open(tablet_id_, ddl_data.lob_piece_tablet_id_, lob_meta_ttl_column_type_))) {
     LOG_WARN("fail to open aux table iter", K(ret), K(ddl_data));
   }
 
@@ -1462,6 +1467,20 @@ int ObLobCheckTask::add_table_param(common::ObArenaAllocator &allocator, ObTable
         }
       }
     }
+
+    // set ttl related parameter for lob meta table
+    if (OB_SUCC(ret)) {
+      is_lob_meta_has_ttl_column_ = table_schema->get_ttl_flag().is_lob_meta_has_ttl_column();
+      if (is_lob_meta_has_ttl_column_) {
+        const ObColumnSchemaV2 *col = table_schema->get_column_schema(table_schema->get_ttl_flag().get_curr_user_ttl_column_id());
+        if (OB_ISNULL(col)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("failed to get ttl column", KR(ret), K(table_schema));
+        } else if (OB_FAIL(storage::ObTTLFilterColTypeUtil::to_filter_col_type(col->get_data_type(), lob_meta_ttl_column_type_))) {
+          LOG_WARN("failed to convert ttl column type", KR(ret), K(col->get_data_type()));
+        }
+      }
+    }
   }
   return ret;
 }
@@ -1503,10 +1522,42 @@ int ObLobCheckTask::build_table_scan_param(common::ObArenaAllocator &allocator,
         LOG_WARN("fail to add table param", K(ret), K(tablet_id));
       }
     } else {
-      int column_cnt = is_repair_task_ ? ObLobMetaUtil::LOB_META_COLUMN_CNT : ObLobMetaUtil::LOB_META_COLUMN_CNT - 1;
-      for (uint32_t i = 0; OB_SUCC(ret) && i < column_cnt; i++) {
-        if (OB_FAIL(scan_param.column_ids_.push_back(OB_APP_MIN_COLUMN_ID + i))) {
-          LOG_WARN("push col id failed", K(ret), K(i));
+      share::schema::ObSchemaGetterGuard schema_guard;
+      const share::schema::ObTableSchema *table_schema = nullptr;
+      share::schema::ObMultiVersionSchemaService *schema_service = GCTX.schema_service_;
+
+      if (OB_ISNULL(schema_service)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema service is null", K(ret));
+      } else if (OB_FAIL(schema_service->get_tenant_schema_guard(tenant_id_, schema_guard))) {
+        LOG_WARN("fail to get tenant schema guard", K(ret), K(tenant_id_));
+      } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id_, table_id_, table_schema))) {
+        LOG_WARN("fail to get table schema", K(ret), K(tenant_id_), K(table_id_));
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("table schema is null", K(ret), K(tenant_id_), K(table_id_));
+      } else {
+        int column_cnt = is_repair_task_ ? ObLobMetaUtil::LOB_META_WITHOUT_TTL_COLUMN_CNT : ObLobMetaUtil::LOB_META_WITHOUT_TTL_COLUMN_CNT - 1;
+        for (uint32_t i = 0; OB_SUCC(ret) && i < column_cnt; i++) {
+          if (OB_FAIL(scan_param.column_ids_.push_back(OB_APP_MIN_COLUMN_ID + i))) {
+            LOG_WARN("push col id failed", K(ret), K(i));
+          }
+        }
+
+        // 如果 Lob 表含有 TTL 列，则查询列需要带上 TTL 列，以确保查询执行正确
+        // 同时写删除行的时候也时候多写一列 NOP
+        is_lob_meta_has_ttl_column_ = table_schema->get_ttl_flag().is_lob_meta_has_ttl_column();
+        if (OB_FAIL(ret)) {
+        } else if (is_lob_meta_has_ttl_column_) {
+          const ObColumnSchemaV2 *col = table_schema->get_column_schema(table_schema->get_ttl_flag().get_curr_user_ttl_column_id());
+          if (OB_ISNULL(col)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("failed to get ttl column", KR(ret), K(table_schema));
+          } else if (OB_FAIL(storage::ObTTLFilterColTypeUtil::to_filter_col_type(col->get_data_type(), lob_meta_ttl_column_type_))) {
+            LOG_WARN("failed to convert ttl column type", KR(ret), K(col->get_data_type()));
+          } else if (OB_FAIL(scan_param.column_ids_.push_back(common::OB_LOB_META_TTL_COLUMN_ID))) {
+            LOG_WARN("push col id failed", K(ret), K(column_cnt));
+          }
         }
       }
     }

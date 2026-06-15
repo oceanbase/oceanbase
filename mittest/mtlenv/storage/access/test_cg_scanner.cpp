@@ -514,7 +514,7 @@ TEST_F(TestCGScanner, test_filter)
 
   sql::ObPushdownWhiteFilterNode white_filter(allocator_);
   white_filter.op_type_ = sql::WHITE_OP_EQ;
-  sql::ObWhiteFilterExecutor filter(allocator_, white_filter, op);
+  sql::ObWhiteFilterExecutor filter(allocator_, white_filter, &op);
   filter.cg_col_offsets_.init(1);
   filter.col_params_.init(1);
   const ObColumnParam *col_param = nullptr;

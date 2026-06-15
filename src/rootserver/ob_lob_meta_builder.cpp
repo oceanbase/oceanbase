@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX RS
 #include "ob_lob_meta_builder.h"
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 
 namespace oceanbase
 {
@@ -105,8 +106,8 @@ int ObLobMetaBuilder::generate_schema(
   int ret = OB_SUCCESS;
   if (OB_SUCC(ret)) {
     // reuse inner lob table create schema
-    if (OB_FAIL(ObInnerTableSchema::all_column_aux_lob_meta_schema(aux_lob_meta_schema))) {
-      LOG_WARN("get lob meta schema failed", K(data_schema), K(ret));
+    if (OB_FAIL(ObCompactionTTLUtil::build_aux_lob_table_schema(data_schema, aux_lob_meta_schema))) {
+      LOG_WARN("build aux lob table schema failed", K(data_schema), K(ret));
     } else if (OB_FAIL(set_basic_infos(data_schema, aux_lob_meta_schema))) {
       LOG_WARN("set_basic_infos failed", K(data_schema), K(ret));
     }
@@ -160,7 +161,7 @@ int ObLobMetaBuilder::set_basic_infos(
   aux_lob_meta_schema.set_merge_engine_type(ObMergeEngineStoreFormat::get_lob_aux_inherit_merge_engine_type(data_schema.get_merge_engine_type()));
   if (OB_FAIL(aux_lob_meta_schema.set_compress_func_name(data_schema.get_compress_func_name()))) {
     LOG_WARN("set_compress_func_name failed", K(data_schema));
-  } else if (OB_FAIL(aux_lob_meta_schema.set_ttl_definition(data_schema.get_ttl_definition(), data_schema.get_ttl_flag()))) {
+  } else if (OB_FAIL(aux_lob_meta_schema.inherit_ttl_definition(data_schema))) {
     LOG_WARN("set_ttl_definition failed", K(data_schema));
   }
   return ret;

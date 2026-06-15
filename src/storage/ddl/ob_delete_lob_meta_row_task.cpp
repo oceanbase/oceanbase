@@ -653,7 +653,7 @@ int ObVecIdxSnapTableLobDelIter::init(ObLobAccessParam *param, ObLobMetaIterator
   if (OB_ISNULL(param) || OB_ISNULL(scan_iter)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("param or scan_iter is null", K(ret), KP(param), KP(scan_iter));
-  } else if (OB_FAIL(datum_row_.init(ObLobMetaUtil::LOB_META_COLUMN_CNT))) {
+  } else if (OB_FAIL(datum_row_.init(ObLobMetaUtil::get_lob_meta_column_cnt(param->has_hidden_ttl_column())))) {
     LOG_WARN("init new datum row failed", K(ret));
   } else if (OB_FAIL(prepare_seq_no(*param))) {
     LOG_WARN("prepare seq no", K(ret));

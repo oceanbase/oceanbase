@@ -5,7 +5,6 @@
 
 #include "ob_base_version_filter.h"
 #include "storage/tablet/ob_tablet.h"
-#include "storage/access/ob_mds_filter_mgr.h"
 
 #define USING_LOG_PREFIX STORAGE
 
@@ -13,6 +12,8 @@ namespace oceanbase
 {
 namespace storage
 {
+
+using namespace sql;
 
 ObBaseVersionFilter::~ObBaseVersionFilter()
 {
@@ -32,21 +33,30 @@ int ObBaseVersionFilter::init_filter_executor(const int64_t schema_rowkey_cnt, c
 
   ObPushdownFilterNode *node = nullptr;
   ObPushdownFilterExecutor *executor = nullptr;
-  ObPushdownFilterFactory &filter_factory = mds_filter_mgr_.get_filter_factory();
-  ObPushdownOperator &op = mds_filter_mgr_.get_pushdown_operator();
+  ObPushdownFilterFactory filter_factory(&filter_allocator_);
 
   if (OB_UNLIKELY(base_version_filter_node_ != nullptr)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("Base version filter node already inited", KR(ret));
   } else if (OB_FAIL(filter_factory.alloc(PushdownFilterType::BASE_VERSION_FILTER, 0, node))) {
     LOG_WARN("Fail to alloc base version filter node", KR(ret));
-  } else if (OB_FAIL(filter_factory.alloc(
-                 PushdownExecutorType::BASE_VERSION_FILTER_EXECUTOR, 0, *node, executor, op))) {
-    LOG_WARN("Fail to alloc base version filter executor", KR(ret));
   } else if (OB_FALSE_IT(base_version_filter_node_ = static_cast<sql::ObBaseVersionFilterNode *>(node))) {
+  } else if (OB_FAIL(filter_factory.alloc(PushdownExecutorType::BASE_VERSION_FILTER_EXECUTOR, 0, *node, executor))) {
+    LOG_WARN("Fail to alloc base version filter executor", KR(ret));
   } else if (OB_FALSE_IT(base_version_filter_executor_ = static_cast<sql::ObBaseVersionFilterExecutor *>(executor))) {
   } else if (OB_FAIL(base_version_filter_executor_->init(schema_rowkey_cnt, base_version))) {
     LOG_WARN("Fail to init base version filter executor", KR(ret), K(schema_rowkey_cnt), K(base_version));
+  }
+
+  if (OB_FAIL(ret)) {
+    if (OB_NOT_NULL(base_version_filter_node_)) {
+      base_version_filter_node_->~ObBaseVersionFilterNode();
+      base_version_filter_node_ = nullptr;
+    }
+    if (OB_NOT_NULL(base_version_filter_executor_)) {
+      base_version_filter_executor_->~ObBaseVersionFilterExecutor();
+      base_version_filter_executor_ = nullptr;
+    }
   }
 
   return ret;
@@ -153,18 +163,16 @@ int ObBaseVersionFilter::init_base_version_filter_for_unittest(const int64_t sch
 int ObBaseVersionFilterFactory::build_base_version_filter(
     ObTablet &tablet,
     const common::ObVersionRange &read_version_range,
-    ObMDSFilterMgr &mds_filter_mgr,
+    ObArenaAllocator &filter_allocator,
     ObBaseVersionFilter *&base_version_filter)
 {
   int ret = OB_SUCCESS;
 
-  ObIAllocator *outer_allocator = mds_filter_mgr.get_outer_allocator();
-
-  if (OB_UNLIKELY(nullptr == outer_allocator)) {
+  if (OB_UNLIKELY(!read_version_range.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", KR(ret), K(outer_allocator));
+    LOG_WARN("Invalid argument", KR(ret), K(read_version_range));
   } else if (nullptr == base_version_filter) {
-    if (OB_ISNULL(base_version_filter = OB_NEWx(ObBaseVersionFilter, outer_allocator, mds_filter_mgr))) {
+    if (OB_ISNULL(base_version_filter = OB_NEWx(ObBaseVersionFilter, &filter_allocator, filter_allocator))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("Fail to alloc base version filter", KR(ret));
     } else if (OB_FAIL(base_version_filter->init(tablet, read_version_range))) {
@@ -173,7 +181,6 @@ int ObBaseVersionFilterFactory::build_base_version_filter(
 
     if (OB_FAIL(ret) && nullptr != base_version_filter) {
       base_version_filter->~ObBaseVersionFilter();
-      outer_allocator->free(base_version_filter);
       base_version_filter = nullptr;
     }
 
@@ -187,20 +194,5 @@ int ObBaseVersionFilterFactory::build_base_version_filter(
   return ret;
 }
 
-void ObBaseVersionFilterFactory::destroy_base_version_filter(
-    ObBaseVersionFilter *&base_version_filter)
-{
-  if (nullptr != base_version_filter) {
-    ObIAllocator *outer_allocator = base_version_filter->get_mds_filter_mgr().get_outer_allocator();
-    base_version_filter->~ObBaseVersionFilter();
-    if (OB_NOT_NULL(outer_allocator)) {
-      outer_allocator->free(base_version_filter);
-    } else {
-      int ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("destroy_base_version_filter must used with build_base_version_filter. but outer_allocator is nullptr, which is unexpected", KR(ret), KPC(base_version_filter));
-    }
-    base_version_filter = nullptr;
-  }
-}
 }
 }

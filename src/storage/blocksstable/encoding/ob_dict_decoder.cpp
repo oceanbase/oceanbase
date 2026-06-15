@@ -1491,7 +1491,7 @@ int ObDictDecoder::pushdown_operator(
   UNUSED(row_index);
   int ret = OB_SUCCESS;
   filter_applied = false;
-  const bool enable_rich_format = filter.get_op().enable_rich_format_;
+  const bool enable_rich_format = filter.get_op()->enable_rich_format_;
   if (OB_UNLIKELY(!is_inited())) {
     ret = OB_NOT_INIT;
     LOG_WARN("Dictionary decoder is not inited", K(ret));

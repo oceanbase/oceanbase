@@ -40,6 +40,7 @@ int ObMdsFilterInfo::assign(ObIAllocator &allocator, const ObMdsFilterInfo &mds_
   } else {
     info_ = mds_filter_info.info_;
     mlog_purge_scn_ = mds_filter_info.mlog_purge_scn_;
+    need_freeze_snapshot_ = mds_filter_info.need_freeze_snapshot_;
   }
   return ret;
 }
@@ -50,6 +51,7 @@ void ObMdsFilterInfo::destroy(ObIAllocator &allocator)
   truncate_info_keys_.destroy(allocator);
   ttl_filter_info_keys_.destroy(allocator);
   mlog_purge_scn_ = 0;
+  need_freeze_snapshot_ = 0;
 }
 
 int ObMdsFilterInfo::serialize(char *buf, const int64_t buf_len, int64_t &pos) const // FARM COMPAT WHITELIST
@@ -72,6 +74,9 @@ int ObMdsFilterInfo::serialize(char *buf, const int64_t buf_len, int64_t &pos) c
       } else {
         LST_DO_CODE(OB_UNIS_ENCODE, mlog_purge_scn_);
       }
+    }
+    if (OB_SUCC(ret) && version_ >= MDS_FILTER_INFO_VERSION_V3) {
+      LST_DO_CODE(OB_UNIS_ENCODE, need_freeze_snapshot_);
     }
   }
   return ret;
@@ -99,6 +104,9 @@ int ObMdsFilterInfo::deserialize(
         LST_DO_CODE(OB_UNIS_DECODE, mlog_purge_scn_);
       }
     }
+    if (OB_SUCC(ret) && version_ >= MDS_FILTER_INFO_VERSION_V3) {
+      LST_DO_CODE(OB_UNIS_DECODE, need_freeze_snapshot_);
+    }
   }
   return ret;
 }
@@ -112,6 +120,9 @@ int64_t ObMdsFilterInfo::get_serialize_size() const
     len += ttl_filter_info_keys_.get_serialize_size();
     LST_DO_CODE(OB_UNIS_ADD_LEN, mlog_purge_scn_);
   }
+  if (version_ >= MDS_FILTER_INFO_VERSION_V3) {
+    LST_DO_CODE(OB_UNIS_ADD_LEN, need_freeze_snapshot_);
+  }
   return len;
 }
 
@@ -121,7 +132,9 @@ int ObMdsFilterInfo::init(
     const ObMdsInfoDistinctMgr &mds_info_mgr)
 {
   int ret = OB_SUCCESS;
-  if (tenant_data_version >= ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION) {
+  if (tenant_data_version >= ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION_V2) {
+    version_ = MDS_FILTER_INFO_VERSION_V3;
+  } else if (tenant_data_version >= ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION) {
     version_ = MDS_FILTER_INFO_VERSION_V2;
   } else if (OB_UNLIKELY(!mds_info_mgr.get_ttl_filter_info_distinct_mgr().empty())) {
     ret = OB_ERR_UNEXPECTED;
@@ -150,7 +163,9 @@ int ObMdsFilterInfo::init(
     LOG_WARN("invalid mlog purge scn", KR(ret), K(mlog_purge_scn));
   } else {
     mlog_purge_scn_ = mlog_purge_scn;
-    version_ = MDS_FILTER_INFO_VERSION_V2;
+    version_ = (tenant_data_version >= ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION_V2)
+                 ? MDS_FILTER_INFO_VERSION_V3
+                 : MDS_FILTER_INFO_VERSION_V2;
   }
   return ret;
 }

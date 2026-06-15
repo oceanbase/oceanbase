@@ -14,7 +14,7 @@ namespace storage
 ObSampleFilterExecutor::ObSampleFilterExecutor(
     common::ObIAllocator &alloc,
     ObPushdownSampleFilterNode &filter,
-    sql::ObPushdownOperator &op,
+    sql::ObPushdownOperator *op,
     sql::PushdownExecutorType type)
     : ObPushdownFilterExecutor(alloc, op, type),
       row_num_(0),
@@ -45,7 +45,7 @@ void ObSampleFilterExecutor::reuse()
 ObTrivalSampleFilterExecutor::ObTrivalSampleFilterExecutor(
     common::ObIAllocator &alloc,
     ObPushdownSampleFilterNode &filter,
-    sql::ObPushdownOperator &op)
+    sql::ObPushdownOperator *op)
     : ObSampleFilterExecutor(alloc, filter, op, sql::PushdownExecutorType::TRIVAL_SAMPLE_FILTER_EXECUTOR),
       cut_off_(0)
 {
@@ -152,7 +152,7 @@ OB_INLINE bool ObTrivalSampleFilterExecutor::check_single_row_filtered(const int
 ObHybridSampleFilterExecutor::ObHybridSampleFilterExecutor(
     common::ObIAllocator &alloc,
     ObPushdownSampleFilterNode &filter,
-    sql::ObPushdownOperator &op)
+    sql::ObPushdownOperator *op)
     : ObSampleFilterExecutor(alloc, filter, op, sql::PushdownExecutorType::HYBRID_SAMPLE_FILTER_EXECUTOR),
       boundary_point_(-1),
       pd_row_range_(OB_INVALID_ROW_ID, OB_INVALID_ROW_ID),
@@ -711,11 +711,11 @@ int ObRowSampleFilter::init(
     if (OB_FAIL(filter_factory.alloc(sql::PushdownFilterType::SAMPLE_FILTER, 0, sample_node_))) {
       LOG_WARN("Failed to alloc pushdown sample filter node", K(ret));
     } else if (sample_info.is_trival_sample()) {
-      if (OB_FAIL(filter_factory.alloc(sql::PushdownExecutorType::TRIVAL_SAMPLE_FILTER_EXECUTOR, 0, *sample_node_, sample_filter_, *op))) {
+      if (OB_FAIL(filter_factory.alloc(sql::PushdownExecutorType::TRIVAL_SAMPLE_FILTER_EXECUTOR, 0, *sample_node_, sample_filter_, op))) {
         LOG_WARN("Failed to alloc pushdown sample filter executor", K(ret));
       }
     } else if (sample_info.is_hybrid_sample()) {
-      if (OB_FAIL(filter_factory.alloc(sql::PushdownExecutorType::HYBRID_SAMPLE_FILTER_EXECUTOR, 0, *sample_node_, sample_filter_, *op))) {
+      if (OB_FAIL(filter_factory.alloc(sql::PushdownExecutorType::HYBRID_SAMPLE_FILTER_EXECUTOR, 0, *sample_node_, sample_filter_, op))) {
         LOG_WARN("Failed to alloc pushdown sample filter executor", K(ret));
       }
     }
@@ -742,7 +742,7 @@ int ObRowSampleFilter::combine_to_filter_tree(sql::ObPushdownFilterExecutor *&ro
     sql::ObPushdownFilterFactory filter_factory(allocator_);
     if (nullptr == filter_node_ && OB_FAIL(filter_factory.alloc(sql::PushdownFilterType::AND_FILTER, 2, filter_node_))) {
       LOG_WARN("Failed to alloc pushdown and filter node", K(ret));
-    } else if (nullptr == filter_ && OB_FAIL(filter_factory.alloc(sql::PushdownExecutorType::AND_FILTER_EXECUTOR, 2, *filter_node_, filter_, root_filter->get_op()))) {
+    } else if (nullptr == filter_ && OB_FAIL(filter_factory.alloc<false>(sql::PushdownExecutorType::AND_FILTER_EXECUTOR, 2, *filter_node_, filter_, root_filter->get_op()))) {
       LOG_WARN("Failed to alloc pushdown and filter executor", K(ret));
     } else {
       filter_->set_child(0, sample_filter_);

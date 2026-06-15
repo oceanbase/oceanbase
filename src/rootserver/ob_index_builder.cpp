@@ -2181,29 +2181,15 @@ int ObIndexBuilder::generate_schema(
       }
     }
     if (OB_SUCC(ret)) {
-      if (share::schema::is_vec_index(arg.index_type_) || share::schema::is_fts_index(arg.index_type_)) {
+      if (share::schema::is_vec_index(arg.index_type_) || share::schema::is_fts_index(arg.index_type_) || ObSimpleTableSchemaV2::is_spatial_index(arg.index_type_)) {
         schema.set_merge_engine_type(ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE);
-      } else if (data_schema.is_append_only_merge_engine()) {
-        // index should inherit the append_only merge engine type of the data table
-        schema.set_merge_engine_type(ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY);
-      } else if (data_schema.is_delete_insert_merge_engine()) {
-        if (arg.store_columns_.count() > 0) {
-          FLOG_INFO("index with storing column will not inherit the delete insert merge engine type of the data table",
-              K(arg.index_type_), K(arg.index_table_id_), K(arg.data_table_id_), K(arg.store_columns_), K(arg.hidden_store_columns_));
-        } else {
-          schema.set_merge_engine_type(ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT);
-        }
+      } else {
+        schema.set_merge_engine_type(data_schema.get_merge_engine_type());
       }
     }
     if (OB_FAIL(ret)) {
-    } else if (data_schema.has_ttl_definition()
-      && OB_FAIL(ObCompactionTTLUtil::check_create_index_for_ttl_valid(data_schema, arg.index_type_, schema))) {
-      LOG_WARN("fail to check create index for ttl valid", KR(ret), K(data_schema), K(arg.index_type_));
-    } else if (data_schema.has_ttl_definition()
-      && OB_FAIL(schema.set_ttl_definition(
-          data_schema.get_ttl_definition(),
-          data_schema.get_ttl_flag()))) {
-      LOG_WARN("set ttl definition failed", K(ret), K(data_schema));
+    } else if (data_schema.has_ttl_definition() && OB_FAIL(schema.inherit_ttl_definition(data_schema))) {
+      LOG_WARN("inherit ttl definition failed", K(ret), K(data_schema));
     } else {
       // column information of the global index is filled during the resolve stage
       const bool is_index_local_storage = share::schema::is_index_local_storage(arg.index_type_);
@@ -2282,6 +2268,12 @@ int ObIndexBuilder::generate_schema(
       schema.set_oracle_tmp_table_v2_index_table();
     }
   }
+
+  if (OB_SUCC(ret) && data_schema.has_ttl_definition()
+      && OB_FAIL(ObCompactionTTLUtil::check_create_index_for_ttl_valid(data_schema, arg.index_type_, schema))) {
+    LOG_WARN("fail to check create index for ttl valid", KR(ret), K(data_schema), K(arg.index_type_));
+  }
+
   if (OB_SUCC(ret) && OB_FAIL(ObDDLService::set_dbms_job_exec_env(arg, schema))) {
     LOG_WARN("fail to set dbms_job exec_env", K(ret), K(arg));
   }

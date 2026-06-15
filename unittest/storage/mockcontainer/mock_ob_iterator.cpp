@@ -225,6 +225,8 @@ int ObMockIterator::add_row(blocksstable::ObDatumRow *row)
       STORAGE_LOG(WARN, "failed to malloc datum row", K(ret));
     } else {
       row_clone->row_flag_ = row->row_flag_;
+      row_clone->mvcc_row_flag_ = row->mvcc_row_flag_;
+      row_clone->major_merge_flag_ = row->major_merge_flag_;
       if (row->mvcc_row_flag_.is_uncommitted_row()) { // make all row point to the same trans_id
         row_clone->trans_id_ = row->trans_id_.is_valid() ? row->trans_id_ : trans_id_;
       }
@@ -389,7 +391,7 @@ bool ObMockIterator::inner_equals(const blocksstable::ObDatumRow &r1, const bloc
 }
 
 bool ObMockIterator::equals(const blocksstable::ObDatumRow &r1, const blocksstable::ObDatumRow &r2,
-    const bool cmp_multi_version_row_flag, const bool cmp_is_get_and_scan_index)
+    const bool cmp_multi_version_row_flag, const bool cmp_row_flag, const bool cmp_is_get_and_scan_index)
 {
   int ret = OB_SUCCESS;
   bool bool_ret = false;
@@ -401,6 +403,9 @@ bool ObMockIterator::equals(const blocksstable::ObDatumRow &r1, const blocksstab
     bool_ret = true;
   } else if (cmp_multi_version_row_flag && r1.mvcc_row_flag_.flag_ != r2.mvcc_row_flag_.flag_) {
     STORAGE_LOG(WARN, "row_type_flag not equals", K(r1), K(r2));
+    bool_ret = false;
+  } else if (r1.major_merge_flag_.flag_ != r2.major_merge_flag_.flag_) {
+    STORAGE_LOG(WARN, "major_merge_flag not equals", K(r1), K(r2));
     bool_ret = false;
   } else if (cmp_is_get_and_scan_index
       && (r1.scan_index_ != r2.scan_index_)) {
@@ -567,6 +572,7 @@ ObHashMap<ObString, bool> ObMockIteratorBuilder::str_to_base_;
 ObHashMap<ObString, bool> ObMockIteratorBuilder::str_to_is_get_;
 ObHashMap<ObString, transaction::ObTransID> ObMockIteratorBuilder::str_to_trans_id_;
 ObHashMap<ObString, uint8_t> ObMockIteratorBuilder::str_to_multi_version_row_flag_;
+ObHashMap<ObString, uint8_t> ObMockIteratorBuilder::str_to_major_merge_flag_;
 transaction::ObTransID ObMockIteratorBuilder::trans_id_list_[ObMockIteratorBuilder::TRANS_ID_NUM];
 const char *ObMockIteratorBuilder::STR_NOP = "nop";
 const char *ObMockIteratorBuilder::STR_NULL = "null";
@@ -1249,6 +1255,23 @@ int ObMockIteratorBuilder::parse_obj_multi_version_row_flag(ObIAllocator *alloca
   return ret;
 }
 
+int ObMockIteratorBuilder::parse_datum_major_merge_flag(ObIAllocator *allocator,
+                                                        const ObString &word,
+                                                        blocksstable::ObDatumRow &row,
+                                                        int64_t &idx)
+{
+  UNUSED(allocator);
+  UNUSED(idx);
+  OB_ASSERT(NULL != word.ptr() && 0 <= word.length());
+
+  int ret = OB_SUCCESS;
+  if (OB_SUCCESS != str_to_major_merge_flag_.get_refactored(word, row.major_merge_flag_.flag_)) {
+    STORAGE_LOG(WARN, "failed to parse major merge flag for datum row", K(word));
+    ret = OB_HASH_NOT_EXIST;
+  }
+  return ret;
+}
+
 // init static var
 int ObMockIteratorBuilder::static_init()
 {
@@ -1384,6 +1407,9 @@ int ObMockIteratorBuilder::static_init()
              || OB_SUCCESS != str_to_datum_info_parse_func_.set_refactored(
                  ObString::make_string("multi_version_row_flag"),
                  ObMockIteratorBuilder::parse_datum_multi_version_row_flag)
+             || OB_SUCCESS != str_to_datum_info_parse_func_.set_refactored(
+                 ObString::make_string("major_merge_flag"),
+                 ObMockIteratorBuilder::parse_datum_major_merge_flag)
              || OB_SUCCESS != str_to_datum_info_parse_func_.set_refactored(
                  ObString::make_string("scan_index"),
                  ObMockIteratorBuilder::parse_datum_scan_index)
@@ -1559,6 +1585,15 @@ int ObMockIteratorBuilder::static_init()
       ) {
     ret = OB_INIT_FAIL;
     STORAGE_LOG(WARN, "multi version row flag hashtable insert failed");
+  } else if (ret == OB_SUCCESS
+      && OB_SUCCESS != (ret = str_to_major_merge_flag_.create(
+      cal_next_prime(MAJOR_MERGE_FLAG_NUM * 2), ObModIds::OB_HASH_BUCKET))) {
+    STORAGE_LOG(WARN, "out of memory");
+  } else if (OB_SUCCESS != str_to_major_merge_flag_.set_refactored(ObString::make_string("N"), 0)
+      || OB_SUCCESS != str_to_major_merge_flag_.set_refactored(ObString::make_string("V"), 1)
+      || OB_SUCCESS != str_to_major_merge_flag_.set_refactored(ObString::make_string("E"), 2)) {
+    ret = OB_INIT_FAIL;
+    STORAGE_LOG(WARN, "major merge flag hashtable insert failed");
   } else {
     STORAGE_LOG(DEBUG, "init multi version row flag hashtable");
   }

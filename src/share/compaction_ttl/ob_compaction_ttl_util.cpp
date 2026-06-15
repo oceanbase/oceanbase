@@ -1,5 +1,6 @@
 // Copyright (c) 2025 OceanBase
 // SPDX-License-Identifier: Apache-2.0
+#include "storage/tx/ob_ts_mgr.h"
 #define USING_LOG_PREFIX SHARE
 #include "share/compaction_ttl/ob_compaction_ttl_util.h"
 #include "share/schema/ob_schema_struct.h"
@@ -11,82 +12,27 @@ namespace oceanbase
 using namespace common;
 namespace share
 {
-const uint64_t ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION;
 
-bool ObCompactionTTLUtil::is_enable_compaction_ttl(uint64_t tenant_id)
-{
-  omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-  return tenant_config.is_valid() &&
-         tenant_config->enable_ttl;
-}
-
-// check exist vec index
-int ObCompactionTTLUtil::is_ttl_schema(
-  const ObTableSchema &table_schema,
-  bool &is_ttl_schema)
+/**
+ * @brief This interface only check whether compaction ttl is valid at the specific data version.
+ */
+int ObCompactionTTLUtil::is_compaction_ttl_schema(const uint64_t tenant_data_version,
+                                                  const ObTableSchema &table_schema,
+                                                  bool &is_compaction_ttl)
 {
   int ret = OB_SUCCESS;
-  is_ttl_schema = true;
-  bool is_compaction_ttl = false;
-  const uint64_t tenant_id = table_schema.get_tenant_id();
-  const uint64_t table_id = table_schema.get_table_id();
-  const common::ObIArray<ObAuxTableMetaInfo> &simple_index_infos = table_schema.get_simple_index_infos();
-  for (int64_t i = 0; i < simple_index_infos.count(); ++i) {
-    const ObAuxTableMetaInfo &simple_index_info = simple_index_infos.at(i);
-    if (is_vec_index_for_ttl(simple_index_info.index_type_)) {
-      is_ttl_schema = false;
-      break;
-    }
-  }
-  if (is_ttl_schema && table_schema.is_parent_table()) {
-    is_ttl_schema = false;
-    COMMON_LOG(INFO, "[COMPACTION TTL] has foreign key", K(ret), K(tenant_id), K(table_id),
-      K(table_schema.get_foreign_key_infos()));
-  }
-  return ret;
-}
 
-int ObCompactionTTLUtil::is_compaction_ttl_schema(
-  const uint64_t tenant_data_version,
-  const ObTableSchema &table_schema,
-  bool &is_compaction_ttl)
-{
-  int ret = OB_SUCCESS;
   is_compaction_ttl = false;
 
-  ObSimpleTableTTLChecker ttl_checker;
-  const bool valid_data_version = tenant_data_version >= COMPACTION_TTL_CMP_DATA_VERSION;
-  const uint64_t table_id = table_schema.get_table_id();
-  if (table_schema.get_ttl_flag().ttl_type_ != ObTTLDefinition::COMPACTION && (table_schema.is_aux_lob_table() || table_schema.is_index_table())) {
-    // is_compaction_ttl = false
-  } else if (OB_FAIL(ttl_checker.init(table_schema, table_schema.get_ttl_definition(), true/*in_full_column_order*/))) {
-    COMMON_LOG(WARN, "fail to init ttl checker", KR(ret), K(table_schema));
-  } else if (1 == ttl_checker.get_ttl_definition().count()) { // only one ttl expr
-    const ObTableTTLExpr &ttl_expr = ttl_checker.get_ttl_definition().at(0);
-    if (!table_schema.is_aux_lob_table() && !ObCompactionTTLUtil::is_compaction_ttl_merge_engine(table_schema.get_merge_engine_type())) {
-      COMMON_LOG(INFO, "[COMPACTION TTL] not support merge engine", K(ret), K(table_id),
-        "merge_engine_type", table_schema.get_merge_engine_type());
-    } else if (!ObCompactionTTLUtil::is_rowscn_column(ttl_expr.column_name_)) {
-      COMMON_LOG(INFO, "[COMPACTION TTL] not rowscn column", K(ret), K(table_id), "column_name", ttl_expr.column_name_);
-    } else if (!valid_data_version) {
-      ret = OB_NOT_SUPPORTED;
-      COMMON_LOG(WARN, "[COMPACTION TTL] not support ttl table use rowscn column in old data version", K(ret), K(table_id), K(valid_data_version));
-    } else {
-      // TODO check is generated column in next feature
-      is_compaction_ttl = true;
-      COMMON_LOG(INFO, "[COMPACTION TTL] use compaction TTL", K(ret), K(table_id));
-    }
-    if (OB_FAIL(ret) || is_compaction_ttl) {
-    } else if (table_schema.is_append_only_merge_engine()) {
-      ret = OB_NOT_SUPPORTED;
-      COMMON_LOG(WARN, "append_only merge engine can only have compaction ttl definition", K(ret),
-        K(ttl_checker.get_ttl_definition()), K(table_schema));
-    } else if (ObCompactionTTLUtil::is_rowscn_column(ttl_expr.column_name_)) {
-      ret = OB_NOT_SUPPORTED;
-      COMMON_LOG(WARN, "only compaction-ttl table can use ora_rowscn column", K(ret),
-        K(ttl_checker.get_ttl_definition()), K(table_schema));
-    }
+  const ObTTLFlag &ttl_flag = table_schema.get_ttl_flag();
+
+  if (OB_UNLIKELY(!ttl_flag.is_valid(tenant_data_version))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid ttl flag", KR(ret), K(tenant_data_version), K(table_schema));
+  } else if (ttl_flag.get_ttl_type() == ObTTLDefinition::COMPACTION) {
+    is_compaction_ttl = true;
   }
+
   return ret;
 }
 
@@ -107,37 +53,70 @@ int ObCompactionTTLUtil::check_exist_user_defined_rowscn_column(const ObTableSch
   return ret;
 }
 
-int ObCompactionTTLUtil::check_ttl_column_valid(const ObTableSchema &table_schema,
-                                                const ObString &ttl_definition,
-                                                const ObTTLFlag &ttl_flag,
-                                                const uint64_t tenant_data_version)
+int ObCompactionTTLUtil::check_table_hbase_valid(const uint64_t tenant_id,
+                                                 const ObTTLFlag &ttl_flag,
+                                                 const ObString &kv_attributes)
 {
   int ret = OB_SUCCESS;
 
-  if (!ttl_definition.empty() && ObTTLDefinition::COMPACTION == ttl_flag.ttl_type_) {
+  ObKVAttr kv_attr;
+  if (OB_FAIL(ObTTLUtil::parse_kv_attributes(tenant_id, kv_attributes, kv_attr))) {
+    COMMON_LOG(WARN, "fail to parse kv attributes", KR(ret), K(kv_attributes));
+  } else if (OB_FAIL(check_table_hbase_valid(ttl_flag, kv_attr))) {
+    COMMON_LOG(WARN, "fail to check table hbase valid", KR(ret), K(ttl_flag), K(kv_attr));
+  }
+
+  return ret;
+}
+
+int ObCompactionTTLUtil::check_table_hbase_valid(const ObTTLFlag &ttl_flag,
+                                                 const common::ObKVAttr &new_kv_attr)
+{
+  int ret = OB_SUCCESS;
+
+  if (new_kv_attr.is_kv_hbase_table() && ttl_flag.get_ttl_type() == ObTTLDefinition::COMPACTION) {
+    ret = OB_NOT_SUPPORTED;
+    COMMON_LOG(WARN, "compaction ttl in hbase table is not supported", KR(ret), K(ttl_flag), K(new_kv_attr));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "compaction ttl in hbase table is");
+  }
+
+  return ret;
+}
+
+int ObCompactionTTLUtil::check_ttl_column_valid(const ObTableSchema &table_schema,
+                                                const ObString &ttl_definition,
+                                                const ObTTLFlag &ttl_flag,
+                                                const uint64_t tenant_data_version,
+                                                const uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+
+  if (ObTTLDefinition::COMPACTION == ttl_flag.get_ttl_type()) {
+    bool is_hbase_table = false;
+
     // 1. don't support sql mode ttl table in old data version
     if (tenant_data_version < COMPACTION_TTL_CMP_DATA_VERSION) {
       ret = OB_NOT_SUPPORTED;
       COMMON_LOG(WARN, "sql mode ttl is not supported in old data version", K(ret), K(tenant_data_version));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "sql mode ttl under this version is");
+    } else if (OB_FAIL(table_schema.is_hbase_table(is_hbase_table))) {
+      COMMON_LOG(WARN, "fail to check is hbase table", KR(ret), K(table_schema));
+    } else if (is_hbase_table && OB_FAIL(check_table_hbase_valid(tenant_id, ttl_flag, table_schema.get_kv_attributes()))) {
+      COMMON_LOG(WARN, "fail to check table hbase valid", KR(ret), K(table_schema));
     } else {
       ObSimpleTableTTLChecker ttl_checker;
       if (OB_FAIL(ttl_checker.init(ttl_definition))) {
         COMMON_LOG(WARN, "Fail to parse ttl_definition");
       } else {
         const common::ObIArray<ObTableTTLExpr> &ttl_exprs = ttl_checker.get_ttl_definition();
+        const ObColumnSchemaV2 *column_schema = nullptr;
         int64_t unused = 0;
 
         if (ttl_exprs.count() != 1) {
-          // 2. don't support multi ttl columns in sql mode
+          // 3. don't support multi ttl columns in sql mode
           ret = OB_NOT_SUPPORTED;
           COMMON_LOG(WARN, "multi ttl columns count is not supported", K(ret), K(ttl_definition));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "multi ttl columns count in sql mode is");
-        } else if (!is_rowscn_column(ttl_exprs.at(0).column_name_)) {
-          // 3. now, only support ora_rowscn column in sql mode
-          ret = OB_NOT_SUPPORTED;
-          COMMON_LOG(WARN, "now, only support ora_rowscn column in sql mode", K(ret), K(table_schema));
-          LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-ora_rowscn column is not supported as ttl column in sql mode");
         } else if (!table_schema.is_aux_lob_table() && !ObCompactionTTLUtil::is_compaction_ttl_merge_engine(table_schema.get_merge_engine_type())) {
           // 4. only support delete_insert and append_only merge engine
           //    skip check aux lob table
@@ -150,10 +129,259 @@ int ObCompactionTTLUtil::check_ttl_column_valid(const ObTableSchema &table_schem
         } else if (OB_FAIL(ttl_checker.get_ttl_filter_us(unused))) {
           COMMON_LOG(WARN, "fail to get ttl filter us", KR(ret), K(ttl_definition));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "negative or very large ttl time is");
-        } else {
-          COMMON_LOG(INFO, "ttl column is valid", K(ret), K(ttl_definition), K(unused));
+        } else if (!is_rowscn_column(ttl_exprs.at(0).column_name_)) {
+          if (tenant_data_version < COMPACTION_TTL_CMP_DATA_VERSION_V2) {
+            // 5. 4.5.1 only support ora_rowscn column in sql mode
+            ret = OB_NOT_SUPPORTED;
+            COMMON_LOG(WARN, "now, only support ora_rowscn column in sql mode", K(ret), K(table_schema));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "non-ora_rowscn column as ttl column in sql mode in this version is");
+          } else if (OB_ISNULL(column_schema = table_schema.get_column_schema(ttl_exprs.at(0).column_name_))) {
+            // 6. column must be in table schema
+            ret = OB_TTL_COLUMN_NOT_EXIST;
+            LOG_WARN("column schema is null", K(ret), K(ttl_exprs.at(0).column_name_), K(table_schema));
+            LOG_USER_ERROR(OB_TTL_COLUMN_NOT_EXIST, ttl_exprs.at(0).column_name_.length(), ttl_exprs.at(0).column_name_.ptr());
+          } else if (!(column_schema->get_data_type() == ObDateTimeType
+                       || column_schema->get_data_type() == ObTimestampType
+                       || column_schema->get_data_type() == ObTimestampNanoType
+                       || column_schema->get_data_type() == ObMySQLDateTimeType
+                       || column_schema->get_data_type() == ObMySQLDateType
+                       || column_schema->get_data_type() == ObTimestampTZType
+                       || column_schema->get_data_type() == ObTimestampLTZType
+                       || (is_hbase_table && column_schema->get_data_type() == ObIntType))) {
+            // 8. column must be datetime type
+            ret = OB_TTL_COLUMN_TYPE_NOT_SUPPORTED;
+            LOG_WARN("non-datetime/non-timestamp column is not supported as ttl column", K(ret), K(ttl_exprs.at(0).column_name_), K(table_schema));
+            LOG_USER_ERROR(OB_TTL_COLUMN_TYPE_NOT_SUPPORTED, ttl_exprs.at(0).column_name_.length(), ttl_exprs.at(0).column_name_.ptr());
+          } else if (column_schema->get_data_type() == ObMySQLDateType
+                     && !(ttl_exprs.at(0).time_unit_ == ObTableTTLTimeUnit::DAY
+                          || ttl_exprs.at(0).time_unit_ == ObTableTTLTimeUnit::MONTH
+                          || ttl_exprs.at(0).time_unit_ == ObTableTTLTimeUnit::YEAR)) {
+            // 9. mysql date type only support day, month, year interval
+            ret = OB_NOT_SUPPORTED;
+            COMMON_LOG(WARN, "mysql date type only support day, month, year interval", K(ret), K(ttl_exprs.at(0).column_name_), K(table_schema));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "date type without day, month, year interval is");
+          } else if (table_schema.is_partial_update_merge_engine() && table_schema.is_heap_organized_table()) {
+            // 10. ttl table with partial update merge engine not support heap organized table
+            ret = OB_NOT_SUPPORTED;
+            COMMON_LOG(WARN, "ttl table with partial update merge engine not support heap organized table", K(ret), K(ttl_exprs.at(0).column_name_), K(table_schema));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "ttl table with partial update merge engine and heap organized table is");
+          } else if (table_schema.is_partial_update_merge_engine() && !column_schema->is_rowkey_column()) {
+            // 11. partial update merge engine only support rowkey column ttl
+            // TODO(menglan): we disable normal column ttl for partial update merge engine because of the primary key conflict check path.
+            //                we should implement fuse logic in this path to support that.
+            ret = OB_NOT_SUPPORTED;
+            COMMON_LOG(WARN, "partial update merge engine only support rowkey column ttl", K(ret), K(ttl_exprs.at(0).column_name_), K(table_schema));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "partial update merge engine with non-rowkey column ttl is");
+          }
         }
       }
+    }
+  }
+
+  return ret;
+}
+
+int ObCompactionTTLUtil::extract_ttl_column_from_schema(const schema::ObTableSchema &table_schema,
+                                                        schema::ObColumnSchemaV2 &ttl_column,
+                                                        const bool for_aux_lob)
+{
+  int ret = OB_SUCCESS;
+
+  if (table_schema.get_ttl_flag().is_user_ttl_column()) {
+    const schema::ObColumnSchemaV2 *src_col = table_schema.get_column_schema(table_schema.get_ttl_flag().get_curr_user_ttl_column_id());
+    if (OB_ISNULL(src_col)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Fail to get ttl column, schema is not consistent", K(ret), K(table_schema));
+    } else if (OB_FAIL(ttl_column.assign(*src_col))) {
+      LOG_WARN("Fail to assign ttl column schema", K(ret), K(src_col));
+    } else if (for_aux_lob) {
+      // For aux lob table, we need reset some fields
+      ObObj default_obj;
+      default_obj.set_null();
+
+      // Maybe more clear than if-else-OB_FAIL
+      OZ(ttl_column.set_column_name(OB_LOB_META_TTL_COLUMN_NAME));
+      OZ(ttl_column.set_orig_default_value_v2(default_obj));
+      OZ(ttl_column.set_cur_default_value_v2(default_obj));
+
+      OX(ttl_column.set_column_id(OB_LOB_META_TTL_COLUMN_ID));
+      OX(ttl_column.set_nullable(true));
+      OX(ttl_column.set_rowkey_position(0));
+      OX(ttl_column.set_index_position(0));
+      OX(ttl_column.set_not_part_key());
+      OX(ttl_column.set_autoincrement(false));
+      OX(ttl_column.set_has_used_as_ttl(true));
+    }
+  }
+
+  return ret;
+}
+
+int ObCompactionTTLUtil::create_mock_ttl_column_for_aux_lob(const common::ObObjType obj_type,
+                                                            schema::ObColumnSchemaV2 &ttl_column)
+{
+  int ret = OB_SUCCESS;
+
+  ObObj default_obj;
+  default_obj.set_null();
+
+  OZ(ttl_column.set_column_name(OB_LOB_META_TTL_COLUMN_NAME));
+  OZ(ttl_column.set_orig_default_value_v2(default_obj));
+  OZ(ttl_column.set_cur_default_value_v2(default_obj));
+
+  OX(ttl_column.set_column_id(OB_LOB_META_TTL_COLUMN_ID));
+  OX(ttl_column.set_data_type(obj_type));
+  OX(ttl_column.set_nullable(true));
+  OX(ttl_column.set_rowkey_position(0));
+  OX(ttl_column.set_index_position(0));
+  OX(ttl_column.set_not_part_key());
+  OX(ttl_column.set_autoincrement(false));
+  OX(ttl_column.set_has_used_as_ttl(true));
+
+  return ret;
+}
+
+int ObCompactionTTLUtil::build_aux_lob_table_schema(const schema::ObTableSchema &data_table_schema, schema::ObTableSchema &aux_lob_meta_schema)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(ObInnerTableSchema::all_column_aux_lob_meta_schema(aux_lob_meta_schema))) {
+    LOG_WARN("Fail to get all column aux lob meta schema", K(ret), K(data_table_schema));
+  } else if (data_table_schema.get_ttl_flag().is_user_ttl_column()) {
+    // Compaction TTL Table, should add ttl column to aux lob meta schema
+    schema::ObColumnSchemaV2 dst_col;
+    if (OB_FAIL(extract_ttl_column_from_schema(data_table_schema, dst_col))) {
+      LOG_WARN("Fail to extract ttl column from schema", K(ret), K(data_table_schema));
+    } else if (OB_FAIL(aux_lob_meta_schema.add_column(dst_col))) {
+      LOG_WARN("Fail to add ttl column to aux lob meta schema", K(ret), K(dst_col));
+    } else {
+      aux_lob_meta_schema.set_max_used_column_id(dst_col.get_column_id());
+    }
+  }
+
+  return ret;
+}
+
+int ObCompactionTTLUtil::build_aux_lob_table_schema(const ObTTLFilterColType ttl_type,
+                                                    schema::ObTableSchema &aux_lob_meta_schema)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(ObInnerTableSchema::all_column_aux_lob_meta_schema(aux_lob_meta_schema))) {
+    LOG_WARN("Fail to get all column aux lob meta schema", K(ret));
+  } else if (ObTTLFilterColTypeUtil::has_ttl_column_in_lob_meta(ttl_type)) {
+    schema::ObColumnSchemaV2 ttl_col;
+    common::ObObjType ttl_column_obj_type = common::ObMaxType;
+    if (OB_FAIL(ObTTLFilterColTypeUtil::to_obj_type(ttl_type, ttl_column_obj_type))) {
+      LOG_WARN("Fail to convert ttl type to obj type", K(ret), K(ttl_type));
+    } else if (OB_FAIL(create_mock_ttl_column_for_aux_lob(ttl_column_obj_type, ttl_col))) {
+      LOG_WARN("Fail to create mock ttl column for aux lob", K(ret), K(ttl_column_obj_type));
+    } else if (OB_FAIL(aux_lob_meta_schema.add_column(ttl_col))) {
+      LOG_WARN("Fail to add ttl column to aux lob meta schema", K(ret), K(ttl_col));
+    } else {
+      aux_lob_meta_schema.set_max_used_column_id(ttl_col.get_column_id());
+    }
+  }
+
+  return ret;
+}
+
+int ObCompactionTTLUtil::adjust_ttl_flag_for_offline(ObTableSchema &new_table_schema, hash::ObHashMap<uint64_t, uint64_t> &id_map)
+{
+  int ret = OB_SUCCESS;
+
+  if (new_table_schema.get_ttl_flag().version_ >= ObTTLFlag::TTL_FLAG_VERSION_V3) { // which means >= 4.6.1
+    uint64_t *new_user_ttl_column_id = id_map.get(new_table_schema.get_ttl_flag().get_last_user_ttl_column_id());
+
+    if (new_user_ttl_column_id == nullptr) {
+      // This situation means user drop the ttl column.
+      new_table_schema.get_ttl_flag().clear_user_ttl_column_id();
+    } else {
+      new_table_schema.get_ttl_flag().update_user_ttl_column_id(*new_user_ttl_column_id);
+    }
+  }
+
+  return ret;
+}
+
+
+int ObCompactionTTLUtil::update_being_compaction_ttl_time(ObTableSchema &new_table_schema)
+{
+  int ret = OB_SUCCESS;
+
+  ObTimeoutCtx ctx;
+  share::SCN upper_version;
+  uint64_t tenant_id = new_table_schema.get_tenant_id();
+  uint64_t timestamp_us = 0;
+  bool is_external_consistent = false;
+  if (OB_UNLIKELY(common::OB_INVALID_ID == tenant_id)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", KR(ret), K(tenant_id));
+  } else if (OB_FAIL(ObShareUtil::set_default_timeout_ctx(ctx, GCONF.rpc_timeout))) {
+    LOG_WARN("fail to set timeout ctx", KR(ret));
+  } else if (OB_FAIL(OB_TS_MGR.get_ts_sync(tenant_id,
+                                           ctx.get_timeout(),
+                                           upper_version,
+                                           is_external_consistent))) {
+    LOG_WARN("fail to get gts sync", KR(ret), K(tenant_id), K(ctx.get_timeout()), K(upper_version));
+  } else if (FALSE_IT(timestamp_us = upper_version.convert_to_ts())) {
+  } else if (OB_UNLIKELY(timestamp_us <= 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid timestamp", KR(ret), K(timestamp_us), K(upper_version));
+  } else {
+    new_table_schema.update_being_compaction_ttl_time(timestamp_us);
+  }
+
+  return ret;
+}
+
+bool ObCompactionTTLUtil::check_change_to_compaction_ttl_table(
+    const AlterTableSchema &alter_table_schema,
+    const ObTableSchema &orig_table_schema)
+{
+  // If a table is transformed to a ora_rowscn ttl table,
+  // we should lock the table to make sure all DML before this ddl to be committed, and all DML
+  // after this ddl should use this new schema. DML that use the new shcema will update all aux
+  // tables even if the index table is not affected by the DML itself. For example, main table: pk1,
+  // c1, c2
+  //             index table: c1, pk1
+  // `update c2 = 2 if pk = 1` won't change the index table, but it actually changes the ora_rowscn
+  // column value. Becuase TTL table depends on the ora_rowscn value, we must update all aux table
+  // together. Therefore, all DML after this ddl should use this new schema.
+  return alter_table_schema.alter_option_bitset_.has_member(obrpc::ObAlterTableArg::TTL_DEFINITION)
+         && alter_table_schema.get_ttl_flag().ttl_type_ == share::ObTTLDefinition::COMPACTION
+         && orig_table_schema.get_ttl_flag().ttl_type_ != share::ObTTLDefinition::COMPACTION;
+}
+
+int ObCompactionTTLUtil::adjust_ttl_related_field_for_offline(const uint64_t tenant_data_version,
+                                                              ObTableSchema &new_table_schema)
+{
+  int ret = OB_SUCCESS;
+
+  if (tenant_data_version >= ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION_V2) {
+    bool is_compaction_ttl = new_table_schema.get_ttl_flag().get_ttl_type() == ObTTLDefinition::COMPACTION;
+    uint64_t current_user_ttl_column_id = new_table_schema.get_ttl_flag().get_curr_user_ttl_column_id();
+
+    ObTableSchema::const_column_iterator tmp_begin = new_table_schema.column_begin();
+    ObTableSchema::const_column_iterator tmp_end = new_table_schema.column_end();
+    for (; OB_SUCC(ret) && tmp_begin != tmp_end; tmp_begin++) {
+      ObColumnSchemaV2 *col = (*tmp_begin);
+      if (OB_ISNULL(col)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get column schema failed", K(ret));
+      } else if (is_compaction_ttl && col->get_column_id() == current_user_ttl_column_id) {
+        // 1. If new table schema is compaction ttl, we should clear all has_used_ttl_flag except the current ttl column
+        // 2. If new table schema isn't compaction ttl, we should clear all has_used_ttl_flag and reset ttl_flag
+      } else {
+        col->set_has_used_as_ttl(false);
+      }
+    }
+
+    if (!is_compaction_ttl) {
+      // Offline path remove compaction ttl, we can safely clear compaction ttl information
+      new_table_schema.get_ttl_flag().reset_compaction_ttl();
+    } else {
+      // Don't need to adjust ttl_flag now. If column id has changed, we will adjust it in adjust_ttl_flag_for_offline
     }
   }
 

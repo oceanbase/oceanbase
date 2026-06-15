@@ -1979,13 +1979,13 @@ int ObMicroBlockDecoder::filter_pushdown_single_column_mds_filter(
                   !filter.is_mds_node())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid argument", K(ret), K(row_count_), K(pd_filter_info.start_), K(pd_filter_info.count_));
-  } else if (OB_ISNULL(mds_executor = ObIMDSFilterExecutor::cast(&filter)) || OB_UNLIKELY(mds_executor->get_col_idx() < 0)) {
+  } else if (OB_ISNULL(mds_executor = ObIMDSFilterExecutor::cast(&filter)) || OB_UNLIKELY(mds_executor->get_col_offset(pd_filter_info.is_pd_to_cg_) < 0)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected mds executor", K(ret), K(filter));
   } else {
     sql::ObWhitePushdownFilterDecoderGuard white_filter_guard(static_cast<sql::ObWhiteFilterExecutor *>(&filter), ret);
     ObColumnDecoder *column_decoder = nullptr;
-    int64_t col_offset = mds_executor->get_col_idx();
+    int64_t col_offset = mds_executor->get_col_offset(pd_filter_info.is_pd_to_cg_);
 
     if (OB_FAIL(white_filter_guard.get_ret())) {
       LOG_WARN("Failed to reverse filter if rowscn", K(ret), K(filter));
@@ -2024,7 +2024,7 @@ int ObMicroBlockDecoder::filter_pushdown_single_column_mds_filter(
   // TODO(menglan): very slow path for white filter pushdown, should repair
   if (OB_SUCC(ret) && !filter_applied) {
     ObStorageDatum datum[1];
-    const bool is_trans_version_column = micro_header_->is_trans_version_column_idx(mds_executor->get_col_idx());
+    const bool is_trans_version_column = read_info_->get_trans_col_index() == mds_executor->get_col_offset(pd_filter_info.is_pd_to_cg_);
     for (int64_t offset = 0; OB_SUCC(ret) && offset < pd_filter_info.count_; ++offset) {
       int64_t row_idx = offset + pd_filter_info.start_;
       bool filtered = false;
@@ -2037,7 +2037,7 @@ int ObMicroBlockDecoder::filter_pushdown_single_column_mds_filter(
         } else {
           ObBitStream bs(reinterpret_cast<unsigned char *>(const_cast<char *>(row_data)), row_len);
           datum[0].reuse();
-          if (OB_FAIL(decoders_[mds_executor->get_col_idx()].decode( datum[0], row_idx, bs, row_data, row_len))) {
+          if (OB_FAIL(decoders_[mds_executor->get_col_offset(pd_filter_info.is_pd_to_cg_)].decode(datum[0], row_idx, bs, row_data, row_len))) {
             LOG_WARN("decode cell failed", K(ret), K(row_idx), K(datum[0]));
           } else if (OB_UNLIKELY(is_trans_version_column) && OB_FAIL(storage::reverse_trans_version_val(datum[0]))) {
             LOG_WARN("Failed to reverse trans version val", K(ret));

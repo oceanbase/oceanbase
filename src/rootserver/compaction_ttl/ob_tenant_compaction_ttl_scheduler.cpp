@@ -104,8 +104,7 @@ int ObTenantCompactionTTLScheduler::check_is_ttl_table(
   if (!table_schema.is_user_table()) {
   } else if (OB_FAIL(ObTTLUtil::check_is_normal_ttl_table(table_schema, is_ttl_table, false/*check_recyclebin*/))) {
     LOG_ERROR("fail to check is ttl table", KR(ret), K(table_schema.get_table_name()));
-  } else if (is_ttl_table && OB_FAIL(ObCompactionTTLUtil::is_compaction_ttl_schema(
-      tenant_data_version, table_schema, is_ttl_table))) {
+  } else if (is_ttl_table && OB_FAIL(ObCompactionTTLUtil::is_compaction_ttl_schema(tenant_data_version, table_schema, is_ttl_table))) {
     LOG_WARN("fail to check is compaction ttl table", KR(ret), K(table_schema.get_table_name()));
   } else if (is_ttl_table) {
     if (OB_UNLIKELY(table_schema.get_ttl_flag().ttl_type_ != ObTTLDefinition::COMPACTION)) {
@@ -163,7 +162,7 @@ int ObTenantCompactionTTLScheduler::check_all_table_finished(bool &all_finished)
         // skip this error table to prevent one table from causing TTL unavailability.
         ret = OB_SUCCESS; // ignore error
       } else if (is_compaction_ttl_table) {
-       if (OB_FAIL(deal_with_compaction_ttl_table(*table_schema, all_finished))) {
+        if (OB_FAIL(deal_with_compaction_ttl_table(*table_schema, all_finished))) {
           LOG_WARN("fail to deal with compaction ttl table", KR(ret), K(table_id));
         }
       }

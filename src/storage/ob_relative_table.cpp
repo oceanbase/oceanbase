@@ -710,10 +710,9 @@ int ObRelativeTable::prepare_mds_filter(common::ObIAllocator &allocator,
       } else if (OB_FAIL(ObMDSFilterMgrFactory::build_mds_filter_mgr(
                      *tablet,
                      tablet_iter_.get_split_extra_tablet_handles_ptr(),
-                     read_info.get_columns_desc(),
-                     read_info.get_columns(),
+                     &read_info,
                      read_version_range,
-                     &allocator,
+                     allocator,
                      mds_filter_mgr_,
                      mds_filter_flags))) {
         LOG_WARN("failed to build mds filter mgr", K(ret), K(mds_filter_flags));

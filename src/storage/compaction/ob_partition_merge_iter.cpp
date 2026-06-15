@@ -124,7 +124,7 @@ const blocksstable::ObDatumRow *ObDefaultRowIter::get_curr_row() const
 /*
  *ObPartitionMergeIter
  */
-ObPartitionMergeIter::ObPartitionMergeIter(common::ObIAllocator &allocator)
+ObPartitionMergeIter::ObPartitionMergeIter(ObIAllocator &allocator)
   : tablet_id_(),
     read_info_(nullptr),
     schema_rowkey_column_cnt_(0),
@@ -227,6 +227,12 @@ int ObPartitionMergeIter::init_query_base_params(const ObMergeParameter &merge_p
       if (access_context_.merge_scn_ != static_param.scn_range_.end_scn_) {
         STORAGE_LOG(TRACE, "end scn is not same with merge scn", K(access_context_.merge_scn_), K(static_param.scn_range_));
       }
+      // Use default_row from merge_param (built once per merge task in ObMergeParameter::init)
+      if (is_major_or_meta_merge_type(static_param.get_merge_type())
+          && static_param.ttl_major_for_partial_update_upper_snapshot_ > 0) {
+        access_context_.ttl_major_for_partial_update_upper_snapshot_ = static_param.ttl_major_for_partial_update_upper_snapshot_;
+      }
+      LOG_INFO("init query base params", K(access_context_.ttl_major_for_partial_update_upper_snapshot_));
     }
   }
   return ret;
@@ -558,7 +564,7 @@ int ObPartitionRowMergeIter::next()
 /*
  *ObPartitionMacroMergeIter
  */
-ObPartitionMacroMergeIter::ObPartitionMacroMergeIter(common::ObIAllocator &allocator)
+ObPartitionMacroMergeIter::ObPartitionMacroMergeIter(ObIAllocator &allocator)
   : ObPartitionMergeIter(allocator),
     macro_block_iter_(nullptr),
     curr_block_desc_(),
@@ -912,7 +918,7 @@ int ObPartitionMacroMergeIter::check_row_changed(const blocksstable::ObDatumRow 
 /*
  *ObPartitionMicroMergeIter
  */
-ObPartitionMicroMergeIter::ObPartitionMicroMergeIter(common::ObIAllocator &allocator)
+ObPartitionMicroMergeIter::ObPartitionMicroMergeIter(ObIAllocator &allocator)
   : ObPartitionMacroMergeIter(allocator),
     micro_block_iter_(),
     micro_row_scanner_(nullptr),
@@ -1455,12 +1461,12 @@ ObPartitionMinorRowMergeIter::ObPartitionMinorRowMergeIter(
   common::ObIAllocator &allocator,
   ObCompactionFilterHandle &filter_handle)
   : ObPartitionMergeIter(allocator),
+    filter_handle_(filter_handle),
     obj_copy_allocator_("MinorMergeObj", OB_MALLOC_MIDDLE_BLOCK_SIZE, MTL_ID(), ObCtxIds::MERGE_NORMAL_CTX_ID),
     nop_pos_(),
     row_queue_(),
     ghost_row_count_(0),
-    tmp_compaction_row_(),
-    filter_handle_(filter_handle)
+    tmp_compaction_row_()
 {
   for (int i = 0; i < ObRowQueue::QI_MAX; ++i) {
     nop_pos_[i] = nullptr;
@@ -2450,7 +2456,7 @@ ObPartitionMVRowMergeIter::ObMVSqlResource::~ObMVSqlResource()
 /*
  * ObPartitionRowMergeIter used for mv major merge
  */
-ObPartitionMVRowMergeIter::ObPartitionMVRowMergeIter(common::ObIAllocator &allocator)
+ObPartitionMVRowMergeIter::ObPartitionMVRowMergeIter(ObIAllocator &allocator)
   : ObPartitionMergeIter(allocator),
     is_delete_(false),
     is_replace_(false),

@@ -8,7 +8,6 @@
 
 #include "lib/container/ob_iarray.h"
 #include "share/schema/ob_table_schema.h"
-#include "storage/ob_storage_schema.h"
 #include "storage/ob_i_table.h"
 #include "storage/blocksstable/index_block/ob_sstable_meta_info.h"
 #include "share/scn.h"
@@ -16,6 +15,7 @@
 #include "storage/blocksstable/ob_table_flag.h"
 #include "storage/blocksstable/ob_column_checksum_struct.h"
 #include "storage/compaction/ob_uncommit_tx_info.h"
+#include "storage/blocksstable/ob_sstable_skip_index.h"
 namespace oceanbase
 {
 namespace storage
@@ -298,6 +298,10 @@ public:
   OB_INLINE const ObSSTableMacroInfo &get_macro_info() const { return macro_info_; }
   OB_INLINE const ObTableBackupFlag &get_table_backup_flag() const { return basic_meta_.table_backup_flag_; }
   OB_INLINE const ObTableSharedFlag &get_table_shared_flag() const { return basic_meta_.table_shared_flag_; }
+  // SSTable level skip index row
+  OB_INLINE const char* get_sstable_skip_index_buf() const { return skip_index_.get_buf(); }
+  OB_INLINE int64_t get_sstable_skip_index_size() const { return skip_index_.get_size(); }
+  OB_INLINE bool has_sstable_skip_index() const { return skip_index_.has_data(); }
   int load_root_block_data(common::ObArenaAllocator &allocator); //TODO:@jinzhu remove me after using kv cache.
   inline int transform_root_block_extra_buf(common::ObArenaAllocator &allocator)
   {
@@ -355,6 +359,8 @@ private:
   ObColumnCkmStruct column_ckm_struct_;
   ObTxContext tx_ctx_;  // abandon meta !!!
   compaction::ObMetaUncommitTxInfo uncommit_tx_info_;
+  // SSTable level skip index row (aggregated from all macro blocks)
+  ObSSTableMetaSkipIndex skip_index_;
   // The following fields don't to persist
   bool is_inited_;
   DISALLOW_COPY_AND_ASSIGN(ObSSTableMeta);

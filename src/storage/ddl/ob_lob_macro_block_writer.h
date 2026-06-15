@@ -36,7 +36,7 @@ public:
   int init(const ObWriteMacroParam &param,
            const ObTabletID &data_tablet_id,
            const blocksstable::ObMacroDataSeq &start_sequence);
-  int write(const ObColumnSchemaItem &column_schema, ObIAllocator &row_allocator, blocksstable::ObStorageDatum &datum);
+  int write(const ObColumnSchemaItem &column_schema, ObIAllocator &row_allocator, blocksstable::ObStorageDatum &datum, const blocksstable::ObStorageDatum *ttl_datum);
   int close();
   TO_STRING_KV(K(is_inited_), K(lob_meta_tablet_id_), K(slice_idx_), K(macro_seq_),
       K(lob_id_cache_), K(lob_column_count_), K(lob_id_generator_), K(lob_meta_row_), KP(macro_block_writer_));

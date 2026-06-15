@@ -89,7 +89,7 @@ private:
   int generate_index_arg(const bool process_heap_table_primary_key);
   int set_index_name();
   int set_index_option_to_arg();
-  int set_storing_column();
+  int set_storing_column(const bool process_heap_table_primary_key);
   int resolve_index(const ParseNode *node, common::ObArray<int> &index_node_position_list);
   int resolve_index_node(const ParseNode *node);
   int resolve_index_name(

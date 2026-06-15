@@ -4,10 +4,12 @@
 
 #include "storage/compaction/filter/ob_rowscn_filter.h"
 #include "storage/blocksstable/ob_block_sstable_struct.h"
-
+#include "storage/blocksstable/index_block/ob_agg_row_struct.h"
+#include "storage/ob_trans_version_skip_index_util.h"
 namespace oceanbase
 {
 using namespace blocksstable;
+using namespace storage;
 namespace compaction
 {
 
@@ -60,28 +62,28 @@ int ObRowscnFilter::filter(
 }
 
 int ObRowscnFilter::get_filter_op(
-  const int64_t min_merged_snapshot,
-  const int64_t max_merged_snapshot,
+  ObAggRowCachedReader &agg_row_cached_reader,
   ObBlockOp &op) const
 {
   int ret = OB_SUCCESS;
   op.set_none();
-  const bool is_compat_min_version = 0 == min_merged_snapshot;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not inited", KR(ret));
-  } else if (OB_UNLIKELY(!is_compat_min_version && min_merged_snapshot > max_merged_snapshot)) {
+  } else if (OB_UNLIKELY(!agg_row_cached_reader.is_inited())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(min_merged_snapshot), K(max_merged_snapshot));
-  } else if (max_merged_snapshot <= filter_val_) {
-    op.set_filter();
-  } else if (is_compat_min_version || filter_val_ >= min_merged_snapshot) {
-    op.set_open();
-  }
-  if (OB_UNLIKELY(is_compat_min_version && op.is_none())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("can't reuse block when min version is compat", KR(ret), K(min_merged_snapshot),
-      K(max_merged_snapshot), K(op));
+    LOG_WARN("invalid argument", KR(ret), K(agg_row_cached_reader));
+  } else {
+    ObTransVersionSkipIndexInfo skip_index_info;
+    if (OB_FAIL(ObTransVersionSkipIndexReader::read_min_max_snapshot(
+        filter_col_idx_, agg_row_cached_reader, skip_index_info))) {
+      LOG_WARN("failed to read min max snapshot", KR(ret), K(agg_row_cached_reader));
+    } else if (skip_index_info.max_snapshot_ <= filter_val_) {
+      op.set_filter();
+    } else if (filter_val_ >= skip_index_info.min_snapshot_) {
+      op.set_open();
+    }
+
   }
   return ret;
 }

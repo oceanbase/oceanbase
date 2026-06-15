@@ -79,7 +79,7 @@ int ObDirectLoadLobMetaRowIter::init(const ObDirectLoadLobMetaIterParam &param,
       param_ = param;
       origin_table_ = &origin_table;
       // set parent params
-      column_count_ = ObLobMetaUtil::LOB_META_COLUMN_CNT;
+      column_count_ = param.col_descs_->count();
       is_inited_ = true;
     }
   }

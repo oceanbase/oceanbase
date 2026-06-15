@@ -1358,6 +1358,329 @@ TEST_F(TestIndexBlockAggregator, test_inv_idx_agg)
   ASSERT_EQ(data_agg_row->agg_row_.storage_datums_[doc_len_idx].get_int(), 100);
 }
 
+// Test SSTable level skip index aggregation (simulating aggregation from multiple macro blocks)
+TEST_F(TestIndexBlockAggregator, test_sstable_level_skip_index_aggregate)
+{
+  const int64_t test_column_cnt = 10;
+  const int64_t macro_block_cnt = 10;  // Simulate 10 macro blocks
+  const int64_t rows_per_macro = 100;  // 100 rows per macro block
+  const int64_t extra_rowkey_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+
+  // Test with various data types (only those that support skip index aggregation)
+  ObObjType col_obj_types[test_column_cnt] = {
+    ObIntType,      // rowkey
+    ObIntType,
+    ObInt32Type,
+    ObSmallIntType,
+    ObUInt64Type,
+    ObFloatType,
+    ObDoubleType,
+    ObDateTimeType,
+    ObVarcharType,
+    ObCharType
+  };
+
+  int64_t min_max_agg_col_idxs[test_column_cnt];
+  for (int64_t i = 0; i < test_column_cnt; ++i) {
+    const int64_t agg_col_idx = i < 1 ? i : i + extra_rowkey_cnt;  // rowkey_count = 1
+    min_max_agg_col_idxs[i] = agg_col_idx;
+  }
+  init_schema(test_column_cnt, 1, col_obj_types);
+  init_min_max_meta(test_column_cnt, min_max_agg_col_idxs);
+
+  const bool is_major = true;
+
+  // Create SSTable level aggregator (simulates aggregation from multiple macro blocks)
+  ObSkipIndexIndexAggregator sstable_aggregator;
+  ASSERT_EQ(OB_SUCCESS, sstable_aggregator.init(is_major, full_agg_metas_, col_descs_, data_version_, allocator_));
+
+  reset_min_max_row();
+  ObDatumRow generate_row;
+  ASSERT_EQ(OB_SUCCESS, generate_row.init(full_column_count_));
+
+  // Simulate multiple macro blocks
+  for (int64_t macro_idx = 0; macro_idx < macro_block_cnt; ++macro_idx) {
+    // Create a per-macro-block aggregator
+    ObSkipIndexDataAggregator macro_data_aggregator;
+    ASSERT_EQ(OB_SUCCESS, macro_data_aggregator.init(is_major, full_agg_metas_, col_descs_, data_version_, allocator_));
+
+    // Aggregate rows within this macro block
+    for (int64_t row_idx = 0; row_idx < rows_per_macro; ++row_idx) {
+      const int64_t seed = macro_idx * rows_per_macro + row_idx + 1;
+      generate_row_by_seed(seed, generate_row);
+      ASSERT_EQ(OB_SUCCESS, macro_data_aggregator.eval(generate_row));
+      update_min_max_row(generate_row);
+    }
+
+    // Get macro block's aggregated result
+    const ObSkipIndexAggResult *macro_agg_row = nullptr;
+    ASSERT_EQ(OB_SUCCESS, macro_data_aggregator.get_aggregated_row(macro_agg_row));
+    ASSERT_TRUE(nullptr != macro_agg_row);
+
+    // Serialize macro block's agg result (simulating what's stored in macro block meta)
+    const char *serialized_buf = nullptr;
+    int64_t serialized_size = 0;
+    serialize_agg_row(*macro_agg_row, serialized_buf, serialized_size);
+    ASSERT_TRUE(nullptr != serialized_buf);
+    ASSERT_TRUE(serialized_size > 0);
+
+    // Feed serialized agg row to SSTable level aggregator
+    ASSERT_EQ(OB_SUCCESS, sstable_aggregator.ObISkipIndexAggregator::eval(
+        serialized_buf, serialized_size, rows_per_macro));
+  }
+
+  // Get SSTable level aggregated result
+  const ObSkipIndexAggResult *sstable_agg_row = nullptr;
+  ASSERT_EQ(OB_SUCCESS, sstable_aggregator.get_aggregated_row(sstable_agg_row));
+  ASSERT_TRUE(nullptr != sstable_agg_row);
+
+  // Validate SSTable level aggregation result
+  validate_agg_row(*sstable_agg_row, is_major);
+
+  LOG_INFO("SSTable level skip index aggregation test passed",
+      K(macro_block_cnt), K(rows_per_macro), K(test_column_cnt));
+}
+
+// Test SSTable level skip index aggregation with large data
+TEST_F(TestIndexBlockAggregator, test_sstable_level_skip_index_aggregate_large_data)
+{
+  const int64_t test_column_cnt = 8;
+  const int64_t macro_block_cnt = 100;   // 100 macro blocks
+  const int64_t rows_per_macro = 1000;   // 1000 rows per macro block (total 100K rows)
+  const int64_t extra_rowkey_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+
+  ObObjType col_obj_types[test_column_cnt] = {
+    ObIntType,      // rowkey
+    ObIntType,
+    ObInt32Type,
+    ObDoubleType,
+    ObVarcharType,
+    ObDateTimeType,
+    ObNumberType,
+    ObUInt64Type
+  };
+
+  int64_t min_max_agg_col_idxs[test_column_cnt];
+  for (int64_t i = 0; i < test_column_cnt; ++i) {
+    const int64_t agg_col_idx = i < 1 ? i : i + extra_rowkey_cnt;
+    min_max_agg_col_idxs[i] = agg_col_idx;
+  }
+  init_schema(test_column_cnt, 1, col_obj_types);
+  init_min_max_meta(test_column_cnt, min_max_agg_col_idxs);
+
+  const bool is_major = true;
+
+  ObSkipIndexIndexAggregator sstable_aggregator;
+  ASSERT_EQ(OB_SUCCESS, sstable_aggregator.init(is_major, full_agg_metas_, col_descs_, data_version_, allocator_));
+
+  reset_min_max_row();
+  ObDatumRow generate_row;
+  ASSERT_EQ(OB_SUCCESS, generate_row.init(full_column_count_));
+
+  int64_t total_rows = 0;
+  for (int64_t macro_idx = 0; macro_idx < macro_block_cnt; ++macro_idx) {
+    ObSkipIndexDataAggregator macro_data_aggregator;
+    ASSERT_EQ(OB_SUCCESS, macro_data_aggregator.init(is_major, full_agg_metas_, col_descs_, data_version_, allocator_));
+
+    for (int64_t row_idx = 0; row_idx < rows_per_macro; ++row_idx) {
+      const int64_t seed = macro_idx * rows_per_macro + row_idx + 1;
+      generate_row_by_seed(seed, generate_row);
+      ASSERT_EQ(OB_SUCCESS, macro_data_aggregator.eval(generate_row));
+      update_min_max_row(generate_row);
+      total_rows++;
+    }
+
+    const ObSkipIndexAggResult *macro_agg_row = nullptr;
+    ASSERT_EQ(OB_SUCCESS, macro_data_aggregator.get_aggregated_row(macro_agg_row));
+    ASSERT_TRUE(nullptr != macro_agg_row);
+
+    const char *serialized_buf = nullptr;
+    int64_t serialized_size = 0;
+    serialize_agg_row(*macro_agg_row, serialized_buf, serialized_size);
+    ASSERT_TRUE(nullptr != serialized_buf);
+
+    ASSERT_EQ(OB_SUCCESS, sstable_aggregator.ObISkipIndexAggregator::eval(
+        serialized_buf, serialized_size, rows_per_macro));
+  }
+
+  const ObSkipIndexAggResult *sstable_agg_row = nullptr;
+  ASSERT_EQ(OB_SUCCESS, sstable_aggregator.get_aggregated_row(sstable_agg_row));
+  ASSERT_TRUE(nullptr != sstable_agg_row);
+
+  validate_agg_row(*sstable_agg_row, is_major);
+
+  LOG_INFO("SSTable level skip index large data aggregation test passed",
+      K(macro_block_cnt), K(rows_per_macro), K(total_rows), K(test_column_cnt));
+}
+
+// Test SSTable level skip index aggregation with null values
+TEST_F(TestIndexBlockAggregator, test_sstable_level_skip_index_aggregate_with_nulls)
+{
+  const int64_t test_column_cnt = 6;
+  const int64_t macro_block_cnt = 5;
+  const int64_t rows_per_macro = 50;
+  const int64_t extra_rowkey_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+
+  ObObjType col_obj_types[test_column_cnt] = {
+    ObIntType,      // rowkey - never null
+    ObIntType,
+    ObVarcharType,
+    ObDoubleType,
+    ObDateTimeType,
+    ObNumberType
+  };
+
+  int64_t min_max_agg_col_idxs[test_column_cnt];
+  for (int64_t i = 0; i < test_column_cnt; ++i) {
+    const int64_t agg_col_idx = i < 1 ? i : i + extra_rowkey_cnt;
+    min_max_agg_col_idxs[i] = agg_col_idx;
+  }
+  init_schema(test_column_cnt, 1, col_obj_types);
+  init_min_max_meta(test_column_cnt, min_max_agg_col_idxs);
+
+  const bool is_major = true;
+
+  ObSkipIndexIndexAggregator sstable_aggregator;
+  ASSERT_EQ(OB_SUCCESS, sstable_aggregator.init(is_major, full_agg_metas_, col_descs_, data_version_, allocator_));
+
+  reset_min_max_row();
+  ObDatumRow generate_row;
+  ASSERT_EQ(OB_SUCCESS, generate_row.init(full_column_count_));
+
+  for (int64_t macro_idx = 0; macro_idx < macro_block_cnt; ++macro_idx) {
+    ObSkipIndexDataAggregator macro_data_aggregator;
+    ASSERT_EQ(OB_SUCCESS, macro_data_aggregator.init(is_major, full_agg_metas_, col_descs_, data_version_, allocator_));
+
+    for (int64_t row_idx = 0; row_idx < rows_per_macro; ++row_idx) {
+      const int64_t seed = macro_idx * rows_per_macro + row_idx + 1;
+      generate_row_by_seed(seed, generate_row);
+
+      // Set some columns to null (every 5th row, set columns 2,3,4 to null)
+      if (row_idx % 5 == 0) {
+        for (int64_t col = 2; col < 5 && col < full_column_count_; ++col) {
+          generate_row.storage_datums_[col].set_null();
+        }
+      }
+
+      ASSERT_EQ(OB_SUCCESS, macro_data_aggregator.eval(generate_row));
+      update_min_max_row(generate_row);
+    }
+
+    const ObSkipIndexAggResult *macro_agg_row = nullptr;
+    ASSERT_EQ(OB_SUCCESS, macro_data_aggregator.get_aggregated_row(macro_agg_row));
+    ASSERT_TRUE(nullptr != macro_agg_row);
+
+    const char *serialized_buf = nullptr;
+    int64_t serialized_size = 0;
+    serialize_agg_row(*macro_agg_row, serialized_buf, serialized_size);
+    ASSERT_TRUE(nullptr != serialized_buf);
+
+    ASSERT_EQ(OB_SUCCESS, sstable_aggregator.ObISkipIndexAggregator::eval(
+        serialized_buf, serialized_size, rows_per_macro));
+  }
+
+  const ObSkipIndexAggResult *sstable_agg_row = nullptr;
+  ASSERT_EQ(OB_SUCCESS, sstable_aggregator.get_aggregated_row(sstable_agg_row));
+  ASSERT_TRUE(nullptr != sstable_agg_row);
+
+  validate_agg_row(*sstable_agg_row, is_major);
+
+  LOG_INFO("SSTable level skip index aggregation with nulls test passed",
+      K(macro_block_cnt), K(rows_per_macro), K(test_column_cnt));
+}
+
+// Test SSTable level skip index serialization and deserialization
+TEST_F(TestIndexBlockAggregator, test_sstable_skip_index_serialize_deserialize)
+{
+  const int64_t test_column_cnt = 6;
+  const int64_t macro_block_cnt = 20;
+  const int64_t rows_per_macro = 200;
+  const int64_t extra_rowkey_cnt = ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+
+  // Use simple types that are well supported
+  ObObjType col_obj_types[test_column_cnt] = {
+    ObIntType,
+    ObIntType,
+    ObInt32Type,
+    ObSmallIntType,
+    ObFloatType,
+    ObDoubleType
+  };
+
+  int64_t min_max_agg_col_idxs[test_column_cnt];
+  for (int64_t i = 0; i < test_column_cnt; ++i) {
+    const int64_t agg_col_idx = i < 1 ? i : i + extra_rowkey_cnt;
+    min_max_agg_col_idxs[i] = agg_col_idx;
+  }
+  init_schema(test_column_cnt, 1, col_obj_types);
+  init_min_max_meta(test_column_cnt, min_max_agg_col_idxs);
+
+  const bool is_major = true;
+
+  ObSkipIndexIndexAggregator sstable_aggregator;
+  ASSERT_EQ(OB_SUCCESS, sstable_aggregator.init(is_major, full_agg_metas_, col_descs_, data_version_, allocator_));
+
+  reset_min_max_row();
+  ObDatumRow generate_row;
+  ASSERT_EQ(OB_SUCCESS, generate_row.init(full_column_count_));
+
+  for (int64_t macro_idx = 0; macro_idx < macro_block_cnt; ++macro_idx) {
+    ObSkipIndexDataAggregator macro_data_aggregator;
+    ASSERT_EQ(OB_SUCCESS, macro_data_aggregator.init(is_major, full_agg_metas_, col_descs_, data_version_, allocator_));
+
+    for (int64_t row_idx = 0; row_idx < rows_per_macro; ++row_idx) {
+      const int64_t seed = macro_idx * rows_per_macro + row_idx + 1;
+      generate_row_by_seed(seed, generate_row);
+      ASSERT_EQ(OB_SUCCESS, macro_data_aggregator.eval(generate_row));
+      update_min_max_row(generate_row);
+    }
+
+    const ObSkipIndexAggResult *macro_agg_row = nullptr;
+    ASSERT_EQ(OB_SUCCESS, macro_data_aggregator.get_aggregated_row(macro_agg_row));
+
+    const char *serialized_buf = nullptr;
+    int64_t serialized_size = 0;
+    serialize_agg_row(*macro_agg_row, serialized_buf, serialized_size);
+
+    ASSERT_EQ(OB_SUCCESS, sstable_aggregator.ObISkipIndexAggregator::eval(
+        serialized_buf, serialized_size, rows_per_macro));
+  }
+
+  const ObSkipIndexAggResult *sstable_agg_row = nullptr;
+  ASSERT_EQ(OB_SUCCESS, sstable_aggregator.get_aggregated_row(sstable_agg_row));
+  ASSERT_TRUE(nullptr != sstable_agg_row);
+
+  // Validate aggregation result
+  validate_agg_row(*sstable_agg_row, is_major);
+
+  // Serialize SSTable level aggregation result
+  const char *sstable_serialized_buf = nullptr;
+  int64_t sstable_serialized_size = 0;
+  serialize_agg_row(*sstable_agg_row, sstable_serialized_buf, sstable_serialized_size);
+  ASSERT_TRUE(nullptr != sstable_serialized_buf);
+  ASSERT_TRUE(sstable_serialized_size > 0);
+
+  // Deserialize and verify basic structure
+  ObAggRowReader agg_reader;
+  ASSERT_EQ(OB_SUCCESS, agg_reader.init(sstable_serialized_buf, sstable_serialized_size));
+  ASSERT_TRUE(agg_reader.is_inited());
+
+  // Verify the header is valid
+  const ObAggRowHeader *header = agg_reader.get_header();
+  ASSERT_TRUE(nullptr != header);
+  ASSERT_TRUE(header->is_valid());
+
+  // Verify we can read all columns back
+  for (int64_t i = 0; i < full_agg_metas_.count(); ++i) {
+    ObDatum read_datum;
+    const ObSkipIndexColMeta &meta = full_agg_metas_.at(i);
+    ASSERT_EQ(OB_SUCCESS, agg_reader.read(meta, read_datum));
+    // Just verify we can read back without error
+  }
+
+  LOG_INFO("SSTable skip index serialize/deserialize test passed",
+      K(sstable_serialized_size), K(macro_block_cnt), K(rows_per_macro));
+}
 
 }
 }

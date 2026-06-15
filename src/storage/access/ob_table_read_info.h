@@ -87,6 +87,23 @@ public:
   int serialize(char *buf, const int64_t buf_len, int64_t &pos) const;
   int deserialize(const char *buf, const int64_t data_len, int64_t &pos, common::ObIAllocator &allocator);
   int64_t get_serialize_size() const;
+
+  int64_t get_array_idx_by_value(const int64_t value) const
+  {
+    // TODO(menglan): maybe need optimize this function or struct
+
+    int64_t idx = -1, array_count = count();
+
+    for (int64_t i = 0; i < array_count; i++) {
+      if (at(i) == value) {
+        idx = i;
+        break;
+      }
+    }
+
+    return idx;
+  }
+
   DECLARE_TO_STRING;
 private:
   typedef int64_t (*COUNT_FUNC)(uint32_t, const ObFixedMetaObjArray<int32_t> &);
@@ -660,6 +677,7 @@ public:
   bool is_valid() const { return nullptr != cg_read_info_; }
   void set_read_info(ObCGReadInfo *cg_read_info) { cg_read_info_ = cg_read_info; }
   const ObCGReadInfo *get_read_info() const { return cg_read_info_; }
+  TO_STRING_KV(KP_(cg_read_info));
 private:
   ObCGReadInfo *cg_read_info_;
 

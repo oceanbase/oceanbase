@@ -329,16 +329,17 @@ int ObScheduleTabletFunc::schedule_tablet_execute(ObTablet &tablet)
   ObCOMajorMergeStrategy co_major_merge_strategy;
   ObCSReplicaTabletStatus cs_replica_status = ObCSReplicaTabletStatus::NORMAL;
   ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason = ObAdaptiveMergePolicy::AdaptiveMergeReason::INVALID_REASON;
+  int64_t need_freeze_snapshot = 0;
 
   if (OB_FAIL(ObTenantTabletScheduler::check_ready_for_major_merge(ls_id, tablet, MEDIUM_MERGE, schedule_scn, cs_replica_status))) { // schedule scn = 0, skip to check unfinish inc major
     LOG_WARN("failed to check ready for major merge", K(ret), K(ls_id), K(tablet_id));
-  } else if (OB_FAIL(get_schedule_execute_info(tablet, schedule_scn, co_major_merge_strategy, merge_reason))) {
+  } else if (OB_FAIL(get_schedule_execute_info(tablet, schedule_scn, co_major_merge_strategy, merge_reason, need_freeze_snapshot))) {
     if (OB_NO_NEED_MERGE == ret) {
       ret = OB_SUCCESS;
     } else {
       LOG_WARN("failed to get schedule execute info", KR(ret), K_(ls_status), K(tablet_id));
     }
-  } else if (OB_FAIL(check_with_schedule_scn(tablet, schedule_scn, tablet_status_, can_merge, co_major_merge_strategy))) {
+  } else if (OB_FAIL(check_with_schedule_scn(tablet, schedule_scn, tablet_status_, can_merge, co_major_merge_strategy, need_freeze_snapshot))) {
     LOG_WARN("failed to check with schedule scn", KR(ret), K(schedule_scn));
   } else if (can_merge) {
     if (OB_FAIL(schedule_merge_dag(ls_id, tablet, MEDIUM_MERGE, schedule_scn, co_major_merge_strategy, merge_reason))) {
@@ -357,7 +358,8 @@ int ObScheduleTabletFunc::get_schedule_execute_info(
     ObTablet &tablet,
     int64_t &schedule_scn,
     ObCOMajorMergeStrategy &co_major_merge_strategy,
-    ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason)
+    ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason,
+    int64_t &need_freeze_snapshot)
 {
   int ret = OB_SUCCESS;
   const ObLSID &ls_id = ls_status_.ls_id_;
@@ -396,7 +398,8 @@ int ObScheduleTabletFunc::get_schedule_execute_info(
       compaction_type,
       schedule_scn,
       co_major_merge_strategy,
-      merge_reason))) {
+      merge_reason,
+      need_freeze_snapshot))) {
     if (OB_NO_NEED_MERGE != ret) {
       LOG_WARN("failed to get next schedule info", KR(ret), K(tablet_id), KPC(tablet_status_.medium_list()), K(last_major_snapshot), K_(merge_version));
     }
@@ -446,13 +449,14 @@ int ObScheduleTabletFunc::check_with_schedule_scn(
     const int64_t schedule_scn,
     const ObTabletStatusCache &tablet_status,
     bool &can_merge,
-    const ObCOMajorMergeStrategy &co_major_merge_strategy)
+    const ObCOMajorMergeStrategy &co_major_merge_strategy,
+    const int64_t need_freeze_snapshot)
 {
   int ret = OB_SUCCESS;
   if (GCTX.is_shared_storage_mode()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("this function can not be used in shared-storage mode", K(ret));
-  } else if (OB_FAIL(ObBasicScheduleTabletFunc::check_with_schedule_scn(tablet, schedule_scn, tablet_status, can_merge, co_major_merge_strategy))) {
+  } else if (OB_FAIL(ObBasicScheduleTabletFunc::check_with_schedule_scn(tablet, schedule_scn, tablet_status, can_merge, co_major_merge_strategy, need_freeze_snapshot))) {
     LOG_WARN("check with schedule scn fail", K(ret));
   }
   return ret;

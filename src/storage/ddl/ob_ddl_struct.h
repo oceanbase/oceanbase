@@ -439,10 +439,49 @@ public:
     : is_column_store_(false), is_index_table_(false), is_unique_index_(false), has_lob_rowkey_(false),
       is_table_with_clustering_key_(false), is_vec_tablet_rebuild_(false),
       rowkey_column_num_(0), compress_type_(NONE_COMPRESSOR), lob_inrow_threshold_(OB_DEFAULT_LOB_INROW_THRESHOLD),
-      vec_idx_param_(), vec_dim_(0), index_type_(INDEX_TYPE_IS_NOT)
+      vec_idx_param_(), vec_dim_(0), user_ttl_column_idx_(-1), user_ttl_column_type_(ObTTLFilterColType::INVALID), index_type_(INDEX_TYPE_IS_NOT)
   {}
   ~ObTableSchemaItem() { reset(); }
   bool is_skip_lob() const { return is_index_table_ || vec_dim_ > 0; }
+
+  bool is_user_compaction_ttl_table() const { return user_ttl_column_idx_ >= 0; }
+
+  /**
+   * @brief Get ttl datum from datum row if it's a user compaction ttl table.
+   */
+  const blocksstable::ObStorageDatum *get_ttl_datum_from_row(const blocksstable::ObDatumRow &datum_row) const
+  {
+    const blocksstable::ObStorageDatum *ttl_datum = nullptr;
+    if (is_user_compaction_ttl_table()) {
+      // TODO(menglan): after more direct load test, we can remove this check.
+      if (user_ttl_column_idx_ >= datum_row.get_column_count()) {
+        STORAGE_LOG_RET(WARN, OB_INVALID_DATA, "user ttl column index is out of range", KPC(this), K(datum_row), K(lbt()));
+      } else {
+        ttl_datum = &datum_row.storage_datums_[user_ttl_column_idx_];
+      }
+    }
+    return ttl_datum;
+  }
+
+  ObIVector *get_ttl_datum_from_vectors(ObIArray<ObIVector *> &vectors) const
+  {
+    return get_ttl_datum_from_vectors(vectors, user_ttl_column_idx_);
+  }
+
+  ObIVector *get_ttl_datum_from_vectors(ObIArray<ObIVector *> &vectors, const int64_t index) const
+  {
+    ObIVector *ttl_vector = nullptr;
+    if (is_user_compaction_ttl_table()) {
+      // TODO(menglan): after more direct load test, we can remove this check.
+      if (index >= vectors.count()) {
+        STORAGE_LOG_RET(WARN, OB_INVALID_DATA, "user ttl column index is out of range", KPC(this), K(vectors), K(lbt()));
+      } else {
+        ttl_vector = vectors.at(index);
+      }
+    }
+    return ttl_vector;
+  }
+
   void reset()
   {
     is_column_store_ = false;
@@ -456,12 +495,14 @@ public:
     lob_inrow_threshold_ = OB_DEFAULT_LOB_INROW_THRESHOLD;
     vec_idx_param_.reset();
     vec_dim_ = 0;
+    user_ttl_column_idx_ = -1;
+    user_ttl_column_type_ = ObTTLFilterColType::INVALID;
     index_type_ = INDEX_TYPE_IS_NOT;
   }
   TO_STRING_KV(K_(is_column_store), K_(is_index_table), K_(is_unique_index), K_(has_lob_rowkey),
     K_(is_table_with_clustering_key), K_(is_vec_tablet_rebuild),
     K_(rowkey_column_num), K_(compress_type), K_(lob_inrow_threshold), K_(vec_idx_param), K_(vec_dim),
-    K_(index_type));
+    K_(user_ttl_column_idx), K_(user_ttl_column_type), K_(index_type));
 
 public:
   bool is_column_store_;
@@ -475,6 +516,8 @@ public:
   int64_t lob_inrow_threshold_;
   ObString vec_idx_param_;
   int64_t vec_dim_;
+  int64_t user_ttl_column_idx_;
+  ObTTLFilterColType user_ttl_column_type_;
   ObIndexType index_type_;
 };
 

@@ -8,7 +8,7 @@
 #include "share/schema/ob_list_row_values.h"
 #include "storage/truncate_info/ob_truncate_info_array.h"
 #include "storage/truncate_info/ob_mds_info_distinct_mgr.h"
-#include "storage/access/ob_mds_filter_mgr.h"
+#include "storage/tablet/ob_tablet.h"
 
 namespace oceanbase
 {
@@ -19,13 +19,12 @@ using namespace share::schema;
 namespace storage
 {
 
-ObTruncatePartitionFilter::ObTruncatePartitionFilter(ObMDSFilterMgr &mds_filter_mgr)
-  : mds_filter_mgr_(mds_filter_mgr),
+ObTruncatePartitionFilter::ObTruncatePartitionFilter(ObArenaAllocator &filter_allocator)
+  : filter_allocator_(filter_allocator),
     is_inited_(false),
     filter_type_(ObTruncateFilterType::FILTER_TYPE_MAX),
     schema_rowkey_cnt_(-1),
     truncate_info_allocator_("TruncateInfo", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-    mds_info_mgr_(),
     truncate_info_array_(),
     truncate_filter_node_(nullptr),
     truncate_filter_executor_(nullptr),
@@ -109,6 +108,9 @@ int ObTruncatePartitionFilter::switch_info(
     const bool has_truncate_info)
 {
   int ret = OB_SUCCESS;
+
+  ObPushdownFilterFactory filter_factory(&filter_allocator_);
+
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("not init", K(ret));
@@ -131,7 +133,7 @@ int ObTruncatePartitionFilter::switch_info(
     } else {
       filter_type_ = ObTruncateFilterType::NORMAL_FILTER;
     }
-  } else if (OB_FAIL(truncate_filter_executor_->switch_info(mds_filter_mgr_.get_filter_factory(), schema_rowkey_cnt_, cols_desc, truncate_info_array_))) {
+  } else if (OB_FAIL(truncate_filter_executor_->switch_info(filter_factory, schema_rowkey_cnt_, cols_desc, truncate_info_array_))) {
     LOG_WARN("failed to init truncate filter executor", K(ret));
   } else {
     filter_type_ = ObTruncateFilterType::NORMAL_FILTER;
@@ -218,13 +220,11 @@ int ObTruncatePartitionFilter::init_truncate_filter(
   int ret = OB_SUCCESS;
 
   ObPushdownFilterExecutor *executor = nullptr;
-  ObPushdownFilterFactory &filter_factory = mds_filter_mgr_.get_filter_factory();
-  ObPushdownOperator &op = mds_filter_mgr_.get_pushdown_operator();
+  ObPushdownFilterFactory filter_factory(&filter_allocator_);
 
   if (OB_FAIL(filter_factory.alloc(PushdownFilterType::TRUNCATE_AND_FILTER, 0, truncate_filter_node_))) {
     LOG_WARN("failed to alloc truncate filter node", K(ret));
-  } else if (OB_FAIL(filter_factory.alloc(PushdownExecutorType::TRUNCATE_AND_FILTER_EXECUTOR,
-                                           0, *truncate_filter_node_, executor, op))) {
+  } else if (OB_FAIL(filter_factory.alloc(PushdownExecutorType::TRUNCATE_AND_FILTER_EXECUTOR, 0, *truncate_filter_node_, executor))) {
     LOG_WARN("failed to alloc truncate filter executor", K(ret));
   } else if (FALSE_IT(truncate_filter_executor_ = static_cast<ObTruncateAndFilterExecutor*>(executor))) {
   } else if (OB_FAIL(truncate_filter_executor_->init(filter_factory, schema_rowkey_cnt, cols_desc, cols_param, array))) {
@@ -274,16 +274,15 @@ int ObTruncatePartitionFilterFactory::build_truncate_partition_filter(
     const ObIArray<ObColDesc> &cols_desc,
     const ObIArray<ObColumnParam *> *cols_param,
     const ObVersionRange &read_version_range,
-    ObMDSFilterMgr &mds_filter_mgr,
+    ObArenaAllocator &filter_allocator,
     ObTruncatePartitionFilter *&truncate_part_filter)
 {
   int ret = OB_SUCCESS;
   bool has_truncate_info = false;
-  ObIAllocator *outer_allocator = mds_filter_mgr.get_outer_allocator();
 
-  if (OB_UNLIKELY(nullptr == outer_allocator || !read_version_range.is_valid())) {
+  if (OB_UNLIKELY(!read_version_range.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", K(ret), K(tablet), KP(outer_allocator), K(read_version_range));
+    LOG_WARN("Invalid argument", K(ret), K(tablet), K(read_version_range));
   } else if (FALSE_IT(tablet.check_truncate_info_state(read_version_range, has_truncate_info))) {
   } else if (!has_truncate_info) {
     LOG_DEBUG("[TRUNCATE INFO] do not need read truncate info", K(ret), K(read_version_range), KP(truncate_part_filter));
@@ -292,7 +291,7 @@ int ObTruncatePartitionFilterFactory::build_truncate_partition_filter(
       truncate_part_filter->set_empty();
     }
   } else if (nullptr == truncate_part_filter) {
-    if (OB_ISNULL(truncate_part_filter = OB_NEWx(ObTruncatePartitionFilter, outer_allocator, mds_filter_mgr))) {
+    if (OB_ISNULL(truncate_part_filter = OB_NEWx(ObTruncatePartitionFilter, &filter_allocator, filter_allocator))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       STORAGE_LOG(WARN, "failed to alloc memory", K(ret));
     } else if (OB_FAIL(truncate_part_filter->init(tablet, split_extra_tablet_handles, cols_desc, cols_param, read_version_range,
@@ -301,7 +300,6 @@ int ObTruncatePartitionFilterFactory::build_truncate_partition_filter(
     }
     if (OB_FAIL(ret) && nullptr != truncate_part_filter) {
       truncate_part_filter->~ObTruncatePartitionFilter();
-      outer_allocator->free(truncate_part_filter);
       truncate_part_filter = nullptr;
     }
   } else if (FALSE_IT(truncate_part_filter->reuse())) {
@@ -310,21 +308,6 @@ int ObTruncatePartitionFilterFactory::build_truncate_partition_filter(
     LOG_WARN("failed to switch info", K(ret));
   }
   return ret;
-}
-
-void ObTruncatePartitionFilterFactory::destroy_truncate_partition_filter(ObTruncatePartitionFilter *&truncate_part_filter)
-{
-  if (nullptr != truncate_part_filter) {
-    ObIAllocator *outer_allocator = truncate_part_filter->get_mds_filter_mgr().get_outer_allocator();
-    truncate_part_filter->~ObTruncatePartitionFilter();
-    if (OB_NOT_NULL(outer_allocator)) {
-      outer_allocator->free(truncate_part_filter);
-    } else {
-      int ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("destroy_truncate_partition_filter must used with build_truncate_partition_filter. but outer_allocator is nullptr, which is unexpected", KR(ret), KPC(truncate_part_filter));
-    }
-    truncate_part_filter = nullptr;
-  }
 }
 
 }

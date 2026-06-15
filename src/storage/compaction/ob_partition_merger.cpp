@@ -113,9 +113,9 @@ int ObMerger::basic_prepare(ObBasicTabletMergeCtx &ctx, const int64_t idx)
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObMergerBasic::basic_prepare(ctx, idx))) {
     LOG_WARN("Failed to do basic prepare", K(ret));
-  } else if (OB_FAIL(ObMergeFuserBuilder::build(merge_param_, ctx.static_desc_.major_working_cluster_version_ ,merger_arena_, partition_fuser_))) {
+  } else if (OB_FAIL(ObMergeFuserBuilder::build(merge_param_, ctx.static_desc_.major_working_cluster_version_, merger_arena_, partition_fuser_))) {
     LOG_WARN("failed to build partition fuser", K(ret), K(merge_param_));
-  } else if (OB_FAIL(filter_handle_.init(ctx.get_compaction_filter()))) {
+  } else if (OB_FAIL(filter_handle_.init(ctx.get_compaction_filter(), ctx.get_filter_col_idxs()))) {
     LOG_WARN("failed to init filter handle", K(ret), K(ctx));
   }
   return ret;
@@ -518,6 +518,9 @@ int ObPartitionMerger::process(
   } else if (OB_UNLIKELY(!row.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "Invalid argument to append row", K(ret), K(row));
+  } else if (row.major_merge_flag_.is_virtual_row_for_ttl_major_) {
+    // skip append virtual row for ttl major merge
+    LOG_INFO("skip append virtual row for ttl major merge", K(ret), K(row));
   } else if (OB_UNLIKELY(row.row_flag_.is_not_exist())) {
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(ERROR, "Unexpected not exist row to append", K(ret), K(row));
@@ -527,6 +530,7 @@ int ObPartitionMerger::process(
     STORAGE_LOG(WARN, "failed to filter row", K(ret), K(row));
   } else if (ObICompactionFilter::FILTER_RET_REMOVE == filter_ret) {
     // drop this row
+    LOG_INFO("drop this row", K(ret), K(row));
   } else if (OB_FAIL(check_row_columns(row))) {
     STORAGE_LOG(WARN, "Failed to check row columns", K(ret), K(row));
   } else if (OB_FAIL(inner_process(row, is_incremental_row))) {
@@ -664,7 +668,7 @@ int ObPartitionMajorMerger::inner_process(
   }
 
   if (OB_SUCC(ret)) {
-    STORAGE_LOG(DEBUG, "Success to virtual append row to major macro writer", K(ret), K(row));
+    STORAGE_LOG(INFO, "Success to virtual append row to major macro writer", K(ret), K(row));
   }
   return ret;
 }
@@ -800,6 +804,7 @@ int ObPartitionMajorMerger::merge_same_rowkey_iters(
     bool is_incremental_row)
 {
   int ret = OB_SUCCESS;
+  bool append_row_flag = false;
 
   if (is_incremental_row &&
       1 == merge_iters.count() &&
@@ -808,13 +813,13 @@ int ObPartitionMajorMerger::merge_same_rowkey_iters(
     is_incremental_row = false;
   }
 
-  if (OB_FAIL(partition_fuser_->fuse_row(merge_iters))) {
+  if (OB_FAIL(partition_fuser_->fuse_row(merge_iters, append_row_flag))) {
     STORAGE_LOG(WARN, "Failed to fuse row", KPC_(partition_fuser), K(ret));
     for (int64_t i = 0; i < merge_iters.count(); i++) {
       const blocksstable::ObDatumRow *merge_row = merge_iters.at(i)->get_curr_row();
       STORAGE_LOG(WARN, "dump merge rows", K(ret), K(i), KPC(merge_iters.at(i)), KPC(merge_row));
     }
-  } else if (OB_FAIL(process(partition_fuser_->get_result_row(), is_incremental_row))) {
+  } else if (append_row_flag && OB_FAIL(process(partition_fuser_->get_result_row(), is_incremental_row))) {
     STORAGE_LOG(WARN, "Failed to process row", K(ret), K(partition_fuser_->get_result_row()));
   } else if (OB_FAIL(merge_helper_->move_iters_next(merge_iters))) {
     STORAGE_LOG(WARN, "failed to move iters", K(ret), K(merge_iters));
@@ -1417,6 +1422,7 @@ int ObPartitionMinorMerger::merge_same_rowkey_iters(
     obj_copy_allocator_.reuse();
     bool rowkey_first_row = true;
     bool shadow_already_output = false;
+    bool unused_append_row_flag = true;
     ObPartitionMergeIter *base_iter = nullptr;
     // base iter always iters the row with newer version
     while (OB_SUCC(ret) && (!merge_iters.empty() || row_queue_.has_next())) {
@@ -1486,7 +1492,7 @@ int ObPartitionMinorMerger::merge_same_rowkey_iters(
           }
         }
         // continue and get row from the row_queue
-      } else if (OB_FAIL(partition_fuser_->fuse_row(*fuse_iters))) {
+      } else if (OB_FAIL(partition_fuser_->fuse_row(*fuse_iters, unused_append_row_flag))) {
         STORAGE_LOG(WARN, "Failed to fuse rowkey minimum iters", K(ret), KPC(fuse_iters));
       } else if (OB_FAIL(set_result_flag(*fuse_iters, rowkey_first_row, add_shadow_row,
                                          minimum_iters_.count() == merge_iters.count()))) {

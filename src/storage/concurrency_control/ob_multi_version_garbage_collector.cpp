@@ -8,6 +8,7 @@
 #include "storage/tx/ob_trans_service.h"
 #include "storage/tx/wrs/ob_weak_read_util.h"
 #include "rootserver/mview/ob_mview_maintenance_service.h"
+#include "share/ob_io_device_helper.h"
 
 namespace oceanbase
 {
@@ -15,7 +16,7 @@ namespace concurrency_control
 {
 
 int64_t ObMultiVersionGarbageCollector::GARBAGE_COLLECT_PRECISION = 1_s;
-int64_t ObMultiVersionGarbageCollector::GARBAGE_COLLECT_RETRY_INTERVAL = 1_min;
+int64_t ObMultiVersionGarbageCollector::GARBAGE_COLLECT_RETRY_INTERVAL = 10_s;
 int64_t ObMultiVersionGarbageCollector::GARBAGE_COLLECT_EXEC_INTERVAL = 10 * GARBAGE_COLLECT_RETRY_INTERVAL;
 int64_t ObMultiVersionGarbageCollector::GARBAGE_COLLECT_RECLAIM_DURATION = 3 * GARBAGE_COLLECT_EXEC_INTERVAL;
 

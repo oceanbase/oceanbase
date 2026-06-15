@@ -2207,6 +2207,7 @@ private:
       ObDDLTaskRecord &task_record,
       const int64_t snapshot_version = 0);
   int adjust_cg_for_offline(ObTableSchema &new_table_schema);
+
   int add_column_group(const obrpc::ObAlterTableArg &alter_table_arg,
                        const share::schema::ObTableSchema &ori_table_schema,
                        share::schema::ObTableSchema &new_table_schema);
@@ -2782,10 +2783,6 @@ private:
       const share::schema::ObTableSchema &hidden_table_schema,
       share::schema::ObTableSchema &index_schema);
 
-// check whether the table adds column instant, we need to reorder the column
-  int reorder_column_after_add_column_instant_(const ObTableSchema &orig_table_schema,
-                                               ObTableSchema &new_table_schema);
-
   int check_and_get_aux_table_schema(ObSchemaGetterGuard &schema_guard, const uint64_t tenant_id, const uint64_t aux_table_id,
                                      const uint64_t data_table_id, const ObTableType table_type, const ObTableSchema *&table_schema);
   int update_tables_tablegroup_for_database_(
@@ -2810,9 +2807,6 @@ private:
       ObDDLOperator &ddl_operator,
       ObMySQLTransaction &trans,
       ObSchemaGetterGuard &schema_guard);
-
-  bool check_change_to_compaction_scn_ttl_table(const AlterTableSchema &alter_table_schema, const ObTableSchema &orig_table_schema) const;
-  int update_being_scn_ttl_time(ObTableSchema &new_table_schema);
 
 private:
   bool inited_;

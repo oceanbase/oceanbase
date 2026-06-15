@@ -260,11 +260,26 @@ int ObCOMergeLogBuilder::build_merge_log(
   int ret = OB_SUCCESS;
   int64_t row_id = 0;
   ObMergeLog::OpType op_type = input_op_type;
+  const bool is_virtual_inc_row = nullptr != row
+      && row->major_merge_flag_.is_virtual_row_for_ttl_major_
+      && (ObMergeLog::INSERT == input_op_type
+          || ObMergeLog::UPDATE == input_op_type
+          || ObMergeLog::DELETE == input_op_type);
   if (OB_UNLIKELY(!ObMergeLog::is_valid_op_type(input_op_type))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected invalid op type", K(ret), K(input_op_type));
+  } else if (is_virtual_inc_row) {
+    // ttl major partial update: this incremental row's trans_version > major snapshot.
+    // The committed version is too new for current major output:
+    //   - INSERT (new rowkey not in major) -> skip; the row stays in incremental tables.
+    //   - UPDATE/DELETE (key exists in major) -> replay major as-is, do not apply inc.
+    op_type = (ObMergeLog::INSERT == input_op_type) ? ObMergeLog::INVALID : ObMergeLog::REPLAY;
+    LOG_INFO("[CO TTL] handle virtual row for ttl major", K(input_op_type),
+             "rewritten_op_type", ObMergeLog::get_op_type_str(op_type), KPC(row));
   } else if (filter_handle_.is_valid() && OB_FAIL(check_with_filter(row_store_iter, row, op_type, replay_to_end))) {
     LOG_WARN("failed to check with filter", K(ret), K(input_op_type), K(op_type), K(row_store_iter), K(row), K(mergelog), K(replay_to_end));
+  }
+  if (OB_FAIL(ret)) {
   } else if (!ObMergeLog::is_valid_op_type(op_type)) {
     // do nothing
   } else if (ObMergeLog::REPLAY == op_type || ObMergeLog::DELETE_RANGE == op_type) {
@@ -318,8 +333,9 @@ int ObCOMergeLogBuilder::check_with_filter(
   const bool replay_to_end)
 {
   int ret = OB_SUCCESS;
+  LOG_TRACE("check_with_filter", K(op_type), KPC(row_store_iter));
   const blocksstable::ObDatumRow *check_row =
-    (ObMergeLog::REPLAY == op_type && nullptr != row_store_iter->get_curr_row()) ? row_store_iter->get_curr_row() : row;
+    (ObMergeLog::REPLAY == op_type && nullptr != row_store_iter->get_curr_row()) ? row_store_iter->get_filter_check_row() : row;
   ObICompactionFilter::ObFilterRet filter_ret = ObICompactionFilter::FILTER_RET_MAX;
   if (!filter_handle_.is_valid() || ObMergeLog::DELETE == op_type) {
     // do nothing
@@ -328,7 +344,7 @@ int ObCOMergeLogBuilder::check_with_filter(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected replay to end", K(ret), K(replay_to_end));
     } else if (OB_FAIL(check_range_with_filter(row_store_iter, op_type))) {
-      LOG_WARN("failed to check range with filter", K(ret), K(row_store_iter), K(op_type));
+      LOG_WARN("failed to check range with filter", K(ret), KPC(row_store_iter), K(op_type));
     }
   } else if (OB_ISNULL(check_row)) {
     ret = OB_ERR_UNEXPECTED;
@@ -388,7 +404,12 @@ int ObCOMergeLogBuilder::check_range_with_filter(
   }
   if (OB_FAIL(ret)) {
   } else if (block_op.is_filter()) {
-    op_type = ObMergeLog::DELETE_RANGE;
+    if (OB_UNLIKELY(filter_handle_.only_has_normal_col_filter())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected has filter col idxs", K(ret));
+    } else {
+      op_type = ObMergeLog::DELETE_RANGE;
+    }
   } else if (block_op.is_open()) {
     if (OB_FAIL(row_store_iter->open_curr_range(false/*for_rewrite*/))) {
       LOG_WARN("failed to open curr range", K(ret), K(block_op), KPC(row_store_iter));
@@ -403,7 +424,7 @@ int ObCOMergeLogBuilder::check_range_with_filter(
     LOG_WARN("unexpected block op", K(ret), K(block_op));
   }
   if (OB_SUCC(ret)) {
-    LOG_TRACE("success to check range with filter", K(ret), K(block_op),
+    LOG_TRACE("[COMPACTION_FILTER] success to check range with filter", K(ret), K(block_op),
       "op_type", ObMergeLog::get_op_type_str(op_type));
   }
   return ret;
@@ -561,6 +582,7 @@ int ObCOMinorSSTableMergeIter::get_curr_row(const blocksstable::ObDatumRow *&row
 {
   int ret = OB_SUCCESS;
   row = nullptr;
+  bool append_row_flag = true;
   if (is_iter_end()) {
   } else {
     if (nullptr == curr_row_) {
@@ -571,8 +593,13 @@ int ObCOMinorSSTableMergeIter::get_curr_row(const blocksstable::ObDatumRow *&row
         LOG_WARN("unexpected empty minimum iters", K(ret));
       } else if (1 == minimum_iters_.count()) {
         curr_row_ = minimum_iters_.at(0)->get_curr_row();
-      } else if (OB_FAIL(partition_fuser_.fuse_row(minimum_iters_))) {
+      } else if (OB_FAIL(partition_fuser_.fuse_row(minimum_iters_, append_row_flag))) {
         LOG_WARN("failed to fuse row", K(ret), K(minimum_iters_));
+      } else if (!append_row_flag) {
+        // All rows for this rowkey are virtual rows in TTL partial-update major merge.
+        // Keep a real rowkey for CO merge-log comparison; the log builder will rewrite
+        // the virtual incremental row to INSERT-skip or major REPLAY as appropriate.
+        curr_row_ = minimum_iters_.at(0)->get_curr_row();
       } else {
         curr_row_ = &(partition_fuser_.get_result_row());
       }

@@ -51,7 +51,8 @@ protected:
     const int64_t schedule_scn,
     const ObTabletStatusCache &tablet_status,
     bool &can_merge,
-    const ObCOMajorMergeStrategy &co_major_merge_strategy) override;
+    const ObCOMajorMergeStrategy &co_major_merge_strategy,
+    const int64_t need_freeze_snapshot) override;
   virtual int schedule_merge_dag(
     const ObLSID &ls_id,
     const ObTablet &tablet,
@@ -72,7 +73,8 @@ private:
     storage::ObTablet &tablet,
     int64_t &schedule_scn,
     ObCOMajorMergeStrategy &co_major_merge_strategy,
-    ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason);
+    ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason,
+    int64_t &need_freeze_snapshot);
 protected:
   ObTabletStatusCache tablet_status_;
 private:

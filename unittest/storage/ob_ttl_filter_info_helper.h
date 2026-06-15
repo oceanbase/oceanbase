@@ -45,7 +45,7 @@ public:
   {
     info.key_.tx_id_ = trans_id;
     info.commit_version_ = commit_version;
-    info.ttl_filter_col_type_ = static_cast<ObTTLFilterInfo::ObTTLFilterColType>(filter_type);
+    info.ttl_filter_col_type_ = static_cast<ObTTLFilterColType>(filter_type);
     info.ttl_filter_value_ = filter_value;
     info.ttl_filter_col_idx_ = filter_col_idx;
   }

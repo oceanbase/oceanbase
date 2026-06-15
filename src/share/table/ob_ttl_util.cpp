@@ -1468,11 +1468,11 @@ int ObSimpleTableTTLChecker::inner_init(
   const schema::ObTableSchema &table_schema,
   const ObString &ttl_definition,
   const bool in_full_column_order,
-  bool &has_datetime_col)
+  bool &has_no_timezone_col)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = table_schema.get_tenant_id();
-  has_datetime_col = false;
+  has_no_timezone_col = false;
   if (tenant_id == OB_INVALID_TENANT_ID) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid tenant id", K(ret), K(tenant_id));
@@ -1508,8 +1508,10 @@ int ObSimpleTableTTLChecker::inner_init(
               find_col = true;
               if (OB_FAIL(row_cell_ids_.push_back(idx))) {
                 LOG_WARN("fail to push back", K(ret), K(idx));
-              } else if (ob_is_datetime_or_mysql_datetime(col_schema->get_data_type())) {
-                has_datetime_col = true;
+              } else if (ob_is_datetime_or_mysql_datetime(col_schema->get_data_type())
+                         || ob_is_timestamp_nano(col_schema->get_data_type())
+                         || ob_is_mysql_compact_dates_type(col_schema->get_data_type())) {
+                has_no_timezone_col = true;
               }
             }
           }
@@ -1528,10 +1530,10 @@ int ObTableTTLChecker::init(const share::schema::ObTableSchema &table_schema, co
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = table_schema.get_tenant_id();
-  bool has_datetime_col = false;
-  if (OB_FAIL(inner_init(table_schema, ttl_definition, in_full_column_order, has_datetime_col))) {
+  bool has_no_timezone_col = false;
+  if (OB_FAIL(inner_init(table_schema, ttl_definition, in_full_column_order, has_no_timezone_col))) {
     LOG_WARN("fail to init", K(ret), K(table_schema), K(in_full_column_order));
-  } else if (has_datetime_col) {
+  } else if (has_no_timezone_col) {
     ObSchemaGetterGuard schema_guard;
     ObTimeZoneInfoWrap tz_info_wrap;
     const ObSysVariableSchema *sys_variable_schema = nullptr;
@@ -1617,10 +1619,9 @@ int ObSimpleTableTTLChecker::get_compaction_ttl_expr_ts(const ObTableTTLExpr &tt
 int ObSimpleTableTTLChecker::get_ttl_filter_us(int64_t &ttl_filter_us)
 {
   int ret = OB_SUCCESS;
-  if (OB_UNLIKELY(1 != ttl_definition_.count()
-    || !ObCompactionTTLUtil::is_rowscn_column(ttl_definition_.at(0).column_name_))) {
+  if (OB_UNLIKELY(1 != ttl_definition_.count())) {
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("ttl definition count should be 1 and first column should be rowscn", K(ret), K(ttl_definition_));
+    LOG_WARN("ttl definition count should be 1", K(ret), K(ttl_definition_));
   } else {
     const ObTableTTLExpr &ttl_expr = ttl_definition_.at(0);
     const int64_t input_us = ObTimeUtility::current_time(); // us

@@ -4013,6 +4013,33 @@ int64_t ObTableSchema::get_column_idx(const uint64_t column_id, const bool ignor
   return ret_idx;
 }
 
+/**
+ * @brief find the column index with multi-version column in schema
+ */
+int ObTableSchema::get_column_idx_with_multi_version_col(const uint64_t column_id, int64_t &column_idx) const
+{
+  int ret = OB_SUCCESS;
+
+  column_idx = -1;
+  ObSEArray<ObColDesc, 8> column_ids;
+
+  if (column_id == common::OB_HIDDEN_TRANS_VERSION_COLUMN_ID) {
+    // ora_rowscn maps to trans_version column in multi-version storage
+    column_idx = storage::ObMultiVersionRowkeyHelpper::get_trans_version_col_store_index(get_rowkey_column_num(), true);
+  } else if (OB_FAIL(get_store_column_ids(column_ids, /** full col */ true))) {
+    LOG_WARN("Fail to get multi version column descs", K(ret));
+  } else {
+    for (int64_t i = 0; i < column_ids.count(); ++i) {
+      if (column_ids.at(i).col_id_ == column_id) {
+        column_idx = i < get_rowkey_column_num() ? i : i + storage::ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+        break;
+      }
+    }
+  }
+
+  return ret;
+}
+
 int64_t ObTableSchema::get_convert_size() const
 {
   int64_t convert_size = 0;
@@ -11170,23 +11197,18 @@ int ObTableSchema::check_identity_column_for_interval_part() const
 int ObTableSchema::check_ttl_definition_valid() const
 {
   int ret = OB_SUCCESS;
-  bool is_ttl_schema = false;
+
   bool is_compaction_ttl = false;
   uint64_t tenant_data_version = 0;
+
   if (!has_ttl_definition()) {
     // do nothing if table has no ttl definition
   } else if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id_, tenant_data_version))) {
     LOG_WARN("get tenant data version failed", K(ret));
-  } else if (OB_FAIL(ObCompactionTTLUtil::is_ttl_schema(*this, is_ttl_schema))) {
-    LOG_WARN("failed to check if schema is ttl schema", K(ret), K(get_table_id()));
-  } else if (!is_ttl_schema) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("schema is not ttl schema", K(ret), K(get_table_id()));
   } else if (OB_FAIL(ObCompactionTTLUtil::is_compaction_ttl_schema(tenant_data_version, *this, is_compaction_ttl))) {
-    if (OB_NOT_SUPPORTED != ret) {
-      LOG_WARN("failed to check if schema is compaction ttl schema", K(ret), K(get_table_id()));
-    }
+    LOG_WARN("failed to check if schema is compaction ttl schema", K(ret), KPC(this));
   }
+
   return ret;
 }
 
@@ -11254,6 +11276,23 @@ int ObTableSchema::set_ttl_definition(const common::ObString &input_ttl_definiti
   if (FAILEDx(deep_copy_str(input_ttl_definition, ttl_definition_))) {
     LOG_WARN("failed to copy ttl definition", K(ret));
   }
+  return ret;
+}
+
+int ObTableSchema::inherit_ttl_definition(const ObTableSchema &data_table_schema)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FALSE_IT(ttl_flag_ = data_table_schema.get_ttl_flag())) {
+  } else if (OB_FAIL(deep_copy_str(data_table_schema.get_ttl_definition(), ttl_definition_))) {
+    LOG_WARN("Fail to copy ttl definition", K(ret));
+  } else if (ttl_flag_.is_user_ttl_column() && is_aux_lob_meta_table()) {
+    // lob table's ttl_flag column id is not same as data table
+    if (OB_FAIL(ttl_flag_.transform_to_lob_ttl_flag(table_type_))) {
+      LOG_WARN("failed to transform to lob ttl flag", K(ret), K(ttl_flag_));
+    }
+  }
+
   return ret;
 }
 

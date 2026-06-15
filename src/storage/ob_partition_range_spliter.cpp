@@ -1443,15 +1443,10 @@ int ObPartitionMultiRangeSpliter::estimate_ranges_info(const ObIArray<ObStoreRan
 
     // TODO(menglan): adapt now sql implement
     constexpr int64_t ONE_TASK_ROW_COUNT = 32768;
-    if (GCTX.is_shared_storage_mode()) {
-      total_size = max(total_size,
-                       total_macro_block_count * OB_DEFAULT_MACRO_BLOCK_SIZE + memtable_total_size);
-    } else {
-      total_size
-          = max(total_size,
-                max(total_macro_block_count * OB_DEFAULT_MACRO_BLOCK_SIZE + memtable_total_size,
-                    (total_row_count / ONE_TASK_ROW_COUNT + 1) * OB_DEFAULT_MACRO_BLOCK_SIZE));
-    }
+    total_size
+        = max(total_size,
+              max(total_macro_block_count * OB_DEFAULT_MACRO_BLOCK_SIZE + memtable_total_size,
+                  (total_row_count / ONE_TASK_ROW_COUNT + 1) * OB_DEFAULT_MACRO_BLOCK_SIZE));
 
     LOG_TRACE("Finish estimate ranges info",
               K(ranges),

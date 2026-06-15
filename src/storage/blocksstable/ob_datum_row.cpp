@@ -69,7 +69,8 @@ ObDatumRow::ObDatumRow(const uint64_t tenant_id)
     delete_version_(0),
     storage_datums_(nullptr),
     datum_buffer_(),
-    trans_info_(nullptr)
+    trans_info_(nullptr),
+    major_merge_flag_()
 {
   if (share::is_reserve_mode()) {
     local_allocator_.set_ctx_id(ObCtxIds::MERGE_RESERVE_CTX_ID);
@@ -190,6 +191,7 @@ void ObDatumRow::reset()
   count_ = 0;
   local_allocator_.reset();
   trans_info_ = nullptr;
+  major_merge_flag_.reset();
 }
 
 void ObDatumRow::reuse()
@@ -210,6 +212,7 @@ void ObDatumRow::reuse()
   if (OB_NOT_NULL(trans_info_)) {
     trans_info_[0] = '\0';
   }
+  major_merge_flag_.reset();
 }
 
 int ObDatumRow::deep_copy(const ObDatumRow &src, ObIAllocator &allocator)
@@ -308,6 +311,7 @@ int ObDatumRow::copy_attributes_except_datums(const ObDatumRow &other)
     snapshot_version_ = other.snapshot_version_;
     insert_version_ = other.insert_version_;
     delete_version_ = other.delete_version_;
+    major_merge_flag_ = other.major_merge_flag_;
   }
   return ret;
 }
@@ -331,6 +335,7 @@ int ObDatumRow::shallow_copy(const ObDatumRow &other)
     row_flag_ = other.row_flag_;
     read_flag_ = other.read_flag_;
     count_ = other.count_;
+    major_merge_flag_ = other.major_merge_flag_;
   }
   return ret;
 }
@@ -413,7 +418,7 @@ DEF_TO_STRING(ObDatumRow)
 {
   int64_t pos = 0;
   J_OBJ_START();
-  J_KV(K_(row_flag), K_(trans_id), K_(scan_index), K_(mvcc_row_flag), K_(snapshot_version),
+  J_KV(K_(row_flag), K_(trans_id), K_(scan_index), K_(mvcc_row_flag), K_(major_merge_flag), K_(snapshot_version),
        K_(have_uncommited_row), K_(fast_filter_skipped), K_(is_insert_filtered), K_(is_delete_filtered),
        K_(insert_version), K_(delete_version), K_(group_idx), K_(count), K_(datum_buffer));
   if (NULL != buf && buf_len >= 0) {

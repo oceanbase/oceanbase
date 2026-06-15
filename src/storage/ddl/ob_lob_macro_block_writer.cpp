@@ -77,7 +77,8 @@ int ObLobMacroBlockWriter::init(const ObWriteMacroParam &param,
 
     // init lob meta row
     if (OB_SUCC(ret)) {
-      if (OB_FAIL(lob_meta_row_.init(ObLobMetaUtil::LOB_META_COLUMN_CNT + ObLobMetaUtil::SKIP_INVALID_COLUMN))) {
+      const bool with_ttl = param.ddl_table_schema_.table_item_.is_user_compaction_ttl_table();
+      if (OB_FAIL(lob_meta_row_.init(ObLobMetaUtil::get_lob_meta_column_cnt(with_ttl) + ObLobMetaUtil::SKIP_INVALID_COLUMN))) {
         LOG_WARN("init lob meta row failed", K(ret));
       } else {
         lob_meta_row_.storage_datums_[ObLobMetaUtil::SEQ_ID_COL_ID + 1].set_int(-param.snapshot_version_);
@@ -99,7 +100,7 @@ int ObLobMacroBlockWriter::init(const ObWriteMacroParam &param,
   return ret;
 }
 
-int ObLobMacroBlockWriter::write(const ObColumnSchemaItem &column_schema, ObIAllocator &row_allocator, blocksstable::ObStorageDatum &datum)
+int ObLobMacroBlockWriter::write(const ObColumnSchemaItem &column_schema, ObIAllocator &row_allocator, blocksstable::ObStorageDatum &datum, const blocksstable::ObStorageDatum *ttl_datum)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(!is_inited_)) {
@@ -129,6 +130,8 @@ int ObLobMacroBlockWriter::write(const ObColumnSchemaItem &column_schema, ObIAll
                                                                   timeout_ts,
                                                                   true/*has_lob_header*/,
                                                                   param_.ddl_table_schema_.src_tenant_id_,
+                                                                  ttl_datum,
+                                                                  param_.ddl_table_schema_.table_item_.user_ttl_column_type_,
                                                                   meta_write_iter_))) {
       LOG_WARN("insert lob column failed", K(ret), K(param_));
     }

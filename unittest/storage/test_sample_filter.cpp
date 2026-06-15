@@ -21,7 +21,7 @@ public:
     ObPushdownSampleFilterNode *filter_node = nullptr;
     void *buf = nullptr;
     ASSERT_NE(nullptr, buf = allocator_.alloc(sizeof(ObHybridSampleFilterExecutor)));
-    sample_executor_ = new (buf) ObHybridSampleFilterExecutor(allocator_, *filter_node, *op);
+    sample_executor_ = new (buf) ObHybridSampleFilterExecutor(allocator_, *filter_node, op);
 
     SampleInfo sample_info;
     sample_info.method_ = SampleInfo::HYBRID_SAMPLE;

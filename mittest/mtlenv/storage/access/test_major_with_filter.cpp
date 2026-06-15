@@ -58,7 +58,6 @@ protected:
     ObBasicTabletMergeCtx &merge_context);
 
   void prepare_merge_context(const ObMergeType &merge_type, const bool is_full_merge, const ObVersionRange &trans_version_range, ObBasicTabletMergeCtx &merge_context);
-
   int64_t schema_rowkey_cnt_;
   ObTabletMergeExecuteDag merge_dag_;
   int64_t row_id_seed_;
@@ -198,7 +197,7 @@ int ObMajorWithTTLFilterTest::prepare_ttl_filter(
   int ret = OB_SUCCESS;
   std::stringstream ss;
   ss << "tx_id    commit_ver  filter_type   filter_value   filter_col\n";
-  ss << "1 " << 100 << " "<<static_cast<int>(ObTTLFilterInfo::ObTTLFilterColType::ROWSCN)
+  ss << "1 " << 100 << " "<<static_cast<int>(ObTTLFilterColType::ROWSCN)
     <<" " << filter_max_version << " "<<schema_rowkey_cnt_<<"\n";
   std::string micro_str = ss.str();
   ObMdsInfoDistinctMgr mds_info_mgr;
@@ -222,6 +221,7 @@ int ObMajorWithTTLFilterTest::prepare_ttl_filter(
       merge_context.filter_ctx_.compaction_filter_,
       allocator_,
       tablet_id,
+      merge_context.get_schema(),
       schema_rowkey_cnt_,
       merge_context.static_param_.multi_version_column_descs_,
       mds_info_mgr))) {
@@ -533,6 +533,817 @@ TEST_F(ObMajorWithTTLFilterTest, co_major_partial_macro_reused) {
   ASSERT_EQ(filter_statistics.row_cnt_[ObICompactionFilter::ObFilterRet::FILTER_RET_REMOVE], 2);
   ASSERT_EQ(filter_statistics.row_cnt_[ObICompactionFilter::ObFilterRet::FILTER_RET_KEEP], 5);
   ASSERT_EQ(filter_statistics.filter_block_row_cnt_, 30);
+}
+
+TEST_F(ObMajorWithTTLFilterTest, co_major_multi_minor_all_virtual_rows)
+{
+  int ret = OB_SUCCESS;
+  merge_type_ = MAJOR_MERGE;
+  fake_freeze_info();
+  ObTabletMergeDagParam param;
+  ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
+
+  ObTableHandleV2 major_handle;
+  const char *major_data[1];
+  major_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -15      0        100    EXIST   N    \n";
+
+  int64_t snapshot_version = 20;
+  ObScnRange scn_range;
+  scn_range.start_scn_.set_min();
+  scn_range.end_scn_.convert_for_tx(snapshot_version);
+  prepare_table_schema(major_data, schema_rowkey_cnt_, scn_range, snapshot_version);
+  TestSchemaPrepare::add_rowkey_and_each_column_group(allocator_, table_schema_);
+  reset_writer(snapshot_version, MAJOR_MERGE);
+  prepare_one_macro(major_data, 1);
+  prepare_data_end(major_handle, storage::ObITable::COLUMN_ORIENTED_SSTABLE);
+  merge_context.static_param_.tables_handle_.add_table(major_handle);
+
+  ObTableHandleV2 older_minor_handle;
+  const char *older_minor_data[1];
+  older_minor_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -45      0        145    EXIST   LF   \n";
+
+  scn_range.start_scn_.convert_for_tx(20);
+  scn_range.end_scn_.convert_for_tx(45);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(45);
+  prepare_one_macro(older_minor_data, 1);
+  prepare_data_end(older_minor_handle);
+  merge_context.static_param_.tables_handle_.add_table(older_minor_handle);
+
+  ObTableHandleV2 newer_minor_handle;
+  const char *newer_minor_data[1];
+  newer_minor_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -48      0        148    EXIST   LF   \n";
+
+  scn_range.start_scn_.convert_for_tx(45);
+  scn_range.end_scn_.convert_for_tx(50);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(50);
+  prepare_one_macro(newer_minor_data, 1);
+  prepare_data_end(newer_minor_handle);
+  merge_context.static_param_.tables_handle_.add_table(newer_minor_handle);
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 40;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.base_version_ = 20;
+  const int64_t filter_max_version = 19;
+
+  TestMergeBasic::prepare_co_major_merge_context(
+    MAJOR_MERGE, false/*is_full_merge*/, trans_version_range, &merge_dag_, merge_context);
+  merge_context.static_param_.co_static_param_.co_major_merge_strategy_.set(false/*build_all_cg_only*/, false/*only_use_row_store*/);
+  prepare_ttl_filter(filter_max_version, merge_context);
+  merge_context.static_param_.ttl_major_for_partial_update_upper_snapshot_ = 50;
+
+  TestMergeBasic::co_major_merge(local_arena_, ObCOMergeTestType::NORMAL, merge_context, 0, 0, 2);
+
+  ObTableHandleV2 table_handle;
+  ASSERT_EQ(2, merge_context.merged_cg_tables_handle_.get_count());
+  merge_context.merged_cg_tables_handle_.get_table(0, table_handle);
+  ObSSTable *merged_sstable = static_cast<ObSSTable *>(table_handle.get_table());
+  ASSERT_NE(nullptr, merged_sstable);
+  ASSERT_EQ(1, merged_sstable->get_row_count());
+
+  major_handle.reset();
+  older_minor_handle.reset();
+  newer_minor_handle.reset();
+}
+
+TEST_F(ObMajorWithTTLFilterTest, co_major_multi_minor_all_virtual_rows_without_major)
+{
+  int ret = OB_SUCCESS;
+  merge_type_ = MAJOR_MERGE;
+  fake_freeze_info();
+  ObTabletMergeDagParam param;
+  ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
+
+  ObTableHandleV2 major_handle;
+  const char *major_data[1];
+  major_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -15      0        100    EXIST   N    \n";
+
+  int64_t snapshot_version = 20;
+  ObScnRange scn_range;
+  scn_range.start_scn_.set_min();
+  scn_range.end_scn_.convert_for_tx(snapshot_version);
+  prepare_table_schema(major_data, schema_rowkey_cnt_, scn_range, snapshot_version);
+  TestSchemaPrepare::add_rowkey_and_each_column_group(allocator_, table_schema_);
+  reset_writer(snapshot_version, MAJOR_MERGE);
+  prepare_one_macro(major_data, 1);
+  prepare_data_end(major_handle, storage::ObITable::COLUMN_ORIENTED_SSTABLE);
+  merge_context.static_param_.tables_handle_.add_table(major_handle);
+
+  ObTableHandleV2 older_minor_handle;
+  const char *older_minor_data[1];
+  older_minor_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "2        -45      0        245    EXIST   LF   \n";
+
+  scn_range.start_scn_.convert_for_tx(20);
+  scn_range.end_scn_.convert_for_tx(45);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(45);
+  prepare_one_macro(older_minor_data, 1);
+  prepare_data_end(older_minor_handle);
+  merge_context.static_param_.tables_handle_.add_table(older_minor_handle);
+
+  ObTableHandleV2 newer_minor_handle;
+  const char *newer_minor_data[1];
+  newer_minor_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "2        -48      0        248    EXIST   LF   \n";
+
+  scn_range.start_scn_.convert_for_tx(45);
+  scn_range.end_scn_.convert_for_tx(50);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(50);
+  prepare_one_macro(newer_minor_data, 1);
+  prepare_data_end(newer_minor_handle);
+  merge_context.static_param_.tables_handle_.add_table(newer_minor_handle);
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 40;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.base_version_ = 20;
+  const int64_t filter_max_version = 10;
+
+  TestMergeBasic::prepare_co_major_merge_context(
+    MAJOR_MERGE, false/*is_full_merge*/, trans_version_range, &merge_dag_, merge_context);
+  merge_context.static_param_.co_static_param_.co_major_merge_strategy_.set(false/*build_all_cg_only*/, false/*only_use_row_store*/);
+  prepare_ttl_filter(filter_max_version, merge_context);
+  merge_context.static_param_.ttl_major_for_partial_update_upper_snapshot_ = 50;
+
+  TestMergeBasic::co_major_merge(local_arena_, ObCOMergeTestType::NORMAL, merge_context, 0, 0, 2);
+
+  ObTableHandleV2 table_handle;
+  ASSERT_EQ(2, merge_context.merged_cg_tables_handle_.get_count());
+  merge_context.merged_cg_tables_handle_.get_table(0, table_handle);
+  ObSSTable *merged_sstable = static_cast<ObSSTable *>(table_handle.get_table());
+  ASSERT_NE(nullptr, merged_sstable);
+  ASSERT_EQ(1, merged_sstable->get_row_count());
+
+  major_handle.reset();
+  older_minor_handle.reset();
+  newer_minor_handle.reset();
+}
+
+TEST_F(ObMajorWithTTLFilterTest, co_major_multi_minor_all_virtual_rows_with_base_replay)
+{
+  int ret = OB_SUCCESS;
+  merge_type_ = MAJOR_MERGE;
+  fake_freeze_info();
+  ObTabletMergeDagParam param;
+  ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
+
+  ObTableHandleV2 major_handle;
+  const char *major_data[1];
+  major_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -15      0        100    EXIST   N    \n";
+
+  int64_t snapshot_version = 20;
+  ObScnRange scn_range;
+  scn_range.start_scn_.set_min();
+  scn_range.end_scn_.convert_for_tx(snapshot_version);
+  prepare_table_schema(major_data, schema_rowkey_cnt_, scn_range, snapshot_version);
+  TestSchemaPrepare::add_rowkey_and_each_column_group(allocator_, table_schema_);
+  reset_writer(snapshot_version, MAJOR_MERGE);
+  prepare_one_macro(major_data, 1);
+  prepare_data_end(major_handle, storage::ObITable::COLUMN_ORIENTED_SSTABLE);
+  merge_context.static_param_.tables_handle_.add_table(major_handle);
+
+  ObTableHandleV2 older_minor_handle;
+  const char *older_minor_data[1];
+  older_minor_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -45      0        145    EXIST   LF   \n";
+
+  scn_range.start_scn_.convert_for_tx(20);
+  scn_range.end_scn_.convert_for_tx(45);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(45);
+  prepare_one_macro(older_minor_data, 1);
+  prepare_data_end(older_minor_handle);
+  merge_context.static_param_.tables_handle_.add_table(older_minor_handle);
+
+  ObTableHandleV2 newer_minor_handle;
+  const char *newer_minor_data[1];
+  newer_minor_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -48      0        148    EXIST   LF   \n";
+
+  scn_range.start_scn_.convert_for_tx(45);
+  scn_range.end_scn_.convert_for_tx(50);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(50);
+  prepare_one_macro(newer_minor_data, 1);
+  prepare_data_end(newer_minor_handle);
+  merge_context.static_param_.tables_handle_.add_table(newer_minor_handle);
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 40;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.base_version_ = 20;
+  const int64_t filter_max_version = 10;
+
+  TestMergeBasic::prepare_co_major_merge_context(
+    MAJOR_MERGE, false/*is_full_merge*/, trans_version_range, &merge_dag_, merge_context);
+  merge_context.static_param_.co_static_param_.co_major_merge_strategy_.set(false/*build_all_cg_only*/, false/*only_use_row_store*/);
+  prepare_ttl_filter(filter_max_version, merge_context);
+  merge_context.static_param_.ttl_major_for_partial_update_upper_snapshot_ = 50;
+
+  TestMergeBasic::co_major_merge(local_arena_, ObCOMergeTestType::NORMAL_WITH_BASE_REPLAY, merge_context, 0, 0, 2);
+
+  ObTableHandleV2 table_handle;
+  ASSERT_EQ(2, merge_context.merged_cg_tables_handle_.get_count());
+  merge_context.merged_cg_tables_handle_.get_table(0, table_handle);
+  ObSSTable *merged_sstable = static_cast<ObSSTable *>(table_handle.get_table());
+  ASSERT_NE(nullptr, merged_sstable);
+  ASSERT_EQ(1, merged_sstable->get_row_count());
+
+  major_handle.reset();
+  older_minor_handle.reset();
+  newer_minor_handle.reset();
+}
+
+TEST_F(ObMajorWithTTLFilterTest, co_major_multi_minor_all_virtual_rows_between_majors)
+{
+  int ret = OB_SUCCESS;
+  merge_type_ = MAJOR_MERGE;
+  fake_freeze_info();
+  ObTabletMergeDagParam param;
+  ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
+
+  ObTableHandleV2 major_handle;
+  const char *major_data[1];
+  major_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -15      0        100    EXIST   N    \n"
+      "10       -15      0        1000   EXIST   N    \n";
+
+  int64_t snapshot_version = 20;
+  ObScnRange scn_range;
+  scn_range.start_scn_.set_min();
+  scn_range.end_scn_.convert_for_tx(snapshot_version);
+  prepare_table_schema(major_data, schema_rowkey_cnt_, scn_range, snapshot_version);
+  TestSchemaPrepare::add_rowkey_and_each_column_group(allocator_, table_schema_);
+  reset_writer(snapshot_version, MAJOR_MERGE);
+  prepare_one_macro(major_data, 1);
+  prepare_data_end(major_handle, storage::ObITable::COLUMN_ORIENTED_SSTABLE);
+  merge_context.static_param_.tables_handle_.add_table(major_handle);
+
+  ObTableHandleV2 older_minor_handle;
+  const char *older_minor_data[1];
+  older_minor_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "3        -45      0        345    EXIST   LF   \n"
+      "6        -45      0        645    EXIST   LF   \n";
+
+  scn_range.start_scn_.convert_for_tx(20);
+  scn_range.end_scn_.convert_for_tx(45);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(45);
+  prepare_one_macro(older_minor_data, 1);
+  prepare_data_end(older_minor_handle);
+  merge_context.static_param_.tables_handle_.add_table(older_minor_handle);
+
+  ObTableHandleV2 newer_minor_handle;
+  const char *newer_minor_data[1];
+  newer_minor_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "3        -48      0        348    EXIST   LF   \n"
+      "6        -48      0        648    EXIST   LF   \n";
+
+  scn_range.start_scn_.convert_for_tx(45);
+  scn_range.end_scn_.convert_for_tx(50);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(50);
+  prepare_one_macro(newer_minor_data, 1);
+  prepare_data_end(newer_minor_handle);
+  merge_context.static_param_.tables_handle_.add_table(newer_minor_handle);
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 40;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.base_version_ = 20;
+  const int64_t filter_max_version = 10;
+
+  TestMergeBasic::prepare_co_major_merge_context(
+    MAJOR_MERGE, false/*is_full_merge*/, trans_version_range, &merge_dag_, merge_context);
+  merge_context.static_param_.co_static_param_.co_major_merge_strategy_.set(false/*build_all_cg_only*/, false/*only_use_row_store*/);
+  prepare_ttl_filter(filter_max_version, merge_context);
+  merge_context.static_param_.ttl_major_for_partial_update_upper_snapshot_ = 50;
+
+  TestMergeBasic::co_major_merge(local_arena_, ObCOMergeTestType::NORMAL, merge_context, 0, 0, 2);
+
+  ObTableHandleV2 table_handle;
+  ASSERT_EQ(2, merge_context.merged_cg_tables_handle_.get_count());
+  merge_context.merged_cg_tables_handle_.get_table(0, table_handle);
+  ObSSTable *merged_sstable = static_cast<ObSSTable *>(table_handle.get_table());
+  ASSERT_NE(nullptr, merged_sstable);
+  ASSERT_EQ(2, merged_sstable->get_row_count());
+
+  major_handle.reset();
+  older_minor_handle.reset();
+  newer_minor_handle.reset();
+}
+
+TEST_F(ObMajorWithTTLFilterTest, co_major_multi_minor_mixed_virtual_and_normal_rows)
+{
+  int ret = OB_SUCCESS;
+  merge_type_ = MAJOR_MERGE;
+  fake_freeze_info();
+  ObTabletMergeDagParam param;
+  ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
+
+  ObTableHandleV2 major_handle;
+  const char *major_data[1];
+  major_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -15      0        100    EXIST   N    \n";
+
+  int64_t snapshot_version = 20;
+  ObScnRange scn_range;
+  scn_range.start_scn_.set_min();
+  scn_range.end_scn_.convert_for_tx(snapshot_version);
+  prepare_table_schema(major_data, schema_rowkey_cnt_, scn_range, snapshot_version);
+  TestSchemaPrepare::add_rowkey_and_each_column_group(allocator_, table_schema_);
+  reset_writer(snapshot_version, MAJOR_MERGE);
+  prepare_one_macro(major_data, 1);
+  prepare_data_end(major_handle, storage::ObITable::COLUMN_ORIENTED_SSTABLE);
+  merge_context.static_param_.tables_handle_.add_table(major_handle);
+
+  ObTableHandleV2 older_minor_handle;
+  const char *older_minor_data[1];
+  older_minor_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -35      0        135    EXIST   LF   \n";
+
+  scn_range.start_scn_.convert_for_tx(20);
+  scn_range.end_scn_.convert_for_tx(45);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(45);
+  prepare_one_macro(older_minor_data, 1);
+  prepare_data_end(older_minor_handle);
+  merge_context.static_param_.tables_handle_.add_table(older_minor_handle);
+
+  ObTableHandleV2 newer_minor_handle;
+  const char *newer_minor_data[1];
+  newer_minor_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -48      0        148    EXIST   LF   \n";
+
+  scn_range.start_scn_.convert_for_tx(45);
+  scn_range.end_scn_.convert_for_tx(50);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(50);
+  prepare_one_macro(newer_minor_data, 1);
+  prepare_data_end(newer_minor_handle);
+  merge_context.static_param_.tables_handle_.add_table(newer_minor_handle);
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 40;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.base_version_ = 20;
+  const int64_t filter_max_version = 40;
+
+  TestMergeBasic::prepare_co_major_merge_context(
+    MAJOR_MERGE, false/*is_full_merge*/, trans_version_range, &merge_dag_, merge_context);
+  merge_context.static_param_.co_static_param_.co_major_merge_strategy_.set(false/*build_all_cg_only*/, false/*only_use_row_store*/);
+  prepare_ttl_filter(filter_max_version, merge_context);
+  merge_context.static_param_.ttl_major_for_partial_update_upper_snapshot_ = 50;
+
+  TestMergeBasic::co_major_merge(local_arena_, ObCOMergeTestType::NORMAL, merge_context, 0, 0, 2);
+
+  ObTableHandleV2 table_handle;
+  ASSERT_EQ(2, merge_context.merged_cg_tables_handle_.get_count());
+  merge_context.merged_cg_tables_handle_.get_table(0, table_handle);
+  ObSSTable *merged_sstable = static_cast<ObSSTable *>(table_handle.get_table());
+  ASSERT_NE(nullptr, merged_sstable);
+  ASSERT_EQ(1, merged_sstable->get_row_count());
+
+  major_handle.reset();
+  older_minor_handle.reset();
+  newer_minor_handle.reset();
+}
+
+TEST_F(ObMajorWithTTLFilterTest, co_major_multi_minor_all_virtual_delete_rows)
+{
+  int ret = OB_SUCCESS;
+  merge_type_ = MAJOR_MERGE;
+  fake_freeze_info();
+  ObTabletMergeDagParam param;
+  ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
+
+  ObTableHandleV2 major_handle;
+  const char *major_data[1];
+  major_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -15      0        100    EXIST   N    \n";
+
+  int64_t snapshot_version = 20;
+  ObScnRange scn_range;
+  scn_range.start_scn_.set_min();
+  scn_range.end_scn_.convert_for_tx(snapshot_version);
+  prepare_table_schema(major_data, schema_rowkey_cnt_, scn_range, snapshot_version);
+  TestSchemaPrepare::add_rowkey_and_each_column_group(allocator_, table_schema_);
+  reset_writer(snapshot_version, MAJOR_MERGE);
+  prepare_one_macro(major_data, 1);
+  prepare_data_end(major_handle, storage::ObITable::COLUMN_ORIENTED_SSTABLE);
+  merge_context.static_param_.tables_handle_.add_table(major_handle);
+
+  ObTableHandleV2 older_minor_handle;
+  const char *older_minor_data[1];
+  older_minor_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -45      0        145    DELETE  LF   \n";
+
+  scn_range.start_scn_.convert_for_tx(20);
+  scn_range.end_scn_.convert_for_tx(45);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(45);
+  prepare_one_macro(older_minor_data, 1);
+  prepare_data_end(older_minor_handle);
+  merge_context.static_param_.tables_handle_.add_table(older_minor_handle);
+
+  ObTableHandleV2 newer_minor_handle;
+  const char *newer_minor_data[1];
+  newer_minor_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -48      0        148    DELETE  LF   \n";
+
+  scn_range.start_scn_.convert_for_tx(45);
+  scn_range.end_scn_.convert_for_tx(50);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(50);
+  prepare_one_macro(newer_minor_data, 1);
+  prepare_data_end(newer_minor_handle);
+  merge_context.static_param_.tables_handle_.add_table(newer_minor_handle);
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 40;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.base_version_ = 20;
+  const int64_t filter_max_version = 10;
+
+  TestMergeBasic::prepare_co_major_merge_context(
+    MAJOR_MERGE, false/*is_full_merge*/, trans_version_range, &merge_dag_, merge_context);
+  merge_context.static_param_.co_static_param_.co_major_merge_strategy_.set(false/*build_all_cg_only*/, false/*only_use_row_store*/);
+  prepare_ttl_filter(filter_max_version, merge_context);
+  merge_context.static_param_.ttl_major_for_partial_update_upper_snapshot_ = 50;
+
+  TestMergeBasic::co_major_merge(local_arena_, ObCOMergeTestType::NORMAL, merge_context, 0, 0, 2);
+
+  ObTableHandleV2 table_handle;
+  ASSERT_EQ(2, merge_context.merged_cg_tables_handle_.get_count());
+  merge_context.merged_cg_tables_handle_.get_table(0, table_handle);
+  ObSSTable *merged_sstable = static_cast<ObSSTable *>(table_handle.get_table());
+  ASSERT_NE(nullptr, merged_sstable);
+  ASSERT_EQ(1, merged_sstable->get_row_count());
+
+  major_handle.reset();
+  older_minor_handle.reset();
+  newer_minor_handle.reset();
+}
+
+TEST_F(ObMajorWithTTLFilterTest, co_major_multi_minor_upper_snapshot_filter)
+{
+  int ret = OB_SUCCESS;
+  merge_type_ = MAJOR_MERGE;
+  fake_freeze_info();
+  ObTabletMergeDagParam param;
+  ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
+
+  ObTableHandleV2 major_handle;
+  const char *major_data[1];
+  major_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -5       0        10     EXIST   N    \n"
+      "2        -5       0        20     EXIST   N    \n";
+
+  int64_t snapshot_version = 10;
+  ObScnRange scn_range;
+  scn_range.start_scn_.set_min();
+  scn_range.end_scn_.convert_for_tx(snapshot_version);
+  prepare_table_schema(major_data, schema_rowkey_cnt_, scn_range, snapshot_version);
+  TestSchemaPrepare::add_rowkey_and_each_column_group(allocator_, table_schema_);
+  reset_writer(snapshot_version, MAJOR_MERGE);
+  prepare_one_macro(major_data, 1);
+  prepare_data_end(major_handle, storage::ObITable::COLUMN_ORIENTED_SSTABLE);
+  merge_context.static_param_.tables_handle_.add_table(major_handle);
+
+  ObTableHandleV2 older_minor_handle;
+  const char *older_minor_data[1];
+  older_minor_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -21      0        121    EXIST   LF   \n"
+      "2        -25      0        225    EXIST   LF   \n";
+
+  snapshot_version = 30;
+  scn_range.start_scn_.convert_for_tx(10);
+  scn_range.end_scn_.convert_for_tx(snapshot_version);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(snapshot_version);
+  prepare_one_macro(older_minor_data, 1);
+  prepare_data_end(older_minor_handle);
+  merge_context.static_param_.tables_handle_.add_table(older_minor_handle);
+
+  ObTableHandleV2 newer_minor_handle;
+  const char *newer_minor_data[1];
+  newer_minor_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "2        -26      0        226    EXIST   LF   \n";
+
+  snapshot_version = 50;
+  scn_range.start_scn_.convert_for_tx(30);
+  scn_range.end_scn_.convert_for_tx(snapshot_version);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(snapshot_version);
+  prepare_one_macro(newer_minor_data, 1);
+  prepare_data_end(newer_minor_handle);
+  merge_context.static_param_.tables_handle_.add_table(newer_minor_handle);
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 20;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.base_version_ = 10;
+  const int64_t filter_max_version = 19;
+
+  TestMergeBasic::prepare_co_major_merge_context(
+    MAJOR_MERGE, false/*is_full_merge*/, trans_version_range, &merge_dag_, merge_context);
+  merge_context.static_param_.co_static_param_.co_major_merge_strategy_.set(false/*build_all_cg_only*/, false/*only_use_row_store*/);
+  prepare_ttl_filter(filter_max_version, merge_context);
+  merge_context.static_param_.ttl_major_for_partial_update_upper_snapshot_ = 22;
+
+  TestMergeBasic::co_major_merge(local_arena_, ObCOMergeTestType::NORMAL, merge_context, 0, 0, 2);
+
+  ObTableHandleV2 table_handle;
+  ASSERT_EQ(2, merge_context.merged_cg_tables_handle_.get_count());
+  merge_context.merged_cg_tables_handle_.get_table(0, table_handle);
+  ObSSTable *merged_sstable = static_cast<ObSSTable *>(table_handle.get_table());
+  ASSERT_NE(nullptr, merged_sstable);
+  ASSERT_EQ(1, merged_sstable->get_row_count());
+
+  const ObICompactionFilter::ObFilterStatistics &filter_statistics = merge_context.filter_ctx_.filter_statistics_;
+  LOG_INFO("filter statistics", K(filter_statistics));
+  ASSERT_EQ(filter_statistics.row_cnt_[ObICompactionFilter::ObFilterRet::FILTER_RET_REMOVE], 1);
+  ASSERT_EQ(filter_statistics.row_cnt_[ObICompactionFilter::ObFilterRet::FILTER_RET_KEEP], 0);
+
+  major_handle.reset();
+  older_minor_handle.reset();
+  newer_minor_handle.reset();
+}
+
+TEST_F(ObMajorWithTTLFilterTest, co_major_single_minor_all_virtual_row)
+{
+  int ret = OB_SUCCESS;
+  merge_type_ = MAJOR_MERGE;
+  fake_freeze_info();
+  ObTabletMergeDagParam param;
+  ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
+
+  ObTableHandleV2 major_handle;
+  const char *major_data[1];
+  major_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -15      0        100    EXIST   N    \n";
+
+  int64_t snapshot_version = 20;
+  ObScnRange scn_range;
+  scn_range.start_scn_.set_min();
+  scn_range.end_scn_.convert_for_tx(snapshot_version);
+  prepare_table_schema(major_data, schema_rowkey_cnt_, scn_range, snapshot_version);
+  TestSchemaPrepare::add_rowkey_and_each_column_group(allocator_, table_schema_);
+  reset_writer(snapshot_version, MAJOR_MERGE);
+  prepare_one_macro(major_data, 1);
+  prepare_data_end(major_handle, storage::ObITable::COLUMN_ORIENTED_SSTABLE);
+  merge_context.static_param_.tables_handle_.add_table(major_handle);
+
+  ObTableHandleV2 minor_handle;
+  const char *minor_data[1];
+  minor_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -45      0        145    EXIST   LF   \n";
+
+  scn_range.start_scn_.convert_for_tx(20);
+  scn_range.end_scn_.convert_for_tx(50);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(50);
+  prepare_one_macro(minor_data, 1);
+  prepare_data_end(minor_handle);
+  merge_context.static_param_.tables_handle_.add_table(minor_handle);
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 40;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.base_version_ = 20;
+  const int64_t filter_max_version = 10;
+
+  TestMergeBasic::prepare_co_major_merge_context(
+    MAJOR_MERGE, false/*is_full_merge*/, trans_version_range, &merge_dag_, merge_context);
+  merge_context.static_param_.co_static_param_.co_major_merge_strategy_.set(false/*build_all_cg_only*/, false/*only_use_row_store*/);
+  prepare_ttl_filter(filter_max_version, merge_context);
+  merge_context.static_param_.ttl_major_for_partial_update_upper_snapshot_ = 50;
+
+  TestMergeBasic::co_major_merge(local_arena_, ObCOMergeTestType::NORMAL, merge_context, 0, 0, 2);
+
+  ObTableHandleV2 table_handle;
+  ASSERT_EQ(2, merge_context.merged_cg_tables_handle_.get_count());
+  merge_context.merged_cg_tables_handle_.get_table(0, table_handle);
+  ObSSTable *merged_sstable = static_cast<ObSSTable *>(table_handle.get_table());
+  ASSERT_NE(nullptr, merged_sstable);
+  ASSERT_EQ(1, merged_sstable->get_row_count());
+
+  major_handle.reset();
+  minor_handle.reset();
+}
+
+TEST_F(ObMajorWithTTLFilterTest, co_major_three_minor_all_virtual_rows)
+{
+  int ret = OB_SUCCESS;
+  merge_type_ = MAJOR_MERGE;
+  fake_freeze_info();
+  ObTabletMergeDagParam param;
+  ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
+
+  ObTableHandleV2 major_handle;
+  const char *major_data[1];
+  major_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -15      0        100    EXIST   N    \n";
+
+  int64_t snapshot_version = 20;
+  ObScnRange scn_range;
+  scn_range.start_scn_.set_min();
+  scn_range.end_scn_.convert_for_tx(snapshot_version);
+  prepare_table_schema(major_data, schema_rowkey_cnt_, scn_range, snapshot_version);
+  TestSchemaPrepare::add_rowkey_and_each_column_group(allocator_, table_schema_);
+  reset_writer(snapshot_version, MAJOR_MERGE);
+  prepare_one_macro(major_data, 1);
+  prepare_data_end(major_handle, storage::ObITable::COLUMN_ORIENTED_SSTABLE);
+  merge_context.static_param_.tables_handle_.add_table(major_handle);
+
+  ObTableHandleV2 minor_handle1;
+  const char *minor_data1[1];
+  minor_data1[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -42      0        142    EXIST   LF   \n";
+  scn_range.start_scn_.convert_for_tx(20);
+  scn_range.end_scn_.convert_for_tx(43);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(43);
+  prepare_one_macro(minor_data1, 1);
+  prepare_data_end(minor_handle1);
+  merge_context.static_param_.tables_handle_.add_table(minor_handle1);
+
+  ObTableHandleV2 minor_handle2;
+  const char *minor_data2[1];
+  minor_data2[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -45      0        145    EXIST   LF   \n";
+  scn_range.start_scn_.convert_for_tx(43);
+  scn_range.end_scn_.convert_for_tx(46);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(46);
+  prepare_one_macro(minor_data2, 1);
+  prepare_data_end(minor_handle2);
+  merge_context.static_param_.tables_handle_.add_table(minor_handle2);
+
+  ObTableHandleV2 minor_handle3;
+  const char *minor_data3[1];
+  minor_data3[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -48      0        148    EXIST   LF   \n";
+  scn_range.start_scn_.convert_for_tx(46);
+  scn_range.end_scn_.convert_for_tx(50);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(50);
+  prepare_one_macro(minor_data3, 1);
+  prepare_data_end(minor_handle3);
+  merge_context.static_param_.tables_handle_.add_table(minor_handle3);
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 40;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.base_version_ = 20;
+  const int64_t filter_max_version = 10;
+
+  TestMergeBasic::prepare_co_major_merge_context(
+    MAJOR_MERGE, false/*is_full_merge*/, trans_version_range, &merge_dag_, merge_context);
+  merge_context.static_param_.co_static_param_.co_major_merge_strategy_.set(false/*build_all_cg_only*/, false/*only_use_row_store*/);
+  prepare_ttl_filter(filter_max_version, merge_context);
+  merge_context.static_param_.ttl_major_for_partial_update_upper_snapshot_ = 50;
+
+  TestMergeBasic::co_major_merge(local_arena_, ObCOMergeTestType::NORMAL, merge_context, 0, 0, 2);
+
+  ObTableHandleV2 table_handle;
+  ASSERT_EQ(2, merge_context.merged_cg_tables_handle_.get_count());
+  merge_context.merged_cg_tables_handle_.get_table(0, table_handle);
+  ObSSTable *merged_sstable = static_cast<ObSSTable *>(table_handle.get_table());
+  ASSERT_NE(nullptr, merged_sstable);
+  ASSERT_EQ(1, merged_sstable->get_row_count());
+
+  major_handle.reset();
+  minor_handle1.reset();
+  minor_handle2.reset();
+  minor_handle3.reset();
+}
+
+TEST_F(ObMajorWithTTLFilterTest, co_major_multi_minor_virtual_ops_batch)
+{
+  int ret = OB_SUCCESS;
+  merge_type_ = MAJOR_MERGE;
+  fake_freeze_info();
+  ObTabletMergeDagParam param;
+  ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
+
+  ObTableHandleV2 major_handle;
+  const char *major_data[1];
+  major_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -15      0        100    EXIST   N    \n"
+      "4        -15      0        400    EXIST   N    \n"
+      "7        -15      0        700    EXIST   N    \n"
+      "8        -15      0        800    EXIST   N    \n"
+      "9        -15      0        900    EXIST   N    \n";
+
+  int64_t snapshot_version = 20;
+  ObScnRange scn_range;
+  scn_range.start_scn_.set_min();
+  scn_range.end_scn_.convert_for_tx(snapshot_version);
+  prepare_table_schema(major_data, schema_rowkey_cnt_, scn_range, snapshot_version);
+  TestSchemaPrepare::add_rowkey_and_each_column_group(allocator_, table_schema_);
+  reset_writer(snapshot_version, MAJOR_MERGE);
+  prepare_one_macro(major_data, 1);
+  prepare_data_end(major_handle, storage::ObITable::COLUMN_ORIENTED_SSTABLE);
+  merge_context.static_param_.tables_handle_.add_table(major_handle);
+
+  ObTableHandleV2 older_minor_handle;
+  const char *older_minor_data[1];
+  older_minor_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -45      0        145    EXIST   LF   \n"
+      "4        -45      0        445    EXIST   LF   \n"
+      "7        -45      0        745    DELETE  LF   \n"
+      "8        -45      0        845    DELETE  LF   \n"
+      "101      -45      0        1011   EXIST   LF   \n"
+      "104      -45      0        1041   EXIST   LF   \n";
+  scn_range.start_scn_.convert_for_tx(20);
+  scn_range.end_scn_.convert_for_tx(45);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(45);
+  prepare_one_macro(older_minor_data, 1);
+  prepare_data_end(older_minor_handle);
+  merge_context.static_param_.tables_handle_.add_table(older_minor_handle);
+
+  ObTableHandleV2 newer_minor_handle;
+  const char *newer_minor_data[1];
+  newer_minor_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -48      0        148    EXIST   LF   \n"
+      "4        -48      0        448    EXIST   LF   \n"
+      "7        -48      0        748    DELETE  LF   \n"
+      "8        -48      0        848    DELETE  LF   \n"
+      "101      -48      0        1018   EXIST   LF   \n"
+      "104      -48      0        1048   EXIST   LF   \n";
+  scn_range.start_scn_.convert_for_tx(45);
+  scn_range.end_scn_.convert_for_tx(50);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(50);
+  prepare_one_macro(newer_minor_data, 1);
+  prepare_data_end(newer_minor_handle);
+  merge_context.static_param_.tables_handle_.add_table(newer_minor_handle);
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 40;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.base_version_ = 20;
+  const int64_t filter_max_version = 10;
+
+  TestMergeBasic::prepare_co_major_merge_context(
+    MAJOR_MERGE, false/*is_full_merge*/, trans_version_range, &merge_dag_, merge_context);
+  merge_context.static_param_.co_static_param_.co_major_merge_strategy_.set(false/*build_all_cg_only*/, false/*only_use_row_store*/);
+  prepare_ttl_filter(filter_max_version, merge_context);
+  merge_context.static_param_.ttl_major_for_partial_update_upper_snapshot_ = 50;
+
+  TestMergeBasic::co_major_merge(local_arena_, ObCOMergeTestType::NORMAL, merge_context, 0, 0, 2);
+
+  ObTableHandleV2 table_handle;
+  ASSERT_EQ(2, merge_context.merged_cg_tables_handle_.get_count());
+  merge_context.merged_cg_tables_handle_.get_table(0, table_handle);
+  ObSSTable *merged_sstable = static_cast<ObSSTable *>(table_handle.get_table());
+  ASSERT_NE(nullptr, merged_sstable);
+  ASSERT_EQ(5, merged_sstable->get_row_count());
+
+  major_handle.reset();
+  older_minor_handle.reset();
+  newer_minor_handle.reset();
 }
 
 // Test case: filter_version equals min - should OPEN and filter some rows
@@ -1315,6 +2126,549 @@ TEST_F(ObMajorWithTTLFilterTest, large_macro_blocks_with_complex_pattern)
   ASSERT_EQ(filter_statistics.row_cnt_[ObICompactionFilter::ObFilterRet::FILTER_RET_KEEP], 31);
   ASSERT_EQ(filter_statistics.row_cnt_[ObICompactionFilter::ObFilterRet::FILTER_RET_REMOVE], 38);
   ASSERT_EQ(filter_statistics.filter_block_row_cnt_, 41);
+}
+
+// Test case: major + minor merge with TTL filter
+// Old major (snapshot=10): 6 rowkeys, all trans_version < 10
+// Minor (scn_range: 10~30): updates for rowkeys 1-5
+//   a) rowkey 1: updates at trans_version 15 and 25 (cross snapshot boundary)
+//   b) rowkey 2: updates at trans_version 12 and 18 (within snapshot)
+//      rowkey 3: update at trans_version 20 (exactly at snapshot)
+//   c) rowkey 4: updates at trans_version 20 and 28 (at/above snapshot)
+//      rowkey 5: update at trans_version 22 (above snapshot)
+// New major snapshot=20, TTL filter_version=19
+// Rowkeys with versions > snapshot (1,4,5) are still alive and must NOT be filtered.
+// Only rowkeys whose ALL versions <= snapshot AND fused trans <= 19 are filtered (2,6).
+// Expected survivors: rowkey 1,3,4,5
+TEST_F(ObMajorWithTTLFilterTest, major_minor_merge_with_ttl_filter)
+{
+  int ret = OB_SUCCESS;
+  merge_type_ = MAJOR_MERGE;
+  fake_freeze_info();
+  ObTabletMergeDagParam param;
+  ObTabletMajorMergeCtx merge_context(param, allocator_);
+  ObPartitionMajorMerger merger(local_arena_, merge_context.static_param_);
+
+  // 1) Old major sstable: all rows have trans_version < 10
+  ObTableHandleV2 handle1;
+  const char *major_data[1];
+  major_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -5       0        10     EXIST   N    \n"
+      "2        -8       0        20     EXIST   N    \n"
+      "3        -3       0        30     EXIST   N    \n"
+      "4        -7       0        40     EXIST   N    \n"
+      "5        -6       0        50     EXIST   N    \n"
+      "6        -9       0        60     EXIST   N    \n";
+
+  int64_t snapshot_version = 10;
+  ObScnRange scn_range;
+  scn_range.start_scn_.set_min();
+  scn_range.end_scn_.convert_for_tx(10);
+  prepare_table_schema(major_data, schema_rowkey_cnt_, scn_range, snapshot_version);
+  reset_writer(snapshot_version, MAJOR_MERGE);
+  prepare_one_macro(major_data, 1);
+  prepare_data_end(handle1, ObITable::MAJOR_SSTABLE);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
+  STORAGE_LOG(INFO, "finish prepare major sstable");
+
+  // 2) Minor sstable: updates for rowkeys 1-5
+  ObTableHandleV2 handle2;
+  const char *minor_data[1];
+  minor_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -25      MIN      125    EXIST   SCF   \n"
+      "1        -25      0        125    EXIST   C   \n"
+      "1        -15      0        110    EXIST   CL   \n"
+      "2        -18      MIN      218    EXIST   SCF   \n"
+      "2        -18      0        218    EXIST   C   \n"
+      "2        -12      0        212    EXIST   CL   \n"
+      "3        -20      0        320    EXIST   LF   \n"
+      "4        -28      MIN      428    EXIST   SCF   \n"
+      "4        -28      0        428    EXIST   N   \n"
+      "4        -20      0        420    EXIST   CL   \n"
+      "5        -22      0        522    EXIST   LF   \n";
+
+  snapshot_version = 30;
+  scn_range.start_scn_.convert_for_tx(10);
+  scn_range.end_scn_.convert_for_tx(30);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(snapshot_version);
+  prepare_one_macro(minor_data, 1);
+  prepare_data_end(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
+  STORAGE_LOG(INFO, "finish prepare minor sstable");
+
+  // 3) TTL filter with filter_version=19, target snapshot=20
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 20;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.base_version_ = 1;
+  const int64_t filter_max_version = 19;
+
+  prepare_merge_context(MAJOR_MERGE, false, trans_version_range, merge_context);
+  prepare_ttl_filter(filter_max_version, merge_context);
+  // upper_snapshot=30 covers all minor rows (max trans_version=28), so the new
+  // bound does not change behavior of this case.
+  merge_context.static_param_.ttl_major_for_partial_update_upper_snapshot_ = 30;
+
+  // 4) Merge
+  ObSSTable *merged_sstable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, merger.merge_partition(merge_context, 0));
+  build_sstable(merge_context, merged_sstable);
+
+  // 5) Verify result
+  // Rowkey 1: has minor@25 > snapshot(20), row is still alive -> KEPT (fused trans=15, data=110)
+  // Rowkey 2: all versions <= snapshot, fused trans=18 <= 19   -> FILTERED
+  // Rowkey 3: all versions <= snapshot, fused trans=20 > 19    -> KEPT
+  // Rowkey 4: has minor@28 > snapshot(20), row is still alive  -> KEPT (fused trans=20, data=420)
+  // Rowkey 5: has minor@22 > snapshot(20), row is still alive  -> KEPT (fused trans=6, data=50)
+  // Rowkey 6: all versions <= snapshot, fused trans=9 <= 19    -> FILTERED
+  const char *result1 =
+      "bigint   bigint   bigint   bigint   flag    multi_version_row_flag \n"
+      "1        -15      0        110      EXIST   N \n"
+      "3        -20      0        320      EXIST   N \n"
+      "4        -20      0        420      EXIST   N \n"
+      "5        -6       0        50       EXIST   N \n";
+
+  ObMockIterator res_iter;
+  ObStoreRowIterator *scanner = NULL;
+  ObDatumRange range;
+  res_iter.reset();
+  range.set_whole_range();
+  trans_version_range.base_version_ = 1;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.snapshot_version_ = INT64_MAX;
+  prepare_query_param(trans_version_range);
+  ASSERT_EQ(OB_SUCCESS, merged_sstable->scan(iter_param_, context_, range, scanner));
+  ASSERT_EQ(OB_SUCCESS, res_iter.from(result1));
+  ObMockDirectReadIterator sstable_iter;
+  ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
+  bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
+  ASSERT_TRUE(is_equal);
+  ASSERT_EQ(4, merged_sstable->get_row_count());
+
+  const ObICompactionFilter::ObFilterStatistics &filter_statistics = merge_context.filter_ctx_.filter_statistics_;
+  LOG_INFO("filter statistics", K(filter_statistics));
+  ASSERT_EQ(filter_statistics.row_cnt_[ObICompactionFilter::ObFilterRet::FILTER_RET_REMOVE], 2);
+  ASSERT_EQ(filter_statistics.row_cnt_[ObICompactionFilter::ObFilterRet::FILTER_RET_KEEP], 4);
+
+  scanner->~ObStoreRowIterator();
+  handle1.reset();
+  handle2.reset();
+  merger.reset();
+}
+
+// Test case: major + minor merge with TTL filter
+// Same setup as major_minor_merge_with_ttl_filter, except that every rowkey with
+// multi-version rows in minor spans macro blocks:
+//   rowkey 1: macro-1 -> macro-2
+//   rowkey 2: macro-2 -> macro-3
+//   rowkey 4: macro-3 -> macro-4
+// New major snapshot=20, TTL filter_version=19
+// The final result should be identical to major_minor_merge_with_ttl_filter.
+TEST_F(ObMajorWithTTLFilterTest, major_minor_merge_with_ttl_filter_cross_micro_and_macro)
+{
+  int ret = OB_SUCCESS;
+  merge_type_ = MAJOR_MERGE;
+  fake_freeze_info();
+  ObTabletMergeDagParam param;
+  ObTabletMajorMergeCtx merge_context(param, allocator_);
+  ObPartitionMajorMerger merger(local_arena_, merge_context.static_param_);
+
+  // 1) Old major sstable: all rows have trans_version < 10
+  ObTableHandleV2 handle1;
+  const char *major_data[1];
+  major_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -5       0        10     EXIST   N    \n"
+      "2        -8       0        20     EXIST   N    \n"
+      "3        -3       0        30     EXIST   N    \n"
+      "4        -7       0        40     EXIST   N    \n"
+      "5        -6       0        50     EXIST   N    \n"
+      "6        -9       0        60     EXIST   N    \n";
+
+  int64_t snapshot_version = 10;
+  ObScnRange scn_range;
+  scn_range.start_scn_.set_min();
+  scn_range.end_scn_.convert_for_tx(10);
+  prepare_table_schema(major_data, schema_rowkey_cnt_, scn_range, snapshot_version);
+  reset_writer(snapshot_version, MAJOR_MERGE);
+  prepare_one_macro(major_data, 1);
+  prepare_data_end(handle1, ObITable::MAJOR_SSTABLE);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
+  STORAGE_LOG(INFO, "finish prepare major sstable");
+
+  // 2) Minor sstable: keep the same version pattern, but make every rowkey with
+  // multi-version rows cross macro blocks.
+  ObTableHandleV2 handle2;
+  const char *minor_data[4];
+  minor_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -25      MIN      125    EXIST   SCF   \n";
+  minor_data[1] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -25      0        125    EXIST   C   \n"
+      "1        -15      0        110    EXIST   CL   \n"
+      "2        -18      MIN      218    EXIST   SCF   \n";
+  minor_data[2] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "2        -18      0        218    EXIST   C   \n"
+      "2        -12      0        212    EXIST   CL   \n"
+      "3        -20      0        320    EXIST   LF   \n"
+      "4        -28      MIN      428    EXIST   SCF   \n";
+  minor_data[3] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "4        -28      0        428    EXIST   N   \n"
+      "4        -20      0        420    EXIST   CL   \n"
+      "5        -22      0        522    EXIST   LF   \n";
+
+  snapshot_version = 30;
+  scn_range.start_scn_.convert_for_tx(10);
+  scn_range.end_scn_.convert_for_tx(30);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(snapshot_version);
+  prepare_one_macro(minor_data, 1);
+  prepare_one_macro(&minor_data[1], 1);
+  prepare_one_macro(&minor_data[2], 1);
+  prepare_one_macro(&minor_data[3], 1);
+  prepare_data_end(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
+  STORAGE_LOG(INFO, "finish prepare minor sstable");
+
+  // 3) TTL filter with filter_version=19, target snapshot=20
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 20;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.base_version_ = 1;
+  const int64_t filter_max_version = 19;
+
+  prepare_merge_context(MAJOR_MERGE, false, trans_version_range, merge_context);
+  prepare_ttl_filter(filter_max_version, merge_context);
+  // upper_snapshot=30 covers all minor rows (max trans_version=28), so the new
+  // bound does not change behavior of this case.
+  merge_context.static_param_.ttl_major_for_partial_update_upper_snapshot_ = 30;
+
+  // 4) Merge
+  ObSSTable *merged_sstable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, merger.merge_partition(merge_context, 0));
+  build_sstable(merge_context, merged_sstable);
+
+  // 5) Verify result
+  const char *result1 =
+      "bigint   bigint   bigint   bigint   flag    multi_version_row_flag \n"
+      "1        -15      0        110      EXIST   N \n"
+      "3        -20      0        320      EXIST   N \n"
+      "4        -20      0        420      EXIST   N \n"
+      "5        -6       0        50       EXIST   N \n";
+
+  ObMockIterator res_iter;
+  ObStoreRowIterator *scanner = NULL;
+  ObDatumRange range;
+  res_iter.reset();
+  range.set_whole_range();
+  trans_version_range.base_version_ = 1;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.snapshot_version_ = INT64_MAX;
+  prepare_query_param(trans_version_range);
+  ASSERT_EQ(OB_SUCCESS, merged_sstable->scan(iter_param_, context_, range, scanner));
+  ASSERT_EQ(OB_SUCCESS, res_iter.from(result1));
+  ObMockDirectReadIterator sstable_iter;
+  ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
+  bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
+  ASSERT_TRUE(is_equal);
+  ASSERT_EQ(4, merged_sstable->get_row_count());
+
+  const ObICompactionFilter::ObFilterStatistics &filter_statistics = merge_context.filter_ctx_.filter_statistics_;
+  LOG_INFO("filter statistics", K(filter_statistics));
+  ASSERT_EQ(filter_statistics.row_cnt_[ObICompactionFilter::ObFilterRet::FILTER_RET_REMOVE], 2);
+  ASSERT_EQ(filter_statistics.row_cnt_[ObICompactionFilter::ObFilterRet::FILTER_RET_KEEP], 4);
+
+  scanner->~ObStoreRowIterator();
+  handle1.reset();
+  handle2.reset();
+  merger.reset();
+}
+
+// Test case: major + 2 minor sstables with TTL filter
+// Old major rows all have trans_version=40.
+// For the same rowkey, versions in each minor sstable fall into one of:
+//   A) only versions < major version
+//   B) versions both < and > major version
+//   C) only versions > major version
+// This case covers ordered combinations:
+//   rowkey 1: A -> A
+//   rowkey 2: A -> B
+//   rowkey 3: A -> C
+//   rowkey 4: B -> A
+//   rowkey 5: B -> B
+//   rowkey 6: B -> C
+//   rowkey 7: C -> B
+//   rowkey 8: C -> C
+// Combination C -> A is intentionally excluded because it would make the newer
+// sstable completely lower than the older sstable for the same rowkey.
+// New major snapshot=45, TTL filter_version=40.
+// Only rowkey 1 should be filtered because all versions <= snapshot and the
+// fused row still resolves to the old major version 40.
+TEST_F(ObMajorWithTTLFilterTest, major_multi_minor_merge_with_ttl_filter_version_combinations)
+{
+  int ret = OB_SUCCESS;
+  merge_type_ = MAJOR_MERGE;
+  fake_freeze_info();
+  ObTabletMergeDagParam param;
+  ObTabletMajorMergeCtx merge_context(param, allocator_);
+  ObPartitionMajorMerger merger(local_arena_, merge_context.static_param_);
+
+  // 1) Old major sstable: all rows have trans_version = 40
+  ObTableHandleV2 handle1;
+  const char *major_data[1];
+  major_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -40      0        100    EXIST   N    \n"
+      "2        -40      0        200    EXIST   N    \n"
+      "3        -40      0        300    EXIST   N    \n"
+      "4        -40      0        400    EXIST   N    \n"
+      "5        -40      0        500    EXIST   N    \n"
+      "6        -40      0        600    EXIST   N    \n"
+      "7        -40      0        700    EXIST   N    \n"
+      "8        -40      0        800    EXIST   N    \n";
+
+  int64_t snapshot_version = 40;
+  ObScnRange scn_range;
+  scn_range.start_scn_.set_min();
+  scn_range.end_scn_.convert_for_tx(40);
+  prepare_table_schema(major_data, schema_rowkey_cnt_, scn_range, snapshot_version);
+  reset_writer(snapshot_version, MAJOR_MERGE);
+  prepare_one_macro(major_data, 1);
+  prepare_data_end(handle1, ObITable::MAJOR_SSTABLE);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
+  STORAGE_LOG(INFO, "finish prepare major sstable");
+
+  // 2) Older minor sstable
+  // rowkey 1: A, rowkey 2: A, rowkey 3: A, rowkey 4: B,
+  // rowkey 5: B, rowkey 6: B, rowkey 7: C, rowkey 8: C
+  ObTableHandleV2 handle2;
+  const char *minor_data1[1];
+  minor_data1[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -15      0        115    EXIST   LF   \n"
+      "2        -15      0        215    EXIST   LF   \n"
+      "3        -15      0        315    EXIST   LF   \n"
+      "4        -42      MIN      442    EXIST   SCF  \n"
+      "4        -42      0        442    EXIST   C    \n"
+      "4        -18      0        418    EXIST   CL   \n"
+      "5        -42      MIN      542    EXIST   SCF  \n"
+      "5        -42      0        542    EXIST   C    \n"
+      "5        -18      0        518    EXIST   CL   \n"
+      "6        -42      MIN      642    EXIST   SCF  \n"
+      "6        -42      0        642    EXIST   C    \n"
+      "6        -18      0        618    EXIST   CL   \n"
+      "7        -44      0        744    EXIST   LF   \n"
+      "8        -44      0        844    EXIST   LF   \n";
+
+  scn_range.start_scn_.convert_for_tx(10);
+  scn_range.end_scn_.convert_for_tx(45);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(45);
+  prepare_one_macro(minor_data1, 1);
+  prepare_data_end(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
+  STORAGE_LOG(INFO, "finish prepare older minor sstable");
+
+  // 3) Newer minor sstable
+  // rowkey 1: A, rowkey 2: B, rowkey 3: C, rowkey 4: A,
+  // rowkey 5: B, rowkey 6: C, rowkey 7: B, rowkey 8: C
+  ObTableHandleV2 handle3;
+  const char *minor_data2[1];
+  minor_data2[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -35      0        135    EXIST   LF   \n"
+      "2        -45      MIN      245    EXIST   SCF  \n"
+      "2        -45      0        245    EXIST   C    \n"
+      "2        -38      0        238    EXIST   CL   \n"
+      "3        -44      0        344    EXIST   LF   \n"
+      "4        -35      0        435    EXIST   LF   \n"
+      "5        -45      MIN      545    EXIST   SCF  \n"
+      "5        -45      0        545    EXIST   C    \n"
+      "5        -38      0        538    EXIST   CL   \n"
+      "6        -46      0        646    EXIST   LF   \n"
+      "7        -48      MIN      748    EXIST   SCF  \n"
+      "7        -48      0        748    EXIST   C    \n"
+      "7        -38      0        738    EXIST   CL   \n"
+      "8        -46      0        846    EXIST   LF   \n";
+
+  scn_range.start_scn_.convert_for_tx(30);
+  scn_range.end_scn_.convert_for_tx(50);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(50);
+  prepare_one_macro(minor_data2, 1);
+  prepare_data_end(handle3);
+  merge_context.static_param_.tables_handle_.add_table(handle3);
+  STORAGE_LOG(INFO, "finish prepare newer minor sstable");
+
+  // 4) TTL filter with filter_version=40, target snapshot=45
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 45;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.base_version_ = 1;
+  const int64_t filter_max_version = 40;
+
+  prepare_merge_context(MAJOR_MERGE, false, trans_version_range, merge_context);
+  prepare_ttl_filter(filter_max_version, merge_context);
+  // upper_snapshot=50 covers all minor rows (max trans_version=48), so the new
+  // bound does not change behavior of this case.
+  merge_context.static_param_.ttl_major_for_partial_update_upper_snapshot_ = 50;
+
+  // 5) Merge
+  ObSSTable *merged_sstable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, merger.merge_partition(merge_context, 0));
+  build_sstable(merge_context, merged_sstable);
+
+  // 6) Verify result
+  const char *result1 =
+      "bigint   bigint   bigint   bigint   flag    multi_version_row_flag \n"
+      "2        -45      0        245      EXIST   N \n"
+      "3        -44      0        344      EXIST   N \n"
+      "4        -42      0        442      EXIST   N \n"
+      "5        -45      0        545      EXIST   N \n"
+      "6        -42      0        642      EXIST   N \n"
+      "7        -44      0        744      EXIST   N \n"
+      "8        -44      0        844      EXIST   N \n";
+
+  ObMockIterator res_iter;
+  ObStoreRowIterator *scanner = NULL;
+  ObDatumRange range;
+  res_iter.reset();
+  range.set_whole_range();
+  trans_version_range.base_version_ = 1;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.snapshot_version_ = INT64_MAX;
+  prepare_query_param(trans_version_range);
+  ASSERT_EQ(OB_SUCCESS, merged_sstable->scan(iter_param_, context_, range, scanner));
+  ASSERT_EQ(OB_SUCCESS, res_iter.from(result1));
+  ObMockDirectReadIterator sstable_iter;
+  ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
+  bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(
+      sstable_iter, true/*cmp multi version row flag*/);
+  ASSERT_TRUE(is_equal);
+  ASSERT_EQ(7, merged_sstable->get_row_count());
+
+  const ObICompactionFilter::ObFilterStatistics &filter_statistics = merge_context.filter_ctx_.filter_statistics_;
+  LOG_INFO("filter statistics", K(filter_statistics));
+  ASSERT_EQ(filter_statistics.row_cnt_[ObICompactionFilter::ObFilterRet::FILTER_RET_REMOVE], 1);
+  ASSERT_EQ(filter_statistics.row_cnt_[ObICompactionFilter::ObFilterRet::FILTER_RET_KEEP], 7);
+
+  scanner->~ObStoreRowIterator();
+  handle1.reset();
+  handle2.reset();
+  handle3.reset();
+  merger.reset();
+}
+
+// Test case: ttl_major_for_partial_update_upper_snapshot_ takes effect.
+//
+// Setup mirrors the existing TTL tests, but two rowkeys symmetrically demonstrate
+// the bound. snapshot=20, upper_snapshot=22, filter_version=19.
+//
+//   rowkey 1: minor@21 (in (snapshot, upper], fits & sets E flag) -> KEPT
+//   rowkey 2: minor@25 (>  upper_snapshot,    must be ignored)    -> FILTERED
+//
+// Without the upper bound, rowkey 2's minor@25 would set
+// exist_new_committed_row_ on the fused row and rescue it from the ttl filter,
+// which is exactly the multi-replica checksum mismatch this fix prevents.
+TEST_F(ObMajorWithTTLFilterTest, major_minor_merge_with_upper_snapshot_filter)
+{
+  int ret = OB_SUCCESS;
+  merge_type_ = MAJOR_MERGE;
+  fake_freeze_info();
+  ObTabletMergeDagParam param;
+  ObTabletMajorMergeCtx merge_context(param, allocator_);
+  ObPartitionMajorMerger merger(local_arena_, merge_context.static_param_);
+
+  // 1) Old major sstable: both rowkeys have trans_version < filter_version=19
+  ObTableHandleV2 handle1;
+  const char *major_data[1];
+  major_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -5       0        10     EXIST   N    \n"
+      "2        -5       0        20     EXIST   N    \n";
+
+  int64_t snapshot_version = 10;
+  ObScnRange scn_range;
+  scn_range.start_scn_.set_min();
+  scn_range.end_scn_.convert_for_tx(10);
+  prepare_table_schema(major_data, schema_rowkey_cnt_, scn_range, snapshot_version);
+  reset_writer(snapshot_version, MAJOR_MERGE);
+  prepare_one_macro(major_data, 1);
+  prepare_data_end(handle1, ObITable::MAJOR_SSTABLE);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
+
+  // 2) Minor sstable:
+  //   rowkey 1: trans=21 in (snapshot=20, upper=22] -> sets exist_new_committed_row_, KEPT
+  //   rowkey 2: trans=25 > upper=22                 -> ignored entirely, ttl filter applies
+  ObTableHandleV2 handle2;
+  const char *minor_data[1];
+  minor_data[0] =
+      "bigint   bigint   bigint   bigint flag    multi_version_row_flag \n"
+      "1        -21      0        121    EXIST   LF   \n"
+      "2        -25      0        225    EXIST   LF   \n";
+
+  snapshot_version = 30;
+  scn_range.start_scn_.convert_for_tx(10);
+  scn_range.end_scn_.convert_for_tx(30);
+  table_key_.scn_range_ = scn_range;
+  reset_writer(snapshot_version);
+  prepare_one_macro(minor_data, 1);
+  prepare_data_end(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
+
+  // 3) TTL filter: filter_max_version=19, snapshot=20, upper_snapshot=22
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 20;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.base_version_ = 1;
+  const int64_t filter_max_version = 19;
+
+  prepare_merge_context(MAJOR_MERGE, false, trans_version_range, merge_context);
+  prepare_ttl_filter(filter_max_version, merge_context);
+  merge_context.static_param_.ttl_major_for_partial_update_upper_snapshot_ = 22;
+
+  ObSSTable *merged_sstable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, merger.merge_partition(merge_context, 0));
+  build_sstable(merge_context, merged_sstable);
+
+  // 4) Verify result: only rowkey 1 (rescued by in-range new committed row) survives
+  const char *result1 =
+      "bigint   bigint   bigint   bigint   flag    multi_version_row_flag \n"
+      "1        -5       0        10       EXIST   N \n";
+
+  ObMockIterator res_iter;
+  ObStoreRowIterator *scanner = NULL;
+  ObDatumRange range;
+  res_iter.reset();
+  range.set_whole_range();
+  trans_version_range.base_version_ = 1;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.snapshot_version_ = INT64_MAX;
+  prepare_query_param(trans_version_range);
+  ASSERT_EQ(OB_SUCCESS, merged_sstable->scan(iter_param_, context_, range, scanner));
+  ASSERT_EQ(OB_SUCCESS, res_iter.from(result1));
+  ObMockDirectReadIterator sstable_iter;
+  ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
+  bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(
+      sstable_iter, true/*cmp multi version row flag*/);
+  ASSERT_TRUE(is_equal);
+  ASSERT_EQ(1, merged_sstable->get_row_count());
+
+  const ObICompactionFilter::ObFilterStatistics &filter_statistics = merge_context.filter_ctx_.filter_statistics_;
+  LOG_INFO("filter statistics", K(filter_statistics));
+  ASSERT_EQ(filter_statistics.row_cnt_[ObICompactionFilter::ObFilterRet::FILTER_RET_REMOVE], 1);
+  ASSERT_EQ(filter_statistics.row_cnt_[ObICompactionFilter::ObFilterRet::FILTER_RET_KEEP], 1);
+
+  scanner->~ObStoreRowIterator();
+  handle1.reset();
+  handle2.reset();
+  merger.reset();
 }
 
 } // namespace storage

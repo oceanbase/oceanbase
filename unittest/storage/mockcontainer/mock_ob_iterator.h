@@ -76,7 +76,8 @@ public:
 
   static bool inner_equals(const blocksstable::ObDatumRow &r1, const blocksstable::ObDatumRow &r2);
   static bool equals(const blocksstable::ObDatumRow &r1, const blocksstable::ObDatumRow &r2,
-      const bool cmp_multi_version_row_flag = false, const bool cmp_is_get_and_scan_index = false);
+      const bool cmp_multi_version_row_flag = false, const bool cmp_row_flag = false,
+      const bool cmp_is_get_and_scan_index = false);
   bool equals(int64_t idx, blocksstable::ObDatumRow &row) const;
   bool equals(int64_t idx, const blocksstable::ObDatumRow &row) const;
   bool equals(blocksstable::ObDatumRow &other_row) const { return equals(0, other_row); }
@@ -261,11 +262,12 @@ public:
   static const int64_t MAX_DATA_LENGTH = 4096;
   static const int64_t DEF_COL_NUM     = 16;
   static const int TYPE_NUM = 6;
-  static const int INFO_NUM = 2;
+  static const int INFO_NUM = 8;
   static const int FLAG_NUM = 5;
   static const int DML_NUM = 6;
   static const int BASE_NUM = 2;
   static const int MULTI_VERSION_ROW_FLAG_NUM = 5;
+  static const int MAJOR_MERGE_FLAG_NUM = 5;
   static const int TRANS_ID_NUM = 10;
 
   static const int64_t STATE_BEGIN = 0;
@@ -455,6 +457,10 @@ private:
                                               const common::ObString &word,
                                               storage::ObStoreRow &row,
                                               int64_t &idx);
+  static int parse_datum_major_merge_flag(common::ObIAllocator *allocator,
+                                          const common::ObString &word,
+                                          blocksstable::ObDatumRow &row,
+                                          int64_t &idx);
   static int parse_is_get(common::ObIAllocator *allocator,
                           const common::ObString &word,
                           storage::ObStoreRow &row,
@@ -536,6 +542,7 @@ private:
   static common::hash::ObHashMap<common::ObString, bool> str_to_base_;
   static common::hash::ObHashMap<common::ObString, bool> str_to_is_get_;
   static common::hash::ObHashMap<common::ObString, uint8_t> str_to_multi_version_row_flag_;
+  static common::hash::ObHashMap<common::ObString, uint8_t> str_to_major_merge_flag_;
   static common::hash::ObHashMap<ObString, transaction::ObTransID> str_to_trans_id_;
 
 private:

@@ -64,6 +64,10 @@ public:
     const blocksstable::ObMicroIndexInfo &micro_index_info,
     const int64_t trans_version_col_idx,
     ObTransVersionSkipIndexInfo &skip_index_info);
+  static int read_min_max_snapshot(
+    const int64_t col_idx,
+    blocksstable::ObAggRowCachedReader &reader,
+    ObTransVersionSkipIndexInfo &skip_index_info);
 private:
   static int inner_read_min_max_snapshot(
     const int64_t col_idx,

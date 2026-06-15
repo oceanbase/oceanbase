@@ -40,7 +40,8 @@ public:
 
 struct ObLobMetaInfo {
   ObLobMetaInfo()
-    : lob_id_(), seq_id_(), char_len_(0), byte_len_(0), piece_id_(0), lob_data_()
+      : lob_id_(), seq_id_(), char_len_(0), byte_len_(0), piece_id_(0), lob_data_(),
+        hidden_ttl_column_(), has_ttl_column_(false)
   {}
 
   int deep_copy(ObIAllocator &allocator, ObLobMetaInfo& src)
@@ -66,7 +67,28 @@ struct ObLobMetaInfo {
         lob_data_.assign_ptr(buf, src.lob_data_.length());
       }
     }
+    if (OB_FAIL(ret)) {
+    } else if (src.has_ttl_column_) {
+      if (OB_FAIL(hidden_ttl_column_.deep_copy(src.hidden_ttl_column_, allocator))) {
+        COMMON_LOG(WARN, "deep copy hidden ttl column failed", K(ret));
+      }
+    }
     return ret;
+  }
+
+  OB_INLINE bool has_ttl_datum() const
+  {
+    return has_ttl_column_;
+  }
+
+  OB_INLINE void shallow_copy_ttl_datum(const ObDatum &datum)
+  {
+    // Even if the datum is null, it also means this lob table has ttl column.
+    has_ttl_column_ = true;
+    hidden_ttl_column_.set_datum(datum);
+
+    // Check in debug mode
+    OB_ASSERT(hidden_ttl_column_.is_null() || hidden_ttl_column_.ptr_ != nullptr);
   }
 
   int64_t to_string(char* buf, const int64_t buf_len) const
@@ -93,6 +115,10 @@ struct ObLobMetaInfo {
       lob_data.assign_ptr(lob_data.ptr(), 500);
     }
     oceanbase::common::databuff_print_kv(buf, buf_len, pos, K(lob_data));
+    if (has_ttl_column_) {
+      common::databuff_printf(buf, buf_len, pos, ", ");
+      oceanbase::common::databuff_print_kv(buf, buf_len, pos, K(hidden_ttl_column_));
+    }
     J_OBJ_END();
     return pos;
   }
@@ -105,6 +131,8 @@ struct ObLobMetaInfo {
     byte_len_ = 0;
     piece_id_ = 0;
     lob_data_.reset();
+    hidden_ttl_column_.reset();
+    has_ttl_column_ = false;
   }
 
   ObLobId lob_id_;
@@ -114,6 +142,8 @@ struct ObLobMetaInfo {
   // blocksstable::MacroBlockId macro_id_;
   uint64_t piece_id_;
   ObString lob_data_;
+  ObDatum hidden_ttl_column_;
+  bool has_ttl_column_;
 };
 
 struct ObLobPieceInfo {
@@ -189,6 +219,8 @@ public:
                                const int64_t timeout_ts,
                                const bool has_lob_header,
                                const uint64_t src_tenant_id,
+                               const blocksstable::ObStorageDatum *ttl_datum,
+                               const ObTTLFilterColType ttl_col_type,
                                ObLobMetaWriteIter &iter);
 };
 

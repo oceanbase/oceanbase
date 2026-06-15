@@ -34,8 +34,7 @@ public:
   virtual CompactionFilterType get_filter_type() const override { return ROWSCN_FILTER; }
   virtual int filter(const blocksstable::ObDatumRow &row, ObFilterRet &filter_ret) const override;
   virtual int get_filter_op(
-    const int64_t min_merged_snapshot,
-    const int64_t max_merged_snapshot,
+    blocksstable::ObAggRowCachedReader &agg_row_cached_reader,
     ObBlockOp &op) const override;
   virtual int64_t get_trans_version_col_idx() const override { return filter_col_idx_; }
   void gene_info(char* buf, const int64_t buf_len, int64_t &pos) const;

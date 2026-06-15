@@ -9,7 +9,7 @@
 #include "storage/compaction_ttl/ob_base_version_filter.h"
 #include "storage/compaction_ttl/ob_ttl_filter.h"
 #include "storage/truncate_info/ob_truncate_partition_filter.h"
-#include "sql/engine/ob_exec_context.h"
+#include "storage/blocksstable/ob_sstable.h"
 
 namespace oceanbase
 {
@@ -62,30 +62,22 @@ public:
   using MDSFilterType = ObMDSFilterFlags::MDSFilterType;
 
 public:
-  ObMDSFilterMgr(ObIAllocator *outer_allocator)
+  ObMDSFilterMgr(ObIAllocator &outer_allocator)
       : outer_allocator_(outer_allocator),
         filter_allocator_("MDSFilterMgr", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
-        exec_ctx_(filter_allocator_),
-        eval_ctx_(exec_ctx_),
-        expr_spec_(filter_allocator_),
-        op_(eval_ctx_, expr_spec_),
-        filter_factory_(&filter_allocator_),
         and_filter_node_(nullptr),
         and_filter_executor_(nullptr),
-        and_filter_flags_(),
-        sql_pd_filter_in_final_(nullptr),
-        final_root_filter_(nullptr),
         truncate_partition_filter_(nullptr),
         ttl_filter_(nullptr),
         base_version_filter_(nullptr),
-        build_filter_flags_(),
-        combined_child_count_(-1)
+        build_filter_flags_()
   {
   }
 
   ~ObMDSFilterMgr();
 
-  OB_INLINE ObIAllocator *get_outer_allocator() const { return outer_allocator_; }
+  OB_INLINE ObIAllocator &get_outer_allocator() const { return outer_allocator_; }
+  OB_INLINE ObArenaAllocator &get_filter_allocator() { return filter_allocator_; }
   OB_INLINE ObTruncatePartitionFilter *get_truncate_partition_filter() const
   {
     return build_filter_flags_.has_type(MDSFilterType::TRUNCATE_FILTER) ? truncate_partition_filter_ : nullptr;
@@ -101,8 +93,7 @@ public:
 
   OB_INLINE int build_filters(ObTablet &tablet,
                               const ObIArray<ObTabletHandle> *split_extra_tablet_handles,
-                              const ObIArray<ObColDesc> &cols_desc,
-                              const ObIArray<ObColumnParam *> *cols_param,
+                              const ObITableReadInfo &read_info,
                               const ObVersionRange &read_version_range,
                               const ObMDSFilterFlags &mds_filter_flags);
 
@@ -114,12 +105,7 @@ public:
 
   int check_filter_row_complete(const ObDatumRow &row, bool &complete) const;
 
-  int combine_to_filter_tree_with_check(sql::ObPushdownFilterExecutor *&root_filter, sql::ObPushdownFilterExecutor *sql_pushdown_filter);
-
-  OB_INLINE void set_uncombined()
-  {
-    combined_child_count_ = -1;
-  }
+  int combine_to_filter_tree(sql::ObPushdownFilterExecutor *&root_filter, sql::ObPushdownFilterExecutor *sql_pushdown_filter);
 
   OB_INLINE bool is_empty() const { return build_filter_flags_.is_empty(); }
   OB_INLINE void set_should_combine_filters_flag(const ObMDSFilterFlags &mds_filter_flags)
@@ -131,56 +117,31 @@ public:
     build_filter_flags_.reset();
   }
 
-  OB_INLINE sql::ObPushdownFilterFactory &get_filter_factory() { return filter_factory_; }
-  OB_INLINE sql::ObPushdownOperator &get_pushdown_operator() { return op_; }
-
   TO_STRING_KV(KPC(truncate_partition_filter_),
                KPC(ttl_filter_),
                KPC(base_version_filter_),
                K(build_filter_flags_),
-               K(and_filter_flags_),
-               K(and_filter_executor_),
-               K(combined_child_count_),
-               K(final_root_filter_),
-               K(sql_pd_filter_in_final_));
+               K(and_filter_executor_));
 
 private:
-  int combine_to_filter_tree_without_check(sql::ObPushdownFilterExecutor *&root_filter, sql::ObPushdownFilterExecutor *sql_pushdown_filter);
+  // the mds filter mgr is always allocated by outer allocator in query path, and the same as other filter-wrapper.
+  // we don't allocate mds filter by this allocator, because we need to reuse them for whole sql-stmt and never release them.
+  // Therefore, a dedicated allocator is better. (In DML path, this allocator will be an FIFO allocator)
+  ObIAllocator &outer_allocator_;
 
-private:
-  // the mds filter mgr is always allocated by outer allocator in query path, and the same as other filter
-  // in compaction path, this is nullptr
-  ObIAllocator *outer_allocator_;
-
-  // this allocator is used to allocate and filter
+  // this allocator is used to allocate any mds-related filter
   ObArenaAllocator filter_allocator_;
 
-  // below struct is shared by all mds filter(ttl filter, base version filter, truncate filter)
-  sql::ObExecContext exec_ctx_;
-  sql::ObEvalCtx eval_ctx_;
-  sql::ObPushdownExprSpec expr_spec_;
-  sql::ObPushdownOperator op_;
-  sql::ObPushdownFilterFactory filter_factory_;
-
   // and filter is used to combine sql pushdown filter and mds filter
-  //   - and_filter_flags: used to indicate which mds filter has combined in and filter
   sql::ObPushdownFilterNode *and_filter_node_;
   sql::ObPushdownFilterExecutor *and_filter_executor_;
-  ObMDSFilterFlags and_filter_flags_;
-
-  // sql_pd_filter_in_final_: the sql pushdown filter in final root filter (which is the sql_pushdown_filter_ in last combine function)
-  // final_root_filter_: the final root filter after combine all filters (it maybe and_filter_executor_ or sql_pushdown_filter_ or single mds filter)
-  sql::ObPushdownFilterExecutor *sql_pd_filter_in_final_;
-  sql::ObPushdownFilterExecutor *final_root_filter_;
 
   ObTruncatePartitionFilter *truncate_partition_filter_;
   ObTTLFilter *ttl_filter_;
   ObBaseVersionFilter *base_version_filter_;
 
   // The build_filters_flag_ means which mds filter should be combined into and filter.
-  // In rescan path (change to next partition), it's not the same as and_filter_flags_ (which indicate the last partition's use).
   ObMDSFilterFlags build_filter_flags_;
-  int32_t combined_child_count_; // negative means not combined, positive means combined
 };
 
 class ObMDSFilterMgrFactory
@@ -188,10 +149,9 @@ class ObMDSFilterMgrFactory
 public:
   static int build_mds_filter_mgr(ObTablet &tablet,
                                   const ObIArray<ObTabletHandle> *split_extra_tablet_handles,
-                                  const ObIArray<ObColDesc> &cols_desc,
-                                  const ObIArray<ObColumnParam *> *cols_param,
+                                  const ObITableReadInfo *read_info,
                                   const ObVersionRange &read_version_range,
-                                  ObIAllocator *outer_allocator,
+                                  ObIAllocator &outer_allocator,
                                   ObMDSFilterMgr *&mds_filter_mgr,
                                   const ObMDSFilterFlags &mds_filter_flags);
 
@@ -233,19 +193,38 @@ OB_INLINE int ObMDSFilterMgr::do_sstable_level_filter(const ObSSTable &table,
 {
   int ret = OB_SUCCESS;
 
-  // We can do more pushdown filter check here. Now, we only check the ttl filter
   is_filtered = false;
+
   const ObTTLFilter *ttl_filter = get_ttl_filter();
-  if (OB_NOT_NULL(ttl_filter)) {
-    ObStorageDatum datum;
-    datum.set_int(table.get_upper_trans_version());
-    if (OB_FAIL(ttl_filter->rowscn_filter(datum, is_filtered))) {
-      STORAGE_LOG(WARN, "failed to filter by rowscn", KR(ret), K(datum), K(is_filtered));
+  if (ttl_filter != nullptr) {
+    ObSSTableMetaHandle meta_handle;
+    if (OB_FAIL(table.get_meta(meta_handle))) {
+      STORAGE_LOG(WARN, "failed to get sstable meta", KR(ret), K(table));
+    } else {
+      ObAggRowCachedReader agg_row_cached_reader;
+      sql::ObBoolMask fal_desc;
+      ObSkipIndexExtraParam extra_param(
+          /* min_scn */   meta_handle.get_sstable_meta().get_min_merged_trans_version(),
+          /* max_scn */   meta_handle.get_sstable_meta().get_upper_trans_version(),
+          /* row_count */ meta_handle.get_sstable_meta().get_row_count()
+      );
+      if (meta_handle.get_sstable_meta().has_sstable_skip_index()
+          && OB_FAIL(agg_row_cached_reader.init(meta_handle.get_sstable_meta().get_sstable_skip_index_buf(), meta_handle.get_sstable_meta().get_sstable_skip_index_size()))) {
+        STORAGE_LOG(WARN, "failed to init agg row cached reader", KR(ret), K(table));
+      } else if (OB_FAIL(ttl_filter->skip_index_filter(agg_row_cached_reader, fal_desc, extra_param))) {
+        STORAGE_LOG(WARN, "failed to do skip index ttl filter", KR(ret), K(table));
+      } else if (fal_desc.is_always_false()) {
+        is_filtered = true;
+      }
+
+      // TODO(menglan): below log is used for feature test & debug, should remove it after merge
+      STORAGE_LOG(TRACE, "do sstable level ttl filter", K(extra_param), K(fal_desc), K(table));
     }
   }
 
   return ret;
 }
+
 }
 }
 

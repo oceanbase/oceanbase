@@ -533,7 +533,7 @@ int build_white_filter(
     // build white_filter_executor
     pd_filter_node.op_type_ = op_type;
 
-    if (OB_ISNULL(white_filter = OB_NEWx(ObSemiStructWhiteFilterExecutor, &allocator, allocator, pd_filter_node, pd_operator))) {
+    if (OB_ISNULL(white_filter = OB_NEWx(ObSemiStructWhiteFilterExecutor, &allocator, allocator, pd_filter_node, &pd_operator))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("fail to allocate white filter", KR(ret));
     } else if (OB_FAIL(white_filter->init_bitmap(row_cnt, res_bitmap))) {

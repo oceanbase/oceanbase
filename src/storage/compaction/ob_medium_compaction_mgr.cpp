@@ -760,7 +760,8 @@ int ObMediumCompactionInfoList::get_next_schedule_info(
     ObMediumCompactionInfo::ObCompactionType &compaction_type,
     int64_t &schedule_scn,
     ObCOMajorMergeStrategy &co_major_merge_strategy,
-    ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason) const
+    ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason,
+    int64_t &need_freeze_snapshot) const
 {
   int ret = OB_SUCCESS;
   DLIST_FOREACH_X(info, get_list(), OB_SUCC(ret)) {
@@ -779,6 +780,11 @@ int ObMediumCompactionInfoList::get_next_schedule_info(
           info->get_co_major_merge_strategy(co_major_merge_strategy);
         }
         merge_reason = (ObAdaptiveMergePolicy::AdaptiveMergeReason)info->medium_merge_reason_;
+        if (info->contain_mds_filter_info_) {
+          need_freeze_snapshot = info->mds_filter_info_.get_need_freeze_snapshot();
+        } else {
+          need_freeze_snapshot = 0;
+        }
       }
       break; // found one unfinish medium info, loop end
     }

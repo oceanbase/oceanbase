@@ -723,6 +723,7 @@ public:
   virtual inline ObMergeEngineType get_merge_engine_type() const { return ObMergeEngineType::OB_MERGE_ENGINE_MAX; }
   virtual inline bool is_delete_insert_merge_engine() const { return false; }
   virtual inline bool is_append_only_merge_engine() const { return false; }
+  virtual inline bool is_partial_update_merge_engine() const { return false; }
   virtual inline ObSkipIndexLevel get_skip_index_level() const { return ObSkipIndexLevel::OB_SKIP_INDEX_LEVEL_BASE_ONLY; }
   virtual inline ObTableModeFlag get_table_mode_flag() const { return TABLE_MODE_MAX; }
   virtual inline ObTableType get_table_type() const { return MAX_TABLE_TYPE; }
@@ -1656,6 +1657,7 @@ public:
   void clear_constraint();
   int set_ttl_definition(const common::ObString &ttl_definition, const ObTTLFlag &ttl_flag);
   int set_ttl_definition(const common::ObString &ttl_definition, const ObString &ttl_flag_str);
+  int inherit_ttl_definition(const ObTableSchema &data_table_schema);
   int set_kv_attributes(const common::ObString &kv_attributes) { return deep_copy_str(kv_attributes, kv_attributes_); }
   int set_index_params(const common::ObString &index_params) { return deep_copy_str(index_params, index_params_); }
   int set_exec_env(const common::ObString &exec_env) { return deep_copy_str(exec_env, exec_env_); }
@@ -1696,6 +1698,10 @@ public:
   const ObConstraint *get_pk_constraint() const;
   int64_t get_index_count() const;
   int64_t get_column_idx(const uint64_t column_id, const bool ignore_hidden_column = false) const;
+
+  // Get column index in multi_version_column_descs
+  int get_column_idx_with_multi_version_col(const uint64_t column_id, int64_t &column_idx) const;
+
   int64_t get_replica_num() const;
   int64_t get_tablet_size() const { return tablet_size_; }
   int64_t get_pctfree() const { return pctfree_; }
@@ -1734,6 +1740,7 @@ public:
   inline virtual ObMergeEngineType get_merge_engine_type() const override { return merge_engine_type_; }
   inline virtual bool is_delete_insert_merge_engine() const override { return ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT == merge_engine_type_; }
   inline virtual bool is_append_only_merge_engine() const override { return ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY == merge_engine_type_; }
+  inline virtual bool is_partial_update_merge_engine() const override { return ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE == merge_engine_type_; }
   inline virtual ObSkipIndexLevel get_skip_index_level() const override { return skip_index_level_; }
   inline const char *get_tablegroup_name_str() const { return extract_str(tablegroup_name_); }
   inline const common::ObString &get_tablegroup_name() const { return tablegroup_name_; }
@@ -1757,17 +1764,16 @@ public:
   inline const ObViewSchema &get_view_schema() const { return view_schema_; }
   inline const common::ObString &get_ttl_definition() const { return ttl_definition_; }
   inline ObTTLFlag get_ttl_flag() const { return ttl_flag_; }
+  inline ObTTLFlag &get_ttl_flag() { return ttl_flag_; }
   virtual bool has_ttl_definition() const override { return !get_ttl_definition().empty(); }
   virtual bool was_compaction_ttl() const override { return get_ttl_flag().was_compaction_ttl_; }
-  inline bool is_compaction_rowscn_ttl_di_table() const
+  inline bool is_compaction_ttl_table() const
   {
-    return get_ttl_flag().ttl_type_ == share::ObTTLDefinition::COMPACTION
-           && is_delete_insert_merge_engine()
-           && get_ttl_flag().ttl_column_type_ == ObTTLFlag::TTLColumnType::ROWSCN;
+    return get_ttl_flag().ttl_type_ == share::ObTTLDefinition::COMPACTION;
   }
-  void update_being_scn_ttl_time(const int64_t timestamp_us)
+  void update_being_compaction_ttl_time(const int64_t timestamp_us)
   {
-    ttl_flag_.update_being_scn_ttl_time(timestamp_us);
+    ttl_flag_.update_being_compaction_ttl_time(timestamp_us);
   }
   inline const common::ObString &get_kv_attributes() const { return kv_attributes_; }
   inline const common::ObString &get_index_params() const { return index_params_; }

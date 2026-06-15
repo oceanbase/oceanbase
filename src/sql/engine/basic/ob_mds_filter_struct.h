@@ -19,11 +19,10 @@ public:
   ObIMDSFilterExecutor() = default;
   virtual ~ObIMDSFilterExecutor() = default;
 
-  // for single column mds filter executor, like ttl filter/base version filter, return the column index
-  virtual int64_t get_col_idx() const { return -1; }
+  // for single column mds filter executor, like ttl filter/base version filter, return the column offset in read info column index array
+  virtual int64_t get_col_offset(const bool is_cg = false) const { return -1; }
   virtual int get_filter_val_meta(common::ObObjMeta &obj_meta) const { return OB_NOT_SUPPORTED; }
 
-  virtual int filter(const blocksstable::ObDatumRow &row, bool &filtered) const = 0;
   virtual int filter(const blocksstable::ObStorageDatum *datums, int64_t count, bool &filtered) const = 0;
 
   DECLARE_PURE_VIRTUAL_TO_STRING;

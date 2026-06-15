@@ -22,7 +22,6 @@ using namespace compaction;
 
 namespace storage
 {
-
 ObParallelMergeCtx::ObParallelMergeCtx(common::ObIAllocator &allocator)
   : allocator_(allocator),
     range_array_(OB_MALLOC_NORMAL_BLOCK_SIZE, allocator_),

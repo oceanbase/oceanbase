@@ -10,6 +10,8 @@
 #include "storage/blocksstable/ob_multi_version_sstable_test.h"
 #include "storage/compaction/ob_tablet_merge_ctx.h"
 #include "storage/test_tablet_helper.h"
+#define private public
+#define protected public
 #include "storage/compaction/filter/ob_mds_info_compaction_filter.h"
 #include "storage/compaction_ttl/ob_ttl_filter.h"
 #include "storage/compaction_ttl/ob_ttl_filter_info_array.h"
@@ -120,6 +122,11 @@ public:
     LOG_INFO("create cg sstable", K(ret), K(start_cg_idx), K(end_cg_idx));
     return ret;
   }
+  static int prepare_ttl_filter(
+    const int64_t filter_max_version,
+    const int64_t filter_col_idx,
+    const int64_t schema_rowkey_cnt,
+    ObBasicTabletMergeCtx &merge_context);
   ObStorageSchema table_merge_schema_;
   ObStoreCtx store_ctx_;
 };
@@ -174,7 +181,7 @@ void TestMergeBasic::prepare_merge_context(
 {
   TestMergeBasic::prepare_merge_context(merge_type, is_full_merge, trans_version_range, merge_context);
   bool unused_flag = false;
-  merge_context.static_param_.is_delete_insert_merge_ = is_delete_insert_merge;
+  merge_context.static_param_.merge_engine_type_ = is_delete_insert_merge ? ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT : ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE;
   merge_context.merge_dag_ = merge_dag;
   merge_context.static_param_.for_unittest_ = true;
   ASSERT_EQ(OB_SUCCESS, merge_context.build_ctx_after_init(unused_flag));
@@ -390,6 +397,51 @@ void TestMergeBasic::co_major_merge(
   if (create_sstable) {
     OK(create_cg_sstables(merge_context, start_cg_idx, end_cg_idx));
   }
+}
+
+int TestMergeBasic::prepare_ttl_filter(
+  const int64_t filter_max_version,
+  const int64_t filter_col_idx,
+  const int64_t schema_rowkey_cnt,
+  ObBasicTabletMergeCtx &merge_context) {
+
+  int ret = OB_SUCCESS;
+  const ObTTLFilterColType col_type =
+    (filter_col_idx == schema_rowkey_cnt) ? ObTTLFilterColType::ROWSCN : ObTTLFilterColType::INT64;
+  std::stringstream ss;
+  ss << "tx_id    commit_ver  filter_type   filter_value   filter_col\n";
+  ss << "1 " << 100 << " "<<static_cast<int>(col_type)
+    <<" " << filter_max_version << " "<<filter_col_idx<<"\n";
+  std::string micro_str = ss.str();
+  ObMdsInfoDistinctMgr mds_info_mgr;
+  ObTTLFilterInfoDistinctMgr &ttl_mgr = mds_info_mgr.ttl_filter_info_distinct_mgr_;
+  ObTTLFilterInfoArray &mock_array = ttl_mgr.array_;
+
+  TTLFilterInfoHelper::batch_mock_ttl_filter_info_without_sort(allocator_, micro_str.c_str(), mock_array);
+
+  if (OB_UNLIKELY(mock_array.count() != 1
+      || !mock_array.at(0)->is_valid()
+      || mock_array.at(0)->ttl_filter_value_ != filter_max_version)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected ttl filter info array count", KR(ret), K(mock_array));
+  } else if (OB_FAIL(ttl_mgr.distinct_array_.push_back(mock_array.at(0)))) {
+    LOG_WARN("unexpected ttl filter info array count", KR(ret), K(mock_array));
+  } else {
+    ttl_mgr.is_inited_ = true;
+    ObTabletID tablet_id(tablet_id_);
+    if (OB_FAIL(ObCompactionFilterFactory::alloc_compaction_filter<ObMdsInfoCompactionFilter>(
+      allocator_,
+      merge_context.filter_ctx_.compaction_filter_,
+      allocator_,
+      tablet_id,
+      merge_context.get_schema(),
+      schema_rowkey_cnt,
+      merge_context.static_param_.multi_version_column_descs_,
+      mds_info_mgr))) {
+      LOG_WARN("failed to build compaction filter", KR(ret), K(merge_context));
+    }
+  }
+  return ret;
 }
 
 ObSEArray<ObTxData, 8> TX_DATA_ARR;

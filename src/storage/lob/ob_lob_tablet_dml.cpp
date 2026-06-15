@@ -59,7 +59,10 @@ int ObLobTabletDmlHelper::build_common_lob_param_for_dml(
   lob_param.is_index_table_ = run_ctx.relative_table_.is_index_table();
   lob_param.main_table_rowkey_col_ = run_ctx.is_main_table_rowkey_col(col_idx) ||
     (!run_ctx.relative_table_.is_index_table() && col_idx < run_ctx.relative_table_.get_rowkey_column_num());
-  if (OB_FAIL(set_lob_storage_params(run_ctx, column, lob_param))) {
+  lob_param.lob_ttl_column_info_ = run_ctx.lob_ttl_column_info_;
+  if (lob_param.lob_ttl_column_info_.has_user_ttl() && OB_FAIL(lob_param.lob_ttl_column_info_.transform_to_local_cache_datum(&data_row))) {
+    LOG_WARN("transform to local cache datum fail", K(ret), K(data_row));
+  } else if (OB_FAIL(set_lob_storage_params(run_ctx, column, lob_param))) {
     LOG_WARN("set_lob_storage_params fail", K(ret), K(column));
   } else if (OB_FAIL(lob_param.snapshot_.assign(run_ctx.dml_param_.snapshot_))) {
     LOG_WARN("assign snapshot fail", K(ret), K(run_ctx.dml_param_.snapshot_));

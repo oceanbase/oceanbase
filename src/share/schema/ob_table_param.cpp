@@ -1154,10 +1154,18 @@ int ObTableParam::construct_columns_and_projector(
 
     has_ttl_definition = table_schema.get_ttl_flag().was_compaction_ttl_;
     if (OB_SUCC(ret) && has_ttl_definition) {
-      // TODO(menglan): we need other column desc in ttl when ttl support non-rowscn column
       if (!is_contain(mds_filter_col_ids, common::OB_HIDDEN_TRANS_VERSION_COLUMN_ID)
           && OB_FAIL(mds_filter_col_ids.push_back(common::OB_HIDDEN_TRANS_VERSION_COLUMN_ID))) {
         LOG_WARN("fail to push back rowscn col id to truncate col ids", K(ret));
+      } else {
+        for (ObTableSchema::const_column_iterator iter = table_schema.column_begin(); OB_SUCC(ret) && iter != table_schema.column_end(); ++iter) {
+          if (*iter != nullptr
+              && (*iter)->has_used_as_ttl()
+              && !is_contain(mds_filter_col_ids, (*iter)->get_column_id())
+              && OB_FAIL(mds_filter_col_ids.push_back((*iter)->get_column_id()))) {
+            LOG_WARN("fail to push back has used as ttl column ids", K(ret), K((*iter)->get_column_id()));
+          }
+        }
       }
     }
 

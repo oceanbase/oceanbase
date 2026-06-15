@@ -1092,6 +1092,389 @@ TEST_F(TestMigrationSSTableParam, test_migrate_sstable)
   ASSERT_TRUE(dest_sstable_param.encrypt_id_ == src_sstable_param.encrypt_id_);
   ASSERT_TRUE(dest_sstable_param.table_shared_flag_ == src_sstable_param.table_shared_flag_);
 }
+
+TEST_F(TestSSTableMeta, test_sstable_skip_index_row_serialize_and_deserialize)
+{
+  // Test Goal: Verify serialize/deserialize of ObSSTableMeta WITHOUT skip index data
+  // Verifications:
+  //   1. After init, has_sstable_skip_index() returns false (no skip index by default)
+  //   2. Serialization succeeds and pos equals get_serialize_size()
+  //   3. After deserialization, skip index is still absent
+  //   4. get_variable_size() and get_deep_copy_size() are consistent between src and dest
+  ObSSTableMeta sstable_meta;
+  ASSERT_TRUE(!sstable_meta.is_valid());
+  sstable_meta.reset();
+  ASSERT_TRUE(!sstable_meta.is_valid());
+  ASSERT_EQ(OB_SUCCESS, sstable_meta.init(param_, allocator_));
+  ASSERT_TRUE(sstable_meta.is_valid());
+
+  // Initially no skip index row
+  ASSERT_FALSE(sstable_meta.has_sstable_skip_index());
+  ASSERT_EQ(nullptr, sstable_meta.get_sstable_skip_index_buf());
+  ASSERT_EQ(0, sstable_meta.get_sstable_skip_index_size());
+
+  // Test serialize and deserialize without skip index row
+  int64_t pos = 0;
+  const uint64_t data_version = DATA_CURRENT_VERSION;
+  int64_t buf_len = sstable_meta.get_serialize_size(data_version);
+  char *buf = static_cast<char *>(allocator_.alloc(buf_len));
+  ASSERT_NE(nullptr, buf);
+  ASSERT_EQ(OB_SUCCESS, sstable_meta.serialize(data_version, buf, buf_len, pos));
+  ASSERT_EQ(buf_len, pos);
+
+  ObSSTableMeta tmp_meta;
+  pos = 0;
+  ASSERT_EQ(OB_SUCCESS, tmp_meta.deserialize(allocator_, buf, buf_len, pos));
+  ASSERT_EQ(buf_len, pos);
+  ASSERT_TRUE(tmp_meta.is_valid());
+  ASSERT_FALSE(tmp_meta.has_sstable_skip_index());
+  ASSERT_EQ(nullptr, tmp_meta.get_sstable_skip_index_buf());
+  ASSERT_EQ(0, tmp_meta.get_sstable_skip_index_size());
+
+  // Verify get_variable_size and get_deep_copy_size
+  ASSERT_EQ(sstable_meta.get_variable_size(), tmp_meta.get_variable_size());
+  ASSERT_EQ(sstable_meta.get_deep_copy_size(), tmp_meta.get_deep_copy_size());
+
+  allocator_.free(buf);
+  buf = nullptr;
+}
+
+TEST_F(TestSSTableMeta, test_sstable_skip_index_row_with_data)
+{
+  // Test Goal: Verify serialize/deserialize of ObSSTableMeta WITH skip index data
+  // Verifications:
+  //   1. After setting skip index in param, init succeeds and has_sstable_skip_index() == true
+  //   2. get_variable_size() includes the skip index data size
+  //   3. Serialization succeeds and pos equals get_serialize_size()
+  //   4. After deserialization, skip index data content is correct
+  //   5. get_variable_size() and get_deep_copy_size() are consistent between src and dest
+  //   6. Deserialized buffer pointer differs from original (independent memory copy)
+  const char *mock_skip_index_data = "mock_skip_index_row_data_for_test";
+  const int64_t mock_skip_index_size = strlen(mock_skip_index_data) + 1;
+  char *skip_index_buf = static_cast<char *>(allocator_.alloc(mock_skip_index_size));
+  ASSERT_NE(nullptr, skip_index_buf);
+  MEMCPY(skip_index_buf, mock_skip_index_data, mock_skip_index_size);
+
+  // Set skip index on param_
+  param_.sstable_skip_index_.set(skip_index_buf, mock_skip_index_size);
+
+  ObSSTableMeta sstable_meta;
+  ASSERT_EQ(OB_SUCCESS, sstable_meta.init(param_, allocator_));
+  ASSERT_TRUE(sstable_meta.is_valid());
+
+  // Should have skip index row now
+  ASSERT_TRUE(sstable_meta.has_sstable_skip_index());
+  ASSERT_NE(nullptr, sstable_meta.get_sstable_skip_index_buf());
+  ASSERT_EQ(mock_skip_index_size, sstable_meta.get_sstable_skip_index_size());
+  ASSERT_EQ(0, MEMCMP(sstable_meta.get_sstable_skip_index_buf(), mock_skip_index_data, mock_skip_index_size));
+
+  // Verify skip index data is included in variable size
+  const int64_t var_size_with_skip_index = sstable_meta.get_variable_size();
+  ASSERT_GE(var_size_with_skip_index, mock_skip_index_size);
+
+  // Test serialize and deserialize with skip index row
+  int64_t pos = 0;
+  const uint64_t data_version = DATA_CURRENT_VERSION;
+  int64_t buf_len = sstable_meta.get_serialize_size(data_version);
+  char *buf = static_cast<char *>(allocator_.alloc(buf_len));
+  ASSERT_NE(nullptr, buf);
+  ASSERT_EQ(OB_SUCCESS, sstable_meta.serialize(data_version, buf, buf_len, pos));
+  ASSERT_EQ(buf_len, pos);
+
+  ObSSTableMeta tmp_meta;
+  pos = 0;
+  ASSERT_EQ(OB_SUCCESS, tmp_meta.deserialize(allocator_, buf, buf_len, pos));
+  ASSERT_EQ(buf_len, pos);
+  ASSERT_TRUE(tmp_meta.is_valid());
+  ASSERT_TRUE(tmp_meta.has_sstable_skip_index());
+  ASSERT_NE(nullptr, tmp_meta.get_sstable_skip_index_buf());
+  ASSERT_EQ(mock_skip_index_size, tmp_meta.get_sstable_skip_index_size());
+  ASSERT_EQ(0, MEMCMP(tmp_meta.get_sstable_skip_index_buf(), mock_skip_index_data, mock_skip_index_size));
+
+  // Verify deserialized meta has same variable size and deep copy size
+  ASSERT_EQ(sstable_meta.get_variable_size(), tmp_meta.get_variable_size());
+  ASSERT_EQ(sstable_meta.get_deep_copy_size(), tmp_meta.get_deep_copy_size());
+
+  // Verify buffer is independent (different pointer after deserialize)
+  ASSERT_NE(sstable_meta.get_sstable_skip_index_buf(), tmp_meta.get_sstable_skip_index_buf());
+
+  allocator_.free(buf);
+  buf = nullptr;
+}
+
+TEST_F(TestSSTableMeta, test_sstable_skip_index_row_deep_copy)
+{
+  // Test Goal: Verify deep_copy of ObSSTableMeta WITH skip index data
+  // Verifications:
+  //   1. First deep copy: dynamic memory meta -> flat memory meta succeeds
+  //   2. Skip index data is correctly deep copied (content matches, pointer differs)
+  //   3. get_variable_size() and get_deep_copy_size() are consistent after deep copy
+  //   4. Second deep copy: flat memory meta -> flat memory meta succeeds
+  //   5. All three buffers (src, dest1, dest2) have different pointers
+  //   6. basic_meta_ is correctly copied in each deep copy
+  const char *mock_skip_index_data = "deep_copy_test_skip_index_data";
+  const int64_t mock_skip_index_size = strlen(mock_skip_index_data) + 1;
+  char *skip_index_buf = static_cast<char *>(allocator_.alloc(mock_skip_index_size));
+  ASSERT_NE(nullptr, skip_index_buf);
+  MEMCPY(skip_index_buf, mock_skip_index_data, mock_skip_index_size);
+
+  // Set skip index on param_
+  param_.sstable_skip_index_.set(skip_index_buf, mock_skip_index_size);
+
+  ObSSTableMeta src_meta;
+  ASSERT_EQ(OB_SUCCESS, src_meta.init(param_, allocator_));
+  ASSERT_TRUE(src_meta.is_valid());
+  ASSERT_TRUE(src_meta.has_sstable_skip_index());
+
+  // First deep copy: from dynamic memory meta to flat memory meta
+  int64_t deep_copy_size = src_meta.get_deep_copy_size();
+  char *dest_buf_1 = static_cast<char *>(allocator_.alloc(deep_copy_size));
+  ASSERT_NE(nullptr, dest_buf_1);
+  MEMSET(dest_buf_1, 0, deep_copy_size);
+
+  int64_t pos = 0;
+  ObSSTableMeta *dest_meta_1 = nullptr;
+  ASSERT_EQ(OB_SUCCESS, src_meta.deep_copy(dest_buf_1, deep_copy_size, pos, dest_meta_1));
+  ASSERT_NE(nullptr, dest_meta_1);
+  ASSERT_TRUE(dest_meta_1->is_valid());
+
+  // Verify first deep copy result
+  ASSERT_TRUE(dest_meta_1->has_sstable_skip_index());
+  ASSERT_NE(nullptr, dest_meta_1->get_sstable_skip_index_buf());
+  ASSERT_EQ(mock_skip_index_size, dest_meta_1->get_sstable_skip_index_size());
+  ASSERT_EQ(0, MEMCMP(dest_meta_1->get_sstable_skip_index_buf(), mock_skip_index_data, mock_skip_index_size));
+
+  // Verify that buffers are different (deep copied, not shallow copy)
+  ASSERT_NE(src_meta.get_sstable_skip_index_buf(), dest_meta_1->get_sstable_skip_index_buf());
+
+  // Verify get_variable_size and get_deep_copy_size are consistent
+  ASSERT_EQ(src_meta.get_variable_size(), dest_meta_1->get_variable_size());
+  ASSERT_EQ(src_meta.get_deep_copy_size(), dest_meta_1->get_deep_copy_size());
+
+  // Second deep copy: from flat memory meta to flat memory meta
+  int64_t deep_copy_size_2 = dest_meta_1->get_deep_copy_size();
+  char *dest_buf_2 = static_cast<char *>(allocator_.alloc(deep_copy_size_2));
+  ASSERT_NE(nullptr, dest_buf_2);
+  MEMSET(dest_buf_2, 0, deep_copy_size_2);
+
+  pos = 0;
+  ObSSTableMeta *dest_meta_2 = nullptr;
+  ASSERT_EQ(OB_SUCCESS, dest_meta_1->deep_copy(dest_buf_2, deep_copy_size_2, pos, dest_meta_2));
+  ASSERT_NE(nullptr, dest_meta_2);
+  ASSERT_TRUE(dest_meta_2->is_valid());
+
+  // Verify second deep copy result
+  ASSERT_TRUE(dest_meta_2->has_sstable_skip_index());
+  ASSERT_NE(nullptr, dest_meta_2->get_sstable_skip_index_buf());
+  ASSERT_EQ(mock_skip_index_size, dest_meta_2->get_sstable_skip_index_size());
+  ASSERT_EQ(0, MEMCMP(dest_meta_2->get_sstable_skip_index_buf(), mock_skip_index_data, mock_skip_index_size));
+
+  // Verify all three buffers are different
+  ASSERT_NE(src_meta.get_sstable_skip_index_buf(), dest_meta_2->get_sstable_skip_index_buf());
+  ASSERT_NE(dest_meta_1->get_sstable_skip_index_buf(), dest_meta_2->get_sstable_skip_index_buf());
+
+  // Verify basic_meta is correctly copied
+  ASSERT_EQ(src_meta.basic_meta_, dest_meta_1->basic_meta_);
+  ASSERT_EQ(dest_meta_1->basic_meta_, dest_meta_2->basic_meta_);
+
+  allocator_.free(dest_buf_1);
+  allocator_.free(dest_buf_2);
+}
+
+TEST_F(TestSSTableMeta, test_sstable_skip_index_row_deep_copy_without_data)
+{
+  // Test Goal: Verify deep_copy of ObSSTableMeta WITHOUT skip index data
+  // Verifications:
+  //   1. Deep copy succeeds when no skip index data is present
+  //   2. After deep copy, destination also has no skip index (buf == nullptr, size == 0)
+  //   3. get_variable_size() and get_deep_copy_size() match between src and dest
+  ObSSTableMeta src_meta;
+  ASSERT_EQ(OB_SUCCESS, src_meta.init(param_, allocator_));
+  ASSERT_TRUE(src_meta.is_valid());
+  ASSERT_FALSE(src_meta.has_sstable_skip_index());
+
+  // Deep copy
+  int64_t deep_copy_size = src_meta.get_deep_copy_size();
+  char *dest_buf = static_cast<char *>(allocator_.alloc(deep_copy_size));
+  ASSERT_NE(nullptr, dest_buf);
+  MEMSET(dest_buf, 0, deep_copy_size);
+
+  int64_t pos = 0;
+  ObSSTableMeta *dest_meta = nullptr;
+  ASSERT_EQ(OB_SUCCESS, src_meta.deep_copy(dest_buf, deep_copy_size, pos, dest_meta));
+  ASSERT_NE(nullptr, dest_meta);
+  ASSERT_TRUE(dest_meta->is_valid());
+
+  // Verify deep copy result - should also have no skip index
+  ASSERT_FALSE(dest_meta->has_sstable_skip_index());
+  ASSERT_EQ(nullptr, dest_meta->get_sstable_skip_index_buf());
+  ASSERT_EQ(0, dest_meta->get_sstable_skip_index_size());
+
+  // Verify sizes match
+  ASSERT_EQ(src_meta.get_variable_size(), dest_meta->get_variable_size());
+  ASSERT_EQ(src_meta.get_deep_copy_size(), dest_meta->get_deep_copy_size());
+
+  allocator_.free(dest_buf);
+}
+
+TEST_F(TestSSTableMeta, test_sstable_skip_index_row_backward_compatibility)
+{
+  // Test Goal: Verify backward compatibility of skip index serialization
+  // Verifications:
+  //   1. Serialize with new version (4.6.1) includes skip index, size is larger
+  //   2. Serialize with old version (4.5.0) excludes skip index, size is smaller
+  //   3. Old format data can be deserialized, has_sstable_skip_index() == false
+  //   4. New format data can be deserialized with correct skip index content
+  //   5. basic_meta_ is identical between old and new format deserialized data
+  //   6. Deep copy after deserialization works correctly
+  const char *mock_skip_index_data = "backward_compat_skip_index_data";
+  const int64_t mock_skip_index_size = strlen(mock_skip_index_data) + 1;
+  char *skip_index_buf = static_cast<char *>(allocator_.alloc(mock_skip_index_size));
+  ASSERT_NE(nullptr, skip_index_buf);
+  MEMCPY(skip_index_buf, mock_skip_index_data, mock_skip_index_size);
+
+  param_.sstable_skip_index_.set(skip_index_buf, mock_skip_index_size);
+
+  ObSSTableMeta sstable_meta;
+  ASSERT_EQ(OB_SUCCESS, sstable_meta.init(param_, allocator_));
+  ASSERT_TRUE(sstable_meta.is_valid());
+  ASSERT_TRUE(sstable_meta.has_sstable_skip_index());
+
+  // Serialize with 4.5.1 version (includes skip index)
+  int64_t pos = 0;
+  const uint64_t new_version = DATA_VERSION_4_6_1_0;
+  int64_t new_buf_len = sstable_meta.get_serialize_size(new_version);
+  char *new_buf = static_cast<char *>(allocator_.alloc(new_buf_len));
+  ASSERT_NE(nullptr, new_buf);
+  ASSERT_EQ(OB_SUCCESS, sstable_meta.serialize(new_version, new_buf, new_buf_len, pos));
+  ASSERT_EQ(new_buf_len, pos);
+
+  // Serialize with 4.5.0 version (without skip index) to get old format size
+  int64_t old_pos = 0;
+  const uint64_t old_version = DATA_VERSION_4_5_0_0;
+  int64_t old_buf_len = sstable_meta.get_serialize_size(old_version);
+  char *old_buf = static_cast<char *>(allocator_.alloc(old_buf_len));
+  ASSERT_NE(nullptr, old_buf);
+  ASSERT_EQ(OB_SUCCESS, sstable_meta.serialize(old_version, old_buf, old_buf_len, old_pos));
+  ASSERT_EQ(old_buf_len, old_pos);
+
+  // Old format should be smaller (no skip index)
+  ASSERT_LT(old_buf_len, new_buf_len);
+
+  // Test: Old version code can deserialize old format data
+  ObSSTableMeta old_meta;
+  old_pos = 0;
+  ASSERT_EQ(OB_SUCCESS, old_meta.deserialize(allocator_, old_buf, old_buf_len, old_pos));
+  ASSERT_EQ(old_buf_len, old_pos);
+  ASSERT_TRUE(old_meta.is_valid());
+  ASSERT_FALSE(old_meta.has_sstable_skip_index());
+
+  // Test: New version code can deserialize new format data
+  ObSSTableMeta new_meta;
+  pos = 0;
+  ASSERT_EQ(OB_SUCCESS, new_meta.deserialize(allocator_, new_buf, new_buf_len, pos));
+  ASSERT_EQ(new_buf_len, pos);
+  ASSERT_TRUE(new_meta.is_valid());
+  ASSERT_TRUE(new_meta.has_sstable_skip_index());
+  ASSERT_EQ(mock_skip_index_size, new_meta.get_sstable_skip_index_size());
+  ASSERT_EQ(0, MEMCMP(new_meta.get_sstable_skip_index_buf(), mock_skip_index_data, mock_skip_index_size));
+
+  // Test: New version code can deserialize old format data
+  ObSSTableMeta new_meta_2;
+  pos = 0;
+  ASSERT_EQ(OB_SUCCESS, new_meta_2.deserialize(allocator_, old_buf, old_buf_len, pos));
+  ASSERT_EQ(old_buf_len, pos);
+  ASSERT_TRUE(new_meta_2.is_valid());
+  ASSERT_FALSE(new_meta_2.has_sstable_skip_index());
+  ASSERT_EQ(0, new_meta_2.get_sstable_skip_index_size());
+  ASSERT_EQ(nullptr, new_meta_2.get_sstable_skip_index_buf());
+
+  // Verify basic_meta is same between old and new format
+  ASSERT_EQ(old_meta.basic_meta_, new_meta.basic_meta_);
+
+  // Test deep copy after deserialization
+  int64_t deep_copy_size = new_meta.get_deep_copy_size();
+  char *deep_buf = static_cast<char *>(allocator_.alloc(deep_copy_size));
+  ASSERT_NE(nullptr, deep_buf);
+  MEMSET(deep_buf, 0, deep_copy_size);
+
+  int64_t deep_pos = 0;
+  ObSSTableMeta *deep_meta = nullptr;
+  ASSERT_EQ(OB_SUCCESS, new_meta.deep_copy(deep_buf, deep_copy_size, deep_pos, deep_meta));
+  ASSERT_NE(nullptr, deep_meta);
+  ASSERT_TRUE(deep_meta->is_valid());
+  ASSERT_TRUE(deep_meta->has_sstable_skip_index());
+  ASSERT_EQ(mock_skip_index_size, deep_meta->get_sstable_skip_index_size());
+  ASSERT_EQ(0, MEMCMP(deep_meta->get_sstable_skip_index_buf(), mock_skip_index_data, mock_skip_index_size));
+  ASSERT_NE(new_meta.get_sstable_skip_index_buf(), deep_meta->get_sstable_skip_index_buf());
+
+  allocator_.free(new_buf);
+  allocator_.free(old_buf);
+  allocator_.free(deep_buf);
+}
+
+TEST_F(TestSSTableMeta, test_sstable_skip_index_serialize_deserialize_roundtrip)
+{
+  // Test Goal: Verify serialize -> deserialize -> serialize roundtrip produces identical results
+  // Verifications:
+  //   1. First serialize succeeds with correct size
+  //   2. Deserialize from first buffer succeeds
+  //   3. Second serialize from deserialized meta has same size as first
+  //   4. Two serialized buffers are byte-identical (MEMCMP == 0)
+  //   5. Final deserialized meta has correct skip index content
+  const char *mock_skip_index_data = "roundtrip_test_data_12345";
+  const int64_t mock_skip_index_size = strlen(mock_skip_index_data) + 1;
+  char *skip_index_buf = static_cast<char *>(allocator_.alloc(mock_skip_index_size));
+  ASSERT_NE(nullptr, skip_index_buf);
+  MEMCPY(skip_index_buf, mock_skip_index_data, mock_skip_index_size);
+
+  param_.sstable_skip_index_.set(skip_index_buf, mock_skip_index_size);
+
+  ObSSTableMeta original_meta;
+  ASSERT_EQ(OB_SUCCESS, original_meta.init(param_, allocator_));
+  ASSERT_TRUE(original_meta.is_valid());
+
+  // First serialize
+  const uint64_t data_version = DATA_CURRENT_VERSION;
+  int64_t buf_len_1 = original_meta.get_serialize_size(data_version);
+  char *buf_1 = static_cast<char *>(allocator_.alloc(buf_len_1));
+  ASSERT_NE(nullptr, buf_1);
+  int64_t pos = 0;
+  ASSERT_EQ(OB_SUCCESS, original_meta.serialize(data_version, buf_1, buf_len_1, pos));
+  ASSERT_EQ(buf_len_1, pos);
+
+  // First deserialize
+  ObSSTableMeta deserialized_meta;
+  pos = 0;
+  ASSERT_EQ(OB_SUCCESS, deserialized_meta.deserialize(allocator_, buf_1, buf_len_1, pos));
+  ASSERT_TRUE(deserialized_meta.is_valid());
+
+  // Second serialize (from deserialized meta)
+  int64_t buf_len_2 = deserialized_meta.get_serialize_size(data_version);
+  ASSERT_EQ(buf_len_1, buf_len_2);  // Sizes should match
+
+  char *buf_2 = static_cast<char *>(allocator_.alloc(buf_len_2));
+  ASSERT_NE(nullptr, buf_2);
+  pos = 0;
+  ASSERT_EQ(OB_SUCCESS, deserialized_meta.serialize(data_version, buf_2, buf_len_2, pos));
+  ASSERT_EQ(buf_len_2, pos);
+
+  // Verify serialized buffers are identical
+  ASSERT_EQ(0, MEMCMP(buf_1, buf_2, buf_len_1));
+
+  // Second deserialize and verify
+  ObSSTableMeta final_meta;
+  pos = 0;
+  ASSERT_EQ(OB_SUCCESS, final_meta.deserialize(allocator_, buf_2, buf_len_2, pos));
+  ASSERT_TRUE(final_meta.is_valid());
+  ASSERT_TRUE(final_meta.has_sstable_skip_index());
+  ASSERT_EQ(mock_skip_index_size, final_meta.get_sstable_skip_index_size());
+  ASSERT_EQ(0, MEMCMP(final_meta.get_sstable_skip_index_buf(), mock_skip_index_data, mock_skip_index_size));
+
+  allocator_.free(buf_1);
+  allocator_.free(buf_2);
+}
+
 } // end namespace unittest
 } // end namespace oceanbase
 

@@ -586,6 +586,7 @@ void TestIndexBlockDataPrepare::close_builder_and_prepare_sstable(const int64_t 
   param.original_size_ = res.original_size_;
   param.nested_offset_ = res.nested_offset_;
   param.nested_size_ = res.nested_size_;
+  param.sstable_skip_index_ = res.sstable_skip_index_;
   param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   ASSERT_EQ(OB_SUCCESS, param.data_block_ids_.assign(res.data_block_ids_));
   ASSERT_EQ(OB_SUCCESS, param.other_block_ids_.assign(res.other_block_ids_));
@@ -713,6 +714,7 @@ void TestIndexBlockDataPrepare::close_builder_and_prepare_co_sstable(const int64
   param.original_size_ = res.original_size_;
   param.nested_offset_ = res.nested_offset_;
   param.nested_size_ = res.nested_size_;
+  param.sstable_skip_index_ = res.sstable_skip_index_;
   param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   ASSERT_EQ(OB_SUCCESS, param.data_block_ids_.assign(res.data_block_ids_));
   ASSERT_EQ(OB_SUCCESS, param.other_block_ids_.assign(res.other_block_ids_));
@@ -1420,6 +1422,7 @@ void TestIndexBlockDataPrepare::prepare_partial_sstable(const int64_t column_cnt
   param.original_size_ = res.original_size_;
   param.nested_offset_ = res.nested_offset_;
   param.nested_size_ = res.nested_size_;
+  param.sstable_skip_index_ = res.sstable_skip_index_;
   param.compressor_type_ = ObCompressorType::NONE_COMPRESSOR;
   param.ddl_scn_.convert_from_ts(ObTimeUtility::current_time());
   param.rec_scn_.set_min();

@@ -883,7 +883,6 @@ int ObMediumCompactionScheduleFunc::init_parallel_range_and_schema_changed_and_c
     }
   }
 #endif
-
     // determine co major type && check if schema changed for sn
     if (OB_FAIL(ret)) {
     } else if (is_column_store_medium_info && OB_FAIL(init_co_major_merge_type(result, medium_info))) {
@@ -1065,7 +1064,7 @@ int ObMediumCompactionScheduleFunc::prepare_medium_info(
   } else if (OB_FAIL(choose_encoding_limit(medium_info))) {
     LOG_WARN("Failed to choose encoding rows limit", K(ret), K(medium_info));
   } else if (FALSE_IT(medium_info.last_medium_snapshot_ = result.handle_.get_table(0)->get_snapshot_version())) {
-  } else if (OB_FAIL(fill_mds_filter_info(medium_info))) {
+  } else if (OB_FAIL(fill_mds_filter_info(result, medium_info))) {
     if (OB_NO_NEED_MERGE != ret) {
       LOG_WARN("Failed to fill mds filter info", K(ret), K(medium_info));
     }
@@ -1616,20 +1615,16 @@ int ObMediumCompactionScheduleFunc::get_max_sync_medium_scn(
   return ret;
 }
 
-// MDS read for TTL: compaction TTL is only permitted on delete_insert/append_only.
-// But aux lob is partial_update for TTL table because of CDC problem.
+// TTL table maybe partial/delete-insert/append-only merge engine table.
 // Don't use storage_schema_.was_compaction_ttl() to check because it maybe not sync with table schema.
 bool ObMediumCompactionScheduleFunc::need_read_mds(const ObMediumCompactionInfo &medium_info)
 {
-  return medium_info.storage_schema_.is_global_index_table()
-         || tablet_handle_.get_obj()->has_merged_with_mds_info()
-         || medium_info.storage_schema_.is_delete_insert_merge_engine()
-         || medium_info.storage_schema_.is_append_only_merge_engine()
-         || medium_info.storage_schema_.is_aux_lob_meta_table()
-         || medium_info.storage_schema_.is_aux_lob_piece_table();
+  return true;
 }
 
-int ObMediumCompactionScheduleFunc::fill_mds_filter_info(ObMediumCompactionInfo &medium_info)
+int ObMediumCompactionScheduleFunc::fill_mds_filter_info(
+  const ObGetMergeTablesResult &result,
+  ObMediumCompactionInfo &medium_info)
 {
   int ret = OB_SUCCESS;
   ObMdsInfoDistinctMgr mds_info_mgr;
@@ -1656,6 +1651,11 @@ int ObMediumCompactionScheduleFunc::fill_mds_filter_info(ObMediumCompactionInfo 
   } else if (OB_UNLIKELY(!medium_info.mds_filter_info_.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("mds filter info is invalid", KR(ret), K(medium_info.mds_filter_info_));
+  } else if (medium_info.mds_filter_info_.has_ttl_filter_info() && medium_info.storage_schema_.is_partial_update_merge_engine()) {
+    // TODO merge engine may changed after 4.6.1
+    if (OB_FAIL(fill_for_ttl_in_partial_update(mds_info_mgr.get_ttl_newest_commit_version(), medium_info))) {
+      LOG_WARN("failed to fill for ttl in partial update", KR(ret), K(mds_info_mgr));
+    }
   } else {
     medium_info.contain_mds_filter_info_ = true;
 #ifdef ERRSIM
@@ -1668,6 +1668,27 @@ int ObMediumCompactionScheduleFunc::fill_mds_filter_info(ObMediumCompactionInfo 
       ret = OB_SUCCESS;
     }
 #endif
+  }
+  return ret;
+}
+
+int ObMediumCompactionScheduleFunc::fill_for_ttl_in_partial_update(
+  const int64_t ttl_newest_commit_version,
+  ObMediumCompactionInfo &medium_info)
+{
+  int ret = OB_SUCCESS;
+  const int64_t reserved_snapshot_for_tx = MTL(ObTenantFreezeInfoMgr *)->get_min_reserved_snapshot_for_tx();
+  if (0 == reserved_snapshot_for_tx || INT64_MAX == reserved_snapshot_for_tx) {
+    ret = OB_EAGAIN;
+    LOG_INFO("[COMPACTION TTL] reserved snapshot for tx is invalid, wait for next round", K(ret), K(reserved_snapshot_for_tx));
+  } else if (reserved_snapshot_for_tx < ttl_newest_commit_version) {
+    ret = OB_EAGAIN;
+    LOG_INFO("[COMPACTION TTL] still have active txns can't reach ttl mds, wait for next round", K(ret), K(ttl_newest_commit_version), K(reserved_snapshot_for_tx));
+  } else {
+    medium_info.mds_filter_info_.set_need_freeze_snapshot(ls_.get_ls_wrs_handler()->get_ls_weak_read_ts().get_val_for_tx());
+    medium_info.contain_mds_filter_info_ = true;
+    LOG_INFO("[COMPACTION TTL] success to fill for ttl in partial update", K(ret), "tablet_id", tablet_handle_.get_obj()->get_tablet_meta().tablet_id_,
+      K(ttl_newest_commit_version), K(reserved_snapshot_for_tx));
   }
   return ret;
 }

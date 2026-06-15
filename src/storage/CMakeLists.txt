@@ -65,6 +65,7 @@ ob_set_subtarget(ob_storage blocksstable
   blocksstable/ob_table_flag.cpp
   blocksstable/ob_datum_rowkey_vector.cpp
   blocksstable/ob_batch_datum_rows.cpp
+  blocksstable/ob_sstable_skip_index.cpp
 )
 
 ob_set_subtarget(ob_storage blocksstable_encoding1

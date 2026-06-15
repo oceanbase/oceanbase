@@ -9,6 +9,11 @@
 
 namespace oceanbase
 {
+namespace common
+{
+class ObKVAttr;
+}
+
 namespace share
 {
 namespace schema
@@ -19,30 +24,44 @@ class ObSchemaGetterGuard;
 struct ObCompactionTTLUtil final
 {
 public:
-  static const uint64_t COMPACTION_TTL_CMP_DATA_VERSION = DATA_VERSION_4_5_1_0;
+  static constexpr uint64_t COMPACTION_TTL_CMP_DATA_VERSION = DATA_VERSION_4_5_1_0;
+  static constexpr uint64_t COMPACTION_TTL_CMP_DATA_VERSION_V2 = DATA_VERSION_4_6_1_0;
   static const bool DISABLE_MLOG_PURGE_IN_COMPACTION = true;
-  static bool is_enable_compaction_ttl(uint64_t tenant_id);
-  static bool is_compaction_ttl_merge_engine(const ObMergeEngineType &merge_engine_type) {
-    return ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT == merge_engine_type
-      || ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY == merge_engine_type;
+
+  OB_INLINE static bool is_enable_compaction_ttl(uint64_t tenant_id)
+  {
+    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    return tenant_config.is_valid() && tenant_config->enable_ttl;
   }
-  static bool is_rowscn_column(const ObString &column_name) {
+
+  OB_INLINE static bool is_compaction_ttl_merge_engine(const ObMergeEngineType &merge_engine_type)
+  {
+    return ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT == merge_engine_type
+           || ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY == merge_engine_type
+           || ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE == merge_engine_type;
+  }
+
+  OB_INLINE static bool is_rowscn_column(const ObString &column_name)
+  {
     return 0 == column_name.case_compare(ObString::make_string(OB_ORA_ROWSCN_STR));
   }
-  static bool is_vec_index_for_ttl(const share::schema::ObIndexType index_type)
-  { // different from schema::is_vec_index(which contains doc_rowkey/rowkey_doc)
+
+  // different from schema::is_vec_index(which contains doc_rowkey/rowkey_doc)
+  OB_INLINE static bool is_vec_index_for_ttl(const share::schema::ObIndexType index_type)
+  {
     return share::schema::is_vec_domain_index(index_type) || share::schema::is_hybrid_vec_index(index_type);
   }
 
   OB_INLINE static bool is_compaction_ttl_type(const share::schema::ObTableSchema &table_schema)
   {
-    return ObTTLDefinition::COMPACTION == table_schema.get_ttl_flag().ttl_type_;
+    return ObTTLDefinition::COMPACTION == table_schema.get_ttl_flag().get_ttl_type();
   }
 
   static int check_ttl_column_valid(const share::schema::ObTableSchema &table_schema,
                                     const ObString &ttl_definition,
                                     const ObTTLFlag &ttl_flag,
-                                    const uint64_t tenant_data_version);
+                                    const uint64_t tenant_data_version,
+                                    const uint64_t tenant_id);
 
   OB_INLINE static int check_create_append_only_engine_valid(const share::schema::ObTableSchema &table_schema,
                                                              const uint64_t tenant_id);
@@ -50,10 +69,10 @@ public:
   // alter merge engine feature will support in 4.5.2
   // this function now is just a placeholder for future feature support
   OB_INLINE static int check_alter_merge_engine_valid(const share::schema::ObTableSchema &table_schema,
-                                            const AlterTableSchema &alter_table_schema);
+                                                      const AlterTableSchema &alter_table_schema);
 
   OB_INLINE static int check_create_ttl_schema_valid(const share::schema::ObTableSchema &table_schema,
-                                           const uint64_t tenant_id);
+                                                     const uint64_t tenant_id);
 
   template<typename Guard>
   static int check_alter_ttl_schema_valid(const share::schema::ObTableSchema &table_schema,
@@ -62,12 +81,12 @@ public:
                                           Guard &schema_guard);
 
   OB_INLINE static int check_create_index_for_ttl_valid(
-    const share::schema::ObTableSchema &table_schema,
-    const share::schema::ObIndexType index_type,
-    const share::schema::ObTableSchema &index_table_schema);
+      const share::schema::ObTableSchema &table_schema,
+      const share::schema::ObIndexType index_type,
+      const share::schema::ObTableSchema &index_table_schema);
 
   OB_INLINE static int check_create_trigger_for_ttl_valid(const share::schema::ObTableSchema &table_schema,
-                                                const ObTriggerInfo &trigger_info);
+                                                          const ObTriggerInfo &trigger_info);
 
   OB_INLINE static int check_create_foreign_key_for_ttl_valid(const share::schema::ObTableSchema &parent_table);
 
@@ -98,18 +117,72 @@ public:
 
   OB_INLINE static int check_alter_table_force_valid(const share::schema::ObTableSchema &table_schema);
 
-  static int is_ttl_schema(
-    const schema::ObTableSchema &table_schema,
-    bool &is_ttl_schema);
+  OB_INLINE static int check_alter_table_hbase_valid(const ObTableSchema &table_schema,
+                                                     const AlterTableSchema &alter_table_schema);
 
-  static int is_compaction_ttl_schema(
-    const uint64_t tenant_data_version,
-    const schema::ObTableSchema &table_schema,
-    bool &is_compaction_ttl);
+  OB_INLINE static int check_table_hbase_valid(const share::schema::ObTableSchema &table_schema,
+                                               const common::ObKVAttr &new_kv_attr);
+
+  static int check_table_hbase_valid(const uint64_t tenant_id,
+                                     const ObTTLFlag &ttl_flag,
+                                     const ObString &kv_attributes);
+
+  static int check_table_hbase_valid(const ObTTLFlag &ttl_flag,
+                                     const common::ObKVAttr &new_kv_attr);
+
+  static int is_compaction_ttl_schema(const uint64_t tenant_data_version,
+                                      const schema::ObTableSchema &table_schema,
+                                      bool &is_compaction_ttl);
+
+  static int extract_ttl_column_from_schema(const schema::ObTableSchema &table_schema,
+                                            schema::ObColumnSchemaV2 &ttl_column,
+                                            const bool for_aux_lob = true);
+
+  static int create_mock_ttl_column_for_aux_lob(const common::ObObjType obj_type,
+                                                schema::ObColumnSchemaV2 &ttl_column);
+
+  static int build_aux_lob_table_schema(const schema::ObTableSchema &data_table_schema,
+                                        schema::ObTableSchema &aux_lob_meta_schema);
+
+  static int build_aux_lob_table_schema(const ObTTLFilterColType ttl_type,
+                                        schema::ObTableSchema &aux_lob_meta_schema);
+
+  /**
+   * @brief TTL_FLAG record the last user ttl column id.
+   *        When doing offline DDL with column id changed, we should adjust the TTL_FLAG together to
+   * sync ttl column.
+   *
+   * @param new_table_schema The new table schema after offline DDL.
+   * @param id_map The map of column id changed. (old -> new)
+   * @return int
+   */
+  static int adjust_ttl_flag_for_offline(ObTableSchema &new_table_schema,
+                                         hash::ObHashMap<uint64_t, uint64_t> &id_map);
+
+  /**
+   * @brief Adjust the TTL related field for offline DDL (such as ttl_flag, has_used_as_ttl).
+   *        We should remove all out-dated has_used_as_ttl flag and adjust ttl_flag for sync current
+   * ttl column.
+   *
+   * @param tenant_data_version
+   * @param new_table_schema The new table schema after offline DDL.
+   * @return int
+   */
+  static int adjust_ttl_related_field_for_offline(const uint64_t tenant_data_version,
+                                                  ObTableSchema &new_table_schema);
+
+  static bool check_change_to_compaction_ttl_table(const AlterTableSchema &alter_table_schema,
+                                                   const ObTableSchema &orig_table_schema);
+
+  static int update_being_compaction_ttl_time(ObTableSchema &new_table_schema);
+
 private:
   static int check_exist_user_defined_rowscn_column(const ObTableSchema &table_schema);
-  template<typename Guard>
-  static int check_index_for_ttl_valid(const share::schema::ObTableSchema &table_schema, Guard &schema_guard);
+
+  template <typename Guard>
+  static int check_aux_table_for_ttl_valid(const share::schema::ObTableSchema &table_schema,
+                                           const ObTTLFlag &new_ttl_flag,
+                                           Guard &schema_guard);
 };
 
 OB_INLINE int ObCompactionTTLUtil::check_create_append_only_engine_valid(
@@ -155,7 +228,7 @@ OB_INLINE int ObCompactionTTLUtil::check_create_append_only_engine_valid(
 }
 
 OB_INLINE int ObCompactionTTLUtil::check_alter_merge_engine_valid(const share::schema::ObTableSchema &table_schema,
-                                                        const AlterTableSchema &alter_table_schema)
+                                                                  const AlterTableSchema &alter_table_schema)
 {
   int ret = OB_SUCCESS;
 
@@ -190,46 +263,48 @@ OB_INLINE int ObCompactionTTLUtil::check_alter_merge_engine_valid(const share::s
 }
 
 OB_INLINE int ObCompactionTTLUtil::check_create_ttl_schema_valid(const share::schema::ObTableSchema &table_schema,
-                                                       const uint64_t tenant_id)
+                                                                 const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
 
   // When creating ttl table, must check the following constraints:
-  if (table_schema.has_ttl_definition()) {
-    if (is_compaction_ttl_type(table_schema)) {
-      uint64_t tenant_data_version = 0;
-      if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
-        COMMON_LOG(WARN, "Fail to get data version", KR(ret));
-      }
-
-      // 0. sql mode support ttl is in 4.5.1
-      if (OB_SUCC(ret) && tenant_data_version < COMPACTION_TTL_CMP_DATA_VERSION) {
-        ret = OB_NOT_SUPPORTED;
-        COMMON_LOG(WARN, "ttl in sql mode is not supported under this version", K(ret), K(tenant_data_version));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "ttl in sql mode under this version is");
-      }
-
-      // 1 tmp table don't support ttl
-      if (OB_SUCC(ret) && table_schema.is_tmp_table()) {
-        ret = OB_NOT_SUPPORTED;
-        COMMON_LOG(WARN, "tmp table don't support ttl", K(ret), K(table_schema));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create tmp table with ttl is");
-      }
-
-      // 2. ttl table can not have delete event trigger
-      //    [x] (CREATE TABLE) tirgger is built after create table. Don't need check
-
-      // 3. check ttl column valid
-      //    [x] (CREATE TABLE) check ttl column valid when create table
-      if (OB_SUCC(ret) && OB_FAIL(check_ttl_column_valid(
-          table_schema,
-          table_schema.get_ttl_definition(),
-          table_schema.get_ttl_flag(),
-          tenant_data_version))) {
-        COMMON_LOG(WARN, "fail to check ttl column valid", KR(ret), K(table_schema));
-      }
+  if (is_compaction_ttl_type(table_schema)) {
+    uint64_t tenant_data_version = 0;
+    if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, tenant_data_version))) {
+      COMMON_LOG(WARN, "Fail to get data version", KR(ret));
     }
 
+    // 0. compaction ttl is in 4.5.1
+    if (OB_SUCC(ret) && tenant_data_version < COMPACTION_TTL_CMP_DATA_VERSION) {
+      ret = OB_NOT_SUPPORTED;
+      COMMON_LOG(WARN, "ttl in sql mode is not supported under this version", K(ret), K(tenant_data_version));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "ttl in sql mode under this version is");
+    }
+
+    // 1 tmp table don't support ttl
+    if (OB_SUCC(ret) && table_schema.is_tmp_table()) {
+      ret = OB_NOT_SUPPORTED;
+      COMMON_LOG(WARN, "tmp table don't support ttl", K(ret), K(table_schema));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "create tmp table with ttl is");
+    }
+
+    // 2. ttl table can not have delete event trigger
+    //    [x] (CREATE TABLE) tirgger is built after create table. Don't need check
+
+    // 3. check ttl column valid
+    //    [x] (CREATE TABLE) check ttl column valid when create table
+    if (OB_SUCC(ret)
+        && OB_FAIL(check_ttl_column_valid(table_schema,
+                                          table_schema.get_ttl_definition(),
+                                          table_schema.get_ttl_flag(),
+                                          tenant_data_version,
+                                          tenant_id))) {
+      COMMON_LOG(WARN, "fail to check ttl column valid", KR(ret), K(table_schema));
+    }
+
+    // 4. index must contain the ttl column of data table
+    //    [x] (CREATE TABLE) create index for ttl table
+    // will checked in ObCompactionTTLUtil::check_create_index_for_ttl_valid, don't need to check again
   }
 
   return ret;
@@ -295,11 +370,11 @@ int ObCompactionTTLUtil::check_alter_ttl_schema_valid(const share::schema::ObTab
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "add ttl to table referenced by foreign keys from other tables is");
       }
 
-      // 3. ttl table don't support vector index
-      //    [x] (ALTER TTL) make a table with vector index be ttl table
+      // 3. aux table of ttl table has some constraints
+      //    [x] (ALTER TTL) make a table with aux table be ttl table
       if (OB_SUCC(ret) && alter_table_schema.has_ttl_definition()) {
-        if (OB_FAIL(check_index_for_ttl_valid(table_schema, schema_guard))) {
-          COMMON_LOG(WARN, "fail to check index for ttl valid", KR(ret), K(table_schema));
+        if (OB_FAIL(check_aux_table_for_ttl_valid(table_schema, alter_table_schema.get_ttl_flag(), schema_guard))) {
+          COMMON_LOG(WARN, "fail to check aux table for ttl valid", KR(ret), K(table_schema));
         }
       }
 
@@ -317,7 +392,7 @@ int ObCompactionTTLUtil::check_alter_ttl_schema_valid(const share::schema::ObTab
       // 6. check ttl column valid
       //    [x] (ALTER TTL) check ttl column valid when alter table
       if (OB_SUCC(ret) && alter_table_schema.has_ttl_definition()) {
-        if (OB_FAIL(check_ttl_column_valid(table_schema, alter_table_schema.get_ttl_definition(), alter_table_schema.get_ttl_flag(), tenant_data_version))) {
+        if (OB_FAIL(check_ttl_column_valid(table_schema, alter_table_schema.get_ttl_definition(), alter_table_schema.get_ttl_flag(), tenant_data_version, tenant_id))) {
           COMMON_LOG(WARN, "fail to check ttl column valid", KR(ret), K(table_schema), K(alter_table_schema));
         } else if (OB_FAIL(check_exist_user_defined_rowscn_column(alter_table_schema))) {
           COMMON_LOG(WARN, "table is compaction ttl table, can't add user defined rowscn column", K(ret), K(alter_table_schema));
@@ -339,30 +414,40 @@ OB_INLINE int ObCompactionTTLUtil::check_create_index_for_ttl_valid(
   int ret = OB_SUCCESS;
 
   // When creating index for ttl table, must check the following constraints:
-  if (table_schema.has_ttl_definition()) {
-    if (is_compaction_ttl_type(table_schema)) {
-
-      // 1. ttl table don't support vector index
-      //    [x] (WHEN CREATE TABLE) create a ttl table with vector index
-      //    [x] (WHEN CREATE INDEX) create vector index for ttl table
-      if (is_vec_index_for_ttl(index_type) || is_fts_index(index_type)) {
-        ret = OB_NOT_SUPPORTED;
-        COMMON_LOG(WARN, "ttl table don't support vector index or fts index", K(ret), K(table_schema), K(index_type));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "create vector index or fts index on ttl table is");
-      } else if (!is_compaction_ttl_merge_engine(index_table_schema.get_merge_engine_type())) {
-        ret = OB_NOT_SUPPORTED;
-        COMMON_LOG(WARN, "not support to create index for ttl table with non-compaction ttl merge engine", K(ret), K(table_schema), K(index_table_schema));
-        LOG_USER_ERROR(OB_NOT_SUPPORTED, "creating index for ttl table with non-compaction ttl merge engine is");
-      }
+  if (is_compaction_ttl_type(table_schema)) {
+    // 1. ttl table don't support vector index and full text index
+    //    [x] (WHEN CREATE TABLE) create a ttl table with vector index
+    //    [x] (WHEN CREATE INDEX) create vector index for ttl table
+    if (is_vec_index_for_ttl(index_type) || is_fts_index(index_type)) {
+      ret = OB_NOT_SUPPORTED;
+      COMMON_LOG(WARN, "ttl table don't support vector index or fts index", K(ret), K(table_schema), K(index_type));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "create vector index or fts index on ttl table is");
     }
 
+    // 2. index must be compaction ttl merge engine type
+    //    [x] (WHEN CREATE INDEX) create index for ttl table
+    if (OB_SUCC(ret) && !is_compaction_ttl_merge_engine(index_table_schema.get_merge_engine_type())) {
+      ret = OB_NOT_SUPPORTED;
+      COMMON_LOG(WARN, "not support to create index for ttl table with non-compaction ttl merge engine", K(ret), K(table_schema), K(index_table_schema));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "creating index for ttl table with non-compaction ttl merge engine is");
+    }
+
+    // 3. index must contain the ttl column of data table
+    //    [x] (WHEN CREATE INDEX) create index for ttl table
+    if (OB_SUCC(ret) && table_schema.get_ttl_flag().is_user_ttl_column()
+        && index_table_schema.get_column_schema(table_schema.get_ttl_flag().get_curr_ttl_column_id()) == nullptr) {
+      ret = OB_NOT_SUPPORTED;
+      COMMON_LOG(WARN, "index must contain the ttl column of data table", K(ret), K(table_schema), K(index_table_schema));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "create index for ttl table without ttl column is");
+    }
   }
 
   return ret;
 }
 
-OB_INLINE int ObCompactionTTLUtil::check_create_trigger_for_ttl_valid(const share::schema::ObTableSchema &table_schema,
-                                                            const ObTriggerInfo &trigger_info)
+OB_INLINE int ObCompactionTTLUtil::check_create_trigger_for_ttl_valid(
+    const share::schema::ObTableSchema &table_schema,
+    const ObTriggerInfo &trigger_info)
 {
   int ret = OB_SUCCESS;
 
@@ -395,17 +480,13 @@ OB_INLINE int ObCompactionTTLUtil::check_create_foreign_key_for_ttl_valid(const 
   int ret = OB_SUCCESS;
 
   // When creating foreign key for ttl table, must check the following constraints:
-  if (parent_table.has_ttl_definition()) {
-    if (is_compaction_ttl_type(parent_table)) {
-
-      // 1. ttl table cannot be referenced by foreign keys from other tables
-      //    [x] (CREATE TABLE) create a table that has foreign keys referencing to ttl table
-      //    [x] (ALTER TABLE ADD CONSTRAINT FOREIGN KEY) add foreign key to ttl table
-      ret = OB_NOT_SUPPORTED;
-      COMMON_LOG(WARN, "foreign key cannot be referenced on ttl table", K(ret), K(parent_table));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "foreign key referenced on ttl table is");
-    }
-
+  if (is_compaction_ttl_type(parent_table)) {
+    // 1. ttl table cannot be referenced by foreign keys from other tables
+    //    [x] (CREATE TABLE) create a table that has foreign keys referencing to ttl table
+    //    [x] (ALTER TABLE ADD CONSTRAINT FOREIGN KEY) add foreign key to ttl table
+    ret = OB_NOT_SUPPORTED;
+    COMMON_LOG(WARN, "foreign key cannot be referenced on ttl table", K(ret), K(parent_table));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "foreign key referenced on ttl table is");
   }
 
   return ret;
@@ -416,15 +497,12 @@ OB_INLINE int ObCompactionTTLUtil::check_create_mlog_for_ttl_valid(const share::
   int ret = OB_SUCCESS;
 
   // When creating mlog for ttl table, must check the following constraints:
-  if (base_table.has_ttl_definition()) {
-    if (is_compaction_ttl_type(base_table)) {
-      // 1. ttl base table can not create mlog table
-      //    [x] (CREATE MATERIALIZED VIEW LOG) create a mlog table with ttl base table
-      ret = OB_NOT_SUPPORTED;
-      COMMON_LOG(WARN, "ttl base table can not create mlog table", K(ret), K(base_table));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view log on ttl base table is");
-    }
-
+  if (is_compaction_ttl_type(base_table)) {
+    // 1. ttl base table can not create mlog table
+    //    [x] (CREATE MATERIALIZED VIEW LOG) create a mlog table with ttl base table
+    ret = OB_NOT_SUPPORTED;
+    COMMON_LOG(WARN, "ttl base table can not create mlog table", K(ret), K(base_table));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "create materialized view log on ttl base table is");
   }
 
   return ret;
@@ -664,24 +742,35 @@ int ObCompactionTTLUtil::check_alter_table_force_valid(const share::schema::ObTa
   return ret;
 }
 
-template<typename Guard>
-int ObCompactionTTLUtil::check_index_for_ttl_valid(
-  const share::schema::ObTableSchema &table_schema,
-  Guard &schema_guard)
+template <typename Guard>
+int ObCompactionTTLUtil::check_aux_table_for_ttl_valid(
+    const share::schema::ObTableSchema &table_schema,
+    const ObTTLFlag &new_ttl_flag,
+    Guard &schema_guard)
 {
   int ret = OB_SUCCESS;
-  const common::ObIArray<ObAuxTableMetaInfo> &simple_index_infos = table_schema.get_simple_index_infos();
+
+  const ObIArray<ObAuxTableMetaInfo> &simple_index_infos = table_schema.get_simple_index_infos();
   const ObTableSchema *index_table_schema = nullptr;
+
+  // 1. we firstly check lob meta table
+  if (table_schema.has_lob_aux_table() && table_schema.get_ttl_flag().get_last_user_ttl_column_id() != new_ttl_flag.get_last_user_ttl_column_id()) {
+    ret = OB_NOT_SUPPORTED;
+    COMMON_LOG(WARN, "last user ttl column id is not the same, can't change ttl column when lob meta table exists", K(ret), K(table_schema), K(new_ttl_flag));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter ttl column when lob meta table exists is");
+  }
+
+  // 2. we then check other aux tables
   for (int64_t i = 0; OB_SUCC(ret) && i < simple_index_infos.count(); ++i) {
     const ObAuxTableMetaInfo &simple_index_info = simple_index_infos.at(i);
+
     if (is_vec_index_for_ttl(simple_index_info.index_type_) || is_fts_index(simple_index_info.index_type_)) {
       ret = OB_NOT_SUPPORTED;
       COMMON_LOG(WARN, "ttl table don't support vector index or fts index", K(ret), K(table_schema), K(simple_index_info.index_type_));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "create vector index or fts index on ttl table is");
-    } else if (OB_FAIL(schema_guard.get_table_schema(
-        table_schema.get_tenant_id(),
-        simple_index_info.table_id_,
-        index_table_schema))) {
+    } else if (OB_FAIL(schema_guard.get_table_schema(table_schema.get_tenant_id(),
+                                                     simple_index_info.table_id_,
+                                                     index_table_schema))) {
       COMMON_LOG(WARN, "failed to get index table schema", KR(ret), K(table_schema), K(simple_index_info.table_id_));
     } else if (OB_ISNULL(index_table_schema)) {
       ret = OB_TABLE_NOT_EXIST;
@@ -690,8 +779,40 @@ int ObCompactionTTLUtil::check_index_for_ttl_valid(
       ret = OB_NOT_SUPPORTED;
       COMMON_LOG(WARN, "not support to have index for ttl table with non-compaction ttl merge engine", K(ret), K(table_schema), KPC(index_table_schema));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "index for ttl table with non-compaction ttl merge engine is");
+    } else if (new_ttl_flag.is_user_ttl_column() && index_table_schema->get_column_schema(new_ttl_flag.get_curr_ttl_column_id()) == nullptr) {
+      ret = OB_NOT_SUPPORTED;
+      COMMON_LOG(WARN, "index must contain the ttl column of data table", K(ret), K(table_schema), K(index_table_schema));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "some index on ttl table without ttl column is");
     }
   }
+
+  return ret;
+}
+
+int ObCompactionTTLUtil::check_alter_table_hbase_valid(
+    const share::schema::ObTableSchema &table_schema,
+    const AlterTableSchema &alter_table_schema)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(check_table_hbase_valid(table_schema.get_tenant_id(),
+                                      table_schema.get_ttl_flag(),
+                                      alter_table_schema.get_kv_attributes()))) {
+    COMMON_LOG(WARN, "fail to check alter table hbase valid", KR(ret), K(table_schema), K(alter_table_schema));
+  }
+
+  return ret;
+}
+
+int ObCompactionTTLUtil::check_table_hbase_valid(const share::schema::ObTableSchema &table_schema,
+                                                 const common::ObKVAttr &new_kv_attr)
+{
+  int ret = OB_SUCCESS;
+
+  if (OB_FAIL(check_table_hbase_valid(table_schema.get_ttl_flag(), new_kv_attr))) {
+    COMMON_LOG(WARN, "fail to check table hbase valid", KR(ret), K(table_schema));
+  }
+
   return ret;
 }
 

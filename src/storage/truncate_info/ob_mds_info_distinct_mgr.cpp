@@ -220,10 +220,19 @@ int ObMdsInfoDistinctMgrImpl<MDSInfo, MDSInfoArray, MDSInfoCacheKey>::need_repla
   replace = false;
 
   if (exist_info.ttl_filter_col_idx_ == input_info.ttl_filter_col_idx_) {
-    equal = true;
-    // if the input info has a larger value, replace the exist info
-    if (exist_info.ttl_filter_value_ < input_info.ttl_filter_value_) {
-      replace = true;
+    if (exist_info.ttl_filter_col_type_ == ObTTLFilterColType::ROWSCN) {
+      equal = true;
+      // if the input info has a larger value, replace the exist info
+      if (exist_info.ttl_filter_value_ < input_info.ttl_filter_value_) {
+        replace = true;
+      }
+    } else {
+      // for non-rowscn ttl filter, should check both value and commit version
+      if (exist_info.ttl_filter_value_ < input_info.ttl_filter_value_
+          && exist_info.commit_version_ < input_info.commit_version_) {
+        equal = true;
+        replace = true;
+      }
     }
   }
 

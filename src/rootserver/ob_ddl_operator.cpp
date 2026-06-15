@@ -4734,10 +4734,8 @@ int ObDDLOperator::update_aux_table(
           new_aux_table_schema.set_micro_block_format_version(new_table_schema.get_micro_block_format_version());
         }
         if (OB_FAIL(ret)) {
-        } else if (OB_FAIL(new_aux_table_schema.set_ttl_definition(
-            new_table_schema.get_ttl_definition(),
-            new_table_schema.get_ttl_flag()))) {
-          LOG_WARN("set_ttl_definition failed", K(new_table_schema));
+        } else if (OB_FAIL(new_aux_table_schema.inherit_ttl_definition(new_table_schema))) {
+          LOG_WARN("inherit ttl definition failed", K(ret), K(new_table_schema));
         } else if (OB_FAIL(new_aux_table_schema.set_compress_func_name(new_table_schema.get_compress_func_name()))) {
           LOG_WARN("set_compress_func_name failed", K(new_table_schema));
         } else if (aux_table_schema->is_in_recyclebin()) {

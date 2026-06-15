@@ -87,7 +87,8 @@ public:
       reserved_(0),
       truncate_info_keys_(),
       ttl_filter_info_keys_(),
-      mlog_purge_scn_(0)
+      mlog_purge_scn_(0),
+      need_freeze_snapshot_(0)
   {}
   ~ObMdsFilterInfo() {}
   void destroy(common::ObIAllocator &allocator);
@@ -95,6 +96,8 @@ public:
   bool has_truncate_info() const { return truncate_info_keys_.count() > 0; }
   bool has_ttl_filter_info() const { return ttl_filter_info_keys_.count() > 0; }
   bool has_mlog_purge_scn() const { return mlog_purge_scn_ > 0; }
+  void set_need_freeze_snapshot(const int64_t need_freeze_snapshot) { need_freeze_snapshot_ = need_freeze_snapshot; }
+  int64_t get_need_freeze_snapshot() const { return need_freeze_snapshot_; }
   bool is_valid() const
   {
     bool is_valid_result = true;
@@ -148,16 +151,20 @@ public:
     }
     if (ttl_filter_info_keys_.count() > 0) {
       ttl_filter_info_keys_.gene_info(buf, buf_len, pos);
+      J_COMMA();
+      J_KV("need_freeze_snapshot", need_freeze_snapshot_);
+      J_COMMA();
     }
     if (has_mlog_purge_scn()) {
       J_KV("mlog_purge_scn", mlog_purge_scn_);
     }
   }
-  TO_STRING_KV(K_(version), K_(truncate_info_keys), K_(ttl_filter_info_keys), K_(mlog_purge_scn));
+  TO_STRING_KV(K_(version), K_(truncate_info_keys), K_(ttl_filter_info_keys), K_(mlog_purge_scn), K_(need_freeze_snapshot));
 private:
   static const int64_t MDS_FILTER_INFO_VERSION_V1 = 1;
   static const int64_t MDS_FILTER_INFO_VERSION_V2 = 2; // TTL Filter Info & Mlog Purge SCN
-  static const int64_t MDS_FILTER_INFO_VERSION_LATEST = MDS_FILTER_INFO_VERSION_V2;
+  static const int64_t MDS_FILTER_INFO_VERSION_V3 = 3; // add need_freeze_snapshot for ttl in partial_update
+  static const int64_t MDS_FILTER_INFO_VERSION_LATEST = MDS_FILTER_INFO_VERSION_V3;
 private:
   static const int32_t MFI_ONE_BYTE = 8;
   static const int32_t MFI_RESERVED_BITS = 56;
@@ -172,6 +179,7 @@ private:
   ObTruncateInfoKeyArray truncate_info_keys_;
   ObTTLFilterInfoKeyArray ttl_filter_info_keys_;
   int64_t mlog_purge_scn_;
+  int64_t need_freeze_snapshot_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMdsFilterInfo);
 };

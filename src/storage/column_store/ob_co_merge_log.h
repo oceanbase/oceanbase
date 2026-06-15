@@ -12,7 +12,7 @@
 #include "storage/tmp_file/ob_tmp_file_manager.h"
 #include "storage/compaction/ob_basic_tablet_merge_ctx.h"
 #include "storage/compaction/ob_compaction_schedule_util.h"
-
+#include "storage/blocksstable/ob_datum_row.h"
 namespace oceanbase
 {
 namespace compaction

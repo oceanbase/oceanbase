@@ -7,7 +7,6 @@
 #include "storage/truncate_info/ob_truncate_info_array.h"
 #include "storage/truncate_info/ob_truncate_partition_filter.h"
 #include "storage/compaction_ttl/ob_ttl_filter.h"
-#include "storage/access/ob_mds_filter_mgr.h"
 
 namespace oceanbase
 {
@@ -18,9 +17,9 @@ class ObMdsInfoCompactionFilter final : public ObICompactionFilter
 public:
   ObMdsInfoCompactionFilter()
     : ObICompactionFilter(),
-      mds_filter_mgr_(nullptr),
-      truncate_filter_(mds_filter_mgr_),
-      ttl_filter_(mds_filter_mgr_),
+      allocator_("MdsCompaFit", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
+      truncate_filter_(allocator_),
+      ttl_filter_(allocator_),
       schema_rowkey_cnt_(0),
       is_inited_(false)
   {}
@@ -32,6 +31,7 @@ public:
   int init(
     common::ObIAllocator &allocator,
     const ObTabletID &tablet_id,
+    const ObStorageSchema *schema,
     const int64_t schema_rowkey_cnt,
     const ObIArray<ObColDesc> &cols_desc,
     const storage::ObMdsInfoDistinctMgr &mds_info_mgr);
@@ -40,14 +40,13 @@ public:
       ObFilterRet &filter_ret) const override;
   virtual CompactionFilterType get_filter_type() const override { return MDS_IN_MEDIUM_INFO; }
   virtual int get_filter_op(
-    const int64_t min_merged_snapshot,
-    const int64_t max_merged_snapshot,
+    blocksstable::ObAggRowCachedReader &agg_row_cached_reader,
     ObBlockOp &op) const override;
   virtual int64_t get_trans_version_col_idx() const override
   { return schema_rowkey_cnt_; }
   INHERIT_TO_STRING_KV("ObMdsInfoCompactionFilter", ObICompactionFilter, K_(truncate_filter), K_(ttl_filter));
 private:
-  storage::ObMDSFilterMgr mds_filter_mgr_;
+  ObArenaAllocator allocator_;
   storage::ObTruncatePartitionFilter truncate_filter_;
   storage::ObTTLFilter ttl_filter_;
   int64_t schema_rowkey_cnt_;

@@ -8,6 +8,7 @@
 #include "sql/resolver/ddl/ob_alter_table_stmt.h"
 #include "sql/ob_sql_utils.h"
 #include "share/table/ob_ttl_util.h"
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 
 namespace oceanbase
 {
@@ -68,6 +69,8 @@ int ObDDLResolver::resolve_kv_attributes_option(uint64_t tenant_id, const ParseN
           LOG_WARN("table schema is NULL", K(ret));
         } else if (OB_FAIL(ObTTLUtil::check_kv_attributes(attr, *tbl_schema, schema_checker_, &alter_table_stmt->get_alter_table_arg()))) {
           LOG_WARN("fail to check kv attributes", K(ret));
+        } else if (OB_FAIL(ObCompactionTTLUtil::check_table_hbase_valid(*tbl_schema, attr))) {
+          LOG_WARN("fail to check table hbase valid with compaction ttl", K(ret));
         }
       }
       if (OB_SUCC(ret) && OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::KV_ATTRIBUTES))) {

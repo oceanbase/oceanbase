@@ -48,7 +48,7 @@ public:
   virtual int prepare_truncate_value(
       const int64_t truncate_commit_viersion,
       const storage::ObTruncatePartition &truncate_partition) = 0;
-  virtual int filter(const blocksstable::ObDatumRow &row, bool &filtered) const override;
+  virtual int filter(const blocksstable::ObDatumRow &row, bool &filtered) const;
   virtual int filter(const blocksstable::ObStorageDatum *datums, int64_t count, bool &filtered) const override final
   {
     return inner_filter(datums, count, filtered);
@@ -141,7 +141,7 @@ public:
   ObTruncateWhiteFilterExecutor(
       common::ObIAllocator &alloc,
       ObTruncateWhiteFilterNode &filter,
-      ObPushdownOperator &op)
+      ObPushdownOperator *op)
       : ObWhiteFilterExecutor(alloc, filter, op),
         ObITruncateFilterExecutor(alloc),
         storage_datum_param_(),
@@ -210,7 +210,7 @@ public:
   ObTruncateBlackFilterExecutor(
       common::ObIAllocator &alloc,
       ObTruncateBlackFilterNode &filter,
-      ObPushdownOperator &op)
+      ObPushdownOperator *op)
       : ObPushdownFilterExecutor(alloc, op, PushdownExecutorType::TRUNCATE_BLACK_FILTER_EXECUTOR),
         ObITruncateFilterExecutor(alloc),
         filter_(filter),
@@ -282,7 +282,7 @@ class ObTruncateOrFilterExecutor : public ObPushdownFilterExecutor, public ObITr
 public:
   ObTruncateOrFilterExecutor(common::ObIAllocator &alloc,
                              ObTruncateOrFilterNode &filter,
-                             ObPushdownOperator &op)
+                             ObPushdownOperator *op)
     : ObPushdownFilterExecutor(alloc, op, PushdownExecutorType::TRUNCATE_OR_FILTER_EXECUTOR),
       ObITruncateFilterExecutor(alloc),
       filter_(filter),
@@ -340,7 +340,7 @@ public:
   ObTruncateAndFilterExecutor(
       common::ObIAllocator &alloc,
       ObTruncateAndFilterNode &filter,
-      ObPushdownOperator &op);
+      ObPushdownOperator *op);
   virtual ~ObTruncateAndFilterExecutor();
   virtual common::ObIArray<uint64_t> &get_col_ids() override final
   {
@@ -411,23 +411,19 @@ class ObTruncateFilterFactory
 {
 public:
   static int build_scn_filter(
-    ObPushdownOperator &op,
     ObPushdownFilterFactory &filter_factory,
     ObPushdownFilterExecutor *&scn_filter);
   static int build_range_filter(
-      ObPushdownOperator &op,
       ObPushdownFilterFactory &filter_factory,
       const bool need_black,
       ObPushdownFilterExecutor *&low_filter,
       ObPushdownFilterExecutor *&high_filter);
   static int build_list_filter(
-      ObPushdownOperator &op,
       ObPushdownFilterFactory &filter_factory,
       const bool need_black,
       ObPushdownFilterExecutor *&list_filter);
 private:
   static int build_filter(
-      ObPushdownOperator &op,
       ObPushdownFilterFactory &filter_factory,
       const bool need_black,
       ObPushdownFilterNode *&node,

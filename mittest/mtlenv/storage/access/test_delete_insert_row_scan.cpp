@@ -69,7 +69,7 @@ public:
   ObMockWhiteFilterExecutor(common::ObIAllocator &alloc,
                             ObPushdownWhiteFilterNode &filter,
                             ObPushdownOperator &op) :
-      ObWhiteFilterExecutor(alloc, filter, op)
+      ObWhiteFilterExecutor(alloc, filter, &op)
   {}
 
   virtual int init_evaluated_datums(bool &is_valid) override
@@ -114,10 +114,10 @@ public:
     // use uniform base currently, support new format later
     // TODO(hanling): If the new vectorization format does not start counting from the 0th row, it can be computed in batches.
     } else if (can_use_vectorize &&
-              filter->get_op().enable_rich_format_ &&
+              filter->get_op()->enable_rich_format_ &&
               OB_FAIL(init_exprs_uniform_header(filter->get_cg_col_exprs(),
-                                                filter->get_op().get_eval_ctx(),
-                                                filter->get_op().get_eval_ctx().max_batch_size_))) {
+                                                filter->get_op()->get_eval_ctx(),
+                                                filter->get_op()->get_eval_ctx().max_batch_size_))) {
       LOG_WARN("Failed to init exprs vector header", K(ret));
     } else {
       switch (reader_->get_type())
@@ -228,10 +228,10 @@ public:
     // use uniform base currently, support new format later
     // TODO(hanling): If the new vectorization format does not start counting from the 0th row, it can be computed in batches.
     } else if (can_use_vectorize &&
-              filter->get_op().enable_rich_format_ &&
+              filter->get_op()->enable_rich_format_ &&
               OB_FAIL(init_exprs_uniform_header(filter->get_cg_col_exprs(),
-                                                filter->get_op().get_eval_ctx(),
-                                                filter->get_op().get_eval_ctx().max_batch_size_))) {
+                                                filter->get_op()->get_eval_ctx(),
+                                                filter->get_op()->get_eval_ctx().max_batch_size_))) {
       LOG_WARN("Failed to init exprs vector header", K(ret));
     } else {
       switch (reader_->get_type())

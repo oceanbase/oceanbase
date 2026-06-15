@@ -142,6 +142,7 @@ int ObLobMetaBaseIterator::scan(ObLobAccessParam &param, const bool is_get, ObIA
     main_tablet_id_ = param.tablet_id_;
     lob_meta_tablet_id_ = param.lob_meta_tablet_id_;
     lob_piece_tablet_id_ = param.lob_piece_tablet_id_;
+    has_ttl_column_ = param.has_hidden_ttl_column();
     LOG_DEBUG("scan lob meta table sucess",  K_(main_tablet_id),
         K_(lob_meta_tablet_id), K_(lob_piece_tablet_id),
         K(is_get), K(param), KPC(this));
@@ -229,7 +230,7 @@ int ObLobMetaIterator::get_next_row(ObLobMetaInfo &row)
   } else if(OB_ISNULL(datum_row)) {
     ret = OB_ERR_NULL_VALUE;
     LOG_WARN("lob meta row is null", K(ret), KPC(this));
-  } else if (OB_FAIL(ObLobMetaUtil::transform_from_row_to_info(datum_row, row, false))) {
+  } else if (OB_FAIL(ObLobMetaUtil::transform_from_row_to_info(datum_row, row, false, has_ttl_column_))) {
     LOG_WARN("get meta info from row fail", K(ret), K(datum_row), KPC(this));
   }
   return ret;
@@ -291,7 +292,7 @@ int ObLobMetaSingleGetter::get_next_row(ObString &seq_id, ObLobMetaInfo &info)
     LOG_WARN("table_scan_iter is null", K(ret), KPC(this));
   } else if (OB_FAIL(table_scan_iter->get_next_row(row))) {
     LOG_WARN("get next row fail.", K(ret), K(range), KPC(this));
-  } else if (OB_FAIL(ObLobMetaUtil::transform_from_row_to_info(row, info, false))) {
+  } else if (OB_FAIL(ObLobMetaUtil::transform_from_row_to_info(row, info, false, has_ttl_column_))) {
     LOG_WARN("transform row fail", K(ret), K(range), KPC(this), KPC(row));
   }
 
@@ -436,7 +437,7 @@ int ObLobPersistInsertIter::init(ObLobAccessParam *param, ObLobMetaWriteIter *me
   if (OB_ISNULL(param) || OB_ISNULL(meta_iter)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("param or meta_iter is null", K(ret), KP(param), KP(meta_iter));
-  } else if (OB_FAIL(new_row_.init(ObLobMetaUtil::LOB_META_COLUMN_CNT))) {
+  } else if (OB_FAIL(new_row_.init(ObLobMetaUtil::get_lob_meta_column_cnt(param->has_hidden_ttl_column())))) {
     LOG_WARN("init new datum row failed", K(ret));
   } else {
     param_ = param;
@@ -492,7 +493,7 @@ int ObLobPersistDeleteIter::init(ObLobAccessParam *param, ObLobMetaScanIter *met
   if (OB_ISNULL(param) || OB_ISNULL(meta_iter)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("param or meta_iter is null", K(ret), KP(param), KP(meta_iter));
-  } else if (OB_FAIL(new_row_.init(ObLobMetaUtil::LOB_META_COLUMN_CNT))) {
+  } else if (OB_FAIL(new_row_.init(ObLobMetaUtil::get_lob_meta_column_cnt(param->has_hidden_ttl_column())))) {
     LOG_WARN("init new datum row failed", K(ret));
   } else {
     param_ = param;
@@ -527,7 +528,10 @@ int ObLobPersistDeleteIter::get_next_row(blocksstable::ObDatumRow *&row)
 int ObLobSimplePersistInsertIter::init()
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(new_row_.init(ObLobMetaUtil::LOB_META_COLUMN_CNT))) {
+  if (OB_ISNULL(param_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("param is null", K(ret), KP(param_));
+  } else if (OB_FAIL(new_row_.init(ObLobMetaUtil::get_lob_meta_column_cnt(param_->has_hidden_ttl_column())))) {
     LOG_WARN("init new datum row failed", K(ret));
   }
   return ret;
@@ -572,19 +576,22 @@ int ObLobSimplePersistInsertIter::get_next_row(blocksstable::ObDatumRow *&row)
   return ret;
 }
 
-int ObLobMetaIterator::open(ObTabletID &main_tablet_id, ObTabletID &lob_piece_tablet_id)
+int ObLobMetaIterator::open(ObTabletID &main_tablet_id,
+                            ObTabletID &lob_piece_tablet_id,
+                            ObTTLFilterColType ttl_type)
 {
   int ret = OB_SUCCESS;
   ObAccessService *oas = MTL(ObAccessService*);
   main_tablet_id_ = main_tablet_id;
   lob_meta_tablet_id_ = scan_param_.tablet_id_;
   lob_piece_tablet_id_ = lob_piece_tablet_id;
+  has_ttl_column_ = ObTTLFilterColTypeUtil::has_ttl_column_in_lob_meta(ttl_type);
   scan_param_.scan_allocator_ = &scan_allocator_;
   if (OB_NOT_NULL(adaptor_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("adapter is not null", K(ret));
-  } else if (OB_FAIL(MTL(ObLobManager *)->get_table_param(scan_param_.table_param_))) {
-    LOG_WARN("fail to get table param", K(ret));
+  } else if (OB_FAIL(MTL(ObLobManager *)->get_table_param(ttl_type, scan_param_.table_param_))) {
+    LOG_WARN("fail to get table param", K(ret), K(ttl_type));
   } else if (OB_FAIL(oas->table_scan(scan_param_, row_iter_))) {
     LOG_WARN("do table scan fail", K(ret), KPC(this));
   }

@@ -75,6 +75,7 @@ public:
   virtual int get_curr_micro_block(const blocksstable::ObMicroBlock *&micro_block) { UNUSED(micro_block);  return OB_NOT_SUPPORTED; }
   virtual int64_t get_last_row_id() const = 0;
   virtual int get_curr_row_id(int64_t& row_id) const = 0;
+  virtual const blocksstable::ObDatumRow *get_filter_check_row() { return nullptr; }
 
   virtual int get_curr_range_end_rowid(int64_t &row_id) const { UNUSED(row_id); return OB_NOT_SUPPORTED; }
   virtual int open_curr_range(const bool for_rewrite, const bool for_compare = false) { UNUSEDx(for_rewrite, for_compare); return OB_NOT_SUPPORTED; }
@@ -173,8 +174,8 @@ public:
   OB_INLINE bool is_base_sstable_iter() const { return is_base_iter() && is_sstable_iter(); }
   virtual OB_INLINE bool is_multi_version_minor_iter() const { return false; }
   virtual OB_INLINE bool is_macro_merge_iter() const { return false; }
-
-  virtual OB_INLINE const blocksstable::ObDatumRow *get_curr_row() const override final { return curr_row_; }
+  virtual OB_INLINE const blocksstable::ObDatumRow *get_curr_row() const final override { return curr_row_; }
+  virtual OB_INLINE const blocksstable::ObDatumRow *get_filter_check_row() override { return curr_row_; }
   virtual int get_curr_row_id(int64_t& row_id) const override;
   virtual int64_t get_last_row_id() const override {  return curr_row_ == nullptr ? iter_row_id_ : iter_row_id_ - 1; }
   virtual int get_curr_range_end_rowid(int64_t &row_id) const override { UNUSED(row_id); return OB_NOT_SUPPORTED; }
@@ -248,7 +249,10 @@ protected:
 class ObPartitionRowMergeIter : public ObPartitionMergeIter
 {
 public:
-  ObPartitionRowMergeIter(common::ObIAllocator &allocator, const bool iter_co_build_row_store = false , const bool &ignore_shadow_row = false);
+  ObPartitionRowMergeIter(
+    common::ObIAllocator &allocator,
+    const bool iter_co_build_row_store = false,
+    const bool &ignore_shadow_row = false);
   virtual ~ObPartitionRowMergeIter();
   virtual int next() override;
   INHERIT_TO_STRING_KV("ObPartitionRowMergeIter", ObPartitionMergeIter, K_(iter_co_build_row_store), K_(ignore_shadow_row));
@@ -358,6 +362,7 @@ public:
     common::ObIAllocator &allocator,
     ObCompactionFilterHandle &filter_handle);
   virtual ~ObPartitionMinorRowMergeIter();
+  ObCompactionFilterHandle &get_filter_handle() { return filter_handle_; }
   virtual void reset() override;
   virtual int next() override;
   virtual int multi_version_compare(const ObPartitionMergeIter &other, int &cmp_ret) override;
@@ -389,12 +394,12 @@ protected:
 private:
   int compact_old_row_for_delete_insert();
 protected:
+  ObCompactionFilterHandle &filter_handle_;
   common::ObArenaAllocator obj_copy_allocator_;
   storage::ObNopPos *nop_pos_[ObRowQueue::QI_MAX];
   blocksstable::ObRowQueue row_queue_;
   int64_t ghost_row_count_;
   blocksstable::ObDatumRow tmp_compaction_row_;
-  ObCompactionFilterHandle &filter_handle_;
 };
 
 

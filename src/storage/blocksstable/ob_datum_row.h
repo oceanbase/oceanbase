@@ -227,6 +227,26 @@ private:
   };
 };
 
+struct ObMajorMergeFlag
+{
+  ObMajorMergeFlag() : flag_(0) {}
+  void fuse(const ObMajorMergeFlag &other)
+  {
+    is_virtual_row_for_ttl_major_ |= other.is_virtual_row_for_ttl_major_;
+    exist_new_committed_row_ |= other.exist_new_committed_row_;
+  }
+  void reset() { flag_ = 0; }
+  TO_STRING_KV(K_(is_virtual_row_for_ttl_major), K_(exist_new_committed_row));
+  union {
+    uint8_t flag_;
+    struct {
+      uint8_t is_virtual_row_for_ttl_major_ : 1; // 1: the row is a virtual row for ttl major merge query
+      uint8_t exist_new_committed_row_ : 1; // 1: the row exists a new committed row
+      uint8_t reserved_ : 6;
+    };
+  };
+};
+
 static const int8_t MvccFlagCount = 8;
 static const char *ObMvccFlagStr[MvccFlagCount] = {
   "",
@@ -346,6 +366,13 @@ public:
 
   int is_datums_changed(const ObDatumRow &other, bool &is_changed) const;
   int copy_attributes_except_datums(const ObDatumRow &other);
+  OB_INLINE void copy_row_meta(const ObDatumRow &other)
+  {
+    row_flag_ = other.row_flag_;
+    count_ = other.count_;
+    have_uncommited_row_ = other.have_uncommited_row_;
+    major_merge_flag_ = other.major_merge_flag_;
+  }
   OB_INLINE int64_t get_capacity() const { return datum_buffer_.get_capacity(); }
   OB_INLINE int64_t get_column_count() const { return count_; }
   OB_INLINE int64_t get_scan_idx() const { return scan_index_; }
@@ -426,6 +453,7 @@ public:
   // add by @zimiao ObDatumRow does not care about the free of trans_info_ptr's memory
   // The caller must guarantee the life cycle and release of this memory
   char *trans_info_;
+  ObMajorMergeFlag major_merge_flag_;
 };
 
 class ObNewRowBuilder

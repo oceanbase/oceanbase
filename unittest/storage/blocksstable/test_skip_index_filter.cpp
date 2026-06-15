@@ -305,7 +305,7 @@ int TestSkipIndexFilter::test_skip_index_filter_pushdown (
   sql::ObEvalCtx eval_ctx(exec_ctx);
   sql::ObPushdownExprSpec expr_spec(allocator_);
   sql::ObPushdownOperator op(eval_ctx, expr_spec);
-  sql::ObWhiteFilterExecutor filter(allocator_, filter_node, op);
+  sql::ObWhiteFilterExecutor filter(allocator_, filter_node, &op);
   eval_ctx.batch_size_ = 256;
   filter.col_offsets_.init(COLUMN_CNT);
   filter.col_params_.init(COLUMN_CNT);
@@ -1490,7 +1490,7 @@ TEST_F(TestSkipIndexFilter, test_eq_prefix)
   sql::ObPushdownOperator op(eval_ctx, expr_spec);
   eval_ctx.batch_size_ = 256;
   white_filter_node.op_type_ = sql::WHITE_OP_EQ;
-  sql::ObWhiteFilterExecutor filter(allocator_, white_filter_node, op);
+  sql::ObWhiteFilterExecutor filter(allocator_, white_filter_node, &op);
   filter.null_param_contained_ = false;
 
   ObSkipIndexFilterExecutor skip_index_filter;
@@ -1584,7 +1584,7 @@ TEST_F(TestSkipIndexFilter, test_ne_prefix)
   sql::ObPushdownOperator op(eval_ctx, expr_spec);
   eval_ctx.batch_size_ = 256;
   white_filter_node.op_type_ = sql::WHITE_OP_NE;
-  sql::ObWhiteFilterExecutor filter(allocator_, white_filter_node, op);
+  sql::ObWhiteFilterExecutor filter(allocator_, white_filter_node, &op);
   filter.null_param_contained_ = false;
 
   ObSkipIndexFilterExecutor skip_index_filter;
@@ -1681,7 +1681,7 @@ TEST_F(TestSkipIndexFilter, test_gt_prefix)
   sql::ObPushdownOperator op(eval_ctx, expr_spec);
   eval_ctx.batch_size_ = 256;
   white_filter_node.op_type_ = sql::WHITE_OP_GT;
-  sql::ObWhiteFilterExecutor filter(allocator_, white_filter_node, op);
+  sql::ObWhiteFilterExecutor filter(allocator_, white_filter_node, &op);
   filter.null_param_contained_ = false;
 
   ObSkipIndexFilterExecutor skip_index_filter;
@@ -1773,7 +1773,7 @@ TEST_F(TestSkipIndexFilter, test_ge_prefix)
   sql::ObPushdownOperator op(eval_ctx, expr_spec);
   eval_ctx.batch_size_ = 256;
   white_filter_node.op_type_ = sql::WHITE_OP_GE;
-  sql::ObWhiteFilterExecutor filter(allocator_, white_filter_node, op);
+  sql::ObWhiteFilterExecutor filter(allocator_, white_filter_node, &op);
   filter.null_param_contained_ = false;
 
   ObSkipIndexFilterExecutor skip_index_filter;
@@ -1867,7 +1867,7 @@ TEST_F(TestSkipIndexFilter, test_lt_prefix)
   sql::ObPushdownOperator op(eval_ctx, expr_spec);
   eval_ctx.batch_size_ = 256;
   white_filter_node.op_type_ = sql::WHITE_OP_LT;
-  sql::ObWhiteFilterExecutor filter(allocator_, white_filter_node, op);
+  sql::ObWhiteFilterExecutor filter(allocator_, white_filter_node, &op);
   filter.null_param_contained_ = false;
 
   ObSkipIndexFilterExecutor skip_index_filter;
@@ -1961,7 +1961,7 @@ TEST_F(TestSkipIndexFilter, test_le_prefix)
   sql::ObPushdownOperator op(eval_ctx, expr_spec);
   eval_ctx.batch_size_ = 256;
   white_filter_node.op_type_ = sql::WHITE_OP_LE;
-  sql::ObWhiteFilterExecutor filter(allocator_, white_filter_node, op);
+  sql::ObWhiteFilterExecutor filter(allocator_, white_filter_node, &op);
   filter.null_param_contained_ = false;
 
   ObSkipIndexFilterExecutor skip_index_filter;
@@ -2055,7 +2055,7 @@ TEST_F(TestSkipIndexFilter, test_bt_prefix)
   sql::ObPushdownOperator op(eval_ctx, expr_spec);
   eval_ctx.batch_size_ = 256;
   white_filter_node.op_type_ = sql::WHITE_OP_BT;
-  sql::ObWhiteFilterExecutor filter(allocator_, white_filter_node, op);
+  sql::ObWhiteFilterExecutor filter(allocator_, white_filter_node, &op);
   filter.null_param_contained_ = false;
 
   ObSkipIndexFilterExecutor skip_index_filter;
@@ -2163,7 +2163,7 @@ TEST_F(TestSkipIndexFilter, test_in_prefix)
   sql::ObPushdownOperator op(eval_ctx, expr_spec);
   eval_ctx.batch_size_ = 256;
   white_filter_node.op_type_ = sql::WHITE_OP_IN;
-  sql::ObWhiteFilterExecutor filter(allocator_, white_filter_node, op);
+  sql::ObWhiteFilterExecutor filter(allocator_, white_filter_node, &op);
   filter.null_param_contained_ = false;
 
   ObSkipIndexFilterExecutor skip_index_filter;

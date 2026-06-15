@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 #define USING_LOG_PREFIX STORAGE
 #include "rootserver/compaction_ttl/ob_compaction_ttl_service.h"
-#include "rootserver/ddl_task/ob_ddl_task.h"
 #include "share/schema/ob_table_schema.h"
 #include "share/table/ob_ttl_util.h"
 #include "share/tablet/ob_tablet_to_ls_operator.h"
@@ -35,24 +34,42 @@ int ObTTLFilterInfoHelper::generate_ttl_filter_info(
     ObTTLFilterInfo &ttl_filter_info)
 {
   int ret = OB_SUCCESS;
-  ObSimpleTableTTLChecker ttl_checker;
+
+  ObTTLFilterColType ttl_filter_col_type = ObTTLFilterColType::MAX;
+  const ObColumnSchemaV2 *column_schema = nullptr;
+  ObTableTTLChecker ttl_checker;
   int64_t ttl_filter_us = 0;
+
   if (OB_FAIL(ttl_checker.init(data_table_schema, data_table_schema.get_ttl_definition(), true/*in_full_column_order*/))) {
     LOG_WARN("failed to init ttl checker", KR(ret), K(data_table_schema));
   } else if (OB_FAIL(ttl_checker.get_ttl_filter_us(ttl_filter_us))) {
     LOG_WARN("failed to get ttl filter ts", KR(ret), K(data_table_schema));
-  } else {
-    ttl_filter_info.ttl_filter_col_type_ = ObTTLFilterInfo::ObTTLFilterColType::ROWSCN;
-    ttl_filter_info.ttl_filter_value_ = ttl_filter_us * 1000L; // us to ns
-
-    if (EN_COMPACTION_TTL_SERVICE_TTL_TIME) { // s -> ns
-      ttl_filter_info.ttl_filter_value_ = -EN_COMPACTION_TTL_SERVICE_TTL_TIME * 1000L * 1000L * 1000L;
-      LOG_INFO("ERRSIM POINT EN_COMPACTION_TTL_SERVICE_TTL_TIME", KR(ret), K(ttl_filter_info));
-    }
-
   }
+
+  if (OB_FAIL(ret)) {
+  } else if (EN_COMPACTION_TTL_SERVICE_TTL_TIME) {
+    ttl_filter_us = -EN_COMPACTION_TTL_SERVICE_TTL_TIME * 1000L * 1000L; // s to us
+    LOG_INFO("ERRSIM POINT EN_COMPACTION_TTL_SERVICE_TTL_TIME", KR(ret), K(ttl_filter_us));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (data_table_schema.get_ttl_flag().ttl_column_type_ == ObTTLFlag::TTLColumnType::ROWSCN) {
+    ttl_filter_col_type = ObTTLFilterColType::ROWSCN;
+  } else if (OB_ISNULL(column_schema = data_table_schema.get_column_schema(data_table_schema.get_ttl_flag().get_curr_user_ttl_column_id()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get column schema", KR(ret), K(data_table_schema));
+  } else if (OB_FAIL(ObTTLFilterColTypeUtil::to_filter_col_type(column_schema->get_data_type(), ttl_filter_col_type))) {
+    LOG_WARN("failed to convert column type to ttl filter col type", KR(ret), K(column_schema->get_data_type()));
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(ttl_filter_info.fill_filter_value(ttl_filter_col_type, ttl_filter_us, ttl_checker.get_tz_info_wrap().get_time_zone_info()))) {
+    LOG_WARN("failed to fill filter value", KR(ret), K(ttl_filter_col_type), K(ttl_filter_us));
+  }
+
   return ret;
 }
+
 #define CHECK_ERRSIM(POINT, ret)                                               \
   if (POINT) {                                                                 \
     ret = POINT;                                                               \
@@ -282,8 +299,6 @@ int ObCompactionTTLService::loop_index_table(
   if (OB_SUCC(ret) && latest_data_table_schema.has_lob_aux_table()) {
     if (OB_FAIL(get_schema_and_sync_mds(trans, schema_guard, latest_data_table_schema.get_aux_lob_meta_tid()))) {
       LOG_WARN("failed to get lob_meta schema and sync mds", KR(ret), K_(tenant_id), K(data_table_id), K(latest_data_table_schema.get_aux_lob_meta_tid()));
-    } else if (OB_FAIL(get_schema_and_sync_mds(trans, schema_guard, latest_data_table_schema.get_aux_lob_piece_tid()))) {
-      LOG_WARN("failed to get lob_piece schema and sync mds", KR(ret), K_(tenant_id), K(data_table_id), K(latest_data_table_schema.get_aux_lob_piece_tid()));
     }
   }
   return ret;
@@ -328,13 +343,15 @@ int ObCompactionTTLService::lock_table_and_sync_mds(
     LOG_WARN("failed to lock table", KR(ret), K_(tenant_id), K(table_id));
   } else if (OB_FAIL(get_tablet_ls_info(trans, schema, tablet_ls_pair_array_))) {
     LOG_WARN("failed to get tablet ls info", KR(ret), K(schema));
-  } else {
-    // filter col is different in different data/index table
-    ttl_filter_arg_.ttl_filter_info_.ttl_filter_col_idx_ = schema.get_rowkey_column_num();
-    if (OB_FAIL(loop_to_register_mds(trans))) {
-      LOG_WARN("failed to register ttl filter info", KR(ret));
-    }
+  } else if (OB_FAIL(schema.get_column_idx_with_multi_version_col(schema.get_ttl_flag().get_curr_ttl_column_id(), ttl_filter_arg_.ttl_filter_info_.ttl_filter_col_idx_))) {
+    LOG_WARN("failed to get column idx with multi version col", KR(ret), K(schema));
+  } else if (OB_UNLIKELY(ttl_filter_arg_.ttl_filter_info_.ttl_filter_col_idx_ < 0)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("failed to get column idx in multi version descs", KR(ret), K(schema));
+  } else if (OB_FAIL(loop_to_register_mds(trans))) {
+    LOG_WARN("failed to register ttl filter info", KR(ret));
   }
+
   return ret;
 }
 

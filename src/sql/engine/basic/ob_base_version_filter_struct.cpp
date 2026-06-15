@@ -53,7 +53,7 @@ int ObBaseVersionFilterExecutor::inner_init(const int64_t schema_rowkey_cnt, con
     ObBaseVersionFilterNode &node = static_cast<ObBaseVersionFilterNode &>(get_filter_node());
 
     // set col index
-    col_idx_ = schema_rowkey_cnt;
+    col_offset_ = schema_rowkey_cnt; // We always access all primary key, so that the col_offset is always equal to schema_rowkey_cnt
     col_obj_meta_.set_int();
 
     // set value
@@ -69,7 +69,7 @@ int ObBaseVersionFilterExecutor::inner_init(const int64_t schema_rowkey_cnt, con
     LOG_WARN("Failed to push back datum", KR(ret), K(cache_datum_));
   } else if (OB_FALSE_IT(filter_.col_ids_.clear())) {
   } else if (OB_FAIL(filter_.col_ids_.push_back(OB_HIDDEN_TRANS_VERSION_COLUMN_ID))) {
-    LOG_WARN("Failed to push back col idx", KR(ret), K(col_idx_));
+    LOG_WARN("Failed to push back col idx", KR(ret), K(col_offset_));
   } else if (OB_FALSE_IT(col_params_.clear())) {
   } else if (OB_FAIL(col_params_.push_back(nullptr))) {
     LOG_WARN("Failed to push back col params", KR(ret));
@@ -128,10 +128,10 @@ int ObBaseVersionFilterExecutor::filter(const blocksstable::ObDatumRow &row, boo
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("Base version filter executor not inited", KR(ret));
-  } else if (OB_UNLIKELY(row.count_ <= col_idx_)) {
+  } else if (OB_UNLIKELY(row.count_ <= col_offset_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected col idx", KR(ret), K(col_idx_), K(row.count_));
-  } else if (OB_FAIL(inner_filter(row.storage_datums_[col_idx_], filtered))) {
+    LOG_WARN("Unexpected col idx", KR(ret), K(col_offset_), K(row.count_));
+  } else if (OB_FAIL(inner_filter(row.storage_datums_[col_offset_], filtered))) {
     LOG_WARN("Failed to inner filter", KR(ret), K(row), KPC(this));
   }
 

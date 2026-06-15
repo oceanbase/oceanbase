@@ -41,7 +41,7 @@ class ObBaseVersionFilterExecutor : public ObWhiteFilterExecutor, public ObIMDSF
 public:
   ObBaseVersionFilterExecutor(ObIAllocator &alloc,
                               ObBaseVersionFilterNode &filter,
-                              ObPushdownOperator &op)
+                              ObPushdownOperator *op)
       : ObWhiteFilterExecutor(alloc, filter, op), ObIMDSFilterExecutor(), is_inited_(false)
   {
   }
@@ -51,10 +51,10 @@ public:
   int init(const int64_t schema_rowkey_cnt, const int64_t base_version);
   int switch_info(const int64_t schema_rowkey_cnt, const int64_t base_version);
 
-  int filter(const blocksstable::ObDatumRow &row, bool &filtered) const override final;
+  int filter(const blocksstable::ObDatumRow &row, bool &filtered) const;
   int filter(const blocksstable::ObStorageDatum *datums, int64_t count, bool &filtered) const override final;
 
-  virtual int64_t get_col_idx() const override final { return col_idx_; }
+  virtual int64_t get_col_offset(const bool is_cg = false) const override final { return col_offset_; }
   virtual int get_filter_val_meta(common::ObObjMeta &obj_meta) const override final
   {
     // just proxy to filter node
@@ -73,14 +73,14 @@ public:
     return OB_SUCCESS;
   }
 
-  TO_STRING_KV(K_(type), K_(col_idx), K_(cache_datum), K_(is_inited), K(get_filter_node()));
+  TO_STRING_KV(K_(type), K_(col_offset), K_(cache_datum), K_(is_inited), K(get_filter_node()));
 
 private:
   int inner_init(const int64_t schema_rowkey_cnt, const int64_t base_version);
   int inner_filter(const blocksstable::ObStorageDatum &datum, bool &filtered) const;
 
 private:
-  int64_t col_idx_;
+  int64_t col_offset_;
   blocksstable::ObStorageDatum cache_datum_;
   bool is_inited_;
 };

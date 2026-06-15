@@ -151,9 +151,10 @@ public:
   bool is_full_merge_; // global full merge or increment merge
   bool need_parallel_minor_merge_;
   bool is_tenant_major_merge_;
-  bool is_delete_insert_merge_;
+  ObMergeEngineType merge_engine_type_;
   bool is_ha_compeleted_; // only used for delete insert minor merge to control multi version row recycle logic, inited from tablet meta
   bool for_unittest_;
+  int64_t ttl_major_for_partial_update_upper_snapshot_;
   ObFillTxType fill_tx_type_;
   ObMergeLevel merge_level_; // TODO: keep it for minor/mini merge now
   ObAdaptiveMergePolicy::AdaptiveMergeReason merge_reason_;
@@ -215,14 +216,16 @@ public:
   ObMergeFilterCtx()
     : compaction_filter_(nullptr),
       mds_filter_info_(),
+      filter_col_idxs_(),
       lock_(common::ObLatchIds::OB_MERGE_FILTER_CTX_LOCK),
       filter_statistics_()
   {}
   void destroy(ObCompactionMemoryContext &merge_ctx);
   void collect_filter_statistics(const ObICompactionFilter::ObFilterStatistics &filter_statistics);
-  TO_STRING_KV(KPC_(compaction_filter), K_(mds_filter_info), K_(filter_statistics));
+  TO_STRING_KV(KPC_(compaction_filter), K_(mds_filter_info), K_(filter_col_idxs), K_(filter_statistics));
   ObICompactionFilter *compaction_filter_;
   ObMdsFilterInfo mds_filter_info_;
+  ObCompactionFilterColIdxs filter_col_idxs_; // only used in pure column store TTL filter
   lib::ObMutex lock_; // to protect statistics
   ObICompactionFilter::ObFilterStatistics filter_statistics_;
 };
@@ -278,6 +281,7 @@ public:
   int get_merge_range(int64_t parallel_idx, blocksstable::ObDatumRange &merge_range);
   bool has_filter() const { return nullptr != filter_ctx_.compaction_filter_; }
   ObICompactionFilter *get_compaction_filter() const { return filter_ctx_.compaction_filter_; }
+  const ObCompactionFilterColIdxs *get_filter_col_idxs() const { return filter_ctx_.filter_col_idxs_.is_valid() ? &filter_ctx_.filter_col_idxs_ : nullptr; }
   virtual int64_t get_recycle_version() const { return 0; }
   void collect_filter_statistics(const ObICompactionFilter::ObFilterStatistics &filter_statistics)
   {

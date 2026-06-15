@@ -286,7 +286,8 @@ struct ObTableAccessContext
     KP_(mds_collector),
     KP_(row_scan_cnt),
     KP_(skip_scan_factory),
-    K_(is_inc_major_query));
+    K_(is_inc_major_query),
+    K_(ttl_major_for_partial_update_upper_snapshot));
 private:
   static const int64_t DEFAULT_COLUMN_SCALE_INFO_SIZE = 8;
   static const int64_t USE_BLOCK_CACHE_LIMIT = 128L << 10;  // 128K
@@ -362,6 +363,8 @@ public:
   uint64_t *row_scan_cnt_;
   ObIndexSkipScanFactory *skip_scan_factory_;
   bool is_inc_major_query_;
+  // 0: not ttl partial_update major path; > 0: upper bound for trans_version when checking new committed rows
+  int64_t ttl_major_for_partial_update_upper_snapshot_;
 };
 
 } // namespace storage

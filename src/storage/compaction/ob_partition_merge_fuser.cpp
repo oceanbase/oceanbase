@@ -43,6 +43,7 @@ void ObMergeFuser::clean_nop_pos_and_result_row()
   result_row_.row_flag_.set_flag(ObDmlFlag::DF_NOT_EXIST);
   result_row_.trans_id_.reset();
   result_row_.mvcc_row_flag_.reset();
+  result_row_.major_merge_flag_.reset();
   for (int64_t i = 0; i < result_row_.count_; i++) {
     result_row_.storage_datums_[i].set_nop();
   }
@@ -61,6 +62,8 @@ int ObMergeFuser::add_fuse_row(const blocksstable::ObDatumRow &row, bool &final_
     STORAGE_LOG(WARN, "row count is not valid", K(ret), K(row), K(result_row_), K(column_cnt_));
   } else if (is_fuse_row_flag_) {
     result_row_.row_flag_.fuse_flag(row.row_flag_);
+  } else {
+    result_row_.major_merge_flag_.fuse(row.major_merge_flag_);
   }
   return ret;
 }
@@ -96,11 +99,13 @@ int ObMergeFuser::set_multi_version_flag(const ObMultiVersionRowFlag &row_flag)
   return ret;
 }
 
-int ObMergeFuser::fuse_row(MERGE_ITER_ARRAY &macro_row_iters)
+int ObMergeFuser::fuse_row(MERGE_ITER_ARRAY &macro_row_iters, bool &append_row_flag)
 {
   int ret = OB_SUCCESS;
   bool is_need_fuse = false;
   const int64_t macro_row_iters_cnt = macro_row_iters.count();
+  int64_t virtual_row_cnt = 0;
+  append_row_flag = true;
 
   if (OB_UNLIKELY(!is_inited())) {
     ret = OB_NOT_INIT;
@@ -121,14 +126,25 @@ int ObMergeFuser::fuse_row(MERGE_ITER_ARRAY &macro_row_iters)
     }
   } else {
     bool final_result = false;
+    bool exist_new_committed_row = false;
     for (int64_t i = 0; OB_SUCC(ret) && !final_result && i < macro_row_iters_cnt; ++i) {
-      if (OB_FAIL(add_fuse_row(*macro_row_iters.at(i)->get_curr_row(), final_result))) {
+      const ObDatumRow *row = macro_row_iters.at(i)->get_curr_row();
+      if (row->major_merge_flag_.is_virtual_row_for_ttl_major_) {
+        virtual_row_cnt++;
+        LOG_INFO("virtual row for ttl major merge", K(ret), KPC(row), K(virtual_row_cnt));
+        exist_new_committed_row = true;
+      } else if (OB_FAIL(add_fuse_row(*row, final_result))) {
         STORAGE_LOG(WARN, "Failed to fuse row", K(ret));
       }
     }
     if (OB_FAIL(ret)) {
+    } else if (virtual_row_cnt == macro_row_iters_cnt) {
+      append_row_flag = false;
     } else if (OB_FAIL(end_fuse_row(nop_pos_, result_row_))) {
       STORAGE_LOG(WARN, "failed to end fuse row", K(ret), KPC(this));
+    } else {
+      result_row_.major_merge_flag_.exist_new_committed_row_ |= exist_new_committed_row;
+      STORAGE_LOG(INFO, "fuse row success", K(ret), K(result_row_));
     }
   }
   return ret;

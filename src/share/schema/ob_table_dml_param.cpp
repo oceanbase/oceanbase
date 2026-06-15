@@ -139,6 +139,7 @@ int ObTableSchemaParam::convert(const ObTableSchema *schema)
     lob_inrow_threshold_ = schema->get_lob_inrow_threshold();
     is_delete_insert_ = schema->is_delete_insert_merge_engine();
     is_rowscn_ttl_table_ = schema->get_ttl_flag().ttl_column_type_ == ObTTLFlag::TTLColumnType::ROWSCN;
+    user_ttl_column_id_ = schema->get_ttl_flag().get_last_user_ttl_column_id();
     merge_engine_type_ = schema->get_merge_engine_type();
     if (OB_FAIL(schema->get_is_row_store(use_cs))) {
       LOG_WARN("fail to get is row store", K(ret));

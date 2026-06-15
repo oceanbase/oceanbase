@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "ob_direct_load_struct.h"
+#include "storage/direct_load/ob_direct_load_vector_utils.h"
 #include "share/ob_ddl_error_message_table_operator.h"
 #include "share/ob_tablet_autoincrement_service.h"
 #include "sql/engine/pdml/static/ob_px_sstable_insert_op.h"
@@ -307,7 +308,8 @@ int ObLobMetaRowIterator::init(ObLobMetaWriteIter *iter,
                                 const transaction::ObTransID &trans_id,
                                 const int64_t trans_version,
                                 const int64_t sql_no,
-                                const ObDirectLoadType direct_load_type)
+                                const ObDirectLoadType direct_load_type,
+                                const ObTableSchemaItem &schema_item)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(is_inited_)) {
@@ -316,7 +318,7 @@ int ObLobMetaRowIterator::init(ObLobMetaWriteIter *iter,
   } else if (OB_ISNULL(iter) || OB_UNLIKELY(trans_id < 0 || sql_no < 0 || trans_version < 0)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("iter is nullptr", K(ret), K(trans_id), K(sql_no), K(trans_version));
-  } else if (!tmp_row_.is_valid() && OB_FAIL(tmp_row_.init(ObLobMetaUtil::LOB_META_COLUMN_CNT + ObLobMetaUtil::SKIP_INVALID_COLUMN))) {
+  } else if (!tmp_row_.is_valid() && OB_FAIL(tmp_row_.init(ObLobMetaUtil::get_lob_meta_column_cnt(schema_item.is_user_compaction_ttl_table()) + ObLobMetaUtil::SKIP_INVALID_COLUMN))) {
     LOG_WARN("Failed to init datum row", K(ret));
   } else {
     iter_ = iter;
@@ -2399,6 +2401,8 @@ int ObDirectLoadSliceWriter::prepare_iters(
     const ObDirectLoadType direct_load_type,
     transaction::ObTxDesc* tx_desc,
     share::ObTabletCacheInterval &pk_interval,
+    const ObTableSchemaItem &schema_item,
+    const blocksstable::ObStorageDatum *ttl_datum,
     ObLobMetaRowIterator *&row_iter)
 {
   int ret = OB_SUCCESS;
@@ -2444,10 +2448,10 @@ int ObDirectLoadSliceWriter::prepare_iters(
           K(ls_id), K(tablet_id), K(trans_version), K(seq_no), K(obj_type), K(cs_type), K(trans_id));
     } else if (OB_FAIL(ObInsertLobColumnHelper::insert_lob_column(
         allocator, *lob_allocator_, tx_desc, pk_interval, ls_id, tablet_id/* tablet_id of main table */, tablet_direct_load_mgr_->get_tablet_id()/*tablet id of lob meta table*/,
-        obj_type, cs_type, lob_storage_param, datum, timeout_ts, true/*has_lob_header*/, src_tenant_id, *meta_write_iter_))) {
+        obj_type, cs_type, lob_storage_param, datum, timeout_ts, true/*has_lob_header*/, src_tenant_id, ttl_datum, schema_item.user_ttl_column_type_, *meta_write_iter_))) {
       LOG_WARN("fail to insert_lob_col", K(ret), K(ls_id), K(tablet_id), K(src_tenant_id));
     } else if (OB_FAIL(row_iterator_->init(meta_write_iter_, trans_id,
-        trans_version, seq_no, direct_load_type))) {
+        trans_version, seq_no, direct_load_type, schema_item))) {
       LOG_WARN("fail to lob meta row iterator", K(ret), K(trans_id), K(trans_version), K(seq_no), K(direct_load_type));
     } else {
       row_iter = row_iterator_;
@@ -2474,6 +2478,7 @@ int ObDirectLoadSliceWriter::fill_lob_sstable_slice(
     ret = OB_NOT_INIT;
     LOG_WARN("ObDirectLoadSliceWriter not init", KR(ret), KP(this));
   } else {
+    const blocksstable::ObStorageDatum *ttl_datum = schema_item.get_ttl_datum_from_row(datum_row);
     ObLobStorageParam lob_storage_param;
     lob_storage_param.inrow_threshold_ = schema_item.lob_inrow_threshold_;
     lob_storage_param.is_index_table_ = schema_item.is_index_table_;
@@ -2488,7 +2493,7 @@ int ObDirectLoadSliceWriter::fill_lob_sstable_slice(
         }
       } else {
         if (OB_FAIL(fill_lob_into_macro_block(allocator, iter_allocator, start_scn, info,
-            pk_interval, col_type, lob_storage_param, datum))) {
+            pk_interval, col_type, schema_item, lob_storage_param, datum, ttl_datum))) {
           LOG_WARN("fill lob into macro block failed", K(ret), K(data_format_version));
         }
       }
@@ -2522,8 +2527,10 @@ int ObDirectLoadSliceWriter::fill_lob_into_macro_block(
     const ObBatchSliceWriteInfo &info,
     share::ObTabletCacheInterval &pk_interval,
     const common::ObObjMeta &col_type,
+    const ObTableSchemaItem &schema_item,
     const ObLobStorageParam &lob_storage_param,
-    blocksstable::ObStorageDatum &datum)
+    blocksstable::ObStorageDatum &datum,
+    const blocksstable::ObStorageDatum *ttl_datum)
 {
   // to insert lob data into macro block.
   int ret = OB_SUCCESS;
@@ -2535,7 +2542,7 @@ int ObDirectLoadSliceWriter::fill_lob_into_macro_block(
       if (OB_FAIL(prepare_iters(allocator, iter_allocator, datum, info.ls_id_,
           info.data_tablet_id_, info.trans_version_, col_type.get_type(), col_type.get_collation_type(),
           info.trans_id_, info.seq_no_, timeout_ts, lob_storage_param, info.src_tenant_id_, info.direct_load_type_,
-          info.tx_desc_, pk_interval, row_iter))) {
+          info.tx_desc_, pk_interval, schema_item, ttl_datum, row_iter))) {
         LOG_WARN("fail to prepare iters", K(ret), KP(row_iter), K(datum));
       } else {
         while (OB_SUCC(ret)) {
@@ -2692,6 +2699,8 @@ int ObDirectLoadSliceWriter::fill_lob_sstable_slice(
     LOG_WARN("ObDirectLoadSliceWriter not init", KR(ret), KP(this));
   } else {
     ObStorageDatum temp_datum;
+    ObStorageDatum ttl_datum_buf;
+    ObIVector *ttl_vector = schema_item.get_ttl_datum_from_vectors(datum_rows.vectors_);
     ObLobStorageParam lob_storage_param;
     lob_storage_param.inrow_threshold_ = schema_item.lob_inrow_threshold_;
     lob_storage_param.is_index_table_ = schema_item.is_index_table_;
@@ -2729,13 +2738,22 @@ int ObDirectLoadSliceWriter::fill_lob_sstable_slice(
             } else {
               temp_datum.ptr_ = data + offsets[j];
               temp_datum.len_ = offsets[j + 1] - offsets[j];
-              if (DATA_VERSION_4_3_0_0 > data_format_version) {
+              ObStorageDatum *cur_ttl_datum = nullptr;
+              if (ttl_vector) {
+                if (OB_FAIL(ObDirectLoadVectorUtils::to_datum(ttl_vector, j, ttl_datum_buf))) {
+                  LOG_WARN("fail to get ttl datum", K(ret), K(ttl_vector));
+                } else {
+                  cur_ttl_datum = &ttl_datum_buf;
+                }
+              }
+              if (OB_FAIL(ret)) {
+              } else if (DATA_VERSION_4_3_0_0 > data_format_version) {
                 if (OB_FAIL(fill_lob_into_memtable(allocator, info, col_type, lob_storage_param, temp_datum))) {
                   LOG_WARN("fill lob into memtable failed", K(ret), K(data_format_version));
                 }
               } else {
                 if (OB_FAIL(fill_lob_into_macro_block(allocator, iter_allocator, start_scn, info,
-                    pk_interval, col_type, lob_storage_param, temp_datum))) {
+                    pk_interval, col_type, schema_item, lob_storage_param, temp_datum, cur_ttl_datum))) {
                   LOG_WARN("fill lob into macro block failed", K(ret), K(data_format_version));
                 }
               }
@@ -2759,13 +2777,22 @@ int ObDirectLoadSliceWriter::fill_lob_sstable_slice(
             if (!discrete_vec->is_null(j)) {
               temp_datum.ptr_ = ptrs[j];
               temp_datum.len_ = lens[j];
-              if (DATA_VERSION_4_3_0_0 > data_format_version) {
+              ObStorageDatum *cur_ttl_datum = nullptr;
+              if (ttl_vector) {
+                if (OB_FAIL(ObDirectLoadVectorUtils::to_datum(ttl_vector, j, ttl_datum_buf))) {
+                  LOG_WARN("fail to get ttl datum", K(ret), K(ttl_vector));
+                } else {
+                  cur_ttl_datum = &ttl_datum_buf;
+                }
+              }
+              if (OB_FAIL(ret)) {
+              } else if (DATA_VERSION_4_3_0_0 > data_format_version) {
                 if (OB_FAIL(fill_lob_into_memtable(allocator, info, col_type, lob_storage_param, temp_datum))) {
                   LOG_WARN("fill lob into memtable failed", K(ret), K(data_format_version));
                 }
               } else {
                 if (OB_FAIL(fill_lob_into_macro_block(allocator, iter_allocator, start_scn, info,
-                    pk_interval, col_type, lob_storage_param, temp_datum))) {
+                    pk_interval, col_type, schema_item, lob_storage_param, temp_datum, cur_ttl_datum))) {
                   LOG_WARN("fill lob into macro block failed", K(ret), K(data_format_version));
                 }
               }
@@ -2786,13 +2813,22 @@ int ObDirectLoadSliceWriter::fill_lob_sstable_slice(
             if (!datum.is_null()) {
               temp_datum.ptr_ = datum.ptr_;
               temp_datum.len_ = datum.len_;
-              if (DATA_VERSION_4_3_0_0 > data_format_version) {
+              ObStorageDatum *cur_ttl_datum = nullptr;
+              if (ttl_vector) {
+                if (OB_FAIL(ObDirectLoadVectorUtils::to_datum(ttl_vector, j, ttl_datum_buf))) {
+                  LOG_WARN("fail to get ttl datum", K(ret), K(ttl_vector));
+                } else {
+                  cur_ttl_datum = &ttl_datum_buf;
+                }
+              }
+              if (OB_FAIL(ret)) {
+              } else if (DATA_VERSION_4_3_0_0 > data_format_version) {
                 if (OB_FAIL(fill_lob_into_memtable(allocator, info, col_type, lob_storage_param, temp_datum))) {
                   LOG_WARN("fill lob into memtable failed", K(ret), K(data_format_version));
                 }
               } else {
                 if (OB_FAIL(fill_lob_into_macro_block(allocator, iter_allocator, start_scn, info,
-                    pk_interval, col_type, lob_storage_param, temp_datum))) {
+                    pk_interval, col_type, schema_item, lob_storage_param, temp_datum, cur_ttl_datum))) {
                   LOG_WARN("fill lob into macro block failed", K(ret), K(data_format_version));
                 }
               }
@@ -2828,7 +2864,6 @@ int ObDirectLoadSliceWriter::fill_lob_meta_sstable_slice(
     LOG_WARN("ObDirectLoadSliceWriter not init", KR(ret), KP(this));
   } else {
     const int64_t rowkey_column_count = ObLobMetaUtil::LOB_META_SCHEMA_ROWKEY_COL_CNT;
-    const int64_t column_count = ObLobMetaUtil::LOB_META_COLUMN_CNT + ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
     while (OB_SUCC(ret)) {
       const blocksstable::ObDatumRow *cur_row = nullptr;
       if (OB_FAIL(THIS_WORKER.check_status())) {
@@ -2843,9 +2878,9 @@ int ObDirectLoadSliceWriter::fill_lob_meta_sstable_slice(
         } else {
           LOG_WARN("get next row failed", K(ret));
         }
-      } else if (OB_ISNULL(cur_row) || !cur_row->is_valid() || cur_row->get_column_count() != column_count) {
+      } else if (OB_ISNULL(cur_row) || !cur_row->is_valid()) {
         ret = OB_INVALID_ARGUMENT;
-        LOG_WARN("invalid args", KR(ret), KPC(cur_row), K(column_count));
+        LOG_WARN("invalid args", KR(ret), KPC(cur_row));
       } else if (OB_FAIL(check_null_and_length(false/*is_index_table*/, false/*has_lob_rowkey*/,
                                                false/*is_table_with_clustering_key*/, rowkey_column_count, *cur_row))) {
         LOG_WARN("fail to check rowkey null value and length in row", KR(ret), KPC(cur_row));

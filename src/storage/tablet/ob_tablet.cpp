@@ -37,6 +37,7 @@
 #include "storage/ddl/ob_ddl_merge_schedule.h"
 #include "storage/ddl/ob_inc_ddl_merge_task_utils.h"
 #include "storage/compaction_ttl/ob_ttl_filter_info_array.h"
+#include "share/schema/ob_table_dml_param.h"
 
 namespace oceanbase
 {
@@ -8388,7 +8389,7 @@ int ObTablet::prepare_param_ctx(
   }
   memtable::ObMvccMdsFilter mds_filter;
   mds_filter.mds_filter_mgr_ = relative_table.get_mds_filter_mgr();
-  mds_filter.read_info_ = rowkey_read_info_;
+  mds_filter.read_info_ = &relative_table.get_schema_param()->get_read_info();
   if (OB_FAIL(context.init(query_flag, ctx, allocator, trans_version_range, &mds_filter))) {
     LOG_WARN("Fail to init access context", K(ret));
   } else if (OB_FAIL(prepare_param(relative_table, param))) {

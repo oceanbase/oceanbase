@@ -122,7 +122,7 @@ private:
     // Therefore, if a delete-insert table was transformed to rowscn comapction ttl table BY ONLINE DDL,
     // we should ensure that the row before the DDL timepoint is recycled by once time to avoid inconsistent rowscn.
     return MAX(max_ddl_create_snapshot_,
-               data_table_schema.get_ttl_flag().get_being_scn_ttl_time_ns() + BEING_SCN_TTL_RECYCLE_SAFE_INTERVAL_NS);
+               data_table_schema.get_ttl_flag().get_being_compaction_ttl_time_ns() + BEING_SCN_TTL_RECYCLE_SAFE_INTERVAL_NS);
   }
 
 private:

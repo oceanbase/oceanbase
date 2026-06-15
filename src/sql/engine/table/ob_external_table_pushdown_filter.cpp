@@ -286,7 +286,7 @@ int ObExternalTablePushdownFilter::apply_bloom_filter(
     BloomFilterParamBuilder* bloom_filter_builder,
     bool &skipped) {
   int ret = OB_SUCCESS;
-  ObEvalCtx &eval_ctx = pd_storage_filters_->get_op().get_eval_ctx();
+  ObEvalCtx &eval_ctx = pd_storage_filters_->get_op()->get_eval_ctx();
   if (bloom_filter_enabled_ && !skipped && bloom_filter_builder != nullptr) {
     // all the items & filters
     common::ObSEArray<BloomFilterItem, 1> items;

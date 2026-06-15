@@ -112,7 +112,6 @@ int ObSSTableIndexFilter::is_filtered_by_skipping_index(
     // There is no need to check skipping index because filter result is contant already.
     node.is_already_determinate_ = true;
   } else if (node.filter_->is_base_version_node() && index_info.row_header_->is_major_node()) {
-    // TODO(menglan): inc major sstable is need to check base version
     node.filter_->get_filter_bool_mask().set_always_true();
   } else {
     uint32_t col_offset = 0;
@@ -127,15 +126,9 @@ int ObSSTableIndexFilter::is_filtered_by_skipping_index(
     } else if (OB_ISNULL(mds_executor = sql::ObIMDSFilterExecutor::cast(node.filter_))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("Unexpected mds executor", K(ret), KPC(node.filter_));
-    } else if (OB_FALSE_IT(col_idx = mds_executor->get_col_idx())) {
+    } else if (OB_FALSE_IT(col_idx = read_info->get_columns_index().at(mds_executor->get_col_offset(is_cg_)))) {
     } else if (OB_FAIL(mds_executor->get_filter_val_meta(obj_meta))) {
       LOG_WARN("Fail to get obj meta", KR(ret), KPC(node.filter_));
-    } else if (OB_UNLIKELY(col_idx != read_info->get_schema_rowkey_count())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected col idx, now only support ttl/base version filter and ora_rowscn",
-               K(ret),
-               K(col_idx),
-               K(read_info->get_schema_rowkey_count()));
     }
 
     if (OB_FAIL(ret)) {
@@ -276,7 +269,7 @@ int ObSSTableIndexFilterFactory::build_sstable_index_filter(
                  iter_param->get_read_info(),
                  pushdown_filter,
                  allocator,
-                 iter_param->op_ != nullptr ? iter_param->op_->get_batch_size() : pushdown_filter.get_op().get_batch_size()))) {
+                 iter_param->op_ != nullptr ? iter_param->op_->get_batch_size() : 0))) {
     LOG_WARN("Fail to init ObSSTableIndexFilter", K(ret), K(is_cg));
   }
   if (OB_SUCC(ret) && tmp_index_filter->can_use_skipping_index()) {

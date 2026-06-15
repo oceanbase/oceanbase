@@ -1200,6 +1200,7 @@ int ObAlterTableResolver::resolve_action_list(const ParseNode &node)
             ttl_definition_.reset();
             ttl_flag_ = table_schema_->get_ttl_flag();
             ttl_flag_.ttl_type_ = ObTTLDefinition::NONE;
+            ttl_flag_.ttl_column_type_ = share::ObTTLFlag::TTLColumnType::NONE;
             if (OB_FAIL(alter_table_bitset_.add_member(ObAlterTableArg::TTL_DEFINITION))) {
               SQL_RESV_LOG(WARN, "failed to add member to bitset!", K(ret));
             }

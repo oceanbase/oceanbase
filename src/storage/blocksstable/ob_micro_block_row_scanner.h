@@ -340,7 +340,8 @@ public:
         cell_allocator_(common::ObModIds::OB_SSTABLE_READER, OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID()),
         trans_version_col_idx_(-1),
         sql_sequence_col_idx_(-1),
-        cell_cnt_(0)
+        cell_cnt_(0),
+        cur_rowkey_exist_new_version_(false)
   {}
   virtual ~ObMultiVersionMicroBlockRowScanner() {}
   virtual void reuse() override;
@@ -360,7 +361,7 @@ public:
   INHERIT_TO_STRING_KV("ObMultiVersionMicroBlockRowScanner",
                        ObIMicroBlockRowScanner, K_(read_row_direct_flag),
                        K_(version_range), K_(is_last_multi_version_row),
-                       K_(finish_scanning_cur_rowkey));
+                       K_(finish_scanning_cur_rowkey), K_(cur_rowkey_exist_new_version));
 
 protected:
   virtual int inner_get_next_row(const ObDatumRow *&row) override;
@@ -378,26 +379,31 @@ protected:
       const transaction::ObTransID trans_id);
   void reuse_cur_micro_row();
 
-  int read_current_row_with_uncommitted_check(const ObDatumRow *&ret_row,
-                                              bool &version_fit,
-                                              bool &final_result,
-                                              bool &have_uncommitted_row);
+  int read_and_resolve_row(const ObDatumRow *&ret_row,
+                          bool &version_fit,
+                          bool &final_result,
+                          bool &have_uncommitted_row);
+  int fill_row_version_info(ObDatumRow *row, const int64_t trans_version, bool &version_fit);
 
 private:
   void reuse_prev_micro_row();
   void inner_reset();
   int locate_cursor_to_read(bool &found_first_row);
-  int inner_get_next_row_impl(const ObDatumRow *&ret_row);
-  int inner_inner_get_next_row(
+  int locate_cursor_forward(bool &found_first_row);
+  int locate_cursor_reverse(bool &found_first_row);
+  int compact_multi_version_rows(const ObDatumRow *&ret_row);
+  int read_next_version_row(
       const ObDatumRow *&ret_row,
       bool &version_fit,
       bool &final_result,
       bool &have_uncommitted_row);
-  int inner_get_next_row_directly(
+  int read_row_on_direct_path(
       const ObDatumRow *&ret_row,
       bool &version_fit,
       bool &final_result);
   int cache_cur_micro_row(const bool found_first_row, const bool final_result);
+  int cache_cur_micro_row_forward(const bool final_result);
+  int cache_cur_micro_row_reverse(const bool found_first_row, const bool final_result);
   int do_compact(const ObDatumRow *src_row, ObDatumRow &dest_row, bool &final_result);
   int lock_for_read(
       const transaction::ObLockForReadArg &lock_for_read_arg,
@@ -407,6 +413,11 @@ private:
   // and it will be destroyed when the life cycle of the rowkey_helper is end.
   // So we have to send it into the function to avoid this situation.
   int get_store_rowkey(ObStoreRowkey &store_rowkey, ObDatumRowkeyHelper &rowkey_helper);
+  void handle_row_exceed_snapshot_version(
+      const int64_t trans_version,
+      const int64_t snapshot_version,
+      const ObMultiVersionRowFlag &mvcc_row_flag,
+      bool &version_fit);
 protected:
   // Use shallow_copy to directly quote the original data of the microblock when compacting,
   // only at the moment (when the dump row format is flat) there is no risk
@@ -426,6 +437,7 @@ private:
   int64_t sql_sequence_col_idx_;
   int64_t cell_cnt_;
   common::ObVersionRange version_range_;
+  bool cur_rowkey_exist_new_version_;
 };
 
 class ObMultiVersionIOMicroBlockRowScanner final : public ObMultiVersionMicroBlockRowScanner

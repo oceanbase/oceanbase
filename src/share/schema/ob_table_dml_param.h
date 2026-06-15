@@ -134,6 +134,7 @@ public:
   OB_INLINE bool is_delete_insert() const { return static_cast<ObMergeEngineType>(merge_engine_type_) == ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT; }
   OB_INLINE bool is_append_only() const { return static_cast<ObMergeEngineType>(merge_engine_type_) == ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY; }
   OB_INLINE bool is_rowscn_ttl_table() const { return is_rowscn_ttl_table_; }
+  OB_INLINE uint64_t get_user_ttl_column_id() const { return user_ttl_column_id_; }
   OB_INLINE const common::ObString &get_index_name() const { return index_name_; }
 
   const ObColumnParam * get_column(const uint64_t column_id) const;

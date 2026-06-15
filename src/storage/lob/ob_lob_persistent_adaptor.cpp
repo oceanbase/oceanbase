@@ -12,11 +12,28 @@
 #include "share/schema/ob_tenant_schema_service.h"
 #include "share/ob_tablet_autoincrement_service.h"
 #include "storage/tx_storage/ob_ls_service.h"
+#include "storage/compaction_ttl/ob_ttl_filter_info.h"
+#include "share/compaction_ttl/ob_compaction_ttl_util.h"
 
 namespace oceanbase
 {
 namespace storage
 {
+
+static_assert(static_cast<size_t>(ObTTLFilterColType::MAX) == 10,
+              "ObTTLFilterColType::MAX must be 10 for array indexing");
+
+ObPersistentLobApator::ObPersistentLobApator(const uint64_t tenant_id)
+  : tenant_id_(tenant_id),
+    allocator_(lib::ObMemAttr(tenant_id, "LobPersist", ObCtxIds::LOB_CTX_ID)),
+    lock_(common::ObLatchIds::OB_LOB_PERSISTENT_ADAPTOR_LOCK),
+    table_param_inited_(false)
+{
+  for (size_t i = 0; i < static_cast<size_t>(ObTTLFilterColType::MAX); ++i) {
+    meta_table_params_[i] = nullptr;
+    meta_table_dml_params_[i] = nullptr;
+  }
+}
 
 ObPersistentLobApator::~ObPersistentLobApator()
 {
@@ -26,38 +43,48 @@ ObPersistentLobApator::~ObPersistentLobApator()
 void ObPersistentLobApator::destroy()
 {
   STORAGE_LOG(INFO, "[LOB] destroy lob persist", K(tenant_id_));
-  if (OB_NOT_NULL(meta_table_param_)) {
-    meta_table_param_->reset();
-    meta_table_param_->~ObTableParam();
-    allocator_.free(meta_table_param_);
-    meta_table_param_ = nullptr;
-  }
-  if (OB_NOT_NULL(meta_table_dml_param_)) {
-    meta_table_dml_param_->reset();
-    meta_table_dml_param_->~ObTableDMLParam();
-    allocator_.free(meta_table_dml_param_);
-    meta_table_dml_param_ = nullptr;
+  for (size_t i = 0; i < static_cast<size_t>(ObTTLFilterColType::MAX); ++i) {
+    if (OB_NOT_NULL(meta_table_params_[i])) {
+      meta_table_params_[i]->reset();
+      meta_table_params_[i]->~ObTableParam();
+      allocator_.free(meta_table_params_[i]);
+      meta_table_params_[i] = nullptr;
+    }
+    if (OB_NOT_NULL(meta_table_dml_params_[i])) {
+      meta_table_dml_params_[i]->reset();
+      meta_table_dml_params_[i]->~ObTableDMLParam();
+      allocator_.free(meta_table_dml_params_[i]);
+      meta_table_dml_params_[i] = nullptr;
+    }
   }
   allocator_.reset();
 }
 
-int ObPersistentLobApator::init_meta_column_ids(ObSEArray<uint64_t, 6> &meta_column_ids)
+int ObPersistentLobApator::get_meta_table_param(ObTTLFilterColType ttl_type, const ObTableParam *&table_param)
 {
   int ret = OB_SUCCESS;
-  for (uint32_t i = 0; OB_SUCC(ret) && i < ObLobMetaUtil::LOB_META_COLUMN_CNT; i++) {
-    if (OB_FAIL(meta_column_ids.push_back(OB_APP_MIN_COLUMN_ID + i))) {
-      LOG_WARN("push col id fail", K(ret), K(i));
+  if (!ATOMIC_LOAD(&table_param_inited_)) {
+    ObLockGuard<ObSpinLock> guard(lock_);
+    if (!ATOMIC_LOAD(&table_param_inited_)) {
+      if (OB_FAIL(init_table_param())) {
+        LOG_ERROR("init_table_param fail", KR(ret));
+      } else {
+        LOG_INFO("init_table_param success", KR(ret));
+      }
     }
+  }
+  if (OB_SUCC(ret)) {
+    table_param = ATOMIC_LOAD(&meta_table_params_[static_cast<size_t>(ttl_type)]);
   }
   return ret;
 }
 
-int ObPersistentLobApator::get_meta_table_param(const ObTableParam *&table_param)
+int ObPersistentLobApator::get_meta_table_dml_param(ObTTLFilterColType ttl_type, const ObTableDMLParam *&table_param)
 {
   int ret = OB_SUCCESS;
-  if (! ATOMIC_LOAD(&table_param_inited_)) {
+  if (!ATOMIC_LOAD(&table_param_inited_)) {
     ObLockGuard<ObSpinLock> guard(lock_);
-    if (! ATOMIC_LOAD(&table_param_inited_)) {
+    if (!ATOMIC_LOAD(&table_param_inited_)) {
       if (OB_FAIL(init_table_param())) {
         LOG_ERROR("init_table_param fail", KR(ret));
       } else {
@@ -66,25 +93,7 @@ int ObPersistentLobApator::get_meta_table_param(const ObTableParam *&table_param
     }
   }
   if (OB_SUCC(ret)) {
-    table_param = ATOMIC_LOAD(&meta_table_param_);
-  }
-  return ret;
-}
-int ObPersistentLobApator::get_meta_table_dml_param(const ObTableDMLParam *&table_param)
-{
-  int ret = OB_SUCCESS;
-  if (! ATOMIC_LOAD(&table_param_inited_)) {
-    ObLockGuard<ObSpinLock> guard(lock_);
-    if (! ATOMIC_LOAD(&table_param_inited_)) {
-      if (OB_FAIL(init_table_param())) {
-        LOG_ERROR("init_table_param fail", KR(ret));
-      } else {
-        LOG_INFO("init_table_param success", KR(ret));
-      }
-    }
-  }
-  if (OB_SUCC(ret)) {
-    table_param = ATOMIC_LOAD(&meta_table_dml_param_);
+    table_param = ATOMIC_LOAD(&meta_table_dml_params_[static_cast<size_t>(ttl_type)]);
   }
   return ret;
 }
@@ -93,31 +102,33 @@ int ObPersistentLobApator::init_table_param()
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator tmp_allocator("TmpLobPersist", OB_MALLOC_NORMAL_BLOCK_SIZE, tenant_id_);
-  ObSEArray<uint64_t, 6> meta_column_ids;
+  ObSEArray<uint64_t, 7> meta_column_ids;
   HEAP_VAR(ObTableSchema, meta_schema, &tmp_allocator) {
-    if (ATOMIC_LOAD(&table_param_inited_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("init again", KR(ret), K(table_param_inited_));
-    } else if (nullptr != meta_table_param_ || nullptr != meta_table_dml_param_) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("init again", KR(ret), KP(meta_table_param_), KP(meta_table_dml_param_));
-    } else if (OB_FAIL(share::ObInnerTableSchema::all_column_aux_lob_meta_schema(meta_schema))) {
-      LOG_ERROR("get lob meta schema fail", KR(ret));
-    } else if (OB_FAIL(init_meta_column_ids(meta_column_ids))) {
-      LOG_ERROR("init_meta_column_ids fail", KR(ret));
-    } else if (OB_FALSE_IT(ATOMIC_STORE(&meta_table_param_, OB_NEWx(ObTableParam, &allocator_, allocator_)))) {
-    } else if (OB_ISNULL(meta_table_param_)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("alloc meta_table_param fail", KR(ret), "size", sizeof(ObTableParam));
-    } else if (OB_FAIL(meta_table_param_->convert(meta_schema, meta_column_ids, sql::ObStoragePushdownFlag()))) {
-      LOG_ERROR("Fail to convert table param", KR(ret), K(meta_schema));
-    } else if (OB_FALSE_IT(ATOMIC_STORE(&meta_table_dml_param_, OB_NEWx(ObTableDMLParam, &allocator_, allocator_)))) {
-    } else if (OB_ISNULL(meta_table_dml_param_)) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_ERROR("alloc meta_table_param fail", KR(ret), "size", sizeof(ObTableDMLParam));
-    } else if (OB_FAIL(meta_table_dml_param_->convert(&meta_schema, meta_schema.get_schema_version(), meta_column_ids))) {
-      LOG_ERROR("Fail to convert table param", KR(ret), K(meta_schema));
-    } else {
+    for (size_t idx = 0; OB_SUCC(ret) && idx < static_cast<size_t>(ObTTLFilterColType::MAX); ++idx) {
+      const ObTTLFilterColType ttl_type = static_cast<ObTTLFilterColType>(idx);
+      meta_column_ids.reuse();
+      meta_schema.reset();
+      if (OB_FAIL(share::ObCompactionTTLUtil::build_aux_lob_table_schema(ttl_type, meta_schema))) {
+        LOG_ERROR("build aux lob meta schema fail", KR(ret), K(ttl_type));
+      } else if (OB_FAIL(ObLobMetaUtil::init_meta_column_ids(meta_column_ids, ObTTLFilterColTypeUtil::has_ttl_column_in_lob_meta(ttl_type)))) {
+        LOG_ERROR("init_meta_column_ids fail", KR(ret));
+      } else {
+        ObTableParam *table_param = OB_NEWx(ObTableParam, &allocator_, allocator_);
+        ObTableDMLParam *dml_param = OB_NEWx(ObTableDMLParam, &allocator_, allocator_);
+        if (OB_ISNULL(table_param) || OB_ISNULL(dml_param)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_ERROR("alloc meta table param fail", KR(ret));
+        } else if (OB_FAIL(table_param->convert(meta_schema, meta_column_ids, sql::ObStoragePushdownFlag()))) {
+          LOG_ERROR("Fail to convert table param", KR(ret), K(ttl_type));
+        } else if (OB_FAIL(dml_param->convert(&meta_schema, meta_schema.get_schema_version(), meta_column_ids))) {
+          LOG_ERROR("Fail to convert table dml param", KR(ret), K(ttl_type));
+        } else {
+          meta_table_params_[idx] = table_param;
+          meta_table_dml_params_[idx] = dml_param;
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
       ATOMIC_STORE(&table_param_inited_, true);
     }
   }
@@ -130,8 +141,8 @@ int ObPersistentLobApator::prepare_table_param(
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(scan_param.table_param_ != NULL)) {
-  } else if (OB_FAIL(get_meta_table_param(scan_param.table_param_))) {
-    LOG_WARN("get_meta_table_param fail", KR(ret));
+  } else if (OB_FAIL(get_meta_table_param(param.lob_ttl_column_info_.get_meta_ttl_type(), scan_param.table_param_))) {
+    LOG_WARN("get_meta_table_param fail", KR(ret), K(param));
   }
   return ret;
 }
@@ -281,8 +292,8 @@ int ObPersistentLobApator::build_lob_meta_table_dml(
   dml_base_param.write_flag_.set_is_insert_up();
   if (param.skip_flush_redo()) dml_base_param.write_flag_.set_skip_flush_redo();
   dml_base_param.dml_allocator_ = param.allocator_;
-  if (OB_FAIL(get_meta_table_dml_param(dml_base_param.table_param_))) {
-    LOG_WARN("get_meta_table_dml_param fail", KR(ret));
+  if (OB_FAIL(get_meta_table_dml_param(param.lob_ttl_column_info_.get_meta_ttl_type(), dml_base_param.table_param_))) {
+    LOG_WARN("get_meta_table_dml_param fail", KR(ret), K(param));
   } else if (OB_FAIL(dml_base_param.snapshot_.assign(param.snapshot_))) {
     LOG_WARN("assign snapshot fail", K(ret));
   }
@@ -323,7 +334,7 @@ int ObPersistentLobApator::prepare_table_scan_param(
     ObIAllocator *scan_allocator)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(build_common_scan_param(param, is_get, ObLobMetaUtil::LOB_META_COLUMN_CNT, scan_param, stmt_allocator, scan_allocator))) {
+  if (OB_FAIL(build_common_scan_param(param, is_get, ObLobMetaUtil::get_lob_meta_column_cnt(param.has_hidden_ttl_column()), scan_param, stmt_allocator, scan_allocator))) {
     LOG_WARN("build common scan param fail", K(ret));
   } else if (OB_FAIL(prepare_table_param(param, scan_param))) {
     LOG_WARN("prepare lob meta table param fail", K(ret));
@@ -477,6 +488,9 @@ void ObPersistentLobApator::set_lob_meta_row(
   datum_row.storage_datums_[ObLobMetaUtil::CHAR_LEN_COL_ID].set_uint32(in_row.char_len_);
   datum_row.storage_datums_[ObLobMetaUtil::PIECE_ID_COL_ID].set_uint(in_row.piece_id_);
   datum_row.storage_datums_[ObLobMetaUtil::LOB_DATA_COL_ID].set_string(in_row.lob_data_);
+  if (in_row.has_ttl_datum()) {
+    datum_row.storage_datums_[ObLobMetaUtil::HIDDEN_TTL_COLUMN_COL_ID].set_datum(in_row.hidden_ttl_column_);
+  }
 }
 
 int ObPersistentLobApator::set_lob_piece_row(
@@ -655,6 +669,7 @@ int ObPersistentLobApator::erase_lob_meta(ObLobAccessParam &param, ObDatumRowIte
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
+  ObSEArray<uint64_t, 7> column_ids;
   ObAccessService *oas = MTL(ObAccessService*);
   if (OB_ISNULL(oas)) {
     ret = OB_ERR_INTERVAL_INVALID;
@@ -666,24 +681,17 @@ int ObPersistentLobApator::erase_lob_meta(ObLobAccessParam &param, ObDatumRowIte
     LOG_WARN("failed to get tablets", K(ret), K(param));
   } else if (OB_FAIL(prepare_lob_meta_dml(param))) {
     LOG_WARN("failed to prepare lob meta dml", K(ret));
-  } else {
-    ObSEArray<uint64_t, 6> column_ids;
-    for (int i = 0; OB_SUCC(ret) && i < ObLobMetaUtil::LOB_META_COLUMN_CNT; ++i) {
-      if (OB_FAIL(column_ids.push_back(OB_APP_MIN_COLUMN_ID + i))) {
-        LOG_WARN("push column ids failed.", K(ret), K(i));
-      }
-    }
-    if (OB_FAIL(ret)) {
-    } else if (OB_FAIL(oas->delete_rows(
-        param.ls_id_,
-        param.lob_meta_tablet_id_,
-        *param.tx_desc_,
-        *param.dml_base_param_,
-        column_ids,
-        &row_iter,
-        affected_rows))) {
-      LOG_WARN("delete_rows fail", K(ret));
-    }
+  } else if (OB_FAIL(ObLobMetaUtil::init_meta_column_ids(column_ids, param.has_hidden_ttl_column()))) {
+    LOG_WARN("init meta column ids failed", K(ret));
+  } else if (OB_FAIL(oas->delete_rows(
+      param.ls_id_,
+      param.lob_meta_tablet_id_,
+      *param.tx_desc_,
+      *param.dml_base_param_,
+      column_ids,
+      &row_iter,
+      affected_rows))) {
+    LOG_WARN("delete_rows fail", K(ret));
   }
   return ret;
 }
@@ -692,6 +700,7 @@ int ObPersistentLobApator::write_lob_meta(ObLobAccessParam& param, ObDatumRowIte
 {
   int ret = OB_SUCCESS;
   int64_t affected_rows = 0;
+  ObSEArray<uint64_t, 7> column_ids;
   ObAccessService *oas = MTL(ObAccessService*);
   if (OB_ISNULL(oas)) {
     ret = OB_ERR_INTERVAL_INVALID;
@@ -703,36 +712,29 @@ int ObPersistentLobApator::write_lob_meta(ObLobAccessParam& param, ObDatumRowIte
     LOG_WARN("failed to get tablets", K(ret), K(param));
   } else if (OB_FAIL(prepare_lob_meta_dml(param))) {
     LOG_WARN("failed to prepare lob meta dml", K(ret));
+  } else if (OB_FAIL(ObLobMetaUtil::init_meta_column_ids(column_ids, param.has_hidden_ttl_column()))) {
+    LOG_WARN("init meta column ids failed", K(ret));
   } else {
-    ObSEArray<uint64_t, 6> column_ids;
-    for (int i = 0; OB_SUCC(ret) && i < ObLobMetaUtil::LOB_META_COLUMN_CNT; ++i) {
-      if (OB_FAIL(column_ids.push_back(OB_APP_MIN_COLUMN_ID + i))) {
-        LOG_WARN("push column ids failed.", K(ret), K(i));
+    ret = OB_E(EventTable::EN_LOB_META_DML_FAILED, param.get_inrow_threshold()) OB_SUCCESS;
+    if (OB_FAIL(ret) && param.tablet_id_.is_user_tablet()) {
+      LOG_ERROR("due to error injection, lob meta not being inserted into the auxiliary table", K(ret), K(param));
+      ObDatumRow *row = nullptr;
+      while (OB_SUCC(row_iter.get_next_row(row))) {
       }
-    }
-    if (OB_FAIL(ret)) {
-    } else {
-      ret = OB_E(EventTable::EN_LOB_META_DML_FAILED, param.get_inrow_threshold()) OB_SUCCESS;
-      if (OB_FAIL(ret) && param.tablet_id_.is_user_tablet()) {
-        LOG_ERROR("due to error injection, lob meta not being inserted into the auxiliary table", K(ret), K(param));
-        ObDatumRow *row = nullptr;
-        while (OB_SUCC(row_iter.get_next_row(row))) {
-        }
-        if (ret != OB_ITER_END) {
-          LOG_WARN("get next row fail", K(ret));
-        } else {
-          ret = OB_SUCCESS;
-        }
-      } else if (OB_FAIL(oas->insert_rows(
-        param.ls_id_,
-        param.lob_meta_tablet_id_,
-        *param.tx_desc_,
-        *param.dml_base_param_,
-        column_ids,
-        &row_iter,
-        affected_rows))) {
-        LOG_WARN("insert_rows fail", K(ret));
+      if (ret != OB_ITER_END) {
+        LOG_WARN("get next row fail", K(ret));
+      } else {
+        ret = OB_SUCCESS;
       }
+    } else if (OB_FAIL(oas->insert_rows(
+      param.ls_id_,
+      param.lob_meta_tablet_id_,
+      *param.tx_desc_,
+      *param.dml_base_param_,
+      column_ids,
+      &row_iter,
+      affected_rows))) {
+      LOG_WARN("insert_rows fail", K(ret));
     }
   }
   return ret;
@@ -754,15 +756,12 @@ int ObPersistentLobApator::update_lob_meta(ObLobAccessParam& param, ObDatumRowIt
   } else if (OB_FAIL(prepare_lob_meta_dml(param))) {
     LOG_WARN("failed to prepare lob meta dml", K(ret));
   } else {
-    ObSEArray<uint64_t, 6> column_ids;
-    for (int i = 0; OB_SUCC(ret) && i < ObLobMetaUtil::LOB_META_COLUMN_CNT; ++i) {
-      if (OB_FAIL(column_ids.push_back(OB_APP_MIN_COLUMN_ID + i))) {
-        LOG_WARN("push column ids failed.", K(ret), K(i));
-      }
+    ObSEArray<uint64_t, 7> column_ids, update_column_ids;
+    if (OB_FAIL(ObLobMetaUtil::init_meta_column_ids(column_ids, param.has_hidden_ttl_column()))) {
+      LOG_WARN("init meta column ids failed", K(ret));
     }
-    ObSEArray<uint64_t, 6> update_column_ids;
-    for (int i = 2; OB_SUCC(ret) && i < ObLobMetaUtil::LOB_META_COLUMN_CNT; ++i) {
-      if (OB_FAIL(update_column_ids.push_back(OB_APP_MIN_COLUMN_ID + i))) {
+    for (int i = 2; OB_SUCC(ret) && i < column_ids.count(); ++i) {
+      if (OB_FAIL(update_column_ids.push_back(column_ids.at(i)))) {
         LOG_WARN("push column ids failed", K(ret), K(i));
       }
     }
@@ -787,7 +786,7 @@ int ObPersistentLobApator::write_lob_meta(ObLobAccessParam &param, ObLobMetaInfo
   int ret = OB_SUCCESS;
   ObDatumRow new_row;
   ObLobPersistInsertSingleRowIter single_iter;
-  if (OB_FAIL(new_row.init(ObLobMetaUtil::LOB_META_COLUMN_CNT))) {
+  if (OB_FAIL(new_row.init(ObLobMetaUtil::get_lob_meta_column_cnt(param.has_hidden_ttl_column())))) {
     LOG_WARN("failed to init datum row", K(ret));
   } else if (FALSE_IT(set_lob_meta_row(new_row, row_info))) {
   } else if (OB_FAIL(single_iter.init(&param, &new_row))) {
@@ -803,7 +802,7 @@ int ObPersistentLobApator::erase_lob_meta(ObLobAccessParam &param, ObLobMetaInfo
   int ret = OB_SUCCESS;
   ObDatumRow new_row;
   ObLobPersistDeleteSingleRowIter single_iter;
-  if (OB_FAIL(new_row.init(ObLobMetaUtil::LOB_META_COLUMN_CNT))) {
+  if (OB_FAIL(new_row.init(ObLobMetaUtil::get_lob_meta_column_cnt(param.has_hidden_ttl_column())))) {
     LOG_WARN("failed to init datum row", K(ret));
   } else if (FALSE_IT(set_lob_meta_row(new_row, row_info))) {
   } else if (OB_FAIL(single_iter.init(&param, &new_row))) {
@@ -820,9 +819,9 @@ int ObPersistentLobApator::update_lob_meta(ObLobAccessParam& param, ObLobMetaInf
   ObDatumRow new_datum_row;
   ObDatumRow old_datum_row;
   ObLobPersistUpdateSingleRowIter upd_iter;
-  if (OB_FAIL(new_datum_row.init(ObLobMetaUtil::LOB_META_COLUMN_CNT))) {
+  if (OB_FAIL(new_datum_row.init(ObLobMetaUtil::get_lob_meta_column_cnt(param.has_hidden_ttl_column())))) {
     LOG_WARN("failed to init new datum row", K(ret));
-  } else if (OB_FAIL(old_datum_row.init(ObLobMetaUtil::LOB_META_COLUMN_CNT))) {
+  } else if (OB_FAIL(old_datum_row.init(ObLobMetaUtil::get_lob_meta_column_cnt(param.has_hidden_ttl_column())))) {
     LOG_WARN("failed to init old datum row", K(ret));
   } else if (FALSE_IT(set_lob_meta_row(new_datum_row, new_row))) {
   } else if (FALSE_IT(set_lob_meta_row(old_datum_row, old_row))) {

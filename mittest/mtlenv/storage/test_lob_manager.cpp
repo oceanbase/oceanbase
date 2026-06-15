@@ -400,9 +400,9 @@ void TestLobManager::build_lob_meta_row(
     ObLobMetaInfo& info,
     ObStoreRow *&row)
 {
-  ASSERT_EQ(OB_SUCCESS, malloc_store_row(allocator, ObLobMetaUtil::LOB_META_COLUMN_CNT, row, FLAT_ROW_STORE));
+  ASSERT_EQ(OB_SUCCESS, malloc_store_row(allocator, ObLobMetaUtil::LOB_META_WITHOUT_TTL_COLUMN_CNT, row, FLAT_ROW_STORE));
   row->flag_.set_flag(ObDmlFlag::DF_INSERT);
-  for (int64_t i = 0; i < ObLobMetaUtil::LOB_META_COLUMN_CNT; ++i) {
+  for (int64_t i = 0; i < ObLobMetaUtil::LOB_META_WITHOUT_TTL_COLUMN_CNT; ++i) {
     row->row_val_.cells_[i].set_nop_value();
   }
 
@@ -450,7 +450,7 @@ void TestLobManager::insert_lob_meta(
   // insert rows
   ObMockDatumRowIterator mock_iter;
   ObSEArray<uint64_t, 512> column_ids;
-  for (int i = 0; i < ObLobMetaUtil::LOB_META_COLUMN_CNT; i++) {
+  for (int i = 0; i < ObLobMetaUtil::LOB_META_WITHOUT_TTL_COLUMN_CNT; i++) {
     column_ids.push_back(OB_APP_MIN_COLUMN_ID + i);
   }
 
@@ -556,7 +556,7 @@ void TestLobManager::lob_write(
   // build table param
   share::schema::ObTableParam table_param(allocator);
   ObSArray<uint64_t> colunm_ids;
-  for (int i = 0; i < ObLobMetaUtil::LOB_META_COLUMN_CNT; i++) {
+  for (int i = 0; i < ObLobMetaUtil::LOB_META_WITHOUT_TTL_COLUMN_CNT; i++) {
     colunm_ids.push_back(OB_APP_MIN_COLUMN_ID + i);
   }
   ASSERT_EQ(OB_SUCCESS, TestDmlCommon::build_table_param(table_schema, colunm_ids, table_param));
@@ -630,7 +630,7 @@ void TestLobManager::scan_lob_meta(
   // build table param
   share::schema::ObTableParam table_param(allocator);
   ObSArray<uint64_t> colunm_ids;
-  for (int i = 0; i < ObLobMetaUtil::LOB_META_COLUMN_CNT; i++) {
+  for (int i = 0; i < ObLobMetaUtil::LOB_META_WITHOUT_TTL_COLUMN_CNT; i++) {
     colunm_ids.push_back(OB_APP_MIN_COLUMN_ID + i);
   }
   ASSERT_EQ(OB_SUCCESS, TestDmlCommon::build_table_param(table_schema, colunm_ids, table_param));

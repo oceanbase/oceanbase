@@ -175,5 +175,32 @@ int ObTransVersionSkipIndexReader::inner_read_min_max_snapshot(
   return ret;
 }
 
+int ObTransVersionSkipIndexReader::read_min_max_snapshot(
+  const int64_t col_idx,
+  ObAggRowCachedReader &reader,
+  ObTransVersionSkipIndexInfo &skip_index_info)
+{
+  int ret = OB_SUCCESS;
+  skip_index_info.reset();
+  if (!reader.is_inited()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid reader", KR(ret), K(reader));
+  } else {
+    const ObSkipIndexColMeta min_col_meta(col_idx, SK_IDX_MIN);
+    const ObSkipIndexColMeta max_col_meta(col_idx, SK_IDX_MAX);
+    ObStorageDatum min_datum;
+    ObStorageDatum max_datum;
+    if (OB_FAIL(reader.read(min_col_meta, min_datum))) {
+      LOG_WARN("Failed to read agg row", K(ret), K(min_col_meta));
+    } else if (OB_FAIL(reader.read(max_col_meta, max_datum))) {
+      LOG_WARN("Failed to read agg row", K(ret), K(max_col_meta));
+    } else if (OB_FAIL(skip_index_info.set(min_datum, max_datum))) {
+      LOG_WARN("Failed to set skip index info", K(ret), K(min_datum), K(max_datum));
+    }
+  }
+  return ret;
+}
+
+
 } // namespace storage
 } // namespace oceanbase

@@ -33,21 +33,22 @@ ObMDSFilterMgr::~ObMDSFilterMgr()
     and_filter_node_ = nullptr;
   }
   if (truncate_partition_filter_ != nullptr) {
-    ObTruncatePartitionFilterFactory::destroy_truncate_partition_filter(truncate_partition_filter_);
+    truncate_partition_filter_->~ObTruncatePartitionFilter();
   }
   if (ttl_filter_ != nullptr) {
-    ObTTLFilterFactory::destroy_ttl_filter(ttl_filter_);
+    ttl_filter_->~ObTTLFilter();
   }
   if (base_version_filter_ != nullptr) {
-    ObBaseVersionFilterFactory::destroy_base_version_filter(base_version_filter_);
+    base_version_filter_->~ObBaseVersionFilter();
   }
+
+  // Don't need to free them because they are allocated by self's ArenaAllocator
 }
 
 OB_INLINE int ObMDSFilterMgr::build_filters(
     ObTablet &tablet,
     const ObIArray<ObTabletHandle> *split_extra_tablet_handles,
-    const ObIArray<ObColDesc> &cols_desc,
-    const ObIArray<ObColumnParam *> *cols_param,
+    const ObITableReadInfo &read_info,
     const ObVersionRange &read_version_range,
     const ObMDSFilterFlags &mds_filter_flags)
 {
@@ -57,10 +58,10 @@ OB_INLINE int ObMDSFilterMgr::build_filters(
     if (OB_FAIL(ObTruncatePartitionFilterFactory::build_truncate_partition_filter(
             tablet,
             split_extra_tablet_handles,
-            cols_desc,
-            cols_param,
+            read_info.get_columns_desc(),
+            read_info.get_columns(),
             read_version_range,
-            *this,
+            filter_allocator_,
             truncate_partition_filter_))) {
       LOG_WARN("failed to build truncate partition filter", K(ret));
     }
@@ -69,10 +70,9 @@ OB_INLINE int ObMDSFilterMgr::build_filters(
   if (OB_SUCC(ret) && mds_filter_flags.has_type(MDSFilterType::TTL_FILTER)) {
     if (OB_FAIL(ObTTLFilterFactory::build_ttl_filter(tablet,
                                                      split_extra_tablet_handles,
-                                                     cols_desc,
-                                                     cols_param,
+                                                     read_info,
                                                      read_version_range,
-                                                     *this,
+                                                     filter_allocator_,
                                                      ttl_filter_))) {
       LOG_WARN("failed to build ttl filter", K(ret));
     }
@@ -80,7 +80,7 @@ OB_INLINE int ObMDSFilterMgr::build_filters(
 
   if (OB_SUCC(ret) && mds_filter_flags.has_type(MDSFilterType::BASE_VERSION_FILTER)) {
     if (OB_FAIL(ObBaseVersionFilterFactory::build_base_version_filter(
-            tablet, read_version_range, *this, base_version_filter_))) {
+            tablet, read_version_range, filter_allocator_, base_version_filter_))) {
       LOG_WARN("failed to build base version filter", K(ret));
     }
   }
@@ -138,13 +138,10 @@ int ObMDSFilterMgr::check_filter_row_complete(const ObDatumRow &row, bool &compl
   return ret;
 }
 
-int ObMDSFilterMgr::combine_to_filter_tree_with_check(sql::ObPushdownFilterExecutor *&root_filter, sql::ObPushdownFilterExecutor *sql_pushdown_filter)
+int ObMDSFilterMgr::combine_to_filter_tree(sql::ObPushdownFilterExecutor *&root_filter, sql::ObPushdownFilterExecutor *sql_pushdown_filter)
 {
   int ret = OB_SUCCESS;
 
-  // the reuse logic makes combine complex, but it's worth to reuse truncate filter which has too
-  // complex filter tree struct.
-  //
   // the whole reuse procedure:
   //
   // ┌──────────────────────────────────────────────────────────────────────────┐
@@ -170,13 +167,9 @@ int ObMDSFilterMgr::combine_to_filter_tree_with_check(sql::ObPushdownFilterExecu
   // │ access_context->prepare_mds_filter() ─────────────────────────────────────┼────┘
   // │                                                                           |
   // │                                                                           │
-  // │                                  has_combined                             │
-  // │ access_context->combine_filter() ──────────────-►  skip                   │
-  // │                                  set_uncombined                           │
-  // │                                 ────────────────►  rebuild                │
+  // │ access_context->combine_filter() ────────────────►  rebuild               │
   // │                                                                           │
   // └───────────────────────────────────────────────────────────────────────────┘
-
 
   //
   // There are three cases when reuse (combined_child_count_ >= 0):
@@ -184,27 +177,11 @@ int ObMDSFilterMgr::combine_to_filter_tree_with_check(sql::ObPushdownFilterExecu
   // 1. table rescan (just change range)
   //   - it will directly call multiple_merge.open() to avoid read mds again
   // 2. table rescan (change partition, like switch_param)
-  //   - the mds filter info must be re-read
-  //   - we must recombine filters because mds filter type maybe change
+  //   - the mds filter info will be re-read
+  //   - we recombine filters because mds filter type maybe change
   // 3. table refresh
-  //   - the mds filter info must be re-read
-  //   - we must recombine filters because mds filter type maybe change
-
-  if (combined_child_count_ >= 0 && sql_pd_filter_in_final_ == sql_pushdown_filter && and_filter_flags_ == build_filter_flags_) {
-    //! To make thing simple, we must ensure that sql pushdown filter and mds_filter is the same as last combine,
-    //! Otherwise, we should re-combine all filters
-    root_filter = final_root_filter_;
-  } else if (OB_FAIL(combine_to_filter_tree_without_check(root_filter, sql_pushdown_filter))) {
-    LOG_WARN("failed to combine to filter tree", K(ret), KPC(root_filter));
-  }
-
-  return ret;
-}
-
-
-int ObMDSFilterMgr::combine_to_filter_tree_without_check(sql::ObPushdownFilterExecutor *&root_filter, sql::ObPushdownFilterExecutor *sql_pushdown_filter)
-{
-  int ret = OB_SUCCESS;
+  //   - the mds filter info will be re-read
+  //   - we recombine filters because mds filter type maybe change
 
   // Step 1. add all filter into one array
   constexpr int64_t MAX_CHILD_CNT = 4;
@@ -233,25 +210,16 @@ int ObMDSFilterMgr::combine_to_filter_tree_without_check(sql::ObPushdownFilterEx
       root_filter = wait_for_combine.at(0);
       break;
     default: {
-      // only child count not changed, we can reuse the and filter node and executor
-      if (nullptr == and_filter_node_ || and_filter_node_->n_child_ != n_child) {
-        if (nullptr != and_filter_node_) {
-          // notice that the child lifetime is not same as the and filter node and executor
-          and_filter_executor_->set_childs(0, nullptr);
-          and_filter_executor_->~ObPushdownFilterExecutor();
-          and_filter_node_->~ObPushdownFilterNode();
-          and_filter_node_ = nullptr;
-          and_filter_executor_ = nullptr;
-        }
-
-        if (OB_FAIL(filter_factory_.alloc(
-                sql::PushdownFilterType::AND_FILTER, n_child, and_filter_node_))) {
+      if (nullptr == and_filter_node_) {
+        sql::ObPushdownFilterFactory filter_factory(&filter_allocator_);
+        if (OB_FAIL(filter_factory.alloc(sql::PushdownFilterType::AND_FILTER, MAX_CHILD_CNT, and_filter_node_))) {
           LOG_WARN("Failed to alloc pushdown and filter node", K(ret));
-        } else if (OB_FAIL(filter_factory_.alloc(sql::PushdownExecutorType::AND_FILTER_EXECUTOR,
-                                                 n_child,
-                                                 *and_filter_node_,
-                                                 and_filter_executor_,
-                                                 op_))) {
+        } else if (OB_FAIL(filter_factory.alloc<false>(
+                       sql::PushdownExecutorType::AND_FILTER_EXECUTOR,
+                       MAX_CHILD_CNT, // we alloc the maximum size of childs to avoid realloc when child count changes
+                       *and_filter_node_,
+                       and_filter_executor_,
+                       wait_for_combine.at(0)->get_op()))) {
           LOG_WARN("Failed to alloc pushdown and filter executor", K(ret));
         }
       }
@@ -260,6 +228,7 @@ int ObMDSFilterMgr::combine_to_filter_tree_without_check(sql::ObPushdownFilterEx
         for (int64_t i = 0; i < n_child; ++i) {
           and_filter_executor_->set_child(i, wait_for_combine.at(i));
         }
+        and_filter_executor_->set_child_count(n_child);
         root_filter = and_filter_executor_;
       }
 
@@ -273,53 +242,42 @@ int ObMDSFilterMgr::combine_to_filter_tree_without_check(sql::ObPushdownFilterEx
     }
 
     if (OB_SUCC(ret)) {
-      // TODO(menglan): for debug, make it to trace level
       LOG_TRACE("[MDS INFO] combine with mds filter tree",
-                K(and_filter_flags_),
                 K(build_filter_flags_),
-                K(combined_child_count_),
                 K(n_child),
-                KP(final_root_filter_),
                 KP(root_filter),
-                KP(sql_pd_filter_in_final_),
                 KP(sql_pushdown_filter),
                 KPC(truncate_partition_filter_),
                 KPC(ttl_filter_),
                 KPC(base_version_filter_));
-
-      and_filter_flags_ = build_filter_flags_;
-      combined_child_count_ = n_child;
-      final_root_filter_ = root_filter;
-      sql_pd_filter_in_final_ = sql_pushdown_filter;
     }
   }
 
   return ret;
 }
 
+// TODO(menglan): Too many parameters, maybe should use a unified struct to pass parameter
 int ObMDSFilterMgrFactory::build_mds_filter_mgr(
     ObTablet &tablet,
     const ObIArray<ObTabletHandle> *split_extra_tablet_handles,
-    const ObIArray<ObColDesc> &cols_desc,
-    const ObIArray<ObColumnParam *> *cols_param,
+    const ObITableReadInfo *read_info,
     const ObVersionRange &read_version_range,
-    ObIAllocator *outer_allocator,
+    ObIAllocator &outer_allocator,
     ObMDSFilterMgr *&mds_filter_mgr,
     const ObMDSFilterFlags &mds_filter_flags)
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(outer_allocator == nullptr)) {
+  if (OB_UNLIKELY(read_info == nullptr)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("Invalid argument", KR(ret), K(outer_allocator));
+    LOG_WARN("Invalid argument", KR(ret), K(read_info));
   } else if (mds_filter_flags.is_empty()) {
     if (nullptr != mds_filter_mgr) {
-      mds_filter_mgr->set_uncombined();
       mds_filter_mgr->set_should_combine_filters_flag(mds_filter_flags);
     }
   } else {
     if (nullptr == mds_filter_mgr) {
-      if (OB_ISNULL(mds_filter_mgr = OB_NEWx(ObMDSFilterMgr, outer_allocator, outer_allocator))) {
+      if (OB_ISNULL(mds_filter_mgr = OB_NEWx(ObMDSFilterMgr, &outer_allocator, outer_allocator))) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("Failed to alloc mds filter mgr", KR(ret));
       }
@@ -327,15 +285,14 @@ int ObMDSFilterMgrFactory::build_mds_filter_mgr(
 
     if (FAILEDx(mds_filter_mgr->build_filters(tablet,
                                               split_extra_tablet_handles,
-                                              cols_desc,
-                                              cols_param,
+                                              *read_info,
                                               read_version_range,
                                               mds_filter_flags))) {
       LOG_WARN("Failed to build filters", KR(ret));
     }
 
     if (OB_FAIL(ret)) {
-      OB_DELETEx(ObMDSFilterMgr, outer_allocator, mds_filter_mgr);
+      OB_DELETEx(ObMDSFilterMgr, &outer_allocator, mds_filter_mgr);
       mds_filter_mgr = nullptr;
     }
   }
@@ -346,15 +303,9 @@ int ObMDSFilterMgrFactory::build_mds_filter_mgr(
 void ObMDSFilterMgrFactory::destroy_mds_filter_mgr(ObMDSFilterMgr *&mds_filter_mgr)
 {
   if (nullptr != mds_filter_mgr) {
-    ObIAllocator *outer_allocator = mds_filter_mgr->get_outer_allocator();
+    ObIAllocator &outer_allocator = mds_filter_mgr->get_outer_allocator();
     mds_filter_mgr->~ObMDSFilterMgr();
-    if (OB_NOT_NULL(outer_allocator)) {
-      outer_allocator->free(mds_filter_mgr);
-    } else {
-      // can't return error here, because it maybe used in class destructor
-      int ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("destroy_mds_filter_mgr must used with build_mds_filter_mgr. but outer_allocator is nullptr, which is unexpected", KR(ret), KPC(mds_filter_mgr), K(lbt()));
-    }
+    outer_allocator.free(mds_filter_mgr);
     mds_filter_mgr = nullptr;
   }
 }

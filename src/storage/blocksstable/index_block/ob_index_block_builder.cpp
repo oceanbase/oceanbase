@@ -217,6 +217,7 @@ void ObIndexTreeInfo::set_empty()
   row_count_ = 0;
   max_merged_trans_version_ = 0;
   contain_uncommitted_row_ = false;
+  sstable_skip_index_.reset();
 }
 
 ObSSTableMergeRes::ObSSTableMergeRes()
@@ -231,6 +232,7 @@ ObSSTableMergeRes::ObSSTableMergeRes()
     row_count_(0),
     max_merged_trans_version_(0),
     min_merged_trans_version_(0),
+    sstable_skip_index_(),
     contain_uncommitted_row_(false),
     occupy_size_(0),
     original_size_(0),
@@ -287,6 +289,7 @@ void ObSSTableMergeRes::reset()
   row_count_ = 0;
   max_merged_trans_version_ = 0;
   min_merged_trans_version_ = 0;
+  sstable_skip_index_.reset();
   contain_uncommitted_row_ = false;
   occupy_size_ = 0;
   original_size_ = 0;
@@ -350,6 +353,7 @@ int ObSSTableMergeRes::assign(const ObSSTableMergeRes &src)
     row_count_ = src.row_count_;
     max_merged_trans_version_ = src.max_merged_trans_version_;
     min_merged_trans_version_ = src.min_merged_trans_version_;
+    sstable_skip_index_ = src.sstable_skip_index_;
     contain_uncommitted_row_ = src.contain_uncommitted_row_;
     table_backup_flag_ = src.table_backup_flag_;
     occupy_size_ = src.occupy_size_;
@@ -1019,6 +1023,7 @@ int ObSSTableIndexBuilder::merge_index_tree(
     res.row_count_ = tree_info.row_count_;
     res.max_merged_trans_version_ = tree_info.max_merged_trans_version_;
     res.min_merged_trans_version_ = tree_info.min_merged_trans_version_;
+    res.sstable_skip_index_ = tree_info.sstable_skip_index_;
     res.contain_uncommitted_row_ = tree_info.contain_uncommitted_row_;
     index_builder_.reset();
   }
@@ -2394,8 +2399,8 @@ int ObBaseIndexBlockBuilder::close(ObIAllocator &allocator, ObIndexTreeInfo &tre
     if (OB_FAIL(ret) && nullptr != desc.buf_) {
       allocator.free(desc.buf_);
     } else if (OB_SUCC(ret)) {
-      const ObIndexBlockAggregator &root_aggregator = root_builder->index_block_aggregator_;
-      if (OB_FAIL(init_tree_info(root_aggregator, tree_info))) {
+      ObIndexBlockAggregator &root_aggregator = root_builder->index_block_aggregator_;
+      if (OB_FAIL(init_tree_info(root_aggregator, tree_info, allocator))) {
         STORAGE_LOG(WARN, "fail to init tree info", K(ret));
       } else {
         root_builder->is_closed_ = true;
@@ -2405,29 +2410,67 @@ int ObBaseIndexBlockBuilder::close(ObIAllocator &allocator, ObIndexTreeInfo &tre
   return ret;
 }
 
-int ObBaseIndexBlockBuilder::init_tree_info(const ObIndexBlockAggregator &root_aggregator, ObIndexTreeInfo &tree_info) const
+int ObBaseIndexBlockBuilder::init_tree_info(ObIndexBlockAggregator &root_aggregator, ObIndexTreeInfo &tree_info, ObIAllocator &allocator) const
 {
   int ret = OB_SUCCESS;
-  ObTransVersionSkipIndexInfo skip_index_info;
+
   int64_t min_version = 0;
   int64_t max_version = root_aggregator.get_max_merged_trans_version();
+  int64_t agg_row_size = 0;
+  char *agg_row_buf = nullptr;
+
   if (data_store_desc_->get_schema_rowkey_col_cnt() > 0 // row_store or rowkey cg
       && root_aggregator.need_data_aggregate()
       && (!data_store_desc_->is_major_merge_type() || data_store_desc_->get_major_working_cluster_version() >= ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION)) {
-    if (OB_FAIL(ObTransVersionSkipIndexReader::read_min_max_snapshot(
-        root_aggregator, data_store_desc_->get_schema_rowkey_col_cnt(), skip_index_info))) {
+
+    // always record scn infomation in tree info
+    ObTransVersionSkipIndexInfo skip_index_info;
+    if (OB_FAIL(ObTransVersionSkipIndexReader::read_min_max_snapshot(root_aggregator, data_store_desc_->get_schema_rowkey_col_cnt(), skip_index_info))) {
       LOG_WARN("fail to read min max snapshot", K(ret));
     } else if (skip_index_info.is_inited()) {
       min_version = skip_index_info.min_snapshot_;
       max_version = skip_index_info.max_snapshot_;
     }
+
+    if (OB_FAIL(ret)) {
+    } else if (need_build_skip_index_in_meta()
+               && data_store_desc_->get_major_working_cluster_version() >= ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION_V2) {
+      ObIndexBlockRowDesc row_desc;
+      ObAggRowWriter agg_row_writer;
+      int64_t row_buf_upper_size = 0;
+      if (OB_FAIL(root_aggregator.get_index_agg_result(row_desc))) {
+        LOG_WARN("fail to get index agg result", K(ret));
+      } else if (OB_ISNULL(row_desc.aggregated_row_)) {
+        // skip set skip index row in tree info
+      } else if (OB_FAIL(agg_row_writer.init(data_store_desc_->get_agg_meta_array(),
+                                              *row_desc.aggregated_row_,
+                                              data_store_desc_->get_major_working_cluster_version(),
+                                              allocator))) {
+        LOG_WARN("fail to init agg row writer", K(ret));
+      } else if (OB_FALSE_IT(row_buf_upper_size = agg_row_writer.get_serialize_data_size())) {
+      } else if (OB_ISNULL(agg_row_buf = static_cast<char *>(allocator.alloc(row_buf_upper_size)))) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("fail to alloc row buffer", K(ret), K(row_buf_upper_size));
+      } else if (OB_FAIL(agg_row_writer.write_agg_data(agg_row_buf, row_buf_upper_size, agg_row_size))) {
+        LOG_WARN("fail to write agg data", K(ret));
+      }
+    }
   }
+
   if (OB_SUCC(ret)) {
+    tree_info.sstable_skip_index_.set(agg_row_buf, agg_row_size);
     tree_info.min_merged_trans_version_ = min_version;
     tree_info.max_merged_trans_version_ = max_version;
     tree_info.row_count_ = root_aggregator.get_row_count();
     tree_info.contain_uncommitted_row_ = root_aggregator.contain_uncommitted_row();
   }
+
+  if (OB_FAIL(ret)) {
+    if (nullptr != agg_row_buf) {
+      allocator.free(agg_row_buf);
+    }
+  }
+
   return ret;
 }
 

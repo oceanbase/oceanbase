@@ -841,10 +841,10 @@ int ObTableHelper::inner_generate_table_schema_(const ObCreateTableArg &arg, ObT
              arg.schema_.get_minor_row_store_type());
     LOG_USER_ERROR(OB_NOT_SUPPORTED,
                    "create table with non-flat delta format under this version is");
-  } else if (compat_version < ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION && arg.schema_.has_ttl_definition() && !arg.schema_.get_ttl_flag().is_valid(compat_version)) {
+  } else if (!arg.schema_.get_ttl_flag().is_valid(compat_version)) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("fail to generate schema, not support ttl flag for this version", KR(ret), K_(tenant_id), K(compat_version), K(arg.schema_));
-    LOG_USER_ERROR(OB_NOT_SUPPORTED, "this version not support ttl flag");
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "this ttl flag in this version is");
   } else if (arg.schema_.is_duplicate_table()) { // check compatibility for duplicate table
     bool is_compatible = false;
     if (OB_FAIL(ObShareUtil::check_compat_version_for_readonly_replica(tenant_id_, is_compatible))) {

@@ -357,9 +357,9 @@ TEST_F(ObTTLSchemaServiceTest, vec_index_defense_test)
   sql.assign_fmt("create table ttl_table3 \
     (c1 int primary key, c2 vector(3), c3 varchar(200))\
     TTL ora_rowscn + INTERVAL 1 hour BY COMPACTION");
-  EXEC_FAIL(sql);
+  EXEC_SUCC(sql);
 
-  sql.assign_fmt("alter table ttl_table4 add vector index idx1(c2) with (distance=l2, type=hnsw)");
+  sql.assign_fmt("alter table ttl_table3 add vector index idx1(c2) with (distance=l2, type=hnsw)");
   EXEC_FAIL(sql); // should fail
 }
 
@@ -376,23 +376,23 @@ TEST_F(ObTTLSchemaServiceTest, append_only_merge_engine_defense_test)
   ObSqlString sql;
   int64_t affected_rows = 0;
   // case1: create table with append_only merge engine and ttl
-  sql.assign_fmt("create table append_only_table \
+  sql.assign_fmt("create table append_only_table_v2 \
       (c1 int primary key, c2 varchar(200), c3 timestamp) \
       merge_engine=append_only \
       TTL c3 + INTERVAL 1 hour BY DELETING");
-  EXEC_FAIL(sql); // should failed
+  EXEC_SUCC(sql); // should success
   // case2: create table with append_only merge engine and ttl and has_merged_with_mds_info
   sql.assign_fmt("create table append_only_table \
       (c1 int primary key, c2 varchar(200), c3 timestamp) \
       merge_engine=append_only TTL ora_rowscn + INTERVAL 1 second BY COMPACTION");
   EXEC_SUCC(sql);
   sql.assign_fmt("alter table append_only_table TTL c3 + INTERVAL 1 hour BY DELETING");
-  EXEC_FAIL(sql); // should fail
+  EXEC_SUCC(sql); // should success
   sql.assign_fmt("alter table append_only_table TTL ora_rowscn + INTERVAL 1 hour BY COMPACTION");
   EXEC_SUCC(sql); // should success
 
   sql.assign_fmt("create table partial_update_ttl_table2 (c1 int primary key, c2 varchar(200), c3 int, index idx1(c3)) merge_engine=partial_update TTL ora_rowscn + INTERVAL 1 hour BY COMPACTION");
-  EXEC_FAIL(sql); // should fail
+  EXEC_SUCC(sql); // should success
 }
 
 TEST_F(ObTTLSchemaServiceTest, ttl_flag_and_inheritance)
@@ -510,10 +510,10 @@ TEST_F(ObTTLSchemaServiceTest, is_compaction_ttl_schema_test)
   uint64_t tenant_data_version = 0;
   ASSERT_EQ(OB_SUCCESS, ObClusterVersion::get_instance().get_tenant_data_version(tenant_id_, tenant_data_version));
 
-  // Case 1: Test partial_update merge engine table (should return false)
+  // Case 1: Test partial_update merge engine table (should return true)
   sql.assign_fmt("create table partial_update_ttl_table (c1 int primary key, c2 varchar(200)) merge_engine=partial_update\
      TTL ora_rowscn + INTERVAL 1 hour BY COMPACTION");
-  EXEC_FAIL(sql);
+  EXEC_SUCC(sql);
 
   // Case 2: Test TTL column is not rowscn column (should return False)
   sql.assign_fmt("create table non_rowscn_ttl_table (c1 int primary key, c2 timestamp) TTL c2 + INTERVAL 1 hour BY COMPACTION");

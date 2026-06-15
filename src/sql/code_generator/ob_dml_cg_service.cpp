@@ -2584,6 +2584,7 @@ int ObDmlCgService::generate_das_dml_ctdef(ObLogDelUpd &op,
     das_dml_ctdef.is_update_pk_with_dop_ = is_update_uk_parallel;
     das_dml_ctdef.is_update_pk_ = index_dml_info.is_update_primary_key_;
     das_dml_ctdef.is_vec_hnsw_index_vid_opt_ = index_dml_info.is_vec_hnsw_index_vid_opt_;
+    das_dml_ctdef.is_compaction_ttl_table_ = index_dml_info.is_compaction_ttl_table_;
   }
 #ifdef OB_BUILD_TDE_SECURITY
   // generate encrypt_meta for table
@@ -2823,7 +2824,7 @@ int ObDmlCgService::generate_related_upd_ctdef(ObLogDelUpd &op,
                                                           related_ctdef->updated_column_ids_,
                                                           *related_ctdef))) {
       LOG_WARN("fail to check is update uk", K(ret), K(related_tid));
-    } else if (related_ctdef->updated_column_ids_.empty() && !index_dml_info.is_compaction_scn_ttl_di_table_) {
+    } else if (related_ctdef->updated_column_ids_.empty() && !index_dml_info.is_compaction_ttl_table_) {
       //ignore invalid update ctdef
     } else if (OB_FAIL(upd_ctdefs.push_back(related_ctdef))) {
       LOG_WARN("store related ctdef failed", K(ret));
@@ -3176,6 +3177,7 @@ int ObDmlCgService::generate_dml_base_ctdef(ObLogicalOperator &op,
   int ret = OB_SUCCESS;
   dml_base_ctdef.is_primary_index_ = index_dml_info.is_primary_index_;
   dml_base_ctdef.is_vec_hnsw_index_vid_opt_ = index_dml_info.is_vec_hnsw_index_vid_opt_;
+  dml_base_ctdef.is_compaction_ttl_table_ = index_dml_info.is_compaction_ttl_table_;
   dml_base_ctdef.column_ids_.set_capacity(index_dml_info.column_exprs_.count());
   if (OB_FAIL(generate_dml_column_ids(op, index_dml_info.column_exprs_, dml_base_ctdef.column_ids_))) {
     LOG_WARN("generate dml column ids failed", K(ret));

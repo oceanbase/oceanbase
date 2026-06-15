@@ -125,7 +125,8 @@ int ObBasicScheduleTabletFunc::check_with_schedule_scn(
   const int64_t schedule_scn,
   const ObTabletStatusCache &tablet_status,
   bool &can_merge,
-  const ObCOMajorMergeStrategy &co_major_merge_strategy)
+  const ObCOMajorMergeStrategy &co_major_merge_strategy,
+  const int64_t need_freeze_snapshot)
 {
   const ObLSID &ls_id = ls_status_.ls_id_;
   can_merge = false;
@@ -145,17 +146,18 @@ int ObBasicScheduleTabletFunc::check_with_schedule_scn(
     ret = OB_EAGAIN;
     LOG_WARN("cannot schedule dag, exists unfinished inc major, try later", K(ret), K(tablet_id), K(schedule_scn));
   } else {
-    can_merge = (tablet_status.can_merge() && weak_read_ts_ready && tablet.get_snapshot_version() >= schedule_scn);
+    const int64_t freeze_snapshot = MAX(schedule_scn, need_freeze_snapshot);
+    can_merge = (tablet_status.can_merge() && weak_read_ts_ready && tablet.get_snapshot_version() >= freeze_snapshot);
 
     if (can_merge || ls_status_.state_ == ObLSStatusCache::LOOP_NOT_READY_LS) {
       // do nothing
-    } else if (OB_FAIL(check_need_force_freeze(tablet, schedule_scn, need_force_freeze))) {
-      LOG_WARN("failed to check need force freeze", KR(ret), K(tablet_id), K(schedule_scn));
+    } else if (OB_FAIL(check_need_force_freeze(tablet, freeze_snapshot, need_force_freeze))) {
+      LOG_WARN("failed to check need force freeze", KR(ret), K(tablet_id), K(freeze_snapshot), K(schedule_scn));
     } else if (need_force_freeze) {
       tablet_cnt_.force_freeze_cnt_++;
       int tmp_ret = OB_SUCCESS;
-      if (OB_TMP_FAIL(freeze_param_.tablet_info_array_.push_back(ObTabletSchedulePair(tablet_id, schedule_scn, co_major_merge_strategy)))) {
-        LOG_WARN("failed to push back tablet_id for batch_freeze", KR(tmp_ret), K(tablet_id));
+      if (OB_TMP_FAIL(freeze_param_.tablet_info_array_.push_back(ObTabletSchedulePair(tablet_id, freeze_snapshot, co_major_merge_strategy)))) {
+        LOG_WARN("failed to push back tablet_id for batch_freeze", KR(tmp_ret), K(tablet_id), K(freeze_snapshot), K(schedule_scn));
       }
     }
   }

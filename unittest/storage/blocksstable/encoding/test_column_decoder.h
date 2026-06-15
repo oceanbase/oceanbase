@@ -559,7 +559,7 @@ int TestColumnDecoder::test_filter_pushdown(
   sql::ObEvalCtx eval_ctx(exec_ctx);
   sql::ObPushdownExprSpec expr_spec(allocator_);
   sql::ObPushdownOperator op(eval_ctx, expr_spec);
-  sql::ObWhiteFilterExecutor filter(allocator_, filter_node, op);
+  sql::ObWhiteFilterExecutor filter(allocator_, filter_node, &op);
   filter.col_offsets_.init(COLUMN_CNT);
   filter.col_params_.init(COLUMN_CNT);
   const ObColumnParam *col_param = nullptr;
@@ -633,7 +633,7 @@ int TestColumnDecoder::test_filter_pushdown_with_pd_info(
   sql::ObEvalCtx eval_ctx(exec_ctx);
   sql::ObPushdownExprSpec expr_spec(allocator_);
   sql::ObPushdownOperator op(eval_ctx, expr_spec);
-  sql::ObWhiteFilterExecutor filter(allocator_, filter_node, op);
+  sql::ObWhiteFilterExecutor filter(allocator_, filter_node, &op);
   filter.col_offsets_.init(COLUMN_CNT);
   filter.col_params_.init(COLUMN_CNT);
   const ObColumnParam *col_param = nullptr;

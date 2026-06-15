@@ -65,7 +65,7 @@ public:
   ObMockWhiteFilterExecutor(common::ObIAllocator &alloc,
                             ObPushdownWhiteFilterNode &filter,
                             ObPushdownOperator &op)
-      : ObWhiteFilterExecutor(alloc, filter, op) {}
+      : ObWhiteFilterExecutor(alloc, filter, &op) {}
 
   virtual int init_evaluated_datums(bool &is_valid) override {
     UNUSED(is_valid);

@@ -11,6 +11,7 @@
 #include "storage/ob_relative_table.h"
 #include "share/scn.h"
 #include "storage/lob/ob_lob_tablet_dml.h"
+#include "storage/lob/ob_lob_access_param.h"
 
 namespace oceanbase
 {
@@ -78,6 +79,8 @@ private:
       const uint64_t table_id,
       const int64_t tenant_schema_version);
 
+  int init_lob_ttl_column_info();
+
 public:
   ObStoreCtx &store_ctx_;
   const ObDMLBaseParam &dml_param_;
@@ -95,6 +98,7 @@ public:
   bool is_delete_insert_table_;
   ObLobTabletDmlCtx lob_dml_ctx_;
   common::ObFixedArray<bool, common::ObIAllocator> main_table_rowkey_col_flag_;
+  ObLobTTLColumnInfo lob_ttl_column_info_;
 
 private:
   share::schema::ObSchemaGetterGuard schema_guard_;

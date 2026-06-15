@@ -8,6 +8,7 @@
 #include "common/object/ob_obj_type.h"
 #include "share/vector/ob_i_vector.h"
 #include "sql/engine/ob_batch_rows.h"
+#include "storage/blocksstable/ob_storage_datum.h"
 
 namespace oceanbase
 {

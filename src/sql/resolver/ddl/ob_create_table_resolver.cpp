@@ -2714,7 +2714,7 @@ int ObCreateTableResolver::generate_index_arg(const bool process_heap_table_prim
     SQL_RESV_LOG(WARN, "set index name failed", K(ret), K_(index_name));
   } else if (OB_FAIL(set_index_option_to_arg())) {
     SQL_RESV_LOG(WARN, "set index option failed", K(ret));
-  } else if(OB_FAIL(set_storing_column())) {
+  } else if(OB_FAIL(set_storing_column(process_heap_table_primary_key))) {
     SQL_RESV_LOG(WARN, "set storing column failed", K(ret));
   } else {
     ObIndexType type = INDEX_TYPE_IS_NOT;
@@ -2973,15 +2973,43 @@ int ObCreateTableResolver::set_index_option_to_arg()
   return ret;
 }
 
-int ObCreateTableResolver::set_storing_column()
+int ObCreateTableResolver::set_storing_column(const bool process_heap_table_primary_key)
 {
   int ret = OB_SUCCESS;
+
+  ObCreateTableStmt *create_table_stmt = static_cast<ObCreateTableStmt*>(stmt_);
+
+  if (OB_ISNULL(create_table_stmt)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("create table stmt is null", K(ret));
+  }
+
   for (int64_t i = 0; OB_SUCC(ret) && i < store_column_names_.count(); ++i) {
     ret = index_arg_.store_columns_.push_back(store_column_names_.at(i));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < hidden_store_column_names_.count(); ++i) {
     ret = index_arg_.hidden_store_columns_.push_back(hidden_store_column_names_.at(i));
   }
+
+  // if process create heap table, add ttl column to storing column
+  if (OB_FAIL(ret)) {
+  } else if (process_heap_table_primary_key) {
+    ObTableSchema &table_schema = create_table_stmt->get_create_table_arg().schema_;
+    if (table_schema.get_ttl_flag().is_user_ttl_column()) {
+      int64_t ttl_column_id = table_schema.get_ttl_flag().get_curr_ttl_column_id();
+      const ObColumnSchemaV2 *ttl_column = table_schema.get_column_schema(ttl_column_id);
+      if (OB_ISNULL(ttl_column)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null ttl column", K(ret), K(ttl_column_id));
+      } else if (!ttl_column->is_rowkey_column()) {
+        const ObString &ttl_column_name = ttl_column->get_column_name_str();
+        if (OB_FAIL(index_arg_.store_columns_.push_back(ttl_column_name))) {
+          LOG_WARN("fail to add ttl column to storing column", K(ret), K(ttl_column->get_column_name()));
+        }
+      }
+    }
+  }
+
   return ret;
 }
 

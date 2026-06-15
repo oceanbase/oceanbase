@@ -328,7 +328,7 @@ int ObDictColumnDecoder::pushdown_operator(
 {
   int ret = OB_SUCCESS;
   filter_applied = false;
-  const bool enable_rich_format = filter.get_op().enable_rich_format_;
+  const bool enable_rich_format = filter.get_op()->enable_rich_format_;
   if (OB_UNLIKELY(result_bitmap.size() != pd_filter_info.count_)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid argument", KR(ret), K(result_bitmap.size()), K(pd_filter_info));

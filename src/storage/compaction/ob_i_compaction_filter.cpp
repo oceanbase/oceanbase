@@ -10,6 +10,7 @@
 #include "storage/blocksstable/index_block/ob_index_block_macro_iterator.h"
 #include "storage/ob_trans_version_skip_index_util.h"
 #include "storage/compaction/ob_partition_merge_iter.h"
+#include "storage/truncate_info/ob_mds_info_distinct_mgr.h"
 namespace oceanbase
 {
 using namespace common;
@@ -168,9 +169,58 @@ void ObICompactionFilter::ObFilterStatistics::gene_info(char* buf, const int64_t
 }
 
 /*
+ * ObCompactionFilterColIdxs
+ */
+int ObCompactionFilterColIdxs::init(
+  const ObMdsInfoDistinctMgr &mds_info_mgr,
+  const ObStorageSchema &storage_schema)
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(mds_info_mgr.is_empty())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid empty mds info", KR(ret), K(mds_info_mgr));
+  } else {
+    const ObTTLFilterInfoDistinctMgr &ttl_info_mgr = mds_info_mgr.get_ttl_filter_info_distinct_mgr();
+    if (!ttl_info_mgr.empty()) {
+      const ObIArray<ObTTLFilterInfo *> &ttl_filter_info_array = ttl_info_mgr.get_distinct_mds_info_array();
+      for (int64_t i = 0; OB_SUCC(ret) && i < ttl_filter_info_array.count(); ++i) {
+        int32_t cg_idx = OB_INVALID_INDEX;
+        const ObTTLFilterInfo *ttl_filter_info = ttl_filter_info_array.at(i);
+        if (OB_ISNULL(ttl_filter_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected nullptr in ttl info", KR(ret), K(i), KPC(ttl_filter_info));
+        } else if (ttl_filter_info->is_rowscn_filter() || ttl_filter_info->ttl_filter_col_idx_ < storage_schema.get_rowkey_column_num()) {
+          only_has_normal_col_filter_ = false;
+        } else if (OB_FAIL(storage_schema.get_single_column_group_index(ttl_filter_info->ttl_filter_col_idx_, cg_idx))) {
+          LOG_WARN("failed to get column group index", KR(ret), K(ttl_filter_info->ttl_filter_col_idx_));
+        } else if (OB_FAIL(col_idxs_.push_back(ObCompactionFilterColIdxs::ColIdxCgIdxPair(ttl_filter_info->ttl_filter_col_idx_, cg_idx)))) {
+          LOG_WARN("failed to push back col idx", KR(ret), K(i), KPC(ttl_filter_info));
+        } else {
+          LOG_INFO("[COMPACTION TTL]push back col idx", K(ttl_filter_info->ttl_filter_col_idx_), K(cg_idx));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObCompactionFilterColIdxs::init_for_unittest(const int64_t col_idx, const int64_t cg_idx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(col_idxs_.push_back(ObCompactionFilterColIdxs::ColIdxCgIdxPair(col_idx, cg_idx)))) {
+    LOG_WARN("failed to push back col idx", KR(ret), K(col_idx), K(cg_idx));
+  } else {
+    LOG_INFO("[COMPACTION FILTER] init_for_unittest", K(col_idx), K(cg_idx));
+  }
+  return ret;
+}
+
+/*
  * ObCompactionFilterHandle
  */
-int ObCompactionFilterHandle::init(ObICompactionFilter *compaction_filter)
+int ObCompactionFilterHandle::init(
+  ObICompactionFilter *compaction_filter,
+  const ObCompactionFilterColIdxs *filter_col_idxs)
 {
   int ret = OB_SUCCESS;
   if (OB_ISNULL(compaction_filter)) {
@@ -181,6 +231,7 @@ int ObCompactionFilterHandle::init(ObICompactionFilter *compaction_filter)
   } else {
     compaction_filter_ = compaction_filter;
     filter_statistics_.reset();
+    filter_col_idxs_ = filter_col_idxs;
   }
   return ret;
 }
@@ -233,14 +284,17 @@ int ObCompactionFilterHandle::inner_get_block_op_from_filter(
   } else if (compaction_filter_->get_trans_version_col_idx() < 0) {
     block_op.set_open();
   } else {
-    ObTransVersionSkipIndexInfo skip_index_info;
-    if (OB_FAIL(ObTransVersionSkipIndexReader::read_min_max_snapshot(
-        macro_desc, compaction_filter_->get_trans_version_col_idx(), skip_index_info))) {
-      LOG_WARN("Failed to read min max snapshot", K(ret), K(macro_desc));
-    } else if (OB_FAIL(compaction_filter_->get_filter_op(skip_index_info.min_snapshot_, skip_index_info.max_snapshot_, block_op))) {
+    ObAggRowCachedReader agg_row_cached_reader;
+    const ObDataBlockMetaVal &macro_meta_val = macro_desc.macro_meta_->get_meta_val();
+    const bool has_agg_data = (nullptr != macro_meta_val.agg_row_buf_) && (macro_meta_val.agg_row_len_ > 0);
+    if (!has_agg_data) {
+      block_op.set_open();
+    } else if (OB_FAIL(agg_row_cached_reader.init(macro_meta_val.agg_row_buf_, macro_meta_val.agg_row_len_))) {
+      LOG_WARN("Failed to init agg row cached reader", K(ret), K(macro_desc));
+    } else if (OB_FAIL(compaction_filter_->get_filter_op(agg_row_cached_reader, block_op))) {
       LOG_WARN("Failed to get filter op", K(ret), K(macro_desc));
     } else {
-      LOG_INFO("[COMPACTION FILTER] get_block_op_from_filter macro", K(block_op), K(skip_index_info), K(macro_desc));
+      LOG_INFO("[COMPACTION FILTER] get_block_op_from_filter macro", K(block_op), K(agg_row_cached_reader), K(macro_desc)); // for debug, remove later
     }
   }
   return ret;
@@ -291,17 +345,23 @@ int ObCompactionFilterHandle::get_block_op_from_filter(
   } else if (compaction_filter_->get_trans_version_col_idx() < 0) {
     filter_op.set_open();
   } else {
-    ObTransVersionSkipIndexInfo skip_index_info;
-    if (OB_FAIL(ObTransVersionSkipIndexReader::read_min_max_snapshot(
-        micro_block, compaction_filter_->get_trans_version_col_idx(), skip_index_info))) {
-      LOG_WARN("Failed to read min max snapshot", K(ret), K(micro_block));
-    } else if (OB_FAIL(compaction_filter_->get_filter_op(skip_index_info.min_snapshot_, skip_index_info.max_snapshot_, filter_op))) {
+    ObAggRowCachedReader agg_row_cached_reader;
+    const ObMicroIndexInfo *micro_index_info = micro_block.micro_index_info_;
+    if (OB_ISNULL(micro_index_info) || !micro_index_info->is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Invalid micro index info", K(ret), K(micro_block));
+    } else if (!micro_index_info->has_agg_data()) {
+      filter_op.set_open();
+    } else if (OB_FAIL(agg_row_cached_reader.init(micro_index_info->agg_row_buf_, micro_index_info->agg_buf_size_))) {
+      LOG_WARN("Failed to init agg row cached reader", K(ret), K(micro_block));
+    } else if (OB_FAIL(compaction_filter_->get_filter_op(agg_row_cached_reader, filter_op))) {
       LOG_WARN("Failed to get filter op", K(ret), K(micro_block));
     } else {
       filter_statistics_.micro_inc(
         filter_op.block_op_,
         micro_block.header_.row_count_);
-      LOG_INFO("[COMPACTION FILTER] get_block_op_from_filter micro", K(filter_op), K(skip_index_info), K(micro_block), K(filter_statistics_));
+      LOG_INFO("[COMPACTION FILTER] get_block_op_from_filter micro", K(filter_op), K(agg_row_cached_reader),
+        K(micro_block), K(filter_statistics_));
     }
   }
   return ret;

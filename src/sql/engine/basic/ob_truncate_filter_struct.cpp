@@ -11,7 +11,6 @@
 #include "storage/truncate_info/ob_truncate_info_array.h"
 #include "storage/blocksstable/ob_imicro_block_reader.h"
 #include "storage/blocksstable/ob_datum_row.h"
-#include "lib/container/ob_fixed_array_iterator.h"
 
 namespace oceanbase
 {
@@ -840,7 +839,7 @@ int ObTruncateOrFilterExecutor::inner_filter(
 ObTruncateAndFilterExecutor::ObTruncateAndFilterExecutor(
     ObIAllocator &alloc,
     ObTruncateAndFilterNode &filter,
-    ObPushdownOperator &op)
+    ObPushdownOperator *op)
   : ObPushdownFilterExecutor(alloc, op, PushdownExecutorType::TRUNCATE_AND_FILTER_EXECUTOR),
     is_inited_(false),
     has_nullable_col_(false),
@@ -1068,7 +1067,7 @@ int ObTruncateAndFilterExecutor::build_single_truncate_filter(
   int ret = OB_SUCCESS;
   int64_t filter_item_cnt = 0;
   int64_t part_filter_item_cnt = 0;
-  if (OB_FAIL(ObTruncateFilterFactory::build_scn_filter(op_, filter_factory, item_buffer_[filter_item_cnt++]))) {
+  if (OB_FAIL(ObTruncateFilterFactory::build_scn_filter(filter_factory, item_buffer_[filter_item_cnt++]))) {
     LOG_WARN("failed to build scn filter", K(ret));
   } else if (OB_FAIL(build_single_part_filter(filter_factory, truncate_info.truncate_part_, filter_item_cnt))) {
     LOG_WARN("failed to build single part filter", K(ret));
@@ -1130,7 +1129,7 @@ int ObTruncateAndFilterExecutor::build_single_part_filter(
     if (is_range_part) {
       const ObRowkey &low_bound = truncate_partition.low_bound_val_;
       const ObRowkey &high_bound = truncate_partition.high_bound_val_;
-      if (OB_FAIL(ObTruncateFilterFactory::build_range_filter(op_, filter_factory, need_black,
+      if (OB_FAIL(ObTruncateFilterFactory::build_range_filter(filter_factory, need_black,
                   item_buffer_[filter_item_pos], item_buffer_[filter_item_pos + 1]))) {
         LOG_WARN("failed to build range filter", K(ret));
       } else {
@@ -1141,7 +1140,7 @@ int ObTruncateAndFilterExecutor::build_single_part_filter(
       if (OB_UNLIKELY(ObTruncatePartition::ALL != truncate_partition.part_op_ && 0 == list_row_values.count())) {
         ret = OB_INVALID_ARGUMENT;
         LOG_WARN("invalid argument", K(ret), K(list_row_values));
-      } else if (OB_FAIL(ObTruncateFilterFactory::build_list_filter(op_, filter_factory, need_black,
+      } else if (OB_FAIL(ObTruncateFilterFactory::build_list_filter(filter_factory, need_black,
                 item_buffer_[filter_item_pos++]))) {
         LOG_WARN("failed to build list filter", K(ret));
       }
@@ -1229,14 +1228,13 @@ int ObTruncateAndFilterExecutor::execute_logic_filter(
   white_##node->set_truncate_white_op_type(type);
 
 int ObTruncateFilterFactory::build_scn_filter(
-    ObPushdownOperator &op,
     ObPushdownFilterFactory &filter_factory,
     ObPushdownFilterExecutor *&scn_filter)
 {
   int ret = OB_SUCCESS;
   scn_filter = nullptr;
   ObPushdownFilterNode *scn_node = nullptr;
-  if (OB_FAIL(build_filter(op, filter_factory, false, scn_node, scn_filter))) {
+  if (OB_FAIL(build_filter(filter_factory, false, scn_node, scn_filter))) {
     LOG_WARN("failed to build scn filter", K(ret));
   } else {
     SET_TRUNCATE_ITEM_TYPE(scn_filter, TRUNCATE_SCN);
@@ -1246,7 +1244,6 @@ int ObTruncateFilterFactory::build_scn_filter(
 }
 
 int ObTruncateFilterFactory::build_range_filter(
-    ObPushdownOperator &op,
     ObPushdownFilterFactory &filter_factory,
     const bool need_black,
     ObPushdownFilterExecutor *&low_filter,
@@ -1257,9 +1254,9 @@ int ObTruncateFilterFactory::build_range_filter(
   high_filter = nullptr;
   ObPushdownFilterNode *low_node = nullptr;
   ObPushdownFilterNode *high_node = nullptr;
-  if (OB_FAIL(build_filter(op, filter_factory, need_black, low_node, low_filter))) {
+  if (OB_FAIL(build_filter(filter_factory, need_black, low_node, low_filter))) {
     LOG_WARN("failed to build low filter", K(ret));
-  } else if (OB_FAIL(build_filter(op, filter_factory, need_black, high_node, high_filter))) {
+  } else if (OB_FAIL(build_filter(filter_factory, need_black, high_node, high_filter))) {
     LOG_WARN("failed to build high filter", K(ret));
   } else {
     SET_TRUNCATE_ITEM_TYPE(low_filter, TRUNCATE_RANGE_LEFT);
@@ -1277,7 +1274,6 @@ int ObTruncateFilterFactory::build_range_filter(
 }
 
 int ObTruncateFilterFactory::build_list_filter(
-    ObPushdownOperator &op,
     ObPushdownFilterFactory &filter_factory,
     const bool need_black,
     ObPushdownFilterExecutor *&list_filter)
@@ -1285,7 +1281,7 @@ int ObTruncateFilterFactory::build_list_filter(
   int ret = OB_SUCCESS;
   list_filter = nullptr;
   ObPushdownFilterNode *list_node = nullptr;
-  if (OB_FAIL(build_filter(op, filter_factory, need_black, list_node, list_filter))) {
+  if (OB_FAIL(build_filter(filter_factory, need_black, list_node, list_filter))) {
     LOG_WARN("failed to build list filter", K(ret));
   } else {
     SET_TRUNCATE_ITEM_TYPE(list_filter, TRUNCATE_LIST);
@@ -1299,7 +1295,6 @@ int ObTruncateFilterFactory::build_list_filter(
 }
 
 int ObTruncateFilterFactory::build_filter(
-    ObPushdownOperator &op,
     ObPushdownFilterFactory &filter_factory,
     const bool need_black,
     ObPushdownFilterNode *&node,
@@ -1310,7 +1305,7 @@ int ObTruncateFilterFactory::build_filter(
   const PushdownExecutorType executor_type = need_black ? TRUNCATE_BLACK_FILTER_EXECUTOR : TRUNCATE_WHITE_FILTER_EXECUTOR;
   if (OB_FAIL(filter_factory.alloc(node_type, 0, node))) {
     LOG_WARN("failed to alloc low node", K(ret));
-  } else if (OB_FAIL(filter_factory.alloc(executor_type, 0, *node, executor, op))) {
+  } else if (OB_FAIL(filter_factory.alloc(executor_type, 0, *node, executor, nullptr))) {
     LOG_WARN("failed to alloc low executor", K(ret));
   }
   if (OB_FAIL(ret)) {

@@ -1662,7 +1662,8 @@ public:
       ObArenaAllocator &allocator,
       const ObColumnSchemaItem &column_schema_item,
       share::ObBatchSelector &selector,
-      ObIVector *&vector);
+      ObIVector *&vector,
+      ObIArray<int64_t> *selected_row_indices = nullptr);
   static int handle_lob_columns(
       const ObTabletID &tablet_id,
       const int64_t slice_idx,

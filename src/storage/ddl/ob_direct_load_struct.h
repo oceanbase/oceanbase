@@ -334,7 +334,8 @@ public:
             const transaction::ObTransID &trans_id,
             const int64_t trans_version,
             const int64_t sql_no,
-            const ObDirectLoadType direct_load_type);
+            const ObDirectLoadType direct_load_type,
+            const ObTableSchemaItem &schema_item);
   void reset();
   void reuse();
   virtual int get_next_row(const blocksstable::ObDatumRow *&row) override;
@@ -1306,8 +1307,10 @@ private:
       const ObBatchSliceWriteInfo &info,
       share::ObTabletCacheInterval &pk_interval,
       const common::ObObjMeta &col_type,
+      const ObTableSchemaItem &schema_item,
       const ObLobStorageParam &lob_storage_param,
-      blocksstable::ObStorageDatum &datum);
+      blocksstable::ObStorageDatum &datum,
+      const blocksstable::ObStorageDatum *ttl_datum);
   int check_null_and_length(
       const bool is_index_table,
       const bool has_lob_rowkey,
@@ -1368,6 +1371,8 @@ private:
       const ObDirectLoadType direct_load_type,
       transaction::ObTxDesc* tx_desc,
       share::ObTabletCacheInterval &pk_interval,
+      const ObTableSchemaItem &schema_item,
+      const blocksstable::ObStorageDatum *ttl_datum,
       ObLobMetaRowIterator *&row_iter);
   int mock_chunk_store(const int64_t row_cnt);
   int inner_fill_column_group(

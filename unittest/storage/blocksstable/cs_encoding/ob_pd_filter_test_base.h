@@ -275,7 +275,7 @@ int ObPdFilterTestBase::build_white_filter(
     pd_filter_node.op_type_ = op_type;
 
     ObIAllocator* allocator_ptr = &allocator_;
-    white_filter = OB_NEWx(ObWhiteFilterExecutor, allocator_ptr, allocator_, pd_filter_node, pd_operator);
+    white_filter = OB_NEWx(ObWhiteFilterExecutor, allocator_ptr, allocator_, pd_filter_node, &pd_operator);
 
     if (OB_ISNULL(white_filter)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;

@@ -1160,7 +1160,8 @@ int ObCsSliceWriter::convert_to_storage_vector(ObIArray<ObIVector *> &vectors, O
                                                row_arena_,
                                                column_schema_item,
                                                selector,
-                                               cur_vector))) {
+                                               cur_vector,
+                                               nullptr))) {
         LOG_WARN("fail to write lob vector value", K(ret), K(column_schema_item), K(idx));
       }
     }
@@ -1184,8 +1185,20 @@ int ObCsSliceWriter::convert_to_storage_vector(ObIArray<ObIVector *> &vectors, O
       }
     }
     // for idempotence, must write lob cells row by row
+    const int64_t ttl_col_idx = ddl_table_schema.table_item_.user_ttl_column_idx_;
+    const int64_t ttl_sql_col_idx = (ttl_col_idx < rowkey_column_count_) ? ttl_col_idx : ttl_col_idx - ObMultiVersionRowkeyHelpper::get_extra_rowkey_col_cnt();
+    ObIVector *ttl_vector = ddl_table_schema.table_item_.get_ttl_datum_from_vectors(vectors, ttl_sql_col_idx);
     ObStorageDatum temp_datum;
+    ObStorageDatum ttl_datum_buf;
     for (int64_t i = 0; OB_SUCC(ret) && i < row_count; ++i) {
+      ObStorageDatum *cur_ttl_datum = nullptr;
+      if (ttl_vector) {
+        if (OB_FAIL(ObDirectLoadVectorUtils::to_datum(ttl_vector, i, ttl_datum_buf))) {
+          LOG_WARN("fail to get ttl datum", K(ret), K(tablet_id_), K(slice_idx_), K(i));
+        } else {
+          cur_ttl_datum = &ttl_datum_buf;
+        }
+      }
       for (int64_t j = 0; OB_SUCC(ret) && j < column_lob_cells.count(); ++j) {
         std::pair<char **, uint32_t *> &cur_cell = column_lob_cells.at(j).at(i);
         if (OB_UNLIKELY(nullptr == cur_cell.first || nullptr == cur_cell.second)) {
@@ -1202,7 +1215,7 @@ int ObCsSliceWriter::convert_to_storage_vector(ObIArray<ObIVector *> &vectors, O
           const ObColumnSchemaItem &column_schema = ddl_table_schema.column_items_.at(lob_column_idx);
           if (temp_datum.is_null() || temp_datum.is_nop()) {
             // skip
-          } else if (OB_FAIL(lob_writer_->write(column_schema, row_arena_, temp_datum))) {
+          } else if (OB_FAIL(lob_writer_->write(column_schema, row_arena_, temp_datum, cur_ttl_datum))) {
             LOG_WARN("write lob cell failed", K(ret), K(tablet_id_), K(slice_idx_), K(i), K(j), K(temp_datum));
           } else {
             *cur_cell.first = const_cast<char *>(temp_datum.ptr_);

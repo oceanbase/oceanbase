@@ -79,7 +79,8 @@ ObTableAccessContext::ObTableAccessContext()
     mds_collector_(nullptr),
     row_scan_cnt_(nullptr),
     skip_scan_factory_(nullptr),
-    is_inc_major_query_(false)
+    is_inc_major_query_(false),
+    ttl_major_for_partial_update_upper_snapshot_(0)
 {
   merge_scn_.set_max();
 }
@@ -527,6 +528,7 @@ void ObTableAccessContext::reset()
   }
   row_scan_cnt_ = nullptr;
   is_inc_major_query_ = false;
+  ttl_major_for_partial_update_upper_snapshot_ = 0;
 }
 
 int ObTableAccessContext::rescan_reuse(ObTableScanParam &scan_param)
@@ -576,6 +578,7 @@ void ObTableAccessContext::reuse()
   scan_resume_point_ = nullptr;
   row_scan_cnt_ = nullptr;
   is_inc_major_query_ = false;
+  ttl_major_for_partial_update_upper_snapshot_ = 0;
 }
 
 int ObTableAccessContext::alloc_iter_pool(const bool use_column_store)
@@ -635,9 +638,7 @@ int ObTableAccessContext::combine_to_filter_tree(sql::ObPushdownFilterExecutor *
     LOG_WARN("not inited", K(ret));
   } else if (nullptr == mds_filter_mgr_) {
     root_filter = sql_pushdown_filter;
-  } else if (OB_FAIL(mds_filter_mgr_->combine_to_filter_tree_with_check(root_filter, sql_pushdown_filter))) {
-    // the function will check double combine to filter tree
-    // if double combine isn't the same, it will return error
+  } else if (OB_FAIL(mds_filter_mgr_->combine_to_filter_tree(root_filter, sql_pushdown_filter))) {
     LOG_WARN("failed to combine to filter tree", K(ret));
   }
 

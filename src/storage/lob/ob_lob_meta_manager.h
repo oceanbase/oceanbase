@@ -11,6 +11,7 @@
 #include "storage/lob/ob_lob_access_param.h"
 #include "storage/blocksstable/ob_datum_row_iterator.h"
 #include "storage/lob/ob_lob_persistent_adaptor.h"
+#include "storage/compaction_ttl/ob_ttl_filter_info.h"
 
 namespace oceanbase
 {
@@ -50,8 +51,8 @@ public:
 
   int open(ObLobAccessParam &param, ObLobMetaSingleGetter* getter);
   int getlength(ObLobAccessParam &param, uint64_t &char_len);
-  int get_table_param(const ObTableParam *&table_param);
-  int get_table_dml_param(const ObTableDMLParam *&table_dml_param);
+  int get_table_param(ObTTLFilterColType ttl_type, const ObTableParam *&table_param);
+  int get_table_dml_param(ObTTLFilterColType ttl_type, const ObTableDMLParam *&table_dml_param);
   TO_STRING_KV("[LOB]", "meta mngr");
 
 private:

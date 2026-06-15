@@ -95,9 +95,6 @@ ObMultipleMerge::~ObMultipleMerge()
     access_ctx_->stmt_allocator_->free(di_base_sstable_row_scanner_);
     di_base_sstable_row_scanner_ = nullptr;
   }
-  if (OB_UNLIKELY(nullptr != access_ctx_ && nullptr != access_ctx_->mds_filter_mgr_)) {
-    access_ctx_->mds_filter_mgr_->set_uncombined();
-  }
 }
 
 int ObMultipleMerge::init(
@@ -1176,10 +1173,6 @@ void ObMultipleMerge::inner_reset()
     }
     skip_bit_ = nullptr;
   }
-  // TODO(menglan): it sames that the set_uncombined is useless?
-  if (OB_UNLIKELY(nullptr != access_ctx_ && nullptr != access_ctx_->mds_filter_mgr_)) {
-    access_ctx_->mds_filter_mgr_->set_uncombined();
-  }
   if (nullptr != di_base_sstable_row_scanner_) {
     di_base_sstable_row_scanner_->~ObDIBaseSSTableRowScanner();
     access_ctx_->stmt_allocator_->free(di_base_sstable_row_scanner_);
@@ -1852,6 +1845,10 @@ int ObMultipleMerge::refresh_table_on_demand()
       STORAGE_LOG(WARN, "fail to prepare read tables", K(ret));
     } else if (use_di_merge_scan() && OB_FAIL(di_base_sstable_row_scanner_->check_di_base_changed(tables_))) {
       STORAGE_LOG(WARN, "di base snapshot version changed", K(ret));
+    } else if (access_ctx_->has_mds_filter() && nullptr != block_row_store_ && OB_FAIL(block_row_store_->open(access_param_->iter_param_))) {
+      // mds filter will change after refresh table, so we need to recalc filter param
+      // TODO: we should separate filter info and block_row_store for clearer logic.
+      STORAGE_LOG(WARN, "fail to open block row store", K(ret));
     } else if (OB_FAIL(reset_tables())) {
       STORAGE_LOG(WARN, "fail to reset tables", K(ret));
     } else if (nullptr != block_row_store_ && OB_FAIL(block_row_store_->reuse_for_refresh_table())) {
@@ -2201,19 +2198,21 @@ int ObMultipleMerge::check_table_need_read(const ObITable *table, bool &need_tab
     need_table = false;
     STORAGE_LOG(DEBUG, "skip minor with upper trans version less than base version", KPC(table), K(major_table_version_));
   }
-  // check pushdown filter using ObSSTableMeta skip index row
-  // now only check ttl filter
-  if (OB_SUCC(ret) && need_table && table->is_sstable() && nullptr != access_ctx_->mds_filter_mgr_) {
-    bool is_filtered = false;
-    if (OB_FAIL(access_ctx_->mds_filter_mgr_->do_sstable_level_filter(static_cast<const ObSSTable &>(*table), is_filtered))) {
-      LOG_WARN("failed to filter table", K(ret), KPC(table));
-    } else {
-      need_table = !is_filtered;
-      if (!need_table) {
-        LOG_TRACE("mds filter all rows of table", KR(ret), KPC(table), KPC(access_ctx_->mds_filter_mgr_));
-      }
-    }
-  }
+
+  // TODO(menglan): consider that we have alter merge_engine_type ddl, this optimize should use more variable to check safely.
+  // check pushdown filter using ObSSTableMeta skip index row, now only check ttl filter
+  // if (OB_SUCC(ret) && need_table && table->is_sstable() && nullptr != access_ctx_->mds_filter_mgr_
+  //     && (access_param_->iter_param_.merge_engine_type_ == ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT || access_param_->iter_param_.merge_engine_type_ == ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY)) {
+  //   bool is_filtered = false;
+  //   if (OB_FAIL(access_ctx_->mds_filter_mgr_->do_sstable_level_filter(static_cast<const ObSSTable &>(*table), is_filtered))) {
+  //     LOG_WARN("failed to filter table", K(ret), KPC(table));
+  //   } else {
+  //     need_table = !is_filtered;
+  //     if (!need_table) {
+  //       LOG_TRACE("mds filter all rows of table", KR(ret), KPC(table), KPC(access_ctx_->mds_filter_mgr_));
+  //     }
+  //   }
+  // }
 
   return ret;
 }
@@ -2222,7 +2221,7 @@ int ObMultipleMerge::prepare_mds_filter()
 {
   int ret = OB_SUCCESS;
 
-  if (OB_ISNULL(access_param_) || OB_ISNULL(access_ctx_)) {
+  if (OB_ISNULL(access_param_) || OB_ISNULL(access_ctx_) || OB_ISNULL(access_ctx_->stmt_allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("access_param_ or access_ctx_ is null", K(ret), KPC(access_param_), KPC(access_ctx_));
   } else {
@@ -2244,10 +2243,9 @@ int ObMultipleMerge::prepare_mds_filter()
     if (OB_FAIL(ObMDSFilterMgrFactory::build_mds_filter_mgr(
             *tablet,
             split_extra_tablet_handles,
-            access_param_->iter_param_.get_read_info()->get_columns_desc(),
-            access_param_->iter_param_.get_read_info()->get_columns(),
+            access_param_->iter_param_.get_read_info(),
             read_version_range,
-            access_ctx_->stmt_allocator_,
+            *access_ctx_->stmt_allocator_,
             access_ctx_->mds_filter_mgr_,
             mds_filter_flags))) {
       LOG_WARN("Failed to build mds filter mgr", K(ret));

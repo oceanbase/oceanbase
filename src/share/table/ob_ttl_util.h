@@ -575,8 +575,8 @@ public:
   // should be in full column schema order, or you shoud set ttl cell ids explicitly.
   virtual int init(const share::schema::ObTableSchema &table_schema, const ObString &ttl_definition, const bool in_full_column_order = true)
   {
-    bool unused_has_datetime_col = false;
-    return inner_init(table_schema, ttl_definition, in_full_column_order, unused_has_datetime_col);
+    bool unused_has_no_timezone_col = false;
+    return inner_init(table_schema, ttl_definition, in_full_column_order, unused_has_no_timezone_col);
   }
   int init(const ObString &ttl_definition)
   {
@@ -591,7 +591,7 @@ protected:
     const share::schema::ObTableSchema &table_schema,
     const ObString &ttl_definition,
     const bool in_full_column_order,
-    bool &has_datetime_col);
+    bool &has_no_timezone_col);
   int get_ttl_expr_ts(const ObTableTTLExpr &ttl_expr, const int64_t input_ts, int64_t &expire_ts);
   int get_compaction_ttl_expr_ts(const ObTableTTLExpr &ttl_expr, const int64_t input_ts, int64_t &expire_ts);
 protected:
@@ -611,6 +611,7 @@ public:
   virtual int init(const share::schema::ObTableSchema &table_schema, const ObString &ttl_definition, const bool in_full_column_order = true) override;
   int check_row_expired(const common::ObNewRow &row, bool &is_expired);
   common::ObIArray<int64_t> &get_row_cell_ids() { return row_cell_ids_; }
+  const ObTimeZoneInfoWrap &get_tz_info_wrap() const { return tz_info_wrap_; }
   virtual void reset() override;
 private:
   ObTimeZoneInfoWrap tz_info_wrap_;

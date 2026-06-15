@@ -209,6 +209,7 @@ int ObRowFuse::fuse_row(const blocksstable::ObDatumRow &former,
       nop_pos.reset();
       result.row_flag_ = former.row_flag_;
       result.fast_filter_skipped_ = former.fast_filter_skipped_;
+      result.major_merge_flag_ = former.major_merge_flag_;
       column_cnt = former.count_;
     } else {
       column_cnt = nop_pos.count_;

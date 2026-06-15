@@ -567,9 +567,9 @@ int ObDefaultCGScanner::do_filter(sql::ObPushdownFilterExecutor *filter, const s
   if (filter->is_filter_node()) {
     if (filter->is_filter_black_node()) {
       sql::ObPhysicalFilterExecutor *black_filter = static_cast<sql::ObPhysicalFilterExecutor *>(filter);
-      sql::ObPushdownOperator &pushdown_op = black_filter->get_op();
-      if (pushdown_op.enable_rich_format_ &&
-          OB_FAIL(storage::init_exprs_uniform_header(black_filter->get_cg_col_exprs(), pushdown_op.get_eval_ctx(), 1))) {
+      sql::ObPushdownOperator *pushdown_op = black_filter->get_op();
+      if (pushdown_op->enable_rich_format_ &&
+          OB_FAIL(storage::init_exprs_uniform_header(black_filter->get_cg_col_exprs(), pushdown_op->get_eval_ctx(), 1))) {
         LOG_WARN("Failed to init exprs vector header", K(ret));
       } else if (OB_FAIL(black_filter->filter(default_row_.storage_datums_, filter->get_col_count(), skip_bit, filtered))) {
         LOG_WARN("Failed to filter row with black filter", K(ret), K(default_row_), KPC(black_filter));

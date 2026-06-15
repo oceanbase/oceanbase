@@ -30,30 +30,33 @@ int ObSkipIndexFilterExecutor::init(const int64_t batch_size, common::ObIAllocat
   return ret;
 }
 
-int ObSkipIndexFilterExecutor::read_aggregate_data(const uint32_t col_idx,
-                  common::ObIAllocator &allocator,
-                  const share::schema::ObColumnParam *col_param,
-                  const ObObjMeta &obj_meta,
-                  const bool is_padding_mode,
-                  ObMinMaxFilterParam &param,
-                  const ObMicroIndexInfo &index_info,
-                  const ObITableReadInfo *read_info)
+template <typename AggRowReader>
+int ObSkipIndexFilterExecutor::read_aggregate_data(AggRowReader &agg_row_reader,
+                                                   const uint32_t col_idx,
+                                                   const ObObjMeta &obj_meta,
+                                                   const bool is_padding_mode,
+                                                   ObMinMaxFilterParam &param,
+                                                   const ObColumnParam *col_param,
+                                                   ObIAllocator *allocator,
+                                                   const bool is_scn_column,
+                                                   const ObSkipIndexExtraParam &extra_param)
 {
   int ret = OB_SUCCESS;
-  meta_.col_idx_ = col_idx;
-  meta_.col_type_ = SK_IDX_NULL_COUNT;
-  if (OB_FAIL(agg_row_reader_.read(meta_, param.null_count_))) {
-    LOG_WARN("Failed read agg null count", K(ret), K(meta_));
-  } else if (FALSE_IT(meta_.col_type_ = SK_IDX_MIN)) {
-  } else if (OB_FAIL(agg_row_reader_.read(meta_, param.min_datum_, param.is_min_prefix_))) {
-    LOG_WARN("Failed read agg min datum", K(ret), K(meta_));
-  } else if (FALSE_IT(meta_.col_type_ = SK_IDX_MAX)) {
-  } else if (OB_FAIL(agg_row_reader_.read(meta_, param.max_datum_, param.is_max_prefix_))) {
-    LOG_WARN("Failed read agg max datum", K(ret), K(meta_));
+
+  ObSkipIndexColMeta meta(col_idx, SK_IDX_NULL_COUNT);
+
+  if (OB_FAIL(agg_row_reader.read(meta, param.null_count_))) {
+    LOG_WARN("Failed read agg null count", K(ret), K(meta));
+  } else if (FALSE_IT(meta.col_type_ = SK_IDX_MIN)) {
+  } else if (OB_FAIL(agg_row_reader.read(meta, param.min_datum_, param.is_min_prefix_))) {
+    LOG_WARN("Failed read agg min datum", K(ret), K(meta));
+  } else if (FALSE_IT(meta.col_type_ = SK_IDX_MAX)) {
+  } else if (OB_FAIL(agg_row_reader.read(meta, param.max_datum_, param.is_max_prefix_))) {
+    LOG_WARN("Failed read agg max datum", K(ret), K(meta));
   } else if (OB_UNLIKELY(ob_is_string_type(obj_meta.get_type())
       && ObCharset::usemb(obj_meta.get_collation_type())
       && !param.max_datum_.is_null()
-      && !agg_row_reader_.has_correct_max_prefix()
+      && !agg_row_reader.has_correct_max_prefix()
       && param.max_datum_.len_ > ObSkipIndexColMeta::SAFE_MBCHARSET_PREFIX_MAX_LEN)) {
     // For multi-byte charsets, an old prefix max produced by truncation may end in the
     // middle of a multi-byte character. Such a max prefix is not reliably a true upper bound
@@ -66,47 +69,77 @@ int ObSkipIndexFilterExecutor::read_aggregate_data(const uint32_t col_idx,
     param.max_datum_.set_null();
     param.is_min_prefix_ = false;
     param.is_max_prefix_ = false;
-  } else if (!param.min_datum_.is_null() && !param.is_min_prefix_ &&
-             OB_FAIL(pad_column(obj_meta, col_param, is_padding_mode, allocator, param.min_datum_))) {
+  } else if (!param.min_datum_.is_null() && !param.is_min_prefix_
+             && OB_FAIL(pad_column(obj_meta, col_param, is_padding_mode, allocator, param.min_datum_))) {
     LOG_WARN("Failed to pad column on min datum", K(ret));
-  } else if (!param.max_datum_.is_null() && !param.is_max_prefix_ &&
-             OB_FAIL(pad_column(obj_meta, col_param, is_padding_mode, allocator, param.max_datum_))){
+  } else if (!param.max_datum_.is_null() && !param.is_max_prefix_
+             && OB_FAIL(pad_column(obj_meta, col_param, is_padding_mode, allocator, param.max_datum_))) {
     LOG_WARN("Failed to pad column on max datum", K(ret));
   }
 
   if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(fix_and_mock_trans_version_datum(col_idx, read_info, index_info, param))) {
-    LOG_WARN("Failed to mock trans version datum", K(ret), K(col_idx));
+  } else if (is_scn_column) {
+    fix_and_mock_trans_version_datum(param, extra_param);
   }
 
   LOG_DEBUG("[SKIP INDEX] read aggregate row", K(ret), K(param.null_count_), K(param.min_datum_), K(param.max_datum_));
   return ret;
 }
 
-OB_INLINE int ObSkipIndexFilterExecutor::fix_and_mock_trans_version_datum(
-    const int64_t col_idx,
-    const ObITableReadInfo *read_info,
-    const ObMicroIndexInfo &index_info,
-    ObMinMaxFilterParam &param)
+template int ObSkipIndexFilterExecutor::read_aggregate_data(ObAggRowReader &, const uint32_t, const ObObjMeta &, const bool, ObMinMaxFilterParam &, const ObColumnParam *, ObIAllocator *, const bool, const ObSkipIndexExtraParam&);
+template int ObSkipIndexFilterExecutor::read_aggregate_data(ObAggRowCachedReader &, const uint32_t, const ObObjMeta &, const bool, ObMinMaxFilterParam &, const ObColumnParam *, ObIAllocator *, const bool, const ObSkipIndexExtraParam&);
+
+int ObSkipIndexFilterExecutor::read_aggregate_data(const uint32_t col_idx,
+                                                   common::ObIAllocator &allocator,
+                                                   const share::schema::ObColumnParam *col_param,
+                                                   const ObObjMeta &obj_meta,
+                                                   const bool is_padding_mode,
+                                                   ObMinMaxFilterParam &param,
+                                                   const ObMicroIndexInfo &index_info,
+                                                   const ObITableReadInfo *read_info)
 {
   int ret = OB_SUCCESS;
 
-  // TODO: Use read_info->get_schema_rowkey_count() == col_idx to check whether this column is ora_rowscn
-  //     1. In row_store, this is true
-  //     2. In column_store, because ora_rowscn is in rowkey_cg, this is true. But If we split ora_rowscn to a normal cg, should fix this check
-  // we also need to check read_info have multi version rowkey (we can't check whether the type of read_info is ObCgReadInfo because cg_sstable also maybe ObTableReadInfo)
-  if (OB_NOT_NULL(read_info) && read_info->get_schema_rowkey_count() == col_idx && read_info->get_schema_rowkey_count() != read_info->get_rowkey_count()) {
-    // ora_rowscn is negative value, we should swap min value and max value
-    int64_t min_version = param.max_datum_.is_null() ? -1 : -param.max_datum_.get_int();
-    int64_t max_version = param.min_datum_.is_null() ? index_info.get_max_merged_trans_version() : -param.min_datum_.get_int();
+  // Check whether this column is ora_rowscn
+  // 1. In row_store, read_info->get_schema_rowkey_count() == col_idx
+  // 2. In column_store, because ora_rowscn is in rowkey_cg, this is true. But If we split ora_rowscn to a normal cg, should fix this check
+  // We also need to check read_info have multi version rowkey (we can't check whether the type of read_info is ObCgReadInfo because cg_sstable also maybe ObTableReadInfo)
+  bool is_scn_column = OB_NOT_NULL(read_info)
+                       && read_info->get_schema_rowkey_count() == col_idx
+                       && read_info->get_schema_rowkey_count() != read_info->get_rowkey_count();
+  ObSkipIndexExtraParam extra_param(
+    /* min_scn */ -1,
+    /* max_scn */ index_info.get_max_merged_trans_version(),
+    /* row_count */ index_info.get_row_count()
+  );
 
-    param.min_datum_.reuse();
-    param.max_datum_.reuse();
-    min_version <= 0 ? param.min_datum_.set_null() : param.min_datum_.set_int(min_version);
-    max_version <= 0 ? param.max_datum_.set_null() : param.max_datum_.set_int(max_version);
+  if (OB_FAIL(read_aggregate_data(agg_row_reader_,
+                                  col_idx,
+                                  obj_meta,
+                                  is_padding_mode,
+                                  param,
+                                  col_param,
+                                  &allocator,
+                                  is_scn_column,
+                                  extra_param))) {
+    LOG_WARN("Failed read agg null count", K(ret), K(col_idx));
   }
 
   return ret;
+}
+
+void ObSkipIndexFilterExecutor::fix_and_mock_trans_version_datum(
+    ObMinMaxFilterParam &param,
+    const ObSkipIndexExtraParam &extra_param)
+{
+  // ora_rowscn is negative value, we should swap min value and max value
+  int64_t min_version = param.max_datum_.is_null() ? extra_param.min_scn_ : -param.max_datum_.get_int();
+  int64_t max_version = param.min_datum_.is_null() ? extra_param.max_scn_ : -param.min_datum_.get_int();
+
+  param.min_datum_.reuse();
+  param.max_datum_.reuse();
+  min_version <= 0 ? param.min_datum_.set_null() : param.min_datum_.set_int(min_version);
+  max_version <= 0 ? param.max_datum_.set_null() : param.max_datum_.set_int(max_version);
 }
 
 int ObSkipIndexFilterExecutor::falsifiable_pushdown_filter(
@@ -148,8 +181,7 @@ int ObSkipIndexFilterExecutor::falsifiable_pushdown_filter(
           } else if (OB_FAIL(read_aggregate_data(col_idx, allocator, col_param, obj_meta,
                                         filter.is_padding_mode(), param, index_info, read_info))) {
             LOG_WARN("Failed to read min and max", K(ret), K(col_idx));
-          } else if (OB_FAIL(filter_on_min_max(col_idx, index_info.get_row_count(),
-              param, dynamic_filter, &index_info))) {
+          } else if (OB_FAIL(filter_on_min_max(index_info.get_row_count(), param, dynamic_filter))) {
             LOG_WARN("Failed to filter on min_max for dynamic filter", K(ret), K(col_idx));
           }
         } else if (filter.is_filter_white_node()) {
@@ -160,8 +192,7 @@ int ObSkipIndexFilterExecutor::falsifiable_pushdown_filter(
           } else if (OB_FAIL(read_aggregate_data(col_idx, allocator, col_param, obj_meta,
                                         filter.is_padding_mode(), param, index_info, read_info))) {
             LOG_WARN("Failed to read min and max", K(ret), K(col_idx));
-          } else if (OB_FAIL(filter_on_min_max(col_idx, index_info.get_row_count(),
-              param, white_filter, &index_info))) {
+          } else if (OB_FAIL(filter_on_min_max(index_info.get_row_count(), param, white_filter))) {
             LOG_WARN("Failed to filter on min_max for white filter", K(ret), K(col_idx));
           }
         } else if (filter.is_filter_black_node()) {
@@ -215,8 +246,7 @@ int ObSkipIndexFilterExecutor::falsifiable_pushdown_filter(
             filter.get_filter_bool_mask().set_always_true();
           } else if (dynamic_filter.is_cmp_op_with_null_ref_value()) {
             filter.get_filter_bool_mask().set_always_false();
-          } else if (OB_FAIL(filter_on_min_max(col_idx, row_count,
-              param, dynamic_filter))) {
+          } else if (OB_FAIL(filter_on_min_max(row_count, param, dynamic_filter))) {
             LOG_WARN("Failed to filter on min_max for dynamic filter", K(ret), K(col_idx));
           }
         } else if (filter.is_filter_white_node()) {
@@ -224,8 +254,7 @@ int ObSkipIndexFilterExecutor::falsifiable_pushdown_filter(
               static_cast<sql::ObWhiteFilterExecutor &>(filter);
           if (white_filter.is_cmp_op_with_null_ref_value()) {
             filter.get_filter_bool_mask().set_always_false();
-          } else if (OB_FAIL(filter_on_min_max(col_idx, row_count,
-                                               param, white_filter))) {
+          } else if (OB_FAIL(filter_on_min_max(row_count, param, white_filter))) {
             LOG_WARN("Failed to filter on min_max for white filter", K(ret), K(col_idx));
           }
         } else if (filter.is_filter_black_node()) {
@@ -249,12 +278,9 @@ int ObSkipIndexFilterExecutor::falsifiable_pushdown_filter(
   return ret;
 }
 
-int ObSkipIndexFilterExecutor::filter_on_min_max(
-    const uint32_t col_idx,
-    const uint64_t row_count,
-    const ObMinMaxFilterParam &param,
-    sql::ObWhiteFilterExecutor &filter,
-    const ObMicroIndexInfo *index_info)
+int ObSkipIndexFilterExecutor::filter_on_min_max(const uint64_t row_count,
+                                                 const ObMinMaxFilterParam &param,
+                                                 sql::ObWhiteFilterExecutor &filter)
 {
   int ret = OB_SUCCESS;
   sql::ObBoolMask &fal_desc = filter.get_filter_bool_mask();
@@ -263,146 +289,158 @@ int ObSkipIndexFilterExecutor::filter_on_min_max(
   } else if (OB_UNLIKELY(!param.null_count_.is_null() &&
                          (param.null_count_.get_int() < 0 || param.null_count_.get_int() > row_count))) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("not correct min_max agg info", K(ret), K(col_idx), K(row_count),
-             K(param.null_count_), K(param.min_datum_), K(param.max_datum_));
-  } else {
-    // following three flags are mutually exclusive, only one can be true
-    const bool is_all_null = param.null_count_.is_null() ? false: (param.null_count_.get_int() == row_count);
-    const bool is_all_not_null = param.null_count_.is_null() ? false: (param.null_count_.get_int() == 0);
-    const bool has_null = param.null_count_.is_null() ? true : (param.null_count_.get_int() > 0 && param.null_count_.get_int() < row_count);
-    // True if either min or max is missing. Either side alone is not enough to safely
-    // falsify a comparison, so we fall back to uncertain.
-    const bool is_min_or_max_null = param.min_datum_.is_null() || param.max_datum_.is_null();
-    const sql::ObWhiteFilterOperatorType op_type = filter.get_op_type();
-    switch (op_type) {
-      case sql::WHITE_OP_NU: {
-        if (is_all_not_null) {
-          fal_desc.set_always_false();
-        } else if (is_all_null) {
-          fal_desc.set_always_true();
-        } else {
-          fal_desc.set_uncertain();
-        }
-        break;
-      }
-      case sql::WHITE_OP_NN: {
-        if (is_all_null) {
-          fal_desc.set_always_false();
-        } else if (is_all_not_null) {
-          fal_desc.set_always_true();
-        } else {
-          fal_desc.set_uncertain();
-        }
-        break;
-      }
-      case sql::WHITE_OP_EQ: {
-        if (is_all_null) {
-          fal_desc.set_always_false();
-        } else if (is_min_or_max_null) {
-          fal_desc.set_uncertain();
-        } else if (OB_FAIL(eq_operator(filter, param.min_datum_, param.is_min_prefix_, param.max_datum_, param.is_max_prefix_, fal_desc))) {
-          LOG_WARN("Failed to run EQ operator", K(ret));
-        }
-        break;
-      }
-      case sql::WHITE_OP_NE: {
-        if (is_all_null) {
-          fal_desc.set_always_false();
-        } else if (is_min_or_max_null) {
-          fal_desc.set_uncertain();
-        } else if (OB_FAIL(ne_operator(filter, param.min_datum_, param.is_min_prefix_, param.max_datum_, param.is_max_prefix_, fal_desc))) {
-          LOG_WARN("Failed to run NE operator", K(ret));
-        }
-        break;
-      }
-      case sql::WHITE_OP_GT: {
-        if (is_all_null) {
-          fal_desc.set_always_false();
-        } else if (is_min_or_max_null) {
-          fal_desc.set_uncertain();
-        } else if (OB_FAIL(gt_operator(filter, param.min_datum_, param.is_min_prefix_, param.max_datum_, param.is_max_prefix_, fal_desc))) {
-          LOG_WARN("Failed to run GT operator", K(ret));
-        }
-        break;
-      }
-      case sql::WHITE_OP_GE: {
-        if (is_all_null) {
-          fal_desc.set_always_false();
-        } else if (is_min_or_max_null) {
-          fal_desc.set_uncertain();
-        } else if (OB_FAIL(ge_operator(filter, param.min_datum_, param.is_min_prefix_, param.max_datum_, param.is_max_prefix_, fal_desc))) {
-          LOG_WARN("Failed to run GE operator", K(ret));
-        }
-        break;
-      }
-      case sql::WHITE_OP_LT: {
-        if (is_all_null) {
-          fal_desc.set_always_false();
-        } else if (is_min_or_max_null) {
-          fal_desc.set_uncertain();
-        } else if (OB_FAIL(lt_operator(filter, param.min_datum_, param.is_min_prefix_, param.max_datum_, param.is_max_prefix_, fal_desc))) {
-          LOG_WARN("Failed to run LT operator", K(ret));
-        }
-        break;
-      }
-      case sql::WHITE_OP_LE: {
-        if (is_all_null) {
-          fal_desc.set_always_false();
-        } else if (is_min_or_max_null) {
-          fal_desc.set_uncertain();
-        } else if (OB_FAIL(le_operator(filter, param.min_datum_, param.is_min_prefix_, param.max_datum_, param.is_max_prefix_, fal_desc))) {
-          LOG_WARN("Failed to run LE operator", K(ret));
-        }
-        break;
-      }
-      case sql::WHITE_OP_IN: {
-        if (is_all_null) {
-          fal_desc.set_always_false();
-        } else if (is_min_or_max_null) {
-          fal_desc.set_uncertain();
-        } else if (OB_FAIL(in_operator(filter, param.min_datum_, param.is_min_prefix_, param.max_datum_, param.is_max_prefix_, fal_desc))) {
-          LOG_WARN("Failed to run IN operator", K(ret));
-        }
-        break;
-      }
-      case sql::WHITE_OP_BT: {
-        if (is_all_null) {
-          fal_desc.set_always_false();
-        } else if (is_min_or_max_null) {
-          fal_desc.set_uncertain();
-        } else if (OB_FAIL(bt_operator(filter, param.min_datum_, param.is_min_prefix_, param.max_datum_, param.is_max_prefix_, fal_desc))) {
-          LOG_WARN("Failed to run BT operator", K(ret));
-        }
-        break;
-      }
-      default: {
-        ret = OB_NOT_SUPPORTED;
-        LOG_WARN("Unexpected filter pushdown operation type", K(ret), K(op_type));
-      }
-    } // end of switch
-    if (OB_SUCC(ret)) {
-      if (has_null && fal_desc.is_always_true()) {
-        fal_desc.set_uncertain();
-      }
-    }
-    LOG_TRACE("[SKIP INDEX] filter on min max", K(ret), K(fal_desc), K(param));
+    LOG_WARN("not correct min_max agg info", K(ret), K(row_count), K(param.null_count_), K(param.min_datum_), K(param.max_datum_));
+  } else if (OB_FAIL(apply_filter_on_min_max(param, filter, fal_desc, row_count))) {
+    LOG_WARN("Failed to apply filter on min max", K(ret));
   }
   return ret;
 }
 
-inline int ObSkipIndexFilterExecutor::pad_column(const ObObjMeta &obj_meta,
-                                          const share::schema::ObColumnParam *col_param,
+int ObSkipIndexFilterExecutor::apply_filter_on_min_max(const ObMinMaxFilterParam &param,
+                                                       const sql::ObWhiteFilterExecutor &filter,
+                                                       sql::ObBoolMask &fal_desc,
+                                                       const uint64_t row_count)
+{
+  int ret = OB_SUCCESS;
+
+  // following three flags are mutually exclusive, only one can be true
+  const bool is_all_null = param.null_count_.is_null() ? false: (param.null_count_.get_int() == row_count);
+  const bool is_all_not_null = param.null_count_.is_null() ? false: (param.null_count_.get_int() == 0);
+  const bool has_null = param.null_count_.is_null() ? true : (param.null_count_.get_int() > 0 && param.null_count_.get_int() < row_count);
+  // True if either min or max is missing. Either side alone is not enough to safely
+  // falsify a comparison, so we fall back to uncertain.
+  const bool is_min_or_max_null = param.min_datum_.is_null() || param.max_datum_.is_null();
+  const sql::ObWhiteFilterOperatorType op_type = filter.get_op_type();
+
+  switch (op_type) {
+    case sql::WHITE_OP_NU: {
+      if (is_all_not_null) {
+        fal_desc.set_always_false();
+      } else if (is_all_null) {
+        fal_desc.set_always_true();
+      } else {
+        fal_desc.set_uncertain();
+      }
+      break;
+    }
+    case sql::WHITE_OP_NN: {
+      if (is_all_null) {
+        fal_desc.set_always_false();
+      } else if (is_all_not_null) {
+        fal_desc.set_always_true();
+      } else {
+        fal_desc.set_uncertain();
+      }
+      break;
+    }
+    case sql::WHITE_OP_EQ: {
+      if (is_all_null) {
+        fal_desc.set_always_false();
+      } else if (is_min_or_max_null) {
+        fal_desc.set_uncertain();
+      } else if (OB_FAIL(eq_operator(filter, param.min_datum_, param.is_min_prefix_, param.max_datum_, param.is_max_prefix_, fal_desc))) {
+        LOG_WARN("Failed to run EQ operator", K(ret));
+      }
+      break;
+    }
+    case sql::WHITE_OP_NE: {
+      if (is_all_null) {
+        fal_desc.set_always_false();
+      } else if (is_min_or_max_null) {
+        fal_desc.set_uncertain();
+      } else if (OB_FAIL(ne_operator(filter, param.min_datum_, param.is_min_prefix_, param.max_datum_, param.is_max_prefix_, fal_desc))) {
+        LOG_WARN("Failed to run NE operator", K(ret));
+      }
+      break;
+    }
+    case sql::WHITE_OP_GT: {
+      if (is_all_null) {
+        fal_desc.set_always_false();
+      } else if (is_min_or_max_null) {
+        fal_desc.set_uncertain();
+      } else if (OB_FAIL(gt_operator(filter, param.min_datum_, param.is_min_prefix_, param.max_datum_, param.is_max_prefix_, fal_desc))) {
+        LOG_WARN("Failed to run GT operator", K(ret));
+      }
+      break;
+    }
+    case sql::WHITE_OP_GE: {
+      if (is_all_null) {
+        fal_desc.set_always_false();
+      } else if (is_min_or_max_null) {
+        fal_desc.set_uncertain();
+      } else if (OB_FAIL(ge_operator(filter, param.min_datum_, param.is_min_prefix_, param.max_datum_, param.is_max_prefix_, fal_desc))) {
+        LOG_WARN("Failed to run GE operator", K(ret));
+      }
+      break;
+    }
+    case sql::WHITE_OP_LT: {
+      if (is_all_null) {
+        fal_desc.set_always_false();
+      } else if (is_min_or_max_null) {
+        fal_desc.set_uncertain();
+      } else if (OB_FAIL(lt_operator(filter, param.min_datum_, param.is_min_prefix_, param.max_datum_, param.is_max_prefix_, fal_desc))) {
+        LOG_WARN("Failed to run LT operator", K(ret));
+      }
+      break;
+    }
+    case sql::WHITE_OP_LE: {
+      if (is_all_null) {
+        fal_desc.set_always_false();
+      } else if (is_min_or_max_null) {
+        fal_desc.set_uncertain();
+      } else if (OB_FAIL(le_operator(filter, param.min_datum_, param.is_min_prefix_, param.max_datum_, param.is_max_prefix_, fal_desc))) {
+        LOG_WARN("Failed to run LE operator", K(ret));
+      }
+      break;
+    }
+    case sql::WHITE_OP_IN: {
+      if (is_all_null) {
+        fal_desc.set_always_false();
+      } else if (is_min_or_max_null) {
+        fal_desc.set_uncertain();
+      } else if (OB_FAIL(in_operator(filter, param.min_datum_, param.is_min_prefix_, param.max_datum_, param.is_max_prefix_, fal_desc))) {
+        LOG_WARN("Failed to run IN operator", K(ret));
+      }
+      break;
+    }
+    case sql::WHITE_OP_BT: {
+      if (is_all_null) {
+        fal_desc.set_always_false();
+      } else if (is_min_or_max_null) {
+        fal_desc.set_uncertain();
+      } else if (OB_FAIL(bt_operator(filter, param.min_datum_, param.is_min_prefix_, param.max_datum_, param.is_max_prefix_, fal_desc))) {
+        LOG_WARN("Failed to run BT operator", K(ret));
+      }
+      break;
+    }
+    default: {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("Unexpected filter pushdown operation type", K(ret), K(op_type));
+    }
+  } // end of switch
+
+  if (OB_SUCC(ret)) {
+    if (has_null && fal_desc.is_always_true()) {
+      fal_desc.set_uncertain();
+    }
+  }
+
+  LOG_TRACE("[SKIP INDEX] filter on min max", K(ret), K(fal_desc), K(param), K(filter));
+  return ret;
+}
+
+int ObSkipIndexFilterExecutor::pad_column(const ObObjMeta &obj_meta,
+                                          const ObColumnParam *col_param,
                                           const bool is_padding_mode,
-                                          common::ObIAllocator &padding_alloc,
-                                          blocksstable::ObStorageDatum &datum)
+                                          ObIAllocator *padding_alloc,
+                                          ObStorageDatum &datum)
 {
   int ret = OB_SUCCESS;
   if (is_padding_mode && obj_meta.is_fixed_len_char_type()) {
-    if (OB_ISNULL(col_param)) {
+    if (OB_ISNULL(col_param) || OB_ISNULL(padding_alloc)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("col_param is null", K(ret));
-    } else if (OB_FAIL(storage::pad_column(
-                   obj_meta, col_param->get_accuracy(), padding_alloc, datum))) {
+    } else if (OB_FAIL(storage::pad_column(obj_meta, col_param->get_accuracy(), *padding_alloc, datum))) {
       LOG_WARN("Failed to pad column", K(ret));
     }
   }
@@ -850,10 +888,10 @@ int ObSkipIndexFilterExecutor::black_filter_on_min_max(
     // Partial min/max (only one side present) is not enough to safely falsify a monotonic black filter.
     fal_desc.set_uncertain();
   } else if (use_vectorize &&
-             filter.get_op().enable_rich_format_ &&
+             filter.get_op()->enable_rich_format_ &&
              OB_FAIL(init_exprs_uniform_header(filter.get_cg_col_exprs(),
-                                               filter.get_op().get_eval_ctx(),
-                                               filter.get_op().get_eval_ctx().max_batch_size_))) {
+                                               filter.get_op()->get_eval_ctx(),
+                                               filter.get_op()->get_eval_ctx().max_batch_size_))) {
     LOG_WARN("Failed to init exprs vector header", K(ret));
   } else if (OB_FAIL(ObCharset::is_pad_charset(cs_type, is_pad_coll))) {
     LOG_WARN("Failed to check pad collation type", K(ret), K(cs_type));

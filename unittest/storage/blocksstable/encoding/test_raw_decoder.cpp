@@ -14,6 +14,7 @@
 #include "share/schema/ob_list_row_values.h"
 #include "storage/ob_truncate_info_helper.h"
 #include "sql/engine/basic/ob_ttl_filter_struct.h"
+#include "storage/compaction_ttl/ob_ttl_filter.h"
 #include "storage/compaction_ttl/ob_ttl_filter_info.h"
 #include "unittest/storage/ob_ttl_filter_info_helper.h"
 
@@ -499,7 +500,7 @@ int TestRawDecoder::test_filter_pushdown(
   sql::ObEvalCtx eval_ctx(exec_ctx);
   sql::ObPushdownExprSpec expr_spec(allocator_);
   sql::ObPushdownOperator op(eval_ctx, expr_spec);
-  sql::ObWhiteFilterExecutor filter(allocator_, filter_node, op);
+  sql::ObWhiteFilterExecutor filter(allocator_, filter_node, &op);
   filter.col_offsets_.init(COLUMN_CNT);
   filter.col_params_.init(COLUMN_CNT);
   const ObColumnParam *col_param = nullptr;
@@ -570,7 +571,7 @@ int TestRawDecoder::test_filter_pushdown_with_pd_info(
   sql::ObEvalCtx eval_ctx(exec_ctx);
   sql::ObPushdownExprSpec expr_spec(allocator_);
   sql::ObPushdownOperator op(eval_ctx, expr_spec);
-  sql::ObWhiteFilterExecutor filter(allocator_, filter_node, op);
+  sql::ObWhiteFilterExecutor filter(allocator_, filter_node, &op);
   filter.col_offsets_.init(COLUMN_CNT);
   filter.col_params_.init(COLUMN_CNT);
   const ObColumnParam *col_param = nullptr;
@@ -1460,7 +1461,7 @@ TEST_F(TestRawDecoder, test_range_truncate_filter_pushdown)
     sql::ObPushdownExprSpec expr_spec(allocator_);
     sql::ObPushdownOperator op(eval_ctx, expr_spec);
     sql::ObTruncateWhiteFilterNode white_filter(allocator_);
-    sql::ObTruncateWhiteFilterExecutor range_filter(allocator_, white_filter, op);
+    sql::ObTruncateWhiteFilterExecutor range_filter(allocator_, white_filter, &op);
     range_filter.set_type(TRUNCATE_WHITE_FILTER_EXECUTOR);
 
     int64_t row_scn = INT64_MAX;
@@ -1558,12 +1559,12 @@ TEST_F(TestRawDecoder, test_list_truncate_filter_pushdown)
     sql::ObPushdownExprSpec expr_spec(allocator_);
     sql::ObPushdownOperator op(eval_ctx, expr_spec);
     sql::ObTruncateWhiteFilterNode white_filter(allocator_);
-    sql::ObTruncateWhiteFilterExecutor range_filter(allocator_, white_filter, op);
+    sql::ObTruncateWhiteFilterExecutor range_filter(allocator_, white_filter, &op);
     range_filter.set_type(TRUNCATE_WHITE_FILTER_EXECUTOR);
 
     int64_t row_scn = INT64_MAX;
     int64_t col_idxs[1] = {i};
-    sql::ObTruncateWhiteFilterExecutor list_filter(allocator_, white_filter, op);
+    sql::ObTruncateWhiteFilterExecutor list_filter(allocator_, white_filter, &op);
     list_filter.set_type(TRUNCATE_WHITE_FILTER_EXECUTOR);
     list_filter.set_truncate_item_type(ObTruncateItemType::TRUNCATE_LIST);
 
@@ -1619,6 +1620,7 @@ TEST_F(TestRawDecoder, test_list_truncate_filter_pushdown)
 
 TEST_F(TestRawDecoder, test_ttl_filter_pushdown)
 {
+  ObPushdownFilterFactory filter_factory(&allocator_);
   ObDatumRow row;
   ASSERT_EQ(OB_SUCCESS, row.init(allocator_, full_column_cnt_));
 
@@ -1654,6 +1656,7 @@ TEST_F(TestRawDecoder, test_ttl_filter_pushdown)
   ObMicroBlockData data;
   ASSERT_EQ(OB_SUCCESS, data.init_with_prepare_micro_header(encoder_.data_buffer_.data(), encoder_.data_buffer_.length()));
   ASSERT_EQ(OB_SUCCESS, decoder.init(data, read_info_)) << "buffer size: " << data.get_buf_size() << std::endl;
+  storage::ObTTLFilterInitParams ttl_init_params(col_descs_, nullptr);
   for (int64_t i = 0; i < ROWKEY_CNT; ++i) {
     sql::PushdownFilterInfo pd_filter_info;
     pd_filter_info.col_capacity_ = full_column_cnt_;
@@ -1665,7 +1668,7 @@ TEST_F(TestRawDecoder, test_ttl_filter_pushdown)
     sql::ObPushdownExprSpec expr_spec(allocator_);
     sql::ObPushdownOperator op(eval_ctx, expr_spec);
     sql::ObTTLWhiteFilterNode white_filter(allocator_);
-    sql::ObTTLWhiteFilterExecutor ttl_filter(allocator_, white_filter, op);
+    sql::ObTTLWhiteFilterExecutor ttl_filter(allocator_, white_filter, &op);
     ttl_filter.set_type(sql::TTL_WHITE_FILTER_EXECUTOR);
 
     int64_t row_scn = INT64_MAX;
@@ -1675,7 +1678,7 @@ TEST_F(TestRawDecoder, test_ttl_filter_pushdown)
     TTLFilterInfoHelper::mock_ttl_filter_info(
         1,
         row_scn,
-        static_cast<int64_t>(storage::ObTTLFilterInfo::ObTTLFilterColType::ROWSCN),
+        static_cast<int64_t>(storage::ObTTLFilterColType::ROWSCN),
         1000,
         i,
         ttl_filter_info);
@@ -1686,7 +1689,12 @@ TEST_F(TestRawDecoder, test_ttl_filter_pushdown)
     ASSERT_EQ(0, result_bitmap.popcnt());
 
     // Initialize TTL filter
-    ASSERT_EQ(OB_SUCCESS, ttl_filter.init(ttl_filter_info, col_descs_));
+    ASSERT_EQ(OB_SUCCESS,
+              ttl_filter.init(filter_factory,
+                              ttl_filter_info,
+                              ttl_init_params,
+                              ROWKEY_CNT,
+                              sql::ObTTLWhiteFilterExecutor::FilterType::TTL_FILTER));
 
     // Execute TTL filter pushdown
     ASSERT_EQ(OB_SUCCESS, decoder.filter_pushdown_ttl_filter(nullptr, ttl_filter, pd_filter_info, result_bitmap));
@@ -1697,7 +1705,12 @@ TEST_F(TestRawDecoder, test_ttl_filter_pushdown)
     // Test different TTL filter values
     result_bitmap.reuse();
     ttl_filter_info.ttl_filter_value_ = 1; // Smaller TTL filter value
-    ASSERT_EQ(OB_SUCCESS, ttl_filter.switch_info(ttl_filter_info, col_descs_));
+    ASSERT_EQ(OB_SUCCESS,
+              ttl_filter.switch_info(filter_factory,
+                                     ttl_filter_info,
+                                     ttl_init_params,
+                                     ROWKEY_CNT,
+                                     sql::ObTTLWhiteFilterExecutor::FilterType::TTL_FILTER));
     ASSERT_EQ(OB_SUCCESS, decoder.filter_pushdown_ttl_filter(nullptr, ttl_filter, pd_filter_info, result_bitmap));
     // Should filter out more rows
     ASSERT_EQ(seed1_count + seed2_count, result_bitmap.popcnt());
@@ -1705,7 +1718,12 @@ TEST_F(TestRawDecoder, test_ttl_filter_pushdown)
     // Test larger TTL filter value
     result_bitmap.reuse();
     ttl_filter_info.ttl_filter_value_ = 4; // Larger TTL filter value
-    ASSERT_EQ(OB_SUCCESS, ttl_filter.switch_info(ttl_filter_info, col_descs_));
+    ASSERT_EQ(OB_SUCCESS,
+              ttl_filter.switch_info(filter_factory,
+                                     ttl_filter_info,
+                                     ttl_init_params,
+                                     ROWKEY_CNT,
+                                     sql::ObTTLWhiteFilterExecutor::FilterType::TTL_FILTER));
     ASSERT_EQ(OB_SUCCESS, decoder.filter_pushdown_ttl_filter(nullptr, ttl_filter, pd_filter_info, result_bitmap));
     // Should filter out fewer rows
     ASSERT_EQ(0, result_bitmap.popcnt());

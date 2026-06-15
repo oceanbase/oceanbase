@@ -135,7 +135,8 @@ public:
     ObMediumCompactionInfo::ObCompactionType &compaction_type,
     int64_t &schedule_scn,
     ObCOMajorMergeStrategy &co_major_merge_strategy,
-    ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason) const;
+    ObAdaptiveMergePolicy::AdaptiveMergeReason &merge_reason,
+    int64_t &need_freeze_snapshot) const;
   OB_INLINE ObMediumCompactionInfo::ObCompactionType get_last_compaction_type() const
   {
     return static_cast<ObMediumCompactionInfo::ObCompactionType>(extra_info_.last_compaction_type_);

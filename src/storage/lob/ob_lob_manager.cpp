@@ -2354,6 +2354,12 @@ int ObLobManager::prepare_char_len(ObLobAccessParam& param, ObLobDiskLocatorBuil
       LOG_WARN("init spilter fail", K(ret), K(src_data_locator));
     } else {
       char_len = spilter.char_pos();
+      // Fill ttl_column when lob_meta_list is generated, so ObLobSimplePersistInsertIter can use it directly
+      for (int64_t i = 0; OB_SUCC(ret) && i < task.lob_meta_list_.count(); ++i) {
+        if (OB_FAIL(param.fill_hidden_ttl_column(task.lob_meta_list_.at(i)))) {
+          LOG_WARN("fill hidden ttl column fail", K(ret), K(i));
+        }
+      }
     }
   }
 
@@ -2443,20 +2449,20 @@ int ObLobManager::prepare_seq_no(ObLobAccessParam& param, ObLobDiskLocatorBuilde
   return ret;
 }
 
-int ObLobManager::get_table_param(const ObTableParam *&table_param)
+int ObLobManager::get_table_param(ObTTLFilterColType ttl_type, const ObTableParam *&table_param)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(lob_ctx_.lob_meta_mngr_->get_table_param(table_param))) {
-    LOG_WARN("get table param fail", K(ret), K(table_param));
+  if (OB_FAIL(lob_ctx_.lob_meta_mngr_->get_table_param(ttl_type, table_param))) {
+    LOG_WARN("get table param fail", K(ret), K(ttl_type));
   }
   return ret;
 }
 
-int ObLobManager::get_table_dml_param(const ObTableDMLParam *&table_dml_param)
+int ObLobManager::get_table_dml_param(ObTTLFilterColType ttl_type, const ObTableDMLParam *&table_dml_param)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(lob_ctx_.lob_meta_mngr_->get_table_dml_param(table_dml_param))) {
-    LOG_WARN("get table dml param fail", K(ret), K(table_dml_param));
+  if (OB_FAIL(lob_ctx_.lob_meta_mngr_->get_table_dml_param(ttl_type, table_dml_param))) {
+    LOG_WARN("get table dml param fail", K(ret), K(ttl_type));
   }
   return ret;
 }

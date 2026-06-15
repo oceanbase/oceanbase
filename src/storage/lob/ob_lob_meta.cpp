@@ -332,21 +332,37 @@ int ObLobMetaUtil::transform_lob_data(const blocksstable::ObDatumRow *row, ObLob
   return ret;
 }
 
-int ObLobMetaUtil::transform_from_row_to_info(const blocksstable::ObDatumRow *row, ObLobMetaInfo &info, bool with_extra_rowkey)
+int ObLobMetaUtil::transform_hidden_ttl_column(const blocksstable::ObDatumRow *row, ObLobMetaInfo &info, bool with_extra_rowkey)
 {
   int ret = OB_SUCCESS;
-  int expcect_row_cnt = (with_extra_rowkey) ?
-                        LOB_META_COLUMN_CNT + SKIP_INVALID_COLUMN :
-                        LOB_META_COLUMN_CNT;
+  if (OB_ISNULL(row)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("row is nullptr", K(ret));
+  } else {
+    int idx = (with_extra_rowkey) ?
+          ObLobMetaUtil::HIDDEN_TTL_COLUMN_COL_ID + SKIP_INVALID_COLUMN :
+          ObLobMetaUtil::HIDDEN_TTL_COLUMN_COL_ID;
+    info.shallow_copy_ttl_datum(row->storage_datums_[idx]);
+  }
+  return ret;
+}
+
+int ObLobMetaUtil::transform_from_row_to_info(const blocksstable::ObDatumRow *row, ObLobMetaInfo &info, bool with_extra_rowkey, bool has_ttl_column)
+{
+  int ret = OB_SUCCESS;
+  int64_t lob_meta_column_cnt = get_lob_meta_column_cnt(has_ttl_column);
+  int64_t expected_row_cnt = (with_extra_rowkey) ?
+                               lob_meta_column_cnt + SKIP_INVALID_COLUMN :
+                               lob_meta_column_cnt;
   if (OB_ISNULL(row)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("row is null", K(ret));
   } else if (!row->is_valid()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid lob meta row.", K(ret), KPC(row));
-  } else if (row->get_column_count() != expcect_row_cnt) {
+  } else if (row->get_column_count() != expected_row_cnt) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid lob meta row.", K(ret), KPC(row), K(expcect_row_cnt));
+    LOG_WARN("invalid lob meta row.", K(ret), KPC(row), K(expected_row_cnt));
   } else if (OB_FAIL(transform_lob_id(row, info))) {
     LOG_WARN("transform lob id failed", K(ret));
   } else if (OB_FAIL(transform_seq_id(row, info))) {
@@ -359,6 +375,9 @@ int ObLobMetaUtil::transform_from_row_to_info(const blocksstable::ObDatumRow *ro
     LOG_WARN("transform piece id failed", K(ret));
   } else if (OB_FAIL(transform_lob_data(row, info, with_extra_rowkey))) {
     LOG_WARN("transform lob data failed", K(ret));
+  } else if (lob_meta_column_cnt == LOB_META_WITH_TTL_COLUMN_CNT
+             && OB_FAIL(transform_hidden_ttl_column(row, info, with_extra_rowkey))) {
+    LOG_WARN("transform hidden ttl column failed", K(ret));
   }
   return ret;
 }
@@ -447,16 +466,32 @@ int ObLobMetaUtil::transform_lob_data(ObLobMetaInfo &info, blocksstable::ObDatum
   return ret;
 }
 
+int ObLobMetaUtil::transform_hidden_ttl_column(ObLobMetaInfo &info, blocksstable::ObDatumRow *row, bool with_extra_rowkey)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(row)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("row is NULL", K(ret));
+  } else if (info.has_ttl_datum()) {
+    int idx = (with_extra_rowkey) ?
+              ObLobMetaUtil::HIDDEN_TTL_COLUMN_COL_ID + SKIP_INVALID_COLUMN :
+              ObLobMetaUtil::HIDDEN_TTL_COLUMN_COL_ID;
+    row->storage_datums_[idx].set_datum(info.hidden_ttl_column_);
+  }
+  return ret;
+}
+
 int ObLobMetaUtil::transform_from_info_to_row(ObLobMetaInfo &info, blocksstable::ObDatumRow *row, bool with_extra_rowkey)
 {
   int ret = OB_SUCCESS;
-  int expcect_row_cnt = (with_extra_rowkey) ?
-                        LOB_META_COLUMN_CNT + SKIP_INVALID_COLUMN :
-                        LOB_META_COLUMN_CNT;
+  int64_t lob_meta_column_cnt = get_lob_meta_column_cnt(info.has_ttl_datum());
+  int64_t expected_row_cnt = (with_extra_rowkey) ?
+                               lob_meta_column_cnt + SKIP_INVALID_COLUMN :
+                               lob_meta_column_cnt;
   if (OB_ISNULL(row)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("row is null.", K(ret));
-  } else if (row->get_column_count() != expcect_row_cnt) {
+  } else if (row->get_column_count() != expected_row_cnt) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid lob meta row.", K(ret), K(info), K(with_extra_rowkey));
   } else if (OB_FAIL(transform_lob_id(info, row))) {
@@ -471,6 +506,9 @@ int ObLobMetaUtil::transform_from_info_to_row(ObLobMetaInfo &info, blocksstable:
     LOG_WARN("get macro id from row failed.", K(ret), K(info));
   } else if (OB_FAIL(transform_lob_data(info, row, with_extra_rowkey))) {
     LOG_WARN("get macro id from row failed.", K(ret), K(info));
+  } else if (lob_meta_column_cnt == LOB_META_WITH_TTL_COLUMN_CNT
+             && OB_FAIL(transform_hidden_ttl_column(info, row, with_extra_rowkey))) {
+    LOG_WARN("get hidden ttl column from row failed.", K(ret), K(info));
   }
   return ret;
 }
@@ -502,6 +540,20 @@ bool ObLobMetaScanIter::is_in_range(const ObLobMetaInfo& info)
     bool_ret = true;
   }
   return bool_ret;
+}
+
+int ObLobMetaUtil::init_meta_column_ids(ObSEArray<uint64_t, 7> &meta_column_ids, const bool with_ttl)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t col_cnt = ObLobMetaUtil::get_lob_meta_column_cnt(with_ttl);
+  for (uint32_t i = 0; OB_SUCC(ret) && i < col_cnt; i++) {
+    uint64_t col_id
+        = (with_ttl && i == col_cnt - 1) ? OB_LOB_META_TTL_COLUMN_ID : (OB_APP_MIN_COLUMN_ID + i);
+    if (OB_FAIL(meta_column_ids.push_back(col_id))) {
+      LOG_WARN("push col id fail", K(ret), K(i));
+    }
+  }
+  return ret;
 }
 
 void ObLobMetaScanIter::reset()
@@ -565,6 +617,7 @@ ObLobMetaWriteIter::ObLobMetaWriteIter(
     iter_fill_size_(0),
     read_param_(nullptr),
     lob_common_(nullptr),
+    lob_ttl_column_info_(),
     is_end_(false),
     is_store_char_len_(true)
 {
@@ -641,6 +694,7 @@ int ObLobMetaWriteIter::open(ObLobAccessParam &param,
   int ret = OB_SUCCESS;
   coll_type_ = param.coll_type_;
   lob_id_ = param.lob_data_->id_;
+  lob_ttl_column_info_ = param.lob_ttl_column_info_;
   piece_id_ = ObLobMetaUtil::LOB_META_INLINE_PIECE_ID;
   padding_size_ = padding_size;
   seq_id_.set_seq_id(seq_id_st);
@@ -685,6 +739,7 @@ int ObLobMetaWriteIter::open(ObLobAccessParam &param,
   } else {
     coll_type_ = param.coll_type_;
     lob_id_ = param.lob_data_->id_;
+    lob_ttl_column_info_ = param.lob_ttl_column_info_;
     piece_id_ = ObLobMetaUtil::LOB_META_INLINE_PIECE_ID;
     padding_size_ = padding_size;
     seq_id_.set_seq_id(seq_id_st);
@@ -969,6 +1024,11 @@ int ObLobMetaWriteIter::get_next_row(ObLobMetaWriteResult &row)
       } else {
         row.data_ = row.info_.lob_data_;
         LOG_DEBUG("to_lob_meta_info", K(row.info_), K(write_buffer), K(offset_));
+      }
+
+      if (OB_FAIL(ret)) {
+      } else if (lob_ttl_column_info_.has_user_ttl() && OB_FAIL(lob_ttl_column_info_.fill_hidden_ttl_column(row.info_))) {
+        LOG_WARN("fill hidden ttl column fail", K(ret), KPC(this));
       }
     }
 

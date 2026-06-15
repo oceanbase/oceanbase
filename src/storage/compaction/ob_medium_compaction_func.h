@@ -207,8 +207,9 @@ protected:
     const ObTablet &tablet,
     int64_t &schema_version);
   int get_adaptive_reason(const int64_t schedule_major_snapshot);
-  int fill_mds_filter_info(ObMediumCompactionInfo &medium_info);
+  int fill_mds_filter_info(const ObGetMergeTablesResult &result, ObMediumCompactionInfo &medium_info);
   int fill_mlog_purge_scn(ObMediumCompactionInfo &medium_info);
+  int fill_for_ttl_in_partial_update(const int64_t ttl_newest_commit_version, ObMediumCompactionInfo &medium_info);
   int fill_window_decision_log_info(ObMediumCompactionInfo &medium_info);
   bool need_read_mds(const ObMediumCompactionInfo &medium_info);
   static const int64_t DEFAULT_SCHEDULE_MEDIUM_INTERVAL = 60_s;

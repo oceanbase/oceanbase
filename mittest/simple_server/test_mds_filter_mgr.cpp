@@ -9,9 +9,14 @@
 #define protected public
 
 #include "unittest/storage/ob_ttl_filter_info_helper.h"
+#include "unittest/storage/ob_truncate_info_helper.h"
 #include "storage/access/ob_mds_filter_mgr.h"
 #include "storage/compaction_ttl/ob_base_version_filter.h"
 #include "storage/compaction_ttl/ob_ttl_filter.h"
+#include "storage/truncate_info/ob_mds_info_distinct_mgr.h"
+#include "storage/truncate_info/ob_truncate_info_array.h"
+#include "storage/compaction_ttl/ob_ttl_filter_info_array.h"
+#include "common/ob_range.h"
 
 namespace oceanbase
 {
@@ -102,7 +107,7 @@ void ObMDSFilterMgrTest::build_ttl_filter_info(const int64_t filter_value,
   TTLFilterInfoHelper::mock_ttl_filter_info(
       trans_id,
       1,
-      static_cast<int64_t>(ObTTLFilterInfo::ObTTLFilterColType::ROWSCN),
+      static_cast<int64_t>(ObTTLFilterColType::ROWSCN),
       filter_value,
       col_idx,
       ttl_filter_info);
@@ -115,7 +120,7 @@ void ObMDSFilterMgrTest::build_ttl_filter(const ObTTLFilterInfo &ttl_filter_info
   ASSERT_EQ(OB_SUCCESS, ttl_filter_info_array.append_with_deep_copy(ttl_filter_info));
   ASSERT_EQ(OB_SUCCESS,
             filter.init_ttl_filter_for_unittest(
-                schema_rowkey_cnt_, cols_desc_, &cols_param_, ttl_filter_info_array));
+                schema_rowkey_cnt_, cols_desc_, ttl_filter_info_array));
 }
 
 void ObMDSFilterMgrTest::build_ttl_filter(const ObTTLFilterInfoArray &ttl_filter_info_array,
@@ -123,7 +128,7 @@ void ObMDSFilterMgrTest::build_ttl_filter(const ObTTLFilterInfoArray &ttl_filter
 {
   ASSERT_EQ(OB_SUCCESS,
             filter.init_ttl_filter_for_unittest(
-                schema_rowkey_cnt_, cols_desc_, &cols_param_, ttl_filter_info_array));
+                schema_rowkey_cnt_, cols_desc_, ttl_filter_info_array));
 }
 
 void ObMDSFilterMgrTest::build_base_version_filter(const int64_t base_version, ObBaseVersionFilter &filter)
@@ -152,7 +157,7 @@ void ObMDSFilterMgrTest::init_mds_filter_mgr_for_unittest(ObMDSFilterMgr &mds_fi
 {
   // Create TTL filter if needed
   if (need_ttl_filter) {
-    ObTTLFilter *ttl_filter = OB_NEWx(ObTTLFilter, &allocator_, mds_filter_mgr);
+    ObTTLFilter *ttl_filter = OB_NEWx(ObTTLFilter, &allocator_, allocator_);
     ASSERT_NE(nullptr, ttl_filter);
     create_simple_ttl_filter(*ttl_filter);
     mds_filter_mgr.ttl_filter_ = ttl_filter;
@@ -161,7 +166,7 @@ void ObMDSFilterMgrTest::init_mds_filter_mgr_for_unittest(ObMDSFilterMgr &mds_fi
 
   // Create base version filter if needed
   if (need_base_version_filter) {
-    ObBaseVersionFilter *base_version_filter = OB_NEWx(ObBaseVersionFilter, &allocator_, mds_filter_mgr);
+    ObBaseVersionFilter *base_version_filter = OB_NEWx(ObBaseVersionFilter, &allocator_, allocator_);
     ASSERT_NE(nullptr, base_version_filter);
     create_simple_base_version_filter(*base_version_filter);
     mds_filter_mgr.base_version_filter_ = base_version_filter;
@@ -174,7 +179,6 @@ TEST_F(ObMDSFilterMgrTest, base_version_filter)
   get_index_table_cols_desc();
   get_index_table_cols_param(false);
 
-  ObMDSFilterMgr mds_filter_mgr(nullptr);
   ObDatumRow row;
   bool filtered = false;
 
@@ -182,7 +186,7 @@ TEST_F(ObMDSFilterMgrTest, base_version_filter)
   ObStorageDatum &scn_datum = row.storage_datums_[2];
 
   // Test base version filter
-  ObBaseVersionFilter base_version_filter(mds_filter_mgr);
+  ObBaseVersionFilter base_version_filter(allocator_);
   create_simple_base_version_filter(base_version_filter);
 
 #define CHECK_BASE_VERSION_FILTER_ROW(scn_val, base_version_filter, expected)                      \
@@ -204,7 +208,6 @@ TEST_F(ObMDSFilterMgrTest, ttl_filter)
   get_index_table_cols_desc();
   get_index_table_cols_param(false);
 
-  ObMDSFilterMgr mds_filter_mgr(nullptr);
   ObDatumRow row;
   bool filtered = false;
 
@@ -212,7 +215,7 @@ TEST_F(ObMDSFilterMgrTest, ttl_filter)
   ObStorageDatum &scn_datum = row.storage_datums_[2];
 
   // Test TTL filter
-  ObTTLFilter ttl_filter(mds_filter_mgr);
+  ObTTLFilter ttl_filter(allocator_);
   create_simple_ttl_filter(ttl_filter);
 
 #define CHECK_TTL_FILTER_ROW(scn_val, ttl_filter, expected)                                        \
@@ -240,7 +243,7 @@ TEST_F(ObMDSFilterMgrTest, mixed_filters)
   ObStorageDatum &scn_datum = row.storage_datums_[2];
 
   // Test MDSFilterMgr with both TTL filter and base version filter
-  ObMDSFilterMgr mds_filter_mgr(&allocator_);
+  ObMDSFilterMgr mds_filter_mgr(allocator_);
   init_mds_filter_mgr_for_unittest(mds_filter_mgr, true, true);
 
   // Test filter with check_filter=true, check_version=false (only TTL filter)
@@ -295,7 +298,7 @@ TEST_F(ObMDSFilterMgrTest, mixed_filters_ttl_only)
   ObStorageDatum &scn_datum = row.storage_datums_[2];
 
   // Test MDSFilterMgr with only TTL filter (need_base_version_filter = false)
-  ObMDSFilterMgr mds_filter_mgr(&allocator_);
+  ObMDSFilterMgr mds_filter_mgr(allocator_);
   init_mds_filter_mgr_for_unittest(mds_filter_mgr, true, false);
 
   // Test filter with check_filter=true, check_version=false (only TTL filter)
@@ -348,7 +351,7 @@ TEST_F(ObMDSFilterMgrTest, check_filter_row_complete)
   ASSERT_EQ(OB_SUCCESS, row.init(allocator_, 4));
 
   // Test MDSFilterMgr with both TTL filter and base version filter
-  ObMDSFilterMgr mds_filter_mgr(&allocator_);
+  ObMDSFilterMgr mds_filter_mgr(allocator_);
   init_mds_filter_mgr_for_unittest(mds_filter_mgr, true, true);
 
   // Test with complete row (all columns have values)
@@ -367,6 +370,154 @@ TEST_F(ObMDSFilterMgrTest, check_filter_row_complete)
   row.storage_datums_[2].set_null();
   ASSERT_EQ(OB_SUCCESS, mds_filter_mgr.check_filter_row_complete(row, complete));
   ASSERT_FALSE(complete);
+}
+
+// Test build_distinct_array: mock array_ directly and verify distinct result
+TEST_F(ObMDSFilterMgrTest, build_distinct_array_ttl_filter_info)
+{
+  ObTTLFilterInfoDistinctMgr ttl_mgr;
+  common::ObVersionRange read_version_range(0, 1000);
+
+  ASSERT_EQ(OB_SUCCESS, ttl_mgr.array_.init_for_first_creation(allocator_));
+
+  // ROWSCN: replace when filter_value is larger (commit_version not checked)
+  // Mock TTL filter infos: same col_idx=2, (commit_version=100, value=800) and (commit_version=200, value=900)
+  ObTTLFilterInfo info1, info2;
+  TTLFilterInfoHelper::mock_ttl_filter_info(trans_id, 100, static_cast<int64_t>(ObTTLFilterColType::ROWSCN), 800, 2, info1);
+  TTLFilterInfoHelper::mock_ttl_filter_info(trans_id + 1, 200, static_cast<int64_t>(ObTTLFilterColType::ROWSCN), 900, 2, info2);
+  ASSERT_EQ(OB_SUCCESS, ttl_mgr.array_.append_with_deep_copy(info1));
+  ASSERT_EQ(OB_SUCCESS, ttl_mgr.array_.append_with_deep_copy(info2));
+
+  ASSERT_EQ(OB_SUCCESS, ttl_mgr.build_distinct_array(read_version_range, false));
+  ASSERT_EQ(1, ttl_mgr.distinct_array_.count());
+  ASSERT_EQ(200, ttl_mgr.distinct_array_.at(0)->commit_version_);
+  ASSERT_EQ(900, ttl_mgr.distinct_array_.at(0)->ttl_filter_value_);
+  ASSERT_EQ(2, ttl_mgr.distinct_array_.at(0)->ttl_filter_col_idx_);
+
+  // Test different col_idx: both should be in distinct array
+  ttl_mgr.distinct_array_.reuse();
+  ObTTLFilterInfo info3;
+  TTLFilterInfoHelper::mock_ttl_filter_info(trans_id + 2, 150, static_cast<int64_t>(ObTTLFilterColType::TIMESTAMP), 700, 3, info3);
+  ASSERT_EQ(OB_SUCCESS, ttl_mgr.array_.append_with_deep_copy(info3));
+  ASSERT_EQ(OB_SUCCESS, ttl_mgr.build_distinct_array(read_version_range, false));
+  ASSERT_EQ(2, ttl_mgr.distinct_array_.count());
+
+  // ROWSCN: commit_version larger but filter_value smaller -> no replace (only filter_value matters)
+  ttl_mgr.array_.reset();
+  ttl_mgr.distinct_array_.reuse();
+  ASSERT_EQ(OB_SUCCESS, ttl_mgr.array_.init_for_first_creation(allocator_));
+  ObTTLFilterInfo info_commit_larger;
+  TTLFilterInfoHelper::mock_ttl_filter_info(trans_id, 100, static_cast<int64_t>(ObTTLFilterColType::ROWSCN), 800, 2, info_commit_larger);
+  ObTTLFilterInfo info_value_smaller;
+  TTLFilterInfoHelper::mock_ttl_filter_info(trans_id + 1, 200, static_cast<int64_t>(ObTTLFilterColType::ROWSCN), 700, 2, info_value_smaller);
+  ASSERT_EQ(OB_SUCCESS, ttl_mgr.array_.append_with_deep_copy(info_commit_larger));
+  ASSERT_EQ(OB_SUCCESS, ttl_mgr.array_.append_with_deep_copy(info_value_smaller));
+  ASSERT_EQ(OB_SUCCESS, ttl_mgr.build_distinct_array(read_version_range, false));
+  ASSERT_EQ(1, ttl_mgr.distinct_array_.count());
+  ASSERT_EQ(100, ttl_mgr.distinct_array_.at(0)->commit_version_);
+  ASSERT_EQ(800, ttl_mgr.distinct_array_.at(0)->ttl_filter_value_);
+
+  // ROWSCN: filter_value larger but commit_version smaller -> replace (only filter_value matters for ROWSCN)
+  ttl_mgr.array_.reset();
+  ttl_mgr.distinct_array_.reuse();
+  ASSERT_EQ(OB_SUCCESS, ttl_mgr.array_.init_for_first_creation(allocator_));
+  ObTTLFilterInfo info_first;
+  TTLFilterInfoHelper::mock_ttl_filter_info(trans_id, 200, static_cast<int64_t>(ObTTLFilterColType::ROWSCN), 800, 2, info_first);
+  ObTTLFilterInfo info_value_larger;
+  TTLFilterInfoHelper::mock_ttl_filter_info(trans_id + 2, 150, static_cast<int64_t>(ObTTLFilterColType::ROWSCN), 900, 2, info_value_larger);
+  ASSERT_EQ(OB_SUCCESS, ttl_mgr.array_.append_with_deep_copy(info_first));
+  ASSERT_EQ(OB_SUCCESS, ttl_mgr.array_.append_with_deep_copy(info_value_larger));
+  ASSERT_EQ(OB_SUCCESS, ttl_mgr.build_distinct_array(read_version_range, false));
+  ASSERT_EQ(1, ttl_mgr.distinct_array_.count());
+  ASSERT_EQ(150, ttl_mgr.distinct_array_.at(0)->commit_version_);
+  ASSERT_EQ(900, ttl_mgr.distinct_array_.at(0)->ttl_filter_value_);
+
+  // Non-ROWSCN (TIMESTAMP): replace requires BOTH commit_version and filter_value larger
+  // filter_value larger but commit_version smaller -> no replace
+  ttl_mgr.array_.reset();
+  ttl_mgr.distinct_array_.reuse();
+  ASSERT_EQ(OB_SUCCESS, ttl_mgr.array_.init_for_first_creation(allocator_));
+  ObTTLFilterInfo info_ts_first;
+  TTLFilterInfoHelper::mock_ttl_filter_info(trans_id, 200, static_cast<int64_t>(ObTTLFilterColType::TIMESTAMP), 800, 2, info_ts_first);
+  ObTTLFilterInfo info_ts_value_larger;
+  TTLFilterInfoHelper::mock_ttl_filter_info(trans_id + 2, 150, static_cast<int64_t>(ObTTLFilterColType::TIMESTAMP), 900, 2, info_ts_value_larger);
+  ASSERT_EQ(OB_SUCCESS, ttl_mgr.array_.append_with_deep_copy(info_ts_first));
+  ASSERT_EQ(OB_SUCCESS, ttl_mgr.array_.append_with_deep_copy(info_ts_value_larger));
+  ASSERT_EQ(OB_SUCCESS, ttl_mgr.build_distinct_array(read_version_range, false));
+  ASSERT_EQ(2, ttl_mgr.distinct_array_.count());
+  ASSERT_EQ(150, ttl_mgr.distinct_array_.at(0)->commit_version_);
+  ASSERT_EQ(900, ttl_mgr.distinct_array_.at(0)->ttl_filter_value_);
+  ASSERT_EQ(200, ttl_mgr.distinct_array_.at(1)->commit_version_);
+  ASSERT_EQ(800, ttl_mgr.distinct_array_.at(1)->ttl_filter_value_);
+
+  // Non-ROWSCN: both larger -> replace
+  ttl_mgr.array_.reset();
+  ttl_mgr.distinct_array_.reuse();
+  ASSERT_EQ(OB_SUCCESS, ttl_mgr.array_.init_for_first_creation(allocator_));
+  ObTTLFilterInfo info_ts_old;
+  TTLFilterInfoHelper::mock_ttl_filter_info(trans_id, 100, static_cast<int64_t>(ObTTLFilterColType::TIMESTAMP), 800, 2, info_ts_old);
+  ObTTLFilterInfo info_ts_new;
+  TTLFilterInfoHelper::mock_ttl_filter_info(trans_id + 1, 200, static_cast<int64_t>(ObTTLFilterColType::TIMESTAMP), 900, 2, info_ts_new);
+  ASSERT_EQ(OB_SUCCESS, ttl_mgr.array_.append_with_deep_copy(info_ts_old));
+  ASSERT_EQ(OB_SUCCESS, ttl_mgr.array_.append_with_deep_copy(info_ts_new));
+  ASSERT_EQ(OB_SUCCESS, ttl_mgr.build_distinct_array(read_version_range, false));
+  ASSERT_EQ(1, ttl_mgr.distinct_array_.count());
+  ASSERT_EQ(200, ttl_mgr.distinct_array_.at(0)->commit_version_);
+  ASSERT_EQ(900, ttl_mgr.distinct_array_.at(0)->ttl_filter_value_);
+
+  // Test version range filter: commit_version outside (base_version, snapshot_version] should be skipped
+  ttl_mgr.array_.reset();
+  ttl_mgr.distinct_array_.reuse();
+  ASSERT_EQ(OB_SUCCESS, ttl_mgr.array_.init_for_first_creation(allocator_));
+  ObTTLFilterInfo info4, info5;
+  TTLFilterInfoHelper::mock_ttl_filter_info(trans_id, 50, static_cast<int64_t>(ObTTLFilterColType::ROWSCN), 600, 2, info4);
+  TTLFilterInfoHelper::mock_ttl_filter_info(trans_id + 1, 500, static_cast<int64_t>(ObTTLFilterColType::ROWSCN), 700, 2, info5);
+  ASSERT_EQ(OB_SUCCESS, ttl_mgr.array_.append_with_deep_copy(info4));
+  ASSERT_EQ(OB_SUCCESS, ttl_mgr.array_.append_with_deep_copy(info5));
+  common::ObVersionRange range2(100, 1000);
+  ASSERT_EQ(OB_SUCCESS, ttl_mgr.build_distinct_array(range2, false));
+  ASSERT_EQ(1, ttl_mgr.distinct_array_.count());
+  ASSERT_EQ(500, ttl_mgr.distinct_array_.at(0)->commit_version_);
+}
+
+// Test build_distinct_array for truncate info
+TEST_F(ObMDSFilterMgrTest, build_distinct_array_truncate_info)
+{
+  ObTruncateInfoDistinctMgr truncate_mgr;
+  common::ObVersionRange read_version_range(0, 1000);
+
+  ASSERT_EQ(OB_SUCCESS, truncate_mgr.array_.init_for_first_creation(allocator_));
+
+  // Mock truncate infos with same partition: (commit_version=100, schema=1) and (commit_version=200, schema=2)
+  // When equal, the newer one should replace the older
+  ObTruncateInfo info1;
+  TruncateInfoHelper::mock_truncate_info(allocator_, trans_id, 1, 100, info1);
+  ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::mock_truncate_partition(allocator_, 100, 200, info1.truncate_part_));
+  ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::mock_part_key_idxs(allocator_, 1, info1.truncate_part_));
+
+  ObTruncateInfo info2;
+  TruncateInfoHelper::mock_truncate_info(allocator_, trans_id + 1, 2, 200, info2);
+  ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::mock_truncate_partition(allocator_, 100, 200, info2.truncate_part_));
+  ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::mock_part_key_idxs(allocator_, 1, info2.truncate_part_));
+
+  ASSERT_EQ(OB_SUCCESS, truncate_mgr.array_.append_with_deep_copy(info1));
+  ASSERT_EQ(OB_SUCCESS, truncate_mgr.array_.append_with_deep_copy(info2));
+
+  ASSERT_EQ(OB_SUCCESS, truncate_mgr.build_distinct_array(read_version_range, false));
+  ASSERT_EQ(1, truncate_mgr.distinct_array_.count());
+  ASSERT_EQ(200, truncate_mgr.distinct_array_.at(0)->commit_version_);
+  ASSERT_EQ(2, truncate_mgr.distinct_array_.at(0)->schema_version_);
+
+  // Test different partitions: both should be in distinct array
+  truncate_mgr.distinct_array_.reuse();
+  ObTruncateInfo info3;
+  TruncateInfoHelper::mock_truncate_info(allocator_, trans_id + 2, 1, 150, info3);
+  ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::mock_truncate_partition(allocator_, 300, 400, info3.truncate_part_));
+  ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::mock_part_key_idxs(allocator_, 1, info3.truncate_part_));
+  ASSERT_EQ(OB_SUCCESS, truncate_mgr.array_.append_with_deep_copy(info3));
+
+  ASSERT_EQ(OB_SUCCESS, truncate_mgr.build_distinct_array(read_version_range, false));
+  ASSERT_EQ(2, truncate_mgr.distinct_array_.count());
 }
 
 } // namespace unittest

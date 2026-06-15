@@ -158,7 +158,7 @@ int ObMemtableBlockReader::filter_pushdown_filter(
     for (int64_t offset = 0; OB_SUCC(ret) && offset < pd_filter_info.count_; ++offset) {
       found_lob_out_row = false;
       row_idx = offset + pd_filter_info.start_;
-      if (nullptr != parent && parent->can_skip_filter(offset)) {
+      if ((nullptr != parent && parent->can_skip_filter(offset)) || rows_[row_idx].row_flag_.is_not_exist()) {
         continue;
       } else if (0 < col_count) {
         for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
@@ -272,7 +272,7 @@ int ObMemtableBlockReader::filter_pushdown_truncate_filter(
     }
     for (int64_t offset = 0; OB_SUCC(ret) && offset < pd_filter_info.count_; ++offset) {
       row_idx = offset + pd_filter_info.start_;
-      if (nullptr != parent && parent->can_skip_filter(offset)) {
+      if ((nullptr != parent && parent->can_skip_filter(offset)) || rows_[row_idx].row_flag_.is_not_exist()) {
         continue;
       } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < col_count; ++i) {
@@ -329,28 +329,22 @@ int ObMemtableBlockReader::filter_pushdown_single_column_mds_filter(
              K(pd_filter_info.is_pd_to_cg_));
   } else {
     sql::ObIMDSFilterExecutor *mds_executor = nullptr;
-    if (filter.is_ttl_filter_node()) {
-      mds_executor = static_cast<sql::ObTTLWhiteFilterExecutor *>(&filter);
-    } else if (filter.is_base_version_node()) {
-      mds_executor = static_cast<sql::ObBaseVersionFilterExecutor *>(&filter);
-    }
 
-    if (OB_ISNULL(mds_executor) || OB_UNLIKELY(mds_executor->get_col_idx() < 0)) {
+    if (OB_ISNULL(mds_executor = sql::ObIMDSFilterExecutor::cast(&filter)) || OB_UNLIKELY(mds_executor->get_col_offset() < 0)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected mds executor", K(ret), K(filter));
     } else {
-      const int64_t col_idx = mds_executor->get_col_idx();
+      const int64_t col_offset = mds_executor->get_col_offset();
 
       for (int64_t offset = 0; OB_SUCC(ret) && offset < pd_filter_info.count_; ++offset) {
         // Step 1. read datum from (cached) row
         const int64_t row_idx = offset + pd_filter_info.start_;
-        const ObStorageDatum &src_datum = rows_[row_idx].storage_datums_[col_idx];
+        const ObStorageDatum &src_datum = rows_[row_idx].storage_datums_[col_offset];
         bool filtered = false;
 
         // Step 2. check whether datum is valid and filter datum
-        if (OB_UNLIKELY(src_datum.is_nop_value())) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("Unexpected nop value", KR(ret), K(col_idx), K(row_idx), K(rows_[row_idx]));
+        if (rows_[row_idx].row_flag_.is_not_exist()) {
+          continue;
         } else if (OB_FAIL(mds_executor->filter(&src_datum, 1, filtered))) {
           LOG_WARN("Failed to filter row with black filter", K(ret), K(row_idx));
         } else if (!filtered) {

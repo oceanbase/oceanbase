@@ -215,6 +215,12 @@ protected:
 class ObPartitionMajorMergeHelper : public ObPartitionMergeHelper
 {
 public:
+  enum MergeIterKind : uint8_t
+  {
+    ROW_MERGE_ITER = 0,
+    MICRO_MERGE_ITER = 1,
+    MACRO_MERGE_ITER = 2,
+  };
   ObPartitionMajorMergeHelper(
       const ObITableReadInfo &read_info,
       common::ObIAllocator &allocator)
@@ -227,6 +233,12 @@ protected:
     const int64_t sstable_idx,
     const ObITable *table,
     ObCompactionFilterHandle &filter_handle) override;
+  int get_merge_iter_kind(
+    const ObMergeParameter &merge_param,
+    const int64_t sstable_idx,
+    const ObITable *table,
+    bool &need_co_sstable_scan,
+    MergeIterKind &iter_kind);
 private:
   virtual bool need_all_column_from_rowkey_co_sstable(const ObITable &table, const ObMergeParameter &merge_param) const { return false; }
   virtual bool table_need_full_merge(const int64_t sstable_idx, const ObITable &table, const ObMergeParameter &merge_param) const

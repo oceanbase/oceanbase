@@ -17,6 +17,11 @@ namespace blocksstable
 struct ObDatumRow;
 struct ObMacroBlockDesc;
 struct ObMicroBlock;
+class ObAggRowCachedReader;
+}
+namespace storage
+{
+class ObMdsInfoDistinctMgr;
 }
 namespace compaction
 {
@@ -86,8 +91,7 @@ public:
       ObFilterRet &filter_ret) const = 0;
   virtual CompactionFilterType get_filter_type() const = 0;
   virtual int get_filter_op(
-    const int64_t min_merged_snapshot,
-    const int64_t max_merged_snapshot,
+    blocksstable::ObAggRowCachedReader &agg_row_cached_reader,
     ObBlockOp &op) const
   {
     op.set_open(); // open all blocks by default
@@ -102,6 +106,40 @@ public:
   VIRTUAL_TO_STRING_KV("filter_type", get_filter_type_str(get_filter_type()));
 };
 
+struct ObCompactionFilterColIdxs final
+{
+  struct ColIdxCgIdxPair
+  {
+    ColIdxCgIdxPair()
+    : col_idx_(-1), cg_idx_(-1)
+    {}
+    ColIdxCgIdxPair(const int64_t col_idx, const int64_t cg_idx)
+    : col_idx_(col_idx), cg_idx_(cg_idx)
+    {}
+    ~ColIdxCgIdxPair() {}
+    bool is_valid() const { return col_idx_ >= 0 && cg_idx_ >= 0; }
+    TO_STRING_KV(K_(col_idx), K_(cg_idx));
+    int64_t col_idx_;
+    int64_t cg_idx_;
+  };
+public:
+  ObCompactionFilterColIdxs()
+  : col_idxs_(),
+    only_has_normal_col_filter_(true)
+  {}
+  ~ObCompactionFilterColIdxs() {}
+  bool is_valid() const { return col_idxs_.count() > 0; }
+  int init(const storage::ObMdsInfoDistinctMgr &mds_info_mgr, const storage::ObStorageSchema &storage_schema);
+  int64_t count() const { return col_idxs_.count(); }
+  const ColIdxCgIdxPair &at(const int64_t idx) const { return col_idxs_.at(idx); }
+  bool only_has_normal_col_filter() const { return only_has_normal_col_filter_; }
+  TO_STRING_KV(K_(col_idxs), K_(only_has_normal_col_filter));
+  ObSEArray<ColIdxCgIdxPair, 1> col_idxs_;
+  bool only_has_normal_col_filter_;
+private:
+  int init_for_unittest(const int64_t col_idx, const int64_t cg_idx);
+};
+
 // compaction_filter is shared by multiple compaction tasks,
 // so we need to collect filter statistics for each compaction task
 struct ObCompactionFilterHandle final
@@ -109,11 +147,13 @@ struct ObCompactionFilterHandle final
 public:
   ObCompactionFilterHandle()
   : compaction_filter_(nullptr),
-    filter_statistics_()
+    filter_statistics_(),
+    filter_col_idxs_(nullptr)
   {}
   ~ObCompactionFilterHandle() {}
   bool is_valid() const { return nullptr != compaction_filter_; }
-  int init(ObICompactionFilter *compaction_filter);
+  bool only_has_normal_col_filter() const { return nullptr != filter_col_idxs_ && filter_col_idxs_->only_has_normal_col_filter(); }
+  int init(ObICompactionFilter *compaction_filter, const ObCompactionFilterColIdxs *filter_col_idxs);
   int filter(
       const blocksstable::ObDatumRow &row,
       ObICompactionFilter::ObFilterRet &filter_ret);
@@ -125,7 +165,7 @@ public:
   int get_block_op_from_filter(const blocksstable::ObMicroBlock &micro_block, ObBlockOp &block_op);
   void inc_filter_row_cnt() { filter_statistics_.row_inc(ObICompactionFilter::FILTER_RET_REMOVE); }
   void inc_macro_open_cnt() { filter_statistics_.macro_inc(ObBlockOp::OP_OPEN, 0/*useless*/); }
-  TO_STRING_KV(KPC_(compaction_filter), K_(filter_statistics));
+  TO_STRING_KV(KPC_(compaction_filter), K_(filter_statistics), KPC_(filter_col_idxs));
 private:
   int inner_get_block_op_from_filter(
     const blocksstable::ObMacroBlockDesc &macro_desc,
@@ -133,6 +173,7 @@ private:
 public:
   ObICompactionFilter *compaction_filter_;
   ObICompactionFilter::ObFilterStatistics filter_statistics_;
+  const ObCompactionFilterColIdxs *filter_col_idxs_; // only used in pure column store TTL filter
 };
 
 struct ObCompactionFilterFactory final
@@ -142,7 +183,7 @@ public:
   static int alloc_compaction_filter(
     common::ObIAllocator &allocator,
     ObICompactionFilter *&compaction_filter,
-    Args&... args)
+    Args&&... args)
   {
     compaction_filter = nullptr;
     int ret = OB_SUCCESS;
@@ -153,7 +194,7 @@ public:
       STORAGE_LOG(WARN, "failed to alloc memory", K(ret));
     } else {
       new_filter = new (buf) T();
-      if (OB_FAIL(new_filter->init(args...))) {
+      if (OB_FAIL(new_filter->init(std::forward<Args>(args)...))) {
         STORAGE_LOG(WARN, "failed to init filter", K(ret));
         allocator.free(new_filter);
         new_filter = nullptr;

@@ -9,6 +9,7 @@
 #include "storage/compaction/ob_tablet_merge_ctx.h"
 #include "storage/compaction/ob_mview_compaction_util.h"
 #include "storage/compaction/ob_compaction_util.h"
+#include "storage/compaction/ob_partition_merge_iter_group.h"
 
 namespace oceanbase
 {
@@ -986,6 +987,40 @@ void ObPartitionMergeHelper::reset()
  * ---------------------------------------------------------ObPartitionMajorMergeHelper--------------------------------------------------------------
  */
 
+int ObPartitionMajorMergeHelper::get_merge_iter_kind(
+  const ObMergeParameter &merge_param,
+  const int64_t sstable_idx,
+  const ObITable *table,
+  bool &need_co_sstable_scan,
+  MergeIterKind &iter_kind)
+{
+  int ret = OB_SUCCESS;
+  need_co_sstable_scan = false;
+  iter_kind = ROW_MERGE_ITER;
+  if (merge_param.is_full_merge() || table_need_full_merge(sstable_idx, *table, merge_param)) {
+    need_co_sstable_scan = need_all_column_from_rowkey_co_sstable(*table, merge_param);
+  } else {
+    ObMergeLevel merge_level = MERGE_LEVEL_MAX;
+    if (OB_FAIL(merge_param.static_param_.get_sstable_merge_level(sstable_idx, merge_level))) {
+      LOG_WARN("failed to get merge level", K(ret), K(sstable_idx), K(merge_param));
+    } else if (OB_UNLIKELY(MERGE_LEVEL_MAX == merge_level)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected merge level", K(ret), K(sstable_idx), K(merge_param));
+    } else if (static_cast<const ObSSTable *>(table)->is_small_sstable()) {
+      const uint64_t compat_version = merge_param.static_param_.data_version_;
+      if (compat_version >= DATA_VERSION_4_3_5_1 && MICRO_BLOCK_MERGE_LEVEL == merge_level) {
+        iter_kind = MICRO_MERGE_ITER;
+      }
+      // otherwise keeps ROW_MERGE_ITER
+    } else if (MICRO_BLOCK_MERGE_LEVEL == merge_level) {
+      iter_kind = MICRO_MERGE_ITER;
+    } else {
+      iter_kind = MACRO_MERGE_ITER;
+    }
+  }
+  return ret;
+}
+
 ObPartitionMergeIter *ObPartitionMajorMergeHelper::alloc_merge_iter(
   const ObMergeParameter &merge_param,
   const int64_t sstable_idx,
@@ -994,33 +1029,45 @@ ObPartitionMergeIter *ObPartitionMajorMergeHelper::alloc_merge_iter(
 {
   UNUSED(filter_handle);
   ObPartitionMergeIter *merge_iter = nullptr;
+  const bool use_group = filter_handle.is_valid() && OB_NOT_NULL(filter_handle.filter_col_idxs_);
   if (OB_UNLIKELY(nullptr == table || !table->is_sstable())) {
     // do nothing
   } else if (need_check_major_sstable() && !table->is_major_type_sstable()) {
     LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected alloc iter for minor sstable", KPC(table));
-  } else if (merge_param.is_full_merge() || table_need_full_merge(sstable_idx, *table, merge_param)) {
-    const bool need_co_sstable_scan = need_all_column_from_rowkey_co_sstable(*table, merge_param);
-    merge_iter = alloc_helper<ObPartitionRowMergeIter>(allocator_, allocator_, need_co_sstable_scan);
+  } else if (use_group && (OB_ISNULL(filter_handle.filter_col_idxs_) || !filter_handle.filter_col_idxs_->is_valid())) {
+    LOG_WARN_RET(OB_INVALID_ARGUMENT, "invalid filter col idxs", KP(filter_handle.filter_col_idxs_));
   } else {
-    ObMergeLevel merge_level = MERGE_LEVEL_MAX;
-    if (OB_UNLIKELY(OB_SUCCESS != (merge_param.static_param_.get_sstable_merge_level(sstable_idx, merge_level)))) {
-      LOG_WARN_RET(OB_ERR_UNEXPECTED, "failed to get merge level", K(sstable_idx), K(merge_param));
-    } else if (OB_UNLIKELY(MERGE_LEVEL_MAX == merge_level)) {
-      LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected merge level", K(sstable_idx), K(merge_param));
-    } else if (static_cast<const ObSSTable *>(table)->is_small_sstable()) {
-      const uint64_t compat_version = merge_param.static_param_.data_version_;
-      if (compat_version >= DATA_VERSION_4_3_5_1 && MICRO_BLOCK_MERGE_LEVEL == merge_level) {
+    bool need_co_sstable_scan = false;
+    MergeIterKind iter_kind = ROW_MERGE_ITER;
+    if (OB_SUCCESS != get_merge_iter_kind(merge_param, sstable_idx, table, need_co_sstable_scan, iter_kind)) {
+    } else if (!use_group || need_co_sstable_scan) {
+      switch (iter_kind) {
+      case ROW_MERGE_ITER:
+        merge_iter = alloc_helper<ObPartitionRowMergeIter>(allocator_, allocator_, need_co_sstable_scan);
+        break;
+      case MICRO_MERGE_ITER:
         merge_iter = alloc_helper<ObPartitionMicroMergeIter>(allocator_, allocator_);
-      } else {
-        merge_iter = alloc_helper<ObPartitionRowMergeIter>(allocator_, allocator_);
+        break;
+      case MACRO_MERGE_ITER:
+        merge_iter = alloc_helper<ObPartitionMacroMergeIter>(allocator_, allocator_);
+        break;
       }
-    } else if (MICRO_BLOCK_MERGE_LEVEL == merge_level) {
-      merge_iter = alloc_helper<ObPartitionMicroMergeIter>(allocator_, allocator_);
+    } else if (OB_UNLIKELY(merge_param.static_param_.data_version_ < ObCompactionTTLUtil::COMPACTION_TTL_CMP_DATA_VERSION_V2)) {
+      LOG_WARN_RET(OB_ERR_UNEXPECTED, "unexpected data version", K(merge_param.static_param_.data_version_));
     } else {
-      merge_iter = alloc_helper<ObPartitionMacroMergeIter>(allocator_, allocator_);
+      switch (iter_kind) {
+      case ROW_MERGE_ITER:
+        merge_iter = alloc_helper<ObPartitionMergeIterGroup<ObPartitionRowMergeIter>>(allocator_, allocator_, filter_handle, need_co_sstable_scan);
+        break;
+      case MICRO_MERGE_ITER:
+        merge_iter = alloc_helper<ObPartitionMergeIterGroup<ObPartitionMicroMergeIter>>(allocator_, allocator_, filter_handle);
+        break;
+      case MACRO_MERGE_ITER:
+        merge_iter = alloc_helper<ObPartitionMergeIterGroup<ObPartitionMacroMergeIter>>(allocator_, allocator_, filter_handle);
+        break;
+      }
     }
   }
-
   return merge_iter;
 }
 

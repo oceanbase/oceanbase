@@ -55,7 +55,7 @@ public:
   int set_multi_version_flag(const blocksstable::ObMultiVersionRowFlag &row_flag);
   template<typename T, typename... Args>
   int fuse_rows(const T& row, const Args&... args);
-  int fuse_row(MERGE_ITER_ARRAY &macro_row_iters);
+  int fuse_row(MERGE_ITER_ARRAY &macro_row_iters, bool &append_row_flag);
   inline const blocksstable::ObDatumRow &get_result_row() const { return result_row_; }
   int make_result_row_shadow(const int64_t sql_sequence_col_idx);
   VIRTUAL_TO_STRING_KV(K_(column_cnt), K_(result_row), K_(is_inited));

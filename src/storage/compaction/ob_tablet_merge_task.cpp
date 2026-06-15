@@ -34,6 +34,7 @@ using namespace blocksstable;
 namespace compaction
 {
 ERRSIM_POINT_DEF(SPECIFIED_SERVER_STOP_COMPACTION);
+ERRSIM_POINT_DEF(SPECIFIED_SERVER_STOP_MAJOR_COMPACTION);
 /*
  *  ----------------------------------------------ObMergeParameter--------------------------------------------------
  */
@@ -121,7 +122,8 @@ int ObMergeParameter::init(
     }
   }
   if (OB_SUCC(ret)) {
-    LOG_INFO("success to init ObMergeParameter", K(ret), K(idx), K_(static_param_.merge_scn), KPC_(merge_rowid_range_array));
+    LOG_INFO("success to init ObMergeParameter", K(ret), K(idx), K_(static_param_.merge_scn),
+        KPC_(merge_rowid_range_array), K_(static_param_.ttl_major_for_partial_update_upper_snapshot));
   }
   return ret;
 }
@@ -214,7 +216,7 @@ bool ObMergeParameter::is_full_merge() const
 
 bool ObMergeParameter::is_delete_insert_merge() const
 {
-  return static_param_.is_delete_insert_merge_;
+  return static_param_.merge_engine_type_ == ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT;
 }
 
 bool ObMergeParameter::is_ha_compeleted() const
@@ -1303,9 +1305,12 @@ int ObTabletMergeTask::process()
     }
   }
   ret = SPECIFIED_SERVER_STOP_COMPACTION;
+  if (OB_SUCC(ret) && OB_NOT_NULL(ctx_) && is_major_merge_type(ctx_->get_merge_type())) {
+    ret = SPECIFIED_SERVER_STOP_MAJOR_COMPACTION;
+  }
   if (OB_FAIL(ret)) {
     if (-ret == GCTX.get_server_id()) {
-      STORAGE_LOG(INFO, "ERRSIM SPECIFIED_SERVER_STOP_COMPACTION", K(ret));
+      STORAGE_LOG(INFO, "ERRSIM SPECIFIED_SERVER_STOP_COMPACTION or SPECIFIED_SERVER_STOP_MAJOR_COMPACTION", K(ret));
       return OB_EAGAIN;
     } else {
       ret = OB_SUCCESS;

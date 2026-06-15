@@ -177,7 +177,7 @@ public:
   ObSampleFilterExecutor(
       common::ObIAllocator &alloc,
       ObPushdownSampleFilterNode &filter,
-      sql::ObPushdownOperator &op,
+      sql::ObPushdownOperator *op,
       sql::PushdownExecutorType type);
   virtual ~ObSampleFilterExecutor();
   virtual void reset();
@@ -215,11 +215,6 @@ public:
   {
     return filter_.get_col_ids();
   }
-  OB_INLINE sql::ObPushdownOperator & get_op() override
-  {
-    OB_ASSERT(false); // op_ maybe null, can not get_op in sample filter
-    return op_;
-  }
   OB_INLINE int init_evaluated_datums(bool &is_valid) override
   {
     is_valid = true;
@@ -243,7 +238,7 @@ public:
   ObTrivalSampleFilterExecutor(
       common::ObIAllocator &alloc,
       ObPushdownSampleFilterNode &filter,
-      sql::ObPushdownOperator &op);
+      sql::ObPushdownOperator *op);
   virtual ~ObTrivalSampleFilterExecutor();
   void reset() override;
   void reuse() override;
@@ -303,7 +298,7 @@ public:
   ObHybridSampleFilterExecutor(
       common::ObIAllocator &alloc,
       ObPushdownSampleFilterNode &filter,
-      sql::ObPushdownOperator &op);
+      sql::ObPushdownOperator *op);
   virtual ~ObHybridSampleFilterExecutor();
   void reset() override;
   void reuse() override;

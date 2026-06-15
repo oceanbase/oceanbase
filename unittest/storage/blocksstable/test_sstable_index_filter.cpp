@@ -216,7 +216,7 @@ ObPushdownFilterExecutor* TestSSTableIndexFilter::create_physical_filter(bool is
     ObPushdownWhiteFilterNode* white_node =
       OB_NEWx(ObPushdownWhiteFilterNode, allocator_ptr, allocator_);
     filter = OB_NEWx(ObWhiteFilterExecutor, allocator_ptr, allocator_,
-                      *white_node, *pushdown_operator_);
+                      *white_node, pushdown_operator_);
     white_node->col_ids_.init(1);
     filter->get_col_ids().push_back(TEST_COLUMN_ID);
     filter->n_cols_ = 1;
@@ -224,7 +224,7 @@ ObPushdownFilterExecutor* TestSSTableIndexFilter::create_physical_filter(bool is
     ObPushdownBlackFilterNode* black_node =
       OB_NEWx(ObPushdownBlackFilterNode, allocator_ptr, allocator_);
     filter = OB_NEWx(ObBlackFilterExecutor, allocator_ptr, allocator_,
-                      *black_node, *pushdown_operator_);
+                      *black_node, pushdown_operator_);
   }
   return filter;
 }
@@ -237,7 +237,7 @@ ObPushdownFilterExecutor* TestSSTableIndexFilter::create_lt_white_filter(uint64_
     OB_NEWx(ObPushdownWhiteFilterNode, allocator_ptr, allocator_);
   white_node->op_type_ = ObWhiteFilterOperatorType::WHITE_OP_LT;
   filter = OB_NEWx(ObWhiteFilterExecutor, allocator_ptr, allocator_,
-                    *white_node, *pushdown_operator_);
+                    *white_node, pushdown_operator_);
   white_node->col_ids_.init(1);
   filter->get_col_ids().push_back(TEST_COLUMN_ID);
   filter->col_params_.init(1);
@@ -277,11 +277,11 @@ ObPushdownFilterExecutor* TestSSTableIndexFilter::create_logical_filter(bool is_
   if (is_and) {
     ObPushdownAndFilterNode* and_node = OB_NEWx(ObPushdownAndFilterNode, allocator_ptr, allocator_);
     filter = OB_NEWx(ObAndFilterExecutor, allocator_ptr, allocator_,
-                     *and_node, *pushdown_operator_);
+                     *and_node, pushdown_operator_);
   } else {
     ObPushdownOrFilterNode* or_node = OB_NEWx(ObPushdownOrFilterNode, allocator_ptr, allocator_);
     filter = OB_NEWx(ObOrFilterExecutor, allocator_ptr, allocator_,
-                     *or_node, *pushdown_operator_);
+                     *or_node, pushdown_operator_);
   }
   return filter;
 }

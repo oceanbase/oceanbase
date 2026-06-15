@@ -857,6 +857,65 @@ bool ObColumnSchemaV2::is_minimal_mode_related_time_column() const
          meta_type.is_mysql_date();
 }
 
+/**
+ * @brief This is only used for online ddl path!
+ */
+bool ObColumnSchemaV2::need_progressive_merge_if_modify_to(const ObColumnSchemaV2 &after_modify_column) const
+{
+  bool need_progressive_merge = false;
+
+  // ignore tenant_id
+  // ignore table_id
+  // ignore column_id
+  // ignore schema_version
+  // ignore rowkey_position
+  // ignore index_position
+  // ignore tbl_part_key_pos_
+
+  // ignore meta_type (in online ddl path, the data must can be explained by new schema)
+  // ignore order_in_rowkey_ (can't modify primary key)
+  // ignore accuracy (in online ddl path, the data must can be explained by new schema)
+
+  // ignore is_nullable
+  // ignore is_zero_fill
+  // ignore is_autoincrement
+  // ignore is_hidden
+  // ignore has_used_as_ttl
+  // ignore is_binary_collation
+  // ignore on_update_current_timestamp_
+
+  // ignore column_ref_idxs_ (alter generated column or rebuild prefix index/fts/vec index is offline ddl)
+
+  // ignore charset_type_ (if changed, it is offline ddl)
+
+  // ignore orig_default_value_
+  // ignore cur_default_value_
+
+  // ignore column_name_
+  // ignore comment_
+
+  // ignore extended_type_info_ (if changed, it is offline ddl)
+
+  // ignore prev_column_id_
+  // ignore next_column_id_
+
+  // ignore sequence_id_ (used in oracle, which means increment column)
+  // ignore encoding_type_
+  // ignore lob_chunk_size_
+
+  if (column_flags_ != after_modify_column.get_column_flags()
+      || srs_id_ != after_modify_column.get_srs_id()
+      || geo_col_id_ != after_modify_column.get_geo_col_id()
+      || udt_set_id_ != after_modify_column.get_udt_set_id()
+      || sub_type_ != after_modify_column.get_sub_data_type()
+      || skip_index_attr_.get_packed_value() != after_modify_column.get_skip_index_attr().get_packed_value()
+      || !(local_session_vars_ == after_modify_column.get_local_session_var())) {
+    need_progressive_merge = true;
+  }
+
+  return need_progressive_merge;
+}
+
 } //end of namespace schema
 } //end of namespace share
 } //end of namespace oceanbase

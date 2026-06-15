@@ -141,6 +141,49 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObAggRowReader);
 };
 
+/**
+ * @brief This is a wrapper of ObAggRowReader, which will cache the datum result of the same ObSkipIndexColMeta.
+ *        We suppose the read pattern is: read less different columns many times.
+ *        So this class just using an array to cache the result for better cache hit rate.
+ */
+class ObAggRowCachedReader final
+{
+public:
+  ObAggRowCachedReader() : reader_(), cached_count_(0) {}
+
+  ~ObAggRowCachedReader() = default;
+
+  int init(const char *buf, const int64_t buf_size);
+
+  OB_INLINE int read(const ObSkipIndexColMeta &meta, ObDatum &datum)
+  {
+    bool unused_prefix = false;
+    return read(meta, datum, unused_prefix);
+  }
+
+  int read(const ObSkipIndexColMeta &meta, ObDatum &datum, bool &is_prefix);
+
+  void reset();
+
+  OB_INLINE bool is_inited() const { return reader_.is_inited(); }
+  OB_INLINE bool has_correct_max_prefix() { return reader_.has_correct_max_prefix(); }
+  TO_STRING_KV("inited", is_inited(), K_(cached_count));
+
+public:
+  static const int64_t MAX_CACHED_COUNT = 6;
+
+  struct CachedEntry
+  {
+    ObDatum datum_;
+    ObSkipIndexColMeta meta_;
+    bool is_prefix_;
+  };
+
+  ObAggRowReader reader_;
+  CachedEntry cached_entries_[MAX_CACHED_COUNT];
+  int64_t cached_count_;
+};
+
 }//end namespace blocksstable
 }//end namespace oceanbase
 #endif

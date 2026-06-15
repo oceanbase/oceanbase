@@ -222,15 +222,17 @@ struct ObIndexTreeInfo final
      row_count_(0),
      max_merged_trans_version_(0),
      min_merged_trans_version_(0),
+     sstable_skip_index_(),
      contain_uncommitted_row_(false) {}
   ~ObIndexTreeInfo() = default;
   void set_empty();
   TO_STRING_KV(K_(root_desc), K_(row_count),
-      K_(max_merged_trans_version), K_(min_merged_trans_version), K_(contain_uncommitted_row));
+      K_(max_merged_trans_version), K_(min_merged_trans_version), K_(sstable_skip_index), K_(contain_uncommitted_row));
   ObIndexTreeRootBlockDesc root_desc_;
   int64_t row_count_;
   int64_t max_merged_trans_version_;
   int64_t min_merged_trans_version_;
+  ObSSTableMetaSkipIndex sstable_skip_index_; // the lifetime is the same as root_desc_
   bool contain_uncommitted_row_;
 };
 
@@ -264,7 +266,8 @@ public:
                K_(use_old_macro_block_count), K_(compressor_type),
                K_(root_row_store_type), K_(nested_offset), K_(nested_size), K_(is_small_sstable),
                K_(table_backup_flag), K_(root_macro_seq), K_(encrypt_id),
-               K_(master_key_id), KPHEX_(encrypt_key, sizeof(encrypt_key_)));
+               K_(master_key_id), KPHEX_(encrypt_key, sizeof(encrypt_key_)),
+               K_(sstable_skip_index));
 
 public:
   ObIndexTreeRootBlockDesc root_desc_;
@@ -278,6 +281,8 @@ public:
   int64_t row_count_;
   int64_t max_merged_trans_version_;
   int64_t min_merged_trans_version_;
+  // skip index in SSTable level
+  ObSSTableMetaSkipIndex sstable_skip_index_; // the lifetime is the same as root_desc_
   bool contain_uncommitted_row_;
   int64_t occupy_size_;
   int64_t original_size_;
@@ -347,11 +352,16 @@ protected:
   int close_index_tree(ObBaseIndexBlockBuilder *&root_builder);
   int64_t get_row_count() { return micro_writer_->get_row_count(); }
   virtual OB_INLINE bool need_pre_warm() const { return false; }
+
+  /**
+   * Whether build skip index row in SSTable level, It will stored in ObSSTableMeta.
+   */
+  virtual bool need_build_skip_index_in_meta() const { return true; }
 private:
   int new_next_builder(ObBaseIndexBlockBuilder *&next_builder);
   virtual int append_next_row(const ObMicroBlockDesc &micro_block_desc);
   int64_t calc_basic_micro_block_data_offset(const uint64_t column_cnt);
-  int init_tree_info(const ObIndexBlockAggregator &root_aggregator, ObIndexTreeInfo &tree_info) const;
+  int init_tree_info(ObIndexBlockAggregator &root_aggregator, ObIndexTreeInfo &tree_info, ObIAllocator &allocator) const;
 public:
   static const int64_t MIN_INDEX_MICRO_BLOCK_ROW_CNT = 10;
 protected:
@@ -483,6 +493,7 @@ private:
       ObIAllocator &allocator,
       const ObMicroBlockDesc &micro_block_desc,
       ObIndexTreeRootBlockDesc &block_desc);
+  virtual bool need_build_skip_index_in_meta() const override { return false; }
 private:
   ObIMicroBlockWriter *micro_writer_;
   ObMacroBlockWriter *macro_writer_;

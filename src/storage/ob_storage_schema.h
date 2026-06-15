@@ -337,6 +337,7 @@ public:
   virtual inline ObMergeEngineType get_merge_engine_type() const override { return merge_engine_type_; }
   virtual inline bool is_delete_insert_merge_engine() const override { return ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT == merge_engine_type_; }
   virtual inline bool is_append_only_merge_engine() const override { return ObMergeEngineType::OB_MERGE_ENGINE_APPEND_ONLY == merge_engine_type_; }
+  virtual inline bool is_partial_update_merge_engine() const override { return ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE == merge_engine_type_; }
   virtual inline ObSkipIndexLevel get_skip_index_level() const override { return skip_index_level_; }
   virtual inline bool is_column_info_simplified() const override { return column_info_simplified_; }
 
@@ -352,6 +353,9 @@ public:
   // This function only get cg idx for actually stored column
   int get_column_group_index(
       const uint64_t &column_id,
+      const int32_t &column_idx,
+      int32_t &cg_idx) const;
+  int get_single_column_group_index(
       const int32_t &column_idx,
       int32_t &cg_idx) const;
   bool is_cg_array_generated_in_cs_replica() const;

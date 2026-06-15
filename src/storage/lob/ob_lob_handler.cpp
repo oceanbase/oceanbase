@@ -316,7 +316,6 @@ int ObLobAppendHandler::init(ObLobMetaManager *lob_meta_mngr)
 int ObLobAppendHandler::execute(ObString &data, bool ori_is_inrow)
 {
   int ret = OB_SUCCESS;
-  ObLobPersistInsertIter insert_iter;
   ObLobMetaWriteIter iter(param_.get_tmp_allocator(), store_chunk_size_);
   bool need_get_last_info = ! (ori_is_inrow || param_.byte_size_ == 0);
   if (IS_NOT_INIT) {

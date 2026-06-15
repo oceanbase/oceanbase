@@ -471,6 +471,10 @@ int ObDMLService::check_row_whether_changed(const ObUpdCtDef &upd_ctdef,
     upd_rtdef.is_row_changed_ = false;
     if (OB_NOT_NULL(upd_rtdef.primary_rtdef_)) {
       upd_rtdef.is_row_changed_ = upd_rtdef.primary_rtdef_->is_row_changed_;
+    } else if (upd_ctdef.is_compaction_ttl_table_) {
+      // if the table is a compaction ttl table, the row is always changed
+      // because there is an rowscn-column-update
+      upd_rtdef.is_row_changed_ = true;
     } else if (lib::is_mysql_mode()) {
       // whether the global index row is updated is subject to the result of the primary index
       // pdml e.g.:

@@ -930,17 +930,18 @@ int ObMicroBlockReader<EnableNewFlatFormat>::filter_pushdown_single_column_mds_f
     LOG_WARN("Invalid argument", K(ret), K(row_count_), K(pd_filter_info.start_), K(pd_filter_info.count_), K(filter));
   } else {
     ObIMDSFilterExecutor *mds_executor = nullptr;
-    if (OB_ISNULL(mds_executor = ObIMDSFilterExecutor::cast(&filter)) || OB_UNLIKELY(mds_executor->get_col_idx() < 0)) {
+
+    if (OB_ISNULL(mds_executor = ObIMDSFilterExecutor::cast(&filter)) || OB_UNLIKELY(mds_executor->get_col_offset(pd_filter_info.is_pd_to_cg_) < 0)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected mds executor", K(ret), K(filter));
     } else {
       ObStorageDatum datum_buf[1];
-      const int64_t col_idx = mds_executor->get_col_idx();
+      const int64_t col_idx = read_info_->get_columns_index().at(mds_executor->get_col_offset(pd_filter_info.is_pd_to_cg_));
       const bool is_trans_version_column = micro_header_->is_trans_version_column_idx(col_idx);
-      int64_t row_idx = 0;
       for (int64_t offset = 0; OB_SUCC(ret) && offset < pd_filter_info.count_; ++offset) {
-        row_idx = offset + pd_filter_info.start_;
+        const int64_t row_idx = offset + pd_filter_info.start_;
         bool filtered = false;
+
         if (OB_FAIL(this->read_column(row_idx, col_idx, datum_buf[0]))) {
           LOG_WARN("fail to read column", K(ret), K(col_idx), K(row_idx), KPC_(micro_header));
         } else if (OB_UNLIKELY(is_trans_version_column)) {

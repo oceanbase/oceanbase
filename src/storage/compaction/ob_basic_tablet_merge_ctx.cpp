@@ -74,9 +74,10 @@ ObStaticMergeParam::ObStaticMergeParam(ObTabletMergeDagParam &dag_param)
     is_full_merge_(false),
     need_parallel_minor_merge_(true),
     is_tenant_major_merge_(false),
-    is_delete_insert_merge_(false),
+    merge_engine_type_(ObMergeEngineType::OB_MERGE_ENGINE_MAX),
     is_ha_compeleted_(true),
     for_unittest_(false),
+    ttl_major_for_partial_update_upper_snapshot_(0),
     fill_tx_type_(FILL_TX_TYPE_NORMAL),
     merge_reason_(ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE),
     sstable_logic_seq_(0),
@@ -125,7 +126,8 @@ void ObStaticMergeParam::reset()
   private_transfer_epoch_ = ObStorageObjectOpt::INVALID_TABLET_TRANSFER_SEQ;
   rec_scn_.reset();
   for_unittest_ = false;
-  is_delete_insert_merge_ = false;
+  ttl_major_for_partial_update_upper_snapshot_ = 0;
+  merge_engine_type_ = ObMergeEngineType::OB_MERGE_ENGINE_MAX;
   is_ha_compeleted_ = true;
   co_static_param_.reset();
   window_decision_log_info_.reset();
@@ -568,7 +570,7 @@ int64_t ObStaticMergeParam::to_string(char* buf, const int64_t buf_len) const
     }
     J_COMMA();
     J_KV(K_(tables_handle), KP_(schema), K_(snapshot_info), "multi_version_column_descs_cnt", multi_version_column_descs_.count(),
-      K_(ls_handle), K_(private_transfer_epoch), K_(is_delete_insert_merge), K_(is_ha_compeleted), K_(major_merge_sstable_status_array));
+      K_(ls_handle), K_(private_transfer_epoch), K_(merge_engine_type), K_(is_ha_compeleted), K_(major_merge_sstable_status_array));
   }
   return pos;
 }
@@ -984,7 +986,6 @@ int ObBasicTabletMergeCtx::get_storage_schema(ObStorageSchema *&schema)
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid ha status", K(ret), K(ha_status));
   } else {
-    static_param_.is_delete_insert_merge_ = schema->is_delete_insert_merge_engine();
     static_param_.is_ha_compeleted_ = ha_status.is_none();
   }
   return ret;
@@ -1237,6 +1238,7 @@ int ObBasicTabletMergeCtx::init_static_desc()
 {
   int ret = OB_SUCCESS;
   static_param_.concurrent_cnt_ = get_concurrent_cnt();
+  static_param_.merge_engine_type_ = get_schema()->get_merge_engine_type();
   if (OB_FAIL(static_desc_.init(false/*is_ddl*/, *get_schema(), get_ls_id(), get_tablet_id(),
                                 static_param_.private_transfer_epoch_,
                                 get_merge_type(), get_snapshot(),
@@ -1680,7 +1682,7 @@ int ObBasicTabletMergeCtx::prepare_from_medium_compaction_info(const ObMediumCom
     if (medium_info->contain_window_decision_log_info_) {
       static_param_.window_decision_log_info_ = medium_info->window_decision_log_info_;
     }
-    FLOG_INFO("get storage schema to merge", "param", get_dag_param(), KPC(medium_info), K(co_major_merge_strategy));
+    FLOG_INFO("get storage schema to merge", "param", get_dag_param(), KPC(medium_info), K(co_major_merge_strategy), K_(static_param));
   }
   if (OB_FAIL(ret) || static_param_.data_version_ < ObTruncateInfoUtil::TRUNCATE_INFO_CMP_DATA_VERSION) {
   } else if (medium_info->contain_mds_filter_info_
@@ -1739,12 +1741,24 @@ int ObBasicTabletMergeCtx::alloc_mds_info_compaction_filter()
       filter_ctx_.compaction_filter_,
       mem_ctx_.get_allocator(),
       get_tablet_id(),
+      get_schema(),
       schema_rowkey_cnt,
       static_param_.multi_version_column_descs_,
       mds_info_mgr))) {
     LOG_WARN("failed to build compaction filter", KR(ret), K(filter_ctx_.mds_filter_info_));
   } else {
     LOG_INFO("success to build compaction_filter", KR(ret), "param", get_dag_param(), K_(filter_ctx), K(read_version_range));
+    if (get_schema()->is_row_store() || mds_info_mgr.get_ttl_filter_info_distinct_mgr().empty()
+      || get_schema()->has_all_column_group()
+      || is_build_all_cg_only() || only_use_row_store()) {
+      // do nothing
+    } else if (OB_FAIL(filter_ctx_.filter_col_idxs_.init(mds_info_mgr, *get_schema()))) {
+      LOG_WARN("failed to init filter col idxs", KR(ret), K(mds_info_mgr));
+    }
+  }
+  if (OB_SUCC(ret) && filter_ctx_.mds_filter_info_.has_ttl_filter_info()
+    && get_schema()->get_merge_engine_type() == ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE) {
+    static_param_.ttl_major_for_partial_update_upper_snapshot_ = filter_ctx_.mds_filter_info_.get_need_freeze_snapshot();
   }
   return ret;
 }
@@ -1799,7 +1813,7 @@ int ObBasicTabletMergeCtx::init_sstable_op()
     const ObITable *table = nullptr;
     const ObSSTable *sstable = nullptr;
     ObMergeSSTableOp &sstable_op = sstable_op_array.at(i);
-    if (!init_from_filter_op) {
+    if (!init_from_filter_op || static_param_.for_unittest_) {
       sstable_op.set_sstable_op(ObMergeSSTableOp::SSTABLE_OP_NORMAL);
     } else if (OB_ISNULL(table = tables_handle.get_table(i))) {
       ret = OB_ERR_UNEXPECTED;
@@ -1826,25 +1840,32 @@ int ObBasicTabletMergeCtx::check_sstable_filtered(
   int ret = OB_SUCCESS;
   const int64_t min_merged_trans_version = sstable.get_min_merged_trans_version();
   int64_t max_merged_trans_version = 0;
-  ObBlockOp op;
-  if (sstable.is_inc_major_type_sstable()) {
-    max_merged_trans_version = sstable.get_max_merged_trans_version();
-  } else {
-    max_merged_trans_version = sstable.get_upper_trans_version();
-  }
-  if (OB_FAIL(compaction_filter.get_filter_op(
-      min_merged_trans_version,
-      max_merged_trans_version,
-      op))) {
+  ObSSTableMetaHandle meta_handle;
+  ObAggRowCachedReader agg_row_cached_reader;
+  ObBlockOp filter_op;
+  if (static_param_.ttl_major_for_partial_update_upper_snapshot_ > 0) {
+    sstable_op.set_sstable_op(ObMergeSSTableOp::SSTABLE_OP_NORMAL);
+  } else if (OB_FAIL(sstable.get_meta(meta_handle))) {
+    LOG_WARN("get meta handle fail", K(ret), K(sstable));
+  } else if (!meta_handle.get_sstable_meta().has_sstable_skip_index()) {
+    filter_op.set_open();
+  } else if (OB_FAIL(agg_row_cached_reader.init(
+                 meta_handle.get_sstable_meta().get_sstable_skip_index_buf(),
+                 meta_handle.get_sstable_meta().get_sstable_skip_index_size()))) {
+    LOG_WARN("failed to init agg row cached reader", K(ret), K(sstable));
+  } else if (OB_FAIL(compaction_filter.get_filter_op(agg_row_cached_reader, filter_op))) {
     LOG_WARN("failed to get filter op", K(ret), K(sstable));
-  } else if (op.is_filter()) {
+  }
+
+  if (OB_FAIL(ret)) {
+  } else if (filter_op.is_filter()) {
     ObSSTableMergeHistory &merge_history = get_merge_history();
     sstable_op.set_sstable_op(ObMergeSSTableOp::SSTABLE_OP_FILTER);
     filter_ctx_.filter_statistics_.filter_sstable_cnt_++;
     merge_history.block_info_.filter_row_count_ += sstable.get_row_count();
     FLOG_INFO("table is filtered by compaction filter", "sstable_key", sstable.get_key(),
       "filter_row_count", merge_history.block_info_.filter_row_count_, K(sstable_op),
-      "op", op, K(min_merged_trans_version), K(max_merged_trans_version));
+      "op", filter_op, K(min_merged_trans_version), K(max_merged_trans_version));
 #ifdef ERRSIM
     SERVER_EVENT_SYNC_ADD("merge_errsim", "table_filtered_by_compaction_filter", "ls_id", get_ls_id(), "tablet_id", get_tablet_id(),
       "sstable_key", sstable.get_key(), K(min_merged_trans_version), K(max_merged_trans_version));

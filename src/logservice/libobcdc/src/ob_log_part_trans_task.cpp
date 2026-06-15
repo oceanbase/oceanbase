@@ -640,6 +640,14 @@ int MutatorRow::parse_columns_(
           column_offset = OB_MAX_EXTRA_ROWKEY_COLUMN_NUMBER;
         }
       }
+      if constexpr (std::is_same_v<CDC_INNER_TABLE_SCHEMA, ObCDCLobAuxTableSchemaInfo>) {
+        // Compaction TTL table will add ttl column for aux lob table.
+        // It is just like multi-version column, we should skip it. (the lob schema won't contain the ttl column)
+        if (i >= col_des_array.count()) {
+          continue;
+        }
+      }
+
       uint64_t column_id = OB_INVALID_ID;
       const ObObj *value = NULL;
       blocksstable::ObStorageDatum &datum = datum_row.storage_datums_[i];

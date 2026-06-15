@@ -829,7 +829,20 @@ int ObDDLTableSchema::fill_ddl_table_schema(
     LOG_WARN("get column desc array failed", K(ret));
   } else if (OB_FAIL(table_schema->get_is_column_store(ddl_table_schema.table_item_.is_column_store_))) {
     LOG_WARN("fail to get is column store", K(ret));
-  } else {
+  } else if (table_schema->get_ttl_flag().is_lob_meta_has_ttl_column()) {
+    const ObTTLFlag &ttl_flag = table_schema->get_ttl_flag();
+    const ObColumnSchemaV2 *column_schema = nullptr;
+    if (OB_FAIL(table_schema->get_column_idx_with_multi_version_col(ttl_flag.get_last_user_ttl_column_id(), ddl_table_schema.table_item_.user_ttl_column_idx_))) {
+      LOG_WARN("fail to get ttl column idx with multi version col", K(ret));
+    } else if (OB_ISNULL(column_schema = table_schema->get_column_schema(ttl_flag.get_last_user_ttl_column_id()))) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("fail to get ttl column schema", K(ret), KPC(table_schema));
+    } else if (OB_FAIL(ObTTLFilterColTypeUtil::to_filter_col_type(column_schema->get_data_type(), ddl_table_schema.table_item_.user_ttl_column_type_))) {
+      LOG_WARN("fail to convert ttl column type", K(ret), K(column_schema->get_data_type()));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
     ddl_table_schema.table_id_ = table_id;
     ddl_table_schema.table_item_.is_index_table_ = table_schema->is_index_table();
     ddl_table_schema.table_item_.is_unique_index_ = table_schema->is_unique_index();

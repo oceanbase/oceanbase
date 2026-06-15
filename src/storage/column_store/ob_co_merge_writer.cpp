@@ -471,7 +471,7 @@ int ObCOMergeWriter::append_iter_curr_row_or_range(
     ret = OB_ERR_UNEXPECTED;
     STORAGE_LOG(WARN, "unexpected iter state", K(ret), KPC(iter));
   } else if (ObMergeLog::DELETE_RANGE == op_type) {
-    STORAGE_LOG(INFO, "delete range, no need to append iter curr row or range", K_(cg_idx), "op_type", ObMergeLog::get_op_type_str(op_type));
+    STORAGE_LOG(TRACE, "delete range, no need to append iter curr row or range", K_(cg_idx), "op_type", ObMergeLog::get_op_type_str(op_type));
   } else if (iter->is_macro_block_opened()) {
     const blocksstable::ObDatumRow *major_row = nullptr;
     if (OB_ISNULL(iter->get_curr_row())) { // micro not opened

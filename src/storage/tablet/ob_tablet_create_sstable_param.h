@@ -14,6 +14,7 @@
 #include "share/scn.h"
 #include "storage/ddl/ob_ddl_struct.h"
 #include "storage/blocksstable/ob_table_flag.h"
+#include "storage/blocksstable/ob_sstable_skip_index.h"
 #include "storage/compaction/ob_compaction_util.h"
 #include "storage/compaction/ob_uncommit_tx_info.h"
 
@@ -227,7 +228,8 @@ public:
       K_(uncommit_tx_info),
       K_(rec_scn),
       K_(upper_trans_version),
-      K_(min_merged_trans_version));
+      K_(min_merged_trans_version),
+      K_(sstable_skip_index));
 private:
   static const int64_t DEFAULT_MACRO_BLOCK_CNT = 64;
   int inner_init_with_merge_res(const blocksstable::ObSSTableMergeRes &res);
@@ -296,6 +298,8 @@ public:
   share::SCN rec_scn_;
   int64_t upper_trans_version_;
   int64_t min_merged_trans_version_;
+  // SSTable level skip index row (aggregated from all macro blocks)
+  blocksstable::ObSSTableMetaSkipIndex sstable_skip_index_;
 };
 
 } // namespace storage
