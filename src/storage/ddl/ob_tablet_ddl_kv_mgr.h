@@ -94,6 +94,7 @@ private:
   int create_empty_ddl_sstable(ObTablet &tablet, common::ObArenaAllocator &allocator, blocksstable::ObSSTable &sstable);
   void cleanup_unlock();
   void destroy();
+  int check_has_freezed_ddl_kv(bool &has_freezed_ddl_kv);
 public:
   static const int64_t MAX_DDL_KV_CNT_IN_STORAGE = 16;
   static const int64_t TRY_LOCK_TIMEOUT = 10 * 1000000; // 10s

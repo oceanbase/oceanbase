@@ -365,22 +365,34 @@ int ObTabletDDLKvMgr::get_ddl_major_merge_param(ObTablet &tablet, ObDDLTableMerg
     LOG_WARN("failed to get ddl kv mgr", K(ret));
   } else if (OB_FAIL(rdlock(TRY_LOCK_TIMEOUT, lock_tid))) {
     LOG_WARN("failed to rdlock", K(ret), KPC(this));
-  } else if (can_schedule_major_compaction_nolock(tablet.get_tablet_meta())
-#ifdef ERRSIM
-    && ObTimeUtility::current_time() - get_commit_scn(tablet.get_tablet_meta()).convert_to_ts() > GCONF.errsim_ddl_major_delay_time
-#endif
-      ) {
-    param.ls_id_ = ls_id_;
-    param.tablet_id_ = tablet_id_;
-    param.rec_scn_ = get_commit_scn(tablet.get_tablet_meta());
-    param.is_commit_ = true;
-    param.start_scn_ = start_scn_;
-    param.compat_mode_ = tablet.get_tablet_meta().compat_mode_;
   } else {
-    ret = OB_EAGAIN;
+    param.ls_id_       = ls_id_;
+    param.tablet_id_   = tablet_id_;
+    param.start_scn_   = start_scn_;
+    param.compat_mode_ = tablet.get_tablet_meta().compat_mode_;
+    if (can_schedule_major_compaction_nolock(tablet.get_tablet_meta())
+#ifdef ERRSIM
+      && ObTimeUtility::current_time() - get_commit_scn(tablet.get_tablet_meta()).convert_to_ts() > GCONF.errsim_ddl_major_delay_time
+#endif
+        ) {
+      param.rec_scn_   = get_commit_scn(tablet.get_tablet_meta());
+      param.is_commit_ = true;
+    }
   }
   if (0 != lock_tid) {
     unlock(lock_tid);
+  }
+  // DDL not yet committed: check for frozen KVs that need draining.
+  // Return OB_SUCCESS (is_commit_=false) when frozen KVs exist so the caller can
+  // schedule a dump-only dag without touching the active KV.
+  // Return OB_EAGAIN when there is genuinely nothing to do.
+  if (OB_SUCC(ret) && !param.is_commit_) {
+    bool has_freezed_ddl_kv = false;
+    if (OB_FAIL(check_has_freezed_ddl_kv(has_freezed_ddl_kv))) {
+      LOG_WARN("check has freezed ddl kv failed", K(ret), KPC(this));
+    } else if (!has_freezed_ddl_kv) {
+      ret = OB_EAGAIN;
+    }
   }
   return ret;
 }
@@ -1154,6 +1166,29 @@ int ObTabletDDLKvMgr::check_has_effective_ddl_kv(bool &has_ddl_kv)
     LOG_WARN("ObTabletDDLKvMgr is not inited", K(ret));
   } else {
     has_ddl_kv = 0 != get_count_nolock();
+  }
+  return ret;
+}
+
+int ObTabletDDLKvMgr::check_has_freezed_ddl_kv(bool &has_freezed_ddl_kv)
+{
+  int ret = OB_SUCCESS;
+  has_freezed_ddl_kv = false;
+  ObLatchRGuard guard(lock_, ObLatchIds::TABLET_DDL_KV_MGR_LOCK);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("ObTabletDDLKvMgr is not inited", K(ret));
+  } else {
+    for (int64_t pos = head_; !has_freezed_ddl_kv && OB_SUCC(ret) && pos < tail_; ++pos) {
+      const int64_t idx = get_idx(pos);
+      ObDDLKV *kv = static_cast<ObDDLKV *>(ddl_kv_handles_[idx].get_table());
+      if (OB_ISNULL(kv)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("ddl kv is null", K(ret), K(ls_id_), K(tablet_id_), KP(kv), K(pos), K(head_), K(tail_));
+      } else if (kv->is_freezed()) {
+        has_freezed_ddl_kv = true;
+      }
+    }
   }
   return ret;
 }
