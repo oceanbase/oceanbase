@@ -19,8 +19,19 @@ namespace rootserver
 class ObDDLService;
 } // namespace rootserver
 
+namespace storage
+{
+class ObFTParserJsonProps;
+} // namespace storage
+
 namespace share
 {
+enum ObFTDictType : uint64_t {
+  OB_FT_DICT_TYPE_MAIN = 1,
+  OB_FT_DICT_TYPE_STOPWORD = 2,
+  OB_FT_DICT_TYPE_QUANTIFIER = 3,
+};
+
 class ObMulValueIndexBuilderUtil;
 
 static constexpr int64_t MIN_DATA_VERSION_FOR_DOC_ID_OPT = DATA_VERSION_4_4_1_0;
@@ -176,10 +187,27 @@ public:
       const share::schema::ObTableSchema &data_schema,
       obrpc::ObCreateIndexArg &arg,
       ObIAllocator *allocator);
+  // Record dictionary table dependency relationships for FTS index
+  static int record_fts_dict_table_dependencies(
+      const share::schema::ObTableSchema &index_schema,
+      const obrpc::ObIndexOption &index_option,
+      common::ObMySQLTransaction &trans);
+  static int check_fulltext_dict_schema(
+      const share::schema::ObTableSchema &table,
+      const uint64_t tenant_id,
+      const int64_t inline_index_cnt = 0);
+  // Check if dictionary table can be dropped
+  static int check_can_drop_dict_table(
+      uint64_t tenant_id,
+      uint64_t dict_table_id,
+      common::ObMySQLTransaction &trans);
   static int check_need_to_load_dic(
       const uint64_t tenant_id,
       const ObString &parser_name,
       bool &need_to_load_dic);
+  static int get_dict_table_ids(
+      const ObString &parser_properties,
+      ObIArray<uint64_t> &dict_table_ids);
   static int try_load_and_lock_dictionary_tables(
       const ObTableSchema &index_schema,
       ObMySQLTransaction &trans);
@@ -337,6 +365,12 @@ private:
       obrpc::ObCreateIndexArg &arg,
       ObIAllocator &allocator);
   static int add_skip_index_for_index_column(schema::ObColumnSchemaV2 &column_schema);
+  static int process_dict_table(
+      const storage::ObFTParserJsonProps &props,
+      const uint64_t property,
+      const share::schema::ObTableSchema &index_schema,
+      int (storage::ObFTParserJsonProps::*get_func)(uint64_t &) const,
+      common::ObArray<share::schema::ObDependencyInfo> &dep_infos);
 
 private:
   enum class FTSColumnType {

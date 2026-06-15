@@ -32,10 +32,16 @@ public:
 protected:
   virtual int top_k_search() override;
 private:
+  static constexpr int64_t DEFAULT_BLOCK_MERGE_BUCKET_SIZE = 256;
   double get_essential_dim_threshold() const { return get_top_k_threshold() - non_essential_dim_max_score_; }
   int sort_and_classify_dims();
   int try_update_essential_dims();
+  bool can_use_block_merge() const;
+  int init_block_merge_buffers();
+  void reuse_block_merge_buffers();
+  int get_uint_doc_id(const ObDatum &datum, uint64_t &doc_id) const;
   int next_pivot(ObDocIdExt &pivot_id);
+  int decide_block_merge_upper_bound(const ObMaxScoreTuple &max_score_tuple, bool &found_range_upper_bound);
   int evaluate_pivot_range(const ObDatum &pivot_id, double &non_essential_block_max_score, bool &is_candidate);
   int evaluate_essential_pivot(
       const ObDatum &pivot_id,
@@ -45,6 +51,13 @@ private:
       bool &is_valid_pivot);
   int evaluate_pivot(const ObDatum &pivot_id, const double &essential_score);
   int forward_next_round_iters();
+  int block_merge_pivot_range(const ObDatum &range_min_id, const double non_essential_block_max_score);
+  int block_merge_essential_dims(
+      const bool is_first_block,
+      const ObDatum &block_start_id,
+      const uint64_t block_end_id,
+      bool &has_valid_doc_in_block);
+  int block_merge_non_essential_dims(ObDatum &doc_id_datum);
   bool need_update_essential_dims() const { return non_essential_dim_threshold_ < get_top_k_threshold(); }
 private:
   int calc_other_dims_max_score_sum(const int64_t iter_idx, double &max_score_sum);
@@ -82,6 +95,12 @@ private:
   double non_essential_dim_threshold_;
   double all_dims_max_score_sum_;
   ObFixedArray<double, ObIAllocator> dim_max_scores_;
+  int64_t block_merge_bucket_size_;
+  uint64_t block_merge_upper_bound_;
+  int64_t block_merge_doc_cnt_;
+  ObFixedArray<double, ObIAllocator> block_merge_scores_;
+  ObFixedArray<uint64_t, ObIAllocator> block_merge_doc_ids_;
+  bool can_use_block_merge_;
   bool is_max_score_cached_;
   DISALLOW_COPY_AND_ASSIGN(ObSRBMMIterImpl);
 };

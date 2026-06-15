@@ -11,6 +11,7 @@
 #include "share/ob_tablet_autoincrement_service.h"
 #include "share/ob_primary_zone_util.h"
 #include "share/ob_index_builder_util.h"
+#include "share/ob_fts_index_builder_util.h"
 #include "share/sequence/ob_sequence_ddl_proxy.h"
 #include "share/ob_global_stat_proxy.h"
 #include "share/ob_service_epoch_proxy.h"
@@ -354,6 +355,9 @@ int ObDDLService::create_inner_expr_index(ObMySQLTransaction &trans,
               index_schema, trans, ddl_stmt_str, true, false, create_vec_index_parallel))) {
         // record the create index operation when index enables rather than schema generates.
         LOG_WARN("failed to create index schema", K(ret));
+      } else if (OB_FAIL(share::ObFtsIndexBuilderUtil::record_fts_dict_table_dependencies(
+                     index_schema, arg.index_option_, trans))) {
+        LOG_WARN("fail to record fts dict table dependencies", K(ret), K(index_schema.get_table_id()));
       }
     }
 
@@ -467,6 +471,9 @@ int ObDDLService::create_index_table(
       if (OB_FAIL(create_index_or_mlog_table_in_trans(table_schema,
 ddl_stmt_str, &sql_trans, schema_guard, true/*need_check_tablet_cnt*/, tenant_data_version, is_table_empty, arg.parallelism_))) {
         LOG_WARN("create_table_in_trans failed", KR(ret), K(arg), K(table_schema));
+      } else if (OB_FAIL(share::ObFtsIndexBuilderUtil::record_fts_dict_table_dependencies(
+                     table_schema, arg.index_option_, sql_trans))) {
+        LOG_WARN("fail to record fts dict table dependencies", K(ret), K(table_schema.get_table_id()));
       }
     }
   }
@@ -7931,7 +7938,10 @@ int ObDDLService::alter_table_index(obrpc::ObAlterTableArg &alter_table_arg,
               } else if (OB_FAIL(ddl_operator.alter_table_create_index(new_table_schema,
                                                                       gen_columns,
                                                                       index_schema,
-                                                                      trans))) {
+                                                                      trans,
+                                                                      schema_guard,
+                                                                      share::schema::is_fts_index(my_arg.index_type_)
+                                                                        ? &my_arg.index_option_ : nullptr))) {
                 LOG_WARN("failed to alter table add index!", K(index_schema), K(ret));
               } else if (is_only_add_index_on_empty_table
                          && FALSE_IT(max_schema_version = std::max(max_schema_version, index_schema.get_schema_version()))) {
@@ -19595,6 +19605,10 @@ int ObDDLService::alter_table(obrpc::ObAlterTableArg &alter_table_arg,
         } else if (NULL == orig_table_schema) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("NULL ptr", KR(ret), KP(orig_table_schema));
+        } else if (orig_table_schema->is_fulltext_dict()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("alter fulltext dictionary table structure is not supported", K(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter fulltext dictionary table structure is");
         } else if (OB_FAIL(orig_table.assign(*orig_table_schema))) {
           LOG_WARN("fail to assign schema", K(ret));
         }

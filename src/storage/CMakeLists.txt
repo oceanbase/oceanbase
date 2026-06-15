@@ -282,10 +282,13 @@ ob_set_subtarget(ob_storage ik
   fts/dict/ob_ft_dict_def.cpp
   fts/dict/ob_ft_trie.cpp
   fts/dict/ob_ft_cache_dict.cpp
-  fts/dict/ob_ft_dict_hub.cpp
   fts/dict/ob_ft_range_dict.cpp
   fts/dict/ob_ft_dict_table_iter.cpp
   fts/dict/ob_ft_cache.cpp
+  fts/dict/ob_ft_slot_mgr.cpp
+  fts/dict/ob_ft_dict_bg_task_mgr.cpp
+  fts/dict/ob_ft_dict_mgr.cpp
+  fts/dict/ob_ft_dict_cache_loader.cpp
   fts/ik/ob_ik_char_util.cpp
 )
 

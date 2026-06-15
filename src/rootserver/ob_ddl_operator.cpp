@@ -10,6 +10,8 @@
 #include "share/ob_fts_index_builder_util.h"
 #include "share/ob_vec_index_builder_util.h"
 #include "share/schema/ob_schema_service_sql_impl.h"
+#include "share/schema/ob_dependency_info.h"
+#include "storage/fts/ob_fts_parser_property.h"
 #include "share/sequence/ob_sequence_ddl_proxy.h"
 #include "rootserver/ob_ddl_sql_generator.h"
 #include "rootserver/ob_root_service.h"
@@ -3455,10 +3457,12 @@ int ObDDLOperator::delete_single_column(ObMySQLTransaction &trans,
   return ret;
 }
 
-int ObDDLOperator::alter_table_create_index(const ObTableSchema &new_table_schema,
-                                            ObIArray<ObColumnSchemaV2*> &gen_columns,
-                                            ObTableSchema &index_schema,
-                                            common::ObMySQLTransaction &trans)
+int ObDDLOperator::alter_table_create_index(const share::schema::ObTableSchema &new_table_schema,
+                                            common::ObIArray<share::schema::ObColumnSchemaV2*> &gen_columns,
+                                            share::schema::ObTableSchema &index_schema,
+                                            common::ObMySQLTransaction &trans,
+                                            share::schema::ObSchemaGetterGuard &schema_guard,
+                                            const obrpc::ObIndexOption *index_option)
 {
   int ret = OB_SUCCESS;
   const uint64_t tenant_id = new_table_schema.get_tenant_id();
@@ -3511,6 +3515,13 @@ int ObDDLOperator::alter_table_create_index(const ObTableSchema &new_table_schem
             }
           }
         }
+      }
+
+      // Record dictionary table dependency relationships for FTS index
+      if (OB_SUCC(ret) && index_option != nullptr
+          && OB_FAIL(share::ObFtsIndexBuilderUtil::record_fts_dict_table_dependencies(
+              index_schema, *index_option, trans))) {
+        LOG_WARN("fail to record fts dict table dependencies", K(ret), K(index_schema.get_table_id()));
       }
     }
   }
@@ -5502,8 +5513,14 @@ int ObDDLOperator::drop_table(
   int ret = OB_SUCCESS;
   bool tmp = false;
   const uint64_t tenant_id = table_schema.get_tenant_id();
-  if (OB_FAIL(ObDependencyInfo::modify_dep_obj_status(trans, tenant_id, table_schema.get_table_id(),
-                                                      *this, schema_service_))) {
+  // Gate: prohibit dropping dict table in use by FTS index
+  if (table_schema.is_fulltext_dict() &&
+      OB_FAIL(share::ObFtsIndexBuilderUtil::check_can_drop_dict_table(tenant_id, table_schema.get_table_id(), trans))) {
+    if (OB_OP_NOT_ALLOW != ret) {
+      LOG_WARN("failed to check and remove dict table on drop", K(ret), K(tenant_id), K(table_schema.get_table_id()));
+    }
+  } else if (OB_FAIL(ObDependencyInfo::modify_dep_obj_status(trans, tenant_id, table_schema.get_table_id(),
+                                                         *this, schema_service_))) {
     LOG_WARN("failed to modify obj status", K(ret));
   } else if (OB_FAIL(drop_table_for_not_dropped_schema(
               table_schema, trans, ddl_stmt_str, is_truncate_table,
@@ -5516,8 +5533,15 @@ int ObDDLOperator::drop_table(
                       table_schema.get_table_id(),
                       table_schema.get_schema_version(),
                       ObObjectType::VIEW))) {
-    LOG_WARN("failed to delete_schema_object_dependency", K(ret), K(tenant_id),
-    K(table_schema.get_table_id()));
+    LOG_WARN("failed to delete_schema_object_dependency", K(ret), K(tenant_id), K(table_schema.get_table_id()));
+  } else if (table_schema.is_fts_index_aux()
+            && OB_FAIL(ObDependencyInfo::delete_schema_object_dependency(
+                      trans,
+                      tenant_id,
+                      table_schema.get_table_id(),
+                      table_schema.get_schema_version(),
+                      ObObjectType::INDEX))) {
+    LOG_WARN("failed to delete_schema_object_dependency for fts index", K(ret), K(tenant_id), K(table_schema.get_table_id()));
   }
 
   if (OB_FAIL(ret)) {
@@ -5769,6 +5793,14 @@ int ObDDLOperator::drop_table_to_recyclebin(const ObTableSchema &table_schema,
   } else if (OB_UNLIKELY(table_schema.get_table_type() == MATERIALIZED_VIEW_LOG)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("materialized view log should not come to recyclebin", KR(ret));
+  } else if (table_schema.is_fulltext_dict() &&
+             OB_FAIL(share::ObFtsIndexBuilderUtil::check_can_drop_dict_table(tenant_id,
+                                                                               table_schema.get_table_id(),
+                                                                               trans))) {
+    if (OB_OP_NOT_ALLOW != ret) {
+      LOG_WARN("failed to check dict table on drop to recyclebin", K(ret), K(tenant_id),
+               K(table_schema.get_table_id()));
+    }
   } else if (OB_ISNULL(schema_service_impl)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("schema_service_impl must not null", K(ret));
@@ -5791,11 +5823,11 @@ int ObDDLOperator::drop_table_to_recyclebin(const ObTableSchema &table_schema,
     LOG_WARN("failed to modify dep obj status", K(ret));
   } else if (table_schema.is_view_table()
             && OB_FAIL(ObDependencyInfo::delete_schema_object_dependency(
-                      trans,
-                      tenant_id,
-                      table_schema.get_table_id(),
-                      table_schema.get_schema_version(),
-                      ObObjectType::VIEW))) {
+                        trans,
+                        tenant_id,
+                        table_schema.get_table_id(),
+                        table_schema.get_schema_version(),
+                        ObObjectType::VIEW))) {
     LOG_WARN("failed to delete_schema_object_dependency", K(ret), K(tenant_id),
     K(table_schema.get_table_id()));
   } else {

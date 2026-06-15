@@ -858,6 +858,10 @@ int ObTableHelper::inner_generate_table_schema_(const ObCreateTableArg &arg, ObT
       LOG_WARN("not user tenant, create duplicate table not supported", KR(ret), K_(tenant_id));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "not user tenant, create duplicate table");
     }
+  } else if (compat_version >= DATA_VERSION_4_6_1_0 && new_table.is_fulltext_dict()
+             && OB_FAIL(ObFtsIndexBuilderUtil::check_fulltext_dict_schema(
+                 new_table, tenant_id_, arg.index_arg_list_.count()))) {
+    LOG_WARN("fulltext dict schema check failed", K(ret), K(tenant_id_), K(new_table.get_table_id()));
   }
   if (OB_SUCC(ret)) {
     if (OB_FAIL(ObCompactionTTLUtil::check_create_append_only_engine_valid(arg.schema_, tenant_id_))) {

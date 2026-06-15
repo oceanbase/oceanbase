@@ -293,9 +293,9 @@ END_P SET_VAR DELIMITER
         CTXCAT CTX_ID CUBE CURDATE CURRENT STACKED CURTIME CURSOR_NAME CUME_DIST CYCLE CALC_PARTITION_ID CONNECT CACHE_REFRESH_INTERVAL_SEC
 
         DAG DATA DATAFILE DATA_DISK_SIZE DATA_SOURCE DATA_TABLE_ID DATE DATE_ADD DATE_SUB DATETIME DAY DEALLOCATE DECRYPT DECRYPTION
-        DEFAULT_AUTH DEFAULT_LOB_INROW_THRESHOLD DEFINER DELAY DELAY_KEY_WRITE DELETING DELTA_FORMAT DEPTH DES_KEY_FILE DENSE_RANK DESCRIPTION DESTINATION DIAGNOSTICS DICT_TABLE
+        DEFAULT_AUTH DEFAULT_LOB_INROW_THRESHOLD DEFINER DELAY DELAY_KEY_WRITE DEPTH DES_KEY_FILE DENSE_RANK DESCRIPTION DESTINATION DIAGNOSTICS DICT DICT_TABLE
         DIRECTORY DISABLE DISALLOW DISCARD DISK DISKGROUP DO DOT DUMP DUMPFILE DUPLICATE DUPLICATE_SCOPE DUPLICATE_READ_CONSISTENCY DYNAMIC
-        DATABASE_ID DEFAULT_TABLEGROUP DISCONNECT DEMAND DELETE_INSERT DYNAMIC_PARTITION_POLICY
+        DATABASE_ID DEFAULT_TABLEGROUP DISCONNECT DEMAND DELETE_INSERT DELETING DELTA_FORMAT DYNAMIC_PARTITION_POLICY
 
         EFFECTIVE EMPTY ENABLE ENABLE_ARBITRATION_SERVICE ENABLE_EXTENDED_ROWID ENABLE_MACRO_BLOCK_BLOOM_FILTER ENCODING_TYPE ENCRYPT ENCRYPTED ENCRYPTION END ENDPOINT ENDS ENFORCED ENGINE_ ENGINES ENUM ENTITY ERROR_CODE ERROR_P ERRORS ESTIMATE EXCLUDE_PATHS
         ESCAPE EVENT EVENTS EVERY EXCHANGE EXCLUDING EXECUTE EXPANSION EXPIRE EXPIRE_INFO EXPORT OUTLINE EXTENDED
@@ -303,7 +303,7 @@ END_P SET_VAR DELIMITER
 
         FAILOVER FAST FAULTS FILE_BLOCK_SIZE FIELDS FILEX FINAL_COUNT FIRST FIRST_VALUE FIXED FLUSH FOLLOWER FORMAT
         FOUND FREEZE FREQUENCY FUNCTION FOLLOWING FLASHBACK FULL FRAGMENTATION FREQ_THRESHOLD FROZEN FILE_ID FILTER
-        FIELD_OPTIONALLY_ENCLOSED_BY FIELD_DELIMITER FIELD_ENCLOSED_BY FILE_EXTENSION FTS_INDEX_TYPE
+        FIELD_OPTIONALLY_ENCLOSED_BY FIELD_DELIMITER FIELD_ENCLOSED_BY FILE_EXTENSION FTS_INDEX_TYPE FULLTEXT_DICT
 
         GENERAL GEOMETRY GEOMCOLLECTION GEOMETRYCOLLECTION GET_FORMAT GLOBAL GRANTS GRANULARITY GROUPCONCAT GROUP_CONCAT GROUPING GROUPING_ID GTS
         GLOBAL_NAME GLOBAL_ALIAS GLOB_PATTERN
@@ -492,7 +492,7 @@ END_P SET_VAR DELIMITER
 %type <node> alter_column_behavior opt_set opt_position_column
 %type <node> alter_system_stmt alter_system_set_parameter_actions alter_system_settp_actions settp_option alter_system_set_parameter_action server_info_list server_info opt_bootstrap_info bootstrap_info opt_logservice_access_point logservice_access_point opt_shared_storage_info shared_storage_info alter_system_reset_parameter_actions alter_system_reset_parameter_action
 %type <node> opt_comment opt_as
-%type <node> column_name relation_name relation_name_list opt_relation_name function_name column_label var_name relation_name_or_string row_format_option compression_name merge_engine_types
+%type <node> column_name relation_name relation_name_list opt_relation_name function_name column_label var_name relation_name_or_string refresh_fulltext_dict_dst row_format_option compression_name merge_engine_types
 %type <node> audit_stmt audit_clause op_audit_tail_clause audit_operation_clause audit_all_shortcut_list audit_all_shortcut auditing_on_clause auditing_by_user_clause audit_user_list audit_user audit_user_with_host_name
 %type <node> opt_hint_list hint_option select_with_opt_hint update_with_opt_hint delete_with_opt_hint merge_with_opt_hint hint_list_with_end global_hint transform_hint optimize_hint
 %type <node> create_index_stmt index_name sort_column_list sort_column_key opt_index_option_list opt_fulltext_index_option_list index_option fulltext_index_option opt_sort_column_key_length opt_index_using_algorithm index_using_algorithm visibility_option opt_constraint_name constraint_name create_with_opt_hint index_expr alter_with_opt_hint
@@ -8556,6 +8556,11 @@ TABLE_MODE opt_equal_mark STRING_VALUE
   (void)($2); /*  make bison mute*/
   malloc_non_terminal_node($$, result->malloc_pool_, T_MICRO_BLOCK_FORMAT_VERSION, 1, $3);
 }
+| FULLTEXT_DICT opt_equal_mark STRING_VALUE
+{
+  (void)($2); /*  make bison mute*/
+  malloc_non_terminal_node($$, result->malloc_pool_, T_FULLTEXT_DICT, 1, $3);
+}
 | AUTO_REFRESH opt_equal_mark OFF
 {
   (void)($2) ; /* make bison mute */
@@ -9064,6 +9069,22 @@ relation_name
 | ALL
 {
   make_name_node($$, result->malloc_pool_, "all");
+}
+;
+
+refresh_fulltext_dict_dst:
+relation_name_or_string { $$ = $1; }
+| relation_name '.' relation_name
+{
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 2, $1, $3);
+  dup_node_string($3, $$, result->malloc_pool_);
+}
+| id_dot_id
+{
+  ParseNode* db_node = $1->children_[0];
+  ParseNode* tb_node = $1->children_[1];
+  malloc_non_terminal_node($$, result->malloc_pool_, T_RELATION_FACTOR, 2, db_node, tb_node);
+  dup_node_string(tb_node, $$, result->malloc_pool_);
 }
 ;
 
@@ -21928,6 +21949,12 @@ alter_with_opt_hint SYSTEM REFRESH IO CALIBRATION opt_storage_name opt_calibrati
   malloc_non_terminal_node($$, result->malloc_pool_, T_REFRESH_IO_CALIBRATION, 3, $6, $7, $8);
 }
 |
+alter_with_opt_hint SYSTEM REFRESH FULLTEXT DICT refresh_fulltext_dict_dst
+{
+  (void)($1);
+  malloc_non_terminal_node($$, result->malloc_pool_, T_REFRESH_FULLTEXT_DICT, 1, $6);
+}
+|
 alter_with_opt_hint SYSTEM opt_set alter_system_set_parameter_actions
 {
   (void)($1);
@@ -28424,6 +28451,7 @@ ACCESS_INFO
 |       DESTINATION
 |       DEMAND
 |       DIAGNOSTICS
+|       DICT
 |       DICT_TABLE
 |       DIRECTORY
 |       DISABLE
@@ -28517,6 +28545,7 @@ ACCESS_INFO
 |       FTS_INDEX_TYPE
 |       FUNCTION
 |       FULL %prec HIGHER_PARENS
+|       FULLTEXT_DICT
 |       GENERAL
 |       GEOMETRY
 |       GEOMCOLLECTION

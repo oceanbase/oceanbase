@@ -32,6 +32,9 @@
 #include "share/ob_srs_importer.h"
 #include "share/ob_license_utils.h"
 #include "lib/string/ob_sensitive_string.h"
+#include "storage/fts/dict/ob_ft_dict_def.h"
+#include "storage/fts/dict/ob_ft_cache_container.h"
+#include "storage/fts/dict/ob_ft_range_dict.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/ob_ss_local_cache_util.h"
 #endif
@@ -1623,6 +1626,117 @@ int ObRefreshMemStatExecutor::execute(ObExecContext &ctx, ObRefreshMemStatStmt &
                          stmt.get_rpc_arg()))) {
     LOG_WARN("refresh memory stat rpc failed", K(ret), "rpc_arg", stmt.get_rpc_arg());
   }
+  return ret;
+}
+
+// Helper function to broadcast RPC to all alive tenant servers
+// Anonymous namespace provides internal linkage
+namespace {
+template<typename RpcArg, typename RpcFunc>
+int broadcast_rpc_to_tenant_servers(
+    const uint64_t tenant_id,
+    const RpcArg &arg,
+    RpcFunc rpc_func,
+    const int64_t rpc_timeout = 10000000) // 10s default
+{
+  int ret = OB_SUCCESS;
+  ObArray<ObAddr> server_list;
+  int64_t renew_time = 0;
+
+  if (OB_FAIL(SVR_TRACER.get_alive_tenant_servers(tenant_id, server_list, renew_time))) {
+    LOG_WARN("failed to get alive tenant servers", KR(ret), K(tenant_id));
+  } else if (OB_UNLIKELY(server_list.empty())) {
+    ret = OB_TENANT_NOT_EXIST;
+    LOG_WARN("no alive servers for tenant", KR(ret), K(tenant_id));
+  } else if (OB_ISNULL(GCTX.srv_rpc_proxy_)) {
+    ret = OB_ERR_SYS;
+    LOG_WARN("srv rpc proxy is null", KR(ret));
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    // RPC to all alive tenant servers ignoring errors
+    ARRAY_FOREACH_X(server_list, idx, cnt, true) {
+      const ObAddr &server_addr = server_list.at(idx);
+      if (OB_TMP_FAIL(rpc_func(*GCTX.srv_rpc_proxy_, server_addr, arg, rpc_timeout))) {
+        LOG_WARN("fail to send rpc", KR(tmp_ret), K(server_addr), K(tenant_id));
+        ret = tmp_ret;
+      } else {
+        LOG_INFO("succ to send rpc", K(server_addr), K(tenant_id));
+      }
+    }
+  }
+  return ret;
+}
+
+int refresh_fulltext_dict_rpc(obrpc::ObSrvRpcProxy &proxy,
+                              const ObAddr &server,
+                              const obrpc::ObRefreshFulltextDictArg &arg,
+                              const int64_t timeout)
+{
+  return proxy.to(server).timeout(timeout).refresh_fulltext_dict(arg);
+}
+}
+
+int ObRefreshFulltextDictExecutor::execute(ObExecContext &ctx, ObRefreshFulltextDictStmt &stmt)
+{
+  int ret = OB_SUCCESS;
+  const uint64_t tenant_id = ctx.get_my_session()->get_effective_tenant_id();
+  share::schema::ObSchemaGetterGuard schema_guard;
+  const share::schema::ObTableSchema *table_schema = nullptr;
+  const share::schema::ObDatabaseSchema *database_schema = nullptr;
+  uint64_t database_id = OB_INVALID_ID;
+  ObString database_name = stmt.get_database_name();
+
+  if (OB_ISNULL(GCTX.schema_service_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("schema service is null", K(ret));
+  } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id, schema_guard))) {
+    LOG_WARN("get schema guard failed", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_database_schema(tenant_id, database_name, database_schema))) {
+    LOG_WARN("get database schema failed", K(ret), K(tenant_id), K(database_name));
+  } else if (OB_ISNULL(database_schema)) {
+    ret = OB_ERR_BAD_DATABASE;
+    LOG_WARN("database not exist", K(ret), K(database_name));
+  } else if (OB_FAIL(schema_guard.get_table_schema(tenant_id,
+                                                    database_schema->get_database_id(),
+                                                    stmt.get_table_name(),
+                                                    false,
+                                                    table_schema))) {
+    LOG_WARN("get table schema failed", K(ret), K(tenant_id), K(stmt.get_table_name()));
+  } else if (OB_ISNULL(table_schema)) {
+    ret = OB_TABLE_NOT_EXIST;
+    LOG_WARN("table not exist", K(ret), K(stmt.get_table_name()));
+  } else if (!table_schema->is_fulltext_dict()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("table is not a fulltext dictionary table", K(ret), K(stmt.get_table_name()));
+    LOG_USER_ERROR(OB_INVALID_ARGUMENT, "table is not a fulltext dictionary table");
+  } else {
+    // Build full table name
+    const uint64_t table_id = table_schema->get_table_id();
+    const ObString &table_name = stmt.get_table_name();
+    const int64_t MAX_FULL_TABLE_NAME_LEN = common::OB_MAX_DATABASE_NAME_LENGTH + 1 + common::OB_MAX_TABLE_NAME_LENGTH;
+    char full_table_name_buf[MAX_FULL_TABLE_NAME_LEN];
+    int64_t pos = 0;
+    ObString full_table_name;
+    if (OB_FAIL(databuff_printf(full_table_name_buf, MAX_FULL_TABLE_NAME_LEN, pos, "%.*s.%.*s",
+                                database_name.length(), database_name.ptr(),
+                                table_name.length(), table_name.ptr()))) {
+      LOG_WARN("fail to print full table name", K(ret));
+    } else {
+      full_table_name.assign_ptr(full_table_name_buf, static_cast<int32_t>(pos));
+
+      obrpc::ObRefreshFulltextDictArg arg;
+      arg.tenant_id_ = tenant_id;
+      arg.table_id_ = table_id;
+      arg.full_table_name_ = full_table_name;
+
+      // Broadcast RPC to all tenant servers
+      if (OB_FAIL(broadcast_rpc_to_tenant_servers(tenant_id, arg,
+          refresh_fulltext_dict_rpc))) {
+        LOG_WARN("fail to broadcast refresh_fulltext_dict rpc", KR(ret), K(tenant_id), K(table_id));
+      }
+    }
+  }
+
   return ret;
 }
 

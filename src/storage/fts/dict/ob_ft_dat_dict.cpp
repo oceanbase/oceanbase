@@ -241,8 +241,8 @@ int ObFTDATReader<DATA_TYPE>::match_with_hit(const ObString &ft_char,
   int ret = OB_SUCCESS;
   ObFTTokenCode code;
   hit.set_unmatch();
-  int32_t *base = reinterpret_cast<int32_t *>(dat_->buff + dat_->base_offset_);
-  int32_t *check = reinterpret_cast<int32_t *>(dat_->buff + dat_->check_offset_);
+  const int32_t *base = reinterpret_cast<const int32_t *>(dat_->buff + dat_->base_offset_);
+  const int32_t *check = reinterpret_cast<const int32_t *>(dat_->buff + dat_->check_offset_);
 
   if (OB_FAIL(map_->find(ft_char, code)) && OB_ENTRY_NOT_EXIST != ret) {
     LOG_WARN("fail to find token code", K(ret));
@@ -283,6 +283,7 @@ template class ObFTDATBuilder<void>;
 template class ObFTDATReader<void>;
 
 ObArrayHashMap *ObFTDAT::get_map() { return reinterpret_cast<ObArrayHashMap *>(buff); }
+const ObArrayHashMap *ObFTDAT::get_map() const { return reinterpret_cast<const ObArrayHashMap *>(buff); }
 
 int ObArrayHashMap::find(const ObString &token, ObFTTokenCode &code) const
 {

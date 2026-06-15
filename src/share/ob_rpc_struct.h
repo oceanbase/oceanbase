@@ -12928,6 +12928,26 @@ public:
 };
 
 #endif
+
+struct ObRefreshFulltextDictArg final
+{
+  OB_UNIS_VERSION(2);
+
+public:
+  ObRefreshFulltextDictArg() : tenant_id_(OB_INVALID_TENANT_ID), table_id_(OB_INVALID_ID) {}
+  ~ObRefreshFulltextDictArg() {}
+  bool is_valid() const
+  {
+    return is_valid_tenant_id(tenant_id_) && OB_INVALID_ID != table_id_;
+  }
+  TO_STRING_KV(K_(tenant_id), K_(table_id), K_(full_table_name));
+
+public:
+  uint64_t tenant_id_;
+  uint64_t table_id_;
+  common::ObString full_table_name_;
+};
+
 struct ObRpcRemoteWriteDDLIncCommitLogArg final
 {
   OB_UNIS_VERSION(1);

@@ -77,6 +77,7 @@
 #include "parallel_ddl/ob_create_tablegroup_helper.h" // ObCreateTableGroupHelper
 #include "share/table/ob_ttl_util.h"
 #include "share/ob_license_utils.h"
+#include "share/ob_fts_index_builder_util.h"
 #include "parallel_ddl/ob_drop_table_helper.h" // ObDropTableHelper
 #include "share/backup/ob_backup_clean_util.h"
 
@@ -3806,6 +3807,10 @@ int ObRootService::alter_table(const obrpc::ObAlterTableArg &arg, obrpc::ObAlter
       } else if (OB_ISNULL(orig_table_schema)) {
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("table not exist", K(ret), K(tenant_id), K(nonconst_arg.alter_table_schema_));
+      } else if (orig_table_schema->is_fulltext_dict()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("alter fulltext dictionary table structure is not supported", K(ret));
+        LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter fulltext dictionary table structure is");
       } else {
         ObCreateDDLTaskParam param(tenant_id,
                                    ddl_type,

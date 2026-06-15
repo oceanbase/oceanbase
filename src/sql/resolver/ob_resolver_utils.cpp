@@ -2633,6 +2633,10 @@ stmt::StmtType ObResolverUtils::get_stmt_type_by_item_type(const ObItemType item
         type = stmt::T_CALL_PROCEDURE;
       }
       break;
+      case T_REFRESH_FULLTEXT_DICT: {
+        type = stmt::T_REFRESH_FULLTEXT_DICT;
+      }
+      break;
       default: {
         type = stmt::T_NONE;
       }

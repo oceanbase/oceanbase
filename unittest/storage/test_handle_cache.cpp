@@ -125,6 +125,72 @@ TEST_F(TestHandleCache, basic)
   ASSERT_EQ(4, handle_cache.lru_list_.get_size());
 }
 
+class TestForEachKeyVisitor
+{
+public:
+  TestForEachKeyVisitor() : sum_(0) {}
+  int operator()(const TestKey &k)
+  {
+    sum_ += k.key_;
+    return OB_SUCCESS;
+  }
+  int64_t sum_;
+};
+
+class TestForEachKeyErrorVisitor
+{
+public:
+  TestForEachKeyErrorVisitor() : call_cnt_(0) {}
+  int operator()(const TestKey &k)
+  {
+    UNUSED(k);
+    ++call_cnt_;
+    return OB_ERR_UNEXPECTED;
+  }
+  int64_t call_cnt_;
+};
+
+TEST_F(TestHandleCache, for_each_key)
+{
+  typedef ObHandleCache<TestKey, TestHandle, 4> TestCache;
+  TestCache handle_cache;
+  TestKey key(0);
+  TestHandle handle;
+  handle.v_ = 0;
+  OK(handle_cache.put_handle(key, handle));
+  key.key_ = 1;
+  handle.v_ = 1;
+  OK(handle_cache.put_handle(key, handle));
+  TestForEachKeyVisitor visitor;
+  OK(handle_cache.for_each_key(visitor));
+  ASSERT_EQ(1, visitor.sum_);
+}
+
+TEST_F(TestHandleCache, for_each_key_empty)
+{
+  typedef ObHandleCache<TestKey, TestHandle, 4> TestCache;
+  TestCache handle_cache;
+  TestForEachKeyVisitor visitor;
+  OK(handle_cache.for_each_key(visitor));
+  ASSERT_EQ(0, visitor.sum_);
+}
+
+TEST_F(TestHandleCache, for_each_key_error)
+{
+  typedef ObHandleCache<TestKey, TestHandle, 4> TestCache;
+  TestCache handle_cache;
+  TestKey key(0);
+  TestHandle handle;
+  handle.v_ = 0;
+  OK(handle_cache.put_handle(key, handle));
+  key.key_ = 1;
+  handle.v_ = 1;
+  OK(handle_cache.put_handle(key, handle));
+  TestForEachKeyErrorVisitor visitor;
+  ASSERT_EQ(OB_ERR_UNEXPECTED, handle_cache.for_each_key(visitor));
+  ASSERT_EQ(1, visitor.call_cnt_);
+}
+
 }
 }
 

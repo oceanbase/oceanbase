@@ -14,6 +14,8 @@
 #include "share/schema/ob_table_sql_service.h"
 #include "share/schema/ob_schema_service_sql_impl.h"
 #include "share/schema/ob_sensitive_rule_schema_struct.h"
+#include "share/schema/ob_dependency_info.h"
+#include "share/ob_fts_index_builder_util.h"
 #include "storage/tablelock/ob_lock_inner_connection_util.h"
 #include "storage/tablet/ob_session_tablet_helper.h"
 
@@ -169,6 +171,12 @@ int ObDropTableHelper::check_legitimacy_()
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("drop table required by materialized view is not supported", KR(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "drop table required by materialized view is");
+      } else if (table_schema->is_fulltext_dict() &&
+                 OB_FAIL(share::ObFtsIndexBuilderUtil::check_can_drop_dict_table(
+                     tenant_id_, table_schema->get_table_id(), get_trans_()))) {
+        if (OB_OP_NOT_ALLOW != ret) {
+          LOG_WARN("failed to check and remove dict table on drop", KR(ret), K(tenant_id_), K(table_schema->get_table_id()));
+        }
       }
     }
   }
@@ -1607,8 +1615,12 @@ int ObDropTableHelper::drop_table_(const ObTableSchema &table_schema, const ObSt
       LOG_WARN("fail to sync version for cascade tables", KR(ret), K_(tenant_id));
     } else if (OB_FAIL(sync_version_for_cascade_mock_fk_parent_table_(table_schema.get_depend_mock_fk_parent_table_ids()))) {
       LOG_WARN("fail to sync version for cascade mock fk parent table", KR(ret), K_(tenant_id));
+    } else if (table_schema.is_fts_index_aux()
+               && OB_FAIL(ObDependencyInfo::delete_schema_object_dependency(
+                                            get_trans_(), tenant_id_, table_schema.get_table_id(),
+                                            table_schema.get_schema_version(), ObObjectType::INDEX))) {
+      LOG_WARN("fail to delete schema object dependency for fts index", KR(ret), K_(tenant_id), K(table_schema.get_table_id()));
     }
-
     // delete audit
     if (OB_SUCC(ret) && (table_schema.is_user_table() || table_schema.is_external_table())) {
       ObArray<ObSAuditSchema> audit_schemas;

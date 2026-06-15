@@ -317,7 +317,9 @@ public:
   virtual int alter_table_create_index(const share::schema::ObTableSchema &new_table_schema,
                                        common::ObIArray<share::schema::ObColumnSchemaV2*> &gen_columns,
                                        share::schema::ObTableSchema &index_schema,
-                                       common::ObMySQLTransaction &trans);
+                                       common::ObMySQLTransaction &trans,
+                                       share::schema::ObSchemaGetterGuard &schema_guard,
+                                       const obrpc::ObIndexOption *index_option = nullptr);
 
   virtual int alter_table_drop_index(const share::schema::ObTableSchema *index_table_schema,
                                      share::schema::ObTableSchema &new_data_table_schema,

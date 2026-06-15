@@ -52,6 +52,10 @@
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "rootserver/standby/ob_recovery_ls_service.h"
 #include "logservice/ob_server_log_block_mgr.h"
+#include "storage/fts/dict/ob_ft_dict_def.h"
+#include "storage/fts/dict/ob_ft_cache_container.h"
+#include "storage/fts/dict/ob_ft_range_dict.h"
+#include "storage/fts/dict/ob_ft_dict_cache_loader.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "close_modules/shared_storage/storage/shared_storage/ob_ss_micro_cache.h"
 #include "close_modules/shared_storage/storage/shared_storage/ob_ss_micro_cache_io_helper.h"
@@ -4478,6 +4482,48 @@ int ObFetchStableMemberListP::process()
       // double check for get stable memberlist
       ret = OB_LS_NOT_LEADER;
       LOG_WARN("ls is not leader, cannot get member list", K(ret), K(role), K(arg_));
+    }
+  }
+  return ret;
+}
+
+int ObRpcRefreshFulltextDictP::process()
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!arg_.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid arguments", K(ret), K_(arg));
+  } else {
+    MTL_SWITCH(arg_.tenant_id_)
+    {
+      share::schema::ObSchemaGetterGuard schema_guard;
+      const share::schema::ObTableSchema *table_schema = nullptr;
+      if (OB_ISNULL(GCTX.schema_service_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("schema service is null", K(ret));
+      } else if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(arg_.tenant_id_, schema_guard))) {
+        LOG_WARN("get schema guard failed", K(ret), K(arg_.tenant_id_));
+      } else if (OB_FAIL(schema_guard.get_table_schema(arg_.tenant_id_, arg_.table_id_, table_schema))) {
+        LOG_WARN("get table schema failed", K(ret), K(arg_.tenant_id_), K(arg_.table_id_));
+      } else if (OB_ISNULL(table_schema)) {
+        ret = OB_TABLE_NOT_EXIST;
+        LOG_WARN("table not exist", K(ret), K(arg_.table_id_));
+      } else if (!table_schema->is_fulltext_dict()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("table is not a fulltext dictionary table", K(ret), K(arg_.table_id_));
+      } else {
+        const ObCollationType dict_coll = table_schema->get_collation_type();
+        storage::ObFTDictDesc desc(table_schema->get_charset_type(),
+                                   dict_coll,
+                                   arg_.table_id_,
+                                   arg_.full_table_name_);
+        storage::ObFTDictCacheLoaderRefresh loader;
+        if (OB_FAIL(loader.load_cache(desc))) {
+          LOG_WARN("build cache from table failed", K(ret), K(arg_.table_id_), K(arg_.full_table_name_));
+        } else {
+          LOG_INFO("refresh fulltext dict success", K(arg_.tenant_id_), K(arg_.table_id_), K(arg_.full_table_name_));
+        }
+      }
     }
   }
   return ret;

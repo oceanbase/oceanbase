@@ -93,6 +93,7 @@ public:
 
 public:
   ObArrayHashMap *get_map();
+  const ObArrayHashMap *get_map() const;
 } __attribute__((packed));
 
 template <typename DataType>
@@ -117,16 +118,9 @@ public:
 
   int build_from_trie(ObFTTrie<DATA_TYPE> &trie);
 
-  // get and put to kv_cache
-  int get_mem_block(ObFTDAT *&mem, size_t &mem_len)
+  void get_mem_block(ObFTDAT *&mem)
   {
     mem = dat_;
-    if (nullptr == dat_) {
-      mem_len = 0;
-    } else {
-      mem_len = dat_->mem_block_size_;
-    }
-    return OB_SUCCESS;
   }
 
 private:
@@ -154,7 +148,7 @@ template <typename DataType = void>
 class ObFTDATReader
 {
 public:
-  ObFTDATReader(ObFTDAT *dat) : dat_(dat), map_(dat->get_map()) { }
+  ObFTDATReader(const ObFTDAT *dat) : dat_(dat), map_(dat->get_map()) { }
 
   // Match single token with hit.
   int match_with_hit(const ObString &single_token,
@@ -162,8 +156,8 @@ public:
                      ObDATrieHit &hit) const;
 
 private:
-  ObFTDAT *dat_;
-  ObArrayHashMap *map_;
+  const ObFTDAT *dat_;
+  const ObArrayHashMap *map_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObFTDATReader);

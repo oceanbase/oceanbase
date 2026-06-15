@@ -1350,6 +1350,32 @@ int ObCreateTableHelper::operate_schemas_() {
   } else if (OB_FAIL(inner_create_table_(&arg_.ddl_stmt_str_,
                                          replace_mock_fk_parent_table_id_))) {
     LOG_WARN("fail create table", KR(ret));
+  } else if (OB_FAIL(record_fts_dict_dependencies_())) {
+    LOG_WARN("fail to record fts dict dependencies", KR(ret));
+  }
+  return ret;
+}
+
+int ObCreateTableHelper::record_fts_dict_dependencies_()
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(check_inner_stat_())) {
+    LOG_WARN("fail to check inner stat", KR(ret));
+  } else {
+    // new_tables_[0] is the data table, [1..N] are aux tables in the same order as index_arg_list_
+    for (int64_t i = 0; OB_SUCC(ret) && i < arg_.index_arg_list_.size(); i++) {
+      const int64_t table_idx = i + 1;
+      if (table_idx < new_tables_.count()) {
+        const ObTableSchema &index_schema = new_tables_.at(table_idx);
+        const obrpc::ObCreateIndexArg &index_arg = arg_.index_arg_list_.at(i);
+        if (index_schema.is_fts_index_aux()
+            && OB_FAIL(share::ObFtsIndexBuilderUtil::record_fts_dict_table_dependencies(
+                   index_schema, index_arg.index_option_, get_trans_()))) {
+          LOG_WARN("fail to record fts dict table dependencies", KR(ret),
+                   K(index_schema.get_table_id()));
+        }
+      }
+    }
   }
   return ret;
 }

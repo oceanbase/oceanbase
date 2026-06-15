@@ -12502,6 +12502,8 @@ OB_SERIALIZE_MEMBER(ObDelSSMacroCacheRes, ret_);
 OB_SERIALIZE_MEMBER(ObDelSSTabletMacroCacheRes, macro_read_cache_cnt_, macro_write_cache_cnt_);
 #endif
 
+OB_SERIALIZE_MEMBER(ObRefreshFulltextDictArg, tenant_id_, table_id_, full_table_name_);
+
 ObRpcRemoteWriteDDLIncCommitLogArg::ObRpcRemoteWriteDDLIncCommitLogArg()
   : tenant_id_(OB_INVALID_ID), ls_id_(), tablet_id_(),
     lob_meta_tablet_id_(), tx_desc_(nullptr), need_release_(false),

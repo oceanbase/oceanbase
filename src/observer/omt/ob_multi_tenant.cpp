@@ -91,6 +91,7 @@
 #include "storage/access/ob_empty_read_bucket.h"
 #include "observer/table/ttl/ob_ttl_service.h"
 #include "storage/high_availability/ob_storage_ha_diagnose_mgr.h"
+#include "storage/fts/dict/ob_ft_dict_mgr.h"
 #ifdef ERRSIM
 #include "share/errsim_module/ob_tenant_errsim_module_mgr.h"
 #include "share/errsim_module/ob_tenant_errsim_event_mgr.h"
@@ -630,6 +631,7 @@ int ObMultiTenant::init(ObAddr myaddr,
     MTL_BIND2(mtl_new_default, table::ObTableObjectPoolMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObTenantSnapshotService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     //MTL_BIND2(ObTenantFTPluginMgr::mtl_new, mtl_init_default, nullptr, nullptr, nullptr, mtl_destroy_default);
+    MTL_BIND2(mtl_new_default, storage::ObFTDictMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, ObIndexUsageInfoMgr::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, storage::ObTabletMemtableMgrPool::mtl_init, nullptr, nullptr, nullptr, mtl_destroy_default);
     MTL_BIND2(mtl_new_default, rootserver::ObMViewMaintenanceService::mtl_init, mtl_start_default, mtl_stop_default, mtl_wait_default, mtl_destroy_default);

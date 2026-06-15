@@ -135,6 +135,10 @@ int ObRenameTableResolver::resolve_rename_action(const ParseNode &rename_action_
           ret = OB_NOT_SUPPORTED;
           LOG_WARN("rename table required by materialized view is not supported", KR(ret));
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "rename table required by materialized view is");
+        } else if (table_schema->is_fulltext_dict()) {
+          ret = OB_NOT_SUPPORTED;
+          LOG_WARN("rename fulltext dictionary table is not supported", KR(ret));
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "rename fulltext dictionary table is");
         }
       }
     }

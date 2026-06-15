@@ -124,13 +124,13 @@ TEST_F(TestFTParserJsonProperty, happy_path_test)
   ret = json_props.config_set_ngram_token_size(K_TEST_NGRAM_TOKEN_SIZE);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ret = json_props.config_set_dict_table(K_TEST_DICT_TABLE);
+  ret = json_props.config_set_dict_table_name(K_TEST_DICT_TABLE);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ret = json_props.config_set_stopword_table(K_TEST_STOPWORD_TABLE);
+  ret = json_props.config_set_stopword_table_name(K_TEST_STOPWORD_TABLE);
   ASSERT_EQ(OB_SUCCESS, ret);
 
-  ret = json_props.config_set_quantifier_table(K_TEST_QUANTIFIER_TABLE);
+  ret = json_props.config_set_quantifier_table_name(K_TEST_QUANTIFIER_TABLE);
   ASSERT_EQ(OB_SUCCESS, ret);
 
   ObArenaAllocator allocator;
@@ -164,19 +164,19 @@ TEST_F(TestFTParserJsonProperty, happy_path_test)
 
   // dict
   ObString dict_table;
-  ret = json_props.config_get_dict_table(dict_table);
+  ret = json_props.config_get_dict_table_name(dict_table);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(dict_table, K_TEST_DICT_TABLE);
 
   // stopword
   ObString stopword_table;
-  ret = json_props.config_get_stopword_table(stopword_table);
+  ret = json_props.config_get_stopword_table_name(stopword_table);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(stopword_table, K_TEST_STOPWORD_TABLE);
 
   // quantifier
   ObString quantifier_table;
-  ret = json_props.config_get_quantifier_table(quantifier_table);
+  ret = json_props.config_get_quantifier_table_name(quantifier_table);
   ASSERT_EQ(ret, OB_SUCCESS);
   ASSERT_EQ(quantifier_table, K_TEST_QUANTIFIER_TABLE);
 }
@@ -189,7 +189,7 @@ TEST_F(TestFTParserJsonProperty, test_parse_from_string)
 
   // okay to parse, but not valid for parser.
   const ObString prebuild_result
-      = R"({"min_token_size": 3, "max_token_size": 84, "stopword_table": "a_stopword_table_name", "ngram_token_size": 2, "quanitfier_table": "a_quantifier_table_name"})";
+      = R"({"min_token_size": 3, "max_token_size": 84, "stopword_table": "a_stopword_table_name", "ngram_token_size": 2, "quantifier_table": "a_quantifier_table_name"})";
 
   ObFTParserJsonProps json_props;
   ret = json_props.init();
@@ -212,16 +212,16 @@ TEST_F(TestFTParserJsonProperty, test_parse_from_string)
   ASSERT_EQ(ngram_token_size, 2);
 
   ObString dict_table;
-  ret = json_props.config_get_dict_table(dict_table);
+  ret = json_props.config_get_dict_table_name(dict_table);
   ASSERT_EQ(ret, OB_SEARCH_NOT_FOUND);
 
   ObString stopword_table;
-  ret = json_props.config_get_stopword_table(stopword_table);
+  ret = json_props.config_get_stopword_table_name(stopword_table);
   ASSERT_EQ(stopword_table, ObString("a_stopword_table_name"));
 
-  ObString quanitfier_table;
-  ret = json_props.config_get_quantifier_table(quanitfier_table);
-  ASSERT_EQ(quanitfier_table, ObString("a_quantifier_table_name"));
+  ObString quantifier_table;
+  ret = json_props.config_get_quantifier_table_name(quantifier_table);
+  ASSERT_EQ(quantifier_table, ObString("a_quantifier_table_name"));
 
   ObString parse_string;
   ObArenaAllocator allocator;
@@ -247,7 +247,9 @@ TEST_F(TestFTParserJsonProperty, test_parse_from_tokenize_array)
   {
     ObArenaAllocator alloc;
     ObString str;
-    ret = ObFTParserJsonProps::tokenize_array_to_props_json(alloc, array_value, str);
+    const ObString database_name;
+    const uint64_t tenant_id = 1;
+    ret = ObFTParserJsonProps::tokenize_array_to_props_json(alloc, array_value, database_name, tenant_id, str);
     ASSERT_EQ(OB_SUCCESS, ret);
 
     ObFTParserJsonProps json_props;
@@ -268,6 +270,80 @@ TEST_F(TestFTParserJsonProperty, test_parse_from_tokenize_array)
   }
 }
 
+TEST_F(TestFTParserJsonProperty, test_tokenize_array_to_props_json_ngram)
+{
+  const ObString prebuild_result = R"({"additional_args": [{"ngram_token_size": 4}]})";
+  ObArenaAllocator allocator;
+
+  ObJsonNode *root = nullptr;
+  int ret = ObJsonParser::get_tree(&allocator, prebuild_result, root);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObIJsonBase *array_value;
+
+  ret = root->get_object_value(0, array_value);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObArenaAllocator alloc;
+  ObString str;
+  const ObString database_name;
+  const uint64_t tenant_id = 1;
+  ret = ObFTParserJsonProps::tokenize_array_to_props_json(alloc, array_value, database_name, tenant_id, str);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObFTParserJsonProps json_props;
+  ret = json_props.init();
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ret = json_props.parse_from_valid_str(str);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  int64_t ngram_token_size = 0;
+  ret = json_props.config_get_ngram_token_size(ngram_token_size);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(ngram_token_size, 4);
+}
+
+TEST_F(TestFTParserJsonProperty, test_tokenize_array_to_props_json_invalid_element_not_object)
+{
+  const ObString prebuild_result = R"({"additional_args": ["not_object"]})";
+  ObArenaAllocator allocator;
+
+  ObJsonNode *root = nullptr;
+  int ret = ObJsonParser::get_tree(&allocator, prebuild_result, root);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObIJsonBase *array_value;
+
+  ret = root->get_object_value(0, array_value);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObArenaAllocator alloc;
+  ObString str;
+  const ObString database_name;
+  const uint64_t tenant_id = 1;
+  ret = ObFTParserJsonProps::tokenize_array_to_props_json(alloc, array_value, database_name, tenant_id, str);
+  ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
+}
+
+TEST_F(TestFTParserJsonProperty, test_tokenize_array_to_props_json_invalid_element_multi_key)
+{
+  const ObString prebuild_result = R"({"additional_args": [{"min_token_size": 3, "max_token_size": 10}]})";
+  ObArenaAllocator allocator;
+
+  ObJsonNode *root = nullptr;
+  int ret = ObJsonParser::get_tree(&allocator, prebuild_result, root);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ObIJsonBase *array_value;
+
+  ret = root->get_object_value(0, array_value);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ObArenaAllocator alloc;
+  ObString str;
+  const ObString database_name;
+  const uint64_t tenant_id = 1;
+  ret = ObFTParserJsonProps::tokenize_array_to_props_json(alloc, array_value, database_name, tenant_id, str);
+  ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
+}
+
 TEST_F(TestFTParserProperty, test_parse_for_ddl)
 {
   // space happy path
@@ -284,18 +360,20 @@ TEST_F(TestFTParserProperty, test_parse_for_ddl)
     ret = json_props.parse_from_valid_str(space_result);
     ASSERT_EQ(OB_SUCCESS, ret);
 
+    const uint64_t tenant_id = 1;
     ret = json_props.rebuild_props_for_ddl(SPACE_PARSER_STR,
                                            ObCollationType::CS_TYPE_UTF8MB4_BIN,
-                                           false);
+                                           false,
+                                           tenant_id);
     ASSERT_EQ(OB_SUCCESS, ret);
     ObString str;
-    ret = json_props.config_get_dict_table(str);
+    ret = json_props.config_get_dict_table_name(str);
     ASSERT_EQ(OB_SEARCH_NOT_FOUND, ret);
 
-    ret = json_props.config_get_stopword_table(str);
+    ret = json_props.config_get_stopword_table_name(str);
     ASSERT_EQ(OB_SEARCH_NOT_FOUND, ret);
 
-    ret = json_props.config_get_quantifier_table(str);
+    ret = json_props.config_get_quantifier_table_name(str);
     ASSERT_EQ(OB_SEARCH_NOT_FOUND, ret);
 
     int64_t min_token_size = 0;
@@ -339,9 +417,11 @@ TEST_F(TestFTParserProperty, test_parse_for_ddl)
     ret = json_props.parse_from_valid_str(space_result);
     ASSERT_EQ(OB_SUCCESS, ret);
 
+    const uint64_t tenant_id = 1;
     ret = json_props.rebuild_props_for_ddl(SPACE_PARSER_STR,
                                            ObCollationType::CS_TYPE_UTF8MB4_BIN,
-                                           false);
+                                           false,
+                                           tenant_id);
     ASSERT_EQ(OB_NOT_SUPPORTED, ret);
   }
 
@@ -376,9 +456,11 @@ TEST_F(TestFTParserProperty, test_parse_for_ddl)
     ret = json_props.parse_from_valid_str(space_result);
     ASSERT_EQ(OB_SUCCESS, ret);
 
+    const uint64_t tenant_id = 1;
     ret = json_props.rebuild_props_for_ddl(SPACE_PARSER_STR,
                                            ObCollationType::CS_TYPE_UTF8MB4_BIN,
-                                           false);
+                                           false,
+                                           tenant_id);
     ASSERT_EQ(OB_NOT_SUPPORTED, ret);
   }
 
@@ -397,9 +479,11 @@ TEST_F(TestFTParserProperty, test_parse_for_ddl)
     ret = json_props.parse_from_valid_str(space_result);
     ASSERT_EQ(OB_SUCCESS, ret);
 
+    const uint64_t tenant_id = 1;
     ret = json_props.rebuild_props_for_ddl(SPACE_PARSER_STR,
                                            ObCollationType::CS_TYPE_UTF8MB4_BIN,
-                                           false);
+                                           false,
+                                           tenant_id);
     ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
   }
 
@@ -416,18 +500,20 @@ TEST_F(TestFTParserProperty, test_parse_for_ddl)
     ret = json_props.parse_from_valid_str(ngram_str);
     ASSERT_EQ(OB_SUCCESS, ret);
 
+    const uint64_t tenant_id = 1;
     ret = json_props.rebuild_props_for_ddl(NGRAM_PARSER_STR,
                                            ObCollationType::CS_TYPE_UTF8MB4_BIN,
-                                           false);
+                                           false,
+                                           tenant_id);
     ASSERT_EQ(OB_SUCCESS, ret);
     ObString str;
-    ret = json_props.config_get_dict_table(str);
+    ret = json_props.config_get_dict_table_name(str);
     ASSERT_EQ(OB_SEARCH_NOT_FOUND, ret);
 
-    ret = json_props.config_get_stopword_table(str);
+    ret = json_props.config_get_stopword_table_name(str);
     ASSERT_EQ(OB_SEARCH_NOT_FOUND, ret);
 
-    ret = json_props.config_get_quantifier_table(str);
+    ret = json_props.config_get_quantifier_table_name(str);
     ASSERT_EQ(OB_SEARCH_NOT_FOUND, ret);
 
     int64_t min_token_size = 0;
@@ -469,18 +555,20 @@ TEST_F(TestFTParserProperty, test_parse_for_ddl)
     ret = json_props.parse_from_valid_str(space_result);
     ASSERT_EQ(OB_SUCCESS, ret);
 
+    const uint64_t tenant_id = 1;
     ret = json_props.rebuild_props_for_ddl(BENG_PARSER_STR,
                                            ObCollationType::CS_TYPE_UTF8MB4_BIN,
-                                           false);
+                                           false,
+                                           tenant_id);
     ASSERT_EQ(OB_SUCCESS, ret);
     ObString str;
-    ret = json_props.config_get_dict_table(str);
+    ret = json_props.config_get_dict_table_name(str);
     ASSERT_EQ(OB_SEARCH_NOT_FOUND, ret);
 
-    ret = json_props.config_get_stopword_table(str);
+    ret = json_props.config_get_stopword_table_name(str);
     ASSERT_EQ(OB_SEARCH_NOT_FOUND, ret);
 
-    ret = json_props.config_get_quantifier_table(str);
+    ret = json_props.config_get_quantifier_table_name(str);
     ASSERT_EQ(OB_SEARCH_NOT_FOUND, ret);
 
     int64_t min_token_size = 0;
@@ -519,22 +607,24 @@ TEST_F(TestFTParserProperty, test_parse_for_ddl)
     ASSERT_EQ(OB_SUCCESS, ret);
 
     const common::ObString ik_str
-        = R"({"stopword_table": "a_stopword_table_name", "quanitfier_table": "a_quantifier_table_name"})";
+        = R"({"stopword_table": "a_stopword_table_name", "quantifier_table": "a_quantifier_table_name"})";
     ret = json_props.parse_from_valid_str(ik_str);
     ASSERT_EQ(OB_SUCCESS, ret);
 
+    const uint64_t tenant_id = 1;
     ret = json_props.rebuild_props_for_ddl(IK_PARSER_STR,
                                            ObCollationType::CS_TYPE_UTF8MB4_BIN,
-                                           false);
+                                           false,
+                                           tenant_id);
     ASSERT_EQ(OB_SUCCESS, ret);
     ObString str;
-    ret = json_props.config_get_dict_table(str);
+    ret = json_props.config_get_dict_table_name(str);
     ASSERT_EQ(OB_SUCCESS, ret);
 
-    ret = json_props.config_get_stopword_table(str);
+    ret = json_props.config_get_stopword_table_name(str);
     ASSERT_EQ(OB_SUCCESS, ret);
 
-    ret = json_props.config_get_quantifier_table(str);
+    ret = json_props.config_get_quantifier_table_name(str);
     ASSERT_EQ(OB_SUCCESS, ret);
 
     int64_t min_token_size = 0;
@@ -553,12 +643,13 @@ TEST_F(TestFTParserProperty, test_parse_for_ddl)
     ObString new_json;
     ret = json_props.to_format_json(tmp_alloc, new_json);
 
-    char output[] = R"(PARSER_PROPERTIES=(ik_mode="smart") )";
-    char output_buf[128];
+    char output_buf[512];
     int64_t pos = 0;
-    ret = json_props.show_parser_properties(json_props, output_buf, 128, pos);
+    ret = json_props.show_parser_properties(json_props, output_buf, sizeof(output_buf), pos);
     ASSERT_EQ(OB_SUCCESS, ret);
-    ASSERT_EQ(ObString(output), ObString(output_buf));
+    ObString out_str(output_buf);
+    ASSERT_TRUE(out_str.prefix_match(ObString("PARSER_PROPERTIES=(")));
+    ASSERT_TRUE(nullptr != strstr(output_buf, "ik_mode=\"smart\""));
   }
   {
     int ret = OB_SUCCESS;
@@ -572,9 +663,11 @@ TEST_F(TestFTParserProperty, test_parse_for_ddl)
     ret = json_props.parse_from_valid_str(ik_str);
     ASSERT_EQ(OB_SUCCESS, ret);
 
+    const uint64_t tenant_id = 1;
     ret = json_props.rebuild_props_for_ddl(NON_BUILTIN_PARSER_STR,
                                            ObCollationType::CS_TYPE_UTF8MB4_BIN,
-                                           false);
+                                           false,
+                                           tenant_id);
     ASSERT_EQ(OB_SUCCESS, ret);
   }
 }

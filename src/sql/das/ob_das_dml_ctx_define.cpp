@@ -107,11 +107,13 @@ int ObDASDMLIterator::get_next_domain_index_row(ObDatumRow *&row)
   if (OB_ISNULL(domain_iter_)) {
     ObDomainDMLParam param(allocator_, row_projector_, write_iter_, das_ctdef_, main_ctdef_);
     if (das_ctdef_->table_param_.get_data_table().is_fts_index() && !das_ctdef_->old_row_projector_.empty()) {
-      param.mode_ = main_ctdef_->is_main_table_in_fts_ddl_ ? ObDomainDMLMode::DOMAIN_DML_MODE_DEFAULT : ObDomainDMLMode::DOMAIN_DML_MODE_FT_SCAN;
+      param.mode_ = das_ctdef_->table_param_.get_data_table().can_read_index()
+                    ? ObDomainDMLMode::DOMAIN_DML_MODE_FT_SCAN : ObDomainDMLMode::DOMAIN_DML_MODE_DEFAULT;
       param.ft_doc_word_info_ = ft_doc_word_info_;
     }
     if (OB_FAIL(ObDomainDMLIterator::create_domain_dml_iterator(param, domain_iter_))) {
       LOG_WARN("fail to create domain index dml iterator", K(ret));
+    } else {
     }
   }
   if (FAILEDx(domain_iter_->get_next_domain_row(row))) {
@@ -128,7 +130,8 @@ int ObDASDMLIterator::get_next_domain_index_rows(ObDatumRow *&rows, int64_t &row
   if (OB_ISNULL(domain_iter_)) {
     ObDomainDMLParam param(allocator_, row_projector_, write_iter_, das_ctdef_, main_ctdef_);
     if (das_ctdef_->table_param_.get_data_table().is_fts_index() && !das_ctdef_->old_row_projector_.empty()) {
-      param.mode_ = main_ctdef_->is_main_table_in_fts_ddl_ ? ObDomainDMLMode::DOMAIN_DML_MODE_DEFAULT : ObDomainDMLMode::DOMAIN_DML_MODE_FT_SCAN;
+      param.mode_ = das_ctdef_->table_param_.get_data_table().can_read_index()
+                    ? ObDomainDMLMode::DOMAIN_DML_MODE_FT_SCAN : ObDomainDMLMode::DOMAIN_DML_MODE_DEFAULT;
       param.ft_doc_word_info_ = ft_doc_word_info_;
     }
     if (OB_FAIL(ObDomainDMLIterator::create_domain_dml_iterator(param, domain_iter_))) {
@@ -137,7 +140,7 @@ int ObDASDMLIterator::get_next_domain_index_rows(ObDatumRow *&rows, int64_t &row
   }
   if (FAILEDx(domain_iter_->get_next_domain_rows(rows, row_count))) {
     if (OB_ITER_END != ret) {
-      LOG_WARN("fail to get next domain rows", K(ret));
+      LOG_WARN("fail to get next domain rows", K(ret), KPC(domain_iter_));
     }
   }
   return ret;

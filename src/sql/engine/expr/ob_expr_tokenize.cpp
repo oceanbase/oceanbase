@@ -18,6 +18,7 @@
 #include "plugin/sys/ob_plugin_helper.h"
 #include "share/ob_fts_index_builder_util.h"
 #include "share/ob_json_access_utils.h"
+#include "sql/engine/expr/ob_expr_lob_utils.h"
 #include "storage/fts/dict/ob_gen_dic_loader.h"
 #include "storage/fts/ob_fts_parser_property.h"
 #include "storage/fts/ob_fts_plugin_helper.h"
@@ -131,7 +132,7 @@ ObExprTokenize::TokenizeParam ::TokenizeParam()
 {
 }
 
-int ObExprTokenize::TokenizeParam::parse_json_param(const ObIJsonBase *obj)
+int ObExprTokenize::TokenizeParam::parse_json_param(const ObIJsonBase *obj, const ObString &database_name, const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   ObString str;
@@ -182,11 +183,13 @@ int ObExprTokenize::TokenizeParam::parse_json_param(const ObIJsonBase *obj)
       LOG_USER_ERROR(OB_INVALID_ARGUMENT, "parser arguments");
     } else {
       ObString json_str;
-      if (OB_FAIL(ObFTParserJsonProps::tokenize_array_to_props_json(allocator_, val, json_str))) {
+      if (OB_FAIL(ObFTParserJsonProps::tokenize_array_to_props_json(allocator_, val, database_name, tenant_id, json_str))) {
         LOG_WARN("Fail to tokenize array to props json", K(ret));
-        ObSqlString message;
-        message.append_fmt("format in %s form", ADDITIONAL_ARGS_STR);
-        LOG_USER_ERROR(OB_INVALID_ARGUMENT, message.ptr());
+        if (OB_INVALID_ARGUMENT == ret) {
+          ObSqlString message;
+          message.append_fmt("format in %s form", ADDITIONAL_ARGS_STR);
+          LOG_USER_ERROR(OB_INVALID_ARGUMENT, message.ptr());
+        }
       } else {
         properties_ = json_str;
       }
@@ -215,6 +218,13 @@ int ObExprTokenize::parse_param(const ObExpr &expr,
   uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
   MultimodeAlloctor temp_allocator(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
 
+  // Get current database name for resolving table names without database prefix
+  ObString database_name;
+  sql::ObSQLSessionInfo *session = ctx.exec_ctx_.get_my_session();
+  if (OB_NOT_NULL(session)) {
+    database_name = session->get_database_name();
+  }
+
   if (OB_UNLIKELY(expr.arg_cnt_ < 1 || expr.arg_cnt_ > 3)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Args count invalid.", K(ret), K(expr.arg_cnt_));
@@ -222,9 +232,9 @@ int ObExprTokenize::parse_param(const ObExpr &expr,
     LOG_WARN("Fail to parse fulltext.", K(ret));
   } else if (OB_FAIL(parse_parser_name(expr, ctx, param))) {
     LOG_WARN("Fail to parse parser params.", K(ret));
-  } else if (OB_FAIL(parse_parser_properties(expr, ctx, temp_allocator, param))) {
+  } else if (OB_FAIL(parse_parser_properties(expr, tenant_id, database_name, ctx, temp_allocator, param))) {
     LOG_WARN("Fail to parse parser params.", K(ret));
-  } else if (OB_FAIL(param.reform_parser_properties(param.properties_))) {
+  } else if (OB_FAIL(param.reform_parser_properties(param.properties_, tenant_id))) {
     LOG_WARN("Fail to reform parser params.", K(ret));
   } else if (OB_FAIL(param.try_load_dictionary_for_ik(tenant_id))) {
     LOG_WARN("fail to try load dictionary for ik", K(ret), K(tenant_id));
@@ -370,6 +380,8 @@ int ObExprTokenize::parse_parser_name(const ObExpr &expr, ObEvalCtx &ctx, Tokeni
 }
 
 int ObExprTokenize::parse_parser_properties(const ObExpr &expr,
+                                            const uint64_t tenant_id,
+                                            const ObString &database_name,
                                             ObEvalCtx &ctx,
                                             MultimodeAlloctor &mm_alloc,
                                             TokenizeParam &param)
@@ -398,7 +410,7 @@ int ObExprTokenize::parse_parser_properties(const ObExpr &expr,
           } else if (ObJsonNodeType::J_OBJECT != (node->json_type())) {
             ret = OB_INVALID_ARGUMENT;
             LOG_WARN("Argument of json array invalid", K(ret));
-          } else if (OB_FAIL(param.parse_json_param(node))) {
+          } else if (OB_FAIL(param.parse_json_param(node, database_name, tenant_id))) {
             LOG_WARN("Failed to parse json object", K(ret));
           }
         } // for
@@ -409,7 +421,7 @@ int ObExprTokenize::parse_parser_properties(const ObExpr &expr,
   return ret;
 }
 
-int ObExprTokenize::TokenizeParam::reform_parser_properties(const ObString &properties)
+int ObExprTokenize::TokenizeParam::reform_parser_properties(const ObString &properties, const uint64_t tenant_id)
 {
   int ret = OB_SUCCESS;
   storage::ObFTParserJsonProps parser_properties;
@@ -421,7 +433,8 @@ int ObExprTokenize::TokenizeParam::reform_parser_properties(const ObString &prop
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "parser properties invalid.");
   } else if (OB_FAIL(parser_properties.rebuild_props_for_ddl(parser_name_,
                                                              ObCollationType::CS_TYPE_UTF8MB4_BIN,
-                                                             true))) {
+                                                             true,
+                                                             tenant_id))) {
     LOG_WARN("fail to serialize to string", K(ret), K(parser_properties));
   } else if (OB_FAIL(parser_properties.to_format_json(allocator_, properties_))) {
     LOG_WARN("fail to serialize to string", K(ret), K(parser_properties));

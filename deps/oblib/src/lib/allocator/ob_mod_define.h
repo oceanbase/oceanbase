@@ -427,6 +427,7 @@ LABEL_ITEM_DEF(OB_QUERY_ALLOCATOR, QueryAllocator)
 LABEL_ITEM_DEF(OB_PARTITION, Partition)
 LABEL_ITEM_DEF(OB_PARTITION_SPLIT, PartitioSplit)
 LABEL_ITEM_DEF(OB_PARTITION_STORAGE, PartitioStorage)
+LABEL_ITEM_DEF(OB_FT_DICT_BUILD_LOCK_MGR, FtDictBuildLock)
 LABEL_ITEM_DEF(OB_PARTITION_SERVICE, PartitioService)
 LABEL_ITEM_DEF(OB_MEMSTORE_ALLOCATOR, MemstoreAllocat)
 LABEL_ITEM_DEF(OB_MEMSTORE, Memstore)
@@ -684,7 +685,7 @@ struct InnerModIds
   #undef LABEL_ITEM_DEF
   };
   enum { LABEL_COUNT_LIMIT = InnerModIds::OB_MOD_END };
-  STATIC_ASSERT(LABEL_COUNT_LIMIT == 453, "forbidden to add new label!!!");
+  STATIC_ASSERT(LABEL_COUNT_LIMIT == 454, "forbidden to add new label!!!");
 };
 
 #define ObNewModIds ObModIds

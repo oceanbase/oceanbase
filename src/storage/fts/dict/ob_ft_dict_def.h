@@ -36,30 +36,47 @@ public:
   uint8_t token_char_len_;
 } __attribute__((packed));
 
-enum class ObFTDictType : uint32_t
-{
-  DICT_TYPE_INVALID = 0,
-  DICT_IK_MAIN = 1,
-  DICT_IK_QUAN = 2,
-  DICT_IK_STOP = 3,
-};
-
 class ObFTDictDesc
 {
 public:
-  ObFTDictDesc(const ObString &name,
-               const ObFTDictType type,
-               const ObCharsetType charset,
-               const ObCollationType coll_type)
-      : name_(name), type_(type), charset_(charset), coll_type_(coll_type)
+  enum BuildMode {
+    DDL_EXE = 0,
+    REFRESH_ONLY,
+    DML_OR_SELECT_EXE
+  };
+public:
+  ObFTDictDesc(const ObCharsetType charset,
+               const ObCollationType coll_type,
+               const uint64_t table_id,
+               const common::ObString &table_name,
+               const bool need_casedown)
+      : table_id_(table_id), table_name_(table_name), charset_(charset), coll_type_(coll_type),
+        need_casedown_(need_casedown)
+  {
+  }
+  ObFTDictDesc(const ObCharsetType charset,
+               const ObCollationType coll_type,
+               const uint64_t table_id,
+               const common::ObString &table_name)
+      : table_id_(table_id), table_name_(table_name), charset_(charset), coll_type_(coll_type),
+        need_casedown_(is_ci_collation(coll_type))
   {
   }
 
+  static bool is_ci_collation(const ObCollationType coll_type)
+  {
+    const ObCharsetInfo *cs = common::ObCharset::get_charset(coll_type);
+    return (cs != nullptr) && (cs->state & OB_CS_CI);
+  }
+
+  TO_STRING_KV(K_(charset), K_(coll_type), K_(table_id), K_(table_name), K_(need_casedown));
+
 public:
-  ObString name_;
-  ObFTDictType type_;
+  uint64_t table_id_;
+  common::ObString table_name_;
   ObCharsetType charset_;
   ObCollationType coll_type_;
+  bool need_casedown_;
 };
 
 } //  namespace storage

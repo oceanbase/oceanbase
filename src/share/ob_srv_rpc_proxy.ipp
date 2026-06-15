@@ -205,6 +205,7 @@
   RPC_S(PR4 admin_update_lock_op, OB_UPDATE_OBJ_LOCK, (transaction::tablelock::ObAdminUpdateLockOpArg));
   RPC_S(PR5 remote_write_ddl_redo_log, OB_REMOTE_WRITE_DDL_REDO_LOG, (obrpc::ObRpcRemoteWriteDDLRedoLogArg));
   RPC_S(PR5 remote_write_ddl_commit_log, OB_REMOTE_WRITE_DDL_COMMIT_LOG, (obrpc::ObRpcRemoteWriteDDLCommitLogArg), obrpc::Int64);
+  RPC_S(PR5 refresh_fulltext_dict, OB_REFRESH_FULLTEXT_DICT, (obrpc::ObRefreshFulltextDictArg));
   #ifdef OB_BUILD_SHARED_STORAGE
   RPC_S(PR5 remote_write_ddl_finsih_log, OB_REMOTE_WRITE_DDL_FINISH_LOG, (obrpc::ObRpcRemoteWriteDDLFinishLogArg));
   RPC_S(PR5 get_ss_macro_block, OB_GET_SS_MACRO_BLOCK, (obrpc::ObGetSSMacroBlockArg), obrpc::ObGetSSMacroBlockResult);

@@ -194,6 +194,11 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
           ret = OB_NOT_SUPPORTED;
           LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter table type");
           SQL_RESV_LOG(WARN, "assign external table failed", K(ret));
+        } else if (table_schema_->is_fulltext_dict()) {
+          // Fulltext dictionary table structure cannot be altered
+          ret = OB_NOT_SUPPORTED;
+          LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter fulltext dictionary table structure is");
+          SQL_RESV_LOG(WARN, "alter fulltext dictionary table structure is not supported", K(ret));
         } else if (ObSchemaChecker::is_ora_priv_check()) {
           OZ (schema_checker_->check_ora_ddl_priv(session_info_->get_effective_tenant_id(),
                                                   session_info_->get_priv_user_id(),

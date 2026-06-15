@@ -8,6 +8,7 @@
 #include "ob_sparse_bmm_iter.h"
 #include "ob_block_max_iter.h"
 
+ERRSIM_POINT_DEF(EN_BLOCK_MERGE_BUCKET_SIZE, "Override block merge bucket size");
 namespace oceanbase
 {
 namespace storage
@@ -21,6 +22,12 @@ ObSRBMMIterImpl::ObSRBMMIterImpl()
     non_essential_dim_threshold_(0.0),
     all_dims_max_score_sum_(0.0),
     dim_max_scores_(),
+    block_merge_bucket_size_(0),
+    block_merge_upper_bound_(0),
+    block_merge_doc_cnt_(0),
+    block_merge_scores_(),
+    block_merge_doc_ids_(),
+    can_use_block_merge_(false),
     is_max_score_cached_(false)
 {}
 
@@ -43,6 +50,9 @@ int ObSRBMMIterImpl::init(
     LOG_WARN("failed to init iter max scores", K(ret));
   } else if (OB_FAIL(dim_max_scores_.prepare_allocate(dim_iters.count()))) {
     LOG_WARN("failed to prepare allocate iter max scores", K(ret));
+  } else if (FALSE_IT(can_use_block_merge_ = can_use_block_merge())) {
+  } else if (can_use_block_merge_ && OB_FAIL(init_block_merge_buffers())) {
+    LOG_WARN("failed to init block merge buffers", K(ret));
   }
   return ret;
 }
@@ -53,6 +63,8 @@ void ObSRBMMIterImpl::reuse(const bool switch_tablet)
   non_essential_dim_max_score_ = 0.0;
   non_essential_dim_threshold_ = 0.0;
   all_dims_max_score_sum_ = 0.0;
+  block_merge_upper_bound_ = 0;
+  block_merge_doc_cnt_ = 0;
   is_max_score_cached_ = false;
   ObSRBlockMaxTopKIterImpl::reuse(switch_tablet);
 }
@@ -65,8 +77,66 @@ void ObSRBMMIterImpl::reset()
   non_essential_dim_threshold_ = 0.0;
   all_dims_max_score_sum_ = 0.0;
   dim_max_scores_.reset();
+  block_merge_bucket_size_ = 0;
+  block_merge_upper_bound_ = 0;
+  block_merge_doc_cnt_ = 0;
+  block_merge_scores_.reset();
+  block_merge_doc_ids_.reset();
+  can_use_block_merge_ = false;
   is_max_score_cached_ = false;
   ObSRBlockMaxTopKIterImpl::reset();
+}
+
+bool ObSRBMMIterImpl::can_use_block_merge() const
+{
+  return nullptr != iter_param_
+         && nullptr != iter_param_->id_proj_expr_
+         && common::ObUInt64Type == iter_param_->id_proj_expr_->datum_meta_.type_
+         && nullptr != relevance_collector_
+         && relevance_collector_->is_pure_additive();
+}
+
+
+int ObSRBMMIterImpl::init_block_merge_buffers()
+{
+  int ret = OB_SUCCESS;
+  const int64_t configured_bucket_size = EN_BLOCK_MERGE_BUCKET_SIZE;
+  block_merge_bucket_size_ = configured_bucket_size > 0 ? configured_bucket_size : DEFAULT_BLOCK_MERGE_BUCKET_SIZE;
+  block_merge_scores_.set_allocator(&allocator_);
+  block_merge_doc_ids_.set_allocator(&allocator_);
+  if (OB_FAIL(block_merge_scores_.init(block_merge_bucket_size_))) {
+    LOG_WARN("failed to init block merge scores", K(ret), K_(block_merge_bucket_size));
+  } else if (OB_FAIL(block_merge_scores_.prepare_allocate(block_merge_bucket_size_))) {
+    LOG_WARN("failed to prepare allocate block merge scores", K(ret), K_(block_merge_bucket_size));
+  } else if (OB_FAIL(block_merge_doc_ids_.init(block_merge_bucket_size_))) {
+    LOG_WARN("failed to init block merge doc ids", K(ret), K_(block_merge_bucket_size));
+  } else if (OB_FAIL(block_merge_doc_ids_.prepare_allocate(block_merge_bucket_size_))) {
+    LOG_WARN("failed to prepare allocate block merge doc ids", K(ret), K_(block_merge_bucket_size));
+  } else {
+    reuse_block_merge_buffers();
+  }
+  return ret;
+}
+
+void ObSRBMMIterImpl::reuse_block_merge_buffers()
+{
+  for (int64_t i = 0; i < block_merge_bucket_size_; ++i) {
+    block_merge_scores_[i] = 0.0;
+    block_merge_doc_ids_[i] = 0;
+  }
+  block_merge_doc_cnt_ = 0;
+}
+
+int ObSRBMMIterImpl::get_uint_doc_id(const ObDatum &datum, uint64_t &doc_id) const
+{
+  int ret = OB_SUCCESS;
+  if (OB_UNLIKELY(!can_use_block_merge_ || datum.is_null() || datum.is_ext())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected not use block merge or datum is ext", K(ret), K_(can_use_block_merge), K(datum));
+  } else {
+    doc_id = datum.get_uint();
+  }
+  return ret;
 }
 
 int ObSRBMMIterImpl::top_k_search()
@@ -87,6 +157,7 @@ int ObSRBMMIterImpl::top_k_search()
     status_ = BMSearchStatus::FIND_NEXT_PIVOT;
   }
 
+  uint64_t block_merge_pivot_id = 0;
   double non_essential_block_max_score = 0.0;
   ObDocIdExt curr_pivot_id;
   while (OB_SUCC(ret) && BMSearchStatus::FINISHED != status_) {
@@ -118,38 +189,51 @@ int ObSRBMMIterImpl::top_k_search()
       break;
     }
     case BMSearchStatus::EVALUATE_PIVOT: {
-      bool is_candidate = false;
-      bool is_valid_pivot = false;
-      double essential_score = 0.0;
-      if (OB_FAIL(evaluate_essential_pivot(
-          curr_pivot_id.get_datum(), non_essential_block_max_score, essential_score, is_candidate, is_valid_pivot))) {
-        LOG_WARN("failed to evaluate bmm essential pivot", K(ret));
-      } else if (is_candidate) {
-        if (OB_FAIL(evaluate_pivot(curr_pivot_id.get_datum(), essential_score))) {
-          LOG_WARN("failed to evaluate bmm pivot", K(ret));
-        } else if (!need_update_essential_dims()) {
-          // skip
-        } else if (OB_FAIL(forward_next_round_iters())) {
-          LOG_WARN("failed to forward next round iters", K(ret));
+      if (can_use_block_merge_ && OB_FAIL(get_uint_doc_id(curr_pivot_id.get_datum(), block_merge_pivot_id))) {
+        LOG_WARN("failed to get uint doc id from pivot id", K(ret));
+      } else if (can_use_block_merge_ && block_merge_pivot_id < block_merge_upper_bound_) {
+        if (OB_FAIL(block_merge_pivot_range(curr_pivot_id.get_datum(), non_essential_block_max_score))) {
+          LOG_WARN("failed to block merge pivot range", K(ret), K(curr_pivot_id),
+              K_(block_merge_upper_bound), K(non_essential_block_max_score));
         } else if (OB_FAIL(try_update_essential_dims())) {
-          LOG_WARN("failed to try update essential dims", K(ret));
-        }
-      }
-
-      if (OB_FAIL(ret)) {
-      } else if (!is_valid_pivot) {
-        // Since pivot might comes from block max iter, which is not accurate, need to find next valid pivot
-        // But this situation should be rare, and has relatively low impact on performance
-        status_ = BMSearchStatus::FIND_NEXT_PIVOT;
-      } else if (OB_FAIL(fill_merge_heap())) {
-        if (OB_UNLIKELY(OB_ITER_END != ret)) {
-          LOG_WARN("failed to fill merge heap", K(ret), K(is_candidate), K_(next_round_cnt));
+          LOG_WARN("failed to rebuild essential dims after block merge", K(ret));
         } else {
-          ret = OB_SUCCESS;
-          status_ = BMSearchStatus::FINISHED;
+          status_ = BMSearchStatus::FIND_NEXT_PIVOT;
         }
       } else {
-        status_ = BMSearchStatus::FIND_NEXT_PIVOT;
+        bool is_candidate = false;
+        bool is_valid_pivot = false;
+        double essential_score = 0.0;
+        if (OB_FAIL(evaluate_essential_pivot(
+            curr_pivot_id.get_datum(), non_essential_block_max_score, essential_score, is_candidate, is_valid_pivot))) {
+          LOG_WARN("failed to evaluate bmm essential pivot", K(ret));
+        } else if (is_candidate) {
+          if (OB_FAIL(evaluate_pivot(curr_pivot_id.get_datum(), essential_score))) {
+            LOG_WARN("failed to evaluate bmm pivot", K(ret));
+          } else if (!need_update_essential_dims()) {
+            // skip
+          } else if (OB_FAIL(forward_next_round_iters())) {
+            LOG_WARN("failed to forward next round iters", K(ret));
+          } else if (OB_FAIL(try_update_essential_dims())) {
+            LOG_WARN("failed to try update essential dims", K(ret));
+          }
+        }
+
+        if (OB_FAIL(ret)) {
+        } else if (!is_valid_pivot) {
+          // Since pivot might comes from block max iter, which is not accurate, need to find next valid pivot
+          // But this situation should be rare, and has relatively low impact on performance
+          status_ = BMSearchStatus::FIND_NEXT_PIVOT;
+        } else if (OB_FAIL(fill_merge_heap())) {
+          if (OB_UNLIKELY(OB_ITER_END != ret)) {
+            LOG_WARN("failed to fill merge heap", K(ret), K(is_candidate), K_(next_round_cnt));
+          } else {
+            ret = OB_SUCCESS;
+            status_ = BMSearchStatus::FINISHED;
+          }
+        } else {
+          status_ = BMSearchStatus::FIND_NEXT_PIVOT;
+        }
       }
       break;
     }
@@ -314,6 +398,33 @@ int ObSRBMMIterImpl::next_pivot(ObDocIdExt &pivot_id)
   return ret;
 }
 
+int ObSRBMMIterImpl::decide_block_merge_upper_bound(
+    const ObMaxScoreTuple &max_score_tuple,
+    bool &found_upper_bound)
+{
+  int ret = OB_SUCCESS;
+  uint64_t tuple_max_doc_id = 0;
+  if (OB_UNLIKELY(nullptr == max_score_tuple.max_domain_id_ || max_score_tuple.max_domain_id_->is_null())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null max domain id in max score tuple", K(ret), K(max_score_tuple.max_score_));
+  } else if (max_score_tuple.max_domain_id_->is_max()) {
+    LOG_DEBUG("ext max domain id in max score tuple", K(max_score_tuple.max_score_));
+  } else if (OB_FAIL(get_uint_doc_id(*max_score_tuple.max_domain_id_, tuple_max_doc_id))) {
+    LOG_WARN("failed to get uint doc id from tuple max domain id", K(ret));
+  } else if (!found_upper_bound) {
+    block_merge_upper_bound_ = tuple_max_doc_id;
+    found_upper_bound = true;
+  } else {
+    block_merge_upper_bound_ = MIN(block_merge_upper_bound_, tuple_max_doc_id);
+  }
+  if (OB_SUCC(ret)) {
+    LOG_DEBUG("[Sparse Retrieval] update block merge range upper bound",
+        K(tuple_max_doc_id), K(found_upper_bound), K_(block_merge_upper_bound),
+        K(max_score_tuple.max_score_));
+  }
+  return ret;
+}
+
 int ObSRBMMIterImpl::evaluate_pivot_range(
     const ObDatum &pivot_id,
     double &non_essential_block_max_score,
@@ -325,6 +436,8 @@ int ObSRBMMIterImpl::evaluate_pivot_range(
   relevance_collector_->reuse();
   const double essential_threshold = get_essential_dim_threshold();
   const ObMaxScoreTuple *max_score_tuple = nullptr;
+  block_merge_upper_bound_ = 0;
+  bool found_upper_bound = false;
   for (int64_t i = 0; OB_SUCC(ret) && i < next_round_cnt_; ++i) {
     const int64_t iter_idx = next_round_iter_idxes_[i];
     ObISRDimBlockMaxIter *iter = get_iter(iter_idx);
@@ -341,6 +454,8 @@ int ObSRBMMIterImpl::evaluate_pivot_range(
       LOG_WARN("failed to get block max score", K(ret), K(iter_idx));
     } else if (OB_FAIL(relevance_collector_->collect_one_dim(iter_idx, max_score_tuple->max_score_))) {
       LOG_WARN("failed to collect one dimension", K(ret));
+    } else if (can_use_block_merge_ && OB_FAIL(decide_block_merge_upper_bound(*max_score_tuple, found_upper_bound))) {
+      LOG_WARN("failed to update range upper bound from essential tuple", K(ret), K(iter_idx));
     }
   }
 
@@ -374,6 +489,8 @@ int ObSRBMMIterImpl::evaluate_pivot_range(
         LOG_WARN("failed to get block max score", K(ret), K(iter_idx));
       } else if (OB_FAIL(relevance_collector_->collect_one_dim(iter_idx, max_score_tuple->max_score_))) {
         LOG_WARN("failed to collect one dimension", K(ret));
+      } else if (can_use_block_merge_ && OB_FAIL(decide_block_merge_upper_bound(*max_score_tuple, found_upper_bound))) {
+        LOG_WARN("failed to update range upper bound from non-essential tuple", K(ret), K(iter_idx));
       }
     }
 
@@ -387,7 +504,8 @@ int ObSRBMMIterImpl::evaluate_pivot_range(
 
   LOG_DEBUG("[Sparse Retrieval] eval bmm pivot", K(ret), K(pivot_id), K(is_candidate),
       K(essential_block_max_score + non_essential_block_max_score),
-      K(non_essential_block_max_score), K(essential_threshold), K(get_top_k_threshold()), K_(sorted_iters));
+      K(non_essential_block_max_score), K(essential_threshold), K(get_top_k_threshold()),
+      K_(can_use_block_merge), K_(block_merge_upper_bound), K_(sorted_iters));
   return ret;
 }
 
@@ -432,6 +550,91 @@ int ObSRBMMIterImpl::evaluate_essential_pivot(
   }
   LOG_DEBUG("[Sparse Retrieval] eval essential pivot", K(ret), K(pivot_id), KPC(collected_id),
         K(non_essential_block_max_score), K(essential_score), K(is_candidate), K(is_valid_pivot));
+  return ret;
+}
+
+int ObSRBMMIterImpl::block_merge_pivot_range(
+    const ObDatum &range_min_id_datum,
+    const double non_essential_block_max_score)
+{
+  int ret = OB_SUCCESS;
+  uint64_t range_min_id = 0;
+  bool top_k_updated = false;
+  bool stop_block_merge = false;
+  if (OB_FAIL(get_uint_doc_id(range_min_id_datum, range_min_id))) {
+    LOG_WARN("failed to get uint doc id from candidate range min id", K(ret), K(range_min_id_datum));
+  } else if (OB_UNLIKELY(block_merge_upper_bound_ < range_min_id)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected reversed candidate range", K(ret),
+        K(range_min_id), K_(block_merge_upper_bound));
+  }
+
+  ObStorageDatum datum_buf;
+  uint64_t block_start_id = range_min_id;
+  while (OB_SUCC(ret) && !top_k_updated && block_start_id <= block_merge_upper_bound_) {
+    const bool is_first_block = block_start_id == range_min_id;
+    const uint64_t remaining_doc_cnt = block_merge_upper_bound_ - block_start_id + 1;
+    const int64_t bucket_cnt = remaining_doc_cnt < block_merge_bucket_size_ ? remaining_doc_cnt : block_merge_bucket_size_;
+    const uint64_t block_end_id = block_start_id + bucket_cnt - 1;
+    bool has_valid_doc_in_block = false;
+
+    reuse_block_merge_buffers();
+    datum_buf.set_uint(block_start_id);
+    if (OB_FAIL(block_merge_essential_dims(is_first_block, datum_buf, block_end_id, has_valid_doc_in_block))) {
+      LOG_WARN("failed to block merge essential dims", K(ret), K(datum_buf), K(block_end_id));
+    } else if (has_valid_doc_in_block) {
+      const double top_k_threshold = get_top_k_threshold();
+      for (int64_t offset = 0; offset < bucket_cnt; ++offset) {
+        if (block_merge_scores_[offset] > 0 && block_merge_scores_[offset] + non_essential_block_max_score > top_k_threshold) {
+          block_merge_doc_ids_[block_merge_doc_cnt_] = block_start_id + offset;
+          block_merge_scores_[block_merge_doc_cnt_] = block_merge_scores_[offset];
+          block_merge_doc_cnt_++;
+        }
+      }
+      if (block_merge_doc_cnt_ > 0 && OB_FAIL(block_merge_non_essential_dims(datum_buf))) {
+        LOG_WARN("failed to block merge non-essential dims", K(ret), K_(block_merge_doc_cnt));
+      }
+    }
+
+    for (int64_t valid_doc_idx = 0; OB_SUCC(ret) && valid_doc_idx < block_merge_doc_cnt_; ++valid_doc_idx) {
+      const uint64_t id = block_merge_doc_ids_[valid_doc_idx];
+      const double relevance = block_merge_scores_[valid_doc_idx];
+      bool is_top_k = false;
+      datum_buf.set_uint(id);
+      if (OB_FAIL(process_collected_row(datum_buf, relevance, is_top_k))) {
+        LOG_WARN("failed to process block merge row", K(ret), K(valid_doc_idx), K(id), K(relevance));
+      } else if (is_top_k) {
+        top_k_updated = true;
+        LOG_DEBUG("[Sparse Retrieval] block merge updates topk",
+            K(valid_doc_idx), K(id), K(block_start_id), K(relevance),
+            K(is_top_k), K(top_k_updated), "top_k_threshold", get_top_k_threshold());
+      } else {
+        LOG_DEBUG("[Sparse Retrieval] block merge doc evaluated",
+            K(valid_doc_idx), K(id), K(block_start_id), K(relevance),
+            K(is_top_k), "top_k_threshold", get_top_k_threshold());
+      }
+    }
+
+    if (OB_FAIL(ret)) {
+    } else if (top_k_updated) {
+      LOG_DEBUG("[Sparse Retrieval] stop block merge after topk update",
+          K(block_start_id), K(block_end_id), K(bucket_cnt),
+          K_(block_merge_upper_bound), "top_k_threshold", get_top_k_threshold());
+    } else {
+      block_start_id = block_end_id + 1;
+      LOG_DEBUG("[Sparse Retrieval] advance block merge",
+          K(block_end_id), K(block_start_id), K_(block_merge_upper_bound));
+    }
+  }
+
+  if (OB_FAIL(ret) || !top_k_updated) {
+  } else if (OB_FAIL(update_filter_thresholds_after_topk_update())) {
+    LOG_WARN("failed to update filter thresholds after block merge topk update", K(ret));
+  } else {
+    LOG_DEBUG("[Sparse Retrieval] finish block merge range",
+        K(range_min_id), K_(block_merge_upper_bound), K(top_k_updated),
+        "top_k_threshold", get_top_k_threshold());
+  }
   return ret;
 }
 
@@ -579,6 +782,119 @@ int ObSRBMMIterImpl::forward_next_round_iters()
         LOG_WARN("failed to get next row", K(ret));
       } else {
         ret = OB_SUCCESS;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSRBMMIterImpl::block_merge_essential_dims(
+    const bool is_first_block,
+    const ObDatum &block_start_id_datum,
+    const uint64_t block_end_id,
+    bool &has_valid_doc_in_block)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = non_essential_dim_count_; OB_SUCC(ret) && i < sorted_iters_.count(); ++i) {
+    bool reach_block_end = false;
+    const int64_t iter_idx = sorted_iters_[i];
+    ObISRDimBlockMaxIter *iter = get_iter(iter_idx);
+    if (OB_ISNULL(iter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null iter", K(ret), K(iter_idx));
+    } else if (iter->iter_end()) {
+    } else if (is_first_block && OB_FAIL(iter->advance_to(block_start_id_datum))) {
+      if (OB_UNLIKELY(OB_ITER_END != ret)) {
+        LOG_WARN("failed to advance iter to block merge start id", K(ret), K(iter_idx), K(block_start_id_datum));
+      } else {
+        ret = OB_SUCCESS;
+      }
+    }
+    while (OB_SUCC(ret) && !reach_block_end && !iter->iter_end()) {
+      const ObDatum *curr_id_datum = nullptr;
+      uint64_t curr_id = 0;
+      double curr_score = 0.0;
+      if (OB_FAIL(iter->get_curr_id(curr_id_datum))) {
+        LOG_WARN("failed to get curr id from iter", K(ret), K(iter_idx));
+      } else if (OB_ISNULL(curr_id_datum)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null curr id", K(ret), K(iter_idx));
+      } else if (OB_FAIL(get_uint_doc_id(*curr_id_datum, curr_id))) {
+        LOG_WARN("failed to get uint doc id from iter datum", K(ret), K(iter_idx));
+      } else if (curr_id > block_end_id) {
+        reach_block_end = true;
+      } else if (OB_FAIL(iter->get_curr_score(curr_score))) {
+        LOG_WARN("failed to get curr score from iter", K(ret), K(iter_idx), KPC(curr_id_datum));
+      } else {
+        has_valid_doc_in_block = true;
+        const int64_t offset = static_cast<int64_t>(curr_id - block_start_id_datum.get_uint());
+        block_merge_scores_[offset] += curr_score;
+        LOG_DEBUG("[Sparse Retrieval] collect block merge score",
+            K(iter_idx), K(curr_id), K(block_start_id_datum), K(offset), K(curr_score),
+            K_(block_merge_doc_cnt), "active_score", block_merge_scores_[offset]);
+        if (OB_FAIL(iter->get_next_row())) {
+          if (OB_UNLIKELY(OB_ITER_END != ret)) {
+            LOG_WARN("failed to get next row in block", K(ret), K(iter_idx), KPC(curr_id_datum));
+          } else {
+            ret = OB_SUCCESS;
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObSRBMMIterImpl::block_merge_non_essential_dims(ObDatum &doc_id_datum)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < non_essential_dim_count_; ++i) {
+    const int64_t iter_idx = sorted_iters_[i];
+    ObISRDimBlockMaxIter *iter = get_iter(iter_idx);
+    if (OB_ISNULL(iter)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null non-essential iter", K(ret), K(iter_idx));
+    } else if (iter->iter_end()) {
+    } else {
+      int64_t doc_idx = 0;
+      while (OB_SUCC(ret) && doc_idx < block_merge_doc_cnt_) {
+        const uint64_t doc_id = block_merge_doc_ids_[doc_idx];
+        const ObDatum *curr_id_datum = nullptr;
+        uint64_t curr_id = 0;
+        double curr_score = 0.0;
+        doc_id_datum.set_uint(doc_id);
+        if (OB_FAIL(iter->advance_to(doc_id_datum))) {
+          if (OB_UNLIKELY(OB_ITER_END != ret)) {
+            LOG_WARN("failed to advance non-essential iter to candidate doc", K(ret), K(iter_idx), K(doc_id));
+          } else {
+            ret = OB_SUCCESS;
+            break;
+          }
+        } else if (OB_FAIL(iter->get_curr_id(curr_id_datum))) {
+          LOG_WARN("failed to get current id from non-essential iter", K(ret), K(iter_idx), K(doc_id));
+        } else if (OB_ISNULL(curr_id_datum)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null current id from non-essential iter", K(ret), K(iter_idx), K(doc_id));
+        } else if (OB_FAIL(get_uint_doc_id(*curr_id_datum, curr_id))) {
+          LOG_WARN("failed to get uint doc id from non-essential iter curr_id_datum", K(ret), K(iter_idx), K(doc_id));
+        } else {
+          for (; OB_SUCC(ret) && doc_idx < block_merge_doc_cnt_; ++doc_idx) {
+            if (block_merge_doc_ids_[doc_idx] == curr_id) {
+              if (OB_FAIL(iter->get_curr_score(curr_score))) {
+                LOG_WARN("failed to get current score from non-essential iter", K(ret), K(iter_idx), K(curr_id));
+              } else {
+                block_merge_scores_[doc_idx] += curr_score;
+                LOG_DEBUG("[Sparse Retrieval] refine block merge candidate with non-essential score",
+                    K(iter_idx), K(doc_idx), K(curr_id), K(curr_score),
+                    "refined_score", block_merge_scores_[doc_idx]);
+              }
+              doc_idx++;
+              break;
+            } else if (block_merge_doc_ids_[doc_idx] > curr_id) {
+              break;
+            }
+          }
+        }
       }
     }
   }

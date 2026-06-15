@@ -307,7 +307,8 @@ int ObDASUpdIterator::get_next_domain_index_row(ObDatumRow *&row)
       const IntFixedArray &cur_proj = got_old_row_ ? das_ctdef_->new_row_projector_ : das_ctdef_->old_row_projector_;
       ObDomainDMLParam param(allocator_, &cur_proj, result_iter_, das_ctdef_, is_search_index ? main_ctdef_ : nullptr);
       if (das_ctdef_->table_param_.get_data_table().is_fts_index() && !got_old_row_) {
-        param.mode_ = is_main_table_in_fts_ddl_ ? ObDomainDMLMode::DOMAIN_DML_MODE_DEFAULT : ObDomainDMLMode::DOMAIN_DML_MODE_FT_SCAN;
+        param.mode_ = das_ctdef_->table_param_.get_data_table().can_read_index()
+                      ? ObDomainDMLMode::DOMAIN_DML_MODE_FT_SCAN : ObDomainDMLMode::DOMAIN_DML_MODE_DEFAULT;
         param.ft_doc_word_info_ = ft_doc_word_info_;
       }
       if (OB_FAIL(ObDomainDMLIterator::create_domain_dml_iterator(param, domain_iter_))) {
@@ -355,7 +356,8 @@ int ObDASUpdIterator::get_next_domain_index_rows(ObDatumRow *&rows, int64_t &row
       const IntFixedArray &cur_proj = got_old_row_ ? das_ctdef_->new_row_projector_ : das_ctdef_->old_row_projector_;
       ObDomainDMLParam param(allocator_, &cur_proj, result_iter_, das_ctdef_, is_search_index ? main_ctdef_ : nullptr);
       if (das_ctdef_->table_param_.get_data_table().is_fts_index() && !got_old_row_) {
-        param.mode_ = is_main_table_in_fts_ddl_ ? ObDomainDMLMode::DOMAIN_DML_MODE_DEFAULT : ObDomainDMLMode::DOMAIN_DML_MODE_FT_SCAN;
+        param.mode_ = das_ctdef_->table_param_.get_data_table().can_read_index()
+                      ? ObDomainDMLMode::DOMAIN_DML_MODE_FT_SCAN : ObDomainDMLMode::DOMAIN_DML_MODE_DEFAULT;
         param.ft_doc_word_info_ = ft_doc_word_info_;
       }
       if (OB_FAIL(ObDomainDMLIterator::create_domain_dml_iterator(param, domain_iter_))) {

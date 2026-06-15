@@ -107,6 +107,7 @@ private:
   int create_tables_();
   int create_audits_();
   int deal_with_mock_fk_parent_tables_();
+  int record_fts_dict_dependencies_();
 private:
   const obrpc::ObCreateTableArg &arg_;
   obrpc::ObCreateTableRes &res_;

@@ -30,6 +30,7 @@ struct ObSRDaaTRelevanceCollector
     return get_result(relevance, is_valid);
   }
   virtual int set_norm(const double max_score) { return OB_NOT_IMPLEMENT; }
+  virtual bool is_pure_additive() const { return false; }
 protected:
   bool is_inited_;
 };
@@ -45,6 +46,7 @@ struct ObSRDaaTInnerProductRelevanceCollector : ObSRDaaTRelevanceCollector
   virtual void reuse() override;
   virtual int collect_one_dim(const int64_t dim_idx, const double relevance) override;
   virtual int get_result(double &relevance, bool &is_valid) override;
+  virtual bool is_pure_additive() const override { return true; }
 private:
   double total_relevance_;
 };

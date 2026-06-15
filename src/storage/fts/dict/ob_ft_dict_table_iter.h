@@ -8,6 +8,8 @@
 
 #include "lib/mysqlclient/ob_isql_client.h"
 #include "storage/fts/dict/ob_ft_dict_iterator.h"
+#include "storage/fts/dict/ob_ft_dict_def.h"
+#include "storage/fts/dict/ob_ft_dict_cache_loader.h"
 
 namespace oceanbase
 {
@@ -26,12 +28,18 @@ public:
   int next() override;
 
 public:
-  int init(const ObString &table_name);
+  int init(const ObString &table_name,
+           const uint64_t tenant_id,
+           const int64_t snapshot_version,
+           const bool need_casedown,
+           const ObIArray<ObMissingRangeInfo> *partial_ranges = nullptr);
 
 private:
   void reset();
 
-private:
+  int append_where_clause(ObSqlString &sql_string, const bool need_casedown,
+                          const ObIArray<ObMissingRangeInfo> *partial_ranges);
+
   bool is_inited_;
   ObISQLClient::ReadResult &res_;
 };

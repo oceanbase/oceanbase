@@ -11,19 +11,34 @@
 #include "lib/charset/ob_charset.h"
 #include "lib/ob_errno.h"
 #include "share/ob_tenant_mem_limit_getter.h"
+#include "share/inner_table/ob_inner_table_schema_constants.h"
+#include "lib/allocator/ob_allocator.h"
+#include "lib/container/ob_array.h"
 #include "storage/fts/dict/ob_ft_cache.h"
 #include "storage/fts/dict/ob_ft_cache_dict.h"
 #include "storage/fts/dict/ob_ft_dat_dict.h"
 #include "storage/fts/dict/ob_ft_dict.h"
 #include "storage/fts/dict/ob_ft_dict_def.h"
-#include "storage/fts/dict/ob_ft_dict_hub.h"
 #include "storage/fts/dict/ob_ft_range_dict.h"
 #include "storage/fts/dict/ob_ft_trie.h"
 #include "storage/fts/dict/ob_ik_dic.h"
+#define private public
+#include "storage/fts/dict/ob_ft_dict_mgr.h"
+#include "storage/fts/dict/ob_ft_dict_bg_task_mgr.h"
+#include "storage/fts/dict/ob_ft_dict_table_iter.h"
+#undef private
+#define private protected
+#include "storage/fts/dict/ob_ft_dict_cache_loader.h"
+#undef private
 #include "storage/fts/ik/ob_ik_char_util.h"
 #include "storage/fts/ik/ob_ik_token.h"
+#define private public
 #include "storage/fts/ob_ik_ft_parser.h"
+#undef private
+#include "lib/string/ob_sql_string.h"
+#include "storage/fts/ob_fts_literal.h"
 #include "storage/fts/utils/ob_ft_ngram_impl.h"
+#include "share/rc/ob_tenant_base.h"
 
 #include <alloca.h>
 #include <chrono>
@@ -38,46 +53,60 @@
 #define USING_LOG_PREFIX STORAGE_FTS
 
 using namespace oceanbase::plugin;
+using namespace oceanbase::share;
 
 namespace oceanbase
 {
 namespace storage
 {
-// mock range dict
-int ObFTRangeDict::build_cache(const ObFTDictDesc &desc, ObFTCacheRangeContainer &range_container)
+
+class TestFTDictCacheLoaderExec : public ObFTDictCacheLoaderBase
 {
-  int ret = OB_SUCCESS;
-  ObIKDictLoader::RawDict dict_text;
-  switch (desc.type_) {
-  case ObFTDictType::DICT_IK_MAIN: {
-    dict_text = ObIKDictLoader::dict_text();
-  } break;
-  case ObFTDictType::DICT_IK_QUAN: {
-    dict_text = ObIKDictLoader::dict_quen_text();
-  } break;
-  case ObFTDictType::DICT_IK_STOP: {
-    dict_text = ObIKDictLoader::dict_stop();
-  } break;
-  default:
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("Not supported dict type.", K(ret));
-  }
-  if (OB_SUCC(ret)) {
-    ObIKDictIterator iter(dict_text);
-    if (OB_FAIL(iter.init())) {
-      LOG_WARN("Failed to init iterator.", K(ret));
-    } else if (OB_FAIL(ObFTRangeDict::build_ranges(desc, iter, range_container))) {
-      LOG_WARN("Failed to build ranges.", K(ret));
-    }
+public:
+  TestFTDictCacheLoaderExec() : ObFTDictCacheLoaderBase()
+  {
+    dict_mgr_ = MTL(ObFTDictMgr*);
+    tenant_id_ = MTL_ID();
   }
 
-  return ret;
-}
+  int load_cache(const ObFTDictDesc &desc, ObFTCacheRangeContainer &range_container) override
+  {
+    int ret = OB_SUCCESS;
+    const int64_t snapshot_version = 1;
+
+    if (desc.table_id_ == share::OB_FT_DICT_IK_UTF8_TID
+        || desc.table_id_ == share::OB_FT_STOPWORD_IK_UTF8_TID
+        || desc.table_id_ == share::OB_FT_QUANTIFIER_IK_UTF8_TID) {
+      ObIKDictLoader::RawDict dict_text;
+      if (desc.table_id_ == share::OB_FT_DICT_IK_UTF8_TID) {
+        dict_text = ObIKDictLoader::dict_text();
+      } else if (desc.table_id_ == share::OB_FT_STOPWORD_IK_UTF8_TID) {
+        dict_text = ObIKDictLoader::dict_stop();
+      } else {
+        dict_text = ObIKDictLoader::dict_quen_text();
+      }
+      ObIKDictIterator iter(dict_text);
+      if (OB_FAIL(iter.init())) {
+        LOG_WARN("Failed to init iterator", K(ret));
+      } else if (OB_FAIL(build_ranges(desc, iter, range_container, snapshot_version, nullptr))) {
+        LOG_WARN("Failed to build ranges from builtin dict", K(ret), K(desc));
+      } else if (range_container.get_handles().empty()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("No ranges built from builtin dict", K(ret), K(desc));
+      }
+    } else {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("Test loader only supports builtin dicts", K(ret), K(desc));
+    }
+
+    return ret;
+  }
+};
 
 class FTParserTest : public ::testing::Test
 {
 protected:
-  FTParserTest() {}
+  FTParserTest() : tenant_id_(1), tenant_base_(tenant_id_), dict_mgr_() {}
   virtual ~FTParserTest() {}
 
   static void SetUpTestCase()
@@ -107,9 +136,15 @@ protected:
       }
     }
     ObDictCache::get_instance().init("dict cache");
+    ASSERT_EQ(OB_SUCCESS, dict_mgr_.init());
+    tenant_base_.set(&dict_mgr_);
+    ObTenantEnv::set_tenant(&tenant_base_);
+    ASSERT_EQ(OB_SUCCESS, tenant_base_.init());
+    ASSERT_EQ(tenant_id_, MTL_ID());
   }
   virtual void TearDown()
   {
+    ObTenantEnv::set_tenant(nullptr);
     ObDictCache::get_instance().destroy();
     ObKVGlobalCache::get_instance().destroy();
     ObClockGenerator::destroy();
@@ -117,6 +152,11 @@ protected:
     ObTimerService::get_instance().wait();
     ObTimerService::get_instance().destroy();
   }
+
+private:
+  const uint64_t tenant_id_;
+  ObTenantBase tenant_base_;
+  ObFTDictMgr dict_mgr_;
 };
 
 TEST(FTWordTest, test_hash)
@@ -188,8 +228,8 @@ TEST_F(FTParserTest, test_cache)
   dat.mem_block_size_ = sizeof(ObFTDAT);
   ObFTDAT *ptr = &dat;
 
-  ObDictCacheKey key(1, 1, ObFTDictType::DICT_IK_MAIN, 0);
-  ObDictCacheValue value(ptr);
+  ObDictCacheKey key(OB_FT_DICT_IK_UTF8_TID, 1, 0); // table_id=OB_FT_DICT_IK_UTF8_TID (main dict), tenant_id=1, range_id=0
+  ObDictCacheValue value(ptr, 1, 0);
   ret = cache.put(key, value);
   ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -285,9 +325,8 @@ TEST_F(FTParserTest, test_trie)
     ASSERT_EQ(OB_SUCCESS, ret);
 
     ObFTDAT *mem = nullptr;
-    size_t mem_len = 0;
-    ret = builder.get_mem_block(mem, mem_len);
-    ASSERT_EQ(OB_SUCCESS, ret);
+    builder.get_mem_block(mem);
+    ASSERT_NE(nullptr, mem);
 
     ObFTDATReader<void> reader(mem);
     ObDATrieHit hit(nullptr, 0); // not used in reader
@@ -359,9 +398,8 @@ TEST_F(FTParserTest, test_trie)
     ASSERT_EQ(OB_SUCCESS, ret);
 
     ObFTDAT *mem = nullptr;
-    size_t mem_len = 0;
-    ret = builder.get_mem_block(mem, mem_len);
-    ASSERT_EQ(OB_SUCCESS, ret);
+    builder.get_mem_block(mem);
+    ASSERT_NE(nullptr, mem);
 
     ObFTCacheDict cache_dict(CS_TYPE_UTF8MB4_GENERAL_CI, mem);
 
@@ -378,8 +416,6 @@ TEST_F(FTParserTest, IK_LLT)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator alloc(ObModIds::TEST);
-  ObFTDictHub hub;
-  hub.init();
 
   auto case_insensitive_equal = [](const std::string &a, const std::string &b) {
     bool ret
@@ -407,8 +443,25 @@ TEST_F(FTParserTest, IK_LLT)
     param.ft_length_ = len;
     param.parser_version_ = 1;
     param.ik_param_.mode_ = smart ? ObFTIKParam::Mode::SMART : ObFTIKParam::Mode::MAX_WORD;
+    param.ik_param_.main_dict_id_ = OB_FT_DICT_IK_UTF8_TID;
+    param.ik_param_.main_dict_name_ = ObString(ObFTSLiteral::FT_DEFAULT_IK_DICT_UTF8_TABLE);
+    param.ik_param_.stopword_dict_id_ = OB_FT_STOPWORD_IK_UTF8_TID;
+    param.ik_param_.stopword_dict_name_ = ObString(ObFTSLiteral::FT_DEFAULT_IK_STOPWORD_UTF8_TABLE);
+    param.ik_param_.quan_dict_id_ = OB_FT_QUANTIFIER_IK_UTF8_TID;
+    param.ik_param_.quan_dict_name_ = ObString(ObFTSLiteral::FT_DEFAULT_IK_QUANTIFIER_UTF8_TABLE);
 
-    ObIKFTParser parser(allocator, &hub);
+    TestFTDictCacheLoaderExec cache_loader;
+    ObFTCacheRangeContainer range_container(allocator);
+    ObFTDictDesc desc1(ObCharsetType::CHARSET_UTF8MB4, ObCollationType::CS_TYPE_UTF8MB4_BIN, OB_FT_DICT_IK_UTF8_TID, ObString(ObFTSLiteral::FT_DEFAULT_IK_DICT_UTF8_TABLE));
+    ASSERT_EQ(OB_SUCCESS, cache_loader.load_cache(desc1, range_container));
+    range_container.reset();
+    ObFTDictDesc desc2(ObCharsetType::CHARSET_UTF8MB4, ObCollationType::CS_TYPE_UTF8MB4_BIN, OB_FT_STOPWORD_IK_UTF8_TID, ObString(ObFTSLiteral::FT_DEFAULT_IK_STOPWORD_UTF8_TABLE));
+    ASSERT_EQ(OB_SUCCESS, cache_loader.load_cache(desc2, range_container));
+    range_container.reset();
+    ObFTDictDesc desc3(ObCharsetType::CHARSET_UTF8MB4, ObCollationType::CS_TYPE_UTF8MB4_BIN, OB_FT_QUANTIFIER_IK_UTF8_TID, ObString(ObFTSLiteral::FT_DEFAULT_IK_QUANTIFIER_UTF8_TABLE));
+    ASSERT_EQ(OB_SUCCESS, cache_loader.load_cache(desc3, range_container));
+    range_container.reset();
+    ObIKFTParser parser(allocator);
     ret = parser.init(param);
     ASSERT_EQ(OB_SUCCESS, ret);
 
@@ -673,6 +726,206 @@ TEST_F(FTParserTest, test_lex_container)
     ASSERT_TRUE(is_add);
   }
 }
+
+TEST_F(FTParserTest, test_append_where_clause)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator alloc(ObModIds::TEST);
+  ObSqlString sql;
+  common::ObISQLClient::ReadResult res;
+  ObFTDictTableIter iter(res);
+
+  ret = iter.append_where_clause(sql, false, nullptr);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_TRUE(sql.empty());
+
+  ObSEArray<ObMissingRangeInfo, 4> empty_ranges;
+  sql.reset();
+  ret = iter.append_where_clause(sql, false, &empty_ranges);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_TRUE(sql.empty());
+
+  ObSEArray<ObMissingRangeInfo, 4> ranges;
+  ObMissingRangeInfo r1;
+  ASSERT_EQ(OB_SUCCESS, r1.start_token_.set_token("a", 1));
+  ASSERT_EQ(OB_SUCCESS, r1.end_token_.set_token("z", 1));
+  ASSERT_EQ(OB_SUCCESS, ranges.push_back(r1));
+  sql.reset();
+  ret = iter.append_where_clause(sql, false, &ranges);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  {
+    std::string s(sql.string().ptr(), sql.string().length());
+    ASSERT_TRUE(s.find("WHERE") != std::string::npos);
+    ASSERT_TRUE(s.find("word >") != std::string::npos);
+    ASSERT_TRUE(s.find("word <") != std::string::npos);
+    ASSERT_TRUE(s.find("AND") != std::string::npos);
+  }
+
+  ranges.reset();
+  ObMissingRangeInfo r2;
+  ASSERT_EQ(OB_SUCCESS, r2.start_token_.set_token("m", 1));
+  ASSERT_EQ(OB_SUCCESS, ranges.push_back(r2));
+  sql.reset();
+  ret = iter.append_where_clause(sql, false, &ranges);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  {
+    std::string s(sql.string().ptr(), sql.string().length());
+    ASSERT_TRUE(s.find("word >") != std::string::npos);
+    ASSERT_TRUE(s.find("word <") == std::string::npos);
+  }
+
+  ranges.reset();
+  ObMissingRangeInfo r3;
+  ASSERT_EQ(OB_SUCCESS, r3.end_token_.set_token("z", 1));
+  ASSERT_EQ(OB_SUCCESS, ranges.push_back(r3));
+  sql.reset();
+  ret = iter.append_where_clause(sql, false, &ranges);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  {
+    std::string s(sql.string().ptr(), sql.string().length());
+    ASSERT_TRUE(s.find("word <") != std::string::npos);
+    ASSERT_TRUE(s.find("word >") == std::string::npos);
+  }
+
+  ranges.reset();
+  ASSERT_EQ(OB_SUCCESS, r1.start_token_.set_token("a", 1));
+  ASSERT_EQ(OB_SUCCESS, r1.end_token_.set_token("m", 1));
+  ASSERT_EQ(OB_SUCCESS, ranges.push_back(r1));
+  ObMissingRangeInfo r4;
+  ASSERT_EQ(OB_SUCCESS, r4.start_token_.set_token("n", 1));
+  ASSERT_EQ(OB_SUCCESS, r4.end_token_.set_token("z", 1));
+  ASSERT_EQ(OB_SUCCESS, ranges.push_back(r4));
+  sql.reset();
+  ret = iter.append_where_clause(sql, false, &ranges);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_TRUE(std::string(sql.string().ptr(), sql.string().length()).find("OR") != std::string::npos);
+
+  ranges.reset();
+  ObMissingRangeInfo r5;
+  ASSERT_EQ(OB_SUCCESS, ranges.push_back(r5));
+  sql.reset();
+  ret = iter.append_where_clause(sql, false, &ranges);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_TRUE(sql.empty());
+}
+
+TEST_F(FTParserTest, test_find_first_char_range_boundary)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator alloc(ObModIds::TEST);
+  ObFTDictDesc desc(ObCharsetType::CHARSET_UTF8MB4,
+                    ObCollationType::CS_TYPE_UTF8MB4_BIN,
+                    share::OB_FT_DICT_IK_UTF8_TID,
+                    ObString(ObFTSLiteral::FT_DEFAULT_IK_DICT_UTF8_TABLE));
+  TestFTDictCacheLoaderExec loader;
+  ObFTCacheRangeContainer range_container(alloc);
+  ASSERT_EQ(OB_SUCCESS, loader.load_cache(desc, range_container));
+  ASSERT_FALSE(range_container.get_handles().empty());
+
+  ObFTRangeDict range_dict(&range_container, desc);
+  ASSERT_EQ(OB_SUCCESS, range_dict.init());
+
+  bool is_match = false;
+  ret = range_dict.match(ObString("a"), is_match);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ret = range_dict.match(ObString(u8"啊"), is_match);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ret = range_dict.match(ObString("0"), is_match);
+  ASSERT_EQ(OB_SUCCESS, ret);
+
+  ret = range_dict.match(ObString(u8"龇"), is_match);
+  ASSERT_EQ(OB_SUCCESS, ret);
+}
+
+TEST_F(FTParserTest, test_collect_missing_ranges)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator alloc(ObModIds::TEST);
+  ObSEArray<ObMissingRangeInfo, 4> missing_ranges;
+  ObFTSingleToken start_token;
+  ObFTSingleToken end_token;
+  ASSERT_EQ(OB_SUCCESS, start_token.set_token("a", 1));
+  ASSERT_EQ(OB_SUCCESS, end_token.set_token("m", 1));
+
+  TestFTDictCacheLoaderExec loader;
+  ret = loader.collect_missing_ranges(start_token, end_token, 1, 2, 100, &missing_ranges);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_EQ(1, missing_ranges.count());
+  ASSERT_EQ(1, missing_ranges.at(0).start_range_id_);
+  ASSERT_EQ(2, missing_ranges.at(0).range_count_);
+  ASSERT_EQ(100, missing_ranges.at(0).snapshot_version_);
+}
+
+TEST_F(FTParserTest, test_handle_missing_ranges)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator alloc(ObModIds::TEST);
+  ObFTDictDesc desc(ObCharsetType::CHARSET_UTF8MB4,
+                    ObCollationType::CS_TYPE_UTF8MB4_BIN,
+                    share::OB_FT_DICT_IK_UTF8_TID,
+                    ObString(ObFTSLiteral::FT_DEFAULT_IK_DICT_UTF8_TABLE));
+  TestFTDictCacheLoaderExec loader;
+  ObFTCacheRangeContainer full_container(alloc);
+  ASSERT_EQ(OB_SUCCESS, loader.load_cache(desc, full_container));
+  ASSERT_GE(full_container.get_handles().size(), 2);
+
+  ObFTCacheRangeContainer gap_container(alloc);
+  ObDictCacheKey key0(desc.table_id_, MTL_ID(), 0);
+  ObDictCacheKey key2(desc.table_id_, MTL_ID(), 2);
+  ObFTCacheRangeHandle tmp0;
+  ObFTCacheRangeHandle tmp2;
+  ObFTCacheRangeHandle *info = nullptr;
+
+  ASSERT_EQ(OB_SUCCESS, ObDictCache::get_instance().get_dict(key0, tmp0.value_, tmp0.handle_));
+  ASSERT_EQ(OB_SUCCESS, gap_container.fetch_info_for_dict(info));
+  info->move_from(tmp0);
+  info->key_ = key0;
+
+  ASSERT_EQ(OB_SUCCESS, ObDictCache::get_instance().get_dict(key2, tmp2.value_, tmp2.handle_));
+  ASSERT_EQ(OB_SUCCESS, gap_container.fetch_info_for_dict(info));
+  info->move_from(tmp2);
+  info->key_ = key2;
+
+  ObSEArray<ObMissingRangeInfo, 4> missing_ranges;
+  ASSERT_FALSE(gap_container.get_handles().empty());
+  int64_t snapshot_version = (*gap_container.get_handles().begin())->value_->get_snapshot_version();
+  const int32_t range_count = 3;
+  ret = loader.handle_missing_ranges(gap_container, range_count, snapshot_version, &missing_ranges);
+  ASSERT_EQ(OB_SUCCESS, ret);
+  ASSERT_GE(missing_ranges.count(), 1);
+  ASSERT_EQ(1, missing_ranges.at(0).start_range_id_);
+}
+
+TEST_F(FTParserTest, test_try_load_cache_invalid_table_id)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator alloc(ObModIds::TEST);
+  ObFTDictCacheLoaderExec loader;
+  const uint64_t invalid_table_id = static_cast<uint64_t>(-1);
+  ObFTDictDesc desc(ObCharsetType::CHARSET_UTF8MB4,
+                    ObCollationType::CS_TYPE_UTF8MB4_BIN,
+                    invalid_table_id,
+                    ObString(""));
+  ObFTCacheRangeContainer container(alloc);
+  ret = loader.try_load_cache(desc, container);
+  ASSERT_EQ(OB_INVALID_ARGUMENT, ret);
+}
+
+TEST_F(FTParserTest, test_access_row_scn_cache_queue_push_pop)
+{
+  ObFTAccessRowScnCacheTask task;
+  ASSERT_EQ(OB_SUCCESS, task.init());
+  const uint64_t tid = 12345ULL;
+  task.push(tid);
+  uint64_t out = 0;
+  ASSERT_TRUE(task.pop(out));
+  ASSERT_EQ(tid, out);
+  ASSERT_FALSE(task.pop(out));
+  task.destroy();
+}
+
 TEST_F(FTParserTest, test_ik) { int ret = OB_SUCCESS; }
 
 // smart mode
@@ -689,8 +942,6 @@ TEST_F(FTParserTest, DISABLED_benchmark)
   int ret = OB_SUCCESS;
 
   ObArenaAllocator alloc(ObModIds::TEST);
-  ObFTDictHub hub;
-  hub.init();
 
   auto case_insensitive_compare = [](const std::string &a, const std::string &b) {
     return a.size() == b.size() && std::equal(a.begin(), a.end(), b.begin(), [](char a, char b) {
@@ -713,8 +964,14 @@ TEST_F(FTParserTest, DISABLED_benchmark)
     param.ft_length_ = len;
     param.parser_version_ = 1;
     param.ik_param_.mode_ = smart ? ObFTIKParam::Mode::SMART : ObFTIKParam::Mode::MAX_WORD;
+    param.ik_param_.main_dict_id_ = OB_FT_DICT_IK_UTF8_TID;
+    param.ik_param_.main_dict_name_ = ObString(ObFTSLiteral::FT_DEFAULT_IK_DICT_UTF8_TABLE);
+    param.ik_param_.stopword_dict_id_ = OB_FT_STOPWORD_IK_UTF8_TID;
+    param.ik_param_.stopword_dict_name_ = ObString(ObFTSLiteral::FT_DEFAULT_IK_STOPWORD_UTF8_TABLE);
+    param.ik_param_.quan_dict_id_ = OB_FT_QUANTIFIER_IK_UTF8_TID;
+    param.ik_param_.quan_dict_name_ = ObString(ObFTSLiteral::FT_DEFAULT_IK_QUANTIFIER_UTF8_TABLE);
 
-    ObIKFTParser parser(allocator, &hub);
+    ObIKFTParser parser(allocator);
     ret = parser.init(param);
     ASSERT_EQ(OB_SUCCESS, ret);
 

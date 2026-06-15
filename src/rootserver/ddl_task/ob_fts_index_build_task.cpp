@@ -1195,6 +1195,8 @@ int ObFtsIndexBuildTask::try_lock_dictionary_tables_out_trans()
   ObTenantDicLoaderHandle dic_loader_handle;
   ObCharsetType charset_type = ObCharsetType::CHARSET_INVALID;
   ObTableLockOwnerID owner_id;
+  const ObString &parser_properties = create_index_arg_.index_option_.parser_properties_;
+  ObSEArray<uint64_t, 3> dict_table_ids;
   if (is_fts_task()) {
     if (OB_FAIL(ObFtsIndexBuilderUtil::check_need_to_load_dic(tenant_id_, parser_name, need_to_load_dic))) {
       LOG_WARN("fail to check need to load dic", K(ret), K(tenant_id_), K(parser_name), K(need_to_load_dic));
@@ -1218,16 +1220,18 @@ int ObFtsIndexBuildTask::try_lock_dictionary_tables_out_trans()
         LOG_WARN("the dic loader handle is not valid", K(ret), K(tenant_id_), K(dic_loader_handle));
       } else if (OB_FAIL(owner_id.convert_from_value(ObLockOwnerType::DEFAULT_OWNER_TYPE, task_id_))) {
         LOG_WARN("failed to get owner id", K(ret), K(task_id_));
+      } else if (OB_FAIL(ObFtsIndexBuilderUtil::get_dict_table_ids(parser_properties, dict_table_ids))) {
+        LOG_WARN("fail to get dict table ids from properties", K(ret), K(parser_name), K(parser_properties));
       } else if (OB_FAIL(ObDicLock::lock_dic_tables_out_trans(tenant_id_,
-                                                              *dic_loader_handle.get_loader(),
                                                               transaction::tablelock::SHARE,
                                                               owner_id,
-                                                              trans))) {
+                                                              trans,
+                                                              dict_table_ids))) {
         if (OB_OBJ_LOCK_EXIST == ret) {
           ret = OB_SUCCESS;
         } else {
           LOG_WARN("failed to lock all dictionary table",
-              K(ret), K(tenant_id_), K(dic_loader_handle), K(owner_id));
+              K(ret), K(tenant_id_), K(dict_table_ids), K(owner_id));
         }
       }
       if (OB_SUCC(ret)) {
@@ -2492,8 +2496,10 @@ int ObFtsIndexBuildTask::cleanup_impl()
     ObMySQLTransaction trans;
     bool need_to_load_dic = false;
     const ObString &parser_name = create_index_arg_.index_option_.parser_name_;
+    const ObString &parser_properties = create_index_arg_.index_option_.parser_properties_;
     ObTenantDicLoaderHandle dic_loader_handle;
     ObCharsetType charset_type = CHARSET_INVALID;
+    ObSEArray<uint64_t, 3> dict_table_ids;
     bool is_skip_unlock = false;
     if (OB_FAIL(GCTX.schema_service_->get_tenant_schema_guard(tenant_id_,
                                                        schema_guard))) {
@@ -2534,23 +2540,15 @@ int ObFtsIndexBuildTask::cleanup_impl()
       if (!is_dic_locked_) {
         LOG_INFO("the dictionaries table is not locked, skip unlock dictionaries",
             K(ret), K(tenant_id_), K(charset_type_), K(parser_name));
-      } else if (OB_FAIL(get_charset_type(charset_type))) {
-        LOG_WARN("fail to get charset type", K(ret), K(tenant_id_), K(charset_type));
-      } else if (OB_FAIL(ObGenDicLoader::get_instance().get_dic_loader(tenant_id_,
-                                                                       parser_name,
-                                                                       charset_type,
-                                                                       dic_loader_handle))) {
-          LOG_WARN("fail to get dic loader", K(ret), K(tenant_id_), K(parser_name), K(charset_type));
-      } else if (OB_UNLIKELY(!dic_loader_handle.is_valid())) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("the dic loader handle is not valid", K(ret), K(tenant_id_), K(dic_loader_handle));
-      } else if (OB_FAIL(ObDicLock::unlock_dic_tables(tenant_id_,
-                                                      *dic_loader_handle.get_loader(),
-                                                      transaction::tablelock::SHARE,
-                                                      owner_id,
-                                                      trans))) {
+      } else if (OB_FAIL(ObFtsIndexBuilderUtil::get_dict_table_ids(parser_properties, dict_table_ids))) {
+        LOG_WARN("fail to get dict table ids from properties", K(ret), K(parser_name), K(parser_properties));
+      } else if (OB_FAIL(ObDicLock::unlock_dict_tables(tenant_id_,
+                                                        dict_table_ids,
+                                                        transaction::tablelock::SHARE,
+                                                        owner_id,
+                                                        trans))) {
         LOG_WARN("failed to unlock all dictionary tables",
-            K(ret), K(tenant_id_), K(dic_loader_handle), K(owner_id));
+            K(ret), K(tenant_id_), K(dict_table_ids), K(owner_id));
       }
     }
     if (OB_FAIL(ret)) {
