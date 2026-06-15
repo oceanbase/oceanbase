@@ -5096,6 +5096,9 @@ int ObSql::pc_add_plan(ObPlanCacheCtx &pc_ctx,
       if (OB_SQL_PC_PLAN_DUPLICATE == ret) {
         ret = OB_SUCCESS;
         LOG_DEBUG("this plan has been added by others, need not add again", K(phy_plan));
+      } else if (OB_PC_LOCK_CONFLICT == ret) {
+        ret = OB_SUCCESS;
+        LOG_DEBUG("add plan to plan cache lock conflict, keep executing by batch", K(phy_plan));
       } else if (OB_FAIL(ret)) {
         LOG_WARN("some unexpected error occured", K(ret));
         ret = OB_BATCHED_MULTI_STMT_ROLLBACK;
