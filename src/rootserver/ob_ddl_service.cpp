@@ -7584,7 +7584,12 @@ int ObDDLService::create_index_tablet(const ObTableSchema &index_schema,
     const ObTableSchema *table_schema = NULL;
     const ObTableSchema *data_table_schema = NULL;
     const ObTablegroupSchema *data_tablegroup_schema = NULL; // keep NULL if no tablegroup
-    const bool is_vec_create_empty_major = index_schema.is_vec_delta_buffer_type() || index_schema.is_hybrid_vec_index_log_type() || index_schema.is_vec_index_id_type();
+    const bool is_vec_create_empty_major = index_schema.is_vec_delta_buffer_type()
+        || index_schema.is_hybrid_vec_index_log_type()
+        || index_schema.is_vec_index_id_type();
+    const bool need_create_empty_major = is_table_empty
+        || is_vec_create_empty_major
+        || index_schema.is_search_def_index();
 
     if (OB_FAIL(table_creator.init(need_check_tablet_cnt))) {
       LOG_WARN("fail to init table creator", KR(ret));
@@ -7628,7 +7633,7 @@ int ObDDLService::create_index_tablet(const ObTableSchema &index_schema,
         ret = OB_TABLE_NOT_EXIST;
         LOG_WARN("data table schema not exists", KR(ret), K(data_table_id));
       } else if (OB_FAIL(schemas.push_back(&index_schema))
-        || OB_FAIL(need_create_empty_majors.push_back(is_table_empty || is_vec_create_empty_major))) {
+        || OB_FAIL(need_create_empty_majors.push_back(need_create_empty_major))) {
         LOG_WARN("failed to push_back", KR(ret), K(index_schema));
       } else if (OB_FAIL(new_table_tablet_allocator.prepare(trans, index_schema, data_tablegroup_schema))) {
         LOG_WARN("fail to prepare ls for index schema tablets", KR(ret));
@@ -7653,7 +7658,7 @@ int ObDDLService::create_index_tablet(const ObTableSchema &index_schema,
             index_schema,
             ls_id_array,
             tenant_data_version,
-            is_table_empty /*need_create_empty_major_sstable*/))) {
+            need_create_empty_major /*need_create_empty_major_sstable*/))) {
         LOG_WARN("create table tablet failed", KR(ret), K(index_schema));
       }
     }
