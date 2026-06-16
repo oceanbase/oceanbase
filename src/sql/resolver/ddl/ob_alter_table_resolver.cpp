@@ -257,6 +257,8 @@ int ObAlterTableResolver::resolve(const ParseNode &parse_tree)
         LOG_WARN("failed to check allowed alter operations for mlog", KR(ret));
       } else if (OB_FAIL(check_semistruct_encoding_type(*table_schema_, alter_table_stmt->get_alter_table_schema()))) {
         LOG_WARN("failed to check semistruct encoding options", KR(ret));
+      } else if (OB_FAIL(check_delta_encoding_type(*table_schema_, alter_table_stmt->get_alter_table_schema()))) {
+        LOG_WARN("failed to check delta encoding options", KR(ret));
       } else {
         // deal with alter table rename to mock_fk_parent_table_name
         if (is_mysql_mode()
@@ -8292,6 +8294,22 @@ int ObAlterTableResolver::check_semistruct_encoding_type(const ObTableSchema &or
           K(origin_schema.get_row_store_type()), K(alter_schema.get_semistruct_encoding_type()));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "semistruct_encoding is not support if cs encoding is not set");
     }
+  }
+  return ret;
+}
+
+int ObAlterTableResolver::check_delta_encoding_type(const ObTableSchema &origin_schema, const ObTableSchema &alter_schema)
+{
+  int ret = OB_SUCCESS;
+  // TODO: when alter merge_engine is supported, use alter_schema.is_partial_update_merge_engine() instead of origin_schema,
+  //       and also check the reverse case (alter merge_engine to partial_update while delta_format is encoding)
+  if (!alter_table_bitset_.has_member(obrpc::ObAlterTableArg::DELTA_FORMAT)) {
+  } else if (ObStoreFormat::is_row_store_type_with_encoding(alter_schema.get_minor_row_store_type())
+               && origin_schema.is_partial_update_merge_engine()) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("delta format 'encoding' is not supported for partial_update merge engine table",
+        K(ret), K(origin_schema.get_merge_engine_type()));
+    LOG_USER_ERROR(OB_NOT_SUPPORTED, "delta format 'encoding' on partial_update merge engine table");
   }
   return ret;
 }

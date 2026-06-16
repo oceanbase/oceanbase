@@ -259,6 +259,9 @@ OB_INLINE int ObCompactionTTLUtil::check_alter_merge_engine_valid(const share::s
   // 5. dynamic partition policy is not supported for append_only table
   //    [x] (ALTER merge engine) when you alter merge engine (for future merge_engine alter feature)
 
+  // 6. delta format 'encoding' is not supported for partial_update merge engine table
+  //    handled in ObAlterTableResolver::check_delta_encoding_type
+
   return ret;
 }
 

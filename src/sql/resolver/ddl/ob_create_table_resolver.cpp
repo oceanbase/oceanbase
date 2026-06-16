@@ -527,7 +527,9 @@ int ObCreateTableResolver::set_default_merge_engine_type_(share::schema::ObTable
 int ObCreateTableResolver::set_default_delta_format_(share::schema::ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;
-  if (!table_schema.is_user_table()) {
+  if (ObRowStoreType::MAX_ROW_STORE != table_schema.get_minor_row_store_type()) {
+    // user explicitly specified delta_format via table option
+  } else if (!table_schema.is_user_table()) {
     table_schema.set_minor_row_store_type(ObStoreFormat::DEFAULT_MINOR_ROW_STORE_TYPE);
   } else if (OB_ISNULL(session_info_)) {
     ret = OB_INVALID_ARGUMENT;
@@ -542,7 +544,16 @@ int ObCreateTableResolver::set_default_delta_format_(share::schema::ObTableSchem
       ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
       if (OB_LIKELY(tenant_config.is_valid())) {
         ObString delta_format = tenant_config->default_delta_format.get_value_string();
-        OZ(ObStoreFormat::resolve_delta_row_store_type(delta_format, row_store_type));
+        ObRowStoreType default_row_store_type = ObRowStoreType::MAX_ROW_STORE;
+        OZ(ObStoreFormat::resolve_delta_row_store_type(delta_format, default_row_store_type));
+        if (OB_FAIL(ret)) {
+        } else if (ObStoreFormat::is_row_store_type_with_encoding(default_row_store_type)
+                   && table_schema.is_partial_update_merge_engine()) {
+          LOG_DEBUG("default_delta_format 'encoding' does not take effect on partial_update merge engine table",
+                    K(delta_format), K(default_row_store_type));
+        } else {
+          row_store_type = default_row_store_type;
+        }
       } else {
         LOG_WARN("invalid tenant config, delta format is set to flat", K(tenant_id));
       }
@@ -862,6 +873,8 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
             if (!table_schema.is_sys_table()) {
               pctfree_ = 0; // set default pctfree value for non-sys table
             }
+            // sentinel to detect whether user explicitly specified delta_format in table options
+            table_schema.set_minor_row_store_type(ObRowStoreType::MAX_ROW_STORE);
             if (OB_FAIL(ret)) {
             } else if (OB_FAIL(set_default_micro_index_clustered_(table_schema))) {
               SQL_RESV_LOG(WARN, "set table options (micro_index_clustered) failed", K(ret));
@@ -871,12 +884,19 @@ int ObCreateTableResolver::resolve(const ParseNode &parse_tree)
               SQL_RESV_LOG(WARN, "set table options (micro_block_format_version) failed", K(ret));
             } else if (OB_FAIL(set_default_merge_engine_type_(table_schema))) {
               SQL_RESV_LOG(WARN, "set default merge engine type failed", K(ret));
-            } else if (OB_FAIL(set_default_delta_format_(table_schema))) {
-              SQL_RESV_LOG(WARN, "set default delta format failed", K(ret));
             } else if (OB_FAIL(set_default_skip_index_level_(table_schema))) {
               SQL_RESV_LOG(WARN, "set default skip index level failed", K(ret));
             } else if (OB_FAIL(resolve_table_options(create_table_node->children_[4], false))) {
               SQL_RESV_LOG(WARN, "resolve table options failed", K(ret));
+            }
+            // merge_engine must be decided before set_default_delta_format,
+            // because default_delta_format 'encoding' does not take effect on partial_update merge engine table
+            else if (OB_FAIL(set_default_delta_format_(table_schema))) {
+              SQL_RESV_LOG(WARN, "set default delta format failed", K(ret));
+            } else if (ObStoreFormat::is_row_store_type_with_encoding(table_schema.get_minor_row_store_type())
+                       && table_schema.is_partial_update_merge_engine()) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "delta format 'encoding' on partial_update merge engine table");
             } else if (is_oracle_temp_table_ && !is_old_oracle_temp_table_ && !tablegroup_name_.trim().empty()) {
               // 禁止临时表指定 TABLEGROUP
               ret = OB_NOT_SUPPORTED;

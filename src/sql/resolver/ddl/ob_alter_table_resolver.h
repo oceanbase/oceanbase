@@ -234,6 +234,7 @@ private:
                                 const share::schema::ObTableSchema &orign_table_schema,
                                 ObAlterTableStmt &alter_table_stmt);
   int check_semistruct_encoding_type(const ObTableSchema &origin_schema, const ObTableSchema &alter_schema);
+  int check_delta_encoding_type(const ObTableSchema &origin_schema, const ObTableSchema &alter_schema);
 
   const share::schema::ObTableSchema *table_schema_;
   const share::schema::ObTableSchema *index_schema_;

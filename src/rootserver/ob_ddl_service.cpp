@@ -2856,6 +2856,12 @@ int ObDDLService::set_raw_table_options(
             LOG_USER_ERROR(OB_NOT_SUPPORTED, "delta format is");
           } else if (OB_FAIL(new_table_schema.set_delta_format(alter_table_schema.get_delta_format()))) {
             LOG_WARN("fail to set delta format", KR(ret), K(alter_table_schema.get_delta_format()), K(new_table_schema));
+          } else if (ObStoreFormat::is_row_store_type_with_encoding(new_table_schema.get_minor_row_store_type())
+                     && new_table_schema.is_partial_update_merge_engine()) {
+            ret = OB_NOT_SUPPORTED;
+            LOG_WARN("delta format 'encoding' is not supported for partial_update merge engine table",
+                KR(ret), K(new_table_schema.get_merge_engine_type()));
+            LOG_USER_ERROR(OB_NOT_SUPPORTED, "delta format 'encoding' on partial_update merge engine table");
           }
           break;
         }
