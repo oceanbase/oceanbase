@@ -851,6 +851,7 @@ public:
                                  enable_pl_sql_parameterize_(false),
                                  enable_fast_json_path_lookup_(false),
                                  enable_pl_null_literal_parameterization_(false),
+                                 enable_foreign_key_gts_opt_(false),
                                  session_(session)
     {
     }
@@ -915,6 +916,7 @@ public:
     bool enable_pl_sql_parameterize() const { return enable_pl_sql_parameterize_; }
     bool enable_fast_json_path_lookup() const { return enable_fast_json_path_lookup_; }
     bool enable_pl_null_literal_parameterization() const { return enable_pl_null_literal_parameterization_; }
+    bool enable_foreign_key_gts_opt() const { return ATOMIC_LOAD(&enable_foreign_key_gts_opt_); }
   private:
     //租户级别配置项缓存session 上，避免每次获取都需要刷新
     bool is_external_consistent_;
@@ -963,6 +965,7 @@ public:
     bool enable_pl_sql_parameterize_;
     bool enable_fast_json_path_lookup_;
     bool enable_pl_null_literal_parameterization_;
+    bool enable_foreign_key_gts_opt_;
     ObSQLSessionInfo *session_;
   };
 
@@ -1663,6 +1666,11 @@ public:
   {
     cached_tenant_config_info_.refresh();
     return cached_tenant_config_info_.enable_insertup_replace_gts_opt();
+  }
+  bool enable_foreign_key_gts_opt()
+  {
+    cached_tenant_config_info_.refresh();
+    return cached_tenant_config_info_.enable_foreign_key_gts_opt();
   }
   bool enable_immediate_row_conflict_check()
   {
