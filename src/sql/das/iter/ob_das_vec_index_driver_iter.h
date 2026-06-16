@@ -200,6 +200,8 @@ public:
       scalar_scan_rtdef_(nullptr),
       filter_rtdef_for_reeval_(nullptr),
       go_brute_force_(false),
+      last_partition_row_count_(0),
+      last_filter_est_row_count_(0),
       profile_(nullptr) {}
 
   virtual ~ObDASVecIndexDriverIter() {}
@@ -259,6 +261,7 @@ private:
   int fill_results_to_eval_ctx(share::ObVectorQueryVidIterator *adaptor_vid_iter, int64_t &count, int64_t capacity);
 
   int post_query_vid_with_expr_filter();
+  int do_expr_filter_batch();
   int filter_by_index_back(int64_t vid, float distance, bool &filter_res);
   int set_rowkey_by_vid(int64_t vid);
   int get_single_row_from_filter_iter(bool is_vectorized);
@@ -332,6 +335,8 @@ private:
   ObDASScalarScanRtDef *scalar_scan_rtdef_;
   ObIDASSearchRtDef *filter_rtdef_for_reeval_;
   bool go_brute_force_;
+  int64_t last_partition_row_count_;
+  int64_t last_filter_est_row_count_;
   common::ObObj vid_obj_for_lookup_;
   common::ObOpProfile<common::ObMetric> *profile_;
 };

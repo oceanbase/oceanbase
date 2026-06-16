@@ -81,6 +81,8 @@ public:
                                          float &similarity_threshold,
                                          float &distance_threshold);
   static int check_ivf_support_similarity_threshold(ObExpr &expr);
+  static int get_main_rowkey(const ObDASScanCtDef *ctdef, ObEvalCtx *eval_ctx, ObRowkey &main_rowkey);
+  static int64_t calc_effective_batch(int64_t needed, double selectivity, int64_t max_batch);
 };
 
 }  // namespace sql
