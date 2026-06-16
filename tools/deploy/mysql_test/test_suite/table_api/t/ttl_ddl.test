@@ -728,3 +728,24 @@ drop table if exists test_ts_index$cf6;
 drop table if exists test_idx$cf4;
 drop table if exists test_idx$cf5;
 --enable_warnings
+
+--echo ####################################CASE####################################
+--echo # an over-long numeric field in duty_duration must be rejected with a
+--echo # config error (OB_INVALID_CONFIG) rather than silently accepted
+--echo ############################################################################
+
+# over-long numeric field: expect OB_INVALID_CONFIG (4147)
+--error 4147
+alter system set kv_ttl_duty_duration='[11111111111111111111111111111111111111111111111111111111111111111111111:00:00,00:00:00]';
+
+--error 4147
+alter system set vector_index_optimize_duty_time='[11111111111111111111111111111111111111111111111111111111111111111111111:00:00,00:00:00]';
+
+# a valid value still takes effect
+alter system set kv_ttl_duty_duration='[02:00:00,04:00:00]';
+let $kv_ttl_duty_duration_value = query_get_value(show parameters like 'kv_ttl_duty_duration', value, 1);
+--echo kv_ttl_duty_duration=$kv_ttl_duty_duration_value
+
+# restore defaults
+alter system set kv_ttl_duty_duration='';
+alter system set vector_index_optimize_duty_time='[00:00:00, 24:00:00]';
