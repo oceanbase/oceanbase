@@ -217,6 +217,7 @@ int ObLCLNode::add_self_ref_count_()
                       K(*this), KP(p_detector));
     CLICK();
     MTL(ObDeadLockDetectorMgr*)->detector_map_.revert(p_detector);
+    ret = OB_ENTRY_EXIST;
   } else {
     // do nothing
   }
