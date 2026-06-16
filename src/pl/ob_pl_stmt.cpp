@@ -1635,6 +1635,39 @@ int ObPLExternalNS::resolve_synonym(uint64_t object_db_id,
         ADD_DEPENDENCY;
       }
     }
+    // Try sys Package Schema
+    if (OB_TABLE_NOT_EXIST == ret && is_oracle_sys_database_id(object_db_id)) {
+      const ObPackageInfo *package_info = nullptr;
+      if (OB_FAIL(schema_guard.get_package_info(OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID, object_name,
+                                                share::schema::PACKAGE_TYPE, compatible_mode, package_info))
+          || OB_ISNULL(package_info)) {
+        ret = OB_TABLE_NOT_EXIST;
+      } else {
+        type = PKG_NS;
+        object_db_id = OB_SYS_DATABASE_ID;
+        object_id = package_info->get_package_id();
+        obj_version.object_id_ = package_info->get_package_id();
+        obj_version.version_ = package_info->get_schema_version();
+        obj_version.object_type_ = DEPENDENCY_PACKAGE;
+        ADD_DEPENDENCY;
+      }
+    }
+    // Try sys UDT Schema
+    if (OB_TABLE_NOT_EXIST == ret && is_oracle_sys_database_id(object_db_id)) {
+      const ObUDTTypeInfo *udt_info = nullptr;
+      if (OB_FAIL(schema_guard.get_udt_info(OB_SYS_TENANT_ID, OB_SYS_DATABASE_ID, OB_INVALID_ID, object_name, udt_info))
+          || OB_ISNULL(udt_info)) {
+        ret = OB_TABLE_NOT_EXIST;
+      } else {
+        object_id = udt_info->get_type_id();
+        type = UDT_NS;
+        object_db_id = OB_SYS_DATABASE_ID;
+        obj_version.object_id_ = object_id;
+        obj_version.object_type_ = DEPENDENCY_TYPE;
+        obj_version.version_ = udt_info->get_schema_version();
+        ADD_DEPENDENCY;
+      }
+    }
     ret = OB_TABLE_NOT_EXIST == ret ? OB_SUCCESS : ret;
     if (OB_SUCC(ret)) {
       if (OB_INVALID_ID == object_id) {

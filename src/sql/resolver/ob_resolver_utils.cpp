@@ -2165,7 +2165,7 @@ int ObResolverUtils::resolve_sp_access_name(ObSchemaChecker &schema_checker,
                   LOG_WARN("get package id failed", K(package_or_db_name), K(ret));
                 }
               } else {
-                package_name = package_or_db_name;
+                package_name = object_name;
                 db_name.assign_ptr(OB_SYS_DATABASE_NAME, static_cast<int32_t>(strlen(OB_SYS_DATABASE_NAME)));
               }
             } else if (!exist) {
