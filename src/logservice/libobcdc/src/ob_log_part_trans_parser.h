@@ -80,14 +80,14 @@ private:
       const bool is_build_baseline,
       ObLogEntryTask &redo_log_entry_task,
       PartTransTask &task,
-      uint64_t &row_index,
+      uint64_t &row_index_in_redo,
       volatile bool &stop_flag);
   int parse_direct_load_inc_stmts_(
       ObLogTenant *tenant,
       const RedoLogMetaNode &redo_log_node,
       ObLogEntryTask &redo_log_entry_task,
       PartTransTask &task,
-      uint64_t &row_index,
+      uint64_t &row_index_in_redo,
       volatile bool &stop_flag);
 
   // try parse mutator_header to get mutator type(support if ob_version >= 320)
@@ -129,7 +129,7 @@ private:
   bool should_not_filter_row_(PartTransTask &task);
 
   int parse_ddl_stmts_(
-      const uint64_t row_index,
+      const uint64_t row_index_in_redo,
       const ObLogAllDdlOperationSchemaInfo &all_ddl_operation_table_schema,
       const bool is_build_baseline,
       MutatorRow &row,
@@ -137,12 +137,12 @@ private:
       volatile bool &stop_flag);
   int parse_ddl_lob_aux_stmts_(
       const uint64_t table_id,
-      const uint64_t row_index,
+      const uint64_t row_index_in_redo,
       MutatorRow &row,
       PartTransTask &part_trans_task);
   int parse_dml_stmts_(
       const uint64_t table_id,
-      const uint64_t row_index,
+      const uint64_t row_index_in_redo,
       MutatorRow &row,
       ObLogEntryTask &redo_log_entry_task,
       PartTransTask &part_trans_task);

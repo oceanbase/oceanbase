@@ -78,7 +78,7 @@ public:
     type_(type),
     host_(host),
     hash_value_(common::OB_INVALID_ID),
-    row_index_(OB_INVALID_ID),
+    row_index_in_redo_(OB_INVALID_ID),
     br_(NULL),
     next_(NULL)
   {}
@@ -104,8 +104,9 @@ public:
   uint64_t hash() const { return hash_value_; }
   void set_hash_value(const int64_t hash_value) { hash_value_ = hash_value; }
 
-  uint64_t get_row_index() const { return row_index_; }
-  void set_row_index(const uint64_t row_index) { row_index_ = row_index; }
+  uint64_t get_row_index_in_redo() const { return row_index_in_redo_; }
+  void set_row_index_in_redo(const uint64_t row_index_in_redo)
+  { row_index_in_redo_ = row_index_in_redo; }
 
   ObLogBR *get_binlog_record() { return br_; }
   const ObLogBR *get_binlog_record() const { return br_; }
@@ -135,7 +136,7 @@ public:
       K_(type),
       "type_str", print_stmt_type(type_),
       K_(hash_value),
-      K_(row_index),
+      K_(row_index_in_redo),
       KP_(br),
       K_(host),
       KP_(next));
@@ -144,7 +145,7 @@ protected:
   StmtType           type_;
   PartTransTask      &host_;        // part trans task the stmt belongs to
   uint64_t           hash_value_;   // HASH value
-  uint64_t           row_index_;    // row index for the stmt in the trans it belongs
+  uint64_t           row_index_in_redo_;    // stmt index within a redo log
   ObLogBR            *br_;
   IStmtTask          *next_;
 
@@ -471,20 +472,20 @@ private:
 //////////////////////////////////////// MemtableMutatorRow ///////////////////////////////////////////////
 #define DELIMITER_STR "_"
 
-// The DML unique ID is part_trans_id(tenant_id + ls_id + trans_id) + redo_log_lsn  + row_index, the separator is `_`
+// The DML unique ID is part_trans_id(tenant_id + ls_id + trans_id) + redo_log_lsn  + row_index_in_redo, the separator is `_`
 // tenant_id+ls_id+trans_id+redo_log_lsn could locate an unique log_entry for a trans,
 // an redo_log_lsn locate a unique redo_log in a trans,
-// row_index locate a specifed row recorded in a redo_log
+// row_index_in_redo locate a specifed row recorded in a redo_log
 class DmlStmtUniqueID
 {
 public:
   DmlStmtUniqueID(
       const ObString &part_trans_info_str,
       const palf::LSN &redo_log_lsn,
-      const uint64_t row_index) :
+      const uint64_t row_index_in_redo) :
     part_trans_info_str_(part_trans_info_str),
     redo_log_lsn_(redo_log_lsn),
-    row_index_(row_index) {}
+    row_index_in_redo_(row_index_in_redo) {}
 
   ~DmlStmtUniqueID() { reset(); }
 public:
@@ -492,28 +493,28 @@ public:
   {
     // part_trans_info_str_.reset(); part_trans_info_str_ is a reference, should not reset it.
     redo_log_lsn_.reset();
-    row_index_ = OB_INVALID_ID;
+    row_index_in_redo_ = OB_INVALID_ID;
   }
 
   bool is_valid() const
-  { return !part_trans_info_str_.empty() && redo_log_lsn_.is_valid() && OB_INVALID_ID != row_index_; }
+  { return !part_trans_info_str_.empty() && redo_log_lsn_.is_valid() && OB_INVALID_ID != row_index_in_redo_; }
   const palf::LSN &get_redo_lsn() const { return redo_log_lsn_; }
-  uint64_t get_row_index() const { return row_index_; }
+  uint64_t get_row_index_in_redo() const { return row_index_in_redo_; }
   // get length of serialized DmlStmtUniqueID(with '\0')
   int64_t get_dml_unique_id_length() const;
 
 public:
-  // row_index(uint64_t): to_cstring长度20
+  // row_index_in_redo(uint64_t): to_cstring长度20
   static const int64_t MAX_ROW_INDEX_LENGTH = 20;
   template<typename NUM> static int64_t compute_str_length_base_num(const NUM num_to_compute);
   // Optimising customisation to_string
   int customized_to_string(char *buf, const int64_t buf_len, int64_t &pos) const;
-  TO_STRING_KV(K_(part_trans_info_str), K_(redo_log_lsn), K_(row_index));
+  TO_STRING_KV(K_(part_trans_info_str), K_(redo_log_lsn), K_(row_index_in_redo));
 
 private:
   const ObString &part_trans_info_str_; // str of tenant_id + ls_id + trans_id
   palf::LSN redo_log_lsn_; // redo_log_lsn
-  uint64_t row_index_;
+  uint64_t row_index_in_redo_;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(DmlStmtUniqueID);
@@ -651,7 +652,7 @@ public:
   // init DDL Binlog Record
   int parse_ddl_info(
       ObLogBR *br,
-      const uint64_t row_index,
+      const uint64_t row_index_in_redo,
       const ObLogAllDdlOperationSchemaInfo &all_ddl_operation_table_schema_info,
       const bool is_build_baseline,
       bool &is_valid_ddl,
@@ -711,7 +712,7 @@ private:
       const uint64_t pure_id);
   int build_ddl_binlog_record_(ObLogBR *br,
       const ObString &ddl_stmt,
-      const uint64_t row_index);
+      const uint64_t row_index_in_redo);
   bool is_recyclebin_database_id(const uint64_t tenant_id, const uint64_t database_id);
   // Offline DDL: create hidden table
   bool is_create_table_ddl_(const int64_t ddl_operation_type);
@@ -805,7 +806,7 @@ public:
   const StmtList &get_stmt_list() const { return stmt_list_; }
   StmtList &get_stmt_list() { return stmt_list_; }
   int64_t get_stmt_num() const { return stmt_list_.num_; }
-  int add_stmt(const uint64_t row_index, IStmtTask *stmt_task);
+  int add_stmt(const uint64_t row_index_in_redo, IStmtTask *stmt_task);
 
   // Increases the number of statements that complete the formatting and returns the result after the increase
   int64_t inc_formatted_stmt_num();
@@ -1096,9 +1097,9 @@ public:
   void *alloc(const int64_t size);
   void free(void *ptr);
 
-  int add_stmt(const uint64_t row_index, IStmtTask *stmt_task);
-  int add_ddl_lob_aux_stmt(const uint64_t row_index, DmlStmtTask *stmt_task);
-  int add_ddl_stmt(const uint64_t row_index, DdlStmtTask *ddl_stmt);
+  int add_stmt(const uint64_t row_index_in_redo, IStmtTask *stmt_task);
+  int add_ddl_lob_aux_stmt(const uint64_t row_index_in_redo, DmlStmtTask *stmt_task);
+  int add_ddl_stmt(const uint64_t row_index_in_redo, DdlStmtTask *ddl_stmt);
   const StmtList &get_stmt_list() const { return stmt_list_; }
   StmtList &get_stmt_list() { return stmt_list_; }
   int64_t get_stmt_num() const { return stmt_list_.num_; }

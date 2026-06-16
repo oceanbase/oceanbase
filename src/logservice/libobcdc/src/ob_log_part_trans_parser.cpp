@@ -151,8 +151,8 @@ int ObLogPartTransParser::parse(ObLogEntryTask &task, volatile bool &stop_flag)
   } else {
     ObLogTenant *tenant = NULL;
     ObLogTenantGuard guard;
-    // Incremental within LogEntryTask
-    uint64_t row_index = 0;
+    // Incremental within a redo log (ObLogEntryTask binds one redo)
+    uint64_t row_index_in_redo = 0;
     const uint64_t tenant_id = part_trans_task->get_tenant_id();
 
     // DDL data/non-PG partitioned data need to be deserialized in whole rows, not filtered
@@ -185,16 +185,16 @@ int ObLogPartTransParser::parse(ObLogEntryTask &task, volatile bool &stop_flag)
         ret = OB_INVALID_DATA;
         LOG_ERROR("redo data is not valid", KR(ret), KPC(redo_node));
       } else if (redo_node->is_direct_load_inc_log()) {
-        if (OB_FAIL(parse_direct_load_inc_stmts_(tenant, *redo_node, task, *part_trans_task, row_index, stop_flag))) {
-          LOG_ERROR("parse_ddl_stmts_ fail", KR(ret), K(tenant), KPC(redo_node), K(task), K(row_index));
+        if (OB_FAIL(parse_direct_load_inc_stmts_(tenant, *redo_node, task, *part_trans_task, row_index_in_redo, stop_flag))) {
+          LOG_ERROR("parse_ddl_stmts_ fail", KR(ret), K(tenant), KPC(redo_node), K(task), K(row_index_in_redo));
         } else {
           ATOMIC_AAF(&total_log_size_, redo_node->get_data_len());
           LOG_DEBUG("[PARSE] LogEntryTask parse ddl redo log succ", K(task));
         }
       } else {
         if (OB_FAIL(parse_stmts_(tenant, *redo_node, is_build_baseline, task, *part_trans_task,
-            row_index, stop_flag))) {
-          LOG_ERROR("parse_stmts_ fail", KR(ret), K(tenant), KPC(redo_node), K(task), K(row_index));
+            row_index_in_redo, stop_flag))) {
+          LOG_ERROR("parse_stmts_ fail", KR(ret), K(tenant), KPC(redo_node), K(task), K(row_index_in_redo));
         } else {
           ATOMIC_AAF(&total_log_size_, redo_node->get_data_len());
           LOG_DEBUG("[PARSE] LogEntryTask parse redo log succ", K(task));
@@ -218,8 +218,8 @@ int ObLogPartTransParser::parse_ddl_redo_log_(PartTransTask &task, const bool is
     LOG_ERROR("redo log list is invalid", K(sorted_redo_list), K(task));
     ret = OB_ERR_UNEXPECTED;
   } else {
-    // Used to assign row_index to DML and DDL statements, partitioned transaction statements are ordered, starting from 0
-    uint64_t row_index = 0;
+    // Used to assign row_index_in_redo to DML and DDL statements within each redo, starting from 0 per redo
+    uint64_t row_index_in_redo = 0;
     ObLogTenant *tenant = NULL;
     ObLogTenantGuard guard;
     // just declear here
@@ -257,9 +257,9 @@ int ObLogPartTransParser::parse_ddl_redo_log_(PartTransTask &task, const bool is
             LOG_ERROR("redo data is not valid", KPC(ddl_redo));
             ret = OB_INVALID_DATA;
           } else if (OB_FAIL(parse_stmts_(tenant, *ddl_redo, is_build_baseline,
-              invalid_redo_log_entry_task, task, row_index, stop_flag))) {
+              invalid_redo_log_entry_task, task, row_index_in_redo, stop_flag))) {
             LOG_ERROR("parse_stmts_ fail", KR(ret), K(tenant), "redo_node", *ddl_redo,
-                K(is_build_baseline), K(task), K(row_index));
+                K(is_build_baseline), K(task), K(row_index_in_redo));
           } else {
             redo_num += ddl_redo->get_log_num();
             redo_iter++;
@@ -282,7 +282,7 @@ int ObLogPartTransParser::parse_stmts_(
     const bool is_build_baseline,
     ObLogEntryTask &redo_log_entry_task,
     PartTransTask &task,
-    uint64_t &row_index,
+    uint64_t &row_index_in_redo,
     volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
@@ -332,7 +332,7 @@ int ObLogPartTransParser::parse_stmts_(
           LOG_ERROR("parse_memtable_mutator_row_ failed", KR(ret),
               "tls_id", task.get_tls_id(),
               "trans_id", task.get_trans_id(),
-              K(tablet_id), K(redo_log_entry_task), K(is_build_baseline), K(row_index));
+              K(tablet_id), K(redo_log_entry_task), K(is_build_baseline), K(row_index_in_redo));
         } else if (! is_ignored) {
           // parse row data
           if (is_ddl_trans) {
@@ -340,33 +340,33 @@ int ObLogPartTransParser::parse_stmts_(
               LOG_INFO("is_all_ddl_operation_lob_aux_tablet", "tls_id", task.get_tls_id(),
                   "trans_id", task.get_trans_id(), K(tablet_id));
 
-              if (OB_FAIL(parse_ddl_lob_aux_stmts_(table_info.get_table_id(), row_index, *row, task))) {
+              if (OB_FAIL(parse_ddl_lob_aux_stmts_(table_info.get_table_id(), row_index_in_redo, *row, task))) {
                 LOG_ERROR("parse_ddl_lob_aux_stmts_ failed", KR(ret), "tls_id", task.get_tls_id(),
                   "trans_id", task.get_trans_id(), K(tablet_id));
               }
               // data in non ddl table already filtered while parse_mutator_row_
             } else if (OB_FAIL(parse_ddl_stmts_(
-                row_index,
+                row_index_in_redo,
                 all_ddl_operation_table_schema_info_,
                 is_build_baseline,
                 *row,
                 task,
                 stop_flag))) {
-              LOG_ERROR("parse_ddl_stmts_ fail", KR(ret), K(row_index), K(tablet_id), K(*row), K(task));
+              LOG_ERROR("parse_ddl_stmts_ fail", KR(ret), K(row_index_in_redo), K(tablet_id), K(*row), K(task));
             }
           } else if (OB_FAIL(parse_dml_stmts_(
               table_info.get_table_id(),
-              row_index,
+              row_index_in_redo,
               *row,
               redo_log_entry_task,
               task))) {
-            LOG_ERROR("parse_dml_stmts_ fail", KR(ret), K(row_index), K(*row), K(redo_log_entry_task), K(task));
+            LOG_ERROR("parse_dml_stmts_ fail", KR(ret), K(row_index_in_redo), K(*row), K(redo_log_entry_task), K(task));
           } else {
             ATOMIC_AAF(&remaining_log_size_, pos - begin_pos);
           }
 
           if (OB_SUCC(ret)) {
-            ++row_index;
+            ++row_index_in_redo;
           }
         } // need_ignore_row=false
       } else if (MutatorType::MUTATOR_ROW_EXT_INFO == mutator_type) {
@@ -381,7 +381,7 @@ int ObLogPartTransParser::parse_stmts_(
           LOG_ERROR("handle_mutator_ext_info_log_ failed", KR(ret),
               "tls_id", task.get_tls_id(),
               "trans_id", task.get_trans_id(),
-              K(tablet_id), K(redo_log_entry_task), K(row_index));
+              K(tablet_id), K(redo_log_entry_task), K(row_index_in_redo));
         }
       } else {
         ret = OB_NOT_SUPPORTED;
@@ -398,7 +398,7 @@ int ObLogPartTransParser::parse_direct_load_inc_stmts_(
     const RedoLogMetaNode &redo_log_node,
     ObLogEntryTask &redo_log_entry_task,
     PartTransTask &task,
-    uint64_t &row_index,
+    uint64_t &row_index_in_redo,
     volatile bool &stop_flag)
 {
   int ret = OB_SUCCESS;
@@ -444,12 +444,12 @@ int ObLogPartTransParser::parse_direct_load_inc_stmts_(
           } else if (OB_FAIL(parse_macroblock_mutator_row_(tenant, tablet_id, task, redo_log_entry_task, row, table_info, is_ignored))) {
             LOG_ERROR("parse macroblock mutator row failed", K(tenant), K(tablet_id), K(task), K(redo_log_entry_task),
                 KPC(row), K(table_info), K(is_ignored), K(datum_row), K(row_key), K(seq), K(dml_flag), K(ddl_redo_log));
-          } else if (!is_ignored && OB_FAIL(parse_dml_stmts_(table_info.get_table_id(), row_index, *row,
+          } else if (!is_ignored && OB_FAIL(parse_dml_stmts_(table_info.get_table_id(), row_index_in_redo, *row,
               redo_log_entry_task, task))) {
-            LOG_ERROR("parse_dml_stmts failed", KR(ret), K(table_info), K(row_index), KPC(row), K(redo_log_entry_task), K(task),
+            LOG_ERROR("parse_dml_stmts failed", KR(ret), K(table_info), K(row_index_in_redo), KPC(row), K(redo_log_entry_task), K(task),
                 K(datum_row), K(row_key), K(seq), K(dml_flag), K(ddl_redo_log));
           } else {
-            ++row_index;
+            ++row_index_in_redo;
           }
         } // for each row
 
@@ -769,7 +769,7 @@ bool ObLogPartTransParser::should_not_filter_row_(PartTransTask &task)
 // Parsing DDL statements
 // Construct DDL Binlog Record directly
 int ObLogPartTransParser::parse_ddl_stmts_(
-    const uint64_t row_index,
+    const uint64_t row_index_in_redo,
     const ObLogAllDdlOperationSchemaInfo &all_ddl_operation_table_schema,
     const bool is_build_baseline,
     MutatorRow &row,
@@ -778,8 +778,8 @@ int ObLogPartTransParser::parse_ddl_stmts_(
 {
   int ret = OB_SUCCESS;
 
-  if (OB_UNLIKELY(! inited_) || OB_UNLIKELY(OB_INVALID_ID == row_index)) {
-    LOG_ERROR("invalid argument", K(inited_), K(row_index));
+  if (OB_UNLIKELY(! inited_) || OB_UNLIKELY(OB_INVALID_ID == row_index_in_redo)) {
+    LOG_ERROR("invalid argument", K(inited_), K(row_index_in_redo));
     ret = OB_INVALID_ARGUMENT;
   } else {
     DdlStmtTask *stmt_task = static_cast<DdlStmtTask *>(task.alloc(sizeof(DdlStmtTask)));
@@ -803,9 +803,9 @@ int ObLogPartTransParser::parse_ddl_stmts_(
 
       // Parsing DDL statement information
       bool is_valid_ddl = false;
-      if (OB_FAIL(stmt_task->parse_ddl_info(br, row_index, all_ddl_operation_table_schema, is_build_baseline,
+      if (OB_FAIL(stmt_task->parse_ddl_info(br, row_index_in_redo, all_ddl_operation_table_schema, is_build_baseline,
               is_valid_ddl, update_schema_version, exec_tennat_id, stop_flag))) {
-        LOG_ERROR("parse_ddl_info fail", KR(ret), K(*stmt_task), K(br), K(row_index), K(is_build_baseline),
+        LOG_ERROR("parse_ddl_info fail", KR(ret), K(*stmt_task), K(br), K(row_index_in_redo), K(is_build_baseline),
             K(is_valid_ddl), K(update_schema_version), K(exec_tennat_id));
       } else if (! is_valid_ddl) {
         // Discard invalid DDL statement tasks
@@ -816,8 +816,8 @@ int ObLogPartTransParser::parse_ddl_stmts_(
         // recycle Binlog Record
         br_pool_->free(br);
         br  = NULL;
-      } else if (OB_FAIL(task.add_ddl_stmt(row_index, stmt_task))) {
-        LOG_ERROR("add stmt into trans task fail", KR(ret), K(task), K(row_index),
+      } else if (OB_FAIL(task.add_ddl_stmt(row_index_in_redo, stmt_task))) {
+        LOG_ERROR("add stmt into trans task fail", KR(ret), K(task), K(row_index_in_redo),
             "stmt_task", *stmt_task);
       } else {
         // succ
@@ -855,7 +855,7 @@ int ObLogPartTransParser::parse_ddl_stmts_(
 
 int ObLogPartTransParser::parse_ddl_lob_aux_stmts_(
     const uint64_t table_id,
-    const uint64_t row_index,
+    const uint64_t row_index_in_redo,
     MutatorRow &row,
     PartTransTask &part_trans_task)
 {
@@ -879,9 +879,9 @@ int ObLogPartTransParser::parse_ddl_lob_aux_stmts_(
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("stmt_task is nullptr", KR(ret), K(stmt_task));
     } else if (FALSE_IT(stmt_task->set_table_id(table_id))) {
-    } else if (OB_FAIL(part_trans_task.add_ddl_lob_aux_stmt(row_index, stmt_task))) {
+    } else if (OB_FAIL(part_trans_task.add_ddl_lob_aux_stmt(row_index_in_redo, stmt_task))) {
       LOG_ERROR("add_ddl_lob_aux_stmt into trans task fail", KR(ret), K(part_trans_task),
-          K(row_index), "stmt_task", *stmt_task);
+          K(row_index_in_redo), "stmt_task", *stmt_task);
     } else if (OB_FAIL(stmt_task->parse_aux_meta_table_cols(lob_aux_table_schema_info))) {
       LOG_ERROR("parse_aux_meta_table_cols failed", KR(ret));
     } else if (OB_FAIL(stmt_task->get_cols(&rowkey_cols, &new_cols, &old_cols, nullptr/*new_lob_ctx_cols*/))) {
@@ -926,7 +926,7 @@ int ObLogPartTransParser::parse_ddl_lob_aux_stmts_(
 // 2. the corresponding Schema must be obtained in order to parse the column data correctly
 int ObLogPartTransParser::parse_dml_stmts_(
     const uint64_t table_id,
-    const uint64_t row_index,
+    const uint64_t row_index_in_redo,
     MutatorRow &row,
     ObLogEntryTask &redo_log_entry_task,
     PartTransTask &task)
@@ -945,13 +945,13 @@ int ObLogPartTransParser::parse_dml_stmts_(
     if (OB_ISNULL(stmt_task)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("stmt_task is nullptr", KR(ret), K(stmt_task));
-    } else if (OB_FAIL(redo_log_entry_task.add_stmt(row_index, stmt_task))) {
-      LOG_ERROR("add stmt into trans task fail", KR(ret), K(task), K(row_index), "stmt_task", *stmt_task);
+    } else if (OB_FAIL(redo_log_entry_task.add_stmt(row_index_in_redo, stmt_task))) {
+      LOG_ERROR("add stmt into trans task fail", KR(ret), K(task), K(row_index_in_redo), "stmt_task", *stmt_task);
     } else {
       // Update the Local Schema version of PartTransTask
       task.update_local_schema_version(stmt_task->get_table_version());
 
-      LOG_DEBUG("add_stmt succ", K(row_index), KPC(stmt_task));
+      LOG_DEBUG("add_stmt succ", K(row_index_in_redo), KPC(stmt_task));
     }
   }
 

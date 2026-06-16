@@ -71,7 +71,10 @@ ObBinlogRecordPrinter::ObBinlogRecordPrinter() : inited_(false),
                                                  dml_tx_br_count_(0),
                                                  total_tx_count_(0),
                                                  total_br_count_(0),
-                                                 dml_data_crc_(0)
+                                                 dml_data_crc_(0),
+                                                 cur_tx_id_(0),
+                                                 expected_row_index_in_trans_(0),
+                                                 tx_verify_failed_(false)
 {
 }
 
@@ -180,6 +183,11 @@ int ObBinlogRecordPrinter::print_binlog_record(IBinlogRecord *br)
     LOG_ERROR("get user data fail", K(br), K(oblog_br));
     ret = OB_INVALID_ARGUMENT;
   } else {
+    // Run verification (via LOG_INFO to obcdc log file)
+    if (enable_verify_mode_) {
+      verify_br(br);
+    }
+
     do_br_statistic_(*br);
 
     if (enable_print_console_) {
@@ -263,6 +271,64 @@ int ObBinlogRecordPrinter::output_heartbeat_file(const int fd, const int64_t hea
   return ret;
 }
 
+void ObBinlogRecordPrinter::verify_br(IBinlogRecord *br)
+{
+  if (NULL == br) {
+    return;
+  }
+
+  int record_type = br->recordType();
+  const uint64_t br_tx_id = br->getTransactionId();
+  const uint64_t br_row_index = br->getRowIndex();
+
+  if (EBEGIN == record_type) {
+    cur_tx_id_ = br_tx_id;
+    expected_row_index_in_trans_ = 1;
+    tx_verify_failed_ = false;
+
+    if (br_row_index != 0) {
+      tx_verify_failed_ = true;
+      LOG_INFO("[VERIFY_FAIL] BEGIN row_index_in_trans should be 0",
+          K_(cur_tx_id), K(br_row_index));
+    }
+  } else if (ECOMMIT == record_type) {
+    const uint64_t dml_count = expected_row_index_in_trans_ - 1;
+
+    if (br_tx_id != cur_tx_id_) {
+      tx_verify_failed_ = true;
+      LOG_INFO("[VERIFY_FAIL] COMMIT tx_id mismatch",
+          K_(cur_tx_id), K(br_tx_id), K(br_row_index));
+    }
+    if (br_row_index != expected_row_index_in_trans_) {
+      tx_verify_failed_ = true;
+      LOG_INFO("[VERIFY_FAIL] COMMIT row_index_in_trans mismatch",
+          K_(cur_tx_id), K_(expected_row_index_in_trans), K(br_row_index));
+    }
+
+    // Print verification summary for this transaction
+    if (tx_verify_failed_) {
+      LOG_INFO("[VERIFY_FAIL]",
+          K(dml_count), K(br_row_index), K_(cur_tx_id));
+    } else {
+      LOG_INFO("[VERIFY_OK]",
+          K(dml_count), K(br_row_index), K_(cur_tx_id));
+    }
+  } else if (EINSERT == record_type || EUPDATE == record_type || EDELETE == record_type
+      || EPUT == record_type || EDDL == record_type) {
+    if (br_tx_id != cur_tx_id_) {
+      tx_verify_failed_ = true;
+      LOG_INFO("[VERIFY_FAIL] tx_id mismatch",
+          K_(cur_tx_id), K(br_tx_id), K(br_row_index));
+    }
+    if (br_row_index != expected_row_index_in_trans_) {
+      tx_verify_failed_ = true;
+      LOG_INFO("[VERIFY_FAIL] row_index_in_trans not monotonic",
+          K_(cur_tx_id), K_(expected_row_index_in_trans), K(br_row_index));
+    }
+    expected_row_index_in_trans_++;
+  }
+}
+
 int ObBinlogRecordPrinter::output_data_file(IBinlogRecord *br,
     const int record_type,
     ObLogBR *oblog_br,
@@ -312,8 +378,13 @@ int ObBinlogRecordPrinter::output_data_file(IBinlogRecord *br,
 
     if (EBEGIN == record_type) {
       ri = 0;
+
       ROW_PRINTF(ptr, size, pos, ri, "BEGIN");
       ROW_PRINTF(ptr, size, pos, ri, "org_cluster_id:%u", br->getThreadId());
+      if (enable_verify_mode) {
+        ROW_PRINTF(ptr, size, pos, ri, "tx_id:%lu", br->getTransactionId());
+        ROW_PRINTF(ptr, size, pos, ri, "row_index_in_trans:%lu", br->getRowIndex());
+      }
 
       memset(begin_trans_id, '\0', TRANS_ID_BUF_LENGTH * sizeof(char));
       MEMCPY(begin_trans_id, unique_id.ptr(), unique_id.length());
@@ -339,6 +410,10 @@ int ObBinlogRecordPrinter::output_data_file(IBinlogRecord *br,
       }
       ri++;
       ROW_PRINTF(ptr, size, pos, ri, "COMMIT");
+      if (enable_verify_mode) {
+        ROW_PRINTF(ptr, size, pos, ri, "tx_id:%lu", br->getTransactionId());
+        ROW_PRINTF(ptr, size, pos, ri, "row_index_in_trans:%lu", br->getRowIndex());
+      }
     } else if (EDDL == record_type) {
       ri = 0;
       ITableMeta *table_meta = NULL;
@@ -358,6 +433,9 @@ int ObBinlogRecordPrinter::output_data_file(IBinlogRecord *br,
       ROW_PRINTF(ptr, size, pos, ri, "record_type:%s", print_record_type(record_type));
       ROW_PRINTF(ptr, size, pos, ri, "db_name:%s", br->dbname());
       ROW_PRINTF(ptr, size, pos, ri, "table_name:%s", br->tbname());
+      if (enable_verify_mode) {
+        ROW_PRINTF(ptr, size, pos, ri, "tx_id:%lu", br->getTransactionId());
+      }
       ROW_PRINTF(ptr, size, pos, ri, "column_count:%ld", column_count);
       // The DDL is in memory, not persistent, and is accessed via the following interface
       int64_t new_cols_count = 0;
@@ -397,6 +475,10 @@ int ObBinlogRecordPrinter::output_data_file(IBinlogRecord *br,
       ROW_PRINTF(ptr, size, pos, ri, "record_type:%s", print_record_type(record_type));
       ROW_PRINTF(ptr, size, pos, ri, "database_name:%s", br->dbname());
       ROW_PRINTF(ptr, size, pos, ri, "table_name:%s", br->tbname());
+      if (enable_verify_mode) {
+        ROW_PRINTF(ptr, size, pos, ri, "tx_id:%lu", br->getTransactionId());
+        ROW_PRINTF(ptr, size, pos, ri, "row_index_in_trans:%lu", br->getRowIndex());
+      }
       ROW_PRINTF(ptr, size, pos, ri, "log_event:%s", br->firstInLogevent() ? "true" : "false");
       ROW_PRINTF(ptr, size, pos, ri, "column_count:%ld", column_count);
       ROW_PRINTF(ptr, size, pos, ri, "source_category:%s", print_src_category(br->getSrcCategory()));
@@ -739,7 +821,13 @@ void ObBinlogRecordPrinter::console_print_begin(IBinlogRecord *br, ObLogBR *oblo
     int64_t filter_rv_count = 0;
     BinlogRecordImpl *filter_rv_impl = static_cast<BinlogRecordImpl *>(br);
     const binlogBuf *filter_rv = filter_rv_impl->filterValues((unsigned int &) filter_rv_count);
-    LOG_STD("BEGIN  TM=[%ld] DELAY=[%.3lf sec] ORG_CLUSTER_ID=%u ", nano_timestamp, delay_sec, br->getThreadId());
+    if (enable_verify_mode_) {
+      LOG_STD("BEGIN  TM=[%ld] DELAY=[%.3lf sec] ORG_CLUSTER_ID=%u TX_ID=%lu ROW_INDEX=%lu ",
+          nano_timestamp, delay_sec, br->getThreadId(), br->getTransactionId(), br->getRowIndex());
+    } else {
+      LOG_STD("BEGIN  TM=[%ld] DELAY=[%.3lf sec] ORG_CLUSTER_ID=%u ",
+          nano_timestamp, delay_sec, br->getThreadId());
+    }
     // The forth slot is major_version
     int32_t major_version;
     if (OB_FAIL(parse_major_version_(filter_rv, major_version))) {
@@ -758,7 +846,12 @@ void ObBinlogRecordPrinter::console_print_commit(IBinlogRecord *br, ObLogBR *obl
     int64_t delta = ObTimeUtility::current_time() - get_precise_timestamp(*br);
     double delay_sec = static_cast<double>(delta) / 1000000.0;
     int64_t nano_timestamp = br->getTimestamp() * 1000000000 + br->getNanoTimestamp();
-    LOG_STD("\nCOMMIT  TM=[%ld] DELAY=[%.3lf sec]\n\n", nano_timestamp, delay_sec);
+    if (enable_verify_mode_) {
+      LOG_STD("\nCOMMIT  TM=[%ld] DELAY=[%.3lf sec] TX_ID=%lu ROW_INDEX=%lu\n\n",
+          nano_timestamp, delay_sec, br->getTransactionId(), br->getRowIndex());
+    } else {
+      LOG_STD("\nCOMMIT  TM=[%ld] DELAY=[%.3lf sec]\n\n", nano_timestamp, delay_sec);
+    }
   }
 }
 
@@ -797,12 +890,23 @@ void ObBinlogRecordPrinter::console_print_statements(IBinlogRecord *br, ObLogBR 
     int64_t nano_timestamp = br->getTimestamp() * 1000000000 + br->getNanoTimestamp();
     const char *padding = (EDDL == br->recordType() ? "" : "  ");
 
-    LOG_STD("%s[%s] DB=[%s] TB=[%s] TM=[%ld] CHKP=[%s] DELAY=[%.3lf sec] SRC_CAT=[%s] TRACE_ID=[%.*s](%d)\n"
-        "%s  UNIQUE_ID=[%.*s](%d)\n",
-        padding, print_record_type(br->recordType()), br->dbname(), br->tbname(),
-        nano_timestamp, br->getCheckpoint(), delay_sec, print_src_category(br->getSrcCategory()),
-        trace_id.length(), trace_id.ptr(), trace_id.length(),
-        padding, unique_id.length(), unique_id.ptr(), unique_id.length());
+    if (enable_verify_mode_) {
+      LOG_STD("%s[%s] DB=[%s] TB=[%s] TM=[%ld] CHKP=[%s] DELAY=[%.3lf sec] TX_ID=%lu ROW_INDEX=%lu "
+          "SRC_CAT=[%s] TRACE_ID=[%.*s](%d)\n"
+          "%s  UNIQUE_ID=[%.*s](%d)\n",
+          padding, print_record_type(br->recordType()), br->dbname(), br->tbname(),
+          nano_timestamp, br->getCheckpoint(), delay_sec, br->getTransactionId(), br->getRowIndex(),
+          print_src_category(br->getSrcCategory()),
+          trace_id.length(), trace_id.ptr(), trace_id.length(),
+          padding, unique_id.length(), unique_id.ptr(), unique_id.length());
+    } else {
+      LOG_STD("%s[%s] DB=[%s] TB=[%s] TM=[%ld] CHKP=[%s] DELAY=[%.3lf sec] SRC_CAT=[%s] TRACE_ID=[%.*s](%d)\n"
+          "%s  UNIQUE_ID=[%.*s](%d)\n",
+          padding, print_record_type(br->recordType()), br->dbname(), br->tbname(),
+          nano_timestamp, br->getCheckpoint(), delay_sec, print_src_category(br->getSrcCategory()),
+          trace_id.length(), trace_id.ptr(), trace_id.length(),
+          padding, unique_id.length(), unique_id.ptr(), unique_id.length());
+    }
 
     LOG_STD("%s  NewCols[%ld]  ", padding, new_cols_count);
     for (int64_t index = 0; NULL != new_cols && index < new_cols_count; index++) {

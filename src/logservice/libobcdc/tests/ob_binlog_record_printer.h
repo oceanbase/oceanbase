@@ -57,7 +57,7 @@ public:
 
 public:
   virtual bool need_print_binlog_record()
-  { return enable_print_console_ || heartbeat_file_fd_ > 0 || data_file_fd_ > 0; };
+  { return enable_verify_mode_ || enable_print_console_ || heartbeat_file_fd_ > 0 || data_file_fd_ > 0; };
   virtual int print_binlog_record(IBinlogRecord *br);
 
 public:
@@ -81,11 +81,11 @@ private:
   void output_statistics_();
 
 private:
-  static void console_print_statements(IBinlogRecord *br, ObLogBR *oblog_br);
-  static void console_print_heartbeat(IBinlogRecord *br, ObLogBR *oblog_br);
-  static void console_print_commit(IBinlogRecord *br, ObLogBR *oblog_br);
-  static void console_print_begin(IBinlogRecord *br, ObLogBR *oblog_br);
-  static void console_print(IBinlogRecord *br, ObLogBR *oblog_br);
+  void console_print_statements(IBinlogRecord *br, ObLogBR *oblog_br);
+  void console_print_heartbeat(IBinlogRecord *br, ObLogBR *oblog_br);
+  void console_print_commit(IBinlogRecord *br, ObLogBR *oblog_br);
+  void console_print_begin(IBinlogRecord *br, ObLogBR *oblog_br);
+  void console_print(IBinlogRecord *br, ObLogBR *oblog_br);
   static int output_data_file(IBinlogRecord *br,
       const int record_type,
       ObLogBR *oblog_br,
@@ -124,6 +124,7 @@ private:
   static int verify_begin_trans_id_(ObLogBR &oblog_br,
       const char *begin_trans_id);
   static int parse_major_version_(const binlogBuf *filter_rv, int32_t &major_version);
+  void verify_br(IBinlogRecord *br);
 
 private:
   bool        inited_;
@@ -142,6 +143,11 @@ private:
   int64_t     total_tx_count_;  // tx count, statistics by commit br.
   int64_t     total_br_count_;  // DDL/DML br count, ignore heartbeat and begin/commit.
   uint64_t    dml_data_crc_;    // DML column data crc.
+
+  // Verification state for tx_id and row_index_in_trans
+  uint64_t    cur_tx_id_;
+  uint64_t    expected_row_index_in_trans_;
+  bool        tx_verify_failed_;
 
 private:
 

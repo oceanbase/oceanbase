@@ -488,7 +488,7 @@ int ObLogFormatter::init_binlog_record_for_dml_stmt_task_(
         RecordType record_type = get_record_type(stmt_task->get_dml_flag());
         const uint64_t tenant_id = stmt_task->get_host().get_tenant_id();
         const uint64_t cluster_id = part_trans_task->get_cluster_id();
-        const uint64_t row_index = stmt_task->get_row_index();
+        const uint64_t row_index_in_redo = stmt_task->get_row_index_in_redo();
         const ObString &trace_id = part_trans_task->get_trace_id();
         const ObString &trace_info = part_trans_task->get_trace_info();
         ObString dml_unique_id;
@@ -499,7 +499,7 @@ int ObLogFormatter::init_binlog_record_for_dml_stmt_task_(
           LOG_ERROR("init_dml_unique_id_ fail", KR(ret), KPC(stmt_task), KPC(log_entry_task), KPC(part_trans_task),
               K(dml_unique_id));
         } else if (OB_FAIL(br->init_data(static_cast<RecordType>(record_type), cluster_id, tenant_id,
-                row_index, trace_id, trace_info, dml_unique_id, schema_version, commit_version))) {
+                row_index_in_redo, trace_id, trace_info, dml_unique_id, schema_version, commit_version))) {
           LOG_ERROR("ObLogBR init_data fail", KR(ret), K(record_type), K(cluster_id), K(tenant_id),
               K(trace_id), K(trace_info), K(dml_unique_id), K(schema_version), K(commit_version));
         } else {
@@ -2537,7 +2537,7 @@ int ObLogFormatter::init_dml_unique_id_(DmlStmtTask &stmt_task,
   int ret = OB_SUCCESS;
   const ObString &part_trans_info_str = part_trans_task.get_part_trans_info();
   palf::LSN redo_log_lsn;
-  const uint64_t row_no = stmt_task.get_row_index();
+  const uint64_t row_no = stmt_task.get_row_index_in_redo();
 
   if (OB_FAIL(log_entry_task.get_log_lsn(redo_log_lsn))) {
     LOG_ERROR("get_redo_log_lsn from log_entry_task failed", KR(ret), K(log_entry_task), K(redo_log_lsn));

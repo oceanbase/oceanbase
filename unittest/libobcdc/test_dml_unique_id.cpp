@@ -43,10 +43,10 @@ static void build_part_trans_info(const char *tls_str, const int64_t trans_id,
 }
 
 static void verify_unique_id_no_null_bytes(const ObString &part_trans_info,
-    const uint64_t lsn_val, const uint64_t row_index)
+    const uint64_t lsn_val, const uint64_t row_index_in_redo)
 {
   LSN lsn(lsn_val);
-  DmlStmtUniqueID uid(part_trans_info, lsn, row_index);
+  DmlStmtUniqueID uid(part_trans_info, lsn, row_index_in_redo);
   ASSERT_TRUE(uid.is_valid());
 
   const int64_t buf_len = uid.get_dml_unique_id_length();
@@ -63,7 +63,7 @@ static void verify_unique_id_no_null_bytes(const ObString &part_trans_info,
   char expected[256];
   int64_t expected_len = snprintf(expected, sizeof(expected), "%.*s_%lu_%lu",
       static_cast<int>(part_trans_info.length()), part_trans_info.ptr(),
-      lsn_val, row_index);
+      lsn_val, row_index_in_redo);
   ASSERT_EQ(expected_len, pos);
   ASSERT_EQ(0, memcmp(expected, buf, pos));
 }

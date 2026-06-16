@@ -1966,7 +1966,7 @@ int ObLogInstance::verify_dml_unique_id_(IBinlogRecord *br)
     static logservice::TenantLSID last_tls_id;
     static palf::LSN last_commit_log_lsn;
     static palf::LSN last_redo_log_lsn;
-    static uint64_t last_row_index = OB_INVALID_ID;
+    static uint64_t last_row_index_in_redo = OB_INVALID_ID;
 
     int record_type = br->recordType();
 
@@ -1993,8 +1993,8 @@ int ObLogInstance::verify_dml_unique_id_(IBinlogRecord *br)
         ObString br_unique_id;
         const int64_t br_unique_id_idx = 1;
         common::ObString dml_unique_id;
-        uint64_t row_index = oblog_br->get_row_index();
-        DmlStmtUniqueID dml_stmt_unique_id(task->get_part_trans_info(), redo_log_lsn, row_index);
+        uint64_t row_index_in_redo = oblog_br->get_row_index_in_redo();
+        DmlStmtUniqueID dml_stmt_unique_id(task->get_part_trans_info(), redo_log_lsn, row_index_in_redo);
 
         if (OB_UNLIKELY(! dml_stmt_unique_id.is_valid())) {
           LOG_ERROR("dml_stmt_unique_id is not valid", K(dml_stmt_unique_id));
@@ -2029,10 +2029,10 @@ int ObLogInstance::verify_dml_unique_id_(IBinlogRecord *br)
               if (last_tls_id == task->get_tls_id()
                   && last_commit_log_lsn == task->get_commit_log_lsn()
                   && last_redo_log_lsn == redo_log_lsn
-                  && last_row_index == row_index) {
+                  && last_row_index_in_redo == row_index_in_redo) {
                 LOG_ERROR("current br_unique_id should not be equal to last_br_unique_id",
-                    K(br_unique_id), KPC(task), K(row_index), K(redo_log_lsn), K(last_redo_log_lsn),
-                    K(last_tls_id), K(last_commit_log_lsn), K(last_row_index));
+                    K(br_unique_id), KPC(task), K(row_index_in_redo), K(redo_log_lsn), K(last_redo_log_lsn),
+                    K(last_tls_id), K(last_commit_log_lsn), K(last_row_index_in_redo));
                 ret = OB_ERR_UNEXPECTED;
               } else {
                 // succ
@@ -2044,7 +2044,7 @@ int ObLogInstance::verify_dml_unique_id_(IBinlogRecord *br)
             last_tls_id = task->get_tls_id();
             last_commit_log_lsn = task->get_commit_log_lsn();
             last_redo_log_lsn = redo_log_lsn;
-            last_row_index = row_index;
+            last_row_index_in_redo = row_index_in_redo;
           }
         }
       }

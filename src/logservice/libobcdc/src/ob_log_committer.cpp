@@ -1546,7 +1546,10 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
 
       // Set host for BEGIN/COMMIT BR to enable TransCtx reference count management
       // Directly point to TransCtx for easier access
+      int64_t transaction_id = trans_ctx.get_trans_id().get_id();
       begin_br->set_host(&trans_ctx);
+      begin_br->set_transaction_id(transaction_id);
+      begin_br->set_row_index_in_trans(0);
       commit_br->set_host(&trans_ctx);
 
       // push begin br to queue
@@ -1577,6 +1580,7 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
         } else {
           // Single br down, next reset to NULL
           br_task->set_next(NULL);
+          br_task->set_transaction_id(transaction_id);
           if (OB_FAIL(push_br_queue_(br_task))) {
             if (OB_IN_STOP_STATE != ret) {
               LOG_ERROR("push_br_queue_ fail", KR(ret), K(br_task));
@@ -1596,7 +1600,8 @@ int ObLogCommitter::commit_binlog_record_list_(TransCtx &trans_ctx,
       if (OB_SUCC(ret)) {
         const int64_t total_br_count = trans_ctx.get_total_br_count();
         const int64_t committed_br_count = trans_ctx.get_committed_br_count();
-
+        commit_br->set_transaction_id(transaction_id);
+        commit_br->set_row_index_in_trans(committed_br_count+1);
         if (OB_UNLIKELY(total_br_count != committed_br_count)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_ERROR("expected all br commit but not", KR(ret), K_(stop_flag), K(total_br_count),
