@@ -73,16 +73,6 @@ int ObPxSubCoordMsgProc::on_interrupted(const ObInterruptCode &ic) const
   return ret;
 }
 
-int ObPxSubCoordMsgProc::on_create_filter_ch_msg(
-    const ObPxCreateBloomFilterChannelMsg &pkt) const
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(sqc_ctx_.bf_ch_provider_.add_msg(pkt))) {
-    LOG_WARN("fail set transmit channel msg to ch provider", K(ret));
-  }
-  return ret;
-}
-
 int ObPxSubCoordMsgProc::on_whole_msg(
     const ObBarrierWholeMsg &pkt) const
 {

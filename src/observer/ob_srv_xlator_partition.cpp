@@ -265,8 +265,7 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
 
   // flush opt stat monitoring info rpc
   RPC_PROCESSOR(ObFlushLocalOptStatMonitoringInfoP, gctx_);
-  // send bloom filter
-  RPC_PROCESSOR(ObSendBloomFilterP);
+
   // GC check member list
   RPC_PROCESSOR(ObQueryLSIsValidMemberP, gctx_);
 

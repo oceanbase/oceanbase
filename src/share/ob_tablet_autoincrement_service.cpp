@@ -106,6 +106,8 @@ int ObTabletAutoincMgr::clear_cache_if_fallback_for_mlog(
 int ObTabletAutoincMgr::fetch_interval(const ObTabletAutoincParam &param, ObTabletCacheInterval &interval)
 {
   int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  ObTabletCacheNode mock_node;
   if (OB_UNLIKELY(!is_inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet autoinc mgr is not inited", K(ret));
@@ -120,12 +122,28 @@ int ObTabletAutoincMgr::fetch_interval(const ObTabletAutoincParam &param, ObTabl
       }
     }
     last_refresh_ts_ = ObTimeUtility::current_time();
-    // TODO(shuangcan): may need to optimize the lock performance here
     if (OB_SUCC(set_interval(param, interval))) {
-      if (prefetch_condition()) {
-        if (OB_FAIL(fetch_new_range(param, tablet_id_, prefetch_node_))) {
-          LOG_WARN("failed to prefetch tablet node", K(param), K(ret));
+      if (prefetch_condition() && !prefetching_) {
+        prefetching_ = true;
+        mutex_.unlock();
+        tmp_ret = fetch_new_range(param, tablet_id_, mock_node);
+        while (true) {
+          if (OB_SUCCESS != mutex_.trylock()) {
+            ob_usleep<common::ObWaitEventIds::STORAGE_AUTOINC_FETCH_CONFLICT_SLEEP>(TRY_LOCK_INTERVAL);
+            THIS_WORKER.sched_run();
+          } else {
+            break;
+          }
         }
+        if (OB_SUCCESS != tmp_ret) {
+          LOG_WARN("failed to fetch tablet node", K(param), K(tmp_ret));
+        } else if (prefetch_node_.is_valid() || mock_node.cache_start_ <= curr_node_.cache_end_) {
+          LOG_INFO("new cache node has been fetched by other, ignore", K(mock_node), K(curr_node_), K(tmp_ret));
+        } else {
+          prefetch_node_.cache_start_ = mock_node.cache_start_;
+          prefetch_node_.cache_end_ = mock_node.cache_end_;
+        }
+        prefetching_ = false;
       }
     } else if (OB_SIZE_OVERFLOW == ret) {
       if (OB_FAIL(fetch_new_range(param, tablet_id_, curr_node_))) {

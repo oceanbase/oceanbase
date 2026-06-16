@@ -166,6 +166,7 @@ int ObExprJoinFilter::check_rf_ready(
   if (join_filter_ctx->is_ready_) {
   } else if (OB_ISNULL(rf_msg)) {
     if (join_filter_ctx->need_wait_ready()) {
+      ScopedTimer timer(ObMetricId::WAIT_JOIN_FILTER_MSG_TIME);
       while (!join_filter_ctx->is_ready_ && OB_SUCC(exec_ctx.fast_check_status())) {
         if (OB_NOT_NULL(rf_msg)) {
 #ifdef ERRSIM

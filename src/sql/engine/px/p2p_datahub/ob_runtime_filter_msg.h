@@ -7,6 +7,7 @@
 #include "lib/ob_define.h"
 #include "lib/hash/ob_hashmap.h"
 #include "lib/container/ob_array.h"
+#include "lib/lock/ob_thread_cond.h"
 #include "share/datum/ob_datum.h"
 #include "sql/engine/px/ob_px_bloom_filter.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_msg.h"
@@ -33,7 +34,8 @@ public:
       next_peer_addrs_(allocator_), expect_first_phase_count_(0),
       piece_size_(0), filter_indexes_(allocator_), receive_count_array_(allocator_),
       filter_idx_(0), create_finish_(false), is_finish_regen_(false),
-      use_rich_format_(false) {}
+      use_rich_format_(false),
+      memset_helper_(nullptr) {}
   ~ObRFBloomFilterMsg() { destroy(); }
   virtual int assign(const ObP2PDatahubMsgBase &) final;
   virtual int merge(ObP2PDatahubMsgBase &) final;
@@ -92,6 +94,22 @@ public:
   virtual int process_msg_internal(bool &need_free);
   virtual int regenerate() override;
   int atomic_merge(ObP2PDatahubMsgBase &other_msg);
+  int prepare_memset_helper();
+  ObPxBfMemsetHelper *get_memset_helper() { return memset_helper_; }
+  void leader_memset()
+  {
+    if (memset_helper_ != nullptr) {
+      memset_helper_->leader_memset();
+    }
+  }
+  // Follower entry: drives helper->follower_help() if a helper has been allocated;
+  // cheap no-op otherwise. Used by workers spinning in wait_constructed.
+  void follower_help_memset()
+  {
+    if (memset_helper_ != nullptr) {
+      memset_helper_->follower_help();
+    }
+  }
   inline void set_use_rich_format(bool value) { use_rich_format_ = value; }
   inline bool get_use_rich_format() const { return use_rich_format_; }
 
@@ -132,6 +150,12 @@ public:
   bool is_finish_regen_;
   bool use_rich_format_;
   bool use_hash_join_seed_ {false};
+  common::ObThreadCond regen_cond_;
+  // Lazy-allocated on allocator_ in prepare_memset_helper(). Single helper per msg,
+  // used by both the init path (leader worker + workers spinning in wait_constructed)
+  // and the regenerate path (leader RPC thread in regenerate() + any late follower
+  // RPC thread in atomic_merge). nullptr => degrade to direct MEMSET.
+  ObPxBfMemsetHelper *memset_helper_;
 };
 
 class ObRFRangeFilterMsg : public ObP2PDatahubMsgBase
@@ -203,6 +227,7 @@ public:
                                 ObEvalCtx &eval_ctx,
                                 ObRuntimeFilterParams &params,
                                 bool &is_data_prepared) override;
+  virtual int regenerate() override;
 private:
   int get_min(ObIArray<ObDatum> &vals);
   int get_max(ObIArray<ObDatum> &vals);
@@ -307,6 +332,7 @@ public:
                                 ObEvalCtx &eval_ctx,
                                 ObRuntimeFilterParams &params,
                                 bool &is_data_prepared) override;
+  virtual int regenerate() override;
 private:
   int append_row();
   int insert_node();

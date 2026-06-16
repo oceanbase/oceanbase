@@ -48,43 +48,6 @@ private:
   common::ObThreadCond &msg_ready_cond_;
 };
 
-class ObBloomFilterSendCtx
-{
-public:
-  ObBloomFilterSendCtx() :
-    bloom_filter_ready_(false),
-    filter_data_(NULL),
-    filter_indexes_(),
-    per_addr_bf_count_(0),
-    filter_addr_idx_(0),
-    bf_compressor_type_(common::ObCompressorType::NONE_COMPRESSOR),
-    each_group_size_(0)
-  {}
-  ~ObBloomFilterSendCtx() {}
-  bool bloom_filter_ready() const { return bloom_filter_ready_; }
-  void set_bloom_filter_ready(bool flag) { bloom_filter_ready_ = flag; }
-  int64_t &get_filter_addr_idx() { return filter_addr_idx_; }
-  common::ObIArray<BloomFilterIndex> &get_filter_indexes() { return filter_indexes_; }
-  void set_filter_data(ObPxBloomFilterData *data) { filter_data_ = data; }
-  ObPxBloomFilterData *get_filter_data() { return filter_data_; }
-  int generate_filter_indexes(int64_t each_group_size, int64_t addr_count);
-  void set_per_addr_bf_count(int64_t count) { per_addr_bf_count_ = count; }
-  int64_t get_per_addr_bf_count() { return per_addr_bf_count_; }
-  void set_bf_compress_type(common::ObCompressorType type)
-      { bf_compressor_type_ = type; }
-  common::ObCompressorType get_bf_compress_type() { return bf_compressor_type_; }
-  int64_t &get_each_group_size() { return each_group_size_; }
-  TO_STRING_KV(K_(bloom_filter_ready));
-private:
-  bool bloom_filter_ready_;
-  ObPxBloomFilterData *filter_data_;
-  common::ObArray<BloomFilterIndex> filter_indexes_;
-  int64_t per_addr_bf_count_;
-  int64_t filter_addr_idx_;
-  common::ObCompressorType bf_compressor_type_;
-  int64_t each_group_size_;
-};
-
 class ObPxSQCProxy
 {
 public:
@@ -113,11 +76,6 @@ public:
                           int64_t timeout_ts,
                           ObPxTaskChSet &task_ch_set,
                           dtl::ObDtlChTotalInfo *ch_info);
-  // for px bloom filter op
-  int get_bloom_filter_ch(ObPxBloomFilterChSet &ch_set,
-                          int64_t &sqc_count,
-                          int64_t timeout_ts,
-                          bool is_transmit);
 
   template <class PieceMsg, class WholeMsg>
   int get_dh_msg_sync(uint64_t op_id,
@@ -162,8 +120,6 @@ public:
   int make_sqc_sample_piece_msg(ObDynamicSamplePieceMsg &msg, bool &finish);
   ObDynamicSamplePieceMsg &get_piece_sample_msg() { return sample_msg_; }
   ObInitChannelPieceMsg &get_piece_init_channel_msg() { return init_channel_msg_; }
-  common::ObIArray<ObBloomFilterSendCtx> &get_bf_send_ctx_array() { return bf_send_ctx_array_; }
-  int append_bf_send_ctx(int64_t &bf_send_ctx_idx);
   int64_t get_task_count() const;
   common::ObThreadCond &get_msg_ready_cond() { return msg_ready_cond_; }
   int64_t get_dh_msg_cnt() const;
@@ -211,10 +167,9 @@ private:
   // 这个锁是临时用，用于互斥多个线程同时用 sqc channel 发数据，
   // Dtl 支持并发访问后可以删掉
   common::ObSpinLock dtl_lock_;
-  common::ObArray<ObBloomFilterSendCtx> bf_send_ctx_array_; // record bloom filters ready to be sent
   ObDynamicSamplePieceMsg sample_msg_;
   ObInitChannelPieceMsg init_channel_msg_;
-  // msg cond is shared by transmit && rescive && bloom filter
+  // msg cond is shared by transmit && rescive
   common::ObThreadCond msg_ready_cond_;
   SQCP2PDhMap p2p_dh_map_;
   DISALLOW_COPY_AND_ASSIGN(ObPxSQCProxy);
@@ -272,6 +227,7 @@ int ObPxSQCProxy::aggregate_sqc_pieces_and_get_dh_msg(uint64_t op_id, dtl::ObDtl
     // for remote datahub message, only last piece is under obligation to send rpc
     bool is_last_piece = false;
     const PieceMsg *sqc_piece = nullptr;
+    ScopedTimer timer(ObMetricId::WORKER_SYNC_WAIT);
     if (OB_FAIL(detail_p->aggregate_sqc_piece_msgs(piece, sqc_piece, timeout_ts, get_task_count(),
                                                    need_sync, is_last_piece))) {
       SQL_LOG(WARN, "failed to aggregate_sqc_piece_msgs");
@@ -333,6 +289,7 @@ int ObPxSQCProxy::inner_get_dh_msg(
     bool need_wait_whole_msg /*= true*/)
 {
   int ret = common::OB_SUCCESS;
+  ScopedTimer timer(ObMetricId::WORKER_SYNC_WAIT);
   ObPxDatahubDataProvider *provider = nullptr;
   if (OB_FAIL(get_whole_msg_provider(op_id, msg_type, provider))) {
     SQL_LOG(WARN, "fail get provider", K(ret));

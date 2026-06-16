@@ -142,45 +142,6 @@ typedef common::ObArray<dtl::ObDtlChTotalInfo,
                         common::ObArrayDefaultCallBack<dtl::ObDtlChTotalInfo>,
                         common::DefaultItemEncode<dtl::ObDtlChTotalInfo> > ObPxChTotalInfos;
 
-class ObPxBloomFilterChInfo : public dtl::ObDtlChTotalInfo
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObPxBloomFilterChInfo() : filter_id_(common::OB_INVALID_INDEX) {}
-
-  void set_filter_id(int64_t filter_id) { filter_id_ = filter_id; }
-  int64_t get_filter_id() const { return filter_id_; }
-  int assign(const ObPxBloomFilterChInfo &other)
-  {
-    filter_id_ = other.filter_id_;
-    return dtl::ObDtlChTotalInfo::assign(other);
-  }
-private:
-  int64_t filter_id_;
-};
-
-class ObPxBloomFilterChSet : public dtl::ObDtlChSet
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObPxBloomFilterChSet() : filter_id_(common::OB_INVALID_INDEX),
-      sqc_id_(common::OB_INVALID_INDEX) {};
-  ~ObPxBloomFilterChSet() = default;
-  void set_sqc_id(int64_t sqc_id) { sqc_id_ = sqc_id; }
-  int64_t get_sqc_id() const { return sqc_id_; }
-  void set_filter_id(int64_t filter_id) { filter_id_ = filter_id; }
-  int64_t get_filter_id() const { return filter_id_; }
-  int assign(const ObPxBloomFilterChSet &ch_set);
-private:
-  int64_t filter_id_;
-  int64_t sqc_id_;
-};
-typedef common::ObArray<ObPxBloomFilterChSet,
-                        common::ModulePageAllocator,
-                        false, /*auto free*/
-                        common::ObArrayDefaultCallBack<ObPxBloomFilterChSet>,
-                        common::DefaultItemEncode<ObPxBloomFilterChSet> > ObPxBloomFilterChSets;
-
 // partition map格式：
 // 老的形式： first: tablet_id second: 全局task_idx
 // 新的形式： 2种情况
@@ -529,82 +490,6 @@ public:
   int64_t sqc_id_;
   int64_t task_id_;
   int rc_;
-};
-
-class ObPxCreateBloomFilterChannelMsg
-  : public dtl::ObDtlMsgTemp<dtl::ObDtlMsgType::PX_BLOOM_FILTER_CHANNEL>
-{
-  OB_UNIS_VERSION_V(1);
-public:
-  ObPxCreateBloomFilterChannelMsg() : ch_set_info_(), sqc_id_(INT64_MAX), sqc_count_(0) {}
-  virtual ~ObPxCreateBloomFilterChannelMsg() = default;
-  int assign(const ObPxCreateBloomFilterChannelMsg &other)
-  {
-    int ret = OB_SUCCESS;
-    sqc_count_ = other.sqc_count_;
-    sqc_id_ = other.sqc_id_;
-    if (OB_FAIL(ch_set_info_.assign(other.ch_set_info_))) {
-    }
-    return ret;
-  }
-  void reset()
-  {
-    ch_set_info_.reset();
-    sqc_count_ = 0;
-    sqc_id_ = INT64_MAX;
-  }
-  TO_STRING_KV(K_(ch_set_info), K_(sqc_id), K_(sqc_count));
-public:
-  ObPxBloomFilterChInfo ch_set_info_;
-  int64_t sqc_id_;
-  int64_t sqc_count_;
-};
-
-class ObPxBloomFilterData: public dtl::ObDtlMsgTemp<dtl::ObDtlMsgType::PX_BLOOM_FILTER_DATA>
-{
-  OB_UNIS_VERSION_V(1);
-public:
-   ObPxBloomFilterData() : filter_(), tenant_id_(common::OB_INVALID_TENANT_ID),
-       filter_id_(common::OB_INVALID_ID), server_id_(common::OB_INVALID_ID),
-       px_sequence_id_(common::OB_INVALID_ID), bloom_filter_count_(0) {}
-  virtual ~ObPxBloomFilterData() = default;
-  void reset()
-  {
-    filter_.reset_filter();
-    tenant_id_ = OB_INVALID_TENANT_ID;
-    filter_id_ = OB_INVALID_ID;
-    server_id_ = OB_INVALID_ID;
-    px_sequence_id_ = OB_INVALID_ID;
-    bloom_filter_count_ = 0;
-  }
-  TO_STRING_KV(K_(filter), K_(server_id), K_(px_sequence_id));
-public:
-  ObPxBloomFilter filter_;
-  int64_t tenant_id_;
-  int64_t filter_id_;
-  int64_t server_id_;
-  int64_t px_sequence_id_;
-  int64_t bloom_filter_count_;
-};
-
-class ObJoinFilterDataCtx
-{
-public:
-  ObJoinFilterDataCtx()
-    : ch_set_(), ch_set_info_(), filter_ready_(false), filter_data_(NULL), ch_provider_ptr_(0), filter_id_(common::OB_INVALID_ID),
-      bf_idx_at_sqc_proxy_(-1),
-      compressor_type_(common::ObCompressorType::NONE_COMPRESSOR) {}
-  ~ObJoinFilterDataCtx() = default;
-  TO_STRING_KV(K_(filter_ready));
-public:
-  ObPxBloomFilterChSet ch_set_;
-  ObPxBloomFilterChInfo ch_set_info_;
-  bool filter_ready_;
-  ObPxBloomFilterData *filter_data_;
-  uint64_t ch_provider_ptr_;
-  int64_t filter_id_;
-  int64_t bf_idx_at_sqc_proxy_;
-  common::ObCompressorType compressor_type_;
 };
 
 class ObPxTabletRange final

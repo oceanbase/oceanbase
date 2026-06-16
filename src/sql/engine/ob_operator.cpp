@@ -1182,6 +1182,14 @@ int ObOperator::close()
   if (io_event_observer_.get_io_time() > 0) {
     SET_METRIC_VAL(ObMetricId::DUMP_RW_TIME, io_event_observer_.get_io_time());
   }
+  if (op_monitor_info_.profile_) {
+    // remove the worker sync wait time from db time
+    // since block time may be recognized as io time in xplan, we not add it to block time too.
+    const ObMetric *metric = op_monitor_info_.profile_->get_metric(ObMetricId::WORKER_SYNC_WAIT);
+    if (metric != nullptr) {
+      op_monitor_info_.db_time_ -= metric->value();
+    }
+  }
   OperatorOpenOrder open_order = get_operator_open_order();
   ASH_ITEM_ATTACH_GUARD(plan_line_id, spec_.id_);
   if (OPEN_SELF_ONLY != open_order) {

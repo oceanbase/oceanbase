@@ -17,6 +17,7 @@ namespace dtl {
 
 class ObDtlLinkedBuffer;
 class ObDtlChannel;
+class ObDtlBatchMsg;
 
 class ObDtlSendMessageP
     : public obrpc::ObRpcProcessor< obrpc::ObDtlRpcProxy::ObRpc<obrpc::OB_DTL_SEND> >
@@ -32,8 +33,6 @@ public:
                                         int64_t rows,
                                         bool is_eof,
                                         bool append_whole_block);
-private:
-  static int process_px_bloom_filter_data(ObDtlLinkedBuffer *&buffer);
 };
 
 class ObDtlBCSendMessageP
@@ -41,6 +40,14 @@ class ObDtlBCSendMessageP
 {
 public:
   virtual int process() final;
+};
+
+class ObDtlBatchSendMessageP
+    : public obrpc::ObRpcProcessor< obrpc::ObDtlRpcProxy::ObRpc<obrpc::OB_DTL_BATCH_SEND> >
+{
+public:
+  virtual int process() final;
+  static int process_batch_control_msg(ObDtlBatchMsg &msg);
 };
 
 }  // dtl

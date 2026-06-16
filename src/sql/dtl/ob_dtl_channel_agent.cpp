@@ -150,21 +150,13 @@ int ObDtlBcastService::send_message(ObDtlLinkedBuffer *&bcast_buf, bool drain)
           LOG_WARN("start message process fail", K(ret));
         }
       }
-      bool send_by_tenant = GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_3_5_0;
       if (OB_SUCC(ret)) {
-        if (send_by_tenant
-            && OB_FAIL(DTL.get_rpc_proxy()
+        if (OB_FAIL(DTL.get_rpc_proxy()
                        .to(server_addr_)
                        .group_id(share::OBCG_DTL)
                        .by(tenant_id_)
                        .timeout(timeout_us)
                        .ap_send_bc_message(args, &cb))) {
-          LOG_WARN("failed to seed message", K(ret));
-        } else if (!send_by_tenant
-                   && OB_FAIL(DTL.get_rpc_proxy()
-                                 .to(server_addr_)
-                                 .timeout(timeout_us)
-                                 .ap_send_bc_message(args, &cb))) {
           LOG_WARN("failed to seed message", K(ret));
         } else {
           // all rpc channel in this service has send this msg. this buffer will be release in agent.
@@ -248,7 +240,7 @@ int ObDtlChanAgent::init(dtl::ObDtlFlowControl &dfc,
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("no momery", K(ret));
         } else {
-          bc_service = new(buf) ObDtlBcastService(tenant_id, data_ch->send_by_tenant());
+          bc_service = new(buf) ObDtlBcastService(tenant_id);
           bc_service->bcast_ch_count_++;
           bc_service->active_chs_count_++;
           bc_service->server_addr_ = data_ch->peer_;
@@ -444,6 +436,80 @@ int ObDtlChanAgent::send_last_buffer(ObDtlLinkedBuffer *&last_buffer)
     dtl_buf_allocator_.free_buf(*bcast_ch, last_buffer);
   }
   return ret;
+}
+
+int ObDtlChanAgent::init_server_groups(
+  ObIArray<ObDtlChannel *> &channels,
+  ObArenaAllocator &allocator,
+  uint64_t tenant_id,
+  ObIArray<ObDtlServerChannelGroup *> &server_groups)
+{
+  int ret = OB_SUCCESS;
+  ObMemAttr attr(tenant_id, "DtlSerChGroup");
+  ObDtlServerChannelGroup *current_group = nullptr;
+  for (int64_t i = 0; i < channels.count() && OB_SUCC(ret); ++i) {
+    ObDtlBasicChannel *data_ch = static_cast<ObDtlBasicChannel *>(channels.at(i));
+    const ObAddr &peer = data_ch->get_peer();
+    ObDtlServerChannelGroup *group = nullptr;
+    // Fast path: channels are laid out contiguously by server_addr_, so the
+    // most recently used group is almost always the right one.
+    if (nullptr != current_group && peer == current_group->server_addr_) {
+      group = current_group;
+    } else {
+      // Slow path: a guard for unexpected ordering. Linear scan over groups.
+      for (int64_t j = server_groups.count() - 1; j >= 0; --j) {
+        if (peer == server_groups.at(j)->server_addr_) {
+          group = server_groups.at(j);
+          current_group = group;
+          break;
+        }
+      }
+      if (nullptr == group) {
+        void *buf = allocator.alloc(sizeof(ObDtlServerChannelGroup));
+        if (OB_ISNULL(buf)) {
+          ret = OB_ALLOCATE_MEMORY_FAILED;
+          LOG_WARN("failed to allocate server group", K(ret));
+        } else {
+          group = new(buf) ObDtlServerChannelGroup();
+          group->server_addr_ = peer;
+          group->tenant_id_ = tenant_id;
+          group->basic_channels_.set_attr(attr);
+          group->channel_indexes_.set_attr(attr);
+          if (OB_FAIL(server_groups.push_back(group))) {
+            LOG_WARN("failed to push server group", K(ret));
+          } else {
+            current_group = group;
+          }
+        }
+      }
+    }
+    if (OB_SUCC(ret)) {
+      if (OB_FAIL(group->basic_channels_.push_back(data_ch))) {
+        LOG_WARN("failed to push channel", K(ret));
+      } else if (OB_FAIL(group->channel_indexes_.push_back(i))) {
+        LOG_WARN("failed to push channel index", K(ret));
+      } else {
+        data_ch->set_server_group(group);
+        if (!IS_LOCAL_CHANNEL(data_ch)) {
+          data_ch->set_defer_flush(true);
+          group->has_rpc_channel_ = true;
+        }
+      }
+    }
+  }
+  LOG_TRACE("init server groups for batch send",
+    K(ret), K(server_groups.count()), K(channels.count()));
+  return ret;
+}
+
+void ObDtlChanAgent::destroy_server_groups(ObIArray<ObDtlServerChannelGroup *> &server_groups)
+{
+  for (int64_t i = 0; i < server_groups.count(); ++i) {
+    if (OB_NOT_NULL(server_groups.at(i))) {
+      server_groups.at(i)->~ObDtlServerChannelGroup();
+    }
+  }
+  server_groups.reset();
 }
 
 int ObDtlChanAgent::destroy()

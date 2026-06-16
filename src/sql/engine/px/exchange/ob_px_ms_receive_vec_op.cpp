@@ -597,6 +597,31 @@ void ObPxMSReceiveVecOp::GlobalOrderInput::destroy()
   add_row_store_ = nullptr;
 }
 
+void ObPxMSReceiveVecOp::set_adaptive_block_size(
+    ObTempRowStore &row_store, const int64_t n_channel)
+{
+  if (n_channel > ADAPTIVE_BLOCK_CHANNEL_THRESHOLD) {
+    // Adaptive block sizing: reduce block sizes for high-fanin merge sort to avoid OOM.
+    // With DOP=N, each merge sort receive has N channels, each needing at least one active
+    // data block + index block in memory (cannot be dumped). Using smaller blocks limits
+    // the minimum undumpable memory.
+    // Formula: block_size rounds down to power-of-2, clamped to [MIN_BLOCK_SIZE, BLOCK_SIZE]
+    int64_t raw_blk_size = ObTempBlockStore::BLOCK_SIZE
+        * ADAPTIVE_BLOCK_CHANNEL_THRESHOLD / n_channel;
+    int64_t target_blk_size = next_pow2(raw_blk_size);
+    if (target_blk_size > raw_blk_size) {
+      target_blk_size >>= 1;
+    }
+    target_blk_size = std::max(ObTempBlockStore::MIN_BLOCK_SIZE, target_blk_size);
+    const int64_t target_idx_size = std::max(ObTempBlockStore::MIN_IDX_BLOCK_SIZE,
+        target_blk_size / 2);
+    row_store.set_default_block_size(target_blk_size);
+    row_store.set_index_block_size(target_idx_size);
+    LOG_TRACE("adaptive block sizing for ms receive",
+        K(n_channel), K(target_blk_size), K(target_idx_size));
+  }
+}
+
 int ObPxMSReceiveVecOp::GlobalOrderInput::create_temp_row_store(
   ObPxMSReceiveVecOp &ms_receive_op, uint64_t tenant_id, ObTempRowStore *&row_store)
 {
@@ -629,6 +654,7 @@ int ObPxMSReceiveVecOp::GlobalOrderInput::create_temp_row_store(
       LOG_WARN("row store init fail", K(ret));
     } else {
       row_store->set_dir_id(sql_mem_processor_->get_dir_id());
+      set_adaptive_block_size(*row_store, ms_receive_op.get_channel_count());
     }
   }
   return ret;
@@ -713,8 +739,6 @@ int ObPxMSReceiveVecOp::inner_get_next_batch(const int64_t max_row_cnt)
     LOG_ERROR("Get operator context failed", K(ret), K(MY_SPEC.id_));
   } else if (OB_FAIL(try_link_channel())) {
     LOG_WARN("failed to init channel", K(ret));
-  } else if (OB_FAIL(try_send_bloom_filter())) {
-    LOG_WARN("fail to send bloom filter", K(ret));
   } else if (use_ordered_aggr_opt()) {
     ret = inner_get_next_ordered_aggr_batch(max_row_cnt);
   } else {
@@ -855,6 +879,10 @@ int ObPxMSReceiveVecOp::new_local_order_input(MergeSortInput *&out_msi)
       LOG_WARN("failed to init temp row store", K(ret));
     } else if (FALSE_IT(local_input->row_store_.set_dir_id(sql_mem_processor_.get_dir_id()))) {
       LOG_WARN("failed to allocate dir id for temp row store", K(ret));
+    } else {
+      set_adaptive_block_size(local_input->row_store_, get_channel_count());
+    }
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(merge_inputs_.push_back(local_input))) {
       LOG_WARN("fail push back MergeSortInput", K(ret));
     } else {

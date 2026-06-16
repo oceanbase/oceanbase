@@ -70,6 +70,7 @@ select /*+index(t1 idx)*/ c1, c2, c3 from t1 where c3 != 1 limit 2;
 --disable_warnings
 drop table t1;
 --enable_warnings
+--explain_protocol 1
 
 CREATE TABLE t1 (c1 bigint, c2 bigint);
 CREATE TABLE t2 (c1 NUMERIC(64,19), c2 DECIMAL(64,16), c3 INTEGER(127), c4 NUMERIC(64,18), c5 DECIMAL(64,0) GENERATED always AS (c3 + c4), c6 int);

@@ -242,7 +242,7 @@ private:
   int process_dump(const common::ObIArray<ObChunkDatumStore *> &full_dump_array,
                    const common::ObIArray<ObChunkDatumStore *> &part_dump_array);
 
-  OB_INLINE virtual int64_t get_channel_count() { return task_channels_.count(); }
+  OB_INLINE int64_t get_channel_count() { return task_channels_.count(); }
 private:
   int new_local_order_input(MergeSortInput *&out_msi);
   int get_all_rows_from_channels(

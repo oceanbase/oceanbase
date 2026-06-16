@@ -38,11 +38,6 @@ OB_SERIALIZE_MEMBER(ObPxFinishSqcResultMsg, dfo_id_, sqc_id_, rc_, trans_result_
                     sqc_fuse_row_cache_hit_, sqc_network_wait_time_,
                     sqc_iceberg_data_files_);
 OB_SERIALIZE_MEMBER(ObPxFinishTaskResultMsg, dfo_id_, sqc_id_, task_id_, rc_);
-OB_SERIALIZE_MEMBER((ObPxBloomFilterChInfo, dtl::ObDtlChTotalInfo), filter_id_);
-OB_SERIALIZE_MEMBER((ObPxBloomFilterChSet, dtl::ObDtlChSet), filter_id_, sqc_id_);
-OB_SERIALIZE_MEMBER(ObPxCreateBloomFilterChannelMsg, sqc_count_, sqc_id_, ch_set_info_);
-OB_SERIALIZE_MEMBER(ObPxBloomFilterData, filter_, tenant_id_, filter_id_,
-                    server_id_, px_sequence_id_, bloom_filter_count_);
 OB_SERIALIZE_MEMBER(ObPxDmlRowInfo, row_match_count_, row_duplicated_count_, row_deleted_count_);
 OB_SERIALIZE_MEMBER(ObPxTabletRange, tablet_id_, range_cut_, range_weights_);
 
@@ -54,17 +49,6 @@ int ObPxTaskChSet::assign(const ObPxTaskChSet &other)
   sm_group_id_ = other.sm_group_id_;
   if (OB_FAIL(dtl::ObDtlChSet::assign(other))) {
     LOG_WARN("fail assign ObPxTaskChSet", K(other), K(ret));
-  }
-  return ret;
-}
-
-int ObPxBloomFilterChSet::assign(const ObPxBloomFilterChSet &other)
-{
-  int ret = OB_SUCCESS;
-  filter_id_ = other.filter_id_;
-  sqc_id_ = other.sqc_id_;
-  if (OB_FAIL(dtl::ObDtlChSet::assign(other))) {
-    LOG_WARN("fail assign ObPxBloomFilterChSet", K(other), K(ret));
   }
   return ret;
 }

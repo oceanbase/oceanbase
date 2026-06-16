@@ -138,6 +138,7 @@ public:
                                 ObEvalCtx &eval_ctx,
                                 ObRuntimeFilterParams &params,
                                 bool &is_data_prepared) override final;
+  virtual int regenerate() override;
 
   int update_storage_white_filter_data(ObDynamicFilterExecutor &dynamic_filter,
                                        ObRuntimeFilterParams &params, bool &is_update);

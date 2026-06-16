@@ -25,6 +25,9 @@ int ObDtlTenantMemManager::init()
   hash_cnt_ = next_pow2(common::ObServerConfig::get_instance()._px_chunklist_count_ratio) * HASH_CNT;
   ObMemAttr attr(tenant_id_, "SqlDtlMgr");
   buf = reinterpret_cast<char*>(ob_malloc(hash_cnt_ * sizeof(ObDtlChannelMemManager), attr));
+  int64_t reserve_buffer_min_size = get_min_buffer_size();
+  int64_t buffer_size = GCONF.dtl_buffer_size;
+  int64_t max_reserve_count = std::max(1L, reserve_buffer_min_size / buffer_size / hash_cnt_);
   if (nullptr == buf) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc channel memory manager", K(ret));
@@ -35,7 +38,7 @@ int ObDtlTenantMemManager::init()
   } else {
     for (int i = 0; i < hash_cnt_ && OB_SUCC(ret); ++i) {
       ObDtlChannelMemManager *ch_mem_mgr = new (buf + i * sizeof(ObDtlChannelMemManager)) ObDtlChannelMemManager (tenant_id_, *this);
-      if (OB_FAIL(ch_mem_mgr->init())) {
+      if (OB_FAIL(ch_mem_mgr->init(max_reserve_count))) {
         LOG_WARN("failed to init channel memory manager", K(ret));
       } else {
         ch_mem_mgr->set_seqno(i);
@@ -118,6 +121,7 @@ void ObDtlTenantMemManager::destroy()
 ObDtlLinkedBuffer *ObDtlTenantMemManager::alloc(int64_t chid, int64_t size)
 {
   int ret = OB_SUCCESS;
+  static const int64_t MAX_RETRY_CNT = 1000;
   ObDtlLinkedBuffer *buf = nullptr;
   int64_t hash_val = hash(chid);
   if (0 > hash_val || hash_val >= hash_cnt_) {
@@ -127,10 +131,15 @@ ObDtlLinkedBuffer *ObDtlTenantMemManager::alloc(int64_t chid, int64_t size)
     ObDtlChannelMemManager *mem_mgr = mem_mgrs_.at(hash_val);
     int64_t &n_times = times_.at(hash_val);
     ++ n_times;
-    buf = mem_mgr->alloc(chid, size);
-    if (nullptr == buf) {
-      ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate dtl buffer memory", K(ret));
+    int64_t retry_cnt = 0;
+    while (OB_ISNULL(buf = mem_mgr->alloc(chid, size))) {
+      ob_usleep(1000);
+      ++retry_cnt;
+      if (retry_cnt > MAX_RETRY_CNT) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to allocate dtl buffer memory", K(ret));
+        break;
+      }
     }
   }
   return buf;

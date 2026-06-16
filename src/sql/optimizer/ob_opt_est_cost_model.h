@@ -656,16 +656,18 @@ struct ObExchInCostInfo
                    double width,
                    ObPQDistributeMethod::Type dist_method,
                    int64_t parallel,
-                    int64_t server_cnt,
+                   int64_t server_cnt,
                    bool is_local_order,
-                   const ObIArray<OrderItem> &sort_keys)
+                   const ObIArray<OrderItem> &sort_keys,
+                   double popular_values_ratio = 0.0)
   : sort_keys_(sort_keys),
     rows_(rows),
     width_(width),
     dist_method_(dist_method),
     parallel_(parallel),
     server_cnt_(server_cnt),
-    is_local_order_(is_local_order)
+    is_local_order_(is_local_order),
+    popular_values_ratio_(popular_values_ratio)
   {}
   const ObIArray<OrderItem> &sort_keys_;
   double rows_;
@@ -674,6 +676,7 @@ struct ObExchInCostInfo
   int64_t parallel_;
   int64_t server_cnt_;
   bool is_local_order_;
+  double popular_values_ratio_;
 };
 
 struct ObExchOutCostInfo
@@ -682,18 +685,21 @@ struct ObExchOutCostInfo
                     double width,
                     ObPQDistributeMethod::Type dist_method,
                     int64_t parallel,
-                    int64_t server_cnt)
+                    int64_t server_cnt,
+                    double popular_values_ratio = 0.0)
   : rows_(rows),
     width_(width),
     dist_method_(dist_method),
     parallel_(parallel),
-    server_cnt_(server_cnt)
+    server_cnt_(server_cnt),
+    popular_values_ratio_(popular_values_ratio)
   {}
   double rows_;
   double width_;
   ObPQDistributeMethod::Type dist_method_;
   int64_t parallel_;
   int64_t server_cnt_;
+  double popular_values_ratio_;
 };
 
 class ObOptEstCostModel

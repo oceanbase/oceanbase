@@ -87,18 +87,6 @@ private:
   ObIPxSubCoordMsgProc &msg_proc_;
 };
 
-class ObPxCreateBloomFilterChannelMsgP : 
-    public dtl::ObDtlPacketProc<ObPxCreateBloomFilterChannelMsg>
-{
-public:
-  ObPxCreateBloomFilterChannelMsgP(ObIPxSubCoordMsgProc &msg_proc)
-      : msg_proc_(msg_proc) {}
-  virtual ~ObPxCreateBloomFilterChannelMsgP() = default;
-  int process(const ObPxCreateBloomFilterChannelMsg &pkt) override;
-private:
-  ObIPxSubCoordMsgProc &msg_proc_;
-};
-
 class ObPxSqcInterruptedP : public dtl::ObDtlInterruptProc
 {
 public:

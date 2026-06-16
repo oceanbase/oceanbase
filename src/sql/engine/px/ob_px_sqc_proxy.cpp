@@ -15,65 +15,12 @@ using namespace oceanbase::sql::dtl;
 
 #define BREAK_TASK_CNT(a) ((a) + 1)
 
-int ObBloomFilterSendCtx::generate_filter_indexes(
-    int64_t each_group_size,
-    int64_t channel_count)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(filter_data_) || channel_count <= 0) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("filter data is null", K(ret));
-  } else {
-    int64_t send_size = GCONF._send_bloom_filter_size * 125;
-    int64_t filter_len = filter_data_->filter_.get_bits_array_length();
-    int64_t count = ceil(filter_len / (double)send_size);
-    int64_t start_idx = 0, end_idx = 0;
-    int64_t group_channel_count = each_group_size > channel_count ?
-        channel_count : each_group_size;
-    BloomFilterIndex filter_index;
-    for (int i = 0; OB_SUCC(ret) && i < count; ++i) {
-      start_idx = i * send_size;
-      end_idx = (i + 1) * send_size;
-      if (start_idx >= filter_len) {
-        start_idx = filter_len - 1;
-      }
-      if (end_idx >= filter_len) {
-        end_idx = filter_len - 1;
-      }
-      filter_index.begin_idx_ = start_idx;
-      filter_index.end_idx_ = end_idx;
-      int64_t group_count = ceil((double)channel_count / group_channel_count);
-      int64_t start_channel = ObRandom::rand(0, group_count - 1);
-      start_channel *= group_channel_count;
-      int pos = 0;
-      for (int j = start_channel; OB_SUCC(ret) &&
-          j < start_channel + channel_count;
-          j += group_channel_count) {
-        pos = (j >= channel_count ? j - channel_count : j);
-        pos = (pos / group_channel_count) * group_channel_count;
-        filter_index.channel_ids_.reset();
-        if (pos + group_channel_count > channel_count) {
-          filter_index.channel_id_ = (i % (channel_count - pos)) + pos;
-        } else {
-          filter_index.channel_id_ = (i % group_channel_count) + pos;
-        }
-        for (int k = pos; OB_SUCC(ret) && k < channel_count && k < pos + group_channel_count; ++k) {
-          OZ(filter_index.channel_ids_.push_back(k));
-        }
-        OZ(filter_indexes_.push_back(filter_index));
-      }
-    }
-  }
-  return ret;
-}
-
 ObPxSQCProxy::ObPxSQCProxy(ObSqcCtx &sqc_ctx,
                            ObPxRpcInitSqcArgs &arg)
   : sqc_ctx_(sqc_ctx),
     sqc_arg_(arg),
     leader_token_lock_(common::ObLatchIds::PX_WORKER_LEADER_LOCK),
     dtl_lock_(common::ObLatchIds::OB_PX_SQC_PROXY_DTL_LOCK),
-    bf_send_ctx_array_(),
     sample_msg_(),
     init_channel_msg_(),
     p2p_dh_map_()
@@ -92,18 +39,6 @@ int ObPxSQCProxy::init()
     LOG_WARN("fail to link sqc qc channel", K(ret));
   } else if (OB_FAIL(setup_loop_proc(sqc_ctx_))) {
     LOG_WARN("fail to setup loop proc", K(ret));
-  }
-  return ret;
-}
-
-int ObPxSQCProxy::append_bf_send_ctx(int64_t &bf_send_ctx_idx)
-{
-  int ret = OB_SUCCESS;
-  bf_send_ctx_idx = -1;
-  if (OB_FAIL(bf_send_ctx_array_.push_back(ObBloomFilterSendCtx()))) {
-    LOG_WARN("failed to pre alloc ObBloomFilterSendCtx", K(ret));
-  } else {
-    bf_send_ctx_idx = bf_send_ctx_array_.count() - 1;
   }
   return ret;
 }
@@ -138,13 +73,10 @@ int ObPxSQCProxy::setup_loop_proc(ObSqcCtx &sqc_ctx)
     LOG_WARN("fail init receive ch provider", K(ret));
   } else if (OB_FAIL(sqc_ctx.transmit_data_ch_provider_.init())) {
     LOG_WARN("fail init transmit ch provider", K(ret));
-  } else if (OB_FAIL(sqc_ctx.bf_ch_provider_.init())) {
-    LOG_WARN("fail init bool filter provider", K(ret));
   } else {
     (void)sqc_ctx.msg_loop_
         .register_processor(sqc_ctx.receive_data_ch_msg_proc_)
         .register_processor(sqc_ctx.transmit_data_ch_msg_proc_)
-        .register_processor(sqc_ctx.px_bloom_filter_msg_proc_)
         .register_processor(sqc_ctx.barrier_whole_msg_proc_)
         .register_processor(sqc_ctx.winbuf_whole_msg_proc_)
         .register_processor(sqc_ctx.sample_whole_msg_proc_)
@@ -575,36 +507,6 @@ bool ObPxSQCProxy::need_receive_channel_map_via_dtl(int64_t child_dfo_id)
      via_sqc = (sqc.get_receive_channel_msg().get_child_dfo_id() == child_dfo_id);
   }
   return !via_sqc;
-}
-
-int ObPxSQCProxy::get_bloom_filter_ch(
-  ObPxBloomFilterChSet &ch_set,
-  int64_t &sqc_count,
-  int64_t timeout_ts,
-  bool is_transmit)
-{
-  int ret = OB_SUCCESS;
-  int64_t wait_count = 0;
-  do {
-    ObSqcLeaderTokenGuard guard(leader_token_lock_, msg_ready_cond_);
-    if (guard.hold_token()) {
-      ret = process_dtl_msg(timeout_ts);
-      LOG_DEBUG("process dtl bf msg done", K(ret));
-    }
-    if (OB_SUCCESS == ret || OB_DTL_WAIT_EAGAIN == ret) {
-      ret = sqc_ctx_.bf_ch_provider_.get_data_ch_nonblock(
-              ch_set, sqc_count, timeout_ts, is_transmit, sqc_arg_.sqc_.get_qc_addr(),
-              get_process_query_time());
-    }
-    if (OB_DTL_WAIT_EAGAIN == ret) {
-      if(0 == (++wait_count) % 100) {
-        LOG_TRACE("try to get bf data channel repeatly", K(wait_count), K(ret));
-      }
-      // wait 1000us
-      ob_usleep(1000);
-    }
-  } while (OB_DTL_WAIT_EAGAIN == ret);
-  return ret;
 }
 
 int ObPxSQCProxy::get_whole_msg_provider(uint64_t op_id, ObDtlMsgType msg_type, ObPxDatahubDataProvider *&provider)

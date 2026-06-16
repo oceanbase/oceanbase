@@ -367,6 +367,8 @@ public:
   const static int64_t BIG_BLOCK_SIZE = (256L << 10) - sizeof(LinkNode);
   const static int64_t DEFAULT_BLOCK_CNT = (1L << 20) / BLOCK_CAPACITY;
   const static int64_t MIN_READ_BUFFER_SIZE = 2L * BLOCK_SIZE + IndexBlock::INDEX_BLOCK_SIZE;
+  const static int64_t MIN_BLOCK_SIZE = 8L << 10; // 8KB minimum block size for adaptive sizing
+  const static int64_t MIN_IDX_BLOCK_SIZE = 4L << 10; // 4KB minimum index block size
 
   explicit ObTempBlockStore(common::ObIAllocator *alloc = NULL);
   virtual ~ObTempBlockStore() { reset(); }
@@ -388,6 +390,18 @@ public:
   void set_mem_ctx_id(const int64_t ctx_id) { ctx_id_ = ctx_id; }
   void set_mem_limit(const int64_t limit) { mem_limit_ = limit; }
   int64_t get_mem_limit() const { return mem_limit_; }
+  // Adaptive block sizing: set smaller block sizes for high-fanin merge sort scenarios
+  void set_default_block_size(const int64_t blk_size)
+  {
+    default_blk_size_ = std::max(MIN_BLOCK_SIZE, std::min(static_cast<int64_t>(BLOCK_SIZE), blk_size));
+  }
+  void set_index_block_size(const int64_t idx_blk_size)
+  {
+    idx_blk_alloc_size_ = std::max(MIN_IDX_BLOCK_SIZE,
+        std::min(static_cast<int64_t>(IndexBlock::INDEX_BLOCK_SIZE + sizeof(LinkNode)), idx_blk_size));
+  }
+  int64_t get_default_block_size() const { return default_blk_size_; }
+  int64_t get_index_block_size() const { return idx_blk_alloc_size_; }
   void set_mem_stat(ObSqlMemoryCallback *mem_stat) { mem_stat_ = mem_stat; }
   void set_callback(ObSqlMemoryCallback *callback) { mem_stat_ = callback; }
   void reset_callback()
@@ -477,7 +491,7 @@ public:
     K_(mem_hold), K_(mem_used), K_(io_.fd), K_(dir_id), K_(file_size), K_(block_cnt),
     K_(index_block_cnt), K_(block_cnt_on_disk), K_(block_id_cnt), K_(dumped_block_id_cnt),
     K_(alloced_mem_size), K_(enable_trunc), K_(last_trunc_offset), K_(cur_file_offset),
-    K_(tempstore_read_alignment_size));
+    K_(tempstore_read_alignment_size), K_(default_blk_size), K_(idx_blk_alloc_size));
 
   void *alloc(const int64_t size)
   {
@@ -663,6 +677,9 @@ private:
   int64_t dir_id_;
   int64_t cur_file_offset_;
   int64_t tempstore_read_alignment_size_;
+  // Adaptive block sizing for high-fanin scenarios (e.g., merge sort receive with large DOP)
+  int64_t default_blk_size_;   // configurable data block size, default BLOCK_SIZE (64K)
+  int64_t idx_blk_alloc_size_; // configurable index block allocation size, default INDEX_BLOCK_SIZE + sizeof(LinkNode)
 
   DISALLOW_COPY_AND_ASSIGN(ObTempBlockStore);
 };

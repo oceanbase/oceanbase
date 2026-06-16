@@ -51,6 +51,7 @@ int ObGITaskReBalancer::init(ObExecContext *ctx, ObGranulePump *gi_pump, int64_t
 
 int ObGITaskReBalancer::wait_for_rebalance(ObGranuleIteratorOp *gi_op, bool need_wait_new_task) {
   int ret = OB_SUCCESS;
+  ScopedTimer timer(ObMetricId::WORKER_SYNC_WAIT);
   if (OB_FAIL(process_finished_count(gi_op))) {
     LOG_WARN("failed to process finished count");
   } else if (!need_wait_new_task) {

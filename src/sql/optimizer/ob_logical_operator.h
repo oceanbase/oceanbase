@@ -456,6 +456,7 @@ struct ObExchangeInfo
     calc_part_id_expr_(NULL),
     hash_dist_exprs_(),
     popular_values_(),
+    popular_values_ratio_(0.0),
     dist_method_(ObPQDistributeMethod::LOCAL), // pull to local
     unmatch_row_dist_method_(ObPQDistributeMethod::LOCAL),
     null_row_dist_method_(ObNullDistributeMethod::NONE),
@@ -515,6 +516,7 @@ struct ObExchangeInfo
   common::ObSEArray<HashExpr, 4> hash_dist_exprs_;
   // for hybrid hash distr
   common::ObSEArray<ObObj, 20> popular_values_;
+  double popular_values_ratio_; // fraction of hot rows, used for hybrid hash exchange cost estimation
   ObPQDistributeMethod::Type dist_method_;
   ObPQDistributeMethod::Type unmatch_row_dist_method_;
   ObNullDistributeMethod::Type null_row_dist_method_;
@@ -575,7 +577,8 @@ struct ObExchangeInfo
                K_(server_list),
                K_(is_ordered_agg),
                K_(hidden_pk_expr),
-               K_(use_scatter_channel_for_pkey_hash));
+               K_(use_scatter_channel_for_pkey_hash),
+               K_(popular_values_ratio));
 private:
   DISALLOW_COPY_AND_ASSIGN(ObExchangeInfo);
 };

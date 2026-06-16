@@ -42,6 +42,7 @@ namespace dtl {
 
 
 class  ObDtlBcastService;
+class ObDtlServerChannelGroup;
 
 enum DtlWriterType
 {
@@ -110,7 +111,7 @@ static DtlWriterType msg_writer_map[] =
   MAX_WRITER, // DH_STATISTICS_COLLECTOR_WHOLE_MSG, placeholder
   CONTROL_WRITER, // DH_DIRECT_INSERT_PIECE_MSG
   CONTROL_WRITER, // DH_DIRECT_INSERT_WHOLE_MSG
-  CONTROL_WRITER, // DTL_BATCH_SEND_MSG
+  CONTROL_WRITER, // DTL_BATCH_MSG
 };
 
 static_assert(ARRAYSIZEOF(msg_writer_map) == ObDtlMsgType::MAX, "invalid ms_writer_map size");
@@ -695,6 +696,7 @@ public:
   virtual int64_t get_hash_val() const { return hash_val_; }
 
   int wait_unblocking_if_blocked();
+  int try_wait_unblocking_if_blocked(int64_t timeout_us);
   int block_on_increase_size(int64_t size);
   int unblock_on_decrease_size(int64_t size);
   bool belong_to_receive_data();
@@ -721,32 +723,85 @@ public:
   }
   int push_back_send_list(ObDtlLinkedBuffer *buffer);
 
-  void set_dfc_idx(int64_t idx) { dfc_idx_ = idx; }
+  // Called when send() defers flush (defer_flush_=true) and send_list_ is non-empty.
+  // Subclass can override to trigger batch flush.
+  virtual int on_buffer_pending() { return common::OB_SUCCESS; }
 
+  // Seal the current write_buffer_ and push it to send_list_.
+  // Used by batch send to collect partially-filled buffers from sibling channels.
+  // After this call, write_buffer_ is nullptr; next write_msg() will allocate a new one.
+  int seal_write_buffer();
   int switch_writer(const ObDtlMsg &msg);
 
   int mock_eof_buffer(int64_t timeout_ts, uint64_t dfo_id);
   ObDtlLinkedBuffer *alloc_buf(const int64_t payload_size);
-  
-  void set_bc_service(ObDtlBcastService *bc_service) { bc_service_ = bc_service; }
+  void free_linked_buffer(ObDtlLinkedBuffer *b) { free_buf(b); }
 
-  ObDtlDatumMsgWriter &get_datum_writer() { return datum_msg_writer_; }
-  ObDtlVectorRowMsgWriter &get_vector_row_writer() { return vector_row_msg_writer_; }
-  ObDtlVectorMsgWriter &get_vector_msg_writer() { return vector_msg_writer_; }
-  ObDtlVectorFixedMsgWriter &get_vector_fixed_msg_writer() { return vector_fixed_msg_writer_; }
+  void set_bc_service(ObDtlBcastService *bc_service) { bc_service_ = bc_service; }
+  void set_server_group(ObDtlServerChannelGroup *group) { server_group_ = group; }
+  ObDtlServerChannelGroup *get_server_group() { return server_group_; }
+  ObDtlLinkedBuffer *get_write_buffer() { return write_buffer_; }
+  int64_t get_writer_used() { return (nullptr != msg_writer_) ? msg_writer_->used() : 0; }
+
+  void set_defer_flush(bool v) { defer_flush_ = v; }
+  bool get_defer_flush() const { return defer_flush_; }
+
+  int init_ctl_msg_writer(void *buf = nullptr) {
+    return alloc_writer(ctl_msg_writer_, "DtlCtlWr", buf);
+  }
+  int init_row_msg_writer(void *buf = nullptr) {
+    return alloc_writer(row_msg_writer_, "DtlRowWr", buf);
+  }
+  int init_datum_msg_writer(void *buf = nullptr) {
+    return alloc_writer(datum_msg_writer_, "DtlDatumWr", buf);
+  }
+  int init_vector_row_msg_writer(void *buf = nullptr) {
+    return alloc_writer(vector_row_msg_writer_, "DtlVRowWr", buf);
+  }
+  int init_vector_msg_writer(void *buf = nullptr) {
+    return alloc_writer(vector_msg_writer_, "DtlVecWr", buf);
+  }
+  int init_vector_fixed_msg_writer(void *buf = nullptr) {
+    return alloc_writer(vector_fixed_msg_writer_, "DtlVFixWr", buf);
+  }
+  ObDtlDatumMsgWriter &get_datum_writer() { return *datum_msg_writer_; }
+  ObDtlVectorRowMsgWriter &get_vector_row_writer() { return *vector_row_msg_writer_; }
+  ObDtlVectorMsgWriter &get_vector_msg_writer() { return *vector_msg_writer_; }
+  ObDtlVectorFixedMsgWriter &get_vector_fixed_msg_writer() { return *vector_fixed_msg_writer_; }
   virtual int push_buffer_batch_info() override;
   void switch_msg_type(const ObDtlMsg &msg);
   void set_row_meta(RowMeta &meta) { meta_ = &meta; }
+  bool is_in_process() const { return msg_response_.is_in_process(); }
 
   TO_STRING_KV(KP_(id), K_(peer), K_(peer_id));
 protected:
   int push_back_send_list();
-  int wait_unblocking();
+  int wait_unblocking(int64_t timeout_ts = 0);
   int switch_buffer(const int64_t min_size, const bool is_eof,
       const int64_t timeout_ts, ObEvalCtx *eval_ctx);
   int write_msg(const ObDtlMsg &msg, int64_t timeout_ts,
       ObEvalCtx *eval_ctx, bool is_eof);
   int inner_write_msg(const ObDtlMsg &msg, int64_t timeout_ts, ObEvalCtx *eval_ctx, bool is_eof);
+  template <typename T>
+  OB_INLINE int alloc_writer(T *&writer, const char *label, void *buf)
+  {
+    int ret = OB_SUCCESS;
+    if (nullptr != writer) {
+    } else if (nullptr != buf) {
+      writer = new(buf) T();
+    } else {
+      buf = ob_malloc(sizeof(T), ObMemAttr(tenant_id_, label));
+      if (OB_ISNULL(buf)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        SQL_DTL_LOG(WARN, "alloc msg writer failed", K(ret), K(tenant_id_));
+      } else {
+        writer = new(buf) T();
+      }
+    }
+    return ret;
+  }
+
+  void destroy_writers();
 
   void free_buf(ObDtlLinkedBuffer *buf);
 
@@ -758,8 +813,12 @@ protected:
 
   virtual void reset_px_row_iterator()
   {
-    datum_iter_.reset();
-    row_iter_.reset();
+    if (nullptr != datum_iter_) {
+      datum_iter_->reset();
+    }
+    if (nullptr != row_iter_) {
+      row_iter_->reset();
+    }
   }
 protected:
   bool is_inited_;
@@ -785,21 +844,23 @@ protected:
   bool is_data_msg_;
   bool use_crs_writer_;
   int64_t hash_val_;
-  int64_t dfc_idx_;
   int64_t got_from_dtl_cache_;
 
-  ObDtlControlMsgWriter ctl_msg_writer_;
-  ObDtlRowMsgWriter row_msg_writer_;
-  ObDtlDatumMsgWriter datum_msg_writer_;
-  ObDtlVectorRowMsgWriter vector_row_msg_writer_;
-  ObDtlVectorMsgWriter vector_msg_writer_;
-  ObDtlVectorFixedMsgWriter vector_fixed_msg_writer_;
+  ObDtlControlMsgWriter *ctl_msg_writer_;
+  ObDtlRowMsgWriter *row_msg_writer_;
+  ObDtlDatumMsgWriter *datum_msg_writer_;
+  ObDtlVectorRowMsgWriter *vector_row_msg_writer_;
+  ObDtlVectorMsgWriter *vector_msg_writer_;
+  ObDtlVectorFixedMsgWriter *vector_fixed_msg_writer_;
   ObDtlChannelEncoder *msg_writer_;
   // row/datum store iterator for interm result iteration.
-  ObChunkDatumStore::Iterator datum_iter_;
-  ObTempRowStore::Iterator row_iter_;
+  // Lazily allocated on first use to avoid construction/destruction cost on non-interm-result channels.
+  ObChunkDatumStore::Iterator *datum_iter_;
+  ObTempRowStore::Iterator *row_iter_;
 
   ObDtlBcastService *bc_service_;
+  ObDtlServerChannelGroup *server_group_;
+  bool defer_flush_;
 
   ObDtlChannelBlockProc block_proc_;
   static const int64_t MAX_BUFFER_CNT = 2;

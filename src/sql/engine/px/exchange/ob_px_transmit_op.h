@@ -354,6 +354,7 @@ protected:
         if (OB_FAIL(try_wait_channel())) {
           LOG_WARN("failed to wait channel init", K(ret));
         } else if (batch_param_remain_) {
+          update_task_channels_head();
           ObPxNewRow px_eof_row;
           px_eof_row.set_eof_row();
           px_eof_row.set_data_type(data_msg_type_);
@@ -416,10 +417,12 @@ private:
   int set_expect_range_count();
   int wait_channel_ready_msg();
   int try_extend_selector_array(int64_t target_count, bool is_fixed);
+  void update_task_channels_head();
   int keep_order_send_batch(ObEvalCtx::BatchInfoScopeGuard &batch_info_guard,
                             ObSliceIdxCalc::SliceIdxFlattenArray &slice_idx_flatten_array,
                             ObSliceIdxCalc::EndIdxArray &end_idx_array,
                             bool is_broad_cast_calc_type);
+  int try_seal_group_buffers(int64_t trigger_slice_idx);
   int keep_order_send_batch_fixed(ObEvalCtx::BatchInfoScopeGuard &batch_info_guard,
                             ObSliceIdxCalc::SliceIdxFlattenArray &slice_idx_flatten_array,
                             ObSliceIdxCalc::EndIdxArray &end_idx_array,
@@ -437,7 +440,6 @@ private:
                                                                     && !proxy.get_transmit_use_interm_result(); }
   int try_wait_channel();
   int init_data_msg_type(const common::ObIArray<ObExpr *> &output);
-  void fill_batch_ptrs_fixed(const int64_t *indexes);
   void fill_batch_ptrs(ObSliceIdxCalc::SliceIdxFlattenArray &slice_idx_flatten_array,
                        ObSliceIdxCalc::EndIdxArray &end_idx_array);
   void fill_batch_ptrs_fixed(ObSliceIdxCalc::SliceIdxFlattenArray &slice_idx_flatten_array,
@@ -450,6 +452,7 @@ private:
   void dispatch_copy_fixed_column_lenN(const char *payload, int64_t col_idx, int64_t fixed_len);
   dtl::ObDtlMsgType get_data_msg_type() const { return data_msg_type_; }
   void set_wf_hybrid_exprs(ObSliceIdxCalc &slice_calc);
+  int init_channel_msg_writers();
 protected:
   ObArray<ObChunkDatumStore::Block *> ch_blocks_;
   ObArray<ObChunkDatumStore::BlockBufferWrap> blk_bufs_;
@@ -467,6 +470,10 @@ protected:
   ObOpMetric metric_;
   dtl::ObDtlChanAgent chs_agent_;
   bool use_bcast_opt_;
+  // Server channel groups for batch send optimization
+  ObTMArray<dtl::ObDtlServerChannelGroup *> server_groups_;
+  double dtl_buffer_seal_threshold_;
+  common::ObArenaAllocator server_group_allocator_;
   ObPxPartChInfo part_ch_info_;
   dtl::ObDtlChTotalInfo *ch_info_;
   bool sample_done_;
@@ -486,6 +493,7 @@ protected:
   unsigned short rand48_buf_[3];
   bool receive_channel_ready_;
   dtl::ObDtlMsgType data_msg_type_;
+  void *writers_buf_;
   bool has_set_tablet_id_vector_ = false;
   //slice_idx, batch_idx
   struct VectorSendParams {
@@ -514,7 +522,6 @@ protected:
                                                     offset_inited_(false),
                                                     row_limit_(-1),
                                                     fixed_rows_(nullptr),
-                                                    reorder_fixed_expr_(false),
                                                     selector_array_max_size_(0) {}
     int init_basic_params(const int64_t max_batch_size, const int64_t channel_cnt,
                           const int64_t output_cnt, ObIAllocator &alloc, ObExecContext &ctx);
@@ -545,7 +552,6 @@ protected:
     bool offset_inited_;
     int64_t row_limit_;
     char **fixed_rows_;
-    bool reorder_fixed_expr_;
     int64_t selector_array_max_size_;
   };
   VectorSendParams params_;

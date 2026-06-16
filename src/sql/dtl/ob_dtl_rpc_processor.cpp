@@ -6,12 +6,53 @@
 #define USING_LOG_PREFIX SQL_DTL
 #include "ob_dtl_rpc_processor.h"
 #include "sql/dtl/ob_dtl.h"
+#include "sql/dtl/ob_dtl_flow_control.h"
 #include "sql/dtl/ob_dtl_rpc_channel.h"
 using namespace oceanbase::common;
 
 namespace oceanbase {
 namespace sql {
 namespace dtl {
+
+static int feedup_unblocking_msg(ObDtlBasicChannel *bc)
+{
+  static constexpr int64_t MAX_UNBLOCKING_MSG_SIZE = 128;
+  static_assert(sizeof(ObDtlUnblockingMsg) + sizeof(ObDtlMsgHeader) <= MAX_UNBLOCKING_MSG_SIZE,
+      "unblocking msg is too large");
+  int ret = OB_SUCCESS;
+  char local_buf[MAX_UNBLOCKING_MSG_SIZE];
+  ObDtlRpcChannel *rpc_chan = nullptr;
+  ObDtlLinkedBuffer mock_buffer(local_buf, sizeof(local_buf), sizeof(local_buf));
+  ObDtlLinkedBuffer *mock_buffer_ptr = &mock_buffer;
+  ObDtlUnblockingMsg unblocking_msg;
+  ObDtlMsgHeader header;
+  header.nbody_ = static_cast<int32_t>(unblocking_msg.get_serialize_size());
+  header.type_ = static_cast<int16_t>(unblocking_msg.get_type());
+  if (OB_ISNULL(bc)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("unexpected null basic channel", K(ret));
+  } else if (ObDtlChannel::DtlChannelType::RPC_CHANNEL != bc->get_channel_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected non-rpc channel for unblocking batch msg", K(ret), KPC(bc));
+  } else if (FALSE_IT(rpc_chan = static_cast<ObDtlRpcChannel *>(bc))) {
+  } else if (OB_FAIL(serialization::encode(
+                 mock_buffer.buf(), mock_buffer.size(), mock_buffer.pos(), header))) {
+    LOG_WARN("failed to serialize unblocking msg header", K(ret), K(header), KPC(bc));
+  } else if (OB_FAIL(serialization::encode(
+                 mock_buffer.buf(), mock_buffer.size(), mock_buffer.pos(), unblocking_msg))) {
+    LOG_WARN("failed to serialize unblocking msg", K(ret), K(header), KPC(bc));
+  } else {
+    mock_buffer.set_data_msg(false);
+    mock_buffer.set_msg_type(ObDtlMsgType::UNBLOCKING_DATA_FLOW);
+    mock_buffer.tenant_id() = bc->get_tenant_id();
+    mock_buffer.set_size(mock_buffer.pos());
+    mock_buffer.set_pos(0);
+    if (OB_FAIL(rpc_chan->feedup(mock_buffer_ptr))) {
+      LOG_WARN("failed to feed mock unblocking msg to rpc channel", K(ret), KPC(bc));
+    }
+  }
+  return ret;
+}
 
 int ObDtlSendMessageP::process()
 {
@@ -49,13 +90,6 @@ int ObDtlSendMessageP::process_msg(ObDtlRpcDataResponse &response, ObDtlSendArgs
       LOG_TRACE("receive drain cmd, unregister rpc channel", KP(arg.chid_));
       ret = OB_SUCCESS;
       tmp_ret = OB_SUCCESS;
-    } else if (header.is_px_bloom_filter_data()) {
-      ObDtlLinkedBuffer *buf = &arg.buffer_;
-      if (OB_FAIL(process_px_bloom_filter_data(buf))) {
-        LOG_WARN("fail to process px bloom filter data", K(ret));
-      } else {
-        tmp_ret = OB_SUCCESS;
-      }
     } else if (arg.buffer_.is_data_msg() && 1 == arg.buffer_.seq_no()) {
       ret = tmp_ret;
       LOG_WARN("failed to get channel", K(ret));
@@ -127,43 +161,96 @@ int ObDtlBCSendMessageP::process()
   return OB_SUCCESS;
 }
 
-int ObDtlSendMessageP::process_px_bloom_filter_data(ObDtlLinkedBuffer *&buffer)
+int ObDtlBatchSendMessageP::process()
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(buffer)) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("linked buffer is null", K(ret));
-  } else {
-    ObPxBloomFilterData bf_data;
+  ObIArray<ObDtlSendArgs> &args = arg_.args_;
+  ObIArray<ObDtlRpcDataResponse> &resps = result_.resps_;
+  if (arg_.is_pure_control_msg_) {
     ObDtlMsgHeader header;
-    ObPxBloomFilter *filter = NULL;
-    if (OB_FAIL(ObDtlLinkedBuffer::deserialize_msg_header(*buffer, header))) {
-      LOG_WARN("fail to decode header of buffer", K(ret));
-    }
-    if (OB_SUCC(ret)) {
-      const char *buf = buffer->buf();
-      int64_t size = buffer->size();
-      int64_t &pos = buffer->pos();
-      if (OB_FAIL(common::serialization::decode(buf, size, pos, bf_data))) {
-        LOG_WARN("fail to decode bloom filter data", K(ret));
-      } else {
-        ObPXBloomFilterHashWrapper bf_key(bf_data.tenant_id_, bf_data.filter_id_,
-            bf_data.server_id_, bf_data.px_sequence_id_, 0/*task_id*/);
-        if (OB_FAIL(ObPxBloomFilterManager::instance().get_px_bf_for_merge_filter(
-            bf_key, filter))) {
-          LOG_WARN("fail to get px bloom filter", K(ret));
-        }
-        // get_px_bf_for_merge_filter只有在成功后会增加filter的引用计数
-        if (OB_SUCC(ret) && OB_NOT_NULL(filter)) {
-          if (OB_FAIL(filter->merge_filter(&bf_data.filter_))) {
-            LOG_WARN("fail to merge filter", K(ret));
-          } else if (OB_FAIL(filter->process_recieve_count(bf_data.bloom_filter_count_))) {
-            LOG_WARN("fail to process receive count", K(ret));
-          }
-          // merge以及process操作完成之后, 需要减少其引用计数.
-          (void)filter->dec_merge_filter_count();
-        }
+    ObDtlBatchMsg msg;
+    if (OB_FAIL(ObDtlLinkedBuffer::deserialize_msg_header(arg_.batch_buffer_, header, false))) {
+      LOG_WARN("failed to deserialize msg header", K(ret));
+    } else  if (!header.is_dtl_batch_msg()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected msg type", K(header.type_));
+    } else {
+      const char *buf = arg_.batch_buffer_.buf();
+      const int64_t sz = arg_.batch_buffer_.size();
+      int64_t &pos = arg_.batch_buffer_.pos();
+      if (OB_FAIL(common::serialization::decode(buf, sz, pos, msg))) {
+        LOG_WARN("batch eof decode body failed", K(ret));
+      } else if (OB_FAIL(process_batch_control_msg(msg))) {
+        LOG_WARN("failed to process batch control msg", K(ret));
       }
+    }
+    LOG_TRACE("[DTL BATCH] process dtl batch msg", K(ret), K(msg));
+    result_.is_pure_control_msg_ = true;
+    result_.recode_ = ret;
+  } else if (args.empty()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected empty batch args", K(ret));
+  } else if (OB_FAIL(resps.prepare_allocate(args.count()))) {
+    LOG_WARN("prepare allocate failed", K(ret));
+  } else {
+    int tmp_ret = OB_SUCCESS;
+    for (int64_t i = 0; i < args.count(); ++i) {
+      ObDtlSendMessageP::process_msg(resps.at(i), args.at(i));
+      tmp_ret = resps.at(i).recode_;
+      if (OB_HASH_NOT_EXIST == tmp_ret) {
+        // channel has been drained
+        tmp_ret = OB_SUCCESS;
+        resps.at(i).recode_ = OB_SUCCESS;
+      } else if (tmp_ret != OB_SUCCESS) {
+        LOG_WARN("failed to process_msg in batch", K(tmp_ret), K(i), K(args.count()));
+      }
+      if (OB_SUCCESS == ret) {
+        ret = tmp_ret;
+      }
+    }
+    LOG_TRACE("[DTL BATCH] finish process batch msg", K(ret), K(resps), K(args.count()));
+  }
+  return OB_SUCCESS;
+}
+
+int ObDtlBatchSendMessageP::process_batch_control_msg(ObDtlBatchMsg &msg)
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < msg.ch_ids_.count(); ++i) {
+    ObDtlChannel *chan = nullptr;
+    if (OB_FAIL(DTL.get_channel(msg.ch_ids_.at(i), chan))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      } else {
+        LOG_WARN("failed to get channel", K(ret));
+      }
+    } else {
+      ObDtlBasicChannel *bc = static_cast<ObDtlBasicChannel *>(chan);
+      if (msg.contained_msg_type_ == ObDtlMsgType::DRAIN_DATA_FLOW) {
+        if (OB_NOT_NULL(bc->get_dfc())) {
+          bc->get_dfc()->set_drain(bc);
+        }
+      } else if (msg.contained_msg_type_ == ObDtlMsgType::UNBLOCKING_DATA_FLOW) {
+        if (OB_NOT_NULL(bc->get_dfc())) {
+          if (bc->get_dfc()->is_block(bc)) {
+            // transmit's rpc response is already processed,
+            // we can unblock the channel directly
+            bc->get_dfc()->unblock_channel(bc);
+            LOG_TRACE("[DTL BATCH BLOCK] unblock channel", K(bc->get_id()), K(bc->get_peer()));
+          } else {
+            // response message is not processed yet, we should feedup a unblocking msg
+            // for later processing
+            if (OB_FAIL(feedup_unblocking_msg(bc))) {
+              LOG_WARN("failed to feedup unblocking msg", K(ret));
+            }
+            LOG_TRACE("[DTL BATCH BLOCK] feedup unblocking msg", K(bc->get_id()), K(bc->get_peer()));
+          }
+        }
+      } else {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected msg type", K(msg.contained_msg_type_));
+      }
+      DTL.release_channel(chan);
     }
   }
   return ret;

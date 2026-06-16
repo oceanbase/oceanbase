@@ -113,8 +113,6 @@ public:
   bool all_tasks_finish_;
   bool interrupted_; // 标记当前 SQC 是否被 QC 中断
   common::ObSEArray<ObPxTabletInfo, 8> px_tablets_info_;
-  ObPxBloomfilterChProvider bf_ch_provider_;
-  ObPxCreateBloomFilterChannelMsgP px_bloom_filter_msg_proc_;
   ObOptStatsGatherWholeMsgP opt_stats_gather_whole_msg_proc_;
   // 用于 datahub 中保存 whole msg provider，一般情况下一个子计划里不会
   // 超过一个算子会使用 datahub，所以大小默认为 1 即可

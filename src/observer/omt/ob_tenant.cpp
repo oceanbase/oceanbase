@@ -17,9 +17,11 @@
 #include "storage/shared_storage/ob_disk_space_manager.h"
 #endif
 #include "share/rc/ob_tenant_module_init_ctx.h"
+#include "share/config/ob_server_config.h"
 #include "sql/engine/px/ob_px_worker.h"
 #include "lib/stat/ob_diagnostic_info_guard.h"
 #include "lib/resource/ob_affinity_ctrl.h"
+#include "lib/ob_define.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -43,6 +45,10 @@ extern "C" {
 int ob_pthread_create(void **ptr, void *(*start_routine) (void *), void *arg);
 int ob_pthread_tryjoin_np(void *ptr);
 }
+
+#if defined(__linux__)
+#include <sys/resource.h>
+#endif
 void MultiLevelReqCnt::atomic_inc(const int32_t level)
 {
   if (level < 0 || level >= MAX_REQUEST_LEVEL) {
@@ -247,6 +253,19 @@ void ObPxPool::set_px_thread_name()
   lib::set_thread_name(buf);
 }
 
+void ObPxPool::apply_px_worker_thread_sched_priority()
+{
+#if defined(__linux__)
+  // Linux per-thread nice: setpriority(PRIO_PROCESS, tid, prio) adjusts the thread identified by
+  // tid (see gettid(2)); naming is historical. who==0 also means the calling thread.
+  static constexpr int PX_WORKER_THREAD_NICE = 10;
+  const id_t tid = static_cast<id_t>(ob_gettid());
+  if (0 != setpriority(PRIO_PROCESS, tid, PX_WORKER_THREAD_NICE)) {
+    LOG_WARN_RET(OB_ERR_UNEXPECTED, "setpriority failed for px worker thread", K(errno), K(tid), K(PX_WORKER_THREAD_NICE));
+  }
+#endif
+}
+
 void ObPxPool::run(int64_t idx)
 {
   ATOMIC_INC(&active_threads_);
@@ -270,6 +289,7 @@ void ObPxPool::run1()
   ObCgroupCtrl *cgroup_ctrl = GCTX.cgroup_ctrl_;
   LOG_INFO("run px pool", K(group_id_), K(tenant_id_), K_(active_threads));
   SET_GROUP_ID(group_id_);
+  apply_px_worker_thread_sched_priority();
 
 	if (!is_inited_) {
     queue_.set_limit(common::ObServerConfig::get_instance().tenant_task_queue_size);

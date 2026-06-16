@@ -2641,11 +2641,13 @@ int ObLogPlan::check_if_use_hybrid_hash_distribution(ObOptimizerContext &optimiz
                                                      const ObDMLStmt *stmt,
                                                      ObJoinType join_type,
                                                      ObRawExpr  &expr,
-                                                     ObIArray<ObObj> &popular_values) const
+                                                     ObIArray<ObObj> &popular_values,
+                                                     double &popular_values_ratio) const
 {
   int ret = OB_SUCCESS;
   ObSQLSessionInfo* session_info = optimizer_ctx.get_session_info();
   bool enable_skew_handling = optimizer_ctx.get_session_info()->get_px_join_skew_handling();
+  popular_values_ratio = 0.0;
   if (OB_SUCC(ret)
       && enable_skew_handling
       && expr.is_column_ref_expr()
@@ -2660,7 +2662,10 @@ int ObLogPlan::check_if_use_hybrid_hash_distribution(ObOptimizerContext &optimiz
                                             expr,
                                             handle))) {
       LOG_WARN("fail get hisstogram by join exprs", K(ret));
-    } else if (OB_FAIL(get_popular_values_hash(get_allocator(), handle, popular_values))) {
+    } else if (OB_FAIL(get_popular_values_hash(get_allocator(),
+                                               handle,
+                                               popular_values,
+                                               popular_values_ratio))) {
       LOG_WARN("fail get popular values hash", K(ret));
     }
   }
@@ -2668,9 +2673,11 @@ int ObLogPlan::check_if_use_hybrid_hash_distribution(ObOptimizerContext &optimiz
 }
 int ObLogPlan::get_popular_values_hash(ObIAllocator &allocator,
                                        ObOptColumnStatHandle &handle,
-                                       common::ObIArray<ObObj> &popular_values) const
+                                       common::ObIArray<ObObj> &popular_values,
+                                       double &popular_values_ratio) const
 {
   int ret = OB_SUCCESS;
+  popular_values_ratio = 0.0;
   if (OB_ISNULL(handle.stat_)
       || 0 >= handle.stat_->get_last_analyzed()
       || handle.stat_->get_histogram().get_bucket_size() <= 0) {
@@ -2682,10 +2689,12 @@ int ObLogPlan::get_popular_values_hash(ObIAllocator &allocator,
     const ObHistBucket &last_bucket = histogram.get(histogram.get_bucket_size() - 1);
     int64_t total_cnt = std::max(1L, last_bucket.endpoint_num_); // avoid zero div
     int64_t min_freq = optimizer_context_.get_session_info()->get_px_join_skew_minfreq();
+    int64_t popular_values_cnt = 0;
     for (int64_t i = 0; OB_SUCC(ret) && i < histogram.get_bucket_size(); ++i) {
       const ObHistBucket &bucket = histogram.get(i);
       int64_t freq = bucket.endpoint_repeat_count_ * 100 / total_cnt;
       if (freq >= min_freq) {
+        popular_values_cnt += bucket.endpoint_repeat_count_;
         ObObj value;
         if (OB_FAIL(ob_write_obj(allocator, bucket.endpoint_value_, value))) {
           LOG_WARN("fail write object", K(ret));
@@ -2695,6 +2704,9 @@ int ObLogPlan::get_popular_values_hash(ObIAllocator &allocator,
       }
       LOG_DEBUG("add a popular value to array",
                 K(freq), K(bucket.endpoint_repeat_count_), K(total_cnt), K(min_freq));
+    }
+    if (OB_SUCC(ret)) {
+      popular_values_ratio = static_cast<double>(popular_values_cnt) / total_cnt;
     }
   }
   return ret;
@@ -2773,18 +2785,22 @@ int ObLogPlan::compute_hash_distribution_info(const ObJoinType &join_type,
       // for now, only support hybrid hash DM with only 1 base column join condition
       // after DSQ supported, we can do better with more scenarios.
       if (enable_hybrid_hash_dm && right_exch_info.hash_dist_exprs_.count() > 0) {
+        double popular_values_ratio = 0.0;
         if (OB_FAIL(check_if_use_hybrid_hash_distribution(
                     optimizer_context_,
                     get_stmt(),
                     join_type,
                     *right_exch_info.hash_dist_exprs_.at(0).expr_,
-                    right_exch_info.popular_values_))) {
+                    right_exch_info.popular_values_,
+                    popular_values_ratio))) {
           LOG_WARN("fail check use hybrid hash dist", K(ret));
         } else if (OB_FAIL(assign_right_popular_value_to_left(left_exch_info, right_exch_info))) {
           LOG_WARN("fail to assign right exch info popular value to left", K(ret), K(left_exch_info), K(right_exch_info));
         } else {
           left_exch_info.dist_method_ = ObPQDistributeMethod::HYBRID_HASH_BROADCAST;
           right_exch_info.dist_method_ = ObPQDistributeMethod::HYBRID_HASH_RANDOM;
+          left_exch_info.popular_values_ratio_  = popular_values_ratio;
+          right_exch_info.popular_values_ratio_ = popular_values_ratio;
         }
       } else {
         left_exch_info.dist_method_ = ObPQDistributeMethod::HASH;

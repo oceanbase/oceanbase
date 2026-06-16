@@ -6,6 +6,12 @@
 #define USING_LOG_PREFIX SQL_DTL
 #include "ob_dtl_channel_group.h"
 #include "sql/dtl/ob_dtl.h"
+#include "sql/dtl/ob_dtl_task.h"
+#include "sql/dtl/ob_dtl_flow_control.h"
+#include "sql/dtl/ob_dtl_local_channel.h"
+#include "sql/dtl/ob_dtl_rpc_channel.h"
+#include "lib/time/ob_time_utility.h"
+#include "lib/allocator/ob_malloc.h"
 
 using namespace oceanbase::common;
 
@@ -132,6 +138,13 @@ int ObDtlChannelGroup::link_channel(const ObDtlChannelInfo &ci, ObDtlChannel *&c
   return ret;
 }
 
+int ObDtlChannelGroup::link_data_channel(ObDtlChannel *&chan,
+                                         ObDtlFlowControl *dfc, ObTenantDfc *tenant_dfc)
+{
+  // chan is pre-allocated (placement new); skip create_*_channel, directly init+register.
+  return DTL.register_data_channel(chan, dfc, tenant_dfc);
+}
+
 int ObDtlChannelGroup::unlink_channel(const ObDtlChannelInfo &ci)
 {
   return DTL.destroy_channel(ci.chid_);
@@ -141,6 +154,60 @@ int ObDtlChannelGroup::unlink_channel(const ObDtlChannelInfo &ci)
 int ObDtlChannelGroup::remove_channel(const ObDtlChannelInfo &ci, ObDtlChannel *&ch)
 {
   return DTL.remove_channel(ci.chid_, ch);
+}
+
+int ObDtlChannelGroup::build_data_channels(void *buf,
+                                           int64_t channel_size,
+                                           ObDtlChSet &ch_set,
+                                           common::ObIArray<ObDtlChannel *> &channels,
+                                           ObDtlFlowControl *dfc,
+                                           uint64_t tenant_id)
+{
+  int ret = OB_SUCCESS;
+  int64_t offset = 0;
+  ObTenantDfc *tenant_dfc = nullptr;
+  if (OB_FAIL(DTL.get_tenant_dfc(tenant_id, tenant_dfc))) {
+    LOG_WARN("fail get tenant dfc", K(ret));
+  } else if (OB_FAIL(channels.reserve(ch_set.count()))) {
+    LOG_WARN("fail reserve channels", K(ret), K(ch_set.count()));
+  } else if (OB_FAIL(dfc->reserve(ch_set.count()))) {
+    LOG_WARN("fail reserve dfc channels", K(ret), K(ch_set.count()));
+  } else {
+    uint16_t seed[3] = {0, 0, 0};
+    int64_t time = ObTimeUtility::current_time();
+    seed[0] = static_cast<uint16_t>(GETTID());
+    seed[1] = static_cast<uint16_t>(time & 0x0000FFFF);
+    seed[2] = static_cast<uint16_t>((time & 0xFFFF0000) >> 16);
+    seed48(seed);
+    bool failed_in_push_back = false;
+    for (int64_t idx = 0; idx < ch_set.count() && OB_SUCC(ret); ++idx) {
+      ObDtlChannel *ch = NULL;
+      int64_t hash_val = jrand48(seed);
+      const ObDtlChannelInfo &ci = ch_set.get_ch_info_set().at(idx);
+      if (nullptr != dfc && ci.type_ == DTL_CT_LOCAL) {
+        ch = new((char*)buf + offset) ObDtlLocalChannel(ci.tenant_id_, ci.chid_, ci.peer_, hash_val,
+                                                        ObDtlChannel::DtlChannelType::LOCAL_CHANNEL);
+      } else {
+        ch = new((char*)buf + offset) ObDtlRpcChannel(ci.tenant_id_, ci.chid_, ci.peer_, hash_val,
+                                                      ObDtlChannel::DtlChannelType::RPC_CHANNEL);
+      }
+      if (OB_ISNULL(ch)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("create channel fail", K(ret), K(ci.tenant_id_), K(ci.chid_));
+      } else if (OB_FAIL(link_data_channel(ch, dfc, tenant_dfc))) {
+        LOG_WARN("fail link channel", K(ret), K(ci));
+      } else if (OB_FAIL(channels.push_back(ch))) {
+        failed_in_push_back = true;
+        LOG_WARN("fail push back channel ptr", K(ci), K(ret));
+      } else {
+        offset += channel_size;
+      }
+    }
+    if (0 == channels.count() && !failed_in_push_back) {
+      ob_free(buf);
+    }
+  }
+  return ret;
 }
 
 }  // dtl

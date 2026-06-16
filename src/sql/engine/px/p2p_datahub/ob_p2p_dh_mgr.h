@@ -22,12 +22,11 @@ class ObP2PDatahubManager
 public:
   struct P2PMsgMergeCall
   {
-    P2PMsgMergeCall(ObP2PDatahubMsgBase &db_msg) : dh_msg_(db_msg), need_free_(false) {};
+    P2PMsgMergeCall(ObP2PDatahubMsgBase &db_msg) : ret_(OB_SUCCESS), dh_msg_(db_msg) {};
     ~P2PMsgMergeCall() = default;
     int operator() (common::hash::HashMapPair<ObP2PDhKey, ObP2PDatahubMsgBase *> &entry);
     int ret_;
     ObP2PDatahubMsgBase &dh_msg_;
-    bool need_free_;
   };
 
   struct P2PMsgGetCall
@@ -50,13 +49,12 @@ public:
   struct P2PMsgSetCall
   {
     P2PMsgSetCall(ObP2PDhKey &dh_key, ObP2PDatahubMsgBase &db_msg)
-        : dh_key_(dh_key), dh_msg_(db_msg), ret_(OB_SUCCESS), succ_reg_dm_(false) {};
+        : dh_key_(dh_key), dh_msg_(db_msg), ret_(OB_SUCCESS) {};
     ~P2PMsgSetCall() = default;
     int operator() (const common::hash::HashMapPair<ObP2PDhKey, ObP2PDatahubMsgBase *> &entry);
     ObP2PDhKey &dh_key_;
     ObP2PDatahubMsgBase &dh_msg_;
     int ret_;
-    bool succ_reg_dm_;
   };
 
 public:
@@ -68,7 +66,7 @@ public:
   typedef common::hash::ObHashMap<ObP2PDhKey, ObP2PDatahubMsgBase *> MsgMap;
   int init();
   void destroy();
-  int process_msg(ObP2PDatahubMsgBase &msg);
+  int process_msg(ObP2PDatahubMsgBase &msg, bool &need_free);
   int send_p2p_msg(
       ObP2PDatahubMsgBase &msg,
       ObPxSQCProxy &sqc_proxy);
@@ -90,6 +88,9 @@ public:
   int alloc_msg(common::ObIAllocator &allocator,
                 ObP2PDatahubMsgBase::ObP2PDatahubMsgType type,
                 ObP2PDatahubMsgBase *&msg_ptr);
+  // Heap allocation for RPC receive; avoids arena + deep_copy into map (see P2PMsgSetCall).
+  int alloc_msg_for_rpc_receive(ObP2PDatahubMsgBase::ObP2PDatahubMsgType type,
+                                ObP2PDatahubMsgBase *&msg_ptr);
   int send_local_msg(ObP2PDatahubMsgBase *msg);
   int atomic_get_msg(ObP2PDhKey &dh_key, ObP2PDatahubMsgBase *&msg);
   int set_msg(ObP2PDhKey &dh_key, ObP2PDatahubMsgBase *&msg);

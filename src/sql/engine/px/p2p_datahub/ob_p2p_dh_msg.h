@@ -151,7 +151,11 @@ public:
   virtual int process_receive_count(ObP2PDatahubMsgBase &);
   virtual int process_msg_internal(bool &need_free);
   virtual int reuse() { return OB_SUCCESS; }
-  virtual int regenerate() { return OB_SUCCESS; }
+  // After RPC deserialize, ObDatum::ptr_ may reference the packet buffer. When this msg is
+  // inserted into PX_P2P_DH map (need_free=false), copy payload into get_allocator() so it
+  // outlives the RPC buffer. Override in msg types that deserialize datums from wire.
+  // For bloom filter, we need to recover the whole size of bits_array_
+  virtual int regenerate() { return OB_NOT_IMPLEMENT; }
   virtual void check_finish_receive();
   virtual int prepare_storage_white_filter_data(ObDynamicFilterExecutor &dynamic_filter,
                                 ObEvalCtx &eval_ctx,

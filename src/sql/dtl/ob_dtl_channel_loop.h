@@ -59,6 +59,7 @@ public:
   virtual int process_one_if(ObIDltChannelLoopPred *proc, int64_t &nth_channel, int64_t timeout = 0);
   ObDtlMsgType get_last_msg_type() const { return static_cast<ObDtlMsgType>(last_msg_type_); }
   int64_t get_channel_count() const { return chans_.count(); }
+  OB_INLINE int reserve(int64_t size) { return chans_.reserve(size); }
   ObDtlChannel *get_channel(const int64_t idx)
   {
     return idx >= 0 && idx <= chans_.count() ? chans_.at(idx) : NULL;

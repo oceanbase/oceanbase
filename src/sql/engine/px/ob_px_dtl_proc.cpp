@@ -38,10 +38,6 @@ int ObPxTransmitDataChannelMsgP::process(const ObPxTransmitDataChannelMsg &pkt)
   return msg_proc_.on_transmit_data_ch_msg(pkt);
 }
 
-int ObPxCreateBloomFilterChannelMsgP::process(const ObPxCreateBloomFilterChannelMsg &pkt)
-{
-  return msg_proc_.on_create_filter_ch_msg(pkt);
-}
 int ObPxSqcInterruptedP::process(const ObInterruptCode &pkt)
 {
   return msg_proc_.on_interrupted(pkt);

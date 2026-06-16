@@ -28,6 +28,9 @@ struct ObDtlMsgHeader {
   bool is_px_bloom_filter_data() {
     return type_ == (uint16_t)ObDtlMsgType::PX_BLOOM_FILTER_DATA;
   }
+  bool is_dtl_batch_msg() const {
+    return type_ == (uint16_t)ObDtlMsgType::DTL_BATCH_MSG;
+  }
   TO_STRING_KV(
       K_(hlen),
       K_(type),

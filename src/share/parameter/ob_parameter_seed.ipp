@@ -575,8 +575,8 @@ DEF_INT(default_progressive_merge_num, OB_TENANT_PARAMETER, "0", "[0,)",
          "default progressive_merge_num when tenant create table"
          "Range:[0,)",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
-DEF_CAP(_parallel_min_message_pool, OB_TENANT_PARAMETER, "16M", "[16M, 8G]",
-        "DTL message buffer pool reserve the mininum size after extend the size. Range: [16M,8G]",
+DEF_CAP(_parallel_min_message_pool, OB_TENANT_PARAMETER, "16M", "[16M,)",
+        "DTL message buffer pool reserve the mininum size after extend the size. Range: [16M,+∞]",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_DBL(_parallel_server_sleep_time, OB_TENANT_PARAMETER, "1", "[0, 2000]",
         "sleep time between get channel data in millisecond. Range: [0, 2000]",
@@ -1356,6 +1356,9 @@ DEF_INT(_io_read_redundant_limit_percentage, OB_TENANT_PARAMETER, "0", "[0, 99]"
 
 // TODO bin.lb: to be remove
 DEF_CAP(dtl_buffer_size, OB_CLUSTER_PARAMETER, "64K", "[4K,2M]", "to be removed",
+        ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_dtl_batch_flush_buffer_fill_pct, OB_CLUSTER_PARAMETER, "50", "[1,100]",
+        "buffer fill percentage threshold for aggregating DTL channel buffers during batch flush",
         ObParameterAttr(Section::OBSERVER, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 // TODO bin.lb: to be remove

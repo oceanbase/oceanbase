@@ -88,7 +88,7 @@ public:
     return ret;
   }
 
-  int sync_wait(ObExecContext &ctx, int64_t &sys_event, EventPred pred, bool ignore_interrupt = false, bool is_open = false);
+  int sync_wait(ObExecContext &ctx, int64_t &sys_event, EventPred pred, bool ignore_interrupt = false, bool is_open = false, bool is_close = false);
   int64_t get_sync_val()
   {
     ObHJSharedTableInfo *shared_hj_info = reinterpret_cast<ObHJSharedTableInfo *>(shared_hj_info_);

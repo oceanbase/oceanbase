@@ -8,6 +8,7 @@
 #include "sql/dtl/ob_dtl_rpc_channel.h"
 #include "sql/dtl/ob_dtl_local_channel.h"
 #include "sql/dtl/ob_dtl_channel_watcher.h"
+#include "share/config/ob_server_config.h"
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -17,67 +18,107 @@ namespace sql {
 namespace dtl {
 
 ////////////////////////////////////////////////////////////////////////////
-int ObDtlChannelManager::insert_channel(uint64_t hash_val, uint64_t chid, ObDtlChannel *&chan)
+// ObDtlHashTableCell
+////////////////////////////////////////////////////////////////////////////
+int ObDtlHashTableCell::insert_channel(uint64_t chid, ObDtlChannel *&chan)
 {
   int ret = OB_SUCCESS;
-  ObLockGuard<ObSpinLock> lock_guard(spin_lock_);
-  if (OB_FAIL(hash_table_.insert_channel(hash_val, chid, chan))) {
+  ObByteLockGuard lock_guard(spin_lock_);
+  if (0 < chan_list_.get_size()) {
+    DLIST_FOREACH_X(node, chan_list_, OB_SUCC(ret)) {
+      if (node->get_id() == chid) {
+        ret = OB_HASH_EXIST;
+      }
+    }
+  }
+  if (OB_FAIL(ret)) {
+  } else if (!chan_list_.add_last(chan)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("set channel in map fail", K(ret), KP(chid));
   }
   return ret;
 }
 
-int ObDtlChannelManager::remove_channel(uint64_t hash_val, uint64_t chid, ObDtlChannel *&ch)
+int ObDtlHashTableCell::remove_channel(uint64_t chid, ObDtlChannel *&ch)
 {
   int ret = OB_SUCCESS;
-  ObLockGuard<ObSpinLock> lock_guard(spin_lock_);
-  if (OB_FAIL(hash_table_.remove_channel(hash_val, chid, ch))) {
+  ch = nullptr;
+  ObByteLockGuard lock_guard(spin_lock_);
+  DLIST_FOREACH_REMOVESAFE_X(node, chan_list_, OB_SUCC(ret)) {
+    if (node->get_id() == chid) {
+      if (OB_ISNULL(chan_list_.remove(node))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("failed to remove channel", K(ret), KP(chid));
+      } else {
+        ch = node;
+      }
+      break;
+    }
+  }
+  if (OB_SUCC(ret) && OB_ISNULL(ch)) {
+    ret = OB_HASH_NOT_EXIST;
+    LOG_WARN("channel not exist", K(ret), KP(chid));
   }
   return ret;
 }
 
-int ObDtlChannelManager::get_channel(uint64_t hash_val, uint64_t chid, ObDtlChannel *&ch)
+int ObDtlHashTableCell::get_channel(uint64_t chid, ObDtlChannel *&ch)
 {
   int ret = OB_SUCCESS;
-  ObLockGuard<ObSpinLock> lock_guard(spin_lock_);
-  if (OB_FAIL(hash_table_.get_channel(hash_val, chid, ch))) {
+  ch = nullptr;
+  ObByteLockGuard lock_guard(spin_lock_);
+  if (0 < chan_list_.get_size()) {
+    DLIST_FOREACH_X(node, chan_list_, OB_SUCC(ret)) {
+      if (node->get_id() == chid) {
+        ch = node;
+        ch->pin();
+        break;
+      }
+    }
+  }
+  if (OB_SUCC(ret) && OB_ISNULL(ch)) {
+    ret = OB_HASH_NOT_EXIST;
   }
   return ret;
 }
 
-int ObDtlChannelManager::foreach_refactored(int64_t interval, std::function<int(ObDtlChannel *ch)> op)
+int ObDtlHashTableCell::foreach_refactored(const std::function<int(ObDtlChannel *ch)> &op)
 {
   int ret = OB_SUCCESS;
-  int64_t bucket_num = hash_table_.get_bucket_num();
-  ObLockGuard<ObSpinLock> lock_guard(spin_lock_);
-  for (int64_t i = idx_; i < bucket_num && OB_SUCC(ret); i += interval) {
-    if (OB_FAIL(hash_table_.foreach_refactored(i, op))) {
-      LOG_WARN("failed to refactor all channels", K(ret), K(i), K(interval));
+  ObByteLockGuard lock_guard(spin_lock_);
+  if (0 < chan_list_.get_size()) {
+    DLIST_FOREACH_X(node, chan_list_, OB_SUCC(ret)) {
+      if (OB_FAIL(op(node))) {
+        LOG_WARN("foreach callback failed", K(ret));
+      }
     }
   }
   return ret;
 }
 
 ////////////////////////////////////////////////////////////////////////////
+// ObDtlHashTable
+////////////////////////////////////////////////////////////////////////////
 ObDtlHashTable::~ObDtlHashTable()
 {
   if (nullptr != bucket_cells_) {
     for (int64_t i = 0; i < bucket_num_; ++i) {
-      ObDtlHashTableCell &cell = bucket_cells_[i];
-      cell.~ObDtlHashTableCell();
+      bucket_cells_[i].~ObDtlHashTableCell();
     }
     allocator_.free(bucket_cells_);
     bucket_cells_ = nullptr;
+    bucket_num_ = 0;
   }
 }
 
 int ObDtlHashTable::init(int64_t bucket_num)
 {
   int ret = OB_SUCCESS;
-  bucket_num_ = bucket_num;
-  if (bucket_num <= 0) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect bukcet number", K(bucket_num));
+  if (bucket_num <= 0 || (bucket_num & (bucket_num - 1)) != 0) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid bucket number", K(ret), K(bucket_num));
   } else {
+    bucket_num_ = bucket_num;
     ObMemAttr attr(OB_SERVER_TENANT_ID, "SqlDtlMgr");
     if (OB_FAIL(allocator_.init(
         lib::ObMallocAllocator::get_instance(),
@@ -109,10 +150,8 @@ int ObDtlHashTable::insert_channel(uint64_t hash_val, uint64_t chid, ObDtlChanne
   if (nullptr == bucket_cells_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("bucket cells is null", K(ret));
-  } else {
-    int64_t nth_cell = hash_val % bucket_num_;
-    if (OB_FAIL(bucket_cells_[nth_cell].insert_channel(chid, chan))) {
-    }
+  } else if (OB_FAIL(bucket_cells_[calc_bucket_idx(hash_val)].insert_channel(chid, chan))) {
+    LOG_WARN("failed to insert channel", K(ret), K(hash_val), KP(chid));
   }
   return ret;
 }
@@ -123,10 +162,8 @@ int ObDtlHashTable::remove_channel(uint64_t hash_val, uint64_t chid, ObDtlChanne
   if (nullptr == bucket_cells_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("bucket cells is null", K(ret));
-  } else {
-    int64_t nth_cell = hash_val % bucket_num_;
-    if (OB_FAIL(bucket_cells_[nth_cell].remove_channel(chid, ch))) {
-    }
+  } else if (OB_FAIL(bucket_cells_[calc_bucket_idx(hash_val)].remove_channel(chid, ch))) {
+    LOG_WARN("failed to remove channel", K(ret), K(hash_val), KP(chid));
   }
   return ret;
 }
@@ -137,147 +174,57 @@ int ObDtlHashTable::get_channel(uint64_t hash_val, uint64_t chid, ObDtlChannel *
   if (nullptr == bucket_cells_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("bucket cells is null", K(ret));
-  } else {
-    int64_t nth_cell = hash_val % bucket_num_;
-    if (OB_FAIL(bucket_cells_[nth_cell].get_channel(chid, ch))) {
-    }
+  } else if (OB_FAIL(bucket_cells_[calc_bucket_idx(hash_val)].get_channel(chid, ch))) {
   }
   return ret;
 }
 
-int ObDtlHashTable::foreach_refactored(int64_t nth_cell, std::function<int(ObDtlChannel *ch)> op)
+int ObDtlHashTable::foreach_refactored(const std::function<int(ObDtlChannel *ch)> &op)
 {
   int ret = OB_SUCCESS;
-  if (0 > nth_cell || bucket_num_ <= nth_cell) {
+  if (OB_ISNULL(bucket_cells_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("invalid cell idx", K(ret), K(nth_cell));
+    LOG_WARN("bucket cells is null", K(ret));
   } else {
-    if (OB_FAIL(bucket_cells_[nth_cell].foreach_refactored(op))) {
-      LOG_WARN("failed to refactor all channels", K(ret));
+    for (int64_t i = 0; i < bucket_num_ && OB_SUCC(ret); ++i) {
+      if (OB_FAIL(bucket_cells_[i].foreach_refactored(op))) {
+        LOG_WARN("failed to foreach cell", K(ret), K(i));
+      }
     }
   }
   return ret;
 }
 
 ////////////////////////////////////////////////////////////////////////////
-int ObDtlHashTableCell::foreach_refactored(std::function<int(ObDtlChannel *ch)> op)
-{
-  int ret = OB_SUCCESS;
-  if (0 < chan_list_.get_size()) {
-    DLIST_FOREACH_X(node, chan_list_, OB_SUCC(ret)) {
-      if (OB_FAIL(op(node))) {
-        LOG_WARN("failed to refactor channel", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObDtlHashTableCell::insert_channel(uint64_t chid, ObDtlChannel *&chan)
-{
-  int ret = OB_SUCCESS;
-  // first find channel by chid
-  ObDtlChannel *ch = nullptr;
-  if (0 < chan_list_.get_size()) {
-    DLIST_FOREACH(node, chan_list_) {
-      if (node->get_id() == chid) {
-        ch = node;
-        break;
-      }
-    }
-  }
-  if (OB_NOT_NULL(ch)) {
-    ret = OB_HASH_EXIST;
-  } else if (!chan_list_.add_last(chan)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("set channel in map fail", KP(chid), K(ret), KP(chan->get_id()));
-  }
-  return ret;
-}
-
-int ObDtlHashTableCell::remove_channel(uint64_t chid, ObDtlChannel *&ch)
-{
-  int ret = OB_SUCCESS;
-  ch = nullptr;
-  if (0 < chan_list_.get_size()) {
-    DLIST_FOREACH_REMOVESAFE_X(node, chan_list_, OB_SUCC(ret)) {
-      if (node->get_id() == chid) {
-        ObDtlChannel *tmp = chan_list_.remove(node);
-        if (nullptr == tmp) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("failed to remove channel", K(ret), KP(chid));
-        } else {
-          ch = node;
-        }
-        break;
-      }
-    }
-  }
-  if (OB_ISNULL(ch)) {
-    ret = OB_HASH_NOT_EXIST;
-  }
-  return ret;
-}
-
-int ObDtlHashTableCell::get_channel(uint64_t chid, ObDtlChannel *&ch)
-{
-  int ret = OB_SUCCESS;
-  ch = nullptr;
-  if (0 < chan_list_.get_size()) {
-    DLIST_FOREACH_X(node, chan_list_, OB_SUCC(ret)) {
-      if (node->get_id() == chid) {
-        ch = node;
-        ch->pin();
-        break;
-      }
-    }
-  }
-  if (nullptr == ch) {
-    ret = OB_HASH_NOT_EXIST;
-  }
-  return ret;
-}
+// ObDtl
 ////////////////////////////////////////////////////////////////////////////
 ObDtl::ObDtl()
     : is_inited_(false),
       allocator_("SqlDtlMgr"),
       rpc_proxy_(),
       dfc_server_(),
-      hash_table_(),
-      ch_mgrs_(nullptr)
+      hash_table_()
 {
   rpc_proxy_.set_tenant(OB_DTL_TENANT_ID);
 }
 
 ObDtl::~ObDtl()
 {
-  if (OB_NOT_NULL(ch_mgrs_)) {
-    allocator_.free(ch_mgrs_);
-    ch_mgrs_ = nullptr;
-  }
 }
 
 int ObDtl::init()
 {
   int ret = OB_SUCCESS;
+  static const int64_t MAX_RATIO = 256;
+  int64_t ratio = common::ObServerConfig::get_instance()._px_chunklist_count_ratio;
+  ratio = next_pow2(MAX(1LL, MIN(ratio, MAX_RATIO)));
+  const int64_t bucket_num = ratio * DTL_CELL_BUCKET_BASE;
   if (OB_FAIL(dfc_server_.init())) {
     LOG_WARN("failed to init flow control server", K(ret));
+  } else if (OB_FAIL(hash_table_.init(bucket_num))) {
+    LOG_WARN("failed to init hash table", K(ret), K(bucket_num));
   } else {
-    ch_mgrs_ = reinterpret_cast<ObDtlChannelManager*>(allocator_.alloc(sizeof(ObDtlChannelManager) * HASH_CNT));
-    if (OB_ISNULL(ch_mgrs_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("channel manager is null", K(ret));
-    } else if (OB_FAIL(hash_table_.init(BUCKET_NUM))) {
-      LOG_WARN("failed init hash table", K(ret));
-    } else {
-      char *buf = reinterpret_cast<char*>(ch_mgrs_);
-      for (int64_t i = 0; i < HASH_CNT && OB_SUCC(ret); ++i) {
-        ObDtlChannelManager *ch_mgr = new (buf) ObDtlChannelManager(i, hash_table_);
-        UNUSED(ch_mgr);
-        buf += sizeof(ObDtlChannelManager);
-      }
-      is_inited_ = true;
-    }
+    is_inited_ = true;
   }
   return ret;
 }
@@ -309,13 +256,8 @@ int ObDtl::destroy_channel(uint64_t chid)
   } else {
     ObDtlChannel *chan = nullptr;
     uint64_t hash_val = get_hash_value(chid);
-    ObDtlChannelManager *ch_mgr = nullptr;
-    if (OB_FAIL(get_dtl_channel_manager(hash_val, ch_mgr))) {
-      LOG_WARN("failed to get dtl channel manager", K(hash_val), KP(chid), K(ret));
-    } else if (nullptr == ch_mgr) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("channel manager is null", K(ret));
-    } else if (OB_FAIL(ch_mgr->remove_channel(hash_val, chid, chan))) {
+    if (OB_FAIL(hash_table_.remove_channel(hash_val, chid, chan))) {
+      LOG_WARN("failed to remove channel in destroy", K(ret), K(hash_val), KP(chid));
     } else if (nullptr != chan) {
       chan->unpin();
       // spin until there's no reference of this channel.
@@ -361,13 +303,8 @@ int ObDtl::remove_channel(uint64_t chid, ObDtlChannel *&ch)
   } else {
     ObDtlChannel *chan = nullptr;
     uint64_t hash_val = get_hash_value(chid);
-    ObDtlChannelManager *ch_mgr = nullptr;
-    if (OB_FAIL(get_dtl_channel_manager(hash_val, ch_mgr))) {
-      LOG_WARN("failed to get dtl channel manager", K(hash_val), KP(chid), K(ret));
-    } else if (nullptr == ch_mgr) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("channel manager is null", K(ret));
-    } else if (OB_FAIL(ch_mgr->remove_channel(hash_val, chid, chan))) {
+    if (OB_FAIL(hash_table_.remove_channel(hash_val, chid, chan))) {
+      LOG_WARN("failed to remove channel", K(ret), K(hash_val), KP(chid));
     } else if (nullptr != chan) {
       chan->unpin();
       // spin until there's no reference of this channel.
@@ -391,13 +328,7 @@ int ObDtl::get_channel(uint64_t chid, ObDtlChannel *&chan)
     ret = OB_NOT_INIT;
   } else {
     uint64_t hash_val = get_hash_value(chid);
-    ObDtlChannelManager *ch_mgr = nullptr;
-    if (OB_FAIL(get_dtl_channel_manager(hash_val, ch_mgr))) {
-      LOG_WARN("failed to get dtl channel manager", K(hash_val), KP(chid), K(ret));
-    } else if (nullptr == ch_mgr) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("channel manager is null", K(ret));
-    } else if (OB_FAIL(ch_mgr->get_channel(hash_val, chid, chan))) {
+    if (OB_FAIL(hash_table_.get_channel(hash_val, chid, chan))) {
     }
   }
   return ret;
@@ -428,7 +359,7 @@ int ObDtl::create_rpc_channel(uint64_t tenant_id, uint64_t chid, const ObAddr &p
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("channel is null", K(tenant_id), KP(chid), K(ret));
   } else if (OB_FAIL(init_channel(tenant_id, chid, peer, chan, dfc, need_free_chan))) {
-    LOG_WARN("failed to init channel", K(tenant_id), KP(chid), K(ret), K(chan));
+    LOG_WARN("failed to init channel", K(tenant_id), KP(chid), K(ret), KP(chan));
   }
   return ret;
 }
@@ -447,6 +378,39 @@ int ObDtl::create_local_channel(uint64_t tenant_id, uint64_t chid, const ObAddr 
     LOG_WARN("channel is null", K(tenant_id), KP(chid), K(ret));
   } else if (OB_FAIL(init_channel(tenant_id, chid, peer, chan, dfc, need_free_chan))) {
     LOG_WARN("failed to init channel", K(ret), K(tenant_id), KP(chid), K(chan));
+  }
+  return ret;
+}
+
+int ObDtl::register_data_channel(ObDtlChannel *chan, ObDtlFlowControl *dfc,
+                                 ObTenantDfc *tenant_dfc)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(chan)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("channel is null", K(ret));
+  } else if (OB_ISNULL(dfc)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dfc is null", K(ret));
+  } else if (OB_ISNULL(tenant_dfc)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("tenant_dfc is null", K(ret));
+  } else if (OB_FAIL(chan->init(dfc))) {
+    LOG_WARN("init channel fail", KP(chan->get_id()), K(ret));
+  } else if (OB_FAIL(dfc_server_.register_dfc_channel(*dfc, chan, tenant_dfc))) {
+    LOG_WARN("failed to register channel to dfc", KP(chan->get_id()), K(ret));
+  } else {
+    IGNORE_RETURN chan->pin();
+    uint64_t hash_val = get_hash_value(chan->get_id());
+    if (OB_FAIL(hash_table_.insert_channel(hash_val, chan->get_id(), chan))) {
+      LOG_WARN("failed to insert channel into hash table", K(ret), K(hash_val), KP(chan->get_id()));
+    }
+    if (OB_FAIL(ret)) {
+      int tmp_ret = OB_SUCCESS;
+      if (OB_SUCCESS != (tmp_ret = dfc_server_.unregister_dfc_channel(*dfc, chan))) {
+        LOG_WARN("failed to unregister channel from dfc", K(tmp_ret), KP(chan->get_id()));
+      }
+    }
   }
   return ret;
 }
@@ -477,19 +441,6 @@ int ObDtl::new_channel(uint64_t tenant_id, uint64_t chid, const ObAddr &peer,
   return ret;
 }
 
-int ObDtl::get_dtl_channel_manager(uint64_t hash_val, ObDtlChannelManager *&ch_mgr)
-{
-  int ret = OB_SUCCESS;
-  int64_t nth_mgr = hash_val & (HASH_CNT - 1);
-  if (nth_mgr < 0 || nth_mgr > HASH_CNT) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpect nth channel manager", K(nth_mgr), K(ret));
-  } else {
-    ch_mgr = &ch_mgrs_[nth_mgr];
-  }
-  return ret;
-}
-
 int ObDtl::init_channel(uint64_t tenant_id, uint64_t chid, const ObAddr &peer,
     ObDtlChannel *&chan, ObDtlFlowControl *dfc, const bool need_free_chan)
 {
@@ -511,13 +462,8 @@ int ObDtl::init_channel(uint64_t tenant_id, uint64_t chid, const ObAddr &peer,
     if (OB_SUCC(ret)) {
       IGNORE_RETURN chan->pin();
       uint64_t hash_val = get_hash_value(chid);
-      ObDtlChannelManager *ch_mgr = nullptr;
-      if (OB_FAIL(get_dtl_channel_manager(hash_val, ch_mgr))) {
-        LOG_WARN("failed to get dtl channel manager", K(hash_val), KP(chid), K(ret));
-      } else if (nullptr == ch_mgr) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("channel manager is null", K(ret));
-      } else if (OB_FAIL(ch_mgr->insert_channel(hash_val, chid, chan))) {
+      if (OB_FAIL(hash_table_.insert_channel(hash_val, chid, chan))) {
+        LOG_WARN("failed to insert channel into hash table", K(ret), K(hash_val), KP(chid));
       }
     }
   }
@@ -529,7 +475,7 @@ int ObDtl::init_channel(uint64_t tenant_id, uint64_t chid, const ObAddr &peer,
       // 之前如果注册到dfc了，必须unregister掉，否则dfc中的channel就是无效的地址
       if (OB_SUCCESS != (tmp_ret = dfc_server_.unregister_dfc_channel(*dfc, chan))) {
         ret = tmp_ret;
-        LOG_WARN("failed to register channel to dfc", K(tenant_id), KP(chid), K(ret), KP(chan->get_id()));
+        LOG_WARN("failed to register channel to dfc", K(ret), K(tenant_id), KP(chid), KP(chan->get_id()));
       }
     }
     if (need_free_chan) {
@@ -540,13 +486,16 @@ int ObDtl::init_channel(uint64_t tenant_id, uint64_t chid, const ObAddr &peer,
   return ret;
 }
 
-int ObDtl::foreach_refactored(std::function<int(ObDtlChannel *ch)> op)
+int ObDtl::get_tenant_dfc(uint64_t tenant_id, ObTenantDfc *&tenant_dfc)
+{
+  return dfc_server_.get_current_tenant_dfc(tenant_id, tenant_dfc);
+}
+
+int ObDtl::foreach_refactored(const std::function<int(ObDtlChannel *ch)> &op)
 {
   int ret = OB_SUCCESS;
-  for (int64_t i = 0; i < HASH_CNT && OB_SUCC(ret); ++i) {
-    if (OB_FAIL(ch_mgrs_[i].foreach_refactored(HASH_CNT, op))) {
-      LOG_WARN("failed to refactor all channels", K(i));
-    }
+  if (OB_FAIL(hash_table_.foreach_refactored(op))) {
+    LOG_WARN("failed to refactor hash table", K(ret));
   }
   return ret;
 }

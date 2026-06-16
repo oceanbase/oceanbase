@@ -17,6 +17,9 @@ namespace sql
 
 const int64_t ObTempBlockStore::IndexBlock::INDEX_BLOCK_SIZE;
 const int64_t ObTempBlockStore::BIG_BLOCK_SIZE;
+const int64_t ObTempBlockStore::MIN_BLOCK_SIZE;
+const int64_t ObTempBlockStore::MIN_IDX_BLOCK_SIZE;
+
 
 int ObTempBlockStore::ShrinkBuffer::init(char *buf, const int64_t buf_size)
 {
@@ -40,7 +43,9 @@ ObTempBlockStore::ObTempBlockStore(common::ObIAllocator *alloc /* = NULL */)
     tenant_id_(0), label_(), ctx_id_(0), mem_limit_(0), mem_hold_(0), mem_used_(0),
     file_size_(0), block_cnt_(0), index_block_cnt_(0), block_cnt_on_disk_(0),
     alloced_mem_size_(0), max_block_size_(0), max_hold_mem_(0), idx_blk_(NULL), mem_stat_(NULL),
-    io_observer_(NULL), cur_file_offset_(0)
+    io_observer_(NULL), cur_file_offset_(0),
+    default_blk_size_(BLOCK_SIZE),
+    idx_blk_alloc_size_(IndexBlock::INDEX_BLOCK_SIZE + sizeof(LinkNode))
 {
   label_[0] = '\0';
   dir_id_ = -1;
@@ -542,7 +547,8 @@ int ObTempBlockStore::alloc_block(Block *&blk, const int64_t min_size, const boo
   int ret = OB_SUCCESS;
   int64_t size = min_size;
   if (!strict_mem_size) {
-    size = std::max(static_cast<int64_t>(BLOCK_CAPACITY), min_size);
+    const int64_t blk_capacity = default_blk_size_ - sizeof(LinkNode);
+    size = std::max(blk_capacity, min_size);
     size += sizeof(LinkNode);
     size = next_pow2(size);
     size -= sizeof(LinkNode);
@@ -681,7 +687,9 @@ int ObTempBlockStore::add_block_idx(const BlockIndex &bi)
       }
     }
   } else {
-    if (idx_blk_->is_full()) {
+    const int64_t idx_capacity =
+        (idx_blk_alloc_size_ - sizeof(LinkNode) - sizeof(IndexBlock)) / sizeof(BlockIndex);
+    if (idx_blk_->cnt_ >= idx_capacity) {
       if (OB_FAIL(switch_idx_block())) {
         LOG_WARN("switch index block failed", K(ret));
       }
@@ -697,7 +705,8 @@ int ObTempBlockStore::add_block_idx(const BlockIndex &bi)
 int ObTempBlockStore::alloc_idx_block(IndexBlock *&ib)
 {
   int ret = OB_SUCCESS;
-  void *mem = alloc_blk_mem(IndexBlock::INDEX_BLOCK_SIZE, NULL);
+  const int64_t alloc_size = idx_blk_alloc_size_ - sizeof(LinkNode);
+  void *mem = alloc_blk_mem(alloc_size, NULL);
   if (OB_ISNULL(mem)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("alloc memory failed", K(ret));
@@ -748,7 +757,7 @@ int ObTempBlockStore::switch_idx_block(bool finish_add)
     bi.block_id_ = idx_blk_->block_id();
     bi.idx_blk_ = idx_blk_;
     bi.length_ = static_cast<int32_t>(idx_blk_->buffer_size());
-    bi.capacity_ = static_cast<int32_t>(IndexBlock::INDEX_BLOCK_SIZE);
+    bi.capacity_ = static_cast<int32_t>(idx_blk_alloc_size_ - sizeof(LinkNode));
     if (!finish_add) {
       if (OB_FAIL(alloc_idx_block(ib))) {
         LOG_WARN("alloc index block failed", K(ret));
@@ -769,7 +778,7 @@ int ObTempBlockStore::switch_idx_block(bool finish_add)
     }
     if (OB_FAIL(ret) && NULL != ib) {
       ib->~IndexBlock();
-      free_blk_mem(ib, IndexBlock::INDEX_BLOCK_SIZE);
+      free_blk_mem(ib, idx_blk_alloc_size_ - sizeof(LinkNode));
       ib = NULL;
     }
   }
@@ -1323,9 +1332,11 @@ int ObTempBlockStore::dump_block_if_need(const int64_t extra_size)
   if (OB_UNLIKELY(need_dump(extra_size))) {
     int64_t target_dump_size = extra_size + mem_hold_ - mem_limit_;
     // Check whether an IndexBlock will be added, and pre-allocate the corresponding mem size
+    const int64_t idx_capacity =
+        (idx_blk_alloc_size_ - sizeof(LinkNode) - sizeof(IndexBlock)) / sizeof(BlockIndex);
     if ((NULL == idx_blk_ && blocks_.count() >= DEFAULT_BLOCK_CNT - 1) ||
-         (NULL != idx_blk_ && idx_blk_->is_full())) {
-      target_dump_size += IndexBlock::INDEX_BLOCK_SIZE;
+         (NULL != idx_blk_ && idx_blk_->cnt_ >= idx_capacity)) {
+      target_dump_size += idx_blk_alloc_size_ - sizeof(LinkNode);
     }
     if (OB_FAIL(dump(false, std::max(target_dump_size, BIG_BLOCK_SIZE)))) {
       LOG_WARN("fail to dump block", K(ret), K(mem_hold_), K(mem_limit_));

@@ -7,8 +7,8 @@
 #define OB_DTL_H
 
 #include <stdint.h>
-#include "lib/hash/ob_hashmap.h"
 #include "lib/allocator/ob_safe_arena.h"
+#include "lib/lock/ob_small_spin_lock.h"
 #include "sql/dtl/ob_dtl_rpc_proxy.h"
 #include "sql/dtl/ob_dtl_fc_server.h"
 
@@ -22,17 +22,17 @@ using obrpc::ObDtlRpcProxy;
 class ObDtlHashTableCell
 {
 public:
-  ObDtlHashTableCell()
-  {}
+  ObDtlHashTableCell() : spin_lock_(common::ObLatchIds::DTL_CHANNEL_MGR_LOCK) {}
   ~ObDtlHashTableCell() { chan_list_.reset(); }
 
   int insert_channel(uint64_t chid, ObDtlChannel *&ch);
   int remove_channel(uint64_t chid, ObDtlChannel *&ch);
   int get_channel(uint64_t chid, ObDtlChannel *&ch);
 
-  int foreach_refactored(std::function<int(ObDtlChannel *ch)> op);
+  int foreach_refactored(const std::function<int(ObDtlChannel *ch)> &op);
 private:
-  ObDList<ObDtlChannel> chan_list_;
+  common::ObByteLock spin_lock_;
+  common::ObDList<ObDtlChannel> chan_list_;
 };
 
 class ObDtlHashTable
@@ -46,37 +46,18 @@ public:
   ~ObDtlHashTable();
 
   int init(int64_t bucket_num);
+
   int insert_channel(uint64_t hash_val, uint64_t chid, ObDtlChannel *&chan);
   int remove_channel(uint64_t hash_val, uint64_t chid, ObDtlChannel *&ch);
   int get_channel(uint64_t hash_val, uint64_t chid, ObDtlChannel *&ch);
 
-  int foreach_refactored(int64_t nth_cell, std::function<int(ObDtlChannel *ch)> op);
+  int foreach_refactored(const std::function<int(ObDtlChannel *ch)> &op);
 
-  int64_t get_bucket_num() { return bucket_num_; }
 private:
+  inline int64_t calc_bucket_idx(uint64_t hash_val) const { return hash_val & (bucket_num_ - 1); }
   int64_t bucket_num_;
   ObDtlHashTableCell* bucket_cells_;
   common::ObFIFOAllocator allocator_;
-};
-
-class ObDtlChannelManager
-{
-public:
-  ObDtlChannelManager(int64_t idx, ObDtlHashTable &hash_table) :
-    idx_(idx), spin_lock_(common::ObLatchIds::DTL_CHANNEL_MGR_LOCK), hash_table_(hash_table)
-  {}
-  ~ObDtlChannelManager();
-
-  int insert_channel(uint64_t hash_val, uint64_t chid, ObDtlChannel *&chan);
-  int remove_channel(uint64_t hash_val, uint64_t chid, ObDtlChannel *&chan);
-  int get_channel(uint64_t hash_val, uint64_t chid, ObDtlChannel *&chan);
-
-  int foreach_refactored(int64_t interval, std::function<int(ObDtlChannel *ch)> op);
-  TO_STRING_KV(K_(idx));
-private:
-  int64_t idx_;
-  ObSpinLock spin_lock_;
-  ObDtlHashTable &hash_table_;
 };
 
 class ObDtl
@@ -102,13 +83,16 @@ public:
   int create_rpc_channel(
       uint64_t tenant_id, uint64_t chid, const common::ObAddr &peer, ObDtlChannel *&chan, ObDtlFlowControl *dfc = nullptr);
   //
+  // Init and register a channel that was pre-allocated (e.g. via placement new).
+  // Skips allocation; does not free chan on error.
+  int register_data_channel(ObDtlChannel *chan, ObDtlFlowControl *dfc, ObTenantDfc *tenant_dfc);
   // Destroy channel from DTL service.
   int destroy_channel(uint64_t chid);
 
   // Remove channel from DTL service but don't release channel
   int remove_channel(uint64_t chid, ObDtlChannel *&ch);
 
-  int foreach_refactored(std::function<int(ObDtlChannel *ch)> op);
+  int foreach_refactored(const std::function<int(ObDtlChannel *ch)> &op);
 
   //
   // Get channel from DTL by its channel ID.
@@ -117,6 +101,7 @@ public:
   // Release channel which is gotten from DTL.
   int release_channel(ObDtlChannel *chan);
 
+  int get_tenant_dfc(uint64_t tenant_id, ObTenantDfc *&tenant_dfc);
   OB_INLINE ObDfcServer &get_dfc_server();
   OB_INLINE const ObDfcServer &get_dfc_server() const;
 
@@ -128,8 +113,7 @@ public:
 
   static uint64_t get_hash_value(int64_t chid)
   {
-    uint64_t val = common::murmurhash(&chid, sizeof(chid), 0);
-    return val & (BUCKET_NUM - 1);
+    return common::murmurhash(&chid, sizeof(chid), 0);
   }
 private:
   int new_channel(
@@ -137,20 +121,13 @@ private:
   int init_channel(
       uint64_t tenant_id, uint64_t chid, const ObAddr &peer, ObDtlChannel *&chan,
       ObDtlFlowControl *dfc, const bool need_free_chan);
-  int get_dtl_channel_manager(uint64_t hash_val, ObDtlChannelManager *&ch_mgr);
 private:
-  // bucket number必须是hash_cnt的整数倍，目前有依赖
-  // 当前认为一个ch_mgr管理一批bucket，采用hash_cnt的倍数关系进行上锁
-  // 如 ch_mgr(0) lock [0, 256, 512, ..., ]
-  // 所以hash_value对于ch_mgr和hash_table必须是同一个
-  static const int64_t HASH_CNT = 256;
-  static const int64_t BUCKET_NUM = 131072;
+  static const int64_t DTL_CELL_BUCKET_BASE = 131072;
   bool is_inited_;
   common::ObSafeArena allocator_;
   ObDtlRpcProxy rpc_proxy_;
   ObDfcServer dfc_server_;
   ObDtlHashTable hash_table_;
-  ObDtlChannelManager *ch_mgrs_;
 };
 
 OB_INLINE ObDtlRpcProxy &ObDtl::get_rpc_proxy()

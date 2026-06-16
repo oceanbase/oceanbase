@@ -15,6 +15,7 @@
 #include "sql/engine/px/ob_px_bloom_filter.h"
 #include "sql/engine/px/ob_px_exchange.h"
 #include "sql/dtl/ob_dtl_channel_loop.h"
+#include "sql/dtl/ob_dtl_channel_agent.h"
 #include "sql/dtl/ob_dtl_flow_control.h"
 #include "sql/dtl/ob_dtl_linked_buffer.h"
 
@@ -125,11 +126,8 @@ public:
   common::ObIArray<dtl::ObDtlChannel *> &get_task_channels() { return task_channels_; }
 
   int64_t get_sqc_id();
-  int get_bf_ctx(int64_t idx, ObJoinFilterDataCtx &bf_ctx);
 
   int wrap_get_next_batch(const int64_t max_row_cnt);
-  int prepare_send_bloom_filter();
-  int try_send_bloom_filter();
 
   int erase_dtl_interm_result();
   int send_channel_ready_msg(int64_t child_dfo_id);
@@ -159,6 +157,8 @@ public:
     ts_ = 0;
     dfc_.destroy();
     ch_info_.reset();
+    server_groups_.reset();
+    server_group_allocator_.reset();
   }
   OB_INLINE int64_t get_timestamp()
   {
@@ -184,12 +184,8 @@ protected:
   // stored rows used for get batch rows from DTL reader.
   const ObChunkDatumStore::StoredRow **stored_rows_;
   const ObCompactRow **vector_rows_;
-  obrpc::ObPxBFProxy bf_rpc_proxy_;
-  int64_t bf_ctx_idx_; // the idx of bloom_filter_id_array_ in spec
-  int64_t bf_send_idx_; // the idx of bf_send_ctx_array_ in sqc proxy
-  // each_group_size_ only used in ObPxMsgProc::mark_rpc_filter()(this func will calc group_size, then each_group_size_ keep it for next use)
-  // means how many node(sqc level) in this group
-  int64_t each_group_size_;
+  ObTMArray<dtl::ObDtlServerChannelGroup *> server_groups_;
+  common::ObArenaAllocator server_group_allocator_;
 };
 
 class ObPxFifoReceiveOpInput : public ObPxReceiveOpInput

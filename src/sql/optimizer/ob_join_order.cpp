@@ -10952,6 +10952,7 @@ int JoinPath::compute_join_path_sharding()
 int JoinPath::compute_join_path_property()
 {
   int ret = OB_SUCCESS;
+
   if (OB_FAIL(compute_join_path_sharding())) {
     LOG_WARN("failed to compute sharding info", K(ret));
   } else if (OB_FAIL(compute_join_path_plan_type())) {
@@ -11165,12 +11166,14 @@ int JoinPath::compute_hash_hash_sharding_info()
       // should check is_naaj - #issue/46230785
       if (OB_SUCC(ret) && !is_naaj_ && 1 == equal_join_conditions_.count()) {
         ObArray<ObObj> popular_values;
+        double dummy_ratio = 0.0;
         if (OB_FAIL(log_plan->check_if_use_hybrid_hash_distribution(
                     log_plan->get_optimizer_context(),
                     log_plan->get_stmt(),
                     join_type_,
                     *right_expr,
-                    popular_values))) {
+                    popular_values,
+                    dummy_ratio))) {
           LOG_WARN("fail to check whether use hybrid hash distribution", K(ret));
         } else if (popular_values.count() > 0) {
           use_hybrid_hash_dm_ = true;
@@ -11912,6 +11915,11 @@ int JoinPath::get_re_estimate_param(EstimateCostInfo &param,
       } else if (is_partition_wise()) {
         left_param.need_parallel_ = param.need_parallel_;
         right_param.need_parallel_ = param.need_parallel_;
+      } else {
+        // If a side doesn't need exchange, use join parallel for re-estimation
+        // Otherwise use its own parallel
+        left_param.need_parallel_ = is_left_need_exchange() ? left_path_->parallel_ : param.need_parallel_;
+        right_param.need_parallel_ = is_right_need_exchange() ? right_path_->parallel_ : param.need_parallel_;
       }
 
       if (OB_FAIL(left_param.join_filter_infos_.assign(param.join_filter_infos_))) {

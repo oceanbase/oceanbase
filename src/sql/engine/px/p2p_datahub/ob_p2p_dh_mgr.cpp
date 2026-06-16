@@ -50,27 +50,14 @@ void ObP2PDatahubManager::destroy()
   }
 }
 
-int ObP2PDatahubManager::process_msg(ObP2PDatahubMsgBase &msg)
+int ObP2PDatahubManager::process_msg(ObP2PDatahubMsgBase &msg, bool &need_free)
 {
   int ret = OB_SUCCESS;
-  ObP2PDatahubMsgBase *new_msg = nullptr;
-  bool need_free = false;
   if (!msg.is_valid_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid type", K(ret), K(msg.get_msg_type()));
-  } else if (OB_FAIL(deep_copy_msg(msg, new_msg))) {
-    need_free = true;
-    LOG_WARN("fail to copy msg", K(ret));
-  } else if (OB_ISNULL(new_msg)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected new msg", K(ret));
-  } else if (OB_FAIL(new_msg->process_msg_internal(need_free))) {
+  } else if (OB_FAIL(msg.process_msg_internal(need_free))) {
     LOG_WARN("fail to process msg", K(ret));
-  }
-  if (need_free && OB_NOT_NULL(new_msg)) {
-    new_msg->destroy();
-    ob_free(new_msg);
-    new_msg = nullptr;
   }
   return ret;
 }
@@ -128,6 +115,44 @@ int ObP2PDatahubManager::alloc_msg(
   return ret;
 }
 
+int ObP2PDatahubManager::alloc_msg_for_rpc_receive(
+    ObP2PDatahubMsgBase::ObP2PDatahubMsgType type,
+    ObP2PDatahubMsgBase *&msg_ptr)
+{
+#define ALLOC_RPC_RECV_MSG_HELPER(msg_type, detail_class, label)                                   \
+  case ObP2PDatahubMsgBase::msg_type: {                                                            \
+    detail_class *new_msg = nullptr;                                                               \
+    ObMemAttr attr(ob_get_tenant_id(), label);                                                     \
+    if (OB_FAIL(alloc_msg<detail_class>(attr, new_msg))) {                                        \
+      LOG_WARN("fail to alloc msg", K(ret));                                                       \
+    } else {                                                                                       \
+      msg_ptr = new_msg;                                                                           \
+    }                                                                                              \
+    break;                                                                                         \
+  }
+
+  int ret = OB_SUCCESS;
+  msg_ptr = nullptr;
+  switch (type) {
+    ALLOC_RPC_RECV_MSG_HELPER(BLOOM_FILTER_MSG, ObRFBloomFilterMsg, "PxBfMsg")
+    ALLOC_RPC_RECV_MSG_HELPER(BLOOM_FILTER_VEC_MSG, ObRFBloomFilterMsg, "PxBfVecMsg")
+    ALLOC_RPC_RECV_MSG_HELPER(RANGE_FILTER_MSG, ObRFRangeFilterMsg, "PxRangeMsg")
+    ALLOC_RPC_RECV_MSG_HELPER(RANGE_FILTER_VEC_MSG, ObRFRangeFilterVecMsg, "PxRangeVecMsg")
+    ALLOC_RPC_RECV_MSG_HELPER(IN_FILTER_MSG, ObRFInFilterMsg, "PxInMsg")
+    ALLOC_RPC_RECV_MSG_HELPER(IN_FILTER_VEC_MSG, ObRFInFilterVecMsg,  "PxInVecMsg")
+    ALLOC_RPC_RECV_MSG_HELPER(PD_TOPN_FILTER_MSG, ObPushDownTopNFilterMsg,  "PxTopNMsg")
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected type", K(type), K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && OB_NOT_NULL(msg_ptr)) {
+    msg_ptr->set_msg_type(type);
+  }
+#undef ALLOC_RPC_RECV_MSG_HELPER
+  return ret;
+}
+
 void ObP2PDatahubManager::free_msg(ObP2PDatahubMsgBase *&msg)
 {
   if (OB_NOT_NULL(msg)) {
@@ -149,13 +174,12 @@ int ObP2PDatahubManager::P2PMsgMergeCall::operator() (common::hash::HashMapPair<
   if (!dh_msg_.is_active()) {
     entry.second->set_is_active(false);
   } else if (!dh_msg_.is_empty() && (OB_FAIL(entry.second->merge(dh_msg_)))) {
-    LOG_WARN("fail to merge dh msg", K(ret_), K(entry.first));
+    LOG_WARN("fail to merge dh msg", K(ret), K(entry.first));
   }
   if (OB_FAIL(ret)) {
   } else if (OB_FAIL(entry.second->process_receive_count(dh_msg_))) {
     LOG_WARN("fail to process receive count", K(ret));
   }
-  need_free_ = true;
   return ret;
 }
 

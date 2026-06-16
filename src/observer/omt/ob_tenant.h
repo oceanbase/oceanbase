@@ -74,6 +74,7 @@ public:
   void set_px_thread_name();
   int64_t get_queue_size() const { return queue_.size(); }
 private:
+  void apply_px_worker_thread_sched_priority();
   void handle(common::ObLink *task);
   void try_recycle(int64_t idle_time);
   void disable_recycle()

@@ -492,7 +492,8 @@ int ObLogExchange::inner_est_cost(int64_t parallel, double child_card, double &o
                                     child->get_width(),
                                     dist_method_,
                                     parallel,
-                                    get_in_server_cnt());
+                                    get_in_server_cnt(),
+                                    popular_values_ratio_);
     if (OB_FAIL(ObOptEstCost::cost_exchange_out(est_cost_info,
                                                 op_cost,
                                                 opt_ctx))) {
@@ -506,7 +507,8 @@ int ObLogExchange::inner_est_cost(int64_t parallel, double child_card, double &o
                                    parallel,
                                    get_server_cnt(),
                                    is_local_order_,
-                                   sort_keys_);
+                                   sort_keys_,
+                                   popular_values_ratio_);
     if (OB_FAIL(ObOptEstCost::cost_exchange_in(est_cost_info,
                                                op_cost,
                                                opt_ctx))) {
@@ -571,6 +573,7 @@ int ObLogExchange::set_exchange_info(const ObExchangeInfo &exch_info)
   null_row_dist_method_ = exch_info.null_row_dist_method_;
   slave_mapping_type_ = exch_info.slave_mapping_type_;
   slave_mapping_id_ = exch_info.slave_mapping_id_;
+  popular_values_ratio_ = exch_info.popular_values_ratio_;
   if (is_producer()) {
     in_server_cnt_ = exch_info.server_cnt_;
     slice_count_ = exch_info.slice_count_;

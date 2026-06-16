@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX SQL_DTL
 
 #include "ob_dtl_channel_mem_manager.h"
+#include "ob_dtl_channel.h"
 #include "storage/tx_storage/ob_tenant_freezer.h"
 
 using namespace oceanbase::common;
@@ -20,7 +21,7 @@ ObDtlChannelMemManager::ObDtlChannelMemManager(uint64_t tenant_id, ObDtlTenantMe
   mem_used_(0), last_update_memory_time_(-1)
 {}
 
-int ObDtlChannelMemManager::init()
+int ObDtlChannelMemManager::init(int64_t max_reserve_count)
 {
   int ret = OB_SUCCESS;
   ObMemAttr attr(tenant_id_, "SqlDtlBuf");
@@ -29,7 +30,7 @@ int ObDtlChannelMemManager::init()
                 OB_MALLOC_NORMAL_BLOCK_SIZE,
                 attr))) {
     LOG_WARN("failed to init fifo allocator", K(ret));
-  } else if (OB_FAIL(free_queue_.init(MAX_CAPACITY, "SqlDtlQueue", tenant_id_))) {
+  } else if (OB_FAIL(free_queue_.init(max_reserve_count, "SqlDtlQueue", tenant_id_))) {
     LOG_WARN("failed to init channel memory manager", K(ret));
   } else {
     allocator_.set_label("SqlDtlBuf");
@@ -111,8 +112,7 @@ ObDtlLinkedBuffer *ObDtlChannelMemManager::alloc(int64_t chid, int64_t size)
   }
   if (nullptr != allocated_buf) {
   } else if (out_of_memory()) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("the memory of dtl reach the maxinum memory limit", K(ret), K(get_used_memory_size()),
+    LOG_INFO("the memory of dtl reach the maxinum memory limit", K(get_used_memory_size()),
       K(get_max_tenant_memory_limit_size()), K(get_max_dtl_memory_size()),
       K(max_mem_percent_), K_(memstore_limit_percent), K(allocated_buf), K(size));
   } else {
@@ -141,12 +141,8 @@ ObDtlLinkedBuffer *ObDtlChannelMemManager::alloc(int64_t chid, int64_t size)
   if (nullptr != allocated_buf) {
     increase_alloc_cnt();
   }
-  uint64_t opt = std::abs(EVENT_CALL(EventTable::EN_PX_DTL_TRACE_LOG_ENABLE));
-  if (0 != opt) {
-    share::ObTaskController::get().allow_next_syslog();
-    LOG_INFO("alloc dtl buffer", KP(allocated_buf));
-  }
-  LOG_TRACE("channel memory status", K(get_alloc_cnt()), K(get_free_cnt()),
+
+  LOG_DEBUG("channel memory status", K(get_alloc_cnt()), K(get_free_cnt()),
     K(get_free_queue_length()), K(get_max_tenant_memory_limit_size()), K(get_max_dtl_memory_size()),
     K(get_used_memory_size()), K(max_mem_percent_), KP(allocated_buf), K(seqno_));
   return allocated_buf;
@@ -156,7 +152,7 @@ int ObDtlChannelMemManager::free(ObDtlLinkedBuffer *buf, bool auto_free)
 {
   int ret = OB_SUCCESS;
   if (NULL != buf) {
-    buf->reset_batch_info();
+    buf->reset();
     if (auto_free && buf->capacity() == size_per_buffer_) {
       if (OB_FAIL(free_queue_.push(buf))) {
         LOG_TRACE("failed to push back buffer", K(ret), K(seqno_), K(free_queue_.size()));

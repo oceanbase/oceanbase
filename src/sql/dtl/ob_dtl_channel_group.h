@@ -11,11 +11,17 @@
 #include "lib/container/ob_se_array.h"
 
 namespace oceanbase {
+namespace common {
+template <typename T>
+class ObIArray;
+} // common
+
 namespace sql {
 namespace dtl {
 
 class ObDtlTask;
 class ObDtlChannel;
+class ObTenantDfc;
 class ObDtlChSet;
 struct ObDtlChannelInfo;
 class ObDtlFlowControl;
@@ -53,8 +59,16 @@ public:
       ObDtlChannelInfo &ci1,
       ObDtlChannelInfo &ci2);
   static int link_channel(const ObDtlChannelInfo &ci, ObDtlChannel *&ch, ObDtlFlowControl *dfc = nullptr);
+  // fast path for data channel
+  static int link_data_channel(ObDtlChannel *&ch, ObDtlFlowControl *dfc, ObTenantDfc *tenant_dfc);
   static int unlink_channel(const ObDtlChannelInfo &ci);
   static int remove_channel(const ObDtlChannelInfo &ci, ObDtlChannel *&ch);
+  static int build_data_channels(void *buf,
+                                  int64_t channel_size,
+                                  ObDtlChSet &ch_set,
+                                  common::ObIArray<ObDtlChannel *> &channels,
+                                  ObDtlFlowControl *dfc,
+                                  uint64_t tenant_id);
 
   static void make_transmit_channel(const uint64_t tenant_id,
                                   const common::ObAddr &peer_exec_addr,

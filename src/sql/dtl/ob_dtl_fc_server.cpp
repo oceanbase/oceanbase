@@ -423,6 +423,11 @@ int ObDfcServer::register_dfc_channel(ObDtlFlowControl &dfc, ObDtlChannel* ch)
   return ret;
 }
 
+int ObDfcServer::register_dfc_channel(ObDtlFlowControl &dfc, ObDtlChannel* ch, ObTenantDfc *tenant_dfc)
+{
+  return tenant_dfc->register_dfc_channel(dfc, ch);
+}
+
 int ObDfcServer::unregister_dfc_channel(ObDtlFlowControl &dfc, ObDtlChannel* ch)
 {
   int ret = OB_SUCCESS;

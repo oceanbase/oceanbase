@@ -76,6 +76,7 @@ void oceanbase::observer::init_srv_xlator_for_sys(ObSrvRpcXlator *xlator) {
   // DTL
   RPC_PROCESSOR(dtl::ObDtlSendMessageP);
   RPC_PROCESSOR(dtl::ObDtlBCSendMessageP);
+  RPC_PROCESSOR(dtl::ObDtlBatchSendMessageP);
 
   // tenant freezer
   RPC_PROCESSOR(ObTenantFreezerP);

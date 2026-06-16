@@ -41,7 +41,7 @@ SQL_MONITOR_STATNAME_DEF(EXCHANGE_DROP_ROW_COUNT, metric::Unit::INT, "drop row c
 // MONITORING DUMP
 SQL_MONITOR_STATNAME_DEF(MONITORING_DUMP_SUM_OUTPUT_HASH, metric::Unit::INT, "sum output hash", "sum of output hash values of monitoring dump", M_FIRST_VAL, metric::Level::AD_HOC)
 // DTL
-SQL_MONITOR_STATNAME_DEF(DTL_SEND_RECV_COUNT, metric::Unit::INT, "processed buffer count", "the count of dtl buffer that received or sended", M_SUM, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(DTL_SEND_RECV_COUNT, metric::Unit::INT, "processed buffer count", "the count of dtl buffer that received or sended", M_SUM | E_MIN | E_MAX, metric::Level::STANDARD)
 SQL_MONITOR_STATNAME_DEF(EXCHANGE_EOF_TIMESTAMP, metric::Unit::TIMESTAMP, "eof timestamp", "the timestamp of send eof or receive eof", E_MIN | E_MAX, metric::Level::AD_HOC)
 // Auto Memory Management (dump, metric::Level::STANDARD)
 SQL_MONITOR_STATNAME_DEF(MEMORY_DUMP, metric::Unit::BYTES, "memory dump size", "dump memory to disk when exceeds memory limit", M_SUM | E_MIN | E_MAX, metric::Level::STANDARD)
@@ -176,6 +176,8 @@ SQL_MONITOR_STATNAME_DEF(DTL_BLOCKING_TIME, metric::Unit::TIME_NS, "dtl blocking
 SQL_MONITOR_STATNAME_DEF(DUMP_RW_TIME, metric::Unit::CPU_CYCLE, "read/write time for dumped data", "read/write time for dumped data", M_AVG | E_MIN | E_MAX, metric::Level::AD_HOC)
 SQL_MONITOR_STATNAME_DEF(PX_MS_RECV_STORED_ROWS, metric::Unit::INT, "temp stored row cnt", "stored row cnt in px ms recv", M_SUM | E_MAX | E_MIN | E_STDDEV, metric::Level::STANDARD)
 
+SQL_MONITOR_STATNAME_DEF(WORKER_SYNC_WAIT, metric::Unit::TIME_NS, "worker synchronization time", "wait time during thread synchronization", M_AVG | E_MIN | E_MAX, metric::Level::STANDARD)
+SQL_MONITOR_STATNAME_DEF(WAIT_JOIN_FILTER_MSG_TIME, metric::Unit::TIME_NS, "wait join filter msg time", "wait join filter ready time", M_AVG | E_MIN | E_MAX, metric::Level::STANDARD)
 // Hybrid Search Metrics
 SQL_MONITOR_STATNAME_DEF(HS_OUTPUT_ROW_COUNT, metric::Unit::INT, "output row count", "output row count", M_SUM, metric::Level::STANDARD)
 SQL_MONITOR_STATNAME_DEF(HS_TOTAL_TIME, metric::Unit::TIME_NS, "total execution time", "total execution time", M_SUM, metric::Level::STANDARD)

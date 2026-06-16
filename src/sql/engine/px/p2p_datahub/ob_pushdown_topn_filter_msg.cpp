@@ -603,6 +603,20 @@ int ObPushDownTopNFilterMsg::adjust_cell_size()
   return ret;
 }
 
+int ObPushDownTopNFilterMsg::regenerate()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < heap_top_datums_.count(); ++i) {
+    ObDatum copy;
+    if (OB_FAIL(copy.deep_copy(heap_top_datums_.at(i), get_allocator()))) {
+      LOG_WARN("rehome topn heap_top_datums failed", K(ret), K(i));
+    } else {
+      heap_top_datums_.at(i) = copy;
+    }
+  }
+  return ret;
+}
+
 int ObPushDownTopNFilterMsg::do_filter_out_data_batch(
     const ObExpr &expr, ObEvalCtx &ctx, const ObBitVector &skip, const int64_t batch_size,
     ObExprTopNFilterContext &filter_ctx)

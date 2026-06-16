@@ -55,18 +55,7 @@ public:
   virtual int assign(const ObP2PDatahubMsgBase &) final;
   virtual int merge(ObP2PDatahubMsgBase &) final;
   virtual int deep_copy_msg(ObP2PDatahubMsgBase *&new_msg_ptr);
-  virtual int destroy() {
-    build_row_cmp_info_.reset();
-    probe_row_cmp_info_.reset();
-    lower_bounds_.reset();
-    upper_bounds_.reset();
-    need_null_cmp_flags_.reset();
-    cells_size_.reset();
-    query_range_info_.destroy();
-    query_range_allocator_.reset();
-    allocator_.reset();
-    return OB_SUCCESS;
-  }
+  virtual int destroy() override;
   virtual int might_contain(const ObExpr &expr,
       ObEvalCtx &ctx,
       ObExprJoinFilter::ObExprJoinFilterContext &filter_ctx,
@@ -115,6 +104,7 @@ public:
   int prepare_storage_white_filter_data(ObDynamicFilterExecutor &dynamic_filter,
                                         ObEvalCtx &eval_ctx, ObRuntimeFilterParams &params,
                                         bool &is_data_prepared) override;
+  virtual int regenerate() override;
 
 private:
 
@@ -304,6 +294,7 @@ public:
 
   inline void set_use_hash_join_seed(bool value) { use_hash_join_seed_ = value; }
   inline bool use_hash_join_seed() const { return use_hash_join_seed_; }
+  virtual int regenerate() override { return OB_SUCCESS; }
 
 private:
   // for merge

@@ -225,9 +225,6 @@ public:
 
   // root dfo 的调度特殊路径
   int on_dfo_pair_thread_inited(ObExecContext &ctx, ObDfo &child, ObDfo &parent);
-  static int mark_rpc_filter(ObExecContext &ctx,
-                             ObJoinFilterDataCtx &bf_ctx,
-                             int64_t &each_group_size);
   // begin DATAHUB msg processing
   int on_piece_msg(ObExecContext &ctx, const ObBarrierPieceMsg &pkt);
   int on_piece_msg(ObExecContext &ctx, const ObWinbufPieceMsg &pkt);

@@ -5,6 +5,7 @@
 
 #include "ob_dtl_msg.h"
 #include "ob_dtl_linked_buffer.h"
+#include "ob_dtl_channel.h"
 #include "sql/ob_sql_utils.h"
 #include "sql/engine/basic/ob_chunk_row_store.h"
 #include "sql/engine/basic/ob_chunk_datum_store.h"
@@ -16,6 +17,36 @@ using namespace oceanbase::common;
 namespace oceanbase {
 namespace sql {
 namespace dtl {
+
+ObDtlLinkedBuffer::ObDtlLinkedBuffer()
+    : buf_(), size_(), pos_(), is_data_msg_(false), seq_no_(0), tenant_id_(0),
+      allocated_chid_(0), is_eof_(false), timeout_ts_(0), msg_type_(ObDtlMsgType::MAX),
+      flags_(0), dfo_key_(), use_interm_result_(false), batch_id_(0), batch_info_valid_(false),
+      rows_cnt_(0), batch_info_(),
+      dfo_id_(common::OB_INVALID_ID),
+      sqc_id_(common::OB_INVALID_ID),
+      enable_channel_sync_(false),
+      register_dm_info_(),
+      row_meta_(),
+      op_info_(),
+      capacity_(0)
+{}
+
+ObDtlLinkedBuffer::ObDtlLinkedBuffer(char *buf, int64_t size, const int64_t capacity)
+    : buf_(buf), size_(size), pos_(), is_data_msg_(false), seq_no_(0), tenant_id_(0),
+      allocated_chid_(0), is_eof_(false), timeout_ts_(0), msg_type_(ObDtlMsgType::MAX),
+      flags_(0), dfo_key_(), use_interm_result_(false), batch_id_(0), batch_info_valid_(false),
+      rows_cnt_(0), batch_info_(),
+      dfo_id_(common::OB_INVALID_ID),
+      sqc_id_(common::OB_INVALID_ID),
+      enable_channel_sync_(false),
+      register_dm_info_(),
+      row_meta_(),
+      op_info_(),
+      capacity_(capacity)
+{}
+
+ObDtlLinkedBuffer::~ObDtlLinkedBuffer() = default;
 
 OB_SERIALIZE_MEMBER(ObDtlDfoKey, server_id_, px_sequence_id_, qc_id_, dfo_id_);
 
@@ -133,6 +164,17 @@ int ObDtlLinkedBuffer::push_batch_id(int64_t batch_id, int64_t rows)
     ret = add_batch_info(batch_id, rows);
   } else {
     batch_id_ = batch_id;
+  }
+  return ret;
+}
+
+int ObDtlLinkedBuffer::append_batch_buffer(ObDtlLinkedBuffer *buffer,
+                                           ObDtlChannel *channel) {
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(payload_bufs_.push_back(buffer))) {
+    SQL_DTL_LOG(WARN, "failed to push back buffer", K(ret));
+  } else if (OB_FAIL(payload_channels_.push_back(channel))) {
+    SQL_DTL_LOG(WARN, "failed to push back channel", K(ret));
   }
   return ret;
 }
@@ -289,10 +331,8 @@ int ObDtlLinkedBuffer::deserialize(const char *buf, const int64_t data_len, int6
     if (OB_SUCC(ret)) {
       (void)ObSQLUtils::adjust_time_by_ntp_offset(timeout_ts_);
     }
-
     pos = pos_orig + len;
   }
-
   return ret;
 }
 

@@ -20,9 +20,14 @@ namespace sql
 OB_SERIALIZE_MEMBER(ObHashJoinVecInput, shared_hj_info_);
 
 //ctx is owned by thread, sync_event is shared
-int ObHashJoinVecInput::sync_wait(ObExecContext &ctx, int64_t &sync_event, EventPred pred, bool ignore_interrupt, bool is_open)
+int ObHashJoinVecInput::sync_wait(ObExecContext &ctx, int64_t &sync_event, EventPred pred, bool ignore_interrupt, bool is_open, bool is_close)
 {
   int ret = OB_SUCCESS;
+  int64_t begin_wait_time = 0;
+  bool need_record_sync_time = (!is_open && !is_close);
+  if (need_record_sync_time) {
+    begin_wait_time = rdtsc();
+  }
   ObHJSharedTableInfo *shared_hj_info = reinterpret_cast<ObHJSharedTableInfo *>(shared_hj_info_);
   if (OB_ISNULL(shared_hj_info)) {
     ret = OB_ERR_UNEXPECTED;
@@ -84,6 +89,9 @@ int ObHashJoinVecInput::sync_wait(ObExecContext &ctx, int64_t &sync_event, Event
     if (OB_FAIL(ret) && is_open) {
       set_open_ret(ret);
     }
+  }
+  if (need_record_sync_time) {
+    INC_METRIC_VAL(ObMetricId::WORKER_SYNC_WAIT, rdtsc() - begin_wait_time);
   }
   return ret;
 }
@@ -1912,7 +1920,7 @@ int ObHashJoinVecOp::sync_wait_close()
       ctx_, hj_input->get_close_cnt(),
       [&](int64_t n_times) {
         UNUSED(n_times);
-      }, true))) {
+      }, true, false, true))) {
     LOG_WARN("failed to sync fetch next batch", K(ret), K(spec_.id_));
   } else {
     LOG_TRACE("debug sync fetch next batch", K(ret), K(spec_.id_));

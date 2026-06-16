@@ -143,6 +143,7 @@ int ObPxCoordOp::init_dfc(ObDfo &dfo, dtl::ObDtlChTotalInfo *ch_info)
     dfc_.set_dtl_channel_watcher(&msg_loop_);
     dfc_.set_total_ch_info(ch_info);
     DTL.get_dfc_server().register_dfc(dfc_);
+    dfc_.set_server_groups(&server_groups_);
     dfc_.set_op_metric(&metric_);
     bool force_block = false;
 #ifdef ERRSIM
@@ -639,11 +640,15 @@ int ObPxCoordOp::destroy_all_channel()
     // overwrite ret
     LOG_WARN("unlink channel failed", K(ret));
   }
-
-  // must erase after unlink channel
-  tmp_ret = erase_dtl_interm_result();
-  if (tmp_ret != common::OB_SUCCESS) {
-    LOG_TRACE("release interm result failed", KR(tmp_ret));
+  // the following 1 situation use interm result (need_erase_dtl_interm_result = true):
+  // 1. enable_px_batch_rescan() => ObPxCoordOp::receive_channel_root_dfo
+  bool need_erase_dtl_interm_result = enable_px_batch_rescan();
+  if (need_erase_dtl_interm_result) {
+      // must erase after unlink channel
+      tmp_ret = erase_dtl_interm_result();
+      if (tmp_ret != common::OB_SUCCESS) {
+        LOG_TRACE("release interm result failed", KR(tmp_ret));
+      }
   }
   // 上面已经把 channel 全部 unregister/unlink，这些容器里残留的都是已释放对象的指针。
   // 立刻 reset，避免与 free_allocator() 之间出现 use-after-free 的窗口。
@@ -918,7 +923,6 @@ int ObPxCoordOp::receive_channel_root_dfo(
         ch->set_operator_owner();
         ch->set_thread_id(thread_id);
         ch->set_enable_channel_sync(true);
-        ch->set_send_by_tenant(min_cluster_version >= CLUSTER_VERSION_4_3_5_0);
         if (enable_px_batch_rescan()) {
           ch->set_interm_result(true);
           ch->set_batch_id(get_batch_id());
@@ -991,7 +995,6 @@ int ObPxCoordOp::receive_channel_root_dfo(
         ch->set_audit(enable_audit);
         ch->set_is_px_channel(true);
         ch->set_enable_channel_sync(true);
-        ch->set_send_by_tenant(min_cluster_version >= CLUSTER_VERSION_4_3_5_0);
         if (enable_px_batch_rescan()) {
           ch->set_interm_result(true);
           ch->set_batch_id(get_batch_id());

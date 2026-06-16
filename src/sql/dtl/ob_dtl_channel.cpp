@@ -38,7 +38,7 @@ ObDtlChannel::ObDtlChannel(uint64_t id, const common::ObAddr &peer, DtlChannelTy
       thread_id_(0),
       enable_channel_sync_(false),
       channel_type_(type),
-      send_by_tenant_(false),
+      dfc_idx_(OB_INVALID_INDEX_INT64),
       prev_link_(nullptr),
       next_link_(nullptr)
 {

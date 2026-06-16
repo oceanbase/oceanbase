@@ -11,11 +11,14 @@
 #include "lib/container/ob_array_serialization.h"
 #include "share/detect/ob_detectable_id.h"
 #include "sql/engine/basic/ob_compact_row.h"
+#include "sql/ob_sql_define.h"
+
 namespace oceanbase {
 namespace sql {
 namespace dtl {
 
 #define DTL_BROADCAST (1ULL)
+#define DTL_BATCH_SEND (1ULL << 1)
 
 struct ObDtlMsgHeader;
 class ObDtlChannel;
@@ -220,32 +223,9 @@ class ObDtlLinkedBuffer
   // notice: Do not modify the version number arbitrarily.
   OB_UNIS_VERSION(3);
 public:
-  ObDtlLinkedBuffer()
-      : buf_(), size_(), pos_(), is_data_msg_(false), seq_no_(0), tenant_id_(0),
-        allocated_chid_(0), is_eof_(false), timeout_ts_(0), msg_type_(ObDtlMsgType::MAX),
-        flags_(0), dfo_key_(), use_interm_result_(false), batch_id_(0), batch_info_valid_(false),
-        rows_cnt_(0), batch_info_(),
-        dfo_id_(common::OB_INVALID_ID),
-        sqc_id_(common::OB_INVALID_ID),
-        enable_channel_sync_(false),
-        register_dm_info_(),
-        row_meta_(),
-        op_info_(),
-        capacity_(0)
-  {}
-  ObDtlLinkedBuffer(char * buf, int64_t size, const int64_t capacity)
-      : buf_(buf), size_(size), pos_(), is_data_msg_(false), seq_no_(0), tenant_id_(0),
-        allocated_chid_(0), is_eof_(false), timeout_ts_(0), msg_type_(ObDtlMsgType::MAX),
-        flags_(0), dfo_key_(), use_interm_result_(false), batch_id_(0), batch_info_valid_(false),
-        rows_cnt_(0), batch_info_(),
-        dfo_id_(common::OB_INVALID_ID),
-        sqc_id_(common::OB_INVALID_ID),
-        enable_channel_sync_(false),
-        register_dm_info_(),
-        row_meta_(),
-        op_info_(),
-        capacity_(capacity)
-  {}
+  ObDtlLinkedBuffer();
+  ObDtlLinkedBuffer(char * buf, int64_t size, const int64_t capacity);
+  ~ObDtlLinkedBuffer();
   TO_STRING_KV(K_(size), K_(pos), K_(is_data_msg), K_(seq_no), K_(tenant_id), K_(allocated_chid),
       K_(is_eof), K_(timeout_ts), K(msg_type_), K_(flags), K(is_bcast()), K_(rows_cnt), K_(enable_channel_sync),
       K_(dfo_key), K_(op_info));
@@ -369,6 +349,18 @@ public:
     remove_flag(DTL_BROADCAST);
   }
 
+  bool is_batch_send() const {
+    return has_flag(DTL_BATCH_SEND);
+  }
+
+  void set_batch_send() {
+    add_flag(DTL_BATCH_SEND);
+  }
+
+  void remove_batch_send() {
+    remove_flag(DTL_BATCH_SEND);
+  }
+
   uint64_t enable_channel_sync() const { return enable_channel_sync_; }
   void set_enable_channel_sync(const bool enable_channel_sync) { enable_channel_sync_ = enable_channel_sync; }
 
@@ -396,6 +388,9 @@ public:
     dst->register_dm_info_ = src.register_dm_info_;
     ret = dst->row_meta_.assign(src.row_meta_);
     dst->op_info_ = src.op_info_;
+    if (OB_SUCC(ret)) {
+      ret = dst->payload_bufs_.assign(src.payload_bufs_);
+    }
     return ret;
   }
 
@@ -418,6 +413,9 @@ public:
     enable_channel_sync_ = src.enable_channel_sync_;
     register_dm_info_ = src.register_dm_info_;
     ret = row_meta_.assign(src.row_meta_);
+    if (OB_SUCC(ret)) {
+      ret = payload_bufs_.assign(src.payload_bufs_);
+    }
     op_info_ = src.op_info_;
     return ret;
   }
@@ -468,11 +466,13 @@ public:
   bool is_batch_info_valid() { return batch_info_valid_; }
   int add_batch_info(int64_t batch_id, int64_t rows);
   const common::ObSArray<ObDtlBatchInfo> &get_batch_info() { return batch_info_; }
-  void reset_batch_info()
+  void reset()
   {
     if (batch_info_valid_) {
       batch_info_.reset();
     }
+    payload_bufs_.reset();
+    payload_channels_.reset();
     row_meta_.reset();
   }
   int push_batch_id(int64_t batch_id, int64_t rows);
@@ -527,6 +527,10 @@ public:
 
   int64_t get_max_batch_size() { return op_info_.max_batch_size_; }
   void set_max_batch_size(int64_t max_batch_size) { op_info_.max_batch_size_ = max_batch_size; }
+  int append_batch_buffer(ObDtlLinkedBuffer *buffer, ObDtlChannel *channel);
+
+  ObTMArray<ObDtlLinkedBuffer *> &get_payload_buffers() { return payload_bufs_; }
+  ObTMArray<ObDtlChannel *> &get_payload_channels() { return payload_channels_; }
 private:
 /*
 
@@ -597,6 +601,10 @@ The memory layout is as below:
   RowMeta row_meta_;
   ObDtlOpInfo op_info_;
   int64_t capacity_;
+  // for batch dtl message, a control buffer contains multiple payload buffers
+  ObTMArray<ObDtlLinkedBuffer *> payload_bufs_;
+  // Not Serialized;
+  ObTMArray<ObDtlChannel *> payload_channels_;
 };
 
 }  // dtl

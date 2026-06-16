@@ -314,23 +314,24 @@ select /*+index(t1 idx)*/ c1, c2, c3 from t1 where c3 != 1 limit 2;
 +----+------+------+
 
 drop table t1;
+explain_protocol: 1
 CREATE TABLE t1 (c1 bigint, c2 bigint);
 CREATE TABLE t2 (c1 NUMERIC(64,19), c2 DECIMAL(64,16), c3 INTEGER(127), c4 NUMERIC(64,18), c5 DECIMAL(64,0) GENERATED always AS (c3 + c4), c6 int);
 CREATE UNIQUE INDEX idx1 ON t2(c2, c1, c5) GLOBAL ;
-EXPLAIN select /*+use_nl(t1 t2) parallel(2) */t1.c1, t2.c6 FROM t1 LEFT JOIN t2 ON t1.c1 = t2.c2 AND t1.c2 <= t2.c5;
+EXPLAIN BASIC select /*+use_nl(t1 t2) parallel(2) */t1.c1, t2.c6 FROM t1 LEFT JOIN t2 ON t1.c1 = t2.c2 AND t1.c2 <= t2.c5;
 Query Plan
-=======================================================================
-|ID|OPERATOR                           |NAME    |EST.ROWS|EST.TIME(us)|
------------------------------------------------------------------------
-|0 |PX COORDINATOR                     |        |1       |13          |
-|1 |└─EXCHANGE OUT DISTR               |:EX10001|1       |13          |
-|2 |  └─NESTED-LOOP OUTER JOIN         |        |1       |12          |
-|3 |    ├─EXCHANGE IN DISTR            |        |1       |2           |
-|4 |    │ └─EXCHANGE OUT DISTR (RANDOM)|:EX10000|1       |2           |
-|5 |    │   └─PX BLOCK ITERATOR        |        |1       |2           |
-|6 |    │     └─TABLE FULL SCAN        |t1      |1       |2           |
-|7 |    └─DISTRIBUTED TABLE RANGE SCAN |t2(idx1)|1       |20          |
-=======================================================================
+=================================================
+|ID|OPERATOR                           |NAME    |
+-------------------------------------------------
+|0 |PX COORDINATOR                     |        |
+|1 |└─EXCHANGE OUT DISTR               |:EX10001|
+|2 |  └─NESTED-LOOP OUTER JOIN         |        |
+|3 |    ├─EXCHANGE IN DISTR            |        |
+|4 |    │ └─EXCHANGE OUT DISTR (RANDOM)|:EX10000|
+|5 |    │   └─PX BLOCK ITERATOR        |        |
+|6 |    │     └─TABLE FULL SCAN        |t1      |
+|7 |    └─DISTRIBUTED TABLE RANGE SCAN |t2(idx1)|
+=================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t1.c1, t2.c6)]), filter(nil), rowset=16

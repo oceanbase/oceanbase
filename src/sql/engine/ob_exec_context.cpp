@@ -93,7 +93,6 @@ ObExecContext::ObExecContext(ObIAllocator &allocator)
     sqc_handler_(nullptr),
     px_task_id_(-1),
     px_sqc_id_(-1),
-    bloom_filter_ctx_array_(),
     frames_(NULL),
     frame_cnt_(0),
     ori_frames_(nullptr),

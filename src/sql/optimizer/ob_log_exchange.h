@@ -47,6 +47,7 @@ public:
       calc_part_id_expr_(NULL),
       hash_dist_exprs_(plan.get_allocator()),
       popular_values_(plan.get_allocator()),
+      popular_values_ratio_(0.0),
       dist_method_(ObPQDistributeMethod::LOCAL), // pull to local
       unmatch_row_dist_method_(ObPQDistributeMethod::LOCAL),
       null_row_dist_method_(ObNullDistributeMethod::NONE),
@@ -282,6 +283,7 @@ private:
   ObRawExpr *calc_part_id_expr_;
   ObSqlArray<ObExchangeInfo::HashExpr> hash_dist_exprs_;
   ObSqlArray<ObObj> popular_values_; // for hybrid hash distr
+  double popular_values_ratio_;      // fraction of hot rows, used for hybrid hash exchange cost estimation
 
   ObPQDistributeMethod::Type dist_method_;
   ObPQDistributeMethod::Type unmatch_row_dist_method_;

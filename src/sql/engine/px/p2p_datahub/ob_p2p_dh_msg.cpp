@@ -128,6 +128,7 @@ int ObP2PDatahubMsgBase::process_msg_internal(bool &need_free)
     }
     need_free = true;
   } else {
+    need_free = false;
     need_merge = false; // set success, not need to merge
     int reg_dm_ret = OB_SUCCESS;
 #ifdef ERRSIM

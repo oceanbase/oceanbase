@@ -510,7 +510,8 @@ public:
                                             const ObDMLStmt *stmt,
                                             ObJoinType join_type,
                                             ObRawExpr  &expr,
-                                            common::ObIArray<common::ObObj> &popular_values) const;
+                                            common::ObIArray<common::ObObj> &popular_values,
+                                            double &popular_values_ratio) const;
   int get_source_table_info(ObLogicalOperator &child_op,
                                uint64_t source_table_id,
                                ObShardingInfo *&sharding_info,
@@ -2024,7 +2025,8 @@ private: // member functions
                                   ObOptColumnStatHandle &handle) const;
   int get_popular_values_hash(common::ObIAllocator &allocator,
                               ObOptColumnStatHandle &handle,
-                              common::ObIArray<ObObj> &popular_values) const;
+                              common::ObIArray<ObObj> &popular_values,
+                              double &popular_values_ratio) const;
   int adjust_expr_properties_for_external_table(ObRawExpr *col_expr, ObRawExpr *&expr) const;
 
   int compute_duplicate_table_replicas(ObLogicalOperator *op);

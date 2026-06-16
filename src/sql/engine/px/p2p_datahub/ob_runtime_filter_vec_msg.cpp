@@ -400,6 +400,28 @@ int ObRFRangeFilterVecMsg::adjust_cell_size()
   return ret;
 }
 
+int ObRFRangeFilterVecMsg::regenerate()
+{
+  int ret = OB_SUCCESS;
+  for (int64_t i = 0; OB_SUCC(ret) && i < lower_bounds_.count(); ++i) {
+    ObDatum copy;
+    if (OB_FAIL(copy.deep_copy(lower_bounds_.at(i), get_allocator()))) {
+      SQL_LOG(WARN, "rehome lower bound datum failed", K(ret), K(i));
+    } else {
+      lower_bounds_.at(i) = copy;
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < upper_bounds_.count(); ++i) {
+    ObDatum copy;
+    if (OB_FAIL(copy.deep_copy(upper_bounds_.at(i), get_allocator()))) {
+      SQL_LOG(WARN, "rehome upper bound datum failed", K(ret), K(i));
+    } else {
+      upper_bounds_.at(i) = copy;
+    }
+  }
+  return ret;
+}
+
 int ObRFRangeFilterVecMsg::dynamic_copy_cell(const ObDatum &src, ObDatum &target,
                                              int64_t &cell_size)
 {
@@ -426,6 +448,19 @@ int ObRFRangeFilterVecMsg::dynamic_copy_cell(const ObDatum &src, ObDatum &target
     }
   }
   return ret;
+}
+
+int ObRFRangeFilterVecMsg::destroy() {
+  build_row_cmp_info_.reset();
+  probe_row_cmp_info_.reset();
+  lower_bounds_.reset();
+  upper_bounds_.reset();
+  need_null_cmp_flags_.reset();
+  cells_size_.reset();
+  query_range_info_.destroy();
+  query_range_allocator_.reset();
+  allocator_.reset();
+  return OB_SUCCESS;
 }
 
 int ObRFRangeFilterVecMsg::merge_min(ObIArray<ObDatum> &vals)

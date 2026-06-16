@@ -16,13 +16,16 @@ using namespace obrpc;
 int ObPxP2pDhMsgP::process()
 {
   int ret = OB_SUCCESS;
+  bool need_free = true;
   if (OB_ISNULL(arg_.msg_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("failed to process px p2p datahub msg", K(ret), K(arg_));
-  } else if (OB_FAIL(PX_P2P_DH.process_msg(*arg_.msg_))) {
+  } else if (OB_FAIL(PX_P2P_DH.process_msg(*arg_.msg_, need_free))) {
     LOG_WARN("failed to process px p2p datahub msg on dh mgr", K(ret));
   }
-  arg_.destroy_arg();
+  if (need_free) {
+    arg_.destroy_arg();
+  }
   return ret;
 }
 

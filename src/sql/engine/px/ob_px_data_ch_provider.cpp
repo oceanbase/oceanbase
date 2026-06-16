@@ -265,7 +265,7 @@ int ObPxReceiveChProvider::get_data_ch_nonblock(
   } else if (OB_FAIL(ObPxChProviderUtil::check_status(timeout_ts, qc_addr, query_start_time))) {
     LOG_WARN("Fail to check status", K(child_dfo_id), K(msg_set_), K(msgs_), K(ret));
   } else {
-    ObLockGuard<ObSpinLock> lock_guard(lock_);
+    SpinRLockGuard lock_guard(lock_);
     ARRAY_FOREACH_X(msgs_, idx, cnt, OB_SUCC(ret) && !found) {
       if (msgs_.at(idx).get_child_dfo_id() == child_dfo_id) {
         found = true;
@@ -304,7 +304,7 @@ int ObPxReceiveChProvider::get_data_ch(
   } else {
     ret = wait_msg(child_dfo_id, timeout_ts);
     if (OB_SUCC(ret)) {
-      ObLockGuard<ObSpinLock> lock_guard(lock_);
+      SpinRLockGuard lock_guard(lock_);
       ARRAY_FOREACH_X(msgs_, idx, cnt, OB_SUCC(ret) && !found) {
         if (msgs_.at(idx).get_child_dfo_id() == child_dfo_id) {
           found = true;
@@ -337,7 +337,7 @@ int ObPxReceiveChProvider::add_msg(const ObPxReceiveDataChannelMsg &msg)
     LOG_WARN("invalid msg", K(msg), K(ret));
   }
   if (OB_SUCC(ret)) {
-    ObLockGuard<ObSpinLock> lock_guard(lock_);
+    SpinWLockGuard lock_guard(lock_);
     if (OB_FAIL(msgs_.push_back(msg))) {
       LOG_WARN("fail assign msg", K(ret));
     } else if (child_dfo_id >= msg_set_.count() &&
@@ -358,8 +358,15 @@ int ObPxReceiveChProvider::wait_msg(int64_t child_dfo_id, int64_t timeout_ts)
 {
   int ret = OB_SUCCESS;
   int64_t wait_count = 0;
-  if (child_dfo_id >= msg_set_.count()) {
-    ObLockGuard<ObSpinLock> lock_guard(lock_);
+  bool msg_ready = false;
+  bool need_resize = false;
+  {
+    SpinRLockGuard lock_guard(lock_);
+    need_resize = child_dfo_id >= msg_set_.count();
+    msg_ready = !need_resize && msg_set_[child_dfo_id];
+  }
+  if (need_resize) {
+    SpinWLockGuard lock_guard(lock_);
     if (child_dfo_id < msg_set_.count()) {
       /*do nothing*/
     } else if (OB_FAIL(reserve_msg_set_array_size(child_dfo_id * 2 + 1))) {
@@ -369,11 +376,12 @@ int ObPxReceiveChProvider::wait_msg(int64_t child_dfo_id, int64_t timeout_ts)
   if (OB_SUCC(ret)) {
     while (!is_msg_set(child_dfo_id)) {
       msg_ready_cond_.lock();
-      if (!msg_set_[child_dfo_id]) {
+      if (!is_msg_set(child_dfo_id)) {
         msg_ready_cond_.wait_us(1 * 1000); /* 1 ms */
       }
       msg_ready_cond_.unlock();
-      if (!msg_set_[child_dfo_id]) {
+      msg_ready = is_msg_set(child_dfo_id);
+      if (!msg_ready) {
         wait_count++;
         if (0 == wait_count % 1000) {
           LOG_TRACE("wait for data channel ready",
@@ -385,7 +393,7 @@ int ObPxReceiveChProvider::wait_msg(int64_t child_dfo_id, int64_t timeout_ts)
           ObInterruptCode code = GET_INTERRUPT_CODE();
           ret = code.code_;
           LOG_WARN("receive channel provider wait msg loop is interrupted",
-                K(child_dfo_id), K(wait_count), K(code), K(msg_set_[child_dfo_id]), K(ret));
+                K(child_dfo_id), K(wait_count), K(code), K(msg_ready), K(ret));
           break;
         } else {
           ret = OB_DTL_WAIT_EAGAIN;
@@ -421,88 +429,6 @@ int ObPxChProviderUtil::check_status(int64_t timeout_ts, const ObAddr &qc_addr,
     ret = OB_RPC_CONNECT_ERROR;
     LOG_WARN("peer no in communication, maybe crashed", K(ret), K(qc_addr),
               K(static_cast<int64_t>(GCONF.cluster_id)));
-  }
-  return ret;
-}
-
-int ObPxBloomfilterChProvider::get_data_ch_nonblock(
-  ObPxBloomFilterChSet &ch_set,
-  int64_t &sqc_count,
-  int64_t timeout_ts,
-  bool is_transmit,
-  const common::ObAddr &qc_addr,
-  int64_t query_start_time)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObPxChProviderUtil::check_status(timeout_ts, qc_addr, query_start_time))) {
-    // nop
-  } else if (!msg_set_) {
-    ret = OB_DTL_WAIT_EAGAIN;
-  } else {
-    if (is_transmit) {
-      if (OB_FAIL(ObDtlChannelUtil::get_transmit_bf_dtl_channel_set(msg_.sqc_id_, msg_.ch_set_info_, ch_set))) {
-        LOG_WARN("failed to get transmit bf dtl channel set", K(ret), K(msg_.sqc_id_));
-      }
-    } else {
-      if (OB_FAIL(ObDtlChannelUtil::get_receive_bf_dtl_channel_set(msg_.sqc_id_, msg_.ch_set_info_, ch_set))) {
-        LOG_WARN("failed to get transmit bf dtl channel set", K(ret), K(msg_.sqc_id_));
-      }
-    }
-    sqc_count = msg_.sqc_count_;
-  }
-  return ret;
-}
-
-int ObPxBloomfilterChProvider::init()
-{
-  int ret = OB_SUCCESS;
-  return ret;
-}
-
-int ObPxBloomfilterChProvider::add_msg(const ObPxCreateBloomFilterChannelMsg &msg)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(msg_.assign(msg))) {
-    LOG_WARN("fail assign msg", K(msg),K(ret));
-  } else {
-    msg_set_ = true;
-    msg_ready_cond_.broadcast();
-    LOG_TRACE("set bloom filter data ch msg to provider done", K(msg));
-  }
-  return ret;
-}
-
-int ObPxBloomfilterChProvider::wait_msg(int64_t timeout_ts)
-{
-  int ret = OB_SUCCESS;
-  int64_t wait_count = 0;
-  while (!msg_set_) {
-    msg_ready_cond_.lock();
-    if (!msg_set_) {
-      msg_ready_cond_.wait_us(1 * 1000); /* 1 ms. TODO:remove */
-    }
-    msg_ready_cond_.unlock();
-    if (!msg_set_) {
-      wait_count++;
-      if (0 == wait_count % 100) {
-        LOG_TRACE("wait for bf data channel ready", K(wait_count), K(lbt()));
-      }
-      if (OB_UNLIKELY(IS_INTERRUPTED())) {
-        // 中断错误处理
-        // overwrite ret
-        ObInterruptCode code = GET_INTERRUPT_CODE();
-        ret = code.code_;
-        LOG_WARN("bf channel provider wait msg loop is interrupted", K(code), K(ret));
-        break;
-      }
-    } else {
-      LOG_TRACE("[CMD] wait msg ok", K(wait_count), K(ret));
-    }
-    if (timeout_ts <= ObTimeUtility::current_time()) {
-      ret = OB_TIMEOUT;
-      LOG_TRACE("wait for data channel fail", K(wait_count), K(lbt()), K(ret));
-      break;
-    }
   }
   return ret;
 }

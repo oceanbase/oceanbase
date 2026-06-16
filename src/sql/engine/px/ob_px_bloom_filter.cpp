@@ -53,16 +53,85 @@ int BloomFilterIndex::assign(const BloomFilterIndex &other)
   return ret;
 }
 
+const int64_t ObPxBfMemsetHelper::PARALLEL_MEMSET_THRESHOLD = 16L << 20;   // 16MB
+const int64_t ObPxBfMemsetHelper::PARALLEL_MEMSET_SLICE_BYTES = 1L << 20;  // 1MB per slice
+
+void ObPxBfMemsetHelper::publish_slice_info(void *buf, int64_t size)
+{
+  int64_t slice_bytes = PARALLEL_MEMSET_SLICE_BYTES;
+  const int64_t slice_count =
+      (size + slice_bytes - 1) / slice_bytes;
+  // Stage all metadata before the release store that publishes buf to followers.
+  total_size_ = size;
+  slice_count_ = slice_count;
+  ATOMIC_STORE(&claimed_, 0);
+  ATOMIC_STORE(&done_, 0);
+  ATOMIC_STORE(&buf_, buf);            // publish (release)
+}
+
+void ObPxBfMemsetHelper::leader_memset()
+{
+  void *buf = ATOMIC_LOAD(&buf_);
+  if (nullptr != buf) {
+    drain_slices();                      // leader participates
+    while (ATOMIC_LOAD(&done_) < slice_count_) {
+      ob_usleep(100);
+    }
+    copy_old_bits_array_to_new_bits_array();
+    ATOMIC_STORE(&buf_, nullptr);        // retract: late followers bail
+  }
+}
+
+void ObPxBfMemsetHelper::drain_slices()
+{
+  void *buf = ATOMIC_LOAD(&buf_);
+  if (nullptr != buf) {
+    const int64_t slice_count = slice_count_;
+    const int64_t total_size = total_size_;
+    while (true) {
+      const int64_t idx = ATOMIC_FAA(&claimed_, 1);
+      if (idx >= slice_count) {
+        break;
+      }
+      int64_t slice_bytes = PARALLEL_MEMSET_SLICE_BYTES;
+      const int64_t offset = idx * slice_bytes;
+      const int64_t this_size = std::min(slice_bytes, total_size - offset);
+      MEMSET(static_cast<char *>(buf) + offset, 0, this_size);
+      (void)ATOMIC_FAA(&done_, 1);
+    }
+  }
+}
+
+void ObPxBfMemsetHelper::backup_old_bits_array(int64_t *bits_array, int64_t bits_array_length,
+                                               int64_t begin_idx)
+{
+  old_bits_array_ = bits_array;
+  old_bits_array_length_ = bits_array_length;
+  old_begin_idx_ = begin_idx;
+}
+
+void ObPxBfMemsetHelper::copy_old_bits_array_to_new_bits_array()
+{
+  int64_t *new_bits_array = static_cast<int64_t *>(ATOMIC_LOAD(&buf_));
+  if (nullptr != old_bits_array_ && nullptr != new_bits_array) {
+    MEMCPY(new_bits_array + old_begin_idx_, old_bits_array_,
+           old_bits_array_length_ * sizeof(int64_t));
+    old_bits_array_ = nullptr;
+    old_bits_array_length_ = 0;
+    old_begin_idx_ = 0;
+  }
+}
+
 ObPxBloomFilter::ObPxBloomFilter() : data_length_(0), max_bit_count_(0), bits_count_(0), fpp_(0.0),
     hash_func_count_(0), is_inited_(false), bits_array_length_(0),
-    bits_array_(NULL), true_count_(0), begin_idx_(0), end_idx_(0), fit_l3_cache_(false), allocator_(),
-    px_bf_recieve_count_(0), px_bf_recieve_size_(0), px_bf_merge_filter_count_(0)
+    bits_array_(NULL), ser_version_(0), begin_idx_(0), end_idx_(0), fit_l3_cache_(false), allocator_()
 {
 
 }
 
 int ObPxBloomFilter::init(int64_t data_length, ObIAllocator &allocator, int64_t tenant_id,
-                          double fpp /*= 0.01 */, int64_t max_filter_size /* =2147483648 */)
+                          double fpp /*= 0.01 */, int64_t max_filter_size /* =2147483648 */,
+                          ObPxBfMemsetHelper *memset_helper /* = nullptr */)
 {
   int ret = OB_SUCCESS;
   set_allocator_attr(tenant_id);
@@ -76,6 +145,7 @@ int ObPxBloomFilter::init(int64_t data_length, ObIAllocator &allocator, int64_t 
     align_max_bit_count(max_filter_size);
     (void)calc_num_of_bits();
     (void)calc_num_of_hash_func();
+    ser_version_ = GET_MIN_CLUSTER_VERSION();
     bits_array_length_ = ceil((double)bits_count_ / 64);
     fit_l3_cache_ = bits_array_length_ * sizeof(int64_t) < get_level3_cache_size();
     void *bits_array_buf = NULL;
@@ -91,7 +161,12 @@ int ObPxBloomFilter::init(int64_t data_length, ObIAllocator &allocator, int64_t 
       int64_t align_addr = ((reinterpret_cast<int64_t>(bits_array_buf)
                             + CACHE_LINE_SIZE - 1) >> LOG_CACHE_LINE_SIZE) << LOG_CACHE_LINE_SIZE;
       bits_array_ = reinterpret_cast<int64_t *>(align_addr);
-      MEMSET(bits_array_, 0, bits_array_length_ * sizeof(int64_t));
+      const int64_t memset_size = bits_array_length_ * sizeof(int64_t);
+      if (memset_helper != nullptr && memset_size >= ObPxBfMemsetHelper::PARALLEL_MEMSET_THRESHOLD) {
+        (void) memset_helper->publish_slice_info(bits_array_, memset_size);
+      } else {
+        MEMSET(bits_array_, 0, memset_size);
+      }
       is_inited_ = true;
       LOG_TRACE("init px bloom filter", K(data_length_), K(bits_array_buf),
                  K(bits_array_), K_(bits_array_length), K(hash_func_count_), K(simd_support));
@@ -112,7 +187,7 @@ int ObPxBloomFilter::assign(const ObPxBloomFilter &filter, int64_t tenant_id)
   hash_func_count_ = filter.hash_func_count_;
   is_inited_ = filter.is_inited_;
   bits_array_length_ = filter.bits_array_length_;
-  true_count_ = filter.true_count_;
+  ser_version_ = filter.ser_version_;
   might_contain_ = filter.might_contain_;
   void *bits_array_buf = NULL;
   begin_idx_ = filter.get_begin_idx();
@@ -152,7 +227,7 @@ int ObPxBloomFilter::init(const ObPxBloomFilter *filter)
     is_inited_ = filter->is_inited_;
     bits_array_length_ = filter->bits_array_length_;
     bits_array_ = filter->bits_array_;
-    true_count_ = filter->true_count_;
+    ser_version_ = filter->ser_version_;
     might_contain_ = filter->might_contain_;
     fit_l3_cache_ = filter->fit_l3_cache_;
   }
@@ -162,8 +237,6 @@ int ObPxBloomFilter::init(const ObPxBloomFilter *filter)
 void ObPxBloomFilter::reset_filter()
 {
   MEMSET(bits_array_, 0, bits_array_length_ * sizeof(int64_t));
-  px_bf_recieve_count_ = 0;
-  px_bf_recieve_size_ = 0;
 }
 
 void ObPxBloomFilter::reset_for_rescan()
@@ -341,98 +414,20 @@ int ObPxBloomFilter::merge_filter(ObPxBloomFilter *filter)
   } else {
     int64_t old_v = 0, new_v = 0;
     for (int i = 0; i < filter->bits_array_length_; ++i) {
-      do {
-        old_v = bits_array_[i + filter->begin_idx_];
-        new_v = old_v | filter->bits_array_[i];
-      } while (old_v != new_v // do not write if old is equal to new
-               && ATOMIC_CAS(&bits_array_[i + filter->begin_idx_], old_v, new_v) != old_v);
-    }
-  }
-  return ret;
-}
-
-bool ObPxBloomFilter::check_ready()
-{
-  return px_bf_recieve_count_ > 0 &&
-         px_bf_recieve_size_ > 0 &&
-         px_bf_recieve_count_ == px_bf_recieve_size_;
-}
-
-int ObPxBloomFilter::process_recieve_count(int64_t whole_expect_size, int64_t cur_buf_size)
-{
-  int ret = OB_SUCCESS;
-  if (whole_expect_size <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("the size is not invalid", K(ret));
-  } else {
-    if (px_bf_recieve_size_ <= 0) {
-      px_bf_recieve_size_ = whole_expect_size;
-    }
-    ATOMIC_AAF(&px_bf_recieve_count_, cur_buf_size);
-    if (px_bf_recieve_count_ > px_bf_recieve_size_) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("fail to process receive count", K(ret), K(px_bf_recieve_count_),
-         K(px_bf_recieve_size_));
-    }
-  }
-  return ret;
-}
-
-int ObPxBloomFilter::process_first_phase_recieve_count(int64_t whole_expect_size,
-    int64_t phase_expect_size, int64_t begin_idx, bool &first_phase_end)
-{
-  int ret = OB_SUCCESS;
-  first_phase_end = false;
-  if (whole_expect_size <= 0) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("the size is not invalid", K(ret));
-  } else {
-    if (px_bf_recieve_size_ <= 0) {
-      px_bf_recieve_size_ = whole_expect_size;
-    }
-    ATOMIC_INC(&px_bf_recieve_count_);
-    if (px_bf_recieve_count_ > px_bf_recieve_size_) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("fail to process receive count", K(ret), K(px_bf_recieve_count_),
-         K(px_bf_recieve_size_));
-    } else if (receive_count_array_.empty()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("emptry receive count array", K(ret));
-    } else {
-      bool find = false;
-      for (int i = 0; OB_SUCC(ret) && i < receive_count_array_.count(); ++i) {
-        if (begin_idx == receive_count_array_.at(i).begin_idx_) {
-          int64_t cur_count = ATOMIC_AAF(&receive_count_array_.at(i).reciv_count_, 1);
-          first_phase_end = (cur_count == phase_expect_size);
-          find = true;
-          break;
-        }
-      }
-      if (!find) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("unexpected process first phase", K(ret), K(receive_count_array_.count()));
+      // only merge non-zero bits
+      if (filter->bits_array_[i] != 0) {
+        do {
+          old_v = bits_array_[i + filter->begin_idx_];
+          new_v = old_v | filter->bits_array_[i];
+        } while (old_v != new_v // do not write if old is equal to new
+                && ATOMIC_CAS(&bits_array_[i + filter->begin_idx_], old_v, new_v) != old_v);
       }
     }
   }
   return ret;
 }
 
-int ObPxBloomFilter::generate_receive_count_array(int64_t piece_size)
-{
-  int ret = OB_SUCCESS;
-  int64_t count = ceil(bits_array_length_ / (double)piece_size);
-  int64_t begin_idx = 0;
-  for (int i = 0; OB_SUCC(ret) && i < count; ++i) {
-    begin_idx = i * piece_size;
-    if (begin_idx >= bits_array_length_) {
-      begin_idx = bits_array_length_ - 1;
-    }
-    OZ(receive_count_array_.push_back(BloomFilterReceiveCount(begin_idx, 0)));
-  }
-  return ret;
-}
-
-int ObPxBloomFilter::regenerate()
+int ObPxBloomFilter::regenerate(ObPxBfMemsetHelper *memset_helper)
 {
   int ret = OB_SUCCESS;
   int64_t bits_array_length = ceil((double)bits_count_ / 64);
@@ -448,9 +443,16 @@ int ObPxBloomFilter::regenerate()
     int64_t align_addr = ((reinterpret_cast<int64_t>(bits_array_buf)
                           + CACHE_LINE_SIZE - 1) >> LOG_CACHE_LINE_SIZE) << LOG_CACHE_LINE_SIZE;
     int64_t *bits_array = reinterpret_cast<int64_t *>(align_addr);
-    MEMSET(bits_array, 0, bits_array_length * sizeof(int64_t));
-    for (int i = 0; i < bits_array_length_; ++i) {
-      bits_array[i + begin_idx_] |= bits_array_[i];
+    const int64_t memset_size = bits_array_length * sizeof(int64_t);
+    if (memset_helper != nullptr && memset_size >= ObPxBfMemsetHelper::PARALLEL_MEMSET_THRESHOLD) {
+      (void) memset_helper->publish_slice_info(bits_array, memset_size);
+      // backup old bits array for merge after cooperative memset
+      (void) memset_helper->backup_old_bits_array(bits_array_, bits_array_length_, begin_idx_);
+    } else {
+      MEMSET(bits_array, 0, memset_size);
+      for (int i = 0; i < bits_array_length_; ++i) {
+        bits_array[i + begin_idx_] |= bits_array_[i];
+      }
     }
     bits_array_length_ = bits_array_length;
     bits_array_ = bits_array;
@@ -463,7 +465,6 @@ int ObPxBloomFilter::regenerate()
 void ObPxBloomFilter::reset()
 {
   // need reset memory
-  receive_count_array_.reset();
   allocator_.reset();
 }
 
@@ -477,12 +478,30 @@ OB_DEF_SERIALIZE(ObPxBloomFilter)
               hash_func_count_,
               is_inited_,
               bits_array_length_,
-              true_count_,
+              true_count_, // Union with ser_version_; legacy wire name, value is serialization version
               begin_idx_,
               end_idx_);
-  for (int i = begin_idx_; OB_SUCC(ret) && i <= end_idx_; ++i) {
-    if (OB_FAIL(serialization::encode(buf, buf_len, pos, bits_array_[i]))) {
-      LOG_WARN("fail to encode bits data", K(ret), K(bits_array_[i]));
+  bool use_memcpy = ser_version_ >= CLUSTER_VERSION_4_6_1_0;
+  if (!use_memcpy) {
+    // use encode to serialize bits_array_
+    for (int i = begin_idx_; OB_SUCC(ret) && i <= end_idx_; ++i) {
+      if (OB_FAIL(serialization::encode(buf, buf_len, pos, bits_array_[i]))) {
+        LOG_WARN("fail to encode bits data", K(ret), K(bits_array_[i]));
+      }
+    }
+  } else {
+    // use memcpy to serialize bits_array_
+    const int64_t real_len = end_idx_ - begin_idx_ + 1;
+    const int64_t wire_bytes = real_len * sizeof(int64_t);
+    if (OB_UNLIKELY(real_len <= 0)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("invalid bloom filter piece for serialize", K(ret), K(begin_idx_), K(end_idx_));
+    } else if (OB_UNLIKELY(buf_len - pos < wire_bytes)) {
+      ret = OB_SIZE_OVERFLOW;
+      LOG_WARN("no room for bits payload", K(ret), K(buf_len), K(pos), K(wire_bytes));
+    } else {
+      MEMCPY(buf + pos, bits_array_ + begin_idx_, wire_bytes);
+      pos += wire_bytes;
     }
   }
   OB_UNIS_ENCODE(max_bit_count_);
@@ -499,9 +518,10 @@ OB_DEF_DESERIALIZE(ObPxBloomFilter)
               hash_func_count_,
               is_inited_,
               bits_array_length_,
-              true_count_,
+              true_count_, // Union with ser_version_; legacy wire name, value is serialization version
               begin_idx_,
               end_idx_);
+  bool use_memcpy = ser_version_ >= CLUSTER_VERSION_4_6_1_0;
   int64_t real_len = end_idx_ - begin_idx_ + 1;
   bits_array_length_ = real_len;
   void *bits_array_buf = NULL;
@@ -513,11 +533,26 @@ OB_DEF_DESERIALIZE(ObPxBloomFilter)
     int64_t align_addr = ((reinterpret_cast<int64_t>(bits_array_buf)
                           + CACHE_LINE_SIZE - 1) >> LOG_CACHE_LINE_SIZE) << LOG_CACHE_LINE_SIZE;
     int64_t *bits_array = reinterpret_cast<int64_t *>(align_addr);
-    for (int i = 0; OB_SUCC(ret) && i < real_len; ++i) {
-      if (OB_FAIL(serialization::decode(buf, data_len, pos, bits_array[i]))) {
-        LOG_WARN("fail to decode bits data", K(ret));
+    if (!use_memcpy) {
+      for (int i = 0; OB_SUCC(ret) && i < real_len; ++i) {
+        if (OB_FAIL(serialization::decode(buf, data_len, pos, bits_array[i]))) {
+          LOG_WARN("fail to decode bits data", K(ret));
+        }
+      }
+    } else {
+      const int64_t wire_bytes = real_len * sizeof(int64_t);
+      if (OB_UNLIKELY(real_len <= 0)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("invalid bloom filter piece for deserialize", K(ret), K(begin_idx_), K(end_idx_));
+      } else if (OB_UNLIKELY(data_len - pos < wire_bytes)) {
+        ret = OB_DESERIALIZE_ERROR;
+        LOG_WARN("bits payload truncated", K(ret), K(data_len), K(pos), K(wire_bytes));
+      } else {
+        MEMCPY(bits_array, buf + pos, wire_bytes);
+        pos += wire_bytes;
       }
     }
+
     if (OB_SUCC(ret)) {
       bits_array_ = bits_array;
       might_contain_ = common::is_arch_supported(ObTargetArch::AVX512) ? &ObPxBloomFilter::might_contain_simd
@@ -540,11 +575,19 @@ OB_DEF_SERIALIZE_SIZE(ObPxBloomFilter)
         hash_func_count_,
         is_inited_,
         bits_array_length_,
-        true_count_,
+        true_count_, // Union with ser_version_; legacy wire name, value is serialization version
         begin_idx_,
         end_idx_);
-  for (int i = begin_idx_; i <= end_idx_; ++i) {
-    len += serialization::encoded_length(bits_array_[i]);
+  bool use_memcpy = ser_version_ >= CLUSTER_VERSION_4_6_1_0;
+  if (!use_memcpy) {
+    for (int i = begin_idx_; i <= end_idx_; ++i) {
+      len += serialization::encoded_length(bits_array_[i]);
+    }
+  } else {
+    const int64_t real_len = end_idx_ - begin_idx_ + 1;
+    if (OB_LIKELY(real_len > 0)) {
+      len += real_len * sizeof(int64_t);
+    }
   }
   OB_UNIS_ADD_LEN(max_bit_count_);
   return len;
@@ -625,7 +668,7 @@ int inner_might_contain(ObPxBloomFilter *bloom_filter, int64_t *bits_array,
   if (std::is_same<ResVec, IntegerFixedVec>::value) {
     IntegerFixedVec *int_fixed_vec = reinterpret_cast<IntegerFixedVec *>(res_vec);
     uint64_t *data = reinterpret_cast<uint64_t *>(int_fixed_vec->get_data());
-    MEMSET(data + bound.start(), 0, (bound.range_size() * res_vec->get_length(0)));
+    MEMSET(data + bound.start(), 0, (bound.range_size() * int_fixed_vec->get_length(0)));
   }
 
   if (ALL_ROWS_ACTIVE) {
@@ -749,196 +792,6 @@ int ObPxBFStaticInfo::init(int64_t tenant_id, int64_t filter_id,
   }
   return ret;
 }
-//-------------------------------------分割线----------------------------
-void ObPxReadAtomicGetBFCall::operator() (common::hash::HashMapPair<ObPXBloomFilterHashWrapper,
-      ObPxBloomFilter *> &entry)
-{
-  bloom_filter_ = entry.second;
-  bloom_filter_->inc_merge_filter_count();
-}
-//-------------------------------------分割线----------------------------
-ObPxBloomFilterManager &ObPxBloomFilterManager::instance()
-{
-  static ObPxBloomFilterManager the_px_bloom_filter_manager;
-  return the_px_bloom_filter_manager;
-}
-ObPxBloomFilterManager::~ObPxBloomFilterManager()
-{
-  destroy();
-}
-ObPxBloomFilterManager::ObPxBloomFilterManager() : map_(), is_inited_(false)
-{
-}
-int ObPxBloomFilterManager::init()
-{
-  int ret = OB_SUCCESS;
-  if (IS_INIT) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("no need to init twice filter manager", K(ret));
-  } else if (OB_FAIL(map_.create(BUCKET_NUM,
-      ObModIds::OB_HASH_PX_BLOOM_FILTER_KEY,
-      ObModIds::OB_HASH_NODE_PX_BLOOM_FILTER_KEY))) {
-    LOG_WARN("create hash table failed", K(ret));
-  } else {
-    is_inited_ = true;
-  }
-  return ret;
-}
-
-void ObPxBloomFilterManager::destroy()
-{
-  if (IS_INIT) {
-    map_.destroy();
-  }
-}
-
-int ObPxBloomFilterManager::get_px_bloom_filter(ObPXBloomFilterHashWrapper &key,
-    ObPxBloomFilter *&filter)
-{
-  int ret = OB_SUCCESS;
-  ObPxBloomFilter *tmp_filter_ptr = NULL;
-  if (OB_FAIL(map_.get_refactored(key, tmp_filter_ptr))) {
-    if (OB_HASH_NOT_EXIST != ret) {
-      LOG_WARN("fail to get px bloom filter in filter manager", K(ret));
-    }
-  } else {
-    filter = tmp_filter_ptr;
-  }
-  return ret;
-}
-int ObPxBloomFilterManager::set_px_bloom_filter(ObPXBloomFilterHashWrapper &key,
-    ObPxBloomFilter *filter)
-{
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(filter)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("fail to set px bloom filter", K(ret));
-  } else if (OB_FAIL(map_.set_refactored(key, filter, 1/*over_write*/))) {
-    LOG_WARN("fail to set px bloom filter in filter manager", K(ret));
-  }
-  return ret;
-}
-int ObPxBloomFilterManager::erase_px_bloom_filter(ObPXBloomFilterHashWrapper &key,
-  ObPxBloomFilter *&filter)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(map_.erase_refactored(key, &filter))) {
-    LOG_TRACE("fail to erase px bloom filter in filter manager", K(ret));
-  }
-  return ret;
-}
-
-int ObPxBloomFilterManager::init_px_bloom_filter(int64_t filter_size, ObIAllocator &allocator,
-    ObPxBloomFilter *&filter)
-{
-  int ret = OB_SUCCESS;
-  void *ptr = NULL;
-  filter_size = MAX(filter_size, 1);
-  if (OB_ISNULL(ptr = allocator.alloc(sizeof(ObPxBloomFilter)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc ObPxBloomFilter", K(ret));
-  } else if (OB_ISNULL(filter = new(ptr) ObPxBloomFilter())) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("fail to alloc ObPxBloomFilter", K(ret));
-  } else if (OB_FAIL(filter->init(filter_size, allocator,
-        (double)GCONF._bloom_filter_ratio / 100))) {
-    LOG_WARN("fail to init ObPxBloomFilter", K(ret));
-  }
-  return ret;
-}
-
-int ObPxBloomFilterManager::get_px_bf_for_merge_filter(ObPXBloomFilterHashWrapper &key,
-    ObPxBloomFilter *&filter)
-{
-  int ret = OB_SUCCESS;
-  ObPxReadAtomicGetBFCall get_bf_call;
-  if (OB_FAIL(map_.read_atomic(key, get_bf_call))) {
-    LOG_WARN("fail to get row store in result manager", K(ret));
-  } else {
-    filter = get_bf_call.bloom_filter_;
-  }
-  return ret;
-}
 
 OB_SERIALIZE_MEMBER(ObPxBFStaticInfo, is_inited_, tenant_id_, filter_id_,
     server_id_, is_shared_, skip_subpart_, p2p_dh_id_, is_shuffle_);
-OB_SERIALIZE_MEMBER(ObPXBloomFilterHashWrapper, tenant_id_, filter_id_,
-    server_id_, px_sequence_id_, task_id_)
-OB_SERIALIZE_MEMBER(ObPxBFSendBloomFilterArgs, bf_key_, bloom_filter_,
-    next_peer_addrs_, expect_bloom_filter_count_,
-    current_bloom_filter_count_, expect_phase_count_,
-    phase_, timeout_timestamp_);
-
-int ObSendBloomFilterP::init()
-{
-  return OB_SUCCESS;
-}
-
-int ObSendBloomFilterP::process_px_bloom_filter_data()
-{
-  int ret = OB_SUCCESS;
-  bool phase_end = false;
-  ObPxBloomFilter *filter = NULL;
-  if (OB_FAIL(ObPxBloomFilterManager::instance().get_px_bf_for_merge_filter(
-      arg_.bf_key_, filter))) {
-    LOG_WARN("fail to get px bloom filter", K(ret));
-  }
-
-  if (OB_SUCC(ret) && OB_NOT_NULL(filter)) {
-    if (OB_FAIL(filter->merge_filter(&arg_.bloom_filter_))) {
-      LOG_WARN("fail to merge filter", K(ret));
-    } else if (!arg_.is_first_phase() &&
-        OB_FAIL(filter->process_recieve_count(arg_.expect_bloom_filter_count_,
-        arg_.current_bloom_filter_count_))) {
-      LOG_WARN("fail to process receive count", K(ret));
-    } else if (arg_.is_first_phase() && OB_FAIL(filter->process_first_phase_recieve_count(
-        arg_.expect_bloom_filter_count_,
-        arg_.expect_phase_count_,
-        arg_.bloom_filter_.get_begin_idx(),
-        phase_end))) {
-      LOG_WARN("fail to process receive count", K(ret));
-    }
-  }
-
-  if (OB_SUCC(ret) && phase_end && arg_.is_first_phase() && !arg_.next_peer_addrs_.empty()) {
-    ObPxBFProxy proxy;
-    if (OB_FAIL(share::init_obrpc_proxy(proxy))) {
-      LOG_WARN("fail to init obrpc proxy", K(ret));
-    } else {
-      ObPxBFSendBloomFilterArgs new_arg;
-      new_arg.bf_key_ = arg_.bf_key_;
-      if (OB_FAIL(new_arg.bloom_filter_.init(filter))) {
-        LOG_WARN("fail to init arg bloom filter", K(ret));
-      } else {
-        new_arg.expect_bloom_filter_count_ = arg_.expect_bloom_filter_count_;
-        new_arg.current_bloom_filter_count_ = arg_.expect_phase_count_;
-        new_arg.phase_ = ObSendBFPhase::SECOND_LEVEL;
-        new_arg.bloom_filter_.set_begin_idx(arg_.bloom_filter_.get_begin_idx());
-        new_arg.bloom_filter_.set_end_idx(arg_.bloom_filter_.get_end_idx());
-        new_arg.timeout_timestamp_ = arg_.timeout_timestamp_;
-        for (int i = 0; OB_SUCC(ret) && i < arg_.next_peer_addrs_.count(); ++i) {
-          if (arg_.next_peer_addrs_.at(i) != GCTX.self_addr()) {
-            if (OB_FAIL(proxy.to(arg_.next_peer_addrs_.at(i))
-                      .by(arg_.bf_key_.tenant_id_)
-                      .timeout(arg_.timeout_timestamp_)
-                      .compressed(ObCompressorType::LZ4_COMPRESSOR)
-                      .send_bloom_filter(new_arg, NULL))) {
-              LOG_WARN("fail to send bloom filter", K(ret));
-            }
-          }
-        }
-      }
-    }
-  }
-  if (OB_NOT_NULL(filter)) {
-    (void)filter->dec_merge_filter_count();
-  }
-  return ret;
-}
-
-void ObSendBloomFilterP::destroy() {}
-
-int ObSendBloomFilterP::process()
-{
-  return process_px_bloom_filter_data();
-}

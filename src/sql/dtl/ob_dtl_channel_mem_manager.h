@@ -29,7 +29,7 @@ public:
   ObDtlChannelMemManager(uint64_t tenant_id, ObDtlTenantMemManager &tenant_mgr);
   virtual ~ObDtlChannelMemManager() { destroy(); }
 
-  int init();
+  int init(int64_t max_reserve_count);
   void destroy();
 
 public:
@@ -71,7 +71,6 @@ private:
   uint64_t tenant_id_;
   int64_t size_per_buffer_;
   int64_t seqno_;
-  static const int64_t MAX_CAPACITY = 128;
   common::ObLightyQueue free_queue_;
   common::ObFIFOAllocator allocator_;
 

@@ -1012,6 +1012,15 @@ int ObOptEstCostModel::cost_exchange_in(const ObExchInCostInfo &cost_info,
     per_dop_rows = cost_info.rows_ * cost_info.server_cnt_ / cost_info.parallel_;
   } else if (ObPQDistributeMethod::BROADCAST == cost_info.dist_method_) {
     per_dop_rows = cost_info.rows_;
+  } else if (ObPQDistributeMethod::HYBRID_HASH_BROADCAST == cost_info.dist_method_) {
+    // each worker receives all hot rows plus its hash-distributed share of cold rows
+    double hot_rows  = cost_info.rows_ * cost_info.popular_values_ratio_;
+    double cold_rows = cost_info.rows_ - hot_rows;
+    per_dop_rows = hot_rows + cold_rows / cost_info.parallel_;
+  } else if (ObPQDistributeMethod::HYBRID_HASH_RANDOM == cost_info.dist_method_) {
+    // hot rows are already local (no receive cost); each worker gets its share of cold rows
+    double cold_rows = cost_info.rows_ * (1.0 - cost_info.popular_values_ratio_);
+    per_dop_rows = cold_rows / cost_info.parallel_;
   } else {
     per_dop_rows = cost_info.rows_ / cost_info.parallel_;
   }
@@ -1023,6 +1032,10 @@ int ObOptEstCostModel::cost_exchange_in(const ObExchInCostInfo &cost_info,
     if (ObPQDistributeMethod::BROADCAST == cost_info.dist_method_) {
       //每个线程都需要拷贝一份当前机器收到的数据
       cost += ObOptEstCostModel::cost_material(per_dop_rows, cost_info.width_);
+    } else if (ObPQDistributeMethod::HYBRID_HASH_BROADCAST == cost_info.dist_method_) {
+      // each worker needs to copy the full set of hot rows it received
+      double hot_rows = cost_info.rows_ * cost_info.popular_values_ratio_;
+      cost += ObOptEstCostModel::cost_material(hot_rows, cost_info.width_);
     }
     if (!cost_info.sort_keys_.empty() && per_dop_rows > 0) {
       double merge_degree = 0;
@@ -1060,6 +1073,18 @@ int ObOptEstCostModel::cost_exchange_out(const ObExchOutCostInfo &cost_info,
              ObPQDistributeMethod::BROADCAST == cost_info.dist_method_) {
     per_dop_ser_rows = cost_info.rows_ / cost_info.parallel_;
     per_dop_trans_rows = cost_info.rows_ * cost_info.server_cnt_ / cost_info.parallel_;
+  } else if (ObPQDistributeMethod::HYBRID_HASH_BROADCAST == cost_info.dist_method_) {
+    // hot rows are broadcast to all servers; cold rows are hash-distributed
+    double hot_rows  = cost_info.rows_ * cost_info.popular_values_ratio_;
+    double cold_rows = cost_info.rows_ - hot_rows;
+    per_dop_ser_rows   = cost_info.rows_ / cost_info.parallel_;
+    per_dop_trans_rows = hot_rows  * cost_info.server_cnt_ / cost_info.parallel_
+                       + cold_rows / cost_info.parallel_;
+  } else if (ObPQDistributeMethod::HYBRID_HASH_RANDOM == cost_info.dist_method_) {
+    // hot rows stay at current worker (no network cost); cold rows are hash-distributed
+    double cold_rows = cost_info.rows_ * (1.0 - cost_info.popular_values_ratio_);
+    per_dop_ser_rows   = cold_rows / cost_info.parallel_;
+    per_dop_trans_rows = cold_rows / cost_info.parallel_;
   } else {
     per_dop_ser_rows = cost_info.rows_ / cost_info.parallel_;
     per_dop_trans_rows = per_dop_ser_rows;
@@ -1303,7 +1328,7 @@ int ObOptEstCostModel::cost_table(const ObCostTableScanInfo &est_cost_info,
     cost = 4.0 * phy_query_range_row_count / parallel;
     OPT_TRACE_COST_MODEL(KV(cost),"=","4.0 * ", KV(phy_query_range_row_count), " / ", KV(parallel));
   } else if (OB_FAIL(cost_basic_table(est_cost_info,
-                                      part_cnt / parallel,
+                                      (est_cost_info.is_rescan_) ? std::max(1.0, part_cnt / parallel) : part_cnt / parallel,
                                       cost))) {
     LOG_WARN("failed to estimate table cost", K(ret));
   } else { /*do nothing*/ }
@@ -1402,7 +1427,7 @@ int ObOptEstCostModel::cost_basic_table(const ObCostTableScanInfo &est_cost_info
     cost += index_back_cost;
     OPT_TRACE_COST_MODEL(KV(cost), "+=", KV(index_back_cost));
     // calc one parallel scan cost
-    cost *= part_cnt_per_dop;
+    cost *= (est_cost_info.is_rescan_) ? std::max(1.0, part_cnt_per_dop) : part_cnt_per_dop;
     OPT_TRACE_COST_MODEL(KV(cost), "*=", KV(part_cnt_per_dop));
     // calc das rescan scan rpc cost
     cost += das_rpc_cost;

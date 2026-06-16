@@ -101,7 +101,11 @@ int SharedJoinFilterConstructor::wait_constructed(ObOperator *join_filter_op,
 {
   int ret = OB_SUCCESS;
   int64_t loop_time = 0;
+  ScopedTimer timer(ObMetricId::WORKER_SYNC_WAIT);
   while (OB_SUCC(ret)) {
+    // Opportunistically help the leader drain its cooperative MEMSET slices.
+    // Safe to call regardless of whether the leader has published work yet.
+    bf_msg->follower_help_memset();
     {
       ObThreadCondGuard guard(cond_);
       if (is_bloom_filter_constructed_) {
@@ -334,6 +338,7 @@ int ObJoinFilterOpInput::init_shared_msgs(
   return ret;
 }
 
+ERRSIM_POINT_DEF(DISABLE_BF_COOP);
 int ObJoinFilterOpInput::construct_msg_details(
     const ObJoinFilterSpec &spec,
     ObPxSQCProxy *sqc_proxy,
@@ -359,7 +364,8 @@ int ObJoinFilterOpInput::construct_msg_details(
           bf_msg.get_allocator(),
           bf_msg.get_tenant_id(),
           config.bloom_filter_ratio_,
-          config.runtime_bloom_filter_max_size_))) {
+          config.runtime_bloom_filter_max_size_,
+          !DISABLE_BF_COOP ? bf_msg.get_memset_helper() : nullptr))) {
         LOG_WARN("failed to init bloom filter", K(ret));
       } else if (!spec.is_shared_join_filter() || !spec.is_shuffle_) {
         bf_msg.set_msg_expect_cnt(1);
@@ -608,39 +614,6 @@ int ObJoinFilterSpec::update_sync_row_count_flag()
 }
 
 //------------------------------------------ ObJoinFilterOp --------------------------------
-int ObJoinFilterOp::destroy_filter()
-{
-  int ret = OB_SUCCESS;
-  return ret;
-}
-
-int ObJoinFilterOp::link_ch_sets(ObPxBloomFilterChSets &ch_sets,
-                               common::ObIArray<dtl::ObDtlChannel *> &channels)
-{
-  int ret = OB_SUCCESS;
-  int64_t thread_id = GETTID();
-  dtl::ObDtlChannelInfo ci;
-  for (int i = 0; i < ch_sets.count() && OB_SUCC(ret); ++i) {
-    for (int j = 0; j < ch_sets.at(i).count() && OB_SUCC(ret); ++j) {
-      dtl::ObDtlChannel *ch = NULL;
-      ObPxBloomFilterChSet &ch_set = ch_sets.at(i);
-      if (OB_FAIL(ch_set.get_channel_info(j, ci))) {
-        LOG_WARN("fail get channel info", K(j), K(ret));
-      } else if (OB_FAIL(dtl::ObDtlChannelGroup::link_channel(ci, ch, NULL))) {
-        LOG_WARN("fail link channel", K(ci), K(ret));
-      } else if (OB_ISNULL(ch)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("ch channel is null", K(ret));
-      } else if (OB_FAIL(channels.push_back(ch))) {
-        LOG_WARN("fail push back channel ptr", K(ci), K(ret));
-      } else {
-        ch->set_join_filter_owner();
-        ch->set_thread_id(thread_id);
-      }
-    }
-  }
-  return ret;
-}
 
 bool ObJoinFilterOp::is_valid()
 {
@@ -649,7 +622,7 @@ bool ObJoinFilterOp::is_valid()
 }
 
 ObJoinFilterOp::ObJoinFilterOp(ObExecContext &exec_ctx, const ObOpSpec &spec, ObOpInput *input)
-    : ObOperator(exec_ctx, spec, input), filter_create_msg_(nullptr), join_filter_hash_values_(NULL),
+    : ObOperator(exec_ctx, spec, input), join_filter_hash_values_(NULL),
       lucky_devil_champions_(), profile_(ObSqlWorkAreaType::HASH_WORK_AREA),
       sql_mem_processor_(profile_, op_monitor_info_)
 {
@@ -1164,37 +1137,6 @@ int ObJoinFilterOp::try_send_join_filter()
           && OB_FAIL(PX_P2P_DH.send_p2p_msg(*shared_rf_msgs_.at(i), *sqc_proxy))) {
         LOG_WARN("fail to send p2p msg", K(ret));
       }
-    }
-  }
-  return ret;
-}
-
-int ObJoinFilterOp::prepre_bloom_filter_ctx(ObBloomFilterSendCtx *bf_ctx)
-{
-  int ret = OB_SUCCESS;
-  int64_t &each_group_size = bf_ctx->get_each_group_size();
-  if (OB_FAIL(calc_each_bf_group_size(each_group_size))) {
-    LOG_WARN("fail to calc each bf group size", K(ret));
-  } else {
-    ObRFBloomFilterMsg *bf_msg = filter_create_msg_->bf_msg_;
-    ObPxBloomFilter &bf = bf_msg->bloom_filter_;
-    int64_t sqc_count = 0;
-    int64_t peer_sqc_count = 0;
-    int64_t tenant_id = ctx_.get_my_session()->get_effective_tenant_id();
-    // 125 = 1000/8, send size means how many byte of partial bloom filter will be send at once
-    int64_t send_size = GCONF._send_bloom_filter_size * 125;
-    // how many piece of partial bloom filter will be send by all threads(sqc level)
-    int64_t send_count = ceil(bf.get_bits_array_length() / (double)send_size);
-    int64_t bloom_filter_count = send_count * send_size;
-    ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
-    if (tenant_config.is_valid() && true == tenant_config->_px_message_compression) {
-      bf_ctx->set_bf_compress_type(ObCompressorType::LZ4_COMPRESSOR);
-    }
-    if (OB_FAIL(bf_ctx->generate_filter_indexes(each_group_size, peer_sqc_count))) {
-      LOG_WARN("failed to generate filter indexs", K(ret));
-    } else {
-      bf_ctx->set_per_addr_bf_count(send_count);
-      bf_ctx->set_bloom_filter_ready(true);
     }
   }
   return ret;
@@ -1843,6 +1785,7 @@ void ObJoinFilterOp::check_in_filter_active(int64_t &in_filter_ndv)
   }
 }
 
+ERRSIM_POINT_DEF(RF_FORCE_BIG);
 int ObJoinFilterOp::init_bloom_filter(const int64_t worker_row_count, const int64_t total_row_count)
 {
   int ret = OB_SUCCESS;
@@ -1887,16 +1830,25 @@ int ObJoinFilterOp::init_bloom_filter(const int64_t worker_row_count, const int6
         LOG_WARN("failed to wait bloom filter init");
       }
     } else {
-      // only the constructor is responsible for init bloom filter
-      if (OB_FAIL(ObJoinFilterOpInput::construct_msg_details(MY_SPEC, sqc_proxy,
+      if (RF_FORCE_BIG) {
+        bloom_filter_data_len = max(bloom_filter_data_len, abs(RF_FORCE_BIG));
+      }
+      // only the constructor is responsible for init bloom filter.
+      // In shared mode, lazy-alloc a memset helper on the shared msg so the MEMSET
+      // inside bloom_filter_.init() can be drained cooperatively by the
+      // followers currently spinning in wait_constructed.
+      bool need_coop_memset = MY_SPEC.is_shared_join_filter();
+      if (need_coop_memset && OB_FAIL(bf_vec_msg_->prepare_memset_helper())) {
+        LOG_WARN("failed to prepare memset helper", K(ret));
+      } else if (OB_FAIL(ObJoinFilterOpInput::construct_msg_details(MY_SPEC, sqc_proxy,
                                                              filter_input->config_, *bf_vec_msg_,
                                                              sqc_count, bloom_filter_data_len))) {
         LOG_WARN("failed to construct bloom filter ", K(spec_.get_id()));
-        // must notify to let other workers exit
-        if (MY_SPEC.is_shared_join_filter()) {
-          (void)filter_input->share_info_.shared_jf_constructor_->notify_constructed();
-        }
-      } else if (MY_SPEC.is_shared_join_filter()) {
+      } else if (need_coop_memset) {
+        (void) bf_vec_msg_->leader_memset();
+      }
+      // must notify to let other workers exit
+      if (MY_SPEC.is_shared_join_filter()) {
         // for shared join filter, notify other worker exit
         (void)filter_input->share_info_.shared_jf_constructor_->notify_constructed();
       }

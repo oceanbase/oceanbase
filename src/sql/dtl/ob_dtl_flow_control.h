@@ -29,6 +29,7 @@ class ObDtlChannel;
 class ObDtlChannelLoop;
 class ObDtlFlowControl;
 class ObDtlBasicChannel;
+struct ObDtlServerChannelGroup;
 
 // Receive op send unblocking msg to transimit op, and transmit op will going
 class ObDtlUnblockingMsg
@@ -62,6 +63,32 @@ public:
   void reset() {}
 };
 
+class ObDtlBatchMsg : public dtl::ObDtlMsgTemp<dtl::ObDtlMsgType::DTL_BATCH_MSG>
+{
+  OB_UNIS_VERSION_V(1);
+public:
+  ObDtlBatchMsg() {}
+  void reset() {
+    ch_ids_.reset();
+    buffer_cnt_ = 0;
+    payload_bufs_.reset();
+    payload_channels_.reset();
+    accum_payload_bytes_ = 0;
+  }
+  int append_payload_buffer(ObDtlLinkedBuffer *buffer, ObDtlChannel *ch);
+  int64_t get_accum_payload_bytes() const { return accum_payload_bytes_; }
+  TO_STRING_KV(K(ch_ids_.count()), K(buffer_cnt_), K(contained_msg_type_));
+  ObTMArray<int64_t> ch_ids_;
+  int64_t buffer_cnt_{0};
+  dtl::ObDtlMsgType contained_msg_type_;
+  // Not serialized; for appending payload when writing batch msg.
+  ObTMArray<ObDtlLinkedBuffer*> payload_bufs_;
+  // Not serialized; for free payload buffers
+  ObTMArray<ObDtlChannel*> payload_channels_;
+  // Not serialized; tracks sum of appended buffer sizes for batching control.
+  int64_t accum_payload_bytes_{0};
+};
+
 class ObDtlDrainMsgP : public dtl::ObDtlPacketProc<ObDtlDrainMsg>
 {
 public:
@@ -80,7 +107,7 @@ public:
   compressor_type_(common::ObCompressorType::NONE_COMPRESSOR), is_init_(false), block_ch_cnt_(0),
   total_memory_size_(0), total_buffer_cnt_(0), accumulated_blocked_cnt_(0), blocks_(), chans_(), drain_ch_cnt_(0),
   dfo_key_(), op_metric_(nullptr),
-  chan_loop_(nullptr), ch_info_(nullptr), last_block_start_time_(0), total_block_time_(0)
+  chan_loop_(nullptr), ch_info_(nullptr), server_groups_(nullptr), last_block_start_time_(0), total_block_time_(0)
   { }
 
   virtual ~ObDtlFlowControl() { destroy(); }
@@ -151,15 +178,7 @@ public:
   int unregister_channel(ObDtlChannel* ch);
   int unregister_all_channel();
 
-  int reserve(int64_t size) {
-    int ret = OB_SUCCESS;
-    if (OB_FAIL(blocks_.reserve(size))) {
-      // nop
-    } else if (OB_FAIL(chans_.reserve(size))) {
-      // nop
-    }
-    return ret;
-  }
+  int reserve(int64_t size);
   virtual int init(uint64_t tenant_id, int64_t chan_cnt);
   virtual void destroy() {
     chans_.reset();
@@ -168,7 +187,7 @@ public:
     is_init_ = false;
   }
 
-  virtual int final_check();
+  int final_check();
 
   int get_channel(int64_t idx, ObDtlChannel *&ch);
   int find(ObDtlChannel* ch, int64_t &out_idx);
@@ -178,6 +197,7 @@ public:
   int sync_send_drain(int64_t &unblock_cnt);
   int notify_all_blocked_channels_unblocking(int64_t &unblock_cnt);
   int notify_channel_unblocking(ObDtlChannel *ch, int64_t &block_cnt, bool asyn_send = true);
+  int need_unblock_peer(ObDtlChannel *ch, int64_t &block_cnt, bool &need_batch_rpc);
   int64_t get_channel_count() const {
     return chans_.count();
   }
@@ -217,6 +237,14 @@ public:
   void end_block_time_counting();
 
   int64_t get_total_block_time() { return total_block_time_; }
+  void set_server_groups(const ObIArray<ObDtlServerChannelGroup *> *server_groups)
+  {
+    server_groups_ = server_groups;
+  }
+  const ObIArray<ObDtlServerChannelGroup *> *get_server_groups()
+  {
+    return server_groups_;
+  }
 
 private:
   static const int64_t THRESHOLD_SIZE = 2097152;
@@ -237,8 +265,8 @@ private:
   // dfc control to block how many object
   // for receive, only 1
   // for transmit, it's equal the count of channels
-  common::ObSEArray<bool, 16> blocks_;
-  common::ObSEArray<ObDtlChannel*, 16> chans_;
+  ObTMArray<bool> blocks_;
+  ObTMArray<ObDtlChannel*> chans_;
 
   uint64_t drain_ch_cnt_;
   ObDtlDfoKey dfo_key_;
@@ -249,6 +277,7 @@ private:
   ObDtlChannelLoop *chan_loop_;
 
   ObDtlChTotalInfo *ch_info_;
+  const ObIArray<ObDtlServerChannelGroup *> *server_groups_;
 
 private:
   // Todo: In DFC, it can monitor data size and so on
@@ -272,7 +301,7 @@ OB_INLINE void ObDtlFlowControl::unblock(int64_t idx)
 
 OB_INLINE bool ObDtlFlowControl::is_block(int64_t idx)
 {
-  bool blocked = blocks_.at(idx);
+  bool &blocked = blocks_.at(idx);
   return (ATOMIC_LOAD(&blocked)) && 1 <= (ATOMIC_LOAD(&block_ch_cnt_));
 }
 

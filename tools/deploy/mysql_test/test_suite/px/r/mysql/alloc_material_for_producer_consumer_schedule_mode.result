@@ -3,33 +3,33 @@ create table t1 (c1 int, c2 int, c3 int);
 create table t2 (c1 int, c2 int, c3 int);
 call dbms_stats.gather_table_stats(NULL, 't1');
 call dbms_stats.gather_table_stats(NULL, 't2');
-explain select /*+ use_px parallel(2) use_hash(c d) */ * from (select a.c2, b.c3 from  (select /*+ use_hash(a, b) */ c1, c2, count(*) c3 from t1 group by 1, 2) a, (select c1, c2, count(*) c3 from t1 group by 1, 2) b where a.c1 = b.c1) c, (select c1, c2, count(*) c3 from t1 group by 1, 2) d where c.c2 = d.c2;
+explain basic select /*+ use_px parallel(2) use_hash(c d) */ * from (select a.c2, b.c3 from  (select /*+ use_hash(a, b) */ c1, c2, count(*) c3 from t1 group by 1, 2) a, (select c1, c2, count(*) c3 from t1 group by 1, 2) b where a.c1 = b.c1) c, (select c1, c2, count(*) c3 from t1 group by 1, 2) d where c.c2 = d.c2;
 Query Plan
-====================================================================================
-|ID|OPERATOR                                    |NAME        |EST.ROWS|EST.TIME(us)|
-------------------------------------------------------------------------------------
-|0 |TEMP TABLE TRANSFORMATION                   |            |1       |6           |
-|1 |├─PX COORDINATOR                            |            |0       |3           |
-|2 |│ └─EXCHANGE OUT DISTR                      |:EX10001    |0       |3           |
-|3 |│   └─TEMP TABLE INSERT                     |TEMP1       |0       |3           |
-|4 |│     └─HASH GROUP BY                       |            |1       |3           |
-|5 |│       └─EXCHANGE IN DISTR                 |            |1       |3           |
-|6 |│         └─EXCHANGE OUT DISTR (HASH)       |:EX10000    |1       |2           |
-|7 |│           └─HASH GROUP BY                 |            |1       |2           |
-|8 |│             └─PX BLOCK ITERATOR           |            |1       |2           |
-|9 |│               └─TABLE FULL SCAN           |t1          |1       |2           |
-|10|└─PX COORDINATOR                            |            |1       |3           |
-|11|  └─EXCHANGE OUT DISTR                      |:EX20002    |1       |3           |
-|12|    └─SHARED HASH JOIN                      |            |1       |2           |
-|13|      ├─EXCHANGE IN DISTR                   |            |1       |2           |
-|14|      │ └─EXCHANGE OUT DISTR (BC2HOST)      |:EX20001    |1       |1           |
-|15|      │   └─SHARED HASH JOIN                |            |1       |1           |
-|16|      │     ├─EXCHANGE IN DISTR             |            |1       |1           |
-|17|      │     │ └─EXCHANGE OUT DISTR (BC2HOST)|:EX20000    |1       |1           |
-|18|      │     │   └─TEMP TABLE ACCESS         |VIEW2(TEMP1)|1       |1           |
-|19|      │     └─TEMP TABLE ACCESS             |VIEW3(TEMP1)|1       |1           |
-|20|      └─TEMP TABLE ACCESS                   |VIEW1(TEMP1)|1       |1           |
-====================================================================================
+==============================================================
+|ID|OPERATOR                                    |NAME        |
+--------------------------------------------------------------
+|0 |TEMP TABLE TRANSFORMATION                   |            |
+|1 |├─PX COORDINATOR                            |            |
+|2 |│ └─EXCHANGE OUT DISTR                      |:EX10001    |
+|3 |│   └─TEMP TABLE INSERT                     |TEMP1       |
+|4 |│     └─HASH GROUP BY                       |            |
+|5 |│       └─EXCHANGE IN DISTR                 |            |
+|6 |│         └─EXCHANGE OUT DISTR (HASH)       |:EX10000    |
+|7 |│           └─HASH GROUP BY                 |            |
+|8 |│             └─PX BLOCK ITERATOR           |            |
+|9 |│               └─TABLE FULL SCAN           |t1          |
+|10|└─PX COORDINATOR                            |            |
+|11|  └─EXCHANGE OUT DISTR                      |:EX20002    |
+|12|    └─SHARED HASH JOIN                      |            |
+|13|      ├─EXCHANGE IN DISTR                   |            |
+|14|      │ └─EXCHANGE OUT DISTR (BC2HOST)      |:EX20001    |
+|15|      │   └─SHARED HASH JOIN                |            |
+|16|      │     ├─EXCHANGE IN DISTR             |            |
+|17|      │     │ └─EXCHANGE OUT DISTR (BC2HOST)|:EX20000    |
+|18|      │     │   └─TEMP TABLE ACCESS         |VIEW2(TEMP1)|
+|19|      │     └─TEMP TABLE ACCESS             |VIEW3(TEMP1)|
+|20|      └─TEMP TABLE ACCESS                   |VIEW1(TEMP1)|
+==============================================================
 Outputs & filters:
 -------------------------------------
   0 - output([VIEW2.t1.c2], [VIEW3.T_FUN_COUNT(*)], [VIEW1.t1.c1], [VIEW1.t1.c2], [VIEW1.T_FUN_COUNT(*)]), filter(nil), rowset=16
@@ -68,32 +68,32 @@ Outputs & filters:
       access([VIEW3.T_FUN_COUNT(*)], [VIEW3.t1.c1])
  20 - output([VIEW1.T_FUN_COUNT(*)], [VIEW1.t1.c1], [VIEW1.t1.c2]), filter(nil), rowset=16
       access([VIEW1.T_FUN_COUNT(*)], [VIEW1.t1.c1], [VIEW1.t1.c2])
-explain select /*+ use_px parallel(2) use_merge(a b) */ b.c2, sum(a.c3) from (select /*+ NO_USE_HASH_AGGREGATION */ c1, c2, count(*) c3 from t1 group by 1, 2) a, t2 b where a.c1 = b.c1 group by 1;
+explain basic select /*+ use_px parallel(2) use_merge(a b) */ b.c2, sum(a.c3) from (select /*+ NO_USE_HASH_AGGREGATION */ c1, c2, count(*) c3 from t1 group by 1, 2) a, t2 b where a.c1 = b.c1 group by 1;
 Query Plan
-=====================================================================================
-|ID|OPERATOR                                         |NAME    |EST.ROWS|EST.TIME(us)|
--------------------------------------------------------------------------------------
-|0 |PX COORDINATOR                                   |        |1       |6           |
-|1 |└─EXCHANGE OUT DISTR                             |:EX10003|1       |5           |
-|2 |  └─HASH GROUP BY                                |        |1       |5           |
-|3 |    └─EXCHANGE IN DISTR                          |        |1       |5           |
-|4 |      └─EXCHANGE OUT DISTR (HASH)                |:EX10002|1       |5           |
-|5 |        └─HASH GROUP BY                          |        |1       |4           |
-|6 |          └─SUBPLAN SCAN                         |VIEW1   |1       |4           |
-|7 |            └─MERGE GROUP BY                     |        |1       |4           |
-|8 |              └─PARTITION SORT                   |        |1       |4           |
-|9 |                └─MERGE JOIN                     |        |1       |4           |
-|10|                  ├─SORT                         |        |1       |2           |
-|11|                  │ └─EXCHANGE IN DISTR          |        |1       |2           |
-|12|                  │   └─EXCHANGE OUT DISTR (HASH)|:EX10000|1       |2           |
-|13|                  │     └─PX BLOCK ITERATOR      |        |1       |2           |
-|14|                  │       └─TABLE FULL SCAN      |b       |1       |2           |
-|15|                  └─SORT                         |        |1       |2           |
-|16|                    └─EXCHANGE IN DISTR          |        |1       |2           |
-|17|                      └─EXCHANGE OUT DISTR (HASH)|:EX10001|1       |2           |
-|18|                        └─PX BLOCK ITERATOR      |        |1       |2           |
-|19|                          └─TABLE FULL SCAN      |t1      |1       |2           |
-=====================================================================================
+===============================================================
+|ID|OPERATOR                                         |NAME    |
+---------------------------------------------------------------
+|0 |PX COORDINATOR                                   |        |
+|1 |└─EXCHANGE OUT DISTR                             |:EX10003|
+|2 |  └─HASH GROUP BY                                |        |
+|3 |    └─EXCHANGE IN DISTR                          |        |
+|4 |      └─EXCHANGE OUT DISTR (HASH)                |:EX10002|
+|5 |        └─HASH GROUP BY                          |        |
+|6 |          └─SUBPLAN SCAN                         |VIEW1   |
+|7 |            └─MERGE GROUP BY                     |        |
+|8 |              └─PARTITION SORT                   |        |
+|9 |                └─MERGE JOIN                     |        |
+|10|                  ├─SORT                         |        |
+|11|                  │ └─EXCHANGE IN DISTR          |        |
+|12|                  │   └─EXCHANGE OUT DISTR (HASH)|:EX10000|
+|13|                  │     └─PX BLOCK ITERATOR      |        |
+|14|                  │       └─TABLE FULL SCAN      |b       |
+|15|                  └─SORT                         |        |
+|16|                    └─EXCHANGE IN DISTR          |        |
+|17|                      └─EXCHANGE OUT DISTR (HASH)|:EX10001|
+|18|                        └─PX BLOCK ITERATOR      |        |
+|19|                          └─TABLE FULL SCAN      |t1      |
+===============================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(VIEW1.b.c2, T_FUN_SUM(T_FUN_SUM(VIEW1.a.c3)))]), filter(nil), rowset=16
@@ -135,27 +135,27 @@ Outputs & filters:
       access([t1.c1], [t1.c2]), partitions(p0)
       is_index_back=false, is_global_index=false, 
       range_key([t1.__pk_increment]), range(MIN ; MAX)always true
-explain select /*+ use_px parallel(2) use_merge(a b) */ * from (select /*+ NO_USE_HASH_AGGREGATION */ c1, c2, count(*) c3 from t1 group by 1, 2) a, t2 b where a.c1 = b.c1;
+explain basic select /*+ use_px parallel(2) use_merge(a b) */ * from (select /*+ NO_USE_HASH_AGGREGATION */ c1, c2, count(*) c3 from t1 group by 1, 2) a, t2 b where a.c1 = b.c1;
 Query Plan
-===========================================================================
-|ID|OPERATOR                               |NAME    |EST.ROWS|EST.TIME(us)|
----------------------------------------------------------------------------
-|0 |PX COORDINATOR                         |        |1       |6           |
-|1 |└─EXCHANGE OUT DISTR                   |:EX10002|1       |5           |
-|2 |  └─MERGE GROUP BY                     |        |1       |4           |
-|3 |    └─PARTITION SORT                   |        |1       |4           |
-|4 |      └─MERGE JOIN                     |        |1       |4           |
-|5 |        ├─SORT                         |        |1       |2           |
-|6 |        │ └─EXCHANGE IN DISTR          |        |1       |2           |
-|7 |        │   └─EXCHANGE OUT DISTR (HASH)|:EX10000|1       |2           |
-|8 |        │     └─PX BLOCK ITERATOR      |        |1       |2           |
-|9 |        │       └─TABLE FULL SCAN      |t1      |1       |2           |
-|10|        └─SORT                         |        |1       |2           |
-|11|          └─EXCHANGE IN DISTR          |        |1       |2           |
-|12|            └─EXCHANGE OUT DISTR (HASH)|:EX10001|1       |2           |
-|13|              └─PX BLOCK ITERATOR      |        |1       |2           |
-|14|                └─TABLE FULL SCAN      |b       |1       |2           |
-===========================================================================
+=====================================================
+|ID|OPERATOR                               |NAME    |
+-----------------------------------------------------
+|0 |PX COORDINATOR                         |        |
+|1 |└─EXCHANGE OUT DISTR                   |:EX10002|
+|2 |  └─MERGE GROUP BY                     |        |
+|3 |    └─PARTITION SORT                   |        |
+|4 |      └─MERGE JOIN                     |        |
+|5 |        ├─SORT                         |        |
+|6 |        │ └─EXCHANGE IN DISTR          |        |
+|7 |        │   └─EXCHANGE OUT DISTR (HASH)|:EX10000|
+|8 |        │     └─PX BLOCK ITERATOR      |        |
+|9 |        │       └─TABLE FULL SCAN      |t1      |
+|10|        └─SORT                         |        |
+|11|          └─EXCHANGE IN DISTR          |        |
+|12|            └─EXCHANGE OUT DISTR (HASH)|:EX10001|
+|13|              └─PX BLOCK ITERATOR      |        |
+|14|                └─TABLE FULL SCAN      |b       |
+=====================================================
 Outputs & filters:
 -------------------------------------
   0 - output([INTERNAL_FUNCTION(t1.c1, t1.c2, T_FUN_COUNT(*), b.c1, b.c2, b.c3)]), filter(nil), rowset=16

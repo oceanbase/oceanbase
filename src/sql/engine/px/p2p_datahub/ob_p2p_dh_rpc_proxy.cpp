@@ -5,6 +5,7 @@
 #define USING_LOG_PREFIX SQL_ENG
 #include "ob_p2p_dh_rpc_proxy.h"
 #include "sql/engine/px/p2p_datahub/ob_p2p_dh_mgr.h"
+#include "lib/allocator/ob_malloc.h"
 
 using namespace oceanbase::common;
 using namespace oceanbase::sql;
@@ -24,15 +25,15 @@ OB_DEF_DESERIALIZE(ObPxP2PDatahubArg)
   CK(OB_NOT_NULL(CURRENT_CONTEXT));
   ObP2PDatahubMsgBase::ObP2PDatahubMsgType msg_type = ObP2PDatahubMsgBase::NOT_INIT;
   OB_UNIS_DECODE(msg_type);
-  ObIAllocator &allocator = CURRENT_CONTEXT->get_arena_allocator();
-  if (OB_FAIL(PX_P2P_DH.alloc_msg(allocator, msg_type, msg_))) {
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(PX_P2P_DH.alloc_msg_for_rpc_receive(msg_type, msg_))) {
     LOG_WARN("fail to alloc msg", K(ret));
   } else {
     OB_UNIS_DECODE(*msg_);
   }
   if (OB_FAIL(ret) && OB_NOT_NULL(msg_)) {
-    // DECODE failed, must destroy msg.
     msg_->destroy();
+    ob_free(msg_);
     msg_ = nullptr;
   }
   return ret;
@@ -50,6 +51,7 @@ void ObPxP2PDatahubArg::destroy_arg()
 {
   if (OB_NOT_NULL(msg_)) {
     msg_->destroy();
+    ob_free(msg_);
     msg_ = nullptr;
   }
 }
