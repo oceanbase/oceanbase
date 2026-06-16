@@ -83,7 +83,9 @@ public:
       K(create_index_arg_),
       K(is_retryable_ddl_),
       K(use_doc_id_),
-      K(rowkey_doc_schema_version_));
+      K(rowkey_doc_schema_version_),
+      K(charset_type_),
+      K(is_dic_locked_));
 
 public:
   void set_rowkey_doc_aux_table_id(const uint64_t id) { rowkey_doc_aux_table_id_ = id; }
@@ -212,6 +214,14 @@ private:
   bool is_retryable_ddl_;
   bool use_doc_id_;
   int64_t rowkey_doc_schema_version_;
+  ObCharsetType charset_type_;
+  // Tracks whether the dictionary tables lock has been acquired via
+  // try_lock_dictionary_tables_out_trans. Persisted in the same transaction as
+  // the lock acquisition so the cleanup path can reliably release the lock.
+  // For task messages serialized by old versions that did not carry this
+  // field, deserialization defaults this to true so any lock the old version
+  // may have acquired still gets released during cleanup.
+  bool is_dic_locked_;
 };
 
 } // end namespace rootserver
