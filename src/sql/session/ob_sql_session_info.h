@@ -1992,6 +1992,10 @@ public:
   int sql_sess_record_sql_stat_start_value(ObExecutingSqlStatRecord& executing_sqlstat);
   dbms_scheduler::ObDBMSSchedJobInfo *get_job_info() const { return job_info_; }
   void set_job_info(dbms_scheduler::ObDBMSSchedJobInfo *job_info) { job_info_ = job_info; }
+  int set_mlog_expected_rows(uint64_t mlog_table_id, int64_t expected_rows);
+  int get_mlog_expected_rows(uint64_t mlog_table_id, int64_t &expected_rows) const;
+  void reset_mlog_expected_rows();
+  bool has_mlog_expected_rows() const { return mlog_expected_rows_map_.created() && mlog_expected_rows_map_.size() > 0; }
 private:
   transaction::ObTxnFreeRouteCtx txn_free_route_ctx_;
   //save the current sql exec context in session
@@ -2032,6 +2036,7 @@ private:
   uint64_t unit_gc_min_sup_proxy_version_;
   bool has_ccl_rule_;
   int64_t last_update_ccl_cnt_time_;
+  common::hash::ObHashMap<uint64_t, int64_t> mlog_expected_rows_map_;
 };
 
 

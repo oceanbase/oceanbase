@@ -5057,3 +5057,40 @@ void ObSQLSessionInfo::set_ash_stat_value(ObActiveSessionStat &ash_stat)
     ash_stat.client_id_[size] = '\0';
   }
 }
+
+int ObSQLSessionInfo::set_mlog_expected_rows(uint64_t mlog_table_id, int64_t expected_rows)
+{
+  int ret = OB_SUCCESS;
+  if (!mlog_expected_rows_map_.created()) {
+    if (OB_FAIL(mlog_expected_rows_map_.create(8, ObMemAttr(orig_tenant_id_, "MlogExpRows")))) {
+      LOG_WARN("failed to create mlog expected rows map", K(ret));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(mlog_expected_rows_map_.set_refactored(mlog_table_id, expected_rows, 1/*overwrite*/))) {
+      LOG_WARN("failed to set mlog expected rows", K(ret), K(mlog_table_id), K(expected_rows));
+    }
+  }
+  return ret;
+}
+
+int ObSQLSessionInfo::get_mlog_expected_rows(uint64_t mlog_table_id, int64_t &expected_rows) const
+{
+  int ret = OB_SUCCESS;
+  expected_rows = -1;
+  if (mlog_expected_rows_map_.created()) {
+    if (OB_FAIL(mlog_expected_rows_map_.get_refactored(mlog_table_id, expected_rows))) {
+      if (OB_HASH_NOT_EXIST == ret) {
+        ret = OB_SUCCESS;
+      }
+    }
+  }
+  return ret;
+}
+
+void ObSQLSessionInfo::reset_mlog_expected_rows()
+{
+  if (mlog_expected_rows_map_.created()) {
+    mlog_expected_rows_map_.reuse();
+  }
+}

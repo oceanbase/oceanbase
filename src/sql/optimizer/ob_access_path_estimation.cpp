@@ -2902,6 +2902,7 @@ int ObAccessPathEstimation::estimate_path_rowcount_by_dynamic_sampling(ObOptimiz
   }
   const OptTableMetas *table_metas = NULL;
   OptSelectivityCtx *sel_ctx = NULL;
+  int64_t mlog_expected_rows = -1;
   if (OB_ISNULL(all_filter_item) ||
       OB_ISNULL(all_filter_item->stat_handle_.stat_) ||
       OB_UNLIKELY(all_filter_item->stat_handle_.stat_->get_sample_block_ratio() <= 0 ||
@@ -2911,9 +2912,12 @@ int ObAccessPathEstimation::estimate_path_rowcount_by_dynamic_sampling(ObOptimiz
       OB_ISNULL(paths.at(0)->est_cost_info_.table_meta_info_) ||
       OB_ISNULL(table_metas = paths.at(0)->est_cost_info_.table_metas_) ||
       OB_ISNULL(sel_ctx = paths.at(0)->est_cost_info_.sel_ctx_) ||
-      OB_ISNULL(ctx.get_query_ctx())) {
+      OB_ISNULL(ctx.get_query_ctx()) ||
+      OB_ISNULL(ctx.get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(table_id), KPC(all_filter_item), K(paths), K(ds_result_items), K(ctx.get_query_ctx()));
+  } else if (OB_FAIL(ctx.get_session_info()->get_mlog_expected_rows(table_id, mlog_expected_rows))) {
+    LOG_WARN("failed to get mlog expected rows", K(ret), K(table_id));
   } else {
     double output_rowcnt = all_filter_item->stat_handle_.stat_->get_rowcount();
     int64_t micro_block_count = all_filter_item->stat_handle_.stat_->get_micro_block_num();
@@ -2930,6 +2934,11 @@ int ObAccessPathEstimation::estimate_path_rowcount_by_dynamic_sampling(ObOptimiz
                                           all_predicate_sel))) {
       LOG_WARN("failed to get non ds sel", K(ret), KPC(all_filter_item));
     } else {
+      if (ctx.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_3_5_BP7)) {
+        if (mlog_expected_rows > 0 && OB_DS_OUTPUT_STAT == all_filter_item->type_) {
+          output_rowcnt = mlog_expected_rows;
+        }
+      }
       if (ctx.get_query_ctx()->check_opt_compat_version(COMPAT_VERSION_4_2_5_BP7, COMPAT_VERSION_4_3_0,
                                                         COMPAT_VERSION_4_3_5_BP4)) {
         output_rowcnt *= output_non_ds_sel;

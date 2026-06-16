@@ -665,6 +665,33 @@ int ObMViewRefresher::fast_refresh()
     }
   }
 
+  // set mlog expected output rows for optimizer
+  if (OB_SUCC(ret) && nullptr != refresh_stats_collection_ && nullptr != exec_session_info
+      && !refresh_stats_collection_->change_stats_array_.empty()) {
+    const ObIArray<ObMViewRefreshChangeStats> &change_stats =
+        refresh_stats_collection_->change_stats_array_;
+    exec_session_info->reset_mlog_expected_rows();
+    for (int64_t i = 0; OB_SUCC(ret) && i < change_stats.count(); ++i) {
+      const ObMViewRefreshChangeStats &cs = change_stats.at(i);
+      for (int64_t j = 0; OB_SUCC(ret) && j < mlog_infos.count(); ++j) {
+        const ObTableSchema *mlog_schema = nullptr;
+        if (OB_FAIL(schema_guard.get_table_schema(tenant_id, mlog_infos.at(j).get_mlog_id(),
+                                                   mlog_schema))) {
+          LOG_WARN("failed to get mlog table schema", K(ret), K(mlog_infos.at(j).get_mlog_id()));
+        } else if (OB_NOT_NULL(mlog_schema)
+                   && mlog_schema->get_data_table_id() == cs.get_detail_table_id()) {
+          int64_t expected_rows = cs.get_num_rows_ins() + cs.get_num_rows_upd() * 2 + cs.get_num_rows_del();
+          expected_rows = (expected_rows > 0) ? expected_rows : 1;
+          if (OB_FAIL(exec_session_info->set_mlog_expected_rows(
+                  mlog_infos.at(j).get_mlog_id(), expected_rows))) {
+            LOG_WARN("failed to set mlog expected rows", K(ret));
+          }
+          break;
+        }
+      }
+    }
+  }
+
   if (OB_SUCC(ret) && OB_FAIL(set_session_dml_dop_(tenant_id, data_version_, exec_session_info,
                                                    trans, parallelism, has_updated_dml_dop,
                                                    orig_dml_dop))) {
@@ -759,6 +786,9 @@ int ObMViewRefresher::fast_refresh()
         LOG_WARN("fail to update mview last refresh info", KR(ret), K(mview_info));
       }
     }
+  }
+  if (nullptr != exec_session_info) {
+    exec_session_info->reset_mlog_expected_rows();
   }
   return ret;
 }
