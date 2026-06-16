@@ -86,8 +86,10 @@ int ObExprSha::eval_sha(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 
 DEF_SET_LOCAL_SESSION_VARS(ObExprSha, raw_expr) {
   int ret = OB_SUCCESS;
-  SET_LOCAL_SYSVAR_CAPACITY(1);
-  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
+  if (is_mysql_mode()) {
+    SET_LOCAL_SYSVAR_CAPACITY(1);
+    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
+  }
   return ret;
 }
 
@@ -165,8 +167,10 @@ int ObExprSha2::eval_sha2(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datu
 
 DEF_SET_LOCAL_SESSION_VARS(ObExprSha2, raw_expr) {
   int ret = OB_SUCCESS;
-  SET_LOCAL_SYSVAR_CAPACITY(1);
-  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
+  if (is_mysql_mode()) {
+    SET_LOCAL_SYSVAR_CAPACITY(1);
+    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
+  }
   return ret;
 }
 
@@ -229,8 +233,10 @@ int ObExprSm3::eval_sm3(const ObExpr &expr, ObEvalCtx &ctx, ObDatum &expr_datum)
 
 DEF_SET_LOCAL_SESSION_VARS(ObExprSm3, raw_expr) {
   int ret = OB_SUCCESS;
-  SET_LOCAL_SYSVAR_CAPACITY(1);
-  EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
+  if (is_mysql_mode()) {
+    SET_LOCAL_SYSVAR_CAPACITY(1);
+    EXPR_ADD_LOCAL_SYSVAR(share::SYS_VAR_COLLATION_CONNECTION);
+  }
   return ret;
 }
 

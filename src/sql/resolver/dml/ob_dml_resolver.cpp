@@ -11147,30 +11147,57 @@ int ObDMLResolver::resolve_generated_column_expr(const ObString &expr_str,
       //do nothing if all local vars are same with cur session vars
     } else if (OB_FAIL(params_.query_ctx_->add_local_session_vars(allocator_, local_vars, var_array_idx))) {
       LOG_WARN("add local session var failed", K(ret));
-    } else if (!session_info->is_inner() && lib::is_mysql_mode()) {
-      //print user warnings
+    } else if (!session_info->is_inner()) {
       ObSEArray<const ObSessionSysVar *, 4> var_array;
       if (OB_FAIL(local_vars.get_local_vars(var_array))) {
         LOG_WARN("extract sysvars failed", K(ret));
       } else {
-        SMART_VAR(char[OB_MAX_DEFAULT_VALUE_LENGTH],val_buf) {
-          for (int64_t i = 0; OB_SUCC(ret) && i < var_array.count(); ++i) {
-            ObString var_name;
-            int64_t pos = 0;
-            if (OB_ISNULL(var_array.at(i))) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("unexpected null", K(ret));
-            } else if (OB_FAIL(ObSysVarFactory::get_sys_var_name_by_id(var_array.at(i)->type_, var_name))) {
-              LOG_WARN("get sysvar name failed", K(ret));
-            } else if (OB_FAIL(var_array.at(i)->val_.print_sql_literal(val_buf, 100, pos))) {
-              LOG_WARN("print value failed", K(ret));
-            } else {
-              LOG_WARN("session vars are different with the old vars which were solidified when creating generated columns",
-                       K(ret), KPC(column_schema), K(var_name));
+        ObArenaAllocator tmp_alloc;
+        ObString var_name;
+        ObString solidified_var_val;
+        ObString cur_var_val;
+        ObObj cur_val;
+        const ObSessionSysVar *sys_var = NULL;
+        LOG_WARN("[FBI_DIAG] generated column depends on session vars that differ from values solidified at DDL time",
+                 K(table_item.ref_id_),
+                 K(table_item.table_name_),
+                 K(column_schema->get_column_id()),
+                 K(column_schema->get_column_name_str()),
+                 K(expr_str),
+                 K(var_array_idx),
+                 K(used_for_generated_column),
+                 "diff_var_count",
+                 var_array.count());
+        for (int64_t i = 0; OB_SUCC(ret) && i < var_array.count(); ++i) {
+          if (OB_ISNULL(sys_var = var_array.at(i))) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("unexpected null", K(ret), K(i));
+          } else if (OB_FAIL(ObSysVarFactory::get_sys_var_name_by_id(sys_var->type_, var_name))) {
+            LOG_WARN("get sysvar name failed", K(ret));
+          } else if (OB_FAIL(ObSessionSysVar::get_sys_var_val_str(sys_var->type_,
+                                                                  sys_var->val_,
+                                                                  tmp_alloc,
+                                                                  solidified_var_val))) {
+            LOG_WARN("failed to get solidified sys var str", K(ret));
+          } else if (OB_FAIL(session_info->get_sys_variable(sys_var->type_, cur_val))) {
+            LOG_WARN("failed to get current session sys var", K(ret));
+          } else if (OB_FAIL(ObSessionSysVar::get_sys_var_val_str(sys_var->type_, cur_val, tmp_alloc, cur_var_val))) {
+            LOG_WARN("failed to get current session sys var str", K(ret));
+          } else {
+            LOG_WARN("[FBI_DIAG] mismatched session var detail",
+                     K(i),
+                     K(sys_var->type_),
+                     K(var_name),
+                     K(solidified_var_val),
+                     K(cur_var_val));
+            if (lib::is_mysql_mode()) {
               LOG_USER_WARN(OB_ERR_SESSION_VAR_CHANGED,
-                            var_name.length(), var_name.ptr(),
-                            column_schema->get_column_name_str().length(), column_schema->get_column_name_str().ptr(),
-                            static_cast<int>(pos), &val_buf[0]);
+                            var_name.length(),
+                            var_name.ptr(),
+                            column_schema->get_column_name_str().length(),
+                            column_schema->get_column_name_str().ptr(),
+                            solidified_var_val.length(),
+                            solidified_var_val.ptr());
             }
           }
         }

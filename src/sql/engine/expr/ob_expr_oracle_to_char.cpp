@@ -1457,11 +1457,24 @@ int ObExprOracleToChar::eval_oracle_to_char(const ObExpr &expr,
 
 DEF_SET_LOCAL_SESSION_VARS(ObExprToCharCommon, raw_expr) {
   int ret = OB_SUCCESS;
-  SET_LOCAL_SYSVAR_CAPACITY(4);
-  EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_NLS_DATE_FORMAT);
-  EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_NLS_TIMESTAMP_FORMAT);
-  EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_NLS_TIMESTAMP_TZ_FORMAT);
-  EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_TIME_ZONE);
+  if (OB_ISNULL(raw_expr) || OB_ISNULL(raw_expr->get_param_expr(0))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null expr", K(ret));
+  } else {
+    const ObObjType param_type = raw_expr->get_param_expr(0)->get_result_type().get_type();
+    if (ob_is_temporal_type(param_type) || ob_is_otimestamp_type(param_type)) {
+      if (is_mysql_mode()) {
+        SET_LOCAL_SYSVAR_CAPACITY(1);
+        EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_TIME_ZONE);
+      } else {
+        SET_LOCAL_SYSVAR_CAPACITY(4);
+        EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_NLS_DATE_FORMAT);
+        EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_NLS_TIMESTAMP_FORMAT);
+        EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_NLS_TIMESTAMP_TZ_FORMAT);
+        EXPR_ADD_LOCAL_SYSVAR(SYS_VAR_TIME_ZONE);
+      }
+    }
+  }
   return ret;
 }
 
