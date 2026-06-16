@@ -120,10 +120,11 @@ int RocksDbStoreService::init_database_(const std::string &path)
   m_options_.unordered_write = true;
   m_options_.allow_concurrent_memtable_write = true;
   m_options_.advise_random_on_open = false;
-  // Keep buffered reads so that recently-flushed data benefits from OS page
-  // cache and prepopulate_block_cache; Direct IO only for background ops.
+  // Keep foreground reads buffered. Direct IO for background flush/compaction
+  // is configurable because it trades page-cache pressure for physical IO.
   m_options_.use_direct_reads = false;
-  m_options_.use_direct_io_for_flush_and_compaction = true;
+  m_options_.use_direct_io_for_flush_and_compaction =
+      (TCONF.rocksdb_use_direct_io_for_flush_and_compaction != 0);
   m_options_.bytes_per_sync = 0;
 
   m_options_.max_background_jobs = flush_threads + compaction_threads;
@@ -156,7 +157,7 @@ int RocksDbStoreService::init_database_(const std::string &path)
 
   m_options_.statistics = rocksdb::CreateDBStatistics();
   m_options_.statistics->set_stats_level(rocksdb::StatsLevel::kExceptDetailedTimers);
-  m_options_.stats_dump_period_sec = 10;
+  m_options_.stats_dump_period_sec = 30;
 
   rocksdb::Status s = rocksdb::DB::Open(m_options_, m_db_path_, &m_db_);
   if (!s.ok()) {
@@ -610,6 +611,14 @@ int RocksDbStoreService::create_column_family(const std::string& column_family_n
   cf_options.max_bytes_for_level_base = 2ULL * 1024 * 1024 * 1024;
   cf_options.target_file_size_base = 64 * 1024 * 1024;
   cf_options.level_compaction_dynamic_level_bytes = true;
+  // Large CDC payloads are short-lived. Blob files reduce LSM rewrite cost, but
+  // may cause physical reads if reader catches values after flush.
+  cf_options.enable_blob_files = TCONF.rocksdb_enable_blob_files;
+  cf_options.min_blob_size = 1024;
+  cf_options.blob_file_size = 256 * 1024 * 1024;
+  cf_options.enable_blob_garbage_collection = true;
+  cf_options.blob_cache = shared_block_cache_;
+  cf_options.prepopulate_blob_cache = rocksdb::PrepopulateBlobCache::kFlushOnly;
 
   rocksdb::BlockBasedTableOptions table_options;
   table_options.block_cache = shared_block_cache_;
@@ -679,7 +688,10 @@ int RocksDbStoreService::create_column_family(const std::string& column_family_n
       cf_handle = reinterpret_cast<void *>(column_family_handle);
 
       LOG_INFO("rocksdb CreateColumnFamily succ", "column_family_name", column_family_name.c_str(),
-          K(column_family_handle), K(cf_handle), K(rocksdb_write_buffer_size));
+          K(column_family_handle), K(cf_handle), K(rocksdb_write_buffer_size),
+          K(cf_options.enable_blob_files), K(cf_options.min_blob_size),
+          K(cf_options.blob_file_size), K(cf_options.enable_blob_garbage_collection),
+          K(cf_options.prepopulate_blob_cache));
     }
   }
 

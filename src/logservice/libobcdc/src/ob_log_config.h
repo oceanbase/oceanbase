@@ -294,6 +294,9 @@ public:
   T_DEF_INT_INFT(rocksdb_write_buffer_size, OB_CLUSTER_PARAMETER, 64, 16, "write buffer size[M]");
   DEF_TIME(rocksdb_flush_interval, OB_CLUSTER_PARAMETER, "1m", "[0s,1d]", "rocksdb flush interval for redo_storage, 0s means never");
   DEF_TIME(rocksdb_compact_interval, OB_CLUSTER_PARAMETER, "1h", "[0s,7d]", "rocksdb compact interval for redo_storage, 0s means never");
+  T_DEF_BOOL(rocksdb_enable_blob_files, OB_CLUSTER_PARAMETER, 1, "0:disabled, 1:enabled");
+  T_DEF_BOOL(rocksdb_use_direct_io_for_flush_and_compaction, OB_CLUSTER_PARAMETER, 0,
+      "0:disabled, 1:enabled. Use direct IO for rocksdb flush and compaction");
   T_DEF_BOOL(rocksdb_enable_compress, OB_CLUSTER_PARAMETER, 1, "0:disabled, 1:enabled");
   T_DEF_BOOL(rocksdb_read_verify_checksums, OB_CLUSTER_PARAMETER, 0, "0:disabled, 1:enabled");
 
