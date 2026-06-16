@@ -311,6 +311,7 @@ int ObBasicSysVar::session_update(ObExecContext &ctx,
   ObString extra_var_name;
   ObString extra_val;
   ObCollationType extra_coll_type = CS_TYPE_INVALID;
+  ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
   bool should_update_extra_var = false;
   ObObj extra_val_obj;
   ObSQLSessionInfo *session = GET_MY_SESSION(ctx);
@@ -386,8 +387,10 @@ int ObBasicSysVar::session_update(ObExecContext &ctx,
       LOG_ERROR("invalid charset", K(ret), K(val));
     }
     if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(session->get_charset_compat_type(charset_compat_type))) {
+      LOG_WARN("fail to get charset compat type", K(ret));
     } else if (OB_FAIL(get_collation_var_and_val_by_charset(
-                set_var.var_name_, cs_str, extra_var_name, extra_val, extra_coll_type))) {
+                set_var.var_name_, cs_str, extra_var_name, extra_val, extra_coll_type, charset_compat_type))) {
       LOG_ERROR("fail to get collation variable and value by charset",
                 K(ret), K(set_var.var_name_), K(val), K(cs_str));
     } else {
@@ -628,7 +631,8 @@ int ObBasicSysVar::get_collation_var_and_val_by_charset(const ObString &cs_var_n
                                                         const ObString &cs_val,
                                                         ObString &coll_var_name,
                                                         ObString &coll_val,
-                                                        ObCollationType &coll_type)
+                                                        ObCollationType &coll_type,
+                                                        ObCharsetCompatType charset_compat_type)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(ObCharsetSysVarPair::get_collation_var_by_charset_var(
@@ -640,7 +644,7 @@ int ObBasicSysVar::get_collation_var_and_val_by_charset(const ObString &cs_var_n
     if (OB_UNLIKELY(CHARSET_INVALID == cs_type)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("invalid charset type", K(ret), K(cs_val));
-    } else if (OB_FAIL(ObCharset::get_default_collation(cs_type, coll_type))) {
+    } else if (OB_FAIL(ObCharset::get_default_collation(cs_type, coll_type, charset_compat_type))) {
       LOG_ERROR("fail to get default collation", K(ret), K(cs_type));
     } else if (OB_FAIL(ObCharset::collation_name(coll_type, coll_val))) {
       LOG_ERROR("fail to get collation name", K(ret), K(coll_type));

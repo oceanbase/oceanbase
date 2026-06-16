@@ -6976,6 +6976,23 @@ int ObBasicSessionInfo::get_compatibility_control(ObCompatType &compat_type) con
   return OB_SUCCESS;
 }
 
+int ObBasicSessionInfo::get_charset_compat_type(ObCharsetCompatType &charset_compat_type) const
+{
+  int ret = OB_SUCCESS;
+  bool is_enable = false;
+  ObCompatType mysql_compat_type = COMPAT_MYSQL57;
+  charset_compat_type = CHARSET_COMPAT_MYSQL57;
+  if (OB_FAIL(check_feature_enable(
+          ObCompatFeatureType::UTF8MB4_DEFAULT_COLLATION_COMPAT, is_enable))) {
+    LOG_WARN("fail to check feature enable", K(ret));
+  } else if (is_enable && OB_FAIL(get_compatibility_control(mysql_compat_type))) {
+    LOG_WARN("fail to get compatibility_control", K(ret));
+  } else if (OB_FAIL(ObCompatControl::get_charset_compat_type(mysql_compat_type, charset_compat_type))) {
+    LOG_WARN("fail to get charset compat type", K(ret), K(mysql_compat_type));
+  }
+  return ret;
+}
+
 int ObBasicSessionInfo::get_compatibility_version(uint64_t &compat_version) const
 {
   compat_version = sys_vars_cache_.get_compat_version();

@@ -661,7 +661,15 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
                   ret = OB_ERR_UNKNOWN_CHARSET;
                   LOG_WARN("unknown charset", K(ret), K(cs_name));
                 } else {
-                  coll_type = ObCharset::get_default_collation(charset_type);
+                  ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
+                  if (OB_ISNULL(ctx_.session_info_)) {
+                    ret = OB_ERR_UNEXPECTED;
+                    LOG_WARN("unexpected session info", K(ret));
+                  } else if (OB_FAIL(ctx_.session_info_->get_charset_compat_type(charset_compat_type))) {
+                    LOG_WARN("fail to get charset compat type", K(ret));
+                  } else {
+                    coll_type = ObCharset::get_default_collation(charset_type, charset_compat_type);
+                  }
                 }
               } else if (ctx_.is_in_system_view_) {
                 //for mysql system view, cast char type always has default collation
@@ -3567,6 +3575,7 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
   uint64_t tenant_data_ver = 0;
   bool enable_decimal_int = false;
   ObCompatType compat_type = COMPAT_MYSQL57;
+  ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
   bool enable_mysql_compatible_dates = false;
   if (OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
@@ -3576,6 +3585,8 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
     LOG_WARN("get sys variables failed", K(ret));
   } else if (OB_FAIL(session_info->get_compatibility_control(compat_type))) {
     LOG_WARN("failed to get compat type", K(ret));
+  } else if (OB_FAIL(session_info->get_charset_compat_type(charset_compat_type))) {
+    LOG_WARN("fail to get charset compat type", K(ret));
   } else if (OB_FAIL(ObSQLUtils::check_enable_decimalint(session_info, enable_decimal_int))) {
     LOG_WARN("fail to check enable decimal int", K(ret));
   } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(session_info, false,
@@ -3603,7 +3614,8 @@ int ObRawExprResolverImpl::process_datatype_or_questionmark(const ParseNode &nod
                                              session_info->get_min_const_integer_precision(),
                                              session_info->get_exec_min_cluster_version(),
                                              nullptr != ctx_.secondary_namespace_,
-                                             ctx_.formalize_const_int_prec_))) {
+                                             ctx_.formalize_const_int_prec_,
+                                             charset_compat_type))) {
     LOG_WARN("failed to resolve const", K(ret));
   } else if (OB_FAIL(ctx_.expr_factory_.create_raw_expr(lib::is_mysql_mode() && node.type_ == T_NCHAR ?
                                                                               T_VARCHAR : node.type_, c_expr))) {

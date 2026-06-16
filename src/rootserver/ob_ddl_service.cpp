@@ -2246,6 +2246,7 @@ int ObDDLService::set_new_table_options(
     if (OB_SUCC(ret) && (alter_collation || alter_charset)) {
       ObCharsetType charset_type = alter_table_schema.get_charset_type();
       ObCollationType collation_type = alter_table_schema.get_collation_type();
+      ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
       if (alter_collation && alter_charset) {
         if (!ObCharset::is_valid_collation(charset_type, collation_type)) {
           ret = OB_ERR_COLLATION_MISMATCH;
@@ -2263,8 +2264,12 @@ int ObDDLService::set_new_table_options(
         new_table_schema.set_collation_type(collation_type);
         new_table_schema.set_charset_type(ObCharset::charset_type_by_coll(collation_type));
       } else if (alter_charset) {
-        new_table_schema.set_collation_type(ObCharset::get_default_collation(charset_type));
-        new_table_schema.set_charset_type(charset_type);
+        if (OB_FAIL(get_charset_compat_type(orig_table_schema.get_tenant_id(), schema_guard, charset_compat_type))) {
+          LOG_WARN("fail to get compat type", K(ret));
+        } else {
+          new_table_schema.set_collation_type(ObCharset::get_default_collation(charset_type, charset_compat_type));
+          new_table_schema.set_charset_type(charset_type);
+        }
       }
     }
   }
@@ -3562,6 +3567,49 @@ int ObDDLService::check_is_alter_decimal_int_offline(const share::ObDDLType &ddl
   return ret;
 }
 
+int ObDDLService::get_charset_compat_type(const uint64_t tenant_id,
+                                  ObSchemaGetterGuard &schema_guard,
+                                  ObCharsetCompatType &charset_compat_type)
+{
+  int ret = OB_SUCCESS;
+  share::ObCompatType compat_type = share::COMPAT_MYSQL57;
+  charset_compat_type = CHARSET_COMPAT_MYSQL57;
+  const ObSysVarSchema *compat_var = NULL;
+  const ObSysVarSchema *compat_version_var = NULL;
+  ObObj compat_obj;
+  ObObj compat_version_obj;
+  ObArenaAllocator compat_alloc(ObModIds::OB_TEMP_VARIABLES);
+  bool is_enable = false;
+  if (OB_FAIL(schema_guard.get_tenant_system_variable(tenant_id,
+                                                      SYS_VAR_OB_COMPATIBILITY_CONTROL,
+                                                      compat_var))) {
+    LOG_WARN("fail to get tenant compatibility control", K(ret));
+  } else if (OB_ISNULL(compat_var)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("compatibility control sys var is NULL", K(ret), K(tenant_id));
+  } else if (OB_FAIL(schema_guard.get_tenant_system_variable(tenant_id,
+                                                              SYS_VAR_OB_COMPATIBILITY_VERSION,
+                                                              compat_version_var))) {
+    LOG_WARN("fail to get tenant compatibility version", K(ret));
+  } else if (OB_ISNULL(compat_version_var)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("compatibility version sys var is NULL", K(ret), K(tenant_id));
+  } else if (OB_FAIL(compat_version_var->get_value(&compat_alloc, NULL, compat_version_obj))) {
+    LOG_WARN("fail to get compatibility version value", K(ret));
+  } else if (OB_FAIL(share::ObCompatControl::check_feature_enable(
+             compat_version_obj.get_uint64(),
+             share::ObCompatFeatureType::UTF8MB4_DEFAULT_COLLATION_COMPAT, is_enable))) {
+    LOG_WARN("fail to check compat feature enable", K(ret));
+  } else if (is_enable && OB_FAIL(compat_var->get_value(&compat_alloc, NULL, compat_obj))) {
+    LOG_WARN("fail to get compatibility control value", K(ret));
+  } else if (!is_enable) {
+  } else if (FALSE_IT(compat_type = static_cast<share::ObCompatType>(compat_obj.get_int()))) {
+  } else if (OB_FAIL(share::ObCompatControl::get_charset_compat_type(compat_type, charset_compat_type))) {
+    LOG_WARN("fail to get charset compat type", K(ret), K(compat_type));
+  }
+  return ret;
+}
+
 int ObDDLService::check_can_add_column_instant_(const ObTableSchema &orig_table_schema,
                                                 const AlterTableSchema &alter_table_schema,
                                                 const obrpc::ObAlterTableArg::AlterAlgorithm &algorithm,
@@ -3882,6 +3930,7 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
   ObTableSchema::const_column_iterator it_end = alter_table_schema.column_end();
   ddl_need_retry_at_executor = false;
   const obrpc::ObAlterTableArg::AlterAlgorithm &algorithm = alter_table_arg.alter_algorithm_;
+  ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
 
   if (OB_FAIL(check_can_add_column_instant_(orig_table_schema, alter_table_schema, algorithm,
                                             is_oracle_mode, tenant_data_version, schema_guard, ddl_type))) {
@@ -3889,6 +3938,8 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
   } else if (OB_FAIL(check_can_drop_column_instant_(orig_table_schema, alter_table_schema,
                                                     tenant_data_version, is_oracle_mode, alter_table_arg))) {
     LOG_WARN("fail to check can drop column instant", KR(ret), K(orig_table_schema), K(alter_table_schema));
+  } else if (OB_FAIL(get_charset_compat_type(orig_table_schema.get_tenant_id(), schema_guard, charset_compat_type))) {
+    LOG_WARN("fail to get compat type", K(ret));
   }
   for (; OB_SUCC(ret) && it_begin != it_end; it_begin++) {
     if (OB_ISNULL(alter_column_schema = static_cast<AlterColumnSchema *>(*it_begin))) {
@@ -4047,7 +4098,8 @@ int ObDDLService::check_alter_table_column(obrpc::ObAlterTableArg &alter_table_a
                                             is_oracle_mode,
                                             orig_table_schema,
                                             allocator,
-                                            *alter_column_schema))) {
+                                            *alter_column_schema,
+                                            charset_compat_type))) {
             LOG_WARN("failed to fill column collation", K(ret));
          } else if (OB_FAIL(check_alter_column_is_offline(
               orig_table_schema, schema_guard, *orig_column_schema, *alter_column_schema, is_offline))) {
@@ -4551,6 +4603,7 @@ int ObDDLService::check_alter_table_index(const obrpc::ObAlterTableArg &alter_ta
 
 int ObDDLService::check_convert_to_character(obrpc::ObAlterTableArg &alter_table_arg,
                                              const ObTableSchema &orig_table_schema,
+                                             ObSchemaGetterGuard &schema_guard,
                                              ObDDLType &ddl_type)
 {
   int ret = OB_SUCCESS;
@@ -4559,10 +4612,15 @@ int ObDDLService::check_convert_to_character(obrpc::ObAlterTableArg &alter_table
   ObCharsetType charset_type = alter_table_schema.get_charset_type();
   ObCollationType collation_type = alter_table_schema.get_collation_type();
   if (CS_TYPE_INVALID == collation_type) {
+    ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
     // If collation_type is not given, the default collation_type of charset_type is used
-    collation_type = ObCharset::get_default_collation(charset_type);
-    alter_table_schema.set_collation_type(collation_type);
-    alter_table_schema.set_charset_type(charset_type);
+    if (OB_FAIL(get_charset_compat_type(orig_table_schema.get_tenant_id(), schema_guard, charset_compat_type))) {
+      LOG_WARN("fail to get compat type", K(ret));
+    } else {
+      collation_type = ObCharset::get_default_collation(charset_type, charset_compat_type);
+      alter_table_schema.set_collation_type(collation_type);
+      alter_table_schema.set_charset_type(charset_type);
+    }
   } else if (!ObCharset::is_valid_collation(charset_type, collation_type)) {
     ret = OB_ERR_COLLATION_MISMATCH;
     const char *cs_name = ObCharset::charset_name(charset_type);
@@ -5181,6 +5239,7 @@ int ObDDLService::convert_to_character(
   bool is_oracle_mode = false;
   AlterTableSchema &alter_table_schema = alter_table_arg.alter_table_schema_;
   ObCollationType collation_type = alter_table_schema.get_collation_type();
+  ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
   new_table_schema.set_collation_type(collation_type);
   new_table_schema.set_charset_type(ObCharset::charset_type_by_coll(collation_type));
   ObColumnIterByPrevNextID iter(orig_table_schema);
@@ -5189,6 +5248,8 @@ int ObDDLService::convert_to_character(
   } else if (is_oracle_mode) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected compat mode", K(ret), K(orig_table_schema));
+  } else if (OB_FAIL(get_charset_compat_type(orig_table_schema.get_tenant_id(), schema_guard, charset_compat_type))) {
+    LOG_WARN("fail to get compat type", K(ret));
   } else {
     while (OB_SUCC(ret)) {
       const ObColumnSchemaV2 *orig_col = nullptr;
@@ -5214,7 +5275,8 @@ int ObDDLService::convert_to_character(
                                             is_oracle_mode,
                                             new_table_schema,
                                             alter_table_arg.allocator_,
-                                            *col))) {
+                                            *col,
+                                            charset_compat_type))) {
             LOG_WARN("failed to fill column collation", K(ret));
           }
         }
@@ -8872,7 +8934,8 @@ int ObDDLService::fill_column_collation(
     const bool is_oracle_mode,
     const ObTableSchema &table_schema,
     common::ObIAllocator &allocator,
-    ObColumnSchemaV2 &column_schema)
+    ObColumnSchemaV2 &column_schema,
+    ObCharsetCompatType charset_compat_type)
 {
   int ret = OB_SUCCESS;
   ObObjTypeClass col_tc = column_schema.get_data_type_class();
@@ -8883,7 +8946,7 @@ int ObDDLService::fill_column_collation(
 
   if (ObStringTC == col_tc) {
     if (OB_FAIL(ObDDLResolver::check_and_fill_column_charset_info(
-                column_schema, charset_type, collation_type))) {
+        column_schema, charset_type, collation_type, charset_compat_type))) {
       RS_LOG(WARN, "failed to fill column charset info", K(ret));
     } else if (OB_FAIL(ObDDLResolver::check_string_column_length(
                        column_schema, is_oracle_mode))) {
@@ -8895,14 +8958,15 @@ int ObDDLService::fill_column_collation(
     }
   } else if (ob_is_text_tc(column_schema.get_data_type())) {
     if (OB_FAIL(ObDDLResolver::check_and_fill_column_charset_info(
-        column_schema, table_schema.get_charset_type(), table_schema.get_collation_type()))) {
+        column_schema, table_schema.get_charset_type(), table_schema.get_collation_type(), charset_compat_type))) {
       RS_LOG(WARN, "failed to fill column charset info", K(ret));
     } else if (OB_FAIL(ObDDLResolver::check_text_column_length_and_promote(column_schema,
                        table_schema.get_table_id(), true))) {
       RS_LOG(WARN, "failed to check text or blob column length", K(ret));
     }
   } else if (ObEnumSetTC == col_tc) {
-    if (OB_FAIL(ObDDLResolver::check_and_fill_column_charset_info(column_schema, charset_type, collation_type))) {
+    if (OB_FAIL(ObDDLResolver::check_and_fill_column_charset_info(
+        column_schema, charset_type, collation_type, charset_compat_type))) {
       LOG_WARN("fail to check and fill column charset info", K(ret), K(column_schema));
     } else if (OB_FAIL(ObResolverUtils::check_extended_type_info(
                 allocator,
@@ -10910,6 +10974,7 @@ int ObDDLService::add_new_column_to_table_schema(
   const bool update_inner_table = nullptr != ddl_operator && nullptr != trans;
   bool is_oracle_mode = false;
   bool is_contain_part_key = false;
+  ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
   LOG_DEBUG("check before alter table column", K(origin_table_schema), K(alter_table_schema), K(new_table_schema));
   if (OB_FAIL(origin_table_schema.check_if_oracle_compat_mode(is_oracle_mode))) {
     LOG_WARN("failed to get oracle mode", K(ret));
@@ -10920,11 +10985,14 @@ int ObDDLService::add_new_column_to_table_schema(
   }
   // fill column collation
   if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(get_charset_compat_type(new_table_schema.get_tenant_id(), schema_guard, charset_compat_type))) {
+    LOG_WARN("fail to get compat type", K(ret));
   } else if (OB_FAIL(fill_column_collation(sql_mode,
                                            is_oracle_mode,
                                            new_table_schema,
                                            allocator,
-                                           alter_column_schema))) {
+                                           alter_column_schema,
+                                           charset_compat_type))) {
     LOG_WARN("failed to fill column collation", K(ret));
   } else {
     int64_t max_used_column_id = new_table_schema.get_max_used_column_id();
@@ -16178,7 +16246,7 @@ int ObDDLService::check_is_offline_ddl(ObAlterTableArg &alter_table_arg,
       LOG_WARN("fail to check alter table constraint", K(ret), K(alter_table_arg), K(ddl_type));
     }
     if (OB_SUCC(ret) && alter_table_arg.is_convert_to_character_
-        && OB_FAIL(check_convert_to_character(alter_table_arg, *orig_table_schema, ddl_type))) {
+        && OB_FAIL(check_convert_to_character(alter_table_arg, *orig_table_schema, schema_guard, ddl_type))) {
       LOG_WARN("fail to check convert to character", K(ret));
     }
     if (OB_SUCC(ret) && alter_table_arg.foreign_key_arg_list_.count() > 0 && ddl_type == ObDDLType::DDL_INVALID) {
@@ -30405,6 +30473,7 @@ int ObDDLService::create_database(const bool if_not_exist,
       if (OB_SUCC(ret)) {
         // if zone_list, primary_zone not set, copy from tenant_schema
         const ObTenantSchema *tenant_schema = NULL;
+        ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
         if (OB_FAIL(schema_guard.get_tenant_info(
             database_schema.get_tenant_id(), tenant_schema))) {
           LOG_WARN("tenant not exist in schema manager", "tenant id",
@@ -30412,9 +30481,12 @@ int ObDDLService::create_database(const bool if_not_exist,
         } else if (OB_ISNULL(tenant_schema)) {
           ret = OB_TENANT_NOT_EXIST;
           LOG_WARN("tenant is not exist", KR(ret), "tenant_id", database_schema.get_tenant_id());
+        } else if (OB_FAIL(get_charset_compat_type(database_schema.get_tenant_id(), schema_guard, charset_compat_type))) {
+          LOG_WARN("fail to get compat type", K(ret));
         } else if (OB_FAIL(ObSchema::set_charset_and_collation_options(tenant_charset_type,
                                                                        tenant_collation_type,
-                                                                       database_schema))) {
+                                                                       database_schema,
+                                                                       charset_compat_type))) {
           LOG_WARN("set charset and collation options failed", K(ret));
         } else {} // ok
 

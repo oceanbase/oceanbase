@@ -12,6 +12,7 @@
 
 #include "sql/resolver/cmd/ob_set_names_resolver.h"
 #include "sql/resolver/cmd/ob_set_names_stmt.h"
+#include "sql/session/ob_sql_session_info.h"
 
 namespace oceanbase
 {
@@ -43,7 +44,13 @@ int ObSetNamesResolver::resolve(const ParseNode &parse_tree)
       ret = OB_ALLOCATE_MEMORY_FAILED;
       SQL_RESV_LOG(ERROR, "create stmt failed", K(ret));
     } else {
-      if (T_SET_NAMES == parse_tree.type_) {
+      ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
+      if (OB_ISNULL(session_info_)) {
+        ret = OB_ERR_UNEXPECTED;
+        SQL_RESV_LOG(WARN, "session info is null", K(ret));
+      } else if (OB_FAIL(session_info_->get_charset_compat_type(charset_compat_type))) {
+        SQL_RESV_LOG(WARN, "fail to get charset compat type", K(ret));
+      } else if (T_SET_NAMES == parse_tree.type_) {
         // SET NAMES
         stmt->set_is_set_names(true);
         if (T_DEFAULT == parse_tree.children_[0]->type_) {
@@ -55,7 +62,8 @@ int ObSetNamesResolver::resolve(const ParseNode &parse_tree)
           // 目前支持gbk，utf16和utf8mb4，只有set names utf16不支持
           // 如果后续支持更多的字符集，这里需要考虑怎么实现形式更好，
           // 最好使用函数，目前没有必要
-          ObCollationType col_type = ObCharset::get_default_collation(ObCharset::charset_type(charset));
+          ObCollationType col_type = ObCharset::get_default_collation(
+              ObCharset::charset_type(charset), charset_compat_type);
           if (!ObCharset::is_valid_collation(col_type)) {
             ret = OB_ERR_UNKNOWN_CHARSET;
             LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, charset.length(), charset.ptr());

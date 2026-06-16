@@ -500,12 +500,15 @@ int ObInListResolver::resolve_access_obj_values_table(const ParseNode &in_list,
   const ParseNode *row_node = NULL;
   bool enable_decimal_int = false;
   ObCompatType compat_type = COMPAT_MYSQL57;
+  ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
   bool enable_mysql_compatible_dates = false;
   if (OB_ISNULL(allocator) || OB_ISNULL(session_info)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("got unexpected NULL ptr", K(ret));
   } else if (OB_FAIL(session_info->get_compatibility_control(compat_type))) {
     LOG_WARN("failed to get compat type", K(ret));
+  } else if (OB_FAIL(session_info->get_charset_compat_type(charset_compat_type))) {
+    LOG_WARN("fail to get charset compat type", K(ret));
   } else if (OB_FAIL(session_info->get_collation_connection(coll_type))) {
     LOG_WARN("fail to get collation_connection", K(ret));
   } else if (is_oracle_mode && OB_FAIL(session_info->get_sys_variable(
@@ -548,7 +551,9 @@ int ObInListResolver::resolve_access_obj_values_table(const ParseNode &in_list,
                                                  enable_mysql_compatible_dates,
                                                  session_info->get_min_const_integer_precision(),
                                                  session_info->get_exec_min_cluster_version(),
-                                                 is_from_pl))) {
+                                                 is_from_pl,
+                                                 false,
+                                                 charset_compat_type))) {
         LOG_WARN("failed to resolve const", K(ret));
       } else if (OB_FAIL(table_def.access_objs_.push_back(obj_param))) {
         LOG_WARN("failed to push back", K(ret));

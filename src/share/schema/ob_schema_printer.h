@@ -14,6 +14,7 @@
 #define OCEANBASE_SHARE_SCHEMA_OB_SCHEMA_PRINTER_H_
 #include <stdint.h>
 #include "share/ob_define.h"
+#include "share/ob_compatibility_control.h"
 #include "share/schema/ob_udt_info.h"
 #include "lib/container/ob_iarray.h"
 #include "share/schema/ob_schema_struct.h"
@@ -64,7 +65,8 @@ public:
   explicit ObSchemaPrinter(ObSchemaGetterGuard &schema_guard,
                            bool strict_compat = false,
                            bool sql_quote_show_create = true,
-                           bool ansi_quotes = false);
+                           bool ansi_quotes = false,
+                           common::ObCharsetCompatType charset_compat_type = common::CHARSET_COMPAT_MYSQL57);
   virtual ~ObSchemaPrinter() { }
 private:
   ObSchemaPrinter();
@@ -581,6 +583,7 @@ private:
   bool strict_compat_;
   bool sql_quote_show_create_;
   bool ansi_quotes_;
+  common::ObCharsetCompatType charset_compat_type_;
 };
 
 

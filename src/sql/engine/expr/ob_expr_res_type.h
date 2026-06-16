@@ -369,10 +369,12 @@ public:
       set_calc_type_default_varchar();
     }
   }
-  OB_INLINE void set_calc_collation_by_charset(common::ObCharsetType charset_type)
+  OB_INLINE void set_calc_collation_by_charset(
+      common::ObCharsetType charset_type,
+      common::ObCharsetCompatType compat_type = common::CHARSET_COMPAT_MYSQL57)
   {
     set_calc_collation_type(
-          common::ObCharset::get_default_collation_by_mode(charset_type, lib::is_oracle_mode()));
+          common::ObCharset::get_default_collation_by_mode(charset_type, lib::is_oracle_mode(), compat_type));
   }
   OB_INLINE common::ObObjType get_calc_type() const { return calc_type_.get_type(); }
   OB_INLINE common::ObObjTypeClass get_calc_type_class() const

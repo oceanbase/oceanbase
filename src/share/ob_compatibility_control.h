@@ -13,6 +13,7 @@
 #ifndef OCEABASE_SHARE_OB_COMPATIBILITY_CONTROL_H_
 #define OCEABASE_SHARE_OB_COMPATIBILITY_CONTROL_H_
 
+#include "lib/charset/ob_charset.h"
 #include "lib/container/ob_se_array.h"
 #include "lib/utility/ob_macro_utils.h"
 
@@ -81,6 +82,8 @@ public:
   static int get_version_str(uint64_t version, common::ObString &str, ObIAllocator &allocator);
   static void get_compat_feature_infos(const ObICompatInfo **&infos, int64_t &len)
   { infos = infos_; len = ObCompatFeatureType::MAX_TYPE; }
+  static int get_charset_compat_type(const ObCompatType compat_type,
+                                     common::ObCharsetCompatType &charset_compat_type);
   static int check_feature_enable(const uint64_t compat_version,
                                   const ObCompatFeatureType feature_type,
                                   bool &is_enable);

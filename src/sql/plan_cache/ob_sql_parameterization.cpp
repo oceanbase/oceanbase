@@ -500,6 +500,7 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
   int64_t value_level = NO_VALUES;
   int64_t assign_level = NO_VALUES;
   ObCompatType compat_type = COMPAT_MYSQL57;
+  ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
   bool enable_mysql_compatible_dates = false;
   if (OB_ISNULL(ctx.top_node_)
       || OB_ISNULL(ctx.allocator_)
@@ -516,6 +517,8 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
                K(ret));
   } else if (OB_FAIL(session_info.get_compatibility_control(compat_type))) {
     LOG_WARN("failed to get compat type", K(ret));
+  } else if (OB_FAIL(session_info.get_charset_compat_type(charset_compat_type))) {
+    LOG_WARN("fail to get charset compat type", K(ret));
   } else if (NULL == ctx.tree_) {
     // do nothing
   } else if (OB_FAIL(ObSQLUtils::check_enable_mysql_compatible_dates(&session_info, false/*is_ddl*/,
@@ -613,7 +616,8 @@ int ObSqlParameterization::transform_tree(TransformTreeCtx &ctx,
                               session_info.get_min_const_integer_precision(),
                               session_info.get_exec_min_cluster_version(),
                               ctx.is_from_pl_,
-                              fmt_int_or_ch_decint))) {
+                              fmt_int_or_ch_decint,
+                              charset_compat_type))) {
             SQL_PC_LOG(WARN, "fail to resolve const", K(ret));
           } else {
             //对于字符串值，其T_VARCHAR型的parse node有一个T_VARCHAR类型的子node，该子node描述字符串的charset等信息。

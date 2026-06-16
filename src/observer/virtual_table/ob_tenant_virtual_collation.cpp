@@ -12,6 +12,8 @@
 
 #define USING_LOG_PREFIX SERVER
 #include "observer/virtual_table/ob_tenant_virtual_collation.h"
+#include "share/ob_compatibility_control.h"
+#include "sql/session/ob_sql_session_info.h"
 using namespace oceanbase::common;
 
 namespace oceanbase
@@ -47,6 +49,8 @@ int ObTenantVirtualCollation::fill_scanner()
   ObObj *cells = NULL;
   const ObCollationWrapper *collation_wrap_arr = NULL;
   int64_t collation_wrap_arr_len = 0;
+  share::ObCompatType mysql_compat_type = share::COMPAT_MYSQL57;
+  bool is_enable = false;
   ObCharset::get_collation_wrap_arr(collation_wrap_arr, collation_wrap_arr_len);
   if (OB_ISNULL(allocator_)) {
     ret = OB_NOT_INIT;
@@ -60,10 +64,22 @@ int ObTenantVirtualCollation::fill_scanner()
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("collation wrap array is NULL or collation_wrap_arr_len is not COLLATION_WRAPPER_COUNT",
                 K(ret), K(collation_wrap_arr), K(collation_wrap_arr_len));
+  } else if (OB_ISNULL(session_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session is NULL", K(ret));
+  } else if (OB_FAIL(session_->check_feature_enable(
+             share::ObCompatFeatureType::UTF8MB4_DEFAULT_COLLATION_COMPAT, is_enable))) {
+    LOG_WARN("failed to check feature enable", K(ret));
+  } else if (is_enable && OB_FAIL(session_->get_compatibility_control(mysql_compat_type))) {
+    LOG_WARN("failed to get compatibility_control", K(ret));
   }
   for (int64_t i = 0; OB_SUCC(ret) && i < collation_wrap_arr_len; ++i) {
     int cell_idx = 0;
     ObCollationWrapper collation_wrap = collation_wrap_arr[i];
+    // In MySQL 8.0 mode, override default collation for utf8mb4
+    if (share::COMPAT_MYSQL8 == mysql_compat_type && CHARSET_UTF8MB4 == collation_wrap.charset_) {
+      collation_wrap.default_ = CS_TYPE_UTF8MB4_0900_AI_CI == collation_wrap.collation_;
+    }
     if (CS_TYPE_INVALID != collation_wrap.collation_) {
       for (int64_t j = 0; OB_SUCC(ret) && j < output_column_ids_.count(); ++j) {
         int64_t col_id = output_column_ids_.at(j);

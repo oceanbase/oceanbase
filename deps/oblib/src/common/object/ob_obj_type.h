@@ -1348,7 +1348,8 @@ int ob_sql_type_str_with_coll(char *buff,
     ObCollationType coll_type,
     const common::ObIArray<ObString> &type_info,
     const uint64_t sub_type = static_cast<uint64_t>(common::ObGeoType::GEOTYPEMAX),
-    const bool is_string_lob = false);
+    const bool is_string_lob = false,
+    ObCharsetCompatType compat_type = CHARSET_COMPAT_MYSQL57);
 
 //such as "double(10,7)". with accuracy
 int ob_sql_type_str(char *buff,

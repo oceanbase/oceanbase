@@ -1621,6 +1621,7 @@ int check_will_be_having_domain_index_operation(
                                   share::ObDDLType &ddl_type);
   int check_convert_to_character(obrpc::ObAlterTableArg &alter_table_arg,
                                  const share::schema::ObTableSchema &orig_table_schema,
+                                 share::schema::ObSchemaGetterGuard &schema_guard,
                                  share::ObDDLType &ddl_type);
 
   bool is_dec_table_lob_inrow_threshold(
@@ -1837,12 +1838,16 @@ int check_will_be_having_domain_index_operation(
       const share::schema::ObTableSchema &new_table_schema,
       ObIArray<share::schema::ObTableSchema> &idx_schemas,
       share::schema::ObSchemaGetterGuard &schema_guard);
+  int get_charset_compat_type(const uint64_t tenant_id,
+                              share::schema::ObSchemaGetterGuard &schema_guard,
+                              common::ObCharsetCompatType &charset_compat_type);
   int fill_column_collation(
       const ObSQLMode sql_mode,
       const bool is_oracle_mode,
       const share::schema::ObTableSchema &table_schema,
       common::ObIAllocator &allocator,
-      share::schema::ObColumnSchemaV2 &alter_column_schema);
+      share::schema::ObColumnSchemaV2 &alter_column_schema,
+      common::ObCharsetCompatType charset_compat_type);
   int resolve_orig_default_value(share::schema::ObColumnSchemaV2 &column_schema,
                                  const common::ObTimeZoneInfoWrap &tz_info_wrap,
                                  const common::ObString *nls_formats,

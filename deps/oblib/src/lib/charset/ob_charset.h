@@ -397,6 +397,11 @@ enum ObCollationLevel
                       // and we didn't persist it on storage.
 };
 
+enum ObCharsetCompatType
+{
+  CHARSET_COMPAT_MYSQL57,
+  CHARSET_COMPAT_MYSQL8,
+};
 
 struct ObCharsetWrapper
 {
@@ -683,14 +688,14 @@ public:
                              int64_t &char_len);
 
   static ObCharsetType get_default_charset();
-  static ObCollationType get_default_collation(ObCharsetType charset_type);
+  static ObCollationType get_default_collation(ObCharsetType charset_type, ObCharsetCompatType compat_type = CHARSET_COMPAT_MYSQL57);
   static ObCollationType get_default_collation_oracle(ObCharsetType charset_type);
-  static ObCollationType get_default_collation_by_mode(ObCharsetType charset_type, bool is_oracle_mode);
-  static int get_default_collation(ObCharsetType charset_type, ObCollationType &coll_type);
+  static ObCollationType get_default_collation_by_mode(ObCharsetType charset_type, bool is_oracle_mode, ObCharsetCompatType compat_type = CHARSET_COMPAT_MYSQL57);
+  static int get_default_collation(ObCharsetType charset_type, ObCollationType &coll_type, ObCharsetCompatType compat_type = CHARSET_COMPAT_MYSQL57);
   static int get_default_collation(const ObCollationType &in, ObCollationType &out);
   static ObCollationType get_system_collation();
-  static bool is_default_collation(ObCollationType type);
-  static bool is_default_collation(ObCharsetType charset_type, ObCollationType coll_type);
+  static bool is_default_collation(ObCollationType type, ObCharsetCompatType compat_type = CHARSET_COMPAT_MYSQL57);
+  static bool is_default_collation(ObCharsetType charset_type, ObCollationType coll_type, ObCharsetCompatType compat_type = CHARSET_COMPAT_MYSQL57);
   static const char* get_default_charset_name()
   { return ObCharset::charset_name(ObCharset::get_default_charset()); }
   static const char* get_default_collation_name()
@@ -699,7 +704,7 @@ public:
   { charset_wrap_arr = charset_wrap_arr_; charset_wrap_arr_len = VALID_CHARSET_TYPES; }
   static void get_collation_wrap_arr(const ObCollationWrapper *&collation_wrap_arr, int64_t &collation_wrap_arr_len)
   { collation_wrap_arr = collation_wrap_arr_; collation_wrap_arr_len = VALID_COLLATION_TYPES; }
-  static int check_and_fill_info(ObCharsetType &charset_type, ObCollationType &collation_type);
+  static int check_and_fill_info(ObCharsetType &charset_type, ObCollationType &collation_type, ObCharsetCompatType compat_type = CHARSET_COMPAT_MYSQL57);
 
   static int strcmp(const ObCollationType collation_type,
                     const ObString &l_str,

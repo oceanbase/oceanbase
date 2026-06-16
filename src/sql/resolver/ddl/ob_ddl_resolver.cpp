@@ -494,23 +494,30 @@ int ObDDLResolver::resolve_default_value(ParseNode *def_node,
       case T_NCHAR: //mysql mode
       case T_CHAR:
       case T_VARCHAR:
-      case T_LOB:
+      case T_LOB: {
+        ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
         tmp_str.assign_ptr(const_cast<char *>(def_val->str_value_),
                            static_cast<int32_t>(def_val->str_len_));
         if ((OB_FAIL(ob_write_string(*name_pool, tmp_str, str)))) {
           SQL_RESV_LOG(WARN, "Can not malloc space for default value", K(ret));
+        } else if (OB_ISNULL(session_info_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("session info is NULL", K(ret));
+        } else if (OB_FAIL(session_info_->get_charset_compat_type(charset_compat_type))) {
+          LOG_WARN("fail to get charset compat type", K(ret));
         } else {
           ObCollationType coll = session_info_->get_local_collation_connection();
           if (def_val->type_ == T_NCHAR) {
             ObString charset(strlen("utf8mb4"), "utf8mb4");
             ObCharsetType charset_type = ObCharset::charset_type(charset.trim());
-            coll = ObCharset::get_default_collation(charset_type);
+            coll = ObCharset::get_default_collation(charset_type, charset_compat_type);
           }
           default_value.set_varchar(str);
           default_value.set_collation_type(coll);
           default_value.set_param_meta();
         }
         break;
+      }
       case T_RAW:
         tmp_str.assign_ptr(const_cast<char *>(def_val->str_value_),
                            static_cast<int32_t>(def_val->str_len_));
@@ -1127,6 +1134,7 @@ int ObDDLResolver::resolve_table_options(ParseNode *node, bool is_index_option)
   }
 
   if (OB_SUCC(ret)) {
+    ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
     if (CHARSET_INVALID == charset_type_
         &&  CS_TYPE_INVALID == collation_type_ ) {
       // The database character set and collation affect these aspects of server operation:
@@ -1149,7 +1157,12 @@ int ObDDLResolver::resolve_table_options(ParseNode *node, bool is_index_option)
         charset_type_ = database_schema->get_charset_type();
         collation_type_ = database_schema->get_collation_type();
       }
-    } else if (OB_FAIL(ObCharset::check_and_fill_info(charset_type_, collation_type_))) {
+    } else if (OB_ISNULL(session_info_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session info is NULL", K(ret));
+    } else if (OB_FAIL(session_info_->get_charset_compat_type(charset_compat_type))) {
+      LOG_WARN("fail to get charset compat type", K(ret));
+    } else if (OB_FAIL(ObCharset::check_and_fill_info(charset_type_, collation_type_, charset_compat_type))) {
       SQL_RESV_LOG(WARN, "fail to fill collation info", K(ret));
     }
   }
@@ -3707,8 +3720,15 @@ int ObDDLResolver::resolve_column_definition(ObColumnSchemaV2 &column,
             collation_type = table_schema.get_collation_type();
           }
         }
-        if (OB_FAIL(check_and_fill_column_charset_info(column, charset_type, collation_type))) {
-          SQL_RESV_LOG(WARN, "fail to check and fill column charset info", K(ret));
+        ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
+        if (OB_ISNULL(session_info_)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("session info is NULL", K(ret));
+        } else if (OB_FAIL(session_info_->get_charset_compat_type(charset_compat_type))) {
+          LOG_WARN("fail to get charset compat type", K(ret));
+        } else if (OB_FAIL(check_and_fill_column_charset_info(
+                   column, charset_type, collation_type, charset_compat_type))) {
+          LOG_WARN("fail to check and fill column charset info", K(ret));
         } else if (data_type.get_meta_type().is_lob() || data_type.get_meta_type().is_json()
                    || data_type.get_meta_type().is_geometry() || data_type.get_meta_type().is_roaringbitmap()) {
           if (OB_FAIL(check_text_column_length_and_promote(column, table_id_))) {
@@ -4499,12 +4519,18 @@ int ObDDLResolver::resolve_normal_column_attribute(ObColumnSchemaV2 &column,
           ObString collation;
           ObCollationType collation_type;
           ObCharsetType charset_type = column.get_charset_type();
+          ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
           collation.assign_ptr(attr_node->str_value_,
                               static_cast<int32_t>(attr_node->str_len_));
           if (CS_TYPE_INVALID == (collation_type = ObCharset::collation_type(collation))) {
             ret = OB_ERR_UNKNOWN_COLLATION;
             LOG_USER_ERROR(OB_ERR_UNKNOWN_COLLATION, collation.length(), collation.ptr());
-          } else if (OB_FAIL(ObCharset::check_and_fill_info(charset_type, collation_type))) {
+          } else if (OB_ISNULL(session_info_)) {
+            ret = OB_ERR_UNEXPECTED;
+            LOG_WARN("session info is NULL", K(ret));
+          } else if (OB_FAIL(session_info_->get_charset_compat_type(charset_compat_type))) {
+            LOG_WARN("fail to get charset compat type", K(ret));
+          } else if (OB_FAIL(ObCharset::check_and_fill_info(charset_type, collation_type, charset_compat_type))) {
             SQL_RESV_LOG(WARN, "fail to fill charset and collation info", K(charset_type), K(collation_type), K(ret));
           }
         }
@@ -5187,7 +5213,14 @@ int ObDDLResolver::resolve_generated_column_definition(ObColumnSchemaV2 &column,
         column.set_collation_type(CS_TYPE_INVALID);
       }
       if (OB_SUCC(ret) && column.is_string_type() && stmt::T_CREATE_TABLE == stmt_->get_stmt_type()) {
-        if (OB_FAIL(check_and_fill_column_charset_info(column, charset_type_, collation_type_))) {
+        ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
+        if (OB_ISNULL(session_info_)) {
+          ret = OB_ERR_UNEXPECTED;
+          SQL_RESV_LOG(WARN, "session info is NULL", K(ret));
+        } else if (OB_FAIL(session_info_->get_charset_compat_type(charset_compat_type))) {
+          SQL_RESV_LOG(WARN, "fail to get charset compat type", K(ret));
+        } else if (OB_FAIL(check_and_fill_column_charset_info(
+                   column, charset_type_, collation_type_, charset_compat_type))) {
           SQL_RESV_LOG(WARN, "fail to check and fill column charset info", K(ret));
         } else if (data_type.get_meta_type().is_lob()) {
           if (OB_FAIL(check_text_column_length_and_promote(column))) {
@@ -6023,7 +6056,8 @@ int ObDDLResolver::check_text_column_length_and_promote(ObColumnSchemaV2 &column
 
 int ObDDLResolver::check_and_fill_column_charset_info(ObColumnSchemaV2 &column,
                                                       const ObCharsetType table_charset_type,
-                                                      const ObCollationType table_collation_type) {
+                                                      const ObCollationType table_collation_type,
+                                                      ObCharsetCompatType charset_compat_type) {
   int ret = OB_SUCCESS;
   ObCharsetType charset_type = CHARSET_INVALID;
   ObCollationType collation_type = CS_TYPE_INVALID;
@@ -6047,7 +6081,7 @@ int ObDDLResolver::check_and_fill_column_charset_info(ObColumnSchemaV2 &column,
   } else if (CHARSET_INVALID == charset_type && CS_TYPE_INVALID == collation_type) {
     column.set_charset_type(table_charset_type);
     column.set_collation_type(table_collation_type);
-  } else if (OB_FAIL(ObCharset::check_and_fill_info(charset_type, collation_type))) {
+  } else if (OB_FAIL(ObCharset::check_and_fill_info(charset_type, collation_type, charset_compat_type))) {
     SQL_RESV_LOG(WARN, "fail to fill charset and collation info", K(collation_type), K(ret));
   } else {
     column.set_charset_type(charset_type);
@@ -6610,6 +6644,7 @@ int ObDDLResolver::fill_extended_type_info(const ParseNode &str_list_node, ObCol
 
 int ObDDLResolver::resolve_enum_or_set_column(const ParseNode *type_node, ObColumnSchemaV2 &column)
 {
+  ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
   int ret = OB_SUCCESS;
   if (OB_ISNULL(type_node)
       || OB_UNLIKELY(type_node->num_child_ != 4)
@@ -6624,7 +6659,13 @@ int ObDDLResolver::resolve_enum_or_set_column(const ParseNode *type_node, ObColu
     LOG_WARN("fail to fill type info", K(ret), K(column));
   } else if (stmt::T_ALTER_TABLE == stmt_->get_stmt_type()) {
     //下面的操作可能需要依赖于table的charset，因此alter table时需要在RS中完成。
-  } else if (OB_FAIL(check_and_fill_column_charset_info(column, charset_type_, collation_type_))) {
+  } else if (OB_ISNULL(session_info_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("session info is NULL", K(ret));
+  } else if (OB_FAIL(session_info_->get_charset_compat_type(charset_compat_type))) {
+    LOG_WARN("fail to get charset compat type", K(ret));
+  } else if (OB_FAIL(check_and_fill_column_charset_info(
+             column, charset_type_, collation_type_, charset_compat_type))) {
     LOG_WARN("fail to check and fill column charset info", K(ret), K(column), K(charset_type_), K(collation_type_));
   } else if (OB_FAIL(check_extended_type_info(column, session_info_->get_sql_mode()))) {
     LOG_WARN("fail to fill extended type info", K(ret), K(column), K(session_info_->get_sql_mode()));

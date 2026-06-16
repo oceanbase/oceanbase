@@ -415,14 +415,16 @@ public:
                            int8_t min_const_integer_precision,
                            uint64_t exec_min_cluster_version,
                            bool is_from_pl = false,
-                           bool fmt_int_or_ch_decint = false);
+                           bool fmt_int_or_ch_decint = false,
+                           ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57);
 
   static int set_string_val_charset(ObIAllocator &allocator,
                                     ObObjParam &val,
                                     ObString &charset,
                                     ObObj &result_val,
                                     bool is_strict_mode,
-                                    bool return_ret);
+                                    bool return_ret,
+                                    ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57);
 
   static int resolve_data_type(const ParseNode &type_node,
                                const common::ObString &ident_name,

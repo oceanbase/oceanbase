@@ -146,10 +146,16 @@ int ObDatabaseResolver<T>::resolve_database_option(T *stmt, ParseNode *node, ObS
       case T_COLLATION: {
         common::ObCharsetType charset_type = common::CHARSET_INVALID;
         common::ObCollationType collation_type = common::CS_TYPE_INVALID;
-        if (T_CHARSET == option_node->type_) {
+        common::ObCharsetCompatType charset_compat_type = common::CHARSET_COMPAT_MYSQL57;
+        if (OB_ISNULL(session_info)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("session info is NULL", K(ret));
+        } else if (OB_FAIL(session_info->get_charset_compat_type(charset_compat_type))) {
+          LOG_WARN("fail to get charset compat type", K(ret));
+        } else if (T_CHARSET == option_node->type_) {
           common::ObString charset(option_node->str_len_, option_node->str_value_);
           charset_type = common::ObCharset::charset_type(charset.trim());
-          collation_type = common::ObCharset::get_default_collation(charset_type);
+          collation_type = common::ObCharset::get_default_collation(charset_type, charset_compat_type);
           if (OB_UNLIKELY(common::CHARSET_INVALID == charset_type)) {
             ret = common::OB_ERR_UNKNOWN_CHARSET;
             LOG_USER_ERROR(OB_ERR_UNKNOWN_CHARSET, charset.length(), charset.ptr());

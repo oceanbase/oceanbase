@@ -164,6 +164,25 @@ int ObCompatControl::get_version_str(uint64_t version, ObString &str, ObIAllocat
   return ret;
 }
 
+int ObCompatControl::get_charset_compat_type(const ObCompatType compat_type,
+                                             ObCharsetCompatType &charset_compat_type)
+{
+  int ret = OB_SUCCESS;
+  switch (compat_type) {
+    case COMPAT_MYSQL57:
+      charset_compat_type = CHARSET_COMPAT_MYSQL57;
+      break;
+    case COMPAT_MYSQL8:
+      charset_compat_type = CHARSET_COMPAT_MYSQL8;
+      break;
+    default:
+      ret = OB_INVALID_ARGUMENT;
+      LOG_WARN("unsupported compat type", K(ret), K(compat_type));
+      break;
+  }
+  return ret;
+}
+
 int ObCompatControl::check_feature_enable(const uint64_t compat_version,
                                           const ObCompatFeatureType feature_type,
                                           bool &is_enable)

@@ -2304,6 +2304,7 @@ int ObPLResolver::resolve_sp_scalar_type(ObIAllocator &allocator,
       }
       ObCharsetType charset_type = scalar_data_type.get_charset_type();
       ObCollationType collation_type = scalar_data_type.get_collation_type();
+      ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
       if (CHARSET_ANY == charset_type) {
         if (!is_for_param_type) {
           ret = OB_ERR_ANY_CS_NOT_ALLOWED;
@@ -2331,7 +2332,9 @@ int ObPLResolver::resolve_sp_scalar_type(ObIAllocator &allocator,
                            CHARSET_ANY : ObCharset::charset_type_by_coll(collation_type);
           }
         }
-      } else if (OB_FAIL(ObCharset::check_and_fill_info(charset_type, collation_type))) {
+      } else if (OB_FAIL(session_info.get_charset_compat_type(charset_compat_type))) {
+        LOG_WARN("fail to get charset compat type", K(ret));
+      } else if (OB_FAIL(ObCharset::check_and_fill_info(charset_type, collation_type, charset_compat_type))) {
         LOG_WARN("fail to fill collation info", K(charset_type), K(collation_type), K(ret));
       }
       if (OB_SUCC(ret)) {

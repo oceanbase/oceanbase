@@ -111,6 +111,7 @@ int ObShowCreateDatabase::fill_row_cells(uint64_t show_database_id,
   bool strict_mode = false;
   bool sql_quote_show_create = true;
   bool ansi_quotes = false;
+  ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
   if (OB_ISNULL(cur_row_.cells_)
       || OB_ISNULL(schema_guard_)
       || OB_ISNULL(allocator_)
@@ -128,6 +129,8 @@ int ObShowCreateDatabase::fill_row_cells(uint64_t show_database_id,
     SERVER_LOG(WARN, "failed to get _show_ddl_in_compat_mode", K(ret));
   } else if (OB_FAIL(session_->get_sql_quote_show_create(sql_quote_show_create))) {
     SERVER_LOG(WARN, "failed to get sql_quote_show_create", K(ret));
+  } else if (OB_FAIL(session_->get_charset_compat_type(charset_compat_type))) {
+    SERVER_LOG(WARN, "fail to get charset compat type", K(ret));
   } else if (OB_FALSE_IT(IS_ANSI_QUOTES(session_->get_sql_mode(), ansi_quotes))) {
     // do nothing
   } else {
@@ -155,7 +158,8 @@ int ObShowCreateDatabase::fill_row_cells(uint64_t show_database_id,
         }
         case OB_APP_MIN_COLUMN_ID + 2: {
           // create_database
-          ObSchemaPrinter schema_printer(*schema_guard_, strict_mode, sql_quote_show_create, ansi_quotes);
+          ObSchemaPrinter schema_printer(
+              *schema_guard_, strict_mode, sql_quote_show_create, ansi_quotes, charset_compat_type);
           int64_t pos = 0;
           if (OB_FAIL(schema_printer.print_database_definiton(effective_tenant_id_,
                                                               show_database_id,
@@ -176,7 +180,8 @@ int ObShowCreateDatabase::fill_row_cells(uint64_t show_database_id,
         }
         case OB_APP_MIN_COLUMN_ID + 3: {
           // create_database_with_if_not_exists
-          ObSchemaPrinter schema_printer(*schema_guard_, strict_mode, sql_quote_show_create, ansi_quotes);
+          ObSchemaPrinter schema_printer(
+              *schema_guard_, strict_mode, sql_quote_show_create, ansi_quotes, charset_compat_type);
           int64_t pos = 0;
           if (OB_FAIL(schema_printer.print_database_definiton(effective_tenant_id_,
                                                               show_database_id,

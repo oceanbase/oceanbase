@@ -1946,7 +1946,8 @@ public:
   template<typename DSTSCHEMA>
   static int set_charset_and_collation_options(common::ObCharsetType src_charset_type,
                                                common::ObCollationType src_collation_type,
-                                               DSTSCHEMA &dst);
+                                               DSTSCHEMA &dst,
+                                               common::ObCharsetCompatType compat_type = common::CHARSET_COMPAT_MYSQL57);
   static common::ObCollationType get_cs_type_with_cmp_mode(const common::ObNameCaseMode mode);
 
   ObSchema *get_buffer() const { return buffer_; }
@@ -1992,7 +1993,8 @@ protected:
 template<typename DSTSCHEMA>
 int ObSchema::set_charset_and_collation_options(common::ObCharsetType src_charset_type,
                                                 common::ObCollationType src_collation_type,
-                                                DSTSCHEMA &dst)
+                                                DSTSCHEMA &dst,
+                                                common::ObCharsetCompatType compat_type)
 {
   int ret = common::OB_SUCCESS;
   if (dst.get_charset_type() == common::CHARSET_INVALID
@@ -2009,7 +2011,7 @@ int ObSchema::set_charset_and_collation_options(common::ObCharsetType src_charse
   } else {
     common::ObCharsetType charset_type = dst.get_charset_type();
     common::ObCollationType collation_type = dst.get_collation_type();
-    if (OB_FAIL(common::ObCharset::check_and_fill_info(charset_type, collation_type))) {
+    if (OB_FAIL(common::ObCharset::check_and_fill_info(charset_type, collation_type, compat_type))) {
       SHARE_SCHEMA_LOG(WARN, "fail to check charset collation",
                        K(charset_type), K(collation_type), K(ret));
     } else {

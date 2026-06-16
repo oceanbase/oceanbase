@@ -1914,6 +1914,7 @@ ObCharsetType ObCharset::charset_type_by_coll(ObCollationType collation_type)
 {
   ObCharsetType charset_type = CHARSET_INVALID;
   switch(collation_type) {
+    case CS_TYPE_UTF8MB4_0900_AI_CI:
     case CS_TYPE_UTF8MB4_GENERAL_CI:
     case CS_TYPE_UTF8MB4_BIN: {
       charset_type = CHARSET_UTF8MB4;
@@ -2519,12 +2520,13 @@ ObCharsetType ObCharset::get_default_charset()
   return ObCharset::default_charset_type_;
 }
 
-ObCollationType ObCharset::get_default_collation(ObCharsetType charset_type)
+ObCollationType ObCharset::get_default_collation(ObCharsetType charset_type, ObCharsetCompatType compat_type)
 {
   ObCollationType collation_type = CS_TYPE_INVALID;
   switch(charset_type) {
     case CHARSET_UTF8MB4: {
-      collation_type = CS_TYPE_UTF8MB4_GENERAL_CI;
+      collation_type = CHARSET_COMPAT_MYSQL57 == compat_type ?
+        CS_TYPE_UTF8MB4_GENERAL_CI : CS_TYPE_UTF8MB4_0900_AI_CI;
       break;
     }
     case CHARSET_BINARY: {
@@ -2627,10 +2629,10 @@ ObCollationType ObCharset::get_default_collation(ObCharsetType charset_type)
 }
 
 ObCollationType ObCharset::get_default_collation_by_mode(ObCharsetType charset_type,
-                                                         bool is_oracle_mode)
+                                                         bool is_oracle_mode, ObCharsetCompatType compat_type)
 {
   return is_oracle_mode ? get_default_collation_oracle(charset_type)
-                        : get_default_collation(charset_type);
+                        : get_default_collation(charset_type, compat_type);
 }
 
 ObCollationType ObCharset::get_default_collation_oracle(ObCharsetType charset_type)
@@ -2696,10 +2698,11 @@ ObCollationType ObCharset::get_default_collation_oracle(ObCharsetType charset_ty
   return collation_type;
 }
 
-int ObCharset::get_default_collation(ObCharsetType charset_type, ObCollationType &collation_type)
+int ObCharset::get_default_collation(ObCharsetType charset_type, ObCollationType &collation_type,
+                                     ObCharsetCompatType compat_type)
 {
   int ret = OB_SUCCESS;
-  ObCollationType res_coll = get_default_collation(charset_type);
+  ObCollationType res_coll = get_default_collation(charset_type, compat_type);
   if(res_coll == CS_TYPE_INVALID) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid charset type", K(ret), K(charset_type));
@@ -2912,7 +2915,7 @@ int ObCharset::last_valid_char(
   return ret;
 }
 
-int ObCharset::check_and_fill_info(ObCharsetType &charset_type, ObCollationType &collation_type)
+int ObCharset::check_and_fill_info(ObCharsetType &charset_type, ObCollationType &collation_type, ObCharsetCompatType compat_type)
 {
   int ret = OB_SUCCESS;
   if (charset_type == CHARSET_INVALID && collation_type == CS_TYPE_INVALID) {
@@ -2920,7 +2923,7 @@ int ObCharset::check_and_fill_info(ObCharsetType &charset_type, ObCollationType 
   } else if (charset_type == CHARSET_INVALID) {
     charset_type = ObCharset::charset_type_by_coll(collation_type);
   } else if (collation_type == CS_TYPE_INVALID) {
-    collation_type = ObCharset::get_default_collation(charset_type);
+    collation_type = ObCharset::get_default_collation(charset_type, compat_type);
   }
   if (!ObCharset::is_valid_collation(charset_type, collation_type)) { // cs type any will return charset invalid
     ret = OB_ERR_COLLATION_MISMATCH;
@@ -2929,12 +2932,20 @@ int ObCharset::check_and_fill_info(ObCharsetType &charset_type, ObCollationType 
   return ret;
 }
 
-bool ObCharset::is_default_collation(ObCollationType collation_type)
+bool ObCharset::is_default_collation(ObCollationType collation_type, ObCharsetCompatType compat_type)
 {
   bool ret = false;
   switch (collation_type) {
-    case CS_TYPE_UTF8MB4_GENERAL_CI:
-      //fall through
+    case CS_TYPE_UTF8MB4_GENERAL_CI: {
+      // In MySQL 8.0 mode, utf8mb4_general_ci is not the default for utf8mb4
+      ret = CHARSET_COMPAT_MYSQL57 == compat_type;
+      break;
+    }
+    case CS_TYPE_UTF8MB4_0900_AI_CI: {
+      // In MySQL 8.0 mode, utf8mb4_0900_ai_ci is the default for utf8mb4
+      ret = CHARSET_COMPAT_MYSQL8 == compat_type;
+      break;
+    }
     case CS_TYPE_GBK_CHINESE_CI:
     case CS_TYPE_UTF16_GENERAL_CI:
     case CS_TYPE_GB18030_CHINESE_CI:
@@ -2969,11 +2980,10 @@ bool ObCharset::is_default_collation(ObCollationType collation_type)
   return ret;
 }
 
-
-bool ObCharset::is_default_collation(ObCharsetType charset_type, ObCollationType collation_type)
+bool ObCharset::is_default_collation(ObCharsetType charset_type, ObCollationType collation_type, ObCharsetCompatType compat_type)
 {
   bool ret = false;
-  ObCollationType default_collation_type = get_default_collation(charset_type);
+  ObCollationType default_collation_type = get_default_collation(charset_type, compat_type);
   if (CS_TYPE_INVALID != default_collation_type && collation_type == default_collation_type) {
     ret = true;
   } else { /* empty */ }

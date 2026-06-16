@@ -1735,6 +1735,7 @@ public:
   void update_tenant_config_version(int64_t v) { cached_tenant_config_version_ = v; };
   static int check_optimizer_features_enable_valid(const ObObj &val);
   int get_compatibility_control(share::ObCompatType &compat_type) const;
+  int get_charset_compat_type(common::ObCharsetCompatType &charset_compat_type) const;
   int get_compatibility_version(uint64_t &compat_version) const;
   int get_security_version(uint64_t &security_version) const;
   uint64_t get_current_default_catalog() const;

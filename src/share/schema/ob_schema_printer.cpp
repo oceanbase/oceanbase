@@ -41,11 +41,13 @@ using namespace common;
 ObSchemaPrinter::ObSchemaPrinter(ObSchemaGetterGuard &schema_guard,
                                  bool strict_compat,
                                  bool sql_quote_show_create,
-                                 bool ansi_quotes)
+                                 bool ansi_quotes,
+                                 ObCharsetCompatType charset_compat_type)
     : schema_guard_(schema_guard),
       strict_compat_(strict_compat),
       sql_quote_show_create_(sql_quote_show_create),
-      ansi_quotes_(ansi_quotes)
+      ansi_quotes_(ansi_quotes),
+      charset_compat_type_(charset_compat_type)
 {
 }
 
@@ -289,7 +291,8 @@ int ObSchemaPrinter::print_table_definition_columns(const ObTableSchema &table_s
             if (OB_SUCCESS == ret
                 && !is_agent_mode
                 && !is_oracle_mode
-                && !ObCharset::is_default_collation(col->get_collation_type())
+                && !ObCharset::is_default_collation(
+                  col->get_collation_type(), charset_compat_type_)
                 && CS_TYPE_INVALID != col->get_collation_type()
                 && CS_TYPE_BINARY != col->get_collation_type()) {
               if (OB_FAIL(databuff_printf(buf, buf_len, pos, " COLLATE %s",
@@ -1849,7 +1852,8 @@ int ObSchemaPrinter::print_table_definition_table_options(const ObTableSchema &t
   }
   if (OB_SUCCESS == ret && !is_oracle_mode && !agent_mode && !is_for_table_status
       && !is_index_tbl && !is_no_table_options(sql_mode) && CS_TYPE_INVALID != table_schema.get_collation_type()
-      && !ObCharset::is_default_collation(table_schema.get_charset_type(), table_schema.get_collation_type())) {
+      && !ObCharset::is_default_collation(
+        table_schema.get_charset_type(), table_schema.get_collation_type(), charset_compat_type_)) {
     if (OB_FAIL(databuff_printf(buf, buf_len, pos, "COLLATE = %s ",
                                              ObCharset::collation_name(table_schema.get_collation_type())))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print collate", K(ret), K(table_schema));
@@ -2458,7 +2462,8 @@ int ObSchemaPrinter::print_table_definition_table_options(
     }
   }
   if (OB_SUCC(ret)  && !is_for_table_status && !is_index_tbl && CS_TYPE_INVALID != table_schema.get_collation_type()
-      && !ObCharset::is_default_collation(table_schema.get_charset_type(), table_schema.get_collation_type())) {
+      && !ObCharset::is_default_collation(
+        table_schema.get_charset_type(), table_schema.get_collation_type(), charset_compat_type_)) {
     if (OB_FAIL(databuff_printf(buf, buf_len, pos, "COLLATE = %s ",
                                              ObCharset::collation_name(table_schema.get_collation_type())))) {
       OB_LOG(WARN, "fail to print collate", K(ret), K(table_schema));
@@ -3816,7 +3821,8 @@ int ObSchemaPrinter::print_database_definiton(
     }
   }
   if (OB_SUCCESS == ret && !lib::is_oracle_mode() && CS_TYPE_INVALID != database_schema->get_collation_type()
-      && !ObCharset::is_default_collation(database_schema->get_collation_type())) {
+      && !ObCharset::is_default_collation(
+        database_schema->get_collation_type(), charset_compat_type_)) {
     if (OB_FAIL(databuff_printf(buf, buf_len, pos, " DEFAULT COLLATE = %s",
                                              ObCharset::collation_name(database_schema->get_collation_type())))) {
       SHARE_SCHEMA_LOG(WARN, "fail to print default collate", K(ret), K(*database_schema));

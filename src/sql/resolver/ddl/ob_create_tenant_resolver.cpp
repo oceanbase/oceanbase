@@ -125,6 +125,20 @@ int ObCreateTenantResolver::resolve(const ParseNode &parse_tree)
   }
 
   bool is_oracle_mode = false;
+  share::ObCompatType mysql_compat_type = share::COMPAT_MYSQL57;
+  ObCharsetCompatType charset_compat_type = CHARSET_COMPAT_MYSQL57;
+  bool is_enable = false;
+  if (OB_SUCC(ret)) {
+    if (OB_ISNULL(session_info_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("session info is NULL", K(ret));
+    } else if (OB_FAIL(session_info_->check_feature_enable(
+               ObCompatFeatureType::UTF8MB4_DEFAULT_COLLATION_COMPAT, is_enable))) {
+      LOG_WARN("fail to check feature enable", K(ret));
+    } else if (is_enable && OB_FAIL(session_info_->get_compatibility_control(mysql_compat_type))) {
+      LOG_WARN("fail to get compatibility_control", K(ret));
+    }
+  }
   if (OB_SUCC(ret)) {
     for (int64_t i = 0; i < mystmt->get_sys_var_nodes().count(); i++) {
       const ObVariableSetStmt::VariableSetNode &node = mystmt->get_sys_var_nodes().at(i);
@@ -142,7 +156,38 @@ int ObCreateTenantResolver::resolve(const ParseNode &parse_tree)
             is_oracle_mode = true;
           }
         }
+      } else if (0 == node.variable_name_.case_compare("ob_compatibility_control")) {
+        ObConstRawExpr *const_expr = static_cast<ObConstRawExpr*>(node.value_expr_);
+        if (nullptr == const_expr) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("const expr is null", K(ret));
+        } else {
+          ObObj value = const_expr->get_value();
+          int64_t compat_type_val = 0;
+          ObString compat_str;
+          if (value.is_int()) {
+            compat_type_val = value.get_int();
+            if (share::COMPAT_MYSQL8 == compat_type_val) {
+              mysql_compat_type = share::COMPAT_MYSQL8;
+            } else {
+              mysql_compat_type = share::COMPAT_MYSQL57;
+            }
+          } else {
+            if (OB_FAIL(value.get_string(compat_str))) {
+              LOG_WARN("fail to parse compatibility_control", K(ret), K(value));
+            } else if (0 == compat_str.case_compare("MYSQL8.0")) {
+              mysql_compat_type = share::COMPAT_MYSQL8;
+            } else {
+              mysql_compat_type = share::COMPAT_MYSQL57;
+            }
+          }
+        }
       }
+    }
+  }
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(share::ObCompatControl::get_charset_compat_type(mysql_compat_type, charset_compat_type))) {
+      LOG_WARN("fail to get charset compat type", K(ret), K(mysql_compat_type));
     }
   }
 
@@ -192,8 +237,8 @@ int ObCreateTenantResolver::resolve(const ParseNode &parse_tree)
       if (collation_type == CS_TYPE_INVALID
           && charset_type == CHARSET_INVALID) {
         charset_type = ObCharset::get_default_charset();
-        collation_type = ObCharset::get_default_collation(charset_type);
-      } else if (OB_FAIL(common::ObCharset::check_and_fill_info(charset_type, collation_type))) {
+        collation_type = ObCharset::get_default_collation(charset_type, charset_compat_type);
+      } else if (OB_FAIL(common::ObCharset::check_and_fill_info(charset_type, collation_type, charset_compat_type))) {
         SQL_LOG(WARN, "fail to check charset collation", K(ret));
       }
     }
