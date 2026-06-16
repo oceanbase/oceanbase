@@ -235,6 +235,7 @@ int ObMVProvider::print_mv_operators(ObSQLSessionInfo *session_info,
   ObQueryCtx *query_ctx = NULL;
   operators.reuse();
   int64_t rt_mv_last_refresh_ts = 0;
+  uint64_t compat_version = (NULL != refresh_info) ? refresh_info->compat_version_ : 0;
   if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     LOG_WARN("mv provider is not inited", K(ret));
@@ -255,6 +256,7 @@ int ObMVProvider::print_mv_operators(ObSQLSessionInfo *session_info,
                                                                     mview_id_,
                                                                     mview_info))) {
       LOG_WARN("failed to fetch mview info", K(ret), K(mview_id_));
+    } else if (OB_FALSE_IT(compat_version = mview_info.get_compat_version())) {
     } else if (OB_FAIL(scn.convert_for_sql(mview_info.get_last_refresh_scn()))) {
       LOG_WARN("failed to convert scn", K(ret), K(mview_info.get_last_refresh_scn()));
     } else if (scn.is_valid()) {
@@ -267,6 +269,7 @@ int ObMVProvider::print_mv_operators(ObSQLSessionInfo *session_info,
                                   *session_info,
                                   *stmt_factory_,
                                   *expr_factory_,
+                                  compat_version,
                                   refresh_info);
     mv_printer_ctx.rt_mv_last_refresh_ts_ = rt_mv_last_refresh_ts;
     query_ctx->get_query_hint_for_update().reset();

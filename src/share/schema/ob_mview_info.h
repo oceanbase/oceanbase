@@ -65,6 +65,7 @@ public:
   DEFINE_GETTER_AND_SETTER(uint64_t, data_sync_scn);
   DEFINE_GETTER_AND_SETTER(bool, is_synced);
   DEFINE_GETTER_AND_SETTER(ObMVNestedRefreshMode, nested_refresh_mode);
+  DEFINE_GETTER_AND_SETTER(uint64_t, compat_version);
 
 #undef DEFINE_GETTER_AND_SETTER
 #undef DEFINE_STRING_GETTER_AND_SETTER
@@ -135,7 +136,8 @@ public:
                K_(refresh_dop),
                K_(data_sync_scn),
                K_(is_synced),
-               K_(nested_refresh_mode));
+               K_(nested_refresh_mode),
+               K_(compat_version));
 
 public:
   static constexpr char *MVIEW_REFRESH_JOB_PREFIX = const_cast<char *>("MVIEW_REFRESH$J_");
@@ -167,6 +169,7 @@ private:
   uint64_t data_sync_scn_;
   bool is_synced_;
   ObMVNestedRefreshMode nested_refresh_mode_;
+  uint64_t compat_version_;
 };
 
 } // namespace schema

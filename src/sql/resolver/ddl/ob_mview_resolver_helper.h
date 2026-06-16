@@ -56,6 +56,9 @@ public:
                                            ObResolverParams &resolver_params,
                                            int64_t &start_time,
                                            ObString &next_time_expr);
+  static int resolve_compat_version_node(const ParseNode *compat_version_node,
+                                         const uint64_t tenant_id,
+                                         uint64_t &compat_version);
 
 private:
   static int resolve_materialized_view_container_table(ParseNode *partition_node,

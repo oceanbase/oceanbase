@@ -411,7 +411,8 @@ int ObMViewExplainRefreshExecutor::explain_single_mview(const uint64_t mview_id,
       ObMVPrinterRefreshInfo refresh_info(base_table_scn_range,
                                           mview_refresh_scn_range,
                                           tables_without_delete,
-                                          tables_without_insert);
+                                          tables_without_insert,
+                                          mview_info.get_compat_version());
       if (OB_FAIL(mv_provider.print_mv_operators(session_info_, &refresh_info, str_alloc,
                                                  operators))) {
         LOG_WARN("fail to print mv operators", KR(ret));

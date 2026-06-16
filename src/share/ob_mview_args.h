@@ -35,6 +35,7 @@ public:
   int64_t parallel_;
   int64_t refresh_dop_;
   share::schema::ObMVNestedRefreshMode nested_refresh_mode_;
+  uint64_t compat_version_;
 
   ObMVRefreshInfo() :
   refresh_method_(share::schema::ObMVRefreshMethod::NEVER),
@@ -44,7 +45,8 @@ public:
   exec_env_(),
   parallel_(OB_INVALID_COUNT),
   refresh_dop_(0),
-  nested_refresh_mode_(share::schema::ObMVNestedRefreshMode::INDIVIDUAL) {}
+  nested_refresh_mode_(share::schema::ObMVNestedRefreshMode::INDIVIDUAL),
+  compat_version_(0) {}
 
   void reset() {
     refresh_method_ = share::schema::ObMVRefreshMethod::NEVER;
@@ -55,6 +57,7 @@ public:
     parallel_ = OB_INVALID_COUNT;
     refresh_dop_ = 0;
     nested_refresh_mode_ = share::schema::ObMVNestedRefreshMode::INDIVIDUAL;
+    compat_version_ = 0;
   }
 
   bool operator == (const ObMVRefreshInfo &other) const {
@@ -65,7 +68,8 @@ public:
       && exec_env_ == other.exec_env_
       && parallel_ == other.parallel_
       && refresh_dop_ == other.refresh_dop_
-      && nested_refresh_mode_ == other.nested_refresh_mode_;
+      && nested_refresh_mode_ == other.nested_refresh_mode_
+      && compat_version_ == other.compat_version_;
   }
 
   TO_STRING_KV(K_(refresh_mode),
@@ -75,7 +79,8 @@ public:
       K_(exec_env),
       K_(parallel),
       K_(refresh_dop),
-      K_(nested_refresh_mode));
+      K_(nested_refresh_mode),
+      K_(compat_version));
 };
 
 struct ObMVRequiredColumnsInfo {
@@ -263,7 +268,9 @@ public:
     is_alter_refresh_next_(false),
     next_time_expr_(),
     is_alter_nested_refresh_mode_(false),
-    nested_refresh_mode_(share::schema::ObMVNestedRefreshMode::MAX)
+    nested_refresh_mode_(share::schema::ObMVNestedRefreshMode::MAX),
+    is_alter_compat_version_(false),
+    compat_version_(0)
   {
   }
   ~ObAlterMViewArg() = default;
@@ -287,7 +294,9 @@ public:
                K_(is_alter_refresh_next),
                K_(next_time_expr),
                K_(is_alter_nested_refresh_mode),
-               K_(nested_refresh_mode));
+               K_(nested_refresh_mode),
+               K_(is_alter_compat_version),
+               K_(compat_version));
 public:
   void set_exec_env(const ObString &exec_env)
   {
@@ -333,6 +342,11 @@ public:
     is_alter_nested_refresh_mode_ = true;
     nested_refresh_mode_ = nested_refresh_mode;
   }
+  void set_compat_version(uint64_t compat_version)
+  {
+    is_alter_compat_version_ = true;
+    compat_version_ = compat_version;
+  }
   const ObString &get_exec_env() const { return exec_env_; }
   bool is_alter_on_query_computation() const { return is_alter_on_query_computation_; }
   bool get_enable_on_query_computation() const { return enable_on_query_computation_; }
@@ -350,6 +364,8 @@ public:
   const ObString &get_next_time_expr() const { return next_time_expr_; }
   bool is_alter_nested_refresh_mode() const { return is_alter_nested_refresh_mode_; }
   share::schema::ObMVNestedRefreshMode get_nested_refresh_mode() const { return nested_refresh_mode_; }
+  bool is_alter_compat_version() const { return is_alter_compat_version_; }
+  uint64_t get_compat_version() const { return compat_version_; }
 private:
   ObString exec_env_;
   bool is_alter_on_query_computation_;
@@ -369,6 +385,8 @@ private:
   // placeholer
   bool is_alter_nested_refresh_mode_;
   share::schema::ObMVNestedRefreshMode nested_refresh_mode_;
+  bool is_alter_compat_version_;
+  uint64_t compat_version_;
 };
 
 struct ObAlterMLogArg

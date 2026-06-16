@@ -65,6 +65,7 @@ struct SharedPrinterRawExprs
 };
 
 struct ObMVPrinterRefreshInfo  {
+  // only used in compaction path
   ObMVPrinterRefreshInfo(const share::ObScnRange &refresh_scn_range,
                          const int64_t part_idx,
                          const int64_t sub_part_idx,
@@ -77,12 +78,14 @@ struct ObMVPrinterRefreshInfo  {
       sub_part_idx_(sub_part_idx),
       range_(&range),
       tables_without_delete_(NULL),
-      tables_without_insert_(NULL)
+      tables_without_insert_(NULL),
+      compat_version_(0)
   {}
   ObMVPrinterRefreshInfo(const share::ObScnRange &refresh_scn_range,
                          const share::ObScnRange &mview_refresh_scn_range,
                          const ObIArray<uint64_t> &tables_without_delete,
-                         const ObIArray<uint64_t> &tables_without_insert)
+                         const ObIArray<uint64_t> &tables_without_insert,
+                         const uint64_t compat_version)
     : last_refresh_scn_(refresh_scn_range.start_scn_),
       refresh_scn_(refresh_scn_range.end_scn_),
       mv_last_refresh_scn_(&mview_refresh_scn_range.start_scn_),
@@ -91,11 +94,13 @@ struct ObMVPrinterRefreshInfo  {
       sub_part_idx_(OB_INVALID_INDEX),
       range_(NULL),
       tables_without_delete_(&tables_without_delete),
-      tables_without_insert_(&tables_without_insert)
+      tables_without_insert_(&tables_without_insert),
+      compat_version_(compat_version)
   {}
 
   TO_STRING_KV(K_(last_refresh_scn), K_(refresh_scn), KPC_(mv_last_refresh_scn), KPC_(mv_refresh_scn),
-              K_(part_idx), K_(sub_part_idx), KPC_(range), KPC_(tables_without_delete), KPC_(tables_without_insert));
+              K_(part_idx), K_(sub_part_idx), KPC_(range), KPC_(tables_without_delete), KPC_(tables_without_insert),
+              K_(compat_version));
 
   const share::SCN &last_refresh_scn_;
   const share::SCN &refresh_scn_;
@@ -109,6 +114,7 @@ struct ObMVPrinterRefreshInfo  {
   // for fast refresh adaptive skip refresh SQL
   const ObIArray<uint64_t> *tables_without_delete_; // ref id for tables without delete (including update)
   const ObIArray<uint64_t> *tables_without_insert_; // ref id for tables without insert (including update)
+  uint64_t compat_version_;
 };
 
 struct ObMVPrinterCtx {
@@ -116,6 +122,7 @@ struct ObMVPrinterCtx {
                  ObSQLSessionInfo &session_info,
                  ObStmtFactory &stmt_factory,
                  ObRawExprFactory &expr_factory,
+                 const uint64_t compat_version,
                  const ObMVPrinterRefreshInfo *refresh_info = NULL)
   : alloc_(alloc),
     session_info_(session_info),
@@ -123,7 +130,8 @@ struct ObMVPrinterCtx {
     expr_factory_(expr_factory),
     refresh_info_(refresh_info),
     marker_idx_(OB_INVALID_INDEX),
-    rt_mv_last_refresh_ts_(0)
+    rt_mv_last_refresh_ts_(0),
+    compat_version_(compat_version)
   {}
   OB_INLINE bool for_rt_expand() const { return NULL == refresh_info_; }
   OB_INLINE bool for_union_all_child_query() const { return OB_INVALID_INDEX != marker_idx_; }
@@ -135,6 +143,7 @@ struct ObMVPrinterCtx {
   int64_t marker_idx_; // for print union all child query
   // only used for rt_mv to check if mlog covered all columns of base table since last refreshment
   int64_t rt_mv_last_refresh_ts_;
+  uint64_t compat_version_;
 };
 
 class ObMVPrinter
@@ -330,6 +339,7 @@ protected:
   int get_mv_rowkey_exprs(const TableItem *mv_table, ObIArray<ObRawExpr*> &mv_rowkey_exprs);
   int add_col_exprs_into_select(ObIArray<SelectItem> &select_items, const ObIArray<ObRawExpr*> &col_exprs);
   int add_mv_rowkey_into_select(ObSelectStmt *stmt, const TableItem *mv_table);
+  int add_semi_to_inner_hint(ObDMLStmt *stmt);
   int add_dynamic_sampling_hint(ObDMLStmt *stmt, const TableItem *table);
   // is_table_skip_refresh
   // we do not add (table_without_delete && table_without_insert)

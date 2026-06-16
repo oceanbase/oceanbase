@@ -58,6 +58,7 @@ ObMViewInfo &ObMViewInfo::operator=(const ObMViewInfo &src_schema)
     data_sync_scn_ = src_schema.data_sync_scn_;
     is_synced_ = src_schema.is_synced_;
     nested_refresh_mode_ = src_schema.nested_refresh_mode_;
+    compat_version_ = src_schema.compat_version_;
     if (OB_FAIL(deep_copy_str(src_schema.refresh_next_, refresh_next_))) {
       LOG_WARN("deep copy refresh next failed", KR(ret), K(src_schema.refresh_next_));
     } else if (OB_FAIL(deep_copy_str(src_schema.refresh_job_, refresh_job_))) {
@@ -110,6 +111,7 @@ void ObMViewInfo::reset()
   data_sync_scn_ = 0;
   is_synced_ = false;
   nested_refresh_mode_ = ObMVNestedRefreshMode::MAX;
+  compat_version_ = 0;
   ObSchema::reset();
 }
 
@@ -141,7 +143,8 @@ OB_SERIALIZE_MEMBER(ObMViewInfo,
                     refresh_dop_,
                     data_sync_scn_,
                     is_synced_,
-                    nested_refresh_mode_);
+                    nested_refresh_mode_,
+                    compat_version_);
 
 int ObMViewInfo::gen_insert_mview_dml(const uint64_t exec_tenant_id, ObDMLSqlSplicer &dml) const
 {
@@ -187,6 +190,8 @@ int ObMViewInfo::gen_insert_mview_dml(const uint64_t exec_tenant_id, ObDMLSqlSpl
     LOG_WARN("fail to add is synced", K(ret));
   } else if (((data_version >= MOCK_DATA_VERSION_4_3_5_3 && data_version < DATA_VERSION_4_4_0_0) || (data_version >= DATA_VERSION_4_4_2_0)) && OB_FAIL(dml.add_column("nested_refresh_mode", nested_refresh_mode_))) {
     LOG_WARN("fail to add nested refresh mode", K(ret));
+  } else if (data_version >= DATA_VERSION_4_4_2_2 && OB_FAIL(dml.add_uint64_column("compat_version", compat_version_))) {
+    LOG_WARN("fail to add compat_version", K(ret));
   }
   return ret;
 }
@@ -260,6 +265,8 @@ int ObMViewInfo::gen_update_mview_attribute_dml(const uint64_t exec_tenant_id,
     LOG_WARN("fail to add is_synced", K(ret));
   } else if (((data_version >= MOCK_DATA_VERSION_4_3_5_3 && data_version < DATA_VERSION_4_4_0_0) || (data_version >= DATA_VERSION_4_4_2_0)) && OB_FAIL(dml.add_column("nested_refresh_mode", nested_refresh_mode_))) {
     LOG_WARN("fail to add nested_refresh_mode", K(ret));
+  } else if (data_version >= DATA_VERSION_4_4_2_2 && OB_FAIL(dml.add_uint64_column("compat_version", compat_version_))) {
+    LOG_WARN("fail to add compat_version", K(ret));
   }
   return ret;
 }
@@ -419,6 +426,8 @@ int ObMViewInfo::gen_update_mview_last_refresh_info_dml(const uint64_t exec_tena
     LOG_WARN("fail to add is_synced", KR(ret));
   } else if (((data_version >= MOCK_DATA_VERSION_4_3_5_3 && data_version < DATA_VERSION_4_4_0_0) || (data_version >= DATA_VERSION_4_4_2_0)) && OB_FAIL(dml.add_column("nested_refresh_mode", nested_refresh_mode_))) {
     LOG_WARN("fail to add nested_refresh_mode", KR(ret));
+  } else if (data_version >= DATA_VERSION_4_4_2_2 && OB_FAIL(dml.add_uint64_column("compat_version", compat_version_))) {
+    LOG_WARN("fail to add compat_version", KR(ret));
   }
   return ret;
 }
@@ -779,6 +788,7 @@ int ObMViewInfo::extract_mview_info(common::sqlclient::ObMySQLResult *result,
                                                          true /*ignore null*/, true /*ignore column error*/, false);
     EXTRACT_INT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(*result, nested_refresh_mode, mview_info,
                                                         ObMVNestedRefreshMode, true, true, 0);
+    EXTRACT_UINT_FIELD_TO_CLASS_MYSQL_WITH_DEFAULT_VALUE(*result, compat_version, mview_info, uint64_t, true, true, 0);
   }
   return ret;
 }

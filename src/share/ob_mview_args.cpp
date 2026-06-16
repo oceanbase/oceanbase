@@ -264,7 +264,8 @@ OB_SERIALIZE_MEMBER(ObMVRefreshInfo,
     exec_env_,
     parallel_,
     refresh_dop_,
-    nested_refresh_mode_);
+    nested_refresh_mode_,
+    compat_version_);
 
 OB_SERIALIZE_MEMBER(ObMVRequiredColumnsInfo,
                     base_table_id_,
@@ -328,6 +329,8 @@ void ObAlterMViewArg::reset()
   next_time_expr_.reset();
   is_alter_nested_refresh_mode_ = false;
   nested_refresh_mode_ = ObMVNestedRefreshMode::MAX;
+  is_alter_compat_version_ = false;
+  compat_version_ = 0;
 }
 
 int ObAlterMViewArg::assign(const ObAlterMViewArg &other)
@@ -351,6 +354,8 @@ int ObAlterMViewArg::assign(const ObAlterMViewArg &other)
     next_time_expr_ = other.next_time_expr_;
     is_alter_nested_refresh_mode_ = other.is_alter_nested_refresh_mode_;
     nested_refresh_mode_ = other.nested_refresh_mode_;
+    is_alter_compat_version_ = other.is_alter_compat_version_;
+    compat_version_ = other.compat_version_;
   }
   return ret;
 }
@@ -372,7 +377,9 @@ OB_SERIALIZE_MEMBER(ObAlterMViewArg,
                     is_alter_nested_refresh_mode_,
                     nested_refresh_mode_,
                     is_alter_table_dop_,
-                    table_dop_);
+                    table_dop_,
+                    is_alter_compat_version_,
+                    compat_version_);
 
 bool ObAlterMLogArg::is_valid() const
 {

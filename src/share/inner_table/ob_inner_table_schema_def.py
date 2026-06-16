@@ -6345,7 +6345,8 @@ def_table_schema(
     ('refresh_dop', 'int', 'false', '0'),
     ('data_sync_scn', 'uint', 'false', '0'),
     ('is_synced', 'bool', 'false', '0'),
-    ('nested_refresh_mode', 'int', 'false', '0')
+    ('nested_refresh_mode', 'int', 'false', '0'),
+    ('compat_version', 'uint', 'false', '0')
   ]
 )
 

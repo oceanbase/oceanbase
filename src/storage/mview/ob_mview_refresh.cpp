@@ -20,6 +20,7 @@
 #include "sql/ob_sql_utils.h"
 #include "lib/hash/ob_hashmap.h"
 #include "sql/resolver/mv/ob_mv_provider.h"
+#include "sql/resolver/mv/ob_mv_compat_control.h"
 #include "storage/mview/ob_mview_refresh_helper.h"
 #include "storage/mview/ob_mview_refresh_stats_utils.h"
 #include "storage/mview/ob_mview_mds.h"
@@ -343,6 +344,11 @@ int ObMViewRefresher::prepare_for_refresh(ObIAllocator &allocator,
     LOG_WARN("mview not exist", KR(ret), K(param_.tenant_id_), K(param_.mview_id_));
   } else if (OB_FAIL(fetch_mview_info(trans_, mview_info_))) {
     LOG_WARN("fail to fetch mview info and dep infos", KR(ret));
+  } else if (enable_adaptive_refresh_step_ &&
+             OB_FAIL(ObMVCompatControl::check_feature_enable(mview_info_.get_compat_version(),
+                                                             ObMVCompatFeatureType::ADAPTIVE_REFRESH_STEP,
+                                                             enable_adaptive_refresh_step_))) {
+    LOG_WARN("fail to check mv compat feature", KR(ret));
   } else if (ObMVRefreshMode::NEVER == mview_info_.get_refresh_mode()) {
     ret = OB_ERR_MVIEW_NEVER_REFRESH;
     LOG_WARN("mview never refresh", KR(ret), K(mview_info_));
@@ -393,7 +399,8 @@ int ObMViewRefresher::prepare_for_refresh(ObIAllocator &allocator,
     ObMVPrinterRefreshInfo refresh_info(base_table_scn_range_,
                                         mview_refresh_scn_range_,
                                         tables_without_delete,
-                                        tables_without_insert);
+                                        tables_without_insert,
+                                        mview_info_.get_compat_version());
     if (OB_FAIL(mv_provider.print_mv_operators(ctx_.get_my_session(),
                                                &refresh_info,
                                                allocator,

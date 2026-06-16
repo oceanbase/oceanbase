@@ -203,6 +203,12 @@ int ObMviewAlterService::alter_mview_attributes(
             need_alter_mview_refresh_job = true;
           }
         }
+        if (mv_arg.is_alter_compat_version()) {
+          if (mv_arg.get_compat_version() != mview_info.get_compat_version()) {
+            mview_info.set_compat_version(mv_arg.get_compat_version());
+            need_alter_mview_info = true;
+          }
+        }
 
         if (OB_FAIL(ddl_operator.alter_table_options(schema_guard, new_container_schema,
                                                      *container_table_schema, false, trans))) {

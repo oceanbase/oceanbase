@@ -35,6 +35,7 @@ ob_set_subtarget(ob_sql common_mixed
   privilege_check/ob_privilege_check.cpp
   privilege_check/ob_ai_model_priv_util.cpp
   resolver/mv/ob_mv_checker.cpp
+  resolver/mv/ob_mv_compat_control.cpp
   resolver/mv/ob_mv_provider.cpp
   resolver/mv/ob_mv_printer.cpp
   resolver/mv/ob_simple_mav_printer.cpp

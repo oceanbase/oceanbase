@@ -111,7 +111,7 @@ int ObAlterMviewUtils::resolve_mv_options(const ParseNode &node,
         LOG_WARN("altering the refresh method of materialized view is not supported yet", KR(ret));
         LOG_USER_ERROR(OB_NOT_SUPPORTED, "altering the refresh method of materialized view is");
       } else if (0 == refresh_info_node->int32_values_[0]) {
-        if (OB_UNLIKELY(4 != refresh_info_node->num_child_)) {
+        if (OB_UNLIKELY(5 != refresh_info_node->num_child_)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("unexpected refresh info node", K(ret), K(refresh_info_node->type_), K(refresh_info_node->num_child_));
         } else {
@@ -120,6 +120,7 @@ int ObAlterMviewUtils::resolve_mv_options(const ParseNode &node,
           const ParseNode *nested_refresh_node = refresh_info_node->children_[1];
           const ParseNode *refresh_on_node = refresh_info_node->children_[2];
           const ParseNode *refresh_interval_node = refresh_info_node->children_[3];
+          const ParseNode *compat_version_node = refresh_info_node->children_[4];
           if (-1 != refresh_method) {
             // REFRESH METHOD BRANCH
             ret = OB_NOT_SUPPORTED;
@@ -166,6 +167,21 @@ int ObAlterMviewUtils::resolve_mv_options(const ParseNode &node,
               alter_mview_arg.set_start_time(start_time);
               if (!next_time_expr.empty()) {
                 alter_mview_arg.set_next_time_expr(next_time_expr);
+              }
+            }
+          } else if (NULL != compat_version_node) {
+            // COMPAT VERSION BRANCH
+            if (OB_UNLIKELY(data_version < DATA_VERSION_4_4_2_2)) {
+              ret = OB_NOT_SUPPORTED;
+              LOG_WARN("tenant data version is less than 4.4.2.2, alter mv compat version is not supported", K(ret), K(data_version));
+              LOG_USER_ERROR(OB_NOT_SUPPORTED, "alter mv compat version is");
+            } else {
+              uint64_t compat_version = 0;
+              if (OB_FAIL(ObMViewResolverHelper::resolve_compat_version_node(
+                      compat_version_node, tenant_id, compat_version))) {
+                LOG_WARN("failed to resolve compat version node", KR(ret));
+              } else {
+                alter_mview_arg.set_compat_version(compat_version);
               }
             }
           } else {
