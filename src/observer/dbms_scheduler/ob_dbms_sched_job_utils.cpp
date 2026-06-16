@@ -189,10 +189,10 @@ int ObDBMSSchedJobUtils::zone_check_impl(int64_t tenant_id, const ObString &zone
 
 bool ObDBMSSchedJobUtils::is_server_addr_form(const ObString &str)
 {
-  // Zone names cannot contain ':' (see ob_zone.cpp / naming rules), so the colon is a
-  // sufficient discriminator. We still rely on ObAddr::parse_from_string at use sites for
-  // full validation.
-  return !str.empty() && (NULL != str.find(':'));
+  ObAddr addr;
+  return !str.empty()
+         && OB_SUCCESS == addr.parse_from_string(str)
+         && addr.is_valid();
 }
 
 int ObDBMSSchedJobUtils::server_check_impl(int64_t tenant_id, const ObString &server_str)
