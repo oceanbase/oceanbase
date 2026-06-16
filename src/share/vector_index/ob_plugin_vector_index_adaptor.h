@@ -1000,7 +1000,7 @@ public:
       common::ObIArray<uint64_t> &i_vids, common::ObIArray<uint64_t> &d_vids);
 
   // for index serialize and deserialize
-  int serialize_snapshot(ObHNSWSerializeCallback::CbParam &param);
+  int serialize_snapshot(ObHNSWSerializeCallback::CbParam &param, const bool skip_for_merge = true);
   int build_snap_meta(
       const ObTabletID &tablet_id, const int64_t snapshot_version, const int64_t &data_block_cnt);
   int build_and_serialize_meta_data(const ObTabletID &tablet_id,
@@ -1026,6 +1026,9 @@ public:
   int create_snap_segment(const ObVectorIndexAlgorithmType enforce_type, ObVectorIndexSegmentHandle &segment_handle);
   int create_snap_segment(const ObVectorIndexAlgorithmType enforce_type, ObVectorIndexSegmentMeta &seg_meta);
 
+  void set_created_by_segment_merge(const bool value) { created_by_segment_merge_ = value; }
+  bool is_created_by_segment_merge() const { return created_by_segment_merge_; }
+
 public:
 
   void log_deseri_snap_without_lock(ObVectorIndexAlgorithmType index_type, const ObString &target_prefix,
@@ -1041,7 +1044,8 @@ public:
               K_(inc_table_id), K_(vbitmap_table_id), K_(snapshot_table_id), K_(embedded_table_id),
               K_(ref_cnt), K_(idle_cnt), KP_(allocator),
               K_(index_identity), K_(follower_sync_statistics),
-              K_(mem_check_cnt), K_(is_mem_limited), K_(is_need_vid), K_(snapshot_key_prefix), K_(replace_scn), K_(dump_info));
+              K_(mem_check_cnt), K_(is_mem_limited), K_(is_need_vid), K_(snapshot_key_prefix), K_(replace_scn),
+              K_(created_by_segment_merge), K_(dump_info));
 
 private:
   int do_fill_vector_index_all_segments(common::ObIArray<ObVectorSegmentInfo> &segment_infos);
@@ -1147,6 +1151,8 @@ private:
    * we can't get scn from snapshot_key_prefix_ because it is invaild in some cases like BQ
    */
   SCN replace_scn_;
+  bool created_by_segment_merge_; // whether the adaptor is created by segment merge
+
   constexpr static uint32_t VEC_INDEX_INCR_DATA_SYNC_THRESHOLD = 100;
   constexpr static uint32_t VEC_INDEX_VBITMAP_SYNC_THRESHOLD = 100;
   constexpr static uint32_t VEC_INDEX_SNAP_DATA_SYNC_THRESHOLD = 1;

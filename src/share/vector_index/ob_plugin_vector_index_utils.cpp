@@ -2731,5 +2731,32 @@ int ObPluginVectorIndexUtils::get_current_read_scn(share::SCN &current_scn)
   return ret;
 }
 
+int ObPluginVectorIndexUtils::get_lob_tablet_id(const ObLSID &ls_id, const ObTabletID &data_tablet_id, ObTabletID &lob_meta_tablet_id, ObTabletID &lob_piece_tablet_id)
+{
+  int ret = OB_SUCCESS;
+ // get lob tablet id
+ HEAP_VARS_3((ObLSHandle, ls_handle), (ObTabletHandle, data_tablet_handle), (ObTabletBindingMdsUserData, ddl_data))
+ {
+   ObLSService *ls_service = nullptr;
+   if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
+     ret = OB_ERR_UNEXPECTED;
+     LOG_WARN("unexpected err", K(ret), K(MTL_ID()));
+   } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
+     LOG_WARN("failed to get log stream", K(ret), K(ls_id));
+   } else if (OB_ISNULL(ls_handle.get_ls())) {
+     ret = OB_ERR_UNEXPECTED;
+     LOG_ERROR("ls should not be null", K(ret));
+   } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(data_tablet_id, data_tablet_handle))) {
+     LOG_WARN("fail to get tablet handle", K(ret), K(data_tablet_id));
+   } else if (OB_FAIL(data_tablet_handle.get_obj()->get_ddl_data(ddl_data))) {
+     LOG_WARN("failed to get ddl data from tablet", K(ret), K(data_tablet_handle));
+   } else {
+     lob_meta_tablet_id = ddl_data.lob_meta_tablet_id_;
+     lob_piece_tablet_id = ddl_data.lob_piece_tablet_id_;
+   }
+ }
+  return ret;
+}
+
 } // namespace share
 } // namespace oceanbase

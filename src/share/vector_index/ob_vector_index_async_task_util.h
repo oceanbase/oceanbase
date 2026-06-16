@@ -524,6 +524,10 @@ protected:
   static const int BATCH_CNT = 2000; // 8M / 4(sizeof(float)) / 1000(dim)
   int get_current_scn(share::SCN &current_scn);
   int execute_inner_sql(const ObTableSchema &data_schema, const int64_t data_table_id, const int64_t dest_table_id, const int64_t task_id, const int64_t parallelism, ObString &partition_names, share::SCN &current_scn);
+  int execute_inner_sql(
+    const int64_t schema_version, const bool is_user_hidden_table, const bool need_padding,
+    const int64_t data_table_id, const int64_t dest_table_id,
+    const int64_t task_id, const int64_t parallelism, const ObString &partition_names, share::SCN &current_scn);
   int build_inc_index(ObPluginVectorIndexAdaptor &adaptor);
   int process_data_for_index(ObPluginVectorIndexAdaptor &adaptor, ObPluginVectorIndexAdaptor &old_adaptor);
   int optimize_vector_index(ObPluginVectorIndexAdaptor &adaptor, ObPluginVectorIndexAdaptor &old_adaptor);

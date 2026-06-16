@@ -477,7 +477,9 @@ ObPluginVectorIndexAdaptor::ObPluginVectorIndexAdaptor(common::ObIAllocator *all
     parent_mem_ctx_(entity), index_identity_(), follower_sync_statistics_(), is_in_opt_task_(false), need_be_optimized_(false), extra_info_column_count_(0),
     opt_task_lock_(common::ObLatchIds::OB_PLUGIN_VECTOR_INDEX_ADAPTOR_OPT_TASK_LOCK),
     reload_lock_(common::ObLatchIds::VECTOR_RELOAD_LOCK),
-    query_lock_(common::ObLatchIds::VECTOR_QUERY_LOCK), reload_finish_(false), last_embedding_time_(ObTimeUtility::fast_current_time()), is_need_vid_(true), sparse_vector_type_(nullptr), index_statistics_updated_(false), replace_scn_()
+    query_lock_(common::ObLatchIds::VECTOR_QUERY_LOCK), reload_finish_(false),
+    last_embedding_time_(ObTimeUtility::fast_current_time()), is_need_vid_(true), sparse_vector_type_(nullptr), index_statistics_updated_(false), replace_scn_(),
+    created_by_segment_merge_(false)
 {
   ATOMIC_INC(&instacnce_cnt_);
 }
@@ -3435,7 +3437,7 @@ int ObPluginVectorIndexAdaptor::prepare_delta_mem_data(roaring::api::roaring64_b
   return ret;
 }
 
-int ObPluginVectorIndexAdaptor::serialize_snapshot(ObHNSWSerializeCallback::CbParam &param)
+int ObPluginVectorIndexAdaptor::serialize_snapshot(ObHNSWSerializeCallback::CbParam &param, const bool skip_for_merge)
 {
   int ret = OB_SUCCESS;
   ObVectorIndexParam *index_param = nullptr;
@@ -3444,7 +3446,10 @@ int ObPluginVectorIndexAdaptor::serialize_snapshot(ObHNSWSerializeCallback::CbPa
   int64_t min_vid = INT64_MAX;
   int64_t max_vid = 0;
   ObVecIdxSnapshotDataWriteCtx *vctx = reinterpret_cast<ObVecIdxSnapshotDataWriteCtx*>(param.vctx_);
-  if (!snap_data_->is_inited()) {
+  if (skip_for_merge && created_by_segment_merge_) {
+    ret = OB_NOT_INIT; // compact ddl pipeline behavior
+    LOG_INFO("skip serialize snapshot by merge task", KPC(this));
+  } else if (!snap_data_->is_inited()) {
     ret = OB_NOT_INIT;
     LOG_WARN("snap index is not init", K(ret));
   } else if (OB_ISNULL(snap_data_->builder_)) {
@@ -3521,7 +3526,9 @@ int ObPluginVectorIndexAdaptor::serialize_snapshot(ObHNSWSerializeCallback::CbPa
 int ObPluginVectorIndexAdaptor::renew_single_snap_index(bool mem_saving_mode)
 {
   int ret = OB_SUCCESS;
-  if (mem_saving_mode) {
+  if (created_by_segment_merge_) {
+    LOG_INFO("adaptor is created by segment merge, do not need to renew snap data", KPC(this));
+  } else if (mem_saving_mode) {
     ObString invalid_prefix("renew");
     if (! snap_data_.is_valid()) {
       ret = OB_ERR_UNEXPECTED;
@@ -6261,34 +6268,6 @@ int ObPluginVectorIndexAdaptor::check_vbitmap_is_subset(roaring::api::roaring64_
   return ret;
 }
 
-static int get_lob_tablet_id(const ObLSID &ls_id, const ObTabletID &data_tablet_id,
-    ObTabletID &lob_meta_tablet_id, ObTabletID &lob_piece_tablet_id)
-{
-  int ret = OB_SUCCESS;
- // get lob tablet id
- HEAP_VARS_3((ObLSHandle, ls_handle), (ObTabletHandle, data_tablet_handle), (ObTabletBindingMdsUserData, ddl_data))
- {
-   ObLSService *ls_service = nullptr;
-   if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
-     ret = OB_ERR_UNEXPECTED;
-     LOG_WARN("unexpected err", K(ret), K(MTL_ID()));
-   } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD))) {
-     LOG_WARN("failed to get log stream", K(ret), K(ls_id));
-   } else if (OB_ISNULL(ls_handle.get_ls())) {
-     ret = OB_ERR_UNEXPECTED;
-     LOG_ERROR("ls should not be null", K(ret));
-   } else if (OB_FAIL(ls_handle.get_ls()->get_tablet(data_tablet_id, data_tablet_handle))) {
-     LOG_WARN("fail to get tablet handle", K(ret), K(data_tablet_id));
-   } else if (OB_FAIL(data_tablet_handle.get_obj()->get_ddl_data(ddl_data))) {
-     LOG_WARN("failed to get ddl data from tablet", K(ret), K(data_tablet_handle));
-   } else {
-     lob_meta_tablet_id = ddl_data.lob_meta_tablet_id_;
-     lob_piece_tablet_id = ddl_data.lob_piece_tablet_id_;
-   }
- }
-  return ret;
-}
-
 int ObPluginVectorIndexAdaptor::persist_incr_segment(const ObLSID &ls_id)
 {
   int ret = OB_SUCCESS;
@@ -6313,7 +6292,7 @@ int ObPluginVectorIndexAdaptor::persist_incr_segment(const ObLSID &ls_id)
     LOG_WARN("fail to get tx_desc", K(ret));
   } else if (OB_FAIL(txs->get_ls_read_snapshot(*tx_desc, transaction::ObTxIsolationLevel::RC, ls_id, timeout, snapshot))) {
     LOG_WARN("fail to get snapshot", K(ret));
-  } else if (OB_FAIL(get_lob_tablet_id(ls_id, ctx.data_tablet_id_, ctx.lob_meta_tablet_id_, ctx.lob_piece_tablet_id_))) {
+  } else if (OB_FAIL(ObPluginVectorIndexUtils::get_lob_tablet_id(ls_id, ctx.data_tablet_id_, ctx.lob_meta_tablet_id_, ctx.lob_piece_tablet_id_))) {
     LOG_WARN("get_lob_tablet_id fail", K(ret), K(ls_id), K(ctx.data_tablet_id_));
   } else if (OB_FAIL(snap_table_handler.init(ls_id, this->get_data_table_id(), this->get_snapshot_table_id(), this->get_snap_tablet_id()))) {
     LOG_WARN("init snap table handler fail", K(ret));
