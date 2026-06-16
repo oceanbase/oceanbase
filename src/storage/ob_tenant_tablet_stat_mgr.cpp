@@ -907,34 +907,6 @@ int ObTenantTabletStatMgr::get_all_tablet_analyzers(
   return ret;
 }
 
-int ObTenantTabletStatMgr::get_history_tablet_stats(
-    const share::ObLSID &ls_id,
-    const common::ObTabletID &tablet_id,
-    common::ObIArray<ObTabletStat> &tablet_stats)
-{
-  int ret = OB_SUCCESS;
-  const ObTabletStatKey key(ls_id, tablet_id);
-
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("ObTenantTabletStatMgr not inited", K(ret));
-  } else if (OB_UNLIKELY(!key.is_valid())) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("get invalid arguments", K(ret), K(ls_id), K(tablet_id));
-  } else {
-    ObTabletStreamNode *stream_node = nullptr;
-    ObBucketHashRLockGuard lock_guard(bucket_lock_, key.hash());
-    if (OB_FAIL(stream_map_.get_refactored(key, stream_node))) {
-      if (OB_HASH_NOT_EXIST != ret) {
-        LOG_WARN("failed to get history stat", K(ret), K(key));
-      }
-    } else if (OB_FAIL(stream_node->stream_.get_all_tablet_stat(tablet_stats))) {
-      LOG_WARN("failed to get all tablet stat", K(ret), K(key));
-    }
-  }
-  return ret;
-}
-
 int ObTenantTabletStatMgr::get_tablet_analyzer(
     const share::ObLSID &ls_id,
     const common::ObTabletID &tablet_id,

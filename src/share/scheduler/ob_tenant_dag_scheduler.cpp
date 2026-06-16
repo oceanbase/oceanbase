@@ -13,9 +13,6 @@
 #include "storage/compaction/ob_batch_freeze_tablets_dag.h"
 #include "share/compaction/ob_batch_exec_dag.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/compaction_v2/ob_ss_compact_helper.h"
-#endif
 
 
 namespace oceanbase
@@ -3297,9 +3294,6 @@ int ObDagPrioScheduler::check_ls_compaction_dag_exist_with_cancel(
         // do nothing
       } else if (ObDagType::DAG_TYPE_BATCH_FREEZE_TABLETS == cur->get_type()) {
         cancel_flag = (ls_id == static_cast<compaction::ObBatchFreezeTabletsDag *>(cur)->get_param().ls_id_);
-#ifdef OB_BUILD_SHARED_STORAGE
-      } else if (GCTX.is_shared_storage_mode() && SSCompactHelper::check_ls_dag_need_cancel(*cur, ls_id, cancel_flag)) {
-#endif
       } else {
         cancel_flag = (ls_id == static_cast<compaction::ObTabletMergeDag *>(cur)->get_ls_id());
       }
@@ -3772,12 +3766,6 @@ bool ObDagPrioScheduler::check_need_load_shedding_(const bool for_schedule)
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   if (OB_ISNULL(scheduler = ObBasicMergeScheduler::get_merge_scheduler())) {
     // may be during the start phase
-#ifdef OB_BUILD_SHARED_STORAGE
-  } else if (GCTX.is_shared_storage_mode()
-             && tenant_config.is_valid()
-             && tenant_config->_ob_enable_background_thread_auto_adapt) {
-    need_shedding = false;
-#endif
   } else if (scheduler->enable_adaptive_merge_schedule()) {
     ObTenantTabletStatMgr *stat_mgr = MTL(ObTenantTabletStatMgr *);
     int64_t load_shedding_factor = 1;
@@ -4460,7 +4448,7 @@ void ObTenantDagScheduler::wait()
   TG_WAIT(tg_id_);
 }
 
-void ObTenantDagScheduler::inner_reload_config()
+void ObTenantDagScheduler::reload_config()
 {
   omt::ObTenantConfigGuard tenant_config(TENANT_CONF(MTL_ID()));
   if (tenant_config.is_valid()) {
@@ -4475,28 +4463,7 @@ void ObTenantDagScheduler::inner_reload_config()
     set_thread_score(ObDagPrio::DAG_PRIO_DDL, tenant_config->ddl_thread_score);
     set_thread_score(ObDagPrio::DAG_PRIO_DDL_HIGH, tenant_config->ddl_high_thread_score);
     set_thread_score(ObDagPrio::DAG_PRIO_TTL, tenant_config->ttl_thread_score);
-#ifdef OB_BUILD_SHARED_STORAGE
-    // use compaction_high_thread_score as default upload thread count
-    if (0 == tenant_config->inc_sstable_upload_thread_score) {
-      set_thread_score(ObDagPrio::DAG_PRIO_INC_SSTABLE_UPLOAD, tenant_config->compaction_high_thread_score);
-    } else {
-      set_thread_score(ObDagPrio::DAG_PRIO_INC_SSTABLE_UPLOAD, tenant_config->inc_sstable_upload_thread_score);
-    }
-    set_thread_score(ObDagPrio::DAG_PRIO_ATTACH_SHARED_SSTABLE, tenant_config->attach_shared_sstable_thread_score);
-#endif
     set_compaction_dag_limit(tenant_config->compaction_dag_cnt_limit);
-  }
-}
-
-void ObTenantDagScheduler::reload_config()
-{
-#ifdef OB_BUILD_SHARED_STORAGE
-  if (GCTX.is_shared_storage_mode()) {
-    ss_reload_config();
-  } else
-#endif
-  {
-    inner_reload_config();
   }
 }
 
@@ -5151,14 +5118,7 @@ void ObTenantDagScheduler::run1()
   while (!has_set_stop()) {
     diagnose_for_suggestion();
     // must before dump_dag_status, because it will use the statistics result of dump_dag_status.
-#ifdef OB_BUILD_SHARED_STORAGE
-    if (GCTX.is_shared_storage_mode()) {
-      adapt_ss_work_thread();
-    }
-#endif
-    if (!GCTX.is_shared_storage_mode()) {
-      adapt_window_thread_cnt();
-    }
+    adapt_window_thread_cnt();
     dump_dag_status();
     loop_dag_net();
     {

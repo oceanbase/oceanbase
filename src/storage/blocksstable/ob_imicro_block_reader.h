@@ -18,6 +18,7 @@
 #include "sql/engine/expr/ob_expr_add.h"
 #include "storage/column_store/ob_column_store_util.h"
 #include "storage/blocksstable/ob_datum_row.h"
+#include "storage/compaction/vectorization/ob_compaction_vector.h"
 
 namespace oceanbase
 {
@@ -555,6 +556,19 @@ public:
       sql::ObEvalCtx &eval_ctx,
       sql::ObExprPtrIArray &exprs,
       const bool need_init_vector)
+  {
+    return OB_NOT_SUPPORTED;
+  }
+
+  virtual int get_rows(
+    const common::ObIArrayWrap<uint16_t> *cols,
+    const common::ObIArray<blocksstable::ObStorageDatum> *default_datums,
+    const int32_t *row_ids,
+    const int64_t row_cap,
+    const int64_t vec_offset,
+    const char **cell_datas,
+    uint32_t *len_array,
+    common::ObIArray<compaction::ObCompactionVector *> &vectors)
   {
     return OB_NOT_SUPPORTED;
   }

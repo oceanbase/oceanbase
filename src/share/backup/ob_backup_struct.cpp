@@ -3450,10 +3450,6 @@ static const char *OB_BACKUP_STATUS_STRS[] = {
   "BACKUP_LOG",
   "BACKUP_FUSE_TABLET_META",
   "PREPARE_BACKUP_LOG",
-  "DISABLE_SS_GC",
-  "WAIT_SS_CLOG_CHECKPOINT",
-  "SS_WAIT_LS_CONSISTENCY",
-  "ENABLE_SS_GC",
 };
 
 const char* ObBackupStatus::get_str() const
@@ -4549,14 +4545,12 @@ int64_t ObBackupSetFileDesc::to_string(char *min_restore_scn_str_buf,  char *buf
 
 bool ObBackupSetFileDesc::is_allow_quick_restore(const Compatible &compatible)
 {
-  const bool is_shared_storage_mode = GCTX.is_shared_storage_mode();
-  return !is_shared_storage_mode && is_backup_set_support_quick_restore(compatible);
+  return is_backup_set_support_quick_restore(compatible);
 }
 
 bool ObBackupSetFileDesc::is_not_allow_quick_restore(const Compatible &compatible)
 {
-  const bool is_shared_storage_mode = GCTX.is_shared_storage_mode();
-  return is_shared_storage_mode || is_backup_set_not_support_quick_restore(compatible);
+  return is_backup_set_not_support_quick_restore(compatible);
 }
 
 

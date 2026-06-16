@@ -120,9 +120,9 @@ int ObBackupOtherBlocksMgr::init(const uint64_t tenant_id, const common::ObTable
   } else if (OB_INVALID_ID == tenant_id || !tablet_id.is_valid() || !table_key.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(tenant_id), K(tablet_id), K(table_key));
-  } else if (!GCTX.is_shared_storage_mode() && !table_key.is_ddl_dump_sstable()) {
+  } else if (!table_key.is_ddl_dump_sstable()) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("only ddl dump in ss mode allowed here", K(ret), K(table_key));
+    LOG_WARN("only ddl dump sstable allowed here", K(ret), K(table_key));
   } else if (OB_FAIL(get_total_other_block_count_(tablet_id, sstable, total_other_block_count))) {
     LOG_WARN("failed to get total other block count", K(ret), K(tablet_id), K(sstable));
   } else {

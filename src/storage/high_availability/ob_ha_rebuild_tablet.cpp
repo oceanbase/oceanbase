@@ -177,20 +177,14 @@ int ObRebuildTabletCopyCtx::get_copy_tablet_record_extra_info(ObCopyTabletRecord
 ObRebuildTabletDagNetInitParam::ObRebuildTabletDagNetInitParam()
   : arg_(),
     task_id_(),
-    bandwidth_throttle_(nullptr),
-    svr_rpc_proxy_(nullptr),
-    storage_rpc_(nullptr),
-    sql_proxy_(nullptr)
+    ha_svc_ctx_()
 {
 }
 
 bool ObRebuildTabletDagNetInitParam::is_valid() const
 {
   return arg_.is_valid() && !task_id_.is_invalid()
-      && OB_NOT_NULL(bandwidth_throttle_)
-      && OB_NOT_NULL(svr_rpc_proxy_)
-      && OB_NOT_NULL(storage_rpc_)
-      && OB_NOT_NULL(sql_proxy_);
+      && ha_svc_ctx_.is_valid();
 }
 
 
@@ -198,11 +192,7 @@ ObRebuildTabletDagNet::ObRebuildTabletDagNet()
     : ObIDagNet(ObDagNetType::DAG_NET_TYPE_REBUILD_TABLET),
       is_inited_(false),
       ctx_(nullptr),
-      bandwidth_throttle_(nullptr),
-      svr_rpc_proxy_(nullptr),
-      storage_rpc_(nullptr),
-      sql_proxy_(nullptr)
-
+      ha_svc_ctx_()
 {
 }
 
@@ -264,10 +254,7 @@ int ObRebuildTabletDagNet::init_by_param(const ObIDagInitParam *param)
     ctx_->task_id_ = init_param->task_id_;
     ctx_->start_ts_ = ObTimeUtil::current_time();
     ctx_->src_ = src;
-    bandwidth_throttle_ = init_param->bandwidth_throttle_;
-    svr_rpc_proxy_ = init_param->svr_rpc_proxy_;
-    storage_rpc_ = init_param->storage_rpc_;
-    sql_proxy_ = init_param->sql_proxy_;
+    ha_svc_ctx_ = init_param->ha_svc_ctx_;
     is_inited_ = true;
   }
   return ret;
@@ -586,9 +573,7 @@ ObInitialRebuildTabletTask::ObInitialRebuildTabletTask()
   : ObITask(TASK_TYPE_INITIAL_REBUILD_TABLET_TASK),
     is_inited_(false),
     ctx_(nullptr),
-    bandwidth_throttle_(nullptr),
-    svr_rpc_proxy_(nullptr),
-    storage_rpc_(nullptr),
+    ha_svc_ctx_(),
     dag_net_(nullptr)
 {
 }
@@ -616,9 +601,7 @@ int ObInitialRebuildTabletTask::init()
   } else if (FALSE_IT(rebuild_tablet_dag_net = static_cast<ObRebuildTabletDagNet*>(dag_net))) {
   } else {
     ctx_ = rebuild_tablet_dag_net->get_rebuild_tablet_ctx();
-    bandwidth_throttle_ = rebuild_tablet_dag_net->get_bandwidth_throttle();
-    svr_rpc_proxy_ = rebuild_tablet_dag_net->get_storage_rpc_proxy();
-    storage_rpc_ = rebuild_tablet_dag_net->get_storage_rpc();
+    ha_svc_ctx_ = rebuild_tablet_dag_net->get_ha_svc_ctx();
     dag_net_ = dag_net;
     is_inited_ = true;
     LOG_INFO("succeed init initial rebuild tablet task", "ls id", ctx_->arg_.ls_id_,
@@ -909,9 +892,7 @@ ObStartRebuildTabletTask::ObStartRebuildTabletTask()
   : ObITask(TASK_TYPE_START_REBUILD_TABLET_TASK),
     is_inited_(false),
     ctx_(nullptr),
-    bandwidth_throttle_(nullptr),
-    svr_rpc_proxy_(nullptr),
-    storage_rpc_(nullptr),
+    ha_svc_ctx_(),
     finish_dag_(nullptr)
 {
 }
@@ -940,9 +921,7 @@ int ObStartRebuildTabletTask::init(
   } else if (FALSE_IT(rebuild_tablet_dag_net = static_cast<ObRebuildTabletDagNet*>(dag_net))) {
   } else {
     ctx_ = rebuild_tablet_dag_net->get_rebuild_tablet_ctx();
-    bandwidth_throttle_ = rebuild_tablet_dag_net->get_bandwidth_throttle();
-    svr_rpc_proxy_ = rebuild_tablet_dag_net->get_storage_rpc_proxy();
-    storage_rpc_ = rebuild_tablet_dag_net->get_storage_rpc();
+    ha_svc_ctx_ = rebuild_tablet_dag_net->get_ha_svc_ctx();
     finish_dag_ = finish_dag;
     is_inited_ = true;
     LOG_INFO("succeed init start rebuild tablet task", "ls id", ctx_->arg_.ls_id_,
@@ -981,7 +960,6 @@ int ObStartRebuildTabletTask::generate_rebuild_tablets_dag_()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  ObTenantDagScheduler *scheduler = nullptr;
   ObIDagNet *dag_net = nullptr;
   ObStartRebuildTabletDag *start_rebuild_tablet_dag = nullptr;
   ObTabletRebuildMajorDag *tablet_rebuild_dag = nullptr;
@@ -995,9 +973,6 @@ int ObStartRebuildTabletTask::generate_rebuild_tablets_dag_()
   } else if (OB_ISNULL(dag_net = start_rebuild_tablet_dag->get_dag_net())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("rebuild tablet dag net should not be NULL", K(ret), KP(dag_net));
-  } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
   } else {
     ObIDag *parent = this->get_dag();
     ObLogicTabletID logic_tablet_id;
@@ -1007,32 +982,13 @@ int ObStartRebuildTabletTask::generate_rebuild_tablets_dag_()
       } else {
         LOG_WARN("failed to get next tablet id", K(ret), KPC(ctx_));
       }
-    } else if (OB_FAIL(scheduler->alloc_dag(tablet_rebuild_dag, true/*is_ha_dag*/))) {
-      LOG_WARN("failed to alloc tablet rebuild dag ", K(ret));
-    } else if (OB_FAIL(tablet_rebuild_dag->init(logic_tablet_id.tablet_id_, dag_net, finish_dag_))) {
-      LOG_WARN("failed to init tablet rebuild dag", K(ret), K(*ctx_));
-    } else if (OB_FAIL(dag_net->add_dag_into_dag_net(*tablet_rebuild_dag))) {
-      LOG_WARN("failed to add dag into dag net", K(ret), K(*ctx_));
-    } else if (OB_FAIL(parent->add_child_without_inheritance(*tablet_rebuild_dag))) {
-      LOG_WARN("failed to add child dag", K(ret), K(*ctx_));
-    } else if (OB_FAIL(tablet_rebuild_dag->create_first_task())) {
-      LOG_WARN("failed to create first task", K(ret), K(*ctx_));
-    } else if (OB_FAIL(tablet_rebuild_dag->add_child_without_inheritance(*finish_dag_))) {
-      LOG_WARN("failed to add finish dag as child", K(ret), K(*ctx_));
-    } else if (OB_FAIL(scheduler->add_dag(tablet_rebuild_dag))) {
-      LOG_WARN("failed to add tablet rebuild dag", K(ret), K(*tablet_rebuild_dag));
-      if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-        LOG_WARN("Fail to add task", K(ret));
-        ret = OB_EAGAIN;
-      }
+    } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_schedule_dag(
+        dag_net, parent, finish_dag_/*child_dag*/, parent->get_priority(),
+        false/*emergency*/, tablet_rebuild_dag/*new_dag*/,
+        logic_tablet_id.tablet_id_, dag_net, finish_dag_))) {
+      LOG_WARN("failed to schedule tablet rebuild dag", K(ret), K(*ctx_));
     } else {
       LOG_INFO("succeed to schedule tablet rebuild dag", K(*tablet_rebuild_dag), K(logic_tablet_id));
-    }
-    if (OB_FAIL(ret)) {
-      if (OB_NOT_NULL(tablet_rebuild_dag)) {
-        scheduler->free_dag(*tablet_rebuild_dag);
-        tablet_rebuild_dag = nullptr;
-      }
     }
   }
   return ret;
@@ -1047,7 +1003,7 @@ int ObStartRebuildTabletTask::get_src_ls_rebuild_seq_()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("start rebuild tablet task do not init", K(ret));
-  } else if (OB_FAIL(storage_rpc_->post_ls_meta_info_request(
+  } else if (OB_FAIL(ha_svc_ctx_.storage_rpc_->post_ls_meta_info_request(
       tenant_id, ctx_->src_, ctx_->arg_.ls_id_, ls_info))) {
     LOG_WARN("fail to post fetch ls meta info request", K(ret), "src_info", ctx_->src_, "arg", ctx_->arg_);
   } else {
@@ -1395,10 +1351,7 @@ ObTabletRebuildMajorTask::ObTabletRebuildMajorTask()
   : ObITask(TASK_TYPE_TABLET_REBUILD_TASK),
     is_inited_(false),
     ctx_(nullptr),
-    bandwidth_throttle_(nullptr),
-    svr_rpc_proxy_(nullptr),
-    storage_rpc_(nullptr),
-    sql_proxy_(nullptr),
+    ha_svc_ctx_(),
     copy_tablet_ctx_(nullptr),
     copy_table_key_array_(),
     copy_sstable_info_mgr_()
@@ -1431,10 +1384,7 @@ int ObTabletRebuildMajorTask::init(ObRebuildTabletCopyCtx &copy_tablet_ctx)
   } else if (FALSE_IT(rebuild_tablet_dag_net = static_cast<ObRebuildTabletDagNet*>(dag_net))) {
   } else {
     ctx_ = rebuild_tablet_dag_net->get_rebuild_tablet_ctx();
-    bandwidth_throttle_ = rebuild_tablet_dag_net->get_bandwidth_throttle();
-    svr_rpc_proxy_ = rebuild_tablet_dag_net->get_storage_rpc_proxy();
-    storage_rpc_ = rebuild_tablet_dag_net->get_storage_rpc();
-    sql_proxy_ = rebuild_tablet_dag_net->get_sql_proxy();
+    ha_svc_ctx_ = rebuild_tablet_dag_net->get_ha_svc_ctx();
     copy_tablet_ctx_ = &copy_tablet_ctx;
     is_inited_ = true;
     LOG_INFO("succeed init tablet rebuild major task", "ls id", ctx_->arg_.ls_id_, "tablet_id", copy_tablet_ctx.tablet_id_,
@@ -1628,7 +1578,7 @@ int ObTabletRebuildMajorTask::build_copy_table_key_info_()
     rpc_arg.dest_major_sstable_snapshot_ = local_max_major_snapshot;
     rpc_arg.version_ = server_version;
     //TODO(muwei.ym) COSSTable should using iterator
-    if (OB_FAIL(reader.init(ctx_->src_, rpc_arg, *svr_rpc_proxy_, *bandwidth_throttle_))) {
+    if (OB_FAIL(reader.init(ctx_->src_, rpc_arg, *ha_svc_ctx_.svr_rpc_proxy_, *ha_svc_ctx_.bandwidth_throttle_))) {
       LOG_WARN("failed to init rebuild tablet sstable info reader", K(ret));
     } else if (OB_FAIL(reader.get_next_tablet_sstable_header(copy_tablet_ctx_->copy_header_))) {
       LOG_WARN("failed to get next tablet sstable hader", K(ret), KPC(copy_tablet_ctx_));
@@ -1673,9 +1623,7 @@ int ObTabletRebuildMajorTask::build_copy_sstable_info_mgr_()
     param.second_meta_index_store_ = nullptr;
     param.restore_base_info_ = nullptr;
     param.src_info_ = ctx_->src_;
-    param.storage_rpc_ = storage_rpc_;
-    param.svr_rpc_proxy_ = svr_rpc_proxy_;
-    param.bandwidth_throttle_ = bandwidth_throttle_;
+    param.ha_svc_ctx_ = ha_svc_ctx_;
     param.src_ls_rebuild_seq_ = ctx_->src_ls_rebuild_seq_;
 
     if (OB_FAIL(copy_sstable_info_mgr_.init(param))) {

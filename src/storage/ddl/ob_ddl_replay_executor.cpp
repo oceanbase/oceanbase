@@ -17,7 +17,6 @@
 #include "share/schema/ob_multi_version_schema_service.h"
 #include "share/ob_task_define.h"
 #ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/compaction_v2/ob_ss_compact_helper.h"
 #include "storage/ddl/ob_ss_ddl_util.h"
 #include "share/scheduler/ob_partition_auto_split_helper.h"
 #endif
@@ -1679,19 +1678,6 @@ int ObDDLFinishReplayExecutor::replay_ddl_finish(ObTabletHandle &tablet_handle)
                                                                              log_->get_data_format_version(),
                                                                              log_->get_data_buffer()))) {
     LOG_WARN("update shared table store fail", K(ret));
-  }
-  if (need_replay && OB_SUCC(ret)) {
-    ObTabletHandle new_tablet_handle;
-    if (OB_FAIL(share::SSCompactHelper::link_major(ls_->get_ls_id(),
-                                                   tablet_id,
-                                                   compaction::ObMergeType::MEDIUM_MERGE,
-                                                   log_->get_table_key().get_snapshot_version(),
-                                                   false/*prewarm*/,
-                                                   true/*report*/))) {
-      LOG_WARN("link major fail", K(ret), K(log_->get_table_key()));
-    } else if (OB_FAIL(ls_->get_tablet_svr()->get_tablet(tablet_id, new_tablet_handle))) {
-      LOG_WARN("failed to get tablet", K(ret), K(tablet_id));
-    }
   }
 
   /* release ddl kv */

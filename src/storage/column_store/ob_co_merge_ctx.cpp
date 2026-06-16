@@ -32,7 +32,8 @@ ObCOTabletMergeCtx::ObCOTabletMergeCtx(
     mocked_row_store_cg_(),
     mocked_row_store_table_read_info_(),
     dag_net_merge_history_(),
-    two_stage_ctx_(nullptr)
+    two_stage_ctx_(nullptr),
+    cg_layout_params_(nullptr)
 {
 }
 
@@ -49,6 +50,16 @@ ObCOTabletMergeCtx::~ObCOTabletMergeCtx()
 
 void ObCOTabletMergeCtx::destroy()
 {
+  if (OB_NOT_NULL(cg_layout_params_)) {
+    for (int64_t i = 0; i < array_count_; ++i) {
+      if (OB_NOT_NULL(cg_layout_params_[i])) {
+        cg_layout_params_[i]->~ObMergeVectorStoreLayoutParam();
+        mem_ctx_.get_allocator().free(cg_layout_params_[i]);
+        cg_layout_params_[i] = nullptr;
+      }
+    }
+    cg_layout_params_ = nullptr;
+  }
   if (OB_NOT_NULL(cg_merge_info_array_)) {
     for (int i = 0; i < array_count_; ++i) {
       if (OB_NOT_NULL(cg_merge_info_array_[i])) {
@@ -75,7 +86,8 @@ int ObCOTabletMergeCtx::init_tablet_merge_info()
 {
   int ret = OB_SUCCESS;
   const int64_t cg_count = get_schema()->get_column_group_count();
-  const int64_t alloc_size = cg_count * (sizeof(ObTabletMergeInfo*) + sizeof(ObITable*));
+  const int64_t alloc_size = cg_count * (sizeof(ObTabletMergeInfo*) + sizeof(ObITable*))
+                           + cg_count * sizeof(ObMergeVectorStoreLayoutParam *);
   void *buf = nullptr;
   if (OB_UNLIKELY(cg_count <= 1)) {
     ret = OB_ERR_UNEXPECTED;
@@ -96,6 +108,10 @@ int ObCOTabletMergeCtx::init_tablet_merge_info()
     buf = (void *)(static_cast<char *>(buf) + cg_count * sizeof(ObTabletMergeInfo *));
     merged_sstable_array_ = static_cast<ObITable **>(buf);
     buf = (void *)(static_cast<char *>(buf) + cg_count * sizeof(ObITable*));
+    cg_layout_params_ = static_cast<ObMergeVectorStoreLayoutParam **>(buf);
+    for (int64_t i = 0; i < cg_count; ++i) {
+      cg_layout_params_[i] = nullptr;
+    }
   }
   return ret;
 }
@@ -304,8 +320,10 @@ int ObCOTabletMergeCtx::build_ctx(bool &finish_flag)
     LOG_WARN("failed to check prefer reuse macro block", K(ret), KPC(this));
   } else if (is_major_merge_type(get_merge_type())) {
     // meta major merge not support row col switch now
-    if (is_build_all_cg_from_each_cg() && OB_FAIL(mock_row_store_table_read_info())) {
+    if (need_mock_row_store_table_read_info() && OB_FAIL(mock_row_store_table_read_info())) {
       LOG_WARN("fail to init table read info", K(ret));
+    } else if (enable_vectorized_batch_merge() && OB_FAIL(prepare_cg_layout_params())) {
+      LOG_WARN("failed to prepare batch layout params in prepare stage", K(ret), KPC(this));
     }
   }
   return ret;
@@ -819,6 +837,57 @@ int ObCOTabletMergeCtx::get_cg_schema_for_merge(const int64_t idx, const ObStora
     } else {
       LOG_DEBUG("[RowColSwitch] get cg schema for merge", K(idx), KPC(cg_schema_ptr));
     }
+  }
+  return ret;
+}
+
+int ObCOTabletMergeCtx::prepare_cg_layout_params()
+{
+  int ret = OB_SUCCESS;
+  const storage::ObStorageColumnGroupSchema *cg_schema_ptr = nullptr;
+  if (OB_UNLIKELY(nullptr == cg_layout_params_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid argument", K(ret), K(array_count_), KP(cg_layout_params_));
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < array_count_; ++i) {
+    ObMergeVectorStoreLayoutParam *layout = nullptr;
+    if (OB_NOT_NULL(cg_layout_params_[i])) {
+    } else if (OB_FAIL(get_cg_schema_for_merge(i, cg_schema_ptr))) {
+      LOG_WARN("fail to get cg schema for merge", K(ret), K(i));
+    } else if (OB_ISNULL(cg_schema_ptr)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("cg schema is null", K(ret), K(i));
+    } else if (OB_ISNULL(layout = OB_NEWx(ObMergeVectorStoreLayoutParam, &(mem_ctx_)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc cg layout param", K(ret), K(i));
+    } else {
+      layout->column_count_ = cg_schema_ptr->column_cnt_;
+      layout->rowkey_column_cnt_ = cg_schema_ptr->rowkey_column_cnt_;
+      layout->static_param_ = &static_param_;
+      layout->datum_utils_ = i == base_rowkey_cg_idx_ ? row_store_datum_utils_ : nullptr;
+      cg_layout_params_[i] = layout;
+    }
+  }
+  return ret;
+}
+
+
+
+int ObCOTabletMergeCtx::get_cg_layout_param(
+    const int64_t cg_idx,
+    const ObMergeVectorStoreLayoutParam *&layout_param) const
+{
+  int ret = OB_SUCCESS;
+  layout_param = nullptr;
+  if (OB_UNLIKELY(cg_idx < 0 || cg_idx >= array_count_ || nullptr == cg_layout_params_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("invalid cg layout cache state", K(ret), K(cg_idx), K(array_count_),
+        KP(cg_layout_params_));
+  } else if (OB_ISNULL(cg_layout_params_[cg_idx])) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("cg layout param is not prepared", K(ret), K(cg_idx));
+  } else {
+    layout_param = cg_layout_params_[cg_idx];
   }
   return ret;
 }

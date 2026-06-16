@@ -92,10 +92,7 @@ public:
   VIRTUAL_TO_STRING_KV(K_(arg), K_(task_id));
   ObMigrationOpArg arg_;
   share::ObTaskId task_id_;
-  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
-  obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
-  storage::ObStorageRpc *storage_rpc_;
-  common::ObMySQLProxy *sql_proxy_;
+  ObStorageHAServiceCtx ha_svc_ctx_;
 };
 
 class ObRebuildTabletDagNet: public share::ObIDagNet
@@ -119,10 +116,7 @@ public:
   bool is_ha_dag_net() const override { return true; }
 
   ObRebuildTabletCtx *get_rebuild_tablet_ctx() { return ctx_; }
-  common::ObInOutBandwidthThrottle *get_bandwidth_throttle() { return bandwidth_throttle_; }
-  obrpc::ObStorageRpcProxy *get_storage_rpc_proxy() { return svr_rpc_proxy_; }
-  storage::ObStorageRpc *get_storage_rpc() { return storage_rpc_; }
-  common::ObMySQLProxy *get_sql_proxy() { return sql_proxy_; }
+  const ObStorageHAServiceCtx &get_ha_svc_ctx() const { return ha_svc_ctx_; }
   INHERIT_TO_STRING_KV("ObIDagNet", share::ObIDagNet, KPC_(ctx));
 private:
   int start_running_for_rebuild_tablet_();
@@ -133,10 +127,7 @@ private:
 private:
   bool is_inited_;
   ObRebuildTabletCtx *ctx_;
-  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
-  obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
-  storage::ObStorageRpc *storage_rpc_;
-  common::ObMySQLProxy *sql_proxy_;
+  ObStorageHAServiceCtx ha_svc_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObRebuildTabletDagNet);
 };
 
@@ -184,9 +175,7 @@ private:
 private:
   bool is_inited_;
   ObRebuildTabletCtx *ctx_;
-  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
-  obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
-  storage::ObStorageRpc *storage_rpc_;
+  ObStorageHAServiceCtx ha_svc_ctx_;
   share::ObIDagNet *dag_net_;
   ObArray<ObLogicTabletID> tablet_id_array_;
   DISALLOW_COPY_AND_ASSIGN(ObInitialRebuildTabletTask);
@@ -227,9 +216,7 @@ private:
 private:
   bool is_inited_;
   ObRebuildTabletCtx *ctx_;
-  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
-  obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
-  storage::ObStorageRpc *storage_rpc_;
+  ObStorageHAServiceCtx ha_svc_ctx_;
   share::ObIDag *finish_dag_;
   DISALLOW_COPY_AND_ASSIGN(ObStartRebuildTabletTask);
 };
@@ -296,10 +283,7 @@ private:
 private:
   bool is_inited_;
   ObRebuildTabletCtx *ctx_;
-  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
-  obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
-  storage::ObStorageRpc *storage_rpc_;
-  common::ObMySQLProxy *sql_proxy_;
+  ObStorageHAServiceCtx ha_svc_ctx_;
   ObRebuildTabletCopyCtx *copy_tablet_ctx_;
   common::ObArray<ObITable::TableKey> copy_table_key_array_;
   ObStorageHACopySSTableInfoMgr copy_sstable_info_mgr_;

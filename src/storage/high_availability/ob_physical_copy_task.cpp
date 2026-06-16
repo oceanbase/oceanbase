@@ -6,10 +6,6 @@
 #define USING_LOG_PREFIX STORAGE
 #include "storage/high_availability/ob_physical_copy_task.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "share/compaction/ob_shared_storage_compaction_util.h"
-#endif
-
 namespace oceanbase
 {
 using namespace share;
@@ -182,11 +178,6 @@ int ObPhysicalCopyTask::fetch_macro_block_(
   blocksstable::ObMacroSeqParam macro_seq_param;
   macro_seq_param.start_ = 0;
   macro_seq_param.seq_type_ = blocksstable::ObMacroSeqParam::SeqType::SEQ_TYPE_INC;
-#ifdef OB_BUILD_SHARED_STORAGE
-  if (GCTX.is_shared_storage_mode() && task_idx_ > 0) {
-    macro_seq_param.start_ += task_idx_ * oceanbase::compaction::MACRO_STEP_SIZE;
-  }
-#endif
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("physical copy physical task do not init", K(ret));
@@ -444,7 +435,6 @@ int ObPhysicalCopyTask::get_macro_block_writer_(
   int ret = OB_SUCCESS;
   ObStorageHAMacroBlockWriter *tmp_writer = nullptr;
   const ObMigrationSSTableParam *sstable_param = nullptr;
-  const bool is_shared_storage = GCTX.is_shared_storage_mode();
   if (OB_ISNULL(reader)
       || OB_ISNULL(index_block_rebuilder)
       || OB_ISNULL(finish_task_)
@@ -457,20 +447,11 @@ int ObPhysicalCopyTask::get_macro_block_writer_(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("src sstable param is null", K(ret), KP(finish_task_));
   } else {
-    if (!is_shared_storage) {
-      tmp_writer = MTL_NEW(ObStorageHALocalMacroBlockWriter, "HAMacroObWriter");
-    } else {
-#ifdef OB_BUILD_SHARED_STORAGE
-      if (sstable_param->is_shared_macro_blocks_sstable()) {
-        tmp_writer = MTL_NEW(ObStorageHASharedMacroBlockWriter, "HAMacroObWriter");
-      } else {
-        tmp_writer = MTL_NEW(ObStorageHALocalMacroBlockWriter, "HAMacroObWriter");
-      }
-#endif
-    }
     const ObStorageHASmallSSTableWriteOpt small_sstable_write_opt(
         finish_task_->get_copy_task_concurrent_cnt(),
         copy_macro_range_id_info_->range_info_.macro_block_count_);
+    tmp_writer = MTL_NEW(ObStorageHALocalMacroBlockWriter, "HAMacroObWriter");
+
     if (OB_ISNULL(tmp_writer)) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to alloc memory", K(ret));
@@ -546,8 +527,7 @@ int ObPhysicalCopyTask::build_copy_macro_block_reader_init_param_(
     init_param.is_leader_restore_ = copy_ctx_->is_leader_restore_;
     init_param.restore_action_ = copy_ctx_->restore_action_;
     init_param.src_info_ = copy_ctx_->src_info_;
-    init_param.bandwidth_throttle_ = copy_ctx_->bandwidth_throttle_;
-    init_param.svr_rpc_proxy_ = copy_ctx_->svr_rpc_proxy_;
+    init_param.ha_svc_ctx_ = copy_ctx_->ha_svc_ctx_;
     init_param.restore_base_info_ = copy_ctx_->restore_base_info_;
     init_param.meta_index_store_ = copy_ctx_->meta_index_store_;
     init_param.second_meta_index_store_ = copy_ctx_->second_meta_index_store_;

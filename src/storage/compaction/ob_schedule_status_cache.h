@@ -69,15 +69,16 @@ struct ObLSStatusCache final
 struct ObTabletStatusCache
 {
 public:
-  enum TabletExecuteState : uint8_t
+  enum TabletExecuteState : uint8_t //FARM COMPAT WHITELIST
   {
     CAN_MERGE = 0,
     DATA_NOT_COMPLETE,
     NO_MAJOR_SSTABLE,
-    INVALID_LS_STATE, // for ss
     TENANT_SKIP_MERGE,
     RESTORE_STATUS_NOT_READY, //FARM COMPAT WHITELIST
     EMERGENCY_MERGE_REQUIRED, //FARM COMPAT WHITELIST
+    MV_CHECK_FAILED,                 // check_is_mv_major_refresh_tablet returned error
+    MEDIUM_LIST_LOAD_FAILED,         // read_medium_info_list failed during init
     EXECUTE_STATE_MAX,
   };
   static const char *tablet_execute_state_to_str(const TabletExecuteState &state);

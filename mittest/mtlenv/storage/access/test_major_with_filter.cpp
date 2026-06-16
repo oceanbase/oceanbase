@@ -155,7 +155,7 @@ int ObMajorWithTTLFilterTest::check_macro_and_micro_reuse(
       LOG_WARN("Failed to read min max snapshot", K(ret), K(macro_desc));
     } else if (skip_index_info.min_snapshot_ < filter_max_version) {
       ret = OB_ERR_UNEXPECTED;
-      LOG_ERROR("should not exist row under filter_version", K(ret), K(micro_block->header_), K(skip_index_info), K(filter_max_version));
+      LOG_ERROR("should not exist row under filter_version", K(ret), K(skip_index_info), K(filter_max_version));
     } else if (skip_index_info.max_snapshot_ <= filter_max_version) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("macro should be filtered", K(ret), K(macro_desc.macro_meta_->val_), K(cur_major_snapshot), K(filter_max_version));
@@ -416,7 +416,13 @@ TEST_F(ObMajorWithTTLFilterTest, co_major_all_data_filtered)
   prepare_ttl_filter(filter_max_version, merge_context);
 
   ObTableHandleV2 table_handle;
-  TestMergeBasic::co_major_merge(local_arena_, ObCOMergeTestType::NORMAL, merge_context, 0, 0, 2);
+  TestMergeBasic::co_major_merge(
+    local_arena_,
+    ObCOMergeTestConfig(ObCOMergeTestConfig::ObCOMergeTestType::NORMAL, 1/*compaction_batch_size*/),
+    merge_context,
+    0,
+    0,
+    2);
   ASSERT_EQ(1, merge_context.merged_cg_tables_handle_.get_count());
   merge_context.merged_cg_tables_handle_.get_table(0, table_handle);
   ObSSTable *merged_sstable = static_cast<ObSSTable *>(table_handle.get_table());
@@ -464,7 +470,13 @@ TEST_F(ObMajorWithTTLFilterTest, co_major_all_data_reused)
   prepare_ttl_filter(filter_max_version, merge_context);
 
   ObTableHandleV2 table_handle;
-  TestMergeBasic::co_major_merge(local_arena_, ObCOMergeTestType::NORMAL, merge_context, 0, 0, 2);
+  TestMergeBasic::co_major_merge(
+    local_arena_,
+    ObCOMergeTestConfig(ObCOMergeTestConfig::ObCOMergeTestType::NORMAL, 1/*compaction_batch_size*/),
+    merge_context,
+    0,
+    0,
+    2);
   ASSERT_EQ(2, merge_context.merged_cg_tables_handle_.get_count());
   merge_context.merged_cg_tables_handle_.get_table(0, table_handle);
   ObSSTable *merged_sstable = static_cast<ObSSTable *>(table_handle.get_table());
@@ -516,7 +528,13 @@ TEST_F(ObMajorWithTTLFilterTest, co_major_partial_macro_reused) {
   prepare_ttl_filter(filter_max_version, merge_context);
 
   ObTableHandleV2 table_handle;
-  TestMergeBasic::co_major_merge(local_arena_, ObCOMergeTestType::NORMAL, merge_context, 0, 0, 2);
+  TestMergeBasic::co_major_merge(
+    local_arena_,
+    ObCOMergeTestConfig(ObCOMergeTestConfig::ObCOMergeTestType::NORMAL, 1/*compaction_batch_size*/),
+    merge_context,
+    0,
+    0,
+    2);
   ASSERT_EQ(2, merge_context.merged_cg_tables_handle_.get_count());
   merge_context.merged_cg_tables_handle_.get_table(0, table_handle);
   ObSSTable *merged_sstable = static_cast<ObSSTable *>(table_handle.get_table());
@@ -600,7 +618,13 @@ TEST_F(ObMajorWithTTLFilterTest, co_major_multi_minor_all_virtual_rows)
   prepare_ttl_filter(filter_max_version, merge_context);
   merge_context.static_param_.ttl_major_for_partial_update_upper_snapshot_ = 50;
 
-  TestMergeBasic::co_major_merge(local_arena_, ObCOMergeTestType::NORMAL, merge_context, 0, 0, 2);
+  TestMergeBasic::co_major_merge(
+    local_arena_,
+    ObCOMergeTestConfig(ObCOMergeTestConfig::ObCOMergeTestType::NORMAL, 1/*compaction_batch_size*/),
+    merge_context,
+    0,
+    0,
+    2);
 
   ObTableHandleV2 table_handle;
   ASSERT_EQ(2, merge_context.merged_cg_tables_handle_.get_count());
@@ -679,7 +703,13 @@ TEST_F(ObMajorWithTTLFilterTest, co_major_multi_minor_all_virtual_rows_without_m
   prepare_ttl_filter(filter_max_version, merge_context);
   merge_context.static_param_.ttl_major_for_partial_update_upper_snapshot_ = 50;
 
-  TestMergeBasic::co_major_merge(local_arena_, ObCOMergeTestType::NORMAL, merge_context, 0, 0, 2);
+  TestMergeBasic::co_major_merge(
+    local_arena_,
+    ObCOMergeTestConfig(ObCOMergeTestConfig::ObCOMergeTestType::NORMAL, 1/*compaction_batch_size*/),
+    merge_context,
+    0,
+    0,
+    2);
 
   ObTableHandleV2 table_handle;
   ASSERT_EQ(2, merge_context.merged_cg_tables_handle_.get_count());
@@ -758,7 +788,13 @@ TEST_F(ObMajorWithTTLFilterTest, co_major_multi_minor_all_virtual_rows_with_base
   prepare_ttl_filter(filter_max_version, merge_context);
   merge_context.static_param_.ttl_major_for_partial_update_upper_snapshot_ = 50;
 
-  TestMergeBasic::co_major_merge(local_arena_, ObCOMergeTestType::NORMAL_WITH_BASE_REPLAY, merge_context, 0, 0, 2);
+  TestMergeBasic::co_major_merge(
+    local_arena_,
+    ObCOMergeTestConfig(ObCOMergeTestConfig::ObCOMergeTestType::NORMAL_WITH_BASE_REPLAY, 1/*compaction_batch_size*/),
+    merge_context,
+    0,
+    0,
+    2);
 
   ObTableHandleV2 table_handle;
   ASSERT_EQ(2, merge_context.merged_cg_tables_handle_.get_count());
@@ -840,7 +876,13 @@ TEST_F(ObMajorWithTTLFilterTest, co_major_multi_minor_all_virtual_rows_between_m
   prepare_ttl_filter(filter_max_version, merge_context);
   merge_context.static_param_.ttl_major_for_partial_update_upper_snapshot_ = 50;
 
-  TestMergeBasic::co_major_merge(local_arena_, ObCOMergeTestType::NORMAL, merge_context, 0, 0, 2);
+  TestMergeBasic::co_major_merge(
+    local_arena_,
+    ObCOMergeTestConfig(ObCOMergeTestConfig::ObCOMergeTestType::NORMAL, 1/*compaction_batch_size*/),
+    merge_context,
+    0,
+    0,
+    2);
 
   ObTableHandleV2 table_handle;
   ASSERT_EQ(2, merge_context.merged_cg_tables_handle_.get_count());
@@ -919,7 +961,13 @@ TEST_F(ObMajorWithTTLFilterTest, co_major_multi_minor_mixed_virtual_and_normal_r
   prepare_ttl_filter(filter_max_version, merge_context);
   merge_context.static_param_.ttl_major_for_partial_update_upper_snapshot_ = 50;
 
-  TestMergeBasic::co_major_merge(local_arena_, ObCOMergeTestType::NORMAL, merge_context, 0, 0, 2);
+  TestMergeBasic::co_major_merge(
+    local_arena_,
+    ObCOMergeTestConfig(ObCOMergeTestConfig::ObCOMergeTestType::NORMAL, 1/*compaction_batch_size*/),
+    merge_context,
+    0,
+    0,
+    2);
 
   ObTableHandleV2 table_handle;
   ASSERT_EQ(2, merge_context.merged_cg_tables_handle_.get_count());
@@ -998,7 +1046,13 @@ TEST_F(ObMajorWithTTLFilterTest, co_major_multi_minor_all_virtual_delete_rows)
   prepare_ttl_filter(filter_max_version, merge_context);
   merge_context.static_param_.ttl_major_for_partial_update_upper_snapshot_ = 50;
 
-  TestMergeBasic::co_major_merge(local_arena_, ObCOMergeTestType::NORMAL, merge_context, 0, 0, 2);
+  TestMergeBasic::co_major_merge(
+    local_arena_,
+    ObCOMergeTestConfig(ObCOMergeTestConfig::ObCOMergeTestType::NORMAL, 1/*compaction_batch_size*/),
+    merge_context,
+    0,
+    0,
+    2);
 
   ObTableHandleV2 table_handle;
   ASSERT_EQ(2, merge_context.merged_cg_tables_handle_.get_count());
@@ -1081,7 +1135,13 @@ TEST_F(ObMajorWithTTLFilterTest, co_major_multi_minor_upper_snapshot_filter)
   prepare_ttl_filter(filter_max_version, merge_context);
   merge_context.static_param_.ttl_major_for_partial_update_upper_snapshot_ = 22;
 
-  TestMergeBasic::co_major_merge(local_arena_, ObCOMergeTestType::NORMAL, merge_context, 0, 0, 2);
+  TestMergeBasic::co_major_merge(
+    local_arena_,
+    ObCOMergeTestConfig(ObCOMergeTestConfig::ObCOMergeTestType::NORMAL, 1/*compaction_batch_size*/),
+    merge_context,
+    0,
+    0,
+    2);
 
   ObTableHandleV2 table_handle;
   ASSERT_EQ(2, merge_context.merged_cg_tables_handle_.get_count());
@@ -1151,7 +1211,13 @@ TEST_F(ObMajorWithTTLFilterTest, co_major_single_minor_all_virtual_row)
   prepare_ttl_filter(filter_max_version, merge_context);
   merge_context.static_param_.ttl_major_for_partial_update_upper_snapshot_ = 50;
 
-  TestMergeBasic::co_major_merge(local_arena_, ObCOMergeTestType::NORMAL, merge_context, 0, 0, 2);
+  TestMergeBasic::co_major_merge(
+    local_arena_,
+    ObCOMergeTestConfig(ObCOMergeTestConfig::ObCOMergeTestType::NORMAL, 1/*compaction_batch_size*/),
+    merge_context,
+    0,
+    0,
+    2);
 
   ObTableHandleV2 table_handle;
   ASSERT_EQ(2, merge_context.merged_cg_tables_handle_.get_count());
@@ -1240,7 +1306,13 @@ TEST_F(ObMajorWithTTLFilterTest, co_major_three_minor_all_virtual_rows)
   prepare_ttl_filter(filter_max_version, merge_context);
   merge_context.static_param_.ttl_major_for_partial_update_upper_snapshot_ = 50;
 
-  TestMergeBasic::co_major_merge(local_arena_, ObCOMergeTestType::NORMAL, merge_context, 0, 0, 2);
+  TestMergeBasic::co_major_merge(
+    local_arena_,
+    ObCOMergeTestConfig(ObCOMergeTestConfig::ObCOMergeTestType::NORMAL, 1/*compaction_batch_size*/),
+    merge_context,
+    0,
+    0,
+    2);
 
   ObTableHandleV2 table_handle;
   ASSERT_EQ(2, merge_context.merged_cg_tables_handle_.get_count());
@@ -1332,7 +1404,13 @@ TEST_F(ObMajorWithTTLFilterTest, co_major_multi_minor_virtual_ops_batch)
   prepare_ttl_filter(filter_max_version, merge_context);
   merge_context.static_param_.ttl_major_for_partial_update_upper_snapshot_ = 50;
 
-  TestMergeBasic::co_major_merge(local_arena_, ObCOMergeTestType::NORMAL, merge_context, 0, 0, 2);
+  TestMergeBasic::co_major_merge(
+    local_arena_,
+    ObCOMergeTestConfig(ObCOMergeTestConfig::ObCOMergeTestType::NORMAL, 1/*compaction_batch_size*/),
+    merge_context,
+    0,
+    0,
+    2);
 
   ObTableHandleV2 table_handle;
   ASSERT_EQ(2, merge_context.merged_cg_tables_handle_.get_count());
@@ -1422,7 +1500,7 @@ TEST_F(ObMajorWithTTLFilterTest, boundary_filter_equals_max)
   ASSERT_EQ(OB_SUCCESS, check_macro_and_micro_reuse(*merge_context.get_tablet(), *merged_sstable, filter_max_version));
   const ObICompactionFilter::ObFilterStatistics &filter_statistics = merge_context.filter_ctx_.filter_statistics_;
   LOG_INFO("filter statistics", K(filter_statistics));
-  ASSERT_EQ(filter_statistics.micro_cnt_[ObBlockOp::OP_FILTER], 1);
+  ASSERT_EQ(filter_statistics.macro_cnt_[ObBlockOp::OP_FILTER], 1);
   ASSERT_EQ(filter_statistics.filter_block_row_cnt_, 10);
 }
 
@@ -1462,7 +1540,7 @@ TEST_F(ObMajorWithTTLFilterTest, boundary_filter_less_than_min)
   ASSERT_EQ(OB_SUCCESS, check_macro_and_micro_reuse(*merge_context.get_tablet(), *merged_sstable, filter_max_version));
   const ObICompactionFilter::ObFilterStatistics &filter_statistics = merge_context.filter_ctx_.filter_statistics_;
   LOG_INFO("filter statistics", K(filter_statistics));
-  ASSERT_EQ(filter_statistics.micro_cnt_[ObBlockOp::OP_NONE], 1);
+  ASSERT_EQ(filter_statistics.macro_cnt_[ObBlockOp::OP_NONE], 1);
   ASSERT_EQ(filter_statistics.filter_block_row_cnt_, 0);
 }
 
@@ -1502,7 +1580,7 @@ TEST_F(ObMajorWithTTLFilterTest, boundary_filter_greater_than_max)
   ASSERT_EQ(OB_SUCCESS, check_macro_and_micro_reuse(*merge_context.get_tablet(), *merged_sstable, filter_max_version));
   const ObICompactionFilter::ObFilterStatistics &filter_statistics = merge_context.filter_ctx_.filter_statistics_;
   LOG_INFO("filter statistics", K(filter_statistics));
-  ASSERT_EQ(filter_statistics.micro_cnt_[ObBlockOp::OP_FILTER], 1);
+  ASSERT_EQ(filter_statistics.macro_cnt_[ObBlockOp::OP_FILTER], 1);
   ASSERT_EQ(filter_statistics.filter_block_row_cnt_, 10);
 }
 
@@ -1950,7 +2028,13 @@ TEST_F(ObMajorWithTTLFilterTest, co_major_macro_with_all_open_micros)
   prepare_ttl_filter(filter_max_version, merge_context);
 
   ObTableHandleV2 table_handle;
-  TestMergeBasic::co_major_merge(local_arena_, ObCOMergeTestType::NORMAL, merge_context, 0, 0, 2);
+  TestMergeBasic::co_major_merge(
+    local_arena_,
+    ObCOMergeTestConfig(ObCOMergeTestConfig::ObCOMergeTestType::NORMAL, 1/*compaction_batch_size*/),
+    merge_context,
+    0,
+    0,
+    2);
   ASSERT_EQ(2, merge_context.merged_cg_tables_handle_.get_count());
   merge_context.merged_cg_tables_handle_.get_table(0, table_handle);
   ObSSTable *merged_sstable = static_cast<ObSSTable *>(table_handle.get_table());
@@ -1995,7 +2079,13 @@ TEST_F(ObMajorWithTTLFilterTest, co_major_single_version_micro_blocks)
   prepare_ttl_filter(filter_max_version, merge_context);
 
   ObTableHandleV2 table_handle;
-  TestMergeBasic::co_major_merge(local_arena_, ObCOMergeTestType::NORMAL, merge_context, 0, 0, 1);
+  TestMergeBasic::co_major_merge(
+    local_arena_,
+    ObCOMergeTestConfig(ObCOMergeTestConfig::ObCOMergeTestType::NORMAL, 1/*compaction_batch_size*/),
+    merge_context,
+    0,
+    0,
+    1);
   ASSERT_EQ(1, merge_context.merged_cg_tables_handle_.get_count());
   merge_context.merged_cg_tables_handle_.get_table(0, table_handle);
   ObSSTable *merged_sstable = static_cast<ObSSTable *>(table_handle.get_table());

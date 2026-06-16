@@ -1664,8 +1664,10 @@ int ObCompactionDiagnoseMgr::diagnose_column_store_dag(
     }
   } else if (OB_NOT_NULL(snap_ptr)) {
     const int64_t now = ObTimeUtility::fast_current_time();
+    // now / start_time_ are microseconds; TOLERATE_MEDIUM_SCHEDULE_INTERVAL is nanoseconds -> convert to us
+    static const int64_t TOLERATE_MEDIUM_SCHEDULE_INTERVAL_US = TOLERATE_MEDIUM_SCHEDULE_INTERVAL / 1000L;
     if (snap_ptr->progress_list_.empty()
-        && (now - snap_ptr->start_time_) > TOLERATE_MEDIUM_SCHEDULE_INTERVAL) {
+        && (now - snap_ptr->start_time_) > TOLERATE_MEDIUM_SCHEDULE_INTERVAL_US) {
       ADD_DIAGNOSE_INFO_FOR_TABLET(
           merge_type,
           ObCompactionDiagnoseInfo::DIA_STATUS_RUNNING,

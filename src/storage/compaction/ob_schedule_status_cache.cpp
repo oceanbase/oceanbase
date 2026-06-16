@@ -143,7 +143,7 @@ bool ObLSStatusCache::is_restore_ready_for_merge(ObLS &ls)
   } else {
     is_restore_ready = false;
   }
-  return true;
+  return is_restore_ready;
 }
 
 bool ObLSStatusCache::check_weak_read_ts_ready(
@@ -167,10 +167,11 @@ const static char * ObTabletExecuteStateStr[] = {
     "CAN_MERGE",
     "DATA_NOT_COMPLETE",
     "NO_MAJOR_SSTABLE",
-    "INVALID_LS_STATE",
     "TENANT_SKIP_MERGE",
     "RESTORE_STATUS_NOT_READY",
     "EMERGENCY_MERGE_REQUIRED",
+    "MV_CHECK_FAILED",
+    "MEDIUM_LIST_LOAD_FAILED",
     "STATE_MAX"
 };
 
@@ -293,11 +294,13 @@ int ObTabletStatusCache::check_unfinished_inc_major(
   } else if (OB_FAIL(ObIncDDLMergeTaskUtils::check_unfinished_inc_major_before_merge(
       &ls, &tablet, schedule_scn, exists_unfinished_inc_major))) {
     LOG_WARN("failed to check unfinished inc major before merge", K(ret), K(tablet_id));
-  } else if (exists_unfinished_inc_major) {
-    FLOG_INFO("tablet can't schedule dag, exists unfinished inc major", K(ret), K(tablet_id)); // tmp log, remove later
-    // TODO tmp event, work under errsim later.
-    SERVER_EVENT_ADD("major_merge", "exist_unfinished_inc_major", "tenant_id", MTL_ID(), "ls_id", ls.get_ls_id().id(), "tablet_id", tablet_id.id());
   }
+#ifdef ERRSIM
+  if (OB_SUCC(ret) && exists_unfinished_inc_major) {
+    SERVER_EVENT_ADD("major_merge", "exist_unfinished_inc_major",
+        "tenant_id", MTL_ID(), "ls_id", ls.get_ls_id().id(), "tablet_id", tablet_id.id());
+  }
+#endif
   return ret;
 }
 
@@ -331,7 +334,9 @@ int ObTabletStatusCache::inner_init_state(
     execute_state_ = RESTORE_STATUS_NOT_READY;
     LOG_INFO("tablet restore status is EMPTY, not ready for merge", K(tablet_id));
   } else if (OB_FAIL(tablet.check_is_mv_major_refresh_tablet(is_mv_major_refresh_tablet))) {
+    execute_state_ = MV_CHECK_FAILED;
     LOG_WARN("check mv major refresh tablet failed", KR(ret));
+    ret = OB_SUCCESS; // state already captures the failure; keep tablet_status valid for diagnosis
   } else if (is_mv_major_refresh_tablet) {
     // MV tablet should schedule merge in restore tenant
     execute_state_ = CAN_MERGE;
@@ -346,6 +351,7 @@ int ObTabletStatusCache::inner_init_state(
     execute_state_ = CAN_MERGE;
   }
   if (FAILEDx(tablet.read_medium_info_list(allocator_, medium_list_))) {
+    execute_state_ = MEDIUM_LIST_LOAD_FAILED;
     LOG_WARN("failed to load medium info list", K(ret), K(tablet_id));
   }
   return ret;
@@ -550,7 +556,7 @@ bool ObTabletStatusCache::need_diagnose() const
 {
   bool bret = false;
   if (!can_merge()) {
-    bret = (INVALID_LS_STATE != execute_state_ && TENANT_SKIP_MERGE != execute_state_);
+    bret = (TENANT_SKIP_MERGE != execute_state_);
   }
   return bret;
 }

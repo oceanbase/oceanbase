@@ -6,6 +6,7 @@
 #define USING_LOG_PREFIX STORAGE
 
 #include "storage/backup/ob_backup_validate_dag_scheduler.h"
+#include "storage/high_availability/ob_storage_ha_dag.h"
 #include "share/ob_common_rpc_proxy.h"
 #include "observer/ob_server_struct.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
@@ -380,15 +381,9 @@ int ObBackupValidatePrepareDag::create_first_task()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObBackupValidatePrepareDag not init", KR(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("failed to alloc prepare task", KR(ret));
-  } else if (OB_ISNULL(task)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("error unexpected, task must not be nullptr", KR(ret));
-  } else if (OB_FAIL(task->init(param_, report_ctx_, storage_info_, ctx_))) {
-    LOG_WARN("failed to init prepare task", KR(ret));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("failed to add prepare task", KR(ret));
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_add_single_task(
+                 this, task, param_, report_ctx_, storage_info_, ctx_))) {
+    LOG_WARN("failed to alloc and add prepare task", KR(ret));
   } else {
     LOG_INFO("success create prepare task", KPC(task));
   }
@@ -418,21 +413,13 @@ int ObBackupValidateBasicDag::create_first_task()
   } else if (OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctx is null", KR(ret), KP_(ctx));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("failed to alloc basic task", KR(ret));
-  } else if (OB_ISNULL(task)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("error unexpected, task must not be nullptr", KR(ret));
   } else if (OB_FAIL(ctx_->get_next_task_id(file_group_id))) {
     LOG_WARN("failed to get next task id", KR(ret));
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_add_single_task(
+                 this, task, param_, file_group_id, report_ctx_, storage_info_))) {
+    LOG_WARN("failed to alloc and add basic task", KR(ret), K(file_group_id));
   } else {
-    if (OB_FAIL(task->init(param_, file_group_id, report_ctx_, storage_info_))) {
-      LOG_WARN("failed to init basic task", KR(ret), K(file_group_id));
-    } else if (OB_FAIL(add_task(*task))) {
-      LOG_WARN("failed to add basic task", KR(ret));
-    } else {
-      LOG_INFO("success create basic task", KPC(task));
-    }
+    LOG_INFO("success create basic task", KPC(task));
   }
   return ret;
 }
@@ -509,15 +496,9 @@ int ObBackupValidateBackupSetPhysicalDag::create_first_task()
     if (FAILEDx(ObBackupValidateObUtils::init_meta_index_store(backup_set_info, param_, false/*is_sec_meta*/,
                                                                    store, meta_index_store_))) {
       LOG_WARN("failed to init meta index store", KR(ret), K(backup_set_info), K_(param));
-    } else if (OB_FAIL(alloc_task(task))) {
-      LOG_WARN("failed to alloc backup set physical task", KR(ret));
-    } else if (OB_ISNULL(task)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("error unexpected, task must not be nullptr", KR(ret));
-    } else if (OB_FAIL(task->init(*base_dag, task_id, backup_set_info, &meta_index_store_))) {
-      LOG_WARN("failed to init backup set physical task", KR(ret), K(backup_set_info), K_(param), K(task_id));
-    } else if (OB_FAIL(add_task(*task))) {
-      LOG_WARN("failed to add backup set physical task", KR(ret));
+    } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_add_single_task(
+                   this, task, *base_dag, task_id, backup_set_info, &meta_index_store_))) {
+      LOG_WARN("failed to alloc and add backup set physical task", KR(ret), K(backup_set_info), K_(param), K(task_id));
     } else {
       LOG_INFO("success create backup set physical task", KPC(task));
     }
@@ -624,15 +605,9 @@ int ObBackupValidateArchivePiecePhysicalDag::create_first_task()
     int64_t lsn_group_id = -1;
     if (OB_FAIL(ctx_->get_next_task_id(lsn_group_id))) {
       LOG_WARN("failed to get next task id", KR(ret));
-    } else if (OB_FAIL(alloc_task(task))) {
-      LOG_WARN("failed to alloc archive piece physical task", KR(ret));
-    } else if (OB_ISNULL(task)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("error unexpected, task must not be nullptr", KR(ret));
-    } else if (OB_FAIL(task->init(param_, report_ctx_, storage_info_, lsn_group_id))) {
-      LOG_WARN("failed to init archive piece physical task", KR(ret));
-    } else if (OB_FAIL(add_task(*task))) {
-      LOG_WARN("failed to add archive piece physical task", KR(ret));
+    } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_add_single_task(
+                   this, task, param_, report_ctx_, storage_info_, lsn_group_id))) {
+      LOG_WARN("failed to alloc and add archive piece physical task", KR(ret));
     } else {
       LOG_INFO("success create archive piece physical task", KPC(task));
     }
@@ -660,15 +635,9 @@ int ObBackupValidateFinishDag::create_first_task()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObBackupValidateFinishDag not init", KR(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("failed to alloc finish task", KR(ret));
-  } else if (OB_ISNULL(task)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("error unexpected, task must not be nullptr", KR(ret));
-  } else if (OB_FAIL(task->init(param_, report_ctx_))) {
-    LOG_WARN("failed to init finish task", KR(ret));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("failed to add finish task", KR(ret));
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_add_single_task(
+                 this, task, param_, report_ctx_))) {
+    LOG_WARN("failed to alloc and add finish task", KR(ret));
   } else {
     LOG_INFO("success create finish task", KPC(task));
   }

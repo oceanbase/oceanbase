@@ -87,7 +87,6 @@
 #include "storage/shared_storage/micro_cache/ob_ss_micro_cache_stat.h" // storage::ObSSMicroCacheStat
 #  include "storage/shared_storage/micro_cache/ob_ss_micro_cache_arc_info.h"
 #  include "storage/incremental/garbage_collector/ob_ss_garbage_collector_define.h"  // LastSuccSCNs
-#include "share/backup/ob_ss_ha_macro_block_struct.h"
 #endif
 #include "storage/tablelock/ob_table_lock_common.h"       //ObTableLockPriority
 #include "storage/mview/ob_major_mv_merge_info.h"       //ObMajorMVMergeInfo
@@ -104,7 +103,6 @@
 #include "share/schema/ob_location_schema_struct.h"
 #include "share/schema/ob_objpriv_mysql_schema_struct.h"
 #include "share/backup/ob_backup_struct.h"
-#include "share/backup/ob_ss_ha_macro_block_struct.h"
 #include "share/ai_service/ob_ai_service_struct.h"
 #include "share/schema/ob_schema_struct_fts.h"
 
@@ -5998,32 +5996,6 @@ public:
   int64_t retry_id_;
   common::ObAddr dst_server_;
   DISALLOW_COPY_AND_ASSIGN(ObBackupFuseTabletMetaArg);
-};
-
-struct ObSSHAMacroBlocksArg final
-{
-  OB_UNIS_VERSION(1);
-public:
-  ObSSHAMacroBlocksArg();
-  int assign(const ObSSHAMacroBlocksArg &arg);
-  bool is_valid() const;
-  TO_STRING_KV(K_(job_id), K_(task_id), K_(task_type), K_(ls_id), K_(retry_cnt), K_(trace_id), K_(tenant_id), K_(backup_set_id), K_(backup_path),
-      K_(dst_server), K_(macro_block_cnt), K_(macro_block_batch), K_(macro_list_addr));
-public:
-  int64_t job_id_;
-  int64_t ls_id_;
-  int64_t task_id_;
-  uint8_t task_type_;
-  int64_t retry_cnt_;
-  share::ObTaskId trace_id_;
-  uint64_t tenant_id_;
-  int64_t backup_set_id_;
-  share::ObBackupPathString backup_path_;
-  common::ObAddr dst_server_;
-  share::ObSSHAMacroBlockBatch macro_block_batch_;    // Macro block batch (binary serialized)
-  backup::ObBackupBlockFileAddr macro_list_addr_;  // For BACKUP_CLEAN tasks: block file address
-  int64_t macro_block_cnt_;
-  DISALLOW_COPY_AND_ASSIGN(ObSSHAMacroBlocksArg);
 };
 
 struct ObBackupCheckTaskArg

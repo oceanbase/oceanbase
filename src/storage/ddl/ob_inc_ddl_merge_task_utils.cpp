@@ -20,7 +20,6 @@
 #include "storage/compaction/ob_partition_merge_policy.h"
 #include "storage/ddl/ob_ddl_merge_schedule.h"
 #ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/compaction_v2/ob_ss_compact_helper.h"
 #include "storage/incremental/ob_shared_meta_service.h"
 #include "close_modules/shared_storage/storage/ddl/ob_ss_ddl_util.h"
 #endif
@@ -350,13 +349,6 @@ int ObIncDDLMergeTaskUtils::link_inc_major(
                                                                  seq_no,
                                                                  is_exist))) {
       LOG_WARN("fail to check inc major exist", KR(ret), K(ss_tablet_handle), K(trans_id), K(seq_no));
-    } else if (is_exist && OB_FAIL(SSCompactHelper::link_inc_major(ls_id,
-                                                                   tablet_id,
-                                                                   snapshot_version,
-                                                                   trans_id,
-                                                                   seq_no))) {
-      LOG_WARN("fail to link inc major", KR(ret), K(ls_id), K(tablet_id),
-               K(snapshot_version), K(trans_id), K(seq_no));
     } else {
       FLOG_INFO("[SS INC MAJOR] link inc major succeed", K(ls_id), K(tablet_id), K(trans_id),
                 K(seq_no), K(is_exist));

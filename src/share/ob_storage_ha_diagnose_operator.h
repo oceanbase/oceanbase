@@ -6,6 +6,7 @@
 #ifndef OCEANBASE_SHARE_HA_DIAGNOSE_OPERATOR_
 #define OCEANBASE_SHARE_HA_DIAGNOSE_OPERATOR_
 
+#include "share/storage/ob_ha_inflight_diag.h"
 #include "share/ob_storage_ha_diagnose_struct.h"
 
 namespace oceanbase
@@ -13,11 +14,6 @@ namespace oceanbase
 namespace common
 {
 class ObISQLClient;
-
-namespace sqlclient
-{
-class ObMySQLResult;
-}
 }
 
 namespace share
@@ -31,46 +27,52 @@ public:
   ~ObStorageHADiagOperator() {}
 
   int init();
-
   void reset();
-  int get_batch_row_keys(
-          common::ObISQLClient &sql_proxy,
-          const uint64_t tenant_id,
-          const ObStorageHADiagModule &module,
-          const int64_t last_end_timestamp,
-          ObIArray<int64_t> &timestamp_array) const;
 
-  int insert_row(
-          common::ObISQLClient &sql_proxy,
-          const uint64_t tenant_id,
+  // Append one history row (columns + finish_row) to `dml`. Caller builds up
+  // a batch across many items and then flushes with batch_write_inflight_rows,
+  // yielding one multi-row INSERT per target table per drain tick.
+  int append_inflight_row(
           const uint64_t report_tenant_id,
-          const ObStorageHADiagInfo &info_row,
-          const ObStorageHADiagModule &module);
-  int do_batch_delete(
+          const ObLSID &ls_id,
+          const ObStorageHADiagModule &module,
+          const ObStorageHADiagTaskType task_type,
+          const ObHAInflightDiagState &state,
+          const int32_t result_code,
+          const int64_t retry_id,
+          ObDMLSqlSplicer &dml);
+
+  // Flush whatever rows have been appended into `dml` as a single multi-row
+  // INSERT against `module`'s history table. No-op if dml is empty.
+  int batch_write_inflight_rows(
           common::ObISQLClient &sql_proxy,
           const uint64_t tenant_id,
           const ObStorageHADiagModule &module,
-          const ObIArray<int64_t> &timestamp_array,
-          const int64_t delete_timestamp,
-          int64_t &delete_index) const;
-  int check_transfer_task_exist(
+          ObDMLSqlSplicer &dml);
+
+  // Delete up to `batch_limit` history rows whose gmt_create is <=
+  // delete_timestamp. Callers loop until `affected_rows < batch_limit`.
+  int delete_expired_rows(
           common::ObISQLClient &sql_proxy,
           const uint64_t tenant_id,
-          const share::ObTransferTaskID &task_id,
-          int64_t &result_count) const;
+          const ObStorageHADiagModule &module,
+          const int64_t delete_timestamp,
+          const int64_t batch_limit,
+          int64_t &affected_rows) const;
 
 private:
-  int fill_dml_(
-          const uint64_t tenant_id,
+  int fill_inflight_dml_(
           const uint64_t report_tenant_id,
-          const ObStorageHADiagInfo &input_info,
+          const ObLSID &ls_id,
+          const ObStorageHADiagModule &module,
+          const ObStorageHADiagTaskType task_type,
+          const ObHAInflightDiagState &state,
+          const int32_t result_code,
+          const int64_t retry_id,
           ObDMLSqlSplicer &dml);
 
   int get_table_name_(const ObStorageHADiagModule &module, const char *&table_name) const;
   int gen_event_ts_(int64_t &event_ts);
-  int parse_result_(
-    common::sqlclient::ObMySQLResult &result,
-    int64_t &result_count) const;
 
 private:
   bool is_inited_;

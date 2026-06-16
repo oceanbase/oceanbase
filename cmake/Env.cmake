@@ -151,8 +151,6 @@ if(OB_BUILD_CLOSE_MODULES)
   ob_define(OB_BUILD_LABEL_SECURITY ON)
   # SPM功能
   ob_define(OB_BUILD_SPM ON)
-  # share storage
-  ob_define(OB_BUILD_SHARED_STORAGE OFF)
 
   # oracle
   ob_define(OB_BUILD_ORACLE_PARSER ON)
@@ -167,9 +165,6 @@ if(OB_BUILD_CLOSE_MODULES)
 
   # 日志存储压缩
   ob_define(OB_BUILD_LOG_STORAGE_COMPRESS ON)
-
-  # 独立日志服务
-  ob_define(OB_BUILD_SHARED_LOG_SERVICE OFF)
 
   # 默认使用BABASSL
   ob_define(OB_USE_BABASSL ON)
@@ -205,10 +200,6 @@ endif()
 
 if(OB_BUILD_LABEL_SECURITY)
   add_definitions(-DOB_BUILD_LABEL_SECURITY)
-endif()
-
-if(OB_BUILD_SHARED_STORAGE)
-  add_definitions(-DOB_BUILD_SHARED_STORAGE)
 endif()
 
 if(OB_BUILD_STANDALONE)
@@ -251,10 +242,6 @@ endif()
 
 if (OB_BUILD_JNI_ODPS)
  add_definitions(-DOB_BUILD_JNI_ODPS)
-endif()
-
-if(OB_BUILD_SHARED_LOG_SERVICE)
-  add_definitions(-DOB_BUILD_SHARED_LOG_SERVICE)
 endif()
 
 if(OB_BUILD_WITH_EMPTY_LOAD_SCHEMA)

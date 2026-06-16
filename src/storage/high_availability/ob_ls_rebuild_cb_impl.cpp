@@ -17,9 +17,7 @@ namespace storage
 ObLSRebuildCbImpl::ObLSRebuildCbImpl()
   : is_inited_(false),
     ls_(nullptr),
-    bandwidth_throttle_(nullptr),
-    svr_rpc_proxy_(nullptr),
-    storage_rpc_(nullptr)
+    ha_svc_ctx_()
 {
 }
 
@@ -27,25 +25,18 @@ ObLSRebuildCbImpl::~ObLSRebuildCbImpl()
 {
 }
 
-int ObLSRebuildCbImpl::init(
-    ObLS *ls,
-    common::ObInOutBandwidthThrottle *bandwidth_throttle,
-    obrpc::ObStorageRpcProxy *svr_rpc_proxy,
-    storage::ObStorageRpc *storage_rpc)
+int ObLSRebuildCbImpl::init(ObLS *ls, const ObStorageHAServiceCtx &ha_svc_ctx)
 {
   int ret = OB_SUCCESS;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("ls rebuild cb impl init twice", K(ret));
-  } else if (OB_ISNULL(ls) || OB_ISNULL(bandwidth_throttle) || OB_ISNULL(svr_rpc_proxy) || OB_ISNULL(storage_rpc)) {
+  } else if (OB_ISNULL(ls) || !ha_svc_ctx.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("init ls rebuild cb impl get invalid argument", K(ret), KP(ls),
-        KP(bandwidth_throttle), KP(svr_rpc_proxy), KP(storage_rpc));
+    LOG_WARN("init ls rebuild cb impl get invalid argument", K(ret), KP(ls), K(ha_svc_ctx));
   } else {
     ls_ = ls;
-    bandwidth_throttle_ = bandwidth_throttle;
-    svr_rpc_proxy_ = svr_rpc_proxy;
-    storage_rpc_ = storage_rpc;
+    ha_svc_ctx_ = ha_svc_ctx;
     is_inited_ = true;
   }
   return ret;

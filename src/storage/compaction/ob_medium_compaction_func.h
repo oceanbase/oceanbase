@@ -111,23 +111,6 @@ public:
     const ObStorageSchema &storage_schema,
     const uint64_t data_version,
     bool &is_schema_changed);
-#ifdef OB_BUILD_SHARED_STORAGE
-  // medium compaction is not considered
-  int try_skip_merge_for_ss(
-    const int64_t merge_version,
-    share::ObFreezeInfo &freeze_info,
-    ObMediumCompactionInfo &medium_info,
-    bool &skip);
-  int check_tablet_inc_data(
-    const int64_t merge_version,
-    ObTablet &tablet,
-    ObMediumCompactionInfo &medium_info,
-    bool &no_inc_data);
-  int check_progressive_merge(
-    const storage::ObTabletTableStore &table_store,
-    const storage::ObStorageSchema &storage_schema,
-    bool &is_progressive_merge);
-#endif
   int64_t to_string(char* buf, const int64_t buf_len) const;
 protected:
   int decide_medium_snapshot(bool &medium_clog_submitted);
@@ -140,6 +123,7 @@ protected:
     const int64_t schema_version,
     ObMediumCompactionInfo &medium_info);
   int choose_encoding_limit(ObMediumCompactionInfo &medium_info);
+  int choose_batch_size(ObMediumCompactionInfo &medium_info);
   int init_parallel_range_and_schema_changed_and_co_merge_type(
       const ObGetMergeTablesResult &result,
       ObMediumCompactionInfo &medium_info);

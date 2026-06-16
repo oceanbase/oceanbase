@@ -14,6 +14,7 @@
 #include "storage/blocksstable/cs_encoding/ob_micro_block_cs_decoder.h"
 #include "storage/access/ob_index_sstable_estimator.h"
 #include "storage/column_store/ob_cg_bitmap.h"
+#include "storage/compaction/vectorization/ob_merge_vector_store.h"
 
 namespace oceanbase
 {
@@ -140,6 +141,17 @@ public:
       const common::ObIArray<blocksstable::ObStorageDatum> *default_datums,
       const bool is_padding_mode,
       const bool need_init_vector = true);
+  int get_next_batch_rows(
+      compaction::ObMergeVectorStore &vector_store,
+      const int64_t border_row_id_inclusive,
+      bool &reach_border,
+      const common::ObIArrayWrap<uint16_t> *cols = nullptr);
+  int get_next_batch_rows(
+      compaction::ObMergeVectorStore &vector_store,
+      const ObDatumRowkey &border_key,
+      bool &reach_border,
+      bool &need_prepare_micro_border);
+
   OB_INLINE int64_t get_current_pos() const
   { return current_; }
   OB_INLINE int64_t get_last_pos() const
@@ -147,8 +159,20 @@ public:
   OB_INLINE ObIMicroBlockReader *get_reader() const
   { return reader_; }
   int get_next_border_rows(const ObDatumRowkey &rowkey);
+  int set_runtime_rowkey_border(const ObDatumRowkey &border_key);
+  void clear_runtime_rowkey_border();
+  OB_INLINE bool is_runtime_rowkey_border_hit() const
+  {
+    return !reverse_scan_
+        && runtime_rowkey_border_enabled_
+        && current_ >= runtime_rowkey_border_exclusive_idx_;
+  }
   OB_INLINE bool can_blockscan() const
   { return can_blockscan_ && can_ignore_multi_version_; }
+  OB_INLINE bool can_batch_scan_to_merge_vector() const
+  {
+    return can_ignore_multi_version_;
+  }
   OB_INLINE bool is_filter_applied() const
   { return is_filter_applied_; }
   void reset_blockscan()
@@ -183,6 +207,7 @@ public:
     current_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
     reserved_pos_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
   }
+  static int get_global_border_row_id(const ObDatumRange &range, const int64_t border_row_id, int64_t &global_border_row_id);
   VIRTUAL_TO_STRING_KV(K_(is_left_border), K_(is_right_border), K_(can_ignore_multi_version), K_(use_private_bitmap),
                        K_(can_blockscan), K_(is_filter_applied), K_(current), K_(start), K_(last), K_(reserved_pos), K_(step),
                        K_(macro_id));
@@ -208,6 +233,15 @@ protected:
   bool is_di_bitmap_valid() const;
   int init_bitmap(ObCGBitmap *&bitmap, bool is_all_true);
   int inner_get_next_row_blockscan(const ObDatumRow *&row);
+  int inner_get_next_batch_rows(
+      compaction::ObMergeVectorStore &vector_store,
+      const int64_t border_exclusive,
+      bool &reach_border,
+      const common::ObIArrayWrap<uint16_t> *cols = nullptr);
+  int inner_get_next_batch_rows(
+      compaction::ObMergeVectorStore &vector_store,
+      const ObDatumRowkey &border_key,
+      bool &reach_border);
 private:
   int apply_filter_batch(
       sql::ObPushdownFilterExecutor *parent,
@@ -229,6 +263,8 @@ protected:
   int64_t last_;            // end of scan, inclusive.
   int64_t reserved_pos_;
   int64_t step_;
+  bool runtime_rowkey_border_enabled_;
+  int64_t runtime_rowkey_border_exclusive_idx_;
   ObDatumRow row_;
   MacroBlockId macro_id_;
   const ObITableReadInfo *read_info_;

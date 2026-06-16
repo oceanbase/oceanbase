@@ -18,12 +18,11 @@ namespace compaction
  * -- ObRSCompactionTimeGuard
  * -- ObScheduleCompactionTimeGuard
  * -- ObStorageCompactionTimeGuard
- * -- ObSSCompactionTimeGuard
  */
 class ObCompactionTimeGuard
 {
 public:
-  enum ObCompactionTimeGuardType : uint8_t
+  enum ObCompactionTimeGuardType : uint8_t //FARM COMPAT WHITELIST
   {
     BASE_COMPACT_TIME_GUARD = 0,
     RS_COMPACT_TIME_GUARD = 1,
@@ -99,7 +98,7 @@ public:
     : ObCompactionTimeGuard(RS_COMPACT_TIME_GUARD, UINT64_MAX, "[RS] ")
   {}
   virtual ~ObRSCompactionTimeGuard() {}
-  enum CompactionEvent : uint16_t {
+  enum CompactionEvent : uint16_t { //FARM COMPAT WHITELIST
     PREPARE_UNFINISH_TABLE_IDS = 0,
     GET_TABLET_LS_PAIRS,
     GET_TABLET_META_TABLE,
@@ -119,7 +118,7 @@ public:
     : ObCompactionTimeGuard(SCHEDULE_COMPACT_TIME_GUARD, UINT64_MAX, "[STORAGE] ")
   {}
   virtual ~ObCompactionScheduleTimeGuard() {}
-  enum CompactionEvent : uint16_t {
+  enum CompactionEvent : uint16_t { //FARM COMPAT WHITELIST
     // medium scheduler
     GET_TABLET = 0,
     INIT_TABLET_STATUS,
@@ -148,7 +147,7 @@ public:
     : ObCompactionTimeGuard(STORAGE_COMPACT_TIME_GUARD, warn_threshold, "[STORAGE] ")
   {}
   virtual ~ObStorageCompactionTimeGuard() {}
-  enum CompactionEvent : uint16_t {
+  enum CompactionEvent : uint16_t { //FARM COMPAT WHITELIST
     DAG_WAIT_TO_SCHEDULE = 0,
     COMPACTION_POLICY,
     PRE_PROCESS_TX_TABLE,
@@ -176,32 +175,6 @@ private:
   static const int64_t COMPACTION_SHOW_TIME_THRESHOLD = 60 * 1000L * 1000L; // 30s
 };
 
-struct ObSSCompactionTimeGuard : public ObCompactionTimeGuard
-{
-public:
-  ObSSCompactionTimeGuard()
-    : ObCompactionTimeGuard(STORAGE_COMPACT_TIME_GUARD, COMPACTION_WARN_THRESHOLD_RATIO, "[SS_Merge] ")
-  {}
-  virtual ~ObSSCompactionTimeGuard() {}
-  enum CompactionEvent : uint16_t {
-    // ls merge scheduler
-    GET_SCHEDULE_TABLET,
-    PREPARE_CLOG,
-    UPDATE_TABLET_OBJ,
-    GET_TABLET,
-    SCHEDULE_MERGE,
-    REFRESH,
-    FORCE_FREEZE,
-    COMPACTION_EVENT_MAX
-  };
-private:
-  const static char *CompactionEventStr[];
-  static const char *get_comp_event_str(const enum CompactionEvent event);
-  static const int64_t COMPACTION_WARN_THRESHOLD_RATIO = 60 * 1000L * 1000L; // 1 min
-  static constexpr float COMPACTION_SHOW_PERCENT_THRESHOLD = 0.1;
-  static const int64_t COMPACTION_SHOW_TIME_THRESHOLD = 1 * 1000L * 1000L; // 1s
-};
-
 struct ObCOMergeTimeGuard : public ObCompactionTimeGuard
 {
 public:
@@ -209,8 +182,9 @@ public:
     : ObCompactionTimeGuard(CO_MERGE_TIME_GUARD, UINT64_MAX, "[CO_Merge] ")
   {}
   virtual ~ObCOMergeTimeGuard() {}
-  enum CompactionEvent : uint16_t {
+  enum CompactionEvent : uint16_t { //FARM COMPAT WHITELIST
     MOVE_NEXT = 0,
+    BATCH_MOVE_NEXT,
     COMPARE,
     BUILD_LOG,
     REPLAY_BASE_CG,
@@ -231,7 +205,7 @@ public:
     : ObCompactionTimeGuard(WINDOW_COMPACT_TIME_GUARD, UINT64_MAX, "[STORAGE] ")
   {}
   virtual ~ObWindowCompactionTimeGuard() {}
-  enum CompactionEvent : uint16_t {
+  enum CompactionEvent : uint16_t { //FARM COMPAT WHITELIST
     UPDATE_ADAPTIVE_THREAD_CNT = 0,
     LOOP_TABLET_STATS,
     LOOP_PRIORITY_QUEUE,

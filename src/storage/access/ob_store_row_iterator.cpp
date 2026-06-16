@@ -14,6 +14,23 @@ using namespace blocksstable;
 namespace storage
 {
 
+int64_t ObMergeBatchBorder::to_string(char *buf, const int64_t buf_len) const
+{
+  int64_t pos = 0;
+  if (OB_ISNULL(buf) || buf_len <= 0) {
+  } else {
+    J_OBJ_START();
+    if (!is_valid()) {
+      J_KV("invalid border", kind_);
+    } else if (is_rowkey()) {
+      J_KV("rowkey", get_rowkey());
+    } else {
+      J_KV("row_id", get_row_id());
+    }
+    J_OBJ_END();
+  }
+  return pos;
+}
 ObStoreRowIterator::~ObStoreRowIterator()
 {
 }

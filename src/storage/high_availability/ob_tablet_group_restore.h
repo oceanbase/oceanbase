@@ -117,9 +117,7 @@ public:
   VIRTUAL_TO_STRING_KV(K_(arg), K_(task_id));
   ObTabletGroupRestoreArg arg_;
   share::ObTaskId task_id_;
-  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
-  obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
-  storage::ObStorageRpc *storage_rpc_;
+  ObStorageHAServiceCtx ha_svc_ctx_;
 };
 
 class ObTabletGroupRestoreDagNet: public share::ObIDagNet
@@ -142,9 +140,7 @@ public:
   virtual int deal_with_cancel() override;
 
   ObTabletGroupRestoreCtx *get_restore_ctx() { return ctx_; }
-  common::ObInOutBandwidthThrottle *get_bandwidth_throttle() { return bandwidth_throttle_; }
-  obrpc::ObStorageRpcProxy *get_storage_rpc_proxy() { return svr_rpc_proxy_; }
-  storage::ObStorageRpc *get_storage_rpc() { return storage_rpc_; }
+  const ObStorageHAServiceCtx &get_ha_svc_ctx() const { return ha_svc_ctx_; }
   backup::ObBackupMetaIndexStoreWrapper *get_meta_index_store() { return ctx_->arg_.is_leader_ ? &meta_index_store_ : nullptr; }
   backup::ObBackupMetaIndexStoreWrapper *get_second_meta_index_store() { return ctx_->arg_.is_leader_ ? &second_meta_index_store_ : nullptr; }
   INHERIT_TO_STRING_KV("ObIDagNet", share::ObIDagNet, KPC_(ctx));
@@ -161,9 +157,7 @@ private:
   backup::ObBackupMetaIndexStoreWrapper meta_index_store_;
   backup::ObBackupMetaIndexStoreWrapper second_meta_index_store_;
   backup::ObBackupIndexKVCache *kv_cache_;
-  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
-  obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
-  storage::ObStorageRpc *storage_rpc_;
+  ObStorageHAServiceCtx ha_svc_ctx_;
 
   DISALLOW_COPY_AND_ASSIGN(ObTabletGroupRestoreDagNet);
 };
@@ -222,9 +216,7 @@ private:
 private:
   bool is_inited_;
   ObTabletGroupRestoreCtx *ctx_;
-  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
-  obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
-  storage::ObStorageRpc *storage_rpc_;
+  ObStorageHAServiceCtx ha_svc_ctx_;
   share::ObIDagNet *dag_net_;
   backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
   backup::ObBackupMetaIndexStoreWrapper *second_meta_index_store_;
@@ -265,9 +257,7 @@ private:
 private:
   bool is_inited_;
   ObTabletGroupRestoreCtx *ctx_;
-  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
-  obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
-  storage::ObStorageRpc *storage_rpc_;
+  ObStorageHAServiceCtx ha_svc_ctx_;
   backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
   backup::ObBackupMetaIndexStoreWrapper *second_meta_index_store_;
   share::ObIDag *finish_dag_;
@@ -359,9 +349,7 @@ public:
   virtual int decide_retry_strategy(const int error_code, ObDagRetryStrategy &retry_strategy) override;
 
   int init(const ObInitTabletRestoreParam &param);
-  ObInOutBandwidthThrottle *get_bandwidth_throttle() { return bandwidth_throttle_; }
-  obrpc::ObStorageRpcProxy *get_storage_rpc_proxy() { return svr_rpc_proxy_; }
-  storage::ObStorageRpc *get_storage_rpc() { return storage_rpc_; }
+  const ObStorageHAServiceCtx &get_ha_svc_ctx() const { return ha_svc_ctx_; }
   storage::ObLS *get_ls() { return ls_handle_.get_ls(); }
 
   INHERIT_TO_STRING_KV("ObStorageHADag", ObStorageHADag, KP(this), K_(tablet_restore_ctx));
@@ -371,10 +359,7 @@ protected:
 protected:
   bool is_inited_;
   ObTabletRestoreCtx tablet_restore_ctx_;
-  //TODO(muwei.ym) put this into dag net ctx 4.3
-  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
-  obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
-  storage::ObStorageRpc *storage_rpc_;
+  ObStorageHAServiceCtx ha_svc_ctx_;
   ObLSHandle ls_handle_;
   ObHATabletGroupCtx *tablet_group_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObTabletRestoreDag);
@@ -444,9 +429,7 @@ private:
   bool is_inited_;
   ObIHADagNetCtx *ha_dag_net_ctx_;
   ObTabletRestoreCtx *tablet_restore_ctx_;
-  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
-  obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
-  storage::ObStorageRpc *storage_rpc_;
+  ObStorageHAServiceCtx ha_svc_ctx_;
   storage::ObLS *ls_;
   ObStorageHASrcInfo src_info_;
   bool need_check_seq_;

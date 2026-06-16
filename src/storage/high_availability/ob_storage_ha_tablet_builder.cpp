@@ -9,9 +9,6 @@
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "storage/ob_storage_schema_util.h"
 #include "ob_tablet_copy_dependency_mgr.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/compaction_v2/ob_ss_compact_helper.h"
-#endif
 
 namespace oceanbase
 {
@@ -29,9 +26,7 @@ ObStorageHATabletsBuilderParam::ObStorageHATabletsBuilderParam()
     need_check_seq_(false),
     is_leader_restore_(false),
     ha_table_info_mgr_(nullptr),
-    bandwidth_throttle_(nullptr),
-    svr_rpc_proxy_(nullptr),
-    storage_rpc_(nullptr),
+    ha_svc_ctx_(),
     restore_base_info_(nullptr),
     restore_action_(ObTabletRestoreAction::MAX),
     meta_index_store_(nullptr)
@@ -48,9 +43,7 @@ void ObStorageHATabletsBuilderParam::reset()
   need_check_seq_ = false;
   is_leader_restore_ = false;
   ha_table_info_mgr_ = nullptr;
-  bandwidth_throttle_ = nullptr;
-  svr_rpc_proxy_ = nullptr;
-  storage_rpc_ = nullptr;
+  ha_svc_ctx_.reset();
   restore_base_info_ = nullptr;
   restore_action_ = ObTabletRestoreAction::MAX;
   meta_index_store_ = nullptr;
@@ -65,8 +58,8 @@ bool ObStorageHATabletsBuilderParam::is_valid() const
       && OB_NOT_NULL(ha_table_info_mgr_);
   if (bool_ret) {
     if (!is_leader_restore_) {
-      bool_ret = src_info_.is_valid() && OB_NOT_NULL(bandwidth_throttle_)
-          && OB_NOT_NULL(svr_rpc_proxy_) && OB_NOT_NULL(storage_rpc_);
+      bool_ret = src_info_.is_valid() && OB_NOT_NULL(ha_svc_ctx_.bandwidth_throttle_)
+          && OB_NOT_NULL(ha_svc_ctx_.svr_rpc_proxy_) && OB_NOT_NULL(ha_svc_ctx_.storage_rpc_);
     } else {
       bool_ret = OB_NOT_NULL(restore_base_info_)
          && ObTabletRestoreAction::is_valid(restore_action_)
@@ -93,9 +86,7 @@ int ObStorageHATabletsBuilderParam::assign(const ObStorageHATabletsBuilderParam 
     is_leader_restore_ = param.is_leader_restore_;
     restore_action_ = param.restore_action_;
     ha_table_info_mgr_ = param.ha_table_info_mgr_;
-    bandwidth_throttle_ = param.bandwidth_throttle_;
-    svr_rpc_proxy_ = param.svr_rpc_proxy_;
-    storage_rpc_ = param.storage_rpc_;
+    ha_svc_ctx_ = param.ha_svc_ctx_;
     restore_base_info_ = param.restore_base_info_;
     restore_action_ = param.restore_action_;
     meta_index_store_ = param.meta_index_store_;
@@ -597,7 +588,7 @@ int ObStorageHATabletsBuilder::get_tablet_info_ob_reader_(
     arg.ls_rebuild_seq_ = param_.local_rebuild_seq_;
     arg.ls_id_ = param_.ls_->get_ls_id();
     arg.need_check_seq_ = param_.need_check_seq_;
-    if (OB_FAIL(ob_reader->init(param_.src_info_, arg, *param_.svr_rpc_proxy_, *param_.bandwidth_throttle_))) {
+    if (OB_FAIL(ob_reader->init(param_.src_info_, arg, *param_.ha_svc_ctx_.svr_rpc_proxy_, *param_.ha_svc_ctx_.bandwidth_throttle_))) {
       LOG_WARN("failed to init copy tablet info ob reader", K(ret), K(param_));
     }
   }
@@ -948,7 +939,7 @@ int ObStorageHATabletsBuilder::get_tablets_sstable_ob_reader_(
   } else if (FALSE_IT(reader = ob_reader)) {
   } else if (OB_FAIL(build_copy_tablets_sstable_info_arg_(tablet_handle_array, arg))) {
     LOG_WARN("failed to build copy tablets sstable info arg", K(ret), K(arg));
-  } else if (OB_FAIL(ob_reader->init(param_.src_info_, arg, *param_.svr_rpc_proxy_, *param_.bandwidth_throttle_))) {
+  } else if (OB_FAIL(ob_reader->init(param_.src_info_, arg, *param_.ha_svc_ctx_.svr_rpc_proxy_, *param_.ha_svc_ctx_.bandwidth_throttle_))) {
     LOG_WARN("failed to init copy tablet info ob reader", K(ret), K(param_));
   }
 
@@ -1929,9 +1920,7 @@ ObStorageHACopySSTableParam::ObStorageHACopySSTableParam()
     need_check_seq_(false),
     is_leader_restore_(false),
     restore_action_(ObTabletRestoreAction::RESTORE_NONE),
-    bandwidth_throttle_(nullptr),
-    svr_rpc_proxy_(nullptr),
-    storage_rpc_(nullptr),
+    ha_svc_ctx_(),
     restore_base_info_(nullptr),
     meta_index_store_(nullptr),
     second_meta_index_store_(nullptr)
@@ -1949,9 +1938,7 @@ void ObStorageHACopySSTableParam::reset()
   need_check_seq_ = false;
   is_leader_restore_ = false;
   restore_action_ = ObTabletRestoreAction::RESTORE_NONE,
-  bandwidth_throttle_ = nullptr;
-  svr_rpc_proxy_ = nullptr;
-  storage_rpc_ = nullptr;
+  ha_svc_ctx_.reset();
   restore_base_info_ = nullptr;
   meta_index_store_ = nullptr;
   second_meta_index_store_ = nullptr;
@@ -1966,8 +1953,8 @@ bool ObStorageHACopySSTableParam::is_valid() const
       && ((need_check_seq_ && src_ls_rebuild_seq_ >= 0) || !need_check_seq_);
   if (bool_ret) {
     if (!is_leader_restore_) {
-      bool_ret = src_info_.is_valid() && OB_NOT_NULL(bandwidth_throttle_)
-          && OB_NOT_NULL(svr_rpc_proxy_) && OB_NOT_NULL(storage_rpc_);
+      bool_ret = src_info_.is_valid() && OB_NOT_NULL(ha_svc_ctx_.bandwidth_throttle_)
+          && OB_NOT_NULL(ha_svc_ctx_.svr_rpc_proxy_) && OB_NOT_NULL(ha_svc_ctx_.storage_rpc_);
     } else {
       bool_ret = OB_NOT_NULL(restore_base_info_)
         && OB_NOT_NULL(meta_index_store_)
@@ -1994,9 +1981,7 @@ int ObStorageHACopySSTableParam::assign(const ObStorageHACopySSTableParam &param
     need_check_seq_ = param.need_check_seq_;
     is_leader_restore_ = param.is_leader_restore_;
     restore_action_ = param.restore_action_;
-    bandwidth_throttle_ = param.bandwidth_throttle_;
-    svr_rpc_proxy_ = param.svr_rpc_proxy_;
-    storage_rpc_ = param.storage_rpc_;
+    ha_svc_ctx_ = param.ha_svc_ctx_;
     restore_base_info_ = param.restore_base_info_;
     meta_index_store_ = param.meta_index_store_;
     second_meta_index_store_ = param.second_meta_index_store_;
@@ -2172,7 +2157,7 @@ int ObStorageHACopySSTableInfoMgr::get_sstable_macro_range_info_ob_reader_(
   }
 #endif
 
-    if (OB_FAIL(ob_reader->init(param_.src_info_, arg, *param_.svr_rpc_proxy_, *param_.bandwidth_throttle_))) {
+    if (OB_FAIL(ob_reader->init(param_.src_info_, arg, *param_.ha_svc_ctx_.svr_rpc_proxy_, *param_.ha_svc_ctx_.bandwidth_throttle_))) {
       LOG_WARN("failed to init copy sstable macro ob reader", K(ret), K(param_));
     }
   }
@@ -2863,25 +2848,6 @@ int ObStorageHATabletBuilderUtil::inner_update_tablet_table_store_with_major_(
                       "old_snapshot_version", tablet->get_snapshot_version(),
                       "new_snapshot_version", table->get_key().get_snapshot_version(),
                       "has_merged_with_mds_info", major_sstables_param.has_merged_with_mds_info_);
-#endif
-
-#ifdef OB_BUILD_SHARED_STORAGE
-    // for shared storage
-    // if build the shared major index tree, and this is leader restore, need update shared major in current region
-    if (OB_SUCC(ret) && GCTX.is_shared_storage_mode() && table_extra_param.is_valid() && table_extra_param.is_leader_restore_) {
-      ObUpdateTableStoreParam update_major_param(param);
-      update_major_param.ha_info_.need_replace_remote_sstable_ = false;
-      update_major_param.ha_info_.is_only_replace_major_ = false;
-      if (OB_FAIL(share::SSCompactHelper::create_or_update_table_store(ls->get_ls_id(),
-                                                                       tablet_id,
-                                                                       tablet->get_reorganization_scn(),
-                                                                       ObMetaUpdateReason::TABLET_STORAGE_HA_ADD_SSTABLES,
-                                                                       update_major_param))) {
-        LOG_WARN("failed to update shared tablet with major", K(ret), K(tablet_id), K(update_major_param));
-      } else {
-        LOG_INFO("succeed to update shared tablet with major", K(tablet_id), K(param), K(table_extra_param));
-      }
-    }
 #endif
 
     if (FAILEDx(ls->update_tablet_table_store(tablet_id, param, tablet_handle))) {

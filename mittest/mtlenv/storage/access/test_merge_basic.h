@@ -20,6 +20,7 @@
 #include "storage/column_store/ob_co_merge_ctx.h"
 #include "storage/column_store/ob_column_oriented_merger.h"
 #include "storage/column_store/ob_co_merge_dag.h"
+#include "test_co_merge.h"
 
 namespace oceanbase
 {
@@ -101,7 +102,7 @@ public:
     ObTabletMergeCtx &merge_context);
   static void co_major_merge(
     ObLocalArena &allocator,
-    const ObCOMergeTestType type,
+    const ObCOMergeTestConfig &config,
     ObCOTabletMergeCtx &merge_context,
     const int64_t task_id,
     const int64_t start_cg_idx,
@@ -184,6 +185,7 @@ void TestMergeBasic::prepare_merge_context(
   merge_context.static_param_.merge_engine_type_ = is_delete_insert_merge ? ObMergeEngineType::OB_MERGE_ENGINE_DELETE_INSERT : ObMergeEngineType::OB_MERGE_ENGINE_PARTIAL_UPDATE;
   merge_context.merge_dag_ = merge_dag;
   merge_context.static_param_.for_unittest_ = true;
+  merge_context.static_param_.need_parallel_minor_merge_ = false;
   ASSERT_EQ(OB_SUCCESS, merge_context.build_ctx_after_init(unused_flag));
 }
 
@@ -314,6 +316,7 @@ void TestMergeBasic::create_tablet()
   ObTabletID tablet_id(tablet_id_);
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
+  ASSERT_NE(nullptr, ls_svr);
   ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
   MERGE_SCHEDULER_PTR->resume_major_merge();
 
@@ -346,7 +349,7 @@ int TestMergeBasic::prepare_rowscn_filter(
 
 void TestMergeBasic::co_major_merge(
   ObLocalArena &allocator,
-  const ObCOMergeTestType type,
+  const ObCOMergeTestConfig &config,
   ObCOTabletMergeCtx &merge_context,
   const int64_t task_id,
   const int64_t start_cg_idx,
@@ -357,19 +360,34 @@ void TestMergeBasic::co_major_merge(
   const bool onle_use_row_store/* = false*/)
 {
   OK(merge_context.prepare_index_builder(start_cg_idx, end_cg_idx));
-  if (need_replay_base(type)) {
+  if (config.need_replay_base()) {
     merge_context.need_replay_base_directly_ = 1;
   }
-  if (ObCOMergeTestType::NORMAL == type || ObCOMergeTestType::NORMAL_WITH_BASE_REPLAY == type) {
+  if (config.is_normal_test_type()) {
     merge_context.merge_log_storage_ = 0;
-    ObCOMergeLogReplayer replayer(allocator, merge_context.static_param_, start_cg_idx, end_cg_idx);
-    ASSERT_EQ(OB_SUCCESS, replayer.init(merge_context, task_id));
-    ASSERT_EQ(OB_SUCCESS, replayer.replay_merge_log());
-    replayer.reset();
+    if (config.is_batch_merge_test_type()) {
+      merge_context.static_param_.compaction_batch_size_ = config.compaction_batch_size_;
+      // build_ctx_after_init() already ran in prepare_merge_context() while compaction_batch_size_ was
+      // still default 0, so prepare_row_store_layout_param / prepare_cg_layout_params were skipped.
+      // Batch replay needs them; prepare here after applying the test config batch size.
+      ASSERT_EQ(OB_SUCCESS, merge_context.prepare_row_store_layout_param());
+      if (is_major_merge_type(merge_context.get_merge_type())) {
+        ASSERT_EQ(OB_SUCCESS, merge_context.prepare_cg_layout_params());
+      }
+      ObCOBatchMergeLogReplayer replayer(allocator, merge_context.static_param_, start_cg_idx, end_cg_idx);
+      ASSERT_EQ(OB_SUCCESS, replayer.init(merge_context, task_id));
+      ASSERT_EQ(OB_SUCCESS, replayer.replay_merge_log());
+      replayer.reset();
+    } else {
+      ObCOMergeLogReplayer replayer(allocator, merge_context.static_param_, start_cg_idx, end_cg_idx);
+      ASSERT_EQ(OB_SUCCESS, replayer.init(merge_context, task_id));
+      ASSERT_EQ(OB_SUCCESS, replayer.replay_merge_log());
+      replayer.reset();
+    }
   } else {
     if (need_prepare_two_stage_ctx) {
       merge_context.merge_log_storage_ = 1;
-      if (!no_column_store && is_column_tmp_file_test_type(type)) {
+      if (!no_column_store && config.is_column_tmp_file_test_type()) {
         merge_context.merge_log_storage_ = 2;
       }
       ASSERT_EQ(OB_SUCCESS, merge_context.prepare_two_stage_ctx());

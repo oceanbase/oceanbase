@@ -164,6 +164,9 @@ struct ObColDataStoreDesc
   int mock_valid_col_default_checksum_array(int64_t column_cnt);
   OB_INLINE int add_col_desc(const ObObjMeta meta, int64_t col_idx);
   OB_INLINE int add_binary_col_desc(int64_t col_idx);
+  static int get_compat_mode_from_schema(
+    const share::schema::ObMergeSchema &merge_schema,
+    bool &is_oracle_mode);
   TO_STRING_KV(K_(is_row_store), K_(table_cg_idx), K_(row_column_count),
                K_(rowkey_column_count), K_(schema_rowkey_col_cnt),
                K_(full_stored_col_cnt), K_(col_desc_array),
@@ -194,9 +197,6 @@ private:
   int add_col_desc_from_cg_schema(
     const share::schema::ObMergeSchema &merge_schema,
     const storage::ObStorageColumnGroupSchema &cg_schema);
-  static int get_compat_mode_from_schema(
-    const share::schema::ObMergeSchema &merge_schema,
-    bool &is_oracle_mode);
 public:
   bool is_row_store_;
   bool default_col_checksum_array_valid_;

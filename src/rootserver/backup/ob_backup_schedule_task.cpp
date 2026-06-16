@@ -14,10 +14,7 @@
 #include "share/backup/ob_backup_struct.h"
 #include "share/backup/ob_backup_helper.h"
 #include "share/ob_all_server_tracer.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "share/backup/ob_ss_ha_macro_block_table_operator.h"
-#endif
-namespace oceanbase 
+namespace oceanbase
 {
 using namespace common;
 using namespace lib;
@@ -599,6 +596,7 @@ int ObBackupDataLSTask::clone(common::ObIAllocator &allocator, ObBackupScheduleT
       out_task = my_task;
     } else if (OB_NOT_NULL(my_task)) {
       my_task->~ObBackupDataLSTask();
+      allocator.free(input_ptr);
       my_task = nullptr;
     }
   }
@@ -662,6 +660,7 @@ int ObBackupComplLogTask::clone(common::ObIAllocator &allocator, ObBackupSchedul
       out_task = my_task;
     } else if (OB_NOT_NULL(my_task)) {
       my_task->~ObBackupComplLogTask();
+      allocator.free(input_ptr);
       my_task = nullptr;
     }
   }
@@ -800,6 +799,7 @@ int ObBackupBuildIndexTask::clone(common::ObIAllocator &allocator, ObBackupSched
       out_task = my_task;
     } else if (OB_NOT_NULL(my_task)) {
       my_task->~ObBackupBuildIndexTask();
+      allocator.free(input_ptr);
       my_task = nullptr;
     }
   }
@@ -886,6 +886,7 @@ int ObBackupCleanLSTask::clone(common::ObIAllocator &allocator, ObBackupSchedule
       out_task = ls_task;
     } else if (OB_NOT_NULL(ls_task)) {
       ls_task->~ObBackupCleanLSTask();
+      allocator.free(input_ptr);
       ls_task = nullptr;
     }
   }
@@ -1052,6 +1053,7 @@ int ObBackupDataLSMetaTask::clone(common::ObIAllocator &allocator, ObBackupSched
       out_task = my_task;
     } else if (OB_NOT_NULL(my_task)) {
       my_task->~ObBackupDataLSMetaTask();
+      allocator.free(input_ptr);
       my_task = nullptr;
     }
   }
@@ -1081,17 +1083,7 @@ int ObBackupDataLSMetaTask::execute(obrpc::ObSrvRpcProxy &rpc_proxy) const
   arg.job_id_ = get_job_id();
   arg.start_scn_ = backup_user_ls_scn_;
 
-  if (GCTX.is_shared_storage_mode()) {
-    if (!extra_info_.sslog_gts_.is_valid_and_not_min()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("sslog_gts is invalid, extra_info may not be initialized",
-          K(ret), K_(extra_info), K(get_task_id()), K(get_tenant_id()));
-    } else {
-      arg.start_scn_ = extra_info_.sslog_gts_;
-    }
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(arg.backup_path_.assign(backup_path_))) {
+  if (OB_FAIL(arg.backup_path_.assign(backup_path_))) {
     LOG_WARN("failed to assign backup path", K(ret), K(backup_path_));
   } else if (OB_FAIL(rpc_proxy.to(get_dst()).backup_meta(arg))) {
     LOG_WARN("fail to send backup meta task", K(ret), K(arg));
@@ -1124,6 +1116,7 @@ int ObBackupDataLSMetaFinishTask::clone(common::ObIAllocator &allocator, ObBacku
       out_task = my_task;
     } else if (OB_NOT_NULL(my_task)) {
       my_task->~ObBackupDataLSMetaFinishTask();
+      allocator.free(input_ptr);
       my_task = nullptr;
     }
   }
@@ -1173,6 +1166,7 @@ int ObBackupDataFuseTabletMetaTask::clone(common::ObIAllocator &allocator, ObBac
       out_task = my_task;
     } else if (OB_NOT_NULL(my_task)) {
       my_task->~ObBackupDataFuseTabletMetaTask();
+      allocator.free(input_ptr);
       my_task = nullptr;
     }
   }
@@ -1210,79 +1204,6 @@ int ObBackupDataFuseTabletMetaTask::execute(obrpc::ObSrvRpcProxy &rpc_proxy) con
   }
   return ret;
 }
-
-#ifdef OB_BUILD_SHARED_STORAGE
-/*
- *------------------------ObSSHAMacroBlockScheduleTask--------------------------
- */
-
-int ObSSHAMacroBlockScheduleTask::build(const share::ObBackupJobAttr &job_attr, const share::ObBackupSetTaskAttr &set_task_attr,
-    const share::ObSSHAMacroBlockTaskAttr &macro_task_attr)
-{
-  int ret = OB_SUCCESS;
-  ObBackupScheduleTaskKey key;
-  ObArray<ObAddr> addr_list;
-  ObCurTraceId::init(GCONF.self_addr_);
-  share::ObTaskId trace_id(*ObCurTraceId::get_trace_id());
-  int64_t dest_id = OB_INVALID_DEST_ID;
-  const int64_t parent_task_id = job_attr.job_id_;
-  if (!job_attr.is_valid() || !macro_task_attr.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(job_attr), K(macro_task_attr));
-  } else if (OB_ISNULL(GCTX.sql_proxy_)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("sql proxy is null", K(ret));
-  } else if (OB_FAIL(key.init(job_attr.tenant_id_, parent_task_id, macro_task_attr.task_id_, macro_task_attr.ls_id_.id(), BackupJobType::BACKUP_DATA_JOB))) {
-    LOG_WARN("failed to init backup schedule task key", K(ret), K(job_attr), K(macro_task_attr));
-  } else if (macro_task_attr.task_type_.is_backup()
-             && OB_FAIL(share::ObBackupUtils::get_backup_dest_id(job_attr.tenant_id_, dest_id))) {
-    LOG_WARN("failed to get backup dest id", K(ret), K(job_attr));
-  } else if (macro_task_attr.task_type_.is_restore()
-             && OB_FAIL(ObBackupStorageInfoOperator::get_restore_dest_id(*(GCTX.sql_proxy_), job_attr.tenant_id_, ObBackupDestType::DEST_TYPE_RESTORE_DATA, dest_id))) {
-    LOG_WARN("fail to get restore dest id", K(ret), K(job_attr));
-  } else if (OB_FAIL(ObBackupScheduleTask::build(key, trace_id, macro_task_attr.status_, macro_task_attr.svr_addr_, dest_id))) {
-    LOG_WARN("fail to build backup schedule task", K(ret), "trace_id", macro_task_attr.trace_id_, "status", macro_task_attr.status_, "dst", macro_task_attr.svr_addr_);
-  } else if (OB_FAIL(addr_list.push_back(macro_task_attr.svr_addr_))) {
-    LOG_WARN("failed to push back", K(ret), K(macro_task_attr));
-  } else if (OB_FAIL(macro_task_attr_.assign(macro_task_attr))) {
-    LOG_WARN("failed to assign macro task attr", K(ret), K(macro_task_attr));
-  } else {
-    backup_set_id_ = job_attr.backup_set_id_;
-    ls_id_ = macro_task_attr.ls_id_;
-    if (OB_FAIL(backup_path_.assign(job_attr.backup_path_))) {
-      LOG_WARN("failed to assign backup dest", K(ret), K(job_attr.backup_path_));
-    } else if (macro_task_attr.task_type_.is_restore()) {
-      addr_list.reuse();
-      ObBackupDest dest;
-      ObArray<ObBackupServer> servers;
-      bool is_self_tenant_server = false; //unused
-      if (OB_FAIL(share::ObBackupStorageInfoOperator::get_backup_dest(
-            *(GCTX.sql_proxy_), job_attr.tenant_id_, set_task_attr.backup_path_, dest))) {
-        LOG_WARN("failed to get backup dest", K(ret), K(job_attr), K(set_task_attr));
-      } else if (OB_FAIL(ObBackupUtils::get_tenant_backup_servers(
-                  dest.get_storage_info()->extension_, job_attr.tenant_id_, addr_list, is_self_tenant_server))) {
-        LOG_WARN("fail to get optional servers", K(ret), K(dest));
-      } else {
-        ARRAY_FOREACH_X(addr_list, i, cnt, OB_SUCC(ret)) {
-          ObBackupServer server;
-          const ObAddr addr = addr_list.at(i);
-          server.set(addr, 1/*high priority*/);
-          if (OB_FAIL(servers.push_back(server))) {
-            LOG_WARN("fail to push back", K(ret), K(server));
-          }
-        }
-      }
-      if (FAILEDx(ObBackupScheduleTask::set_optional_servers(servers))) {
-        LOG_WARN("fail to set optional servers", K(ret), K(servers));
-      }
-    }  else if (OB_FAIL(set_optional_servers_(addr_list))) {
-      LOG_WARN("failed to set optional servers", K(ret), K(macro_task_attr));
-    }
-    LOG_INFO("get optional servers", K(ret), K(addr_list));
-  }
-  return ret;
-}
-#endif // OB_BUILD_SHARED_STORAGE
 
 /*
  *-------------------------------ObBackupValidateLSTask---------------------------------
@@ -1334,49 +1255,12 @@ int ObBackupValidateLSTask::clone(common::ObIAllocator &allocator, ObBackupSched
       out_task = ls_task;
     } else if (OB_NOT_NULL(ls_task)) {
       ls_task->~ObBackupValidateLSTask();
+      allocator.free(input_ptr);
       ls_task = nullptr;
     }
   }
   return ret;
 }
-
-#ifdef OB_BUILD_SHARED_STORAGE
-int ObSSHAMacroBlockScheduleTask::build(
-    const share::ObBackupCleanJobAttr &clean_job_attr,
-    const share::ObBackupCleanTaskAttr &clean_task_attr,
-    const share::ObSSHAMacroBlockTaskAttr &macro_task_attr)
-{
-  int ret = OB_SUCCESS;
-  ObBackupScheduleTaskKey key;
-  ObCurTraceId::init(GCONF.self_addr_);
-  share::ObTaskId trace_id(*ObCurTraceId::get_trace_id());
-  int64_t dest_id = OB_INVALID_DEST_ID;
-  const int64_t parent_task_id = clean_task_attr.task_id_;
-
-  if (!clean_job_attr.is_valid() || !clean_task_attr.is_valid() || !macro_task_attr.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", K(ret), K(clean_job_attr), K(clean_task_attr), K(macro_task_attr));
-  } else if (OB_FAIL(key.init(clean_job_attr.tenant_id_, parent_task_id, macro_task_attr.task_id_,
-                              macro_task_attr.ls_id_.id(), BackupJobType::BACKUP_CLEAN_JOB))) {
-    LOG_WARN("failed to init backup schedule task key", K(ret), K(clean_job_attr), K(macro_task_attr));
-  } else if (OB_FALSE_IT(dest_id = clean_task_attr.dest_id_)) {  // the dest_id is from clean_task_attr instead of get_backup_dest_id of tenant
-    LOG_WARN("failed to get backup dest id", K(ret), K(clean_job_attr));
-  } else if (OB_FAIL(ObBackupScheduleTask::build(key, trace_id, macro_task_attr.status_, macro_task_attr.svr_addr_, dest_id))) {
-    LOG_WARN("failed to build backup schedule task", K(ret), K(macro_task_attr));
-  } else if (OB_FAIL(macro_task_attr_.assign(macro_task_attr))) {
-    LOG_WARN("failed to assign macro task attr", K(ret), K(macro_task_attr));
-  } else {
-    backup_set_id_ = clean_task_attr.backup_set_id_;
-    ls_id_ = macro_task_attr.ls_id_;
-    if (OB_FAIL(backup_path_.assign(clean_task_attr.backup_path_))) {
-      LOG_WARN("failed to assign backup dest", K(ret), K(clean_task_attr));
-    } else if (OB_FAIL(set_optional_servers_for_backup_clean_())) { //TODO(lyh444845): modify it to a virtual function after refactor
-      LOG_WARN("failed to set optional servers for backup clean", K(ret), K(macro_task_attr));
-    }
-  }
-  return ret;
-}
-#endif // OB_BUILD_SHARED_STORAGE
 
 int64_t ObBackupValidateLSTask::get_deep_copy_size() const
 {
@@ -1398,43 +1282,6 @@ int ObBackupValidateLSTask::do_update_dst_and_doing_status_(common::ObISQLClient
   }
   return ret;
 }
-
-#ifdef OB_BUILD_SHARED_STORAGE
-// Get all alive servers of the tenant for backup clean
-int ObSSHAMacroBlockScheduleTask::set_optional_servers_for_backup_clean_()
-{
-  int ret = OB_SUCCESS;
-  ObArray<ObBackupServer> backup_servers;
-  ObArray<ObAddr> alive_servers;
-  uint64_t tenant_id = get_tenant_id();
-  int64_t renew_time = 0; // unused
-
-  if (OB_FAIL(SVR_TRACER.get_alive_tenant_servers(tenant_id, alive_servers, renew_time))) {
-    LOG_WARN("failed to get alive tenant servers", K(ret), K(tenant_id));
-  } else if (alive_servers.empty()) {
-    ret = OB_EAGAIN;
-    LOG_WARN("no alive servers for tenant, retry_later", K(ret), K(tenant_id), K(*this));
-  } else {
-    ObBackupServer server;
-    for (int64_t i = 0; OB_SUCC(ret) && i < alive_servers.count(); ++i) {
-      server.reset();
-      if (OB_FAIL(server.set(alive_servers.at(i), 1/*high priority*/))) {
-        LOG_WARN("failed to set server", K(ret), "server", alive_servers.at(i));
-      } else if (OB_FAIL(backup_servers.push_back(server))) {
-        LOG_WARN("failed to push server", K(ret), K(server));
-      }
-    }
-  }
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(set_optional_servers(backup_servers))) {
-    LOG_WARN("failed to set optional servers", K(ret), K(backup_servers));
-  } else {
-    FLOG_INFO("[BACKUP_CLEAN] ss macro block task optional servers are", K(backup_servers));
-  }
-  return ret;
-}
-#endif // OB_BUILD_SHARED_STORAGE
 
 // TODO(xingzhi): add change to get all alive servers after rs code merge and refresh
 int ObBackupValidateLSTask::set_optional_servers_()
@@ -1480,35 +1327,6 @@ int ObBackupValidateLSTask::set_optional_servers_()
   return ret;
 }
 
-#ifdef OB_BUILD_SHARED_STORAGE
-int ObSSHAMacroBlockScheduleTask::clone(common::ObIAllocator &allocator, ObBackupScheduleTask *&out_task) const
-{
-  int ret = OB_SUCCESS;
-  void *input_ptr = NULL;
-  if (OB_ISNULL(input_ptr = allocator.alloc(get_deep_copy_size()))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("invalid argument", K(ret), KP(input_ptr));
-  } else {
-    ObSSHAMacroBlockScheduleTask *my_task = new (input_ptr) ObSSHAMacroBlockScheduleTask();
-    if (OB_ISNULL(my_task)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("taks is nullptr", K(ret));
-    } else if (OB_FAIL(my_task->ObBackupDataBaseTask::deep_copy(*this))) {
-      LOG_WARN("fail to deep copy base task", K(ret));
-    } else if (OB_FAIL(my_task->macro_task_attr_.assign(this->macro_task_attr_))) {
-      LOG_WARN("failed to assign macro task attr", K(ret));
-    }
-    if (OB_SUCC(ret)) {
-      out_task = my_task;
-    } else if (OB_NOT_NULL(my_task)) {
-      my_task->~ObSSHAMacroBlockScheduleTask();
-      my_task = nullptr;
-    }
-  }
-  return ret;
-}
-#endif // OB_BUILD_SHARED_STORAGE
-
 int ObBackupValidateLSTask::execute(obrpc::ObSrvRpcProxy &rpc_proxy) const
 {
   int ret = OB_SUCCESS;
@@ -1536,122 +1354,6 @@ int ObBackupValidateLSTask::execute(obrpc::ObSrvRpcProxy &rpc_proxy) const
   }
   return ret;
 }
-
-#ifdef OB_BUILD_SHARED_STORAGE
-int64_t ObSSHAMacroBlockScheduleTask::get_deep_copy_size() const
-{
-  return sizeof(ObSSHAMacroBlockScheduleTask);
-}
-
-int ObSSHAMacroBlockScheduleTask::execute(obrpc::ObSrvRpcProxy &rpc_proxy) const
-{
-  int ret = OB_SUCCESS;
-  LOG_INFO("start to execute macro block backup task",
-           "tenant_id", get_tenant_id(),
-           "job_id", get_job_id(),
-           "task_id", get_task_id(),
-           "ls_id", get_ls_id(),
-           "macro_block_count", macro_task_attr_.macro_block_cnt_,
-           "trace_id", get_trace_id(),
-           "dst_server", get_dst());
-
-  // Macro block data handling differs by task type:
-  // - BACKUP/RESTORE: use macro_block_batch_ (ObSSHAMacroBlockBatch), contains macro block info list
-  // - BACKUP_CLEAN: use macro_list_addr_ (ObBackupBlockFileAddr), a file address pointing to block list
-  obrpc::ObSSHAMacroBlocksArg arg;
-  int64_t macro_block_cnt = 0;
-  switch (macro_task_attr_.task_type_.type_) {
-    case share::ObSSHAMacroTaskType::Type::BACKUP_CLEAN:
-      // For BACKUP_CLEAN tasks, use macro_list_addr (file_id, offset, length)
-      arg.macro_list_addr_ = macro_task_attr_.macro_id_list_.get_macro_list_addr();
-      arg.macro_block_batch_.reset();
-      break;
-    case share::ObSSHAMacroTaskType::Type::BACKUP:
-    case share::ObSSHAMacroTaskType::Type::RESTORE:
-      {
-        const share::ObSSHAMacroBlockBatch &macro_block_batch = macro_task_attr_.macro_id_list_.get_macro_block_batch();
-        if (macro_task_attr_.macro_block_cnt_ != macro_block_batch.count()) {
-          ret = OB_INVALID_DATA;
-          LOG_WARN("macro block count mismatch", K(ret), K(macro_task_attr_.macro_block_cnt_), "batch_count", macro_block_batch.count());
-        } else if (OB_FAIL(arg.macro_block_batch_.assign(macro_block_batch))) {
-          LOG_WARN("failed to assign macro block batch", K(ret));
-        } else {
-          macro_block_cnt = macro_block_batch.count();
-          arg.macro_list_addr_.reset();
-        }
-      }
-      break;
-    default:
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("invalid task type", K(ret), K(macro_task_attr_.task_type_));
-      break;
-  }
-
-  if (OB_SUCC(ret)) {
-    LOG_DEBUG("parsed macro block items", "item_count", macro_block_cnt, "task_type", macro_task_attr_.task_type_);
-
-    arg.tenant_id_ = get_tenant_id();
-    arg.job_id_ = get_job_id();
-    arg.task_id_ = get_task_id();
-    arg.task_type_ = static_cast<uint8_t>(macro_task_attr_.task_type_.type_);
-    arg.retry_cnt_ = macro_task_attr_.retry_cnt_;
-    arg.trace_id_ = get_trace_id();
-    arg.backup_set_id_ = get_backup_set_id();
-    arg.ls_id_ = get_ls_id();
-    arg.dst_server_ = get_dst();
-    arg.backup_path_ = backup_path_;
-    arg.macro_block_cnt_ = macro_block_cnt;
-
-    if (!arg.is_valid()) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("arg is not valid", K(ret), K(arg));
-    } else {
-      switch (macro_task_attr_.task_type_.type_) {
-        case ObSSHAMacroTaskType::Type::BACKUP_CLEAN:
-          if (OB_FAIL(rpc_proxy.to(get_dst()).ss_ha_delete_macro_blocks(arg))) {
-            LOG_WARN("fail to send backup macro block delete task", K(ret), K_(macro_task_attr), K(arg));
-          } else {
-            LOG_INFO("start to delete macro blocks", K(ret), K(arg), K(get_ls_id()));
-          }
-          break;
-        case ObSSHAMacroTaskType::Type::BACKUP:
-        case ObSSHAMacroTaskType::Type::RESTORE:
-          if (OB_FAIL(rpc_proxy.to(get_dst()).ss_ha_copy_macro_blocks(arg))) {
-            LOG_WARN("fail to send backup macro block copy task", K(ret), K_(macro_task_attr), K(arg));
-          } else {
-            LOG_INFO("start to copy macro blocks", K(ret), K(arg), K(get_ls_id()));
-          }
-          break;
-        default:
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("invalid task type for RPC call", K(ret), K(macro_task_attr_.task_type_));
-          break;
-      }
-    }
-    ROOTSERVICE_EVENT_ADD("ss_ha", "ss_ha_macro_blocks_task",
-                     "tenant_id", arg.tenant_id_,
-                     "ls_id", arg.ls_id_,
-                     "task_id", arg.task_id_,
-                     "trace_id", arg.trace_id_,
-                     "macro_cnt", macro_block_cnt,
-                     "macro_task_attr_", macro_task_attr_);
-  }
-
-  return ret;
-}
-
-int ObSSHAMacroBlockScheduleTask::do_update_dst_and_doing_status_(
-    common::ObISQLClient &sql_proxy, common::ObAddr &dst, share::ObTaskId &trace_id)
-{
-  int ret = OB_SUCCESS;
-  ObLSID ls_id(get_ls_id());
-  if (OB_FAIL(ObSSHAMacroBlockTaskOperator::update_dst_and_status(
-      sql_proxy, get_tenant_id(), get_job_id(), macro_task_attr_.task_type_, get_task_id(), ls_id.id(), dst, ObBackupTaskStatus::DOING, trace_id))) {
-    LOG_WARN("failed to update task status", K(ret), K(*this), K(dst));
-  }
-  return ret;
-}
-#endif // OB_BUILD_SHARED_STORAGE
 
 int ObBackupValidateLSTask::cancel(obrpc::ObSrvRpcProxy &rpc_proxy) const
 {

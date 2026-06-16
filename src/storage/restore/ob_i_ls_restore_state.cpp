@@ -722,9 +722,10 @@ int ObILSRestoreState::schedule_tablet_group_restore_dag_net_(
     LOG_WARN("failed to assign ls restore arg", K(ret), K(arg), K(task_id));
   } else {
     param.task_id_ = task_id;
-    param.bandwidth_throttle_ = bandwidth_throttle_;
-    param.storage_rpc_ = storage_rpc_;
-    param.svr_rpc_proxy_ = svr_rpc_proxy_;
+    param.ha_svc_ctx_.bandwidth_throttle_ = bandwidth_throttle_;
+    param.ha_svc_ctx_.storage_rpc_ = storage_rpc_;
+    param.ha_svc_ctx_.svr_rpc_proxy_ = svr_rpc_proxy_;
+    param.ha_svc_ctx_.sql_proxy_ = GCTX.sql_proxy_;
 
     ObTenantDagScheduler *scheduler = nullptr;
     if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
@@ -789,9 +790,10 @@ int ObILSRestoreState::schedule_ls_restore_dag_net_(
     LOG_WARN("failed to assign ls restore arg", K(ret), K(arg), K(task_id));
   } else {
     param.task_id_ = task_id;
-    param.bandwidth_throttle_ = bandwidth_throttle_;
-    param.storage_rpc_ = storage_rpc_;
-    param.svr_rpc_proxy_ = svr_rpc_proxy_;
+    param.ha_svc_ctx_.bandwidth_throttle_ = bandwidth_throttle_;
+    param.ha_svc_ctx_.storage_rpc_ = storage_rpc_;
+    param.ha_svc_ctx_.svr_rpc_proxy_ = svr_rpc_proxy_;
+    param.ha_svc_ctx_.sql_proxy_ = GCTX.sql_proxy_;
 
     ObTenantDagScheduler *scheduler = nullptr;
     if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {

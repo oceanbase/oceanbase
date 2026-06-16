@@ -174,8 +174,9 @@ public:
     const ObMergeParameter &merge_param,
     ObCompactionFilterHandle &filter_handle);
   virtual void reset();
-  virtual OB_INLINE bool is_co_major_helper() const { return false; }
+  virtual OB_INLINE bool need_skip_sstable(const bool table_need_full_merge, const ObITable &table) const { return false; }
   virtual OB_INLINE bool is_multi_major_helper() const { return false; }
+  virtual int get_next_row(const blocksstable::ObDatumRow *&row) { return OB_NOT_SUPPORTED; }
   int find_rowkey_minimum_iters(MERGE_ITER_ARRAY &minimum_iters);
   static int move_iters_next(MERGE_ITER_ARRAY &merge_iters);
   int rebuild_rows_merger();
@@ -227,6 +228,7 @@ public:
     : ObPartitionMergeHelper(read_info, allocator)
   {}
   virtual OB_INLINE bool need_check_major_sstable() const { return false; }
+  virtual int get_next_row(const blocksstable::ObDatumRow *&row) override;
 protected:
   ObPartitionMergeIter *alloc_merge_iter(
     const ObMergeParameter &merge_param,
@@ -261,11 +263,12 @@ public:
       replay_base_directly_(replay_base_directly)
   {}
   virtual OB_INLINE bool is_multi_major_helper() const { return true; }
+  virtual OB_INLINE bool need_skip_sstable(const bool table_need_full_merge, const ObITable &table) const { return !table.is_major_type_sstable(); }
   virtual OB_INLINE bool need_check_major_sstable() const { return true; }
   bool check_could_move_to_end();
   void move_to_end();
   int get_current_major_iter(ObPartitionMergeIter *&row_store_iter);
-  int next();
+  int next(const bool need_move_next);
 private:
   virtual int check_unique_champion() override;
   virtual bool need_all_column_from_rowkey_co_sstable(const ObITable &table, const ObMergeParameter &merge_param) const override;
@@ -295,6 +298,20 @@ protected:
     ObCompactionFilterHandle &filter_handle) override;
 };
 
+class ObMultiMajorBatchMergeIter : public ObMultiMajorMergeIter
+{
+public:
+  ObMultiMajorBatchMergeIter(
+      const ObITableReadInfo &read_info,
+      common::ObIAllocator &allocator,
+      const bool replay_base_directly = false)
+    : ObMultiMajorMergeIter(read_info, allocator, replay_base_directly)
+  {}
+  virtual OB_INLINE bool need_skip_sstable(const bool table_need_full_merge, const ObITable &table) const
+  {
+    return !table.is_major_type_sstable() || (table.is_major_type_sstable() && table_need_full_merge);
+  }
+};
 } //namespace compaction
 } //namespace oceanbase
 #endif

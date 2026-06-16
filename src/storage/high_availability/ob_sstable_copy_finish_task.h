@@ -153,7 +153,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObCopiedSSTableCreator);
 };
 
-
 // Create SSTable whose macro blocks are entirely stored in backup. During quick restore,
 // only small SSTables may remain fully remote. This creator is used when migration
 // encounters such SSTables.

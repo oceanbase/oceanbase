@@ -384,6 +384,19 @@ int ObTableReadInfo::mock_for_sstable_query(
   } else if (OB_FAIL(init_datum_utils(allocator, is_cg_sstable))) {
     LOG_WARN("failed to init sequence read info & datum utils", K(ret));
   } else {
+    trans_col_index_ = OB_INVALID_INDEX;
+    group_idx_col_index_ = OB_INVALID_INDEX;
+    mview_old_new_col_index_ = OB_INVALID_INDEX;
+    for (int64_t i = 0; i < cols_desc_.count(); ++i) {
+      const uint64_t col_id = cols_desc_.at(i).col_id_;
+      if (OB_INVALID_INDEX == trans_col_index_ && common::OB_HIDDEN_TRANS_VERSION_COLUMN_ID == col_id) {
+        trans_col_index_ = i;
+      } else if (OB_INVALID_INDEX == group_idx_col_index_ && common::OB_HIDDEN_GROUP_IDX_COLUMN_ID == col_id) {
+        group_idx_col_index_ = i;
+      } else if (OB_INVALID_INDEX == mview_old_new_col_index_ && common::OB_MAJOR_REFRESH_MVIEW_OLD_NEW_COLUMN_ID == col_id) {
+        mview_old_new_col_index_ = i;
+      }
+    }
     mock_sstable_query_ = true;
     has_all_column_group_ = false;
     need_truncate_filter_ = false;

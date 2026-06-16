@@ -8,10 +8,6 @@
 #include "storage/compaction/ob_tenant_compaction_progress.h"
 #include "share/ob_tablet_meta_table_compaction_operator.h"
 #include "storage/tx_storage/ob_ls_service.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/compaction_v2/ob_ss_compact_helper.h"
-#include "storage/compaction_v2/ob_ss_schedule_tablet_func.h"
-#endif
 
 namespace oceanbase
 {
@@ -64,22 +60,7 @@ int ObMediumLoop::loop()
 
   ObLSHandle ls_handle;
   ObLS *ls = nullptr;
-  ObScheduleTabletFunc *func = nullptr;
-  // merge_version_ may be larger than loop_version_ by other thread,
-  // keep using merge_version_ can make the medium loop faster
-#ifdef OB_BUILD_SHARED_STORAGE
-  if (GCTX.is_shared_storage_mode()) {
-    func = MTL_NEW(ObSSScheduleTabletFunc, "SS_ScheTablet", merge_version_, ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE, true, loop_cnt_);
-  } else {
-    func = MTL_NEW(ObScheduleTabletFunc, "SN_SchedTablet", merge_version_, ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE, loop_cnt_);
-  }
-#else
-  func = MTL_NEW(ObScheduleTabletFunc, "SN_SchedTablet", merge_version_, ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE, loop_cnt_);
-#endif
-  if (OB_ISNULL(func)) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("alloc SchedTabletFunc fail", K(ret));
-  }
+  ObScheduleTabletFunc func(merge_version_, ObAdaptiveMergePolicy::AdaptiveMergeReason::NONE, loop_cnt_);
   ObLSID ls_id;
   schedule_stats_.all_ls_weak_read_ts_ready_ = true;
   while (OB_SUCC(ret)) {
@@ -94,8 +75,8 @@ int ObMediumLoop::loop()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls is null", K(ret), K(ls));
     } else if (FALSE_IT(ls_id = ls->get_ls_id())) {
-    } else if (OB_TMP_FAIL(loop_in_ls(ls_handle, *func))) {
-      LOG_TRACE("failed to loop ls", KR(ret), KPC(ls), KPC(func));
+    } else if (OB_TMP_FAIL(loop_in_ls(ls_handle, func))) {
+      LOG_TRACE("failed to loop ls", KR(ret), KPC(ls), K(func));
       ls_tablet_iter_.skip_cur_ls(); // for any errno, skip cur ls
       ls_tablet_iter_.update_merge_finish(false);
       if (OB_SIZE_OVERFLOW == tmp_ret) {
@@ -106,26 +87,14 @@ int ObMediumLoop::loop()
     }
     if (OB_SUCC(ret) && ls_tablet_iter_.need_report_scn()) {
       // loop tablet_meta table to update smaller report_scn because of migration
-      tmp_ret = update_report_scn_as_ls_leader(*ls, *func);
+      tmp_ret = update_report_scn_as_ls_leader(*ls, func);
 #ifndef ERRSIM
       LOG_INFO("try to update report scn as ls leader", K(tmp_ret), K(ls_id)); // low printing frequency
 #endif
     }
   } // while
   LOG_TRACE("finish schedule ls medium merge", K(tmp_ret), K(ret), K_(ls_tablet_iter), K(ls_id));
-  if (func) {
-    add_event_and_diagnose(*func);
-#ifdef OB_BUILD_SHARED_STORAGE
-    if (GCTX.is_shared_storage_mode()) {
-      ((ObSSScheduleTabletFunc*)func)->~ObSSScheduleTabletFunc();
-    } else {
-      func->~ObScheduleTabletFunc();
-    }
-#else
-    func->~ObScheduleTabletFunc();
-#endif
-    mtl_free(func);
-  }
+  add_event_and_diagnose(func);
   return ret;
 }
 

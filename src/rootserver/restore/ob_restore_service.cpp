@@ -27,10 +27,6 @@ ObRestoreService::ObRestoreService()
     restore_scheduler_(),
     recover_table_scheduler_(),
     import_table_scheduler_()
-#ifdef OB_BUILD_SHARED_STORAGE
-    , ss_restore_scheduler_(),
-    proposal_id_(0)
-#endif
 {
 }
 
@@ -63,18 +59,6 @@ int ObRestoreService::init()
     LOG_WARN("failed to create thread", KR(ret));
   } else if (OB_FAIL(ObTenantThreadHelper::start())) {
     LOG_WARN("fail to start thread", KR(ret));
-#ifdef OB_BUILD_SHARED_STORAGE
-  } else if (GCTX.is_shared_storage_mode()) {
-    ObBackupTaskScheduler *backup_task_scheduler = MTL(ObBackupTaskScheduler *);
-    if (OB_FAIL(ss_restore_scheduler_.init(*this))) {
-      LOG_WARN("failed to init restore scheduler", K(ret));
-    } else if (OB_ISNULL(backup_task_scheduler)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("backup_task_scheduler should not be NULL", K(ret), KP(backup_task_scheduler));
-    } else if (OB_FAIL(backup_task_scheduler->register_restore_srv(this))) {
-      LOG_WARN("failed to register restore srv", K(ret));
-    }
-#endif
   } else if (OB_FAIL(restore_scheduler_.init(*this))) {
     LOG_WARN("failed to init restore scheduler", K(ret));
   }
@@ -98,27 +82,6 @@ int ObRestoreService::init()
   }
   return ret;
 }
-
-#ifdef OB_BUILD_SHARED_STORAGE
-int ObRestoreService::switch_to_leader()
-{
-  int ret = OB_SUCCESS;
-  common::ObRole role;
-  int64_t proposal_id = 0;
-
-  // Call base class switch_to_leader to start thread
-  if (OB_FAIL(ObTenantThreadHelper::switch_to_leader())) {
-    LOG_WARN("failed to switch to leader in base class", KR(ret));
-  } else if (OB_FAIL(MTL(logservice::ObLogService *)->get_palf_role(share::SYS_LS, role, proposal_id))) {
-    LOG_WARN("get restore service role fail", K(ret));
-  } else {
-    proposal_id_ = proposal_id;
-    wakeup();
-    LOG_INFO("[RESTORE_SERVICE]switch to leader finish", K(proposal_id_));
-  }
-  return ret;
-}
-#endif
 
 int ObRestoreService::idle()
 {
@@ -185,14 +148,7 @@ void ObRestoreService::do_work()
           //tenant not normal, maybe meta or sys tenant
           //while meta tenant not ready, cannot process tenant restore job
         } else {
-#ifdef OB_BUILD_SHARED_STORAGE
-          if (GCTX.is_shared_storage_mode()) {
-            ss_restore_scheduler_.do_work();
-          }
-#endif
-          if (!GCTX.is_shared_storage_mode()) {
-            restore_scheduler_.do_work();
-          }
+          restore_scheduler_.do_work();
           recover_table_scheduler_.do_work();
           import_table_scheduler_.do_work();
           idle_time_us_ = 10;
@@ -210,67 +166,7 @@ void ObRestoreService::do_work()
 int ObRestoreService::do_reload_task(ObBackupTaskSchedulerQueue &queue)
 {
   int ret = OB_SUCCESS;
-#ifdef OB_BUILD_SHARED_STORAGE
-  if (!inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(ss_restore_scheduler_.reload_task(queue))) {
-    LOG_WARN("failed to get need reload task", K(ret));
-  }
-#endif
+  UNUSED(queue);
   return ret;
 }
 
-#ifdef OB_BUILD_SHARED_STORAGE
-int ObRestoreService::check_leader()
-{
-  int ret = OB_SUCCESS;
-  common::ObRole role;
-  int64_t proposal_id = 0;
-  if (OB_UNLIKELY(!inited_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("restore service not inited", K(ret));
-  } else if (OB_FAIL(MTL(logservice::ObLogService *)->get_palf_role(share::SYS_LS, role, proposal_id))) {
-    if (OB_LS_NOT_EXIST == ret) {
-      ret = OB_NOT_MASTER;
-      LOG_WARN("sys ls is not exist, service can't be leader", K(ret));
-    } else {
-      LOG_WARN("get ObRestoreService role fail", K(ret));
-    }
-  } else if (common::ObRole::LEADER == role && proposal_id == proposal_id_) {
-  } else {
-    ret = OB_NOT_MASTER;
-  }
-  return ret;
-}
-
-int ObRestoreService::end_transaction(
-    common::ObMySQLTransaction &trans,
-    const int upstream_ret)
-{
-  int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-
-  if (trans.is_started()) {
-    if (OB_SUCCESS == upstream_ret) {
-      // Upper layer succeeded, check leader and commit
-      if (OB_FAIL(check_leader())) {
-        LOG_WARN("failed to recheck leader before commit", K(ret));
-        if (OB_TMP_FAIL(trans.end(false))) {
-          LOG_WARN("failed to rollback after leader check fail", K(ret), K(tmp_ret));
-        }
-      } else if (OB_FAIL(trans.end(true))) {
-        LOG_WARN("failed to commit trans", K(ret));
-      }
-    } else {
-      // Upper layer failed, rollback (preserve original error)
-      if (OB_FAIL(trans.end(false))) {
-        LOG_WARN("failed to rollback trans", K(upstream_ret), K(ret));
-      }
-    }
-  }
-
-  return ret;
-}
-
-#endif // OB_BUILD_SHARED_STORAGE

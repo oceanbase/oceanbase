@@ -5,6 +5,7 @@
 
 #define USING_LOG_PREFIX STORAGE
 #include "ob_sstable_row_whole_scanner.h"
+#include "storage/compaction/vectorization/ob_merge_vector_store.h"
 
 namespace oceanbase
 {
@@ -65,6 +66,7 @@ void ObSSTableRowWholeScanner::reset()
   }
   allocator_.reset();
   is_inited_ = false;
+  need_prepare_micro_border_ = true;
 }
 
 void ObSSTableRowWholeScanner::reuse()
@@ -88,6 +90,7 @@ void ObSSTableRowWholeScanner::reuse()
   }
   allocator_.reuse();
   is_inited_ = false;
+  need_prepare_micro_border_ = true;
 }
 
 int ObSSTableRowWholeScanner::init_micro_scanner(const ObDatumRange *range)
@@ -323,6 +326,85 @@ int ObSSTableRowWholeScanner::set_ignore_shadow_row()
   return ret;
 }
 
+int ObSSTableRowWholeScanner::handle_end_of_micro_block_in_batch(compaction::ObMergeVectorStore &store)
+{
+  int ret = OB_SUCCESS;
+  // IMPORTANT: do not switch micro block when store already holds shallow pointers.
+  if (!store.is_empty()) {
+    store.set_need_flush();
+  } else if (OB_FAIL(open_next_valid_micro_block())) {
+    if (OB_UNLIKELY(OB_ITER_END != ret)) {
+      LOG_WARN("failed to open next valid micro block", K(ret), K_(cur_macro_cursor));
+    }
+  }
+  return ret;
+}
+
+bool ObSSTableRowWholeScanner::can_batch_scan_to_merge_vector() const
+{
+  bool can_batch_scan = false;
+  if (nullptr != micro_scanner_) {
+    can_batch_scan = micro_scanner_->can_batch_scan_to_merge_vector();
+  }
+  return can_batch_scan;
+}
+
+int ObSSTableRowWholeScanner::get_next_batch_rows(
+    const ObMergeBatchBorder &border,
+    compaction::ObMergeVectorStore &store,
+    bool &reach_border,
+    const common::ObIArrayWrap<uint16_t> *cols)
+{
+  int ret = OB_SUCCESS;
+  reach_border = false;
+  int64_t global_border_row_id = 0;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not inited", K(ret));
+  } else if (OB_UNLIKELY(!border.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid border", K(ret), K(border));
+  } else if (cur_macro_cursor_ >= prefetch_macro_cursor_) {
+    ret = OB_ITER_END;
+  } else if (OB_ISNULL(micro_scanner_) || OB_ISNULL(iter_param_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected null scanner/iter param", K(ret), KP_(micro_scanner), KP_(iter_param));
+  } else if (OB_UNLIKELY(nullptr == sstable_ ||
+                        (border.is_row_id() && !sstable_->is_normal_cg_sstable()))) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("rowid batch read only supported for normal cg sstable", K(ret), KPC_(sstable));
+  } else if (border.is_row_id() &&
+      OB_FAIL(ObIMicroBlockRowScanner::get_global_border_row_id(query_range_, border.get_row_id(), global_border_row_id))) {
+    LOG_WARN("failed to get global border row id", K(ret), K(border.get_row_id()), K(query_range_));
+  } else {
+    while (OB_SUCC(ret) && !reach_border && !store.need_flush() && !store.has_single_row()) {
+      // Ensure current micro block is available.
+      if (OB_ITER_END == micro_scanner_->end_of_block()) {
+        if (OB_FAIL(handle_end_of_micro_block_in_batch(store))) {
+          if (OB_UNLIKELY(OB_ITER_END != ret)) {
+            LOG_WARN("failed to open next valid micro block", K(ret), K_(cur_macro_cursor));
+          }
+        }
+      } else if (border.is_row_id()) {
+        const MacroScanHandle &scan_handle = scan_handles_[cur_macro_cursor_ % PREFETCH_DEPTH];
+        const int64_t global_micro_start_row_id = scan_handle.start_row_offset_ + cur_micro_start_row_offset_;
+        const int64_t micro_border_row_id = INT64_MAX == global_border_row_id ? INT64_MAX : global_border_row_id - global_micro_start_row_id;
+        if (OB_FAIL(micro_scanner_->get_next_batch_rows(store, micro_border_row_id, reach_border, cols))) {
+          LOG_WARN("failed to batch fill rows within micro block", K(ret),
+              K(global_border_row_id), K(micro_border_row_id), K(global_micro_start_row_id));
+        }
+      } else if (OB_FAIL(micro_scanner_->get_next_batch_rows(
+                    store,
+                    border.get_rowkey(),
+                    reach_border,
+                    need_prepare_micro_border_))) {
+        LOG_WARN("failed to get next batch rows for merge border", K(ret), K(border.get_rowkey()));
+      }
+    }
+  }
+  return ret;
+}
+
 int ObSSTableRowWholeScanner::inner_get_next_row(const blocksstable::ObDatumRow *&row)
 {
   int ret = OB_SUCCESS;
@@ -515,6 +597,9 @@ int ObSSTableRowWholeScanner::open_micro_block()
     }
   }
   }
+  if (OB_SUCC(ret)) {
+    need_prepare_micro_border_ = true;
+  }
   return ret;
 }
 
@@ -527,7 +612,7 @@ int ObSSTableRowWholeScanner::open_cg_micro_block()
   const bool is_left_border = scan_handle.is_left_border_ && micro_block_iter_.is_left_border();
   const bool is_right_border = scan_handle.is_right_border_ && micro_block_iter_.is_right_border();
 
-  if (!query_range_.is_whole_range() && OB_FAIL(micro_block_iter_.get_curr_start_row_offset(micro_block_start_row_offset))) {
+  if (OB_FAIL(micro_block_iter_.get_curr_start_row_offset(micro_block_start_row_offset))) {
     if (OB_UNLIKELY(OB_ITER_END != ret)) {
       STORAGE_LOG(WARN, "failed to get prev row offset", K(ret), K(micro_block_iter_));
     }
@@ -545,6 +630,8 @@ int ObSSTableRowWholeScanner::open_cg_micro_block()
       STORAGE_LOG(WARN, "invalid range", K(ret), K(range), K(is_left_border), K(is_right_border), K(scan_handle.start_row_offset_), K(micro_block_start_row_offset));
     } else if (OB_FAIL(micro_scanner_->open_column_block(scan_handle.macro_io_handle_.get_macro_id(), block_data, range))) {
       STORAGE_LOG(WARN, "failed to open column block", K(ret), K(scan_handle), K(block_data), K(range));
+    } else {
+      cur_micro_start_row_offset_ = micro_block_start_row_offset;
     }
   }
 

@@ -563,8 +563,6 @@ public:
       diagnose_type = ObDiagnoseTabletType::TYPE_MINI_MERGE;
     } else if (ObDagType::ObDagTypeEnum::DAG_TYPE_MERGE_EXECUTE == type) {
       diagnose_type = ObDiagnoseTabletType::TYPE_MINOR_MERGE;
-    } else if (ObDagType::ObDagTypeEnum::DAG_TYPE_REFRESH_SSTABLES == type) {
-      diagnose_type = ObDiagnoseTabletType::TYPE_S2_REFRESH;
     } else if (ObDagType::ObDagTypeEnum::DAG_TYPE_MAJOR_MERGE <= type
             && ObDagType::ObDagTypeEnum::DAG_TYPE_CO_MERGE_SCHEDULE >= type) {
       diagnose_type = ObDiagnoseTabletType::TYPE_MEDIUM_MERGE;
@@ -1512,11 +1510,7 @@ private:
       int64_t &idx);
   common::ObIAllocator &get_allocator(const bool is_ha);
   int init_allocator(const uint64_t tenant_id, const lib::ObLabel &label, lib::MemoryContext &mem_context);
-  void inner_reload_config();
   void adapt_window_thread_cnt() { (void) prio_sche_[ObDagPrio::DAG_PRIO_COMPACTION_LOW].adapt_window_thread_cnt(); }
-#ifdef OB_BUILD_SHARED_STORAGE
-  #include "share/scheduler/ob_tenant_ss_dag_scheduler.h"
-#endif
 private:
   bool is_inited_;
   bool fast_schedule_dag_net_;
@@ -1544,6 +1538,9 @@ private:
   ObDagPrioScheduler::WorkerList free_workers_; // free workers who have not been assigned to any task // locked by scheduler_sync_
   ObDagNetScheduler dag_net_sche_;
   ObDagPrioScheduler prio_sche_[ObDagPrio::DAG_PRIO_MAX];
+#ifdef OB_BUILD_SHARED_STORAGE
+  #include "share/scheduler/ob_tenant_ss_dag_scheduler.h"
+#endif
 };
 
 // ATTENTION! when alloc task success, the task is already added into task_list_!!!
@@ -1671,8 +1668,7 @@ int ObTenantDagScheduler::alloc_dag_with_priority(
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     COMMON_LOG(WARN, "ObTenantDagScheduler is not inited", K(ret));
-  } else if (prio < ObDagPrio::DAG_PRIO_COMPACTION_HIGH
-     || prio >= ObDagPrio::DAG_PRIO_MAX) {
+  } else if (OB_UNLIKELY(!ObDagPrio::is_valid_prio(prio))) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "get invalid arg", K(ret), K(prio));
   } else if (OB_FAIL(alloc_dag(dag, is_ha_prio_dag(prio)))) {
@@ -1789,16 +1785,6 @@ int ObTenantDagScheduler::create_and_add_dag(
 inline bool is_ha_backfill_dag(const ObDagType::ObDagTypeEnum dag_type)
 {
   return ObDagType::DAG_TYPE_TABLET_BACKFILL_TX == dag_type
-#ifdef OB_BUILD_SHARED_STORAGE
-      || ObDagType::DAG_TYPE_SS_START_TRANSFER_BACKFILL_TX == dag_type
-      || ObDagType::DAG_TYPE_SS_FINISH_TRANSFER_BACKFILL_TX == dag_type
-      || ObDagType::DAG_TYPE_SS_TABLET_BACKFILL_SCHEDULE == dag_type
-      || ObDagType::DAG_TYPE_SS_TABLET_BACKFILL_UPLOAD == dag_type
-      || ObDagType::DAG_TYPE_SS_TABLET_BACKFILL_TX == dag_type
-      || ObDagType::DAG_TYPE_SS_TABLET_REPLACE_TABLE == dag_type
-      || ObDagType::DAG_TYPE_SS_TABLET_REFRESH_TABLE == dag_type
-      || ObDagType::DAG_TYPE_SS_TABLET_UPDATE_INFO == dag_type
-#endif
       ;
 }
 

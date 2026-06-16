@@ -270,102 +270,15 @@ int ObBackupCleanScheduler::get_job_need_reload_task(
   } else if (task_attrs.empty()) {
     LOG_INFO("[BACKUP_CLEAN]no set tasks, no need to reload");
   } else {
-    ObArray<ObSSHAMacroBlockTaskAttr> macro_tasks;
     for (int j = 0; OB_SUCC(ret) && j < task_attrs.count(); ++j) {
       const ObBackupCleanTaskAttr &task_attr = task_attrs.at(j);
-#ifdef OB_BUILD_SHARED_STORAGE
-      macro_tasks.reset();
-      if (GCTX.is_shared_storage_mode() && task_attr.is_delete_backup_set_task()) {
-        if (OB_FAIL(ObSSHAMacroBlockTaskOperator::get_pending_or_doing_tasks(
-            *sql_proxy_, task_attr.tenant_id_, task_attr.task_id_, ObSSHAMacroTaskType::BACKUP_CLEAN, macro_tasks))) {
-          LOG_WARN("[BACKUP_CLEAN]failed to get macro block tasks", K(ret));
-        } else if (macro_tasks.empty()) {
-          LOG_INFO("[BACKUP_CLEAN]no macro tasks, no need to reload", K(task_attr));
-        } else if (OB_FAIL(do_reload_macro_block_tasks_(job, task_attr, macro_tasks, allocator, queue))) {
-          LOG_WARN("[BACKUP_CLEAN]failed to reload macro block tasks", K(ret));
-        } else {
-          LOG_INFO("[BACKUP_CLEAN]succeed to reload macro block tasks", K_(tenant_id), K(job), K(task_attr));
-        }
-      } else
-#endif
-      {
-        if (OB_FAIL(do_reload_for_task_(task_attr, allocator, queue))) {
-          LOG_WARN("failed to reload ls tasks", K(ret), K(task_attr));
-        }
+      if (OB_FAIL(do_reload_for_task_(task_attr, allocator, queue))) {
+        LOG_WARN("failed to reload ls tasks", K(ret), K(task_attr));
       }
     }
   }
   return ret;
 }
-
-#ifdef OB_BUILD_SHARED_STORAGE
-int ObBackupCleanScheduler::build_macro_block_task_(
-    const share::ObBackupCleanJobAttr &job_attr,
-    const share::ObBackupCleanTaskAttr &task_attr,
-    const share::ObSSHAMacroBlockTaskAttr &macro_task_attr,
-    common::ObIAllocator &allocator,
-    ObBackupScheduleTask *&task)
-{
-  int ret = OB_SUCCESS;
-  ObSSHAMacroBlockScheduleTask tmp_task;
-  task = nullptr;
-
-  if (OB_FAIL(tmp_task.build(job_attr, task_attr, macro_task_attr))) {
-    LOG_WARN("failed to build macro block schedule task", K(ret), K(macro_task_attr));
-  } else if (OB_FAIL(tmp_task.clone(allocator, task))) {
-    LOG_WARN("fail to clone macro block schedule task", K(ret));
-  } else if (nullptr == task) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("task ptr is null", K(ret));
-  }
-  return ret;
-}
-
-int ObBackupCleanScheduler::do_reload_macro_block_tasks_(
-    const share::ObBackupCleanJobAttr &job_attr,
-    const share::ObBackupCleanTaskAttr &task_attr,
-    const ObArray<share::ObSSHAMacroBlockTaskAttr> &macro_tasks,
-    common::ObIAllocator &allocator,
-    ObBackupTaskSchedulerQueue &queue)
-{
-  int ret = OB_SUCCESS;
-
-  for (int64_t i = 0; OB_SUCC(ret) && i < macro_tasks.count(); ++i) {
-    const share::ObSSHAMacroBlockTaskAttr &macro_task_attr = macro_tasks.at(i);
-    ObBackupScheduleTask *task = nullptr;
-    bool queue_is_full = false;
-
-    if (OB_FAIL(build_macro_block_task_(job_attr, task_attr, macro_task_attr, allocator, task))) {
-      LOG_WARN("failed to build macro block task", K(ret), K(job_attr), K(task_attr), K(macro_task_attr));
-    } else if (OB_ISNULL(task)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("task should not be null", K(ret));
-    } else if (OB_FAIL(queue.check_queue_is_full(queue_is_full))) {
-      LOG_WARN("[BACKUP_CLEAN]failed to check queue is full", K(ret));
-    } else if (queue_is_full) {
-      ret = OB_SIZE_OVERFLOW;
-      LOG_WARN("[BACKUP_CLEAN]queue is full, stop reload macro block tasks", KPC(task));
-    } else if (OB_FAIL(queue.push_task(*task))) {
-      if (OB_ENTRY_EXIST == ret) {
-        LOG_DEBUG("[BACKUP_CLEAN]task already exist in queue, skip", KPC(task));
-        ret = OB_SUCCESS;
-      } else {
-        LOG_WARN("[BACKUP_CLEAN]failed to push task to queue", K(ret), KPC(task));
-      }
-    } else {
-      LOG_DEBUG("successfully reload macro block task to queue", KPC(task));
-    }
-
-    if (nullptr != task) {
-      task->~ObBackupScheduleTask();
-      allocator.free(task);
-      task = nullptr;
-    }
-  }
-
-  return ret;
-}
-#endif
 
 int ObBackupCleanScheduler::do_reload_for_task_(
     const ObBackupCleanTaskAttr &task_attr,
@@ -959,12 +872,6 @@ int ObBackupCleanScheduler::handle_execute_over(
     LOG_WARN("failed to check tenant status", K(ret), K(*task));
   } else if (!is_valid) {
     can_remove = true;
-#ifdef OB_BUILD_SHARED_STORAGE
-  } else if (task->is_macro_block_task()) {
-    if (OB_FAIL(handle_macro_block_task_execute_over_(task, result_info, can_remove))) {
-      LOG_WARN("failed to handle macro block task execute over", K(ret), K(*task), K(result_info));
-    }
-#endif
   } else {
     if (OB_FAIL(handle_ls_task_execute_over_(task, result_info, can_remove))) {
       LOG_WARN("failed to handle ls task execute over", K(ret), K(*task), K(result_info));
@@ -973,38 +880,6 @@ int ObBackupCleanScheduler::handle_execute_over(
 
   return ret;
 }
-
-#ifdef OB_BUILD_SHARED_STORAGE
-int ObBackupCleanScheduler::handle_macro_block_task_execute_over_(
-    const ObBackupScheduleTask *task,
-    const ObHAResultInfo &result_info,
-    bool &can_remove)
-{
-  int ret = OB_SUCCESS;
-  can_remove = false;
-  const ObSSHAMacroBlockScheduleTask *macro_task = nullptr;
-
-  // Use macro block task manager to handle execution completion event
-  if (OB_ISNULL(task)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument, the task is null", K(ret));
-  } else if (ObBackupScheduleTaskType::BACKUP_SS_HA_MACRO_BLOCK_TASK != task->get_task_type()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("task type is unexpected for macro block task", K(ret), K(task->get_task_type()), KPC(task));
-  } else if (OB_ISNULL(macro_task = static_cast<const ObSSHAMacroBlockScheduleTask*>(task))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("macro task should not be null", K(ret));
-  } else if (OB_FAIL(ObSSHAMacroBlockTaskMgr::handle_execute_over(
-      *backup_service_, *sql_proxy_, macro_task, result_info))) {
-    LOG_WARN("failed to handle macro block task execute over", K(ret), KPC(macro_task), K(result_info));
-  } else {
-    can_remove = true;
-    LOG_INFO("handle macro block task execute over success", KPC(macro_task), K(result_info));
-  }
-
-  return ret;
-}
-#endif
 
 int ObBackupCleanScheduler::handle_ls_task_execute_over_(
     const ObBackupScheduleTask *task,
@@ -1231,26 +1106,9 @@ int ObUserTenantBackupDeleteMgr::deal_non_reentrant_job(const int error)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("not init", K(ret));
   } else {
-#ifdef OB_BUILD_SHARED_STORAGE
-    if (GCTX.is_shared_storage_mode()) {
-      if (OB_FAIL(task_scheduler_->cancel_tasks(BackupJobType::BACKUP_CLEAN_JOB, job_attr_->tenant_id_))) { // for ss, we use tenant_id to cancel the backup clean task
-        LOG_WARN("failed to cancel backup tasks", K(ret), K(*job_attr_));
-      }
-    } else {
-      if (OB_FAIL(task_scheduler_->cancel_tasks(BackupJobType::BACKUP_CLEAN_JOB, job_attr_->job_id_, job_attr_->tenant_id_))) {
-        LOG_WARN("failed to cancel backup tasks", K(ret), K(*job_attr_));
-      }
+    if (OB_FAIL(task_scheduler_->cancel_tasks(BackupJobType::BACKUP_CLEAN_JOB, job_attr_->job_id_, job_attr_->tenant_id_))) {
+      LOG_WARN("failed to cancel backup tasks", K(ret), K(*job_attr_));
     }
-#else
-    if (!GCTX.is_shared_storage_mode()) {
-      if (OB_FAIL(task_scheduler_->cancel_tasks(BackupJobType::BACKUP_CLEAN_JOB, job_attr_->job_id_, job_attr_->tenant_id_))) {
-        LOG_WARN("failed to cancel backup tasks", K(ret), K(*job_attr_));
-      }
-    } else {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("unexpeced shared storage mode", K(ret));
-    }
-#endif
   }
 
   if (OB_FAIL(ret)) {

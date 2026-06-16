@@ -58,11 +58,8 @@ public:
   // remove task 
   // When finished, task memory will be released and %task can not be used again.
   int cancel_tasks(const BackupJobType &type, const uint64_t job_id, const uint64_t tenant_id);
-  int cancel_tasks(const BackupJobType &type, const uint64_t tenant_id);
   int check_task_exist(const ObBackupScheduleTaskKey key, bool &is_exist);
   int get_all_tasks(common::ObIAllocator &allocator, common::ObIArray<ObBackupScheduleTask *> &tasks);
-  int get_task_count(const uint64_t tenant_id, const int64_t job_id,
-                     const bool only_macro_block_task, int64_t &count);
   int get_schedule_tasks(ObIArray<ObBackupScheduleTask *> &schedule_tasks, ObArenaAllocator &allocator);
   void reset();
   int dump_statistics();
@@ -208,10 +205,7 @@ public:
   // remove task from scheduler
   virtual int execute_over(const ObBackupScheduleTask &input_task, const share::ObHAResultInfo &result_info);
   virtual int get_all_tasks(common::ObIAllocator &allocator, common::ObIArray<ObBackupScheduleTask *> &tasks);
-  int get_task_count(const uint64_t tenant_id, const int64_t job_id,
-                     const bool only_macro_block_task, int64_t &count);
   virtual int cancel_tasks(const BackupJobType &type, const uint64_t job_id, const uint64_t tenant_id);
-  int cancel_tasks(const BackupJobType &type, const uint64_t tenant_id);
   int get_backup_job(const BackupJobType &type, ObIBackupJobScheduler *&job);
   int register_backup_srv(ObBackupService &srv);
   int register_restore_srv(ObRestoreService *srv);

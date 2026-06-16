@@ -225,8 +225,16 @@ int ObScheduleTabletFunc::schedule_tablet_new_round(
       if (OB_NOT_MASTER == ret) {
         ls_status_.is_leader_ = false;
         ls_could_schedule_new_round_ = false;
-      } else {
+      } else if (OB_TABLE_IS_DELETED != ret && OB_NO_NEED_MERGE != ret) {
         LOG_WARN("failed to schedule next medium", K(ret), K_(ls_status), K(tablet_id));
+        // transient failure; record via suspect info so diagnose side can read it back
+        int tmp_ret = OB_SUCCESS;
+        if (OB_TMP_FAIL(ADD_SUSPECT_INFO(MEDIUM_MERGE, ObDiagnoseTabletType::TYPE_MEDIUM_MERGE,
+                                         ls_id, tablet_id,
+                                         ObSuspectInfoType::SUSPECT_SCHEDULE_NEW_ROUND_FAILED,
+                                         static_cast<int64_t>(ret)))) {
+          LOG_WARN("failed to add suspect info", K(tmp_ret));
+        }
       }
     } else if (medium_clog_submitted) {
       if (OB_TMP_FAIL(clear_stat_tablets_.push_back(tablet_id))) {
@@ -453,10 +461,7 @@ int ObScheduleTabletFunc::check_with_schedule_scn(
     const int64_t need_freeze_snapshot)
 {
   int ret = OB_SUCCESS;
-  if (GCTX.is_shared_storage_mode()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("this function can not be used in shared-storage mode", K(ret));
-  } else if (OB_FAIL(ObBasicScheduleTabletFunc::check_with_schedule_scn(tablet, schedule_scn, tablet_status, can_merge, co_major_merge_strategy, need_freeze_snapshot))) {
+  if (OB_FAIL(ObBasicScheduleTabletFunc::check_with_schedule_scn(tablet, schedule_scn, tablet_status, can_merge, co_major_merge_strategy, need_freeze_snapshot))) {
     LOG_WARN("check with schedule scn fail", K(ret));
   }
   return ret;
@@ -475,12 +480,19 @@ int ObScheduleTabletFunc::schedule_merge_dag(
   if (is_major_merge(merge_type)) {
     DEBUG_SYNC(BEFORE_SCHEDULE_TABLET_FUNC);
   }
-  if (GCTX.is_shared_storage_mode()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_ERROR("this functor can not be used in shared-storage mode", K(ret));
-  } else if (OB_FAIL(ObTenantTabletScheduler::schedule_merge_dag(ls_id, tablet, merge_type, schedule_scn, ObExecMode::EXEC_MODE_LOCAL, nullptr/*dag_net_id*/, co_major_merge_strategy))) {
+  if (OB_FAIL(ObTenantTabletScheduler::schedule_merge_dag(ls_id, tablet, merge_type, schedule_scn, ObExecMode::EXEC_MODE_LOCAL, nullptr/*dag_net_id*/, co_major_merge_strategy))) {
     if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
       LOG_WARN("schedule major merge dag fail", K(ret));
+      // Transient dag submission failure. Record suspect info with the concrete ret
+      // so diagnose side can show the root cause instead of an empty row.
+      int tmp_ret = OB_SUCCESS;
+      const ObTabletID tablet_id = tablet.get_tablet_id();
+      if (OB_TMP_FAIL(ADD_SUSPECT_INFO(merge_type, ObDiagnoseTabletType::TYPE_MEDIUM_MERGE,
+                                       ls_id, tablet_id,
+                                       ObSuspectInfoType::SUSPECT_SCHEDULE_DAG_FAILED,
+                                       static_cast<int64_t>(ret)))) {
+        LOG_WARN("failed to add suspect info", K(tmp_ret));
+      }
     }
   } else {
     LOG_TRACE("schedule major merge dag success", K(ls_id), "tablet_id", tablet.get_tablet_id(), K(merge_type), K(schedule_scn));

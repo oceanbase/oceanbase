@@ -297,7 +297,6 @@ int ObCopiedSSTableCreator::check_sstable_param_for_init_(const ObMigrationSSTab
   return ret;
 }
 
-
 // ObCopiedSharedSSTableCreator
 int ObCopiedSharedSSTableCreator::create_sstable()
 {
@@ -398,8 +397,10 @@ int ObSSTableCopyFinishTask::init(const ObPhysicalCopyTaskInitParam &init_param)
     copy_ctx_.ls_id_ = init_param.ls_id_;
     copy_ctx_.tablet_id_ = init_param.tablet_id_;
     copy_ctx_.src_info_ = init_param.src_info_;
-    copy_ctx_.bandwidth_throttle_ = bandwidth_throttle;
-    copy_ctx_.svr_rpc_proxy_ = svr_rpc_proxy;
+    copy_ctx_.ha_svc_ctx_.bandwidth_throttle_ = bandwidth_throttle;
+    copy_ctx_.ha_svc_ctx_.svr_rpc_proxy_ = svr_rpc_proxy;
+    copy_ctx_.ha_svc_ctx_.storage_rpc_ = ls_service->get_storage_rpc();
+    copy_ctx_.ha_svc_ctx_.sql_proxy_ = GCTX.sql_proxy_;
     copy_ctx_.is_leader_restore_ = init_param.is_leader_restore_;
     copy_ctx_.restore_action_ = init_param.restore_action_;
     copy_ctx_.restore_base_info_ = init_param.restore_base_info_;
@@ -1004,12 +1005,8 @@ int ObSSTableCopyFinishTask::alloc_and_init_sstable_creator_(ObCopiedSSTableCrea
 {
   int ret = OB_SUCCESS;
   ObCopiedSSTableCreatorImpl *tmp_creator = nullptr;
-  const bool is_shared_storage = GCTX.is_shared_storage_mode();
   if (sstable_param_->is_empty_sstable()) {
     tmp_creator = MTL_NEW(ObCopiedEmptySSTableCreator, "CopySSTCreator");
-  } else if (is_shared_storage) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("shared storage mode is not supported here", K(ret), KPC(sstable_param_));
   } else if (sstable_param_->basic_meta_.table_shared_flag_.is_shared_macro_blocks()) {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("shared storage sstable should not encounter here", K(ret), KPC(sstable_param_));
@@ -1025,7 +1022,7 @@ int ObSSTableCopyFinishTask::alloc_and_init_sstable_creator_(ObCopiedSSTableCrea
   if (OB_FAIL(ret)) {
   } else if (OB_ISNULL(tmp_creator)) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to alloc memory", K(ret));
+    LOG_WARN("failed to alloc memory", K(ret), KP(tmp_creator));
   } else if (OB_FAIL(tmp_creator->init(copy_ctx_.ls_id_,
                                        copy_ctx_.tablet_id_,
                                        sstable_param_,

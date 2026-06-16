@@ -34,7 +34,7 @@ struct ObStorageHATabletsBuilderParam final
 
   TO_STRING_KV(K_(tenant_id), KPC_(ls), K_(tablet_id_array), K_(src_info), K_(local_rebuild_seq),
       K_(need_check_seq), K_(is_leader_restore), KP_(ha_table_info_mgr),
-      K_(restore_action), KP_(bandwidth_throttle), KP_(svr_rpc_proxy), KP_(storage_rpc));
+      K_(restore_action), K_(ha_svc_ctx));
 
   uint64_t tenant_id_;
   ObLS *ls_;
@@ -45,9 +45,7 @@ struct ObStorageHATabletsBuilderParam final
   bool is_leader_restore_;
 
   ObStorageHATableInfoMgr *ha_table_info_mgr_;
-  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
-  obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
-  storage::ObStorageRpc *storage_rpc_;
+  ObStorageHAServiceCtx ha_svc_ctx_;
   const ObRestoreBaseInfo *restore_base_info_;
   ObTabletRestoreAction::ACTION restore_action_;
   backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
@@ -277,7 +275,7 @@ struct ObStorageHACopySSTableParam final
 
   TO_STRING_KV(K_(tenant_id), K_(ls_id), K_(tablet_id), K_(copy_table_key_array),
       K_(src_info), K_(src_ls_rebuild_seq), K_(need_check_seq), K_(is_leader_restore),
-      K_(restore_action), KP_(bandwidth_throttle), KP_(svr_rpc_proxy), KP_(storage_rpc));
+      K_(restore_action), K_(ha_svc_ctx));
 
   uint64_t tenant_id_;
   share::ObLSID ls_id_;
@@ -290,9 +288,7 @@ struct ObStorageHACopySSTableParam final
   bool is_leader_restore_;
   ObTabletRestoreAction::ACTION restore_action_;
 
-  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
-  obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
-  storage::ObStorageRpc *storage_rpc_;
+  ObStorageHAServiceCtx ha_svc_ctx_;
   const ObRestoreBaseInfo *restore_base_info_;
   backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
   backup::ObBackupMetaIndexStoreWrapper *second_meta_index_store_;

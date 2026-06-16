@@ -69,9 +69,7 @@ public:
   VIRTUAL_TO_STRING_KV(K_(arg), K_(task_id));
   ObLSRestoreArg arg_;
   share::ObTaskId task_id_;
-  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
-  obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
-  storage::ObStorageRpc *storage_rpc_;
+  ObStorageHAServiceCtx ha_svc_ctx_;
 };
 
 class ObLSRestoreDagNet: public share::ObIDagNet
@@ -94,9 +92,7 @@ public:
   virtual int deal_with_cancel() override;
 
   ObLSRestoreCtx *get_ls_restore_ctx() { return ctx_; }
-  common::ObInOutBandwidthThrottle *get_bandwidth_throttle() { return bandwidth_throttle_; }
-  obrpc::ObStorageRpcProxy *get_storage_rpc_proxy() { return svr_rpc_proxy_; }
-  storage::ObStorageRpc *get_storage_rpc() { return storage_rpc_; }
+  const ObStorageHAServiceCtx &get_ha_svc_ctx() const { return ha_svc_ctx_; }
   backup::ObBackupMetaIndexStoreWrapper *get_meta_index_store() { return ctx_->arg_.is_leader_ ? &meta_index_store_ : nullptr; }
   backup::ObBackupMetaIndexStoreWrapper *get_second_meta_index_store() { return ctx_->arg_.is_leader_ ? &second_meta_index_store_ : nullptr; }
   INHERIT_TO_STRING_KV("ObIDagNet", share::ObIDagNet, KPC_(ctx));
@@ -112,10 +108,7 @@ private:
   backup::ObBackupMetaIndexStoreWrapper meta_index_store_;
   backup::ObBackupMetaIndexStoreWrapper second_meta_index_store_;
   backup::ObBackupIndexKVCache *kv_cache_;
-  //TODO(muwei.ym) put bandwidth_throttle, svr_rpc_proxy, and storage_rpc into ctx 4.3
-  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
-  obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
-  storage::ObStorageRpc *storage_rpc_;
+  ObStorageHAServiceCtx ha_svc_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObLSRestoreDagNet);
 };
 
@@ -161,9 +154,7 @@ private:
 private:
   bool is_inited_;
   ObLSRestoreCtx *ctx_;
-  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
-  obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
-  storage::ObStorageRpc *storage_rpc_;
+  ObStorageHAServiceCtx ha_svc_ctx_;
   share::ObIDagNet *dag_net_;
   DISALLOW_COPY_AND_ASSIGN(ObInitialLSRestoreTask);
 };
@@ -208,9 +199,7 @@ private:
 private:
   bool is_inited_;
   ObLSRestoreCtx *ctx_;
-  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
-  obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
-  storage::ObStorageRpc *storage_rpc_;
+  ObStorageHAServiceCtx ha_svc_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObStartLSRestoreTask);
 };
 
@@ -247,9 +236,7 @@ private:
   bool is_inited_;
   ObLSHandle ls_handle_;
   ObLSRestoreCtx *ctx_;
-  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
-  obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
-  storage::ObStorageRpc *storage_rpc_;
+  ObStorageHAServiceCtx ha_svc_ctx_;
   backup::ObBackupMetaIndexStoreWrapper *meta_index_store_;
   backup::ObBackupMetaIndexStoreWrapper *second_meta_index_store_;
   ObStorageHATabletsBuilder ha_tablets_builder_;
@@ -287,9 +274,7 @@ private:
 private:
   bool is_inited_;
   ObLSRestoreCtx *ctx_;
-  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
-  obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
-  storage::ObStorageRpc *storage_rpc_;
+  ObStorageHAServiceCtx ha_svc_ctx_;
   share::ObIDag *finish_dag_;
 
   DISALLOW_COPY_AND_ASSIGN(ObDataTabletsMetaRestoreTask);

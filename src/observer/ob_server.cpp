@@ -175,9 +175,6 @@ ObServer::ObServer()
     arb_timer_()
 #endif
     ,wr_service_()
-#ifdef OB_BUILD_SHARED_STORAGE
-    ,ss_ls_online_helper_()
-#endif
 {
 }
 
@@ -544,8 +541,6 @@ int ObServer::init(const ObServerOptions &opts, const ObPLogWriterCfg &log_cfg)
     } else if (GCTX.is_shared_storage_mode()
         && OB_FAIL(init_tenant_dir_gc_task())) {
       LOG_WARN("failed to init_tenant_dir_gc_task", K(ret));
-    } else if (GCTX.is_shared_storage_mode() && OB_FAIL(ss_ls_online_helper_.init())) {
-      LOG_WARN("failed to init ss online ls helper", K(ret));
 #endif
     } else {
       GDS.set_rpc_proxy(&rs_rpc_proxy_);
@@ -909,14 +904,6 @@ void ObServer::destroy()
     LOG_IO_DEVICE_WRAPPER.destroy();
     FLOG_INFO("log io device wrapper destroyed");
 
-#ifdef OB_BUILD_SHARED_STORAGE
-    if (GCTX.is_shared_storage_mode()) {
-      FLOG_INFO("begin to destroy ss ls online helper");
-      ss_ls_online_helper_.destroy();
-      FLOG_INFO("ss ls online helper destroyed");
-    }
-#endif
-
     has_destroy_ = true;
     FLOG_INFO("[OBSERVER_NOTICE] destroy observer end");
   }
@@ -1035,15 +1022,6 @@ int ObServer::start()
     } else {
       FLOG_INFO("success to start server storage meta service");
     }
-#ifdef OB_BUILD_SHARED_STORAGE
-    if (gctx_.is_shared_storage_mode()) {
-      if (FAILEDx(ss_ls_online_helper_.start())) {
-        LOG_ERROR("fail to start ss ls online helper", KR(ret));
-      } else {
-        FLOG_INFO("success to start ss ls online helper");
-      }
-    }
-#endif
     // shared-storage mode need check disk space available after creating tenant
     if (FAILEDx(OB_STORAGE_OBJECT_MGR.check_disk_space_available())) {
       LOG_ERROR("failed to check disk space available", K(ret));
@@ -1762,13 +1740,6 @@ int ObServer::stop()
     ObClockGenerator::get_instance().stop();
     FLOG_INFO("clock generator stopped");
 
-#ifdef OB_BUILD_SHARED_STORAGE
-    if (GCTX.is_shared_storage_mode()) {
-      FLOG_INFO("begin to stop ss ls online helper");
-      ss_ls_online_helper_.stop();
-      FLOG_INFO("ss ls online helper stopped");
-    }
-#endif
     FLOG_INFO("begin to stop rest auth mgr");
     ObRestAuthMgr::get_instance().stop();
     FLOG_INFO("rest auth mgr stopped");
@@ -2073,14 +2044,6 @@ int ObServer::wait()
     FLOG_INFO("begin to wait thread dynamic mgr");
     ObSimpleThreadPoolDynamicMgr::get_instance().wait();
     FLOG_INFO("wait thread dynamic mgr success");
-
-#ifdef OB_BUILD_SHARED_STORAGE
-    if (GCTX.is_shared_storage_mode()) {
-      FLOG_INFO("begin to wait ss ls online helper");
-      ss_ls_online_helper_.wait();
-      FLOG_INFO("wait ss ls online helper success");
-    }
-#endif
 
     gctx_.status_ = SS_STOPPED;
     FLOG_INFO("[OBSERVER_NOTICE] wait observer end", KR(ret));

@@ -49,8 +49,6 @@ public:
       const int64_t piece_switch_interval, 
       const int64_t piece_id, 
       SCN &end_scn);
-  // 'ts' must be with unit us.
-  static int timestamp_to_day(const int64_t ts, int64_t &day);
 };
 
 }

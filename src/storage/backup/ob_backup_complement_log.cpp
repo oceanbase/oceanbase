@@ -6,9 +6,11 @@
 #define USING_LOG_PREFIX STORAGE
 #include "storage/backup/ob_backup_complement_log.h"
 #include "storage/backup/ob_backup_block_file_reader_writer.h"
+#include "storage/high_availability/ob_storage_ha_dag.h"
 
 namespace oceanbase
 {
+using namespace storage;
 namespace backup
 {
 ERRSIM_POINT_DEF(EN_BACKUP_SKIP_LS_INFO_WRITE);
@@ -457,12 +459,9 @@ int ObBackupLSLogGroupDag::create_first_task()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup ls group dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("failed to alloc task", K(ret));
-  } else if (OB_FAIL(task->init(ls_id_, ctx_, bandwidth_throttle_))) {
-    LOG_WARN("failed to init task", K(ret), K_(ls_id), K_(ctx));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("failed to add task", K(ret));
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_add_single_task(
+                 this, task, ls_id_, ctx_, bandwidth_throttle_))) {
+    LOG_WARN("failed to alloc and add task", K(ret), K_(ls_id), K_(ctx));
   } else {
     LOG_INFO("success to add complement log task", K(ret), KPC(this), KPC(task));
   }
@@ -729,12 +728,9 @@ int ObBackupLSLogDag::create_first_task()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup ls dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("failed to alloc task", K(ret));
-  } else if (OB_FAIL(task->init(ls_id_, ctx_, bandwidth_throttle_))) {
-    LOG_WARN("failed to init task", K(ret), K_(ctx));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("failed to add task", K(ret));
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_add_single_task(
+                 this, task, ls_id_, ctx_, bandwidth_throttle_))) {
+    LOG_WARN("failed to alloc and add task", K(ret), K_(ctx));
   } else {
     LOG_INFO("success to add backup ls log task", K(ret), KPC(this), KPC(task));
   }
@@ -948,35 +944,27 @@ int ObBackupLSLogTask::generate_ls_copy_task_(const bool is_only_calc_stat, cons
   if (!is_only_calc_stat) {
     ObBackupLSLogFileTask *copy_task = NULL;
     ObBackupLSLogFinishTask *finish_task = NULL;
-    if (OB_FAIL(dag_->alloc_task(finish_task))) {
-      LOG_WARN("failed to alloc finish task", K(ret));
-    } else if (OB_FAIL(finish_task->init(ls_id, file_list_, ctx_))) {
-      LOG_WARN("failed to init finish task", K(ret), K(ls_id), KPC_(ctx));
-    } else if (OB_FAIL(dag_->alloc_task(copy_task))) {
-      LOG_WARN("failed to alloc copy task", K(ret));
-    } else if (OB_FAIL(copy_task->init(ls_id, bandwidth_throttle_, ctx_, finish_task))) {
-      LOG_WARN("failed to init copy task", K(ret), K(ls_id), KPC_(ctx), KPC(finish_task));
-    } else if (OB_FAIL(this->add_child(*copy_task))) {
-      LOG_WARN("failed to add child", K(ret));
-    } else if (OB_FAIL(copy_task->add_child(*finish_task))) {
-      LOG_WARN("failed to add child finish task", K(ret));
-    } else if (OB_FAIL(dag_->add_task(*copy_task))) {
-      LOG_WARN("failed to add copy task to dag", K(ret));
-    } else if (OB_FAIL(dag_->add_task(*finish_task))) {
-      LOG_WARN("failed to add finish task to dag", K(ret));
+    if (OB_FAIL(ObStorageHADagUtils::alloc_and_add_task(
+            dag_, this/*parent*/, nullptr/*child*/, finish_task, ls_id, file_list_, ctx_))) {
+      LOG_WARN("failed to alloc and add finish task", K(ret), K(ls_id), KPC_(ctx));
+    } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_add_task(
+            dag_, this/*parent*/, nullptr/*child*/, copy_task,
+            ls_id, bandwidth_throttle_, ctx_, finish_task))) {
+      LOG_WARN("failed to alloc and add copy task", K(ret), K(ls_id), KPC_(ctx), KPC(finish_task));
+    // finish_task has already been added to dag by the call above, so it is in
+    // TASK_STATUS_WAITING and add_child's default INITING-status check would
+    // fail. Skip the check: parent 'this' is still running and guarantees
+    // finish_task's indegree stays >= 1 while we wire this extra edge.
+    } else if (OB_FAIL(copy_task->add_child(*finish_task, false/*check_child_task_status*/))) {
+      LOG_WARN("failed to link copy_task -> finish_task", K(ret), K(ls_id), KPC(finish_task));
     } else {
       LOG_INFO("generate ls copy task", K(ls_id));
     }
   } else {
     ObBackupLSLogFinishTask *finish_task = NULL;
-    if (OB_FAIL(dag_->alloc_task(finish_task))) {
-      LOG_WARN("failed to alloc finish task", K(ret));
-    } else if (OB_FAIL(finish_task->init(ls_id, file_list_, ctx_))) {
-      LOG_WARN("failed to init finish task", K(ret), K(ls_id), KPC_(ctx));
-    } else if (OB_FAIL(this->add_child(*finish_task))) {
-      LOG_WARN("failed to add child", K(ret));
-    } else if (OB_FAIL(dag_->add_task(*finish_task))) {
-      LOG_WARN("failed to add finish task to dag", K(ret));
+    if (OB_FAIL(ObStorageHADagUtils::alloc_and_add_task(
+            dag_, this/*parent*/, nullptr/*child*/, finish_task, ls_id, file_list_, ctx_))) {
+      LOG_WARN("failed to alloc and add finish task", K(ret), K(ls_id), KPC_(ctx));
     } else {
       LOG_INFO("generate ls copy task", K(ls_id));
     }
@@ -1556,7 +1544,7 @@ int ObBackupLSLogTask::copy_ls_file_info_(
     if (OB_FAIL(dest_store.write_single_ls_info(dest_dest_id, round_id, piece_id, ls_id, desc))) {
       LOG_WARN("failed to write single ls info", K(ret), K(piece_file));
     }
-    if (OB_FAIL(ret) || GCTX.is_shared_storage_mode()) {
+    if (OB_FAIL(ret)) {
     } else if (OB_FAIL(ObArchivePathUtil::get_piece_ls_dir_path(dest, dest_dest_id, round_id, piece_id, ls_id, ls_path))) {
       LOG_WARN("failed to get piece ls dir path", K(ret), K(dest), K(dest_dest_id), K(round_id), K(piece_id), K(ls_id));
     } else if (OB_FAIL(dir_info.set_dir_info("log"))) {
@@ -1673,7 +1661,7 @@ int ObBackupLSLogTask::copy_checkpoint_info_(const ObTenantArchivePieceAttr &pie
     LOG_WARN("failed to get piece checkpoint file path", K(ret), K(dest), K(dest_dest_id), K(round_id), K(piece_id));
   } else if (OB_FAIL(dest_store.is_file_list_file_exist(piece_checkpoint_dir_path, suffix, is_exist))) {
     LOG_WARN("failed to check is file list file exist", K(ret), K(piece_checkpoint_dir_path), K(suffix));
-  } else if (is_exist || GCTX.is_shared_storage_mode()) {
+  } else if (is_exist) {
     // do nothing
   } else {
     ObBackupFileListInfo file_list_info;
@@ -2350,7 +2338,6 @@ int ObBackupLSLogFinishTask::generate_log_file_list_()
   if (OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ctx should not be null", K(ret));
-  } else if (GCTX.is_shared_storage_mode()) {
   } else if (OB_FAIL(ObBackupPathUtil::construct_backup_complement_log_dest(
     ctx_->backup_dest_, ctx_->backup_set_desc_, dest))) {
     LOG_WARN("failed to construct backup complement log dest", K(ret), K(ctx_->backup_dest_), K(ctx_->backup_set_desc_));
@@ -2466,12 +2453,9 @@ int ObBackupLSLogGroupFinishDag::create_first_task()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup ls group dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("failed to alloc task", K(ret));
-  } else if (OB_FAIL(task->init(ctx_))) {
-    LOG_WARN("failed to init task", K(ret), K_(ctx));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("failed to add task", K(ret));
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_add_single_task(
+                 this, task, ctx_))) {
+    LOG_WARN("failed to alloc and add task", K(ret), K_(ctx));
   } else {
     LOG_INFO("success to add backup ls log group finish task", K(ret), KPC(this), KPC(task));
   }

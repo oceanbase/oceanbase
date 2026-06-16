@@ -169,6 +169,7 @@ int ObLSRemoveMemberHandler::init(
 void ObLSRemoveMemberHandler::destroy()
 {
   ls_ = nullptr;
+  storage_rpc_ = nullptr;
   is_inited_ = false;
 }
 

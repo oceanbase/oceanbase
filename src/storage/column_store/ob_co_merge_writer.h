@@ -34,9 +34,21 @@ public:
       const int64_t parallel_idx,
       const ObStorageColumnGroupSchema &cg_schema,
       ObTabletMergeInfo &merge_info,
-      ObIAllocator &allocator);
+      ObIAllocator &allocator,
+      const ObITableReadInfo *merge_micro_block_read_info = nullptr);
+  int init_data_store_desc(
+      ObBasicTabletMergeCtx &ctx,
+      const ObMergeParameter &merge_param,
+      ObTabletMergeInfo &merge_info);
+  int open_macro_writer(
+      ObBasicTabletMergeCtx &ctx,
+      const int64_t parallel_idx,
+      const ObStorageColumnGroupSchema &cg_schema,
+      ObIAllocator &allocator,
+      const ObITableReadInfo *merge_micro_block_read_info = nullptr);
   int append(const blocksstable::ObDatumRow &row, const bool direct_append = false);
-  int append_micro_block(const blocksstable::ObMicroBlock &micro_block, const int64_t sstable_idx);
+  int append_batch(const blocksstable::ObBatchDatumRows &batch_rows);
+  int append_micro_block(const blocksstable::ObMicroBlock &micro_block, const int64_t sstable_idx, ObMergeVectorStore *read_vector_store = nullptr);
   int append_macro_block(const ObMacroBlockDesc &macro_desc, const ObMicroBlockData *micro_block_data, const int64_t sstable_idx);
   int project(const blocksstable::ObDatumRow &row, blocksstable::ObDatumRow &result_row, bool &is_all_nop) const
   {
@@ -49,8 +61,11 @@ public:
     return macro_writer_.check_data_macro_block_need_merge(macro_desc, need_rewrite);
   }
   const common::ObIArray<share::schema::ObColDesc>& get_col_desc_array() const { return data_store_desc_.get_col_desc_array(); }
+  const blocksstable::ObDataStoreDesc& get_data_store_desc() const { return data_store_desc_; }
   bool is_cg() const { return data_store_desc_.is_cg(); }
   int end_write(ObTabletMergeInfo &merge_info);
+  OB_INLINE const uint16_t *get_projector() const { return projector_.get_projector(); }
+  OB_INLINE int64_t get_projector_count() const { return projector_.get_projector_count(); }
   TO_STRING_KV(K_(data_store_desc), K_(projector), K_(skip_project))
 private:
   blocksstable::ObDataStoreDesc data_store_desc_;
@@ -130,22 +145,27 @@ public:
       ObIArray<ObITable*> &tables)
   { return OB_NOT_SUPPORTED; }
   bool is_init() const { return is_inited_; }
-  virtual int replay_mergelog(const ObMergeLog &mergelog, const blocksstable::ObDatumRow *&row);
-  virtual int end_write(ObTabletMergeInfo &merge_info) { return OB_NOT_SUPPORTED; }
-  virtual int end_write(ObTabletMergeInfo **merge_infos)
-  { return OB_NOT_SUPPORTED; }
+  int replay_mergelog(const ObMergeLog &mergelog, const ObMergeVectorStore *&vector_store, const blocksstable::ObDatumRow *&row);
+  virtual int end_write(ObCOTabletMergeCtx &co_ctx) { return OB_NOT_SUPPORTED; }
   static int init_default_row(
     ObIAllocator &allocator,
     const ObMergeParameter &merge_param,
-    ObTabletMergeInfo &merge_info,
+    const int64_t major_working_cluster_version,
     blocksstable::ObDatumRow &default_row);
 
   VIRTUAL_TO_STRING_KV(K_(is_inited), K_(default_row), K_(cg_idx));
 
 protected:
   virtual int replay_single_mergelog(const ObMergeLog &mergelog, const blocksstable::ObDatumRow &row);
+  // replay batch rows in vector store
+  virtual int replay_batch_mergelog(
+      const ObMergeLog &mergelog,
+      const ObMergeVectorStore &vector_store,
+      const bool need_check_project,
+      const bool need_check_filter) { return OB_NOT_SUPPORTED; }
   // replay major without incremental row
   virtual int replay_range_mergelog(const ObMergeLog &mergelog);
+  virtual ObMergeVectorStore *get_read_vector_store() { return nullptr;}
   int basic_init(
       const blocksstable::ObDatumRow &default_row,
       const ObMergeParameter &merge_param,
@@ -162,24 +182,26 @@ protected:
   int move_iters_next();
   int get_curr_major_iter(const ObMergeLog &mergelog, ObCOMajorMergeIter *&merge_iter);
   void dump_info() const;
-  int process_macro_rewrite(ObCOMajorMergeIter *iter);
   int append_iter_curr_row_or_range(ObCOMajorMergeIter *iter, const ObMergeLog::OpType op_type);
   int process_mergelog_row(ObCOMajorMergeIter *iter, const ObMergeLog &mergelog, const blocksstable::ObDatumRow &row);
   bool check_is_all_nop(const blocksstable::ObDatumRow &row);
-  virtual bool is_base_cg_writer() const { return false; }
-  int replay_last_skip_major(const int64_t current_major_idx);
-private:
+  virtual OB_INLINE bool is_base_cg_writer() const { return false; }
+  virtual OB_INLINE bool is_batch_merge_writer() const { return false; }
+  int replay_last_skip_major(const int64_t current_major_idx, const int64_t current_row_id = -1);
   int compare(
       ObCOMajorMergeIter *iter,
       const ObMergeLog &mergelog,
       int64_t &cmp_ret,
       const blocksstable::ObDatumRow &row,
       bool &skip_curr_row) const;
+private:
   virtual int get_curr_major_row(ObCOMajorMergeIter &iter, const blocksstable::ObDatumRow *&row);
   virtual int process(ObCOMajorMergeIter *iter,
                       const ObMacroBlockDesc &macro_desc,
                       const ObMicroBlockData *micro_block_data) = 0;
-  virtual int process(const blocksstable::ObMicroBlock &micro_block, const int64_t sstable_idx) = 0;
+  virtual int process(const blocksstable::ObMicroBlock &micro_block,
+                      const int64_t sstable_idx,
+                      ObMergeVectorStore *read_vector_store = nullptr) = 0;
   virtual int process(const blocksstable::ObDatumRow &row) = 0;
   virtual bool is_cg() const { return false; } //temp code
 protected:
@@ -219,14 +241,24 @@ public:
       const int64_t cg_idx,
       ObTabletMergeInfo &merge_info,
       ObIArray<ObITable*> &tables);
-  virtual int end_write(ObTabletMergeInfo &merge_info) override;
+  virtual int end_write(ObCOTabletMergeCtx &co_ctx) override;
   INHERIT_TO_STRING_KV("ObCOMergeRowWriter", ObCOMergeWriter, K_(write_helper));
 protected:
+  virtual int inner_init(ObBasicTabletMergeCtx &ctx) { return OB_SUCCESS; }
+  virtual int flush_pending_buffered_rows() { return OB_SUCCESS;}
   virtual int replay_single_mergelog(const ObMergeLog &mergelog, const blocksstable::ObDatumRow &row) override;
+  virtual int process(ObCOMajorMergeIter *iter, const ObMacroBlockDesc &macro_desc, const ObMicroBlockData *micro_block_data) override;
+  virtual int process(const blocksstable::ObMicroBlock &micro_block,
+                      const int64_t sstable_idx,
+                      ObMergeVectorStore *read_vector_store = nullptr) override;
+  int prepare_replay_row(const ObMergeLog &mergelog,
+                         const blocksstable::ObDatumRow &row,
+                         const blocksstable::ObDatumRow *&res_row,
+                         bool &skip_replay);
+  int replay_row_directly(const ObMergeLog &mergelog, const blocksstable::ObDatumRow &row, ObCOMajorMergeIter &merge_iter);
+  int replay_iter_directly(const ObMergeLog &mergelog, ObCOMajorMergeIter &merge_iter);
 private:
   virtual int get_curr_major_row(ObCOMajorMergeIter &iter, const blocksstable::ObDatumRow *&row) override;
-  virtual int process(ObCOMajorMergeIter *iter, const ObMacroBlockDesc &macro_desc, const ObMicroBlockData *micro_block_data) override;
-  virtual int process(const blocksstable::ObMicroBlock &micro_block, const int64_t sstable_idx) override;
   virtual int process(const blocksstable::ObDatumRow &row) override;
   virtual bool is_cg() const override { return write_helper_.is_cg(); }
   int choose_read_info_for_old_major(
@@ -242,6 +274,8 @@ private:
       ObSSTable *sstable,
       ObITable *&table,
       bool &add_column);
+  int inner_process_macro_rewrite(ObCOMajorMergeIter &iter);
+  int inner_process_macro_open(ObCOMajorMergeIter &iter);
 protected:
   ObProgressiveMergeHelper *progressive_merge_helper_;
   ObWriteHelper write_helper_;
@@ -266,7 +300,7 @@ public:
 protected:
   virtual int replay_single_mergelog(const ObMergeLog &mergelog, const blocksstable::ObDatumRow &row) override;
   virtual int replay_range_mergelog(const ObMergeLog &mergelog) override;
-  virtual bool is_base_cg_writer() const override { return true; }
+  virtual OB_INLINE bool is_base_cg_writer() const override { return true; }
 private:
   ObCOMajorMergeIter merge_iter_;
 };
@@ -293,7 +327,7 @@ public:
       const common::ObIArray<ObStorageColumnGroupSchema> &cg_array,
       ObTabletMergeInfo **merge_infos,
       ObIArray<ObITable*> &tables) override;
-  virtual int end_write(ObTabletMergeInfo **merge_infos) override;
+  virtual int end_write(ObCOTabletMergeCtx &co_ctx) override;
 private:
   virtual int process(ObCOMajorMergeIter *iter,
                       const ObMacroBlockDesc &macro_desc,
@@ -301,7 +335,12 @@ private:
   {
     return OB_NOT_SUPPORTED;
   }
-  virtual int process(const blocksstable::ObMicroBlock &micro_block, const int64_t sstable_idx) override { return OB_NOT_SUPPORTED; };
+  virtual int process(const blocksstable::ObMicroBlock &micro_block,
+                      const int64_t sstable_idx,
+                      ObMergeVectorStore *read_vector_store = nullptr) override
+  {
+    return OB_NOT_SUPPORTED;
+  }
   virtual int process(const blocksstable::ObDatumRow &row) override;
 
 private:

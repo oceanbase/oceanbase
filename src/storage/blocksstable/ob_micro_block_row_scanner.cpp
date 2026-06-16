@@ -34,6 +34,8 @@ ObIMicroBlockRowScanner::ObIMicroBlockRowScanner(common::ObIAllocator &allocator
     last_(ObIMicroBlockReaderInfo::INVALID_ROW_INDEX),
     reserved_pos_(ObIMicroBlockReaderInfo::INVALID_ROW_INDEX),
     step_(1),
+    runtime_rowkey_border_enabled_(false),
+    runtime_rowkey_border_exclusive_idx_(ObIMicroBlockReaderInfo::INVALID_ROW_INDEX),
     row_(),
     macro_id_(),
     read_info_(nullptr),
@@ -81,6 +83,7 @@ void ObIMicroBlockRowScanner::reuse()
   start_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
   last_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
   reserved_pos_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
+  clear_runtime_rowkey_border();
 }
 
 int ObIMicroBlockRowScanner::init(
@@ -112,6 +115,7 @@ int ObIMicroBlockRowScanner::init(
     if (NULL != reader_) {
       reader_->reset();
     }
+    clear_runtime_rowkey_border();
     LOG_DEBUG("init ObIMicroBlockRowScanner", K(context), KPC_(read_info), K(param));
   }
   return ret;
@@ -152,6 +156,7 @@ int ObIMicroBlockRowScanner::switch_context(
     sstable_ = sstable;
     range_ = nullptr;
     block_row_store_ = context.block_row_store_;
+    clear_runtime_rowkey_border();
   }
 
   return ret;
@@ -184,6 +189,7 @@ int ObIMicroBlockRowScanner::open(
     is_left_border_ = is_left_border;
     is_right_border_ = is_right_border;
     macro_id_ = macro_id;
+    clear_runtime_rowkey_border();
   }
   return ret;
 }
@@ -232,6 +238,7 @@ int ObIMicroBlockRowScanner::open_column_block(
       last_ = end;
       step_ = 1;
     }
+    clear_runtime_rowkey_border();
   }
   return ret;
 }
@@ -464,6 +471,8 @@ int ObIMicroBlockRowScanner::end_of_block() const
   int ret = common::OB_SUCCESS;
   if (ObIMicroBlockReaderInfo::INVALID_ROW_INDEX == current_) {
     ret = common::OB_ITER_END;
+  } else if (is_runtime_rowkey_border_hit()) {
+    ret = common::OB_ITER_END;
   } else {
     if (!reverse_scan_) {
       if (current_ > last_) {
@@ -476,6 +485,51 @@ int ObIMicroBlockRowScanner::end_of_block() const
     }
   }
   return ret;
+}
+
+int ObIMicroBlockRowScanner::set_runtime_rowkey_border(const ObDatumRowkey &border_key)
+{
+  int ret = OB_SUCCESS;
+  bool is_equal = false;
+  int64_t border_row_idx = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
+  const int64_t start_idx = current_;
+  const int64_t end_idx = last_ + 1; // exclusive
+  clear_runtime_rowkey_border();
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(reverse_scan_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("reverse scan is not supported for runtime rowkey border", K(ret), K_(reverse_scan));
+  } else if (OB_UNLIKELY(!border_key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid border rowkey", K(ret), K(border_key));
+  } else if (OB_ISNULL(reader_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("reader is null", K(ret), KP_(reader));
+  } else if (OB_FAIL(end_of_block())) {
+    if (OB_UNLIKELY(OB_ITER_END != ret)) {
+      LOG_WARN("failed to check end of block", K(ret));
+    } else {
+      ret = OB_SUCCESS;
+    }
+  } else if (OB_FAIL(reader_->locate_border_row_id(border_key, start_idx, end_idx, border_row_idx, is_equal))) {
+    LOG_WARN("failed to locate border row id", K(ret), K(border_key), K(start_idx), K(end_idx));
+  } else if (OB_UNLIKELY(border_row_idx < start_idx || border_row_idx > end_idx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected border row idx", K(ret), K(border_row_idx), K(start_idx), K(end_idx), K(border_key));
+  } else if (border_row_idx < end_idx) {
+    // Only treat as a runtime border when border_key falls within current micro remain range.
+    runtime_rowkey_border_enabled_ = true;
+    runtime_rowkey_border_exclusive_idx_ = border_row_idx;
+  } // border_key is beyond current micro block end; this micro should end naturally.
+  return ret;
+}
+
+void ObIMicroBlockRowScanner::clear_runtime_rowkey_border()
+{
+  runtime_rowkey_border_enabled_ = false;
+  runtime_rowkey_border_exclusive_idx_ = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
 }
 
 int ObIMicroBlockRowScanner::fuse_row(
@@ -770,6 +824,145 @@ int ObIMicroBlockRowScanner::get_rows_for_rich_format(
         LOG_WARN("Fail to fill lob locator", K(ret));
       }
     }
+  }
+  return ret;
+}
+
+// border_key is a exclusive border
+int ObIMicroBlockRowScanner::inner_get_next_batch_rows(
+    compaction::ObMergeVectorStore &vector_store,
+    const ObDatumRowkey &border_key,
+    bool &reach_border)
+{
+  int ret = OB_SUCCESS;
+  reach_border = false;
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(reverse_scan_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("reverse scan is not supported for merge batch read", K(ret), K_(reverse_scan));
+  } else if (OB_UNLIKELY(!border_key.is_valid())) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid border rowkey", K(ret), K(border_key));
+  } else if (OB_FAIL(end_of_block())) {
+    ret = OB_SUCCESS;
+    reach_border = true;
+  } else if (OB_ISNULL(reader_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("reader is NULL", K(ret));
+  } else {
+    bool is_equal = false;
+    int64_t border_row_idx = ObIMicroBlockReaderInfo::INVALID_ROW_INDEX;
+    const int64_t start_idx = current_;
+    const int64_t end_idx = last_ + 1; // exclusive
+    if (OB_FAIL(reader_->locate_border_row_id(border_key, start_idx, end_idx, border_row_idx, is_equal))) {
+      LOG_WARN("Fail to locate border row id", K(ret), K(border_key), K(start_idx), K(end_idx));
+    } else if (OB_UNLIKELY(border_row_idx < start_idx || border_row_idx > end_idx)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected border row idx", K(ret), K(start_idx), K(end_idx), K(border_row_idx), K(border_key));
+    } else if (OB_FAIL(inner_get_next_batch_rows(vector_store, border_row_idx, reach_border, nullptr))) {
+      LOG_WARN("Failed to get next batch rows", K(ret));
+    }
+  }
+  return ret;
+}
+
+// border_row_id is a inclusive border
+int ObIMicroBlockRowScanner::get_next_batch_rows(
+    compaction::ObMergeVectorStore &vector_store,
+    const int64_t border_row_id_inclusive,
+    bool &reach_border,
+    const common::ObIArrayWrap<uint16_t> *cols)
+{
+  int ret = OB_SUCCESS;
+  reach_border = false;
+  // border_exclusive = border_row_id_inclusive + 1, but border_row_id_inclusive may be INT64_MAX.
+  const int64_t border_exclusive = (border_row_id_inclusive == INT64_MAX)
+      ? INT64_MAX
+      : (border_row_id_inclusive + 1);
+  if (IS_NOT_INIT) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", K(ret));
+  } else if (OB_UNLIKELY(reverse_scan_)) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("reverse scan is not supported for merge batch read", K(ret), K_(reverse_scan));
+  } else if (OB_FAIL(end_of_block())) {
+    ret = OB_ITER_END;
+    reach_border = true;
+  } else if (OB_ISNULL(reader_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("reader is NULL", K(ret));
+  } else if (OB_UNLIKELY(border_exclusive <= 0)) {
+    reach_border = true; // micro block is beyond border, do not read any data
+  } else if (OB_FAIL(inner_get_next_batch_rows(vector_store, border_exclusive, reach_border, cols))) {
+    LOG_WARN("Failed to get next batch rows", K(ret));
+  }
+  return ret;
+}
+
+int ObIMicroBlockRowScanner::get_next_batch_rows(
+    compaction::ObMergeVectorStore &vector_store,
+    const ObDatumRowkey &border_key,
+    bool &reach_border,
+    bool &need_prepare_micro_border)
+{
+  int ret = OB_SUCCESS;
+  if (can_batch_scan_to_merge_vector()) {
+    if (OB_FAIL(inner_get_next_batch_rows(vector_store, border_key, reach_border))) {
+      LOG_WARN("failed to batch fill rows within micro block", K(ret), K(border_key));
+    }
+  } else {
+    if (need_prepare_micro_border && OB_FAIL(set_runtime_rowkey_border(border_key))) {
+      LOG_WARN("failed to set runtime rowkey border for micro scanner", K(ret), K(border_key));
+    } else {
+      need_prepare_micro_border = false;
+      const ObDatumRow *row = nullptr;
+      if (OB_FAIL(get_next_row(row))) {
+        if (OB_ITER_END == ret) {
+          if (is_runtime_rowkey_border_hit()) {
+            reach_border = true;
+            clear_runtime_rowkey_border();
+            need_prepare_micro_border = true;
+          }
+          ret = OB_SUCCESS;
+        } else {
+          LOG_WARN("failed to get next row", K(ret));
+        }
+      } else if (OB_ISNULL(row)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected null row", K(ret));
+      } else if (OB_FAIL(vector_store.set_single_row(row))) {
+        LOG_WARN("failed to set single row", K(ret), KPC(row));
+      } else if (is_runtime_rowkey_border_hit()) {
+        reach_border = true;
+        clear_runtime_rowkey_border();
+        need_prepare_micro_border = true;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObIMicroBlockRowScanner::inner_get_next_batch_rows(
+    compaction::ObMergeVectorStore &vector_store,
+    const int64_t border_exclusive,
+    bool &reach_border,
+    const common::ObIArrayWrap<uint16_t> *cols)
+{
+  int ret = OB_SUCCESS;
+  reach_border = false;
+  const int64_t end_idx = last_ + 1; // exclusive
+  // - if border is beyond this micro block: read remaining rows in this block
+  // - if border is within this micro block: read [current_, border)
+  const int64_t end_exclusive = MIN(border_exclusive, end_idx);
+  const bool border_in_this_micro = (border_exclusive < end_idx);
+  if (OB_FAIL(vector_store.fill_rows(cols, *this, current_, end_exclusive))) {
+    LOG_WARN("Failed to fill rows to merge vector store", K(ret), K(current_), K(end_exclusive));
+  } else {
+    // NOTE: vector_store may be limited by batch capacity and fill_rows() might not advance to end_exclusive.
+    // reach_border should mean we have actually advanced to (or beyond) the border position.
+    reach_border = border_in_this_micro && (current_ >= border_exclusive);
   }
   return ret;
 }
@@ -1504,6 +1697,28 @@ int ObIMicroBlockRowScanner::compare_rowkey(const ObDatumRowkey &rowkey, const b
   return ret;
 }
 
+int ObIMicroBlockRowScanner::get_global_border_row_id(
+    const ObDatumRange &range,
+    const int64_t border_row_id,
+    int64_t &global_border_row_id)
+{
+  int ret = OB_SUCCESS;
+  global_border_row_id = border_row_id;
+  int64_t query_start_rowid = 0;
+  if (INT64_MAX == border_row_id) {
+  } else if (!range.is_whole_range()) {
+    if (OB_UNLIKELY(range.start_key_.is_static_rowkey() || range.start_key_.datum_cnt_ != 1)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected query range for rowid batch read", K(ret), K(range));
+    } else {
+      query_start_rowid = range.is_left_closed()
+          ? range.start_key_.datums_[0].get_int()
+          : (range.start_key_.datums_[0].get_int() + 1);
+      global_border_row_id = border_row_id + query_start_rowid;
+    }
+  }
+  return ret;
+}
 ////////////////////////////////// ObMicroBlockRowScanner ////////////////////////////////////////////
 int ObMicroBlockRowScanner::init(
     const storage::ObTableIterParam &param,

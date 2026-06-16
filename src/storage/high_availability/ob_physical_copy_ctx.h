@@ -91,8 +91,7 @@ struct ObPhysicalCopyCtx final
                K_(ls_id),
                K_(tablet_id),
                K_(src_info),
-               KP_(bandwidth_throttle),
-               KP_(svr_rpc_proxy),
+               K_(ha_svc_ctx),
                K_(is_leader_restore),
                K_(restore_action),
                KP_(restore_base_info),
@@ -116,8 +115,7 @@ struct ObPhysicalCopyCtx final
   share::ObLSID ls_id_;
   common::ObTabletID tablet_id_;
   ObStorageHASrcInfo src_info_;
-  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
-  obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
+  ObStorageHAServiceCtx ha_svc_ctx_;
   bool is_leader_restore_;
   ObTabletRestoreAction::ACTION restore_action_;
   const ObRestoreBaseInfo *restore_base_info_;

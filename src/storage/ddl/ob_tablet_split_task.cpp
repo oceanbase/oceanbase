@@ -12,7 +12,6 @@
 #include "storage/access/ob_multiple_scan_merge.h"
 
 #ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/compaction_v2/ob_ss_compact_helper.h"
 #include "storage/shared_storage/prewarm/ob_macro_prewarm_struct.h"
 #include "storage/shared_storage/macro_cache/ob_ss_macro_cache_mgr.h"
 #include "storage/shared_storage/ob_ss_local_cache_service.h"

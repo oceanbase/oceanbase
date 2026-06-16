@@ -13,9 +13,6 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/high_availability/ob_rebuild_service.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "close_modules/shared_storage/storage/high_availability/ob_ss_ls_restore_state.h"
-#endif
 #include "share/backup/ob_backup_connectivity.h"
 #include "rootserver/ob_tenant_info_loader.h"
 #include "src/storage/restore/ob_tenant_restore_info_mgr.h"
@@ -694,44 +691,6 @@ int ObLSRestoreHandler::get_restore_state_handler_(const share::ObLSRestoreStatu
       }
       break;
     }
-#ifdef OB_BUILD_SHARED_STORAGE
-    case ObLSRestoreStatus::Status::SS_RESTORE_START: {
-      ObSSLSRestoreStartState *tmp_ptr = nullptr;
-      if (OB_FAIL(construct_state_handler_(tmp_ptr))) {
-        LOG_WARN("fail to construct ObLSRestoreStartState", K(ret), K(new_status));
-      } else {
-        new_state_handler = tmp_ptr;
-      }
-      break;
-    }
-    case ObLSRestoreStatus::Status::SS_RESTORE_LS: {
-      ObSSLSRestoreLSState *tmp_ptr = nullptr;
-      if (OB_FAIL(construct_state_handler_(tmp_ptr))) {
-        LOG_WARN("fail to construct ObSSLSRestoreLSState", K(ret), K(new_status));
-      } else {
-        new_state_handler = tmp_ptr;
-      }
-      break;
-    }
-    case ObLSRestoreStatus::Status::SS_RESTORE_WAIT_LS: {
-      ObSSWaitLSRestoreState *tmp_ptr = nullptr;
-      if (OB_FAIL(construct_state_handler_(tmp_ptr))) {
-        LOG_WARN("fail to construct ObSSWaitLSRestoreState", K(ret), K(new_status));
-      } else {
-        new_state_handler = tmp_ptr;
-      }
-      break;
-    }
-    case ObLSRestoreStatus::Status::SS_RESTORE_CLOG: {
-      ObSSLSRestoreCLogState *tmp_ptr = nullptr;
-      if (OB_FAIL(construct_state_handler_(tmp_ptr))) {
-        LOG_WARN("fail to construct ObSSLSRestoreRestoreCLogState", K(ret), K(new_status));
-      } else {
-        new_state_handler = tmp_ptr;
-      }
-      break;
-    }
-#endif
     default: {
       ret = OB_ERR_SYS;
       LOG_ERROR("unknown ls restore status", K(ret), K(new_status));

@@ -97,7 +97,7 @@ int ObSimpleBackupStatMgr::get_missing_items_(
       bool exist = false;
       const T &lhs_item = lhs.at(i);
       for (int64_t j = 0; OB_SUCC(ret) && j < rhs.count(); ++j) {
-        const T &rhs_item = lhs.at(j);
+        const T &rhs_item = rhs.at(j);
         if (lhs_item == rhs_item) {
           exist = true;
           break;

@@ -106,9 +106,6 @@ int ObColumnCSDecoder::decode_vector(ObVectorDecodeCtx &vector_ctx)
   if (OB_UNLIKELY(!vector_ctx.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("Invalid parameters", K(ret), K(vector_ctx));
-  } else if (OB_UNLIKELY(!decoder_->can_vectorized())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpect column batch_decode not supported.", K(ret), K(decoder_->get_type()));
   } else if (OB_FAIL(decoder_->decode_vector(*ctx_, vector_ctx))) {
     LOG_WARN("failed to decocde vector in column decoder", K(ret), K(*ctx_), K(vector_ctx));
   }
@@ -956,10 +953,9 @@ int ObCSEncodeBlockGetReader<IS_MULTI_VERSION>::get_row_id(
 //=============================ObMicroBlockCSDecoder===================================//
 template <bool IS_MULTI_VERSION>
 ObMicroBlockCSDecoder<IS_MULTI_VERSION>::ObMicroBlockCSDecoder()
-    : read_info_not_contain_multi_version_cols_(false), request_cnt_(0),
+    : read_info_not_contain_multi_version_cols_(false),
       cached_decoder_(nullptr), decoders_(nullptr), transform_helper_(),
       column_count_(0), ctxs_(nullptr),
-      decoder_allocator_(ObModIds::OB_DECODER_CTX),
       transform_allocator_(SET_IGNORE_MEM_VERSION(ObMemAttr(MTL_ID(), "MICB_TRANSFORM")), OB_MALLOC_NORMAL_BLOCK_SIZE),
       buf_allocator_(SET_IGNORE_MEM_VERSION(ObMemAttr(MTL_ID(), "MICB_CSDECODER")), OB_MALLOC_NORMAL_BLOCK_SIZE),
       allocated_decoders_buf_(nullptr), allocated_decoders_buf_size_(0),
@@ -1174,7 +1170,9 @@ int ObMicroBlockCSDecoder<IS_MULTI_VERSION>::init_decoders()
   int ret = OB_SUCCESS;
   int64_t decoders_buf_pos = 0;
 
-  if (OB_ISNULL(read_info_) || typeid(ObRowkeyReadInfo) == typeid(*read_info_)) {
+  if (OB_ISNULL(read_info_) ||
+               (typeid(ObRowkeyReadInfo) == typeid(*read_info_) &&
+                read_info_->get_request_count() != read_info_->get_columns_desc().count())) {
     ObObjMeta col_type;
     if (OB_UNLIKELY(column_count_ < request_cnt_ && nullptr == read_info_)) {
       ret = OB_ERR_UNEXPECTED;
@@ -1197,14 +1195,7 @@ int ObMicroBlockCSDecoder<IS_MULTI_VERSION>::init_decoders()
   } else if (OB_FAIL(alloc_decoders_buf(true/*by_read_info*/, decoders_buf_pos))) {
     LOG_WARN("fail to alloc decoders buf", K(ret));
   } else {
-    const ObColumnIndexArray &cols_index = read_info_->get_columns_index();
-    const ObColDescIArray &cols_desc = read_info_->get_columns_desc();
-    if (typeid(ObCGRowkeyReadInfo) == typeid(*read_info_) || typeid(ObCGReadInfo) == typeid(*read_info_) || read_info_->get_columns()->count() < 1) {
-      FOREACH_ADD_DECODER(nullptr)
-    } else {
-      const ObColumnParamIArray *cols_param = read_info_->get_columns();
-      FOREACH_ADD_DECODER(cols_param->at(i))
-    }
+    ADD_DECODERS_BY_READ_INFO(column_count_);
   }
 
   if (OB_SUCC(ret) && IS_MULTI_VERSION) {
@@ -2793,6 +2784,8 @@ int ObMicroBlockCSDecoder<IS_MULTI_VERSION>::get_rows(
         }
         if (OB_FAIL(get_col_data(col_id, vector_decode_ctx))) {
           LOG_WARN("Failed to get col datums", K(ret), K(i), K(col_id), K(vector_decode_ctx));
+        } else if (OB_NOT_NULL(default_datums) && OB_FAIL(fill_default_for_nop(col_id, vector_decode_ctx))) {
+          LOG_WARN("Failed to fill default for nop", K(ret), K(i), K(col_id), K(vector_decode_ctx));
         } else if (is_need_padding && OB_FAIL(storage::pad_on_rich_format_columns(
             col_params.at(i)->get_accuracy(),
             col_params.at(i)->get_meta_type().get_collation_type(),
@@ -2810,15 +2803,51 @@ int ObMicroBlockCSDecoder<IS_MULTI_VERSION>::get_rows(
 }
 
 template<bool IS_MULTI_VERSION>
-int ObMicroBlockCSDecoder<IS_MULTI_VERSION>::get_col_data(const int32_t col_id, ObVectorDecodeCtx &vector_ctx)
+int ObMicroBlockCSDecoder<IS_MULTI_VERSION>::get_col_data(const int32_t col_id, ObVectorDecodeCtx &vector_ctx, const bool need_reverse_trans_version)
 {
   int ret = OB_SUCCESS;
-  const ObColumnIndexArray &cols_index = read_info_->get_columns_index();
   if (OB_FAIL(decoders_[col_id].decode_vector(vector_ctx))) {
     LOG_WARN("fail to get datums from decoder", K(ret),  K(column_count_), K(col_id), K(vector_ctx));
-  } else if (OB_UNLIKELY(transform_helper_.get_micro_block_header()->is_trans_version_column_idx(cols_index.at(col_id))) &&
-             OB_FAIL(storage::reverse_trans_version_val(vector_ctx.get_vector(), vector_ctx.row_cap_, vector_ctx.vec_offset_))) {
-     LOG_WARN("Failed to reverse trans version val", K(ret));
+  } else if (need_reverse_trans_version) {
+    const int64_t store_idx = nullptr == read_info_ ? col_id : read_info_->get_columns_index().at(col_id);
+    if (OB_UNLIKELY(transform_helper_.get_micro_block_header()->is_trans_version_column_idx(store_idx)) &&
+        OB_FAIL(storage::reverse_trans_version_val(vector_ctx.get_vector(), vector_ctx.row_cap_, vector_ctx.vec_offset_))) {
+      LOG_WARN("Failed to reverse trans version val", K(ret));
+    }
+  }
+  return ret;
+}
+
+template<bool IS_MULTI_VERSION>
+int ObMicroBlockCSDecoder<IS_MULTI_VERSION>::fill_default_for_nop(const int32_t col_id, ObVectorDecodeCtx &vector_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObColumnCSDecoderCtx *ctx = nullptr;
+  if (OB_UNLIKELY(col_id < 0 || col_id >= request_cnt_ || OB_ISNULL(vector_ctx.default_datum_))) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument to fill default for nop", K(ret), K(col_id), K_(request_cnt), K(vector_ctx));
+  } else if (OB_ISNULL(ctx = decoders_[col_id].ctx_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected null decoder ctx", K(ret), K(col_id));
+  } else if (ctx->base_ctx_.has_no_nop()) {
+    // do nothing
+  } else if (ctx->base_ctx_.is_nop_replaced()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < vector_ctx.row_cap_; ++i) {
+      if (vector_ctx.is_null_at(i) && OB_FAIL(vector_ctx.fill_default_datum_at(i))) {
+        LOG_WARN("Failed to fill default datum", K(ret), K(col_id), K(i), K(vector_ctx));
+      }
+    }
+  } else if (ctx->base_ctx_.has_nop_bitmap()) {
+    for (int64_t i = 0; OB_SUCC(ret) && i < vector_ctx.row_cap_; ++i) {
+      if (ObCSDecodingUtil::test_bit(ctx->base_ctx_.nop_bitmap_, vector_ctx.row_ids_[i])) {
+        if (OB_FAIL(vector_ctx.fill_default_datum_at(i))) {
+          LOG_WARN("Failed to fill default datum", K(ret), K(col_id), K(i), K(vector_ctx));
+        }
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected nop flag", K(ret), K(col_id), KPC(ctx));
   }
   return ret;
 }

@@ -4,8 +4,8 @@
 #include "storage/compaction/ob_basic_schedule_tablet_func.h"
 #include "storage/compaction/ob_medium_compaction_func.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/compaction_v2/ob_ss_compact_helper.h"
+#ifdef ERRSIM
+#include "observer/ob_server_event_history_table_operator.h"
 #endif
 namespace oceanbase
 {

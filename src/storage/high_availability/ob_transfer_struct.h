@@ -22,6 +22,8 @@ namespace oceanbase
 namespace storage
 {
 
+class ObLS;
+
 struct ObTXStartTransferOutInfo final
 {
   OB_UNIS_VERSION(1);
@@ -262,36 +264,6 @@ public:
   int set_info(
       const share::ObTransferTaskID &task_id,
       const share::SCN &start_scn);
-  int record_error_diagnose_info_in_replay(
-      const share::ObTransferTaskID &task_id,
-      const share::ObLSID &dest_ls_id,
-      const int result_code,
-      const bool clean_related_info,
-      const share::ObStorageHADiagTaskType type,
-      const share::ObStorageHACostItemName result_msg);
-  int record_error_diagnose_info_in_backfill(
-      const share::SCN &log_sync_scn,
-      const share::ObLSID &dest_ls_id,
-      const int result_code,
-      const ObTabletID &tablet_id,
-      const ObMigrationStatus &migration_status,
-      const share::ObStorageHACostItemName result_msg);
-
-  int record_perf_diagnose_info_in_replay(
-      const share::ObStorageHAPerfDiagParams &params,
-      const int result,
-      const uint64_t timestamp,
-      const int64_t start_ts,
-      const bool is_report);
-
-  int record_perf_diagnose_info_in_backfill(
-      const share::ObStorageHAPerfDiagParams &params,
-      const share::SCN &log_sync_scn,
-      const int result_code,
-      const ObMigrationStatus &migration_status,
-      const uint64_t timestamp,
-      const int64_t start_ts,
-      const bool is_report);
   int get_related_info_task_id(share::ObTransferTaskID &task_id) const;
   int reset(const share::ObTransferTaskID &task_id);
   TO_STRING_KV(K_(task_id), K_(start_scn), K_(start_out_log_replay_num),
@@ -300,20 +272,8 @@ public:
 
 private:
   void reset_();
-  int inc_tx_backfill_retry_num_(const ObTabletID &id, int64_t &retry_num);
   const share::ObTransferTaskID &get_task_id_() const;
   const share::SCN &get_start_scn_() const;
-  int get_replay_retry_num_(
-      const share::ObStorageHADiagTaskType type, const bool inc_retry_num, int64_t &retry_num);
-  int construct_perf_diag_info_(
-      const share::ObStorageHAPerfDiagParams &params,
-      const uint64_t timestamp,
-      const int64_t retry_num,
-      const share::ObTransferTaskID &task_id,
-      const int result,
-      const int64_t start_ts,
-      const bool is_report);
-
 private:
   bool is_inited_;
   share::ObTransferTaskID task_id_;
@@ -359,10 +319,6 @@ public:
   int build_storage_schema_info(
       const share::ObTransferTaskInfo &task_info,
       ObTimeoutCtx &timeout_ctx);
-#ifdef OB_BUILD_SHARED_STORAGE
-  int build_src_reorganization_scn(const share::ObTransferTaskInfo &task_info);
-  int get_src_reorganization_scn(common::ObIArray<share::SCN> &reorganization_scn);
-#endif
   TO_STRING_KV(K_(index), K_(tablet_info_array), K_(child_task_num), K_(total_tablet_count),
       K_(result), K_(data_version), K_(task_id));
 private:
@@ -429,10 +385,20 @@ private:
   uint64_t data_version_;
   common::ObCurTraceId::TraceId task_id_;
   ObTransferTabletInfoMgr mgr_;
-#ifdef OB_BUILD_SHARED_STORAGE
-  common::ObArray<share::SCN> src_reorganization_scn_array_;
-#endif
   DISALLOW_COPY_AND_ASSIGN(ObTransferBuildTabletInfoCtx);
+};
+
+class ObTransferBuildTabletInfoHelper
+{
+public:
+  static int build_tablet_info(
+      ObLS *ls,
+      const share::ObTransferTabletInfo &tablet_info,
+      ObTransferBuildTabletInfoCtx &ctx);
+  static int loop_to_build_tablet_infos(
+      ObLS *ls,
+      common::ObTimeoutCtx &timeout_ctx,
+      ObTransferBuildTabletInfoCtx &ctx);
 };
 
 struct ObTransferLSInfo final

@@ -59,7 +59,9 @@ public:
       rowkey_helper_(),
       micro_scanner_(nullptr),
       is_inited_(false),
-      iter_macro_cnt_(0)
+      iter_macro_cnt_(0),
+      cur_micro_start_row_offset_(0),
+      need_prepare_micro_border_(true)
   {}
 
   virtual ~ObSSTableRowWholeScanner();
@@ -75,7 +77,14 @@ public:
   int switch_query_range(const blocksstable::ObDatumRange &query_range);
   void reset_query_range();
   virtual int set_ignore_shadow_row() override;
+  virtual int get_next_batch_rows(
+      const ObMergeBatchBorder &border,
+      compaction::ObMergeVectorStore &store,
+      bool &reach_border,
+      const common::ObIArrayWrap<uint16_t> *cols = nullptr) override;
+  virtual bool can_batch_scan_to_merge_vector() const;
   int get_first_row_mvcc_info(bool &is_first_row, bool &is_shadow_row) const;
+  bool is_inited() const { return is_inited_; }
   INHERIT_TO_STRING_KV("ObStoreRowIterator", ObStoreRowIterator, K_(query_range),
                        K_(prefetch_macro_cursor), K_(cur_macro_cursor), K_(is_macro_prefetch_end),
                        K(ObArrayWrap<MacroScanHandle>(scan_handles_, PREFETCH_DEPTH)),
@@ -93,6 +102,7 @@ private:
   int prefetch();
   int open_micro_block();
   int open_cg_micro_block();
+  int handle_end_of_micro_block_in_batch(compaction::ObMergeVectorStore &store);
   int get_cs_range(
       const bool is_left_border,
       const bool is_right_border,
@@ -124,6 +134,8 @@ private:
   blocksstable::ObIMicroBlockRowScanner *micro_scanner_;
   bool is_inited_;
   int64_t iter_macro_cnt_;
+  int64_t cur_micro_start_row_offset_;
+  bool need_prepare_micro_border_;
 };
 
 }

@@ -164,7 +164,7 @@ private:
   int add_ready_sstable_into_table_mgr_(
       const share::SCN &max_major_end_scn,
       ObTablet *tablet,
-      common::ObIArray<ObTableHandleV2> &non_backfill_sstable);
+      const common::ObIArray<ObTableHandleV2> &non_backfill_sstable);
 
   int add_sstable_into_handles_(
       ObTableStoreIterator &sstable_iter,
@@ -177,23 +177,6 @@ private:
       share::ObITask *pre_task);
   int wait_memtable_frozen_();
   int init_tablet_handle_();
-
-  //shared_storage
-#ifdef OB_BUILD_SHARED_STORAGE
-  int generate_ss_backfill_tx_task_();
-  int generate_ss_table_backfill_tx_task_(
-      share::ObITask *replace_task,
-      common::ObIArray<ObTableHandleV2> &table_array,
-      share::ObITask *child);
-#endif
-
-  int get_diagnose_support_info_(share::ObLSID &dest_ls_id, share::SCN &backfill_scn) const;
-  void process_transfer_perf_diagnose_(
-      const int64_t timestamp,
-      const int64_t start_ts,
-      const bool is_report,
-      const ObStorageHACostItemName name,
-      const int result) const;
 private:
   bool is_inited_;
   ObBackfillTXCtx *backfill_tx_ctx_;
@@ -220,15 +203,6 @@ public:
 private:
   int check_need_merge_(bool &need_merge);
   int generate_merge_task_();
-
-  int get_diagnose_support_info_(share::ObLSID &dest_ls_id, share::SCN &log_sync_scn) const;
-  void process_transfer_perf_diagnose_(
-      const int64_t timestamp,
-      const int64_t start_ts,
-      const bool is_report,
-      const ObStorageHACostItemType type,
-      const ObStorageHACostItemName name,
-      const int result) const;
 private:
   bool is_inited_;
   ObBackfillTXCtx *backfill_tx_ctx_;
@@ -260,9 +234,6 @@ public:
 private:
   int prepare_merge_ctx_();
   int update_merge_sstable_();
-#ifdef OB_BUILD_SHARED_STORAGE
-  int update_merge_sstable_for_ss_();
-#endif
 
 private:
   bool is_inited_;
@@ -280,6 +251,7 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObTabletTableFinishBackfillTXTask);
 };
 
+class ObFinishBackfillTXTask;
 class ObFinishBackfillTXDag : public ObStorageHADag
 {
 public:
@@ -289,7 +261,7 @@ public:
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
   virtual bool operator == (const share::ObIDag &other) const override;
   virtual uint64_t hash() const override;
-  virtual int create_first_task() override;
+  virtual int create_first_task() override { ObFinishBackfillTXTask *task = nullptr; return create_task(nullptr, task); }
 
   int init(
       const share::ObTaskId &task_id,
@@ -360,9 +332,6 @@ private:
       compaction::ObTabletCrossLSMdsMinorMergeCtx &tablet_merge_ctx);
   int add_sstable_(ObTableHandleV2 &sstable);
   int do_backfill_mds_();
-#ifdef OB_BUILD_SHARED_STORAGE
-  int do_ss_backfill_mds_();
-#endif
 
 private:
   bool is_inited_;

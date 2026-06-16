@@ -10,7 +10,7 @@
 #include "storage/compaction/ob_partition_merger.h"
 #include "storage/column_store/ob_co_merge_ctx.h"
 #include "lib/lock/ob_spin_lock.h"
-#include "storage/column_store/ob_column_oriented_merger.h"
+#include "storage/compaction/vectorization/ob_compaction_batch_merger.h"
 
 namespace oceanbase
 {
@@ -289,6 +289,8 @@ public:
   INHERIT_TO_STRING_KV("ObCOMergeLogReplayTask", ObCOMergeExeTask, K_(start_cg_idx), K_(end_cg_idx));
 protected:
   virtual int process() override;
+private:
+  int init_replayer(ObCOTabletMergeCtx &ctx);
 private:
   ObCOMergeLogReplayer *replayer_;
   int64_t start_cg_idx_;

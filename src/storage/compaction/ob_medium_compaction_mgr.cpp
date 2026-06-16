@@ -376,11 +376,14 @@ int ObTabletMediumCompactionInfoRecorder::prepare_struct_in_lock(
   } else if (buf_len >= common::OB_MAX_LOG_ALLOWED_SIZE) { // need be separated into several clogs
     ret = OB_ERR_DATA_TOO_LONG;
     LOG_WARN("medium info log too long", K(buf_len), LITERAL_K(common::OB_MAX_LOG_ALLOWED_SIZE));
-  } else if (FALSE_IT(allocator_ = allocator)) {
-  } else if (OB_ISNULL(buf = static_cast<char *>(allocator_->alloc(alloc_buf_size)))) {
+  } else if (OB_ISNULL(buf = static_cast<char *>(allocator->alloc(alloc_buf_size)))) {
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("allocate memory failed", K(ret), KPC(medium_info_));
   } else {
+    // Record allocator_ only after alloc succeeds, so that a later failure
+    // does not leave allocator_ pointing to a new allocator while member
+    // pointers still reference buffers from the previous allocator.
+    allocator_ = allocator;
     logcb_ptr_ = new(buf) ObStorageCLogCb(*this);
     alloc_buf_offset += sizeof(ObStorageCLogCb);
     tablet_handle_ptr_ = new (buf + alloc_buf_offset) ObTabletHandle();

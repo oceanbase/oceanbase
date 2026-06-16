@@ -149,6 +149,9 @@ public:
   }
   virtual ObCSColumnHeader::Type get_type() const { return type_; }
   virtual bool can_vectorized() const override { return false; }
+  virtual int decode_vector(
+      const ObColumnCSDecoderCtx &ctx,
+      ObVectorDecodeCtx &vector_ctx) const override;
 };
 
 } // end namespace blocksstable

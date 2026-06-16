@@ -1198,6 +1198,10 @@ DEF_BOOL(_enable_parallel_minor_merge, OB_TENANT_PARAMETER, "True",
          "specifies whether enable parallel minor merge. "
          "Value: True:turned on;  False: turned off",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_BOOL(_enable_minor_micro_reuse, OB_CLUSTER_PARAMETER, "False",
+         "specifies whether enable micro block reuse during minor compaction. "
+         "Value: True: turned on; False: turned off",
+         ObParameterAttr(Section::SSTABLE, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 DEF_BOOL(_enable_adaptive_compaction, OB_TENANT_PARAMETER, "True",
          "specifies whether allow adaptive compaction schedule and information collection",
          ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
@@ -1294,6 +1298,11 @@ DEF_INT(_compaction_prewarm_percentage, OB_TENANT_PARAMETER, "0", "[0,100]",
         "specifies the fixed percentage data to prewarm in compaction"
         "Range: [0, 100] in integer"
         "0 means not use this method, value > 0 means the corresponding percentage of data will be prewarmed",
+        ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
+DEF_INT(_compaction_batch_size, OB_TENANT_PARAMETER, "1", "[1, 1048576]",
+        "specifies the batch row size limit of batch compaction"
+        "Range: [1, 1048576] in integer"
+        "The default value is 256. 1 means not use batch compaction opt",
         ObParameterAttr(Section::TENANT, Source::DEFAULT, EditLevel::DYNAMIC_EFFECTIVE));
 
 DEF_BOOL(_ob_enable_background_thread_auto_adapt, OB_TENANT_PARAMETER, "True",

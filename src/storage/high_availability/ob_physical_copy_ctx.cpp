@@ -61,8 +61,7 @@ ObPhysicalCopyCtx::ObPhysicalCopyCtx()
     ls_id_(),
     tablet_id_(),
     src_info_(),
-    bandwidth_throttle_(nullptr),
-    svr_rpc_proxy_(nullptr),
+    ha_svc_ctx_(),
     is_leader_restore_(false),
     restore_action_(ObTabletRestoreAction::RESTORE_NONE),
     restore_base_info_(nullptr),
@@ -92,8 +91,7 @@ bool ObPhysicalCopyCtx::is_valid() const
   bool_ret = tenant_id_ != OB_INVALID_ID
              && ls_id_.is_valid()
              && tablet_id_.is_valid()
-             && OB_NOT_NULL(bandwidth_throttle_)
-             && OB_NOT_NULL(svr_rpc_proxy_)
+             && ha_svc_ctx_.is_valid()
              && OB_NOT_NULL(ha_dag_)
              && OB_NOT_NULL(sstable_index_builder_)
              && ((need_check_seq_ && ls_rebuild_seq_ >= 0) || !need_check_seq_)
@@ -123,8 +121,7 @@ void ObPhysicalCopyCtx::reset()
   ls_id_.reset();
   tablet_id_.reset();
   src_info_.reset();
-  bandwidth_throttle_ = nullptr;
-  svr_rpc_proxy_ = nullptr;
+  ha_svc_ctx_.reset();
   is_leader_restore_ = false;
   restore_action_= ObTabletRestoreAction::RESTORE_NONE;
   restore_base_info_ = nullptr;

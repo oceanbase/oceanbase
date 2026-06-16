@@ -15,6 +15,11 @@ namespace oceanbase
 namespace blocksstable
 {
 class ObSSTable;
+class ObDatumRowkey;
+}
+namespace compaction
+{
+class ObMergeVectorStore;
 }
 namespace storage
 {
@@ -23,6 +28,44 @@ class ObITable;
 class ObBlockRowStore;
 struct ObSSTableReadHandle;
 struct ObTableIterParam;
+
+// Unified batch boundary for Merge: rowkey comparison or micro row-id.
+struct ObMergeBatchBorder
+{
+  enum class BorderKind : uint8_t {
+    ROWKEY = 0,
+    ROW_ID = 1,
+  };
+  BorderKind kind_;
+  union {
+    const blocksstable::ObDatumRowkey *rowkey_;
+    int64_t row_id_;
+  } border_value_;
+  static OB_INLINE ObMergeBatchBorder make_rowkey(const blocksstable::ObDatumRowkey &key)
+  {
+    ObMergeBatchBorder b;
+    b.kind_ = BorderKind::ROWKEY;
+    b.border_value_.rowkey_ = &key;
+    return b;
+  }
+  static OB_INLINE ObMergeBatchBorder make_row_id(const int64_t row_id)
+  {
+    ObMergeBatchBorder b;
+    b.kind_ = BorderKind::ROW_ID;
+    b.border_value_.row_id_ = row_id;
+    return b;
+  }
+  bool is_valid() const
+  {
+    return (BorderKind::ROWKEY == kind_ && OB_NOT_NULL(border_value_.rowkey_) && border_value_.rowkey_->is_valid()) ||
+           (BorderKind::ROW_ID == kind_ && border_value_.row_id_ >= 0);
+  }
+  OB_INLINE bool is_rowkey() const { return BorderKind::ROWKEY == kind_; }
+  OB_INLINE bool is_row_id() const { return BorderKind::ROW_ID == kind_; }
+  OB_INLINE const blocksstable::ObDatumRowkey &get_rowkey() const { return *border_value_.rowkey_; }
+  OB_INLINE int64_t get_row_id() const { return border_value_.row_id_; }
+  int64_t to_string(char *buf, const int64_t buf_len) const;
+};
 
 class ObIStoreRowIterator
 {
@@ -84,6 +127,15 @@ public:
     return OB_NOT_SUPPORTED;
   }
   virtual int set_ignore_shadow_row() { return OB_NOT_SUPPORTED; }
+  virtual int get_next_batch_rows(
+      const ObMergeBatchBorder &border,
+      compaction::ObMergeVectorStore &store,
+      bool &reach_border,
+      const common::ObIArrayWrap<uint16_t> *cols = nullptr)
+  {
+    UNUSEDx(border, store, reach_border, cols);
+    return OB_NOT_SUPPORTED;
+  }
   virtual bool can_blockscan() const
   {
     return false;
@@ -92,6 +144,7 @@ public:
   {
     return false;
   }
+  virtual bool can_batch_scan_to_merge_vector() const { return false; }
   virtual int get_next_row(const blocksstable::ObDatumRow *&row);
   virtual int get_next_rows()
   {

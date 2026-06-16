@@ -158,17 +158,21 @@ public:
       const blocksstable::ObDatumRow &row,
       ObICompactionFilter::ObFilterRet &filter_ret);
   int get_block_op_from_filter(const blocksstable::ObMacroBlockDesc &macro_desc, ObBlockOp &block_op);
+  int get_block_op_from_filter(const blocksstable::ObMicroBlock &micro_block, ObBlockOp &block_op);
+  template <typename T>
   int get_block_op_from_filter_for_minor(
-    const blocksstable::ObMacroBlockDesc &macro_desc,
+    const T &block,
     const ObMinorRowkeyOutputState &rowkey_state,
     ObBlockOp &block_op);
-  int get_block_op_from_filter(const blocksstable::ObMicroBlock &micro_block, ObBlockOp &block_op);
   void inc_filter_row_cnt() { filter_statistics_.row_inc(ObICompactionFilter::FILTER_RET_REMOVE); }
   void inc_macro_open_cnt() { filter_statistics_.macro_inc(ObBlockOp::OP_OPEN, 0/*useless*/); }
   TO_STRING_KV(KPC_(compaction_filter), K_(filter_statistics), KPC_(filter_col_idxs));
 private:
   int inner_get_block_op_from_filter(
     const blocksstable::ObMacroBlockDesc &macro_desc,
+    ObBlockOp &block_op);
+  int inner_get_block_op_from_filter(
+    const blocksstable::ObMicroBlock &micro_block,
     ObBlockOp &block_op);
 public:
   ObICompactionFilter *compaction_filter_;

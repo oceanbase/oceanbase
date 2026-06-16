@@ -48,7 +48,7 @@ private:
 struct ObIHADagNetCtx
 {
 public:
-  enum DagNetCtxType {
+  enum DagNetCtxType { //FARM COMPAT WHITELIST
     LS_PREPARE_MIGRATION = 0,
     LS_MIGRATION = 1,
     LS_COMPLETE_MIGRATION = 2,
@@ -57,11 +57,6 @@ public:
     BACKFILL_TX = 5,
     TRANSFER_BACKFILL_TX = 6,
     REBUILD_TABLET = 7,
-    SS_LS_MIGRATION = 8,
-    SS_TRANSFER_BACKFILL_TX = 9,
-    SS_MACRO_COPY = 10,
-    SS_MACRO_DELETE = 11,
-    SS_LS_RESTORE = 12,
     MAX
   };
 
@@ -182,13 +177,59 @@ public:
       ObTabletHandle &tablet_handle,
       bool &need_migrate);
 
-#ifdef OB_BUILD_SHARED_STORAGE
-  static int check_self_is_valid_member_with_log_service(
-      const share::ObLSID &ls_id,
-      bool &is_valid_member);
-  static int inc_config_version_with_log_service(
-      const share::ObLSID &ls_id);
-#endif
+  // Alloc DAG with priority, init it with forwarded args, insert it between parent_dag
+  // and child_dag in the DAG dependency chain, and add it to the tenant DAG scheduler (MTL).
+  // On failure the DAG is freed and the pointer is set to nullptr.
+  template <typename DAG, typename... Args>
+  static int alloc_and_schedule_dag(
+      share::ObIDagNet *dag_net,
+      share::ObIDag *parent_dag,
+      share::ObIDag *child_dag,
+      const share::ObDagPrio::ObDagPrioEnum prio,
+      const bool emergency,
+      DAG *&dag,
+      Args&&... init_args);
+
+  // Alloc a standalone DAG (no parent, no child), init it with forwarded args, and add it
+  // to the tenant DAG scheduler (MTL).
+  template <typename DAG, typename... Args>
+  static int alloc_and_schedule_single_dag(
+      share::ObIDagNet *dag_net,
+      const share::ObDagPrio::ObDagPrioEnum prio,
+      const bool emergency,
+      DAG *&dag,
+      Args&&... init_args);
+
+  // Alloc two DAGs (first_dag, second_dag) with priority, init both with forwarded args,
+  // set up the chain: parent_dag -> first_dag -> second_dag, create first tasks for both,
+  // and schedule them (second_dag first, then first_dag) with proper error handling.
+  // On failure both DAGs are freed and pointers set to nullptr.
+  template <typename FIRST_DAG, typename SECOND_DAG, typename... Args>
+  static int alloc_and_schedule_pair_dags(
+      const share::ObDagPrio::ObDagPrioEnum prio,
+      share::ObIDag *parent_dag,
+      FIRST_DAG *&first_dag,
+      SECOND_DAG *&second_dag,
+      Args&&... init_args);
+
+  // Alloc a task from dag, init it with forwarded args, set up parent-child chain
+  // (parent_task -> new_task -> child_task), and add it to the dag.
+  // parent_task and child_task can be nullptr (skipped if null).
+  template <typename TaskType, typename... Args>
+  static int alloc_and_add_task(
+      share::ObIDag *dag,
+      share::ObITask *parent_task,
+      share::ObITask *child_task,
+      TaskType *&task,
+      Args&&... init_args);
+
+  // Alloc a standalone task from dag (no parent, no child), init it with
+  // forwarded args, and add it to the dag.
+  template <typename TaskType, typename... Args>
+  static int alloc_and_add_single_task(
+      share::ObIDag *dag,
+      TaskType *&task,
+      Args&&... init_args);
 
 private:
   static int inner_check_self_is_valid_member_(
@@ -270,6 +311,159 @@ public:
 private:
   static int cancel_migration_task_(const share::ObTaskId &task_id, const ObLSHandle &ls_handle, bool &is_exist);
 };
+
+template <typename DAG, typename... Args>
+int ObStorageHADagUtils::alloc_and_schedule_dag(
+    share::ObIDagNet *dag_net,
+    share::ObIDag *parent_dag,
+    share::ObIDag *child_dag,
+    const share::ObDagPrio::ObDagPrioEnum prio,
+    const bool emergency,
+    DAG *&dag,
+    Args&&... init_args)
+{
+  int ret = OB_SUCCESS;
+  dag = nullptr;
+  share::ObTenantDagScheduler *scheduler = MTL(share::ObTenantDagScheduler*);
+  if (OB_ISNULL(scheduler) || OB_ISNULL(dag_net)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument for alloc_and_schedule_dag", K(ret),
+        KP(scheduler), KP(dag_net), KP(parent_dag), KP(child_dag));
+  } else if (OB_FAIL(scheduler->alloc_dag(dag, true/*is_ha_dag*/))) {
+    STORAGE_LOG(WARN, "failed to alloc dag with priority", K(ret), K(prio));
+  } else if (ObDagPrio::is_valid_prio(prio) && FALSE_IT(dag->set_priority(prio))) {
+  } else if (OB_FAIL(dag->init(std::forward<Args>(init_args)...))) {
+    STORAGE_LOG(WARN, "failed to init dag", K(ret));
+  } else if (OB_FAIL(dag_net->add_dag_into_dag_net(*dag))) {
+    STORAGE_LOG(WARN, "failed to add dag into dag net", K(ret));
+  } else if (OB_NOT_NULL(parent_dag) && OB_FAIL(parent_dag->add_child_without_inheritance(*dag))) {
+    STORAGE_LOG(WARN, "failed to add child dag to parent dag", K(ret), KP(parent_dag));
+  } else if (OB_FAIL(dag->create_first_task())) {
+    STORAGE_LOG(WARN, "failed to create first task", K(ret));
+  } else if (OB_NOT_NULL(child_dag) && OB_FAIL(dag->add_child_without_inheritance(*child_dag))) {
+    STORAGE_LOG(WARN, "failed to add child dag", K(ret), KP(child_dag));
+  } else if (OB_FAIL(scheduler->add_dag(dag, emergency))) {
+    STORAGE_LOG(WARN, "failed to add dag to scheduler", K(ret), KPC(dag));
+    if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
+      ret = OB_EAGAIN;
+    }
+  }
+  if (OB_FAIL(ret) && OB_NOT_NULL(dag)) {
+    scheduler->free_dag(*dag);
+    dag = nullptr;
+  }
+  return ret;
+}
+
+template <typename DAG, typename... Args>
+int ObStorageHADagUtils::alloc_and_schedule_single_dag(
+    share::ObIDagNet *dag_net,
+    const share::ObDagPrio::ObDagPrioEnum prio,
+    const bool emergency,
+    DAG *&dag,
+    Args&&... init_args)
+{
+  return alloc_and_schedule_dag(dag_net, nullptr /*parent_dag*/, nullptr /*child_dag*/,
+                                prio, emergency, dag,
+                                std::forward<Args>(init_args)...);
+}
+
+template <typename FIRST_DAG, typename SECOND_DAG, typename... Args>
+int ObStorageHADagUtils::alloc_and_schedule_pair_dags(
+    const share::ObDagPrio::ObDagPrioEnum prio,
+    share::ObIDag *parent_dag,
+    FIRST_DAG *&first_dag,
+    SECOND_DAG *&second_dag,
+    Args&&... init_args)
+{
+  int ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS;
+  first_dag = nullptr;
+  second_dag = nullptr;
+  share::ObTenantDagScheduler *scheduler = MTL(share::ObTenantDagScheduler*);
+  if (OB_ISNULL(scheduler)) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "failed to get ObTenantDagScheduler from MTL", K(ret));
+  } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, first_dag))) {
+    STORAGE_LOG(WARN, "failed to alloc first dag", K(ret));
+  } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, second_dag))) {
+    STORAGE_LOG(WARN, "failed to alloc second dag", K(ret));
+  } else if (OB_FAIL(first_dag->init(std::forward<Args>(init_args)...))) {
+    STORAGE_LOG(WARN, "failed to init first dag", K(ret));
+  } else if (OB_FAIL(second_dag->init(std::forward<Args>(init_args)...))) {
+    STORAGE_LOG(WARN, "failed to init second dag", K(ret));
+  } else if (OB_NOT_NULL(parent_dag) && OB_FAIL(parent_dag->add_child(*first_dag))) {
+    STORAGE_LOG(WARN, "failed to add first dag as child of parent", K(ret), KP(parent_dag));
+  } else if (OB_FAIL(first_dag->create_first_task())) {
+    STORAGE_LOG(WARN, "failed to create first task for first dag", K(ret));
+  } else if (OB_FAIL(first_dag->add_child(*second_dag))) {
+    STORAGE_LOG(WARN, "failed to add second dag as child of first dag", K(ret));
+  } else if (OB_FAIL(second_dag->create_first_task())) {
+    STORAGE_LOG(WARN, "failed to create first task for second dag", K(ret));
+  } else if (OB_FAIL(scheduler->add_dag(second_dag))) {
+    STORAGE_LOG(WARN, "failed to add second dag to scheduler", K(ret), KPC(second_dag));
+    if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
+      ret = OB_EAGAIN;
+    }
+  } else if (OB_FAIL(scheduler->add_dag(first_dag))) {
+    STORAGE_LOG(WARN, "failed to add first dag to scheduler", K(ret), KPC(first_dag));
+    if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
+      ret = OB_EAGAIN;
+    }
+    if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(second_dag))) {
+      STORAGE_LOG(WARN, "failed to cancel second dag", K(tmp_ret), KPC(second_dag));
+    } else {
+      second_dag = nullptr;
+    }
+  } else {
+    STORAGE_LOG(INFO, "succeed to schedule two dags", KPC(first_dag), KPC(second_dag));
+    first_dag = nullptr;
+    second_dag = nullptr;
+  }
+  if (OB_FAIL(ret)) {
+    if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(second_dag)) {
+      scheduler->free_dag(*second_dag);
+      second_dag = nullptr;
+    }
+    if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(first_dag)) {
+      scheduler->free_dag(*first_dag);
+      first_dag = nullptr;
+    }
+  }
+  return ret;
+}
+
+template <typename TaskType, typename... Args>
+int ObStorageHADagUtils::alloc_and_add_task(
+    share::ObIDag *dag,
+    share::ObITask *parent_task,
+    share::ObITask *child_task,
+    TaskType *&task,
+    Args&&... init_args)
+{
+  int ret = OB_SUCCESS;
+  task = nullptr;
+  if (OB_ISNULL(dag)) {
+    ret = OB_INVALID_ARGUMENT;
+    STORAGE_LOG(WARN, "invalid argument for alloc_and_add_task", K(ret), KP(dag));
+  } else if (OB_FAIL(dag->create_task(parent_task, task, std::forward<Args>(init_args)...))) {
+    STORAGE_LOG(WARN, "failed to create task", K(ret));
+  } else if (OB_NOT_NULL(child_task) && OB_FAIL(task->add_child(*child_task))) {
+    STORAGE_LOG(WARN, "failed to add child task", K(ret), KP(child_task));
+  }
+  return ret;
+}
+
+template <typename TaskType, typename... Args>
+int ObStorageHADagUtils::alloc_and_add_single_task(
+    share::ObIDag *dag,
+    TaskType *&task,
+    Args&&... init_args)
+{
+  return alloc_and_add_task(dag, nullptr /*parent*/, nullptr /*child*/, task,
+                            std::forward<Args>(init_args)...);
+}
+
 }
 }
 #endif

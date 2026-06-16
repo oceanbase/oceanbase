@@ -1404,6 +1404,48 @@ TEST_F(TestChooseMigrationSourcePolicy, c_replica_have_other)
   EXPECT_EQ(expect_addr, src_info.src_addr_);
 }
 
+// test choose_src_to_advance_checkpoint_by_location: must_choose_c_replica with paxos F addr
+// in failed_src_infos that is NOT in learner_list -> get_learner_by_addr returns
+// OB_ENTRY_NOT_EXIST, loop must skip and keep searching for a C replica.
+// dst addr: 192.168.1.7:1234 (idc1, region1, type -> C)
+// failed_src_infos:
+//   192.168.1.1:1234 : idc1, region1, paxos F (in member_list_, NOT in learner_list_)
+//   192.168.1.4:1234 : idc1, region2, C learner (in learner_list_)
+// expected: paxos F triggers OB_ENTRY_NOT_EXIST branch and is skipped;
+//           chosen_src_addr -> 192.168.1.4:1234
+TEST_F(TestChooseMigrationSourcePolicy, choose_src_to_advance_ckpt_skip_paxos_f)
+{
+  common::ObAddr paxos_f_addr;
+  common::ObAddr c_addr;
+  EXPECT_EQ(OB_SUCCESS, mock_addr("192.168.1.1:1234", paxos_f_addr));
+  EXPECT_EQ(OB_SUCCESS, mock_addr("192.168.1.4:1234", c_addr));
+
+  ObLSMemberListInfo member_list_info;
+  member_list_info.leader_addr_ = paxos_f_addr;
+  common::ObMember f_member(paxos_f_addr, 0);
+  EXPECT_EQ(OB_SUCCESS, member_list_info.member_list_.push_back(f_member));
+  EXPECT_EQ(OB_SUCCESS, add_c_to_learner_list(c_addr, member_list_info.learner_list_));
+
+  ObMigrationOpArg mock_arg;
+  EXPECT_EQ(OB_SUCCESS, mock_migrate_arg_for_c_type(mock_arg));
+
+  common::ObArray<ObMigrationChooseSourceInfo::ChooseSourceInfo> failed_src_infos;
+  ObMigrationChooseSourceInfo::ChooseSourceInfo info_f;
+  info_f.addr_ = paxos_f_addr;
+  EXPECT_EQ(OB_SUCCESS, failed_src_infos.push_back(info_f));
+  ObMigrationChooseSourceInfo::ChooseSourceInfo info_c;
+  info_c.addr_ = c_addr;
+  EXPECT_EQ(OB_SUCCESS, failed_src_infos.push_back(info_c));
+
+  EXPECT_EQ(OB_SUCCESS, mock_locality_manager(MOCKLOCALITY::IDC_MODE_IDC_LEADER, locality_manager_));
+  GCTX.locality_manager_ = &locality_manager_;
+
+  common::ObAddr chosen_src_addr;
+  EXPECT_EQ(OB_SUCCESS, ObStorageHAChooseSrcHelper::choose_src_to_advance_checkpoint_by_location(
+      member_list_info, failed_src_infos, mock_arg, true /*must_choose_c_replica*/, chosen_src_addr));
+  EXPECT_EQ(c_addr, chosen_src_addr);
+}
+
 }
 }
 

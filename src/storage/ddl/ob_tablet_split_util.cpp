@@ -19,7 +19,6 @@
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
 #include "close_modules/shared_storage/storage/incremental/ob_ss_minor_compaction.h"
 #include "storage/incremental/ob_shared_meta_service.h"
-#include "storage/compaction_v2/ob_ss_compact_helper.h"
 #include "storage/incremental/ob_inc_ss_macro_seq_define.h"
 #endif
 
@@ -1810,23 +1809,6 @@ int ObSSDataSplitHelper::persist_majors_gc_rely_info(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid arg", K(ret), K(ls_id), K(dst_tablet_ids), K(transfer_scn),
         K(generated_majors_cnt), K(max_majors_snapshot), K(parallel_cnt_of_each_sstable));
-  } else {
-    const int64_t gc_rely_parallel =
-        parallel_cnt_of_each_sstable * generated_majors_cnt /*total steps of the parallel child tasks*/
-      + ObGetMacroSeqStage::GET_NEW_ROOT_MACRO_SEQ * generated_majors_cnt; /*total steps of IndexTree*/
-    for (int64_t i = 0; OB_SUCC(ret) && i < dst_tablet_ids.count(); i++) {
-      const ObTabletID &tablet_id = dst_tablet_ids.at(i);
-      if (OB_FAIL(share::SSCompactHelper::start_major_task(ls_id,
-                                                           tablet_id,
-                                                           transfer_scn,
-                                                           max_majors_snapshot,
-                                                           0, /*start seq*/
-                                                           gc_rely_parallel,
-                                                           1/*cg_cnt*/))) {
-        LOG_WARN("write major gc info fail", K(ret), K(tablet_id));
-      }
-      // TODO YIREN, optimization, add local tablet cache or check firstly.
-    }
   }
   return ret;
 }

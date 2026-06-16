@@ -7,7 +7,7 @@
 #define OB_ALL_VIRTUAL_STORAGE_HA_ERROR_DIAGNOSE_H_
 #include "share/ob_virtual_table_scanner_iterator.h"
 #include "share/ob_storage_ha_diagnose_struct.h"
-#include "storage/high_availability/ob_storage_ha_diagnose_mgr.h"
+#include "share/storage/ob_ha_inflight_diag.h"
 #include "observer/omt/ob_multi_tenant_operator.h"
 
 namespace oceanbase
@@ -36,11 +36,8 @@ public:
   };
   ObAllVirtualStorageHAErrorDiagnose();
   virtual ~ObAllVirtualStorageHAErrorDiagnose();
-  int init();
   virtual int inner_get_next_row(common::ObNewRow *&row);
   virtual void reset();
-protected:
-  int get_info_from_type_(ObStorageHADiagInfo *&info, ObTransferErrorDiagInfo &transfer_err_diag);
 
 private:
   // Filter out tenants that need to be processed
@@ -52,10 +49,9 @@ private:
 
 private:
   char ip_buf_[common::OB_IP_STR_BUFF];
-  ObStorageHADiagInfo *info_;
-  ObStorageHADiagIterator iter_;
   char info_str_[common::OB_DIAGNOSE_INFO_LENGTH];
   char task_id_[common::OB_MAX_TRACE_ID_BUFFER_SIZE];
+  share::ObHAInflightVirtualIter inflight_iter_;
   DISALLOW_COPY_AND_ASSIGN(ObAllVirtualStorageHAErrorDiagnose);
 };
 

@@ -300,38 +300,7 @@ int ObCompactionFilterHandle::inner_get_block_op_from_filter(
   return ret;
 }
 
-int ObCompactionFilterHandle::get_block_op_from_filter_for_minor(
-  const blocksstable::ObMacroBlockDesc &macro_desc,
-  const ObMinorRowkeyOutputState &rowkey_state,
-  ObBlockOp &block_op)
-{
-  int ret = OB_SUCCESS;
-  ObBlockOp orig_block_op;
-  ObBlockOp new_block_op;
-  if (OB_SUCC(inner_get_block_op_from_filter(macro_desc, orig_block_op))) {
-    new_block_op = orig_block_op;
-    if (new_block_op.is_filter()) {
-      if (rowkey_state.have_rowkey_output_row()) {
-        new_block_op.set_open();
-      }
-    } else if (new_block_op.is_none() && rowkey_state.is_recycling()) {
-      new_block_op.set_open();
-    }
-    if (OB_UNLIKELY(!new_block_op.is_valid())) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("Unexpected block op", K(ret), K(new_block_op));
-    } else {
-      block_op = new_block_op;
-      LOG_TRACE("[COMPACTION FILTER] get_block_op_from_filter_for_minor", K(block_op), K(orig_block_op), K(new_block_op), K(rowkey_state), K(macro_desc));
-      filter_statistics_.macro_inc(
-        block_op.block_op_,
-        macro_desc.row_count_);
-    }
-  }
-  return ret;
-}
-
-int ObCompactionFilterHandle::get_block_op_from_filter(
+int ObCompactionFilterHandle::inner_get_block_op_from_filter(
   const ObMicroBlock &micro_block,
   ObBlockOp &filter_op)
 {
@@ -357,9 +326,6 @@ int ObCompactionFilterHandle::get_block_op_from_filter(
     } else if (OB_FAIL(compaction_filter_->get_filter_op(agg_row_cached_reader, filter_op))) {
       LOG_WARN("Failed to get filter op", K(ret), K(micro_block));
     } else {
-      filter_statistics_.micro_inc(
-        filter_op.block_op_,
-        micro_block.header_.row_count_);
       LOG_INFO("[COMPACTION FILTER] get_block_op_from_filter micro", K(filter_op), K(agg_row_cached_reader),
         K(micro_block), K(filter_statistics_));
     }
@@ -367,7 +333,65 @@ int ObCompactionFilterHandle::get_block_op_from_filter(
   return ret;
 }
 
+int ObCompactionFilterHandle::get_block_op_from_filter(
+  const ObMicroBlock &micro_block,
+  ObBlockOp &block_op)
+{
+  int ret = OB_SUCCESS;
+  if (OB_SUCC(inner_get_block_op_from_filter(micro_block, block_op))) {
+    filter_statistics_.micro_inc(
+      block_op.block_op_,
+      micro_block.header_.row_count_);
+  }
+  return ret;
+}
 
+template <typename T>
+int ObCompactionFilterHandle::get_block_op_from_filter_for_minor(
+  const T &block,
+  const ObMinorRowkeyOutputState &rowkey_state,
+  ObBlockOp &block_op)
+{
+  int ret = OB_SUCCESS;
+  ObBlockOp orig_block_op;
+  ObBlockOp new_block_op;
+  if (OB_SUCC(inner_get_block_op_from_filter(block, orig_block_op))) {
+    new_block_op = orig_block_op;
+    if (new_block_op.is_filter()) {
+      if (rowkey_state.have_rowkey_output_row()) {
+        new_block_op.set_open();
+      }
+    } else if (new_block_op.is_none() && rowkey_state.is_recycling()) {
+      new_block_op.set_open();
+    }
+    if (OB_UNLIKELY(!new_block_op.is_valid())) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected block op", K(ret), K(new_block_op));
+    } else {
+      block_op = new_block_op;
+      if constexpr (std::is_same<T, ObMacroBlockDesc>::value) {
+        filter_statistics_.macro_inc(block_op.block_op_, block.row_count_);
+      } else if constexpr (std::is_same<T, ObMicroBlock>::value) {
+        filter_statistics_.micro_inc(block_op.block_op_, block.header_.row_count_);
+      }
+      LOG_TRACE("[COMPACTION FILTER] get_block_op_from_filter_for_minor",
+        K(block_op), K(orig_block_op), K(new_block_op), K(rowkey_state), K(block),
+        K(filter_statistics_));
+    }
+  }
+  return ret;
+}
+
+// Explicit template instantiation
+template int ObCompactionFilterHandle::get_block_op_from_filter_for_minor(
+  const ObMacroBlockDesc &,
+  const ObMinorRowkeyOutputState &,
+  ObBlockOp &);
+
+template int ObCompactionFilterHandle::get_block_op_from_filter_for_minor(
+  const ObMicroBlock &,
+  const ObMinorRowkeyOutputState &,
+  ObBlockOp &);
 
 } // namespace compaction
 } // namespace oceanbase

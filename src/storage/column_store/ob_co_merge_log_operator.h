@@ -26,7 +26,7 @@ public:
   virtual ~ObCOMergeLogFileWriter() { reset(); }
   int init(ObIAllocator &allocator, ObBasicTabletMergeCtx &ctx, const int64_t idx);
   void reset();
-  int write_merge_log(const ObMergeLog &log, const blocksstable::ObDatumRow *full_row);
+  int write_merge_log(const ObMergeLog &log, const ObMergeVectorStore *vector_store, const blocksstable::ObDatumRow *full_row);
   int close();
   TO_STRING_KV(K_(is_inited), K_(cg_count));
 private:
@@ -60,7 +60,7 @@ public:
   virtual ~ObCOMergeLogFileReader() { reset(); };
   virtual int init(ObBasicTabletMergeCtx &ctx, const int64_t idx, const int64_t cg_idx) override;
   virtual void reset() override;
-  virtual int get_next_log(ObMergeLog &mergelog, const blocksstable::ObDatumRow *&row) override;
+  virtual int get_next_log(ObMergeLog &mergelog, const ObMergeVectorStore *&vector_store, const blocksstable::ObDatumRow *&row) override;
   virtual int close() override { return OB_SUCCESS; }
   VIRTUAL_TO_STRING_KV(K_(cg_idx), K_(merge_log), K_(curr_row), K_(log_buffer_reader), K_(row_buffer_reader));
 private:

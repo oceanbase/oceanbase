@@ -670,16 +670,19 @@ private:
         LOG_WARN_RET(tmp_ret, "failed to delete suspect info",                 \
                      K(tmp_ret), K(dag_hash));                                 \
       }                                                                        \
-    } else if (OB_TMP_FAIL(MTL(compaction::ObDiagnoseTabletMgr *)              \
-                               ->delete_diagnose_tablet(ls_id, tablet_id,      \
-                                                        diagnose_type))) {     \
+    }                                                                          \
+    /* diagnose tablet map must be cleaned even when suspect info is already   \
+       gone (OB_HASH_NOT_EXIST), otherwise zombie entries linger */            \
+    if (OB_TMP_FAIL(MTL(compaction::ObDiagnoseTabletMgr *)                     \
+                        ->delete_diagnose_tablet(ls_id, tablet_id,             \
+                                                 diagnose_type))) {            \
       if (OB_HASH_NOT_EXIST != tmp_ret) {                                      \
         LOG_WARN_RET(tmp_ret, "failed to delete diagnose tablet", K(tmp_ret),  \
-                  K(ls_id), K(tablet_id));                                     \
+                     K(ls_id), K(tablet_id));                                  \
       }                                                                        \
     } else {                                                                   \
       STORAGE_LOG(DEBUG, "success to delete suspect info", K(tmp_ret),         \
-                  K(dag_hash), K(diagnose_type));                                                \
+                  K(dag_hash), K(diagnose_type));                              \
     }                                                                          \
   }
 

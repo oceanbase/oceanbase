@@ -159,7 +159,7 @@ void TestSchemaPrepare::add_rowkey_and_each_column_group(
 
   ASSERT_EQ(OB_SUCCESS, table_schema.get_rowkey_column_ids(rowkey_col_ids));
   rowkey_column_count = rowkey_col_ids.count();
-  ObRowStoreType row_store_type = FLAT_ROW_STORE;
+  ObRowStoreType row_store_type = CS_ENCODING_ROW_STORE;
 
   //add rowkey_cg_schema
   share::schema::ObColumnGroupSchema cg_1;

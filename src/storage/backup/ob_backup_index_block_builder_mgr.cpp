@@ -8,9 +8,6 @@
 #include "storage/backup/ob_backup_index_block_builder_mgr.h"
 #include "storage/tablet/ob_tablet.h"
 #include "storage/tablet/ob_mds_schema_helper.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "share/compaction/ob_shared_storage_compaction_util.h"
-#endif
 
 using namespace oceanbase::lib;
 using namespace oceanbase::common;
@@ -177,11 +174,6 @@ int ObBackupTaskIndexRebuilderMgr::prepare_index_block_rebuilder_(
   blocksstable::ObMacroSeqParam macro_seq_param;
   macro_seq_param.start_ = 0;
   macro_seq_param.seq_type_ = blocksstable::ObMacroSeqParam::SeqType::SEQ_TYPE_INC;
-#ifdef OB_BUILD_SHARED_STORAGE
-  if (GCTX.is_shared_storage_mode() && OB_NOT_NULL(task_idx) && *task_idx > 0) {
-    macro_seq_param.start_ += (*task_idx) * oceanbase::compaction::MACRO_STEP_SIZE;
-  }
-#endif
   void *buf = NULL;
   if (!item.is_valid() || 2 != device_handle_array.count()) {
     ret = OB_INVALID_ARGUMENT;
@@ -391,9 +383,7 @@ int ObBackupTabletIndexBlockBuilderMgr::open_sstable_index_builders_without_lock
           LOG_WARN("table should not be null", K(ret));
         } else {
           const ObITable::TableKey &table_key = sstable_ptr->get_key();
-          if (GCTX.is_shared_storage_mode() && table_key.is_ddl_dump_sstable()) {
-            // do nothing
-          } else if (OB_FAIL(mgr->add_sstable_index_builder(ls_id_, tablet_handle, table_key, sstable_ptr))) {
+          if (OB_FAIL(mgr->add_sstable_index_builder(ls_id_, tablet_handle, table_key, sstable_ptr))) {
             LOG_WARN("failed to add sstable index builder", K(ret), K(tablet_id), K(table_key), KPC(sstable_ptr));
           } else {
             LOG_INFO("[INDEX_BUILDER_MGR] open sstable index builder", K(tablet_id), K(table_key));

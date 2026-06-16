@@ -20,7 +20,9 @@ namespace oceanbase
 {
 namespace storage
 {
-class ObLSCompleteMigrationParam;
+struct ObMigrationDagNetInitParam;
+struct ObLSPrepareMigrationParam;
+struct ObLSCompleteMigrationParam;
 
 /*
  * Migration Handler State Machine:
@@ -60,13 +62,13 @@ public:
   static const char *get_status_str(const ObLSMigrationHandlerStatus &status);
 };
 
-struct ObLSMigrationTask
+struct ObLSMigrationTask final
 {
   ObLSMigrationTask();
-  virtual ~ObLSMigrationTask();
+  ~ObLSMigrationTask() = default;
   void reset();
   bool is_valid() const;
-  VIRTUAL_TO_STRING_KV(
+  TO_STRING_KV(
       K_(arg),
       K_(task_id));
 
@@ -105,12 +107,6 @@ public:
   int update_advance_ls_checkpoint_scn(const share::SCN &scn);
   int advance_ls_checkpoint();
 
-#ifdef OB_BUILD_SHARED_STORAGE
-  int notify_switch_to_leader_and_wait_replace_complete(const int64_t new_proposal_id);
-  int wait_notified_switch_to_leader(
-      const ObTimeoutCtx &timeout_ctx,
-      int64_t &leader_proposal_id);
-#endif
 private:
   void reuse_();
   void wakeup_();
@@ -120,9 +116,6 @@ private:
   bool is_migration_failed_() const;
   int get_ls_migration_task_(ObLSMigrationTask &task);
   int check_task_exist_(bool &is_exist);
-  int handle_failed_task_(
-      const ObLSMigrationHandlerStatus &status,
-      bool &need_generate_dag_net);
   int handle_current_task_(
       bool &need_wait,
       int32_t &task_result);
@@ -135,9 +128,19 @@ private:
   int do_complete_ls_status_();
   int do_finish_status_();
   int do_wait_status_();
+  int get_valid_migration_task_(ObLSMigrationTask &task);
   int generate_build_ls_dag_net_();
   int generate_prepare_ls_dag_net_();
   int generate_complete_ls_dag_net_();
+  void fill_build_ls_dag_net_param_(
+      const ObLSMigrationTask &task,
+      ObMigrationDagNetInitParam &param);
+  void fill_prepare_ls_dag_net_param_(
+      const ObLSMigrationTask &task,
+      ObLSPrepareMigrationParam &param);
+  void fill_complete_ls_dag_net_param_(
+      const ObLSMigrationTask &task,
+      ObLSCompleteMigrationParam &param);
   int report_result_();
   int report_meta_table_();
   int report_to_disaster_recovery_();
@@ -158,15 +161,19 @@ private:
   int check_need_to_abort_(bool &need_to_abort);
   void get_advance_checkpoint_info_(int64_t &last_ts, share::SCN &scn);
   void update_last_advance_checkpoint_ts_();
+  template<typename DagNetType, typename ParamType>
+  int generate_dag_net_(const bool check_cancel,
+                        const char *errsim_event,
+                        const common::ObDebugSyncPoint errsim_sync_point,
+                        void (ObLSMigrationHandler::*fill_param_fn)(
+                            const ObLSMigrationTask &,
+                            ParamType &));
   template<typename DagNetType>
   int schedule_dag_net_(const share::ObIDagInitParam *param, const bool check_cancel);
 private:
   bool is_inited_;
   ObLS *ls_;
-  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
-  obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
-  storage::ObStorageRpc *storage_rpc_;
-  common::ObMySQLProxy *sql_proxy_;
+  ObStorageHAServiceCtx ha_svc_ctx_;
 
   int64_t start_ts_;
   int64_t finish_ts_;
@@ -184,11 +191,6 @@ private:
   share::SCN advance_checkpoint_scn_; // won't clear when handler is reused
   ObLSMigrationCostStatic cost_static_;
 
-#ifdef OB_BUILD_SHARED_STORAGE
-  common::ObThreadCond switch_leader_cond_;
-  int64_t switch_leader_cnt_;
-  int64_t leader_proposal_id_;
-#endif
   DISALLOW_COPY_AND_ASSIGN(ObLSMigrationHandler);
 };
 

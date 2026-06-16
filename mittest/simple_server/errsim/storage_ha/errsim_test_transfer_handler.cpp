@@ -296,7 +296,7 @@ int TestTransferHandler::wait_error_happen(const ObTransferTask &task)
       LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(ls_id));
     } else {
       while (OB_SUCC(ret)) {
-        if (ls->get_transfer_handler()->retry_count_ > 0) {
+        if (ls->get_transfer_handler()->diag_ctx_.get_retry_count() > 0) {
           break;
         } else if (ObTimeUtil::current_time() - current_time >= MAX_WAIT_TIME) {
           ret = OB_TIMEOUT;

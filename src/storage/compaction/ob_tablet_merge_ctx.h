@@ -14,9 +14,6 @@
 #include "storage/ob_tenant_tablet_stat_mgr.h"
 #include "storage/compaction/ob_tablet_merge_info.h"
 #include "storage/compaction/ob_basic_tablet_merge_ctx.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/incremental/ob_ls_inc_sstable_uploader.h"
-#endif
 
 namespace oceanbase
 {

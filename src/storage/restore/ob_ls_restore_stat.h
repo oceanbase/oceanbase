@@ -9,9 +9,6 @@
 #include "share/restore/ob_restore_persist_helper.h"
 #include "ob_ls_restore_task_mgr.h"
 #include "storage/high_availability/ob_storage_restore_struct.h"
-#ifdef OB_BUILD_SHARED_STOARGE
-#include "close_modules/shared_storage/storage/high_availability/ob_ss_ls_restore_state.h"
-#endif
 
 namespace oceanbase
 {

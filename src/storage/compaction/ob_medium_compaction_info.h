@@ -384,6 +384,7 @@ public:
   ObIncMajorSSTableInfo inc_major_info_; // store inc major sstable checksum and end scn
   ObCOMajorMergeStrategy co_major_merge_strategy_;
   ObWindowCompactionDecisionLogInfo window_decision_log_info_; // store score and other dynamic info for window compaction decision
+  uint64_t compaction_batch_size_; // batch compaction row size limit
   ObIAllocator *allocator_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObMediumCompactionInfo);

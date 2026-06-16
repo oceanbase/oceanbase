@@ -140,18 +140,18 @@ int ObPartitionMergeLoserTreeCmp::open_iter_range(
     const ObPartitionMergeLoserTreeItem &right)
 {
   int ret = OB_SUCCESS;
+  // Here will open the range and read the next row
   if (need_open_left_range(cmp_ret) &&
-      OB_FAIL(left.iter_->open_curr_range(false, true /* for compare */))) {
+      OB_FAIL(left.iter_->open_curr_range(false/*for_rewrite*/, false/*for_compare*/))) {
     if (ret != OB_BLOCK_SWITCHED) {
       STORAGE_LOG(WARN, "open curr range failed", K(ret), K(*left.iter_));
     }
   } else if (need_open_right_range(cmp_ret) &&
-             OB_FAIL(right.iter_->open_curr_range(false, true /* for compare */))) {
+             OB_FAIL(right.iter_->open_curr_range(false/*for_rewrite*/, false/*for_compare*/))) {
     if (ret != OB_BLOCK_SWITCHED) {
       STORAGE_LOG(WARN, "open curr range failed", K(ret), K(*right.iter_));
     }
   }
-
   return ret;
 }
 
@@ -514,7 +514,7 @@ int ObPartitionMajorRowsMerger::compare_base_iter()
         } else if (is_purged) {
           merger_state_ = NEED_SKIP;
           break;
-        } else if (OB_FAIL(base_item->iter_->open_curr_range(false))) {
+        } else if (OB_FAIL(base_item->iter_->open_curr_range(false/*for_rewrite*/, false/*for_compare*/))) {
           STORAGE_LOG(WARN, "Failed to base iter open_curr_range", K(ret), KPC(base_item->iter_));
         }
       }
@@ -604,6 +604,7 @@ int ObPartitionMergeHelper::init_merge_iters(
     ObITable *table = nullptr;
     ObSSTable *sstable = nullptr;
     ObPartitionMergeIter *merge_iter = nullptr;
+    bool table_need_full_merge = false;
 
     if (merge_param.is_mv_merge() && OB_FAIL(init_mv_merge_iters(merge_param))) {
       STORAGE_LOG(WARN, "Failed to init mv merge iters", K(ret), K(merge_param));
@@ -615,9 +616,10 @@ int ObPartitionMergeHelper::init_merge_iters(
       } else if (OB_UNLIKELY(table->is_remote_logical_minor_sstable())) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("unexpected remote minor sstable", K(ret), KP(sstable));
-      } else if (is_co_major_helper() && table->is_major_type_sstable()) {
-        continue;
-      } else if (is_multi_major_helper() && !table->is_major_type_sstable()) {
+      } else if (table->is_major_type_sstable() &&
+          OB_FAIL(merge_param.static_param_.get_sstable_need_full_merge(i, table_need_full_merge))) {
+        LOG_WARN("failed to get sstable need full merge", K(ret), K(i), KPC(table));
+      } else if (need_skip_sstable(table_need_full_merge, *table)) {
         continue;
       } else if (FALSE_IT(sstable = static_cast<ObSSTable *>(table))) {
         //TODO(COLUMN_STORE) tmp code, use specific cg sstable according to the ctx of sub merge task
@@ -846,7 +848,6 @@ int ObPartitionMergeHelper::find_rowkey_minimum_iters(MERGE_ITER_ARRAY &minimum_
       }
     } while (OB_SUCC(ret) && !rows_merger_->empty() && has_same_rowkey);
   }
-
   return ret;
 }
 
@@ -1071,6 +1072,30 @@ ObPartitionMergeIter *ObPartitionMajorMergeHelper::alloc_merge_iter(
   return merge_iter;
 }
 
+int ObPartitionMajorMergeHelper::get_next_row(const blocksstable::ObDatumRow *&row)
+{
+  int ret = OB_SUCCESS;
+  row = nullptr;
+  if (is_iter_end()) {
+    ret = OB_ITER_END;
+  } else {
+    const ObPartitionMergeLoserTreeItem *top_item = nullptr;
+    if (rows_merger_->empty()) {
+    } else if (OB_FAIL(rows_merger_->top(top_item))) {
+      LOG_WARN("failed to top", K(ret));
+    } else if (OB_ISNULL(top_item) || !top_item->is_valid()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected null or invalid top item", K(ret), KP(top_item));
+    } else if (nullptr == (row = top_item->iter_->get_curr_row())) {
+      ObPartitionMergeIter *iter = top_item->iter_;
+      if (OB_FAIL(iter->get_curr_range_first_row(row))) {
+        LOG_WARN("failed to get next row", K(ret));
+      }
+    }
+  }
+  return ret;
+}
+
 /**
  * ---------------------------------------------------------ObMultiMajorMergeIter--------------------------------------------------------------
  */
@@ -1157,12 +1182,12 @@ int ObMultiMajorMergeIter::get_current_major_iter(ObPartitionMergeIter *&row_sto
   return ret;
 }
 
-int ObMultiMajorMergeIter::next()
+int ObMultiMajorMergeIter::next(const bool need_move_next)
 {
   int ret = OB_SUCCESS;
   if (is_iter_end()) {
     ret = OB_ITER_END;
-  } else if (OB_FAIL(move_iters_next(minimum_iters_))) {
+  } else if (need_move_next && OB_FAIL(move_iters_next(minimum_iters_))) {
     LOG_WARN("failed to move iters next", K(ret), K(minimum_iters_));
   } else if (OB_FAIL(rebuild_rows_merger())) {
     LOG_WARN("failed to rebuild rows merger", K(ret));
@@ -1202,29 +1227,6 @@ int ObPartitionMinorMergeHelper::collect_tnode_dml_stat(
   return ret;
 }
 
-// check reuse macro block for shared-storage mode:
-// 1. for local minor, sstable with shared-macro-block, disabled
-// 2. for upload minor merge, sstable with private data-macro-block, disabled
-static bool check_allow_reuse_macro_block_for_ss(const ObStaticMergeParam &static_param, const ObITable *table)
-{
-  bool allow = true;
-  int ret = OB_SUCCESS;
-  if (GCTX.is_shared_storage_mode() && table->is_sstable()) {
-    const ObSSTable *sstable = static_cast<const ObSSTable *>(table);
-    if (is_local_exec_mode(static_param.get_exec_mode()) || is_upload_minor_exec_mode(static_param.get_exec_mode())) {
-      ObSSTableMetaHandle meta_handle;
-      if (OB_FAIL(sstable->get_meta(meta_handle))) {
-        LOG_ERROR("failed to get sstable meta, will disable reuse macro-block", K(ret), KPC(sstable));
-        allow = false;
-      } else if (is_local_exec_mode(static_param.get_exec_mode())) {
-        allow = !meta_handle.get_sstable_meta().get_table_shared_flag().is_shared_macro_blocks();
-      } else if (is_upload_minor_exec_mode(static_param.get_exec_mode())) {
-        allow = meta_handle.get_sstable_meta().get_table_shared_flag().is_shared_macro_blocks();
-      }
-    }
-  }
-  return allow;
-}
 
 ObPartitionMergeIter *ObPartitionMinorMergeHelper::alloc_merge_iter(
   const ObMergeParameter &merge_param,
@@ -1241,27 +1243,14 @@ ObPartitionMergeIter *ObPartitionMinorMergeHelper::alloc_merge_iter(
   } else if (!(table->is_sstable() && static_cast<const ObSSTable*>(table)->is_small_sstable())
       && !is_mini_merge(static_param.get_merge_type())
       && !static_param.is_full_merge_
-      && static_param.sstable_logic_seq_ < ObMacroDataSeq::MAX_SSTABLE_SEQ
-      && check_allow_reuse_macro_block_for_ss(static_param, table)) {
+      && static_param.sstable_logic_seq_ < ObMacroDataSeq::MAX_SSTABLE_SEQ) {
     ObSSTableMetaHandle meta_handle;
     bool reuse_uncommit_row = false;
-    //we only have the tx_id on sstable meta, without seq_no, the tuples in the macro block could still be abort
-    //open this flag when we support open empty macro block during reuse/rewrite processing
-
-    //if (!transaction::ObTransID(static_param.tx_id_).is_valid() || !static_cast<const ObSSTable *>(table)->contain_uncommitted_row()) {
-      //reuse_uncommit_row = false;
-    //} else if (OB_FAIL(static_cast<const ObSSTable *>(table)->get_meta(meta_handle))) {
-      //STORAGE_LOG(ERROR, "fail to get meta", K(ret), KPC(table));
-    //} else if (meta_handle.get_sstable_meta().get_tx_id_count() > 0) {
-      //const int64_t tx_id = meta_handle.get_sstable_meta().get_tx_ids(0);
-      //if (OB_UNLIKELY(meta_handle.get_sstable_meta().get_tx_id_count() != 1)) {
-        //ret = OB_ERR_UNEXPECTED;
-        //STORAGE_LOG(ERROR, "unexpected tx id count", K(ret), KPC(table), KPC(meta_handle.meta_));
-      //} else {
-        //reuse_uncommit_row = tx_id == static_param.tx_id_;
-      //}
-    //}
-    merge_iter = alloc_helper<ObPartitionMinorMacroMergeIter>(allocator_, allocator_, filter_handle, reuse_uncommit_row);
+    if (MICRO_BLOCK_MERGE_LEVEL == static_param.merge_level_) {
+      merge_iter = alloc_helper<ObPartitionMinorMicroMergeIter>(allocator_, allocator_, filter_handle, reuse_uncommit_row);
+    } else {
+      merge_iter = alloc_helper<ObPartitionMinorMacroMergeIter>(allocator_, allocator_, filter_handle, reuse_uncommit_row);
+    }
   } else {
     merge_iter = alloc_helper<ObPartitionMinorRowMergeIter>(allocator_, allocator_, filter_handle);
   }

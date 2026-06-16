@@ -668,6 +668,7 @@ int ObMediumCompactionInfo::init(
     data_version_ = medium_info.data_version_;
     encoding_granularity_ = medium_info.encoding_granularity_;
     co_major_merge_strategy_ = medium_info.co_major_merge_strategy_;
+    compaction_batch_size_ = medium_info.compaction_batch_size_;
   }
   if (OB_FAIL(ret)) {
     reset();
@@ -740,6 +741,7 @@ void ObMediumCompactionInfo::reset()
   last_medium_snapshot_ = 0;
   encoding_granularity_ = 0;
   window_decision_log_info_.reset();
+  compaction_batch_size_ = 0;
   storage_schema_.reset();
   co_major_merge_strategy_.reset();
   if (OB_NOT_NULL(allocator_)) {
@@ -787,9 +789,7 @@ int ObMediumCompactionInfo::try_gene_inc_major_info(const storage::ObTablesHandl
   contain_inc_major_info_ = false;
   ObSEArray<ObITable *, 16> inc_major_tables;
 
-  if (GCTX.is_shared_storage_mode()) {
-    // TODO(@ganxin) add inc major info for ss
-  } else if (OB_ISNULL(allocator_)) {
+  if (OB_ISNULL(allocator_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("allocator is not init", KR(ret), KP_(allocator));
   } else if (OB_UNLIKELY(table_array.get_count() <= 0)) {
@@ -812,12 +812,6 @@ int ObMediumCompactionInfo::try_gene_inc_major_info(const storage::ObTablesHandl
 bool ObMediumCompactionInfo::contain_storage_schema() const
 {
   bool contain_schema = true;
-#ifdef OB_BUILD_SHARED_STORAGE
-  if (GCTX.is_shared_storage_mode() &&
-      ObAdaptiveMergePolicy::is_skip_merge_reason((ObAdaptiveMergePolicy::AdaptiveMergeReason)medium_merge_reason_)) {
-    contain_schema = contain_noinc_storage_schema_;
-  }
-#endif
   return contain_schema;
 }
 
@@ -884,6 +878,11 @@ int ObMediumCompactionInfo::serialize(char *buf, const int64_t buf_len, int64_t 
           window_decision_log_info_);
       }
     }
+    if (OB_SUCC(ret) && MEDIUM_COMPAT_VERSION_V7 <= medium_compat_version_) {
+      LST_DO_CODE(
+        OB_UNIS_ENCODE,
+        compaction_batch_size_);
+    }
     LOG_DEBUG("ObMediumCompactionInfo::serialize", K(ret), KCSTRING(buf), K(buf_len), K(pos));
   }
   return ret;
@@ -949,6 +948,11 @@ int ObMediumCompactionInfo::deserialize(
     } else {
       window_decision_log_info_.reset();
     }
+    if (OB_SUCC(ret) && MEDIUM_COMPAT_VERSION_V7 <= medium_compat_version_) {
+      LST_DO_CODE(
+        OB_UNIS_DECODE,
+        compaction_batch_size_);
+    }
     if (OB_FAIL(ret)) {
       reset();
     }
@@ -1001,6 +1005,11 @@ int64_t ObMediumCompactionInfo::get_serialize_size() const
         window_decision_log_info_);
     }
   }
+  if (MEDIUM_COMPAT_VERSION_V7 <= medium_compat_version_) {
+    LST_DO_CODE(
+      OB_UNIS_ADD_LEN,
+      compaction_batch_size_);
+  }
   return len;
 }
 
@@ -1012,7 +1021,7 @@ void ObMediumCompactionInfo::gene_info(
   } else {
     J_KV("compaction_type", ObMediumCompactionInfo::get_compaction_type_str((ObCompactionType)compaction_type_),
        "merge_reason", ObAdaptiveMergePolicy::merge_reason_to_str(medium_merge_reason_),
-       K(medium_snapshot_), K_(last_medium_snapshot), K_(parallel_merge_info), K_(encoding_granularity), K_(contain_mds_filter_info),
+       K(medium_snapshot_), K_(last_medium_snapshot), K_(parallel_merge_info), K_(encoding_granularity), K_(contain_mds_filter_info), K_(compaction_batch_size),
        K_(contain_window_decision_log_info));
     if (contain_mds_filter_info_) {
       J_COMMA();
@@ -1047,7 +1056,8 @@ int64_t ObMediumCompactionInfo::to_string(char* buf, const int64_t buf_len) cons
         J_KV("co_major_merge_type", (ObCOMajorMergePolicy::ObCOMajorMergeType)co_major_merge_type_);
       }
       J_COMMA();
-      J_KV(K_(is_skip_tenant_major), K_(contain_parallel_range), K_(parallel_merge_info), K_(encoding_granularity), K_(contain_window_decision_log_info));
+      J_KV(K_(is_skip_tenant_major), K_(contain_parallel_range), K_(parallel_merge_info), K_(encoding_granularity), K_(compaction_batch_size),
+           K_(contain_window_decision_log_info));
     if (contain_mds_filter_info_) {
       J_COMMA();
       J_KV(K_(mds_filter_info));

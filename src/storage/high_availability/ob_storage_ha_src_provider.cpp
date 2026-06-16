@@ -844,8 +844,6 @@ int ObStorageHASrcProvider::check_replica_type_for_normal_replica_(
       } else {
         is_replica_type_valid = false;
       }
-    } else if (common::ObReplicaType::REPLICA_TYPE_LOGONLY == dst.get_replica_type()) {
-      is_replica_type_valid = true;
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("unexpected dst replica type", K(ret), K(dst), K(learner_list));
@@ -1295,7 +1293,7 @@ int ObMigrationSrcByLocationProvider::find_src_in_sorted_addr_list_(
         LOG_INFO("no available data source exist in this area", K(ret), "tenant_id", get_tenant_id(),
             "ls_id", get_ls_id(), K(addr_list), K(dst), K(learner_list));
       } else if (!candidate_addr_list.empty()) {
-        int64_t num = candidate_addr_list.count();
+        const int64_t num = candidate_addr_list.count();
         chosen_src_addr = addr_list.at(candidate_addr_list.at(rand() % num));
         LOG_INFO("found available data follower source in this area", "tenant_id", get_tenant_id(),
             "ls_id", get_ls_id(), K(addr_list), K(dst), K(learner_list), K(chosen_src_addr));
@@ -1665,6 +1663,7 @@ int ObMigrationLogOnlyProvider::inner_choose_ob_src(
             "ls_id", get_ls_id(), K(learner_list), K(member_list));
       } else {
         choosen_src_addr = member_list.at(choose_member_idx).get_server();
+        chosen_policy_type_ = ObMigrationChooseSourcePolicy::LOG_ONLY;
       }
     }
   }
@@ -1979,7 +1978,14 @@ int ObStorageHAChooseSrcHelper::choose_src_to_advance_checkpoint_by_location(
           src.reset();
           ObAddr addr = sorted_addr_list.at(idx);
           if (OB_FAIL(member_list_info.learner_list_.get_learner_by_addr(addr, src))) {
-            LOG_WARN("failed to get learner by addr", K(ret), K(addr), "learner_list", member_list_info.learner_list_);
+            // paxos F members are not in learner_list; skip them instead of aborting the loop
+            if (OB_ENTRY_NOT_EXIST == ret) {
+              ret = OB_SUCCESS;
+              LOG_INFO("addr is not a learner, skip when choosing c replica",
+                  K(addr), "learner_list", member_list_info.learner_list_);
+            } else {
+              LOG_WARN("failed to get learner by addr", K(ret), K(addr), "learner_list", member_list_info.learner_list_);
+            }
           } else if (src.is_columnstore()) {
             chosen_src_addr = addr;
             break;

@@ -1424,7 +1424,7 @@ struct ObBackupStatus final
   OB_UNIS_VERSION(1);
 public:
   enum Status
-  {
+  {  //FARM COMPAT WHITELIST
     INIT = 0,
     DOING = 1,
     COMPLETED = 2,
@@ -1440,10 +1440,6 @@ public:
     BACKUP_LOG = 12,
     BACKUP_FUSE_TABLET_META = 13,
     PREPARE_BACKUP_LOG = 14,
-    DISABLE_SS_GC = 15,
-    WAIT_SS_CLOG_CHECKPOINT = 16,
-    SS_WAIT_LS_CONSISTENCY = 17,
-    ENABLE_SS_GC = 18,
     MAX_STATUS
   };
   ObBackupStatus(): status_(MAX_STATUS) {}
@@ -1850,7 +1846,7 @@ public:
   int64_t minor_turn_id_;
   int64_t major_turn_id_;
   SCN consistent_scn_;
-  bool is_shared_storage_mode_;
+  bool is_shared_storage_mode_; // useless after 4.6.1
 };
 
 struct ObBackupSkippedType;

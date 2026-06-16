@@ -18,11 +18,7 @@
 #include "storage/multi_data_source/ob_tablet_mds_merge_ctx.h"
 #include "storage/compaction/ob_tenant_compaction_progress.h"
 #include "storage/compaction/filter/ob_tx_data_minor_filter.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/incremental/ob_ss_mini_merge_ctx.h"
-#include "storage/incremental/ob_ss_minor_compaction.h"
-#include "storage/compaction_v2/ob_ss_major_merge_ctx.h"
-#endif
+#include "storage/compaction/vectorization/ob_compaction_batch_merger.h"
 
 namespace oceanbase
 {
@@ -67,21 +63,23 @@ void ObMergeParameter::reset()
   merge_range_.reset();
   trans_state_mgr_ = nullptr;
   error_location_ = nullptr;
-  if (nullptr != sstable_scn_range_array_) {
-    allocator_->free(sstable_scn_range_array_);
-    sstable_scn_range_array_ = nullptr;
-    merge_rowid_range_array_ = nullptr;
+  if (nullptr != allocator_) {
+    if (nullptr != sstable_scn_range_array_) {
+      allocator_->free(sstable_scn_range_array_);
+    }
+    if (nullptr != cg_rowkey_read_info_) {
+      cg_rowkey_read_info_->~ObITableReadInfo();
+      allocator_->free(cg_rowkey_read_info_);
+    }
+    if (nullptr != mview_merge_param_) {
+      mview_merge_param_->~ObMviewMergeParameter();
+      allocator_->free(mview_merge_param_);
+    }
   }
-  if (nullptr != cg_rowkey_read_info_) {
-    cg_rowkey_read_info_->~ObITableReadInfo();
-    allocator_->free(cg_rowkey_read_info_);
-    cg_rowkey_read_info_ = nullptr;
-  }
-  if (nullptr != mview_merge_param_) {
-    mview_merge_param_->~ObMviewMergeParameter();
-    allocator_->free(mview_merge_param_);
-    mview_merge_param_ = nullptr;
-  }
+  sstable_scn_range_array_ = nullptr;
+  merge_rowid_range_array_ = nullptr;
+  cg_rowkey_read_info_ = nullptr;
+  mview_merge_param_ = nullptr;
   allocator_ = nullptr;
 }
 
@@ -301,8 +299,10 @@ void ObCompactionParam::estimate_concurrent_count(const compaction::ObMergeType 
   if (is_mini_merge(merge_type)) {
     estimate_concurrent_cnt_ = MAX((estimate_phy_size_ + tablet_size - 1) / tablet_size, 1);
   } else if (is_minor_merge_type(merge_type)) {
-    int64_t avg_sstable_size = MAX(occupy_size_ / parallel_sstable_cnt_, 0);
-    estimate_concurrent_cnt_ = MAX((avg_sstable_size + tablet_size - 1) / tablet_size, 1);
+    if (parallel_sstable_cnt_ > 0) {
+      int64_t avg_sstable_size = MAX(occupy_size_ / parallel_sstable_cnt_, 0);
+      estimate_concurrent_cnt_ = MAX((avg_sstable_size + tablet_size - 1) / tablet_size, 1);
+    }
   }
 }
 
@@ -872,36 +872,20 @@ int ObTabletMergeDag::alloc_merge_ctx()
     LOG_WARN("ctx is not null", K(ret), K(ctx_));
   } else if (FALSE_IT(prepare_allocator(merge_type, param_.is_reserve_mode_, allocator_))) {
   } else if (is_mini_merge(merge_type)) {
-#ifdef OB_BUILD_SHARED_STORAGE
-   ctx_ = GCTX.is_shared_storage_mode() ? NEW_CTX(ObTabletSSMiniMergeCtx) : NEW_CTX(ObTabletMiniMergeCtx);
-#else
    ctx_ = NEW_CTX(ObTabletMiniMergeCtx);
-#endif
   } else if (is_meta_major_merge(merge_type)) {
     ctx_ = NEW_CTX(ObTabletMajorMergeCtx);
   } else if (is_major_merge_type(merge_type) || is_inc_major_merge(merge_type)) {
     if (is_local_exec_mode(param_.exec_mode_)) {
       ctx_ = NEW_CTX(ObTabletMajorMergeCtx);
-#ifdef OB_BUILD_SHARED_STORAGE
-    } else if (is_output_exec_mode(param_.exec_mode_)) {
-      ctx_ = NEW_CTX(ObSSTabletMajorMergeCtx);
-#endif
     } else {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("invalid exec mode", KR(ret), K_(param));
     }
-#ifdef OB_BUILD_SHARED_STORAGE
-  } else if (is_minor_merge(merge_type) && is_output_exec_mode(param_.exec_mode_)) {
-    ctx_ = NEW_CTX(ObTabletSSMinorMergeCtx);
-#endif
   } else if (is_multi_version_merge(merge_type) && !is_mds_minor_merge(merge_type)) {
     ctx_ = NEW_CTX(ObTabletExeMergeCtx);
   } else if (is_mds_mini_merge(merge_type) || is_backfill_tx_merge(merge_type)) {
     ctx_ = NEW_CTX(ObTabletMergeCtx);
-#ifdef OB_BUILD_SHARED_STORAGE
-  } else if (is_mds_minor_merge(merge_type) && is_output_exec_mode(param_.exec_mode_)) {
-    ctx_ = NEW_CTX(ObTabletSSMinorMergeCtx);
-#endif
   } else if (is_mds_minor_merge(merge_type)) {
     ctx_ = NEW_CTX(ObTabletMdsMinorMergeCtx);
   } else {
@@ -1230,7 +1214,15 @@ int ObTabletMergeTask::init(const int64_t idx, ObBasicTabletMergeCtx &ctx)
   } else if (FALSE_IT(prepare_allocator(ctx.get_merge_type(), ctx.get_dag_param().is_reserve_mode_,
       allocator_, false/*is_global_mem*/))) {
   } else if (is_major_or_meta_merge_type(ctx.get_merge_type())) {
-    merger_ = OB_NEWx(ObPartitionMajorMerger, &allocator_, allocator_, ctx.static_param_);
+    const ObStorageSchema *storage_schema = ctx.get_schema();
+    if (OB_ISNULL(storage_schema)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("storage schema is null", K(ret));
+    } else if (ctx.enable_vectorized_batch_merge() && !storage_schema->is_mv_major_refresh_table()) {
+      merger_ = OB_NEWx(ObPartitionMajorBatchMerger, &allocator_, allocator_, ctx.static_param_);
+    } else {
+      merger_ = OB_NEWx(ObPartitionMajorMerger, &allocator_, allocator_, ctx.static_param_);
+    }
   } else {
     merger_ = OB_NEWx(ObPartitionMinorMerger, &allocator_, allocator_, ctx.static_param_);
   }

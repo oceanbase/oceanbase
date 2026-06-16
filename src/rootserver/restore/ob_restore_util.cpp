@@ -15,9 +15,6 @@
 #include "share/restore/ob_restore_progress_display_mode.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #include "share/location_cache/ob_location_service.h" // for ObLocationService
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "close_modules/shared_storage/storage/backup/ob_ss_backup_restore_util.h"
-#endif
 
 using namespace oceanbase::common;
 using namespace oceanbase;
@@ -1977,44 +1974,27 @@ int ObRestoreUtil::get_ss_restore_ls_palf_base_info(
     palf::PalfBaseInfo &palf_base_info)
 {
   int ret = OB_SUCCESS;
+  storage::ObBackupDataStore store;
   const common::ObSArray<share::ObBackupSetPath> &backup_set_array =
     job_info.get_multi_restore_path_list().get_backup_set_path_list();
   const int64_t idx = backup_set_array.count() - 1;
-  ObArenaAllocator allocator;
+  storage::ObLSMetaPackage ls_meta_package;
   if (!job_info.is_valid() || !ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid job info or ls id", KR(ret), K(job_info), K(ls_id));
   } else if (idx < 0) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("backup_set_array can't empty", KR(ret), K(job_info));
+  } else if (OB_FAIL(store.init(backup_set_array.at(idx).ptr()))) {
+    LOG_WARN("fail to init backup data store", KR(ret));
+  } else if (OB_FAIL(store.read_ls_meta_infos(ls_id, ls_meta_package))) {
+    LOG_WARN("fail to read backup ls meta info", KR(ret), K(ls_id));
+  } else if (!ls_meta_package.is_valid()) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid ls meta package", KR(ret), K(ls_meta_package));
   } else {
-    const int64_t fake_dest_id = 0;
-    ObBackupDest backup_dest;
-    storage::ObBackupSSLSMetaInfo ls_meta;
-    if (OB_FAIL(backup_dest.set(backup_set_array.at(idx).ptr()))) {
-      LOG_WARN("fail to set backup dest", K(ret));
-    } else if (OB_FAIL(backup::ObSSBackupRestoreUtil::read_ss_ls_meta(
-                                              backup_dest,
-                                              ls_id,
-                                              fake_dest_id,
-                                              allocator,
-                                              ls_meta))) {
-      LOG_WARN("fail to read ss ls meta", K(ret), K(backup_dest), K(ls_id));
-    } else {
-      int64_t pos = 0;
-      typedef ObDefaultSSMetaSSLogValue<ObSSLSMeta> ObSSLSMetaSSLogValue;
-      SMART_VAR(ObSSLSMetaSSLogValue, tmp) {
-        if (OB_FAIL(tmp.deserialize(ls_meta.raw_ls_meta_row_.meta_value_.ptr(),
-                                  ls_meta.raw_ls_meta_row_.meta_value_.length(),
-                                  pos))) {
-          LOG_WARN("fail to deserialize ss ls meta", K(ret), K(ls_meta));
-        } else if (OB_FAIL(tmp.meta_value_.get_palf_meta(palf_base_info))) {
-          LOG_WARN("fail to get palf meta", K(ret), K(tmp));
-        } else {
-          LOG_INFO("[SS RESTORE] get restore ls palf base info", K(palf_base_info), K(tmp));
-        }
-      }
-    }
+    palf_base_info = ls_meta_package.palf_meta_;
+    LOG_INFO("[SS RESTORE] get restore ls palf base info", K(palf_base_info));
   }
   return ret;
 }

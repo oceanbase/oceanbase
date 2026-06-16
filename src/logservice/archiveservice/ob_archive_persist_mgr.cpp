@@ -36,7 +36,7 @@ class ObArchivePersistMgr::DeleteStaleLSFunctor
         ARCHIVE_LOG(WARN, "get_ls failed, remove archive persist value", K(ret), K(id));
         bret = true;
       }
-      return true;
+      return bret;
     }
   private:
     ObLSService *ls_svr_;

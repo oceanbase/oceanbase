@@ -63,36 +63,16 @@ bool ObBackupTabletFuseDagNet::is_valid() const
 int ObBackupTabletFuseDagNet::start_running()
 {
   int ret = OB_SUCCESS;
-  ObTenantDagScheduler *scheduler = NULL;
   ObInitialBackupTabletGroupFuseDag *initial_dag = NULL;
 
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet group dag net do not init", K(ret));
   } else if (FALSE_IT(ctx_->start_ts_ = ObTimeUtil::current_time())) {
-  } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag(initial_dag, true/*is_ha_dag*/))) {
-    LOG_WARN("failed to alloc inital fuse dag ", K(ret));
-  } else if (OB_FAIL(initial_dag->init(this))) {
-    LOG_WARN("failed to init initial fuse dag", K(ret));
-  } else if (OB_FAIL(add_dag_into_dag_net(*initial_dag))) {
-    LOG_WARN("failed to add initial fuse dag into dag net", K(ret));
-  } else if (OB_FAIL(initial_dag->create_first_task())) {
-    LOG_WARN("failed to create first task", K(ret));
-  } else if (OB_FAIL(scheduler->add_dag(initial_dag))) {
-    LOG_WARN("failed to add initial fuse dag", K(ret), K(*initial_dag));
-    if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-      LOG_WARN("Fail to add task", K(ret));
-      ret = OB_EAGAIN;
-    }
-  } else {
-    initial_dag = NULL;
-  }
-
-  if (OB_NOT_NULL(initial_dag) && OB_NOT_NULL(scheduler)) {
-    scheduler->free_dag(*initial_dag);
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_schedule_single_dag(
+      this, ObDagPrio::DAG_PRIO_MAX,
+      false/*emergency*/, initial_dag/*new_dag*/, this))) {
+    LOG_WARN("failed to alloc and schedule initial fuse dag", K(ret));
   }
   return ret;
 }
@@ -337,12 +317,8 @@ int ObInitialBackupTabletGroupFuseDag::create_first_task()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("initial tablet group fuse dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init())) {
-    LOG_WARN("failed to init initial tablet group fuse task", K(ret));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_add_single_task(this, task))) {
+    LOG_WARN("Fail to alloc and add task", K(ret));
   } else {
     LOG_INFO("success to create first task", K(ret), KPC(this));
   }
@@ -413,12 +389,8 @@ int ObStartBackupTabletGroupFuseDag::create_first_task()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("start tablet group fuse dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init(finish_dag_))) {
-    LOG_WARN("failed to init start tablet group fuse task", K(ret));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_add_single_task(this, task, finish_dag_))) {
+    LOG_WARN("Fail to alloc and add task", K(ret));
   } else {
     LOG_INFO("success to create first task", K(ret), KPC(this));
   }
@@ -487,12 +459,8 @@ int ObFinishBackupTabletGroupFuseDag::create_first_task()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("finish tablet group fuse dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init())) {
-    LOG_WARN("failed to init finish tablet group fuse task", K(ret));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_add_single_task(this, task))) {
+    LOG_WARN("Fail to alloc and add task", K(ret));
   } else {
     LOG_INFO("success to create first task", K(ret), KPC(this));
   }
@@ -602,12 +570,8 @@ int ObBackupTabletFuseDag::create_first_task()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("tablet fuse dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init(fuse_ctx_, *group_ctx_))) {
-    LOG_WARN("failed to init sys tablets fuse task", K(ret), K(fuse_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_add_single_task(this, task, fuse_ctx_, *group_ctx_))) {
+    LOG_WARN("Fail to alloc and add task", K(ret), K(fuse_ctx_));
   } else {
     LOG_INFO("success to create first task", K(ret), KPC(this));
   }

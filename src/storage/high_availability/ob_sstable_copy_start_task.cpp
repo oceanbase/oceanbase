@@ -229,8 +229,7 @@ int ObSSTableCopyStartTask::build_macro_id_info_reader_init_param_(ObCopySSTable
     init_param.is_leader_restore_ = copy_ctx_->is_leader_restore_;
     init_param.restore_action_ = copy_ctx_->restore_action_;
     init_param.src_info_ = copy_ctx_->src_info_;
-    init_param.bandwidth_throttle_ = copy_ctx_->bandwidth_throttle_;
-    init_param.svr_rpc_proxy_ = copy_ctx_->svr_rpc_proxy_;
+    init_param.ha_svc_ctx_ = copy_ctx_->ha_svc_ctx_;
     init_param.restore_base_info_ = copy_ctx_->restore_base_info_;
     init_param.meta_index_store_ = copy_ctx_->meta_index_store_;
     init_param.second_meta_index_store_ = copy_ctx_->second_meta_index_store_;

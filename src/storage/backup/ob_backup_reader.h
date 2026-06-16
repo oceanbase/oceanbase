@@ -281,8 +281,6 @@ private:
   int close_sstable_index_builder_(const storage::ObITable::TableKey &table_key);
   int free_sstable_index_builder_(const storage::ObITable::TableKey &table_key);
   int get_macro_block_id_list_(const blocksstable::ObSSTable &sstable, ObBackupSSTableMeta &sstable_meta);
-  int deal_with_ddl_sstable_(const storage::ObITable::TableKey &table_key,
-      ObBackupLinkedBlockItemWriter *linked_writer, ObBackupSSTableMeta &sstable_meta);
   int get_sstable_merge_results_(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key,
       blocksstable::ObSSTableMergeRes *&merge_res);
 

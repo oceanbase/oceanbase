@@ -17,7 +17,6 @@
 #include "storage/ddl/ob_ddl_independent_dag.h"
 #include "storage/direct_load/ob_direct_load_auto_inc_seq_service.h"
 #ifdef OB_BUILD_SHARED_STORAGE
-#include "close_modules/shared_storage/storage/compaction_v2/ob_ss_compact_helper.h"
 #include "storage/compaction/ob_schedule_dag_func.h"
 #endif
 
@@ -2275,12 +2274,6 @@ int ObSSIncMajorDDLMergeHelper::update_tablet_table_store_for_inc_major(
     LOG_WARN("failed to update shared tablet", K(ret), K(ls_id), K(tablet_id));
   } else if (OB_FAIL(MTL(observer::ObTabletTableUpdater*)->submit_tablet_update_task(ls_id, tablet_id))) {
     LOG_WARN("fail to submit tablet update task", K(ret), K(ls_id), K(tablet_id));
-  } else if (OB_FAIL(share::SSCompactHelper::link_inc_major(ls_id,
-                                                    tablet_id,
-                                                    snapshot_version,
-                                                    dag_merge_param.trans_id_,
-                                                    dag_merge_param.seq_no_))) {
-    LOG_WARN("fail to link inc major", KR(ret));
   } else {
     ObUpdateTableStoreParam table_store_param(snapshot_version,
                                               ObVersionRange::MIN_VERSION/*multi_version_start*/,

@@ -177,9 +177,13 @@ int ObCOMergeLogFileWriter::close()
   return ret;
 }
 
-int ObCOMergeLogFileWriter::write_merge_log(const ObMergeLog &log, const blocksstable::ObDatumRow *full_row)
+int ObCOMergeLogFileWriter::write_merge_log(
+    const ObMergeLog &log,
+    const ObMergeVectorStore *vector_store,
+    const blocksstable::ObDatumRow *full_row)
 {
   int ret = OB_SUCCESS;
+  UNUSED(vector_store); // TODO
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("ObCOMergeLogFileWriter has not been inited", K(ret));
@@ -333,11 +337,15 @@ int ObCOMergeLogFileReader::inner_row_read(int64_t &log_id)
   return ret;
 }
 
-int ObCOMergeLogFileReader::get_next_log(ObMergeLog &mergelog, const blocksstable::ObDatumRow *&row)
+int ObCOMergeLogFileReader::get_next_log(
+    ObMergeLog &mergelog,
+    const ObMergeVectorStore *&vector_store,
+    const blocksstable::ObDatumRow *&row)
 {
   int ret = OB_SUCCESS;
   int64_t log_id = 0;
   int64_t row_log_id = 0;
+  vector_store = nullptr;
   row = nullptr;
   mergelog.reset();
   const int64_t start_time = common::ObTimeUtility::current_time();

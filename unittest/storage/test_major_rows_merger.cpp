@@ -238,14 +238,14 @@ TEST_F(ObMajorRowsMergerTest, test_compare_func)
   ASSERT_EQ((long)ObPartitionMergeLoserTreeCmp::RIGHT_RANGE_NEED_OPEN, cmp_ret);
 
   //compare rowkey and range
-  OK(item_0.iter_->open_curr_range(false));
+  OK(item_0.iter_->open_curr_range(false, false));
   OK(cmp.compare(item_0, item_1, cmp_ret));
   ASSERT_EQ((long)ObPartitionMergeLoserTreeCmp::RIGHT_RANGE_NEED_OPEN, cmp_ret);
   OK(cmp.compare(item_1, item_0, cmp_ret));
   ASSERT_EQ((long)ObPartitionMergeLoserTreeCmp::LEFT_RANGE_NEED_OPEN, cmp_ret);
 
   //compare both rowkey
-  OK(item_1.iter_->open_curr_range(false));
+  OK(item_1.iter_->open_curr_range(false, false));
   OK(cmp.compare(item_0, item_1, cmp_ret));
   ASSERT_EQ(-1, cmp_ret);
 

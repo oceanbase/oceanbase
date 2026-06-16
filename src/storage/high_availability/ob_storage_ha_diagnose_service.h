@@ -6,15 +6,31 @@
 #ifndef OCEABASE_STORAGE_HA_DIAG_SERVICE_
 #define OCEABASE_STORAGE_HA_DIAG_SERVICE_
 
+#include "lib/lock/ob_thread_cond.h"
+#include "lib/thread/thread_pool.h"
 #include "share/ob_storage_ha_diagnose_struct.h"
-#include "share/ob_storage_ha_diagnose_operator.h"
 
 namespace oceanbase
 {
-using namespace share;
+namespace common
+{
+class ObMySQLProxy;
+}
+namespace share
+{
+class ObStorageHADiagOperator;
+class ObDMLSqlSplicer;
+}
 namespace storage
 {
+class ObStorageHADiagMgr;
+struct ObHADiagFlushItem;
 
+// Global server-level worker that drains each tenant's inflight diag queue
+// into the sys-tenant history tables and periodically recycles old history
+// rows. One instance per observer — tenants register their flush items via
+// the per-tenant ObStorageHADiagMgr, and this service walks every MTL tenant
+// each tick to persist them.
 class ObStorageHADiagService : public lib::ThreadPool
 {
 public:
@@ -22,74 +38,42 @@ public:
   virtual ~ObStorageHADiagService() {}
 
   int init(common::ObMySQLProxy *sql_proxy);
-  void run1() final;
   void destroy();
-  void wakeup();
+  int start();
   void stop();
   void wait();
+  void wakeup();
   int reload_config();
-  int start();
 
-public:
-  int add_task(const ObStorageHADiagTaskKey &key);
   static ObStorageHADiagService &instance();
 
-private:
-  typedef ObArray<ObStorageHADiagTaskKey> TaskKeyArray;
-  typedef hash::ObHashMap<ObStorageHADiagTaskKey, int64_t, hash::NoPthreadDefendMode> TaskKeyMap;
-  static const int64_t ONCE_REPORT_KEY_MAX_NUM = 100;
-  static const int64_t REPORT_KEY_MAX_NUM = 1000;
+  void run1() final;
+
+public:
+  static constexpr int64_t DEFAULT_IDLE_INTERVAL_MS = 5 * 60 * 1000L; // 5 minutes
+  static constexpr int64_t DELETE_BATCH_LIMIT = 1000;
+  // Upper bound on rows per multi-row INSERT. Bounds single-statement SQL
+  // text, parse/plan cost, lock/redo footprint regardless of queue size.
+  static constexpr int64_t DML_BATCH_ROWS = 128;
 
 private:
-  int do_clean_history_(const ObStorageHADiagModule module, int64_t &end_timestamp);
-  int do_report_();
-  int get_info_from_type_(const ObStorageHADiagTaskKey &key, ObStorageHADiagInfo *&info,
-                          ObTransferErrorDiagInfo &transfer_err_diag,
-                          ObTransferPerfDiagInfo &transfer_perf_diag,
-                          ObIAllocator &alloc);
-  int insert_inner_table_(
-      ObMySQLTransaction &trans,
-      ObStorageHADiagMgr *mgr,
-      const ObStorageHADiagTaskKey &task_key,
-      ObStorageHADiagInfo &info);
-  int deep_copy_keys_(TaskKeyArray &do_report_keys) const;
-  int report_process_(const TaskKeyArray &task_keys);
-  int add_keys_(
-      const int64_t index,
-      const TaskKeyArray &task_keys,
-      TaskKeyArray &new_task_keys) const;
-  int clean_task_key_without_lock_(const ObStorageHADiagTaskKey &task_key);
-  int report_to_inner_table_(
-      ObMySQLTransaction &trans,
-      ObStorageHADiagMgr *mgr,
-      const ObStorageHADiagTaskKey &task_key);
-  int remove_oldest_without_lock_();
-  int get_oldest_key_without_lock_(ObStorageHADiagTaskKey &key) const;
-  int start_trans_(
-      ObTimeoutCtx &timeout_ctx,
-      ObMySQLTransaction &trans);
-  int commit_trans_(
-      const int32_t result,
-      ObMySQLTransaction &trans);
-  int report_batch_task_key_(ObMySQLTransaction &trans, const TaskKeyArray &task_keys);
-  int batch_del_task_in_mgr_(const TaskKeyArray &task_keys);
-  int get_ls_id_array_(ObLSService *ls_service, ObIArray<share::ObLSID> &ls_id_array);
-  int do_clean_related_info_(ObLSService *ls_service, const share::ObLSID &ls_id, const uint64_t tenant_id);
-  int scheduler_clean_related_info_(ObLSService *ls_service, const ObIArray<share::ObLSID> &ls_id_array, const uint64_t tenant_id);
-  int do_clean_related_info_in_ls_(ObLSService *ls_service, const uint64_t tenant_id);
-  int do_clean_transfer_related_info_();
-  int del_task_in_mgr_(const ObStorageHADiagTaskKey &task_key) const;
+  int drain_tenant_(const uint64_t tenant_id);
+  void append_and_maybe_flush_(
+      share::ObStorageHADiagOperator &op,
+      const uint64_t report_tenant_id,
+      const ObHADiagFlushItem &item,
+      const share::ObStorageHADiagModule module,
+      share::ObDMLSqlSplicer &dml,
+      bool &poisoned,
+      int64_t &written_rows);
+  int do_clean_history_(const share::ObStorageHADiagModule module);
+  bool should_run_gc_() const;
 
 private:
   bool is_inited_;
   common::ObThreadCond thread_cond_;
   int64_t wakeup_cnt_;
-  ObStorageHADiagOperator op_;
   common::ObMySQLProxy *sql_proxy_;
-  TaskKeyMap task_keys_;
-  SpinRWLock lock_;
-  int64_t err_diag_end_timestamp_;
-  int64_t perf_diag_end_timestamp_;
   int64_t idle_interval_ms_;
   DISALLOW_COPY_AND_ASSIGN(ObStorageHADiagService);
 };

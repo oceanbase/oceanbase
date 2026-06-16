@@ -133,6 +133,15 @@ public:
   virtual ~ObIPartitionMergeFuser() {}
   virtual int init(const ObMergeParameter &merge_param, const bool is_fuse_row_flag = false) override final;
   virtual bool is_valid() const override;
+  // nullptr when default_row_ was not filled (e.g. ObCOMinorSSTableFuser); else schema default row for NOP fill.
+  OB_INLINE const blocksstable::ObDatumRow *get_default_row_ptr() const
+  {
+    const blocksstable::ObDatumRow *row = nullptr;
+    if (default_row_.is_valid()) {
+      row = &default_row_;
+    }
+    return row;
+  }
   INHERIT_TO_STRING_KV("ObMergeFuser", ObMergeFuser, "cur_fuser", "ObIPartitionMergeFuser");
 protected:
   virtual int inner_init(const ObMergeParameter &merge_param) = 0;

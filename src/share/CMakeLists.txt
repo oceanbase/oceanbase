@@ -158,7 +158,6 @@ ob_set_subtarget(ob_share backup
   backup/ob_log_restore_config.cpp
   backup/ob_log_restore_struct.cpp
   backup/ob_archive_checkpoint_mgr.cpp
-  backup/ob_ss_ha_macro_block_struct.cpp
   backup/ob_backup_validate_struct.cpp
   backup/ob_backup_validate_table_operator.cpp
   backup/ob_backup_util.cpp
@@ -435,6 +434,7 @@ ob_set_subtarget(ob_share common_mixed
   compaction/ob_schedule_daily_maintenance_window.cpp
   compaction/ob_compaction_resource_manager.cpp
   storage/ob_i_pre_warmer.cpp
+  storage/ob_ha_inflight_diag.cpp
   storage_cache_policy/ob_storage_cache_common.cpp
   storage_cache_policy/ob_storage_cache_partition_sql_helper.cpp
   partition_table/ob_partition_location.cpp

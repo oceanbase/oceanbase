@@ -200,7 +200,7 @@ int ObTruncatePartitionFilter::check_filter_row_complete(const blocksstable::ObD
     complete = true;
     for (int64_t idx = 0; OB_SUCC(ret) && idx < ref_column_idxs_.count() && complete; ++idx) {
       const uint64_t ref_idx = ref_column_idxs_[idx];
-      if (OB_UNLIKELY(ref_idx < 0 || ref_idx >= row.get_column_count()) ) {
+      if (OB_UNLIKELY(ref_idx >= row.get_column_count()) ) {
         ret = OB_INVALID_DATA;
         LOG_WARN("invalid data", KR(ret), K(idx), K(ref_idx), K(row));
       } else if (row.storage_datums_[ref_idx].is_nop()) {

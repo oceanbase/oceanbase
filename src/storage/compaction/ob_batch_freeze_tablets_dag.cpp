@@ -140,7 +140,7 @@ int ObBatchFreezeTabletsTask::inner_process()
       LOG_WARN_RET(tmp_ret, "failed to force freeze tablet", K(param), K(cur_pair));
       ++cnt_.failure_cnt_;
     } else if (FALSE_IT(++cnt_.success_cnt_)) {
-    } else if (!GCTX.is_shared_storage_mode() && OB_TMP_FAIL(schedule_tablet_major_after_freeze(*ls, cur_pair))) {
+    } else if (OB_TMP_FAIL(schedule_tablet_major_after_freeze(*ls, cur_pair))) {
       if (OB_SIZE_OVERFLOW != tmp_ret && OB_EAGAIN != tmp_ret) {
         LOG_WARN_RET(tmp_ret, "failed to schedule medium merge dag", K(param), K(cur_pair));
       }
@@ -172,9 +172,7 @@ int ObBatchFreezeTabletsTask::schedule_tablet_major_after_freeze(
   int ret = OB_SUCCESS;
   ObTabletHandle tablet_handle;
   ObTablet *tablet = NULL;
-  if (GCTX.is_shared_storage_mode()) {
-  // disable schedule merge after freeze, because other check is required in shared storage mode
-  } else if (!MTL(ObTenantTabletScheduler *)->could_major_merge_start()) {
+  if (!MTL(ObTenantTabletScheduler *)->could_major_merge_start()) {
     // merge is suspended
   } else if (OB_FAIL(ls.get_tablet_svr()->get_tablet(
                  cur_pair.tablet_id_, tablet_handle, 0 /*timeout_us*/,

@@ -404,6 +404,7 @@ _bloom_filter_ratio
 _cache_wash_interval
 _checkpoint_diagnose_preservation_count
 _chunk_row_store_mem_limit
+_compaction_batch_size
 _compaction_prewarm_percentage
 _complex_cbqt_table_num
 _cs_auto_split_row_count_threshold
@@ -488,6 +489,7 @@ _enable_log_cache
 _enable_malloc_v2
 _enable_memleak_light_backtrace
 _enable_memtable_hash_index
+_enable_minor_micro_reuse
 _enable_mock_stmt_flush_table
 _enable_more_aggressive_dynamic_worker
 _enable_multiple_semantic_indexes_on_column

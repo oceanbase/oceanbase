@@ -15,6 +15,7 @@
 #include "share/backup/ob_backup_data_table_operator.h"
 #include "observer/omt/ob_tenant.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
+#include "storage/high_availability/ob_storage_ha_dag.h"
 #include "storage/backup/ob_backup_meta_cache.h"
 #include "share/ob_zone_merge_info.h"
 #include "share/ob_global_merge_table_operator.h"
@@ -877,45 +878,25 @@ int ObBackupBuildTenantIndexDagNet::init_by_param(const share::ObIDagInitParam *
 int ObBackupBuildTenantIndexDagNet::start_running()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
+  int tmp_ret = OB_SUCCESS; // used in REPORT_TASK_RESULT macro
   MAKE_TENANT_SWITCH_SCOPE_GUARD(guard);
   ObLSBackupIndexRebuildDag *rebuild_dag = NULL;
   const ObBackupIndexLevel index_level = BACKUP_INDEX_LEVEL_TENANT;
-  ObTenantDagScheduler *dag_scheduler = NULL;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("dag net not init", K(ret));
   } else if (OB_FAIL(guard.switch_to(param_.tenant_id_))) {
     LOG_WARN("failed to switch to tenant", K(ret), K_(param));
-  } else if (OB_ISNULL(dag_scheduler = MTL(ObTenantDagScheduler *))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dag scheduler must not be NULL", K(ret));
-  } else if (OB_FAIL(dag_scheduler->alloc_dag(rebuild_dag, true/*is_ha_dag*/))) {
-    LOG_WARN("failed to alloc rebuild index dag", K(ret));
-  } else if (OB_FAIL(rebuild_dag->init(param_,
-                 backup_data_type_,
-                 index_level,
-                 report_ctx_,
-                 NULL /*task_mgr*/,
-                 NULL /*provider*/,
-                 NULL /*index_kv_cache*/,
-                 NULL /*ctx*/))) {
-    LOG_WARN("failed to init child dag", K(ret), K_(param));
-  } else if (OB_FAIL(rebuild_dag->create_first_task())) {
-    LOG_WARN("failed to create first task for child dag", K(ret), KPC(rebuild_dag));
-  } else if (OB_FAIL(add_dag_into_dag_net(*rebuild_dag))) {
-    LOG_WARN("failed to add dag into dag_net", K(ret), KPC(rebuild_dag));
-  } else if (OB_FAIL(dag_scheduler->add_dag(rebuild_dag))) {
-    if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
-      LOG_WARN("failed to add dag", K(ret), KPC(rebuild_dag));
-    } else {
-      LOG_WARN("may exist same dag", K(ret), KPC(rebuild_dag));
-    }
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_schedule_single_dag(
+      this,
+      ObDagPrio::DAG_PRIO_MAX, false/*emergency*/, rebuild_dag/*new_dag*/,
+      param_, backup_data_type_, index_level, report_ctx_,
+      (ObBackupMacroBlockTaskMgr *)nullptr,
+      (ObIBackupTabletProvider *)nullptr,
+      (ObBackupIndexKVCache *)nullptr,
+      (ObLSBackupCtx *)nullptr))) {
+    LOG_WARN("failed to alloc and schedule rebuild index dag", K(ret), K_(param));
   }
-  if (OB_FAIL(ret) && OB_NOT_NULL(dag_scheduler) && OB_NOT_NULL(rebuild_dag)) {
-    dag_scheduler->free_dag(*rebuild_dag);
-  }
-
   if (OB_FAIL(ret)) {
     REPORT_TASK_RESULT(this->get_dag_id(), ret);
   }
@@ -1028,12 +1009,9 @@ int ObLSBackupMetaDag::create_first_task()
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup meta dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("failed to alloc task", K(ret));
-  } else if (OB_FAIL(task->init(start_scn_, param_, report_ctx_, *ls_backup_ctx_))) {
-    LOG_WARN("failed to init task", K(ret), K_(start_scn), K_(param));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("failed to add task", K(ret));
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_add_single_task(
+                 this, task, start_scn_, param_, report_ctx_, *ls_backup_ctx_))) {
+    LOG_WARN("failed to alloc and add task", K(ret), K_(start_scn), K_(param));
   } else {
     LOG_INFO("success to add backup meta task", K(ret), KPC(this), KPC(task));
   }
@@ -1137,9 +1115,9 @@ int ObLSBackupPrepareDag::create_first_task()
   int64_t concurrency = 0;
   if (OB_FAIL(get_concurrency_count_(backup_data_type_, concurrency))) {
     LOG_WARN("failed to get concurrency count", K(ret), K_(backup_data_type));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("failed to alloc task", K(ret));
-  } else if (OB_FAIL(task->init(concurrency,
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_add_single_task(
+                 this, task,
+                 concurrency,
                  param_,
                  backup_data_type_,
                  *ls_backup_ctx_,
@@ -1147,9 +1125,7 @@ int ObLSBackupPrepareDag::create_first_task()
                  *task_mgr_,
                  *index_kv_cache_,
                  report_ctx_))) {
-    LOG_WARN("failed to init task", K(ret), K_(param), K_(backup_data_type));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("failed to add task", K(ret));
+    LOG_WARN("failed to alloc and add task", K(ret), K_(param), K_(backup_data_type));
   } else {
     LOG_INFO("success to add prepare task", K(ret), KPC(this), KPC(task));
   }
@@ -1281,12 +1257,9 @@ int ObLSBackupFinishDag::create_first_task()
   backup_data_type.set_major_data_backup();
   if (OB_FAIL(param_.convert_to(backup_data_type, param))) {
     LOG_WARN("failed to convert param", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("failed to alloc task", K(ret));
-  } else if (OB_FAIL(task->init(param, report_ctx_, *ls_backup_ctx_, *index_kv_cache_))) {
-    LOG_WARN("failed to init task", K(ret), K(param));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("failed to add task", K(ret));
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_add_single_task(
+                 this, task, param, report_ctx_, *ls_backup_ctx_, *index_kv_cache_))) {
+    LOG_WARN("failed to alloc and add task", K(ret), K(param));
   } else {
     LOG_INFO("success to add finish task", K(ret), KPC(this), KPC(task));
   }
@@ -1594,9 +1567,9 @@ int ObLSBackupDataDag::create_first_task()
   ObLSBackupDataParam param;
   if (OB_FAIL(param_.convert_to(backup_data_type_, param))) {
     LOG_WARN("failed to convert param", K(ret));
-  } else if (OB_FAIL(alloc_task(backup_task))) {
-    LOG_WARN("failed to alloc task", K(ret));
-  } else if (OB_FAIL(backup_task->init(task_id_,
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_add_single_task(
+                 this, backup_task,
+                 task_id_,
                  backup_data_type_,
                  backup_items_,
                  param,
@@ -1606,9 +1579,7 @@ int ObLSBackupDataDag::create_first_task()
                  *task_mgr_,
                  *index_kv_cache_,
                  index_rebuild_dag_))) {
-    LOG_WARN("failed to init backup task", K(ret), K_(task_id));
-  } else if (OB_FAIL(add_task(*backup_task))) {
-    LOG_WARN("failed to add task", K(ret));
+    LOG_WARN("failed to alloc and add backup task", K(ret), K_(task_id));
   } else {
     LOG_INFO("generate backup data task", K_(param), K_(backup_data_type));
   }
@@ -1698,9 +1669,9 @@ int ObPrefetchBackupInfoDag::create_first_task()
   if (OB_ISNULL(ls_backup_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls backup ctx should not be null", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("failed to alloc task", K(ret));
-  } else if (OB_FAIL(task->init(param_,
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_add_single_task(
+                 this, task,
+                 param_,
                  backup_data_type_,
                  report_ctx_,
                  *ls_backup_ctx_,
@@ -1708,9 +1679,7 @@ int ObPrefetchBackupInfoDag::create_first_task()
                  *task_mgr_,
                  *index_kv_cache_,
                  index_rebuild_dag_))) {
-    LOG_WARN("failed to init task", K(ret), K(param_), K_(backup_data_type));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("failed to add task", K(ret));
+    LOG_WARN("failed to alloc and add task", K(ret), K(param_), K_(backup_data_type));
   } else {
     LOG_INFO("success to add prefetch task", K(ret), K_(param), K_(backup_data_type), KPC(task));
   }
@@ -1787,9 +1756,9 @@ int ObLSBackupIndexRebuildDag::create_first_task()
     LOG_WARN("task not init", K(ret));
   } else if (OB_FAIL(param_.convert_to(backup_data_type_, param))) {
     LOG_WARN("failed to convert param", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("failed to alloc task", K(ret));
-  } else if (OB_FAIL(task->init(param,
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_add_single_task(
+                 this, task,
+                 param,
                  index_level_,
                  ls_backup_ctx_,
                  provider_,
@@ -1797,9 +1766,7 @@ int ObLSBackupIndexRebuildDag::create_first_task()
                  index_kv_cache_,
                  report_ctx_,
                  compressor_type))) {
-    LOG_WARN("failed to init task", K(ret), K(param), K_(index_level));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("failed to add task", K(ret));
+    LOG_WARN("failed to alloc and add task", K(ret), K(param), K_(index_level));
   } else {
     LOG_INFO("success to add index rebuild dag", K(ret), KPC(this), KPC(task));
   }
@@ -2375,50 +2342,25 @@ int ObPrefetchBackupInfoTask::inner_check_backup_item_need_copy_when_change_turn
 int ObPrefetchBackupInfoTask::generate_next_prefetch_dag_()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
-  ObPrefetchBackupInfoDag *child_dag = NULL;
+  ObPrefetchBackupInfoDag *new_dag = NULL;
   int64_t prefetch_task_id = 0;
-  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler *);
   ObIDagNet *dag_net = NULL;
-  if (OB_ISNULL(scheduler) || OB_ISNULL(ls_backup_ctx_)) {
+  if (OB_ISNULL(ls_backup_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null MTL scheduler", K(ret), KP(scheduler), KP_(ls_backup_ctx));
+    LOG_WARN("ls_backup_ctx_ is null", K(ret));
   } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net should not be NULL", K(ret), K(*this));
-  } else if (OB_FAIL(scheduler->alloc_dag(child_dag, true/*is_ha_dag*/))) {
-    LOG_WARN("failed to alloc child dag", K(ret));
   } else if (OB_FAIL(ls_backup_ctx_->get_prefetch_task_id(prefetch_task_id))) {
     LOG_WARN("failed to get prefetch task id", K(ret));
-  } else if (OB_FAIL(child_dag->init(prefetch_task_id,
-                 param_,
-                 backup_data_type_,
-                 report_ctx_,
-                 *ls_backup_ctx_,
-                 *provider_,
-                 *task_mgr_,
-                 *index_kv_cache_,
-                 index_rebuild_dag_))) {
-    LOG_WARN("failed to init child dag", K(ret), K_(param));
-  } else if (OB_FAIL(child_dag->create_first_task())) {
-    LOG_WARN("failed to create first task for child dag", K(ret), KPC(child_dag));
-  } else if (OB_FAIL(dag_net->add_dag_into_dag_net(*child_dag))) {
-    LOG_WARN("failed to add dag into dag net", K(ret), KPC(child_dag));
-  } else if (OB_FAIL(dag_->add_child_without_inheritance(*child_dag))) {
-    LOG_WARN("failed to alloc dependency dag", K(ret), KPC(dag_), KPC(child_dag));
-  } else if (OB_FAIL(child_dag->add_child_without_inheritance(*index_rebuild_dag_))) {
-    LOG_WARN("failed to alloc dependency dag", K(ret), KPC(child_dag), KPC_(index_rebuild_dag));
-  } else if (OB_FAIL(scheduler->add_dag(child_dag))) {
-    if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
-      LOG_WARN("failed to add dag", K(ret), KPC(dag_), KPC(child_dag));
-    } else {
-      LOG_WARN("may exist same dag", K(ret));
-    }
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_schedule_dag(
+      dag_net, dag_/*parent_dag*/, index_rebuild_dag_/*child_dag*/,
+      ObDagPrio::DAG_PRIO_MAX, false/*emergency*/, new_dag,
+      prefetch_task_id, param_, backup_data_type_, report_ctx_,
+      *ls_backup_ctx_, *provider_, *task_mgr_, *index_kv_cache_, index_rebuild_dag_))) {
+    LOG_WARN("failed to alloc and schedule next prefetch dag", K(ret), K_(param));
   } else {
     LOG_INFO("success to alloc next prefetch dag", K(ret), K(prefetch_task_id), K_(param));
-  }
-  if (OB_FAIL(ret) && OB_NOT_NULL(scheduler) && OB_NOT_NULL(child_dag)) {
-    scheduler->free_dag(*child_dag);
   }
   return ret;
 }
@@ -2943,9 +2885,7 @@ int ObLSBackupDataTask::deal_with_backup_meta_(common::ObIArray<ObIODevice *> &d
           const ObTabletID &tablet_id = item.get_tablet_id();
           const storage::ObITable::TableKey &table_key = item.get_table_key();
           const ObBackupDeviceMacroBlockId physical_id = ObBackupDeviceMacroBlockId::get_default();
-          if (OB_FAIL(deal_with_sstable_other_block_root_blocks_(tablet_id, table_key))) {
-            LOG_WARN("failed to deal with ddl sstable root blocks", K(ret), K(tablet_id), K(table_key));
-          } else if (OB_FAIL(do_backup_single_meta_data_(item, device_handle_array.at(0)))) {
+          if (OB_FAIL(do_backup_single_meta_data_(item, device_handle_array.at(0)))) {
             LOG_WARN("failed to do backup single meta data", K(ret), K(item));
           } else if (OB_FAIL(mark_backup_item_finished_(item, physical_id))) {
             LOG_WARN("failed to mark backup item finished", K(ret), K(item));
@@ -3046,10 +2986,7 @@ int ObLSBackupDataTask::do_wait_index_builder_ready_(const common::ObTabletID &t
   bool exist = false;
   static const int64_t DEFAULT_SLEEP_US = 10_ms;
   while (OB_SUCC(ret)) {
-    if (GCTX.is_shared_storage_mode() && table_key.is_ddl_dump_sstable()) {
-      // ddl sstable in shared storage mode has no index builder
-      break;
-    } else if (OB_ISNULL(ls_backup_ctx_)) {
+    if (OB_ISNULL(ls_backup_ctx_)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("ls back ctx should not be null", K(ret));
     } else if (OB_SUCCESS != ls_backup_ctx_->get_result_code()) {
@@ -3315,48 +3252,6 @@ int ObLSBackupDataTask::add_item_to_other_block_mgr_(const blocksstable::MacroBl
     LOG_WARN("failed to add item", K(ret), K(linked_item));
   } else {
     LOG_INFO("add item to other block mgr", K(linked_item));
-  }
-  return ret;
-}
-
-int ObLSBackupDataTask::deal_with_sstable_other_block_root_blocks_(
-    const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key)
-{
-  int ret = OB_SUCCESS;
-  ObBackupOtherBlocksMgr *other_block_mgr = NULL;
-  ObBackupLinkedBlockItemWriter *linked_writer = NULL;
-  if (!GCTX.is_shared_storage_mode()) {
-    // do nothing
-  } else if (!table_key.is_ddl_dump_sstable()) {
-    // do nothing
-  } else if (OB_FAIL(get_other_block_mgr_for_tablet_(tablet_id, other_block_mgr, linked_writer))) {
-    LOG_WARN("failed to get other block mgr for tablet", K(ret), K(tablet_id), K(table_key));
-  } else if (OB_FAIL(linked_writer->init(param_, tablet_id, table_key, task_id_,
-      backup_data_ctx_.file_write_ctx_, backup_data_ctx_.file_offset_))) {
-    LOG_WARN("failed to init backup linked block item writer", K(ret), K(tablet_id), K(table_key));
-  } else if (OB_FAIL(other_block_mgr->wait(ls_backup_ctx_))) {
-    LOG_WARN("failed to wait other block mgr", K(ret), KP_(ls_backup_ctx));
-  } else {
-    ObBackupLinkedItem link_item;
-    while (OB_SUCC(ret)) {
-      link_item.reset();
-      if (OB_FAIL(other_block_mgr->get_next_item(link_item))) {
-        if (OB_ITER_END == ret) {
-          ret = OB_SUCCESS;
-          break;
-        } else {
-          LOG_WARN("failed to get next item", K(ret));
-        }
-      } else if (OB_FAIL(linked_writer->write(link_item))) {
-        LOG_WARN("failed to write link item", K(ret));
-      } else {
-        LOG_INFO("write link item", K(tablet_id), K(table_key), K(link_item));
-      }
-    }
-    if (FAILEDx(linked_writer->close())) {
-      LOG_WARN("failed to close item writer", K(ret));
-    }
-    LOG_INFO("deal with ddl sstable root blocks", K(tablet_id), K(table_key));
   }
   return ret;
 }
@@ -3931,55 +3826,27 @@ int ObLSBackupDataTask::check_backup_finish_(bool &is_finished)
 int ObLSBackupDataTask::do_generate_next_backup_dag_()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   ObPrefetchBackupInfoDag *next_dag = NULL;
   ObLSBackupDagInitParam dag_param;
-  ObLSBackupStage stage = LOG_STREAM_BACKUP_MAJOR;
-  ObTenantDagScheduler *scheduler = MTL(ObTenantDagScheduler *);
+  const ObLSBackupStage stage = LOG_STREAM_BACKUP_MAJOR;
   ObIDagNet *dag_net = NULL;
   int64_t prefetch_task_id = 0;
-  if (OB_ISNULL(scheduler) || OB_ISNULL(ls_backup_ctx_)) {
+  if (OB_ISNULL(ls_backup_ctx_)) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("unexpected null MTL scheduler", K(ret), KP(scheduler), KP_(ls_backup_ctx));
+    LOG_WARN("ls_backup_ctx_ is null", K(ret));
   } else if (OB_FAIL(param_.convert_to(stage, dag_param))) {
     LOG_WARN("failed to convert to param", K(ret), K(stage));
-  } else if (OB_FAIL(scheduler->alloc_dag(next_dag, true/*is_ha_dag*/))) {
-    LOG_WARN("failed to alloc child dag", K(ret));
   } else if (OB_ISNULL(dag_net = this->get_dag()->get_dag_net())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net should not be NULL", K(ret), K(*this));
   } else if (OB_FAIL(ls_backup_ctx_->get_prefetch_task_id(prefetch_task_id))) {
     LOG_WARN("failed to get prefetch task id", K(ret));
-  } else if (OB_FAIL(next_dag->init(prefetch_task_id,
-                 dag_param,
-                 backup_data_type_,
-                 report_ctx_,
-                 *ls_backup_ctx_,
-                 *provider_,
-                 *task_mgr_,
-                 *index_kv_cache_,
-                 index_rebuild_dag_))) {
-    LOG_WARN("failed to init child dag", K(ret), K(param_));
-  } else if (OB_FAIL(next_dag->create_first_task())) {
-    LOG_WARN("failed to create first task for child dag", K(ret), KPC(next_dag));
-  } else if (OB_FAIL(dag_net->add_dag_into_dag_net(*next_dag))) {
-    LOG_WARN("failed to add dag into dag net", K(ret), KPC(next_dag));
-  } else if (OB_FAIL(dag_->add_child_without_inheritance(*next_dag))) {
-    LOG_WARN("failed to alloc dependency dag", K(ret), KPC(dag_), KPC(next_dag));
-  } else if (OB_FAIL(next_dag->add_child_without_inheritance(*index_rebuild_dag_))) {
-    LOG_WARN("failed to add child without inheritance", K(ret), KPC_(index_rebuild_dag));
-  } else {
-    if (FAILEDx(scheduler->add_dag(next_dag))) {
-      if (OB_EAGAIN != ret && OB_SIZE_OVERFLOW != ret) {
-        LOG_WARN("failed to add dag", K(ret), KPC(dag_), KPC(next_dag));
-      } else {
-        LOG_WARN("may exist same dag", K(ret));
-      }
-    }
-  }
-
-  if (OB_FAIL(ret) && OB_NOT_NULL(scheduler) && OB_NOT_NULL(next_dag)) {
-    scheduler->free_dag(*next_dag);
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_schedule_dag(
+      dag_net, dag_/*parent_dag*/, index_rebuild_dag_/*child_dag*/,
+      ObDagPrio::DAG_PRIO_MAX, false/*emergency*/, next_dag,
+      prefetch_task_id, dag_param, backup_data_type_, report_ctx_,
+      *ls_backup_ctx_, *provider_, *task_mgr_, *index_kv_cache_, index_rebuild_dag_))) {
+    LOG_WARN("failed to alloc and schedule next backup dag", K(ret), K_(param));
   }
   return ret;
 }

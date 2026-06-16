@@ -36,6 +36,7 @@ using namespace blocksstable;
 namespace compaction
 {
 struct ObMergeParameter;
+class ObMergeVectorStore;
 class ObPartitionMergeHelper;
 class ObPartitionMinorMergeHelper;
 class ObTabletMergeInfo;
@@ -157,21 +158,25 @@ protected:
       const blocksstable::ObMacroBlockDesc &macro_desc,
       const ObMicroBlockData *micro_block_data,
       ObPartitionMergeIter &iter);
-  virtual int merge_macro_block_iter(MERGE_ITER_ARRAY &minimum_iters);
+  virtual int merge_macro_block_iter(ObPartitionMergeIter &iter);
   int check_macro_block_op(const ObMacroBlockDesc &macro_desc, ObBlockOp &block_op);
   virtual int merge_same_rowkey_iters(MERGE_ITER_ARRAY &merge_iters, bool is_incremental_row = true) = 0;
+  virtual int merge_batch_rows(MERGE_ITER_ARRAY &merge_iters) { return OB_NOT_SUPPORTED; }
 
   int process(const blocksstable::ObDatumRow &row, bool is_incremental_row = true);
-  int merge_macro_block_iter(MERGE_ITER_ARRAY &minimum_iters, int64_t &reuse_row_cnt);
-  int check_row_columns(const blocksstable::ObDatumRow &row);
-
-private:
-   // Attention! use try_process to reuse micro/macro
-  int process(const blocksstable::ObMicroBlock &micro_block, const int64_t sstable_idx);
-  int process(
+  // Attention! use try_process to reuse micro/macro
+  virtual int process(const blocksstable::ObMicroBlock &micro_block, const int64_t sstable_idx);
+  int process_micro_block(
+      const blocksstable::ObMicroBlock &micro_block,
+      const int64_t sstable_idx,
+      ObMergeVectorStore *read_vector_store);
+  virtual int process(
       const blocksstable::ObMacroBlockDesc &macro_meta,
       const ObMicroBlockData *micro_block_data,
       const int64_t sstable_idx);
+  int check_row_columns(const blocksstable::ObDatumRow &row);
+
+private:
   int inner_open_macro_writer(ObBasicTabletMergeCtx &ctx, ObMergeParameter &merge_param);
   virtual int inner_prepare_merge(ObBasicTabletMergeCtx &ctx, const int64_t idx) override final;
   virtual int inner_init() = 0;
@@ -195,21 +200,25 @@ public:
   ObPartitionMajorMerger(
     compaction::ObLocalArena &allocator,
     const ObStaticMergeParam &static_param);
-  ~ObPartitionMajorMerger();
+  virtual ~ObPartitionMajorMerger();
   virtual int merge_partition(
       ObBasicTabletMergeCtx &ctx,
       const int64_t idx) override;
   INHERIT_TO_STRING_KV("ObPartitionMajorMerger", ObPartitionMerger, "curr merger", "major merger");
 protected:
   virtual int inner_process(const blocksstable::ObDatumRow &row, bool is_incremental_row = true) override;
-private:
   virtual int inner_init() override;
   int init_progressive_merge_helper();
   virtual int merge_same_rowkey_iters(MERGE_ITER_ARRAY &merge_iters, bool is_incremental_row = true) override;
+  virtual int merge_batch_rows(MERGE_ITER_ARRAY &merge_iters) override;
   int merge_micro_block_iter(ObPartitionMergeIter &iter);
+  int try_reuse_range(ObPartitionMergeIter &iter);
   int reuse_base_sstable(ObPartitionMergeHelper &merge_helper);
   int reuse_base_small_sstable(ObPartitionMergeIter *base_iter, const MERGE_ITER_ARRAY &merge_iters);
   int inner_reuse_micro_or_row(ObPartitionMergeIter &base_iter, const MERGE_ITER_ARRAY &merge_iters);
+#ifdef ERRSIM
+  void write_wrong_row(const common::ObTabletID &tablet_id, const blocksstable::ObDatumRow &row);
+#endif
 };
 
 class ObPartitionMinorMerger : public ObPartitionMerger
@@ -230,6 +239,7 @@ protected:
                                           MERGE_ITER_ARRAY &minimum_iters,
                                           common::ObIArray<int64_t> &iter_idxs);
   virtual int merge_same_rowkey_iters(MERGE_ITER_ARRAY &merge_iters, bool is_incremental_row = true) override;
+  int merge_micro_block_iter(ObPartitionMergeIter &iter);
   int try_remove_ghost_iters(MERGE_ITER_ARRAY &merge_iters,
                              const bool shadow_already_output,
                              MERGE_ITER_ARRAY &minimum_iters,

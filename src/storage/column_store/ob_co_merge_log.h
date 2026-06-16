@@ -12,6 +12,8 @@
 #include "storage/tmp_file/ob_tmp_file_manager.h"
 #include "storage/compaction/ob_basic_tablet_merge_ctx.h"
 #include "storage/compaction/ob_compaction_schedule_util.h"
+#include "storage/compaction/vectorization/ob_merge_vector_store.h"
+
 #include "storage/blocksstable/ob_datum_row.h"
 namespace oceanbase
 {
@@ -97,6 +99,8 @@ public:
   const blocksstable::ObDatumRow &get_project_row() const { return project_row_; }
   int project(const blocksstable::ObDatumRow &row);
   int project(const blocksstable::ObDatumRow &row, blocksstable::ObDatumRow &result_row, bool &is_all_nop) const;
+  OB_INLINE const uint16_t *get_projector() const { return projector_; }
+  OB_INLINE int64_t get_projector_count() const { return projector_count_; }
   TO_STRING_KV(K_(is_inited), K_(projector), K_(project_row))
 private:
   void clean_project_row();
@@ -117,8 +121,8 @@ public:
   virtual ~ObCOMergeLogIterator() = default;
   virtual int init(ObBasicTabletMergeCtx &ctx, const int64_t idx, const int64_t cg_idx) = 0;
   virtual void reset() = 0;
-  // when mergelog.op_ = REPLAY, row = nullptr
-  virtual int get_next_log(ObMergeLog &mergelog, const blocksstable::ObDatumRow *&row) = 0;
+  // when mergelog.op_ = REPLAY, row = nullptr, vector_store = nullptr
+  virtual int get_next_log(ObMergeLog &mergelog, const ObMergeVectorStore *&vector_store, const blocksstable::ObDatumRow *&row) = 0;
   virtual int close() = 0;
   // for unittest / debug: expose major-merge-helper allocated iterators (major sstable) to check iterator type.
   // NOTE: this API appends into `iters`; caller should pass an empty array.

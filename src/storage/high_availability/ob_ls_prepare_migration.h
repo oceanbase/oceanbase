@@ -98,27 +98,16 @@ public:
   virtual bool operator == (const share::ObIDag &other) const override;
   virtual uint64_t hash() const override;
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
+  int init(share::ObIDagNet *dag_net);
   int prepare_ctx(share::ObIDagNet *dag_net);
 
   INHERIT_TO_STRING_KV("ObStorageHADag", ObStorageHADag, KP(this));
+protected:
+  ObLSPrepareMigrationCtx *get_ctx() const { return static_cast<ObLSPrepareMigrationCtx *>(ha_dag_net_ctx_); }
+  int fill_dag_key_helper_(const char *dag_name, char *buf, const int64_t buf_len) const;
+  bool is_inited_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObPrepareMigrationDag);
-};
-
-class ObInitialPrepareMigrationDag : public ObPrepareMigrationDag
-{
-public:
-  ObInitialPrepareMigrationDag();
-  virtual ~ObInitialPrepareMigrationDag();
-  virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
-  virtual int create_first_task() override;
-
-
-  int init(share::ObIDagNet *dag_net);
-  INHERIT_TO_STRING_KV("ObPrepareMigrationDag", ObPrepareMigrationDag, KP(this));
-protected:
-  bool is_inited_;
-  DISALLOW_COPY_AND_ASSIGN(ObInitialPrepareMigrationDag);
 };
 
 class ObInitialPrepareMigrationTask : public share::ObITask
@@ -136,21 +125,6 @@ private:
   ObLSPrepareMigrationCtx *ctx_;
   share::ObIDagNet *dag_net_;
   DISALLOW_COPY_AND_ASSIGN(ObInitialPrepareMigrationTask);
-};
-
-class ObStartPrepareMigrationDag : public ObPrepareMigrationDag
-{
-public:
-  ObStartPrepareMigrationDag();
-  virtual ~ObStartPrepareMigrationDag();
-  virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
-  virtual int create_first_task() override;
-
-  int init(share::ObIDagNet *dag_net);
-  INHERIT_TO_STRING_KV("ObPrepareMigrationDag", ObPrepareMigrationDag, KP(this));
-protected:
-  bool is_inited_;
-  DISALLOW_COPY_AND_ASSIGN(ObStartPrepareMigrationDag);
 };
 
 class ObStartPrepareMigrationTask : public share::ObITask
@@ -174,21 +148,6 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObStartPrepareMigrationTask);
 };
 
-class ObFinishPrepareMigrationDag : public ObPrepareMigrationDag
-{
-public:
-  ObFinishPrepareMigrationDag();
-  virtual ~ObFinishPrepareMigrationDag();
-  virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
-  virtual int create_first_task() override;
-
-  int init(share::ObIDagNet *dag_net);
-  INHERIT_TO_STRING_KV("ObPrepareMigrationDag", ObPrepareMigrationDag, KP(this));
-protected:
-  bool is_inited_;
-  DISALLOW_COPY_AND_ASSIGN(ObFinishPrepareMigrationDag);
-};
-
 class ObFinishPrepareMigrationTask : public share::ObITask
 {
 public:
@@ -206,6 +165,19 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObFinishPrepareMigrationTask);
 };
 
+#define DEFINE_PREPARE_MIGRATION_DAG(DAG_NAME, DAG_TYPE, TASK_NAME)                                   \
+  class DAG_NAME : public ObPrepareMigrationDag {                                   \
+  public:                                                                      \
+    DAG_NAME() : ObPrepareMigrationDag(DAG_TYPE) {} \
+    virtual ~DAG_NAME() = default; \
+    virtual int fill_dag_key(char *buf, const int64_t buf_len) const override { return fill_dag_key_helper_("DAG_NAME", buf, buf_len); } \
+    virtual int create_first_task() override { TASK_NAME *task = nullptr; return create_task(nullptr, task); } \
+    INHERIT_TO_STRING_KV("DAG_NAME", ObPrepareMigrationDag, KP(this)); \
+  };
+
+DEFINE_PREPARE_MIGRATION_DAG(ObInitialPrepareMigrationDag, ObDagType::DAG_TYPE_INITIAL_PREPARE_MIGRATION, ObInitialPrepareMigrationTask);
+DEFINE_PREPARE_MIGRATION_DAG(ObStartPrepareMigrationDag, ObDagType::DAG_TYPE_START_PREPARE_MIGRATION, ObStartPrepareMigrationTask);
+DEFINE_PREPARE_MIGRATION_DAG(ObFinishPrepareMigrationDag, ObDagType::DAG_TYPE_FINISH_PREPARE_MIGRATION, ObFinishPrepareMigrationTask);
 
 }
 }

@@ -14,6 +14,7 @@
 #include "share/backup/ob_backup_connectivity.h"
 #include "share/location_cache/ob_location_service.h"
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
+#include "storage/high_availability/ob_storage_ha_dag.h"
 
 namespace oceanbase
 {
@@ -163,38 +164,16 @@ int ObLSBackupCleanDagNet::init_by_param(const ObIDagInitParam *param)
 int ObLSBackupCleanDagNet::start_running()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   ObLSBackupCleanDag *clean_dag = nullptr;
-  ObTenantDagScheduler *scheduler = nullptr;
   FLOG_INFO("[BACKUP_CLEAN]start running ls backup clean dagnet");
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup clean dag net do not init", K(ret));
-  } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag(clean_dag, true/*is_ha_dag*/))) {
-    LOG_WARN("failed to alloc backup clean dag ", K(ret));
-  } else if (OB_FAIL(clean_dag->init(this))) {
-    LOG_WARN("failed to init backup clean dag", K(ret));
-  } else if (OB_FAIL(add_dag_into_dag_net(*clean_dag))) {
-    LOG_WARN("failed to add backup clean dag into dag net", K(ret));
-  } else if (OB_FAIL(clean_dag->create_first_task())) {
-    LOG_WARN("failed to create first task", K(ret));
-  } else if (OB_FAIL(scheduler->add_dag(clean_dag))) {
-    LOG_WARN("failed to add dag", K(ret), K(*clean_dag));
-    if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-      LOG_WARN("Fail to add task", K(ret));
-      ret = OB_EAGAIN;
-    }
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_schedule_single_dag(
+      this, ObDagPrio::DAG_PRIO_MAX, false/*emergency*/, clean_dag/*new_dag*/, this))) {
+    LOG_WARN("failed to alloc and schedule backup clean dag", K(ret));
   } else {
     LOG_INFO("[BACKUP_CLEAN]succeed to schedule backup clean dag", K(*clean_dag));
-  }
-
-  if (OB_FAIL(ret)) {
-    if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(clean_dag)) {
-      scheduler->free_dag(*clean_dag);
-    }
   }
   return ret;
 }
@@ -366,12 +345,9 @@ int ObLSBackupCleanDag::create_first_task()
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("backup clean dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("failed to alloc task", K(ret));
-  } else if (OB_FAIL(task->init(param_, *sql_proxy_))) {
-    LOG_WARN("failed to init log stream backup clean task", K(ret));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_add_single_task(
+                 this, task, param_, *sql_proxy_))) {
+    LOG_WARN("failed to alloc and add log stream backup clean task", K(ret));
   } else {
     LOG_INFO("[BACKUP_CLEAN]success finish create first task", K(*task));
   }

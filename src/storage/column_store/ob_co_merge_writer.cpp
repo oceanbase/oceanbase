@@ -15,25 +15,34 @@ namespace compaction
 /**
  * ---------------------------------------------------------ObWriteHelper--------------------------------------------------------------
  */
-int ObWriteHelper::init(
+int ObWriteHelper::init_data_store_desc(
     ObBasicTabletMergeCtx &ctx,
     const ObMergeParameter &merge_param,
+    ObTabletMergeInfo &merge_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObDataDescHelper::build(merge_param, merge_info, data_store_desc_))) {
+    STORAGE_LOG(WARN, "fail to build data desc", K(ret));
+  } else if (OB_FAIL(ObSSTableMergeHistory::init_sstable_merge_block_info_array(
+        ctx.get_major_sstable_count(), sstable_merge_block_info_array_))) {
+    STORAGE_LOG(WARN, "failed to init sstable merge block info array", K(ret));
+  }
+  return ret;
+}
+
+int ObWriteHelper::open_macro_writer(
+    ObBasicTabletMergeCtx &ctx,
     const int64_t parallel_idx,
     const ObStorageColumnGroupSchema &cg_schema,
-    ObTabletMergeInfo &merge_info,
-    ObIAllocator &allocator)
+    ObIAllocator &allocator,
+    const ObITableReadInfo *merge_micro_block_read_info)
 {
   int ret = OB_SUCCESS;
   int64_t macro_start_seq = 0;
   ObMacroSeqParam macro_seq_param;
   macro_seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;
   ObISSTableObjectCleaner *object_cleaner = nullptr;
-  if (OB_FAIL(ObDataDescHelper::build(merge_param, merge_info, data_store_desc_))) {
-    STORAGE_LOG(WARN, "fail to build data desc", K(ret), K(cg_schema));
-  } else if (OB_FAIL(ObSSTableMergeHistory::init_sstable_merge_block_info_array(
-        ctx.get_major_sstable_count(), sstable_merge_block_info_array_))) {
-    STORAGE_LOG(WARN, "failed to init sstable merge block info array", K(ret));
-  } else if (OB_FAIL(ctx.generate_macro_seq_info(parallel_idx, macro_start_seq))) {
+  if (OB_FAIL(ctx.generate_macro_seq_info(parallel_idx, macro_start_seq))) {
     LOG_WARN("failed to generate macro seq info for cur merge task", K(ret), K(parallel_idx), K(ctx));
   } else if (FALSE_IT(macro_seq_param.start_ = macro_start_seq)) {
   } else if (OB_FAIL(ObISSTableObjectCleaner::get_cleaner_from_data_store_desc(
@@ -42,18 +51,39 @@ int ObWriteHelper::init(
   } else if (OB_FAIL(macro_writer_.open(
                  data_store_desc_, parallel_idx, macro_seq_param,
                  ctx.get_pre_warm_param(),
-                 *object_cleaner))) {
+                 *object_cleaner,
+                 nullptr /*callback*/,
+                 nullptr /*validator*/, // TODO: remove ss related parameters
+                 nullptr /*device_handle*/,
+                 merge_micro_block_read_info))) {
     STORAGE_LOG(WARN, "Failed to open macro writer",
-                K(ret), K(parallel_idx), K(data_store_desc_), KPC(object_cleaner));
+                K(ret), K(parallel_idx), K(data_store_desc_), KPC(object_cleaner), KP(merge_micro_block_read_info));
   } else if (cg_schema.is_all_column_group()) {
     skip_project_ = true;
   } else if (OB_FAIL(projector_.init(cg_schema, allocator))) {
     STORAGE_LOG(WARN, "fail to init project", K(ret), K(cg_schema));
   } else {
     LOG_INFO("success to open macro writer with pre warmer", KR(ret), K(data_store_desc_),
-      K(macro_writer_), K(ctx.get_pre_warm_param()), K(cg_schema));
+      K(macro_writer_), K(ctx.get_pre_warm_param()), K(cg_schema), KP(merge_micro_block_read_info));
   }
+  return ret;
+}
 
+int ObWriteHelper::init(
+    ObBasicTabletMergeCtx &ctx,
+    const ObMergeParameter &merge_param,
+    const int64_t parallel_idx,
+    const ObStorageColumnGroupSchema &cg_schema,
+    ObTabletMergeInfo &merge_info,
+    ObIAllocator &allocator,
+    const ObITableReadInfo *merge_micro_block_read_info)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(init_data_store_desc(ctx, merge_param, merge_info))) {
+    STORAGE_LOG(WARN, "fail to init data store desc", K(ret));
+  } else if (OB_FAIL(open_macro_writer(ctx, parallel_idx, cg_schema, allocator, merge_micro_block_read_info))) {
+    STORAGE_LOG(WARN, "fail to open macro writer", K(ret), K(parallel_idx), K(cg_schema), KP(merge_micro_block_read_info));
+  }
   return ret;
 }
 
@@ -74,10 +104,22 @@ int ObWriteHelper::append(const blocksstable::ObDatumRow &row, const bool direct
   return ret;
 }
 
-int ObWriteHelper::append_micro_block(const blocksstable::ObMicroBlock &micro_block, const int64_t sstable_idx)
+int ObWriteHelper::append_batch(const blocksstable::ObBatchDatumRows &batch_rows)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(macro_writer_.append_micro_block(micro_block))) {
+  if (OB_FAIL(macro_writer_.append_batch(batch_rows))) {
+    STORAGE_LOG(WARN, "failed to append batch", K(ret), K(batch_rows), K(macro_writer_));
+  }
+  return ret;
+}
+
+int ObWriteHelper::append_micro_block(
+    const blocksstable::ObMicroBlock &micro_block,
+    const int64_t sstable_idx,
+    ObMergeVectorStore *read_vector_store)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(macro_writer_.append_micro_block(micro_block, nullptr, read_vector_store))) {
     STORAGE_LOG(WARN, "failed to append micro block", K(ret), K(micro_block), K(macro_writer_));
   } else if (sstable_idx >= 0 && sstable_idx < sstable_merge_block_info_array_.count()) {
     sstable_merge_block_info_array_.at(sstable_idx).inc_multiplexed_micro_count_in_new_macro();
@@ -319,53 +361,70 @@ int ObCOMergeWriter::basic_init(const blocksstable::ObDatumRow &default_row,
   return ret;
 }
 
-int ObCOMergeWriter::replay_last_skip_major(const int64_t current_major_idx)
+int ObCOMergeWriter::replay_last_skip_major(const int64_t current_major_idx, const int64_t current_row_id)
 {
   int ret = OB_SUCCESS;
-  if (last_skip_major_idx_ >= 0 && last_skip_major_idx_ != current_major_idx) {
-    ObMergeLog merge_log(ObMergeLog::REPLAY, last_skip_major_idx_, last_skip_major_row_id_);
-    if (OB_FAIL(ObCOMergeWriter::replay_range_mergelog(merge_log))) {
-      LOG_WARN("failed to replay merge log");
-    } else {
+  if (last_skip_major_idx_ >= 0) {
+    if (last_skip_major_idx_ == current_major_idx && last_skip_major_row_id_ <= current_row_id) {
+      // larger row id for same major, do nothing
       last_skip_major_idx_ = -1;
       last_skip_major_row_id_ = -1;
-      LOG_INFO("success to replay last skip major", K(ret), K(merge_log));
+    } else if (last_skip_major_idx_ != current_major_idx) {
+      ObMergeLog merge_log(ObMergeLog::REPLAY, last_skip_major_idx_, last_skip_major_row_id_);
+      if (OB_FAIL(replay_range_mergelog(merge_log))) {
+        LOG_WARN("failed to replay merge log");
+      } else {
+        last_skip_major_idx_ = -1;
+        last_skip_major_row_id_ = -1;
+        LOG_INFO("success to replay last skip major", K(ret), K(merge_log), K(cg_idx_));
+      }
     }
   }
   return ret;
 }
 
-int ObCOMergeWriter::replay_mergelog(const ObMergeLog &mergelog, const blocksstable::ObDatumRow *&row)
+// The main entry for replay mergelog
+int ObCOMergeWriter::replay_mergelog(
+    const ObMergeLog &mergelog,
+    const ObMergeVectorStore *&vector_store,
+    const blocksstable::ObDatumRow *&row)
 {
   int ret = OB_SUCCESS;
   if (IS_NOT_INIT) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObCOMergeWriter not init", K(ret));
-  } else if (OB_UNLIKELY(!mergelog.is_valid())) {
+  } else if (OB_UNLIKELY(!mergelog.is_valid() || (nullptr != vector_store && nullptr != row))) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid merge log", K(ret), K(mergelog), K(row));
-  } else if (OB_FAIL(replay_last_skip_major(mergelog.major_idx_))) {
+    LOG_WARN("invalid merge log", K(ret), K(mergelog), K(vector_store), K(row));
+  } else if (OB_FAIL(replay_last_skip_major(mergelog.major_idx_, mergelog.row_id_))) {
     LOG_WARN("failed to replay last skip major", K(ret));
   } else if (mergelog.is_range_mergelog()) {
     if (OB_FAIL(replay_range_mergelog(mergelog))) {
       LOG_WARN("failed to replay merge log", K(ret), K(mergelog));
     }
-  } else if (OB_ISNULL(row)) {
+  } else if (OB_UNLIKELY(nullptr == vector_store && nullptr == row)) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid row", K(ret), K(mergelog), K(row));
-  } else if (ObMergeLog::INSERT == mergelog.op_ && row->row_flag_.is_delete()) {
-  } else if (OB_FAIL(replay_single_mergelog(mergelog, *row))) {
-    LOG_WARN("failed to replay merge log", K(ret), K(mergelog), K(row));
+    LOG_WARN("invalid row", K(ret), K(mergelog), K(vector_store), K(row));
+  } else if (nullptr != row) {
+    if (ObMergeLog::INSERT == mergelog.op_ && row->row_flag_.is_delete()) {
+    } else if (OB_FAIL(replay_single_mergelog(mergelog, *row))) {
+      LOG_WARN("failed to replay merge log", K(ret), K(mergelog), KPC(row));
+    }
+  } else { // nullptr != vector_store
+    if (OB_FAIL(replay_batch_mergelog(mergelog, *vector_store, true/*need_check_project*/, true/*need_check_filter*/))) {
+      LOG_WARN("failed to replay merge log", K(ret), K(mergelog), K(vector_store));
+    }
   }
-  LOG_TRACE("success to replay merge log", K(ret), K(mergelog), KPC(row));
+  LOG_TRACE("success to replay merge log", K(ret), K(mergelog), KPC(vector_store), KPC(row));
   return ret;
 }
 
+// replay single row which is seen as inc row
 int ObCOMergeWriter::replay_single_mergelog(const ObMergeLog &mergelog, const blocksstable::ObDatumRow &row)
 {
   int ret = OB_SUCCESS;
-  bool finish = false;
   ObCOMajorMergeIter *merge_iter = nullptr;
+  bool finish = false;
   if (OB_FAIL(get_curr_major_iter(mergelog, merge_iter))) {
     LOG_WARN("failed to get curr major iter", K(ret), K(mergelog));
   }
@@ -373,26 +432,12 @@ int ObCOMergeWriter::replay_single_mergelog(const ObMergeLog &mergelog, const bl
     int64_t cmp_ret = 0;
     bool skip_curr_row = false;
     if (OB_FAIL(compare(merge_iter, mergelog, cmp_ret, row, skip_curr_row))) {
-      STORAGE_LOG(WARN, "failed to compare", K(ret), K(mergelog));
+      LOG_WARN("failed to compare", K(ret), K(mergelog), K(row));
     } else if (skip_curr_row) {
       last_skip_major_idx_ = mergelog.major_idx_;
       last_skip_major_row_id_ = mergelog.row_id_;
-      break;//skip
-    } else if (cmp_ret < 0) {
-      if (OB_FAIL(append_iter_curr_row_or_range(merge_iter, mergelog.op_))) {
-        STORAGE_LOG(WARN, "failed to append iter curr row or range", K(ret));
-      }
-    } else if (cmp_ret == 0) {
-      if (mergelog.op_ == ObMergeLog::INSERT) {
-        if (OB_FAIL(append_iter_curr_row_or_range(merge_iter, mergelog.op_))) {
-          STORAGE_LOG(WARN, "failed to append iter curr row or range", K(ret));
-        }
-      } else if (OB_FAIL(process_mergelog_row(merge_iter, mergelog, row))) {
-        STORAGE_LOG(WARN, "failed to process_mergelog_row", K(ret), K(mergelog), K(row));
-      } else {
-        finish = true;
-      }
-    } else if (cmp_ret > 0){
+      break;
+    } else if (cmp_ret > 0) {
       if (OB_UNLIKELY(mergelog.op_ != ObMergeLog::INSERT)) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "unexpected cmp ret", K(ret), K(cmp_ret), K(mergelog), K(row), K(*this));
@@ -401,6 +446,16 @@ int ObCOMergeWriter::replay_single_mergelog(const ObMergeLog &mergelog, const bl
       } else {
         finish = true;
       }
+    } else if (cmp_ret < 0) {
+      // we can't replay to row_id - 1 directly, cause merge log maybe update which can be skipped,
+      // in which situation, the range can be reused but replay to row_id - 1 will cause range be opened.
+      if (OB_FAIL(append_iter_curr_row_or_range(merge_iter, mergelog.op_))) {
+        STORAGE_LOG(WARN, "failed to append iter curr row or range", K(ret));
+      }
+    } else if (OB_FAIL(process_mergelog_row(merge_iter, mergelog, row))) {
+      STORAGE_LOG(WARN, "failed to process_mergelog_row", K(ret), K(mergelog), K(row));
+    } else {
+      finish = true;
     }
     if (OB_FAIL(ret)) {
     } else if (cmp_ret <= 0 && OB_FAIL(merge_iter->next())) {
@@ -481,7 +536,7 @@ int ObCOMergeWriter::append_iter_curr_row_or_range(
       } else if (OB_ISNULL(micro_block) || !micro_block->is_valid()) {
         ret = OB_ERR_UNEXPECTED;
         STORAGE_LOG(WARN, "unexpected micro block", K(ret), KPC(iter), KPC(micro_block));
-      } else if (OB_FAIL(process(*micro_block, static_cast<ObPartitionMergeIter *>(iter)->get_sstable_idx()))) {
+      } else if (OB_FAIL(process(*micro_block, static_cast<ObPartitionMergeIter *>(iter)->get_sstable_idx(), get_read_vector_store()))) {
         STORAGE_LOG(WARN, "failed to process micro block", K(ret));
       }
     } else if (OB_FAIL(get_curr_major_row(*merge_iter, major_row))) {
@@ -548,7 +603,7 @@ int ObCOMergeWriter::compare(
         skip_curr_row = true;
         break;
       } else if (FALSE_IT(check_iter_range = true)) {
-      } else if (OB_FAIL(iter->open_curr_range(false /* rewrite */))) {
+      } else if (OB_FAIL(iter->open_curr_range(false /* rewrite */, false/*for_compare*/))) {
         STORAGE_LOG(WARN, "failed to open curr range", K(ret), KPC(iter));
       }
     }
@@ -594,33 +649,6 @@ int ObCOMergeWriter::process_mergelog_row(ObCOMajorMergeIter *merge_iter, const 
   return ret;
 }
 
-int ObCOMergeWriter::process_macro_rewrite(ObCOMajorMergeIter *merge_iter)
-{
-  int ret = OB_SUCCESS;
-  const blocksstable::ObDatumRow *major_row = nullptr;
-  ObMergeIter *iter = nullptr != merge_iter ? merge_iter->iter_ : nullptr;
-  if (OB_UNLIKELY(nullptr == iter || iter->is_iter_end())) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexpected iter state", K(ret), KPC(iter));
-  } else if (OB_UNLIKELY(iter->is_macro_block_opened())) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexpected macro block opened", K(ret), KPC(iter));
-  } else if (OB_FAIL(iter->open_curr_range(true /* rewrite */))) {
-    STORAGE_LOG(WARN, "failed to open iter range", K(ret), KPC(iter));
-  } else if (OB_ISNULL(iter->get_curr_row())) {
-    ret = OB_ERR_UNEXPECTED;
-    STORAGE_LOG(WARN, "unexpected null row", K(ret), KPC(iter));
-  } else if (OB_FAIL(get_curr_major_row(*merge_iter, major_row))) {
-    STORAGE_LOG(WARN, "failed to get curr major row", K(ret), KPC(this));
-  } else if (OB_FAIL(fuser_.fuse_rows(*major_row, default_row_))) {
-    STORAGE_LOG(WARN, "failed to fuse row", K(ret), KPC(iter), K(default_row_));
-  } else if (OB_FAIL(process(fuser_.get_result_row()))) {
-    STORAGE_LOG(WARN, "failed to process iter curr row", K(ret), KPC(iter));
-  }
-
-  return ret;
-}
-
 void ObCOMergeWriter::dump_info() const
 {
   for (int64_t i = 0; i < iters_.count(); ++i) {
@@ -635,14 +663,14 @@ void ObCOMergeWriter::dump_info() const
 int ObCOMergeWriter::init_default_row(
     ObIAllocator &allocator,
     const ObMergeParameter &merge_param,
-    ObTabletMergeInfo &merge_info,
+    const int64_t major_working_cluster_version,
     blocksstable::ObDatumRow &default_row)
 {
   int ret = OB_SUCCESS;
   if (OB_FAIL(default_row.init(allocator, merge_param.static_param_.multi_version_column_descs_.count()))) {
     LOG_WARN("Failed to init datum row", K(ret));
   } else if (OB_FAIL(merge_param.get_schema()->get_orig_default_row(merge_param.static_param_.multi_version_column_descs_,
-      merge_info.get_sstable_build_desc().get_static_desc().major_working_cluster_version_ >= DATA_VERSION_4_3_1_0, default_row))) {
+      major_working_cluster_version >= DATA_VERSION_4_3_1_0, default_row))) {
     LOG_WARN("Failed to get default row from table schema", K(ret), K(merge_param.static_param_.multi_version_column_descs_));
   } else if (OB_FAIL(ObLobManager::fill_lob_header(allocator, merge_param.static_param_.multi_version_column_descs_, default_row))) {
     LOG_WARN("fail to fill lob header for default row", K(ret));
@@ -763,29 +791,34 @@ int ObCOMergeRowWriter::init(
   if (OB_FAIL(co_ctx->get_cg_schema_for_merge(cg_idx, cg_schema))) {
     LOG_WARN("fail to get cg schema for merge", K(ret), K(cg_idx));
   } else if (FALSE_IT(cg_column_cnt = cg_schema->column_cnt_)) {
-  } else if (OB_FAIL(write_helper_.init(ctx, merge_param, parallel_idx, *cg_schema, merge_info, allocator_))) {
-    LOG_WARN("fail to init write helper", K(ret), K(parallel_idx), K(cg_schema));
+  } else if (OB_FAIL(write_helper_.init_data_store_desc(ctx, merge_param, merge_info))) {
+    LOG_WARN("fail to init data store desc", K(ret), K(parallel_idx), K(cg_schema));
+  } else if (OB_FAIL(choose_read_info_for_old_major(merge_param, *full_read_info, *cg_schema, read_info))) {
+    LOG_WARN("fail to choose read info for old major", K(ret), K(cg_schema), KP(read_info));
+  } else if (OB_ISNULL(read_info)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("read info is unexpected null", KR(ret), KP(read_info));
+  } else if (OB_FAIL(write_helper_.open_macro_writer(ctx, parallel_idx, *cg_schema, allocator_, read_info))) {
+    LOG_WARN("fail to open macro writer", K(ret), K(parallel_idx), K(cg_schema), KPC(read_info));
   } else if (OB_FAIL(row_.init(cg_column_cnt))) {
     LOG_WARN("fail to init row", K(ret), K(cg_schema));
   } else {
+    // inner_init() uses cg_idx_; set before the major loop because batch merge may skip every
+    // major (empty cg_tables path) so the loop body never assigns cg_idx_.
+    cg_idx_ = cg_idx;
     // Note: The order of 'tables' here is the reverse of 'merge_sstable_status_array_'
     for (int64_t i = 0, sstable_idx = tables.count() - 1; OB_SUCC(ret) && i < tables.count(); i++, sstable_idx--) {
       sstable = static_cast<ObSSTable *>(tables.at(i));
       table_need_full_merge = false;
-      if (OB_FAIL(get_writer_param(merge_param, cg_schema, cg_idx, sstable, table, add_column))) {
-        LOG_WARN("failed to get writer param", K(ret));
-      } else if (OB_FAIL(merge_param.static_param_.get_sstable_need_full_merge(sstable_idx, table_need_full_merge))) {
+      if (OB_FAIL(merge_param.static_param_.get_sstable_need_full_merge(sstable_idx, table_need_full_merge))) {
         LOG_WARN("failed to get sstable need_full_merge", K(ret), K(sstable_idx), KPC(table));
+      } else if (is_batch_merge_writer() && table_need_full_merge) {
+        LOG_INFO("skip major which is treated as minor in batch merge", K(sstable_idx), KPC(table));
+      } else if (OB_FAIL(get_writer_param(merge_param, cg_schema, cg_idx, sstable, table, add_column))) {
+        LOG_WARN("failed to get writer param", K(ret));
       } else if (nullptr != table && OB_FAIL(cg_tables.push_back(table))) {
         LOG_WARN("failed to push back table", K(ret), KPC(table));
       } else {
-        if (add_column) { //skip init read info and progressive_merge_helper_
-        } else if (read_info == nullptr && OB_FAIL(choose_read_info_for_old_major(merge_param, *full_read_info, *cg_schema, read_info))) {
-          LOG_WARN("Fail to choose read info", K(ret), K(cg_schema), K(read_info));
-        } else if (OB_ISNULL(read_info)) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("read info is unexpected null", KR(ret), KP(read_info));
-        }
         major_need_project = !add_column && table != nullptr &&
           (!table->is_column_store_sstable() ||
           (table->is_co_sstable() && static_cast<ObCOSSTableV2*>(table)->is_row_store_only_co_table())) &&
@@ -794,7 +827,6 @@ int ObCOMergeRowWriter::init(
                           table_need_full_merge ||
                           (cg_schema == &co_ctx->mocked_row_store_cg_) ||
                           (table != nullptr && !table->is_column_store_sstable()); // TODO: allow reuse row-store sstable
-        cg_idx_ = cg_idx;
         if (OB_FAIL(ret)) {
         } else if (is_base_cg_writer()) { // no need major iter
         } else if (OB_FAIL(init_merge_iter(
@@ -825,6 +857,11 @@ int ObCOMergeRowWriter::init(
     LOG_WARN("Failed to init default row", K(ret), K(cg_column_cnt));
   }
 
+  if (OB_FAIL(ret)) {
+  } else if (OB_FAIL(inner_init(ctx))) {
+    LOG_WARN("failed to inner init", K(ret));
+  }
+
   return ret;
 }
 
@@ -837,6 +874,42 @@ int ObCOMergeRowWriter::get_curr_major_row(ObCOMajorMergeIter &iter, const block
     }
   } else {
     row = iter.iter_->get_curr_row();
+  }
+  return ret;
+}
+
+int ObCOMergeRowWriter::inner_process_macro_rewrite(ObCOMajorMergeIter &merge_iter)
+{
+  int ret = OB_SUCCESS;
+  const blocksstable::ObDatumRow *major_row = nullptr;
+  ObMergeIter *iter = merge_iter.iter_;
+  if (OB_UNLIKELY(iter->is_macro_block_opened())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected macro block opened", K(ret), KPC(iter));
+  } else if (OB_FAIL(iter->open_curr_range(true /* rewrite */, false/*for_compare*/))) {
+    STORAGE_LOG(WARN, "failed to open iter range", K(ret), KPC(iter));
+  } else if (OB_ISNULL(iter->get_curr_row())) {
+    ret = OB_ERR_UNEXPECTED;
+    STORAGE_LOG(WARN, "unexpected null row", K(ret), KPC(iter));
+  } else if (OB_FAIL(get_curr_major_row(merge_iter, major_row))) {
+    STORAGE_LOG(WARN, "failed to get curr major row", K(ret), KPC(this));
+  } else if (OB_FAIL(fuser_.fuse_rows(*major_row, default_row_))) {
+    STORAGE_LOG(WARN, "failed to fuse row", K(ret), KPC(iter), K(default_row_));
+  } else if (OB_FAIL(process(fuser_.get_result_row()))) {
+    STORAGE_LOG(WARN, "failed to process iter curr row", K(ret), KPC(iter));
+  }
+
+  return ret;
+}
+
+int ObCOMergeRowWriter::inner_process_macro_open(ObCOMajorMergeIter &merge_iter)
+{
+  int ret = OB_SUCCESS;
+  ObMergeIter *iter = merge_iter.iter_;
+  if (OB_FAIL(iter->open_curr_range(false /* rewrite */, false/*for_compare*/))) {
+    STORAGE_LOG(WARN, "Failed to open_curr_range", K(ret));
+  } else if (OB_FAIL(append_iter_curr_row_or_range(&merge_iter, ObMergeLog::REPLAY))) {
+    STORAGE_LOG(WARN, "failed to append iter curr row or range", K(ret), KPC(iter));
   }
   return ret;
 }
@@ -862,26 +935,27 @@ int ObCOMergeRowWriter::process(
 
     if (OB_FAIL(ret)) {
     } else if (block_op.is_rewrite()) {
-      if (OB_FAIL(process_macro_rewrite(merge_iter))) {
+      if (OB_FAIL(inner_process_macro_rewrite(*merge_iter))) {
         STORAGE_LOG(WARN, "failed to process_macro_rewrite", K(ret));
       }
     } else if (block_op.is_open()) {
-      if (OB_FAIL(iter->open_curr_range(false /* rewrite */))) {
-        STORAGE_LOG(WARN, "Failed to open_curr_range", K(ret));
-      } else if (OB_FAIL(append_iter_curr_row_or_range(merge_iter, ObMergeLog::REPLAY))) {
-        STORAGE_LOG(WARN, "failed to append iter curr row or range", K(ret), KPC(iter));
+      if (OB_FAIL(inner_process_macro_open(*merge_iter))) {
+        STORAGE_LOG(WARN, "failed to process_macro_open", K(ret));
       }
     } else if (OB_FAIL(write_helper_.append_macro_block(macro_desc, micro_block_data, partition_iter->get_sstable_idx()))) {
       STORAGE_LOG(WARN, "failed to append macro block", K(ret), K(macro_desc));
     }
   }
-  STORAGE_LOG(DEBUG, "process micro data", K(ret), K(macro_desc), K(block_op), K(micro_block_data), KPC(this));
+  STORAGE_LOG(INFO, "process micro data", K(ret), K(macro_desc), K(block_op), K(micro_block_data), KPC(this));
   return ret;
 }
 
-int ObCOMergeRowWriter::process(const blocksstable::ObMicroBlock &micro_block, const int64_t sstable_idx)
+int ObCOMergeRowWriter::process(
+    const blocksstable::ObMicroBlock &micro_block,
+    const int64_t sstable_idx,
+    ObMergeVectorStore *read_vector_store)
 {
-  return write_helper_.append_micro_block(micro_block, sstable_idx);
+  return write_helper_.append_micro_block(micro_block, sstable_idx, read_vector_store);
 }
 
 int ObCOMergeRowWriter::process(const blocksstable::ObDatumRow &row)
@@ -899,71 +973,57 @@ int ObCOMergeRowWriter::process(const blocksstable::ObDatumRow &row)
   return ret;
 }
 
-int ObCOMergeRowWriter::replay_single_mergelog(const ObMergeLog &mergelog, const blocksstable::ObDatumRow &row)
+// prepare projected row for replay
+int ObCOMergeRowWriter::prepare_replay_row(
+    const ObMergeLog &mergelog,
+    const blocksstable::ObDatumRow &row,
+    const blocksstable::ObDatumRow *&res_row,
+    bool &skip_replay)
 {
   int ret = OB_SUCCESS;
   bool is_all_nop = false;
-  const blocksstable::ObDatumRow *tmp_row = nullptr;
   if (!is_using_column_tmp_file_ && write_helper_.need_project()) {
     if (OB_FAIL(write_helper_.project(row, row_, is_all_nop))) {
       STORAGE_LOG(WARN, "fail to project", K(ret), K(write_helper_), K(row));
     } else {
-      tmp_row = &row_;
+      res_row = &row_;
     }
   } else {
     is_all_nop = check_is_all_nop(row);
-    tmp_row = &row;
+    res_row = &row;
   }
   if (OB_FAIL(ret)) {
   } else if (mergelog.op_ == ObMergeLog::UPDATE && is_all_nop) { // only single major can skip nop
     last_skip_major_idx_ = mergelog.major_idx_;
     last_skip_major_row_id_ = mergelog.row_id_;
-  } else if (OB_FAIL(ObCOMergeWriter::replay_single_mergelog(mergelog, *tmp_row))) {
-    STORAGE_LOG(WARN, "failed to replay mergelog", K(ret), K(mergelog), K(*tmp_row));
-  }
-
-  return ret;
-}
-
-int ObCOMergeRowWriter::end_write(ObTabletMergeInfo &merge_info)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(replay_last_skip_major(-1))) {
-    LOG_WARN("failed to replay last skip major", K(ret));
-  } else if (OB_NOT_NULL(progressive_merge_helper_)) {
-    progressive_merge_helper_->end();
-  }
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(write_helper_.end_write(merge_info))) {
-    LOG_WARN("failed to end write", K(ret));
+    skip_replay = true;
   }
   return ret;
 }
 
-/**
- * ---------------------------------------------------------ObCOMergeBaseRowWriter--------------------------------------------------------------
- */
-int ObCOMergeBaseRowWriter::replay_single_mergelog(const ObMergeLog &mergelog, const blocksstable::ObDatumRow &row)
+int ObCOMergeRowWriter::replay_row_directly(
+    const ObMergeLog &mergelog,
+    const blocksstable::ObDatumRow &row,
+    ObCOMajorMergeIter &merge_iter)
 {
   int ret = OB_SUCCESS;
   bool is_all_nop = false;
   if (write_helper_.need_project()) {
     if (OB_FAIL(write_helper_.project(row, row_, is_all_nop))) {
       STORAGE_LOG(WARN, "fail to project", K(ret), K(write_helper_), K(row));
-    } else if (OB_FAIL(process_mergelog_row(&merge_iter_, mergelog, row_))) {
-      LOG_WARN("failed to process_mergelog_row", K(ret), K(mergelog), K(row), K(merge_iter_));
+    } else if (OB_FAIL(process_mergelog_row(&merge_iter, mergelog, row_))) {
+      LOG_WARN("failed to process_mergelog_row", K(ret), K(mergelog), K(row), K(merge_iter));
     }
-  } else if (OB_FAIL(process_mergelog_row(&merge_iter_, mergelog, row))) {
-    LOG_WARN("failed to process_mergelog_row", K(ret), K(mergelog), K(row), K(merge_iter_));
+  } else if (OB_FAIL(process_mergelog_row(&merge_iter, mergelog, row))) {
+    LOG_WARN("failed to process_mergelog_row", K(ret), K(mergelog), K(row), K(merge_iter));
   }
   return ret;
 }
 
-// merge log is build by row_store_iter, when replay base cg, this iter no need to compare row_id
-int ObCOMergeBaseRowWriter::replay_range_mergelog(const ObMergeLog &mergelog)
+int ObCOMergeRowWriter::replay_iter_directly(const ObMergeLog &mergelog, ObCOMajorMergeIter &merge_iter)
 {
   int ret = OB_SUCCESS;
-  ObMergeIter *iter = merge_iter_.iter_;
+  ObMergeIter *iter = merge_iter.iter_;
   int64_t curr_end_row_id = 0;
   int64_t expected_end_row_id = 0;
 #define GET_CURR_END_ROW_ID(iter, end_row_id) \
@@ -982,8 +1042,11 @@ int ObCOMergeBaseRowWriter::replay_range_mergelog(const ObMergeLog &mergelog)
     LOG_WARN("unexpected curr end row id", K(ret), K(mergelog), K(expected_end_row_id));
   }
   while (OB_SUCC(ret) && OB_NOT_NULL(iter) && !iter->is_iter_end()) {
-    if (OB_FAIL(append_iter_curr_row_or_range(&merge_iter_, mergelog.op_))) {
-      LOG_WARN("failed to append iter curr row or range", K(ret), K(merge_iter_));
+    // if current row is not opened, range maybe reused, so flush pending buffered rows first
+    if (nullptr == iter->get_curr_row() && OB_FAIL(flush_pending_buffered_rows())) {
+      LOG_WARN("failed to flush pending buffered rows", K(ret), K(iter));
+    } else if (OB_FAIL(append_iter_curr_row_or_range(&merge_iter, mergelog.op_))) {
+      LOG_WARN("failed to append iter curr row or range", K(ret), K(merge_iter));
     } else {
       GET_CURR_END_ROW_ID(iter, curr_end_row_id);
     }
@@ -1005,6 +1068,60 @@ int ObCOMergeBaseRowWriter::replay_range_mergelog(const ObMergeLog &mergelog)
   }
 #undef GET_CURR_END_ROW_ID
   return ret;
+}
+
+int ObCOMergeRowWriter::replay_single_mergelog(const ObMergeLog &mergelog, const blocksstable::ObDatumRow &row)
+{
+  int ret = OB_SUCCESS;
+  bool skip_replay = false;
+  const blocksstable::ObDatumRow *tmp_row = nullptr;
+  if (OB_FAIL(prepare_replay_row(mergelog, row, tmp_row, skip_replay))) {
+    LOG_WARN("failed to prepare replay row", K(ret), K(mergelog), K(row));
+  } else if (skip_replay) {
+  } else if (OB_FAIL(ObCOMergeWriter::replay_single_mergelog(mergelog, *tmp_row))) {
+    STORAGE_LOG(WARN, "failed to replay mergelog", K(ret), K(mergelog), K(*tmp_row));
+  }
+
+  return ret;
+}
+
+int ObCOMergeRowWriter::end_write(ObCOTabletMergeCtx &co_ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(replay_last_skip_major(-1))) {
+    LOG_WARN("failed to replay last skip major", K(ret));
+  } else if (OB_FAIL(flush_pending_buffered_rows())) {
+    LOG_WARN("failed to flush last data", K(ret));
+  } else if (OB_NOT_NULL(progressive_merge_helper_)) {
+    progressive_merge_helper_->end();
+  }
+  if (OB_FAIL(ret)) {
+  } else {
+    ObTabletMergeInfo **merge_infos = co_ctx.cg_merge_info_array_;
+    if (OB_UNLIKELY(nullptr == merge_infos)) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "invalid count or unexpected null merge info array", K(ret), K(merge_infos));
+    } else if (nullptr == merge_infos[cg_idx_]) {
+      ret = OB_ERR_UNEXPECTED;
+      STORAGE_LOG(WARN, "unexpected null merge info", K(ret), K(cg_idx_));
+    } else if (OB_FAIL(write_helper_.end_write(*merge_infos[cg_idx_]))) {
+      LOG_WARN("failed to end write", K(ret));
+    }
+  }
+  return ret;
+}
+
+/**
+ * ---------------------------------------------------------ObCOMergeBaseRowWriter--------------------------------------------------------------
+ */
+int ObCOMergeBaseRowWriter::replay_single_mergelog(const ObMergeLog &mergelog, const blocksstable::ObDatumRow &row)
+{
+  return replay_row_directly(mergelog, row, merge_iter_);
+}
+
+int ObCOMergeBaseRowWriter::replay_range_mergelog(const ObMergeLog &mergelog)
+{
+  return replay_iter_directly(mergelog, merge_iter_);
 }
 
 /**
@@ -1112,10 +1229,10 @@ int ObCOMergeSingleWriter::process(const blocksstable::ObDatumRow &row)
   return ret;
 }
 
-int ObCOMergeSingleWriter::end_write(ObTabletMergeInfo **merge_infos)
+int ObCOMergeSingleWriter::end_write(ObCOTabletMergeCtx &co_ctx)
 {
   int ret = OB_SUCCESS;
-
+  ObTabletMergeInfo **merge_infos = co_ctx.cg_merge_info_array_;
   if (OB_UNLIKELY(!is_init())) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "ObCOMergeWriter not init", K(ret));

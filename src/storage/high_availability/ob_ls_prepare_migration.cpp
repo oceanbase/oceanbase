@@ -17,7 +17,6 @@ using namespace common;
 using namespace share;
 using namespace storage;
 
-ERRSIM_POINT_DEF(PREPARE_START_RUNNING_FAILED);
 /******************ObLSMigrationPrepareCtx*********************/
 ObLSPrepareMigrationCtx::ObLSPrepareMigrationCtx()
   : ObIHADagNetCtx(),
@@ -153,53 +152,17 @@ int ObLSPrepareMigrationDagNet::start_running_for_migration_()
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
   ObInitialPrepareMigrationDag *initial_dag = nullptr;
-  ObTenantDagScheduler *scheduler = nullptr;
   ObDagPrio::ObDagPrioEnum prio = ObDagPrio::DAG_PRIO_MAX;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("ls prepare migration dag net do not init", K(ret));
   } else if (FALSE_IT(ctx_.start_ts_ = ObTimeUtil::current_time())) {
-  } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
   } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx_.arg_.type_, prio))) {
     LOG_WARN("failed to get dag priority", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, initial_dag))) {
-    LOG_WARN("failed to alloc initial dag ", K(ret));
-  } else if (OB_FAIL(initial_dag->init(this))) {
-    LOG_WARN("failed to init initial dag", K(ret));
-  } else if (OB_FAIL(add_dag_into_dag_net(*initial_dag))) {
-    LOG_WARN("failed to add initial dag into dag net", K(ret));
-  } else if (OB_FAIL(initial_dag->create_first_task())) {
-    LOG_WARN("failed to create first task", K(ret));
-  }
-
-#ifdef ERRSIM
-    if (OB_SUCC(ret)) {
-      ret = PREPARE_START_RUNNING_FAILED ? : OB_SUCCESS;
-      if (OB_FAIL(ret)) {
-        STORAGE_LOG(ERROR, "fake PREPARE_START_RUNNING_FAILED", K(ret));
-      }
-    }
-#endif
-
-  if (OB_FAIL(ret)) {
-  } else if (OB_FAIL(scheduler->add_dag(initial_dag))) {
-    LOG_WARN("failed to add initial dag", K(ret), K(*initial_dag));
-    if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-      LOG_WARN("Fail to add task", K(ret));
-      ret = OB_EAGAIN;
-    }
-  } else {
-    initial_dag = nullptr;
-  }
-
-  if (OB_NOT_NULL(initial_dag) && OB_NOT_NULL(scheduler)) {
-    if (OB_SUCCESS != (tmp_ret = erase_dag_from_dag_net(*initial_dag))) {
-      LOG_WARN("failed to erase dag from dag net", K(tmp_ret), KPC(initial_dag));
-    }
-    scheduler->free_dag(*initial_dag); // contain reset_children
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_schedule_single_dag(
+      this/*dag_net*/, prio, false/*emergency*/, initial_dag, this))) {
+    LOG_WARN("failed to alloc and schedule initial prepare migration dag", K(ret));
   }
 
   if (OB_FAIL(ret)) {
@@ -342,12 +305,30 @@ int ObLSPrepareMigrationDagNet::deal_with_cancel()
 
 /******************ObPrepareMigrationDag*********************/
 ObPrepareMigrationDag::ObPrepareMigrationDag(const share::ObDagType::ObDagTypeEnum &dag_type)
-  : ObStorageHADag(dag_type)
+  : ObStorageHADag(dag_type),
+    is_inited_(false)
 {
 }
 
 ObPrepareMigrationDag::~ObPrepareMigrationDag()
 {
+}
+
+int ObPrepareMigrationDag::init(ObIDagNet *dag_net)
+{
+  int ret = OB_SUCCESS;
+  if (is_inited_) {
+    ret = OB_INIT_TWICE;
+    LOG_WARN("prepare migration dag init twice", K(ret));
+  } else if (OB_ISNULL(dag_net)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("init prepare migration dag get invalid argument", K(ret), KP(dag_net));
+  } else if (OB_FAIL(prepare_ctx(dag_net))) {
+    LOG_WARN("failed to prepare ctx", K(ret));
+  } else {
+    is_inited_ = true;
+  }
+  return ret;
 }
 
 bool ObPrepareMigrationDag::operator == (const ObIDag &other) const
@@ -365,7 +346,7 @@ bool ObPrepareMigrationDag::operator == (const ObIDag &other) const
     } else if (ha_dag_net_ctx_->get_dag_net_ctx_type() != ha_dag.get_ha_dag_net_ctx()->get_dag_net_ctx_type()) {
       is_same = false;
     } else {
-      ObLSPrepareMigrationCtx *self_ctx = static_cast<ObLSPrepareMigrationCtx *>(ha_dag_net_ctx_);
+      const ObLSPrepareMigrationCtx *self_ctx = get_ctx();
       ObLSPrepareMigrationCtx *other_ctx = static_cast<ObLSPrepareMigrationCtx *>(ha_dag.get_ha_dag_net_ctx());
       if (self_ctx->arg_.ls_id_ != other_ctx->arg_.ls_id_) {
         is_same = false;
@@ -386,7 +367,7 @@ uint64_t ObPrepareMigrationDag::hash() const
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("ha dag net ctx type is unexpected", K(ret), KPC(ha_dag_net_ctx_));
   } else {
-    ObLSPrepareMigrationCtx *self_ctx = static_cast<ObLSPrepareMigrationCtx *>(ha_dag_net_ctx_);
+    const ObLSPrepareMigrationCtx *self_ctx = get_ctx();
     hash_value = common::murmurhash(
         &self_ctx->arg_.ls_id_, sizeof(self_ctx->arg_.ls_id_), hash_value);
     ObDagType::ObDagTypeEnum dag_type = get_type();
@@ -399,19 +380,16 @@ uint64_t ObPrepareMigrationDag::hash() const
 int ObPrepareMigrationDag::fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const
 {
   int ret = OB_SUCCESS;
-  ObLSPrepareMigrationCtx *ctx = nullptr;
+  const ObLSPrepareMigrationCtx *ctx = get_ctx();
 
-  if (FALSE_IT(ctx = static_cast<ObLSPrepareMigrationCtx *>(ha_dag_net_ctx_))) {
-  } else {
-    ObCStringHelper helper;
-    if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
+  ObCStringHelper helper;
+  if (OB_FAIL(ADD_DAG_WARN_INFO_PARAM(out_param, allocator, get_type(),
                                 static_cast<int64_t>(ctx->tenant_id_), ctx->arg_.ls_id_.id(),
                                 static_cast<int64_t>(ctx->arg_.type_),
                                 "dag_net_task_id", helper.convert(ctx->task_id_),
                                 "src", helper.convert(ctx->arg_.src_.get_server()),
                                 "dest", helper.convert(ctx->arg_.dst_.get_server())))) {
-      LOG_WARN("failed to fill info param", K(ret));
-    }
+    LOG_WARN("failed to fill info param", K(ret));
   }
   return ret;
 }
@@ -439,71 +417,23 @@ int ObPrepareMigrationDag::prepare_ctx(share::ObIDagNet *dag_net)
   return ret;
 }
 
-/******************ObInitialPrepareMigrationDag*********************/
-ObInitialPrepareMigrationDag::ObInitialPrepareMigrationDag()
-  : ObPrepareMigrationDag(ObDagType::DAG_TYPE_INITIAL_PREPARE_MIGRATION),
-    is_inited_(false)
-{
-}
-
-ObInitialPrepareMigrationDag::~ObInitialPrepareMigrationDag()
-{
-}
-
-int ObInitialPrepareMigrationDag::fill_dag_key(char *buf, const int64_t buf_len) const
+int ObPrepareMigrationDag::fill_dag_key_helper_(const char *dag_name, char *buf, const int64_t buf_len) const
 {
   int ret = OB_SUCCESS;
-  ObLSPrepareMigrationCtx *self_ctx = nullptr;
+  const ObLSPrepareMigrationCtx *self_ctx = nullptr;
   ObCStringHelper helper;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("initial prepare migration dag do not init", K(ret));
+    LOG_WARN("prepare migration dag do not init", K(ret));
   } else if (ObIHADagNetCtx::LS_PREPARE_MIGRATION != ha_dag_net_ctx_->get_dag_net_ctx_type()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ha dag net ctx type is unexpected", K(ret), KPC(ha_dag_net_ctx_));
-  } else if (FALSE_IT(self_ctx = static_cast<ObLSPrepareMigrationCtx *>(ha_dag_net_ctx_))) {
+  } else if (FALSE_IT(self_ctx = get_ctx())) {
   } else if (OB_FAIL(databuff_printf(buf, buf_len,
-         "ObInitialPrepareMigrationDag: ls_id = %s, migration_type = %s, dag_prio = %s",
-         helper.convert(self_ctx->arg_.ls_id_), ObMigrationOpType::get_str(self_ctx->arg_.type_),
+         "%s: ls_id = %s, migration_type = %s, dag_prio = %s",
+         dag_name, helper.convert(self_ctx->arg_.ls_id_), ObMigrationOpType::get_str(self_ctx->arg_.type_),
          ObIDag::get_dag_prio_str(this->get_priority())))) {
     LOG_WARN("failed to fill comment", K(ret), K(*self_ctx));
-  }
-  return ret;
-}
-
-int ObInitialPrepareMigrationDag::init(ObIDagNet *dag_net)
-{
-  int ret = OB_SUCCESS;
-  if (is_inited_) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("initial prepare migration dag init twice", K(ret));
-  } else if (OB_ISNULL(dag_net)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("init initial prepare migration dag get invalid argument", K(ret), KP(dag_net));
-  } else if (OB_FAIL(prepare_ctx(dag_net))) {
-    LOG_WARN("failed to prepare ctx", K(ret));
-  } else {
-    is_inited_ = true;
-  }
-  return ret;
-}
-
-int ObInitialPrepareMigrationDag::create_first_task()
-{
-  int ret = OB_SUCCESS;
-  ObInitialPrepareMigrationTask *task = NULL;
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("initial prepare migration dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init())) {
-    LOG_WARN("failed to init initial prepare migration task", K(ret), KPC(ha_dag_net_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
-  } else {
-    LOG_DEBUG("success to create first task", K(ret), KPC(this));
   }
   return ret;
 }
@@ -574,147 +504,22 @@ int ObInitialPrepareMigrationTask::generate_migration_dags_()
   int tmp_ret = OB_SUCCESS;
   ObStartPrepareMigrationDag *start_prepare_dag = nullptr;
   ObFinishPrepareMigrationDag *finish_prepare_dag = nullptr;
-  ObTenantDagScheduler *scheduler = nullptr;
-  ObInitialPrepareMigrationDag *initial_prepare_migration_dag = nullptr;
   ObDagPrio::ObDagPrioEnum prio = ObDagPrio::DAG_PRIO_MAX;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("initial prepare migration task do not init", K(ret));
-  } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
+  } else if (OB_ISNULL(this->get_dag())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else if (OB_ISNULL(initial_prepare_migration_dag = static_cast<ObInitialPrepareMigrationDag *>(this->get_dag()))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("initial prepare migration dag should not be NULL", K(ret), KP(initial_prepare_migration_dag));
+    LOG_WARN("initial prepare migration dag should not be NULL", K(ret));
   } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx_->arg_.type_, prio))) {
     LOG_WARN("failed to get dag priority", K(ret));
-  } else {
-    if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, start_prepare_dag))) {
-      LOG_WARN("failed to alloc start prepare migration dag ", K(ret));
-    } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, finish_prepare_dag))) {
-      LOG_WARN("failed to alloc finish prepare migration dag", K(ret));
-    } else if (OB_FAIL(start_prepare_dag->init(dag_net_))) {
-      LOG_WARN("failed to init start prepare migration dag", K(ret));
-    } else if (OB_FAIL(finish_prepare_dag->init(dag_net_))) {
-      LOG_WARN("failed to init finish prepare migration dag", K(ret));
-    } else if (OB_FAIL(this->get_dag()->add_child(*start_prepare_dag))) {
-      LOG_WARN("failed to add start prepare dag", K(ret), KPC(start_prepare_dag));
-    } else if (OB_FAIL(start_prepare_dag->create_first_task())) {
-      LOG_WARN("failed to create first task", K(ret));
-    } else if (OB_FAIL(start_prepare_dag->add_child(*finish_prepare_dag))) {
-      LOG_WARN("failed to add migration finish dag as child", K(ret));
-    } else if (OB_FAIL(finish_prepare_dag->create_first_task())) {
-      LOG_WARN("failed to create first task", K(ret));
-    } else if (OB_FAIL(scheduler->add_dag(finish_prepare_dag))) {
-      LOG_WARN("failed to add finish prepare migration dag", K(ret), K(*finish_prepare_dag));
-      if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-        LOG_WARN("Fail to add task", K(ret));
-        ret = OB_EAGAIN;
-      }
-    } else if (OB_FAIL(scheduler->add_dag(start_prepare_dag))) {
-      LOG_WARN("failed to add dag", K(ret), K(*start_prepare_dag));
-      if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-        LOG_WARN("Fail to add task", K(ret));
-        ret = OB_EAGAIN;
-      }
-      if (OB_SUCCESS != (tmp_ret = scheduler->cancel_dag(finish_prepare_dag))) {
-        LOG_WARN("failed to cancel ha dag", K(tmp_ret), KPC(initial_prepare_migration_dag));
-      } else {
-        finish_prepare_dag = nullptr;
-      }
-    } else {
-      LOG_INFO("succeed to schedule start prepare migration dag", K(*start_prepare_dag));
-      start_prepare_dag = nullptr;
-      finish_prepare_dag = nullptr;
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_schedule_pair_dags(
+      prio, this->get_dag()/*parent_dag*/, start_prepare_dag/*first_dag*/, finish_prepare_dag/*second_dag*/, dag_net_))) {
+    LOG_WARN("failed to alloc and schedule prepare migration dags", K(ret));
+    if (OB_SUCCESS != (tmp_ret = ctx_->set_result(ret, true /*allow_retry*/, this->get_dag()->get_type()))) {
+      LOG_WARN("failed to set ls prepare migration result", K(ret), K(tmp_ret), K(*ctx_));
     }
-
-    if (OB_FAIL(ret)) {
-      if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(finish_prepare_dag)) {
-        scheduler->free_dag(*finish_prepare_dag);
-        finish_prepare_dag = nullptr;
-      }
-
-      if (OB_NOT_NULL(scheduler) && OB_NOT_NULL(start_prepare_dag)) {
-        scheduler->free_dag(*start_prepare_dag);
-        start_prepare_dag = nullptr;
-      }
-
-      if (OB_SUCCESS != (tmp_ret = ctx_->set_result(ret, true /*allow_retry*/, this->get_dag()->get_type()))) {
-        LOG_WARN("failed to set ls prepare migration result", K(ret), K(tmp_ret), K(*ctx_));
-      }
-    }
-  }
-  return ret;
-}
-
-/******************ObStartPrepareMigrationDag*********************/
-ObStartPrepareMigrationDag::ObStartPrepareMigrationDag()
-  : ObPrepareMigrationDag(ObDagType::DAG_TYPE_START_PREPARE_MIGRATION),
-    is_inited_(false)
-{
-}
-
-ObStartPrepareMigrationDag::~ObStartPrepareMigrationDag()
-{
-}
-
-int ObStartPrepareMigrationDag::fill_dag_key(char *buf, const int64_t buf_len) const
-{
-  int ret = OB_SUCCESS;
-  ObLSPrepareMigrationCtx *self_ctx = nullptr;
-
-  ObCStringHelper helper;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("start prepare migration dag do not init", K(ret));
-  } else if (ObIHADagNetCtx::LS_PREPARE_MIGRATION != ha_dag_net_ctx_->get_dag_net_ctx_type()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ha dag net ctx type is unexpected", K(ret), KPC(ha_dag_net_ctx_));
-  } else if (FALSE_IT(self_ctx = static_cast<ObLSPrepareMigrationCtx *>(ha_dag_net_ctx_))) {
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObStartPrepareMigrationDag: ls_id = %s, migration_type = %s, dag_prio = %s",
-       helper.convert(self_ctx->arg_.ls_id_), ObMigrationOpType::get_str(self_ctx->arg_.type_),
-       ObIDag::get_dag_prio_str(this->get_priority())))) {
-    LOG_WARN("failed to fill comment", K(ret), K(*self_ctx));
-  }
-  return ret;
-}
-
-int ObStartPrepareMigrationDag::init(ObIDagNet *dag_net)
-{
-  int ret = OB_SUCCESS;
-
-  if (is_inited_) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("start prepare migration dag init twice", K(ret));
-  } else if (OB_ISNULL(dag_net)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("init start prepare migration dag get invalid argument", K(ret), KP(dag_net));
-  } else if (OB_FAIL(prepare_ctx(dag_net))) {
-    LOG_WARN("failed to prepare ctx", K(ret));
-  } else {
-    is_inited_ = true;
-  }
-  return ret;
-}
-
-int ObStartPrepareMigrationDag::create_first_task()
-{
-  int ret = OB_SUCCESS;
-  ObStartPrepareMigrationTask *task = NULL;
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("start prepare migration dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init())) {
-    LOG_WARN("failed to init start prepare migration task", K(ret), KPC(ha_dag_net_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
-  } else {
-    LOG_INFO("success to create start prepare migration first task", K(ret), KPC(this));
   }
   return ret;
 }
@@ -900,6 +705,7 @@ int ObStartPrepareMigrationTask::wait_transfer_tablets_ready_()
       } else if (OB_FAIL(wait_transfer_out_tablet_ready_(ls, tablet))) {
         LOG_WARN("failed to wait transfer out tablet ready", K(ret), KPC(tablet));
       }
+      // TODO(lixia.yq): wait transfer
     }
   }
   return ret;
@@ -1038,77 +844,6 @@ int ObStartPrepareMigrationTask::wait_transfer_out_tablet_ready_(
   return ret;
 }
 
-/******************ObFinishPrepareMigrationDag*********************/
-ObFinishPrepareMigrationDag::ObFinishPrepareMigrationDag()
-  : ObPrepareMigrationDag(ObDagType::DAG_TYPE_FINISH_PREPARE_MIGRATION),
-    is_inited_(false)
-{
-}
-
-ObFinishPrepareMigrationDag::~ObFinishPrepareMigrationDag()
-{
-}
-
-int ObFinishPrepareMigrationDag::fill_dag_key(char *buf, const int64_t buf_len) const
-{
-  int ret = OB_SUCCESS;
-  ObLSPrepareMigrationCtx *self_ctx = nullptr;
-
-  ObCStringHelper helper;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("finish prepare migration dag do not init", K(ret));
-  } else if (ObIHADagNetCtx::LS_PREPARE_MIGRATION != ha_dag_net_ctx_->get_dag_net_ctx_type()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ha dag net ctx type is unexpected", K(ret), KPC(ha_dag_net_ctx_));
-  } else if (FALSE_IT(self_ctx = static_cast<ObLSPrepareMigrationCtx *>(ha_dag_net_ctx_))) {
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObFinishPrepareMigrationDag: ls_id = %s, migration_type = %s, dag_prio = %s",
-       helper.convert(self_ctx->arg_.ls_id_), ObMigrationOpType::get_str(self_ctx->arg_.type_),
-       ObIDag::get_dag_prio_str(this->get_priority())))) {
-    LOG_WARN("failed to fill comment", K(ret), K(*self_ctx));
-  }
-  return ret;
-}
-
-int ObFinishPrepareMigrationDag::init(ObIDagNet *dag_net)
-{
-  int ret = OB_SUCCESS;
-
-  if (is_inited_) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("finish prepare migration dag init twice", K(ret));
-  } else if (OB_ISNULL(dag_net)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("init finish prepare migration dag get invalid argument", K(ret), KP(dag_net));
-  } else if (OB_FAIL(prepare_ctx(dag_net))) {
-    LOG_WARN("failed to prepare ctx", K(ret));
-  } else {
-    is_inited_ = true;
-  }
-  return ret;
-}
-
-int ObFinishPrepareMigrationDag::create_first_task()
-{
-  int ret = OB_SUCCESS;
-  ObFinishPrepareMigrationTask *task = NULL;
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("finish prepare migration dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init())) {
-    LOG_WARN("failed to init finish prepare migration task", K(ret), KPC(ha_dag_net_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
-  } else {
-    LOG_DEBUG("success to create first task", K(ret), KPC(this));
-  }
-  return ret;
-}
-
 /******************ObFinishPrepareMigrationTask*********************/
 ObFinishPrepareMigrationTask::ObFinishPrepareMigrationTask()
   : ObITask(TASK_TYPE_MIGRATE_PREPARE),
@@ -1176,47 +911,21 @@ int ObFinishPrepareMigrationTask::process()
 int ObFinishPrepareMigrationTask::generate_prepare_initial_dag_()
 {
   int ret = OB_SUCCESS;
-  int tmp_ret = OB_SUCCESS;
   ObInitialPrepareMigrationDag *initial_prepare_dag = nullptr;
-  ObTenantDagScheduler *scheduler = nullptr;
-  ObFinishPrepareMigrationDag *finish_prepare_migration_dag = nullptr;
   ObDagPrio::ObDagPrioEnum prio = ObDagPrio::DAG_PRIO_MAX;
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("finish prepare migration task do not init", K(ret));
-  } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
+  } else if (OB_ISNULL(this->get_dag())) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
-  } else if (OB_ISNULL(finish_prepare_migration_dag = static_cast<ObFinishPrepareMigrationDag *>(this->get_dag()))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("finish prepare migration dag should not be NULL", K(ret), KP(finish_prepare_migration_dag));
+    LOG_WARN("finish prepare migration dag should not be NULL", K(ret));
   } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx_->arg_.type_, prio))) {
     LOG_WARN("failed to get dag priority", K(ret));
-  } else {
-    if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, initial_prepare_dag))) {
-      LOG_WARN("failed to alloc initial prepare migration dag ", K(ret));
-    } else if (OB_FAIL(initial_prepare_dag->init(dag_net_))) {
-      LOG_WARN("failed to init initial migration dag", K(ret));
-    } else if (OB_FAIL(this->get_dag()->add_child(*initial_prepare_dag))) {
-      LOG_WARN("failed to add initial prepare dag", K(ret), KPC(initial_prepare_dag));
-    } else if (OB_FAIL(initial_prepare_dag->create_first_task())) {
-      LOG_WARN("failed to create first task", K(ret));
-    } else if (OB_FAIL(scheduler->add_dag(initial_prepare_dag))) {
-      LOG_WARN("failed to add initial prepare migration dag", K(ret), K(*initial_prepare_dag));
-      if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-        LOG_WARN("Fail to add task", K(ret));
-        ret = OB_EAGAIN;
-      }
-    } else {
-      LOG_INFO("start create initial prepare migration dag", K(ret), K(*ctx_));
-      initial_prepare_dag = nullptr;
-    }
-
-    if (OB_NOT_NULL(initial_prepare_dag) && OB_NOT_NULL(scheduler)) {
-      scheduler->free_dag(*initial_prepare_dag);
-      initial_prepare_dag = nullptr;
-    }
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_schedule_dag(
+      dag_net_/*dag_net*/, this->get_dag()/*parent_dag*/, nullptr/*child_dag*/, prio,
+      false/*emergency*/, initial_prepare_dag, dag_net_))) {
+    LOG_WARN("failed to alloc and schedule initial prepare migration dag", K(ret));
   }
   return ret;
 }

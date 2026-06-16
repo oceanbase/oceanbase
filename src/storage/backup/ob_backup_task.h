@@ -626,7 +626,6 @@ private:
   int write_ddl_other_block_(const blocksstable::ObBufferReader &buffer_reader, ObBackupLinkedBlockAddr &physical_id);
   int add_item_to_other_block_mgr_(const blocksstable::MacroBlockId &macro_id,
       const ObBackupLinkedBlockAddr &physical_id, ObBackupOtherBlocksMgr *other_block_mgr);
-  int deal_with_sstable_other_block_root_blocks_(const common::ObTabletID &tablet_id, const storage::ObITable::TableKey &table_key);
   int prepare_macro_block_reader_(const uint64_t tenant_id,
       const common::ObIArray<ObBackupMacroBlockId> &list, ObMultiMacroBlockBackupReader *&reader);
   int prepare_tablet_meta_reader_(const common::ObTabletID &tablet_id, const ObTabletMetaReaderType &reader_type,

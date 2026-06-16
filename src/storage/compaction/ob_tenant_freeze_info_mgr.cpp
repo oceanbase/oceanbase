@@ -14,9 +14,6 @@
 #include "storage/meta_store/ob_server_storage_meta_service.h"
 #include "storage/compaction/ob_compaction_schedule_util.h"
 #include "storage/compaction/ob_tenant_tablet_scheduler.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/incremental/garbage_collector/ob_ss_garbage_collector_service.h"
-#endif
 namespace oceanbase
 {
 
@@ -385,6 +382,7 @@ int64_t ObTenantFreezeInfoMgr::get_min_reserved_snapshot_for_tx()
   }
 
   if (data_version >= DATA_VERSION_4_1_0_0
+      && tenant_config.is_valid()
       && tenant_config->_mvcc_gc_using_min_txn_snapshot
       && !is_gc_disabled) {
     share::SCN snapshot_for_active_tx =
@@ -454,41 +452,9 @@ int ObTenantFreezeInfoMgr::get_min_reserved_snapshot(
   } else if (OB_UNLIKELY(!inited_)) {
     ret = OB_NOT_INIT;
     STORAGE_LOG(WARN, "not init", K(ret));
-#ifdef OB_BUILD_SHARED_STORAGE
-  /* FIXME: should change to function and consider about other modules */
-  } else if (GCTX.is_shared_storage_mode() && OB_ALL_SSLOG_TABLE_TID == tablet_id.id()) {
-    ObSSGarbageCollectorService *ss_gc_srv = nullptr;
-    SCN last_succ_scn = SCN::min_scn();
-    // get last_succ_scn from meta_tenant
-    if (OB_ISNULL(ss_gc_srv = MTL(ObSSGarbageCollectorService *))) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ObSSGarbageCollectorService should not be null", KR(ret));
-    } else if (OB_FAIL(ss_gc_srv->get_min_ss_gc_last_succ_scn(false /*is_for_sslog_table */, last_succ_scn))) {
-      LOG_WARN("get last_succ_scns from ObSSGarbageCollectorService failed", KR(ret));
-    } else {
-      // get last_succ_scn from user_tenant
-      uint64_t user_tenant_id = gen_user_tenant_id(MTL_ID());
-      SCN user_last_succ_scn = SCN::min_scn();
-      // Use the new interface with tenant_id parameter, which will handle the case
-      // where the tenant is not in the current server by forwarding the request to sswriter
-      if (OB_FAIL(ss_gc_srv->get_min_ss_gc_last_succ_scn(
-            user_tenant_id, false /*is_for_sslog_table */, user_last_succ_scn))) {
-        LOG_WARN("get last_succ_scns from ObSSGarbageCollectorService failed", KR(ret), K(user_tenant_id));
-      } else {
-        last_succ_scn = SCN::min(last_succ_scn, user_last_succ_scn);
-      }
-    }
-    if (OB_FAIL(ret)) {
-      LOG_WARN(
-        "meet fail during get_min_ss_gc_last_succ_scn, reset multi_version_start to min", KR(ret), K(last_succ_scn));
-      last_succ_scn.set_min();
-    }
-    snapshot_info.update_by_smaller_snapshot(ObStorageSnapshotInfo::SNAPSHOT_FOR_SS_GC, last_succ_scn.get_val_for_tx());
-    LOG_TRACE("set multi_start_version for sslog_table", KR(ret), K(snapshot_info));
-#endif
   }
   if (OB_FAIL(ret)) {
-  } else if (skip_undo_retention && !GCTX.is_shared_storage_mode()) {
+  } else if (skip_undo_retention) {
     ret = OB_ERR_UNEXPECTED;
     LOG_ERROR("get unexpected argument skip_undo_retention", K(ret));
   } else if (!skip_undo_retention && OB_FAIL(get_multi_version_duration(duration))) {

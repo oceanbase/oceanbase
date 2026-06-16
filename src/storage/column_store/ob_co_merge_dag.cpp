@@ -11,9 +11,6 @@
 #include "share/scheduler/ob_dag_warning_history_mgr.h"
 #include "storage/compaction/ob_compaction_dag_ranker.h"
 #include "observer/ob_server_event_history_table_operator.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/compaction_v2/ob_ss_major_merge_ctx.h"
-#endif
 namespace oceanbase
 {
 using namespace share;
@@ -1138,6 +1135,24 @@ int ObCOMergeLogReplayTask::generate_next_task(ObITask *&next_task)
   return ret;
 }
 
+int ObCOMergeLogReplayTask::init_replayer(ObCOTabletMergeCtx &ctx)
+{
+  int ret = OB_SUCCESS;
+  if (ctx.enable_vectorized_batch_merge()) { // batch merge
+    if (OB_ISNULL(replayer_ = OB_NEWx(ObCOBatchMergeLogReplayer, &allocator_,
+        allocator_, ctx.static_param_, start_cg_idx_, end_cg_idx_))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc memory for replayer", K(ret));
+    }
+  } else if (OB_ISNULL(replayer_ = OB_NEWx(ObCOMergeLogReplayer, &allocator_,
+      allocator_, ctx.static_param_, start_cg_idx_, end_cg_idx_,
+      ctx.prefer_reuse_macro_block_ ? false :ctx.only_use_row_store()))) {
+    ret = OB_ALLOCATE_MEMORY_FAILED;
+    LOG_WARN("failed to alloc memory for replayer", K(ret));
+  }
+  return ret;
+}
+
 int ObCOMergeLogReplayTask::process()
 {
   int ret = OB_SUCCESS;
@@ -1158,12 +1173,8 @@ int ObCOMergeLogReplayTask::process()
   } else if (FALSE_IT(SET_MEM_CTX(ctx->mem_ctx_))) {
   } else if (OB_FAIL(ctx->prepare_index_builder(start_cg_idx_, end_cg_idx_))) {
     LOG_WARN("failed to prepare merge info", K(ret));
-  } else if (OB_ISNULL(buf = allocator_.alloc(sizeof(ObCOMergeLogReplayer)))) {
-    ret = OB_ALLOCATE_MEMORY_FAILED;
-    LOG_WARN("failed to alloc memory for persister", K(ret));
-  } else if (FALSE_IT(replayer_ = new (buf) ObCOMergeLogReplayer(allocator_,
-      ctx->static_param_, start_cg_idx_, end_cg_idx_,
-      ctx->prefer_reuse_macro_block_ ? false :ctx->only_use_row_store()))) {
+  } else if (OB_FAIL(init_replayer(*ctx))) {
+    LOG_WARN("failed to init replayer", K(ret));
   } else if (OB_FAIL(replayer_->init(*ctx, range_idx_))) {
     LOG_WARN("failed to init replayer", K(ret));
   } else if (OB_FAIL(replayer_->replay_merge_log())) {
@@ -1482,10 +1493,6 @@ int ObCOMergeDagNet::prepare_co_merge_ctx()
     LOG_INFO("Tenant Merge has been paused", K(ret), KPC(this));
   } else if (is_local_exec_mode(basic_param_.exec_mode_)) {
     co_merge_ctx_ = NEW_CTX(ObCOTabletMergeCtx);
-#ifdef OB_BUILD_SHARED_STORAGE
-  } else if (is_output_exec_mode(basic_param_.exec_mode_)) {
-    co_merge_ctx_ = NEW_CTX(ObSSCOTabletMergeCtx);
-#endif
   } else {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid exec mode", KR(ret), K_(basic_param));

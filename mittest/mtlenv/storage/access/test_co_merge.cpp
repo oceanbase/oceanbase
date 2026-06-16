@@ -13,6 +13,7 @@
 #include "storage/column_store/ob_co_merge_log_operator.h"
 #include "unittest/storage/test_schema_prepare.h"
 #include "storage/compaction/ob_compaction_schedule_util.h"
+#include "test_co_merge.h"
 
 namespace oceanbase
 {
@@ -46,6 +47,9 @@ ObCOTabletMergeCtx::~ObCOTabletMergeCtx()
 
 namespace storage
 {
+
+// Alias for the nested enum type in `ObCOMergeTestConfig`, kept for test readability.
+using ObCOMergeTestType = ObCOMergeTestConfig::ObCOMergeTestType;
 
 static ObArenaAllocator allocator_;
 static ObLocalArena merger_allocator_("TestArena", OB_MALLOC_NORMAL_BLOCK_SIZE);
@@ -134,7 +138,7 @@ int get_col_ids(const ObTableSchema &table_schema, ObIArray<ObColDesc> &col_ids)
   return table_schema.get_store_column_ids(col_ids);
 }
 
-class TestCOMerge : public TestMergeBasic, public ::testing::WithParamInterface<TestMergeBasic::ObCOMergeTestType>
+class TestCOMerge : public TestMergeBasic, public ::testing::WithParamInterface<ObCOMergeTestConfig>
 {
 public:
   static const int64_t MAX_PARALLEL_DEGREE = 10;
@@ -476,7 +480,7 @@ void TestCOMerge::prepare_merge_context(const ObMergeType &merge_type,
 
 TEST_P(TestCOMerge, test_merge_default_row_store_with_empty_major)
 {
-  ObCOMergeTestType type = GetParam();
+  ObCOMergeTestConfig config = GetParam();
   int ret = OB_SUCCESS;
   ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
 
@@ -526,7 +530,7 @@ TEST_P(TestCOMerge, test_merge_default_row_store_with_empty_major)
       "bigint   var   bigint   bigint   bigint bigint  dml          flag    multi_version_row_flag\n"
       "0        var1  -10       0        NOP     10    T_DML_UPDATE EXIST   LF\n"
       "2        var1  -10       0        NOP     12    T_DML_UPDATE EXIST   LF\n"
-      "3        var1  -10       0        NOP     13    T_DML_UPDATE EXIST   LF\n";
+      "3        var1  -10       0        NULL    13    T_DML_UPDATE EXIST   LF\n";
 
   snapshot_version = 20;
   table_key_.scn_range_.start_scn_.convert_for_tx(10);
@@ -546,7 +550,7 @@ TEST_P(TestCOMerge, test_merge_default_row_store_with_empty_major)
   prepare_merge_context(MAJOR_MERGE, false, trans_version_range, merge_context);
   merge_context.array_count_ = 5;
 
-  TestMergeBasic::co_major_merge(local_arena_, type, merge_context, 0, 0, 1);
+  TestMergeBasic::co_major_merge(local_arena_, config, merge_context, 0, 0, 1);
 
   ObSSTable *merged_sstable = static_cast<ObSSTable *>(merge_context.merged_cg_tables_handle_.get_table(0));
   ASSERT_NE(nullptr, merged_sstable);
@@ -585,7 +589,7 @@ TEST_P(TestCOMerge, test_merge_default_row_store_with_empty_major)
 
 TEST_P(TestCOMerge, test_column_store_merge_with_empty_co_table)
 {
-  ObCOMergeTestType type = GetParam();
+  ObCOMergeTestConfig config = GetParam();
   int ret = OB_SUCCESS;
   ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
 
@@ -637,7 +641,7 @@ TEST_P(TestCOMerge, test_column_store_merge_with_empty_co_table)
   trans_version_range.base_version_ = 7;
  //prepare merge_ctx
   prepare_merge_context(MAJOR_MERGE, false, trans_version_range, merge_context);
-  TestMergeBasic::co_major_merge(local_arena_, type, merge_context, 0, 0, 4);
+  TestMergeBasic::co_major_merge(local_arena_, config, merge_context, 0, 0, 4);
 
   const char *result1 =
       "  bigint  flag    multi_version_row_flag\n"
@@ -675,7 +679,7 @@ TEST_P(TestCOMerge, test_column_store_merge_with_empty_co_table)
 
 TEST_P(TestCOMerge, test_co_merge_with_twice_major)
 {
-  ObCOMergeTestType type = GetParam();
+  ObCOMergeTestConfig config = GetParam();
   int ret = OB_SUCCESS;
   ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
 
@@ -683,7 +687,7 @@ TEST_P(TestCOMerge, test_co_merge_with_twice_major)
   micro_data[0] =
       "bigint   var   bigint   bigint   bigint  dml           flag    multi_version_row_flag\n"
       "0        var1  -8       0        8       T_DML_UPDATE  EXIST   LF\n"
-      "1        var1  -8       0        NOP       T_DML_INSERT  EXIST   CLF\n";
+      "1        var1  -8       0        NULL       T_DML_INSERT  EXIST   CLF\n";
 
   micro_data[1] =
       "bigint   var   bigint   bigint   bigint  dml           flag    multi_version_row_flag\n"
@@ -731,7 +735,7 @@ TEST_P(TestCOMerge, test_co_merge_with_twice_major)
   prepare_merge_context(MAJOR_MERGE, false, trans_version_range, merge_context);
   merge_context.array_count_ = 4;
 
-  TestMergeBasic::co_major_merge(local_arena_, type, merge_context, 0, 0, 4);
+  TestMergeBasic::co_major_merge(local_arena_, config, merge_context, 0, 0, 4);
   ASSERT_EQ(4, merge_context.merged_cg_tables_handle_.get_count());
 
   const char *result[4];
@@ -824,7 +828,7 @@ TEST_P(TestCOMerge, test_co_merge_with_twice_major)
   //prepare new merge_ctx
   prepare_merge_context(MAJOR_MERGE, false, trans_version_range, new_merge_context);
   new_merge_context.array_count_ = 4;
-  TestMergeBasic::co_major_merge(local_arena_, type, new_merge_context, 0, 0, 4);
+  TestMergeBasic::co_major_merge(local_arena_, config, new_merge_context, 0, 0, 4);
 
   const char *new_result[4];
   new_result[0] =
@@ -895,7 +899,7 @@ TEST_P(TestCOMerge, test_co_merge_with_twice_major)
 
 TEST_P(TestCOMerge, test_merge_range)
 {
-  ObCOMergeTestType type = GetParam();
+  ObCOMergeTestConfig config = GetParam();
   int ret = OB_SUCCESS;
   ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
 
@@ -916,7 +920,7 @@ TEST_P(TestCOMerge, test_merge_range)
       "bigint     bigint   bigint   bigint  dml           flag    multi_version_row_flag\n"
       "0          -13       0        9         T_DML_UPDATE  EXIST   CLF\n"
       "1          -11      0        NOP       T_DML_INSERT  EXIST   CLF\n"
-      "5          -11       0        NOP       T_DML_INSERT  EXIST   CLF\n";
+      "5          -11       0        NULL       T_DML_INSERT  EXIST   CLF\n";
 
   int schema_rowkey_cnt = 1;
 
@@ -985,7 +989,7 @@ TEST_P(TestCOMerge, test_merge_range)
   merge_context.parallel_merge_ctx_.range_array_.reset();
   OK(merge_context.parallel_merge_ctx_.range_array_.push_back(merge_range));
 
-  TestMergeBasic::co_major_merge(local_arena_, type, merge_context, 0, 0, 3);
+  TestMergeBasic::co_major_merge(local_arena_, config, merge_context, 0, 0, 3);
 
   ASSERT_EQ(3, merge_context.merged_cg_tables_handle_.get_count());
 
@@ -1048,7 +1052,7 @@ TEST_P(TestCOMerge, test_merge_range)
 
 TEST_P(TestCOMerge, test_merge_range_with_open)
 {
-  ObCOMergeTestType type = GetParam();
+  ObCOMergeTestConfig config = GetParam();
   int ret = OB_SUCCESS;
   ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
 
@@ -1069,7 +1073,7 @@ TEST_P(TestCOMerge, test_merge_range_with_open)
       "bigint     bigint   bigint   bigint  dml           flag    multi_version_row_flag\n"
       "0          -13       0        9         T_DML_UPDATE  EXIST   CLF\n"
       "1          -11      0        NOP       T_DML_INSERT  EXIST   CLF\n"
-      "5          -11       0        NOP       T_DML_INSERT  EXIST   CLF\n";
+      "5          -11       0        NULL       T_DML_INSERT  EXIST   CLF\n";
 
   int schema_rowkey_cnt = 1;
 
@@ -1138,7 +1142,7 @@ TEST_P(TestCOMerge, test_merge_range_with_open)
   merge_context.parallel_merge_ctx_.range_array_.reset();
   OK(merge_context.parallel_merge_ctx_.range_array_.push_back(merge_range));
 
-  TestMergeBasic::co_major_merge(local_arena_, type, merge_context, 0, 0, 3);
+  TestMergeBasic::co_major_merge(local_arena_, config, merge_context, 0, 0, 3);
   ASSERT_EQ(3, merge_context.merged_cg_tables_handle_.get_count());
 
   const char *result[3];
@@ -1194,7 +1198,7 @@ TEST_P(TestCOMerge, test_merge_range_with_open)
 
 TEST_P(TestCOMerge, test_merge_range_with_left_open)
 {
-  ObCOMergeTestType type = GetParam();
+  ObCOMergeTestConfig config = GetParam();
   int ret = OB_SUCCESS;
   ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
 
@@ -1215,7 +1219,7 @@ TEST_P(TestCOMerge, test_merge_range_with_left_open)
       "bigint     bigint   bigint   bigint  dml           flag    multi_version_row_flag\n"
       "0          -13       0        9         T_DML_UPDATE  EXIST   CLF\n"
       "1          -11      0        NOP       T_DML_INSERT  EXIST   CLF\n"
-      "5          -11       0        NOP       T_DML_INSERT  EXIST   CLF\n";
+      "5          -11       0        NULL       T_DML_INSERT  EXIST   CLF\n";
 
   int schema_rowkey_cnt = 1;
 
@@ -1284,7 +1288,7 @@ TEST_P(TestCOMerge, test_merge_range_with_left_open)
   merge_context.parallel_merge_ctx_.range_array_.reset();
   OK(merge_context.parallel_merge_ctx_.range_array_.push_back(merge_range));
 
-  TestMergeBasic::co_major_merge(local_arena_, type, merge_context, 0, 0, 3);
+  TestMergeBasic::co_major_merge(local_arena_, config, merge_context, 0, 0, 3);
   ASSERT_EQ(3, merge_context.merged_cg_tables_handle_.get_count());
 
   const char *result[3];
@@ -1343,7 +1347,7 @@ TEST_P(TestCOMerge, test_merge_range_with_left_open)
 
 TEST_P(TestCOMerge, test_merge_range_with_right_open)
 {
-  ObCOMergeTestType type = GetParam();
+  ObCOMergeTestConfig config = GetParam();
   int ret = OB_SUCCESS;
   ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
 
@@ -1364,7 +1368,7 @@ TEST_P(TestCOMerge, test_merge_range_with_right_open)
       "bigint     bigint   bigint   bigint  dml           flag    multi_version_row_flag\n"
       "0          -13       0        9         T_DML_UPDATE  EXIST   CLF\n"
       "1          -11      0        NOP       T_DML_INSERT  EXIST   CLF\n"
-      "5          -11       0        NOP       T_DML_INSERT  EXIST   CLF\n";
+      "5          -11       0        NULL       T_DML_INSERT  EXIST   CLF\n";
 
   int schema_rowkey_cnt = 1;
 
@@ -1433,7 +1437,7 @@ TEST_P(TestCOMerge, test_merge_range_with_right_open)
   merge_context.parallel_merge_ctx_.range_array_.reset();
   OK(merge_context.parallel_merge_ctx_.range_array_.push_back(merge_range));
 
-  TestMergeBasic::co_major_merge(local_arena_, type, merge_context, 0, 0, 3);
+  TestMergeBasic::co_major_merge(local_arena_, config, merge_context, 0, 0, 3);
   ASSERT_EQ(3, merge_context.merged_cg_tables_handle_.get_count());
 
   const char *result[3];
@@ -1492,7 +1496,7 @@ TEST_P(TestCOMerge, test_merge_range_with_right_open)
 
 TEST_P(TestCOMerge, test_merge_range_left_is_min)
 {
-  ObCOMergeTestType type = GetParam();
+  ObCOMergeTestConfig config = GetParam();
   int ret = OB_SUCCESS;
   ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
 
@@ -1513,7 +1517,7 @@ TEST_P(TestCOMerge, test_merge_range_left_is_min)
       "bigint     bigint   bigint   bigint  dml           flag    multi_version_row_flag\n"
       "0          -13       0        9         T_DML_UPDATE  EXIST   CLF\n"
       "1          -11      0        NOP       T_DML_INSERT  EXIST   CLF\n"
-      "5          -11       0        NOP       T_DML_INSERT  EXIST   CLF\n";
+      "5          -11       0        NULL       T_DML_INSERT  EXIST   CLF\n";
 
   int schema_rowkey_cnt = 1;
 
@@ -1582,7 +1586,7 @@ TEST_P(TestCOMerge, test_merge_range_left_is_min)
   merge_context.parallel_merge_ctx_.range_array_.reset();
   OK(merge_context.parallel_merge_ctx_.range_array_.push_back(merge_range));
 
-  TestMergeBasic::co_major_merge(local_arena_, type, merge_context, 0, 0, 3);
+  TestMergeBasic::co_major_merge(local_arena_, config, merge_context, 0, 0, 3);
   ASSERT_EQ(3, merge_context.merged_cg_tables_handle_.get_count());
 
   const char *result[3];
@@ -1650,7 +1654,7 @@ TEST_P(TestCOMerge, test_merge_range_left_is_min)
 
 TEST_P(TestCOMerge, test_merge_range_with_right_max)
 {
-  ObCOMergeTestType type = GetParam();
+  ObCOMergeTestConfig config = GetParam();
   int ret = OB_SUCCESS;
   ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
 
@@ -1671,7 +1675,7 @@ TEST_P(TestCOMerge, test_merge_range_with_right_max)
       "bigint     bigint   bigint   bigint  dml           flag    multi_version_row_flag\n"
       "0          -13       0        9         T_DML_UPDATE  EXIST   CLF\n"
       "1          -11      0        NOP       T_DML_INSERT  EXIST   CLF\n"
-      "5          -11       0        NOP       T_DML_INSERT  EXIST   CLF\n";
+      "5          -11       0        NULL       T_DML_INSERT  EXIST   CLF\n";
 
   int schema_rowkey_cnt = 1;
 
@@ -1740,7 +1744,7 @@ TEST_P(TestCOMerge, test_merge_range_with_right_max)
   merge_context.parallel_merge_ctx_.range_array_.reset();
   OK(merge_context.parallel_merge_ctx_.range_array_.push_back(merge_range));
 
-  TestMergeBasic::co_major_merge(local_arena_, type, merge_context, 0, 0, 3);
+  TestMergeBasic::co_major_merge(local_arena_, config, merge_context, 0, 0, 3);
   ASSERT_EQ(3, merge_context.merged_cg_tables_handle_.get_count());
 
   const char *result[3];
@@ -1811,7 +1815,7 @@ TEST_P(TestCOMerge, test_merge_range_with_right_max)
 
 TEST_P(TestCOMerge, test_merge_range_with_empty)
 {
-  ObCOMergeTestType type = GetParam();
+  ObCOMergeTestConfig config = GetParam();
   int ret = OB_SUCCESS;
   ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
 
@@ -1832,7 +1836,7 @@ TEST_P(TestCOMerge, test_merge_range_with_empty)
       "bigint     bigint   bigint   bigint  dml           flag    multi_version_row_flag\n"
       "0          -13       0        9         T_DML_UPDATE  EXIST   CLF\n"
       "1          -11      0        NOP       T_DML_INSERT  EXIST   CLF\n"
-      "5          -11       0        NOP       T_DML_INSERT  EXIST   CLF\n";
+      "5          -11       0        NULL       T_DML_INSERT  EXIST   CLF\n";
 
   int schema_rowkey_cnt = 1;
 
@@ -1901,7 +1905,7 @@ TEST_P(TestCOMerge, test_merge_range_with_empty)
 
   merge_context.parallel_merge_ctx_.range_array_.reset();
   OK(merge_context.parallel_merge_ctx_.range_array_.push_back(merge_range));
-  TestMergeBasic::co_major_merge(local_arena_, type, merge_context, 0, 0, 3);
+  TestMergeBasic::co_major_merge(local_arena_, config, merge_context, 0, 0, 3);
   EXPECT_EQ(1, merge_context.merged_cg_tables_handle_.get_count());
 
   for (int64_t i = 0; i < 3; i++) {
@@ -1926,7 +1930,7 @@ TEST_P(TestCOMerge, test_merge_range_with_empty)
 
 TEST_P(TestCOMerge, test_merge_range_is_whole_range)
 {
-  ObCOMergeTestType type = GetParam();
+  ObCOMergeTestConfig config = GetParam();
   int ret = OB_SUCCESS;
   ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
 
@@ -1947,7 +1951,7 @@ TEST_P(TestCOMerge, test_merge_range_is_whole_range)
       "bigint     bigint   bigint   bigint  dml           flag    multi_version_row_flag\n"
       "0          -13       0        9         T_DML_UPDATE  EXIST   CLF\n"
       "1          -11      0        NOP       T_DML_INSERT  EXIST   CLF\n"
-      "5          -11       0        NOP       T_DML_INSERT  EXIST   CLF\n";
+      "5          -11       0        NULL       T_DML_INSERT  EXIST   CLF\n";
 
   int schema_rowkey_cnt = 1;
 
@@ -2003,7 +2007,7 @@ TEST_P(TestCOMerge, test_merge_range_is_whole_range)
 
   merge_context.parallel_merge_ctx_.range_array_.reset();
   OK(merge_context.parallel_merge_ctx_.range_array_.push_back(merge_range));
-  TestMergeBasic::co_major_merge(local_arena_, type, merge_context, 0, 0, 3);
+  TestMergeBasic::co_major_merge(local_arena_, config, merge_context, 0, 0, 3);
   ASSERT_EQ(3, merge_context.merged_cg_tables_handle_.get_count());
 
   const char *result[3];
@@ -2080,7 +2084,7 @@ TEST_P(TestCOMerge, test_merge_range_is_whole_range)
 
 TEST_P(TestCOMerge, test_merge_range_with_beyond_range)
 {
-  ObCOMergeTestType type = GetParam();
+  ObCOMergeTestConfig config = GetParam();
   int ret = OB_SUCCESS;
   ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
 
@@ -2101,7 +2105,7 @@ TEST_P(TestCOMerge, test_merge_range_with_beyond_range)
       "bigint     bigint   bigint   bigint  dml           flag    multi_version_row_flag\n"
       "0          -13       0        9         T_DML_UPDATE  EXIST   CLF\n"
       "1          -11      0        NOP       T_DML_INSERT  EXIST   CLF\n"
-      "5          -11       0        NOP       T_DML_INSERT  EXIST   CLF\n";
+      "5          -11       0        NULL       T_DML_INSERT  EXIST   CLF\n";
 
   int schema_rowkey_cnt = 1;
 
@@ -2170,7 +2174,7 @@ TEST_P(TestCOMerge, test_merge_range_with_beyond_range)
   merge_context.parallel_merge_ctx_.range_array_.reset();
   OK(merge_context.parallel_merge_ctx_.range_array_.push_back(merge_range));
 
-  TestMergeBasic::co_major_merge(local_arena_, type, merge_context, 0, 0, 3);
+  TestMergeBasic::co_major_merge(local_arena_, config, merge_context, 0, 0, 3);
   EXPECT_EQ(1, merge_context.merged_cg_tables_handle_.get_count());
 
   for (int64_t i = 0; i < 3; i++) {
@@ -2196,7 +2200,7 @@ TEST_P(TestCOMerge, test_merge_range_with_beyond_range)
 
 TEST_P(TestCOMerge, test_rebuild_sstable)
 {
-  ObCOMergeTestType type = GetParam();
+  ObCOMergeTestConfig config = GetParam();
   int ret = OB_SUCCESS;
   ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
 
@@ -2217,7 +2221,7 @@ TEST_P(TestCOMerge, test_rebuild_sstable)
       "bigint     bigint   bigint   bigint  dml           flag    multi_version_row_flag\n"
       "0          -13       0        9         T_DML_UPDATE  EXIST   CLF\n"
       "1          -11      0        NOP       T_DML_INSERT  EXIST   CLF\n"
-      "5          -11       0        NOP       T_DML_INSERT  EXIST   CLF\n";
+      "5          -11       0        NULL       T_DML_INSERT  EXIST   CLF\n";
 
   int schema_rowkey_cnt = 1;
 
@@ -2296,8 +2300,8 @@ TEST_P(TestCOMerge, test_rebuild_sstable)
   OK(merge_context.parallel_merge_ctx_.range_array_.push_back(merge_range_1));
   OK(merge_context.parallel_merge_ctx_.range_array_.push_back(merge_range));
   merge_context.static_param_.concurrent_cnt_ = 2;
-  TestMergeBasic::co_major_merge(local_arena_, type, merge_context, 0, 0, 3, false/*create_sstable*/);
-  TestMergeBasic::co_major_merge(local_arena_, type, merge_context, 1, 0, 3, true/*create_sstable*/, false, false);
+  TestMergeBasic::co_major_merge(local_arena_, config, merge_context, 0, 0, 3, false/*create_sstable*/);
+  TestMergeBasic::co_major_merge(local_arena_, config, merge_context, 1, 0, 3, true/*create_sstable*/, false, false);
   merge_context.cg_merge_info_array_[0]->sstable_builder_.data_store_desc_.get_desc().static_desc_->major_working_cluster_version_ = DATA_VERSION_4_3_0_0;
   merge_context.cg_merge_info_array_[1]->sstable_builder_.data_store_desc_.get_desc().static_desc_->major_working_cluster_version_ = DATA_VERSION_4_3_0_0;
   ASSERT_EQ(3, merge_context.merged_cg_tables_handle_.get_count());
@@ -2370,8 +2374,8 @@ TEST_P(TestCOMerge, test_rebuild_sstable)
 
 TEST_P(TestCOMerge, test_co_merge_log_row_store)
 {
-  ObCOMergeTestType type = GetParam();
-  if (ObCOMergeTestType::NORMAL != type) {
+  ObCOMergeTestConfig config = GetParam();
+  if (ObCOMergeTestConfig::ObCOMergeTestType::NORMAL != config.type_) {
     return;
   }
   int ret = OB_SUCCESS;
@@ -2431,6 +2435,7 @@ TEST_P(TestCOMerge, test_co_merge_log_row_store)
   ASSERT_EQ(OB_SUCCESS, data_iter.from_for_datum(micro_data[0]));
   const blocksstable::ObDatumRow *data_row = nullptr;
   const blocksstable::ObDatumRow *res_row = nullptr;
+  const ObMergeVectorStore *vector_store = nullptr;
   replay_merge_log.op_ = ObMergeLog::REPLAY;
   replay_merge_log.major_idx_ = 1;
   replay_merge_log.row_id_ = 10;
@@ -2441,14 +2446,14 @@ TEST_P(TestCOMerge, test_co_merge_log_row_store)
   // write merge logs
   merge_log = replay_merge_log;
   // write a REPLAY log without row
-  ASSERT_EQ(OB_SUCCESS, writer.write_merge_log(merge_log, nullptr/*no used*/));
+  ASSERT_EQ(OB_SUCCESS, writer.write_merge_log(merge_log, nullptr, nullptr/*no used*/));
   // write INSERT logs with full row
   merge_log.op_ = ObMergeLog::INSERT;
   while (OB_SUCCESS == data_iter.get_next_row(data_row)) {
     if (data_row) {
       merge_log.major_idx_++;
       merge_log.row_id_++;
-      ASSERT_EQ(OB_SUCCESS, writer.write_merge_log(merge_log, data_row));
+      ASSERT_EQ(OB_SUCCESS, writer.write_merge_log(merge_log, nullptr, data_row));
     } else {
       break;
     }
@@ -2462,7 +2467,7 @@ TEST_P(TestCOMerge, test_co_merge_log_row_store)
   ASSERT_EQ(OB_SUCCESS, data_iter.from_for_datum(micro_data[0]));
   // read first merge log which is REPLAY log
   merge_log = replay_merge_log;
-  ASSERT_EQ(OB_SUCCESS, reader.get_next_log(res_merge_log, res_row));
+  ASSERT_EQ(OB_SUCCESS, reader.get_next_log(res_merge_log, vector_store, res_row));
   ASSERT_EQ(merge_log, res_merge_log);
   ASSERT_EQ(nullptr, res_row);
 
@@ -2473,7 +2478,7 @@ TEST_P(TestCOMerge, test_co_merge_log_row_store)
   int ret2 = OB_SUCCESS;
 
   while (is_equal) {
-    ret1 = reader.get_next_log(res_merge_log, res_row);
+    ret1 = reader.get_next_log(res_merge_log, vector_store, res_row);
     ret2 = data_iter.get_next_row(data_row);
     merge_log.major_idx_++;
     merge_log.row_id_++;
@@ -2495,8 +2500,8 @@ TEST_P(TestCOMerge, test_co_merge_log_row_store)
 
 TEST_P(TestCOMerge, test_co_merge_log_column_store)
 {
-  ObCOMergeTestType type = GetParam();
-  if (ObCOMergeTestType::NORMAL != type) {
+  ObCOMergeTestConfig config = GetParam();
+  if (ObCOMergeTestConfig::ObCOMergeTestType::NORMAL != config.type_) {
     return;
   }
   int ret = OB_SUCCESS;
@@ -2557,6 +2562,7 @@ TEST_P(TestCOMerge, test_co_merge_log_column_store)
   ASSERT_EQ(OB_SUCCESS, data_iter.from_for_datum(micro_data[0]));
   const blocksstable::ObDatumRow *data_row = nullptr;
   const blocksstable::ObDatumRow *res_row = nullptr;
+  const ObMergeVectorStore *vector_store = nullptr;
   replay_merge_log.op_ = ObMergeLog::REPLAY;
   replay_merge_log.major_idx_ = 1;
   replay_merge_log.row_id_ = 10;
@@ -2568,14 +2574,14 @@ TEST_P(TestCOMerge, test_co_merge_log_column_store)
   // write merge logs
   merge_log = replay_merge_log;
   // write a REPLAY log without row
-  ASSERT_EQ(OB_SUCCESS, writer.write_merge_log(merge_log, nullptr/*no used*/));
+  ASSERT_EQ(OB_SUCCESS, writer.write_merge_log(merge_log, nullptr, nullptr/*no used*/));
   // write INSERT logs with row
   merge_log.op_ = ObMergeLog::INSERT;
   while (OB_SUCCESS == data_iter.get_next_row(data_row)) {
     if (data_row) {
       merge_log.major_idx_++;
       merge_log.row_id_++;
-      ASSERT_EQ(OB_SUCCESS, writer.write_merge_log(merge_log, data_row));
+      ASSERT_EQ(OB_SUCCESS, writer.write_merge_log(merge_log, nullptr, data_row));
     } else {
       break;
     }
@@ -2592,7 +2598,7 @@ TEST_P(TestCOMerge, test_co_merge_log_column_store)
   // read first merge log which is REPLAY log
   merge_log = replay_merge_log;
   for (int64_t i = 0; i < 3; ++i) {
-    ASSERT_EQ(OB_SUCCESS, reader[i].get_next_log(res_merge_log, res_row));
+    ASSERT_EQ(OB_SUCCESS, reader[i].get_next_log(res_merge_log, vector_store, res_row));
     ASSERT_EQ(merge_log, res_merge_log);
     ASSERT_EQ(nullptr, res_row);
   }
@@ -2614,7 +2620,7 @@ TEST_P(TestCOMerge, test_co_merge_log_column_store)
       row_project = &projector;
     }
     while (is_equal) {
-      ret1 = reader[i].get_next_log(res_merge_log, res_row);
+      ret1 = reader[i].get_next_log(res_merge_log, vector_store, res_row);
       ret2 = data_iter.get_next_row(data_row);
       merge_log.major_idx_++;
       merge_log.row_id_++;
@@ -2643,7 +2649,7 @@ TEST_P(TestCOMerge, test_co_merge_log_column_store)
 
 TEST_P(TestCOMerge, test_multi_merge_with_empty_base)
 {
-  ObCOMergeTestType type = GetParam();
+  ObCOMergeTestConfig config = GetParam();
   int ret = OB_SUCCESS;
   ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
 
@@ -2665,7 +2671,7 @@ TEST_P(TestCOMerge, test_multi_merge_with_empty_base)
       "bigint     bigint   bigint   bigint  dml           flag    multi_version_row_flag\n"
       "0          -13       0        9         T_DML_UPDATE  EXIST   CLF\n"
       "1          -12      0        NOP       T_DML_INSERT  EXIST   CLF\n"
-      "5          -11       0        NOP       T_DML_INSERT  EXIST   CLF\n";
+      "5          -11       0        NULL       T_DML_INSERT  EXIST   CLF\n";
 
   int schema_rowkey_cnt = 1;
 
@@ -2736,7 +2742,7 @@ TEST_P(TestCOMerge, test_multi_merge_with_empty_base)
   //prepare merge_ctx
   prepare_merge_context(MAJOR_MERGE, false, trans_version_range, merge_context);
   merge_context.array_count_ = 3;
-  TestMergeBasic::co_major_merge(local_arena_, type, merge_context, 0, 0, 3);
+  TestMergeBasic::co_major_merge(local_arena_, config, merge_context, 0, 0, 3);
   ASSERT_EQ(3, merge_context.merged_cg_tables_handle_.get_count());
 
   const char *result[3];
@@ -2817,7 +2823,7 @@ TEST_P(TestCOMerge, test_multi_merge_with_empty_base)
 
 TEST_P(TestCOMerge, test_multi_merge_with_empty_inc_major)
 {
-  ObCOMergeTestType type = GetParam();
+  ObCOMergeTestConfig config = GetParam();
   int ret = OB_SUCCESS;
   ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
 
@@ -2839,7 +2845,7 @@ TEST_P(TestCOMerge, test_multi_merge_with_empty_inc_major)
       "bigint     bigint   bigint   bigint  dml           flag    multi_version_row_flag\n"
       "0          -13       0        9         T_DML_UPDATE  EXIST   CLF\n"
       "1          -12      0        NOP       T_DML_INSERT  EXIST   CLF\n"
-      "5          -11       0        NOP       T_DML_INSERT  EXIST   CLF\n";
+      "5          -11       0        NULL       T_DML_INSERT  EXIST   CLF\n";
 
   int schema_rowkey_cnt = 1;
 
@@ -2909,7 +2915,7 @@ TEST_P(TestCOMerge, test_multi_merge_with_empty_inc_major)
   //prepare merge_ctx
   prepare_merge_context(MAJOR_MERGE, false, trans_version_range, merge_context);
   merge_context.array_count_ = 3;
-  TestMergeBasic::co_major_merge(local_arena_, type, merge_context, 0, 0, 3);
+  TestMergeBasic::co_major_merge(local_arena_, config, merge_context, 0, 0, 3);
 
   // create all cg sstable
   ASSERT_EQ(3, merge_context.merged_cg_tables_handle_.get_count());
@@ -2992,7 +2998,7 @@ TEST_P(TestCOMerge, test_multi_merge_with_empty_inc_major)
 
 TEST_P(TestCOMerge, test_multi_merge_with_empty_range)
 {
-  ObCOMergeTestType type = GetParam();
+  ObCOMergeTestConfig config = GetParam();
   int ret = OB_SUCCESS;
   ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
 
@@ -3018,8 +3024,8 @@ TEST_P(TestCOMerge, test_multi_merge_with_empty_range)
   micro_data1[0] =
       "bigint     bigint   bigint   bigint  dml           flag    multi_version_row_flag\n"
       "3          -13       0        9         T_DML_UPDATE  EXIST   CLF\n"
-      "4          -12       0        NOP       T_DML_INSERT  EXIST   CLF\n"
-      "5          -11       0        NOP       T_DML_INSERT  EXIST   CLF\n";
+      "4          -12       0        NULL       T_DML_INSERT  EXIST   CLF\n"
+      "5          -11       0        NULL       T_DML_INSERT  EXIST   CLF\n";
 
   int schema_rowkey_cnt = 1;
 
@@ -3099,7 +3105,7 @@ TEST_P(TestCOMerge, test_multi_merge_with_empty_range)
   merge_context.parallel_merge_ctx_.range_array_.reset();
   OK(merge_context.parallel_merge_ctx_.range_array_.push_back(merge_range));
 
-  TestMergeBasic::co_major_merge(local_arena_, type, merge_context, 0, 0, 3);
+  TestMergeBasic::co_major_merge(local_arena_, config, merge_context, 0, 0, 3);
   // create all cg sstable
   ASSERT_EQ(3, merge_context.merged_cg_tables_handle_.get_count());
 
@@ -3164,7 +3170,7 @@ TEST_P(TestCOMerge, test_multi_merge_with_empty_range)
 // TODO Complicate this use case
 TEST_P(TestCOMerge, test_multi_merge_with_three_pure_co)
 {
-  ObCOMergeTestType type = GetParam();
+  ObCOMergeTestConfig config = GetParam();
   int ret = OB_SUCCESS;
   ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
 
@@ -3202,7 +3208,7 @@ TEST_P(TestCOMerge, test_multi_merge_with_three_pure_co)
       "102        -14       0        NOP       T_DML_UPDATE  EXIST   CLF\n"
       "104        -15       0        NOP       T_DML_DELETE  DELETE   CLF\n"
       "105        -16       0        10       T_DML_INSERT  EXIST   CLF\n"
-      "111        -20       0        NOP       T_DML_INSERT  EXIST   CLF\n"
+      "111        -20       0        NULL       T_DML_INSERT  EXIST   CLF\n"
       "120        -18       0        NOP       T_DML_INSERT  EXIST   CLF\n";
 
   int schema_rowkey_cnt = 1;
@@ -3267,7 +3273,7 @@ TEST_P(TestCOMerge, test_multi_merge_with_three_pure_co)
   prepare_merge_context(MAJOR_MERGE, false, trans_version_range, merge_context);
   merge_context.array_count_ = 3;
   merge_context.static_param_.is_full_merge_ = true;
-  TestMergeBasic::co_major_merge(local_arena_, type, merge_context, 0, 0, 3);
+  TestMergeBasic::co_major_merge(local_arena_, config, merge_context, 0, 0, 3);
 
   // create all cg sstable
   ASSERT_EQ(3, merge_context.merged_cg_tables_handle_.get_count());
@@ -3383,7 +3389,7 @@ TEST_P(TestCOMerge, test_multi_merge_with_three_pure_co)
 
 TEST_P(TestCOMerge, test_multi_merge_with_three_major)
 {
-  ObCOMergeTestType type = GetParam();
+  ObCOMergeTestConfig config = GetParam();
   int ret = OB_SUCCESS;
   ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
 
@@ -3421,7 +3427,7 @@ TEST_P(TestCOMerge, test_multi_merge_with_three_major)
       "102        -14       0        NOP       T_DML_UPDATE  EXIST   CLF\n"
       "104        -15       0        NOP       T_DML_DELETE  DELETE   CLF\n"
       "105        -16       0        10       T_DML_INSERT  EXIST   CLF\n"
-      "111        -20       0        NOP       T_DML_INSERT  EXIST   CLF\n"
+      "111        -20       0        NULL       T_DML_INSERT  EXIST   CLF\n"
       "120        -18       0        NOP       T_DML_INSERT  EXIST   CLF\n";
 
   int schema_rowkey_cnt = 1;
@@ -3485,7 +3491,7 @@ TEST_P(TestCOMerge, test_multi_merge_with_three_major)
   //prepare merge_ctx
   prepare_merge_context(MAJOR_MERGE, false, trans_version_range, merge_context);
   merge_context.array_count_ = 3;
-  TestMergeBasic::co_major_merge(local_arena_, type, merge_context, 0, 0, 3);
+  TestMergeBasic::co_major_merge(local_arena_, config, merge_context, 0, 0, 3);
 
   // create all cg sstable
   ASSERT_EQ(3, merge_context.merged_cg_tables_handle_.get_count());
@@ -3589,7 +3595,7 @@ TEST_P(TestCOMerge, test_multi_merge_with_three_major)
 
 TEST_P(TestCOMerge, test_only_row_with_three_major)
 {
-  ObCOMergeTestType type = GetParam();
+  ObCOMergeTestConfig config = GetParam();
   int ret = OB_SUCCESS;
   ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
 
@@ -3627,7 +3633,7 @@ TEST_P(TestCOMerge, test_only_row_with_three_major)
       "102        -14       0        NOP       T_DML_UPDATE  EXIST   CLF\n"
       "104        -15       0        NOP       T_DML_DELETE  DELETE   CLF\n"
       "105        -16       0        10       T_DML_INSERT  EXIST   CLF\n"
-      "111        -20       0        NOP       T_DML_INSERT  EXIST   CLF\n"
+      "111        -20       0        NULL       T_DML_INSERT  EXIST   CLF\n"
       "120        -18       0        NOP       T_DML_INSERT  EXIST   CLF\n";
 
   int schema_rowkey_cnt = 1;
@@ -3691,7 +3697,7 @@ TEST_P(TestCOMerge, test_only_row_with_three_major)
   //prepare merge_ctx
   prepare_merge_context(MAJOR_MERGE, false, trans_version_range, merge_context);
   merge_context.array_count_ = 3;
-  TestMergeBasic::co_major_merge(local_arena_, type, merge_context, 0, 0, 3, true/*create_sstable*/,true, true, true);
+  TestMergeBasic::co_major_merge(local_arena_, config, merge_context, 0, 0, 3, true/*create_sstable*/,true, true, true);
 
   // create all cg sstable
   ASSERT_EQ(3, merge_context.merged_cg_tables_handle_.get_count());
@@ -3795,7 +3801,7 @@ TEST_P(TestCOMerge, test_only_row_with_three_major)
 
 TEST_P(TestCOMerge, test_co_to_row_with_three_pure_co)
 {
-  ObCOMergeTestType type = GetParam();
+  ObCOMergeTestConfig config = GetParam();
   int ret = OB_SUCCESS;
   ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
 
@@ -3833,7 +3839,7 @@ TEST_P(TestCOMerge, test_co_to_row_with_three_pure_co)
       "102        -14       0        NOP       T_DML_UPDATE  EXIST   CLF\n"
       "104        -15       0        NOP       T_DML_DELETE  DELETE   CLF\n"
       "105        -16       0        10       T_DML_INSERT  EXIST   CLF\n"
-      "111        -20       0        NOP       T_DML_INSERT  EXIST   CLF\n"
+      "111        -20       0        NULL       T_DML_INSERT  EXIST   CLF\n"
       "120        -18       0        NOP       T_DML_INSERT  EXIST   CLF\n";
 
   int schema_rowkey_cnt = 1;
@@ -3903,7 +3909,7 @@ TEST_P(TestCOMerge, test_co_to_row_with_three_pure_co)
   ASSERT_EQ(OB_SUCCESS, merge_context.mock_row_store_table_read_info());
   merge_context.array_count_ = 3;
   merge_context.static_param_.is_full_merge_ = true;
-  TestMergeBasic::co_major_merge(local_arena_, type, merge_context, 0, merge_context.base_rowkey_cg_idx_, merge_context.base_rowkey_cg_idx_ + 1, true/*create_sstable*/, true);
+  TestMergeBasic::co_major_merge(local_arena_, config, merge_context, 0, merge_context.base_rowkey_cg_idx_, merge_context.base_rowkey_cg_idx_ + 1, true/*create_sstable*/, true);
 
   // create all cg sstable
   ASSERT_EQ(1, merge_context.merged_cg_tables_handle_.get_count());
@@ -3962,7 +3968,7 @@ TEST_P(TestCOMerge, test_co_to_row_with_three_pure_co)
 
 TEST_P(TestCOMerge, test_update_all_with_one_pure_co)
 {
-  ObCOMergeTestType type = GetParam();
+  ObCOMergeTestConfig config = GetParam();
   int ret = OB_SUCCESS;
   ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
 
@@ -4001,8 +4007,8 @@ TEST_P(TestCOMerge, test_update_all_with_one_pure_co)
   data_iter.reset();
   OK(data_iter.from(co_table_data[0]));
   ObTableHandleV2 co_table_handle;
-  const int64_t micro_row_count[3] = {2, 2, 1};
-  const int64_t macro_row_count[3] = {2, 4, 3};
+  const int64_t micro_row_count[4] = {2, 2, 1, 2};
+  const int64_t macro_row_count[4] = {2, 4, 3, 4};
   prepare_co_sstable(table_schema_, MAJOR_MERGE, snapshot_version, 0,
                       micro_row_count, macro_row_count, data_iter, co_table_handle, scn_range, false/*is_all_cg_base*/);
   ASSERT_EQ(4, static_cast<const ObCOSSTableV2 *>(co_table_handle.get_table())->cs_meta_.column_group_cnt_);
@@ -4028,7 +4034,7 @@ TEST_P(TestCOMerge, test_update_all_with_one_pure_co)
   prepare_merge_context(MAJOR_MERGE, false, trans_version_range, merge_context);
   merge_context.array_count_ = 4;
   merge_context.static_param_.is_full_merge_ = true;
-  TestMergeBasic::co_major_merge(local_arena_, type, merge_context, 0, 0, 4);
+  TestMergeBasic::co_major_merge(local_arena_, config, merge_context, 0, 0, 4);
 
   // create all cg sstable
   ASSERT_EQ(4, merge_context.merged_cg_tables_handle_.get_count());
@@ -4117,7 +4123,7 @@ TEST_P(TestCOMerge, test_update_all_with_one_pure_co)
 
 TEST_P(TestCOMerge, test_update_all_with_three_pure_co)
 {
-  ObCOMergeTestType type = GetParam();
+  ObCOMergeTestConfig config = GetParam();
   int ret = OB_SUCCESS;
   ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
 
@@ -4184,8 +4190,8 @@ TEST_P(TestCOMerge, test_update_all_with_three_pure_co)
   data_iter.reset();
   OK(data_iter.from(co_table_data1[0]));
   ObTableHandleV2 co_table_handle1;
-  const int64_t micro_row_count[3] = {2, 2, 1};
-  const int64_t macro_row_count[3] = {2, 4, 3};
+  const int64_t micro_row_count[4] = {2, 2, 1, 2};
+  const int64_t macro_row_count[4] = {2, 4, 3, 4};
   prepare_co_sstable(table_schema_, MAJOR_MERGE, snapshot_version, 0,
                       micro_row_count, macro_row_count, data_iter, co_table_handle1, scn_range, false/*is_all_cg_base*/);
   ASSERT_EQ(4, static_cast<const ObCOSSTableV2 *>(co_table_handle1.get_table())->cs_meta_.column_group_cnt_);
@@ -4229,7 +4235,7 @@ TEST_P(TestCOMerge, test_update_all_with_three_pure_co)
   prepare_merge_context(MAJOR_MERGE, false, trans_version_range, merge_context);
   merge_context.array_count_ = 4;
   merge_context.static_param_.is_full_merge_ = true;
-  TestMergeBasic::co_major_merge(local_arena_, type, merge_context, 0, 0, 4);
+  TestMergeBasic::co_major_merge(local_arena_, config, merge_context, 0, 0, 4);
   ASSERT_EQ(4, merge_context.merged_cg_tables_handle_.get_count());
 
   const char *result[4];
@@ -4356,7 +4362,7 @@ TEST_P(TestCOMerge, test_update_all_with_three_pure_co)
 
 TEST_P(TestCOMerge, test_update_one_major)
 {
-  ObCOMergeTestType type = GetParam();
+  ObCOMergeTestConfig config = GetParam();
   int ret = OB_SUCCESS;
   ObCOTabletMergeCtx merge_context(dag_net_, param_, allocator_);
 
@@ -4419,8 +4425,8 @@ TEST_P(TestCOMerge, test_update_one_major)
   data_iter.reset();
   OK(data_iter.from(co_table_data1[0]));
   ObTableHandleV2 co_table_handle1;
-  const int64_t micro_row_count[3] = {2, 2, 1};
-  const int64_t macro_row_count[3] = {2, 4, 3};
+  const int64_t micro_row_count[4] = {2, 2, 1, 2};
+  const int64_t macro_row_count[4] = {2, 4, 3, 4};
   prepare_co_sstable(table_schema_, MAJOR_MERGE, snapshot_version, 0,
                       micro_row_count, macro_row_count, data_iter, co_table_handle1, scn_range, false/*is_all_cg_base*/);
   ASSERT_EQ(4, static_cast<const ObCOSSTableV2 *>(co_table_handle1.get_table())->cs_meta_.column_group_cnt_);
@@ -4454,7 +4460,7 @@ TEST_P(TestCOMerge, test_update_one_major)
   //prepare merge_ctx
   prepare_merge_context(MAJOR_MERGE, false, trans_version_range, merge_context);
   merge_context.array_count_ = 4;
-  TestMergeBasic::co_major_merge(local_arena_, type, merge_context, 0, 0, 4);
+  TestMergeBasic::co_major_merge(local_arena_, config, merge_context, 0, 0, 4);
   ASSERT_EQ(4, merge_context.merged_cg_tables_handle_.get_count());
 
   const char *result[4];
@@ -4599,17 +4605,12 @@ TEST_P(TestCOMerge, test_update_one_major)
   }
 }
 
+std::vector<ObCOMergeTestConfig> all_configs;
 INSTANTIATE_TEST_CASE_P(
     COMergeSuite,
     TestCOMerge,
-    ::testing::Values(
-      TestMergeBasic::ObCOMergeTestType::NORMAL,
-      TestMergeBasic::ObCOMergeTestType::USE_ROW_TMP_FILE,
-      TestMergeBasic::ObCOMergeTestType::USE_COLUMN_TMP_FILE,
-      TestMergeBasic::ObCOMergeTestType::NORMAL_WITH_BASE_REPLAY,
-      TestMergeBasic::ObCOMergeTestType::USE_ROW_TMP_FILE_WITH_BASE_REPLAY,
-      TestMergeBasic::ObCOMergeTestType::USE_COLUMN_TMP_FILE_WITH_BASE_REPLAY
-    )
+    ::testing::ValuesIn(all_configs),
+    ObCOMergeTestUtil::custom_test_name
 );
 
 }
@@ -4618,6 +4619,21 @@ INSTANTIATE_TEST_CASE_P(
 
 int main(int argc, char **argv)
 {
+  using oceanbase::storage::ObCOMergeTestUtil;
+  using oceanbase::storage::ObCOMergeTestConfig;
+  using oceanbase::storage::ObCOMergeTestType;
+  using oceanbase::storage::all_configs;
+
+  ObCOMergeTestUtil::generate_configs(all_configs, ObCOMergeTestConfig(ObCOMergeTestType::NORMAL, 1/*compaction_batch_size*/));
+  ObCOMergeTestUtil::generate_configs(all_configs, ObCOMergeTestConfig(ObCOMergeTestType::USE_ROW_TMP_FILE, 1/*compaction_batch_size*/));
+  ObCOMergeTestUtil::generate_configs(all_configs, ObCOMergeTestConfig(ObCOMergeTestType::USE_COLUMN_TMP_FILE, 1/*compaction_batch_size*/));
+  ObCOMergeTestUtil::generate_configs(all_configs, ObCOMergeTestConfig(ObCOMergeTestType::NORMAL_WITH_BASE_REPLAY, 1/*compaction_batch_size*/));
+  ObCOMergeTestUtil::generate_configs(all_configs, ObCOMergeTestConfig(ObCOMergeTestType::USE_ROW_TMP_FILE_WITH_BASE_REPLAY, 1/*compaction_batch_size*/));
+  ObCOMergeTestUtil::generate_configs(all_configs, ObCOMergeTestConfig(ObCOMergeTestType::USE_COLUMN_TMP_FILE_WITH_BASE_REPLAY, 1/*compaction_batch_size*/));
+
+  ObCOMergeTestUtil::generate_configs(all_configs, ObCOMergeTestConfig(ObCOMergeTestType::NORMAL, 10/*compaction_batch_size*/));
+  ObCOMergeTestUtil::generate_configs(all_configs, ObCOMergeTestConfig(ObCOMergeTestType::NORMAL_WITH_BASE_REPLAY, 10/*compaction_batch_size*/));
+
   system("rm -rf test_co_merge.log*");
   OB_LOGGER.set_file_name("test_co_merge.log");
   OB_LOGGER.set_log_level("DEBUG");

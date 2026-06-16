@@ -15,7 +15,6 @@
 #include "share/ob_rpc_struct.h"
 #include "observer/ob_server_struct.h"
 #include "ob_backup_base_job.h"
-#include "share/backup/ob_ss_ha_macro_block_struct.h"
 
 namespace oceanbase
 {
@@ -37,7 +36,7 @@ struct ObBackupScheduleTaskType final
     BACKUP_DATA_LS_META_FINISH_TASK = 4,
     BACKUP_DATA_FUSE_TABLET_META_TASK = 5,
     BACKUP_CLEAN_LS_TASK = 6,
-    BACKUP_SS_HA_MACRO_BLOCK_TASK = 7,
+    BACKUP_SS_HA_MACRO_BLOCK_TASK = 7, // not support ss
     BACKUP_VALIDATE_LS_TASK = 8,
     BACKUP_SCHEDULE_TASK_TYPE_MAX
   };
@@ -218,10 +217,8 @@ public:
   virtual bool can_execute_on_any_server() const = 0;
   virtual int execute(obrpc::ObSrvRpcProxy &rpc_proxy) const = 0;
   virtual int cancel(obrpc::ObSrvRpcProxy &rpc_proxy) const = 0;
-  // check backup task can remote execute 
+  // check backup task can remote execute
   virtual bool can_cross_machine_exec() { return false; };
-  // Check if this is a macro block backup task
-  virtual bool is_macro_block_task() const { return false; }
 private:
   // write inner table to update task dst, trace id and advnace task status to doing
   virtual int do_update_dst_and_doing_status_(common::ObISQLClient &sql_proxy, common::ObAddr &dst, share::ObTaskId &trace_id) = 0;
@@ -447,34 +444,6 @@ private:
   share::ObBackupPathString backup_path_;
 private:
   DISALLOW_COPY_AND_ASSIGN(ObBackupCleanLSTask); 
-};
-
-// Macro block schedule task: for TaskScheduler scheduling
-class ObSSHAMacroBlockScheduleTask : public ObBackupDataBaseTask
-{
-public:
-  ObSSHAMacroBlockScheduleTask() : ObBackupDataBaseTask(ObBackupScheduleTaskType::BACKUP_SS_HA_MACRO_BLOCK_TASK) {}
-  virtual ~ObSSHAMacroBlockScheduleTask() {}
-
-  int build(const share::ObBackupJobAttr &job_attr, const share::ObBackupSetTaskAttr &set_task_attr,
-      const share::ObSSHAMacroBlockTaskAttr &macro_task_attr);
-  int build(const share::ObBackupCleanJobAttr &clean_job_attr, // used for backup clean scenario
-      const share::ObBackupCleanTaskAttr &clean_task_attr,
-      const share::ObSSHAMacroBlockTaskAttr &macro_task_attr);
-  virtual int clone(common::ObIAllocator &allocator, ObBackupScheduleTask *&out_task) const override;
-  virtual int64_t get_deep_copy_size() const override;
-  virtual int execute(obrpc::ObSrvRpcProxy &rpc_proxy) const override;
-  virtual bool is_macro_block_task() const override { return true; }
-  const share::ObSSHAMacroBlockTaskAttr &get_macro_task_attr() const { return macro_task_attr_; }
-
-private:
-  virtual int do_update_dst_and_doing_status_(common::ObISQLClient &sql_proxy, common::ObAddr &dst,
-      share::ObTaskId &trace_id) final override;
-  int set_optional_servers_for_backup_clean_();
-
-  share::ObSSHAMacroBlockTaskAttr macro_task_attr_;
-
-  DISALLOW_COPY_AND_ASSIGN(ObSSHAMacroBlockScheduleTask);
 };
 
 class ObBackupValidateLSTask : public ObBackupScheduleTask

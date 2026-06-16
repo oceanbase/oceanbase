@@ -74,7 +74,6 @@ public:
   VIRTUAL_TO_STRING_KV(K("ObTransferParallelBuildTabletTask"), KP(this), KPC(ctx_));
 private:
   int do_build_tablet_infos_();
-  int do_build_tablet_info_(const share::ObTransferTabletInfo &tablet_info);
 
 private:
   bool is_inited_;

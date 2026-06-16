@@ -306,6 +306,7 @@ ob_set_subtarget(ob_storage high_availability
   high_availability/ob_storage_ha_struct.cpp
   high_availability/ob_storage_ha_src_provider.cpp
   high_availability/ob_transfer_backfill_tx.cpp
+  high_availability/ob_transfer_diag_ctx.cpp
   high_availability/ob_transfer_handler.cpp
   high_availability/ob_storage_restore_struct.cpp
   high_availability/ob_tablet_group_restore.cpp
@@ -929,6 +930,14 @@ ob_set_subtarget(ob_storage compaction_filter
   compaction/filter/ob_mds_info_compaction_filter.cpp
   compaction/filter/ob_reorg_info_minor_filter.cpp
   compaction/filter/ob_rowscn_filter.cpp
+)
+
+ob_set_subtarget(ob_storage compaction_vectorization
+  compaction/vectorization/ob_compaction_vector.cpp
+  compaction/vectorization/ob_compaction_vector_utils.cpp
+  compaction/vectorization/ob_merge_vector_store.cpp
+  compaction/vectorization/ob_co_batch_merge_writer.cpp
+  compaction/vectorization/ob_compaction_batch_merger.cpp
 )
 
 ob_set_subtarget(ob_storage lock_wait_mgr

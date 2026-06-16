@@ -245,7 +245,7 @@ static int record_piece_ls_file_list(
       LOG_WARN("failed to push ls log dir to list", KR(ret), K(ls_log_dir_path));
     } else if (ls_id.is_sys_ls() && OB_FAIL(add_ls_meta_recorder_to_file_list(single_ls_desc, store, file_list_info))) {
       LOG_WARN("failed to add ls meta recorder to file list", KR(ret), K(single_ls_desc));
-    } else if (!GCTX.is_shared_storage_mode()) {
+    } else {
       ObBackupPath file_info_path;
       if (OB_FAIL(ObArchivePathUtil::get_ls_file_info_path(dest, single_ls_desc.dest_id_,
                                                   single_ls_desc.round_id_, single_ls_desc.piece_id_,
@@ -478,7 +478,7 @@ static int record_single_piece_file_list(
           LOG_WARN("failed to push ls dir info", K(ret), K(ls_dir_path));
         }
       }
-      if (OB_FAIL(ret) || GCTX.is_shared_storage_mode()) {
+      if (OB_FAIL(ret)) {
       } else if (OB_FAIL(ObBackupFileListWriterUtil::write_file_list_to_path(storage_info, suffix,
                                                                             piece_path, dest_id, file_list_info))) {
         LOG_WARN("failed to write file list", K(ret), K(piece_path), K(file_list_info));
@@ -493,7 +493,7 @@ static int record_checkpoint_dir_file_list(
   const ObArchiveStore &store)
 {
   int ret = OB_SUCCESS;
-  if (!piece_info.status_.is_frozen() || GCTX.is_shared_storage_mode()) {
+  if (!piece_info.status_.is_frozen()) {
   } else {
     const ObBackupDest &dest = store.get_backup_dest();
     const ObBackupStorageInfo *storage_info = store.get_storage_info();

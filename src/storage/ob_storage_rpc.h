@@ -28,7 +28,6 @@
 #include "share/rpc/ob_async_rpc_proxy.h"
 #include "storage/meta_mem/ob_tablet_pointer.h"
 #ifdef OB_BUILD_SHARED_STORAGE
-#include "close_modules/shared_storage/storage/high_availability/ob_migration_warmup_struct.h"
 #include "close_modules/shared_storage/storage/shared_storage/micro_cache/ob_ss_micro_cache_common_meta.h"
 #include "close_modules/shared_storage/storage/shared_storage/prewarm/ob_ha_prewarm_struct.h"
 #include "close_modules/shared_storage/storage/shared_storage/ob_ss_micro_cache.h"
@@ -1713,7 +1712,6 @@ public:
   virtual ~ObNotifySSWriterDoBackfillP() {}
 protected:
   int process();
-  int notify_sswriter_do_backfill_();
 };
 #endif
 

@@ -13,7 +13,6 @@
 #include "storage/high_availability/ob_storage_ha_utils.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "storage/shared_storage/prewarm/ob_replica_prewarm_struct.h"
-#include "storage/high_availability/ob_ss_transfer_backfill_utils.h"
 #include "storage/shared_storage/ob_ss_local_cache_service.h"
 #endif
 #include "storage/ddl/ob_direct_load_mgr_utils.h"
@@ -4905,38 +4904,8 @@ int ObNotifySSWriterDoBackfillP::process()
   if (OB_UNLIKELY(!arg_.is_valid())) {
     ret = OB_INVALID_ARGUMENT;
     STORAGE_LOG(WARN, "invalid argument", KR(ret), K_(arg));
-  } else if (OB_FAIL(notify_sswriter_do_backfill_())) {
-    LOG_WARN("failed to notify sswriter do backfill", KR(ret), K(arg_));
   }
 
-  return ret;
-}
-
-int ObNotifySSWriterDoBackfillP::notify_sswriter_do_backfill_()
-{
-  int ret = OB_SUCCESS;
-  bool is_sswriter = false;
-
-  MTL_SWITCH(arg_.tenant_id_) {
-    if (OB_FAIL(ObSSTransferBackfillUtils::check_self_is_sswriter(arg_.type_, arg_.ls_id_, arg_.tablet_id_,
-        is_sswriter))) {
-      LOG_WARN("failed to check self is sswriter", KR(ret), K(arg_));
-    } else if (!is_sswriter) {
-      // set result then skip
-      result_ = OB_NOT_MASTER;
-      LOG_INFO("[SS_TRANSFER_BACKFILL] is not valid sswriter", KR(ret), K(arg_));
-    } else {
-      ObTransferService *transfer_service = nullptr;
-      if (OB_ISNULL(transfer_service = MTL(ObTransferService*))) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("transfer service should not be NULL", KR(ret), KP(transfer_service));
-      } else {
-        transfer_service->wakeup();
-        result_ = OB_SUCCESS;
-        LOG_TRACE("[SS_TRANSFER_BACKFILL] notify sswriter do backfill success", KR(ret), K(arg_));
-      }
-    }
-  }
   return ret;
 }
 // ==================== ObGetLocalCacheKeyP ====================

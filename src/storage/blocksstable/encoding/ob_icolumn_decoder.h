@@ -133,6 +133,10 @@ struct ObVectorDecodeCtx
 
   VectorFormat get_format() const { return vec_header_.get_format(); }
   ObIVector *get_vector() { return vec_header_.get_vector(); }
+  bool is_null_at(const int64_t row_idx);
+  int fill_from_default_datum();
+  int fill_default_datum_at(const int64_t row_idx);
+  int set_default_datum_to_vector(const int64_t vec_idx);
 
   TO_STRING_KV(KP_(ptr_arr), KP_(len_arr), KP_(row_ids), K_(row_cap), K_(vec_offset), KPC_(default_datum));
 
@@ -411,6 +415,11 @@ public:
   virtual int update_pointer(const char *, const char *) { return common::OB_SUCCESS; }
 
   virtual bool can_vectorized() const override { return false; }
+
+  virtual int decode_vector(
+      const ObColumnDecoderCtx &decoder_ctx,
+      const ObIRowIndex *row_index,
+      ObVectorDecodeCtx &vector_ctx) const override;
 };
 
 // Read row data offset and row length from row index

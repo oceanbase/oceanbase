@@ -294,35 +294,11 @@ int64_t ObStorageCompactionTimeGuard::to_string(char *buf, const int64_t buf_len
 }
 
 /**
- * --------------------------------------ObSSCompactionTimeGuard--------------------------------------
- */
-const char *ObSSCompactionTimeGuard::CompactionEventStr[] = {
-    "GET_SCHEDULE_TABLET",
-    "PREPARE_CLOG",
-    "UPDATE_TABLET_OBJ",
-    "GET_TABLET",
-    "SCHEDULE_MERGE",
-    "REFRESH",
-    "FORCE_FREEZE"
-};
-
-const char *ObSSCompactionTimeGuard::get_comp_event_str(enum CompactionEvent event)
-{
-  STATIC_ASSERT(static_cast<int64_t>(COMPACTION_EVENT_MAX) == ARRAYSIZEOF(CompactionEventStr), "events str len is mismatch");
-  const char *str = "";
-  if (event >= COMPACTION_EVENT_MAX || event < GET_SCHEDULE_TABLET) {
-    str = "invalid_type";
-  } else {
-    str = CompactionEventStr[event];
-  }
-  return str;
-}
-
-/**
  * --------------------------------------ObCOMergeTimeGuard--------------------------------------
  */
 const char *ObCOMergeTimeGuard::CompactionEventStr[] = {
     "MOVE_NEXT",
+    "BATCH_MOVE_NEXT",
     "COMPARE",
     "BUILD_LOG",
     "REPLAY_BASE_CG",

@@ -20,7 +20,7 @@ class ObMemberListLockUtils {
 public:
   /* member list and learner list */
   static int batch_lock_ls_member_and_learner_list(const uint64_t tenant_id, const int64_t task_id,
-      const common::ObArray<share::ObLSID> &lock_ls_list, const common::ObMemberList &member_list,
+      const common::ObIArray<share::ObLSID> &lock_ls_list, const common::ObMemberList &member_list,
       const common::GlobalLearnerList &learner_list, const ObTransferLockStatus &status,
       const int32_t group_id, const share::ObLSID &unlock_check_ls_id, common::ObMySQLProxy &sql_proxy);
   static int lock_ls_member_and_learner_list(const uint64_t tenant_id, const share::ObLSID &ls_id, const int64_t task_id,

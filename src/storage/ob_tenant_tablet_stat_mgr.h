@@ -403,10 +403,6 @@ public:
       ObTabletStat &tablet_stat,
       ObTabletStat &total_tablet_stat,
       share::schema::ObTableModeFlag &mode);
-  int get_history_tablet_stats(
-      const share::ObLSID &ls_id,
-      const common::ObTabletID &tablet_id,
-      common::ObIArray<ObTabletStat> &tablet_stats);
   int get_all_tablet_stats(
       common::ObIArray<ObTabletStat> &tablet_stats);
   int get_all_tablet_analyzers(
@@ -475,7 +471,6 @@ private:
   static constexpr int32_t DEFAULT_UP_LIMIT_STREAM_CNT = 20000;
   static constexpr int32_t DEFAULT_BUCKET_NUM = 1543; // should be a prime to guarantee the bucket nums of hashmap and bucketlock are equal
   static constexpr int32_t DEFAULT_MAX_PENDING_CNT = 40000;
-  static constexpr int32_t MAX_REPORT_RETRY_CNT = 5;
   static constexpr int32_t MAX_SCHEMA_GUARD_REFRESH_CNT = 100;
 
   TabletStatUpdater report_stat_task_;

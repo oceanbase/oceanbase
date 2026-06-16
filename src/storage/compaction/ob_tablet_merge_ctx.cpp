@@ -116,7 +116,7 @@ int ObTabletMiniMergeCtx::prepare_schema()
       LOG_WARN("pre process tx data table for merge failed", KR(ret), "dag_param", get_dag_param());
     } else {
       static_param_.schema_ = schema;
-      static_param_.set_full_merge_and_level(true/*is_full_merge*/);
+      static_param_.set_full_merge();
     }
   } else if (OB_FAIL(update_storage_schema_by_memtable(get_tables_handle(), *schema))) {
     LOG_WARN("failed to update storage schema by memtable", KR(ret), KPC(schema));
@@ -133,7 +133,10 @@ int ObTabletMiniMergeCtx::pre_process_tx_data_table_merge()
     const ObTablesHandleArray &tables_handle = get_tables_handle();
     for (int i = 0; OB_SUCC(ret) && i < tables_handle.get_count(); i++) {
       ObITable *table = tables_handle.get_table(i);
-      if (OB_FAIL(static_cast<ObTxDataMemtable *>(table)->pre_process_for_merge())) {
+      if (OB_ISNULL(table)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("table is unexpected nullptr", KR(ret), "param", get_dag_param(), K(i));
+      } else if (OB_FAIL(static_cast<ObTxDataMemtable *>(table)->pre_process_for_merge())) {
         LOG_WARN("do pre process for tx data table merge failed.", KR(ret), "param", get_dag_param(),
                  KPC(table));
       }
@@ -151,9 +154,6 @@ int ObTabletMiniMergeCtx::update_tablet(
     LOG_WARN("failed to update tablet", KR(ret), "param", get_dag_param());
   } else {
     time_guard_click(ObStorageCompactionTimeGuard::UPDATE_TABLET);
-#ifdef OB_BUILD_SHARED_STORAGE
-    after_update_tablet(new_tablet_handle);
-#endif
     if (OB_FAIL(new_tablet_handle.get_obj()->release_memtables(static_param_.scn_range_.end_scn_))) {
       LOG_WARN("failed to release memtable", KR(ret), "param", get_dag_param());
     } else if (FALSE_IT(time_guard_click(ObStorageCompactionTimeGuard::RELEASE_MEMTABLE))) {
@@ -223,9 +223,7 @@ void ObTabletMiniMergeCtx::try_schedule_compaction_after_mini(ObTabletHandle &ta
                               create_dag))) {
       LOG_WARN_RET(tmp_ret, "failed to schedule meta merge", K(get_dag_param()), "tnode_stat", info_collector_.tnode_stat_);
     }
-    if (GCTX.is_shared_storage_mode()) {
-      // disable minor merge in shared storage mode
-    } else if (create_dag) {
+    if (create_dag) {
       // no need to schedule minor merge
     } else {
       (void) try_schedule_minor_merge_after_mini(tablet_handle);
@@ -431,8 +429,6 @@ int ObTabletExeMergeCtx::prepare_tx_table_compaction_filter_()
   if (OB_UNLIKELY(!get_tablet_id().is_ls_tx_data_tablet())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("only tx data tablet can execute minor merge", KR(ret), "param", get_dag_param());
-  } else if (GCTX.is_shared_storage_mode() && is_local_exec_mode(get_exec_mode())) {
-    // shared-storage mode, local minor do not filter tx data
   } else if (!static_param_.scn_range_.start_scn_.is_base_scn()) {
     FLOG_INFO ("Skip filtering because this minor merge does not contain the oldest minor sstable",
       K(static_param_.scn_range_));
@@ -465,12 +461,6 @@ int ObTabletExeMergeCtx::init_tx_table_compaction_filter_(ObTxDataMinorFilter *c
   } else if (OB_UNLIKELY(!guard.is_valid())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("tx table guard is invalid", K(ret), K(param), K(guard));
-#ifdef OB_BUILD_SHARED_STORAGE
-  } else if (!is_local) {
-    if (OB_FAIL(guard.get_ss_recycle_scn(recycle_scn))) {
-      LOG_WARN("failed to get ss_recycle_scn", K(ret), K(param));
-    }
-#endif
   } else if (OB_FAIL(guard.get_recycle_scn(recycle_scn))) {
     LOG_WARN("failed to get ss_recycle_scn", K(ret), K(param));
   }
@@ -536,7 +526,7 @@ int ObTabletExeMergeCtx::prepare_rowscn_compaction_filter_()
 {
   int ret = OB_SUCCESS;
   const int64_t recycle_version = static_param_.version_range_.base_version_;
-  if (recycle_version > 1 && !GCTX.is_shared_storage_mode() && get_is_ha_compeleted() && !(EN_COMPACTION_DISABLE_MINOR_RECYCLE_ROWS)) {
+  if (recycle_version > 1 && get_is_ha_compeleted() && !(EN_COMPACTION_DISABLE_MINOR_RECYCLE_ROWS)) {
     const int64_t filter_col_idx = get_schema()->get_rowkey_column_num();
     bool need_create_filter = false;
     const ObICompactionFilter::CompactionFilterType filter_type = ObICompactionFilter::ROWSCN_FILTER;

@@ -36,12 +36,6 @@ struct ObTabletMergeDagParam;
 struct ObCOMergeDagParam;
 struct ObTabletSchedulePair;
 struct ObBatchFreezeTabletsParam;
-#ifdef OB_BUILD_SHARED_STORAGE
-struct ObTabletsRefreshSSTableParam;
-struct ObVerifyCkmParam;
-struct ObUpdateSkipMajorParam;
-struct ObTabletSSMinorMergeDagParam;
-#endif
 
 class ObScheduleDagFunc final
 {
@@ -76,10 +70,6 @@ public:
       const bool is_emergency = false);
   static int schedule_batch_freeze_dag(
     const ObBatchFreezeTabletsParam &freeze_param);
-#ifdef OB_BUILD_SHARED_STORAGE
-  static int schedule_ss_attach_major_dag(
-    ObTabletMergeDagParam &param);
-#endif
 };
 
 class ObDagParamFunc final

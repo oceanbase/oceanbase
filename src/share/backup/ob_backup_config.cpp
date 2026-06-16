@@ -445,12 +445,6 @@ int ObDataBackupDestConfigParser::check_before_update_inner_config(obrpc::ObSrvR
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("set backup dest during upgrade is not supported", K(ret), K_(tenant_id), K_(config_items));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "set backup dest during upgrade is not supported");
-#ifdef OB_BUILD_SHARED_STORAGE
-    } else if (GCTX.is_shared_storage_mode() && backup_dest_tmp.is_storage_type_file()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("setting data_backup_dest to NFS is not supported in shared storage mode", K(ret), K_(tenant_id), K_(config_items));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "set data_backup_dest to NFS in shared storage mode is");
-#endif
     } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest_status(
                        trans, tenant_id_, backup_dest_tmp, is_cleaning))) {
       if (OB_ENTRY_NOT_EXIST == ret) {
@@ -718,12 +712,6 @@ int ObLogArchiveDestConfigParser::check_before_update_inner_config(obrpc::ObSrvR
       ret = OB_NOT_SUPPORTED;
       LOG_WARN("set backup dest during upgrade is not supported", K(ret), K_(tenant_id), K_(backup_dest));
       LOG_USER_ERROR(OB_NOT_SUPPORTED, "set backup dest during upgrade is not supported");
-#ifdef OB_BUILD_SHARED_STORAGE
-    } else if (GCTX.is_shared_storage_mode() && backup_dest.is_storage_type_file()) {
-      ret = OB_NOT_SUPPORTED;
-      LOG_WARN("setting log_archive_dest to NFS is not supported in shared storage mode", K(ret), K_(tenant_id), K_(backup_dest));
-      LOG_USER_ERROR(OB_NOT_SUPPORTED, "set log_archive_dest to NFS in shared storage mode is");
-#endif
     } else if (OB_FAIL(ObBackupStorageInfoOperator::get_backup_dest_status(
                         trans, tenant_id_, backup_dest, is_cleaning))) {
       if (OB_ENTRY_NOT_EXIST == ret) {

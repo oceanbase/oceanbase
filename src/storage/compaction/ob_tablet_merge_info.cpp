@@ -122,9 +122,12 @@ int ObTabletMergeInfo::record_start_tx_scn_for_tx_data(const ObBasicTabletMergeC
     // when this merge is MINOR_MERGE, use max_filtered_end_scn in filter if filtered some tx data
     ObTxDataMinorFilter *compaction_filter = (ObTxDataMinorFilter*)ctx.filter_ctx_.compaction_filter_;
     ObSSTableMetaHandle sstable_meta_hdl;
-    ObSSTable *oldest_tx_data_sstable = static_cast<ObSSTable *>(tables_handle.get_table(0));
+    ObSSTable *oldest_tx_data_sstable = nullptr;
     SCN default_tx_data_recycle_scn(SCN::min_scn());
-    if (OB_ISNULL(oldest_tx_data_sstable)) {
+    if (tables_handle.empty()) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_ERROR("tables handle is unexpected empty", KR(ret), K(ctx));
+    } else if (OB_ISNULL(oldest_tx_data_sstable = static_cast<ObSSTable *>(tables_handle.get_table(0)))) {
       ret = OB_ERR_UNEXPECTED;
       LOG_ERROR("tx data sstable is unexpected nullptr", KR(ret));
     } else if (OB_FAIL(oldest_tx_data_sstable->get_meta(sstable_meta_hdl))) {

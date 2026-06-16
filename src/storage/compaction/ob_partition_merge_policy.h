@@ -50,12 +50,6 @@ public:
       storage::ObLS &ls,
       const storage::ObTablet &tablet,
       storage::ObGetMergeTablesResult &result);
-#ifdef OB_BUILD_SHARED_STORAGE
-  static int get_ss_minor_merge_tables(
-      storage::ObLS &ls,
-      const storage::ObTablet &tablet,
-      storage::ObGetMergeTablesResult &result);
-#endif
   static int get_hist_minor_merge_tables(
       const storage::ObGetMergeTablesParam &param,
       storage::ObLS &ls,
@@ -199,17 +193,6 @@ private:
   static int deal_hist_minor_merge(
       const storage::ObTablet &tablet,
       int64_t &max_snapshot_version);
-#ifdef OB_BUILD_SHARED_STORAGE
-  static int get_ss_minor_boundary_snapshot_version(
-      ObLS &ls,
-      const ObTablet &tablet,
-      int64_t &min_snapshot,
-      int64_t &max_snapshot);
-  static int deal_with_ss_minor_result(
-      ObLS &ls,
-      const ObTablet &tablet,
-      ObGetMergeTablesResult &result);
-#endif
   // diagnose part
   static int diagnose_minor_dag(
       compaction::ObMergeType merge_type,

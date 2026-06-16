@@ -30,8 +30,6 @@
   RPC_S(PR5 backup_build_index, OB_BACKUP_BUILD_INDEX, (ObBackupBuildIdxArg));
   RPC_S(PR5 backup_meta, OB_BACKUP_META, (ObBackupMetaArg));
   RPC_S(PR5 backup_fuse_tablet_meta, OB_BACKUP_FUSE_TABLET_META, (ObBackupFuseTabletMetaArg));
-  RPC_S(PR5 ss_ha_copy_macro_blocks, OB_SS_HA_COPY_MACRO_BLOCKS, (ObSSHAMacroBlocksArg));
-  RPC_S(PR5 ss_ha_delete_macro_blocks, OB_SS_HA_DELETE_MACRO_BLOCKS, (ObSSHAMacroBlocksArg));
   RPC_S(PR5 check_backup_task_exist, OB_CHECK_BACKUP_TASK_EXIST, (ObBackupCheckTaskArg), obrpc::Bool);
   RPC_S(PR5 report_backup_over, OB_BACKUP_LS_DATA_RES, (ObBackupTaskRes));
   RPC_S(PR5 report_backup_clean_over, OB_DELETE_BACKUP_LS_TASK_RES, (ObBackupTaskRes));

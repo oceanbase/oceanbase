@@ -81,12 +81,12 @@ public:
   virtual int get_src_ls(ObLS *&src_ls);
   virtual int get_dest_ls(ObLS *&dest_ls);
   virtual int get_src_ls_handle(ObLSHandle &src_ls_handle);
-  virtual int get_dest_ls_handle(ObLSHandle &dest_ls_handle);
-
   static int convert_from_ha_ctx(ObIHADagNetCtx *ha_dag_net_ctx, ObTransferBackfillTXBaseCtx *&ctx);
 protected:
   void reset();
   void reuse();
+  void clear_fields_();
+  int get_ls_(ObLSHandle &ls_handle, const char *desc, ObLS *&ls);
 public:
   uint64_t tenant_id_;
   share::ObTaskId task_id_;
@@ -150,10 +150,8 @@ public:
   ObTransferBackfillTXCtx *get_ctx() { return &ctx_; }
   virtual share::ObLSID get_ls_id() const override { return ctx_.src_ls_id_; }
   const share::SCN &get_backfill_scn() const { return ctx_.backfill_scn_; }
+  static int get_ctx_from_task(share::ObITask *task, ObTransferBackfillTXCtx *&ctx);
   INHERIT_TO_STRING_KV("ObIDagNet", share::ObIDagNet, K_(ctx));
-private:
-  int start_running_for_backfill_();
-
 private:
   bool is_inited_;
   ObTransferBackfillTXCtx ctx_;
@@ -178,13 +176,14 @@ private:
   DISALLOW_COPY_AND_ASSIGN(ObBaseTransferBackfillTXDag);
 };
 
+class ObStartTransferBackfillTXTask;
 class ObStartTransferBackfillTXDag : public ObBaseTransferBackfillTXDag
 {
 public:
   ObStartTransferBackfillTXDag();
   virtual ~ObStartTransferBackfillTXDag();
   virtual int fill_dag_key(char *buf, const int64_t buf_len) const override;
-  virtual int create_first_task() override;
+  virtual int create_first_task() override { ObStartTransferBackfillTXTask *task = nullptr; return create_task(nullptr, task); }
   virtual int fill_info_param(compaction::ObIBasicInfoParam *&out_param, ObIAllocator &allocator) const override;
   int init(share::ObIDagNet *dag_net);
   INHERIT_TO_STRING_KV("ObStorageHADag", ObStorageHADag, KP(this));
@@ -278,18 +277,11 @@ private:
       const ObTablesHandleArray &tables_handle,
       const ObTablet *dest_tablet);
 
-  void process_transfer_perf_diagnose_(
-      const int64_t timestamp,
-      const int64_t start_ts,
-      const bool is_report,
-      const share::ObLSID &dest_ls_id,
-      const share::SCN &log_sync_scn,
-      const common::ObTabletID &tablet_id,
-      const share::ObStorageHACostItemName name) const;
   void transfer_tablet_restore_stat_() const;
-#ifdef OB_BUILD_SHARED_STORAGE
-  int put_sstables_to_shared_tablet_(ObBatchUpdateTableStoreParam &batch_param, const ObTablet &tablet);
-#endif
+  int get_memtables_max_end_scn_(
+      const ObTablet &tablet,
+      const common::ObIArray<ObTableHandleV2> &memtables,
+      share::SCN &max_end_scn);
 private:
   bool is_inited_;
   ObTabletBackfillInfo tablet_info_;

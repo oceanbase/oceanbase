@@ -16,9 +16,6 @@
 #include "ob_sstable_copy_start_task.h"
 #include "ob_tablet_copy_dependency_mgr.h"
 #include "share/ob_tablet_reorganize_history_table_operator.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#endif
-
 namespace oceanbase
 {
 using namespace share;
@@ -38,6 +35,21 @@ ERRSIM_POINT_DEF(EN_GENERATE_TABLET_GROUP_DAG_FAILED);
 ERRSIM_POINT_DEF(EN_TABLET_GROUP_GENERATE_TASK_GEN_SELF_FAILED);
 ERRSIM_POINT_DEF(EN_TABLET_GROUP_GENERATE_TASK_INFINITE_LOOP);
 ERRSIM_POINT_DEF(EN_MIGRATION_TABLET_STOPPED);
+
+#define MIGRATION_PROCESS_EPILOGUE(record_fn)                           \
+  do {                                                                  \
+    int tmp_ret = OB_SUCCESS;                                 \
+    if (OB_SUCCESS != (tmp_ret = (record_fn))) {              \
+      LOG_WARN("failed to record server event", K(tmp_ret), K(ret)); \
+    }                                                                   \
+    if (OB_FAIL(ret)) {                                                 \
+      int deal_ret = OB_SUCCESS;                                       \
+      if (OB_SUCCESS != (deal_ret = ObStorageHADagUtils::deal_with_fo(ret, this->get_dag()))) { \
+        LOG_WARN("failed to deal with fo", K(ret), K(deal_ret));       \
+      }                                                                 \
+    }                                                                   \
+  } while (0)
+
 /******************ObMigrationCtx*********************/
 ObMigrationCtx::ObMigrationCtx()
   : ObIHADagNetCtx(),
@@ -215,20 +227,14 @@ int ObCopyTabletCtx::get_copy_tablet_record_extra_info(ObCopyTabletRecordExtraIn
 ObMigrationDagNetInitParam::ObMigrationDagNetInitParam()
   : arg_(),
     task_id_(),
-    bandwidth_throttle_(nullptr),
-    svr_rpc_proxy_(nullptr),
-    storage_rpc_(nullptr),
-    sql_proxy_(nullptr)
+    ha_svc_ctx_()
 {
 }
 
 bool ObMigrationDagNetInitParam::is_valid() const
 {
   return arg_.is_valid() && !task_id_.is_invalid()
-      && OB_NOT_NULL(bandwidth_throttle_)
-      && OB_NOT_NULL(svr_rpc_proxy_)
-      && OB_NOT_NULL(storage_rpc_)
-      && OB_NOT_NULL(sql_proxy_);
+      && ha_svc_ctx_.is_valid();
 }
 
 
@@ -236,11 +242,7 @@ ObMigrationDagNet::ObMigrationDagNet()
     : ObIDagNet(ObDagNetType::DAG_NET_TYPE_MIGRATION),
       is_inited_(false),
       ctx_(nullptr),
-      bandwidth_throttle_(nullptr),
-      svr_rpc_proxy_(nullptr),
-      storage_rpc_(nullptr),
-      sql_proxy_(nullptr)
-
+      ha_svc_ctx_()
 {
 }
 
@@ -305,10 +307,7 @@ int ObMigrationDagNet::init_by_param(const ObIDagInitParam *param)
     ctx_->tenant_id_ = MTL_ID();
     ctx_->arg_ = init_param->arg_;
     ctx_->task_id_ = init_param->task_id_;
-    bandwidth_throttle_ = init_param->bandwidth_throttle_;
-    svr_rpc_proxy_ = init_param->svr_rpc_proxy_;
-    storage_rpc_ = init_param->storage_rpc_;
-    sql_proxy_ = init_param->sql_proxy_;
+    ha_svc_ctx_ = init_param->ha_svc_ctx_;
     is_inited_ = true;
   }
   return ret;
@@ -520,7 +519,8 @@ int ObMigrationDagNet::deal_with_cancel()
 
 /******************ObMigrationDag*********************/
 ObMigrationDag::ObMigrationDag(const share::ObDagType::ObDagTypeEnum &dag_type)
-  : ObStorageHADag(dag_type)
+  : ObStorageHADag(dag_type),
+    is_inited_(false)
 {
 }
 
@@ -550,87 +550,13 @@ int ObMigrationDag::fill_info_param(compaction::ObIBasicInfoParam *&out_param, O
   return ret;
 }
 
-/******************ObInitialMigrationDag*********************/
-ObInitialMigrationDag::ObInitialMigrationDag()
-  : ObMigrationDag(ObDagType::DAG_TYPE_INITIAL_MIGRATION),
-    is_inited_(false)
-{
-}
-
-ObInitialMigrationDag::~ObInitialMigrationDag()
-{
-}
-
-bool ObInitialMigrationDag::operator == (const ObIDag &other) const
-{
-  bool is_same = true;
-  ObMigrationCtx *ctx = nullptr;
-
-  if (this == &other) {
-    // same
-  } else if (get_type() != other.get_type()) {
-    is_same = false;
-  } else {
-    const ObMigrationDag &other_dag = static_cast<const ObMigrationDag&>(other);
-    ctx = get_migration_ctx();
-    if (OB_ISNULL(ctx) || OB_ISNULL(other_dag.get_migration_ctx())) {
-      is_same = false;
-      LOG_ERROR_RET(OB_INVALID_ARGUMENT, "migration ctx should not be NULL", KP(ctx), KP(other_dag.get_migration_ctx()));
-    } else if (NULL != ctx && NULL != other_dag.get_migration_ctx()) {
-      if (ctx->arg_.ls_id_ != other_dag.get_migration_ctx()->arg_.ls_id_) {
-        is_same = false;
-      }
-    }
-  }
-  return is_same;
-}
-
-uint64_t ObInitialMigrationDag::hash() const
-{
-  uint64_t hash_value = 0;
-  ObMigrationCtx * ctx = get_migration_ctx();
-
-  if (OB_ISNULL(ctx)) {
-    LOG_ERROR_RET(OB_INVALID_ARGUMENT, "migration ctx should not be NULL", KP(ctx));
-  } else {
-    hash_value = common::murmurhash(
-        &ctx->arg_.ls_id_, sizeof(ctx->arg_.ls_id_), hash_value);
-    ObDagType::ObDagTypeEnum dag_type = get_type();
-    hash_value = common::murmurhash(
-        &dag_type, sizeof(dag_type), hash_value);
-  }
-  return hash_value;
-}
-
-int ObInitialMigrationDag::fill_dag_key(char *buf, const int64_t buf_len) const
+int ObMigrationDag::init_from_dag_net_(ObIDagNet *dag_net)
 {
   int ret = OB_SUCCESS;
-  ObMigrationCtx *ctx = nullptr;
-
-  ObCStringHelper helper;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("initial migration dag do not init", K(ret));
-  } else if (OB_ISNULL(ctx = get_migration_ctx())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("inital migration dag migration ctx should not be NULL", K(ret), KP(ctx));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObInitialMigrationDag: ls_id = %s, migration_type = %s, dag_prio = %s",
-       helper.convert(ctx->arg_.ls_id_), ObMigrationOpType::get_str(ctx->arg_.type_),
-       ObIDag::get_dag_prio_str(this->get_priority())))) {
-    LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
-  }
-  return ret;
-}
-
-int ObInitialMigrationDag::init(ObIDagNet *dag_net)
-{
-  int ret = OB_SUCCESS;
-  ObMigrationDagNet* migration_dag_net = nullptr;
-
+  ObMigrationDagNet *migration_dag_net = nullptr;
   if (is_inited_) {
     ret = OB_INIT_TWICE;
-    LOG_WARN("initial migration dag init twice", K(ret));
+    LOG_WARN("migration dag init twice", K(ret));
   } else if (OB_ISNULL(dag_net)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net should not be NULL", K(ret), KP(dag_net));
@@ -648,22 +574,56 @@ int ObInitialMigrationDag::init(ObIDagNet *dag_net)
   return ret;
 }
 
-int ObInitialMigrationDag::create_first_task()
+bool ObMigrationDag::operator == (const ObIDag &other) const
+{
+  bool is_same = true;
+  if (this == &other) {
+    // same
+  } else if (get_type() != other.get_type()) {
+    is_same = false;
+  } else {
+    const ObMigrationDag &other_dag = static_cast<const ObMigrationDag&>(other);
+    ObMigrationCtx *ctx = get_migration_ctx();
+    if (OB_ISNULL(ctx) || OB_ISNULL(other_dag.get_migration_ctx())) {
+      is_same = false;
+      LOG_ERROR_RET(OB_INVALID_ARGUMENT, "migration ctx should not be NULL", KP(ctx), KP(other_dag.get_migration_ctx()));
+    } else if (ctx->arg_.ls_id_ != other_dag.get_migration_ctx()->arg_.ls_id_) {
+      is_same = false;
+    }
+  }
+  return is_same;
+}
+
+uint64_t ObMigrationDag::hash() const
+{
+  uint64_t hash_value = 0;
+  ObMigrationCtx *ctx = get_migration_ctx();
+  if (OB_NOT_NULL(ctx)) {
+    hash_value = common::murmurhash(
+        &ctx->arg_.ls_id_, sizeof(ctx->arg_.ls_id_), hash_value);
+    ObDagType::ObDagTypeEnum dag_type = get_type();
+    hash_value = common::murmurhash(
+        &dag_type, sizeof(dag_type), hash_value);
+  }
+  return hash_value;
+}
+
+int ObMigrationDag::fill_dag_key_impl_(const char *dag_name, char *buf, const int64_t buf_len) const
 {
   int ret = OB_SUCCESS;
-  ObInitialMigrationTask *task = NULL;
-
+  ObMigrationCtx *ctx = nullptr;
+  ObCStringHelper helper;
   if (!is_inited_) {
     ret = OB_NOT_INIT;
-    LOG_WARN("initial migration dag dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init())) {
-    LOG_WARN("failed to init initial migration task", K(ret), KPC(ha_dag_net_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
-  } else {
-    LOG_DEBUG("success to create first task", K(ret), KPC(this));
+    LOG_WARN("migration dag do not init", K(ret));
+  } else if (OB_ISNULL(ctx = get_migration_ctx())) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("migration ctx should not be NULL", K(ret), KP(ctx));
+  } else if (OB_FAIL(databuff_printf(buf, buf_len,
+       "%s: ls_id = %s, migration_type = %s, dag_prio = %s",
+       dag_name, helper.convert(ctx->arg_.ls_id_), ObMigrationOpType::get_str(ctx->arg_.type_),
+       ObIDag::get_dag_prio_str(this->get_priority())))) {
+    LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
   }
   return ret;
 }
@@ -673,9 +633,7 @@ ObInitialMigrationTask::ObInitialMigrationTask()
   : ObITask(TASK_TYPE_MIGRATE_PREPARE),
     is_inited_(false),
     ctx_(nullptr),
-    bandwidth_throttle_(nullptr),
-    svr_rpc_proxy_(nullptr),
-    storage_rpc_(nullptr),
+    ha_svc_ctx_(),
     dag_net_(nullptr)
 {
 }
@@ -688,24 +646,14 @@ int ObInitialMigrationTask::init()
 {
   int ret = OB_SUCCESS;
   ObIDagNet *dag_net = nullptr;
-  ObMigrationDagNet* migration_dag_net = nullptr;
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("initial migration task init twice", K(ret));
   } else if (FALSE_IT(dag_net = this->get_dag()->get_dag_net())) {
-  } else if (OB_ISNULL(dag_net)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dag net should not be NULL", K(ret), KP(dag_net));
-  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net->get_type()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
-  } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
+  } else if (OB_FAIL(ObLSMigrationUtils::get_migration_ctx_from_dag_net(dag_net, ctx_, ha_svc_ctx_))) {
+    LOG_WARN("failed to get migration ctx from dag net", K(ret));
   } else {
-    ctx_ = migration_dag_net->get_migration_ctx();
-    bandwidth_throttle_ = migration_dag_net->get_bandwidth_throttle();
-    svr_rpc_proxy_ = migration_dag_net->get_storage_rpc_proxy();
-    storage_rpc_ = migration_dag_net->get_storage_rpc();
     dag_net_ = dag_net;
     is_inited_ = true;
     LOG_INFO("succeed init initial migration task", "ls id", ctx_->arg_.ls_id_,
@@ -751,16 +699,7 @@ int ObInitialMigrationTask::process()
     }
   }
 
-  if (OB_SUCCESS != (tmp_ret = record_server_event_())) {
-    LOG_WARN("failed to record server event", K(tmp_ret), K(ret));
-  }
-
-  if (OB_FAIL(ret)) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = ObStorageHADagUtils::deal_with_fo(ret, this->get_dag()))) {
-      LOG_WARN("failed to deal with fo", K(ret), K(tmp_ret), K(*ctx_));
-    }
-  }
+  MIGRATION_PROCESS_EPILOGUE(record_server_event_());
   return ret;
 }
 
@@ -849,132 +788,7 @@ int ObInitialMigrationTask::generate_migration_dags_()
 
 int ObInitialMigrationTask::record_server_event_()
 {
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(ctx_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ctx should not be null", K(ret), KPC_(ctx));
-  } else {
-    SERVER_EVENT_ADD("storage_ha", "initial_migration_task",
-        "tenant_id", ctx_->tenant_id_,
-        "ls_id", ctx_->arg_.ls_id_.id(),
-        "src", ctx_->arg_.src_.get_server(),
-        "dst", ctx_->arg_.dst_.get_server(),
-        "task_id", ctx_->task_id_,
-        "is_failed", ctx_->is_failed(),
-        ObMigrationOpType::get_str(ctx_->arg_.type_));
-  }
-  return ret;
-}
-
-/******************ObStartMigrationDag*********************/
-ObStartMigrationDag::ObStartMigrationDag()
-  : ObMigrationDag(ObDagType::DAG_TYPE_START_MIGRATION),
-    is_inited_(false)
-{
-}
-
-ObStartMigrationDag::~ObStartMigrationDag()
-{
-}
-
-bool ObStartMigrationDag::operator == (const ObIDag &other) const
-{
-  bool is_same = true;
-  if (this == &other) {
-    // same
-  } else if (get_type() != other.get_type()) {
-    is_same = false;
-  } else {
-    const ObMigrationDag &other_dag = static_cast<const ObMigrationDag&>(other);
-    ObMigrationCtx *ctx = get_migration_ctx();
-    if (NULL != ctx && NULL != other_dag.get_migration_ctx()) {
-      if (ctx->arg_.ls_id_ != other_dag.get_migration_ctx()->arg_.ls_id_) {
-        is_same = false;
-      }
-    }
-  }
-  return is_same;
-}
-
-uint64_t ObStartMigrationDag::hash() const
-{
-  uint64_t hash_value = 0;
-  ObMigrationCtx *ctx = get_migration_ctx();
-
-  if (NULL != ctx) {
-    hash_value = common::murmurhash(
-        &ctx->arg_.ls_id_, sizeof(ctx->arg_.ls_id_), hash_value);
-    ObDagType::ObDagTypeEnum dag_type = get_type();
-    hash_value = common::murmurhash(
-        &dag_type, sizeof(dag_type), hash_value);
-  }
-  return hash_value;
-}
-
-int ObStartMigrationDag::fill_dag_key(char *buf, const int64_t buf_len) const
-{
-  int ret = OB_SUCCESS;
-  ObMigrationCtx *ctx = nullptr;
-
-  ObCStringHelper helper;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("start migration dag do not init", K(ret));
-  } else if (OB_ISNULL(ctx = get_migration_ctx())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("migration ctx should not be NULL", K(ret), KP(ctx));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObStartMigrationDag: ls_id = %s, migration_type = %s, dag_prio = %s",
-       helper.convert(ctx->arg_.ls_id_), ObMigrationOpType::get_str(ctx->arg_.type_),
-       ObIDag::get_dag_prio_str(this->get_priority())))) {
-    LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
-  }
-  return ret;
-}
-
-int ObStartMigrationDag::init(ObIDagNet *dag_net)
-{
-  int ret = OB_SUCCESS;
-  ObMigrationDagNet* migration_dag_net = nullptr;
-
-  if (is_inited_) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("start migration dag init twice", K(ret));
-  } else if (OB_ISNULL(dag_net)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dag net should not be NULL", K(ret), KP(dag_net));
-  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net->get_type()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
-  } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
-  } else if (FALSE_IT(ha_dag_net_ctx_ = migration_dag_net->get_migration_ctx())) {
-  } else if (OB_ISNULL(ha_dag_net_ctx_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("migration ctx should not be NULL", K(ret), KP(ha_dag_net_ctx_));
-  } else {
-    is_inited_ = true;
-  }
-  return ret;
-}
-
-int ObStartMigrationDag::create_first_task()
-{
-  int ret = OB_SUCCESS;
-  ObStartMigrationTask *task = NULL;
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("start migration dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init())) {
-    LOG_WARN("failed to init start migration task", K(ret), KPC(ha_dag_net_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
-  } else {
-    LOG_DEBUG("success to create first task", K(ret), KPC(this));
-  }
-  return ret;
+  return ObLSMigrationUtils::record_migration_event("initial_migration_task", ctx_);
 }
 
 /******************ObStartMigrationTask*********************/
@@ -982,10 +796,7 @@ ObStartMigrationTask::ObStartMigrationTask()
   : ObITask(TASK_TYPE_MIGRATE_PREPARE),
     is_inited_(false),
     ctx_(nullptr),
-    bandwidth_throttle_(nullptr),
-    svr_rpc_proxy_(nullptr),
-    storage_rpc_(nullptr),
-    sql_proxy_(nullptr)
+    ha_svc_ctx_()
 {
 }
 
@@ -997,25 +808,14 @@ int ObStartMigrationTask::init()
 {
   int ret = OB_SUCCESS;
   ObIDagNet *dag_net = nullptr;
-  ObMigrationDagNet* migration_dag_net = nullptr;
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("start migration task init twice", K(ret));
   } else if (FALSE_IT(dag_net = this->get_dag()->get_dag_net())) {
-  } else if (OB_ISNULL(dag_net)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dag net should not be NULL", K(ret), KP(dag_net));
-  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net->get_type()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
-  } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
+  } else if (OB_FAIL(ObLSMigrationUtils::get_migration_ctx_from_dag_net(dag_net, ctx_, ha_svc_ctx_))) {
+    LOG_WARN("failed to get migration ctx from dag net", K(ret));
   } else {
-    ctx_ = migration_dag_net->get_migration_ctx();
-    bandwidth_throttle_ = migration_dag_net->get_bandwidth_throttle();
-    svr_rpc_proxy_ = migration_dag_net->get_storage_rpc_proxy();
-    storage_rpc_ = migration_dag_net->get_storage_rpc();
-    sql_proxy_ = migration_dag_net->get_sql_proxy();
     ctx_->reuse();
     is_inited_ = true;
     LOG_INFO("succeed init start migration task", "ls id", ctx_->arg_.ls_id_,
@@ -1249,23 +1049,26 @@ int ObStartMigrationTask::choose_src_()
     obrpc::ObCopyLSInfo ls_info;
     SCN local_clog_checkpoint_scn = SCN::min_scn();
     SMART_VAR(ObMigrationChooseSrcHelperInitParam, param) {
-    omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+    {
+      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(tenant_id));
+      if (!tenant_config.is_valid()) {
+        ret = OB_INVALID_ARGUMENT;
+        LOG_WARN("tenant config is invalid", K(ret));
+      } else {
+        str = tenant_config->choose_migration_source_policy.str();
+        enable_choose_source_policy = tenant_config->_enable_choose_migration_source_policy;
+      }
+    }
     ObLS* ls = nullptr;
     ObLSHandle ls_handle;
-    bool use_c_replica_policy = false;
-    if (OB_FAIL(get_local_ls_checkpoint_scn_(local_clog_checkpoint_scn))) {
+    if (FAILEDx(get_local_ls_checkpoint_scn_(local_clog_checkpoint_scn))) {
       LOG_WARN("failed to get local ls checkpoint ts", K(ret));
-    } else if (!tenant_config.is_valid()) {
-      ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("tenant config is invalid", K(ret));
-    } else if (FALSE_IT(str = tenant_config->choose_migration_source_policy.str())) {
-    } else if (FALSE_IT(enable_choose_source_policy = tenant_config->_enable_choose_migration_source_policy)) {
     } else if (FALSE_IT(param.tenant_id_ = tenant_id)) {
     } else if (FALSE_IT(param.ls_id_ = ls_id)) {
     } else if (FALSE_IT(param.local_clog_checkpoint_scn_ = local_clog_checkpoint_scn)) {
     } else if (FALSE_IT(param.arg_ = ctx_->arg_)) {
-    } else if (OB_FAIL(member_helper.init(storage_rpc_))) {
-      LOG_WARN("failed to init member helper", K(ret), KP(storage_rpc_));
+    } else if (OB_FAIL(member_helper.init(ha_svc_ctx_.storage_rpc_))) {
+      LOG_WARN("failed to init member helper", K(ret), KP(ha_svc_ctx_.storage_rpc_));
     } else if (OB_FAIL(member_helper.get_member_list_by_replica_type(tenant_id, ctx_->arg_.ls_id_,
         ctx_->arg_.dst_, param.info_, param.is_first_c_replica_))) {
       LOG_WARN("failed to get member list.", K(ret), K(tenant_id), "ls_id", ctx_->arg_.ls_id_, "dst", ctx_->arg_.dst_);
@@ -1273,8 +1076,8 @@ int ObStartMigrationTask::choose_src_()
         enable_choose_source_policy, str, param.info_.learner_list_, param.policy_, param.use_c_replica_policy_))) {
       LOG_WARN("failed to get policy type", K(ret), K(ctx_->arg_), K(tenant_id),
           K(enable_choose_source_policy), K(str), K(param));
-    } else if (OB_FAIL(choose_src_helper.init(param, storage_rpc_, &member_helper))) {
-      LOG_WARN("failed to init src provider.", K(ret), K(param), KP(storage_rpc_));
+    } else if (OB_FAIL(choose_src_helper.init(param, ha_svc_ctx_.storage_rpc_, &member_helper))) {
+      LOG_WARN("failed to init src provider.", K(ret), K(param), KP(ha_svc_ctx_.storage_rpc_));
     } else if (OB_FAIL(choose_src_helper.get_available_src(ctx_->arg_, src_info))) {
       LOG_WARN("failed to choose ob src", K(ret), K(tenant_id), K(ls_id), K(local_clog_checkpoint_scn), K(ctx_->arg_));
     } else if (OB_FAIL(fetch_ls_info_(tenant_id, ls_id, src_info.src_addr_, ls_info))) {
@@ -1327,13 +1130,13 @@ int ObStartMigrationTask::fetch_ls_info_(const uint64_t tenant_id, const share::
   ObStorageHASrcInfo src_info;
   src_info.src_addr_ = member_addr;
   src_info.cluster_id_ = GCONF.cluster_id;
-  if (OB_ISNULL(storage_rpc_)) {
+  if (OB_ISNULL(ha_svc_ctx_.storage_rpc_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("storage rpc should not be null", K(ret));
   } else if (OB_INVALID_ID == tenant_id || !ls_id.is_valid() || !member_addr.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("get invalid args", K(ret), K(tenant_id), K(ls_id), K(member_addr));
-  } else if (OB_FAIL(storage_rpc_->post_ls_info_request(tenant_id, src_info, ls_id, ls_info))) {
+  } else if (OB_FAIL(ha_svc_ctx_.storage_rpc_->post_ls_info_request(tenant_id, src_info, ls_id, ls_info))) {
     LOG_WARN("failed to post ls info request", K(ret), K(tenant_id), K(src_info), K(ls_id));
   }
   return ret;
@@ -1612,7 +1415,7 @@ int ObStartMigrationTask::inner_build_ls_(bool &is_rpc_not_support)
     ret = OB_ALLOCATE_MEMORY_FAILED;
     LOG_WARN("failed to alloc memory", K(ret));
   } else if (FALSE_IT(ob_reader = new (buf) ObCopyLSViewInfoObReader())) {
-  } else if (OB_FAIL(ob_reader->init(ctx_->minor_src_, arg, *svr_rpc_proxy_, *bandwidth_throttle_))) {
+  } else if (OB_FAIL(ob_reader->init(ctx_->minor_src_, arg, *ha_svc_ctx_.svr_rpc_proxy_, *ha_svc_ctx_.bandwidth_throttle_))) {
     if (OB_NOT_SUPPORTED == ret) {
       is_rpc_not_support = true;
     }
@@ -1732,12 +1535,12 @@ int ObStartMigrationTask::fill_restore_arg_if_needed_()
     if (OB_FAIL(helper.init(ctx_->tenant_id_, share::OBCG_STORAGE))) {
       LOG_WARN("fail to init restore table helper", K(ret), K(ret), KPC(ls), KPC(ctx_));
     } else if (!restore_status.is_before_restore_to_consistent_scn()
-               && OB_FAIL(helper.get_ls_total_tablet_cnt(*sql_proxy_, dest_ls_key, ls_restore_progress.tablet_count_))) {
+               && OB_FAIL(helper.get_ls_total_tablet_cnt(*ha_svc_ctx_.sql_proxy_, dest_ls_key, ls_restore_progress.tablet_count_))) {
       LOG_WARN("fail to get total tablet cnt", K(ret), K(dest_ls_key), K(restore_status));
     } else if (!restore_status.is_before_restore_major_data()
-               && OB_FAIL(helper.get_ls_total_bytes(*sql_proxy_, dest_ls_key, ls_restore_progress.total_bytes_))) {
+               && OB_FAIL(helper.get_ls_total_bytes(*ha_svc_ctx_.sql_proxy_, dest_ls_key, ls_restore_progress.total_bytes_))) {
       LOG_WARN("fail to get total bytes", K(ret), K(dest_ls_key), K(restore_status));
-    } else if (OB_FAIL(helper.insert_initial_ls_restore_progress(*sql_proxy_, ls_restore_progress))) {
+    } else if (OB_FAIL(helper.insert_initial_ls_restore_progress(*ha_svc_ctx_.sql_proxy_, ls_restore_progress))) {
       LOG_WARN("fail to insert initial restore progress", K(ret), K(ls_restore_progress));
     } else {
       LOG_INFO("succeed fill restore arg during migration", "ls_id", ctx_->arg_.ls_id_, K(restore_status));
@@ -1904,126 +1707,13 @@ int ObStartMigrationTask::ls_online_()
   return ret;
 }
 
-/******************ObSysTabletsMigrationDag*********************/
-ObSysTabletsMigrationDag::ObSysTabletsMigrationDag()
-  : ObMigrationDag(ObDagType::DAG_TYPE_SYS_TABLETS_MIGRATION),
-    is_inited_(false)
-{
-}
-
-ObSysTabletsMigrationDag::~ObSysTabletsMigrationDag()
-{
-}
-
-bool ObSysTabletsMigrationDag::operator == (const ObIDag &other) const
-{
-  bool is_same = true;
-  if (this == &other) {
-    // same
-  } else if (get_type() != other.get_type()) {
-    is_same = false;
-  } else {
-    const ObMigrationDag &other_dag = static_cast<const ObMigrationDag&>(other);
-    ObMigrationCtx *ctx = get_migration_ctx();
-    if (NULL != ctx && NULL != other_dag.get_migration_ctx()) {
-      if (ctx->arg_.ls_id_ != other_dag.get_migration_ctx()->arg_.ls_id_) {
-        is_same = false;
-      }
-    }
-  }
-  return is_same;
-}
-
-uint64_t ObSysTabletsMigrationDag::hash() const
-{
-  uint64_t hash_value = 0;
-  ObMigrationCtx *ctx = get_migration_ctx();
-
-  if (NULL != ctx) {
-    hash_value = common::murmurhash(
-        &ctx->arg_.ls_id_, sizeof(ctx->arg_.ls_id_), hash_value);
-    ObDagType::ObDagTypeEnum dag_type = get_type();
-    hash_value = common::murmurhash(
-        &dag_type, sizeof(dag_type), hash_value);
-  }
-  return hash_value;
-}
-
-int ObSysTabletsMigrationDag::fill_dag_key(char *buf, const int64_t buf_len) const
-{
-  int ret = OB_SUCCESS;
-  ObMigrationCtx *ctx = nullptr;
-
-  ObCStringHelper helper;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("sys tablets migration dag do not init", K(ret));
-  } else if (OB_ISNULL(ctx = get_migration_ctx())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("migration ctx should not be NULL", K(ret), KP(ctx));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObSysTabletsMigrationDag: ls_id = %s, migration_type = %s, dag_prio = %s",
-       helper.convert(ctx->arg_.ls_id_), ObMigrationOpType::get_str(ctx->arg_.type_),
-       ObIDag::get_dag_prio_str(this->get_priority())))) {
-    LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
-  }
-  return ret;
-}
-
-int ObSysTabletsMigrationDag::init(ObIDagNet *dag_net)
-{
-  int ret = OB_SUCCESS;
-  ObMigrationDagNet* migration_dag_net = nullptr;
-
-  if (is_inited_) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("sys tablets migration dag init twice", K(ret));
-  } else if (OB_ISNULL(dag_net)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("dag net should not be NULL", K(ret), KP(dag_net));
-  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net->get_type()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
-  } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
-  } else if (FALSE_IT(ha_dag_net_ctx_ = migration_dag_net->get_migration_ctx())) {
-  } else if (OB_ISNULL(ha_dag_net_ctx_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("migration ctx should not be NULL", K(ret), KP(ha_dag_net_ctx_));
-  } else {
-    is_inited_ = true;
-  }
-  return ret;
-}
-
-int ObSysTabletsMigrationDag::create_first_task()
-{
-  int ret = OB_SUCCESS;
-  ObSysTabletsMigrationTask *task = NULL;
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("sys tablets migration dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init())) {
-    LOG_WARN("failed to init sys tablets migration task", K(ret), KPC(ha_dag_net_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
-  } else {
-    LOG_DEBUG("success to create first task", K(ret), KPC(this));
-  }
-  return ret;
-}
-
 /******************ObSysTabletsMigrationTask*********************/
 ObSysTabletsMigrationTask::ObSysTabletsMigrationTask()
   : ObITask(TASK_TYPE_MIGRATE_PREPARE),
     is_inited_(false),
     ls_handle_(),
     ctx_(nullptr),
-    bandwidth_throttle_(nullptr),
-    svr_rpc_proxy_(nullptr),
-    storage_rpc_(nullptr),
+    ha_svc_ctx_(),
     ha_tablets_builder_()
 
 {
@@ -2037,26 +1727,15 @@ int ObSysTabletsMigrationTask::init()
 {
   int ret = OB_SUCCESS;
   ObIDagNet *dag_net = nullptr;
-  ObMigrationDagNet* migration_dag_net = nullptr;
   ObArray<ObTabletID> tablet_id_array;
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("sys tablets migration task init twice", K(ret));
   } else if (FALSE_IT(dag_net = this->get_dag()->get_dag_net())) {
-  } else if (OB_ISNULL(dag_net)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dag net should not be NULL", K(ret), KP(dag_net));
-  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net->get_type()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
-  } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
+  } else if (OB_FAIL(ObLSMigrationUtils::get_migration_ctx_from_dag_net(dag_net, ctx_, ha_svc_ctx_))) {
+    LOG_WARN("failed to get migration ctx from dag net", K(ret));
   } else {
-    ctx_ = migration_dag_net->get_migration_ctx();
-    bandwidth_throttle_ = migration_dag_net->get_bandwidth_throttle();
-    svr_rpc_proxy_ = migration_dag_net->get_storage_rpc_proxy();
-    storage_rpc_ = migration_dag_net->get_storage_rpc();
-
     if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle_))) {
       LOG_WARN("failed to get ls", K(ret), KPC(ctx_));
     } else if (OB_FAIL(ObStorageHAUtils::append_tablet_list(ctx_->sys_tablet_id_array_, tablet_id_array))) {
@@ -2102,16 +1781,7 @@ int ObSysTabletsMigrationTask::process()
     }
   }
 
-  if (OB_SUCCESS != (tmp_ret = record_server_event_())) {
-    LOG_WARN("failed to record server event", K(tmp_ret), K(ret));
-  }
-
-  if (OB_FAIL(ret)) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = ObStorageHADagUtils::deal_with_fo(ret, this->get_dag()))) {
-      LOG_WARN("failed to deal with fo", K(ret), K(tmp_ret), KPC(ctx_));
-    }
-  }
+  MIGRATION_PROCESS_EPILOGUE(record_server_event_());
   return ret;
 }
 
@@ -2279,27 +1949,12 @@ int ObSysTabletsMigrationTask::remove_tablets_info_()
 
 int ObSysTabletsMigrationTask::record_server_event_()
 {
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(ctx_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ctx should not be null", K(ret), KPC_(ctx));
-  } else {
-    SERVER_EVENT_ADD("storage_ha", "sys_tablets_migration_task",
-        "tenant_id", ctx_->tenant_id_,
-        "ls_id", ctx_->arg_.ls_id_.id(),
-        "src", ctx_->arg_.src_.get_server(),
-        "dst", ctx_->arg_.dst_.get_server(),
-        "task_id", ctx_->task_id_,
-        "is_failed", ctx_->is_failed(),
-        ObMigrationOpType::get_str(ctx_->arg_.type_));
-  }
-  return ret;
+  return ObLSMigrationUtils::record_migration_event("sys_tablets_migration_task", ctx_);
 }
 
 /******************ObTabletMigrationDag*********************/
 ObTabletMigrationDag::ObTabletMigrationDag()
   : ObMigrationDag(ObDagType::DAG_TYPE_TABLET_MIGRATION),
-    is_inited_(false),
     ls_handle_(),
     copy_tablet_ctx_(),
     tablet_group_ctx_(nullptr),
@@ -2711,10 +2366,7 @@ ObTabletMigrationTask::ObTabletMigrationTask()
   : ObITask(TASK_TYPE_MIGRATE_PREPARE),
     is_inited_(false),
     ctx_(nullptr),
-    bandwidth_throttle_(nullptr),
-    svr_rpc_proxy_(nullptr),
-    storage_rpc_(nullptr),
-    sql_proxy_(nullptr),
+    ha_svc_ctx_(),
     copy_tablet_ctx_(nullptr),
     copy_table_key_array_(),
     copy_sstable_info_mgr_()
@@ -2729,7 +2381,6 @@ int ObTabletMigrationTask::init(ObCopyTabletCtx &copy_tablet_ctx)
 {
   int ret = OB_SUCCESS;
   ObIDagNet *dag_net = nullptr;
-  ObMigrationDagNet* migration_dag_net = nullptr;
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
@@ -2738,19 +2389,9 @@ int ObTabletMigrationTask::init(ObCopyTabletCtx &copy_tablet_ctx)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablet migration task init get invalid argument", K(ret), K(copy_tablet_ctx));
   } else if (FALSE_IT(dag_net = this->get_dag()->get_dag_net())) {
-  } else if (OB_ISNULL(dag_net)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dag net should not be NULL", K(ret), KP(dag_net));
-  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION !=  dag_net->get_type()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
-  } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
+  } else if (OB_FAIL(ObLSMigrationUtils::get_migration_ctx_from_dag_net(dag_net, ctx_, ha_svc_ctx_))) {
+    LOG_WARN("failed to get migration ctx from dag net", K(ret));
   } else {
-    ctx_ = migration_dag_net->get_migration_ctx();
-    bandwidth_throttle_ = migration_dag_net->get_bandwidth_throttle();
-    svr_rpc_proxy_ = migration_dag_net->get_storage_rpc_proxy();
-    storage_rpc_ = migration_dag_net->get_storage_rpc();
-    sql_proxy_ = migration_dag_net->get_sql_proxy();
     copy_tablet_ctx_ = &copy_tablet_ctx;
     is_inited_ = true;
     LOG_INFO("succeed init tablet migration task", "ls id", ctx_->arg_.ls_id_, "tablet_id", copy_tablet_ctx.tablet_id_,
@@ -2845,16 +2486,7 @@ int ObTabletMigrationTask::process()
   }
 
   const int64_t cost_us = ObTimeUtility::current_time() - start_ts;
-  if (OB_SUCCESS != (tmp_ret = record_server_event_(cost_us, ret))) {
-    LOG_WARN("failed to record server event", K(tmp_ret), K(cost_us), K(ret));
-  }
-
-  if (OB_FAIL(ret)) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = ObStorageHADagUtils::deal_with_fo(ret, this->get_dag()))) {
-      LOG_WARN("failed to deal with fo", K(ret), K(tmp_ret), KPC(ctx_));
-    }
-  }
+  MIGRATION_PROCESS_EPILOGUE(record_server_event_(cost_us, ret));
 
   return ret;
 }
@@ -3184,9 +2816,7 @@ int ObTabletMigrationTask::build_copy_sstable_info_mgr_()
     param.need_check_seq_ = true;
     param.restore_base_info_ = nullptr;
     param.src_info_ = ctx_->minor_src_;
-    param.storage_rpc_ = storage_rpc_;
-    param.svr_rpc_proxy_ = svr_rpc_proxy_;
-    param.bandwidth_throttle_ = bandwidth_throttle_;
+    param.ha_svc_ctx_ = ha_svc_ctx_;
 
     if (OB_FAIL(copy_sstable_info_mgr_.init(param))) {
       LOG_WARN("failed to init copy sstable info mgr", K(ret), K(param), KPC(ctx_), KPC(copy_tablet_ctx_));
@@ -3484,14 +3114,14 @@ int ObTabletMigrationTask::check_tablet_replica_validity_(const common::ObTablet
 {
   int ret = OB_SUCCESS;
   int64_t start_ts = ObTimeUtility::current_time();
-  if (OB_ISNULL(sql_proxy_) || OB_ISNULL(ctx_)) {
+  if (OB_ISNULL(ha_svc_ctx_.sql_proxy_) || OB_ISNULL(ctx_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy should not be null", K(ret));
   } else {
     const uint64_t tenant_id = ctx_->tenant_id_;
     const share::ObLSID &ls_id = ctx_->arg_.ls_id_;
     const common::ObAddr &src_addr = ctx_->major_src_.src_addr_;
-    if (OB_FAIL(ObStorageHAUtils::check_tablet_replica_validity(tenant_id, ls_id, src_addr, tablet_id, *sql_proxy_))) {
+    if (OB_FAIL(ObStorageHAUtils::check_tablet_replica_validity(tenant_id, ls_id, src_addr, tablet_id, *ha_svc_ctx_.sql_proxy_))) {
       LOG_WARN("failed to check tablet replica validity", K(ret), K(tenant_id), K(ls_id), K(src_addr), K(tablet_id));
     } else {
       ctx_->check_tablet_info_cost_time_ += ObTimeUtility::current_time() - start_ts;
@@ -3826,125 +3456,13 @@ void ObTabletFinishMigrationTask::schedule_convert_co_merge(
   }
 }
 
-/******************ObDataTabletsMigrationDag*********************/
-ObDataTabletsMigrationDag::ObDataTabletsMigrationDag()
-  : ObMigrationDag(ObDagType::DAG_TYPE_DATA_TABLETS_MIGRATION),
-    is_inited_(false)
-{
-}
-
-ObDataTabletsMigrationDag::~ObDataTabletsMigrationDag()
-{
-}
-
-bool ObDataTabletsMigrationDag::operator == (const ObIDag &other) const
-{
-  bool is_same = true;
-  if (this == &other) {
-    // same
-  } else if (get_type() != other.get_type()) {
-    is_same = false;
-  } else {
-    const ObMigrationDag &other_dag = static_cast<const ObMigrationDag&>(other);
-    ObMigrationCtx *ctx = get_migration_ctx();
-    if (NULL != ctx && NULL != other_dag.get_migration_ctx()) {
-      if (ctx->arg_.ls_id_ != other_dag.get_migration_ctx()->arg_.ls_id_) {
-        is_same = false;
-      }
-    }
-  }
-  return is_same;
-}
-
-uint64_t ObDataTabletsMigrationDag::hash() const
-{
-  uint64_t hash_value = 0;
-  ObMigrationCtx *ctx = nullptr;
-
-  if (NULL != ctx) {
-    hash_value = common::murmurhash(
-        &ctx->arg_.ls_id_, sizeof(ctx->arg_.ls_id_), hash_value);
-    ObDagType::ObDagTypeEnum dag_type = get_type();
-    hash_value = common::murmurhash(
-        &dag_type, sizeof(dag_type), hash_value);
-  }
-  return hash_value;
-}
-
-int ObDataTabletsMigrationDag::fill_dag_key(char *buf, const int64_t buf_len) const
-{
-  int ret = OB_SUCCESS;
-  ObMigrationCtx *ctx = nullptr;
-
-  ObCStringHelper helper;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("data tablets migration dag do not init", K(ret));
-  } else if (OB_ISNULL(ctx = get_migration_ctx())) {
-    ret = OB_ERR_UNEXPECTED;
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObDataTabletsMigrationDag: log_stream_id = %s, migration_type = %s, dag_prio = %s",
-       helper.convert(ctx->arg_.ls_id_), ObMigrationOpType::get_str(ctx->arg_.type_),
-       ObIDag::get_dag_prio_str(this->get_priority())))) {
-    LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
-  }
-  return ret;
-}
-
-int ObDataTabletsMigrationDag::init(ObIDagNet *dag_net)
-{
-  int ret = OB_SUCCESS;
-  ObMigrationDagNet* migration_dag_net = nullptr;
-
-  if (is_inited_) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("data tablets migration dag init twice", K(ret));
-  } else if (OB_ISNULL(dag_net)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("dag net should not be NULL", K(ret), KP(dag_net));
-  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net->get_type()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
-  } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
-  } else if (FALSE_IT(ha_dag_net_ctx_ = migration_dag_net->get_migration_ctx())) {
-  } else if (OB_ISNULL(ha_dag_net_ctx_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("migration ctx should not be NULL", K(ret), KP(ha_dag_net_ctx_));
-  } else {
-    is_inited_ = true;
-  }
-  return ret;
-}
-
-int ObDataTabletsMigrationDag::create_first_task()
-{
-  int ret = OB_SUCCESS;
-  ObDataTabletsMigrationTask *task = NULL;
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("data tablets migration dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init())) {
-    LOG_WARN("failed to init sys tablets migration task", K(ret), KPC(ha_dag_net_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
-  } else {
-    LOG_DEBUG("success to create first task", K(ret), KPC(this));
-  }
-  return ret;
-}
-
 /******************ObDataTabletsMigrationTask*********************/
 ObDataTabletsMigrationTask::ObDataTabletsMigrationTask()
   : ObITask(TASK_TYPE_MIGRATE_PREPARE),
     is_inited_(false),
     ls_handle_(),
     ctx_(nullptr),
-    bandwidth_throttle_(nullptr),
-    svr_rpc_proxy_(nullptr),
-    storage_rpc_(nullptr),
+    ha_svc_ctx_(),
     finish_dag_(nullptr),
     ha_tablets_builder_()
 {
@@ -3958,7 +3476,6 @@ int ObDataTabletsMigrationTask::init()
 {
   int ret = OB_SUCCESS;
   ObIDagNet *dag_net = nullptr;
-  ObMigrationDagNet* migration_dag_net = nullptr;
   ObArray<ObTabletID> tablet_id_array;
   ObSEArray<ObINodeWithChild*, 1> child_node_array;
 
@@ -3966,13 +3483,8 @@ int ObDataTabletsMigrationTask::init()
     ret = OB_INIT_TWICE;
     LOG_WARN("data tablets migration task init twice", K(ret));
   } else if (FALSE_IT(dag_net = this->get_dag()->get_dag_net())) {
-  } else if (OB_ISNULL(dag_net)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dag net should not be NULL", K(ret), KP(dag_net));
-  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net->get_type()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
-  } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
+  } else if (OB_FAIL(ObLSMigrationUtils::get_migration_ctx_from_dag_net(dag_net, ctx_, ha_svc_ctx_))) {
+    LOG_WARN("failed to get migration ctx from dag net", K(ret));
   } else if (OB_FAIL(this->get_dag()->copy_child_nodes(child_node_array))) {
     LOG_WARN("failed to copy child nodes", K(ret));
   } else {
@@ -3985,10 +3497,6 @@ int ObDataTabletsMigrationTask::init()
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("migrtion dag type is unexpected", K(ret), K(*child_dag));
       } else {
-        ctx_ = migration_dag_net->get_migration_ctx();
-        bandwidth_throttle_ = migration_dag_net->get_bandwidth_throttle();
-        svr_rpc_proxy_ = migration_dag_net->get_storage_rpc_proxy();
-        storage_rpc_ = migration_dag_net->get_storage_rpc();
         finish_dag_ = static_cast<ObIDag*>(child_dag);
 
         if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle_))) {
@@ -4131,23 +3639,6 @@ int ObDataTabletsMigrationTask::ls_online_()
     FLOG_INFO("succeed online ls", K(ret), KPC(ctx_));
     if (OB_FAIL(ret)) {
     } else {
-      // for migrate warmup, open rearrange free cache space
-      const bool is_shared_storage = GCTX.is_shared_storage_mode();
-      bool open_migration_warmup = true;
-      omt::ObTenantConfigGuard tenant_config(TENANT_CONF(ctx_->tenant_id_));
-      if (tenant_config.is_valid()) {
-        open_migration_warmup = tenant_config->_enable_ss_migration_prewarm;
-      }
-      if (is_shared_storage && open_migration_warmup) {
-#ifdef OB_BUILD_SHARED_STORAGE
-        ObSSMicroCache *micro_cache = nullptr;
-        if (OB_ISNULL(micro_cache = MTL(ObSSMicroCache *))) {
-          ret = OB_ERR_UNEXPECTED;
-          LOG_WARN("micro_cache should not be nullptr", K(ret), KPC(ctx_));
-        } else if (FALSE_IT(micro_cache->begin_free_space_for_prewarm())) {
-        }
-#endif
-      }
     }
   }
 #ifdef ERRSIM
@@ -4173,7 +3664,6 @@ int ObDataTabletsMigrationTask::generate_tablet_group_generate_dag_()
 {
   int ret = OB_SUCCESS;
   ObTabletGroupGenerateDag *tablet_group_generate_dag = nullptr;
-  ObTenantDagScheduler *scheduler = nullptr;
   ObIDagNet *dag_net = nullptr;
   ObDataTabletsMigrationDag *data_tablets_migration_dag = nullptr;
   ObDagPrio::ObDagPrioEnum prio = ObDagPrio::DAG_PRIO_MAX;
@@ -4189,38 +3679,13 @@ int ObDataTabletsMigrationTask::generate_tablet_group_generate_dag_()
   } else if (OB_ISNULL(dag_net = data_tablets_migration_dag->get_dag_net())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net should not be NULL", K(ret), K(*this));
-  } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
   } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx_->arg_.type_, prio))) {
     LOG_WARN("failed to get dag priority", K(ret));
-  } else {
-    if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, tablet_group_generate_dag))) {
-      LOG_WARN("failed to alloc tablet group migration dag ", K(ret));
-    } else if (OB_FAIL(tablet_group_generate_dag->init(0 /*dag_idx*/, dag_net, finish_dag_, ObTimeUtil::current_time()))) {
-      LOG_WARN("failed to init tablet group dag", K(ret));
-    } else if (OB_FAIL(dag_net->add_dag_into_dag_net(*tablet_group_generate_dag))) {
-      LOG_WARN("failed to add dag into dag net", K(ret));
-    } else if (OB_FAIL(this->get_dag()->add_child_without_inheritance(*tablet_group_generate_dag))) {
-      LOG_WARN("failed to add tablet group dag as child", K(ret), K(*tablet_group_generate_dag));
-    } else if (OB_FAIL(tablet_group_generate_dag->create_first_task())) {
-      LOG_WARN("failed to create first task", K(ret), K(*ctx_));
-    } else if (OB_FAIL(tablet_group_generate_dag->add_child_without_inheritance(*finish_dag_))) {
-      LOG_WARN("failed to add finish dag as child", K(ret), K(*tablet_group_generate_dag), K(*finish_dag_));
-    } else if (OB_FAIL(scheduler->add_dag(tablet_group_generate_dag))) {
-      LOG_WARN("failed to add tablet group generate dag", K(ret), K(*tablet_group_generate_dag));
-      if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-        LOG_WARN("Fail to add task", K(ret));
-        ret = OB_EAGAIN;
-      }
-    } else {
-      tablet_group_generate_dag = nullptr;
-    }
-
-    if (OB_NOT_NULL(tablet_group_generate_dag)) {
-      scheduler->free_dag(*tablet_group_generate_dag);
-      tablet_group_generate_dag = nullptr;
-    }
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_schedule_dag(
+      dag_net, this->get_dag()/*parent_dag*/, finish_dag_/*child_dag*/,
+      prio, false/*emergency*/, tablet_group_generate_dag/*new_dag*/,
+      0 /*dag_idx*/, dag_net, finish_dag_, ObTimeUtil::current_time()))) {
+    LOG_WARN("failed to schedule tablet group generate dag", K(ret));
   }
 
   return ret;
@@ -4256,7 +3721,6 @@ int ObDataTabletsMigrationTask::generate_check_co_convert_dag_if_needed() {
 int ObDataTabletsMigrationTask::inner_generate_check_co_convert_dag(ObLS *ls)
 {
   int ret = OB_SUCCESS;
-  ObTenantDagScheduler *scheduler =  MTL(ObTenantDagScheduler*);
   ObDataTabletsCheckCOConvertDag *tablet_check_convert_dag = nullptr;
   ObIDagNet *dag_net = nullptr;
   ObMigrationDagNet *migration_dag_net = nullptr;
@@ -4264,32 +3728,15 @@ int ObDataTabletsMigrationTask::inner_generate_check_co_convert_dag(ObLS *ls)
   if (OB_ISNULL(ls) || OB_ISNULL(dag_) || OB_ISNULL(dag_net = dag_->get_dag_net())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("invalid nullptr", K(ret), KP(ls), KP_(dag), KP(dag_net));
-  } else if (OB_FAIL(scheduler->alloc_dag_with_priority(dag_->get_priority(), tablet_check_convert_dag))) {
-    LOG_WARN("failed to alloc dag", K(ret));
   } else if (OB_UNLIKELY(ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net->get_type())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
   } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet *>(dag_net))) {
-  } else if (OB_FAIL(tablet_check_convert_dag->init(migration_dag_net->get_migration_ctx(), ls))) {
-    LOG_WARN("failed to init tablet check convert dag", K(ret), "ls_id", ls->get_ls_id());
-  } else if (OB_FAIL(dag_net->add_dag_into_dag_net(*(tablet_check_convert_dag)))) {
-    LOG_WARN("failed to add dag into dag net", K(ret));
-  } else if (OB_FAIL(dag_->add_child_without_inheritance(*tablet_check_convert_dag))) {
-    LOG_WARN("failed to add child dag", K(ret), KPC(tablet_check_convert_dag), KPC_(dag));
-  } else if (OB_FAIL(tablet_check_convert_dag->create_first_task())) {
-    LOG_WARN("failed to create first task", K(ret));
-  } else if (OB_FAIL(tablet_check_convert_dag->add_child_without_inheritance(*finish_dag_))) {
-    LOG_WARN("failed to add finish dag as child", K(ret), KPC(tablet_check_convert_dag), KPC_(finish_dag));
-  } else if (OB_FAIL(scheduler->add_dag(tablet_check_convert_dag))) {
-    LOG_WARN("failed to add tablet check convert dag", K(ret), KPC(tablet_check_convert_dag));
-    if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-      LOG_WARN("Fail to add dag", K(ret), "ls_id", ls->get_ls_id());
-      ret = OB_EAGAIN;
-    }
-  }
-  if (OB_FAIL(ret) && OB_NOT_NULL(tablet_check_convert_dag)) {
-    scheduler->free_dag(*tablet_check_convert_dag);
-    tablet_check_convert_dag = nullptr;
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_schedule_dag(
+      dag_net, dag_/*parent_dag*/, finish_dag_/*child_dag*/, dag_->get_priority(),
+      false/*emergency*/, tablet_check_convert_dag/*new_dag*/,
+      migration_dag_net->get_migration_ctx(), ls))) {
+    LOG_WARN("failed to schedule tablet check convert dag", K(ret), "ls_id", ls->get_ls_id());
   }
 
   return ret;
@@ -4436,27 +3883,12 @@ int ObDataTabletsMigrationTask::check_tx_data_continue_()
 
 int ObDataTabletsMigrationTask::record_server_event_()
 {
-  int ret = OB_SUCCESS;
-  if (OB_ISNULL(ctx_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ctx should not be null", K(ret), KPC_(ctx));
-  } else {
-    SERVER_EVENT_ADD("storage_ha", "data_tablets_migration_task",
-        "tenant_id", ctx_->tenant_id_,
-        "ls_id", ctx_->arg_.ls_id_.id(),
-        "src", ctx_->arg_.src_.get_server(),
-        "dst", ctx_->arg_.dst_.get_server(),
-        "task_id", ctx_->task_id_,
-        "is_failed", ctx_->is_failed(),
-        ObMigrationOpType::get_str(ctx_->arg_.type_));
-  }
-  return ret;
+  return ObLSMigrationUtils::record_migration_event("data_tablets_migration_task", ctx_);
 }
 
 /******************ObTabletGroupMigrationDag*********************/
 ObTabletGroupMigrationDag::ObTabletGroupMigrationDag()
   : ObMigrationDag(ObDagType::DAG_TYPE_TABLET_GROUP_MIGRATION),
-    is_inited_(false),
     tablet_id_array_(),
     finish_dag_(nullptr),
     tablet_group_ctx_(nullptr)
@@ -4543,28 +3975,16 @@ int ObTabletGroupMigrationDag::init(
     ObHATabletGroupCtx *tablet_group_ctx)
 {
   int ret = OB_SUCCESS;
-  ObMigrationDagNet* migration_dag_net = nullptr;
-
-  if (is_inited_) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("tablet group migration dag init twice", K(ret));
-  } else if (tablet_id_array.empty() || OB_ISNULL(dag_net) || OB_ISNULL(finish_dag) || OB_ISNULL(tablet_group_ctx)) {
+  if (tablet_id_array.empty() || OB_ISNULL(finish_dag) || OB_ISNULL(tablet_group_ctx)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablet group migration init get invalid argument", K(ret), KP(dag_net), KP(finish_dag), KP(tablet_group_ctx));
   } else if (OB_FAIL(tablet_id_array_.assign(tablet_id_array))) {
     LOG_WARN("failed to assgin tablet id array", K(ret), K(tablet_id_array));
-  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net->get_type()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
-  } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
-  } else if (FALSE_IT(ha_dag_net_ctx_ = migration_dag_net->get_migration_ctx())) {
-  } else if (OB_ISNULL(ha_dag_net_ctx_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("migration ctx should not be NULL", K(ret), KP(ha_dag_net_ctx_));
+  } else if (OB_FAIL(init_from_dag_net_(dag_net))) {
+    LOG_WARN("failed to init from dag net", K(ret));
   } else {
     finish_dag_ = finish_dag;
     tablet_group_ctx_ = tablet_group_ctx;
-    is_inited_ = true;
   }
   return ret;
 }
@@ -4619,9 +4039,7 @@ ObTabletGroupMigrationTask::ObTabletGroupMigrationTask()
     is_inited_(false),
     ls_handle_(),
     ctx_(nullptr),
-    bandwidth_throttle_(nullptr),
-    svr_rpc_proxy_(nullptr),
-    storage_rpc_(nullptr),
+    ha_svc_ctx_(),
     tablet_id_array_(),
     finish_dag_(nullptr),
     ha_tablets_builder_(),
@@ -4640,7 +4058,6 @@ int ObTabletGroupMigrationTask::init(
 {
   int ret = OB_SUCCESS;
   ObIDagNet *dag_net = nullptr;
-  ObMigrationDagNet* migration_dag_net = nullptr;
   ObArray<ObTabletID> tmp_tablet_id_array;
 
   if (is_inited_) {
@@ -4652,18 +4069,9 @@ int ObTabletGroupMigrationTask::init(
   } else if (OB_FAIL(tablet_id_array_.assign(tablet_id_array))) {
     LOG_WARN("failed to assign tablet id array", K(ret));
   } else if (FALSE_IT(dag_net = this->get_dag()->get_dag_net())) {
-  } else if (OB_ISNULL(dag_net)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dag net should not be NULL", K(ret), KP(dag_net));
-  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net->get_type()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
-  } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
+  } else if (OB_FAIL(ObLSMigrationUtils::get_migration_ctx_from_dag_net(dag_net, ctx_, ha_svc_ctx_))) {
+    LOG_WARN("failed to get migration ctx from dag net", K(ret));
   } else {
-    ctx_ = migration_dag_net->get_migration_ctx();
-    bandwidth_throttle_ = migration_dag_net->get_bandwidth_throttle();
-    svr_rpc_proxy_ = migration_dag_net->get_storage_rpc_proxy();
-    storage_rpc_ = migration_dag_net->get_storage_rpc();
     finish_dag_ = finish_dag;
     tablet_group_ctx_ = tablet_group_ctx;
 
@@ -4713,16 +4121,7 @@ int ObTabletGroupMigrationTask::process()
     }
   }
 
-  if (OB_SUCCESS != (tmp_ret = record_server_event_())) {
-    LOG_WARN("failed to record server event", K(tmp_ret), K(ret));
-  }
-
-  if (OB_FAIL(ret)) {
-    int tmp_ret = OB_SUCCESS;
-    if (OB_SUCCESS != (tmp_ret = ObStorageHADagUtils::deal_with_fo(ret, this->get_dag()))) {
-      LOG_WARN("failed to deal with fo", K(ret), K(tmp_ret), KPC(ctx_));
-    }
-  }
+  MIGRATION_PROCESS_EPILOGUE(record_server_event_());
 
   return ret;
 }
@@ -4731,7 +4130,6 @@ int ObTabletGroupMigrationTask::generate_tablet_migration_dag_()
 {
   int ret = OB_SUCCESS;
   int tmp_ret = OB_SUCCESS;
-  ObTenantDagScheduler *scheduler = nullptr;
   ObIDagNet *dag_net = nullptr;
   ObTabletGroupMigrationDag *tablet_group_migration_dag = nullptr;
   ObTabletMigrationDag *tablet_migration_dag = nullptr;
@@ -4748,9 +4146,6 @@ int ObTabletGroupMigrationTask::generate_tablet_migration_dag_()
   } else if (OB_ISNULL(dag_net = tablet_group_migration_dag->get_dag_net())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("migration dag net should not be NULL", K(ret), KP(dag_net));
-  } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
   } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx_->arg_.type_, prio))) {
     LOG_WARN("failed to get dag priority", K(ret));
   } else {
@@ -4773,34 +4168,14 @@ int ObTabletGroupMigrationTask::generate_tablet_migration_dag_()
         LOG_WARN("failed to deal with non migrated tablet", K(ret), K(logic_tablet_id));
       } else if (!need_migrate) {
         // do nothing
-      } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, tablet_migration_dag))) {
-        LOG_WARN("failed to alloc tablet migration dag ", K(ret));
-      } else if (OB_FAIL(tablet_migration_dag->init(logic_tablet_id.tablet_id_, tablet_handle, dag_net, tablet_group_ctx_, ObTabletMigrationDag::ObTabletType::DATA_TABLET_TYPE))) {
-        LOG_WARN("failed to init tablet migration migration dag", K(ret), K(*ctx_));
-      } else if (OB_FAIL(dag_net->add_dag_into_dag_net(*tablet_migration_dag))) {
-        LOG_WARN("failed to add dag into dag net", K(ret), K(*ctx_));
-      } else if (OB_FAIL(parent->add_child_without_inheritance(*tablet_migration_dag))) {
-        LOG_WARN("failed to add child dag", K(ret), K(*ctx_));
-      } else if (OB_FAIL(tablet_migration_dag->create_first_task())) {
-        LOG_WARN("failed to create first task", K(ret), K(*ctx_));
-      } else if (OB_FAIL(tablet_migration_dag->add_child_without_inheritance(*finish_dag_))) {
-        LOG_WARN("failed to add finish dag as child", K(ret), K(*ctx_));
-      } else if (OB_FAIL(scheduler->add_dag(tablet_migration_dag))) {
-        LOG_WARN("failed to add tablet migration dag", K(ret), K(*tablet_migration_dag));
-        if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-          LOG_WARN("Fail to add task", K(ret));
-          ret = OB_EAGAIN;
-        }
+      } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_schedule_dag(
+          dag_net, parent, finish_dag_, prio, false/*emergency*/, tablet_migration_dag/*new_dag*/,
+          logic_tablet_id.tablet_id_, tablet_handle, dag_net, tablet_group_ctx_,
+          ObTabletMigrationDag::ObTabletType::DATA_TABLET_TYPE))) {
+        LOG_WARN("failed to schedule tablet migration dag", K(ret), K(*ctx_));
       } else {
         LOG_INFO("succeed to schedule tablet migration dag", K(*tablet_migration_dag), K(logic_tablet_id));
         break;
-      }
-    }
-
-    if (OB_FAIL(ret)) {
-      if (OB_NOT_NULL(tablet_migration_dag)) {
-        scheduler->free_dag(*tablet_migration_dag);
-        tablet_migration_dag = nullptr;
       }
     }
   }
@@ -4906,7 +4281,6 @@ int ObTabletGroupMigrationTask::record_server_event_()
 /*****************ObTabletGroupGenerateDag******************/
 ObTabletGroupGenerateDag::ObTabletGroupGenerateDag()
   : ObMigrationDag(ObDagType::DAG_TYPE_TABLET_GROUP_GENERATOR),
-    is_inited_(false),
     dag_idx_(-1),
     tablet_id_array_(),
     last_schedule_time_(0),
@@ -5006,27 +4380,15 @@ int ObTabletGroupGenerateDag::init(
   const int64_t dag_idx, ObIDagNet *dag_net, ObIDag *finish_dag, const int64_t last_schedule_time)
 {
   int ret = OB_SUCCESS;
-  ObMigrationDagNet* migration_dag_net = nullptr;
-
-  if (IS_INIT) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("tablet group generate dag init twice", K(ret));
-  } else if (OB_ISNULL(dag_net) || OB_ISNULL(finish_dag)) {
+  if (OB_ISNULL(finish_dag)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablet group generate dag init get invalid argument", K(ret), KP(dag_net), KP(finish_dag));
-  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net->get_type()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
-  } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
-  } else if (FALSE_IT(ha_dag_net_ctx_ = migration_dag_net->get_migration_ctx())) {
-  } else if (OB_ISNULL(ha_dag_net_ctx_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("migration ctx should not be NULL", K(ret), KP(ha_dag_net_ctx_));
+  } else if (OB_FAIL(init_from_dag_net_(dag_net))) {
+    LOG_WARN("failed to init from dag net", K(ret));
   } else {
     dag_idx_ = dag_idx;
     finish_dag_ = finish_dag;
     last_schedule_time_ = last_schedule_time;
-    is_inited_ = true;
   }
   return ret;
 }
@@ -5050,7 +4412,7 @@ int ObTabletGroupGenerateTask::init(const int64_t task_idx, ObIDag *finish_dag)
 {
   int ret = OB_SUCCESS;
   ObIDagNet *dag_net = nullptr;
-  ObMigrationDagNet* migration_dag_net = nullptr;
+  ObStorageHAServiceCtx ha_svc_ctx;
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
@@ -5059,14 +4421,8 @@ int ObTabletGroupGenerateTask::init(const int64_t task_idx, ObIDag *finish_dag)
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("tablet group generate task init get invalid argument", K(ret), KP(finish_dag));
   } else if (FALSE_IT(dag_net = this->get_dag()->get_dag_net())) {
-  } else if (OB_ISNULL(dag_net)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dag net should not be NULL", K(ret), KP(dag_net));
-  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net->get_type()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
-  } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
-  } else if (FALSE_IT(ctx_ = migration_dag_net->get_migration_ctx())) {
+  } else if (OB_FAIL(ObLSMigrationUtils::get_migration_ctx_from_dag_net(dag_net, ctx_, ha_svc_ctx))) {
+    LOG_WARN("failed to get migration ctx from dag net", K(ret));
   } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle_))) {
     LOG_WARN("failed to get ls", K(ret));
   } else {
@@ -5170,16 +4526,7 @@ int ObTabletGroupGenerateTask::process()
     }
   }
 
-  int tmp_ret = OB_SUCCESS;
-  if (OB_TMP_FAIL(record_server_event_(tablet_id_array))) {
-    LOG_WARN("failed to record server event", K(tmp_ret), K(ret));
-  }
-
-  if (OB_FAIL(ret)) {
-    if (OB_TMP_FAIL(ObStorageHADagUtils::deal_with_fo(ret, this->get_dag()))) {
-      LOG_WARN_RET(tmp_ret, "failed to deal with fo", K(ret));
-    }
-  }
+  MIGRATION_PROCESS_EPILOGUE(record_server_event_(tablet_id_array));
 
   return ret;
 }
@@ -5260,7 +4607,6 @@ int ObTabletGroupGenerateTask::generate_self_(int64_t last_schedule_time)
   int ret = OB_SUCCESS;
 
   ObTabletGroupGenerateDag *next_dag = nullptr;
-  ObTenantDagScheduler *scheduler = nullptr;
   ObIDagNet *dag_net = nullptr;
   ObDagPrio::ObDagPrioEnum prio = ObDagPrio::DAG_PRIO_MAX;
 
@@ -5276,38 +4622,14 @@ int ObTabletGroupGenerateTask::generate_self_(int64_t last_schedule_time)
   } else if (OB_ISNULL(dag_net)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("ls migration dag net should not be NULL", K(ret), KP(dag_net));
-  } else if (OB_ISNULL(scheduler = MTL(ObTenantDagScheduler*))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("failed to get ObTenantDagScheduler from MTL", K(ret));
   } else if (OB_FAIL(ObMigrationUtils::get_dag_priority(ctx_->arg_.type_, prio))) {
     LOG_WARN("failed to get dag priority", K(ret));
-  } else if (OB_FAIL(scheduler->alloc_dag_with_priority(prio, next_dag))) {
-    LOG_WARN("failed to alloc next tablet group generate dag ", K(ret));
-  } else if (OB_FAIL(next_dag->init(task_idx_ + 1, dag_net, finish_dag_, last_schedule_time))) {
-    LOG_WARN("failed to init next tablet group generate dag", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(dag_net->add_dag_into_dag_net(*next_dag))) {
-    LOG_WARN("failed to add dag into dag net", K(ret));
-  } else if (OB_FAIL(next_dag->create_first_task())) {
-    LOG_WARN("failed to create first task", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(this->get_dag()->add_child_without_inheritance(*next_dag))) {
-    LOG_WARN("failed to add child dag", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(next_dag->add_child_without_inheritance(*finish_dag_))) {
-    LOG_WARN("failed to add finish dag as child", K(ret), KPC(ctx_));
-  } else if (OB_FAIL(scheduler->add_dag(next_dag))) {
-    LOG_WARN("failed to add next tablet group generate dag", K(ret), KPC(next_dag));
-    if (OB_SIZE_OVERFLOW != ret && OB_EAGAIN != ret) {
-      LOG_WARN("Fail to add task", K(ret));
-      ret = OB_EAGAIN;
-    }
+  } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_schedule_dag(
+      dag_net, this->get_dag(), finish_dag_, prio, false/*emergency*/, next_dag,
+      task_idx_ + 1, dag_net, finish_dag_, last_schedule_time))) {
+    LOG_WARN("failed to schedule next tablet group generate dag", K(ret), KPC(ctx_));
   } else {
     LOG_INFO("succeed to generate next tablet group generate dag", K(ret), K(task_idx_), "ls_id", ctx_->arg_.ls_id_, "dag_net_id", ctx_->task_id_);
-  }
-
-  if (OB_FAIL(ret)) {
-    if (OB_NOT_NULL(next_dag)) {
-      scheduler->free_dag(*next_dag);
-      next_dag = nullptr;
-    }
   }
 
   return ret;
@@ -5344,116 +4666,6 @@ int ObTabletGroupGenerateTask::record_server_event_(const ObIArray<ObLogicTablet
   return ret;
 }
 
-/******************ObMigrationFinishDag*********************/
-ObMigrationFinishDag::ObMigrationFinishDag()
-  : ObMigrationDag(ObDagType::DAG_TYPE_MIGRATION_FINISH),
-    is_inited_(false)
-{
-}
-
-ObMigrationFinishDag::~ObMigrationFinishDag()
-{
-}
-
-bool ObMigrationFinishDag::operator == (const ObIDag &other) const
-{
-  bool is_same = true;
-  if (this == &other) {
-    // same
-  } else if (get_type() != other.get_type()) {
-    is_same = false;
-  } else {
-    const ObMigrationDag &other_dag = static_cast<const ObMigrationDag&>(other);
-    ObMigrationCtx *ctx = get_migration_ctx();
-    if (NULL != ctx && NULL != other_dag.get_migration_ctx()) {
-      if (ctx->arg_.ls_id_ != other_dag.get_migration_ctx()->arg_.ls_id_) {
-        is_same = false;
-      }
-    }
-  }
-  return is_same;
-}
-
-uint64_t ObMigrationFinishDag::hash() const
-{
-  uint64_t hash_value = 0;
-  ObMigrationCtx *ctx = get_migration_ctx();
-
-  if (NULL != ctx) {
-    hash_value = common::murmurhash(
-        &ctx->arg_.ls_id_, sizeof(ctx->arg_.ls_id_), hash_value);
-    ObDagType::ObDagTypeEnum dag_type = get_type();
-    hash_value = common::murmurhash(
-        &dag_type, sizeof(dag_type), hash_value);
-  }
-  return hash_value;
-}
-
-int ObMigrationFinishDag::fill_dag_key(char *buf, const int64_t buf_len) const
-{
-  int ret = OB_SUCCESS;
-  ObMigrationCtx *ctx = nullptr;
-  ObCStringHelper helper;
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("migration finish dag do not init", K(ret));
-  } else if (OB_ISNULL(ctx = get_migration_ctx())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("migration ctx should not be NULL", K(ret), KP(ctx));
-  } else if (OB_FAIL(databuff_printf(buf, buf_len,
-       "ObMigrationFinishDag: ls_id = %s, migration_type = %s, dag_prio = %s",
-       helper.convert(ctx->arg_.ls_id_), ObMigrationOpType::get_str(ctx->arg_.type_),
-       ObIDag::get_dag_prio_str(this->get_priority())))) {
-    LOG_WARN("failed to fill comment", K(ret), KPC(ctx));
-  }
-  return ret;
-}
-
-int ObMigrationFinishDag::init(ObIDagNet *dag_net)
-{
-  int ret = OB_SUCCESS;
-  ObMigrationDagNet* migration_dag_net = nullptr;
-
-  if (is_inited_) {
-    ret = OB_INIT_TWICE;
-    LOG_WARN("migration finish dag init twice", K(ret));
-  } else if (OB_ISNULL(dag_net)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dag net should not be NULL", K(ret), KP(dag_net));
-  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net->get_type()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
-  } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
-  } else if (FALSE_IT(ha_dag_net_ctx_ = migration_dag_net->get_migration_ctx())) {
-  } else if (OB_ISNULL(ha_dag_net_ctx_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("migration ctx should not be NULL", K(ret), KP(ha_dag_net_ctx_));
-  } else {
-    is_inited_ = true;
-  }
-  return ret;
-}
-
-int ObMigrationFinishDag::create_first_task()
-{
-  int ret = OB_SUCCESS;
-  ObMigrationFinishTask *task = NULL;
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("migration finish dag do not init", K(ret));
-  } else if (OB_FAIL(alloc_task(task))) {
-    LOG_WARN("Fail to alloc task", K(ret));
-  } else if (OB_FAIL(task->init())) {
-    LOG_WARN("failed to init log stream migration task", K(ret), KPC(ha_dag_net_ctx_));
-  } else if (OB_FAIL(add_task(*task))) {
-    LOG_WARN("Fail to add task", K(ret));
-  } else {
-    LOG_DEBUG("success to create first task", K(ret), KPC(this));
-  }
-  return ret;
-}
-
 /******************ObMigrationFinishTask*********************/
 ObMigrationFinishTask::ObMigrationFinishTask()
   : ObITask(TASK_TYPE_MIGRATE_PREPARE),
@@ -5471,21 +4683,15 @@ int ObMigrationFinishTask::init()
 {
   int ret = OB_SUCCESS;
   ObIDagNet *dag_net = nullptr;
-  ObMigrationDagNet* migration_dag_net = nullptr;
+  ObStorageHAServiceCtx ha_svc_ctx;
 
   if (is_inited_) {
     ret = OB_INIT_TWICE;
     LOG_WARN("migration finish task init twice", K(ret));
   } else if (FALSE_IT(dag_net = this->get_dag()->get_dag_net())) {
-  } else if (OB_ISNULL(dag_net)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dag net should not be NULL", K(ret), KP(dag_net));
-  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net->get_type()) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
-  } else if (FALSE_IT(migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net))) {
+  } else if (OB_FAIL(ObLSMigrationUtils::get_migration_ctx_from_dag_net(dag_net, ctx_, ha_svc_ctx))) {
+    LOG_WARN("failed to get migration ctx from dag net", K(ret));
   } else {
-    ctx_ = migration_dag_net->get_migration_ctx();
     dag_net_ = dag_net;
     is_inited_ = true;
     LOG_INFO("succeed init migration finish task", "ls id", ctx_->arg_.ls_id_,
@@ -5638,7 +4844,7 @@ int ObMigrationFinishTask::check_split_tablets_ready_(bool &is_ready)
   } else if (OB_ISNULL(migration_dag_net = static_cast<ObMigrationDagNet *>(dag_net_))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("migration dag net should not be null", K(ret), KP(migration_dag_net));
-  } else if (OB_ISNULL(sql_proxy = migration_dag_net->get_sql_proxy())) {
+  } else if (OB_ISNULL(sql_proxy = migration_dag_net->get_ha_svc_ctx().sql_proxy_)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("sql proxy should not be null", K(ret));
   } else if (OB_FAIL(ObStorageHADagUtils::get_ls(ctx_->arg_.ls_id_, ls_handle))) {
@@ -5694,6 +4900,49 @@ int ObMigrationFinishTask::check_split_tablets_ready_(bool &is_ready)
 }
 
 /******************ObLSMigrationUtils*********************/
+int ObLSMigrationUtils::get_migration_ctx_from_dag_net(
+    ObIDagNet *dag_net,
+    ObMigrationCtx *&ctx,
+    ObStorageHAServiceCtx &ha_svc_ctx)
+{
+  int ret = OB_SUCCESS;
+  ObMigrationDagNet *migration_dag_net = nullptr;
+  ctx = nullptr;
+  if (OB_ISNULL(dag_net)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag net should not be NULL", K(ret), KP(dag_net));
+  } else if (ObDagNetType::DAG_NET_TYPE_MIGRATION != dag_net->get_type()) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("dag net type is unexpected", K(ret), KPC(dag_net));
+  } else {
+    migration_dag_net = static_cast<ObMigrationDagNet*>(dag_net);
+    ctx = migration_dag_net->get_migration_ctx();
+    ha_svc_ctx = migration_dag_net->get_ha_svc_ctx();
+  }
+  return ret;
+}
+
+int ObLSMigrationUtils::record_migration_event(
+    const char *event_name,
+    const ObMigrationCtx *ctx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(ctx)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx should not be null", K(ret), KPC(ctx));
+  } else {
+    SERVER_EVENT_ADD("storage_ha", event_name,
+        "tenant_id", ctx->tenant_id_,
+        "ls_id", ctx->arg_.ls_id_.id(),
+        "src", ctx->arg_.src_.get_server(),
+        "dst", ctx->arg_.dst_.get_server(),
+        "task_id", ctx->task_id_,
+        "is_failed", ctx->is_failed(),
+        ObMigrationOpType::get_str(ctx->arg_.type_));
+  }
+  return ret;
+}
+
 int ObLSMigrationUtils::init_ha_tablets_builder(
     const uint64_t tenant_id,
     const common::ObIArray<common::ObTabletID> &tablet_id_array,
@@ -5719,7 +4968,7 @@ int ObLSMigrationUtils::init_ha_tablets_builder(
   } else if (OB_FAIL(param.tablet_id_array_.assign(tablet_id_array))) {
     LOG_WARN("failed to assign tablet id array", K(ret), K(tablet_id_array));
   } else {
-    param.bandwidth_throttle_ = GCTX.bandwidth_throttle_;
+    param.ha_svc_ctx_.bandwidth_throttle_ = GCTX.bandwidth_throttle_;
     param.is_leader_restore_ = false;
     param.local_rebuild_seq_ = local_rebuild_seq;
     param.need_check_seq_ = true;
@@ -5729,8 +4978,8 @@ int ObLSMigrationUtils::init_ha_tablets_builder(
     param.restore_base_info_ = nullptr;
     param.restore_action_ = ObTabletRestoreAction::RESTORE_NONE;
     param.src_info_ = src_info;
-    param.storage_rpc_ = ls_service->get_storage_rpc();
-    param.svr_rpc_proxy_ = ls_service->get_storage_rpc_proxy();
+    param.ha_svc_ctx_.storage_rpc_ = ls_service->get_storage_rpc();
+    param.ha_svc_ctx_.svr_rpc_proxy_ = ls_service->get_storage_rpc_proxy();
     param.tenant_id_ = tenant_id;
     param.ha_table_info_mgr_ = ha_table_info_mgr;
 

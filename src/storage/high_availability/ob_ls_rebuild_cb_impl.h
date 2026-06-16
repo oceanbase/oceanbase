@@ -24,11 +24,7 @@ class ObLSRebuildCbImpl : public palf::PalfRebuildCb
 public:
   ObLSRebuildCbImpl();
   virtual ~ObLSRebuildCbImpl();
-  int init(
-      ObLS *ls,
-      common::ObInOutBandwidthThrottle *bandwidth_throttle,
-      obrpc::ObStorageRpcProxy *svr_rpc_proxy,
-      storage::ObStorageRpc *storage_rpc);
+  int init(ObLS *ls, const ObStorageHAServiceCtx &ha_svc_ctx);
   virtual int on_rebuild(const int64_t id, const palf::LSN &lsn);
   virtual bool is_rebuilding(const int64_t id) const;
   void destroy();
@@ -39,9 +35,7 @@ private:
 private:
   bool is_inited_;
   ObLS *ls_;
-  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
-  obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
-  storage::ObStorageRpc *storage_rpc_;
+  ObStorageHAServiceCtx ha_svc_ctx_;
   DISALLOW_COPY_AND_ASSIGN(ObLSRebuildCbImpl);
 };
 

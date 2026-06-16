@@ -184,6 +184,11 @@ int ObLS::init(const share::ObLSID &ls_id,
         LOG_INFO("ls init success", K(ls_id));
       }
     } else {
+      ObStorageHAServiceCtx rebuild_ha_svc_ctx;
+      rebuild_ha_svc_ctx.bandwidth_throttle_ = GCTX.bandwidth_throttle_;
+      rebuild_ha_svc_ctx.svr_rpc_proxy_ = ls_service->get_storage_rpc_proxy();
+      rebuild_ha_svc_ctx.storage_rpc_ = ls_service->get_storage_rpc();
+      rebuild_ha_svc_ctx.sql_proxy_ = GCTX.sql_proxy_;
       if (OB_FAIL(ls_freezer_.init(this))) {
         LOG_WARN("init freezer failed", K(ret), K(tenant_id), K(ls_id));
       } else if (OB_FAIL(txs_svr->create_ls(ls_id, *this, &tx_palf_param, nullptr))) {
@@ -217,8 +222,7 @@ int ObLS::init(const share::ObLSID &ls_id,
         LOG_WARN("failed to init ls migration handler", K(ret));
       } else if (OB_FAIL(ls_remove_member_handler_.init(this, ls_service->get_storage_rpc()))) {
         LOG_WARN("failed to init ls remove member handler", K(ret));
-      } else if (OB_FAIL(ls_rebuild_cb_impl_.init(this, GCTX.bandwidth_throttle_,
-          ls_service->get_storage_rpc_proxy(), ls_service->get_storage_rpc()))) {
+      } else if (OB_FAIL(ls_rebuild_cb_impl_.init(this, rebuild_ha_svc_ctx))) {
         LOG_WARN("failed to init ls rebuild cb impl", K(ret));
       } else if (OB_FAIL(tablet_gc_handler_.init(this))) {
         LOG_WARN("failed to init tablet gc handler", K(ret));

@@ -43,18 +43,14 @@ SUSPECT_INFO_TYPE_DEF(SUSPECT_COMPACTION_REPORT_PROGRESS_FAILED, ObDiagnoseInfoP
     1, {"errno"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_LS_CANT_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, true, "ls can't schedule merge",
     1, {"weak_read_ts"})
-#ifdef OB_BUILD_SHARED_STORAGE
-SUSPECT_INFO_TYPE_DEF(SUSPECT_SS_TABLET_CANT_MAJOR_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH, false, "shared tablet can't schedule major merge",
-    5, {"compaction_scn", "ss_tablet_snapshot_version", "ss_checkpoint_scn", "local_tablet_clog_checkpoint_scn", "ss_tablet_clog_checkpoint_scn"})
-SUSPECT_INFO_TYPE_DEF(SUSPECT_SS_TABLET_REORG_SKIP_MAJOR_MERGE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH, false,
-    "shared tablet can't schedule major merge because it is reorganizing", 3, {"compaction_scn", "ss_tablet_snapshot_version", "ss_checkpoint_scn"})
-SUSPECT_INFO_TYPE_DEF(SUSPECT_SS_TABLET_MAJOR_ATTACH_WAIT_SS_MAJOR_READY, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_HIGH, false, "local tablet attach major waiting for shared major finish",
-    2, {"compaction_scn", "ss_tablet_last_major"})
-#endif
 SUSPECT_INFO_TYPE_DEF(SUSPECT_MV_IN_CREATION, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false,
                       "materialized view creation has not finished", 2, {"schedule_scn", "is_row_store"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_MULTI_VERSION_START_NOT_ADVANCE, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "multi version start not advance for a long time",
     2, {"multi_version_start", "current_time"})
+SUSPECT_INFO_TYPE_DEF(SUSPECT_SCHEDULE_DAG_FAILED, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_MID, false, "failed to submit merge dag to scheduler",
+    1, {"error_code"})
+SUSPECT_INFO_TYPE_DEF(SUSPECT_SCHEDULE_NEW_ROUND_FAILED, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_MID, false, "failed to submit merge dag to scheduler",
+    1, {"error_code"})
 SUSPECT_INFO_TYPE_DEF(SUSPECT_INFO_TYPE_MAX, ObDiagnoseInfoPrio::DIAGNOSE_PRIORITY_LOW, false, "", 0, {})
 #endif
 
@@ -83,7 +79,7 @@ enum ObSuspectInfoType : uint8_t
 #undef SUSPECT_INFO_TYPE_DEF
 };
 
-enum ObDiagnoseTabletType {
+enum ObDiagnoseTabletType { //FARM COMPAT WHITELIST
   TYPE_SPECIAL, // can't ensure the type
   TYPE_MINI_MERGE,
   TYPE_MINOR_MERGE,
@@ -93,7 +89,6 @@ enum ObDiagnoseTabletType {
   TYPE_TX_TABLE_MERGE,
   TYPE_MDS_MINI_MERGE, // for mds mini merge
   TYPE_BATCH_EXECUTE, // for batch execute dag
-  TYPE_S2_REFRESH, // for shared storage
   TYPE_MICRO_MINI_MERGE,
   TYPE_MDS_MINOR_MERGE, // for mds minor merge
   TYPE_DIAGNOSE_TABLET_MAX

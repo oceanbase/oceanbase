@@ -8,9 +8,6 @@
 #include "observer/ob_server_event_history_table_operator.h"
 #include "storage/high_availability/ob_storage_ha_tablet_builder.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/compaction_v2/ob_ss_compact_helper.h"
-#endif
 
 namespace oceanbase
 {

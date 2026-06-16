@@ -939,7 +939,7 @@ TEST_F(TestMergeIterGroup, test_macro_merge_iter_group)
   int ret = OB_SUCCESS;
   while (OB_SUCCESS == (ret = group->next())) {
     if (!group->is_macro_block_opened()) {
-      ASSERT_EQ(OB_SUCCESS, group->open_curr_range(false));
+      ASSERT_EQ(OB_SUCCESS, group->open_curr_range(false, false));
     }
     if (nullptr != group->get_curr_row()) {
       const ObDatumRow *check_row = group->get_filter_check_row();
@@ -1009,7 +1009,7 @@ TEST_F(TestMergeIterGroup, test_micro_merge_iter_group)
       ++actual_row_cnt;
       ret = group->next();
     } else {
-      ASSERT_EQ(OB_SUCCESS, group->open_curr_range(false));
+      ASSERT_EQ(OB_SUCCESS, group->open_curr_range(false, false));
     }
   }
   ASSERT_EQ(OB_ITER_END, ret);
@@ -1071,7 +1071,7 @@ TEST_F(TestMergeIterGroup, test_macro_iter_group_asymmetric)
       ++actual_row_cnt;
       ret = group->next();
     } else {
-      ASSERT_EQ(OB_SUCCESS, group->open_curr_range(false));
+      ASSERT_EQ(OB_SUCCESS, group->open_curr_range(false, false));
     }
   }
   ASSERT_EQ(OB_ITER_END, ret);
@@ -1131,7 +1131,7 @@ TEST_F(TestMergeIterGroup, test_micro_iter_group_two_columns)
       ++actual_row_cnt;
       ret = group->next();
     } else {
-      ASSERT_EQ(OB_SUCCESS, group->open_curr_range(false));
+      ASSERT_EQ(OB_SUCCESS, group->open_curr_range(false, false));
     }
   }
   ASSERT_EQ(OB_ITER_END, ret);

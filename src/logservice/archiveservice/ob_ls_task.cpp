@@ -184,7 +184,6 @@ int ObLSArchiveTask::get_sorted_fetch_log(ObArchiveLogFetchTask *&task)
   }
 
   if (OB_SUCC(ret) && NULL != task) {
-    ObArchiveLogFetchTask *tmp_task = NULL;
     if (OB_FAIL(dest_.pop_fetch_log(tmp_task))) {
       ARCHIVE_LOG(ERROR, "pop failed", K(ret), KPC(this));
     }

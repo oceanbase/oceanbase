@@ -17,7 +17,6 @@
 #include "storage/ddl/ob_ddl_merge_schedule.h"
 
 #ifdef OB_BUILD_SHARED_STORAGE
-#include "close_modules/shared_storage/storage/compaction_v2/ob_ss_compact_helper.h"
 #include "storage/meta_store/ob_tenant_storage_meta_service.h"
 #include "close_modules/shared_storage/meta_store/ob_shared_storage_obj_meta.h"
 #include "storage/ddl/ob_ss_ddl_util.h"
@@ -2332,13 +2331,6 @@ int ObDDLRedoLogWriter::wait_finish_log(
   } else if (OB_FAIL(ObDDLUtil::ddl_get_tablet(ls_handle, tablet_id, pre_tablet_handle, ObMDSGetTabletMode::READ_ALL_COMMITED))) {
     LOG_WARN("failed to get pre tablet handle", K(ret));
   } else if (FALSE_IT(pre_meta_version = pre_tablet_handle.get_obj()->get_tablet_meta().snapshot_version_)) {
-  } else if (OB_FAIL(share::SSCompactHelper::link_major(ls_id,
-                                                        tablet_id,
-                                                        compaction::ObMergeType::MEDIUM_MERGE,
-                                                        table_key.get_snapshot_version(),
-                                                        false/*prewarm*/,
-                                                        true/*report*/))) {
-    LOG_WARN("failed to link major sstable", K(ret), K(table_key.get_snapshot_version()));
   }
 
   if (OB_FAIL(ret)) {

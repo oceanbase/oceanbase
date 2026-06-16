@@ -129,13 +129,3 @@ int ObTenantArchiveMgr::decide_piece_end_scn(
 
   return ret;
 }
-
-int ObTenantArchiveMgr::timestamp_to_day(const int64_t ts, int64_t &day)
-{
-  int ret = OB_SUCCESS;
-  if (OB_FAIL(ObBackupUtils::convert_timestamp_to_date(ts, day))) {
-    LOG_WARN("failed to get day from timestamp", K(ret), K(ts));
-  }
-
-  return ret;
-}

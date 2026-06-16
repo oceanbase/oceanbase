@@ -106,9 +106,10 @@ int ObDagTempMacroBlockWriter::open(
       pre_warm_param,
       false,
       object_cleaner,
-      nullptr,
-      nullptr,
-      nullptr))) {
+      nullptr /*callback*/,
+      nullptr /*validator*/,
+      nullptr /*device_handle*/,
+      nullptr /*merge_micro_block_read_info*/))) {
     LOG_WARN("failed to inner init macro block writer", K(ret));
   } else {
     dag_temp_macro_flusher_.set_temp_file_writer(*cg_block_writer);
@@ -184,7 +185,8 @@ int ObDagMacroBlockWriter::open_for_ss_ddl(
       object_cleaner,
       callback,
       nullptr, /* validator */
-      nullptr /* device handle */))) {
+      nullptr /* device handle */,
+      nullptr /* merge_micro_block_read_info */))) {
     LOG_WARN("failed to inner init macro block writer", K(ret));
   } else {
     set_dag_stage(ObDagMacroWriterStage::WAITTING_APPEND_CG_BLOCK);

@@ -243,18 +243,14 @@ int ObTabletRestoreCtx::get_copy_tablet_record_extra_info(ObCopyTabletRecordExtr
 ObTGRDagNetInitParam::ObTGRDagNetInitParam()
   : arg_(),
     task_id_(),
-    bandwidth_throttle_(nullptr),
-    svr_rpc_proxy_(nullptr),
-    storage_rpc_(nullptr)
+    ha_svc_ctx_()
 {
 }
 
 bool ObTGRDagNetInitParam::is_valid() const
 {
   return arg_.is_valid() && !task_id_.is_invalid()
-      && OB_NOT_NULL(bandwidth_throttle_)
-      && OB_NOT_NULL(svr_rpc_proxy_)
-      && OB_NOT_NULL(storage_rpc_);
+      && ha_svc_ctx_.is_valid();
 }
 
 
@@ -265,10 +261,7 @@ ObTabletGroupRestoreDagNet::ObTabletGroupRestoreDagNet()
       meta_index_store_(),
       second_meta_index_store_(),
       kv_cache_(nullptr),
-      bandwidth_throttle_(nullptr),
-      svr_rpc_proxy_(nullptr),
-      storage_rpc_(nullptr)
-
+      ha_svc_ctx_()
 {
 }
 
@@ -380,9 +373,7 @@ int ObTabletGroupRestoreDagNet::init_by_param(const ObIDagInitParam *param)
   }  else {
     ctx_->task_id_ = init_param->task_id_;
     kv_cache_ = &OB_BACKUP_INDEX_CACHE;
-    bandwidth_throttle_ = init_param->bandwidth_throttle_;
-    svr_rpc_proxy_ = init_param->svr_rpc_proxy_;
-    storage_rpc_ = init_param->storage_rpc_;
+    ha_svc_ctx_ = init_param->ha_svc_ctx_;
     is_inited_ = true;
   }
 
@@ -752,9 +743,7 @@ ObInitialTabletGroupRestoreTask::ObInitialTabletGroupRestoreTask()
   : ObITask(TASK_TYPE_MIGRATE_PREPARE),
     is_inited_(false),
     ctx_(nullptr),
-    bandwidth_throttle_(nullptr),
-    svr_rpc_proxy_(nullptr),
-    storage_rpc_(nullptr),
+    ha_svc_ctx_(),
     dag_net_(nullptr),
     meta_index_store_(nullptr),
     second_meta_index_store_(nullptr),
@@ -790,9 +779,7 @@ int ObInitialTabletGroupRestoreTask::init()
     LOG_WARN("ls service should not be NULL", K(ret), KP(ls_service));
   } else {
     ctx_ = restore_dag_net->get_restore_ctx();
-    bandwidth_throttle_ = restore_dag_net->get_bandwidth_throttle();
-    svr_rpc_proxy_ = restore_dag_net->get_storage_rpc_proxy();
-    storage_rpc_ = restore_dag_net->get_storage_rpc();
+    ha_svc_ctx_ = restore_dag_net->get_ha_svc_ctx();
     dag_net_ = dag_net;
     meta_index_store_ = restore_dag_net->get_meta_index_store();
     second_meta_index_store_ = restore_dag_net->get_second_meta_index_store();
@@ -995,7 +982,7 @@ int ObInitialTabletGroupRestoreTask::choose_follower_src_()
     ObStorageHASrcInfo src_info;
     src_info.src_addr_ = ctx_->arg_.src_.get_server();
     src_info.cluster_id_ = GCONF.cluster_id;
-    if (OB_FAIL(storage_rpc_->post_ls_meta_info_request(
+    if (OB_FAIL(ha_svc_ctx_.storage_rpc_->post_ls_meta_info_request(
         tenant_id, src_info, ctx_->arg_.ls_id_, ls_info))) {
       LOG_WARN("fail to post fetch ls meta info request", K(ret), K(src_info), "arg", ctx_->arg_);
     } else if (OB_FAIL(ls_info.ls_meta_package_.ls_meta_.get_restore_status(ls_restore_status))) {
@@ -1298,9 +1285,7 @@ ObStartTabletGroupRestoreTask::ObStartTabletGroupRestoreTask()
   : ObITask(TASK_TYPE_MIGRATE_PREPARE),
     is_inited_(false),
     ctx_(nullptr),
-    bandwidth_throttle_(nullptr),
-    svr_rpc_proxy_(nullptr),
-    storage_rpc_(nullptr),
+    ha_svc_ctx_(),
     meta_index_store_(nullptr),
     second_meta_index_store_(nullptr),
     finish_dag_(nullptr),
@@ -1341,9 +1326,7 @@ int ObStartTabletGroupRestoreTask::init(
     LOG_WARN("ls service should not be NULL", K(ret), KP(ls_service));
   } else {
     ctx_ = restore_dag_net->get_restore_ctx();
-    bandwidth_throttle_ = restore_dag_net->get_bandwidth_throttle();
-    svr_rpc_proxy_ = restore_dag_net->get_storage_rpc_proxy();
-    storage_rpc_ = restore_dag_net->get_storage_rpc();
+    ha_svc_ctx_ = restore_dag_net->get_ha_svc_ctx();
     meta_index_store_ = restore_dag_net->get_meta_index_store();
     second_meta_index_store_ = restore_dag_net->get_second_meta_index_store();
     finish_dag_ = finish_dag;
@@ -1843,9 +1826,7 @@ ObTabletRestoreDag::ObTabletRestoreDag()
   : ObStorageHADag(ObDagType::DAG_TYPE_TABLET_RESTORE),
     is_inited_(false),
     tablet_restore_ctx_(),
-    bandwidth_throttle_(nullptr),
-    svr_rpc_proxy_(nullptr),
-    storage_rpc_(nullptr),
+    ha_svc_ctx_(),
     ls_handle_(),
     tablet_group_ctx_(nullptr)
 {
@@ -1999,9 +1980,9 @@ int ObTabletRestoreDag::init(
     tablet_restore_ctx_.need_check_seq_ = param.need_check_seq_;
     tablet_restore_ctx_.ls_rebuild_seq_ = param.ls_rebuild_seq_;
     ha_dag_net_ctx_ = param.ha_dag_net_ctx_;
-    bandwidth_throttle_ = GCTX.bandwidth_throttle_;
-    svr_rpc_proxy_ = ls_service->get_storage_rpc_proxy();
-    storage_rpc_ = ls_service->get_storage_rpc();
+    ha_svc_ctx_.bandwidth_throttle_ = GCTX.bandwidth_throttle_;
+    ha_svc_ctx_.svr_rpc_proxy_ = ls_service->get_storage_rpc_proxy();
+    ha_svc_ctx_.storage_rpc_ = ls_service->get_storage_rpc();
     compat_mode_ = tablet_restore_ctx_.tablet_handle_.get_obj()->get_tablet_meta().compat_mode_;
     tablet_group_ctx_ = param.tablet_group_ctx_;
     is_inited_ = true;
@@ -2187,16 +2168,13 @@ ObTabletRestoreTask::ObTabletRestoreTask()
     is_inited_(false),
     ha_dag_net_ctx_(nullptr),
     tablet_restore_ctx_(nullptr),
-    bandwidth_throttle_(nullptr),
-    svr_rpc_proxy_(nullptr),
-    storage_rpc_(nullptr),
+    ha_svc_ctx_(),
     ls_(nullptr),
     src_info_(),
     need_check_seq_(false),
     ls_rebuild_seq_(-1),
     copy_table_key_array_(),
     copy_sstable_info_mgr_()
-
 {
 }
 
@@ -2218,9 +2196,7 @@ int ObTabletRestoreTask::init(ObTabletRestoreCtx &tablet_restore_ctx)
   } else if (FALSE_IT(tablet_restore_dag = static_cast<ObTabletRestoreDag *>(this->get_dag()))) {
   } else {
     ha_dag_net_ctx_ = tablet_restore_dag->get_ha_dag_net_ctx();
-    bandwidth_throttle_ = tablet_restore_dag->get_bandwidth_throttle();
-    svr_rpc_proxy_ = tablet_restore_dag->get_storage_rpc_proxy();
-    storage_rpc_ = tablet_restore_dag->get_storage_rpc();
+    ha_svc_ctx_ = tablet_restore_dag->get_ha_svc_ctx();
     tablet_restore_ctx_ = &tablet_restore_ctx;
     ls_ = tablet_restore_dag->get_ls();
     is_inited_ = true;
@@ -2688,9 +2664,7 @@ int ObTabletRestoreTask::build_copy_sstable_info_mgr_()
     param.second_meta_index_store_ = tablet_restore_ctx_->second_meta_index_store_;
     param.restore_base_info_ = tablet_restore_ctx_->restore_base_info_;
     param.src_info_ = src_info_;
-    param.storage_rpc_ = storage_rpc_;
-    param.svr_rpc_proxy_ = svr_rpc_proxy_;
-    param.bandwidth_throttle_ = bandwidth_throttle_;
+    param.ha_svc_ctx_ = ha_svc_ctx_;
 
     if (OB_FAIL(copy_sstable_info_mgr_.init(param))) {
       LOG_WARN("failed to init copy sstable info mgr", K(ret), K(param), KPC(tablet_restore_ctx_));
@@ -3230,7 +3204,7 @@ int ObTabletGroupRestoreUtils::init_ha_tablets_builder(
   } else if (OB_FAIL(param.tablet_id_array_.assign(tablet_id_array))) {
     LOG_WARN("failed to assign tablet id array", K(ret), K(tablet_id_array));
   } else {
-    param.bandwidth_throttle_ = GCTX.bandwidth_throttle_;
+    param.ha_svc_ctx_.bandwidth_throttle_ = GCTX.bandwidth_throttle_;
     param.is_leader_restore_ = is_leader_restore;
     param.local_rebuild_seq_ = ls_rebuild_seq;
     param.need_check_seq_ = need_check_seq;
@@ -3239,8 +3213,8 @@ int ObTabletGroupRestoreUtils::init_ha_tablets_builder(
     param.restore_base_info_ = restore_base_info;
     param.restore_action_ = restore_action;
     param.src_info_ = src_info;
-    param.storage_rpc_ = ls_service->get_storage_rpc();
-    param.svr_rpc_proxy_ = ls_service->get_storage_rpc_proxy();
+    param.ha_svc_ctx_.storage_rpc_ = ls_service->get_storage_rpc();
+    param.ha_svc_ctx_.svr_rpc_proxy_ = ls_service->get_storage_rpc_proxy();
     param.tenant_id_ = tenant_id;
     param.ha_table_info_mgr_ = ha_table_info_mgr;
 

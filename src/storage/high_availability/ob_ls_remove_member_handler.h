@@ -11,6 +11,7 @@
 #include "lib/container/ob_array.h"
 #include "share/ob_rpc_struct.h"
 #include "storage/ob_storage_rpc.h"
+#include "ob_storage_ha_struct.h"
 
 namespace oceanbase
 {
@@ -106,7 +107,7 @@ private:
 private:
   bool is_inited_;
   ObLS *ls_;
-  ObStorageRpc *storage_rpc_;
+  storage::ObStorageRpc *storage_rpc_;
   DISALLOW_COPY_AND_ASSIGN(ObLSRemoveMemberHandler);
 };
 

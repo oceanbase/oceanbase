@@ -7,9 +7,6 @@
 #include "ob_partition_merge_progress.h"
 #include "ob_tenant_compaction_progress.h"
 #include "storage/column_store/ob_co_merge_dag.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/compaction_v2/ob_ss_major_merge_ctx.h"
-#endif
 
 namespace oceanbase
 {
@@ -424,15 +421,8 @@ int ObCOMajorMergeProgress::finish_merge_progress()
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null ctx", K(ret), KPC_(ctx));
   } else if (typeid(*ctx_) != typeid(ObCOTabletMergeCtx)) {
-    if (!GCTX.is_shared_storage_mode()) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ctx has unexpected type", K(ret), KPC_(ctx));
-#ifdef OB_BUILD_SHARED_STORAGE
-    } else if (typeid(*ctx_) != typeid(ObSSCOTabletMergeCtx)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("ctx has unexpected type", K(ret), KPC_(ctx));
-#endif
-    }
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("ctx has unexpected type", K(ret), KPC_(ctx));
   }
 
   if (OB_SUCC(ret)) {

@@ -1012,12 +1012,6 @@ int ObBackupTabletStat::prepare_tablet_sstables(const uint64_t tenant_id, const 
     } else {
       const ObITable::TableKey &table_key = sstable_ptr->get_key();
       if (OB_SUCC(ret)) {
-        if (GCTX.is_shared_storage_mode() && sstable_ptr->is_ddl_dump_sstable()) {
-          ObBackupOtherBlocksMgr &other_block_mgr = stat->other_block_mgr_;
-          if (OB_FAIL(other_block_mgr.init(tenant_id, tablet_id, table_key, *sstable_ptr))) {
-            LOG_WARN("failed to init backup other blocks mgr", K(ret), K(tenant_id), K(tablet_id), K(table_key), KPC(sstable_ptr));
-          }
-        }
       }
     }
   }
@@ -2470,17 +2464,8 @@ int ObBackupTabletProvider::prepare_tablet_(const uint64_t tenant_id, const shar
         LOG_WARN("table should not be null", K(ret));
       } else {
         const ObITable::TableKey &table_key = sstable_ptr->get_key();
-        if (GCTX.is_shared_storage_mode() && table_key.is_ddl_dump_sstable()) {
-          if (OB_FAIL(fetch_ddl_macro_id_in_ss_mode_(tablet_id, tablet_ref->tablet_handle_, table_key, *sstable_ptr, total_count))) {
-            LOG_WARN("failed to fetch ddl macro id in ss mode", K(ret));
-          } else {
-            has_ss_ddl = true;
-            ss_ddl_table_key = table_key;
-          }
-        } else {
-          if (OB_FAIL(fetch_all_logic_macro_block_id_(tablet_id, tablet_ref->tablet_handle_, table_key, *sstable_ptr, total_count))) {
-            LOG_WARN("failed to fetch all logic macro block id", K(ret), K(tablet_id), KPC(tablet_ref), K(table_key));
-          }
+        if (OB_FAIL(fetch_all_logic_macro_block_id_(tablet_id, tablet_ref->tablet_handle_, table_key, *sstable_ptr, total_count))) {
+          LOG_WARN("failed to fetch all logic macro block id", K(ret), K(tablet_id), KPC(tablet_ref), K(table_key));
         }
       }
     }
@@ -2876,7 +2861,7 @@ int ObBackupTabletProvider::fetch_ddl_macro_id_in_ss_mode_(const common::ObTable
 {
   int ret = OB_SUCCESS;
   ObBackupOtherBlockIdIterator other_block_iter;
-  if (!GCTX.is_shared_storage_mode() && !table_key.is_ddl_dump_sstable()) {
+  if (!table_key.is_ddl_dump_sstable()) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table key is not ddl dump sstable", K(ret), K(table_key));
   } else if (OB_FAIL(other_block_iter.init(tablet_id, sstable))) {

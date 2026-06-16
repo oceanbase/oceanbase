@@ -11,7 +11,6 @@
 #include "storage/ls/ob_ls.h"
 #ifdef OB_BUILD_SHARED_STORAGE
 #include "meta_store/ob_shared_storage_obj_meta.h"
-#include "storage/high_availability/ob_ss_tablet_pointer_reader.h"
 #endif
 
 namespace oceanbase
@@ -839,16 +838,6 @@ int ObTenantStorageMetaService::read_from_sslog(
     int64_t &buf_len)
 {
   int ret = OB_SUCCESS;
-  ObSSTabletPointerReader ss_pointer_reader;
-
-  if (!addr.is_valid() || !addr.is_sslog()) {
-    ret = OB_INVALID_ARGUMENT;
-    STORAGE_LOG(WARN, "read from sslog get invalid argument", K(ret), K(addr));
-  } else if (OB_FAIL(ss_pointer_reader.init(addr))) {
-    STORAGE_LOG(WARN, "failed to init ss tablet pointer reader", K(ret), K(addr));
-  } else if (OB_FAIL(ss_pointer_reader.get_tablet_raw_buffer(allocator, buf, buf_len))) {
-    STORAGE_LOG(WARN, "failed to get tablet raw buffer", K(ret), K(addr));
-  }
   return ret;
 }
 

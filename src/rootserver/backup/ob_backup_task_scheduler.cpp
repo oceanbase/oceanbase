@@ -228,8 +228,9 @@ int ObBackupTaskSchedulerQueue::push_task_without_lock_(const ObBackupScheduleTa
         }
         if (nullptr != new_task) {
           new_task->~ObBackupScheduleTask();
+          task_allocator_.free(new_task);
           new_task = nullptr;
-        } 
+        }
       }
     }
   }
@@ -1145,56 +1146,6 @@ int ObBackupTaskSchedulerQueue::cancel_tasks(
   return ret;
 }
 
-int ObBackupTaskSchedulerQueue::cancel_tasks(
-    const BackupJobType &type, 
-    const uint64_t tenant_id) 
-{
-  ObMutexGuard guard(mutex_);
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("backup scheduler queue not inited", K(ret)); 
-  } else {
-    ObBackupScheduleTask *tmp_task = nullptr;
-    bool in_schedule = false;
-    DLIST_FOREACH_REMOVESAFE(t, wait_list_) {
-      if (nullptr == t) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("task is nullptr", K(ret), KPC(t));
-      } else if (t->get_type() == type && t->get_tenant_id() == tenant_id) {
-        in_schedule = false;
-        if (OB_FAIL(get_wait_task_(*t, tmp_task))) {
-          LOG_WARN("fail to get task from wait list", K(ret), KPC(t));
-        } else if (nullptr == tmp_task) {
-          ret = OB_ENTRY_NOT_EXIST;
-          LOG_WARN("task not in wait list", K(ret), KPC(t));
-        } else if (OB_FAIL(remove_task_(tmp_task, in_schedule))) {
-          LOG_WARN("remove task failed", K(ret), KPC(tmp_task));
-        }
-      }
-    }
-    DLIST_FOREACH_REMOVESAFE(t, schedule_list_) {
-      if (nullptr == t) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("task is nullptr", K(ret), KPC(t));
-      } else if (t->get_type() == type && t->get_tenant_id() == tenant_id) {
-        in_schedule = true;
-        if (OB_FAIL(get_schedule_task_(*t, tmp_task))) {
-          LOG_WARN("fail to get task from wait list", K(ret), KPC(t));
-        } else if (nullptr == tmp_task) {
-          ret = OB_ENTRY_NOT_EXIST;
-          LOG_WARN("task not in schedule list", K(ret), KPC(t));
-        } else if (OB_FAIL(t->cancel(*rpc_proxy_))) {
-          LOG_WARN("fail to cancel task in server", K(ret), KPC(t));
-        } else if(OB_FAIL(remove_task_(tmp_task, in_schedule))) {
-          LOG_WARN("remove task failed", K(ret), KPC(tmp_task));
-        }
-      }
-    }
-  }
-  return ret;
-}
-
 int ObBackupTaskSchedulerQueue::get_all_tasks(
     ObIAllocator &allocator, 
     ObIArray<ObBackupScheduleTask *> &tasks)
@@ -1227,35 +1178,6 @@ int ObBackupTaskSchedulerQueue::get_all_tasks(
         LOG_WARN("input task ptr is null", K(ret));
       } else if (OB_FAIL(tasks.push_back(task))) {
         LOG_WARN("push back fail", K(ret));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObBackupTaskSchedulerQueue::get_task_count(
-    const uint64_t tenant_id, const int64_t job_id,
-    const bool only_macro_block_task, int64_t &count)
-{
-  int ret = OB_SUCCESS;
-  count = 0;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("queue not init", K(ret));
-  } else {
-    ObMutexGuard guard(mutex_);
-    DLIST_FOREACH(t, schedule_list_) {
-      if (t->get_tenant_id() == tenant_id
-          && t->get_job_id() == job_id
-          && (!only_macro_block_task || t->is_macro_block_task())) {
-        count++;
-      }
-    }
-    DLIST_FOREACH(t, wait_list_) {
-      if (t->get_tenant_id() == tenant_id
-          && t->get_job_id() == job_id
-          && (!only_macro_block_task || t->is_macro_block_task())) {
-        count++;
       }
     }
   }
@@ -1791,20 +1713,6 @@ int ObBackupTaskScheduler::get_all_tasks(ObIAllocator &allocator, ObIArray<ObBac
   return ret;
 }
 
-int ObBackupTaskScheduler::get_task_count(
-    const uint64_t tenant_id, const int64_t job_id,
-    const bool only_macro_block_task, int64_t &count)
-{
-  int ret = OB_SUCCESS;
-  if (IS_NOT_INIT) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("not init", K(ret));
-  } else if (OB_FAIL(queue_.get_task_count(tenant_id, job_id, only_macro_block_task, count))) {
-    LOG_WARN("failed to get task count", K(ret), K(tenant_id), K(job_id));
-  }
-  return ret;
-}
-
 int ObBackupTaskScheduler::do_execute_(const ObBackupScheduleTask &task)
 {
   int ret = OB_SUCCESS;
@@ -1892,15 +1800,6 @@ int ObBackupTaskScheduler::cancel_tasks(const BackupJobType &type, const uint64_
   int ret = OB_SUCCESS;
 	if (OB_FAIL(queue_.cancel_tasks(type, job_id, tenant_id))) {
     LOG_WARN("remove task group failed", K(ret), K(job_id), K(tenant_id));
-  } 
-  return ret;
-}
-
-int ObBackupTaskScheduler::cancel_tasks(const BackupJobType &type, const uint64_t tenant_id)
-{
-  int ret = OB_SUCCESS;
-	if (OB_FAIL(queue_.cancel_tasks(type, tenant_id))) {
-    LOG_WARN("remove task group failed", K(ret), K(tenant_id));
   } 
   return ret;
 }

@@ -22,11 +22,10 @@
 #include "observer/ob_inner_sql_connection.h"
 #include "ob_transfer_struct.h"
 #include "ob_transfer_backfill_tx.h"
-#ifdef OB_BUILD_SHARED_STORAGE
-#include "storage/high_availability/ob_ss_transfer_backfill_tx.h"
-#endif
+#include "ob_transfer_diag_ctx.h"
 #include "lib/thread/thread_mgr_interface.h"
 #include "logservice/ob_log_base_type.h"
+#include "share/storage/ob_ha_inflight_diag.h"
 #include "share/ob_storage_ha_diagnose_struct.h"
 
 namespace oceanbase
@@ -70,36 +69,11 @@ public:
       const share::SCN &start_scn);
   int get_related_info_task_id(share::ObTransferTaskID &task_id) const;
   int reset_related_info(const share::ObTransferTaskID &task_id);
-  int record_error_diagnose_info_in_replay(
-      const share::ObTransferTaskID &task_id,
-      const share::ObLSID &dest_ls_id,
-      const int result_code,
-      const bool clean_related_info,
-      const share::ObStorageHADiagTaskType type,
-      const share::ObStorageHACostItemName result_msg);
-  int record_error_diagnose_info_in_backfill(
-      const share::SCN &log_sync_scn,
-      const share::ObLSID &dest_ls_id,
-      const int result_code,
-      const ObTabletID &tablet_id,
-      const ObMigrationStatus &migration_status,
-      const share::ObStorageHACostItemName result_msg);
   void reset_related_info();
-  int record_perf_diagnose_info_in_replay(
-      const share::ObStorageHAPerfDiagParams &params,
-      const int result,
-      const uint64_t timestamp,
-      const int64_t start_ts,
-      const bool is_report);
-  int record_perf_diagnose_info_in_backfill(
-      const share::ObStorageHAPerfDiagParams &params,
-      const share::SCN &log_sync_scn,
-      const int result_code,
-      const ObMigrationStatus &migration_status,
-      const uint64_t timestamp,
-      const int64_t start_ts,
-      const bool is_report);
   void wakeup_thread_cond();
+
+  // Read-only access to the inflight diagnostic state. Takes rlock internally.
+  void peek_inflight_diag(share::ObHAInflightDiagState &state) const { diag_ctx_.peek(state); }
 private:
   int get_transfer_task_(share::ObTransferTaskInfo &task_info);
   int get_transfer_task_from_inner_table_(
@@ -121,16 +95,13 @@ private:
   int do_leader_transfer_();
   int do_worker_transfer_();
   int get_transfer_task_();
-  int block_and_kill_all_tx_if_need_(const share::ObTransferTaskInfo &task_info);
   int do_with_start_status_(const share::ObTransferTaskInfo &task_info);
   int do_with_doing_status_(const share::ObTransferTaskInfo &task_info);
   int do_with_aborted_status_(const share::ObTransferTaskInfo &task_info);
   int init_transfer_ls_info_(const share::ObTransferTaskInfo &task_info);
   int check_self_is_leader_(bool &is_leader);
   int lock_src_and_dest_ls_member_and_learner_list_(
-      const share::ObTransferTaskInfo &task_info,
-      const share::ObLSID &src_ls_id,
-      const share::ObLSID &dest_ls);
+      const share::ObTransferTaskInfo &task_info);
   int unlock_src_and_dest_ls_member_and_learner_list_(
       const share::ObTransferTaskInfo &task_info,
       const bool need_check_palf_leader,
@@ -144,7 +115,6 @@ private:
       const ObTransferLockStatus &status,
       const bool need_check_palf_leader,
       const share::ObLSID &need_check_palf_leader_ls_id);
-  int insert_lock_info_(const share::ObTransferTaskInfo &task_info);
   int check_ls_member_list_and_learner_list_same_(
       const share::ObLSID &src_ls_id,
       const share::ObLSID &dest_ls,
@@ -152,7 +122,7 @@ private:
       common::GlobalLearnerList &learner_list,
       const bool need_check_learner_list,
       bool &is_same);
- int check_src_ls_has_active_trans_(
+  int check_src_ls_has_active_trans_(
       const share::ObLSID &src_ls_id,
       const int64_t expected_active_trans_count = 0);
   int get_ls_active_trans_count_(
@@ -310,17 +280,9 @@ private:
       const uint64_t tenant_id,
       const share::ObLSID &ls_id,
       const share::SCN &gts);
-  int get_gts_(
-      const uint64_t tenant_id,
-      const share::ObLSID &ls_id);
   int record_server_event_(const int32_t ret, const int64_t round, const share::ObTransferTaskInfo &task_info) const;
   int clear_prohibit_medium_flag_(const ObIArray<ObTabletID> &tablet_ids);
   int stop_tablets_schedule_medium_(const ObIArray<ObTabletID> &tablet_ids, bool &succ_stop);
-  int get_next_tablet_info_(
-      const share::ObTransferTaskInfo &task_info,
-      const ObTransferTabletInfo &transfer_tablet_info,
-      ObTabletHandle &tablet_handle,
-      obrpc::ObCopyTabletInfo &tablet_info);
   int clear_prohibit_(
       const share::ObTransferTaskInfo &task_info,
       const ObIArray<ObTabletID> &tablet_ids,
@@ -351,10 +313,6 @@ private:
       const share::ObTransferTaskInfo &task_info,
       const share::SCN &start_scn,
       ObLSTransferMetaInfo &transfer_meta_info);
-  int get_dest_ls_max_decided_scn_(
-      const share::ObTransferTaskInfo &task_info,
-      ObTimeoutCtx &timeout_ctx,
-      share::SCN &dest_decided_scn);
   int get_ls_max_decided_scn_(
       const share::ObLSID &ls_id,
       ObTimeoutCtx &timeout_ctx,
@@ -369,12 +327,6 @@ private:
       ObTimeoutCtx &timeout_ctx,
       common::ObIArray<ObAddr> &finished_addr_list);
   int broadcast_tablet_location_(const share::ObTransferTaskInfo &task_info);
-  void process_perf_diagnose_info_(
-      const ObStorageHACostItemName name,
-      const ObStorageHADiagTaskType task_type,
-      const int64_t start_ts,
-      const int64_t round, const bool is_report) const;
-  int do_clean_diagnose_info_();
   int inner_do_with_abort_status_(const share::ObTransferTaskInfo &task_info);
 
   int register_move_tx_ctx_batch_(const share::ObTransferTaskInfo &task_info,
@@ -411,17 +363,6 @@ private:
       const share::ObTransferTaskInfo &task_info,
       ObTimeoutCtx &timeout_ctx);
 
-#ifdef OB_BUILD_SHARED_STORAGE
-  int set_reorg_info_table_(
-      const share::ObTransferTaskInfo &task_info,
-      const share::SCN &start_scn,
-      common::ObMySQLTransaction &trans);
-  int set_reorg_info_table_data_(
-      const share::ObTransferTaskInfo &task_info,
-      const share::SCN &start_scn,
-      const ObTabletStatus &tablet_status,
-      common::ObMySQLTransaction &trans);
-#endif
 
 private:
   static const int64_t INTERVAL_US = 1 * 1000 * 1000; //1s
@@ -430,27 +371,30 @@ private:
 private:
   bool is_inited_;
   ObLS *ls_;
-  common::ObInOutBandwidthThrottle *bandwidth_throttle_;
-  obrpc::ObStorageRpcProxy *svr_rpc_proxy_;
-  storage::ObStorageRpc *storage_rpc_;
-  common::ObMySQLProxy *sql_proxy_;
+  ObStorageHAServiceCtx ha_svc_ctx_;
 
-  int64_t retry_count_;
   // TODO(jyx441808): use one base transfer worker mgr class
   ObTransferWorkerMgr transfer_worker_mgr_;
-#ifdef OB_BUILD_SHARED_STORAGE
-  ObSSTransferWorkerMgr ss_transfer_worker_mgr_;
-#endif
   int64_t round_;
   share::SCN gts_seq_;
   ObTransferRelatedInfo related_info_;
   ObTransferTaskInfo task_info_;
-  share::ObStorageHACostItemName diagnose_result_msg_;
   common::SpinRWLock transfer_handler_lock_;
   bool transfer_handler_enabled_;
   ObTransferBuildTabletInfoCtx ctx_;
   common::ObThreadCond cond_;
   ObTransferLSInfo ls_transfer_info_;
+  ObTransferDiagCtx diag_ctx_;
+
+public:
+  // Submit a batch of diagnostic steps collected at an external call site
+  // (backfill dag, replay helper, ObTxFinishTransfer's doing path) into
+  // this LS's diag ctx. See ObTransferDiagCtx::merge_external_state for
+  // semantics.
+  int merge_external_diag(
+      const share::ObTransferTaskID &task_id,
+      const share::ObHAInflightDiagState &local)
+  { return diag_ctx_.merge_external_state(task_id, local); }
 
   DISALLOW_COPY_AND_ASSIGN(ObTransferHandler);
 };

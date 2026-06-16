@@ -13,6 +13,7 @@
 #include "storage/backup/ob_backup_sstable_sec_meta_iterator.h"
 #include "storage/backup/ob_backup_data_store.h"
 #include "storage/high_availability/ob_storage_ha_utils.h"
+#include "storage/high_availability/ob_storage_ha_dag.h"
 #include "share/backup/ob_backup_path.h"
 #include "share/backup/ob_backup_validate_struct.h"
 #include "share/backup/ob_backup_struct.h"
@@ -1125,17 +1126,9 @@ int ObBackupValidateBackupSetPhysicalTask::generate_tablet_finish_task_(
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("dag type is not backup validate dag", KR(ret), K(dag->get_type()));
     } else if (FALSE_IT(base_dag = static_cast<ObBackupValidateBaseDag *>(dag))) {
-    } else if (OB_FAIL(base_dag->alloc_task(tablet_finish_task))) {
-      LOG_WARN("failed to alloc tablet finish task", KR(ret));
-    } else if (OB_ISNULL(tablet_finish_task)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("tablet finish task is null", KR(ret), KP(tablet_finish_task));
-    } else if (OB_FAIL(tablet_finish_task->init(*base_dag, task_id_))) {
-      LOG_WARN("failed to init tablet finish task", KR(ret));
-    } else if (OB_FAIL(this->add_child(*tablet_finish_task))) {
-      LOG_WARN("failed to add tablet finish task as child of this task", KR(ret));
-    } else if (OB_FAIL(base_dag->add_task(*tablet_finish_task))) {
-      LOG_WARN("failed to add tablet finish task to dag", KR(ret));
+    } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_add_task(
+                   base_dag, this/*parent*/, nullptr, tablet_finish_task, *base_dag, task_id_))) {
+      LOG_WARN("failed to alloc and add tablet finish task", KR(ret));
     }
   }
   return ret;
@@ -1399,19 +1392,14 @@ int ObBackupValidateBackupSetPhysicalTask::generate_sstable_validate_task_(
     } else {
       ObBackupValidateSSTableTask *sstable_task = nullptr;
       const int64_t first_sstable_index = 0;
-      if (OB_FAIL(base_dag->alloc_task(sstable_task))) {
-        LOG_WARN("failed to alloc sstable task", KR(ret));
-      } else if (OB_ISNULL(sstable_task)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("sstable task is null", KR(ret), KP(sstable_task));
-      } else if (OB_FAIL(sstable_task->init(*base_dag, first_sstable_index, backup_set_info_,
-                                      tablet_param, meta_index_store_, tablet_finish_task))) {
-        LOG_WARN("failed to init sstable task", KR(ret), K(first_sstable_index), K(tablet_param),
+      if (OB_FAIL(ObStorageHADagUtils::alloc_and_add_single_task(
+              base_dag, sstable_task,
+              *base_dag, first_sstable_index, backup_set_info_,
+              tablet_param, meta_index_store_, tablet_finish_task))) {
+        LOG_WARN("failed to alloc and add sstable task", KR(ret), K(first_sstable_index), K(tablet_param),
                     KP(meta_index_store_), KP(tablet_finish_task));
       } else if (OB_FAIL(sstable_task->add_child(*tablet_finish_task, check_child_task_status))) {
         LOG_WARN("failed to add tablet finish task as child of sstable task", KR(ret));
-      } else if (OB_FAIL(base_dag->add_task(*sstable_task))) {
-        LOG_WARN("failed to add sstable task to dag", KR(ret));
       }
     }
   }
@@ -1756,37 +1744,31 @@ int ObBackupValidateSSTableTask::generate_validate_macro_block_task_()
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("dag type is not backup validate dag", KR(ret), K(dag->get_type()));
     } else if (FALSE_IT(base_dag = static_cast<ObBackupValidateBaseDag*>(dag))) {
-    } else if (OB_FAIL(base_dag->alloc_task(macro_task_finish_task))) {
-      LOG_WARN("failed to alloc macro task finish task", KR(ret));
-    } else if (OB_ISNULL(macro_task_finish_task)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("macro task finish task is null", KR(ret), KP(macro_task_finish_task));
-    } else if (OB_FAIL(macro_task_finish_task->init(*base_dag, sstable_meta_, tablet_param_, backup_set_info_,
-                                                        *meta_index_store_, tablet_finish_task_))) {
-      LOG_WARN("failed to init macro task finish task", KR(ret), K(sstable_meta_), K(tablet_param_), K(backup_set_info_),
-                  K_(meta_index_store), K_(backup_dest), K_(param), KP(tablet_finish_task_));
+    } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_add_task(
+                   base_dag, this/*parent*/, nullptr/*child*/, macro_task_finish_task,
+                   *base_dag, sstable_meta_, tablet_param_, backup_set_info_,
+                   *meta_index_store_, tablet_finish_task_))) {
+      LOG_WARN("failed to alloc and add macro task finish task", KR(ret), K(sstable_meta_), K(tablet_param_),
+                  K(backup_set_info_), K_(meta_index_store), K_(backup_dest), K_(param), KP(tablet_finish_task_));
     } else {
       ObArray<backup::ObBackupMacroBlockIndex> macro_index_array;
       bool check_child_task_status = false;
-      if (OB_FAIL(base_dag->alloc_task(macro_task))) {
-        LOG_WARN("failed to alloc macro task", KR(ret));
-      } else if (OB_ISNULL(macro_task)) {
-        ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("macro task is null", KR(ret), KP(macro_task));
-      } else if (OB_FAIL(macro_task_finish_task->get_next_bacth_macro_index_array(macro_index_array))) {
+      if (OB_FAIL(macro_task_finish_task->get_next_bacth_macro_index_array(macro_index_array))) {
         LOG_WARN("failed to get next batch macro index array", KR(ret));
-      } else if (OB_FAIL(macro_task->init(*base_dag, sstable_meta_, backup_set_info_,
-                                              macro_index_array, macro_task_finish_task, tablet_finish_task_))) {
-        LOG_WARN("failed to init macro task", KR(ret), K(sstable_meta_),
+      } else if (OB_FAIL(ObStorageHADagUtils::alloc_and_add_task(
+                     base_dag, nullptr/*parent*/, nullptr/*child*/, macro_task,
+                     *base_dag, sstable_meta_, backup_set_info_,
+                     macro_index_array, macro_task_finish_task, tablet_finish_task_))) {
+        LOG_WARN("failed to alloc and add macro task", KR(ret), K(sstable_meta_),
                     K(backup_set_info_), K(macro_index_array), KP(macro_task_finish_task));
+      // macro_task_finish_task was added to the dag (status WAITING) by
+      // alloc_and_add_single_task above, so add_child's default INITING-status
+      // check would fail. Skip it; we rely on the caller ordering to ensure the
+      // child hasn't been scheduled yet.
+      } else if (OB_FAIL(macro_task->add_child(*macro_task_finish_task, check_child_task_status))) {
+        LOG_WARN("failed to link macro_task -> macro_task_finish_task", KR(ret), KP(macro_task_finish_task));
       } else if (OB_FAIL(macro_task_finish_task->add_child(*tablet_finish_task_, check_child_task_status))) {
         LOG_WARN("failed to add tablet finish task", KR(ret), KP(tablet_finish_task_));
-      } else if (OB_FAIL(macro_task->add_child(*macro_task_finish_task))) {
-        LOG_WARN("failed to add macro task finish task", KR(ret), KP(macro_task_finish_task));
-      } else if (OB_FAIL(base_dag->add_task(*macro_task))) {
-        LOG_WARN("failed to add macro task to dag", KR(ret));
-      } else if (OB_FAIL(base_dag->add_task(*macro_task_finish_task))) {
-        LOG_WARN("failed to add macro task finish task to dag", KR(ret));
       }
     }
   }

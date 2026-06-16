@@ -30,7 +30,10 @@
  * Statistics Verified:
  *   - macro_cnt[OP_FILTER]: Macros filtered at block level
  *   - macro_cnt[OP_NONE]: Macros reused without opening
- *   - micro_cnt[*]: Always 0 for mini/minor sstables (not tracked)
+ *   - macro_cnt[OP_OPEN]: Macros opened for row-level processing
+ *   - micro_cnt[OP_FILTER]: Micros filtered at block level (MICRO_BLOCK_MERGE_LEVEL only)
+ *   - micro_cnt[OP_NONE]: Micros reused without opening (MICRO_BLOCK_MERGE_LEVEL only)
+ *   - micro_cnt[OP_OPEN]: Micros opened for row-level processing (MICRO_BLOCK_MERGE_LEVEL only)
  *   - filter_block_row_cnt: Rows filtered at block level (macro/micro)
  *   - row_cnt[FILTER_RET_REMOVE]: Rows filtered at row level (after opening block)
  *
@@ -85,7 +88,7 @@ using namespace transaction;
 namespace storage
 {
 
-class TestMultiVersionMergeRecycle : public TestMergeBasic
+class TestMultiVersionMergeRecycle : public TestMergeBasic, public ::testing::WithParamInterface<ObMergeLevel>
 {
 public:
   TestMultiVersionMergeRecycle();
@@ -98,10 +101,12 @@ public:
   void prepare_merge_context(const ObMergeType &merge_type,
                              const bool is_full_merge,
                              const ObVersionRange &trans_version_range,
-                             ObTabletExeMergeCtx &merge_context)
+                             ObTabletExeMergeCtx &merge_context,
+                             const ObMergeLevel merge_level = MICRO_BLOCK_MERGE_LEVEL)
   {
     TestMergeBasic::prepare_merge_context(
       merge_type, is_full_merge, trans_version_range, &merge_dag_, merge_context, false/*is_delete_insert_merge*/);
+    merge_context.static_param_.merge_level_ = merge_level;
   }
   int64_t schema_rowkey_cnt_;
   ObTabletMergeExecuteDag merge_dag_;
@@ -160,59 +165,73 @@ void TestMultiVersionMergeRecycle::TearDown()
  *   - SSTable2-Macro1: OP_FILTER (max_version=8 <= 9, all rows recyclable)
  *   - SSTable2-Macro2: OP_NONE (max_version=10 > 9, reuse without opening)
  *
- * Expected Statistics:
+ * Expected Statistics (MACRO_BLOCK_MERGE_LEVEL):
  *   - macro_cnt[OP_FILTER]=2 (2 macros filtered at block level)
  *   - macro_cnt[OP_NONE]=2 (2 macros reused without opening)
- *   - micro_cnt[*]=0 (mini/minor sstable doesn't count micro stats)
  *   - filter_block_row_cnt=5 (rows filtered at block level: 2+3=5)
  *   - row_cnt[REMOVE]=0 (no row-level filtering needed)
+ *
+ * Expected Statistics (MICRO_BLOCK_MERGE_LEVEL):
+ *   - macro_cnt[OP_FILTER]=2, micro_cnt[OP_FILTER]=2 (2 micros filtered)
+ *   - macro_cnt[OP_NONE]=2, micro_cnt[OP_NONE]=2 (2 micros reused)
+ *   - filter_block_row_cnt=5 (rows filtered at micro-block level: 2+3=5)
+ *   - row_cnt[REMOVE]=0 (no row-level filtering needed)
  */
-TEST_F(TestMultiVersionMergeRecycle, recycle_macro)
+TEST_P(TestMultiVersionMergeRecycle, recycle_macro)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
   ObTabletExeMergeCtx merge_context(param, allocator_);
   ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
   ObScnRange scn_range;
+  ObMergeLevel merge_level = GetParam();
 
   ObTableHandleV2 handle1;
   const char *micro_data[2];
-  micro_data[0] = // MACRO: OP_FILTER
+  micro_data[0] = // FILTER
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
-      "0        var1  -6       0        NOP      1    EXIST   LF\n"
+      "0        var0  -6       0        NOP      1    EXIST   LF\n"
       "1        var1  -6       0        2        2    EXIST   CLF\n";
 
-  micro_data[1] = // MACRO: OP_NONE
+  micro_data[1] = // NONE
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
-      "2        var1  -10       0        3       NOP   EXIST   LF\n";
+      "2        var2  -10       0        3       NOP   EXIST   LF\n";
 
   const int64_t snapshot_version = 10;
   PREPARE_SCN_RANGE(1, snapshot_version);
   prepare_table_schema(micro_data, schema_rowkey_cnt_, scn_range, snapshot_version);
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data, 1);
-  prepare_one_macro(&micro_data[1], 1);
+  if (merge_level == MICRO_BLOCK_MERGE_LEVEL) {
+    prepare_one_macro(micro_data, 2);
+  } else {
+    prepare_one_macro(micro_data, 1);
+    prepare_one_macro(&micro_data[1], 1);
+  }
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
   const char *micro_data2[2];
-  micro_data2[0] = // MACRO: OP_FILTER
+  micro_data2[0] = // FILTER
       "bigint   var   bigint   bigint   bigint bigint  flag    multi_version_row_flag\n"
       "3        var3  -8       MIN        2     12    EXIST   SCF\n"
       "3        var3  -8       0          NOP   12    EXIST   N\n"
-      "3        var3  -6       0          2     2    EXIST   CL\n";
+      "3        var3  -6       0          2     2     EXIST   CL\n";
 
-  micro_data2[1] = // MACRO: OP_NONE
+  micro_data2[1] = // NONE
       "bigint   var   bigint   bigint   bigint bigint  flag    multi_version_row_flag\n"
       "5        var5  -10       0        NOP     13    EXIST   LF\n";
 
   const int64_t snapshot_version_2 = 30;
   PREPARE_SCN_RANGE(snapshot_version, snapshot_version_2);
   reset_writer(snapshot_version_2);
-  prepare_one_macro(micro_data2, 1);
-  prepare_one_macro(&micro_data2[1], 1);
+  if (merge_level == MICRO_BLOCK_MERGE_LEVEL) {
+    prepare_one_macro(micro_data2, 2);
+  } else {
+    prepare_one_macro(micro_data2, 1);
+    prepare_one_macro(&micro_data2[1], 1);
+  }
   prepare_data_end(handle2);
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
@@ -222,7 +241,7 @@ TEST_F(TestMultiVersionMergeRecycle, recycle_macro)
   trans_version_range.multi_version_start_ = 10;
   trans_version_range.base_version_ = 9;
 
-  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context);
+  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context, merge_level);
   // minor mrege
   ObSSTable *merged_sstable = nullptr;
   ASSERT_EQ(OB_SUCCESS, merger.merge_partition(merge_context, 0));
@@ -230,7 +249,7 @@ TEST_F(TestMultiVersionMergeRecycle, recycle_macro)
 
   const char *result1 =
       "bigint   var   bigint   bigint   bigint  bigint  flag    multi_version_row_flag\n"
-      "2        var1  -10       0        3       NOP   EXIST   LF\n"
+      "2        var2  -10       0        3       NOP   EXIST   LF\n"
       "5        var5  -10       0        NOP     13    EXIST   LF\n";
 
   ObMockIterator res_iter;
@@ -249,8 +268,13 @@ TEST_F(TestMultiVersionMergeRecycle, recycle_macro)
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
   const ObICompactionFilter::ObFilterStatistics &filter_statistics = merge_context.filter_ctx_.filter_statistics_;
-  ASSERT_EQ(2, filter_statistics.macro_cnt_[ObBlockOp::OP_FILTER]);
-  ASSERT_EQ(2, filter_statistics.macro_cnt_[ObBlockOp::OP_NONE]);
+  if (merge_level == MICRO_BLOCK_MERGE_LEVEL) {
+    ASSERT_EQ(2, filter_statistics.micro_cnt_[ObBlockOp::OP_FILTER]);
+    ASSERT_EQ(2, filter_statistics.micro_cnt_[ObBlockOp::OP_NONE]);
+  } else {
+    ASSERT_EQ(2, filter_statistics.macro_cnt_[ObBlockOp::OP_FILTER]);
+    ASSERT_EQ(2, filter_statistics.macro_cnt_[ObBlockOp::OP_NONE]);
+  }
   ASSERT_EQ(5, filter_statistics.filter_block_row_cnt_);
   ASSERT_EQ(0, filter_statistics.row_cnt_[ObICompactionFilter::FILTER_RET_REMOVE]);
   scanner->~ObStoreRowIterator();
@@ -278,29 +302,35 @@ TEST_F(TestMultiVersionMergeRecycle, recycle_macro)
  *   - SSTable2-Macro1: OP_FILTER (max_version=8 <= 9)
  *   - SSTable2-Macro2: OP_NONE (max_version=10 > 9)
  *
- * Expected Statistics:
- *   - macro_cnt[OP_FILTER]=2, macro_cnt[OP_NONE]=1
- *   - micro_cnt[*]=0 (not counted in mini/minor sstable)
- *   - filter_block_row_cnt=3 (SSTable1-Macro2 + SSTable2-Macro1)
- *   - row_cnt[REMOVE]=2 (rowkey=2 v-8 + partial rows of rowkey=1)
+ * Expected Statistics (MACRO_BLOCK_MERGE_LEVEL):
+ *   - macro_cnt[OP_FILTER]=1, macro_cnt[OP_NONE]=1, macro_cnt[OP_OPEN]=2
+ *   - filter_block_row_cnt=3 (SSTable2-Macro1: 3 rows)
+ *   - row_cnt[REMOVE]=2 (rowkey=2 v-8: 1 row + rowkey=3 v-4: 1 row)
+ *
+ * Expected Statistics (MICRO_BLOCK_MERGE_LEVEL):
+ *   - macro_cnt[OP_FILTER]=1, macro_cnt[OP_NONE]=1, macro_cnt[OP_OPEN]=2
+ *   - micro_cnt[OP_FILTER]=1, micro_cnt[OP_NONE]=1, micro_cnt[OP_OPEN]=2
+ *   - filter_block_row_cnt=3 (SSTable2-Macro1's micro-block: 3 rows)
+ *   - row_cnt[REMOVE]=2 (rowkey=2 v-8: 1 row + rowkey=3 v-4: 1 row)
  */
-TEST_F(TestMultiVersionMergeRecycle, recycle_after_reuse)
+TEST_P(TestMultiVersionMergeRecycle, recycle_after_reuse)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
   ObTabletExeMergeCtx merge_context(param, allocator_);
   ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
   ObScnRange scn_range;
+  ObMergeLevel merge_level = GetParam();
 
   ObTableHandleV2 handle1;
   const char *micro_data[2];
-  micro_data[0] = // MACRO: OP_NONE
+  micro_data[0] = // NONE
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
       "0        var0  -15       0        NOP      1    EXIST   LF\n"
       "1        var1  -15       MIN      12       2    EXIST  SCF\n"
       "1        var1  -15       0        12       NOP  EXIST  N\n";
 
-  micro_data[1] = // MACRO: OP_OPEN
+  micro_data[1] = // OPEN
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
       "1        var1  -7        0        2       2    EXIST   CL\n"
       "2        var2  -8        0        3       NOP   EXIST   LF\n";
@@ -309,21 +339,25 @@ TEST_F(TestMultiVersionMergeRecycle, recycle_after_reuse)
   PREPARE_SCN_RANGE(1, snapshot_version);
   prepare_table_schema(micro_data, schema_rowkey_cnt_, scn_range, snapshot_version);
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data, 1);
-  prepare_one_macro(&micro_data[1], 1);
+  if (merge_level == MICRO_BLOCK_MERGE_LEVEL) {
+    prepare_one_macro(micro_data, 2);
+  } else {
+    prepare_one_macro(micro_data, 1);
+    prepare_one_macro(&micro_data[1], 1);
+  }
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
   const char *micro_data2[2];
-  micro_data2[0] = // MACRO: OP_FILTER
+  micro_data2[0] = // FILTER
       "bigint   var   bigint   bigint   bigint bigint  flag    multi_version_row_flag\n"
       "3        var3  -8       MIN        12     12    EXIST   SCF\n"
       "3        var3  -8       0          NOP   12    EXIST   N\n"
       "3        var3  -6       0          12    NOP    EXIST  N\n";
 
-  micro_data2[1] = // MACRO: OP_OPEN
+  micro_data2[1] = // OPEN
       "bigint   var   bigint   bigint   bigint bigint  flag    multi_version_row_flag\n"
       "3        var3  -4       0          2    2      EXIST  CL\n"
       "5        var5  -10      0        NOP    13    EXIST   LF\n";
@@ -331,8 +365,12 @@ TEST_F(TestMultiVersionMergeRecycle, recycle_after_reuse)
   const int64_t snapshot_version_2 = 30;
   PREPARE_SCN_RANGE(snapshot_version, snapshot_version_2);
   reset_writer(snapshot_version_2);
-  prepare_one_macro(micro_data2, 1);
-  prepare_one_macro(&micro_data2[1], 1);
+  if (merge_level == MICRO_BLOCK_MERGE_LEVEL) {
+    prepare_one_macro(micro_data2, 2);
+  } else {
+    prepare_one_macro(micro_data2, 1);
+    prepare_one_macro(&micro_data2[1], 1);
+  }
   prepare_data_end(handle2);
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
@@ -342,7 +380,7 @@ TEST_F(TestMultiVersionMergeRecycle, recycle_after_reuse)
   trans_version_range.multi_version_start_ = 10;
   trans_version_range.base_version_ = 9;
 
-  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context);
+  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context, merge_level);
   // minor mrege
   ObSSTable *merged_sstable = nullptr;
   ASSERT_EQ(OB_SUCCESS, merger.merge_partition(merge_context, 0));
@@ -372,11 +410,24 @@ TEST_F(TestMultiVersionMergeRecycle, recycle_after_reuse)
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
   const ObICompactionFilter::ObFilterStatistics &filter_statistics = merge_context.filter_ctx_.filter_statistics_;
-  ASSERT_EQ(1, filter_statistics.macro_cnt_[ObBlockOp::OP_FILTER]);
-  ASSERT_EQ(1, filter_statistics.macro_cnt_[ObBlockOp::OP_NONE]);
-  ASSERT_EQ(2, filter_statistics.macro_cnt_[ObBlockOp::OP_OPEN]);
-  ASSERT_EQ(3, filter_statistics.filter_block_row_cnt_);
-  ASSERT_EQ(2, filter_statistics.row_cnt_[ObICompactionFilter::FILTER_RET_REMOVE]);
+  if (merge_level == MICRO_BLOCK_MERGE_LEVEL) {
+    // At micro-block level, more rows can be filtered directly via micro-block filtering
+    ASSERT_EQ(1, filter_statistics.micro_cnt_[ObBlockOp::OP_FILTER]);
+    ASSERT_EQ(1, filter_statistics.micro_cnt_[ObBlockOp::OP_NONE]);
+    ASSERT_EQ(2, filter_statistics.micro_cnt_[ObBlockOp::OP_OPEN]);
+    // SSTable2-Macro1's micro-block (3 rows) can be filtered at micro-block level
+    ASSERT_EQ(3, filter_statistics.filter_block_row_cnt_);
+    // Only row-level filtering: rowkey=2 v-8 (1 row) + rowkey=3 v-4 (1 row)
+    ASSERT_EQ(2, filter_statistics.row_cnt_[ObICompactionFilter::FILTER_RET_REMOVE]);
+  } else {
+    // At macro-block level, SSTable2-Macro1 (3 rows) filtered at block level
+    ASSERT_EQ(1, filter_statistics.macro_cnt_[ObBlockOp::OP_FILTER]);
+    ASSERT_EQ(1, filter_statistics.macro_cnt_[ObBlockOp::OP_NONE]);
+    ASSERT_EQ(2, filter_statistics.macro_cnt_[ObBlockOp::OP_OPEN]);
+    ASSERT_EQ(3, filter_statistics.filter_block_row_cnt_);
+    // Row-level filtering: rowkey=2 v-8 (1 row) + rowkey=3 v-4 (1 row)
+    ASSERT_EQ(2, filter_statistics.row_cnt_[ObICompactionFilter::FILTER_RET_REMOVE]);
+  }
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -402,29 +453,33 @@ TEST_F(TestMultiVersionMergeRecycle, recycle_after_reuse)
  *   - SSTable2-Macro1: OP_FILTER (although has v-15, v-8<=9 rows need filtering)
  *   - SSTable2-Macro2: OP_FILTER (max_version=6 <= 9)
  *
- * Expected Statistics:
- *   - macro_cnt[OP_FILTER]=2, macro_cnt[OP_NONE]=1
- *   - micro_cnt[*]=0 (not counted in mini/minor sstable)
- *   - filter_block_row_cnt=1 (SSTable2-Macro2 with 2 rows)
- *   - row_cnt[REMOVE]=6 (SSTable1-Macro1: 4 rows + SSTable2-Macro1: 2 rows)
+ * Expected Statistics (both MACRO and MICRO levels):
+ *   - macro_cnt[OP_FILTER]=2 (SSTable1-Macro1: 3 rows + SSTable2-Macro2: 2 rows)
+ *   - macro_cnt[OP_NONE]=0, macro_cnt[OP_OPEN]=1 (SSTable2-Macro1)
+ *   - filter_block_row_cnt=5 (SSTable1-Macro1: 3 rows + SSTable2-Macro2: 2 rows)
+ *   - row_cnt[REMOVE]=1 (SSTable2-Macro1: rowkey=3 v-8)
+ *
+ * For MICRO_BLOCK_MERGE_LEVEL:
+ *   - micro_cnt[OP_FILTER]=2, micro_cnt[OP_NONE]=1, micro_cnt[OP_OPEN]=1
  */
-TEST_F(TestMultiVersionMergeRecycle, reuse_after_recycle)
+TEST_P(TestMultiVersionMergeRecycle, reuse_after_recycle)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
   ObTabletExeMergeCtx merge_context(param, allocator_);
   ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
   ObScnRange scn_range;
+  ObMergeLevel merge_level = GetParam();
 
   ObTableHandleV2 handle1;
   const char *micro_data[2];
-  micro_data[0] =
+  micro_data[0] = // FILTER
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
       "0        var0  -8       0        NOP      1    EXIST   LF\n"
       "1        var1  -8       MIN      12       2    EXIST   SCF\n"
       "1        var1  -8       0        12       NOP  EXIST   N\n";
 
-  micro_data[1] =
+  micro_data[1] = // OPEN
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
       "1        var1  -7        0        2       2     EXIST   CL\n"
       "2        var2  -15       0        3       NOP   EXIST   LF\n";
@@ -433,21 +488,25 @@ TEST_F(TestMultiVersionMergeRecycle, reuse_after_recycle)
   PREPARE_SCN_RANGE(1, snapshot_version);
   prepare_table_schema(micro_data, schema_rowkey_cnt_, scn_range, snapshot_version);
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data, 1);
-  prepare_one_macro(&micro_data[1], 1);
+  if (merge_level == MICRO_BLOCK_MERGE_LEVEL) {
+    prepare_one_macro(micro_data, 2);
+  } else {
+    prepare_one_macro(micro_data, 1);
+    prepare_one_macro(&micro_data[1], 1);
+  }
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
   const char *micro_data2[2];
-  micro_data2[0] =
+  micro_data2[0] = // OPEN
       "bigint   var   bigint   bigint   bigint bigint  flag    multi_version_row_flag\n"
       "3        var3  -15      MIN       12    12     EXIST   SCF\n"
       "3        var3  -15      0         NOP   12     EXIST   N\n"
       "3        var3  -8       0         12    NOP    EXIST   L\n";
 
-  micro_data2[1] =
+  micro_data2[1] = // FILTER
       "bigint   var   bigint   bigint   bigint bigint  flag    multi_version_row_flag\n"
       "4        var4  -4       0         2      2     EXIST   CLF\n"
       "5        var5  -6       0         NOP    13    EXIST   LF\n";
@@ -455,8 +514,12 @@ TEST_F(TestMultiVersionMergeRecycle, reuse_after_recycle)
   const int64_t snapshot_version_2 = 30;
   PREPARE_SCN_RANGE(snapshot_version, snapshot_version_2);
   reset_writer(snapshot_version_2);
-  prepare_one_macro(micro_data2, 1);
-  prepare_one_macro(&micro_data2[1], 1);
+  if (merge_level == MICRO_BLOCK_MERGE_LEVEL) {
+    prepare_one_macro(micro_data2, 2);
+  } else {
+    prepare_one_macro(micro_data2, 1);
+    prepare_one_macro(&micro_data2[1], 1);
+  }
   prepare_data_end(handle2);
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
@@ -466,7 +529,7 @@ TEST_F(TestMultiVersionMergeRecycle, reuse_after_recycle)
   trans_version_range.multi_version_start_ = 10;
   trans_version_range.base_version_ = 9;
 
-  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context);
+  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context, merge_level);
   // minor mrege
   ObSSTable *merged_sstable = nullptr;
   ASSERT_EQ(OB_SUCCESS, merger.merge_partition(merge_context, 0));
@@ -495,8 +558,14 @@ TEST_F(TestMultiVersionMergeRecycle, reuse_after_recycle)
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
   const ObICompactionFilter::ObFilterStatistics &filter_statistics = merge_context.filter_ctx_.filter_statistics_;
-  ASSERT_EQ(2, filter_statistics.macro_cnt_[ObBlockOp::OP_FILTER]);
-  ASSERT_EQ(0, filter_statistics.macro_cnt_[ObBlockOp::OP_NONE]);
+  if (merge_level == MICRO_BLOCK_MERGE_LEVEL) {
+    // At micro-block level, statistics are similar since each macro has 1 micro
+    ASSERT_EQ(2, filter_statistics.micro_cnt_[ObBlockOp::OP_FILTER]);
+    ASSERT_EQ(2, filter_statistics.micro_cnt_[ObBlockOp::OP_OPEN]);
+  } else {
+    ASSERT_EQ(2, filter_statistics.macro_cnt_[ObBlockOp::OP_FILTER]);
+    ASSERT_EQ(0, filter_statistics.macro_cnt_[ObBlockOp::OP_NONE]);
+  }
   ASSERT_EQ(5, filter_statistics.filter_block_row_cnt_);
   ASSERT_EQ(1, filter_statistics.row_cnt_[ObICompactionFilter::FILTER_RET_REMOVE]);
   scanner->~ObStoreRowIterator();
@@ -526,36 +595,44 @@ TEST_F(TestMultiVersionMergeRecycle, reuse_after_recycle)
  *   - Micro2: partially recyclable (rowkey=2,3 v<=9)
  *   - Micro3: reusable (rowkey=4,5 v>9)
  *
- * Expected Statistics:
- *   - macro_cnt[OP_FILTER]=0, macro_cnt[OP_NONE]=1 (Micro1 can be reused)
- *   - micro_cnt[*]=0 (not counted in mini/minor sstable)
+ * Expected Statistics (MACRO_BLOCK_MERGE_LEVEL):
+ *   - macro_cnt[OP_FILTER]=0, macro_cnt[OP_NONE]=1
+ *   - filter_block_row_cnt=0 (cannot filter at macro level)
+ *   - row_cnt[REMOVE]=4 (rowkey=2: 1 row + rowkey=3: 2 rows + partial: 1 row)
+ *
+ * Expected Statistics (MICRO_BLOCK_MERGE_LEVEL):
+ *   - macro_cnt[OP_FILTER]=0, macro_cnt[OP_NONE]=1
+ *   - micro_cnt[OP_FILTER]=1 (Micro2 with rowkey=2,3 can be filtered)
+ *   - micro_cnt[OP_NONE]=2 (Micro1 and Micro3 can be reused)
+ *   - micro_cnt[OP_OPEN]=0
  *   - filter_block_row_cnt=3 (rowkey=2: 1 row + rowkey=3: 2 rows at micro level)
  *   - row_cnt[REMOVE]=1 (row-level filtering for partial rowkey)
  */
-TEST_F(TestMultiVersionMergeRecycle, recycled_micros_after_reuse)
+TEST_P(TestMultiVersionMergeRecycle, recycled_micros_after_reuse)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
   ObTabletExeMergeCtx merge_context(param, allocator_);
   ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
   ObScnRange scn_range;
+  ObMergeLevel merge_level = GetParam();
 
   ObTableHandleV2 handle1;
   const char *micro_data[3];
-  micro_data[0] =
+  micro_data[0] =  // NONE
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
       "0        var0  -15       0        NOP      1    EXIST   LF\n"
       "1        var1  -15       MIN      12       2    EXIST  SCF\n"
       "1        var1  -15       0        12       NOP    EXIST  N\n"
       "1        var1  -10       0        2         2    EXIST  CL\n";
 
-  micro_data[1] =
+  micro_data[1] = // FILTER
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
       "2        var2  -8        0        3       NOP   EXIST   LF\n"
       "3        var3  -8        MIN      12      12   EXIST   SCF\n"
       "3        var3  -8        0       12      NOP   EXIST   N\n";
 
-  micro_data[2] =
+  micro_data[2] = // OPEN
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
       "3        var3  -6        0      NOP      12   EXIST   L\n"
       "4        var4  -15       0      2        2    EXIST   CLF\n"
@@ -565,15 +642,19 @@ TEST_F(TestMultiVersionMergeRecycle, recycled_micros_after_reuse)
   PREPARE_SCN_RANGE(1, snapshot_version);
   prepare_table_schema(micro_data, schema_rowkey_cnt_, scn_range, snapshot_version);
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data, 1);
-  prepare_one_macro(&micro_data[1], 2);
+  if (merge_level == MICRO_BLOCK_MERGE_LEVEL) {
+    prepare_one_macro(micro_data, 3);
+  } else {
+    prepare_one_macro(micro_data, 1);
+    prepare_one_macro(&micro_data[1], 2);
+  }
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
   const char *micro_data2[1];
-  micro_data2[0] =
+  micro_data2[0] = // NONE
       "bigint   var   bigint   bigint   bigint bigint  flag    multi_version_row_flag\n"
       "5        var5  -20      0        NOP    13    EXIST   LF\n";
 
@@ -590,7 +671,7 @@ TEST_F(TestMultiVersionMergeRecycle, recycled_micros_after_reuse)
   trans_version_range.multi_version_start_ = 10;
   trans_version_range.base_version_ = 9;
 
-  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context);
+  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context, merge_level);
   // minor mrege
   ObSSTable *merged_sstable = nullptr;
   ASSERT_EQ(OB_SUCCESS, merger.merge_partition(merge_context, 0));
@@ -623,10 +704,21 @@ TEST_F(TestMultiVersionMergeRecycle, recycled_micros_after_reuse)
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
   const ObICompactionFilter::ObFilterStatistics &filter_statistics = merge_context.filter_ctx_.filter_statistics_;
-  ASSERT_EQ(0, filter_statistics.macro_cnt_[ObBlockOp::OP_FILTER]);
-  ASSERT_EQ(1, filter_statistics.macro_cnt_[ObBlockOp::OP_NONE]);
-  ASSERT_EQ(0, filter_statistics.filter_block_row_cnt_);
-  ASSERT_EQ(4, filter_statistics.row_cnt_[ObICompactionFilter::FILTER_RET_REMOVE]);
+  if (merge_level == MICRO_BLOCK_MERGE_LEVEL) {
+    // At micro-block level, can filter Micro2 with rowkey=2,3 (3 rows)
+    ASSERT_EQ(1, filter_statistics.micro_cnt_[ObBlockOp::OP_FILTER]);
+    ASSERT_EQ(2, filter_statistics.micro_cnt_[ObBlockOp::OP_NONE]);
+    ASSERT_EQ(1, filter_statistics.micro_cnt_[ObBlockOp::OP_OPEN]);
+    ASSERT_EQ(3, filter_statistics.filter_block_row_cnt_);
+    ASSERT_EQ(1, filter_statistics.row_cnt_[ObICompactionFilter::FILTER_RET_REMOVE]);
+  } else {
+    // At macro-block level, cannot filter entire macro, need row-level filtering
+    ASSERT_EQ(0, filter_statistics.macro_cnt_[ObBlockOp::OP_FILTER]);
+    ASSERT_EQ(2, filter_statistics.macro_cnt_[ObBlockOp::OP_NONE]);
+    ASSERT_EQ(1, filter_statistics.macro_cnt_[ObBlockOp::OP_OPEN]);
+    ASSERT_EQ(0, filter_statistics.filter_block_row_cnt_);
+    ASSERT_EQ(4, filter_statistics.row_cnt_[ObICompactionFilter::FILTER_RET_REMOVE]);
+  }
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -661,40 +753,41 @@ TEST_F(TestMultiVersionMergeRecycle, recycled_micros_after_reuse)
  *   - filter_block_row_cnt=3 (rowkey=0: 1 + rowkey=3 micro rows)
  *   - row_cnt[REMOVE]=12 (rowkey=0: 1 + rowkey=1: 7 + rowkey=2 partial: 4)
  */
-TEST_F(TestMultiVersionMergeRecycle, rowkeys_across_micros)
+TEST_P(TestMultiVersionMergeRecycle, rowkeys_across_micros)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
   ObTabletExeMergeCtx merge_context(param, allocator_);
   ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
   ObScnRange scn_range;
+  ObMergeLevel merge_level = GetParam();
 
   ObTableHandleV2 handle1;
   const char *micro_data[5];
-  micro_data[0] =
+  micro_data[0] = // FILTER
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
       "0        var0  -10       0        NOP      1    EXIST   LF\n"
       "1        var1  -10       MIN      12       2    EXIST  SCF\n"
       "1        var1  -10       0        12       NOP    EXIST  N\n"
       "1        var1  -8        0        2         2    EXIST  C\n";
 
-  micro_data[1] =
+  micro_data[1] = // FILTER
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
       "1        var1  -7        0        1         2    EXIST  C\n"
       "1        var1  -6        0        2         1    EXIST  C\n";
 
-  micro_data[2] =
+  micro_data[2] =  // OPEN
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
       "1        var1  -5        0        1         1    EXIST  CL\n"
       "2        var2  -15       MIN      12      12   EXIST   SCF\n"
       "2        var2  -15       0      NOP     12    EXIST   N\n";
 
-  micro_data[3] =
+  micro_data[3] = // OPEN
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
       "2        var2  -10       0      12      NOP   EXIST   N\n"
       "2        var2  -8        0      2       2     EXIST   N\n";
 
-  micro_data[4] =
+  micro_data[4] = // OPEN
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
       "2        var2  -6        0      1       1     EXIST   CL\n"
       "3        var3  -15       0      2       2     EXIST   CLF\n"
@@ -712,7 +805,7 @@ TEST_F(TestMultiVersionMergeRecycle, rowkeys_across_micros)
 
   ObTableHandleV2 handle2;
   const char *micro_data2[1];
-  micro_data2[0] =
+  micro_data2[0] = // NONE
       "bigint   var   bigint   bigint   bigint bigint  flag    multi_version_row_flag\n"
       "5        var5  -20      0        NOP    13    EXIST   LF\n";
 
@@ -729,7 +822,7 @@ TEST_F(TestMultiVersionMergeRecycle, rowkeys_across_micros)
   trans_version_range.multi_version_start_ = 14;
   trans_version_range.base_version_ = 12;
 
-  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context);
+  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context, merge_level);
   // minor mrege
   ObSSTable *merged_sstable = nullptr;
   ASSERT_EQ(OB_SUCCESS, merger.merge_partition(merge_context, 0));
@@ -761,10 +854,19 @@ TEST_F(TestMultiVersionMergeRecycle, rowkeys_across_micros)
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
   const ObICompactionFilter::ObFilterStatistics &filter_statistics = merge_context.filter_ctx_.filter_statistics_;
-  ASSERT_EQ(0, filter_statistics.macro_cnt_[ObBlockOp::OP_FILTER]);
-  ASSERT_EQ(0, filter_statistics.macro_cnt_[ObBlockOp::OP_NONE]);
-  ASSERT_EQ(0, filter_statistics.filter_block_row_cnt_);
-  ASSERT_EQ(7, filter_statistics.row_cnt_[ObICompactionFilter::FILTER_RET_REMOVE]);
+  if (merge_level == MICRO_BLOCK_MERGE_LEVEL) {
+    ASSERT_EQ(2, filter_statistics.micro_cnt_[ObBlockOp::OP_FILTER]);
+    ASSERT_EQ(1, filter_statistics.micro_cnt_[ObBlockOp::OP_NONE]);
+    ASSERT_EQ(3, filter_statistics.micro_cnt_[ObBlockOp::OP_OPEN]);
+    ASSERT_EQ(6, filter_statistics.filter_block_row_cnt_);
+    ASSERT_EQ(1, filter_statistics.row_cnt_[ObICompactionFilter::FILTER_RET_REMOVE]);
+  } else {
+    ASSERT_EQ(0, filter_statistics.macro_cnt_[ObBlockOp::OP_FILTER]);
+    ASSERT_EQ(1, filter_statistics.macro_cnt_[ObBlockOp::OP_NONE]);
+    ASSERT_EQ(1, filter_statistics.macro_cnt_[ObBlockOp::OP_OPEN]);
+    ASSERT_EQ(0, filter_statistics.filter_block_row_cnt_);
+    ASSERT_EQ(7, filter_statistics.row_cnt_[ObICompactionFilter::FILTER_RET_REMOVE]);
+  }
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -799,61 +901,66 @@ TEST_F(TestMultiVersionMergeRecycle, rowkeys_across_micros)
  *   - filter_block_row_cnt=1 (rowkey=0 macro filtered)
  *   - row_cnt[REMOVE]=10 (rowkey=1,2 partial versions filtered at row level)
  */
-TEST_F(TestMultiVersionMergeRecycle, rowkeys_across_macro)
+TEST_P(TestMultiVersionMergeRecycle, rowkeys_across_macro)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
   ObTabletExeMergeCtx merge_context(param, allocator_);
   ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
   ObScnRange scn_range;
+  ObMergeLevel merge_level = GetParam();
 
   ObTableHandleV2 handle1;
   const char *micro_data[5];
-  micro_data[0] = // MACRO: OP_NONE
+  micro_data[0] = // OPEN
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
       "0        var0  -10       0        NOP      1    EXIST   LF\n"
       "1        var1  -15       MIN      12       2    EXIST  SCF\n"
       "1        var1  -15       0        12       NOP    EXIST  N\n"
       "1        var1  -8        0        2         2    EXIST  C\n";
 
-  micro_data[1] = // MACRO: OP_OPEN
+  micro_data[1] = // OPEN
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
       "1        var1  -7        0        1         2    EXIST  C\n"
       "1        var1  -6        0        2         1    EXIST  C\n";
 
-  micro_data[2] = // MACRO: OP_NONE
+  micro_data[2] = // OPEN
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
       "1        var1  -5        0        1         1    EXIST  CL\n"
       "2        var2  -15       MIN      12      12   EXIST   SCF\n"
       "2        var2  -15       0      NOP     12    EXIST   N\n";
 
-  micro_data[3] =
+  micro_data[3] = // OPEN
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
       "2        var2  -10       0      12      NOP   EXIST   N\n"
       "2        var2  -8        0      2       2     EXIST   N\n";
 
-  micro_data[4] =
+  micro_data[4] = // OPEN
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
       "2        var2  -6        0      1       1     EXIST   CL\n"
       "3        var3  -15       0      2       2     EXIST   CLF\n"
-      "5        var5  -15      0      2        2    EXIST   CLF\n";
+      "5        var5  -15       0      2        2    EXIST   CLF\n";
 
   int64_t snapshot_version = 20;
   PREPARE_SCN_RANGE(1, snapshot_version);
   prepare_table_schema(micro_data, schema_rowkey_cnt_, scn_range, snapshot_version);
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data, 1);
-  prepare_one_macro(&micro_data[1], 1);
-  prepare_one_macro(&micro_data[2], 1);
-  prepare_one_macro(&micro_data[3], 1);
-  prepare_one_macro(&micro_data[4], 1);
+  if (merge_level == MICRO_BLOCK_MERGE_LEVEL) {
+    prepare_one_macro(micro_data, 5);
+  } else {
+    prepare_one_macro(micro_data, 1);
+    prepare_one_macro(&micro_data[1], 1);
+    prepare_one_macro(&micro_data[2], 1);
+    prepare_one_macro(&micro_data[3], 1);
+    prepare_one_macro(&micro_data[4], 1);
+  }
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
   const char *micro_data2[1];
-  micro_data2[0] = // MACRO: OP_NONE
+  micro_data2[0] = // NONE
       "bigint   var   bigint   bigint   bigint bigint  flag    multi_version_row_flag\n"
       "5        var5  -20      0        NOP    13    EXIST   LF\n";
 
@@ -870,7 +977,7 @@ TEST_F(TestMultiVersionMergeRecycle, rowkeys_across_macro)
   trans_version_range.multi_version_start_ = 14;
   trans_version_range.base_version_ = 12;
 
-  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context);
+  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context, merge_level);
   // minor mrege
   ObSSTable *merged_sstable = nullptr;
   ASSERT_EQ(OB_SUCCESS, merger.merge_partition(merge_context, 0));
@@ -905,10 +1012,16 @@ TEST_F(TestMultiVersionMergeRecycle, rowkeys_across_macro)
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
   const ObICompactionFilter::ObFilterStatistics &filter_statistics = merge_context.filter_ctx_.filter_statistics_;
-  ASSERT_EQ(0, filter_statistics.macro_cnt_[ObBlockOp::OP_FILTER]);
-  ASSERT_EQ(0, filter_statistics.macro_cnt_[ObBlockOp::OP_NONE]);
-  ASSERT_EQ(0, filter_statistics.filter_block_row_cnt_);
-  ASSERT_EQ(1, filter_statistics.row_cnt_[ObICompactionFilter::FILTER_RET_REMOVE]);
+  if (merge_level == MICRO_BLOCK_MERGE_LEVEL) {
+    ASSERT_EQ(5, filter_statistics.micro_cnt_[ObBlockOp::OP_OPEN]);
+    ASSERT_EQ(0, filter_statistics.micro_cnt_[ObBlockOp::OP_FILTER]);
+    ASSERT_EQ(1, filter_statistics.micro_cnt_[ObBlockOp::OP_NONE]);
+    ASSERT_EQ(0, filter_statistics.filter_block_row_cnt_);
+    ASSERT_EQ(1, filter_statistics.row_cnt_[ObICompactionFilter::FILTER_RET_REMOVE]);
+  } else {
+    ASSERT_EQ(1, filter_statistics.macro_cnt_[ObBlockOp::OP_NONE]);
+    ASSERT_EQ(1, filter_statistics.row_cnt_[ObICompactionFilter::FILTER_RET_REMOVE]);
+  }
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -944,29 +1057,30 @@ TEST_F(TestMultiVersionMergeRecycle, rowkeys_across_macro)
  *   - filter_block_row_cnt=4 (rowkey=0: 1 + rowkey=1: 3 at macro level)
  *   - row_cnt[REMOVE]=4 (rowkey=2: 4 rows across micros at row level)
  */
-TEST_F(TestMultiVersionMergeRecycle, recycle_macro_with_last_row)
+TEST_P(TestMultiVersionMergeRecycle, recycle_macro_with_last_row)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
   ObTabletExeMergeCtx merge_context(param, allocator_);
   ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
   ObScnRange scn_range;
+  ObMergeLevel merge_level = GetParam();
 
   ObTableHandleV2 handle1;
   const char *micro_data[3];
-  micro_data[0] =
+  micro_data[0] = // FILTER
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
       "0        var0  -10       0        NOP      1    EXIST   LF\n"
       "1        var1  -10       MIN      12       2    EXIST  SCF\n"
       "1        var1  -10       0        12       NOP    EXIST  N\n"
       "1        var1  -8        0        2         2    EXIST  CL\n";
 
-  micro_data[1] =
+  micro_data[1] = // FILTER
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
       "2        var2  -10       MIN      12      12   EXIST   SCF\n"
       "2        var2  -10       0      NOP     12    EXIST   N\n";
 
-  micro_data[2] =
+  micro_data[2] = // OPEN
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
       "2        var2  -9        0      12     NOP     EXIST   N\n"
       "2        var2  -8        0      2       2     EXIST   CL\n"
@@ -978,15 +1092,19 @@ TEST_F(TestMultiVersionMergeRecycle, recycle_macro_with_last_row)
   PREPARE_SCN_RANGE(1, snapshot_version);
   prepare_table_schema(micro_data, schema_rowkey_cnt_, scn_range, snapshot_version);
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data, 1);
-  prepare_one_macro(&micro_data[1], 2);
+  if (merge_level == MICRO_BLOCK_MERGE_LEVEL) {
+    prepare_one_macro(micro_data, 3);
+  } else {
+    prepare_one_macro(micro_data, 1);
+    prepare_one_macro(&micro_data[1], 2);
+  }
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
   const char *micro_data2[1];
-  micro_data2[0] =
+  micro_data2[0] = // NONE
       "bigint   var   bigint   bigint   bigint bigint  flag    multi_version_row_flag\n"
       "5        var5  -20      0        NOP    13    EXIST   LF\n";
 
@@ -1003,7 +1121,7 @@ TEST_F(TestMultiVersionMergeRecycle, recycle_macro_with_last_row)
   trans_version_range.multi_version_start_ = 14;
   trans_version_range.base_version_ = 12;
 
-  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context);
+  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context, merge_level);
   // minor mrege
   ObSSTable *merged_sstable = nullptr;
   ASSERT_EQ(OB_SUCCESS, merger.merge_partition(merge_context, 0));
@@ -1032,10 +1150,19 @@ TEST_F(TestMultiVersionMergeRecycle, recycle_macro_with_last_row)
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
   const ObICompactionFilter::ObFilterStatistics &filter_statistics = merge_context.filter_ctx_.filter_statistics_;
-  ASSERT_EQ(1, filter_statistics.macro_cnt_[ObBlockOp::OP_FILTER]);
-  ASSERT_EQ(0, filter_statistics.macro_cnt_[ObBlockOp::OP_NONE]);
-  ASSERT_EQ(4, filter_statistics.filter_block_row_cnt_);
-  ASSERT_EQ(4, filter_statistics.row_cnt_[ObICompactionFilter::FILTER_RET_REMOVE]);
+  if (merge_level == MICRO_BLOCK_MERGE_LEVEL) {
+    ASSERT_EQ(2, filter_statistics.micro_cnt_[ObBlockOp::OP_FILTER]);
+    ASSERT_EQ(1, filter_statistics.micro_cnt_[ObBlockOp::OP_NONE]);
+    ASSERT_EQ(1, filter_statistics.micro_cnt_[ObBlockOp::OP_OPEN]);
+    ASSERT_EQ(6, filter_statistics.filter_block_row_cnt_);
+    ASSERT_EQ(2, filter_statistics.row_cnt_[ObICompactionFilter::FILTER_RET_REMOVE]);
+  } else {
+    ASSERT_EQ(1, filter_statistics.macro_cnt_[ObBlockOp::OP_FILTER]);
+    ASSERT_EQ(1, filter_statistics.macro_cnt_[ObBlockOp::OP_NONE]);
+    ASSERT_EQ(1, filter_statistics.macro_cnt_[ObBlockOp::OP_OPEN]);
+    ASSERT_EQ(4, filter_statistics.filter_block_row_cnt_);
+    ASSERT_EQ(4, filter_statistics.row_cnt_[ObICompactionFilter::FILTER_RET_REMOVE]);
+  }
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -1070,13 +1197,14 @@ TEST_F(TestMultiVersionMergeRecycle, recycle_macro_with_last_row)
  *   - filter_block_row_cnt=4 (rowkey=0,1 filtered at macro level)
  *   - row_cnt[REMOVE]=3 (partial versions of rowkey=5 before base_version)
  */
-TEST_F(TestMultiVersionMergeRecycle, reuse_after_recycle_with_last)
+TEST_P(TestMultiVersionMergeRecycle, reuse_after_recycle_with_last)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
   ObTabletExeMergeCtx merge_context(param, allocator_);
   ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
   ObScnRange scn_range;
+  ObMergeLevel merge_level = GetParam();
 
   ObTableHandleV2 handle1;
   const char *micro_data[4];
@@ -1105,10 +1233,14 @@ TEST_F(TestMultiVersionMergeRecycle, reuse_after_recycle_with_last)
   PREPARE_SCN_RANGE(1, snapshot_version);
   prepare_table_schema(micro_data, schema_rowkey_cnt_, scn_range, snapshot_version);
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data, 1);
-  prepare_one_macro(&micro_data[1], 1);
-  prepare_one_macro(&micro_data[2], 1);
-  prepare_one_macro(&micro_data[3], 1);
+  if (merge_level == MICRO_BLOCK_MERGE_LEVEL) {
+    prepare_one_macro(micro_data, 4);
+  } else {
+    prepare_one_macro(micro_data, 1);
+    prepare_one_macro(&micro_data[1], 1);
+    prepare_one_macro(&micro_data[2], 1);
+    prepare_one_macro(&micro_data[3], 1);
+  }
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
@@ -1138,7 +1270,7 @@ TEST_F(TestMultiVersionMergeRecycle, reuse_after_recycle_with_last)
   trans_version_range.multi_version_start_ = 16;
   trans_version_range.base_version_ = 12;
 
-  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context);
+  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context, merge_level);
   // minor mrege
   ObSSTable *merged_sstable = nullptr;
   ASSERT_EQ(OB_SUCCESS, merger.merge_partition(merge_context, 0));
@@ -1170,8 +1302,13 @@ TEST_F(TestMultiVersionMergeRecycle, reuse_after_recycle_with_last)
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
   const ObICompactionFilter::ObFilterStatistics &filter_statistics = merge_context.filter_ctx_.filter_statistics_;
-  ASSERT_EQ(1, filter_statistics.macro_cnt_[ObBlockOp::OP_FILTER]);
-  ASSERT_EQ(2, filter_statistics.macro_cnt_[ObBlockOp::OP_NONE]);
+  if (merge_level == MICRO_BLOCK_MERGE_LEVEL) {
+    ASSERT_EQ(1, filter_statistics.micro_cnt_[ObBlockOp::OP_FILTER]);
+    ASSERT_EQ(2, filter_statistics.micro_cnt_[ObBlockOp::OP_NONE]);
+  } else {
+    ASSERT_EQ(1, filter_statistics.macro_cnt_[ObBlockOp::OP_FILTER]);
+    ASSERT_EQ(2, filter_statistics.macro_cnt_[ObBlockOp::OP_NONE]);
+  }
   ASSERT_EQ(4, filter_statistics.filter_block_row_cnt_);
   ASSERT_EQ(0, filter_statistics.row_cnt_[ObICompactionFilter::FILTER_RET_REMOVE]);
   clear_tx_data();
@@ -1205,29 +1342,30 @@ TEST_F(TestMultiVersionMergeRecycle, reuse_after_recycle_with_last)
  *   - filter_block_row_cnt=6 (rowkey=0: 3 rows + rowkey=2: 3 rows)
  *   - row_cnt[REMOVE]=0 (all filtered at block level)
  */
-TEST_F(TestMultiVersionMergeRecycle, base_version_boundary)
+TEST_P(TestMultiVersionMergeRecycle, base_version_boundary)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
   ObTabletExeMergeCtx merge_context(param, allocator_);
   ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
   ObScnRange scn_range;
+  ObMergeLevel merge_level = GetParam();
 
   ObTableHandleV2 handle1;
   const char *micro_data[3];
-  micro_data[0] = // MACRO: OP_FILTER (max_version=10 <= 10)
+  micro_data[0] = // FILTER (max_version=10 <= 10)
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
       "0        var0  -10      MIN      2       1    EXIST   SCF\n"
       "0        var0  -10      0        2       1    EXIST   N\n"
       "0        var0  -9       0        NOP     2    EXIST   L\n";
 
-  micro_data[1] = // MACRO: OP_NONE (max_version=11 > 10)
+  micro_data[1] = // NONE (max_version=11 > 10)
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
       "1        var1  -11      MIN      3       1    EXIST   SCF\n"
       "1        var1  -11      0        3       1    EXIST   N\n"
       "1        var1  -10      0        NOP     2    EXIST   L\n";
 
-  micro_data[2] = // MACRO: OP_FILTER (max_version=9 <= 10)
+  micro_data[2] = // FILTER (max_version=9 <= 10)
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
       "2        var2  -9       MIN      4       1    EXIST   SCF\n"
       "2        var2  -9       0        4       1    EXIST   N\n"
@@ -1237,9 +1375,13 @@ TEST_F(TestMultiVersionMergeRecycle, base_version_boundary)
   PREPARE_SCN_RANGE(1, snapshot_version);
   prepare_table_schema(micro_data, schema_rowkey_cnt_, scn_range, snapshot_version);
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data, 1);
-  prepare_one_macro(&micro_data[1], 1);
-  prepare_one_macro(&micro_data[2], 1);
+  if (merge_level == MICRO_BLOCK_MERGE_LEVEL) {
+    prepare_one_macro(micro_data, 3);
+  } else {
+    prepare_one_macro(micro_data, 1);
+    prepare_one_macro(&micro_data[1], 1);
+    prepare_one_macro(&micro_data[2], 1);
+  }
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
@@ -1247,7 +1389,7 @@ TEST_F(TestMultiVersionMergeRecycle, base_version_boundary)
   // SSTable2: Add an empty sstable to satisfy minor merge requirement (>= 2 sstables)
   ObTableHandleV2 handle2;
   const char *micro_data2[1];
-  micro_data2[0] = // MACRO: OP_NONE
+  micro_data2[0] = // NONE
       "bigint   var   bigint   bigint   bigint bigint  flag    multi_version_row_flag\n"
       "4        var4  -20      0        5       5     EXIST   CLF\n";
 
@@ -1264,7 +1406,7 @@ TEST_F(TestMultiVersionMergeRecycle, base_version_boundary)
   trans_version_range.multi_version_start_ = 11;
   trans_version_range.base_version_ = 10;
 
-  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context);
+  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context, merge_level);
   ObSSTable *merged_sstable = nullptr;
   ASSERT_EQ(OB_SUCCESS, merger.merge_partition(merge_context, 0));
   build_sstable(merge_context, merged_sstable);
@@ -1290,8 +1432,13 @@ TEST_F(TestMultiVersionMergeRecycle, base_version_boundary)
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
   const ObICompactionFilter::ObFilterStatistics &filter_statistics = merge_context.filter_ctx_.filter_statistics_;
-  ASSERT_EQ(2, filter_statistics.macro_cnt_[ObBlockOp::OP_FILTER]);
-  ASSERT_EQ(1, filter_statistics.macro_cnt_[ObBlockOp::OP_OPEN]);
+  if (merge_level == MICRO_BLOCK_MERGE_LEVEL) {
+    ASSERT_EQ(2, filter_statistics.micro_cnt_[ObBlockOp::OP_FILTER]);
+    ASSERT_EQ(1, filter_statistics.micro_cnt_[ObBlockOp::OP_OPEN]);
+  } else {
+    ASSERT_EQ(2, filter_statistics.macro_cnt_[ObBlockOp::OP_FILTER]);
+    ASSERT_EQ(1, filter_statistics.macro_cnt_[ObBlockOp::OP_OPEN]);
+  }
   ASSERT_EQ(6, filter_statistics.filter_block_row_cnt_);
   ASSERT_EQ(0, filter_statistics.row_cnt_[ObICompactionFilter::FILTER_RET_REMOVE]);
   scanner->~ObStoreRowIterator();
@@ -1324,34 +1471,35 @@ TEST_F(TestMultiVersionMergeRecycle, base_version_boundary)
  *   - filter_block_row_cnt=0 (no block-level filtering)
  *   - row_cnt[REMOVE]=3 (v-10, v-8, v-6)
  */
-TEST_F(TestMultiVersionMergeRecycle, last_flag_across_blocks)
+TEST_P(TestMultiVersionMergeRecycle, last_flag_across_blocks)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
   ObTabletExeMergeCtx merge_context(param, allocator_);
   ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
   ObScnRange scn_range;
+  ObMergeLevel merge_level = GetParam();
 
   ObTableHandleV2 handle1;
   const char *micro_data[4];
-  micro_data[0] = // MACRO: OP_NONE (max_version=15 > 11)
+  micro_data[0] = // NONE (max_version=15 > 11)
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
       "0        var0  -15      MIN      12      1    EXIST   SCF\n"
       "0        var0  -15      0        12      NOP  EXIST   N\n"
       "0        var0  -13      0        2       2    EXIST   N\n";
 
-  micro_data[1] = // MACRO: OP_OPEN
+  micro_data[1] = // OPEN
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
       "0        var0  -10      0        1       1    EXIST   N\n"
       "0        var0  -8       0        3       3    EXIST   N\n";
 
-  micro_data[2] = // MACRO: OP_OPEN
+  micro_data[2] = // OPEN
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
       "0        var0  -6       0        NOP     2    EXIST   L\n"
       "1        var1  -11      MIN      1       5    EXIST   SCF\n"
       "1        var1  -11      0        NOP     5    EXIST   N\n";
 
-  micro_data[3] = // MACRO: OP_OPEN (max_version=12 > 11)
+  micro_data[3] = // OPEN (max_version=12 > 11)
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
       "1        var1  -10      0        1       1    EXIST   N\n"
       "1        var1  -8       0        3       3    EXIST   CL\n"
@@ -1361,16 +1509,20 @@ TEST_F(TestMultiVersionMergeRecycle, last_flag_across_blocks)
   PREPARE_SCN_RANGE(1, snapshot_version);
   prepare_table_schema(micro_data, schema_rowkey_cnt_, scn_range, snapshot_version);
   reset_writer(snapshot_version);
-  prepare_one_macro(micro_data, 2);
-  prepare_one_macro(&micro_data[2], 1);
-  prepare_one_macro(&micro_data[3], 1);
+  if (merge_level == MICRO_BLOCK_MERGE_LEVEL) {
+    prepare_one_macro(micro_data, 4);
+  } else {
+    prepare_one_macro(micro_data, 2);
+    prepare_one_macro(&micro_data[2], 1);
+    prepare_one_macro(&micro_data[3], 1);
+  }
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
 
   ObTableHandleV2 handle2;
   const char *micro_data2[1];
-  micro_data2[0] =
+  micro_data2[0] = // NONE
       "bigint   var   bigint   bigint   bigint bigint  flag    multi_version_row_flag\n"
       "2        var2  -20      0        NOP     6     EXIST   L\n";
 
@@ -1387,7 +1539,7 @@ TEST_F(TestMultiVersionMergeRecycle, last_flag_across_blocks)
   trans_version_range.multi_version_start_ = 12;
   trans_version_range.base_version_ = 11;
 
-  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context);
+  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context, merge_level);
   ObSSTable *merged_sstable = nullptr;
   ASSERT_EQ(OB_SUCCESS, merger.merge_partition(merge_context, 0));
   build_sstable(merge_context, merged_sstable);
@@ -1418,11 +1570,20 @@ TEST_F(TestMultiVersionMergeRecycle, last_flag_across_blocks)
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
   const ObICompactionFilter::ObFilterStatistics &filter_statistics = merge_context.filter_ctx_.filter_statistics_;
-  ASSERT_EQ(0, filter_statistics.macro_cnt_[ObBlockOp::OP_FILTER]);
-  ASSERT_EQ(0, filter_statistics.macro_cnt_[ObBlockOp::OP_NONE]);
-  ASSERT_EQ(2, filter_statistics.macro_cnt_[ObBlockOp::OP_OPEN]);
-  ASSERT_EQ(4, filter_statistics.row_cnt_[ObICompactionFilter::FILTER_RET_REMOVE]);
-  ASSERT_EQ(0, filter_statistics.filter_block_row_cnt_);
+  if (merge_level == MICRO_BLOCK_MERGE_LEVEL) {
+    ASSERT_EQ(0, filter_statistics.micro_cnt_[ObBlockOp::OP_FILTER]);
+    ASSERT_EQ(2, filter_statistics.micro_cnt_[ObBlockOp::OP_NONE]);
+    ASSERT_EQ(3, filter_statistics.micro_cnt_[ObBlockOp::OP_OPEN]);
+    ASSERT_EQ(4, filter_statistics.row_cnt_[ObICompactionFilter::FILTER_RET_REMOVE]);
+    ASSERT_EQ(0, filter_statistics.filter_block_row_cnt_);
+  } else {
+    ASSERT_EQ(0, filter_statistics.macro_cnt_[ObBlockOp::OP_FILTER]);
+    ASSERT_EQ(1, filter_statistics.macro_cnt_[ObBlockOp::OP_NONE]);
+    ASSERT_EQ(2, filter_statistics.macro_cnt_[ObBlockOp::OP_OPEN]);
+    ASSERT_EQ(4, filter_statistics.row_cnt_[ObICompactionFilter::FILTER_RET_REMOVE]);
+    ASSERT_EQ(0, filter_statistics.filter_block_row_cnt_);
+  }
+
   scanner->~ObStoreRowIterator();
   handle1.reset();
   handle2.reset();
@@ -1450,13 +1611,14 @@ TEST_F(TestMultiVersionMergeRecycle, last_flag_across_blocks)
  *   - macro_cnt[OP_FILTER]=1 (SSTable3-Macro1 with rowkey=1)
  *   - row_cnt[REMOVE]=2 (rowkey=0 v-8 + rowkey=1 DELETE)
  */
-TEST_F(TestMultiVersionMergeRecycle, delete_flag_recycle)
+TEST_P(TestMultiVersionMergeRecycle, delete_flag_recycle)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
   ObTabletExeMergeCtx merge_context(param, allocator_);
   ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
   ObScnRange scn_range;
+  ObMergeLevel merge_level = GetParam();
 
   ObTableHandleV2 handle1;
   const char *micro_data[1];
@@ -1511,7 +1673,7 @@ TEST_F(TestMultiVersionMergeRecycle, delete_flag_recycle)
   trans_version_range.multi_version_start_ = 11;
   trans_version_range.base_version_ = 10;
 
-  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context);
+  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context, merge_level);
   ObSSTable *merged_sstable = nullptr;
   ASSERT_EQ(OB_SUCCESS, merger.merge_partition(merge_context, 0));
   build_sstable(merge_context, merged_sstable);
@@ -1568,19 +1730,20 @@ TEST_F(TestMultiVersionMergeRecycle, delete_flag_recycle)
  *   - Aborted rows don't participate in version comparison
  *   - row_cnt[REMOVE] includes aborted rows
  */
-TEST_F(TestMultiVersionMergeRecycle, abort_transaction_recycle)
+TEST_P(TestMultiVersionMergeRecycle, abort_transaction_recycle)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
   ObTabletExeMergeCtx merge_context(param, allocator_);
   ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
   ObScnRange scn_range;
+  ObMergeLevel merge_level = GetParam();
 
   ObTableHandleV2 handle1;
   const char *micro_data[1];
   micro_data[0] =
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
-      "0        var0  -15      MIN      12      1    EXIST   SCF\n"
+      "0        var0  -15      MIN      12      1    EXIST   SCF\n" // sql_seq of MIN means shadow row
       "0        var0  -15      0        12      NOP  EXIST   N\n"
       "0        var0  -12      0        2       2    EXIST   L\n";
 
@@ -1617,7 +1780,7 @@ TEST_F(TestMultiVersionMergeRecycle, abort_transaction_recycle)
   trans_version_range.multi_version_start_ = 12;
   trans_version_range.base_version_ = 11;
 
-  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context);
+  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context, merge_level);
   ObSSTable *merged_sstable = nullptr;
   ASSERT_EQ(OB_SUCCESS, merger.merge_partition(merge_context, 0));
   build_sstable(merge_context, merged_sstable);
@@ -1658,42 +1821,43 @@ TEST_F(TestMultiVersionMergeRecycle, abort_transaction_recycle)
  *
  * Data Layout:
  *   SSTable1-Macro1: rowkey=0 v-8 (recyclable)
- *   SSTable1-Macro2: rowkey=1 v-15 (reusable)
- *   SSTable2-Macro1: rowkey=1 v-12 (needs merge with SSTable1)
+ *   SSTable1-Macro2: rowkey=1 v-15 (recyclable)
+ *   SSTable2-Macro1: rowkey=1 v-18 (reusable)
  *   SSTable2-Macro2: rowkey=2 v-9 (recyclable)
- *   SSTable3-Macro1: rowkey=2 v-20 (needs merge with SSTable2)
- *   SSTable3-Macro2: rowkey=3 v-8 (recyclable)
+ *   SSTable3-Macro1: rowkey=2 v-20 (reusable)
+ *   SSTable3-Macro2: rowkey=3 v-18 (reusable)
  *
- * Recycle Version: base_version=10
+ * Recycle Version: base_version=15
  *
  * Expected Behavior:
- *   - rowkey=0: v-8 <= 10, filtered
- *   - rowkey=1: merge v-15 and v-12, keep both
- *   - rowkey=2: merge v-20 and v-9, keep v-20, recycle v-9
- *   - rowkey=3: v-8 <= 10, filtered
+ *   - rowkey=0: v-8 <= 15, filtered at block level
+ *   - rowkey=1: keep v-18, filter v-15 at block level
+ *   - rowkey=2: keep v-20, filter v-9 at block level
+ *   - rowkey=3: v-18 > 15, kept
  *
  * Expected Statistics:
- *   - macro_cnt[OP_FILTER]=2 (SSTable1-Macro1, SSTable3-Macro2)
- *   - macro_cnt[OP_NONE]=1 (SSTable1-Macro2)
- *   - filter_block_row_cnt=2 (rowkey=0 + rowkey=3)
- *   - row_cnt[REMOVE]=1 (rowkey=2 v-9)
+ *   - macro_cnt[OP_FILTER]=3 (rowkey=0, rowkey=1 v-15, rowkey=2 v-9)
+ *   - macro_cnt[OP_NONE]=3 (rowkey=1 v-18, rowkey=2 v-20, rowkey=3 v-18)
+ *   - filter_block_row_cnt=3
+ *   - row_cnt[REMOVE]=0 (all recycled rows are filtered at block level)
  */
-TEST_F(TestMultiVersionMergeRecycle, three_sstables_mixed)
+TEST_P(TestMultiVersionMergeRecycle, three_sstables_mixed)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
   ObTabletExeMergeCtx merge_context(param, allocator_);
   ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
   ObScnRange scn_range;
+  ObMergeLevel merge_level = GetParam();
 
   // SSTable1
   ObTableHandleV2 handle1;
   const char *micro_data1[2];
-  micro_data1[0] = // MACRO: OP_FILTER
+  micro_data1[0] = // FILTER
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
       "0        var0  -8       0        NOP     1    EXIST   CLF\n";
 
-  micro_data1[1] = // MACRO: OP_FILTER
+  micro_data1[1] = // FILTER
       "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
       "1        var1  -15      0        2       2    EXIST   CLF\n";
 
@@ -1701,8 +1865,12 @@ TEST_F(TestMultiVersionMergeRecycle, three_sstables_mixed)
   PREPARE_SCN_RANGE(1, snapshot_version1);
   prepare_table_schema(micro_data1, schema_rowkey_cnt_, scn_range, snapshot_version1);
   reset_writer(snapshot_version1);
-  prepare_one_macro(micro_data1, 1);
-  prepare_one_macro(&micro_data1[1], 1);
+  if (merge_level == MICRO_BLOCK_MERGE_LEVEL) {
+    prepare_one_macro(micro_data1, 2);
+  } else {
+    prepare_one_macro(micro_data1, 1);
+    prepare_one_macro(&micro_data1[1], 1);
+  }
   prepare_data_end(handle1);
   merge_context.static_param_.tables_handle_.add_table(handle1);
   STORAGE_LOG(INFO, "finish prepare sstable1");
@@ -1710,19 +1878,23 @@ TEST_F(TestMultiVersionMergeRecycle, three_sstables_mixed)
   // SSTable2
   ObTableHandleV2 handle2;
   const char *micro_data2[2];
-  micro_data2[0] = // MACRO: OP_NONE
+  micro_data2[0] = // NONE
       "bigint   var   bigint   bigint   bigint bigint  flag    multi_version_row_flag\n"
       "1        var1  -18      0        3       3     EXIST   CLF\n";
 
-  micro_data2[1] = // MACRO: OP_FILTER
+  micro_data2[1] = // FILTER
       "bigint   var   bigint   bigint   bigint bigint  flag    multi_version_row_flag\n"
       "2        var2  -9       0        4       4     EXIST   CLF\n";
 
   const int64_t snapshot_version2 = 15;
   PREPARE_SCN_RANGE(snapshot_version1, snapshot_version2);
   reset_writer(snapshot_version2);
-  prepare_one_macro(micro_data2, 1);
-  prepare_one_macro(&micro_data2[1], 1);
+  if (merge_level == MICRO_BLOCK_MERGE_LEVEL) {
+    prepare_one_macro(micro_data2, 2);
+  } else {
+    prepare_one_macro(micro_data2, 1);
+    prepare_one_macro(&micro_data2[1], 1);
+  }
   prepare_data_end(handle2);
   merge_context.static_param_.tables_handle_.add_table(handle2);
   STORAGE_LOG(INFO, "finish prepare sstable2");
@@ -1730,19 +1902,23 @@ TEST_F(TestMultiVersionMergeRecycle, three_sstables_mixed)
   // SSTable3
   ObTableHandleV2 handle3;
   const char *micro_data3[2];
-  micro_data3[0] = // MACRO: OP_NONE
+  micro_data3[0] = // NONE
       "bigint   var   bigint   bigint   bigint bigint  flag    multi_version_row_flag\n"
       "2        var2  -20      0        5       5     EXIST   CLF\n";
 
-  micro_data3[1] = // MACRO: OP_NONE
+  micro_data3[1] = // NONE
       "bigint   var   bigint   bigint   bigint bigint  flag    multi_version_row_flag\n"
       "3        var3  -18       0        NOP     6     EXIST   CLF\n";
 
   const int64_t snapshot_version3 = 25;
   PREPARE_SCN_RANGE(snapshot_version2, snapshot_version3);
   reset_writer(snapshot_version3);
-  prepare_one_macro(micro_data3, 1);
-  prepare_one_macro(&micro_data3[1], 1);
+  if (merge_level == MICRO_BLOCK_MERGE_LEVEL) {
+    prepare_one_macro(micro_data3, 2);
+  } else {
+    prepare_one_macro(micro_data3, 1);
+    prepare_one_macro(&micro_data3[1], 1);
+  }
   prepare_data_end(handle3);
   merge_context.static_param_.tables_handle_.add_table(handle3);
   STORAGE_LOG(INFO, "finish prepare sstable3");
@@ -1752,7 +1928,7 @@ TEST_F(TestMultiVersionMergeRecycle, three_sstables_mixed)
   trans_version_range.multi_version_start_ = 17;
   trans_version_range.base_version_ = 15;
 
-  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context);
+  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context, merge_level);
   ObSSTable *merged_sstable = nullptr;
   ASSERT_EQ(OB_SUCCESS, merger.merge_partition(merge_context, 0));
   build_sstable(merge_context, merged_sstable);
@@ -1779,8 +1955,13 @@ TEST_F(TestMultiVersionMergeRecycle, three_sstables_mixed)
   bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
   ASSERT_TRUE(is_equal);
   const ObICompactionFilter::ObFilterStatistics &filter_statistics = merge_context.filter_ctx_.filter_statistics_;
-  ASSERT_EQ(3, filter_statistics.macro_cnt_[ObBlockOp::OP_FILTER]);
-  ASSERT_EQ(3, filter_statistics.macro_cnt_[ObBlockOp::OP_NONE]);
+  if (merge_level == MICRO_BLOCK_MERGE_LEVEL) {
+    ASSERT_EQ(1, filter_statistics.micro_cnt_[ObBlockOp::OP_FILTER]);
+    ASSERT_EQ(3, filter_statistics.micro_cnt_[ObBlockOp::OP_NONE]);
+  } else {
+    ASSERT_EQ(3, filter_statistics.macro_cnt_[ObBlockOp::OP_FILTER]);
+    ASSERT_EQ(3, filter_statistics.macro_cnt_[ObBlockOp::OP_NONE]);
+  }
   ASSERT_EQ(3, filter_statistics.filter_block_row_cnt_);
   ASSERT_EQ(0, filter_statistics.row_cnt_[ObICompactionFilter::FILTER_RET_REMOVE]);
   scanner->~ObStoreRowIterator();
@@ -1790,7 +1971,7 @@ TEST_F(TestMultiVersionMergeRecycle, three_sstables_mixed)
   merger.reset();
 }
 
-TEST_F(TestMultiVersionMergeRecycle, multi_uncommitted_trans_recycle)
+TEST_P(TestMultiVersionMergeRecycle, multi_uncommitted_trans_recycle)
 {
   int ret = OB_SUCCESS;
   ObTabletMergeDagParam param;
@@ -1904,6 +2085,138 @@ TEST_F(TestMultiVersionMergeRecycle, multi_uncommitted_trans_recycle)
   handle2.reset();
   merger.reset();
 }
+
+/**
+ * TEST 14: expired_first_macro_with_fresh_data - First Macro Has Expired Rows, Second Macro Fresh
+ *
+ * Objective: Verify row-level recycling when the first macro contains expired
+ *            rows for a rowkey, while the same rowkey has fresh data in
+ *            another sstable
+ *
+ * Data Layout:
+ *   SSTable1-Macro1: rowkey=0 v-15 + rowkey=1 v-8,v-7,v-6,v-5 (rowkey=1 expired)
+ *   SSTable1-Macro2: rowkey=2 v-15
+ *   SSTable2-Macro1: rowkey=1 v-20 (fresh, not expired)
+ *
+ * Recycle Version: base_version=10
+ *
+ * Expected Behavior:
+ *   - SSTable1-Macro1: contains fresh rowkey=0 and expired rowkey=1, should be opened
+ *     and rowkey=1 removed at row level
+ *   - rowkey=1 in SSTable2: v-20 > 10, kept
+ *   - rowkey=2 in SSTable1-Macro2: v-15 > 10, kept
+ *
+ * Expected Statistics:
+ *   - MACRO_BLOCK_MERGE_LEVEL:
+ *     - macro_cnt[OP_OPEN]=1 (SSTable1-Macro1)
+ *     - macro_cnt[OP_NONE]=2 (SSTable1-Macro2 + SSTable2-Macro1)
+ *   - MICRO_BLOCK_MERGE_LEVEL:
+ *     - micro_cnt[OP_OPEN]=1 (SSTable1-Micro1)
+ *     - micro_cnt[OP_NONE]=2 (SSTable1-Micro2 + SSTable2-Micro1)
+ *   - row_cnt[REMOVE]=5 (rowkey=1: 5 rows in SSTable1-Macro1)
+ */
+TEST_P(TestMultiVersionMergeRecycle, expired_first_macro_with_fresh_data)
+{
+  int ret = OB_SUCCESS;
+  ObTabletMergeDagParam param;
+  ObTabletExeMergeCtx merge_context(param, allocator_);
+  ObPartitionMinorMerger merger(local_arena_, merge_context.static_param_);
+  ObScnRange scn_range;
+  ObMergeLevel merge_level = GetParam();
+
+  // SSTable1
+  ObTableHandleV2 handle1;
+  const char *micro_data1[2];
+  micro_data1[0] = // MACRO1: OP_OPEN (rowkey=0 kept, rowkey=1 removed row by row)
+      "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
+      "0        var0  -15      0        15       15   EXIST  CLF\n"
+      "1        var1  -8       MIN      12       2    EXIST  SCF\n"
+      "1        var1  -8       0        12       NOP  EXIST  N\n"
+      "1        var1  -7       0        2        2    EXIST  N\n"
+      "1        var1  -6       0        1        1    EXIST  N\n"
+      "1        var1  -5       0        NOP      3    EXIST  CL\n";
+
+  micro_data1[1] = // MACRO2: OP_NONE (max_version=15 > 10)
+      "bigint   var   bigint   bigint   bigint bigint flag    multi_version_row_flag\n"
+      "2        var2  -15      0        5        5    EXIST   CLF\n";
+
+  const int64_t snapshot_version1 = 20;
+  PREPARE_SCN_RANGE(1, snapshot_version1);
+  prepare_table_schema(micro_data1, schema_rowkey_cnt_, scn_range, snapshot_version1);
+  reset_writer(snapshot_version1);
+  if (merge_level == MICRO_BLOCK_MERGE_LEVEL) {
+    prepare_one_macro(micro_data1, 2);
+  } else {
+    prepare_one_macro(micro_data1, 1);
+    prepare_one_macro(&micro_data1[1], 1);
+  }
+  prepare_data_end(handle1);
+  merge_context.static_param_.tables_handle_.add_table(handle1);
+  STORAGE_LOG(INFO, "finish prepare sstable1");
+
+  // SSTable2
+  ObTableHandleV2 handle2;
+  const char *micro_data2[1];
+  micro_data2[0] = // MACRO1: OP_NONE (max_version=20 > 10)
+      "bigint   var   bigint   bigint   bigint bigint  flag    multi_version_row_flag\n"
+      "1        var1  -20      0        6       6     EXIST   CLF\n";
+
+  const int64_t snapshot_version2 = 25;
+  PREPARE_SCN_RANGE(snapshot_version1, snapshot_version2);
+  reset_writer(snapshot_version2);
+  prepare_one_macro(micro_data2, 1);
+  prepare_data_end(handle2);
+  merge_context.static_param_.tables_handle_.add_table(handle2);
+  STORAGE_LOG(INFO, "finish prepare sstable2");
+
+  ObVersionRange trans_version_range;
+  trans_version_range.snapshot_version_ = 100;
+  trans_version_range.multi_version_start_ = 11;
+  trans_version_range.base_version_ = 10;
+
+  prepare_merge_context(MINOR_MERGE, false, trans_version_range, merge_context, merge_level);
+  ObSSTable *merged_sstable = nullptr;
+  ASSERT_EQ(OB_SUCCESS, merger.merge_partition(merge_context, 0));
+  build_sstable(merge_context, merged_sstable);
+
+  const char *result1 =
+      "bigint   var   bigint   bigint   bigint  bigint  flag    multi_version_row_flag\n"
+      "0        var0  -15      0        15      15    EXIST   CLF\n"
+      "1        var1  -20      0        6       6     EXIST   CLF\n"
+      "2        var2  -15      0        5       5     EXIST   CLF\n";
+
+  ObMockIterator res_iter;
+  ObStoreRowIterator *scanner = NULL;
+  ObDatumRange range;
+  res_iter.reset();
+  range.set_whole_range();
+  trans_version_range.base_version_ = 1;
+  trans_version_range.multi_version_start_ = 1;
+  trans_version_range.snapshot_version_ = INT64_MAX;
+  prepare_query_param(trans_version_range);
+  ASSERT_EQ(OB_SUCCESS, merged_sstable->scan(iter_param_, context_, range, scanner));
+  ASSERT_EQ(OB_SUCCESS, res_iter.from(result1));
+  ObMockDirectReadIterator sstable_iter;
+  ASSERT_EQ(OB_SUCCESS, sstable_iter.init(scanner, allocator_, full_read_info_));
+  bool is_equal = res_iter.equals<ObMockDirectReadIterator, ObStoreRow>(sstable_iter, true/*cmp multi version row flag*/);
+  ASSERT_TRUE(is_equal);
+  const ObICompactionFilter::ObFilterStatistics &filter_statistics = merge_context.filter_ctx_.filter_statistics_;
+  if (merge_level == MICRO_BLOCK_MERGE_LEVEL) {
+    ASSERT_EQ(1, filter_statistics.micro_cnt_[ObBlockOp::OP_OPEN]);
+    ASSERT_EQ(2, filter_statistics.micro_cnt_[ObBlockOp::OP_NONE]);
+  } else {
+    ASSERT_EQ(1, filter_statistics.macro_cnt_[ObBlockOp::OP_OPEN]);
+    ASSERT_EQ(2, filter_statistics.macro_cnt_[ObBlockOp::OP_NONE]);
+  }
+  ASSERT_EQ(5, filter_statistics.row_cnt_[ObICompactionFilter::FILTER_RET_REMOVE]);
+  scanner->~ObStoreRowIterator();
+  handle1.reset();
+  handle2.reset();
+  merger.reset();
+}
+
+INSTANTIATE_TEST_CASE_P(MergeLevelTests, TestMultiVersionMergeRecycle,
+  testing::Values(MACRO_BLOCK_MERGE_LEVEL, MICRO_BLOCK_MERGE_LEVEL));
 
 }
 }

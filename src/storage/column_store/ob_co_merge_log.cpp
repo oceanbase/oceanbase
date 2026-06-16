@@ -138,6 +138,7 @@ int ObCOMergeLogConsumer<CallbackImpl>::consume_all_merge_log(ObCOMergeLogIterat
   ObMergeLog curr_log;
   ObMergeLog compact_log;
   const blocksstable::ObDatumRow *row = nullptr;
+  const ObMergeVectorStore *vector_store = nullptr;
   while (OB_SUCC(ret)) {
     if (OB_UNLIKELY(!MERGE_SCHEDULER_PTR->could_major_merge_start())) {
       ret = OB_CANCELED;
@@ -155,7 +156,7 @@ int ObCOMergeLogConsumer<CallbackImpl>::consume_all_merge_log(ObCOMergeLogIterat
       ret = OB_SUCCESS;
       continue;
 #endif
-    } else if (OB_FAIL(iter.get_next_log(curr_log, row))) {
+    } else if (OB_FAIL(iter.get_next_log(curr_log, vector_store, row))) {
       if (OB_ITER_END != ret) {
         LOG_WARN("fail to get next log", K(ret));
       } else {
@@ -163,7 +164,7 @@ int ObCOMergeLogConsumer<CallbackImpl>::consume_all_merge_log(ObCOMergeLogIterat
         break;
       }
     } else if (compact_log.is_valid() && !curr_log.is_continuous(compact_log)) {
-      if (OB_FAIL(callback.consume(compact_log, row/*no used*/))) {
+      if (OB_FAIL(callback.consume(compact_log, vector_store, row/*no used*/))) {
         LOG_WARN("failed to consume compact merge log", K(ret), K(compact_log));
       } else {
         compact_log.reset();
@@ -173,12 +174,12 @@ int ObCOMergeLogConsumer<CallbackImpl>::consume_all_merge_log(ObCOMergeLogIterat
     if (OB_FAIL(ret)) {
     } else if (curr_log.is_range_mergelog()) {
       compact_log = curr_log;
-    } else if (OB_FAIL(callback.consume(curr_log, row))) {
+    } else if (OB_FAIL(callback.consume(curr_log, vector_store, row))) {
       LOG_WARN("failed to consume merge log", K(ret), K(curr_log), KPC(row));
     }
   }
   if (OB_FAIL(ret)) {
-  } else if (compact_log.is_valid() && OB_FAIL(callback.consume(compact_log, row/*no used*/))) {
+  } else if (compact_log.is_valid() && OB_FAIL(callback.consume(compact_log, vector_store, row/*no used*/))) {
     LOG_WARN("failed to consume merge log", K(ret), K(compact_log));
   } else if (OB_FAIL(iter.close())) {
     LOG_WARN("failed to close merge log iter", K(ret));

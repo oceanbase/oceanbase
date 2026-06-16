@@ -44,22 +44,11 @@ int ObNewColumnCommonDecoder::batch_decode(
 int ObNewColumnCommonDecoder::decode_vector(ObVectorDecodeCtx &vector_ctx) const
 {
   int ret = OB_SUCCESS;
-  if (OB_ISNULL(vector_ctx.default_datum_)) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("Unexpected null datum", K(ret));
+  if (OB_FAIL(vector_ctx.fill_from_default_datum())) {
+    LOG_WARN("Failed to fill vector from default datum", K(ret), K(vector_ctx));
   } else {
-#define FOREACH_SET_VEC(FORMAT)                                                                     \
-  for (int64_t idx = 0; idx < vector_ctx.row_cap_; ++idx) {                                         \
-    const int64_t vec_idx = idx + vector_ctx.vec_offset_;                                           \
-    static_cast<FORMAT *>(vector_ctx.get_vector())->set_datum(vec_idx, *vector_ctx.default_datum_); \
+    LOG_DEBUG("[NEW_COLUMN_DECODE] decode vector", KPC(vector_ctx.default_datum_), K(lbt()));
   }
-    if (VEC_DISCRETE == vector_ctx.get_format()) {
-      FOREACH_SET_VEC(ObDiscreteFormat)
-    } else {
-      FOREACH_SET_VEC(ObFixedLengthBase)
-    }
-  }
-  LOG_DEBUG("[NEW_COLUMN_DECODE] decode vector", KPC(vector_ctx.default_datum_), K(lbt()));
   return ret;
 }
 

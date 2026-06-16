@@ -240,85 +240,21 @@ int ObTransferParallelBuildTabletTask::process()
 int ObTransferParallelBuildTabletTask::do_build_tablet_infos_()
 {
   int ret = OB_SUCCESS;
-  share::ObTransferTabletInfo tablet_info;
-  int64_t build_tablet_info_num = 0;
-  const int64_t start_ts = ObTimeUtil::current_time();
 
   if (!is_inited_) {
     ret = OB_NOT_INIT;
     LOG_WARN("transfer parallel build tablet task do not init", K(ret), KPC(ctx_));
   } else {
     if (first_tablet_info_.is_valid()) {
-      if (OB_FAIL(do_build_tablet_info_(first_tablet_info_))) {
-        LOG_WARN("failed to do build tablet info", K(ret), K(first_tablet_info_));
-      } else {
-        ++build_tablet_info_num;
+      if (OB_FAIL(ObTransferBuildTabletInfoHelper::build_tablet_info(ls_, first_tablet_info_, *ctx_))) {
+        LOG_WARN("failed to build tablet info", K(ret), K(first_tablet_info_));
       }
     }
 
-    while (OB_SUCC(ret)) {
-      if (timeout_ctx_->is_timeouted()) {
-        ret = OB_TIMEOUT;
-        LOG_WARN("transfer parallel build tablet task already timeout", K(ret));
-        break;
-      } else if (OB_FAIL(ctx_->get_next_tablet_info(tablet_info))) {
-        if (OB_ITER_END == ret) {
-          ret = OB_SUCCESS;
-          break;
-        } else {
-          LOG_WARN("failed to get next tablet id", K(ret), KPC(ctx_));
-        }
-      } else if (OB_FAIL(do_build_tablet_info_(tablet_info))) {
-        LOG_WARN("failed to do build tablet info", K(ret), K(tablet_info));
-      } else {
-        ++build_tablet_info_num;
-      }
+    if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(ObTransferBuildTabletInfoHelper::loop_to_build_tablet_infos(ls_, *timeout_ctx_, *ctx_))) {
+      LOG_WARN("failed to build tablet infos", K(ret));
     }
-
-    LOG_INFO("finish do build tablet infos", K(ret), K(build_tablet_info_num), "cost_ts", ObTimeUtil::current_time() - start_ts);
-  }
-  return ret;
-}
-
-int ObTransferParallelBuildTabletTask::do_build_tablet_info_(const share::ObTransferTabletInfo &tablet_info)
-{
-  int ret = OB_SUCCESS;
-  ObTabletHandle tablet_handle;
-  ObTabletCreateDeleteMdsUserData user_data;
-  ObTablet *tablet = nullptr;
-  bool committed_flag = false;
-  ObMigrationTabletParam param;
-  mds::MdsWriter writer;// will be removed later
-  mds::TwoPhaseCommitState trans_stat;// will be removed later
-  share::SCN trans_version;// will be removed later
-
-  if (!is_inited_) {
-    ret = OB_NOT_INIT;
-    LOG_WARN("transfer parallel build tablet task do not init", K(ret), KPC(ctx_));
-  } else if (!tablet_info.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("do build tablet info get invalid argument", K(ret), K(tablet_info));
-  } else if (OB_FAIL(ls_->ha_get_tablet(tablet_info.tablet_id_, tablet_handle))) {
-    LOG_WARN("failed to get tablet", K(ret), K(tablet_info), K(tablet_handle));
-  } else if (OB_ISNULL(tablet = tablet_handle.get_obj())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("tablet should not be NULL", K(ret), KP(tablet), K(tablet_info));
-  } else if (OB_FAIL(tablet->get_latest_tablet_status(user_data, writer, trans_stat, trans_version))) {
-    LOG_WARN("failed to get latest tablet status", K(ret), KPC(tablet), K(tablet_info));
-  } else if (ObTabletStatus::TRANSFER_OUT != user_data.tablet_status_) {
-    ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("tablet status is not match", K(ret), KPC(tablet), K(tablet_info), K(user_data));
-  } else if (mds::TwoPhaseCommitState::ON_COMMIT == trans_stat) {
-    ret = OB_STATE_NOT_MATCH;
-    LOG_WARN("transfer src tablet status is transfer out but is already committed, not match",
-        K(ret), KPC(tablet), K(tablet_info), K(user_data));
-  } else if (tablet_info.transfer_seq_ != tablet->get_tablet_meta().transfer_info_.transfer_seq_) {
-    ret = OB_TABLET_TRANSFER_SEQ_NOT_MATCH;
-    LOG_WARN("tablet transfer seq is not match", K(ret), KPC(tablet), K(tablet_info));
-  } else if (OB_FAIL(tablet->build_transfer_tablet_param(ctx_->get_data_version(), ctx_->get_dest_ls_id(), param))) {
-    LOG_WARN("failed to build transfer tablet param", K(ret), K(tablet_info));
-  } else if (OB_FAIL(ctx_->add_tablet_info(param))) {
-    LOG_WARN("failed to add tablet info", K(ret), K(param));
   }
   return ret;
 }

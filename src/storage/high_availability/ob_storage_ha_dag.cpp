@@ -530,21 +530,23 @@ int ObStorageHADagUtils::get_migration_src_info(
     } else if (FALSE_IT(param.ls_id_ = arg.ls_id_)) {
     } else if (FALSE_IT(param.local_clog_checkpoint_scn_ = local_clog_checkpoint_scn)) {
     } else if (FALSE_IT(param.arg_ = arg)) {
-    } else if (OB_FAIL(member_helper.init(storage_rpc))) {
-      LOG_WARN("failed to init member helper", K(ret), KP(storage_rpc));
-    } else if (OB_FAIL(member_helper.get_member_list_by_replica_type(tenant_id, arg.ls_id_,
-        arg.dst_, param.info_, param.is_first_c_replica_))) {
-      LOG_WARN("failed to get member list.", K(ret), K(tenant_id), "ls_id", arg.ls_id_, "dst", arg.dst_);
-    } else if (OB_FAIL(ObStorageHAChooseSrcHelper::get_policy_type(arg, tenant_id,
-        enable_choose_source_policy, str, param.info_.learner_list_, param.policy_, param.use_c_replica_policy_))) {
-      LOG_WARN("failed to get policy type", K(ret), K(arg), K(tenant_id),
-          K(enable_choose_source_policy), K(str), K(param));
-    } else if (OB_FAIL(choose_src_helper.init(param, storage_rpc, &member_helper))) {
-      LOG_WARN("failed to init src provider.", K(ret), K(param), KP(storage_rpc));
-    } else if (OB_FAIL(choose_src_helper.get_available_src(arg, src_info))) {
-      LOG_WARN("failed to choose ob src", K(ret), K(tenant_id), K(local_clog_checkpoint_scn), K(arg));
     } else {
-      FLOG_INFO("choose src", K(src_info), K(arg));
+      if (OB_FAIL(member_helper.init(storage_rpc))) {
+        LOG_WARN("failed to init member helper", K(ret), KP(storage_rpc));
+      } else if (OB_FAIL(member_helper.get_member_list_by_replica_type(tenant_id, arg.ls_id_,
+          arg.dst_, param.info_, param.is_first_c_replica_))) {
+        LOG_WARN("failed to get member list.", K(ret), K(tenant_id), "ls_id", arg.ls_id_, "dst", arg.dst_);
+      } else if (OB_FAIL(ObStorageHAChooseSrcHelper::get_policy_type(arg, tenant_id,
+          enable_choose_source_policy, str, param.info_.learner_list_, param.policy_, param.use_c_replica_policy_))) {
+        LOG_WARN("failed to get policy type", K(ret), K(arg), K(tenant_id),
+            K(enable_choose_source_policy), K(str), K(param));
+      } else if (OB_FAIL(choose_src_helper.init(param, storage_rpc, &member_helper))) {
+        LOG_WARN("failed to init src provider.", K(ret), K(param), KP(storage_rpc));
+      } else if (OB_FAIL(choose_src_helper.get_available_src(arg, src_info))) {
+        LOG_WARN("failed to choose ob src", K(ret), K(tenant_id), K(local_clog_checkpoint_scn), K(arg));
+      } else {
+        FLOG_INFO("choose src", K(src_info), K(arg));
+      }
     }
   } // end smart var
   return ret;
@@ -559,21 +561,9 @@ int ObStorageHADagUtils::check_self_is_valid_member_after_inc_config_version(
   if (!ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("check self in member list get invalid argument", K(ret), K(ls_id));
-  } else if (!GCTX.is_shared_storage_mode()) {
+  } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support for sn", K(ret));
-#ifdef OB_BUILD_SHARED_STORAGE
-  } else if (with_leader) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not support with leader", K(ret));
-  } else {
-    // inc config version with log service
-    if (OB_FAIL(inc_config_version_with_log_service(ls_id))) {
-      LOG_WARN("failed inc config version with log service", K(ret));
-    } else if (OB_FAIL(check_self_is_valid_member_with_log_service(ls_id, is_valid_member))) {
-      LOG_WARN("failed check self is valid member with log service", K(ret));
-    }
-#endif
   }
 
   return ret;
@@ -587,89 +577,13 @@ int ObStorageHADagUtils::inc_member_list_config_version(
   if (!ls_id.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("inc member list config version get invalid argument", K(ret), K(ls_id));
-  } else if (!GCTX.is_shared_storage_mode()) {
+  } else {
     ret = OB_NOT_SUPPORTED;
     LOG_WARN("not support for sn", K(ret));
-#ifdef OB_BUILD_SHARED_STORAGE
-  } else if (with_leader) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("not support with leader", K(ret));
-  } else {
-    // inc config version with log service
-    if (OB_FAIL(inc_config_version_with_log_service(ls_id))) {
-      LOG_WARN("failed inc config version with log service", K(ret));
-    } else {
-      LOG_INFO("succeed inc config version with log service", K(ls_id));
-    }
-#endif
   }
 
   return ret;
 }
-
-#ifdef OB_BUILD_SHARED_STORAGE
-int ObStorageHADagUtils::check_self_is_valid_member_with_log_service(
-    const share::ObLSID &ls_id,
-    bool &is_valid_member)
-{
-  int ret = OB_SUCCESS;
-  const uint64_t tenant_id = MTL_ID();
-
-  if (!ls_id.is_valid_with_tenant(tenant_id)) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid argument", KR(ret), K(tenant_id), K(ls_id));
-  } else if (!GCONF.enable_logservice) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("log service not support", KR(ret));
-  } else {
-    palf::LogConfigVersion config_version;
-    common::ObMemberList member_list;
-    common::GlobalLearnerList learner_list;
-    libpalf::LibPalfMemberInfoReaderWrapper palf_wrapper(tenant_id, ls_id.id());
-    if (OB_FAIL(palf_wrapper.get_member_info(config_version, member_list, learner_list))) {
-      LOG_WARN("failed to get member info", K(ret));
-    } else if (OB_FAIL(inner_check_self_is_valid_member_(ls_id,
-                                                         member_list,
-                                                         learner_list,
-                                                         is_valid_member))) {
-      LOG_WARN("failed to inner check self is valid member", K(ret));
-    }
-  }
-
-  return ret;
-}
-
-int ObStorageHADagUtils::inc_config_version_with_log_service(
-    const share::ObLSID &ls_id)
-{
-  int ret = OB_SUCCESS;
-  ObLSService *ls_service = nullptr;
-  ObLSHandle ls_handle;
-  ObLS *ls = nullptr;
-  const int64_t timeout_us = GCONF.sys_bkgd_migration_change_member_list_timeout;
-
-  if (!ls_id.is_valid()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("check self in member list get invalid argument", K(ret), K(ls_id));
-  } else if (!GCONF.enable_logservice) {
-    ret = OB_NOT_SUPPORTED;
-    LOG_WARN("log service not support", KR(ret));
-  } else if (OB_ISNULL(ls_service = MTL(ObLSService *))) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls service should not be NULL", K(ret), K(ls_id));
-  } else if (OB_FAIL(ls_service->get_ls(ls_id, ls_handle, ObLSGetMod::HA_MOD))) {
-    LOG_WARN("failed to get ls", K(ret), K(ls_id));
-  } else if (OB_ISNULL(ls = ls_handle.get_ls())) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("ls should not be NULL", K(ret), KP(ls), K(ls_id));
-  } else if (OB_FAIL(ls->get_log_handler()->inc_config_version(timeout_us))) {
-    LOG_WARN("failed to inc config version", K(ret), K(ls_id), K(timeout_us));
-  } else {
-    LOG_INFO("succeed to inc config version", K(ls_id), K(timeout_us));
-  }
-  return ret;
-}
-#endif
 
 int ObStorageHADagUtils::deal_with_non_migrated_tablet(
   const ObLSHandle &ls_handle,

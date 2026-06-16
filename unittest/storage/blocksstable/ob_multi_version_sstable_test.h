@@ -452,6 +452,7 @@ void ObMultiVersionSSTableTest::init_tablet()
   ObTabletID tablet_id(tablet_id_);
   ObLSHandle ls_handle;
   ObLSService *ls_svr = MTL(ObLSService*);
+  ASSERT_NE(nullptr, ls_svr);
   ASSERT_EQ(OB_SUCCESS, ls_svr->get_ls(ls_id, ls_handle, ObLSGetMod::STORAGE_MOD));
 
   ObTabletHandle tablet_handle;
@@ -499,7 +500,7 @@ void ObMultiVersionSSTableTest::reset_writer(
 
   ASSERT_EQ(OB_SUCCESS, index_desc_.gen_index_store_desc(data_desc_.get_desc()));
   ASSERT_TRUE(index_desc_.is_valid());
-  ASSERT_EQ(OB_SUCCESS, root_index_builder_->init(index_desc_.get_desc()));
+  ASSERT_EQ(OB_SUCCESS, root_index_builder_->init(index_desc_.get_desc(), ObSSTableIndexBuilder::ObSpaceOptimizationMode::DISABLE));
 
   ObMacroSeqParam seq_param;
   seq_param.seq_type_ = ObMacroSeqParam::SEQ_TYPE_INC;

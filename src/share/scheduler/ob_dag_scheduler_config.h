@@ -16,11 +16,6 @@ DAG_SCHEDULER_DAG_NET_TYPE_DEF(DAG_NET_TYPE_CO_MAJOR, "DAG_NET_TYPE_CO_MAJOR")
 DAG_SCHEDULER_DAG_NET_TYPE_DEF(DAG_NET_TRANSFER_BACKFILL_TX, "DAG_NET_TRANSFER_BACKFILL_TX")
 DAG_SCHEDULER_DAG_NET_TYPE_DEF(DAG_NET_TYPE_REBUILD_TABLET, "DAG_NET_REBUILD_TABLET")
 DAG_SCHEDULER_DAG_NET_TYPE_DEF(DAG_NET_TYPE_SS_MIGRATION, "DAG_NET_SS_MIGRATION")
-#ifdef OB_BUILD_SHARED_STORAGE
-DAG_SCHEDULER_DAG_NET_TYPE_DEF(DAG_NET_TYPE_SS_TRANSFER_BACKFILL_TX, "DAG_NET_SS_TRANSFER_BACKFILL_TX")
-DAG_SCHEDULER_DAG_NET_TYPE_DEF(DAG_NET_TYPE_SS_HA_MACRO_COPY, "DAG_NET_SS_HA_MACRO_COPY")
-DAG_SCHEDULER_DAG_NET_TYPE_DEF(DAG_NET_TYPE_SS_HA_MACRO_DELETE, "DAG_NET_SS_HA_MACRO_DELETE")
-#endif
 DAG_SCHEDULER_DAG_NET_TYPE_DEF(DAG_NET_TYPE_BACKUP_VALIDATE, "DAG_NET_TYPE_BACKUP_VALIDATE")
 DAG_SCHEDULER_DAG_NET_TYPE_DEF(DAG_NET_TYPE_MAX, "DAG_NET_TYPE_MAX")
 #endif
@@ -70,14 +65,8 @@ DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_MDS_MINI_MERGE, ObDagPrio::DAG_PRIO_MDS_COMP
     false, 3, {"ls_id", "tablet_id", "flush_scn"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_MDS_MINOR_MERGE, ObDagPrio::DAG_PRIO_MDS_COMPACTION_MID, ObSysTaskType::SSTABLE_MINOR_MERGE_TASK, "MDS_MINOR_MERGE", "COMPACTION",
     false, 3, {"ls_id", "tablet_id", "flush_scn"})
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_VERIFY_CKM, ObDagPrio::DAG_PRIO_COMPACTION_LOW, ObSysTaskType::SSTABLE_MAJOR_MERGE_TASK, "VERIFY_CKM", "COMPACTION",
-    false, 2, {"ls_id", "tablet_count"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_BATCH_FREEZE_TABLETS, ObDagPrio::DAG_PRIO_COMPACTION_LOW, ObSysTaskType::BATCH_FREEZE_TABLET_TASK, "BATCH_FREEZE", "COMPACTION",
     false, 2, {"ls_id", "tablet_count"})
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_UPDATE_SKIP_MAJOR, ObDagPrio::DAG_PRIO_COMPACTION_LOW, ObSysTaskType::SSTABLE_MAJOR_MERGE_TASK, "UPDATE_SKIP_MAJOR", "COMPACTION",
-    false, 2, {"ls_id", "tablet_count"})
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_REFRESH_SSTABLES, ObDagPrio::DAG_PRIO_COMPACTION_LOW, ObSysTaskType::SSTABLE_MAJOR_MERGE_TASK, "REFRESH_MAJOR", "COMPACTION",
-    false, 3, {"ls_id", "tablet_id", "compaction_scn"})
 /*
  * NOTICE: if you add/delete a compaction dag type here, remember to alter function is_compaction_dag and get_diagnose_tablet_type in ob_tenant_dag_scheduler.h
  * AND update check_ls_compaction_dag_exist_with_cancel
@@ -134,16 +123,6 @@ DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_TABLET_CHECK_CONVERT, ObDagPrio::DAG_PRIO_HA
     true, 3, {"tenant_id", "ls_id", "op_type"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_TABLET_GROUP_GENERATOR, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::MIGRATION_TASK, "TABLET_GROUP_GENERATOR", "MIGRATE",
     true, 3, {"tenant_id", "ls_id", "op_type"})
-#ifdef OB_BUILD_SHARED_STORAGE
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_SS_INITIAL_MIGRATION, ObDagPrio::DAG_PRIO_HA_MID, ObSysTaskType::MIGRATION_TASK, "SS_INITIAL_MIGRATION", "MIGRATE",
-    true, 3, {"tenant_id", "ls_id", "op_type"})
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_SS_START_MIGRATION, ObDagPrio::DAG_PRIO_HA_MID, ObSysTaskType::MIGRATION_TASK, "SS_START_MIGRATION", "MIGRATE",
-    true, 3, {"tenant_id", "ls_id", "op_type"})
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_SS_FINISH_MIGRATION, ObDagPrio::DAG_PRIO_HA_MID, ObSysTaskType::MIGRATION_TASK, "SS_FINISH_MIGRATION", "MIGRATE",
-    true, 3, {"tenant_id", "ls_id", "op_type"})
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_SS_CREATE_TABLETS_CONSUMER, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::MIGRATION_TASK, "SS_CREATE_TABLETS_CONSUMER", "MIGRATE",
-    true, 3, {"tenant_id", "ls_id", "op_type"})
-#endif
 // DAG_TYPE_MIGRATE END
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_FAST_MIGRATE, ObDagPrio::DAG_PRIO_HA_MID, ObSysTaskType::MIGRATION_TASK, "FAST_MIGRATE", "MIGRATE",
     false, 0, {})
@@ -230,14 +209,6 @@ DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_FINISH_TABLET_GROUP_RESTORE, ObDagPrio::DAG_
     true, 3, {"ls_id", "first_tablet_id", "is_leader"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_TABLET_RESTORE, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::RESTORE_TASK, "TABLET_RESTORE", "RESTORE",
     true, 3, {"ls_id", "tablet_id", "is_leader"})
-#ifdef OB_BUILD_SHARED_STORAGE
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_INITIAL_MACRO_COPY, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::SS_HA_MACRO_COPY_TASK, "INITIAL_MACRO_COPY", "SSHA_MC",
-    true, 4, {"parent_task_id", "ls_id", "task_id", "task_type"})
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_START_MACRO_COPY, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::SS_HA_MACRO_COPY_TASK, "START_MACRO_COPY", "SSHA_MC",
-    true, 4, {"parent_task_id", "ls_id", "task_id", "task_type"})
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_FINISH_MACRO_COPY, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::SS_HA_MACRO_COPY_TASK, "FINISH_MACRO_COPY", "SSHA_MC",
-    true, 4, {"parent_task_id", "ls_id", "task_id", "task_type"})
-#endif
     // DAG_TYPE_RESTORE END
 
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_BACKUP_CLEAN, ObDagPrio::DAG_PRIO_HA_LOW, ObSysTaskType::BACKUP_CLEAN_TASK, "BACKUP_CLEAN", "BACKUP_CLEAN",
@@ -279,30 +250,8 @@ DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_INC_SSTABLE_UPLOAD, ObDagPrio::DAG_PRIO_INC_
     false, 6, {"ls_id", "tablet_id", "table_type", "start_scn", "end_scn", "transfer_scn"})
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_ATTACH_SHARED_SSTABLE, ObDagPrio::DAG_PRIO_ATTACH_SHARED_SSTABLE, ObSysTaskType::ATTACH_SHARED_SSTABLE_TASK, "ATTACH_SHARED_SSTABLE", "ATTACH_SHARED_SSTABLE",
     false, 3, {"ls_id", "tablet_id", "version"})
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_ATTACH_MAJOR_SSTABLE, ObDagPrio::DAG_PRIO_ATTACH_SHARED_SSTABLE, ObSysTaskType::ATTACH_MAJOR_SSTABLE_TASK, "ATTACH_MAJOR_SSTABLE", "ATTACH_MAJOR_SSTABLE",
-    false, 3, {"ls_id", "tablet_id", "merge_version"})
-// DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_SS_TRANSFER, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::TRANSFER_TASK, "SS_TRANSFER", "TRANSFER")
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_SS_START_TRANSFER_BACKFILL_TX, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::TRANSFER_TASK, "SS_START_TRANSFER_BACKFILL_TX", "TRANSFER",
-    true, 3, {"backfill_job_type", "tenant_id", "ls_id"})
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_SS_FINISH_TRANSFER_BACKFILL_TX, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::TRANSFER_TASK, "SS_FINISH_TRANSFER_BACKFILL_TX", "TRANSFER",
-    true, 3, {"backfill_job_type", "tenant_id", "ls_id"})
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_SS_TABLET_BACKFILL_SCHEDULE, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::TRANSFER_TASK, "SS_TABLET_BACKFILL_TX_SCHEDULE", "TRANSFER",
-    true, 3, {"ls_id", "tablet_id", "backfill_scn"})
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_START_MACRO_DELETE, ObDagPrio::DAG_PRIO_HA_LOW, ObSysTaskType::BACKUP_TASK, "START_MACRO_DELETE", "BACKUP_CLEAN",
-    true, 3, {"tenant_id", "ls_id", "task_id"})
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_SS_TABLET_BACKFILL_UPLOAD, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::TRANSFER_TASK, "SS_TABLET_BACKFILL_UPLOAD", "TRANSFER",
-    true, 3, {"ls_id", "tablet_id", "backfill_scn"})
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_SS_TABLET_BACKFILL_TX, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::TRANSFER_TASK, "SS_TABLET_BACKFILL_TX", "TRANSFER",
-    true, 3, {"ls_id", "tablet_id", "backfill_scn"})
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_SS_TABLET_REPLACE_TABLE, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::TRANSFER_TASK, "SS_TABLET_REPLACE_TABLE", "TRANSFER",
-    true, 3, {"ls_id", "tablet_id", "backfill_scn"})
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_SS_TABLET_REFRESH_TABLE, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::TRANSFER_TASK, "SS_TABLET_REFRESH_TABLE", "TRANSFER",
-    true, 3, {"ls_id", "tablet_id", "backfill_scn"})
-DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_SS_TABLET_UPDATE_INFO, ObDagPrio::DAG_PRIO_HA_HIGH, ObSysTaskType::TRANSFER_TASK, "SS_TABLET_UPDATE_INFO", "TRANSFER",
-    true, 3, {"ls_id", "tablet_id", "backfill_scn"})
-// DAG_TYPE_SS_TRANSFER END
-
 #endif
+
 DAG_SCHEDULER_DAG_TYPE_DEF(DAG_TYPE_MAX, ObDagPrio::DAG_PRIO_MAX, ObSysTaskType::MAX_SYS_TASK_TYPE, "DAG_TYPE_MAX", "INVALID", false, 0, {})
 #endif
 
@@ -348,6 +297,10 @@ struct ObDagPrio
 #include "ob_dag_scheduler_config.h"
 #undef DAG_SCHEDULER_DAG_PRIO_DEF
   };
+  static bool is_valid_prio(const ObDagPrioEnum prio)
+  {
+    return prio >= DAG_PRIO_COMPACTION_HIGH && prio < DAG_PRIO_MAX;
+  }
 };
 
 static constexpr ObDagPrioStruct OB_DAG_PRIOS[] = {
@@ -421,15 +374,16 @@ inline bool is_compaction_dag(ObDagType::ObDagTypeEnum dag_type)
 
 inline bool is_batch_exec_dag(ObDagType::ObDagTypeEnum dag_type)
 {
-  return ObDagType::DAG_TYPE_VERIFY_CKM == dag_type
-      || ObDagType::DAG_TYPE_BATCH_FREEZE_TABLETS == dag_type
-      || ObDagType::DAG_TYPE_UPDATE_SKIP_MAJOR == dag_type;
+  return ObDagType::DAG_TYPE_BATCH_FREEZE_TABLETS == dag_type;
 }
 
 inline bool is_diagnose_dag(ObDagType::ObDagTypeEnum dag_type)
 {
+  /*
   return is_compaction_dag(dag_type)
       || is_batch_exec_dag(dag_type);
+  */
+  return true;
 }
 
 inline bool is_valid_dag_priority(ObDagPrio::ObDagPrioEnum priority)

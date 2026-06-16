@@ -1760,7 +1760,7 @@ int ObMockIteratorBuilder::parse_for_datum(
           } else if (OB_FAIL(ret)) {
             STORAGE_LOG(WARN, "failed to get row", K(ret), K(pos));
           } else {
-            STORAGE_LOG(WARN, "add row", K(ret), KPC(row));
+            STORAGE_LOG(INFO, "add datum row", K(ret), KPC(row));
             iter.add_row(row);
           }
         }
@@ -2528,20 +2528,18 @@ int ObMockDirectReadIterator::init(ObStoreRowIterator *iter,
                                    const ObITableReadInfo &read_info)
 {
   int ret = OB_SUCCESS;
-  const blocksstable::ObDatumRow *row = nullptr;
   if (OB_ISNULL(iter)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "Invalid null argument", K(ret));
   } else if (typeid(*iter) != typeid(storage::ObSSTableRowWholeScanner)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "iterator must be ObSSTableRowWholeScanner", K(ret));
-  } else if (OB_FAIL(iter->get_next_row(row))) {
-    if (OB_ITER_END != ret) {
-      TRANS_LOG(WARN, "Fail to get next row", K(ret));
-    }
   } else {
     int64_t column_cnt = read_info.get_request_count();
     row_iter_ = iter;
+    // The WholeScanner has already opened the first micro block during scan().
+    // We directly access the micro scanner's reader/last without consuming any rows through get_next_row(),
+    // which would go through multi-version logic and potentially consume rows across micro block boundaries.
     scanner_ = (static_cast<storage::ObSSTableRowWholeScanner *>(iter))->micro_scanner_;
     reader_ = scanner_->reader_;
     current_ = 0;
@@ -2563,18 +2561,24 @@ int ObMockDirectReadIterator::init(ObStoreRowIterator *iter,
 int ObMockDirectReadIterator::reset_scanner()
 {
   int ret = OB_SUCCESS;
-  const blocksstable::ObDatumRow *row = nullptr;
   if (OB_ISNULL(row_iter_)) {
     ret = OB_INVALID_ARGUMENT;
     TRANS_LOG(WARN, "Invalid null iter", K(ret));
-  } else if (OB_FAIL(row_iter_->get_next_row(row))) {
-    if (OB_ITER_END != ret) {
-      TRANS_LOG(WARN, "Fail to get next row", K(ret));
-    }
   } else {
-    current_ = 0;
-    end_ = scanner_->last_;
-    reader_ = scanner_->reader_;
+    // Directly open the next micro block without going through the multi-version
+    // scanner's get_next_row(), which may consume multiple micro blocks when doing
+    // multi-version row compaction (e.g., a rowkey spanning two micro blocks).
+    storage::ObSSTableRowWholeScanner *whole_scanner =
+        static_cast<storage::ObSSTableRowWholeScanner *>(row_iter_);
+    if (OB_FAIL(whole_scanner->open_next_valid_micro_block())) {
+      if (OB_ITER_END != ret) {
+        TRANS_LOG(WARN, "Fail to open next micro block", K(ret));
+      }
+    } else {
+      current_ = 0;
+      end_ = scanner_->last_;
+      reader_ = scanner_->reader_;
+    }
   }
 
   return ret;
@@ -2587,7 +2591,6 @@ int ObMockDirectReadIterator::get_next_row(const storage::ObStoreRow *&row)
 
   while (OB_SUCC(ret)) {
     if (end_of_block()) {
-      scanner_->current_ = -1;
       if (OB_FAIL(reset_scanner())) {
         if (OB_ITER_END != ret) {
           TRANS_LOG(WARN, "Fail to get next row", K(ret));

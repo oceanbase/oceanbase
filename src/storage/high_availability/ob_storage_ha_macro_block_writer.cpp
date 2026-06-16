@@ -418,62 +418,6 @@ int ObStorageHALocalMacroBlockWriter::append_macro_row_(
 }
 
 
-#ifdef OB_BUILD_SHARED_STORAGE
-// ObStorageHASharedMacroBlockWriter
-int ObStorageHASharedMacroBlockWriter::check_sstable_param_for_init_(const ObMigrationSSTableParam *sstable_param) const
-{
-  int ret = OB_SUCCESS;
-  if (!sstable_param->basic_meta_.table_shared_flag_.is_shared_macro_blocks()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("sstable has no shared macro blocks or is shared backup table", K(ret), KPC(sstable_param));
-  }
-  return ret;
-}
-
-int ObStorageHASharedMacroBlockWriter::set_macro_write_info_(
-    const MacroBlockId &macro_block_id,
-    blocksstable::ObStorageObjectWriteInfo &write_info,
-    blocksstable::ObStorageObjectOpt &opt)
-{
-  int ret = OB_SUCCESS;
-  const ObTabletID tablet_id(macro_block_id.second_id());
-  if (!macro_block_id.is_valid() || !macro_block_id.is_id_mode_share()) {
-    ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("prepare shared macro write info get invalid argument", K(ret), K(macro_block_id));
-  } else if (tablet_id_ != tablet_id) {
-    ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("macro tablet id in shared storage is not match", K(ret), K(macro_block_id), K(tablet_id), K(tablet_id_));
-  } else {
-    write_info.io_desc_.set_wait_event(ObWaitEventIds::DB_FILE_MIGRATE_WRITE);
-    write_info.io_desc_.set_sys_module_id(ObIOModule::SHARED_BLOCK_RW_IO);
-    write_info.io_desc_.set_unsealed();
-    write_info.mtl_tenant_id_ = MTL_ID();
-    write_info.offset_ = 0;
-    write_info.set_ls_epoch_id(0);
-    opt.set_ss_share_data_macro_object_opt(macro_block_id.second_id(), macro_block_id.third_id(), macro_block_id.column_group_id());
-  }
-  return ret;
-}
-
-int ObStorageHASharedMacroBlockWriter::append_macro_row_(
-    const char *buf,
-    const int64_t size,
-    const blocksstable::MacroBlockId &macro_id)
-{
-  int ret = OB_SUCCESS;
-  if (sstable_param_->is_shared_sstable()) {
-    if (OB_FAIL(index_block_rebuilder_->append_macro_row(buf, size, macro_id, -1 /*absolute_row_offset*/))) {
-      LOG_WARN("failed to append macro row", K(ret), K(macro_id));
-    }
-  } else {
-    // sstable which only shared macro blocks need not rebuild index.
-  }
-
-  return ret;
-}
-
-#endif
-
 } // storage
 } // oceanbase
 

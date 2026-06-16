@@ -15,6 +15,97 @@ namespace blocksstable
 {
 using namespace common;
 
+int ObVectorDecodeCtx::set_default_datum_to_vector(const int64_t vec_idx)
+{
+  int ret = OB_SUCCESS;
+  ObIVector *vector = get_vector();
+  const VectorFormat format = get_format();
+  if (OB_ISNULL(vector) || OB_ISNULL(default_datum_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected null vector or default datum", K(ret), K(format), K(vec_idx), KP(vector), KP(default_datum_));
+  } else {
+    switch (format) {
+    case VEC_DISCRETE: {
+      static_cast<ObDiscreteFormat *>(vector)->set_datum(vec_idx, *default_datum_);
+      break;
+    }
+    case VEC_FIXED: {
+      static_cast<ObFixedLengthBase *>(vector)->set_datum(vec_idx, *default_datum_);
+      break;
+    }
+    case VEC_UNIFORM: {
+      ObUniformFormat<false> *uni_vec = static_cast<ObUniformFormat<false> *>(vector);
+      if (default_datum_->is_null()) {
+        uni_vec->set_null(vec_idx);
+      } else {
+        uni_vec->get_datum(vec_idx) = *default_datum_;
+      }
+      break;
+    }
+    case VEC_UNIFORM_CONST: {
+      ObUniformFormat<true> *uni_vec = static_cast<ObUniformFormat<true> *>(vector);
+      if (default_datum_->is_null()) {
+        uni_vec->set_null(0);
+      } else {
+        uni_vec->get_datum(0) = *default_datum_;
+      }
+      break;
+    }
+    default: {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("Unexpected vector format to set default datum", K(ret), K(format), K(vec_idx));
+      break;
+    }
+    }
+  }
+  return ret;
+}
+
+bool ObVectorDecodeCtx::is_null_at(const int64_t row_idx)
+{
+  bool is_null = false;
+  if (row_idx >= 0 && row_idx < row_cap_) {
+    const int64_t vec_idx = row_idx + vec_offset_;
+    ObIVector *vector = get_vector();
+    if (OB_NOT_NULL(vector)) {
+      is_null = vector->is_null(vec_idx);
+    }
+  }
+  return is_null;
+}
+
+int ObVectorDecodeCtx::fill_from_default_datum()
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(default_datum_)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("Unexpected null datum", K(ret));
+  } else {
+    for (int64_t idx = 0; OB_SUCC(ret) && idx < row_cap_; ++idx) {
+      const int64_t vec_idx = idx + vec_offset_;
+      if (OB_FAIL(set_default_datum_to_vector(vec_idx))) {
+        LOG_WARN("Failed to set default datum to vector", K(ret), K(get_format()), K(vec_idx), K(idx));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObVectorDecodeCtx::fill_default_datum_at(const int64_t row_idx)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(default_datum_) || OB_UNLIKELY(row_idx < 0 || row_idx >= row_cap_)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("Invalid argument to fill default datum", K(ret), K(row_idx), K(row_cap_), KPC(default_datum_));
+  } else {
+    const int64_t vec_idx = row_idx + vec_offset_;
+    if (OB_FAIL(set_default_datum_to_vector(vec_idx))) {
+      LOG_WARN("Failed to set default datum to vector", K(ret), K(row_idx), K(vec_idx), K(get_format()));
+    }
+  }
+  return ret;
+}
+
 int ObIColumnDecoder::get_is_null_bitmap_from_fixed_column(
     const ObColumnDecoderCtx &col_ctx,
     const unsigned char* col_data,
@@ -500,5 +591,20 @@ int ObSpanColumnDecoder::decode_refed_range(
   return ret;
 }
 
-} // end of namespace oceanbase
+int ObNoneExistColumnDecoder::decode_vector(
+    const ObColumnDecoderCtx &decoder_ctx,
+    const ObIRowIndex *row_index,
+    ObVectorDecodeCtx &vector_ctx) const
+{
+  UNUSEDx(decoder_ctx, row_index);
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(vector_ctx.fill_from_default_datum())) {
+    LOG_WARN("Failed to fill vector from default datum", K(ret), K(vector_ctx));
+  } else {
+    LOG_DEBUG("[NONE_EXIST_COLUMN_DECODE] decode vector", KPC(vector_ctx.default_datum_), K(lbt()));
+  }
+  return ret;
+}
+
+} // end of namespace blocksstable
 } // end of namespace oceanbase

@@ -111,7 +111,8 @@ int ObColumnDecoder::batch_decode(
 
 int ObColumnDecoder::decode_vector(
     const ObIRowIndex* row_index,
-    ObVectorDecodeCtx &vector_ctx)
+    ObVectorDecodeCtx &vector_ctx,
+    const bool need_reverse_trans_version)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(nullptr == row_index || !vector_ctx.is_valid())) {
@@ -119,7 +120,8 @@ int ObColumnDecoder::decode_vector(
     LOG_WARN("Invalid null parameter", K(ret), KP(row_index), K(vector_ctx));
   } else if (OB_FAIL(decoder_->decode_vector(*ctx_, row_index, vector_ctx))) {
     LOG_WARN("Failed to batch decode data to vector format in column decoder", K(ret), K(*ctx_));
-  } else if (OB_UNLIKELY(ctx_->is_trans_version_col()) &&
+  } else if (need_reverse_trans_version &&
+             OB_UNLIKELY(ctx_->is_trans_version_col()) &&
              OB_FAIL(storage::reverse_trans_version_val(vector_ctx.get_vector(), vector_ctx.row_cap_, vector_ctx.vec_offset_))) {
      LOG_WARN("Failed to reverse trans version val", K(ret));
   }
@@ -826,8 +828,7 @@ int ObEncodeBlockGetReader::get_row_id(
 ////////////////////////// ObMicroBlockDecoderV2 ////////////////////////////////
 
 ObMicroBlockDecoder::ObMicroBlockDecoder()
-  : request_cnt_(0),
-    col_header_(nullptr),
+  : col_header_(nullptr),
     meta_data_(nullptr),
     row_data_(nullptr),
     var_row_index_(),
@@ -836,7 +837,6 @@ ObMicroBlockDecoder::ObMicroBlockDecoder()
     row_index_(&var_row_index_),
     decoders_(nullptr),
     ctxs_(nullptr),
-    decoder_allocator_(ObModIds::OB_DECODER_CTX),
     buf_allocator_(SET_IGNORE_MEM_VERSION(ObMemAttr(MTL_ID(), "OB_MICB_DECODER")), OB_MALLOC_NORMAL_BLOCK_SIZE),
     allocated_decoders_buf_(nullptr),
     allocated_decoders_buf_size_(0)
@@ -1122,7 +1122,9 @@ int ObMicroBlockDecoder::init_decoders()
     }
     */
     int64_t decoders_buf_pos = 0;
-    if (OB_ISNULL(read_info_) || typeid(ObRowkeyReadInfo) == typeid(*read_info_)) {
+    if (OB_ISNULL(read_info_) ||
+                 (typeid(ObRowkeyReadInfo) == typeid(*read_info_) &&
+                  read_info_->get_request_count() != read_info_->get_columns_desc().count())) {
       ObObjMeta col_type;
       if (OB_UNLIKELY((micro_header_->column_count_ < request_cnt_ && nullptr == read_info_) ||
                       (micro_header_->column_count_ > request_cnt_))) {
@@ -1146,15 +1148,7 @@ int ObMicroBlockDecoder::init_decoders()
     } else if (OB_FAIL(alloc_decoders_buf(true/*by_read_info*/, decoders_buf_pos))) {
       LOG_WARN("fail to alloc decoders buf", K(ret));
     } else {
-      const ObColumnIndexArray &cols_index = read_info_->get_columns_index();
-      const ObColDescIArray &cols_desc = read_info_->get_columns_desc();
-
-      if (typeid(ObCGRowkeyReadInfo) == typeid(*read_info_) || typeid(ObCGReadInfo) == typeid(*read_info_) || read_info_->get_columns()->count() < 1) {
-        FOREACH_ADD_DECODER(nullptr)
-      } else {
-        const ObColumnParamIArray *cols_param = read_info_->get_columns();
-        FOREACH_ADD_DECODER(cols_param->at(i))
-      }
+      ADD_DECODERS_BY_READ_INFO(micro_header_->column_count_);
     }
   }
   return ret;
@@ -2534,10 +2528,10 @@ int ObMicroBlockDecoder::get_rows(
   return ret;
 }
 
-int ObMicroBlockDecoder::get_col_data(const int32_t col_id, ObVectorDecodeCtx &vector_ctx)
+int ObMicroBlockDecoder::get_col_data(const int32_t col_id, ObVectorDecodeCtx &vector_ctx, const bool need_reverse_trans_version)
 {
   int ret = OB_SUCCESS;
-  if (OB_FAIL(decoders_[col_id].decode_vector(row_index_, vector_ctx))) {
+  if (OB_FAIL(decoders_[col_id].decode_vector(row_index_, vector_ctx, need_reverse_trans_version))) {
     LOG_WARN("fail to get column data from decoder", K(ret), K(micro_header_->column_count_), K(col_id), K(vector_ctx));
   }
   return ret;

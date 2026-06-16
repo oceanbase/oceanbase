@@ -126,30 +126,6 @@ private:
 };
 
 
-#ifdef OB_BUILD_SHARED_STORAGE
-class ObStorageHASharedMacroBlockWriter final : public ObStorageHAMacroBlockWriter
-{
-public:
-  ObStorageHASharedMacroBlockWriter () : ObStorageHAMacroBlockWriter() {}
-  virtual ~ObStorageHASharedMacroBlockWriter() {}
-  virtual Type get_type() const override { return SHARED_MACRO_BLOCK_OB_WRITER; }
-
-private:
-  virtual int check_sstable_param_for_init_(const ObMigrationSSTableParam *sstable_param) const override;
-  virtual int set_macro_write_info_(
-      const MacroBlockId &macro_block_id,
-      blocksstable::ObStorageObjectWriteInfo &write_info,
-      blocksstable::ObStorageObjectOpt &opt) override;
-  virtual int append_macro_row_(
-      const char *buf,
-      const int64_t size,
-      const blocksstable::MacroBlockId &macro_id) override;
-
-  DISALLOW_COPY_AND_ASSIGN(ObStorageHASharedMacroBlockWriter);
-};
-
-#endif
-
 }
 }
 #endif

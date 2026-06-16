@@ -149,7 +149,7 @@ TEST_F(TestTruncateInfo, part_and_subpart)
   ASSERT_FALSE(equal);
 
   ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::mock_truncate_partition(allocator_, 100, 200, truncate_info2.truncate_subpart_));
-  ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::mock_part_key_idxs(allocator_, 2, truncate_info2.truncate_part_));
+  ASSERT_EQ(OB_SUCCESS, TruncateInfoHelper::mock_part_key_idxs(allocator_, 2, truncate_info2.truncate_subpart_));
   truncate_info2.is_sub_part_ = true;
   ASSERT_EQ(OB_SUCCESS, truncate_info2.compare(truncate_info, equal));
   ASSERT_FALSE(equal);

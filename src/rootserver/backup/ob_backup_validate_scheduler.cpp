@@ -771,34 +771,34 @@ int ObBackupValidateScheduler::check_tenant_status(
   ObSchemaGetterGuard schema_guard;
   const ObSimpleTenantSchema *tenant_schema = nullptr;
   if (OB_FAIL(schema_service.check_if_tenant_has_been_dropped(tenant_id, is_dropped))) {
-    LOG_WARN("BACKUP_VALIDATE]failed to check if tenant has been dropped", K(ret), K(tenant_id));
+    LOG_WARN("[BACKUP_VALIDATE]failed to check if tenant has been dropped", K(ret), K(tenant_id));
   } else if (is_dropped) {
     is_valid = false;
-    LOG_WARN("BACKUP_VALIDATE]tenant is dropped, can't not do validate now", K(tenant_id));
+    LOG_WARN("[BACKUP_VALIDATE]tenant is dropped, can't not do validate now", K(tenant_id));
   } else if (OB_FAIL(schema_service.get_tenant_schema_guard(tenant_id, schema_guard))) {
-    LOG_WARN("BACKUP_VALIDATE]failed to get schema guard", K(ret), K(tenant_id));
+    LOG_WARN("[BACKUP_VALIDATE]failed to get schema guard", K(ret), K(tenant_id));
   } else if (OB_FAIL(schema_guard.get_tenant_info(tenant_id, tenant_schema))) {
-    LOG_WARN("BACKUP_VALIDATE]failed to get tenant info", K(ret), K(tenant_id));
+    LOG_WARN("[BACKUP_VALIDATE]failed to get tenant info", K(ret), K(tenant_id));
   } else if (OB_ISNULL(tenant_schema)) {
     is_valid = false;
     LOG_WARN("tenant schema is null, tenant may has been dropped", K(ret), K(tenant_id));
   } else if (tenant_schema->is_creating()) {
     is_valid = false;
-    LOG_WARN("BACKUP_VALIDATE]tenant is creating, can't not do validate now", K(tenant_id));
+    LOG_WARN("[BACKUP_VALIDATE]tenant is creating, can't not do validate now", K(tenant_id));
   } else if (tenant_schema->is_restore()) {
     is_valid = false;
-    LOG_WARN("BACKUP_VALIDATE]tenant is doing restore, can't not do validate now", K(tenant_id));
+    LOG_WARN("[BACKUP_VALIDATE]tenant is doing restore, can't not do validate now", K(tenant_id));
   } else if (tenant_schema->is_dropping()) {
     is_valid = false;
-    LOG_WARN("BACKUP_VALIDATE]tenant is dropping, can't not do validate now", K(tenant_id));
+    LOG_WARN("[BACKUP_VALIDATE]tenant is dropping, can't not do validate now", K(tenant_id));
   } else if (tenant_schema->is_in_recyclebin()) {
     is_valid = false;
-    LOG_WARN("BACKUP_VALIDATE]tenant is in recyclebin, can't not do validate now", K(tenant_id));
+    LOG_WARN("[BACKUP_VALIDATE]tenant is in recyclebin, can't not do validate now", K(tenant_id));
   } else if (tenant_schema->is_normal()) {
     is_valid = true;
   } else {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("BACKUP_VALIDATE]unknown tenant status", K(tenant_id), K(tenant_schema));
+    LOG_WARN("[BACKUP_VALIDATE]unknown tenant status", K(tenant_id), K(tenant_schema));
   }
 
   return ret;
@@ -815,9 +815,9 @@ int ObBackupValidateScheduler::fill_template_job_(
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("[BACKUP_VALIDATE]invalid argument", KR(ret), K(in_arg));
   } else if (OB_FAIL(job_attr.description_.assign(in_arg.description_))) {
-    LOG_WARN("BACKUP_VALIDATE]failed to assgin description", KR(ret));
+    LOG_WARN("[BACKUP_VALIDATE]failed to assgin description", KR(ret));
   } else if (OB_FAIL(job_attr.executor_tenant_ids_.assign(in_arg.execute_tenant_ids_))) {
-    LOG_WARN("BACKUP_VALIDATE]failed to assgin backup tenant id", KR(ret));
+    LOG_WARN("[BACKUP_VALIDATE]failed to assgin backup tenant id", KR(ret));
   } else {
     job_attr.tenant_id_ = in_arg.tenant_id_;
     job_attr.initiator_job_id_ = in_arg.initiator_job_id_;
@@ -883,12 +883,12 @@ int ObBackupValidateScheduler::get_path_and_set_path_type_(
       path_type = ObBackupValidatePathType::ValidatePathType::ARCHIVELOG_DEST;
     } else {
       ret = OB_INVALID_ARGUMENT;
-      LOG_WARN("BACKUP_VALIDATE]invalid validate dest type", K(ret), K(format_desc));
+      LOG_WARN("[BACKUP_VALIDATE]invalid validate dest type", K(ret), K(format_desc));
       LOG_USER_ERROR(OB_INVALID_ARGUMENT,
           "validate: Only data backup path or log archive path supports backup verification.");
     }
   } else if (OB_FAIL(store.is_single_backup_set_info_exist(is_exist))) {   //Determine whether it is BACKUP_SET_DEST
-    LOG_WARN("BACKUP_VALIDATE]failed to check single backup set info exist", KR(ret), K(dest));
+    LOG_WARN("[BACKUP_VALIDATE]failed to check single backup set info exist", KR(ret), K(dest));
   } else if (is_exist) {
     path_type = ObBackupValidatePathType::ValidatePathType::BACKUP_SET_DEST;
   }
@@ -899,7 +899,7 @@ int ObBackupValidateScheduler::get_path_and_set_path_type_(
   } else if (OB_FAIL(archive_store.init(dest))) {
     LOG_WARN("[BACKUP_VALIDATE]failed to init archive store", KR(ret), K(dest));
   } else if (OB_FAIL(archive_store.is_tenant_archive_piece_infos_file_exist(is_exist))) {
-    LOG_WARN("BACKUP_VALIDATE]fail to check if tenant arhive piece info is exist", KR(ret), K(dest));
+    LOG_WARN("[BACKUP_VALIDATE]fail to check if tenant arhive piece info is exist", KR(ret), K(dest));
   } else if (is_exist) {
     path_type = ObBackupValidatePathType::ValidatePathType::ARCHIVELOG_PIECE_DEST;
   }
@@ -908,10 +908,10 @@ int ObBackupValidateScheduler::get_path_and_set_path_type_(
   if (OB_FAIL(ret)) {
   } else if (!is_exist) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("BACKUP_VALIDATE]invalid argument", KR(ret), K(dest));
+    LOG_WARN("[BACKUP_VALIDATE]invalid argument", KR(ret), K(dest));
     LOG_USER_ERROR(OB_INVALID_ARGUMENT, "validate: missing format file and metadata file to identify the path type.");
   } else if (OB_FAIL(job_attr.set_path_type(path_type))) {
-    LOG_WARN("BACKUP_VALIDATE]failed to set path type", KR(ret), K(path_type));
+    LOG_WARN("[BACKUP_VALIDATE]failed to set path type", KR(ret), K(path_type));
   }
 
   return ret;
@@ -923,12 +923,12 @@ int ObBackupValidateScheduler::get_next_job_id_(common::ObISQLClient &trans, con
   job_id = OB_INVALID_JOB_ID;
   if (OB_INVALID_TENANT_ID == tenant_id) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("BACKUP_VALIDATE]invalid argument", KR(ret), K(tenant_id));
+    LOG_WARN("[BACKUP_VALIDATE]invalid argument", KR(ret), K(tenant_id));
   } else if (OB_FAIL(ObLSBackupInfoOperator::get_next_job_id(trans, tenant_id, job_id))) {
-    LOG_WARN("BACKUP_VALIDATE]failed to get next job id", KR(ret), K(tenant_id));
+    LOG_WARN("[BACKUP_VALIDATE]failed to get next job id", KR(ret), K(tenant_id));
   } else if (OB_INVALID_JOB_ID == job_id) {
     ret = OB_ERR_UNEXPECTED;
-    LOG_WARN("BACKUP_VALIDATE]invalid job id", KR(ret), K(job_id));
+    LOG_WARN("[BACKUP_VALIDATE]invalid job id", KR(ret), K(job_id));
   }
   return ret;
 }
@@ -1146,13 +1146,13 @@ int ObUserTenantBackupValidateJobMgr::process()
     switch (status) {
       case ObBackupValidateStatus::Status::INIT: {
         if (OB_FAIL(persist_set_task_())) {
-          LOG_WARN("BACKUP_VALIDATE]failed to persist log stream task", K(ret), KPC(job_attr_));
+          LOG_WARN("[BACKUP_VALIDATE]failed to persist log stream task", K(ret), KPC(job_attr_));
         }
         break;
       }
       case ObBackupValidateStatus::Status::DOING: {
         if (OB_FAIL(do_validate_task_())) {
-          LOG_WARN("BACKUP_VALIDATE]failed to do validate task", K(ret), KPC(job_attr_));
+          LOG_WARN("[BACKUP_VALIDATE]failed to do validate task", K(ret), KPC(job_attr_));
         }
         break;
       }
@@ -1160,19 +1160,19 @@ int ObUserTenantBackupValidateJobMgr::process()
       case ObBackupValidateStatus::Status::FAILED:
       case ObBackupValidateStatus::Status::CANCELED: {
         if (OB_FAIL(move_to_history_())) {
-          LOG_WARN("BACKUP_VALIDATE]failed to move job and set to histroy", K(ret), KPC(job_attr_));
+          LOG_WARN("[BACKUP_VALIDATE]failed to move job and set to histroy", K(ret), KPC(job_attr_));
         }
         break;
       }
       case ObBackupValidateStatus::Status::CANCELING: {
         if (OB_FAIL(cancel_())) {
-          LOG_WARN("BACKUP_VALIDATE]failed to cancel validate", K(ret), KPC(job_attr_));
+          LOG_WARN("[BACKUP_VALIDATE]failed to cancel validate", K(ret), KPC(job_attr_));
         }
         break;
       }
       default: {
         ret = OB_ERR_SYS;
-        LOG_ERROR("BACKUP_VALIDATE]unknown backup status", K(ret), KPC(job_attr_));
+        LOG_ERROR("[BACKUP_VALIDATE]unknown backup status", K(ret), KPC(job_attr_));
       }
     }
   }
@@ -2012,7 +2012,7 @@ int ObUserTenantBackupValidateJobMgr::move_to_history_()
       SMART_VAR(ObBackupValidateTaskMgr, task_mgr) {
         const share::ObBackupValidateTaskAttr &task_attr = task_attrs.at(i);
         if (OB_FAIL(task_mgr.init(tenant_id_, task_attr.task_id_, *job_attr_, *sql_proxy_,
-          *rpc_proxy_, *task_scheduler_, *backup_validate_service_))) {
+            *rpc_proxy_, *task_scheduler_, *backup_validate_service_))) {
           LOG_WARN("[BACKUP_VALIDATE]failed to init validate task mgr", KR(ret));
         } else if (OB_FAIL(task_mgr.do_clean_up())) {
           LOG_WARN("[BACKUP_VALIDATE]failed to task move history", KR(ret), K(task_attr));
