@@ -243,8 +243,8 @@ int ObExprAIComplete::eval_ai_complete_vector(const ObExpr &expr, ObEvalCtx &ctx
 
     ObEvalCtx::TempAllocGuard tmp_alloc_g(ctx);
     uint64_t tenant_id = ObMultiModeExprHelper::get_tenant_id(ctx.exec_ctx_.get_my_session());
-    MultimodeAlloctor batch_arena(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
-    ObArenaAllocator const_arena(lib::ObMemAttr(tenant_id, "AIComplConst"));
+    MultimodeAlloctor const_arena(tmp_alloc_g.get_allocator(), expr.type_, tenant_id, ret);
+    ObArenaAllocator batch_arena(lib::ObMemAttr(tenant_id, "AIComplbatch"));
     lib::ObMallocHookAttrGuard malloc_guard(lib::ObMemAttr(tenant_id, N_AI_COMPLETE));
 
     omt::ObAiServiceGuard ai_service_guard;
