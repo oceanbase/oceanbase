@@ -30,7 +30,8 @@ DEF_TO_STRING(ObRemoteSqlInfo)
        K_(is_batched_stmt),
        K_(is_original_ps_mode),
        K_(ps_param_cnt),
-       K_(remote_sql));
+       K_(remote_sql),
+       K_(is_ps_cursor));
   J_COMMA();
   J_NAME("ps_params");
   J_COLON();
