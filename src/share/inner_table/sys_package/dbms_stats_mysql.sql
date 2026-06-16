@@ -421,4 +421,82 @@ create or replace PACKAGE dbms_stats AUTHID CURRENT_USER
     );
 
     PROCEDURE async_gather_stats_job_proc (duration BIGINT DEFAULT NULL);
+
+    PROCEDURE gather_catalog_table_stats (
+      catname            VARCHAR(65535),
+      dbname             VARCHAR(65535),
+      tabname            VARCHAR(65535),
+      partname           VARCHAR(65535) DEFAULT NULL,
+      estimate_percent   DECIMAL(30, 10) DEFAULT AUTO_SAMPLE_SIZE,
+      sample_type        VARCHAR(65535) DEFAULT NULL,
+      method_opt         VARCHAR(65535) DEFAULT DEFAULT_METHOD_OPT,
+      degree             DECIMAL(30, 10) DEFAULT NULL,
+      granularity        VARCHAR(65535) DEFAULT DEFAULT_GRANULARITY,
+      force              BOOLEAN DEFAULT FALSE
+    );
+
+    PROCEDURE lock_catalog_table_stat (
+      catname            VARCHAR(65535),
+      dbname             VARCHAR(65535),
+      tabname            VARCHAR(65535),
+      partname           VARCHAR(65535) DEFAULT NULL,
+      stattype           VARCHAR(65535) DEFAULT 'ALL'
+    );
+
+    PROCEDURE unlock_catalog_table_stat (
+      catname            VARCHAR(65535),
+      dbname             VARCHAR(65535),
+      tabname            VARCHAR(65535),
+      partname           VARCHAR(65535) DEFAULT NULL,
+      stattype           VARCHAR(65535) DEFAULT 'ALL'
+    );
+
+    PROCEDURE lock_catalog_partition_stat (
+      catname            VARCHAR(65535),
+      dbname             VARCHAR(65535),
+      tabname            VARCHAR(65535),
+      partname           VARCHAR(65535)
+    );
+
+    PROCEDURE unlock_catalog_partition_stat (
+      catname            VARCHAR(65535),
+      dbname             VARCHAR(65535),
+      tabname            VARCHAR(65535),
+      partname           VARCHAR(65535)
+    );
+
+    PROCEDURE set_catalog_table_prefs(
+      catname        VARCHAR(65535),
+      dbname         VARCHAR(65535),
+      tabname        VARCHAR(65535),
+      pname          VARCHAR(65535),
+      pvalue         VARCHAR(65535)
+    );
+
+    FUNCTION get_catalog_prefs (
+      pname           VARCHAR(65535),
+      catname         VARCHAR(65535),
+      dbname          VARCHAR(65535),
+      tabname         VARCHAR(65535)
+    ) RETURN VARCHAR(65535);
+
+    PROCEDURE delete_catalog_table_prefs (
+      catname        VARCHAR(65535),
+      dbname         VARCHAR(65535),
+      tabname        VARCHAR(65535),
+      pname          VARCHAR(65535)
+    );
+
+    PROCEDURE set_catalog_global_prefs(
+      pname          VARCHAR(65535),
+      pvalue         VARCHAR(65535)
+    );
+
+    FUNCTION get_catalog_global_prefs (
+      pname          VARCHAR(65535)
+    ) RETURN VARCHAR(65535);
+
+    PROCEDURE delete_catalog_global_prefs (
+      pname          VARCHAR(65535)
+    );
 END dbms_stats;

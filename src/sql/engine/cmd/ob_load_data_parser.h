@@ -852,6 +852,13 @@ public:
     int field_cnt_;
     int batch_size_;
   };
+  struct HandleSampleLinesParam {
+    HandleSampleLinesParam(common::ObIArray<FieldValue> &fields, int field_cnt, int batch_size)
+      : fields_(fields), field_cnt_(field_cnt), batch_size_(batch_size) {}
+    common::ObIArray<FieldValue> &fields_;
+    int field_cnt_;
+    int batch_size_;
+  };
 
 private:
   int init_opt_variables();

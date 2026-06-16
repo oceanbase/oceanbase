@@ -373,11 +373,19 @@ int ObOrcTableRowIterator::init(const storage::ObTableScanParam *scan_param)
     OZ (id_to_type_.create(512, mem_attr_));
     OZ (name_to_id_.create(512, mem_attr_));
     OZ (iceberg_id_to_type_.create(512, mem_attr_));
+    if (OB_SUCC(ret) && !scan_param->sample_info_.is_no_sample()) {
+      if (!scan_param->sample_info_.is_block_sample()
+          && !scan_param->sample_info_.is_row_sample()) {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("unable to support non-block/file sample", K(ret), K(scan_param->sample_info_));
+      }
+    }
     OZ (ObExternalTableRowIterator::init(scan_param));
     OZ (ObExternalTablePushdownFilter::init(scan_param->pd_storage_filters_,
                                             scan_param->ext_tbl_filter_pd_level_,
                                             scan_param->column_ids_,
                                             eval_ctx));
+    LOG_INFO("orc init", K(scan_param->pd_storage_flag_));
     OZ (reader_profile_.register_metrics(&reader_metrics_, READER_METRICS_LABEL));
     OZ (data_access_driver_.register_io_metrics(reader_profile_, IO_METRICS_LABEL));
     OZ (file_prebuffer_.register_metrics(reader_profile_, PREBUFFER_METRICS_LABEL));
@@ -684,6 +692,55 @@ int ObOrcTableRowIterator::select_row_ranges(const int64_t stripe_idx)
         state_.cur_row_range_idx_ = 0;
         state_.end_row_range_idx_ = 0;
       }
+      // block/fast sample: trim row ranges to only include the first N row groups
+      if (OB_SUCC(ret) && state_.has_row_range()
+          && OB_NOT_NULL(scan_param_)
+          && scan_param_->sample_info_.is_block_sample()) {
+        const int64_t row_index_stride = reader_->getRowIndexStride();
+        if (row_index_stride > 0) {
+          const double sample_rate = static_cast<double>(scan_param_->sample_info_.percent_) / 100.0;
+          const int64_t num_row_groups = (stripe_num_rows + row_index_stride - 1) / row_index_stride;
+          int64_t selected_rg_cnt = 0;
+          if (sample_rate <= 0.0) {
+            selected_rg_cnt = 0;
+          } else if (sample_rate >= 1.0) {
+            selected_rg_cnt = num_row_groups;
+          } else {
+            selected_rg_cnt = static_cast<int64_t>(std::ceil(num_row_groups * sample_rate));
+            if (selected_rg_cnt <= 0) {
+              selected_rg_cnt = 1;
+            }
+            if (selected_rg_cnt > num_row_groups) {
+              selected_rg_cnt = num_row_groups;
+            }
+          }
+          const int64_t selected_rows = std::min(selected_rg_cnt * row_index_stride, stripe_num_rows);
+          if (selected_rows <= 0) {
+            state_.cur_row_range_idx_ = 0;
+            state_.end_row_range_idx_ = -1;
+          } else {
+            int64_t remaining = selected_rows;
+            int64_t new_end_idx = -1;
+            for (int64_t i = state_.cur_row_range_idx_;
+                 i <= state_.end_row_range_idx_ && remaining > 0; ++i) {
+              SelectedRowRange &range = row_ranges_.at(i);
+              if (range.num_rows <= remaining) {
+                remaining -= range.num_rows;
+                new_end_idx = i;
+              } else {
+                range.num_rows = remaining;
+                remaining = 0;
+                new_end_idx = i;
+              }
+            }
+            state_.end_row_range_idx_ = new_end_idx;
+          }
+          LOG_TRACE("block/fast sample trimmed row ranges",
+                    K(stripe_num_rows), K(row_index_stride), K(num_row_groups),
+                    K(selected_rg_cnt), K(selected_rows),
+                    K(state_.cur_row_range_idx_), K(state_.end_row_range_idx_));
+        }
+      }
       if (OB_SUCC(ret) && state_.has_row_range() && options_.enable_prebuffer_) {
         if (OB_FAIL(pre_buffer(false /* row index */))) {
           LOG_WARN("fail to pre buffer data", K(ret));
@@ -834,6 +891,8 @@ int ObOrcTableRowIterator::next_file()
     do {
       if ((task_idx = state_.file_idx_++) >= scan_param_->scan_tasks_.count()) {
         ret = OB_ITER_END;
+      }
+      if (OB_FAIL(ret)) {
       } else {
         file_size = -1;
         int64_t modify_time = 0;
@@ -1000,6 +1059,16 @@ int ObOrcTableRowIterator::next_file()
           } else if (is_iceberg_lake_table() &&
                     OB_FAIL(build_delete_bitmap(state_.cur_file_url_, state_.file_idx_ - 1))) {
             LOG_WARN("fail to build delete bitmap", K(ret));
+          } else if (OB_NOT_NULL(scan_param_) && !scan_param_->sample_info_.is_no_sample()) {
+            if (scan_param_->sample_info_.is_block_sample()) {
+              // block/fast sample uses the same row-range trim path in select_row_ranges().
+              const int64_t row_index_stride = reader_->getRowIndexStride();
+              if (row_index_stride <= 0) {
+                ret = OB_NOT_SUPPORTED;
+                LOG_WARN("block/fast sample requires row index stride", K(ret), K(row_index_stride));
+                LOG_USER_ERROR(OB_NOT_SUPPORTED, "BLOCK/FAST sample without row index");
+              }
+            }
           }
         }
       } CATCH_ORC_EXCEPTIONS_FILE_ERROR
@@ -1905,7 +1974,7 @@ int ObOrcTableRowIterator::load_filter_column(const common::ObIArray<uint64_t> &
   return ret;
 }
 
-static OB_INLINE int convert_integer_type_statistics(
+int ObOrcTableRowIterator::convert_integer_type_statistics(
     const orc::ColumnStatistics *orc_stat,
     const orc::Type *orc_type,
     const ObDatumMeta &col_meta,
@@ -1939,7 +2008,7 @@ static OB_INLINE int convert_integer_type_statistics(
   return ret;
 }
 
-static OB_INLINE int convert_real_type_statistics(
+int ObOrcTableRowIterator::convert_real_type_statistics(
     const orc::ColumnStatistics *orc_stat,
     const orc::Type *orc_type,
     const ObDatumMeta &col_meta,
@@ -1964,7 +2033,7 @@ static OB_INLINE int convert_real_type_statistics(
   return ret;
 }
 
-static OB_INLINE int128_t orc_int64_to_ob_int128(const int64_t orc_int)
+int128_t ObOrcTableRowIterator::orc_int64_to_ob_int128(const int64_t orc_int)
 {
   int128_t ob_int128 = 0;
   ob_int128.items_[1] = 0;
@@ -1972,7 +2041,7 @@ static OB_INLINE int128_t orc_int64_to_ob_int128(const int64_t orc_int)
   return ob_int128;
 }
 
-static OB_INLINE int128_t orc_int128_to_ob_int128(const orc::Int128 &orc_int)
+int128_t ObOrcTableRowIterator::orc_int128_to_ob_int128(const orc::Int128 &orc_int)
 {
   int128_t ob_int128 = 0;
   ob_int128.items_[1] = orc_int.getHighBits();
@@ -1980,8 +2049,8 @@ static OB_INLINE int128_t orc_int128_to_ob_int128(const orc::Int128 &orc_int)
   return ob_int128;
 }
 
-static OB_INLINE int decimal128_to_number(const int128_t &decimal_int, const ObScale scale,
-                                          ObDatum &out)
+int ObOrcTableRowIterator::decimal128_to_number(const int128_t &decimal_int, const ObScale scale,
+                                                ObDatum &out)
 {
   int ret = OB_SUCCESS;
   ObNumStackOnceAlloc tmp_alloc;
@@ -1994,7 +2063,7 @@ static OB_INLINE int decimal128_to_number(const int128_t &decimal_int, const ObS
   return ret;
 }
 
-static OB_INLINE int convert_decimal_type_statistics(
+int ObOrcTableRowIterator::convert_decimal_type_statistics(
     const orc::ColumnStatistics *orc_stat,
     const orc::Type *orc_type,
     const ObDatumMeta &col_meta,
@@ -2084,7 +2153,7 @@ static OB_INLINE int convert_decimal_type_statistics(
   return ret;
 }
 
-static OB_INLINE int convert_orc_date_to_ob_temporal_statistics(
+int ObOrcTableRowIterator::convert_orc_date_to_ob_temporal_statistics(
     const orc::ColumnStatistics *orc_stat,
     const ObDatumMeta &col_meta,
     const int64_t adjust_us,
@@ -2155,21 +2224,21 @@ static OB_INLINE int convert_orc_date_to_ob_temporal_statistics(
   return ret;
 }
 
-static OB_INLINE int64_t orc_timestamp_to_ob_timestamp(const int64_t second, const int32_t nanos,
-                                                       const int64_t adjust_us)
+int64_t ObOrcTableRowIterator::orc_timestamp_to_ob_timestamp(const int64_t second, const int32_t nanos,
+                                                             const int64_t adjust_us)
 {
   return second * USECS_PER_SEC + nanos / NSECS_PER_USEC + adjust_us;
 }
 
-static OB_INLINE int64_t orc_stat_ts_to_ob_timestamp(const int64_t utc, const int32_t nanos,
-                                                     const int64_t adjust_us)
+int64_t ObOrcTableRowIterator::orc_stat_ts_to_ob_timestamp(const int64_t utc, const int32_t nanos,
+                                                           const int64_t adjust_us)
 {
   const int64_t second = utc / NSECS_PER_USEC;
   const int32_t nano = static_cast<int32_t>((utc % NSECS_PER_USEC) * USECS_PER_SEC) + nanos;
   return orc_timestamp_to_ob_timestamp(second, nano, adjust_us);
 }
 
-static OB_INLINE int convert_orc_ts_temporal_type_statistics(
+int ObOrcTableRowIterator::convert_orc_ts_temporal_type_statistics(
     const orc::ColumnStatistics *orc_stat,
     const ObDatumMeta &col_meta,
     const int64_t adjust_us,
@@ -2236,7 +2305,7 @@ static OB_INLINE int convert_orc_ts_temporal_type_statistics(
   return ret;
 }
 
-static OB_INLINE int convert_temporal_type_statistics(
+int ObOrcTableRowIterator::convert_temporal_type_statistics(
     const orc::ColumnStatistics *orc_stat,
     const orc::Type *orc_type,
     const ObDatumMeta &col_meta,
@@ -2254,7 +2323,7 @@ static OB_INLINE int convert_temporal_type_statistics(
   return ret;
 }
 
-static OB_INLINE int convert_string_type_statistics(
+int ObOrcTableRowIterator::convert_string_type_statistics(
     const orc::ColumnStatistics *orc_stat,
     const ObColumnMeta &col_meta,
     ObIAllocator &allocator,
@@ -2690,50 +2759,52 @@ int ObOrcTableRowIterator::get_next_rows(int64_t &count, int64_t capacity)
   const ExprFixedArray &column_conv_exprs = *(scan_param_->ext_column_dependent_exprs_);
   int64_t read_count = 0;
   ObMallocHookAttrGuard guard(mem_attr_);
-  if (sector_reader_ != nullptr && !sector_reader_->is_finished()) {
-    // sector reader is still not finished, project rows from sector bitmap,
-    // no need to move to next range.
-  } else if (OB_UNLIKELY(!state_.has_rows_in_row_range())) {
-    if (OB_FAIL(next_row_range())) {
-      if (OB_ITER_END != ret) {
-        LOG_WARN("fail to next row group", K(ret));
+  {
+    if (OB_NOT_NULL(sector_reader_) && !sector_reader_->is_finished()) {
+      // sector reader is still not finished, project rows from sector bitmap,
+      // no need to move to next range.
+    } else if (OB_UNLIKELY(!state_.has_rows_in_row_range())) {
+      if (OB_FAIL(next_row_range())) {
+        if (OB_ITER_END != ret) {
+          LOG_WARN("fail to next row group", K(ret));
+        }
+      } else if (OB_UNLIKELY(!state_.has_rows_in_row_range()) && !is_count_aggr_) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected iterator state", K(ret), K_(state));
       }
-    } else if (OB_UNLIKELY(!state_.has_rows_in_row_range()) && !is_count_aggr_) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unexpected iterator state", K(ret), K_(state));
     }
-  }
 
-  if (OB_FAIL(ret)) {
-  } else if (is_count_aggr_) {
-    read_count = std::min(capacity, state_.remain_rows_in_range());
-    state_.cur_range_read_row_count_ += read_count;
-  } else if (OB_FAIL(next_batch(read_count, capacity))) {
-    LOG_WARN("fail to next batch", K(ret), K(capacity), K(read_count));
-  }
-  if (OB_SUCC(ret) && read_count > 0) {
-    if (!is_count_aggr_ && !is_count_aggr_with_filter_) {
-      // load vec data from orc file to file column expr
-      for (int64_t i = 0; OB_SUCC(ret) && i < project_reader_.data_loaders_.count(); ++i) {
-        DataLoader &data_loader = project_reader_.data_loaders_.at(i);
-        if (data_loader.has_load_func() && OB_FAIL(data_loader.load_data_for_col(eval_ctx))) {
-          LOG_WARN("fail to load data for col", K(ret));
+    if (OB_FAIL(ret)) {
+    } else if (is_count_aggr_) {
+      read_count = std::min(capacity, state_.remain_rows_in_range());
+      state_.cur_range_read_row_count_ += read_count;
+    } else if (OB_FAIL(next_batch(read_count, capacity))) {
+      LOG_WARN("fail to next batch", K(ret), K(capacity), K(read_count));
+    }
+    if (OB_SUCC(ret) && read_count > 0) {
+      if (!is_count_aggr_ && !is_count_aggr_with_filter_) {
+        // load vec data from orc file to file column expr
+        for (int64_t i = 0; OB_SUCC(ret) && i < project_reader_.data_loaders_.count(); ++i) {
+          DataLoader &data_loader = project_reader_.data_loaders_.at(i);
+          if (data_loader.has_load_func() && OB_FAIL(data_loader.load_data_for_col(eval_ctx))) {
+            LOG_WARN("fail to load data for col", K(ret));
+          }
         }
       }
-    }
-    //fill expr results from metadata
-    for (int64_t i = 0; OB_SUCC(ret) && i < file_meta_column_exprs_.count(); i++) {
-      OZ (fill_file_meta_column(eval_ctx, file_meta_column_exprs_.at(i), read_count));
-    }
-
-    for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs_.count(); i++) {
-      //column_conv_exprs is 1-1 mapped to column_exprs
-      //calc gen column exprs
-      if (column_sel_mask_.at(i) && column_need_conv_.at(i)) {
-        OZ (project_column(eval_ctx, column_conv_exprs.at(i), column_exprs_.at(i), read_count));
+      //fill expr results from metadata
+      for (int64_t i = 0; OB_SUCC(ret) && i < file_meta_column_exprs_.count(); i++) {
+        OZ (fill_file_meta_column(eval_ctx, file_meta_column_exprs_.at(i), read_count));
       }
+
+      for (int64_t i = 0; OB_SUCC(ret) && i < column_exprs_.count(); i++) {
+        //column_conv_exprs is 1-1 mapped to column_exprs
+        //calc gen column exprs
+        if (column_sel_mask_.at(i) && column_need_conv_.at(i)) {
+          OZ (project_column(eval_ctx, column_conv_exprs.at(i), column_exprs_.at(i), read_count));
+        }
+      }
+      OZ (calc_exprs_for_rowid(read_count, state_));
     }
-    OZ (calc_exprs_for_rowid(read_count, state_));
   }
   if (OB_SUCC(ret)) {
     reader_metrics_.read_rows_count_ += read_count;
@@ -4228,6 +4299,26 @@ int ObOrcTableRowIterator::SectorReader::merge_bitmap_with_delete_bitmap(ObBitma
   }
 
   return ret;
+}
+
+const orc::Type* ObOrcTableRowIterator::find_orc_type_by_column_id(const orc::Type* root, uint64_t col_id)
+{
+  const orc::Type* type = root;
+  while (OB_NOT_NULL(type)) {
+    if (type->getColumnId() == col_id) {
+      return type;
+    }
+    const orc::Type* next = nullptr;
+    for (uint64_t i = 0; i < type->getSubtypeCount(); ++i) {
+      const orc::Type* sub = type->getSubtype(i);
+      if (sub->getColumnId() <= col_id && col_id <= sub->getMaximumColumnId()) {
+        next = sub;
+        break;
+      }
+    }
+    type = next;
+  }
+  return nullptr;
 }
 
 DEF_TO_STRING(ObOrcIteratorState)

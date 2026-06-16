@@ -95,6 +95,8 @@ private:
   int init_tablet_loc_by_addr(ObCandiTabletLoc &tablet_loc, const ObAddr &addr, const uint64_t part_id);
   int add_table_file(ObCandiTabletLoc &tablet_loc, ObIcebergFileDesc *file_desc);
   int add_table_file_for_hive(ObCandiTabletLoc &tablet_loc, ObHiveFileDesc &file_desc);
+  template <typename T>
+  int filter_files_by_sample(const ObDMLStmt &stmt, const uint64_t table_id, common::ObIArray<T> &files);
 
 private:
   ObIAllocator &allocator_;

@@ -2047,6 +2047,8 @@ bool ObOperator::enable_get_next_row() const
     case PHY_BLOCK_SAMPLE_SCAN: // sample scan with geometry type
     case PHY_ROW_SAMPLE_SCAN:
     case PHY_DDL_BLOCK_SAMPLE_SCAN:
+    case PHY_EXTERNAL_ROW_SAMPLE_SCAN: // external table row sample scan
+    case PHY_EXTERNAL_BLOCK_SAMPLE_SCAN: // external table block sample scan
     case PHY_SUBPLAN_FILTER: // subplan filter with update set
     case PHY_COUNT: // count with rownum expr
     case PHY_NESTED_LOOP_CONNECT_BY_WITH_INDEX:

@@ -136,6 +136,8 @@ int init_aggregates(RuntimeContext &agg_ctx, ObIAllocator &allocator,
         INIT_AGGREGATE_CASE(T_FUN_ANY, any, i);
         INIT_AGGREGATE_CASE(T_FUN_ARBITRARY, any, i);
         INIT_AGGREGATE_CASE(T_FUN_SYS_COUNT_INROW, count, i);
+        INIT_AGGREGATE_CASE(T_FUN_SYS_EXT_MIN, min, i);
+        INIT_AGGREGATE_CASE(T_FUN_SYS_EXT_MAX, max, i);
       default: {
         ret = OB_NOT_SUPPORTED;
         SQL_LOG(WARN, "not supported aggregate function", K(ret), K(aggr_info.expr_->type_));
@@ -251,6 +253,8 @@ static int32_t agg_cell_tmp_res_size(RuntimeContext &agg_ctx, int64_t agg_col_id
     case T_FUN_ARBITRARY:
     case T_FUN_INNER_PREFIX_MIN:
     case T_FUN_INNER_PREFIX_MAX:
+    case T_FUN_SYS_EXT_MIN:
+    case T_FUN_SYS_EXT_MAX:
     case T_FUN_MIN:
     case T_FUN_MAX: {
       VecValueTypeClass vec_tc = info.expr_->get_vec_value_tc();

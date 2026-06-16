@@ -16,6 +16,7 @@
 #include "sql/engine/table/ob_external_file_access.h"
 #include "sql/engine/table/ob_csv_prefetch_mgr.h"
 #include "sql/engine/ob_exec_context.h"
+#include "lib/hash_func/murmur_hash.h"
 
 namespace oceanbase {
 namespace sql {
@@ -138,6 +139,11 @@ private:
                                   ObEvalCtx &eval_ctx,
                                   ObCSVGeneralParser::HandleOneLineParam &param);
   bool is_end_of_file();
+  OB_INLINE bool check_row_sample_filtered(const int64_t row_num) const
+  {
+    uint64_t hash_value = murmurhash(&row_num, sizeof(row_num), row_sample_seed_);
+    return hash_value > row_sample_cut_off_;
+  }
 private:
   ObCSVIteratorState state_;
   ObBitVector *bit_vector_cache_;
@@ -153,6 +159,10 @@ private:
   bool enable_prefetch_;
   ObCSVPrefetchMgr prefetch_mgr_;
   common::ObStorageType storage_type_;
+  int64_t global_row_counter_ = 0;
+  bool is_row_sample_ = false;
+  uint64_t row_sample_seed_ = 0;
+  uint64_t row_sample_cut_off_ = 0;
 };
 
 

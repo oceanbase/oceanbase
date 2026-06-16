@@ -98,7 +98,7 @@ class ObCachedCatalogMetaGetter final : public ObICatalogMetaGetter
 {
 public:
   ObCachedCatalogMetaGetter(schema::ObSchemaGetterGuard &schema_getter_guard, ObIAllocator &allocator)
-      : delegate_(ObCatalogMetaGetter{schema_getter_guard, allocator}), allocator_(allocator)
+      : delegate_(schema_getter_guard, allocator), allocator_(allocator)
   {
   }
 
@@ -134,12 +134,13 @@ public:
                              const ObILakeTableMetadata *table_metadata,
                              const ObIArray<ObString> &partition_values,
                              const ObIArray<ObString> &column_names,
-                             ObOptExternalTableStat *&external_table_stat,
-                             ObIArray<ObOptExternalColumnStat *> &external_table_column_stats) override;
+                             common::ObIArray<share::ObOptCatalogTableStat *> &catalog_table_stats,
+                             common::ObIArray<share::ObOptCatalogColumnStat *> &catalog_table_column_stats) override;
 
   int fetch_partitions(ObIAllocator &allocator,
                        const ObILakeTableMetadata *table_metadata,
-                       Partitions &partitions) override;
+                       const ObIArray<ObString> &part_col_names,
+                       ObIArray<common::ObCatalogExtPartitionInfo> &partition_infos) override;
 
   int get_cache_refresh_interval_sec(const ObILakeTableMetadata *table_metadata,
                                      int64_t &sec) override;

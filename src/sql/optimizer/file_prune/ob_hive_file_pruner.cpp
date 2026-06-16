@@ -11,6 +11,7 @@
 #include "share/catalog/ob_cached_catalog_meta_getter.h"
 #include "share/external_table/ob_external_table_file_mgr.h"
 #include "share/external_table/ob_external_table_utils.h"
+#include "share/stat/catalog/ob_dbms_catalog_stats_utils.h"
 #include "sql/code_generator/ob_static_engine_cg.h"
 #include "sql/engine/expr/ob_expr_regexp_context.h"
 #include "sql/engine/ob_exec_context.h"
@@ -18,14 +19,17 @@
 #include "sql/optimizer/file_prune/ob_hive_query_partition_cache.h"
 #include "sql/optimizer/ob_log_table_scan.h"
 #include "sql/table_format/hive/ob_hive_table_metadata.h"
+#include "lib/hash/ob_hashset.h"
 
 using namespace oceanbase::sql;
 using namespace oceanbase::common;
 
+static const char HIVE_DEFAULT_PARTITION_VALUE[] = "__HIVE_DEFAULT_PARTITION__";
 
 ObHiveFilePruner::ObHiveFilePruner(common::ObIAllocator &allocator)
     : ObILakeTableFilePruner(allocator, PrunnerType::HIVE), sql_schema_guard_(),
-      hive_part_bounds_(allocator_), part_column_ids_(allocator_)
+      hive_part_bounds_(allocator_), part_column_ids_(allocator_),
+      use_fast_path_(false)
 {
 }
 
@@ -35,6 +39,7 @@ void ObHiveFilePruner::reset()
   sql_schema_guard_ = NULL;
   hive_part_bounds_.reset();
   part_column_ids_.reset();
+  use_fast_path_ = false;
 }
 
 int ObHiveFilePruner::assign(const ObILakeTableFilePruner &o)
@@ -49,6 +54,8 @@ int ObHiveFilePruner::assign(const ObILakeTableFilePruner &o)
       LOG_WARN("failed to assign hive part bounds");
     } else if (OB_FAIL(part_column_ids_.assign(other.part_column_ids_))) {
       LOG_WARN("failed to assign part column ids");
+    } else {
+      use_fast_path_ = other.use_fast_path_;
     }
   }
   if (OB_FAIL(ret)) {
@@ -96,17 +103,28 @@ int ObHiveFilePruner::init(ObSqlSchemaGuard &sql_schema_guard,
 
     if (OB_FAIL(ret)) {
     } else if (OB_FAIL(generate_column_meta_info(stmt))) {
-      LOG_WARN("failed to generate column meta info");
+      LOG_WARN("failed to generate column meta info", K(ret));
     } else if (OB_FAIL(generate_partition_bound(stmt, exec_ctx, table_schema, filter_exprs))) {
       LOG_WARN("failed to generate partition bound", K(ret));
     } else if (need_all_) {
       // do nothing
-    } else if (OB_FAIL(ObLakeTablePushDownFilter::generate_pd_filter_spec(allocator_,
-                                                                      *exec_ctx,
-                                                                      &stmt,
-                                                                      filter_exprs,
-                                                                      file_filter_spec_))) {
-      LOG_WARN("failed to generate pd filter spec");
+    } else {
+      const ObQueryCtx *query_ctx = stmt.get_query_ctx();
+      if (OB_NOT_NULL(query_ctx) && query_ctx->get_global_hint().has_dbms_stats_hint()
+          && is_partitioned_ && hive_part_bounds_.count() > 0) {
+        use_fast_path_ = true;
+        LOG_TRACE("hive pruner fast path enabled",
+                  K(hive_part_bounds_.count()),
+                  K(is_partitioned_));
+      }
+      if (!use_fast_path_
+          && OB_FAIL(ObLakeTablePushDownFilter::generate_pd_filter_spec(allocator_,
+                                                                        *exec_ctx,
+                                                                        &stmt,
+                                                                        filter_exprs,
+                                                                        file_filter_spec_))) {
+        LOG_WARN("failed to generate pd filter spec", K(ret));
+      }
     }
   }
   return ret;
@@ -275,12 +293,33 @@ int ObHiveFilePruner::prune_partition_by_hms(ObExecContext &exec_ctx,
     LOG_WARN("failed to init partition info");
   }
 
-  if (OB_SUCC(ret)) {
-    LOG_TRACE("get partition from cache: ", K(refresh_interval_sec), K(partition_infos));
-
+  if (OB_SUCC(ret) && use_fast_path_) {
+    if (OB_FAIL(filter_partitions_by_str_hash_(exec_ctx,
+                                               *table_schema,
+                                               *cache_info,
+                                               partition_infos,
+                                               tmp_allocator,
+                                               selected_part_idxs,
+                                               tmp_part_id,
+                                               tmp_part_path))) {
+      if (OB_NOT_SUPPORTED == ret) {
+        ret = OB_SUCCESS;
+        use_fast_path_ = false;
+        LOG_TRACE("fast path fallback due to unsupported type");
+      } else {
+        LOG_WARN("failed to filter partitions by str hash", K(ret));
+      }
+    }
+  }
+  if (OB_SUCC(ret) && !use_fast_path_) {
+    bool pd_filter_ready = false;
     ObHivePushDownFilter file_filter(exec_ctx, file_filter_spec_, &part_column_ids_);
-    if (!need_all_ && OB_FAIL(file_filter.init(column_ids_, column_metas_))) {
-      LOG_WARN("failed to init skip filter executor");
+    if (!need_all_ && OB_NOT_NULL(file_filter_spec_.pd_expr_spec_)) {
+      if (OB_FAIL(file_filter.init(column_ids_, column_metas_))) {
+        LOG_WARN("failed to init skip filter executor", K(ret));
+      } else {
+        pd_filter_ready = true;
+      }
     }
     for (int64_t i = 0; OB_SUCC(ret) && i < partition_infos.count(); ++i) {
       const HivePartitionInfo *partition_info = partition_infos.at(i);
@@ -289,68 +328,39 @@ int ObHiveFilePruner::prune_partition_by_hms(ObExecContext &exec_ctx,
       if (OB_ISNULL(partition_info)) {
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("partition_info is null", K(ret));
-      } else if (OB_FAIL(hive::ObHiveTableMetadata::calculate_part_val_from_string(*table_schema,
-                                                                                   is_partitioned_,
-                                                                                   partition_info->partition_values_,
-                                                                                   tmp_allocator,
-                                                                                   ob_part_row))) {
+      } else if (OB_FAIL(hive::ObHiveTableMetadata::calculate_part_val_from_string(
+                     *table_schema,
+                     is_partitioned_,
+                     partition_info->partition_values_,
+                     tmp_allocator,
+                     ob_part_row))) {
         LOG_WARN("failed to calculate partition value", K(ret), K(i), K(partition_info));
       } else if (need_all_ || !is_partitioned_) {
         in_bound = true;
-        LOG_TRACE("get one partition: ", K(*partition_info));
       } else if (ob_part_row.get_count() != hive_part_bounds_.count()) {
         ret = OB_ERR_UNEXPECTED;
-        LOG_WARN("part_row size should equal with partition_values", K(ob_part_row), K(hive_part_bounds_));
+        LOG_WARN("part_row size should equal with partition_values",
+                 K(ob_part_row),
+                 K(hive_part_bounds_));
       } else if (check_one_row_part_column(ob_part_row)) {
         bool is_filtered = false;
-        if (OB_FAIL(file_filter.filter(ob_part_row, is_filtered))) {
-          LOG_WARN("failed to check file filter range");
-        } else if (is_filtered) {
-          in_bound = false;
-          LOG_TRACE("filtered partition: ", K(*partition_info));
-        } else {
+        if (pd_filter_ready && OB_FAIL(file_filter.filter(ob_part_row, is_filtered))) {
+          LOG_WARN("failed to check file filter range", K(ret));
+        } else if (!is_filtered) {
           in_bound = true;
-          LOG_TRACE("get one partition: ", K(*partition_info));
         }
       }
-
       if (OB_SUCC(ret) && in_bound) {
-        int64_t part_index = 1;
-        // TODO @yibo 考虑直接使用partition_info->path_作为Key，计算hash和比较更轻量
-        if (OB_FAIL(cache_info->partition_map_.get_refactored(ObNewRowWrap(ob_part_row), part_index))) {
-          if (OB_UNLIKELY(ret == OB_HASH_NOT_EXIST)) {
-            part_index = table_schema->get_partition_num() + 1;
-            ObPartition partition;
-            partition.set_part_id(part_index);
-            ObPartition *added_partition = nullptr;
-            if (OB_FAIL(partition.set_external_location(const_cast<ObString&>(partition_info->path_)))) {
-              LOG_WARN("failed to set external location", K(ret), K(partition_info->path_));
-            } else if (OB_FAIL(partition.set_part_name(partition_info->partition_))) {
-              LOG_WARN("set partition name failed", K(ret), K(partition_info->partition_));
-            } else if (OB_FAIL(partition.add_list_row(ob_part_row))) {
-              LOG_WARN("add list row failed", K(ret));
-            } else if (OB_FAIL(const_cast<ObTableSchema*>(table_schema)->add_partition(partition))) {
-              LOG_WARN("failed to add partition", K(ret));
-            } else if (OB_ISNULL(added_partition = table_schema->get_part_array()[part_index - 1])) {
-              ret = OB_ERR_UNEXPECTED;
-              LOG_WARN("get null partition");
-            } else if (OB_FAIL(cache_info->partition_map_.set_refactored(ObNewRowWrap(added_partition->get_list_row_values().at(0)),
-                                                                         part_index))) {
-              LOG_WARN("failed to set partition");
-            }
-            LOG_TRACE("add one partition to schema: ", K(partition));
-          } else {
-            LOG_WARN("failed to get partition id");
-          }
-        }
-        if (OB_SUCC(ret)) {
-          if (OB_FAIL(selected_part_idxs.push_back(i))) {
-            LOG_WARN("failed to push back part index", K(ret));
-          } else if (OB_FAIL(tmp_part_id.push_back(part_index))) {
-            LOG_WARN("failed to push back part id");
-          } else if (OB_FAIL(tmp_part_path.push_back(partition_info->path_))) {
-            LOG_WARN("failed to push back part path");
-          }
+        if (OB_FAIL(register_matched_partition_(exec_ctx,
+                                                *table_schema,
+                                                *cache_info,
+                                                *partition_info,
+                                                i,
+                                                ob_part_row,
+                                                selected_part_idxs,
+                                                tmp_part_id,
+                                                tmp_part_path))) {
+          LOG_WARN("failed to register matched partition", K(ret), K(i));
         }
       }
     }
@@ -444,6 +454,9 @@ int ObHiveFilePruner::prune_partition_by_hms(ObExecContext &exec_ctx,
       }
     }
   }
+  if (OB_SUCC(ret)) {
+    all_partitions_selected_ = is_partitioned_ && selected_part_idxs.count() == partition_infos.count();
+  }
   return ret;
 }
 
@@ -455,12 +468,10 @@ bool ObHiveFilePruner::check_one_row_part_column(ObNewRow ob_part_row)
     ObHivePartFieldBound &field_bound = *hive_part_bounds_.at(i);
     if (field_bound.is_always_false_) {
       contain = false;
-    } else if (field_bound.is_whole_range_) {
-      continue;
+    } else if (!field_bound.is_whole_range_) {
+      contain = check_one_part(cell, field_bound);
     }
-    contain = check_one_part(cell, field_bound);
   }
-
   return contain;
 }
 
@@ -470,21 +481,235 @@ bool ObHiveFilePruner::check_one_part(ObObj &part_val, ObHivePartFieldBound &fie
   ObFixedArray<ObFieldBound *, ObIAllocator> bounds = field_bounds.bounds_;
   for (int64_t i = 0; !contain && i < bounds.count(); ++i) {
     ObFieldBound *bound = bounds.at(i);
-    if (bound->is_valid_range_) {
+    if (bound->contains_null_ && part_val.is_null()) {
+      contain = true;
+    } else if (part_val.is_null() && is_hive_default_point_bound_(*bound)) {
+      // Hive default partition string maps to NULL partition value in partition row.
+      contain = true;
+    } else if (bound->is_valid_range_) {
       int cmp_lower = part_val.compare(bound->lower_bound_);
       if (cmp_lower == 0 && bound->include_lower_) {
         contain = true;
       } else if (cmp_lower > 0) {
         int cmp_upper = part_val.compare(bound->upper_bound_);
-        {
-          if ((cmp_upper == 0 && bound->include_upper_) || cmp_upper < 0) {
-            contain = true;
-          }
+        if ((cmp_upper == 0 && bound->include_upper_) || cmp_upper < 0) {
+          contain = true;
         }
       }
     }
   }
   return contain;
+}
+
+bool ObHiveFilePruner::is_hive_default_partition_obj_(const ObObj &obj) const
+{
+  bool bret = false;
+  ObString str_val;
+  if (obj.is_string_type()
+      && OB_SUCCESS == obj.get_string(str_val)
+      && ObDbmsCatalogStatsUtils::is_hive_default_partition(str_val)) {
+    bret = true;
+  }
+  return bret;
+}
+
+bool ObHiveFilePruner::is_hive_default_point_bound_(const ObFieldBound &bound) const
+{
+  bool bret = false;
+  if (bound.is_valid_range_
+      && bound.include_lower_
+      && bound.include_upper_
+      && 0 == bound.lower_bound_.compare(bound.upper_bound_)
+      && is_hive_default_partition_obj_(bound.lower_bound_)) {
+    bret = true;
+  }
+  return bret;
+}
+
+// ============================================================
+// DBMS_STATS + WHERE IN fast path: M (bounds) drives N (partitions)
+// ============================================================
+int ObHiveFilePruner::point_bound_to_hive_string_(const ObObj &obj,
+                                                  ObIAllocator &allocator,
+                                                  ObString &result)
+{
+  int ret = OB_SUCCESS;
+  if (obj.is_string_type()) {
+    if (OB_FAIL(obj.get_string(result))) {
+      LOG_WARN("failed to get string from obj", K(ret), K(obj));
+    }
+  } else if (obj.is_integer_type()) {
+    char buf[32];
+    int64_t len = snprintf(buf, sizeof(buf), "%ld", obj.get_int());
+    char *dst = static_cast<char *>(allocator.alloc(len));
+    if (OB_ISNULL(dst)) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to alloc memory for int string", K(ret), K(len));
+    } else {
+      MEMCPY(dst, buf, len);
+      result.assign_ptr(dst, static_cast<int32_t>(len));
+    }
+  } else {
+    ret = OB_NOT_SUPPORTED;
+    LOG_TRACE("unsupported obj type for fast path", K(ret), K(obj.get_type()), K(obj));
+  }
+  return ret;
+}
+
+int ObHiveFilePruner::register_matched_partition_(ObExecContext &exec_ctx,
+                                                  const ObTableSchema &table_schema,
+                                                  HiveTableFileCache &cache_info,
+                                                  const HivePartitionInfo &partition_info,
+                                                  int64_t part_info_idx,
+                                                  ObNewRow &ob_part_row,
+                                                  ObIArray<int64_t> &selected_part_idxs,
+                                                  ObIArray<int64_t> &tmp_part_id,
+                                                  ObIArray<ObString> &tmp_part_path)
+{
+  int ret = OB_SUCCESS;
+  int64_t part_index = 1;
+  bool is_new_partition = false;
+  if (OB_FAIL(cache_info.partition_map_.get_refactored(ObNewRowWrap(ob_part_row), part_index))) {
+    if (OB_HASH_NOT_EXIST == ret) {
+      ret = OB_SUCCESS;
+      is_new_partition = true;
+    } else {
+      LOG_WARN("failed to get partition id", K(ret));
+    }
+  }
+  if (OB_SUCC(ret) && is_new_partition) {
+    part_index = table_schema.get_partition_num() + 1;
+    ObPartition partition;
+    partition.set_part_id(part_index);
+    ObPartition *added_partition = nullptr;
+    if (OB_FAIL(partition.set_external_location(const_cast<ObString &>(partition_info.path_)))) {
+      LOG_WARN("failed to set external location", K(ret));
+    } else if (OB_FAIL(partition.set_part_name(partition_info.partition_))) {
+      LOG_WARN("set partition name failed", K(ret));
+    } else if (OB_FAIL(partition.add_list_row(ob_part_row))) {
+      LOG_WARN("add list row failed", K(ret));
+    } else if (OB_FAIL(const_cast<ObTableSchema *>(&table_schema)->add_partition(partition))) {
+      LOG_WARN("failed to add partition", K(ret));
+    } else if (OB_ISNULL(added_partition = table_schema.get_part_array()[part_index - 1])) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("get null partition", K(ret));
+    } else if (OB_FAIL(cache_info.partition_map_.set_refactored(
+                   ObNewRowWrap(added_partition->get_list_row_values().at(0)),
+                   part_index))) {
+      LOG_WARN("failed to set partition", K(ret));
+    }
+    LOG_TRACE("add one partition to schema", K(partition));
+  }
+  if (OB_SUCC(ret)) {
+    OZ(selected_part_idxs.push_back(part_info_idx));
+    OZ(tmp_part_id.push_back(part_index));
+    OZ(tmp_part_path.push_back(partition_info.path_));
+  }
+  return ret;
+}
+
+int ObHiveFilePruner::filter_partitions_by_str_hash_(ObExecContext &exec_ctx,
+                                                     const ObTableSchema &table_schema,
+                                                     HiveTableFileCache &cache_info,
+                                                     ObIArray<HivePartitionInfo *> &partition_infos,
+                                                     ObIAllocator &tmp_allocator,
+                                                     ObIArray<int64_t> &selected_part_idxs,
+                                                     ObIArray<int64_t> &tmp_part_id,
+                                                     ObIArray<ObString> &tmp_part_path)
+{
+  int ret = OB_SUCCESS;
+  const int64_t part_col_count = hive_part_bounds_.count();
+  ObSEArray<hash::ObHashSet<ObString> *, 4> col_str_sets;
+  for (int64_t j = 0; OB_SUCC(ret) && j < part_col_count; ++j) {
+    ObHivePartFieldBound *fb = hive_part_bounds_.at(j);
+    if (OB_ISNULL(fb)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null part field bound", K(ret), K(j));
+    } else {
+      hash::ObHashSet<ObString> *str_set = OB_NEWx(hash::ObHashSet<ObString>, &tmp_allocator);
+      if (OB_ISNULL(str_set)) {
+        ret = OB_ALLOCATE_MEMORY_FAILED;
+        LOG_WARN("failed to alloc hash set", K(ret));
+      } else if (OB_FAIL(str_set->create(MAX(fb->bounds_.count() * 2, 16)))) {
+        LOG_WARN("failed to create hash set", K(ret));
+      } else if (OB_FAIL(col_str_sets.push_back(str_set))) {
+        LOG_WARN("failed to push back hash set", K(ret));
+      }
+      for (int64_t k = 0; OB_SUCC(ret) && k < fb->bounds_.count(); ++k) {
+        ObFieldBound *bound = fb->bounds_.at(k);
+        if (OB_ISNULL(bound)) {
+          continue;
+        } else if (bound->contains_null_) {
+          ObString default_part_str;
+          if (OB_FAIL(ob_write_string(tmp_allocator,
+                                      ObString::make_string(HIVE_DEFAULT_PARTITION_VALUE),
+                                      default_part_str))) {
+            LOG_WARN("failed to write default partition string", K(ret));
+          } else if (OB_FAIL(str_set->set_refactored(default_part_str, 0))) {
+            if (OB_HASH_EXIST == ret) {
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("failed to insert default partition into hash set", K(ret));
+            }
+          }
+        }
+        if (OB_FAIL(ret) || !bound->is_valid_range_) {
+          // do nothing
+        } else {
+          ObString str_val;
+          if (OB_FAIL(point_bound_to_hive_string_(bound->lower_bound_, tmp_allocator, str_val))) {
+            LOG_WARN("failed to convert bound to hive string", K(ret), K(j), K(k));
+          } else if (OB_FAIL(str_set->set_refactored(str_val, 0))) {
+            if (OB_HASH_EXIST == ret) {
+              ret = OB_SUCCESS;
+            } else {
+              LOG_WARN("failed to insert into hash set", K(ret));
+            }
+          }
+        }
+      }
+    }
+  }
+  for (int64_t i = 0; OB_SUCC(ret) && i < partition_infos.count(); ++i) {
+    HivePartitionInfo *pi = partition_infos.at(i);
+    bool match = false;
+    if (OB_ISNULL(pi)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("null partition info", K(ret), K(i));
+    } else {
+      match = (pi->partition_values_.count() >= part_col_count);
+      for (int64_t j = 0; match && j < part_col_count; ++j) {
+        const ObString &hms_val = pi->partition_values_.at(j);
+        match = (OB_HASH_EXIST == col_str_sets.at(j)->exist_refactored(hms_val));
+      }
+    }
+    if (OB_SUCC(ret) && match) {
+      ObNewRow ob_part_row;
+      if (OB_FAIL(hive::ObHiveTableMetadata::calculate_part_val_from_string(table_schema,
+                                                                            is_partitioned_,
+                                                                            pi->partition_values_,
+                                                                            tmp_allocator,
+                                                                            ob_part_row))) {
+        LOG_WARN("failed to calculate partition value", K(ret), K(i));
+      } else if (OB_FAIL(register_matched_partition_(exec_ctx,
+                                                     table_schema,
+                                                     cache_info,
+                                                     *pi,
+                                                     i,
+                                                     ob_part_row,
+                                                     selected_part_idxs,
+                                                     tmp_part_id,
+                                                     tmp_part_path))) {
+        LOG_WARN("failed to register matched partition", K(ret));
+      }
+    }
+  }
+  for (int64_t j = 0; j < col_str_sets.count(); ++j) {
+    if (OB_NOT_NULL(col_str_sets.at(j))) {
+      col_str_sets.at(j)->destroy();
+    }
+  }
+  return ret;
 }
 
 ObHivePartFieldBound::ObHivePartFieldBound(common::ObIAllocator &allocator)
@@ -568,6 +793,8 @@ int ObHivePushDownFilter::HivePartitionFilterParamBuilder::build(const int32_t e
 
   if (part_column_idx == -1) {
     // 非分区列不做过滤
+  } else if (row_.get_cell(part_column_idx).is_null()) {
+    // NULL分区保持uncertain，分区裁剪已由check_one_part完成
   } else {
     ObObj null_value;
     null_value.set_int(0);

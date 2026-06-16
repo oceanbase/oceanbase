@@ -1077,6 +1077,8 @@ static const NonReservedKeyword Mysql_none_reserved_keywords[] =
   {"system", SYSTEM},
   {"system_user", SYSTEM_USER},
   {"sys_count_inrow", SYS_COUNT_INROW},
+  {"sys_ext_min", SYS_EXT_MIN},
+  {"sys_ext_max", SYS_EXT_MAX},
   {"statement", STATEMENT},
   {"swaps", SWAPS},
   {"switch", SWITCH},

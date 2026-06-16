@@ -2218,6 +2218,16 @@ int ObUpdateLocalStatCacheP::process()
   return ret;
 }
 
+int ObUpdateLocalCatalogStatCacheP::process()
+{
+  int ret = OB_SUCCESS;
+  ObOptStatManager &stat_manager = ObOptStatManager::get_instance();
+  if (OB_FAIL(stat_manager.add_refresh_catalog_stat_task(arg_))) {
+    LOG_WARN("failed to update local catalog stat cache", K(ret));
+  }
+  return ret;
+}
+
 int ObForceDisableBlacklistP::process()
 {
   int ret = OB_SUCCESS;

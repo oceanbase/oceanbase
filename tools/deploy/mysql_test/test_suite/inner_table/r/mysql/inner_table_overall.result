@@ -372,6 +372,11 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 585	__all_table_archive_history	0	201001	1
 586	__all_java_policy	0	201001	1
 587	__all_java_policy_history	0	201001	1
+588	__all_catalog_table_stat	0	201001	1
+589	__all_catalog_column_stat	0	201001	1
+590	__all_catalog_table_opt_stat_gather_history	0	201001	1
+593	__all_optstat_catalog_user_prefs	0	201001	1
+594	__all_optstat_catalog_global_prefs	0	201001	1
 596	__all_table_opt_stat_invalidate_plan	0	201001	1
 10001	__tenant_virtual_all_table	2	201001	1
 10002	__tenant_virtual_table_column	2	201001	1
@@ -946,6 +951,9 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 12592	__all_virtual_vector_segment_info	2	201001	1
 12594	__all_virtual_java_policy	2	201001	1
 12595	__all_virtual_java_policy_history	2	201001	1
+12596	__all_virtual_catalog_table_opt_stat_gather_history	2	201001	1
+12600	__all_virtual_optstat_catalog_user_prefs	2	201001	1
+12602	__all_virtual_optstat_catalog_global_prefs	2	201001	1
 12603	__all_virtual_tenant_worker_group	2	201001	1
 12608	__all_virtual_table_opt_stat_invalidate_plan	2	201001	1
 20001	GV$OB_PLAN_CACHE_STAT	1	201001	1
@@ -1558,6 +1566,9 @@ select 0xffffffffff & table_id, table_name, table_type, database_id, part_num fr
 21721	CDB_SCHEDULER_RUNNING_JOBS	1	201001	1
 21722	CDB_SCHEDULER_JOBS	1	201001	1
 21723	GV$OB_TENANT_WORKER_GROUPS	1	201001	1
+21725	DBA_OB_EXTERNAL_TAB_STATISTICS	1	201001	1
+21726	DBA_OB_EXTERNAL_TAB_COL_STATISTICS	1	201001	1
+21727	DBA_OB_EXTERNAL_PART_COL_STATISTICS	1	201001	1
 21744	DBA_OB_SYS_VARIABLE_HISTORY	1	201001	1
 21745	CDB_OB_SYS_VARIABLE_HISTORY	1	201001	1
 check sys table count and table_id range success

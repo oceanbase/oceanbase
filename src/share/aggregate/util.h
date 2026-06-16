@@ -722,6 +722,10 @@ inline bool supported_aggregate_function(const ObItemType agg_op, bool use_hash_
     return (cluster_version >= MOCK_CLUSTER_VERSION_4_4_2_1 && cluster_version < CLUSTER_VERSION_4_5_0_0)
             || (cluster_version >= CLUSTER_VERSION_4_6_1_0);
   }
+  case T_FUN_SYS_EXT_MIN:
+  case T_FUN_SYS_EXT_MAX: {
+    return GET_MIN_CLUSTER_VERSION() >= CLUSTER_VERSION_4_6_1_0;
+  }
   default:
     return false;
   }

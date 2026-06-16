@@ -490,6 +490,8 @@ private:
   int generate_spec(ObLogTableScan &op, ObRowSampleScanSpec &spec, const bool in_root_job);
   int generate_spec(ObLogTableScan &op, ObBlockSampleScanSpec &spec, const bool in_root_job);
   int generate_spec(ObLogTableScan &op, ObDDLBlockSampleScanSpec &spec, const bool);
+  int generate_spec(ObLogTableScan &op, ObExternalRowSampleScanSpec &spec, const bool in_root_job);
+  int generate_spec(ObLogTableScan &op, ObExternalBlockSampleScanSpec &spec, const bool in_root_job);
 
   int generate_spec(ObLogTableScan &op, ObTableScanWithIndexBackSpec &spec,
                                     const bool in_root_job);

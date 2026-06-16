@@ -1013,6 +1013,8 @@ int ObRawExprResolverImpl::do_recursive_resolve(const ParseNode *node,
       case T_FUN_COUNT:
       case T_FUN_MAX:
       case T_FUN_MIN:
+      case T_FUN_SYS_EXT_MIN:
+      case T_FUN_SYS_EXT_MAX:
       case T_FUN_SUM:
       case T_FUN_AVG:
       case T_FUN_AVG_WEIGHTED:
@@ -6146,6 +6148,18 @@ int ObRawExprResolverImpl::process_agg_node(const ParseNode *node, ObRawExpr *&e
             LOG_WARN("fail to add param expr", K(ret));
           }
         }
+      }
+    } else if (T_FUN_SYS_EXT_MAX == node->type_ || T_FUN_SYS_EXT_MIN == node->type_) {
+      sub_expr = NULL;
+      if (OB_UNLIKELY(1 != node->num_child_)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get unexpected error, node expected 1 argument", K(ret), K(node->num_child_));
+      } else if (NULL != node->children_[0] && T_DISTINCT == node->children_[0]->type_) {
+        agg_expr->set_param_distinct(true);
+      } else if (OB_FAIL(SMART_CALL(recursive_resolve(node->children_[0], sub_expr)))) {
+        LOG_WARN("fail to recursive resolve node child", K(ret));
+      } else if (OB_FAIL(agg_expr->add_real_param_expr(sub_expr))) {
+        LOG_WARN("fail to add param expr", K(ret));
       }
     } else if (T_FUN_COUNT != node->type_
         || (T_FUN_COUNT == node->type_ && 2 == node->num_child_ && T_ALL == node->children_[0]->type_)

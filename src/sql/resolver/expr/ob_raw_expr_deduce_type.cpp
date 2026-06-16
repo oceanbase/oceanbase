@@ -2299,10 +2299,14 @@ int ObRawExprDeduceType::visit(ObAggFunRawExpr &expr)
       case T_FUN_MAX:
       case T_FUN_MIN:
       case T_FUN_ARG_MAX:
-      case T_FUN_ARG_MIN: {
-        ret = set_agg_min_max_result_type(expr, result_type, need_add_cast,
+      case T_FUN_ARG_MIN:
+      case T_FUN_SYS_EXT_MIN:
+      case T_FUN_SYS_EXT_MAX: {
+        ret = set_agg_min_max_result_type(expr,
+                                          result_type,
+                                          need_add_cast,
                                           expr.get_expr_type() == T_FUN_ARG_MAX
-                                          || expr.get_expr_type() == T_FUN_ARG_MIN);
+                                              || expr.get_expr_type() == T_FUN_ARG_MIN);
         break;
       }
       default: {
@@ -2515,6 +2519,8 @@ int ObRawExprDeduceType::check_group_aggr_param(ObAggFunRawExpr &expr)
                     || ob_is_user_defined_pl_type(param_expr->get_data_type()))
                  && (expr.get_expr_type() == T_FUN_MAX
                      || expr.get_expr_type() == T_FUN_MIN
+                     || expr.get_expr_type() == T_FUN_SYS_EXT_MIN
+                     || expr.get_expr_type() == T_FUN_SYS_EXT_MAX
                      || expr.get_expr_type() == T_FUN_GROUPING)) {
         // other udt types not run here, xmltype does not have order or map member function for compare
         ret = OB_ERR_NO_ORDER_MAP_SQL;

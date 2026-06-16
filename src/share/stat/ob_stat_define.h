@@ -1147,7 +1147,10 @@ public:
   static const int64_t MINIMAL_AUDIT_TIME = 500000;
 public:
   ObOptStatGatherAudit(ObIAllocator &allocator)
-    : audit_items_(OB_MALLOC_NORMAL_BLOCK_SIZE, allocator),
+    : acc_basic_est_time_(0), acc_refine_time_(0), acc_flush_time_(0),
+      acc_catalog_global_derive_time_(0),
+      acc_catalog_global_direct_time_(0),
+      audit_items_(OB_MALLOC_NORMAL_BLOCK_SIZE, allocator),
       failed_refine_parts_(OB_MALLOC_NORMAL_BLOCK_SIZE, allocator),
       allocator_(allocator) {}
   ~ObOptStatGatherAudit();
@@ -1165,7 +1168,20 @@ public:
   int add_flush_stats_audit(int64_t cost_time);
   int add_flush_block_count_audit(int64_t cost_time);
   int add_flush_skip_rate_audit(int64_t cost_time);
+  int add_catalog_basic_estimate_audit(const ObIArray<ObString> & partition_names, int64_t cost_time);
+  int add_catalog_refine_estimate_audit(const uint64_t &catalog_id,
+                                        const ObString &db_name,
+                                        const ObString &table_name,
+                                        const ObString &partition_value,
+                                        int64_t cost_time);
   DECLARE_TO_STRING;
+
+  int64_t acc_basic_est_time_;
+  int64_t acc_refine_time_;
+  int64_t acc_flush_time_;
+  int64_t acc_catalog_global_derive_time_;
+  int64_t acc_catalog_global_direct_time_;
+
 private:
   int64_t inner_to_string(const ObIArray<AuditBaseItem*> &items, char* buf, const int64_t buf_len) const;
   ObSEArray<AuditBaseItem*, 4, ObIAllocator&> audit_items_;

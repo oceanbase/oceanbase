@@ -322,6 +322,7 @@ ob_set_subtarget(ob_share common
   ob_scheduled_recycle_schema_history.cpp
   ob_scheduled_inspection.cpp
   ob_inspection_service.cpp
+  ob_catalog_ext_partition_info.cpp
 )
 
 ob_set_subtarget(ob_share common_mixed
@@ -703,12 +704,31 @@ ob_set_subtarget(ob_share stat
   stat/ob_min_max_estimator.cpp
   stat/ob_column_store_refine_estimator.cpp
   stat/ob_lake_table_stat.cpp
-  stat/ob_opt_external_column_stat.cpp
-  stat/ob_opt_external_column_stat_builder.cpp
-  stat/ob_opt_external_column_stat_cache.cpp
-  stat/ob_opt_external_table_stat.cpp
-  stat/ob_opt_external_table_stat_cache.cpp
-  stat/ob_opt_external_table_stat_builder.cpp
+  stat/catalog/ob_catalog_stat_define.cpp
+  stat/catalog/ob_catalog_stat_item.cpp
+  stat/catalog/ob_catalog_min_max_estimator.cpp
+  stat/catalog/ob_catalog_incremental_stat_estimator.cpp
+  stat/catalog/ob_catalog_stats_estimator.cpp
+  stat/catalog/ob_basic_catalog_stats_estimator.cpp
+  stat/catalog/ob_catalog_topk_hist_estimator.cpp
+  stat/catalog/ob_catalog_hybrid_hist_estimator.cpp
+  stat/catalog/ob_dbms_catalog_stats_preferences.cpp
+  stat/catalog/ob_dbms_catalog_stats_executor.cpp
+  stat/catalog/ob_dbms_catalog_stats_gather.cpp
+  stat/catalog/ob_dbms_catalog_stats_lock_unlock.cpp
+  stat/catalog/ob_dbms_catalog_stats_utils.cpp
+  stat/catalog/ob_opt_catalog_column_stat.cpp
+  stat/catalog/ob_opt_catalog_column_stat_builder.cpp
+  stat/catalog/ob_opt_catalog_column_stat_cache.cpp
+  stat/catalog/ob_opt_catalog_stat_service.cpp
+  stat/catalog/ob_opt_catalog_stat_sql_service.cpp
+  stat/catalog/ob_opt_catalog_table_stat.cpp
+  stat/catalog/ob_opt_catalog_table_stat_builder.cpp
+  stat/catalog/ob_opt_catalog_table_stat_cache.cpp
+  stat/catalog/ob_catalog_stats_freshness_checker.cpp
+  stat/catalog/hms/ob_hms_catalog_stats_freshness_checker.cpp
+  stat/catalog/iceberg/ob_iceberg_stats_freshness_checker.cpp
+  stat/catalog/odps/ob_odps_catalog_stats_freshness_checker.cpp
   stat/hive/ob_hive_hll_utils.cpp
   stat/hive/ob_hive_hll.cpp
   stat/hive/ob_hive_hll_dense_register.cpp

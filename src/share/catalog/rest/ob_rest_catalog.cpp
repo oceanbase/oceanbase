@@ -270,14 +270,18 @@ int ObRestCatalog::fetch_table_statistics(ObIAllocator &allocator,
                                           const ObILakeTableMetadata *table_metadata,
                                           const ObIArray<ObString> &partition_values,
                                           const ObIArray<ObString> &column_names,
-                                          ObOptExternalTableStat *&external_table_stat,
-                                          ObIArray<ObOptExternalColumnStat *> &external_table_column_stats)
+                                          ObIArray<ObOptCatalogTableStat *> &external_table_stats,
+                                          ObIArray<ObOptCatalogColumnStat *> &external_table_column_stats)
 {
   int ret = OB_SUCCESS;
+  UNUSED(sql_schema_guard);
+  external_table_stats.reset();
+  external_table_column_stats.reset();
   if (OB_ISNULL(table_metadata)) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid table metadata", K(ret));
   } else if (ObLakeTableFormat::ICEBERG == table_metadata->get_format_type()) {
+    ObOptCatalogTableStat *external_table_stat = nullptr;
     ObIcebergCatalogStatHelper stat_helper(allocator);
     if (OB_FAIL(stat_helper.fetch_iceberg_table_statistics(table_metadata,
                                                           partition_values,
@@ -285,6 +289,9 @@ int ObRestCatalog::fetch_table_statistics(ObIAllocator &allocator,
                                                           external_table_stat,
                                                           external_table_column_stats))) {
       LOG_WARN("failed to fetch iceberg table statistics via helper", K(ret));
+    } else if (OB_NOT_NULL(external_table_stat)
+               && OB_FAIL(external_table_stats.push_back(external_table_stat))) {
+      LOG_WARN("failed to push back iceberg table stat", K(ret));
     }
   } else {
     ret = OB_NOT_SUPPORTED;

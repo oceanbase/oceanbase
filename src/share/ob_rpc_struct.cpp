@@ -7514,6 +7514,47 @@ OB_SERIALIZE_MEMBER((ObSequenceDDLArg, ObDDLArg),
                     database_name_,
                     ignore_exists_error_);
 
+DEF_TO_STRING(ObUpdateCatalogStatCacheArg)
+{
+  int64_t pos = 0;
+  J_KV(K_(tenant_id),
+       K_(catalog_id),
+       K_(db_name),
+       K_(table_name),
+       K_(partition_values),
+       K_(column_names));
+  return pos;
+}
+
+bool ObUpdateCatalogStatCacheArg::is_valid() const
+{
+  return OB_INVALID_ID != tenant_id_ && OB_INVALID_ID != catalog_id_ && !db_name_.empty()
+         && !table_name_.empty();
+}
+
+int ObUpdateCatalogStatCacheArg::assign(const ObUpdateCatalogStatCacheArg &other)
+{
+  int ret = OB_SUCCESS;
+  tenant_id_ = other.tenant_id_;
+  catalog_id_ = other.catalog_id_;
+  db_name_ = other.db_name_;
+  table_name_ = other.table_name_;
+  if (OB_FAIL(partition_values_.assign(other.partition_values_))) {
+    LOG_WARN("failed to assign partition values", K(ret));
+  } else if (OB_FAIL(column_names_.assign(other.column_names_))) {
+    LOG_WARN("failed to assign column names", K(ret));
+  }
+  return ret;
+}
+
+OB_SERIALIZE_MEMBER((ObUpdateCatalogStatCacheArg, ObDDLArg),
+                    tenant_id_,
+                    catalog_id_,
+                    db_name_,
+                    table_name_,
+                    partition_values_,
+                    column_names_);
+
 OB_SERIALIZE_MEMBER((ObTablespaceDDLArg, ObDDLArg), schema_, type_);
 DEF_TO_STRING(ObTablespaceDDLArg)
 {

@@ -16,6 +16,7 @@
 #include "sql/table_format/iceberg/ob_iceberg_table_metadata.h"
 #include "sql/table_format/iceberg/spec/table_metadata.h"
 #include "sql/optimizer/file_prune/ob_hive_file_pruner.h"
+#include "share/external_table/ob_external_table_utils.h"
 
 namespace oceanbase
 {
@@ -160,6 +161,8 @@ int ObLakeTablePartitionInfo::prune_file_and_select_location(ObSqlSchemaGuard &s
 
     // 这里不能接上面的 else if, 否则 manifest_files 为空的情况会出 bug
     if (OB_FAIL(ret)) {
+    } else if (OB_FAIL(filter_files_by_sample(stmt, table_id, iceberg_file_descs_))) {
+      LOG_WARN("failed to filter iceberg files by sample", K(ret));
     } else if (OB_FAIL(select_location_for_iceberg(exec_ctx, part_key_map, iceberg_file_descs_))) {
       LOG_WARN("failed to select location for iceberg");
     } else {
@@ -188,6 +191,8 @@ int ObLakeTablePartitionInfo::prune_file_and_select_location(ObSqlSchemaGuard &s
       LOG_WARN("failed to init hive file prunner", K(ret));
     } else if (OB_FAIL(hive_file_pruner->prunner_files(*exec_ctx, hive_files))) {
       LOG_WARN("failed to init hive table location", K(ret));
+    } else if (OB_FAIL(filter_files_by_sample(stmt, table_id, hive_files))) {
+      LOG_WARN("failed to filter hive files by sample", K(ret));
     } else if (OB_FAIL(select_location_for_hive(exec_ctx, hive_files))) {
       LOG_WARN("failed to select location for hive");
     } else {
@@ -647,6 +652,52 @@ int ObLakeTablePartitionInfo::get_partition_values(ObIArray<ObString> &partition
     LOG_WARN("file pruner is null");
   } else if (OB_FAIL(partition_values.assign(file_pruner_->partition_values_))) {
     LOG_WARN("failed to assign partition values", K(ret));
+  }
+  return ret;
+}
+
+template <typename T>
+int ObLakeTablePartitionInfo::filter_files_by_sample(const ObDMLStmt &stmt,
+                                                     const uint64_t table_id,
+                                                     ObIArray<T> &files)
+{
+  int ret = OB_SUCCESS;
+  const TableItem *table_item = stmt.get_table_item_by_id(table_id);
+  bool need_filter = false;
+  if (OB_NOT_NULL(table_item) && OB_NOT_NULL(table_item->sample_info_)) {
+    const SampleInfo &si = *table_item->sample_info_;
+    need_filter = si.is_row_sample()
+                  && -1 == static_cast<int64_t>(si.seed_)
+                  && files.count() > 0
+                  && si.percent_ > 0 && si.percent_ < 100;
+  }
+  if (need_filter) {
+    const SampleInfo &si = *table_item->sample_info_;
+    const int64_t total_files = files.count();
+    bool is_file_sample = false;
+    int64_t target_count = 0;
+    ObSEArray<int64_t, 16> indices;
+    if (OB_FAIL(share::ObExternalTableUtils::generate_file_sample_indices(
+            total_files, si.percent_, is_file_sample, target_count, indices))) {
+      LOG_WARN("failed to generate file sample indices", K(ret));
+    } else if (is_file_sample) {
+      ObSEArray<T, 16> filtered;
+      for (int64_t i = 0; OB_SUCC(ret) && i < indices.count(); ++i) {
+        int64_t idx = indices.at(i);
+        if (idx >= 0 && idx < total_files) {
+          OZ (filtered.push_back(files.at(idx)));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        files.reset();
+        for (int64_t i = 0; OB_SUCC(ret) && i < filtered.count(); ++i) {
+          OZ (files.push_back(filtered.at(i)));
+        }
+        LOG_INFO("[FILE SAMPLE] pruner level file sample filter",
+                 K(total_files), K(target_count), K(indices),
+                 "remaining_files", files.count());
+      }
+    }
   }
   return ret;
 }

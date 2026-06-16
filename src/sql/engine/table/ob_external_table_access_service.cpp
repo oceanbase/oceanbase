@@ -9,7 +9,9 @@
 #include "share/backup/ob_backup_io_adapter.h"
 #include "share/external_table/ob_external_table_utils.h"
 #include "share/ob_device_manager.h"
+#include "sql/engine/basic/ob_pushdown_filter.h"
 #include "sql/engine/table/ob_parquet_table_row_iter.h"
+#include "sql/engine/table/ob_parquet_min_max_iter.h"
 #ifdef OB_BUILD_CPP_ODPS
 #include "sql/engine/table/ob_odps_table_row_iter.h"
 #endif
@@ -19,6 +21,7 @@
 #include "sql/engine/cmd/ob_load_data_file_reader.h"
 #include "sql/engine/table/ob_dummy_table_row_iter.h"
 #include "sql/engine/table/ob_orc_table_row_iter.h"
+#include "sql/engine/table/ob_orc_min_max_iter.h"
 #include "sql/engine/table/ob_csv_table_row_iter.h"
 #include "plugin/external_table/ob_plugin_external_table_row_iter.h"
 #include "sql/engine/expr/ob_expr_regexp_context.h"
@@ -472,6 +475,31 @@ int ObExternalStreamFileReader::create_decompressor(ObCSVGeneralFormat::ObCSVCom
   return ret;
 }
 
+bool ObExternalTableAccessService::is_ext_min_max_agg_scan(
+    const storage::ObTableScanParam &scan_param)
+{
+  bool bret = true;
+  const ObStoragePushdownFlag pd_flag(scan_param.pd_storage_flag_);
+  if (!pd_flag.is_aggregate_pushdown()) {
+    bret = false;
+  } else {
+    const ExprFixedArray *agg_exprs = scan_param.aggregate_exprs_;
+    if (OB_ISNULL(agg_exprs) || agg_exprs->empty()) {
+      bret = false;
+    } else {
+      for (int64_t i = 0; i < agg_exprs->count(); ++i) {
+        ObExpr *agg_expr = agg_exprs->at(i);
+        if (OB_ISNULL(agg_expr)
+            || (T_FUN_SYS_EXT_MIN != agg_expr->type_ && T_FUN_SYS_EXT_MAX != agg_expr->type_)) {
+          bret = false;
+          break;
+        }
+      }
+    }
+  }
+  return bret;
+}
+
 int ObExternalTableAccessService::table_scan(
     ObVTableScanParam &param,
     ObNewRowIterator *&result)
@@ -519,10 +547,17 @@ int ObExternalTableAccessService::table_scan(
             LOG_WARN("alloc memory failed", K(ret));
           }
           break;
-        case ObExternalFileFormat::PARQUET_FORMAT :
-          if (OB_ISNULL(row_iter = OB_NEWx(ObParquetTableRowIterator, (scan_param.allocator_)))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("alloc memory failed", K(ret));
+        case ObExternalFileFormat::PARQUET_FORMAT:
+          if (is_ext_min_max_agg_scan(scan_param)) {
+            if (OB_ISNULL(row_iter = OB_NEWx(ObParquetMinMaxIter, (scan_param.allocator_)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("alloc memory failed", K(ret));
+            }
+          } else {
+            if (OB_ISNULL(row_iter = OB_NEWx(ObParquetTableRowIterator, (scan_param.allocator_)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("alloc memory failed", K(ret));
+            }
           }
           break;
         case ObExternalFileFormat::ODPS_FORMAT:
@@ -554,9 +589,16 @@ int ObExternalTableAccessService::table_scan(
           break;
         }
         case ObExternalFileFormat::ORC_FORMAT:
-          if (OB_ISNULL(row_iter = OB_NEWx(ObOrcTableRowIterator, (scan_param.allocator_)))) {
-            ret = OB_ALLOCATE_MEMORY_FAILED;
-            LOG_WARN("alloc memory failed", K(ret));
+          if (is_ext_min_max_agg_scan(scan_param)) {
+            if (OB_ISNULL(row_iter = OB_NEWx(ObOrcMinMaxIter, (scan_param.allocator_)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("alloc memory failed", K(ret));
+            }
+          } else {
+            if (OB_ISNULL(row_iter = OB_NEWx(ObOrcTableRowIterator, (scan_param.allocator_)))) {
+              ret = OB_ALLOCATE_MEMORY_FAILED;
+              LOG_WARN("alloc memory failed", K(ret));
+            }
           }
           break;
         case ObExternalFileFormat::PLUGIN_FORMAT:
@@ -661,6 +703,7 @@ int ObExternalTableAccessService::revert_scan_iter(ObNewRowIterator *iter)
 int ObExternalTableRowIterator::init(const ObTableScanParam *scan_param)
 {
    scan_param_ = scan_param;
+   is_agg_pushdown_ = ObStoragePushdownFlag(scan_param->pd_storage_flag_).is_aggregate_pushdown();
    return init_exprs(scan_param);
 }
 

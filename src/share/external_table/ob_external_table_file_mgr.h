@@ -15,6 +15,7 @@
 #include "sql/resolver/ob_resolver_utils.h"
 #include "sql/session/ob_sql_session_info.h"
 #include "src/sql/resolver/ob_stmt_resolver.h"
+#include "sql/engine/table/ob_odps_table_row_iter.h"
 
 namespace oceanbase {
 namespace sql {
@@ -201,7 +202,7 @@ public:
   int64_t size() const override
   {
     int64_t size = sizeof(ObExternalTablePartitions);
-    for (int i = 0; i < partition_infos_.count(); ++i) {
+    for (int64_t i = 0; i < partition_infos_.count(); ++i) {
       size += partition_infos_.at(i).get_size();
     }
 
@@ -425,6 +426,8 @@ public:
                           common::ObIAllocator &allocator,
                           ObExternalTablePartitions &pts);
 
+  int get_part_col_names(const ObTableSchema &table_schema, ObIArray<ObString> &part_col_names);
+
   int flush_external_file_cache(
     const uint64_t tenant_id,
     const uint64_t table_id,
@@ -463,6 +466,12 @@ public:
                                           const common::ObIArray<common::ObString> &file_urls,
                                           common::ObIAllocator &allocator,
                                           common::ObIArray<ObString> &content_digests);
+  static int get_external_table_simple_stats(const ObString &location,
+                                             const ObString &access_info,
+                                             const ObIArray<ObString> &partition_values,
+                                             ObIArray<int64_t> &file_nums,
+                                             ObIArray<int64_t> &data_sizes,
+                                             ObIArray<int64_t> &modify_times);
 
 private:
   int fill_single_file_info(ObIAllocator &allocator,

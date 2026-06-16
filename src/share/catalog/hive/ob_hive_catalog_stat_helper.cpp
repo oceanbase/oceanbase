@@ -12,12 +12,17 @@
 #include "lib/time/ob_time_utility.h"
 #include "lib/wide_integer/ob_wide_integer.h"
 #include "lib/wide_integer/ob_wide_integer_helper.h"
-#include "share/stat/ob_opt_external_column_stat_builder.h"
-#include "share/stat/ob_opt_external_table_stat_builder.h"
+#include "share/schema/ob_column_schema.h"
+#include "share/schema/ob_table_schema.h"
+#include "share/stat/catalog/ob_opt_catalog_column_stat_builder.h"
+#include "share/stat/catalog/ob_opt_catalog_table_stat_builder.h"
 #include "sql/table_format/hive/ob_hive_table_metadata.h"
+
 namespace oceanbase {
 namespace share {
 
+using schema::ObColumnSchemaV2;
+using schema::ObTableSchema;
 // Medium int constants
 #ifndef INT24_MIN
 #define INT24_MIN (-8388607 - 1)
@@ -38,11 +43,11 @@ int ObHiveCatalogStatHelper::fetch_hive_table_statistics(
     ObHiveMetastoreClient *client, const ObILakeTableMetadata *table_metadata,
     const ObIArray<ObString> &partition_values,
     const ObIArray<ObString> &column_names,
-    ObOptExternalTableStat *&external_table_stat,
-    ObIArray<ObOptExternalColumnStat *> &external_column_stats) {
+    ObIArray<ObOptCatalogTableStat *> &catalog_table_stats,
+    ObIArray<ObOptCatalogColumnStat *> &catalog_column_stats) {
   int ret = OB_SUCCESS;
-  external_table_stat = nullptr;
-  external_column_stats.reset();
+  catalog_table_stats.reset();
+  catalog_column_stats.reset();
 
   // Check parameters
   if (OB_ISNULL(client)) {
@@ -74,30 +79,33 @@ int ObHiveCatalogStatHelper::fetch_hive_table_statistics(
 
       if (partition_names.empty()) {
         // Non-partitioned table - get table-level statistics directly
+        ObOptCatalogTableStat *catalog_table_stat = nullptr;
         if (OB_FAIL(fetch_table_level_statistics(
-                client, table_metadata, column_names, external_table_stat,
-                external_column_stats))) {
+                client, table_metadata, column_names, catalog_table_stat,
+                catalog_column_stats))) {
           LOG_WARN("failed to fetch table level statistics", K(ret), K(ns_name),
                    K(table_name));
+        } else if (OB_NOT_NULL(catalog_table_stat)
+                   && OB_FAIL(catalog_table_stats.push_back(catalog_table_stat))) {
+          LOG_WARN("failed to push back table level statistics", K(ret), K(ns_name), K(table_name));
         }
       } else {
-        // Partitioned table - get partition-level statistics and merge
+        std::vector<std::string> target_partition_names;
         if (partition_values.empty()) {
-          // Get statistics for all partitions and merge
-          if (OB_FAIL(fetch_all_partitions_statistics(
-                  client, table_metadata, partition_names, column_names,
-                  external_table_stat, external_column_stats))) {
-            LOG_WARN("failed to fetch all partitions statistics", K(ret),
-                     K(ns_name), K(table_name));
-          }
+          target_partition_names = partition_names;
         } else {
-          // Get statistics for specified partitions only
-          if (OB_FAIL(fetch_specified_partitions_statistics(
-                  client, table_metadata, partition_values, column_names,
-                  external_table_stat, external_column_stats))) {
-            LOG_WARN("failed to fetch specified partitions statistics", K(ret),
-                     K(ns_name), K(table_name));
+          for (int64_t i = 0; i < partition_values.count(); ++i) {
+            target_partition_names.emplace_back(partition_values.at(i).ptr(),
+                                                partition_values.at(i).length());
           }
+        }
+        if (OB_FAIL(fetch_partitions_statistics_batch(client,
+                                                      table_metadata,
+                                                      target_partition_names,
+                                                      column_names,
+                                                      catalog_table_stats,
+                                                      catalog_column_stats))) {
+          LOG_WARN("failed to fetch partition statistics in batch", K(ret), K(ns_name), K(table_name));
         }
       }
     }
@@ -109,8 +117,8 @@ int ObHiveCatalogStatHelper::fetch_hive_table_statistics(
 int ObHiveCatalogStatHelper::fetch_table_level_statistics(
     ObHiveMetastoreClient *client, const ObILakeTableMetadata *table_metadata,
     const ObIArray<ObString> &column_names,
-    ObOptExternalTableStat *&external_table_stat,
-    ObIArray<ObOptExternalColumnStat *> &external_column_stats) {
+    ObOptCatalogTableStat *&catalog_table_stat,
+    ObIArray<ObOptCatalogColumnStat *> &catalog_column_stats) {
   int ret = OB_SUCCESS;
   const ObString &ns_name = table_metadata->namespace_name_;
   const ObString &table_name = table_metadata->table_name_;
@@ -151,62 +159,11 @@ int ObHiveCatalogStatHelper::fetch_table_level_statistics(
       // Convert Hive statistics to OceanBase external statistics
       if (OB_FAIL(convert_hive_table_stats_to_external_stats(
               table_metadata, basic_stats, table_stats_result, column_names,
-              external_table_stat, external_column_stats))) {
+              catalog_table_stat, catalog_column_stats))) {
         LOG_WARN("failed to convert hive table stats to external stats", K(ret),
                  K(ns_name), K(table_name));
       }
     }
-  }
-
-  return ret;
-}
-
-int ObHiveCatalogStatHelper::fetch_all_partitions_statistics(
-    ObHiveMetastoreClient *client, const ObILakeTableMetadata *table_metadata,
-    const Strings &partition_names, const ObIArray<ObString> &column_names,
-    ObOptExternalTableStat *&external_table_stat,
-    ObIArray<ObOptExternalColumnStat *> &external_column_stats) {
-  int ret = OB_SUCCESS;
-
-  // Convert Strings to std::vector<std::string> for compatibility
-  std::vector<std::string> std_partition_names;
-  for (const std::string &partition_name : partition_names) {
-    std_partition_names.push_back(partition_name);
-  }
-
-  // Use batch processing to fetch all partition statistics
-  if (OB_FAIL(fetch_partitions_statistics_batch(
-          client, table_metadata, std_partition_names, column_names,
-          external_table_stat, external_column_stats))) {
-    LOG_WARN("failed to fetch all partitions statistics via batch processing",
-             K(ret));
-  }
-
-  return ret;
-}
-
-int ObHiveCatalogStatHelper::fetch_specified_partitions_statistics(
-    ObHiveMetastoreClient *client, const ObILakeTableMetadata *table_metadata,
-    const ObIArray<ObString> &partition_values,
-    const ObIArray<ObString> &column_names,
-    ObOptExternalTableStat *&external_table_stat,
-    ObIArray<ObOptExternalColumnStat *> &external_column_stats) {
-  int ret = OB_SUCCESS;
-
-  // Convert partition values to partition names
-  std::vector<std::string> specified_partition_names;
-  for (int64_t i = 0; i < partition_values.count(); ++i) {
-    specified_partition_names.emplace_back(partition_values.at(i).ptr(),
-                                           partition_values.at(i).length());
-  }
-
-  // Use batch processing to fetch partition statistics
-  if (OB_FAIL(fetch_partitions_statistics_batch(
-          client, table_metadata, specified_partition_names, column_names,
-          external_table_stat, external_column_stats))) {
-    LOG_WARN(
-        "failed to fetch specified partitions statistics via batch processing",
-        K(ret));
   }
 
   return ret;
@@ -327,7 +284,7 @@ int ObHiveCatalogStatHelper::merge_part_column_stat(const ObTableSchema &table_s
                                                     std::vector<ApacheHive::Partition> &partitions,
                                                     std::vector<ObHiveBasicStats> &basic_stats,
                                                     ObIArray<const ObColumnSchemaV2 *> &column_schemas,
-                                                    ObIArray<ObOptExternalColumnStatBuilder *> &column_builders)
+                                                    ObIArray<ObOptCatalogColumnStatBuilder *> &column_builders)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator tmp_allocator("HivePartRow", OB_MALLOC_MIDDLE_BLOCK_SIZE, MTL_ID());
@@ -359,7 +316,7 @@ int ObHiveCatalogStatHelper::merge_part_column_stat(const ObTableSchema &table_s
       }
       for (int64_t j = 0; OB_SUCC(ret) && j < column_schemas.count(); ++j) {
         const ObColumnSchemaV2 *column_schema = column_schemas.at(j);
-        ObOptExternalColumnStatBuilder *builder = column_builders.at(j);
+        ObOptCatalogColumnStatBuilder *builder = column_builders.at(j);
         if (OB_ISNULL(column_schema) || OB_ISNULL(builder)) {
           ret = OB_ERR_UNEXPECTED;
           LOG_WARN("get unexpected null", K(column_schema), K(builder));
@@ -381,8 +338,7 @@ int ObHiveCatalogStatHelper::merge_non_part_column_stats(
     int64_t total_rows,
     const std::vector<ApacheHive::ColumnStatisticsObj> &column_stats,
     ObIArray<const ObColumnSchemaV2 *> &column_schemas,
-    ObIArray<ObOptExternalColumnStatBuilder *> &column_builders)
-{
+    ObIArray<ObOptCatalogColumnStatBuilder *> &column_builders) {
   int ret = OB_SUCCESS;
   std::vector<const ApacheHive::ColumnStatisticsObj *> arranged_column_stats;
   if (OB_UNLIKELY(column_schemas.count() != column_builders.count())) {
@@ -395,7 +351,7 @@ int ObHiveCatalogStatHelper::merge_non_part_column_stats(
     // Process each column according to schema order
     for (int64_t i = 0; OB_SUCC(ret) && i < column_schemas.count(); ++i) {
       const ObColumnSchemaV2 *column_schema = column_schemas.at(i);
-      ObOptExternalColumnStatBuilder *builder = column_builders.at(i);
+      ObOptCatalogColumnStatBuilder *builder = column_builders.at(i);
       const ApacheHive::ColumnStatisticsObj *column_stat_obj = arranged_column_stats.at(i);
       if (OB_ISNULL(column_schema) || OB_ISNULL(builder)) {
         ret = OB_ERR_UNEXPECTED;
@@ -470,8 +426,8 @@ int ObHiveCatalogStatHelper::prepare_column_builders_and_schemas(
     ObIAllocator &allocator, const ObString &partition_value,
     const ObILakeTableMetadata *table_metadata,
     const ObIArray<ObString> &column_names,
-    ObIArray<ObOptExternalColumnStatBuilder *> &part_column_builders,
-    ObIArray<ObOptExternalColumnStatBuilder *> &non_part_column_builders,
+    ObIArray<ObOptCatalogColumnStatBuilder *> &part_column_builders,
+    ObIArray<ObOptCatalogColumnStatBuilder *> &non_part_column_builders,
     const ObTableSchema *&table_schema,
     ObIArray<const ObColumnSchemaV2 *> &part_column_schemas,
     ObIArray<const ObColumnSchemaV2 *> &non_part_column_schemas)
@@ -492,8 +448,8 @@ int ObHiveCatalogStatHelper::prepare_column_builders_and_schemas(
     for (int64_t i = 0; OB_SUCC(ret) && i < column_names.count(); ++i) {
       const ObString &column_name = column_names.at(i);
       const ObColumnSchemaV2 *column_schema = nullptr;
-      ObOptExternalColumnStatBuilder *builder =
-          OB_NEWx(ObOptExternalColumnStatBuilder, &allocator, allocator);
+      ObOptCatalogColumnStatBuilder *builder =
+          OB_NEWx(ObOptCatalogColumnStatBuilder, &allocator, allocator);
       if (OB_ISNULL(builder)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
         LOG_WARN("failed to allocate column stat builder", K(ret), K(i));
@@ -507,7 +463,7 @@ int ObHiveCatalogStatHelper::prepare_column_builders_and_schemas(
       } else if (OB_FAIL(builder->set_stat_info(0, 0, 0, 0, ObTimeUtility::current_time(),
                                                 common::ObCollationType::CS_TYPE_UTF8MB4_GENERAL_CI))) {
         LOG_WARN("failed to set stat info for column stat builder", K(ret), K(i));
-      } else if (OB_FAIL(builder->set_bitmap_type(ObExternalBitmapType::HIVE_AUTO_DETECT))) {
+      } else if (OB_FAIL(builder->set_bitmap_type(ObCatalogBitmapType::HIVE_AUTO_DETECT))) {
         LOG_WARN("failed to set bitmap type for hive column stat builder", K(ret), K(i));
       } else if (OB_ISNULL(column_schema = table_schema->get_column_schema(column_name))) {
         ret = OB_ERR_UNEXPECTED;
@@ -529,21 +485,21 @@ int ObHiveCatalogStatHelper::prepare_column_builders_and_schemas(
 }
 
 int ObHiveCatalogStatHelper::collect_column_stats_from_builders(
-    ObIArray<ObOptExternalColumnStatBuilder *> &column_builders,
-    ObIArray<ObOptExternalColumnStat *> &external_column_stats) {
+    ObIArray<ObOptCatalogColumnStatBuilder *> &column_builders,
+    ObIArray<ObOptCatalogColumnStat *> &catalog_column_stats) {
   int ret = OB_SUCCESS;
   for (int64_t i = 0; OB_SUCC(ret) && i < column_builders.count(); ++i) {
-    ObOptExternalColumnStatBuilder *builder = column_builders.at(i);
-    ObOptExternalColumnStat *external_column_stat = nullptr;
+    ObOptCatalogColumnStatBuilder *builder = column_builders.at(i);
+    ObOptCatalogColumnStat *catalog_column_stat = nullptr;
     if (OB_ISNULL(builder)) {
       ret = OB_ERR_UNEXPECTED;
       LOG_WARN("column stat builder is null", K(ret), K(i));
     } else if (OB_FAIL(builder->finalize_bitmap())) {
       LOG_WARN("failed to finalize bitmap for column stat builder", K(ret),
                K(i));
-    } else if (OB_FAIL(builder->build(allocator_, external_column_stat))) {
+    } else if (OB_FAIL(builder->build(allocator_, catalog_column_stat))) {
       LOG_WARN("failed to build external column stat", K(ret), K(i));
-    } else if (OB_FAIL(external_column_stats.push_back(external_column_stat))) {
+    } else if (OB_FAIL(catalog_column_stats.push_back(catalog_column_stat))) {
       LOG_WARN("failed to push back external column stat", K(ret), K(i));
     }
   }
@@ -563,11 +519,13 @@ int ObHiveCatalogStatHelper::fetch_partitions_statistics_batch(
     ObHiveMetastoreClient *client, const ObILakeTableMetadata *table_metadata,
     const std::vector<std::string> &partition_names,
     const ObIArray<ObString> &column_names,
-    ObOptExternalTableStat *&external_table_stat,
-    ObIArray<ObOptExternalColumnStat *> &external_column_stats,
-    int64_t batch_size) {
+    ObIArray<ObOptCatalogTableStat *> &catalog_table_stats,
+    ObIArray<ObOptCatalogColumnStat *> &catalog_column_stats,
+    int64_t batch_size)
+{
   int ret = OB_SUCCESS;
-  external_table_stat = nullptr;
+  catalog_table_stats.reset();
+  catalog_column_stats.reset();
   if (OB_ISNULL(client) || OB_ISNULL(table_metadata) || column_names.empty() ||
       partition_names.empty() || batch_size <= 0) {
     ret = OB_ERR_UNEXPECTED;
@@ -581,42 +539,28 @@ int ObHiveCatalogStatHelper::fetch_partitions_statistics_batch(
   } else {
     common::ObArenaAllocator arena_allocator(
         "HiveStatBatch", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-    ObString global_partition_value;
     const ObString &ns_name = table_metadata->namespace_name_;
     const ObString &table_name = table_metadata->table_name_;
     const ObNameCaseMode case_mode = table_metadata->case_mode_;
-    // Merge basic statistics across all batches
-    ObHiveBasicStats merged_basic_stats;
-    // Process partitions in batches
     std::vector<std::string> std_column_names;
     std::vector<std::string> batch_partition_names;
     std::vector<ObHiveBasicStats> batch_basic_stats;
     std::vector<ApacheHive::Partition> partitions;
-    // Prepare column builders for merging
-    ObSEArray<ObOptExternalColumnStatBuilder *, 16> part_column_builders;
-    ObSEArray<ObOptExternalColumnStatBuilder *, 16> non_part_column_builders;
     const ObTableSchema *table_schema = nullptr;
-    ObSEArray<const ObColumnSchemaV2 *, 16> part_column_schemas;
-    ObSEArray<const ObColumnSchemaV2 *, 16> non_part_column_schemas;
     if (OB_FAIL(convert_to_std_vector(column_names, std_column_names))) {
       LOG_WARN("failed to convert column names to std vector", K(ret));
-    } else if (OB_FAIL(prepare_column_builders_and_schemas(arena_allocator,
-                                                           global_partition_value,
-                                                           table_metadata,
-                                                           column_names,
-                                                           part_column_builders,
-                                                           non_part_column_builders,
-                                                           table_schema,
-                                                           part_column_schemas,
-                                                           non_part_column_schemas))) {
-      LOG_WARN("failed to prepare column builders and schemas", K(ret));
-    } else if (OB_ISNULL(table_schema)) {
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("get null table schema");
+    } else {
+      const sql::hive::ObHiveTableMetadata *hive_table_metadata =
+          static_cast<const sql::hive::ObHiveTableMetadata *>(table_metadata);
+      table_schema = &(hive_table_metadata->get_table_schema());
+      if (OB_ISNULL(table_schema)) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("get null table schema", K(ret));
+      }
     }
 
     for (int64_t batch_start = 0;
-         OB_SUCC(ret) && batch_start < partition_names.size();
+         OB_SUCC(ret) && batch_start < static_cast<int64_t>(partition_names.size());
          batch_start += batch_size) {
       int64_t batch_end =
           std::min(batch_start + batch_size,
@@ -627,7 +571,6 @@ int ObHiveCatalogStatHelper::fetch_partitions_statistics_batch(
       batch_partition_names.clear();
       partitions.clear();
 
-      // Create batch partition list
       for (int64_t i = batch_start; i < batch_end; ++i) {
         if (partition_names[i].find("__HIVE_DEFAULT_PARTITION__") == std::string::npos) {
           batch_partition_names.emplace_back(partition_names[i]);
@@ -638,7 +581,6 @@ int ObHiveCatalogStatHelper::fetch_partitions_statistics_batch(
                 "batch_size", batch_partition_names.size(), "total_partitions",
                 partition_names.size());
 
-      // Get basic statistics for this batch
       if (batch_partition_names.empty()) {
         // do nothing
       } else if (OB_FAIL(client->get_partition_basic_stats(ns_name, table_name, case_mode,
@@ -650,69 +592,112 @@ int ObHiveCatalogStatHelper::fetch_partitions_statistics_batch(
         ret = OB_ERR_UNEXPECTED;
         LOG_WARN("get unexpected size", K(ret), K(batch_partition_names.size()),
                  K(batch_basic_stats.size()));
-      } else if (OB_FAIL(merge_table_stats(batch_basic_stats, merged_basic_stats))) {
-        LOG_WARN("failed to merge table stats", K(ret));
-      } else if (OB_FAIL(merge_part_column_stat(*table_schema, partitions, batch_basic_stats,
-                                                part_column_schemas, part_column_builders))) {
-        LOG_WARN("failed to merge part column stat");
       } else if (OB_FAIL(client->get_partition_statistics(ns_name, table_name, case_mode,
                                                           std_column_names, batch_partition_names,
                                                           found, batch_stats_result))) {
         LOG_WARN("failed to get partition statistics for batch", K(ret),
                  K(ns_name), K(table_name), K(batch_start), K(batch_end));
-      } else if (found && !batch_stats_result.partStats.empty()) {
+      } else {
         for (int64_t i = 0; OB_SUCC(ret) && i < batch_partition_names.size(); ++i) {
           const std::string &partition_name = batch_partition_names[i];
           const ObHiveBasicStats &partition_basic_stats = batch_basic_stats[i];
-          std::map<std::string, std::vector<ApacheHive::ColumnStatisticsObj> >::const_iterator itr = batch_stats_result.partStats.find(partition_name);
-          if (itr != batch_stats_result.partStats.end()) {
-            const std::vector<ApacheHive::ColumnStatisticsObj>
-                &partition_column_stats = itr->second;
-            if (OB_FAIL(merge_non_part_column_stats(partition_basic_stats.num_rows_,
-                                                    partition_column_stats,
-                                                    non_part_column_schemas,
-                                                    non_part_column_builders))) {
-              LOG_WARN("failed to merge partition column stats", K(ret),
-                       K(ns_name), K(table_name), K(batch_start), K(batch_end),
-                       K(partition_name.c_str()));
+          ObOptCatalogTableStat *catalog_table_stat = nullptr;
+          ObSEArray<ObOptCatalogColumnStat *, 16> single_partition_column_stats;
+          ObSEArray<ObOptCatalogColumnStatBuilder *, 16> part_column_builders;
+          ObSEArray<ObOptCatalogColumnStatBuilder *, 16> non_part_column_builders;
+          ObSEArray<const ObColumnSchemaV2 *, 16> part_column_schemas;
+          ObSEArray<const ObColumnSchemaV2 *, 16> non_part_column_schemas;
+          const ObString partition_value(static_cast<int32_t>(partition_name.length()),
+                                         partition_name.c_str());
+          std::vector<ApacheHive::Partition> single_partition;
+          std::vector<ObHiveBasicStats> single_basic_stats;
+          if (!partition_basic_stats.is_valid()) {
+            LOG_TRACE("skip invalid partition basic stats", K(partition_value));
+          } else {
+            single_partition.push_back(partitions[i]);
+            single_basic_stats.push_back(partition_basic_stats);
+            if (OB_FAIL(create_catalog_table_stat(table_metadata,
+                                                  partition_basic_stats,
+                                                  partition_value,
+                                                  1,
+                                                  catalog_table_stat))) {
+              LOG_WARN("failed to create partition table stat", K(ret), K(partition_value));
+            } else if (OB_ISNULL(catalog_table_stat)) {
+              ret = OB_ERR_UNEXPECTED;
+              LOG_WARN("catalog table stat is null", K(ret), K(partition_value));
+            } else if (OB_FAIL(catalog_table_stats.push_back(catalog_table_stat))) {
+              LOG_WARN("failed to push back partition table stat", K(ret), K(partition_value));
+            } else if (OB_FAIL(prepare_column_builders_and_schemas(arena_allocator,
+                                                                   partition_value,
+                                                                   table_metadata,
+                                                                   column_names,
+                                                                   part_column_builders,
+                                                                   non_part_column_builders,
+                                                                   table_schema,
+                                                                   part_column_schemas,
+                                                                   non_part_column_schemas))) {
+              LOG_WARN("failed to prepare column builders and schemas", K(ret), K(partition_value));
+            } else if (OB_FAIL(merge_part_column_stat(*table_schema,
+                                                      single_partition,
+                                                      single_basic_stats,
+                                                      part_column_schemas,
+                                                      part_column_builders))) {
+              LOG_WARN("failed to merge partition column stat", K(ret), K(partition_value));
+            } else {
+              if (found && !batch_stats_result.partStats.empty()) {
+                std::map<std::string, std::vector<ApacheHive::ColumnStatisticsObj> >::const_iterator itr =
+                    batch_stats_result.partStats.find(partition_name);
+                if (itr != batch_stats_result.partStats.end()) {
+                  if (OB_FAIL(merge_non_part_column_stats(partition_basic_stats.num_rows_,
+                                                          itr->second,
+                                                          non_part_column_schemas,
+                                                          non_part_column_builders))) {
+                    LOG_WARN("failed to merge non-partition column stats",
+                             K(ret),
+                             K(partition_value));
+                  }
+                }
+              }
+              if (OB_SUCC(ret)) {
+                if (OB_FAIL(collect_column_stats_from_builders(part_column_builders,
+                                                               single_partition_column_stats))) {
+                  LOG_WARN("failed to collect partition column stats", K(ret), K(partition_value));
+                } else if (OB_FAIL(collect_column_stats_from_builders(non_part_column_builders,
+                                                                       single_partition_column_stats))) {
+                  LOG_WARN("failed to collect non-partition column stats", K(ret), K(partition_value));
+                } else {
+                  for (int64_t j = 0; OB_SUCC(ret) && j < single_partition_column_stats.count(); ++j) {
+                    if (OB_FAIL(catalog_column_stats.push_back(single_partition_column_stats.at(j)))) {
+                      LOG_WARN("failed to push back partition column stat",
+                               K(ret),
+                               K(partition_value),
+                               K(j));
+                    }
+                  }
+                }
+              }
+            }
+          }
+
+          for (int64_t j = 0; j < part_column_builders.count(); ++j) {
+            if (OB_NOT_NULL(part_column_builders.at(j))) {
+              part_column_builders.at(j)->~ObOptCatalogColumnStatBuilder();
+            }
+          }
+          for (int64_t j = 0; j < non_part_column_builders.count(); ++j) {
+            if (OB_NOT_NULL(non_part_column_builders.at(j))) {
+              non_part_column_builders.at(j)->~ObOptCatalogColumnStatBuilder();
             }
           }
         }
       }
     }
 
-    // Create final table statistics and column statistics
-    if (OB_SUCC(ret) && merged_basic_stats.is_valid()) {
-      if (OB_FAIL(create_external_table_stat(table_metadata, merged_basic_stats, ObString(""),
-                                             partition_names.size(), external_table_stat))) {
-        LOG_WARN("failed to create external table stat", K(ret));
-      } else if (OB_FAIL(collect_column_stats_from_builders(part_column_builders,
-                                                            external_column_stats))) {
-        LOG_WARN("failed to collect column stats from builders", K(ret));
-      } else if (OB_FAIL(collect_column_stats_from_builders(non_part_column_builders,
-                                                            external_column_stats))) {
-        LOG_WARN("failed to collect column stats from builders", K(ret));
-      }
-    }
-
-    // Clean up builders
-    for (int64_t i = 0; i < part_column_builders.count(); ++i) {
-      if (OB_NOT_NULL(part_column_builders.at(i))) {
-        part_column_builders.at(i)->~ObOptExternalColumnStatBuilder();
-      }
-    }
-    for (int64_t i = 0; i < non_part_column_builders.count(); ++i) {
-      if (OB_NOT_NULL(non_part_column_builders.at(i))) {
-        non_part_column_builders.at(i)->~ObOptExternalColumnStatBuilder();
-      }
-    }
-
-
     LOG_TRACE("Completed batch processing of partition statistics",
-              "total_partitions", partition_names.size(), "batch_size",
-              batch_size, "merged_rows", merged_basic_stats.num_rows_,
-              "merged_files", merged_basic_stats.num_files_, "merged_size",
-              merged_basic_stats.total_size_);
+              "total_partitions", partition_names.size(),
+              "batch_size", batch_size,
+              "table_stat_count", catalog_table_stats.count(),
+              "column_stat_count", catalog_column_stats.count());
   }
 
   return ret;
@@ -723,27 +708,27 @@ int ObHiveCatalogStatHelper::convert_hive_table_stats_to_external_stats(
     const ObHiveBasicStats &basic_stats,
     const ApacheHive::TableStatsResult &table_stats_result,
     const ObIArray<ObString> &column_names,
-    ObOptExternalTableStat *&external_table_stat,
-    ObIArray<ObOptExternalColumnStat *> &external_column_stats) {
+    ObOptCatalogTableStat *&catalog_table_stat,
+    ObIArray<ObOptCatalogColumnStat *> &catalog_column_stats) {
   int ret = OB_SUCCESS;
-  external_table_stat = nullptr;
-  external_column_stats.reset();
+  catalog_table_stat = nullptr;
+  catalog_column_stats.reset();
 
   if (basic_stats.is_valid()) {
     // Create table statistics and column statistics
-    if (OB_FAIL(create_external_table_stat(table_metadata,
-                                           basic_stats,
-                                           ObString(""),
-                                           1,
-                                           external_table_stat))) {
+    if (OB_FAIL(create_catalog_table_stat(table_metadata,
+                                          basic_stats,
+                                          ObString(""),
+                                          1,
+                                          catalog_table_stat))) {
       LOG_WARN("failed to create external table stat", K(ret));
     } else if (!table_stats_result.tableStats.empty() &&
-               OB_FAIL(create_external_column_stats(table_metadata,
-                                                    table_stats_result.tableStats,
-                                                    column_names,
-                                                    ObString(""),
-                                                    basic_stats.num_rows_,
-                                                    external_column_stats))) {
+               OB_FAIL(create_catalog_column_stats(table_metadata,
+                                                   table_stats_result.tableStats,
+                                                   column_names,
+                                                   ObString(""),
+                                                   basic_stats.num_rows_,
+                                                   catalog_column_stats))) {
       LOG_WARN("failed to create external column stats", K(ret));
     }
   }
@@ -751,43 +736,47 @@ int ObHiveCatalogStatHelper::convert_hive_table_stats_to_external_stats(
   return ret;
 }
 
-int ObHiveCatalogStatHelper::create_external_table_stat(
-    const ObILakeTableMetadata *table_metadata,
-    const ObHiveBasicStats &basic_stats, const ObString &partition_value,
-    const int64_t partition_num, ObOptExternalTableStat *&external_table_stat) {
+int ObHiveCatalogStatHelper::create_catalog_table_stat(const ObILakeTableMetadata *table_metadata,
+                                                       const ObHiveBasicStats &basic_stats,
+                                                       const ObString &partition_value,
+                                                       const int64_t partition_num,
+                                                       ObOptCatalogTableStat *&catalog_table_stat)
+{
   int ret = OB_SUCCESS;
-  external_table_stat = nullptr;
+  catalog_table_stat = nullptr;
 
-  ObOptExternalTableStatBuilder table_stat_builder;
-  if (OB_FAIL(table_stat_builder.set_basic_info(
-          table_metadata->tenant_id_, table_metadata->catalog_id_,
-          table_metadata->namespace_name_, table_metadata->table_name_,
-          partition_value))) {
+  ObOptCatalogTableStatBuilder table_stat_builder;
+  if (OB_FAIL(table_stat_builder.set_basic_info(table_metadata->tenant_id_,
+                                                table_metadata->catalog_id_,
+                                                table_metadata->namespace_name_,
+                                                table_metadata->table_name_,
+                                                partition_value))) {
     LOG_WARN("failed to set basic info for table stat builder", K(ret));
-  } else if (OB_FAIL(table_stat_builder.set_stat_info(
-                 basic_stats.num_rows_, basic_stats.num_files_,
-                 basic_stats.total_size_, ObTimeUtility::current_time()))) {
+  } else if (OB_FAIL(table_stat_builder.set_stat_info(table_metadata->lake_table_metadata_version_,
+                                                      basic_stats.num_rows_,
+                                                      basic_stats.num_files_,
+                                                      basic_stats.total_size_,
+                                                      ObTimeUtility::current_time()))) {
     LOG_WARN("failed to set stat info for table stat builder", K(ret));
   } else if (OB_FALSE_IT(table_stat_builder.add_partition_num(partition_num))) {
-  } else if (OB_FAIL(
-                 table_stat_builder.build(allocator_, external_table_stat))) {
-    LOG_WARN("failed to build external table stat", K(ret));
+  } else if (OB_FAIL(table_stat_builder.build(allocator_, catalog_table_stat))) {
+    LOG_WARN("failed to build catalog table stat", K(ret));
   }
 
   return ret;
 }
 
-int ObHiveCatalogStatHelper::create_external_column_stats(
+int ObHiveCatalogStatHelper::create_catalog_column_stats(
     const ObILakeTableMetadata *table_metadata,
     const std::vector<ApacheHive::ColumnStatisticsObj> &hive_column_stats,
     const ObIArray<ObString> &column_names, const ObString &partition_value,
     int64_t total_rows,
-    ObIArray<ObOptExternalColumnStat *> &external_column_stats)
+    ObIArray<ObOptCatalogColumnStat *> &catalog_column_stats)
 {
   int ret = OB_SUCCESS;
   ObArenaAllocator arena_allocator("HiveStatBatch", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
-  ObSEArray<ObOptExternalColumnStatBuilder *, 16> part_column_stat_builders;
-  ObSEArray<ObOptExternalColumnStatBuilder *, 16> non_part_column_stat_builders;
+  ObSEArray<ObOptCatalogColumnStatBuilder *, 16> part_column_stat_builders;
+  ObSEArray<ObOptCatalogColumnStatBuilder *, 16> non_part_column_stat_builders;
   const ObTableSchema *table_schema = nullptr;
   ObSEArray<const ObColumnSchemaV2 *, 16> part_column_schemas;
   ObSEArray<const ObColumnSchemaV2 *, 16> non_part_column_schemas;
@@ -806,13 +795,13 @@ int ObHiveCatalogStatHelper::create_external_column_stats(
                                                  non_part_column_schemas,
                                                  non_part_column_stat_builders))) {
     LOG_WARN("failed to merge hive column stats", K(ret));
-  } else if (OB_FAIL(collect_column_stats_from_builders(non_part_column_stat_builders, external_column_stats))) {
+  } else if (OB_FAIL(collect_column_stats_from_builders(non_part_column_stat_builders, catalog_column_stats))) {
     LOG_WARN("failed to collect column stats from builders", K(ret));
   }
 
   for (int64_t i = 0; OB_SUCC(ret) && i < non_part_column_stat_builders.count(); ++i) {
     if (OB_NOT_NULL(non_part_column_stat_builders.at(i))) {
-      non_part_column_stat_builders.at(i)->~ObOptExternalColumnStatBuilder();
+      non_part_column_stat_builders.at(i)->~ObOptCatalogColumnStatBuilder();
     }
   }
   return ret;
@@ -821,7 +810,7 @@ int ObHiveCatalogStatHelper::create_external_column_stats(
 int ObHiveCatalogStatHelper::merge_hive_column_data_to_builder(
     const ApacheHive::BooleanColumnStatsData &boolean_column_stat,
     int64_t total_rows, const ObColumnSchemaV2 &column_schema,
-    ObOptExternalColumnStatBuilder &builder) {
+    ObOptCatalogColumnStatBuilder &builder) {
   int ret = OB_SUCCESS;
 
   // Calculate basic statistics
@@ -854,7 +843,7 @@ int ObHiveCatalogStatHelper::merge_hive_column_data_to_builder(
 int ObHiveCatalogStatHelper::merge_hive_column_data_to_builder(
     const ApacheHive::LongColumnStatsData &long_column_stat, int64_t total_rows,
     const ObColumnSchemaV2 &column_schema,
-    ObOptExternalColumnStatBuilder &builder) {
+    ObOptCatalogColumnStatBuilder &builder) {
   int ret = OB_SUCCESS;
   ObArenaAllocator arena_allocator("HiveStatObj", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   // Calculate basic statistics
@@ -909,7 +898,7 @@ int ObHiveCatalogStatHelper::merge_hive_column_data_to_builder(
 int ObHiveCatalogStatHelper::merge_hive_column_data_to_builder(
     const ApacheHive::DoubleColumnStatsData &double_column_stat,
     int64_t total_rows, const ObColumnSchemaV2 &column_schema,
-    ObOptExternalColumnStatBuilder &builder) {
+    ObOptCatalogColumnStatBuilder &builder) {
   int ret = OB_SUCCESS;
   ObArenaAllocator arena_allocator("HiveStatObj", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   // Calculate basic statistics
@@ -964,7 +953,7 @@ int ObHiveCatalogStatHelper::merge_hive_column_data_to_builder(
 int ObHiveCatalogStatHelper::merge_hive_column_data_to_builder(
     const ApacheHive::StringColumnStatsData &string_column_stat,
     int64_t total_rows, const ObColumnSchemaV2 &column_schema,
-    ObOptExternalColumnStatBuilder &builder) {
+    ObOptCatalogColumnStatBuilder &builder) {
   int ret = OB_SUCCESS;
 
   // Calculate basic statistics
@@ -998,7 +987,7 @@ int ObHiveCatalogStatHelper::merge_hive_column_data_to_builder(
 int ObHiveCatalogStatHelper::merge_hive_column_data_to_builder(
     const ApacheHive::BinaryColumnStatsData &binary_column_stat,
     int64_t total_rows, const ObColumnSchemaV2 &column_schema,
-    ObOptExternalColumnStatBuilder &builder) {
+    ObOptCatalogColumnStatBuilder &builder) {
   int ret = OB_SUCCESS;
 
   // Calculate basic statistics
@@ -1033,7 +1022,7 @@ int ObHiveCatalogStatHelper::merge_hive_column_data_to_builder(
 int ObHiveCatalogStatHelper::merge_hive_column_data_to_builder(
     const ApacheHive::DecimalColumnStatsData &decimal_column_stat,
     int64_t total_rows, const ObColumnSchemaV2 &column_schema,
-    ObOptExternalColumnStatBuilder &builder) {
+    ObOptCatalogColumnStatBuilder &builder) {
   int ret = OB_SUCCESS;
   ObArenaAllocator arena_allocator("HiveStatObj", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   // Calculate basic statistics
@@ -1088,7 +1077,7 @@ int ObHiveCatalogStatHelper::merge_hive_column_data_to_builder(
 int ObHiveCatalogStatHelper::merge_hive_column_data_to_builder(
     const ApacheHive::DateColumnStatsData &date_column_stat, int64_t total_rows,
     const ObColumnSchemaV2 &column_schema,
-    ObOptExternalColumnStatBuilder &builder) {
+    ObOptCatalogColumnStatBuilder &builder) {
   int ret = OB_SUCCESS;
   ObArenaAllocator arena_allocator("HiveStatObj", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   // Calculate basic statistics
@@ -1141,7 +1130,7 @@ int ObHiveCatalogStatHelper::merge_hive_column_data_to_builder(
 int ObHiveCatalogStatHelper::merge_hive_column_data_to_builder(
     const ApacheHive::TimestampColumnStatsData &timestamp_column_stat,
     int64_t total_rows, const ObColumnSchemaV2 &column_schema,
-    ObOptExternalColumnStatBuilder &builder) {
+    ObOptCatalogColumnStatBuilder &builder) {
   int ret = OB_SUCCESS;
   ObArenaAllocator arena_allocator("HiveStatObj", OB_MALLOC_NORMAL_BLOCK_SIZE, MTL_ID());
   // Calculate basic statistics
@@ -1197,7 +1186,7 @@ int ObHiveCatalogStatHelper::merge_hive_column_data_to_builder(
 int ObHiveCatalogStatHelper::merge_part_column_data_to_builder(const ObObj &part_val,
                                                                int64_t total_rows,
                                                                const ObColumnSchemaV2 &column_schema,
-                                                               ObOptExternalColumnStatBuilder &builder)
+                                                               ObOptCatalogColumnStatBuilder &builder)
 {
   int ret = OB_SUCCESS;
   if (OB_UNLIKELY(part_val.is_null())) {
@@ -1507,14 +1496,14 @@ int ObHiveCatalogStatHelper::convert_hive_value_to_obobj(
           while (temp_len >= 8) {
             uint64_t temp_v =
                 *(reinterpret_cast<const uint64_t *>(str + temp_len - 8));
-            *(reinterpret_cast<uint64_t *>(buf + pos)) = ntohll(temp_v);
+            *(reinterpret_cast<uint64_t *>(buf + pos)) = be64toh(temp_v);
             pos += 8;
             temp_len -= 8;
           }
           if (temp_len > 0) {
             MEMCPY(buf + pos + 8 - temp_len, str, temp_len);
             uint64_t temp_v = *(reinterpret_cast<uint64_t *>(buf + pos));
-            *(reinterpret_cast<uint64_t *>(buf + pos)) = ntohll(temp_v);
+            *(reinterpret_cast<uint64_t *>(buf + pos)) = be64toh(temp_v);
           }
         }
 

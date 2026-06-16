@@ -188,8 +188,8 @@ int ObCatalogMetaGetter::fetch_table_statistics(
     const ObILakeTableMetadata *table_metadata,
     const ObIArray<ObString> &partition_values,
     const ObIArray<ObString> &column_names,
-    ObOptExternalTableStat *&external_table_stat,
-    ObIArray<ObOptExternalColumnStat *> &external_table_column_stats)
+    common::ObIArray<share::ObOptCatalogTableStat *> &catalog_table_stats,
+    common::ObIArray<share::ObOptCatalogColumnStat *> &catalog_table_column_stats)
 {
   int ret = OB_SUCCESS;
   ObIExternalCatalog *catalog = nullptr;
@@ -207,8 +207,8 @@ int ObCatalogMetaGetter::fetch_table_statistics(
                                                      table_metadata,
                                                      partition_values,
                                                      column_names,
-                                                     external_table_stat,
-                                                     external_table_column_stats))) {
+                                                     catalog_table_stats,
+                                                     catalog_table_column_stats))) {
     LOG_WARN("failed to fetch table statistics", K(ret));
   }
   return ret;
@@ -216,7 +216,8 @@ int ObCatalogMetaGetter::fetch_table_statistics(
 
 int ObCatalogMetaGetter::fetch_partitions(ObIAllocator &allocator,
                                           const ObILakeTableMetadata *table_metadata,
-                                          Partitions &partitions)
+                                          const ObIArray<ObString> &part_col_names,
+                                          ObIArray<common::ObCatalogExtPartitionInfo> &partition_infos)
 {
   int ret = OB_SUCCESS;
   ObIExternalCatalog *catalog = nullptr;
@@ -229,7 +230,10 @@ int ObCatalogMetaGetter::fetch_partitions(ObIAllocator &allocator,
   } else if (OB_ISNULL(catalog)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("catalog is nullptr", K(ret));
-  } else if (OB_FAIL(catalog->fetch_partitions(allocator, table_metadata, partitions))) {
+  } else if (OB_FAIL(catalog->fetch_partitions(allocator,
+                                               table_metadata,
+                                               part_col_names,
+                                               partition_infos))) {
     LOG_WARN("failed to fetch partition values", K(ret));
   }
   return ret;

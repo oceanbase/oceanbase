@@ -134,8 +134,6 @@ struct SkipPageCallback
       throw parquet::ParquetException("skip page error");
     }
 
-    int64_t found_page_idx = std::distance(column_page_locations->begin(), it);
-
     // Advance the read row count for this column
     read_row_counts_.at(cur_eager_id_) += it->num_rows_;
   }
@@ -221,7 +219,13 @@ public:
     column_index_type_(sql::ColumnIndexType::NAME),
     is_col_name_case_sensitive_(false),
     filter_eval_inited_(false),
-    dict_filter_pushdown_(nullptr) {}
+    dict_filter_pushdown_(nullptr),
+    sample_cumulative_block_offset_(0),
+    sample_actual_seed_(0),
+    sample_seed_inited_(false),
+    fast_target_pages_(0),
+    fast_taken_pages_(0),
+    fast_sample_active_(false) {}
   virtual ~ObParquetTableRowIterator();
 
   int init(const storage::ObTableScanParam *scan_param) override;
@@ -611,6 +615,45 @@ private:
     }
   };
 
+  // block sample / fast sample helpers
+  int alloc_page_range_arrays();
+  int filter_block_sample_pages(const int64_t cur_row_group,
+                                std::shared_ptr<parquet::RowGroupReader> rg_reader,
+                                int64_t &sel_rows);
+  int resolve_sample_source_pages(const int64_t cur_row_group,
+                                  std::shared_ptr<parquet::RowGroupReader> rg_reader,
+                                  common::ObSEArray<ObParquetPageLocation, 64> &fallback_locs,
+                                  const common::ObIArray<ObParquetPageLocation> *&out_pages,
+                                  int64_t &out_sample_col_idx,
+                                  bool &out_need_page_filter);
+  int pick_sample_blocks(const int64_t n_pages,
+                         const common::ObIArray<ObParquetPageLocation> &pages,
+                         const int64_t cumulative_block_offset,
+                         const int64_t part_id,
+                         const int64_t file_id,
+                         const uint64_t actual_seed,
+                         const uint64_t cut_off,
+                         common::ObArray<int8_t> &block_pick,
+                         common::ObArray<int64_t> &page_block_id,
+                         int64_t &num_blocks,
+                         int64_t &out_tail_compressed_bytes);
+  int classify_sample_pages(const common::ObIArray<ObParquetPageLocation> &pages,
+                            const bool need_page_filter,
+                            const int64_t fast_take,
+                            const common::ObArray<int8_t> &block_pick,
+                            const common::ObArray<int64_t> &page_block_id,
+                            int64_t &sel_rows);
+  int prepend_sample_dict_range(std::shared_ptr<parquet::RowGroupReader> rg_reader,
+                                const int64_t file_col_idx,
+                                const int64_t slot);
+  int project_single_column_block_sample(int64_t &read_count, const int64_t capacity);
+  int prepare_fast_sample_quota();
+  bool is_fast_sample() const
+  {
+    return scan_param_->sample_info_.is_block_sample()
+           && -1 == static_cast<int64_t>(scan_param_->sample_info_.seed_);
+  }
+
 private:
   ObParquetIteratorState state_;
   lib::ObMemAttr mem_attr_;
@@ -673,6 +716,14 @@ private:
   bool is_col_name_case_sensitive_;
   bool filter_eval_inited_;
   ObParquetDictFilterPushdown *dict_filter_pushdown_;  // 字典优化模块
+  // block sample state (single-column sampling only)
+  int64_t sample_cumulative_block_offset_;
+  uint64_t sample_actual_seed_;
+  bool sample_seed_inited_;
+  // FAST sample: per-file page quota, accumulated across row groups.
+  int64_t fast_target_pages_;
+  int64_t fast_taken_pages_;
+  bool fast_sample_active_;
 };
 
 }

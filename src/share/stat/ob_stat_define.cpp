@@ -456,6 +456,49 @@ DEF_TO_STRING(BasicStatAuditItem)
   return pos;
 }
 
+// CatalogBasicStatAuditItem: audit item for catalog table basic stats gathering
+// Uses partition name strings instead of part_ids (catalog tables don't have numeric part_id)
+class CatalogBasicStatAuditItem : public AuditBaseItem
+{
+public:
+  CatalogBasicStatAuditItem(ObIAllocator &allocator) :
+   partition_names_(allocator),
+   cost_time_(0) {}
+  virtual ~CatalogBasicStatAuditItem() {}
+
+  virtual int64_t get_cost_time() const { return cost_time_; }
+  DECLARE_VIRTUAL_TO_STRING;
+public:
+  ObFixedArray<ObString, ObIAllocator> partition_names_;
+  int64_t cost_time_;
+};
+
+DEF_TO_STRING(CatalogBasicStatAuditItem)
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("TYPE", "CatalogBasic");
+  J_COMMA();
+  if (partition_names_.empty()) {
+    J_KV("PART", "ALL");
+  } else {
+    J_NAME("PART");
+    J_COLON();
+    J_ARRAY_START();
+    for (int64_t i = 0; pos < buf_len && i < partition_names_.count(); ++i) {
+      if (i > 0) {
+        J_COMMA();
+      }
+      BUF_PRINTF("\"%.*s\"", partition_names_.at(i).length(), partition_names_.at(i).ptr());
+    }
+    J_ARRAY_END();
+  }
+  J_COMMA();
+  J_KV("COST", cost_time_);
+  J_OBJ_END();
+  return pos;
+}
+
 class HistogramAuditItem : public AuditBaseItem
 {
 public:
@@ -495,6 +538,55 @@ DEF_TO_STRING(HistogramAuditItem)
   if (hybrid_cost_time_ > 1000) {
     J_KV("HYBRID_COST", hybrid_cost_time_);
   }
+  J_OBJ_END();
+  return pos;
+}
+
+class CatalogRefineMinMaxAuditItem : public AuditBaseItem
+{
+public:
+  CatalogRefineMinMaxAuditItem(const uint64_t &catalog_id,
+                               const ObString &db_name,
+                               const ObString &table_name,
+                               const ObString &partition_value,
+                               int64_t cost_time)
+      : catalog_id_(catalog_id), db_name_(db_name), table_name_(table_name),
+        partition_value_(partition_value), cost_time_(cost_time)
+  {
+  }
+  virtual ~CatalogRefineMinMaxAuditItem()
+  {
+  }
+
+  virtual int64_t get_cost_time() const
+  {
+    return cost_time_;
+  }
+  DECLARE_VIRTUAL_TO_STRING;
+
+public:
+  uint64_t catalog_id_;
+  ObString db_name_;
+  ObString table_name_;
+  ObString partition_value_;
+  int64_t cost_time_;
+};
+
+DEF_TO_STRING(CatalogRefineMinMaxAuditItem)
+{
+  int64_t pos = 0;
+  J_OBJ_START();
+  J_KV("TYPE", "CatalogRefineMinMax");
+  J_COMMA();
+  J_KV("CATALOG_ID", catalog_id_);
+  J_COMMA();
+  J_KV("DB_NAME", db_name_);
+  J_COMMA();
+  J_KV("TABLE_NAME", table_name_);
+  J_COMMA();
+  J_KV("PARTITION_VALUE", partition_value_);
+  J_COMMA();
+  J_KV("COST", cost_time_);
   J_OBJ_END();
   return pos;
 }
@@ -680,6 +772,36 @@ int ObOptStatGatherAudit::add_basic_estimate_audit(const ObIArray<PartInfo> & pa
   return ret;
 }
 
+int ObOptStatGatherAudit::add_catalog_basic_estimate_audit(
+    const ObIArray<ObString> &partition_names, int64_t cost_time)
+{
+  int ret = OB_SUCCESS;
+  CatalogBasicStatAuditItem *item = NULL;
+  void *ptr = NULL;
+  if (need_audit(cost_time)) {
+    if (OB_ISNULL(ptr = allocator_.alloc(sizeof(CatalogBasicStatAuditItem)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate audit item", K(ret));
+    } else if (OB_FALSE_IT(item = new(ptr) CatalogBasicStatAuditItem(allocator_))) {
+    } else if (OB_FAIL(item->partition_names_.init(partition_names.count()))) {
+      LOG_WARN("failed to init fixed array", K(ret));
+    } else {
+      for (int64_t i = 0; OB_SUCC(ret) && i < partition_names.count(); ++i) {
+        if (OB_FAIL(item->partition_names_.push_back(partition_names.at(i)))) {
+          LOG_WARN("failed to push back partition names", K(ret));
+        }
+      }
+      if (OB_SUCC(ret)) {
+        item->cost_time_ = cost_time;
+        if (OB_FAIL(audit_items_.push_back(item))) {
+          LOG_WARN("failed to push back audit item", K(ret));
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObOptStatGatherAudit::add_histogram_estimate_audit(uint64_t part_id, int64_t topk_cost, int64_t hybrid_cost)
 {
   int ret = OB_SUCCESS;
@@ -709,6 +831,31 @@ int ObOptStatGatherAudit::add_refine_estimate_audit(bool use_skip_index, uint64_
       ret = OB_ALLOCATE_MEMORY_FAILED;
       LOG_WARN("failed to allocate audit item", K(ret));
     } else if (OB_FALSE_IT(item = new(ptr) RefineMinMaxAuditItem(type, part_id, cost_time))) {
+    } else if (OB_FAIL(audit_items_.push_back(item))) {
+      LOG_WARN("failed to push back audit item", K(ret));
+    }
+  }
+  return ret;
+}
+
+int ObOptStatGatherAudit::add_catalog_refine_estimate_audit(const uint64_t &catalog_id,
+                                                            const ObString &db_name,
+                                                            const ObString &table_name,
+                                                            const ObString &partition_value,
+                                                            int64_t cost_time)
+{
+  int ret = OB_SUCCESS;
+  CatalogRefineMinMaxAuditItem *item = NULL;
+  void *ptr = NULL;
+  if (need_audit(cost_time)) {
+    if (OB_ISNULL(ptr = allocator_.alloc(sizeof(CatalogRefineMinMaxAuditItem)))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("failed to allocate audit item", K(ret));
+    } else if (OB_FALSE_IT(item = new (ptr) CatalogRefineMinMaxAuditItem(catalog_id,
+                                                                         db_name,
+                                                                         table_name,
+                                                                         partition_value,
+                                                                         cost_time))) {
     } else if (OB_FAIL(audit_items_.push_back(item))) {
       LOG_WARN("failed to push back audit item", K(ret));
     }

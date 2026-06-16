@@ -195,6 +195,7 @@ void oceanbase::observer::init_srv_xlator_for_others(ObSrvRpcXlator *xlator) {
 
   // update optimizer statistic
   RPC_PROCESSOR(ObUpdateLocalStatCacheP, gctx_);
+  RPC_PROCESSOR(ObUpdateLocalCatalogStatCacheP, gctx_);
   RPC_PROCESSOR(ObInitSqcP, gctx_);
   RPC_PROCESSOR(ObInitTaskP, gctx_);
   RPC_PROCESSOR(ObInitFastSqcP, gctx_);

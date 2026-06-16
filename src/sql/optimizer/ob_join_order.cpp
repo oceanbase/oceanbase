@@ -24694,30 +24694,44 @@ int ObJoinOrder::compute_lake_table_meta_info(const uint64_t table_id,
         table_meta_info_.table_row_count_ = table_stat.total_row_count_;
       }
     } else {
-      if (OB_FAIL(get_lake_table_partition_values(partition_values))) {
+      bool is_all_partitions_selected = false;
+      if (table_meta_info_.lake_table_format_ == ObLakeTableFormat::HIVE) {
+        ObLakeTablePartitionInfo *lake_table_partition_info =
+            static_cast<ObLakeTablePartitionInfo *>(table_partition_info_);
+        if (OB_ISNULL(lake_table_partition_info)
+            || OB_ISNULL(lake_table_partition_info->get_file_pruner())) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("unexpected null lake table file pruner", K(ret), KP(lake_table_partition_info));
+        } else {
+          is_all_partitions_selected =
+              lake_table_partition_info->get_file_pruner()->all_partitions_selected();
+        }
+      }
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(get_lake_table_partition_values(partition_values))) {
         LOG_WARN("failed to get lake table partition values", K(ret));
       } else if (OB_FAIL(get_common_lake_table_stat(*allocator_,
                                                     ref_table_id,
                                                     column_exprs,
                                                     partition_values,
+                                                    is_all_partitions_selected,
                                                     table_stat,
                                                     column_stats))) {
         LOG_WARN("failed to get common lake table stat", K(ret));
       } else if (table_stat.last_analyzed_ > 0) {
-        if (partition_values.count() > 0 &&
-            partition_values.count() < table_stat.part_cnt_) {
-          double scale_ratio = static_cast<double>(partition_values.count()) / table_stat.part_cnt_;
-          if (OB_FAIL(ObLakeTableStatUtils::scale_table_stat(scale_ratio, table_stat))) {
-            LOG_WARN("failed to scale table stat", K(ret));
-          } else if (OB_FAIL(ObLakeTableStatUtils::scale_column_stats(table_stat.total_row_count_,
-                                                                      scale_ratio,
-                                                                      column_stats))) {
-            LOG_WARN("failed to scale column stats", K(ret));
+        if (table_meta_info_.lake_table_format_ == ObLakeTableFormat::ODPS) { // hive 实现了分区级别缓存，不再需要缩放
+          if (partition_values.count() > 0 && partition_values.count() < table_stat.part_cnt_) {
+            double scale_ratio = static_cast<double>(partition_values.count()) / table_stat.part_cnt_;
+            if (OB_FAIL(ObLakeTableStatUtils::scale_table_stat(scale_ratio, table_stat))) {
+              LOG_WARN("failed to scale table stat", K(ret));
+            } else if (OB_FAIL(ObLakeTableStatUtils::scale_column_stats(table_stat.total_row_count_,
+                                                                        scale_ratio,
+                                                                        column_stats))) {
+              LOG_WARN("failed to scale column stats", K(ret));
+            }
           }
         }
-        if (OB_SUCC(ret)) {
-          table_meta_info_.table_row_count_ = table_stat.total_row_count_;
-        }
+        table_meta_info_.table_row_count_ = table_stat.total_row_count_;
       }
     }
     if (OB_SUCC(ret)) {
@@ -24946,6 +24960,7 @@ int ObJoinOrder::get_iceberg_table_stat(ObIAllocator &allocator,
                                                 ref_table_id,
                                                 column_exprs,
                                                 partition_names,
+                                                false,
                                                 common_table_stat,
                                                 common_column_stats))) {
     LOG_WARN("failed to get common lake table stat", K(ret));
@@ -24968,6 +24983,7 @@ int ObJoinOrder::get_common_lake_table_stat(ObIAllocator &allocator,
                                             uint64_t ref_table_id,
                                             ObIArray<ObColumnRefRawExpr*> &column_exprs,
                                             ObIArray<ObString> &partition_names,
+                                            const bool is_all_partitions_selected,
                                             common::ObLakeTableStat &table_stat,
                                             ObIArray<common::ObLakeColumnStat*> &column_stats)
 {
@@ -24993,28 +25009,30 @@ int ObJoinOrder::get_common_lake_table_stat(ObIAllocator &allocator,
                        OB_ISNULL(opt_ctx->get_session_info())) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("unexpected null", K(ret));
-  } else if (OB_FAIL(ObOptStatManager::get_instance().get_external_table_stat(
+  } else if (OB_FAIL(ObOptStatManager::get_instance().get_catalog_table_stat(
                      opt_ctx->get_session_info()->get_effective_tenant_id(),
                      ref_table_id,
                      partition_names,
+                     is_all_partitions_selected,
                      *sql_schema_guard,
                      table_stat))) {
-    LOG_WARN("failed to get external table stat", K(ret));
-  } else if (OB_FAIL(ObOptStatManager::get_instance().get_external_column_stat(
+    LOG_WARN("failed to get catalog table stat", K(ret));
+  } else if (OB_FAIL(ObOptStatManager::get_instance().get_catalog_column_stat(
                      allocator,
                      opt_ctx->get_session_info()->get_effective_tenant_id(),
                      ref_table_id,
                      column_names,
                      partition_names,
+                     is_all_partitions_selected,
                      *sql_schema_guard,
                      table_stat.total_row_count_,
                      1.0,
                      column_stats))) {
-    LOG_WARN("failed to get external column stat", K(ret));
+    LOG_WARN("failed to get catalog column stat", K(ret));
   }
 
   if (OB_FAIL(ret)) {
-    LOG_WARN("failed to get external table stat or column stat", K(ret));
+    LOG_WARN("failed to get catalog table stat or column stat", K(ret));
     ret = OB_SUCCESS;
     table_stat.total_row_count_ = 0;
     table_stat.last_analyzed_ = 0;

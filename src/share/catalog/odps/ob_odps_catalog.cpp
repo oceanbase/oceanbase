@@ -11,7 +11,7 @@
 #include "sql/resolver/dml/ob_dml_resolver.h"
 #include "sql/table_format/odps/ob_odps_table_metadata.h"
 #include "share/external_table/ob_external_table_utils.h"
-#include "share/stat/ob_opt_external_table_stat_builder.h"
+#include "share/stat/catalog/ob_opt_catalog_table_stat_builder.h"
 #ifdef OB_BUILD_CPP_ODPS
 #include <odps/odps_table.h>
 #endif
@@ -379,10 +379,12 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
                                           const ObILakeTableMetadata *table_metadata,
                                           const ObIArray<ObString> &partition_values,
                                           const ObIArray<ObString> &column_names,
-                                          ObOptExternalTableStat *&external_table_stat,
-                                          ObIArray<ObOptExternalColumnStat *> &external_table_column_stats)
+                                          ObIArray<ObOptCatalogTableStat *> &catalog_table_stats,
+                                          ObIArray<ObOptCatalogColumnStat *> &catalog_table_column_stats)
 {
   int ret = OB_SUCCESS;
+  catalog_table_stats.reset();
+  catalog_table_column_stats.reset();
 
   // do some argument check
   if (OB_ISNULL(table_metadata)
@@ -396,8 +398,7 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
   }
   int64_t total_partition_count = 0;
   if (OB_SUCC(ret)) {
-    external_table_stat = nullptr;
-    external_table_column_stats.reset();
+    ObOptCatalogTableStat *catalog_table_stat = nullptr;
     const odps::ObODPSTableMetadata* odps_table_metadata = static_cast<const odps::ObODPSTableMetadata*>(table_metadata);
     ObString format_str;
     const ObTableSchema *table_schema = NULL;
@@ -565,7 +566,7 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
               THIS_WORKER.get_session(), part_str, format_str, part_sum_row_count));
           LOG_INFO("fetch storage row count", K(part_sum_row_count));
           if (OB_SUCC(ret)) {
-            OX(total_partition_count = part_sum_row_count / part_count * table_schema->get_partition_num());
+            OX(row_count = part_sum_row_count / part_count * table_schema->get_partition_num());
             OX(total_partition_count = table_schema->get_partition_num());
           }
         #else
@@ -576,30 +577,44 @@ int ObOdpsCatalog::fetch_table_statistics(ObIAllocator &allocator,
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("not support row api", K(ret));
       }
-
     }
 
     if (OB_SUCC(ret)) {
       int64_t snapshot_timestamp_ms = static_cast<const odps::ObODPSTableMetadata*>(table_metadata)->lake_table_metadata_version_ * 1000;
-      ObOptExternalTableStatBuilder stat_builder;
+      ObOptCatalogTableStatBuilder stat_builder;
       if (OB_FAIL(stat_builder.set_basic_info(table_metadata->tenant_id_,
                                               table_metadata->catalog_id_,
                                               table_metadata->namespace_name_,
                                               table_metadata->table_name_,
                                               ObString("")))) {
         LOG_WARN("failed to set basic info for table stat builder", K(ret));
-      }  else if (OB_FAIL(stat_builder.set_stat_info(
-            row_count, 1, total_data_size,
-            snapshot_timestamp_ms))) { // last_analyzed
+      } else if (OB_FAIL(stat_builder.set_stat_info(table_metadata->lake_table_metadata_version_,
+                                                    row_count,
+                                                    1,
+                                                    total_data_size,
+                                                    snapshot_timestamp_ms))) { // last_analyzed
         LOG_WARN("failed to set stat info for table stat builder", K(ret));
       } else if (OB_FALSE_IT(stat_builder.add_partition_num(total_partition_count))) {
         // 如果是多个分区 odps 通过选中分区进行缩放
         // do nothing
-      } else if (OB_FAIL(stat_builder.build(allocator, external_table_stat))) {
-        LOG_WARN("failed to build external table stat", K(ret));
+      } else if (OB_FAIL(stat_builder.build(allocator, catalog_table_stat))) {
+        LOG_WARN("failed to build catalog table stat", K(ret));
+      } else if (OB_NOT_NULL(catalog_table_stat)
+                 && OB_FAIL(catalog_table_stats.push_back(catalog_table_stat))) {
+        LOG_WARN("failed to push back odps catalog table stat", K(ret));
       }
     }
   }
+  return ret;
+}
+
+int ObOdpsCatalog::fetch_partitions(ObIAllocator &allocator,
+                                    const ObILakeTableMetadata *table_metadata,
+                                    const ObIArray<ObString> &part_col_names,
+                                    ObIArray<common::ObCatalogExtPartitionInfo> &partition_infos)
+{
+  int ret = OB_NOT_SUPPORTED;
+  LOG_WARN("not support fetch partitions", K(ret));
   return ret;
 }
 

@@ -11,6 +11,7 @@
 #include "lib/container/ob_array.h"
 #include "lib/profile/ob_trace_id.h"
 #include "share/stat/ob_stat_define.h"
+#include "share/stat/catalog/ob_catalog_stat_define.h"
 
 namespace oceanbase
 {
@@ -232,6 +233,8 @@ struct ObOptStatRunningMonitor
             int64_t current_memory_used,
             ObOptStatGatherStat &opt_stat_gather_stat);
   int add_table_info(const common::ObTableStatParam &table_param,
+                     double stale_percent = -1.0);
+  int add_table_info(const common::ObCatalogTableStatParam &table_param,
                      double stale_percent = -1.0);
   int add_monitor_info(ObOptStatRunningPhase current_phase, double extra_progress_ratio = 0);
   double get_monitor_extra_progress_ratio(ObOptStatRunningPhase current_phase,

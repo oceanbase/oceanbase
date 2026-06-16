@@ -18,7 +18,7 @@ namespace sql
 {
 class ObRawExpr;
 class ObSqlSchemaGuard;
-
+struct HiveTableFileCache;
 
 struct ObHivePartFieldBound
 {
@@ -89,14 +89,44 @@ private:
   DISABLE_COPY_ASSIGN(ObHiveFilePruner);
   bool check_one_row_part_column(ObNewRow ob_part_row);
   bool check_one_part(ObObj &part_val, ObHivePartFieldBound &field_bounds);
+  bool is_hive_default_partition_obj_(const ObObj &obj) const;
+  bool is_hive_default_point_bound_(const ObFieldBound &bound) const;
+
+  // DBMS_STATS + WHERE IN fast path: small (M bounds) drives big (N partitions)
+  int filter_partitions_by_str_hash_(
+      ObExecContext &exec_ctx,
+      const share::schema::ObTableSchema &table_schema,
+      HiveTableFileCache &cache_info,
+      ObIArray<HivePartitionInfo *> &partition_infos,
+      ObIAllocator &tmp_allocator,
+      ObIArray<int64_t> &selected_part_idxs,
+      ObIArray<int64_t> &tmp_part_id,
+      ObIArray<common::ObString> &tmp_part_path);
+
+  int register_matched_partition_(
+      ObExecContext &exec_ctx,
+      const share::schema::ObTableSchema &table_schema,
+      HiveTableFileCache &cache_info,
+      const HivePartitionInfo &partition_info,
+      int64_t part_info_idx,
+      ObNewRow &ob_part_row,
+      ObIArray<int64_t> &selected_part_idxs,
+      ObIArray<int64_t> &tmp_part_id,
+      ObIArray<common::ObString> &tmp_part_path);
+
+  static int point_bound_to_hive_string_(
+      const common::ObObj &obj,
+      common::ObIAllocator &allocator,
+      common::ObString &result);
 
 public:
-  TO_STRING_KV(K_(loc_meta), K_(is_partitioned), K_(need_all));
+  TO_STRING_KV(K_(loc_meta), K_(is_partitioned), K_(need_all), K_(use_fast_path));
 
 private:
   ObSqlSchemaGuard *sql_schema_guard_;
   ObFixedArray<ObHivePartFieldBound *, common::ObIAllocator> hive_part_bounds_;
   common::ObFixedArray<uint64_t, common::ObIAllocator> part_column_ids_;
+  bool use_fast_path_;
 };
 
 class ObHivePushDownFilter : public ObLakeTablePushDownFilter

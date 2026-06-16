@@ -160,7 +160,7 @@ bool ObFieldBound::is_intersect(const ObFieldBound &r_bound)
 }
 
 ObILakeTableFilePruner::ObILakeTableFilePruner(common::ObIAllocator &allocator, PrunnerType type)
-    : is_partitioned_(true), inited_(false), need_all_(false), allocator_(allocator),
+    : is_partitioned_(true), inited_(false), need_all_(false), all_partitions_selected_(false), allocator_(allocator),
       loc_meta_(allocator_), column_ids_(allocator_), column_metas_(allocator_),
       file_filter_spec_(allocator_), type_(type), partition_values_(allocator_)
 {
@@ -174,6 +174,7 @@ int ObILakeTableFilePruner::assign(const ObILakeTableFilePruner &other)
     inited_ = other.inited_;
     is_partitioned_ = other.is_partitioned_;
     need_all_ = other.need_all_;
+    all_partitions_selected_ = other.all_partitions_selected_;
     type_ = other.type_;
     if (OB_FAIL(loc_meta_.assign(other.loc_meta_))) {
       LOG_WARN("assign loc meta failed", K(ret), K(other.loc_meta_));
@@ -198,6 +199,7 @@ void ObILakeTableFilePruner::reset()
   inited_ = false;
   is_partitioned_ = true;
   need_all_ = false;
+  all_partitions_selected_ = false;
   loc_meta_.reset();
   column_ids_.reset();
   column_metas_.reset();

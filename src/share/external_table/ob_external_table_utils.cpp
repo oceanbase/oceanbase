@@ -5,6 +5,7 @@
 #define USING_LOG_PREFIX SQL
 #include "share/external_table/ob_external_table_utils.h"
 
+#include "lib/random/ob_random.h"
 #include "sql/ob_sql_utils.h"
 #include "share/external_table/ob_external_table_file_rpc_processor.h"
 #include "share/schema/ob_schema_getter_guard.h"
@@ -2194,6 +2195,53 @@ int ObExternalFileListArrayOpWithFilter::func(const dirent *entry)
   return ret;
 }
 
+int ObCommonDirStatsCollectorOp::func(const dirent *entry)
+{
+  int ret = OB_SUCCESS;
+  if (OB_ISNULL(entry)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid list entry, entry is null", K(ret));
+  } else if (OB_ISNULL(entry->d_name)) {
+    ret = OB_INVALID_ARGUMENT;
+    LOG_WARN("invalid list entry, d_name is null", K(ret));
+  } else {
+    const ObString file_name(entry->d_name);
+    if (file_name.case_compare(".") == 0 || file_name.case_compare("..") == 0
+        || file_name.case_compare("_SUCCESS") == 0) {
+      // skip . and .. and _SUCCESS
+    } else {
+      cur_file_count_++;
+      cur_total_size_ += get_size();
+      const int64_t modify_time = get_extra_info().last_modified_time_ms_;
+      if (modify_time > cur_max_modify_time_) {
+        cur_max_modify_time_ = modify_time;
+      }
+    }
+  }
+  return ret;
+}
+
+int ObCommonDirStatsCollectorOp::finish_current_dir()
+{
+  int ret = OB_SUCCESS;
+  // Convert modify time from milliseconds to microseconds (OceanBase uses microseconds)
+  if (OB_FAIL(file_nums_.push_back(cur_file_count_))) {
+    LOG_WARN("fail to push file count", K(ret), K(cur_file_count_));
+  } else if (OB_FAIL(data_sizes_.push_back(cur_total_size_))) {
+    LOG_WARN("fail to push data size", K(ret), K(cur_total_size_));
+  } else if (OB_FAIL(modify_times_.push_back(cur_max_modify_time_ * 1000LL))) {
+    // Modify time should store in millseconds.
+    LOG_WARN("fail to push modify time",
+             K(ret),
+             K(cur_max_modify_time_));
+  } else {
+    cur_file_count_ = 0;
+    cur_total_size_ = 0;
+    cur_max_modify_time_ = 0;
+  }
+  return ret;
+}
+
 int ObLocalFileListArrayOpWithFilter::func(const dirent *entry)
 {
   int ret = OB_SUCCESS;
@@ -2323,6 +2371,37 @@ int ObExternalTableUtils::collect_external_file_list_with_cache(
   return ret;
 }
 
+int ObExternalTableUtils::fetch_external_table_simple_stats(
+    const ObString &location,
+    const ObString &access_info,
+    const ObIArray<ObString> &partition_values,
+    ObIArray<int64_t> &file_nums,
+    ObIArray<int64_t> &data_sizes,
+    ObIArray<int64_t> &modify_times)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObExternalTableFileManager::get_external_table_simple_stats(location,
+                                                                          access_info,
+                                                                          partition_values,
+                                                                          file_nums,
+                                                                          data_sizes,
+                                                                          modify_times))) {
+    LOG_WARN("fail to fetch external table simple stats", K(ret), K(location), K(access_info));
+  }
+  return ret;
+}
+
+int ObExternalTableUtils::get_part_col_names(const ObTableSchema &table_schema,
+                                             ObIArray<ObString> &part_col_names)
+{
+  int ret = OB_SUCCESS;
+  if (OB_FAIL(ObExternalTableFileManager::get_instance().get_part_col_names(table_schema,
+                                                                            part_col_names))) {
+    LOG_WARN("failed to get part col names", K(ret));
+  }
+  return ret;
+}
+
 int ObExternalTableUtils::collect_partitions_info_with_cache(
     const ObTableSchema &table_schema,
     ObSqlSchemaGuard &sql_schema_guard,
@@ -2331,7 +2410,6 @@ int ObExternalTableUtils::collect_partitions_info_with_cache(
     ObIArray<sql::HivePartitionInfo*> &partition_infos)
 {
   int ret = OB_SUCCESS;
-
   if (OB_FAIL(ObExternalTableFileManager::get_instance().get_partitions_info_with_cache(
           table_schema,
           sql_schema_guard,
@@ -2357,6 +2435,12 @@ bool ObExternalTableUtils::is_skipped_insert_column(const schema::ObColumnSchema
     is_skip = true;
   }
   return is_skip;
+}
+
+bool ObExternalTableUtils::is_hidden_external_column(const ObString &column_name)
+{
+  return column_name.case_compare(OB_HIDDEN_FILE_ID_COLUMN_NAME) == 0
+         || column_name.case_compare(OB_HIDDEN_LINE_NUMBER_COLUMN_NAME) == 0;
 }
 
 int ObExternalTableUtils::concat_external_file_location(const ObString &location,
@@ -3041,6 +3125,78 @@ int ObExternalFileInfoCollector::get_file_list(const common::ObString &path,
   return ret;
 }
 
+int ObExternalFileInfoCollector::fetch_simple_stats(const common::ObString &path,
+                                                    const common::ObIArray<ObString> &partition_values,
+                                                    ObIArray<int64_t> &file_nums,
+                                                    ObIArray<int64_t> &data_sizes,
+                                                    ObIArray<int64_t> &modify_times)
+{
+  int ret = OB_SUCCESS;
+  ObString path_cstring;
+  CONSUMER_GROUP_FUNC_GUARD(PRIO_IMPORT);
+
+  if (OB_UNLIKELY(!storage_info_->is_valid())) {
+    ret = OB_NOT_INIT;
+    LOG_WARN("not init", KR(ret), K_(storage_info));
+  } else if (OB_FAIL(ob_write_string(allocator_, path, path_cstring, true /*c_style*/))) {
+    LOG_WARN("fail to copy string", KR(ret), K(path));
+  } else {
+    if (partition_values.count() == 0) {
+      // Non-partitioned table
+      ObCommonDirStatsCollectorOp stats_op(file_nums, data_sizes, modify_times);
+      if (OB_STORAGE_HDFS == storage_type_ || OB_STORAGE_FILE == storage_type_) {
+        bool is_dir = false;
+        OZ (ObExternalIoAdapter::is_directory(path_cstring, storage_info_, is_dir));
+        if (!is_dir) {
+          ret = OB_INVALID_ARGUMENT;
+          LOG_WARN("external location is not a directory", K(ret), K(path_cstring));
+        }
+      }
+
+      // Object storage (OSS/COS/S3) using list_files to collect stats directly.
+      if (OB_FAIL(ret)) {
+      } else {
+        ObCommonDirStatsCollectorOp stats_op(file_nums, data_sizes, modify_times);
+        if (OB_FAIL(ObExternalIoAdapter::list_files(path_cstring, storage_info_, stats_op))) {
+          LOG_WARN("fail to list directories", KR(ret), K(path_cstring), KPC(storage_info_));
+        } else if (OB_FAIL(stats_op.finish_current_dir())) {
+          LOG_WARN("fail to finish current dir", KR(ret));
+        }
+      }
+    } else {
+      // Partitioned table
+      ObCommonDirStatsCollectorOp stats_op(file_nums, data_sizes, modify_times);
+      for (int64_t i = 0; OB_SUCC(ret) && i < partition_values.count(); ++i) {
+        ObSqlString partition_path;
+        if (OB_FAIL(partition_path.assign(path_cstring))) {
+          LOG_WARN("fail to assign path", K(ret), K(path_cstring));
+        } else if (partition_path.length() > 0
+                   && *(partition_path.ptr() + partition_path.length() - 1) != '/'
+                   && OB_FAIL(partition_path.append("/"))) {
+          LOG_WARN("fail to append slash", K(ret));
+        } else if (OB_FAIL(partition_path.append(partition_values.at(i)))) {
+          LOG_WARN("fail to append partition value", K(ret), K(partition_values.at(i)));
+        } else {
+          ObString partition_path_str;
+          if (OB_FAIL(ob_write_string(allocator_,
+                                      partition_path.string(),
+                                      partition_path_str,
+                                      true /*c_style*/))) {
+            LOG_WARN("fail to copy partition path", K(ret), K(partition_path));
+          } else if (OB_FAIL(ObExternalIoAdapter::list_files(partition_path_str,
+                                                                   storage_info_,
+                                                                   stats_op))) {
+            LOG_WARN("fail to list directories", KR(ret), K(partition_path_str), KPC(storage_info_));
+          } else if (OB_FAIL(stats_op.finish_current_dir())) {
+            LOG_WARN("fail to finish current dir", KR(ret), K(partition_path_str));
+          }
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 int ObExternalTableUtils::create_external_file_url_info(const common::ObString &file_location,
                                                        const common::ObString &access_info,
                                                        const common::ObString &full_file_name,
@@ -3092,6 +3248,49 @@ int ObExternalTableUtils::get_credential_field_name(ObSqlString &str, int64_t op
   } else {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid opt", K(ret), K(opt));
+  }
+  return ret;
+}
+
+int ObExternalTableUtils::generate_file_sample_indices(const int64_t total_files,
+                                                       const double sample_percent,
+                                                       bool &is_file_sample,
+                                                       int64_t &target_count,
+                                                       ObIArray<int64_t> &indices)
+{
+  int ret = OB_SUCCESS;
+  is_file_sample = false;
+  target_count = 0;
+  indices.reset();
+  if (total_files <= 0 || sample_percent <= 0) {
+    // nothing to sample
+  } else {
+    const double sample_rate = sample_percent / 100.0;
+    target_count
+        = std::max(1L,
+                   static_cast<int64_t>(std::ceil(static_cast<double>(total_files) * sample_rate)));
+    if (target_count >= total_files) {
+      is_file_sample = false;
+    } else {
+      is_file_sample = true;
+      common::hash::ObHashSet<int64_t> selected_set;
+      if (OB_FAIL(selected_set.create(target_count * 2))) {
+        LOG_WARN("failed to create hash set for file sample", K(ret), K(target_count));
+      } else {
+        ObRandom rng;
+        rng.seed(static_cast<uint64_t>(ObTimeUtility::current_time()));
+        while (OB_SUCC(ret) && indices.count() < target_count) {
+          int64_t r = std::abs(rng.get()) % total_files;
+          if (OB_HASH_NOT_EXIST == selected_set.exist_refactored(r)) {
+            OZ (selected_set.set_refactored(r));
+            OZ (indices.push_back(r));
+          }
+        }
+      }
+      if (selected_set.created()) {
+        selected_set.destroy();
+      }
+    }
   }
   return ret;
 }

@@ -98,6 +98,12 @@ inline const char *ob_aggr_func_str(ObItemType aggr_func)
     case T_FUN_WINDOW_FUNNEL:
       ret = "WINDOW_FUNNEL";
       break;
+    case T_FUN_SYS_EXT_MIN:
+      ret = "SYS_EXT_MIN";
+      break;
+    case T_FUN_SYS_EXT_MAX:
+      ret = "SYS_EXT_MAX";
+      break;
     default:
       break;
   }

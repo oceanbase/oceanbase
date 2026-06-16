@@ -301,6 +301,9 @@ int ObIcebergTableMetadata::do_build_table_schema(std::optional<int32_t> schema_
             LOG_WARN("get transform str failed", K(ret));
           } else if (OB_FAIL(part_expr.append(tmp_str))) {
             LOG_WARN("append str failed", K(ret), K(tmp_str));
+          } else if (OB_FAIL(iceberg_table_schema->add_partition_key(
+                         col_schema->get_column_name_str()))) {
+            LOG_WARN("failed to add partition key", K(ret), K(col_schema->get_column_name_str()));
           }
         }
         if (OB_SUCC(ret) && !part_expr.empty()) {

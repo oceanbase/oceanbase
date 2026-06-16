@@ -290,6 +290,22 @@ class ObPartitionId : public ObStatTabItem
   int64_t partition_id_;
 };
 
+class ObPartitionValue : public ObStatTabItem
+{
+public:
+  ObPartitionValue() : calc_partition_value_str_() {}
+  ObPartitionValue(ObOptTableStat *stat,
+                   ObString &calc_part_value_str) :
+    ObStatTabItem(stat),
+    calc_partition_value_str_(calc_part_value_str)
+  {}
+  virtual int gen_expr(char *buf, const int64_t buf_len, int64_t &pos) override;
+  virtual int decode(ObObj &obj, ObIAllocator &allocator) override;
+
+  // Sql expression for partition value, e.g. "CONCAT(partition_col1, '/', partition_col2)"
+  ObString calc_partition_value_str_;
+};
+
 class ObStatHybridHist : public ObStatColItem
 {
 public:

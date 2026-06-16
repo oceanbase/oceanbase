@@ -12,8 +12,8 @@
 #include "lib/utility/ob_macro_utils.h"
 #include "share/ob_define.h"
 #include "share/schema/ob_column_schema.h"
-#include "share/stat/ob_opt_external_column_stat_builder.h"
-#include "share/stat/ob_opt_external_table_stat_builder.h"
+#include "share/stat/catalog/ob_opt_catalog_column_stat_builder.h"
+#include "share/stat/catalog/ob_opt_catalog_table_stat_builder.h"
 #include "sql/table_format/iceberg/ob_iceberg_table_metadata.h"
 #include "sql/table_format/iceberg/spec/schema.h"
 #include "sql/table_format/iceberg/spec/table_metadata.h"
@@ -31,11 +31,11 @@ int ObIcebergCatalogStatHelper::fetch_iceberg_table_statistics(
     const ObILakeTableMetadata *table_metadata,
     const ObIArray<ObString> &partition_values,
     const ObIArray<ObString> &column_names,
-    ObOptExternalTableStat *&external_table_stat,
-    ObIArray<ObOptExternalColumnStat *> &external_column_stats) {
+    ObOptCatalogTableStat *&catalog_table_stat,
+    ObIArray<ObOptCatalogColumnStat *> &catalog_column_stats) {
   int ret = OB_SUCCESS;
-  external_table_stat = nullptr;
-  external_column_stats.reset();
+  catalog_table_stat = nullptr;
+  catalog_column_stats.reset();
 
   // Check parameters
   if (OB_ISNULL(table_metadata)) {
@@ -68,14 +68,14 @@ int ObIcebergCatalogStatHelper::fetch_iceberg_table_statistics(
       LOG_WARN("failed to find latest statistics file", K(ret));
     } else {
       // Create table statistics (works with or without statistics file)
-      if (OB_FAIL(create_external_table_stat(
-              table_metadata, snapshot_timestamp_ms, external_table_stat))) {
-        LOG_WARN("failed to create external table stat", K(ret));
+      if (OB_FAIL(create_catalog_table_stat(
+              table_metadata, snapshot_timestamp_ms, catalog_table_stat))) {
+        LOG_WARN("failed to create catalog table stat", K(ret));
       } else if (OB_ISNULL(statistics_file)) {
         // No statistics file available, create default column statistics
         if (OB_FAIL(create_default_column_statistics(
                 table_metadata, column_names, snapshot_timestamp_ms,
-                external_column_stats))) {
+                catalog_column_stats))) {
           LOG_WARN("failed to create default column statistics", K(ret));
         }
       } else {
@@ -83,7 +83,7 @@ int ObIcebergCatalogStatHelper::fetch_iceberg_table_statistics(
         // columns internally)
         if (OB_FAIL(convert_iceberg_column_stats_to_external_stats(
                 table_metadata, statistics_file, column_names,
-                snapshot_timestamp_ms, external_column_stats))) {
+                snapshot_timestamp_ms, catalog_column_stats))) {
           LOG_WARN("failed to convert iceberg column stats to external stats",
                    K(ret));
         }
@@ -246,8 +246,10 @@ int ObIcebergCatalogStatHelper::build_field_id_to_ndv_map(
 int ObIcebergCatalogStatHelper::convert_iceberg_column_stats_to_external_stats(
     const ObILakeTableMetadata *table_metadata,
     const sql::iceberg::StatisticsFile *statistics_file,
-    const ObIArray<ObString> &column_names, int64_t snapshot_timestamp_ms,
-    ObIArray<ObOptExternalColumnStat *> &external_column_stats) {
+    const ObIArray<ObString> &column_names,
+    int64_t snapshot_timestamp_ms,
+    ObIArray<ObOptCatalogColumnStat *> &catalog_column_stats)
+{
   int ret = OB_SUCCESS;
 
   if (OB_ISNULL(table_metadata) || OB_ISNULL(statistics_file)) {
@@ -309,8 +311,8 @@ int ObIcebergCatalogStatHelper::convert_iceberg_column_stats_to_external_stats(
         // Create external column stat for all requested columns (found stats or
         // default)
         if (OB_SUCC(ret)) {
-          ObOptExternalColumnStatBuilder stat_builder(allocator_);
-          ObOptExternalColumnStat *external_column_stat = nullptr;
+          ObOptCatalogColumnStatBuilder stat_builder(allocator_);
+          ObOptCatalogColumnStat *catalog_column_stat = nullptr;
 
           if (OB_FAIL(stat_builder.set_basic_info(
                   table_metadata->tenant_id_, table_metadata->catalog_id_,
@@ -331,11 +333,11 @@ int ObIcebergCatalogStatHelper::convert_iceberg_column_stats_to_external_stats(
           } else if (OB_FAIL(stat_builder.finalize_bitmap())) {
             LOG_WARN("failed to finalize bitmap", K(ret), K(column_name));
           } else if (OB_FAIL(
-                         stat_builder.build(allocator_, external_column_stat))) {
+                         stat_builder.build(allocator_, catalog_column_stat))) {
             LOG_WARN("failed to build external column stat", K(ret),
                      K(column_name));
           } else if (OB_FAIL(
-                         external_column_stats.push_back(external_column_stat))) {
+                         catalog_column_stats.push_back(catalog_column_stat))) {
             LOG_WARN("failed to add external column stat to array", K(ret),
                      K(column_name));
           }
@@ -351,11 +353,13 @@ int ObIcebergCatalogStatHelper::convert_iceberg_column_stats_to_external_stats(
   return ret;
 }
 
-int ObIcebergCatalogStatHelper::create_external_table_stat(
-    const ObILakeTableMetadata *table_metadata, int64_t snapshot_timestamp_ms,
-    ObOptExternalTableStat *&external_table_stat) {
+int ObIcebergCatalogStatHelper::create_catalog_table_stat(
+    const ObILakeTableMetadata *table_metadata,
+    int64_t snapshot_timestamp_ms,
+    ObOptCatalogTableStat *&catalog_table_stat)
+{
   int ret = OB_SUCCESS;
-  external_table_stat = nullptr;
+  catalog_table_stat = nullptr;
   int64_t row_count = 0;
   int64_t file_count = 0;
   int64_t data_size = 0;
@@ -364,24 +368,22 @@ int ObIcebergCatalogStatHelper::create_external_table_stat(
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("table metadata is null", K(ret));
   } else {
-    const sql::iceberg::ObIcebergTableMetadata *iceberg_metadata =
-        static_cast<const sql::iceberg::ObIcebergTableMetadata *>(
-            table_metadata);
-    const sql::iceberg::TableMetadata &iceberg_table_metadata =
-        iceberg_metadata->table_metadata_;
+    const sql::iceberg::ObIcebergTableMetadata *iceberg_metadata
+        = static_cast<const sql::iceberg::ObIcebergTableMetadata *>(table_metadata);
+    const sql::iceberg::TableMetadata &iceberg_table_metadata = iceberg_metadata->table_metadata_;
 
     // Try to get current snapshot to extract table statistics
     const sql::iceberg::Snapshot *current_snapshot = nullptr;
-    if (OB_FAIL(
-            iceberg_table_metadata.get_current_snapshot(current_snapshot))) {
-      LOG_WARN("failed to get current snapshot, will use default values",
-               K(ret));
+    if (OB_FAIL(iceberg_table_metadata.get_current_snapshot(current_snapshot))) {
+      LOG_WARN("failed to get current snapshot, will use default values", K(ret));
     } else if (OB_ISNULL(current_snapshot)) {
       LOG_INFO("current snapshot is null, will use default values");
     } else {
       // Extract statistics from snapshot summary
-      if (OB_FAIL(extract_table_stats_from_snapshot_summary(
-              *current_snapshot, row_count, file_count, data_size))) {
+      if (OB_FAIL(extract_table_stats_from_snapshot_summary(*current_snapshot,
+                                                            row_count,
+                                                            file_count,
+                                                            data_size))) {
         LOG_WARN("failed to extract table stats from snapshot summary, use "
                  "default values",
                  K(ret));
@@ -389,19 +391,22 @@ int ObIcebergCatalogStatHelper::create_external_table_stat(
     }
 
     if (OB_SUCC(ret)) {
-      ObOptExternalTableStatBuilder stat_builder;
+      ObOptCatalogTableStatBuilder stat_builder;
 
-      if (OB_FAIL(stat_builder.set_basic_info(
-              table_metadata->tenant_id_, table_metadata->catalog_id_,
-              table_metadata->namespace_name_, table_metadata->table_name_,
-              ObString("")))) { // partition value
+      if (OB_FAIL(stat_builder.set_basic_info(table_metadata->tenant_id_,
+                                              table_metadata->catalog_id_,
+                                              table_metadata->namespace_name_,
+                                              table_metadata->table_name_,
+                                              ObString("")))) { // partition value
         LOG_WARN("failed to set basic info for table stat builder", K(ret));
-      } else if (OB_FAIL(stat_builder.set_stat_info(
-                     row_count, file_count, data_size,
-                     snapshot_timestamp_ms))) { // last_analyzed
+      } else if (OB_FAIL(stat_builder.set_stat_info(table_metadata->lake_table_metadata_version_,
+                                                    row_count,
+                                                    file_count,
+                                                    data_size,
+                                                    snapshot_timestamp_ms))) { // last_analyzed
         LOG_WARN("failed to set stat info for table stat builder", K(ret));
-      } else if (OB_FAIL(stat_builder.build(allocator_, external_table_stat))) {
-        LOG_WARN("failed to build external table stat", K(ret));
+      } else if (OB_FAIL(stat_builder.build(allocator_, catalog_table_stat))) {
+        LOG_WARN("failed to build catalog table stat", K(ret));
       }
     }
   }
@@ -614,7 +619,7 @@ int ObIcebergCatalogStatHelper::extract_table_stats_from_snapshot_summary(
 int ObIcebergCatalogStatHelper::create_default_column_statistics(
     const ObILakeTableMetadata *table_metadata,
     const ObIArray<ObString> &column_names, int64_t snapshot_timestamp_ms,
-    ObIArray<ObOptExternalColumnStat *> &external_column_stats) {
+    ObIArray<ObOptCatalogColumnStat *> &catalog_column_stats) {
   int ret = OB_SUCCESS;
 
   if (OB_ISNULL(table_metadata)) {
@@ -627,8 +632,8 @@ int ObIcebergCatalogStatHelper::create_default_column_statistics(
     // Create default column statistics for each requested column
     for (int64_t i = 0; OB_SUCC(ret) && i < column_names.count(); ++i) {
       const ObString &column_name = column_names.at(i);
-      ObOptExternalColumnStat *external_column_stat = nullptr;
-      ObOptExternalColumnStatBuilder stat_builder(allocator_);
+      ObOptCatalogColumnStat *catalog_column_stat = nullptr;
+      ObOptCatalogColumnStatBuilder stat_builder(allocator_);
 
       if (OB_FAIL(stat_builder.set_basic_info(
               table_metadata->tenant_id_, table_metadata->catalog_id_,
@@ -649,11 +654,11 @@ int ObIcebergCatalogStatHelper::create_default_column_statistics(
       } else if (OB_FAIL(stat_builder.finalize_bitmap())) {
         LOG_WARN("failed to finalize bitmap", K(ret), K(column_name));
       } else if (OB_FAIL(
-                     stat_builder.build(allocator_, external_column_stat))) {
+                     stat_builder.build(allocator_, catalog_column_stat))) {
         LOG_WARN("failed to build default external column stat", K(ret),
                  K(column_name));
       } else if (OB_FAIL(
-                     external_column_stats.push_back(external_column_stat))) {
+                     catalog_column_stats.push_back(catalog_column_stat))) {
         LOG_WARN("failed to add default external column stat to array", K(ret),
                  K(column_name));
       }

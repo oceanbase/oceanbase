@@ -6943,6 +6943,28 @@ status	bigint(20)	YES		NULL
 select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_java_policy_history;
 IF(count(*) >= 0, 1, 0)
 1
+desc oceanbase.__all_virtual_catalog_table_opt_stat_gather_history;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+task_id	varchar(36)	NO	PRI	NULL	
+catalog_id	bigint(20)	NO	PRI	NULL	
+db_name	varchar(256)	NO	PRI	NULL	
+table_name	varchar(256)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+ret_code	bigint(20)	YES		NULL	
+start_time	timestamp(6)	YES		NULL	
+end_time	timestamp(6)	YES		NULL	
+memory_used	bigint(20)	YES		NULL	
+stat_refresh_failed_list	varchar(4096)	YES		NULL	
+properties	varchar(4096)	YES		NULL	
+spare1	bigint(20)	YES		NULL	
+spare2	bigint(20)	YES		NULL	
+spare3	varchar(4096)	YES		NULL	
+spare4	varchar(4096)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_catalog_table_opt_stat_gather_history;
+IF(count(*) >= 0, 1, 0)
+1
 desc oceanbase.__all_virtual_tenant_worker_group;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO		NULL	

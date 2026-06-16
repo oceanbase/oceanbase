@@ -357,6 +357,23 @@ REGISTER_OPERATOR(ObLogTableScan, PHY_DDL_BLOCK_SAMPLE_SCAN,
                   ObDDLBlockSampleScanSpec, ObDDLBlockSampleScanOp, ObDDLBlockSampleScanOpInput,
                   VECTORIZED_OP);
 
+// External table sampling operators with SUPPORT_RICH_FORMAT
+class ObLogTableScan;
+class ObExternalRowSampleScanOpInput;
+class ObExternalRowSampleScanSpec;
+class ObExternalRowSampleScanOp;
+REGISTER_OPERATOR(ObLogTableScan, PHY_EXTERNAL_ROW_SAMPLE_SCAN,
+                  ObExternalRowSampleScanSpec, ObExternalRowSampleScanOp, ObExternalRowSampleScanOpInput,
+                  VECTORIZED_OP, 0 /*version*/, SUPPORT_RICH_FORMAT);
+
+class ObLogTableScan;
+class ObExternalBlockSampleScanOpInput;
+class ObExternalBlockSampleScanSpec;
+class ObExternalBlockSampleScanOp;
+REGISTER_OPERATOR(ObLogTableScan, PHY_EXTERNAL_BLOCK_SAMPLE_SCAN,
+                  ObExternalBlockSampleScanSpec, ObExternalBlockSampleScanOp, ObExternalBlockSampleScanOpInput,
+                  VECTORIZED_OP, 0 /*version*/, SUPPORT_RICH_FORMAT);
+
 class ObLogMerge;
 class ObTableMergeSpec;
 class ObTableMergeOp;

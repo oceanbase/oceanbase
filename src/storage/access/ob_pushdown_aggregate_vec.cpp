@@ -1651,6 +1651,8 @@ int ObPDAggVecFactory::alloc_cell(
       INIT_AGG_CELL(T_FUN_COUNT, Count, exclude_null)
       INIT_AGG_CELL(T_FUN_MAX, Max)
       INIT_AGG_CELL(T_FUN_MIN, Min)
+      INIT_AGG_CELL(T_FUN_SYS_EXT_MIN, Min)
+      INIT_AGG_CELL(T_FUN_SYS_EXT_MAX, Max)
       INIT_AGG_CELL(T_FUN_SUM, Sum)
       INIT_AGG_CELL(T_FUN_COUNT_SUM, CountSum)
       INIT_AGG_CELL(T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS, HyperLogLog)

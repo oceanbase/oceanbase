@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#define USING_LOG_PREFIX SQL_OPT
+#define USING_LOG_PREFIX SQL_ENG
 
-#include "share/stat/ob_opt_external_column_stat_builder.h"
+#include "share/stat/catalog/ob_opt_catalog_column_stat_builder.h"
 #include "common/object/ob_obj_compare.h"
 #include "share/stat/ob_dbms_stats_utils.h"
 #include "share/stat/hive/ob_hive_fm_sketch_utils.h"
@@ -13,27 +13,32 @@
 #include <algorithm>
 #include <cstring>
 
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 
-ObOptExternalColumnStatBuilder::ObOptExternalColumnStatBuilder(
-    common::ObIAllocator &allocator)
-    : allocator_(allocator), tenant_id_(common::OB_INVALID_ID),
-      catalog_id_(OB_INTERNAL_CATALOG_ID), database_name_(), table_name_(),
-      partition_value_(), column_name_(), num_null_(0), num_not_null_(0),
-      num_distinct_(0), avg_length_(0), min_value_(), max_value_(),
+ObOptCatalogColumnStatBuilder::ObOptCatalogColumnStatBuilder(common::ObIAllocator &allocator)
+    : allocator_(allocator), tenant_id_(common::OB_INVALID_ID), catalog_id_(OB_INTERNAL_CATALOG_ID),
+      database_name_(), table_name_(), partition_value_(), column_name_(), num_null_(0),
+      num_not_null_(0), num_distinct_(0), avg_length_(0), min_value_(), max_value_(),
       bitmap_size_(0), bitmap_(nullptr), last_analyzed_(0),
       cs_type_(common::ObCollationType::CS_TYPE_INVALID), min_obj_buf_(nullptr),
       min_obj_buf_size_(0), max_obj_buf_(nullptr), max_obj_buf_size_(0),
-      bitmap_type_(ObExternalBitmapType::UNKNOWN), hive_fm_sketch_(nullptr),
-      hive_hll_(nullptr), final_bitmap_(nullptr), final_bitmap_size_(0),
-      final_ndv_(0), is_bitmap_finalized_(false), is_basic_info_set_(false),
-      is_stat_info_set_(false), is_min_value_set_(false),
-      is_max_value_set_(false), is_bitmap_set_(false) {}
+      bitmap_type_(ObCatalogBitmapType::UNKNOWN), hive_fm_sketch_(nullptr), hive_hll_(nullptr),
+      final_bitmap_(nullptr), final_bitmap_size_(0), final_ndv_(0), is_bitmap_finalized_(false),
+      is_basic_info_set_(false), is_stat_info_set_(false), is_min_value_set_(false),
+      is_max_value_set_(false), is_bitmap_set_(false)
+{
+}
 
-ObOptExternalColumnStatBuilder::~ObOptExternalColumnStatBuilder() { reset(); }
+ObOptCatalogColumnStatBuilder::~ObOptCatalogColumnStatBuilder()
+{
+  reset();
+}
 
-void ObOptExternalColumnStatBuilder::reset() {
+void ObOptCatalogColumnStatBuilder::reset()
+{
   tenant_id_ = common::OB_INVALID_ID;
   catalog_id_ = OB_INTERNAL_CATALOG_ID;
   database_name_.reset();
@@ -50,7 +55,7 @@ void ObOptExternalColumnStatBuilder::reset() {
   bitmap_ = nullptr;
   last_analyzed_ = 0;
   cs_type_ = common::ObCollationType::CS_TYPE_INVALID;
-  bitmap_type_ = ObExternalBitmapType::UNKNOWN;
+  bitmap_type_ = ObCatalogBitmapType::UNKNOWN;
 
   // Clean up deserialized bitmap objects
   if (OB_NOT_NULL(hive_fm_sketch_)) {
@@ -63,8 +68,7 @@ void ObOptExternalColumnStatBuilder::reset() {
   }
 
   // Clean up finalized bitmap
-  final_bitmap_ =
-      nullptr; // Note: this memory should be managed by the allocator
+  final_bitmap_ = nullptr; // Note: this memory should be managed by the allocator
   final_bitmap_size_ = 0;
   final_ndv_ = 0;
   is_bitmap_finalized_ = false;
@@ -76,11 +80,13 @@ void ObOptExternalColumnStatBuilder::reset() {
   is_bitmap_set_ = false;
 }
 
-int ObOptExternalColumnStatBuilder::set_basic_info(
-    uint64_t tenant_id, uint64_t catalog_id,
-    const common::ObString &database_name, const common::ObString &table_name,
-    const common::ObString &partition_value,
-    const common::ObString &column_name) {
+int ObOptCatalogColumnStatBuilder::set_basic_info(uint64_t tenant_id,
+                                                   uint64_t catalog_id,
+                                                   const common::ObString &database_name,
+                                                   const common::ObString &table_name,
+                                                   const common::ObString &partition_value,
+                                                   const common::ObString &column_name)
+{
   int ret = OB_SUCCESS;
   tenant_id_ = tenant_id;
   catalog_id_ = catalog_id;
@@ -93,10 +99,13 @@ int ObOptExternalColumnStatBuilder::set_basic_info(
   return ret;
 }
 
-int ObOptExternalColumnStatBuilder::set_stat_info(
-    int64_t num_null, int64_t num_not_null, int64_t num_distinct,
-    int64_t avg_length, int64_t last_analyzed,
-    common::ObCollationType cs_type) {
+int ObOptCatalogColumnStatBuilder::set_stat_info(int64_t num_null,
+                                                  int64_t num_not_null,
+                                                  int64_t num_distinct,
+                                                  int64_t avg_length,
+                                                  int64_t last_analyzed,
+                                                  common::ObCollationType cs_type)
+{
   int ret = OB_SUCCESS;
   num_null_ = num_null;
   num_not_null_ = num_not_null;
@@ -108,29 +117,29 @@ int ObOptExternalColumnStatBuilder::set_stat_info(
   return ret;
 }
 
-int ObOptExternalColumnStatBuilder::set_min_value(
-    const common::ObObj &min_value) {
+int ObOptCatalogColumnStatBuilder::set_min_value(const common::ObObj &min_value)
+{
   int ret = OB_SUCCESS;
   min_value_ = min_value;
   is_min_value_set_ = true;
   return ret;
 }
 
-int ObOptExternalColumnStatBuilder::set_max_value(
-    const common::ObObj &max_value) {
+int ObOptCatalogColumnStatBuilder::set_max_value(const common::ObObj &max_value)
+{
   int ret = OB_SUCCESS;
   max_value_ = max_value;
   is_max_value_set_ = true;
   return ret;
 }
 
-int ObOptExternalColumnStatBuilder::set_bitmap(const char *bitmap,
-                                               int64_t bitmap_size) {
+int ObOptCatalogColumnStatBuilder::set_bitmap(const char *bitmap, int64_t bitmap_size)
+{
   int ret = OB_SUCCESS;
   if (OB_ISNULL(bitmap) || bitmap_size <= 0) {
     ret = OB_INVALID_ARGUMENT;
     LOG_WARN("invalid bitmap parameters", K(ret), KP(bitmap), K(bitmap_size));
-  } else if (bitmap_type_ == ObExternalBitmapType::HIVE_FM) {
+  } else if (bitmap_type_ == ObCatalogBitmapType::HIVE_FM) {
     // For Hive FM bitmap, create and initialize the FM sketch object directly
     if (OB_ISNULL(hive_fm_sketch_)) {
       hive_fm_sketch_ = OB_NEWx(ObHiveFMSketch, &allocator_, allocator_);
@@ -141,19 +150,20 @@ int ObOptExternalColumnStatBuilder::set_bitmap(const char *bitmap,
     }
     if (OB_SUCC(ret)) {
       int64_t pos = 0;
-      if (OB_FAIL(ObHiveFMSketchUtils::deserialize_fm_sketch(
-              bitmap, bitmap_size, pos, *hive_fm_sketch_))) {
+      if (OB_FAIL(ObHiveFMSketchUtils::deserialize_fm_sketch(bitmap,
+                                                             bitmap_size,
+                                                             pos,
+                                                             *hive_fm_sketch_))) {
         LOG_WARN("failed to deserialize FM bitmap", K(ret), K(bitmap_size));
       } else {
         is_bitmap_set_ = true;
         LOG_DEBUG("successfully set Hive FM bitmap", K(bitmap_size));
       }
     }
-  } else if (bitmap_type_ == ObExternalBitmapType::HIVE_HLL) {
+  } else if (bitmap_type_ == ObCatalogBitmapType::HIVE_HLL) {
     // For Hive HLL bitmap, deserialize and store the HLL object directly
     int64_t pos = 0;
-    if (OB_FAIL(ObHiveHLLUtils::deserialize_hll(bitmap, bitmap_size, pos,
-                                                allocator_, hive_hll_))) {
+    if (OB_FAIL(ObHiveHLLUtils::deserialize_hll(bitmap, bitmap_size, pos, allocator_, hive_hll_))) {
       LOG_WARN("failed to deserialize HLL bitmap", K(ret), K(bitmap_size));
     } else {
       is_bitmap_set_ = true;
@@ -170,24 +180,23 @@ int ObOptExternalColumnStatBuilder::set_bitmap(const char *bitmap,
   return ret;
 }
 
-int ObOptExternalColumnStatBuilder::merge_column_stat(
-    const ObOptExternalColumnStat &other) {
+int ObOptCatalogColumnStatBuilder::merge_column_stat(const ObOptCatalogColumnStat &other)
+{
   int ret = OB_SUCCESS;
 
   // Merge basic statistical values
   num_null_ += other.get_num_null();
   num_not_null_ += other.get_num_not_null();
-  num_distinct_ = num_distinct_ > other.get_num_distinct()
-                      ? num_distinct_
-                      : other.get_num_distinct();
+  num_distinct_
+      = num_distinct_ > other.get_num_distinct() ? num_distinct_ : other.get_num_distinct();
 
   // Calculate weighted average length
   int64_t total_rows = num_null_ + num_not_null_;
   int64_t other_total_rows = other.get_num_null() + other.get_num_not_null();
   if (total_rows > 0 && other_total_rows > 0) {
-    avg_length_ = (avg_length_ * (total_rows - other_total_rows) +
-                   other.get_avg_length() * other_total_rows) /
-                  total_rows;
+    avg_length_ = (avg_length_ * (total_rows - other_total_rows)
+                   + other.get_avg_length() * other_total_rows)
+                  / total_rows;
   } else if (other_total_rows > 0) {
     avg_length_ = other.get_avg_length();
   }
@@ -197,24 +206,24 @@ int ObOptExternalColumnStatBuilder::merge_column_stat(
     LOG_WARN("failed to merge min value", K(ret));
   } else if (OB_FAIL(merge_max_value(other.get_max_value()))) {
     LOG_WARN("failed to merge max value", K(ret));
-  } else if (other.get_bitmap_size() > 0 && other.get_bitmap() != nullptr) {
-    if (OB_FAIL(merge_bitmap(other.get_bitmap(), other.get_bitmap_size()))) {
+  } else if (other.get_llc_bitmap_size() > 0 && other.get_llc_bitmap() != nullptr) {
+    if (OB_FAIL(merge_bitmap(other.get_llc_bitmap(), other.get_llc_bitmap_size()))) {
       LOG_WARN("failed to merge bitmap", K(ret));
     }
   }
 
   // Update last analyzed time to the latest
-  last_analyzed_ = last_analyzed_ > other.get_last_analyzed()
-                       ? last_analyzed_
-                       : other.get_last_analyzed();
+  last_analyzed_
+      = last_analyzed_ > other.get_last_analyzed() ? last_analyzed_ : other.get_last_analyzed();
 
   return ret;
 }
 
-int ObOptExternalColumnStatBuilder::merge_stat_values(int64_t num_null,
+int ObOptCatalogColumnStatBuilder::merge_stat_values(int64_t num_null,
                                                       int64_t num_not_null,
                                                       int64_t num_distinct,
-                                                      int64_t avg_length) {
+                                                      int64_t avg_length)
+{
   int ret = OB_SUCCESS;
 
   // Merge basic statistical values
@@ -232,9 +241,7 @@ int ObOptExternalColumnStatBuilder::merge_stat_values(int64_t num_null,
   int64_t total_rows = num_null_ + num_not_null_;
   if (total_rows > 0) {
     if (old_total_rows > 0 && new_total_rows > 0) {
-      avg_length_ =
-          (avg_length_ * old_total_rows + avg_length * new_total_rows) /
-          total_rows;
+      avg_length_ = (avg_length_ * old_total_rows + avg_length * new_total_rows) / total_rows;
     } else if (new_total_rows > 0) {
       avg_length_ = avg_length;
     }
@@ -244,13 +251,12 @@ int ObOptExternalColumnStatBuilder::merge_stat_values(int64_t num_null,
   return ret;
 }
 
-int ObOptExternalColumnStatBuilder::merge_min_value(
-    const common::ObObj &min_value) {
+int ObOptCatalogColumnStatBuilder::merge_min_value(const common::ObObj &min_value)
+{
   int ret = OB_SUCCESS;
   if (!min_value.is_null()) {
     if (OB_FAIL(merge_min_max(min_value_, min_value, true /* is_cmp_min */))) {
-      LOG_WARN("failed to merge min value", K(ret), K(min_value),
-               K(min_value_));
+      LOG_WARN("failed to merge min value", K(ret), K(min_value), K(min_value_));
     } else {
       is_min_value_set_ = true;
     }
@@ -258,13 +264,12 @@ int ObOptExternalColumnStatBuilder::merge_min_value(
   return ret;
 }
 
-int ObOptExternalColumnStatBuilder::merge_max_value(
-    const common::ObObj &max_value) {
+int ObOptCatalogColumnStatBuilder::merge_max_value(const common::ObObj &max_value)
+{
   int ret = OB_SUCCESS;
   if (!max_value.is_null()) {
     if (OB_FAIL(merge_min_max(max_value_, max_value, false /* is_cmp_min */))) {
-      LOG_WARN("failed to merge max value", K(ret), K(max_value),
-               K(max_value_));
+      LOG_WARN("failed to merge max value", K(ret), K(max_value), K(max_value_));
     } else {
       is_max_value_set_ = true;
     }
@@ -272,8 +277,8 @@ int ObOptExternalColumnStatBuilder::merge_max_value(
   return ret;
 }
 
-int ObOptExternalColumnStatBuilder::merge_bitmap(const char *bitmap,
-                                                 int64_t bitmap_size) {
+int ObOptCatalogColumnStatBuilder::merge_bitmap(const char *bitmap, int64_t bitmap_size)
+{
   int ret = OB_SUCCESS;
 
   if (OB_ISNULL(bitmap) || bitmap_size <= 0) {
@@ -281,17 +286,14 @@ int ObOptExternalColumnStatBuilder::merge_bitmap(const char *bitmap,
     LOG_WARN("invalid bitmap parameters", K(ret), KP(bitmap), K(bitmap_size));
   } else if (!is_bitmap_set_) {
     // First bitmap - handle differently based on type
-    if (bitmap_type_ == ObExternalBitmapType::HIVE_AUTO_DETECT) {
+    if (bitmap_type_ == ObCatalogBitmapType::HIVE_AUTO_DETECT) {
       // Auto-detect Hive bitmap type for the first bitmap
-      ObExternalBitmapType detected_type =
-          detect_hive_bitmap_type(bitmap, bitmap_size);
+      ObCatalogBitmapType detected_type = detect_hive_bitmap_type(bitmap, bitmap_size);
       bitmap_type_ = detected_type;
-      LOG_TRACE("auto-detected Hive bitmap type for first bitmap",
-                K(bitmap_type_), K(bitmap_size));
-    } else if (bitmap_type_ == ObExternalBitmapType::OTHER) {
+      LOG_TRACE("auto-detected Hive bitmap type for first bitmap", K(bitmap_type_), K(bitmap_size));
+    } else if (bitmap_type_ == ObCatalogBitmapType::OTHER) {
       // Non-Hive bitmap, no detection needed
-      LOG_DEBUG("processing non-hive bitmap, no type detection",
-                K(bitmap_size));
+      LOG_DEBUG("processing non-hive bitmap, no type detection", K(bitmap_size));
     }
 
     // Copy the first bitmap
@@ -301,42 +303,41 @@ int ObOptExternalColumnStatBuilder::merge_bitmap(const char *bitmap,
   } else {
     // Subsequent bitmaps - merge based on established type
     switch (bitmap_type_) {
-    case ObExternalBitmapType::HIVE_FM:
-      if (OB_FAIL(merge_hive_fm_bitmap(bitmap, bitmap_size))) {
-        LOG_WARN("failed to merge Hive FM bitmap", K(ret));
-      }
-      break;
+      case ObCatalogBitmapType::HIVE_FM:
+        if (OB_FAIL(merge_hive_fm_bitmap(bitmap, bitmap_size))) {
+          LOG_WARN("failed to merge Hive FM bitmap", K(ret));
+        }
+        break;
 
-    case ObExternalBitmapType::HIVE_HLL:
-      if (OB_FAIL(merge_hive_hll_bitmap(bitmap, bitmap_size))) {
-        LOG_WARN("failed to merge Hive HLL bitmap", K(ret));
-      }
-      break;
+      case ObCatalogBitmapType::HIVE_HLL:
+        if (OB_FAIL(merge_hive_hll_bitmap(bitmap, bitmap_size))) {
+          LOG_WARN("failed to merge Hive HLL bitmap", K(ret));
+        }
+        break;
 
-    case ObExternalBitmapType::OTHER:
-      if (OB_FAIL(merge_other_bitmap(bitmap, bitmap_size))) {
-        LOG_WARN("failed to merge other bitmap", K(ret));
-      }
-      break;
+      case ObCatalogBitmapType::OTHER:
+        if (OB_FAIL(merge_other_bitmap(bitmap, bitmap_size))) {
+          LOG_WARN("failed to merge other bitmap", K(ret));
+        }
+        break;
 
-    case ObExternalBitmapType::HIVE_AUTO_DETECT:
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("bitmap type should have been determined by now", K(ret),
-               K(bitmap_type_));
-      break;
+      case ObCatalogBitmapType::HIVE_AUTO_DETECT:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("bitmap type should have been determined by now", K(ret), K(bitmap_type_));
+        break;
 
-    case ObExternalBitmapType::UNKNOWN:
-    default:
-      ret = OB_ERR_UNEXPECTED;
-      LOG_WARN("unknown bitmap type cannot be merged", K(ret), K(bitmap_type_));
-      break;
+      case ObCatalogBitmapType::UNKNOWN:
+      default:
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unknown bitmap type cannot be merged", K(ret), K(bitmap_type_));
+        break;
     }
   }
 
   return ret;
 }
 
-int ObOptExternalColumnStatBuilder::add_hhl_value(uint64_t hash_value)
+int ObOptCatalogColumnStatBuilder::add_hhl_value(uint64_t hash_value)
 {
   int ret = OB_SUCCESS;
   if (!is_bitmap_set_) {
@@ -347,9 +348,9 @@ int ObOptExternalColumnStatBuilder::add_hhl_value(uint64_t hash_value)
       LOG_WARN("failed to add hash to temp HLL", K(ret));
     } else {
       is_bitmap_set_ = true;
-      bitmap_type_ = ObExternalBitmapType::HIVE_HLL;
+      bitmap_type_ = ObCatalogBitmapType::HIVE_HLL;
     }
-  } else if (ObExternalBitmapType::HIVE_HLL != bitmap_type_) {
+  } else if (ObCatalogBitmapType::HIVE_HLL != bitmap_type_) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected bitmap type", K(bitmap_type_));
   } else if (OB_FAIL(hive_hll_->add(hash_value))) {
@@ -358,7 +359,8 @@ int ObOptExternalColumnStatBuilder::add_hhl_value(uint64_t hash_value)
   return ret;
 }
 
-int ObOptExternalColumnStatBuilder::finalize_bitmap() {
+int ObOptCatalogColumnStatBuilder::finalize_bitmap()
+{
   int ret = OB_SUCCESS;
   // Initialize with current num_distinct_ in case no bitmap objects exist
   final_ndv_ = num_distinct_;
@@ -370,24 +372,23 @@ int ObOptExternalColumnStatBuilder::finalize_bitmap() {
     // Calculate NDV from FM sketch and serialize
     if (OB_FAIL(hive_fm_sketch_->estimate_num_distinct_values(final_ndv_))) {
       LOG_WARN("failed to estimate num distinct values from FM sketch", K(ret));
-    } else if (OB_FAIL(ObHiveFMSketchUtils::get_serialize_size(
-                   hive_fm_sketch_, final_bitmap_size_))) {
+    } else if (OB_FAIL(
+                   ObHiveFMSketchUtils::get_serialize_size(hive_fm_sketch_, final_bitmap_size_))) {
       LOG_WARN("failed to get FM sketch serialize size", K(ret));
     } else if (final_bitmap_size_ > 0) {
       final_bitmap_ = static_cast<char *>(allocator_.alloc(final_bitmap_size_));
       if (OB_ISNULL(final_bitmap_)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate memory for FM bitmap", K(ret),
-                 K(final_bitmap_size_));
+        LOG_WARN("failed to allocate memory for FM bitmap", K(ret), K(final_bitmap_size_));
       } else {
         int64_t serialize_pos = 0;
-        if (OB_FAIL(ObHiveFMSketchUtils::serialize_fm_sketch(
-                final_bitmap_, final_bitmap_size_, serialize_pos,
-                hive_fm_sketch_))) {
+        if (OB_FAIL(ObHiveFMSketchUtils::serialize_fm_sketch(final_bitmap_,
+                                                             final_bitmap_size_,
+                                                             serialize_pos,
+                                                             hive_fm_sketch_))) {
           LOG_WARN("failed to serialize FM sketch", K(ret));
         } else {
-          LOG_DEBUG("successfully finalized FM bitmap", K(final_bitmap_size_),
-                    K(final_ndv_));
+          LOG_DEBUG("successfully finalized FM bitmap", K(final_bitmap_size_), K(final_ndv_));
         }
       }
     }
@@ -399,20 +400,20 @@ int ObOptExternalColumnStatBuilder::finalize_bitmap() {
       final_bitmap_ = static_cast<char *>(allocator_.alloc(final_bitmap_size_));
       if (OB_ISNULL(final_bitmap_)) {
         ret = OB_ALLOCATE_MEMORY_FAILED;
-        LOG_WARN("failed to allocate memory for HLL bitmap", K(ret),
-                 K(final_bitmap_size_));
+        LOG_WARN("failed to allocate memory for HLL bitmap", K(ret), K(final_bitmap_size_));
       } else {
         int64_t serialize_pos = 0;
-        if (OB_FAIL(ObHiveHLLUtils::serialize_hll(
-                final_bitmap_, final_bitmap_size_, serialize_pos, hive_hll_))) {
+        if (OB_FAIL(ObHiveHLLUtils::serialize_hll(final_bitmap_,
+                                                  final_bitmap_size_,
+                                                  serialize_pos,
+                                                  hive_hll_))) {
           LOG_WARN("failed to serialize HLL", K(ret));
         } else {
-          LOG_DEBUG("successfully finalized HLL bitmap", K(final_bitmap_size_),
-                    K(final_ndv_));
+          LOG_DEBUG("successfully finalized HLL bitmap", K(final_bitmap_size_), K(final_ndv_));
         }
       }
     }
-  } else if (is_bitmap_set_ && bitmap_ != nullptr && bitmap_size_ > 0) {
+  } else if (is_bitmap_set_ && OB_NOT_NULL(bitmap_) && bitmap_size_ > 0) {
     // Use existing bitmap (for non-Hive cases)
     final_bitmap_size_ = bitmap_size_;
     final_bitmap_ = bitmap_;
@@ -425,8 +426,9 @@ int ObOptExternalColumnStatBuilder::finalize_bitmap() {
   return ret;
 }
 
-int64_t ObOptExternalColumnStatBuilder::calculate_size() const {
-  int64_t size = sizeof(ObOptExternalColumnStat);
+int64_t ObOptCatalogColumnStatBuilder::calculate_size() const
+{
+  int64_t size = sizeof(ObOptCatalogColumnStat);
   size += table_name_.length();
   size += database_name_.length();
   size += partition_value_.length();
@@ -441,8 +443,9 @@ int64_t ObOptExternalColumnStatBuilder::calculate_size() const {
   return size;
 }
 
-int ObOptExternalColumnStatBuilder::build(
-    ObIAllocator &allocator, ObOptExternalColumnStat *&stat) const {
+int ObOptCatalogColumnStatBuilder::build(ObIAllocator &allocator,
+                                          ObOptCatalogColumnStat *&stat) const
+{
   int ret = OB_SUCCESS;
   int64_t size = calculate_size();
   char *buf = static_cast<char *>(allocator.alloc(size));
@@ -454,48 +457,64 @@ int ObOptExternalColumnStatBuilder::build(
     ret = OB_NOT_INIT;
     LOG_WARN("basic info not set", K(ret));
   } else {
-    stat = new (buf) ObOptExternalColumnStat();
-    int64_t pos = sizeof(ObOptExternalColumnStat);
+    stat = new (buf) ObOptCatalogColumnStat();
+    int64_t pos = sizeof(ObOptCatalogColumnStat);
 
     // Set basic information
     stat->set_tenant_id(tenant_id_);
     stat->set_catalog_id(catalog_id_);
 
     // Deep copy strings using buffer
-    if (OB_FAIL(ObDbmsStatsUtils::deep_copy_string(
-            buf, size, pos, database_name_, stat->database_name_))) {
+    if (OB_FAIL(ObDbmsStatsUtils::deep_copy_string(buf,
+                                                   size,
+                                                   pos,
+                                                   database_name_,
+                                                   stat->database_name_))) {
       LOG_WARN("failed to deep copy database name", K(ret));
-    } else if (OB_FAIL(ObDbmsStatsUtils::deep_copy_string(
-                   buf, size, pos, table_name_, stat->table_name_))) {
+    } else if (OB_FAIL(ObDbmsStatsUtils::deep_copy_string(buf,
+                                                          size,
+                                                          pos,
+                                                          table_name_,
+                                                          stat->table_name_))) {
       LOG_WARN("failed to deep copy table name", K(ret));
-    } else if (OB_FAIL(ObDbmsStatsUtils::deep_copy_string(
-                   buf, size, pos, partition_value_, stat->partition_value_))) {
+    } else if (OB_FAIL(ObDbmsStatsUtils::deep_copy_string(buf,
+                                                          size,
+                                                          pos,
+                                                          partition_value_,
+                                                          stat->partition_value_))) {
       LOG_WARN("failed to deep copy partition value", K(ret));
-    } else if (OB_FAIL(ObDbmsStatsUtils::deep_copy_string(
-                   buf, size, pos, column_name_, stat->column_name_))) {
+    } else if (OB_FAIL(ObDbmsStatsUtils::deep_copy_string(buf,
+                                                          size,
+                                                          pos,
+                                                          column_name_,
+                                                          stat->column_name_))) {
       LOG_WARN("failed to deep copy column name", K(ret));
     } else {
       // Set statistical information using finalized values
       stat->set_num_null(num_null_);
       stat->set_num_not_null(num_not_null_);
-      stat->set_num_distinct(final_ndv_);
+      // load from system table only sets num_distinct_; final_ndv_ is set in finalize_bitmap()
+      stat->set_num_distinct(is_bitmap_finalized_ ? final_ndv_ : num_distinct_);
       stat->set_avg_length(avg_length_);
       stat->set_last_analyzed(last_analyzed_);
       stat->set_collation_type(cs_type_);
       // Deep copy min/max values
       if (OB_FAIL(stat->min_value_.deep_copy(min_value_, buf, size, pos))) {
         LOG_WARN("failed to deep copy min value", K(ret));
-      } else if (OB_FAIL(
-                     stat->max_value_.deep_copy(max_value_, buf, size, pos))) {
+      } else if (OB_FAIL(stat->max_value_.deep_copy(max_value_, buf, size, pos))) {
         LOG_WARN("failed to deep copy max value", K(ret));
       }
-      if (is_bitmap_finalized_ && final_bitmap_ != nullptr && final_bitmap_size_ > 0) {
+      if (is_bitmap_finalized_ && OB_NOT_NULL(final_bitmap_) && final_bitmap_size_ > 0) {
         if (OB_UNLIKELY(pos + final_bitmap_size_ > size)) {
           ret = OB_SIZE_OVERFLOW;
-          LOG_WARN("final bitmap size is too large", K(ret), K(pos), K(final_bitmap_size_), K(size));
+          LOG_WARN("final bitmap size is too large",
+                   K(ret),
+                   K(pos),
+                   K(final_bitmap_size_),
+                   K(size));
         } else {
           MEMCPY(buf + pos, final_bitmap_, final_bitmap_size_);
-          stat->set_bitmap(buf + pos, final_bitmap_size_);
+          stat->set_llc_bitmap(buf + pos, final_bitmap_size_);
           pos += final_bitmap_size_;
         }
       }
@@ -509,9 +528,10 @@ int ObOptExternalColumnStatBuilder::build(
   return ret;
 }
 
-int ObOptExternalColumnStatBuilder::copy_obj_to_buffer(common::ObObj &dest,
+int ObOptCatalogColumnStatBuilder::copy_obj_to_buffer(common::ObObj &dest,
                                                        const common::ObObj &src,
-                                                       bool is_min_obj) {
+                                                       bool is_min_obj)
+{
   int ret = OB_SUCCESS;
   int64_t size = src.get_deep_copy_size();
   int64_t pos = 0;
@@ -527,9 +547,10 @@ int ObOptExternalColumnStatBuilder::copy_obj_to_buffer(common::ObObj &dest,
   return ret;
 }
 
-int ObOptExternalColumnStatBuilder::merge_min_max(common::ObObj &cur,
+int ObOptCatalogColumnStatBuilder::merge_min_max(common::ObObj &cur,
                                                   const common::ObObj &other,
-                                                  bool is_cmp_min) {
+                                                  bool is_cmp_min)
+{
   int ret = OB_SUCCESS;
   int cmp_result = 0;
 
@@ -558,7 +579,8 @@ int ObOptExternalColumnStatBuilder::merge_min_max(common::ObObj &cur,
   return ret;
 }
 
-int ObOptExternalColumnStatBuilder::alloc_bitmap(int64_t size) {
+int ObOptCatalogColumnStatBuilder::alloc_bitmap(int64_t size)
+{
   int ret = OB_SUCCESS;
 
   if (size <= 0) {
@@ -579,8 +601,8 @@ int ObOptExternalColumnStatBuilder::alloc_bitmap(int64_t size) {
   return ret;
 }
 
-int ObOptExternalColumnStatBuilder::ensure_min_max_buffer(
-    bool is_min, int64_t required_size) {
+int ObOptCatalogColumnStatBuilder::ensure_min_max_buffer(bool is_min, int64_t required_size)
+{
   int ret = OB_SUCCESS;
   char **buf = is_min ? &min_obj_buf_ : &max_obj_buf_;
   int64_t *size = is_min ? &min_obj_buf_size_ : &max_obj_buf_size_;
@@ -603,8 +625,11 @@ int ObOptExternalColumnStatBuilder::ensure_min_max_buffer(
     // Allocate new buffer with appropriate size
     if (OB_ISNULL(*buf = static_cast<char *>(allocator_.alloc(alloc_size)))) {
       ret = OB_ALLOCATE_MEMORY_FAILED;
-      LOG_WARN("failed to allocate memory for min/max obj buf", K(ret),
-               K(alloc_size), K(required_size), K(is_min));
+      LOG_WARN("failed to allocate memory for min/max obj buf",
+               K(ret),
+               K(alloc_size),
+               K(required_size),
+               K(is_min));
     } else {
       *size = alloc_size;
     }
@@ -613,16 +638,13 @@ int ObOptExternalColumnStatBuilder::ensure_min_max_buffer(
   return ret;
 }
 
-
-
-int ObOptExternalColumnStatBuilder::merge_other_bitmap(const char *bitmap,
-                                                       int64_t bitmap_size) {
+int ObOptCatalogColumnStatBuilder::merge_other_bitmap(const char *bitmap, int64_t bitmap_size)
+{
   int ret = OB_SUCCESS;
 
   if (OB_ISNULL(bitmap) || bitmap_size <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid other bitmap parameters", K(ret), KP(bitmap),
-             K(bitmap_size));
+    LOG_WARN("invalid other bitmap parameters", K(ret), KP(bitmap), K(bitmap_size));
   } else if (!is_bitmap_set_ || bitmap_ == nullptr) {
     // First non-Hive bitmap, just copy it (no type detection needed)
     if (OB_FAIL(set_bitmap(bitmap, bitmap_size))) {
@@ -632,58 +654,58 @@ int ObOptExternalColumnStatBuilder::merge_other_bitmap(const char *bitmap,
     // For non-Hive bitmaps, we currently don't support merging
     // This could be extended in the future for other bitmap types
     ret = OB_NOT_SUPPORTED;
-    LOG_WARN("merging of non-hive bitmaps not supported yet", K(ret),
-             K(bitmap_type_), K(bitmap_size));
+    LOG_WARN("merging of non-hive bitmaps not supported yet",
+             K(ret),
+             K(bitmap_type_),
+             K(bitmap_size));
   }
 
   return ret;
 }
 
-int ObOptExternalColumnStatBuilder::set_bitmap_type(
-    ObExternalBitmapType bitmap_type) {
+int ObOptCatalogColumnStatBuilder::set_bitmap_type(ObCatalogBitmapType bitmap_type)
+{
   int ret = OB_SUCCESS;
   bitmap_type_ = bitmap_type;
-  LOG_DEBUG("set bitmap type", K(bitmap_type), "type_name",
-            (bitmap_type == ObExternalBitmapType::HIVE_AUTO_DETECT)
-                ? "HIVE_AUTO_DETECT"
-            : (bitmap_type == ObExternalBitmapType::HIVE_FM)  ? "HIVE_FM"
-            : (bitmap_type == ObExternalBitmapType::HIVE_HLL) ? "HIVE_HLL"
-            : (bitmap_type == ObExternalBitmapType::OTHER)    ? "OTHER"
-                                                              : "UNKNOWN");
+  LOG_DEBUG("set bitmap type",
+            K(bitmap_type),
+            "type_name",
+            (bitmap_type == ObCatalogBitmapType::HIVE_AUTO_DETECT) ? "HIVE_AUTO_DETECT"
+            : (bitmap_type == ObCatalogBitmapType::HIVE_FM)        ? "HIVE_FM"
+            : (bitmap_type == ObCatalogBitmapType::HIVE_HLL)       ? "HIVE_HLL"
+            : (bitmap_type == ObCatalogBitmapType::OTHER)          ? "OTHER"
+                                                                    : "UNKNOWN");
   return ret;
 }
 
-ObExternalBitmapType
-ObOptExternalColumnStatBuilder::detect_hive_bitmap_type(const char *bitmap,
-                                                        int64_t bitmap_size) {
-  ObExternalBitmapType bitmap_type = ObExternalBitmapType::UNKNOWN;
+ObCatalogBitmapType ObOptCatalogColumnStatBuilder::detect_hive_bitmap_type(const char *bitmap,
+                                                                             int64_t bitmap_size)
+{
+  ObCatalogBitmapType bitmap_type = ObCatalogBitmapType::UNKNOWN;
 
   if (OB_ISNULL(bitmap) || bitmap_size <= 0) {
-    bitmap_type = ObExternalBitmapType::UNKNOWN;
-  } else if (bitmap_size >= ObHiveHLLUtils::HEADER_SIZE &&
-             memcmp(bitmap, ObHiveHLLUtils::MAGIC,
-                    ObHiveHLLUtils::MAGIC_SIZE) == 0) {
+    bitmap_type = ObCatalogBitmapType::UNKNOWN;
+  } else if (bitmap_size >= ObHiveHLLUtils::HEADER_SIZE
+             && memcmp(bitmap, ObHiveHLLUtils::MAGIC, ObHiveHLLUtils::MAGIC_SIZE) == 0) {
     // Check for HLL magic string
-    bitmap_type = ObExternalBitmapType::HIVE_HLL;
-  } else if (bitmap_size >= 2 &&
-             memcmp(bitmap, ObHiveFMSketchUtils::MAGIC, 2) == 0) {
+    bitmap_type = ObCatalogBitmapType::HIVE_HLL;
+  } else if (bitmap_size >= 2 && memcmp(bitmap, ObHiveFMSketchUtils::MAGIC, 2) == 0) {
     // Check for FM magic string
-    bitmap_type = ObExternalBitmapType::HIVE_FM;
+    bitmap_type = ObCatalogBitmapType::HIVE_FM;
   } else {
-    bitmap_type = ObExternalBitmapType::UNKNOWN;
+    bitmap_type = ObCatalogBitmapType::UNKNOWN;
   }
 
   return bitmap_type;
 }
 
-int ObOptExternalColumnStatBuilder::merge_hive_fm_bitmap(const char *bitmap,
-                                                         int64_t bitmap_size) {
+int ObOptCatalogColumnStatBuilder::merge_hive_fm_bitmap(const char *bitmap, int64_t bitmap_size)
+{
   int ret = OB_SUCCESS;
 
   if (OB_ISNULL(bitmap) || bitmap_size <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid Hive FM bitmap parameters", K(ret), KP(bitmap),
-             K(bitmap_size));
+    LOG_WARN("invalid Hive FM bitmap parameters", K(ret), KP(bitmap), K(bitmap_size));
   } else if (OB_ISNULL(hive_fm_sketch_)) {
     // First FM bitmap - create and deserialize the sketch object
     hive_fm_sketch_ = OB_NEWx(ObHiveFMSketch, &allocator_, allocator_);
@@ -692,10 +714,11 @@ int ObOptExternalColumnStatBuilder::merge_hive_fm_bitmap(const char *bitmap,
       LOG_WARN("failed to allocate hive fm sketch", K(ret));
     } else {
       int64_t pos = 0;
-      if (OB_FAIL(ObHiveFMSketchUtils::deserialize_fm_sketch(
-              bitmap, bitmap_size, pos, *hive_fm_sketch_))) {
-        LOG_WARN("failed to deserialize first FM bitmap", K(ret),
-                 K(bitmap_size));
+      if (OB_FAIL(ObHiveFMSketchUtils::deserialize_fm_sketch(bitmap,
+                                                             bitmap_size,
+                                                             pos,
+                                                             *hive_fm_sketch_))) {
+        LOG_WARN("failed to deserialize first FM bitmap", K(ret), K(bitmap_size));
       } else {
         is_bitmap_set_ = true;
         LOG_DEBUG("successfully set first Hive FM bitmap", K(bitmap_size));
@@ -705,10 +728,11 @@ int ObOptExternalColumnStatBuilder::merge_hive_fm_bitmap(const char *bitmap,
     // Subsequent FM bitmaps - deserialize and merge with existing sketch
     ObHiveFMSketch incoming_sketch(allocator_);
     int64_t pos = 0;
-    if (OB_FAIL(ObHiveFMSketchUtils::deserialize_fm_sketch(
-            bitmap, bitmap_size, pos, incoming_sketch))) {
-      LOG_WARN("failed to deserialize incoming FM bitmap", K(ret),
-               K(bitmap_size));
+    if (OB_FAIL(ObHiveFMSketchUtils::deserialize_fm_sketch(bitmap,
+                                                           bitmap_size,
+                                                           pos,
+                                                           incoming_sketch))) {
+      LOG_WARN("failed to deserialize incoming FM bitmap", K(ret), K(bitmap_size));
     } else if (OB_FAIL(hive_fm_sketch_->merge_estimators(&incoming_sketch))) {
       LOG_WARN("failed to merge FM sketches", K(ret));
     } else {
@@ -719,21 +743,18 @@ int ObOptExternalColumnStatBuilder::merge_hive_fm_bitmap(const char *bitmap,
   return ret;
 }
 
-int ObOptExternalColumnStatBuilder::merge_hive_hll_bitmap(const char *bitmap,
-                                                          int64_t bitmap_size) {
+int ObOptCatalogColumnStatBuilder::merge_hive_hll_bitmap(const char *bitmap, int64_t bitmap_size)
+{
   int ret = OB_SUCCESS;
 
   if (OB_ISNULL(bitmap) || bitmap_size <= 0) {
     ret = OB_INVALID_ARGUMENT;
-    LOG_WARN("invalid Hive HLL bitmap parameters", K(ret), KP(bitmap),
-             K(bitmap_size));
+    LOG_WARN("invalid Hive HLL bitmap parameters", K(ret), KP(bitmap), K(bitmap_size));
   } else if (OB_ISNULL(hive_hll_)) {
     // First HLL bitmap - deserialize and store the HLL object
     int64_t pos = 0;
-    if (OB_FAIL(ObHiveHLLUtils::deserialize_hll(bitmap, bitmap_size, pos,
-                                                allocator_, hive_hll_))) {
-      LOG_WARN("failed to deserialize first HLL bitmap", K(ret),
-               K(bitmap_size));
+    if (OB_FAIL(ObHiveHLLUtils::deserialize_hll(bitmap, bitmap_size, pos, allocator_, hive_hll_))) {
+      LOG_WARN("failed to deserialize first HLL bitmap", K(ret), K(bitmap_size));
     } else {
       is_bitmap_set_ = true;
       LOG_DEBUG("successfully set first Hive HLL bitmap", K(bitmap_size));
@@ -742,10 +763,9 @@ int ObOptExternalColumnStatBuilder::merge_hive_hll_bitmap(const char *bitmap,
     // Subsequent HLL bitmaps - deserialize and merge with existing HLL
     ObHiveHLL *incoming_hll = nullptr;
     int64_t pos = 0;
-    if (OB_FAIL(ObHiveHLLUtils::deserialize_hll(bitmap, bitmap_size, pos,
-                                                allocator_, incoming_hll))) {
-      LOG_WARN("failed to deserialize incoming HLL bitmap", K(ret),
-               K(bitmap_size));
+    if (OB_FAIL(
+            ObHiveHLLUtils::deserialize_hll(bitmap, bitmap_size, pos, allocator_, incoming_hll))) {
+      LOG_WARN("failed to deserialize incoming HLL bitmap", K(ret), K(bitmap_size));
     } else if (OB_FAIL(hive_hll_->merge(incoming_hll))) {
       LOG_WARN("failed to merge HLL bitmaps", K(ret));
     } else {

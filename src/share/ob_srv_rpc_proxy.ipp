@@ -146,6 +146,7 @@
   RPC_S(PR5 notify_create_duplicate_ls, OB_NOTIFY_CREATE_DUPLICATE_LS, (obrpc::ObCreateDupLSArg), obrpc::ObCreateDupLSResult);
 
   RPC_S(PR5 update_local_stat_cache, obrpc::OB_SERVER_UPDATE_STAT_CACHE, (ObUpdateStatCacheArg));
+  RPC_S(PR5 update_local_catalog_stat_cache, obrpc::OB_SERVER_UPDATE_CATALOG_STAT_CACHE, (ObUpdateCatalogStatCacheArg));
   // The optimizer estimates the number of rows
   RPC_S(PR5 estimate_partition_rows, OB_ESTIMATE_PARTITION_ROWS, (ObEstPartArg), ObEstPartRes);
 

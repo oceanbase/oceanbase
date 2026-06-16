@@ -665,15 +665,6 @@ int ObHiveMetastoreClient::extract_host_and_port(const ObString &uri, char *host
   return ret;
 }
 
-int64_t ObHiveMetastoreClient::handle_ddl_time(String &time_str)
-{
-  int64_t ddl_time = 0;
-   if (OB_SUCCESS != ob_atoll(time_str.c_str(), ddl_time)) {
-    ddl_time = 0;
-  }
-  return ddl_time;
-}
-
 int ObHiveMetastoreClient::build_lock_request_for_operation(const LockableOperation &op,
                                                             ApacheHive::LockRequest &lock_request)
 {
@@ -1209,68 +1200,6 @@ int ObHiveMetastoreClient::list_table_names(const ObString &db_name,
         LOG_WARN("failed to write table name", K(ret), K(tb_name), K(t_name));
       } else if (OB_FAIL(tb_names.push_back(t_name))) {
         LOG_WARN("failed to push table name to list", K(ret), K(tb_name), K(t_name));
-      }
-    }
-  }
-  return ret;
-}
-
-int ObHiveMetastoreClient::get_latest_schema_version(const ObString &ns_name,
-                                                     const ObString &tb_name,
-                                                     const ObNameCaseMode case_mode,
-                                                     int64_t &schema_version)
-{
-  int ret = OB_SUCCESS;
-  UNUSED(case_mode);
-  String cat_name;
-  if (OB_ISNULL(hms_default_catalog_) || hms_default_catalog_.empty()) {
-  } else {
-    cat_name = String(hms_default_catalog_.ptr(), hms_default_catalog_.length());
-  }
-  String d_name = String(ns_name.ptr(), ns_name.length());
-  String t_name = String(tb_name.ptr(), tb_name.length());
-  bool found = false;
-  std::shared_ptr<ApacheHive::Table> table = std::make_shared<ApacheHive::Table>();
-  GetTableOperation table_op(*table, cat_name, d_name, t_name, found);
-  if (OB_FAIL(try_call_hive_client(table_op))) {
-    LOG_WARN("failed to call to get table operation",
-             K(ret),
-             K(cat_name.c_str()),
-             K(ns_name),
-             K(tb_name));
-  } else if (OB_UNLIKELY(!found)) {
-    ret = OB_TABLE_NOT_EXIST;
-    LOG_WARN("failed to find table", K(ret), K(cat_name.c_str()), K(ns_name), K(tb_name));
-  } else {
-    schema_version = table->createTime;
-    if (OB_LIKELY(table->partitionKeys.empty())) {
-      // Indicate the table is not with partitions
-      std::map<String, String>::iterator iter;
-      iter = table->parameters.find(LAST_DDL_TIME);
-      if (OB_LIKELY(iter != table->parameters.end())) {
-        String version_str = iter->second;
-        int64_t ddl_time = handle_ddl_time(version_str);
-        if (schema_version < ddl_time) {
-          schema_version = ddl_time;
-        }
-      }
-    } else {
-      // Fetch the latest partition ddl time.
-      int64_t latest_ddl_time = -1;
-      GetLatestPartitionDdlTimeOperation ddl_time_op(latest_ddl_time, cat_name, d_name, t_name);
-      if (OB_FAIL(try_call_hive_client(ddl_time_op))) {
-        LOG_WARN("failed to call to get partition latest ddl time",
-                 K(ret),
-                 K(cat_name.c_str()),
-                 K(ns_name),
-                 K(tb_name));
-      } else if (OB_UNLIKELY(-1 == latest_ddl_time)) {
-        // DO NOTHING, use table create time as the schema version
-      } else if (schema_version < latest_ddl_time) {
-        schema_version = latest_ddl_time;
-        LOG_TRACE("get the latest partition ddl time as latest version",
-                  K(ret),
-                  K(latest_ddl_time));
       }
     }
   }

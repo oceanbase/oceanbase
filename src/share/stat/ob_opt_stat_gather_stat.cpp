@@ -251,6 +251,66 @@ int ObOptStatRunningMonitor::add_table_info(const common::ObTableStatParam &tabl
   return ret;
 }
 
+int ObOptStatRunningMonitor::add_table_info(const common::ObCatalogTableStatParam &table_param,
+                                           double stale_percent)
+{
+  int ret = OB_SUCCESS;
+  ObString tmp_db_name;
+  ObString tmp_tab_name;
+  ObString tmp_properties_str;
+  if (OB_FAIL(ob_write_string(allocator_,
+                              table_param.table_identity_.db_name_,
+                              tmp_db_name))) {
+    LOG_WARN("failed to write string", K(ret));
+  } else if (OB_FAIL(ob_write_string(allocator_,
+                                     table_param.table_identity_.tab_name_,
+                                     tmp_tab_name))) {
+    LOG_WARN("failed to write string", K(ret));
+  } else {
+    // External tables don't have table_id, use OB_INVALID_ID
+    opt_stat_gather_stat_.set_table_id(OB_INVALID_ID);
+    ObSqlString properties_sql_str;
+    char *buf = NULL;
+    const char *sample_type = "ROW";
+    if (table_param.gather_options_.sample_info_.is_fast_sample()) {
+      sample_type = "FAST";
+    } else if (table_param.gather_options_.sample_info_.is_block_sample()) {
+      sample_type = "BLOCK";
+    }
+    if (OB_FAIL(properties_sql_str.append_fmt(
+            "GRANULARITY:%.*s;METHOD_OPT:%.*s;DEGREE:%ld;ESTIMATE_PERCENT:%lf;SAMPLE_TYPE:%s;"
+            "SAMPLE_SEED:%ld;STALE_PERCENT:%lf;CATALOG_ID:%lu;CATALOG_NAME:%.*s",
+            table_param.gather_options_.granularity_.length(),
+            table_param.gather_options_.granularity_.ptr(),
+            table_param.gather_options_.method_opt_.length(),
+            table_param.gather_options_.method_opt_.ptr(),
+            table_param.gather_options_.degree_,
+            table_param.gather_options_.sample_info_.is_sample_
+                ? table_param.gather_options_.sample_info_.percent_
+                : 100.0,
+            sample_type,
+            table_param.gather_options_.sample_info_.seed_,
+            stale_percent,
+            table_param.table_identity_.catalog_id_,
+            table_param.table_identity_.catalog_name_.length(),
+            table_param.table_identity_.catalog_name_.ptr()))) {
+      LOG_WARN("failed to append fmt", K(ret));
+    } else if (OB_ISNULL(buf
+                         = static_cast<char *>(allocator_.alloc(properties_sql_str.length())))) {
+      ret = OB_ALLOCATE_MEMORY_FAILED;
+      LOG_WARN("memory is not enough", K(ret), K(properties_sql_str));
+    } else {
+      MEMCPY(buf, properties_sql_str.ptr(), properties_sql_str.length());
+      tmp_properties_str.assign_ptr(buf, static_cast<int32_t>(properties_sql_str.length()));
+      ObOptStatGatherStatList::instance().update_gather_stat_info(tmp_db_name,
+                                                                  tmp_tab_name,
+                                                                  tmp_properties_str,
+                                                                  opt_stat_gather_stat_);
+    }
+  }
+  return ret;
+}
+
 int ObOptStatRunningMonitor::add_monitor_info(ObOptStatRunningPhase current_phase,
                                               double extra_progress_ratio/*default 0*/)
 {

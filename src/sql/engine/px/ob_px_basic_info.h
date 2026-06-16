@@ -93,7 +93,9 @@ namespace sql
 #define IS_SAMPLE_SCAN(type) \
       ((type) == PHY_BLOCK_SAMPLE_SCAN || \
       (type) == PHY_ROW_SAMPLE_SCAN || \
-      (type) == PHY_DDL_BLOCK_SAMPLE_SCAN)
+      (type) == PHY_DDL_BLOCK_SAMPLE_SCAN || \
+      (type) == PHY_EXTERNAL_BLOCK_SAMPLE_SCAN || \
+      (type) == PHY_EXTERNAL_ROW_SAMPLE_SCAN)
 
 enum JoinFilterMode
 {

@@ -1166,6 +1166,8 @@ ob_set_subtarget(ob_sql engine_set
 
 ob_set_subtarget(ob_sql engine_table
   engine/table/ob_block_sample_scan_op.cpp
+  engine/table/ob_external_block_sample_scan_op.cpp
+  engine/table/ob_external_row_sample_scan_op.cpp
   engine/table/ob_link_scan_op.cpp
   engine/table/ob_row_sample_scan_op.cpp
   engine/table/ob_table_partition_ranges.cpp
@@ -1184,7 +1186,9 @@ ob_set_subtarget(ob_sql engine_table
   engine/table/ob_csv_prefetch_mgr.cpp
   engine/table/ob_dummy_table_row_iter.cpp
   engine/table/ob_orc_table_row_iter.cpp
+  engine/table/ob_orc_min_max_iter.cpp
   engine/table/ob_parquet_table_row_iter.cpp
+  engine/table/ob_parquet_min_max_iter.cpp
   engine/table/ob_parquet_dict_filter.cpp
   engine/table/ob_iceberg_delete_bitmap_builder.cpp
   engine/table/ob_odps_table_row_iter.cpp

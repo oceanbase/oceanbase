@@ -9136,13 +9136,164 @@ all_java_policy = dict(
 def_table_schema(**all_java_policy)
 def_table_schema(**gen_history_table_def(587, all_java_policy))
 
-# 588: __all_catalog_table_stat
-# 589: __all_catalog_column_stat
-# 590: __all_catalog_table_opt_stat_gather_history
+
+# External table statistics tables
+def_table_schema(
+  owner = 'xutengting.xtt',
+  table_name = '__all_catalog_table_stat',
+  table_id = '588',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('catalog_id', 'int'),
+      ('db_name', 'varchar:256'),
+      ('table_name', 'varchar:256'),
+      ('partition_value', 'varchar:3584'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = False,
+
+  normal_columns = [
+      ('schema_version', 'bigint'),
+      ('last_analyzed', 'timestamp'),
+      ('last_modified', 'timestamp'),
+      ('file_count', 'int'),
+      ('data_size', 'bigint'),
+      ('row_cnt', 'int'),
+      ('avg_row_len', 'double'),
+      ('stattype_locked', 'int', 'true', '0'),
+      ('sample_size', 'int', 'true'),
+      ('spare1', 'int', 'true', '0'),
+      ('spare2', 'int', 'true', '0'),
+      ('spare3', 'int', 'true', '0'),
+      ('spare4', 'varchar:256', 'true'),
+      ('spare5', 'varchar:256', 'true'),
+      ('spare6', 'varchar:256', 'true'),
+  ],
+)
+
+def_table_schema(
+  owner = 'xutengting.xtt',
+  table_name = '__all_catalog_column_stat',
+  table_id = '589',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('catalog_id', 'int'),
+      ('db_name', 'varchar:256'),
+      ('table_name', 'varchar:256'),
+      ('column_name', 'varchar:256'),
+      ('partition_value', 'varchar:3584'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = False,
+
+  normal_columns = [
+      ('last_analyzed', 'timestamp'),
+      ('last_modified', 'timestamp'),
+      ('distinct_cnt', 'int'),
+      ('null_cnt', 'int'),
+      ('max_value', 'varchar:MAX_VALUE_LENGTH'),
+      ('b_max_value', 'varchar:MAX_VALUE_LENGTH'),
+      ('min_value', 'varchar:MAX_VALUE_LENGTH'),
+      ('b_min_value', 'varchar:MAX_VALUE_LENGTH'),
+      ('avg_len', 'double'),
+      ('distinct_cnt_synopsis','varchar:MAX_LLC_BITMAP_LENGTH'),
+      ('distinct_cnt_synopsis_size', 'int'),
+      ('sample_size', 'int'),
+      ('density', 'double'),
+      ('bucket_cnt', 'int'),
+      ('histogram_type', 'int'),
+      ('spare1', 'int', 'true', '0'),
+      ('spare2', 'int', 'true', '0'),
+      ('spare3', 'int', 'true', '0'),
+      ('spare4', 'varchar:256', 'true'),
+      ('spare5', 'varchar:256', 'true'),
+      ('spare6', 'varchar:256', 'true'),
+  ],
+)
+
+def_table_schema(
+  owner = 'xutengting.xtt',
+  table_name = '__all_catalog_table_opt_stat_gather_history',
+  table_id = '590',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('task_id', 'varchar:36'),
+      ('catalog_id', 'int'),
+      ('db_name', 'varchar:256'),
+      ('table_name', 'varchar:256'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = True,
+  meta_record_in_sys = False,
+
+  normal_columns = [
+    ('ret_code', 'int', 'true'),
+    ('start_time', 'timestamp', 'true'),
+    ('end_time', 'timestamp', 'true'),
+    ('memory_used', 'int', 'true'),
+    ('stat_refresh_failed_list', 'varchar:MAX_VALUE_LENGTH', 'true'),
+    ('properties', 'varchar:MAX_VALUE_LENGTH', 'true'),
+    ('spare1', 'int', 'true'),
+    ('spare2', 'int', 'true'),
+    ('spare3', 'varchar:MAX_VALUE_LENGTH', 'true'),
+    ('spare4', 'varchar:MAX_VALUE_LENGTH', 'true'),
+  ],
+)
+
 # 591: __all_audit_log_encryption_password
 # 592: __all_direct_load_stream
-# 593: __all_optstat_catalog_user_prefs
-# 594: __all_optstat_catalog_global_prefs
+
+def_table_schema(
+  owner = 'xutengting.xtt',
+  table_name = '__all_optstat_catalog_user_prefs',
+  table_id = '593',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+      ('tenant_id', 'int'),
+      ('catalog_id', 'int'),
+      ('db_name', 'varchar:256'),
+      ('table_name', 'varchar:256'),
+      ('pname', 'varchar:30'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = False,
+  normal_columns = [
+      ('valnum', 'int', 'true'),
+      ('valchar', 'varchar:4000', 'true'),
+      ('chgtime', 'timestamp', 'true'),
+      ('spare1', 'int', 'true')
+  ],
+)
+
+def_table_schema(
+  owner = 'xutengting.xtt',
+  table_name = '__all_optstat_catalog_global_prefs',
+  table_id = '594',
+  table_type = 'SYSTEM_TABLE',
+  gm_columns = ['gmt_create', 'gmt_modified'],
+  rowkey_columns = [
+      ('sname', 'varchar:30'),
+  ],
+  in_tenant_space = True,
+  is_cluster_private = False,
+  normal_columns = [
+      ('sval1', 'number:38:0', 'true'),
+      ('sval2', 'timestamp', 'true'),
+      ('spare1', 'int', 'true'),
+      ('spare2', 'int', 'true'),
+      ('spare3', 'int', 'true'),
+      ('spare4', 'varchar:MAX_VALUE_LENGTH', 'true'),
+      ('spare5', 'varchar:MAX_VALUE_LENGTH', 'true'),
+      ('spare6', 'timestamp', 'true')
+  ],
+)
 # 595: __all_ss_gc_history
 
 def_table_schema(
@@ -18381,12 +18532,29 @@ def_table_schema(**gen_iterate_virtual_table_def(
   keywords = all_def_keywords['__all_java_policy_history']))
 
 # 12596: __all_virtual_catalog_table_opt_stat_gather_history
+
+def_table_schema(**gen_iterate_private_virtual_table_def(
+  table_id = '12596',
+  table_name = '__all_virtual_catalog_table_opt_stat_gather_history',
+  in_tenant_space = True,
+  keywords = all_def_keywords['__all_catalog_table_opt_stat_gather_history']))
+
 # 12597: __all_virtual_object_storage_stat
 # 12598: __all_virtual_object_storage_error_record
 # 12599: __all_virtual_audit_log_encryption_password
-# 12600: __all_virtual_optstat_catalog_user_prefs
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12600',
+  table_name = '__all_virtual_optstat_catalog_user_prefs',
+  keywords = all_def_keywords['__all_optstat_catalog_user_prefs']))
+
 # 12601: __all_virtual_sandbox_process
-# 12602: __all_virtual_optstat_catalog_global_prefs
+
+def_table_schema(**gen_iterate_virtual_table_def(
+  table_id = '12602',
+  table_name = '__all_virtual_optstat_catalog_global_prefs',
+  keywords = all_def_keywords['__all_optstat_catalog_global_prefs']))
+
 def_table_schema(
   owner             = 'fyy280124',
   table_name        = '__all_virtual_tenant_worker_group',
@@ -47614,9 +47782,119 @@ FROM
 """.replace("\n", " ")
 )
 # 21724: V$OB_KEYWORDS
-# 21725: DBA_OB_EXTERNAL_TAB_STATISTICS
-# 21726: DBA_OB_EXTERNAL_TAB_COL_STATISTICS
-# 21727: DBA_OB_EXTERNAL_PART_COL_STATISTICS
+
+def_table_schema(
+    owner = 'xutengting.xtt',
+    table_name     = 'DBA_OB_EXTERNAL_TAB_STATISTICS',
+    table_id       = '21725',
+    table_type = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = True,
+    view_definition = """SELECT
+    CAST(C.CATALOG_NAME AS CHAR(128)) AS CATALOG_NAME,
+    CAST(STAT.DB_NAME AS CHAR(128)) AS DATABASE_NAME,
+    CAST(STAT.TABLE_NAME AS CHAR(128)) AS TABLE_NAME,
+    CAST(STAT.PARTITION_VALUE AS CHAR(3584)) AS PARTITION_VALUE,
+    CAST((CASE WHEN STAT.PARTITION_VALUE = '' THEN 'TABLE' ELSE 'PARTITION' END) AS CHAR(12)) AS OBJECT_TYPE,
+    CAST(STAT.ROW_CNT AS DECIMAL(20, 0)) AS NUM_ROWS,
+    CAST(STAT.AVG_ROW_LEN AS NUMBER) AS AVG_ROW_LEN,
+    CAST(STAT.SAMPLE_SIZE AS DECIMAL(20, 0)) AS SAMPLE_SIZE,
+    CAST(STAT.LAST_ANALYZED AS DATETIME(6)) AS LAST_ANALYZED,
+    CAST(STAT.LAST_MODIFIED AS DATETIME(6)) AS LAST_MODIFIED,
+    CAST((CASE WHEN STAT.STATTYPE_LOCKED & 15 IS NULL THEN NULL ELSE (CASE STAT.STATTYPE_LOCKED & 15 WHEN 0 THEN NULL WHEN 1 THEN 'DATA' WHEN 2 THEN 'CACHE' ELSE 'ALL' END) END) AS CHAR(5)) AS STATTYPE_LOCKED
+    FROM
+        oceanbase.__all_catalog_table_stat STAT
+    JOIN
+        oceanbase.__all_catalog C
+        ON STAT.TENANT_ID = C.TENANT_ID
+        AND STAT.CATALOG_ID = C.CATALOG_ID
+        AND STAT.TENANT_ID = 0
+""".replace("\n", " ")
+)
+
+def_table_schema(
+    owner = 'xutengting.xtt',
+    table_name     = 'DBA_OB_EXTERNAL_TAB_COL_STATISTICS',
+    table_id       = '21726',
+    table_type = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = True,
+    view_definition = """SELECT
+    CAST(C.CATALOG_NAME AS CHAR(128)) AS CATALOG_NAME,
+    CAST(STAT.DB_NAME AS CHAR(128)) AS DATABASE_NAME,
+    CAST(STAT.TABLE_NAME AS CHAR(128)) AS TABLE_NAME,
+    CAST(STAT.COLUMN_NAME AS CHAR(128)) AS COLUMN_NAME,
+    CAST(STAT.DISTINCT_CNT AS DECIMAL(20, 0)) AS NUM_DISTINCT,
+    CAST(STAT.MIN_VALUE AS CHAR(128)) AS LOW_VALUE,
+    CAST(STAT.MAX_VALUE AS CHAR(128)) AS HIGH_VALUE,
+    CAST(STAT.DENSITY AS DECIMAL(30, 10)) AS DENSITY,
+    CAST(STAT.NULL_CNT AS DECIMAL(20, 0)) AS NUM_NULLS,
+    CAST(STAT.BUCKET_CNT AS DECIMAL(20, 0)) AS NUM_BUCKETS,
+    CAST(STAT.LAST_ANALYZED AS DATETIME(6)) AS LAST_ANALYZED,
+    CAST(STAT.LAST_MODIFIED AS DATETIME(6)) AS LAST_MODIFIED,
+    CAST(STAT.SAMPLE_SIZE AS DECIMAL(20, 0)) AS SAMPLE_SIZE,
+    CAST(STAT.AVG_LEN AS NUMBER) AS AVG_COL_LEN,
+    CAST((CASE WHEN STAT.HISTOGRAM_TYPE = 1 THEN 'FREQUENCY'
+          WHEN STAT.HISTOGRAM_TYPE = 3 THEN 'TOP-FREQUENCY'
+          WHEN STAT.HISTOGRAM_TYPE = 4 THEN 'HYBRID'
+          ELSE NULL END) AS CHAR(15)) AS HISTOGRAM
+    FROM
+        oceanbase.__all_catalog_column_stat STAT
+    JOIN
+        oceanbase.__all_catalog C
+        ON STAT.TENANT_ID = C.TENANT_ID
+        AND STAT.CATALOG_ID = C.CATALOG_ID
+        AND STAT.TENANT_ID = 0
+    WHERE
+        STAT.PARTITION_VALUE = ''
+""".replace("\n", " ")
+)
+
+def_table_schema(
+    owner = 'xutengting.xtt',
+    table_name     = 'DBA_OB_EXTERNAL_PART_COL_STATISTICS',
+    table_id       = '21727',
+    table_type = 'SYSTEM_VIEW',
+    rowkey_columns  = [],
+    normal_columns  = [],
+    gm_columns      = [],
+    in_tenant_space = True,
+    view_definition = """SELECT
+    CAST(C.CATALOG_NAME AS CHAR(128)) AS CATALOG_NAME,
+    CAST(STAT.DB_NAME AS CHAR(128)) AS DATABASE_NAME,
+    CAST(STAT.TABLE_NAME AS CHAR(128)) AS TABLE_NAME,
+    CAST(STAT.PARTITION_VALUE AS CHAR(3584)) AS PARTITION_NAME,
+    CAST(STAT.COLUMN_NAME AS CHAR(128)) AS COLUMN_NAME,
+    CAST(STAT.DISTINCT_CNT AS DECIMAL(20, 0)) AS NUM_DISTINCT,
+    CAST(STAT.MIN_VALUE AS CHAR(128)) AS LOW_VALUE,
+    CAST(STAT.MAX_VALUE AS CHAR(128)) AS HIGH_VALUE,
+    CAST(STAT.DENSITY AS DECIMAL(30, 10)) AS DENSITY,
+    CAST(STAT.NULL_CNT AS DECIMAL(20, 0)) AS NUM_NULLS,
+    CAST(STAT.BUCKET_CNT AS DECIMAL(20, 0)) AS NUM_BUCKETS,
+    CAST(STAT.LAST_ANALYZED AS DATETIME(6)) AS LAST_ANALYZED,
+    CAST(STAT.LAST_MODIFIED AS DATETIME(6)) AS LAST_MODIFIED,
+    CAST(STAT.SAMPLE_SIZE AS NUMBER) AS SAMPLE_SIZE,
+    CAST(STAT.AVG_LEN AS NUMBER) AS AVG_COL_LEN,
+    CAST((CASE WHEN STAT.HISTOGRAM_TYPE = 1 THEN 'FREQUENCY'
+          WHEN STAT.HISTOGRAM_TYPE = 3 THEN 'TOP-FREQUENCY'
+          WHEN STAT.HISTOGRAM_TYPE = 4 THEN 'HYBRID'
+          ELSE NULL END) AS CHAR(15)) AS HISTOGRAM
+    FROM
+        oceanbase.__all_catalog_column_stat STAT
+    JOIN
+        oceanbase.__all_catalog C
+        ON STAT.TENANT_ID = C.TENANT_ID
+        AND STAT.CATALOG_ID = C.CATALOG_ID
+        AND STAT.TENANT_ID = 0
+    WHERE
+        STAT.PARTITION_VALUE != ''
+""".replace("\n", " ")
+)
+
 # 21728: GV$OB_LS_LOG_REPLAY_STAT
 # 21729: V$OB_LS_LOG_REPLAY_STAT
 # 21730: GV$OB_LS_LOG_TRANSPORT_STAT

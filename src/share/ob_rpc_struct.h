@@ -1686,6 +1686,45 @@ public:
   DECLARE_VIRTUAL_TO_STRING;
 };
 
+struct ObUpdateCatalogStatCacheArg : public ObDDLArg
+{
+  OB_UNIS_VERSION_V(1);
+
+public:
+  ObUpdateCatalogStatCacheArg()
+      : tenant_id_(common::OB_INVALID_ID), catalog_id_(common::OB_INVALID_ID), db_name_(),
+        table_name_(), partition_values_(), column_names_()
+  {
+  }
+  virtual ~ObUpdateCatalogStatCacheArg()
+  {
+  }
+  void reset()
+  {
+    tenant_id_ = common::OB_INVALID_ID;
+    catalog_id_ = common::OB_INVALID_ID;
+    db_name_.reset();
+    table_name_.reset();
+    partition_values_.reset();
+    column_names_.reset();
+  }
+  bool is_valid() const;
+  int assign(const ObUpdateCatalogStatCacheArg &other);
+  virtual bool is_allow_when_upgrade() const
+  {
+    return true;
+  }
+
+  uint64_t tenant_id_;
+  uint64_t catalog_id_;
+  common::ObString db_name_;
+  common::ObString table_name_;
+  common::ObSArray<common::ObString> partition_values_;
+  common::ObSArray<common::ObString> column_names_;
+
+  DECLARE_VIRTUAL_TO_STRING;
+};
+
 struct ObDropLobArg: public ObDDLArg
 {
   OB_UNIS_VERSION(1);

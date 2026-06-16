@@ -3,14 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "share/stat/ob_opt_external_column_stat_cache.h"
+#define USING_LOG_PREFIX SQL_ENG
+#include "share/stat/catalog/ob_opt_catalog_column_stat_cache.h"
 
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 
-int ObOptExternalColumnStatCache::get_row(
-    const ObOptExternalColumnStat::Key &key,
-    ObOptExternalColumnStatHandle &handle) {
+int ObOptCatalogColumnStatCache::get_row(const ObOptCatalogColumnStat::Key &key,
+                                          ObOptCatalogColumnStatHandle &handle)
+{
   int ret = OB_SUCCESS;
 
   if (!key.is_valid()) {
@@ -28,9 +31,9 @@ int ObOptExternalColumnStatCache::get_row(
   return ret;
 }
 
-int ObOptExternalColumnStatCache::put_row(
-    const ObOptExternalColumnStat::Key &key,
-    const ObOptExternalColumnStat &value) {
+int ObOptCatalogColumnStatCache::put_row(const ObOptCatalogColumnStat::Key &key,
+                                          const ObOptCatalogColumnStat &value)
+{
   int ret = OB_SUCCESS;
   if (!key.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
@@ -41,16 +44,15 @@ int ObOptExternalColumnStatCache::put_row(
   return ret;
 }
 
-int ObOptExternalColumnStatCache::put_and_fetch_row(
-    const ObOptExternalColumnStat::Key &key,
-    const ObOptExternalColumnStat &value,
-    ObOptExternalColumnStatHandle &handle) {
+int ObOptCatalogColumnStatCache::put_and_fetch_row(const ObOptCatalogColumnStat::Key &key,
+                                                    const ObOptCatalogColumnStat &value,
+                                                    ObOptCatalogColumnStatHandle &handle)
+{
   int ret = OB_SUCCESS;
   if (!key.is_valid()) {
     ret = OB_INVALID_ARGUMENT;
     COMMON_LOG(WARN, "invalid external column stat cache key.", K(key), K(ret));
-  } else if (OB_FAIL(put_and_fetch(key, value, handle.stat_, handle.handle_,
-                                   true /*overwrite*/))) {
+  } else if (OB_FAIL(put_and_fetch(key, value, handle.stat_, handle.handle_, true /*overwrite*/))) {
     COMMON_LOG(WARN, "Fail to put kvpair to cache.", K(ret));
   }
   return ret;

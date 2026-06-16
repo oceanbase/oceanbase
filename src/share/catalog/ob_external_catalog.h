@@ -9,6 +9,7 @@
 #include "share/catalog/ob_catalog_properties.h"
 #include "share/catalog/ob_time_travel_info.h"
 #include "share/schema/ob_table_schema.h"
+#include "share/stat/catalog/ob_catalog_stat_define.h"
 
 #include <optional>
 #include <ThriftHiveMetastore.h>
@@ -25,8 +26,8 @@ namespace share
 using Partitions = std::vector<Apache::Hadoop::Hive::Partition>;
 
 class ObCatalogLocationSchemaProvider;
-class ObOptExternalTableStat;
-class ObOptExternalColumnStat;
+class ObOptCatalogTableStat;
+class ObOptCatalogColumnStat;
 
 class ObILakeTableMetadata
 {
@@ -103,19 +104,26 @@ public:
 
   // 如果 partition_values 为空，则代表获取所有分区列的统计信息
   // 如果 column_names 为空，则代表获取所有列的统计信息
-  // 如果 partition_values 为空，table_stat 返回的是整个表的统计信息。如果 partition_values 有值，则返回分区合并后的值
-  // column_stats 返回的是合并后的列统计信息。
+  // 如果 partition_values 为空，则对于分区表返回所有分区粒度统计；非分区表返回整表统计。
+  // 如果 partition_values 有值，则返回这些分区粒度的 table/column 统计信息。
   virtual int fetch_table_statistics(ObIAllocator &allocator,
                                      sql::ObSqlSchemaGuard &sql_schema_guard,
                                      const ObILakeTableMetadata *table_metadata,
                                      const ObIArray<ObString> &partition_values,
                                      const ObIArray<ObString> &column_names,
-                                     ObOptExternalTableStat *&external_table_stat,
-                                     ObIArray<ObOptExternalColumnStat *> &external_table_column_stats);
+                                     ObIArray<ObOptCatalogTableStat *> &catalog_table_stats,
+                                     ObIArray<ObOptCatalogColumnStat *> &catalog_table_column_stats);
 
   virtual int fetch_partitions(ObIAllocator &allocator,
                                const ObILakeTableMetadata *table_metadata,
-                               Partitions &partitions);
+                               const ObIArray<ObString> &part_col_names,
+                               ObIArray<common::ObCatalogExtPartitionInfo> &partition_infos)
+  {
+    UNUSED(table_metadata);
+    UNUSED(part_col_names);
+    UNUSED(partition_infos);
+    return OB_NOT_SUPPORTED;
+  }
 
   // if table not found, return OB_TABLE_NOT_EXIST
   virtual int fetch_latest_table_schema_version(const common::ObString &ns_name,
@@ -167,12 +175,19 @@ public:
                                      const ObILakeTableMetadata *table_metadata,
                                      const ObIArray<ObString> &partition_values,
                                      const ObIArray<ObString> &column_names,
-                                     ObOptExternalTableStat *&external_table_stat,
-                                     ObIArray<ObOptExternalColumnStat *> &external_table_column_stats) = 0;
+                                     common::ObIArray<share::ObOptCatalogTableStat *> &catalog_table_stats,
+                                     common::ObIArray<share::ObOptCatalogColumnStat *> &catalog_table_column_stats) = 0;
 
   virtual int fetch_partitions(ObIAllocator &allocator,
                                const ObILakeTableMetadata *table_metadata,
-                               Partitions &partitions) = 0;
+                               const ObIArray<ObString> &part_col_names,
+                               ObIArray<common::ObCatalogExtPartitionInfo> &partition_infos)
+  {
+    UNUSED(table_metadata);
+    UNUSED(part_col_names);
+    UNUSED(partition_infos);
+    return OB_NOT_SUPPORTED;
+  }
 
   virtual int get_cache_refresh_interval_sec(const ObILakeTableMetadata *table_metadata,
                                              int64_t &sec)

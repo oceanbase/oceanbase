@@ -19,6 +19,16 @@ using namespace sql;
 namespace  common
 {
 
+void ObLakeTableStat::reset()
+{
+  total_row_count_ = 0;
+  pruned_row_count_ = 0;
+  data_size_ = 0;
+  part_cnt_ = 0;
+  file_cnt_ = 0;
+  last_analyzed_ = 0;
+}
+
 void ObLakeColumnStat::reset()
 {
   min_val_.set_min_value();

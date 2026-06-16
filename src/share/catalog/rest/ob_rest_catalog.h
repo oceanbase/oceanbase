@@ -53,8 +53,8 @@ public:
                                      const ObILakeTableMetadata *table_metadata,
                                      const ObIArray<ObString> &partition_values,
                                      const ObIArray<ObString> &column_names,
-                                     ObOptExternalTableStat *&external_table_stat,
-                                     ObIArray<ObOptExternalColumnStat *> &external_table_column_stats) override;
+                                     ObIArray<ObOptCatalogTableStat *> &external_table_stats,
+                                     ObIArray<ObOptCatalogColumnStat *> &external_table_column_stats) override;
 private:
   virtual int do_init(const common::ObString &properties) override;
   int execute_warpper(ObRestHttpRequest &req, ObRestHttpResponse &rsp);

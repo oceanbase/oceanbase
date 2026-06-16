@@ -469,4 +469,93 @@ CREATE OR REPLACE PACKAGE BODY dbms_stats
 
     PROCEDURE async_gather_stats_job_proc (duration BIGINT DEFAULT NULL);
     PRAGMA INTERFACE(C, ASYNC_GATHER_STATS_JOB_PROC);
+
+    PROCEDURE gather_catalog_table_stats (
+      catname            VARCHAR(65535),
+      dbname             VARCHAR(65535),
+      tabname            VARCHAR(65535),
+      partname           VARCHAR(65535) DEFAULT NULL,
+      estimate_percent   DECIMAL(30, 10) DEFAULT AUTO_SAMPLE_SIZE,
+      sample_type        VARCHAR(65535) DEFAULT NULL,
+      method_opt         VARCHAR(65535) DEFAULT DEFAULT_METHOD_OPT,
+      degree             DECIMAL(30, 10) DEFAULT NULL,
+      granularity        VARCHAR(65535) DEFAULT DEFAULT_GRANULARITY,
+      force              BOOLEAN DEFAULT FALSE
+    );
+    PRAGMA INTERFACE(C, GATHER_CATALOG_TABLE_STATS);
+
+    PROCEDURE lock_catalog_table_stat (
+      catname            VARCHAR(65535),
+      dbname             VARCHAR(65535),
+      tabname            VARCHAR(65535),
+      partname           VARCHAR(65535) DEFAULT NULL,
+      stattype           VARCHAR(65535) DEFAULT 'ALL'
+    );
+    PRAGMA INTERFACE(C, LOCK_CATALOG_TABLE_STAT);
+
+    PROCEDURE unlock_catalog_table_stat (
+      catname            VARCHAR(65535),
+      dbname             VARCHAR(65535),
+      tabname            VARCHAR(65535),
+      partname           VARCHAR(65535) DEFAULT NULL,
+      stattype           VARCHAR(65535) DEFAULT 'ALL'
+    );
+    PRAGMA INTERFACE(C, UNLOCK_CATALOG_TABLE_STAT);
+
+    PROCEDURE lock_catalog_partition_stat (
+      catname            VARCHAR(65535),
+      dbname             VARCHAR(65535),
+      tabname            VARCHAR(65535),
+      partname           VARCHAR(65535)
+    );
+    PRAGMA INTERFACE(C, LOCK_CATALOG_PARTITION_STAT);
+
+    PROCEDURE unlock_catalog_partition_stat (
+      catname            VARCHAR(65535),
+      dbname             VARCHAR(65535),
+      tabname            VARCHAR(65535),
+      partname           VARCHAR(65535)
+    );
+    PRAGMA INTERFACE(C, UNLOCK_CATALOG_PARTITION_STAT);
+
+    PROCEDURE set_catalog_table_prefs(
+      catname        VARCHAR(65535),
+      dbname         VARCHAR(65535),
+      tabname        VARCHAR(65535),
+      pname          VARCHAR(65535),
+      pvalue         VARCHAR(65535)
+    );
+    PRAGMA INTERFACE(C, SET_CATALOG_TABLE_PREFS);
+
+    FUNCTION get_catalog_prefs (
+      pname           VARCHAR(65535),
+      catname         VARCHAR(65535),
+      dbname          VARCHAR(65535),
+      tabname         VARCHAR(65535)
+    ) RETURN VARCHAR(65535);
+    PRAGMA INTERFACE(C, GET_CATALOG_PREFS);
+
+    PROCEDURE delete_catalog_table_prefs (
+      catname        VARCHAR(65535),
+      dbname         VARCHAR(65535),
+      tabname        VARCHAR(65535),
+      pname          VARCHAR(65535)
+    );
+    PRAGMA INTERFACE(C, DELETE_CATALOG_TABLE_PREFS);
+
+    PROCEDURE set_catalog_global_prefs(
+      pname          VARCHAR(65535),
+      pvalue         VARCHAR(65535)
+    );
+    PRAGMA INTERFACE(C, SET_CATALOG_GLOBAL_PREFS);
+
+    FUNCTION get_catalog_global_prefs (
+      pname          VARCHAR(65535)
+    ) RETURN VARCHAR(65535);
+    PRAGMA INTERFACE(C, GET_CATALOG_GLOBAL_PREFS);
+
+    PROCEDURE delete_catalog_global_prefs (
+      pname          VARCHAR(65535)
+    );
+    PRAGMA INTERFACE(C, DELETE_CATALOG_GLOBAL_PREFS);
 END dbms_stats;

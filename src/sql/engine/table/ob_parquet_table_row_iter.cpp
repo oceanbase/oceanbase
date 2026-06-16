@@ -17,6 +17,8 @@
 #include "storage/blocksstable/encoding/ob_encoding_util.h"
 #include "storage/direct_load/ob_direct_load_vector_utils.h"
 #include "common/ob_target_specific.h"
+#include "lib/hash_func/murmur_hash.h"
+#include "lib/hash_func/splitmix64.h"
 
 #include <parquet/api/reader.h>
 
@@ -30,6 +32,8 @@ using namespace share::schema;
 using namespace common;
 using namespace share;
 namespace sql {
+
+static const int64_t OB_PARQUET_BLK_2M_BYTES = 2LL * 1024 * 1024;
 
 bool mem_zero_detect(void *buf, size_t n)
 {
@@ -270,6 +274,16 @@ int ObParquetTableRowIterator::init(const storage::ObTableScanParam *scan_param)
     }
   }
 
+  if (OB_FAIL(ret)) {
+  } else if (!scan_param_->sample_info_.is_no_sample()) {
+    if (!scan_param_->sample_info_.is_block_sample()
+        && !scan_param_->sample_info_.is_row_sample()) {
+      ret = OB_NOT_SUPPORTED;
+      LOG_WARN("parquet external table only supports block/file sample",
+               K(ret), K(scan_param_->sample_info_));
+    }
+  }
+
   return ret;
 }
 
@@ -446,6 +460,8 @@ int ObParquetTableRowIterator::next_file()
     status = arrow::Status::OK();
     if ((task_idx = state_.file_idx_++) >= scan_param_->scan_tasks_.count()) {
       ret = OB_ITER_END;
+    }
+    if (OB_FAIL(ret)) {
     } else {
       state_.is_delete_file_loaded_ = false;
       state_.cur_row_group_begin_row_id_ = 0;
@@ -651,6 +667,12 @@ int ObParquetTableRowIterator::next_file()
     if (OB_SUCC(ret) && OB_FAIL(prepare_filter_col_meta(column_indexs_, column_ids, column_metas))) {
       LOG_WARN("fail to prepare filter col meta",
               K(ret), K(column_indexs_.count()), K(column_metas.count()));
+    }
+  }
+  if (OB_SUCC(ret)) {
+    const int64_t quota_start = ObTimeUtility::current_time();
+    if (OB_FAIL(prepare_fast_sample_quota())) {
+      LOG_WARN("failed to prepare fast sample quota", K(ret));
     }
   }
   return ret;
@@ -2551,6 +2573,7 @@ int ObParquetTableRowIterator::DataLoader::set_data_attr_vector_payload_for_varc
   uint32_t *offsets, const ObLength &max_accuracy_len)
 {
   int ret = OB_SUCCESS;
+  static const char EMPTY_STR_PTR = '\0';
   int64_t offset_idx = 0;
   ObExpr **attrs = file_col_expr_->attrs_;
   int64_t max_rep_level = reader_->descr()->max_repetition_level();
@@ -2595,11 +2618,17 @@ int ObParquetTableRowIterator::DataLoader::set_data_attr_vector_payload_for_varc
           }
         }
         if (OB_FAIL(ret)) {
-        } else if (row_str_length > 0 && OB_ISNULL(res_ptr = str_res_mem_.alloc(row_str_length))) {
-          ret = OB_ALLOCATE_MEMORY_FAILED;
-          LOG_WARN("fail to allocate memory", K(row_str_length));
+        } else if (row_str_length > 0) {
+          if (OB_ISNULL(res_ptr = str_res_mem_.alloc(row_str_length))) {
+            ret = OB_ALLOCATE_MEMORY_FAILED;
+            LOG_WARN("fail to allocate memory", K(row_str_length));
+          } else {
+            MEMCPY(res_ptr, values + cur_offset, row_str_length);
+          }
         } else {
-          MEMCPY(res_ptr, values + cur_offset, row_str_length);
+          res_ptr = const_cast<char *>(&EMPTY_STR_PTR);
+        }
+        if (OB_SUCC(ret)) {
           vec0->set_string(idx, reinterpret_cast<char *>(&nulls[start]), sizeof(uint8_t) * count);
           vec1->set_string(idx, reinterpret_cast<char *>(&offsets[start]), sizeof(uint32_t) * count);
           vec2->set_string(idx, pointer_cast<const char *>(res_ptr), row_str_length);
@@ -3049,6 +3078,7 @@ void ObParquetTableRowIterator::reset() {
   }
   filter_eval_inited_ = false;
   parquet_page_mgr_.reset();
+  sample_cumulative_block_offset_ = 0;
 }
 
 int ObParquetTableRowIterator::read_min_max_datum(const std::string &min_val, const std::string &max_val,
@@ -4561,9 +4591,7 @@ int ObParquetTableRowIterator::prepare_all_column_page_locations(
   return ret;
 }
 
-int ObParquetTableRowIterator::prepare_page_ranges(
-    std::shared_ptr<parquet::RowGroupReader> rg_reader,
-    const int64_t num_rows)
+int ObParquetTableRowIterator::alloc_page_range_arrays()
 {
   int ret = OB_SUCCESS;
   if (page_skip_ranges_.empty()) {
@@ -4594,7 +4622,6 @@ int ObParquetTableRowIterator::prepare_page_ranges(
       }
     }
   }
-
   if (all_column_page_locations_.empty()) {
     OZ(all_column_page_locations_.prepare_allocate(file_column_exprs_.count()));
     for (int64_t i = 0; OB_SUCC(ret) && i < all_column_page_locations_.count(); ++i) {
@@ -4609,7 +4636,15 @@ int ObParquetTableRowIterator::prepare_page_ranges(
       }
     }
   }
+  return ret;
+}
 
+int ObParquetTableRowIterator::prepare_page_ranges(
+    std::shared_ptr<parquet::RowGroupReader> rg_reader,
+    const int64_t num_rows)
+{
+  int ret = OB_SUCCESS;
+  OZ(alloc_page_range_arrays());
   if (OB_SUCC(ret)) {
     if (nullptr == rg_page_index_reader_) {
     } else {
@@ -4977,15 +5012,33 @@ int ObParquetTableRowIterator::prepare_page_index(const int64_t cur_row_group,
     LOG_WARN("unexpected index", K(ret), K(cur_row_group));
   }
   if (OB_SUCC(ret)) {
-    ObEvalCtx::TempAllocGuard tmp_alloc_g(scan_param_->op_->get_eval_ctx());
-    ParquetPageMinMaxFilterParamBuilder page_builder(this, rg_reader, file_meta_,
-                                                     page_index_reader_, rg_page_index_reader_,
-                                                     tmp_alloc_g.get_allocator());
-    if (OB_FAIL(ObExternalTablePushdownFilter::apply_skipping_index_filter(PushdownLevel::PAGE, page_builder, rg_bitmap_,
-        rg_reader->metadata()->num_rows(), tmp_alloc_g.get_allocator()))) {
-      LOG_WARN("failed to apply skip index", K(ret));
-    } else if (OB_FAIL(prepare_page_ranges(rg_reader, file_meta_->RowGroup(cur_row_group)->num_rows()))) {
-      LOG_WARN("failed to prepare ranges", K(ret));
+    const bool is_block_sample = scan_param_->sample_info_.is_block_sample();
+    const int64_t rg_num_rows = file_meta_->RowGroup(cur_row_group)->num_rows();
+    int64_t sample_sel_rows = 0;
+    if (is_block_sample) {
+      if (OB_FAIL(alloc_page_range_arrays())) {
+        LOG_WARN("failed to prepare base ranges", K(ret));
+      } else if (OB_NOT_NULL(rg_page_index_reader_)
+                 && OB_FAIL(prepare_all_column_page_locations(rg_num_rows,
+                                                              rg_page_index_reader_))) {
+        LOG_WARN("failed to prepare all column page locations for block sample",
+                 K(ret), K(cur_row_group));
+      } else if (OB_FAIL(filter_block_sample_pages(cur_row_group, rg_reader, sample_sel_rows))) {
+        LOG_WARN("failed to filter block sample pages", K(ret));
+      }
+    } else {
+      ObEvalCtx::TempAllocGuard tmp_alloc_g(scan_param_->op_->get_eval_ctx());
+      ParquetPageMinMaxFilterParamBuilder page_builder(this, rg_reader, file_meta_,
+                                                       page_index_reader_, rg_page_index_reader_,
+                                                       tmp_alloc_g.get_allocator());
+      if (OB_FAIL(ObExternalTablePushdownFilter::apply_skipping_index_filter(PushdownLevel::PAGE, page_builder, rg_bitmap_,
+          rg_reader->metadata()->num_rows(), tmp_alloc_g.get_allocator()))) {
+        LOG_WARN("failed to apply skip index", K(ret));
+      } else if (OB_FAIL(prepare_page_ranges(rg_reader, file_meta_->RowGroup(cur_row_group)->num_rows()))) {
+        LOG_WARN("failed to prepare ranges", K(ret));
+      }
+    }
+    if (OB_FAIL(ret)) {
     } else {
       try {
         if (state_.read_row_counts_.count() > 0) {
@@ -4996,7 +5049,7 @@ int ObParquetTableRowIterator::prepare_page_index(const int64_t cur_row_group,
           memset(pointer_cast<char *> (&state_.eager_read_row_counts_.at(0)), 0,
                                        sizeof(int64_t) * state_.eager_read_row_counts_.count());
         }
-        state_.cur_row_group_row_count_ = file_meta_->RowGroup(cur_row_group)->num_rows();
+        state_.cur_row_group_row_count_ = is_block_sample ? sample_sel_rows : rg_num_rows;
         state_.logical_read_row_count_ = 0;
         //LOG_INFO("got rg", K(state_.cur_row_group_idx_), K(state_.cur_row_group_row_count_));
         int64_t eager_column_cnt = 0;
@@ -5281,6 +5334,19 @@ int ObParquetTableRowIterator::advance_next_batch(const int64_t capacity,
         read_count
             = std::min(capacity, state_.cur_row_group_row_count_ - state_.logical_read_row_count_);
         state_.logical_read_row_count_ += read_count;
+      } else if (scan_param_->sample_info_.is_block_sample()) {
+        // block sample: single-column projection path
+        if (state_.cur_row_group_row_count_ > 0) {
+          if (OB_FAIL(project_single_column_block_sample(read_count, capacity))) {
+            LOG_WARN("failed to project single column block sample", K(ret));
+          } else if (0 == read_count
+                     && (state_.logical_read_row_count_ >= state_.cur_row_group_row_count_
+                         || column_readers_.count() == 0
+                         || OB_ISNULL(column_readers_.at(0).get())
+                         || !column_readers_.at(0)->HasNext())) {
+            state_.logical_read_row_count_ = state_.cur_row_group_row_count_;
+          }
+        }
       } else {
         int64_t group_remain = state_.cur_row_group_row_count_ - state_.logical_read_row_count_;
         if (group_remain > 0) {
@@ -5385,6 +5451,505 @@ int ObParquetTableRowIterator::read_batch(const int64_t actual_capacity,
       LOG_WARN("failed to project lazy columns", K(ret));
     } else if (0 == read_count) {
       scan_param_->op_->clear_evaluated_flag();
+    }
+  }
+  return ret;
+}
+
+int ObParquetTableRowIterator::resolve_sample_source_pages(
+    const int64_t cur_row_group,
+    std::shared_ptr<parquet::RowGroupReader> rg_reader,
+    ObSEArray<ObParquetPageLocation, 64> &fallback_locs,
+    const ObIArray<ObParquetPageLocation> *&out_pages,
+    int64_t &out_sample_col_idx,
+    bool &out_need_page_filter)
+{
+  int ret = OB_SUCCESS;
+  out_pages = nullptr;
+  out_sample_col_idx = -1;
+
+  const bool has_selected_slot = page_selected_read_ranges_.count() > 0
+                                 && OB_NOT_NULL(page_selected_read_ranges_.at(0));
+  const bool has_skip_slot = page_skip_ranges_.count() > 0
+                             && OB_NOT_NULL(page_skip_ranges_.at(0));
+  const bool has_page_loc_slot = all_column_page_locations_.count() > 0
+                                 && OB_NOT_NULL(all_column_page_locations_.at(0));
+  out_need_page_filter = has_selected_slot && has_skip_slot && has_page_loc_slot;
+
+  if (out_need_page_filter) {
+    out_pages = all_column_page_locations_.at(0);
+    if (column_indexs_.count() > 0) {
+      out_sample_col_idx = column_indexs_.at(0);
+    }
+  } else if (file_column_exprs_.count() == 0) {
+    if (nullptr == rg_page_index_reader_) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("rg page index reader is null for block sample", K(ret), K(cur_row_group));
+    } else if (OB_ISNULL(file_meta_)) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("file meta is null for block sample", K(ret), K(cur_row_group));
+    } else {
+      const int64_t rg_num_rows = rg_reader->metadata()->num_rows();
+      const int64_t col_cnt = file_meta_->schema()->num_columns();
+      for (int64_t col_idx = 0;
+           OB_SUCC(ret) && fallback_locs.empty() && col_idx < col_cnt;
+           ++col_idx) {
+        std::shared_ptr<parquet::OffsetIndex> offset_index =
+            rg_page_index_reader_->GetOffsetIndex(col_idx);
+        if (OB_ISNULL(offset_index)) {
+        } else {
+          const std::vector<parquet::PageLocation> &page_locs = offset_index->page_locations();
+          if (!page_locs.empty()) {
+            out_sample_col_idx = col_idx;
+            for (int64_t j = 0; OB_SUCC(ret) && j < static_cast<int64_t>(page_locs.size()); ++j) {
+              ObParquetPageLocation loc;
+              loc.offset_ = page_locs[j].offset;
+              loc.compressed_page_size_ = page_locs[j].compressed_page_size;
+              loc.first_row_index_ = page_locs[j].first_row_index;
+              if (j == static_cast<int64_t>(page_locs.size()) - 1) {
+                loc.num_rows_ = rg_num_rows - page_locs[j].first_row_index;
+              } else {
+                loc.num_rows_ = page_locs[j + 1].first_row_index - page_locs[j].first_row_index;
+              }
+              OZ(fallback_locs.push_back(loc));
+            }
+          }
+        }
+      }
+      if (OB_SUCC(ret) && fallback_locs.empty()) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("no page locations for block sample", K(ret), K(cur_row_group), K(col_cnt));
+      } else if (OB_SUCC(ret)) {
+        out_pages = &fallback_locs;
+      }
+    }
+  } else {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("page locations not available for block sample",
+             K(ret), K(cur_row_group),
+             K(file_column_exprs_.count()),
+             K(column_indexs_.count()));
+  }
+  return ret;
+}
+
+int ObParquetTableRowIterator::pick_sample_blocks(
+    const int64_t n_pages,
+    const ObIArray<ObParquetPageLocation> &pages,
+    const int64_t cumulative_block_offset,
+    const int64_t part_id,
+    const int64_t file_id,
+    const uint64_t actual_seed,
+    const uint64_t cut_off,
+    ObArray<int8_t> &block_pick,
+    ObArray<int64_t> &page_block_id,
+    int64_t &num_blocks,
+    int64_t &out_tail_compressed_bytes)
+{
+  int ret = OB_SUCCESS;
+  num_blocks = 0;
+  out_tail_compressed_bytes = 0;
+  if (OB_UNLIKELY(n_pages <= 0)) {
+    // do nothing
+  } else {
+    page_block_id.set_block_allocator(ModulePageAllocator(allocator_));
+    OZ(page_block_id.prepare_allocate(n_pages));
+    if (OB_SUCC(ret)) {
+      memset(&page_block_id.at(0), 0, sizeof(int64_t) * n_pages);
+      int64_t bid = 0;
+      int64_t acc = 0;
+      for (int64_t pi = 0; pi < n_pages; ++pi) {
+        const int64_t page_sz = static_cast<int64_t>(pages.at(pi).compressed_page_size_);
+        if (acc > 0 && acc + page_sz > OB_PARQUET_BLK_2M_BYTES) {
+          ++bid;
+          acc = 0;
+        }
+        page_block_id.at(pi) = bid;
+        acc += page_sz;
+        if (acc >= OB_PARQUET_BLK_2M_BYTES) {
+          ++bid;
+          acc = 0;
+        }
+      }
+      out_tail_compressed_bytes = acc;
+      num_blocks = (0 == acc) ? bid : bid + 1;
+    }
+
+    if (OB_SUCC(ret) && num_blocks > 0) {
+      block_pick.set_block_allocator(ModulePageAllocator(allocator_));
+      OZ(block_pick.prepare_allocate(num_blocks));
+      if (OB_SUCC(ret)) {
+        memset(&block_pick.at(0), 0, sizeof(int8_t) * num_blocks);
+      }
+    }
+
+    if (OB_SUCC(ret)) {
+      // Use murmurhash chained calls to fold (part_id, file_id) into a random base,
+      // so each (partition, file) combination gets a different starting point.
+      uint64_t base = murmurhash(&part_id, sizeof(part_id), actual_seed);
+      base = murmurhash(&file_id, sizeof(file_id), base);
+      for (int64_t bi = 0; bi < num_blocks; ++bi) {
+        const int64_t block_id = cumulative_block_offset + bi;
+        uint64_t h = splitmix64(base + static_cast<uint64_t>(block_id));
+        if (h <= cut_off) {
+          block_pick.at(bi) = 1;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
+int ObParquetTableRowIterator::classify_sample_pages(
+    const ObIArray<ObParquetPageLocation> &pages,
+    const bool need_page_filter,
+    const int64_t fast_take,
+    const ObArray<int8_t> &block_pick,
+    const ObArray<int64_t> &page_block_id,
+    int64_t &sel_rows)
+{
+  int ret = OB_SUCCESS;
+  const int64_t n_pages = pages.count();
+  const bool is_fast = block_pick.empty() && page_block_id.empty();
+
+  for (int64_t pi = 0; OB_SUCC(ret) && pi < n_pages; ++pi) {
+    const ObParquetPageLocation &p = pages.at(pi);
+    const bool picked = is_fast ? (pi < fast_take)
+                                : (0 != block_pick.at(page_block_id.at(pi)));
+    if (picked) {
+      if (need_page_filter) {
+        OZ(page_selected_read_ranges_.at(0)->push_back(
+            std::pair<int64_t, int64_t>(p.offset_,
+                                         static_cast<int64_t>(p.compressed_page_size_))));
+      }
+      sel_rows += p.num_rows_;
+    } else if (need_page_filter) {
+      OZ(page_skip_ranges_.at(0)->push_back(
+          std::pair<int64_t, int64_t>(p.first_row_index_,
+                                       p.first_row_index_ + p.num_rows_)));
+    }
+  }
+  return ret;
+}
+
+int ObParquetTableRowIterator::prepend_sample_dict_range(
+    std::shared_ptr<parquet::RowGroupReader> rg_reader,
+    const int64_t file_col_idx,
+    const int64_t slot)
+{
+  int ret = OB_SUCCESS;
+  try {
+    std::unique_ptr<parquet::ColumnChunkMetaData> col_meta =
+        rg_reader->metadata()->ColumnChunk(file_col_idx);
+    if (col_meta->has_dictionary_page() && col_meta->dictionary_page_offset() > 0
+        && col_meta->data_page_offset() > col_meta->dictionary_page_offset()) {
+      const int64_t dict_off = col_meta->dictionary_page_offset();
+      const int64_t meta_data_page_off = col_meta->data_page_offset();
+      // Use OffsetIndex offset to avoid gap between dict-page and first data-page.
+      int64_t first_data_page_off = meta_data_page_off;
+      if (slot < all_column_page_locations_.count()
+          && OB_NOT_NULL(all_column_page_locations_.at(slot))
+          && !all_column_page_locations_.at(slot)->empty()) {
+        first_data_page_off = all_column_page_locations_.at(slot)->at(0).offset_;
+      }
+      const int64_t dict_sz = first_data_page_off - dict_off;
+      if (dict_sz > 0) {
+        bool already_covered = false;
+        if (!page_selected_read_ranges_.at(slot)->empty()) {
+          already_covered = (page_selected_read_ranges_.at(slot)->at(0).first <= dict_off);
+        }
+        if (!already_covered) {
+          OZ(page_selected_read_ranges_.at(slot)->push_back(
+              std::pair<int64_t, int64_t>(dict_off, dict_sz)));
+          if (OB_SUCC(ret) && page_selected_read_ranges_.at(slot)->count() > 1) {
+            ObArray<std::pair<int64_t, int64_t>> &arr = *page_selected_read_ranges_.at(slot);
+            const int64_t last = arr.count() - 1;
+            std::pair<int64_t, int64_t> tmp = arr.at(last);
+            for (int64_t k = last; k > 0; --k) {
+              arr.at(k) = arr.at(k - 1);
+            }
+            arr.at(0) = tmp;
+          }
+        }
+      }
+    }
+  } catch (const std::exception &e) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected exception reading dict page meta",
+             K(ret), K(file_col_idx), K(slot), "Info", e.what());
+  } catch (...) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("unexpected exception reading dict page meta", K(ret), K(file_col_idx), K(slot));
+  }
+  return ret;
+}
+
+int ObParquetTableRowIterator::prepare_fast_sample_quota()
+{
+  int ret = OB_SUCCESS;
+  fast_target_pages_ = 0;
+  fast_taken_pages_ = 0;
+  fast_sample_active_ = false;
+  if (!is_fast_sample()) {
+    // not FAST sample, leave everything zero
+  } else if (OB_ISNULL(file_meta_.get())) {
+    // file meta not ready (e.g. count-only scan), nothing to do
+  } else if (OB_ISNULL(page_index_reader_.get())) {
+    // No PageIndex: do not sample this file at all. fast_target_pages_=0 makes
+    // next_row_group() skip every RG in this file via the quota check.
+  } else if (OB_UNLIKELY(column_indexs_.count() == 0)) {
+    // no sampling column resolved, treat as no-PageIndex case
+  } else {
+    const int sample_col_idx = column_indexs_.at(0);
+    if (OB_UNLIKELY(sample_col_idx < 0)) {
+      // sampling column not in file, skip whole file
+    } else {
+      const double sample_rate
+          = static_cast<double>(scan_param_->sample_info_.percent_) / 100.0;
+      const int64_t num_rgs = file_meta_->num_row_groups();
+      int64_t total_pages = 0;
+      try {
+        for (int64_t i = 0; OB_SUCC(ret) && i < num_rgs; ++i) {
+          std::shared_ptr<parquet::RowGroupPageIndexReader> rg_pi
+              = page_index_reader_->RowGroup(i);
+          if (nullptr == rg_pi) {
+            // any RG missing OffsetIndex degrades to "skip whole file".
+            total_pages = 0;
+            fast_sample_active_ = false;
+            break;
+          }
+          std::shared_ptr<parquet::OffsetIndex> off_idx
+              = rg_pi->GetOffsetIndex(sample_col_idx);
+          if (nullptr == off_idx) {
+            total_pages = 0;
+            fast_sample_active_ = false;
+            break;
+          }
+          total_pages += static_cast<int64_t>(off_idx->page_locations().size());
+          fast_sample_active_ = true;
+        }
+      } catch (const std::exception &e) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected exception in fast sample quota", K(ret), "Info", e.what());
+      } catch (...) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("unexpected exception in fast sample quota", K(ret));
+      }
+      if (OB_SUCC(ret) && fast_sample_active_) {
+        fast_target_pages_ = static_cast<int64_t>(
+            std::floor(static_cast<double>(total_pages) * sample_rate));
+        if (fast_target_pages_ < 0) {
+          fast_target_pages_ = 0;
+        }
+        LOG_INFO("[FILE SAMPLE] parquet fast sample quota ready",
+                  K_(fast_sample_active), K(total_pages),
+                  K_(fast_target_pages), K(sample_rate), K(num_rgs));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObParquetTableRowIterator::filter_block_sample_pages(
+    const int64_t cur_row_group,
+    std::shared_ptr<parquet::RowGroupReader> rg_reader,
+    int64_t &sel_rows)
+{
+  int ret = OB_SUCCESS;
+  sel_rows = 0;
+  // Defensive: block sample is single-column only. The resolver is expected to
+  // produce exactly one file column expression. Bail out loudly if violated so
+  // we never silently corrupt slot[0] state for multi-column scans.
+  if (OB_UNLIKELY(file_column_exprs_.count() != 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("block sample expects single-column scan",
+             K(ret), K(file_column_exprs_.count()), K(cur_row_group));
+  }
+  const SampleInfo &si = scan_param_->sample_info_;
+  const double sample_rate = static_cast<double>(si.percent_) / 100.0;
+  const int64_t seed = static_cast<int64_t>(si.seed_);
+
+  if (OB_SUCC(ret) && seed < -1) {
+    ret = OB_NOT_SUPPORTED;
+    LOG_WARN("invalid block sample seed", K(ret), K(seed));
+  }
+
+  bool need_page_filter = false;
+  int64_t sample_col_idx = -1;
+  ObSEArray<ObParquetPageLocation, 64> fallback_locs;
+  const ObIArray<ObParquetPageLocation> *all_pages = nullptr;
+  OZ(resolve_sample_source_pages(cur_row_group, rg_reader,
+                                 fallback_locs, all_pages,
+                                 sample_col_idx, need_page_filter));
+
+  if (OB_SUCC(ret) && need_page_filter) {
+    page_selected_read_ranges_.at(0)->reset();
+    page_skip_ranges_.at(0)->reset();
+  }
+
+  if (OB_SUCC(ret) && OB_NOT_NULL(all_pages)) {
+    const int64_t n_pages = all_pages->count();
+    if (n_pages <= 0 || sample_rate <= 0.0) {
+      // nothing to do
+    } else if (sample_rate >= 1.0) {
+      for (int64_t pi = 0; OB_SUCC(ret) && pi < n_pages; ++pi) {
+        const ObParquetPageLocation &p = all_pages->at(pi);
+        if (need_page_filter) {
+          OZ(page_selected_read_ranges_.at(0)->push_back(
+              std::pair<int64_t, int64_t>(p.offset_,
+                                           static_cast<int64_t>(p.compressed_page_size_))));
+        }
+        sel_rows += p.num_rows_;
+      }
+    } else if (-1 == seed) {
+      // FAST sample: take pages from the per-file quota set up by
+      // prepare_fast_sample_quota(). When the file has no PageIndex
+      // (fast_sample_active_ == false) we fall back to dropping the file by
+      // treating the remaining quota as zero, so no row group is sampled.
+      int64_t take = 0;
+      if (fast_sample_active_) {
+        const int64_t remain = fast_target_pages_ - fast_taken_pages_;
+        take = std::min(remain, n_pages);
+        if (take < 0) {
+          take = 0;
+        }
+        fast_taken_pages_ += take;
+      }
+      LOG_INFO("[FILE SAMPLE] parquet fast sample page selection",
+                K(cur_row_group), K(n_pages), K(take),
+                K_(fast_sample_active), K_(fast_taken_pages), K_(fast_target_pages));
+      ObArray<int8_t> empty_pick;
+      ObArray<int64_t> empty_block_id;
+      OZ(classify_sample_pages(*all_pages, need_page_filter, take,
+                               empty_pick, empty_block_id, sel_rows));
+    } else {
+      const double cut_off_d = sample_rate * static_cast<double>(UINT64_MAX);
+      const uint64_t cut_off = (cut_off_d >= static_cast<double>(UINT64_MAX))
+                                   ? UINT64_MAX
+                                   : std::max(static_cast<uint64_t>(cut_off_d),
+                                              static_cast<uint64_t>(1));
+      if (!sample_seed_inited_) {
+        sample_actual_seed_ = (0 == seed)
+                                  ? static_cast<uint64_t>(ObTimeUtility::current_time())
+                                  : static_cast<uint64_t>(seed);
+        sample_seed_inited_ = true;
+      }
+      const uint64_t actual_seed = sample_actual_seed_;
+
+      ObArray<int8_t> block_pick;
+      ObArray<int64_t> page_block_id;
+      int64_t num_blocks = 0;
+      int64_t tail_compressed_bytes = 0;
+      OZ(pick_sample_blocks(n_pages, *all_pages, sample_cumulative_block_offset_,
+                            state_.part_id_, state_.cur_file_id_,
+                            actual_seed, cut_off,
+                            block_pick, page_block_id, num_blocks, tail_compressed_bytes));
+      UNUSED(tail_compressed_bytes);
+      if (OB_SUCC(ret)) {
+        OZ(classify_sample_pages(*all_pages, need_page_filter,
+                                 0, block_pick, page_block_id, sel_rows));
+      }
+      if (OB_SUCC(ret)) {
+        sample_cumulative_block_offset_ += num_blocks;
+      }
+    }
+  }
+
+  if (OB_SUCC(ret) && need_page_filter && sel_rows > 0 && sample_col_idx >= 0) {
+    OZ(prepend_sample_dict_range(rg_reader, sample_col_idx, 0));
+  }
+
+  return ret;
+}
+
+int ObParquetTableRowIterator::project_single_column_block_sample(int64_t &read_count,
+                                                                  const int64_t capacity)
+{
+  int ret = OB_SUCCESS;
+  ObEvalCtx &eval_ctx = scan_param_->op_->get_eval_ctx();
+  read_count = 0;
+  str_res_mem_.reuse();
+  // Defensive: block sample is single-column only and cur_col_id_ is hard-coded
+  // to 0 here. Bail out loudly if scan plan deviates from this assumption.
+  if (OB_UNLIKELY(column_indexs_.count() != 1) || OB_UNLIKELY(column_readers_.count() < 1)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("block sample expects single-column scan",
+             K(ret), K(column_indexs_.count()), K(column_readers_.count()));
+  } else if (column_indexs_.at(0) < 0 || OB_ISNULL(column_readers_.at(0).get())) {
+    read_count = std::min(capacity, state_.cur_row_group_row_count_);
+    state_.logical_read_row_count_ += read_count;
+  } else {
+    try {
+      cur_col_id_ = 0;
+      ObExpr *column_expr = get_column_expr_by_id(cur_col_id_);
+      OZ(column_expr->init_vector_for_write(eval_ctx, column_expr->get_default_res_format(),
+                                            eval_ctx.max_batch_size_));
+      ObColumnDefaultValue default_value =
+          is_lake_table() ? colid_default_value_arr_.at(cur_col_id_) : ObColumnDefaultValue();
+      ObCollectionArrayType *arr_type = NULL;
+      if (ob_is_collection_sql_type(column_expr->datum_meta_.type_)) {
+        OZ(ObArrayExprUtils::get_array_type_by_subschema_id(
+            eval_ctx, column_expr->datum_meta_.get_subschema_id(), arr_type));
+      }
+      int64_t load_row_count = 0;
+      bool first_batch = true;
+      while (OB_SUCC(ret) && load_row_count < capacity
+             && (state_.logical_read_row_count_ + load_row_count) < state_.cur_row_group_row_count_
+             && column_readers_.at(0)->HasNext()) {
+        int64_t temp_row_count = 0;
+        const int64_t remaining_in_rg = state_.cur_row_group_row_count_
+                                        - state_.logical_read_row_count_ - load_row_count;
+        const int64_t requested_batch_size = std::min(capacity - load_row_count, remaining_in_rg);
+        DataLoader loader(
+            eval_ctx,
+            column_expr,
+            arr_type,
+            column_readers_.at(0).get(),
+            record_readers_.at(0).get(),
+            coll_record_readers_.at(0),
+            def_levels_buf_,
+            rep_levels_buf_,
+            str_res_mem_,
+            data_loader_buffers_,
+            requested_batch_size,
+            load_row_count,
+            temp_row_count,
+            state_.cur_row_group_row_count_,
+            default_value,
+            state_.read_row_counts_[cur_col_id_],
+            // block sample assembles one output batch from multiple ReadBatch calls,
+            // page buffers may be released in between; always deep copy string values.
+            true /*cross_page*/,
+            stat_,
+            cur_col_id_,
+            first_batch,
+            dict_filter_pushdown_,
+            is_eager_calc(),
+            is_hive_lake_table());
+        MEMSET(def_levels_buf_.get_data(), 0,
+               sizeof(def_levels_buf_.at(0)) * eval_ctx.max_batch_size_);
+        MEMSET(rep_levels_buf_.get_data(), 0,
+               sizeof(rep_levels_buf_.at(0)) * eval_ctx.max_batch_size_);
+        OZ(loader.load_data_for_col(load_funcs_.at(cur_col_id_)));
+        load_row_count += temp_row_count;
+        first_batch = false;
+      }
+      if (OB_SUCC(ret)) {
+        read_count = load_row_count;
+        state_.logical_read_row_count_ += read_count;
+        column_expr->set_evaluated_projected(eval_ctx);
+      }
+    } catch (const ObErrorCodeException &ob_error) {
+      if (OB_SUCC(ret)) {
+        ret = ob_error.get_error_code();
+        LOG_WARN("fail to read file", K(ret));
+      }
+    } catch (const std::exception &e) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected exception", K(ret), "Info", e.what());
+    } catch (...) {
+      ret = OB_ERR_UNEXPECTED;
+      LOG_WARN("unexpected exception", K(ret));
     }
   }
   return ret;

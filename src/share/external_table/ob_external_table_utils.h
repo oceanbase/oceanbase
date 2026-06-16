@@ -111,6 +111,11 @@ public:
       int64_t spec_level,
       common::ObIArray<common::ObString> &dir_urls,
       common::ObIArray<int64_t> &modify_times);
+  int fetch_simple_stats(const common::ObString &path,
+                         const common::ObIArray<ObString> &partition_values,
+                         ObIArray<int64_t> &file_nums,
+                         ObIArray<int64_t> &data_sizes,
+                         ObIArray<int64_t> &modify_times);
 private:
   int convert_to_full_file_urls(const common::ObString &location,
                                 const common::ObIArray<common::ObString> &file_urls,
@@ -178,6 +183,7 @@ public:
   }
   virtual bool need_get_file_meta() const override { return true; }
   int func(const dirent *entry);
+  int finish_current_dir();
 private:
   ObIArray <ObString> &name_array_;
   ObIArray <int64_t> &file_size_;
@@ -187,6 +193,31 @@ private:
   const ObString &origin_path_;
   ObExternalPathFilter *filter_;
   ObIAllocator &allocator_;
+};
+
+class ObCommonDirStatsCollectorOp : public ObBaseDirEntryOperator
+{
+public:
+  ObCommonDirStatsCollectorOp(ObIArray<int64_t> &file_nums,
+                              ObIArray<int64_t> &data_sizes,
+                              ObIArray<int64_t> &modify_times)
+      : file_nums_(file_nums), data_sizes_(data_sizes), modify_times_(modify_times),
+        cur_file_count_(0), cur_total_size_(0), cur_max_modify_time_(0)
+  {
+  }
+  virtual bool need_get_file_meta() const override
+  {
+    return true;
+  }
+  int func(const dirent *entry);
+  int finish_current_dir();
+private:
+  ObIArray<int64_t> &file_nums_;
+  ObIArray<int64_t> &data_sizes_;
+  ObIArray<int64_t> &modify_times_;
+  int64_t cur_file_count_;
+  int64_t cur_total_size_;
+  int64_t cur_max_modify_time_;
 };
 
 class ObExternalTableUtils {
@@ -375,6 +406,8 @@ public:
                                           ObExtTableScanTask *scan_task);
 
   static bool is_skipped_insert_column(const schema::ObColumnSchemaV2& column);
+  // External table hidden columns (__file_id, __line_number) have no catalog column stats.
+  static bool is_hidden_external_column(const common::ObString &column_name);
   static int concat_external_file_location(const ObString &location,
                                            const ObString &sub_path,
                                            ObSqlString &full_path);
@@ -418,6 +451,16 @@ public:
                                                    ObIArray<ObHiveFileDesc> &hive_file_desc,
                                                    ObIArray<int64_t> &part_file_count);
 
+  static int fetch_external_table_simple_stats(const ObString &location,
+                                               const ObString &access_info,
+                                               const ObIArray<ObString> &partition_values,
+                                               ObIArray<int64_t> &file_nums,
+                                               ObIArray<int64_t> &data_sizes,
+                                               ObIArray<int64_t> &modify_times);
+
+  static int get_part_col_names(const ObTableSchema &table_schema,
+                                ObIArray<ObString> &part_col_names);
+
   static int collect_partitions_info_with_cache(const ObTableSchema &table_schema,
                                                 ObSqlSchemaGuard &sql_schema_guard,
                                                 ObIAllocator &allocator,
@@ -430,7 +473,11 @@ public:
                                            common::ObIAllocator &allocator,
                                            ObExternalFileUrlInfo *&file_info);
   static int get_credential_field_name(ObSqlString &str, int64_t opt);
-
+  static int generate_file_sample_indices(const int64_t total_files,
+                                          const double sample_percent,
+                                          bool &is_file_sample,
+                                          int64_t &target_count,
+                                          common::ObIArray<int64_t> &indices);
 
 private:
   // Rewrite `sfile://<path>` to `file://<path>` in-place via allocator.

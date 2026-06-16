@@ -273,15 +273,16 @@ int ObExternalTablePartitions::deep_copy(char *buf,
                          old_partition_info.path_,
                          new_partition_info.path_));
       OX(new_partition_info.modify_ts_ = old_partition_info.modify_ts_);
+      OX(new_partition_info.file_num_ = old_partition_info.file_num_);
+      OX(new_partition_info.data_size_ = old_partition_info.data_size_);
+      OX(new_partition_info.schema_version_ = old_partition_info.schema_version_);
 
-      const common::ObArrayWrap<ObString> &old_partition_values
+      const ObSEArray<ObString, 4> &old_partition_values
           = this->partition_infos_.at(i).partition_values_;
-      if (old_partition_values.count() > 0) {
-        common::ObArrayWrap<ObString> &new_partition_values = new_partition_info.partition_values_;
-        OZ(new_partition_values.allocate_array(allocator, old_partition_values.count()));
-        for (int64_t j = 0; OB_SUCC(ret) && j < old_partition_values.count(); ++j) {
-          OZ(ob_write_string(allocator, old_partition_values.at(j), new_partition_values.at(j)));
-        }
+      for (int64_t j = 0; OB_SUCC(ret) && j < old_partition_values.count(); ++j) {
+        ObString new_value;
+        OZ(ob_write_string(allocator, old_partition_values.at(j), new_value));
+        OZ(new_partition_info.partition_values_.push_back(new_value));
       }
     }
     OX(value = new_value);
@@ -1857,6 +1858,28 @@ int ObExternalTableFileManager::collect_files_content_digest(
   return ret;
 }
 
+int ObExternalTableFileManager::get_external_table_simple_stats(const ObString &location,
+                                                                const ObString &access_info,
+                                                                const ObIArray<ObString> &partition_values,
+                                                                ObIArray<int64_t> &file_nums,
+                                                                ObIArray<int64_t> &data_sizes,
+                                                                ObIArray<int64_t> &modify_times)
+{
+  int ret = OB_SUCCESS;
+  ObArenaAllocator allocator("ExternalStats");
+  ObExternalFileInfoCollector collector(allocator);
+  if (OB_FAIL(collector.init(location, access_info))) {
+    LOG_WARN("failed to init", K(ret));
+  } else if (OB_FAIL(collector.fetch_simple_stats(location,
+                                                  partition_values,
+                                                  file_nums,
+                                                  data_sizes,
+                                                  modify_times))) {
+    LOG_WARN("failed to get simple stats", K(ret));
+  }
+  return ret;
+}
+
 int ObExternalTableFileManager::get_one_location_from_cache(
     const common::ObString &location,
     const uint64_t tenant_id,
@@ -2367,7 +2390,7 @@ int ObExternalTableFileManager::get_partitions_info_with_cache(const ObTableSche
             || OB_ENTRY_NOT_EXIST == ret) {
           ret = OB_SUCCESS;
           if (OB_FAIL(get_partitions_info(table_schema, sql_schema_guard, allocator, pts))) {
-            LOG_WARN("fail to get partitions info", K(ret), K(table_schema));
+            LOG_WARN("fail to get partitions info", K(ret));
           } else if (OB_FAIL(external_partitions_cache_
                                  .put_and_fetch(key, pts, table_partitions, handle, true))) {
             LOG_WARN("fail to put and get partitions info to cache", K(ret), K(key));
@@ -2398,23 +2421,21 @@ int ObExternalTableFileManager::get_partitions_info_with_cache(const ObTableSche
         LOG_WARN("failed to allocate place holder for partition info", K(ret));
       } else {
         out_partition_info->modify_ts_ = cache_partition_info.modify_ts_;
+        out_partition_info->file_num_ = cache_partition_info.file_num_;
+        out_partition_info->data_size_ = cache_partition_info.data_size_;
+        out_partition_info->schema_version_ = cache_partition_info.schema_version_;
       }
       OZ(ob_write_string(allocator,
                          cache_partition_info.partition_,
                          out_partition_info->partition_));
       OZ(ob_write_string(allocator, cache_partition_info.path_, out_partition_info->path_));
-      if (OB_SUCC(ret) && cache_partition_info.partition_values_.count() > 0) {
-        if (OB_FAIL(out_partition_info->partition_values_.allocate_array(
-                allocator,
-                cache_partition_info.partition_values_.count()))) {
-          LOG_WARN("fail to allocate array for partition values", KR(ret));
-        }
-        for (int64_t j = 0; OB_SUCC(ret) && j < cache_partition_info.partition_values_.count();
-             ++j) {
-          OZ(ob_write_string(allocator,
-                             cache_partition_info.partition_values_.at(j),
-                             out_partition_info->partition_values_.at(j)));
-        }
+      for (int64_t j = 0; OB_SUCC(ret) && j < cache_partition_info.partition_values_.count();
+           ++j) {
+        ObString copied_value;
+        OZ(ob_write_string(allocator,
+                           cache_partition_info.partition_values_.at(j),
+                           copied_value));
+        OZ(out_partition_info->partition_values_.push_back(copied_value));
       }
       OZ(partition_infos.push_back(out_partition_info));
     }
@@ -2433,62 +2454,75 @@ int ObExternalTableFileManager::get_partitions_info(const ObTableSchema &table_s
   ObArenaAllocator tmp_allocator;
   ObCachedCatalogMetaGetter catalog_meta_getter{*sql_schema_guard.get_schema_guard(),
                                                 tmp_allocator};
-  Partitions partitions;
   if (OB_ISNULL(metadata)) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null metadata", K(ret), K(table_schema));
   } else {
     pts.create_ts_ = ObTimeUtil::current_time_ms();
+    ObArray<ObString> part_col_names;
+    ObArray<common::ObCatalogExtPartitionInfo> tmp_infos;
     if (table_schema.get_partition_key_column_num() == 0) {
-      // 非分区表
-      OZ(pts.partition_infos_.allocate_array(allocator, 1));
+      common::ObCatalogExtPartitionInfo non_part_info;
       OZ(ob_write_string(allocator,
                          table_schema.get_external_file_location(),
-                         pts.partition_infos_.at(0).path_));
-      if (OB_SUCC(ret)) {
-        pts.partition_infos_.at(0).partition_values_.reset();
-        pts.partition_infos_.at(0).modify_ts_ = metadata->lake_table_metadata_version_;
+                         non_part_info.path_));
+      OZ(tmp_infos.push_back(non_part_info));
+      if (OB_FAIL(ret)) {
+      } else if (OB_FAIL(catalog_meta_getter.fetch_partitions(allocator,
+                                                              metadata,
+                                                              part_col_names,
+                                                              tmp_infos))) {
+        LOG_WARN("failed to fetch whole non-partition table info", K(ret));
+      } else {
+        tmp_infos.at(0).partition_values_.reset();
       }
     } else {
-      // 分区表
-      if (OB_FAIL(catalog_meta_getter.fetch_partitions(allocator, metadata, partitions))) {
+      if (OB_FAIL(get_part_col_names(table_schema, part_col_names))) {
+        LOG_WARN("failed to get part col names", K(ret));
+      } else if (OB_FAIL(catalog_meta_getter.fetch_partitions(allocator,
+                                                              metadata,
+                                                              part_col_names,
+                                                              tmp_infos))) {
         LOG_WARN("failed to fetch partitions", K(ret), K(metadata));
-      } else if (partitions.size() == 0) {
-        // empty table, do nothing
-      } else if (OB_FAIL(pts.partition_infos_.allocate_array(allocator, partitions.size()))) {
-        LOG_WARN("fail to new partition info", KR(ret));
+      }
+    }
+    if (OB_SUCC(ret) && tmp_infos.count() > 0) {
+      OZ(pts.partition_infos_.allocate_array(allocator, tmp_infos.count()));
+      for (int64_t i = 0; OB_SUCC(ret) && i < tmp_infos.count(); ++i) {
+        OZ(pts.partition_infos_.at(i).assign(tmp_infos.at(i)));
+      }
+    }
+  }
+  return ret;
+}
+
+int ObExternalTableFileManager::get_part_col_names(const ObTableSchema &table_schema,
+                                                   ObIArray<ObString> &part_col_names)
+{
+  int ret = OB_SUCCESS;
+  const int64_t part_key_column_num = table_schema.get_partition_key_column_num();
+  if (0 == part_key_column_num) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("non-partition table to get part col names", K(ret));
+  } else {
+    const ObRowkeyInfo &partition_key_info = table_schema.get_partition_key_info();
+    const ObColumnSchemaV2 *col_schema = nullptr;
+    uint64_t column_id = OB_INVALID_ID;
+
+    for (int64_t i = 0; OB_SUCC(ret) && i < partition_key_info.get_size(); ++i) {
+      if (OB_FAIL(partition_key_info.get_column_id(i, column_id))) {
+        LOG_WARN("failed to get column id", K(ret), K(i));
+      } else if (OB_ISNULL(col_schema = table_schema.get_column_schema(column_id))) {
+        ret = OB_ERR_UNEXPECTED;
+        LOG_WARN("column schema is null", K(ret), K(column_id));
       } else {
-        for (int64_t i = 0; OB_SUCC(ret) && i < partitions.size(); ++i) {
-          const Apache::Hadoop::Hive::Partition &hive_part = partitions.at(i);
-          HivePartitionInfo &p_info = pts.partition_infos_.at(i);
-          if (OB_FAIL(
-                  p_info.partition_values_.allocate_array(allocator, hive_part.values.size()))) {
-            LOG_WARN("fail to new partition values", KR(ret));
-          }
-          for (int64_t j = 0; OB_SUCC(ret) && j < hive_part.values.size(); ++j) {
-            ObString partition_value(hive_part.values[j].c_str());
-            OZ(ob_write_string(allocator, partition_value, p_info.partition_values_.at(j)));
-          }
-          ObString path(hive_part.sd.location.c_str());
-          OZ(ob_write_string(allocator, path, p_info.path_));
-          std::map<std::string, std::string>::const_iterator params_iter;
-          if (OB_SUCC(ret)) {
-            params_iter = hive_part.parameters.find(share::LAST_DDL_TIME);
-            if (OB_UNLIKELY(params_iter != hive_part.parameters.end())) {
-              if (OB_SUCCESS != ob_atoll(params_iter->second.c_str(), p_info.modify_ts_)) {
-                p_info.modify_ts_ = 0;
-              }
-              LOG_TRACE("get latest ddl time", K(ret), K(p_info.modify_ts_));
-            } else {
-              p_info.modify_ts_ = 0;
-              LOG_TRACE("not contain latest ddl time", K(ret));
-            }
-          }
+        ObString col_name = col_schema->get_column_name_str();
+        if (OB_FAIL(part_col_names.push_back(col_name))) {
+          LOG_WARN("failed to push part col name", K(ret));
         }
       }
     }
   }
-
   return ret;
 }
 

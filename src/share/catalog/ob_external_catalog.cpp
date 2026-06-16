@@ -7,8 +7,8 @@
 #include "share/catalog/ob_external_catalog.h"
 
 #include "share/schema/ob_column_schema.h"
-#include "share/stat/ob_opt_external_table_stat.h"
-#include "share/stat/ob_opt_external_column_stat.h"
+#include "share/stat/catalog/ob_opt_catalog_table_stat.h"
+#include "share/stat/catalog/ob_opt_catalog_column_stat.h"
 #include "sql/ob_sql_context.h"
 namespace oceanbase
 {
@@ -122,15 +122,8 @@ int ObIExternalCatalog::fetch_table_statistics(
     const ObILakeTableMetadata *table_metadata,
     const ObIArray<ObString> &partition_values,
     const ObIArray<ObString> &column_names,
-    ObOptExternalTableStat *&external_table_stat,
-    ObIArray<ObOptExternalColumnStat *> &external_table_column_stats)
-{
-  return OB_NOT_SUPPORTED;
-}
-
-int ObIExternalCatalog::fetch_partitions(ObIAllocator &allocator,
-                                         const ObILakeTableMetadata *table_metadata,
-                                         Partitions &partitions)
+    common::ObIArray<share::ObOptCatalogTableStat *> &catalog_table_stats,
+    common::ObIArray<share::ObOptCatalogColumnStat *> &catalog_table_column_stats)
 {
   return OB_NOT_SUPPORTED;
 }

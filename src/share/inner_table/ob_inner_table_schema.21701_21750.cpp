@@ -1140,6 +1140,159 @@ int ObInnerTableSchema::gv_ob_tenant_worker_groups_schema(ObTableSchema &table_s
   return ret;
 }
 
+int ObInnerTableSchema::dba_ob_external_tab_statistics_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_OB_EXTERNAL_TAB_STATISTICS_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_OB_EXTERNAL_TAB_STATISTICS_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT     CAST(C.CATALOG_NAME AS CHAR(128)) AS CATALOG_NAME,     CAST(STAT.DB_NAME AS CHAR(128)) AS DATABASE_NAME,     CAST(STAT.TABLE_NAME AS CHAR(128)) AS TABLE_NAME,     CAST(STAT.PARTITION_VALUE AS CHAR(3584)) AS PARTITION_VALUE,     CAST((CASE WHEN STAT.PARTITION_VALUE = '' THEN 'TABLE' ELSE 'PARTITION' END) AS CHAR(12)) AS OBJECT_TYPE,     CAST(STAT.ROW_CNT AS DECIMAL(20, 0)) AS NUM_ROWS,     CAST(STAT.AVG_ROW_LEN AS NUMBER) AS AVG_ROW_LEN,     CAST(STAT.SAMPLE_SIZE AS DECIMAL(20, 0)) AS SAMPLE_SIZE,     CAST(STAT.LAST_ANALYZED AS DATETIME(6)) AS LAST_ANALYZED,     CAST(STAT.LAST_MODIFIED AS DATETIME(6)) AS LAST_MODIFIED,     CAST((CASE WHEN STAT.STATTYPE_LOCKED & 15 IS NULL THEN NULL ELSE (CASE STAT.STATTYPE_LOCKED & 15 WHEN 0 THEN NULL WHEN 1 THEN 'DATA' WHEN 2 THEN 'CACHE' ELSE 'ALL' END) END) AS CHAR(5)) AS STATTYPE_LOCKED     FROM         oceanbase.__all_catalog_table_stat STAT     JOIN         oceanbase.__all_catalog C         ON STAT.TENANT_ID = C.TENANT_ID         AND STAT.CATALOG_ID = C.CATALOG_ID         AND STAT.TENANT_ID = 0 )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::dba_ob_external_tab_col_statistics_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_OB_EXTERNAL_TAB_COL_STATISTICS_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_OB_EXTERNAL_TAB_COL_STATISTICS_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT     CAST(C.CATALOG_NAME AS CHAR(128)) AS CATALOG_NAME,     CAST(STAT.DB_NAME AS CHAR(128)) AS DATABASE_NAME,     CAST(STAT.TABLE_NAME AS CHAR(128)) AS TABLE_NAME,     CAST(STAT.COLUMN_NAME AS CHAR(128)) AS COLUMN_NAME,     CAST(STAT.DISTINCT_CNT AS DECIMAL(20, 0)) AS NUM_DISTINCT,     CAST(STAT.MIN_VALUE AS CHAR(128)) AS LOW_VALUE,     CAST(STAT.MAX_VALUE AS CHAR(128)) AS HIGH_VALUE,     CAST(STAT.DENSITY AS DECIMAL(30, 10)) AS DENSITY,     CAST(STAT.NULL_CNT AS DECIMAL(20, 0)) AS NUM_NULLS,     CAST(STAT.BUCKET_CNT AS DECIMAL(20, 0)) AS NUM_BUCKETS,     CAST(STAT.LAST_ANALYZED AS DATETIME(6)) AS LAST_ANALYZED,     CAST(STAT.LAST_MODIFIED AS DATETIME(6)) AS LAST_MODIFIED,     CAST(STAT.SAMPLE_SIZE AS DECIMAL(20, 0)) AS SAMPLE_SIZE,     CAST(STAT.AVG_LEN AS NUMBER) AS AVG_COL_LEN,     CAST((CASE WHEN STAT.HISTOGRAM_TYPE = 1 THEN 'FREQUENCY'           WHEN STAT.HISTOGRAM_TYPE = 3 THEN 'TOP-FREQUENCY'           WHEN STAT.HISTOGRAM_TYPE = 4 THEN 'HYBRID'           ELSE NULL END) AS CHAR(15)) AS HISTOGRAM     FROM         oceanbase.__all_catalog_column_stat STAT     JOIN         oceanbase.__all_catalog C         ON STAT.TENANT_ID = C.TENANT_ID         AND STAT.CATALOG_ID = C.CATALOG_ID         AND STAT.TENANT_ID = 0     WHERE         STAT.PARTITION_VALUE = '' )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
+int ObInnerTableSchema::dba_ob_external_part_col_statistics_schema(ObTableSchema &table_schema)
+{
+  int ret = OB_SUCCESS;
+  uint64_t column_id = OB_APP_MIN_COLUMN_ID - 1;
+
+  //generated fields:
+  table_schema.set_tenant_id(OB_SYS_TENANT_ID);
+  table_schema.set_tablegroup_id(OB_INVALID_ID);
+  table_schema.set_database_id(OB_SYS_DATABASE_ID);
+  table_schema.set_table_id(OB_DBA_OB_EXTERNAL_PART_COL_STATISTICS_TID);
+  table_schema.set_rowkey_split_pos(0);
+  table_schema.set_is_use_bloomfilter(false);
+  table_schema.set_progressive_merge_num(0);
+  table_schema.set_rowkey_column_num(0);
+  table_schema.set_load_type(TABLE_LOAD_TYPE_IN_DISK);
+  table_schema.set_table_type(SYSTEM_VIEW);
+  table_schema.set_index_type(INDEX_TYPE_IS_NOT);
+  table_schema.set_def_type(TABLE_DEF_TYPE_INTERNAL);
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_table_name(OB_DBA_OB_EXTERNAL_PART_COL_STATISTICS_TNAME))) {
+      LOG_ERROR("fail to set table_name", K(ret));
+    }
+  }
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_compress_func_name(OB_DEFAULT_COMPRESS_FUNC_NAME))) {
+      LOG_ERROR("fail to set compress_func_name", K(ret));
+    }
+  }
+  table_schema.set_part_level(PARTITION_LEVEL_ZERO);
+  table_schema.set_charset_type(ObCharset::get_default_charset());
+  table_schema.set_collation_type(ObCharset::get_default_collation(ObCharset::get_default_charset()));
+
+  if (OB_SUCC(ret)) {
+    if (OB_FAIL(table_schema.set_view_definition(R"__(SELECT     CAST(C.CATALOG_NAME AS CHAR(128)) AS CATALOG_NAME,     CAST(STAT.DB_NAME AS CHAR(128)) AS DATABASE_NAME,     CAST(STAT.TABLE_NAME AS CHAR(128)) AS TABLE_NAME,     CAST(STAT.PARTITION_VALUE AS CHAR(3584)) AS PARTITION_NAME,     CAST(STAT.COLUMN_NAME AS CHAR(128)) AS COLUMN_NAME,     CAST(STAT.DISTINCT_CNT AS DECIMAL(20, 0)) AS NUM_DISTINCT,     CAST(STAT.MIN_VALUE AS CHAR(128)) AS LOW_VALUE,     CAST(STAT.MAX_VALUE AS CHAR(128)) AS HIGH_VALUE,     CAST(STAT.DENSITY AS DECIMAL(30, 10)) AS DENSITY,     CAST(STAT.NULL_CNT AS DECIMAL(20, 0)) AS NUM_NULLS,     CAST(STAT.BUCKET_CNT AS DECIMAL(20, 0)) AS NUM_BUCKETS,     CAST(STAT.LAST_ANALYZED AS DATETIME(6)) AS LAST_ANALYZED,     CAST(STAT.LAST_MODIFIED AS DATETIME(6)) AS LAST_MODIFIED,     CAST(STAT.SAMPLE_SIZE AS NUMBER) AS SAMPLE_SIZE,     CAST(STAT.AVG_LEN AS NUMBER) AS AVG_COL_LEN,     CAST((CASE WHEN STAT.HISTOGRAM_TYPE = 1 THEN 'FREQUENCY'           WHEN STAT.HISTOGRAM_TYPE = 3 THEN 'TOP-FREQUENCY'           WHEN STAT.HISTOGRAM_TYPE = 4 THEN 'HYBRID'           ELSE NULL END) AS CHAR(15)) AS HISTOGRAM     FROM         oceanbase.__all_catalog_column_stat STAT     JOIN         oceanbase.__all_catalog C         ON STAT.TENANT_ID = C.TENANT_ID         AND STAT.CATALOG_ID = C.CATALOG_ID         AND STAT.TENANT_ID = 0     WHERE         STAT.PARTITION_VALUE != '' )__"))) {
+      LOG_ERROR("fail to set view_definition", K(ret));
+    }
+  }
+  table_schema.set_index_using_type(USING_BTREE);
+  table_schema.set_row_store_type(ENCODING_ROW_STORE);
+  table_schema.set_store_format(OB_STORE_FORMAT_DYNAMIC_MYSQL);
+  table_schema.set_progressive_merge_round(1);
+  table_schema.set_storage_format_version(3);
+  table_schema.set_tablet_id(0);
+  table_schema.set_micro_index_clustered(false);
+
+  table_schema.set_max_used_column_id(column_id);
+  return ret;
+}
+
 int ObInnerTableSchema::dba_ob_sys_variable_history_schema(ObTableSchema &table_schema)
 {
   int ret = OB_SUCCESS;

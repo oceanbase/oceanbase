@@ -3262,6 +3262,8 @@ extern const char *get_type_name(int type);
                          (op) == T_FUN_SYS_RB_OR_CARDINALITY_AGG ||\
                          (op) == T_FUN_SYS_RB_AND_CARDINALITY_AGG ||\
                          (op) == T_FUNC_SYS_ARRAY_AGG ||\
+                         (op) == T_FUN_SYS_EXT_MIN ||\
+                         (op) == T_FUN_SYS_EXT_MAX ||\
                          ((op) >= T_FUN_SYS_BIT_AND && (op) <= T_FUN_SYS_BIT_XOR) || \
                          (op) == T_FUN_INNER_PREFIX_MAX || \
                          (op) == T_FUN_INNER_PREFIX_MIN || \

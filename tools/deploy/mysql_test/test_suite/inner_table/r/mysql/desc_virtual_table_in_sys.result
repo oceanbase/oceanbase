@@ -12788,6 +12788,64 @@ select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all
 IF(count(*) >= 0, 1, 0)
 1
 select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_java_policy_history limit 1;
+desc oceanbase.__all_virtual_catalog_table_opt_stat_gather_history;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+task_id	varchar(36)	NO	PRI	NULL	
+catalog_id	bigint(20)	NO	PRI	NULL	
+db_name	varchar(256)	NO	PRI	NULL	
+table_name	varchar(256)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+ret_code	bigint(20)	YES		NULL	
+start_time	timestamp(6)	YES		NULL	
+end_time	timestamp(6)	YES		NULL	
+memory_used	bigint(20)	YES		NULL	
+stat_refresh_failed_list	varchar(4096)	YES		NULL	
+properties	varchar(4096)	YES		NULL	
+spare1	bigint(20)	YES		NULL	
+spare2	bigint(20)	YES		NULL	
+spare3	varchar(4096)	YES		NULL	
+spare4	varchar(4096)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_catalog_table_opt_stat_gather_history;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_catalog_table_opt_stat_gather_history limit 1;
+desc oceanbase.__all_virtual_optstat_catalog_user_prefs;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+catalog_id	bigint(20)	NO	PRI	NULL	
+db_name	varchar(256)	NO	PRI	NULL	
+table_name	varchar(256)	NO	PRI	NULL	
+pname	varchar(30)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+valnum	bigint(20)	YES		NULL	
+valchar	varchar(4000)	YES		NULL	
+chgtime	timestamp(6)	YES		NULL	
+spare1	bigint(20)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_optstat_catalog_user_prefs;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_optstat_catalog_user_prefs limit 1;
+desc oceanbase.__all_virtual_optstat_catalog_global_prefs;
+Field	Type	Null	Key	Default	Extra
+tenant_id	bigint(20)	NO	PRI	NULL	
+sname	varchar(30)	NO	PRI	NULL	
+gmt_create	timestamp(6)	NO		NULL	
+gmt_modified	timestamp(6)	NO		NULL	
+sval1	decimal(38,0)	YES		NULL	
+sval2	timestamp(6)	YES		NULL	
+spare1	bigint(20)	YES		NULL	
+spare2	bigint(20)	YES		NULL	
+spare3	bigint(20)	YES		NULL	
+spare4	varchar(4096)	YES		NULL	
+spare5	varchar(4096)	YES		NULL	
+spare6	timestamp(6)	YES		NULL	
+select /*+QUERY_TIMEOUT(60000000)*/ IF(count(*) >= 0, 1, 0) from oceanbase.__all_virtual_optstat_catalog_global_prefs;
+IF(count(*) >= 0, 1, 0)
+1
+select /*+QUERY_TIMEOUT(60000000)*/ * from oceanbase.__all_virtual_optstat_catalog_global_prefs limit 1;
 desc oceanbase.__all_virtual_tenant_worker_group;
 Field	Type	Null	Key	Default	Extra
 svr_ip	varchar(46)	NO		NULL	

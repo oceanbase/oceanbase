@@ -10,10 +10,10 @@
 #include "lib/container/ob_array.h"
 #include "lib/hash/ob_hashmap.h"
 #include "share/catalog/ob_external_catalog.h"
-#include "share/stat/ob_opt_external_column_stat.h"
-#include "share/stat/ob_opt_external_column_stat_builder.h"
-#include "share/stat/ob_opt_external_table_stat.h"
-#include "share/stat/ob_opt_external_table_stat_builder.h"
+#include "share/stat/catalog/ob_opt_catalog_column_stat.h"
+#include "share/stat/catalog/ob_opt_catalog_column_stat_builder.h"
+#include "share/stat/catalog/ob_opt_catalog_table_stat.h"
+#include "share/stat/catalog/ob_opt_catalog_table_stat_builder.h"
 #include "sql/table_format/iceberg/spec/snapshot.h"
 #include "sql/table_format/iceberg/spec/statistics.h"
 
@@ -35,8 +35,8 @@ public:
       const ObILakeTableMetadata *table_metadata,
       const ObIArray<ObString> &partition_values,
       const ObIArray<ObString> &column_names,
-      ObOptExternalTableStat *&external_table_stat,
-      ObIArray<ObOptExternalColumnStat *> &external_column_stats);
+      ObOptCatalogTableStat *&catalog_table_stat,
+      ObIArray<ObOptCatalogColumnStat *> &catalog_column_stats);
 
 private:
   /**
@@ -70,14 +70,14 @@ private:
       const ObILakeTableMetadata *table_metadata,
       const sql::iceberg::StatisticsFile *statistics_file,
       const ObIArray<ObString> &column_names, int64_t snapshot_timestamp_ms,
-      ObIArray<ObOptExternalColumnStat *> &external_column_stats);
+      ObIArray<ObOptCatalogColumnStat *> &catalog_column_stats);
 
   /**
-   * @brief Create external table statistics with basic info
+   * @brief Create catalog table statistics with basic info
    */
-  int create_external_table_stat(const ObILakeTableMetadata *table_metadata,
+  int create_catalog_table_stat(const ObILakeTableMetadata *table_metadata,
                                  int64_t snapshot_timestamp_ms,
-                                 ObOptExternalTableStat *&external_table_stat);
+                                 ObOptCatalogTableStat *&catalog_table_stat);
 
   /**
    * @brief Get column field ID from table schema by column name
@@ -114,7 +114,7 @@ private:
   int create_default_column_statistics(
       const ObILakeTableMetadata *table_metadata,
       const ObIArray<ObString> &column_names, int64_t snapshot_timestamp_ms,
-      ObIArray<ObOptExternalColumnStat *> &external_column_stats);
+      ObIArray<ObOptCatalogColumnStat *> &catalog_column_stats);
 
   /**
    * @brief Build column name to field ID mapping for fast lookup

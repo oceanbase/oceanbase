@@ -8,6 +8,7 @@
 #include "sql/engine/ob_exec_context.h"
 #include "pl/sys_package/ob_dbms_upgrade.h"
 #include "pl/sys_package/ob_dbms_stats.h"
+#include "pl/sys_package/ob_dbms_catalog_stats.h"
 #include "pl/sys_package/ob_dbms_scheduler.h"
 #include "pl/sys_package/ob_dbms_application.h"
 #include "pl/sys_package/ob_dbms_session.h"
@@ -329,6 +330,11 @@
 
   //start of dbms_stat
   INTERFACE_DEF(INTERFACE_DBMS_STATS_GATHER_TABLE_STATS, "GATHER_TABLE_STATS", (ObDbmsStats::gather_table_stats))
+  INTERFACE_DEF(INTERFACE_DBMS_STATS_GATHER_CATALOG_TABLE_STATS, "GATHER_CATALOG_TABLE_STATS", (ObDbmsCatalogStats::gather_table_stat))
+  INTERFACE_DEF(INTERFACE_DBMS_STATS_LOCK_CATALOG_TABLE_STAT, "LOCK_CATALOG_TABLE_STAT", (ObDbmsCatalogStats::lock_catalog_table_stat))
+  INTERFACE_DEF(INTERFACE_DBMS_STATS_UNLOCK_CATALOG_TABLE_STAT, "UNLOCK_CATALOG_TABLE_STAT", (ObDbmsCatalogStats::unlock_catalog_table_stat))
+  INTERFACE_DEF(INTERFACE_DBMS_STATS_LOCK_CATALOG_PARTITION_STAT, "LOCK_CATALOG_PARTITION_STAT", (ObDbmsCatalogStats::lock_catalog_partition_stat))
+  INTERFACE_DEF(INTERFACE_DBMS_STATS_UNLOCK_CATALOG_PARTITION_STAT, "UNLOCK_CATALOG_PARTITION_STAT", (ObDbmsCatalogStats::unlock_catalog_partition_stat))
   INTERFACE_DEF(INTERFACE_DBMS_STATS_GATHER_SCHEMA_STATS, "GATHER_SCHEMA_STATS", (ObDbmsStats::gather_schema_stats))
   INTERFACE_DEF(INTERFACE_DBMS_STATS_SET_TABLE_STATS, "SET_TABLE_STATS", (ObDbmsStats::set_table_stats))
   INTERFACE_DEF(INTERFACE_DBMS_STATS_SET_COLUMN_STATS, "SET_COLUMN_STATS", (ObDbmsStats::set_column_stats))
@@ -375,6 +381,12 @@
   INTERFACE_DEF(INTERFACE_DBMS_STATS_DELETE_SYSTEM_STATS, "DELETE_SYSTEM_STATS", (ObDbmsStats::delete_system_stats))
   INTERFACE_DEF(INTERFACE_DBMS_STATS_SET_SYSTEM_STATS, "SET_SYSTEM_STATS", (ObDbmsStats::set_system_stats))
   INTERFACE_DEF(INTERFACE_DBMS_STATS_ASYNC_GATHER_STATS_JOB_PROC, "ASYNC_GATHER_STATS_JOB_PROC", (ObDbmsStats::async_gather_stats_job_proc))
+  INTERFACE_DEF(INTERFACE_DBMS_SET_CATALOG_TABLE_PREFS, "SET_CATALOG_TABLE_PREFS", (ObDbmsCatalogStats::set_catalog_table_prefs))
+  INTERFACE_DEF(INTERFACE_DBMS_GET_CATALOG_PREFS, "GET_CATALOG_PREFS", (ObDbmsCatalogStats::get_catalog_prefs))
+  INTERFACE_DEF(INTERFACE_DBMS_DELETE_CATALOG_TABLE_PREFS, "DELETE_CATALOG_TABLE_PREFS", (ObDbmsCatalogStats::delete_catalog_table_prefs))
+  INTERFACE_DEF(INTERFACE_DBMS_SET_CATALOG_GLOBAL_PREFS, "SET_CATALOG_GLOBAL_PREFS", (ObDbmsCatalogStats::set_catalog_global_prefs))
+  INTERFACE_DEF(INTERFACE_DBMS_GET_CATALOG_GLOBAL_PREFS, "GET_CATALOG_GLOBAL_PREFS", (ObDbmsCatalogStats::get_catalog_global_prefs))
+  INTERFACE_DEF(INTERFACE_DBMS_DELETE_CATALOG_GLOBAL_PREFS, "DELETE_CATALOG_GLOBAL_PREFS", (ObDbmsCatalogStats::delete_catalog_global_prefs))
   //end of dbms_stat
 
   //start of dbms xplan

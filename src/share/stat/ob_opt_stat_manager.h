@@ -10,6 +10,10 @@
 #include "share/stat/ob_opt_column_stat.h"
 #include "share/stat/ob_opt_table_stat.h"
 #include "share/stat/ob_opt_stat_service.h"
+#include "share/stat/catalog/ob_opt_catalog_stat_service.h"
+#include "share/stat/catalog/ob_catalog_stat_define.h"
+#include "share/stat/catalog/ob_opt_catalog_table_stat.h"
+#include "share/stat/catalog/ob_opt_catalog_column_stat.h"
 #include "share/stat/ob_opt_stat_sql_service.h"
 #include "share/ob_rpc_struct.h"
 #include "lib/queue/ob_dedup_queue.h"
@@ -134,6 +138,25 @@ public:
                          bool only_update_col_stat = false,
                          const ObObjPrintParams &print_params = ObObjPrintParams());
 
+  // Catalog table statistics update methods
+  int update_catalog_table_stat(const uint64_t tenant_id,
+                                const share::ObOptCatalogTableStat *table_stat,
+                                const ObCatalogTableStatParam &table_param,
+                                sqlclient::ObISQLConnection *conn);
+
+  int update_catalog_column_stat(const uint64_t tenant_id,
+                                 const common::ObIArray<share::ObOptCatalogColumnStat *> &column_stats,
+                                 const common::ObIArray<ObCatalogColumnStatParam> &column_params,
+                                 const ObCatalogTableStatParam &table_param,
+                                 const ObObjPrintParams &print_params,
+                                 share::schema::ObSchemaGetterGuard &schema_guard,
+                                 sqlclient::ObISQLConnection *conn);
+
+  int update_catalog_opt_stat_gather_stat(const ObOptStatGatherStat &gather_stat,
+                                          const uint64_t &catalog_id,
+                                          const ObString &db_name,
+                                          const ObString &table_name);
+
   int delete_table_stat(const uint64_t tenant_id,
                         const uint64_t ref_id,
                         int64_t &affected_rows);
@@ -164,6 +187,9 @@ public:
                         const ObIArray<int64_t> &part_ids,
                         const ObIArray<uint64_t> &column_ids);
 
+  int erase_catalog_table_stat(const share::ObOptCatalogTableStat::Key &key);
+  int erase_catalog_column_stat(const share::ObOptCatalogColumnStat::Key &key);
+
   int batch_write(share::schema::ObSchemaGetterGuard *schema_guard,
                   const uint64_t tenant_id,
                   sqlclient::ObISQLConnection *conn,
@@ -178,10 +204,12 @@ public:
                      const ObOptTableStat::Key &key,
                      ObOptTableStat &tstat);
   int add_refresh_stat_task(const obrpc::ObUpdateStatCacheArg &analyze_arg);
+  virtual int add_refresh_catalog_stat_task(const obrpc::ObUpdateCatalogStatCacheArg &analyze_arg);
 
   int invalidate_plan(const uint64_t tenant_id, const uint64_t table_id, int64_t plan_expired_before);
 
   int handle_refresh_stat_task(const obrpc::ObUpdateStatCacheArg &arg);
+  int handle_refresh_catalog_stat_task(const obrpc::ObUpdateCatalogStatCacheArg &arg);
 
   int handle_refresh_system_stat_task(const obrpc::ObUpdateStatCacheArg &arg);
 
@@ -222,6 +250,7 @@ public:
                                      int64_t &affected_rows);
   int update_opt_stat_task_stat(const ObOptStatTaskInfo &task_info);
   ObOptStatService &get_stat_service() { return stat_service_; }
+  ObOptCatalogStatService &get_cat_stat_service() { return cat_stat_service_; }
 
   int get_system_stat(const uint64_t tenant_id,
                       ObOptSystemStat &stat);
@@ -229,16 +258,18 @@ public:
                         const ObOptSystemStat *system_stats);
   int delete_system_stats(const uint64_t tenant_id);
 
-  int get_external_table_stat(const uint64_t tenant_id,
+  int get_catalog_table_stat(const uint64_t tenant_id,
                               const uint64_t ref_table_id,
-                              const ObIArray<ObString> &partition_names,
+                              const ObIArray<ObString> &partition_values,
+                              const bool is_all_partitions_selected,
                               sql::ObSqlSchemaGuard &schema_guard,
                               ObLakeTableStat &stat);
-  int get_external_column_stat(ObIAllocator &alloc,
+  int get_catalog_column_stat(ObIAllocator &alloc,
                                const uint64_t tenant_id,
                                const uint64_t ref_table_id,
                                const ObIArray<ObString> &column_names,
-                               const ObIArray<ObString> &partition_names,
+                               const ObIArray<ObString> &partition_values,
+                               const bool is_all_partitions_selected,
                                sql::ObSqlSchemaGuard &schema_guard,
                                const int64_t row_cnt,
                                const double scale_ratio,
@@ -247,6 +278,18 @@ public:
                                  int64_t &recent_update_time);
 
 private:
+  // ========== TODO: Add helper functions for writing statistics back to HMS ==========
+  // These functions will be implemented when HMS write-back feature is enabled
+  // int write_table_stats_to_hms(const uint64_t tenant_id,
+  //                              const share::ObOptCatalogTableStat *table_stat,
+  //                              const ObCatalogTableStatParam &table_param);
+  // int write_column_stats_to_hms(const uint64_t tenant_id,
+  //                               share::schema::ObSchemaGetterGuard &schema_guard,
+  //                               const ObIArray<share::ObOptCatalogColumnStat *> &column_stats,
+  //                               const ObIArray<ObCatalogColumnStatParam> &column_params,
+  //                               const ObCatalogTableStatParam &table_param);
+  // bool is_hms_catalog(const uint64_t catalog_id);
+  // ================================================================================
   int trans_col_handle_to_evals(const ObArray<ObOptColumnStatHandle> &new_handles,
                                 hash::ObHashMap<uint64_t, ObGlobalAllColEvals *> &column_id_col_evals);
 
@@ -268,6 +311,7 @@ protected:
   bool inited_;
   common::ObDedupQueue refresh_stat_task_queue_;
   ObOptStatService stat_service_;
+  ObOptCatalogStatService cat_stat_service_;
   int64_t last_schema_version_;
 };
 

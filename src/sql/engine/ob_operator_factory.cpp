@@ -126,6 +126,8 @@
 #include "sql/engine/table/ob_table_row_store_op.h"
 #include "sql/engine/table/ob_row_sample_scan_op.h"
 #include "sql/engine/table/ob_block_sample_scan_op.h"
+#include "sql/engine/table/ob_external_row_sample_scan_op.h"
+#include "sql/engine/table/ob_external_block_sample_scan_op.h"
 #include "sql/executor/ob_direct_receive_op.h"
 #include "sql/executor/ob_direct_transmit_op.h"
 #include "sql/engine/pdml/static/ob_px_multi_part_delete_op.h"

@@ -99,6 +99,8 @@
 #include "sql/engine/table/ob_row_sample_scan_op.h"
 #include "sql/engine/table/ob_block_sample_scan_op.h"
 #include "sql/engine/table/ob_ddl_block_sample_scan_op.h"
+#include "sql/engine/table/ob_external_row_sample_scan_op.h"
+#include "sql/engine/table/ob_external_block_sample_scan_op.h"
 #include "sql/engine/table/ob_table_scan_with_index_back_op.h"
 #include "sql/executor/ob_direct_receive_op.h"
 #include "sql/engine/basic/ob_temp_table_access_op.h"
@@ -1139,7 +1141,12 @@ int ObStaticEngineCG::generate_spec_final(ObLogicalOperator &op, ObOpSpec &spec)
     }
   }
 
-  if (PHY_TABLE_SCAN == spec.type_ || IS_SAMPLE_SCAN(spec.type_)) {
+  if (PHY_TABLE_SCAN == spec.type_ ||
+      PHY_ROW_SAMPLE_SCAN == spec.type_ ||
+      PHY_BLOCK_SAMPLE_SCAN == spec.type_ ||
+      PHY_DDL_BLOCK_SAMPLE_SCAN == spec.type_ ||
+      PHY_EXTERNAL_ROW_SAMPLE_SCAN == spec.type_ ||
+      PHY_EXTERNAL_BLOCK_SAMPLE_SCAN == spec.type_) {
     ObTableScanSpec &tsc_spec = static_cast<ObTableScanSpec&>(spec);
     ObDASScanCtDef &scan_ctdef = tsc_spec.tsc_ctdef_.scan_ctdef_;
     ObDASScanCtDef *lookup_ctdef = tsc_spec.tsc_ctdef_.lookup_ctdef_;
@@ -6223,14 +6230,25 @@ int ObStaticEngineCG::generate_normal_tsc(ObLogTableScan &op, ObTableScanSpec &s
   if (OB_SUCC(ret)) {
     if (op.is_sample_scan()
         && (op.get_sample_info().is_row_sample())) {
-      ObRowSampleScanSpec &sample_scan = static_cast<ObRowSampleScanSpec &>(spec);
-      sample_scan.set_sample_info(op.get_sample_info());
+      if (PHY_EXTERNAL_ROW_SAMPLE_SCAN == spec.type_) {
+        ObExternalRowSampleScanSpec &sample_scan = static_cast<ObExternalRowSampleScanSpec &>(spec);
+        sample_scan.set_sample_info(op.get_sample_info());
+      } else {
+        ObRowSampleScanSpec &sample_scan = static_cast<ObRowSampleScanSpec &>(spec);
+        sample_scan.set_sample_info(op.get_sample_info());
+      }
     }
 
     if (OB_SUCC(ret) && op.is_sample_scan()
         && op.get_sample_info().is_block_sample()) {
-      ObBlockSampleScanSpec &sample_scan = static_cast<ObBlockSampleScanSpec &>(spec);
-      sample_scan.set_sample_info(op.get_sample_info());
+      if (PHY_EXTERNAL_BLOCK_SAMPLE_SCAN == spec.type_) {
+        ObExternalBlockSampleScanSpec &sample_scan
+            = static_cast<ObExternalBlockSampleScanSpec &>(spec);
+        sample_scan.set_sample_info(op.get_sample_info());
+      } else {
+        ObBlockSampleScanSpec &sample_scan = static_cast<ObBlockSampleScanSpec &>(spec);
+        sample_scan.set_sample_info(op.get_sample_info());
+      }
     }
 
     if (OB_SUCC(ret) && op.is_sample_scan()
@@ -8183,6 +8201,22 @@ int ObStaticEngineCG::generate_spec(ObLogTableScan &op, ObBlockSampleScanSpec &s
 }
 
 int ObStaticEngineCG::generate_spec(ObLogTableScan &op, ObDDLBlockSampleScanSpec &spec, const bool)
+{
+  int ret = OB_SUCCESS;
+  OZ(generate_normal_tsc(op, spec));
+
+  return ret;
+}
+
+int ObStaticEngineCG::generate_spec(ObLogTableScan &op, ObExternalRowSampleScanSpec &spec, const bool)
+{
+  int ret = OB_SUCCESS;
+  OZ(generate_normal_tsc(op, spec));
+
+  return ret;
+}
+
+int ObStaticEngineCG::generate_spec(ObLogTableScan &op, ObExternalBlockSampleScanSpec &spec, const bool)
 {
   int ret = OB_SUCCESS;
   OZ(generate_normal_tsc(op, spec));
@@ -10954,12 +10988,22 @@ int ObStaticEngineCG::get_phy_op_type(ObLogicalOperator &log_op,
       if (op.get_contains_fake_cte()) {
         type = PHY_FAKE_CTE_TABLE;
       } else if (op.is_sample_scan()) {
-        if (op.get_sample_info().is_row_sample()) {
-          type = PHY_ROW_SAMPLE_SCAN;
-        } else if (op.get_sample_info().is_block_sample()){
-          type = PHY_BLOCK_SAMPLE_SCAN;
-        } else if (op.get_sample_info().is_ddl_block_sample()) {
-          type = PHY_DDL_BLOCK_SAMPLE_SCAN;
+        // For external tables, use dedicated sampling operators that support rich format
+        if (op.get_table_type() == share::schema::EXTERNAL_TABLE) {
+          if (op.get_sample_info().is_row_sample()) {
+            type = PHY_EXTERNAL_ROW_SAMPLE_SCAN;
+          } else if (op.get_sample_info().is_block_sample()) {
+            type = PHY_EXTERNAL_BLOCK_SAMPLE_SCAN;
+          }
+        } else {
+          // For internal tables, use regular sampling operators
+          if (op.get_sample_info().is_row_sample()) {
+            type = PHY_ROW_SAMPLE_SCAN;
+          } else if (op.get_sample_info().is_block_sample()){
+            type = PHY_BLOCK_SAMPLE_SCAN;
+          } else if (op.get_sample_info().is_ddl_block_sample()) {
+            type = PHY_DDL_BLOCK_SAMPLE_SCAN;
+          }
         }
       } else if (op.get_is_multi_part_table_scan()) {
         type = PHY_MULTI_PART_TABLE_SCAN;

@@ -441,6 +441,11 @@
 # 586: __all_java_policy
 # 587: __all_java_policy_history
 # 587: __all_java_policy  # BASE_TABLE_NAME
+# 588: __all_catalog_table_stat
+# 589: __all_catalog_column_stat
+# 590: __all_catalog_table_opt_stat_gather_history
+# 593: __all_optstat_catalog_user_prefs
+# 594: __all_optstat_catalog_global_prefs
 # 596: __all_table_opt_stat_invalidate_plan
 # 10001: __tenant_virtual_all_table
 # 10002: __tenant_virtual_table_column
@@ -1406,6 +1411,12 @@
 # 12595: __all_virtual_java_policy_history
 # 12595: __all_java_policy  # BASE_TABLE_NAME
 # 12595: __all_java_policy_history  # BASE_TABLE_NAME1
+# 12596: __all_virtual_catalog_table_opt_stat_gather_history
+# 12596: __all_catalog_table_opt_stat_gather_history  # BASE_TABLE_NAME
+# 12600: __all_virtual_optstat_catalog_user_prefs
+# 12600: __all_optstat_catalog_user_prefs  # BASE_TABLE_NAME
+# 12602: __all_virtual_optstat_catalog_global_prefs
+# 12602: __all_optstat_catalog_global_prefs  # BASE_TABLE_NAME
 # 12603: __all_virtual_tenant_worker_group
 # 12608: __all_virtual_table_opt_stat_invalidate_plan
 # 12608: __all_table_opt_stat_invalidate_plan  # BASE_TABLE_NAME
@@ -2812,6 +2823,9 @@
 # 21721: CDB_SCHEDULER_RUNNING_JOBS
 # 21722: CDB_SCHEDULER_JOBS
 # 21723: GV$OB_TENANT_WORKER_GROUPS
+# 21725: DBA_OB_EXTERNAL_TAB_STATISTICS
+# 21726: DBA_OB_EXTERNAL_TAB_COL_STATISTICS
+# 21727: DBA_OB_EXTERNAL_PART_COL_STATISTICS
 # 21744: DBA_OB_SYS_VARIABLE_HISTORY
 # 21745: CDB_OB_SYS_VARIABLE_HISTORY
 # 25001: DBA_SYNONYMS

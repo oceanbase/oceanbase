@@ -6215,7 +6215,9 @@ int ObLogPlan::check_three_stage_groupby_pushdown(const ObIArray<ObRawExpr *> &r
                aggr_expr->get_expr_type() != T_FUN_SYS_RB_AND_AGG &&
                aggr_expr->get_expr_type() != T_FUN_SYS_RB_OR_AGG &&
                aggr_expr->get_expr_type() != T_FUN_GROUPING_ID &&
-               aggr_expr->get_expr_type() != T_FUN_SYS_COUNT_INROW) {
+               aggr_expr->get_expr_type() != T_FUN_SYS_COUNT_INROW &&
+               aggr_expr->get_expr_type() != T_FUN_SYS_EXT_MIN &&
+               aggr_expr->get_expr_type() != T_FUN_SYS_EXT_MAX) {
       // three stage with rollup, only hash rollup is allowed
       // grouping_id can be safely pushdown
       can_push = false;
@@ -6305,7 +6307,9 @@ int ObLogPlan::check_basic_groupby_pushdown(const ObIArray<ObAggFunRawExpr*> &ag
                T_FUN_ARBITRARY != aggr_expr->get_expr_type() &&
                T_FUN_SYS_RB_OR_AGG != aggr_expr->get_expr_type() &&
                T_FUN_SYS_RB_AND_AGG != aggr_expr->get_expr_type() &&
-               T_FUN_SYS_COUNT_INROW != aggr_expr->get_expr_type()) {
+               T_FUN_SYS_COUNT_INROW != aggr_expr->get_expr_type() &&
+               T_FUN_SYS_EXT_MIN != aggr_expr->get_expr_type() &&
+               T_FUN_SYS_EXT_MAX != aggr_expr->get_expr_type()) {
       can_push = false;
     } else if (T_FUN_GROUPING == aggr_expr->get_expr_type()
                || T_FUN_GROUPING_ID == aggr_expr->get_expr_type()) {
@@ -6397,11 +6401,27 @@ int ObLogPlan::check_storage_groupby_pushdown(const ObIArray<ObAggFunRawExpr *> 
   } else if (OB_ISNULL(table_item = stmt->get_table_item(0))) {
     ret = OB_ERR_UNEXPECTED;
     LOG_WARN("get unexpected null", K(ret), K(table_item));
+  } else if (EXTERNAL_TABLE == table_item->table_type_) {
+    bool all_ext_minmax = true;
+    for (int64_t i = 0; all_ext_minmax && i < aggrs.count(); ++i) {
+      if (OB_NOT_NULL(aggrs.at(i)) && aggrs.at(i)->get_expr_type() != T_FUN_SYS_EXT_MIN
+          && aggrs.at(i)->get_expr_type() != T_FUN_SYS_EXT_MAX) {
+        all_ext_minmax = false;
+      }
+    }
+    if (all_ext_minmax) {
+      can_push = true;
+      if (OB_FAIL(check_scalar_aggr_can_storage_pushdown(table_item->table_id_,
+                                                         aggrs,
+                                                         pushdown_groupby_columns,
+                                                         can_push))) {
+        LOG_WARN("failed to check scalar aggr can storage pushdown", K(ret));
+      }
+    }
   } else if (!table_item->is_basic_table() ||
              table_item->is_link_table() ||
              is_sys_table(table_item->ref_id_) ||
-             is_virtual_table(table_item->ref_id_) ||
-             EXTERNAL_TABLE == table_item->table_type_) {
+             is_virtual_table(table_item->ref_id_)) {
     /*do nothing*/
   } else if (OB_FAIL(stmt->has_virtual_generated_column(table_item->table_id_, has_virtual_col, true))) {
     LOG_WARN("failed to check has virtual generated column", K(ret), K(*table_item));
@@ -11882,6 +11902,21 @@ int ObLogPlan::replace_generate_column_exprs(ObLogicalOperator *op)
           }
         }
       }
+      // 新增：处理 pushdown_aggr_exprs_ 中的参数列
+      for (int64_t i = 0; OB_SUCC(ret) && i < scan_op->get_pushdown_aggr_exprs().count(); ++i) {
+        ObAggFunRawExpr *aggr_expr = scan_op->get_pushdown_aggr_exprs().at(i);
+        if (OB_ISNULL(aggr_expr)) {
+          ret = OB_ERR_UNEXPECTED;
+          LOG_WARN("aggr expr is null", K(ret), K(i));
+        } else {
+          for (int64_t j = 0; OB_SUCC(ret) && j < aggr_expr->get_param_count(); ++j) {
+            ObRawExpr *param_expr = aggr_expr->get_param_expr(j);
+            if (OB_FAIL(scan_op->extract_file_column_exprs_recursively(param_expr))) {
+              LOG_WARN("failed to extract file column exprs", K(ret), K(i), K(j));
+            }
+          }
+        }
+      }
     }
   } else if ((op->get_type() == log_op_def::LOG_INSERT) ||
             ((op->get_type() == log_op_def::LOG_INSERT_ALL))) {
@@ -15916,6 +15951,8 @@ int ObLogPlan::perform_gather_stat_replace(ObLogicalOperator *op)
     const ObTableSchema *table_schema = NULL;
     if (table_scan->get_pushdown_aggr_exprs().empty()) {
       // do nothing
+    } else if (EXTERNAL_TABLE == table_scan->get_table_type()) {
+      // external table doesn't need schema-based aggr replacement
     } else if (GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_2) {
       // do nothing
     } else if (OB_ISNULL(schema_guard = get_optimizer_context().get_schema_guard())
@@ -16287,7 +16324,9 @@ int ObLogPlan::check_scalar_aggr_can_storage_pushdown(const uint64_t table_id,
                 && T_FUN_SYS_RB_OR_AGG != cur_aggr->get_expr_type()
                 && T_FUN_SYS_RB_BUILD_AGG != cur_aggr->get_expr_type()
                 && T_FUN_COUNT_SUM != cur_aggr->get_expr_type()
-                && T_FUN_SYS_COUNT_INROW != cur_aggr->get_expr_type()) {
+                && T_FUN_SYS_COUNT_INROW != cur_aggr->get_expr_type()
+                && T_FUN_SYS_EXT_MIN != cur_aggr->get_expr_type()
+                && T_FUN_SYS_EXT_MAX != cur_aggr->get_expr_type()) {
       can_push = false;
     } else if ((T_FUN_SYS_RB_BUILD_AGG == cur_aggr->get_expr_type() && (!enable_rich_vector_format || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_5_0))
       || (T_FUN_COUNT_SUM == cur_aggr->get_expr_type() && (!enable_rich_vector_format || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_4_1_0))) {
@@ -16300,6 +16339,10 @@ int ObLogPlan::check_scalar_aggr_can_storage_pushdown(const uint64_t table_id,
     } else if (T_FUN_SYS_COUNT_INROW == cur_aggr->get_expr_type() && (!enable_rich_vector_format ||
                                                                       GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_5_1_0)) {
       // if rich vector format is not enable, can not storage pushdown for sys_count_inrow
+      can_push = false;
+    } else if ((T_FUN_SYS_EXT_MIN == cur_aggr->get_expr_type() || T_FUN_SYS_EXT_MAX == cur_aggr->get_expr_type())
+               && (!enable_rich_vector_format || GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_6_1_0)) {
+      // if vector 2.0 is not enabled, can not storage pushdown for ext_min/ext_max
       can_push = false;
     } else if (T_FUN_SUM == cur_aggr->get_expr_type() && GET_MIN_CLUSTER_VERSION() < CLUSTER_VERSION_4_3_0_0) {
       can_push = false;
@@ -16323,15 +16366,15 @@ int ObLogPlan::check_scalar_aggr_can_storage_pushdown(const uint64_t table_id,
     } else if (!first_param->is_column_ref_expr() ||
                 table_id != static_cast<ObColumnRefRawExpr*>(first_param)->get_table_id()) {
       can_push = false;
-            } else if (first_param->is_column_ref_expr() &&
-              static_cast<const ObColumnRefRawExpr*>(first_param)->is_pseudo_column_ref()) {
+    } else if (first_param->is_column_ref_expr()
+               && static_cast<const ObColumnRefRawExpr *>(first_param)->is_pseudo_column_ref()) {
       can_push = false;
     }
 
     if (OB_FAIL(ret) || !can_push || cur_aggr->get_real_param_exprs().empty()) {
     } else if (!cur_aggr->is_param_distinct() && !distinct_exprs.empty()) {
       can_push = false;
-            } else if (!cur_aggr->is_param_distinct()) {
+    } else if (!cur_aggr->is_param_distinct()) {
       /*do nothing*/
     } else if (!first_param->is_column_ref_expr()) {
       can_push = false;
@@ -16353,7 +16396,7 @@ int ObLogPlan::check_scalar_aggr_can_storage_pushdown(const uint64_t table_id,
   } else if (can_push && OB_FAIL(append(pushdown_groupby_columns, distinct_exprs))) {
     LOG_WARN("failed to pushdown groupby columns", K(ret));
   }
-    return ret;
+  return ret;
 }
 
 int ObLogPlan::check_normal_aggr_can_storage_pushdown(const uint64_t table_id,

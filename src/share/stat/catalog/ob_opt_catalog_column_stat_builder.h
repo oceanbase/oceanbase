@@ -3,15 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef _OB_OPT_EXTERNAL_COLUMN_STAT_BUILDER_H_
-#define _OB_OPT_EXTERNAL_COLUMN_STAT_BUILDER_H_
+#ifndef OCEANBASE_SHARE_STAT_EXTERNAL_OB_OPT_EXTERNAL_COLUMN_STAT_BUILDER_
+#define OCEANBASE_SHARE_STAT_EXTERNAL_OB_OPT_EXTERNAL_COLUMN_STAT_BUILDER_
 
 #include "common/object/ob_object.h"
 #include "lib/allocator/ob_allocator.h"
-#include "share/stat/ob_opt_external_column_stat.h"
+#include "share/stat/catalog/ob_opt_catalog_column_stat.h"
 
-namespace oceanbase {
-namespace share {
+namespace oceanbase
+{
+namespace share
+{
 
 class ObHiveHLL;
 
@@ -19,7 +21,8 @@ class ObHiveFMSketch;
 /**
  * @brief Bitmap type enumeration for external column statistics
  */
-enum class ObExternalBitmapType {
+enum class ObCatalogBitmapType
+{
   UNKNOWN = 0,
   HIVE_AUTO_DETECT = 1, // Hive bitmap with auto-detection (FM or HLL)
   HIVE_FM = 2,          // Hive FM Sketch bitmap (for low cardinality)
@@ -27,10 +30,11 @@ enum class ObExternalBitmapType {
   OTHER = 4             // Other bitmap types (no detection needed)
 };
 
-class ObOptExternalColumnStatBuilder {
+class ObOptCatalogColumnStatBuilder
+{
 public:
-  explicit ObOptExternalColumnStatBuilder(common::ObIAllocator &allocator);
-  ~ObOptExternalColumnStatBuilder();
+  explicit ObOptCatalogColumnStatBuilder(common::ObIAllocator &allocator);
+  ~ObOptCatalogColumnStatBuilder();
 
   /**
    * @brief Reset the builder to initial state
@@ -40,7 +44,8 @@ public:
   /**
    * @brief Set basic table and column information
    */
-  int set_basic_info(uint64_t tenant_id, uint64_t catalog_id,
+  int set_basic_info(uint64_t tenant_id,
+                     uint64_t catalog_id,
                      const common::ObString &database_name,
                      const common::ObString &table_name,
                      const common::ObString &partition_value,
@@ -49,9 +54,12 @@ public:
   /**
    * @brief Set statistical information
    */
-  int set_stat_info(int64_t num_null, int64_t num_not_null,
-                    int64_t num_distinct, int64_t avg_length,
-                    int64_t last_analyzed, common::ObCollationType cs_type);
+  int set_stat_info(int64_t num_null,
+                    int64_t num_not_null,
+                    int64_t num_distinct,
+                    int64_t avg_length,
+                    int64_t last_analyzed,
+                    common::ObCollationType cs_type);
 
   /**
    * @brief Set min/max values
@@ -67,13 +75,15 @@ public:
   /**
    * @brief Merge with another external column stat
    */
-  int merge_column_stat(const ObOptExternalColumnStat &other);
+  int merge_column_stat(const ObOptCatalogColumnStat &other);
 
   /**
    * @brief Merge statistical values (add num_null, num_not_null, etc.)
    */
-  int merge_stat_values(int64_t num_null, int64_t num_not_null,
-                        int64_t num_distinct, int64_t avg_length);
+  int merge_stat_values(int64_t num_null,
+                        int64_t num_not_null,
+                        int64_t num_distinct,
+                        int64_t avg_length);
 
   /**
    * @brief Merge min value
@@ -95,12 +105,15 @@ public:
   /**
    * @brief Set bitmap type (should be called before any bitmap operations)
    */
-  int set_bitmap_type(ObExternalBitmapType bitmap_type);
+  int set_bitmap_type(ObCatalogBitmapType bitmap_type);
 
   /**
    * @brief Get current bitmap type
    */
-  ObExternalBitmapType get_bitmap_type() const { return bitmap_type_; }
+  ObCatalogBitmapType get_bitmap_type() const
+  {
+    return bitmap_type_;
+  }
 
   /**
    * @brief Finalize bitmap and calculate final NDV (should be called before
@@ -109,37 +122,57 @@ public:
   int finalize_bitmap();
 
   /**
-   * @brief Create a new ObOptExternalColumnStat object on allocator
+   * @brief Create a new ObOptCatalogColumnStat object on allocator
    * @param[in] allocator The allocator to use for the new object
    * @param[out] stat Pointer to the created external column stat object
    * @note Should call finalize_bitmap() before this method
    */
-  int build(ObIAllocator &allocator, ObOptExternalColumnStat *&stat) const;
+  int build(ObIAllocator &allocator, ObOptCatalogColumnStat *&stat) const;
 
   int64_t calculate_size() const;
 
-  void inc_partition_key_num_distinct() { ++num_distinct_; }
-  int64_t get_num_distinct() const { return num_distinct_; }
-  TO_STRING_KV(K(tenant_id_), K(catalog_id_), K(database_name_), K(table_name_),
-               K(partition_value_), K(column_name_), K(num_null_),
-               K(num_not_null_), K(num_distinct_), K(avg_length_),
-               K(min_value_), K(max_value_), K(bitmap_size_),
-               K(is_min_value_set_), K(is_max_value_set_), K(is_bitmap_set_),
-               K(min_obj_buf_), K(min_obj_buf_size_), K(max_obj_buf_),
-               K(max_obj_buf_size_), K(bitmap_type_), K(final_bitmap_),
-               K(final_bitmap_size_), K(final_ndv_), K(is_bitmap_finalized_));
+  void inc_partition_key_num_distinct()
+  {
+    ++num_distinct_;
+  }
+  int64_t get_num_distinct() const
+  {
+    return num_distinct_;
+  }
+  TO_STRING_KV(K(tenant_id_),
+               K(catalog_id_),
+               K(database_name_),
+               K(table_name_),
+               K(partition_value_),
+               K(column_name_),
+               K(num_null_),
+               K(num_not_null_),
+               K(num_distinct_),
+               K(avg_length_),
+               K(min_value_),
+               K(max_value_),
+               K(bitmap_size_),
+               K(is_min_value_set_),
+               K(is_max_value_set_),
+               K(is_bitmap_set_),
+               K(min_obj_buf_),
+               K(min_obj_buf_size_),
+               K(max_obj_buf_),
+               K(max_obj_buf_size_),
+               K(bitmap_type_),
+               K(final_bitmap_),
+               K(final_bitmap_size_),
+               K(final_ndv_),
+               K(is_bitmap_finalized_));
 
 private:
-  int merge_min_max(common::ObObj &cur, const common::ObObj &other,
-                    bool is_cmp_min);
+  int merge_min_max(common::ObObj &cur, const common::ObObj &other, bool is_cmp_min);
   int alloc_bitmap(int64_t size);
   int ensure_min_max_buffer(bool is_min, int64_t required_size);
-  int copy_obj_to_buffer(common::ObObj &dest, const common::ObObj &src,
-                         bool is_min_obj);
+  int copy_obj_to_buffer(common::ObObj &dest, const common::ObObj &src, bool is_min_obj);
 
   // Hive bitmap type detection and merge methods
-  ObExternalBitmapType detect_hive_bitmap_type(const char *bitmap,
-                                               int64_t bitmap_size);
+  ObCatalogBitmapType detect_hive_bitmap_type(const char *bitmap, int64_t bitmap_size);
   int merge_hive_fm_bitmap(const char *bitmap, int64_t bitmap_size);
   int merge_hive_hll_bitmap(const char *bitmap, int64_t bitmap_size);
   int merge_other_bitmap(const char *bitmap, int64_t bitmap_size);
@@ -172,7 +205,7 @@ private:
   int64_t max_obj_buf_size_;
 
   // Bitmap type management
-  ObExternalBitmapType bitmap_type_;
+  ObCatalogBitmapType bitmap_type_;
 
   // Deserialized bitmap objects for efficient merging
   ObHiveFMSketch *hive_fm_sketch_;
@@ -194,4 +227,4 @@ private:
 } // end of namespace share
 } // end of namespace oceanbase
 
-#endif /* _OB_OPT_EXTERNAL_COLUMN_STAT_BUILDER_H_ */
+#endif // OCEANBASE_SHARE_STAT_EXTERNAL_OB_OPT_EXTERNAL_COLUMN_STAT_BUILDER_

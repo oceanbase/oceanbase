@@ -12268,6 +12268,84 @@ end a);
 select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.GV$OB_TENANT_WORKER_GROUPS limit 1);
 cnt
 1
+desc oceanbase.DBA_OB_EXTERNAL_TAB_STATISTICS;
+Field	Type	Null	Key	Default	Extra
+CATALOG_NAME	varchar(128)	NO			
+DATABASE_NAME	varchar(128)	NO		NULL	
+TABLE_NAME	varchar(128)	NO		NULL	
+PARTITION_VALUE	text	NO		NULL	
+OBJECT_TYPE	varchar(12)	NO			
+NUM_ROWS	decimal(20,0)	NO		NULL	
+AVG_ROW_LEN	decimal(10,0)	NO		NULL	
+SAMPLE_SIZE	decimal(20,0)	YES		NULL	
+LAST_ANALYZED	datetime(6)	NO		NULL	
+LAST_MODIFIED	datetime(6)	NO		NULL	
+STATTYPE_LOCKED	varchar(5)	NO			
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_EXTERNAL_TAB_STATISTICS|%') then 2
+when ('' like '%|DBA_OB_EXTERNAL_TAB_STATISTICS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_EXTERNAL_TAB_STATISTICS|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_EXTERNAL_TAB_STATISTICS limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_EXTERNAL_TAB_COL_STATISTICS;
+Field	Type	Null	Key	Default	Extra
+CATALOG_NAME	varchar(128)	NO			
+DATABASE_NAME	varchar(128)	NO		NULL	
+TABLE_NAME	varchar(128)	NO		NULL	
+COLUMN_NAME	varchar(128)	NO		NULL	
+NUM_DISTINCT	decimal(20,0)	NO		NULL	
+LOW_VALUE	varchar(128)	NO		NULL	
+HIGH_VALUE	varchar(128)	NO		NULL	
+DENSITY	decimal(30,10)	NO		NULL	
+NUM_NULLS	decimal(20,0)	NO		NULL	
+NUM_BUCKETS	decimal(20,0)	NO		NULL	
+LAST_ANALYZED	datetime(6)	NO		NULL	
+LAST_MODIFIED	datetime(6)	NO		NULL	
+SAMPLE_SIZE	decimal(20,0)	NO		NULL	
+AVG_COL_LEN	decimal(10,0)	NO		NULL	
+HISTOGRAM	varchar(15)	NO			
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_EXTERNAL_TAB_COL_STATISTICS|%') then 2
+when ('' like '%|DBA_OB_EXTERNAL_TAB_COL_STATISTICS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_EXTERNAL_TAB_COL_STATISTICS|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_EXTERNAL_TAB_COL_STATISTICS limit 1);
+cnt
+1
+desc oceanbase.DBA_OB_EXTERNAL_PART_COL_STATISTICS;
+Field	Type	Null	Key	Default	Extra
+CATALOG_NAME	varchar(128)	NO			
+DATABASE_NAME	varchar(128)	NO		NULL	
+TABLE_NAME	varchar(128)	NO		NULL	
+PARTITION_NAME	text	NO		NULL	
+COLUMN_NAME	varchar(128)	NO		NULL	
+NUM_DISTINCT	decimal(20,0)	NO		NULL	
+LOW_VALUE	varchar(128)	NO		NULL	
+HIGH_VALUE	varchar(128)	NO		NULL	
+DENSITY	decimal(30,10)	NO		NULL	
+NUM_NULLS	decimal(20,0)	NO		NULL	
+NUM_BUCKETS	decimal(20,0)	NO		NULL	
+LAST_ANALYZED	datetime(6)	NO		NULL	
+LAST_MODIFIED	datetime(6)	NO		NULL	
+SAMPLE_SIZE	decimal(10,0)	NO		NULL	
+AVG_COL_LEN	decimal(10,0)	NO		NULL	
+HISTOGRAM	varchar(15)	NO			
+set @query_type = (select 
+case 
+when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_EXTERNAL_PART_COL_STATISTICS|%') then 2
+when ('' like '%|DBA_OB_EXTERNAL_PART_COL_STATISTICS|%') then 3
+when ('|V$OB_SS_SSTABLES|' like '%|DBA_OB_EXTERNAL_PART_COL_STATISTICS|%') then 4
+else 1
+end a);
+select /*+QUERY_TIMEOUT(60000000)*/ count(*) as cnt from (select * from oceanbase.DBA_OB_EXTERNAL_PART_COL_STATISTICS limit 1);
+cnt
+1
 desc oceanbase.DBA_OB_SYS_VARIABLE_HISTORY;
 Field	Type	Null	Key	Default	Extra
 NAME	varchar(128)	NO			

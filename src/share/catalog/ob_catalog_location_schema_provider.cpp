@@ -67,5 +67,27 @@ int ObCatalogLocationSchemaProvider::get_access_info_by_path(ObIAllocator &alloc
   return ret;
 }
 
+int ObCatalogLocationSchemaProvider::get_access_info_by_id(const uint64_t tenant_id,
+                                                           const uint64_t location_id,
+                                                           ObString &access_info) const
+{
+  int ret = OB_SUCCESS;
+  access_info.reset();
+  const schema::ObLocationSchema *location_schema = NULL;
+  if (OB_INVALID_ID == location_id) {
+    // no location object, do nothing
+  } else if (OB_FAIL(schema_guard_.get_location_schema_by_id(tenant_id,
+                                                             location_id,
+                                                             location_schema))) {
+    LOG_WARN("get location schema by id failed", K(ret), K(tenant_id), K(location_id));
+  } else if (OB_ISNULL(location_schema)) {
+    ret = OB_ERR_UNEXPECTED;
+    LOG_WARN("location schema is null", K(ret), K(location_id));
+  } else {
+    access_info = location_schema->get_location_access_info_str();
+  }
+  return ret;
+}
+
 } // namespace share
 } // namespace oceanbase

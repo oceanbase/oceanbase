@@ -52,8 +52,13 @@ public:
                              const ObILakeTableMetadata *table_metadata,
                              const ObIArray<ObString> &partition_values,
                              const ObIArray<ObString> &column_names,
-                             ObOptExternalTableStat *&external_table_stat,
-                             ObIArray<ObOptExternalColumnStat *> &external_table_column_stats) override;
+                             ObIArray<ObOptCatalogTableStat *> &catalog_table_stats,
+                             ObIArray<ObOptCatalogColumnStat *> &catalog_table_column_stats) override;
+
+  int fetch_partitions(ObIAllocator &allocator,
+                       const ObILakeTableMetadata *table_metadata,
+                       const ObIArray<ObString> &part_col_names,
+                       ObIArray<common::ObCatalogExtPartitionInfo> &partition_infos) override;
 
   static int get_odps_format_str_from_catalog_properties(common::ObIAllocator &allocator,
     const ObODPSCatalogProperties &properties, const common::ObString &ns_name, const common::ObString &tbl_name,

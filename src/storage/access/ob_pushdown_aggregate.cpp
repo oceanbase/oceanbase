@@ -2943,6 +2943,12 @@ int ObPDAggFactory::alloc_cell(
         }
         break;
       }
+      case T_FUN_SYS_EXT_MIN:
+      case T_FUN_SYS_EXT_MAX: {
+        ret = OB_NOT_SUPPORTED;
+        LOG_WARN("ext_min/ext_max storage pushdown requires vector 2.0", K(ret), K(basic_info.agg_expr_->type_));
+        break;
+      }
       default: {
         ret = OB_NOT_SUPPORTED;
         LOG_WARN("Agg is not supported", K(ret), K(basic_info.agg_expr_->type_));

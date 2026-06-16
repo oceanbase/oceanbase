@@ -9435,7 +9435,9 @@ int ObOptimizerUtil::generate_pullup_aggr_expr(ObRawExprFactory &expr_factory,
              T_FUN_SYS_RB_OR_AGG == aggr_type ||
              T_FUN_SYS_RB_AND_AGG == aggr_type ||
              T_FUN_SYS_RB_BUILD_AGG == aggr_type ||
-             T_FUN_SYS_COUNT_INROW == aggr_type) {
+             T_FUN_SYS_COUNT_INROW == aggr_type ||
+             T_FUN_SYS_EXT_MIN == aggr_type ||
+             T_FUN_SYS_EXT_MAX == aggr_type) {
     /* MAX(a) -> MAX(MAX(a)), MIN(a) -> MIN(MIN(a)) SUM(a) -> SUM(SUM(a)) */
     ObItemType pullup_aggr_type = aggr_type;
     if (T_FUN_COUNT == pullup_aggr_type || T_FUN_SUM_OPNSIZE == pullup_aggr_type ||
@@ -9445,6 +9447,10 @@ int ObOptimizerUtil::generate_pullup_aggr_expr(ObRawExprFactory &expr_factory,
       pullup_aggr_type = T_FUN_APPROX_COUNT_DISTINCT_SYNOPSIS_MERGE;
     } else if (T_FUN_SYS_RB_BUILD_AGG == pullup_aggr_type) {
       pullup_aggr_type = T_FUN_SYS_RB_OR_AGG;
+    } else if (T_FUN_SYS_EXT_MIN == pullup_aggr_type) {
+      pullup_aggr_type = T_FUN_MIN;
+    } else if (T_FUN_SYS_EXT_MAX == pullup_aggr_type) {
+      pullup_aggr_type = T_FUN_MAX;
     }
 
     if (OB_FAIL(ObRawExprUtils::build_common_aggr_expr(expr_factory,
@@ -11258,6 +11264,8 @@ int ObOptimizerUtil::check_aggr_can_pre_aggregate(const ObAggFunRawExpr *aggr,
     LOG_WARN("get unexpected null", K(ret));
   } else if (T_FUN_MAX == aggr->get_expr_type() ||
              T_FUN_MIN == aggr->get_expr_type() ||
+             T_FUN_SYS_EXT_MIN == aggr->get_expr_type() ||
+             T_FUN_SYS_EXT_MAX == aggr->get_expr_type() ||
              T_FUN_SUM == aggr->get_expr_type() ||
              T_FUN_COUNT == aggr->get_expr_type() ||
              T_FUN_COUNT_SUM == aggr->get_expr_type() ||

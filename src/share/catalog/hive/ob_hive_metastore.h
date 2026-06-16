@@ -47,7 +47,7 @@ using PartitionValuesRows = std::vector<ApacheHive::PartitionValuesRow>;
 static const int MAX_HIVE_METASTORE_CLIENT_RETRY = 3;
 
 const char *const LAST_DDL_TIME = "transient_lastDdlTime";
-
+const char *const LAST_MODIFIED_TIME = "last_modified_time";
 // Kerberos related.
 static constexpr int64_t DEFAULT_KINIT_TIMEOUT_US = 10LL * 60LL * 1000LL * 1000LL; // 10 min
 static constexpr int64_t OB_MAX_ACCESS_INFO_LENGTH = 1600;
@@ -547,10 +547,6 @@ public:
   int list_table_names(const ObString &db_name,
                        ObIAllocator &allocator,
                        ObIArray<ObString> &tb_names);
-  int get_latest_schema_version(const ObString &ns_name,
-                                const ObString &tb_name,
-                                const ObNameCaseMode case_mode,
-                                int64_t &schema_version);
   int get_table(const ObString &ns_name,
                 const ObString &tb_name,
                 const ObNameCaseMode case_mode,
@@ -622,7 +618,6 @@ public:
 
 private:
   static int extract_host_and_port(const ObString &uri, char *host, int &port);
-  static int64_t handle_ddl_time(String &time_str);
   static void extract_basic_stats_from_parameters(const std::map<std::string, std::string> &parameters,
                                                   ObHiveBasicStats &basic_stats);
 

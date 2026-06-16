@@ -1271,6 +1271,10 @@ int ObRawExprPrinter::print(ObAggFunRawExpr *expr)
       SET_SYMBOL_IF_EMPTY("sum_opnsize");
     case T_FUN_SYS_COUNT_INROW:
       SET_SYMBOL_IF_EMPTY("sys_count_inrow");
+    case T_FUN_SYS_EXT_MIN:
+      SET_SYMBOL_IF_EMPTY("sys_ext_min");
+    case T_FUN_SYS_EXT_MAX:
+      SET_SYMBOL_IF_EMPTY("sys_ext_max");
     case T_FUN_PL_AGG_UDF:{
       if (type == T_FUN_PL_AGG_UDF) {
         if (OB_ISNULL(expr->get_pl_agg_udf_expr()) ||

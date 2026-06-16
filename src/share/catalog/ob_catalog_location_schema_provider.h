@@ -24,6 +24,10 @@ public:
                               common::ObString &access_info,
                               uint64_t &location_id,
                               common::ObString &sub_path) const;
+  // get access info by location object id, no session/privilege check needed
+  int get_access_info_by_id(const uint64_t tenant_id,
+                            const uint64_t location_id,
+                            common::ObString &access_info) const;
 
 private:
   DISALLOW_COPY_AND_ASSIGN(ObCatalogLocationSchemaProvider);

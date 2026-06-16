@@ -29,6 +29,7 @@ public:
                K(part_cnt_),
                K(file_cnt_),
                K(last_analyzed_));
+  void reset();
 
   int64_t total_row_count_;
   int64_t pruned_row_count_;
