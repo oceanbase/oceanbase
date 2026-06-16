@@ -27424,12 +27424,25 @@ int ObDDLService::create_tablegroup(const bool if_not_exist,
     uint64_t compat_version = OB_INVALID_VERSION;
     if (OB_FAIL(GET_MIN_DATA_VERSION(tenant_id, compat_version))) {
       LOG_WARN("get min data_version failed", K(ret), K(tenant_id));
-    } else if (compat_version < DATA_VERSION_4_2_0_0) {
+    } else if (!tablegroup_schema.get_scope().empty() && (compat_version < MOCK_DATA_VERSION_4_4_2_1 ||
+        (compat_version >= DATA_VERSION_4_5_0_0 && compat_version < DATA_VERSION_4_6_1_0))) {
       ret = OB_NOT_SUPPORTED;
-      LOG_WARN("can not create tablegroup while observer is upgrading", KR(ret), K(tenant_id));
-    } else if (tablegroup_schema.get_sharding() == OB_PARTITION_SHARDING_SUBPARTITION
+      LOG_WARN("create tablegroup with scope before 4.6.1 is not allowed", KR(ret), K(tenant_id));
+      LOG_USER_ERROR(OB_NOT_SUPPORTED, "create tablegroup with scope before 4.6.1 is");
+    } else if (tablegroup_schema.is_sharding_subpartition()
             && OB_FAIL(ObShareUtil::check_compat_version_for_subpartition_sharding(tenant_id))) {
       LOG_WARN("fail to check compat version for subpartition sharding", KR(ret), K(tenant_id));
+    } else if (!ObTablegroupSchema::is_sharding_scope_matched(tablegroup_schema.get_sharding(),
+                                                              tablegroup_schema.get_scope())) {
+      ret = OB_OP_NOT_ALLOW;
+      char err_msg[OB_MAX_ERROR_MSG_LEN] = {0};
+      LOG_WARN("invalid sharding-scope combination for creating tablegroup", KR(ret), K(tenant_id),
+               K(tablegroup_schema.get_sharding()), K(tablegroup_schema.get_scope()));
+      (void)snprintf(err_msg, sizeof(err_msg),
+                     "create tablegroup with sharding is %.*s and scope is %.*s",
+                     tablegroup_schema.get_sharding().length(), tablegroup_schema.get_sharding().ptr(),
+                     tablegroup_schema.get_scope().length(), tablegroup_schema.get_scope().ptr());
+      LOG_USER_ERROR(OB_OP_NOT_ALLOW, err_msg);
     }
   }
   if (OB_SUCC(ret)) {
@@ -27633,6 +27646,8 @@ int ObDDLService::alter_tablegroup(const ObAlterTablegroupArg &arg)
       LOG_WARN("fail to add tables to tablegroup", K(ret));
     } else if (OB_FAIL(helper.modify_sharding_type(arg, *orig_tablegroup, trans, new_schema_guard))) {
       LOG_WARN("fail to modify partition option", K(ret), K(*orig_tablegroup), K(arg));
+    } else if (OB_FAIL(helper.modify_scope_type(arg, *orig_tablegroup, trans))) {
+      LOG_WARN("fail to modify scope option", KR(ret), K(*orig_tablegroup), K(arg));
     }
     // however, end the trans
     int temp_ret = OB_SUCCESS;

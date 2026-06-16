@@ -295,10 +295,24 @@ public:
                                          || partition_status_ == PARTITION_STATUS_PHYSICAL_SPLITTING; }
   bool has_self_partition() const { return false; }
 
-  bool is_sharding_none() const { return sharding_ == OB_PARTITION_SHARDING_NONE; }
-  bool is_sharding_partition() const { return sharding_ == OB_PARTITION_SHARDING_PARTITION; }
-  bool is_sharding_adaptive() const { return sharding_ == OB_PARTITION_SHARDING_ADAPTIVE; }
-  bool is_sharding_subpartition() const { return sharding_ == OB_PARTITION_SHARDING_SUBPARTITION; }
+  bool is_sharding_none() const { return sharding_.case_compare(OB_PARTITION_SHARDING_NONE) == 0; }
+  bool is_sharding_partition() const { return sharding_.case_compare(OB_PARTITION_SHARDING_PARTITION) == 0; }
+  bool is_sharding_adaptive() const { return sharding_.case_compare(OB_PARTITION_SHARDING_ADAPTIVE) == 0; }
+  bool is_sharding_subpartition() const { return sharding_.case_compare(OB_PARTITION_SHARDING_SUBPARTITION) == 0; }
+  bool is_scope_server() const
+  {
+    return 0 == scope_.case_compare(OB_TABLEGROUP_SCOPE_SERVER)
+           || (scope_.empty() && is_sharding_none());
+  }
+  bool is_scope_zone() const
+  {
+    return 0 == scope_.case_compare(OB_TABLEGROUP_SCOPE_ZONE);
+  }
+  bool is_scope_cluster() const
+  {
+    return 0 == scope_.case_compare(OB_TABLEGROUP_SCOPE_CLUSTER)
+           || (scope_.empty() && (is_sharding_partition() || is_sharding_adaptive() || is_sharding_subpartition()));
+  }
 private:
   uint64_t tenant_id_;
   uint64_t tablegroup_id_;

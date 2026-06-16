@@ -2906,6 +2906,7 @@ DEF_SUBPARTITION_COUNT	bigint(0)	NO
 PARTITIONING_KEY_COUNT	bigint(0)	NO			
 SUBPARTITIONING_KEY_COUNT	bigint(0)	NO			
 SHARDING	varchar(20)	NO			
+SCOPE	varchar(20)	NO			
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_TABLEGROUPS|%') then 2
@@ -2978,6 +2979,7 @@ TABLEGROUP_NAME	varchar(128)	NO		NULL
 OWNER	varchar(128)	NO			
 TABLE_NAME	varchar(256)	NO			
 SHARDING	varchar(20)	NO			
+SCOPE	varchar(20)	NO			
 set @query_type = (select 
 case 
 when ('|KEY_COLUMN_USAGE|' like '%|DBA_OB_TABLEGROUP_TABLES|%') then 2
@@ -5839,6 +5841,7 @@ OBJECT_ID	bigint(20)	NO
 TABLEGROUP_NAME	varchar(128)	NO		NULL	
 TABLEGROUP_ID	bigint(20)	NO		NULL	
 SHARDING	varchar(20)	NO			
+SCOPE	varchar(20)	NO			
 INDEX_TYPE	varchar(6)	NO			
 set @query_type = (select 
 case 

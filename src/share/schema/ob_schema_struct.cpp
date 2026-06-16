@@ -5041,7 +5041,7 @@ ObTablegroupSchema &ObTablegroupSchema::operator =(const ObTablegroupSchema &src
       } else if (OB_FAIL(deep_copy_str(src_schema.sharding_, sharding_))) {
         LOG_WARN("fail to deep copy split partition name", K(ret));
       } else if (OB_FAIL(deep_copy_str(src_schema.scope_, scope_))) {
-        LOG_WARN("fail to deep copy scope", K(ret));
+        LOG_WARN("fail to deep copy tablegroup scope", K(ret));
       } else if (OB_FAIL(src_schema.split_high_bound_val_.deep_copy(split_high_bound_val_, *get_allocator()))) {
         LOG_WARN("fail to deep copy split row key", K(ret));
       } else if (OB_FAIL(src_schema.split_list_row_values_.deep_copy(split_list_row_values_, *get_allocator()))) {
